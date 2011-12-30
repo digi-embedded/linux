@@ -256,6 +256,17 @@ config TOUCHSCREEN_ELAN
 	  To compile this driver as a module, choose M here: the
 	  module will be called elan-touch.
 
+config TOUCHSCREEN_FUSION_7_10
+	tristate "Fusion touchscreen panel support"
+	depends on I2C
+	help
+	  Say Y here to enable support for the Fusion I2C touch
+	  driver. For multi touch support, select the 
+	  FUSION_7_10_MULTITOUCH option.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called fusion.
+
 config TOUCHSCREEN_FUJITSU
 	tristate "Fujitsu serial touchscreen"
 	select SERIO
