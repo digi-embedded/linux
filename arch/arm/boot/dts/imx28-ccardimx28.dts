@@ -189,7 +189,7 @@
 
 			duart: serial@80074000 {
 				pinctrl-names = "default";
-				pinctrl-0 = <&duart_pins_a>;
+				pinctrl-0 = <&duart_pins_c>;
 				status = "okay";
 			};
 
