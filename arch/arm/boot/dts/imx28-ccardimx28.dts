@@ -1,5 +1,5 @@
 /*
- * Copyright 2012 Freescale Semiconductor, Inc.
+ * Copyright 2013 Digi International, Inc.
  *
  * The code contained herein is licensed under the GNU General Public
  * License. You may obtain a copy of the GNU General Public License
@@ -13,10 +13,12 @@
 /include/ "imx28.dtsi"
 
 / {
-	model = "Freescale i.MX28 Evaluation Kit";
-	compatible = "fsl,imx28-evk", "fsl,imx28";
+	model = "Digi ConnectCard for i.MX28 JumpStart Kit";
+	compatible = "digi,ccardimx28js", "fsl,imx28";
 
 	memory {
+		/* This needs to be hacked by U-Boot
+		 * to write the available DRAM */
 		reg = <0x40000000 0x08000000>;
 	};
 
