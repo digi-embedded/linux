@@ -225,6 +225,17 @@
 					fsl,pull-up = <0>;
 				};
 
+				duart_pins_c: duart@2 {
+					reg = <2>;
+					fsl,pinmux-ids = <
+						0x3182 /* MX28_PAD_I2C0_SCL__DUART_RX */
+						0x3192 /* MX28_PAD_I2C0_SDA__DUART_TX */
+					>;
+					fsl,drive-strength = <0>;
+					fsl,voltage = <1>;
+					fsl,pull-up = <0>;
+				};
+
 				duart_4pins_a: duart-4pins@0 {
 					reg = <0>;
 					fsl,pinmux-ids = <
