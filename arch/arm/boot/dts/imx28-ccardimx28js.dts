@@ -24,7 +24,7 @@
 			i2c1: i2c@8005a000 {
 				pinctrl-names = "default";
 				pinctrl-0 = <&i2c1_pins_a>;
-				status = "okay";
+				status = "disabled";
 
 				sgtl5000: codec@0a {
 					compatible = "fsl,sgtl5000";
