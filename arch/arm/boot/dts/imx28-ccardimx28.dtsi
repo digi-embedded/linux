@@ -9,12 +9,11 @@
  * http://www.gnu.org/copyleft/gpl.html
  */
 
-/dts-v1/;
 /include/ "imx28.dtsi"
 
 / {
-	model = "Digi ConnectCard for i.MX28 JumpStart Kit";
-	compatible = "digi,ccardimx28js", "fsl,imx28";
+	model = "Digi ConnectCard for i.MX28 module";
+	compatible = "digi,ccardimx28", "fsl,imx28";
 
 	memory {
 		/* This needs to be hacked by U-Boot
