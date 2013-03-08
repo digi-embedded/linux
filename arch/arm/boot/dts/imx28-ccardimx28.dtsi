@@ -221,9 +221,8 @@
 			phy-mode = "rmii";
 			pinctrl-names = "default";
 			pinctrl-0 = <&mac0_pins_a>;
-			phy-supply = <&reg_fec_3v3>;
-			phy-reset-gpios = <&gpio4 13 0>;
-			phy-reset-duration = <100>;
+			phy-reset-gpios = <&gpio3 29 0>;
+			phy-reset-duration = <50>;
 			status = "okay";
 		};
 
@@ -231,6 +230,8 @@
 			phy-mode = "rmii";
 			pinctrl-names = "default";
 			pinctrl-0 = <&mac1_pins_a>;
+			phy-reset-gpios = <&gpio4 13 0>;
+			phy-reset-duration = <50>;
 			status = "okay";
 		};
 	};
@@ -252,14 +253,6 @@
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
 			gpio = <&gpio3 28 0>;
-		};
-
-		reg_fec_3v3: fec-3v3 {
-			compatible = "regulator-fixed";
-			regulator-name = "fec-3v3";
-			regulator-min-microvolt = <3300000>;
-			regulator-max-microvolt = <3300000>;
-			gpio = <&gpio2 15 0>;
 		};
 
 		reg_usb0_vbus: usb0_vbus {
