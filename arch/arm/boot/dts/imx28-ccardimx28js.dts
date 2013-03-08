@@ -16,4 +16,29 @@
 / {
 	model = "Digi ConnectCard for i.MX28 JumpStart Kit";
 	compatible = "digi,ccardimx28js", "digi,ccardimx28", "fsl,imx28";
+
+	apb@80000000 {
+		apbh@80000000 {
+		};
+		apbx@80040000 {
+			i2c1: i2c@8005a000 {
+				pinctrl-names = "default";
+				pinctrl-0 = <&i2c1_pins_a>;
+				status = "okay";
+
+				sgtl5000: codec@0a {
+					compatible = "fsl,sgtl5000";
+					reg = <0x0a>;
+				};
+			};
+		};
+	};
+
+	sound {
+		compatible = "fsl,ccardimx28js-sgtl5000",
+			     "fsl,mxs-audio-sgtl5000";
+		model = "imx28-evk-sgtl5000";
+		saif-controllers = <&saif0 &saif1>;
+		audio-codec = <&sgtl5000>;
+	};
 };

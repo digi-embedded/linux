@@ -152,26 +152,6 @@
 				status = "okay";
 			};
 
-			i2c0: i2c@80058000 {
-				pinctrl-names = "default";
-				pinctrl-0 = <&i2c0_pins_a>;
-				status = "okay";
-
-				sgtl5000: codec@0a {
-					compatible = "fsl,sgtl5000";
-					reg = <0x0a>;
-					VDDA-supply = <&reg_3p3v>;
-					VDDIO-supply = <&reg_3p3v>;
-
-				};
-
-				at24@51 {
-					compatible = "at24,24c32";
-					pagesize = <32>;
-					reg = <0x51>;
-				};
-			};
-
 			pwm: pwm@80064000 {
 				pinctrl-names = "default";
 				pinctrl-0 = <&pwm2_pins_a>;
@@ -271,26 +251,6 @@
 			regulator-max-microvolt = <5000000>;
 			gpio = <&gpio3 8 0>;
 			enable-active-high;
-		};
-	};
-
-	sound {
-		compatible = "fsl,imx28-evk-sgtl5000",
-			     "fsl,mxs-audio-sgtl5000";
-		model = "imx28-evk-sgtl5000";
-		saif-controllers = <&saif0 &saif1>;
-		audio-codec = <&sgtl5000>;
-	};
-
-	leds {
-		compatible = "gpio-leds";
-		pinctrl-names = "default";
-		pinctrl-0 = <&led_pin_gpio3_5>;
-
-		user {
-			label = "Heartbeat";
-			gpios = <&gpio3 5 0>;
-			linux,default-trigger = "heartbeat";
 		};
 	};
 
