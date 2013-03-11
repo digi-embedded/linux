@@ -212,7 +212,7 @@
 			pinctrl-0 = <&mac1_pins_a>;
 			phy-reset-gpios = <&gpio4 13 0>;
 			phy-reset-duration = <50>;
-			status = "disabled";
+			status = "okay";
 		};
 	};
 

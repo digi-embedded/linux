@@ -284,11 +284,25 @@ static int ccardimx28_phy_fixup(struct phy_device *phy)
 	return 0;
 }
 
+#define CCARDIMX28_FEC1_PHY_RESET	MXS_GPIO_NR(4, 13)
+
+static void __init ccardimx28_post_init(void)
+{
+	/* Take ENET1 PHY out of reset so that the address
+	 * is properly latched by the time ENET0 MDIO bus
+	 * (shared between ENET0 and ENET1) does the PHY
+	 * autodetection.
+	 */
+	if (!gpio_request_one(CCARDIMX28_FEC1_PHY_RESET, GPIOF_DIR_OUT,
+			      "enet1-phy-reset")) {
+		gpio_set_value(CCARDIMX28_FEC1_PHY_RESET, 1);
+	}
+}
+
 static void __init ccardimx28_init(void)
 {
-	printk("%s()\n\n", __func__);
 	if (IS_BUILTIN(CONFIG_PHYLIB))
-		phy_register_fixup_for_uid(PHY_ID_KSZ8051, MICREL_PHY_ID_MASK,
+		phy_register_fixup_for_uid(PHY_ID_KSZ8031, MICREL_PHY_ID_MASK,
 					   ccardimx28_phy_fixup);
 
 	enable_clk_enet_out();
@@ -407,6 +421,8 @@ static void __init mxs_machine_init(void)
 
 	if (of_machine_is_compatible("fsl,imx28-evk"))
 		imx28_evk_post_init();
+	if (of_machine_is_compatible("digi,ccardimx28"))
+		ccardimx28_post_init();
 }
 
 #define MX23_CLKCTRL_RESET_OFFSET	0x120
