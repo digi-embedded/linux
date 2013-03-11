@@ -257,6 +257,8 @@ static int ccardimx28_phy_fixup(struct phy_device *phy)
 	return 0;
 }
 
+#define CCARDIMX28_FEC1_PHY_RESET	MXS_GPIO_NR(4, 13)
+
 static void __init ccardimx28_init(void)
 {
 	if (IS_BUILTIN(CONFIG_PHYLIB))
@@ -272,6 +274,18 @@ static void __init ccardimx28_init(void)
 	mxsfb_pdata.ld_intf_width = STMLCDIF_18BIT;
 
 	mxs_saif_clkmux_select(MXS_DIGCTL_SAIF_CLKMUX_EXTMSTR0);
+}
+
+static void __init ccardimx28_post_init(void)
+{
+	/* Take ENET1 PHY out of reset so that the address
+	 * is properly latched by the time ENET0 MDIO bus
+	 * (shared between ENET0 and ENET1) does the PHY
+	 * autodetection.
+	 */
+	if (!gpio_request_one(CCARDIMX28_FEC1_PHY_RESET, GPIOF_DIR_OUT,
+			      "enet1-phy-reset"))
+		gpio_set_value(CCARDIMX28_FEC1_PHY_RESET, 1);
 }
 
 #define ENET0_MDC__GPIO_4_0	MXS_GPIO_NR(4, 0)
@@ -497,6 +511,8 @@ static void __init mxs_machine_init(void)
 
 	if (of_machine_is_compatible("karo,tx28"))
 		tx28_post_init();
+	if (of_machine_is_compatible("digi,ccardimx28"))
+		ccardimx28_post_init();
 }
 
 #define MXS_CLKCTRL_RESET_CHIP		(1 << 1)
