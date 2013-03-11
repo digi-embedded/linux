@@ -12,6 +12,10 @@
 /include/ "imx28.dtsi"
 
 / {
+	/* This DT contains all the available interfaces of
+	 * all variants of Digi ConnectCard for i.MX28 module.
+	 * The boot loader may modify this device tree at run-time
+	 * to accomodate it to the specific module variant detected. */
 	model = "Digi ConnectCard for i.MX28 module";
 	compatible = "digi,ccardimx28", "fsl,imx28";
 
