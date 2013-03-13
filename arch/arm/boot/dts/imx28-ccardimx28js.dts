@@ -19,6 +19,20 @@
 
 	apb@80000000 {
 		apbh@80000000 {
+			pinctrl@80018000 {
+				/*
+				user_leds: leds@0 {
+					reg = <0>;
+					fsl,pinmux-ids = <
+						0x3043 // MX28_PAD_AUART1_RX__GPIO_3_4
+						0x3053 // MX28_PAD_AUART1_TX__GPIO_3_5
+					>;
+					fsl,drive-strength = <0>;
+					fsl,voltage = <1>;
+					fsl,pull-up = <0>;
+				};
+				*/
+			};
 		};
 		apbx@80040000 {
 			i2c1: i2c@8005a000 {
@@ -41,4 +55,24 @@
 		saif-controllers = <&saif0 &saif1>;
 		audio-codec = <&sgtl5000>;
 	};
+
+	/*
+	leds {
+		compatible = "gpio-leds";
+		pinctrl-names = "default";
+		pinctrl-0 = <&user_leds>;
+
+		user1 {
+			label = "LED1";
+			gpios = <&gpio3 5 1>;
+			default-state = "off";
+		};
+		user2 {
+			label = "LED2";
+			gpios = <&gpio3 4 1>;
+			default-state = "off";
+		};
+	};
+	*/
+
 };
