@@ -16,6 +16,10 @@ Optional properties:
   will have the duration be 1 millisecond.  Numbers greater than 1000 are
   invalid and 1 millisecond will be used instead.
 
+Digi properties:
+- gpio-link-led : Should specify the GPIO to use for link LED
+- gpio-act-led : Should specify the GPIO to use for activity LED
+
 Example:
 
 ethernet@83fec000 {

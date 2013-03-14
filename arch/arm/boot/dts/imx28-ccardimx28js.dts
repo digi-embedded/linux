@@ -80,6 +80,17 @@
 		};
 	};
 
+	ahb@80080000 {
+		mac0: ethernet@800f0000 {
+			gpio-link-led = <&gpio3 6 1>;
+			gpio-act-led = <&gpio3 7 1>;
+		};
+		mac1: ethernet@800f4000 {
+			gpio-link-led = <&gpio3 13 1>;
+			gpio-act-led = <&gpio3 12 1>;
+		};
+	};
+
 	sound {
 		compatible = "fsl,ccardimx28js-sgtl5000",
 			     "fsl,mxs-audio-sgtl5000";
