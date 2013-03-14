@@ -231,7 +231,51 @@ MODULE_PARM_DESC(macaddr, "FEC Ethernet MAC address");
 #define FEC_PAUSE_FLAG_AUTONEG	0x1
 #define FEC_PAUSE_FLAG_ENABLE	0x2
 
+/* GPIO activity LED constants */
+#define ACTLED_TOGGLE_TIMEOUT	2	/* in jiffies */
+#define ACTLED_OFF_TIMEOUT	20	/* in jiffies */
+
 static int mii_cnt;
+
+static void toggle_activityled(struct net_device *ndev)
+{
+	struct fec_enet_private *fep = netdev_priv(ndev);
+
+	if (fep->gpio_actled >= 0) {
+		fep->rxtx_activity = 1;
+		/* run timer if not already running */
+		if(!timer_pending(&fep->activityled_timer)) {
+			mod_timer(&fep->activityled_timer,
+				  jiffies + ACTLED_TOGGLE_TIMEOUT);
+		}
+	}
+}
+
+static void activityled_timer_fn(unsigned long ndev)
+{
+	struct fec_enet_private *fep = netdev_priv((struct net_device *)ndev);
+
+	if (fep->rxtx_activity) {
+		/* toggle RX/TX Ethernet activity LED */
+		gpio_set_value(fep->gpio_actled,
+			       !gpio_get_value(fep->gpio_actled));
+		mod_timer(&fep->activityled_timer,
+			  jiffies + ACTLED_TOGGLE_TIMEOUT);
+		fep->rxtx_cnt = 0;
+		fep->rxtx_activity = 0;
+	} else {
+		if(fep->rxtx_cnt++ < ACTLED_OFF_TIMEOUT / ACTLED_TOGGLE_TIMEOUT)
+			mod_timer(&fep->activityled_timer,
+				  jiffies + ACTLED_TOGGLE_TIMEOUT);
+		else {
+			/* switch LED off */
+			gpio_set_value(fep->gpio_actled,
+				       fep->gpio_actled_inverted);
+			fep->rxtx_cnt = 0;
+		}
+	}
+
+}
 
 static inline
 struct bufdesc *fec_enet_get_nextdesc(struct bufdesc *bdp, struct fec_enet_private *fep)
@@ -839,6 +883,9 @@ fec_enet_tx(struct net_device *ndev)
 				netif_wake_queue(ndev);
 		}
 	}
+
+	toggle_activityled(ndev);
+
 	return;
 }
 
@@ -1040,6 +1087,8 @@ rx_processing_done:
 	}
 	fep->cur_rx = bdp;
 
+	toggle_activityled(ndev);
+
 	return pkt_received;
 }
 
@@ -1165,6 +1214,13 @@ static void fec_get_mac(struct net_device *ndev)
 /*
  * Phy section
  */
+static void gpioled_phylink(struct fec_enet_private *fep)
+{
+	if (fep->gpio_linkled >= 0)
+		gpio_set_value(fep->gpio_linkled,
+			       fep->link ^ fep->gpio_linkled_inverted);
+}
+
 static void fec_enet_adjust_link(struct net_device *ndev)
 {
 	struct fec_enet_private *fep = netdev_priv(ndev);
@@ -1204,6 +1260,8 @@ static void fec_enet_adjust_link(struct net_device *ndev)
 
 	if (status_change)
 		phy_print_status(phy_dev);
+
+	gpioled_phylink(fep);
 }
 
 static int fec_enet_mdio_read(struct mii_bus *bus, int mii_id, int regnum)
@@ -1822,6 +1880,7 @@ fec_enet_close(struct net_device *ndev)
 	}
 
 	fec_enet_free_buffers(ndev);
+	gpioled_phylink(fep);
 
 	return 0;
 }
@@ -2079,6 +2138,64 @@ static void fec_reset_phy(struct platform_device *pdev)
 	msleep(msec);
 	gpio_set_value(phy_reset, 1);
 }
+
+static void fec_gpio_led_init(struct platform_device *pdev)
+{
+	struct net_device *ndev = platform_get_drvdata(pdev);
+	struct fec_enet_private *fep = netdev_priv(ndev);
+	struct device_node *np = pdev->dev.of_node;
+	enum of_gpio_flags flags;
+	int init_st;
+
+	if (!np)
+		return;
+
+	fep->gpio_linkled = of_get_named_gpio_flags(np, "gpio-link-led", 0,
+						    &flags);
+	if (fep->gpio_linkled >= 0) {
+		if (flags & OF_GPIO_ACTIVE_LOW) {
+			fep->gpio_linkled_inverted = 1;
+			init_st = GPIOF_OUT_INIT_HIGH;
+		}
+		else
+			init_st = GPIOF_OUT_INIT_LOW;
+
+		if (gpio_request_one(fep->gpio_linkled, init_st,
+				      "FEC link LED"))
+			printk("Unable to register gpio %d for link LED\n",
+			       fep->gpio_linkled);
+	}
+
+	fep->gpio_actled = of_get_named_gpio_flags(np, "gpio-act-led", 0,
+						   &flags);
+	if (fep->gpio_actled >= 0) {
+		if (flags & OF_GPIO_ACTIVE_LOW) {
+			fep->gpio_actled_inverted = 1;
+			init_st = GPIOF_OUT_INIT_HIGH;
+		}
+		else
+			init_st = GPIOF_OUT_INIT_LOW;
+
+		if (gpio_request_one(fep->gpio_actled, init_st,
+				     "FEC activity LED")) {
+			printk("Unable to register gpio %d for activity LED\n",
+				fep->gpio_actled);
+		}
+		else {
+			if (flags & OF_GPIO_ACTIVE_LOW)
+				fep->gpio_actled_inverted = 1;
+			/* Initialize kernel timer for toggling the activity LED */
+			fep->rxtx_cnt = 0;
+			fep->activityled_timer.data = (unsigned long)ndev;
+			fep->activityled_timer.function = activityled_timer_fn;
+			fep->activityled_timer.expires = jiffies +
+							 ACTLED_TOGGLE_TIMEOUT;
+			init_timer(&fep->activityled_timer);
+			add_timer(&fep->activityled_timer);
+		}
+	}
+
+}
 #else /* CONFIG_OF */
 static void fec_reset_phy(struct platform_device *pdev)
 {
@@ -2086,6 +2203,9 @@ static void fec_reset_phy(struct platform_device *pdev)
 	 * In case of platform probe, the reset has been done
 	 * by machine code.
 	 */
+}
+static inline void fec_gpio_led_init(struct platform_device *pdev)
+{
 }
 #endif /* CONFIG_OF */
 
@@ -2203,6 +2323,7 @@ fec_probe(struct platform_device *pdev)
 		fep->reg_phy = NULL;
 	}
 
+	fec_gpio_led_init(pdev);
 	fec_reset_phy(pdev);
 
 	if (fep->bufdesc_ex)

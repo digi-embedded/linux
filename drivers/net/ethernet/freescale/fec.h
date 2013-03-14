@@ -321,6 +321,15 @@ struct fec_enet_private {
 	struct	napi_struct napi;
 	int	csum_flags;
 
+	/* GPIO LEDs */
+	int gpio_linkled;
+	bool gpio_linkled_inverted;
+	int gpio_actled;
+	bool gpio_actled_inverted;
+	unsigned int rxtx_activity;
+	unsigned int rxtx_cnt;
+	struct timer_list activityled_timer;
+
 	struct ptp_clock *ptp_clock;
 	struct ptp_clock_info ptp_caps;
 	unsigned long last_overflow_check;
