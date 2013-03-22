@@ -10,7 +10,6 @@
  */
 
 /dts-v1/;
-/include/ "imx28.dtsi"
 /include/ "imx28-ccardimx28.dtsi"
 
 / {
