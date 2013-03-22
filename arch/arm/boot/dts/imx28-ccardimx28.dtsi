@@ -109,6 +109,13 @@
 		};
 
 		apbx@80040000 {
+			/* AUART0 connected to Atheros Bluetooth chip */
+			auart0: serial@8006a000 {
+				pinctrl-names = "default";
+				pinctrl-0 = <&auart0_pins_a>;
+				status = "okay";
+			};
+
 			saif0: saif@80042000 {
 				pinctrl-names = "default";
 				pinctrl-0 = <&saif0_pins_a>;

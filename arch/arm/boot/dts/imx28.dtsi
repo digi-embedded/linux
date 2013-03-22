@@ -330,11 +330,35 @@
 					fsl,pull-up = <0>;
 				};
 
+				auart2_pins_a: auart2@0 {
+					reg = <0>;
+					fsl,pinmux-ids = <
+						0x3080 /* MX28_PAD_AUART2_RX__AUART2_RX */
+						0x3090 /* MX28_PAD_AUART2_TX__AUART2_TX */
+						0x30a0 /* MX28_PAD_AUART2_CTS__AUART2_CTS */
+						0x30b0 /* MX28_PAD_AUART2_RTS__AUART2_RTS */
+					>;
+					fsl,drive-strength = <0>;
+					fsl,voltage = <1>;
+					fsl,pull-up = <0>;
+				};
+
 				auart2_2pins_a: auart2-2pins@0 {
 					reg = <0>;
 					fsl,pinmux-ids = <
 						0x2101 /* MX28_PAD_SSP2_SCK__AUART2_RX */
 						0x2111 /* MX28_PAD_SSP2_MOSI__AUART2_TX */
+					>;
+					fsl,drive-strength = <0>;
+					fsl,voltage = <1>;
+					fsl,pull-up = <0>;
+				};
+
+				auart2_2pins_b: auart2-2pins@1 {
+					reg = <1>;
+					fsl,pinmux-ids = <
+						0x3080 /* MX28_PAD_AUART2_RX__AUART2_RX */
+						0x3090 /* MX28_PAD_AUART2_TX__AUART2_TX */
 					>;
 					fsl,drive-strength = <0>;
 					fsl,voltage = <1>;
@@ -359,6 +383,43 @@
 					fsl,pinmux-ids = <
 						0x2121 /* MX28_PAD_SSP2_MISO__AUART3_RX */
 						0x2131 /* MX28_PAD_SSP2_SS0__AUART3_TX */
+					>;
+					fsl,drive-strength = <0>;
+					fsl,voltage = <1>;
+					fsl,pull-up = <0>;
+				};
+
+				auart3_2pins_b: auart3-2pins@1 {
+					reg = <1>;
+					fsl,pinmux-ids = <
+						0x30c0 /* MX28_PAD_AUART3_RX__AUART3_RX */
+						0x30d0 /* MX28_PAD_AUART3_TX__AUART3_TX */
+					>;
+					fsl,drive-strength = <0>;
+					fsl,voltage = <1>;
+					fsl,pull-up = <0>;
+				};
+
+				auart4_pins_a: auart4@0 {
+					reg = <0>;
+					fsl,pinmux-ids = <
+						0x3162 /* MX28_PAD_SAIF0_BITCLK__AUART4_RX */
+						0x3172 /* MX28_PAD_SAIF0_SDATA0__AUART4_TX */
+						0x3142 /* MX28_PAD_SAIF0_MCLK__AUART4_CTS */
+						0x3152 /* MX28_PAD_SAIF0_LRCLK__AUART4_RTS */
+					>;
+					fsl,drive-strength = <0>;
+					fsl,voltage = <1>;
+					fsl,pull-up = <0>;
+				};
+
+				auart4_2pins_a: auart4-2pins@0 {
+					reg = <0>;
+					fsl,pinmux-ids = <
+						0x3162 /* MX28_PAD_SAIF0_BITCLK__AUART4_RX */
+						0x3172 /* MX28_PAD_SAIF0_SDATA0__AUART4_TX */
+						0x3142 /* MX28_PAD_SAIF0_MCLK__AUART4_CTS */
+						0x3152 /* MX28_PAD_SAIF0_LRCLK__AUART4_RTS */
 					>;
 					fsl,drive-strength = <0>;
 					fsl,voltage = <1>;

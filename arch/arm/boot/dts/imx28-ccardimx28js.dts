@@ -41,19 +41,31 @@
 				status = "okay";
 			};
 
-			/*
-			auart0: serial@8006a000 {
+			auart1: serial@8006c000 {
 				pinctrl-names = "default";
-				pinctrl-0 = <&auart0_pins_a>;
+				pinctrl-0 = <&auart1_pins_a>;
+				status = "okay";
+			};
+
+			auart2: serial@8006e000 {
+				pinctrl-names = "default";
+				pinctrl-0 = <&auart2_2pins_b>;
 				status = "disabled";
 			};
 
 			auart3: serial@80070000 {
 				pinctrl-names = "default";
-				pinctrl-0 = <&auart3_pins_a>;
+				pinctrl-0 = <&auart3_2pins_b>;
 				status = "disabled";
 			};
 
+			auart4: serial@80072000 {
+				pinctrl-names = "default";
+				pinctrl-0 = <&auart4_pins_a>;
+				status = "okay";
+			};
+
+			/*
 			can0: can@80032000 {
 				pinctrl-names = "default";
 				pinctrl-0 = <&can0_pins_a>;
@@ -82,12 +94,12 @@
 
 	ahb@80080000 {
 		mac0: ethernet@800f0000 {
-			gpio-link-led = <&gpio3 6 1>;
-			gpio-act-led = <&gpio3 7 1>;
+			//gpio-link-led = <&gpio3 6 1>;
+			//gpio-act-led = <&gpio3 7 1>;
 		};
 		mac1: ethernet@800f4000 {
-			gpio-link-led = <&gpio3 13 1>;
-			gpio-act-led = <&gpio3 12 1>;
+			//gpio-link-led = <&gpio3 13 1>;
+			//gpio-act-led = <&gpio3 12 1>;
 		};
 	};
 
