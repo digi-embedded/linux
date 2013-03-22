@@ -69,24 +69,6 @@
 
 			pinctrl@80018000 {
 				pinctrl-names = "default";
-				pinctrl-0 = <&hog_pins_a>;
-
-				hog_pins_a: hog@0 {
-					reg = <0>;
-					fsl,pinmux-ids = <
-						0x20d3 /* MX28_PAD_SSP1_CMD__GPIO_2_13 */
-						0x20f3 /* MX28_PAD_SSP1_DATA3__GPIO_2_15 */
-						0x40d3 /* MX28_PAD_ENET0_RX_CLK__GPIO_4_13 */
-						0x20c3 /* MX28_PAD_SSP1_SCK__GPIO_2_12 */
-						0x31c3 /* MX28_PAD_PWM3__GPIO_3_28 */
-						0x31e3 /* MX28_PAD_LCD_RESET__GPIO_3_30 */
-						0x3083 /* MX28_PAD_AUART2_RX__GPIO_3_8 */
-						0x3093 /* MX28_PAD_AUART2_TX__GPIO_3_9 */
-					>;
-					fsl,drive-strength = <0>;
-					fsl,voltage = <1>;
-					fsl,pull-up = <0>;
-				};
 
 				led_pin_gpio3_5: led_gpio3_5@0 {
 					reg = <0>;
@@ -98,6 +80,7 @@
 					fsl,pull-up = <0>;
 				};
 
+				/* NAND powered at 1.8V */
 				gpmi_pins_a: gpmi-nand@0 {
 					fsl,voltage = <0>;
 				};
@@ -141,12 +124,6 @@
 
 			lradc@80050000 {
 				fsl,lradc-touchscreen-wires = <4>;
-				status = "disabled";
-			};
-
-			pwm: pwm@80064000 {
-				pinctrl-names = "default";
-				pinctrl-0 = <&pwm2_pins_a>;
 				status = "disabled";
 			};
 
@@ -226,12 +203,5 @@
 			gpio = <&gpio3 8 0>;
 			enable-active-high;
 		};
-	};
-
-	backlight {
-		compatible = "pwm-backlight";
-		pwms = <&pwm 2 5000000>;
-		brightness-levels = <0 4 8 16 32 64 128 255>;
-		default-brightness-level = <6>;
 	};
 };
