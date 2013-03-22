@@ -85,6 +85,11 @@
 					fsl,voltage = <0>;
 				};
 
+				/* I2C1 has external pull-ups on module */
+				i2c1_pins_a: i2c1@0 {
+					fsl,pull-up = <0>;
+				};
+
 				lcdif_pins_evk: lcdif-evk@0 {
 					reg = <0>;
 					fsl,pinmux-ids = <

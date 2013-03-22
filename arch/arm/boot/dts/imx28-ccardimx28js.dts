@@ -31,6 +31,11 @@
 					fsl,pull-up = <0>;
 				};
 				*/
+
+				/* I2C0 has external pull-ups on JSK board */
+				i2c0_pins_a: i2c0@0 {
+					fsl,pull-up = <0>;
+				};
 			};
 		};
 		apbx@80040000 {
@@ -77,6 +82,12 @@
 				status = "disabled";
 			};
 			*/
+
+			i2c0: i2c@80058000 {
+				pinctrl-names = "default";
+				pinctrl-0 = <&i2c0_pins_a>;
+				status = "disabled";
+			};
 
 			i2c1: i2c@8005a000 {
 				pinctrl-names = "default";
