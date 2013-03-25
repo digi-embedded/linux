@@ -38,6 +38,7 @@ fsl,sgtl5000		SGTL5000: Ultra Low-Power Audio Codec
 infineon,slb9635tt	Infineon SLB9635 (Soft-) I2C TPM (old protocol, max 100khz)
 infineon,slb9645tt	Infineon SLB9645 I2C TPM (new protocol, max 400khz)
 maxim,ds1050		5 Bit Programmable, Pulse-Width Modulator
+maxim,ds2482		i2c to w1-master bridge(s)
 maxim,max1237		Low-Power, 4-/12-Channel, 2-Wire Serial, 12-Bit ADCs
 maxim,max6625		9-Bit/12-Bit Temperature Sensors with I²C-Compatible Serial Interface
 mc,rv3029c2		Real Time Clock Module with I2C-Bus
