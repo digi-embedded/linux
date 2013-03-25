@@ -100,6 +100,11 @@
 					VDDA-supply = <&reg_3p3v>;
 					VDDIO-supply = <&reg_3p3v>;
 				};
+
+				ds2482: onewire@18 {
+					compatible = "maxim,ds2482";
+					reg = <0x18>;
+				};
 			};
 
 			saif0: saif@80042000 {
@@ -134,6 +139,10 @@
 		model = "imx28-evk-sgtl5000";
 		saif-controllers = <&saif0 &saif1>;
 		audio-codec = <&sgtl5000>;
+	};
+
+	onewire {
+		compatible = "maxim,ds2482";
 	};
 
 	/*
