@@ -115,7 +115,7 @@
 
 			saif1: saif@80046000 {
 				pinctrl-names = "default";
-				pinctrl-0 = <&saif1_pins_a>;
+				pinctrl-0 = <&saif1_pins_b>;
 				fsl,saif-master = <&saif0>;
 				status = "okay";
 			};
