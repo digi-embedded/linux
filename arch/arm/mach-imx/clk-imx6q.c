@@ -84,7 +84,7 @@ static const char *pll4_bypass_sels[] = { "pll4", "pll4_bypass_src", };
 static const char *pll5_bypass_sels[] = { "pll5", "pll5_bypass_src", };
 static const char *pll6_bypass_sels[] = { "pll6", "pll6_bypass_src", };
 static const char *pll7_bypass_sels[] = { "pll7", "pll7_bypass_src", };
- 
+
 static struct clk *clk[IMX6QDL_CLK_END];
 static struct clk_onecell_data clk_data;
 
@@ -192,7 +192,7 @@ static void __init imx6q_clocks_init(struct device_node *ccm_node)
 	clk[IMX6QDL_CLK_PLL5_VIDEO]    = imx_clk_gate("pll5_video",    "pll5_bypass", base + 0xa0, 13);
 	clk[IMX6QDL_CLK_PLL6_ENET]     = imx_clk_gate("pll6_enet",     "pll6_bypass", base + 0xe0, 13);
 	clk[IMX6QDL_CLK_PLL7_USB_HOST] = imx_clk_gate("pll7_usb_host", "pll7_bypass", base + 0x20, 13);
- 
+
 	/*
 	 * Bit 20 is the reserved and read-only bit, we do this only for:
 	 * - Do nothing for usbphy clk_enable/disable
@@ -233,7 +233,7 @@ static void __init imx6q_clocks_init(struct device_node *ccm_node)
 
 	clk[IMX6QDL_CLK_LVDS1_IN] = imx_clk_gate_exclusive("lvds1_in", "anaclk1", base + 0x160, 12, BIT(10));
 	clk[IMX6QDL_CLK_LVDS2_IN] = imx_clk_gate_exclusive("lvds2_in", "anaclk2", base + 0x160, 13, BIT(11));
- 
+
 	/*                                            name              parent_name        reg       idx */
 	clk[IMX6QDL_CLK_PLL2_PFD0_352M] = imx_clk_pfd("pll2_pfd0_352m", "pll2_bus",     base + 0x100, 0);
 	clk[IMX6QDL_CLK_PLL2_PFD1_594M] = imx_clk_pfd("pll2_pfd1_594m", "pll2_bus",     base + 0x100, 1);
@@ -508,6 +508,11 @@ static void __init imx6q_clocks_init(struct device_node *ccm_node)
 	} else if (cpu_is_imx6q()) {
 		imx_clk_set_parent(clk[IMX6QDL_CLK_IPU1_SEL], clk[IMX6QDL_CLK_MMDC_CH0_AXI]);
 		imx_clk_set_parent(clk[IMX6QDL_CLK_IPU2_SEL], clk[IMX6QDL_CLK_MMDC_CH0_AXI]);
+	}
+
+	if (imx_get_soc_revision() != IMX_CHIP_REVISION_1_0) {
+		clk_set_parent(clk[IMX6QDL_CLK_LDB_DI0_SEL], clk[IMX6QDL_CLK_PLL5_VIDEO_DIV]);
+		clk_set_parent(clk[IMX6QDL_CLK_LDB_DI1_SEL], clk[IMX6QDL_CLK_PLL5_VIDEO_DIV]);
 	}
 
 	/*
