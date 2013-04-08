@@ -471,7 +471,6 @@
 						0x2060 /* MX28_PAD_SSP0_DATA6__SSP0_D6 */
 						0x2070 /* MX28_PAD_SSP0_DATA7__SSP0_D7 */
 						0x2080 /* MX28_PAD_SSP0_CMD__SSP0_CMD */
-						0x2090 /* MX28_PAD_SSP0_DETECT__SSP0_CARD_DETECT */
 						0x20a0 /* MX28_PAD_SSP0_SCK__SSP0_SCK */
 					>;
 					fsl,drive-strength = <1>;
@@ -487,7 +486,6 @@
 						0x2020 /* MX28_PAD_SSP0_DATA2__SSP0_D2 */
 						0x2030 /* MX28_PAD_SSP0_DATA3__SSP0_D3 */
 						0x2080 /* MX28_PAD_SSP0_CMD__SSP0_CMD */
-						0x2090 /* MX28_PAD_SSP0_DETECT__SSP0_CARD_DETECT */
 						0x20a0 /* MX28_PAD_SSP0_SCK__SSP0_SCK */
 					>;
 					fsl,drive-strength = <1>;
@@ -499,6 +497,8 @@
 					fsl,pinmux-ids = <
 						0x2090 /* MX28_PAD_SSP0_DETECT__SSP0_CARD_DETECT */
 					>;
+					fsl,drive-strength = <1>;
+					fsl,voltage = <1>;
 					fsl,pull-up = <0>;
 				};
 
