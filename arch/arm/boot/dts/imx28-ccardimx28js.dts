@@ -37,6 +37,10 @@
 					fsl,pull-up = <0>;
 				};
 			};
+
+			ssp0: ssp@80010000 {
+				status = "okay";
+			};
 		};
 		apbx@80040000 {
 			duart: serial@80074000 {

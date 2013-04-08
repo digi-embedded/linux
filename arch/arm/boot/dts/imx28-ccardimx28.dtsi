@@ -36,18 +36,11 @@
 			ssp0: ssp@80010000 {
 				compatible = "fsl,imx28-mmc";
 				pinctrl-names = "default";
-				pinctrl-0 = <&mmc0_8bit_pins_a
-					&mmc0_cd_cfg &mmc0_sck_cfg>;
-				bus-width = <8>;
-				wp-gpios = <&gpio2 12 0>;
-				vmmc-supply = <&reg_vddio_sd0>;
+				pinctrl-0 = <&mmc0_4bit_pins_a &mmc0_sck_cfg>;
+				bus-width = <4>;
+				broken-cd;
+				vmmc-supply = <&reg_3p3v>;
 				status = "disabled";
-			};
-
-			ssp1: ssp@80012000 {
-				compatible = "fsl,imx28-mmc";
-				bus-width = <8>;
-				wp-gpios = <&gpio0 28 0>;
 			};
 
 			ssp2: ssp@80014000 {
@@ -188,14 +181,6 @@
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
 			regulator-always-on;
-		};
-
-		reg_vddio_sd0: vddio-sd0 {
-			compatible = "regulator-fixed";
-			regulator-name = "vddio-sd0";
-			regulator-min-microvolt = <3300000>;
-			regulator-max-microvolt = <3300000>;
-			gpio = <&gpio3 28 0>;
 		};
 
 		reg_usb0_vbus: usb0_vbus {
