@@ -60,6 +60,18 @@
 				};
 			};
 
+			can0: can@80032000 {
+				pinctrl-names = "default";
+				pinctrl-0 = <&can0_pins_a>;
+				status = "disabled";
+			};
+
+			can1: can@80034000 {
+				pinctrl-names = "default";
+				pinctrl-0 = <&can1_pins_a>;
+				status = "disabled";
+			};
+
 			pinctrl@80018000 {
 				pinctrl-names = "default";
 
