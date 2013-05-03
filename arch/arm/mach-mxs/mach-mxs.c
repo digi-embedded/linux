@@ -316,6 +316,22 @@ static void __init ccardimx28_init(void)
 	mxs_saif_clkmux_select(MXS_DIGCTL_SAIF_CLKMUX_EXTMSTR0);
 }
 
+static int cpx2_phy_fixup(struct phy_device *phy)
+{
+	phy->dev_flags |= MICREL_PHY_50MHZ_CLK;
+	return 0;
+}
+
+static void __init cpx2_init(void)
+{
+	if (IS_BUILTIN(CONFIG_PHYLIB))
+		phy_register_fixup_for_uid(PHY_ID_KSZ8031, MICREL_PHY_ID_MASK,
+					   cpx2_phy_fixup);
+
+	enable_clk_enet_out();
+	update_fec_mac_prop(OUI_FSL);
+}
+
 #define ENET0_MDC__GPIO_4_0	MXS_GPIO_NR(4, 0)
 #define ENET0_MDIO__GPIO_4_1	MXS_GPIO_NR(4, 1)
 #define ENET0_RX_EN__GPIO_4_2	MXS_GPIO_NR(4, 2)
@@ -412,6 +428,8 @@ static void __init mxs_machine_init(void)
 		cfa10049_init();
 	else if (of_machine_is_compatible("digi,ccardimx28"))
 		ccardimx28_init();
+	else if (of_machine_is_compatible("digi,cpx2"))
+		cpx2_init();
 
 	of_platform_populate(NULL, of_default_bus_match_table,
 			     mxs_auxdata_lookup, NULL);
