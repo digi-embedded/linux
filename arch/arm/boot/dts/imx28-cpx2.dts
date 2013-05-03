@@ -9,19 +9,14 @@
  * http://www.gnu.org/copyleft/gpl.html
  */
 
+/dts-v1/;
 /include/ "imx28.dtsi"
 
 / {
-	/* This DT contains all the available interfaces of
-	 * all variants of Digi ConnectCard for i.MX28 module.
-	 * The boot loader may modify this device tree at run-time
-	 * to accomodate it to the specific module variant detected. */
-	model = "Digi ConnectCard for i.MX28 module";
-	compatible = "digi,ccardimx28", "fsl,imx28";
+	model = "Digi ConnectPort X2";
+	compatible = "digi,cpx2", "fsl,imx28";
 
 	memory {
-		/* This needs to be hacked by U-Boot
-		 * to write the available DRAM */
 		reg = <0x40000000 0x08000000>;
 	};
 
