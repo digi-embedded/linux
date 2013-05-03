@@ -297,7 +297,7 @@ static int cpx2_phy_fixup(struct phy_device *phy)
 static void __init cpx2_init(void)
 {
 	if (IS_BUILTIN(CONFIG_PHYLIB))
-		phy_register_fixup_for_uid(PHY_ID_KSZ8031, MICREL_PHY_ID_MASK,
+		phy_register_fixup_for_uid(PHY_ID_KSZ8021, MICREL_PHY_ID_MASK,
 					   cpx2_phy_fixup);
 
 	enable_clk_enet_out();
