@@ -901,6 +901,19 @@
 					fsl,pull-up = <MXS_PULL_DISABLE>;
 				};
 
+				spi3_pins_c: spi3@2 {
+					reg = <2>;
+					fsl,pinmux-ids = <
+						MX28_PAD_SSP3_SCK__SSP3_SCK
+						MX28_PAD_SSP3_MOSI__SSP3_CMD
+						MX28_PAD_SSP3_MISO__SSP3_D0
+						MX28_PAD_SSP3_SS0__SSP3_D3
+					>;
+					fsl,drive-strength = <MXS_DRIVE_8mA>;
+					fsl,voltage = <MXS_VOLTAGE_HIGH>;
+					fsl,pull-up = <MXS_PULL_DISABLE>;
+				};
+
 				usbphy0_pins_a: usbphy0@0 {
 					reg = <0>;
 					fsl,pinmux-ids = <
