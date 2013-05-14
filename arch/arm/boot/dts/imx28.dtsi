@@ -719,6 +719,19 @@
 					fsl,pull-up = <1>;
 				};
 
+				spi0_pins_b: spi0@1 {
+					reg = <1>;
+					fsl,pinmux-ids = <
+						0x20a3 /* MX28_PAD_SSP0_SCK__GPIO_2_10 */
+						0x2083 /* MX28_PAD_SSP0_CMD__GPIO_2_8 */
+						0x2003 /* MX28_PAD_SSP0_DATA0__GPIO_2_0 */
+						0x2033 /* MX28_PAD_SSP0_DATA3__GPIO_2_3 */
+					>;
+					fsl,drive-strength = <1>;
+					fsl,voltage = <1>;
+					fsl,pull-up = <1>;
+				};
+
 				spi1_pins_a: spi1@0 {
 					reg = <0>;
 					fsl,pinmux-ids = <
@@ -726,6 +739,19 @@
 						0x20d0 /* MX28_PAD_SSP1_CMD__SSP1_CMD */
 						0x20e0 /* MX28_PAD_SSP1_DATA0__SSP1_D0 */
 						0x20f0 /* MX28_PAD_SSP1_DATA3__SSP1_D3 */
+					>;
+					fsl,drive-strength = <1>;
+					fsl,voltage = <1>;
+					fsl,pull-up = <1>;
+				};
+
+				spi1_pins_b: spi1@1 {
+					reg = <1>;
+					fsl,pinmux-ids = <
+						0x20c3 /* MX28_PAD_SSP1_SCK__GPIO_2_12 */
+						0x20d3 /* MX28_PAD_SSP1_CMD__GPIO_2_13 */
+						0x20e3 /* MX28_PAD_SSP1_DATA0__GPIO_2_14 */
+						0x20f3 /* MX28_PAD_SSP1_DATA3__GPIO_2_15 */
 					>;
 					fsl,drive-strength = <1>;
 					fsl,voltage = <1>;
@@ -752,6 +778,19 @@
 						0x2190 /* MX28_PAD_SSP3_MOSI__SSP3_CMD */
 						0x21a0 /* MX28_PAD_SSP3_MISO__SSP3_D0 */
 						0x21b0 /* MX28_PAD_SSP3_SS0__SSP3_D3 */
+					>;
+					fsl,drive-strength = <1>;
+					fsl,voltage = <1>;
+					fsl,pull-up = <1>;
+				};
+
+				spi3_pins_b: spi3@1 {
+					reg = <1>;
+					fsl,pinmux-ids = <
+						0x2183 /* MX28_PAD_SSP3_SCK__GPIO_2_24 */
+						0x2193 /* MX28_PAD_SSP3_MOSI__GPIO_2_25 */
+						0x21a3 /* MX28_PAD_SSP3_MISO__GPIO_2_26 */
+						0x21b3 /* MX28_PAD_SSP3_SS0__GPIO_2_27 */
 					>;
 					fsl,drive-strength = <1>;
 					fsl,voltage = <1>;

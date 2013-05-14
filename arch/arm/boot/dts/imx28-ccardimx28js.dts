@@ -182,4 +182,23 @@
 	};
 	*/
 
+	/* SPI1 (GPIO) */
+	spi1 {
+		status = "disabled";
+//		spidev@0 {
+//			compatible = "spidev";
+//			reg = <0>;
+//			spi-max-frequency = <4000000>;
+//		};
+	};
+
+	/* SPI3 (GPIO) */
+	spi3 {
+		status = "okay";
+		spidev@0 {
+			compatible = "spidev";
+			reg = <0>;
+			spi-max-frequency = <4000000>;
+		};
+	};
 };

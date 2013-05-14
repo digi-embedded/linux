@@ -233,4 +233,46 @@
 			enable-active-high;
 		};
 	};
+
+	/* SPI0 (GPIO) */
+//	spi0 {
+//		compatible = "spi-gpio";
+//		pinctrl-0 = <&spi0_pins_b>;
+//		gpio-sck = <&gpio2 10 0>;
+//		gpio-mosi = <&gpio2 8 0>;
+//		gpio-miso = <&gpio2 0 0>;
+//		cs-gpios = <&gpio2 3 0>;
+//		num-chipselects = <1>;
+//		#address-cells = <1>;
+//		#size-cells = <0>;
+//		status = "disabled";
+//	};
+
+	/* SPI1 (GPIO) */
+	spi1 {
+		compatible = "spi-gpio";
+		pinctrl-0 = <&spi1_pins_b>;
+		gpio-sck = <&gpio2 12 0>;
+		gpio-mosi = <&gpio2 13 0>;
+		gpio-miso = <&gpio2 14 0>;
+		cs-gpios = <&gpio2 15 0>;
+		num-chipselects = <1>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		status = "disabled";
+	};
+
+	/* SPI3 (GPIO) */
+	spi3 {
+		compatible = "spi-gpio";
+		pinctrl-0 = <&spi3_pins_b>;
+		gpio-sck = <&gpio2 24 0>;
+		gpio-mosi = <&gpio2 25 0>;
+		gpio-miso = <&gpio2 26 0>;
+		cs-gpios = <&gpio2 27 0>;
+		num-chipselects = <1>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		status = "disabled";
+	};
 };
