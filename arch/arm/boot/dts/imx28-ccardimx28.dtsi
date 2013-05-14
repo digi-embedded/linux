@@ -43,9 +43,22 @@
 				status = "disabled";
 			};
 
+			/* SSP0 as SPI port */
+//			ssp0: ssp@80010000 {
+//				compatible = "fsl,imx28-spi";
+//				pinctrl-names = "default";
+//				pinctrl-0 = <&spi0_pins_a>;
+//				status = "okay";
+//			};
+
+			ssp1: ssp@80012000 {
+				compatible = "fsl,imx28-spi";
+				pinctrl-names = "default";
+				pinctrl-0 = <&spi1_pins_a>;
+				status = "disabled";
+			};
+
 			ssp2: ssp@80014000 {
-				#address-cells = <1>;
-				#size-cells = <0>;
 				compatible = "fsl,imx28-spi";
 				pinctrl-names = "default";
 				pinctrl-0 = <&spi2_pins_a>;
@@ -58,6 +71,13 @@
 					spi-max-frequency = <40000000>;
 					reg = <0>;
 				};
+			};
+
+			ssp3: ssp@80016000 {
+				compatible = "fsl,imx28-spi";
+				pinctrl-names = "default";
+				pinctrl-0 = <&spi3_pins_a>;
+				status = "okay";
 			};
 
 			can0: can@80032000 {

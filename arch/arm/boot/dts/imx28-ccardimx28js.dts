@@ -42,6 +42,26 @@
 				status = "okay";
 			};
 
+			/* MXS SPI1 */
+			ssp1: ssp@80012000 {
+				status = "disabled";
+//				spidev@0 {
+//					compatible = "spidev";
+//					reg = <0>;
+//					spi-max-frequency = <4000000>;
+//				};
+			};
+
+			/* MXS SPI3 */
+			ssp3: ssp@80016000 {
+				status = "disabled";
+//				spidev@0 {
+//					compatible = "spidev";
+//					reg = <0>;
+//					spi-max-frequency = <4000000>;
+//				};
+			};
+
 			can0: can@80032000 {
 				status = "okay";
 			};
@@ -108,14 +128,14 @@
 			saif0: saif@80042000 {
 				pinctrl-names = "default";
 				pinctrl-0 = <&saif0_pins_a>;
-				status = "okay";
+				status = "disabled";
 			};
 
 			saif1: saif@80046000 {
 				pinctrl-names = "default";
 				pinctrl-0 = <&saif1_pins_b>;
 				fsl,saif-master = <&saif0>;
-				status = "okay";
+				status = "disabled";
 			};
 		};
 	};

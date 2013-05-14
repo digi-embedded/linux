@@ -706,6 +706,32 @@
 					fsl,pull-up = <0>;
 				};
 
+				spi0_pins_a: spi0@0 {
+					reg = <0>;
+					fsl,pinmux-ids = <
+						0x20a0 /* MX28_PAD_SSP0_SCK__SSP0_SCK */
+						0x2080 /* MX28_PAD_SSP0_CMD__SSP0_CMD */
+						0x2000 /* MX28_PAD_SSP0_DATA0__SSP0_D0 */
+						0x2030 /* MX28_PAD_SSP1_DATA3__SSP1_D3 */
+					>;
+					fsl,drive-strength = <1>;
+					fsl,voltage = <1>;
+					fsl,pull-up = <1>;
+				};
+
+				spi1_pins_a: spi1@0 {
+					reg = <0>;
+					fsl,pinmux-ids = <
+						0x20c0 /* MX28_PAD_SSP1_SCK__SSP1_SCK */
+						0x20d0 /* MX28_PAD_SSP1_CMD__SSP1_CMD */
+						0x20e0 /* MX28_PAD_SSP1_DATA0__SSP1_D0 */
+						0x20f0 /* MX28_PAD_SSP1_DATA3__SSP1_D3 */
+					>;
+					fsl,drive-strength = <1>;
+					fsl,voltage = <1>;
+					fsl,pull-up = <1>;
+				};
+
 				spi2_pins_a: spi2@0 {
 					reg = <0>;
 					fsl,pinmux-ids = <
@@ -713,6 +739,19 @@
 						0x2110 /* MX28_PAD_SSP2_MOSI__SSP2_CMD */
 						0x2120 /* MX28_PAD_SSP2_MISO__SSP2_D0 */
 						0x2130 /* MX28_PAD_SSP2_SS0__SSP2_D3 */
+					>;
+					fsl,drive-strength = <1>;
+					fsl,voltage = <1>;
+					fsl,pull-up = <1>;
+				};
+
+				spi3_pins_a: spi3@0 {
+					reg = <0>;
+					fsl,pinmux-ids = <
+						0x2180 /* MX28_PAD_SSP3_SCK__SSP3_SCK */
+						0x2190 /* MX28_PAD_SSP3_MOSI__SSP3_CMD */
+						0x21a0 /* MX28_PAD_SSP3_MISO__SSP3_D0 */
+						0x21b0 /* MX28_PAD_SSP3_SS0__SSP3_D3 */
 					>;
 					fsl,drive-strength = <1>;
 					fsl,voltage = <1>;
