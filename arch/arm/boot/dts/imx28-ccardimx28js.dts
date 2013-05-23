@@ -144,6 +144,12 @@
 				fsl,saif-master = <&saif0>;
 				status = "disabled";
 			};
+
+			pwm: pwm@80064000 {
+				pinctrl-names = "default";
+				pinctrl-0 = <&pwm0_pins_b>;
+				status = "disabled";
+			};
 		};
 	};
 
@@ -207,5 +213,14 @@
 			reg = <0>;
 			spi-max-frequency = <4000000>;
 		};
+	};
+
+	backlight {
+		compatible = "pwm-backlight";
+		pwms = <&pwm 0 5000000>;
+		brightness-levels = <0 4 8 16 32 64 128 255>;
+		/* inversed polarity of backlight in HR_LCD (0 = on) */
+		default-brightness-level = <1>;
+		status = "disabled";
 	};
 };
