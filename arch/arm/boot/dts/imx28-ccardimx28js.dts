@@ -69,6 +69,13 @@
 			can1: can@80034000 {
 				status = "okay";
 			};
+
+			lcdif@80030000 {
+				pinctrl-names = "default";
+				pinctrl-0 = <&lcdif_18bit_pins_a
+					     &lcdif_pins_ccard>;
+				status = "disabled";
+			};
 		};
 		apbx@80040000 {
 			duart: serial@80074000 {

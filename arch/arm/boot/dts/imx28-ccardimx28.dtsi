@@ -115,26 +115,18 @@
 					fsl,pull-up = <0>;
 				};
 
-				lcdif_pins_evk: lcdif-evk@0 {
+				lcdif_pins_ccard: lcdif_ccard@0 {
 					reg = <0>;
 					fsl,pinmux-ids = <
-						0x1181 /* MX28_PAD_LCD_RD_E__LCD_VSYNC */
-						0x1191 /* MX28_PAD_LCD_WR_RWN__LCD_HSYNC */
-						0x11a1 /* MX28_PAD_LCD_RS__LCD_DOTCLK */
-						0x11b1 /* MX28_PAD_LCD_CS__LCD_ENABLE */
+						0x11e0 /* MX28_PAD_LCD_DOTCLK__LCD_DOTCLK */
+						0x11f0 /* MX28_PAD_LCD_ENABLE__LCD_ENABLE */
+						0x31e1 /* MX28_PAD_LCD_RESET__LCD_VSYNC */
+						0x11d0 /* MX28_PAD_LCD_HSYNC__LCD_HSYNC */
 					>;
-					fsl,drive-strength = <0>;
+					fsl,drive-strength = <1>;
 					fsl,voltage = <1>;
 					fsl,pull-up = <0>;
 				};
-			};
-
-			lcdif@80030000 {
-				pinctrl-names = "default";
-				pinctrl-0 = <&lcdif_24bit_pins_a
-					     &lcdif_pins_evk>;
-				panel-enable-gpios = <&gpio3 30 0>;
-				status = "disabled";
 			};
 		};
 
