@@ -854,6 +854,16 @@
 					fsl,pull-up = <0>;
 				};
 
+				usbphy0_pins_c: usbphy0@2 {
+					reg = <2>;
+					fsl,pinmux-ids = <
+						0x3121 /* MX28_PAD_PWM2__USB0_ID */
+					>;
+					fsl,drive-strength = <1>;
+					fsl,voltage = <1>;
+					fsl,pull-up = <1>;
+				};
+
 				usbphy1_pins_a: usbphy1@0 {
 					reg = <0>;
 					fsl,pinmux-ids = <
