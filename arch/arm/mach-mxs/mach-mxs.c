@@ -268,11 +268,6 @@ static void __init ccardimx28_init(void)
 	enable_clk_enet_out();
 	update_fec_mac_prop(OUI_FSL);
 
-	mxsfb_pdata.mode_list = mx28evk_video_modes;
-	mxsfb_pdata.mode_count = ARRAY_SIZE(mx28evk_video_modes);
-	mxsfb_pdata.default_bpp = 32;
-	mxsfb_pdata.ld_intf_width = STMLCDIF_18BIT;
-
 	mxs_saif_clkmux_select(MXS_DIGCTL_SAIF_CLKMUX_EXTMSTR0);
 }
 
