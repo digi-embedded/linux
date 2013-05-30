@@ -74,7 +74,33 @@
 				pinctrl-names = "default";
 				pinctrl-0 = <&lcdif_18bit_pins_a
 					     &lcdif_pins_ccard>;
+				display = <&display>;
 				status = "disabled";
+
+				/* Sharp LQ070Y3DG3B */
+				display: display {
+                                       bits-per-pixel = <32>;
+                                       bus-width = <18>;
+
+                                       display-timings {
+						native-mode = <&timing0>;
+							timing0: timing0 {
+							clock-frequency = <33500000>;
+							hactive = <800>;
+							vactive = <480>;
+							hback-porch = <130>;
+							hfront-porch = <110>;
+							vback-porch = <35>;
+							vfront-porch = <5>;
+							hsync-len = <128>;
+							vsync-len = <0>;
+							hsync-active = <0>;
+							vsync-active = <0>;
+							de-active = <1>;
+							pixelclk-active = <0>;
+						};
+                                       };
+				};
 			};
 		};
 		apbx@80040000 {
