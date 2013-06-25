@@ -58,19 +58,17 @@
 				status = "disabled";
 			};
 
+			/* SSP2 connected to Wireless chip */
 			ssp2: ssp@80014000 {
-				compatible = "fsl,imx28-spi";
+				compatible = "fsl,imx28-mmc";
 				pinctrl-names = "default";
-				pinctrl-0 = <&spi2_pins_a>;
-				status = "disabled";
-
-				flash: m25p80@0 {
-					#address-cells = <1>;
-					#size-cells = <1>;
-					compatible = "sst,sst25vf016b";
-					spi-max-frequency = <40000000>;
-					reg = <0>;
-				};
+				pinctrl-0 = <&mmc2_4bit_pins_a
+					     &mmc2_sck_cfg
+					     &wifi_pins_a>;
+				bus-width = <4>;
+				non-removable;
+				vmmc-supply = <&reg_3p3v>;
+				status = "okay";
 			};
 
 			ssp3: ssp@80016000 {
@@ -131,6 +129,17 @@
 					fsl,drive-strength = <0>;
 					fsl,voltage = <1>;
 					fsl,pull-up = <0>;
+				};
+
+				/* Wifi */
+				wifi_pins_a: wireless@0 {
+					reg = <0>;
+					fsl,pinmux-ids = <
+						0x2123 /* MX28_PAD_SSP2_MISO__GPIO_2_18 */
+					>;
+					fsl,drive-strength = <1>;
+					fsl,voltage = <1>;
+					fsl,pull-up = <1>;
 				};
 			};
 		};
