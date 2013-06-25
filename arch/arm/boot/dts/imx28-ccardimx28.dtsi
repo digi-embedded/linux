@@ -95,16 +95,6 @@
 			pinctrl@80018000 {
 				pinctrl-names = "default";
 
-				led_pin_gpio3_5: led_gpio3_5@0 {
-					reg = <0>;
-					fsl,pinmux-ids = <
-						0x3053 /* MX28_PAD_AUART1_TX__GPIO_3_5 */
-					>;
-					fsl,drive-strength = <0>;
-					fsl,voltage = <1>;
-					fsl,pull-up = <0>;
-				};
-
 				/* NAND powered at 1.8V */
 				gpmi_pins_a: gpmi-nand@0 {
 					fsl,voltage = <0>;
