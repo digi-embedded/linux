@@ -550,6 +550,21 @@
 					fsl,pull-up = <MXS_PULL_DISABLE>;
 				};
 
+				mmc2_4bit_pins_b: mmc2-4bit@1 {
+					reg = <1>;
+					fsl,pinmux-ids = <
+						MX28_PAD_SSP0_DATA4__SSP2_D0
+						MX28_PAD_SSP2_SS1__SSP2_D1
+						MX28_PAD_SSP2_SS2__SSP2_D2
+						MX28_PAD_SSP0_DATA5__SSP2_D3
+						MX28_PAD_SSP0_DATA6__SSP2_CMD
+						MX28_PAD_SSP0_DATA7__SSP2_SCK
+					>;
+					fsl,drive-strength = <MXS_DRIVE_8mA>;
+					fsl,voltage = <MXS_VOLTAGE_HIGH>;
+					fsl,pull-up = <MXS_PULL_ENABLE>;
+				};
+
 				i2c0_pins_a: i2c0@0 {
 					reg = <0>;
 					fsl,pinmux-ids = <
