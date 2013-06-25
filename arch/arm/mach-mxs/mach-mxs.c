@@ -263,6 +263,7 @@ static int ccardimx28_phy_fixup(struct phy_device *phy)
 #define CCARDIMX28_BT_PWD_L		MXS_GPIO_NR(0, 21)
 #define CCARDIMX28_BT_HOST_WAKE	 	MXS_GPIO_NR(0, 17)
 #define CCARDIMX28_BT_WAKE		MXS_GPIO_NR(2, 16)
+#define CCARDIMX28_WIFI_CHIP_PWD	MXS_GPIO_NR(2, 18)
 
 static const struct gpio ccardimx28_bt_gpios[] __initconst = {
 	{ CCARDIMX28_BT_DISABLE, GPIOF_OUT_INIT_HIGH, "bt-disable" },
@@ -270,6 +271,10 @@ static const struct gpio ccardimx28_bt_gpios[] __initconst = {
 	{ CCARDIMX28_BT_PWD_L, GPIOF_OUT_INIT_LOW, "bt-pwd-l" },
 	{ CCARDIMX28_BT_HOST_WAKE, GPIOF_DIR_IN, "bt-host-wake" },
 	{ CCARDIMX28_BT_WAKE, GPIOF_OUT_INIT_HIGH, "bt-wake" },
+};
+
+static const struct gpio ccardimx28_wifi_gpios[] __initconst = {
+	{ CCARDIMX28_WIFI_CHIP_PWD, GPIOF_OUT_INIT_LOW, "wifi-chip-pwd" },
 };
 
 static void ccardimx28_init_bt(void)
@@ -288,6 +293,23 @@ static void ccardimx28_init_bt(void)
 	gpio_set_value(CCARDIMX28_BT_PWD_L, 1);
 	/* Free the BT power pin to allow controlling it from user space */
 	gpio_free(CCARDIMX28_BT_PWD_L);
+}
+
+static void ccardimx28_init_wifi(void)
+{
+	int ret;
+
+	ret = gpio_request_array(ccardimx28_wifi_gpios,
+				 ARRAY_SIZE(ccardimx28_wifi_gpios));
+	if (ret) {
+		pr_err("%s: failed to request wifi gpios: %d\n",
+		       __func__, ret);
+		return;
+	}
+	/* Start with Power pin low, then set high to power Wifi */
+	gpio_set_value(CCARDIMX28_WIFI_CHIP_PWD, 1);
+	/* Free the Wifi chip PWD pin to allow controlling it from user space */
+	gpio_free(CCARDIMX28_WIFI_CHIP_PWD);
 }
 
 static void __init ccardimx28_init(void)
@@ -313,9 +335,15 @@ static void __init ccardimx28_post_init(void)
 			      "enet1-phy-reset"))
 		gpio_set_value(CCARDIMX28_FEC1_PHY_RESET, 1);
 
-	/* Bluetooth */
+	/* Bluetooth
+	 * TODO: check the variant has BT */
 	if (IS_ENABLED(CONFIG_BT))
 		ccardimx28_init_bt();
+
+	/* Wireless
+	 * TODO: check the variant has Wifi */
+	if (IS_ENABLED(CONFIG_ATH6KL_SDIO))
+		ccardimx28_init_wifi();
 }
 
 static int cpx2_phy_fixup(struct phy_device *phy)
