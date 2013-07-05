@@ -704,8 +704,27 @@ static bool check_device_tree(struct ath6kl *ar)
 	static const char *board_id_prop = "atheros,board-id";
 	struct device_node *node;
 	char board_filename[64];
-	const char *board_id;
+	const char *board_id, *board_cert;
 	int ret;
+
+	node = of_find_compatible_node(NULL, NULL, "digi,ccimx6");
+	if (node) {
+		const char *board_nobluetooth =
+		    of_get_child_by_name(node, "bluetooth") ? "" : "ANT-";
+		board_cert = of_get_property(node, "digi,hwid,cert", NULL);
+		if (board_cert) {
+			snprintf(board_filename, sizeof(board_filename),
+				 "%s/bdata.%s%s.bin", ar->hw.fw.dir,
+				 board_nobluetooth, board_cert);
+			ret = ath6kl_get_fw(ar, board_filename, &ar->fw_board,
+					    &ar->fw_board_len);
+			if (ret == 0) {
+				ath6kl_info("Using board file: %s\n",
+					    board_filename);
+				return true;
+			}
+		}
+	}
 
 	for_each_compatible_node(node, NULL, "atheros,ath6kl") {
 		board_id = of_get_property(node, board_id_prop, NULL);
@@ -747,17 +766,17 @@ static int ath6kl_fetch_board_file(struct ath6kl *ar)
 	if (WARN_ON(ar->hw.fw_board == NULL))
 		return -EINVAL;
 
+	if (check_device_tree(ar)) {
+		/* got board file from device tree */
+		return 0;
+	}
+
 	filename = ar->hw.fw_board;
 
 	ret = ath6kl_get_fw(ar, filename, &ar->fw_board,
 			    &ar->fw_board_len);
 	if (ret == 0) {
 		/* managed to get proper board file */
-		return 0;
-	}
-
-	if (check_device_tree(ar)) {
-		/* got board file from device tree */
 		return 0;
 	}
 
@@ -1161,12 +1180,6 @@ int ath6kl_init_fetch_firmwares(struct ath6kl *ar)
 	if (ret)
 		return ret;
 
-	ret = ath6kl_fetch_fw_apin(ar, ATH6KL_FW_API5_FILE);
-	if (ret == 0) {
-		ar->fw_api = 5;
-		goto out;
-	}
-
 	ret = ath6kl_fetch_fw_apin(ar, ATH6KL_FW_API4_FILE);
 	if (ret == 0) {
 		ar->fw_api = 4;
@@ -1344,7 +1357,7 @@ static int ath6kl_upload_otp(struct ath6kl *ar)
 	/* execute the OTP code */
 	ath6kl_dbg(ATH6KL_DBG_BOOT, "executing OTP at 0x%x\n",
 		   ar->hw.app_start_override_addr);
-	param = 0;
+	param = ar->softmac_enable ? 1 : 0;
 	ath6kl_bmi_execute(ar, ar->hw.app_start_override_addr, &param);
 
 	return ret;
@@ -1639,6 +1652,9 @@ static const struct fw_capa_str_map {
 	{ ATH6KL_FW_CAPABILITY_REGDOMAIN, "regdomain" },
 	{ ATH6KL_FW_CAPABILITY_SCHED_SCAN_V2, "sched-scan-v2" },
 	{ ATH6KL_FW_CAPABILITY_HEART_BEAT_POLL, "hb-poll" },
+	{ ATH6KL_FW_CAPABILITY_MAC_ACL, "mac-acl" },
+	{ ATH6KL_FW_CAPABILITY_REGDOMAIN_V2, "regdomain-v2" },
+	{ ATH6KL_FW_CAPABILITY_LARGE_CONNECT_IE, "large-connect-ie" },
 	{ ATH6KL_FW_CAPABILITY_64BIT_RATES, "64bit-rates" },
 	{ ATH6KL_FW_CAPABILITY_AP_INACTIVITY_MINS, "ap-inactivity-mins" },
 	{ ATH6KL_FW_CAPABILITY_MAP_LP_ENDPOINT, "map-lp-endpoint" },
@@ -1703,6 +1719,59 @@ static int ath6kl_init_hw_reset(struct ath6kl *ar)
 				   cpu_to_le32(RESET_CONTROL_COLD_RST));
 }
 
+/* Number of bytes in board data that we are interested
+ * in while setting regulatory domain from host
+ */
+#define REG_DMN_BOARD_DATA_LEN	16
+
+/* Modifies regulatory domain in board data in target RAM */
+static int ath6kl_set_reg_dmn(struct ath6kl *ar)
+{
+	u8 buf[REG_DMN_BOARD_DATA_LEN];
+	__le16 old_sum, old_ver, old_rd, old_rd_next;
+	__le32 brd_dat_addr = 0, new_sum, new_rd;
+	int ret;
+
+	ret = ath6kl_bmi_read(ar, AR6003_BOARD_DATA_ADDR,
+			      (u8 *)&brd_dat_addr, 4);
+	if (ret)
+		return ret;
+
+	memset(buf, 0, sizeof(buf));
+	ret = ath6kl_bmi_read(ar, brd_dat_addr, buf, sizeof(buf));
+	if (ret)
+		return ret;
+
+	memcpy((u8 *)&old_sum, buf + AR6003_BOARD_DATA_OFFSET, 2);
+	memcpy((u8 *)&old_ver, buf + AR6003_BOARD_DATA_OFFSET + 2, 2);
+	memcpy((u8 *)&old_rd, buf + AR6003_RD_OFFSET, 2);
+	memcpy((u8 *)&old_rd_next, buf + AR6003_RD_OFFSET + 2, 2);
+
+	/* Overwrite the new regulatory domain and preserve the
+	 * MAC addr which is in the same word.
+	 */
+	new_rd = cpu_to_le32((le32_to_cpu(old_rd_next) << 16) + ar->reg_domain);
+	ret = ath6kl_bmi_write(ar,
+		cpu_to_le32(le32_to_cpu(brd_dat_addr) + AR6003_RD_OFFSET),
+		(u8 *)&new_rd, 4);
+	if (ret)
+		return ret;
+
+	/* Recompute the board data checksum with the new regulatory
+	 * domain, preserve the version information which is in the
+	 * same word.
+	 */
+	new_sum = cpu_to_le32((le32_to_cpu(old_ver) << 16) +
+			      (le32_to_cpu(old_sum) ^ le32_to_cpu(old_rd) ^
+			       ar->reg_domain));
+	ret = ath6kl_bmi_write(ar,
+		cpu_to_le32(le32_to_cpu(brd_dat_addr) +
+		AR6003_BOARD_DATA_OFFSET),
+		(u8 *)&new_sum, 4);
+
+	return ret;
+}
+
 static int __ath6kl_init_hw_start(struct ath6kl *ar)
 {
 	long timeleft;
@@ -1722,6 +1791,12 @@ static int __ath6kl_init_hw_start(struct ath6kl *ar)
 	ret = ath6kl_init_upload(ar);
 	if (ret)
 		goto err_power_off;
+
+	if (ar->reg_domain != 0xffff) {
+		ret = ath6kl_set_reg_dmn(ar);
+		if (ret)
+			goto err_power_off;
+	}
 
 	/* Do we need to finish the BMI phase */
 	ret = ath6kl_bmi_done(ar);

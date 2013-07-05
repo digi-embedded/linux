@@ -35,6 +35,7 @@ ath6kl_core-y += txrx.o
 ath6kl_core-y += wmi.o
 ath6kl_core-y += core.o
 ath6kl_core-y += recovery.o
+ath6kl_core-y += softmac.o
 
 ath6kl_core-$(CONFIG_NL80211_TESTMODE) += testmode.o
 ath6kl_core-$(CONFIG_ATH6KL_TRACING) += trace.o

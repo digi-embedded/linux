@@ -20,6 +20,7 @@
 #include <linux/module.h>
 #include <linux/moduleparam.h>
 #include <linux/export.h>
+#include <linux/of.h>
 #include <linux/vmalloc.h>
 
 #include "debug.h"
@@ -32,10 +33,13 @@ static unsigned int suspend_mode;
 static unsigned int wow_mode;
 static unsigned int uart_debug;
 static unsigned int uart_rate = 115200;
-static unsigned int ath6kl_p2p;
+static unsigned int ath6kl_p2p = EINVAL;
 static unsigned int testmode;
 static unsigned int recovery_enable;
 static unsigned int heart_beat_poll;
+static unsigned int softmac_enable = EINVAL;
+static unsigned short locally_administered_bit;
+static unsigned short reg_domain = EINVAL;
 
 module_param(debug_mask, uint, 0644);
 module_param(suspend_mode, uint, 0644);
@@ -46,6 +50,9 @@ module_param(ath6kl_p2p, uint, 0644);
 module_param(testmode, uint, 0644);
 module_param(recovery_enable, uint, 0644);
 module_param(heart_beat_poll, uint, 0644);
+module_param(softmac_enable, uint, 0644);
+module_param(locally_administered_bit, ushort, 0644);
+module_param(reg_domain, ushort, 0644);
 MODULE_PARM_DESC(recovery_enable, "Enable recovery from firmware error");
 MODULE_PARM_DESC(heart_beat_poll,
 		 "Enable fw error detection periodic polling in msecs - Also set recovery_enable for this to be effective");
@@ -68,6 +75,9 @@ int ath6kl_core_init(struct ath6kl *ar, enum ath6kl_htc_type htc_type)
 	struct ath6kl_bmi_target_info targ_info;
 	struct wireless_dev *wdev;
 	int ret = 0, i;
+#ifdef CONFIG_OF
+	struct device_node *node;
+#endif
 
 	switch (htc_type) {
 	case ATH6KL_HTC_TYPE_MBOX:
@@ -118,10 +128,21 @@ int ath6kl_core_init(struct ath6kl *ar, enum ath6kl_htc_type htc_type)
 	}
 
 	ar->testmode = testmode;
+#ifdef CONFIG_OF
+	if (softmac_enable == EINVAL) {
+		node = of_find_compatible_node(NULL, NULL, "atheros,ath6kl");
+		if (node)
+			softmac_enable =
+			    of_property_read_bool(node,
+						  "ath6kl-softmac-enable");
+	}
+#endif
+	ar->softmac_enable = (softmac_enable == EINVAL) ? 0 : !!softmac_enable;
 
 	ret = ath6kl_init_fetch_firmwares(ar);
 	if (ret)
 		goto err_htc_cleanup;
+	ath6kl_mangle_mac_address(ar, locally_administered_bit);
 
 	/* FIXME: we should free all firmwares in the error cases below */
 
@@ -141,6 +162,22 @@ int ath6kl_core_init(struct ath6kl *ar, enum ath6kl_htc_type htc_type)
 				  ar->fw_capabilities);
 	}
 
+#ifdef CONFIG_OF
+	/*
+	 * The firmware used in the ccimx6 SoM has builtin support for the
+	 * inactivity timeout, but that capability is not flagged in the binary
+	 * file. That is needed by the ccimx6 when working in AP mode, otherwise
+	 * the supplicant/hostapd will handle it internally and, because it is
+	 * not properly done, it will disconnect the clients after the inactivity
+	 * timeout (300 seconds by default).
+	 *
+	 * To avoid that, we set here the capability in the firmware bit-stream.
+	 */
+	node = of_find_compatible_node(NULL, NULL, "digi,ccimx6");
+	if (node)
+		__set_bit(ATH6KL_FW_CAPABILITY_INACTIVITY_TIMEOUT,
+			  ar->fw_capabilities);
+#endif
 	/* Indicate that WMI is enabled (although not ready yet) */
 	set_bit(WMI_ENABLED, &ar->flag);
 	ar->wmi = ath6kl_wmi_init(ar);
@@ -271,7 +308,36 @@ struct ath6kl *ath6kl_core_create(struct device *dev)
 	if (!ar)
 		return NULL;
 
-	ar->p2p = !!ath6kl_p2p;
+#ifdef CONFIG_OF
+	if (ath6kl_p2p == EINVAL) {
+		struct device_node *node;
+
+		node = of_find_compatible_node(NULL, NULL, "atheros,ath6kl");
+		if (node)
+			ath6kl_p2p =
+			    of_property_read_bool(node, "ath6kl-p2p-enable");
+	}
+
+	if (reg_domain == EINVAL) {
+		struct device_node *node;
+
+		node = of_find_compatible_node(NULL, NULL, "atheros,ath6kl");
+		if (node)
+			of_property_read_u16(node, "ath6kl-reg-domain",
+					&reg_domain);
+	}
+
+	if (!debug_mask) {
+		struct device_node *node;
+
+		node = of_find_compatible_node(NULL, NULL, "atheros,ath6kl");
+		if (node)
+			of_property_read_u32(node, "ath6kl-debug-mask",
+					&debug_mask);
+	}
+#endif
+	ar->reg_domain = (reg_domain == EINVAL) ? 0xffff : reg_domain;
+	ar->p2p = (ath6kl_p2p == EINVAL) ? 0 : !!ath6kl_p2p;
 	ar->dev = dev;
 
 	ar->vif_max = 1;
