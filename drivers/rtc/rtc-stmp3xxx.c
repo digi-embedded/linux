@@ -17,6 +17,7 @@
  * http://www.opensource.org/licenses/gpl-license.html
  * http://www.gnu.org/copyleft/gpl.html
  */
+#include <linux/device.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/io.h>
@@ -40,6 +41,7 @@
 
 #define STMP3XXX_RTC_STAT			0x10
 #define STMP3XXX_RTC_STAT_STALE_SHIFT		16
+#define STMP3XXX_RTC_STAT_NEW_SHIFT		8
 #define STMP3XXX_RTC_STAT_RTC_PRESENT		0x80000000
 
 #define STMP3XXX_RTC_SECONDS			0x30
@@ -63,7 +65,96 @@ struct stmp3xxx_rtc_data {
 	struct rtc_device *rtc;
 	void __iomem *io;
 	int irq_alarm;
+#if IS_ENABLED(CONFIG_RTC_INTF_SYSFS)
+	struct attribute_group persist_attr_group;
+	struct device_attribute *devattr;
+	struct attribute **persist_attrs;
+#endif
 };
+
+#if IS_ENABLED(CONFIG_RTC_INTF_SYSFS)
+struct mxs_persist_bitconfig {
+	int reg;
+	int start;
+	int width;
+	const char *name;
+};
+
+static const struct mxs_persist_bitconfig mx28_persist_bitconfig[] = {
+	{ .reg = 0, .start =  0, .width =  1,
+		.name = "CLOCKSOURCE" },
+	{ .reg = 0, .start =  1, .width =  1,
+		.name = "ALARM_WAKE_EN" },
+	{ .reg = 0, .start =  2, .width =  1,
+		.name = "ALARM_EN" },
+	{ .reg = 0, .start =  3, .width =  1,
+		.name = "CLK_SECS" },
+	{ .reg = 0, .start =  4, .width =  1,
+		.name = "XTAL24MHZ_PWRUP" },
+	{ .reg = 0, .start =  5, .width =  1,
+		.name = "XTAL32MHZ_PWRUP" },
+	{ .reg = 0, .start =  6, .width =  1,
+		.name = "XTAL32_FREQ" },
+	{ .reg = 0, .start =  7, .width =  1,
+		.name = "ALARM_WAKE" },
+	{ .reg = 0, .start =  8, .width =  5,
+		.name = "MSEC_RES" },
+	{ .reg = 0, .start = 13, .width =  1,
+		.name = "DISABLE_XTALOK" },
+	{ .reg = 0, .start = 14, .width =  2,
+		.name = "LOWERBIAS" },
+	{ .reg = 0, .start = 16, .width =  1,
+		.name = "DISABLE_PSWITCH" },
+	{ .reg = 0, .start = 17, .width =  1,
+		.name = "AUTO_RESTART" },
+	{ .reg = 0, .start = 18, .width = 1,
+		.name = "ENABLE_LRADC_PWRUP" },
+	{ .reg = 0, .start = 20, .width = 1,
+		.name = "THERMAL_RESET" },
+	{ .reg = 0, .start = 21, .width = 1,
+		.name = "EXTERNAL_RESET" },
+	{ .reg = 0, .start = 28, .width = 4,
+		.name = "ADJ_POSLIMITBUCK" },
+	{ .reg = 1, .start =  0, .width =  1,
+		.name = "FORCE_RECOVERY" },
+	{ .reg = 1, .start =  1, .width =  1,
+		.name = "ROM_REDUNDANT_BOOT" },
+	{ .reg = 1, .start =  2, .width =  1,
+		.name = "NAND_SDK_BLOCK_REWRITE" },
+	{ .reg = 1, .start =  3, .width =  1,
+		.name = "SD_SPEED_ENABLE" },
+	{ .reg = 1, .start =  4, .width =  1,
+		.name = "SD_INIT_SEQ_1_DISABLE" },
+	{ .reg = 1, .start =  5, .width =  1,
+		.name = "SD_CMD0_DISABLE" },
+	{ .reg = 1, .start =  6, .width =  1,
+		.name = "SD_INIT_SEQ_2_ENABLE" },
+	{ .reg = 1, .start =  7, .width =  1,
+		.name = "OTG_ATL_ROLE_BIT" },
+	{ .reg = 1, .start =  8, .width =  1,
+		.name = "OTG_HNP_BIT" },
+	{ .reg = 1, .start =  9, .width =  1,
+		.name = "USB_LOW_POWER_MODE" },
+	{ .reg = 1, .start = 10, .width =  1,
+		.name = "SKIP_CHECKDISK" },
+	{ .reg = 1, .start = 11, .width =  1,
+		.name = "USB_BOOT_PLAYER_MODE" },
+	{ .reg = 1, .start = 12, .width =  1,
+		.name = "ENUMERATE_500MA_TWICE" },
+	{ .reg = 1, .start = 13, .width = 19,
+		.name = "SPARE_GENERAL" },
+	{ .reg = 2, .start =  0, .width = 2,
+		.name = "boot_attempts" },	/* for dual boot mechanism */
+	{ .reg = 2, .start = 0, .width = 32,
+		.name = "SPARE_2" },
+	{ .reg = 3, .start = 2, .width = 30,
+		.name = "SPARE_3" },
+	{ .reg = 4, .start = 0, .width = 32,
+		.name = "SPARE_4" },
+	{ .reg = 5, .start = 0, .width = 32,
+		.name = "SPARE_5" },
+};
+#endif /* CONFIG_RTC_INTF_SYSFS */
 
 #if IS_ENABLED(CONFIG_STMP3XXX_RTC_WATCHDOG)
 /**
@@ -207,6 +298,86 @@ static int stmp3xxx_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alm)
 	return 0;
 }
 
+#if IS_ENABLED(CONFIG_RTC_INTF_SYSFS)
+static void stmp3xxx_persist_reg_wait_settle(struct stmp3xxx_rtc_data *rtc_data,
+					     int reg)
+{
+	/* Wait until the change is propagated */
+	while (readl(rtc_data->io + STMP3XXX_RTC_STAT) &
+			(1 << (STMP3XXX_RTC_STAT_NEW_SHIFT + reg)))
+		cpu_relax();
+}
+
+static ssize_t stmp3xxx_persist_show(struct device *dev,
+				     struct device_attribute *attr,
+				     char *buf)
+{
+	struct stmp3xxx_rtc_data *rtc_data = dev_get_drvdata(dev);
+	u32 val;
+	struct mxs_persist_bitconfig *bc;
+	int index;
+
+	/* Obtain bit config in array */
+	index = attr - rtc_data->devattr;
+	bc = (struct mxs_persist_bitconfig *)&mx28_persist_bitconfig[index];
+
+	/*
+	 * The datasheet doesn't say which way round the
+	 * NEW_REGS/STALE_REGS bitfields go. In fact it's 0x1=P0,
+	 * 0x2=P1, .., 0x20=P5, 0x40=ALARM, 0x80=SECONDS
+	 */
+	while (readl(rtc_data->io + STMP3XXX_RTC_STAT) &
+		     (1 << (STMP3XXX_RTC_STAT_STALE_SHIFT + bc->reg)));
+		cpu_relax();
+
+	val = readl(rtc_data->io + STMP3XXX_RTC_PERSISTENT0 + (bc->reg * 0x10));
+
+	/* Shift and mask read value */
+	val >>= bc->start;
+	val &= ((1 << bc->width) - 1);
+
+	return sprintf(buf, "%u\n", val);
+}
+
+static ssize_t stmp3xxx_persist_store(struct device *dev,
+				      struct device_attribute *attr,
+				      const char *buf, size_t count)
+{
+	struct stmp3xxx_rtc_data *rtc_data = dev_get_drvdata(dev);
+	int ret;
+	unsigned long val, mask;
+	struct mxs_persist_bitconfig *bc;
+	int index;
+
+	/* Obtain bit config in array */
+	index = attr - rtc_data->devattr;
+	bc = (struct mxs_persist_bitconfig *)&mx28_persist_bitconfig[index];
+
+	/* get value to write */
+	ret = strict_strtoul(buf, 10, &val);
+	if (ret != 0)
+		return ret;
+
+	/* verify it fits */
+	if ((unsigned int)val > (1 << bc->width) - 1)
+		return -EINVAL;
+
+	/* lockless update, first clear the area */
+	mask = ((1 << bc->width) - 1) << bc->start;
+	writel(mask, rtc_data->io + STMP3XXX_RTC_PERSISTENT0_CLR +
+	       (bc->reg * 0x10));
+	stmp3xxx_persist_reg_wait_settle(rtc_data, bc->reg);
+
+	/* shift value into position */
+	val <<= bc->start;
+	writel(val, rtc_data->io + STMP3XXX_RTC_PERSISTENT0_SET +
+	       (bc->reg * 0x10));
+	stmp3xxx_persist_reg_wait_settle(rtc_data, bc->reg);
+
+	return count;
+}
+#endif /* CONFIG_RTC_INTF_SYSFS */
+
 static struct rtc_class_ops stmp3xxx_rtc_ops = {
 	.alarm_irq_enable =
 			  stmp3xxx_alarm_irq_enable,
@@ -223,6 +394,12 @@ static int stmp3xxx_rtc_remove(struct platform_device *pdev)
 	if (!rtc_data)
 		return 0;
 
+#if IS_ENABLED(CONFIG_RTC_INTF_SYSFS)
+	sysfs_remove_group(&pdev->dev.kobj, &rtc_data->persist_attr_group);
+	kfree(rtc_data->persist_attrs);
+	kfree(rtc_data->devattr);
+#endif
+
 	writel(STMP3XXX_RTC_CTRL_ALARM_IRQ_EN,
 			rtc_data->io + STMP3XXX_RTC_CTRL_CLR);
 	platform_set_drvdata(pdev, NULL);
@@ -235,6 +412,9 @@ static int stmp3xxx_rtc_probe(struct platform_device *pdev)
 	struct stmp3xxx_rtc_data *rtc_data;
 	struct resource *r;
 	int err;
+#if IS_ENABLED(CONFIG_RTC_INTF_SYSFS)
+	int i;
+#endif /* CONFIG_RTC_INTF_SYSFS */
 
 	rtc_data = devm_kzalloc(&pdev->dev, sizeof(*rtc_data), GFP_KERNEL);
 	if (!rtc_data)
@@ -287,8 +467,50 @@ static int stmp3xxx_rtc_probe(struct platform_device *pdev)
 		goto out;
 	}
 
+#if IS_ENABLED(CONFIG_RTC_INTF_SYSFS)
+	rtc_data->devattr = kzalloc(sizeof(struct device_attribute) *
+				    ARRAY_SIZE(mx28_persist_bitconfig),
+				    GFP_KERNEL);
+	if (!rtc_data->devattr) {
+		err = -ENOMEM;
+		goto out;
+	}
+
+	rtc_data->persist_attrs = kzalloc(sizeof(struct attribute) *
+					  ARRAY_SIZE(mx28_persist_bitconfig),
+					  GFP_KERNEL);
+	if (!rtc_data->persist_attrs) {
+		err = -ENOMEM;
+		goto err_free_devattr;
+	}
+
+	/* build the attributes structures */
+	for (i = 0; i < ARRAY_SIZE(mx28_persist_bitconfig); i++) {
+		rtc_data->devattr[i].attr.name = mx28_persist_bitconfig[i].name;
+		rtc_data->devattr[i].attr.mode = S_IWUSR | S_IRUGO;
+		rtc_data->devattr[i].show = stmp3xxx_persist_show;
+		rtc_data->devattr[i].store = stmp3xxx_persist_store;
+		rtc_data->persist_attrs[i] = &rtc_data->devattr[i].attr;
+		sysfs_attr_init(&rtc_data->devattr[i].attr);
+	}
+	rtc_data->persist_attr_group.attrs =
+			(struct attribute **)rtc_data->persist_attrs;
+
+	err = sysfs_create_group(&pdev->dev.kobj,
+				 &rtc_data->persist_attr_group);
+	if (err != 0)
+		goto err_free_persist;
+#endif /* CONFIG_RTC_INTF_SYSFS */
+
 	stmp3xxx_wdt_register(pdev);
 	return 0;
+
+#if IS_ENABLED(CONFIG_RTC_INTF_SYSFS)
+err_free_persist:
+	kfree(rtc_data->persist_attrs);
+err_free_devattr:
+	kfree(rtc_data->devattr);
+#endif /* CONFIG_RTC_INTF_SYSFS */
 
 out:
 	platform_set_drvdata(pdev, NULL);

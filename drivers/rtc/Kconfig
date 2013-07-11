@@ -1123,6 +1123,14 @@ config RTC_DRV_STMP
 	  This driver can also be built as a module. If so, the module
 	  will be called rtc-stmp3xxx.
 
+if RTC_DRV_STMP
+config RTC_INTF_SYSFS
+	bool "RTC Persistent bits sysfs interface"
+	help
+	  This enables sysfs access as binary attributes to RTC persistent
+	  registers.
+endif
+
 config RTC_DRV_PCAP
 	tristate "PCAP RTC"
 	depends on EZX_PCAP
