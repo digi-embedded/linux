@@ -1,9 +1,12 @@
 * Freescale i.MX28 LRADC device driver
 
 Required properties:
-- compatible: Should be "fsl,imx28-lradc"
+- compatible: "fsl,imx28-lradc", "fsl,imx23-lradc"
 - reg: Address and length of the register set for the device
 - interrupts: Should contain the LRADC interrupts
+- fsl,vref: Reference voltage (in mV) for each LRADC channel. This is the
+	    maximum voltage that can be measured at full scale in each channel
+	    considering fixed pre-dividers.
 
 Optional properties:
 - fsl,lradc-touchscreen-wires: Number of wires used to connect the touchscreen
@@ -18,4 +21,8 @@ Examples:
 		reg = <0x80050000 0x2000>;
 		interrupts = <10 14 15 16 17 18 19
 				20 21 22 23 24 25>;
+		fsl,vref = <1850 1850 1850 1850
+			    1850 1850 1850 7400
+			    1850 1850 3700 1850
+			    3700 1850 1850 7400>
 	};
