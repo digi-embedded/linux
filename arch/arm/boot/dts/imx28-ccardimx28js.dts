@@ -72,11 +72,11 @@
 				pinctrl-names = "default";
 				pinctrl-0 = <&lcdif_18bit_pins_a
 					     &lcdif_pins_ccard>;
-				display = <&display>;
+				display = <&lq70y3dg3b>;
 				status = "disabled";
 
-				/* Sharp LQ070Y3DG3B */
-				display: display {
+				/* Sharp LQ70Y3DG3B */
+				lq70y3dg3b: display {
                                        bits-per-pixel = <32>;
                                        bus-width = <18>;
 
