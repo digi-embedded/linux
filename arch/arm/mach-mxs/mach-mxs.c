@@ -312,8 +312,89 @@ static void ccardimx28_init_wifi(void)
 	gpio_free(CCARDIMX28_WIFI_CHIP_PWD);
 }
 
+static int ccardimx28_register_hwid(void)
+{
+	struct device_node *np;
+	const u32 *ocotp = mxs_get_ocotp();
+	u8 *hwid;
+	char str[20];
+	struct property *hwidprop;
+	const char *hwidpropname;
+	int ret, i;
+	const char *propnames[] = {
+		"digi,hwid,tf",
+		"digi,hwid,variant",
+		"digi,hwid,hv",
+		"digi,hwid,cert",
+		"digi,hwid,year",
+		"digi,hwid,month",
+		"digi,hwid,sn",
+	};
+
+	np = of_find_compatible_node(NULL, NULL, "digi,ccardimx28");
+	if (!np)
+		return -EINVAL;
+
+	/* Retrieve HWID from OTP bits */
+	hwid = (u8 *)ocotp;
+
+	/*
+	 * Try to read the HWID fields from DT. If not found, create those
+	 * properties from the information on the OTP bits.
+	 */
+	for (i = 0; i < ARRAY_SIZE(propnames); i++) {
+		ret = of_property_read_string(np, propnames[i], &hwidpropname);
+		if (ret) {
+			/* Convert HWID fields to strings */
+			if (!strcmp("digi,hwid,tf", propnames[i]))
+				sprintf(str, "0x%02x", hwid[6]);
+			else if (!strcmp("digi,hwid,variant", propnames[i]))
+				sprintf(str, "0x%02x", hwid[5]);
+			else if (!strcmp("digi,hwid,hv", propnames[i]))
+				sprintf(str, "0x%x", hwid[4] >> 4);
+			else if (!strcmp("digi,hwid,cert", propnames[i]))
+				sprintf(str, "0x%x", hwid[4] & 0xf);
+			else if (!strcmp("digi,hwid,year", propnames[i]))
+				sprintf(str, "20%02d", hwid[3]);
+			else if (!strcmp("digi,hwid,month", propnames[i]))
+				sprintf(str, "%02d", hwid[2] >> 4);
+			else if (!strcmp("digi,hwid,sn", propnames[i]))
+				sprintf(str, "%d", ocotp[0] & 0xfffff);
+			else
+				continue;
+
+			hwidprop = kzalloc(sizeof(*hwidprop) + strlen(str),
+					   GFP_KERNEL);
+			if (!hwidprop)
+				return -ENOMEM;
+
+			hwidprop->value = hwidprop + 1;
+			hwidprop->length = strlen(str);
+			hwidprop->name = kstrdup(propnames[i], GFP_KERNEL);
+			if (!hwidprop->name) {
+				kfree(hwidprop);
+				return -ENOMEM;
+			}
+			strncpy(hwidprop->value, str, strlen(str));
+			of_update_property(np, hwidprop);
+		}
+	}
+
+	return 0;
+}
+
 static void __init ccardimx28_init(void)
 {
+	int ret;
+
+	/*
+	 * Read the HWID from OTP bits and register it to DT if not already
+	 * there, to be exposed to the filesystem via procfs.
+	 */
+	ret = ccardimx28_register_hwid();
+	if (ret)
+		pr_err("%s: failed to register hwid: %d\n", __func__, ret);
+
 	if (IS_BUILTIN(CONFIG_PHYLIB))
 		phy_register_fixup_for_uid(PHY_ID_KSZ8031, MICREL_PHY_ID_MASK,
 					   ccardimx28_phy_fixup);
