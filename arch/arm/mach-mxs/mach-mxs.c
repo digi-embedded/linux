@@ -319,7 +319,6 @@ static void __init ccardimx28_init(void)
 					   ccardimx28_phy_fixup);
 
 	enable_clk_enet_out();
-	update_fec_mac_prop(OUI_FSL);
 
 	mxs_saif_clkmux_select(MXS_DIGCTL_SAIF_CLKMUX_EXTMSTR0);
 }
@@ -359,7 +358,6 @@ static void __init cpx2_init(void)
 					   cpx2_phy_fixup);
 
 	enable_clk_enet_out();
-	update_fec_mac_prop(OUI_FSL);
 }
 
 #define ENET0_MDC__GPIO_4_0	MXS_GPIO_NR(4, 0)
