@@ -247,6 +247,11 @@ int __init mx28_clocks_init(void)
 	of_clk_add_provider(np, of_clk_src_onecell_get, &clk_data);
 
 	clk_register_clkdev(clks[enet_out], NULL, "enet_out");
+	/* These clocks are used by the suspend platform code. */
+	clk_register_clkdev(clks[cpu], NULL, "cpu");
+	clk_register_clkdev(clks[cpu_xtal], NULL, "cpu_xtal");
+	clk_register_clkdev(clks[pll0], NULL, "pll0");
+	clk_register_clkdev(clks[hbus], NULL, "hbus");
 
 	for (i = 0; i < ARRAY_SIZE(clks_init_on); i++)
 		clk_prepare_enable(clks[clks_init_on[i]]);
