@@ -1,0 +1,31 @@
+/*
+ * Copyright 2013 Digi International, Inc.
+ *
+ * The code contained herein is licensed under the GNU General Public
+ * License. You may obtain a copy of the GNU General Public License
+ * Version 2 or later at the following locations:
+ *
+ * http://www.opensource.org/licenses/gpl-license.html
+ * http://www.gnu.org/copyleft/gpl.html
+ */
+
+/ {
+	apb@80000000 {
+		apbx@80040000 {
+			i2c1: i2c@8005a000 {
+				pinctrl-names = "default";
+				pinctrl-0 = <&i2c1_pins_a>;
+				status = "okay";
+
+				ds2482: onewire@18 {
+					compatible = "maxim,ds2482";
+					reg = <0x18>;
+				};
+			};
+		};
+	};
+
+	onewire {
+		compatible = "maxim,ds2482";
+	};
+};

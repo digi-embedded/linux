@@ -10,281 +10,81 @@
  */
 
 /dts-v1/;
-/include/ "imx28-ccardimx28.dtsi"
+/include/ "imx28.dtsi"
 
+/*
+ * This DTS file is made of small Device Tree fragments that can be
+ * separately included or excluded to match a custom hardware configuration.
+ * Remember to consult the documentation to prevent conflicts between
+ * multiplexed devices.
+ */
+
+/* NAND Flash */
+/include/ "digi/ccardimx28/ccardimx28_nand.dtsi"
+
+/* DUART */
+/include/ "digi/ccardimx28/ccardimx28_duart_i2c0.dtsi"
+
+/* Ethernet */
+/include/ "digi/ccardimx28/ccardimx28_ethernet0.dtsi"
+///include/ "digi/ccardimx28/ccardimx28_ethernet0_leds.dtsi"
+/include/ "digi/ccardimx28/ccardimx28_ethernet1.dtsi"
+///include/ "digi/ccardimx28/ccardimx28_ethernet1_leds.dtsi"
+
+/* AUARTs (and Bluetooth) */
+/include/ "digi/ccardimx28/ccardimx28_auart0_bluetooth.dtsi"
+/include/ "digi/ccardimx28/ccardimx28_auart1_2wires.dtsi"
+///include/ "digi/ccardimx28/ccardimx28_auart1_4wires.dtsi"
+///include/ "digi/ccardimx28/ccardimx28_auart2_2wires.dtsi"
+///include/ "digi/ccardimx28/ccardimx28_auart2_4wires.dtsi"
+///include/ "digi/ccardimx28/ccardimx28_auart3_2wires.dtsi"
+///include/ "digi/ccardimx28/ccardimx28_auart3_4wires.dtsi"
+///include/ "digi/ccardimx28/ccardimx28_auart4_2wires.dtsi"
+///include/ "digi/ccardimx28/ccardimx28_auart4_4wires.dtsi"
+
+/* SSP (and WiFi) */
+/include/ "digi/ccardimx28/ccardimx28_ssp0_mmc.dtsi"
+///include/ "digi/ccardimx28/ccardimx28_ssp0_spi.dtsi"
+///include/ "digi/ccardimx28/ccardimx28_ssp0_spi_gpio.dtsi"
+///include/ "digi/ccardimx28/ccardimx28_ssp1_spi.dtsi"
+///include/ "digi/ccardimx28/ccardimx28_ssp1_spi_gpio.dtsi"
+/include/ "digi/ccardimx28/ccardimx28_ssp2_mmc_wifi.dtsi"
+///include/ "digi/ccardimx28/ccardimx28_ssp3_spi.dtsi"
+///include/ "digi/ccardimx28/ccardimx28_ssp3_spi_gpio.dtsi"
+
+/* CAN */
+/include/ "digi/ccardimx28/ccardimx28_can0.dtsi"
+/include/ "digi/ccardimx28/ccardimx28_can1.dtsi"
+
+/* I2C */
+///include/ "digi/ccardimx28/ccardimx28_i2c0.dtsi"
+/include/ "digi/ccardimx28/ccardimx28_i2c1.dtsi"
+
+/* Sound */
+/include/ "digi/ccardimx28/ccardimx28_sound_i2c1.dtsi"
+
+/* 1-wire */
+/include/ "digi/ccardimx28/ccardimx28_onewire_i2c1.dtsi"
+
+/* USB */
+/include/ "digi/ccardimx28/ccardimx28_usb0.dtsi"
+///include/ "digi/ccardimx28/ccardimx28_usb1.dtsi"
+
+/* Display */
+///include/ "digi/ccardimx28/ccardimx28_display_lq70y3dg3b.dtsi"
+
+/* LRADC */
+/include/ "digi/ccardimx28/ccardimx28_lradc.dtsi"
+///include/ "digi/ccardimx28/ccardimx28_lradc_touchscreen.dtsi"
+
+/* Platform */
 / {
 	model = "Digi ConnectCard for i.MX28 JumpStart Kit";
 	compatible = "digi,ccardimx28js", "digi,ccardimx28", "fsl,imx28";
 
-	apb@80000000 {
-		apbh@80000000 {
-			pinctrl@80018000 {
-				user_leds: leds@0 {
-					reg = <0>;
-					fsl,pinmux-ids = <
-						0x3043 /* MX28_PAD_AUART1_RX__GPIO_3_4 */
-						0x3053 /* MX28_PAD_AUART1_TX__GPIO_3_5 */
-					>;
-					fsl,drive-strength = <0>;
-					fsl,voltage = <1>;
-					fsl,pull-up = <0>;
-				};
-
-				/* I2C0 has external pull-ups on JSK board */
-				i2c0_pins_a: i2c0@0 {
-					fsl,pull-up = <0>;
-				};
-			};
-
-			ssp0: ssp@80010000 {
-				status = "okay";
-			};
-
-			/* MXS SPI1 */
-			ssp1: ssp@80012000 {
-				status = "disabled";
-//				spidev@0 {
-//					compatible = "spidev";
-//					reg = <0>;
-//					spi-max-frequency = <4000000>;
-//				};
-			};
-
-			/* MXS SPI3 */
-			ssp3: ssp@80016000 {
-				status = "disabled";
-//				spidev@0 {
-//					compatible = "spidev";
-//					reg = <0>;
-//					spi-max-frequency = <4000000>;
-//				};
-			};
-
-			can0: can@80032000 {
-				status = "okay";
-			};
-
-			can1: can@80034000 {
-				status = "okay";
-			};
-
-			lcdif@80030000 {
-				pinctrl-names = "default";
-				pinctrl-0 = <&lcdif_18bit_pins_a
-					     &lcdif_pins_ccard>;
-				display = <&lq70y3dg3b>;
-				status = "disabled";
-
-				/* Sharp LQ70Y3DG3B */
-				lq70y3dg3b: display {
-                                       bits-per-pixel = <32>;
-                                       bus-width = <18>;
-
-                                       display-timings {
-						native-mode = <&timing0>;
-							timing0: timing0 {
-							clock-frequency = <33500000>;
-							hactive = <800>;
-							vactive = <480>;
-							hback-porch = <129>;
-							hfront-porch = <110>;
-							vback-porch = <33>;
-							vfront-porch = <5>;
-							hsync-len = <5>;
-							vsync-len = <2>;
-							hsync-active = <0>;
-							vsync-active = <0>;
-							de-active = <1>;
-							pixelclk-active = <0>;
-						};
-                                       };
-				};
-			};
-		};
-		apbx@80040000 {
-			duart: serial@80074000 {
-				pinctrl-names = "default";
-				pinctrl-0 = <&duart_pins_c>;
-				status = "okay";
-			};
-
-			auart1: serial@8006c000 {
-				pinctrl-names = "default";
-				pinctrl-0 = <&auart1_pins_a>;
-				status = "okay";
-			};
-
-			auart2: serial@8006e000 {
-				pinctrl-names = "default";
-				pinctrl-0 = <&auart2_2pins_b>;
-				status = "disabled";
-			};
-
-			auart3: serial@80070000 {
-				pinctrl-names = "default";
-				pinctrl-0 = <&auart3_2pins_b>;
-				status = "disabled";
-			};
-
-			auart4: serial@80072000 {
-				pinctrl-names = "default";
-				pinctrl-0 = <&auart4_pins_a>;
-				status = "disabled";
-			};
-
-			i2c0: i2c@80058000 {
-				pinctrl-names = "default";
-				pinctrl-0 = <&i2c0_pins_a>;
-				status = "disabled";
-			};
-
-			i2c1: i2c@8005a000 {
-				pinctrl-names = "default";
-				pinctrl-0 = <&i2c1_pins_a>;
-				status = "okay";
-
-				sgtl5000: codec@0a {
-					compatible = "fsl,sgtl5000";
-					reg = <0x0a>;
-					VDDA-supply = <&reg_3p3v>;
-					VDDIO-supply = <&reg_3p3v>;
-				};
-
-				ds2482: onewire@18 {
-					compatible = "maxim,ds2482";
-					reg = <0x18>;
-				};
-			};
-
-			saif0: saif@80042000 {
-				pinctrl-names = "default";
-				pinctrl-0 = <&saif0_pins_a>;
-				status = "disabled";
-			};
-
-			saif1: saif@80046000 {
-				pinctrl-names = "default";
-				pinctrl-0 = <&saif1_pins_b>;
-				fsl,saif-master = <&saif0>;
-				status = "disabled";
-			};
-
-			pwm0: pwm@80064000 {
-				pinctrl-names = "default";
-				pinctrl-0 = <&pwm0_pins_b>;
-				status = "disabled";
-			};
-		};
-	};
-
-	ahb@80080000 {
-		usb0: usb@80080000 {
-			pinctrl-names = "default";
-			pinctrl-0 = <&usbphy0_pins_c>;
-			vbus-supply = <&reg_usb0_vbus>;
-			status = "okay";
-		};
-
-		usb1: usb@80090000 {
-			vbus-supply = <&reg_usb1_vbus>;
-			status = "disabled";
-		};
-
-		mac0: ethernet@800f0000 {
-			//digi,gpio-link-led = <&gpio3 6 1>;
-			//digi,gpio-act-led = <&gpio3 7 1>;
-		};
-		mac1: ethernet@800f4000 {
-			//digi,gpio-link-led = <&gpio3 13 1>;
-			//digi,gpio-act-led = <&gpio3 12 1>;
-		};
-	};
-
-	regulators {
-		compatible = "simple-bus";
-
-		reg_3p3v: 3p3v {
-			compatible = "regulator-fixed";
-			regulator-name = "3P3V";
-			regulator-min-microvolt = <3300000>;
-			regulator-max-microvolt = <3300000>;
-			regulator-always-on;
-		};
-
-		reg_usb0_vbus: usb0_vbus {
-			compatible = "regulator-fixed";
-			regulator-name = "usb0_vbus";
-			regulator-min-microvolt = <5000000>;
-			regulator-max-microvolt = <5000000>;
-			regulator-always-on;
-		};
-
-		reg_usb1_vbus: usb1_vbus {
-			compatible = "regulator-fixed";
-			regulator-name = "usb1_vbus";
-			regulator-min-microvolt = <5000000>;
-			regulator-max-microvolt = <5000000>;
-			regulator-always-on;
-		};
-	};
-
-	sound {
-		compatible = "fsl,ccardimx28js-sgtl5000",
-			     "fsl,mxs-audio-sgtl5000";
-		model = "imx28-evk-sgtl5000";
-		saif-controllers = <&saif0 &saif1>;
-		audio-codec = <&sgtl5000>;
-	};
-
-	onewire {
-		compatible = "maxim,ds2482";
-	};
-
-	/*
-	leds {
-		compatible = "gpio-leds";
-		pinctrl-names = "default";
-		pinctrl-0 = <&user_leds>;
-
-		user1 {
-			label = "LED1";
-			gpios = <&gpio3 5 1>;
-			default-state = "off";
-		};
-		user2 {
-			label = "LED2";
-			gpios = <&gpio3 4 1>;
-			default-state = "off";
-		};
-	};
-	*/
-
-	/* SPI1 (GPIO) */
-	spi1 {
-		status = "disabled";
-//		spidev@0 {
-//			compatible = "spidev";
-//			reg = <0>;
-//			spi-max-frequency = <4000000>;
-//		};
-	};
-
-	/* SPI3 (GPIO) */
-	spi3 {
-		status = "okay";
-		spidev@0 {
-			compatible = "spidev";
-			reg = <0>;
-			spi-max-frequency = <4000000>;
-		};
-	};
-
-	backlight {
-		compatible = "pwm-backlight";
-		pwms = <&pwm0 0 5000000>;
-		brightness-levels = <0 4 8 16 32 64 128 255>;
-		/* inversed polarity of backlight in HR_LCD (0 = on) */
-		default-brightness-level = <1>;
-		status = "disabled";
+	memory {
+		/* This needs to be hacked by U-Boot
+		 * to write the available DRAM */
+		reg = <0x40000000 0x08000000>;
 	};
 };
