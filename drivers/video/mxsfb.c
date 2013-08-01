@@ -340,24 +340,6 @@ static const struct fb_bitfield def_rgb565[] = {
 	}
 };
 
-static const struct fb_bitfield def_rgb666[] = {
-	[RED] = {
-		.offset = 16,
-		.length = 6,
-	},
-	[GREEN] = {
-		.offset = 8,
-		.length = 6,
-	},
-	[BLUE] = {
-		.offset = 0,
-		.length = 6,
-	},
-	[TRANSP] = {	/* no support for transparency */
-		.length = 0,
-	}
-};
-
 static const struct fb_bitfield def_rgb888[] = {
 	[RED] = {
 		.offset = 16,
@@ -467,16 +449,7 @@ static int mxsfb_check_var(struct fb_var_screeninfo *var,
 			pr_debug("Unsupported LCD bus width mapping\n");
 			break;
 		case STMLCDIF_16BIT:
-			/* 24 bit to 18 bit mapping */
-			rgb = def_rgb666;
-			break;
 		case STMLCDIF_18BIT:
-			if (pixfmt_is_equal(var, def_rgb666))
-				/* 24 bit to 18 bit mapping */
-				rgb = def_rgb666;
-			else
-				rgb = def_rgb888;
-			break;
 		case STMLCDIF_24BIT:
 			/* real 24 bit */
 			rgb = def_rgb888;
@@ -702,18 +675,7 @@ static int mxsfb_set_par(struct fb_info *fb_info)
 					"Unsupported LCD bus width mapping\n");
 			return -EINVAL;
 		case STMLCDIF_16BIT:
-			/* 24 bit to 18 bit mapping */
-			ctrl |= CTRL_DF24; /* ignore the upper 2 bits in
-					    *  each colour component
-					    */
-			break;
 		case STMLCDIF_18BIT:
-			if (pixfmt_is_equal(&fb_info->var, def_rgb666))
-				/* 24 bit to 18 bit mapping */
-				ctrl |= CTRL_DF24; /* ignore the upper 2 bits in
-						    *  each colour component
-						    */
-			break;
 		case STMLCDIF_24BIT:
 			/* real 24 bit */
 			break;
