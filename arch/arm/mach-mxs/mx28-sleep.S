@@ -169,7 +169,6 @@ __mx28_temp_stack:
 
 	adrl	r9, __mx28_temp_stack
 
-	mov r3, r0      @Save first argument
 	@ clean cache
 	ldr	r1, __mx28_flush_cache_addr
 	mov	lr, pc
@@ -300,7 +299,8 @@ powersts:
     PM_GET_BASE_ADDR_OFF 1,HW_POWER_MINPWR, r0
 	PM_BITS_SET BM_POWER_MINPWR_LESSANA_I
 
-	cmp r3, #(MXS_DO_SW_OSC_RTC_TO_BATT)
+	ldr r0 ,[sp]
+	cmp r0, #(MXS_DO_SW_OSC_RTC_TO_BATT)
 	bne DoNotSwOscRtcToBatt
 
     PM_GET_BASE_ADDR_OFF 1,HW_POWER_5VCTRL, r0
