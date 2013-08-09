@@ -62,7 +62,8 @@ struct mx28_virt_addr_t {
 } __attribute__((packed));
 
 struct mx28_virt_addr_t mx28_virt_addr;
-
+static phys_addr_t iram_phy_addr;
+static unsigned long iram_virtual_addr;
 static struct gen_pool * iram_pool;
 
 static inline void __mxs_setl(u32 mask, void __iomem *reg)
@@ -95,8 +96,6 @@ static inline void do_standby(void)
     int cpu_rate = 0;
     int hbus_rate = 0;
     u32 reg_clkctrl_clkseq, reg_clkctrl_xtal;
-    phys_addr_t iram_phy_addr;
-    unsigned long iram_virtual_addr;
     int wakeupirq;
     int suspend_param = MXS_DO_SW_OSC_RTC_TO_BATT;
 
@@ -117,8 +116,6 @@ static inline void do_standby(void)
      * SDRAM will be placed into self-refresh during power down
      */
     flush_cache_all();
-    iram_virtual_addr = gen_pool_alloc(iram_pool, MAX_POWEROFF_CODE_SIZE);
-    iram_phy_addr = gen_pool_virt_to_phys(iram_pool, iram_virtual_addr);
 
     /* copy suspend function into SRAM */
     memcpy((void *)iram_virtual_addr, mx28_cpu_standby, mx28_standby_alloc_sz);
@@ -249,6 +246,9 @@ void __init mxs_pm_init(void)
         if( !iram_pool )
             if( NULL == (iram_pool = of_get_named_gen_pool(np, "sram", 0)))
                 pr_err("Failed to fetch iram_poll.\n");
+
+        iram_virtual_addr = gen_pool_alloc(iram_pool, MAX_POWEROFF_CODE_SIZE);
+        iram_phy_addr = gen_pool_virt_to_phys(iram_pool, iram_virtual_addr);
 
         get_virt_addr("clkctrl",&mx28_virt_addr.clkctrl_addr);
         get_virt_addr("power",&mx28_virt_addr.power_addr);
