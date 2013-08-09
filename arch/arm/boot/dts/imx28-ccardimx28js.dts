@@ -77,6 +77,9 @@
 /include/ "digi/ccardimx28/ccardimx28_lradc.dtsi"
 ///include/ "digi/ccardimx28/ccardimx28_lradc_touchscreen.dtsi"
 
+/* Power Switch */
+/include/ "digi/ccardimx28/ccardimx28_pswitch.dtsi"
+
 /* Platform */
 / {
 	model = "Digi ConnectCard for i.MX28 JumpStart Kit";

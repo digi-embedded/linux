@@ -641,4 +641,14 @@ config KEYBOARD_CROS_EC
 	  To compile this driver as a module, choose M here: the
 	  module will be called cros_ec_keyb.
 
+config KEYBOARD_MXS_PSWITCH
+       tristate "MXS Power Switch Button"
+       depends on ARCH_MXS
+       help
+         Support the Power Switch Key of the i.MX28 processor as an input
+         device.
+
+         To compile this driver as a module, choose M here: the module
+         will be called mxs_pswitch.
+
 endif
