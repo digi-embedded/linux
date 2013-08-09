@@ -33,9 +33,15 @@
 
 	cpus {
 		cpu@0 {
-			compatible = "arm,arm926ejs";
+                        compatible = "arm,arm926ejs";
+                        sram = <&ocram>;
 		};
 	};
+
+        ocram: ocram@00000000 {
+                compatible = "mmio-sram";
+                reg = <0x00000000 0x20000>;
+        };
 
 	apb@80000000 {
 		compatible = "simple-bus";
@@ -1248,6 +1254,11 @@
 			reg = <0x800f8000 0x8000>;
 			status = "disabled";
 		};
+
+                emi@800e0000 {
+                        compatible = "fsl,imx28";
+                        reg = <0x800e0000 0x10000>;
+                };
 
 	};
 };
