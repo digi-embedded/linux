@@ -84,7 +84,7 @@
 / {
 	model = "Digi ConnectCard for i.MX28 JumpStart Kit";
 	compatible = "digi,ccardimx28js", "digi,ccardimx28", "fsl,imx28";
-
+        digi,machine,name = "ccardimx28";
 	memory {
 		/* This needs to be hacked by U-Boot
 		 * to write the available DRAM */
