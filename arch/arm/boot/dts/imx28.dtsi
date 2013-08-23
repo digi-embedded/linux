@@ -1256,7 +1256,6 @@
 		};
 
                 emi@800e0000 {
-                        compatible = "fsl,imx28";
                         reg = <0x800e0000 0x10000>;
                 };
 
