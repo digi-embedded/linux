@@ -72,10 +72,10 @@
 
 	backlight {
 		compatible = "pwm-backlight";
-		pwms = <&pwm0 0 15000>;
-		brightness-levels = <0 4 8 16 32 64 128 255>;
-		/* inversed polarity of backlight in HR_LCD (0 = on) */
-		default-brightness-level = <1>;
+		pwms = <&pwm0 0 15000 1>;	/* inverted duty */
+		brightness-levels = <0 2 4 8 16 32 54 76 98
+				     120 142 164 186 208 230 255>;
+		default-brightness-level = <13>;
 		status = "okay";
 	};
 };
