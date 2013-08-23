@@ -892,6 +892,17 @@
 					fsl,pull-up = <1>;
 				};
 
+				usb0_pins_a: usb0@0 {
+					reg = <0>;
+					fsl,pinmux-ids = <
+						0x3071 /* MX28_PAD_AUART1_RTS__USB0_ID */
+					>;
+					fsl,drive-strength = <2>;
+					fsl,voltage = <1>;
+					fsl,pull-up = <1>;
+				};
+
+
 				usbphy1_pins_a: usbphy1@0 {
 					reg = <0>;
 					fsl,pinmux-ids = <
