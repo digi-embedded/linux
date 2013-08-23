@@ -68,7 +68,7 @@
 #define BM_PINCTRL_EMI_DS_CTRL_DDR_MODE     0x00030000
 #define BP_PINCTRL_EMI_DS_CTRL_DDR_MODE             16
 #define BF_PINCTRL_EMI_DS_CTRL_DDR_MODE(v)  \
-    (((v) << 16) & BM_PINCTRL_EMI_DS_CTRL_DDR_MODE)
+        (((v) << 16) & BM_PINCTRL_EMI_DS_CTRL_DDR_MODE)
 #define HW_PINCTRL_DOUT3_TOG  (0x0000073C)
 
 /* DRAM control registers */
@@ -77,7 +77,7 @@
 #define BP_DRAM_CTL22_LOWPOWER_CONTROL  8
 #define BM_DRAM_CTL22_LOWPOWER_CONTROL  0x00001F00
 #define BF_DRAM_CTL22_LOWPOWER_CONTROL(v)  \
-    (((v) << 8) & BM_DRAM_CTL22_LOWPOWER_CONTROL)
+        (((v) << 8) & BM_DRAM_CTL22_LOWPOWER_CONTROL)
 #define BM_DRAM_CTL17_SREFRESH	0x00000001
 
 #define BM_HWID_MODULE_VERSION	0x000000f0
@@ -94,40 +94,40 @@
 #define POWER_MINPWR_BACKUP 4
 
 .macro PM_BITS_SET, val
-	ldr	r1, [r0]
-	orr	r1, r1, #(\val)
-	str r1, [r0]
+        ldr	r1, [r0]
+        orr	r1, r1, #(\val)
+        str r1, [r0]
 .endm
 
 .macro PM_BITS_CLR, val
-	ldr	r1, [r0]
-	bic	r1, r1, #(\val)
-	str r1, [r0]
+        ldr	r1, [r0]
+        bic	r1, r1, #(\val)
+        str r1, [r0]
 .endm
 
 .macro PM_BACKUP_REG, num
-	ldr	r1, [r0]
-	str r1, __mx28_temp_stack + \num * 4
+        ldr	r1, [r0]
+        str r1, __mx28_temp_stack + \num * 4
 .endm
 
 .macro PM_WRITE_REG_MASK, bitmask, val
-	ldr	r1, [r0]
-	bic r1, r1, #(\bitmask)
-	orr r1, r1, #(\val)
-	str r1, [r0]
+        ldr	r1, [r0]
+        bic r1, r1, #(\bitmask)
+        orr r1, r1, #(\val)
+        str r1, [r0]
 .endm
 
 .macro PM_SET_AND_BACKUP_REG, bitmask, val, num
-	ldr	r1, [r0]
-	str r1, __mx28_temp_stack + \num * 4
-	bic r1, r1, #(\bitmask)
-	orr r1, r1, #(\val)
-	str r1, [r0]
+        ldr	r1, [r0]
+        str r1, __mx28_temp_stack + \num * 4
+        bic r1, r1, #(\bitmask)
+        orr r1, r1, #(\val)
+        str r1, [r0]
 .endm
 
 .macro PM_SET_RESTORE_REG, num
-	ldr r1, __mx28_temp_stack + \num * 4
-	str r1, [r0]
+        ldr r1, __mx28_temp_stack + \num * 4
+        str r1, [r0]
 .endm
 
 #struct mx28_virt_addr_t:
@@ -136,19 +136,19 @@
 #    [2] dram_addr
 #    [3] pinctrl_addr
 .macro PM_GET_BASE_ADDR_OFF, n, offset, rr
-    ldr r1, [sp, #4]
-	ldr r0, [r1, #\n * 4]
-    mov r1, #(\offset & 0x000000ff)
-    orr r1, r1 , #(\offset & 0x0000ff00)
-    orr r1, r1 , #(\offset & 0x00ff0000)
-    orr r1, r1 , #(\offset & 0xff000000)
-    add \rr, r0, r1
+        ldr r1, [sp, #4]
+        ldr r0, [r1, #\n * 4]
+        mov r1, #(\offset & 0x000000ff)
+        orr r1, r1 , #(\offset & 0x0000ff00)
+        orr r1, r1 , #(\offset & 0x00ff0000)
+        orr r1, r1 , #(\offset & 0xff000000)
+        add \rr, r0, r1
 .endm
 
 .macro ledtoggle
-    ldr r1, [r0]
-    orr r1, r1, #(0x10)
-    str r1, [r0]
+        ldr r1, [r0]
+        orr r1, r1, #(0x10)
+        str r1, [r0]
 .endm
 
 @ Usage
@@ -156,291 +156,291 @@
 #    PM_GET_BASE_ADDR_OFF 3, HW_PINCTRL_DOUT3_TOG, r0
 #    ledtoggle
 
-		.text
+        .text
 
-.align 8
+        .align 8
 ENTRY(mx28_cpu_standby)
-	@ save registers on stack
-	stmfd	sp!, {r0 - r9, lr}
+        @ save registers on stack
+        stmfd	sp!, {r0 - r9, lr}
 
-	.space  0x100
-__mx28_temp_stack:
-	.space  128
+        .space  0x100
+        __mx28_temp_stack:
+        .space  128
 
-	adrl	r9, __mx28_temp_stack
+        adrl	r9, __mx28_temp_stack
 
-	@ clean cache
-	ldr	r1, __mx28_flush_cache_addr
-	mov	lr, pc
-	mov	pc, r1
+        @ clean cache
+        ldr	r1, __mx28_flush_cache_addr
+        mov	lr, pc
+        mov	pc, r1
 
-	@ put DRAM into self refresh
-    PM_GET_BASE_ADDR_OFF 2, HW_DRAM_CTL22, r0
-	ldr     r1,[r0]
-	and	r1, r1, #(~BM_DRAM_CTL22_LOWPOWER_CONTROL)
-	orr	r1, r1, #(BF_DRAM_CTL22_LOWPOWER_CONTROL(2))
-	str	r1, [r0]
+        @ put DRAM into self refresh
+        PM_GET_BASE_ADDR_OFF 2, HW_DRAM_CTL22, r0
+        ldr     r1,[r0]
+        and	r1, r1, #(~BM_DRAM_CTL22_LOWPOWER_CONTROL)
+        orr	r1, r1, #(BF_DRAM_CTL22_LOWPOWER_CONTROL(2))
+        str	r1, [r0]
 
-	@ wait for it to actually happen
-	mov	r0, #24 << 12
-11:	sub	r0, r0, #1
-	cmp	r0, #0
-	bne	11b
+        @ wait for it to actually happen
+        mov	r0, #24 << 12
+        11:	sub	r0, r0, #1
+        cmp	r0, #0
+        bne	11b
 
-	@ gate EMI clk
-    PM_GET_BASE_ADDR_OFF 0, HW_CLKCTRL_EMI, r0
-	ldr	r1, [r0]
-	orr	r1, r1, #(BM_CLKCTRL_EMI_CLKGATE)
-	str	r1, [r0]
+        @ gate EMI clk
+        PM_GET_BASE_ADDR_OFF 0, HW_CLKCTRL_EMI, r0
+        ldr	r1, [r0]
+        orr	r1, r1, #(BM_CLKCTRL_EMI_CLKGATE)
+        str	r1, [r0]
 
-	@ gate ref_emi clk
-    PM_GET_BASE_ADDR_OFF 0, HW_CLKCTRL_FRAC0, r0
-	ldr     r1, [r0]
-	orr     r1, r1, #(BM_CLKCTRL_FRAC0_CLKGATEEMI)
-	str     r1, [r0]
+        @ gate ref_emi clk
+        PM_GET_BASE_ADDR_OFF 0, HW_CLKCTRL_FRAC0, r0
+        ldr     r1, [r0]
+        orr     r1, r1, #(BM_CLKCTRL_FRAC0_CLKGATEEMI)
+        str     r1, [r0]
 
-	@ gate ref_cpu clk
-    PM_GET_BASE_ADDR_OFF 0, HW_CLKCTRL_FRAC0, r0
-	ldr     r1, [r0]
-	orr     r1, r1, #(BM_CLKCTRL_FRAC0_CLKGATECPU)
-	str     r1, [r0]
+        @ gate ref_cpu clk
+        PM_GET_BASE_ADDR_OFF 0, HW_CLKCTRL_FRAC0, r0
+        ldr     r1, [r0]
+        orr     r1, r1, #(BM_CLKCTRL_FRAC0_CLKGATECPU)
+        str     r1, [r0]
 
-    @ disable EMI pads
-	@ Digi: Accessing PINCTRL with DRAM in self refresh
-	@ is causing a crash.
-//  PM_GET_BASE_ADDR_OFF 3, HW_PINCTRL_EMI_DS_CTRL, r0
-//  ldr	r1, [r0]
-//	and	r1, r1, #(~BM_PINCTRL_EMI_DS_CTRL_DDR_MODE)
-//	orr     r1, r1, #(BF_PINCTRL_EMI_DS_CTRL_DDR_MODE(0x1))
-//	str	r1, [r0]
+        @ disable EMI pads
+        @ Digi: Accessing PINCTRL with DRAM in self refresh
+        @ is causing a crash.
+        //  PM_GET_BASE_ADDR_OFF 3, HW_PINCTRL_EMI_DS_CTRL, r0
+        //  ldr	r1, [r0]
+        //	and	r1, r1, #(~BM_PINCTRL_EMI_DS_CTRL_DDR_MODE)
+        //	orr     r1, r1, #(BF_PINCTRL_EMI_DS_CTRL_DDR_MODE(0x1))
+        //	str	r1, [r0]
 
-powersts:
-    PM_GET_BASE_ADDR_OFF 1, HW_POWER_STS, r2
-	// vddio
-    PM_GET_BASE_ADDR_OFF 1,HW_POWER_VDDIOCTRL, r0
-	PM_SET_AND_BACKUP_REG BM_POWER_VDDIOCTRL_TRG,\
-    LOWER_VDDIO, VDDIOCTRL_BACKUP
+        powersts:
+        PM_GET_BASE_ADDR_OFF 1, HW_POWER_STS, r2
+        // vddio
+        PM_GET_BASE_ADDR_OFF 1,HW_POWER_VDDIOCTRL, r0
+        PM_SET_AND_BACKUP_REG BM_POWER_VDDIOCTRL_TRG,\
+                LOWER_VDDIO, VDDIOCTRL_BACKUP
 
-7:
-	mov	r0, #24 << 10
-1:	sub	r0, r0, #1
-	cmp	r0, #0
-	bne	1b
+                7:
+                mov	r0, #24 << 10
+                1:	sub	r0, r0, #1
+                cmp	r0, #0
+                bne	1b
 
-	ldr     r0,[r2]
-	and     r0,r0,#(BM_POWER_STS_DC_OK)
-	cmp     r0,#(BM_POWER_STS_DC_OK)
-	bne     7b
+        ldr     r0,[r2]
+        and     r0,r0,#(BM_POWER_STS_DC_OK)
+        cmp     r0,#(BM_POWER_STS_DC_OK)
+        bne     7b
 
-    PM_GET_BASE_ADDR_OFF 1,HW_POWER_VDDACTRL, r0
-	PM_SET_AND_BACKUP_REG BM_POWER_VDDACTRL_TRG,\
-    LOWER_VDDA, VDDACTRL_BACKUP
-8:
-	mov	r0, #24 << 10
-2:	sub	r0, r0, #1
-	cmp	r0, #0
-	bne	2b
+        PM_GET_BASE_ADDR_OFF 1,HW_POWER_VDDACTRL, r0
+        PM_SET_AND_BACKUP_REG BM_POWER_VDDACTRL_TRG,\
+                LOWER_VDDA, VDDACTRL_BACKUP
+                8:
+                mov	r0, #24 << 10
+                2:	sub	r0, r0, #1
+                cmp	r0, #0
+                bne	2b
 
-	ldr     r0,[r2]
-	and     r0,r0,#(BM_POWER_STS_DC_OK)
-	cmp     r0,#(BM_POWER_STS_DC_OK)
-	bne     8b
+        ldr     r0,[r2]
+        and     r0,r0,#(BM_POWER_STS_DC_OK)
+        cmp     r0,#(BM_POWER_STS_DC_OK)
+        bne     8b
 
-    PM_GET_BASE_ADDR_OFF 1,HW_POWER_VDDDCTRL, r0
-	PM_SET_AND_BACKUP_REG BM_POWER_VDDDCTRL_TRG,\
-    LOWER_VDDD, VDDDCTRL_BACKUP
-9:
-	mov	r0, #24 << 10
-3:	sub	r0, r0, #1
-	cmp	r0, #0
-	bne	3b
+        PM_GET_BASE_ADDR_OFF 1,HW_POWER_VDDDCTRL, r0
+        PM_SET_AND_BACKUP_REG BM_POWER_VDDDCTRL_TRG,\
+                LOWER_VDDD, VDDDCTRL_BACKUP
+                9:
+                mov	r0, #24 << 10
+                3:	sub	r0, r0, #1
+                cmp	r0, #0
+                bne	3b
 
-	ldr     r0,[r2]
-	and     r0,r0,#(BM_POWER_STS_DC_OK)
-	cmp     r0,#(BM_POWER_STS_DC_OK)
-	bne     9b
+        ldr     r0,[r2]
+        and     r0,r0,#(BM_POWER_STS_DC_OK)
+        cmp     r0,#(BM_POWER_STS_DC_OK)
+        bne     9b
 
-	@ wait for DC OK
-    PM_GET_BASE_ADDR_OFF 1, HW_POWER_STS, r0
-4:	ldr     r1,[r0]
-	and     r1,r1,#(BM_POWER_STS_DC_OK)
-	cmp     r1,#(BM_POWER_STS_DC_OK)
-	bne     4b
+        @ wait for DC OK
+        PM_GET_BASE_ADDR_OFF 1, HW_POWER_STS, r0
+        4:	ldr     r1,[r0]
+        and     r1,r1,#(BM_POWER_STS_DC_OK)
+        cmp     r1,#(BM_POWER_STS_DC_OK)
+        bne     4b
 
-    PM_GET_BASE_ADDR_OFF 1,HW_POWER_LOOPCTRL, r0
-	PM_BACKUP_REG POWER_LOOPCTRL_BACKUP
-    PM_GET_BASE_ADDR_OFF 1,HW_POWER_MINPWR, r0
-	PM_BACKUP_REG POWER_MINPWR_BACKUP
+        PM_GET_BASE_ADDR_OFF 1,HW_POWER_LOOPCTRL, r0
+        PM_BACKUP_REG POWER_LOOPCTRL_BACKUP
+        PM_GET_BASE_ADDR_OFF 1,HW_POWER_MINPWR, r0
+        PM_BACKUP_REG POWER_MINPWR_BACKUP
 
-    PM_GET_BASE_ADDR_OFF 1,HW_POWER_LOOPCTRL, r0
-	PM_BITS_CLR	BM_POWER_LOOPCTRL_EN_RCSCALE
-    PM_GET_BASE_ADDR_OFF 1,HW_POWER_LOOPCTRL, r0
-	PM_WRITE_REG_MASK BM_POWER_LOOPCTRL_DC_R,\
-		(2<<BP_POWER_LOOPCTRL_DC_R)
+        PM_GET_BASE_ADDR_OFF 1,HW_POWER_LOOPCTRL, r0
+        PM_BITS_CLR	BM_POWER_LOOPCTRL_EN_RCSCALE
+        PM_GET_BASE_ADDR_OFF 1,HW_POWER_LOOPCTRL, r0
+        PM_WRITE_REG_MASK BM_POWER_LOOPCTRL_DC_R,\
+                (2<<BP_POWER_LOOPCTRL_DC_R)
 
-	// half fets
-    PM_GET_BASE_ADDR_OFF 1,HW_POWER_MINPWR, r0
-	PM_BITS_SET BM_POWER_MINPWR_HALF_FETS
+        // half fets
+        PM_GET_BASE_ADDR_OFF 1,HW_POWER_MINPWR, r0
+        PM_BITS_SET BM_POWER_MINPWR_HALF_FETS
 
-    PM_GET_BASE_ADDR_OFF 1,HW_POWER_LOOPCTRL, r0
-	PM_BITS_CLR	BM_POWER_LOOPCTRL_CM_HYST_THRESH
-    PM_GET_BASE_ADDR_OFF 1,HW_POWER_LOOPCTRL, r0
-	PM_BITS_CLR	BM_POWER_LOOPCTRL_EN_CM_HYST
-    PM_GET_BASE_ADDR_OFF 1,HW_POWER_LOOPCTRL, r0
-	PM_BITS_CLR	BM_POWER_LOOPCTRL_EN_DF_HYST
+        PM_GET_BASE_ADDR_OFF 1,HW_POWER_LOOPCTRL, r0
+        PM_BITS_CLR	BM_POWER_LOOPCTRL_CM_HYST_THRESH
+        PM_GET_BASE_ADDR_OFF 1,HW_POWER_LOOPCTRL, r0
+        PM_BITS_CLR	BM_POWER_LOOPCTRL_EN_CM_HYST
+        PM_GET_BASE_ADDR_OFF 1,HW_POWER_LOOPCTRL, r0
+        PM_BITS_CLR	BM_POWER_LOOPCTRL_EN_DF_HYST
 
-	// enable PFM
-    PM_GET_BASE_ADDR_OFF 1,HW_POWER_LOOPCTRL, r0
-	PM_BITS_SET	 BM_POWER_LOOPCTRL_HYST_SIGN
-    PM_GET_BASE_ADDR_OFF 1,HW_POWER_MINPWR, r0
-	PM_BITS_SET BM_POWER_MINPWR_EN_DC_PFM
+        // enable PFM
+        PM_GET_BASE_ADDR_OFF 1,HW_POWER_LOOPCTRL, r0
+        PM_BITS_SET	 BM_POWER_LOOPCTRL_HYST_SIGN
+        PM_GET_BASE_ADDR_OFF 1,HW_POWER_MINPWR, r0
+        PM_BITS_SET BM_POWER_MINPWR_EN_DC_PFM
 
 
-    PM_GET_BASE_ADDR_OFF 1,HW_POWER_MINPWR, r0
-	PM_BITS_SET BM_POWER_MINPWR_LESSANA_I
+        PM_GET_BASE_ADDR_OFF 1,HW_POWER_MINPWR, r0
+        PM_BITS_SET BM_POWER_MINPWR_LESSANA_I
 
-	ldr r0 ,[sp]
-	cmp r0, #(MXS_DO_SW_OSC_RTC_TO_BATT)
-	bne DoNotSwOscRtcToBatt
+        ldr r0 ,[sp]
+        cmp r0, #(MXS_DO_SW_OSC_RTC_TO_BATT)
+        bne DoNotSwOscRtcToBatt
 
-    PM_GET_BASE_ADDR_OFF 1,HW_POWER_5VCTRL, r0
-	PM_BITS_SET     BM_POWER_5VCTRL_ILIMIT_EQ_ZERO
+        PM_GET_BASE_ADDR_OFF 1,HW_POWER_5VCTRL, r0
+        PM_BITS_SET     BM_POWER_5VCTRL_ILIMIT_EQ_ZERO
 
-DoNotSwOscRtcToBatt:
-	//Gated PLL0
-    PM_GET_BASE_ADDR_OFF 0, HW_CLKCTRL_PLL0CTRL0, r0
-	PM_BITS_CLR	BM_CLKCTRL_PLL0CTRL0_POWER
+        DoNotSwOscRtcToBatt:
+        //Gated PLL0
+        PM_GET_BASE_ADDR_OFF 0, HW_CLKCTRL_PLL0CTRL0, r0
+        PM_BITS_CLR	BM_CLKCTRL_PLL0CTRL0_POWER
 
-	@ div hbus to lowest
-    PM_GET_BASE_ADDR_OFF 0, HW_CLKCTRL_HBUS, r0
-	ldr r3, [r0]
-	mov r1, #(0x1F)
-	str r1, [r0, #4]
+        @ div hbus to lowest
+        PM_GET_BASE_ADDR_OFF 0, HW_CLKCTRL_HBUS, r0
+        ldr r3, [r0]
+        mov r1, #(0x1F)
+        str r1, [r0, #4]
 
-	@ do enter standby
+        @ do enter standby
 
-    PM_GET_BASE_ADDR_OFF 0, HW_CLKCTRL_CPU, r0
-	mov	r1, #(1<<12)
-	str	r1, [r0, #4]
-	mov	r2, #0
-	mcr	p15, 0, r2, c7, c0, 4
-	nop
+        PM_GET_BASE_ADDR_OFF 0, HW_CLKCTRL_CPU, r0
+        mov	r1, #(1<<12)
+        str	r1, [r0, #4]
+        mov	r2, #0
+        mcr	p15, 0, r2, c7, c0, 4
+        nop
 
-	@ sleeping now...
+        @ sleeping now...
 
-	@ remove INTERRUPT_WAIT bit
-	str	r1, [r0, #8]
-	nop
-	nop
-	nop
+        @ remove INTERRUPT_WAIT bit
+        str	r1, [r0, #8]
+        nop
+        nop
+        nop
 
-	@ restore hbus
-    PM_GET_BASE_ADDR_OFF 0, HW_CLKCTRL_HBUS, r0
-	str r3, [r0]
+        @ restore hbus
+        PM_GET_BASE_ADDR_OFF 0, HW_CLKCTRL_HBUS, r0
+        str r3, [r0]
 
-    PM_GET_BASE_ADDR_OFF 1, HW_POWER_STS, r2
+        PM_GET_BASE_ADDR_OFF 1, HW_POWER_STS, r2
 
-    PM_GET_BASE_ADDR_OFF 0, HW_CLKCTRL_PLL0CTRL0, r0
-	PM_BITS_SET	BM_CLKCTRL_PLL0CTRL0_POWER
+        PM_GET_BASE_ADDR_OFF 0, HW_CLKCTRL_PLL0CTRL0, r0
+        PM_BITS_SET	BM_CLKCTRL_PLL0CTRL0_POWER
 
-    PM_GET_BASE_ADDR_OFF 1,HW_POWER_MINPWR, r0
-	PM_SET_RESTORE_REG POWER_MINPWR_BACKUP
+        PM_GET_BASE_ADDR_OFF 1,HW_POWER_MINPWR, r0
+        PM_SET_RESTORE_REG POWER_MINPWR_BACKUP
 
-    PM_GET_BASE_ADDR_OFF 1,HW_POWER_LOOPCTRL, r0
-	PM_SET_RESTORE_REG POWER_LOOPCTRL_BACKUP
+        PM_GET_BASE_ADDR_OFF 1,HW_POWER_LOOPCTRL, r0
+        PM_SET_RESTORE_REG POWER_LOOPCTRL_BACKUP
 
-    PM_GET_BASE_ADDR_OFF 1,HW_POWER_MINPWR, r0
-	PM_BITS_CLR     BM_POWER_MINPWR_LESSANA_I
+        PM_GET_BASE_ADDR_OFF 1,HW_POWER_MINPWR, r0
+        PM_BITS_CLR     BM_POWER_MINPWR_LESSANA_I
 
-    PM_GET_BASE_ADDR_OFF 1,HW_POWER_5VCTRL, r0
-	PM_BITS_CLR     BM_POWER_5VCTRL_ILIMIT_EQ_ZERO
+        PM_GET_BASE_ADDR_OFF 1,HW_POWER_5VCTRL, r0
+        PM_BITS_CLR     BM_POWER_5VCTRL_ILIMIT_EQ_ZERO
 
-	// vddio
-    PM_GET_BASE_ADDR_OFF 1, HW_POWER_VDDIOCTRL, r0
-	PM_SET_RESTORE_REG VDDIOCTRL_BACKUP
-77:
-	mov	r0, #24 << 10
-10:	sub	r0, r0, #1
-	cmp	r0, #0
-	bne	10b
+        // vddio
+        PM_GET_BASE_ADDR_OFF 1, HW_POWER_VDDIOCTRL, r0
+        PM_SET_RESTORE_REG VDDIOCTRL_BACKUP
+        77:
+        mov	r0, #24 << 10
+        10:	sub	r0, r0, #1
+        cmp	r0, #0
+        bne	10b
 
-	ldr     r0,[r2]
-	and     r0,r0,#(BM_POWER_STS_DC_OK)
-	cmp     r0,#(BM_POWER_STS_DC_OK)
-	bne     77b
+        ldr     r0,[r2]
+        and     r0,r0,#(BM_POWER_STS_DC_OK)
+        cmp     r0,#(BM_POWER_STS_DC_OK)
+        bne     77b
 
-    PM_GET_BASE_ADDR_OFF 1,HW_POWER_VDDACTRL, r0
-	PM_SET_RESTORE_REG VDDACTRL_BACKUP
-88:
-	mov	r0, #24 << 10
-20:	sub	r0, r0, #1
-	cmp	r0, #0
-	bne	20b
+        PM_GET_BASE_ADDR_OFF 1,HW_POWER_VDDACTRL, r0
+        PM_SET_RESTORE_REG VDDACTRL_BACKUP
+        88:
+        mov	r0, #24 << 10
+        20:	sub	r0, r0, #1
+        cmp	r0, #0
+        bne	20b
 
-	ldr     r0,[r2]
-	and     r0,r0,#(BM_POWER_STS_DC_OK)
-	cmp     r0,#(BM_POWER_STS_DC_OK)
-	bne     88b
+        ldr     r0,[r2]
+        and     r0,r0,#(BM_POWER_STS_DC_OK)
+        cmp     r0,#(BM_POWER_STS_DC_OK)
+        bne     88b
 
-    PM_GET_BASE_ADDR_OFF 1,HW_POWER_VDDDCTRL, r0
-	PM_SET_RESTORE_REG VDDDCTRL_BACKUP
-99:
-	mov	r0, #24 << 10
-30:	sub	r0, r0, #1
-	cmp	r0, #0
-	bne	30b
+        PM_GET_BASE_ADDR_OFF 1,HW_POWER_VDDDCTRL, r0
+        PM_SET_RESTORE_REG VDDDCTRL_BACKUP
+        99:
+        mov	r0, #24 << 10
+        30:	sub	r0, r0, #1
+        cmp	r0, #0
+        bne	30b
 
-	ldr     r0,[r2]
-	and     r0,r0,#(BM_POWER_STS_DC_OK)
-	cmp     r0,#(BM_POWER_STS_DC_OK)
-	bne     99b
+        ldr     r0,[r2]
+        and     r0,r0,#(BM_POWER_STS_DC_OK)
+        cmp     r0,#(BM_POWER_STS_DC_OK)
+        bne     99b
 
-    @ Enable EMI pads
-//  PM_GET_BASE_ADDR_OFF 3, HW_PINCTRL_EMI_DS_CTRL, r0
-//	ldr	r1, [r0]
-//	and	r1, r1, #(~BM_PINCTRL_EMI_DS_CTRL_DDR_MODE)
-//	orr	r1, r1, #(BF_PINCTRL_EMI_DS_CTRL_DDR_MODE(3))
-//	str	r1, [r0]
+        @ Enable EMI pads
+        //  PM_GET_BASE_ADDR_OFF 3, HW_PINCTRL_EMI_DS_CTRL, r0
+        //	ldr	r1, [r0]
+        //	and	r1, r1, #(~BM_PINCTRL_EMI_DS_CTRL_DDR_MODE)
+        //	orr	r1, r1, #(BF_PINCTRL_EMI_DS_CTRL_DDR_MODE(3))
+        //	str	r1, [r0]
 
-	@ ungate ref_cpu clk
-    PM_GET_BASE_ADDR_OFF 0, HW_CLKCTRL_FRAC0, r0
-	ldr     r1, [r0]
-	bic     r1, r1, #(BM_CLKCTRL_FRAC0_CLKGATECPU)
-	str     r1, [r0]
+        @ ungate ref_cpu clk
+        PM_GET_BASE_ADDR_OFF 0, HW_CLKCTRL_FRAC0, r0
+        ldr     r1, [r0]
+        bic     r1, r1, #(BM_CLKCTRL_FRAC0_CLKGATECPU)
+        str     r1, [r0]
 
-	@ ungate ref_emi clk
-    PM_GET_BASE_ADDR_OFF 0, HW_CLKCTRL_FRAC0, r0
-	ldr     r1, [r0]
-	bic     r1, r1, #(BM_CLKCTRL_FRAC0_CLKGATEEMI)
-	str     r1, [r0]
+        @ ungate ref_emi clk
+        PM_GET_BASE_ADDR_OFF 0, HW_CLKCTRL_FRAC0, r0
+        ldr     r1, [r0]
+        bic     r1, r1, #(BM_CLKCTRL_FRAC0_CLKGATEEMI)
+        str     r1, [r0]
 
-	@ ungate EMI clk
-    PM_GET_BASE_ADDR_OFF 0, HW_CLKCTRL_EMI, r0
-	ldr	r1, [r0]
-	bic	r1, r1, #(BM_CLKCTRL_EMI_CLKGATE)
-	str	r1, [r0]
+        @ ungate EMI clk
+        PM_GET_BASE_ADDR_OFF 0, HW_CLKCTRL_EMI, r0
+        ldr	r1, [r0]
+        bic	r1, r1, #(BM_CLKCTRL_EMI_CLKGATE)
+        str	r1, [r0]
 
-	@ restore normal DRAM mode
-    PM_GET_BASE_ADDR_OFF 2, HW_DRAM_CTL22, r0
-	ldr	r1, [r0]
-	bic	r1, r1, #(BF_DRAM_CTL22_LOWPOWER_CONTROL(2))
-	str	r1, [r0]
+        @ restore normal DRAM mode
+        PM_GET_BASE_ADDR_OFF 2, HW_DRAM_CTL22, r0
+        ldr	r1, [r0]
+        bic	r1, r1, #(BF_DRAM_CTL22_LOWPOWER_CONTROL(2))
+        str	r1, [r0]
 
-	@ wait for it to actually happen
-	mov	r0, #24 << 12
-12:	sub	r0, r0, #1
-	cmp	r0, #0
-	bne	12b
+        @ wait for it to actually happen
+        mov	r0, #24 << 12
+        12:	sub	r0, r0, #1
+        cmp	r0, #0
+        bne	12b
 
-	nop
-	nop
-	nop
+        nop
+        nop
+        nop
 
-	@ restore regs and return
-	ldmfd   sp!, {r0 - r9, pc}
+        @ restore regs and return
+        ldmfd   sp!, {r0 - r9, pc}
 
 __mx28_flush_cache_addr:
-	.word	arm926_flush_kern_cache_all
+        .word	arm926_flush_kern_cache_all
 
 ENTRY(mx28_standby_alloc_sz)
-	.word	. - mx28_cpu_standby
+        .word	. - mx28_cpu_standby
