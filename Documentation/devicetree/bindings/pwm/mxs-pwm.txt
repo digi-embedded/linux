@@ -3,8 +3,10 @@ Freescale MXS PWM controller
 Required properties:
 - compatible: should be "fsl,imx23-pwm"
 - reg: physical base address and length of the controller's registers
-- #pwm-cells: should be 2.  The first cell specifies the per-chip index
-  of the PWM to use and the second cell is the period in nanoseconds.
+- #pwm-cells: should be 3.  The first cell specifies the per-chip index
+  of the PWM to use; the second cell is the period in nanoseconds; the third
+  cell encodes the polarity of PWM output. Set bit 0 of the third in PWM
+  specifier to 1 for inverse polarity & set to 0 for normal polarity.
 - fsl,pwm-number: the number of PWM devices
 
 Example:
@@ -12,6 +14,6 @@ Example:
 pwm: pwm@80064000 {
 	compatible = "fsl,imx28-pwm", "fsl,imx23-pwm";
 	reg = <0x80064000 0x2000>;
-	#pwm-cells = <2>;
+	#pwm-cells = <3>;
 	fsl,pwm-number = <8>;
 };

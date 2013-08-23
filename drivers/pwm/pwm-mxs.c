@@ -32,9 +32,15 @@
 #define  PERIOD_PERIOD(p)	((p) & 0xffff)
 #define  PERIOD_PERIOD_MAX	0x10000
 #define  PERIOD_ACTIVE_HIGH	(3 << 16)
+#define  PERIOD_ACTIVE_LOW	(2 << 16)
 #define  PERIOD_INACTIVE_LOW	(2 << 18)
+#define  PERIOD_INACTIVE_HIGH	(3 << 18)
+#define  PERIOD_POLARITY_NORMAL		PERIOD_ACTIVE_HIGH | PERIOD_INACTIVE_LOW
+#define  PERIOD_POLARITY_INVERTED	PERIOD_ACTIVE_LOW | PERIOD_INACTIVE_HIGH
+#define  PERIOD_POLARITY_MASK	(0xf << 16)
 #define  PERIOD_CDIV(div)	(((div) & 0x7) << 20)
 #define  PERIOD_CDIV_MAX	8
+
 
 struct mxs_pwm_chip {
 	struct pwm_chip chip;
@@ -52,6 +58,7 @@ static int mxs_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm,
 	unsigned int period_cycles, duty_cycles;
 	unsigned long rate;
 	unsigned long long c;
+	u32 val;
 
 	rate = clk_get_rate(mxs->clk);
 	while (1) {
@@ -82,9 +89,10 @@ static int mxs_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm,
 
 	writel(duty_cycles << 16,
 			mxs->base + PWM_ACTIVE0 + pwm->hwpwm * 0x20);
-	writel(PERIOD_PERIOD(period_cycles) | PERIOD_ACTIVE_HIGH |
-	       PERIOD_INACTIVE_LOW | PERIOD_CDIV(div),
-			mxs->base + PWM_PERIOD0 + pwm->hwpwm * 0x20);
+	val = readl(mxs->base + PWM_PERIOD0 + pwm->hwpwm * 0x20);
+	val &= PERIOD_POLARITY_MASK;	/* do not override polarity */
+	writel(val | PERIOD_PERIOD(period_cycles) | PERIOD_CDIV(div),
+	       mxs->base + PWM_PERIOD0 + pwm->hwpwm * 0x20);
 
 	/*
 	 * If the PWM is not enabled, turn the clock off again to save power.
@@ -118,10 +126,47 @@ static void mxs_pwm_disable(struct pwm_chip *chip, struct pwm_device *pwm)
 	clk_disable_unprepare(mxs->clk);
 }
 
+static int mxs_pwm_set_polarity(struct pwm_chip *chip,
+				struct pwm_device *pwm,
+				enum pwm_polarity polarity)
+{
+	struct mxs_pwm_chip *mxs = to_mxs_pwm_chip(chip);
+	u32 val;
+	int ret;
+
+	/*
+	 * If the PWM channel is disabled, make sure to turn on the clock
+	 * before writing the register. Otherwise, keep it enabled.
+	 */
+	if (!test_bit(PWMF_ENABLED, &pwm->flags)) {
+		ret = clk_prepare_enable(mxs->clk);
+		if (ret)
+			return ret;
+	}
+
+	val = readl(mxs->base + PWM_PERIOD0 + pwm->hwpwm * 0x20);
+	val &= ~PERIOD_POLARITY_MASK;
+
+	if (polarity == PWM_POLARITY_INVERSED)
+		val |= PERIOD_POLARITY_INVERTED;
+	else
+		val |= PERIOD_POLARITY_NORMAL;
+	writel(val, mxs->base + PWM_PERIOD0 + pwm->hwpwm * 0x20);
+
+	/*
+	 * If the PWM is not enabled, turn the clock off again to save power.
+	 */
+	if (!test_bit(PWMF_ENABLED, &pwm->flags))
+		clk_disable_unprepare(mxs->clk);
+
+	return 0;
+}
+
 static const struct pwm_ops mxs_pwm_ops = {
 	.config = mxs_pwm_config,
 	.enable = mxs_pwm_enable,
 	.disable = mxs_pwm_disable,
+	.set_polarity = mxs_pwm_set_polarity,
 	.owner = THIS_MODULE,
 };
 
@@ -152,6 +197,8 @@ static int mxs_pwm_probe(struct platform_device *pdev)
 
 	mxs->chip.dev = &pdev->dev;
 	mxs->chip.ops = &mxs_pwm_ops;
+	mxs->chip.of_xlate = of_pwm_xlate_with_flags;
+	mxs->chip.of_pwm_n_cells = 3;
 	mxs->chip.base = -1;
 	ret = of_property_read_u32(np, "fsl,pwm-number", &mxs->chip.npwm);
 	if (ret < 0) {
