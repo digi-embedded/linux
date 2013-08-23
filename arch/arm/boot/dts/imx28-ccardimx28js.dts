@@ -86,8 +86,10 @@
 	compatible = "digi,ccardimx28js", "digi,ccardimx28", "fsl,imx28";
         digi,machine,name = "ccardimx28";
 	memory {
-		/* This needs to be hacked by U-Boot
-		 * to write the available DRAM */
-		reg = <0x40000000 0x08000000>;
+		/*
+		 * The kernel will update this to reflect the real
+		 * RAM memory size as passed by U-Boot through MEM_ATAGs
+		 */
+		reg = <0x40000000 0x10000000>;
 	};
 };
