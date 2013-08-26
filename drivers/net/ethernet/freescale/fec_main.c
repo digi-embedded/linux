@@ -899,8 +899,12 @@ fec_enet_rx(struct net_device *ndev, int budget)
 			}
 			if (status & BD_ENET_RX_NO)	/* Frame alignment */
 				ndev->stats.rx_frame_errors++;
-			if (status & BD_ENET_RX_CR)	/* CRC Error */
-				ndev->stats.rx_crc_errors++;
+			if (status & BD_ENET_RX_CR) {	/* CRC Error */
+				if (of_machine_is_compatible("digi,ccardimx28"))
+					ndev->stats.rx_errors--;
+				else
+					ndev->stats.rx_crc_errors++;
+			}
 			if (status & BD_ENET_RX_OV)	/* FIFO overrun */
 				ndev->stats.rx_fifo_errors++;
 		}
