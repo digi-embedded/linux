@@ -116,10 +116,6 @@ static void mxs_pswitch_hwinit(struct platform_device *pdev)
 	enable_irq_wake(info->irq);
 }
 
-static void mxs_pswitch_hwdeinit(struct platform_device *pdev)
-{
-}
-
 static int mxs_pswitch_probe(struct platform_device *pdev)
 {
 	struct mxs_pswitch_data *info;
@@ -204,7 +200,6 @@ static int mxs_pswitch_remove(struct platform_device *pdev)
 	free_irq(info->irq, info);
 	input_unregister_device(info->input);
 	kfree(info);
-	mxs_pswitch_hwdeinit(pdev);
 	platform_set_drvdata(pdev, NULL);
 
 	return 0;
