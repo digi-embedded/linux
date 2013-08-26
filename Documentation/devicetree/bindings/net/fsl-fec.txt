@@ -18,8 +18,8 @@ Optional properties:
 - phy-supply: regulator that powers the Ethernet PHY.
 
 Digi properties:
-- gpio-link-led : Should specify the GPIO to use for link LED
-- gpio-act-led : Should specify the GPIO to use for activity LED
+- digi,gpio-link-led : Should specify the GPIO to use for link LED
+- digi,gpio-act-led : Should specify the GPIO to use for activity LED
 
 Example:
 

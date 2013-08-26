@@ -2150,7 +2150,7 @@ static void fec_gpio_led_init(struct platform_device *pdev)
 	if (!np)
 		return;
 
-	fep->gpio_linkled = of_get_named_gpio_flags(np, "gpio-link-led", 0,
+	fep->gpio_linkled = of_get_named_gpio_flags(np, "digi,gpio-link-led", 0,
 						    &flags);
 	if (fep->gpio_linkled >= 0) {
 		if (flags & OF_GPIO_ACTIVE_LOW) {
@@ -2166,7 +2166,7 @@ static void fec_gpio_led_init(struct platform_device *pdev)
 			       fep->gpio_linkled);
 	}
 
-	fep->gpio_actled = of_get_named_gpio_flags(np, "gpio-act-led", 0,
+	fep->gpio_actled = of_get_named_gpio_flags(np, "digi,gpio-act-led", 0,
 						   &flags);
 	if (fep->gpio_actled >= 0) {
 		if (flags & OF_GPIO_ACTIVE_LOW) {
