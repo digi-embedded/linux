@@ -1052,10 +1052,9 @@
 				status = "disabled";
 			};
 
-			power@80044000 {
-				reg = <0x80044000 0x2000>;
-				status = "disabled";
-			};
+                        power@80044000 {
+                                reg = <0x80044000 0x2000>;
+                        };
 
 			saif1: saif@80046000 {
 				compatible = "fsl,imx28-saif";

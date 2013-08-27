@@ -514,5 +514,11 @@ config REGULATOR_AS3711
 	  This driver provides support for the voltage regulators on the
 	  AS3711 PMIC
 
+config REGULATOR_MXS
+	tristate "Freescale's MXS regulator."
+	depends on ARCH_MXS
+	help
+	  This driver provides support for the voltage regulators on the
+	  Freescale i.MX28 SoC.
 endif
 

@@ -131,7 +131,7 @@ static int mxs_pswitch_probe(struct platform_device *pdev)
                 np = pdev->dev.of_node;
                 of_property_read_u32(np, "linux,code", &info->input_code);
                 info->irq = platform_get_irq(pdev, 0);
-
+                np = of_find_node_by_name(NULL, "power");
                 info->power_base_addr = of_iomap(np, 0);
                 WARN_ON(!info->power_base_addr);
                 of_node_put(np);

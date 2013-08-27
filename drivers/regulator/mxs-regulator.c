@@ -1,0 +1,257 @@
+/*
+ * Copyright (C) 2011 Freescale Semiconductor, Inc. All Rights Reserved.
+ */
+
+/*
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ */
+
+#include <linux/slab.h>
+#include <linux/device.h>
+#include <linux/module.h>
+#include <linux/mfd/syscon.h>
+#include <linux/err.h>
+#include <linux/io.h>
+#include <linux/platform_device.h>
+#include <linux/of.h>
+#include <linux/of_address.h>
+#include <linux/regmap.h>
+#include <linux/regulator/driver.h>
+#include <linux/regulator/of_regulator.h>
+#include <linux/regulator/machine.h>
+#include <linux/delay.h>
+
+#define HW_POWER_STS             0x000000c0
+#define BM_POWER_STS_DC_OK       0x00000200
+
+struct mxs_regulator {
+        const char *name;
+        void __iomem * control_reg;
+        void __iomem * power_reg;
+        struct regulator_desc rdesc;
+        struct regulator_init_data *initdata;
+};
+
+static int mxs_set_voltage(struct regulator_dev *reg, int min_uV, int uv,
+        unsigned *selector)
+{
+        struct mxs_regulator *mxs_reg = rdev_get_drvdata(reg);
+        struct regulation_constraints *constraints =
+                &mxs_reg->initdata->constraints;
+        u32 val, rg, i;
+
+        pr_debug("%s: uv %d, min %d, max %d\n", __func__,
+                uv, constraints->min_uV, constraints->max_uV);
+
+        if (uv < constraints->min_uV || uv > constraints->max_uV)
+                return -EINVAL;
+
+        if( !strcmp(mxs_reg->name, "vddio") ){
+                val = (uv - constraints->min_uV) / 50000;
+        }
+        else
+                val = (uv - constraints->min_uV) * 0x1f /
+                        (constraints->max_uV - constraints->min_uV);
+        rg = (__raw_readl(mxs_reg->control_reg) & ~0x1f);
+        pr_debug("%s: calculated val %d\n", __func__, val);
+        __raw_writel(val | rg, mxs_reg->control_reg);
+
+        for (i = 20; i; i--) {
+                if (__raw_readl(mxs_reg->power_reg + HW_POWER_STS) &
+                        BM_POWER_STS_DC_OK)
+                        break;
+                udelay(1);
+        }
+
+        if (i)
+                goto out;
+
+        __raw_writel(val | rg, mxs_reg->control_reg);
+        for (i = 40000; i; i--) {
+                if (__raw_readl(mxs_reg->power_reg + HW_POWER_STS) &
+                        BM_POWER_STS_DC_OK)
+                        break;
+                udelay(1);
+        }
+
+        if (i)
+                goto out;
+
+        for (i = 40000; i; i--) {
+                if (__raw_readl(mxs_reg->power_reg + HW_POWER_STS) &
+                        BM_POWER_STS_DC_OK)
+                        break;
+                udelay(1);
+        }
+
+out:
+        return !i;
+}
+
+
+static int mxs_get_voltage(struct regulator_dev *reg)
+{
+        struct mxs_regulator *mxs_reg = rdev_get_drvdata(reg);
+        struct regulation_constraints * constraints =
+                &mxs_reg->initdata->constraints;
+        int uv;
+
+        u32 val = __raw_readl(mxs_reg->control_reg) & 0x1f;
+        if( !strcmp( mxs_reg->name, "vddio") ){
+                if (val > 0x10)
+                        val = 0x10;
+                uv = constraints->min_uV + val * 50000;
+                pr_debug("vddio = %d, val=%u\n", uv, val);
+        } else
+                uv = constraints->min_uV + val *
+                        (constraints->max_uV - constraints->min_uV) / 0x1f;
+        return uv;
+}
+
+static int mxs_set_mode(struct regulator_dev *reg, unsigned int mode)
+{
+        struct mxs_regulator *mxs_reg = rdev_get_drvdata(reg);
+        int ret = 0;
+        u32 val;
+
+        switch (mode) {
+        case REGULATOR_MODE_FAST:
+                val = __raw_readl(mxs_reg->control_reg);
+                __raw_writel(val | (1 << 17), mxs_reg->control_reg);
+                break;
+
+        case REGULATOR_MODE_NORMAL:
+                val = __raw_readl(mxs_reg->control_reg);
+                __raw_writel(val & ~(1<<17), mxs_reg->control_reg);
+                break;
+
+        default:
+                ret = -EINVAL;
+                break;
+        }
+        return ret;
+}
+
+static unsigned int mxs_get_mode(struct regulator_dev *reg)
+{
+        struct mxs_regulator *mxs_reg = rdev_get_drvdata(reg);
+        u32 val = __raw_readl(mxs_reg->control_reg) & (1 << 17);
+
+        return val ? REGULATOR_MODE_FAST : REGULATOR_MODE_NORMAL;
+}
+
+static struct regulator_ops mxs_rops = {
+        .set_voltage            = mxs_set_voltage,
+        .get_voltage            = mxs_get_voltage,
+        .set_mode               = mxs_set_mode,
+        .get_mode               = mxs_get_mode,
+};
+
+static int mxs_regulator_probe(struct platform_device *pdev)
+{
+        struct device *dev = &pdev->dev;
+        struct device_node *np = dev->of_node;
+        struct device_node *mxs_np;
+        struct regulator_desc *rdesc;
+        struct regulator_dev *rdev;
+        struct mxs_regulator *sreg;
+        struct regulator_init_data *initdata;
+        struct regulator_config config = { };
+        int ret = 0;
+
+        initdata = of_get_regulator_init_data(dev, np);
+        sreg = devm_kzalloc(dev, sizeof(*sreg), GFP_KERNEL);
+        if (!sreg)
+                return -ENOMEM;
+        sreg->initdata = initdata;
+        sreg->name = kstrdup(of_get_property(np, "regulator-name", NULL),
+                             GFP_KERNEL);
+        sreg->control_reg = of_iomap(np, 0);
+        WARN_ON(!sreg->control_reg);
+        mxs_np = of_find_node_by_name(NULL,"power");
+        sreg->power_reg = of_iomap(mxs_np, 0);
+        WARN_ON(!sreg->power_reg);
+        of_node_put(mxs_np);
+        rdesc = &sreg->rdesc;
+        memset(rdesc, 0, sizeof(*rdesc));
+        rdesc->name = sreg->name;
+        rdesc->ops = &mxs_rops;
+        rdesc->type = REGULATOR_VOLTAGE;
+        rdesc->owner = THIS_MODULE;
+
+        config.dev = &pdev->dev;
+        config.init_data = initdata;
+        config.driver_data = sreg;
+        config.of_node = pdev->dev.of_node;
+
+        /* register regulator */
+        rdev = regulator_register(rdesc, &config);
+        if (IS_ERR(rdev)) {
+                dev_err(dev, "failed to register %s\n",
+                        rdesc->name);
+                ret = PTR_ERR(rdev);
+                goto mxs_probe_end;
+        }
+
+        platform_set_drvdata(pdev, rdev);
+
+mxs_probe_end:
+        if (ret)
+                kfree(sreg->name);
+
+        return ret;
+}
+
+static int mxs_regulator_remove(struct platform_device *pdev)
+{
+        struct regulator_dev *rdev = platform_get_drvdata(pdev);
+        struct mxs_regulator *sreg = rdev_get_drvdata(rdev);
+        const char *name = sreg->name;
+
+        regulator_unregister(rdev);
+        kfree(name);
+
+        return 0;
+}
+
+static struct of_device_id of_mxs_regulator_match_tbl[] = {
+        { .compatible = "digi,mxs-regulator", },
+        { /* end */ }
+};
+
+static struct platform_driver mxs_regulator_driver = {
+        .driver = {
+                .name   = "mxs-regulator",
+                .owner  = THIS_MODULE,
+                .of_match_table = of_mxs_regulator_match_tbl,
+        },
+        .probe  = mxs_regulator_probe,
+        .remove = mxs_regulator_remove,
+};
+
+static int __init mxs_regulator_init(void)
+{
+        return platform_driver_register(&mxs_regulator_driver);
+}
+postcore_initcall(mxs_regulator_init);
+
+static void __exit mxs_regulator_exit(void)
+{
+        platform_driver_unregister(&mxs_regulator_driver);
+}
+module_exit(mxs_regulator_exit);
+
+MODULE_DESCRIPTION("MXS Regulator driver");
+MODULE_LICENSE("GPL v2");
