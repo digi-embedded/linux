@@ -39,4 +39,8 @@
 			};
 		};
 	};
+
+	bluetooth {
+		/* Empty node. U-Boot will fill in the MAC address here */
+	};
 };
