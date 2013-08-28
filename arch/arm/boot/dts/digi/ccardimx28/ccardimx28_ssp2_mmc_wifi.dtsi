@@ -49,4 +49,8 @@
 			regulator-always-on;
 		};
 	};
+
+	wireless {
+		/* Empty node. U-Boot will fill in the MAC address here */
+	};
 };
