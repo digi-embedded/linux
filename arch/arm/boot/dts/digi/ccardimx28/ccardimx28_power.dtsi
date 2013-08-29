@@ -33,6 +33,16 @@
                                         regulator-always-on;
                                 };
 
+                                vddd_bo@80044040 {
+                                        compatible = "digi,mxs-regulator";
+                                        reg = <0x80044040 0x10>;
+                                        regulator-name = "vddd_bo";
+                                        regulator-min-microvolt = <800000>;
+                                        regulator-max-microvolt = <1575000>;
+                                        regulator-always-on;
+                                        mxs-regulator-brown-out;
+                                };
+
                                 vdda@80044050 {
                                         compatible = "digi,mxs-regulator";
                                         reg = <0x80044050 0x10>;

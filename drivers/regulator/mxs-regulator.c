@@ -120,6 +120,57 @@ static int mxs_get_voltage(struct regulator_dev *reg)
         return uv;
 }
 
+static int mxs_get_bo_voltage(struct regulator_dev *reg)
+{
+        struct mxs_regulator *mxs_reg = rdev_get_drvdata(reg);
+        int uv;
+        int offs;
+
+        uv = mxs_get_voltage(reg);
+        offs = (__raw_readl(mxs_reg->control_reg) & ~0x700) >> 8;
+        return uv - 25000*offs;
+}
+
+static int mxs_set_bo_voltage(struct regulator_dev *reg, int min_uV, int bo_uv,
+        unsigned *selector)
+{
+        struct mxs_regulator *mxs_reg = rdev_get_drvdata(reg);
+        int uv;
+        int offs;
+        u32 rg;
+        int i;
+
+        uv = mxs_get_voltage(reg);
+        offs = (uv - bo_uv) / 25000;
+        if (offs < 0 || offs > 7)
+                return -EINVAL;
+
+        rg = (__raw_readl(mxs_reg->control_reg) & ~0x700);
+        pr_debug("%s: calculated offs %d\n", __func__, offs);
+        __raw_writel((offs << 8) | rg, mxs_reg->control_reg);
+
+        for (i = 10000; i; i--) {
+                if (__raw_readl(mxs_reg->power_reg + HW_POWER_STS) &
+                        BM_POWER_STS_DC_OK)
+                        break;
+                udelay(1);
+        }
+
+        if (i)
+                goto out;
+
+        for (i = 10000; i; i--) {
+                if (__raw_readl(mxs_reg->power_reg + HW_POWER_STS) &
+                        BM_POWER_STS_DC_OK)
+                        break;
+                udelay(1);
+        }
+
+out:
+        return !i;
+}
+
+
 static int mxs_set_mode(struct regulator_dev *reg, unsigned int mode)
 {
         struct mxs_regulator *mxs_reg = rdev_get_drvdata(reg);
@@ -172,6 +223,12 @@ static struct regulator_ops mxs_rops = {
         .get_mode               = mxs_get_mode,
 };
 
+
+static struct regulator_ops mxs_rops_bo = {
+        .set_voltage            = mxs_set_bo_voltage,
+        .get_voltage            = mxs_get_bo_voltage,
+};
+
 static int mxs_regulator_probe(struct platform_device *pdev)
 {
         struct device *dev = &pdev->dev;
@@ -201,7 +258,10 @@ static int mxs_regulator_probe(struct platform_device *pdev)
         rdesc = &sreg->rdesc;
         memset(rdesc, 0, sizeof(*rdesc));
         rdesc->name = sreg->name;
-        rdesc->ops = &mxs_rops;
+        if (of_find_property(np, "mxs-regulator-brown-out", NULL))
+                rdesc->ops = &mxs_rops_bo;
+        else
+                rdesc->ops = &mxs_rops;
         rdesc->type = REGULATOR_VOLTAGE;
         rdesc->owner = THIS_MODULE;
 
