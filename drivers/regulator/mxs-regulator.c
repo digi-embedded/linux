@@ -42,6 +42,13 @@ struct mxs_regulator {
         void __iomem * power_reg;
         struct regulator_desc rdesc;
         struct regulator_init_data *initdata;
+
+        int mode;
+        int type;
+        int cur_current;
+        struct mxs_regulator *parent;
+        spinlock_t lock;
+        wait_queue_head_t wait_q;
 };
 
 static int mxs_set_voltage(struct regulator_dev *reg, int min_uV, int uv,
@@ -179,13 +186,19 @@ static int mxs_set_mode(struct regulator_dev *reg, unsigned int mode)
 
         switch (mode) {
         case REGULATOR_MODE_FAST:
-                val = __raw_readl(mxs_reg->control_reg);
-                __raw_writel(val | (1 << 17), mxs_reg->control_reg);
+                if(mxs_reg->type == REGULATOR_VOLTAGE){
+                        val = __raw_readl(mxs_reg->control_reg);
+                        __raw_writel(val | (1 << 17), mxs_reg->control_reg);
+                }
+                mxs_reg->mode = REGULATOR_MODE_FAST;
                 break;
 
         case REGULATOR_MODE_NORMAL:
-                val = __raw_readl(mxs_reg->control_reg);
-                __raw_writel(val & ~(1<<17), mxs_reg->control_reg);
+                if(mxs_reg->type == REGULATOR_VOLTAGE){
+                        val = __raw_readl(mxs_reg->control_reg);
+                        __raw_writel(val & ~(1<<17), mxs_reg->control_reg);
+                }
+                mxs_reg->mode = REGULATOR_MODE_NORMAL;
                 break;
 
         default:
@@ -198,9 +211,14 @@ static int mxs_set_mode(struct regulator_dev *reg, unsigned int mode)
 static unsigned int mxs_get_mode(struct regulator_dev *reg)
 {
         struct mxs_regulator *mxs_reg = rdev_get_drvdata(reg);
-        u32 val = __raw_readl(mxs_reg->control_reg) & (1 << 17);
+        u32 val;
 
-        return val ? REGULATOR_MODE_FAST : REGULATOR_MODE_NORMAL;
+        if(mxs_reg->type == REGULATOR_VOLTAGE){
+                val = __raw_readl(mxs_reg->control_reg) & (1 << 17);
+                return val ? REGULATOR_MODE_FAST : REGULATOR_MODE_NORMAL;
+        }
+
+        return mxs_reg->mode;
 }
 
 int mxs_regulator_setup(void * driver_data)
@@ -216,17 +234,85 @@ int mxs_regulator_setup(void * driver_data)
         return 0;
 }
 
-static struct regulator_ops mxs_rops = {
+static int main_add_current(struct mxs_regulator *mxs_reg, int uA)
+{
+        struct regulation_constraints * constraints =
+                &mxs_reg->initdata->constraints;
+        pr_debug("%s: enter reg %s, uA=%d\n",
+                 __func__, mxs_reg->name, uA);
+        if (uA > 0 && (mxs_reg->cur_current + uA > constraints->max_uA))
+                return -EINVAL;
+        else
+                mxs_reg->cur_current += uA;
+        return 0;
+}
+
+static int mxs_set_current_limit(struct regulator_dev *reg, int minuA, int uA)
+{
+        int ret = 0;
+        unsigned long flags;
+        struct mxs_regulator *mxs_reg = rdev_get_drvdata(reg);
+        struct regulation_constraints * parent_constraints =
+                &mxs_reg->parent->initdata->constraints;
+
+        pr_debug("%s: enter reg %s, uA=%d\n",
+                 __func__, mxs_reg->name, uA);
+
+        if(!mxs_reg->parent)
+                goto out;
+
+        spin_lock_irqsave(&mxs_reg->parent->lock, flags);
+        ret = main_add_current(mxs_reg->parent, uA - mxs_reg->cur_current);
+        spin_unlock_irqrestore(&mxs_reg->parent->lock, flags);
+
+        if (!ret)
+                goto out;
+
+        if (mxs_reg->mode == REGULATOR_MODE_FAST)
+                return ret;
+
+        while (ret) {
+                wait_event(mxs_reg->parent->wait_q ,
+                           (uA - mxs_reg->cur_current <
+                            parent_constraints->max_uA -
+                            mxs_reg->parent->cur_current));
+                spin_lock_irqsave(&mxs_reg->parent->lock, flags);
+                ret = main_add_current(mxs_reg->parent, uA -
+                        mxs_reg->cur_current);
+                spin_unlock_irqrestore(&mxs_reg->parent->lock, flags);
+        }
+out:
+        if (mxs_reg->parent && (uA - mxs_reg->cur_current < 0))
+                wake_up_all(&mxs_reg->parent->wait_q);
+        mxs_reg->cur_current = uA;
+        return 0;
+}
+
+static int mxs_get_current_limit(struct regulator_dev *reg)
+{
+        struct mxs_regulator *mxs_reg = rdev_get_drvdata(reg);
+        return mxs_reg->cur_current;
+}
+
+static struct regulator_ops mxs_rops_voltage = {
         .set_voltage            = mxs_set_voltage,
         .get_voltage            = mxs_get_voltage,
         .set_mode               = mxs_set_mode,
         .get_mode               = mxs_get_mode,
 };
 
+static struct regulator_ops mxs_rops_current = {
+        .set_current_limit      = mxs_set_current_limit,
+        .get_current_limit      = mxs_get_current_limit,
+        .set_mode               = mxs_set_mode,
+        .get_mode               = mxs_get_mode,
+};
 
 static struct regulator_ops mxs_rops_bo = {
         .set_voltage            = mxs_set_bo_voltage,
         .get_voltage            = mxs_get_bo_voltage,
+        .set_mode               = mxs_set_mode,
+        .get_mode               = mxs_get_mode,
 };
 
 static int mxs_regulator_probe(struct platform_device *pdev)
@@ -239,6 +325,8 @@ static int mxs_regulator_probe(struct platform_device *pdev)
         struct mxs_regulator *sreg;
         struct regulator_init_data *initdata;
         struct regulator_config config = { };
+        const char *regtype = "voltage";
+        struct regulator * parent;
         int ret = 0;
 
         initdata = of_get_regulator_init_data(dev, np);
@@ -249,21 +337,41 @@ static int mxs_regulator_probe(struct platform_device *pdev)
         sreg->initdata->regulator_init = mxs_regulator_setup;
         sreg->name = kstrdup(of_get_property(np, "regulator-name", NULL),
                              GFP_KERNEL);
-        sreg->control_reg = of_iomap(np, 0);
-        WARN_ON(!sreg->control_reg);
-        mxs_np = of_find_node_by_name(NULL,"power");
-        sreg->power_reg = of_iomap(mxs_np, 0);
-        WARN_ON(!sreg->power_reg);
-        of_node_put(mxs_np);
+
         rdesc = &sreg->rdesc;
         memset(rdesc, 0, sizeof(*rdesc));
         rdesc->name = sreg->name;
+        rdesc->owner = THIS_MODULE;
+        rdesc->ops = &mxs_rops_voltage;
+
+        of_property_read_string(np, "regulator-type", &regtype);
+        if (!strncmp("voltage", regtype, 7)){
+                rdesc->type = REGULATOR_VOLTAGE;
+                sreg->control_reg = of_iomap(np, 0);
+                WARN_ON(!sreg->control_reg);
+                mxs_np = of_find_node_by_name(NULL,"power");
+                sreg->power_reg = of_iomap(mxs_np, 0);
+                WARN_ON(!sreg->power_reg);
+                of_node_put(mxs_np);
+        }
+        else if (!strncmp("current", regtype, 7)){
+                rdesc->type = REGULATOR_CURRENT;
+                rdesc->ops = &mxs_rops_current;
+                sreg->cur_current = 0;
+                init_waitqueue_head(&sreg->wait_q);
+                /* The overall_current regulator is parent to all others */
+                if(strncmp(sreg->name,"overall_current",15)){
+                        parent = regulator_get(dev, "overall_current");
+                        if (!parent){
+                                ret = -ENODEV;
+                                goto mxs_probe_end;
+                        }
+                        sreg->parent = regulator_get_drvdata(parent);
+                }
+        }
+
         if (of_find_property(np, "mxs-regulator-brown-out", NULL))
                 rdesc->ops = &mxs_rops_bo;
-        else
-                rdesc->ops = &mxs_rops;
-        rdesc->type = REGULATOR_VOLTAGE;
-        rdesc->owner = THIS_MODULE;
 
         config.dev = &pdev->dev;
         config.init_data = initdata;

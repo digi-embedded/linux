@@ -30,6 +30,7 @@
                                         regulator-name = "vddd";
                                         regulator-min-microvolt = <800000>;
                                         regulator-max-microvolt = <1575000>;
+                                        regulator-type = "voltage";
                                         regulator-always-on;
                                 };
 
@@ -39,6 +40,7 @@
                                         regulator-name = "vddd_bo";
                                         regulator-min-microvolt = <800000>;
                                         regulator-max-microvolt = <1575000>;
+                                        regulator-type = "voltage";
                                         regulator-always-on;
                                         mxs-regulator-brown-out;
                                 };
@@ -49,6 +51,7 @@
                                         regulator-name = "vdda";
                                         regulator-min-microvolt = <1500000>;
                                         regulator-max-microvolt = <2275000>;
+                                        regulator-type = "voltage";
                                         regulator-always-on;
                                 };
 
@@ -58,7 +61,27 @@
                                         regulator-name = "vddio";
                                         regulator-min-microvolt = <2880000>;
                                         regulator-max-microvolt = <3680000>;
+                                        regulator-type = "voltage";
                                         regulator-always-on;
+                                };
+
+                                overall_current: regulator {
+                                        compatible = "digi,mxs-regulator";
+                                        regulator-name = "overall_current";
+                                        regulator-max-microamp = <0x7fffffff>;
+                                        regulator-min-microamp = <0>;
+                                        regulator-type = "current";
+                                        regulator-always-on;
+                                };
+
+                                cpufreq {
+                                        compatible = "digi,mxs-regulator";
+                                        regulator-name = "cpufreq";
+                                        regulator-type = "current";
+                                        regulator-max-microamp = <0x7fffffff>;
+                                        regulator-min-microamp = <0>;
+                                        regulator-always-on;
+                                        cpufreq-supply = <&overall_current>;
                                 };
 			};
 		};
