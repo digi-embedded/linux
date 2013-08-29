@@ -152,6 +152,19 @@ static unsigned int mxs_get_mode(struct regulator_dev *reg)
         return val ? REGULATOR_MODE_FAST : REGULATOR_MODE_NORMAL;
 }
 
+int mxs_regulator_setup(void * driver_data)
+{
+        struct mxs_regulator *mxs_reg = driver_data;
+        u32 vddio_reg;
+
+        if(!strcmp(mxs_reg->name, "vddio")){
+                /* Set voltage level to 3.3v */
+                vddio_reg = __raw_readl(mxs_reg->control_reg) & ~0x1f;
+                __raw_writel(vddio_reg | 0xA, mxs_reg->control_reg);
+        }
+        return 0;
+}
+
 static struct regulator_ops mxs_rops = {
         .set_voltage            = mxs_set_voltage,
         .get_voltage            = mxs_get_voltage,
@@ -176,6 +189,7 @@ static int mxs_regulator_probe(struct platform_device *pdev)
         if (!sreg)
                 return -ENOMEM;
         sreg->initdata = initdata;
+        sreg->initdata->regulator_init = mxs_regulator_setup;
         sreg->name = kstrdup(of_get_property(np, "regulator-name", NULL),
                              GFP_KERNEL);
         sreg->control_reg = of_iomap(np, 0);
