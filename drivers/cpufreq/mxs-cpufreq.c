@@ -35,6 +35,7 @@
 #include <linux/of.h>
 #include <linux/of_address.h>
 #include <linux/slab.h>
+#include <linux/clk-provider.h>
 
 
 #define BF(value, field) (((value) << BP_##field) & BM_##field)
@@ -57,9 +58,6 @@
 #define BM_CLKCTRL_HBUS_ASM_ENABLE      0x00100000
 
 #define LCD_ON_CPU_FREQ_KHZ             261818
-
-/* ASM mode is used when both LCD and USB clocks are off*/
-//#define MXS_CPUFREQ_HBUS_ASM_MODE
 
 struct profile {
         int cpu;
@@ -140,24 +138,20 @@ int cpufreq_trig_needed;
    usage are zero. */
 static int low_freq_used(void)
 {
-#ifdef MXS_CPUFREQ_HBUS_ASM_MODE
-        if (((clk_is_enabled(mxs_cpufreq_usb0_clk) == 0)
-            && (clk_is_enabled(mxs_cpufreq.usb1_clk) == 0)
-            && (clk_is_enabled(mxs_cpufreq.lcdif_clk) == 0))
+        if (!__clk_is_enabled(mxs_cpufreq.usb0_clk) &&
+            !__clk_is_enabled(mxs_cpufreq.usb1_clk) &&
+            !__clk_is_enabled(mxs_cpufreq.lcdif_clk))
                 return 1;
         else
-#endif
                 return 0;
 }
 
 static int is_hclk_autoslow_ok(void)
 {
-#ifdef MXS_CPUFREQ_HBUS_ASM_MODE
-        if ((clk_is_enabled(mxs_cpufreq.usb0_clk) == 0)
-            && (clk_is_enabled(mxs_cpufreq.usb1_clk) == 0))
+        if (!__clk_is_enabled(mxs_cpufreq.usb0_clk) &&
+            !__clk_is_enabled(mxs_cpufreq.usb1_clk))
                 return 1;
         else
-#endif
                 return 0;
 }
 
@@ -685,7 +679,6 @@ static int mxs_cpufreq_probe(struct platform_device *pdev)
         const struct property *prop;
         const __be32 *val;
         int cnt, i, ret;
-
 
         if (of_property_read_u32(np, "clock-latency",
                                 &mxs_cpufreq.transition_latency))
