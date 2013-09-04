@@ -799,9 +799,6 @@ static int gpiod_export(struct gpio_desc *desc, bool direction_may_change)
 		goto fail_unlock;
 	}
 
-        if (of_machine_is_compatible("digi,ccardimx28"))
-                device_set_wakeup_capable(dev,1);
-
 	status = sysfs_create_group(&dev->kobj, &gpio_attr_group);
 	if (status)
 		goto fail_unregister_device;
