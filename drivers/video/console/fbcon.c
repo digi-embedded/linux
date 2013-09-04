@@ -612,6 +612,14 @@ static void fbcon_prepare_logo(struct vc_data *vc, struct fb_info *info,
 	if (fb_get_color_depth(&info->var, &info->fix) == 1)
 		erase &= ~0x400;
 	logo_height = fb_prepare_logo(info, ops->rotate);
+/*
+ * If the logo is centered, we need to add-up the upper half of the display
+ * height (pretending it's a bigger logo put on the top of the screen) so it
+ * does not get deleted by a following 'update_region' execution.
+ */
+#ifdef CONFIG_FB_LOGO_CENTERED
+	logo_height += (info->var.yres - logo_height) / 2;
+#endif
 	logo_lines = DIV_ROUND_UP(logo_height, vc->vc_font.height);
 	q = (unsigned short *) (vc->vc_origin +
 				vc->vc_size_row * rows);
