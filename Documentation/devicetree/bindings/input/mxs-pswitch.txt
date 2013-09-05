@@ -19,9 +19,8 @@ Required properties:
 
 Example:
 
-power@80044000 {
-        compatible = "digi,mxs-pswitch";
-        reg = <0x80044000 0x2000>;
-        linux,code = <116>;
-        interrupts = <6>;
-};
+        pswitch@80044000 {
+                compatible = "digi,mxs-pswitch";
+                linux,code = <116>;
+                interrupts = <6>;
+        };
