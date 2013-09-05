@@ -14,6 +14,7 @@ config SOC_IMX28
 	select HAVE_CAN_FLEXCAN if CAN
 	select HAVE_PWM
 	select PINCTRL_IMX28
+	select ARCH_HAS_CPUFREQ
 
 config ARCH_MXS
 	bool "Freescale MXS (i.MX23, i.MX28) support"

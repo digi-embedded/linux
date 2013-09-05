@@ -32,8 +32,9 @@
 	};
 
 	cpus {
+		compatible = "simple-bus";
 		cpu@0 {
-                        compatible = "arm,arm926ejs";
+                        compatible = "arm,arm926ejs", "simple-bus";
                         sram = <&ocram>;
 		};
 	};

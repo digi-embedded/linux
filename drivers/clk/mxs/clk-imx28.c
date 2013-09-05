@@ -253,6 +253,13 @@ int __init mx28_clocks_init(void)
 	clk_register_clkdev(clks[pll0], NULL, "pll0");
 	clk_register_clkdev(clks[hbus], NULL, "hbus");
 
+	/* These clocks are used by the cpufreq platform driver. */
+	clk_register_clkdev(clks[xbus], NULL, "xbus");
+	clk_register_clkdev(clks[emi], NULL, "emi");
+	clk_register_clkdev(clks[usb0], NULL, "usb_clk0");
+	clk_register_clkdev(clks[usb1], NULL, "usb_clk1");
+	clk_register_clkdev(clks[lcdif], NULL, "lcdif");
+
 	for (i = 0; i < ARRAY_SIZE(clks_init_on); i++)
 		clk_prepare_enable(clks[clks_init_on[i]]);
 

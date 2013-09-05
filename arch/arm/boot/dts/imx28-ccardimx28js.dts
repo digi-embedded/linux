@@ -19,6 +19,9 @@
  * multiplexed devices.
  */
 
+/* CPU frequency scaling */
+/include/ "digi/ccardimx28/ccardimx28_cpufreq.dtsi"
+
 /* NAND Flash */
 /include/ "digi/ccardimx28/ccardimx28_nand.dtsi"
 

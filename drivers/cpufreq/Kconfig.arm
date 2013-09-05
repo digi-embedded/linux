@@ -150,3 +150,11 @@ config ARM_SPEAR_CPUFREQ
 	default y
 	help
 	  This adds the CPUFreq driver support for SPEAr SOCs.
+
+config ARM_MXS_CPUFREQ
+	bool "Freescale's i.MX28 cpufreq support"
+	depends on SOC_IMX28
+        select REGULATOR_MXS
+	default y
+	help
+	  This adds the cpufreq driver support for Freescale's iMX28  SOCs.
