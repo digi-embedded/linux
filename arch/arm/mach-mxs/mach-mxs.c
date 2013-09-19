@@ -21,6 +21,7 @@
 #include <linux/reboot.h>
 #include <linux/micrel_phy.h>
 #include <linux/of_address.h>
+#include <linux/of_gpio.h>
 #include <linux/of_platform.h>
 #include <linux/phy.h>
 #include <linux/pinctrl/consumer.h>
@@ -263,7 +264,6 @@ static int ccardimx28_phy_fixup(struct phy_device *phy)
 #define CCARDIMX28_BT_PWD_L		MXS_GPIO_NR(0, 21)
 #define CCARDIMX28_BT_HOST_WAKE	 	MXS_GPIO_NR(0, 17)
 #define CCARDIMX28_BT_WAKE		MXS_GPIO_NR(2, 16)
-#define CCARDIMX28_WIFI_CHIP_PWD	MXS_GPIO_NR(2, 18)
 
 static const struct gpio ccardimx28_bt_gpios[] __initconst = {
 	{ CCARDIMX28_BT_DISABLE, GPIOF_OUT_INIT_HIGH, "bt-disable" },
@@ -271,10 +271,6 @@ static const struct gpio ccardimx28_bt_gpios[] __initconst = {
 	{ CCARDIMX28_BT_PWD_L, GPIOF_OUT_INIT_LOW, "bt-pwd-l" },
 	{ CCARDIMX28_BT_HOST_WAKE, GPIOF_DIR_IN, "bt-host-wake" },
 	{ CCARDIMX28_BT_WAKE, GPIOF_OUT_INIT_HIGH, "bt-wake" },
-};
-
-static const struct gpio ccardimx28_wifi_gpios[] __initconst = {
-	{ CCARDIMX28_WIFI_CHIP_PWD, GPIOF_OUT_INIT_LOW, "wifi-chip-pwd" },
 };
 
 static void ccardimx28_init_bt(void)
@@ -297,19 +293,28 @@ static void ccardimx28_init_bt(void)
 
 static void ccardimx28_init_wifi(void)
 {
-	int ret;
+	struct device_node *np;
+	int pwrdown_gpio;
+	enum of_gpio_flags flags;
 
-	ret = gpio_request_array(ccardimx28_wifi_gpios,
-				 ARRAY_SIZE(ccardimx28_wifi_gpios));
-	if (ret) {
-		pr_err("%s: failed to request wifi gpios: %d\n",
-		       __func__, ret);
+	np = of_find_node_by_path("/wireless");
+	if (!np)
 		return;
+
+	/* Read the power down gpio */
+	pwrdown_gpio = of_get_named_gpio_flags(np, "digi,pwrdown-gpio", 0, &flags);
+	if (gpio_is_valid(pwrdown_gpio)) {
+		if (!gpio_request_one(pwrdown_gpio, GPIOF_DIR_OUT,
+			      "wifi_chip_pwd_l")) {
+			/* Start with Power pin low, then set high to power Wifi */
+			gpio_set_value(pwrdown_gpio, 1);
+			/*
+			 * Free the Wifi chip PWD pin to allow controlling
+			 * it from user space
+			 */
+			gpio_free(pwrdown_gpio);
+		}
 	}
-	/* Start with Power pin low, then set high to power Wifi */
-	gpio_set_value(CCARDIMX28_WIFI_CHIP_PWD, 1);
-	/* Free the Wifi chip PWD pin to allow controlling it from user space */
-	gpio_free(CCARDIMX28_WIFI_CHIP_PWD);
 }
 
 static int ccardimx28_register_hwid(void)
@@ -422,8 +427,7 @@ static void __init ccardimx28_post_init(void)
 
 	/* Wireless
 	 * TODO: check the variant has Wifi */
-	if (IS_ENABLED(CONFIG_ATH6KL_SDIO))
-		ccardimx28_init_wifi();
+	ccardimx28_init_wifi();
 }
 
 static int cpx2_phy_fixup(struct phy_device *phy)
