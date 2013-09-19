@@ -51,9 +51,11 @@
 ///include/ "digi/ccardimx28/ccardimx28_ssp0_spi_gpio.dtsi"
 ///include/ "digi/ccardimx28/ccardimx28_ssp1_spi.dtsi"
 ///include/ "digi/ccardimx28/ccardimx28_ssp1_spi_gpio.dtsi"
+///include/ "digi/ccardimx28/ccardimx28_ssp1_spi_gpio_spidev.dtsi"
 /include/ "digi/ccardimx28/ccardimx28_ssp2_mmc_wifi.dtsi"
 ///include/ "digi/ccardimx28/ccardimx28_ssp3_spi.dtsi"
 ///include/ "digi/ccardimx28/ccardimx28_ssp3_spi_gpio.dtsi"
+///include/ "digi/ccardimx28/ccardimx28_ssp3_spi_gpio_spidev.dtsi"
 
 /* CAN */
 /include/ "digi/ccardimx28/ccardimx28_can0.dtsi"
