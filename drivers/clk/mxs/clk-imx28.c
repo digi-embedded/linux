@@ -246,6 +246,12 @@ int __init mx28_clocks_init(void)
 	clk_data.clk_num = ARRAY_SIZE(clks);
 	of_clk_add_provider(np, of_clk_src_onecell_get, &clk_data);
 
+	/*
+	 * Select PLL as the parent source of lcdif_sel clk to have a finer
+	 * granularity when calculating the LCD pixelclock
+	 */
+	clk_set_parent(clks[lcdif_sel], clks[ref_pix]);
+
 	clk_register_clkdev(clks[enet_out], NULL, "enet_out");
 	/* These clocks are used by the suspend platform code. */
 	clk_register_clkdev(clks[cpu], NULL, "cpu");
