@@ -39,10 +39,12 @@
  * the required value in the imx_fb_videomode structure.
  */
 
+#include <linux/busfreq-imx6.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/of_device.h>
 #include <linux/platform_device.h>
+#include <linux/pm_runtime.h>
 #include <linux/interrupt.h>
 #include <linux/clk.h>
 #include <linux/dma-mapping.h>
@@ -420,6 +422,8 @@ static void mxsfb_enable_controller(struct fb_info *fb_info)
 		}
 	}
 
+	pm_runtime_get_sync(&host->pdev->dev);
+
 	clk_enable_axi(host);
 
 	clk_prepare_enable(host->clk_pix);
@@ -469,6 +473,8 @@ static void mxsfb_disable_controller(struct fb_info *fb_info)
 	writel(reg & ~VDCTRL4_SYNC_SIGNALS_ON, host->base + LCDC_VDCTRL4);
 
 	clk_disable_unprepare(host->clk_pix);
+
+	pm_runtime_put_sync_suspend(&host->pdev->dev);
 
 	host->enabled = 0;
 
@@ -1208,6 +1214,8 @@ static int mxsfb_probe(struct platform_device *pdev)
 		goto fb_destroy;
 	}
 
+	pm_runtime_enable(&host->pdev->dev);
+
 	dev_info(&pdev->dev, "initialized\n");
 
 	return 0;
@@ -1262,7 +1270,6 @@ static int mxsfb_suspend(struct platform_device *pdev, pm_message_t state)
 
 	if (host->enabled)
 		mxsfb_disable_controller(fb_info);
-
 	return 0;
 }
 
@@ -1278,6 +1285,31 @@ static int mxsfb_resume(struct platform_device *pdev)
 }
 #endif /* CONFIG_PM */
 
+#ifdef CONFIG_PM_RUNTIME
+static int mxsfb_runtime_suspend(struct device *dev)
+{
+	release_bus_freq(BUS_FREQ_HIGH);
+	dev_dbg(dev, "mxsfb busfreq high release.\n");
+
+	return 0;
+}
+
+static int mxsfb_runtime_resume(struct device *dev)
+{
+	request_bus_freq(BUS_FREQ_HIGH);
+	dev_dbg(dev, "mxsfb busfreq high request.\n");
+
+	return 0;
+}
+#else
+#define	mxsfb_runtime_suspend	NULL
+#define	mxsfb_runtime_resume	NULL
+#endif
+
+static const struct dev_pm_ops mxsfb_pm_ops = {
+	SET_RUNTIME_PM_OPS(mxsfb_runtime_suspend, mxsfb_runtime_resume, NULL)
+};
+
 static struct platform_driver mxsfb_driver = {
 	.probe = mxsfb_probe,
 	.remove = mxsfb_remove,
@@ -1290,6 +1322,7 @@ static struct platform_driver mxsfb_driver = {
 	.driver = {
 		   .name = DRIVER_NAME,
 		   .of_match_table = mxsfb_dt_ids,
+		   .pm = &mxsfb_pm_ops,
 	},
 };
 
