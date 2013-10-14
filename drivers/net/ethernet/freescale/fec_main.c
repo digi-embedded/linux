@@ -1880,6 +1880,8 @@ fec_enet_open(struct net_device *ndev)
 				   PM_QOS_CPU_DMA_LATENCY,
 				   PM_QOS_DEFAULT_VALUE);
 
+	pinctrl_pm_select_default_state(&fep->pdev->dev);
+
 	fec_enet_clk_enable(ndev, true);
 
 	napi_enable(&fep->napi);
@@ -1926,6 +1928,8 @@ fec_enet_close(struct net_device *ndev)
 	}
 
 	fec_enet_clk_enable(ndev, false);
+
+	pinctrl_pm_select_sleep_state(&fep->pdev->dev);
 
 	pm_qos_remove_request(&ndev->pm_qos_req);
 	pm_runtime_put_sync_suspend(ndev->dev.parent);
@@ -2305,6 +2309,9 @@ fec_probe(struct platform_device *pdev)
 		fep->pause_flag |= FEC_PAUSE_FLAG_AUTONEG;
 #endif
 
+	/* Select default pin state */
+	pinctrl_pm_select_default_state(&pdev->dev);
+
 	fep->hwp = devm_ioremap_resource(&pdev->dev, r);
 	if (IS_ERR(fep->hwp)) {
 		ret = PTR_ERR(fep->hwp);
@@ -2408,6 +2415,9 @@ fec_probe(struct platform_device *pdev)
 	netif_carrier_off(ndev);
 	fec_enet_clk_enable(ndev, false);
 
+	/* Select sleep pin state */
+	pinctrl_pm_select_sleep_state(&pdev->dev);
+
 	ret = register_netdev(ndev);
 	if (ret)
 		goto failed_register;
@@ -2486,6 +2496,8 @@ fec_suspend(struct device *dev)
 	if (fep->reg_phy)
 		regulator_disable(fep->reg_phy);
 
+	pinctrl_pm_select_sleep_state(&fep->pdev->dev);
+
 	return 0;
 }
 
@@ -2495,6 +2507,8 @@ fec_resume(struct device *dev)
 	struct net_device *ndev = dev_get_drvdata(dev);
 	struct fec_enet_private *fep = netdev_priv(ndev);
 	int ret;
+
+	pinctrl_pm_select_default_state(&fep->pdev->dev);
 
 	if (fep->reg_phy) {
 		ret = regulator_enable(fep->reg_phy);
