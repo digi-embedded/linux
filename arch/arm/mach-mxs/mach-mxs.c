@@ -425,6 +425,7 @@ static void __init ccardimx28_post_init(void)
 	if (!gpio_request_one(CCARDIMX28_FEC1_PHY_RESET, GPIOF_DIR_OUT,
 			      "enet1-phy-reset")) {
 		gpio_set_value(CCARDIMX28_FEC1_PHY_RESET, 1);
+		gpio_free(CCARDIMX28_FEC1_PHY_RESET);
 	}
 
 	/* Bluetooth
