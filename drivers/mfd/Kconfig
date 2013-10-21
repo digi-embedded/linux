@@ -139,6 +139,13 @@ config MFD_DA9055
 	  This driver can be built as a module. If built as a module it will be
 	  called "da9055"
 
+config MFD_MXC_HDMI
+	tristate "Freescale HDMI Core"
+	select MFD_CORE
+	help
+	  This is the core driver for the Freescale i.MX6 on-chip HDMI.
+	  This MFD driver connects with the video and audio drivers for HDMI.
+
 config MFD_MC13783
 	tristate
 
@@ -276,6 +283,13 @@ config MFD_88PM860X
 	  This includes the I2C driver and the core APIs _only_, you have to
 	  select individual components like voltage regulators, RTC and
 	  battery-charger under the corresponding menus.
+
+config MFD_MAX17135
+    tristate "Maxim MAX17135 EPD PMIC core"
+	depends on I2C
+    help
+      This is the MAX17135 PMIC support. It includes
+      core support for communication with the MAX17135 chip.
 
 config MFD_MAX77686
 	bool "Maxim Semiconductor MAX77686 PMIC Support"
@@ -1148,3 +1162,4 @@ config VEXPRESS_CONFIG
 	help
 	  Platform configuration infrastructure for the ARM Ltd.
 	  Versatile Express.
+

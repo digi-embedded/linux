@@ -383,6 +383,15 @@ static int ci_get_platdata(struct device *dev,
 		return PTR_ERR(platdata->reg_vbus);
 	}
 
+	if (!platdata->phy_mode)
+		platdata->phy_mode = of_usb_get_phy_mode(dev->of_node);
+
+	if (!platdata->dr_mode)
+		platdata->dr_mode = of_usb_get_dr_mode(dev->of_node);
+
+	if (platdata->dr_mode == USB_DR_MODE_UNKNOWN)
+		platdata->dr_mode = USB_DR_MODE_OTG;
+
 	return 0;
 }
 
@@ -443,6 +452,20 @@ void ci_hdrc_remove_device(struct platform_device *pdev)
 	ida_simple_remove(&ci_ida, id);
 }
 EXPORT_SYMBOL_GPL(ci_hdrc_remove_device);
+
+void ci_hdrc_enter_lpm(struct platform_device *pdev, bool enable)
+{
+	struct ci_hdrc *ci = platform_get_drvdata(pdev);
+	enum ci_hw_regs reg = ci->hw_bank.lpm ? OP_DEVLC : OP_PORTSC;
+
+	if (enable)
+		hw_write(ci, reg, PORTSC_PHCD(ci->hw_bank.lpm),
+				PORTSC_PHCD(ci->hw_bank.lpm));
+	else
+		hw_write(ci, reg, PORTSC_PHCD(ci->hw_bank.lpm),
+				0);
+}
+EXPORT_SYMBOL_GPL(ci_hdrc_enter_lpm);
 
 static inline void ci_role_destroy(struct ci_hdrc *ci)
 {
@@ -527,6 +550,8 @@ static int ci_hdrc_probe(struct platform_device *pdev)
 	if (ci->platdata->dr_mode == USB_DR_MODE_UNKNOWN)
 		ci->platdata->dr_mode = USB_DR_MODE_OTG;
 
+	hw_phymode_configure(ci);
+
 	dr_mode = ci->platdata->dr_mode;
 	/* initialize role(s) before the interrupt is requested */
 	if (dr_mode == USB_DR_MODE_OTG || dr_mode == USB_DR_MODE_HOST) {
@@ -607,6 +632,7 @@ static int ci_hdrc_remove(struct platform_device *pdev)
 	dbg_remove_files(ci);
 	free_irq(ci->irq, ci);
 	ci_role_destroy(ci);
+	kfree(ci->hw_bank.regmap);
 
 	return 0;
 }
@@ -622,7 +648,6 @@ static struct platform_driver ci_hdrc_driver = {
 module_platform_driver(ci_hdrc_driver);
 
 MODULE_ALIAS("platform:ci_hdrc");
-MODULE_ALIAS("platform:ci13xxx");
 MODULE_LICENSE("GPL v2");
 MODULE_AUTHOR("David Lopo <dlopo@chipidea.mips.com>");
 MODULE_DESCRIPTION("ChipIdea HDRC Driver");

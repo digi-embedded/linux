@@ -1,5 +1,6 @@
 config ARCH_MXC
 	bool "Freescale i.MX family" if ARCH_MULTI_V4_V5 || ARCH_MULTI_V6_V7
+	select ARCH_HAS_RESET_CONTROLLER
 	select ARCH_REQUIRE_GPIOLIB
 	select ARM_PATCH_PHYS_VIRT
 	select AUTO_ZRELADDR if !ZBOOT_ROM
@@ -8,8 +9,11 @@ config ARCH_MXC
 	select GENERIC_ALLOCATOR
 	select GENERIC_CLOCKEVENTS
 	select GENERIC_IRQ_CHIP
+	select MIGHT_HAVE_CACHE_L2X0 if ARCH_MULTI_V6_V7
 	select MULTI_IRQ_HANDLER
+	select SOC_BUS
 	select SPARSE_IRQ
+	select SRAM
 	select USE_OF
 	help
 	  Support for Freescale MXC/iMX-based family of processors
@@ -73,7 +77,6 @@ config HAVE_IMX_MMDC
 
 config HAVE_IMX_SRC
 	def_bool y if SMP
-	select ARCH_HAS_RESET_CONTROLLER
 
 config IMX_HAVE_IOMUX_V1
 	bool
@@ -806,15 +809,52 @@ config SOC_IMX6Q
 	select HAVE_IMX_SRC
 	select HAVE_SMP
 	select MFD_SYSCON
+	select MIGHT_HAVE_PCI
+	select PCI_DOMAINS if PCI
 	select PINCTRL
 	select PINCTRL_IMX6Q
 	select PL310_ERRATA_588369 if CACHE_PL310
 	select PL310_ERRATA_727915 if CACHE_PL310
 	select PL310_ERRATA_769419 if CACHE_PL310
 	select PM_OPP if PM
+	select ZONE_DMA
 
 	help
 	  This enables support for Freescale i.MX6 Quad processor.
+
+config SOC_IMX6SL
+	bool "i.MX6 SoloLite support"
+	select ARM_ERRATA_754322
+	select ARM_ERRATA_775420
+	select ARM_GIC
+	select CPU_V7
+	select HAVE_IMX_ANATOP
+	select HAVE_IMX_GPC
+	select HAVE_IMX_MMDC
+	select HAVE_IMX_SRC
+	select PINCTRL
+	select PINCTRL_IMX6SL
+	select PL310_ERRATA_588369 if CACHE_PL310
+	select PL310_ERRATA_727915 if CACHE_PL310
+	select PL310_ERRATA_769419 if CACHE_PL310
+
+	help
+	  This enables support for Freescale i.MX6 SoloLite processor.
+
+config SOC_VF610
+	bool "Vybrid Family VF610 support"
+	select CPU_V7
+	select ARM_GIC
+	select CLKSRC_OF
+	select PINCTRL
+	select PINCTRL_VF610
+	select VF_PIT_TIMER
+	select PL310_ERRATA_588369 if CACHE_PL310
+	select PL310_ERRATA_727915 if CACHE_PL310
+	select PL310_ERRATA_769419 if CACHE_PL310
+
+	help
+	  This enable support for Freescale Vybrid VF610 processor.
 
 endif
 

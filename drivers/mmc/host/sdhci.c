@@ -49,7 +49,6 @@ static unsigned int debug_quirks2;
 
 static void sdhci_finish_data(struct sdhci_host *);
 
-static void sdhci_send_command(struct sdhci_host *, struct mmc_command *);
 static void sdhci_finish_command(struct sdhci_host *);
 static int sdhci_execute_tuning(struct mmc_host *mmc, u32 opcode);
 static void sdhci_tuning_timer(unsigned long data);
@@ -969,7 +968,7 @@ static void sdhci_finish_data(struct sdhci_host *host)
 		tasklet_schedule(&host->finish_tasklet);
 }
 
-static void sdhci_send_command(struct sdhci_host *host, struct mmc_command *cmd)
+void sdhci_send_command(struct sdhci_host *host, struct mmc_command *cmd)
 {
 	int flags;
 	u32 mask;
@@ -1041,6 +1040,7 @@ static void sdhci_send_command(struct sdhci_host *host, struct mmc_command *cmd)
 
 	sdhci_writew(host, SDHCI_MAKE_CMD(cmd->opcode, flags), SDHCI_COMMAND);
 }
+EXPORT_SYMBOL_GPL(sdhci_send_command);
 
 static void sdhci_finish_command(struct sdhci_host *host)
 {
@@ -1859,6 +1859,14 @@ static int sdhci_execute_tuning(struct mmc_host *mmc, u32 opcode)
 		return 0;
 	}
 
+	if (host->ops->platform_execute_tuning) {
+		spin_unlock(&host->lock);
+		enable_irq(host->irq);
+		err = host->ops->platform_execute_tuning(host, opcode);
+		sdhci_runtime_pm_put(host);
+		return err;
+	}
+
 	sdhci_writew(host, ctrl, SDHCI_HOST_CONTROL2);
 
 	/*
@@ -2049,8 +2057,7 @@ static void sdhci_card_event(struct mmc_host *mmc)
 	spin_lock_irqsave(&host->lock, flags);
 
 	/* Check host->mrq first in case we are runtime suspended */
-	if (host->mrq &&
-	    !(sdhci_readl(host, SDHCI_PRESENT_STATE) & SDHCI_CARD_PRESENT)) {
+	if (host->mrq && !sdhci_do_get_cd(host)) {
 		pr_err("%s: Card removed during transfer!\n",
 			mmc_hostname(host->mmc));
 		pr_err("%s: Resetting controller.\n",
@@ -2902,6 +2909,7 @@ int sdhci_add_host(struct sdhci_host *host)
 
 	/* Auto-CMD23 stuff only works in ADMA or PIO. */
 	if ((host->version >= SDHCI_SPEC_300) &&
+	    !(host->quirks2 & SDHCI_QUIRK2_BROKEN_AUTO_CMD23) &&
 	    ((host->flags & SDHCI_USE_ADMA) ||
 	     !(host->flags & SDHCI_USE_SDMA))) {
 		host->flags |= SDHCI_AUTO_CMD23;
@@ -3174,6 +3182,8 @@ int sdhci_add_host(struct sdhci_host *host)
 		host->tuning_timer.function = sdhci_tuning_timer;
 	}
 
+	sdhci_init(host, 0);
+
 	ret = request_irq(host->irq, sdhci_irq, IRQF_SHARED,
 		mmc_hostname(mmc), host);
 	if (ret) {
@@ -3181,8 +3191,6 @@ int sdhci_add_host(struct sdhci_host *host)
 		       mmc_hostname(mmc), host->irq, ret);
 		goto untasklet;
 	}
-
-	sdhci_init(host, 0);
 
 #ifdef CONFIG_MMC_DEBUG
 	sdhci_dumpregs(host);
