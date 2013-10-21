@@ -1606,7 +1606,6 @@ static void destroy_eps(struct ci_hdrc *ci)
 
 		if (hwep->pending_td)
 			free_pending_td(hwep);
-
 		dma_pool_free(ci->qh_pool, hwep->qh.ptr, hwep->qh.dma);
 	}
 }
@@ -1674,7 +1673,6 @@ static int ci_udc_stop(struct usb_gadget *gadget,
 		if (ci->platdata->notify_event)
 			ci->platdata->notify_event(ci,
 			CI_HDRC_CONTROLLER_STOPPED_EVENT);
-		ci->driver = NULL;
 		spin_unlock_irqrestore(&ci->lock, flags);
 		_gadget_stop_activity(&ci->gadget);
 		spin_lock_irqsave(&ci->lock, flags);
