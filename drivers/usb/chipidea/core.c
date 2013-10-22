@@ -172,6 +172,34 @@ u8 hw_port_test_get(struct ci_hdrc *ci)
 	return hw_read(ci, OP_PORTSC, PORTSC_PTC) >> __ffs(PORTSC_PTC);
 }
 
+/* The PHY enters/leaves low power mode */
+static void ci_hdrc_enter_lpm(struct ci_hdrc *ci, bool enable)
+{
+	enum ci_hw_regs reg = ci->hw_bank.lpm ? OP_DEVLC : OP_PORTSC;
+	bool lpm = !!(hw_read(ci, reg, PORTSC_PHCD(ci->hw_bank.lpm)));
+
+	if (enable && !lpm) {
+		hw_write(ci, reg, PORTSC_PHCD(ci->hw_bank.lpm),
+				PORTSC_PHCD(ci->hw_bank.lpm));
+	} else  if (!enable && lpm) {
+		hw_write(ci, reg, PORTSC_PHCD(ci->hw_bank.lpm),
+				0);
+		/* 
+		 * The controller needs at least 1ms to reflect
+		 * PHY's status, the PHY also needs some time (less
+		 * than 1ms) to leave low power mode.
+		 */
+		usleep_range(1500, 2000);
+	} else if (!enable) {
+		/*
+		 * At wakeup interrupt, the phcd will be cleared by hardware
+		 * automatically, but the controller needs at least 1ms
+		 * to reflect PHY's status.
+		 */
+		usleep_range(1200, 1800);
+	}
+}
+
 static int hw_device_init(struct ci_hdrc *ci, void __iomem *base)
 {
 	u32 reg;
@@ -331,6 +359,13 @@ static irqreturn_t ci_irq(int irq, void *data)
 	struct ci_hdrc *ci = data;
 	irqreturn_t ret = IRQ_NONE;
 	u32 otgsc = 0;
+
+	if (ci->in_lpm) {
+		disable_irq_nosync(irq);
+		ci->wakeup_int = true;
+		pm_runtime_get(ci->dev);
+		return IRQ_HANDLED;
+	}
 
 	if (ci->is_otg)
 		otgsc = hw_read(ci, OP_OTGSC, ~0);
@@ -728,6 +763,12 @@ static int ci_controller_resume(struct device *dev)
 	}
 
 	ci->in_lpm = false;
+
+	if (ci->wakeup_int) {
+		ci->wakeup_int = false;
+		enable_irq(ci->irq);
+		pm_runtime_put(ci->dev);
+	}
 
 	return 0;
 }
