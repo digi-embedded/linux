@@ -11,7 +11,7 @@
 
 / {
         cpus {
-                cpu@0 {
+                cpu {
                         cpufreq {
                                 compatible = "digi,mxs-cpufreq";
                                 cpufreq_tbl = < 64000
