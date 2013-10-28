@@ -35,7 +35,7 @@
 				status = "okay";
 
 				/* Sharp LQ70Y3DG3B */
-				lq70y3dg3b: display {
+				lq70y3dg3b: display@0 {
                                        bits-per-pixel = <32>;
                                        bus-width = <18>;
 
