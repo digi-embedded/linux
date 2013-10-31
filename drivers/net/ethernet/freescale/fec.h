@@ -16,6 +16,9 @@
 #include <linux/clocksource.h>
 #include <linux/net_tstamp.h>
 #include <linux/ptp_clock_kernel.h>
+#include <linux/netdevice.h>
+#include <linux/etherdevice.h>
+#include <linux/circ_buf.h>
 
 #if defined(CONFIG_M523x) || defined(CONFIG_M527x) || defined(CONFIG_M528x) || \
     defined(CONFIG_M520x) || defined(CONFIG_M532x) || \
@@ -59,6 +62,61 @@
 #define BM_MIIGSK_CFGR_MII		0x00
 #define BM_MIIGSK_CFGR_RMII		0x01
 #define BM_MIIGSK_CFGR_FRCONT_10M	0x40
+
+#define RMON_T_DROP		0x200 /* Count of frames not cntd correctly */
+#define RMON_T_PACKETS		0x204 /* RMON TX packet count */
+#define RMON_T_BC_PKT		0x208 /* RMON TX broadcast pkts */
+#define RMON_T_MC_PKT		0x20C /* RMON TX multicast pkts */
+#define RMON_T_CRC_ALIGN	0x210 /* RMON TX pkts with CRC align err */
+#define RMON_T_UNDERSIZE	0x214 /* RMON TX pkts < 64 bytes, good CRC */
+#define RMON_T_OVERSIZE		0x218 /* RMON TX pkts > MAX_FL bytes good CRC */
+#define RMON_T_FRAG		0x21C /* RMON TX pkts < 64 bytes, bad CRC */
+#define RMON_T_JAB		0x220 /* RMON TX pkts > MAX_FL bytes, bad CRC */
+#define RMON_T_COL		0x224 /* RMON TX collision count */
+#define RMON_T_P64		0x228 /* RMON TX 64 byte pkts */
+#define RMON_T_P65TO127		0x22C /* RMON TX 65 to 127 byte pkts */
+#define RMON_T_P128TO255	0x230 /* RMON TX 128 to 255 byte pkts */
+#define RMON_T_P256TO511	0x234 /* RMON TX 256 to 511 byte pkts */
+#define RMON_T_P512TO1023	0x238 /* RMON TX 512 to 1023 byte pkts */
+#define RMON_T_P1024TO2047	0x23C /* RMON TX 1024 to 2047 byte pkts */
+#define RMON_T_P_GTE2048	0x240 /* RMON TX pkts > 2048 bytes */
+#define RMON_T_OCTETS		0x244 /* RMON TX octets */
+#define IEEE_T_DROP		0x248 /* Count of frames not counted crtly */
+#define IEEE_T_FRAME_OK		0x24C /* Frames tx'd OK */
+#define IEEE_T_1COL		0x250 /* Frames tx'd with single collision */
+#define IEEE_T_MCOL		0x254 /* Frames tx'd with multiple collision */
+#define IEEE_T_DEF		0x258 /* Frames tx'd after deferral delay */
+#define IEEE_T_LCOL		0x25C /* Frames tx'd with late collision */
+#define IEEE_T_EXCOL		0x260 /* Frames tx'd with excesv collisions */
+#define IEEE_T_MACERR		0x264 /* Frames tx'd with TX FIFO underrun */
+#define IEEE_T_CSERR		0x268 /* Frames tx'd with carrier sense err */
+#define IEEE_T_SQE		0x26C /* Frames tx'd with SQE err */
+#define IEEE_T_FDXFC		0x270 /* Flow control pause frames tx'd */
+#define IEEE_T_OCTETS_OK	0x274 /* Octet count for frames tx'd w/o err */
+#define RMON_R_PACKETS		0x284 /* RMON RX packet count */
+#define RMON_R_BC_PKT		0x288 /* RMON RX broadcast pkts */
+#define RMON_R_MC_PKT		0x28C /* RMON RX multicast pkts */
+#define RMON_R_CRC_ALIGN	0x290 /* RMON RX pkts with CRC alignment err */
+#define RMON_R_UNDERSIZE	0x294 /* RMON RX pkts < 64 bytes, good CRC */
+#define RMON_R_OVERSIZE		0x298 /* RMON RX pkts > MAX_FL bytes good CRC */
+#define RMON_R_FRAG		0x29C /* RMON RX pkts < 64 bytes, bad CRC */
+#define RMON_R_JAB		0x2A0 /* RMON RX pkts > MAX_FL bytes, bad CRC */
+#define RMON_R_RESVD_O		0x2A4 /* Reserved */
+#define RMON_R_P64		0x2A8 /* RMON RX 64 byte pkts */
+#define RMON_R_P65TO127		0x2AC /* RMON RX 65 to 127 byte pkts */
+#define RMON_R_P128TO255	0x2B0 /* RMON RX 128 to 255 byte pkts */
+#define RMON_R_P256TO511	0x2B4 /* RMON RX 256 to 511 byte pkts */
+#define RMON_R_P512TO1023	0x2B8 /* RMON RX 512 to 1023 byte pkts */
+#define RMON_R_P1024TO2047	0x2BC /* RMON RX 1024 to 2047 byte pkts */
+#define RMON_R_P_GTE2048	0x2C0 /* RMON RX pkts > 2048 bytes */
+#define RMON_R_OCTETS		0x2C4 /* RMON RX octets */
+#define IEEE_R_DROP		0x2C8 /* Count frames not counted correctly */
+#define IEEE_R_FRAME_OK		0x2CC /* Frames rx'd OK */
+#define IEEE_R_CRC		0x2D0 /* Frames rx'd with CRC err */
+#define IEEE_R_ALIGN		0x2D4 /* Frames rx'd with alignment err */
+#define IEEE_R_MACERR		0x2D8 /* Receive FIFO overflow count */
+#define IEEE_R_FDXFC		0x2DC /* Flow control pause frames rx'd */
+#define IEEE_R_OCTETS_OK	0x2E0 /* Octet cnt for frames rx'd w/o err */
 
 #else
 
@@ -148,6 +206,9 @@ struct bufdesc_ex {
 #define BD_ENET_RX_CL           ((ushort)0x0001)
 #define BD_ENET_RX_STATS        ((ushort)0x013f)        /* All status bits */
 
+/* Enhanced buffer descriptor control/status used by Ethernet receive */
+#define BD_ENET_RX_VLAN         0x00000004
+
 /* Buffer descriptor control/status used by Ethernet transmit.
 */
 #define BD_ENET_TX_READY        ((ushort)0x8000)
@@ -198,9 +259,102 @@ struct bufdesc_ex {
 #define FLAG_RX_CSUM_ENABLED	(BD_ENET_RX_ICE | BD_ENET_RX_PCR)
 #define FLAG_RX_CSUM_ERROR	(BD_ENET_RX_ICE | BD_ENET_RX_PCR)
 
+#define FALSE                  0
+#define TRUE                   1
+
+/* IEEE 1588 definition */
+#define FEC_T_PERIOD_ONE_SEC           0x3B9ACA00
+
+#define DEFAULT_PTP_RX_BUF_SZ          64
+#define DEFAULT_PTP_TX_BUF_SZ          64
+
+/* 1588stack API defines */
+#define PTP_ENBL_TXTS_IOCTL    SIOCDEVPRIVATE
+#define PTP_DSBL_TXTS_IOCTL    (SIOCDEVPRIVATE + 1)
+#define PTP_ENBL_RXTS_IOCTL    (SIOCDEVPRIVATE + 2)
+#define PTP_DSBL_RXTS_IOCTL    (SIOCDEVPRIVATE + 3)
+#define PTP_GET_TX_TIMESTAMP   (SIOCDEVPRIVATE + 4)
+#define PTP_GET_RX_TIMESTAMP   (SIOCDEVPRIVATE + 5)
+#define PTP_SET_RTC_TIME       (SIOCDEVPRIVATE + 6)
+#define PTP_GET_CURRENT_TIME   (SIOCDEVPRIVATE + 7)
+#define PTP_SET_COMPENSATION   (SIOCDEVPRIVATE + 9)
+#define PTP_GET_ORIG_COMP      (SIOCDEVPRIVATE + 10)
+#define PTP_FLUSH_TIMESTAMP    (SIOCDEVPRIVATE + 11)
+
+/* IEEE1588 ptp head format */
+#define PTP_CTRL_OFFS          0x52
+#define PTP_SOURCE_PORT_LENGTH 10
+#define PTP_HEADER_SEQ_OFFS    30
+#define PTP_HEADER_CTL_OFFS    32
+#define PTP_SPID_OFFS          20
+#define PTP_HEADER_SZE         34
+#define PTP_EVENT_PORT         0x013F
+
+#define FEC_VLAN_TAG_LEN       0x04
+#define FEC_ETHTYPE_LEN                0x02
+
+/* 1588-2008 network protocol enumeration values */
+#define FEC_PTP_PROT_IPV4              1
+#define FEC_PTP_PROT_IPV6              2
+#define FEC_PTP_PROT_802_3             3
+#define FEC_PTP_PROT_DONTCARE          0xFFFF
+#define FEC_PACKET_TYPE_UDP            0x11
+
+#define FEC_PTP_ORIG_COMP              0x15555555
+#define FEC_PTP_SPINNER_2              2
+#define FEC_PTP_SPINNER_4              4
+
+/* PTP standard time representation structure */
+struct ptp_time{
+	u64 sec;        /* seconds */
+	u32 nsec;       /* nanoseconds */
+};
+
+/* struct needed to identify a timestamp */
+struct fec_ptp_ident {
+	u8      version;
+	u8      message_type;
+	u16     netw_prot;
+	u16     seq_id;
+	u8      spid[10];
+};
+
+/* interface for PTP driver command GET_TX_TIME */
+struct fec_ptp_ts_data {
+	struct fec_ptp_ident ident;
+	/* PTP timestamp */
+	struct ptp_time ts;
+};
+
+/* circular buffer for ptp timestamps over ioctl */
+struct fec_ptp_circular {
+	int     front;
+	int     end;
+	int     size;
+	struct  fec_ptp_ts_data *data_buf;
+};
+
+/* interface for PTP driver command SET_RTC_TIME/GET_CURRENT_TIME */
+struct ptp_rtc_time {
+	struct ptp_time rtc_time;
+};
+
+/* interface for PTP driver command SET_COMPENSATION */
+struct ptp_set_comp {
+	u32 drift;
+	bool o_ops;
+	u32 freq_compensation;
+};
+
+struct ptp_time_correct {
+	u32 corr_period;
+	u32 corr_inc;
+};
+
 struct fec_enet_delayed_work {
 	struct delayed_work delay_work;
 	bool timeout;
+	bool trig_tx;
 };
 
 /* The FEC buffer descriptors track the ring buffers.  The rx_bd_base and
@@ -253,6 +407,12 @@ struct fec_enet_private {
 	int	speed;
 	struct	completion mdio_done;
 	int	irq[FEC_IRQ_NUM];
+	/* HW timestamping over ioctl enabled flag */
+	int hwts_tx_en_ioctl;
+	int hwts_rx_en_ioctl;
+	struct fec_ptp_circular tx_timestamps;
+	struct fec_ptp_circular rx_timestamps;
+	u64 prtc;
 	int	bufdesc_ex;
 	int	pause_flag;
 
@@ -267,6 +427,8 @@ struct fec_enet_private {
 	unsigned int rxtx_activity;
 	unsigned int rxtx_cnt;
 	struct timer_list activityled_timer;
+	int     phy_reset_gpio;
+	int     reset_duration;
 
 	struct ptp_clock *ptp_clock;
 	struct ptp_clock_info ptp_caps;
@@ -281,11 +443,21 @@ struct fec_enet_private {
 	int hwts_tx_en;
 	struct timer_list time_keep;
 	struct fec_enet_delayed_work delay_work;
+	struct regulator *reg_phy;
 };
 
-void fec_ptp_init(struct net_device *ndev, struct platform_device *pdev);
+void fec_ptp_init(struct platform_device *pdev);
 void fec_ptp_start_cyclecounter(struct net_device *ndev);
 int fec_ptp_ioctl(struct net_device *ndev, struct ifreq *ifr, int cmd);
+void fec_ptp_cleanup(struct fec_enet_private *priv);
+void fec_ptp_stop(struct net_device *ndev);
+int fec_ptp_do_txstamp(struct sk_buff *skb);
+void fec_ptp_store_txstamp(struct fec_enet_private *priv,
+				struct sk_buff *skb,
+				struct bufdesc *bdp);
+void fec_ptp_store_rxstamp(struct fec_enet_private *priv,
+				struct sk_buff *skb,
+				struct bufdesc *bdp);
 
 /****************************************************************************/
 #endif /* FEC_H */

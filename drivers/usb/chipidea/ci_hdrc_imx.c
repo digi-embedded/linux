@@ -1,5 +1,5 @@
 /*
- * Copyright 2012 Freescale Semiconductor, Inc.
+ * Copyright 2012-2013 Freescale Semiconductor, Inc.
  * Copyright (C) 2012 Marek Vasut <marex@denx.de>
  * on behalf of DENX Software Engineering GmbH
  *
@@ -23,64 +23,52 @@
 #include "ci.h"
 #include "ci_hdrc_imx.h"
 
-#define pdev_to_phy(pdev) \
-	((struct usb_phy *)platform_get_drvdata(pdev))
-
 struct ci_hdrc_imx_data {
 	struct usb_phy *phy;
 	struct platform_device *ci_pdev;
 	struct clk *clk;
+	struct imx_usbmisc_data *usbmisc_data;
 };
-
-static const struct usbmisc_ops *usbmisc_ops;
 
 /* Common functions shared by usbmisc drivers */
 
-int usbmisc_set_ops(const struct usbmisc_ops *ops)
-{
-	if (usbmisc_ops)
-		return -EBUSY;
-
-	usbmisc_ops = ops;
-
-	return 0;
-}
-EXPORT_SYMBOL_GPL(usbmisc_set_ops);
-
-void usbmisc_unset_ops(const struct usbmisc_ops *ops)
-{
-	usbmisc_ops = NULL;
-}
-EXPORT_SYMBOL_GPL(usbmisc_unset_ops);
-
-int usbmisc_get_init_data(struct device *dev, struct usbmisc_usb_device *usbdev)
+static struct imx_usbmisc_data *usbmisc_get_init_data(struct device *dev)
 {
 	struct device_node *np = dev->of_node;
 	struct of_phandle_args args;
+	struct imx_usbmisc_data *data;
 	int ret;
 
-	usbdev->dev = dev;
+	/*
+	 * In case the fsl,usbmisc property is not present this device doesn't
+	 * need usbmisc. Return NULL (which is no error here)
+	 */
+	if (!of_get_property(np, "fsl,usbmisc", NULL))
+		return NULL;
+
+	data = devm_kzalloc(dev, sizeof(*data), GFP_KERNEL);
+	if (!data)
+		return ERR_PTR(-ENOMEM);
 
 	ret = of_parse_phandle_with_args(np, "fsl,usbmisc", "#index-cells",
 					0, &args);
 	if (ret) {
 		dev_err(dev, "Failed to parse property fsl,usbmisc, errno %d\n",
 			ret);
-		memset(usbdev, 0, sizeof(*usbdev));
-		return ret;
+		return ERR_PTR(ret);
 	}
-	usbdev->index = args.args[0];
+
+	data->index = args.args[0];
 	of_node_put(args.np);
 
 	if (of_find_property(np, "disable-over-current", NULL))
-		usbdev->disable_oc = 1;
+		data->disable_oc = 1;
 
 	if (of_find_property(np, "external-vbus-divider", NULL))
-		usbdev->evdo = 1;
+		data->evdo = 1;
 
-	return 0;
+	return data;
 }
-EXPORT_SYMBOL_GPL(usbmisc_get_init_data);
 
 /* End of common functions shared by usbmisc drivers*/
 
@@ -93,12 +81,7 @@ static int ci_hdrc_imx_probe(struct platform_device *pdev)
 		.flags		= CI_HDRC_REQUIRE_TRANSCEIVER |
 				  CI_HDRC_DISABLE_STREAMING,
 	};
-	struct resource *res;
 	int ret;
-
-	if (of_find_property(pdev->dev.of_node, "fsl,usbmisc", NULL)
-		&& !usbmisc_ops)
-		return -EPROBE_DEFER;
 
 	data = devm_kzalloc(&pdev->dev, sizeof(*data), GFP_KERNEL);
 	if (!data) {
@@ -106,11 +89,9 @@ static int ci_hdrc_imx_probe(struct platform_device *pdev)
 		return -ENOMEM;
 	}
 
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	if (!res) {
-		dev_err(&pdev->dev, "Can't get device resources!\n");
-		return -ENOENT;
-	}
+	data->usbmisc_data = usbmisc_get_init_data(&pdev->dev);
+	if (IS_ERR(data->usbmisc_data))
+		return PTR_ERR(data->usbmisc_data);
 
 	data->clk = devm_clk_get(&pdev->dev, NULL);
 	if (IS_ERR(data->clk)) {
@@ -145,12 +126,12 @@ static int ci_hdrc_imx_probe(struct platform_device *pdev)
 	if (!pdev->dev.coherent_dma_mask)
 		pdev->dev.coherent_dma_mask = DMA_BIT_MASK(32);
 
-	if (usbmisc_ops && usbmisc_ops->init) {
-		ret = usbmisc_ops->init(&pdev->dev);
+	if (data->usbmisc_data) {
+		ret = imx_usbmisc_init(data->usbmisc_data);
 		if (ret) {
-			dev_err(&pdev->dev,
-				"usbmisc init failed, ret=%d\n", ret);
-			goto err_clk;
+			dev_err(&pdev->dev, "usbmisc init failed, ret=%d\n",
+					ret);
+			goto err_phy;
 		}
 	}
 
@@ -162,14 +143,14 @@ static int ci_hdrc_imx_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev,
 			"Can't register ci_hdrc platform device, err=%d\n",
 			ret);
-		goto err_clk;
+		goto err_phy;
 	}
 
-	if (usbmisc_ops && usbmisc_ops->post) {
-		ret = usbmisc_ops->post(&pdev->dev);
+	if (data->usbmisc_data) {
+		ret = imx_usbmisc_init_post(data->usbmisc_data);
 		if (ret) {
-			dev_err(&pdev->dev,
-				"usbmisc post failed, ret=%d\n", ret);
+			dev_err(&pdev->dev, "usbmisc post failed, ret=%d\n",
+					ret);
 			goto disable_device;
 		}
 	}
@@ -183,6 +164,9 @@ static int ci_hdrc_imx_probe(struct platform_device *pdev)
 
 disable_device:
 	ci_hdrc_remove_device(data->ci_pdev);
+err_phy:
+	if (data->phy)
+		usb_phy_shutdown(data->phy);
 err_clk:
 	clk_disable_unprepare(data->clk);
 	return ret;
@@ -195,15 +179,84 @@ static int ci_hdrc_imx_remove(struct platform_device *pdev)
 	pm_runtime_disable(&pdev->dev);
 	ci_hdrc_remove_device(data->ci_pdev);
 
-	if (data->phy) {
+	if (data->phy)
 		usb_phy_shutdown(data->phy);
-		module_put(data->phy->dev->driver->owner);
-	}
 
 	clk_disable_unprepare(data->clk);
 
+	platform_set_drvdata(pdev, NULL);
+
 	return 0;
 }
+
+#ifdef CONFIG_PM_SLEEP
+static int imx_controller_suspend(struct device *dev)
+{
+	struct ci_hdrc_imx_data *data = dev_get_drvdata(dev);
+
+	dev_dbg(dev, "at the beginning of %s\n", __func__);
+
+	ci_hdrc_enter_lpm(data->ci_pdev, true);
+
+	if (data->phy)
+		usb_phy_set_suspend(data->phy, 1);
+
+	clk_disable_unprepare(data->clk);
+
+	dev_dbg(dev, "at the end of %s\n", __func__);
+
+	return 0;
+
+}
+static int imx_controller_resume(struct device *dev)
+{
+	struct ci_hdrc_imx_data *data = dev_get_drvdata(dev);
+	int ret;
+
+	dev_dbg(dev, "at the beginning of %s\n", __func__);
+
+	ret = clk_prepare_enable(data->clk);
+	if (ret) {
+		dev_err(dev,
+			"Failed to prepare or enable clock, err=%d\n", ret);
+		return ret;
+	}
+
+	ci_hdrc_enter_lpm(data->ci_pdev, false);
+
+	if (data->phy) {
+		/*
+		 * USB PHY needs to wait 6 times of 32K cycles
+		 * for clock stable.
+		 */
+		udelay(500);
+		usb_phy_set_suspend(data->phy, 0);
+	}
+
+	dev_dbg(dev, "at the end of %s\n", __func__);
+
+	return ret;
+}
+
+static int ci_hdrc_imx_suspend(struct device *dev)
+{
+	dev_dbg(dev, "at %s\n", __func__);
+
+	return imx_controller_suspend(dev);
+}
+
+static int ci_hdrc_imx_resume(struct device *dev)
+{
+	dev_dbg(dev, "at %s\n", __func__);
+
+	return imx_controller_resume(dev);
+}
+
+#endif /* CONFIG_PM_SLEEP */
+
+static const struct dev_pm_ops ci_hdrc_imx_pm_ops = {
+	SET_SYSTEM_SLEEP_PM_OPS(ci_hdrc_imx_suspend, ci_hdrc_imx_resume)
+};
 
 static const struct of_device_id ci_hdrc_imx_dt_ids[] = {
 	{ .compatible = "fsl,imx27-usb", },
@@ -218,6 +271,7 @@ static struct platform_driver ci_hdrc_imx_driver = {
 		.name = "imx_usb",
 		.owner = THIS_MODULE,
 		.of_match_table = ci_hdrc_imx_dt_ids,
+		.pm = &ci_hdrc_imx_pm_ops,
 	 },
 };
 

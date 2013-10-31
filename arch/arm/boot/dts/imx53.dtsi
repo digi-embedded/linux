@@ -137,8 +137,10 @@
 					reg = <0x50014000 0x4000>;
 					interrupts = <30>;
 					clocks = <&clks 49>;
+					dmas = <&sdma 24 1 0>,
+					       <&sdma 25 1 0>;
+					dma-names = "rx", "tx";
 					fsl,fifo-depth = <15>;
-					fsl,ssi-dma-events = <25 24 23 22>; /* TX0 RX0 TX1 RX1 */
 					status = "disabled";
 				};
 
@@ -705,6 +707,7 @@
 				interrupts = <6>;
 				clocks = <&clks 56>, <&clks 56>;
 				clock-names = "ipg", "ahb";
+				#dma-cells = <3>;
 				fsl,sdma-ram-script-name = "imx/sdma/sdma-imx53.bin";
 			};
 
@@ -744,8 +747,10 @@
 				reg = <0x63fcc000 0x4000>;
 				interrupts = <29>;
 				clocks = <&clks 48>;
+				dmas = <&sdma 28 0 0>,
+				       <&sdma 29 0 0>;
+				dma-names = "rx", "tx";
 				fsl,fifo-depth = <15>;
-				fsl,ssi-dma-events = <29 28 27 26>; /* TX0 RX0 TX1 RX1 */
 				status = "disabled";
 			};
 
@@ -768,8 +773,10 @@
 				reg = <0x63fe8000 0x4000>;
 				interrupts = <96>;
 				clocks = <&clks 50>;
+				dmas = <&sdma 46 0 0>,
+				       <&sdma 47 0 0>;
+				dma-names = "rx", "tx";
 				fsl,fifo-depth = <15>;
-				fsl,ssi-dma-events = <47 46 45 44>; /* TX0 RX0 TX1 RX1 */
 				status = "disabled";
 			};
 
@@ -781,6 +788,11 @@
 				clock-names = "ipg", "ahb", "ptp";
 				status = "disabled";
 			};
+		};
+
+		ocram: sram@f8000000 {
+			compatible = "mmio-sram";
+			reg = <0xf8000000 0x20000>;
 		};
 	};
 };

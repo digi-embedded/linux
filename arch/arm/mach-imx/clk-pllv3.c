@@ -1,5 +1,5 @@
 /*
- * Copyright 2012 Freescale Semiconductor, Inc.
+ * Copyright 2012-2013 Freescale Semiconductor, Inc.
  * Copyright 2012 Linaro Ltd.
  *
  * The code contained herein is licensed under the GNU General Public
@@ -31,6 +31,7 @@
  * @clk_hw:	 clock source
  * @base:	 base address of PLL registers
  * @powerup_set: set POWER bit to power up the PLL
+ * @always_on : Leave the PLL powered up all the time.
  * @div_mask:	 mask of divider bits
  *
  * IMX PLL clock version 3, found on i.MX6 series.  Divider for pllv3
@@ -40,15 +41,38 @@ struct clk_pllv3 {
 	struct clk_hw	hw;
 	void __iomem	*base;
 	bool		powerup_set;
+	bool		always_on;
 	u32		div_mask;
 };
 
 #define to_clk_pllv3(_hw) container_of(_hw, struct clk_pllv3, hw)
 
+static int clk_pllv3_wait_for_lock(struct clk_pllv3 *pll, u32 timeout_ms)
+{
+	unsigned long timeout = jiffies + msecs_to_jiffies(timeout_ms);
+	u32 val = readl_relaxed(pll->base) & BM_PLL_POWER;
+
+	/* No need to wait for lock when pll is power down */
+	if ((pll->powerup_set && !val) || (!pll->powerup_set && val))
+		return 0;
+
+	/* Wait for PLL to lock */
+	do {
+		if (readl_relaxed(pll->base) & BM_PLL_LOCK)
+			break;
+		if (time_after(jiffies, timeout))
+			break;
+	} while (1);
+
+	if (readl_relaxed(pll->base) & BM_PLL_LOCK)
+		return 0;
+	else
+		return -ETIMEDOUT;
+}
+
 static int clk_pllv3_prepare(struct clk_hw *hw)
 {
 	struct clk_pllv3 *pll = to_clk_pllv3(hw);
-	unsigned long timeout = jiffies + msecs_to_jiffies(10);
 	u32 val;
 
 	val = readl_relaxed(pll->base);
@@ -59,12 +83,7 @@ static int clk_pllv3_prepare(struct clk_hw *hw)
 		val &= ~BM_PLL_POWER;
 	writel_relaxed(val, pll->base);
 
-	/* Wait for PLL to lock */
-	while (!(readl_relaxed(pll->base) & BM_PLL_LOCK))
-		if (time_after(jiffies, timeout))
-			return -ETIMEDOUT;
-
-	return 0;
+	return clk_pllv3_wait_for_lock(pll, 10);
 }
 
 static void clk_pllv3_unprepare(struct clk_hw *hw)
@@ -99,7 +118,8 @@ static void clk_pllv3_disable(struct clk_hw *hw)
 	u32 val;
 
 	val = readl_relaxed(pll->base);
-	val &= ~BM_PLL_ENABLE;
+	if (!pll->always_on)
+		val &= ~BM_PLL_ENABLE;
 	writel_relaxed(val, pll->base);
 }
 
@@ -139,7 +159,7 @@ static int clk_pllv3_set_rate(struct clk_hw *hw, unsigned long rate,
 	val |= div;
 	writel_relaxed(val, pll->base);
 
-	return 0;
+	return clk_pllv3_wait_for_lock(pll, 10);
 }
 
 static const struct clk_ops clk_pllv3_ops = {
@@ -195,7 +215,7 @@ static int clk_pllv3_sys_set_rate(struct clk_hw *hw, unsigned long rate,
 	val |= div;
 	writel_relaxed(val, pll->base);
 
-	return 0;
+	return clk_pllv3_wait_for_lock(pll, 10);
 }
 
 static const struct clk_ops clk_pllv3_sys_ops = {
@@ -269,7 +289,7 @@ static int clk_pllv3_av_set_rate(struct clk_hw *hw, unsigned long rate,
 	writel_relaxed(mfn, pll->base + PLL_NUM_OFFSET);
 	writel_relaxed(mfd, pll->base + PLL_DENOM_OFFSET);
 
-	return 0;
+	return clk_pllv3_wait_for_lock(pll, 10);
 }
 
 static const struct clk_ops clk_pllv3_av_ops = {
@@ -305,7 +325,7 @@ static const struct clk_ops clk_pllv3_mlb_ops = {
 
 struct clk *imx_clk_pllv3(enum imx_pllv3_type type, const char *name,
 			  const char *parent_name, void __iomem *base,
-			  u32 div_mask)
+			  u32 div_mask, bool always_on)
 {
 	struct clk_pllv3 *pll;
 	const struct clk_ops *ops;
@@ -338,6 +358,7 @@ struct clk *imx_clk_pllv3(enum imx_pllv3_type type, const char *name,
 	}
 	pll->base = base;
 	pll->div_mask = div_mask;
+	pll->always_on = always_on;
 
 	init.name = name;
 	init.ops = ops;

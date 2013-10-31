@@ -70,6 +70,7 @@ static int ci_hdrc_pci_probe(struct pci_dev *pdev,
 		return -ENODEV;
 	}
 
+	pci_set_power_state(pdev, PCI_D0);
 	pci_set_master(pdev);
 	pci_try_set_mwi(pdev);
 
