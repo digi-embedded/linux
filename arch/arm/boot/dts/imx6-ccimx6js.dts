@@ -1,0 +1,48 @@
+/*
+ * Copyright 2013 Digi International, Inc.
+ * Copyright 2012 Freescale Semiconductor, Inc.
+ * Copyright 2011 Linaro Ltd.
+ *
+ * The code contained herein is licensed under the GNU General Public
+ * License. You may obtain a copy of the GNU General Public License
+ * Version 2 or later at the following locations:
+ *
+ * http://www.opensource.org/licenses/gpl-license.html
+ * http://www.gnu.org/copyleft/gpl.html
+ */
+
+/dts-v1/;
+
+#include "imx6q.dtsi"
+#include "imx6-ccimx6qdljs.dtsi"
+
+/ {
+	model = "Digi International ConnectCore 6 Jump Start Kit.";
+	compatible = "digi,ccimx6js", "fsl,imx6q";
+};
+
+&battery {
+	offset-charger = <1900>;
+	offset-discharger = <1694>;
+	offset-usb-charger = <1685>;
+};
+
+&mxcfb1 {
+	status = "okay";
+};
+
+&mxcfb2 {
+	status = "okay";
+};
+
+&mxcfb3 {
+	status = "okay";
+};
+
+&mxcfb4 {
+	status = "okay";
+};
+
+&sata {
+	status = "okay";
+};
