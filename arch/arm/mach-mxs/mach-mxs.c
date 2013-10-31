@@ -307,6 +307,8 @@ static void ccardimx28_init_wifi(void)
 		if (!gpio_request_one(pwrdown_gpio, GPIOF_DIR_OUT,
 			      "wifi_chip_pwd_l")) {
 			/* Start with Power pin low, then set high to power Wifi */
+			gpio_set_value(pwrdown_gpio, 0);
+			udelay(20);	/* minimum is 5us */
 			gpio_set_value(pwrdown_gpio, 1);
 			/*
 			 * Free the Wifi chip PWD pin to allow controlling
