@@ -2491,12 +2491,11 @@ fec_suspend(struct device *dev)
 		fec_stop(ndev);
 		netif_device_detach(ndev);
 		fec_enet_clk_enable(ndev, false);
+		pinctrl_pm_select_sleep_state(&fep->pdev->dev);
 	}
 
 	if (fep->reg_phy)
 		regulator_disable(fep->reg_phy);
-
-	pinctrl_pm_select_sleep_state(&fep->pdev->dev);
 
 	return 0;
 }
@@ -2508,8 +2507,6 @@ fec_resume(struct device *dev)
 	struct fec_enet_private *fep = netdev_priv(ndev);
 	int ret;
 
-	pinctrl_pm_select_default_state(&fep->pdev->dev);
-
 	if (fep->reg_phy) {
 		ret = regulator_enable(fep->reg_phy);
 		if (ret)
@@ -2517,6 +2514,7 @@ fec_resume(struct device *dev)
 	}
 
 	if (netif_running(ndev)) {
+		pinctrl_pm_select_default_state(&fep->pdev->dev);
 		fec_enet_clk_enable(ndev, true);
 		fec_restart(ndev, fep->full_duplex);
 		netif_device_attach(ndev);
