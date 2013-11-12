@@ -330,7 +330,8 @@ int da9063_device_init(struct da9063 *da9063, unsigned int irq)
 	}
 
 	ret = mfd_add_devices(da9063->dev, -1, da9063_devs,
-			      ARRAY_SIZE(da9063_devs), NULL, da9063->irq_base);
+			ARRAY_SIZE(da9063_devs), NULL,
+			da9063->irq_base, NULL);
 	if (ret)
 		dev_err(da9063->dev, "Cannot add MFD cells\n");
 
