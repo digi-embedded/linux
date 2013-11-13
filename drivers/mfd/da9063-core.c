@@ -1,5 +1,6 @@
 /* da9063-core.c - Core MFD device driver for DA9063
  * Copyright (C) 2013  Dialog Semiconductor Ltd.
+ * Copyright (C) 2013  Digi International Inc.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -34,7 +35,7 @@
 #include <linux/proc_fs.h>
 #include <linux/kthread.h>
 #include <linux/uaccess.h>
-
+#include <linux/of.h>
 
 static struct resource da9063_regulators_resources[] = {
 	{
@@ -82,21 +83,25 @@ static struct mfd_cell da9063_devs[] = {
 		.name		= DA9063_DRVNAME_REGULATORS,
 		.num_resources	= ARRAY_SIZE(da9063_regulators_resources),
 		.resources	= da9063_regulators_resources,
+		.of_compatible  = "dlg,da9063-regulators",
 	},
 	{
 		.name		= DA9063_DRVNAME_HWMON,
 		.num_resources	= ARRAY_SIZE(da9063_hwmon_resources),
 		.resources	= da9063_hwmon_resources,
+		.of_compatible  = "dlg,da9063-hwmon",
 	},
 	{
 		.name		= DA9063_DRVNAME_ONKEY,
 		.num_resources	= ARRAY_SIZE(da9063_onkey_resources),
 		.resources	= da9063_onkey_resources,
+		.of_compatible  = "dlg,da9063-onkey",
 	},
 	{
 		.name		= DA9063_DRVNAME_RTC,
 		.num_resources	= ARRAY_SIZE(da9063_rtc_resources),
 		.resources	= da9063_rtc_resources,
+		.of_compatible  = "dlg,da9063-rtc",
 	},
 };
 
@@ -286,26 +291,11 @@ int da9063_get_trim_data(struct da9063 *da9063)
 
 int da9063_device_init(struct da9063 *da9063, unsigned int irq)
 {
-	struct da9063_pdata *pdata = da9063->dev->platform_data;
 	int ret = 0;
 
 	mutex_init(&da9063->io_mutex);
 
-	if (pdata == NULL) {
-		dev_err(da9063->dev, "Platform data not specified.\n");
-		return -EINVAL;
-	}
-	da9063->irq_base = pdata->irq_base;
 	da9063->chip_irq = irq;
-
-	if (pdata->init != NULL) {
-		ret = pdata->init(da9063);
-		if (ret != 0) {
-			dev_err(da9063->dev,
-				"Platform initialization failed.\n");
-			return ret;
-		}
-	}
 
 	if (da9063_init_page(da9063)) {
 		dev_err(da9063->dev, "Cannot initialise page selector.\n");
@@ -331,7 +321,7 @@ int da9063_device_init(struct da9063 *da9063, unsigned int irq)
 
 	ret = mfd_add_devices(da9063->dev, -1, da9063_devs,
 			ARRAY_SIZE(da9063_devs), NULL,
-			da9063->irq_base, NULL);
+			da9063->irq_base, da9063->irq_domain);
 	if (ret)
 		dev_err(da9063->dev, "Cannot add MFD cells\n");
 

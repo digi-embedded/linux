@@ -1,5 +1,6 @@
 /* da9063-irq.c - Interrupt support for DA9063
  * Copyright (C) 2013  Dialog Semiconductor Ltd.
+ * Copyright (C) 2013  Digi International Inc.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -24,6 +25,8 @@
 #include <linux/interrupt.h>
 #include <linux/mfd/da9063/core.h>
 #include <linux/mfd/da9063/pdata.h>
+#include <linux/of.h>
+#include <linux/irqdomain.h>
 
 #define	DA9063_REG_EVENT_A_OFFSET	0
 #define	DA9063_REG_EVENT_B_OFFSET	1
@@ -252,21 +255,33 @@ static irqreturn_t da9063_irq_thread(int irq_id, void *da9063_data)
 	return IRQ_HANDLED;
 }
 
+static int da9063_irq_domain_map(struct irq_domain *d, unsigned int virq,
+                                 irq_hw_number_t hw)
+{
+	irq_set_chip_data(virq, d->host_data);
+	irq_set_chip_and_handler(virq, &da9063_irq_chip, handle_level_irq);
+	irq_set_nested_thread(virq, 1);
+#ifdef CONFIG_ARM
+	set_irq_flags(virq, IRQF_VALID);
+#else
+	irq_set_noprobe(virq);
+#endif
+	return 0;
+}
+
+static struct irq_domain_ops da9063_irq_domain_ops = {
+	.map    = da9063_irq_domain_map,
+	.xlate  = irq_domain_xlate_onecell,
+};
+
 int da9063_irq_init(struct da9063 *da9063)
 {
-	struct da9063_pdata *pdata = da9063->dev->platform_data;
-	int i, cur_irq;
+	int i;
 	int ret = -EINVAL;
+	struct device_node *np = da9063->dev->of_node;
 
 	if (!da9063->chip_irq) {
 		dev_err(da9063->dev, "No IRQ configured\n");
-		return -EINVAL;
-	}
-
-	if (pdata != NULL)
-		da9063->irq_base = pdata->irq_base;
-	else {
-		dev_err(da9063->dev, "No interrupt base specified.\n");
 		return -EINVAL;
 	}
 
@@ -286,19 +301,15 @@ int da9063_irq_init(struct da9063 *da9063)
 		return ret;
 
 	mutex_init(&da9063->irq_mutex);
-
-	for (i = 0; i < DA9063_NUM_IRQ; i++) {
-		cur_irq = i + da9063->irq_base;
-		irq_set_chip_data(cur_irq, da9063);
-		irq_set_chip_and_handler(cur_irq, &da9063_irq_chip,
-			handle_level_irq);
-		irq_set_nested_thread(cur_irq, 1);
-#ifdef CONFIG_ARM
-		set_irq_flags(cur_irq, IRQF_VALID);
-#else
-		set_irq_noprobe(cur_irq);
-#endif
+	da9063->irq_base = irq_alloc_descs(-1, 0, DA9063_NUM_IRQ, 0);
+	if (da9063->irq_base < 0) {
+		dev_err(da9063->dev, "Failed to allocate interrupts, ret:%d\n",
+			da9063->irq_base);
+		return -EBUSY;
 	}
+
+	da9063->irq_domain = irq_domain_add_legacy(np, DA9063_NUM_IRQ, da9063->irq_base, 0,
+		&da9063_irq_domain_ops, da9063);
 
 	ret = devm_request_threaded_irq(da9063->dev, da9063->chip_irq, NULL,
 			da9063_irq_thread, IRQF_TRIGGER_LOW | IRQF_ONESHOT,

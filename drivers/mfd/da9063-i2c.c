@@ -1,5 +1,6 @@
 /* da9063-i2c.c - I2C device access for DA9063
  * Copyright (C) 2013  Dialog Semiconductor Ltd.
+ * Copyright (C) 2013  Digi International Inc.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -108,10 +109,22 @@ static const struct i2c_device_id da9063_i2c_id[] = {
 };
 MODULE_DEVICE_TABLE(i2c, da9063_i2c_id);
 
+
+#ifdef CONFIG_OF
+static const struct of_device_id dialog_dt_ids[] = {
+        { .compatible = "dlg,da9063", .data = &da9063_i2c_id[0] },
+        { /* sentinel */ }
+};
+MODULE_DEVICE_TABLE(of, dialog_dt_ids);
+#endif
+
 static struct i2c_driver da9063_i2c_driver = {
 	.driver = {
 		.name = "da9063",
 		.owner = THIS_MODULE,
+#ifdef CONFIG_OF
+                .of_match_table = dialog_dt_ids,
+#endif
 	},
 	.probe    = da9063_i2c_probe,
 	.remove   = da9063_i2c_remove,

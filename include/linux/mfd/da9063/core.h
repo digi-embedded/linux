@@ -92,6 +92,7 @@ struct da9063 {
 	struct mutex		irq_mutex;
 	u8			irq_masks[DA9063_EVENT_REG_NUM];
 	u8			irq_cache[DA9063_EVENT_REG_NUM];
+	struct irq_domain	*irq_domain;
 };
 
 int da9063_reg_read(struct da9063 *da9063, u16 reg);

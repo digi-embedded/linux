@@ -21,6 +21,29 @@
 	compatible = "digi,ccimx6js", "fsl,imx6q";
 };
 
+&iomuxc {
+	pmic_dialog {
+		pinctrl_pmic_dialog: pmic_dialoggrp {
+			fsl,pins = <
+				MX6QDL_PAD_GPIO_17__GPIO7_IO12 0x1b0b0
+			>;
+		};
+	};
+};
+
+&i2c2 {
+	pmic_dialog: dialog@58 {
+		compatible = "dlg,da9063";
+		reg = <0x58>;
+		interrupt-parent = <&gpio7>;
+		interrupts = <12 2>;
+		interrupt-controller;
+		#interrupt-cells = <1>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_pmic_dialog>;
+	};
+};
+
 &battery {
 	offset-charger = <1900>;
 	offset-discharger = <1694>;
