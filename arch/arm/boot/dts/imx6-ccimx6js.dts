@@ -41,6 +41,13 @@
 		#interrupt-cells = <1>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_pmic_dialog>;
+
+		rtc {
+			compatible = "dlg,da9063-rtc";
+			interrupts = <1 2>;
+			interrupts-names = "ALARM" , "TIMER";
+			interrupt-parent = <&pmic_dialog>;
+		};
 	};
 };
 

@@ -27,6 +27,7 @@
 #include <linux/delay.h>
 #include <linux/mfd/da9063/registers.h>
 #include <linux/mfd/da9063/core.h>
+#include <linux/of.h>
 
 #define CLOCK_DATA_LEN    (DA9063_REG_COUNT_Y    - DA9063_REG_COUNT_S     + 1)
 #define ALARM_AD_DATA_LEN (DA9063_AD_REG_ALARM_Y - DA9063_AD_REG_ALARM_MI + 1)
@@ -267,7 +268,7 @@ static const struct rtc_class_ops da9063_rtc_ops = {
 	.alarm_irq_enable = da9063_rtc_alarm_irq_enable,
 };
 
-static __devinit int da9063_rtc_probe(struct platform_device *pdev)
+static int da9063_rtc_probe(struct platform_device *pdev)
 {
 	struct da9063 *da9063 = dev_get_drvdata(pdev->dev.parent);
 	struct da9063_rtc *rtc;
@@ -355,7 +356,7 @@ static __devinit int da9063_rtc_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static int __devexit da9063_rtc_remove(struct platform_device *pdev)
+static int da9063_rtc_remove(struct platform_device *pdev)
 {
 	struct da9063_rtc *rtc = platform_get_drvdata(pdev);
 
@@ -366,12 +367,23 @@ static int __devexit da9063_rtc_remove(struct platform_device *pdev)
 	return 0;
 }
 
+#ifdef CONFIG_OF
+static const struct of_device_id dialog_dt_ids[] = {
+        { .compatible = "dlg,da9063-rtc", },
+        { /* sentinel */ }
+};
+MODULE_DEVICE_TABLE(of, dialog_dt_ids);
+#endif
+
 static struct platform_driver da9063_rtc_driver = {
 	.probe		= da9063_rtc_probe,
-	.remove		= __devexit_p(da9063_rtc_remove),
+	.remove		= da9063_rtc_remove,
 	.driver		= {
 		.name	= DA9063_DRVNAME_RTC,
 		.owner	= THIS_MODULE,
+#ifdef CONFIG_OF
+                .of_match_table = dialog_dt_ids,
+#endif
 	},
 };
 

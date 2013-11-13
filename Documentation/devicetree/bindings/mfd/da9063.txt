@@ -31,4 +31,11 @@ Example:
 
                 regulators {
                 };
+
+		rtc {
+			compatible = "dlg,da9063-rtc";
+			interrupts = <1 2>;
+			interrupts-names = "ALARM" , "TIMER";
+			interrupt-parent = <&pmic>;
+		};
         };
