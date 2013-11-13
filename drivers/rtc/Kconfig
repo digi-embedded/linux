@@ -687,6 +687,15 @@ config RTC_DRV_DA9055
 	  This driver can also be built as a module. If so, the module
 	  will be called rtc-da9055
 
+config RTC_DRV_DA9063
+	tristate "Dialog DA9063 RTC"
+	depends on MFD_DA9063
+	help
+	  Say y here to support the RTC driver for Dialog Semiconductor
+	  DA9063 Power Management IC.
+
+	  This driver can also be built as a module.
+
 config RTC_DRV_EFI
 	tristate "EFI RTC"
 	depends on IA64
