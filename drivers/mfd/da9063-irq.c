@@ -235,7 +235,7 @@ static irqreturn_t da9063_irq_thread(int irq_id, void *da9063_data)
 		return IRQ_NONE;
 	}
 
-	for (i = DA9063_NUM_IRQ; i >= 0; i--) {
+	for (i = DA9063_NUM_IRQ-1; i >= 0; i--) {
 		irq = &da9063_irqs[i + DA9063_IRQ_BASE_OFFSET];
 		if (!(irq->mask & da9063->irq_masks[irq->reg]) &&
 		    irq->mask & events[irq->reg]) {
