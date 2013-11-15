@@ -135,6 +135,7 @@ dtb-$(CONFIG_ARCH_MXC) += \
 	imx6-ccimx6adpt-ldo.dtb \
 	imx6-ccimx6adpt-hdcp.dtb \
 	imx6sl-evk.dtb \
+	imx6sl-evk-csi.dtb \
 	imx6sl-evk-ldo.dtb \
 	vf610-twr.dtb
 dtb-$(CONFIG_ARCH_MXS) += imx23-evk.dtb \
