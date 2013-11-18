@@ -1851,6 +1851,9 @@ fec_enet_open(struct net_device *ndev)
 	if (ret)
 		return ret;
 
+	/* reset phy */
+	fec_reset_phy(fep->pdev);
+
 	/* Probe and connect to PHY when open the interface */
 	ret = fec_enet_mii_probe(ndev);
 	if (ret) {
@@ -1861,9 +1864,6 @@ fec_enet_open(struct net_device *ndev)
 	phy_start(fep->phy_dev);
 	netif_start_queue(ndev);
 	fep->opened = 1;
-
-	/* reset phy */
-	fec_reset_phy(fep->pdev);
 
 	return 0;
 }
