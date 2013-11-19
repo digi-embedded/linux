@@ -334,8 +334,10 @@ int phy_mii_ioctl(struct phy_device *phydev,
 			case MII_BMCR:
 				if ((val & (BMCR_RESET|BMCR_ANENABLE)) == 0)
 					phydev->autoneg = AUTONEG_DISABLE;
-				else
+				else {
 					phydev->autoneg = AUTONEG_ENABLE;
+					phydev->link_timeout = PHY_AN_TIMEOUT;
+				}
 				if ((!phydev->autoneg) && (val & BMCR_FULLDPLX))
 					phydev->duplex = DUPLEX_FULL;
 				else
