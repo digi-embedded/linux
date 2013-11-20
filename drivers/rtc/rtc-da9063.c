@@ -345,6 +345,7 @@ static int da9063_rtc_probe(struct platform_device *pdev)
 			PTR_ERR(rtc->rtc_dev));
 		return PTR_ERR(rtc->rtc_dev);
 	}
+	rtc->rtc_dev->dev.of_node = pdev->dev.of_node;
 
 	/* Register interrupts. Complain on errors but let device
 	   to be registered at least for date/time. */
