@@ -61,6 +61,9 @@ struct mx28_virt_addr_t {
 	void __iomem *rtc_addr;
 } __attribute__((packed));
 
+extern int mxs_icoll_suspend(void);
+extern void mxs_icoll_resume(void);
+
 struct mx28_virt_addr_t mx28_virt_addr;
 static phys_addr_t iram_phy_addr;
 static unsigned long iram_virtual_addr;
@@ -189,9 +192,13 @@ static int mxs_suspend_enter(suspend_state_t state)
 	switch (state) {
 	case PM_SUSPEND_MEM:
 	case PM_SUSPEND_STANDBY:
-		if (of_machine_is_compatible("digi,ccardimx28") && iram_pool)
-			do_standby();
-		else
+		if (of_machine_is_compatible("digi,ccardimx28") && iram_pool) {
+			if (mxs_icoll_suspend() < 0)
+				printk(KERN_ERR "No wake-up sources enabled. Suspend aborted.\n");
+			else
+				do_standby();
+			mxs_icoll_resume();
+		} else
 			cpu_do_idle();
 		break;
 
