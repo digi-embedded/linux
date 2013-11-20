@@ -68,11 +68,6 @@ struct da9063_regulator_data {
 	int				dvc_max_uV;
 };
 
-struct da9063_regulators_pdata {
-	unsigned			n_regulators;
-	struct da9063_regulator_data	*regulator_data;
-};
-
 struct da9063;
 
 /* DA9063 platform data */
@@ -84,7 +79,7 @@ struct da9063_pdata {
 	bool				bmem_bio_merged;
 	bool				key_power;
 	signed char			t_offset;
-	struct da9063_regulators_pdata	*regulators_pdata;
+	struct da9063_regulator_data	*regulator_data;
 };
 
 #endif	/* __MFD_DA9063_PDATA_H__ */

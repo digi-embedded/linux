@@ -1,5 +1,6 @@
 /* da9063-regulator.c - Regulator device driver for DA9063
  * Copyright (C) 2013  Dialog Semiconductor Ltd.
+ * Copyright (C) 2013  Digi International Corp.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -28,7 +29,8 @@
 #include <linux/mfd/da9063/core.h>
 #include <linux/mfd/da9063/pdata.h>
 #include <linux/mfd/da9063/registers.h>
-
+#include <linux/of.h>
+#include <linux/regulator/of_regulator.h>
 
 /* Definition for registering bit fields */
 struct bfield {
@@ -135,11 +137,13 @@ struct da9063_regulator_info {
 	.mode = FIELD(DA9063_REG_##regl_name##_CFG, DA9063_BUCK_MODE_MASK, \
 		      DA9063_BUCK_MODE_SHIFT, 0)
 
+#if 0
 /* Defines assignment of regulators info table to chip model */
 struct da9063_dev_model {
 	const struct da9063_regulator_info	*regulator_info;
 	unsigned				n_regulators;
 };
+#endif
 
 /* Single regulator settings */
 struct da9063_regulator {
@@ -150,16 +154,6 @@ struct da9063_regulator {
 
 	unsigned				mode;
 	unsigned				suspend_mode;
-};
-
-/* Encapsulates all information for the regulators driver */
-struct da9063_regulators {
-	int					irq_ldo_lim;
-	int					irq_uvov;
-
-	unsigned				n_regulators;
-	/* Array size to be defined during init. Keep at end. */
-	struct da9063_regulator			regulator[0];
 };
 
 /* System states for da9063_update_mode_internal()
@@ -271,7 +265,7 @@ static const int da9063_bmem_bio_merged_limits[] = {
 			    da9063_buck_a_limits), \
 		DA9063_BUCK_COMMON_FIELDS(BCORE1), \
 		.suspend = BFIELD(DA9063_REG_DVC_1, DA9063_VBCORE1_SEL), \
-		.ilimit = FIELD(DA9063_REG_BUCK_ILIM_C, DA9063_BCORE1_ILIM_MASK, \
+		.ilimit = FIELD(DA9063_REG_BUCK_ILIM_C,DA9063_BCORE1_ILIM_MASK,\
 				DA9063_BCORE1_ILIM_SHIFT, 0), \
 	}
 
@@ -336,7 +330,7 @@ static const int da9063_bmem_bio_merged_limits[] = {
 			    da9063_buck_a_limits), \
 		DA9063_BUCK_COMMON_FIELDS(BPERI), \
 		.suspend = BFIELD(DA9063_REG_DVC_1, DA9063_VBPERI_SEL), \
-		.ilimit = FIELD(DA9063_REG_BUCK_ILIM_B, DA9063_BPERI_ILIM_MASK, \
+		.ilimit = FIELD(DA9063_REG_BUCK_ILIM_B,DA9063_BPERI_ILIM_MASK,\
 				DA9063_BPERI_ILIM_SHIFT, 0), \
 	}
 
@@ -345,7 +339,7 @@ static const int da9063_bmem_bio_merged_limits[] = {
 			    da9063_buck_b_limits), \
 		DA9063_BUCK_COMMON_FIELDS(BPERI), \
 		.suspend = BFIELD(DA9063_REG_DVC_1, DA9063_VBPERI_SEL), \
-		.ilimit = FIELD(DA9063_REG_BUCK_ILIM_B, DA9063_BPERI_ILIM_MASK, \
+		.ilimit = FIELD(DA9063_REG_BUCK_ILIM_B,DA9063_BPERI_ILIM_MASK, \
 				DA9063_BPERI_ILIM_SHIFT, 0), \
 	}
 
@@ -354,7 +348,7 @@ static const int da9063_bmem_bio_merged_limits[] = {
 			    da9063_bcores_merged_limits), \
 		DA9063_BUCK_COMMON_FIELDS(BCORE1), \
 		.suspend = BFIELD(DA9063_REG_DVC_1, DA9063_VBCORE1_SEL), \
-		.ilimit = FIELD(DA9063_REG_BUCK_ILIM_C, DA9063_BCORE1_ILIM_MASK, \
+		.ilimit = FIELD(DA9063_REG_BUCK_ILIM_C,DA9063_BCORE1_ILIM_MASK,\
 				DA9063_BCORE1_ILIM_SHIFT, 0), \
 	}
 
@@ -490,6 +484,20 @@ static const struct da9063_regulator_info da9063_regulator_info_b[] = {
 	da9063_regulator_info_ldo11,
 	da9063_regulator_info_32k_out,
 };
+
+#define DA9063_MAX_REGULATORS 20
+
+/* Encapsulates all information for the regulators driver */
+struct da9063_regulators {
+	int					irq_ldo_lim;
+	int					irq_uvov;
+
+	unsigned				n_regulators;
+	struct da9063_regulator			*regulators[DA9063_MAX_REGULATORS];
+};
+
+static struct da9063_regulators regulators;
+
 /*
  * Regulator internal functions
  */
@@ -872,23 +880,24 @@ static int da9063_set_suspend_mode(struct regulator_dev *rdev, unsigned mode)
 irqreturn_t da9063_ldo_lim_event(int irq, void *data)
 {
 	struct da9063_regulators *regulators = data;
-	struct da9063 *hw = regulators->regulator[0].hw;
-	struct da9063_regulator *regl;
+	struct da9063_regulator *regl = NULL;
 	int bits;
 	int i;
 
-	bits = da9063_reg_read(hw, DA9063_REG_STATUS_D);
-	if (bits < 0)
-		bits = IRQ_NONE;
+	for( i = 0; i < regulators->n_regulators; i++){
+		regl = regulators->regulators[i];
 
-	for (i = regulators->n_regulators - 1; i >= 0; i--) {
-		regl = &regulators->regulator[i];
 		if (regl->info->oc_event.addr != DA9063_REG_STATUS_D)
 			continue;
 
-		if (regl->info->oc_event.mask & bits)
+		bits = da9063_reg_read(regl->hw, DA9063_REG_STATUS_D);
+		if (bits < 0)
+			bits = IRQ_NONE;
+
+		if (regl->info->oc_event.mask & bits){
 			regulator_notifier_call_chain(regl->rdev,
 					REGULATOR_EVENT_OVER_CURRENT, NULL);
+		}
 	}
 
 	return IRQ_HANDLED;
@@ -897,220 +906,259 @@ irqreturn_t da9063_ldo_lim_event(int irq, void *data)
 /*
  * Probing and Initialisation functions
  */
-static __devinit const struct da9063_regulator_info * da9063_get_regl_info(int id, struct da9063 * chip)
+static const struct da9063_regulator_info * da9063_get_regl_info(
+	const char * regulator_id_string,
+	struct da9063 * chip)
 {
 	int m;
 
 	switch( chip->revision ) {
 	case DA9063_AD_REVISION:
-		for (m = ARRAY_SIZE(da9063_regulator_info_a) - 1;
-		     da9063_regulator_info_a[m].id != id; m--) {
-			if (m <= 0)
-				return NULL;
+		for(m=0 ; m < ARRAY_SIZE(da9063_regulator_info_a); m++){
+			if(!strcmp(da9063_regulator_info_a[m].name,
+				regulator_id_string))
+				return &da9063_regulator_info_a[m];
 		}
-		return &da9063_regulator_info_a[m];
 		break;
 
 	case DA9063_BB_REVISION:
 	default:
-		for (m = ARRAY_SIZE(da9063_regulator_info_b) - 1;
-		     da9063_regulator_info_b[m].id != id; m--) {
-			if (m <= 0)
-				return NULL;
+		for(m=0 ; m < ARRAY_SIZE(da9063_regulator_info_b); m++){
+			if(!strcmp(da9063_regulator_info_b[m].name,
+				regulator_id_string))
+				return &da9063_regulator_info_b[m];
 		}
-		return &da9063_regulator_info_b[m];
+		break;
 	}
+	return NULL;
 }
 
-static __devinit int da9063_regulator_probe(struct platform_device *pdev)
-{
-	struct da9063 *da9063 = dev_get_drvdata(pdev->dev.parent);
-	struct da9063_pdata *da9063_pdata = dev_get_platdata(da9063->dev);
-	struct da9063_regulators_pdata *regl_pdata;
-	struct da9063_regulator_data *rdata;
-	struct da9063_regulators *regulators;
-	struct da9063_regulator *regl;
-	bool bcores_merged = 0;
-	bool bmem_bio_merged = 0;
-	size_t size;
-	int n;
+static int da9063_check_merge_mode (struct platform_device *pdev,
+			struct da9063_regulator *regulator,
+			int bcores_merged, int bmem_bio_merged){
+
+	/* Check regulator ID against merge mode configuration */
+	switch (regulator->info->id) {
+		case DA9063_ID_BCORE1:
+                case DA9063_ID_BCORE2:
+                        if (bcores_merged) {
+                                dev_err(&pdev->dev,
+                                        "Cannot use BCORE1 and BCORE2"
+					" separately, when in merge mode\n");
+                                return -EINVAL;
+                        }
+                        break;
+                case DA9063_ID_BMEM:
+                case DA9063_ID_BIO:
+                        if (bmem_bio_merged) {
+                                dev_err(&pdev->dev,
+                                        "Cannot use BMEM and BIO separately,"
+					 " when in merge mode\n");
+                                return -EINVAL;
+                        }
+                        break;
+                case DA9063_ID_BCORES_MERGED:
+                        if (!bcores_merged) {
+                                dev_err(&pdev->dev,
+                                        "BCORE1 and BCORE2 are unavailable"
+					" in merge mode\n");
+                                return -EINVAL;
+                        }
+                        break;
+                case DA9063_ID_BMEM_BIO_MERGED:
+                        if (!bmem_bio_merged) {
+                                dev_err(&pdev->dev,
+                                        "BMEM and BIO are unavailable"
+					" in merge mode\n");
+                                return -EINVAL;
+                        }
+                        break;
+	}
+	return 0;
+}
+
+/* Get current modes of operation (A/B voltage selection)
+   for normal and suspend states */
+static int da9063_set_operation_mode(struct platform_device *pdev,
+		struct da9063_regulator *regulator){
 	int ret;
 
-	regl_pdata = da9063_pdata->regulators_pdata;
-
-	if (!regl_pdata || regl_pdata->n_regulators == 0) {
+	ret = da9063_get_mode_internal(regulator, SYS_STATE_NORMAL);
+	if (ret < 0) {
 		dev_err(&pdev->dev,
-			"No regulators defined for the platform\n");
-		return -ENODEV;
+				"Failed to read %s regulator's mode\n",
+				regulator->info->name);
+		return ret;
 	}
-
-	/* Get platform data values to define the behavious of the driver */
-	if( da9063_pdata ) {
-		bcores_merged   = da9063_pdata->bcores_merged;
-		bmem_bio_merged = da9063_pdata->bmem_bio_merged;
-	}
+	if (ret == 0)
+		regulator->mode = REGULATOR_MODE_NORMAL;
 	else
-		dev_warn(&pdev->dev, "No platform init data supplied, choosing default values\n");
+		regulator->mode = ret;
 
-	/* Allocate memory required by usable regulators */
-	size = sizeof(struct da9063_regulators) +
-		regl_pdata->n_regulators * sizeof(struct da9063_regulator);
-	regulators = devm_kzalloc(&pdev->dev, size, GFP_KERNEL);
-	if (!regulators) {
-		dev_err(&pdev->dev, "No memory for regulators\n");
-		return -ENOMEM;
-	}
-
-	regulators->n_regulators = regl_pdata->n_regulators;
-	platform_set_drvdata(pdev, regulators);
-
-	/* Register all regulators declared in platform information */
-	n = 0;
-	while (n < regulators->n_regulators) {
-		rdata = &regl_pdata->regulator_data[n];
-
-		/* Check regulator ID against merge mode configuration */
-		switch (rdata->id) {
-		case DA9063_ID_BCORE1:
-		case DA9063_ID_BCORE2:
-			if (bcores_merged) {
-				dev_err(&pdev->dev,
-					"Cannot use BCORE1 and BCORE2 separately, when in merge mode\n");
-				ret = -EINVAL;
-				goto err;
-			}
-			break;
-		case DA9063_ID_BMEM:
-		case DA9063_ID_BIO:
-			if (bmem_bio_merged) {
-				dev_err(&pdev->dev,
-					"Cannot use BMEM and BIO separately, when in merge mode\n");
-				ret = -EINVAL;
-				goto err;
-			}
-			break;
-		case DA9063_ID_BCORES_MERGED:
-			if (!bcores_merged) {
-				dev_err(&pdev->dev,
-					"BCORE1 and BCORE2 are unavailable in merge mode\n");
-				ret = -EINVAL;
-				goto err;
-			}
-			break;
-		case DA9063_ID_BMEM_BIO_MERGED:
-			if (!bmem_bio_merged) {
-				dev_err(&pdev->dev,
-					"BMEM and BIO are unavailable in merge mode\n");
-				ret = -EINVAL;
-				goto err;
-			}
-			break;
-		}
-
-		/* Initialise regulator structure */
-		regl = &regulators->regulator[n];
-		regl->hw = da9063;
-		regl->info = da9063_get_regl_info(rdata->id, da9063);
-		if (!regl->info) {
-			dev_err(&pdev->dev,
-				"Invalid regulator ID in platform data\n");
-			ret = -EINVAL;
-			goto err;
-		}
-		regl->desc.name = regl->info->name;
-		regl->desc.id = rdata->id;
-		regl->desc.ops = regl->info->ops;
-		regl->desc.n_voltages = regl->info->n_steps;
-		regl->desc.type = REGULATOR_VOLTAGE;
-		regl->desc.owner = THIS_MODULE;
-
-		/* Register regulator */
-		regl->rdev = regulator_register(&regl->desc, &pdev->dev,
-						rdata->initdata, regl);
-		if (IS_ERR_OR_NULL(regl->rdev)) {
-			dev_err(&pdev->dev,
-				"Failed to register %s regulator\n",
-				regl->info->name);
-			ret = PTR_ERR(regl->rdev);
-			goto err;
-		}
-		n++;
-
-		/* Get current modes of operation (A/B voltage selection)
-		   for normal and suspend states */
-		ret = da9063_get_mode_internal(regl, SYS_STATE_NORMAL);
-		if (ret < 0) {
-			dev_err(&pdev->dev,
+	ret = da9063_get_mode_internal(regulator, SYS_STATE_SUSPEND);
+	if (ret < 0) {
+		dev_err(&pdev->dev,
 				"Failed to read %s regulator's mode\n",
-				regl->info->name);
-			goto err;
-		}
-		if (ret == 0)
-			regl->mode = REGULATOR_MODE_NORMAL;
-		else
-			regl->mode = ret;
-
-		ret = da9063_get_mode_internal(regl, SYS_STATE_SUSPEND);
-		if (ret < 0) {
-			dev_err(&pdev->dev,
-				"Failed to read %s regulator's mode\n",
-				regl->info->name);
-			goto err;
-		}
-		if (ret == 0)
-			regl->suspend_mode = REGULATOR_MODE_NORMAL;
-		else
-			regl->mode = ret;
+				regulator->info->name);
+		return ret;
 	}
-
-	/* LDOs overcurrent event support */
-	regulators->irq_ldo_lim = platform_get_irq_byname(pdev, "LDO_LIM");
-	if (regulators->irq_ldo_lim >= 0) {
-		ret = request_threaded_irq(regulators->irq_ldo_lim,
-					   NULL, da9063_ldo_lim_event,
-					   IRQF_TRIGGER_LOW | IRQF_ONESHOT,
-					   "LDO_LIM", regulators);
-		if (ret) {
-			dev_err(&pdev->dev,
-					"Failed to request LDO_LIM IRQ.\n");
-			regulators->irq_ldo_lim = -ENXIO;
-		}
-	}
-
-	return 0;
-
-err:
-	/* Wind back regulators registeration */
-	while (--n >= 0) {
-		regulator_unregister(regulators->regulator[n].rdev);
-	}
+	if (ret == 0)
+		regulator->suspend_mode = REGULATOR_MODE_NORMAL;
+	else
+		regulator->mode = ret;
 
 	return ret;
 }
 
-static int __devexit da9063_regulator_remove(struct platform_device *pdev)
+static int da9063_regulator_probe(struct platform_device *pdev)
+{
+	struct regulator_config config = { };
+	struct da9063_regulator *regulator;
+	struct da9063 *da9063;
+        struct device_node *nproot;
+        struct device_node *np = NULL;
+	bool bcores_merged = 0;
+	bool bmem_bio_merged = 0;
+	const char *reg_id;
+	int ret,i;
+
+	da9063 = dev_get_drvdata(pdev->dev.parent);
+	if(da9063 == NULL)
+		return -EPROBE_DEFER;
+
+	memset(&regulators, 0, sizeof(struct da9063_regulators));
+
+	nproot = of_node_get(da9063->dev->of_node);
+	if (!nproot)
+		return -ENODEV;
+
+	nproot = of_find_node_by_name(nproot, "regulators");
+	if (!nproot)
+		return -ENODEV;
+
+	if (of_property_read_bool(nproot, "dlg,bcores_merged"))
+		bcores_merged = 1;
+	if (of_property_read_bool(nproot, "dlg,bmem_bio_merged"))
+		bmem_bio_merged = 1;
+
+	for_each_child_of_node(nproot, np) {
+		regulator = devm_kzalloc(&pdev->dev, sizeof(struct da9063_regulator),
+				GFP_KERNEL);
+		if (!regulator){
+			ret = -ENOMEM;
+			goto err;
+		}
+
+		regulators.regulators[regulators.n_regulators] = regulator;
+		if (of_property_read_string(np, "regulator-name", &reg_id)){
+			ret = -EINVAL;
+			goto err;
+		}
+		regulator->info = da9063_get_regl_info(reg_id, da9063);
+		if (regulator->info == NULL) {
+			dev_err(&pdev->dev, "invalid regulator ID specified\n");
+			ret = -EINVAL;
+			goto err;
+		}
+		regulator->hw = da9063;
+		regulator->desc.type = REGULATOR_VOLTAGE;
+		regulator->desc.name = regulator->info->name;
+		regulator->desc.ops = regulator->info->ops;
+		regulator->desc.n_voltages = regulator->info->n_steps;
+		regulator->desc.owner = THIS_MODULE;
+		regulators.n_regulators += 1;
+		if(regulators.n_regulators >= DA9063_MAX_REGULATORS ){
+			dev_err(&pdev->dev,
+				"The regulators defined exceed the maximum "
+				"number allowed of %d\n",DA9063_MAX_REGULATORS);
+			ret = -EINVAL;
+			goto err;
+		}
+
+		config.dev = &pdev->dev;
+		config.driver_data = regulator;
+		if (!of_node_cmp(np->name, regulator->info->name)) {
+			config.init_data = of_get_regulator_init_data(
+				&pdev->dev, np);
+			config.of_node = np;
+		}
+
+		if( (ret = da9063_check_merge_mode(pdev,regulator,bcores_merged,
+			bmem_bio_merged)) != 0 )
+			goto err;
+
+		regulator->rdev = regulator_register(&regulator->desc, &config);
+		if (IS_ERR(regulator->rdev)) {
+			dev_err(&pdev->dev, "failed to register regulator %s\n",
+				regulator->desc.name);
+			ret = PTR_ERR(regulator->rdev);
+			goto err;
+		}
+
+		if( (ret = da9063_set_operation_mode(pdev, regulator)) < 0 )
+			goto err;
+
+	}
+
+	/* LDOs overcurrent event support */
+	regulators.irq_ldo_lim = platform_get_irq_byname(pdev, "LDO_LIM");
+        if (regulators.irq_ldo_lim >= 0) {
+                ret = request_threaded_irq(regulators.irq_ldo_lim,
+                                           NULL, da9063_ldo_lim_event,
+                                           IRQF_TRIGGER_LOW | IRQF_ONESHOT,
+                                           "LDO_LIM", &regulators);
+                if (ret) {
+                        dev_err(&pdev->dev,
+                                        "Failed to request LDO_LIM IRQ.\n");
+                        regulators.irq_ldo_lim = -ENXIO;
+                }
+        }
+
+	platform_set_drvdata(pdev, &regulators);
+	return 0;
+
+err:
+	for( i = 0; i < regulators.n_regulators; i++){
+                regulator_unregister(regulators.regulators[i]->rdev);
+		devm_kfree(&pdev->dev,regulators.regulators[i]);
+	}
+	return ret;
+}
+
+static int da9063_regulator_remove(struct platform_device *pdev)
 {
 	struct da9063_regulators *regulators = platform_get_drvdata(pdev);
-	struct da9063_regulator *regl;
+	int i;
 
-	free_irq(regulators->irq_ldo_lim, regulators);
-	free_irq(regulators->irq_uvov, regulators);
+	free_irq(regulators->irq_ldo_lim, &regulators);
+	//free_irq(regulators->irq_uvov, &regulators);
 
-	for (regl = &regulators->regulator[regulators->n_regulators - 1];
-	     regl >= &regulators->regulator[0]; regl--) {
-		regulator_unregister(regl->rdev);
-	}
+	for( i = 0; i < regulators->n_regulators; i++){
+                regulator_unregister(regulators->regulators[i]->rdev);
+		devm_kfree(&pdev->dev,regulators->regulators[i]);
+        }
 
 	return 0;
 }
+
+#ifdef CONFIG_OF
+static const struct of_device_id dialog_dt_ids[] = {
+        { .compatible = "dlg,da9063-regulator", },
+        { /* sentinel */ }
+};
+MODULE_DEVICE_TABLE(of, dialog_dt_ids);
+#endif
 
 static struct platform_driver da9063_regulator_driver = {
 	.driver = {
 		.name = DA9063_DRVNAME_REGULATORS,
 		.owner = THIS_MODULE,
+#ifdef CONFIG_OF
+                .of_match_table = dialog_dt_ids,
+#endif
 	},
 	.probe = da9063_regulator_probe,
-	.remove = __devexit_p(da9063_regulator_remove),
+	.remove = da9063_regulator_remove,
 };
 
 static int __init da9063_regulator_init(void)
