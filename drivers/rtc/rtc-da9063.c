@@ -274,6 +274,10 @@ static int da9063_rtc_probe(struct platform_device *pdev)
 	struct da9063_rtc *rtc;
 	int ret;
 
+	if (!da9063 || !da9063->dev->parent->of_node) {
+		return -EPROBE_DEFER;
+        }
+
 	/* Enable RTC hardware */
 	ret = da9063_reg_set_bits(da9063, DA9063_REG_CONTROL_E, DA9063_RTC_EN);
 	if (ret < 0) {
