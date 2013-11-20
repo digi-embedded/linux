@@ -83,6 +83,10 @@ static int da9063_i2c_probe(struct i2c_client *i2c,
 {
 	struct da9063 *da9063;
 
+	if( i2c->adapter->dev.of_node == NULL ){
+		return -EPROBE_DEFER;
+	}
+
 	da9063 = devm_kzalloc(&i2c->dev, sizeof(struct da9063), GFP_KERNEL);
 	if (da9063 == NULL)
 		return -ENOMEM;
