@@ -174,6 +174,7 @@ static void mxs_gpio_irq_handler(u32 irq, struct irq_desc *desc)
 	}
 }
 
+#ifdef CONFIG_PM_SLEEP
 /*
  * Set interrupt number "irq" in the GPIO as a wake-up source.
  * While system is running, all registered GPIO interrupts need to have
@@ -196,6 +197,33 @@ static int mxs_gpio_set_wake_irq(struct irq_data *d, unsigned int enable)
 	return 0;
 }
 
+static int mxs_gpio_suspend(struct device *dev)
+{
+	struct platform_device *pdev =
+			container_of(dev, struct platform_device, dev);
+	int irq = platform_get_irq(pdev, 0);
+
+	/* Enable wakeup irq before suspending, if device can wakeup */
+	if (device_may_wakeup(dev))
+		return enable_irq_wake(irq);
+
+	return 0;
+}
+
+static int mxs_gpio_resume(struct device *dev)
+{
+	struct platform_device *pdev =
+			container_of(dev, struct platform_device, dev);
+	int irq = platform_get_irq(pdev, 0);
+
+	/* Disable wakeup irq on resume, if device can wakeup */
+	if (device_may_wakeup(dev))
+		return disable_irq_wake(irq);
+
+	return 0;
+}
+#endif
+
 static void __init mxs_gpio_init_gc(struct mxs_gpio_port *port, int irq_base)
 {
 	struct irq_chip_generic *gc;
@@ -210,7 +238,9 @@ static void __init mxs_gpio_init_gc(struct mxs_gpio_port *port, int irq_base)
 	ct->chip.irq_mask = irq_gc_mask_clr_bit;
 	ct->chip.irq_unmask = irq_gc_mask_set_bit;
 	ct->chip.irq_set_type = mxs_gpio_set_irq_type;
+#ifdef CONFIG_PM_SLEEP
 	ct->chip.irq_set_wake = mxs_gpio_set_wake_irq;
+#endif
 	ct->regs.ack = PINCTRL_IRQSTAT(port) + MXS_CLR;
 	ct->regs.mask = PINCTRL_IRQEN(port);
 
@@ -320,6 +350,10 @@ static int mxs_gpio_probe(struct platform_device *pdev)
 	/* gpio-mxs can be a generic irq chip */
 	mxs_gpio_init_gc(port, irq_base);
 
+#ifdef CONFIG_PM_SLEEP
+	device_set_wakeup_capable(&pdev->dev, 1);
+#endif
+
 	/* setup one handler for each entry */
 	irq_set_chained_handler(port->irq, mxs_gpio_irq_handler);
 	irq_set_handler_data(port->irq, port);
@@ -348,11 +382,16 @@ out_irqdesc_free:
 	return err;
 }
 
+static const struct dev_pm_ops mxs_gpio_pm_ops = {
+	SET_SYSTEM_SLEEP_PM_OPS(mxs_gpio_suspend, mxs_gpio_resume)
+};
+
 static struct platform_driver mxs_gpio_driver = {
 	.driver		= {
 		.name	= "gpio-mxs",
 		.owner	= THIS_MODULE,
 		.of_match_table = mxs_gpio_dt_ids,
+		.pm	= &mxs_gpio_pm_ops,
 	},
 	.probe		= mxs_gpio_probe,
 	.id_table	= mxs_gpio_ids,
