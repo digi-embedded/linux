@@ -57,6 +57,14 @@
 			dlg,key-power;
 		};
 
+		hwmon {
+			compatible = "dlg,da9063-hwmon";
+			interrupts = <3>;
+			interrupts-names = "HWMON";
+			interrupt-parent = <&pmic_dialog>;
+			dlg,tjunc-offset = <(-5)>;
+		};
+
 		/* For DA9063 revision AD */
 		regulators {
 			compatible = "dlg,da9063-regulator";

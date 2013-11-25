@@ -1,0 +1,22 @@
+* Dialog's hwmon device tree bindings
+
+The da9063 hwmon driver allow for user space hardware monitoring.
+
+Required properties:
+
+- compatible: Must be "dlg,da9063-hwmon".
+- interrupts: Local Da9063 interrupt line.
+- interrupt-name: Local DA9063 interrupt line name.
+
+Optional properties:
+- dlg,tjunc-offset: Juntion temperature calibration offset [-128,127].
+
+Example:
+
+        onkey {
+                compatible = "dlg,da9063-hwmon";
+                interrupts = <3>;
+                interrupts-names = "HWMON";
+                interrupt-parent = <&pmic_dialog>;
+                dlg,tjunc-offset = <(-5)>;
+        };

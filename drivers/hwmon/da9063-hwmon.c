@@ -1,5 +1,6 @@
 /* da9063-hwmon.c - Hardware monitor support for DA9063
  * Copyright (C) 2013  Dialog Semiconductor Ltd.
+ * Copyright (C) 2013  Digi International Corp.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -29,6 +30,7 @@
 #include <linux/hwmon-sysfs.h>
 #include <linux/mfd/da9063/core.h>
 #include <linux/mfd/da9063/pdata.h>
+#include <linux/of.h>
 
 /* ADC resolutions */
 #define DA9063_ADC_RES (1 << (DA9063_ADC_RES_L_BITS + DA9063_ADC_RES_M_BITS))
@@ -262,12 +264,24 @@ static const struct attribute_group da9063_attr_group = {
 	.attrs = da9063_attributes,
 };
 
-static int __devinit da9063_hwmon_probe(struct platform_device *pdev)
+static int da9063_hwmon_probe(struct platform_device *pdev)
 {
 	struct da9063 *da9063 = dev_get_drvdata(pdev->dev.parent);
-	struct da9063_pdata *da9063_pdata = dev_get_platdata(da9063->dev);
 	struct da9063_hwmon *hwmon;
+	struct device_node *np = NULL;
 	int ret;
+	u32 val;
+
+	if (!da9063 || !da9063->dev->parent->of_node)
+		return -EPROBE_DEFER;
+
+	np = of_node_get(da9063->dev->of_node);
+	if (!np)
+		return -ENODEV;
+
+	np = of_find_node_by_name(np, "hwmon");
+	if (!np)
+		return -ENODEV;
 
 	hwmon = devm_kzalloc(&pdev->dev, sizeof(struct da9063_hwmon),
 			     GFP_KERNEL);
@@ -297,12 +311,20 @@ static int __devinit da9063_hwmon_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, hwmon);
 
-	/* set trim temperature offset provided by platform data */
-	if (da9063_pdata)
-		hwmon->tjunc_offset = (s8) da9063_pdata->t_offset;
-	else
-		dev_warn(&pdev->dev, "Could not read temp1 calibration offset.\n");
+	/* set trim temperature offset provided by device tree */
+        if (of_property_read_u32(np, "dlg,tjunc-offset",&val)){
+		dev_warn(&pdev->dev, "Could not read calibration offset.\n");
+		hwmon->tjunc_offset = 0;
+	}
 
+	if( val < 0x80 || (val >= 0xffffff80) )
+		hwmon->tjunc_offset = val;
+	else {
+		dev_warn(&pdev->dev, "Ignoring out of range calibration offset."
+					"\n");
+		hwmon->tjunc_offset = 0;
+	}
+	dev_notice(&pdev->dev, "Calibration offset %d\n.",hwmon->tjunc_offset);
 	ret = sysfs_create_group(&pdev->dev.kobj, &da9063_attr_group);
 	if (ret)
 		return ret;
@@ -316,7 +338,7 @@ static int __devinit da9063_hwmon_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static int __devexit da9063_hwmon_remove(struct platform_device *pdev)
+static int da9063_hwmon_remove(struct platform_device *pdev)
 {
 	struct da9063_hwmon *hwmon = platform_get_drvdata(pdev);
 
@@ -326,12 +348,23 @@ static int __devexit da9063_hwmon_remove(struct platform_device *pdev)
 	return 0;
 }
 
+#ifdef CONFIG_OF
+static const struct of_device_id dialog_dt_ids[] = {
+        { .compatible = "dlg,da9063-hwmon", },
+        { /* sentinel */ }
+};
+MODULE_DEVICE_TABLE(of, dialog_dt_ids);
+#endif
+
 static struct platform_driver da9063_hwmon_driver = {
 	.probe = da9063_hwmon_probe,
-	.remove = __devexit_p(da9063_hwmon_remove),
+	.remove = da9063_hwmon_remove,
 	.driver = {
 		.name = DA9063_DRVNAME_HWMON,
 		.owner = THIS_MODULE,
+#ifdef CONFIG_OF
+                .of_match_table = dialog_dt_ids,
+#endif
 	},
 };
 
