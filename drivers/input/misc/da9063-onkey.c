@@ -1,5 +1,6 @@
 /* da9063-onkey.c - Onkey device driver for DA9063
  * Copyright (C) 2013  Dialog Semiconductor Ltd.
+ * Copyright (C) 2013  Digi International Corp.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -30,6 +31,7 @@
 #include <linux/mfd/da9063/core.h>
 #include <linux/mfd/da9063/pdata.h>
 #include <linux/mfd/da9063/registers.h>
+#include <linux/of.h>
 
 
 struct da9063_onkey {
@@ -135,21 +137,23 @@ static irqreturn_t da9063_onkey_irq_handler(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
-static int __devinit da9063_onkey_probe(struct platform_device *pdev)
+static int da9063_onkey_probe(struct platform_device *pdev)
 {
 	struct da9063 *da9063 = dev_get_drvdata(pdev->dev.parent);
-	struct da9063_pdata *pdata = dev_get_platdata(da9063->dev);
 	struct da9063_onkey *onkey;
-	bool kp_tmp = true;
+	struct device_node *np = NULL;
 	int ret = 0;
 
-	/* driver assumes CONFIG_I register is set to DA9063_NONKEY_PIN_SWDOWN */
-	if( pdata )
-		kp_tmp = pdata->key_power;
+	if (!da9063 || !da9063->dev->parent->of_node)
+                return -EPROBE_DEFER;
 
-	if( !kp_tmp ) {
-		dev_err(&pdev->dev, "Software power down key is not set.\n");
-	}
+	np = of_node_get(pdev->dev.of_node);
+	if (!np)
+		return -ENODEV;
+
+	/*driver assumes CONFIG_I register is set to DA9063_NONKEY_PIN_SWDOWN */
+	dev_notice(&pdev->dev, "This driver assumes that the CONFIG_I register"
+			" is configured to support software shutdown.\n");
 
 	onkey = devm_kzalloc(&pdev->dev, sizeof(struct da9063_onkey),
 			     GFP_KERNEL);
@@ -168,11 +172,15 @@ static int __devinit da9063_onkey_probe(struct platform_device *pdev)
 
 	onkey->irq = platform_get_irq_byname(pdev, DA9063_DRVNAME_ONKEY);
 	onkey->da9063 = da9063;
-	onkey->key_power = kp_tmp;
 	onkey->input->evbit[0] = BIT_MASK(EV_KEY);
 	onkey->input->name = DA9063_DRVNAME_ONKEY;
 	onkey->input->phys = DA9063_DRVNAME_ONKEY "/input0";
 	onkey->input->dev.parent = &pdev->dev;
+
+	if (of_property_read_bool(np, "dlg,key-power"))
+		onkey->key_power = 1;
+	else
+		onkey->key_power = 0;
 
 	if( onkey->key_power )
 		input_set_capability(onkey->input, EV_KEY, KEY_POWER);
@@ -202,7 +210,7 @@ err_input:
 	return ret;
 }
 
-static int __devexit da9063_onkey_remove(struct platform_device *pdev)
+static int da9063_onkey_remove(struct platform_device *pdev)
 {
 	struct	da9063_onkey *onkey = platform_get_drvdata(pdev);
 
@@ -213,12 +221,23 @@ static int __devexit da9063_onkey_remove(struct platform_device *pdev)
 	return 0;
 }
 
+#ifdef CONFIG_OF
+static const struct of_device_id dialog_dt_ids[] = {
+        { .compatible = "dlg,da9063-onkey", },
+        { /* sentinel */ }
+};
+MODULE_DEVICE_TABLE(of, dialog_dt_ids);
+#endif
+
 static struct platform_driver da9063_onkey_driver = {
 	.probe	= da9063_onkey_probe,
-	.remove	= __devexit_p(da9063_onkey_remove),
+	.remove	= da9063_onkey_remove,
 	.driver	= {
 		.name	= DA9063_DRVNAME_ONKEY,
 		.owner	= THIS_MODULE,
+#ifdef CONFIG_OF
+                .of_match_table = dialog_dt_ids,
+#endif
 	},
 };
 

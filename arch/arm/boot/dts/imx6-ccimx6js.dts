@@ -49,6 +49,14 @@
 			interrupt-parent = <&pmic_dialog>;
 		};
 
+		onkey {
+			compatible = "dlg,da9063-onkey";
+			interrupts = <0>;
+			interrupts-names = "ONKEY";
+			interrupt-parent = <&pmic_dialog>;
+			dlg,key-power;
+		};
+
 		/* For DA9063 revision AD */
 		regulators {
 			compatible = "dlg,da9063-regulator";
