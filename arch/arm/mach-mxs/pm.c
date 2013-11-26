@@ -42,6 +42,7 @@
 
 #define STMP3XXX_RTC_PERSISTENT0	0x60
 #define STMP3XXX_RTC_PERSISTENT0_AUTO_RESTART	(1 << 17)
+#define STMP3XXX_RTC_PERSISTENT0_ALARM_WAKE	(1 << 7)
 #define STMP3XXX_RTC_STAT		0x10
 #define STMP3XXX_RTC_STAT_NEW_REGS_MASK	0x0000FF00
 #define STMP3XXX_RTC_STAT_NEW_REGS(v)	(((v) << 8) \
@@ -230,11 +231,13 @@ static void mx28_pm_power_off(void)
 		__mxs_setl(BM_POWER_5VCTRL_ILIMIT_EQ_ZERO,
 			   mx28_virt_addr.power_addr + HW_POWER_5VCTRL);
 		/* Clear the autorestart bit which is enabled in the
-		 * bootloader by default */
-		__mxs_clrl(STMP3XXX_RTC_PERSISTENT0_AUTO_RESTART,
+		 * bootloader by default.
+		 * Clear previous signal of having been woken up by alarm. */
+		__mxs_clrl(STMP3XXX_RTC_PERSISTENT0_AUTO_RESTART |
+			   STMP3XXX_RTC_PERSISTENT0_ALARM_WAKE,
 			   mx28_virt_addr.rtc_addr +
 			   STMP3XXX_RTC_PERSISTENT0);
-		/* Wait for it to take effect before we power off
+		/* Wait for persistent regs to take effect before we power off
 		 * the analog supplies */
 		for (i = 0; ((i < 100) &&
 		     (__raw_readl(mx28_virt_addr.rtc_addr + STMP3XXX_RTC_STAT) &
@@ -243,6 +246,7 @@ static void mx28_pm_power_off(void)
 			mdelay(1);
 		}
 	}
+	/* Power down */
 	__mxs_setl(BF_POWER_RESET_UNLOCK(0x3e77) | BM_POWER_RESET_PWD,
 		   mx28_virt_addr.power_addr + HW_POWER_RESET);
 }
