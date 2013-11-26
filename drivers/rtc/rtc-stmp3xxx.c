@@ -525,6 +525,12 @@ out:
 #ifdef CONFIG_PM_SLEEP
 static int stmp3xxx_rtc_suspend(struct device *dev)
 {
+	struct stmp3xxx_rtc_data *rtc_data = dev_get_drvdata(dev);
+
+	/* Enable wakeup irq before suspending, if device can wakeup */
+	if (device_may_wakeup(dev))
+		return enable_irq_wake(rtc_data->irq_alarm);
+
 	return 0;
 }
 
@@ -537,6 +543,11 @@ static int stmp3xxx_rtc_resume(struct device *dev)
 			STMP3XXX_RTC_PERSISTENT0_ALARM_WAKE_EN |
 			STMP3XXX_RTC_PERSISTENT0_ALARM_WAKE,
 			rtc_data->io + STMP3XXX_RTC_PERSISTENT0_CLR);
+
+	/* Disable wakeup irq on resume, if device can wakeup */
+	if (device_may_wakeup(dev))
+		return disable_irq_wake(rtc_data->irq_alarm);
+
 	return 0;
 }
 #endif
