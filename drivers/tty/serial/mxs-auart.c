@@ -780,6 +780,26 @@ static unsigned int mxs_auart_tx_empty(struct uart_port *u)
 		return 0;
 }
 
+/*
+ * Flush the transmit buffer.
+ * Locking: called with port lock held and IRQs disabled.
+ */
+static void mxs_auart_flush_buffer(struct uart_port *u)
+{
+	struct mxs_auart_port *s = to_auart_port(u);
+	struct dma_chan *channel = s->tx_dma_chan;
+
+	if (auart_dma_enabled(s)) {
+		/* Avoid deadlock with the DMA engine callback */
+		spin_unlock(&s->port.lock);
+		dmaengine_terminate_all(channel);
+		spin_lock(&s->port.lock);
+	}
+	/* Wait for the FIFO to flush */
+	if (!mxs_auart_tx_empty(u))
+		msleep(u->timeout);
+}
+
 static void mxs_auart_start_tx(struct uart_port *u)
 {
 	struct mxs_auart_port *s = to_auart_port(u);
@@ -826,6 +846,7 @@ static struct uart_ops mxs_auart_ops = {
 	.get_mctrl      = mxs_auart_get_mctrl,
 	.startup	= mxs_auart_startup,
 	.shutdown       = mxs_auart_shutdown,
+	.flush_buffer	= mxs_auart_flush_buffer,
 	.set_termios    = mxs_auart_settermios,
 	.type	   	= mxs_auart_type,
 	.release_port   = mxs_auart_release_port,
