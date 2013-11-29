@@ -755,26 +755,9 @@ static int mxs_auart_startup(struct uart_port *u)
 	return 0;
 }
 
-static unsigned int mxs_auart_tx_empty(struct uart_port *u)
-{
-	unsigned long stat;
-
-	stat = readl(u->membase + AUART_STAT);
-	if ((stat & (AUART_STAT_BUSY | AUART_STAT_TXFE)) == AUART_STAT_TXFE)
-		return TIOCSER_TEMT;
-
-	return 0;
-}
-
 static void mxs_auart_shutdown(struct uart_port *u)
 {
 	struct mxs_auart_port *s = to_auart_port(u);
-	unsigned int to;
-
-	/* Wait for the FIFO to flush */
-	to = u->timeout;
-	while (!mxs_auart_tx_empty(u) && to--)
-		mdelay(1);
 
 	if (auart_dma_enabled(s))
 		mxs_auart_dma_exit(s);
@@ -787,6 +770,14 @@ static void mxs_auart_shutdown(struct uart_port *u)
 	writel(AUART_CTRL0_CLKGATE, u->membase + AUART_CTRL0_SET);
 
 	clk_disable_unprepare(s->clk);
+}
+
+static unsigned int mxs_auart_tx_empty(struct uart_port *u)
+{
+	if (readl(u->membase + AUART_STAT) & AUART_STAT_TXFE)
+		return TIOCSER_TEMT;
+	else
+		return 0;
 }
 
 static void mxs_auart_start_tx(struct uart_port *u)
