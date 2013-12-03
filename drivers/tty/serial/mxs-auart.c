@@ -688,22 +688,23 @@ static irqreturn_t mxs_auart_irq_handle(int irq, void *context)
 	istatus = istat = readl(s->port.membase + AUART_INTR);
 
 	if (istat & AUART_INTR_CTSMIS) {
-		uart_handle_cts_change(&s->port, stat & AUART_STAT_CTS);
-		writel(AUART_INTR_CTSMIS,
-				s->port.membase + AUART_INTR_CLR);
-		istat &= ~AUART_INTR_CTSMIS;
+		/* Fast pulses on the CTS line may lead to a situation where the
+		 * CTS is asserted and generates an interrupt, but when the ISR
+		 * is called, the CTS line has already been deasserted. In this
+		 * case, we must do nothing. Consider only the case where CTS
+		 * is still asserted.
+		 */
+		if (stat & AUART_STAT_CTS)
+			uart_handle_cts_change(&s->port, stat & AUART_STAT_CTS);
 	}
 
 	if (istat & (AUART_INTR_RTIS | AUART_INTR_RXIS)) {
 		if (!auart_dma_enabled(s))
 			mxs_auart_rx_chars(s);
-		istat &= ~(AUART_INTR_RTIS | AUART_INTR_RXIS);
 	}
 
-	if (istat & AUART_INTR_TXIS) {
+	if (istat & AUART_INTR_TXIS)
 		mxs_auart_tx_chars(s);
-		istat &= ~AUART_INTR_TXIS;
-	}
 
 	writel(istatus & (AUART_INTR_RTIS
 		| AUART_INTR_TXIS
