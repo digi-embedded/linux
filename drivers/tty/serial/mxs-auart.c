@@ -195,7 +195,9 @@ static void dma_tx_callback(void *param)
 {
 	struct mxs_auart_port *s = param;
 	struct circ_buf *xmit = &s->port.state->xmit;
+	unsigned long flags;
 
+	spin_lock_irqsave(&s->port.lock, flags);
 	dma_unmap_sg(s->dev, &s->tx_sgl, 1, DMA_TO_DEVICE);
 
 	/* clear the bit used to serialize the DMA tx. */
@@ -205,6 +207,7 @@ static void dma_tx_callback(void *param)
 	/* wake up the possible processes. */
 	if (uart_circ_chars_pending(xmit) < WAKEUP_CHARS)
 		uart_write_wakeup(&s->port);
+	spin_unlock_irqrestore(&s->port.lock, flags);
 
 	mxs_auart_tx_chars(s);
 }
@@ -246,6 +249,7 @@ static int mxs_auart_dma_tx(struct mxs_auart_port *s, int size)
 static void mxs_auart_tx_chars(struct mxs_auart_port *s)
 {
 	struct circ_buf *xmit = &s->port.state->xmit;
+	unsigned long flags;
 
 	if (auart_dma_enabled(s)) {
 		u32 i = 0;
@@ -280,7 +284,6 @@ static void mxs_auart_tx_chars(struct mxs_auart_port *s)
 		return;
 	}
 
-
 	while (!(readl(s->port.membase + AUART_STAT) &
 		 AUART_STAT_TXFF)) {
 		if (s->port.x_char) {
@@ -298,8 +301,11 @@ static void mxs_auart_tx_chars(struct mxs_auart_port *s)
 		} else
 			break;
 	}
-	if (uart_circ_chars_pending(xmit) < WAKEUP_CHARS)
+	if (uart_circ_chars_pending(xmit) < WAKEUP_CHARS) {
+		spin_lock_irqsave(&s->port.lock, flags);
 		uart_write_wakeup(&s->port);
+		spin_unlock_irqrestore(&s->port.lock, flags);
+	}
 
 	if (uart_circ_empty(&(s->port.state->xmit)))
 		writel(AUART_INTR_TXIEN,
@@ -360,6 +366,7 @@ out:
 static void mxs_auart_rx_chars(struct mxs_auart_port *s)
 {
 	u32 stat = 0;
+	unsigned long flags;
 
 	for (;;) {
 		stat = readl(s->port.membase + AUART_STAT);
@@ -368,8 +375,10 @@ static void mxs_auart_rx_chars(struct mxs_auart_port *s)
 		mxs_auart_rx_char(s);
 	}
 
+	spin_lock_irqsave(&s->port.lock, flags);
 	writel(stat, s->port.membase + AUART_STAT);
 	tty_flip_buffer_push(&s->port.state->port);
+	spin_unlock_irqrestore(&s->port.lock, flags);
 }
 
 static int mxs_auart_request_port(struct uart_port *u)
@@ -442,7 +451,9 @@ static void dma_rx_callback(void *arg)
 	struct tty_port *port = &s->port.state->port;
 	int count;
 	u32 stat;
+	unsigned long flags;
 
+	spin_lock_irqsave(&s->port.lock, flags);
 	dma_unmap_sg(s->dev, &s->rx_sgl, 1, DMA_FROM_DEVICE);
 
 	stat = readl(s->port.membase + AUART_STAT);
@@ -454,6 +465,7 @@ static void dma_rx_callback(void *arg)
 
 	writel(stat, s->port.membase + AUART_STAT);
 	tty_flip_buffer_push(port);
+	spin_unlock_irqrestore(&s->port.lock, flags);
 
 	/* start the next DMA for RX. */
 	mxs_auart_dma_prep_rx(s);
@@ -514,7 +526,9 @@ static void mxs_auart_dma_exit_channel(struct mxs_auart_port *s)
 
 static void mxs_auart_dma_exit(struct mxs_auart_port *s)
 {
+	unsigned long flags;
 
+	spin_lock_irqsave(&s->port.lock, flags);
 	writel(AUART_CTRL2_TXDMAE | AUART_CTRL2_RXDMAE | AUART_CTRL2_DMAONERR,
 		s->port.membase + AUART_CTRL2_CLR);
 
@@ -522,13 +536,17 @@ static void mxs_auart_dma_exit(struct mxs_auart_port *s)
 	s->flags &= ~MXS_AUART_DMA_ENABLED;
 	clear_bit(MXS_AUART_DMA_TX_SYNC, &s->flags);
 	clear_bit(MXS_AUART_DMA_RX_READY, &s->flags);
+	spin_unlock_irqrestore(&s->port.lock, flags);
 }
 
 static int mxs_auart_dma_init(struct mxs_auart_port *s)
 {
+	unsigned long flags;
+
 	if (auart_dma_enabled(s))
 		return 0;
 
+	spin_lock_irqsave(&s->port.lock, flags);
 	/* init for RX */
 	s->rx_dma_chan = dma_request_slave_channel(s->dev, "rx");
 	if (!s->rx_dma_chan)
@@ -552,9 +570,12 @@ static int mxs_auart_dma_init(struct mxs_auart_port *s)
 	/* The DMA buffer is now the FIFO the TTY subsystem can use */
 	s->port.fifosize = UART_XMIT_SIZE;
 
+	spin_unlock_irqrestore(&s->port.lock, flags);
+
 	return 0;
 
 err_out:
+	spin_unlock_irqrestore(&s->port.lock, flags);
 	mxs_auart_dma_exit_channel(s);
 	return -EINVAL;
 
@@ -567,6 +588,7 @@ static void mxs_auart_settermios(struct uart_port *u,
 	struct mxs_auart_port *s = to_auart_port(u);
 	u32 bm, ctrl, ctrl2, div;
 	unsigned int cflag, baud;
+	unsigned long flags;
 
 	cflag = termios->c_cflag;
 
@@ -591,6 +613,7 @@ static void mxs_auart_settermios(struct uart_port *u,
 		return;
 	}
 
+	spin_lock_irqsave(&s->port.lock, flags);
 	ctrl |= AUART_LINECTRL_WLEN(bm);
 
 	/* parity */
@@ -677,6 +700,7 @@ static void mxs_auart_settermios(struct uart_port *u,
 			dev_err(s->dev, "We can not start up the DMA.\n");
 		}
 	}
+	spin_unlock_irqrestore(&s->port.lock, flags);
 }
 
 static irqreturn_t mxs_auart_irq_handle(int irq, void *context)
