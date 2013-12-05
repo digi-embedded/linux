@@ -536,6 +536,8 @@ static void mxs_auart_dma_exit(struct mxs_auart_port *s)
 	s->flags &= ~MXS_AUART_DMA_ENABLED;
 	clear_bit(MXS_AUART_DMA_TX_SYNC, &s->flags);
 	clear_bit(MXS_AUART_DMA_RX_READY, &s->flags);
+	/* Reset FIFO size */
+	s->port.fifosize = MXS_AUART_FIFO_SIZE;
 	spin_unlock_irqrestore(&s->port.lock, flags);
 }
 
