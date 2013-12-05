@@ -613,7 +613,6 @@ static void mxs_auart_settermios(struct uart_port *u,
 		return;
 	}
 
-	spin_lock_irqsave(&s->port.lock, flags);
 	ctrl |= AUART_LINECTRL_WLEN(bm);
 
 	/* parity */
@@ -659,23 +658,12 @@ static void mxs_auart_settermios(struct uart_port *u,
 		ctrl |= AUART_LINECTRL_STP2;
 
 	/* figure out the hardware flow control settings */
-	if (cflag & CRTSCTS) {
-		/*
-		 * The DMA has a bug(see errata:2836) in mx23.
-		 * So we can not implement the DMA for auart in mx23,
-		 * we can only implement the DMA support for auart
-		 * in mx28.
-		 */
-		if (is_imx28_auart(s) && (s->flags & MXS_AUART_DMA_CONFIG)) {
-			if (!mxs_auart_dma_init(s))
-				/* enable DMA tranfer */
-				ctrl2 |= AUART_CTRL2_TXDMAE | AUART_CTRL2_RXDMAE
-				       | AUART_CTRL2_DMAONERR;
-		}
+	if (cflag & CRTSCTS)
 		ctrl2 |= AUART_CTRL2_CTSEN | AUART_CTRL2_RTSEN;
-	} else {
+	else
 		ctrl2 &= ~(AUART_CTRL2_CTSEN | AUART_CTRL2_RTSEN);
-	}
+
+	spin_lock_irqsave(&s->port.lock, flags);
 
 	/* set baud rate */
 	baud = uart_get_baud_rate(u, termios, old, 0, u->uartclk);
@@ -688,18 +676,6 @@ static void mxs_auart_settermios(struct uart_port *u,
 
 	uart_update_timeout(u, termios->c_cflag, baud);
 
-	/* prepare for the DMA RX. */
-	if (auart_dma_enabled(s) &&
-		!test_and_set_bit(MXS_AUART_DMA_RX_READY, &s->flags)) {
-		if (!mxs_auart_dma_prep_rx(s)) {
-			/* Disable the normal RX interrupt. */
-			writel(AUART_INTR_RXIEN | AUART_INTR_RTIEN,
-					u->membase + AUART_INTR_CLR);
-		} else {
-			mxs_auart_dma_exit(s);
-			dev_err(s->dev, "We can not start up the DMA.\n");
-		}
-	}
 	spin_unlock_irqrestore(&s->port.lock, flags);
 }
 
@@ -776,6 +752,33 @@ static int mxs_auart_startup(struct uart_port *u)
 	 * output (otherwise, only the LSB is written, ie. 1 in 4 bytes)
 	 */
 	writel(AUART_LINECTRL_FEN, u->membase + AUART_LINECTRL_SET);
+
+	/*
+	 * The DMA has a bug(see errata:2836) in mx23.
+	 * So we can not implement the DMA for auart in mx23,
+	 * we can only implement the DMA support for auart
+	 * in mx28.
+	 */
+	if (is_imx28_auart(s) && (s->flags & MXS_AUART_DMA_CONFIG)) {
+		if (!mxs_auart_dma_init(s))
+			/* enable DMA transfer */
+			writel(AUART_CTRL2_TXDMAE | AUART_CTRL2_RXDMAE |
+			       AUART_CTRL2_DMAONERR,
+			       u->membase + AUART_CTRL2_SET);
+
+		/* prepare for the DMA RX. */
+		if (auart_dma_enabled(s) &&
+			!test_and_set_bit(MXS_AUART_DMA_RX_READY, &s->flags)) {
+			if (!mxs_auart_dma_prep_rx(s)) {
+				/* Disable the normal RX interrupt. */
+				writel(AUART_INTR_RXIEN | AUART_INTR_RTIEN,
+						u->membase + AUART_INTR_CLR);
+			} else {
+				mxs_auart_dma_exit(s);
+				dev_err(s->dev, "We can not start up the DMA.\n");
+			}
+		}
+	}
 
 	return 0;
 }
