@@ -1459,7 +1459,6 @@ static int fec_enet_mii_init(struct platform_device *pdev)
 	if (id_entry->driver_data & FEC_QUIRK_ENET_MAC)
 		fep->phy_speed--;
 	fep->phy_holdtime = DIV_ROUND_UP(clk_get_rate(fep->clk_ahb), 100000000);
-	STRAIL("phy_holdtime=0x%x\n", fep->phy_holdtime);
 	writel(BF(fep->phy_holdtime, FEC_MII_SPEED_HOLDTIME) |
 	       BF(fep->phy_speed, FEC_MII_SPEED_MII_SPEED),
 	       fep->hwp + FEC_MII_SPEED);
