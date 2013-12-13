@@ -36,6 +36,7 @@
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/of_device.h>
+#include <linux/of_gpio.h>
 #include <linux/platform_device.h>
 #include <linux/pinctrl/consumer.h>
 
@@ -211,6 +212,7 @@ struct flexcan_priv {
 	struct clk *clk_ipg;
 	struct clk *clk_per;
 	struct flexcan_platform_data *pdata;
+	int stby_gpio;
 	const struct flexcan_devtype_data *devtype_data;
 };
 
@@ -264,8 +266,13 @@ static inline void flexcan_write(u32 val, void __iomem *addr)
  */
 static void flexcan_transceiver_switch(const struct flexcan_priv *priv, int on)
 {
-	if (priv->pdata && priv->pdata->transceiver_switch)
-		priv->pdata->transceiver_switch(on);
+	if (!priv->pdata){
+		gpio_set_value(priv->stby_gpio, !on);
+	}
+	else {
+		if( priv->pdata->transceiver_switch)
+			priv->pdata->transceiver_switch(on);
+	}
 }
 
 static inline int flexcan_has_and_handle_berr(const struct flexcan_priv *priv,
@@ -996,6 +1003,22 @@ static const struct platform_device_id flexcan_id_table[] = {
 };
 MODULE_DEVICE_TABLE(platform, flexcan_id_table);
 
+static int flexcan_gpio_init(struct device_node *np , struct net_device *dev)
+{
+	int ret;
+	struct flexcan_priv *priv = netdev_priv(dev);
+
+	priv->stby_gpio = of_get_named_gpio(np, "stby-gpios", 0);
+	if (!gpio_is_valid(priv->stby_gpio))
+		return -ENODEV;
+
+	if( (ret = gpio_request(priv->stby_gpio, "can_stby")) == 0)
+		gpio_direction_output(priv->stby_gpio, 0);
+	else
+		netdev_err(dev, "Could not configure standby pin.\n");
+	return ret;
+}
+
 static int flexcan_probe(struct platform_device *pdev)
 {
 	const struct of_device_id *of_id;
@@ -1089,6 +1112,7 @@ static int flexcan_probe(struct platform_device *pdev)
 	priv->clk_per = clk_per;
 	priv->pdata = pdev->dev.platform_data;
 	priv->devtype_data = devtype_data;
+	flexcan_gpio_init(pdev->dev.of_node,dev);
 
 	netif_napi_add(dev, &priv->napi, flexcan_poll, FLEXCAN_NAPI_WEIGHT);
 
@@ -1102,7 +1126,6 @@ static int flexcan_probe(struct platform_device *pdev)
 	}
 
 	devm_can_led_init(dev);
-
 	dev_info(&pdev->dev, "device registered (reg_base=%p, irq=%d)\n",
 		 priv->base, dev->irq);
 
