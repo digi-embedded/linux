@@ -15,4 +15,4 @@ Required root node properties:
 
 ConnectCard 6 JumpStart Kit
 Required root node properties:
-    - compatible = "digi,ccimx6js", "fsl,imx6q";
+    - compatible = "digi,ccimx6adpt", "fsl,imx6q";
