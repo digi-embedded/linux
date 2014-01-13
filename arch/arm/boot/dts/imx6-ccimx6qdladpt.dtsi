@@ -650,9 +650,7 @@
 
 &usdhc2 {
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_usdhc2_1>;
-	cd-gpios = <&gpio2 2 0>;
-	wp-gpios = <&gpio2 3 0>;
+	pinctrl-0 = <&pinctrl_usdhc2_2>;
 	no-1-8-v;
 	status = "okay";
 };
