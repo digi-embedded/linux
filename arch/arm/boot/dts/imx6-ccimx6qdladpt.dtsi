@@ -234,9 +234,9 @@
 };
 
 &cpu0 {
-	arm-supply = <&sw1a_reg>;
-	soc-supply = <&sw1c_reg>;
-	pu-supply = <&pu_dummy>; /* use pu_dummy if VDDSOC share with VDDPU */
+	arm-supply = <&bcore1>;
+	soc-supply = <&bcore2>;
+	pu-supply = <&pu_dummy>;
 };
 
 &ecspi2 {
