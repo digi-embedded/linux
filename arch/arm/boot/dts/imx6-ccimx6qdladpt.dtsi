@@ -105,24 +105,11 @@
 	};
 
 	sound {
-		compatible = "fsl,imx6q-sabresd-wm8962",
-			   "fsl,imx-audio-wm8962";
-		model = "wm8962-audio";
+		compatible = "fsl,imx6q-ccimx6adpt-sgtl5000",
+			   "fsl,imx-audio-sgtl5000";
+		model = "sgtl5000-audio";
 		ssi-controller = <&ssi2>;
-		audio-codec = <&codec>;
-		audio-routing =
-			"Headphone Jack", "HPOUTL",
-			"Headphone Jack", "HPOUTR",
-			"Ext Spk", "SPKOUTL",
-			"Ext Spk", "SPKOUTR",
-			"MICBIAS", "AMIC",
-			"IN3R", "MICBIAS",
-			"DMIC", "MICBIAS",
-			"DMICDAT", "DMIC";
-		mux-int-port = <2>;
-		mux-ext-port = <3>;
-		hp-det-gpios = <&gpio7 8 1>;
-		mic-det-gpios = <&gpio1 9 1>;
+		audio-codec = <&sgtl5000>;
 	};
 
 	sound-hdmi {
@@ -309,6 +296,13 @@
 		compatible = "fsl,imx6-hdmi-i2c";
 		reg = <0x50>;
 	};
+
+        sgtl5000: codec@0a {
+		compatible = "fsl,sgtl5000";
+                reg = <0x0a>;
+                /* VDDA-supply = <&reg_3p3v>; */
+                /* VDDIO-supply = <&reg_3p3v>; */
+        };
 };
 
 &iomuxc {
