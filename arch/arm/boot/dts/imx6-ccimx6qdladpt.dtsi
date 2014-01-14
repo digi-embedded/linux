@@ -239,20 +239,12 @@
 	pu-supply = <&pu_dummy>; /* use pu_dummy if VDDSOC share with VDDPU */
 };
 
-&ecspi1 {
+&ecspi2 {
 	fsl,spi-num-chipselects = <1>;
-	cs-gpios = <&gpio4 9 0>;
+	cs-gpios = <&gpio5 29 0>;
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_ecspi1_2>;
+	pinctrl-0 = <&pinctrl_ecspi2_1>;
 	status = "okay";
-
-	flash: m25p80@0 {
-		#address-cells = <1>;
-		#size-cells = <1>;
-		compatible = "st,m25p32";
-		spi-max-frequency = <20000000>;
-		reg = <0>;
-	};
 };
 
 &fec {
