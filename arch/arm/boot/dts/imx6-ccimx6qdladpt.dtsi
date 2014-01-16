@@ -291,7 +291,6 @@
 				MX6QDL_PAD_GPIO_5__GPIO1_IO05 0x80000000
 				MX6QDL_PAD_SD3_RST__GPIO7_IO08 0x80000000
 				MX6QDL_PAD_GPIO_9__GPIO1_IO09 0x80000000
-				MX6QDL_PAD_GPIO_1__WDOG2_B 0x80000000
 			>;
 		};
 	};
@@ -352,7 +351,7 @@
 
 &usbotg {
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_usbotg_2>;
+	pinctrl-0 = <&pinctrl_usbotg_1>;
 	disable-over-current;
 	status = "okay";
 };
