@@ -36,52 +36,6 @@
 		status = "okay";
 	};
 
-	regulators {
-		compatible = "simple-bus";
-
-		reg_usb_otg_vbus: usb_otg_vbus {
-			compatible = "regulator-fixed";
-			regulator-name = "usb_otg_vbus";
-			regulator-min-microvolt = <5000000>;
-			regulator-max-microvolt = <5000000>;
-			gpio = <&gpio3 22 0>;
-			enable-active-high;
-		};
-
-		reg_usb_h1_vbus: usb_h1_vbus {
-			compatible = "regulator-fixed";
-			regulator-name = "usb_h1_vbus";
-			regulator-min-microvolt = <5000000>;
-			regulator-max-microvolt = <5000000>;
-			gpio = <&gpio1 29 0>;
-			enable-active-high;
-		};
-
-		reg_audio: wm8962_supply {
-			compatible = "regulator-fixed";
-			regulator-name = "wm8962-supply";
-			gpio = <&gpio4 10 0>;
-			enable-active-high;
-		};
-
-		reg_mipi_dsi_pwr_on: mipi_dsi_pwr_on {
-			compatible = "regulator-fixed";
-			regulator-name = "mipi_dsi_pwr_on";
-			gpio = <&gpio6 14 0>;
-			enable-active-high;
-		};
-
-		reg_sensor: sensor_supply {
-			compatible = "regulator-fixed";
-			regulator-name = "sensor-supply";
-			regulator-min-microvolt = <3300000>;
-			regulator-max-microvolt = <3300000>;
-			gpio = <&gpio2 31 0>;
-			startup-delay-us = <500>;
-			enable-active-high;
-		};
-	};
-
 	gpio-keys {
 		compatible = "gpio-keys";
 		power {
@@ -365,7 +319,6 @@
 	dev_id = <0>;
 	disp_id = <0>;
 	lcd_panel = "TRULY-WVGA";
-	disp-power-on-supply = <&reg_mipi_dsi_pwr_on>;
 	resets = <&mipi_dsi_reset>;
 	status = "okay";
 };
@@ -394,12 +347,10 @@
 };
 
 &usbh1 {
-	vbus-supply = <&reg_usb_h1_vbus>;
 	status = "okay";
 };
 
 &usbotg {
-	vbus-supply = <&reg_usb_otg_vbus>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_usbotg_2>;
 	disable-over-current;
