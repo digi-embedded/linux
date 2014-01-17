@@ -33,6 +33,7 @@
 #include <linux/jiffies.h>
 #include <linux/timex.h>
 #include <linux/interrupt.h>
+#include <linux/sched.h>
 #include "tcrypt.h"
 #include "internal.h"
 
@@ -182,6 +183,7 @@ static void test_cipher_speed(const char *algo, int enc, unsigned int sec,
 				goto out;
 			}
 
+			schedule();
 			printk("test %u (%d bit key, %d byte blocks): ", i,
 					*keysize * 8, *b_size);
 
@@ -448,6 +450,7 @@ static void test_hash_speed(const char *algo, unsigned int sec,
 		if (speed[i].klen)
 			crypto_hash_setkey(tfm, tvmem[0], speed[i].klen);
 
+		schedule();
 		printk(KERN_INFO "test%3u "
 		       "(%5u byte blocks,%5u bytes per update,%4u updates): ",
 		       i, speed[i].blen, speed[i].plen, speed[i].blen / speed[i].plen);
@@ -688,6 +691,7 @@ static void test_ahash_speed(const char *algo, unsigned int sec,
 			break;
 		}
 
+		schedule();
 		pr_info("test%3u "
 			"(%5u byte blocks,%5u bytes per update,%4u updates): ",
 			i, speed[i].blen, speed[i].plen, speed[i].blen / speed[i].plen);
@@ -853,6 +857,7 @@ static void test_acipher_speed(const char *algo, int enc, unsigned int sec,
 				goto out_free_req;
 			}
 
+			schedule();
 			pr_info("test %u (%d bit key, %d byte blocks): ", i,
 				*keysize * 8, *b_size);
 
@@ -934,6 +939,7 @@ static void test_available(void)
 		printk("alg %s ", *name);
 		printk(crypto_has_alg(*name, 0, 0) ?
 		       "found\n" : "not found\n");
+		schedule();
 		name++;
 	}
 }
