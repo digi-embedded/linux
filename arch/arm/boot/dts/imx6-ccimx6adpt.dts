@@ -65,6 +65,12 @@
 			dlg,tjunc-offset = <(-5)>;
 		};
 
+		gpio_extender: gpio {
+			compatible = "dlg,da9063-gpio";
+			gpio-controller;
+			#gpio-cells = <2>;
+		};
+
 		/* For DA9063 revision AD */
 		regulators {
 			compatible = "dlg,da9063-regulator";
