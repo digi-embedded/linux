@@ -356,6 +356,13 @@
 	status = "okay";
 };
 
+&usdhc1 {
+        pinctrl-names = "default";
+        pinctrl-0 = <&pinctrl_usdhc1_1>;
+        no-1-8-v;
+        status = "okay";
+};
+
 &usdhc2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_usdhc2_2>;
