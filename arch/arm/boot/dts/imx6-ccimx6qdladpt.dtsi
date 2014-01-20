@@ -166,6 +166,11 @@
 		reset-delay-us = <50>;
 		#reset-cells = <0>;
 	};
+
+	wireless {
+		digi,pwrdown-gpios = <&gpio_extender 3 0>;
+		/* U-Boot will fill in the MAC address here */
+	};
 };
 
 &audmux {

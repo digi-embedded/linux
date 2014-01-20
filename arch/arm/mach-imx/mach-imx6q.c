@@ -36,6 +36,7 @@
 #include <asm/mach/arch.h>
 #include <asm/mach/map.h>
 #include <asm/system_misc.h>
+#include <linux/of_gpio.h>
 
 #include "common.h"
 #include "cpuidle.h"
@@ -253,6 +254,32 @@ static void __init imx6q_lvds_cabc_init(void)
 	}
 }
 
+static void imx6q_wifi_init (void)
+{
+	struct device_node *np;
+	int pwrdown_gpio;
+	enum of_gpio_flags flags;
+
+	np = of_find_node_by_path("/wireless");
+	if (!np)
+		return;
+
+	/* Read the power down gpio */
+	pwrdown_gpio = of_get_named_gpio_flags(np, "digi,pwrdown-gpios", 0, &flags);
+	if (gpio_is_valid(pwrdown_gpio)) {
+		if (!gpio_request_one(pwrdown_gpio, GPIOF_DIR_OUT,
+			"wifi_chip_pwd_l")) {
+			/* Start with Power pin low, then set high to power Wifi */
+			gpio_set_value_cansleep(pwrdown_gpio, 1);
+			/*
+			* Free the Wifi chip PWD pin to allow controlling
+			* it from user space
+			*/
+			gpio_free(pwrdown_gpio);
+		}
+	}
+}
+
 static void __init imx6q_init_machine(void)
 {
 	struct device *parent;
@@ -377,6 +404,8 @@ static void __init imx6q_init_late(void)
 		imx6q_opp_init(&imx6q_cpufreq_pdev.dev);
 		platform_device_register(&imx6q_cpufreq_pdev);
 	}
+
+	imx6q_wifi_init();
 }
 
 static void __init imx6q_map_io(void)
