@@ -77,6 +77,88 @@ static struct resource da9063_hwmon_resources[] = {
 	},
 };
 
+static struct resource da9063_gpio_resources[] = {
+	{
+		.start	= DA9063_IRQ_GPI0,
+		.end	= DA9063_IRQ_GPI0,
+		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.start	= DA9063_IRQ_GPI1,
+		.end	= DA9063_IRQ_GPI1,
+		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.start	= DA9063_IRQ_GPI2,
+		.end	= DA9063_IRQ_GPI2,
+		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.start	= DA9063_IRQ_GPI3,
+		.end	= DA9063_IRQ_GPI3,
+		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.start	= DA9063_IRQ_GPI4,
+		.end	= DA9063_IRQ_GPI4,
+		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.start	= DA9063_IRQ_GPI5,
+		.end	= DA9063_IRQ_GPI5,
+		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.start	= DA9063_IRQ_GPI6,
+		.end	= DA9063_IRQ_GPI6,
+		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.start	= DA9063_IRQ_GPI7,
+		.end	= DA9063_IRQ_GPI7,
+		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.start	= DA9063_IRQ_GPI8,
+		.end	= DA9063_IRQ_GPI8,
+		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.start	= DA9063_IRQ_GPI9,
+		.end	= DA9063_IRQ_GPI9,
+		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.start	= DA9063_IRQ_GPI10,
+		.end	= DA9063_IRQ_GPI10,
+		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.start	= DA9063_IRQ_GPI11,
+		.end	= DA9063_IRQ_GPI11,
+		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.start	= DA9063_IRQ_GPI12,
+		.end	= DA9063_IRQ_GPI12,
+		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.start	= DA9063_IRQ_GPI13,
+		.end	= DA9063_IRQ_GPI13,
+		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.start	= DA9063_IRQ_GPI14,
+		.end	= DA9063_IRQ_GPI14,
+		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.start	= DA9063_IRQ_GPI15,
+		.end	= DA9063_IRQ_GPI15,
+		.flags	= IORESOURCE_IRQ,
+	},
+};
 
 static struct mfd_cell da9063_devs[] = {
 	{
@@ -102,6 +184,12 @@ static struct mfd_cell da9063_devs[] = {
 		.num_resources	= ARRAY_SIZE(da9063_rtc_resources),
 		.resources	= da9063_rtc_resources,
 		.of_compatible  = "dlg,da9063-rtc",
+	},
+	{
+		.name		= DA9063_DRVNAME_GPIO,
+		.num_resources	= ARRAY_SIZE(da9063_gpio_resources),
+		.resources	= da9063_gpio_resources,
+		.of_compatible  = "dlg,da9063-gpio",
 	},
 };
 
