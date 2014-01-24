@@ -52,6 +52,8 @@
 #define HW_OCOTP_DATA			0x00000020
 
 #define HW_OCOTP_CUST_N(n)	(0x00000400 + (n) * 0x10)
+#define HW_OCTP_IDX_MAC1	0x23
+
 #define BF(value, field)	(((value) << BP_##field) & BM_##field)
 
 #define DEF_RELAX		20	/* > 16.5ns */
@@ -125,11 +127,8 @@ static int otp_wait_busy(u32 flags)
 	return 0;
 }
 
-static ssize_t fsl_otp_show(struct kobject *kobj, struct kobj_attribute *attr,
-			    char *buf)
+static u32 fsl_otp_read(int index, u32 *value)
 {
-	unsigned int index = attr - otp_kattr;
-	u32 value = 0;
 	int ret;
 
 	ret = clk_prepare_enable(otp_clk);
@@ -140,14 +139,26 @@ static ssize_t fsl_otp_show(struct kobject *kobj, struct kobj_attribute *attr,
 
 	set_otp_timing();
 	ret = otp_wait_busy(0);
-	if (ret)
+	if (ret){
+		*value = 0;
 		goto out;
+	}
 
-	value = __raw_readl(otp_base + HW_OCOTP_CUST_N(index));
-
+	*value = __raw_readl(otp_base + HW_OCOTP_CUST_N(index));
 out:
 	mutex_unlock(&otp_mutex);
 	clk_disable_unprepare(otp_clk);
+	return ret;
+}
+
+static ssize_t fsl_otp_show(struct kobject *kobj, struct kobj_attribute *attr,
+			    char *buf)
+{
+	unsigned int index = attr - otp_kattr;
+	u32 value = 0;
+	int ret;
+
+	ret = fsl_otp_read(index,&value);
 	return ret ? 0 : sprintf(buf, "0x%x\n", value);
 }
 
@@ -203,6 +214,78 @@ out:
 	mutex_unlock(&otp_mutex);
 	clk_disable_unprepare(otp_clk);
 	return ret ? 0 : count;
+}
+
+static int fsl_register_hwid(void) {
+	struct device_node *np;
+	u32 ocotp;
+	u8 *hwid;
+	char str[20];
+	struct property *hwidprop;
+	const char *hwidpropname;
+	int ret, i;
+	const char *propnames[] = {
+		"digi,hwid,tf",
+		"digi,hwid,variant",
+		"digi,hwid,hv",
+		"digi,hwid,cert",
+		"digi,hwid,year",
+		"digi,hwid,month",
+		"digi,hwid,sn",
+	};
+
+	np = of_find_compatible_node(NULL, NULL, "digi,ccimx6adpt");
+	if (!np)
+		return -EINVAL;
+
+	if(fsl_otp_read(HW_OCTP_IDX_MAC1, &ocotp) != 0)
+		return -EINVAL;
+
+	/* Retrieve HWID from OTP bits */
+	hwid = (u8 *)&ocotp;
+
+	/*
+	* Try to read the HWID fields from DT. If not found, create those
+	* properties from the information on the OTP bits.
+	*/
+	for (i = 0; i < ARRAY_SIZE(propnames); i++) {
+		ret = of_property_read_string(np, propnames[i], &hwidpropname);
+		if (ret) {
+		/* Convert HWID fields to strings */
+		if (!strcmp("digi,hwid,tf", propnames[i]))
+			sprintf(str, "0x%02x", hwid[6]);
+			else if (!strcmp("digi,hwid,variant", propnames[i]))
+				sprintf(str, "0x%02x", hwid[5]);
+			else if (!strcmp("digi,hwid,hv", propnames[i]))
+				sprintf(str, "0x%x", hwid[4] >> 4);
+			else if (!strcmp("digi,hwid,cert", propnames[i]))
+				sprintf(str, "0x%x", hwid[4] & 0xf);
+			else if (!strcmp("digi,hwid,year", propnames[i]))
+				sprintf(str, "20%02d", hwid[3]);
+			else if (!strcmp("digi,hwid,month", propnames[i]))
+				sprintf(str, "%02d", hwid[2] >> 4);
+			else if (!strcmp("digi,hwid,sn", propnames[i]))
+				sprintf(str, "%d", (&ocotp)[0] & 0xfffff);
+			else
+				continue;
+
+			hwidprop = kzalloc(sizeof(*hwidprop) + strlen(str),
+				GFP_KERNEL);
+			if (!hwidprop)
+				return -ENOMEM;
+
+			hwidprop->value = hwidprop + 1;
+			hwidprop->length = strlen(str);
+			hwidprop->name = kstrdup(propnames[i], GFP_KERNEL);
+			if (!hwidprop->name) {
+				kfree(hwidprop);
+				return -ENOMEM;
+			}
+			strncpy(hwidprop->value, str, strlen(str));
+			of_update_property(np, hwidprop);
+		}
+	}
+	return 0;
 }
 
 static int fsl_otp_probe(struct platform_device *pdev)
@@ -265,6 +348,12 @@ static int fsl_otp_probe(struct platform_device *pdev)
 	}
 
 	mutex_init(&otp_mutex);
+
+	/*
+	* Read the HWID from OTP bits and register it to DT if not already
+	* there, to be exposed to the filesystem via procfs.
+	*/
+	fsl_register_hwid();
 
 	return 0;
 }
