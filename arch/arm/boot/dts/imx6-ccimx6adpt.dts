@@ -19,6 +19,7 @@
 / {
 	model = "Digi International ConnectCore 6 Jump Start Kit.";
 	compatible = "digi,ccimx6adpt", "fsl,imx6q";
+	digi,machine,name = "ccimx6adpt";
 };
 
 &iomuxc {
