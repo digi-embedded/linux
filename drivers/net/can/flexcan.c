@@ -266,8 +266,12 @@ static inline void flexcan_write(u32 val, void __iomem *addr)
  */
 static void flexcan_transceiver_switch(const struct flexcan_priv *priv, int on)
 {
-	if (!priv->pdata){
-		gpio_set_value(priv->stby_gpio, !on);
+	if (!priv)
+		return;
+
+	if (!priv->pdata) {
+		if(gpio_is_valid(priv->stby_gpio))
+			gpio_set_value(priv->stby_gpio, !on);
 	}
 	else {
 		if( priv->pdata->transceiver_switch)
