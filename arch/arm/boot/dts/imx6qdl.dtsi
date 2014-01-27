@@ -362,7 +362,6 @@
 				compatible = "fsl,imx6q-flexcan";
 				pinctrl-names = "default";
 				pinctrl-0 = <&pinctrl_flexcan1_1>;
-				stby-gpios = <&gpio4 5 0>;
 				reg = <0x02090000 0x4000>;
 				interrupts = <0 110 0x04>;
 				clocks = <&clks 108>, <&clks 109>;
@@ -1162,7 +1161,6 @@
 			fsl,pins = <
 				MX6QDL_PAD_GPIO_7__FLEXCAN1_TX 0x1b0b0
 				MX6QDL_PAD_GPIO_8__FLEXCAN1_RX 0x1b0b0
-				MX6QDL_PAD_GPIO_19__GPIO4_IO05 0x1b0b0
 			>;
 		};
 	};
@@ -1170,8 +1168,8 @@
 	flexcan2 {
 		pinctrl_flexcan2_1: flexcan2grp-1 {
 			fsl,pins = <
-				MX6QDL_PAD_KEY_COL4__FLEXCAN2_TX 0x80000000
-				MX6QDL_PAD_KEY_ROW4__FLEXCAN2_RX 0x80000000
+				MX6QDL_PAD_SD3_DAT0__FLEXCAN2_TX 0x1b0b0
+				MX6QDL_PAD_SD3_DAT1__FLEXCAN2_RX 0x1b0b0
 			>;
 		};
 	};
