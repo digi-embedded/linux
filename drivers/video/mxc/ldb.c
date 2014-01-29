@@ -159,6 +159,30 @@ static struct fb_videomode ldb_modedb[] = {
 	 0,
 	 FB_VMODE_NONINTERLACED,
 	 FB_MODE_IS_DETAILED,},
+	{
+	 "LDB-F07A0102", 60, 800, 480, 50000,
+	 0, 50,
+	 25, 10,
+	 128, 10,
+	 FB_SYNC_EXT,
+	 FB_VMODE_NONINTERLACED,
+	 FB_MODE_IS_DETAILED,},
+	{
+	 "LDB-HSD101PFW2", 60, 1024, 600, 22222,
+	 0, 0,
+	 0, 0,
+	 176, 25,
+	 FB_SYNC_CLK_LAT_FALL | FB_SYNC_EXT,
+	 FB_VMODE_NONINTERLACED,
+	 FB_MODE_IS_DETAILED,},
+	{
+	 "LDB-F04B0101", 60, 480, 272, 111111,
+	 30, 5,
+	 0, 8,
+	 10, 8,
+	 FB_SYNC_EXT,
+	 FB_VMODE_NONINTERLACED,
+	 FB_MODE_IS_DETAILED,}
 };
 static int ldb_modedb_sz = ARRAY_SIZE(ldb_modedb);
 
@@ -817,6 +841,10 @@ static int ldb_disp_init(struct mxc_dispdrv_handle *disp,
 	/* must use spec video mode defined by driver */
 	ret = fb_find_mode(&setting->fbi->var, setting->fbi, setting->dft_mode_str,
 				ldb_modedb, ldb_modedb_sz, NULL, setting->default_bpp);
+
+	if (ret == 1)
+		dev_info(&ldb->pdev->dev,"Using specified mode for %s\n",setting->dft_mode_str);
+
 	if (ret != 1)
 		fb_videomode_to_var(&setting->fbi->var, &ldb_modedb[0]);
 
