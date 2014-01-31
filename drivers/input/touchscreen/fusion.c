@@ -73,10 +73,19 @@ static int fusion_register_input(void)
 	set_bit(EV_KEY, dev->evbit);
 	set_bit(EV_ABS, dev->evbit);
 
+#if defined(CONFIG_TOUCHSCREEN_FUSION_7_10_MULTITOUCH)
 	input_set_abs_params(dev, ABS_MT_POSITION_X, 0, fusion.info.xres-1, 0, 0);
 	input_set_abs_params(dev, ABS_MT_POSITION_Y, 0, fusion.info.yres-1, 0, 0);
 	input_set_abs_params(dev, ABS_MT_TOUCH_MAJOR, 0, 255, 0, 0);
 	input_set_abs_params(dev, ABS_MT_WIDTH_MAJOR, 0, 15, 0, 0);
+#else
+	set_bit(ABS_X, dev->absbit);
+	set_bit(ABS_Y, dev->absbit);
+	set_bit(ABS_PRESSURE, dev->absbit);
+	input_set_abs_params(dev, ABS_X, 0, fusion.info.xres-1, 0, 0);
+	input_set_abs_params(dev, ABS_Y, 0, fusion.info.yres-1, 0, 0);
+	input_set_abs_params(dev, ABS_PRESSURE, 0, 1 ,0, 0);
+#endif
 
 	ret = input_register_device(dev);
 	if (ret < 0)
@@ -220,6 +229,7 @@ static void fusion_wq(struct work_struct *work)
 		}
 	}
 
+#if defined(CONFIG_TOUCHSCREEN_FUSION_7_10_MULTITOUCH)
 	input_report_abs(dev, ABS_MT_TOUCH_MAJOR, z1);
 	input_report_abs(dev, ABS_MT_WIDTH_MAJOR, 1);
 	input_report_abs(dev, ABS_MT_POSITION_X, x1);
@@ -230,6 +240,11 @@ static void fusion_wq(struct work_struct *work)
 	input_report_abs(dev, ABS_MT_POSITION_X, x2);
 	input_report_abs(dev, ABS_MT_POSITION_Y, y2);
 	input_mt_sync(dev);
+#else
+	input_report_abs(dev, ABS_PRESSURE, z1);
+	input_report_abs(dev, ABS_X, x1);
+	input_report_abs(dev, ABS_Y, y1);
+#endif
 
 	input_sync(dev);
 

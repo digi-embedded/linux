@@ -267,6 +267,14 @@ config TOUCHSCREEN_FUSION_7_10
 	  To compile this driver as a module, choose M here: the
 	  module will be called fusion.
 
+config TOUCHSCREEN_FUSION_7_10_MULTITOUCH
+	bool "Enable the Fusion 7/10 multitouch support."
+	default n
+	depends on TOUCHSCREEN_FUSION_7_10
+	help
+	  Say Y here to enable multitouch support for the Fusion 7/10 I2C
+	  touch driver.
+
 config TOUCHSCREEN_FUJITSU
 	tristate "Fujitsu serial touchscreen"
 	select SERIO
