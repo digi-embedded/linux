@@ -408,9 +408,19 @@ static struct i2c_device_id fusion_id[] = {
 	{},
 };
 
+static const struct of_device_id fusion_dt_ids[] = {
+        {
+                .compatible = "touchrev,fusion-touch",
+        }, {
+                /* sentinel */
+        }
+};
+MODULE_DEVICE_TABLE(of, fusion_dt_ids);
+
 static struct i2c_driver fusion_i2c_drv = {
 	.driver = {
 		.name		= DRV_NAME,
+		.of_match_table = fusion_dt_ids,
 	},
 	.probe          = fusion_probe,
 	.remove         = fusion_remove,
