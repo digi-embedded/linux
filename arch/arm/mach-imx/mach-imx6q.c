@@ -231,7 +231,7 @@ static void __init imx6q_csi_mux_init(void)
 static void __init imx6q_lvds_cabc_init(void)
 {
 	struct device_node *np = NULL;
-	int ret, lvds0_gpio, lvds1_gpio;
+	int ret, lvds0_gpio, lvds1_en_gpio,  lvds1_gpio;
 
 	np = of_find_node_by_name(NULL, "lvds_cabc_ctrl");
 	if (!np)
@@ -239,10 +239,18 @@ static void __init imx6q_lvds_cabc_init(void)
 
 	lvds0_gpio = of_get_named_gpio(np, "lvds0-gpios", 0);
 	if (gpio_is_valid(lvds0_gpio)) {
-		ret = gpio_request_one(lvds0_gpio, GPIOF_OUT_INIT_LOW,
+		ret = gpio_request_one(lvds0_gpio, GPIOF_OUT_INIT_HIGH,
 				"LVDS0 CABC enable");
 		if (ret)
 			pr_warn("failed to request LVDS0 CABC gpio\n");
+	}
+
+	lvds1_en_gpio = of_get_named_gpio(np, "lvds1-auxen-gpios", 0);
+	if (gpio_is_valid(lvds1_en_gpio)) {
+		ret = gpio_request_one(lvds1_en_gpio, GPIOF_OUT_INIT_HIGH,
+				"LVDS1 AUX enable");
+		if (ret)
+			pr_warn("failed to request LVDS1 AUX gpio\n");
 	}
 
 	lvds1_gpio = of_get_named_gpio(np, "lvds1-gpios", 0);
