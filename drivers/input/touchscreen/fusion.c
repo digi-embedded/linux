@@ -73,19 +73,22 @@ static int fusion_register_input(void)
 	set_bit(EV_KEY, dev->evbit);
 	set_bit(EV_ABS, dev->evbit);
 
-#if defined(CONFIG_TOUCHSCREEN_FUSION_7_10_MULTITOUCH)
-	input_set_abs_params(dev, ABS_MT_POSITION_X, 0, fusion.info.xres-1, 0, 0);
-	input_set_abs_params(dev, ABS_MT_POSITION_Y, 0, fusion.info.yres-1, 0, 0);
-	input_set_abs_params(dev, ABS_MT_TOUCH_MAJOR, 0, 255, 0, 0);
-	input_set_abs_params(dev, ABS_MT_WIDTH_MAJOR, 0, 15, 0, 0);
-#else
-	set_bit(ABS_X, dev->absbit);
-	set_bit(ABS_Y, dev->absbit);
-	set_bit(ABS_PRESSURE, dev->absbit);
-	input_set_abs_params(dev, ABS_X, 0, fusion.info.xres-1, 0, 0);
-	input_set_abs_params(dev, ABS_Y, 0, fusion.info.yres-1, 0, 0);
-	input_set_abs_params(dev, ABS_PRESSURE, 0, 1 ,0, 0);
-#endif
+	if(fusion.multitouch){
+		input_set_abs_params(dev, ABS_MT_POSITION_X, 0,
+			fusion.info.xres-1, 0, 0);
+		input_set_abs_params(dev, ABS_MT_POSITION_Y, 0,
+			fusion.info.yres-1, 0, 0);
+		input_set_abs_params(dev, ABS_MT_TOUCH_MAJOR, 0, 255, 0, 0);
+		input_set_abs_params(dev, ABS_MT_WIDTH_MAJOR, 0, 15, 0, 0);
+	}
+	else {
+		set_bit(ABS_X, dev->absbit);
+		set_bit(ABS_Y, dev->absbit);
+		set_bit(ABS_PRESSURE, dev->absbit);
+		input_set_abs_params(dev, ABS_X, 0, fusion.info.xres-1, 0, 0);
+		input_set_abs_params(dev, ABS_Y, 0, fusion.info.yres-1, 0, 0);
+		input_set_abs_params(dev, ABS_PRESSURE, 0, 1 ,0, 0);
+	}
 
 	ret = input_register_device(dev);
 	if (ret < 0)
@@ -229,22 +232,23 @@ static void fusion_wq(struct work_struct *work)
 		}
 	}
 
-#if defined(CONFIG_TOUCHSCREEN_FUSION_7_10_MULTITOUCH)
-	input_report_abs(dev, ABS_MT_TOUCH_MAJOR, z1);
-	input_report_abs(dev, ABS_MT_WIDTH_MAJOR, 1);
-	input_report_abs(dev, ABS_MT_POSITION_X, x1);
-	input_report_abs(dev, ABS_MT_POSITION_Y, y1);
-	input_mt_sync(dev);
-	input_report_abs(dev, ABS_MT_TOUCH_MAJOR, z2);
-	input_report_abs(dev, ABS_MT_WIDTH_MAJOR, 2);
-	input_report_abs(dev, ABS_MT_POSITION_X, x2);
-	input_report_abs(dev, ABS_MT_POSITION_Y, y2);
-	input_mt_sync(dev);
-#else
-	input_report_abs(dev, ABS_PRESSURE, z1);
-	input_report_abs(dev, ABS_X, x1);
-	input_report_abs(dev, ABS_Y, y1);
-#endif
+	if( fusion.multitouch) {
+		input_report_abs(dev, ABS_MT_TOUCH_MAJOR, z1);
+		input_report_abs(dev, ABS_MT_WIDTH_MAJOR, 1);
+		input_report_abs(dev, ABS_MT_POSITION_X, x1);
+		input_report_abs(dev, ABS_MT_POSITION_Y, y1);
+		input_mt_sync(dev);
+		input_report_abs(dev, ABS_MT_TOUCH_MAJOR, z2);
+		input_report_abs(dev, ABS_MT_WIDTH_MAJOR, 2);
+		input_report_abs(dev, ABS_MT_POSITION_X, x2);
+		input_report_abs(dev, ABS_MT_POSITION_Y, y2);
+		input_mt_sync(dev);
+	}
+	else {
+		input_report_abs(dev, ABS_PRESSURE, z1);
+		input_report_abs(dev, ABS_X, x1);
+		input_report_abs(dev, ABS_Y, y1);
+	}
 
 	input_sync(dev);
 
@@ -269,7 +273,11 @@ static int fusion_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 {
 	int ret;
 	u8 ver_product, ver_id;
+	struct device_node *np = i2c->dev.of_node;
 	u32 version;
+
+	if (!np)
+                return -ENODEV;
 
 	if(!i2c->irq)
 	{
@@ -284,6 +292,10 @@ static int fusion_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 
 	printk(KERN_INFO "Fusion :Touchscreen registered with bus id (%d) with slave address 0x%x\n",
 			i2c_adapter_id(fusion.client->adapter),	fusion.client->addr);
+
+	fusion.multitouch = 0;
+	if (of_property_read_bool(np, "touchrev,is-multitouch"))
+		fusion.multitouch = 1;
 
 	/* Read out a lot of registers */
 	ret = fusion_read_u8(FUSION_VIESION_INFO_LO);

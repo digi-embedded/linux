@@ -520,6 +520,7 @@
 		reg = <0x10>;
 		interrupt-parent = <&gpio6>;
 		interrupts = <7 1>;
+		//touchrev,is-multitouch;
 		status = "okay";
 	};
 

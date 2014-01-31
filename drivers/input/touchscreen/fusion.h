@@ -83,5 +83,6 @@ struct fusion_data {
 	u8						tid2;
 	u8						f_num;
 	u8						save_points;
+	u8						multitouch;
 };
 
