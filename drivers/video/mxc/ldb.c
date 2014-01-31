@@ -170,8 +170,8 @@ static struct fb_videomode ldb_modedb[] = {
 	{
 	 "LDB-HSD101PFW2", 60, 1024, 600, 22222,
 	 0, 0,
-	 0, 0,
-	 176, 25,
+	 0, 2,
+	 176, 23,
 	 FB_SYNC_CLK_LAT_FALL,
 	 FB_VMODE_NONINTERLACED,
 	 FB_MODE_IS_DETAILED,},
