@@ -135,7 +135,7 @@
 		compatible = "fsl,mxc_sdc_fb";
 		disp_dev = "ldb";
 		interface_pix_fmt = "RGB666";
-		mode_str ="LDB-XGA";
+		mode_str ="LDB-HSD101PFW2";
 		default_bpp = <16>;
 		int_clk = <0>;
 		late_init = <0>;
@@ -189,7 +189,7 @@
 		compatible = "pwm-backlight";
 		pwms = <&pwm1 0 5000000>;
 		brightness-levels = <0 4 8 16 32 64 128 255>;
-		default-brightness-level = <7>;
+		default-brightness-level = <5>;
 	};
 
 	v4l2_cap_0 {
@@ -215,6 +215,7 @@
 
 	lvds_cabc_ctrl {
 		lvds0-gpios = <&gpio6 15 0>;
+		lvds1-auxen-gpios = <&gpio6 10 0>;
 		lvds1-gpios = <&gpio6 16 0>;
 	};
 
@@ -560,6 +561,7 @@
 				MX6QDL_PAD_NANDF_CLE__GPIO6_IO07 0x80000000
 				MX6QDL_PAD_GPIO_0__CCM_CLKO1    0x130b0
 				MX6QDL_PAD_NANDF_CS2__GPIO6_IO15 0x80000000
+				MX6QDL_PAD_NANDF_RB0__GPIO6_IO10 0x80000000
 				MX6QDL_PAD_NANDF_CS3__GPIO6_IO16 0x80000000
 				MX6QDL_PAD_EIM_D26__GPIO3_IO26 0x80000000
 				MX6QDL_PAD_EIM_CS1__GPIO2_IO24 0x80000000
@@ -582,16 +584,6 @@
 			>;
 		};
 	};
-};
-
-&ldb {
-	ipu_id = <1>;
-	disp_id = <1>;
-	ext_ref = <1>;
-	mode = "sep1";
-	sec_ipu_id = <1>;
-	sec_disp_id = <0>;
-	status = "okay";
 };
 
 &mipi_csi {
