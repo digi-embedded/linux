@@ -72,6 +72,7 @@ static int fusion_register_input(void)
 
 	set_bit(EV_KEY, dev->evbit);
 	set_bit(EV_ABS, dev->evbit);
+	set_bit(BTN_TOUCH, dev->keybit);
 
 	if(fusion.multitouch){
 		input_set_abs_params(dev, ABS_MT_POSITION_X, 0,
@@ -245,6 +246,7 @@ static void fusion_wq(struct work_struct *work)
 		input_mt_sync(dev);
 	}
 	else {
+		input_report_key(dev, BTN_TOUCH, fusion.tip1);
 		input_report_abs(dev, ABS_PRESSURE, z1);
 		input_report_abs(dev, ABS_X, x1);
 		input_report_abs(dev, ABS_Y, y1);
