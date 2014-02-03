@@ -248,8 +248,10 @@ static void fusion_wq(struct work_struct *work)
 	else {
 		input_report_key(dev, BTN_TOUCH, fusion.tip1);
 		input_report_abs(dev, ABS_PRESSURE, z1);
-		input_report_abs(dev, ABS_X, x1);
-		input_report_abs(dev, ABS_Y, y1);
+		if(fusion.tip1){
+			input_report_abs(dev, ABS_X, x1);
+			input_report_abs(dev, ABS_Y, y1);
+		}
 	}
 
 	input_sync(dev);
