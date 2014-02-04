@@ -77,7 +77,7 @@
 		compatible = "fsl,mxc_sdc_fb";
 		disp_dev = "ldb";
 		interface_pix_fmt = "RGB666";
-		mode_str ="LDB-XGA";
+		mode_str ="LDB-HSD101PFW2";
 		default_bpp = <16>;
 		int_clk = <0>;
 		late_init = <0>;
@@ -254,6 +254,15 @@
 		reg = <0x50>;
 	};
 
+	fusion@10 {
+		compatible = "touchrev,fusion-touch";
+		reg = <0x10>;
+		interrupt-parent = <&gpio7>;
+		interrupts = <11 1>;
+		//touchrev,is-multitouch;
+		status = "okay";
+	};
+
         sgtl5000: codec@0a {
 		compatible = "fsl,sgtl5000";
                 reg = <0x0a>;
@@ -276,7 +285,7 @@
 				MX6QDL_PAD_NANDF_D2__GPIO2_IO02 0x80000000
 				MX6QDL_PAD_NANDF_D3__GPIO2_IO03 0x80000000
 				MX6QDL_PAD_NANDF_ALE__GPIO6_IO08 0x80000000
-				MX6QDL_PAD_NANDF_CLE__GPIO6_IO07 0x80000000
+				MX6QDL_PAD_GPIO_16__GPIO7_IO11	 0x80000000
 				MX6QDL_PAD_GPIO_0__CCM_CLKO1    0x130b0
 				MX6QDL_PAD_NANDF_CS2__GPIO6_IO15 0x80000000
 				MX6QDL_PAD_NANDF_CS3__GPIO6_IO16 0x80000000
@@ -299,16 +308,6 @@
 			>;
 		};
 	};
-};
-
-&ldb {
-	ipu_id = <1>;
-	disp_id = <1>;
-	ext_ref = <1>;
-	mode = "sep1";
-	sec_ipu_id = <1>;
-	sec_disp_id = <0>;
-	status = "okay";
 };
 
 &mipi_csi {
