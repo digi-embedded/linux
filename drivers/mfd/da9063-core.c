@@ -191,6 +191,10 @@ static struct mfd_cell da9063_devs[] = {
 		.resources	= da9063_gpio_resources,
 		.of_compatible  = "dlg,da9063-gpio",
 	},
+	{
+		.name		= DA9063_DRVNAME_LEDS,
+		.of_compatible  = "dlg,da9063-leds",
+	},
 };
 
 static int da9063_init_page(struct da9063 *da9063)
