@@ -72,6 +72,17 @@
 			#gpio-cells = <2>;
 		};
 
+		leds {
+			compatible = "dlg,da9063-leds";
+
+			led-backlight@0xc6 {
+				dlg,led-gpio-reg = <0x1a 0xf0>;
+				dlg,led-reg = <0xc6>;
+				dlg,inverse-polarity;
+				linux,default-trigger = "backlight";
+			};
+		};
+
 		/* For DA9063 revision AD */
 		regulators {
 			compatible = "dlg,da9063-regulator";
