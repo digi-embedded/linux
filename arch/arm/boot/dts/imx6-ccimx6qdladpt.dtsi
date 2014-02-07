@@ -188,7 +188,7 @@
 
 &fec {
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_enet_1>;
+	pinctrl-0 = <&pinctrl_enet_4>;
 	phy-mode = "rgmii";
 	status = "okay";
 };
