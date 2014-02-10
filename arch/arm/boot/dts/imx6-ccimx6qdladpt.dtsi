@@ -192,6 +192,7 @@
 	phy-mode = "rgmii";
 	phy-reset-gpios = <&gpio1 25 2>;
 	phy-reset-duration = <10>;
+	phy-reset-wait = <1>;
 	status = "okay";
 };
 

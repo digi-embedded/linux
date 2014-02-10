@@ -429,6 +429,7 @@ struct fec_enet_private {
 	struct timer_list activityled_timer;
 	int     phy_reset_gpio;
 	int     reset_duration;
+	int     reset_wait;
 
 	struct ptp_clock *ptp_clock;
 	struct ptp_clock_info ptp_caps;

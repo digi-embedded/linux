@@ -2135,6 +2135,12 @@ static void fec_of_init(struct platform_device *pdev)
 	if ((fep->reset_duration > 1000) || (fep->reset_duration == 0))
 		fep->reset_duration = 1;
 
+	of_property_read_u32(np, "phy-reset-wait",
+				 &fep->reset_wait);
+	/* A sane reset duration should not be longer than 1s */
+	if ((fep->reset_wait > 1000) || (fep->reset_wait == 0))
+		fep->reset_wait = 1;
+
 	fep->phy_reset_gpio = of_get_named_gpio(np, "phy-reset-gpios", 0);
 	if (!gpio_is_valid(fep->phy_reset_gpio))
 		return;
@@ -2157,6 +2163,7 @@ static void fec_reset_phy(struct platform_device *pdev)
 		gpio_set_value(fep->phy_reset_gpio, 0);
 		msleep(fep->reset_duration);
 		gpio_set_value(fep->phy_reset_gpio, 1);
+		msleep(fep->reset_wait);
 	}
 }
 
