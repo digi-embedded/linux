@@ -95,26 +95,38 @@
 
 			bcore1: DA9063_BCORE1 {
 				regulator-name = "DA9063_BCORE1";
+				regulator-boot-on;
+				regulator-always-on;
 			};
 
 			bcore2: DA9063_BCORE2 {
 				regulator-name = "DA9063_BCORE2";
+				regulator-boot-on;
+				regulator-always-on;
 			};
 
 			bpro: DA9063_BPRO {
 				regulator-name = "DA9063_BPRO";
+				regulator-boot-on;
+				regulator-always-on;
 			};
 
 			bmem: DA9063_BMEM {
 				regulator-name = "DA9063_BMEM";
+				regulator-boot-on;
+				regulator-always-on;
 			};
 
 			bio: DA9063_BIO {
 				regulator-name = "DA9063_BIO";
+				regulator-boot-on;
+				regulator-always-on;
 			};
 
 			bperi: DA9063_BPERI {
 				regulator-name = "DA9063_BPERI";
+				regulator-boot-on;
+				regulator-always-on;
 			};
 
 			/*
@@ -137,6 +149,8 @@
 
 			ldo3: DA9063_LDO3 {
 				regulator-name = "DA9063_LDO3";
+				regulator-boot-on;
+				regulator-always-on;
 			};
 
 			ldo4: DA9063_LDO4 {
@@ -145,6 +159,8 @@
 
 			ldo5: DA9063_LDO5 {
 				regulator-name = "DA9063_LDO5";
+				regulator-boot-on;
+				regulator-always-on;
 			};
 
 			ldo6: DA9063_LDO6 {
@@ -153,6 +169,8 @@
 
 			ldo7: DA9063_LDO7 {
 				regulator-name = "DA9063_LDO7";
+				regulator-boot-on;
+				regulator-always-on;
 			};
 
 			ldo8: DA9063_LDO8 {
@@ -169,6 +187,8 @@
 
 			ldo11: DA9063_LDO11 {
 				regulator-name = "DA9063_LDO11";
+				regulator-boot-on;
+				regulator-always-on;
 			};
 
 			out_32k: DA9063_32K_OUT {
