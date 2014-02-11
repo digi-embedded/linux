@@ -195,6 +195,7 @@
 	phy-reset-wait = <1>;
 	phy-supply = <&ldo4>;
 	status = "okay";
+	/*local-mac-address = [00 FA 3E 00 00 05];*/
 };
 
 &gpc {
