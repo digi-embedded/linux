@@ -1352,7 +1352,7 @@ static int fec_enet_mii_probe(struct net_device *ndev)
 		break;
 	}
 
-	if (phy_id >= PHY_MAX_ADDR) {
+	if (phy_id >= PHY_MAX_ADDR-1) {
 		netdev_info(ndev, "no PHY, assuming direct connection to switch\n");
 		strncpy(mdio_bus_id, "fixed-0", MII_BUS_ID_SIZE);
 		phy_id = 0;
@@ -2356,6 +2356,8 @@ fec_probe(struct platform_device *pdev)
 			goto failed_irq;
 		}
 	}
+
+	fec_reset_phy(pdev);
 
 	ret = fec_enet_mii_init(pdev);
 	if (ret)
