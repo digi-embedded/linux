@@ -155,6 +155,8 @@
 
 			ldo4: DA9063_LDO4 {
 				regulator-name = "DA9063_LDO4";
+				regulator-min-microvolt = <2500000>;
+				regulator-max-microvolt = <2500000>;
 			};
 
 			ldo5: DA9063_LDO5 {
