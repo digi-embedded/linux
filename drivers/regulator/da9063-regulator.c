@@ -1087,6 +1087,9 @@ static int da9063_regulator_probe(struct platform_device *pdev)
 			bmem_bio_merged)) != 0 )
 			goto err;
 
+		if( (ret = da9063_set_operation_mode(pdev, regulator)) < 0 )
+			goto err;
+
 		regulator->rdev = regulator_register(&regulator->desc, &config);
 		if (IS_ERR(regulator->rdev)) {
 			dev_err(&pdev->dev, "failed to register regulator %s\n",
@@ -1094,9 +1097,6 @@ static int da9063_regulator_probe(struct platform_device *pdev)
 			ret = PTR_ERR(regulator->rdev);
 			goto err;
 		}
-
-		if( (ret = da9063_set_operation_mode(pdev, regulator)) < 0 )
-			goto err;
 
 	}
 
