@@ -64,6 +64,12 @@
 		model = "sgtl5000-audio";
 		ssi-controller = <&ssi2>;
 		audio-codec = <&sgtl5000>;
+		audio-routing =
+                        "MIC_IN", "Mic Jack",
+                        "Mic Jack", "Mic Bias",
+                        "Headphone Jack", "HP_OUT";
+		mux-int-port = <2>;
+		mux-ext-port = <3>;
 	};
 
 	sound-hdmi {
@@ -261,12 +267,13 @@
 		status = "okay";
 	};
 
-        sgtl5000: codec@0a {
+	sgtl5000: codec@0a {
 		compatible = "fsl,sgtl5000";
                 reg = <0x0a>;
-                /* VDDA-supply = <&reg_3p3v>; */
-                /* VDDIO-supply = <&reg_3p3v>; */
-        };
+		clock-frequency = <13000000>;
+		VDDA-supply = <&bperi>;
+		VDDIO-supply = <&bperi>;
+	};
 };
 
 &iomuxc {
