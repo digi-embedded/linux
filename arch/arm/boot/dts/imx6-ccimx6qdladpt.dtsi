@@ -341,6 +341,12 @@
 	status = "okay";
 };
 
+&uart5 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_uart5_1>;
+	status = "okay";
+};
+
 &usbh1 {
 	status = "okay";
 };
