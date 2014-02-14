@@ -34,6 +34,7 @@
 #include <linux/io.h>
 #include <linux/uaccess.h>
 #include <linux/of.h>
+#include <linux/micrel_phy.h>
 
 #include <asm/irq.h>
 
@@ -811,14 +812,30 @@ EXPORT_SYMBOL(genphy_setup_forced);
 int genphy_restart_aneg(struct phy_device *phydev)
 {
 	int ctl = phy_read(phydev, MII_BMCR);
+	struct phy_driver *pdrv = phydev->drv;
 
 	if (ctl < 0)
 		return ctl;
 
-	ctl |= BMCR_ANENABLE | BMCR_ANRESTART;
-
 	/* Don't isolate the PHY if we're negotiating */
 	ctl &= ~BMCR_ISOLATE;
+
+	if (pdrv->phy_id == PHY_ID_KSZ8051 ||
+	    pdrv->phy_id == PHY_ID_KSZ8031 ||
+	    pdrv->phy_id == PHY_ID_KSZ8021) {
+
+		/* Don't use the BMCR_ANRESTART in case of the these
+		 * Micrel chips.
+		 */
+		ctl &= ~(BMCR_ANENABLE);
+		phy_write(phydev, MII_BMCR, ctl);
+
+		udelay(500);
+
+		ctl |= (BMCR_ANENABLE);
+	}
+	else
+		ctl |= (BMCR_ANENABLE | BMCR_ANRESTART);
 
 	return phy_write(phydev, MII_BMCR, ctl);
 }
