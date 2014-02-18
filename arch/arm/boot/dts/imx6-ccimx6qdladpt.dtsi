@@ -170,6 +170,11 @@
 		digi,pwrdown-gpios = <&gpio_extender 3 0>;
 		/* U-Boot will fill in the MAC address here */
 	};
+
+	bluetooth {
+		digi,pwrdown-gpios = <&gpio_extender 4 0>;
+		/* U-Boot will fill in the MAC address here */
+	};
 };
 
 &audmux {

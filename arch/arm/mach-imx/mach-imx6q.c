@@ -288,6 +288,32 @@ static void imx6q_wifi_init (void)
 	}
 }
 
+static void imx6q_bt_init (void)
+{
+	struct device_node *np;
+	int pwrdown_gpio;
+	enum of_gpio_flags flags;
+
+	np = of_find_node_by_path("/bluetooth");
+	if (!np)
+		return;
+
+	/* Read the power down gpio */
+	pwrdown_gpio = of_get_named_gpio_flags(np, "digi,pwrdown-gpios", 0, &flags);
+	if (gpio_is_valid(pwrdown_gpio)) {
+		if (!gpio_request_one(pwrdown_gpio, GPIOF_DIR_OUT,
+			"bt_chip_pwd_l")) {
+			/* Start with Power pin low, then set high to power  */
+			gpio_set_value_cansleep(pwrdown_gpio, 1);
+			/*
+			* Free the chip PWD pin to allow controlling
+			* it from user space
+			*/
+			gpio_free(pwrdown_gpio);
+		}
+	}
+}
+
 static void __init imx6q_init_machine(void)
 {
 	struct device *parent;
@@ -414,6 +440,7 @@ static void __init imx6q_init_late(void)
 	}
 
 	imx6q_wifi_init();
+	imx6q_bt_init();
 }
 
 static void __init imx6q_map_io(void)
