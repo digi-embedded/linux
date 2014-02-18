@@ -225,6 +225,8 @@ static int hw_device_init(struct ci_hdrc *ci, void __iomem *base)
 	if (ci->hw_ep_max > ENDPT_MAX)
 		return -ENODEV;
 
+	ci_hdrc_enter_lpm(ci, false);
+
 	/* Disable all interrupts bits */
 	hw_write(ci, OP_USBINTR, 0xffffffff, 0);
 
@@ -718,8 +720,10 @@ static int ci_hdrc_remove(struct platform_device *pdev)
 	dbg_remove_files(ci);
 	free_irq(ci->irq, ci);
 	ci_role_destroy(ci);
+	ci_hdrc_enter_lpm(ci, true);
 	ci_usb_phy_destroy(ci);
 	kfree(ci->hw_bank.regmap);
+
 	return 0;
 }
 
