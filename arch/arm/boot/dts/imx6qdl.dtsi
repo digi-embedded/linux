@@ -370,7 +370,7 @@
 				clock-names = "ipg", "per";
 			};
 
-			can1: flexcan@02090000 {
+			flexcan1: can@02090000 {
 				compatible = "fsl,imx6q-flexcan";
 				pinctrl-names = "default";
 				pinctrl-0 = <&pinctrl_flexcan1_1>;
@@ -382,7 +382,7 @@
 				status = "disabled";
 			};
 
-			can2: flexcan@02094000 {
+			flexcan2: can@02094000 {
 				compatible = "fsl,imx6q-flexcan";
 				pinctrl-names = "default";
 				pinctrl-0 = <&pinctrl_flexcan2_1>;
