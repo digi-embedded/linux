@@ -145,6 +145,8 @@
 
 			ldo2: DA9063_LDO2 {
 				regulator-name = "DA9063_LDO2";
+				regulator-boot-on;
+				regulator-always-on;
 			};
 
 			ldo3: DA9063_LDO3 {
