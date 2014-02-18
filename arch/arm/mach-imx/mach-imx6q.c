@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2013 Freescale Semiconductor, Inc.
+ * Copyright 2011-2014 Freescale Semiconductor, Inc.
  * Copyright 2011 Linaro Ltd.
  *
  * The code contained herein is licensed under the GNU General Public
@@ -232,46 +232,6 @@ static void __init imx6q_csi_mux_init(void)
 	}
 }
 
-/*
- * Disable Hannstar LVDS panel CABC function.
- * This function turns the panel's backlight density automatically
- * according to the content shown on the panel which may cause
- * annoying unstable backlight issue.
- */
-static void __init imx6q_lvds_cabc_init(void)
-{
-	struct device_node *np = NULL;
-	int ret, lvds0_gpio, lvds1_en_gpio,  lvds1_gpio;
-
-	np = of_find_node_by_name(NULL, "lvds_cabc_ctrl");
-	if (!np)
-		return;
-
-	lvds0_gpio = of_get_named_gpio(np, "lvds0-gpios", 0);
-	if (gpio_is_valid(lvds0_gpio)) {
-		ret = gpio_request_one(lvds0_gpio, GPIOF_OUT_INIT_HIGH,
-				"LVDS0 CABC enable");
-		if (ret)
-			pr_warn("failed to request LVDS0 CABC gpio\n");
-	}
-
-	lvds1_en_gpio = of_get_named_gpio(np, "lvds1-auxen-gpios", 0);
-	if (gpio_is_valid(lvds1_en_gpio)) {
-		ret = gpio_request_one(lvds1_en_gpio, GPIOF_OUT_INIT_HIGH,
-				"LVDS1 AUX enable");
-		if (ret)
-			pr_warn("failed to request LVDS1 AUX gpio\n");
-	}
-
-	lvds1_gpio = of_get_named_gpio(np, "lvds1-gpios", 0);
-	if (gpio_is_valid(lvds1_gpio)) {
-		ret = gpio_request_one(lvds1_gpio, GPIOF_OUT_INIT_LOW,
-				"LVDS1 CABC enable");
-		if (ret)
-			pr_warn("failed to request LVDS1 CABC gpio\n");
-	}
-}
-
 static void imx6q_wifi_init (void)
 {
 	struct device_node *np;
@@ -414,7 +374,6 @@ static void __init imx6q_init_machine(void)
 	imx_anatop_init();
 	imx6_pm_init();
 	imx6q_csi_mux_init();
-	imx6q_lvds_cabc_init();
 }
 
 #define OCOTP_CFG3			0x440
