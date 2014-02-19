@@ -348,15 +348,19 @@ int phy_mii_ioctl(struct phy_device *phydev, struct ifreq *ifr, int cmd)
 					phydev->autoneg = AUTONEG_ENABLE;
 					phydev->link_timeout = PHY_AN_TIMEOUT;
 				}
-				if ((!phydev->autoneg) && (val & BMCR_FULLDPLX))
-					phydev->duplex = DUPLEX_FULL;
-				else
-					phydev->duplex = DUPLEX_HALF;
-				if (!phydev->autoneg && (val & BMCR_SPEED1000))
-					phydev->speed = SPEED_1000;
-				else if (!phydev->autoneg &&
-					 (val & BMCR_SPEED100))
-					phydev->speed = SPEED_100;
+				if (!phydev->autoneg) {
+					if (val & BMCR_FULLDPLX)
+						phydev->duplex = DUPLEX_FULL;
+					else
+						phydev->duplex = DUPLEX_HALF;
+
+					if (val & BMCR_SPEED1000)
+						phydev->speed = SPEED_1000;
+					else if (val & BMCR_SPEED100)
+						phydev->speed = SPEED_100;
+					else
+						phydev->speed = SPEED_10;
+				}
 				break;
 			case MII_ADVERTISE:
 				phydev->advertising = val;
