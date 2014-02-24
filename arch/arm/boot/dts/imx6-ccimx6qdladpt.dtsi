@@ -190,11 +190,18 @@
 };
 
 &ecspi2 {
-	fsl,spi-num-chipselects = <1>;
-	cs-gpios = <&gpio5 29 0>;
+	fsl,spi-num-chipselects = <2>;
+	cs-gpios = <&gpio5 29 0>,<&gpio2 27 0>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_ecspi2_1>;
 	status = "okay";
+
+	spidev@0 {
+		compatible = "spidev";
+		reg = <0>;
+		spi-max-frequency = <4000000>;
+		status = "okay";
+	};
 };
 
 &fec {
