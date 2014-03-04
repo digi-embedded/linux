@@ -751,20 +751,28 @@ void phy_state_machine(struct work_struct *work)
 		 * and AN is enabled, disable AN, wait 500usec and
 		 * enable AN again to workaround PHY errata.
 		 */
-		if (phydev->autoneg &&
-				(pdrv->phy_id == PHY_ID_KSZ8051 ||
-				 pdrv->phy_id == PHY_ID_KSZ8031 ||
-				 pdrv->phy_id == PHY_ID_KSZ8021)) {
+		if ( phydev->autoneg &&
+				((pdrv->phy_id & MICREL_PHY_ID_MASK) ==
+				 (PHY_ID_KSZ8031 & MICREL_PHY_ID_MASK)) ) {
 
 			if (0 == phydev->link_timeout--) {
 				int regval;
 
 				regval = phy_read(phydev, MII_BMCR);
-				phy_write(phydev, MII_BMCR,
-						regval & ~BMCR_ANENABLE);
-				udelay(500);
-				phy_write(phydev, MII_BMCR,
-						regval | BMCR_ANENABLE);
+
+				/* Toggle ANE only for PHYs before rev A2 */
+				if ((pdrv->phy_id & 0x0000000F) < 6) {
+					phy_write(phydev, MII_BMCR,
+							regval & ~BMCR_ANENABLE);
+					udelay(500);
+					phy_write(phydev, MII_BMCR,
+							regval | BMCR_ANENABLE);
+				}
+				else {
+					phy_write(phydev, MII_BMCR,
+							regval | BMCR_ANRESTART);
+				}
+
 				phydev->link_timeout = PHY_AN_TIMEOUT;
 			}
 		}
