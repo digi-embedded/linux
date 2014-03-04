@@ -820,14 +820,18 @@ int genphy_restart_aneg(struct phy_device *phydev)
 	/* Don't isolate the PHY if we're negotiating */
 	ctl &= ~BMCR_ISOLATE;
 
-	if (pdrv->phy_id == PHY_ID_KSZ8051 ||
-	    pdrv->phy_id == PHY_ID_KSZ8031 ||
-	    pdrv->phy_id == PHY_ID_KSZ8021) {
+	/* Micrel KSZ8021/8031/8051 before silicon rev-A2 have an errata
+	 * to not use the ANRESTART flag, instead toggle the ANE flag to
+	 * restart the autonegotiation.
+	 */
+	if ( ((pdrv->phy_id & MICREL_PHY_ID_MASK) ==
+		(PHY_ID_KSZ8031 & MICREL_PHY_ID_MASK)) &&
+		((pdrv->phy_id & 0x0000000F) < 6) ) {
 
-		/* Don't use the BMCR_ANRESTART in case of the these
-		 * Micrel chips.
-		 */
+		/* Set also reg to 100/Full to not send 10Mbit link pulses */
+		ctl |= (BMCR_SPEED100 | BMCR_FULLDPLX);
 		ctl &= ~(BMCR_ANENABLE);
+
 		phy_write(phydev, MII_BMCR, ctl);
 
 		udelay(500);
