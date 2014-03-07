@@ -387,7 +387,8 @@ static inline void imx6q_enet_init(void)
 {
 	imx6_enet_mac_init("fsl,imx6q-fec");
 	imx6q_enet_phy_init();
-	imx6q_1588_init();
+	if (!of_machine_is_compatible("digi,ccimx6adpt"))
+		imx6q_1588_init();
 }
 
 /* Add auxdata to pass platform data */
