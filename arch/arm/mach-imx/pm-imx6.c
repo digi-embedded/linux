@@ -329,6 +329,7 @@ static struct map_desc imx6_pm_io_desc[] __initdata = {
 	imx_map_entry(MX6Q, GPC, MT_DEVICE),
 	imx_map_entry(MX6Q, L2, MT_DEVICE),
 	imx_map_entry(MX6Q, IRAM_TLB, MT_MEMORY_NONCACHED),
+	imx_map_entry(MX6Q, GPIO2, MT_DEVICE),
 };
 
 void __init imx6_pm_map_io(void)

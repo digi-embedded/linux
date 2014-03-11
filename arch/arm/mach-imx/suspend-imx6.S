@@ -31,6 +31,8 @@
 #define MX6Q_CCM_CCR	0x0
 #define MX6Q_ANATOP_CORE	0x140
 
+#define HW_PINCTRL_GPIO35_ADDR IMX_IO_P2V(MX6Q_GPIO2_BASE_ADDR)
+
 	.align 3
 
 	.macro	imx6sl_ddr_io_save
@@ -458,7 +460,25 @@
 #endif
 	.endm
 
+#define LEDR1 r11
+#define LEDR2 r12
+.macro ledtoggle
+    ldr LEDR2, [LEDR1]
+    orr LEDR2, LEDR2, #(0x8)
+    str LEDR2, [LEDR1]
+.endm
+
 ENTRY(imx6_suspend)
+
+/**** Debug via user LED 2
+	* Store address of GPIO35 - user led 2
+	mov LEDR1, #(HW_PINCTRL_GPIO35_ADDR & 0x000000FF)
+	orr LEDR1, LEDR1, #(HW_PINCTRL_GPIO35_ADDR & 0x0000FF00)
+	orr LEDR1, LEDR1, #(HW_PINCTRL_GPIO35_ADDR & 0x00FF0000)
+	orr LEDR1, LEDR1, #(HW_PINCTRL_GPIO35_ADDR & 0xFF000000)
+
+	ledtoggle
+*/
 
 	/*
 	 * counting the resume address in iram
