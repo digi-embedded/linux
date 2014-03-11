@@ -600,6 +600,13 @@ static int fec_enet_txq_submit_skb(struct fec_enet_priv_tx_q *txq,
 	bdp->cbd_datlen = buflen;
 	bdp->cbd_bufaddr = addr;
 
+	/*
+	 * We need the preceding stores to the descriptor to complete
+	 * before updating the status field, which hands it over to the
+	 * hardware.  The corresponding rmb() is "in the hardware".
+	 */
+	wmb();
+
 	/* Send it on its way.  Tell FEC it's ready, interrupt when done,
 	 * it's the last BD of the frame, and to put the CRC on the end.
 	 */
