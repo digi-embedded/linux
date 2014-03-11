@@ -336,6 +336,7 @@ static int da9063_rtc_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, rtc);
 
+	device_init_wakeup(&pdev->dev, 1);
 	rtc->chip_revision = da9063->revision;
 	rtc->hw = da9063;
 	rtc->rtc_dev = rtc_device_register(DA9063_DRVNAME_RTC, &pdev->dev,
