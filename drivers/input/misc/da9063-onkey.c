@@ -128,7 +128,7 @@ static irqreturn_t da9063_onkey_irq_handler(int irq, void *data)
 		schedule_delayed_work(&onkey->work, 0);
 	}
 	else {
-		dev_notice(&onkey->input->dev, "KEY_SLEEP pressed.\n");
+		dev_dbg(&onkey->input->dev, "KEY_SLEEP pressed.\n");
 		input_report_key(onkey->input, KEY_SLEEP, 1);
 		input_report_key(onkey->input, KEY_SLEEP, 0);
 		input_sync(onkey->input);
