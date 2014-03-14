@@ -75,10 +75,15 @@
 		leds {
 			compatible = "dlg,da9063-leds";
 
-			led-backlight@0xc6 {
+			lvds0-backlight@0xc6 {
+				dlg,led-gpio-reg = <0x1c 0xf0>;
+				dlg,led-reg = <0xc8>;
+				linux,default-trigger = "backlight";
+			};
+
+			lvds1-backlight@0xc6 {
 				dlg,led-gpio-reg = <0x1a 0xf0>;
 				dlg,led-reg = <0xc6>;
-				dlg,inverse-polarity;
 				linux,default-trigger = "backlight";
 			};
 		};
@@ -238,10 +243,10 @@
 
 &ldb {
 	ipu_id = <0>;
-	disp_id = <1>;
+	disp_id = <0>;
 	ext_ref = <1>;
-	mode = "sin1";
+	mode = "sin0";
 	sec_ipu_id = <0>;
-	sec_disp_id = <0>;
+	sec_disp_id = <1>;
 	status = "okay";
 };
