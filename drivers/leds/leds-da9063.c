@@ -132,7 +132,7 @@ static int da9063_led_probe(struct platform_device *pdev)
 		led->cdev.brightness = DA9063_HALF_BRIGHTNESS;
 		led->cdev.max_brightness = DA9063_MAX_BRIGHTNESS;
 		led->brightness = DA9063_HALF_BRIGHTNESS;
-		led->led_index = i++;
+		led->led_index = i;
 		of_property_read_u32(np, "dlg,led-reg", &led->led_reg);
 		of_property_read_u32_index(np, "dlg,led-gpio-reg", 0, &led->gpio_reg);
 		of_property_read_u32_index(np, "dlg,led-gpio-reg", 1, &led->gpio_mask);
@@ -148,18 +148,18 @@ static int da9063_led_probe(struct platform_device *pdev)
 			goto err_register;
 		}
 
+		error = da9063_configure_leds(led);
+		if (error) {
+			dev_err(&pdev->dev, "Failed to configure GPIO LED%d\n", error);
+			goto err_register;
+		}
+
 		error = da9063_set_led_brightness(led);
 		if (error) {
 			dev_err(&pdev->dev, "Unable to init led %d\n",
 				led->led_index);
 			continue;
 		}
-	}
-
-	error = da9063_configure_leds(led);
-	if (error) {
-		dev_err(&pdev->dev, "Failed to configure GPIO LED%d\n", error);
-		goto err_register;
 	}
 
 	platform_set_drvdata(pdev, &da9063_leds);
