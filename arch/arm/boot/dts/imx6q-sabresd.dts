@@ -30,29 +30,18 @@
 	status = "okay";
 };
 
-
 &mxcfb2 {
-	status = "disabled";
-};
-
-&mxcfb3 {
-	status = "disabled";
-};
-
-&mxcfb4 {
-	status = "disabled";
-};
-
-&sata {
 	status = "okay";
 };
 
-&ldb {
-	ipu_id = <0>;
-	disp_id = <1>;
-	ext_ref = <1>;
-	mode = "sin1";
-	sec_ipu_id = <0>;
-	sec_disp_id = <0>;
+&mxcfb3 {
+	status = "okay";
+};
+
+&mxcfb4 {
+	status = "okay";
+};
+
+&sata {
 	status = "okay";
 };
