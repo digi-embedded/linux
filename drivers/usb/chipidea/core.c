@@ -611,8 +611,6 @@ static int ci_hdrc_probe(struct platform_device *pdev)
 		return -ENODEV;
 	}
 
-	hw_phymode_configure(ci);
-
 	ret = ci_usb_phy_init(ci);
 	if (ret) {
 		dev_err(dev, "unable to init phy: %d\n", ret);
@@ -630,6 +628,8 @@ static int ci_hdrc_probe(struct platform_device *pdev)
 
 	ci_get_otg_capable(ci);
 
+	hw_phymode_configure(ci);
+	
 	if (!ci->platdata->phy_mode)
 		ci->platdata->phy_mode = of_usb_get_phy_mode(of_node);
 
@@ -638,7 +638,7 @@ static int ci_hdrc_probe(struct platform_device *pdev)
 
 	if (ci->platdata->dr_mode == USB_DR_MODE_UNKNOWN)
 		ci->platdata->dr_mode = USB_DR_MODE_OTG;
-
+	
 	dr_mode = ci->platdata->dr_mode;
 
 	ci->supports_runtime_pm = !!(ci->platdata->flags &
