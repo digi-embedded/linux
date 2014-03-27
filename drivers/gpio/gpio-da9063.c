@@ -128,7 +128,7 @@ static int da9063_gpio_to_irq(struct gpio_chip *gc, u32 offset)
 	struct da9063 *da9063 = gpio->da9063;
 
 	return irq_find_mapping(da9063->irq_domain,
-				  da9063->irq_base + offset);
+				  DA9063_IRQ_GPI0 + offset);
 }
 
 static struct gpio_chip reference_gp = {
