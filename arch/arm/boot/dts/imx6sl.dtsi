@@ -13,6 +13,7 @@
 
 / {
 	aliases {
+		ethernet0 = &fec;
 		serial0 = &uart1;
 		serial1 = &uart2;
 		serial2 = &uart3;
