@@ -184,7 +184,7 @@ static void fusion_wq(struct work_struct *work)
 	if (fusion_read_sensor() < 0)
 		return;
 
-	printk(KERN_DEBUG "tip1, tid1, x1, y1, z1 (%x,%x,%d,%d,%d); tip2, tid2, x2, y2, z2 (%x,%x,%d,%d,%d)\n",
+	dev_dbg(&fusion.client->dev,"tip1, tid1, x1, y1, z1 (%x,%x,%d,%d,%d); tip2, tid2, x2, y2, z2 (%x,%x,%d,%d,%d)\n",
 		fusion.tip1, fusion.tid1, fusion.x1, fusion.y1, fusion.z1,
 		fusion.tip2, fusion.tid2, fusion.x2, fusion.y2, fusion.z2);
 
