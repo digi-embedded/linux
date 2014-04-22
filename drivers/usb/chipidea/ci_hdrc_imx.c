@@ -302,8 +302,7 @@ static int ci_hdrc_imx_probe(struct platform_device *pdev)
 		(imx_platform_flag->flags & CI_HDRC_IMX_HAS_HSIC))
 		pdata.flags |= CI_HDRC_IMX_IS_HSIC;
 
-	if (of_find_property(np, "imx6-usb-charger-detection", NULL) &&
-			IS_ENABLED(CONFIG_IMX6_USB_CHARGER))
+	if (of_find_property(np, "imx6-usb-charger-detection", NULL))
 		data->imx6_usb_charger_detection = true;
 
 	if (of_find_property(np, "fsl,anatop", NULL)) {
