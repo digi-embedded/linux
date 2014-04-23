@@ -146,6 +146,11 @@
 
 #endif /* CONFIG_M5272 */
 
+#define BF(value, field) (((value) << BP_##field) & BM_##field)
+#define BP_FEC_MII_SPEED_HOLDTIME	8
+#define BM_FEC_MII_SPEED_HOLDTIME	0x700
+#define BP_FEC_MII_SPEED_MII_SPEED	1
+#define BM_FEC_MII_SPEED_MII_SPEED	0x7e
 
 /*
  *	Define the buffer descriptor structure.
@@ -243,7 +248,7 @@ struct bufdesc_ex {
  * the skbuffer directly.
  */
 
-#define FEC_ENET_RX_PAGES	8
+#define FEC_ENET_RX_PAGES	32
 #define FEC_ENET_RX_FRSIZE	2048
 #define FEC_ENET_RX_FRPPG	(PAGE_SIZE / FEC_ENET_RX_FRSIZE)
 #define RX_RING_SIZE		(FEC_ENET_RX_FRPPG * FEC_ENET_RX_PAGES)
@@ -420,6 +425,7 @@ struct fec_enet_private {
 	struct	phy_device *phy_dev;
 	int	mii_timeout;
 	uint	phy_speed;
+	uint	phy_holdtime;
 	phy_interface_t	phy_interface;
 	int	link;
 	int	full_duplex;

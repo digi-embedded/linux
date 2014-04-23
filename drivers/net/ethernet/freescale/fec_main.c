@@ -589,8 +589,10 @@ fec_restart(struct net_device *ndev, int duplex)
 
 	fep->full_duplex = duplex;
 
-	/* Set MII speed */
-	writel(fep->phy_speed, fep->hwp + FEC_MII_SPEED);
+	/* Set MII speed and holdtime */
+	writel(BF(fep->phy_holdtime, FEC_MII_SPEED_HOLDTIME) |
+	       BF(fep->phy_speed, FEC_MII_SPEED_MII_SPEED),
+	       fep->hwp + FEC_MII_SPEED);
 
 #if !defined(CONFIG_M5272)
 	/* set RX checksum */
@@ -727,7 +729,9 @@ fec_stop(struct net_device *ndev)
 	/* Whack a reset.  We should wait for this. */
 	writel(1, fep->hwp + FEC_ECNTRL);
 	udelay(10);
-	writel(fep->phy_speed, fep->hwp + FEC_MII_SPEED);
+	writel(BF(fep->phy_holdtime, FEC_MII_SPEED_HOLDTIME) |
+	       BF(fep->phy_speed, FEC_MII_SPEED_MII_SPEED),
+	       fep->hwp + FEC_MII_SPEED);
 	writel(FEC_DEFAULT_IMASK, fep->hwp + FEC_IMASK);
 
 	if (fep->bufdesc_ex && (fep->hwts_tx_en_ioctl ||
@@ -1454,8 +1458,10 @@ static int fec_enet_mii_init(struct platform_device *pdev)
 	fep->phy_speed = DIV_ROUND_UP(clk_get_rate(fep->clk_ipg), 5000000);
 	if (id_entry->driver_data & FEC_QUIRK_ENET_MAC)
 		fep->phy_speed--;
-	fep->phy_speed <<= 1;
-	writel(fep->phy_speed, fep->hwp + FEC_MII_SPEED);
+	fep->phy_holdtime = DIV_ROUND_UP(clk_get_rate(fep->clk_ahb), 100000000);
+	writel(BF(fep->phy_holdtime, FEC_MII_SPEED_HOLDTIME) |
+	       BF(fep->phy_speed, FEC_MII_SPEED_MII_SPEED),
+	       fep->hwp + FEC_MII_SPEED);
 
 	fep->mii_bus = mdiobus_alloc();
 	if (fep->mii_bus == NULL) {

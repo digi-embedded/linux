@@ -36,6 +36,7 @@
 #include <linux/timer.h>
 #include <linux/workqueue.h>
 #include <linux/mdio.h>
+#include <linux/micrel_phy.h>
 
 #include <linux/atomic.h>
 #include <asm/io.h>
@@ -333,8 +334,10 @@ int phy_mii_ioctl(struct phy_device *phydev,
 			case MII_BMCR:
 				if ((val & (BMCR_RESET|BMCR_ANENABLE)) == 0)
 					phydev->autoneg = AUTONEG_DISABLE;
-				else
+				else {
 					phydev->autoneg = AUTONEG_ENABLE;
+					phydev->link_timeout = PHY_AN_TIMEOUT;
+				}
 				if ((!phydev->autoneg) && (val & BMCR_FULLDPLX))
 					phydev->duplex = DUPLEX_FULL;
 				else
@@ -743,6 +746,7 @@ void phy_state_machine(struct work_struct *work)
 	struct delayed_work *dwork = to_delayed_work(work);
 	struct phy_device *phydev =
 			container_of(dwork, struct phy_device, state_queue);
+	struct phy_driver *pdrv = phydev->drv;
 	int needs_aneg = 0;
 	int err = 0;
 
@@ -799,6 +803,27 @@ void phy_state_machine(struct work_struct *work)
 			}
 			break;
 		case PHY_NOLINK:
+			/* If PHY is Micrel KSZ8051, KSZ8031, KSZ8021
+			 * and AN is enabled, disable AN, wait 500usec and
+			 * enable AN again to workaround PHY errata.
+			 */
+			if (phydev->autoneg &&
+			    (pdrv->phy_id == PHY_ID_KSZ8051 ||
+			     pdrv->phy_id == PHY_ID_KSZ8031 ||
+			     pdrv->phy_id == PHY_ID_KSZ8021)) {
+
+				if (0 == phydev->link_timeout--) {
+					int regval;
+
+					regval = phy_read(phydev, MII_BMCR);
+					phy_write(phydev, MII_BMCR,
+						  regval & ~BMCR_ANENABLE);
+					udelay(500);
+					phy_write(phydev, MII_BMCR,
+						  regval | BMCR_ANENABLE);
+					phydev->link_timeout = PHY_AN_TIMEOUT;
+				}
+			}
 			err = phy_read_status(phydev);
 
 			if (err)
