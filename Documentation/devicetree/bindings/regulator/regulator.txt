@@ -11,6 +11,12 @@ Optional properties:
 - regulator-boot-on: bootloader/firmware enabled regulator
 - <name>-supply: phandle to the parent supply/regulator node
 - regulator-ramp-delay: ramp delay for regulator(in uV/uS)
+- regulator-suspend-disk-microvolt: voltage (uV) applied when suspending to disk
+- regulator-suspend-disk-disabled: turn off when suspendin to disk
+- regulator-suspend-mem-microvolt: voltage applied (uV) when suspending to RAM
+- regulator-suspend-mem-disabled: turn off when suspending to RAM
+- regulator-suspend-standby-microvolt: voltage applied (uD) when entering standby
+- regulator-suspend-standby-disabled: turn off when entering standby
 
 Deprecated properties:
 - regulator-compatible: If a regulator chip contains multiple
