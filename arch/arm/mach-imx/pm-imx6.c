@@ -28,6 +28,7 @@
 #include <asm/tlb.h>
 #include <asm/hardware/cache-l2x0.h>
 #include <asm/mach/map.h>
+#include <linux/regulator/machine.h>
 
 #include "common.h"
 #include "hardware.h"
@@ -396,6 +397,28 @@ void imx6_pm_set_ccm_base(void __iomem *base)
 	ccm_base = base;
 }
 
+static int imx6_suspend_prepare(struct notifier_block *nb,
+                        unsigned long action, void *ptr)
+{
+        switch (action) {
+
+	case PM_SUSPEND_PREPARE:
+		regulator_suspend_prepare(PM_SUSPEND_MEM);
+		break;
+	case PM_HIBERNATION_PREPARE:
+		regulator_suspend_prepare(PM_SUSPEND_STANDBY);
+		break;
+	case PM_POST_SUSPEND:
+	case PM_POST_HIBERNATION:
+		break;
+
+	default:
+		return NOTIFY_DONE;
+	}
+
+	return NOTIFY_OK;
+}
+
 void __init imx6_pm_init(void)
 {
 	iram_paddr = MX6_SUSPEND_IRAM_ADDR;
@@ -415,4 +438,6 @@ void __init imx6_pm_init(void)
 		cpu_type = MXC_CPU_IMX6DL;
 	else
 		cpu_type = MXC_CPU_IMX6SL;
+
+	pm_notifier(imx6_suspend_prepare, 0);
 }
