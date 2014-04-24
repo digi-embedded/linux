@@ -74,6 +74,7 @@ struct da9063_regulator_info {
 	struct bfield	suspend_sleep;
 	struct field	voltage;
 	struct field	suspend_voltage;
+	struct bfield	suspend_keep_on;
 	struct field	ilimit;
 
 	/* DA9063 event detection bit */
@@ -105,6 +106,7 @@ struct da9063_regulator_info {
 			DA9063_V##regl_name##_MASK, \
 			DA9063_V##regl_name##_SHIFT, \
 			DA9063_V##regl_name##_BIAS), \
+	.suspend_keep_on = BFIELD(DA9063_REG_##regl_name##_CONT, DA9063_LDO_CONF), \
 	.suspend_voltage = FIELD(DA9063_REG_V##regl_name##_B, \
 			DA9063_V##regl_name##_MASK,\
 			DA9063_V##regl_name##_SHIFT, \
@@ -130,6 +132,7 @@ struct da9063_regulator_info {
 			 DA9063_VBUCK_MASK, \
 			 DA9063_VBUCK_SHIFT, \
 			 DA9063_VBUCK_BIAS), \
+	.suspend_keep_on = BFIELD(DA9063_REG_##regl_name##_CONT, DA9063_BUCK_CONF), \
 	.suspend_voltage = FIELD(DA9063_REG_V##regl_name##_B, \
 				 DA9063_VBUCK_MASK,\
 				 DA9063_VBUCK_SHIFT, \
@@ -187,7 +190,10 @@ static int da9063_set_mode(struct regulator_dev *rdev, unsigned int mode);
 static unsigned da9063_get_mode(struct regulator_dev *rdev);
 static int da9063_get_status(struct regulator_dev *rdev);
 static int da9063_set_suspend_voltage(struct regulator_dev *rdev, int uV);
-static int da9063_suspend_enable(struct regulator_dev *rdev);
+static int da9063_suspend_enable(struct regulator_dev *rdev)
+	__attribute__ ((unused));
+static int da9063_suspend_ldo_prepare(struct regulator_dev *rdev);
+static int da9063_suspend_buck_prepare(struct regulator_dev *rdev);
 static int da9063_set_suspend_mode(struct regulator_dev *rdev, unsigned mode);
 
 static struct regulator_ops da9063_switch_ops = {
@@ -209,7 +215,7 @@ static struct regulator_ops da9063_ldo_ops = {
 	.get_mode		= da9063_get_mode,
 	.get_status		= da9063_get_status,
 	.set_suspend_voltage	= da9063_set_suspend_voltage,
-	.set_suspend_enable	= da9063_suspend_enable,
+	.set_suspend_enable	= da9063_suspend_ldo_prepare,
 	.set_suspend_disable	= da9063_disable,
 	.set_suspend_mode	= da9063_set_suspend_mode,
 };
@@ -227,7 +233,7 @@ static struct regulator_ops da9063_buck_ops = {
 	.get_mode		= da9063_get_mode,
 	.get_status		= da9063_get_status,
 	.set_suspend_voltage	= da9063_set_suspend_voltage,
-	.set_suspend_enable	= da9063_suspend_enable,
+	.set_suspend_enable	= da9063_suspend_buck_prepare,
 	.set_suspend_disable	= da9063_disable,
 	.set_suspend_mode	= da9063_set_suspend_mode,
 };
@@ -857,7 +863,33 @@ static int da9063_set_suspend_voltage(struct regulator_dev *rdev, int uV)
 	return ret;
 }
 
-static int da9063_suspend_enable(struct regulator_dev *rdev)
+static int da9063_suspend_ldo_prepare(struct regulator_dev *rdev)
+{
+	int ret;
+	struct da9063_regulator *regl = rdev_get_drvdata(rdev);
+	const struct bfield *bskeep_on = &regl->info->suspend_keep_on;
+
+	/* do not disable on standby */
+	ret = da9063_reg_update(regl->hw, bskeep_on->addr, bskeep_on->mask,
+		DA9063_LDO_CONF);
+
+	return ret;
+}
+
+static int da9063_suspend_buck_prepare(struct regulator_dev *rdev)
+{
+	int ret;
+	struct da9063_regulator *regl = rdev_get_drvdata(rdev);
+	const struct bfield *bskeep_on = &regl->info->suspend_keep_on;
+
+	/* do not disable on standby */
+	ret = da9063_reg_update(regl->hw, bskeep_on->addr, bskeep_on->mask,
+		DA9063_BUCK_CONF);
+
+	return ret;
+}
+
+static int  da9063_suspend_enable(struct regulator_dev *rdev)
 {
 	int ret;
 	struct da9063_regulator *regl = rdev_get_drvdata(rdev);
@@ -1113,6 +1145,12 @@ static int da9063_regulator_probe(struct platform_device *pdev)
                         regulators.irq_ldo_lim = -ENXIO;
                 }
         }
+
+	/* Do not read OTP configuration when coming back from suspend */
+	ret = da9063_reg_update(da9063, DA9063_REG_CONTROL_C ,
+		DA9063_OTPREAD_EN, 0);
+	if (ret)
+		dev_err(&pdev->dev, "Failed to clear OTPREAD_EN.\n");
 
 	platform_set_drvdata(pdev, &regulators);
 	return 0;
