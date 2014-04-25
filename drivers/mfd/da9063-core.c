@@ -37,6 +37,8 @@
 #include <linux/uaccess.h>
 #include <linux/of.h>
 
+static struct da9063 * da9063_data;
+
 static struct resource da9063_regulators_resources[] = {
 	{
 		.name	= "LDO_LIM",
@@ -381,6 +383,21 @@ int da9063_get_trim_data(struct da9063 *da9063)
 	return 0;
 }
 
+void da9063_power_off ( void ) {
+	u8 val = 0;
+
+	BUG_ON(!da9063_data);
+
+	if(!mutex_is_locked(&da9063_data->io_mutex))
+		mutex_lock(&da9063_data->io_mutex);
+
+	da9063_write_device(da9063_data, DA9063_I2C_REG(DA9063_REG_CONTROL_A), 1, &val);
+
+	// Do not unlock mutex to avoid further accesses
+	// Do not return
+	while(1);
+}
+
 int da9063_device_init(struct da9063 *da9063, unsigned int irq)
 {
 	int ret = 0;
@@ -416,6 +433,10 @@ int da9063_device_init(struct da9063 *da9063, unsigned int irq)
 			da9063->irq_base, da9063->irq_domain);
 	if (ret)
 		dev_err(da9063->dev, "Cannot add MFD cells\n");
+
+	da9063_data = da9063;
+
+	pm_power_off = da9063_power_off;
 
 	dev_info(da9063->dev, "Device detected DA9063\n" );
 
