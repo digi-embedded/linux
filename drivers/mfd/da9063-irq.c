@@ -211,12 +211,24 @@ static void da9063_irq_disable(struct irq_data *data)
 		da9063->irq_masks[offset] |= da9063_irq->mask;
 }
 
+static int da9063_irq_set_wake (struct irq_data *d, unsigned enable) {
+	struct da9063 * da9063 = irq_data_get_irq_chip_data(d);
+
+	if (enable)
+		enable_irq_wake(da9063->chip_irq);
+	else
+		disable_irq_wake(da9063->chip_irq);
+
+	return 0;
+}
+
 static struct irq_chip da9063_irq_chip = {
 	.name = "da9063",
 	.irq_bus_lock = da9063_irq_lock,
 	.irq_bus_sync_unlock = da9063_irq_sync_unlock,
 	.irq_disable = da9063_irq_disable,
 	.irq_enable = da9063_irq_enable,
+	.irq_set_wake = da9063_irq_set_wake,
 };
 
 static irqreturn_t da9063_irq_thread(int irq_id, void *da9063_data)
