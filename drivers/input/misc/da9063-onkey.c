@@ -193,6 +193,8 @@ static int da9063_onkey_probe(struct platform_device *pdev)
 		goto err_input;
 	}
 
+	enable_irq_wake(onkey->irq);
+
 	ret = input_register_device(onkey->input);
 	if (ret) {
 		dev_err(&pdev->dev, "Failed to request IRQ.\n");
