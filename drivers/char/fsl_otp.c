@@ -485,7 +485,7 @@ static const struct of_device_id fsl_otp_dt_ids[] = {
 MODULE_DEVICE_TABLE(of, fsl_otp_dt_ids);
 
 static int fsl_register_hwid(void) {
-	struct device_node *np;
+	struct device_node *np = NULL;
 	u32 ocotp;
 	u8 *hwid;
 	char str[20];
@@ -502,7 +502,11 @@ static int fsl_register_hwid(void) {
 		"digi,hwid,sn",
 	};
 
-	np = of_find_compatible_node(NULL, NULL, "digi,ccimx6adpt");
+	if (of_machine_is_compatible("digi,ccimx6sbc"))
+		np = of_find_compatible_node(NULL, NULL, "digi,ccimx6sbc");
+	else if (of_machine_is_compatible("digi,ccimx6adpt"))
+		np = of_find_compatible_node(NULL, NULL, "digi,ccimx6adpt");
+
 	if (!np)
 		return -EINVAL;
 
