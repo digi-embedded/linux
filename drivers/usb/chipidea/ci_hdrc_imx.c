@@ -471,6 +471,7 @@ static int ci_hdrc_imx_probe(struct platform_device *pdev)
 	const struct ci_hdrc_imx_platform_flag *imx_platform_flag;
 	struct device_node *np = pdev->dev.of_node;
 	struct pinctrl_state *pinctrl_hsic_idle;
+	unsigned int reset_gpio;
 
 	of_id = of_match_device(ci_hdrc_imx_dt_ids, &pdev->dev);
 	if (!of_id)
@@ -517,6 +518,19 @@ static int ci_hdrc_imx_probe(struct platform_device *pdev)
 			dev_dbg(&pdev->dev,
 				"pinctrl_hsic_active lookup failed, err=%ld\n",
 					PTR_ERR(data->pinctrl_hsic_active));
+	}
+
+	reset_gpio = of_get_named_gpio(np, "fsl,reset-gpio", 0);
+	if(gpio_is_valid(reset_gpio)) {
+		if (gpio_request_one(reset_gpio, GPIOF_OUT_INIT_LOW,
+			"usb_host_reset") >= 0) {
+			if( gpio_direction_output(reset_gpio, 0) >= 0)
+					gpio_set_value_cansleep(reset_gpio, 1);
+			else
+				dev_warn(&pdev->dev,
+					"%d: gpio direction failed",reset_gpio);
+			gpio_free(reset_gpio);
+		}
 	}
 
 	ret = imx_get_clks(&pdev->dev);
