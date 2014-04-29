@@ -1502,6 +1502,7 @@ static int sgtl5000_i2c_probe(struct i2c_client *client,
 {
 	struct sgtl5000_priv *sgtl5000;
 	int ret;
+	struct clk *codec_clk;
 
 	sgtl5000 = devm_kzalloc(&client->dev, sizeof(struct sgtl5000_priv),
 								GFP_KERNEL);
@@ -1516,6 +1517,11 @@ static int sgtl5000_i2c_probe(struct i2c_client *client,
 	}
 
 	i2c_set_clientdata(client, sgtl5000);
+
+	/* Make sure clock is enabled as we will make an access next */
+	codec_clk = clk_get(&client->dev, NULL);
+        if (!IS_ERR(codec_clk))
+                clk_prepare_enable(codec_clk);
 
 	/* Ensure sgtl5000 will start with sane register values */
 	ret = sgtl5000_fill_defaults(sgtl5000);
