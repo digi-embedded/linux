@@ -241,7 +241,8 @@
 	sgtl5000: codec@0a {
 		compatible = "fsl,sgtl5000";
                 reg = <0x0a>;
-		clock-frequency = <13000000>;
+		clock-frequency = <24000000>;
+		clocks = <&clks 201>;
 		VDDA-supply = <&bperi>;
 		VDDIO-supply = <&bperi>;
 	};
