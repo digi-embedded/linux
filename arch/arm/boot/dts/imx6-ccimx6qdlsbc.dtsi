@@ -279,6 +279,7 @@
 				MX6QDL_PAD_GPIO_5__GPIO1_IO05 0x80000000
 				MX6QDL_PAD_SD3_RST__GPIO7_IO08 0x80000000
 				MX6QDL_PAD_GPIO_9__GPIO1_IO09 0x80000000
+				MX6QDL_PAD_EIM_DA10__GPIO3_IO10 0x80000000
 			>;
 		};
 	};
@@ -343,6 +344,7 @@
 };
 
 &usbh1 {
+	fsl,reset-gpio = <&gpio3 10 0>;
 	status = "okay";
 };
 
