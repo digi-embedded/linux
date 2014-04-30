@@ -378,8 +378,6 @@
 
 			flexcan1: can@02090000 {
 				compatible = "fsl,imx6q-flexcan";
-				pinctrl-names = "default";
-				pinctrl-0 = <&pinctrl_flexcan1_1>;
 				reg = <0x02090000 0x4000>;
 				interrupts = <0 110 0x04>;
 				clocks = <&clks 108>, <&clks 109>;
@@ -390,8 +388,6 @@
 
 			flexcan2: can@02094000 {
 				compatible = "fsl,imx6q-flexcan";
-				pinctrl-names = "default";
-				pinctrl-0 = <&pinctrl_flexcan2_1>;
 				reg = <0x02094000 0x4000>;
 				interrupts = <0 111 0x04>;
 				clocks = <&clks 110>, <&clks 111>;
