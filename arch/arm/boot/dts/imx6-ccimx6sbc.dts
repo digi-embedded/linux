@@ -235,10 +235,16 @@
 };
 
 &flexcan1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_flexcan1_2>;
+	stby-gpios = <&gpio1 2 0>;
 	status = "okay";
 };
 
 &flexcan2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_flexcan2_2>;
+	stby-gpios = <&gpio1 5 0>;
 	status = "okay";
 };
 

@@ -1260,6 +1260,13 @@
 				MX6QDL_PAD_GPIO_8__FLEXCAN1_RX 0x1b0b0
 			>;
 		};
+		pinctrl_flexcan1_2: flexcan1grp-2 {
+			fsl,pins = <
+				MX6QDL_PAD_GPIO_7__FLEXCAN1_TX 0x1b0b0
+				MX6QDL_PAD_GPIO_8__FLEXCAN1_RX 0x1b0b0
+				MX6QDL_PAD_GPIO_2__GPIO1_IO02  0x1b0b0
+			>;
+		};
 	};
 
 	flexcan2 {
@@ -1267,6 +1274,13 @@
 			fsl,pins = <
 				MX6QDL_PAD_SD3_DAT0__FLEXCAN2_TX 0x1b0b0
 				MX6QDL_PAD_SD3_DAT1__FLEXCAN2_RX 0x1b0b0
+			>;
+		};
+		pinctrl_flexcan2_2: flexcan2grp-2 {
+			fsl,pins = <
+				MX6QDL_PAD_SD3_DAT0__FLEXCAN2_TX 0x1b0b0
+				MX6QDL_PAD_SD3_DAT1__FLEXCAN2_RX 0x1b0b0
+				MX6QDL_PAD_GPIO_5__GPIO1_IO05    0x1b0b0
 			>;
 		};
 	};
