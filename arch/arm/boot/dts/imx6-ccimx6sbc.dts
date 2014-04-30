@@ -139,20 +139,6 @@
 				regulator-suspend-standby-microvolt = <3300000>;
 			};
 
-			/*
-			bcores_merged: DA9063_BCORES_MERGED {
-				regulator-name = "DA9063_BCORES_MERGED";
-			};
-
-			bmem_bio_merged: DA9063_BMEM_BIO_MERGED {
-				regulator-name = "DA9063_BMEM_BIO_MERGED";
-			};
-			*/
-
-			ldo1: DA9063_LDO1 {
-				regulator-name = "DA9063_LDO1";
-			};
-
 			ldo2: DA9063_LDO2 {
 				regulator-name = "DA9063_LDO2";
 				regulator-boot-on;
@@ -179,24 +165,6 @@
 
 			ldo6: DA9063_LDO6 {
 				regulator-name = "DA9063_LDO6";
-			};
-
-			ldo7: DA9063_LDO7 {
-				regulator-name = "DA9063_LDO7";
-				regulator-boot-on;
-				regulator-always-on;
-			};
-
-			ldo8: DA9063_LDO8 {
-				regulator-name = "DA9063_LDO8";
-			};
-
-			ldo9: DA9063_LDO9 {
-				regulator-name = "DA9063_LDO9";
-			};
-
-			ldo10: DA9063_LDO10 {
-				regulator-name = "DA9063_LDO10";
 			};
 
 			ldo11: DA9063_LDO11 {
