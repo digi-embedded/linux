@@ -286,6 +286,33 @@ static struct irq_domain_ops da9063_irq_domain_ops = {
 	.xlate  = irq_domain_xlate_onecell,
 };
 
+static int da9063_fault_log_init (struct da9063 *da9063)
+{
+	int ret = -EINVAL;
+
+	ret = da9063_reg_read(da9063, DA9063_REG_FAULT_LOG);
+	if (ret & DA9063_WAIT_SHUT)
+		dev_info(da9063->dev, "Power down by timeout of ID_WAIT.\n");
+	if (ret & DA9063_NSHUTDOWN)
+		dev_info(da9063->dev, "Power down by nOFF/nShutdown.\n");
+	if (ret & DA9063_KEY_RESET)
+		dev_info(da9063->dev, "Power down from nONKEY.\n");
+	if (ret & DA9063_TEMP_CRIT)
+		dev_info(da9063->dev, "Junction over temperature.\n");
+	if (ret & DA9063_VDD_START)
+		dev_info(da9063->dev, "Power down by VSYS fault before ACTIVE.\n");
+	if (ret & DA9063_VDD_FAULT)
+		dev_info(da9063->dev, "Power down by VSYS fault.\n");
+	if (ret & DA9063_POR)
+		dev_info(da9063->dev, "Start up from no power or RTC/Delivery.\n");
+	if (ret & DA9063_TWD_ERROR)
+		dev_info(da9063->dev, "Watchdog time violation.\n");
+	ret = da9063_reg_write(da9063, DA9063_REG_FAULT_LOG, ret);
+	if (ret < 0)
+		dev_err(da9063->dev, "Failed to clear fault log.\n");
+	return ret;
+}
+
 int da9063_irq_init(struct da9063 *da9063)
 {
 	int i;
@@ -311,6 +338,9 @@ int da9063_irq_init(struct da9063 *da9063)
 				DA9063_EVENT_REG_NUM, mask_events_buf);
 	if (ret < 0)
 		return ret;
+
+	/* Report and clear fault events */
+	da9063_fault_log_init(da9063);
 
 	mutex_init(&da9063->irq_mutex);
 	da9063->irq_base = irq_alloc_descs(-1, 0, DA9063_NUM_IRQ, 0);
