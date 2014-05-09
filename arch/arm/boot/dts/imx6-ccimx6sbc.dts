@@ -1,0 +1,253 @@
+/*
+ * Copyright 2014 Digi International, Inc.
+ * Copyright 2012 Freescale Semiconductor, Inc.
+ * Copyright 2011 Linaro Ltd.
+ *
+ * The code contained herein is licensed under the GNU General Public
+ * License. You may obtain a copy of the GNU General Public License
+ * Version 2 or later at the following locations:
+ *
+ * http://www.opensource.org/licenses/gpl-license.html
+ * http://www.gnu.org/copyleft/gpl.html
+ */
+
+/dts-v1/;
+
+#include "imx6q.dtsi"
+#include "imx6-ccimx6qdlsbc.dtsi"
+
+/ {
+	model = "Digi International ConnectCore 6 Single Board Computer.";
+	compatible = "digi,ccimx6sbc", "fsl,imx6q";
+	digi,machine,name = "ccimx6sbc";
+};
+
+&iomuxc {
+	pmic_dialog {
+		pinctrl_pmic_dialog: pmic_dialoggrp {
+			fsl,pins = <
+				MX6QDL_PAD_GPIO_17__GPIO7_IO12 0x1b0b0
+			>;
+		};
+	};
+};
+
+&i2c2 {
+	pmic_dialog: dialog@58 {
+		compatible = "dlg,da9063";
+		reg = <0x58>;
+		interrupt-parent = <&gpio7>;
+		interrupts = <12 2>;
+		interrupt-controller;
+		#interrupt-cells = <1>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_pmic_dialog>;
+
+		rtc {
+			compatible = "dlg,da9063-rtc";
+			interrupts = <1 2>;
+			interrupts-names = "ALARM" , "TIMER";
+			interrupt-parent = <&pmic_dialog>;
+		};
+
+		onkey {
+			compatible = "dlg,da9063-onkey";
+			interrupts = <0>;
+			interrupts-names = "ONKEY";
+			interrupt-parent = <&pmic_dialog>;
+			dlg,key-power;
+		};
+
+		hwmon {
+			compatible = "dlg,da9063-hwmon";
+			interrupts = <3>;
+			interrupts-names = "HWMON";
+			interrupt-parent = <&pmic_dialog>;
+			dlg,tjunc-offset = <(-5)>;
+		};
+
+		gpio_extender: gpio {
+			compatible = "dlg,da9063-gpio";
+			gpio-controller;
+			#gpio-cells = <2>;
+		};
+
+		leds {
+			compatible = "dlg,da9063-leds";
+
+			lvds0-backlight@0xc6 {
+				dlg,led-gpio-reg = <0x1c 0xf0>;
+				dlg,led-reg = <0xc8>;
+				linux,default-trigger = "backlight";
+			};
+
+			lvds1-backlight@0xc6 {
+				dlg,led-gpio-reg = <0x1a 0xf0>;
+				dlg,led-reg = <0xc6>;
+				linux,default-trigger = "backlight";
+			};
+		};
+
+		regulators {
+			compatible = "dlg,da9063-regulator";
+			/*dlg,bcores_merged;*/
+			/*dlg,bmem_bio_merged;*/
+			interrupts = <8>;
+			interrupts-names = "LDO_LIM";
+			interrupt-parent = <&pmic_dialog>;
+
+
+			bcore1: DA9063_BCORE1 {
+				regulator-name = "DA9063_BCORE1";
+				regulator-boot-on;
+				regulator-always-on;
+				regulator-suspend-mem-microvolt = <1377000>;
+				regulator-suspend-standby-microvolt = <1377000>;
+			};
+
+			bcore2: DA9063_BCORE2 {
+				regulator-name = "DA9063_BCORE2";
+				regulator-boot-on;
+				regulator-always-on;
+				regulator-suspend-mem-microvolt = <1377000>;
+				regulator-suspend-standby-microvolt = <1377000>;
+			};
+
+			bpro: DA9063_BPRO {
+				regulator-name = "DA9063_BPRO";
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			bmem: DA9063_BMEM {
+				regulator-name = "DA9063_BMEM";
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			bio: DA9063_BIO {
+				regulator-name = "DA9063_BIO";
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			bperi: DA9063_BPERI {
+				regulator-name = "DA9063_BPERI";
+				regulator-boot-on;
+				regulator-always-on;
+				regulator-suspend-mem-microvolt = <3300000>;
+				regulator-suspend-standby-microvolt = <3300000>;
+			};
+
+			/*
+			bcores_merged: DA9063_BCORES_MERGED {
+				regulator-name = "DA9063_BCORES_MERGED";
+			};
+
+			bmem_bio_merged: DA9063_BMEM_BIO_MERGED {
+				regulator-name = "DA9063_BMEM_BIO_MERGED";
+			};
+			*/
+
+			ldo1: DA9063_LDO1 {
+				regulator-name = "DA9063_LDO1";
+			};
+
+			ldo2: DA9063_LDO2 {
+				regulator-name = "DA9063_LDO2";
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			ldo3: DA9063_LDO3 {
+				regulator-name = "DA9063_LDO3";
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			ldo4: DA9063_LDO4 {
+				regulator-name = "DA9063_LDO4";
+				regulator-min-microvolt = <2500000>;
+				regulator-max-microvolt = <2500000>;
+			};
+
+			ldo5: DA9063_LDO5 {
+				regulator-name = "DA9063_LDO5";
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			ldo6: DA9063_LDO6 {
+				regulator-name = "DA9063_LDO6";
+			};
+
+			ldo7: DA9063_LDO7 {
+				regulator-name = "DA9063_LDO7";
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			ldo8: DA9063_LDO8 {
+				regulator-name = "DA9063_LDO8";
+			};
+
+			ldo9: DA9063_LDO9 {
+				regulator-name = "DA9063_LDO9";
+			};
+
+			ldo10: DA9063_LDO10 {
+				regulator-name = "DA9063_LDO10";
+			};
+
+			ldo11: DA9063_LDO11 {
+				regulator-name = "DA9063_LDO11";
+				regulator-boot-on;
+				regulator-always-on;
+				regulator-suspend-mem-microvolt = <2800000>;
+				regulator-suspend-standby-microvolt = <2800000>;
+			};
+
+			out_32k: DA9063_32K_OUT {
+				regulator-name = "DA9063_32K_OUT";
+			};
+		};
+	};
+};
+
+&mxcfb1 {
+	status = "okay";
+};
+
+&mxcfb2 {
+	status = "disabled";
+};
+
+&mxcfb3 {
+	status = "disabled";
+};
+
+&mxcfb4 {
+	status = "disabled";
+};
+
+&sata {
+	status = "okay";
+};
+
+&flexcan1 {
+	status = "okay";
+};
+
+&flexcan2 {
+	status = "okay";
+};
+
+&ldb {
+	ipu_id = <0>;
+	disp_id = <0>;
+	ext_ref = <1>;
+	mode = "sin0";
+	sec_ipu_id = <0>;
+	sec_disp_id = <1>;
+	status = "okay";
+};
