@@ -232,9 +232,8 @@
 	fusion@10 {
 		compatible = "touchrev,fusion-touch";
 		reg = <0x10>;
-		interrupt-parent = <&gpio2>;
-		interrupts = <1 1>;
-		//touchrev,is-multitouch;
+		interrupt-parent = <&gpio7>;
+		interrupts = <11 1>;
 		status = "okay";
 	};
 
