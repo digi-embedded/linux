@@ -30,6 +30,8 @@
 #define MX53_BM_OVER_CUR_DIS_UHx	BIT(30)
 
 #define MX6_BM_OVER_CUR_DIS		BIT(7)
+#define MX6_BM_OVER_CUR_POL		BIT(8)
+#define MX6_BM_PWR_POL			BIT(9)
 #define MX6_BM_WAKEUP_ENABLE		BIT(10)
 #define MX6_BM_UTMI_ON_CLOCK		BIT(13)
 #define MX6_BM_ID_WAKEUP		BIT(16)
@@ -143,6 +145,23 @@ static int usbmisc_imx6q_init(struct imx_usbmisc_data *data)
 		spin_lock_irqsave(&usbmisc->lock, flags);
 		val = readl(usbmisc->base + data->index * 4);
 		writel(val | MX6_BM_OVER_CUR_DIS,
+			usbmisc->base + data->index * 4);
+		spin_unlock_irqrestore(&usbmisc->lock, flags);
+	}
+	else {
+		if(data->oc_pol) {
+			spin_lock_irqsave(&usbmisc->lock, flags);
+			val = readl(usbmisc->base + data->index * 4);
+			writel(val | MX6_BM_OVER_CUR_POL,
+				usbmisc->base + data->index * 4);
+			spin_unlock_irqrestore(&usbmisc->lock, flags);
+		}
+	}
+
+	if(data->pwr_pol) {
+		spin_lock_irqsave(&usbmisc->lock, flags);
+		val = readl(usbmisc->base + data->index * 4);
+		writel(val | MX6_BM_PWR_POL,
 			usbmisc->base + data->index * 4);
 		spin_unlock_irqrestore(&usbmisc->lock, flags);
 	}
