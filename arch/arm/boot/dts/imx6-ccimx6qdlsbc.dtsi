@@ -349,6 +349,8 @@
 &usbotg {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_usbotg_3>;
+	fsl,power-line-polarity-active-high;
+	fsl,over-current-polarity-active-low;
 	status = "okay";
 };
 
