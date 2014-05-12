@@ -528,6 +528,7 @@ static int imx_get_sensor_data(struct platform_device *pdev)
 {
 	struct imx_thermal_data *data = platform_get_drvdata(pdev);
 	struct regmap *map;
+	int t1, n1, t2;
 	int ret;
 	u32 val;
 
@@ -560,16 +561,34 @@ static int imx_get_sensor_data(struct platform_device *pdev)
 		imx6_calibrate_data(data, val);
 
 	/*
-	 * Set the default passive cooling trip point to IMX_TEMP_PASSIVE.
-	 * Can be changed from userspace.
+	 * Sensor data layout:
+	 *   [31:20] - sensor value @ 25C
+	 *    [19:8] - sensor value @ hot temperature
+	 *     [7:0] - hot temperature value (depends on CPU variant)
+	 * We use universal formula now and only need sensor value @ 25C
+	 * slope = 0.4297157 - (0.0015976 * 25C fuse)
 	 */
-	data->temp_passive = IMX_TEMP_PASSIVE;
+	n1 = val >> 20;
+	t1 = 25; /* t1 always 25C */
+	t2 = val & 0xff;
 
 	/*
 	 * Set the default critical trip point to 20 C higher
 	 * than passive trip point. Can be changed from userspace.
 	 */
 	data->temp_critical = IMX_TEMP_PASSIVE + 20 * 1000;
+
+	/*
+	 * Set the default passive cooling trip point to 20 °C below the
+	 * maximum die temperature. Can be changed from userspace.
+	 */
+	data->trip_temp[IMX_TRIP_PASSIVE] = 1000 * (t2 - 20);
+
+	/*
+	 * The maximum die temperature is t2, let's give 5 °C cushion
+	 * for noise and possible temperature rise between measurements.
+	 */
+	data->trip_temp[IMX_TRIP_CRITICAL] = 1000 * (t2 - 5);
 
 	return 0;
 }
