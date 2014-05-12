@@ -582,13 +582,13 @@ static int imx_get_sensor_data(struct platform_device *pdev)
 	 * Set the default passive cooling trip point to 20 °C below the
 	 * maximum die temperature. Can be changed from userspace.
 	 */
-	data->trip_temp[IMX_TRIP_PASSIVE] = 1000 * (t2 - 20);
+	data->temp_passive = 1000 * (t2 - 20);
 
 	/*
 	 * The maximum die temperature is t2, let's give 5 °C cushion
 	 * for noise and possible temperature rise between measurements.
 	 */
-	data->trip_temp[IMX_TRIP_CRITICAL] = 1000 * (t2 - 5);
+	data->temp_critical = 1000 * (t2 - 5);
 
 	return 0;
 }
