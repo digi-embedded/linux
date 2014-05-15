@@ -357,6 +357,7 @@
 		pwn-gpios = <&gpio1 16 1>;   /* active low: SD1_DAT0 */
 		rst-gpios = <&gpio1 17 0>;   /* active high: SD1_DAT1 */
 		csi_id = <0>;
+		ipu_id = <0>;
 		mclk = <24000000>;
 		mclk_source = <0>;
 	};

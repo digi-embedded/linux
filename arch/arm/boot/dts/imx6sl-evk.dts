@@ -431,6 +431,7 @@
 		pwn-gpios = <&gpio1 25 1>;
 		rst-gpios = <&gpio1 26 0>;
 		csi_id = <0>;
+		ipu_id = <0>;
 		mclk = <24000000>;
 		mclk_source = <0>;
 	};
