@@ -296,6 +296,21 @@
 		VDDA-supply = <&bperi>;
 		VDDIO-supply = <&bperi>;
 	};
+
+	ov564x: ov564x@3c {
+		compatible = "ovti,ov564x";
+		reg = <0x3c>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_ipu1_5>;
+		clocks = <&clks 201>;
+		clock-names = "csi_mclk";
+		pwn-gpios = <&gpio5 0 1>;
+		csi_id = <0>;
+		ipu_id = <0>;
+		mclk = <13000000>;
+		mclk_source = <0>;
+	};
+
 };
 
 &iomuxc {
@@ -306,7 +321,6 @@
 		pinctrl_hog_1: hoggrp-1 {
 			fsl,pins = <
 				MX6QDL_PAD_GPIO_4__GPIO1_IO04   0x80000000
-				MX6QDL_PAD_GPIO_5__GPIO1_IO05   0x80000000
 				MX6QDL_PAD_NANDF_D0__GPIO2_IO00 0x80000000
 				MX6QDL_PAD_NANDF_D1__GPIO2_IO01 0x80000000
 				MX6QDL_PAD_NANDF_D2__GPIO2_IO02 0x80000000
