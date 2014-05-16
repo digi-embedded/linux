@@ -2629,6 +2629,7 @@ static int init_camera_struct(cam_data *cam, struct platform_device *pdev)
 	int ipu_id, csi_id, mclk_source;
 	int ret = 0;
 	struct v4l2_device *v4l2_dev;
+	static int camera_id;
 
 	pr_debug("In MVC: init_camera_struct\n");
 
@@ -2748,7 +2749,7 @@ static int init_camera_struct(cam_data *cam, struct platform_device *pdev)
 
 	cam->self = kmalloc(sizeof(struct v4l2_int_device), GFP_KERNEL);
 	cam->self->module = THIS_MODULE;
-	sprintf(cam->self->name, "mxc_v4l2_cap%d", cam->csi);
+	sprintf(cam->self->name, "mxc_v4l2_cap%d", camera_id++);
 	cam->self->type = v4l2_int_type_master;
 	cam->self->u.master = &mxc_v4l2_master;
 
