@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Digi International, Inc.
+ * Copyright 2014 Digi International, Inc.
  * Copyright 2012 Freescale Semiconductor, Inc.
  * Copyright 2011 Linaro Ltd.
  *
@@ -34,28 +34,6 @@
 		fsl,dc_valid;
 		fsl,usb_valid;
 		status = "okay";
-	};
-
-	gpio-keys {
-		compatible = "gpio-keys";
-		power {
-			label = "Power Button";
-			gpios = <&gpio3 29 0>;
-			linux,code = <116>; /* KEY_POWER */
-			gpio-key,wakeup;
-		};
-
-		volume-up {
-			label = "Volume Up";
-			gpios = <&gpio1 4 0>;
-			linux,code = <115>; /* KEY_VOLUMEUP */
-		};
-
-		volume-down {
-			label = "Volume Down";
-			gpios = <&gpio1 5 0>;
-			linux,code = <114>; /* KEY_VOLUMEDOWN */
-		};
 	};
 
 	sound {
@@ -129,7 +107,7 @@
 		default_ifmt = "RGB565";
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_ipu1_1>;
-		status = "okay";
+		status = "disabled";
 	};
 
 	v4l2_cap_0 {
@@ -199,7 +177,6 @@
 };
 
 /* 10/100/1000 KSZ9031 PHY */
-
 &fec {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_enet_4>;
@@ -247,7 +224,7 @@
 &hdmi_cec {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_hdmi_cec_2>;
-	status = "okay";
+	status = "disabled";
 };
 
 &hdmi_core {
@@ -285,7 +262,6 @@
 		reg = <0x10>;
 		interrupt-parent = <&gpio2>;
 		interrupts = <1 1>;
-		//touchrev,is-multitouch;
 		status = "okay";
 	};
 
