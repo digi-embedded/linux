@@ -3040,7 +3040,6 @@ static s32 update_device_addr(struct sensor_data *sensor)
 	msg.len = 3;
 	msg.buf = buf;
 
-
 	ret = i2c_transfer(sensor->i2c_client->adapter, &msg, 1);
 	return ret;
 }
@@ -3060,6 +3059,8 @@ static void ov5642_standby(s32 enable)
 
 static void ov5642_reset(void)
 {
+	mxc_camera_common_lock();
+
 	if (gpio_is_valid(rst_gpio))
 		gpio_set_value(rst_gpio, 1);
 
@@ -3078,6 +3079,7 @@ static void ov5642_reset(void)
 	}
 
 	update_device_addr(&ov5642_data);
+	mxc_camera_common_unlock();
 
 	if (gpio_is_valid(pwn_gpio))
 		gpio_set_value(pwn_gpio, 1);
@@ -3158,8 +3160,10 @@ static s32 ov5642_write_reg(u16 reg, u8 val)
 	au8Buf[2] = val;
 
 	if ((reg == 0x3008) && (val & 0x80)) {
+		mxc_camera_common_lock();
 		ret = i2c_master_send(ov5642_data.i2c_client, au8Buf, 3);
 		update_device_addr(&ov5642_data);
+		mxc_camera_common_unlock();
 	} else {
 		ret = i2c_master_send(ov5642_data.i2c_client, au8Buf, 3);
 	}
