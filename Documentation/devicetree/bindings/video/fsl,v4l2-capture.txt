@@ -26,16 +26,20 @@ Required properties for sensor
   connection between sensor and i.MX could be MIPI-CSI2 or legacy parallel
 - clocks: should be the clock source provided to sensor.
 - clock-names: should be "csi_mclk"
+- csi_id: csi id for v4l2 capture device
+  should be 0 or 1 for i.MX6DQ/i.MX6SDL.
+- ipu_id: ipu id for v4l2 capture device.
+  should be 0 or 1 for i.MX6DQ/i.MX6SDL.
+- mclk: should the value of mclk clock send out the sensor. unit is Hz.
+- mclk_source: should be 0 or 1 and should be the same as the setting in
+  v4l2_capture.
+
+Optional properties for sensor:
 - DOVDD-supply: set according to the board.
 - AVDD-supply: set according to the board.
 - DVDD-supply: set according to the board.
 - pwn-gpios: set according to the board.
 - rst-gpios: set according to the board.
-- csi_id: csi id for v4l2 capture device
-  should be 0 or 1 for i.MX6DQ/i.MX6SDL.
-- mclk: should the value of mclk clock send out the sensor. unit is Hz.
-- mclk_source: should be 0 or 1 and should be the same as the setting in
-  v4l2_capture.
 - cvbs: 1 for CVBS input, 0 YPbPr input. This property is only needed for
   adv7180 tv decoder.
 
