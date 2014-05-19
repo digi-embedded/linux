@@ -252,6 +252,7 @@
 		reg = <0x4c>;
 		clocks = <&clks 201>;
 		clock-names = "csi_mclk";
+		digi,alt-pwn-gpios = <&gpio5 0 1>;
 		csi_id = <1>;
 		ipu_id = <1>;
 		mclk = <24000000>;
