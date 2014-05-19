@@ -99,7 +99,7 @@
 
 	v4l2_cap_0 {
 		compatible = "fsl,imx6q-v4l2-capture";
-		ipu_id = <0>;
+		ipu_id = <1>;
 		csi_id = <1>;
 		mclk_source = <0>;
 		status = "okay";
@@ -246,29 +246,28 @@
 		VDDIO-supply = <&bperi>;
 	};
 
-	/* Parallel CSI camera */
-	ov564x: ov564x@4c {
-		compatible = "ovti,ov564x";
+	/* MIPI-CSI2 camera */
+	ov5640_mipi: ov5640_mipi@4c {
+		compatible = "ovti,ov5640_mipi";
 		reg = <0x4c>;
+		clocks = <&clks 201>;
+		clock-names = "csi_mclk";
+		csi_id = <1>;
+		ipu_id = <1>;
+		mclk = <24000000>;
+		mclk_source = <0>;
+	};
+
+	/* Parallel CSI camera */
+	ov564x: ov564x@5c {
+		compatible = "ovti,ov564x";
+		reg = <0x5c>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_ipu1_5>;
 		clocks = <&clks 201>;
 		clock-names = "csi_mclk";
 		pwn-gpios = <&gpio5 0 1>;
 		csi_id = <0>;
-		ipu_id = <0>;
-		mclk = <24000000>;
-		mclk_source = <0>;
-	};
-
-	/* MIPI-CSI2 camera */
-	ov5640_mipi: ov5640_mipi@3c {
-		compatible = "ovti,ov5640_mipi";
-		reg = <0x3c>;
-		clocks = <&clks 201>;
-		clock-names = "csi_mclk";
-		pwn-gpios = <&gpio7 6 1>;
-		csi_id = <1>;
 		ipu_id = <0>;
 		mclk = <24000000>;
 		mclk_source = <0>;
@@ -313,7 +312,7 @@
 
 &mipi_csi {
 	status = "okay";
-	ipu_id = <0>;
+	ipu_id = <1>;
 	csi_id = <1>;
 	v_channel = <0>;
 	lanes = <2>;
