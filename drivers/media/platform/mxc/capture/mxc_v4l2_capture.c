@@ -27,6 +27,7 @@
 #include <linux/fb.h>
 #include <linux/dma-mapping.h>
 #include <linux/delay.h>
+#include <linux/mutex.h>
 #include <linux/mxcfb.h>
 #include <linux/of_device.h>
 #include <media/v4l2-chip-ident.h>
@@ -3163,6 +3164,20 @@ static void mxc_v4l2_master_detach(struct v4l2_int_device *slave)
 	cam->sensor_index--;
 	vidioc_int_dev_exit(slave);
 }
+
+DEFINE_MUTEX(camera_common_mutex);
+
+void mxc_camera_common_lock(void)
+{
+	mutex_lock(&camera_common_mutex);
+}
+EXPORT_SYMBOL(mxc_camera_common_lock);
+
+void mxc_camera_common_unlock(void)
+{
+	mutex_unlock(&camera_common_mutex);
+}
+EXPORT_SYMBOL(mxc_camera_common_unlock);
 
 /*!
  * Entry point for the V4L2
