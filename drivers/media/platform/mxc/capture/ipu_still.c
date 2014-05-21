@@ -124,6 +124,7 @@ static int prp_still_start(void *private)
 	}
 
 	memset(&params, 0, sizeof(params));
+	params.csi_mem.csi = cam->csi;
 	err = ipu_init_channel(cam->ipu, MXC_V4L2_GET_IPU_CHAN(cam->csi),
 		&params);
 	if (err != 0)
