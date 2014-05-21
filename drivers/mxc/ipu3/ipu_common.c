@@ -492,8 +492,8 @@ static int ipu_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	/* Set sync refresh channels and CSI->mem channel as high priority */
-	ipu_idmac_write(ipu, 0x18800001L, IDMAC_CHA_PRI(0));
+	/* Set sync refresh channels and CSI->mem channels as high priority */
+	ipu_idmac_write(ipu, 0x18800003L, IDMAC_CHA_PRI(0));
 
 	/* Enable error interrupts by default */
 	ipu_cm_write(ipu, 0xFFFFFFFF, IPU_INT_CTRL(5));
@@ -3071,7 +3071,7 @@ static int ipu_resume(struct device *dev)
 		_ipu_get(ipu);
 		_ipu_dmfc_init(ipu, dmfc_type_setup, 1);
 		/* Set sync refresh channels as high priority */
-		ipu_idmac_write(ipu, 0x18800001L, IDMAC_CHA_PRI(0));
+		ipu_idmac_write(ipu, 0x18800003L, IDMAC_CHA_PRI(0));
 		_ipu_put(ipu);
 	}
 	dev_dbg(dev, "ipu resume.\n");
