@@ -758,6 +758,32 @@ err:
 	return retval;
 }
 
+void ipu_csi_dump_registers(struct ipu_soc *ipu, uint32_t csi)
+{
+	dev_dbg(ipu->dev, "CSI%d_SENS_CONF[%08x] = \t0x%08X\n", csi,
+		CSI_SENS_CONF, ipu_csi_read(ipu, csi , CSI_SENS_CONF));
+	dev_dbg(ipu->dev, "CSI%d_SENS_FRM_SIZE = \t0x%08X\n", csi,
+		ipu_csi_read(ipu, csi , CSI_SENS_FRM_SIZE));
+	dev_dbg(ipu->dev, "CSI%d_ACT_FRM_SIZE = \t0x%08X\n", csi,
+		ipu_csi_read(ipu, csi , CSI_ACT_FRM_SIZE));
+	dev_dbg(ipu->dev, "CSI%d_ACT_FRM_SIZE = \t0x%08X\n", csi,
+		ipu_csi_read(ipu, csi , CSI_ACT_FRM_SIZE));
+	dev_dbg(ipu->dev, "CSI%d_OUT_FRM_CTRL = \t0x%08X\n", csi,
+		ipu_csi_read(ipu, csi , CSI_OUT_FRM_CTRL));
+	dev_dbg(ipu->dev, "CSI%d_TST_CTRL = \t0x%08X\n", csi,
+		ipu_csi_read(ipu, csi , CSI_TST_CTRL));
+	dev_dbg(ipu->dev, "CSI%d_CCIR_CODE_1 = \t0x%08X\n", csi,
+		ipu_csi_read(ipu, csi , CSI_CCIR_CODE_1));
+	dev_dbg(ipu->dev, "CSI%d_CCIR_CODE_2 = \t0x%08X\n", csi,
+		ipu_csi_read(ipu, csi , CSI_CCIR_CODE_2));
+	dev_dbg(ipu->dev, "CSI%d_CCIR_CODE_3 = \t0x%08X\n", csi,
+		ipu_csi_read(ipu, csi , CSI_CCIR_CODE_3));
+	dev_dbg(ipu->dev, "CSI%d_MIPI_DI = \t0x%08X\n", csi,
+		ipu_csi_read(ipu, csi , CSI_MIPI_DI));
+	dev_dbg(ipu->dev, "CSI%d_SKIP = \t0x%08X\n", csi,
+		ipu_csi_read(ipu, csi , CSI_SKIP));
+}
+
 /*!
  * csi_irq_handler
  *
