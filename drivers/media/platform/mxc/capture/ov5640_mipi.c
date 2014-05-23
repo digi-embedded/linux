@@ -682,6 +682,30 @@ static struct i2c_driver ov5640_i2c_driver = {
 	.id_table = ov5640_id,
 };
 
+static s32 update_device_addr(struct sensor_data *sensor)
+{
+	int ret;
+	u8 buf[4];
+	unsigned reg = 0x3100;
+	unsigned default_addr = 0x3c;
+	struct i2c_msg msg;
+
+	if (sensor->i2c_client->addr == default_addr)
+		return 0;
+
+	buf[0] = reg >> 8;
+	buf[1] = reg & 0xff;
+	buf[2] = sensor->i2c_client->addr << 1;
+	msg.addr = default_addr;
+	msg.flags = 0;
+	msg.len = 3;
+	msg.buf = buf;
+
+
+	ret = i2c_transfer(sensor->i2c_client->adapter, &msg, 1);
+	return ret;
+}
+
 static void ov5640_standby(s32 enable)
 {
 	if (!gpio_is_valid(pwn_gpio))
@@ -697,26 +721,30 @@ static void ov5640_standby(s32 enable)
 
 static void ov5640_reset(void)
 {
-	if (!gpio_is_valid(pwn_gpio) || !gpio_is_valid(rst_gpio))
-		return;
+	mxc_camera_common_lock();
 
-	/* camera reset */
-	gpio_set_value(rst_gpio, 1);
+	if (gpio_is_valid(rst_gpio))
+		gpio_set_value(rst_gpio, 1);
 
-	/* camera power dowmn */
-	gpio_set_value(pwn_gpio, 1);
-	msleep(5);
+	if (gpio_is_valid(pwn_gpio)) {
+		gpio_set_value(pwn_gpio, 1);
+		msleep(5);
+		gpio_set_value(pwn_gpio, 0);
+		msleep(5);
+	}
 
-	gpio_set_value(pwn_gpio, 0);
-	msleep(5);
+	if (gpio_is_valid(rst_gpio)) {
+		gpio_set_value(rst_gpio, 0);
+		msleep(1);
+		gpio_set_value(rst_gpio, 1);
+		msleep(20);
+	}
 
-	gpio_set_value(rst_gpio, 0);
-	msleep(1);
+	update_device_addr(&ov5640_data);
+	mxc_camera_common_unlock();
 
-	gpio_set_value(rst_gpio, 1);
-	msleep(5);
-
-	gpio_set_value(pwn_gpio, 1);
+	if (gpio_is_valid(pwn_gpio))
+		gpio_set_value(pwn_gpio, 1);
 }
 
 static int ov5640_power_on(struct device *dev)
