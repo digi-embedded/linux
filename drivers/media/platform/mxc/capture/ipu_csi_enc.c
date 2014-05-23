@@ -28,7 +28,7 @@
 #include "ipu_prp_sw.h"
 
 #ifdef CAMERA_DBG
-	#define CAMERA_TRACE(x) (printk)x
+	#define CAMERA_TRACE(x) printk(x)
 #else
 	#define CAMERA_TRACE(x)
 #endif
@@ -75,7 +75,7 @@ static int csi_enc_setup(cam_data *cam)
 	int csi_id;
 #endif
 
-	CAMERA_TRACE("In csi_enc_setup\n");
+	CAMERA_TRACE("In csi_enc_setup ");
 	if (!cam) {
 		printk(KERN_ERR "cam private is NULL\n");
 		return -ENXIO;
@@ -160,13 +160,16 @@ static int csi_enc_setup(cam_data *cam)
 	}
 #endif
 
-	err = ipu_init_channel(cam->ipu, CSI_MEM, &params);
+	err = ipu_init_channel(cam->ipu, MXC_V4L2_GET_IPU_CHAN(cam->csi),
+		&params);
+
 	if (err != 0) {
 		printk(KERN_ERR "ipu_init_channel %d\n", err);
 		return err;
 	}
 
-	err = ipu_init_channel_buffer(cam->ipu, CSI_MEM, IPU_OUTPUT_BUFFER,
+	err = ipu_init_channel_buffer(cam->ipu, MXC_V4L2_GET_IPU_CHAN(cam->csi),
+				      IPU_OUTPUT_BUFFER,
 				      pixel_fmt, cam->v2f.fmt.pix.width,
 				      cam->v2f.fmt.pix.height,
 				      cam->v2f.fmt.pix.bytesperline,
@@ -178,7 +181,9 @@ static int csi_enc_setup(cam_data *cam)
 		printk(KERN_ERR "CSI_MEM output buffer\n");
 		return err;
 	}
-	err = ipu_enable_channel(cam->ipu, CSI_MEM);
+
+	err = ipu_enable_channel(cam->ipu, MXC_V4L2_GET_IPU_CHAN(cam->csi));
+
 	if (err < 0) {
 		printk(KERN_ERR "ipu_enable_channel CSI_MEM\n");
 		return err;
@@ -195,20 +200,21 @@ static int csi_enc_setup(cam_data *cam)
  *
  * @return  status
  */
-static int csi_enc_eba_update(struct ipu_soc *ipu, dma_addr_t eba,
+static int csi_enc_eba_update(struct ipu_soc *ipu, int csi_id , dma_addr_t eba,
 			      int *buffer_num)
 {
 	int err = 0;
 
 	pr_debug("eba %x\n", eba);
-	err = ipu_update_channel_buffer(ipu, CSI_MEM, IPU_OUTPUT_BUFFER,
-					*buffer_num, eba);
+	err = ipu_update_channel_buffer(ipu, MXC_V4L2_GET_IPU_CHAN(csi_id),
+		IPU_OUTPUT_BUFFER, *buffer_num, eba);
 	if (err != 0) {
-		ipu_clear_buffer_ready(ipu, CSI_MEM, IPU_OUTPUT_BUFFER,
-				       *buffer_num);
+		ipu_clear_buffer_ready(ipu, MXC_V4L2_GET_IPU_CHAN(csi_id),
+			IPU_OUTPUT_BUFFER, *buffer_num);
 
-		err = ipu_update_channel_buffer(ipu, CSI_MEM, IPU_OUTPUT_BUFFER,
-						*buffer_num, eba);
+		err = ipu_update_channel_buffer(ipu,
+			MXC_V4L2_GET_IPU_CHAN(csi_id), IPU_OUTPUT_BUFFER,
+				*buffer_num, eba);
 		if (err != 0) {
 			pr_err("ERROR: v4l2 capture: fail to update "
 			       "buf%d\n", *buffer_num);
@@ -216,7 +222,8 @@ static int csi_enc_eba_update(struct ipu_soc *ipu, dma_addr_t eba,
 		}
 	}
 
-	ipu_select_buffer(ipu, CSI_MEM, IPU_OUTPUT_BUFFER, *buffer_num);
+	ipu_select_buffer(ipu, MXC_V4L2_GET_IPU_CHAN(csi_id), IPU_OUTPUT_BUFFER,
+		*buffer_num);
 
 	*buffer_num = (*buffer_num == 0) ? 1 : 0;
 
@@ -249,8 +256,8 @@ static int csi_enc_enabling_tasks(void *private)
 	    PAGE_ALIGN(cam->v2f.fmt.pix.sizeimage);
 	cam->dummy_frame.buffer.m.offset = cam->dummy_frame.paddress;
 
-	ipu_clear_irq(cam->ipu, IPU_IRQ_CSI0_OUT_EOF);
-	err = ipu_request_irq(cam->ipu, IPU_IRQ_CSI0_OUT_EOF,
+	ipu_clear_irq(cam->ipu, MXC_V4L2_GET_IPU_IRQ(cam->csi));
+	err = ipu_request_irq(cam->ipu, MXC_V4L2_GET_IPU_IRQ(cam->csi),
 			      csi_enc_callback, 0, "Mxc Camera", cam);
 	if (err != 0) {
 		printk(KERN_ERR "Error registering rot irq\n");
@@ -282,9 +289,10 @@ static int csi_enc_disabling_tasks(void *private)
 	int csi_id;
 #endif
 
-	err = ipu_disable_channel(cam->ipu, CSI_MEM, true);
+	err = ipu_disable_channel(cam->ipu, MXC_V4L2_GET_IPU_CHAN(cam->csi),
+		true);
 
-	ipu_uninit_channel(cam->ipu, CSI_MEM);
+	ipu_uninit_channel(cam->ipu, MXC_V4L2_GET_IPU_CHAN(cam->csi));
 
 	if (cam->dummy_frame.vaddress != 0) {
 		dma_free_coherent(0, cam->dummy_frame.buffer.length,
@@ -337,7 +345,7 @@ static int csi_enc_disable_csi(void *private)
 	/* free csi eof irq firstly.
 	 * when disable csi, wait for idmac eof.
 	 * it requests eof irq again */
-	ipu_free_irq(cam->ipu, IPU_IRQ_CSI0_OUT_EOF, cam);
+	ipu_free_irq(cam->ipu, MXC_V4L2_GET_IPU_IRQ(cam->csi), cam);
 
 	return ipu_disable_csi(cam->ipu, cam->csi);
 }
