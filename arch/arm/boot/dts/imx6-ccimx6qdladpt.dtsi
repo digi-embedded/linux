@@ -299,6 +299,7 @@
 		ipu_id = <0>;
 		mclk = <13000000>;
 		mclk_source = <0>;
+		digi,defer-probe;
 	};
 
 };
