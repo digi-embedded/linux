@@ -453,16 +453,16 @@ static int mxc_streamon(cam_data *cam)
 		list_del(cam->ready_q.next);
 		list_add_tail(&frame->queue, &cam->working_q);
 		frame->ipu_buf_num = cam->ping_pong_csi;
-		err = cam->enc_update_eba(cam->ipu, frame->buffer.m.offset,
-					  &cam->ping_pong_csi);
+		err = cam->enc_update_eba(cam->ipu, cam->csi,
+			frame->buffer.m.offset, &cam->ping_pong_csi);
 
 		frame =
 		    list_entry(cam->ready_q.next, struct mxc_v4l_frame, queue);
 		list_del(cam->ready_q.next);
 		list_add_tail(&frame->queue, &cam->working_q);
 		frame->ipu_buf_num = cam->ping_pong_csi;
-		err |= cam->enc_update_eba(cam->ipu, frame->buffer.m.offset,
-					   &cam->ping_pong_csi);
+		err |= cam->enc_update_eba(cam->ipu, cam->csi,
+			 frame->buffer.m.offset, &cam->ping_pong_csi);
 		spin_unlock_irqrestore(&cam->queue_int_lock, lock_flags);
 	} else {
 		spin_unlock_irqrestore(&cam->queue_int_lock, lock_flags);
@@ -2592,7 +2592,7 @@ next:
 					 struct mxc_v4l_frame,
 					 queue);
 		if (cam->enc_update_eba)
-			if (cam->enc_update_eba(cam->ipu,
+			if (cam->enc_update_eba(cam->ipu, cam->csi,
 						ready_frame->buffer.m.offset,
 						&cam->ping_pong_csi) == 0) {
 				list_del(cam->ready_q.next);
@@ -2603,7 +2603,8 @@ next:
 	} else {
 		if (cam->enc_update_eba)
 			cam->enc_update_eba(
-				cam->ipu, cam->dummy_frame.buffer.m.offset,
+				cam->ipu, cam->csi,
+				cam->dummy_frame.buffer.m.offset,
 				&cam->ping_pong_csi);
 	}
 

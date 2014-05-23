@@ -183,7 +183,7 @@ typedef struct _cam_data {
 	struct v4l2_rect crop_defrect;
 	struct v4l2_rect crop_current;
 
-	int (*enc_update_eba) (struct ipu_soc *ipu, dma_addr_t eba,
+	int (*enc_update_eba) (struct ipu_soc *ipu, int csi_id,  dma_addr_t eba,
 			       int *bufferNum);
 	int (*enc_enable) (void *private);
 	int (*enc_disable) (void *private);
@@ -263,5 +263,9 @@ struct sensor_data {
 void set_mclk_rate(uint32_t *p_mclk_freq, uint32_t csi);
 void mxc_camera_common_lock(void);
 void mxc_camera_common_unlock(void);
+
+#define MXC_V4L2_GET_IPU_CHAN(x) (x ? CSI_MEM1 : CSI_MEM0)
+#define MXC_V4L2_GET_IPU_IRQ(x) (x ? IPU_IRQ_CSI1_OUT_EOF : \
+		IPU_IRQ_CSI0_OUT_EOF)
 
 #endif				/* __MXC_V4L2_CAPTURE_H__ */
