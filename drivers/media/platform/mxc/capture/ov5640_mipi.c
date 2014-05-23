@@ -681,6 +681,9 @@ static struct i2c_driver ov5640_i2c_driver = {
 
 static void ov5640_standby(s32 enable)
 {
+	if (!gpio_is_valid(pwn_gpio))
+		return;
+
 	if (enable)
 		gpio_set_value(pwn_gpio, 1);
 	else
@@ -691,6 +694,9 @@ static void ov5640_standby(s32 enable)
 
 static void ov5640_reset(void)
 {
+	if (!gpio_is_valid(pwn_gpio) || !gpio_is_valid(rst_gpio))
+		return;
+
 	/* camera reset */
 	gpio_set_value(rst_gpio, 1);
 
@@ -728,7 +734,8 @@ static int ov5640_power_on(struct device *dev)
 				"%s:io set voltage ok\n", __func__);
 		}
 	} else {
-		pr_err("%s: cannot get io voltage error\n", __func__);
+		pr_warn("%s: cannot get io voltage error, assuming powered\n",
+			 __func__);
 		io_regulator = NULL;
 	}
 
@@ -747,7 +754,8 @@ static int ov5640_power_on(struct device *dev)
 		}
 	} else {
 		core_regulator = NULL;
-		pr_err("%s: cannot get core voltage error\n", __func__);
+		pr_warn("%s: cannot get core voltage error, assuming powered\n",
+			 __func__);
 	}
 
 	analog_regulator = devm_regulator_get(dev, "AVDD");
@@ -766,7 +774,8 @@ static int ov5640_power_on(struct device *dev)
 		}
 	} else {
 		analog_regulator = NULL;
-		pr_err("%s: cannot get analog voltage error\n", __func__);
+		pr_warn("%s: cannot get analog voltage error, assuming powered\n",
+				__func__);
 	}
 
 	return ret;
@@ -1986,23 +1995,23 @@ static int ov5640_probe(struct i2c_client *client,
 	pwn_gpio = of_get_named_gpio(dev->of_node, "pwn-gpios", 0);
 	if (!gpio_is_valid(pwn_gpio)) {
 		dev_warn(dev, "no sensor pwdn pin available");
-		return -EINVAL;
+	} else {
+		retval = devm_gpio_request_one(dev, pwn_gpio,
+			GPIOF_OUT_INIT_HIGH, "ov5640_mipi_pwdn");
+		if (retval < 0)
+			return retval;
 	}
-	retval = devm_gpio_request_one(dev, pwn_gpio, GPIOF_OUT_INIT_HIGH,
-					"ov5640_mipi_pwdn");
-	if (retval < 0)
-		return retval;
 
 	/* request reset pin */
 	rst_gpio = of_get_named_gpio(dev->of_node, "rst-gpios", 0);
 	if (!gpio_is_valid(rst_gpio)) {
 		dev_warn(dev, "no sensor reset pin available");
-		return -EINVAL;
+	} else {
+		retval = devm_gpio_request_one(dev, rst_gpio,
+			GPIOF_OUT_INIT_HIGH, "ov5640_mipi_reset");
+		if (retval < 0)
+			return retval;
 	}
-	retval = devm_gpio_request_one(dev, rst_gpio, GPIOF_OUT_INIT_HIGH,
-					"ov5640_mipi_reset");
-	if (retval < 0)
-		return retval;
 
 	/* Set initial values for the sensor struct. */
 	memset(&ov5640_data, 0, sizeof(ov5640_data));
