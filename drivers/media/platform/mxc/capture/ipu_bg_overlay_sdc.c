@@ -249,12 +249,12 @@ static int csi_enc_setup(cam_data *cam)
 		cam->vf_bufs[0], cam->vf_bufs[1], 0,
 		cam->offset.u_offset, cam->offset.u_offset);
 	if (err != 0) {
-		printk(KERN_ERR "CSI_MEM output buffer\n");
+		printk(KERN_ERR "CSI_MEM%d output buffer\n", cam->csi);
 		goto out_1;
 	}
 	err = ipu_enable_channel(cam->ipu, chan);
 	if (err < 0) {
-		printk(KERN_ERR "ipu_enable_channel CSI_MEM\n");
+		printk(KERN_ERR "ipu_enable_channel CSI_MEM%d\n", cam->csi);
 		goto out_1;
 	}
 
