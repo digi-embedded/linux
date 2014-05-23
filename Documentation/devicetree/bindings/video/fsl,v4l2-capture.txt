@@ -44,10 +44,6 @@ Required properties for sensor
   a second sensor with a conflicting I2C slave address so that the current
   slave address could be changed. This is needed if for example reset and
   power down pins are not available in both camera boards.
-- digi,defer-probe: Voluntarily defer probe to give other camera sensors
-  the chance to probe first and if using digi,alt-pwn-gpios place this one
-  in power down so that they can reconfigure its i2c slave address (in case
-  of i2c slave address clash)
 
 Supported Sensor
 - ov5640

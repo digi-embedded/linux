@@ -2020,9 +2020,10 @@ static int ov5640_probe(struct i2c_client *client,
 			const struct i2c_device_id *id)
 {
 	struct device *dev = &client->dev;
-	int retval;
+	int retval, i, n_alt_pwn_gpios;
 	u8 chip_id_high, chip_id_low;
 	struct regmap *gpr;
+	int *alt_pwn_gpios = NULL;
 
 	/* request power down pin */
 	pwn_gpio = of_get_named_gpio(dev->of_node, "pwn-gpios", 0);
@@ -2033,6 +2034,32 @@ static int ov5640_probe(struct i2c_client *client,
 			GPIOF_OUT_INIT_HIGH, "ov5640_mipi_pwdn");
 		if (retval < 0)
 			return retval;
+	}
+
+	n_alt_pwn_gpios = of_gpio_named_count(dev->of_node,
+		"digi,alt-pwn-gpios");
+	if (n_alt_pwn_gpios) {
+		alt_pwn_gpios =
+			kmalloc(sizeof(*alt_pwn_gpios) * n_alt_pwn_gpios,
+				GFP_KERNEL);
+		if (!alt_pwn_gpios)
+			return -ENOMEM;
+
+		for (i = 0; i < n_alt_pwn_gpios; i++) {
+			alt_pwn_gpios[i] = of_get_named_gpio(dev->of_node,
+				"digi,alt-pwn-gpios", i);
+			if (gpio_is_valid(alt_pwn_gpios[i])) {
+				/* Keep the alternative power pin down to
+				 * disable the alternative camera with the same
+				 * default slave address*/
+				retval = devm_gpio_request_one(dev,
+					alt_pwn_gpios[i],
+					GPIOF_OUT_INIT_HIGH,
+					"ov5640_mipi_alt_pwdn");
+				if (retval < 0)
+					return retval;
+			}
+		}
 	}
 
 	/* request reset pin */
@@ -2140,6 +2167,12 @@ static int ov5640_probe(struct i2c_client *client,
 	retval = v4l2_int_device_register(&ov5640_int_device);
 
 	clk_disable_unprepare(ov5640_data.sensor_clk);
+
+	for (i = 0; i < n_alt_pwn_gpios; i++) {
+		if (gpio_is_valid(alt_pwn_gpios[i]))
+			devm_gpio_free(dev, alt_pwn_gpios[i]);
+	}
+	kfree(alt_pwn_gpios);
 
 	pr_info("camera ov5640_mipi is found\n");
 	return retval;
