@@ -42,6 +42,10 @@ Optional properties for sensor:
 - rst-gpios: set according to the board.
 - cvbs: 1 for CVBS input, 0 YPbPr input. This property is only needed for
   adv7180 tv decoder.
+- digi,alt-pwn-gpios: Alternative power GPIO. It can be used to power off
+  a second sensor with a conflicting I2C slave address so that the current
+  slave address could be changed. This is needed if for example reset and
+  power down pins are not available in both camera boards.
 
 Supported Sensor
 - ov5640
