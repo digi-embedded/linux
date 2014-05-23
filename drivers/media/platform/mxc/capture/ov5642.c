@@ -4134,6 +4134,14 @@ static int ov5642_probe(struct i2c_client *client,
 	u8 chip_id_high, chip_id_low;
 	struct regmap *gpr;
 	struct sensor_data *sensor = &ov5642_data;
+	static int defer_probe = 1;
+
+	if (of_property_read_bool(dev->of_node, "digi,defer-probe")) {
+		if (defer_probe) {
+			defer_probe = 0;
+			return -EPROBE_DEFER;
+		}
+	}
 
 	/* ov5642 pinctrl */
 	pinctrl = devm_pinctrl_get_select_default(dev);
