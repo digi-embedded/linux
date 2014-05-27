@@ -309,6 +309,14 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_hog_1>;
 
+	ipu1 {
+		pinctrl_ipu1_6: ipu1grp-6 {
+			fsl,pins = <
+				MX6QDL_PAD_NANDF_D1__GPIO2_IO01            0x80000000
+			>;
+		};
+	};
+
 	hog {
 		pinctrl_hog_1: hoggrp-1 {
 			fsl,pins = <
