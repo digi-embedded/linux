@@ -548,7 +548,7 @@ config DEBUG_IMX_UART_PORT
 						DEBUG_IMX53_UART || \
 						DEBUG_IMX6Q_UART || \
 						DEBUG_IMX6SL_UART
-	default 1
+	default 4
 	depends on ARCH_MXC
 	help
 	  Choose UART port on which kernel low-level debug messages
