@@ -102,9 +102,25 @@
 		default_ifmt = "RGB565";
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_ipu1_6>;
+		display = <&lq070y3dg3b>;
 		status = "okay";
 	};
 
+	lq070y3dg3b: LQ70Y3DG3B@0 {
+		display-timings {
+			timing {
+				clock-frequency = <18520000>;
+				hactive = <800>;
+				vactive = <480>;
+				hfront-porch = <50>;
+				hback-porch = <0>;
+				hsync-len = <128>;
+				vback-porch = <25>;
+				vfront-porch = <10>;
+				vsync-len = <10>;
+			};
+		};
+	};
 	v4l2_cap_0 {
 		compatible = "fsl,imx6q-v4l2-capture";
 		ipu_id = <1>;
