@@ -19,13 +19,19 @@
 #include <linux/of_device.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/platform_device.h>
-
+#include <linux/fb.h>
+#include <video/of_display_timing.h>
+#include <video/videomode.h>
+#include <linux/vmalloc.h>
 #include "mxc_dispdrv.h"
 
 struct mxc_lcd_platform_data {
 	u32 default_ifmt;
 	u32 ipu_id;
 	u32 disp_id;
+	const char *disp_name;
+	const struct display_timings *timings;
+	struct fb_videomode native_mode;
 };
 
 struct mxc_lcdif_data {
@@ -35,37 +41,18 @@ struct mxc_lcdif_data {
 
 #define DISPDRV_LCD	"lcd"
 
-static struct fb_videomode lcdif_modedb[] = {
-	{
-	/* 800x480 @ 60 Hz , pixel clk @ 54MHz */
-	"LQ070Y3DG3B", 60, 800, 480, 54000, 0, 50, 25, 10, 128, 10,
-	FB_SYNC_CLK_LAT_FALL,
-	FB_VMODE_NONINTERLACED,
-	0,},
-	{
-	/* 800x480 @ 57 Hz , pixel clk @ 27MHz */
-	"CLAA-WVGA", 57, 800, 480, 37037, 40, 60, 10, 10, 20, 10,
-	FB_SYNC_CLK_LAT_FALL,
-	FB_VMODE_NONINTERLACED,
-	0,},
-	{
-	/* 800x480 @ 60 Hz , pixel clk @ 32MHz */
-	"SEIKO-WVGA", 60, 800, 480, 29850, 89, 164, 23, 10, 10, 10,
-	FB_SYNC_CLK_LAT_FALL,
-	FB_VMODE_NONINTERLACED,
-	0,},
-};
-static int lcdif_modedb_sz = ARRAY_SIZE(lcdif_modedb);
-
 static int lcdif_init(struct mxc_dispdrv_handle *disp,
 	struct mxc_dispdrv_setting *setting)
 {
-	int ret, i;
+	int ret = -ENOENT;
+	int i;
 	struct mxc_lcdif_data *lcdif = mxc_dispdrv_getdata(disp);
 	struct device *dev = &lcdif->pdev->dev;
 	struct mxc_lcd_platform_data *plat_data = dev->platform_data;
-	struct fb_videomode *modedb = lcdif_modedb;
-	int modedb_sz = lcdif_modedb_sz;
+	struct fb_videomode *modedb = NULL;
+
+	if (!plat_data->timings->num_timings)
+		return -ENOENT;
 
 	/* use platform defined ipu/di */
 	ret = ipu_di_to_crtc(dev, plat_data->ipu_id,
@@ -73,24 +60,48 @@ static int lcdif_init(struct mxc_dispdrv_handle *disp,
 	if (ret < 0)
 		return ret;
 
-	ret = fb_find_mode(&setting->fbi->var, setting->fbi, setting->dft_mode_str,
-				modedb, modedb_sz, NULL, setting->default_bpp);
+	modedb = vzalloc(sizeof(*modedb) *
+			plat_data->timings->num_timings);
+	if (!modedb)
+		return -ENOMEM;
+
+	for (i = 0; i < plat_data->timings->num_timings; i++) {
+		struct videomode vm;
+
+		videomode_from_timing(plat_data->timings->timings[i], &vm);
+		ret = fb_videomode_from_videomode(&vm, &modedb[i]);
+		if (ret)
+			goto out;
+	}
+
+	ret = fb_find_mode(&setting->fbi->var, setting->fbi,
+			setting->dft_mode_str, modedb,
+			plat_data->timings->num_timings, NULL,
+			setting->default_bpp);
 	if (!ret) {
-		fb_videomode_to_var(&setting->fbi->var, &modedb[0]);
-		setting->if_fmt = plat_data->default_ifmt;
+		fb_videomode_to_var(&setting->fbi->var,
+				&plat_data->native_mode);
+		dev_info(&lcdif->pdev->dev, "Using native mode for %s\n",
+				plat_data->disp_name);
+	} else {
+		dev_info(&lcdif->pdev->dev, "Using specified mode for %s\n",
+				setting->dft_mode_str);
 	}
 
 	INIT_LIST_HEAD(&setting->fbi->modelist);
-	for (i = 0; i < modedb_sz; i++) {
+	for (i = 0; i < plat_data->timings->num_timings; i++) {
 		struct fb_videomode m;
+
 		fb_var_to_videomode(&m, &setting->fbi->var);
 		if (fb_mode_is_equal(&m, &modedb[i])) {
-			fb_add_videomode(&modedb[i],
-					&setting->fbi->modelist);
+			ret = fb_add_videomode(&modedb[i],
+				&setting->fbi->modelist);
 			break;
 		}
 	}
 
+out:
+	vfree(modedb);
 	return ret;
 }
 
@@ -112,6 +123,7 @@ static int lcd_get_of_property(struct platform_device *pdev,
 	int err;
 	u32 ipu_id, disp_id;
 	const char *default_ifmt;
+	struct device_node *disp_np = NULL;
 
 	err = of_property_read_string(np, "default_ifmt", &default_ifmt);
 	if (err) {
@@ -158,6 +170,28 @@ static int lcd_get_of_property(struct platform_device *pdev,
 		return -ENOENT;
 	}
 
+	disp_np = of_parse_phandle(np, "display" , 0);
+	if (!disp_np) {
+		dev_err(&pdev->dev, "failed to get display.\n");
+		return -ENOENT;
+	}
+	plat_data->disp_name = disp_np->name;
+
+	plat_data->timings = of_get_display_timings(disp_np);
+	if (!plat_data->timings) {
+		dev_err(&pdev->dev, "failed to get display timings\n");
+		err = -ENOENT;
+		goto err;
+	}
+
+	if (of_get_fb_videomode(disp_np, &plat_data->native_mode,
+				OF_USE_NATIVE_MODE)) {
+		dev_err(&pdev->dev, "failed to get display native mode\n");
+		err = -ENOENT;
+	}
+
+err:
+	of_node_put(disp_np);
 	return err;
 }
 

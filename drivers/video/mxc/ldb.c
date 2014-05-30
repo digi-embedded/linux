@@ -31,6 +31,7 @@
 #include <linux/types.h>
 #include <video/of_videomode.h>
 #include <video/videomode.h>
+#include <video/of_display_timing.h>
 #include "mxc_dispdrv.h"
 
 #define DRIVER_NAME	"ldb"
@@ -91,6 +92,12 @@ struct ldb_chan {
 	bool online;
 };
 
+struct fsl_mxc_ldb_display_data {
+	const char *disp_name;
+	const struct display_timings *timings;
+	struct fb_videomode native_mode;
+};
+
 struct ldb_data {
 	struct regmap *regmap;
 	struct device *dev;
@@ -108,6 +115,9 @@ struct ldb_data {
 	struct clk *div_3_5_clk[2];
 	struct clk *div_7_clk[2];
 	struct clk *div_sel_clk[2];
+	struct fsl_mxc_ldb_display_data disp;
+	struct fsl_mxc_ldb_display_data sec_disp;
+	struct notifier_block nb;
 };
 
 static const struct crtc_mux imx6q_lvds0_crtc_mux[] = {
@@ -313,11 +323,7 @@ static int ldb_init(struct mxc_dispdrv_handle *mddh,
 
 	chan->fbi = fbi;
 
-	fb_videomode_from_videomode(&chan->vm, &fb_vm);
-
-	INIT_LIST_HEAD(&fbi->modelist);
-	fb_add_videomode(&fb_vm, &fbi->modelist);
-	fb_videomode_to_var(&fbi->var, &fb_vm);
+	ldb_set_videomode(&dev, ldb, setting, chno);
 
 	setting->crtc = chan->crtc;
 
@@ -561,6 +567,72 @@ static struct mxc_dispdrv_driver ldb_drv = {
 	.disable	= ldb_disable
 };
 
+static int ldb_set_videomode(struct device *dev,
+		struct ldb_data *ldb,
+		struct mxc_dispdrv_setting *setting,
+		int index)
+{
+	int ret = -ENOENT;
+	int i;
+	struct fb_videomode *modedb = NULL;
+	struct fsl_mxc_ldb_display_data *display;
+
+	if (index == 0)
+		display = &ldb->disp;
+	else if (index == 1)
+		display = &ldb->sec_disp;
+	else {
+		dev_info(dev, " Invalid display index %d\n", index);
+		return -ENOENT;
+	}
+
+	if (!display->timings->num_timings)
+		return -ENOENT;
+
+	modedb = vzalloc(sizeof(*modedb) *
+			display->timings->num_timings);
+	if (!modedb)
+		return -ENOMEM;
+
+	for (i = 0; i < display->timings->num_timings; i++) {
+		struct videomode vm;
+
+		videomode_from_timing(display->timings->timings[i], &vm);
+		ret = fb_videomode_from_videomode(&vm, &modedb[i]);
+		if (ret)
+			goto out;
+	}
+
+	ret = fb_find_mode(&setting->fbi->var, setting->fbi,
+			setting->dft_mode_str, modedb,
+			display->timings->num_timings, NULL,
+			setting->default_bpp);
+	if (!ret) {
+		fb_videomode_to_var(&setting->fbi->var,
+				&display->native_mode);
+		dev_info(dev, "Using native mode for %s\n",
+				display->disp_name);
+	} else {
+		dev_info(dev, "Using specified mode for %s\n",
+				setting->dft_mode_str);
+	}
+
+	INIT_LIST_HEAD(&setting->fbi->modelist);
+	for (i = 0; i < display->timings->num_timings; i++) {
+		struct fb_videomode m;
+
+		fb_var_to_videomode(&m, &setting->fbi->var);
+		if (fb_mode_is_equal(&m, &modedb[i])) {
+			ret = fb_add_videomode(&modedb[i],
+				&setting->fbi->modelist);
+			break;
+		}
+	}
+out:
+	vfree(modedb);
+	return ret;
+}
+
 enum {
 	LVDS_BIT_MAP_SPWG,
 	LVDS_BIT_MAP_JEIDA,
@@ -679,6 +751,7 @@ static int ldb_probe(struct platform_device *pdev)
 	bool ext_ref;
 	int i, data_width, mapping, child_count = 0;
 	char clkname[16];
+	struct device_node *disp_np = NULL;
 
 	ldb = devm_kzalloc(dev, sizeof(*ldb), GFP_KERNEL);
 	if (!ldb)
@@ -818,6 +891,55 @@ static int ldb_probe(struct platform_device *pdev)
 		ret = of_get_videomode(child, &chan->vm, 0);
 		if (ret)
 			return -EINVAL;
+
+		/* Primary display timings */
+		disp_np = of_parse_phandle(np, "display" , 0);
+		if (!disp_np) {
+			dev_err(&pdev->dev, "failed to get primary display.\n");
+			return -ENOENT;
+		}
+		ldb->disp.disp_name = disp_np->name;
+
+
+		ldb->disp.timings = of_get_display_timings(disp_np);
+		if (!ldb->disp.timings) {
+			dev_err(&pdev->dev, "failed to get primary display timings\n");
+			err = -ENOENT;
+			goto out;
+		}
+
+		if (of_get_fb_videomode(disp_np, &ldb->disp.native_mode,
+					OF_USE_NATIVE_MODE)) {
+			dev_err(&pdev->dev, "failed to get primary display native mode\n");
+			err = -ENOENT;
+			goto out;
+		}
+
+		of_node_put(disp_np);
+
+		/* Secondary display timings */
+		disp_np = of_parse_phandle(np, "sec_display" , 0);
+		if (!disp_np) {
+			dev_err(&pdev->dev, "failed to get secondary display.\n");
+			return -ENOENT;
+		}
+		ldb->sec_disp.disp_name = disp_np->name;
+
+		ldb->sec_disp.timings = of_get_display_timings(disp_np);
+		if (!ldb->sec_disp.timings) {
+			dev_err(&pdev->dev, "failed to get secondary display timings\n");
+			err = -ENOENT;
+			goto out;
+		}
+
+		if (of_get_fb_videomode(disp_np, &ldb->sec_disp.native_mode,
+					OF_USE_NATIVE_MODE)) {
+			dev_err(&pdev->dev, "failed to get secondary display native mode\n");
+			err = -ENOENT;
+			goto out;
+		}
+
+		of_node_put(disp_np);
 
 		sprintf(clkname, "ldb_di%d", i);
 		ldb->ldb_di_clk[i] = devm_clk_get(dev, clkname);

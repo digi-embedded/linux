@@ -60,6 +60,11 @@ Required properties for display:
 - lcd_panel : the video mode name for the display device(only valid for mipi display panel now).
 - dev_id : the display engine's identity within the system, which intends to replace ipu_id
 	   (only valid for mipi dsi now).
+- display: phandle to a display node with timing settings. See display-timings.txt
+	   for the display timings format.
+- sec_display: Only for ldb, phandle to a display node with timing settings
+	       for the secondary display. See display-timings.txt for the
+	       display timings format.
 
 Example for IPU:
 		ipu1: ipu@02400000 {
@@ -85,6 +90,19 @@ Example for fb:
 			default_bpp = <16>;
 			int_clk = <0>;
 			late_init = <0>;
+			status = "okay";
+		};
+
+Example for ldb display:
+		ldb@020e0000 {
+			ipu_id = <1>;
+			disp_id = <0>;
+			ext_ref = <1>;
+			mode = "sep0";
+			sec_ipu_id = <1>;
+			sec_disp_id = <1>;
+			display = <&fusion>;
+			sec_display = <&fusion>;
 			status = "okay";
 		};
 
