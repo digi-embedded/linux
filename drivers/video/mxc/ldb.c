@@ -38,6 +38,9 @@
 #include <linux/spinlock.h>
 #include <linux/of_device.h>
 #include <linux/mod_devicetable.h>
+#include <linux/vmalloc.h>
+#include <video/of_display_timing.h>
+#include <video/videomode.h>
 #include "mxc_dispdrv.h"
 
 #define DISPDRV_LDB	"ldb"
@@ -86,6 +89,12 @@ enum {
 	LDB_IMX6 = 1,
 };
 
+struct fsl_mxc_ldb_display_data {
+	const char *disp_name;
+	const struct display_timings *timings;
+	struct fb_videomode native_mode;
+};
+
 struct fsl_mxc_ldb_platform_data {
 	int devtype;
 	u32 ext_ref;
@@ -104,6 +113,9 @@ struct fsl_mxc_ldb_platform_data {
 	/*only work for separate mode*/
 	int sec_ipu_id;
 	int sec_disp_id;
+
+	struct fsl_mxc_ldb_display_data disp;
+	struct fsl_mxc_ldb_display_data sec_disp;
 };
 
 struct ldb_data {
@@ -133,58 +145,6 @@ struct ldb_data {
 };
 
 static int g_ldb_mode;
-
-static struct fb_videomode ldb_modedb[] = {
-	{
-	 "LDB-WXGA", 60, 1280, 800, 14065,
-	 40, 40,
-	 10, 3,
-	 80, 10,
-	 0,
-	 FB_VMODE_NONINTERLACED,
-	 FB_MODE_IS_DETAILED,},
-	{
-	 "LDB-XGA", 60, 1024, 768, 15385,
-	 220, 40,
-	 21, 7,
-	 60, 10,
-	 0,
-	 FB_VMODE_NONINTERLACED,
-	 FB_MODE_IS_DETAILED,},
-	{
-	 "LDB-1080P60", 60, 1920, 1080, 7692,
-	 100, 40,
-	 30, 3,
-	 10, 2,
-	 0,
-	 FB_VMODE_NONINTERLACED,
-	 FB_MODE_IS_DETAILED,},
-	{
-	 "LDB-F07A0102", 60, 800, 480, 50000,
-	 0, 50,
-	 25, 10,
-	 128, 10,
-	 0,
-	 FB_VMODE_NONINTERLACED,
-	 FB_MODE_IS_DETAILED,},
-	{
-	 "LDB-HSD101PFW2", 60, 1024, 600, 22222,
-	 0, 0,
-	 0, 2,
-	 176, 23,
-	 FB_SYNC_CLK_LAT_FALL,
-	 FB_VMODE_NONINTERLACED,
-	 FB_MODE_IS_DETAILED,},
-	{
-	 "LDB-F04B0101", 60, 480, 272, 111111,
-	 30, 5,
-	 0, 8,
-	 10, 8,
-	 0,
-	 FB_VMODE_NONINTERLACED,
-	 FB_MODE_IS_DETAILED,}
-};
-static int ldb_modedb_sz = ARRAY_SIZE(ldb_modedb);
 
 static inline int is_imx6_ldb(struct fsl_mxc_ldb_platform_data *plat_data)
 {
@@ -279,6 +239,7 @@ static int ldb_get_of_property(struct platform_device *pdev,
 	u32 sec_ipu_id, sec_disp_id;
 	char *mode;
 	u32 ext_ref;
+	struct device_node *disp_np = NULL;
 
 	err = of_property_read_string(np, "mode", (const char **)&mode);
 	if (err) {
@@ -318,6 +279,55 @@ static int ldb_get_of_property(struct platform_device *pdev,
 	plat_data->sec_ipu_id = sec_ipu_id;
 	plat_data->sec_disp_id = sec_disp_id;
 
+	/* Primary display timings */
+	disp_np = of_parse_phandle(np, "display" , 0);
+	if (!disp_np) {
+		dev_err(&pdev->dev, "failed to get primary display.\n");
+		return -ENOENT;
+	}
+	plat_data->disp.disp_name = disp_np->name;
+
+
+	plat_data->disp.timings = of_get_display_timings(disp_np);
+	if (!plat_data->disp.timings) {
+		dev_err(&pdev->dev, "failed to get primary display timings\n");
+		err = -ENOENT;
+		goto out;
+	}
+
+	if (of_get_fb_videomode(disp_np, &plat_data->disp.native_mode,
+				OF_USE_NATIVE_MODE)) {
+		dev_err(&pdev->dev, "failed to get primary display native mode\n");
+		err = -ENOENT;
+		goto out;
+	}
+
+	of_node_put(disp_np);
+
+	/* Secondary display timings */
+	disp_np = of_parse_phandle(np, "sec_display" , 0);
+	if (!disp_np) {
+		dev_err(&pdev->dev, "failed to get secondary display.\n");
+		return -ENOENT;
+	}
+	plat_data->sec_disp.disp_name = disp_np->name;
+
+	plat_data->sec_disp.timings = of_get_display_timings(disp_np);
+	if (!plat_data->sec_disp.timings) {
+		dev_err(&pdev->dev, "failed to get secondary display timings\n");
+		err = -ENOENT;
+		goto out;
+	}
+
+	if (of_get_fb_videomode(disp_np, &plat_data->sec_disp.native_mode,
+				OF_USE_NATIVE_MODE)) {
+		dev_err(&pdev->dev, "failed to get secondary display native mode\n");
+		err = -ENOENT;
+		goto out;
+	}
+
+out:
+	of_node_put(disp_np);
 	return err;
 }
 
@@ -550,10 +560,76 @@ static int ldb_ipu_ldb_route(int ipu, int di, struct ldb_data *ldb)
 	return 0;
 }
 
+static int ldb_set_videomode(struct device *dev,
+		struct fsl_mxc_ldb_platform_data *plat_data,
+		struct mxc_dispdrv_setting *setting,
+		int index)
+{
+	int ret = -ENOENT;
+	int i;
+	struct fb_videomode *modedb = NULL;
+	struct fsl_mxc_ldb_display_data *display;
+
+	if (index == 0)
+		display = &plat_data->disp;
+	else if (index == 1)
+		display = &plat_data->sec_disp;
+	else {
+		dev_info(dev, " Invalid display index %d\n", index);
+		return -ENOENT;
+	}
+
+	if (!display->timings->num_timings)
+		return -ENOENT;
+
+	modedb = vzalloc(sizeof(*modedb) *
+			display->timings->num_timings);
+	if (!modedb)
+		return -ENOMEM;
+
+	for (i = 0; i < display->timings->num_timings; i++) {
+		struct videomode vm;
+
+		videomode_from_timing(display->timings->timings[i], &vm);
+		ret = fb_videomode_from_videomode(&vm, &modedb[i]);
+		if (ret)
+			goto out;
+	}
+
+	ret = fb_find_mode(&setting->fbi->var, setting->fbi,
+			setting->dft_mode_str, modedb,
+			display->timings->num_timings, NULL,
+			setting->default_bpp);
+	if (!ret) {
+		fb_videomode_to_var(&setting->fbi->var,
+				&display->native_mode);
+		dev_info(dev, "Using native mode for %s\n",
+				display->disp_name);
+	} else {
+		dev_info(dev, "Using specified mode for %s\n",
+				setting->dft_mode_str);
+	}
+
+	INIT_LIST_HEAD(&setting->fbi->modelist);
+	for (i = 0; i < display->timings->num_timings; i++) {
+		struct fb_videomode m;
+
+		fb_var_to_videomode(&m, &setting->fbi->var);
+		if (fb_mode_is_equal(&m, &modedb[i])) {
+			ret = fb_add_videomode(&modedb[i],
+				&setting->fbi->modelist);
+			break;
+		}
+	}
+out:
+	vfree(modedb);
+	return ret;
+}
+
 static int ldb_disp_init(struct mxc_dispdrv_handle *disp,
 	struct mxc_dispdrv_setting *setting)
 {
-	int ret = 0, i, lvds_channel = 0;
+	int ret = 0, lvds_channel = 0;
 	struct ldb_data *ldb = mxc_dispdrv_getdata(disp);
 	struct fsl_mxc_ldb_platform_data *plat_data = ldb->pdev->dev.platform_data;
 	struct resource *res;
@@ -839,25 +915,7 @@ static int ldb_disp_init(struct mxc_dispdrv_handle *disp,
 		ldb_ipu_ldb_route(setting->dev_id, setting->disp_id, ldb);
 
 	/* must use spec video mode defined by driver */
-	ret = fb_find_mode(&setting->fbi->var, setting->fbi, setting->dft_mode_str,
-				ldb_modedb, ldb_modedb_sz, NULL, setting->default_bpp);
-
-	if (ret == 1)
-		dev_info(&ldb->pdev->dev,"Using specified mode for %s\n",setting->dft_mode_str);
-
-	if (ret != 1)
-		fb_videomode_to_var(&setting->fbi->var, &ldb_modedb[0]);
-
-	INIT_LIST_HEAD(&setting->fbi->modelist);
-	for (i = 0; i < ldb_modedb_sz; i++) {
-		struct fb_videomode m;
-		fb_var_to_videomode(&m, &setting->fbi->var);
-		if (fb_mode_is_equal(&m, &ldb_modedb[i])) {
-			fb_add_videomode(&ldb_modedb[i],
-					&setting->fbi->modelist);
-			break;
-		}
-	}
+	ldb_set_videomode(&ldb->pdev->dev, plat_data, setting, setting_idx);
 
 	ldb->setting[setting_idx].ipu = setting->dev_id;
 	ldb->setting[setting_idx].di = setting->disp_id;
