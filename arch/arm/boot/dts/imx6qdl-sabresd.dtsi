@@ -204,7 +204,24 @@
 		default_ifmt = "RGB565";
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_ipu1_1>;
+		display = <&claa>;
 		status = "okay";
+	};
+
+	claa: CLAA-WVGA {
+		display-timings {
+			timing {
+				clock-frequency = <27000000>;
+				hactive = <800>;
+				vactive = <480>;
+				hfront-porch = <60>;
+				hback-porch = <40>;
+				hsync-len = <20>;
+				vback-porch = <10>;
+				vfront-porch = <10>;
+				vsync-len = <10>;
+			};
+		};
 	};
 
 	backlight {
