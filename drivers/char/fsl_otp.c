@@ -66,6 +66,7 @@
 #define HW_OCOTP_DATA3_MX7D		0x00000050
 
 #define HW_OCOTP_CUST_N(n)	(0x00000400 + (n) * 0x10)
+#define HW_OCTP_IDX_MAC0	0x22
 #define HW_OCTP_IDX_MAC1	0x23
 
 #define BF(value, field)	(((value) << BP_##field) & BM_##field)
@@ -486,8 +487,7 @@ MODULE_DEVICE_TABLE(of, fsl_otp_dt_ids);
 
 static int fsl_register_hwid(void) {
 	struct device_node *np = NULL;
-	u32 ocotp;
-	u8 *hwid;
+	u32 mac0, mac1;
 	char str[20];
 	struct property *hwidprop;
 	const char *hwidpropname;
@@ -510,33 +510,37 @@ static int fsl_register_hwid(void) {
 	if (!np)
 		return -EINVAL;
 
-	if(fsl_otp_read(HW_OCTP_IDX_MAC1, &ocotp) != 0)
-		return -EINVAL;
-
 	/* Retrieve HWID from OTP bits */
-	hwid = (u8 *)&ocotp;
+	if (fsl_otp_read(HW_OCTP_IDX_MAC0, &mac0) ||
+	    fsl_otp_read(HW_OCTP_IDX_MAC1, &mac1))
+		return -EINVAL;
 
 	/*
 	 * Try to read the HWID fields from DT. If not found, create those
-	 * properties from the information on the OTP bits.
+	 * properties from the information on the OTP bits:
+	 *  +------------------------------+---------------------------+
+	 *  |              MAC1            |            MAC0           |
+	 *  +-----[19.16][15..8][7.4][3.0] | [31..24][23..16][15....0] |
+	 *  |        TF  VARIANT  HV  CERT |   YEAR    MONTH    S/N    |
+	 *  +------------------------------+---------------------------+
 	 */
 	for (i = 0; i < ARRAY_SIZE(propnames); i++) {
 		if (of_property_read_string(np, propnames[i], &hwidpropname)) {
 			/* Convert HWID fields to strings */
 			if (!strcmp("digi,hwid,tf", propnames[i]))
-				sprintf(str, "0x%02x", hwid[6]);
+				sprintf(str, "0x%02x", (mac1 >> 16) & 0xf);
 			else if (!strcmp("digi,hwid,variant", propnames[i]))
-				sprintf(str, "0x%02x", hwid[5]);
+				sprintf(str, "0x%02x", (mac1 >> 8) & 0xff);
 			else if (!strcmp("digi,hwid,hv", propnames[i]))
-				sprintf(str, "0x%x", hwid[4] >> 4);
+				sprintf(str, "0x%x", (mac1 >> 4) & 0xf);
 			else if (!strcmp("digi,hwid,cert", propnames[i]))
-				sprintf(str, "0x%x", hwid[4] & 0xf);
+				sprintf(str, "0x%x", mac1 & 0xf);
 			else if (!strcmp("digi,hwid,year", propnames[i]))
-				sprintf(str, "20%02d", hwid[3]);
+				sprintf(str, "20%02d", (mac0 >> 24) & 0xff);
 			else if (!strcmp("digi,hwid,month", propnames[i]))
-				sprintf(str, "%02d", hwid[2] >> 4);
+				sprintf(str, "%02d", (mac0 >> 16) & 0xff);
 			else if (!strcmp("digi,hwid,sn", propnames[i]))
-				sprintf(str, "%d", (&ocotp)[0] & 0xfffff);
+				sprintf(str, "%d", mac0 & 0xffff);
 			else
 				continue;
 
