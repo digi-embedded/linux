@@ -491,7 +491,7 @@ static int fsl_register_hwid(void) {
 	char str[20];
 	struct property *hwidprop;
 	const char *hwidpropname;
-	int ret, i;
+	int i;
 	const char *propnames[] = {
 		"digi,hwid,tf",
 		"digi,hwid,variant",
@@ -517,15 +517,14 @@ static int fsl_register_hwid(void) {
 	hwid = (u8 *)&ocotp;
 
 	/*
-	* Try to read the HWID fields from DT. If not found, create those
-	* properties from the information on the OTP bits.
-	*/
+	 * Try to read the HWID fields from DT. If not found, create those
+	 * properties from the information on the OTP bits.
+	 */
 	for (i = 0; i < ARRAY_SIZE(propnames); i++) {
-		ret = of_property_read_string(np, propnames[i], &hwidpropname);
-		if (ret) {
-		/* Convert HWID fields to strings */
-		if (!strcmp("digi,hwid,tf", propnames[i]))
-			sprintf(str, "0x%02x", hwid[6]);
+		if (of_property_read_string(np, propnames[i], &hwidpropname)) {
+			/* Convert HWID fields to strings */
+			if (!strcmp("digi,hwid,tf", propnames[i]))
+				sprintf(str, "0x%02x", hwid[6]);
 			else if (!strcmp("digi,hwid,variant", propnames[i]))
 				sprintf(str, "0x%02x", hwid[5]);
 			else if (!strcmp("digi,hwid,hv", propnames[i]))
@@ -542,7 +541,7 @@ static int fsl_register_hwid(void) {
 				continue;
 
 			hwidprop = kzalloc(sizeof(*hwidprop) + strlen(str),
-				GFP_KERNEL);
+				           GFP_KERNEL);
 			if (!hwidprop)
 				return -ENOMEM;
 
