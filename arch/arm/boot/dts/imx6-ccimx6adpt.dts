@@ -366,18 +366,24 @@
 				regulator-name = "DA9063_BPRO";
 				regulator-boot-on;
 				regulator-always-on;
+				regulator-suspend-mem-disabled;
+				regulator-suspend-standby-disabled;
 			};
 
 			bmem: DA9063_BMEM {
 				regulator-name = "DA9063_BMEM";
 				regulator-boot-on;
 				regulator-always-on;
+				regulator-suspend-mem-microvolt = <1500000>;
+				regulator-suspend-standby-microvolt = <1500000>;
 			};
 
 			bio: DA9063_BIO {
 				regulator-name = "DA9063_BIO";
 				regulator-boot-on;
 				regulator-always-on;
+				regulator-suspend-mem-disabled;
+				regulator-suspend-standby-disabled;
 			};
 
 			bperi: DA9063_BPERI {
@@ -390,52 +396,72 @@
 
 			ldo1: DA9063_LDO1 {
 				regulator-name = "DA9063_LDO1";
+				regulator-suspend-mem-disabled;
+				regulator-suspend-standby-disabled;
 			};
 
 			ldo2: DA9063_LDO2 {
 				regulator-name = "DA9063_LDO2";
 				regulator-boot-on;
 				regulator-always-on;
+				regulator-suspend-mem-disabled;
+				regulator-suspend-standby-disabled;
 			};
 
 			ldo3: DA9063_LDO3 {
 				regulator-name = "DA9063_LDO3";
 				regulator-boot-on;
 				regulator-always-on;
+				regulator-suspend-mem-microvolt = <3300000>;
+				regulator-suspend-standby-microvolt = <3300000>;
 			};
 
 			ldo4: DA9063_LDO4 {
 				regulator-name = "DA9063_LDO4";
 				regulator-min-microvolt = <2500000>;
 				regulator-max-microvolt = <2500000>;
+				regulator-suspend-mem-disabled;
+				regulator-suspend-standby-disabled;
 			};
 
 			ldo5: DA9063_LDO5 {
 				regulator-name = "DA9063_LDO5";
 				regulator-boot-on;
 				regulator-always-on;
+				regulator-suspend-mem-microvolt = <3000000>;
+				regulator-suspend-standby-microvolt = <3000000>;
 			};
 
 			ldo6: DA9063_LDO6 {
 				regulator-name = "DA9063_LDO6";
+				regulator-suspend-mem-disabled;
+				regulator-suspend-standby-disabled;
 			};
 
 			ldo7: DA9063_LDO7 {
 				regulator-name = "DA9063_LDO7";
 				regulator-boot-on;
 				regulator-always-on;
+				regulator-suspend-mem-disabled;
+				regulator-suspend-standby-disabled;
 			};
 
 			ldo8: DA9063_LDO8 {
 				regulator-name = "DA9063_LDO8";
+				regulator-suspend-mem-disabled;
+				regulator-suspend-standby-disabled;
 			};
 
 			ldo9: DA9063_LDO9 {
 				regulator-name = "DA9063_LDO9";
+				regulator-suspend-mem-disabled;
+				regulator-suspend-standby-disabled;
 			};
 
 			ldo10: DA9063_LDO10 {
 				regulator-name = "DA9063_LDO10";
+				regulator-suspend-mem-disabled;
+				regulator-suspend-standby-disabled;
 			};
 
 			ldo11: DA9063_LDO11 {
