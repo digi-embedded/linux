@@ -518,11 +518,11 @@ static int fsl_register_hwid(void) {
 	/*
 	 * Try to read the HWID fields from DT. If not found, create those
 	 * properties from the information on the OTP bits:
-	 *  +------------------------------+---------------------------+
-	 *  |              MAC1            |            MAC0           |
-	 *  +-----[19.16][15..8][7.4][3.0] | [31..24][23..16][15....0] |
-	 *  |        TF  VARIANT  HV  CERT |   YEAR    MONTH    S/N    |
-	 *  +------------------------------+---------------------------+
+	 *  +------------------------------+----------------------------+
+	 *  |              MAC1            |            MAC0            |
+	 *  +-----[19.16][15..8][7.4][3.0] | [31..24][23.20][19......0] |
+	 *  |        TF  VARIANT  HV  CERT |   YEAR   MONTH     S/N     |
+	 *  +------------------------------+----------------------------+
 	 */
 	for (i = 0; i < ARRAY_SIZE(propnames); i++) {
 		if (of_property_read_string(np, propnames[i], &hwidpropname)) {
@@ -538,9 +538,9 @@ static int fsl_register_hwid(void) {
 			else if (!strcmp("digi,hwid,year", propnames[i]))
 				sprintf(str, "20%02d", (mac0 >> 24) & 0xff);
 			else if (!strcmp("digi,hwid,month", propnames[i]))
-				sprintf(str, "%02d", (mac0 >> 16) & 0xff);
+				sprintf(str, "%02d", (mac0 >> 20) & 0xf);
 			else if (!strcmp("digi,hwid,sn", propnames[i]))
-				sprintf(str, "%d", mac0 & 0xffff);
+				sprintf(str, "%d", mac0 & 0xfffff);
 			else
 				continue;
 
@@ -560,6 +560,7 @@ static int fsl_register_hwid(void) {
 			of_update_property(np, hwidprop);
 		}
 	}
+
 	return 0;
 }
 
