@@ -1093,6 +1093,16 @@
 				MX6QDL_PAD_KEY_COL0__ECSPI1_SCLK 0x100b1
 			>;
 		};
+
+		pinctrl_ecspi1_3: ecspi1grp-3 {
+			fsl,pins = <
+				MX6QDL_PAD_EIM_D17__ECSPI1_MISO 0x100b1
+				MX6QDL_PAD_EIM_D18__ECSPI1_MOSI 0x100b1
+				MX6QDL_PAD_EIM_D16__ECSPI1_SCLK 0x100b1
+				MX6QDL_PAD_EIM_EB2__GPIO2_IO30  0x100b1
+				MX6QDL_PAD_KEY_COL2__GPIO4_IO10 0x100b1
+			>;
+		};
 	};
 
 	ecspi2 {
