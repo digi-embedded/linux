@@ -384,14 +384,24 @@ int da9063_get_trim_data(struct da9063 *da9063)
 }
 
 void da9063_power_off ( void ) {
-	u8 val = 0;
-
 	BUG_ON(!da9063_data);
+
+	/* Configure LDO11 and BPERI not to follow sequencer */
+	da9063_reg_clear_bits(da9063_data, DA9063_REG_BPERI_CONT,
+			      DA9063_BUCK_CONF);
+	da9063_reg_clear_bits(da9063_data, DA9063_REG_LDO11_CONT,
+			      DA9063_LDO_CONF);
+
+	/* Configure to read OTP settings after power down */
+	da9063_reg_set_bits(da9063_data, DA9063_REG_CONTROL_C,
+			    DA9063_OTPREAD_EN);
+
+	/* Power down */
+	da9063_reg_clear_bits(da9063_data, DA9063_REG_CONTROL_A,
+			      DA9063_SYSTEM_EN);
 
 	if(!mutex_is_locked(&da9063_data->io_mutex))
 		mutex_lock(&da9063_data->io_mutex);
-
-	da9063_write_device(da9063_data, DA9063_I2C_REG(DA9063_REG_CONTROL_A), 1, &val);
 
 	// Do not unlock mutex to avoid further accesses
 	// Do not return
