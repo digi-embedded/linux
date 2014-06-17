@@ -911,7 +911,7 @@ static int ldo_regulator_remove(struct snd_soc_codec *codec)
 static int sgtl5000_set_bias_level(struct snd_soc_codec *codec,
 				   enum snd_soc_bias_level level)
 {
-	int ret;
+	int ret, reg;
 	struct sgtl5000_priv *sgtl5000 = snd_soc_codec_get_drvdata(codec);
 
 	switch (level) {
@@ -920,18 +920,46 @@ static int sgtl5000_set_bias_level(struct snd_soc_codec *codec,
 		break;
 	case SND_SOC_BIAS_STANDBY:
 		if (codec->dapm.bias_level == SND_SOC_BIAS_OFF) {
-			ret = regulator_bulk_enable(
+			if (of_machine_is_compatible("digi,ccimx6sbc") ||
+			    of_machine_is_compatible("digi,ccimx6adpt")) {
+				reg = snd_soc_read(codec,
+						   SGTL5000_CHIP_ANA_POWER);
+				reg |= SGTL5000_VAG_POWERUP;
+				reg |= SGTL5000_HP_POWERUP;
+				reg |= SGTL5000_LINE_OUT_POWERUP;
+				reg |= SGTL5000_DAC_POWERUP;
+				reg |= SGTL5000_ADC_POWERUP;
+				snd_soc_write(codec, SGTL5000_CHIP_ANA_POWER,
+					      reg);
+			} else {
+				ret = regulator_bulk_enable(
 						ARRAY_SIZE(sgtl5000->supplies),
 						sgtl5000->supplies);
-			if (ret)
-				return ret;
+				if (ret)
+					return ret;
+			}
 			udelay(10);
 		}
-
 		break;
 	case SND_SOC_BIAS_OFF:
-		regulator_bulk_disable(ARRAY_SIZE(sgtl5000->supplies),
-					sgtl5000->supplies);
+		if (of_machine_is_compatible("digi,ccimx6sbc") ||
+		    of_machine_is_compatible("digi,ccimx6adpt")) {
+			reg = snd_soc_read(codec,
+					   SGTL5000_CHIP_ANA_POWER);
+			reg &= ~SGTL5000_VAG_POWERUP;
+			snd_soc_write(codec, SGTL5000_CHIP_ANA_POWER,
+				      reg);
+			msleep(400);
+			reg &= ~SGTL5000_HP_POWERUP;
+			reg &= ~SGTL5000_LINE_OUT_POWERUP;
+			reg &= ~SGTL5000_DAC_POWERUP;
+			reg &= ~SGTL5000_ADC_POWERUP;
+			snd_soc_write(codec, SGTL5000_CHIP_ANA_POWER,
+				      reg);
+		} else {
+			regulator_bulk_disable(ARRAY_SIZE(sgtl5000->supplies),
+					       sgtl5000->supplies);
+		}
 		break;
 	}
 
@@ -1057,6 +1085,13 @@ static int sgtl5000_suspend(struct snd_soc_codec *codec)
 
 static int sgtl5000_resume(struct snd_soc_codec *codec)
 {
+	struct clk *codec_clk;
+
+	/* Make sure clock is enabled as we will make an access next */
+	codec_clk = clk_get(codec->dev, NULL);
+	if (!IS_ERR(codec_clk))
+		clk_prepare_enable(codec_clk);
+
 	/* Bring the codec back up to standby to enable regulators */
 	sgtl5000_set_bias_level(codec, SND_SOC_BIAS_STANDBY);
 
