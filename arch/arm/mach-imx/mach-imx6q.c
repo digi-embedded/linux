@@ -261,15 +261,32 @@ static void imx6q_wifi_init (void)
 static void imx6q_bt_init (void)
 {
 	struct device_node *np;
-	int pwrdown_gpio;
+	int pwrdown_gpio, disable_gpio;
 	enum of_gpio_flags flags;
 
 	np = of_find_node_by_path("/bluetooth");
 	if (!np)
 		return;
 
+	/* Read the disable gpio */
+	disable_gpio = of_get_named_gpio_flags(np, "digi,disable-gpios", 0,
+			&flags);
+	if (gpio_is_valid(disable_gpio)) {
+		if (!gpio_request_one(disable_gpio, GPIOF_DIR_OUT,
+			"bt_chip_dis_l")) {
+			/* Start with Power pin low, then set high to power  */
+			gpio_set_value_cansleep(disable_gpio, 1);
+			/*
+			* Free the chip PWD pin to allow controlling
+			* it from user space
+			*/
+			gpio_free(disable_gpio);
+		}
+	}
+
 	/* Read the power down gpio */
-	pwrdown_gpio = of_get_named_gpio_flags(np, "digi,pwrdown-gpios", 0, &flags);
+	pwrdown_gpio = of_get_named_gpio_flags(np, "digi,pwrdown-gpios", 0,
+			&flags);
 	if (gpio_is_valid(pwrdown_gpio)) {
 		if (!gpio_request_one(pwrdown_gpio, GPIOF_DIR_OUT,
 			"bt_chip_pwd_l")) {
