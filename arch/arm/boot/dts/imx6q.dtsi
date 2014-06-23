@@ -114,8 +114,8 @@
 		hdmi_core: hdmi_core@00120000 {
 			compatible = "fsl,imx6q-hdmi-core";
 			reg = <0x00120000 0x9000>;
-			clocks = <&clks 124>, <&clks 123>;
-			clock-names = "hdmi_isfr", "hdmi_iahb";
+			clocks = <&clks 124>, <&clks 123>, <&clks 138>;
+			clock-names = "hdmi_isfr", "hdmi_iahb", "mipi_core";
 			status = "disabled";
 		};
 
