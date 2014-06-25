@@ -3765,6 +3765,8 @@ static void hci_sync_conn_complete_evt(struct hci_dev *hdev,
 
 		hci_debugfs_create_conn(conn);
 		hci_conn_add_sysfs(conn);
+		if (hdev->notify)
+			hdev->notify(hdev, HCI_NOTIFY_SCO_COMPLETE);
 		break;
 
 	case 0x10:	/* Connection Accept Timeout */
