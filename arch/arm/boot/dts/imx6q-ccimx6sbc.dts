@@ -636,6 +636,7 @@
 	pinctrl-0 = <&pinctrl_usdhc1_1>;
 	no-1-8-v;
 	keep-power-in-suspend;
+	enable-sdio-wakeup;
 	status = "okay";
 };
 
@@ -645,6 +646,7 @@
 	broken-cd;
 	no-1-8-v;
 	keep-power-in-suspend;
+	enable-sdio-wakeup;
 	status = "okay";
 };
 
