@@ -635,6 +635,7 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_usdhc1_1>;
 	no-1-8-v;
+	keep-power-in-suspend;
 	status = "okay";
 };
 
@@ -643,6 +644,7 @@
 	pinctrl-0 = <&pinctrl_usdhc2_2>;
 	broken-cd;
 	no-1-8-v;
+	keep-power-in-suspend;
 	status = "okay";
 };
 
@@ -652,6 +654,7 @@
 	bus-width = <8>;
 	non-removable;
 	no-1-8-v;
+	keep-power-in-suspend;
 	status = "okay";
 };
 
