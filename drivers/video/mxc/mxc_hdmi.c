@@ -2454,6 +2454,19 @@ static void hdmi_get_of_property(struct mxc_hdmi *hdmi)
 
 }
 
+static int valid_mode(int pixel_fmt)
+{
+	return ((pixel_fmt == IPU_PIX_FMT_RGB24) ||
+		(pixel_fmt == IPU_PIX_FMT_BGR24) ||
+		(pixel_fmt == IPU_PIX_FMT_GBR24) ||
+		(pixel_fmt == IPU_PIX_FMT_YUV444) ||
+		(pixel_fmt == IPU_PIX_FMT_VYU444) ||
+		(pixel_fmt == IPU_PIX_FMT_YUYV) ||
+		(pixel_fmt == IPU_PIX_FMT_UYVY) ||
+		(pixel_fmt == IPU_PIX_FMT_YVYU) ||
+		(pixel_fmt == IPU_PIX_FMT_VYUY));
+}
+
 /* HDMI Initialization Step A */
 static int mxc_hdmi_disp_init(struct mxc_dispdrv_handle *disp,
 			      struct mxc_dispdrv_setting *setting)
@@ -2487,7 +2500,10 @@ static int mxc_hdmi_disp_init(struct mxc_dispdrv_handle *disp,
 	if (ret < 0)
 		return ret;
 
-	setting->if_fmt = IPU_PIX_FMT_RGB24;
+	if (!valid_mode(setting->if_fmt)) {
+		dev_warn(&hdmi->pdev->dev, "Input pixel format not valid use default RGB24\n");
+		setting->if_fmt = IPU_PIX_FMT_RGB24;
+	}
 
 	hdmi->dft_mode_str = setting->dft_mode_str;
 	hdmi->default_bpp = setting->default_bpp;
