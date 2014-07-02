@@ -3061,6 +3061,70 @@ static int ipu_suspend(struct device *dev)
 	return 0;
 }
 
+char *ipu_pixelfmt_str(int pixel_fmt)
+{
+	switch (pixel_fmt) {
+	case IPU_PIX_FMT_RGB666:
+		return "IPU_PIX_FMT_RGB666";
+	case IPU_PIX_FMT_RGB565:
+		return "IPU_PIX_FMT_RGB565";
+	case IPU_PIX_FMT_BGR24:
+		return "IPU_PIX_FMT_BGR24";
+	case IPU_PIX_FMT_RGB24:
+		return "IPU_PIX_FMT_RGB24";
+	case IPU_PIX_FMT_GBR24:
+		return "IPU_PIX_FMT_GBR24";
+	case IPU_PIX_FMT_BGR32:
+		return "IPU_PIX_FMT_BGR32";
+	case IPU_PIX_FMT_BGRA32:
+		return "IPU_PIX_FMT_BGRA32";
+	case IPU_PIX_FMT_RGB32:
+		return "IPU_PIX_FMT_RGB32";
+	case IPU_PIX_FMT_RGBA32:
+		return "IPU_PIX_FMT_RGBA32";
+	case IPU_PIX_FMT_ABGR32:
+		return "IPU_PIX_FMT_ABGR32";
+	case IPU_PIX_FMT_LVDS666:
+		return "IPU_PIX_FMT_LVDS666";
+	case IPU_PIX_FMT_LVDS888:
+		return "IPU_PIX_FMT_LVDS888";
+	case IPU_PIX_FMT_YUYV:
+		return "IPU_PIX_FMT_YUYV";
+	case IPU_PIX_FMT_UYVY:
+		return "IPU_PIX_FMT_UYVY";
+	case IPU_PIX_FMT_YVYU:
+		return "IPU_PIX_FMT_YVYU";
+	case IPU_PIX_FMT_VYUY:
+		return "IPU_PIX_FMT_VYUY";
+	case IPU_PIX_FMT_Y41P:
+		return "IPU_PIX_FMT_Y41P";
+	case IPU_PIX_FMT_YUV444:
+		return "IPU_PIX_FMT_YUV444";
+	case IPU_PIX_FMT_VYU444:
+		return "IPU_PIX_FMT_VYU444";
+	case IPU_PIX_FMT_NV12:
+		return "IPU_PIX_FMT_NV12";
+	case IPU_PIX_FMT_GREY:
+		return "IPU_PIX_FMT_GREY";
+	case IPU_PIX_FMT_YVU410P:
+		return "IPU_PIX_FMT_YVU410P";
+	case IPU_PIX_FMT_YUV410P:
+		return "IPU_PIX_FMT_YUV410P";
+	case IPU_PIX_FMT_YVU420P:
+		return "IPU_PIX_FMT_YVU420P";
+	case IPU_PIX_FMT_YUV420P:
+		return "IPU_PIX_FMT_YUV420P";
+	case IPU_PIX_FMT_YUV420P2:
+		return "IPU_PIX_FMT_YUV420P2";
+	case IPU_PIX_FMT_YVU422P:
+		return "IPU_PIX_FMT_YVU422P";
+	case IPU_PIX_FMT_YUV422P:
+		return "IPU_PIX_FMT_YUV422P";
+	default:
+		return "";
+	}
+}
+
 static int ipu_resume(struct device *dev)
 {
 	struct ipu_soc *ipu = dev_get_drvdata(dev);
