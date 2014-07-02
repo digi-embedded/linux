@@ -35,4 +35,6 @@ int need_csc(int ifmt, int ofmt);
 int ipu_queue_task(struct ipu_task *task);
 int ipu_check_task(struct ipu_task *task);
 
+char *ipu_pixelfmt_str(int pixel_fmt);
+
 #endif
