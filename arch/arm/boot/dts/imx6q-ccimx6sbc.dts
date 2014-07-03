@@ -56,7 +56,7 @@
 		disp_dev = "hdmi";
 		interface_pix_fmt = "RGB24";
 		mode_str ="1920x1080M@60";
-		default_bpp = <24>;
+		default_bpp = <32>;
 		int_clk = <0>;
 		late_init = <0>;
 		status = "okay";
