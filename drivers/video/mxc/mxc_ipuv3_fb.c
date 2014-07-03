@@ -1615,6 +1615,7 @@ static int mxcfb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
 		ret = bpp_to_var(var->bits_per_pixel, var);
 		if (ret < 0)
 			return ret;
+		dev_dbg(info->device, "Falling back to default pixel format\n");
 	}
 
 	if (ipu_pixel_format_is_gpu_tile(var->nonstd)) {
@@ -3011,8 +3012,9 @@ static int mxcfb_dispdrv_init(struct platform_device *pdev,
 		if (ret)
 			return ret;
 
-		dev_dbg(&pdev->dev, "di_pixfmt:0x%x, bpp:0x%x, di:%d, ipu:%d\n",
-				setting.if_fmt, setting.default_bpp,
+		dev_dbg(&pdev->dev, "di_pixfmt:%s, bpp:0x%x, di:%d, ipu:%d\n",
+				ipu_pixelfmt_str(setting.if_fmt),
+				setting.default_bpp,
 				mxcfbi->ipu_di, mxcfbi->ipu_id);
 	}
 
