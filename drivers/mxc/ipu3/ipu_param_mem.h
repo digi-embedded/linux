@@ -483,7 +483,9 @@ static inline void _ipu_ch_param_init(struct ipu_soc *ipu, int ch,
 	ipu_ch_param_set_field(&params, 0, 46, 22, u_offset / 8);
 	ipu_ch_param_set_field(&params, 0, 68, 22, v_offset / 8);
 
-	dev_dbg(ipu->dev, "initializing idma ch %d @ %p\n", ch, ipu_ch_param_addr(ipu, ch));
+	dev_dbg(ipu->dev, "initializing idma ch %d @ %p with %s\n", ch,
+			ipu_ch_param_addr(ipu, ch),
+			ipu_pixelfmt_str(pixel_fmt));
 	fill_cpmem(ipu, ch, &params);
 	if (addr2) {
 		sub_ch = __ipu_ch_get_third_buf_cpmem_num(ch);
