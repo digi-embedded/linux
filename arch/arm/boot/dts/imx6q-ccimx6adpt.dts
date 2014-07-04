@@ -17,7 +17,7 @@
 
 / {
 	model = "Digi International ConnectCore 6 MX53 JSK adapter.";
-	compatible = "digi,ccimx6adpt", "fsl,imx6q";
+	compatible = "digi,ccimx6adpt", "digi,ccimx6", "fsl,imx6q";
 	digi,machine,name = "ccimx6adpt";
 
 	aliases {

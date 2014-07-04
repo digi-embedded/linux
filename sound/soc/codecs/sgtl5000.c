@@ -466,8 +466,7 @@ static int sgtl5000_set_dai_fmt(struct snd_soc_dai *codec_dai, unsigned int fmt)
 		break;
 	case SND_SOC_DAIFMT_I2S:
 		i2sctl |= SGTL5000_I2S_MODE_I2S_LJ;
-		if (of_machine_is_compatible("digi,ccimx6sbc") ||
-		    of_machine_is_compatible("digi,ccimx6adpt"))
+		if (of_machine_is_compatible("digi,ccimx6"))
 				i2sctl |= SGTL5000_I2S_LRPOL;
 		break;
 	case SND_SOC_DAIFMT_RIGHT_J:
@@ -923,8 +922,7 @@ static int sgtl5000_set_bias_level(struct snd_soc_codec *codec,
 		break;
 	case SND_SOC_BIAS_STANDBY:
 		if (codec->dapm.bias_level == SND_SOC_BIAS_OFF) {
-			if (of_machine_is_compatible("digi,ccimx6sbc") ||
-			    of_machine_is_compatible("digi,ccimx6adpt")) {
+			if (of_machine_is_compatible("digi,ccimx6")) {
 				reg = snd_soc_read(codec,
 						   SGTL5000_CHIP_ANA_POWER);
 				reg |= SGTL5000_VAG_POWERUP;
@@ -945,8 +943,7 @@ static int sgtl5000_set_bias_level(struct snd_soc_codec *codec,
 		}
 		break;
 	case SND_SOC_BIAS_OFF:
-		if (of_machine_is_compatible("digi,ccimx6sbc") ||
-		    of_machine_is_compatible("digi,ccimx6adpt")) {
+		if (of_machine_is_compatible("digi,ccimx6")) {
 			reg = snd_soc_read(codec,
 					   SGTL5000_CHIP_ANA_POWER);
 			reg &= ~SGTL5000_VAG_POWERUP;

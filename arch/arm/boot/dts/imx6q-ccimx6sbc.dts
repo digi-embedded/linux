@@ -17,7 +17,7 @@
 
 / {
 	model = "Digi International ConnectCore 6 Single Board Computer.";
-	compatible = "digi,ccimx6sbc", "fsl,imx6q";
+	compatible = "digi,ccimx6sbc", "digi,ccimx6", "fsl,imx6q";
 	digi,machine,name = "ccimx6sbc";
 
 	aliases {
