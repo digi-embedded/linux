@@ -823,11 +823,22 @@ static void imx_set_mctrl(struct uart_port *port, unsigned int mctrl)
 	struct imx_port *sport = (struct imx_port *)port;
 	unsigned long temp;
 
-	temp = readl(sport->port.membase + UCR2) & ~UCR2_CTS;
+	temp = readl(sport->port.membase + UCR2);
 
-	if (mctrl & TIOCM_RTS)
-		if (!sport->dma_is_enabled)
+	if (mctrl & TIOCM_RTS) {
+		/*
+		 * Return to hardware-driven hardware flow control if the
+		 * option is enabled
+		 */
+		if (sport->have_rtscts) {
+			temp |= UCR2_CTSC;
+		} else {
 			temp |= UCR2_CTS;
+			temp &= ~UCR2_CTSC;
+		}
+	} else {
+		temp &= ~(UCR2_CTS | UCR2_CTSC);
+	}
 
 	writel(temp, sport->port.membase + UCR2);
 
