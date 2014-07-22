@@ -982,6 +982,7 @@ static void imx_uart_dma_exit(struct imx_port *sport)
 	sport->dma_is_inited = 0;
 }
 
+#if 0
 static int imx_uart_dma_init(struct imx_port *sport)
 {
 	struct dma_slave_config slave_config = {};
@@ -1038,6 +1039,7 @@ err:
 	imx_uart_dma_exit(sport);
 	return ret;
 }
+#endif
 
 static void imx_enable_dma(struct imx_port *sport)
 {
@@ -1341,10 +1343,12 @@ imx_set_termios(struct uart_port *port, struct ktermios *termios,
 			ucr2 &= ~UCR2_IRTS;
 			ucr2 |= UCR2_CTSC;
 
+#if 0
 			/* Can we enable the DMA support? */
 			if (is_imx6q_uart(sport) && !uart_console(port)
 				&& !sport->dma_is_inited)
 				imx_uart_dma_init(sport);
+#endif
 		} else {
 			termios->c_cflag &= ~CRTSCTS;
 		}
