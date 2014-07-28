@@ -665,8 +665,12 @@ int fb_show_logo(struct fb_info *info, int rotate)
 {
 	int y;
 
+#if defined(CONFIG_FB_LOGO_FORCE_SINGLE)
+	y = fb_show_logo_line(info, rotate, fb_logo.logo, 0, 1);
+#else
 	y = fb_show_logo_line(info, rotate, fb_logo.logo, 0,
 			      num_online_cpus());
+#endif
 	y = fb_show_extra_logos(info, y, rotate);
 
 	return y;
