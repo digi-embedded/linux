@@ -368,8 +368,8 @@
 				regulator-name = "DA9063_BIO";
 				regulator-boot-on;
 				regulator-always-on;
-				regulator-suspend-mem-disabled;
-				regulator-suspend-standby-disabled;
+				regulator-suspend-mem-microvolt = <3300000>;
+				regulator-suspend-standby-microvolt = <3300000>;
 			};
 
 			bperi: DA9063_BPERI {
@@ -384,8 +384,8 @@
 				regulator-name = "DA9063_LDO2";
 				regulator-boot-on;
 				regulator-always-on;
-				regulator-suspend-mem-disabled;
-				regulator-suspend-standby-disabled;
+				regulator-suspend-mem-microvolt = <1800000>;
+				regulator-suspend-standby-microvolt = <1800000>;
 			};
 
 			ldo3: DA9063_LDO3 {
