@@ -35,7 +35,7 @@
 #define HCIUARTGETFLAGS		_IOR('U', 204, int)
 
 /* UART protocols */
-#define HCI_UART_MAX_PROTO	8
+#define HCI_UART_MAX_PROTO	9
 
 #define HCI_UART_H4	0
 #define HCI_UART_BCSP	1
@@ -150,6 +150,11 @@ int ll_deinit(void);
 #ifdef CONFIG_BT_HCIUART_ATH3K
 int ath_init(void);
 int ath_deinit(void);
+#endif
+
+#ifdef CONFIG_BT_HCIUART_IBS
+int ibs_init(void);
+int ibs_deinit(void);
 #endif
 
 #ifdef CONFIG_BT_HCIUART_3WIRE
