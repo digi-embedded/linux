@@ -590,6 +590,7 @@
 &uart1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_uart1_2>;
+	fsl,uart-has-rtscts;
 	status = "okay";
 };
 
@@ -603,6 +604,7 @@
 &uart3 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_uart3_2>;
+	fsl,uart-has-rtscts;
 	status = "okay";
 };
 
@@ -615,6 +617,7 @@
 &uart5 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_uart5_1>;
+	fsl,uart-has-rtscts;
 	status = "okay";
 };
 
