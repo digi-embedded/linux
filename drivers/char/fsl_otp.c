@@ -493,12 +493,13 @@ static int fsl_register_hwid(void) {
 	const char *hwidpropname;
 	int i;
 	const char *propnames[] = {
-		"digi,hwid,tf",
+		"digi,hwid,location",
 		"digi,hwid,variant",
 		"digi,hwid,hv",
 		"digi,hwid,cert",
 		"digi,hwid,year",
-		"digi,hwid,month",
+		"digi,hwid,week",
+		"digi,hwid,genid",
 		"digi,hwid,sn",
 	};
 
@@ -518,29 +519,40 @@ static int fsl_register_hwid(void) {
 	/*
 	 * Try to read the HWID fields from DT. If not found, create those
 	 * properties from the information on the OTP bits:
-	 *  +------------------------------+----------------------------+
-	 *  |              MAC1            |            MAC0            |
-	 *  +-----[19.16][15..8][7.4][3.0] | [31..24][23.20][19......0] |
-	 *  |        TF  VARIANT  HV  CERT |   YEAR   MONTH     S/N     |
-	 *  +------------------------------+----------------------------+
+	 *
+	 *                      MAC1 (Bank 4 Word 3)
+	 *
+	 *       | 31..26 | 25..20 |   |  15..8  | 7..4 | 3..0 |
+	 *       +--------+--------+---+---------+------+------+
+	 * HWID: |  Year  |  Week  | - | Variant |  HV  | Cert |
+	 *       +--------+--------+---+---------+------+------+
+	 *
+	 *                      MAC0 (Bank 4 Word 2)
+	 *
+	 *       |  31..27  | 26..20 |         19..0           |
+	 *       +----------+--------+-------------------------+
+	 * HWID: | Location |  GenID |      Serial number      |
+	 *       +----------+--------+-------------------------+
 	 */
 	for (i = 0; i < ARRAY_SIZE(propnames); i++) {
 		if (of_property_read_string(np, propnames[i], &hwidpropname)) {
 			/* Convert HWID fields to strings */
-			if (!strcmp("digi,hwid,tf", propnames[i]))
-				sprintf(str, "0x%02x", (mac1 >> 16) & 0xf);
+			if (!strcmp("digi,hwid,location", propnames[i]))
+				sprintf(str, "0x%02x", (mac0 >> 27) & 0x1f);
+			else if (!strcmp("digi,hwid,genid", propnames[i]))
+				sprintf(str, "%02d", (mac0 >> 20) & 0x7f);
+			else if (!strcmp("digi,hwid,sn", propnames[i]))
+				sprintf(str, "%d", mac0 & 0xfffff);
+			else if (!strcmp("digi,hwid,year", propnames[i]))
+				sprintf(str, "20%02d", (mac1 >> 26) & 0x3f);
+			else if (!strcmp("digi,hwid,week", propnames[i]))
+				sprintf(str, "%02d", (mac1 >> 20) & 0x3f);
 			else if (!strcmp("digi,hwid,variant", propnames[i]))
 				sprintf(str, "0x%02x", (mac1 >> 8) & 0xff);
 			else if (!strcmp("digi,hwid,hv", propnames[i]))
 				sprintf(str, "0x%x", (mac1 >> 4) & 0xf);
 			else if (!strcmp("digi,hwid,cert", propnames[i]))
 				sprintf(str, "0x%x", mac1 & 0xf);
-			else if (!strcmp("digi,hwid,year", propnames[i]))
-				sprintf(str, "20%02d", (mac0 >> 24) & 0xff);
-			else if (!strcmp("digi,hwid,month", propnames[i]))
-				sprintf(str, "%02d", (mac0 >> 20) & 0xf);
-			else if (!strcmp("digi,hwid,sn", propnames[i]))
-				sprintf(str, "%d", mac0 & 0xfffff);
 			else
 				continue;
 
