@@ -1624,6 +1624,13 @@
 				MX6QDL_PAD_EIM_D20__UART1_RTS_B 0x1b0b1
 			>;
 		};
+		pinctrl_uart1_3: uart1grp-3 {
+			fsl,pins = <
+				MX6QDL_PAD_SD3_DAT6__UART1_RX_DATA 0x1b0b1
+				MX6QDL_PAD_SD3_DAT7__UART1_TX_DATA 0x1b0b1
+				MX6QDL_PAD_EIM_D19__UART1_CTS_B 0x1b0b1
+			>;
+		};
 	};
 
 	uart2 {
@@ -1669,6 +1676,13 @@
 				MX6QDL_PAD_EIM_D31__UART3_RTS_B   0x1b0b1
 			>;
 		};
+		pinctrl_uart3_3: uart3grp-3 {
+			fsl,pins = <
+				MX6QDL_PAD_EIM_D25__UART3_RX_DATA 0x1b0b1
+				MX6QDL_PAD_EIM_D24__UART3_TX_DATA 0x1b0b1
+				MX6QDL_PAD_EIM_D30__UART3_CTS_B   0x1b0b1
+			>;
+		};
 	};
 
 	uart4 {
@@ -1686,6 +1700,13 @@
 				MX6QDL_PAD_KEY_ROW1__UART5_RX_DATA 0x1b0b1
 				MX6QDL_PAD_KEY_COL1__UART5_TX_DATA 0x1b0b1
 				MX6QDL_PAD_KEY_COL4__UART5_RTS_B   0x1b0b1
+				MX6QDL_PAD_KEY_ROW4__UART5_CTS_B   0x1b0b1
+			>;
+		};
+		pinctrl_uart5_2: uart5grp-2 {
+			fsl,pins = <
+				MX6QDL_PAD_KEY_ROW1__UART5_RX_DATA 0x1b0b1
+				MX6QDL_PAD_KEY_COL1__UART5_TX_DATA 0x1b0b1
 				MX6QDL_PAD_KEY_ROW4__UART5_CTS_B   0x1b0b1
 			>;
 		};
