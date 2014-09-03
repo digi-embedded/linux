@@ -572,6 +572,55 @@ static int fsl_register_hwid(void) {
 	return 0;
 }
 
+#define CONFIG_CARRIERBOARD_VERSION_BANK	4
+#define CONFIG_CARRIERBOARD_VERSION_WORD	6
+#define CONFIG_CARRIERBOARD_VERSION_MASK	0xf	/* 4 OTP bits */
+#define CONFIG_CARRIERBOARD_VERSION_OFFSET	0	/* lower 4 OTP bits */
+
+static int fsl_register_carrierboard(void) {
+	struct device_node *np = NULL;
+	const char *boardver_str;
+
+	np = of_find_compatible_node(NULL, NULL, "digi,ccimx6");
+	if (!np)
+		return -EPERM;
+
+	if (of_property_read_string(np, "digi,carrierboard,version",
+				    &boardver_str)) {
+		int index;
+		u32 reg;
+		char str[20];
+		struct property *hwidprop;
+
+		/* Read OTP word containing the carrier board version */
+		index = (8 * CONFIG_CARRIERBOARD_VERSION_BANK) +
+			CONFIG_CARRIERBOARD_VERSION_WORD;
+		if (fsl_otp_read(index, &reg))
+			return -EPERM;
+
+		/* Convert carrier board field to string */
+		sprintf(str, "%d", (reg >> CONFIG_CARRIERBOARD_VERSION_OFFSET) &
+			CONFIG_CARRIERBOARD_VERSION_MASK);
+
+		hwidprop = kzalloc(sizeof(*hwidprop) + strlen(str), GFP_KERNEL);
+		if (!hwidprop)
+			return -ENOMEM;
+
+		hwidprop->value = hwidprop + 1;
+		hwidprop->length = strlen(str);
+		hwidprop->name = kstrdup("digi,carrierboard,version",
+					 GFP_KERNEL);
+		if (!hwidprop->name) {
+			kfree(hwidprop);
+			return -ENOMEM;
+		}
+		strncpy(hwidprop->value, str, strlen(str));
+		of_update_property(np, hwidprop);
+	}
+
+	return 0;
+}
+
 static int fsl_otp_probe(struct platform_device *pdev)
 {
 	struct resource *res;
@@ -645,6 +694,11 @@ static int fsl_otp_probe(struct platform_device *pdev)
 	 * there, to be exposed to the filesystem via procfs.
 	 */
 	fsl_register_hwid();
+
+	/* Read the carrier board from OTP bits and register it to DT if not
+	 * already there, to be exposed to the filesytem via procfs.
+	 */
+	fsl_register_carrierboard();
 
 	return 0;
 }
