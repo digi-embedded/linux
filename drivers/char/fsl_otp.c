@@ -503,18 +503,14 @@ static int fsl_register_hwid(void) {
 		"digi,hwid,sn",
 	};
 
-	if (of_machine_is_compatible("digi,ccimx6sbc"))
-		np = of_find_compatible_node(NULL, NULL, "digi,ccimx6sbc");
-	else if (of_machine_is_compatible("digi,ccimx6adpt"))
-		np = of_find_compatible_node(NULL, NULL, "digi,ccimx6adpt");
-
+	np = of_find_compatible_node(NULL, NULL, "digi,ccimx6");
 	if (!np)
-		return -EINVAL;
+		return -EPERM;
 
 	/* Retrieve HWID from OTP bits */
 	if (fsl_otp_read(HW_OCTP_IDX_MAC0, &mac0) ||
 	    fsl_otp_read(HW_OCTP_IDX_MAC1, &mac1))
-		return -EINVAL;
+		return -EPERM;
 
 	/*
 	 * Try to read the HWID fields from DT. If not found, create those
@@ -645,10 +641,9 @@ static int fsl_otp_probe(struct platform_device *pdev)
 
 	mutex_init(&otp_mutex);
 
-	/*
-	* Read the HWID from OTP bits and register it to DT if not already
-	* there, to be exposed to the filesystem via procfs.
-	*/
+	/* Read the HWID from OTP bits and register it to DT if not already
+	 * there, to be exposed to the filesystem via procfs.
+	 */
 	fsl_register_hwid();
 
 	return 0;
