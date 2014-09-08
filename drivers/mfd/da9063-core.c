@@ -397,8 +397,8 @@ void da9063_power_off ( void ) {
 			    DA9063_OTPREAD_EN);
 
 	/* Power down */
-	da9063_reg_clear_bits(da9063_data, DA9063_REG_CONTROL_A,
-			      DA9063_SYSTEM_EN);
+	da9063_reg_set_bits(da9063_data, DA9063_REG_CONTROL_F,
+			      DA9063_SHUTDOWN);
 
 	if(!mutex_is_locked(&da9063_data->io_mutex))
 		mutex_lock(&da9063_data->io_mutex);
