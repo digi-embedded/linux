@@ -1875,6 +1875,7 @@ static void mxc_hdmi_set_mode(struct mxc_hdmi *hdmi)
 	const struct fb_videomode *mode;
 	struct fb_videomode m;
 	struct fb_var_screeninfo var;
+	bool show_logo = !hdmi->dft_mode_set;
 
 	dev_dbg(&hdmi->pdev->dev, "%s\n", __func__);
 
@@ -1908,6 +1909,10 @@ static void mxc_hdmi_set_mode(struct mxc_hdmi *hdmi)
 		fb_videomode_to_var(&hdmi->fbi->var, mode);
 		dump_fb_videomode((struct fb_videomode *)mode);
 		mxc_hdmi_notify_fb(hdmi);
+#if defined(CONFIG_LOGO)
+		if (show_logo)
+			fb_show_logo(hdmi->fbi, 0);
+#endif
 	}
 
 }
