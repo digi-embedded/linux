@@ -2289,8 +2289,6 @@ static int mxc_hdmi_fb_event(struct notifier_block *nb,
 		dev_dbg(&hdmi->pdev->dev, "event=FB_EVENT_FB_REGISTERED\n");
 		mxc_hdmi_fb_registered(hdmi);
 		hdmi_set_registered(1);
-		if (hdmi->fb_reg)
-			mxc_hdmi_setup(hdmi, val);
 		break;
 
 	case FB_EVENT_FB_UNREGISTERED:
