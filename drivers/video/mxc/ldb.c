@@ -463,6 +463,11 @@ int ldb_fb_event(struct notifier_block *nb, unsigned long val, void *v)
 	}
 
 	switch (val) {
+	case FB_EVENT_FB_REGISTERED:
+#if defined(CONFIG_LOGO)
+		fb_show_logo(fbi, 0);
+#endif
+		break;
 	case FB_EVENT_BLANK:
 	{
 		if (*((int *)event->data) == FB_BLANK_UNBLANK) {
