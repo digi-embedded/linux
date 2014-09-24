@@ -610,11 +610,14 @@ int32_t ipu_init_channel(struct ipu_soc *ipu, ipu_channel_t channel, ipu_channel
 
 	mutex_lock(&ipu->mutex_lock);
 
-	/* Re-enable error interrupts every time a channel is initialized */
-	ipu_cm_write(ipu, 0xFFFFFFFF, IPU_INT_CTRL(5));
-	ipu_cm_write(ipu, 0xFFFFFFFF, IPU_INT_CTRL(6));
-	ipu_cm_write(ipu, 0xFFFFFFFF, IPU_INT_CTRL(9));
-	ipu_cm_write(ipu, 0xFFFFFFFF, IPU_INT_CTRL(10));
+	if (!of_machine_is_compatible("digi,ccimx6")) {
+		/* Re-enable error interrupts every time a channel is
+		 * initialized */
+		ipu_cm_write(ipu, 0xFFFFFFFF, IPU_INT_CTRL(5));
+		ipu_cm_write(ipu, 0xFFFFFFFF, IPU_INT_CTRL(6));
+		ipu_cm_write(ipu, 0xFFFFFFFF, IPU_INT_CTRL(9));
+		ipu_cm_write(ipu, 0xFFFFFFFF, IPU_INT_CTRL(10));
+	}
 
 	if (ipu->channel_init_mask & (1L << IPU_CHAN_ID(channel))) {
 		dev_warn(ipu->dev, "Warning: channel already initialized %d\n",
