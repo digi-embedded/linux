@@ -40,6 +40,8 @@
 #include <linux/of_device.h>
 #include <linux/io.h>
 #include <linux/dma-mapping.h>
+#include <linux/gpio.h>
+#include <linux/of_gpio.h>
 
 #include <asm/irq.h>
 #include <linux/platform_data/serial-imx.h>
@@ -189,6 +191,8 @@
 #define IMX_RXBD_NUM 20
 #define IMX_MODULE_MAX_CLK_RATE	80000000
 
+extern int digi_get_board_version(void);
+
 /* i.MX21 type uart runs on all i.mx except i.MX1 and i.MX6q */
 enum imx_uart_type {
 	IMX1_UART,
@@ -229,6 +233,8 @@ struct imx_port {
 	unsigned int		dte_mode:1;
 	unsigned int		irda_inv_rx:1;
 	unsigned int		irda_inv_tx:1;
+	unsigned int		pwr_en_gpio;
+	unsigned int		pwr_en_act_low:1;
 	unsigned short		trcv_delay; /* transceiver delay */
 	struct clk		*clk_ipg;
 	struct clk		*clk_per;
@@ -2048,6 +2054,8 @@ static int serial_imx_probe_dt(struct imx_port *sport,
 		struct platform_device *pdev)
 {
 	struct device_node *np = pdev->dev.of_node;
+	enum of_gpio_flags flags;
+	int init_st = GPIOF_OUT_INIT_HIGH;
 	int ret;
 
 	sport->devdata = of_device_get_match_data(&pdev->dev);
@@ -2069,6 +2077,19 @@ static int serial_imx_probe_dt(struct imx_port *sport,
 	if (of_get_property(np, "fsl,dte-mode", NULL))
 		sport->dte_mode = 1;
 
+	sport->pwr_en_gpio = of_get_named_gpio_flags(np, "digi,pwr-en-gpio", 0 ,
+			&flags);
+	sport->pwr_en_act_low = false;
+	if (gpio_is_valid(sport->pwr_en_gpio)) {
+		if (flags & OF_GPIO_ACTIVE_LOW) {
+			sport->pwr_en_act_low = true;
+			init_st = GPIOF_OUT_INIT_LOW;
+		}
+		ret = gpio_request_one(sport->pwr_en_gpio, init_st,
+				"uart-pwr-en-gpio");
+		if (ret < 0)
+			dev_err(&pdev->dev, "Could not assign uart pwr enable gpio\n");
+	}
 	return 0;
 }
 #else
@@ -2288,8 +2309,17 @@ static int imx_serial_port_suspend_noirq(struct device *dev)
 	if (ret)
 		return ret;
 
-	/* enable wakeup from i.MX UART */
-	serial_imx_enable_wakeup(sport, true);
+	if (device_can_wakeup(&pdev->dev)) {
+		/* enable wakeup from i.MX UART */
+		serial_imx_enable_wakeup(sport, true);
+	} else {
+		if (of_machine_is_compatible("digi,ccimx6sbc") &&
+		    digi_get_board_version() >= 2) {
+			if (gpio_is_valid(sport->pwr_en_gpio))
+				gpio_set_value_cansleep(sport->pwr_en_gpio,
+							sport->pwr_en_act_low ? 1 : 0);
+		}
+	}
 
 	serial_imx_save_context(sport);
 
@@ -2315,11 +2345,20 @@ static int imx_serial_port_resume_noirq(struct device *dev)
 
 	serial_imx_restore_context(sport);
 
-	/* disable wakeup from i.MX UART */
-	serial_imx_enable_wakeup(sport, false);
-	val = readl(sport->port.membase + USR1);
-	if (val & (USR1_AWAKE | USR1_RTSD))
-		writel(USR1_AWAKE | USR1_RTSD, sport->port.membase + USR1);
+	if (device_can_wakeup(&pdev->dev)) {
+		/* disable wakeup from i.MX UART */
+		serial_imx_enable_wakeup(sport, false);
+		val = readl(sport->port.membase + USR1);
+		if (val & (USR1_AWAKE | USR1_RTSD))
+			writel(USR1_AWAKE | USR1_RTSD, sport->port.membase + USR1);
+	} else {
+		if (of_machine_is_compatible("digi,ccimx6sbc") &&
+		    digi_get_board_version() >= 2) {
+			if (gpio_is_valid(sport->pwr_en_gpio))
+				gpio_set_value_cansleep(sport->pwr_en_gpio,
+							sport->pwr_en_act_low ? 0 : 1);
+		}
+	}
 
 	clk_disable(sport->clk_ipg);
 
