@@ -30,4 +30,6 @@ struct imxuart_platform_data {
 	unsigned short transceiver_delay;
 };
 
+extern int mx6q_get_board_version(void);
+
 #endif
