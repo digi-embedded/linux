@@ -555,6 +555,7 @@
 				MX6QDL_PAD_GPIO_9__GPIO1_IO09 0x80000000
 				MX6QDL_PAD_EIM_DA10__GPIO3_IO10 0x80000000
 				MX6QDL_PAD_SD3_DAT2__GPIO7_IO06 0x80000000
+				MX6QDL_PAD_EIM_RW__GPIO2_IO26 0x80000000
 			>;
 		};
 	};
@@ -591,6 +592,7 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_uart1_2>;
 	fsl,uart-has-rtscts;
+	digi,pwr-en-gpio = <&gpio2 26 0>;
 	status = "okay";
 };
 
@@ -605,6 +607,7 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_uart3_2>;
 	fsl,uart-has-rtscts;
+	digi,pwr-en-gpio = <&gpio2 26 0>;
 	status = "okay";
 };
 

@@ -7,6 +7,7 @@ Required properties:
 
 Optional properties:
 - fsl,uart-has-rtscts: indicate that RTS/CTS signals are used
+- digi,pwr-en-gpio: Power enable GPIO (if supported by hardware).
 
 Note: Each uart controller should have an alias correctly numbered
 in "aliases" node.
