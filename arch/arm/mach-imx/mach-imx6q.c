@@ -402,6 +402,41 @@ static const struct of_dev_auxdata imx6q_auxdata_lookup[] __initconst = {
 	{ /* sentinel */ }
 };
 
+static void fixup_dt_audio_codec(void)
+{
+	if (mx6q_get_board_version() == 1) {
+		/* SBCv1 has the codec directly powered from DA9063_BPERI
+		 * without any controlling GPIO, while SBCv2 (default DT)
+		 * controls it with GPIO2_25 so it uses a fixed gpio regulator.
+		 */
+		struct device_node *regulator_np = NULL;
+		struct device_node *codec_np = NULL;
+		struct property *propVDDA = NULL;
+		struct property *propVDDIO = NULL;
+
+		regulator_np = of_find_node_by_name(NULL, "DA9063_BPERI");
+		if (!regulator_np)
+			return;
+
+		codec_np = of_find_compatible_node(NULL, NULL, "fsl,sgtl5000");
+		if (!codec_np)
+			return;
+
+		propVDDA = of_find_property(codec_np, "VDDA-supply", NULL);
+		if (!propVDDA)
+			return;
+
+		propVDDIO = of_find_property(codec_np, "VDDIO-supply", NULL);
+		if (!propVDDIO)
+			return;
+
+		*(phandle *)propVDDA->value =
+				be32_to_cpu(regulator_np->phandle);
+		*(phandle *)propVDDIO->value =
+				be32_to_cpu(regulator_np->phandle);
+	}
+}
+
 static void __init imx6q_init_machine(void)
 {
 	struct device *parent;
@@ -414,6 +449,9 @@ static void __init imx6q_init_machine(void)
 	mx6q_get_board_version();
 	of_platform_populate(NULL, of_default_bus_match_table,
 					imx6q_auxdata_lookup, parent);
+
+	if (of_machine_is_compatible("digi,ccimx6sbc"))
+		fixup_dt_audio_codec();
 
 	imx6q_enet_init();
 	imx_anatop_init();
