@@ -2186,7 +2186,8 @@ static int serial_imx_probe_dt(struct imx_port *sport,
 	else
 		rs485conf->flags |= SER_RS485_RTS_AFTER_SEND;
 
-	if (of_property_read_u32_array(np, "rs485-rts-delay", rs485_delay, 2)) {
+	if (of_property_read_u32_array(np, "rs485-rts-delay",
+				       rs485_delay, 2) == 0) {
 		rs485conf->delay_rts_before_send = rs485_delay[0];
 		rs485conf->delay_rts_after_send = rs485_delay[1];
 	} else {
