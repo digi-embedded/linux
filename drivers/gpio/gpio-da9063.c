@@ -15,6 +15,7 @@
 #include <linux/of_device.h>
 #include <linux/gpio.h>
 #include <linux/irqdomain.h>
+#include <linux/regulator/consumer.h>
 
 #include <linux/mfd/da9063/core.h>
 #include <linux/mfd/da9063/registers.h>
@@ -38,6 +39,7 @@
 struct da9063_gpio {
 	struct da9063 *da9063;
 	struct gpio_chip gp;
+	struct regulator *reg;
 };
 
 static inline struct da9063_gpio *to_da9063_gpio(struct gpio_chip *chip)
@@ -149,6 +151,20 @@ static const struct of_device_id da9063_gpio_dt_ids[] = {
 	{ /* sentinel */ }
 };
 
+static int da9063_reg_init(struct da9063_gpio *gpio)
+{
+	int ret = -ENODEV;
+
+	gpio->reg = regulator_get(NULL, "gpio-ext-reg");
+	if (!IS_ERR(gpio->reg))
+		/* The regulator use count needs to be incremented.
+		 * otherwise we get an unbalanced call if we call
+		 * regulator_disable(). */
+		ret = regulator_enable(gpio->reg);
+
+	return ret;
+}
+
 static int da9063_gpio_probe(struct platform_device *pdev)
 {
 	struct da9063_gpio *gpio;
@@ -173,6 +189,12 @@ static int da9063_gpio_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, gpio);
 
+	if (da9063_reg_init(gpio))
+		/* We should -EPROBE_DEFER, but there is machine code like
+		 * the BT & wireless reset lines, that need this driver so
+		 * we can't with the current machine code. */
+		gpio->reg = NULL;
+
 	return 0;
 
 err_mem:
@@ -185,9 +207,39 @@ static int da9063_gpio_remove(struct platform_device *pdev)
 	return gpiochip_remove(&gpio->gp);
 }
 
+
+static int da9063_gpio_suspend(struct platform_device *pdev, pm_message_t state)
+{
+	struct da9063_gpio *gpio = platform_get_drvdata(pdev);
+	int ret = 0;
+
+	if (gpio->reg == NULL) {
+		/* Try again in case the probe() was too early */
+		if (da9063_reg_init(gpio))
+			gpio->reg = NULL;
+	}
+	if (gpio->reg)
+		ret = regulator_disable(gpio->reg);
+
+	return ret;
+}
+
+static int da9063_gpio_resume(struct platform_device *pdev)
+{
+	struct da9063_gpio *gpio = platform_get_drvdata(pdev);
+	int ret = 0;
+
+	if (gpio->reg)
+		ret = regulator_enable(gpio->reg);
+	return ret;
+
+}
+
 static struct platform_driver da9063_gpio_driver = {
 	.probe = da9063_gpio_probe,
 	.remove = da9063_gpio_remove,
+	.suspend = da9063_gpio_suspend,
+	.resume = da9063_gpio_resume,
 	.driver = {
 		.name	= "da9063-gpio",
 		.owner	= THIS_MODULE,

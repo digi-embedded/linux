@@ -31,6 +31,16 @@
 		reg = <0x10000000 0x40000000>;
 	};
 
+	5v_reg {
+		compatible = "regulator-fixed";
+		gpio = <&gpio_extender 7 0>;
+		regulator-name = "gpio-ext-reg";
+		regulator-boot-on;
+		enable-active-high;
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+	};
+
 	sound {
 		compatible = "fsl,imx-audio-sgtl5000";
 		model = "sgtl5000-audio";
