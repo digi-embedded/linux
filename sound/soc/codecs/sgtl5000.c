@@ -687,7 +687,6 @@ static int sgtl5000_pcm_hw_params(struct snd_pcm_substream *substream,
 {
 	struct snd_soc_codec *codec = dai->codec;
 	struct sgtl5000_priv *sgtl5000 = snd_soc_codec_get_drvdata(codec);
-	int channels = params_channels(params);
 	int i2s_ctl = 0;
 	int stereo;
 	int ret;
@@ -704,8 +703,7 @@ static int sgtl5000_pcm_hw_params(struct snd_pcm_substream *substream,
 		stereo = SGTL5000_ADC_STEREO;
 
 	/* set mono to save power */
-	snd_soc_update_bits(codec, SGTL5000_CHIP_ANA_POWER, stereo,
-			channels == 1 ? 0 : stereo);
+	snd_soc_update_bits(codec, SGTL5000_CHIP_ANA_POWER, stereo, stereo);
 
 	/* set codec clock base on lrclk */
 	ret = sgtl5000_set_clock(codec, params_rate(params));
