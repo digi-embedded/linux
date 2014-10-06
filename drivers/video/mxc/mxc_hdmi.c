@@ -1910,7 +1910,9 @@ static void mxc_hdmi_set_mode(struct mxc_hdmi *hdmi)
 		dump_fb_videomode((struct fb_videomode *)mode);
 		mxc_hdmi_notify_fb(hdmi);
 #if defined(CONFIG_LOGO)
-		if (show_logo)
+		/* Show logo only once and only if user space has not
+		 * yet used the framebuffer to avoid race conditions */
+		if (show_logo && (atomic_read(&hdmi->fbi->count) == 1))
 			fb_show_logo(hdmi->fbi, 0);
 #endif
 	}
