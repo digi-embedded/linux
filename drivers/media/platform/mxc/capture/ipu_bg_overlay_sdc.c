@@ -355,13 +355,16 @@ static int bg_overlay_start(void *private)
 		return -EINVAL;
 	}
 
-	offset = cam->v4l2_fb.fmt.bytesperline * cam->win.w.top +
-	    csi_mem_bufsize * cam->win.w.left;
+	offset = cam->v4l2_fb.fmt.bytesperline * cam->win.w.top/4 +
+	    csi_mem_bufsize * cam->win.w.left/4;
+
 
 	if (cam->v4l2_fb.base == 0)
 		printk(KERN_ERR "invalid frame buffer address.\n");
-	else
+	else  {
 		offset += (u32) cam->v4l2_fb.base;
+		offset = ALIGN(offset, 8);
+	}
 
 	csi_mem_bufsize = cam->win.w.width * cam->win.w.height
 				* csi_mem_bufsize;
