@@ -483,12 +483,19 @@
 	status = "okay";
 };
 
-&usdhc1 {
+&usdhc2 {
 	pinctrl-names = "default", "state_100mhz", "state_200mhz";
-	pinctrl-0 = <&pinctrl_usdhc1_1>;
-	pinctrl-1 = <&pinctrl_usdhc1_1_100mhz>;
-	pinctrl-2 = <&pinctrl_usdhc1_1_200mhz>;
+	pinctrl-0 = <&pinctrl_usdhc2_2>;
+	pinctrl-1 = <&pinctrl_usdhc2_2_100mhz>;
+	pinctrl-2 = <&pinctrl_usdhc2_2_200mhz>;
+	broken-cd;
 	no-1-8-v;
+	keep-power-in-suspend;
+	enable-sdio-wakeup;
+	/* Allows suspend/resume to work when using the sdcard as rootfs.
+	 * Remove this property when booting from emmc to allow card
+	 * detection to work. */
+	non-removable;
 	status = "okay";
 };
 
