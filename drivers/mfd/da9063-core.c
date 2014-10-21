@@ -386,11 +386,13 @@ int da9063_get_trim_data(struct da9063 *da9063)
 void da9063_power_off ( void ) {
 	BUG_ON(!da9063_data);
 
-	/* Configure LDO11 and BPERI not to follow sequencer */
+	/* Configure LDO11, BIO and BPERI not to follow sequencer */
 	da9063_reg_clear_bits(da9063_data, DA9063_REG_BPERI_CONT,
 			      DA9063_BUCK_CONF);
 	da9063_reg_clear_bits(da9063_data, DA9063_REG_LDO11_CONT,
 			      DA9063_LDO_CONF);
+	da9063_reg_clear_bits(da9063_data, DA9063_REG_BIO_CONT,
+			      DA9063_BUCK_CONF);
 
 	/* Configure to read OTP settings after power down */
 	da9063_reg_set_bits(da9063_data, DA9063_REG_CONTROL_C,
