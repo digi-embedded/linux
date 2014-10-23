@@ -1146,16 +1146,40 @@ static int mxc_v4l2_s_ctrl(cam_data *cam, struct v4l2_control *c)
 			tmp_rotation = IPU_ROTATE_180;
 			break;
 		case V4L2_MXC_ROTATE_90_RIGHT:
-			tmp_rotation = IPU_ROTATE_90_RIGHT;
+			if (cam->win.w.width > 1024 || cam->win.w.height > 1024) {
+				pr_info("ROTATE_90_RIGHT not supported for resolutions above 1024\n");
+				ret = -EINVAL;
+				goto next;
+			} else {
+				tmp_rotation = IPU_ROTATE_90_RIGHT;
+			}
 			break;
 		case V4L2_MXC_ROTATE_90_RIGHT_VFLIP:
-			tmp_rotation = IPU_ROTATE_90_RIGHT_VFLIP;
+			if (cam->win.w.width > 1024 || cam->win.w.height > 1024) {
+				pr_info("ROTATE_90_RIGHT_VFLIP not supported for resolutions above 1024\n");
+				ret = -EINVAL;
+				goto next;
+			} else {
+				tmp_rotation = IPU_ROTATE_90_RIGHT_VFLIP;
+			}
 			break;
 		case V4L2_MXC_ROTATE_90_RIGHT_HFLIP:
-			tmp_rotation = IPU_ROTATE_90_RIGHT_HFLIP;
+			if (cam->win.w.width > 1024 || cam->win.w.height > 1024) {
+				pr_info("ROTATE_90_RIGHT_HFLIP not supported for resolutions above 1024\n");
+				ret = -EINVAL;
+				goto next;
+			} else {
+				tmp_rotation = IPU_ROTATE_90_RIGHT_HFLIP;
+			}
 			break;
 		case V4L2_MXC_ROTATE_90_LEFT:
-			tmp_rotation = IPU_ROTATE_90_LEFT;
+			if (cam->win.w.width > 1024 || cam->win.w.height > 1024) {
+				pr_info("ROTATE_90_LEFT not supported for resolutions above 1024\n");
+				ret = -EINVAL;
+				goto next;
+			} else {
+				tmp_rotation = IPU_ROTATE_90_LEFT;
+			}
 			break;
 		default:
 			ret = -EINVAL;
@@ -1169,6 +1193,7 @@ static int mxc_v4l2_s_ctrl(cam_data *cam, struct v4l2_control *c)
 			cam->rotation = tmp_rotation;
 		#endif
 
+next:
 		break;
 	case V4L2_CID_HUE:
 		if (cam->sensor) {
