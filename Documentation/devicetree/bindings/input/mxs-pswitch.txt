@@ -1,0 +1,26 @@
+* Digi International MXS power switch device tree bindings
+
+The Freescale's MX28 SoC has a pswitch pin which has several power related
+functions determined by a product's hardware and software design.
+
+The pswitch keyboard driver allow for the user space handling of power events
+like suspend to RAM or poweroff.
+
+Required properties:
+
+- compatible: Should be "digi,mxs-pswitch".
+
+- reg: Physical base address of the power hardware subsystem and length of the
+        memory mapped region.
+
+- interrupts: The pswitch interrupt number.
+
+- linux,code: The linux key code the event maps to.
+
+Example:
+
+        pswitch@80044000 {
+                compatible = "digi,mxs-pswitch";
+                linux,code = <116>;
+                interrupts = <6>;
+        };

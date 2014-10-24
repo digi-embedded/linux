@@ -1,0 +1,41 @@
+* Dialog da9063 Power Management IC
+
+Required parent device properties:
+
+- compatible : "dlg,da9063"
+- reg : the I2C slave address for the da9063 chip
+- interrupts : IRQ line for the da9063 chip
+- interrupt-controller: describes the da9063 as an interrupt
+  controller (has its own domain)
+- #interrupt-cells : should be 1.
+        - The cell is the da9063 local IRQ number
+
+The da9063 consists of a large and varied group of sub-devices:
+
+Device                   Supply Names    Description
+------                   ------------    -----------
+da9063-onkey            :               : On key
+da9063-rtc              :               : RTC
+da9063-regulator        :               : Regulators
+da9063-hwmon            :               : Hardware monitoring
+
+Example:
+
+        pmic: da9063@58 {
+                compatible = "dlg,da9063";
+                reg = <0x58>;
+                interrupts = <12 2>;
+                interrupt-parent = <&gpio7>;
+                interrupt-controller;
+                #interrupt-cells = <1>;
+
+                regulators {
+                };
+
+		rtc {
+			compatible = "dlg,da9063-rtc";
+			interrupts = <1 2>;
+			interrupts-names = "ALARM" , "TIMER";
+			interrupt-parent = <&pmic>;
+		};
+        };

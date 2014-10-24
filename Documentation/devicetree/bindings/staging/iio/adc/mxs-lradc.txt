@@ -5,6 +5,9 @@ Required properties:
               for i.MX28 SoC
 - reg: Address and length of the register set for the device
 - interrupts: Should contain the LRADC interrupts
+- fsl,vref: Reference voltage (in mV) for each LRADC channel. This is the
+	    maximum voltage that can be measured at full scale in each channel
+	    considering fixed pre-dividers.
 
 Optional properties:
 - fsl,lradc-touchscreen-wires: Number of wires used to connect the touchscreen

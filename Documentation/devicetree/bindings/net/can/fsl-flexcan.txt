@@ -15,6 +15,13 @@ Required properties:
 Optional properties:
 
 - clock-frequency : The oscillator frequency driving the flexcan device
+- gpr: phandle to general purpose register node. The remote wakeup control
+	bits is stored here.
+
+Below are gpios for tranceiver:
+- trx_en_gpio : enable gpio
+- trx_stby_gpio : standby gpio
+- trx_nerr_gpio : NERR gpio
 
 - xceiver-supply: Regulator that powers the CAN transceiver
 

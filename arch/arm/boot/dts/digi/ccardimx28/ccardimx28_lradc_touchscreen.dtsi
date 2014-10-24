@@ -1,0 +1,51 @@
+/*
+ * Copyright 2013 Digi International, Inc.
+ *
+ * The code contained herein is licensed under the GNU General Public
+ * License. You may obtain a copy of the GNU General Public License
+ * Version 2 or later at the following locations:
+ *
+ * http://www.opensource.org/licenses/gpl-license.html
+ * http://www.gnu.org/copyleft/gpl.html
+ */
+
+/ {
+	apb@80000000 {
+		apbh@80000000 {
+			pinctrl@80018000 {
+				/* LRADC touchscreen daisy-chain IOMUX */
+				touchscreen_pins_a: touchscreen@0 {
+					reg = <0>;
+					fsl,pinmux-ids = <
+						0x20c3 /* MX28_PAD_SSP1_SCK__GPIO_2_12 */
+						0x3063 /* MX28_PAD_AUART1_CTS__GPIO_3_6 */
+						0x3073 /* MX28_PAD_AUART1_RTS__GPIO_3_7 */
+					>;
+					fsl,drive-strength = <1>;
+					fsl,voltage = <1>;
+					fsl,pull-up = <0>;
+				};
+
+				touchscreen_pins_b: touchscreen@1{
+					reg = <1>;
+					fsl,pinmux-ids = <
+						0x20e3 /* MX28_PAD_SSP1_DATA0__GPIO_2_14 */
+					>;
+					fsl,drive-strength = <1>;
+					fsl,voltage = <1>;
+					fsl,pull-up = <1>;
+				};
+			};
+		};
+
+		apbx@80040000 {
+			lradc@80050000 {
+				pinctrl-names = "default";
+				pinctrl-0 = <&touchscreen_pins_a
+					     &touchscreen_pins_b>;
+				fsl,lradc-touchscreen-wires = <4>;
+				status = "okay";
+			};
+		};
+	};
+};

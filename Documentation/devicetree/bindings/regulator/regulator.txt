@@ -19,6 +19,12 @@ Optional properties:
   design requires. This property describes the total system ramp time
   required due to the combination of internal ramping of the regulator itself,
   and board design issues such as trace capacitance and load on the supply.
+- regulator-suspend-disk-microvolt: voltage (uV) applied when suspending to disk
+- regulator-suspend-disk-disabled: turn off when suspendin to disk
+- regulator-suspend-mem-microvolt: voltage applied (uV) when suspending to RAM
+- regulator-suspend-mem-disabled: turn off when suspending to RAM
+- regulator-suspend-standby-microvolt: voltage applied (uD) when entering standby
+- regulator-suspend-standby-disabled: turn off when entering standby
 
 Deprecated properties:
 - regulator-compatible: If a regulator chip contains multiple

@@ -70,6 +70,7 @@ static int ci_hdrc_pci_probe(struct pci_dev *pdev,
 		return -ENODEV;
 	}
 
+	pci_set_power_state(pdev, PCI_D0);
 	pci_set_master(pdev);
 	pci_try_set_mwi(pdev);
 
@@ -112,7 +113,7 @@ static void ci_hdrc_pci_remove(struct pci_dev *pdev)
  *
  * Check "pci.h" for details
  */
-static const struct pci_device_id ci_hdrc_pci_id_table[] = {
+static DEFINE_PCI_DEVICE_TABLE(ci_hdrc_pci_id_table) = {
 	{
 		PCI_DEVICE(0x153F, 0x1004),
 		.driver_data = (kernel_ulong_t)&pci_platdata,
@@ -129,12 +130,7 @@ static const struct pci_device_id ci_hdrc_pci_id_table[] = {
 		PCI_DEVICE(PCI_VENDOR_ID_INTEL, 0x0829),
 		.driver_data = (kernel_ulong_t)&penwell_pci_platdata,
 	},
-	{
-		/* Intel Clovertrail */
-		PCI_DEVICE(PCI_VENDOR_ID_INTEL, 0xe006),
-		.driver_data = (kernel_ulong_t)&penwell_pci_platdata,
-	},
-	{ 0 } /* end: all zeroes */
+	{ 0, 0, 0, 0, 0, 0, 0 /* end: all zeroes */ }
 };
 MODULE_DEVICE_TABLE(pci, ci_hdrc_pci_id_table);
 

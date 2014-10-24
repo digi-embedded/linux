@@ -1,0 +1,46 @@
+/*
+ * Copyright 2013 Digi International, Inc.
+ *
+ * The code contained herein is licensed under the GNU General Public
+ * License. You may obtain a copy of the GNU General Public License
+ * Version 2 or later at the following locations:
+ *
+ * http://www.opensource.org/licenses/gpl-license.html
+ * http://www.gnu.org/copyleft/gpl.html
+ */
+
+/ {
+	apb@80000000 {
+		apbh@80000000 {
+			pinctrl@80018000 {
+				/* Bluetooth */
+				bluetooth_pins_a: bluetooth@0 {
+					reg = <0>;
+					fsl,pinmux-ids = <
+						0x31a3 /* MX28_PAD_SAIF1_SDATA0__GPIO_3_26 */
+						0x31b3 /* MX28_PAD_SPDIF__GPIO_3_27 */
+						0x0153 /* MX28_PAD_GPMI_RDY1__GPIO_0_21 */
+						0x0113 /* MX28_PAD_GPMI_CE1N__GPIO_0_17 */
+						0x2103 /* MX28_PAD_SSP2_SCK__GPIO_2_16 */
+					>;
+					fsl,drive-strength = <0>;
+					fsl,voltage = <1>;
+					fsl,pull-up = <0>;
+				};
+			};
+		};
+		apbx@80040000 {
+			/* AUART0 connected to Atheros Bluetooth chip */
+			auart0: serial@8006a000 {
+				pinctrl-names = "default";
+				pinctrl-0 = <&auart0_pins_a
+					     &bluetooth_pins_a>;
+				status = "okay";
+			};
+		};
+	};
+
+	bluetooth {
+		/* Empty node. U-Boot will fill in the MAC address here */
+	};
+};

@@ -1,0 +1,89 @@
+/*
+ * Copyright 2013 Digi International, Inc.
+ *
+ * The code contained herein is licensed under the GNU General Public
+ * License. You may obtain a copy of the GNU General Public License
+ * Version 2 or later at the following locations:
+ *
+ * http://www.opensource.org/licenses/gpl-license.html
+ * http://www.gnu.org/copyleft/gpl.html
+ */
+
+/ {
+	apb@80000000 {
+		apbx@80040000 {
+			power@80044000 {
+                                #address-cells = <1>;
+                                #size-cells = <1>;
+                                ranges;
+                                compatible = "simple-bus";
+
+                                pswitch@80044000 {
+                                        compatible = "digi,mxs-pswitch";
+                                        linux,code = <116>;
+                                        interrupts = <6>;
+                                };
+
+                                vddd@80044040 {
+                                        compatible = "digi,mxs-regulator";
+                                        reg = <0x80044040 0x10>;
+                                        regulator-name = "vddd";
+                                        regulator-min-microvolt = <800000>;
+                                        regulator-max-microvolt = <1575000>;
+                                        regulator-type = "voltage";
+                                        regulator-always-on;
+                                };
+
+                                vddd_bo@80044040 {
+                                        compatible = "digi,mxs-regulator";
+                                        reg = <0x80044040 0x10>;
+                                        regulator-name = "vddd_bo";
+                                        regulator-min-microvolt = <800000>;
+                                        regulator-max-microvolt = <1575000>;
+                                        regulator-type = "voltage";
+                                        regulator-always-on;
+                                        mxs-regulator-brown-out;
+                                };
+
+                                vdda@80044050 {
+                                        compatible = "digi,mxs-regulator";
+                                        reg = <0x80044050 0x10>;
+                                        regulator-name = "vdda";
+                                        regulator-min-microvolt = <1500000>;
+                                        regulator-max-microvolt = <2275000>;
+                                        regulator-type = "voltage";
+                                        regulator-always-on;
+                                };
+
+                                vddio@80044060 {
+                                        compatible = "digi,mxs-regulator";
+                                        reg = <0x80044060 0x10>;
+                                        regulator-name = "vddio";
+                                        regulator-min-microvolt = <2880000>;
+                                        regulator-max-microvolt = <3680000>;
+                                        regulator-type = "voltage";
+                                        regulator-always-on;
+                                };
+
+                                overall_current: regulator {
+                                        compatible = "digi,mxs-regulator";
+                                        regulator-name = "overall_current";
+                                        regulator-max-microamp = <0x7fffffff>;
+                                        regulator-min-microamp = <0>;
+                                        regulator-type = "current";
+                                        regulator-always-on;
+                                };
+
+                                cpufreq {
+                                        compatible = "digi,mxs-regulator";
+                                        regulator-name = "cpufreq";
+                                        regulator-type = "current";
+                                        regulator-max-microamp = <0x7fffffff>;
+                                        regulator-min-microamp = <0>;
+                                        regulator-always-on;
+                                        cpufreq-supply = <&overall_current>;
+                                };
+			};
+		};
+	};
+};

@@ -17,6 +17,10 @@ Optional properties:
   invalid and 1 millisecond will be used instead.
 - phy-supply: regulator that powers the Ethernet PHY.
 
+Digi properties:
+- gpio-link-led : Should specify the GPIO to use for link LED
+- gpio-act-led : Should specify the GPIO to use for activity LED
+
 Example:
 
 ethernet@83fec000 {

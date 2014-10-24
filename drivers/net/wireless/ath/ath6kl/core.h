@@ -672,6 +672,7 @@ struct ath6kl {
 
 	enum ath6kl_state state;
 	unsigned int testmode;
+	unsigned int softmac_enable;
 
 	struct ath6kl_bmi bmi;
 	const struct ath6kl_hif_ops *hif_ops;
@@ -961,4 +962,6 @@ void ath6kl_recovery_init(struct ath6kl *ar);
 void ath6kl_recovery_cleanup(struct ath6kl *ar);
 void ath6kl_recovery_suspend(struct ath6kl *ar);
 void ath6kl_recovery_resume(struct ath6kl *ar);
+
+void ath6kl_mangle_mac_address(struct ath6kl *ar, u8 locally_administered_bit);
 #endif /* CORE_H */

@@ -247,7 +247,25 @@ static void __init mx28_clocks_init(struct device_node *np)
 	clk_data.clk_num = ARRAY_SIZE(clks);
 	of_clk_add_provider(np, of_clk_src_onecell_get, &clk_data);
 
+	/*
+	 * Select PLL as the parent source of lcdif_sel clk to have a finer
+	 * granularity when calculating the LCD pixelclock
+	 */
+	clk_set_parent(clks[lcdif_sel], clks[ref_pix]);
+
 	clk_register_clkdev(clks[enet_out], NULL, "enet_out");
+	/* These clocks are used by the suspend platform code. */
+	clk_register_clkdev(clks[cpu], NULL, "cpu");
+	clk_register_clkdev(clks[cpu_xtal], NULL, "cpu_xtal");
+	clk_register_clkdev(clks[pll0], NULL, "pll0");
+	clk_register_clkdev(clks[hbus], NULL, "hbus");
+
+	/* These clocks are used by the cpufreq platform driver. */
+	clk_register_clkdev(clks[xbus], NULL, "xbus");
+	clk_register_clkdev(clks[emi], NULL, "emi");
+	clk_register_clkdev(clks[usb0], NULL, "usb_clk0");
+	clk_register_clkdev(clks[usb1], NULL, "usb_clk1");
+	clk_register_clkdev(clks[lcdif], NULL, "lcdif");
 
 	for (i = 0; i < ARRAY_SIZE(clks_init_on); i++)
 		clk_prepare_enable(clks[clks_init_on[i]]);

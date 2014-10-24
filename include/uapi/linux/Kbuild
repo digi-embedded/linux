@@ -226,6 +226,7 @@ ifneq ($(wildcard $(srctree)/arch/$(SRCARCH)/include/uapi/asm/kvm_para.h \
 header-y += kvm_para.h
 endif
 
+header-y += ipu.h
 header-y += l2tp.h
 header-y += libc-compat.h
 header-y += limits.h
@@ -253,6 +254,9 @@ header-y += mroute6.h
 header-y += msdos_fs.h
 header-y += msg.h
 header-y += mtio.h
+header-y += mxcfb.h
+header-y += mxc_asrc.h
+header-y += mxc_v4l2.h
 header-y += n_r3964.h
 header-y += nbd.h
 header-y += ncp.h
@@ -318,6 +322,8 @@ header-y += pps.h
 header-y += prctl.h
 header-y += ptp_clock.h
 header-y += ptrace.h
+header-y += pxp_dma.h
+header-y += pxp_device.h
 header-y += qnx4_fs.h
 header-y += qnxtypes.h
 header-y += quota.h

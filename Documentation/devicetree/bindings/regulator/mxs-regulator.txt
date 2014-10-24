@@ -1,0 +1,23 @@
+MXS regulators
+
+Required properties:
+- compatible		: Must be "digi,mxs-regulator".
+- regulator-type:       : "current" or "voltage"
+
+Optional properties:
+- mxs-regulator-brown-out: Specifies a brown out voltage regulator.
+
+Any property defined as part of the core regulator binding defined in
+regulator.txt can also be used.
+
+Example:
+
+        vddd@80044040 {
+                compatible = "digi,mxs-regulator";
+                reg = <0x80044040 0x10>;
+                regulator-name = "vddd";
+                regulator-min-microvolt = <800000>;
+                regulator-max-microvolt = <1575000>;
+                regulator-type = "voltage";
+                regulator-always-on;
+};

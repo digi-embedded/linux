@@ -894,6 +894,15 @@ config SENSORS_MAX1668
 	  This driver can also be built as a module.  If so, the module
 	  will be called max1668.
 
+config SENSORS_MAX17135
+	tristate "Maxim MAX17135 EPD temperature sensor"
+	depends on I2C
+	help
+	  If you say yes here you get support for MAX17135 PMIC sensor.
+
+	  This driver can also be built as a module.  If so, the module
+	  will be called max17135_sensor.
+
 config SENSORS_MAX197
 	tristate "Maxim MAX197 and compatibles"
 	help
@@ -1518,6 +1527,15 @@ config SENSORS_WM8350
 	  This driver can also be built as a module.  If so, the module
 	  will be called wm8350-hwmon.
 
+config SENSORS_DA9063
+	tristate "Dialog Semiconductor DA9063"
+	depends on MFD_DA9063
+	help
+	  If you say yes here you get support for the hardware
+	  monitoring features of the DA9063 Power Management IC.
+
+	  This driver can also be built as a module.
+
 config SENSORS_ULTRA45
 	tristate "Sun Ultra45 PIC16F747"
 	depends on SPARC64
@@ -1583,5 +1601,19 @@ config SENSORS_ATK0110
 	  will be called asus_atk0110.
 
 endif # ACPI
+
+config SENSORS_MAG3110
+	tristate "Freescale MAG3110 e-compass sensor"
+	depends on I2C && SYSFS
+	help
+	  If you say yes here you get support for the Freescale MAG3110
+	  e-compass sensor.
+	  This driver can also be built as a module.  If so, the module
+	  will be called mag3110.
+
+config MXC_MMA8451
+	tristate "MMA8451 device driver"
+	depends on I2C
+	default y
 
 endif # HWMON

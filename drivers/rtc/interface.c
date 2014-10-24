@@ -16,6 +16,7 @@
 #include <linux/module.h>
 #include <linux/log2.h>
 #include <linux/workqueue.h>
+#include <linux/of.h>
 
 static int rtc_timer_enqueue(struct rtc_device *rtc, struct rtc_timer *timer);
 static void rtc_timer_remove(struct rtc_device *rtc, struct rtc_timer *timer);
@@ -853,6 +854,11 @@ again:
 	__rtc_read_time(rtc, &tm);
 	now = rtc_tm_to_ktime(tm);
 	while ((next = timerqueue_getnext(&rtc->timerqueue))) {
+		/*Digi DEL-805: The da9063 rev AD calendar registers is
+		not updated when the alarm triggers, add one second
+		to the seconds read.*/
+		if(of_device_is_compatible(rtc->dev.of_node,"dlg,da9063-rtc"))
+			now.tv64 += NSEC_PER_SEC;
 		if (next->expires.tv64 > now.tv64)
 			break;
 

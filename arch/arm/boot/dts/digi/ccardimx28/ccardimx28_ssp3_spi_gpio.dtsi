@@ -1,0 +1,25 @@
+/*
+ * Copyright 2013 Digi International, Inc.
+ *
+ * The code contained herein is licensed under the GNU General Public
+ * License. You may obtain a copy of the GNU General Public License
+ * Version 2 or later at the following locations:
+ *
+ * http://www.opensource.org/licenses/gpl-license.html
+ * http://www.gnu.org/copyleft/gpl.html
+ */
+
+/ {
+	spi3 {
+		compatible = "spi-gpio";
+		pinctrl-0 = <&spi3_pins_b>;
+		gpio-sck = <&gpio2 24 0>;
+		gpio-mosi = <&gpio2 25 0>;
+		gpio-miso = <&gpio2 26 0>;
+		cs-gpios = <&gpio2 27 0>;
+		num-chipselects = <1>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		status = "okay";
+	};
+};

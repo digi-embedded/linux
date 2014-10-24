@@ -10,6 +10,7 @@ Optional properties:
 - fsl,irda-mode : Indicate the uart supports irda mode
 - fsl,dte-mode : Indicate the uart works in DTE mode. The uart works
                   is DCE mode by default.
+- digi,pwr-en-gpio: Power enable GPIO (if supported by hardware).
 
 Note: Each uart controller should have an alias correctly numbered
 in "aliases" node.
