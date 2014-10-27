@@ -21,7 +21,7 @@
 	ahb@80080000 {
 		usb0: usb@80080000 {
 			pinctrl-names = "default";
-			pinctrl-0 = <&usb0_pins_b>;
+			pinctrl-0 = <&usb0_id_pins_b>;
 			vbus-supply = <&reg_usb0_vbus>;
 			dr_mode = "otg";
 			status = "okay";

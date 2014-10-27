@@ -10,7 +10,7 @@
  */
 
 /dts-v1/;
-/include/ "imx28.dtsi"
+#include "imx28.dtsi"
 
 /*
  * This DTS file is made of small Device Tree fragments that can be
@@ -20,70 +20,70 @@
  */
 
 /* CPU frequency scaling */
-/include/ "digi/ccardimx28/ccardimx28_cpufreq.dtsi"
+#include "digi/ccardimx28/ccardimx28_cpufreq.dtsi"
 
 /* NAND Flash */
-/include/ "digi/ccardimx28/ccardimx28_nand.dtsi"
+#include "digi/ccardimx28/ccardimx28_nand.dtsi"
 
 /* DUART */
-/include/ "digi/ccardimx28/ccardimx28_duart_i2c0.dtsi"
+#include "digi/ccardimx28/ccardimx28_duart_i2c0.dtsi"
 
 /* Ethernet */
-/include/ "digi/ccardimx28/ccardimx28_ethernet0.dtsi"
-///include/ "digi/ccardimx28/ccardimx28_ethernet0_leds.dtsi"
-/include/ "digi/ccardimx28/ccardimx28_ethernet1.dtsi"
-///include/ "digi/ccardimx28/ccardimx28_ethernet1_leds.dtsi"
+#include "digi/ccardimx28/ccardimx28_ethernet0.dtsi"
+#include "digi/ccardimx28/ccardimx28_ethernet0_leds.dtsi"
+#include "digi/ccardimx28/ccardimx28_ethernet1.dtsi"
+/* #include "digi/ccardimx28/ccardimx28_ethernet1_leds.dtsi" */
 
 /* AUARTs (and Bluetooth) */
-/include/ "digi/ccardimx28/ccardimx28_auart0_bluetooth.dtsi"
-/include/ "digi/ccardimx28/ccardimx28_auart1_2wires.dtsi"
-///include/ "digi/ccardimx28/ccardimx28_auart1_4wires.dtsi"
-///include/ "digi/ccardimx28/ccardimx28_auart2_2wires.dtsi"
-///include/ "digi/ccardimx28/ccardimx28_auart2_4wires.dtsi"
-///include/ "digi/ccardimx28/ccardimx28_auart3_2wires.dtsi"
-///include/ "digi/ccardimx28/ccardimx28_auart3_4wires.dtsi"
-///include/ "digi/ccardimx28/ccardimx28_auart4_2wires.dtsi"
-///include/ "digi/ccardimx28/ccardimx28_auart4_4wires.dtsi"
+#include "digi/ccardimx28/ccardimx28_auart0_bluetooth.dtsi"
+#include "digi/ccardimx28/ccardimx28_auart1_2wires.dtsi"
+/* #include "digi/ccardimx28/ccardimx28_auart1_4wires.dtsi" */
+/* #include "digi/ccardimx28/ccardimx28_auart2_2wires.dtsi" */
+/* #include "digi/ccardimx28/ccardimx28_auart2_4wires.dtsi" */
+/* #include "digi/ccardimx28/ccardimx28_auart3_2wires.dtsi" */
+/* #include "digi/ccardimx28/ccardimx28_auart3_4wires.dtsi" */
+/* #include "digi/ccardimx28/ccardimx28_auart4_2wires.dtsi" */
+/* #include "digi/ccardimx28/ccardimx28_auart4_4wires.dtsi" */
 
 /* SSP (and WiFi) */
-/include/ "digi/ccardimx28/ccardimx28_ssp0_mmc.dtsi"
-///include/ "digi/ccardimx28/ccardimx28_ssp0_spi.dtsi"
-///include/ "digi/ccardimx28/ccardimx28_ssp0_spi_gpio.dtsi"
-///include/ "digi/ccardimx28/ccardimx28_ssp1_spi.dtsi"
-///include/ "digi/ccardimx28/ccardimx28_ssp1_spi_gpio.dtsi"
-///include/ "digi/ccardimx28/ccardimx28_ssp1_spi_gpio_spidev.dtsi"
-/include/ "digi/ccardimx28/ccardimx28_ssp2_mmc_wifi.dtsi"
-///include/ "digi/ccardimx28/ccardimx28_ssp3_spi.dtsi"
-///include/ "digi/ccardimx28/ccardimx28_ssp3_spi_gpio.dtsi"
-///include/ "digi/ccardimx28/ccardimx28_ssp3_spi_gpio_spidev.dtsi"
+#include "digi/ccardimx28/ccardimx28_ssp0_mmc.dtsi"
+/* #include "digi/ccardimx28/ccardimx28_ssp0_spi.dtsi" */
+/* #include "digi/ccardimx28/ccardimx28_ssp0_spi_gpio.dtsi" */
+/* #include "digi/ccardimx28/ccardimx28_ssp1_spi.dtsi" */
+/* #include "digi/ccardimx28/ccardimx28_ssp1_spi_gpio.dtsi" */
+/* #include "digi/ccardimx28/ccardimx28_ssp1_spi_gpio_spidev.dtsi" */
+#include "digi/ccardimx28/ccardimx28_ssp2_mmc_wifi.dtsi"
+/* #include "digi/ccardimx28/ccardimx28_ssp3_spi.dtsi" */
+/* #include "digi/ccardimx28/ccardimx28_ssp3_spi_gpio.dtsi" */
+/* #include "digi/ccardimx28/ccardimx28_ssp3_spi_gpio_spidev.dtsi" */
 
 /* CAN */
-/include/ "digi/ccardimx28/ccardimx28_can0.dtsi"
-/include/ "digi/ccardimx28/ccardimx28_can1.dtsi"
+#include "digi/ccardimx28/ccardimx28_can0.dtsi"
+#include "digi/ccardimx28/ccardimx28_can1.dtsi"
 
 /* I2C */
-///include/ "digi/ccardimx28/ccardimx28_i2c0.dtsi"
-/include/ "digi/ccardimx28/ccardimx28_i2c1.dtsi"
+/* #include "digi/ccardimx28/ccardimx28_i2c0.dtsi" */
+#include "digi/ccardimx28/ccardimx28_i2c1.dtsi"
 
 /* Sound */
-/include/ "digi/ccardimx28/ccardimx28_sound_i2c1.dtsi"
+#include "digi/ccardimx28/ccardimx28_sound_i2c1.dtsi"
 
 /* 1-wire */
-/include/ "digi/ccardimx28/ccardimx28_onewire_i2c1.dtsi"
+#include "digi/ccardimx28/ccardimx28_onewire_i2c1.dtsi"
 
 /* USB */
-/include/ "digi/ccardimx28/ccardimx28_usb0.dtsi"
-///include/ "digi/ccardimx28/ccardimx28_usb1.dtsi"
+#include "digi/ccardimx28/ccardimx28_usb0.dtsi"
+/* #include "digi/ccardimx28/ccardimx28_usb1.dtsi" */
 
 /* Display */
-///include/ "digi/ccardimx28/ccardimx28_display_lq70y3dg3b.dtsi"
+/* #include "digi/ccardimx28/ccardimx28_display_lq70y3dg3b.dtsi" */
 
 /* LRADC */
-/include/ "digi/ccardimx28/ccardimx28_lradc.dtsi"
-///include/ "digi/ccardimx28/ccardimx28_lradc_touchscreen.dtsi"
+#include "digi/ccardimx28/ccardimx28_lradc.dtsi"
+/* #include "digi/ccardimx28/ccardimx28_lradc_touchscreen.dtsi" */
 
 /* Power */
-/include/ "digi/ccardimx28/ccardimx28_power.dtsi"
+#include "digi/ccardimx28/ccardimx28_power.dtsi"
 
 /* Platform */
 / {
