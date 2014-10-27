@@ -250,8 +250,6 @@
 			pinctrl-names = "default";
 			pinctrl-0 = <&usb0_id_pins_a>;
 			vbus-supply = <&reg_usb0_vbus>;
-			pinctrl-names = "default";
-			pinctrl-0 = <&usb0_pins_a>;
 			status = "okay";
 		};
 
