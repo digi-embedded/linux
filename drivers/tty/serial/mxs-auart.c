@@ -548,6 +548,7 @@ static int mxs_auart_dma_init(struct mxs_auart_port *s)
 	if (auart_dma_enabled(s))
 		return 0;
 
+	spin_lock_irqsave(&s->port.lock, flags);
 	/* init for RX */
 	s->rx_dma_chan = dma_request_slave_channel(s->dev, "rx");
 	if (!s->rx_dma_chan)
@@ -571,9 +572,12 @@ static int mxs_auart_dma_init(struct mxs_auart_port *s)
 	/* The DMA buffer is now the FIFO the TTY subsystem can use */
 	s->port.fifosize = UART_XMIT_SIZE;
 
+	spin_unlock_irqrestore(&s->port.lock, flags);
+
 	return 0;
 
 err_out:
+	spin_unlock_irqrestore(&s->port.lock, flags);
 	mxs_auart_dma_exit_channel(s);
 	return -EINVAL;
 
@@ -688,6 +692,19 @@ static void mxs_auart_settermios(struct uart_port *u,
 
 	uart_update_timeout(u, termios->c_cflag, baud);
 
+	/* prepare for the DMA RX. */
+	if (auart_dma_enabled(s) &&
+		!test_and_set_bit(MXS_AUART_DMA_RX_READY, &s->flags)) {
+		if (!mxs_auart_dma_prep_rx(s)) {
+			/* Disable the normal RX interrupt. */
+			writel(AUART_INTR_RXIEN | AUART_INTR_RTIEN,
+					u->membase + AUART_INTR_CLR);
+		} else {
+			mxs_auart_dma_exit(s);
+			dev_err(s->dev, "We can not start up the DMA.\n");
+		}
+	}
+
 	spin_unlock_irqrestore(&s->port.lock, flags);
 }
 
@@ -713,17 +730,24 @@ static irqreturn_t mxs_auart_irq_handle(int irq, void *context)
 		 * case, we must do nothing. Consider only the case where CTS
 		 * is still asserted.
 		 */
-		if (stat & AUART_STAT_CTS)
+		if (stat & AUART_STAT_CTS) {
 			uart_handle_cts_change(&s->port, stat & AUART_STAT_CTS);
+			writel(AUART_INTR_CTSMIS,
+					s->port.membase + AUART_INTR_CLR);
+			istat &= ~AUART_INTR_CTSMIS;
+		}
 	}
 
 	if (istat & (AUART_INTR_RTIS | AUART_INTR_RXIS)) {
 		if (!auart_dma_enabled(s))
 			mxs_auart_rx_chars(s);
+		istat &= ~(AUART_INTR_RTIS | AUART_INTR_RXIS);
 	}
 
-	if (istat & AUART_INTR_TXIS)
+	if (istat & AUART_INTR_TXIS) {
 		mxs_auart_tx_chars(s);
+		istat &= ~AUART_INTR_TXIS;
+	}
 
 	return IRQ_HANDLED;
 }
@@ -769,33 +793,6 @@ static int mxs_auart_startup(struct uart_port *u)
 	 */
 	writel(AUART_LINECTRL_FEN, u->membase + AUART_LINECTRL_SET);
 
-	/*
-	 * The DMA has a bug(see errata:2836) in mx23.
-	 * So we can not implement the DMA for auart in mx23,
-	 * we can only implement the DMA support for auart
-	 * in mx28.
-	 */
-	if (is_imx28_auart(s) && (s->flags & MXS_AUART_DMA_CONFIG)) {
-		if (!mxs_auart_dma_init(s))
-			/* enable DMA transfer */
-			writel(AUART_CTRL2_TXDMAE | AUART_CTRL2_RXDMAE |
-			       AUART_CTRL2_DMAONERR,
-			       u->membase + AUART_CTRL2_SET);
-
-		/* prepare for the DMA RX. */
-		if (auart_dma_enabled(s) &&
-			!test_and_set_bit(MXS_AUART_DMA_RX_READY, &s->flags)) {
-			if (!mxs_auart_dma_prep_rx(s)) {
-				/* Disable the normal RX interrupt. */
-				writel(AUART_INTR_RXIEN | AUART_INTR_RTIEN,
-						u->membase + AUART_INTR_CLR);
-			} else {
-				mxs_auart_dma_exit(s);
-				dev_err(s->dev, "We can not start up the DMA.\n");
-			}
-		}
-	}
-
 	return 0;
 }
 
@@ -818,14 +815,12 @@ static void mxs_auart_shutdown(struct uart_port *u)
 
 static unsigned int mxs_auart_tx_empty(struct uart_port *u)
 {
-	unsigned long stat;
-
-	stat = readl(u->membase + AUART_STAT);
-	if ((stat & (AUART_STAT_BUSY | AUART_STAT_TXFE)) == AUART_STAT_TXFE)
+	if (readl(u->membase + AUART_STAT) & AUART_STAT_TXFE)
 		return TIOCSER_TEMT;
-
-	return 0;
+	else
+		return 0;
 }
+
 
 /*
  * Flush the transmit buffer.
