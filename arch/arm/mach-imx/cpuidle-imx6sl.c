@@ -162,6 +162,7 @@ static int ldo2p5_dummy_probe(struct platform_device *pdev)
 	struct regulator_config config = { };
 	int ret;
 
+#ifdef CONFIG_REGULATOR
 	config.dev = &pdev->dev;
 	config.init_data = &ldo2p5_dummy_initdata;
 	config.of_node = pdev->dev.of_node;
@@ -172,6 +173,7 @@ static int ldo2p5_dummy_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "Failed to register dummy ldo2p5 regulator: %d\n", ret);
 		return ret;
 	}
+#endif
 
 	return 0;
 }

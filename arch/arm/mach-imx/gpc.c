@@ -414,6 +414,7 @@ static int imx_pureg_list_voltage(struct regulator_dev *rdev,
 	return 0;
 }
 
+#if defined (CONFIG_REGULATOR)
 static struct regulator_ops pu_dummy_ops = {
 	.set_voltage = imx_pureg_set_voltage,
 	.enable	= imx_pureg_enable,
@@ -462,6 +463,7 @@ static struct platform_driver pu_dummy_driver = {
 		.of_match_table = imx_pudummy_ids,
 	},
 };
+#endif
 
 static int imx_gpc_probe(struct platform_device *pdev)
 {
@@ -536,7 +538,9 @@ static struct platform_driver imx_gpc_platdrv = {
 };
 module_platform_driver(imx_gpc_platdrv);
 
+#if defined (CONFIG_REGULATOR)
 module_platform_driver(pu_dummy_driver);
+#endif
 
 MODULE_AUTHOR("Anson Huang <b20788@freescale.com>");
 MODULE_DESCRIPTION("Freescale i.MX GPC driver");

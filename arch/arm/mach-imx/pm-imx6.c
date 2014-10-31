@@ -439,10 +439,14 @@ static int imx6_suspend_prepare(struct notifier_block *nb,
         switch (action) {
 
 	case PM_SUSPEND_PREPARE:
+#ifdef CONFIG_REGULATOR
 		regulator_suspend_prepare(PM_SUSPEND_MEM);
+#endif
 		break;
 	case PM_HIBERNATION_PREPARE:
+#ifdef CONFIG_REGULATOR
 		regulator_suspend_prepare(PM_SUSPEND_STANDBY);
+#endif
 		break;
 	case PM_POST_SUSPEND:
 	case PM_POST_HIBERNATION:
