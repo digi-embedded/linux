@@ -593,7 +593,7 @@ static void __init imx6q_init_late(void)
 	imx6q_bt_init();
 
 	if (of_machine_is_compatible("fsl,imx6q-sabreauto")
-		|| of_machine_is_compatible("fsl,imx6dl-sabreauto")){
+		|| of_machine_is_compatible("fsl,imx6dl-sabreauto")) {
 		imx6q_flexcan_fixup_auto();
 		imx6q_audio_lvds2_init();
 	}

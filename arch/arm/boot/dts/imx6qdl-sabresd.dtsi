@@ -204,40 +204,7 @@
 		default_ifmt = "RGB565";
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_ipu1_1>;
-		display = <&claa>;
 		status = "okay";
-	};
-
-	claa: CLAA-WVGA {
-		display-timings {
-			timing {
-				clock-frequency = <27000000>;
-				hactive = <800>;
-				vactive = <480>;
-				hfront-porch = <60>;
-				hback-porch = <40>;
-				hsync-len = <20>;
-				vback-porch = <10>;
-				vfront-porch = <10>;
-				vsync-len = <10>;
-			};
-		};
-	};
-
-	ldbxga: LDB-XGA {
-		display-timings {
-			timing {
-				clock-frequency = <65000000>;
-				hactive = <1024>;
-				vactive = <768>;
-				hfront-porch = <40>;
-				hback-porch = <220>;
-				hsync-len = <60>;
-				vback-porch = <21>;
-				vfront-porch = <7>;
-				vsync-len = <10>;
-			};
-		};
 	};
 
 	backlight {
@@ -390,7 +357,6 @@
 		pwn-gpios = <&gpio1 16 1>;   /* active low: SD1_DAT0 */
 		rst-gpios = <&gpio1 17 0>;   /* active high: SD1_DAT1 */
 		csi_id = <0>;
-		ipu_id = <0>;
 		mclk = <24000000>;
 		mclk_source = <0>;
 	};
@@ -435,7 +401,6 @@
 		pwn-gpios = <&gpio1 19 1>;   /* active low: SD1_CLK */
 		rst-gpios = <&gpio1 20 0>;   /* active high: SD1_DAT2 */
 		csi_id = <1>;
-		ipu_id = <1>;
 		mclk = <24000000>;
 		mclk_source = <0>;
 	};
@@ -544,8 +509,6 @@
 	sec_ipu_id = <1>;
 	sec_disp_id = <0>;
 	status = "okay";
-	display = <&ldbxga>;
-	sec-display = <&ldbxga>;
 };
 
 &mipi_csi {
