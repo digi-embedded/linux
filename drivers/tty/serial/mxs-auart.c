@@ -246,6 +246,10 @@ static int mxs_auart_dma_tx(struct mxs_auart_port *s, int size)
 	return 0;
 }
 
+/*
+ * This function assumes it is called without the port
+ * lock held.
+ */
 static void mxs_auart_tx_chars(struct mxs_auart_port *s)
 {
 	struct circ_buf *xmit = &s->port.state->xmit;
@@ -842,6 +846,10 @@ static void mxs_auart_flush_buffer(struct uart_port *u)
 		msleep(u->timeout);
 }
 
+/*
+ * Start the transmission.
+ * Locking: called with port lock held and IRQs disabled.
+ */
 static void mxs_auart_start_tx(struct uart_port *u)
 {
 	struct mxs_auart_port *s = to_auart_port(u);
@@ -849,7 +857,10 @@ static void mxs_auart_start_tx(struct uart_port *u)
 	/* enable transmitter */
 	writel(AUART_CTRL2_TXE, u->membase + AUART_CTRL2_SET);
 
+	/* Avoid lock contention - tx_chars does its own locking */
+	spin_unlock(&s->port.lock);
 	mxs_auart_tx_chars(s);
+	spin_lock(&s->port.lock);
 }
 
 static void mxs_auart_stop_tx(struct uart_port *u)
