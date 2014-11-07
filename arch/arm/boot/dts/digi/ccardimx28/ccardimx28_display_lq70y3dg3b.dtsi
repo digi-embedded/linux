@@ -16,14 +16,14 @@
 				lcdif_pins_ccard: lcdif_ccard@0 {
 					reg = <0>;
 					fsl,pinmux-ids = <
-						0x11e0 /* MX28_PAD_LCD_DOTCLK__LCD_DOTCLK */
-						0x11f0 /* MX28_PAD_LCD_ENABLE__LCD_ENABLE */
-						0x31e1 /* MX28_PAD_LCD_RESET__LCD_VSYNC */
-						0x11d0 /* MX28_PAD_LCD_HSYNC__LCD_HSYNC */
+						MX28_PAD_LCD_DOTCLK__LCD_DOTCLK
+						MX28_PAD_LCD_ENABLE__LCD_ENABLE
+						MX28_PAD_LCD_RESET__LCD_VSYNC
+						MX28_PAD_LCD_HSYNC__LCD_HSYNC
 					>;
-					fsl,drive-strength = <1>;
-					fsl,voltage = <1>;
-					fsl,pull-up = <0>;
+					fsl,drive-strength = <MXS_DRIVE_8mA>;
+					fsl,voltage = <MXS_VOLTAGE_HIGH>;
+					fsl,pull-up = <MXS_PULL_DISABLE>;
 				};
 			};
 
