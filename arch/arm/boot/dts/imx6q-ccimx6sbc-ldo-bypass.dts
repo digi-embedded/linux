@@ -1,0 +1,69 @@
+/*
+ * Copyright 2014 Digi International, Inc.
+ * Copyright 2012 Freescale Semiconductor, Inc.
+ * Copyright 2011 Linaro Ltd.
+ *
+ * The code contained herein is licensed under the GNU General Public
+ * License. You may obtain a copy of the GNU General Public License
+ * Version 2 or later at the following locations:
+ *
+ * http://www.opensource.org/licenses/gpl-license.html
+ * http://www.gnu.org/copyleft/gpl.html
+ */
+
+#include "imx6q-ccimx6sbc.dts"
+
+&cpu0 {
+	operating-points = <
+		/* kHz    uV */
+		1200000 1280000
+		996000  1250000
+		852000  1250000
+		792000  1150000
+		396000  980000
+		>;
+	fsl,soc-operating-points = <
+		/* ARM kHz  SOC-PU uV */
+		1200000       1280000
+		996000        1250000
+		852000        1250000
+		792000        1180000
+		396000        1180000
+		>;
+	arm-supply = <&bcore1>;
+	soc-supply = <&bcore2>;
+	pu-supply = <&pu_dummy>; /* use pu_dummy if VDDSOC share with VDDPU */
+};
+
+&gpc {
+	fsl,ldo-bypass = <1>; /* use ldo-bypass, u-boot will check it and configure */
+	pu-supply = <&pu_dummy>; /* ldo-bypass:use pu_dummy if VDDSOC share with VDDPU */
+};
+
+&gpu {
+	pu-supply = <&pu_dummy>; /* ldo-bypass:use pu_dummy if VDDSOC share with VDDPU */
+};
+
+&vpu {
+	pu-supply = <&pu_dummy>; /* ldo-bypass:use pu_dummy if VDDSOC share with VDDPU */
+};
+
+&i2c2 {
+	dialog@58 {
+		regulators {
+			DA9063_BCORE1 {
+				regulator-min-microvolt = <3000>;
+				regulator-max-microvolt = <1570000>;
+				regulator-suspend-mem-microvolt = <1175000>;
+				regulator-suspend-standby-microvolt = <1175000>;
+			};
+
+			DA9063_BCORE2 {
+				regulator-min-microvolt = <3000>;
+				regulator-max-microvolt = <1570000>;
+				regulator-suspend-mem-microvolt = <1175000>;
+				regulator-suspend-standby-microvolt = <1175000>;
+			};
+		};
+	};
+};
