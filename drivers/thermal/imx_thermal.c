@@ -226,9 +226,9 @@ static void imx_set_alarm_temp(struct imx_thermal_data *data,
 	regmap_field_write(data->high_alarm, alarm_value);
 }
 
-static int imx_get_temp(struct thermal_zone_device *tz, unsigned long *temp)
+static int imx_get_temp_internal(struct imx_thermal_data *data,
+				 unsigned long *temp)
 {
-	struct imx_thermal_data *data = tz->devdata;
 	unsigned int finished;
 	unsigned int val;
 
@@ -278,7 +278,7 @@ static int imx_get_temp(struct thermal_zone_device *tz, unsigned long *temp)
 
 	/* The finished bit is not easy to poll on i.MX7, skip checking it */
 	if (data->socdata->version != TEMPMON_V3 && !finished) {
-		dev_dbg(&tz->device, "temp measurement never finished\n");
+		dev_dbg(&data->tz->device, "temp measurement never finished\n");
 		mutex_unlock(&data->mutex);
 		return -EAGAIN;
 	}
@@ -294,12 +294,12 @@ static int imx_get_temp(struct thermal_zone_device *tz, unsigned long *temp)
 		imx_set_alarm_temp(data, data->temp_critical);
 	if (data->alarm_temp == data->temp_critical && *temp < data->temp_passive) {
 		imx_set_alarm_temp(data, data->temp_passive);
-		dev_dbg(&tz->device, "thermal alarm off: T < %lu\n",
+		dev_dbg(&data->tz->device, "thermal alarm off: T < %lu\n",
 			data->alarm_temp / 1000);
 	}
 
 	if (*temp != data->last_temp) {
-		dev_dbg(&tz->device, "millicelsius: %ld\n", *temp);
+		dev_dbg(&data->tz->device, "millicelsius: %ld\n", *temp);
 		data->last_temp = *temp;
 	}
 
@@ -311,6 +311,12 @@ static int imx_get_temp(struct thermal_zone_device *tz, unsigned long *temp)
 	mutex_unlock(&data->mutex);
 
 	return 0;
+}
+
+static int imx_get_temp(struct thermal_zone_device *tz, unsigned long *temp)
+{
+	struct imx_thermal_data *data = tz->devdata;
+	return imx_get_temp_internal(data, temp);
 }
 
 static int imx_get_mode(struct thermal_zone_device *tz,
@@ -671,6 +677,7 @@ static int imx_thermal_probe(struct platform_device *pdev)
 	struct regmap *map;
 	int measure_freq;
 	int ret;
+	unsigned long temp;
 
 	data = devm_kzalloc(&pdev->dev, sizeof(*data), GFP_KERNEL);
 	if (!data)
@@ -796,6 +803,10 @@ static int imx_thermal_probe(struct platform_device *pdev)
 	data->irq_enabled = true;
 
 	data->mode = THERMAL_DEVICE_ENABLED;
+
+	imx_get_temp_internal(data, &temp);
+	pr_info("i.MX junction temperature %d celsius.",
+			(unsigned int)(temp/1000));
 
 	/* register the busfreq notifier called in low bus freq */
 	if (data->socdata->version != TEMPMON_V3)
