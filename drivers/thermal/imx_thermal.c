@@ -81,9 +81,9 @@ struct imx_thermal_data {
 	struct clk *thermal_clk;
 };
 
-static int imx_get_temp(struct thermal_zone_device *tz, unsigned long *temp)
+static int imx_get_temp_internal(struct imx_thermal_data *data,
+				 unsigned long *temp)
 {
-	struct imx_thermal_data *data = tz->devdata;
 	struct regmap *map = data->tempmon;
 	static unsigned long last_temp;
 	unsigned int n_meas;
@@ -109,7 +109,7 @@ static int imx_get_temp(struct thermal_zone_device *tz, unsigned long *temp)
 	regmap_write(map, TEMPSENSE0 + REG_SET, TEMPSENSE0_POWER_DOWN);
 
 	if ((val & TEMPSENSE0_FINISHED) == 0) {
-		dev_dbg(&tz->device, "temp measurement never finished\n");
+		dev_dbg(&data->tz->device, "temp measurement never finished\n");
 		return -EAGAIN;
 	}
 
@@ -119,13 +119,19 @@ static int imx_get_temp(struct thermal_zone_device *tz, unsigned long *temp)
 	*temp = data->c2 - n_meas * data->c1;
 
 	if (*temp != last_temp) {
-		dev_dbg(&tz->device, "millicelsius: %ld\n", *temp);
+		dev_dbg(&data->tz->device, "millicelsius: %ld\n", *temp);
 		last_temp = *temp;
 	}
 
 	clk_disable_unprepare(data->thermal_clk);
 
 	return 0;
+}
+
+static int imx_get_temp(struct thermal_zone_device *tz, unsigned long *temp)
+{
+	struct imx_thermal_data *data = tz->devdata;
+	return imx_get_temp_internal(data, temp);
 }
 
 static int imx_get_mode(struct thermal_zone_device *tz,
@@ -343,6 +349,7 @@ static int imx_thermal_probe(struct platform_device *pdev)
 	struct cpumask clip_cpus;
 	struct regmap *map;
 	int ret;
+	unsigned long temp;
 
 	data = devm_kzalloc(&pdev->dev, sizeof(*data), GFP_KERNEL);
 	if (!data)
@@ -412,6 +419,10 @@ static int imx_thermal_probe(struct platform_device *pdev)
 	}
 
 	data->mode = THERMAL_DEVICE_ENABLED;
+
+	imx_get_temp_internal(data, &temp);
+	pr_info("i.MX junction temperature %d celsius.",
+			(unsigned int)(temp/1000));
 
 	return 0;
 }
