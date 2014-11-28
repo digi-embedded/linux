@@ -66,6 +66,7 @@ struct imx6_pcie {
 	struct clk		*pcie_inbound_axi;
 	struct clk		*pcie_phy;
 	struct clk		*pcie;
+	struct regulator        *regulator;
 	struct clk		*pcie_ext;
 	struct clk		*pcie_ext_src;
 	struct regmap		*iomuxc_gpr;
@@ -1213,6 +1214,20 @@ static int imx6_pcie_probe(struct platform_device *pdev)
 	pp->dbi_base = devm_ioremap_resource(dev, dbi_base);
 	if (IS_ERR(pp->dbi_base))
 		return PTR_ERR(pp->dbi_base);
+
+	/* Fetch supply */
+	imx6_pcie->regulator = devm_regulator_get(&pdev->dev, "vin");
+	if (!IS_ERR(imx6_pcie->regulator)) {
+		regulator_set_voltage(imx6_pcie->regulator, 1500000, 1500000);
+		ret = regulator_enable(imx6_pcie->regulator);
+		if (ret) {
+			dev_err(&pdev->dev, "set regulator voltage failed\n");
+			return ret;
+		}
+	} else {
+		imx6_pcie->regulator = NULL;
+		dev_warn(&pdev->dev, "cannot get regulator voltage\n");
+	}
 
 	/* Fetch GPIOs */
 	imx6_pcie->dis_gpio = of_get_named_gpio(node, "disable-gpio", 0);
