@@ -1130,6 +1130,9 @@ static int da9063_regulator_probe(struct platform_device *pdev)
 			goto err;
 		}
 
+		/* Disable by default unless always on specified. */
+		if (!of_property_read_bool(np, "regulator-always-on"))
+			da9063_disable(regulator->rdev);
 	}
 
 	/* LDOs overcurrent event support */

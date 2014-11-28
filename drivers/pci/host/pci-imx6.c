@@ -28,6 +28,7 @@
 #include <linux/signal.h>
 #include <linux/types.h>
 #include <linux/busfreq-imx6.h>
+#include <linux/regulator/consumer.h>
 
 #include "pcie-designware.h"
 
@@ -47,6 +48,7 @@ struct imx6_pcie {
 	int			power_on_gpio;
 	int			wake_up_gpio;
 	int			disable_gpio;
+	struct regulator	*regulator;
 	struct clk		*lvds_gate;
 	struct clk		*sata_ref_100m;
 	struct clk		*pcie_ref_125m;
@@ -627,6 +629,20 @@ static int __init imx6_pcie_probe(struct platform_device *pdev)
 	if (IS_ERR(pp->dbi_base)) {
 		ret = PTR_ERR(pp->dbi_base);
 		goto err;
+	}
+
+	/* Fetch supply */
+	imx6_pcie->regulator = devm_regulator_get(&pdev->dev, "vin");
+	if (!IS_ERR(imx6_pcie->regulator)) {
+		regulator_set_voltage(imx6_pcie->regulator, 3300000, 3300000);
+		ret = regulator_enable(imx6_pcie->regulator);
+		if (ret) {
+			dev_err(&pdev->dev, "set regulator voltage failed\n");
+			goto err;
+		}
+	} else {
+		imx6_pcie->regulator = NULL;
+		dev_warn(&pdev->dev, "cannot get regulator voltage\n");
 	}
 
 	/* Fetch GPIOs */

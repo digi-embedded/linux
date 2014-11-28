@@ -167,6 +167,8 @@
 
 			ldo6: DA9063_LDO6 {
 				regulator-name = "DA9063_LDO6";
+				regulator-min-microvolt = <900000>;
+				regulator-max-microvolt = <3600000>;
 				regulator-suspend-mem-disabled;
 				regulator-suspend-standby-disabled;
 			};
