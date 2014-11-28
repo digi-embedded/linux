@@ -124,6 +124,12 @@
 };
 
 &pcie {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pcie_1>;
+	reset-gpio = <&gpio7 8 0>;
+	wake-up-gpio = <&gpio7 7 0>;
+	disable-gpio = <&gpio1 4 0>;
+	vin-supply = <&ldo6>;
 	status = "okay";
 };
 
