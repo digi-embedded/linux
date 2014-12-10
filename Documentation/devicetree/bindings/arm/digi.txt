@@ -13,6 +13,10 @@ ConnectPort X2
 Required root node properties:
     - compatible = "digi,cpx2", "fsl,imx28";
 
-ConnectCard 6 JumpStart Kit
+ConnectCard 6 module
 Required root node properties:
-    - compatible = "digi,ccimx6adpt", "fsl,imx6q";
+    - compatible = "digi,ccimx6", "fsl,imx6q";
+
+ConnectCard 6 SBC
+Required root node properties:
+    - compatible = "digi,ccimx6sbc", "fsl,imx6q";
