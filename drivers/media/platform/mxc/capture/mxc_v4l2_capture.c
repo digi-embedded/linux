@@ -625,10 +625,14 @@ static int verify_preview(cam_data *cam, struct v4l2_window *win)
 		return -EINVAL;
 	}
 
-	if ((cam->crop_bounds.width / *width > 8) ||
-	    ((cam->crop_bounds.width / *width == 8) &&
-	     (cam->crop_bounds.width % *width))) {
-		*width = cam->crop_bounds.width / 8;
+
+	if (cam->crop_bounds.width / *width >= 8) {
+		/* The IPU fails with IPU_CHECK_ERR_W_DOWNSIZE_OVER for widths
+		 * strictly equal to (cam->crop_bounds.width / 8) so add 1 more
+		 * pixel here and let the following check to adjust to a 8-pixel
+		 * boundary
+		 */
+		*width = cam->crop_bounds.width / 8 + 1;
 		if (*width % 8)
 			*width += 8 - *width % 8;
 		if (*width + win->w.left > width_bound) {
@@ -641,10 +645,13 @@ static int verify_preview(cam_data *cam, struct v4l2_window *win)
 			*width);
 	}
 
-	if ((cam->crop_bounds.height / *height > 8) ||
-	    ((cam->crop_bounds.height / *height == 8) &&
-	     (cam->crop_bounds.height % *height))) {
-		*height = cam->crop_bounds.height / 8;
+	if (cam->crop_bounds.height / *height >= 8) {
+		/* The IPU fails with IPU_CHECK_ERR_H_DOWNSIZE_OVER for heights
+		 * strictly equal to (cam->crop_bounds.height / 8) so add 1 more
+		 * pixel here and let the following check to adjust to a 8-pixel
+		 * boundary
+		 */
+		*height = cam->crop_bounds.height / 8 + 1;
 		if (*height % 8)
 			*height += 8 - *height % 8;
 		if (*height + win->w.top > height_bound) {
