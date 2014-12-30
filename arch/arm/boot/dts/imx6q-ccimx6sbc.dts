@@ -103,11 +103,14 @@
 
 	lcd@0 {
 		compatible = "fsl,lcd";
+*/
+		/* Note that to use DISP0_CONTRAST it needs to use IPU0 */
+/*
 		ipu_id = <1>;
 		disp_id = <0>;
-		default_ifmt = "RGB565";
 		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_ipu1_6>;
+		pinctrl-0 = <&pinctrl_ipu2_3>;
+		default_ifmt = "RGB565";
 		display = <&lq070y3dg3b>;
 		status = "okay";
 	};
