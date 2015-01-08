@@ -32,7 +32,14 @@
 #include <linux/proc_fs.h>
 #include <linux/fb.h>
 #include <linux/console.h>
-#include <video/ad9389.h>
+#include <linux/ipu.h>
+#include <linux/clk.h>
+#include "mxc_dispdrv.h"
+#include <linux/vmalloc.h>
+#include <linux/pinctrl/consumer.h>
+#include <video/display_timing.h>
+#include <video/of_display_timing.h>
+#include <video/videomode.h>
 
 #define HPD_INT			0x80
 #define MSEN_INT		0x40
@@ -43,18 +50,50 @@
 #define EDID_LENGTH		256
 #define DRV_NAME		"ad9389"
 
-
-#define DEBUG
 #define I2C_DBG			0x0001
 #define EDID_DBG		0x0002
 #define REGS_DBG		0x0004
 #define SCREEN_DBG		0x0008
 
-//static int debug = I2C_DBG | EDID_DBG | REGS_DBG | SCREEN_DBG;
-static int debug = 0;
+#define DISPDRV_HDMI		"hdmi_ad9389"
 
-struct ad9389_dev *pad9389;
+#ifdef DEBUG_DUMP
+static int debug = I2C_DBG | EDID_DBG | REGS_DBG | SCREEN_DBG;
+#endif
 
+struct ad9389_dev {
+	u8				chiprev;
+	struct mutex			irq_lock;
+	struct i2c_client		*client;
+	struct work_struct		work;
+	struct timer_list		timer;
+	struct i2c_client		*edid_ram;
+	struct fb_info			*fbi;
+	u8				*edid_data;
+	int				dvi;
+	struct mxc_dispdrv_handle	*disp_mxc_hdmi;
+	struct notifier_block		nb;
+	unsigned int			fb_reg;
+	int				if_fmt;
+	int				default_bpp;
+	char				*dft_mode_str;
+	struct clk			*ipu_clk;
+	struct pinctrl			*pinctrl;
+};
+
+struct ad9389_display_data {
+	char				disp_name[64];
+	const struct display_timings	*timings;
+	struct fb_videomode		native_mode;
+};
+
+struct ad9389_pdata {
+	unsigned int			debounce_ms;
+	unsigned int			edid_addr;
+	unsigned int			ipu_id;
+	unsigned int			disp_id;
+	struct ad9389_display_data	disp;
+};
 
 static inline int ad9389_read_reg(struct i2c_client *client, u8 reg)
 {
@@ -156,7 +195,7 @@ static int ad9389_get_N(struct i2c_client *client)
 	return N_val;
 }
 
-#ifdef DEBUG
+#ifdef DEBUG_DUMP
 static void ad9389_dump_edid(u8 *edid)
 {
 	int i;
@@ -309,29 +348,193 @@ static void ad9389_audio_setup(struct ad9389_dev *ad9389)
 	ad9389_set_av_mute(client, 0);
 }
 
-
-static void ad9389_fb_init(struct fb_info *info)
+static void ad9389_notify_fb(struct ad9389_dev *ad9389)
 {
-	struct ad9389_dev *ad9389 = pad9389;
+	/* Don't notify if we aren't registered yet */
+	if (!ad9389->fb_reg)
+		return;
+
+	ad9389->fbi->var.activate |= FB_ACTIVATE_FORCE;
+	console_lock();
+	ad9389->fbi->flags |= FBINFO_MISC_USEREVENT;
+	fb_set_var(ad9389->fbi, &ad9389->fbi->var);
+	ad9389->fbi->flags &= ~FBINFO_MISC_USEREVENT;
+	console_unlock();
+}
+
+static int ad9389_fb_event(struct notifier_block *nb, unsigned long val,
+			   void *v)
+{
+	struct ad9389_dev *ad9389 = container_of(nb, struct ad9389_dev, nb);
+	struct i2c_client *client = ad9389->client;
+	struct fb_event *event = v;
+
+	switch (val) {
+	case FB_EVENT_FB_REGISTERED:
+		/* Ack any active interrupt and enable irqs */
+		ad9389_write_reg(client, 0x94, 0x84);
+		ad9389_write_reg(client, 0x95, 0xc3);
+		ad9389_write_reg(client, 0x96, 0x84);
+		/* TODO: Datasheet says bit 2 should be 1 for proper
+		 * operation */
+		ad9389_write_reg(client, 0x97, 0xc3);
+		ad9389->fb_reg = 1;
+		/* Display logo also when not primary */
+		memset((char *)ad9389->fbi->screen_base, 0,
+			ad9389->fbi->fix.smem_len);
+		fb_blank(ad9389->fbi, FB_BLANK_UNBLANK);
+		fb_prepare_logo(ad9389->fbi, 0);
+		fb_show_logo(ad9389->fbi, 0);
+		break;
+	case FB_EVENT_FB_UNREGISTERED:
+		/* Disable interrupts */
+		ad9389_write_reg(client, 0x96, 0x00);
+		ad9389_write_reg(client, 0x97, 0x04);
+		ad9389->fb_reg = 0;
+		break;
+	case FB_EVENT_BLANK:
+		if (ad9389_disp_connected(client)) {
+			if (*((int *)event->data) == FB_BLANK_UNBLANK)
+				clk_enable(ad9389->ipu_clk);
+			else
+				clk_disable(ad9389->ipu_clk);
+		}
+		break;
+	default:
+		break;
+	}
+	return 0;
+}
+
+static void set_fb_bitfield(struct fb_bitfield *bf , u32 offset, u32 length,
+			    u32 msbr)
+{
+	bf->offset = offset;
+	bf->length = length;
+	bf->msb_right = msbr;
+}
+
+static int ad9389_var_color_format(struct ad9389_dev *ad9389, int pixelfmt,
+				   struct fb_var_screeninfo *var)
+{
+	switch (pixelfmt) {
+	case IPU_PIX_FMT_RGB24:
+		set_fb_bitfield(&var->red, 0, 8, 0);
+		set_fb_bitfield(&var->green, 8, 8, 0);
+		set_fb_bitfield(&var->blue, 16, 8, 0);
+		set_fb_bitfield(&var->transp, 0, 0, 0);
+		break;
+	case IPU_PIX_FMT_BGR24:
+		set_fb_bitfield(&var->red, 16, 8, 0);
+		set_fb_bitfield(&var->green, 8, 8, 0);
+		set_fb_bitfield(&var->blue, 0, 8, 0);
+		set_fb_bitfield(&var->transp, 0, 0, 0);
+		break;
+	case IPU_PIX_FMT_GBR24:
+		set_fb_bitfield(&var->red, 16, 8, 0);
+		set_fb_bitfield(&var->green, 0, 8, 0);
+		set_fb_bitfield(&var->blue, 8, 8, 0);
+		set_fb_bitfield(&var->transp, 0, 0, 0);
+		break;
+	default:
+		dev_err(&ad9389->client->dev, "Unsupported pixel format %s\n",
+			ipu_pixelfmt_str(pixelfmt));
+		return -EINVAL;
+	}
+	var->bits_per_pixel = 24;
+	return 0;
+}
+
+#ifdef DEBUG_DUMP
+static void dump_fb_videomode(struct fb_videomode *m)
+{
+	pr_debug("fb_videomode = %d %d %d %d %d %d %d %d %d %d %d %d %d\n",
+		m->refresh, m->xres, m->yres, m->pixclock, m->left_margin,
+		m->right_margin, m->upper_margin, m->lower_margin,
+		m->hsync_len, m->vsync_len, m->sync, m->vmode, m->flag);
+}
+#else
+static void dump_fb_videomode(struct fb_videomode *m)
+{}
+#endif
+
+static int ad9389_set_videomode(struct ad9389_dev *ad9389)
+{
+	int ret = -ENOENT;
+	int i = 0;
+	int num_timings = 0;
+	struct fb_videomode *modedb = NULL;
 	struct i2c_client *client = ad9389->client;
 	struct ad9389_pdata *pdata = client->dev.platform_data;
+	struct ad9389_display_data *display = &pdata->disp;
+	struct fb_videomode m;
+
+	/* auto mode will read edid and use preferred mode */
+	if (strcmp(ad9389->dft_mode_str, "auto")) {
+		/* Check for user supplied timings */
+		if (display->timings && display->timings->num_timings) {
+			num_timings = display->timings->num_timings;
+			modedb = vzalloc(sizeof(*modedb) *
+					display->timings->num_timings);
+			if (!modedb)
+				return -ENOMEM;
+
+			for (i = 0; i < display->timings->num_timings; i++) {
+				struct videomode vm;
+
+				videomode_from_timing(
+						display->timings->timings[i],
+						&vm);
+				ret = fb_videomode_from_videomode(&vm,
+								  &modedb[i]);
+				if (ret < 0)
+					goto out;
+				dump_fb_videomode(&modedb[i]);
+				modedb[i].name = display->disp_name;
+			}
+			/* Add user supplied timings if any to modelist */
+			fb_videomode_to_modelist(modedb, num_timings,
+						 &ad9389->fbi->modelist);
+			dev_info(&client->dev, "Using timings for %s\n",
+					display->disp_name);
+		}
+	} else
+		dev_info(&client->dev, "Using auto mode.\n");
+
+	/* Find mode either in user supplied timings or default modedb */
+	ret = fb_find_mode(&ad9389->fbi->var, ad9389->fbi,
+				ad9389->dft_mode_str, modedb,
+				num_timings, NULL,
+				ad9389->default_bpp);
+	if (ret <= 0)
+		goto out;
+
+	fb_var_to_videomode(&m, &ad9389->fbi->var);
+	dump_fb_videomode(&m);
+
+out:
+	if (modedb)
+		vfree(modedb);
+	return ret;
+}
+
+static int ad9389_fb_init(struct ad9389_dev *ad9389)
+{
+	struct i2c_client *client = ad9389->client;
 	static struct fb_var_screeninfo var;
+	struct fb_videomode m;
+	const struct fb_videomode *mode;
+	uint32_t pixel_clk, rounded_pixel_clk;
 	int ret = 0;
+	int force_mode = 0;
 
-	dev_dbg(info->dev, "%s\n", __func__);
-
-	if (!ad9389_disp_connected(client)) {
-		dev_dbg(info->dev, "%s, display disconnected\n", __func__);
-		ad9389_set_power_down(client, 1);
-		if(pdata->disp_disconnected)
-			pdata->disp_disconnected(ad9389);
-		return;
+	if (ad9389->fbi == NULL) {
+		dev_err(&client->dev, "No framebuffer available\n");
+		return -ENODEV;
 	}
 
-	if(pdata->disp_connected)
-		pdata->disp_connected(ad9389);
+	dev_dbg(&client->dev, "%s\n", __func__);
 
-	dev_dbg(info->dev, "%s, display connected\n", __func__);
 	memset(&var, 0, sizeof(var));
 
 	/* Disable Power down and set mute to on */
@@ -353,60 +556,171 @@ static void ad9389_fb_init(struct fb_info *info)
 
 	mdelay(50);
 
-	ret = ad9389_read_edid(ad9389->client, ad9389->edid_data);
-	if (!ret) {
-		ad9389_dump_edid(ad9389->edid_data);
-		ret = ad9389_parse_edid(&var, ad9389->edid_data, &ad9389->dvi);
-		if (!ret) {
-			if (!ad9389->dvi) {
-				ad9389_set_hdmi_mode(client, 1);
-				/* FIXME audio setup should be done once we know
-				 * the pixclock */
-				ad9389_audio_setup(ad9389);
-			}
+	ad9389_var_color_format(ad9389, ad9389->if_fmt, &ad9389->fbi->var);
 
-			fb_edid_to_monspecs(ad9389->edid_data, &info->monspecs);
-			if (info->monspecs.modedb_len) {
-				fb_dump_modeline(info->monspecs.modedb,
-						info->monspecs.modedb_len);
-				if (pdata->vmode_to_modelist)
-					pdata->vmode_to_modelist(
-							info->monspecs.modedb,
-							info->monspecs.modedb_len,
-							 &info->modelist, &var);
-				else
-					fb_videomode_to_modelist(
-							info->monspecs.modedb,
-							info->monspecs.modedb_len,
-							&info->modelist);
-			}
-		}
+	ret = ad9389_set_videomode(ad9389);
+	if (ret <= 0) {
+		dev_err(&client->dev, "Failed to set video modes.\n");
+		return -EINVAL;
+	} else if (ret == 1) {
+		dev_info(&client->dev, "Using user specified mode.\n");
+		force_mode = 1;
 	} else {
-		/* TODO */
-		dev_warn(&client->dev, "NO EDID information found, using default mode?\n");
+		dev_info(&client->dev, "Using edid to set mode.\n");
 	}
 
-	ad9389_dump_regs(client);
+	if (!ad9389_disp_connected(client)) {
+		dev_dbg(&client->dev, "%s, display disconnected\n", __func__);
+		ad9389_set_power_down(client, 1);
+		ad9389_notify_fb(ad9389);
+		return 0;
+	}
 
-	if (pdata->vmode_to_var)
-		pdata->vmode_to_var(ad9389, &var);
+	dev_dbg(&client->dev, "%s, display connected\n", __func__);
 
-	var.activate = FB_ACTIVATE_ALL;
-	acquire_console_sem();
-	info->flags |= FBINFO_MISC_USEREVENT;
-	fb_set_var(info, &var);
-	info->flags &= ~FBINFO_MISC_USEREVENT;
-	memset((char *)info->screen_base, 0, info->fix.smem_len);
-	fb_blank(info, FB_BLANK_UNBLANK);
-	fb_prepare_logo(info, 0);
-	fb_show_logo(info, 0);
-	release_console_sem();
-}
+	if (!force_mode) {
+		/* Read edid modes */
+		ret = ad9389_read_edid(ad9389->client, ad9389->edid_data);
+		if (!ret) {
+			ad9389_dump_edid(ad9389->edid_data);
+			ret = ad9389_parse_edid(&var, ad9389->edid_data,
+						&ad9389->dvi);
+			if (!ret) {
+				if (!ad9389->dvi) {
+					ad9389_set_hdmi_mode(client, 1);
+					/* FIXME audio setup should be done
+					 * once we know the pixclock */
+					ad9389_audio_setup(ad9389);
+				}
 
-int ad9389_fb_event(struct notifier_block *nb, unsigned long val, void *v)
-{
+				fb_edid_to_monspecs(ad9389->edid_data,
+						    &ad9389->fbi->monspecs);
+				if (ad9389->fbi->monspecs.modedb_len) {
+					fb_dump_modeline(
+					ad9389->fbi->monspecs.modedb,
+					ad9389->fbi->monspecs.modedb_len);
+					fb_videomode_to_modelist(
+					ad9389->fbi->monspecs.modedb,
+					ad9389->fbi->monspecs.modedb_len,
+					&ad9389->fbi->modelist);
+				}
+			}
+		} else {
+			dev_warn(&client->dev, "NO EDID information found, using default mode?\n");
+		}
+
+		ad9389_dump_regs(client);
+
+		/* Find best match between edid modes and user supplied mode
+		 * if any */
+		mode = fb_find_nearest_mode(&m, &ad9389->fbi->modelist);
+		if (!mode) {
+			pr_err("%s: could not find mode in modelist\n",
+				__func__);
+			return -EINVAL;
+		}
+
+		dump_fb_videomode((struct fb_videomode *)mode);
+		fb_videomode_to_var(&ad9389->fbi->var, mode);
+
+		/* update fbi mode */
+		ad9389->fbi->mode = (struct fb_videomode *)mode;
+	}
+
+	/* Configure clocks for required pixelclock */
+	pixel_clk = (PICOS2KHZ(ad9389->fbi->var.pixclock)) * 1000UL;
+
+	rounded_pixel_clk = clk_round_rate(ad9389->ipu_clk, pixel_clk);
+	dev_dbg(&client->dev, "pixel_clk:%d, rounded_pixel_clk:%d\n",
+			pixel_clk, rounded_pixel_clk);
+	ret = clk_set_rate(ad9389->ipu_clk, rounded_pixel_clk);
+	if (ret < 0) {
+		dev_err(&client->dev, "set ipu di clk fail:%d\n", ret);
+		return ret;
+	}
+	ret = clk_prepare_enable(ad9389->ipu_clk);
+	if (ret < 0) {
+		dev_err(&client->dev, "enable ipu di clk fail:%d\n", ret);
+		return ret;
+	}
+
+	ad9389_notify_fb(ad9389);
 	return 0;
 }
+
+static int ad9389_dispdrv_power_on(struct mxc_dispdrv_handle *disp)
+{
+	struct ad9389_dev *ad9389 = mxc_dispdrv_getdata(disp);
+	ad9389_set_power_down(ad9389->client, 0);
+	return 0;
+}
+
+static void ad9389_dispdrv_power_off(struct mxc_dispdrv_handle *disp)
+{
+	struct ad9389_dev *ad9389 = mxc_dispdrv_getdata(disp);
+	ad9389_set_power_down(ad9389->client, 1);
+}
+
+static int valid_mode(int pixel_fmt)
+{
+	return ((pixel_fmt == IPU_PIX_FMT_RGB24)  ||
+			(pixel_fmt == IPU_PIX_FMT_BGR24)  ||
+			(pixel_fmt == IPU_PIX_FMT_RGB666) ||
+			(pixel_fmt == IPU_PIX_FMT_RGB565) ||
+			(pixel_fmt == IPU_PIX_FMT_BGR666) ||
+			(pixel_fmt == IPU_PIX_FMT_RGB332));
+}
+
+static int ad9389_dispdrv_init(struct mxc_dispdrv_handle *disp,
+			      struct mxc_dispdrv_setting *setting)
+{
+	struct ad9389_dev *ad9389 = mxc_dispdrv_getdata(disp);
+	struct i2c_client *client = ad9389->client;
+	struct ad9389_pdata *pdata = client->dev.platform_data;
+
+	mutex_lock(&ad9389->irq_lock);
+
+	ad9389->fbi = setting->fbi;
+	ad9389->if_fmt = setting->if_fmt;
+	ad9389->default_bpp = setting->default_bpp;
+	ad9389->dft_mode_str = setting->dft_mode_str;
+
+	setting->dev_id = pdata->ipu_id;
+	setting->disp_id = pdata->disp_id;
+	dev_dbg(&client->dev, "ipu_id %d disp_id %d\n", setting->dev_id,
+		setting->disp_id);
+
+	if (!valid_mode(setting->if_fmt)) {
+		dev_warn(&client->dev, "Input pixel format not valid use default RGB24\n");
+		setting->if_fmt = IPU_PIX_FMT_RGB24;
+	}
+
+	dev_dbg(&client->dev, "%s - default mode %s bpp=%d\n",
+		__func__, setting->dft_mode_str, setting->default_bpp);
+
+	mutex_unlock(&ad9389->irq_lock);
+
+	ad9389->nb.notifier_call = ad9389_fb_event;
+	fb_register_client(&ad9389->nb);
+	return ad9389_fb_init(ad9389);
+}
+
+static void ad9389_dispdrv_deinit(struct mxc_dispdrv_handle *disp)
+{
+	struct ad9389_dev *ad9389 = mxc_dispdrv_getdata(disp);
+	clk_disable(ad9389->ipu_clk);
+	clk_put(ad9389->ipu_clk);
+	fb_unregister_client(&ad9389->nb);
+}
+
+static struct mxc_dispdrv_driver ad9389_mxc_dispdrv = {
+	.name		= DISPDRV_HDMI,
+	.init		= ad9389_dispdrv_init,
+	.deinit		= ad9389_dispdrv_deinit,
+	.enable		= ad9389_dispdrv_power_on,
+	.disable	= ad9389_dispdrv_power_off,
+};
+
 
 static void ad9389_timer(unsigned long handle)
 {
@@ -416,10 +730,8 @@ static void ad9389_timer(unsigned long handle)
 	/* Just enable again the interrupt and stop the timer */
 	dev_dbg(&client->dev, "%s, enabling interrupts\n", __func__);
 
-	mutex_lock(&ad9389->irq_lock);
 	enable_irq(client->irq);
 	del_timer(&ad9389->timer);
-	mutex_unlock(&ad9389->irq_lock);
 }
 
 static void ad9389_work(struct work_struct *work)
@@ -448,7 +760,7 @@ static void ad9389_work(struct work_struct *work)
 		/* hot plug detections interrupt? */
 		if (irq_reg1 & HPD_INT) {
 			dev_dbg(&client->dev, "HPD irq\n");
-			ad9389_fb_init(ad9389->fbi);
+			ad9389_fb_init(ad9389);
 		}
 
 		/* check for EDID ready flag, then call EDID Handler */
@@ -610,25 +922,67 @@ static const struct attribute_group ad9389_attr_group = {
 	.attrs = ad9389_attributes,
 };
 
-static struct notifier_block nb = {
-	.notifier_call = ad9389_fb_event,
-};
+static struct ad9389_pdata *ad9389_parse_dt(struct device *dev)
+{
+	struct device_node *np = dev->of_node;
+	struct ad9389_pdata *pdata = NULL;
+	struct device_node *disp_np = NULL;
+
+	pdata = kzalloc(sizeof(struct ad9389_pdata), GFP_KERNEL);
+	if (pdata == NULL) {
+		dev_err(dev, "Memory allocation error for platform data\n");
+		return NULL;
+	}
+
+	of_property_read_u32(np, "ad,debounce_ms", &pdata->debounce_ms);
+	if (of_property_read_u32(np, "ad,edid_addr", &pdata->edid_addr)) {
+		dev_err(dev, "edid_addr required\n");
+		return NULL;
+	}
+	if (of_property_read_u32(np, "ipu_id", &pdata->ipu_id)) {
+		dev_dbg(dev, "get of property ipu_id fail\n");
+		return NULL;
+	}
+	if (of_property_read_u32(np, "disp_id", &pdata->disp_id)) {
+		dev_dbg(dev, "get of property disp_id fail\n");
+		return NULL;
+	}
+
+	if (pdata->ipu_id > 1 || pdata->disp_id > 1) {
+		dev_err(dev, "Invalid data ipu_id %d disp_id %d\n",
+			pdata->ipu_id, pdata->disp_id);
+		return NULL;
+	}
+
+	disp_np = of_parse_phandle(np, "display" , 0);
+	if (disp_np) {
+		strncpy(pdata->disp.disp_name, disp_np->name,
+			sizeof(pdata->disp.disp_name));
+		pdata->disp.timings = of_get_display_timings(disp_np);
+		if (pdata->disp.timings) {
+			if (of_get_fb_videomode(disp_np,
+						&pdata->disp.native_mode,
+						OF_USE_NATIVE_MODE)) {
+				dev_err(dev, "failed to get display native mode\n");
+				return NULL;
+			}
+		}
+		of_node_put(disp_np);
+	}
+	return pdata;
+}
 
 static int ad9389_probe(struct i2c_client *client,
         const struct i2c_device_id *id)
 {
-	struct ad9389_pdata *pdata = client->dev.platform_data;
 	struct ad9389_dev *ad9389;
+	struct ad9389_pdata *pdata = NULL;
+	char ipu_clk[] = "ipuN_diN_sel\0";
 	int ret = -EINVAL;
 
 	/* Sanity checks */
 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_SMBUS_BYTE_DATA))
 		return -EIO;
-
-	if (!pdata) {
-		printk(KERN_ERR DRV_NAME ": Platform data not supplied\n");
-		return -ENOENT;
-	}
 
 	if (!client->irq) {
 		dev_err(&client->dev, ": Invalid irq value\n");
@@ -645,7 +999,6 @@ static int ad9389_probe(struct i2c_client *client,
 		goto err_edid_alloc;
 	}
 
-	pad9389 = ad9389;
 	ad9389->client = client;
 	i2c_set_clientdata(client, ad9389);
 
@@ -653,9 +1006,29 @@ static int ad9389_probe(struct i2c_client *client,
 	mutex_init(&ad9389->irq_lock);
 	mutex_lock(&ad9389->irq_lock);
 
-	/* platform specific initialization (gpio, irq...) */
-	if (pdata->hw_init)
-		pdata->hw_init(ad9389);
+	pdata = client->dev.platform_data;
+	if (!pdata && client->dev.of_node)
+		pdata = client->dev.platform_data =
+				ad9389_parse_dt(&client->dev);
+	if (!pdata) {
+		dev_err(&client->dev, "This driver does not use legacy platform data\n");
+		ret = -EINVAL;
+		goto err_pdata;
+	}
+
+	ad9389->pinctrl = devm_pinctrl_get_select_default(&client->dev);
+	if (IS_ERR(ad9389->pinctrl)) {
+		dev_err(&client->dev, "can't get/select pinctrl\n");
+		goto err_pdata;
+	}
+
+	sprintf(ipu_clk, "ipu%d_di%d_sel", pdata->ipu_id + 1, pdata->disp_id);
+	ad9389->ipu_clk = clk_get(&client->dev, ipu_clk);
+
+	if (IS_ERR(ad9389->ipu_clk)) {
+		dev_err(&client->dev, "Could not get IPU clock %s\n", ipu_clk);
+		goto err_pdata;
+	}
 
 	ret = request_irq(client->irq, ad9389_handler,
 			  IRQF_TRIGGER_FALLING | IRQF_TRIGGER_RISING, DRV_NAME,
@@ -691,22 +1064,22 @@ static int ad9389_probe(struct i2c_client *client,
 	if (ret)
 		goto err_sysfs_file;
 
-	ad9389->fbi = registered_fb[pdata->fbidx];
-	fb_register_client(&nb);
+	ad9389->disp_mxc_hdmi = mxc_dispdrv_register(&ad9389_mxc_dispdrv);
+	if (IS_ERR(ad9389->disp_mxc_hdmi)) {
+		dev_err(&client->dev, "Failed to register dispdrv - 0x%x\n",
+			(int)ad9389->disp_mxc_hdmi);
+		ret = (int)ad9389->disp_mxc_hdmi;
+		goto err_sysfs_file;
+	}
 
-	/* Ack any active interrupt and enable irqs */
-	ad9389_write_reg(client, 0x94, 0x84);
-	ad9389_write_reg(client, 0x95, 0xc3);
-	ad9389_write_reg(client, 0x96, 0x84);
-	ad9389_write_reg(client, 0x97, 0xc3);
+	mxc_dispdrv_setdata(ad9389->disp_mxc_hdmi, ad9389);
 
-	mutex_unlock(&ad9389->irq_lock);
+	dev_set_drvdata(&client->dev, ad9389);
 
 	setup_timer(&ad9389->timer, ad9389_timer, (unsigned long)ad9389);
+	mutex_unlock(&ad9389->irq_lock);
 
 	dev_info(&client->dev, "device detected at address 0x%x, chip revision 0x%02x\n",
-	ad9389_fb_init(registered_fb[pdata->fbidx]);
-
 	       client->addr << 1, ad9389->chiprev);
 
 	return 0;
@@ -717,18 +1090,17 @@ err_presence:
 	free_irq(client->irq, ad9389);
 err_irq:
 	flush_scheduled_work();
-	if (pdata->hw_deinit)
-		pdata->hw_deinit(ad9389);
 	kfree(ad9389->edid_data);
 err_edid_alloc:
+	kfree(client->dev.platform_data);
+	client->dev.platform_data = NULL;
+err_pdata:
 	kfree(ad9389);
-	pad9389 = NULL;
 	return ret;
 }
 
 static int ad9389_remove(struct i2c_client *client)
 {
-	struct ad9389_pdata *pdata = client->dev.platform_data;
 	struct ad9389_dev *ad9389 = i2c_get_clientdata(client);
 
 	free_irq(client->irq, ad9389);
@@ -736,14 +1108,14 @@ static int ad9389_remove(struct i2c_client *client)
 	flush_scheduled_work();
 	sysfs_remove_group(&client->dev.kobj, &ad9389_attr_group);
 	i2c_unregister_device(ad9389->edid_ram);
-	fb_unregister_client(&nb);
+
+	mxc_dispdrv_puthandle(ad9389->disp_mxc_hdmi);
+	mxc_dispdrv_unregister(ad9389->disp_mxc_hdmi);
+
 	kfree(ad9389->edid_data);
+	kfree(client->dev.platform_data);
+	client->dev.platform_data = NULL;
 	kfree(ad9389);
-	pad9389 = NULL;
-
-	if (pdata->hw_deinit)
-		pdata->hw_deinit(ad9389);
-
 	return 0;
 }
 
@@ -758,9 +1130,9 @@ static int ad9389_suspend(struct i2c_client *client, pm_message_t state)
 
 static int ad9389_resume(struct i2c_client *client)
 {
-	struct ad9389_dev *ad9389 = pad9389;
 	int ret;
 	static struct fb_var_screeninfo var;
+	struct ad9389_dev *ad9389 = dev_get_drvdata(&client->dev);
 
 	dev_dbg(&client->dev, "PM resume\n");
 
@@ -810,9 +1182,21 @@ static struct i2c_device_id ad9389_id[] = {
 };
 MODULE_DEVICE_TABLE(i2c, ad9389_id);
 
+#ifdef CONFIG_OF
+static const struct of_device_id ad9389b_i2c_match[] = {
+	{ .compatible = "ad,ad9889b-i2c", },
+	{ .compatible = "ad,ad9389b-i2c", },
+	{ /* sentinel */ }
+};
+#endif
+
 static struct i2c_driver ad9389_driver = {
 	.driver = {
 		.name = "ad9389",
+#ifdef CONFIG_OF
+		.of_match_table = ad9389b_i2c_match,
+#endif
+
 	},
 	.probe		= ad9389_probe,
 	.remove		= ad9389_remove,
