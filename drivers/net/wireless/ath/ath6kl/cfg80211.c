@@ -3860,6 +3860,20 @@ static const struct wiphy_wowlan_support ath6kl_wowlan_support = {
 };
 #endif
 
+static const struct ieee80211_iface_limit if_limits[] = {
+	{ .max = 2, .types = BIT(NL80211_IFTYPE_STATION) },
+	{ .max = 1, .types = BIT(NL80211_IFTYPE_AP) },
+};
+
+static const struct ieee80211_iface_combination if_comb[] = {
+	{
+		.limits = if_limits,
+		.n_limits = ARRAY_SIZE(if_limits),
+		.max_interfaces = 2,
+		.num_different_channels = 1,
+	},
+};
+
 int ath6kl_cfg80211_init(struct ath6kl *ar)
 {
 	struct wiphy *wiphy = ar->wiphy;
@@ -3879,6 +3893,12 @@ int ath6kl_cfg80211_init(struct ath6kl *ar)
 	if (ar->p2p) {
 		wiphy->interface_modes |= BIT(NL80211_IFTYPE_P2P_GO) |
 					  BIT(NL80211_IFTYPE_P2P_CLIENT);
+	}
+
+	/* AP+STA mode is only supported in firmware API 4 or greater */
+	if (ar->fw_api >= 4) {
+		wiphy->iface_combinations = if_comb;
+		wiphy->n_iface_combinations = ARRAY_SIZE(if_comb);
 	}
 
 	if (IS_ENABLED(CONFIG_ATH6KL_REGDOMAIN) &&
