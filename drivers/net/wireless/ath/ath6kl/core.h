@@ -136,6 +136,26 @@ enum ath6kl_fw_capability {
 	 */
 	ATH6KL_FW_CAPABILITY_HEART_BEAT_POLL,
 
+	/*
+	 * Firmware supports mac address based ACL with
+	 * white/black list
+	 */
+	ATH6KL_FW_CAPABILITY_MAC_ACL,
+
+	/*
+	 * Firmware with capability regdomain-v2 can support
+	 * set regdomain immediately. The firmware without this
+	 * capability need start scan for new regdomain take effect
+	 */
+	ATH6KL_FW_CAPABILITY_REGDOMAIN_V2,
+
+	/*
+	 * Firmware capable to send more than 255 byte in IE
+	 * (assoc req ie, assoc resp ie, beacon ie) present in
+	 * connect event.
+	 */
+	ATH6KL_FW_CAPABILITY_LARGE_CONNECT_IE,
+
 	/* WMI_SET_TX_SELECT_RATES_CMDID uses 64 bit size rate table */
 	ATH6KL_FW_CAPABILITY_64BIT_RATES,
 
