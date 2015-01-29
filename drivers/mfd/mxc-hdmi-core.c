@@ -669,7 +669,7 @@ static int mxc_hdmi_core_probe(struct platform_device *pdev)
 	if (IS_ERR(mipi_core_clk)) {
 		ret = PTR_ERR(mipi_core_clk);
 		dev_err(&hdmi_data->pdev->dev,
-			"Unable to get HDMI isfr clk: %d\n", ret);
+			"Unable to get mipi core clk: %d\n", ret);
 		goto eclkg;
 	}
 
