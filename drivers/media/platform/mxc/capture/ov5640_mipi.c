@@ -2137,7 +2137,7 @@ static int ov5640_probe(struct i2c_client *client,
 				regmap_update_bits(gpr, IOMUXC_GPR1, mask, 0);
 		}  else if (of_machine_is_compatible("fsl,imx6dl")) {
 			int mask = ov5640_data.csi ? (7 << 3) : (7 << 0);
-			int val =  ov5640_data.csi ? (3 << 3) : (0 << 0);
+			int val =  ov5640_data.csi ? (1 << 3) : (0 << 0);
 
 			regmap_update_bits(gpr, IOMUXC_GPR13, mask, val);
 		}
