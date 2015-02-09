@@ -213,3 +213,19 @@ config CRYPTO_DEV_FSL_CAAM_DEBUG
 config CRYPTO_DEV_FSL_CAAM_CRYPTO_API_DESC
 	def_tristate (CRYPTO_DEV_FSL_CAAM_CRYPTO_API || \
 		      CRYPTO_DEV_FSL_CAAM_CRYPTO_API_QI)
+
+config CRYPTO_DEV_FSL_CAAM_KEYBLOB
+	tristate "Freescale CAAM memory keyblob driver backend"
+	depends on CRYPTO_DEV_FSL_CAAM
+	depends on CRYPTO_DEV_FSL_CAAM_JR
+	default y
+	help
+	  Enables the driver module for Key Blob which are part of
+	  Freescale's Cryptographic Accelerator
+	  and Assurance Module (CAAM). This module adds a key blob operation
+	  interface.
+
+	  To compile this driver as a module, choose M here: the module
+	  will be called caam_keyblob.
+
+
