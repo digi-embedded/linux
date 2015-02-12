@@ -473,21 +473,9 @@ static int mxc_streamon(cam_data *cam)
 	return err;
 }
 
-/*!
- * Shut down the encoder job
- *
- * @param cam      structure cam_data *
- *
- * @return status  0 Success
- */
-static int mxc_streamoff(cam_data *cam)
+static int mxc_enc_disable(cam_data *cam)
 {
 	int err = 0;
-
-	pr_debug("In MVC:mxc_streamoff\n");
-
-	if (cam->capture_on == false)
-		return 0;
 
 	/* For both CSI--MEM and CSI--IC--MEM
 	 * 1. wait for idmac eof
@@ -507,6 +495,26 @@ static int mxc_streamoff(cam_data *cam)
 				return err;
 		}
 	}
+	return err;
+}
+
+/*!
+ * Shut down the encoder job
+ *
+ * @param cam      structure cam_data *
+ *
+ * @return status  0 Success
+ */
+static int mxc_streamoff(cam_data *cam)
+{
+	int err = 0;
+
+	pr_debug("In MVC:mxc_streamoff\n");
+
+	if (cam->capture_on == false)
+		return 0;
+
+	err = mxc_enc_disable(cam);
 
 	mxc_free_frames(cam);
 	mxc_capture_inputs[cam->current_input].status |= V4L2_IN_ST_NO_POWER;
