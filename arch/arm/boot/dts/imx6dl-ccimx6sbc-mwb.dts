@@ -33,6 +33,8 @@
 		gpio = <&gpio_extender 7 0>;
 		regulator-name = "gpio-ext-reg";
 		regulator-boot-on;
+		/* Leave enabled for MIPI camera suspend  to work */
+		/* regulator-always-on; */
 		enable-active-high;
 		regulator-min-microvolt = <5000000>;
 		regulator-max-microvolt = <5000000>;
