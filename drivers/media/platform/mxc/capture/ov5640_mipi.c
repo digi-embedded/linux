@@ -2035,11 +2035,17 @@ static struct v4l2_int_device ov5640_int_device = {
 static int ov5640_probe(struct i2c_client *client,
 			const struct i2c_device_id *id)
 {
+	struct pinctrl *pinctrl;
 	struct device *dev = &client->dev;
 	int retval, i, n_alt_pwn_gpios;
 	u8 chip_id_high, chip_id_low;
 	struct regmap *gpr;
 	int *alt_pwn_gpios = NULL;
+	pinctrl = devm_pinctrl_get_select_default(dev);
+	if (IS_ERR(pinctrl)) {
+		dev_err(dev, "mipi setup pinctrl failed!");
+		return PTR_ERR(pinctrl);
+	}
 
 	/* request power down pin */
 	pwn_gpio = of_get_named_gpio(dev->of_node, "pwn-gpios", 0);
