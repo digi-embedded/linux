@@ -817,16 +817,29 @@ static int ov5640_power_on(struct device *dev)
 
 static s32 ov5640_write_reg(u16 reg, u8 val)
 {
+	int ret = -1;
 	u8 au8Buf[3] = {0};
 
 	au8Buf[0] = reg >> 8;
 	au8Buf[1] = reg & 0xff;
 	au8Buf[2] = val;
 
-	if (i2c_master_send(ov5640_data.i2c_client, au8Buf, 3) < 0) {
-		pr_err("%s:write reg error:reg=%x,val=%x\n",
-			__func__, reg, val);
-		return -1;
+	/* If we are commanding a software reset, high bit on register 3008,
+	 * it will reset the I2C address to the default, so update it once
+	 * again right afterwards. */
+	if ((reg == 0x3008) && (val & 0x80)) {
+		mxc_camera_common_lock();
+		ret = i2c_master_send(ov5640_data.i2c_client, au8Buf, 3);
+		update_device_addr(&ov5640_data);
+		mxc_camera_common_unlock();
+	} else {
+		ret = i2c_master_send(ov5640_data.i2c_client, au8Buf, 3);
+	}
+
+	if (ret < 0) {
+		pr_err("%s:write reg error:reg=%x,val=%x ret=%d\n",
+			__func__, reg, val, ret);
+		return ret;
 	}
 
 	return 0;
