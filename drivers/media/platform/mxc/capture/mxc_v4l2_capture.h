@@ -206,6 +206,8 @@ typedef struct _cam_data {
 	int capture_pid;
 	bool low_power;
 	wait_queue_head_t power_queue;
+	wait_queue_head_t ready_queue;
+	struct work_struct r_queue_wq;
 	unsigned int ipu_id;
 	unsigned int csi;
 	u8 mclk_source;
