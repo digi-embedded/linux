@@ -422,6 +422,15 @@ static int mxc_streamon(cam_data *cam)
 	}
 
 	if (list_empty(&cam->ready_q)) {
+		err = wait_event_interruptible_timeout(
+					cam->ready_queue,
+					!list_empty(&cam->ready_q),
+					msecs_to_jiffies(1000));
+		if (err <= 0)
+			pr_warn("Timeout waiting on ready queue\n");
+	}
+
+	if (list_empty(&cam->ready_q)) {
 		pr_err("ERROR: v4l2 capture: mxc_streamon buffer has not been "
 			"queued yet\n");
 		return -EINVAL;
@@ -2088,6 +2097,8 @@ static long mxc_v4l_do_ioctl(struct file *file,
 
 		buf->flags = cam->frame[index].buffer.flags;
 		spin_unlock_irqrestore(&cam->queue_int_lock, lock_flags);
+		if (cam->ready_q.prev != cam->ready_q.next)
+			wake_up_interruptible(&cam->ready_queue);
 		break;
 	}
 
@@ -2651,6 +2662,12 @@ next:
 	return;
 }
 
+static void r_queue_work(struct work_struct *work)
+{
+	cam_data *cam = container_of(work, cam_data, r_queue_wq);
+	mxc_streamon(cam);
+}
+
 /*!
  * initialize cam_data structure
  *
@@ -2739,6 +2756,8 @@ static int init_camera_struct(cam_data *cam, struct platform_device *pdev)
 	init_waitqueue_head(&cam->enc_queue);
 	init_waitqueue_head(&cam->still_queue);
 
+	INIT_WORK(&cam->r_queue_wq ,  r_queue_work);
+
 	/* setup cropping */
 	cam->crop_bounds.left = 0;
 	cam->crop_bounds.width = 640;
@@ -2789,7 +2808,7 @@ static int init_camera_struct(cam_data *cam, struct platform_device *pdev)
 	sprintf(cam->self->name, "mxc_v4l2_cap%d", camera_id++);
 	cam->self->type = v4l2_int_type_master;
 	cam->self->u.master = &mxc_v4l2_master;
-
+	init_waitqueue_head(&cam->ready_queue);
 	return 0;
 }
 
@@ -3005,12 +3024,10 @@ static int mxc_v4l2_resume(struct platform_device *pdev)
 
 	if (cam->overlay_on == true)
 		start_preview(cam);
-	if (cam->capture_on == true) {
-		if (cam->enc_enable)
-			cam->enc_enable(cam);
 
-		if (cam->enc_enable_csi)
-			cam->enc_enable_csi(cam);
+	if (cam->capture_on == true) {
+		cam->capture_on = false;
+		schedule_work(&cam->r_queue_wq);
 	}
 
 	up(&cam->busy_lock);
