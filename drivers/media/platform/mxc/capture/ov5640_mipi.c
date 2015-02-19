@@ -703,6 +703,9 @@ static s32 update_device_addr(struct sensor_data *sensor)
 
 
 	ret = i2c_transfer(sensor->i2c_client->adapter, &msg, 1);
+	if (ret < 0)
+		pr_warn("%s: Device address not updated: %d\n", __func__,
+				ret);
 	return ret;
 }
 
