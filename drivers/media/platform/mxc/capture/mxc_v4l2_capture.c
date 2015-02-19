@@ -3024,12 +3024,10 @@ static int mxc_v4l2_resume(struct platform_device *pdev)
 
 	if (cam->overlay_on == true)
 		start_preview(cam);
-	if (cam->capture_on == true) {
-		if (cam->enc_enable)
-			cam->enc_enable(cam);
 
-		if (cam->enc_enable_csi)
-			cam->enc_enable_csi(cam);
+	if (cam->capture_on == true) {
+		cam->capture_on = false;
+		schedule_work(&cam->r_queue_wq);
 	}
 
 	up(&cam->busy_lock);
