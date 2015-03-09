@@ -516,6 +516,16 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_hog_1>;
 
+	pcie {
+		pinctrl_pcie_1: pciegrp-1 {
+			fsl,pins = <
+				MX6QDL_PAD_SD3_DAT3__GPIO7_IO07 0x80000000
+				MX6QDL_PAD_GPIO_4__GPIO1_IO04   0x80000000
+				MX6QDL_PAD_SD3_RST__GPIO7_IO08 0x80000000
+			>;
+		};
+	};
+
 	pmic_dialog {
 		pinctrl_pmic_dialog: pmic_dialoggrp {
 			fsl,pins = <
@@ -583,8 +593,12 @@
 };
 
 &pcie {
-	pwr-gpios = <&gpio3 19 0>;
-	rst-gpios = <&gpio7 12 0>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pcie_1>;
+	reset-gpio = <&gpio7 8 0>;
+	wake-up-gpio = <&gpio7 7 0>;
+	disable-gpio = <&gpio1 4 0>;
+	vin-supply = <&ldo6>;
 	status = "okay";
 };
 
