@@ -11,7 +11,7 @@
  * http://www.gnu.org/copyleft/gpl.html
  */
 
-#include "imx6q-ccimx6sbc-wbk.dts"
+#include "imx6q-ccimx6sbc.dts"
 
 &cpu0 {
 	operating-points = <
