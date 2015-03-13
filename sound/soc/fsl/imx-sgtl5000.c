@@ -14,7 +14,11 @@
 #include <linux/of.h>
 #include <linux/of_platform.h>
 #include <linux/i2c.h>
+#include <linux/of_i2c.h>
+#include <linux/of_gpio.h>
 #include <linux/clk.h>
+#include <linux/gpio.h>
+#include <sound/jack.h>
 #include <sound/soc.h>
 
 #include "../codecs/sgtl5000.h"
@@ -31,11 +35,45 @@ struct imx_sgtl5000_data {
 	unsigned int clk_frequency;
 };
 
+struct imx_priv {
+	int hp_gpio;
+	int hp_gpio_active_low;
+	struct snd_soc_codec *codec;
+};
+static struct imx_priv card_priv;
+
+static struct snd_soc_jack imx_hp_jack;
+static struct snd_soc_jack_pin imx_hp_jack_pins[] = {
+	{
+		.pin = "Headphone Jack",
+		.mask = SND_JACK_HEADPHONE,
+	},
+};
+static struct snd_soc_jack_gpio imx_hp_jack_gpio = {
+	.name = "headphone detect",
+	.report = SND_JACK_HEADPHONE,
+	.debounce_time = 250,
+	.invert = 0,
+};
+
 static int imx_sgtl5000_dai_init(struct snd_soc_pcm_runtime *rtd)
 {
 	struct imx_sgtl5000_data *data = snd_soc_card_get_drvdata(rtd->card);
 	struct device *dev = rtd->card->dev;
+	struct snd_soc_codec *codec = rtd->codec;
+	struct imx_priv *priv = &card_priv;
 	int ret;
+
+	priv->codec = codec;
+
+	if (gpio_is_valid(priv->hp_gpio)) {
+		snd_soc_jack_new(codec, "Headphone Jack", SND_JACK_HEADPHONE,
+				 &imx_hp_jack);
+		snd_soc_jack_add_pins(&imx_hp_jack,
+				      ARRAY_SIZE(imx_hp_jack_pins),
+				      imx_hp_jack_pins);
+		snd_soc_jack_add_gpios(&imx_hp_jack, 1, &imx_hp_jack_gpio);
+	}
 
 	ret = snd_soc_dai_set_sysclk(rtd->codec_dai, SGTL5000_SYSCLK,
 				     data->clk_frequency, SND_SOC_CLOCK_IN);
@@ -70,6 +108,16 @@ static int imx_sgtl5000_audmux_config(struct platform_device *pdev)
 	if (ret) {
 		dev_err(&pdev->dev, "mux-ext-port missing or invalid\n");
 		return ret;
+	}
+
+	priv->hp_gpio = of_get_named_gpio_flags(np, "hp-det-gpios", 0,
+			(enum of_gpio_flags *)&priv->hp_gpio_active_low);
+
+	if (gpio_is_valid(priv->hp_gpio)) {
+		imx_hp_jack_gpio.gpio = priv->hp_gpio;
+		imx_hp_jack_gpio.invert = priv->hp_gpio_active_low;
+		of_property_read_u32(np, "hp-det-debounce",
+				     &imx_hp_jack_gpio.debounce_time);
 	}
 
 	/*
