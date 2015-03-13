@@ -51,6 +51,8 @@
 			"Headphone Jack", "HP_OUT";
 		mux-int-port = <2>;
 		mux-ext-port = <3>;
+		hp-det-gpios = <&gpio2 0 0>;
+		hp-det-debounce = <250>;
 	};
 
 	sound-hdmi {
