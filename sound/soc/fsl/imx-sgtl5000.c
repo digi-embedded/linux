@@ -38,6 +38,7 @@ struct imx_sgtl5000_data {
 struct imx_priv {
 	int hp_gpio;
 	int hp_gpio_active_low;
+	int hp_gpio_debounce_time;
 	struct snd_soc_codec *codec;
 	struct platform_device *pdev;
 };
@@ -50,10 +51,13 @@ static struct snd_soc_jack_pin imx_hp_jack_pins[] = {
 		.mask = SND_JACK_HEADPHONE,
 	},
 };
+
+#define DEFAULT_DEBOUNCE_TIME		250
+
 static struct snd_soc_jack_gpio imx_hp_jack_gpio = {
 	.name = "headphone detect",
 	.report = SND_JACK_HEADPHONE,
-	.debounce_time = 250,
+	.debounce_time = DEFAULT_DEBOUNCE_TIME,
 	.invert = 0,
 };
 
@@ -74,9 +78,11 @@ static int hpjack_status_check(void)
 
 	if (hp_status != priv->hp_gpio_active_low) {
 		snprintf(buf, 32, "STATE=%d", 2);
+		imx_hp_jack_gpio.debounce_time = 0;
 		ret = imx_hp_jack_gpio.report;
 	} else {
 		snprintf(buf, 32, "STATE=%d", 0);
+		imx_hp_jack_gpio.debounce_time = priv->hp_gpio_debounce_time;
 		ret = 0;
 	}
 
@@ -176,8 +182,10 @@ static int imx_sgtl5000_audmux_config(struct platform_device *pdev)
 	if (gpio_is_valid(priv->hp_gpio)) {
 		imx_hp_jack_gpio.gpio = priv->hp_gpio;
 		imx_hp_jack_gpio.invert = priv->hp_gpio_active_low;
+		priv->hp_gpio_debounce_time = DEFAULT_DEBOUNCE_TIME;
 		of_property_read_u32(np, "hp-det-debounce",
-				     &imx_hp_jack_gpio.debounce_time);
+				     &priv->hp_gpio_debounce_time);
+		imx_hp_jack_gpio.debounce_time = priv->hp_gpio_debounce_time;
 	}
 
 	/*
