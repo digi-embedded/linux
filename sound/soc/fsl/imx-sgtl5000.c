@@ -75,9 +75,13 @@ static int hpjack_status_check(void)
 
 	if (hp_status != priv->hp_gpio_active_low) {
 		snprintf(buf, 32, "STATE=%d", 2);
+		snd_soc_update_bits(codec, SGTL5000_CHIP_DIG_POWER,
+				    SGTL5000_DAC_EN, SGTL5000_DAC_EN);
 		ret = imx_hp_jack_gpio.report;
 	} else {
 		snprintf(buf, 32, "STATE=%d", 0);
+		snd_soc_update_bits(codec, SGTL5000_CHIP_DIG_POWER,
+				    SGTL5000_DAC_EN, 0);
 		ret = 0;
 	}
 
