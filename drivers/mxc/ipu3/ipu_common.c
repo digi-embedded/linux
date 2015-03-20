@@ -1526,71 +1526,76 @@ int32_t ipu_init_channel_buffer(struct ipu_soc *ipu, ipu_channel_t channel,
 	if (idma_is_set(ipu, IDMAC_CHA_PRI(dma_chan), dma_chan) &&
 	    ipu->devtype == IPUv3H) {
 		uint32_t reg = IDMAC_CH_LOCK_EN_1(ipu->devtype);
-		uint32_t value = 0;
+		uint32_t value;
 
-		switch (dma_chan) {
-		case 5:
-			value = 0x3;
-			break;
-		case 11:
-			value = 0x3 << 2;
-			break;
-		case 12:
-			value = 0x3 << 4;
-			break;
-		case 14:
-			value = 0x3 << 6;
-			break;
-		case 15:
-			value = 0x3 << 8;
-			break;
-		case 20:
-			value = 0x3 << 10;
-			break;
-		case 21:
-			value = 0x3 << 12;
-			break;
-		case 22:
-			value = 0x3 << 14;
-			break;
-		case 23:
-			value = 0x3 << 16;
-			break;
-		case 27:
-			value = 0x3 << 18;
-			break;
-		case 28:
-			value = 0x3 << 20;
-			break;
-		case 45:
-			reg = IDMAC_CH_LOCK_EN_2(ipu->devtype);
-			value = 0x3 << 0;
-			break;
-		case 46:
-			reg = IDMAC_CH_LOCK_EN_2(ipu->devtype);
-			value = 0x3 << 2;
-			break;
-		case 47:
-			reg = IDMAC_CH_LOCK_EN_2(ipu->devtype);
-			value = 0x3 << 4;
-			break;
-		case 48:
-			reg = IDMAC_CH_LOCK_EN_2(ipu->devtype);
-			value = 0x3 << 6;
-			break;
-		case 49:
-			reg = IDMAC_CH_LOCK_EN_2(ipu->devtype);
-			value = 0x3 << 8;
-			break;
-		case 50:
-			reg = IDMAC_CH_LOCK_EN_2(ipu->devtype);
-			value = 0x3 << 10;
-			break;
-		default:
-			break;
-		}
-		value |= ipu_idmac_read(ipu, reg);
-		ipu_idmac_write(ipu, value, reg);
+		if (of_machine_is_compatible("fsl,imx6dl"))
+			value = 0x02;	/* 4 AXI bursts */
+		else
+			value = 0x03;	/* 8 AXI bursts */
+
+			switch (dma_chan) {
+			case 5:
+				value <<= 0;
+				break;
+			case 11:
+				value <<= 2;
+				break;
+			case 12:
+				value <<= 4;
+				break;
+			case 14:
+				value <<= 6;
+				break;
+			case 15:
+				value <<= 8;
+				break;
+			case 20:
+				value <<= 10;
+				break;
+			case 21:
+				value <<= 12;
+				break;
+			case 22:
+				value <<= 14;
+				break;
+			case 23:
+				value <<= 16;
+				break;
+			case 27:
+				value <<= 18;
+				break;
+			case 28:
+				value <<= 20;
+				break;
+			case 45:
+				reg = IDMAC_CH_LOCK_EN_2(ipu->devtype);
+				value <<= 0;
+				break;
+			case 46:
+				reg = IDMAC_CH_LOCK_EN_2(ipu->devtype);
+				value <<= 2;
+				break;
+			case 47:
+				reg = IDMAC_CH_LOCK_EN_2(ipu->devtype);
+				value <<= 4;
+				break;
+			case 48:
+				reg = IDMAC_CH_LOCK_EN_2(ipu->devtype);
+				value <<= 6;
+				break;
+			case 49:
+				reg = IDMAC_CH_LOCK_EN_2(ipu->devtype);
+				value <<= 8;
+				break;
+			case 50:
+				reg = IDMAC_CH_LOCK_EN_2(ipu->devtype);
+				value <<= 10;
+				break;
+			default:
+				break;
+			}
+			value |= ipu_idmac_read(ipu, reg);
+			ipu_idmac_write(ipu, value, reg);
 	}
 
 	_ipu_ch_param_dump(ipu, dma_chan);
