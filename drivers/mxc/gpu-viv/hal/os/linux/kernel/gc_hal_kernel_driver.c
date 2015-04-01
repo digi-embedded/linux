@@ -20,6 +20,7 @@
 *****************************************************************************/
 
 #include <linux/device.h>
+#include <linux/of.h>
 #include <linux/slab.h>
 #include <linux/notifier.h>
 #include "gc_hal_kernel_linux.h"
@@ -1117,6 +1118,16 @@ static int __devinit gpu_probe(struct platform_device *pdev)
     {
         registerMemBaseVG = res->start;
         registerMemSizeVG = res->end - res->start + 1;
+    }
+
+    /* If undefined, set Freescale recommended value. Else use the min freq. */
+    if (gpu3DMinClock == 0) {
+        if (of_machine_is_compatible("fsl,imx6dl"))
+            gpu3DMinClock = 8;
+        else if (of_machine_is_compatible("fsl,imx6q"))
+            gpu3DMinClock = 3;
+        else
+            gpu3DMinClock = 1;
     }
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
