@@ -303,28 +303,6 @@ static void imx6q_bt_init (void)
 	if (!np)
 		return;
 
-	/* Read the disable gpio */
-	disable_gpio = of_get_named_gpio_flags(np, "digi,disable-gpios", 0,
-			&flags);
-	if (of_property_read_u32(np, "digi,disable_delay", &disable_delay) < 0)
-		disable_delay = 5;
-
-	if (gpio_is_valid(disable_gpio)) {
-		if (!gpio_request_one(disable_gpio, GPIOF_DIR_OUT,
-			"bt_chip_dis_l")) {
-			/* Start with Power pin low, then set high to power  */
-			gpio_set_value_cansleep(disable_gpio, 0);
-			mdelay(disable_delay);
-			gpio_set_value_cansleep(disable_gpio, 1);
-			mdelay(disable_delay);
-			/*
-			* Free the chip PWD pin to allow controlling
-			* it from user space
-			*/
-			gpio_free(disable_gpio);
-		}
-	}
-
 	/* Read the power down gpio */
 	pwrdown_gpio = of_get_named_gpio_flags(np, "digi,pwrdown-gpios", 0,
 			&flags);
@@ -344,6 +322,28 @@ static void imx6q_bt_init (void)
 			* it from user space
 			*/
 			gpio_free(pwrdown_gpio);
+		}
+	}
+
+	/* Read the disable gpio */
+	disable_gpio = of_get_named_gpio_flags(np, "digi,disable-gpios", 0,
+			&flags);
+	if (of_property_read_u32(np, "digi,disable_delay", &disable_delay) < 0)
+		disable_delay = 5;
+
+	if (gpio_is_valid(disable_gpio)) {
+		if (!gpio_request_one(disable_gpio, GPIOF_DIR_OUT,
+			"bt_chip_dis_l")) {
+			/* Start with Power pin low, then set high to power  */
+			gpio_set_value_cansleep(disable_gpio, 0);
+			mdelay(disable_delay);
+			gpio_set_value_cansleep(disable_gpio, 1);
+			mdelay(disable_delay);
+			/*
+			* Free the chip PWD pin to allow controlling
+			* it from user space
+			*/
+			gpio_free(disable_gpio);
 		}
 	}
 }
