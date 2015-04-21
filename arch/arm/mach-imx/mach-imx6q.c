@@ -38,6 +38,7 @@
 #include <asm/mach/map.h>
 #include <asm/system_misc.h>
 #include <linux/of_gpio.h>
+#include <linux/delay.h>
 
 #include "common.h"
 #include "cpuidle.h"
@@ -262,12 +263,16 @@ static void __init imx6q_csi_mux_init(void)
 static void imx6q_wifi_init (void)
 {
 	struct device_node *np;
-	int pwrdown_gpio;
+	unsigned int pwrdown_gpio, pwrdown_delay;
 	enum of_gpio_flags flags;
 
 	np = of_find_node_by_path("/wireless");
 	if (!np)
 		return;
+
+	if (of_property_read_u32(np, "digi,pwrdown_delay",
+			&pwrdown_delay) < 0)
+		pwrdown_delay = 5;
 
 	/* Read the power down gpio */
 	pwrdown_gpio = of_get_named_gpio_flags(np, "digi,pwrdown-gpios", 0, &flags);
@@ -275,7 +280,10 @@ static void imx6q_wifi_init (void)
 		if (!gpio_request_one(pwrdown_gpio, GPIOF_DIR_OUT,
 			"wifi_chip_pwd_l")) {
 			/* Start with Power pin low, then set high to power Wifi */
+			gpio_set_value_cansleep(pwrdown_gpio, 0);
+			mdelay(pwrdown_delay);
 			gpio_set_value_cansleep(pwrdown_gpio, 1);
+			mdelay(pwrdown_delay);
 			/*
 			* Free the Wifi chip PWD pin to allow controlling
 			* it from user space
@@ -288,7 +296,7 @@ static void imx6q_wifi_init (void)
 static void imx6q_bt_init (void)
 {
 	struct device_node *np;
-	int pwrdown_gpio, disable_gpio;
+	unsigned int pwrdown_gpio, disable_gpio, pwrdown_delay, disable_delay;
 	enum of_gpio_flags flags;
 
 	np = of_find_node_by_path("/bluetooth");
@@ -298,11 +306,17 @@ static void imx6q_bt_init (void)
 	/* Read the disable gpio */
 	disable_gpio = of_get_named_gpio_flags(np, "digi,disable-gpios", 0,
 			&flags);
+	if (of_property_read_u32(np, "digi,disable_delay", &disable_delay) < 0)
+		disable_delay = 5;
+
 	if (gpio_is_valid(disable_gpio)) {
 		if (!gpio_request_one(disable_gpio, GPIOF_DIR_OUT,
 			"bt_chip_dis_l")) {
 			/* Start with Power pin low, then set high to power  */
+			gpio_set_value_cansleep(disable_gpio, 0);
+			mdelay(disable_delay);
 			gpio_set_value_cansleep(disable_gpio, 1);
+			mdelay(disable_delay);
 			/*
 			* Free the chip PWD pin to allow controlling
 			* it from user space
@@ -314,11 +328,17 @@ static void imx6q_bt_init (void)
 	/* Read the power down gpio */
 	pwrdown_gpio = of_get_named_gpio_flags(np, "digi,pwrdown-gpios", 0,
 			&flags);
+	if (of_property_read_u32(np, "digi,pwrdown_delay", &pwrdown_delay) < 0)
+		pwrdown_delay = 5;
+
 	if (gpio_is_valid(pwrdown_gpio)) {
 		if (!gpio_request_one(pwrdown_gpio, GPIOF_DIR_OUT,
 			"bt_chip_pwd_l")) {
 			/* Start with Power pin low, then set high to power  */
+			gpio_set_value_cansleep(pwrdown_gpio, 0);
+			mdelay(pwrdown_delay);
 			gpio_set_value_cansleep(pwrdown_gpio, 1);
+			mdelay(pwrdown_delay);
 			/*
 			* Free the chip PWD pin to allow controlling
 			* it from user space

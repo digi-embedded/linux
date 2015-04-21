@@ -1,0 +1,20 @@
+BLUETOOTH
+
+Required properties: None.
+
+Optional properties:
+
+  - digi,pwrdown-gpios: GPIOs used to power down the bluetooth chip.
+  - digi,pwrdown_delay: Delay in ms between power down GPIO toggling.
+  - digi,disable-gpios: GPIOs used to disable the bluetooth chip.
+  - digi,disable_delay: Delay in ms between disable GPIO toggling.
+
+Example:
+
+	bluetooth {
+		digi,pwrdown-gpios = <&gpio_extender 4 0>;
+		digi,disable-gpios = <&gpio1 9 0>;
+		digi,pwrdown_delay = <5>;
+		digi,disable_delay = <5>;
+		/* U-Boot will fill in the MAC address here */
+	}
