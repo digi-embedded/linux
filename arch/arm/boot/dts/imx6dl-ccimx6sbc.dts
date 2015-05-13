@@ -172,6 +172,8 @@
 	 * by GPIO2_25 via a FET transistor
 	 */
 	codec_power: fixedregulator@0 {
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_aud_pwr_en_1>;
 		compatible = "regulator-fixed";
 		regulator-name = "aud_pwr_en";
 		regulator-min-microvolt = <3300000>;
@@ -524,6 +526,14 @@
 				MX6QDL_PAD_SD3_DAT3__GPIO7_IO07 0x80000000
 				MX6QDL_PAD_GPIO_4__GPIO1_IO04   0x80000000
 				MX6QDL_PAD_SD3_RST__GPIO7_IO08 0x80000000
+			>;
+		};
+	};
+
+	aud_pwr_en {
+		pinctrl_aud_pwr_en_1: aud_pwr_en_grp-1 {
+			fsl,pins = <
+				MX6QDL_PAD_EIM_OE__GPIO2_IO25 0x80000000
 			>;
 		};
 	};
