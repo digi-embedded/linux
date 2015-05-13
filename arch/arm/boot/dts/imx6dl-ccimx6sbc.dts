@@ -12,7 +12,7 @@
  */
 
 /dts-v1/;
-#include "imx6dl.dtsi"
+#include "imx6dl-ccimx6.dtsi"
 
 / {
 	model = "Digi International ConnectCore 6 Single Board Computer.";
@@ -22,10 +22,6 @@
 	aliases {
 		mxcfb0 = &mxcfb1;
 		mxcfb1 = &mxcfb2;
-	};
-
-	memory {
-		reg = <0x10000000 0x40000000>;
 	};
 
 	5v_reg {
@@ -157,17 +153,6 @@
 		#reset-cells = <0>;
 	};
 
-	wireless {
-		digi,pwrdown-gpios = <&gpio_extender 3 0>;
-		/* U-Boot will fill in the MAC address here */
-	};
-
-	bluetooth {
-		digi,pwrdown-gpios = <&gpio_extender 4 0>;
-		digi,disable-gpios = <&gpio1 9 0>;
-		/* U-Boot will fill in the MAC address here */
-	};
-
 	/* SGTL5000 codec is powered by 3V3 BUCK_PERI, but controlled
 	 * by GPIO2_25 via a FET transistor
 	 */
@@ -188,12 +173,6 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_audmux_2>;
 	status = "okay";
-};
-
-&cpu0 {
-	arm-supply = <&reg_arm>;
-	soc-supply = <&reg_soc>;
-	pu-supply = <&reg_pu>;
 };
 
 &ecspi1 {
@@ -269,172 +248,6 @@
 	status = "okay";
 	display = <&fusion10>;
 	sec_display = <&fusion10>;
-};
-
-&i2c2 {
-	clock-frequency = <100000>;
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_i2c2_2>;
-	status = "okay";
-
-	pmic_dialog: dialog@58 {
-		compatible = "dlg,da9063";
-		reg = <0x58>;
-		interrupt-parent = <&gpio7>;
-		interrupts = <12 2>;
-		interrupt-controller;
-		#interrupt-cells = <1>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_pmic_dialog>;
-
-		rtc {
-			compatible = "dlg,da9063-rtc";
-			interrupts = <1 2>;
-			interrupts-names = "ALARM" , "TIMER";
-			interrupt-parent = <&pmic_dialog>;
-		};
-
-		onkey {
-			compatible = "dlg,da9063-onkey";
-			interrupts = <0>;
-			interrupts-names = "ONKEY";
-			interrupt-parent = <&pmic_dialog>;
-			dlg,key-power;
-		};
-
-		hwmon {
-			compatible = "dlg,da9063-hwmon";
-			interrupts = <3>;
-			interrupts-names = "HWMON";
-			interrupt-parent = <&pmic_dialog>;
-			dlg,tjunc-offset = <(-5)>;
-		};
-
-		gpio_extender: gpio {
-			compatible = "dlg,da9063-gpio";
-			gpio-controller;
-			#gpio-cells = <2>;
-		};
-
-		leds {
-			compatible = "dlg,da9063-leds";
-
-			lvds0-backlight@0xc6 {
-				dlg,led-gpio-reg = <0x1a 0xf0>;
-				dlg,led-reg = <0xc6>;
-				linux,default-trigger = "backlight";
-			};
-
-			lvds1-backlight@0xc6 {
-				dlg,led-gpio-reg = <0x1c 0xf0>;
-				dlg,led-reg = <0xc8>;
-				linux,default-trigger = "backlight";
-			};
-		};
-
-		regulators {
-			compatible = "dlg,da9063-regulator";
-			interrupts = <8>;
-			interrupts-names = "LDO_LIM";
-			interrupt-parent = <&pmic_dialog>;
-
-			bcore1: DA9063_BCORE1 {
-				regulator-name = "DA9063_BCORE1";
-				regulator-boot-on;
-				regulator-always-on;
-				regulator-suspend-mem-microvolt = <1377000>;
-				regulator-suspend-standby-microvolt = <1377000>;
-			};
-
-			bcore2: DA9063_BCORE2 {
-				regulator-name = "DA9063_BCORE2";
-				regulator-boot-on;
-				regulator-always-on;
-				regulator-suspend-mem-microvolt = <1377000>;
-				regulator-suspend-standby-microvolt = <1377000>;
-			};
-
-			bpro: DA9063_BPRO {
-				regulator-name = "DA9063_BPRO";
-				regulator-boot-on;
-				regulator-always-on;
-				regulator-suspend-mem-disabled;
-				regulator-suspend-standby-disabled;
-			};
-
-			bmem: DA9063_BMEM {
-				regulator-name = "DA9063_BMEM";
-				regulator-boot-on;
-				regulator-always-on;
-				regulator-suspend-mem-microvolt = <1500000>;
-				regulator-suspend-standby-microvolt = <1500000>;
-			};
-
-			bio: DA9063_BIO {
-				regulator-name = "DA9063_BIO";
-				regulator-boot-on;
-				regulator-always-on;
-				regulator-suspend-mem-microvolt = <3300000>;
-				regulator-suspend-standby-microvolt = <3300000>;
-			};
-
-			bperi: DA9063_BPERI {
-				regulator-name = "DA9063_BPERI";
-				regulator-boot-on;
-				regulator-always-on;
-				regulator-suspend-mem-microvolt = <3300000>;
-				regulator-suspend-standby-microvolt = <3300000>;
-			};
-
-			ldo2: DA9063_LDO2 {
-				regulator-name = "DA9063_LDO2";
-				regulator-boot-on;
-				regulator-always-on;
-				regulator-suspend-mem-microvolt = <1800000>;
-				regulator-suspend-standby-microvolt = <1800000>;
-			};
-
-			ldo3: DA9063_LDO3 {
-				regulator-name = "DA9063_LDO3";
-				regulator-boot-on;
-				regulator-always-on;
-				regulator-suspend-mem-microvolt = <3300000>;
-				regulator-suspend-standby-microvolt = <3300000>;
-			};
-
-			ldo4: DA9063_LDO4 {
-				regulator-name = "DA9063_LDO4";
-				regulator-min-microvolt = <2500000>;
-				regulator-max-microvolt = <2500000>;
-			};
-
-			ldo5: DA9063_LDO5 {
-				regulator-name = "DA9063_LDO5";
-				regulator-boot-on;
-				regulator-always-on;
-				regulator-suspend-mem-microvolt = <3000000>;
-				regulator-suspend-standby-microvolt = <3000000>;
-			};
-
-			ldo6: DA9063_LDO6 {
-				regulator-name = "DA9063_LDO6";
-				regulator-suspend-mem-disabled;
-				regulator-suspend-standby-disabled;
-			};
-
-			ldo11: DA9063_LDO11 {
-				regulator-name = "DA9063_LDO11";
-				regulator-boot-on;
-				regulator-always-on;
-				regulator-suspend-mem-microvolt = <2800000>;
-				regulator-suspend-standby-microvolt = <2800000>;
-			};
-
-			out_32k: DA9063_32K_OUT {
-				regulator-name = "DA9063_32K_OUT";
-			};
-		};
-	};
 };
 
 &i2c3 {
@@ -534,14 +347,6 @@
 		pinctrl_aud_pwr_en_1: aud_pwr_en_grp-1 {
 			fsl,pins = <
 				MX6QDL_PAD_EIM_OE__GPIO2_IO25 0x80000000
-			>;
-		};
-	};
-
-	pmic_dialog {
-		pinctrl_pmic_dialog: pmic_dialoggrp {
-			fsl,pins = <
-				MX6QDL_PAD_GPIO_17__GPIO7_IO12 0x1b0b0
 			>;
 		};
 	};
@@ -674,15 +479,6 @@
 	status = "okay";
 };
 
-&usdhc1 {
-	pinctrl-names = "default", "state_100mhz", "state_200mhz";
-	pinctrl-0 = <&pinctrl_usdhc1_1>;
-	pinctrl-1 = <&pinctrl_usdhc1_1_100mhz>;
-	pinctrl-2 = <&pinctrl_usdhc1_1_200mhz>;
-	no-1-8-v;
-	status = "okay";
-};
-
 &usdhc2 {
 	pinctrl-names = "default", "state_100mhz", "state_200mhz";
 	pinctrl-0 = <&pinctrl_usdhc2_2>;
@@ -696,17 +492,6 @@
 	 * Remove this property when booting from emmc to allow card
 	 * detection to work. */
 	non-removable;
-	status = "okay";
-};
-
-&usdhc4 {
-	pinctrl-names = "default", "state_100mhz", "state_200mhz";
-	pinctrl-0 = <&pinctrl_usdhc4_1>;
-	pinctrl-1 = <&pinctrl_usdhc4_1_100mhz>;
-	pinctrl-2 = <&pinctrl_usdhc4_1_200mhz>;
-	bus-width = <8>;
-	non-removable;
-	no-1-8-v;
 	status = "okay";
 };
 
