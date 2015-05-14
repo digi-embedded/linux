@@ -1,0 +1,513 @@
+/*
+ * Copyright 2014 Digi International, Inc.
+ * Copyright 2012 Freescale Semiconductor, Inc.
+ * Copyright 2011 Linaro Ltd.
+ *
+ * The code contained herein is licensed under the GNU General Public
+ * License. You may obtain a copy of the GNU General Public License
+ * Version 2 or later at the following locations:
+ *
+ * http://www.opensource.org/licenses/gpl-license.html
+ * http://www.gnu.org/copyleft/gpl.html
+ */
+
+#include "imx6dl-ccimx6.dtsi"
+
+/ {
+	model = "Digi International ConnectCore 6 Single Board Computer.";
+	compatible = "digi,ccimx6sbc", "digi,ccimx6", "fsl,imx6dl";
+	digi,machine,name = "ccimx6sbc";
+
+	aliases {
+		mxcfb0 = &mxcfb1;
+		mxcfb1 = &mxcfb2;
+	};
+
+	5v_reg {
+		compatible = "regulator-fixed";
+		gpio = <&gpio_extender 7 0>;
+		regulator-name = "gpio-ext-reg";
+		regulator-boot-on;
+		/* Leave enabled for MIPI camera suspend  to work */
+		/* regulator-always-on; */
+		enable-active-high;
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+	};
+
+	sound {
+		compatible = "fsl,imx-audio-sgtl5000";
+		model = "sgtl5000-audio";
+		ssi-controller = <&ssi2>;
+		audio-codec = <&sgtl5000>;
+		audio-routing =
+			"MIC_IN", "Mic Jack",
+			"Mic Jack", "Mic Bias",
+			"Headphone Jack", "HP_OUT";
+		mux-int-port = <2>;
+		mux-ext-port = <3>;
+		hp-det-gpios = <&gpio2 0 0>;
+		hp-det-debounce = <250>;
+	};
+
+	sound-hdmi {
+		compatible = "fsl,imx6q-audio-hdmi",
+			     "fsl,imx-audio-hdmi";
+		model = "imx-audio-hdmi";
+		hdmi-controller = <&hdmi_audio>;
+	};
+
+	mxcfb1: fb@0 {
+		compatible = "fsl,mxc_sdc_fb";
+		disp_dev = "hdmi";
+		interface_pix_fmt = "RGB24";
+		mode_str ="1920x1080M@60";
+		default_bpp = <32>;
+		int_clk = <0>;
+		late_init = <0>;
+		status = "okay";
+	};
+
+	mxcfb2: fb@1 {
+		compatible = "fsl,mxc_sdc_fb";
+		disp_dev = "ldb";
+		interface_pix_fmt = "RGB666";
+		mode_str ="LDB-HSD101PFW2";
+		default_bpp = <16>;
+		int_clk = <0>;
+		late_init = <0>;
+		status = "okay";
+	};
+
+/*
+	lcd@0 {
+		compatible = "fsl,lcd";
+		ipu_id = <0>;
+		disp_id = <0>;
+		default_ifmt = "RGB565";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_ipu1_6>;
+		display = <&lq070y3dg3b>;
+		status = "okay";
+	};
+*/
+
+	lq070y3dg3b: LQ70Y3DG3B@0 {
+		display-timings {
+			timing {
+				clock-frequency = <18520000>;
+				hactive = <800>;
+				vactive = <480>;
+				hfront-porch = <50>;
+				hback-porch = <0>;
+				hsync-len = <128>;
+				vback-porch = <25>;
+				vfront-porch = <10>;
+				vsync-len = <10>;
+			};
+		};
+	};
+
+	fusion10: LDB-HSD101PFW2@0 {
+		display-timings {
+			timing {
+				clock-frequency = <45000000>;
+				hactive = <1024>;
+				vactive = <600>;
+				hfront-porch = <0>;
+				hback-porch = <0>;
+				hsync-len = <176>;
+				vback-porch = <0>;
+				vfront-porch = <2>;
+				vsync-len = <23>;
+			};
+		};
+	};
+
+	v4l2_cap_0 {
+		compatible = "fsl,imx6q-v4l2-capture";
+		ipu_id = <0>;
+		csi_id = <0>;
+		mclk_source = <0>;
+		status = "okay";
+	};
+
+	v4l2_cap_1 {
+		compatible = "fsl,imx6q-v4l2-capture";
+		ipu_id = <0>;
+		csi_id = <1>;
+		mclk_source = <0>;
+		status = "okay";
+	};
+
+	v4l2_out {
+		compatible = "fsl,mxc_v4l2_output";
+		status = "okay";
+	};
+
+	mipi_dsi_reset: mipi-dsi-reset {
+		compatible = "gpio-reset";
+		reset-gpios = <&gpio6 11 GPIO_ACTIVE_LOW>;
+		reset-delay-us = <50>;
+		#reset-cells = <0>;
+	};
+
+	/* SGTL5000 codec is powered by 3V3 BUCK_PERI, but controlled
+	 * by GPIO2_25 via a FET transistor
+	 */
+	codec_power: fixedregulator@0 {
+		compatible = "regulator-fixed";
+		regulator-name = "aud_pwr_en";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		gpio = <&gpio2 25 0>;
+		enable-active-high;
+		vin-supply = <&bperi>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_aud_pwr_en_1>;
+	};
+};
+
+&audmux {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_audmux_2>;
+	status = "okay";
+};
+
+&ecspi1 {
+	fsl,spi-num-chipselects = <2>;
+	cs-gpios = <&gpio2 30 0>,<&gpio4 10 0>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_ecspi1_3>;
+	status = "okay";
+
+	spidev@0 {
+		compatible = "spidev";
+		reg = <0>;
+		spi-max-frequency = <4000000>;
+		status = "okay";
+	};
+};
+
+/* 10/100/1000 KSZ9031 PHY */
+&fec {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_enet_4>;
+	phy-mode = "rgmii";
+	phy-reset-gpios = <&gpio1 25 2>;
+	phy-reset-duration = <10>;
+	phy-reset-wait = <1>;
+	phy-supply = <&ldo4>;
+	status = "okay";
+};
+
+&gpc {
+	fsl,cpu_pupscr_sw2iso = <0xf>;
+	fsl,cpu_pupscr_sw = <0xf>;
+	fsl,cpu_pdnscr_iso2sw = <0x1>;
+	fsl,cpu_pdnscr_iso = <0x1>;
+	fsl,ldo-bypass = <0>; /* No ldo-bypass */
+	fsl,wdog-reset = <1>; /* watchdog select of reset source */
+	pu-supply = <&reg_pu>;
+};
+
+&gpu {
+	pu-supply = <&reg_pu>;
+};
+
+&hdmi_audio {
+	status = "okay";
+};
+
+&hdmi_cec {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_hdmi_cec_2>;
+	status = "disabled";
+};
+
+&hdmi_core {
+	ipu_id = <0>;
+	disp_id = <1>;
+	status = "okay";
+};
+
+&hdmi_video {
+	fsl,phy_reg_vlev = <0x0294>;
+	fsl,phy_reg_cksymtx = <0x800d>;
+	status = "okay";
+};
+
+&ldb {
+	ipu_id = <0>;
+	disp_id = <0>;
+	ext_ref = <1>;
+	mode = "sep0";
+	sec_ipu_id = <0>;
+	sec_disp_id = <1>;
+	status = "okay";
+	display = <&fusion10>;
+	sec_display = <&fusion10>;
+};
+
+&i2c3 {
+	clock-frequency = <100000>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_i2c3_2>;
+	status = "okay";
+
+	hdmi: edid@50 {
+		compatible = "fsl,imx6-hdmi-i2c";
+		reg = <0x50>;
+	};
+
+	fusion@10 {
+		compatible = "touchrev,fusion-touch";
+		reg = <0x10>;
+		interrupt-parent = <&gpio7>;
+		interrupts = <11 1>;
+		status = "okay";
+	};
+
+	sgtl5000: codec@0a {
+		compatible = "fsl,sgtl5000";
+		reg = <0x0a>;
+		clock-frequency = <24000000>;
+		clocks = <&clks 201>;
+		VDDA-supply = <&codec_power>;
+		VDDIO-supply = <&codec_power>;
+	};
+
+	/* MIPI-CSI2 camera */
+	ov5640_mipi: ov5640_mipi@4c {
+		compatible = "ovti,ov5640_mipi";
+		reg = <0x4c>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_mipi_1>;
+		clocks = <&clks 201>;
+		clock-names = "csi_mclk";
+		digi,alt-pwn-gpios = <&gpio5 0 1
+				      &gpio3 15 1>;
+		csi_id = <1>;
+		ipu_id = <0>;
+		mclk = <24000000>;
+		mclk_source = <0>;
+	};
+
+	/* Primary parallel camera */
+	ov5642_1: ov5642_1@5c {
+		compatible = "ovti,ov564x";
+		reg = <0x5c>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_ipu1_5>;
+		clocks = <&clks 201>;
+		clock-names = "csi_mclk";
+		pwn-gpios = <&gpio5 0 1>;
+		csi_id = <0>;
+		ipu_id = <0>;
+		mclk = <24000000>;
+		mclk_source = <0>;
+		digi,defer-probe;
+	};
+
+	/* Secondary parallel camera */
+/*
+	ov5642_2: ov5642_2@6c {
+		compatible = "ovti,ov564x";
+		reg = <0x6c>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_ipu1_5>;
+		clocks = <&clks 201>;
+		clock-names = "csi_mclk";
+		pwn-gpios = <&gpio3 15 1>;
+		csi_id = <1>;
+		ipu_id = <0>;
+		mclk = <24000000>;
+		mclk_source = <0>;
+		digi,defer-probe;
+	};
+*/
+};
+
+&iomuxc {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_hog_1>;
+
+	pcie {
+		pinctrl_pcie_1: pciegrp-1 {
+			fsl,pins = <
+				MX6QDL_PAD_SD3_DAT3__GPIO7_IO07 0x80000000
+				MX6QDL_PAD_GPIO_4__GPIO1_IO04   0x80000000
+				MX6QDL_PAD_SD3_RST__GPIO7_IO08 0x80000000
+			>;
+		};
+	};
+
+	mipi {
+			pinctrl_mipi_1: mipiggrp-1 {
+			fsl,pins = <
+				MX6QDL_PAD_SD3_DAT2__GPIO7_IO06 0x80000000
+			>;
+		};
+	};
+
+	aud_pwr_en {
+		pinctrl_aud_pwr_en_1: aud_pwr_en_grp-1 {
+			fsl,pins = <
+				MX6QDL_PAD_EIM_OE__GPIO2_IO25 0x80000000
+			>;
+		};
+	};
+
+	hog {
+		pinctrl_hog_1: hoggrp-1 {
+			fsl,pins = <
+				/* AUD_HP_DET */
+				MX6QDL_PAD_NANDF_D0__GPIO2_IO00 0x80000000
+				/* USER_LED0 */
+				MX6QDL_PAD_NANDF_D2__GPIO2_IO02 0x80000000
+				/* USER_LED1 */
+				MX6QDL_PAD_NANDF_D3__GPIO2_IO03 0x80000000
+				/* CHRG_UOK_N */
+				MX6QDL_PAD_NANDF_ALE__GPIO6_IO08 0x80000000
+				/* CHRG_FAULT_N */
+				MX6QDL_PAD_NANDF_CS2__GPIO6_IO15 0x80000000
+				/* CHRG_DOK_N */
+				MX6QDL_PAD_NANDF_CS3__GPIO6_IO16 0x80000000
+				/* LVDS0_PEN_IRQ_N */
+				MX6QDL_PAD_GPIO_16__GPIO7_IO11	 0x80000000
+				/* LVDS1_PEN_IRQ_N */
+				MX6QDL_PAD_EIM_D23__GPIO3_IO23 0x80000000
+				/* AUD_CLK / CSI0_MCLK / CSI1_MCLK */
+				MX6QDL_PAD_GPIO_0__CCM_CLKO1    0x130b0
+				/* DSI_RESET */
+				MX6QDL_PAD_EIM_D26__GPIO3_IO26 0x80000000
+				/* EXP_GPIO_3 */
+				MX6QDL_PAD_EIM_CS1__GPIO2_IO24 0x80000000
+				/* BT_DISABLE_N */
+				MX6QDL_PAD_GPIO_9__GPIO1_IO09 0x80000000
+				/* USB_HUB_RESET_N */
+				MX6QDL_PAD_EIM_DA10__GPIO3_IO10 0x80000000
+				/* XBEE_ON / SLEEP_N  */
+				MX6QDL_PAD_EIM_D27__GPIO3_IO27 0x80000000
+				/* XBEE_RESET_N  */
+				MX6QDL_PAD_EIM_D28__GPIO3_IO28 0x80000000
+				/* XBEE_SLEEP_RQ  */
+				MX6QDL_PAD_EIM_D29__GPIO3_IO29 0x80000000
+			>;
+		};
+	};
+};
+
+&mipi_csi {
+	status = "okay";
+	ipu_id = <0>;
+	csi_id = <1>;
+	v_channel = <0>;
+	lanes = <2>;
+};
+
+&mipi_dsi {
+	dev_id = <0>;
+	disp_id = <0>;
+	lcd_panel = "TRULY-WVGA";
+	resets = <&mipi_dsi_reset>;
+	status = "okay";
+};
+
+&pcie {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pcie_1>;
+	reset-gpio = <&gpio7 8 0>;
+	wake-up-gpio = <&gpio7 7 0>;
+	disable-gpio = <&gpio1 4 0>;
+	vin-supply = <&ldo6>;
+	status = "okay";
+};
+
+&ssi2 {
+	fsl,mode = "i2s-slave";
+	status = "okay";
+};
+
+&uart1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_uart1_2>;
+	fsl,uart-has-rtscts;
+	digi,pwr-en-gpio = <&gpio2 26 0>;
+	status = "okay";
+};
+
+&uart2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_uart2_3>;
+	fsl,uart-has-rtscts;
+	status = "okay";
+};
+
+&uart3 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_uart3_2>;
+	fsl,uart-has-rtscts;
+	digi,pwr-en-gpio = <&gpio2 26 0>;
+	status = "okay";
+};
+
+&uart4 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_uart4_1>;
+	status = "okay";
+};
+
+&uart5 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_uart5_1>;
+	fsl,uart-has-rtscts;
+	status = "okay";
+};
+
+&usbh1 {
+	fsl,reset-gpio = <&gpio3 10 0>;
+	status = "okay";
+};
+
+&usbotg {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_usbotg_3>;
+	fsl,power-line-polarity-active-high;
+	fsl,over-current-polarity-active-low;
+	status = "okay";
+};
+
+&usdhc2 {
+	pinctrl-names = "default", "state_100mhz", "state_200mhz";
+	pinctrl-0 = <&pinctrl_usdhc2_2>;
+	pinctrl-1 = <&pinctrl_usdhc2_2_100mhz>;
+	pinctrl-2 = <&pinctrl_usdhc2_2_200mhz>;
+	broken-cd;
+	no-1-8-v;
+	keep-power-in-suspend;
+	enable-sdio-wakeup;
+	/* Allows suspend/resume to work when using the sdcard as rootfs.
+	 * Remove this property when booting from emmc to allow card
+	 * detection to work. */
+	non-removable;
+	status = "okay";
+};
+
+&flexcan1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_flexcan1_2>;
+	stby-gpios = <&gpio1 2 0>;
+	status = "okay";
+};
+
+&flexcan2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_flexcan2_2>;
+	stby-gpios = <&gpio1 5 0>;
+	status = "okay";
+};
+
+&vpu {
+	pu-supply = <&reg_pu>;
+};
