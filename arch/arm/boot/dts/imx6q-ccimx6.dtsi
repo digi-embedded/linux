@@ -17,17 +17,6 @@
 	memory {
 		reg = <0x10000000 0x40000000>;
 	};
-
-	wireless {
-		digi,pwrdown-gpios = <&gpio_extender 3 0>;
-		/* U-Boot will fill in the MAC address here */
-	};
-
-	bluetooth {
-		digi,pwrdown-gpios = <&gpio_extender 4 0>;
-		digi,disable-gpios = <&gpio1 9 0>;
-		/* U-Boot will fill in the MAC address here */
-	};
 };
 
 &cpu0 {
@@ -122,7 +111,6 @@
 			bio: DA9063_BIO {
 				regulator-name = "DA9063_BIO";
 				regulator-boot-on;
-				regulator-always-on;
 				regulator-suspend-mem-microvolt = <3300000>;
 				regulator-suspend-standby-microvolt = <3300000>;
 			};
@@ -138,7 +126,6 @@
 			ldo2: DA9063_LDO2 {
 				regulator-name = "DA9063_LDO2";
 				regulator-boot-on;
-				regulator-always-on;
 				regulator-suspend-mem-microvolt = <1800000>;
 				regulator-suspend-standby-microvolt = <1800000>;
 			};

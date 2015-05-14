@@ -12,20 +12,10 @@
  */
 
 #include "imx6dl.dtsi"
+
 / {
 	memory {
 		reg = <0x10000000 0x40000000>;
-	};
-
-	wireless {
-		digi,pwrdown-gpios = <&gpio_extender 3 0>;
-		/* U-Boot will fill in the MAC address here */
-	};
-
-	bluetooth {
-		digi,pwrdown-gpios = <&gpio_extender 4 0>;
-		digi,disable-gpios = <&gpio1 9 0>;
-		/* U-Boot will fill in the MAC address here */
 	};
 };
 
@@ -137,7 +127,6 @@
 			bio: DA9063_BIO {
 				regulator-name = "DA9063_BIO";
 				regulator-boot-on;
-				regulator-always-on;
 				regulator-suspend-mem-microvolt = <3300000>;
 				regulator-suspend-standby-microvolt = <3300000>;
 			};
@@ -153,7 +142,6 @@
 			ldo2: DA9063_LDO2 {
 				regulator-name = "DA9063_LDO2";
 				regulator-boot-on;
-				regulator-always-on;
 				regulator-suspend-mem-microvolt = <1800000>;
 				regulator-suspend-standby-microvolt = <1800000>;
 			};
@@ -219,16 +207,4 @@
 	no-1-8-v;
 	status = "okay";
 };
-
-&usdhc4 {
-	pinctrl-names = "default", "state_100mhz", "state_200mhz";
-	pinctrl-0 = <&pinctrl_usdhc4_1>;
-	pinctrl-1 = <&pinctrl_usdhc4_1_100mhz>;
-	pinctrl-2 = <&pinctrl_usdhc4_1_200mhz>;
-	bus-width = <8>;
-	non-removable;
-	no-1-8-v;
-	status = "okay";
-};
-
 
