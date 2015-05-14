@@ -11,7 +11,11 @@
  * http://www.gnu.org/copyleft/gpl.html
  */
 
-#include "imx6q-ccimx6sbc.dts"
+/dts-v1/;
+/* ConnectCore 6 (Quad wireless/bluetooth variant) */
+#include "imx6q-ccimx6-wb.dtsi"
+/* ConnectCore 6 SBC carrier board */
+#include "imx6q-ccimx6sbc.dtsi"
 
 &cpu0 {
 	operating-points = <
