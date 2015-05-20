@@ -1137,7 +1137,7 @@ static int __devinit gpu_probe(struct platform_device *pdev)
 	if (!pool)
 		return -ENOMEM;
 
-	 /* If not configured via command line, read it from Device Tree */
+	/* If not configured via command line, read it from Device Tree */
 	if (contiguousSize == 0) {
 		if (of_property_read_u32(dn, "contiguous-size",
 					(u32 *)&contiguous_size_percent) == 0) {
@@ -1145,9 +1145,11 @@ static int __devinit gpu_probe(struct platform_device *pdev)
 			if (mem_node) {
 				if (of_get_address(mem_node, 0, &mem_size,
 						  &flags)) {
-					contiguousSize = ((u32)mem_size *
-						contiguous_size_percent/100)
-							% (u32)mem_size;
+					/* Make sure to do the div by 100 first to
+					 * avoid an overflow in the contiguousSize
+					 * variable (32-bit) */
+					contiguousSize = (((u32)mem_size / 100) *
+					     contiguous_size_percent) % (u32)mem_size;
 				}
 			}
 		}
