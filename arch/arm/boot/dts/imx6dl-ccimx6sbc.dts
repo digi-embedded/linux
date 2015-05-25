@@ -17,5 +17,5 @@
 #include "imx6dl-ccimx6sbc.dtsi"
 
 &gpu {
-	contiguous-size = <12>;
+	contiguous-size = <16>;
 };
