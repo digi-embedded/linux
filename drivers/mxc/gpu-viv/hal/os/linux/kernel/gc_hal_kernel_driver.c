@@ -1165,8 +1165,9 @@ static int __devinit gpu_probe(struct platform_device *pdev)
 		contiguousSize = 4 << 20;
 #endif
 	}
-
-	pool->size = contiguousSize;
+	/* Round to MB */
+	contiguousSize = contiguousSize - (contiguousSize % SZ_1M);
+	pool->size = PAGE_ALIGN(contiguousSize);
 	init_dma_attrs(&pool->attrs);
 	dma_set_attr(DMA_ATTR_WRITE_COMBINE, &pool->attrs);
 	pool->virt = dma_alloc_attrs(&pdev->dev, pool->size, &pool->phys,
@@ -1175,6 +1176,8 @@ static int __devinit gpu_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "Failed to allocate contiguous memory\n");
 		return -ENOMEM;
 	}
+	dev_info(&pdev->dev, "Allocated %d MB of contiguous memory\n",
+			pool->size/SZ_1M);
 	contiguousBase = pool->phys;
 	dev_set_drvdata(&pdev->dev, pool);
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0)
