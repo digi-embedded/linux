@@ -1145,11 +1145,12 @@ static int __devinit gpu_probe(struct platform_device *pdev)
 			if (mem_node) {
 				if (of_get_address(mem_node, 0, &mem_size,
 						  &flags)) {
-					/* Make sure to do the div by 100 first to
-					 * avoid an overflow in the contiguousSize
-					 * variable (32-bit) */
-					contiguousSize = (((u32)mem_size / 100) *
-					     contiguous_size_percent) % (u32)mem_size;
+					/* Make sure to do the div by 100 first
+					 * to avoid an overflow in the
+					 * contiguousSize variable (32-bit) */
+					contiguousSize = (((u32)mem_size / 100)
+						* contiguous_size_percent)
+							% (u32)mem_size;
 				}
 			}
 		}
