@@ -334,7 +334,7 @@ static int da9063_hwmon_probe(struct platform_device *pdev)
 					"\n");
 		hwmon->tjunc_offset = 0;
 	}
-	dev_notice(&pdev->dev, "Calibration offset %d\n.",hwmon->tjunc_offset);
+	dev_notice(&pdev->dev, "Calibration offset %d\n", hwmon->tjunc_offset);
 	ret = sysfs_create_group(&pdev->dev.kobj, &da9063_attr_group);
 	if (ret)
 		return ret;
