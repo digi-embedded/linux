@@ -310,6 +310,8 @@
 /* Chip ID and variant */
 #define	DA9063_REG_CHIP_ID		0x181
 #define	DA9063_REG_CHIP_VARIANT		0x182
+#define	DA9063_REG_CHIP_CUSTOMER_ID	0x183
+#define	DA9063_REG_CHIP_CONFIG_ID	0x184
 
 /*
  * Chip registers bits

@@ -326,6 +326,53 @@ int da9063_reg_clear_bits(struct da9063 *da9063, u16 reg, u8 mask)
 	return da9063_reg_update(da9063, reg, mask, 0);
 }
 
+int da9063_dump(struct da9063 *da9063)
+{
+	int j = 0;
+	int i;
+	unsigned int val;
+	unsigned int invalid = 0;
+
+	if (!da9063)
+		return -EINVAL;
+
+	printk(KERN_DEBUG"PMIC\t00 01 02 03 04 05 06 07     08 09 0a 0b 0c 0d 0e 0f\n"
+		 "    \t---------------------------------------------------\n");
+	for (i = DA9063_REG_PAGE_CON; i <= DA9063_REG_CHIP_CONFIG_ID; i++) {
+		/* Check for invalid registers */
+		if ((i > DA9063_REG_SECOND_D && i < (DA9063_REG_SEQ - 1)) ||
+		    (i > DA9063_REG_AUTO3_LOW && i < (DA9063_REG_OPT_COUNT - 1)) ||
+		    (i > DA9063_REG_GP_ID_19 && i < (DA9063_REG_CHIP_ID - 1))) {
+			invalid = 1;
+		}
+
+		if (j == 0)
+			printk("0x%04x:\t", i);
+
+		if (!invalid) {
+			val = da9063_page_reg_read(da9063, i);
+			if (val < 0)
+				printk("?? ");
+			else
+				printk("%02x ", (unsigned char)val);
+		} else {
+			printk("-- ");
+			invalid = 0;
+		}
+
+		if (j == 7)
+			printk("    ");
+		if (j == 15) {
+			printk("\n");
+			j = 0;
+		} else {
+			j++;
+		}
+	}
+
+	return 0;
+}
+
 int da9063_get_trim_data(struct da9063 *da9063)
 {
 	signed int t_offset;
