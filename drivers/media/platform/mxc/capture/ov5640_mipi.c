@@ -110,8 +110,8 @@ static int pwn_gpio, rst_gpio;
 
 static struct reg_value ov5640_init_setting_30fps_VGA[] = {
 
-	{0x3103, 0x11, 0, 0}, {0x3008, 0x82, 0, 5}, {0x3008, 0x42, 0, 0},
-	{0x3103, 0x03, 0, 0}, {0x3017, 0x00, 0, 0}, {0x3018, 0x00, 0, 0},
+	{0x3103, 0x11, 0, 0}, {0x3008, 0x82, 0, 5}, {0x3008, 0x42, 0, 10},
+	{0x3103, 0x03, 0, 0}, {0x3017, 0x00, 0, 10}, {0x3018, 0x00, 0, 10},
 	{0x3034, 0x18, 0, 0}, {0x3035, 0x14, 0, 0}, {0x3036, 0x38, 0, 0},
 	{0x3037, 0x13, 0, 0}, {0x3108, 0x01, 0, 0}, {0x3630, 0x36, 0, 0},
 	{0x3631, 0x0e, 0, 0}, {0x3632, 0xe2, 0, 0}, {0x3633, 0x12, 0, 0},
@@ -1187,6 +1187,9 @@ static int ov5640_download_firmware(struct reg_value *pModeSetting, s32 ArySize)
 
 		if (Delay_ms)
 			msleep(Delay_ms);
+		else
+			/* Do a minimum delay before writing another reg */
+			udelay(1);
 	}
 err:
 	return retval;
