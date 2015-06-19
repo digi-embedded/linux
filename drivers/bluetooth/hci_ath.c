@@ -162,11 +162,6 @@ static int ath_enqueue(struct hci_uart *hu, struct sk_buff *skb)
 {
 	struct ath_struct *ath = hu->priv;
 
-	if (bt_cb(skb)->pkt_type == HCI_SCODATA_PKT) {
-		kfree_skb(skb);
-		return 0;
-	}
-
 	/*
 	 * Update power management enable flag with parameters of
 	 * HCI sleep enable vendor specific HCI command.
