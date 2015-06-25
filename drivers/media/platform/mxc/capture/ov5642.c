@@ -3266,16 +3266,12 @@ static int ov5642_change_mode(enum ov5642_frame_rate new_frame_rate,
 		return -1;
 	}
 
-	if ((new_frame_rate == old_frame_rate) &&
-	    (new_mode == ov5642_mode_VGA_640_480) &&
-		(orig_mode == ov5642_mode_QSXGA_2592_1944)) {
+	if (new_mode == ov5642_mode_VGA_640_480) {
 		pModeSetting = ov5642_setting_QSXGA_2_VGA;
 		iModeSettingArySize = ARRAY_SIZE(ov5642_setting_QSXGA_2_VGA);
 		ov5642_data.pix.width = 640;
 		ov5642_data.pix.height = 480;
-	} else if ((new_frame_rate == old_frame_rate) &&
-	    (new_mode == ov5642_mode_QVGA_320_240) &&
-		(orig_mode == ov5642_mode_VGA_640_480)) {
+	} else if (new_mode == ov5642_mode_QVGA_320_240) {
 		pModeSetting = ov5642_setting_VGA_2_QVGA;
 		iModeSettingArySize = ARRAY_SIZE(ov5642_setting_VGA_2_QVGA);
 		ov5642_data.pix.width = 320;
