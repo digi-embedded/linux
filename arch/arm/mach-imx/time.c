@@ -256,6 +256,14 @@ static void mxc_set_mode(enum clock_event_mode mode,
 }
 
 /*
+ * Shutdown timer
+ */
+static void mxc_suspend(struct clock_event_device *evt)
+{
+	mxc_set_mode(CLOCK_EVT_MODE_SHUTDOWN, evt);
+}
+
+/*
  * IRQ handler for the timer
  */
 static irqreturn_t mxc_timer_interrupt(int irq, void *dev_id)
@@ -285,6 +293,7 @@ static struct clock_event_device clockevent_mxc = {
 	.name		= "mxc_timer1",
 	.features	= CLOCK_EVT_FEAT_ONESHOT,
 	.set_mode	= mxc_set_mode,
+	.suspend	= mxc_suspend,
 	.set_next_event	= mx1_2_set_next_event,
 	.rating		= 200,
 };
