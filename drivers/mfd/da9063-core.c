@@ -25,6 +25,7 @@
 #include <linux/device.h>
 #include <linux/delay.h>
 #include <linux/interrupt.h>
+#include <linux/tick.h>
 #include <linux/mutex.h>
 #include <linux/mfd/core.h>
 
@@ -432,6 +433,9 @@ int da9063_get_trim_data(struct da9063 *da9063)
 
 void da9063_power_off ( void ) {
 	BUG_ON(!da9063_data);
+
+	/* Disable timer events */
+	clockevents_suspend();
 
 	/* Configure LDO11, BIO and BPERI not to follow sequencer */
 	da9063_reg_clear_bits(da9063_data, DA9063_REG_BPERI_CONT,
