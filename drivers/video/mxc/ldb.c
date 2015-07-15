@@ -109,10 +109,12 @@ struct fsl_mxc_ldb_platform_data {
 	int mode;
 	int ipu_id;
 	int disp_id;
+	int jeida;
 
 	/*only work for separate mode*/
 	int sec_ipu_id;
 	int sec_disp_id;
+	int sec_jeida;
 
 	struct fsl_mxc_ldb_display_data disp;
 	struct fsl_mxc_ldb_display_data sec_disp;
@@ -261,6 +263,7 @@ static int ldb_get_of_property(struct platform_device *pdev,
 		dev_dbg(&pdev->dev, "get of property disp_id fail\n");
 		return err;
 	}
+	plat_data->jeida = of_property_read_bool(np, "jeida");
 	err = of_property_read_u32(np, "sec_ipu_id", &sec_ipu_id);
 	if (err) {
 		dev_dbg(&pdev->dev, "get of property sec_ipu_id fail\n");
@@ -271,6 +274,7 @@ static int ldb_get_of_property(struct platform_device *pdev,
 		dev_dbg(&pdev->dev, "get of property sec_disp_id fail\n");
 		return err;
 	}
+	plat_data->sec_jeida = of_property_read_bool(np, "sec_jeida");
 
 	plat_data->mode = parse_ldb_mode(mode);
 	plat_data->ext_ref = ext_ref;
@@ -679,9 +683,11 @@ static int ldb_disp_init(struct mxc_dispdrv_handle *disp,
 		else
 			reg |= LDB_BGREF_RMODE_INT;
 
-		/* TODO: now only use SPWG data mapping for both channel */
 		reg &= ~(LDB_BIT_MAP_CH0_MASK | LDB_BIT_MAP_CH1_MASK);
-		reg |= LDB_BIT_MAP_CH0_SPWG | LDB_BIT_MAP_CH1_SPWG;
+		reg |= plat_data->jeida ?
+			LDB_BIT_MAP_CH0_JEIDA : LDB_BIT_MAP_CH0_SPWG;
+		reg |= plat_data->sec_jeida ?
+			LDB_BIT_MAP_CH1_JEIDA : LDB_BIT_MAP_CH1_SPWG;
 
 		/* channel mode setting */
 		reg &= ~(LDB_CH0_MODE_MASK | LDB_CH1_MODE_MASK);

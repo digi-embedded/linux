@@ -1497,6 +1497,13 @@ gckOS_StopTimer(
     IN gctPOINTER Timer
     );
 
+/* Get the global video memory mutex. */
+gceSTATUS
+gckOS_GetVideoMemoryMutex(
+    IN gckOS Os,
+    OUT gctPOINTER *Mutex
+    );
+
 /******************************************************************************\
 ********************************* gckHEAP Object ********************************
 \******************************************************************************/
@@ -1574,6 +1581,7 @@ gckVIDMEM_Destroy(
 /* Allocate rectangular memory. */
 gceSTATUS
 gckVIDMEM_Allocate(
+    IN gckKERNEL Kernel,
     IN gckVIDMEM Memory,
     IN gctUINT Width,
     IN gctUINT Height,
@@ -1587,6 +1595,7 @@ gckVIDMEM_Allocate(
 /* Allocate linear memory. */
 gceSTATUS
 gckVIDMEM_AllocateLinear(
+    IN gckKERNEL Kernel,
     IN gckVIDMEM Memory,
     IN gctSIZE_T Bytes,
     IN gctUINT32 Alignment,
@@ -1597,6 +1606,7 @@ gckVIDMEM_AllocateLinear(
 /* Free memory. */
 gceSTATUS
 gckVIDMEM_Free(
+    IN gckKERNEL Kernel,
     IN gcuVIDMEM_NODE_PTR Node
     );
 

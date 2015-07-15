@@ -1336,66 +1336,71 @@ int32_t ipu_init_channel_buffer(struct ipu_soc *ipu, ipu_channel_t channel,
 	/* AXI-id */
 	if (idma_is_set(ipu, IDMAC_CHA_PRI, dma_chan)) {
 		unsigned reg = IDMAC_CH_LOCK_EN_1;
-		uint32_t value = 0;
+		uint32_t value;
+
+		if (of_machine_is_compatible("fsl,imx6dl"))
+			value = 0x02;	/* 4 AXI bursts */
+		else
+			value = 0x03;	/* 8 AXI bursts */
 		if (ipu->pdata->devtype == IPU_V3H) {
 			_ipu_ch_param_set_axi_id(ipu, dma_chan, 0);
 			switch (dma_chan) {
 			case 5:
-				value = 0x3;
+				value <<= 0;
 				break;
 			case 11:
-				value = 0x3 << 2;
+				value <<= 2;
 				break;
 			case 12:
-				value = 0x3 << 4;
+				value <<= 4;
 				break;
 			case 14:
-				value = 0x3 << 6;
+				value <<= 6;
 				break;
 			case 15:
-				value = 0x3 << 8;
+				value <<= 8;
 				break;
 			case 20:
-				value = 0x3 << 10;
+				value <<= 10;
 				break;
 			case 21:
-				value = 0x3 << 12;
+				value <<= 12;
 				break;
 			case 22:
-				value = 0x3 << 14;
+				value <<= 14;
 				break;
 			case 23:
-				value = 0x3 << 16;
+				value <<= 16;
 				break;
 			case 27:
-				value = 0x3 << 18;
+				value <<= 18;
 				break;
 			case 28:
-				value = 0x3 << 20;
+				value <<= 20;
 				break;
 			case 45:
 				reg = IDMAC_CH_LOCK_EN_2;
-				value = 0x3 << 0;
+				value <<= 0;
 				break;
 			case 46:
 				reg = IDMAC_CH_LOCK_EN_2;
-				value = 0x3 << 2;
+				value <<= 2;
 				break;
 			case 47:
 				reg = IDMAC_CH_LOCK_EN_2;
-				value = 0x3 << 4;
+				value <<= 4;
 				break;
 			case 48:
 				reg = IDMAC_CH_LOCK_EN_2;
-				value = 0x3 << 6;
+				value <<= 6;
 				break;
 			case 49:
 				reg = IDMAC_CH_LOCK_EN_2;
-				value = 0x3 << 8;
+				value <<= 8;
 				break;
 			case 50:
 				reg = IDMAC_CH_LOCK_EN_2;
-				value = 0x3 << 10;
+				value <<= 10;
 				break;
 			default:
 				break;

@@ -105,8 +105,8 @@ static int pwn_gpio, rst_gpio;
 
 static struct reg_value ov5640_init_setting_30fps_VGA[] = {
 
-	{0x3103, 0x11, 0, 0}, {0x3008, 0x82, 0, 5}, {0x3008, 0x42, 0, 0},
-	{0x3103, 0x03, 0, 0}, {0x3017, 0x00, 0, 0}, {0x3018, 0x00, 0, 0},
+	{0x3103, 0x11, 0, 0}, {0x3008, 0x82, 0, 5}, {0x3008, 0x42, 0, 10},
+	{0x3103, 0x03, 0, 0}, {0x3017, 0x00, 0, 10}, {0x3018, 0x00, 0, 10},
 	{0x3034, 0x18, 0, 0}, {0x3035, 0x14, 0, 0}, {0x3036, 0x38, 0, 0},
 	{0x3037, 0x13, 0, 0}, {0x3108, 0x01, 0, 0}, {0x3630, 0x36, 0, 0},
 	{0x3631, 0x0e, 0, 0}, {0x3632, 0xe2, 0, 0}, {0x3633, 0x12, 0, 0},
@@ -698,6 +698,9 @@ static s32 update_device_addr(struct sensor_data *sensor)
 
 
 	ret = i2c_transfer(sensor->i2c_client->adapter, &msg, 1);
+	if (ret < 0)
+		pr_warn("%s: Device address not updated: %d\n", __func__,
+				ret);
 	return ret;
 }
 
@@ -809,16 +812,29 @@ static int ov5640_power_on(struct device *dev)
 
 static s32 ov5640_write_reg(u16 reg, u8 val)
 {
+	int ret = -1;
 	u8 au8Buf[3] = {0};
 
 	au8Buf[0] = reg >> 8;
 	au8Buf[1] = reg & 0xff;
 	au8Buf[2] = val;
 
-	if (i2c_master_send(ov5640_data.i2c_client, au8Buf, 3) < 0) {
-		pr_err("%s:write reg error:reg=%x,val=%x\n",
-			__func__, reg, val);
-		return -1;
+	/* If we are commanding a software reset, high bit on register 3008,
+	 * it will reset the I2C address to the default, so update it once
+	 * again right afterwards. */
+	if ((reg == 0x3008) && (val & 0x80)) {
+		mxc_camera_common_lock();
+		ret = i2c_master_send(ov5640_data.i2c_client, au8Buf, 3);
+		update_device_addr(&ov5640_data);
+		mxc_camera_common_unlock();
+	} else {
+		ret = i2c_master_send(ov5640_data.i2c_client, au8Buf, 3);
+	}
+
+	if (ret < 0) {
+		pr_err("%s:write reg error:reg=%x,val=%x ret=%d\n",
+			__func__, reg, val, ret);
+		return ret;
 	}
 
 	return 0;
@@ -1166,6 +1182,9 @@ static int ov5640_download_firmware(struct reg_value *pModeSetting, s32 ArySize)
 
 		if (Delay_ms)
 			msleep(Delay_ms);
+		else
+			/* Do a minimum delay before writing another reg */
+			udelay(1);
 	}
 err:
 	return retval;
@@ -1981,11 +2000,17 @@ static struct v4l2_int_device ov5640_int_device = {
 static int ov5640_probe(struct i2c_client *client,
 			const struct i2c_device_id *id)
 {
+	struct pinctrl *pinctrl;
 	struct device *dev = &client->dev;
 	int retval, i, n_alt_pwn_gpios;
 	u8 chip_id_high, chip_id_low;
 	struct regmap *gpr;
 	int *alt_pwn_gpios = NULL;
+	pinctrl = devm_pinctrl_get_select_default(dev);
+	if (IS_ERR(pinctrl)) {
+		dev_err(dev, "mipi setup pinctrl failed!");
+		return PTR_ERR(pinctrl);
+	}
 
 	/* request power down pin */
 	pwn_gpio = of_get_named_gpio(dev->of_node, "pwn-gpios", 0);
@@ -2099,7 +2124,7 @@ static int ov5640_probe(struct i2c_client *client,
 				regmap_update_bits(gpr, IOMUXC_GPR1, mask, 0);
 		}  else if (of_machine_is_compatible("fsl,imx6dl")) {
 			int mask = ov5640_data.csi ? (7 << 3) : (7 << 0);
-			int val =  ov5640_data.csi ? (3 << 3) : (0 << 0);
+			int val =  ov5640_data.csi ? (1 << 3) : (0 << 0);
 
 			regmap_update_bits(gpr, IOMUXC_GPR13, mask, val);
 		}

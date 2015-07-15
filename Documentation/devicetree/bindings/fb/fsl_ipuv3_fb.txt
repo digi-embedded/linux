@@ -96,6 +96,10 @@ Required properties for display:
 	       for the secondary display. See display-timings.txt for the
 	       display timings format.
 
+Optional properties for ldb display:
+- jeida: Uses the JEIDA standard instead of the default SPWG.
+- sec_jeida: Same as above for the secondary display.
+
 Example for IPU:
 		ipu1: ipu@02400000 {
 			compatible = "fsl,imx6q-ipu";

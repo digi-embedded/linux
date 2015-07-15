@@ -34,6 +34,8 @@
 #include <asm/mach/arch.h>
 #include <asm/mach/map.h>
 #include <asm/system_misc.h>
+#include <linux/of_gpio.h>
+#include <linux/delay.h>
 
 #include "common.h"
 #include "cpuidle.h"
@@ -194,6 +196,232 @@ static void __init imx6q_1588_init(void)
 
 }
 
+static void __init imx6q_csi_mux_init(void)
+{
+	/*
+	 * MX6Q SabreSD board:
+	 * IPU1 CSI0 connects to parallel interface.
+	 * Set GPR1 bit 19 to 0x1.
+	 *
+	 * MX6DL SabreSD board:
+	 * IPU1 CSI0 connects to parallel interface.
+	 * Set GPR13 bit 0-2 to 0x4.
+	 * IPU1 CSI1 connects to MIPI CSI2 virtual channel 1.
+	 * Set GPR13 bit 3-5 to 0x1.
+	 */
+	struct regmap *gpr;
+
+	gpr = syscon_regmap_lookup_by_compatible("fsl,imx6q-iomuxc-gpr");
+	if (!IS_ERR(gpr)) {
+		if (of_machine_is_compatible("fsl,imx6q-sabresd") ||
+			of_machine_is_compatible("fsl,imx6q-sabreauto"))
+			regmap_update_bits(gpr, IOMUXC_GPR1, 1 << 19, 1 << 19);
+		else if (of_machine_is_compatible("fsl,imx6dl-sabresd") ||
+			 of_machine_is_compatible("fsl,imx6dl-sabreauto"))
+			regmap_update_bits(gpr, IOMUXC_GPR13, 0x3F, 0x0C);
+	} else {
+		pr_err("%s(): failed to find fsl,imx6q-iomux-gpr regmap\n",
+		       __func__);
+	}
+}
+
+static void imx6q_wifi_init (void)
+{
+	struct device_node *np;
+	unsigned int pwrdown_gpio, pwrdown_delay;
+	enum of_gpio_flags flags;
+
+	np = of_find_node_by_path("/wireless");
+	if (!np)
+		return;
+
+	if (of_property_read_u32(np, "digi,pwrdown_delay",
+			&pwrdown_delay) < 0)
+		pwrdown_delay = 5;
+
+	/* Read the power down gpio */
+	pwrdown_gpio = of_get_named_gpio_flags(np, "digi,pwrdown-gpios", 0, &flags);
+	if (gpio_is_valid(pwrdown_gpio)) {
+		if (!gpio_request_one(pwrdown_gpio, GPIOF_DIR_OUT,
+			"wifi_chip_pwd_l")) {
+			/* Start with Power pin low, then set high to power Wifi */
+			gpio_set_value_cansleep(pwrdown_gpio, 0);
+			mdelay(pwrdown_delay);
+			gpio_set_value_cansleep(pwrdown_gpio, 1);
+			mdelay(pwrdown_delay);
+			/*
+			* Free the Wifi chip PWD pin to allow controlling
+			* it from user space
+			*/
+			gpio_free(pwrdown_gpio);
+		}
+	}
+}
+
+static void imx6q_bt_init (void)
+{
+	struct device_node *np;
+	unsigned int pwrdown_gpio, disable_gpio, pwrdown_delay, disable_delay;
+	enum of_gpio_flags flags;
+
+	np = of_find_node_by_path("/bluetooth");
+	if (!np)
+		return;
+
+	/* Read the power down gpio */
+	pwrdown_gpio = of_get_named_gpio_flags(np, "digi,pwrdown-gpios", 0,
+			&flags);
+	if (of_property_read_u32(np, "digi,pwrdown_delay", &pwrdown_delay) < 0)
+		pwrdown_delay = 5;
+
+	if (gpio_is_valid(pwrdown_gpio)) {
+		if (!gpio_request_one(pwrdown_gpio, GPIOF_DIR_OUT,
+			"bt_chip_pwd_l")) {
+			/* Start with Power pin low, then set high to power  */
+			gpio_set_value_cansleep(pwrdown_gpio, 0);
+			mdelay(pwrdown_delay);
+			gpio_set_value_cansleep(pwrdown_gpio, 1);
+			mdelay(pwrdown_delay);
+			/*
+			* Free the chip PWD pin to allow controlling
+			* it from user space
+			*/
+			gpio_free(pwrdown_gpio);
+		}
+	}
+
+	/* Read the disable gpio */
+	disable_gpio = of_get_named_gpio_flags(np, "digi,disable-gpios", 0,
+			&flags);
+	if (of_property_read_u32(np, "digi,disable_delay", &disable_delay) < 0)
+		disable_delay = 5;
+
+	if (gpio_is_valid(disable_gpio)) {
+		if (!gpio_request_one(disable_gpio, GPIOF_DIR_OUT,
+			"bt_chip_dis_l")) {
+			/* Start with Power pin low, then set high to power  */
+			gpio_set_value_cansleep(disable_gpio, 0);
+			mdelay(disable_delay);
+			gpio_set_value_cansleep(disable_gpio, 1);
+			mdelay(disable_delay);
+			/*
+			* Free the chip PWD pin to allow controlling
+			* it from user space
+			*/
+			gpio_free(disable_gpio);
+		}
+	}
+}
+
+#define OCOTP_MACn(n)	(0x00000620 + (n) * 0x10)
+void __init imx6_enet_mac_init(const char *compatible)
+{
+	struct device_node *ocotp_np, *enet_np;
+	void __iomem *base;
+	struct property *newmac;
+	u32 macaddr_low, macaddr_high;
+	u8 *macaddr;
+
+	enet_np = of_find_compatible_node(NULL, NULL, compatible);
+	if (!enet_np)
+		return;
+
+	if (of_get_mac_address(enet_np))
+		goto put_enet_node;
+
+	ocotp_np = of_find_compatible_node(NULL, NULL, "fsl,imx6q-ocotp");
+	if (!ocotp_np) {
+		pr_warn("failed to find ocotp node\n");
+		goto put_enet_node;
+	}
+
+	base = of_iomap(ocotp_np, 0);
+	if (!base) {
+		pr_warn("failed to map ocotp\n");
+		goto put_ocotp_node;
+	}
+
+	macaddr_high = readl_relaxed(base + OCOTP_MACn(0));
+	macaddr_low = readl_relaxed(base + OCOTP_MACn(1));
+
+	newmac = kzalloc(sizeof(*newmac) + 6, GFP_KERNEL);
+	if (!newmac)
+		goto put_ocotp_node;
+
+	newmac->value = newmac + 1;
+	newmac->length = 6;
+	newmac->name = kstrdup("local-mac-address", GFP_KERNEL);
+	if (!newmac->name) {
+		kfree(newmac);
+		goto put_ocotp_node;
+	}
+
+	macaddr = newmac->value;
+	macaddr[5] = macaddr_high & 0xff;
+	macaddr[4] = (macaddr_high >> 8) & 0xff;
+	macaddr[3] = (macaddr_high >> 16) & 0xff;
+	macaddr[2] = (macaddr_high >> 24) & 0xff;
+	macaddr[1] = macaddr_low & 0xff;
+	macaddr[0] = (macaddr_low >> 8) & 0xff;
+
+	of_update_property(enet_np, newmac);
+
+put_ocotp_node:
+	of_node_put(ocotp_np);
+put_enet_node:
+	of_node_put(enet_np);
+}
+
+static inline void imx6q_enet_init(void)
+{
+	imx6_enet_mac_init("fsl,imx6q-fec");
+	imx6q_enet_phy_init();
+	if (!of_machine_is_compatible("digi,ccimx6"))
+			imx6q_1588_init();
+}
+
+/* Add auxdata to pass platform data */
+static const struct of_dev_auxdata imx6q_auxdata_lookup[] __initconst = {
+	OF_DEV_AUXDATA("fsl,imx6q-flexcan", 0x02090000, NULL, &flexcan_pdata[0]),
+	OF_DEV_AUXDATA("fsl,imx6q-flexcan", 0x02094000, NULL, &flexcan_pdata[1]),
+	{ /* sentinel */ }
+};
+
+static void fixup_dt_audio_codec(void)
+{
+	if (mx6q_get_board_version() == 1) {
+		/* SBCv1 has the codec directly powered from DA9063_BPERI
+		 * without any controlling GPIO, while SBCv2 (default DT)
+		 * controls it with GPIO2_25 so it uses a fixed gpio regulator.
+		 */
+		struct device_node *regulator_np = NULL;
+		struct device_node *codec_np = NULL;
+		struct property *propVDDA = NULL;
+		struct property *propVDDIO = NULL;
+
+		regulator_np = of_find_node_by_name(NULL, "DA9063_BPERI");
+		if (!regulator_np)
+			return;
+
+		codec_np = of_find_compatible_node(NULL, NULL, "fsl,sgtl5000");
+		if (!codec_np)
+			return;
+
+		propVDDA = of_find_property(codec_np, "VDDA-supply", NULL);
+		if (!propVDDA)
+			return;
+
+		propVDDIO = of_find_property(codec_np, "VDDIO-supply", NULL);
+		if (!propVDDIO)
+			return;
+
+		*(phandle *)propVDDA->value =
+				be32_to_cpu(regulator_np->phandle);
+		*(phandle *)propVDDIO->value =
+				be32_to_cpu(regulator_np->phandle);
+	}
+}
+
 static void __init imx6q_init_machine(void)
 {
 	struct device *parent;
@@ -290,6 +518,15 @@ static void __init imx6q_init_late(void)
 	if (IS_ENABLED(CONFIG_ARM_IMX6Q_CPUFREQ)) {
 		imx6q_opp_init();
 		platform_device_register(&imx6q_cpufreq_pdev);
+	}
+
+	imx6q_wifi_init();
+	imx6q_bt_init();
+
+	if (of_machine_is_compatible("fsl,imx6q-sabreauto")
+		|| of_machine_is_compatible("fsl,imx6dl-sabreauto")) {
+		imx6q_flexcan_fixup_auto();
+		imx6q_audio_lvds2_init();
 	}
 }
 

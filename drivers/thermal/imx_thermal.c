@@ -90,9 +90,9 @@ static void imx_set_alarm_temp(struct imx_thermal_data *data,
 			TEMPSENSE0_ALARM_VALUE_SHIFT);
 }
 
-static int imx_get_temp(struct thermal_zone_device *tz, unsigned long *temp)
+static int imx_get_temp_internal(struct imx_thermal_data *data,
+				 unsigned long *temp)
 {
-	struct imx_thermal_data *data = tz->devdata;
 	struct regmap *map = data->tempmon;
 	unsigned int n_meas;
 	bool wait;
@@ -129,7 +129,7 @@ static int imx_get_temp(struct thermal_zone_device *tz, unsigned long *temp)
 	}
 
 	if ((val & TEMPSENSE0_FINISHED) == 0) {
-		dev_dbg(&tz->device, "temp measurement never finished\n");
+		dev_dbg(&data->tz->device, "temp measurement never finished\n");
 		return -EAGAIN;
 	}
 
@@ -159,6 +159,12 @@ static int imx_get_temp(struct thermal_zone_device *tz, unsigned long *temp)
 	}
 
 	return 0;
+}
+
+static int imx_get_temp(struct thermal_zone_device *tz, unsigned long *temp)
+{
+	struct imx_thermal_data *data = tz->devdata;
+	return imx_get_temp_internal(data, temp);
 }
 
 static int imx_get_mode(struct thermal_zone_device *tz,
@@ -396,6 +402,7 @@ static int imx_thermal_probe(struct platform_device *pdev)
 	struct regmap *map;
 	int measure_freq;
 	int ret;
+	unsigned long temp;
 
 	data = devm_kzalloc(&pdev->dev, sizeof(*data), GFP_KERNEL);
 	if (!data)
@@ -485,6 +492,10 @@ static int imx_thermal_probe(struct platform_device *pdev)
 
 	data->irq_enabled = true;
 	data->mode = THERMAL_DEVICE_ENABLED;
+
+	imx_get_temp_internal(data, &temp);
+	pr_info("i.MX junction temperature %d celsius.",
+			(unsigned int)(temp/1000));
 
 	return 0;
 }

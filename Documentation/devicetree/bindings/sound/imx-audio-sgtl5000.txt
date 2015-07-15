@@ -32,6 +32,11 @@ Required properties:
 Note: The AUDMUX port numbering should start at 1, which is consistent with
 hardware manual.
 
+Optional properties:
+- hp-det-gpios: The gpio pin to detect plug in/out event that happens to
+  Headphone jack.
+- hp-det-debounce: Headphone jack detection debounce time (ms).
+
 Example:
 
 sound {
@@ -46,4 +51,6 @@ sound {
 		"Headphone Jack", "HP_OUT";
 	mux-int-port = <1>;
 	mux-ext-port = <3>;
+	hp-det-gpios = <&gpio2 0 1>;
+	hp-det-debounce = <400>;
 };

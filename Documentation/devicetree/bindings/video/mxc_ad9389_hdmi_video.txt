@@ -1,0 +1,88 @@
+Device-Tree bindings for the ad9389 hdmi video driver
+
+The ad9389 I2C device inherits the i2c-imx properties.
+
+Required properties:
+- compatible: value should be "ad,ad9889b-i2c".
+- ad,edid_addr: I2C client address to read EDID data.
+- ipu_id: IPU ID (0/1) where the controller is connected to.
+- disp_id: Display port ID (0/1) in the IPU.
+- clocks: IPU0 and IPU1 clocks. See example below.
+- clock-names: Clock names used by the driver to enable the corresponding IPU
+  clocks. See example below.
+
+Optional properties:
+- display: phandle to user specified display timings. To use them, the
+  framebuffer device should pass the timings node name in the mode_str.
+- ad,debounce_ms: Time to debounce after interrupt, in milliseconds.
+
+This device supports the following framebuffer mode strings settings:
+
+mode_str = "auto"            : This will read the EDID and use the monitor's
+			       preferred mode.
+mode_str = "<video options>" : This will try to match the video options against
+			       the modedb database, and best match the monitor's
+                               edid data.
+mode_str = "<display name>"  : This will use the user specified display timings.
+                               The <display name> must match a display node.
+                               This force mode will ignore edid data.
+
+The mxc framebuffer node must set:
+
+	disp_dev = "hdmi_ad9389";
+
+in order to use this display driver.
+
+Example:
+
+	hdmi_ad9389: ad9889b@39 {
+		compatible = "ad,ad9889b-i2c";
+		reg = <0x39>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_ipu2_3>;
+		interrupt-parent = <&gpio2>;
+		interrupts = <1 GPIO_ACTIVE_HIGH>;
+		ad,edid_addr = <0x3f>; /* 0x7e >> 1*/
+		ipu_id = <1>;
+		disp_id = <0>;
+		clocks = <&clks 131>, <&clks 132>,
+			 <&clks 134>, <&clks 137>,
+			 <&clks 39>, <&clks 40>,
+			 <&clks 41>, <&clks 44>;
+		clock-names = "ipu1_di0", "ipu1_di1",
+			      "ipu2_di0", "ipu2_di1",
+			      "ipu1_di0_sel", "ip11_di1_sel",
+			      "ipu2_di0_sel", "ip12_di1_sel";
+	};
+
+	&mxcfb1 {
+		disp_dev = "hdmi_ad9389";
+		mode_str = "auto";
+		/*mode_str = "1920x1080@60";*/
+	};
+
+Example of forced mode:
+
+	&hdmi_ad9389 {
+		display = <&ad9389_1920x1080>;
+	}
+
+	&mxcfb1 {
+		mode_str ="HDMI_1920_1080";
+	}
+
+	ad9389_1920x1080: HDMI_1920_1080@0 {
+		display-timings {
+			timing {
+				clock-frequency = <130992926>; /* 7634 ps*/
+				hactive = <1920>;
+				vactive = <1080>;
+				hfront-porch = <88>;
+				hback-porch = <148>;
+				hsync-len = <44>;
+				vback-porch = <36>;
+				vfront-porch = <4>;
+				vsync-len = <5>;
+			};
+		};
+	};

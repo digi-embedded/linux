@@ -168,11 +168,8 @@ static irqreturn_t da9063_hwmon_irq_handler(int irq, void *irq_data)
 	return IRQ_HANDLED;
 }
 
-static ssize_t da9063_adc_read(struct device *dev,
-			       struct device_attribute *devattr, char *buf)
+static int da9063_adc_read_internal(struct da9063_hwmon *hwmon, int channel)
 {
-	struct da9063_hwmon *hwmon = dev_get_drvdata(dev);
-	int channel = to_sensor_dev_attr(devattr)->index;
 	int val;
 
 	val = da9063_adc_manual_read(hwmon, channel);
@@ -183,6 +180,19 @@ static ssize_t da9063_adc_read(struct device *dev,
 		val += hwmon->tjunc_offset;
 
 	val = da9063_adc_convert(channel, val);
+	return val;
+}
+
+static ssize_t da9063_adc_read(struct device *dev,
+			       struct device_attribute *devattr, char *buf)
+{
+	struct da9063_hwmon *hwmon = dev_get_drvdata(dev);
+	int channel = to_sensor_dev_attr(devattr)->index;
+	int val;
+
+	val = da9063_adc_read_internal(hwmon, channel);
+	if (val < 0)
+		return val;
 
 	return sprintf(buf, "%d\n", val);
 }
@@ -324,7 +334,7 @@ static int da9063_hwmon_probe(struct platform_device *pdev)
 					"\n");
 		hwmon->tjunc_offset = 0;
 	}
-	dev_notice(&pdev->dev, "Calibration offset %d\n.",hwmon->tjunc_offset);
+	dev_notice(&pdev->dev, "Calibration offset %d\n", hwmon->tjunc_offset);
 	ret = sysfs_create_group(&pdev->dev.kobj, &da9063_attr_group);
 	if (ret)
 		return ret;
@@ -334,6 +344,9 @@ static int da9063_hwmon_probe(struct platform_device *pdev)
 		sysfs_remove_group(&pdev->dev.kobj, &da9063_attr_group);
 		return PTR_ERR(hwmon->class_dev);
 	}
+
+	pr_info("DA9063 PMIC junction temperature %d celsius.\n",
+			da9063_adc_read_internal(hwmon, DA9063_TJUNC));
 
 	return 0;
 }

@@ -1,0 +1,16 @@
+WIRELESS
+
+Required properties: None.
+
+Optional properties:
+
+  - digi,pwrdown-gpios: GPIOs used to power down the wireless chip.
+  - digi,pwrdown_delay: Delay in ms between power down GPIO toggling.
+
+Example:
+
+	wireless {
+		digi,pwrdown-gpios = <&gpio_extender 3 0>;
+		digi,pwrdown_delay = <5>;
+		/* U-Boot will fill in the MAC address here */
+	};

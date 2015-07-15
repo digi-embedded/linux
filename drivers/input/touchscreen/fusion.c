@@ -401,6 +401,9 @@ static int fusion_suspend(struct i2c_client *i2c, pm_message_t mesg)
 
 static int fusion_resume(struct i2c_client *i2c)
 {
+	/* Give the controller time to come up */
+	schedule_timeout_uninterruptible(100);
+
 	enable_irq(i2c->irq);
 
 	return 0;

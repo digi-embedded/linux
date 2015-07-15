@@ -1,7 +1,7 @@
 /****************************************************************************
 *
 *    Copyright (C) 2005 - 2013 by Vivante Corp.
-*    Copyright (C) 2011-2013 Freescale Semiconductor, Inc.
+*    Copyright (C) 2011-2014 Freescale Semiconductor, Inc.
 *
 *    This program is free software; you can redistribute it and/or modify
 *    it under the terms of the GNU General Public License as published by
@@ -20,6 +20,7 @@
 *****************************************************************************/
 
 #include <linux/device.h>
+#include <linux/of.h>
 #include <linux/slab.h>
 #include <linux/notifier.h>
 #include "gc_hal_kernel_linux.h"
@@ -37,6 +38,9 @@
 
 #ifdef CONFIG_ANDROID_RESERVED_MEMORY_ACCOUNT
 #    include <linux/resmem_account.h>
+#endif
+
+#ifdef CONFIG_GPU_LOW_MEMORY_KILLER
 #    include <linux/kernel.h>
 #    include <linux/mm.h>
 #    include <linux/oom.h>
@@ -73,6 +77,7 @@ task_notify_func(struct notifier_block *self, unsigned long val, void *data)
 #else
 #include <linux/busfreq-imx6.h>
 #include <linux/reset.h>
+#include <linux/of_address.h>
 #endif
 #endif
 /* Zone used for header/footer. */
@@ -128,11 +133,7 @@ module_param(registerMemBaseVG, ulong, 0644);
 static ulong registerMemSizeVG = 2 << 10;
 module_param(registerMemSizeVG, ulong, 0644);
 
-#if gcdENABLE_FSCALE_VAL_ADJUST
-static ulong contiguousSize = 128 << 20;
-#else
-static ulong contiguousSize = 4 << 20;
-#endif
+static ulong contiguousSize;
 module_param(contiguousSize, ulong, 0644);
 
 static ulong contiguousBase = 0;
@@ -893,9 +894,11 @@ static int drv_init(struct device *pdev)
         /* Reset the base address */
         device->baseAddress = 0;
     }
+#ifdef CONFIG_GPU_LOW_MEMORY_KILLER
+    task_free_register(&task_nb);
+#endif
 
 #ifdef CONFIG_ANDROID_RESERVED_MEMORY_ACCOUNT
-    task_free_register(&task_nb);
     viv_gpu_resmem_handler.data = device->kernels[gcvCORE_MAJOR];
     register_reserved_memory_account(&viv_gpu_resmem_handler);
 #endif
@@ -980,8 +983,11 @@ static void drv_exit(void)
 {
     gcmkHEADER();
 
-#ifdef CONFIG_ANDROID_RESERVED_MEMORY_ACCOUNT
+#ifdef CONFIG_GPU_LOW_MEMORY_KILLER
     task_free_unregister(&task_nb);
+#endif
+
+#ifdef CONFIG_ANDROID_RESERVED_MEMORY_ACCOUNT
     unregister_reserved_memory_account(&viv_gpu_resmem_handler);
 #endif
 
@@ -1065,7 +1071,12 @@ static int __devinit gpu_probe(struct platform_device *pdev)
     struct resource* res;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
 	struct contiguous_mem_pool *pool;
+	u32 contiguous_size_percent = 0;
 	struct reset_control *rstc;
+	struct device_node *dn = pdev->dev.of_node;
+	struct device_node *mem_node = NULL;
+	u64 mem_size = 0;
+	u32 flags = 0;
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0)
 	struct device_node *dn =pdev->dev.of_node;
 	const u32 *prop;
@@ -1111,11 +1122,52 @@ static int __devinit gpu_probe(struct platform_device *pdev)
         registerMemSizeVG = res->end - res->start + 1;
     }
 
+    /* If undefined, set Freescale recommended value. Else use the min freq. */
+    if (gpu3DMinClock == 0) {
+        if (of_machine_is_compatible("fsl,imx6dl"))
+            gpu3DMinClock = 8;
+        else if (of_machine_is_compatible("fsl,imx6q"))
+            gpu3DMinClock = 3;
+        else
+            gpu3DMinClock = 1;
+    }
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
 	pool = devm_kzalloc(&pdev->dev, sizeof(*pool), GFP_KERNEL);
 	if (!pool)
 		return -ENOMEM;
-	pool->size = contiguousSize;
+
+	/* If not configured via command line, read it from Device Tree */
+	if (contiguousSize == 0) {
+		if (of_property_read_u32(dn, "contiguous-size",
+					(u32 *)&contiguous_size_percent) == 0) {
+			mem_node = of_find_node_by_path("/memory");
+			if (mem_node) {
+				if (of_get_address(mem_node, 0, &mem_size,
+						  &flags)) {
+					/* Make sure to do the div by 100 first
+					 * to avoid an overflow in the
+					 * contiguousSize variable (32-bit) */
+					contiguousSize = (((u32)mem_size / 100)
+						* contiguous_size_percent)
+							% (u32)mem_size;
+				}
+			}
+		}
+	}
+
+	/* If not configured via command line or DT, fallback to hard coded
+	 * default */
+	if (contiguousSize == 0) {
+#if gcdENABLE_FSCALE_VAL_ADJUST
+		contiguousSize = 128 << 20;
+#else
+		contiguousSize = 4 << 20;
+#endif
+	}
+	/* Round to MB */
+	contiguousSize = contiguousSize - (contiguousSize % SZ_1M);
+	pool->size = PAGE_ALIGN(contiguousSize);
 	init_dma_attrs(&pool->attrs);
 	dma_set_attr(DMA_ATTR_WRITE_COMBINE, &pool->attrs);
 	pool->virt = dma_alloc_attrs(&pdev->dev, pool->size, &pool->phys,
@@ -1124,6 +1176,8 @@ static int __devinit gpu_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "Failed to allocate contiguous memory\n");
 		return -ENOMEM;
 	}
+	dev_info(&pdev->dev, "Allocated %d MB of contiguous memory\n",
+			pool->size/SZ_1M);
 	contiguousBase = pool->phys;
 	dev_set_drvdata(&pdev->dev, pool);
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0)
