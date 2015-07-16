@@ -33,7 +33,6 @@
 
 #define HW_OCOTP_CTRL			0x00000000
 #define HW_OCOTP_CTRL_SET		0x00000004
-#define HW_OCOTP_CTRL_CLR		0x00000008
 #define BP_OCOTP_CTRL_WR_UNLOCK		16
 #define BM_OCOTP_CTRL_WR_UNLOCK		0xFFFF0000
 #define BM_OCOTP_CTRL_RELOAD_SHADOWS	0x00000400
@@ -53,9 +52,6 @@
 #define HW_OCOTP_DATA			0x00000020
 
 #define HW_OCOTP_CUST_N(n)	(0x00000400 + (n) * 0x10)
-#define HW_OCTP_IDX_MAC0	0x22
-#define HW_OCTP_IDX_MAC1	0x23
-
 #define BF(value, field)	(((value) << BP_##field) & BM_##field)
 
 #define DEF_RELAX		20	/* > 16.5ns */
@@ -120,10 +116,6 @@ static int otp_wait_busy(u32 flags)
 		c = __raw_readl(otp_base + HW_OCOTP_CTRL);
 		if (!(c & (BM_OCOTP_CTRL_BUSY | BM_OCOTP_CTRL_ERROR | flags)))
 			break;
-		/* Clear error before attempting further OTP accesses */
-		if (c & (BM_OCOTP_CTRL_ERROR | flags))
-			__raw_writel(BM_OCOTP_CTRL_ERROR,
-				     otp_base + HW_OCOTP_CTRL_CLR);
 		cpu_relax();
 	}
 
@@ -133,8 +125,11 @@ static int otp_wait_busy(u32 flags)
 	return 0;
 }
 
-static u32 fsl_otp_read(int index, u32 *value)
+static ssize_t fsl_otp_show(struct kobject *kobj, struct kobj_attribute *attr,
+			    char *buf)
 {
+	unsigned int index = attr - otp_kattr;
+	u32 value = 0;
 	int ret;
 
 	ret = clk_prepare_enable(otp_clk);
@@ -145,26 +140,14 @@ static u32 fsl_otp_read(int index, u32 *value)
 
 	set_otp_timing();
 	ret = otp_wait_busy(0);
-	if (ret){
-		*value = 0;
+	if (ret)
 		goto out;
-	}
 
-	*value = __raw_readl(otp_base + HW_OCOTP_CUST_N(index));
+	value = __raw_readl(otp_base + HW_OCOTP_CUST_N(index));
+
 out:
 	mutex_unlock(&otp_mutex);
 	clk_disable_unprepare(otp_clk);
-	return ret;
-}
-
-static ssize_t fsl_otp_show(struct kobject *kobj, struct kobj_attribute *attr,
-			    char *buf)
-{
-	unsigned int index = attr - otp_kattr;
-	u32 value = 0;
-	int ret;
-
-	ret = fsl_otp_read(index,&value);
 	return ret ? 0 : sprintf(buf, "0x%x\n", value);
 }
 
@@ -220,142 +203,6 @@ out:
 	mutex_unlock(&otp_mutex);
 	clk_disable_unprepare(otp_clk);
 	return ret ? 0 : count;
-}
-
-static int fsl_register_hwid(void) {
-	struct device_node *np = NULL;
-	u32 mac0, mac1;
-	char str[20];
-	struct property *hwidprop;
-	const char *hwidpropname;
-	int i;
-	const char *propnames[] = {
-		"digi,hwid,location",
-		"digi,hwid,variant",
-		"digi,hwid,hv",
-		"digi,hwid,cert",
-		"digi,hwid,year",
-		"digi,hwid,week",
-		"digi,hwid,genid",
-		"digi,hwid,sn",
-	};
-
-	np = of_find_compatible_node(NULL, NULL, "digi,ccimx6");
-	if (!np)
-		return -EPERM;
-
-	/* Retrieve HWID from OTP bits */
-	if (fsl_otp_read(HW_OCTP_IDX_MAC0, &mac0) ||
-	    fsl_otp_read(HW_OCTP_IDX_MAC1, &mac1))
-		return -EPERM;
-
-	/*
-	 * Try to read the HWID fields from DT. If not found, create those
-	 * properties from the information on the OTP bits:
-	 *
-	 *                      MAC1 (Bank 4 Word 3)
-	 *
-	 *       | 31..26 | 25..20 |   |  15..8  | 7..4 | 3..0 |
-	 *       +--------+--------+---+---------+------+------+
-	 * HWID: |  Year  |  Week  | - | Variant |  HV  | Cert |
-	 *       +--------+--------+---+---------+------+------+
-	 *
-	 *                      MAC0 (Bank 4 Word 2)
-	 *
-	 *       |  31..27  | 26..20 |         19..0           |
-	 *       +----------+--------+-------------------------+
-	 * HWID: | Location |  GenID |      Serial number      |
-	 *       +----------+--------+-------------------------+
-	 */
-	for (i = 0; i < ARRAY_SIZE(propnames); i++) {
-		if (of_property_read_string(np, propnames[i], &hwidpropname)) {
-			/* Convert HWID fields to strings */
-			if (!strcmp("digi,hwid,location", propnames[i]))
-				sprintf(str, "0x%02x", (mac0 >> 27) & 0x1f);
-			else if (!strcmp("digi,hwid,genid", propnames[i]))
-				sprintf(str, "%02d", (mac0 >> 20) & 0x7f);
-			else if (!strcmp("digi,hwid,sn", propnames[i]))
-				sprintf(str, "%d", mac0 & 0xfffff);
-			else if (!strcmp("digi,hwid,year", propnames[i]))
-				sprintf(str, "20%02d", (mac1 >> 26) & 0x3f);
-			else if (!strcmp("digi,hwid,week", propnames[i]))
-				sprintf(str, "%02d", (mac1 >> 20) & 0x3f);
-			else if (!strcmp("digi,hwid,variant", propnames[i]))
-				sprintf(str, "0x%02x", (mac1 >> 8) & 0xff);
-			else if (!strcmp("digi,hwid,hv", propnames[i]))
-				sprintf(str, "0x%x", (mac1 >> 4) & 0xf);
-			else if (!strcmp("digi,hwid,cert", propnames[i]))
-				sprintf(str, "0x%x", mac1 & 0xf);
-			else
-				continue;
-
-			hwidprop = kzalloc(sizeof(*hwidprop) + strlen(str),
-				           GFP_KERNEL);
-			if (!hwidprop)
-				return -ENOMEM;
-
-			hwidprop->value = hwidprop + 1;
-			hwidprop->length = strlen(str);
-			hwidprop->name = kstrdup(propnames[i], GFP_KERNEL);
-			if (!hwidprop->name) {
-				kfree(hwidprop);
-				return -ENOMEM;
-			}
-			strncpy(hwidprop->value, str, strlen(str));
-			of_update_property(np, hwidprop);
-		}
-	}
-
-	return 0;
-}
-
-#define CONFIG_CARRIERBOARD_VERSION_BANK	4
-#define CONFIG_CARRIERBOARD_VERSION_WORD	6
-#define CONFIG_CARRIERBOARD_VERSION_MASK	0xf	/* 4 OTP bits */
-#define CONFIG_CARRIERBOARD_VERSION_OFFSET	0	/* lower 4 OTP bits */
-
-static int fsl_register_carrierboard(void) {
-	struct device_node *np = NULL;
-	const char *boardver_str;
-
-	np = of_find_compatible_node(NULL, NULL, "digi,ccimx6");
-	if (!np)
-		return -EPERM;
-
-	if (of_property_read_string(np, "digi,carrierboard,version",
-				    &boardver_str)) {
-		int index;
-		u32 reg;
-		char str[20];
-		struct property *hwidprop;
-
-		/* Read OTP word containing the carrier board version */
-		index = (8 * CONFIG_CARRIERBOARD_VERSION_BANK) +
-			CONFIG_CARRIERBOARD_VERSION_WORD;
-		if (fsl_otp_read(index, &reg))
-			return -EPERM;
-
-		/* Convert carrier board field to string */
-		sprintf(str, "%d", (reg >> CONFIG_CARRIERBOARD_VERSION_OFFSET) &
-			CONFIG_CARRIERBOARD_VERSION_MASK);
-
-		hwidprop = kzalloc(sizeof(*hwidprop) + strlen(str), GFP_KERNEL);
-		if (!hwidprop)
-			return -ENOMEM;
-
-		hwidprop->value = hwidprop + 1;
-		hwidprop->length = strlen(str);
-		hwidprop->name = kstrdup("digi,carrierboard,version",
-					 GFP_KERNEL);
-		if (!hwidprop->name) {
-			kfree(hwidprop);
-			return -ENOMEM;
-		}
-		strncpy(hwidprop->value, str, strlen(str));
-		of_update_property(np, hwidprop);
-	}
-
-	return 0;
 }
 
 static int fsl_otp_probe(struct platform_device *pdev)
@@ -418,16 +265,6 @@ static int fsl_otp_probe(struct platform_device *pdev)
 	}
 
 	mutex_init(&otp_mutex);
-
-	/* Read the HWID from OTP bits and register it to DT if not already
-	 * there, to be exposed to the filesystem via procfs.
-	 */
-	fsl_register_hwid();
-
-	/* Read the carrier board from OTP bits and register it to DT if not
-	 * already there, to be exposed to the filesytem via procfs.
-	 */
-	fsl_register_carrierboard();
 
 	return 0;
 }

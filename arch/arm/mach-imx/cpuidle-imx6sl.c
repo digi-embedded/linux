@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 Freescale Semiconductor, Inc.
+ * Copyright (C) 2014-2015 Freescale Semiconductor, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -7,36 +7,49 @@
  */
 
 #include <linux/cpuidle.h>
-#include <linux/genalloc.h>
 #include <linux/module.h>
-#include <linux/of.h>
-#include <linux/of_address.h>
-#include <linux/of_device.h>
+#include <linux/platform_device.h>
 #include <linux/regulator/consumer.h>
 #include <linux/regulator/driver.h>
 #include <linux/regulator/machine.h>
 #include <asm/cpuidle.h>
 #include <asm/fncpy.h>
-#include <asm/mach/map.h>
 #include <asm/proc-fns.h>
-#include <asm/tlb.h>
 
 #include "common.h"
 #include "cpuidle.h"
 #include "hardware.h"
 
-extern u32 audio_bus_freq_mode;
-extern u32 ultra_low_bus_freq_mode;
-extern unsigned long reg_addrs[];
-extern void imx6sl_low_power_wfi(void);
+#define MAX_MMDC_IO_NUM		19
 
-extern unsigned long save_ttbr1(void);
-extern void restore_ttbr1(unsigned long ttbr1);
+static void __iomem *wfi_iram_base;
+extern unsigned long iram_tlb_base_addr;
+extern int ultra_low_bus_freq_mode;
+extern int audio_bus_freq_mode;
+extern unsigned long mx6sl_lpm_wfi_start asm("mx6sl_lpm_wfi_start");
+extern unsigned long mx6sl_lpm_wfi_end asm("mx6sl_lpm_wfi_end");
 
-static void __iomem *iomux_base;
-static void *wfi_iram_base;
+struct imx6_cpuidle_pm_info {
+	u32 pm_info_size; /* Size of pm_info */
+	u32 ttbr;
+	void __iomem *mmdc_base;
+	void __iomem *iomuxc_base;
+	void __iomem *ccm_base;
+	void __iomem *l2_base;
+	void __iomem *anatop_base;
+	u32 mmdc_io_num; /*Number of MMDC IOs which need saved/restored. */
+	u32 mmdc_io_val[MAX_MMDC_IO_NUM][2]; /* To save offset and value */
+} __aligned(8);
+
+static const u32 imx6sl_mmdc_io_offset[] __initconst = {
+	0x30c, 0x310, 0x314, 0x318, /* DQM0 ~ DQM3 */
+	0x5c4, 0x5cc, 0x5d4, 0x5d8, /* GPR_B0DS ~ GPR_B3DS */
+	0x300, 0x31c, 0x338, 0x5ac, /*CAS, RAS, SDCLK_0, GPR_ADDS */
+	0x33c, 0x340, 0x5b0, 0x5c0, /*SODT0, SODT1, ,MODE_CTL, MODE */
+	0x330, 0x334, 0x320,	    /*SDCKE0, SDCK1, RESET */
+};
+
 static struct regulator *vbus_ldo;
-
 static struct regulator_dev *ldo2p5_dummy_regulator_rdev;
 static struct regulator_init_data ldo2p5_dummy_initdata = {
 	.constraints = {
@@ -45,31 +58,26 @@ static struct regulator_init_data ldo2p5_dummy_initdata = {
 };
 static int ldo2p5_dummy_enable;
 
-void (*imx6sl_wfi_in_iram_fn)(void *wfi_iram_base,
-	bool vbus_ldo, u32 audio_mode) = NULL;
-
+static void (*imx6sl_wfi_in_iram_fn)(void __iomem *iram_vbase,
+		int audio_mode, bool vbus_ldo);
 
 static int imx6sl_enter_wait(struct cpuidle_device *dev,
 			    struct cpuidle_driver *drv, int index)
 {
-	imx6_set_lpm(WAIT_UNCLOCKED);
-	if (ultra_low_bus_freq_mode || audio_bus_freq_mode) {
-		unsigned long ttbr1;
-		/*
-		 * Run WFI code from IRAM.
-		 * Drop the DDR freq to 1MHz and AHB to 3MHz
-		 * Also float DDR IO pads.
-		 */
-		ttbr1 = save_ttbr1();
-		imx6sl_wfi_in_iram_fn(wfi_iram_base, regulator_is_enabled(vbus_ldo),
-					audio_bus_freq_mode);
-		restore_ttbr1(ttbr1);
+	imx6q_set_lpm(WAIT_UNCLOCKED);
+	if (audio_bus_freq_mode || ultra_low_bus_freq_mode) {
+		imx6sl_wfi_in_iram_fn(wfi_iram_base, audio_bus_freq_mode,
+			regulator_is_enabled(vbus_ldo));
 	} else {
+		/*
+		 * Software workaround for ERR005311, see function
+		 * description for details.
+		 */
 		imx6sl_set_wait_clk(true);
 		cpu_do_idle();
 		imx6sl_set_wait_clk(false);
 	}
-	imx6_set_lpm(WAIT_CLOCKED);
+	imx6q_set_lpm(WAIT_CLOCKED);
 
 	return index;
 }
@@ -85,7 +93,7 @@ static struct cpuidle_driver imx6sl_cpuidle_driver = {
 			.exit_latency = 50,
 			.target_residency = 75,
 			.flags = CPUIDLE_FLAG_TIME_VALID |
-					CPUIDLE_FLAG_TIMER_STOP,
+				CPUIDLE_FLAG_TIMER_STOP,
 			.enter = imx6sl_enter_wait,
 			.name = "WAIT",
 			.desc = "Clock off",
@@ -97,28 +105,40 @@ static struct cpuidle_driver imx6sl_cpuidle_driver = {
 
 int __init imx6sl_cpuidle_init(void)
 {
-	unsigned int iram_paddr;
-	struct device_node *node;
-
-	node = of_find_compatible_node(NULL, NULL, "fsl,imx6sl-iomuxc");
-	if (!node) {
-		pr_err("failed to find imx6sl-iomuxc device tree data!\n");
-		return -EINVAL;
-	}
-	iomux_base = of_iomap(node, 0);
-	WARN(!iomux_base, "unable to map iomux registers\n");
+	struct imx6_cpuidle_pm_info *pm_info;
+	int i;
+	const u32 *mmdc_offset_array;
+	u32 wfi_code_size;
 
 	vbus_ldo = regulator_get(NULL, "ldo2p5-dummy");
 	if (IS_ERR(vbus_ldo))
 		vbus_ldo = NULL;
 
-	iram_paddr = MX6SL_WFI_IRAM_ADDR;
-	/* Calculate the virtual address of the code */
-	wfi_iram_base = (void *)IMX_IO_P2V(MX6Q_IRAM_TLB_BASE_ADDR) +
-				(iram_paddr - MX6Q_IRAM_TLB_BASE_ADDR);
+	wfi_iram_base = (void *)(iram_tlb_base_addr + MX6_CPUIDLE_IRAM_ADDR_OFFSET);
 
-	imx6sl_wfi_in_iram_fn = (void *)fncpy(wfi_iram_base,
-		&imx6sl_low_power_wfi, MX6SL_WFI_IRAM_CODE_SIZE);
+	/* Make sure wif_iram_base is 8 byte aligned. */
+	if ((uintptr_t)(wfi_iram_base) & (FNCPY_ALIGN - 1))
+		wfi_iram_base += FNCPY_ALIGN - ((uintptr_t)wfi_iram_base % (FNCPY_ALIGN));
+
+	pm_info = wfi_iram_base;
+	pm_info->pm_info_size = sizeof(*pm_info);
+	pm_info->mmdc_io_num = ARRAY_SIZE(imx6sl_mmdc_io_offset);
+	mmdc_offset_array = imx6sl_mmdc_io_offset;
+	pm_info->mmdc_base = (void __iomem *)IMX_IO_P2V(MX6Q_MMDC_P0_BASE_ADDR);
+	pm_info->ccm_base = (void __iomem *)IMX_IO_P2V(MX6Q_CCM_BASE_ADDR);
+	pm_info->anatop_base = (void __iomem *)IMX_IO_P2V(MX6Q_ANATOP_BASE_ADDR);
+	pm_info->iomuxc_base = (void __iomem *)IMX_IO_P2V(MX6Q_IOMUXC_BASE_ADDR);
+	pm_info->l2_base = (void __iomem *)IMX_IO_P2V(MX6Q_L2_BASE_ADDR);
+
+	/* Only save mmdc io offset, settings will be saved in asm code */
+	for (i = 0; i < pm_info->mmdc_io_num; i++)
+		pm_info->mmdc_io_val[i][0] = mmdc_offset_array[i];
+
+	/* calculate the wfi code size */
+	wfi_code_size = (&mx6sl_lpm_wfi_end -&mx6sl_lpm_wfi_start) *4;
+
+	imx6sl_wfi_in_iram_fn = (void *)fncpy(wfi_iram_base + sizeof(*pm_info),
+		&imx6sl_low_power_wfi, wfi_code_size);
 
 	return cpuidle_register(&imx6sl_cpuidle_driver, NULL);
 }
@@ -126,14 +146,12 @@ int __init imx6sl_cpuidle_init(void)
 static int imx_ldo2p5_dummy_enable(struct regulator_dev *rdev)
 {
 	ldo2p5_dummy_enable = 1;
-
 	return 0;
 }
 
 static int imx_ldo2p5_dummy_disable(struct regulator_dev *rdev)
 {
 	ldo2p5_dummy_enable = 0;
-
 	return 0;
 }
 
@@ -142,9 +160,8 @@ static int imx_ldo2p5_dummy_is_enable(struct regulator_dev *rdev)
 	return ldo2p5_dummy_enable;
 }
 
-
 static struct regulator_ops ldo2p5_dummy_ops = {
-	.enable	= imx_ldo2p5_dummy_enable,
+	.enable = imx_ldo2p5_dummy_enable,
 	.disable = imx_ldo2p5_dummy_disable,
 	.is_enabled = imx_ldo2p5_dummy_is_enable,
 };
@@ -162,7 +179,6 @@ static int ldo2p5_dummy_probe(struct platform_device *pdev)
 	struct regulator_config config = { };
 	int ret;
 
-#ifdef CONFIG_REGULATOR
 	config.dev = &pdev->dev;
 	config.init_data = &ldo2p5_dummy_initdata;
 	config.of_node = pdev->dev.of_node;
@@ -173,24 +189,21 @@ static int ldo2p5_dummy_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "Failed to register dummy ldo2p5 regulator: %d\n", ret);
 		return ret;
 	}
-#endif
-
 	return 0;
 }
 
 static const struct of_device_id imx_ldo2p5_dummy_ids[] = {
-	{ .compatible = "fsl,imx6-dummy-ldo2p5" },
-};
-MODULE_DEVICE_TABLE(of, imx_ldo2p5_dummy_ids);
+	{ .compatible = "fsl,imx6-dummy-ldo2p5"},
+	};
+MODULE_DEVICE_TABLE(ofm, imx_ldo2p5_dummy_ids);
 
 static struct platform_driver ldo2p5_dummy_driver = {
-	.probe	= ldo2p5_dummy_probe,
-	.driver	= {
-		.name	= "ldo2p5-dummy",
-		.owner	= THIS_MODULE,
+	.probe = ldo2p5_dummy_probe,
+	.driver = {
+		.name = "ldo2p5-dummy",
+		.owner = THIS_MODULE,
 		.of_match_table = imx_ldo2p5_dummy_ids,
 	},
 };
 
 module_platform_driver(ldo2p5_dummy_driver);
-

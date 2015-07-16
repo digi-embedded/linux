@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2013 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright (C) 2010-2014 Freescale Semiconductor, Inc. All Rights Reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -43,7 +43,7 @@
 #define MAX17135_HVINP_MAX_uV   20000000
 #define MAX17135_HVINP_STEP_uV   1000000
 #define MAX17135_HVINP_MIN_VAL         0
-#define MAX17135_HVINP_MAX_VAL         1
+#define MAX17135_HVINP_MAX_VAL        12
 
 #define MAX17135_HVINN_MIN_uV    5000000
 #define MAX17135_HVINN_MAX_uV   20000000

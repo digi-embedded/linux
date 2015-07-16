@@ -17,6 +17,11 @@
 #include <linux/io.h>
 #include <linux/mmc/host.h>
 
+struct sdhci_host_next {
+	unsigned int	sg_count;
+	s32		cookie;
+};
+
 struct sdhci_host {
 	/* Data set by hardware interface driver */
 	const char *hw_name;	/* Hardware bus name */
@@ -96,6 +101,7 @@ struct sdhci_host {
 #define SDHCI_QUIRK2_NO_1_8_V				(1<<2)
 #define SDHCI_QUIRK2_PRESET_VALUE_BROKEN		(1<<3)
 #define SDHCI_QUIRK2_CARD_ON_NEEDS_BUS_ON		(1<<4)
+#define SDHCI_QUIRK2_NOSTD_TIMEOUT_COUNTER		(1<<5)
 /* Controller has a non-standard host control register */
 #define SDHCI_QUIRK2_BROKEN_HOST_CONTROL		(1<<5)
 /* Controller does not support HS200 */
@@ -183,6 +189,7 @@ struct sdhci_host {
 #define SDHCI_TUNING_MODE_1	0
 	struct timer_list	tuning_timer;	/* Timer for tuning */
 
+	struct sdhci_host_next	next_data;
 	unsigned long private[0] ____cacheline_aligned;
 };
 #endif /* LINUX_MMC_SDHCI_H */

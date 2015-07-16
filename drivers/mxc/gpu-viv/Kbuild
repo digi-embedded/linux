@@ -1,6 +1,6 @@
 ##############################################################################
 #
-#    Copyright (C) 2005 - 2013 by Vivante Corp.
+#    Copyright (C) 2005 - 2014 by Vivante Corp.
 #
 #    This program is free software; you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -24,26 +24,55 @@
 #
 
 AQROOT := $(srctree)/drivers/mxc/gpu-viv
-AQARCH := $(AQROOT)/arch/XAQ2
-AQVGARCH := $(AQROOT)/arch/GC350
 
 include $(AQROOT)/config
 
 KERNEL_DIR ?= $(TOOL_DIR)/kernel
 
 OS_KERNEL_DIR   := hal/os/linux/kernel
-ARCH_KERNEL_DIR := arch/$(notdir $(AQARCH))/hal/kernel
-ARCH_VG_KERNEL_DIR := arch/$(notdir $(AQVGARCH))/hal/kernel
+ARCH_KERNEL_DIR := hal/kernel/arch
+ARCH_VG_KERNEL_DIR := hal/kernel/archvg
 HAL_KERNEL_DIR  := hal/kernel
+
+# Check and include platform config.
+ifneq ($(PLATFORM),)
+
+# Get platform config path.
+PLATFORM_CONFIG ?= $(AQROOT)/$(OS_KERNEL_DIR)/platform/$(PLATFORM).config
+
+# Check whether it exists.
+PLATFORM_CONFIG := $(wildcard $(PLATFORM_CONFIG))
+
+# Include it if exists.
+ifneq ($(PLATFORM_CONFIG),)
+include $(PLATFORM_CONFIG)
+endif
+
+endif
+
+MODULE_NAME ?= galcore
+CUSTOMER_ALLOCATOR_OBJS    ?=
+ALLOCATOR_ARRAY_H_LOCATION ?= $(OS_KERNEL_DIR)/allocator/default/
 
 EXTRA_CFLAGS += -Werror
 
 OBJS := $(OS_KERNEL_DIR)/gc_hal_kernel_device.o \
-        $(OS_KERNEL_DIR)/gc_hal_kernel_driver.o \
         $(OS_KERNEL_DIR)/gc_hal_kernel_linux.o \
         $(OS_KERNEL_DIR)/gc_hal_kernel_math.o \
         $(OS_KERNEL_DIR)/gc_hal_kernel_os.o \
-        $(OS_KERNEL_DIR)/gc_hal_kernel_debugfs.o
+        $(OS_KERNEL_DIR)/gc_hal_kernel_debugfs.o \
+        $(OS_KERNEL_DIR)/gc_hal_kernel_allocator.o \
+
+ifneq ($(CONFIG_IOMMU_SUPPORT),)
+OBJS += $(OS_KERNEL_DIR)/gc_hal_kernel_iommu.o
+endif
+
+ifneq ($(PLATFORM),)
+OBJS += $(OS_KERNEL_DIR)/gc_hal_kernel_probe.o
+OBJS += $(OS_KERNEL_DIR)/platform/$(PLATFORM).o
+else
+OBJS += $(OS_KERNEL_DIR)/gc_hal_kernel_driver.o
+endif
 
 OBJS += $(HAL_KERNEL_DIR)/gc_hal_kernel.o \
         $(HAL_KERNEL_DIR)/gc_hal_kernel_command.o \
@@ -58,6 +87,10 @@ OBJS += $(HAL_KERNEL_DIR)/gc_hal_kernel.o \
 OBJS += $(ARCH_KERNEL_DIR)/gc_hal_kernel_context.o \
         $(ARCH_KERNEL_DIR)/gc_hal_kernel_hardware.o
 
+ifeq ($(VIVANTE_ENABLE_3D), 1)
+OBJS += $(ARCH_KERNEL_DIR)/gc_hal_kernel_recorder.o
+endif
+
 ifeq ($(VIVANTE_ENABLE_VG), 1)
 OBJS +=\
           $(HAL_KERNEL_DIR)/gc_hal_kernel_vg.o\
@@ -69,7 +102,18 @@ OBJS +=\
 endif
 
 ifneq ($(CONFIG_SYNC),)
+EXTRA_CFLAGS += -Idrivers/staging/android
+
 OBJS += $(OS_KERNEL_DIR)/gc_hal_kernel_sync.o
+endif
+
+ifeq ($(SECURITY), 1)
+OBJS += $(OS_KERNEL_DIR)/gc_hal_kernel_security_channel.o \
+        $(HAL_KERNEL_DIR)/gc_hal_kernel_security.o
+endif
+
+ifneq ($(CUSTOMER_ALLOCATOR_OBJS),)
+OBJS += $(CUSTOMER_ALLOCATOR_OBJS)
 endif
 
 ifeq ($(KERNELRELEASE), )
@@ -92,12 +136,6 @@ else
 
 
 EXTRA_CFLAGS += -DLINUX -DDRIVER
-
-ifeq ($(ENUM_WORKAROUND), 1)
-EXTRA_CFLAGS += -DENUM_WORKAROUND=1
-else
-EXTRA_CFLAGS += -DENUM_WORKAROUND=0
-endif
 
 ifeq ($(FLAREON),1)
 EXTRA_CFLAGS += -DFLAREON
@@ -123,14 +161,8 @@ else
 EXTRA_CFLAGS += -DUSE_PLATFORM_DRIVER=0
 endif
 
-
 EXTRA_CFLAGS += -DVIVANTE_PROFILER=1
 EXTRA_CFLAGS += -DVIVANTE_PROFILER_CONTEXT=1
-
-
-ifeq ($(ANDROID), 1)
-EXTRA_CFLAGS += -DANDROID=1
-endif
 
 ifeq ($(ENABLE_GPU_CLOCK_BY_DRIVER), 1)
 EXTRA_CFLAGS += -DENABLE_GPU_CLOCK_BY_DRIVER=1
@@ -142,12 +174,6 @@ ifeq ($(USE_NEW_LINUX_SIGNAL), 1)
 EXTRA_CFLAGS += -DUSE_NEW_LINUX_SIGNAL=1
 else
 EXTRA_CFLAGS += -DUSE_NEW_LINUX_SIGNAL=0
-endif
-
-ifeq ($(NO_USER_DIRECT_ACCESS_FROM_KERNEL), 1)
-EXTRA_CFLAGS += -DNO_USER_DIRECT_ACCESS_FROM_KERNEL=1
-else
-EXTRA_CFLAGS += -DNO_USER_DIRECT_ACCESS_FROM_KERNEL=0
 endif
 
 ifeq ($(FORCE_ALL_VIDEO_MEMORY_CACHED), 1)
@@ -174,26 +200,28 @@ else
 EXTRA_CFLAGS += -DgcdCACHE_FUNCTION_UNIMPLEMENTED=0
 endif
 
-ifeq ($(SUPPORT_SWAP_RECTANGLE), 1)
-EXTRA_CFLAGS += -DgcdSUPPORT_SWAP_RECTANGLE=1
-else
-EXTRA_CFLAGS += -DgcdSUPPORT_SWAP_RECTANGLE=0
-endif
-
-ifeq ($(VIVANTE_ENABLE_VG), 1)
-EXTRA_CFLAGS += -DgcdENABLE_VG=1
-else
-EXTRA_CFLAGS += -DgcdENABLE_VG=0
-endif
-
 ifeq ($(CONFIG_SMP), y)
 EXTRA_CFLAGS += -DgcdSMP=1
 else
 EXTRA_CFLAGS += -DgcdSMP=0
 endif
 
-ifeq ($(VIVANTE_NO_3D),1)
-EXTRA_CFLAGS += -DVIVANTE_NO_3D
+ifeq ($(VIVANTE_ENABLE_3D),0)
+EXTRA_CFLAGS += -DgcdENABLE_3D=0
+else
+EXTRA_CFLAGS += -DgcdENABLE_3D=1
+endif
+
+ifeq ($(VIVANTE_ENABLE_2D),0)
+EXTRA_CFLAGS += -DgcdENABLE_2D=0
+else
+EXTRA_CFLAGS += -DgcdENABLE_2D=1
+endif
+
+ifeq ($(VIVANTE_ENABLE_VG),0)
+EXTRA_CFLAGS += -DgcdENABLE_VG=0
+else
+EXTRA_CFLAGS += -DgcdENABLE_VG=1
 endif
 
 ifeq ($(ENABLE_OUTER_CACHE_PATCH), 1)
@@ -216,17 +244,25 @@ ifeq ($(USE_BANK_ALIGNMENT), 1)
     endif
 endif
 
-ifneq ($(CONFIG_SYNC),)
-EXTRA_CFLAGS += -DgcdANDROID_NATIVE_FENCE_SYNC=1
+ifeq ($(gcdFPGA_BUILD), 1)
+EXTRA_CFLAGS += -DgcdFPGA_BUILD=1
+else
+EXTRA_CFLAGS += -DgcdFPGA_BUILD=0
+endif
+
+ifeq ($(SECURITY), 1)
+EXTRA_CFLAGS += -DgcdSECURITY=1
 endif
 
 EXTRA_CFLAGS += -I$(AQROOT)/hal/kernel/inc
 EXTRA_CFLAGS += -I$(AQROOT)/hal/kernel
-EXTRA_CFLAGS += -I$(AQARCH)/hal/kernel
+EXTRA_CFLAGS += -I$(AQROOT)/hal/kernel/arch
+EXTRA_CFLAGS += -I$(AQROOT)/hal/kernel/inc
 EXTRA_CFLAGS += -I$(AQROOT)/hal/os/linux/kernel
+EXTRA_CFLAGS += -I$(AQROOT)/$(ALLOCATOR_ARRAY_H_LOCATION)
 
 ifeq ($(VIVANTE_ENABLE_VG), 1)
-EXTRA_CFLAGS += -I$(AQVGARCH)/hal/kernel
+EXTRA_CFLAGS += -I$(AQROOT)/hal/kernel/archvg
 endif
 
 obj-$(CONFIG_MXC_GPU_VIV) += galcore.o

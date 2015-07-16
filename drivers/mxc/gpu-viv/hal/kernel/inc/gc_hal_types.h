@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (C) 2005 - 2013 by Vivante Corp.
+*    Copyright (C) 2005 - 2014 by Vivante Corp.
 *
 *    This program is free software; you can redistribute it and/or modify
 *    it under the terms of the GNU General Public License as published by
@@ -18,11 +18,35 @@
 *
 *****************************************************************************/
 
+
 #ifndef __gc_hal_types_h_
 #define __gc_hal_types_h_
 
 #include "gc_hal_version.h"
 #include "gc_hal_options.h"
+
+#if !defined(VIV_KMD)
+#if defined(__KERNEL__)
+#include "linux/version.h"
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24)
+    typedef unsigned long uintptr_t;
+#   endif
+#   include "linux/types.h"
+#elif defined(UNDER_CE)
+#include <crtdefs.h>
+#elif defined(_MSC_VER) && (_MSC_VER <= 1500)
+#include <crtdefs.h>
+#include "vadefs.h"
+#elif defined(__QNXNTO__)
+#define _QNX_SOURCE
+#include <stdint.h>
+#include <stddef.h>
+#else
+#include <stdlib.h>
+#include <stddef.h>
+#include <stdint.h>
+#endif
+#endif
 
 #ifdef _WIN32
 #pragma warning(disable:4127)   /* Conditional expression is constant (do { }
@@ -32,6 +56,8 @@
 #pragma warning(disable:4131)   /* Uses old-style declarator (for Bison and
                                 ** Flex generated files). */
 #pragma warning(disable:4206)   /* Translation unit is empty. */
+#pragma warning(disable:4214)   /* Nonstandard extension used :
+                                ** bit field types other than int. */
 #endif
 
 #ifdef __cplusplus
@@ -43,26 +69,27 @@ extern "C" {
 */
 
 #if defined(__GNUC__)
-#   define gcdHAS_ELLIPSES      1       /* GCC always has it. */
+#   define gcdHAS_ELLIPSIS      1       /* GCC always has it. */
 #elif defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L)
-#   define gcdHAS_ELLIPSES      1       /* C99 has it. */
+#   define gcdHAS_ELLIPSIS      1       /* C99 has it. */
 #elif defined(_MSC_VER) && (_MSC_VER >= 1500)
-#   define gcdHAS_ELLIPSES      1       /* MSVC 2007+ has it. */
+#   define gcdHAS_ELLIPSIS      1       /* MSVC 2007+ has it. */
 #elif defined(UNDER_CE)
 #if UNDER_CE >= 600
-#       define gcdHAS_ELLIPSES  1
+#       define gcdHAS_ELLIPSIS  1
 #   else
-#       define gcdHAS_ELLIPSES  0
+#       define gcdHAS_ELLIPSIS  0
 #   endif
 #else
-#   error "gcdHAS_ELLIPSES: Platform could not be determined"
+#   error "gcdHAS_ELLIPSIS: Platform could not be determined"
 #endif
 
 /******************************************************************************\
 ************************************ Keyword ***********************************
 \******************************************************************************/
-
-#if (defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L))
+#if defined(ANDROID) && defined(__BIONIC_FORTIFY)
+#   define gcmINLINE            __inline__ __attribute__ ((always_inline)) __attribute__ ((gnu_inline)) __attribute__ ((artificial))
+#elif ((defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L)) || defined(__APPLE__))
 #   define gcmINLINE            inline      /* C99 keyword. */
 #elif defined(__GNUC__)
 #   define gcmINLINE            __inline__  /* GNU keyword. */
@@ -127,7 +154,6 @@ typedef int                     gctBOOL;
 typedef gctBOOL *               gctBOOL_PTR;
 
 typedef int                     gctINT;
-typedef long                    gctLONG;
 typedef signed char             gctINT8;
 typedef signed short            gctINT16;
 typedef signed int              gctINT32;
@@ -144,7 +170,7 @@ typedef unsigned char           gctUINT8;
 typedef unsigned short          gctUINT16;
 typedef unsigned int            gctUINT32;
 typedef unsigned long long      gctUINT64;
-typedef unsigned long           gctUINTPTR_T;
+typedef uintptr_t               gctUINTPTR_T;
 
 typedef gctUINT *               gctUINT_PTR;
 typedef gctUINT8 *              gctUINT8_PTR;
@@ -152,14 +178,33 @@ typedef gctUINT16 *             gctUINT16_PTR;
 typedef gctUINT32 *             gctUINT32_PTR;
 typedef gctUINT64 *             gctUINT64_PTR;
 
-typedef unsigned long           gctSIZE_T;
+typedef size_t                  gctSIZE_T;
 typedef gctSIZE_T *             gctSIZE_T_PTR;
+typedef gctUINT32               gctTRACE;
 
 #ifdef __cplusplus
 #   define gcvNULL              0
 #else
 #   define gcvNULL              ((void *) 0)
 #endif
+
+#define gcvMAXINT8              0x7f
+#define gcvMININT8              0x80
+#define gcvMAXINT16             0x7fff
+#define gcvMININT16             0x8000
+#define gcvMAXINT32             0x7fffffff
+#define gcvMININT32             0x80000000
+#define gcvMAXINT64             0x7fffffffffffffff
+#define gcvMININT64             0x8000000000000000
+#define gcvMAXUINT8             0xff
+#define gcvMINUINT8             0x0
+#define gcvMAXUINT16            0xffff
+#define gcvMINUINT16            0x8000
+#define gcvMAXUINT32            0xffffffff
+#define gcvMINUINT32            0x80000000
+#define gcvMAXUINT64            0xffffffffffffffff
+#define gcvMINUINT64            0x8000000000000000
+#define gcvMAXUINTPTR_T         (~(gctUINTPTR_T)0)
 
 typedef float                   gctFLOAT;
 typedef signed int              gctFIXED_POINT;
@@ -172,8 +217,9 @@ typedef void *                  gctSIGNAL;
 typedef void *                  gctWINDOW;
 typedef void *                  gctIMAGE;
 typedef void *                  gctSYNC_POINT;
+typedef void *                  gctSHBUF;
 
-typedef void *					gctSEMAPHORE;
+typedef void *                  gctSEMAPHORE;
 
 typedef void *                  gctPOINTER;
 typedef const void *            gctCONST_POINTER;
@@ -202,6 +248,90 @@ gcuFLOAT_UINT32;
 #define gcvONE_X                ((gctFIXED_POINT) 0x00010000)
 #define gcvNEGONE_X             ((gctFIXED_POINT) 0xFFFF0000)
 #define gcvTWO_X                ((gctFIXED_POINT) 0x00020000)
+
+
+
+#define gcmFIXEDCLAMP_NEG1_TO_1(_x) \
+    (((_x) < gcvNEGONE_X) \
+        ? gcvNEGONE_X \
+        : (((_x) > gcvONE_X) \
+            ? gcvONE_X \
+            : (_x)))
+
+#define gcmFLOATCLAMP_NEG1_TO_1(_f) \
+    (((_f) < -1.0f) \
+        ? -1.0f \
+        : (((_f) > 1.0f) \
+            ? 1.0f \
+            : (_f)))
+
+
+#define gcmFIXEDCLAMP_0_TO_1(_x) \
+    (((_x) < 0) \
+        ? 0 \
+        : (((_x) > gcvONE_X) \
+            ? gcvONE_X \
+            : (_x)))
+
+#define gcmFLOATCLAMP_0_TO_1(_f) \
+    (((_f) < 0.0f) \
+        ? 0.0f \
+        : (((_f) > 1.0f) \
+            ? 1.0f \
+            : (_f)))
+
+
+/******************************************************************************\
+******************************* Multicast Values *******************************
+\******************************************************************************/
+
+/* Value types. */
+typedef enum _gceVALUE_TYPE
+{
+    gcvVALUE_UINT = 0x0,
+    gcvVALUE_FIXED,
+    gcvVALUE_FLOAT,
+    gcvVALUE_INT,
+
+    /*
+    ** The value need be unsigned denormalized. clamp (0.0-1.0) should be done first.
+    */
+    gcvVALUE_FLAG_UNSIGNED_DENORM = 0x00010000,
+
+    /*
+    ** The value need be signed denormalized. clamp (-1.0-1.0) should be done first.
+    */
+    gcvVALUE_FLAG_SIGNED_DENORM   = 0x00020000,
+
+    /*
+    ** The value need to gammar
+    */
+    gcvVALUE_FLAG_GAMMAR          = 0x00040000,
+
+    /*
+    ** The value need to convert from float to float16
+    */
+    gcvVALUE_FLAG_FLOAT_TO_FLOAT16 = 0x0080000,
+
+    /*
+    ** Mask for flag field.
+    */
+    gcvVALUE_FLAG_MASK            = 0xFFFF0000,
+}
+gceVALUE_TYPE;
+
+/* Value unions. */
+typedef union _gcuVALUE
+{
+    gctUINT                     uintValue;
+    gctFIXED_POINT              fixedValue;
+    gctFLOAT                    floatValue;
+    gctINT                      intValue;
+}
+gcuVALUE;
+
+
+
 
 /* Stringizing macro. */
 #define gcmSTRING(Value)        #Value
@@ -255,6 +385,7 @@ gcs2D_PROFILE;
 
 #define IN
 #define OUT
+#define INOUT
 #define OPTIONAL
 
 /******************************************************************************\
@@ -282,10 +413,8 @@ typedef enum _gceSTATUS
     gcvSTATUS_INVALID_CONFIG        =   15,
     gcvSTATUS_CHANGED               =   16,
     gcvSTATUS_NOT_SUPPORT_DITHER    =   17,
-	gcvSTATUS_EXECUTED				=	18,
+    gcvSTATUS_EXECUTED              =   18,
     gcvSTATUS_TERMINATE             =   19,
-
-    gcvSTATUS_CONVERT_TO_SINGLE_STREAM    =   20,
 
     gcvSTATUS_INVALID_ARGUMENT      =   -1,
     gcvSTATUS_INVALID_OBJECT        =   -2,
@@ -317,20 +446,37 @@ typedef enum _gceSTATUS
     gcvSTATUS_NOT_MULTI_PIPE_ALIGNED =   -28,
 
     /* Linker errors. */
-    gcvSTATUS_GLOBAL_TYPE_MISMATCH  =   -1000,
-    gcvSTATUS_TOO_MANY_ATTRIBUTES   =   -1001,
-    gcvSTATUS_TOO_MANY_UNIFORMS     =   -1002,
-    gcvSTATUS_TOO_MANY_VARYINGS     =   -1003,
-    gcvSTATUS_UNDECLARED_VARYING    =   -1004,
-    gcvSTATUS_VARYING_TYPE_MISMATCH =   -1005,
-    gcvSTATUS_MISSING_MAIN          =   -1006,
-    gcvSTATUS_NAME_MISMATCH         =   -1007,
-    gcvSTATUS_INVALID_INDEX         =   -1008,
-    gcvSTATUS_UNIFORM_TYPE_MISMATCH =   -1009,
+    gcvSTATUS_GLOBAL_TYPE_MISMATCH              =   -1000,
+    gcvSTATUS_TOO_MANY_ATTRIBUTES               =   -1001,
+    gcvSTATUS_TOO_MANY_UNIFORMS                 =   -1002,
+    gcvSTATUS_TOO_MANY_VARYINGS                 =   -1003,
+    gcvSTATUS_UNDECLARED_VARYING                =   -1004,
+    gcvSTATUS_VARYING_TYPE_MISMATCH             =   -1005,
+    gcvSTATUS_MISSING_MAIN                      =   -1006,
+    gcvSTATUS_NAME_MISMATCH                     =   -1007,
+    gcvSTATUS_INVALID_INDEX                     =   -1008,
+    gcvSTATUS_UNIFORM_MISMATCH                  =   -1009,
+    gcvSTATUS_UNSAT_LIB_SYMBOL                  =   -1010,
+    gcvSTATUS_TOO_MANY_SHADERS                  =   -1011,
+    gcvSTATUS_LINK_INVALID_SHADERS              =   -1012,
+    gcvSTATUS_CS_NO_WORKGROUP_SIZE              =   -1013,
+    gcvSTATUS_LINK_LIB_ERROR                    =   -1014,
+    gcvSTATUS_SHADER_VERSION_MISMATCH           =   -1015,
+    gcvSTATUS_TOO_MANY_INSTRUCTION              =   -1016,
+    gcvSTATUS_SSBO_MISMATCH                     =   -1017,
+    gcvSTATUS_TOO_MANY_OUTPUT                   =   -1018,
+    gcvSTATUS_TOO_MANY_INPUT                    =   -1019,
+    gcvSTATUS_NOT_SUPPORT_CL                    =   -1020,
+    gcvSTATUS_NOT_SUPPORT_INTEGER               =   -1021,
+    gcvSTATUS_UNIFORM_TYPE_MISMATCH             =   -1022,
+    gcvSTATUS_TOO_MANY_SAMPLER                  =   -1023,
 
     /* Compiler errors. */
-    gcvSTATUS_COMPILER_FE_PREPROCESSOR_ERROR = -2000,
-    gcvSTATUS_COMPILER_FE_PARSER_ERROR = -2001,
+    gcvSTATUS_COMPILER_FE_PREPROCESSOR_ERROR    =   -2000,
+    gcvSTATUS_COMPILER_FE_PARSER_ERROR          =   -2001,
+
+    /* Recompilation Errors */
+    gcvSTATUS_RECOMPILER_CONVERT_UNIMPLEMENTED  =   -3000,
 }
 gceSTATUS;
 
@@ -566,254 +712,6 @@ gceSTATUS;
     ((Address & (~0U << Name ## _LSB)) == (Name ## _Address >> 2)) \
 )
 
-/*******************************************************************************
-**
-**  A set of macros to aid state loading.
-**
-**  ARGUMENTS:
-**
-**      CommandBuffer   Pointer to a gcoCMDBUF object.
-**      StateDelta      Pointer to a gcsSTATE_DELTA state delta structure.
-**      Memory          Destination memory pointer of gctUINT32_PTR type.
-**      PartOfContext   Whether or not the state is a part of the context.
-**      FixedPoint      Whether or not the state is of the fixed point format.
-**      Count           Number of consecutive states to be loaded.
-**      Address         State address.
-**      Data            Data to be set to the state.
-*/
-
-/*----------------------------------------------------------------------------*/
-
-#if gcmIS_DEBUG(gcdDEBUG_CODE)
-
-#   define gcmSTORELOADSTATE(CommandBuffer, Memory, Address, Count) \
-        CommandBuffer->lastLoadStatePtr     = gcmPTR_TO_UINT64(Memory); \
-        CommandBuffer->lastLoadStateAddress = Address; \
-        CommandBuffer->lastLoadStateCount   = Count
-
-#   define gcmVERIFYLOADSTATE(CommandBuffer, Memory, Address) \
-        gcmASSERT( \
-            (gctUINT) (Memory  - gcmUINT64_TO_TYPE(CommandBuffer->lastLoadStatePtr, gctUINT32_PTR) - 1) \
-            == \
-            (gctUINT) (Address - CommandBuffer->lastLoadStateAddress) \
-            ); \
-        \
-        gcmASSERT(CommandBuffer->lastLoadStateCount > 0); \
-        \
-        CommandBuffer->lastLoadStateCount -= 1
-
-#   define gcmVERIFYLOADSTATEDONE(CommandBuffer) \
-        gcmASSERT(CommandBuffer->lastLoadStateCount == 0)
-
-#else
-
-#   define gcmSTORELOADSTATE(CommandBuffer, Memory, Address, Count)
-#   define gcmVERIFYLOADSTATE(CommandBuffer, Memory, Address)
-#   define gcmVERIFYLOADSTATEDONE(CommandBuffer)
-
-#endif
-
-#if gcdSECURE_USER
-
-#   define gcmDEFINESECUREUSER() \
-        gctUINT         __secure_user_offset__; \
-        gctUINT32_PTR   __secure_user_hintArray__;
-
-#   define gcmBEGINSECUREUSER() \
-        __secure_user_offset__ = reserve->lastOffset; \
-        \
-        __secure_user_hintArray__ = gcmUINT64_TO_PTR(reserve->hintArrayTail)
-
-#   define gcmENDSECUREUSER() \
-        reserve->hintArrayTail = gcmPTR_TO_UINT64(__secure_user_hintArray__)
-
-#   define gcmSKIPSECUREUSER() \
-        __secure_user_offset__ += gcmSIZEOF(gctUINT32)
-
-#   define gcmUPDATESECUREUSER() \
-        *__secure_user_hintArray__ = __secure_user_offset__; \
-        \
-        __secure_user_offset__    += gcmSIZEOF(gctUINT32); \
-        __secure_user_hintArray__ += 1
-
-#else
-
-#   define gcmDEFINESECUREUSER()
-#   define gcmBEGINSECUREUSER()
-#   define gcmENDSECUREUSER()
-#   define gcmSKIPSECUREUSER()
-#   define gcmUPDATESECUREUSER()
-
-#endif
-
-/*----------------------------------------------------------------------------*/
-
-#if gcdDUMP
-#   define gcmDUMPSTATEDATA(StateDelta, FixedPoint, Address, Data) \
-        if (FixedPoint) \
-        { \
-            gcmDUMP(gcvNULL, "@[state.x 0x%04X 0x%08X]", \
-                Address, Data \
-                ); \
-        } \
-        else \
-        { \
-            gcmDUMP(gcvNULL, "@[state 0x%04X 0x%08X]", \
-                Address, Data \
-                ); \
-        }
-#else
-#   define gcmDUMPSTATEDATA(StateDelta, FixedPoint, Address, Data)
-#endif
-
-/*----------------------------------------------------------------------------*/
-
-#define gcmDEFINESTATEBUFFER(CommandBuffer, StateDelta, Memory, ReserveSize) \
-    gcmDEFINESECUREUSER() \
-    gctSIZE_T ReserveSize; \
-    gcoCMDBUF CommandBuffer; \
-    gctUINT32_PTR Memory; \
-    gcsSTATE_DELTA_PTR StateDelta
-
-#define gcmBEGINSTATEBUFFER(Hardware, CommandBuffer, StateDelta, Memory, ReserveSize) \
-{ \
-    gcmONERROR(gcoBUFFER_Reserve( \
-        Hardware->buffer, ReserveSize, gcvTRUE, &CommandBuffer \
-        )); \
-    \
-    Memory =  gcmUINT64_TO_PTR(CommandBuffer->lastReserve); \
-    \
-    StateDelta = Hardware->delta; \
-    \
-    gcmBEGINSECUREUSER(); \
-}
-
-#define gcmENDSTATEBUFFER(CommandBuffer, Memory, ReserveSize) \
-{ \
-    gcmENDSECUREUSER(); \
-    \
-    gcmASSERT( \
-        gcmUINT64_TO_TYPE(CommandBuffer->lastReserve, gctUINT8_PTR) + ReserveSize \
-        == \
-         (gctUINT8_PTR) Memory \
-        ); \
-}
-
-/*----------------------------------------------------------------------------*/
-
-#define gcmBEGINSTATEBATCH(CommandBuffer, Memory, FixedPoint, Address, Count) \
-{ \
-    gcmASSERT(((Memory - gcmUINT64_TO_TYPE(CommandBuffer->lastReserve, gctUINT32_PTR)) & 1) == 0); \
-    gcmASSERT((gctUINT32)Count <= 1024); \
-    \
-    gcmVERIFYLOADSTATEDONE(CommandBuffer); \
-    \
-    gcmSTORELOADSTATE(CommandBuffer, Memory, Address, Count); \
-    \
-    *Memory++ \
-        = gcmSETFIELDVALUE(0, AQ_COMMAND_LOAD_STATE_COMMAND, OPCODE,  LOAD_STATE) \
-        | gcmSETFIELD     (0, AQ_COMMAND_LOAD_STATE_COMMAND, FLOAT,   FixedPoint) \
-        | gcmSETFIELD     (0, AQ_COMMAND_LOAD_STATE_COMMAND, COUNT,   Count) \
-        | gcmSETFIELD     (0, AQ_COMMAND_LOAD_STATE_COMMAND, ADDRESS, Address); \
-    \
-    gcmSKIPSECUREUSER(); \
-}
-
-#define gcmENDSTATEBATCH(CommandBuffer, Memory) \
-{ \
-    gcmVERIFYLOADSTATEDONE(CommandBuffer); \
-    \
-    gcmASSERT(((Memory - gcmUINT64_TO_TYPE(CommandBuffer->lastReserve, gctUINT32_PTR)) & 1) == 0); \
-}
-
-/*----------------------------------------------------------------------------*/
-
-#define gcmSETSTATEDATA(StateDelta, CommandBuffer, Memory, FixedPoint, \
-                        Address, Data) \
-{ \
-    gctUINT32 __temp_data32__; \
-    \
-    gcmVERIFYLOADSTATE(CommandBuffer, Memory, Address); \
-    \
-    __temp_data32__ = Data; \
-    \
-    *Memory++ = __temp_data32__; \
-    \
-    gcoHARDWARE_UpdateDelta( \
-        StateDelta, FixedPoint, Address, 0, __temp_data32__ \
-        ); \
-    \
-    gcmDUMPSTATEDATA(StateDelta, FixedPoint, Address, __temp_data32__); \
-    \
-    gcmUPDATESECUREUSER(); \
-}
-
-#define gcmSETCTRLSTATE(StateDelta, CommandBuffer, Memory, Address, Data) \
-{ \
-    gctUINT32 __temp_data32__; \
-    \
-    gcmVERIFYLOADSTATE(CommandBuffer, Memory, Address); \
-    \
-    __temp_data32__ = Data; \
-    \
-    *Memory++ = __temp_data32__; \
-    \
-    gcmDUMPSTATEDATA(StateDelta, gcvFALSE, Address, __temp_data32__); \
-    \
-    gcmSKIPSECUREUSER(); \
-}
-
-#define gcmSETFILLER(CommandBuffer, Memory) \
-{ \
-    gcmVERIFYLOADSTATEDONE(CommandBuffer); \
-    \
-    Memory += 1; \
-    \
-    gcmSKIPSECUREUSER(); \
-}
-
-/*----------------------------------------------------------------------------*/
-
-#define gcmSETSINGLESTATE(StateDelta, CommandBuffer, Memory, FixedPoint, \
-                          Address, Data) \
-{ \
-    gcmBEGINSTATEBATCH(CommandBuffer, Memory, FixedPoint, Address, 1); \
-    gcmSETSTATEDATA(StateDelta, CommandBuffer, Memory, FixedPoint, \
-                    Address, Data); \
-    gcmENDSTATEBATCH(CommandBuffer, Memory); \
-}
-
-#define gcmSETSINGLECTRLSTATE(StateDelta, CommandBuffer, Memory, FixedPoint, \
-                              Address, Data) \
-{ \
-    gcmBEGINSTATEBATCH(CommandBuffer, Memory, FixedPoint, Address, 1); \
-    gcmSETCTRLSTATE(StateDelta, CommandBuffer, Memory, Address, Data); \
-    gcmENDSTATEBATCH(CommandBuffer, Memory); \
-}
-
-
-/*******************************************************************************
-**
-**  gcmSETSTARTDECOMMAND
-**
-**      Form a START_DE command.
-**
-**  ARGUMENTS:
-**
-**      Memory          Destination memory pointer of gctUINT32_PTR type.
-**      Count           Number of the rectangles.
-*/
-
-#define gcmSETSTARTDECOMMAND(Memory, Count) \
-{ \
-    *Memory++ \
-        = gcmSETFIELDVALUE(0, AQ_COMMAND_START_DE_COMMAND, OPCODE,     START_DE) \
-        | gcmSETFIELD     (0, AQ_COMMAND_START_DE_COMMAND, COUNT,      Count) \
-        | gcmSETFIELD     (0, AQ_COMMAND_START_DE_COMMAND, DATA_COUNT, 0); \
-    \
-    *Memory++ = 0xDEADDEED; \
-}
-
 /******************************************************************************\
 ******************************** Ceiling Macro ********************************
 \******************************************************************************/
@@ -830,6 +728,10 @@ gceSTATUS;
 #define gcmABS(x)               (((x) < 0)    ? -(x) :  (x))
 #define gcmNEG(x)               (((x) < 0)    ?  (x) : -(x))
 
+/******************************************************************************\
+******************************** Bit Macro ********************************
+\******************************************************************************/
+#define gcmBITSET(x, y)         ((x) & (y))
 /*******************************************************************************
 **
 **  gcmPTR2INT
@@ -840,17 +742,15 @@ gceSTATUS;
 **
 **      p       Pointer value.
 */
-#if defined(_WIN32) || (defined(__LP64__) && __LP64__)
-#   define gcmPTR2INT(p) \
-    ( \
-        (gctUINT32) (gctUINT64) (p) \
-    )
-#else
-#   define gcmPTR2INT(p) \
-    ( \
-        (gctUINT32) (p) \
-    )
-#endif
+#define gcmPTR2INT(p) \
+( \
+    (gctUINTPTR_T) (p) \
+)
+
+#define gcmPTR2INT32(p) \
+( \
+    (gctUINT32)(gctUINTPTR_T) (p) \
+)
 
 /*******************************************************************************
 **
@@ -862,17 +762,11 @@ gceSTATUS;
 **
 **      v       Integer value.
 */
-#ifdef __LP64__
-#   define gcmINT2PTR(i) \
-    ( \
-        (gctPOINTER) (gctINT64) (i) \
-    )
-#else
-#   define gcmINT2PTR(i) \
-    ( \
-        (gctPOINTER) (i) \
-    )
-#endif
+
+#define gcmINT2PTR(i) \
+( \
+    (gctPOINTER) (gctUINTPTR_T)(i) \
+)
 
 /*******************************************************************************
 **
@@ -887,9 +781,15 @@ gceSTATUS;
 */
 #define gcmOFFSETOF(s, field) \
 ( \
-    gcmPTR2INT(& (((struct s *) 0)->field)) \
+    gcmPTR2INT32(& (((struct s *) 0)->field)) \
 )
 
+/*******************************************************************************
+**
+** gcmSWAB32
+**
+**      Return a value with all bytes in the 32 bit argument swapped.
+*/
 #define gcmSWAB32(x) ((gctUINT32)( \
         (((gctUINT32)(x) & (gctUINT32)0x000000FFUL) << 24) | \
         (((gctUINT32)(x) & (gctUINT32)0x0000FF00UL) << 8)  | \
@@ -942,19 +842,12 @@ typedef struct _gcsHAL_FRAME_INFO
     OUT gctUINT                 readRequests[8];
     OUT gctUINT                 writeRequests[8];
 
-    /* FE counters. */
-    OUT gctUINT                 drawCount;
-    OUT gctUINT                 vertexOutCount;
-    OUT gctUINT                 vertexMissCount;
-
     /* 3D counters. */
     OUT gctUINT                 vertexCount;
     OUT gctUINT                 primitiveCount;
     OUT gctUINT                 rejectedPrimitives;
     OUT gctUINT                 culledPrimitives;
     OUT gctUINT                 clippedPrimitives;
-    OUT gctUINT                 droppedPrimitives;
-    OUT gctUINT                 frustumClippedPrimitives;
     OUT gctUINT                 outPrimitives;
     OUT gctUINT                 inPrimitives;
     OUT gctUINT                 culledQuadCount;
@@ -972,96 +865,17 @@ typedef struct _gcsHAL_FRAME_INFO
     OUT gctUINT                 shaderCycles;
     OUT gctUINT                 vsInstructionCount;
     OUT gctUINT                 vsTextureCount;
-    OUT gctUINT                 vsBranchCount;
-    OUT gctUINT                 vsVertices;
     OUT gctUINT                 psInstructionCount;
     OUT gctUINT                 psTextureCount;
-    OUT gctUINT                 psBranchCount;
-    OUT gctUINT                 psPixels;
 
     /* Texture counters. */
     OUT gctUINT                 bilinearRequests;
     OUT gctUINT                 trilinearRequests;
-    OUT gctUINT                 txBytes8[2];
+    OUT gctUINT                 txBytes8;
     OUT gctUINT                 txHitCount;
     OUT gctUINT                 txMissCount;
 }
 gcsHAL_FRAME_INFO;
-
-typedef enum _gcePATCH_ID
-{
-    gcePATCH_UNKNOWN = 0xFFFFFFFF,
-
-    /* Benchmark list*/
-    gcePATCH_GLB11 = 0x0,
-    gcePATCH_GLB21,
-    gcePATCH_GLB25,
-    gcePATCH_GLB27,
-
-    gcePATCH_BM21,
-    gcePATCH_MM,
-    gcePATCH_MM06,
-    gcePATCH_MM07,
-    gcePATCH_QUADRANT,
-    gcePATCH_ANTUTU,
-    gcePATCH_SMARTBENCH,
-    gcePATCH_JPCT,
-    gcePATCH_NENAMARK,
-    gcePATCH_NENAMARK2,
-    gcePATCH_NEOCORE,
-    gcePATCH_GLB,
-    gcePATCH_GB,
-    gcePATCH_RTESTVA,
-    gcePATCH_BMX,
-    gcePATCH_BMGUI,
-    gcePATCH_ANDROID_CTS_MEDIA_PRESENTATIONTIME,
-
-    /* Game list */
-    gcePATCH_NBA2013,
-    gcePATCH_BARDTALE,
-    gcePATCH_BUSPARKING3D,
-    gcePATCH_FISHBOODLE,
-    gcePATCH_SUBWAYSURFER,
-    gcePATCH_HIGHWAYDRIVER,
-    gcePATCH_PREMIUM,
-    gcePATCH_RACEILLEGAL,
-    gcePATCH_BLABLA,
-    gcePATCH_MEGARUN,
-    gcePATCH_GALAXYONFIRE2,
-    gcePATCH_GLOFTR3HM,
-    gcePATCH_GLOFTSXHM,
-    gcePATCH_GLOFTF3HM,
-    gcePATCH_GLOFTGANG,
-    gcePATCH_XRUNNER,
-    gcePATCH_WP,
-    gcePATCH_DEVIL,
-    gcePATCH_HOLYARCH,
-    gcePATCH_MUSE,
-    gcePATCH_SG,
-    gcePATCH_SIEGECRAFT,
-    gcePATCH_CARCHALLENGE,
-    gcePATCH_HEROESCALL,
-    gcePATCH_MONOPOLY,
-    gcePATCH_CTGL20,
-    gcePATCH_FIREFOX,
-    gcePATCH_CHORME,
-    gcePATCH_DUOKANTV,
-    gcePATCH_TESTAPP,
-    gcePATCH_GOOGLEEARTH,
-    gcePATCH_SF4,
-    gcePATCH_SPEEDRACE,
-    gcePATCH_AIRNAVY,
-    gcePATCH_F18NEW,
-    gcePATCH_F18,
-    gcePATCH_WISTONESG,
-    gcvPATCH_VECUNIT_RED,
-    gcvPATCH_NAMESGAS,
-    gcvPATCH_AFTERBURNER,
-    gcvPATCH_UIMARK,
-    /* Count enum*/
-    gcePATCH_COUNT,
-}
-gcePATCH_ID;
 
 #if gcdLINK_QUEUE_SIZE
 typedef struct _gckLINKDATA * gckLINKDATA;
@@ -1069,7 +883,7 @@ struct _gckLINKDATA
 {
     gctUINT32                   start;
     gctUINT32                   end;
-    gctINT                      pid;
+    gctUINT32                   pid;
 };
 
 typedef struct _gckLINKQUEUE * gckLINKQUEUE;
@@ -1081,6 +895,35 @@ struct _gckLINKQUEUE
     gctUINT32                   count;
 };
 #endif
+
+#define gcdENTRY_QUEUE_SIZE 256
+typedef struct _gckENTRYDATA * gckENTRYDATA;
+struct _gckENTRYDATA
+{
+    gctUINT32                   physical;
+    gctUINT32                   bytes;
+};
+
+typedef struct _gckENTRYQUEUE * gckENTRYQUEUE;
+struct _gckENTRYQUEUE
+{
+    struct _gckENTRYDATA        data[gcdENTRY_QUEUE_SIZE];
+    gctUINT32                   rear;
+    gctUINT32                   front;
+    gctUINT32                   count;
+};
+
+typedef enum _gceTRACEMODE
+{
+    gcvTRACEMODE_NONE     = 0,
+    gcvTRACEMODE_FULL     = 1,
+    gcvTRACEMODE_LOGGER   = 2,
+    gcvTRACEMODE_PRE      = 3,
+    gcvTRACEMODE_POST     = 4,
+    gcvTRACEMODE_SYSTRACE = 5,
+
+} gceTRACEMODE;
+
 
 #ifdef __cplusplus
 }

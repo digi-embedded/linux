@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2014 Freescale Semiconductor, Inc.
+ * Copyright 2011-2015 Freescale Semiconductor, Inc.
  * Copyright 2011 Linaro Ltd.
  *
  * The code contained herein is licensed under the GNU General Public
@@ -14,113 +14,145 @@
 #include <linux/delay.h>
 #include <linux/io.h>
 #include <linux/irq.h>
-#include <linux/module.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
 #include <linux/of_irq.h>
 #include <linux/platform_device.h>
-#include <linux/irqchip/arm-gic.h>
+#include <linux/pm_domain.h>
 #include <linux/regulator/consumer.h>
-#include <linux/regulator/driver.h>
-#include <linux/regulator/machine.h>
+#include <linux/irqchip/arm-gic.h>
 #include "common.h"
 #include "hardware.h"
 
+#define GPC_CNTR		0x000
+#define GPC_CNTR_PCIE_PHY_PDU_SHIFT	0x7
+#define GPC_CNTR_PCIE_PHY_PDN_SHIFT	0x6
+#define PGC_PCIE_PHY_CTRL		0x200
+#define PGC_PCIE_PHY_PDN_EN		0x1
 #define GPC_IMR1		0x008
-#define GPC_PGC_CPU_PDN		0x2a0
+#define GPC_PGC_MF_PDN		0x220
 #define GPC_PGC_GPU_PDN		0x260
 #define GPC_PGC_GPU_PUPSCR	0x264
 #define GPC_PGC_GPU_PDNSCR	0x268
+#define GPC_PGC_CPU_PDN		0x2a0
 #define GPC_PGC_DISP_PGCR_OFFSET	0x240
 #define GPC_PGC_DISP_PUPSCR_OFFSET	0x244
 #define GPC_PGC_DISP_PDNSCR_OFFSET	0x248
 #define GPC_PGC_DISP_SR_OFFSET		0x24c
-#define GPC_PGC_GPU_SW_SHIFT		0
-#define GPC_PGC_GPU_SW_MASK		0x3f
-#define GPC_PGC_GPU_SW2ISO_SHIFT	8
-#define GPC_PGC_GPU_SW2ISO_MASK		0x3f
-#define GPC_PGC_CPU_PUPSCR	0x2a4
-#define GPC_PGC_CPU_PDNSCR	0x2a8
-#define GPC_PGC_CPU_SW_SHIFT		0
-#define GPC_PGC_CPU_SW_MASK		0x3f
-#define GPC_PGC_CPU_SW2ISO_SHIFT	8
-#define GPC_PGC_CPU_SW2ISO_MASK		0x3f
-#define GPC_CNTR		0x0
-#define GPC_CNTR_PU_UP_REQ_SHIFT	0x1
-#define GPC_CNTR_PU_DOWN_REQ_SHIFT	0x0
+#define GPC_M4_LPSR		0x2c
+#define GPC_M4_LPSR_M4_SLEEPING_SHIFT	4
+#define GPC_M4_LPSR_M4_SLEEPING_MASK	0x1
+#define GPC_M4_LPSR_M4_SLEEP_HOLD_REQ_MASK	0x1
+#define GPC_M4_LPSR_M4_SLEEP_HOLD_REQ_SHIFT	0
+#define GPC_M4_LPSR_M4_SLEEP_HOLD_ACK_MASK	0x1
+#define GPC_M4_LPSR_M4_SLEEP_HOLD_ACK_SHIFT	1
 
 #define IMR_NUM			4
 
+#define GPU_VPU_PUP_REQ		BIT(1)
+#define GPU_VPU_PDN_REQ		BIT(0)
+
+#define GPC_CLK_MAX		10
+
+struct pu_domain {
+	struct generic_pm_domain base;
+	struct regulator *reg;
+	struct clk *clk[GPC_CLK_MAX];
+	int num_clks;
+};
+
+struct disp_domain {
+	struct generic_pm_domain base;
+	struct clk *clk[GPC_CLK_MAX];
+	int num_clks;
+};
+
 static void __iomem *gpc_base;
+static u32 gpc_mf_irqs[IMR_NUM];
 static u32 gpc_wake_irqs[IMR_NUM];
 static u32 gpc_saved_imrs[IMR_NUM];
-static struct clk *gpu3d_clk, *gpu3d_shader_clk, *gpu2d_clk, *gpu2d_axi_clk;
-static struct clk *lcd_axi_clk, *lcd_pix_clk, *epdc_axi_clk, *epdc_pix_clk;
-static struct clk *pxp_axi_clk;
-static struct clk *openvg_axi_clk, *vpu_clk, *ipg_clk;
-static struct device *gpc_dev;
-struct regulator *pu_reg;
-struct notifier_block nb;
-static struct regulator_dev *pu_dummy_regulator_rdev;
-static struct regulator_init_data pu_dummy_initdata = {
-	.constraints = {
-		.max_uV = 1450000,	/* allign with real max of anatop */
-		.valid_ops_mask = REGULATOR_CHANGE_STATUS |
-				REGULATOR_CHANGE_VOLTAGE,
-	},
-};
-static int pu_dummy_enable;
+static u32 gpc_mf_request_on[IMR_NUM];
+static u32 bypass;
+static DEFINE_SPINLOCK(gpc_lock);
+static struct notifier_block nb_pcie;
 
-static void imx_disp_clk(bool enable)
+void imx_gpc_add_m4_wake_up_irq(u32 irq, bool enable)
 {
-	if (enable) {
-		clk_prepare_enable(lcd_axi_clk);
-		clk_prepare_enable(lcd_pix_clk);
-		clk_prepare_enable(epdc_axi_clk);
-		clk_prepare_enable(epdc_pix_clk);
-		clk_prepare_enable(pxp_axi_clk);
-	} else {
-		clk_disable_unprepare(lcd_axi_clk);
-		clk_disable_unprepare(lcd_pix_clk);
-		clk_disable_unprepare(epdc_axi_clk);
-		clk_disable_unprepare(epdc_pix_clk);
-		clk_disable_unprepare(pxp_axi_clk);
-	}
+	unsigned int idx = irq / 32 - 1;
+	unsigned long flags;
+	u32 mask;
+
+	/* Sanity check for SPI irq */
+	if (irq < 32)
+		return;
+
+	mask = 1 << irq % 32;
+	spin_lock_irqsave(&gpc_lock, flags);
+	gpc_wake_irqs[idx] = enable ? gpc_wake_irqs[idx] | mask :
+		gpc_wake_irqs[idx] & ~mask;
+	spin_unlock_irqrestore(&gpc_lock, flags);
 }
 
-static void imx_gpc_dispmix_on(void)
+void imx_gpc_hold_m4_in_sleep(void)
 {
-	if (cpu_is_imx6sl() &&
-		imx_get_soc_revision() >= IMX_CHIP_REVISION_1_2) {
-		imx_disp_clk(true);
+	int val;
+	unsigned long timeout = jiffies + msecs_to_jiffies(500);
 
-		writel_relaxed(0x0, gpc_base + GPC_PGC_DISP_PGCR_OFFSET);
-		writel_relaxed(0x20, gpc_base + GPC_CNTR);
-		while (readl_relaxed(gpc_base + GPC_CNTR) & 0x20)
-			;
-		writel_relaxed(0x1, gpc_base + GPC_PGC_DISP_SR_OFFSET);
+	/* wait M4 in wfi before asserting hold request */
+	while (!imx_gpc_is_m4_sleeping())
+		if (time_after(jiffies, timeout))
+			pr_err("M4 is NOT in expected sleep!\n");
 
-		imx_disp_clk(false);
-	}
+	val = readl_relaxed(gpc_base + GPC_M4_LPSR);
+	val &= ~(GPC_M4_LPSR_M4_SLEEP_HOLD_REQ_MASK <<
+		GPC_M4_LPSR_M4_SLEEP_HOLD_REQ_SHIFT);
+	writel_relaxed(val, gpc_base + GPC_M4_LPSR);
+
+	timeout = jiffies + msecs_to_jiffies(500);
+	while (readl_relaxed(gpc_base + GPC_M4_LPSR)
+		& (GPC_M4_LPSR_M4_SLEEP_HOLD_ACK_MASK <<
+		GPC_M4_LPSR_M4_SLEEP_HOLD_ACK_SHIFT))
+		if (time_after(jiffies, timeout))
+			pr_err("Wait M4 hold ack timeout!\n");
 }
 
-static void imx_gpc_dispmix_off(void)
+void imx_gpc_release_m4_in_sleep(void)
 {
-	if (cpu_is_imx6sl() &&
-		imx_get_soc_revision() >= IMX_CHIP_REVISION_1_2) {
-		imx_disp_clk(true);
+	int val;
 
-		writel_relaxed(0xFFFFFFFF,
-				gpc_base + GPC_PGC_DISP_PUPSCR_OFFSET);
-		writel_relaxed(0xFFFFFFFF,
-				gpc_base + GPC_PGC_DISP_PDNSCR_OFFSET);
-		writel_relaxed(0x1, gpc_base + GPC_PGC_DISP_PGCR_OFFSET);
-		writel_relaxed(0x10, gpc_base + GPC_CNTR);
-		while (readl_relaxed(gpc_base + GPC_CNTR) & 0x10)
-			;
+	val = readl_relaxed(gpc_base + GPC_M4_LPSR);
+	val |= GPC_M4_LPSR_M4_SLEEP_HOLD_REQ_MASK <<
+		GPC_M4_LPSR_M4_SLEEP_HOLD_REQ_SHIFT;
+	writel_relaxed(val, gpc_base + GPC_M4_LPSR);
+}
 
-		imx_disp_clk(false);
-	}
+unsigned int imx_gpc_is_m4_sleeping(void)
+{
+	if (readl_relaxed(gpc_base + GPC_M4_LPSR) &
+		(GPC_M4_LPSR_M4_SLEEPING_MASK <<
+		GPC_M4_LPSR_M4_SLEEPING_SHIFT))
+		return 1;
+
+	return 0;
+}
+
+unsigned int imx_gpc_is_mf_mix_off(void)
+{
+	return readl_relaxed(gpc_base + GPC_PGC_MF_PDN);
+}
+
+static void imx_gpc_mf_mix_off(void)
+{
+	int i;
+
+	for (i = 0; i < IMR_NUM; i++)
+		if (((gpc_wake_irqs[i] | gpc_mf_request_on[i]) &
+						gpc_mf_irqs[i]) != 0)
+			return;
+
+	pr_info("Turn off M/F mix!\n");
+	/* turn off mega/fast mix */
+	writel_relaxed(0x1, gpc_base + GPC_PGC_MF_PDN);
 }
 
 void imx_gpc_pre_suspend(bool arm_power_off)
@@ -128,10 +160,11 @@ void imx_gpc_pre_suspend(bool arm_power_off)
 	void __iomem *reg_imr1 = gpc_base + GPC_IMR1;
 	int i;
 
-	imx_gpc_dispmix_off();
+	/* Tell GPC to power off ARM core when suspend */
+	if (cpu_is_imx6sx() && arm_power_off)
+		imx_gpc_mf_mix_off();
 
 	if (arm_power_off)
-		/* Tell GPC to power off ARM core when suspend */
 		writel_relaxed(0x1, gpc_base + GPC_PGC_CPU_PDN);
 
 	for (i = 0; i < IMR_NUM; i++) {
@@ -147,16 +180,18 @@ void imx_gpc_post_resume(void)
 
 	/* Keep ARM core powered on for other low-power modes */
 	writel_relaxed(0x0, gpc_base + GPC_PGC_CPU_PDN);
+	/* Keep M/F mix powered on for other low-power modes */
+	if (cpu_is_imx6sx())
+		writel_relaxed(0x0, gpc_base + GPC_PGC_MF_PDN);
 
 	for (i = 0; i < IMR_NUM; i++)
 		writel_relaxed(gpc_saved_imrs[i], reg_imr1 + i * 4);
-
-	imx_gpc_dispmix_on();
 }
 
 static int imx_gpc_irq_set_wake(struct irq_data *d, unsigned int on)
 {
 	unsigned int idx = d->irq / 32 - 1;
+	unsigned long flags;
 	u32 mask;
 
 	/* Sanity check for SPI irq */
@@ -164,8 +199,10 @@ static int imx_gpc_irq_set_wake(struct irq_data *d, unsigned int on)
 		return -EINVAL;
 
 	mask = 1 << d->irq % 32;
+	spin_lock_irqsave(&gpc_lock, flags);
 	gpc_wake_irqs[idx] = on ? gpc_wake_irqs[idx] | mask :
 				  gpc_wake_irqs[idx] & ~mask;
+	spin_unlock_irqrestore(&gpc_lock, flags);
 
 	return 0;
 }
@@ -221,104 +258,22 @@ void imx_gpc_irq_mask(struct irq_data *d)
 	writel_relaxed(val, reg);
 }
 
-static void imx_pu_clk(bool enable)
-{
-	if (enable) {
-		if (cpu_is_imx6sl()) {
-			clk_prepare_enable(gpu2d_clk);
-			clk_prepare_enable(openvg_axi_clk);
-		} else {
-			clk_prepare_enable(gpu3d_clk);
-			clk_prepare_enable(gpu3d_shader_clk);
-			clk_prepare_enable(vpu_clk);
-			clk_prepare_enable(gpu2d_clk);
-			clk_prepare_enable(gpu2d_axi_clk);
-			clk_prepare_enable(openvg_axi_clk);
-		}
-	} else {
-		if (cpu_is_imx6sl()) {
-			clk_disable_unprepare(gpu2d_clk);
-			clk_disable_unprepare(openvg_axi_clk);
-		} else {
-			clk_disable_unprepare(gpu3d_clk);
-			clk_disable_unprepare(gpu3d_shader_clk);
-			clk_disable_unprepare(vpu_clk);
-			clk_disable_unprepare(gpu2d_clk);
-			clk_disable_unprepare(gpu2d_axi_clk);
-			clk_disable_unprepare(openvg_axi_clk);
-		}
-	}
-}
-
-static void imx_gpc_pu_enable(bool enable)
-{
-	u32 rate, delay_us;
-	u32 gpu_pupscr_sw2iso, gpu_pdnscr_iso2sw;
-	u32 gpu_pupscr_sw, gpu_pdnscr_iso;
-
-	/* get ipg clk rate for PGC delay */
-	rate = clk_get_rate(ipg_clk);
-
-	if (enable) {
-		imx_anatop_pu_enable(true);
-		/*
-		 * need to add necessary delay between powering up PU LDO and
-		 * disabling PU isolation in PGC, the counter of PU isolation
-		 * is based on ipg clk.
-		 */
-		gpu_pupscr_sw2iso = (readl_relaxed(gpc_base +
-			GPC_PGC_GPU_PUPSCR) >> GPC_PGC_GPU_SW2ISO_SHIFT)
-			& GPC_PGC_GPU_SW2ISO_MASK;
-		gpu_pupscr_sw = (readl_relaxed(gpc_base +
-			GPC_PGC_GPU_PUPSCR) >> GPC_PGC_GPU_SW_SHIFT)
-			& GPC_PGC_GPU_SW_MASK;
-		delay_us = (gpu_pupscr_sw2iso + gpu_pupscr_sw) * 1000000
-			/ rate + 1;
-		udelay(delay_us);
-
-		imx_pu_clk(true);
-		writel_relaxed(1, gpc_base + GPC_PGC_GPU_PDN);
-		writel_relaxed(1 << GPC_CNTR_PU_UP_REQ_SHIFT,
-			gpc_base + GPC_CNTR);
-		while (readl_relaxed(gpc_base + GPC_CNTR) &
-			(1 << GPC_CNTR_PU_UP_REQ_SHIFT))
-			;
-		imx_pu_clk(false);
-	} else {
-		writel_relaxed(1, gpc_base + GPC_PGC_GPU_PDN);
-		writel_relaxed(1 << GPC_CNTR_PU_DOWN_REQ_SHIFT,
-			gpc_base + GPC_CNTR);
-		while (readl_relaxed(gpc_base + GPC_CNTR) &
-			(1 << GPC_CNTR_PU_DOWN_REQ_SHIFT))
-			;
-		/*
-		 * need to add necessary delay between enabling PU isolation
-		 * in PGC and powering down PU LDO , the counter of PU isolation
-		 * is based on ipg clk.
-		 */
-		gpu_pdnscr_iso2sw = (readl_relaxed(gpc_base +
-			GPC_PGC_GPU_PDNSCR) >> GPC_PGC_GPU_SW2ISO_SHIFT)
-			& GPC_PGC_GPU_SW2ISO_MASK;
-		gpu_pdnscr_iso = (readl_relaxed(gpc_base +
-			GPC_PGC_GPU_PDNSCR) >> GPC_PGC_GPU_SW_SHIFT)
-			& GPC_PGC_GPU_SW_MASK;
-		delay_us = (gpu_pdnscr_iso2sw + gpu_pdnscr_iso) * 1000000
-			/ rate + 1;
-		udelay(delay_us);
-		imx_anatop_pu_enable(false);
-	}
-}
-
-static int imx_gpc_regulator_notify(struct notifier_block *nb,
+static int imx_pcie_regulator_notify(struct notifier_block *nb,
 					unsigned long event,
 					void *ignored)
 {
+	u32 value = readl_relaxed(gpc_base + GPC_CNTR);
+
 	switch (event) {
-	case REGULATOR_EVENT_PRE_DISABLE:
-		imx_gpc_pu_enable(false);
+	case REGULATOR_EVENT_PRE_ENABLE:
+		value |= 1 << GPC_CNTR_PCIE_PHY_PDU_SHIFT;
+		writel_relaxed(value, gpc_base + GPC_CNTR);
 		break;
-	case REGULATOR_EVENT_ENABLE:
-		imx_gpc_pu_enable(true);
+	case REGULATOR_EVENT_PRE_DISABLE:
+		value |= 1 << GPC_CNTR_PCIE_PHY_PDN_SHIFT;
+		writel_relaxed(value, gpc_base + GPC_CNTR);
+		writel_relaxed(PGC_PCIE_PHY_PDN_EN,
+				gpc_base + PGC_PCIE_PHY_CTRL);
 		break;
 	default:
 		break;
@@ -327,13 +282,26 @@ static int imx_gpc_regulator_notify(struct notifier_block *nb,
 	return NOTIFY_OK;
 }
 
+int imx_gpc_mf_request_on(unsigned int irq, unsigned int on)
+{
+	unsigned int idx = irq / 32 - 1;
+	unsigned long flags;
+	u32 mask;
+
+	mask = 1 << (irq % 32);
+	spin_lock_irqsave(&gpc_lock, flags);
+	gpc_mf_request_on[idx] = on ? gpc_mf_request_on[idx] | mask :
+				  gpc_mf_request_on[idx] & ~mask;
+	spin_unlock_irqrestore(&gpc_lock, flags);
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(imx_gpc_mf_request_on);
+
 void __init imx_gpc_init(void)
 {
 	struct device_node *np;
 	int i;
-	u32 val;
-	u32 cpu_pupscr_sw2iso, cpu_pupscr_sw;
-	u32 cpu_pdnscr_iso2sw, cpu_pdnscr_iso;
 
 	np = of_find_compatible_node(NULL, NULL, "fsl,imx6q-gpc");
 	gpc_base = of_iomap(np, 0);
@@ -343,205 +311,307 @@ void __init imx_gpc_init(void)
 	for (i = 0; i < IMR_NUM; i++)
 		writel_relaxed(~0, gpc_base + GPC_IMR1 + i * 4);
 
+	/* Read supported wakeup source in M/F domain */
+	if (cpu_is_imx6sx()) {
+		of_property_read_u32_index(np, "fsl,mf-mix-wakeup-irq", 0,
+			&gpc_mf_irqs[0]);
+		of_property_read_u32_index(np, "fsl,mf-mix-wakeup-irq", 1,
+			&gpc_mf_irqs[1]);
+		of_property_read_u32_index(np, "fsl,mf-mix-wakeup-irq", 2,
+			&gpc_mf_irqs[2]);
+		of_property_read_u32_index(np, "fsl,mf-mix-wakeup-irq", 3,
+			&gpc_mf_irqs[3]);
+		if (!(gpc_mf_irqs[0] | gpc_mf_irqs[1] |
+			gpc_mf_irqs[2] | gpc_mf_irqs[3]))
+			pr_info("No wakeup source in Mega/Fast domain found!\n");
+	}
+
 	/* Register GPC as the secondary interrupt controller behind GIC */
 	gic_arch_extn.irq_mask = imx_gpc_irq_mask;
 	gic_arch_extn.irq_unmask = imx_gpc_irq_unmask;
 	gic_arch_extn.irq_set_wake = imx_gpc_irq_set_wake;
-
-	/*
-	 * If there are CPU isolation timing settings in dts,
-	 * update them according to dts, otherwise, keep them
-	 * with default value in registers.
-	 */
-	cpu_pupscr_sw2iso = cpu_pupscr_sw =
-		cpu_pdnscr_iso2sw = cpu_pdnscr_iso = 0;
-
-	/* Read CPU isolation setting for GPC */
-	of_property_read_u32(np, "fsl,cpu_pupscr_sw2iso", &cpu_pupscr_sw2iso);
-	of_property_read_u32(np, "fsl,cpu_pupscr_sw", &cpu_pupscr_sw);
-	of_property_read_u32(np, "fsl,cpu_pdnscr_iso2sw", &cpu_pdnscr_iso2sw);
-	of_property_read_u32(np, "fsl,cpu_pdnscr_iso", &cpu_pdnscr_iso);
-
-	/* Update CPU PUPSCR timing if it is defined in dts */
-	val = readl_relaxed(gpc_base + GPC_PGC_CPU_PUPSCR);
-	if (cpu_pupscr_sw2iso)
-		val &= ~(GPC_PGC_CPU_SW2ISO_MASK << GPC_PGC_CPU_SW2ISO_SHIFT);
-	if (cpu_pupscr_sw)
-		val &= ~(GPC_PGC_CPU_SW_MASK << GPC_PGC_CPU_SW_SHIFT);
-	val |= cpu_pupscr_sw2iso << GPC_PGC_CPU_SW2ISO_SHIFT;
-	val |= cpu_pupscr_sw << GPC_PGC_CPU_SW_SHIFT;
-	writel_relaxed(val, gpc_base + GPC_PGC_CPU_PUPSCR);
-
-	/* Update CPU PDNSCR timing if it is defined in dts */
-	val = readl_relaxed(gpc_base + GPC_PGC_CPU_PDNSCR);
-	if (cpu_pdnscr_iso2sw)
-		val &= ~(GPC_PGC_CPU_SW2ISO_MASK << GPC_PGC_CPU_SW2ISO_SHIFT);
-	if (cpu_pdnscr_iso)
-		val &= ~(GPC_PGC_CPU_SW_MASK << GPC_PGC_CPU_SW_SHIFT);
-	val |= cpu_pdnscr_iso2sw << GPC_PGC_CPU_SW2ISO_SHIFT;
-	val |= cpu_pdnscr_iso << GPC_PGC_CPU_SW_SHIFT;
-	writel_relaxed(val, gpc_base + GPC_PGC_CPU_PDNSCR);
 }
 
-static int imx_pureg_set_voltage(struct regulator_dev *reg, int min_uV,
-					int max_uV, unsigned *selector)
-{
-	return 0;
-}
+#ifdef CONFIG_PM
 
-static int imx_pureg_enable(struct regulator_dev *rdev)
+static int imx6q_pm_pu_power_off(struct generic_pm_domain *genpd)
 {
-	pu_dummy_enable = 1;
+	struct pu_domain *pu = container_of(genpd, struct pu_domain, base);
+	int iso, iso2sw;
+	u32 val;
+
+	/* Read ISO and ISO2SW power down delays */
+	val = readl_relaxed(gpc_base + GPC_PGC_GPU_PDNSCR);
+	iso = val & 0x3f;
+	iso2sw = (val >> 8) & 0x3f;
+
+	/* Gate off PU domain when GPU/VPU when powered down */
+	writel_relaxed(0x1, gpc_base + GPC_PGC_GPU_PDN);
+
+	/* Request GPC to power down GPU/VPU */
+	val = readl_relaxed(gpc_base + GPC_CNTR);
+	val |= GPU_VPU_PDN_REQ;
+	writel_relaxed(val, gpc_base + GPC_CNTR);
+
+	/* Wait ISO + ISO2SW IPG clock cycles */
+	ndelay((iso + iso2sw) * 1000 / 66);
+
+	if (pu->reg)
+		regulator_disable(pu->reg);
 
 	return 0;
 }
 
-static int imx_pureg_disable(struct regulator_dev *rdev)
+static int imx6q_pm_pu_power_on(struct generic_pm_domain *genpd)
 {
-	pu_dummy_enable = 0;
+	struct pu_domain *pu = container_of(genpd, struct pu_domain, base);
+	int i, ret, sw, sw2iso;
+	u32 val;
 
-	return 0;
-}
-
-static int imx_pureg_is_enable(struct regulator_dev *rdev)
-{
-	return pu_dummy_enable;
-}
-
-static int imx_pureg_list_voltage(struct regulator_dev *rdev,
-				unsigned int selector)
-{
-	return 0;
-}
-
-#if defined (CONFIG_REGULATOR)
-static struct regulator_ops pu_dummy_ops = {
-	.set_voltage = imx_pureg_set_voltage,
-	.enable	= imx_pureg_enable,
-	.disable = imx_pureg_disable,
-	.is_enabled = imx_pureg_is_enable,
-	.list_voltage = imx_pureg_list_voltage,
-};
-
-static struct regulator_desc pu_dummy_desc = {
-	.name = "pureg-dummy",
-	.id = -1,
-	.type = REGULATOR_VOLTAGE,
-	.owner = THIS_MODULE,
-	.ops = &pu_dummy_ops,
-};
-
-static int pu_dummy_probe(struct platform_device *pdev)
-{
-	struct regulator_config config = { };
-	int ret;
-
-	config.dev = &pdev->dev;
-	config.init_data = &pu_dummy_initdata;
-	config.of_node = pdev->dev.of_node;
-
-	pu_dummy_regulator_rdev = regulator_register(&pu_dummy_desc, &config);
-	if (IS_ERR(pu_dummy_regulator_rdev)) {
-		ret = PTR_ERR(pu_dummy_regulator_rdev);
-		dev_err(&pdev->dev, "Failed to register regulator: %d\n", ret);
-		return ret;
+	if (pu->reg) {
+		ret = regulator_enable(pu->reg);
+		if (ret) {
+			pr_err("%s: failed to enable regulator: %d\n", __func__, ret);
+			return ret;
+		}
 	}
+	/* Enable reset clocks for all devices in the PU domain */
+	for (i = 0; i < pu->num_clks; i++)
+		clk_prepare_enable(pu->clk[i]);
+
+	/* Gate off PU domain when GPU/VPU when powered down */
+	writel_relaxed(0x1, gpc_base + GPC_PGC_GPU_PDN);
+
+	/* Read ISO and ISO2SW power down delays */
+	val = readl_relaxed(gpc_base + GPC_PGC_GPU_PUPSCR);
+	sw = val & 0x3f;
+	sw2iso = (val >> 8) & 0x3f;
+
+	/* Request GPC to power up GPU/VPU */
+	val = readl_relaxed(gpc_base + GPC_CNTR);
+	val |= GPU_VPU_PUP_REQ;
+	writel_relaxed(val, gpc_base + GPC_CNTR);
+
+	/* Wait ISO + ISO2SW IPG clock cycles */
+	ndelay((sw + sw2iso) * 1000 / 66);
+
+	/* Disable reset clocks for all devices in the PU domain */
+	for (i = 0; i < pu->num_clks; i++)
+		clk_disable_unprepare(pu->clk[i]);
 
 	return 0;
 }
 
-static const struct of_device_id imx_pudummy_ids[] = {
-	{ .compatible = "fsl,imx6-dummy-pureg" },
-};
-MODULE_DEVICE_TABLE(of, imx_pudummy_ids);
+static int imx_pm_dispmix_on(struct generic_pm_domain *genpd)
+{
+	struct disp_domain *disp = container_of(genpd, struct disp_domain, base);
+	u32 val = readl_relaxed(gpc_base + GPC_CNTR);
+	int i;
 
-static struct platform_driver pu_dummy_driver = {
-	.probe	= pu_dummy_probe,
-	.driver	= {
-		.name	= "pu-dummy",
-		.owner	= THIS_MODULE,
-		.of_match_table = imx_pudummy_ids,
+	if ((cpu_is_imx6sl() &&
+		imx_get_soc_revision() >= IMX_CHIP_REVISION_1_2) || cpu_is_imx6sx()) {
+
+		/* Enable reset clocks for all devices in the disp domain */
+		for (i = 0; i < disp->num_clks; i++)
+			clk_prepare_enable(disp->clk[i]);
+
+		writel_relaxed(0x0, gpc_base + GPC_PGC_DISP_PGCR_OFFSET);
+		writel_relaxed(0x20 | val, gpc_base + GPC_CNTR);
+		while (readl_relaxed(gpc_base + GPC_CNTR) & 0x20)
+			;
+
+		writel_relaxed(0x1, gpc_base + GPC_PGC_DISP_SR_OFFSET);
+
+		/* Disable reset clocks for all devices in the disp domain */
+		for (i = 0; i < disp->num_clks; i++)
+			clk_disable_unprepare(disp->clk[i]);
+	}
+	return 0;
+}
+
+static int imx_pm_dispmix_off(struct generic_pm_domain *genpd)
+{
+	struct disp_domain *disp = container_of(genpd, struct disp_domain, base);
+	u32 val = readl_relaxed(gpc_base + GPC_CNTR);
+	int i;
+
+	if ((cpu_is_imx6sl() &&
+		imx_get_soc_revision() >= IMX_CHIP_REVISION_1_2) || cpu_is_imx6sx()) {
+
+		/* Enable reset clocks for all devices in the disp domain */
+		for (i = 0; i < disp->num_clks; i++)
+			clk_prepare_enable(disp->clk[i]);
+
+		writel_relaxed(0xFFFFFFFF,
+				gpc_base + GPC_PGC_DISP_PUPSCR_OFFSET);
+		writel_relaxed(0xFFFFFFFF,
+				gpc_base + GPC_PGC_DISP_PDNSCR_OFFSET);
+		writel_relaxed(0x1, gpc_base + GPC_PGC_DISP_PGCR_OFFSET);
+		writel_relaxed(0x10 | val, gpc_base + GPC_CNTR);
+		while (readl_relaxed(gpc_base + GPC_CNTR) & 0x10)
+			;
+
+		/* Disable reset clocks for all devices in the disp domain */
+		for (i = 0; i < disp->num_clks; i++)
+			clk_disable_unprepare(disp->clk[i]);
+	}
+	return 0;
+}
+
+static struct generic_pm_domain imx6q_arm_domain = {
+	.name = "ARM",
+};
+
+static struct pu_domain imx6q_pu_domain = {
+	.base = {
+		.name = "PU",
+		.power_off = imx6q_pm_pu_power_off,
+		.power_on = imx6q_pm_pu_power_on,
+		.power_off_latency_ns = 25000,
+		.power_on_latency_ns = 2000000,
 	},
 };
-#endif
+
+static struct disp_domain imx6s_display_domain = {
+	.base = {
+		.name = "DISPLAY",
+		.power_off = imx_pm_dispmix_off,
+		.power_on = imx_pm_dispmix_on,
+	},
+};
+
+static struct generic_pm_domain *imx_gpc_domains[] = {
+	&imx6q_arm_domain,
+	&imx6q_pu_domain.base,
+	&imx6s_display_domain.base,
+};
+
+static struct genpd_onecell_data imx_gpc_onecell_data = {
+	.domains = imx_gpc_domains,
+	.num_domains = ARRAY_SIZE(imx_gpc_domains),
+};
+
+static int imx_gpc_genpd_init(struct device *dev, struct regulator *pu_reg)
+{
+	struct clk *clk;
+	bool is_off;
+	int pu_clks, disp_clks;
+	int i = 0, k = 0;
+
+	imx6q_pu_domain.base.of_node = dev->of_node;
+	imx6q_pu_domain.reg = pu_reg;
+
+	imx6s_display_domain.base.of_node = dev->of_node;
+
+	if ((cpu_is_imx6sl() &&
+			imx_get_soc_revision() >= IMX_CHIP_REVISION_1_2)) {
+		pu_clks = 2 ;
+		disp_clks = 6;
+	} else if (cpu_is_imx6sx()) {
+		pu_clks = 1;
+		disp_clks = 8;
+	} else {
+		pu_clks = GPC_CLK_MAX;
+		disp_clks = 0;
+	}
+
+	/* Get pu domain clks */
+	for (i = 0; i < pu_clks ; i++) {
+		clk = of_clk_get(dev->of_node, i);
+		if (IS_ERR(clk))
+			break;
+		imx6q_pu_domain.clk[i] = clk;
+	}
+	imx6q_pu_domain.num_clks = i;
+
+	/* Get disp domain clks */
+	for (k = 0, i = pu_clks; i < pu_clks + disp_clks ; i++, k++) {
+		clk = of_clk_get(dev->of_node, i);
+		if (IS_ERR(clk))
+			break;
+		imx6s_display_domain.clk[k] = clk;
+	}
+	imx6s_display_domain.num_clks = k;
+
+	is_off = IS_ENABLED(CONFIG_PM_RUNTIME);
+	if (is_off)
+		imx6q_pm_pu_power_off(&imx6q_pu_domain.base);
+
+	pm_genpd_init(&imx6q_pu_domain.base, NULL, is_off);
+	pm_genpd_init(&imx6s_display_domain.base, NULL, is_off);
+
+	return __of_genpd_add_provider(dev->of_node, __of_genpd_xlate_onecell,
+				     &imx_gpc_onecell_data);
+
+}
+
+#else
+static inline int imx_gpc_genpd_init(struct device *dev, struct regulator *reg)
+{
+	return 0;
+}
+#endif /* CONFIG_PM */
 
 static int imx_gpc_probe(struct platform_device *pdev)
 {
+	struct regulator *pu_reg;
 	int ret;
 
-	gpc_dev = &pdev->dev;
-
-	pu_reg = devm_regulator_get(gpc_dev, "pu");
-	if (IS_ERR(pu_reg)) {
-		ret = PTR_ERR(pu_reg);
-		dev_info(gpc_dev, "pu regulator not ready.\n");
-		return ret;
-	}
-	nb.notifier_call = &imx_gpc_regulator_notify;
-
-	/* Get gpu&vpu clk for power up PU by GPC */
-	if (cpu_is_imx6sl()) {
-		gpu2d_clk = devm_clk_get(gpc_dev, "gpu2d_podf");
-		openvg_axi_clk = devm_clk_get(gpc_dev, "gpu2d_ovg");
-		ipg_clk = devm_clk_get(gpc_dev, "ipg");
-		lcd_axi_clk = devm_clk_get(gpc_dev, "lcd_axi");
-		lcd_pix_clk = devm_clk_get(gpc_dev, "lcd_pix");
-		epdc_axi_clk = devm_clk_get(gpc_dev, "epdc_axi");
-		epdc_pix_clk = devm_clk_get(gpc_dev, "epdc_pix");
-		pxp_axi_clk = devm_clk_get(gpc_dev, "pxp_axi");
-		if (IS_ERR(gpu2d_clk) || IS_ERR(openvg_axi_clk)
-			|| IS_ERR(ipg_clk) || IS_ERR(lcd_axi_clk)
-			|| IS_ERR(lcd_pix_clk) || IS_ERR(epdc_axi_clk)
-			|| IS_ERR(epdc_pix_clk) || IS_ERR(pxp_axi_clk)) {
-			dev_err(gpc_dev, "failed to get clk!\n");
-			return -ENOENT;
+	of_property_read_u32(pdev->dev.of_node, "fsl,ldo-bypass", &bypass);
+	pu_reg = devm_regulator_get(&pdev->dev, "pu");
+	if (!IS_ERR(pu_reg)) {
+		/* The regulator is initially enabled */
+		ret = regulator_enable(pu_reg);
+		if (ret < 0) {
+			dev_err(&pdev->dev, "failed to enable pu regulator: %d\n", ret);
+			return ret;
 		}
+		/* We only bypass pu since arm and soc has been set in u-boot */
+		if (bypass)
+			regulator_allow_bypass(pu_reg, true);
 	} else {
-		gpu3d_clk = devm_clk_get(gpc_dev, "gpu3d_core");
-		gpu3d_shader_clk = devm_clk_get(gpc_dev, "gpu3d_shader");
-		gpu2d_clk = devm_clk_get(gpc_dev, "gpu2d_core");
-		gpu2d_axi_clk = devm_clk_get(gpc_dev, "gpu2d_axi");
-		openvg_axi_clk = devm_clk_get(gpc_dev, "openvg_axi");
-		vpu_clk = devm_clk_get(gpc_dev, "vpu_axi");
-		ipg_clk = devm_clk_get(gpc_dev, "ipg");
-		if (IS_ERR(gpu3d_clk) || IS_ERR(gpu3d_shader_clk)
-			|| IS_ERR(gpu2d_clk) || IS_ERR(gpu2d_axi_clk)
-			|| IS_ERR(openvg_axi_clk) || IS_ERR(vpu_clk)
-			|| IS_ERR(ipg_clk)) {
-			dev_err(gpc_dev, "failed to get clk!\n");
-			return -ENOENT;
+		pu_reg = NULL;
+	}
+
+	if (cpu_is_imx6sx()) {
+		struct regulator *pcie_reg;
+
+		pcie_reg = devm_regulator_get(&pdev->dev, "pcie-phy");
+		if (IS_ERR(pcie_reg)) {
+			ret = PTR_ERR(pcie_reg);
+			dev_info(&pdev->dev, "pcie regulator not ready.\n");
+			return ret;
+		}
+		nb_pcie.notifier_call = &imx_pcie_regulator_notify;
+
+		ret = regulator_register_notifier(pcie_reg, &nb_pcie);
+		if (ret) {
+			dev_err(&pdev->dev,
+				"pcie regulator notifier request failed\n");
+			return ret;
 		}
 	}
 
-	ret = regulator_register_notifier(pu_reg, &nb);
-	if (ret) {
-		dev_err(gpc_dev,
-			"regulator notifier request failed\n");
-		return ret;
-	}
-
-	return 0;
+	return imx_gpc_genpd_init(&pdev->dev, pu_reg);
 }
 
-static const struct of_device_id imx_gpc_ids[] = {
+static struct of_device_id imx_gpc_dt_ids[] = {
 	{ .compatible = "fsl,imx6q-gpc" },
+	{ .compatible = "fsl,imx6sl-gpc" },
+	{ }
 };
-MODULE_DEVICE_TABLE(of, imx_gpc_ids);
 
-static struct platform_driver imx_gpc_platdrv = {
+static struct platform_driver imx_gpc_driver = {
 	.driver = {
-		.name	= "imx-gpc",
-		.owner	= THIS_MODULE,
-		.of_match_table = imx_gpc_ids,
+		.name = "imx-gpc",
+		.owner = THIS_MODULE,
+		.of_match_table = imx_gpc_dt_ids,
 	},
-	.probe		= imx_gpc_probe,
+	.probe = imx_gpc_probe,
 };
-module_platform_driver(imx_gpc_platdrv);
 
-#if defined (CONFIG_REGULATOR)
-module_platform_driver(pu_dummy_driver);
-#endif
-
-MODULE_AUTHOR("Anson Huang <b20788@freescale.com>");
-MODULE_DESCRIPTION("Freescale i.MX GPC driver");
-MODULE_LICENSE("GPL");
+static int __init imx_pgc_init(void)
+{
+	return platform_driver_register(&imx_gpc_driver);
+}
+subsys_initcall(imx_pgc_init);

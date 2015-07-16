@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2013 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright (C) 2011-2014 Freescale Semiconductor, Inc. All Rights Reserved.
  */
 
 /*
@@ -31,10 +31,10 @@
 #include <linux/regulator/consumer.h>
 #include <linux/isl29023.h>
 
-#define ISL29023_DRV_NAME	"isl29023"
-#define DRIVER_VERSION		"1.0"
+#define ISL29023_DRV_NAME		"isl29023"
+#define DRIVER_VERSION			"1.0"
 
-#define ISL29023_COMMAND1		0x00
+#define ISL29023_COMMAND1		(0x00)
 #define ISL29023_MODE_SHIFT		(5)
 #define ISL29023_MODE_MASK		(0x7 << ISL29023_MODE_SHIFT)
 #define ISL29023_INT_FLAG_SHIFT		(2)
@@ -42,18 +42,18 @@
 #define ISL29023_INT_PERSISTS_SHIFT	(0)
 #define ISL29023_INT_PERSISTS_MASK	(0x3 << ISL29023_INT_PERSISTS_SHIFT)
 
-#define ISL29023_COMMAND2		0x01
+#define ISL29023_COMMAND2		(0x01)
 #define ISL29023_RES_SHIFT		(2)
 #define ISL29023_RES_MASK		(0x3 << ISL29023_RES_SHIFT)
 #define ISL29023_RANGE_SHIFT		(0)
 #define ISL29023_RANGE_MASK		(0x3 << ISL29023_RANGE_SHIFT)
 
-#define ISL29023_REG_LSB_SENSOR		0x02
-#define ISL29023_REG_MSB_SENSOR		0x03
-#define ISL29023_REG_IRQ_TH_LO_LSB	0x04
-#define ISL29023_REG_IRQ_TH_LO_MSB	0x05
-#define ISL29023_REG_IRQ_TH_HI_LSB	0x06
-#define ISL29023_REG_IRQ_TH_HI_MSB	0x07
+#define ISL29023_REG_LSB_SENSOR		(0x02)
+#define ISL29023_REG_MSB_SENSOR		(0x03)
+#define ISL29023_REG_IRQ_TH_LO_LSB	(0x04)
+#define ISL29023_REG_IRQ_TH_LO_MSB	(0x05)
+#define ISL29023_REG_IRQ_TH_HI_LSB	(0x06)
+#define ISL29023_REG_IRQ_TH_HI_MSB	(0x07)
 
 #define ISL29023_NUM_CACHABLE_REGS	8
 #define DEF_RANGE			2
@@ -113,8 +113,6 @@ static int __isl29023_write_reg(struct i2c_client *client,
 /*
  * internally used functions
  */
-
-/* interrupt persists */
 static int isl29023_get_int_persists(struct i2c_client *client)
 {
 	return __isl29023_read_reg(client, ISL29023_COMMAND1,
@@ -129,7 +127,9 @@ static int isl29023_set_int_persists(struct i2c_client *client,
 		int_persists);
 }
 
-/* interrupt flag */
+/*
+ * interrupt flag
+ */
 static int isl29023_get_int_flag(struct i2c_client *client)
 {
 	return __isl29023_read_reg(client, ISL29023_COMMAND1,
@@ -142,7 +142,9 @@ static int isl29023_set_int_flag(struct i2c_client *client, int flag)
 		ISL29023_INT_FLAG_MASK, ISL29023_INT_FLAG_SHIFT, flag);
 }
 
-/* interrupt lt */
+/*
+ * interrupt lt
+ */
 static int isl29023_get_int_lt(struct i2c_client *client)
 {
 	struct isl29023_data *data = i2c_get_clientdata(client);
@@ -194,7 +196,9 @@ static int isl29023_set_int_lt(struct i2c_client *client, int lt)
 	return ret;
 }
 
-/* interrupt ht */
+/*
+ * interrupt ht
+ */
 static int isl29023_get_int_ht(struct i2c_client *client)
 {
 	struct isl29023_data *data = i2c_get_clientdata(client);
@@ -246,7 +250,9 @@ static int isl29023_set_int_ht(struct i2c_client *client, int ht)
 	return ret;
 }
 
-/* range */
+/*
+ * range
+ */
 static int isl29023_get_range(struct i2c_client *client)
 {
 	return __isl29023_read_reg(client, ISL29023_COMMAND2,
@@ -259,7 +265,9 @@ static int isl29023_set_range(struct i2c_client *client, int range)
 		ISL29023_RANGE_MASK, ISL29023_RANGE_SHIFT, range);
 }
 
-/* resolution */
+/*
+ * resolution
+ */
 static int isl29023_get_resolution(struct i2c_client *client)
 {
 	return __isl29023_read_reg(client, ISL29023_COMMAND2,
@@ -272,7 +280,9 @@ static int isl29023_set_resolution(struct i2c_client *client, int res)
 		ISL29023_RES_MASK, ISL29023_RES_SHIFT, res);
 }
 
-/* mode */
+/*
+ * mode
+ */
 static int isl29023_get_mode(struct i2c_client *client)
 {
 	return __isl29023_read_reg(client, ISL29023_COMMAND1,
@@ -285,7 +295,9 @@ static int isl29023_set_mode(struct i2c_client *client, int mode)
 		ISL29023_MODE_MASK, ISL29023_MODE_SHIFT, mode);
 }
 
-/* power_state */
+/*
+ * power_state
+ */
 static int isl29023_set_power_state(struct i2c_client *client, int state)
 {
 	return __isl29023_write_reg(client, ISL29023_COMMAND1,
@@ -384,7 +396,9 @@ static int isl29023_get_int_ht_value(struct i2c_client *client)
  * sysfs layer
  */
 
-/* interrupt persists */
+/*
+ * interrupt persists
+ */
 static ssize_t isl29023_show_int_persists(struct device *dev,
 					  struct device_attribute *attr,
 					  char *buf)
@@ -415,7 +429,9 @@ static ssize_t isl29023_store_int_persists(struct device *dev,
 static DEVICE_ATTR(int_persists, S_IWUSR | S_IRUGO,
 		   isl29023_show_int_persists, isl29023_store_int_persists);
 
-/* interrupt flag */
+/*
+ *interrupt flag
+ */
 static ssize_t isl29023_show_int_flag(struct device *dev,
 					  struct device_attribute *attr,
 					  char *buf)
@@ -445,7 +461,9 @@ static ssize_t isl29023_store_int_flag(struct device *dev,
 static DEVICE_ATTR(int_flag, S_IWUSR | S_IRUGO,
 		   isl29023_show_int_flag, isl29023_store_int_flag);
 
-/* interrupt lt */
+/*
+ * interrupt lt
+ */
 static ssize_t isl29023_show_int_lt(struct device *dev,
 				   struct device_attribute *attr, char *buf)
 {
@@ -474,7 +492,9 @@ static ssize_t isl29023_store_int_lt(struct device *dev,
 static DEVICE_ATTR(int_lt, S_IWUSR | S_IRUGO,
 		   isl29023_show_int_lt, isl29023_store_int_lt);
 
-/* interrupt ht */
+/*
+ *interrupt ht
+ */
 static ssize_t isl29023_show_int_ht(struct device *dev,
 				   struct device_attribute *attr, char *buf)
 {
@@ -503,7 +523,9 @@ static ssize_t isl29023_store_int_ht(struct device *dev,
 static DEVICE_ATTR(int_ht, S_IWUSR | S_IRUGO,
 		   isl29023_show_int_ht, isl29023_store_int_ht);
 
-/* range */
+/*
+ * range
+ */
 static ssize_t isl29023_show_range(struct device *dev,
 				   struct device_attribute *attr, char *buf)
 {
@@ -533,7 +555,9 @@ static DEVICE_ATTR(range, S_IWUSR | S_IRUGO,
 		   isl29023_show_range, isl29023_store_range);
 
 
-/* resolution */
+/*
+ * resolution
+ */
 static ssize_t isl29023_show_resolution(struct device *dev,
 					struct device_attribute *attr,
 					char *buf)
@@ -563,7 +587,9 @@ static ssize_t isl29023_store_resolution(struct device *dev,
 static DEVICE_ATTR(resolution, S_IWUSR | S_IRUGO,
 		   isl29023_show_resolution, isl29023_store_resolution);
 
-/* mode */
+/*
+ *mode
+ */
 static ssize_t isl29023_show_mode(struct device *dev,
 				  struct device_attribute *attr, char *buf)
 {
@@ -582,6 +608,8 @@ static ssize_t isl29023_store_mode(struct device *dev,
 	    (val > ISL29023_IR_CONT_MODE))
 		return -EINVAL;
 
+	/* clear the interrupt flag */
+	i2c_smbus_read_byte_data(client, ISL29023_COMMAND1);
 	ret = isl29023_set_mode(client, val);
 	if (ret < 0)
 		return ret;
@@ -593,7 +621,9 @@ static DEVICE_ATTR(mode, S_IWUSR | S_IRUGO,
 		   isl29023_show_mode, isl29023_store_mode);
 
 
-/* power state */
+/*
+ *power state
+ */
 static ssize_t isl29023_show_power_state(struct device *dev,
 					 struct device_attribute *attr,
 					 char *buf)
@@ -620,7 +650,9 @@ static ssize_t isl29023_store_power_state(struct device *dev,
 static DEVICE_ATTR(power_state, S_IWUSR | S_IRUGO,
 		   isl29023_show_power_state, isl29023_store_power_state);
 
-/* lux */
+/*
+ * lux
+ */
 static ssize_t isl29023_show_lux(struct device *dev,
 				 struct device_attribute *attr, char *buf)
 {
@@ -635,7 +667,9 @@ static ssize_t isl29023_show_lux(struct device *dev,
 
 static DEVICE_ATTR(lux, S_IRUGO, isl29023_show_lux, NULL);
 
-/* lux interrupt low threshold */
+/*
+ * lux interrupt low threshold
+ */
 static ssize_t isl29023_show_int_lt_lux(struct device *dev,
 				 struct device_attribute *attr, char *buf)
 {
@@ -703,7 +737,9 @@ static ssize_t isl29023_store_int_lt_lux(struct device *dev,
 static DEVICE_ATTR(int_lt_lux, S_IWUSR | S_IRUGO,
 		isl29023_show_int_lt_lux, isl29023_store_int_lt_lux);
 
-/* lux interrupt high threshold */
+/*
+ * lux interrupt high threshold
+ */
 static ssize_t isl29023_show_int_ht_lux(struct device *dev,
 				 struct device_attribute *attr, char *buf)
 {
@@ -844,6 +880,11 @@ static void isl29023_work(struct work_struct *work)
 static irqreturn_t isl29023_irq_handler(int irq, void *handle)
 {
 	struct isl29023_data *data = handle;
+	int cmd_1;
+	cmd_1 = i2c_smbus_read_byte_data(data->client, ISL29023_COMMAND1);
+	if (!(cmd_1 & ISL29023_INT_FLAG_MASK))
+		return IRQ_NONE;
+
 	queue_work(data->workqueue, &data->work);
 	return IRQ_HANDLED;
 }
@@ -851,7 +892,6 @@ static irqreturn_t isl29023_irq_handler(int irq, void *handle)
 /*
  * I2C layer
  */
-
 static int isl29023_probe(struct i2c_client *client,
 				    const struct i2c_device_id *id)
 {
@@ -862,6 +902,9 @@ static int isl29023_probe(struct i2c_client *client,
 	struct regulator *vdd = NULL;
 	u32 rext = 0;
 	struct device_node *of_node = client->dev.of_node;
+	struct irq_data *irq_data = irq_get_irq_data(client->irq);
+	u32 irq_flag;
+	bool shared_irq;
 
 	vdd = devm_regulator_get(&client->dev, "vdd");
 	if (!IS_ERR(vdd)) {
@@ -875,6 +918,7 @@ static int isl29023_probe(struct i2c_client *client,
 	err = of_property_read_u32(of_node, "rext", &rext);
 	if (err)
 		rext = DEFAULT_REGISTOR_VAL;
+	shared_irq = of_property_read_bool(of_node, "shared-interrupt");
 
 	if (!i2c_check_functionality(adapter, I2C_FUNC_SMBUS_BYTE))
 		return -EIO;
@@ -919,10 +963,13 @@ static int isl29023_probe(struct i2c_client *client,
 	if (err)
 		goto exit_free_input;
 
-	/* set irq type to edge falling */
-	irq_set_irq_type(client->irq, IRQF_TRIGGER_FALLING);
-	err = request_irq(client->irq, isl29023_irq_handler, 0,
-			  client->dev.driver->name, data);
+	irq_flag = irqd_get_trigger_type(irq_data);
+	irq_flag |= IRQF_ONESHOT;
+	if (shared_irq)
+		irq_flag |= IRQF_SHARED;
+	err = request_threaded_irq(client->irq, NULL,
+					isl29023_irq_handler, irq_flag,
+					client->dev.driver->name, data);
 	if (err < 0) {
 		dev_err(&client->dev, "failed to register irq %d!\n",
 			client->irq);

@@ -10,6 +10,7 @@
  */
 
 #include <linux/clk-private.h>
+#include <linux/clk/clk-conf.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/spinlock.h>
@@ -1702,6 +1703,7 @@ void __clk_reparent(struct clk *clk, struct clk *new_parent)
  */
 int clk_set_parent(struct clk *clk, struct clk *parent)
 {
+	struct clk *child;
 	int ret = 0;
 	int p_index = 0;
 	unsigned long p_rate = 0;
@@ -1726,6 +1728,18 @@ int clk_set_parent(struct clk *clk, struct clk *parent)
 	if ((clk->flags & CLK_SET_PARENT_GATE) && clk->prepare_count) {
 		ret = -EBUSY;
 		goto out;
+	}
+
+	/* check two consecutive basic mux clocks */
+	if (clk->flags & CLK_IS_BASIC_MUX) {
+		hlist_for_each_entry(child, &clk->children, child_node) {
+			if (child->flags & CLK_IS_BASIC_MUX) {
+				pr_err("%s: failed to switch parent of %s due to child mux %s\n",
+					__func__, clk->name, child->name);
+				ret = -EBUSY;
+				goto out;
+			}
+		}
 	}
 
 	/* try finding the new parent index */
@@ -2431,6 +2445,7 @@ int of_clk_add_provider(struct device_node *np,
 			void *data)
 {
 	struct of_clk_provider *cp;
+	int ret;
 
 	cp = kzalloc(sizeof(struct of_clk_provider), GFP_KERNEL);
 	if (!cp)
@@ -2445,7 +2460,11 @@ int of_clk_add_provider(struct device_node *np,
 	mutex_unlock(&of_clk_mutex);
 	pr_debug("Added clock from %s\n", np->full_name);
 
-	return 0;
+	ret = of_clk_set_defaults(np, true);
+	if (ret < 0)
+		of_clk_del_provider(np);
+
+	return ret;
 }
 EXPORT_SYMBOL_GPL(of_clk_add_provider);
 
@@ -2545,6 +2564,7 @@ void __init of_clk_init(const struct of_device_id *matches)
 	for_each_matching_node_and_match(np, matches, &match) {
 		of_clk_init_cb_t clk_init_cb = match->data;
 		clk_init_cb(np);
+		of_clk_set_defaults(np, true);
 	}
 }
 #endif

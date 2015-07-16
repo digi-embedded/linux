@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2009 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright 2004-2014 Freescale Semiconductor, Inc. All Rights Reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -40,6 +40,9 @@ enum sdma_peripheral_type {
 	IMX_DMATYPE_ASRC,	/* ASRC */
 	IMX_DMATYPE_ESAI,	/* ESAI */
 	IMX_DMATYPE_SSI_DUAL,	/* SSI Dual FIFO */
+	IMX_DMATYPE_ASRC_SP,	/* Shared ASRC */
+	IMX_DMATYPE_HDMI,	/* HDMI Audio */
+	IMX_DMATYPE_SAI,        /* SAI Audio */
 };
 
 enum imx_dma_prio {
@@ -50,6 +53,7 @@ enum imx_dma_prio {
 
 struct imx_dma_data {
 	int dma_request; /* DMA request line */
+	int dma_request2; /* secondary DMA request line */
 	enum sdma_peripheral_type peripheral_type;
 	int priority;
 };
@@ -57,6 +61,11 @@ struct imx_dma_data {
 static inline int imx_dma_is_ipu(struct dma_chan *chan)
 {
 	return !strcmp(dev_name(chan->device->dev), "ipu-core");
+}
+
+static inline int imx_dma_is_pxp(struct dma_chan *chan)
+{
+	return strstr(dev_name(chan->device->dev), "pxp") != NULL;
 }
 
 static inline int imx_dma_is_general_purpose(struct dma_chan *chan)

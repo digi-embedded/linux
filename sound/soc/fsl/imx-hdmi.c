@@ -1,7 +1,7 @@
 /*
  * ASoC HDMI Transmitter driver for IMX development boards
  *
- * Copyright (C) 2011-2013 Freescale Semiconductor, Inc.
+ * Copyright (C) 2011-2014 Freescale Semiconductor, Inc.
  *
  * based on stmp3780_devb_hdmi.c
  *

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2013 Freescale Semiconductor, Inc.
+ * Copyright (C) 2010-2014 Freescale Semiconductor, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -90,6 +90,7 @@
 #define MERGE_BLOCK	2
 
 static unsigned long default_bpp = 16;
+DEFINE_MUTEX(hard_lock);
 
 struct update_marker_data {
 	struct list_head full_list;
@@ -2820,13 +2821,18 @@ static int mxc_epdc_fb_send_single_update(struct mxcfb_update_data *upd_data,
 			upd_data->waveform_mode);
 		return -EINVAL;
 	}
+
+	mutex_lock(&fb_data->queue_mutex);
 	if ((upd_data->update_region.left + upd_data->update_region.width > fb_data->epdc_fb_var.xres) ||
 		(upd_data->update_region.top + upd_data->update_region.height > fb_data->epdc_fb_var.yres)) {
+		mutex_unlock(&fb_data->queue_mutex);
 		dev_err(fb_data->dev,
 			"Update region is outside bounds of framebuffer."
 			"Aborting update.\n");
 		return -EINVAL;
 	}
+	mutex_unlock(&fb_data->queue_mutex);
+
 	if (upd_data->flags & EPDC_FLAG_USE_ALT_BUFFER) {
 		if ((upd_data->update_region.width !=
 			upd_data->alt_buffer_data.alt_update_region.width) ||
@@ -3261,6 +3267,10 @@ static int mxc_epdc_fb_ioctl(struct fb_info *info, unsigned int cmd,
 	case MXCFB_SEND_UPDATE:
 		{
 			struct mxcfb_update_data upd_data;
+
+			if (mutex_lock_interruptible(&hard_lock) < 0)
+				return -ERESTARTSYS;
+
 			if (!copy_from_user(&upd_data, argp,
 				sizeof(upd_data))) {
 				ret = mxc_epdc_fb_send_update(&upd_data, info);
@@ -3270,6 +3280,8 @@ static int mxc_epdc_fb_ioctl(struct fb_info *info, unsigned int cmd,
 			} else {
 				ret = -EFAULT;
 			}
+
+			mutex_unlock(&hard_lock);
 
 			break;
 		}
@@ -3324,6 +3336,25 @@ static int mxc_epdc_fb_ioctl(struct fb_info *info, unsigned int cmd,
 				ret = 0;
 			flush_cache_all();
 			outer_flush_all();
+			break;
+		}
+
+	case MXCFB_DISABLE_EPDC_ACCESS:
+		{
+			struct mxc_epdc_fb_data *fb_data = info ?
+				(struct mxc_epdc_fb_data *)info:g_fb_data;
+			mxc_epdc_fb_flush_updates(fb_data);
+			/* disable handling any user update request */
+			mutex_lock(&hard_lock);
+			ret = 0;
+			break;
+		}
+
+	case MXCFB_ENABLE_EPDC_ACCESS:
+		{
+			/* enable user update handling again */
+			mutex_unlock(&hard_lock);
+			ret = 0;
 			break;
 		}
 
@@ -4305,7 +4336,6 @@ static void mxc_epdc_fb_fw_handler(const struct firmware *fw,
 
 	target_pix_clk = fb_data->cur_mode->vmode->pixclock;
 	/* Enable pix clk for EPDC */
-	clk_prepare_enable(fb_data->epdc_clk_pix);
 	rounded_pix_clk = clk_round_rate(fb_data->epdc_clk_pix, target_pix_clk);
 
 	if (((rounded_pix_clk >= target_pix_clk + target_pix_clk/100) ||
@@ -4329,6 +4359,7 @@ static void mxc_epdc_fb_fw_handler(const struct firmware *fw,
 	}
 
 	clk_set_rate(fb_data->epdc_clk_pix, rounded_pix_clk);
+	clk_prepare_enable(fb_data->epdc_clk_pix);
 
 	epdc_init_sequence(fb_data);
 
@@ -5330,21 +5361,26 @@ static int pxp_process_update(struct mxc_epdc_fb_data *fb_data,
 	 */
 	proc_data->drect.top = 0;
 	proc_data->drect.left = 0;
-	proc_data->drect.width = proc_data->srect.width;
-	proc_data->drect.height = proc_data->srect.height;
 
 	/* PXP expects rotation in terms of degrees */
 	proc_data->rotate = fb_data->epdc_fb_var.rotate * 90;
 	if (proc_data->rotate > 270)
 		proc_data->rotate = 0;
 
-	pxp_conf->out_param.width = update_region->width;
-	pxp_conf->out_param.height = update_region->height;
-
-	if ((proc_data->rotate == 90) || (proc_data->rotate == 270))
+	/* Just as V4L2 PXP, we should pass the rotated values to PXP */
+	if ((proc_data->rotate == 90) || (proc_data->rotate == 270)) {
+		proc_data->drect.width = proc_data->srect.height;
+		proc_data->drect.height = proc_data->srect.width;
+		pxp_conf->out_param.width = update_region->height;
+		pxp_conf->out_param.height = update_region->width;
 		pxp_conf->out_param.stride = update_region->height;
-	else
+	} else {
+		proc_data->drect.width = proc_data->srect.width;
+		proc_data->drect.height = proc_data->srect.height;
+		pxp_conf->out_param.width = update_region->width;
+		pxp_conf->out_param.height = update_region->height;
 		pxp_conf->out_param.stride = update_region->width;
+	}
 
 	/* For EPDC v2.0, we need output to be 64-bit
 	 * aligned since EPDC stride does not work. */

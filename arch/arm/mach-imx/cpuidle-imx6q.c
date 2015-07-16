@@ -27,9 +27,9 @@ static int imx6q_enter_wait(struct cpuidle_device *dev,
 		 */
 		if (!spin_trylock(&master_lock))
 			goto idle;
-		imx6_set_lpm(WAIT_UNCLOCKED);
+		imx6q_set_lpm(WAIT_UNCLOCKED);
 		cpu_do_idle();
-		imx6_set_lpm(WAIT_CLOCKED);
+		imx6q_set_lpm(WAIT_CLOCKED);
 		spin_unlock(&master_lock);
 		goto done;
 	}
@@ -65,8 +65,8 @@ static struct cpuidle_driver imx6q_cpuidle_driver = {
 
 int __init imx6q_cpuidle_init(void)
 {
-	/* Set cache lpm bit for reliable WAIT mode support */
-	imx6_set_cache_lpm_in_wait(true);
+	/* Set INT_MEM_CLK_LPM bit to get a reliable WAIT mode support */
+	imx6q_set_int_mem_clk_lpm(true);
 
 	return cpuidle_register(&imx6q_cpuidle_driver, NULL);
 }

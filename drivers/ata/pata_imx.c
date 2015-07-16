@@ -15,7 +15,6 @@
  */
 #include <linux/kernel.h>
 #include <linux/module.h>
-#include <linux/init.h>
 #include <linux/blkdev.h>
 #include <scsi/scsi_host.h>
 #include <linux/ata.h>
@@ -191,7 +190,7 @@ static int pata_imx_remove(struct platform_device *pdev)
 	return 0;
 }
 
-#ifdef CONFIG_PM
+#ifdef CONFIG_PM_SLEEP
 static int pata_imx_suspend(struct device *dev)
 {
 	struct ata_host *host = dev_get_drvdata(dev);
@@ -250,7 +249,7 @@ static struct platform_driver pata_imx_driver = {
 		.name		= DRV_NAME,
 		.of_match_table	= imx_pata_dt_ids,
 		.owner		= THIS_MODULE,
-#ifdef CONFIG_PM
+#ifdef CONFIG_PM_SLEEP
 		.pm		= &pata_imx_pm_ops,
 #endif
 	},

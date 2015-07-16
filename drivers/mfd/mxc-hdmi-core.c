@@ -78,10 +78,12 @@ unsigned int hdmi_set_cable_state(unsigned int state)
 	hdmi_cable_state = state;
 	spin_unlock_irqrestore(&hdmi_cable_state_lock, flags);
 
+#ifndef CONFIG_MFD_MXC_HDMI_ANDROID
 	if (check_hdmi_state() && substream && hdmi_abort_state) {
 		hdmi_abort_state = 0;
 		substream->ops->trigger(substream, SNDRV_PCM_TRIGGER_START);
 	}
+#endif
 	return 0;
 }
 EXPORT_SYMBOL(hdmi_set_cable_state);
@@ -95,10 +97,13 @@ unsigned int hdmi_set_blank_state(unsigned int state)
 	hdmi_blank_state = state;
 	spin_unlock_irqrestore(&hdmi_blank_state_lock, flags);
 
+#ifndef CONFIG_MFD_MXC_HDMI_ANDROID
 	if (check_hdmi_state() && substream && hdmi_abort_state) {
 		hdmi_abort_state = 0;
 		substream->ops->trigger(substream, SNDRV_PCM_TRIGGER_START);
 	}
+#endif
+
 	return 0;
 }
 EXPORT_SYMBOL(hdmi_set_blank_state);
@@ -109,10 +114,15 @@ static void hdmi_audio_abort_stream(struct snd_pcm_substream *substream)
 
 	snd_pcm_stream_lock_irqsave(substream, flags);
 
+#ifndef CONFIG_MFD_MXC_HDMI_ANDROID
 	if (snd_pcm_running(substream)) {
 		hdmi_abort_state = 1;
 		substream->ops->trigger(substream, SNDRV_PCM_TRIGGER_STOP);
 	}
+#else
+	if (snd_pcm_running(substream))
+		snd_pcm_stop(substream, SNDRV_PCM_STATE_DISCONNECTED);
+#endif
 
 	snd_pcm_stream_unlock_irqrestore(substream, flags);
 }
@@ -556,6 +566,8 @@ EXPORT_SYMBOL(hdmi_init_clk_regenerator);
 void hdmi_clk_regenerator_update_pixel_clock(u32 pixclock)
 {
 
+	if (!pixclock)
+		return;
 	/* Translate pixel clock in ps (pico seconds) to Hz  */
 	pixel_clk_rate = PICOS2KHZ(pixclock) * 1000UL;
 	hdmi_set_clk_regenerator();
@@ -684,13 +696,13 @@ static int mxc_hdmi_core_probe(struct platform_device *pdev)
 		ret = PTR_ERR(isfr_clk);
 		dev_err(&hdmi_data->pdev->dev,
 			"Unable to get HDMI isfr clk: %d\n", ret);
-		goto eclkg;
+		goto eclkg1;
 	}
 
 	ret = clk_prepare_enable(isfr_clk);
 	if (ret < 0) {
 		dev_err(&pdev->dev, "Cannot enable HDMI clock: %d\n", ret);
-		goto eclke;
+		goto eclke1;
 	}
 
 	pr_debug("%s isfr_clk:%d\n", __func__,
@@ -733,6 +745,7 @@ static int mxc_hdmi_core_probe(struct platform_device *pdev)
 	/* Disable HDMI clocks until video/audio sub-drivers are initialized */
 	clk_disable_unprepare(isfr_clk);
 	clk_disable_unprepare(iahb_clk);
+	clk_disable_unprepare(mipi_core_clk);
 
 	/* Replace platform data coming in with a local struct */
 	platform_set_drvdata(pdev, hdmi_data);
@@ -747,8 +760,12 @@ eclke2:
 	clk_put(iahb_clk);
 eclkg2:
 	clk_disable_unprepare(isfr_clk);
-eclke:
+eclke1:
 	clk_put(isfr_clk);
+eclkg1:
+	clk_disable_unprepare(mipi_core_clk);
+eclke:
+	clk_put(mipi_core_clk);
 eclkg:
 	return ret;
 }

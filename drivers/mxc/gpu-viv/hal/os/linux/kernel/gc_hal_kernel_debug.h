@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (C) 2005 - 2013 by Vivante Corp.
+*    Copyright (C) 2005 - 2014 by Vivante Corp.
 *
 *    This program is free software; you can redistribute it and/or modify
 *    it under the terms of the GNU General Public License as published by
@@ -43,14 +43,18 @@ typedef va_list gctARGUMENTS;
 #define gcmkARGUMENTS_END(Arguments) \
     va_end(Arguments)
 
+#define gcmkARGUMENTS_ARG(Arguments, Type) \
+    va_arg(Arguments, Type)
+
 #define gcmkDECLARE_LOCK(__spinLock__) \
-    static DEFINE_SPINLOCK(__spinLock__);
+    static DEFINE_SPINLOCK(__spinLock__); \
+    unsigned long __spinLock__##flags = 0;
 
 #define gcmkLOCKSECTION(__spinLock__) \
-    spin_lock(&__spinLock__)
+    spin_lock_irqsave(&__spinLock__, __spinLock__##flags)
 
 #define gcmkUNLOCKSECTION(__spinLock__) \
-    spin_unlock(&__spinLock__)
+    spin_unlock_irqrestore(&__spinLock__, __spinLock__##flags)
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,24)
 #   define gcmkGETPROCESSID() \
@@ -69,10 +73,11 @@ typedef va_list gctARGUMENTS;
 #endif
 
 #define gcmkOUTPUT_STRING(String) \
-   if(gckDebugFileSystemIsEnabled()) \
-   	gckDebugFileSystemPrint(String);\
-   else\
-   	printk(String); \
+    if(gckDEBUGFS_IsEnabled()) {\
+        while(-ERESTARTSYS == gckDEBUGFS_Print(String));\
+    }else{\
+        printk(String); \
+    }\
     touch_softlockup_watchdog()
 
 
@@ -86,10 +91,16 @@ typedef va_list gctARGUMENTS;
     snprintf(Destination, Size, Message, Value1, Value2, Value3)
 
 #define gcmkVSPRINTF(Destination, Size, Message, Arguments) \
-    vsnprintf(Destination, Size, Message, *(va_list *) &Arguments)
+    vsnprintf(Destination, Size, Message, *((va_list*)Arguments))
 
 #define gcmkSTRCAT(Destination, Size, String) \
     strncat(Destination, String, Size)
+
+#define gcmkMEMCPY(Destination, Source, Size) \
+    memcpy(Destination, Source, Size)
+
+#define gcmkSTRLEN(String) \
+    strlen(String)
 
 /* If not zero, forces data alignment in the variable argument list
    by its individual size. */

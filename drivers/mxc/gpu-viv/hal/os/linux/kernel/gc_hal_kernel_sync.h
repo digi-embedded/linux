@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (C) 2005 - 2013 by Vivante Corp.
+*    Copyright (C) 2005 - 2014 by Vivante Corp.
 *
 *    This program is free software; you can redistribute it and/or modify
 *    it under the terms of the GNU General Public License as published by
@@ -24,7 +24,8 @@
 
 #include <linux/types.h>
 
-#include <linux/sync.h>
+/* sync.h is in drivers/staging/android/ for now. */
+#include <sync.h>
 
 #include <gc_hal.h>
 #include <gc_hal_base.h>

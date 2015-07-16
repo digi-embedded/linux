@@ -21,7 +21,8 @@ config FB_MXC_SYNC_PANEL
 config FB_MXC_LDB
 	tristate "MXC LDB"
 	depends on FB_MXC_SYNC_PANEL
-	depends on MXC_IPU_V3
+	depends on MXC_IPU_V3 || FB_MXS
+	select VIDEOMODE_HELPERS
 
 config FB_MXC_MIPI_DSI
 	tristate "MXC MIPI_DSI"
@@ -47,15 +48,6 @@ config FB_MXC_EDID
      tristate "MXC EDID support"
      default y
 
-config FB_MXC_AD9389
-	depends on I2C
-	tristate "AD9389/AD9889 HDMI/DVI transmitter support."
-	help
-	  Driver for the AD9389/AD9889 HDMI/DVI video transmitter.
-
-	  To compile this driver as a module choose M here. The module
-	  will be called ad9389.
-
 config FB_MXC_EINK_PANEL
 	depends on FB_MXC
 	depends on DMA_ENGINE
@@ -70,6 +62,12 @@ config FB_MXC_EINK_AUTO_UPDATE_MODE
 config FB_MXS_SII902X
 	tristate "Si Image SII9022 DVI/HDMI Interface Chip"
 	depends on FB_MXS && I2C
+
+config FB_MXC_DCIC
+	tristate "MXC DCIC"
+	depends on FB_MXC_SYNC_PANEL
+	depends on MXC_IPU_V3 || FB_MXS
+	select VIDEOMODE_HELPERS
 
 config HANNSTAR_CABC
 	tristate "Hannstar CABC function"

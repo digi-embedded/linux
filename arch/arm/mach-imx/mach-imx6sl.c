@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Freescale Semiconductor, Inc.
+ * Copyright (C) 2013-2014 Freescale Semiconductor, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -17,8 +17,9 @@
 #include <asm/mach/map.h>
 
 #include "common.h"
+#include "cpuidle.h"
 
-static void __init imx6sl_fec_init(void)
+static void __init imx6sl_fec_clk_init(void)
 {
 	struct regmap *gpr;
 
@@ -29,9 +30,14 @@ static void __init imx6sl_fec_init(void)
 			IMX6SL_GPR1_FEC_CLOCK_MUX2_SEL_MASK, 0);
 		regmap_update_bits(gpr, IOMUXC_GPR1,
 			IMX6SL_GPR1_FEC_CLOCK_MUX1_SEL_MASK, 0);
-	} else {
+	} else
 		pr_err("failed to find fsl,imx6sl-iomux-gpr regmap\n");
-	}
+}
+
+static inline void imx6sl_fec_init(void)
+{
+	imx6sl_fec_clk_init();
+	imx6_enet_mac_init("fsl,imx6sl-fec");
 }
 
 static void __init imx6sl_init_late(void)
@@ -39,6 +45,8 @@ static void __init imx6sl_init_late(void)
 	/* imx6sl reuses imx6q cpufreq driver */
 	if (IS_ENABLED(CONFIG_ARM_IMX6Q_CPUFREQ))
 		platform_device_register_simple("imx6q-cpufreq", -1, NULL, 0);
+
+	imx6sl_cpuidle_init();
 }
 
 static void __init imx6sl_init_machine(void)
@@ -55,8 +63,7 @@ static void __init imx6sl_init_machine(void)
 
 	imx6sl_fec_init();
 	imx_anatop_init();
-	/* Reuse imx6q pm code */
-	imx6q_pm_init();
+	imx6sl_pm_init();
 }
 
 static void __init imx6sl_init_irq(void)
@@ -73,8 +80,15 @@ static const char *imx6sl_dt_compat[] __initconst = {
 	NULL,
 };
 
+static void __init imx6sl_map_io(void)
+{
+	debug_ll_io_init();
+	imx6_pm_map_io();
+	imx6_busfreq_map_io();
+}
+
 DT_MACHINE_START(IMX6SL, "Freescale i.MX6 SoloLite (Device Tree)")
-	.map_io		= debug_ll_io_init,
+	.map_io		= imx6sl_map_io,
 	.init_irq	= imx6sl_init_irq,
 	.init_machine	= imx6sl_init_machine,
 	.init_late      = imx6sl_init_late,

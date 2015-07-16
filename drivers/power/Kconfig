@@ -278,7 +278,7 @@ config CHARGER_MAX8903
 
 config SABRESD_MAX8903
 	tristate "Sabresd Board Battery DC-DC Charger for USB and Adapter Power"
-	depends on GENERIC_HARDIRQS && TOUCHSCREEN_MAX11801
+	depends on TOUCHSCREEN_MAX11801
 	help
 	  Say Y to enable support for the MAX8903 DC-DC charger and sysfs on
 	  sabresd board.The driver supports controlling charger and battery
@@ -399,7 +399,7 @@ config BATTERY_GOLDFISH
 
 config IMX6_USB_CHARGER
 	bool "Freescale imx6 USB Charger"
-	depends on SOC_IMX6Q || SOC_IMX6SL
+	depends on SOC_IMX6Q || SOC_IMX6SL || SOC_IMX6SX
 	help
 	  Say Y to enable Freescale imx6 USB Charger Detect.
 

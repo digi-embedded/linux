@@ -2,7 +2,7 @@
  *  mma8451.c - Linux kernel modules for 3-Axis Orientation/Motion
  *  Detection Sensor
  *
- *  Copyright (C) 2010-2013 Freescale Semiconductor, Inc. All Rights Reserved.
+ *  Copyright (C) 2010-2014 Freescale Semiconductor, Inc. All Rights Reserved.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by

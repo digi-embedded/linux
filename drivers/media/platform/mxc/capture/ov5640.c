@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2013 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright (C) 2012-2015 Freescale Semiconductor, Inc. All Rights Reserved.
  */
 
 /*
@@ -29,7 +29,7 @@
 #include <linux/pinctrl/consumer.h>
 #include <linux/regulator/consumer.h>
 #include <media/v4l2-chip-ident.h>
-#include <media/v4l2-int-device.h>
+#include "v4l2-int-device.h"
 #include "mxc_v4l2_capture.h"
 
 #define OV5640_VOLTAGE_ANALOG               2800000
@@ -566,7 +566,6 @@ static s32 ov5640_read_reg(u16 reg, u8 *val);
 static s32 ov5640_write_reg(u16 reg, u8 val);
 
 static const struct i2c_device_id ov5640_id[] = {
-	{"ov5640", 0},
 	{"ov564x", 0},
 	{},
 };
@@ -576,7 +575,7 @@ MODULE_DEVICE_TABLE(i2c, ov5640_id);
 static struct i2c_driver ov5640_i2c_driver = {
 	.driver = {
 		  .owner = THIS_MODULE,
-		  .name  = "ov5640",
+		  .name  = "ov564x",
 		  },
 	.probe  = ov5640_probe,
 	.remove = ov5640_remove,
@@ -992,7 +991,7 @@ static int ov5640_set_night_mode(int enable)
 
 /* enable = 0 to turn off AEC/AGC
    enable = 1 to turn on AEC/AGC */
-void ov5640_turn_on_AE_AG(int enable)
+static void ov5640_turn_on_AE_AG(int enable)
 {
 	u8 ae_ag_ctrl;
 
@@ -1798,7 +1797,7 @@ static struct v4l2_int_slave ov5640_slave = {
 
 static struct v4l2_int_device ov5640_int_device = {
 	.module = THIS_MODULE,
-	.name = "ov5640",
+	.name = "ov564x",
 	.type = v4l2_int_type_slave,
 	.u = {
 		.slave = &ov5640_slave,

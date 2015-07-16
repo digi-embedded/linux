@@ -36,6 +36,7 @@
 #define MXC_CPU_MX53		53
 #define MXC_CPU_IMX6SL		0x60
 #define MXC_CPU_IMX6DL		0x61
+#define MXC_CPU_IMX6SX		0x62
 #define MXC_CPU_IMX6Q		0x63
 
 #define IMX_CHIP_REVISION_1_0		0x10
@@ -53,6 +54,8 @@
 #define IMX_CHIP_REVISION_3_2		0x32
 #define IMX_CHIP_REVISION_3_3		0x33
 #define IMX_CHIP_REVISION_UNKNOWN	0xff
+
+#define IMX_DDR_TYPE_LPDDR2		1
 
 #ifndef __ASSEMBLY__
 extern unsigned int __mxc_cpu_type;
@@ -163,6 +166,11 @@ static inline bool cpu_is_imx6sl(void)
 static inline bool cpu_is_imx6dl(void)
 {
 	return __mxc_cpu_type == MXC_CPU_IMX6DL;
+}
+
+static inline bool cpu_is_imx6sx(void)
+{
+	return __mxc_cpu_type == MXC_CPU_IMX6SX;
 }
 
 static inline bool cpu_is_imx6q(void)

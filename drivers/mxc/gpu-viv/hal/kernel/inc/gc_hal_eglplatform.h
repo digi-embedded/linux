@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (C) 2005 - 2013 by Vivante Corp.
+*    Copyright (C) 2005 - 2014 by Vivante Corp.
 *
 *    This program is free software; you can redistribute it and/or modify
 *    it under the terms of the GNU General Public License as published by
@@ -17,6 +17,7 @@
 *    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 *
 *****************************************************************************/
+
 
 #ifndef __gc_hal_eglplatform_h_
 #define __gc_hal_eglplatform_h_
@@ -51,8 +52,12 @@ typedef struct _DFBPixmap *  HALNativePixmapType;
 #elif defined(LINUX) && defined(EGL_API_FB) && !defined(__APPLE__)
 
 #if defined(EGL_API_WL)
+
+#if defined(__GNUC__)
+#   define inline            __inline__  /* GNU keyword. */
+#endif
+
 /* Wayland platform. */
-#include "wayland-server.h"
 #include <wayland-egl.h>
 
 #define WL_EGL_NUM_BACKBUFFERS 3
@@ -70,6 +75,7 @@ typedef struct _gcsWL_EGL_DISPLAY
    struct wl_viv* wl_viv;
    struct wl_registry *registry;
    struct wl_event_queue    *wl_queue;
+   gctINT swapInterval;
 } gcsWL_EGL_DISPLAY;
 
 typedef struct _gcsWL_EGL_BUFFER_INFO
@@ -288,6 +294,12 @@ gcoOS_SetSwapInterval(
     IN HALNativeDisplayType Display,
     IN gctINT Interval
 );
+
+gceSTATUS
+gcoOS_SetSwapIntervalEx(
+    IN HALNativeDisplayType Display,
+    IN gctINT Interval,
+    IN gctPOINTER localDisplay);
 
 gceSTATUS
 gcoOS_GetSwapInterval(
@@ -620,8 +632,41 @@ gcoOS_SwapBuffers(
     OUT gctUINT *Width,
     OUT gctUINT *Height
     );
+
+#ifdef EGL_API_DRI
+gceSTATUS
+gcoOS_ResizeWindow(
+    IN gctPOINTER localDisplay,
+    IN HALNativeWindowType Drawable,
+    IN gctUINT Width,
+    IN gctUINT Height)
+    ;
+
+#ifdef USE_FREESCALE_EGL_ACCEL
+gceSTATUS
+gcoOS_SwapBuffersGeneric_Async(
+    IN gctPOINTER localDisplay,
+    IN HALNativeWindowType Drawable,
+    IN gcoSURF RenderTarget,
+    IN gcoSURF ResolveTarget,
+    IN gctPOINTER ResolveBits,
+    OUT gctUINT *Width,
+    OUT gctUINT *Height,
+    IN void * resolveRect
+    );
+
+gceSTATUS
+gcoOS_DrawSurface(
+    IN gctPOINTER localDisplay,
+    IN HALNativeWindowType Drawable
+    );
+#endif
+
+#endif
+
 #ifdef __cplusplus
 }
 #endif
 
 #endif /* __gc_hal_eglplatform_h_ */
+

@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (C) 2005 - 2013 by Vivante Corp.
+*    Copyright (C) 2005 - 2014 by Vivante Corp.
 *
 *    This program is free software; you can redistribute it and/or modify
 *    it under the terms of the GNU General Public License as published by
@@ -21,7 +21,6 @@
 
 #ifndef __gc_hal_kernel_buffer_h_
 #define __gc_hal_kernel_buffer_h_
-
 
 #ifdef __cplusplus
 extern "C" {
@@ -91,11 +90,37 @@ typedef struct _gcsSTATE_DELTA
 }
 gcsSTATE_DELTA;
 
+/* Command buffer patch record. */
+struct _gcsPATCH
+{
+    /* Pointer within the buffer. */
+    gctUINT32_PTR               pointer;
+
+    /* 32-bit data to write at the specified offset. */
+    gctUINT32                   data;
+};
+
+/* List of patches for the command buffer. */
+struct _gcsPATCH_LIST
+{
+    /* Array of patch records. */
+    struct _gcsPATCH            patch[1024];
+
+    /* Number of patches in the array. */
+    gctUINT                     count;
+
+    /* Next item in the list. */
+    struct _gcsPATCH_LIST       *next;
+};
+
 /* Command buffer object. */
 struct _gcoCMDBUF
 {
     /* The object. */
     gcsOBJECT                   object;
+
+    /* Commit count. */
+    gctUINT                     count;
 
     /* Command buffer entry and exit pipes. */
     gcePIPE_SELECT              entryPipe;
@@ -114,20 +139,20 @@ struct _gcoCMDBUF
     gctUINT64                   logical;
 
     /* Number of bytes in command buffer. */
-    gctUINT                     bytes;
+    gctUINT32                   bytes;
 
     /* Start offset into the command buffer. */
-    gctUINT                     startOffset;
+    gctUINT32                   startOffset;
 
     /* Current offset into the command buffer. */
-    gctUINT                     offset;
+    gctUINT32                   offset;
 
     /* Number of free bytes in command buffer. */
-    gctUINT                     free;
+    gctUINT32                   free;
 
     /* Location of the last reserved area. */
     gctUINT64                   lastReserve;
-    gctUINT                     lastOffset;
+    gctUINT32                   lastOffset;
 
 #if gcdSECURE_USER
     /* Hint array for the current command buffer. */
@@ -142,6 +167,17 @@ struct _gcoCMDBUF
     gctUINT32                   lastLoadStateAddress;
     gctUINT32                   lastLoadStateCount;
 #endif
+
+    /* Completion signal. */
+    gctSIGNAL                   signal;
+
+    /* List of patches. */
+    struct _gcsPATCH_LIST       *patchHead;
+    struct _gcsPATCH_LIST       *patchTail;
+
+    /* Link to the siblings. */
+    gcoCMDBUF                   prev;
+    gcoCMDBUF                   next;
 };
 
 typedef struct _gcsQUEUE
@@ -164,18 +200,22 @@ struct _gcoQUEUE
     gcsQUEUE_PTR                head;
     gcsQUEUE_PTR                tail;
 
-#ifdef __QNXNTO__
-    /* Buffer for records. */
-    gcsQUEUE_PTR                records;
-    gctUINT32                   freeBytes;
-    gctUINT32                   offset;
-#else
+    /* chunks of the records. */
+    gctPOINTER                  chunks;
+
     /* List of free records. */
     gcsQUEUE_PTR                freeList;
-#endif
+
     #define gcdIN_QUEUE_RECORD_LIMIT 16
     /* Number of records currently in queue */
     gctUINT32                   recordCount;
+};
+
+struct _gcsTEMPCMDBUF
+{
+    gctUINT32 currentByteSize;
+    gctPOINTER buffer;
+    gctBOOL  inUse;
 };
 
 #ifdef __cplusplus

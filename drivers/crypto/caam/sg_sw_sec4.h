@@ -1,7 +1,7 @@
 /*
  * CAAM/SEC 4.x functions for using scatterlists in caam driver
  *
- * Copyright (C) 2008-2013 Freescale Semiconductor, Inc.
+ * Copyright 2008-2015 Freescale Semiconductor, Inc.
  *
  */
 

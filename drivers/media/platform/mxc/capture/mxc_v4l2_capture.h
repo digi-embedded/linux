@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2013 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright 2004-2014 Freescale Semiconductor, Inc. All Rights Reserved.
  */
 
 /*
@@ -37,7 +37,7 @@
 #include <linux/platform_data/dma-imx.h>
 
 #include <media/v4l2-dev.h>
-#include <media/v4l2-int-device.h>
+#include "v4l2-int-device.h"
 
 
 #define FRAME_NUM 10
@@ -157,6 +157,8 @@ typedef struct _cam_data {
 
 	/* v4l2 format */
 	struct v4l2_format v2f;
+	struct v4l2_format input_fmt;	/* camera in */
+	bool bswapenable;
 	int rotation;	/* for IPUv1 and IPUv3, this means encoder rotation */
 	int vf_rotation; /* viewfinder rotation only for IPUv1 and IPUv3 */
 	struct v4l2_mxc_offset offset;
@@ -181,7 +183,7 @@ typedef struct _cam_data {
 	struct v4l2_rect crop_defrect;
 	struct v4l2_rect crop_current;
 
-	int (*enc_update_eba) (struct ipu_soc *ipu, int csi_id,  dma_addr_t eba,
+	int (*enc_update_eba) (struct ipu_soc *ipu, dma_addr_t eba,
 			       int *bufferNum);
 	int (*enc_enable) (void *private);
 	int (*enc_disable) (void *private);
@@ -204,8 +206,6 @@ typedef struct _cam_data {
 	int capture_pid;
 	bool low_power;
 	wait_queue_head_t power_queue;
-	wait_queue_head_t ready_queue;
-	struct work_struct r_queue_wq;
 	unsigned int ipu_id;
 	unsigned int csi;
 	u8 mclk_source;
@@ -221,6 +221,7 @@ typedef struct _cam_data {
 	struct v4l2_int_device *self;
 	int sensor_index;
 	void *ipu;
+	void *csi_soc;
 	enum imx_v4l2_devtype devtype;
 
 	/* v4l2 buf elements related to PxP DMA */
@@ -254,17 +255,9 @@ struct sensor_data {
 	u8 mclk_source;
 	struct clk *sensor_clk;
 	int csi;
-	int ipu_id;
 
 	void (*io_init)(void);
 };
 
 void set_mclk_rate(uint32_t *p_mclk_freq, uint32_t csi);
-void mxc_camera_common_lock(void);
-void mxc_camera_common_unlock(void);
-
-#define MXC_V4L2_GET_IPU_CHAN(x) (x ? CSI_MEM1 : CSI_MEM0)
-#define MXC_V4L2_GET_IPU_IRQ(x) (x ? IPU_IRQ_CSI1_OUT_EOF : \
-		IPU_IRQ_CSI0_OUT_EOF)
-
 #endif				/* __MXC_V4L2_CAPTURE_H__ */

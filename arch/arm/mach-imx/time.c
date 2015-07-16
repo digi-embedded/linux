@@ -25,8 +25,12 @@
 #include <linux/irq.h>
 #include <linux/clockchips.h>
 #include <linux/clk.h>
+#include <linux/delay.h>
 #include <linux/err.h>
 #include <linux/sched_clock.h>
+#include <linux/of.h>
+#include <linux/of_address.h>
+#include <linux/of_irq.h>
 
 #include <asm/mach/time.h>
 
@@ -56,15 +60,15 @@
 #define MX2_TSTAT_CAPT		(1 << 1)
 #define MX2_TSTAT_COMP		(1 << 0)
 
-/* MX31, MX35, MX25, MX5 */
+/* MX31, MX35, MX25, MX5, MX6 */
 #define V2_TCTL_WAITEN		(1 << 3) /* Wait enable mode */
 #define V2_TCTL_CLK_IPG		(1 << 6)
 #define V2_TCTL_CLK_PER		(2 << 6)
-#define V2_TCTL_CLK_OSC_DIV8     (5 << 6)
-#define V2_TCTL_CLK_OSC         (7 << 6)
-#define V2_TCTL_24MEN          (1 << 10)
+#define V2_TCTL_CLK_OSC_DIV8	(5 << 6)
+#define V2_TCTL_CLK_OSC		(7 << 6)
+#define V2_TCTL_24MEN		(1 << 10)
 #define V2_TCTL_FRR		(1 << 9)
-#define V2_TPRER_PRE24M                12
+#define V2_TPRER_PRE24M		12
 #define V2_IR			0x0c
 #define V2_TSTAT		0x08
 #define V2_TSTAT_OF1		(1 << 0)
@@ -120,10 +124,21 @@ static u64 notrace mxc_read_sched_clock(void)
 	return sched_clock_reg ? __raw_readl(sched_clock_reg) : 0;
 }
 
+static struct delay_timer imx_delay_timer;
+
+static unsigned long imx_read_current_timer(void)
+{
+	return __raw_readl(sched_clock_reg);
+}
+
 static int __init mxc_clocksource_init(struct clk *timer_clk)
 {
 	unsigned int c = clk_get_rate(timer_clk);
 	void __iomem *reg = timer_base + (timer_is_v2() ? V2_TCN : MX1_2_TCN);
+
+	imx_delay_timer.read_current_timer = &imx_read_current_timer;
+	imx_delay_timer.freq = c;
+	register_current_timer_delay(&imx_delay_timer);
 
 	sched_clock_reg = reg;
 
@@ -299,7 +314,7 @@ void __init mxc_timer_init(void __iomem *base, int irq)
 	 * imx6dl, others from per clk.
 	 */
 	if ((cpu_is_imx6q() && imx_get_soc_revision() > IMX_CHIP_REVISION_1_0)
-		|| cpu_is_imx6dl())
+		|| cpu_is_imx6dl() || cpu_is_imx6sx())
 		timer_clk = clk_get_sys("imx-gpt.0", "gpt_3m");
 	else
 		timer_clk = clk_get_sys("imx-gpt.0", "per");
@@ -326,10 +341,11 @@ void __init mxc_timer_init(void __iomem *base, int irq)
 
 	if (timer_is_v2()) {
 		if ((cpu_is_imx6q() && imx_get_soc_revision() >
-			IMX_CHIP_REVISION_1_0) || cpu_is_imx6dl()) {
+			IMX_CHIP_REVISION_1_0) || cpu_is_imx6dl() ||
+			cpu_is_imx6sx()) {
 			tctl_val = V2_TCTL_CLK_OSC_DIV8 | V2_TCTL_FRR |
 				V2_TCTL_WAITEN | MXC_TCTL_TEN;
-			if (cpu_is_imx6dl()) {
+			if (cpu_is_imx6dl() || cpu_is_imx6sx()) {
 				/* 24 / 8 = 3 MHz */
 				tprer_val = 7 << V2_TPRER_PRE24M;
 				__raw_writel(tprer_val, timer_base + MXC_TPRER);
@@ -351,4 +367,16 @@ void __init mxc_timer_init(void __iomem *base, int irq)
 
 	/* Make irqs happen */
 	setup_irq(irq, &mxc_timer_irq);
+}
+
+void __init mxc_timer_init_dt(struct device_node *np)
+{
+	void __iomem *base;
+	int irq;
+
+	base = of_iomap(np, 0);
+	WARN_ON(!base);
+	irq = irq_of_parse_and_map(np, 0);
+
+	mxc_timer_init(base, irq);
 }

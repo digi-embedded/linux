@@ -816,6 +816,9 @@ static int si476x_core_probe(struct i2c_client *client,
 		goto free_kfifo;
 	}
 
+	if (of_property_read_bool(client->dev.of_node, "revision-a10"))
+		core->revision = SI476X_REVISION_A10;
+
 	cell_num = 0;
 
 	cell = &core->cells[SI476X_RADIO_CELL];
@@ -831,6 +834,7 @@ static int si476x_core_probe(struct i2c_client *client,
 	    core->pinmux.xout == SI476X_XOUT_TRISTATE) {
 		cell = &core->cells[SI476X_CODEC_CELL];
 		cell->name          = "si476x-codec";
+		cell->of_compatible = "si476x-codec";
 		cell_num++;
 	}
 #endif

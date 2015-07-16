@@ -77,7 +77,6 @@ struct usb_phy {
 	unsigned int		 flags;
 
 	enum usb_phy_type	type;
-	enum usb_otg_state	state;
 	enum usb_phy_events	last_event;
 
 	struct usb_otg		*otg;
@@ -113,7 +112,7 @@ struct usb_phy {
 
 	/*
 	 * Set wakeup enable for PHY, in that case, the PHY can be
-	 * waken up from suspend status due to external events,
+	 * woken up from suspend status due to external events,
 	 * like vbus change, dp/dm change and id.
 	 */
 	int	(*set_wakeup)(struct usb_phy *x, bool enabled);

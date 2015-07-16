@@ -32,10 +32,7 @@ static void gpio_reset_set(struct reset_controller_dev *rcdev, int asserted)
 	if (drvdata->active_low)
 		value = !value;
 
-	if (gpio_cansleep(drvdata->gpio))
-		gpio_set_value_cansleep(drvdata->gpio, value);
-	else
-		gpio_set_value(drvdata->gpio, value);
+	gpio_set_value(drvdata->gpio, value);
 }
 
 static int gpio_reset(struct reset_controller_dev *rcdev, unsigned long id)

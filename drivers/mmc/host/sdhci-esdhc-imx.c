@@ -11,6 +11,7 @@
  * the Free Software Foundation; either version 2 of the License.
  */
 
+#include <linux/busfreq-imx6.h>
 #include <linux/io.h>
 #include <linux/delay.h>
 #include <linux/err.h>
@@ -114,6 +115,10 @@
 #define ESDHC_FLAG_STD_TUNING		BIT(5)
 /* The IP has SDHCI_CAPABILITIES_1 register */
 #define ESDHC_FLAG_HAVE_CAP1		BIT(6)
+/* The IP has errata ERR004536 */
+#define ESDHC_FLAG_ERR004536		BIT(7)
+/* need request bus freq during low power */
+#define ESDHC_FLAG_BUSFREQ		BIT(8)
 
 struct esdhc_soc_data {
 	u32 flags;
@@ -140,6 +145,12 @@ static struct esdhc_soc_data usdhc_imx6q_data = {
 };
 
 static struct esdhc_soc_data usdhc_imx6sl_data = {
+	.flags = ESDHC_FLAG_USDHC | ESDHC_FLAG_STD_TUNING
+			| ESDHC_FLAG_HAVE_CAP1 | ESDHC_FLAG_ERR004536
+			| ESDHC_FLAG_BUSFREQ,
+};
+
+static struct esdhc_soc_data usdhc_imx6sx_data = {
 	.flags = ESDHC_FLAG_USDHC | ESDHC_FLAG_STD_TUNING
 			| ESDHC_FLAG_HAVE_CAP1,
 };
@@ -185,6 +196,7 @@ static const struct of_device_id imx_esdhc_dt_ids[] = {
 	{ .compatible = "fsl,imx35-esdhc", .data = &esdhc_imx35_data, },
 	{ .compatible = "fsl,imx51-esdhc", .data = &esdhc_imx51_data, },
 	{ .compatible = "fsl,imx53-esdhc", .data = &esdhc_imx53_data, },
+	{ .compatible = "fsl,imx6sx-usdhc", .data = &usdhc_imx6sx_data, },
 	{ .compatible = "fsl,imx6sl-usdhc", .data = &usdhc_imx6sl_data, },
 	{ .compatible = "fsl,imx6q-usdhc", .data = &usdhc_imx6q_data, },
 	{ /* sentinel */ }
@@ -450,6 +462,10 @@ static void esdhc_writew_le(struct sdhci_host *host, u16 val, int reg)
 			if (val & SDHCI_CTRL_EXEC_TUNING) {
 				v |= ESDHC_MIX_CTRL_EXE_TUNE;
 				m |= ESDHC_MIX_CTRL_FBCLK_SEL;
+				writel(readl(host->ioaddr + ESDHC_TUNING_CTRL) |
+					ESDHC_STD_TUNING_EN |
+					ESDHC_TUNING_START_TAP,
+					host->ioaddr + ESDHC_TUNING_CTRL);
 			} else {
 				v &= ~ESDHC_MIX_CTRL_EXE_TUNE;
 			}
@@ -878,6 +894,11 @@ static int esdhc_set_uhs_signaling(struct sdhci_host *host, unsigned int uhs)
 	return esdhc_change_pinstate(host, uhs);
 }
 
+static unsigned int esdhc_get_max_timeout_counter(struct sdhci_host *host)
+{
+	return 1 << 28;
+}
+
 static struct sdhci_ops sdhci_esdhc_ops = {
 	.read_l = esdhc_readl_le,
 	.read_w = esdhc_readw_le,
@@ -906,6 +927,7 @@ sdhci_esdhc_imx_probe_dt(struct platform_device *pdev,
 			 struct esdhc_platform_data *boarddata)
 {
 	struct device_node *np = pdev->dev.of_node;
+	struct sdhci_host *host = platform_get_drvdata(pdev);
 
 	if (!np)
 		return -ENODEV;
@@ -938,6 +960,12 @@ sdhci_esdhc_imx_probe_dt(struct platform_device *pdev,
 
 	if (of_property_read_u32(np, "fsl,delay-line", &boarddata->delay_line))
 		boarddata->delay_line = 0;
+
+	if (of_find_property(np, "keep-power-in-suspend", NULL))
+		host->mmc->pm_caps |= MMC_PM_KEEP_POWER;
+
+	if (of_find_property(np, "enable-sdio-wakeup", NULL))
+		host->mmc->pm_caps |= MMC_PM_WAKE_SDIO_IRQ;
 
 	return 0;
 }
@@ -996,6 +1024,10 @@ static int sdhci_esdhc_imx_probe(struct platform_device *pdev)
 
 	pltfm_host->clk = imx_data->clk_per;
 	pltfm_host->clock = clk_get_rate(pltfm_host->clk);
+
+	if (imx_data->socdata->flags & ESDHC_FLAG_BUSFREQ)
+		request_bus_freq(BUS_FREQ_HIGH);
+
 	clk_prepare_enable(imx_data->clk_per);
 	clk_prepare_enable(imx_data->clk_ipg);
 	clk_prepare_enable(imx_data->clk_ahb);
@@ -1027,18 +1059,25 @@ static int sdhci_esdhc_imx_probe(struct platform_device *pdev)
 	 */
 	if (esdhc_is_usdhc(imx_data)) {
 		writel(0x08100810, host->ioaddr + ESDHC_WTMK_LVL);
-		host->quirks2 |= SDHCI_QUIRK2_PRESET_VALUE_BROKEN;
+		host->quirks2 |= SDHCI_QUIRK2_PRESET_VALUE_BROKEN |
+					SDHCI_QUIRK2_NOSTD_TIMEOUT_COUNTER;
 		host->mmc->caps |= MMC_CAP_1_8V_DDR;
+
+		/*
+		 * errata ESDHC_FLAG_ERR004536 fix for MX6Q TO1.2 and MX6DL
+		 * TO1.1, it's harmless for MX6SL
+		 */
+		writel(readl(host->ioaddr + 0x6c) | BIT(7), host->ioaddr + 0x6c);
+		sdhci_esdhc_ops.get_max_timeout_counter =
+					esdhc_get_max_timeout_counter;
 	}
 
 	if (imx_data->socdata->flags & ESDHC_FLAG_MAN_TUNING)
 		sdhci_esdhc_ops.platform_execute_tuning =
 					esdhc_executing_tuning;
 
-	if (imx_data->socdata->flags & ESDHC_FLAG_STD_TUNING)
-		writel(readl(host->ioaddr + ESDHC_TUNING_CTRL) |
-			ESDHC_STD_TUNING_EN | ESDHC_TUNING_START_TAP,
-			host->ioaddr + ESDHC_TUNING_CTRL);
+	if (imx_data->socdata->flags & ESDHC_FLAG_ERR004536)
+		host->quirks |= SDHCI_QUIRK_BROKEN_ADMA;
 
 	boarddata = &imx_data->boarddata;
 	if (sdhci_esdhc_imx_probe_dt(pdev, boarddata) < 0) {
@@ -1116,6 +1155,8 @@ static int sdhci_esdhc_imx_probe(struct platform_device *pdev)
 		host->quirks2 |= SDHCI_QUIRK2_NO_1_8_V;
 	}
 
+	device_set_wakeup_capable(&pdev->dev, 1);
+
 	err = sdhci_add_host(host);
 	if (err)
 		goto disable_clk;
@@ -1132,6 +1173,8 @@ disable_clk:
 	clk_disable_unprepare(imx_data->clk_per);
 	clk_disable_unprepare(imx_data->clk_ipg);
 	clk_disable_unprepare(imx_data->clk_ahb);
+	if (imx_data->socdata->flags & ESDHC_FLAG_BUSFREQ)
+		release_bus_freq(BUS_FREQ_HIGH);
 free_sdhci:
 	sdhci_pltfm_free(pdev);
 	return err;
@@ -1174,6 +1217,9 @@ static int sdhci_esdhc_runtime_suspend(struct device *dev)
 	clk_disable_unprepare(imx_data->clk_ipg);
 	clk_disable_unprepare(imx_data->clk_ahb);
 
+	if (imx_data->socdata->flags & ESDHC_FLAG_BUSFREQ)
+		release_bus_freq(BUS_FREQ_HIGH);
+
 	return ret;
 }
 
@@ -1182,6 +1228,9 @@ static int sdhci_esdhc_runtime_resume(struct device *dev)
 	struct sdhci_host *host = dev_get_drvdata(dev);
 	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
 	struct pltfm_imx_data *imx_data = pltfm_host->priv;
+
+	if (imx_data->socdata->flags & ESDHC_FLAG_BUSFREQ)
+		request_bus_freq(BUS_FREQ_HIGH);
 
 	clk_prepare_enable(imx_data->clk_per);
 	clk_prepare_enable(imx_data->clk_ipg);

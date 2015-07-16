@@ -70,7 +70,6 @@ struct hdmi_dma_priv {
 	dma_addr_t phy_hdmi_sdma_t;
 	struct hdmi_sdma_script *hdmi_sdma_t;
 	struct dma_chan *dma_channel;
-	struct imx_dma_data dma_data;
 	struct dma_async_tx_descriptor *desc;
 	struct imx_hdmi_sdma_params sdma_params;
 };
@@ -456,7 +455,7 @@ static void hdmi_dma_data_copy(struct snd_pcm_substream *substream,
 	if (runtime->access != SNDRV_PCM_ACCESS_MMAP_INTERLEAVED)
 		return;
 
-	appl_bytes = frames_to_bytes(runtime, runtime->status->hw_ptr);
+	appl_bytes =  runtime->status->hw_ptr * (runtime->frame_bits / 8);
 	if (type == 'p')
 		appl_bytes += 2 * priv->period_bytes;
 	offset = appl_bytes % priv->buffer_bytes;
@@ -745,13 +744,9 @@ static int hdmi_sdma_config(struct snd_pcm_substream *substream,
 		return -EBUSY;
 	}
 
-	priv->dma_data.data_addr1 = &priv->sdma_params.buffer_num;
-	priv->dma_data.data_addr2 = &priv->sdma_params.phyaddr;
-	priv->dma_channel->private = &priv->dma_data;
-
 	slave_config.direction = DMA_TRANS_NONE;
-	slave_config.dma_request0 = 0;
-	slave_config.dma_request1 = 0;
+	slave_config.src_addr = (dma_addr_t)priv->sdma_params.buffer_num;
+	slave_config.dst_addr = (dma_addr_t)priv->sdma_params.phyaddr;
 
 	ret = dmaengine_slave_config(priv->dma_channel, &slave_config);
 	if (ret) {

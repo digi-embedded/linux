@@ -556,6 +556,23 @@ err_out:
 	return ret;
 }
 
+static int ethtool_copy_validate_indir(u32 *indir, void __user *useraddr,
+					struct ethtool_rxnfc *rx_rings,
+					u32 size)
+{
+	int ret = 0, i;
+
+	if (copy_from_user(indir, useraddr, size * sizeof(indir[0])))
+		ret = -EFAULT;
+
+	/* Validate ring indices */
+	for (i = 0; i < size; i++) {
+		if (indir[i] >= rx_rings->data)
+			ret = -EINVAL;
+	}
+	return ret;
+}
+
 static noinline_for_stack int ethtool_get_rxfh_indir(struct net_device *dev,
 						     void __user *useraddr)
 {
@@ -612,6 +629,7 @@ static noinline_for_stack int ethtool_set_rxfh_indir(struct net_device *dev,
 	u32 *indir;
 	const struct ethtool_ops *ops = dev->ethtool_ops;
 	int ret;
+	u32 ringidx_offset = offsetof(struct ethtool_rxfh_indir, ring_index[0]);
 
 	if (!ops->get_rxfh_indir_size || !ops->set_rxfh_indir ||
 	    !ops->get_rxnfc)
@@ -642,28 +660,198 @@ static noinline_for_stack int ethtool_set_rxfh_indir(struct net_device *dev,
 		for (i = 0; i < dev_size; i++)
 			indir[i] = ethtool_rxfh_indir_default(i, rx_rings.data);
 	} else {
-		if (copy_from_user(indir,
-				  useraddr +
-				  offsetof(struct ethtool_rxfh_indir,
-					   ring_index[0]),
-				  dev_size * sizeof(indir[0]))) {
-			ret = -EFAULT;
+		ret = ethtool_copy_validate_indir(indir,
+						  useraddr + ringidx_offset,
+						  &rx_rings,
+						  dev_size);
+		if (ret)
 			goto out;
-		}
-
-		/* Validate ring indices */
-		for (i = 0; i < dev_size; i++) {
-			if (indir[i] >= rx_rings.data) {
-				ret = -EINVAL;
-				goto out;
-			}
-		}
 	}
 
 	ret = ops->set_rxfh_indir(dev, indir);
 
 out:
 	kfree(indir);
+	return ret;
+}
+
+static noinline_for_stack int ethtool_get_rxfh(struct net_device *dev,
+					       void __user *useraddr)
+{
+	int ret;
+	const struct ethtool_ops *ops = dev->ethtool_ops;
+	u32 user_indir_size = 0, user_key_size = 0;
+	u32 dev_indir_size = 0, dev_key_size = 0;
+	u32 total_size;
+	u32 indir_offset, indir_bytes;
+	u32 key_offset;
+	u32 *indir = NULL;
+	u8 *hkey = NULL;
+	u8 *rss_config;
+
+	if (!(dev->ethtool_ops->get_rxfh_indir_size ||
+	      dev->ethtool_ops->get_rxfh_key_size) ||
+	      !dev->ethtool_ops->get_rxfh)
+		return -EOPNOTSUPP;
+
+	if (ops->get_rxfh_indir_size)
+		dev_indir_size = ops->get_rxfh_indir_size(dev);
+
+	indir_offset = offsetof(struct ethtool_rxfh, indir_size);
+
+	if (copy_from_user(&user_indir_size,
+			   useraddr + indir_offset,
+			   sizeof(user_indir_size)))
+		return -EFAULT;
+
+	if (copy_to_user(useraddr + indir_offset,
+			 &dev_indir_size, sizeof(dev_indir_size)))
+		return -EFAULT;
+
+	if (ops->get_rxfh_key_size)
+		dev_key_size = ops->get_rxfh_key_size(dev);
+
+	if ((dev_key_size + dev_indir_size) == 0)
+		return -EOPNOTSUPP;
+
+	key_offset = offsetof(struct ethtool_rxfh, key_size);
+
+	if (copy_from_user(&user_key_size,
+			   useraddr + key_offset,
+			   sizeof(user_key_size)))
+		return -EFAULT;
+
+	if (copy_to_user(useraddr + key_offset,
+			 &dev_key_size, sizeof(dev_key_size)))
+		return -EFAULT;
+
+	/* If the user buffer size is 0, this is just a query for the
+	 * device table size and key size.  Otherwise, if the User size is
+	 * not equal to device table size or key size it's an error.
+	 */
+	if (!user_indir_size && !user_key_size)
+		return 0;
+
+	if ((user_indir_size && (user_indir_size != dev_indir_size)) ||
+	    (user_key_size && (user_key_size != dev_key_size)))
+		return -EINVAL;
+
+	indir_bytes = user_indir_size * sizeof(indir[0]);
+	total_size = indir_bytes + user_key_size;
+	rss_config = kzalloc(total_size, GFP_USER);
+	if (!rss_config)
+		return -ENOMEM;
+
+	if (user_indir_size)
+		indir = (u32 *)rss_config;
+
+	if (user_key_size)
+		hkey = rss_config + indir_bytes;
+
+	ret = dev->ethtool_ops->get_rxfh(dev, indir, hkey);
+	if (!ret) {
+		if (copy_to_user(useraddr +
+				 offsetof(struct ethtool_rxfh, rss_config[0]),
+				 rss_config, total_size))
+			ret = -EFAULT;
+	}
+
+	kfree(rss_config);
+
+	return ret;
+}
+
+static noinline_for_stack int ethtool_set_rxfh(struct net_device *dev,
+					       void __user *useraddr)
+{
+	int ret;
+	const struct ethtool_ops *ops = dev->ethtool_ops;
+	struct ethtool_rxnfc rx_rings;
+	u32 user_indir_size = 0, dev_indir_size = 0, i;
+	u32 user_key_size = 0, dev_key_size = 0;
+	u32 *indir = NULL, indir_bytes = 0;
+	u8 *hkey = NULL;
+	u8 *rss_config;
+	u32 indir_offset, key_offset;
+	u32 rss_cfg_offset = offsetof(struct ethtool_rxfh, rss_config[0]);
+
+	if (!(ops->get_rxfh_indir_size || ops->get_rxfh_key_size) ||
+	    !ops->get_rxnfc || !ops->set_rxfh)
+		return -EOPNOTSUPP;
+
+	if (ops->get_rxfh_indir_size)
+		dev_indir_size = ops->get_rxfh_indir_size(dev);
+
+	indir_offset = offsetof(struct ethtool_rxfh, indir_size);
+	if (copy_from_user(&user_indir_size,
+			   useraddr + indir_offset,
+			   sizeof(user_indir_size)))
+		return -EFAULT;
+
+	if (ops->get_rxfh_key_size)
+		dev_key_size = dev->ethtool_ops->get_rxfh_key_size(dev);
+
+	if ((dev_key_size + dev_indir_size) == 0)
+		return -EOPNOTSUPP;
+
+	key_offset = offsetof(struct ethtool_rxfh, key_size);
+	if (copy_from_user(&user_key_size,
+			   useraddr + key_offset,
+			   sizeof(user_key_size)))
+		return -EFAULT;
+
+	/* If either indir or hash key is valid, proceed further.
+	 */
+	if ((user_indir_size &&
+	     user_indir_size != ETH_RXFH_INDIR_NO_CHANGE &&
+	     user_indir_size != dev_indir_size) ||
+	    (user_key_size && (user_key_size != dev_key_size)))
+		return -EINVAL;
+
+	if (user_indir_size != ETH_RXFH_INDIR_NO_CHANGE)
+		indir_bytes = dev_indir_size * sizeof(indir[0]);
+
+	rss_config = kzalloc(indir_bytes + user_key_size, GFP_USER);
+	if (!rss_config)
+		return -ENOMEM;
+
+	rx_rings.cmd = ETHTOOL_GRXRINGS;
+	ret = ops->get_rxnfc(dev, &rx_rings, NULL);
+	if (ret)
+		goto out;
+
+	/* user_indir_size == 0 means reset the indir table to default.
+	 * user_indir_size == ETH_RXFH_INDIR_NO_CHANGE means leave it unchanged.
+	 */
+	if (user_indir_size &&
+	    user_indir_size != ETH_RXFH_INDIR_NO_CHANGE) {
+		indir = (u32 *)rss_config;
+		ret = ethtool_copy_validate_indir(indir,
+						  useraddr + rss_cfg_offset,
+						  &rx_rings,
+						  user_indir_size);
+		if (ret)
+			goto out;
+	} else if (user_indir_size == 0) {
+		indir = (u32 *)rss_config;
+		for (i = 0; i < dev_indir_size; i++)
+			indir[i] = ethtool_rxfh_indir_default(i, rx_rings.data);
+	}
+
+	if (user_key_size) {
+		hkey = rss_config + indir_bytes;
+		if (copy_from_user(hkey,
+				   useraddr + rss_cfg_offset + indir_bytes,
+				   user_key_size)) {
+			ret = -EFAULT;
+			goto out;
+		}
+	}
+
+	ret = ops->set_rxfh(dev, indir, hkey);
+
+out:
+	kfree(rss_config);
 	return ret;
 }
 
@@ -1446,6 +1634,80 @@ static int ethtool_get_module_eeprom(struct net_device *dev,
 				      modinfo.eeprom_len);
 }
 
+static int ethtool_tunable_valid(const struct ethtool_tunable *tuna)
+{
+	switch (tuna->id) {
+	case ETHTOOL_RX_COPYBREAK:
+		if (tuna->len != sizeof(u32) ||
+		    tuna->type_id != ETHTOOL_TUNABLE_U32)
+			return -EINVAL;
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+static int ethtool_get_tunable(struct net_device *dev, void __user *useraddr)
+{
+	int ret;
+	struct ethtool_tunable tuna;
+	const struct ethtool_ops *ops = dev->ethtool_ops;
+	void *data;
+
+	if (!ops->get_tunable)
+		return -EOPNOTSUPP;
+	if (copy_from_user(&tuna, useraddr, sizeof(tuna)))
+		return -EFAULT;
+	ret = ethtool_tunable_valid(&tuna);
+	if (ret)
+		return ret;
+	data = kmalloc(tuna.len, GFP_USER);
+	if (!data)
+		return -ENOMEM;
+	ret = ops->get_tunable(dev, &tuna, data);
+	if (ret)
+		goto out;
+	useraddr += sizeof(tuna);
+	ret = -EFAULT;
+	if (copy_to_user(useraddr, data, tuna.len))
+		goto out;
+	ret = 0;
+
+out:
+	kfree(data);
+	return ret;
+}
+
+static int ethtool_set_tunable(struct net_device *dev, void __user *useraddr)
+{
+	int ret;
+	struct ethtool_tunable tuna;
+	const struct ethtool_ops *ops = dev->ethtool_ops;
+	void *data;
+
+	if (!ops->set_tunable)
+		return -EOPNOTSUPP;
+	if (copy_from_user(&tuna, useraddr, sizeof(tuna)))
+		return -EFAULT;
+	ret = ethtool_tunable_valid(&tuna);
+	if (ret)
+		return ret;
+	data = kmalloc(tuna.len, GFP_USER);
+	if (!data)
+		return -ENOMEM;
+	useraddr += sizeof(tuna);
+	ret = -EFAULT;
+	if (copy_from_user(data, useraddr, tuna.len))
+		goto out;
+	ret = ops->set_tunable(dev, &tuna, data);
+
+out:
+	kfree(data);
+	return ret;
+}
+
 /* The main entry point in this file.  Called from net/core/dev_ioctl.c */
 
 int dev_ethtool(struct net *net, struct ifreq *ifr)
@@ -1490,10 +1752,12 @@ int dev_ethtool(struct net *net, struct ifreq *ifr)
 	case ETHTOOL_GRXCLSRULE:
 	case ETHTOOL_GRXCLSRLALL:
 	case ETHTOOL_GRXFHINDIR:
+	case ETHTOOL_GRSSH:
 	case ETHTOOL_GFEATURES:
 	case ETHTOOL_GCHANNELS:
 	case ETHTOOL_GET_TS_INFO:
 	case ETHTOOL_GEEE:
+	case ETHTOOL_GTUNABLE:
 		break;
 	default:
 		if (!ns_capable(net->user_ns, CAP_NET_ADMIN))
@@ -1627,6 +1891,12 @@ int dev_ethtool(struct net *net, struct ifreq *ifr)
 	case ETHTOOL_SRXFHINDIR:
 		rc = ethtool_set_rxfh_indir(dev, useraddr);
 		break;
+	case ETHTOOL_GRSSH:
+		rc = ethtool_get_rxfh(dev, useraddr);
+		break;
+	case ETHTOOL_SRSSH:
+		rc = ethtool_set_rxfh(dev, useraddr);
+		break;
 	case ETHTOOL_GFEATURES:
 		rc = ethtool_get_features(dev, useraddr);
 		break;
@@ -1674,6 +1944,12 @@ int dev_ethtool(struct net *net, struct ifreq *ifr)
 		break;
 	case ETHTOOL_GMODULEEEPROM:
 		rc = ethtool_get_module_eeprom(dev, useraddr);
+		break;
+	case ETHTOOL_GTUNABLE:
+		rc = ethtool_get_tunable(dev, useraddr);
+		break;
+	case ETHTOOL_STUNABLE:
+		rc = ethtool_set_tunable(dev, useraddr);
 		break;
 	default:
 		rc = -EOPNOTSUPP;

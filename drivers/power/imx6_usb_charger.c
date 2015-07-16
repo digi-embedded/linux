@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright (C) 2013-2015 Freescale Semiconductor, Inc. All Rights Reserved.
  *
  * The code contained herein is licensed under the GNU General Public
  * License. You may obtain a copy of the GNU General Public License
@@ -13,11 +13,6 @@
 #include <linux/device.h>
 #include <linux/power/imx6_usb_charger.h>
 #include <linux/regmap.h>
-
-#define HW_ANADIG_REG_3P0_SET	(0x00000124)
-#define HW_ANADIG_REG_3P0_CLR	(0x00000128)
-#define BM_ANADIG_REG_3P0_ENABLE_ILIMIT 0x00000004
-#define BM_ANADIG_REG_3P0_ENABLE_LINREG 0x00000001
 
 #define HW_ANADIG_USB1_CHRG_DETECT_SET	(0x000001b4)
 #define HW_ANADIG_USB1_CHRG_DETECT_CLR	(0x000001b8)
@@ -76,13 +71,6 @@ static void disable_charger_detector(struct regmap *regmap)
 		BM_ANADIG_USB1_CHRG_DETECT_CHK_CHRG_B);
 }
 
-static void disable_current_limiter(struct regmap *regmap)
-{
-	/* Disable the vdd3p0 current limiter */
-	regmap_write(regmap, HW_ANADIG_REG_3P0_CLR,
-			BM_ANADIG_REG_3P0_ENABLE_ILIMIT);
-}
-
 /* Return value if the charger is present */
 static int imx6_usb_charger_detect(struct usb_charger *charger)
 {
@@ -90,16 +78,10 @@ static int imx6_usb_charger_detect(struct usb_charger *charger)
 	u32 val;
 	int i, data_pin_contact_count = 0;
 
-	/* Enable the vdd3p0 curret limiter */
-	regmap_write(regmap, HW_ANADIG_REG_3P0_SET,
-			BM_ANADIG_REG_3P0_ENABLE_LINREG |
-			BM_ANADIG_REG_3P0_ENABLE_ILIMIT);
-
 	/* check if vbus is valid */
 	regmap_read(regmap, HW_ANADIG_USB1_VBUS_DET_STAT, &val);
 	if (!(val & BM_ANADIG_USB1_VBUS_DET_STAT_VBUS_VALID)) {
 		dev_err(charger->dev, "vbus is error\n");
-		disable_current_limiter(regmap);
 		return -EINVAL;
 	}
 
@@ -121,7 +103,10 @@ static int imx6_usb_charger_detect(struct usb_charger *charger)
 			if (data_pin_contact_count++ > 5)
 			/* Data pin makes contact */
 				break;
+			else
+				usleep_range(5000, 10000);
 		} else {
+			data_pin_contact_count = 0;
 			msleep(20);
 		}
 	}
@@ -129,7 +114,6 @@ static int imx6_usb_charger_detect(struct usb_charger *charger)
 	if (i == 100) {
 		dev_err(charger->dev,
 			"VBUS is coming from a dedicated power supply.\n");
-		disable_current_limiter(regmap);
 		disable_charger_detector(regmap);
 		return -ENXIO;
 	}
@@ -142,7 +126,7 @@ static int imx6_usb_charger_detect(struct usb_charger *charger)
 	regmap_write(regmap, HW_ANADIG_USB1_CHRG_DETECT_CLR,
 			BM_ANADIG_USB1_CHRG_DETECT_CHK_CONTACT |
 			BM_ANADIG_USB1_CHRG_DETECT_CHK_CHRG_B);
-	msleep(45);
+	msleep(100);
 
 	/* Check if it is a charger */
 	regmap_read(regmap, HW_ANADIG_USB1_CHRG_DET_STAT, &val);
@@ -157,9 +141,18 @@ static int imx6_usb_charger_detect(struct usb_charger *charger)
 		msleep(45);
 	}
 
-	disable_current_limiter(regmap);
-
 	return 0;
+}
+
+static void usb_charger_is_present(struct usb_charger *charger, bool present)
+{
+	if (present)
+		charger->present = 1;
+	else
+		charger->present = 0;
+
+	power_supply_changed(&charger->psy);
+	sysfs_notify(&charger->psy.dev->kobj, NULL, "present");
 }
 
 /*
@@ -180,12 +173,14 @@ int imx6_usb_vbus_connect(struct usb_charger *charger)
 
 	/* Start the 1st period charger detection. */
 	ret = imx6_usb_charger_detect(charger);
-	if (ret)
+	if (ret) {
 		dev_err(charger->dev,
 				"Error occurs during detection: %d\n",
 				ret);
-	else
-		charger->present = 1;
+	} else {
+		if (charger->psy.type == POWER_SUPPLY_TYPE_USB)
+			usb_charger_is_present(charger, true);
+	}
 
 	mutex_unlock(&charger->lock);
 
@@ -217,8 +212,7 @@ int imx6_usb_charger_detect_post(struct usb_charger *charger)
 		charger->max_current = 900;
 	}
 
-	power_supply_changed(&charger->psy);
-
+	usb_charger_is_present(charger, true);
 	mutex_unlock(&charger->lock);
 
 	return 0;
@@ -235,11 +229,10 @@ EXPORT_SYMBOL(imx6_usb_charger_detect_post);
 int imx6_usb_vbus_disconnect(struct usb_charger *charger)
 {
 	charger->online = 0;
-	charger->present = 0;
 	charger->max_current = 0;
 	charger->psy.type = POWER_SUPPLY_TYPE_MAINS;
 
-	power_supply_changed(&charger->psy);
+	usb_charger_is_present(charger, false);
 
 	return 0;
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2013 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright (C) 2008-2014 Freescale Semiconductor, Inc. All Rights Reserved.
  */
 
 /*
@@ -13,7 +13,7 @@
 
 #include <linux/module.h>
 #include <linux/of_platform.h>
-#include <linux/of_i2c.h>
+#include <linux/i2c.h>
 #include <sound/soc.h>
 
 #include "imx-audmux.h"
@@ -30,6 +30,16 @@ static int imx_audmux_config(int slave, int master)
 		IMX_AUDMUX_V2_PTCR_TCLKDIR |
 		IMX_AUDMUX_V2_PTCR_TCSEL(slave);
 	pdcr = IMX_AUDMUX_V2_PDCR_RXDSEL(slave);
+	imx_audmux_v2_configure_port(master, ptcr, pdcr);
+
+	/*
+	 * According to RM, RCLKDIR and SYN should not be changed at same time.
+	 * So separate to two step for configuring this port.
+	 */
+	ptcr |= IMX_AUDMUX_V2_PTCR_RFSDIR |
+		IMX_AUDMUX_V2_PTCR_RFSEL(slave) |
+		IMX_AUDMUX_V2_PTCR_RCLKDIR |
+		IMX_AUDMUX_V2_PTCR_RCSEL(slave);
 	imx_audmux_v2_configure_port(master, ptcr, pdcr);
 
 	ptcr = IMX_AUDMUX_V2_PTCR_SYN;
@@ -81,7 +91,6 @@ static struct snd_soc_dai_link imx_dai = {
 	.name = "imx-si476x",
 	.stream_name = "imx-si476x",
 	.codec_dai_name = "si476x-codec",
-	.codec_name = "si476x-codec.99",
 	.ops = &imx_si476x_ops,
 };
 
@@ -134,8 +143,8 @@ static int imx_si476x_probe(struct platform_device *pdev)
 		goto end;
 	}
 
-	fm_dev = of_find_i2c_device_by_node(fm_np);
-	if (!fm_dev || !fm_dev->driver) {
+	fm_dev = of_find_i2c_device_by_node(fm_np->parent);
+	if (!fm_dev || !fm_dev->dev.driver) {
 		dev_err(&pdev->dev, "failed to find FM platform device\n");
 		ret = -EINVAL;
 		goto end;
@@ -144,6 +153,7 @@ static int imx_si476x_probe(struct platform_device *pdev)
 	card->dev = &pdev->dev;
 	card->dai_link->cpu_dai_name = dev_name(&ssi_pdev->dev);
 	card->dai_link->platform_of_node = ssi_np;
+	card->dai_link->codec_of_node = fm_np;
 
 	platform_set_drvdata(pdev, card);
 

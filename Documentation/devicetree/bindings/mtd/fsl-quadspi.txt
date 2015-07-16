@@ -1,0 +1,52 @@
+* Freescale Quad Serial Peripheral Interface(QuadSPI)
+
+The QuadSPI controller acts as the SPI master. It is described with a node
+for the controller and a set of child nodes for each SPI NOR flash.
+
+Part I - The DT node for the controller:
+------------------------------
+
+Required properties:
+  - compatible : Should be "fsl,vf610-qspi"
+  - reg : the first contains the register location and length,
+          the second contains the memory mapping address and length
+  - reg-names: Should contain the reg names "QuadSPI" and "QuadSPI-memory"
+  - interrupts : Should contain the interrupt for the device
+  - clocks : The clocks needed by the QuadSPI controller
+  - clock-names : the name of the clocks
+
+Optional properties:
+  - fsl,qspi-has-second-chip: The controller has two buses, bus A and bus B.
+                              Each bus can be connected with two NOR flashes.
+			      Most of the time, each bus only has one NOR flash
+			      connected, this is the default case.
+			      But if there are two NOR flashes connected to the
+			      bus, you should enable this property.
+			      (Please check the board's schematic.)
+  - ddrsmp: The value for DDR internal sampling point, range is 0 - 7.
+
+Part II - The DT nodes for each SPI NOR flash
+------------------------------
+Required properties:
+- spi-max-frequency : Maximum frequency of the SPI bus the chip can operate at
+
+Optional properties:
+  Please refer to the Documentation/devicetree/bindings/mtd/spi-nor-flash.txt
+  If you set the "spi-nor,ddr-quad-read-dummy", it means you enable the DDR
+  quad read feature for the driver.
+
+Example:
+
+qspi0: quadspi@40044000 {
+	compatible = "fsl,vf610-qspi";
+	reg = <0x40044000 0x1000>, <0x20000000 0x10000000>;
+	reg-names = "QuadSPI", "QuadSPI-memory";
+	interrupts = <0 24 IRQ_TYPE_LEVEL_HIGH>;
+	clocks = <&clks VF610_CLK_QSPI0_EN>,
+		<&clks VF610_CLK_QSPI0>;
+	clock-names = "qspi_en", "qspi";
+
+	flash0: s25fl128s@0 {
+		....
+	};
+};

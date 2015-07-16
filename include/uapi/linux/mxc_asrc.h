@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2013 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright 2008-2014 Freescale Semiconductor, Inc. All Rights Reserved.
  *
  * The code contained herein is licensed under the GNU General Public
  * License. You may obtain a copy of the GNU General Public License
@@ -30,7 +30,7 @@
 #define ASRC_FLUSH		_IOW(ASRC_IOC_MAGIC, 7, enum asrc_pair_index)
 
 enum asrc_pair_index {
-	ASRC_UNVALID_PAIR = -1,
+	ASRC_INVALID_PAIR = -1,
 	ASRC_PAIR_A = 0,
 	ASRC_PAIR_B = 1,
 	ASRC_PAIR_C = 2,
@@ -91,14 +91,6 @@ struct asrc_config {
 	enum asrc_outclk outclk;
 };
 
-struct asrc_pair {
-	unsigned int start_channel;
-	unsigned int chn_num;
-	unsigned int chn_max;
-	unsigned int active;
-	unsigned int overload_error;
-};
-
 struct asrc_req {
 	unsigned int chn_num;
 	enum asrc_pair_index index;
@@ -119,20 +111,11 @@ struct asrc_convert_buffer {
 	unsigned int output_buffer_length;
 };
 
-struct asrc_buffer {
-	unsigned int index;
-	unsigned int length;
-	unsigned int output_last_length;
-	int buf_valid;
-};
-
 struct asrc_status_flags {
 	enum asrc_pair_index index;
 	unsigned int overload_error;
 };
 
-#define ASRC_BUF_NA	-35	/* ASRC DQ's buffer is NOT available */
-#define ASRC_BUF_AV	 35	/* ASRC DQ's buffer is available */
 enum asrc_error_status {
 	ASRC_TASK_Q_OVERLOAD		= 0x01,
 	ASRC_OUTPUT_TASK_OVERLOAD	= 0x02,

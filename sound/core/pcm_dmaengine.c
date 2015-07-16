@@ -5,6 +5,7 @@
  *  Based on:
  *	imx-pcm-dma-mx2.c, Copyright 2009 Sascha Hauer <s.hauer@pengutronix.de>
  *	mxs-pcm.c, Copyright (C) 2011 Freescale Semiconductor, Inc.
+ *	imx-pcm-dma.c, Copyright (C) 2014-2015 Freescale Semiconductor, Inc.
  *	ep93xx-pcm.c, Copyright (C) 2006 Lennert Buytenhek <buytenh@wantstofly.org>
  *		      Copyright (C) 2006 Applied Data Systems
  *
@@ -27,13 +28,6 @@
 #include <sound/soc.h>
 
 #include <sound/dmaengine_pcm.h>
-
-struct dmaengine_pcm_runtime_data {
-	struct dma_chan *dma_chan;
-	dma_cookie_t cookie;
-
-	unsigned int pos;
-};
 
 static inline struct dmaengine_pcm_runtime_data *substream_to_prtd(
 	const struct snd_pcm_substream *substream)
@@ -162,7 +156,10 @@ static int dmaengine_pcm_prepare_and_submit(struct snd_pcm_substream *substream)
 	if (!desc)
 		return -ENOMEM;
 
-	desc->callback = dmaengine_pcm_dma_complete;
+	if (prtd->callback)
+		desc->callback = prtd->callback;
+	else
+		desc->callback = dmaengine_pcm_dma_complete;
 	desc->callback_param = substream;
 	prtd->cookie = dmaengine_submit(desc);
 
@@ -186,20 +183,16 @@ int snd_dmaengine_pcm_trigger(struct snd_pcm_substream *substream, int cmd)
 
 	switch (cmd) {
 	case SNDRV_PCM_TRIGGER_START:
+	case SNDRV_PCM_TRIGGER_RESUME:
+	case SNDRV_PCM_TRIGGER_PAUSE_RELEASE:
 		ret = dmaengine_pcm_prepare_and_submit(substream);
 		if (ret)
 			return ret;
 		dma_async_issue_pending(prtd->dma_chan);
 		break;
-	case SNDRV_PCM_TRIGGER_RESUME:
-	case SNDRV_PCM_TRIGGER_PAUSE_RELEASE:
-		dmaengine_resume(prtd->dma_chan);
-		break;
+	case SNDRV_PCM_TRIGGER_STOP:
 	case SNDRV_PCM_TRIGGER_SUSPEND:
 	case SNDRV_PCM_TRIGGER_PAUSE_PUSH:
-		dmaengine_pause(prtd->dma_chan);
-		break;
-	case SNDRV_PCM_TRIGGER_STOP:
 		dmaengine_terminate_all(prtd->dma_chan);
 		break;
 	default:

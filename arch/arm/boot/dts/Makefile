@@ -156,13 +156,14 @@ dtb-$(CONFIG_ARCH_MXC) += \
 	imx6dl-cubox-i.dtb \
 	imx6dl-hummingboard.dtb \
 	imx6dl-sabreauto.dtb \
-	imx6dl-sabreauto-ecspi.dtb \
 	imx6dl-sabreauto-flexcan1.dtb \
+	imx6dl-sabreauto-ecspi.dtb \
 	imx6dl-sabreauto-gpmi-weim.dtb \
 	imx6dl-sabresd.dtb \
-	imx6dl-sabresd-hdcp.dtb \
+	imx6dl-sabresd-enetirq.dtb \
 	imx6dl-sabresd-ldo.dtb \
 	imx6dl-sabresd-pf200.dtb \
+	imx6dl-sabresd-hdcp.dtb \
 	imx6dl-wandboard.dtb \
 	imx6dl-ccimx6sbc.dtb \
 	imx6dl-ccimx6sbc-w.dtb \
@@ -176,23 +177,44 @@ dtb-$(CONFIG_ARCH_MXC) += \
 	imx6q-ccimx6sbc-wb.dtb \
 	imx6q-ccimx6sbc-wb-ldo-bypass.dtb \
 	imx6q-sabreauto.dtb \
-	imx6q-sabreauto-ecspi.dtb \
 	imx6q-sabreauto-flexcan1.dtb \
+	imx6q-sabreauto-ecspi.dtb \
 	imx6q-sabreauto-gpmi-weim.dtb \
 	imx6q-sabrelite.dtb \
 	imx6q-sabresd.dtb \
+	imx6q-sabresd-ldo.dtb \
+	imx6q-sabresd-enetirq.dtb \
+	imx6q-sabresd-uart.dtb \
+	imx6q-sabresd-hdcp.dtb \
+	imx6q-sabresd-ldo.dtb \
 	imx6q-sbc6x.dtb \
 	imx6q-udoo.dtb \
 	imx6q-wandboard.dtb \
 	imx6sl-evk.dtb \
-	vf610-cosmic.dtb \
-	imx6q-sabresd-hdcp.dtb \
-	imx6q-sabresd-ldo.dtb \
-	imx6q-sbc6x.dtb \
-	imx6sl-evk.dtb \
 	imx6sl-evk-csi.dtb \
 	imx6sl-evk-ldo.dtb \
 	imx6sl-evk-pf200.dtb \
+	imx6sl-evk-uart.dtb \
+	imx6sx-17x17-arm2.dtb \
+	imx6sx-17x17-arm2-ldo.dtb \
+	imx6sx-17x17-arm2-ecspi.dtb \
+	imx6sx-17x17-arm2-gpmi-weim.dtb \
+	imx6sx-17x17-arm2-mlb.dtb \
+	imx6sx-19x19-arm2.dtb \
+	imx6sx-19x19-arm2-ldo.dtb \
+	imx6sx-19x19-arm2-csi.dtb \
+	imx6sx-19x19-arm2-lcdif1.dtb \
+	imx6sx-19x19-arm2-gpmi-weim.dtb \
+	imx6sx-sdb.dtb \
+	imx6sx-sdb-ldo.dtb \
+	imx6sx-sdb-reva.dtb \
+	imx6sx-sdb-reva-ldo.dtb \
+	imx6sx-sabreauto.dtb \
+	imx6sx-sabreauto-m4.dtb \
+	imx6sx-sdb-lcdif1.dtb \
+	vf610-cosmic.dtb \
+	imx6sx-sdb-emmc.dtb \
+	imx6sx-sdb-m4.dtb \
 	vf610-twr.dtb
 dtb-$(CONFIG_ARCH_MXS) += imx23-evk.dtb \
 	imx23-olinuxino.dtb \

@@ -1,7 +1,7 @@
 /*
  * Freescale UUT driver
  *
- * Copyright 2008-2013 Freescale Semiconductor, Inc.
+ * Copyright 2008-2014 Freescale Semiconductor, Inc.
  * Copyright 2008-2009 Embedded Alley Solutions, Inc All Rights Reserved.
  */
 

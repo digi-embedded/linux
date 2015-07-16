@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2014 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright (C) 2011-2015 Freescale Semiconductor, Inc. All Rights Reserved.
  */
 
 /*
@@ -44,10 +44,8 @@
 
 
 static struct device *busfreq_dev;
-static void *ddr_freq_change_iram_base;
 static int curr_ddr_rate;
-
-unsigned long ddr_freq_change_iram_paddr;
+static DEFINE_SPINLOCK(freq_lock);
 
 void (*mx6_change_lpddr2_freq)(u32 ddr_freq, int bus_freq_mode) = NULL;
 
@@ -55,19 +53,24 @@ extern unsigned int ddr_normal_rate;
 extern int low_bus_freq_mode;
 extern int ultra_low_bus_freq_mode;
 extern void mx6_lpddr2_freq_change(u32 freq, int bus_freq_mode);
-
+extern void imx6sx_lpddr2_freq_change(u32 freq, int bus_freq_mode);
 extern unsigned long save_ttbr1(void);
 extern void restore_ttbr1(unsigned long ttbr1);
+extern unsigned long ddr_freq_change_iram_base;
+extern unsigned long imx6_lpddr2_freq_change_start asm("imx6_lpddr2_freq_change_start");
+extern unsigned long imx6_lpddr2_freq_change_end asm("imx6_lpddr2_freq_change_end");
 
 /* change the DDR frequency. */
 int update_lpddr2_freq(int ddr_rate)
 {
-	unsigned long ttbr1;
+	unsigned long ttbr1, flags;
+
 	if (ddr_rate == curr_ddr_rate)
 		return 0;
 
-	dev_dbg(busfreq_dev, "\nBus freq set to %d start...\n", ddr_rate);
+	printk(KERN_DEBUG "\nBus freq set to %d start...\n", ddr_rate);
 
+	spin_lock_irqsave(&freq_lock, flags);
 	/*
 	 * Flush the TLB, to ensure no TLB maintenance occurs
 	 * when DDR is in self-refresh.
@@ -80,24 +83,28 @@ int update_lpddr2_freq(int ddr_rate)
 	restore_ttbr1(ttbr1);
 
 	curr_ddr_rate = ddr_rate;
+	spin_unlock_irqrestore(&freq_lock, flags);
 
-	dev_dbg(busfreq_dev, "\nBus freq set to %d done...\n", ddr_rate);
+	printk(KERN_DEBUG "\nBus freq set to %d done...\n", ddr_rate);
 
 	return 0;
 }
 
 int init_mmdc_lpddr2_settings(struct platform_device *busfreq_pdev)
 {
+	unsigned long ddr_code_size;
 	busfreq_dev = &busfreq_pdev->dev;
 
-	ddr_freq_change_iram_paddr = MX6SL_LPDDR2_FREQ_ADDR;
-	/* Calculate the virtual address of the code */
-	ddr_freq_change_iram_base =
-			(void *)IMX_IO_P2V(MX6Q_IRAM_TLB_BASE_ADDR) +
-			(ddr_freq_change_iram_paddr - MX6Q_IRAM_TLB_BASE_ADDR);
+	ddr_code_size = (&imx6_lpddr2_freq_change_end -&imx6_lpddr2_freq_change_start) *4;
 
-	mx6_change_lpddr2_freq = (void *)fncpy(ddr_freq_change_iram_base,
-		&mx6_lpddr2_freq_change, LPDDR2_FREQ_CODE_SIZE);
+	if (cpu_is_imx6sl())
+		mx6_change_lpddr2_freq = (void *)fncpy(
+			(void *)ddr_freq_change_iram_base,
+			&mx6_lpddr2_freq_change, ddr_code_size);
+	else if (cpu_is_imx6sx())
+		mx6_change_lpddr2_freq = (void *)fncpy(
+			(void *)ddr_freq_change_iram_base,
+			&imx6sx_lpddr2_freq_change, ddr_code_size);
 
 	curr_ddr_rate = ddr_normal_rate;
 

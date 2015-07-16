@@ -1,7 +1,7 @@
 /*
  * RNG driver for Freescale RNG B/C
  *
- * Copyright (C) 2008-2014 Freescale Semiconductor, Inc.
+ * Copyright (C) 2008-2015 Freescale Semiconductor, Inc.
  */
 
 /*
@@ -196,8 +196,8 @@ static int imx_rng_init(struct hwrng *rng)
 	struct imx_rng_priv_data *prv = (struct imx_rng_priv_data *)rng->priv;
 	u32 cmd, ctrl, osc;
 
-	INIT_COMPLETION(rng_self_testing);
-	INIT_COMPLETION(rng_seed_done);
+	reinit_completion(&rng_self_testing);
+	reinit_completion(&rng_seed_done);
 
 	err = readl(prv->reg_base + RNGC_STATUS) & RNGC_STATUS_ERROR;
 	if (err) {

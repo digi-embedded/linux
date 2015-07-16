@@ -455,6 +455,7 @@ cs_t colorspaceofpixel(int fmt)
 {
 	switch (fmt) {
 	case IPU_PIX_FMT_RGB565:
+	case IPU_PIX_FMT_RGB666:
 	case IPU_PIX_FMT_BGR24:
 	case IPU_PIX_FMT_RGB24:
 	case IPU_PIX_FMT_BGRA32:
@@ -1102,6 +1103,13 @@ static int check_task(struct ipu_task_entry *t)
 	if ((t->input.crop.w != t->output.crop.w) ||
 			(t->input.crop.h != t->output.crop.h) ||
 			need_csc(t->input.format, t->output.format))
+		t->set.mode |= IC_MODE;
+
+	/*need cropping?*/
+	if ((t->input.crop.w != t->input.width)       ||
+		(t->input.crop.h != t->input.height)  ||
+		(t->output.crop.w != t->output.width) ||
+		(t->output.crop.h != t->output.height))
 		t->set.mode |= IC_MODE;
 
 	/*need flip?*/

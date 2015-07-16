@@ -634,6 +634,7 @@ static int set_config(struct usb_composite_dev *cdev,
 	if (!c)
 		goto done;
 
+	usb_gadget_set_state(gadget, USB_STATE_CONFIGURED);
 	cdev->config = c;
 
 	/* Initialize all interfaces by setting them to altsetting zero. */
@@ -1648,6 +1649,7 @@ void composite_dev_cleanup(struct usb_composite_dev *cdev)
 	}
 	if (cdev->req) {
 		kfree(cdev->req->buf);
+		usb_ep_dequeue(cdev->gadget->ep0, cdev->req);
 		usb_ep_free_request(cdev->gadget->ep0, cdev->req);
 	}
 	cdev->next_string_id = 0;

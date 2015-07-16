@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 Freescale Semiconductor, Inc.
+ * Copyright (C) 2013-2014 Freescale Semiconductor, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -10,7 +10,7 @@
 
 &hdmi_video {
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_hdmi_hdcp_1>;
+	pinctrl-0 = <&pinctrl_hdmi_hdcp>;
 	fsl,hdcp;
 };
 

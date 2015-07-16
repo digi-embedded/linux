@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2013 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright (C) 2011-2014 Freescale Semiconductor, Inc. All Rights Reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -38,7 +38,6 @@
 #include <linux/delay.h>
 #include <video/mipi_display.h>
 
-#include "mxc_dispdrv.h"
 #include "mipi_dsi.h"
 
 #define DISPDRV_MIPI			"mipi_dsi"
@@ -623,7 +622,8 @@ static int mipi_dsi_lcd_init(struct mipi_dsi_info *mipi_dsi,
 	return 0;
 }
 
-int mipi_dsi_enable(struct mxc_dispdrv_handle *disp)
+static int mipi_dsi_enable(struct mxc_dispdrv_handle *disp,
+			   struct fb_info *fbi)
 {
 	int err;
 	struct mipi_dsi_info *mipi_dsi = mxc_dispdrv_getdata(disp);
@@ -653,6 +653,14 @@ int mipi_dsi_enable(struct mxc_dispdrv_handle *disp)
 	return 0;
 }
 
+static void mipi_dsi_disable(struct mxc_dispdrv_handle *disp,
+			    struct fb_info *fbi)
+{
+	struct mipi_dsi_info *mipi_dsi = mxc_dispdrv_getdata(disp);
+
+	mipi_dsi_power_off(mipi_dsi->disp_mipi);
+}
+
 static int mipi_dsi_disp_init(struct mxc_dispdrv_handle *disp,
 	struct mxc_dispdrv_setting *setting)
 {
@@ -666,8 +674,10 @@ static int mipi_dsi_disp_init(struct mxc_dispdrv_handle *disp,
 		setting->if_fmt = IPU_PIX_FMT_RGB24;
 	}
 
-	setting->dev_id = mipi_dsi->dev_id;
-	setting->disp_id = mipi_dsi->disp_id;
+	ret = ipu_di_to_crtc(dev, mipi_dsi->dev_id,
+			     mipi_dsi->disp_id, &setting->crtc);
+	if (ret < 0)
+		return ret;
 
 	ret = mipi_dsi_lcd_init(mipi_dsi, setting);
 	if (ret) {
@@ -690,12 +700,38 @@ static void mipi_dsi_disp_deinit(struct mxc_dispdrv_handle *disp)
 		backlight_device_unregister(mipi_dsi->bl);
 }
 
+static int mipi_dsi_setup(struct mxc_dispdrv_handle *disp,
+			  struct fb_info *fbi)
+{
+	struct mipi_dsi_info *mipi_dsi = mxc_dispdrv_getdata(disp);
+	int xres_virtual = fbi->var.xres_virtual;
+	int yres_virtual = fbi->var.yres_virtual;
+	int xoffset = fbi->var.xoffset;
+	int yoffset = fbi->var.yoffset;
+	int pixclock = fbi->var.pixclock;
+
+	if (!mipi_dsi->mode)
+		return 0;
+
+	/* set the mode back to var in case userspace changes it */
+	fb_videomode_to_var(&fbi->var, mipi_dsi->mode);
+
+	/* restore some var entries cached */
+	fbi->var.xres_virtual = xres_virtual;
+	fbi->var.yres_virtual = yres_virtual;
+	fbi->var.xoffset = xoffset;
+	fbi->var.yoffset = yoffset;
+	fbi->var.pixclock = pixclock;
+	return 0;
+}
+
 static struct mxc_dispdrv_driver mipi_dsi_drv = {
 	.name	= DISPDRV_MIPI,
 	.init	= mipi_dsi_disp_init,
 	.deinit	= mipi_dsi_disp_deinit,
 	.enable	= mipi_dsi_enable,
-	.disable = mipi_dsi_power_off,
+	.disable = mipi_dsi_disable,
+	.setup	= mipi_dsi_setup,
 };
 
 static int imx6q_mipi_dsi_get_mux(int dev_id, int disp_id)

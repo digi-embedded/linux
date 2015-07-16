@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2014 Freescale Semiconductor, Inc.
+ * Copyright (C) 2010-2015 Freescale Semiconductor, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -41,6 +41,7 @@
 #include <media/videobuf-dma-contig.h>
 #include <media/v4l2-common.h>
 #include <media/v4l2-dev.h>
+#include <media/v4l2-device.h>
 #include <media/v4l2-ioctl.h>
 
 #include "mxc_pxp_v4l2.h"
@@ -86,6 +87,16 @@ static struct pxp_data_format pxp_s0_formats[] = {
 		.bpp = 2,
 		.fourcc = V4L2_PIX_FMT_UYVY,
 		.colorspace = V4L2_COLORSPACE_JPEG,
+	}, {
+		.name = "YUYV",
+		.bpp = 2,
+		.fourcc = V4L2_PIX_FMT_YUYV,
+		.colorspace = V4L2_COLORSPACE_JPEG,
+	}, {
+		.name = "YUV32",
+		.bpp = 4,
+		.fourcc = V4L2_PIX_FMT_YUV32,
+		.colorspace = V4L2_COLORSPACE_JPEG,
 	},
 };
 
@@ -107,6 +118,10 @@ static unsigned int v4l2_fmt_to_pxp_fmt(u32 v4l2_pix_fmt)
 		pxp_fmt = PXP_PIX_FMT_YUV422P;
 	else if (v4l2_pix_fmt == V4L2_PIX_FMT_UYVY)
 		pxp_fmt = PXP_PIX_FMT_UYVY;
+	else if (v4l2_pix_fmt == V4L2_PIX_FMT_YUV32)
+		pxp_fmt = PXP_PIX_FMT_VUY444;
+	else if (v4l2_pix_fmt == V4L2_PIX_FMT_YUYV)
+		pxp_fmt = PXP_PIX_FMT_YUYV;
 
 	return pxp_fmt;
 }
@@ -265,7 +280,7 @@ static int _get_fbinfo(struct fb_info **fbi)
 	int i;
 	for (i = 0; i < num_registered_fb; i++) {
 		char *idstr = registered_fb[i]->fix.id;
-		if (strcmp(idstr, "mxs") == 0) {
+		if (strncmp(idstr, "mxs", 3) == 0) {
 			*fbi = registered_fb[i];
 			return 0;
 		}
@@ -436,7 +451,8 @@ static int pxp_s_output(struct file *file, void *fh,
 		return -EINVAL;
 
 	/* Output buffer is same format as fbdev */
-	if (fmt->pixelformat == V4L2_PIX_FMT_RGB24)
+	if (fmt->pixelformat == V4L2_PIX_FMT_RGB24  ||
+		fmt->pixelformat == V4L2_PIX_FMT_YUV32)
 		bpp = 4;
 	else
 		bpp = 2;
@@ -450,6 +466,7 @@ static int pxp_s_output(struct file *file, void *fh,
 		if (ret < 0)
 			return ret;
 	}
+	memset(pxp->outbuf.vaddr, 0x0, pxp->outbuf.size);
 
 	pxp->pxp_conf.out_param.width = fmt->width;
 	pxp->pxp_conf.out_param.height = fmt->height;
@@ -602,9 +619,9 @@ static int pxp_try_fmt_output_overlay(struct file *file, void *fh,
 	wf->w.left = srect.left;
 	wf->w.top = srect.top;
 	wf->w.width = min(srect.width,
-			((__s32)pxp->pxp_conf.s0_param.width - wf->w.left));
+			((__u32)pxp->pxp_conf.s0_param.width - wf->w.left));
 	wf->w.height = min(srect.height,
-			((__s32)pxp->pxp_conf.s0_param.height - wf->w.top));
+			((__u32)pxp->pxp_conf.s0_param.height - wf->w.top));
 
 	return 0;
 }
@@ -643,9 +660,17 @@ static int pxp_reqbufs(struct file *file, void *priv,
 static int pxp_querybuf(struct file *file, void *priv,
 			struct v4l2_buffer *b)
 {
+	int ret;
 	struct pxps *pxp = video_get_drvdata(video_devdata(file));
 
-	return videobuf_querybuf(&pxp->s0_vbq, b);
+	ret = videobuf_querybuf(&pxp->s0_vbq, b);
+	if (!ret) {
+		struct videobuf_buffer *vb = pxp->s0_vbq.bufs[b->index];
+		if (b->flags & V4L2_BUF_FLAG_MAPPED)
+			b->m.offset = videobuf_to_dma_contig(vb);
+	}
+
+	return ret;
 }
 
 static int pxp_qbuf(struct file *file, void *priv,
@@ -803,17 +828,14 @@ static int pxp_buf_prepare(struct videobuf_queue *q,
 					&pxp_conf->s0_param,
 					sizeof(struct pxp_layer_param));
 			} else if (i == 1) { /* Output */
-				if (proc_data->rotate % 180) {
-					pxp_conf->out_param.width =
-						pxp->fb.fmt.height;
-					pxp_conf->out_param.height =
-						pxp->fb.fmt.width;
-				} else {
-					pxp_conf->out_param.width =
-						pxp->fb.fmt.width;
-					pxp_conf->out_param.height =
-						pxp->fb.fmt.height;
-				}
+				/* we should always pass the output
+				 * width and height which is the value
+				 * after been rotated.
+				 */
+				pxp_conf->out_param.width =
+					pxp->fb.fmt.width;
+				pxp_conf->out_param.height =
+					pxp->fb.fmt.height;
 
 				pxp_conf->out_param.paddr = pxp->outbuf.paddr;
 				memcpy(&desc->layer_param.out_param,
@@ -1028,6 +1050,8 @@ static int pxp_s_crop(struct file *file, void *fh,
 	pxp->pxp_conf.proc_data.drect.width = w;
 	pxp->pxp_conf.proc_data.drect.height = h;
 
+	memset(pxp->outbuf.vaddr, 0x0, pxp->outbuf.size);
+
 	return 0;
 }
 
@@ -1072,6 +1096,8 @@ static int pxp_s_ctrl(struct file *file, void *priv,
 				return -ERANGE;
 			return pxp_set_cstate(pxp, vc);
 		}
+
+	memset(pxp->outbuf.vaddr, 0x0, pxp->outbuf.size);
 
 	return -EINVAL;
 }
@@ -1213,6 +1239,7 @@ MODULE_DEVICE_TABLE(of, imx_pxpv4l2_dt_ids);
 static int pxp_probe(struct platform_device *pdev)
 {
 	struct pxps *pxp;
+	struct v4l2_device *v4l2_dev;
 	int err = 0;
 
 	pxp = kzalloc(sizeof(*pxp), GFP_KERNEL);
@@ -1224,6 +1251,19 @@ static int pxp_probe(struct platform_device *pdev)
 
 	dev_set_drvdata(&pdev->dev, pxp);
 
+	v4l2_dev = kzalloc(sizeof(*v4l2_dev), GFP_KERNEL);
+	if (!v4l2_dev) {
+		dev_err(&pdev->dev, "failed to allocate v4l2_dev structure\n");
+		err = -ENOMEM;
+		goto freeirq;
+	}
+
+	err = v4l2_device_register(&pdev->dev, v4l2_dev);
+	if (err) {
+		dev_err(&pdev->dev, "register v4l2 device failed\n");
+		goto freev4l2;
+	}
+
 	INIT_LIST_HEAD(&pxp->outq);
 	spin_lock_init(&pxp->lock);
 	mutex_init(&pxp->mutex);
@@ -1234,10 +1274,11 @@ static int pxp_probe(struct platform_device *pdev)
 	if (!pxp->vdev) {
 		dev_err(&pdev->dev, "video_device_alloc() failed\n");
 		err = -ENOMEM;
-		goto freeirq;
+		goto relv4l2;
 	}
 
 	memcpy(pxp->vdev, &pxp_template, sizeof(pxp_template));
+	pxp->vdev->v4l2_dev = v4l2_dev;
 	video_set_drvdata(pxp->vdev, pxp);
 
 	err = video_register_device(pxp->vdev, VFL_TYPE_GRABBER, video_nr);
@@ -1253,7 +1294,10 @@ exit:
 
 freevdev:
 	video_device_release(pxp->vdev);
-
+relv4l2:
+	v4l2_device_unregister(v4l2_dev);
+freev4l2:
+	kfree(v4l2_dev);
 freeirq:
 	kfree(pxp);
 
@@ -1263,9 +1307,12 @@ freeirq:
 static int pxp_remove(struct platform_device *pdev)
 {
 	struct pxps *pxp = platform_get_drvdata(pdev);
+	struct v4l2_device *v4l2_dev = pxp->vdev->v4l2_dev;
 
 	video_unregister_device(pxp->vdev);
 	video_device_release(pxp->vdev);
+	v4l2_device_unregister(v4l2_dev);
+	kfree(v4l2_dev);
 
 	free_dma_buf(pxp, &pxp->outbuf);
 

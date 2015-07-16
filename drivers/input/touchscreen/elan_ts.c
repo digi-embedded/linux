@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2007-2008 HTC Corporation.
  *
- * Copyright (C) 2013 Freescale Semiconductor, Inc.
+ * Copyright (C) 2013-2015 Freescale Semiconductor, Inc.
  *
  * This driver is adapted from elan8232_i2c.c written by Shan-Fu Chiou
  * <sfchiou@gmail.com> and Jay Tu <jay_tu@htc.com>.

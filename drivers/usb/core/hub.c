@@ -32,6 +32,7 @@
 #include <asm/byteorder.h>
 
 #include "hub.h"
+#include "otg_whitelist.h"
 
 #define USB_VENDOR_GENESYS_LOGIC		0x05e3
 #define HUB_QUIRK_CHECK_PORT_AUTOSUSPEND	0x01
@@ -2119,9 +2120,6 @@ static void announce_device(struct usb_device *udev)
 static inline void announce_device(struct usb_device *udev) { }
 #endif
 
-#ifdef	CONFIG_USB_OTG
-#include "otg_whitelist.h"
-#endif
 
 /**
  * usb_enumerate_device_otg - FIXME (usbcore-internal)
@@ -2181,21 +2179,6 @@ static int usb_enumerate_device_otg(struct usb_device *udev)
 			}
 		}
 	}
-
-	if (!is_targeted(udev)) {
-
-		/* Maybe it can talk to us, though we can't talk to it.
-		 * (Includes HNP test device.)
-		 */
-		if (udev->bus->b_hnp_enable || udev->bus->is_b_host) {
-			err = usb_port_suspend(udev, PMSG_SUSPEND);
-			if (err < 0)
-				dev_dbg(&udev->dev, "HNP fail, %d\n", err);
-		}
-		err = -ENOTSUPP;
-		goto fail;
-	}
-fail:
 #endif
 	return err;
 }
@@ -2218,6 +2201,7 @@ fail:
 static int usb_enumerate_device(struct usb_device *udev)
 {
 	int err;
+	struct usb_hcd *hcd = bus_to_hcd(udev->bus);
 
 	if (udev->config == NULL) {
 		err = usb_get_configuration(udev);
@@ -2238,6 +2222,20 @@ static int usb_enumerate_device(struct usb_device *udev)
 	err = usb_enumerate_device_otg(udev);
 	if (err < 0)
 		return err;
+
+	if (IS_ENABLED(CONFIG_USB_OTG_WHITELIST) && hcd->tpl_support &&
+		!is_targeted(udev)) {
+		/* Maybe it can talk to us, though we can't talk to it.
+		 * (Includes HNP test device.)
+		 */
+		if (IS_ENABLED(CONFIG_USB_OTG) && (udev->bus->b_hnp_enable
+			|| udev->bus->is_b_host)) {
+			err = usb_port_suspend(udev, PMSG_AUTO_SUSPEND);
+			if (err < 0)
+				dev_dbg(&udev->dev, "HNP fail, %d\n", err);
+		}
+		return -ENOTSUPP;
+	}
 
 	usb_detect_interface_quirks(udev);
 
@@ -4222,9 +4220,6 @@ hub_port_init (struct usb_hub *hub, struct usb_device *udev, int port1,
 	if (retval)
 		goto fail;
 
-	if (hcd->phy && !hdev->parent)
-		usb_phy_notify_connect(hcd->phy, udev->speed);
-
 	/*
 	 * Some superspeed devices have finished the link training process
 	 * and attached to a superspeed hub port, but the device descriptor
@@ -4430,8 +4425,8 @@ static void hub_port_connect_change(struct usb_hub *hub, int port1,
 
 	/* Disconnect any existing devices under this port */
 	if (udev) {
-		if (hcd->phy && !hdev->parent)
-			usb_phy_notify_disconnect(hcd->phy, udev->speed);
+		if (hcd->usb_phy && !hdev->parent)
+			usb_phy_notify_disconnect(hcd->usb_phy, udev->speed);
 		usb_disconnect(&hub->ports[port1 - 1]->child);
 	}
 	clear_bit(port1, hub->change_bits);
@@ -4576,6 +4571,10 @@ static void hub_port_connect_change(struct usb_hub *hub, int port1,
 				spin_lock_irq(&device_state_lock);
 				hub->ports[port1 - 1]->child = NULL;
 				spin_unlock_irq(&device_state_lock);
+			} else {
+				if (hcd->usb_phy && !hdev->parent)
+					usb_phy_notify_connect(hcd->usb_phy,
+							udev->speed);
 			}
 		}
 

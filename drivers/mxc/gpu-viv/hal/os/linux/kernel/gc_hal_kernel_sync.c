@@ -1,6 +1,6 @@
 /****************************************************************************
 *
-*    Copyright (C) 2005 - 2013 by Vivante Corp.
+*    Copyright (C) 2005 - 2014 by Vivante Corp.
 *
 *    This program is free software; you can redistribute it and/or modify
 *    it under the terms of the GNU General Public License as published by
@@ -19,6 +19,11 @@
 *****************************************************************************/
 
 
+#include <gc_hal.h>
+#include <gc_hal_base.h>
+
+#if gcdANDROID_NATIVE_FENCE_SYNC
+
 #include <linux/kernel.h>
 #include <linux/file.h>
 #include <linux/fs.h>
@@ -28,8 +33,6 @@
 #include <linux/uaccess.h>
 
 #include "gc_hal_kernel_sync.h"
-
-#if gcdANDROID_NATIVE_FENCE_SYNC
 
 static struct sync_pt *
 viv_sync_pt_dup(
