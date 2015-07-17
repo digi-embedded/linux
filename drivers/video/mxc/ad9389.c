@@ -648,14 +648,16 @@ static int ad9389_fb_init(struct ad9389_dev *ad9389)
 	return 0;
 }
 
-static int ad9389_dispdrv_power_on(struct mxc_dispdrv_handle *disp)
+static int ad9389_dispdrv_power_on(struct mxc_dispdrv_handle *disp,
+				   struct fb_info *fbi)
 {
 	struct ad9389_dev *ad9389 = mxc_dispdrv_getdata(disp);
 	ad9389_set_power_down(ad9389->client, 0);
 	return 0;
 }
 
-static void ad9389_dispdrv_power_off(struct mxc_dispdrv_handle *disp)
+static void ad9389_dispdrv_power_off(struct mxc_dispdrv_handle *disp,
+				     struct fb_info *fbi)
 {
 	struct ad9389_dev *ad9389 = mxc_dispdrv_getdata(disp);
 	ad9389_set_power_down(ad9389->client, 1);
@@ -676,7 +678,6 @@ static int ad9389_dispdrv_init(struct mxc_dispdrv_handle *disp,
 {
 	struct ad9389_dev *ad9389 = mxc_dispdrv_getdata(disp);
 	struct i2c_client *client = ad9389->client;
-	struct ad9389_pdata *pdata = client->dev.platform_data;
 
 	mutex_lock(&ad9389->irq_lock);
 
@@ -684,11 +685,6 @@ static int ad9389_dispdrv_init(struct mxc_dispdrv_handle *disp,
 	ad9389->if_fmt = setting->if_fmt;
 	ad9389->default_bpp = setting->default_bpp;
 	ad9389->dft_mode_str = setting->dft_mode_str;
-
-	setting->dev_id = pdata->ipu_id;
-	setting->disp_id = pdata->disp_id;
-	dev_dbg(&client->dev, "ipu_id %d disp_id %d\n", setting->dev_id,
-		setting->disp_id);
 
 	if (!valid_mode(setting->if_fmt)) {
 		dev_warn(&client->dev, "Input pixel format not valid use default RGB24\n");
