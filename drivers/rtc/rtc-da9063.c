@@ -28,6 +28,7 @@
 #include <linux/mfd/da9063/registers.h>
 #include <linux/mfd/da9063/core.h>
 #include <linux/of.h>
+#include <linux/regmap.h>
 
 #define CLOCK_DATA_LEN    (DA9063_REG_COUNT_Y    - DA9063_REG_COUNT_S     + 1)
 #define ALARM_AD_DATA_LEN (DA9063_AD_REG_ALARM_Y - DA9063_AD_REG_ALARM_MI + 1)
@@ -90,11 +91,13 @@ static int da9063_rtc_stop_alarm(struct device *dev)
 
 	switch( rtc->chip_revision ) {
 	case DA9063_AD_REVISION:
-		ret = da9063_reg_clear_bits(rtc->hw, DA9063_AD_REG_ALARM_Y, DA9063_ALARM_ON);
+		ret = regmap_update_bits(rtc->hw->regmap, DA9063_AD_REG_ALARM_Y,
+					 DA9063_ALARM_ON, 0);
 		break;
 	case DA9063_BB_REVISION:
 	default:
-		ret = da9063_reg_clear_bits(rtc->hw, DA9063_REG_ALARM_Y, DA9063_ALARM_ON);
+		ret = regmap_update_bits(rtc->hw->regmap, DA9063_REG_ALARM_Y,
+					 DA9063_ALARM_ON, 0);
 	}
 
 	return ret;
@@ -107,11 +110,13 @@ static int da9063_rtc_start_alarm(struct device *dev)
 
 	switch( rtc->chip_revision ) {
 	case DA9063_AD_REVISION:
-		ret = da9063_reg_set_bits(rtc->hw, DA9063_AD_REG_ALARM_Y, DA9063_ALARM_ON);
+		ret = regmap_update_bits(rtc->hw->regmap, DA9063_AD_REG_ALARM_Y,
+					 DA9063_ALARM_ON, 1);
 		break;
 	case DA9063_BB_REVISION:
 	default:
-		ret = da9063_reg_set_bits(rtc->hw, DA9063_REG_ALARM_Y, DA9063_ALARM_ON);
+		ret = regmap_update_bits(rtc->hw->regmap, DA9063_REG_ALARM_Y,
+					 DA9063_ALARM_ON, 1);
 	}
 
 	return ret;
@@ -123,8 +128,8 @@ static int da9063_rtc_read_time(struct device *dev, struct rtc_time *tm)
 	u8 data[CLOCK_DATA_LEN] = { [0 ... (CLOCK_DATA_LEN - 1)] = 0 };
 	int ret;
 
-	ret = da9063_block_read(rtc->hw,
-				DA9063_REG_COUNT_S, CLOCK_DATA_LEN, data);
+	ret = regmap_bulk_read(rtc->hw->regmap,
+				DA9063_REG_COUNT_S, data, CLOCK_DATA_LEN);
 	if (ret < 0) {
 		dev_err(dev, "Failed to read RTC time data: %d\n", ret);
 		return ret;
@@ -147,8 +152,8 @@ static int da9063_rtc_set_time(struct device *dev, struct rtc_time *tm)
 
 	da9063_tm_to_data(tm, data);
 
-	ret = da9063_block_write(rtc->hw,
-				 DA9063_REG_COUNT_S, CLOCK_DATA_LEN, data);
+	ret = regmap_bulk_write(rtc->hw->regmap,
+				 DA9063_REG_COUNT_S, data, CLOCK_DATA_LEN);
 	if (ret < 0) {
 		dev_err(dev, "Failed to set RTC time data: %d\n", ret);
 		return ret;
@@ -162,16 +167,17 @@ static int da9063_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 	struct da9063_rtc *rtc = dev_get_drvdata(dev);
 	u8 data[CLOCK_DATA_LEN] = { [0 ... (CLOCK_DATA_LEN - 1)] = 0 };
 	int ret;
+	unsigned int val;
 
 	switch( rtc->chip_revision ) {
 	case DA9063_AD_REVISION:
-		ret = da9063_block_read(rtc->hw, DA9063_AD_REG_ALARM_MI,
-				ALARM_AD_DATA_LEN, &data[DATA_MIN]);
+		ret = regmap_bulk_read(rtc->hw->regmap, DA9063_AD_REG_ALARM_MI,
+				       &data[DATA_MIN], ALARM_AD_DATA_LEN);
 		break;
 	case DA9063_BB_REVISION:
 	default:
-		ret = da9063_block_read(rtc->hw, DA9063_REG_ALARM_S,
-				ALARM_DATA_LEN, &data[DATA_SEC]);
+		ret = regmap_bulk_read(rtc->hw->regmap, DA9063_REG_ALARM_S,
+				       &data[DATA_SEC], ALARM_DATA_LEN);
 	}
 
 	if (ret < 0)
@@ -181,7 +187,7 @@ static int da9063_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 	alrm->enabled = !!(data[DATA_YEAR] & DA9063_ALARM_ON);
 
 	/* If RTC event is not processed yet, indicate pending */
-	ret = da9063_reg_read(rtc->hw, DA9063_REG_EVENT_A);
+	ret = regmap_read(rtc->hw->regmap, DA9063_REG_EVENT_A, &val);
 	if (ret < 0)
 		return ret;
 
@@ -209,13 +215,13 @@ static int da9063_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 
 	switch( rtc->chip_revision ) {
 	case DA9063_AD_REVISION:
-		ret= da9063_block_write(rtc->hw, DA9063_AD_REG_ALARM_MI,
-				ALARM_AD_DATA_LEN, &data[DATA_MIN]);
+		ret = regmap_bulk_write(rtc->hw->regmap, DA9063_AD_REG_ALARM_MI,
+				       &data[DATA_MIN], ALARM_AD_DATA_LEN);
 		break;
 	case DA9063_BB_REVISION:
 	default:
-		ret= da9063_block_write(rtc->hw, DA9063_REG_ALARM_S,
-				ALARM_DATA_LEN, &data[DATA_SEC]);
+		ret = regmap_bulk_write(rtc->hw->regmap, DA9063_REG_ALARM_S,
+				       &data[DATA_SEC], ALARM_AD_DATA_LEN);
 	}
 
 	if (alrm->enabled) {
@@ -246,13 +252,13 @@ static irqreturn_t da9063_alarm_event(int irq, void *data)
 
 	switch( rtc->chip_revision ) {
 	case DA9063_AD_REVISION:
-		da9063_reg_clear_bits(rtc->hw, DA9063_AD_REG_ALARM_Y,
-				      DA9063_ALARM_ON);
+		regmap_update_bits(rtc->hw->regmap, DA9063_AD_REG_ALARM_Y,
+				      DA9063_ALARM_ON, 0);
 		break;
 	case DA9063_BB_REVISION:
 	default:
-		da9063_reg_clear_bits(rtc->hw, DA9063_REG_ALARM_Y,
-				      DA9063_ALARM_ON);
+		regmap_update_bits(rtc->hw->regmap, DA9063_REG_ALARM_Y,
+				      DA9063_ALARM_ON, 0);
 	}
 
 	rtc_update_irq(rtc->rtc_dev, 1, RTC_IRQF | RTC_AF);
@@ -279,13 +285,15 @@ static int da9063_rtc_probe(struct platform_device *pdev)
         }
 
 	/* Enable RTC hardware */
-	ret = da9063_reg_set_bits(da9063, DA9063_REG_CONTROL_E, DA9063_RTC_EN);
+	ret = regmap_update_bits(da9063->regmap, DA9063_REG_CONTROL_E,
+				 DA9063_RTC_EN, 1);
 	if (ret < 0) {
 		dev_err(&pdev->dev, "Failed to enable RTC.\n");
 		return ret;
 	}
 
-	ret = da9063_reg_set_bits(da9063, DA9063_REG_EN_32K, DA9063_CRYSTAL);
+	ret = regmap_update_bits(da9063->regmap, DA9063_REG_EN_32K,
+				 DA9063_CRYSTAL, 1);
 	if (ret < 0) {
 		dev_err(&pdev->dev, "Failed to run 32 KHz OSC.\n");
 		return ret;
@@ -294,17 +302,19 @@ static int da9063_rtc_probe(struct platform_device *pdev)
 	/* Set alarm reason (alarm only, no tick) */
 	switch( da9063->revision ) {
 	case DA9063_AD_REVISION:
-		ret = da9063_reg_clear_bits(da9063, DA9063_AD_REG_ALARM_MI,
-					    DA9063_ALARM_STATUS_TICK | DA9063_ALARM_STATUS_ALARM );
-		ret = da9063_reg_set_bits(da9063, DA9063_AD_REG_ALARM_MI,
-					    DA9063_ALARM_STATUS_ALARM );
+		ret = regmap_update_bits(da9063->regmap, DA9063_AD_REG_ALARM_MI,
+					 DA9063_ALARM_STATUS_TICK |
+					 DA9063_ALARM_STATUS_ALARM, 0);
+		ret = regmap_update_bits(da9063->regmap, DA9063_AD_REG_ALARM_MI,
+					    DA9063_ALARM_STATUS_ALARM, 1);
 		break;
 	case DA9063_BB_REVISION:
 	default:
-		ret = da9063_reg_clear_bits(da9063, DA9063_REG_ALARM_S,
-					    DA9063_ALARM_STATUS_TICK | DA9063_ALARM_STATUS_ALARM );
-		ret = da9063_reg_set_bits(da9063, DA9063_REG_ALARM_S,
-					    DA9063_ALARM_STATUS_ALARM );
+		ret = regmap_update_bits(da9063->regmap, DA9063_REG_ALARM_S,
+					    DA9063_ALARM_STATUS_TICK |
+					    DA9063_ALARM_STATUS_ALARM, 0);
+		ret = regmap_update_bits(da9063->regmap, DA9063_REG_ALARM_S,
+					    DA9063_ALARM_STATUS_ALARM, 1);
 	}
 
 	if (ret < 0) {
@@ -315,13 +325,13 @@ static int da9063_rtc_probe(struct platform_device *pdev)
 	/* Make sure that ticks are disabled. */
 	switch( da9063->revision ) {
 	case DA9063_AD_REVISION:
-		ret = da9063_reg_clear_bits(da9063, DA9063_AD_REG_ALARM_Y,
-					    DA9063_TICK_ON);
+		ret = regmap_update_bits(da9063->regmap, DA9063_AD_REG_ALARM_Y,
+					    DA9063_TICK_ON, 0);
 		break;
 	case DA9063_BB_REVISION:
 	default:
-		ret = da9063_reg_clear_bits(da9063, DA9063_REG_ALARM_Y,
-					    DA9063_TICK_ON);
+		ret = regmap_update_bits(da9063->regmap, DA9063_REG_ALARM_Y,
+					    DA9063_TICK_ON, 0);
 	}
 
 	if (ret < 0) {
