@@ -14,7 +14,6 @@
 #include <linux/of.h>
 #include <linux/of_platform.h>
 #include <linux/i2c.h>
-#include <linux/of_i2c.h>
 #include <linux/of_gpio.h>
 #include <linux/clk.h>
 #include <linux/gpio.h>
@@ -167,6 +166,7 @@ static int imx_sgtl5000_audmux_config(struct platform_device *pdev)
 	struct device_node *np = pdev->dev.of_node;
 	int int_port, ext_port;
 	int ret;
+	struct imx_priv *priv = &card_priv;
 
 	priv->pdev = pdev;
 
@@ -227,6 +227,7 @@ static int imx_sgtl5000_probe(struct platform_device *pdev)
 	struct platform_device *cpu_pdev;
 	struct i2c_client *codec_dev;
 	struct imx_sgtl5000_data *data = NULL;
+	struct imx_priv *priv = &card_priv;
 	int ret;
 
 	cpu_np = of_parse_phandle(pdev->dev.of_node, "cpu-dai", 0);
