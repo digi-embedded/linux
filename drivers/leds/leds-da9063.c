@@ -22,6 +22,7 @@
 #include <linux/mfd/da9063/core.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
+#include <linux/regmap.h>
 
 #define DA9063_OPENDRAIN_OUTPUT		0x0
 #define DA9063_MAX_BRIGHTNESS		0x5f
@@ -58,7 +59,7 @@ static int da9063_set_led_brightness(struct da9063_led *led)
 
 	val = (led->brightness & 0x7f) | DA9063_GPIO_DIM;
 
-	error = da9063_reg_write(led->da9063, led->led_reg, val);
+	error = regmap_write(led->da9063->regmap, led->led_reg, val);
 	if (error < 0)
 		dev_err(led->da9063->dev, "Failed to set led brightness, %d\n",
 			error);
@@ -86,7 +87,7 @@ static int da9063_configure_leds(struct da9063_led *led)
 {
 	int error;
 
-	error = da9063_reg_update(led->da9063, led->gpio_reg,
+	error = regmap_update_bits(led->da9063->regmap, led->gpio_reg,
 				  led->gpio_mask,
 				  DA9063_OPENDRAIN_OUTPUT);
 	if (error < 0)
