@@ -47,6 +47,8 @@
 #include "cpuidle.h"
 #include "hardware.h"
 
+#include "linux/platform_data/serial-imx.h"
+
 static struct fec_platform_data fec_pdata;
 static struct flexcan_platform_data flexcan_pdata[2];
 static int flexcan_en_gpio;
@@ -585,6 +587,9 @@ static void __init imx6q_init_machine(void)
 
 	of_platform_populate(NULL, of_default_bus_match_table,
 					imx6q_auxdata_lookup, parent);
+
+	if (of_machine_is_compatible("digi,ccimx6sbc"))
+		fixup_dt_audio_codec();
 
 	imx6q_enet_init();
 	imx_anatop_init();
