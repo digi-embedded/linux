@@ -44,8 +44,7 @@ struct imx_shared_mem {
 };
 
 struct clk *imx_clk_pllv3(enum imx_pllv3_type type, const char *name,
-		const char *parent_name, void __iomem *base,
-		u32 div_mask, bool always_on);
+		const char *parent_name, void __iomem *base, u32 div_mask);
 
 struct clk *clk_register_gate2(struct device *dev, const char *name,
 		const char *parent_name, unsigned long flags,
