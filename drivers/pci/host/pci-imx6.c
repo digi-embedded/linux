@@ -595,7 +595,7 @@ static void imx6_pcie_reset_phy(struct pcie_port *pp)
 
 static int imx6_pcie_link_up(struct pcie_port *pp)
 {
-	u32 rc, debug_r0, rx_valid;
+	u32 rc, ltssm, rx_valid;
 	int count = 500;
 
 	/*
