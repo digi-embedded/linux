@@ -36,20 +36,10 @@
 		>;
 	arm-supply = <&bcore1>;
 	soc-supply = <&bcore2>;
-	pu-supply = <&pu_dummy>; /* use pu_dummy if VDDSOC share with VDDPU */
 };
 
 &gpc {
 	fsl,ldo-bypass = <1>; /* use ldo-bypass, u-boot will check it and configure */
-	pu-supply = <&pu_dummy>; /* ldo-bypass:use pu_dummy if VDDSOC share with VDDPU */
-};
-
-&gpu {
-	pu-supply = <&pu_dummy>; /* ldo-bypass:use pu_dummy if VDDSOC share with VDDPU */
-};
-
-&vpu {
-	pu-supply = <&pu_dummy>; /* ldo-bypass:use pu_dummy if VDDSOC share with VDDPU */
 };
 
 &i2c2 {
