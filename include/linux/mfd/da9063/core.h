@@ -31,6 +31,9 @@
 #define DA9063_DRVNAME_LEDS		"da9063-leds"
 #define DA9063_DRVNAME_GPIO		"da9063-gpio"
 
+#define DA9063_AD_REVISION              3
+#define DA9063_BB_REVISION              5
+
 enum da9063_models {
 	PMIC_DA9063 = 0x61,
 };
