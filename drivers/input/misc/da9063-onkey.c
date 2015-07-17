@@ -32,7 +32,7 @@
 #include <linux/mfd/da9063/pdata.h>
 #include <linux/mfd/da9063/registers.h>
 #include <linux/of.h>
-
+#include <linux/regmap.h>
 
 struct da9063_onkey {
 	struct	da9063 *da9063;
@@ -44,7 +44,7 @@ struct da9063_onkey {
 
 static void da9063_poll_on(struct work_struct *work)
 {
-	u8 value;
+	unsigned int value;
 	int poll = 1;
 	int mask_events = 0;
 	int ret;
@@ -52,38 +52,44 @@ static void da9063_poll_on(struct work_struct *work)
 						   work.work);
 
 	/* poll to see when the pin is deasserted */
-	ret = da9063_reg_read(onkey->da9063, DA9063_REG_STATUS_A);
-	if (ret >= 0 )
+	ret = regmap_read(onkey->da9063->regmap, DA9063_REG_STATUS_A, &value);
+	if (ret >= 0)
 	{
 		if( !(ret & DA9063_NONKEY)) {
-			ret = da9063_reg_read(onkey->da9063, DA9063_REG_CONTROL_B);
-			if( ret >= 0 )
-			{
-				ret &= ~(DA9063_NONKEY_LOCK);
-				value = ret;
-				ret = da9063_reg_write(onkey->da9063, DA9063_REG_CONTROL_B, value );
-				if( ret < 0 )
-					dev_err(&onkey->input->dev, "Failed to reset the Key_Delay %d\n", ret);
+			ret = regmap_read(onkey->da9063->regmap,
+					DA9063_REG_CONTROL_B, &value);
+			if (ret < 0) {
+				dev_err(&onkey->input->dev, "Failed to read CONTROL_B: %d\n", ret);
+				return;
 			}
-			else {
-				dev_err(&onkey->input->dev,
-					"Failed to read DA9063_REG_CONTROL_B while trying to reset ONKEY %d\n", ret);
+			value &= ~(DA9063_NONKEY_LOCK);
+			ret = regmap_write(onkey->da9063->regmap,
+					DA9063_REG_CONTROL_B, value);
+			if (ret < 0) {
+				dev_err(&onkey->input->dev, "Failed to reset the Key_Delay %d\n", ret);
+				return;
 			}
 
 			input_report_key(onkey->input, KEY_POWER, 0);
 			input_sync(onkey->input);
 
 			/* unmask the onkey interrupt again */
-			mask_events = da9063_reg_read(onkey->da9063, DA9063_REG_IRQ_MASK_A );
+			ret = regmap_read(onkey->da9063->regmap, DA9063_REG_IRQ_MASK_A, &mask_events);
+			if (ret < 0) {
+				dev_err(&onkey->input->dev, "Failed to read IRQ_MASK_A: %d\n", ret);
+				return;
+			}
 			if (mask_events >= 0) {
 				mask_events &= ~(DA9063_NONKEY);
-				ret = da9063_reg_write(onkey->da9063, DA9063_REG_IRQ_MASK_A, mask_events);
+				ret = regmap_write(onkey->da9063->regmap, DA9063_REG_IRQ_MASK_A, mask_events);
 				if (ret < 0) {
 					dev_err(&onkey->input->dev, "Failed to unmask the onkey IRQ: %d\n", ret);
+					return;
 				}
 			}
 			else {
 				dev_err(&onkey->input->dev, "Failed to unmask the onkey IRQ: %d\n", ret);
+				return;
 			}
 
 			poll = 0;
@@ -91,6 +97,7 @@ static void da9063_poll_on(struct work_struct *work)
 	}
 	else {
 		dev_err(&onkey->input->dev, "Failed to read ON status: %d\n", ret);
+		return;
 	}
 
 	if( poll )
@@ -101,25 +108,36 @@ static irqreturn_t da9063_onkey_irq_handler(int irq, void *data)
 {
 	struct da9063_onkey *onkey = data;
 	int ret;
+	unsigned int val;
 	int mask_events = 0;
 
-	ret = da9063_reg_read(onkey->da9063, DA9063_REG_STATUS_A);
+	ret = regmap_read(onkey->da9063->regmap, DA9063_REG_STATUS_A, &val);
+	if (ret < 0) {
+		dev_err(&onkey->input->dev, "Failed to read status: %d\n", ret);
+		goto out;
+	}
 	/* only report POWER if the key_power option is supported by driver */
-	if (onkey->key_power && (ret >= 0) && (ret & DA9063_NONKEY))
+	if (onkey->key_power && (val >= 0) && (val & DA9063_NONKEY))
 	{
 		dev_notice(&onkey->input->dev, "KEY_POWER pressed.\n");
 
 		/* mask the onkey interrupt until power key unpressed */
-		mask_events = da9063_reg_read(onkey->da9063, DA9063_REG_IRQ_MASK_A);
+		ret = regmap_read(onkey->da9063->regmap, DA9063_REG_IRQ_MASK_A, &mask_events);
+		if (ret < 0) {
+			dev_err(&onkey->input->dev, "Failed to read status: %d\n", ret);
+			goto out;
+		}
 		if (mask_events >= 0) {
 			mask_events |= DA9063_NONKEY;
-			ret = da9063_reg_write(onkey->da9063, DA9063_REG_IRQ_MASK_A, mask_events);
+			ret = regmap_write(onkey->da9063->regmap, DA9063_REG_IRQ_MASK_A, mask_events);
 			if (ret < 0) {
 				dev_err(&onkey->input->dev, "Failed to mask the onkey IRQ: %d\n", ret);
+				goto out;
 			}
 		}
 		else {
 			dev_err(&onkey->input->dev, "Failed to mask the onkey IRQ: %d\n", ret);
+			goto out;
 		}
 
 		input_report_key(onkey->input, KEY_POWER, 1);
@@ -134,6 +152,7 @@ static irqreturn_t da9063_onkey_irq_handler(int irq, void *data)
 		input_sync(onkey->input);
 	}
 
+out:
 	return IRQ_HANDLED;
 }
 
