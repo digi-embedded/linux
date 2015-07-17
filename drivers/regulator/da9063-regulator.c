@@ -879,10 +879,6 @@ static int da9063_regulator_probe(struct platform_device *pdev)
 					"Failed to request LDO_LIM IRQ.\n");
 			regulators->irq_ldo_lim = -ENXIO;
 		}
-
-		/* Disable by default unless always on specified. */
-		if (!of_property_read_bool(np, "regulator-always-on"))
-			da9063_disable(regulator->rdev);
 	}
 
 	return 0;
