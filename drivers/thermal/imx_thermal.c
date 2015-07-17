@@ -191,12 +191,12 @@ static int imx_get_temp_internal(struct imx_thermal_data *data,
 		imx_set_alarm_temp(data, data->temp_critical);
 	if (data->alarm_temp == data->temp_critical && *temp < data->temp_passive) {
 		imx_set_alarm_temp(data, data->temp_passive);
-		dev_dbg(&tz->device, "thermal alarm off: T < %lu\n",
+		dev_dbg(&data->tz->device, "thermal alarm off: T < %lu\n",
 			data->alarm_temp / 1000);
 	}
 
 	if (*temp != data->last_temp) {
-		dev_dbg(&tz->device, "millicelsius: %ld\n", *temp);
+		dev_dbg(&data->tz->device, "millicelsius: %ld\n", *temp);
 		data->last_temp = *temp;
 	}
 
