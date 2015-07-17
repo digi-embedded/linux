@@ -31,6 +31,7 @@
 #include <linux/mfd/da9063/core.h>
 #include <linux/mfd/da9063/pdata.h>
 #include <linux/of.h>
+#include <linux/regmap.h>
 
 /* ADC resolutions */
 #define DA9063_ADC_RES (1 << (DA9063_ADC_RES_L_BITS + DA9063_ADC_RES_M_BITS))
@@ -135,7 +136,7 @@ static int da9063_adc_manual_read(struct da9063_hwmon *hwmon, int channel)
 	/* Start measurment on selected channel */
 	data[0] = (channel << DA9063_ADC_MUX_SHIFT) & DA9063_ADC_MUX_MASK;
 	data[0] |= DA9063_ADC_MAN;
-	ret = da9063_reg_update(hwmon->da9063, DA9063_REG_ADC_MAN,
+	ret = regmap_update_bits(hwmon->da9063->regmap, DA9063_REG_ADC_MAN,
 				DA9063_ADC_MUX_MASK | DA9063_ADC_MAN, data[0]);
 	if (ret < 0)
 		goto out;
@@ -149,7 +150,8 @@ static int da9063_adc_manual_read(struct da9063_hwmon *hwmon, int channel)
 	}
 
 	/* Get results */
-	ret = da9063_block_read(hwmon->da9063, DA9063_REG_ADC_RES_L, 2, data);
+	ret = regmap_bulk_read(hwmon->da9063->regmap, DA9063_REG_ADC_RES_L,
+			       data, 2);
 	if (ret < 0)
 		goto out;
 	ret = (data[0] & DA9063_ADC_RES_L_MASK) >> DA9063_ADC_RES_L_SHIFT;
@@ -302,7 +304,7 @@ static int da9063_hwmon_probe(struct platform_device *pdev)
 	init_completion(&hwmon->man_adc_rdy);
 	hwmon->da9063 = da9063;
 
-	ret = da9063_reg_read(da9063, DA9063_REG_ADC_CONT);
+	ret = regmap_read(da9063->regmap, DA9063_REG_ADC_CONT, &val);
 	if (ret < 0)
 		return ret;
 

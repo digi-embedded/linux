@@ -785,6 +785,7 @@
 #define	DA9063_VLDO4_SEL			0x80
 
 /* DA9063_REG_ADC_MAN (addr=0x34) */
+#define	DA9063_ADC_MUX_SHIFT			0
 #define	DA9063_ADC_MUX_MASK			0x0F
 #define		DA9063_ADC_MUX_VSYS		0x00
 #define		DA9063_ADC_MUX_ADCIN1		0x01
@@ -813,14 +814,17 @@
 #define	DA9063_VSYS_VAL_BASE			0x00
 
 /* DA9063_REG_ADC_RES_L (addr=0x37) */
+#define	DA9063_ADC_RES_L_SHIFT			6
 #define	DA9063_ADC_RES_L_BITS			2
 #define	DA9063_ADC_RES_L_MASK			0xC0
 
 /* DA9063_REG_ADC_RES_H (addr=0x38) */
+#define	DA9063_ADC_RES_M_SHIFT			0
 #define	DA9063_ADC_RES_M_BITS			8
 #define	DA9063_ADC_RES_M_MASK			0xFF
 
 /* DA9063_REG_(xxx_RES/ADC_RES_H) (addr=0x39-0x3F) */
+#define	DA9063_ADC_VAL_SHIFT			0
 #define	DA9063_ADC_VAL_MASK			0xFF
 
 /* DA9063_REG_COUNT_S (addr=0x40) */
