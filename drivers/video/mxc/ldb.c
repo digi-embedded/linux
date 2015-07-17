@@ -29,6 +29,7 @@
 #include <linux/platform_device.h>
 #include <linux/regmap.h>
 #include <linux/types.h>
+#include <linux/vmalloc.h>
 #include <video/of_videomode.h>
 #include <video/videomode.h>
 #include <video/of_display_timing.h>
@@ -297,20 +298,86 @@ MODULE_DEVICE_TABLE(of, ldb_dt_ids);
 
 static int ldb_fb_event(struct notifier_block *nb, unsigned long val, void *v)
 {
-        struct ldb_data *ldb = container_of(nb, struct ldb_data, nb);
-        struct fb_info *fbi = event->info;
+	struct fb_event *event = v;
+	struct fb_info *fbi = event->info;
 
-        switch (val) {
-        case FB_EVENT_FB_REGISTERED:
+	switch (val) {
+	case FB_EVENT_FB_REGISTERED:
 #if defined(CONFIG_LOGO)
-                fb_show_logo(fbi, 0);
+		fb_show_logo(fbi, 0);
 #endif
-                break;
+		break;
 
-        default:
-                break;
-        }
-        return 0;
+	default:
+		break;
+	}
+	return 0;
+}
+
+static int ldb_set_videomode(struct device *dev,
+		struct ldb_data *ldb,
+		struct mxc_dispdrv_setting *setting,
+		int index)
+{
+	int ret = -ENOENT;
+	int i;
+	struct fb_videomode *modedb = NULL;
+	struct fsl_mxc_ldb_display_data *display;
+
+	if (index == 0)
+		display = &ldb->disp;
+	else if (index == 1)
+		display = &ldb->sec_disp;
+	else {
+		dev_info(dev, " Invalid display index %d\n", index);
+		return -ENOENT;
+	}
+
+	if (!display->timings->num_timings)
+		return -ENOENT;
+
+	modedb = vzalloc(sizeof(*modedb) *
+			display->timings->num_timings);
+	if (!modedb)
+		return -ENOMEM;
+
+	for (i = 0; i < display->timings->num_timings; i++) {
+		struct videomode vm;
+
+		videomode_from_timing(display->timings->timings[i], &vm);
+		ret = fb_videomode_from_videomode(&vm, &modedb[i]);
+		if (ret)
+			goto out;
+	}
+
+	ret = fb_find_mode(&setting->fbi->var, setting->fbi,
+			setting->dft_mode_str, modedb,
+			display->timings->num_timings, NULL,
+			setting->default_bpp);
+	if (!ret) {
+		fb_videomode_to_var(&setting->fbi->var,
+				&display->native_mode);
+		dev_info(dev, "Using native mode for %s\n",
+				display->disp_name);
+	} else {
+		dev_info(dev, "Using specified mode for %s\n",
+				setting->dft_mode_str);
+	}
+
+	INIT_LIST_HEAD(&setting->fbi->modelist);
+	for (i = 0; i < display->timings->num_timings; i++) {
+		struct fb_videomode m;
+
+		fb_var_to_videomode(&m, &setting->fbi->var);
+		if (fb_mode_is_equal(&m, &modedb[i])) {
+			ret = fb_add_videomode(&modedb[i],
+				&setting->fbi->modelist);
+			break;
+		}
+	}
+out:
+	vfree(modedb);
+	return ret;
 }
 
 static int ldb_init(struct mxc_dispdrv_handle *mddh,
@@ -320,7 +387,6 @@ static int ldb_init(struct mxc_dispdrv_handle *mddh,
 	struct device *dev = ldb->dev;
 	struct fb_info *fbi = setting->fbi;
 	struct ldb_chan *chan;
-	struct fb_videomode fb_vm;
 	int chno;
 
 	chno = ldb->chan[ldb->primary_chno].is_used ?
@@ -341,7 +407,7 @@ static int ldb_init(struct mxc_dispdrv_handle *mddh,
 
 	chan->fbi = fbi;
 
-	ldb_set_videomode(&dev, ldb, setting, chno);
+	ldb_set_videomode(dev, ldb, setting, chno);
 
 	setting->crtc = chan->crtc;
 
@@ -588,71 +654,7 @@ static struct mxc_dispdrv_driver ldb_drv = {
 	.disable	= ldb_disable
 };
 
-static int ldb_set_videomode(struct device *dev,
-		struct ldb_data *ldb,
-		struct mxc_dispdrv_setting *setting,
-		int index)
-{
-	int ret = -ENOENT;
-	int i;
-	struct fb_videomode *modedb = NULL;
-	struct fsl_mxc_ldb_display_data *display;
 
-	if (index == 0)
-		display = &ldb->disp;
-	else if (index == 1)
-		display = &ldb->sec_disp;
-	else {
-		dev_info(dev, " Invalid display index %d\n", index);
-		return -ENOENT;
-	}
-
-	if (!display->timings->num_timings)
-		return -ENOENT;
-
-	modedb = vzalloc(sizeof(*modedb) *
-			display->timings->num_timings);
-	if (!modedb)
-		return -ENOMEM;
-
-	for (i = 0; i < display->timings->num_timings; i++) {
-		struct videomode vm;
-
-		videomode_from_timing(display->timings->timings[i], &vm);
-		ret = fb_videomode_from_videomode(&vm, &modedb[i]);
-		if (ret)
-			goto out;
-	}
-
-	ret = fb_find_mode(&setting->fbi->var, setting->fbi,
-			setting->dft_mode_str, modedb,
-			display->timings->num_timings, NULL,
-			setting->default_bpp);
-	if (!ret) {
-		fb_videomode_to_var(&setting->fbi->var,
-				&display->native_mode);
-		dev_info(dev, "Using native mode for %s\n",
-				display->disp_name);
-	} else {
-		dev_info(dev, "Using specified mode for %s\n",
-				setting->dft_mode_str);
-	}
-
-	INIT_LIST_HEAD(&setting->fbi->modelist);
-	for (i = 0; i < display->timings->num_timings; i++) {
-		struct fb_videomode m;
-
-		fb_var_to_videomode(&m, &setting->fbi->var);
-		if (fb_mode_is_equal(&m, &modedb[i])) {
-			ret = fb_add_videomode(&modedb[i],
-				&setting->fbi->modelist);
-			break;
-		}
-	}
-out:
-	vfree(modedb);
-	return ret;
-}
 
 enum {
 	LVDS_BIT_MAP_SPWG,
@@ -773,6 +775,7 @@ static int ldb_probe(struct platform_device *pdev)
 	int i, data_width, mapping, child_count = 0;
 	char clkname[16];
 	struct device_node *disp_np = NULL;
+	int ret;
 
 	ldb = devm_kzalloc(dev, sizeof(*ldb), GFP_KERNEL);
 	if (!ldb)
@@ -834,7 +837,6 @@ static int ldb_probe(struct platform_device *pdev)
 		struct ldb_chan *chan;
 		enum crtc crtc;
 		bool is_primary;
-		int ret;
 
 		ret = of_property_read_u32(child, "reg", &i);
 		if (ret || i < 0 || i > 1 || i >= ldb->bus_mux_num) {
@@ -925,14 +927,14 @@ static int ldb_probe(struct platform_device *pdev)
 		ldb->disp.timings = of_get_display_timings(disp_np);
 		if (!ldb->disp.timings) {
 			dev_err(&pdev->dev, "failed to get primary display timings\n");
-			err = -ENOENT;
+			ret = -ENOENT;
 			goto out;
 		}
 
 		if (of_get_fb_videomode(disp_np, &ldb->disp.native_mode,
 					OF_USE_NATIVE_MODE)) {
 			dev_err(&pdev->dev, "failed to get primary display native mode\n");
-			err = -ENOENT;
+			ret = -ENOENT;
 			goto out;
 		}
 
@@ -949,14 +951,14 @@ static int ldb_probe(struct platform_device *pdev)
 		ldb->sec_disp.timings = of_get_display_timings(disp_np);
 		if (!ldb->sec_disp.timings) {
 			dev_err(&pdev->dev, "failed to get secondary display timings\n");
-			err = -ENOENT;
+			ret = -ENOENT;
 			goto out;
 		}
 
 		if (of_get_fb_videomode(disp_np, &ldb->sec_disp.native_mode,
 					OF_USE_NATIVE_MODE)) {
 			dev_err(&pdev->dev, "failed to get secondary display native mode\n");
-			err = -ENOENT;
+			ret = -ENOENT;
 			goto out;
 		}
 
@@ -1005,7 +1007,8 @@ static int ldb_probe(struct platform_device *pdev)
 	mxc_dispdrv_setdata(ldb->mddh, ldb);
 	dev_set_drvdata(&pdev->dev, ldb);
 
-	return 0;
+out:
+	return ret;
 }
 
 static int ldb_remove(struct platform_device *pdev)
