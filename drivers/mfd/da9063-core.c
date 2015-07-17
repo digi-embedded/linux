@@ -34,6 +34,7 @@
 #include <linux/kthread.h>
 #include <linux/uaccess.h>
 #include <linux/of.h>
+#include <linux/clockchips.h>
 
 static struct da9063 * da9063_data;
 
@@ -208,7 +209,7 @@ static const struct mfd_cell da9063_devs[] = {
 int da9063_dump(struct da9063 *da9063)
 {
 	int j = 0;
-	int i;
+	int i, ret;
 	unsigned int val;
 	unsigned int invalid = 0;
 
@@ -274,9 +275,6 @@ void da9063_power_off ( void ) {
 	regmap_update_bits(da9063_data->regmap, DA9063_REG_CONTROL_F, 0x02,
 			      DA9063_SHUTDOWN);
 
-	if(!mutex_is_locked(&da9063_data->io_mutex))
-		mutex_lock(&da9063_data->io_mutex);
-
 	// Do not unlock mutex to avoid further accesses
 	// Do not return
 	while(1);
@@ -284,10 +282,8 @@ void da9063_power_off ( void ) {
 
 int da9063_device_init(struct da9063 *da9063, unsigned int irq)
 {
-	int model, revision t_offset;
+	int model, revision, t_offset;
 	int ret;
-
-	mutex_init(&da9063->io_mutex);
 
 	da9063->chip_irq = irq;
 
@@ -312,7 +308,7 @@ int da9063_device_init(struct da9063 *da9063, unsigned int irq)
 		return -ENODEV;
 	}
 
-	ret = regmap_read(da9063, DA9063_REG_T_OFFSET, &t_offset);
+	ret = regmap_read(da9063->regmap, DA9063_REG_T_OFFSET, &t_offset);
 	if (ret < 0) {
 		dev_err(da9063->dev, "Cannot read chip temperature offset.\n");
 		return -EIO;
