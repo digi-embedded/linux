@@ -29,6 +29,7 @@
 #define DA9063_DRVNAME_RTC		"da9063-rtc"
 #define DA9063_DRVNAME_VIBRATION	"da9063-vibration"
 #define DA9063_DRVNAME_LEDS		"da9063-leds"
+#define DA9063_DRVNAME_GPIO		"da9063-gpio"
 
 enum da9063_models {
 	PMIC_DA9063 = 0x61,
