@@ -2865,6 +2865,8 @@ static DEVICE_ATTR(fsl_csi_property, S_IRUGO, show_csi, NULL);
  */
 static int mxc_v4l2_probe(struct platform_device *pdev)
 {
+	int ret = 0;
+
 	/* Create cam and initialize it. */
 	cam_data *cam = kmalloc(sizeof(cam_data), GFP_KERNEL);
 	if (cam == NULL) {
@@ -2872,7 +2874,10 @@ static int mxc_v4l2_probe(struct platform_device *pdev)
 		return -1;
 	}
 
-	init_camera_struct(cam, pdev);
+	ret = init_camera_struct(cam, pdev);
+	if (ret)
+		return ret;
+
 	pdev->dev.release = camera_platform_release;
 
 	/* Set up the v4l2 device and register it*/
