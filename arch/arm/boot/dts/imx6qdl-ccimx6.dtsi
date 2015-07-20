@@ -26,7 +26,7 @@
 &i2c2 {
 	clock-frequency = <100000>;
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_i2c2_2>;
+	pinctrl-0 = <&pinctrl_i2c2>;
 	status = "okay";
 
 	pmic_dialog: dialog@58 {
@@ -185,9 +185,9 @@
 
 &usdhc1 {
 	pinctrl-names = "default", "state_100mhz", "state_200mhz";
-	pinctrl-0 = <&pinctrl_usdhc1_1>;
-	pinctrl-1 = <&pinctrl_usdhc1_1_100mhz>;
-	pinctrl-2 = <&pinctrl_usdhc1_1_200mhz>;
+	pinctrl-0 = <&pinctrl_usdhc1>;
+	pinctrl-1 = <&pinctrl_usdhc1_100mhz>;
+	pinctrl-2 = <&pinctrl_usdhc1_200mhz>;
 	no-1-8-v;
 	status = "okay";
 };

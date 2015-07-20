@@ -35,9 +35,9 @@
 
 &usdhc4 {
 	pinctrl-names = "default", "state_100mhz", "state_200mhz";
-	pinctrl-0 = <&pinctrl_usdhc4_1>;
-	pinctrl-1 = <&pinctrl_usdhc4_1_100mhz>;
-	pinctrl-2 = <&pinctrl_usdhc4_1_200mhz>;
+	pinctrl-0 = <&pinctrl_usdhc4>;
+	pinctrl-1 = <&pinctrl_usdhc4_100mhz>;
+	pinctrl-2 = <&pinctrl_usdhc4_200mhz>;
 	bus-width = <8>;
 	non-removable;
 	no-1-8-v;
