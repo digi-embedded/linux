@@ -884,6 +884,7 @@ static int __init mxs_dma_probe(struct platform_device *pdev)
 	return 0;
 }
 
+#ifdef CONFIG_PM_RUNTIME
 static int mxs_dma_runtime_suspend(struct device *dev)
 {
 	struct mxs_dma_engine *mxs_dma = dev_get_drvdata(dev);
@@ -904,6 +905,7 @@ static int mxs_dma_runtime_resume(struct device *dev)
 	}
 	return 0;
 }
+#endif
 
 static int mxs_dma_pm_suspend(struct device *dev)
 {
