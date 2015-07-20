@@ -10,7 +10,7 @@
  */
 
 /dts-v1/;
-/* ConnectCore 6 (Quad variant) */
-#include "imx6q-ccimx6.dtsi"
+#include "imx6q.dtsi"
+#include "imx6qdl-ccimx6.dtsi"
 /* ConnectCore 6 SBC carrier board */
 #include "imx6q-ccimx6sbc.dtsi"

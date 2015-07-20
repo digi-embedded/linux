@@ -9,7 +9,9 @@
  * http://www.gnu.org/copyleft/gpl.html
  */
 
-#include "imx6dl-ccimx6.dtsi"
+#include "imx6dl.dtsi"
+/* ConnectCore 6 (common)*/
+#include "imx6qdl-ccimx6.dtsi"
 
 / {
 	wireless {
