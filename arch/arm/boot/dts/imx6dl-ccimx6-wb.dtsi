@@ -26,7 +26,6 @@
 	};
 };
 
-
 &i2c2 {
 	pmic_dialog: dialog@58 {
 		regulators {
