@@ -1183,29 +1183,6 @@ static int mxsfb_init_fbinfo(struct mxsfb_info *host)
 	return 0;
 }
 
-static void mxsfb_dispdrv_init(struct platform_device *pdev,
-			      struct fb_info *fbi)
-{
-	struct mxsfb_info *host = to_imxfb_host(fbi);
-	struct mxc_dispdrv_setting setting;
-	struct device *dev = &pdev->dev;
-	char disp_dev[32];
-
-	setting.fbi = fbi;
-	memcpy(disp_dev, host->disp_dev, strlen(host->disp_dev));
-	disp_dev[strlen(host->disp_dev)] = '\0';
-
-	host->dispdrv = mxc_dispdrv_gethandle(disp_dev, &setting);
-	if (IS_ERR(host->dispdrv)) {
-		host->dispdrv = NULL;
-		dev_info(dev, "failed to find mxc display driver %s\n",
-			 disp_dev);
-	} else {
-		dev_info(dev, "registered mxc display driver %s\n",
-			 disp_dev);
-	}
-}
-
 static void mxsfb_free_videomem(struct mxsfb_info *host)
 {
 	struct fb_info *fb_info = &host->fb_info;
@@ -1375,8 +1352,6 @@ static int mxsfb_probe(struct platform_device *pdev)
 	ret = mxsfb_init_fbinfo(host);
 	if (ret != 0)
 		goto fb_pm_runtime_disable;
-
-	mxsfb_dispdrv_init(pdev, fb_info);
 
 	if (!host->dispdrv) {
 		pinctrl = devm_pinctrl_get_select_default(&pdev->dev);
