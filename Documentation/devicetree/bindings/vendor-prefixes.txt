@@ -29,7 +29,9 @@ cirrus	Cirrus Logic, Inc.
 cortina	Cortina Systems, Inc.
 dallas	Maxim Integrated Products (formerly Dallas Semiconductor)
 davicom	DAVICOM Semiconductor, Inc.
+digi    Digi International
 denx	Denx Software Engineering
+dlg     Dialog Semiconductor
 eeti    EGalax_eMPIA Technology, Inc.
 edt	Emerging Display Technologies
 emmicro	EM Microelectronic
@@ -64,6 +66,7 @@ nintendo	Nintendo
 nvidia	NVIDIA
 nxp	NXP Semiconductors
 onnn	ON Semiconductor Corp.
+ovti    Omnivision
 panasonic	Panasonic Corporation
 phytec	PHYTEC Messtechnik GmbH
 picochip	Picochip Ltd
@@ -90,6 +93,7 @@ stericsson	ST-Ericsson
 ti	Texas Instruments
 tlm	Trusted Logic Mobility
 toshiba	Toshiba Corporation
+touchrev Touch Revolution
 toumaz	Toumaz
 v3	V3 Semiconductor
 via	VIA Technologies, Inc.
