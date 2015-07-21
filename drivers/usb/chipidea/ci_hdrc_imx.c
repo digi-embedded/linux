@@ -338,6 +338,11 @@ static int ci_hdrc_imx_probe(struct platform_device *pdev)
 	if (ret)
 		goto err_clk;
 
+	if (!data->usbmisc_data) {
+		dev_err(&pdev->dev, "No usbmisc data\n");
+		goto err_clk;
+	}
+
 	if (data->usbmisc_data->index > 1 && (imx_has_hsic_con(data))) {
 		pdata.flags |= CI_HDRC_IMX_IS_HSIC;
 		data->hsic_pad_regulator = devm_regulator_get(&pdev->dev,
