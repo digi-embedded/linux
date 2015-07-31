@@ -378,6 +378,12 @@ static int da9063_set_suspend_voltage(struct regulator_dev *rdev, int uV)
 static int da9063_suspend_enable(struct regulator_dev *rdev)
 {
 	struct da9063_regulator *regl = rdev_get_drvdata(rdev);
+	int ret;
+
+	ret = regmap_update_bits(regl->hw->regmap, DA9063_REG_CONTROL_C ,
+			DA9063_OTPREAD_EN, 0);
+	if (ret)
+		return ret;
 
 	return regmap_field_write(regl->suspend, 1);
 }
