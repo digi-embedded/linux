@@ -58,6 +58,8 @@
 
 #define MX6_BM_UNBURST_SETTING		BIT(1)
 #define MX6_BM_OVER_CUR_DIS		BIT(7)
+#define MX6_BM_OVER_CUR_POL		BIT(8)
+#define MX6_BM_PWR_POL			BIT(9)
 #define MX6_BM_WAKEUP_ENABLE		BIT(10)
 #define MX6_BM_UTMI_ON_CLOCK		BIT(13)
 #define MX6_BM_ID_WAKEUP		BIT(16)
@@ -344,6 +346,18 @@ static int usbmisc_imx6q_init(struct imx_usbmisc_data *data)
 	if (data->disable_oc) {
 		reg = readl(usbmisc->base + data->index * 4);
 		writel(reg | MX6_BM_OVER_CUR_DIS,
+			usbmisc->base + data->index * 4);
+	}else {
+		if(data->oc_pol) {
+			reg = readl(usbmisc->base + data->index * 4);
+			writel(reg | MX6_BM_OVER_CUR_POL,
+				usbmisc->base + data->index * 4);
+		}
+	}
+
+	if(data->pwr_pol) {
+		reg = readl(usbmisc->base + data->index * 4);
+		writel(reg | MX6_BM_PWR_POL,
 			usbmisc->base + data->index * 4);
 	}
 

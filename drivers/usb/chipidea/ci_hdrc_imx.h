@@ -19,6 +19,8 @@ struct imx_usbmisc_data {
 	int index;
 
 	unsigned int disable_oc:1; /* over current detect disabled */
+	unsigned int oc_pol:1; /* overcurrent polarity is active low */
+	unsigned int pwr_pol:1; /* power line polarity is active high */
 	unsigned int evdo:1; /* set external vbus divider option */
 	/*
 	 * Specifies the delay between powering up the xtal 24MHz clock
