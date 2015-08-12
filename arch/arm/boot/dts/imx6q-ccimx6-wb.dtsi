@@ -27,11 +27,11 @@
 &i2c2 {
 	pmic_dialog: dialog@58 {
 		regulators {
-			bio: DA9063_BIO {
+			bio {
 				regulator-always-on;
 			};
 
-			ldo2: DA9063_LDO2 {
+			ldo2 {
 				regulator-always-on;
 			};
 		};

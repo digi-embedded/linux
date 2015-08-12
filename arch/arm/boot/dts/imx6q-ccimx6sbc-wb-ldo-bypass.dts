@@ -43,14 +43,14 @@
 &i2c2 {
 	dialog@58 {
 		regulators {
-			DA9063_BCORE1 {
+			bcore1 {
 				regulator-min-microvolt = <3000>;
 				regulator-max-microvolt = <1570000>;
 				regulator-suspend-mem-microvolt = <1175000>;
 				regulator-suspend-standby-microvolt = <1175000>;
 			};
 
-			DA9063_BCORE2 {
+			bcore2 {
 				regulator-min-microvolt = <3000>;
 				regulator-max-microvolt = <1570000>;
 				regulator-suspend-mem-microvolt = <1175000>;

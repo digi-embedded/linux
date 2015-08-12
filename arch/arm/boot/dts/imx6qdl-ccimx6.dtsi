@@ -72,7 +72,7 @@
 			interrupts-names = "LDO_LIM";
 			interrupt-parent = <&pmic_dialog>;
 
-			bcore1: DA9063_BCORE1 {
+			bcore1: bcore1 {
 				regulator-name = "DA9063_BCORE1";
 				regulator-boot-on;
 				regulator-always-on;
@@ -80,7 +80,7 @@
 				regulator-suspend-standby-microvolt = <1377000>;
 			};
 
-			bcore2: DA9063_BCORE2 {
+			bcore2: bcore2 {
 				regulator-name = "DA9063_BCORE2";
 				regulator-boot-on;
 				regulator-always-on;
@@ -88,7 +88,7 @@
 				regulator-suspend-standby-microvolt = <1377000>;
 			};
 
-			bpro: DA9063_BPRO {
+			bpro: bpro {
 				regulator-name = "DA9063_BPRO";
 				regulator-boot-on;
 				regulator-always-on;
@@ -96,7 +96,7 @@
 				regulator-suspend-standby-disabled;
 			};
 
-			bmem: DA9063_BMEM {
+			bmem: bmem {
 				regulator-name = "DA9063_BMEM";
 				regulator-boot-on;
 				regulator-always-on;
@@ -104,14 +104,14 @@
 				regulator-suspend-standby-microvolt = <1500000>;
 			};
 
-			bio: DA9063_BIO {
+			bio: bio {
 				regulator-name = "DA9063_BIO";
 				regulator-boot-on;
 				regulator-suspend-mem-microvolt = <3300000>;
 				regulator-suspend-standby-microvolt = <3300000>;
 			};
 
-			bperi: DA9063_BPERI {
+			bperi: bperi {
 				regulator-name = "DA9063_BPERI";
 				regulator-boot-on;
 				regulator-always-on;
@@ -119,14 +119,14 @@
 				regulator-suspend-standby-microvolt = <3300000>;
 			};
 
-			ldo2: DA9063_LDO2 {
+			ldo2: ldo2 {
 				regulator-name = "DA9063_LDO2";
 				regulator-boot-on;
 				regulator-suspend-mem-microvolt = <1800000>;
 				regulator-suspend-standby-microvolt = <1800000>;
 			};
 
-			ldo3: DA9063_LDO3 {
+			ldo3: ldo3 {
 				regulator-name = "DA9063_LDO3";
 				regulator-boot-on;
 				regulator-always-on;
@@ -134,13 +134,13 @@
 				regulator-suspend-standby-microvolt = <3300000>;
 			};
 
-			ldo4: DA9063_LDO4 {
+			ldo4: ldo4 {
 				regulator-name = "DA9063_LDO4";
 				regulator-min-microvolt = <2500000>;
 				regulator-max-microvolt = <2500000>;
 			};
 
-			ldo5: DA9063_LDO5 {
+			ldo5: ldo5 {
 				regulator-name = "DA9063_LDO5";
 				regulator-boot-on;
 				regulator-always-on;
@@ -148,7 +148,7 @@
 				regulator-suspend-standby-microvolt = <3000000>;
 			};
 
-			ldo6: DA9063_LDO6 {
+			ldo6: ldo6 {
 				regulator-name = "DA9063_LDO6";
 				regulator-min-microvolt = <900000>;
 				regulator-max-microvolt = <3600000>;
@@ -156,16 +156,12 @@
 				regulator-suspend-standby-disabled;
 			};
 
-			ldo11: DA9063_LDO11 {
+			ldo11: ldo11 {
 				regulator-name = "DA9063_LDO11";
 				regulator-boot-on;
 				regulator-always-on;
 				regulator-suspend-mem-microvolt = <2800000>;
 				regulator-suspend-standby-microvolt = <2800000>;
-			};
-
-			out_32k: DA9063_32K_OUT {
-				regulator-name = "DA9063_32K_OUT";
 			};
 		};
 	};
