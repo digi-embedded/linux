@@ -954,6 +954,7 @@ static int machine_constraints_current(struct regulator_dev *rdev,
 }
 
 static int _regulator_do_enable(struct regulator_dev *rdev);
+static int _regulator_do_disable(struct regulator_dev *rdev);
 
 /**
  * set_machine_constraints - sets regulator constraints
@@ -1019,6 +1020,14 @@ static int set_machine_constraints(struct regulator_dev *rdev,
 		ret = _regulator_do_enable(rdev);
 		if (ret < 0 && ret != -EINVAL) {
 			rdev_err(rdev, "failed to enable\n");
+			goto out;
+		}
+	} else {
+		/* Otherwise disable the regulator to save power */
+		/* Drivers should enabled them if needed */
+		ret = _regulator_do_disable(rdev);
+		if (ret < 0 && ret != -EINVAL) {
+			rdev_err(rdev, "failed to disable\n");
 			goto out;
 		}
 	}
