@@ -25,7 +25,7 @@
 	sound {
 		compatible = "fsl,imx-audio-sgtl5000";
 		model = "sgtl5000-audio";
-		ssi-controller = <&ssi2>;
+		cpu-dai = <&ssi2>;
 		audio-codec = <&sgtl5000>;
 		audio-routing =
 			"MIC_IN", "Mic Jack",
