@@ -20,6 +20,7 @@
 
 
 #include <linux/device.h>
+#include <linux/of.h>
 #include <linux/slab.h>
 
 #include "gc_hal_kernel_linux.h"
@@ -148,7 +149,8 @@ module_param(showArgs, int, 0644);
 static int mmu = 1;
 module_param(mmu, int, 0644);
 
-static int gpu3DMinClock = 1;
+static int gpu3DMinClock = 0;
+module_param(gpu3DMinClock, int, 0644);
 
 static int contiguousRequested = 0;
 
@@ -1051,6 +1053,16 @@ static int __devinit gpu_probe(struct platform_device *pdev)
 
         /* Update module param because drv_init() uses them directly. */
         _UpdateModuleParam(&moduleParam);
+    }
+
+    /* If undefined, set Freescale recommended value. Else use the min freq. */
+    if (gpu3DMinClock == 0) {
+        if (of_machine_is_compatible("fsl,imx6dl"))
+            gpu3DMinClock = 8;
+        else if (of_machine_is_compatible("fsl,imx6q"))
+            gpu3DMinClock = 3;
+        else
+            gpu3DMinClock = 1;
     }
 
     ret = drv_init();

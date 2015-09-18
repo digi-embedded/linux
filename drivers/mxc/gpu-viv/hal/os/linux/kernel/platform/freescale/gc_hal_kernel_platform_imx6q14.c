@@ -61,7 +61,7 @@ extern int unregister_thermal_notifier(struct notifier_block *nb);
 #define UNREG_THERMAL_NOTIFIER(a) unregister_thermal_notifier(a);
 #endif
 
-static int initgpu3DMinClock = 1;
+static int initgpu3DMinClock = 0;
 module_param(initgpu3DMinClock, int, 0644);
 
 struct platform_device *pdevice;
