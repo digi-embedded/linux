@@ -201,10 +201,6 @@
 	pu-supply = <&reg_pu>;
 };
 
-&gpu {
-	pu-supply = <&reg_pu>;
-};
-
 &hdmi_audio {
 	status = "okay";
 };
@@ -846,8 +842,4 @@
 	pinctrl-0 = <&pinctrl_flexcan2>;
 	stby-gpios = <&gpio1 5 0>;
 	status = "okay";
-};
-
-&vpu {
-	pu-supply = <&reg_pu>;
 };

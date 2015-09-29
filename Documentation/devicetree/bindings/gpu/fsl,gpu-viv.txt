@@ -26,7 +26,6 @@ Vivante GPU2d/3d on Freescale i.MX6
 		clock-names = "gpu2d_axi_clk", "openvg_axi_clk", "gpu2d_clk";
 		resets = <&src 3>, <&src 3>;
 		reset-names = "gpu2d", "gpuvg";
-		pu-supply = <&reg_pu>;
 		contiguous-size = <12>;
 	}
 
