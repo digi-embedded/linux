@@ -240,4 +240,20 @@ static struct i2c_driver da9063_i2c_driver = {
 	.id_table = da9063_i2c_id,
 };
 
-module_i2c_driver(da9063_i2c_driver);
+static int __init da9063_i2c_init(void)
+{
+	int ret;
+
+	ret = i2c_add_driver(&da9063_i2c_driver);
+	if (ret != 0)
+		pr_err("Failed to register da9063 I2C driver\n");
+
+	return ret;
+}
+subsys_initcall(da9063_i2c_init);
+
+static void __exit da9063_i2c_exit(void)
+{
+	i2c_del_driver(&da9063_i2c_driver);
+}
+module_exit(da9063_i2c_exit);
