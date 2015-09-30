@@ -191,6 +191,10 @@
 #define UART_NR 8
 #define IMX_RXBD_NUM 20
 
+static bool nodma __read_mostly = 1;
+module_param(nodma, bool, 0644);
+MODULE_PARM_DESC(nodma, "Disable DMA usage when true");
+
 /* i.mx21 type uart runs on all i.mx except i.mx1 */
 enum imx_uart_type {
 	IMX1_UART,
@@ -1337,7 +1341,7 @@ static int imx_startup(struct uart_port *port)
 
 	/* Can we enable the DMA support? */
 	if (is_imx6q_uart(sport) && !uart_console(port)
-		&& !sport->dma_is_inited)
+		&& !sport->dma_is_inited && !nodma)
 		imx_uart_dma_init(sport);
 
 	if (sport->dma_is_inited) {
