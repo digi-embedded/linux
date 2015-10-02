@@ -23,24 +23,11 @@
 		mxcfb3 = &mxcfb4;
 	};
 
-/*
 	mxcfb3: fb@2 {
 		compatible = "fsl,mxc_sdc_fb";
 		disp_dev = "lcd";
 		interface_pix_fmt = "RGB24";
 		mode_str ="LQ070Y3DG3B";
-		default_bpp = <32>;
-		int_clk = <0>;
-		late_init = <0>;
-		status = "okay";
-	};
-*/
-
-	mxcfb3: fb@2 {
-		compatible = "fsl,mxc_sdc_fb";
-		disp_dev = "hdmi_ad9389";
-		interface_pix_fmt = "RGB24";
-		mode_str ="auto";
 		default_bpp = <32>;
 		int_clk = <0>;
 		late_init = <0>;
@@ -73,27 +60,6 @@
 		status = "okay";
 	};
 */
-};
-
-&i2c3 {
-	hdmi_ad9389: ad9889b@39 {
-		compatible = "ad,ad9889b-i2c";
-		reg = <0x39>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_ipu2>;
-		interrupt-parent = <&gpio2>;
-		interrupts = <1 GPIO_ACTIVE_HIGH>;
-		ad,edid_addr = <0x3f>; /* 0x7e >> 1*/
-		display = <&ad9389_1920x1080>;
-		clocks = <&clks 131>, <&clks 132>,
-			 <&clks 134>, <&clks 137>,
-			 <&clks 39>, <&clks 40>,
-			 <&clks 41>, <&clks 44>;
-		clock-names = "ipu1_di0", "ipu1_di1",
-			      "ipu2_di0", "ipu2_di1",
-			      "ipu1_di0_sel", "ip11_di1_sel",
-			      "ipu2_di0_sel", "ip12_di1_sel";
-	};
 };
 
 &iomuxc {
