@@ -24,3 +24,11 @@
 		mxcfb1 = &mxcfb2;
 	};
 };
+
+&ldb {
+	lvds-channel@0 {
+		crtc = "ipu1-di0";
+		status = "okay";
+		primary;
+	};
+};

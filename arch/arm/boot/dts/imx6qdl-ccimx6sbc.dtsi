@@ -59,7 +59,6 @@
 		compatible = "fsl,mxc_sdc_fb";
 		disp_dev = "ldb";
 		interface_pix_fmt = "RGB666";
-		mode_str ="LDB-HSD101PFW2";
 		default_bpp = <16>;
 		int_clk = <0>;
 		late_init = <0>;
@@ -78,22 +77,6 @@
 				vback-porch = <25>;
 				vfront-porch = <10>;
 				vsync-len = <10>;
-			};
-		};
-	};
-
-	fusion10: LDB-HSD101PFW2@0 {
-		display-timings {
-			timing {
-				clock-frequency = <45000000>;
-				hactive = <1024>;
-				vactive = <600>;
-				hfront-porch = <0>;
-				hback-porch = <0>;
-				hsync-len = <176>;
-				vback-porch = <0>;
-				vfront-porch = <2>;
-				vsync-len = <23>;
 			};
 		};
 	};
@@ -208,15 +191,47 @@
 };
 
 &ldb {
-	ipu_id = <0>;
-	disp_id = <0>;
-	ext_ref = <1>;
-	mode = "sep0";
-	sec_ipu_id = <0>;
-	sec_disp_id = <1>;
 	status = "okay";
-	display = <&fusion10>;
-	sec_display = <&fusion10>;
+
+	lvds-channel@0 {
+		fsl,data-mapping = "spwg";
+		fsl,data-width = <18>;
+
+		display-timings {
+			native-mode = <&timing0>;
+			timing0: hsd101pfw2 {
+				clock-frequency = <45000000>;
+				hactive = <1024>;
+				vactive = <600>;
+				hfront-porch = <0>;
+				hback-porch = <0>;
+				hsync-len = <176>;
+				vback-porch = <0>;
+				vfront-porch = <2>;
+				vsync-len = <23>;
+			};
+		};
+	};
+	lvds-channel@1 {
+		fsl,data-mapping = "spwg";
+		fsl,data-width = <18>;
+
+		display-timings {
+			native-mode = <&timing1>;
+			timing1: hsd101pfw2 {
+				clock-frequency = <45000000>;
+				hactive = <1024>;
+				vactive = <600>;
+				hfront-porch = <0>;
+				hback-porch = <0>;
+				hsync-len = <176>;
+				vback-porch = <0>;
+				vfront-porch = <2>;
+				vsync-len = <23>;
+			};
+		};
+	};
+
 };
 
 &i2c2 {

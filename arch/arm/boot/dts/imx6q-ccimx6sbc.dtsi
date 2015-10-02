@@ -38,28 +38,24 @@
 		compatible = "fsl,mxc_sdc_fb";
 		disp_dev = "ldb";
 		interface_pix_fmt = "RGB666";
-		mode_str ="LDB-HSD101PFW2";
 		default_bpp = <16>;
 		int_clk = <0>;
 		late_init = <0>;
 		status = "okay";
 	};
+};
 
-/*
-	lcd@0 {
-		compatible = "fsl,lcd";
-*/
-		/* Note that to use DISP0_CONTRAST it needs to use IPU0 */
-/*
-		ipu_id = <1>;
-		disp_id = <0>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_ipu2>;
-		default_ifmt = "RGB565";
-		display = <&lq070y3dg3b>;
+&ldb {
+	lvds-channel@0 {
+		crtc = "ipu1-di0";
 		status = "okay";
+		primary;
 	};
-*/
+
+	lvds-channel@1 {
+		crtc = "ipu1-di1";
+		status = "disabled";
+	};
 };
 
 &iomuxc {
