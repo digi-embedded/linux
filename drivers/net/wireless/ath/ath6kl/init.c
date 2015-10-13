@@ -704,8 +704,27 @@ static bool check_device_tree(struct ath6kl *ar)
 	static const char *board_id_prop = "atheros,board-id";
 	struct device_node *node;
 	char board_filename[64];
-	const char *board_id;
+	const char *board_id, *board_cert;
 	int ret;
+
+	node = of_find_compatible_node(NULL, NULL, "digi,ccimx6");
+	if (node) {
+		const char *board_nobluetooth =
+		    of_get_child_by_name(node, "bluetooth") ? "" : "ANT-";
+		board_cert = of_get_property(node, "digi,hwid,cert", NULL);
+		if (board_cert) {
+			snprintf(board_filename, sizeof(board_filename),
+				 "%s/bdata.%s%s.bin", ar->hw.fw.dir,
+				 board_nobluetooth, board_cert);
+			ret = ath6kl_get_fw(ar, board_filename, &ar->fw_board,
+					    &ar->fw_board_len);
+			if (ret == 0) {
+				ath6kl_info("Using board file: %s\n",
+					    board_filename);
+				return true;
+			}
+		}
+	}
 
 	for_each_compatible_node(node, NULL, "atheros,ath6kl") {
 		board_id = of_get_property(node, board_id_prop, NULL);
