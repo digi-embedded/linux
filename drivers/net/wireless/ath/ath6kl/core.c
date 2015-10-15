@@ -20,6 +20,7 @@
 #include <linux/module.h>
 #include <linux/moduleparam.h>
 #include <linux/export.h>
+#include <linux/of.h>
 #include <linux/vmalloc.h>
 
 #include "debug.h"
@@ -32,11 +33,11 @@ static unsigned int suspend_mode;
 static unsigned int wow_mode;
 static unsigned int uart_debug;
 static unsigned int uart_rate = 115200;
-static unsigned int ath6kl_p2p;
+static unsigned int ath6kl_p2p = EINVAL;
 static unsigned int testmode;
 static unsigned int recovery_enable;
 static unsigned int heart_beat_poll;
-static unsigned int softmac_enable;
+static unsigned int softmac_enable = EINVAL;
 static unsigned short locally_administered_bit;
 
 module_param(debug_mask, uint, 0644);
@@ -122,7 +123,18 @@ int ath6kl_core_init(struct ath6kl *ar, enum ath6kl_htc_type htc_type)
 	}
 
 	ar->testmode = testmode;
-	ar->softmac_enable = softmac_enable;
+#ifdef CONFIG_OF
+	if (softmac_enable == EINVAL) {
+		struct device_node *node;
+
+		node = of_find_compatible_node(NULL, NULL, "atheros,ath6kl");
+		if (node)
+			softmac_enable =
+			    of_property_read_bool(node,
+						  "ath6kl-softmac-enable");
+	}
+#endif
+	ar->softmac_enable = (softmac_enable == EINVAL) ? 0 : !!softmac_enable;
 
 	ret = ath6kl_init_fetch_firmwares(ar);
 	if (ret)
@@ -277,7 +289,17 @@ struct ath6kl *ath6kl_core_create(struct device *dev)
 	if (!ar)
 		return NULL;
 
-	ar->p2p = !!ath6kl_p2p;
+#ifdef CONFIG_OF
+	if (ath6kl_p2p == EINVAL) {
+		struct device_node *node;
+
+		node = of_find_compatible_node(NULL, NULL, "atheros,ath6kl");
+		if (node)
+			ath6kl_p2p =
+			    of_property_read_bool(node, "ath6kl-p2p-enable");
+	}
+#endif
+	ar->p2p = (ath6kl_p2p == EINVAL) ? 0 : !!ath6kl_p2p;
 	ar->dev = dev;
 
 	ar->vif_max = 1;
