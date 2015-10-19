@@ -1,6 +1,8 @@
 WIRELESS
 
-Required properties: None.
+Required properties:
+
+  - compatible: "atheros,ath6kl"
 
 Optional properties:
 
@@ -13,6 +15,9 @@ Optional properties:
 Example:
 
 	wireless {
+		compatible = "atheros,ath6kl"
+		ath6kl-p2p-enable;
+		ath6kl-softmac-enable;
 		digi,pwrdown-gpios = <&gpio_extender 3 0>;
 		digi,pwrdown_delay = <5>;
 		/* U-Boot will fill in the MAC address here */
