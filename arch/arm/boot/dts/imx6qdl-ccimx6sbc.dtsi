@@ -268,8 +268,12 @@
 	fusion@10 {
 		compatible = "touchrev,fusion-touch";
 		reg = <0x10>;
+		/* Interrupt for LVDS0 */
 		interrupt-parent = <&gpio7>;
 		interrupts = <11 1>;
+		/* Interrupt for LVDS1 */
+		//interrupt-parent = <&gpio3>;
+		//interrupts = <23 1>;
 		status = "okay";
 	};
 
