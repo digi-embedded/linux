@@ -207,8 +207,8 @@
 				hback-porch = <0>;
 				hsync-len = <176>;
 				vback-porch = <0>;
-				vfront-porch = <2>;
-				vsync-len = <23>;
+				vfront-porch = <0>;
+				vsync-len = <25>;
 			};
 		};
 	};
