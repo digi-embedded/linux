@@ -111,12 +111,12 @@ static int da9063_rtc_start_alarm(struct device *dev)
 	switch( rtc->chip_revision ) {
 	case DA9063_AD_REVISION:
 		ret = regmap_update_bits(rtc->hw->regmap, DA9063_AD_REG_ALARM_Y,
-					 DA9063_ALARM_ON, 1);
+					 DA9063_ALARM_ON, DA9063_ALARM_ON);
 		break;
 	case DA9063_BB_REVISION:
 	default:
 		ret = regmap_update_bits(rtc->hw->regmap, DA9063_REG_ALARM_Y,
-					 DA9063_ALARM_ON, 1);
+					 DA9063_ALARM_ON, DA9063_ALARM_ON);
 	}
 
 	return ret;
@@ -221,7 +221,7 @@ static int da9063_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 	case DA9063_BB_REVISION:
 	default:
 		ret = regmap_bulk_write(rtc->hw->regmap, DA9063_REG_ALARM_S,
-				       &data[DATA_SEC], ALARM_AD_DATA_LEN);
+				       &data[DATA_SEC], ALARM_DATA_LEN);
 	}
 
 	if (alrm->enabled) {
@@ -286,14 +286,14 @@ static int da9063_rtc_probe(struct platform_device *pdev)
 
 	/* Enable RTC hardware */
 	ret = regmap_update_bits(da9063->regmap, DA9063_REG_CONTROL_E,
-				 DA9063_RTC_EN, 1);
+				 DA9063_RTC_EN, DA9063_RTC_EN);
 	if (ret < 0) {
 		dev_err(&pdev->dev, "Failed to enable RTC.\n");
 		return ret;
 	}
 
 	ret = regmap_update_bits(da9063->regmap, DA9063_REG_EN_32K,
-				 DA9063_CRYSTAL, 1);
+				 DA9063_CRYSTAL, DA9063_CRYSTAL);
 	if (ret < 0) {
 		dev_err(&pdev->dev, "Failed to run 32 KHz OSC.\n");
 		return ret;
@@ -306,7 +306,8 @@ static int da9063_rtc_probe(struct platform_device *pdev)
 					 DA9063_ALARM_STATUS_TICK |
 					 DA9063_ALARM_STATUS_ALARM, 0);
 		ret = regmap_update_bits(da9063->regmap, DA9063_AD_REG_ALARM_MI,
-					    DA9063_ALARM_STATUS_ALARM, 1);
+					    DA9063_ALARM_STATUS_ALARM,
+					    DA9063_ALARM_STATUS_ALARM);
 		break;
 	case DA9063_BB_REVISION:
 	default:
@@ -314,7 +315,8 @@ static int da9063_rtc_probe(struct platform_device *pdev)
 					    DA9063_ALARM_STATUS_TICK |
 					    DA9063_ALARM_STATUS_ALARM, 0);
 		ret = regmap_update_bits(da9063->regmap, DA9063_REG_ALARM_S,
-					    DA9063_ALARM_STATUS_ALARM, 1);
+					    DA9063_ALARM_STATUS_ALARM,
+					    DA9063_ALARM_STATUS_ALARM);
 	}
 
 	if (ret < 0) {
