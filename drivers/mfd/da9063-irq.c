@@ -174,6 +174,7 @@ int da9063_irq_init(struct da9063 *da9063)
 		return -EINVAL;
 	}
 
+	da9063->irq_base = -1;
 	ret = regmap_add_irq_chip(da9063->regmap, da9063->chip_irq,
 			IRQF_TRIGGER_LOW | IRQF_ONESHOT | IRQF_SHARED,
 			da9063->irq_base, &da9063_irq_chip,
