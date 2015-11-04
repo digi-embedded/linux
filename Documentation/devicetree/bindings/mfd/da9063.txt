@@ -7,8 +7,9 @@ Required parent device properties:
 - interrupts : IRQ line for the da9063 chip
 - interrupt-controller: describes the da9063 as an interrupt
   controller (has its own domain)
-- #interrupt-cells : should be 1.
-        - The cell is the da9063 local IRQ number
+- #interrupt-cells : should be 2 (standard two cells node, see interrupts.txt).
+	- The first cell is the da9063 local IRQ number
+	- The second cell is an edge or level flag
 
 The da9063 consists of a large and varied group of sub-devices:
 
@@ -27,7 +28,7 @@ Example:
                 interrupts = <12 2>;
                 interrupt-parent = <&gpio7>;
                 interrupt-controller;
-                #interrupt-cells = <1>;
+                #interrupt-cells = <2>;
 
                 regulators {
                 };
