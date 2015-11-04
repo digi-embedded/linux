@@ -486,7 +486,8 @@ int regmap_add_irq_chip(struct regmap *map, int irq, int irq_flags,
 
 	if (irq_base)
 		d->domain = irq_domain_add_legacy(map->dev->of_node,
-						  chip->num_irqs, irq_base, 0,
+						  chip->num_irqs, irq_base,
+						  irq_base,
 						  &regmap_domain_ops, d);
 	else
 		d->domain = irq_domain_add_linear(map->dev->of_node,
