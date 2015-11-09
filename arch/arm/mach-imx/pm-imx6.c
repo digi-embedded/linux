@@ -35,6 +35,7 @@
 #include <asm/proc-fns.h>
 #include <asm/suspend.h>
 #include <asm/tlb.h>
+#include <linux/regulator/machine.h>
 
 #include "common.h"
 #include "hardware.h"
@@ -1131,6 +1132,32 @@ put_node:
 	return ret;
 }
 
+static int imx6_suspend_prepare(struct notifier_block *nb, unsigned long action,
+		void *ptr)
+{
+	switch (action) {
+
+	case PM_SUSPEND_PREPARE:
+#ifdef CONFIG_REGULATOR
+		regulator_suspend_prepare(PM_SUSPEND_MEM);
+#endif
+		break;
+	case PM_HIBERNATION_PREPARE:
+#ifdef CONFIG_REGULATOR
+		regulator_suspend_prepare(PM_SUSPEND_STANDBY);
+#endif
+		break;
+	case PM_POST_SUSPEND:
+	case PM_POST_HIBERNATION:
+		break;
+
+	default:
+		return NOTIFY_DONE;
+	}
+
+	return NOTIFY_OK;
+}
+
 static void __init imx6_pm_common_init(const struct imx6_pm_socdata
 					*socdata)
 {
@@ -1157,6 +1184,8 @@ static void __init imx6_pm_common_init(const struct imx6_pm_socdata
 	if (!IS_ERR(gpr))
 		regmap_update_bits(gpr, IOMUXC_GPR1, IMX6Q_GPR1_GINT,
 				   IMX6Q_GPR1_GINT);
+
+	pm_notifier(imx6_suspend_prepare, 0);
 }
 
 void __init imx6q_pm_init(void)
