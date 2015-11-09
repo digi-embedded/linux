@@ -777,7 +777,11 @@ static int imx6q_pm_enter(suspend_state_t state)
 		imx6q_set_lpm(WAIT_CLOCKED);
 		break;
 	case PM_SUSPEND_MEM:
-		imx6q_set_lpm(STOP_POWER_OFF);
+		if (!of_machine_is_compatible("digi,ccimx6"))
+			imx6q_set_lpm(STOP_POWER_OFF);
+		else
+			imx6q_set_lpm(STOP_POWER_ON);
+
 		imx6q_set_int_mem_clk_lpm(false);
 		imx6q_enable_wb(true);
 		/*
