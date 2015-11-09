@@ -1032,6 +1032,32 @@ put_node:
 	return ret;
 }
 
+static int imx6_suspend_prepare(struct notifier_block *nb, unsigned long action,
+		void *ptr)
+{
+	switch (action) {
+
+	case PM_SUSPEND_PREPARE:
+#ifdef CONFIG_REGULATOR
+		regulator_suspend_prepare(PM_SUSPEND_MEM);
+#endif
+		break;
+	case PM_HIBERNATION_PREPARE:
+#ifdef CONFIG_REGULATOR
+		regulator_suspend_prepare(PM_SUSPEND_STANDBY);
+#endif
+		break;
+	case PM_POST_SUSPEND:
+	case PM_POST_HIBERNATION:
+		break;
+
+	default:
+		return NOTIFY_DONE;
+	}
+
+	return NOTIFY_OK;
+}
+
 static void __init imx6_pm_common_init(const struct imx6_pm_socdata
 					*socdata)
 {
@@ -1058,6 +1084,8 @@ static void __init imx6_pm_common_init(const struct imx6_pm_socdata
 	if (!IS_ERR(gpr))
 		regmap_update_bits(gpr, IOMUXC_GPR1, IMX6Q_GPR1_GINT,
 				   IMX6Q_GPR1_GINT);
+
+	pm_notifier(imx6_suspend_prepare, 0);
 }
 
 void __init imx6q_pm_init(void)
@@ -1069,33 +1097,6 @@ void __init imx6dl_pm_init(void)
 {
 	imx6_pm_common_init(&imx6dl_pm_data);
 }
-
-static int imx6_suspend_prepare(struct notifier_block *nb,
-                        unsigned long action, void *ptr)
-{
-        switch (action) {
-
-	case PM_SUSPEND_PREPARE:
-#ifdef CONFIG_REGULATOR
-		regulator_suspend_prepare(PM_SUSPEND_MEM);
-#endif
-		break;
-	case PM_HIBERNATION_PREPARE:
-#ifdef CONFIG_REGULATOR
-		regulator_suspend_prepare(PM_SUSPEND_STANDBY);
-#endif
-		break;
-	case PM_POST_SUSPEND:
-	case PM_POST_HIBERNATION:
-		break;
-
-	default:
-		return NOTIFY_DONE;
-	}
-
-	return NOTIFY_OK;
-}
-
 void __init imx6sl_pm_init(void)
 {
 	imx6_pm_common_init(&imx6sl_pm_data);
@@ -1153,6 +1154,4 @@ void __init imx6sx_pm_init(void)
 			qspi_base = of_iomap(np, 0);
 		WARN_ON(!qspi_base);
 	}
-
-	pm_notifier(imx6_suspend_prepare, 0);
 }
