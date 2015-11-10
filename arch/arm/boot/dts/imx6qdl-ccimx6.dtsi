@@ -76,16 +76,12 @@
 				regulator-name = "DA9063_BCORE1";
 				regulator-boot-on;
 				regulator-always-on;
-				regulator-suspend-mem-microvolt = <1377000>;
-				regulator-suspend-standby-microvolt = <1377000>;
 			};
 
 			bcore2: bcore2 {
 				regulator-name = "DA9063_BCORE2";
 				regulator-boot-on;
 				regulator-always-on;
-				regulator-suspend-mem-microvolt = <1377000>;
-				regulator-suspend-standby-microvolt = <1377000>;
 			};
 
 			bpro: bpro {
@@ -100,38 +96,28 @@
 				regulator-name = "DA9063_BMEM";
 				regulator-boot-on;
 				regulator-always-on;
-				regulator-suspend-mem-microvolt = <1500000>;
-				regulator-suspend-standby-microvolt = <1500000>;
 			};
 
 			bio: bio {
 				regulator-name = "DA9063_BIO";
 				regulator-boot-on;
-				regulator-suspend-mem-microvolt = <3300000>;
-				regulator-suspend-standby-microvolt = <3300000>;
 			};
 
 			bperi: bperi {
 				regulator-name = "DA9063_BPERI";
 				regulator-boot-on;
 				regulator-always-on;
-				regulator-suspend-mem-microvolt = <3300000>;
-				regulator-suspend-standby-microvolt = <3300000>;
 			};
 
 			ldo2: ldo2 {
 				regulator-name = "DA9063_LDO2";
 				regulator-boot-on;
-				regulator-suspend-mem-microvolt = <1800000>;
-				regulator-suspend-standby-microvolt = <1800000>;
 			};
 
 			ldo3: ldo3 {
 				regulator-name = "DA9063_LDO3";
 				regulator-boot-on;
 				regulator-always-on;
-				regulator-suspend-mem-microvolt = <3300000>;
-				regulator-suspend-standby-microvolt = <3300000>;
 			};
 
 			ldo4: ldo4 {
@@ -144,8 +130,6 @@
 				regulator-name = "DA9063_LDO5";
 				regulator-boot-on;
 				regulator-always-on;
-				regulator-suspend-mem-microvolt = <3000000>;
-				regulator-suspend-standby-microvolt = <3000000>;
 			};
 
 			ldo6: ldo6 {
@@ -160,8 +144,6 @@
 				regulator-name = "DA9063_LDO11";
 				regulator-boot-on;
 				regulator-always-on;
-				regulator-suspend-mem-microvolt = <2800000>;
-				regulator-suspend-standby-microvolt = <2800000>;
 			};
 		};
 	};
