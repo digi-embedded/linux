@@ -248,7 +248,6 @@
 			lvds1-backlight@0xc6 {
 				dlg,led-gpio-reg = <0x1c 0xf0>;
 				dlg,led-reg = <0xc8>;
-				dlg,inverse-polarity = <1>;
 				linux,default-trigger = "backlight";
 			};
 		};
