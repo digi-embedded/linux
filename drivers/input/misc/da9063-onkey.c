@@ -55,7 +55,7 @@ static void da9063_poll_on(struct work_struct *work)
 	ret = regmap_read(onkey->da9063->regmap, DA9063_REG_STATUS_A, &value);
 	if (ret >= 0)
 	{
-		if( !(ret & DA9063_NONKEY)) {
+		if (!(value & DA9063_NONKEY)) {
 			ret = regmap_read(onkey->da9063->regmap,
 					DA9063_REG_CONTROL_B, &value);
 			if (ret < 0) {
