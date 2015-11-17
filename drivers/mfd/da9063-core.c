@@ -260,20 +260,20 @@ void da9063_power_off ( void ) {
 	clockevents_suspend();
 
 	/* Configure LDO11, BIO and BPERI not to follow sequencer */
-	regmap_update_bits(da9063_data->regmap, DA9063_REG_BPERI_CONT, 0x08,
-			      DA9063_BUCK_CONF);
-	regmap_update_bits(da9063_data->regmap, DA9063_REG_LDO11_CONT, 0x80,
-			      DA9063_LDO_CONF);
-	regmap_update_bits(da9063_data->regmap, DA9063_REG_BIO_CONT, 0x08,
-			      DA9063_BUCK_CONF);
+	regmap_update_bits(da9063_data->regmap, DA9063_REG_BPERI_CONT,
+			   DA9063_BUCK_CONF, 0);
+	regmap_update_bits(da9063_data->regmap, DA9063_REG_LDO11_CONT,
+			   DA9063_LDO_CONF, 0);
+	regmap_update_bits(da9063_data->regmap, DA9063_REG_BIO_CONT,
+			   DA9063_BUCK_CONF, 0);
 
 	/* Configure to read OTP settings after power down */
-	regmap_update_bits(da9063_data->regmap, DA9063_REG_CONTROL_C, 0x10,
-			    DA9063_OTPREAD_EN);
+	regmap_update_bits(da9063_data->regmap, DA9063_REG_CONTROL_C,
+			   DA9063_OTPREAD_EN, DA9063_OTPREAD_EN);
 
 	/* Power down */
-	regmap_update_bits(da9063_data->regmap, DA9063_REG_CONTROL_F, 0x02,
-			      DA9063_SHUTDOWN);
+	regmap_update_bits(da9063_data->regmap, DA9063_REG_CONTROL_F,
+			   DA9063_SHUTDOWN, DA9063_SHUTDOWN);
 
 	// Do not unlock mutex to avoid further accesses
 	// Do not return
