@@ -46,7 +46,6 @@ static void da9063_poll_on(struct work_struct *work)
 {
 	unsigned int value;
 	int poll = 1;
-	int mask_events = 0;
 	int ret;
 	struct da9063_onkey *onkey = container_of(work, struct da9063_onkey,
 						   work.work);
@@ -56,15 +55,10 @@ static void da9063_poll_on(struct work_struct *work)
 	if (ret >= 0)
 	{
 		if (!(value & DA9063_NONKEY)) {
-			ret = regmap_read(onkey->da9063->regmap,
-					DA9063_REG_CONTROL_B, &value);
-			if (ret < 0) {
-				dev_err(&onkey->input->dev, "Failed to read CONTROL_B: %d\n", ret);
-				return;
-			}
-			value &= ~(DA9063_NONKEY_LOCK);
-			ret = regmap_write(onkey->da9063->regmap,
-					DA9063_REG_CONTROL_B, value);
+			ret = regmap_update_bits(onkey->da9063->regmap,
+						 DA9063_REG_CONTROL_B,
+						 DA9063_NONKEY_LOCK,
+						 0);
 			if (ret < 0) {
 				dev_err(&onkey->input->dev, "Failed to reset the Key_Delay %d\n", ret);
 				return;
@@ -74,20 +68,11 @@ static void da9063_poll_on(struct work_struct *work)
 			input_sync(onkey->input);
 
 			/* unmask the onkey interrupt again */
-			ret = regmap_read(onkey->da9063->regmap, DA9063_REG_IRQ_MASK_A, &mask_events);
+			ret = regmap_update_bits(onkey->da9063->regmap,
+						 DA9063_REG_IRQ_MASK_A,
+						 DA9063_NONKEY,
+						 0);
 			if (ret < 0) {
-				dev_err(&onkey->input->dev, "Failed to read IRQ_MASK_A: %d\n", ret);
-				return;
-			}
-			if (mask_events >= 0) {
-				mask_events &= ~(DA9063_NONKEY);
-				ret = regmap_write(onkey->da9063->regmap, DA9063_REG_IRQ_MASK_A, mask_events);
-				if (ret < 0) {
-					dev_err(&onkey->input->dev, "Failed to unmask the onkey IRQ: %d\n", ret);
-					return;
-				}
-			}
-			else {
 				dev_err(&onkey->input->dev, "Failed to unmask the onkey IRQ: %d\n", ret);
 				return;
 			}
@@ -109,7 +94,6 @@ static irqreturn_t da9063_onkey_irq_handler(int irq, void *data)
 	struct da9063_onkey *onkey = data;
 	int ret;
 	unsigned int val;
-	int mask_events = 0;
 
 	ret = regmap_read(onkey->da9063->regmap, DA9063_REG_STATUS_A, &val);
 	if (ret < 0) {
@@ -122,20 +106,11 @@ static irqreturn_t da9063_onkey_irq_handler(int irq, void *data)
 		dev_notice(&onkey->input->dev, "KEY_POWER pressed.\n");
 
 		/* mask the onkey interrupt until power key unpressed */
-		ret = regmap_read(onkey->da9063->regmap, DA9063_REG_IRQ_MASK_A, &mask_events);
+		ret = regmap_update_bits(onkey->da9063->regmap,
+					 DA9063_REG_IRQ_MASK_A,
+					 DA9063_NONKEY,
+					 DA9063_NONKEY);
 		if (ret < 0) {
-			dev_err(&onkey->input->dev, "Failed to read status: %d\n", ret);
-			goto out;
-		}
-		if (mask_events >= 0) {
-			mask_events |= DA9063_NONKEY;
-			ret = regmap_write(onkey->da9063->regmap, DA9063_REG_IRQ_MASK_A, mask_events);
-			if (ret < 0) {
-				dev_err(&onkey->input->dev, "Failed to mask the onkey IRQ: %d\n", ret);
-				goto out;
-			}
-		}
-		else {
 			dev_err(&onkey->input->dev, "Failed to mask the onkey IRQ: %d\n", ret);
 			goto out;
 		}
