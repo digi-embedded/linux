@@ -195,7 +195,8 @@ static ssize_t fsl_otp_store(struct kobject *kobj, struct kobj_attribute *attr,
 	u32 value;
 	int ret;
 
-	sscanf(buf, "0x%x", &value);
+	if (sscanf(buf, "0x%x", &value) != 1)
+		return -EINVAL;
 
 	ret = clk_prepare_enable(otp_clk);
 	if (ret)
