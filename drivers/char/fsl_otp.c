@@ -371,6 +371,7 @@ static ssize_t fsl_otp_show(struct kobject *kobj, struct kobj_attribute *attr,
 	return ret ? 0 : sprintf(buf, "0x%x\n", value);
 }
 
+#ifdef CONFIG_FSL_OTP_WRITE
 static int imx6_otp_write_bits(int addr, u32 data, u32 magic)
 {
 	u32 c; /* for control register */
@@ -480,6 +481,7 @@ out:
 	clk_disable_unprepare(otp_clk);
 	return ret ? 0 : count;
 }
+#endif
 
 static const struct of_device_id fsl_otp_dt_ids[] = {
 	{ .compatible = "fsl,imx6q-ocotp", .data = (void *)&imx6q_data, },
@@ -673,9 +675,14 @@ static int fsl_otp_probe(struct platform_device *pdev)
 	for (i = 0; i < num; i++) {
 		sysfs_attr_init(&otp_kattr[i].attr);
 		otp_kattr[i].attr.name = desc[i];
+#ifdef CONFIG_FSL_OTP_WRITE
 		otp_kattr[i].attr.mode = 0600;
-		otp_kattr[i].show = fsl_otp_show;
 		otp_kattr[i].store = fsl_otp_store;
+#else
+		otp_kattr[i].attr.mode = 0400;
+		otp_kattr[i].store = NULL;
+#endif
+		otp_kattr[i].show = fsl_otp_show;
 		attrs[i] = &otp_kattr[i].attr;
 	}
 	otp_attr_group->attrs = attrs;
