@@ -1999,9 +1999,9 @@ int gpiod_get_value(const struct gpio_desc *desc)
 
 	value = _gpiod_get_raw_value(desc);
 	if (test_bit(FLAG_ACTIVE_LOW, &desc->flags))
-		value = !value;
-
-	return value;
+		return !value;
+	else
+		return !!value;
 }
 EXPORT_SYMBOL_GPL(gpiod_get_value);
 
@@ -2242,9 +2242,9 @@ int gpiod_get_value_cansleep(const struct gpio_desc *desc)
 
 	value = _gpiod_get_raw_value(desc);
 	if (test_bit(FLAG_ACTIVE_LOW, &desc->flags))
-		value = !value;
-
-	return value;
+		return !value;
+	else
+		return !!value;
 }
 EXPORT_SYMBOL_GPL(gpiod_get_value_cansleep);
 
