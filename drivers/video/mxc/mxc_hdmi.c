@@ -80,7 +80,7 @@
 #define YCBCR422_8BITS		3
 #define XVYCC444            4
 
-static int only_cea;
+static bool only_cea;
 module_param(only_cea, bool, 0644);
 MODULE_PARM_DESC(only_cea, "Allow only CEA modes");
 
