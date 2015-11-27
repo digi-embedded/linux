@@ -608,6 +608,7 @@ struct btrfs_path {
 	unsigned int skip_locking:1;
 	unsigned int leave_spinning:1;
 	unsigned int search_commit_root:1;
+	unsigned int skip_release_on_error:1;
 };
 
 /*
@@ -1104,6 +1105,12 @@ struct btrfs_qgroup_limit_item {
 	__le64 rsv_excl;
 } __attribute__ ((__packed__));
 
+/* For raid type sysfs entries */
+struct raid_kobject {
+	int raid_type;
+	struct kobject kobj;
+};
+
 struct btrfs_space_info {
 	spinlock_t lock;
 
@@ -1154,7 +1161,7 @@ struct btrfs_space_info {
 	wait_queue_head_t wait;
 
 	struct kobject kobj;
-	struct kobject block_group_kobjs[BTRFS_NR_RAID_TYPES];
+	struct kobject *block_group_kobjs[BTRFS_NR_RAID_TYPES];
 };
 
 #define	BTRFS_BLOCK_RSV_GLOBAL		1
@@ -3603,6 +3610,10 @@ struct btrfs_dir_item *btrfs_lookup_xattr(struct btrfs_trans_handle *trans,
 int verify_dir_item(struct btrfs_root *root,
 		    struct extent_buffer *leaf,
 		    struct btrfs_dir_item *dir_item);
+struct btrfs_dir_item *btrfs_match_dir_item_name(struct btrfs_root *root,
+						 struct btrfs_path *path,
+						 const char *name,
+						 int name_len);
 
 /* orphan.c */
 int btrfs_insert_orphan_item(struct btrfs_trans_handle *trans,

@@ -656,6 +656,14 @@ int ext4_es_insert_extent(struct inode *inode, ext4_lblk_t lblk,
 
 	BUG_ON(end < lblk);
 
+	if ((status & EXTENT_STATUS_DELAYED) &&
+	    (status & EXTENT_STATUS_WRITTEN)) {
+		ext4_warning(inode->i_sb, "Inserting extent [%u/%u] as "
+				" delayed and written which can potentially "
+				" cause data loss.\n", lblk, len);
+		WARN_ON(1);
+	}
+
 	newes.es_lblk = lblk;
 	newes.es_len = len;
 	ext4_es_store_pblock(&newes, pblk);
@@ -962,10 +970,10 @@ retry:
 			continue;
 		}
 
-		if (ei->i_es_lru_nr == 0 || ei == locked_ei)
+		if (ei->i_es_lru_nr == 0 || ei == locked_ei ||
+		    !write_trylock(&ei->i_es_lock))
 			continue;
 
-		write_lock(&ei->i_es_lock);
 		shrunk = __es_try_to_reclaim_extents(ei, nr_to_scan);
 		if (ei->i_es_lru_nr == 0)
 			list_del_init(&ei->i_es_lru);

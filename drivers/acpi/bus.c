@@ -52,6 +52,12 @@ struct proc_dir_entry *acpi_root_dir;
 EXPORT_SYMBOL(acpi_root_dir);
 
 #ifdef CONFIG_X86
+#ifdef CONFIG_ACPI_CUSTOM_DSDT
+static inline int set_copy_dsdt(const struct dmi_system_id *id)
+{
+	return 0;
+}
+#else
 static int set_copy_dsdt(const struct dmi_system_id *id)
 {
 	printk(KERN_NOTICE "%s detected - "
@@ -59,6 +65,7 @@ static int set_copy_dsdt(const struct dmi_system_id *id)
 	acpi_gbl_copy_dsdt_locally = 1;
 	return 0;
 }
+#endif
 
 static struct dmi_system_id dsdt_dmi_table[] __initdata = {
 	/*
@@ -443,6 +450,16 @@ static int __init acpi_bus_init_irq(void)
 u8 acpi_gbl_permanent_mmap;
 
 
+/**
+ * acpi_early_init - Initialize ACPICA and populate the ACPI namespace.
+ *
+ * The ACPI tables are accessible after this, but the handling of events has not
+ * been initialized and the global lock is not available yet, so AML should not
+ * be executed at this point.
+ *
+ * Doing this before switching the EFI runtime services to virtual mode allows
+ * the EfiBootServices memory to be freed slightly earlier on boot.
+ */
 void __init acpi_early_init(void)
 {
 	acpi_status status;
@@ -503,26 +520,42 @@ void __init acpi_early_init(void)
 		acpi_gbl_FADT.sci_interrupt = acpi_sci_override_gsi;
 	}
 #endif
+	return;
+
+ error0:
+	disable_acpi();
+}
+
+/**
+ * acpi_subsystem_init - Finalize the early initialization of ACPI.
+ *
+ * Switch over the platform to the ACPI mode (if possible), initialize the
+ * handling of ACPI events, install the interrupt and global lock handlers.
+ *
+ * Doing this too early is generally unsafe, but at the same time it needs to be
+ * done before all things that really depend on ACPI.  The right spot appears to
+ * be before finalizing the EFI initialization.
+ */
+void __init acpi_subsystem_init(void)
+{
+	acpi_status status;
+
+	if (acpi_disabled)
+		return;
 
 	status = acpi_enable_subsystem(~ACPI_NO_ACPI_ENABLE);
 	if (ACPI_FAILURE(status)) {
 		printk(KERN_ERR PREFIX "Unable to enable ACPI\n");
-		goto error0;
+		disable_acpi();
+	} else {
+		/*
+		 * If the system is using ACPI then we can be reasonably
+		 * confident that any regulators are managed by the firmware
+		 * so tell the regulator core it has everything it needs to
+		 * know.
+		 */
+		regulator_has_full_constraints();
 	}
-
-	/*
-	 * If the system is using ACPI then we can be reasonably
-	 * confident that any regulators are managed by the firmware
-	 * so tell the regulator core it has everything it needs to
-	 * know.
-	 */
-	regulator_has_full_constraints();
-
-	return;
-
-      error0:
-	disable_acpi();
-	return;
 }
 
 static int __init acpi_bus_init(void)

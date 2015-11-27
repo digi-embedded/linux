@@ -2223,6 +2223,11 @@ static ssize_t target_core_alua_tg_pt_gp_store_attr_alua_access_state(
 			" tg_pt_gp ID: %hu\n", tg_pt_gp->tg_pt_gp_valid_id);
 		return -EINVAL;
 	}
+	if (!(dev->dev_flags & DF_CONFIGURED)) {
+		pr_err("Unable to set alua_access_state while device is"
+		       " not configured\n");
+		return -ENODEV;
+	}
 
 	ret = kstrtoul(page, 0, &tmp);
 	if (ret < 0) {
@@ -2354,7 +2359,7 @@ static ssize_t target_core_alua_tg_pt_gp_store_attr_alua_support_##_name(\
 		pr_err("Invalid value '%ld', must be '0' or '1'\n", tmp); \
 		return -EINVAL;						\
 	}								\
-	if (!tmp)							\
+	if (tmp)							\
 		t->_var |= _bit;					\
 	else								\
 		t->_var &= ~_bit;					\

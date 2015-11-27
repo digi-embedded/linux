@@ -5,6 +5,18 @@
 #include <asm/percpu.h>
 #include <linux/thread_info.h>
 
+#ifdef CONFIG_X86_32
+/*
+ * i386's current_thread_info() depends on ESP and for interrupt/exception
+ * stacks this doesn't yield the actual task thread_info.
+ *
+ * We hard rely on the fact that all the TIF_NEED_RESCHED bits are
+ * the same, therefore use the slightly more expensive version below.
+ */
+#undef tif_need_resched
+#define tif_need_resched() test_tsk_thread_flag(current, TIF_NEED_RESCHED)
+#endif
+
 DECLARE_PER_CPU(int, __preempt_count);
 
 /*
@@ -93,9 +105,9 @@ static __always_inline bool __preempt_count_dec_and_test(void)
 /*
  * Returns true when we need to resched and can (barring IRQ state).
  */
-static __always_inline bool should_resched(void)
+static __always_inline bool should_resched(int preempt_offset)
 {
-	return unlikely(!__this_cpu_read_4(__preempt_count));
+	return unlikely(__this_cpu_read_4(__preempt_count) == preempt_offset);
 }
 
 #ifdef CONFIG_PREEMPT

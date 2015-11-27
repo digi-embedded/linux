@@ -20,6 +20,7 @@
 #include <linux/xattr.h>
 #include <linux/integrity.h>
 #include <linux/evm.h>
+#include <linux/magic.h>
 #include <crypto/hash.h>
 #include "evm.h"
 
@@ -269,6 +270,24 @@ static int evm_protect_xattr(struct dentry *dentry, const char *xattr_name,
 		goto out;
 	}
 	evm_status = evm_verify_current_integrity(dentry);
+	if (evm_status == INTEGRITY_NOXATTRS) {
+		struct integrity_iint_cache *iint;
+
+		iint = integrity_iint_find(dentry->d_inode);
+		if (iint && (iint->flags & IMA_NEW_FILE))
+			return 0;
+
+		/* exception for pseudo filesystems */
+		if (dentry->d_inode->i_sb->s_magic == TMPFS_MAGIC
+		    || dentry->d_inode->i_sb->s_magic == SYSFS_MAGIC)
+			return 0;
+
+		integrity_audit_msg(AUDIT_INTEGRITY_METADATA,
+				    dentry->d_inode, dentry->d_name.name,
+				    "update_metadata",
+				    integrity_status_msg[evm_status],
+				    -EPERM, 0);
+	}
 out:
 	if (evm_status != INTEGRITY_PASS)
 		integrity_audit_msg(AUDIT_INTEGRITY_METADATA, dentry->d_inode,
@@ -285,12 +304,23 @@ out:
  * @xattr_value: pointer to the new extended attribute value
  * @xattr_value_len: pointer to the new extended attribute value length
  *
- * Updating 'security.evm' requires CAP_SYS_ADMIN privileges and that
- * the current value is valid.
+ * Before allowing the 'security.evm' protected xattr to be updated,
+ * verify the existing value is valid.  As only the kernel should have
+ * access to the EVM encrypted key needed to calculate the HMAC, prevent
+ * userspace from writing HMAC value.  Writing 'security.evm' requires
+ * requires CAP_SYS_ADMIN privileges.
  */
 int evm_inode_setxattr(struct dentry *dentry, const char *xattr_name,
 		       const void *xattr_value, size_t xattr_value_len)
 {
+	const struct evm_ima_xattr_data *xattr_data = xattr_value;
+
+	if (strcmp(xattr_name, XATTR_NAME_EVM) == 0) {
+		if (!xattr_value_len)
+			return -EINVAL;
+		if (xattr_data->type != EVM_IMA_XATTR_DIGSIG)
+			return -EPERM;
+	}
 	return evm_protect_xattr(dentry, xattr_name, xattr_value,
 				 xattr_value_len);
 }

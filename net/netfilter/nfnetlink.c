@@ -248,15 +248,15 @@ replay:
 #endif
 		{
 			nfnl_unlock(subsys_id);
-			kfree_skb(nskb);
-			return netlink_ack(skb, nlh, -EOPNOTSUPP);
+			netlink_ack(skb, nlh, -EOPNOTSUPP);
+			return kfree_skb(nskb);
 		}
 	}
 
 	if (!ss->commit || !ss->abort) {
 		nfnl_unlock(subsys_id);
-		kfree_skb(nskb);
-		return netlink_ack(skb, nlh, -EOPNOTSUPP);
+		netlink_ack(skb, nlh, -EOPNOTSUPP);
+		return kfree_skb(skb);
 	}
 
 	while (skb->len >= nlmsg_total_size(0)) {
@@ -265,7 +265,8 @@ replay:
 		nlh = nlmsg_hdr(skb);
 		err = 0;
 
-		if (nlh->nlmsg_len < NLMSG_HDRLEN) {
+		if (nlmsg_len(nlh) < sizeof(struct nfgenmsg) ||
+		    skb->len < nlh->nlmsg_len) {
 			err = -EINVAL;
 			goto ack;
 		}
@@ -367,7 +368,7 @@ static void nfnetlink_rcv(struct sk_buff *skb)
 	    skb->len < nlh->nlmsg_len)
 		return;
 
-	if (!ns_capable(net->user_ns, CAP_NET_ADMIN)) {
+	if (!netlink_net_capable(skb, CAP_NET_ADMIN)) {
 		netlink_ack(skb, nlh, -EPERM);
 		return;
 	}

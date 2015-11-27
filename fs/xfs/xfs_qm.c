@@ -1108,6 +1108,11 @@ xfs_qm_reset_dqcounts(
 		 */
 		xfs_dqcheck(mp, ddq, id+j, type, XFS_QMOPT_DQREPAIR,
 			    "xfs_quotacheck");
+		/*
+		 * Reset type in case we are reusing group quota file for
+		 * project quotas or vice versa
+		 */
+		ddq->d_flags = type;
 		ddq->d_bcount = 0;
 		ddq->d_icount = 0;
 		ddq->d_rtbcount = 0;
@@ -1176,6 +1181,12 @@ xfs_qm_dqiter_bufs(
 		if (error)
 			break;
 
+		/*
+		 * A corrupt buffer might not have a verifier attached, so
+		 * make sure we have the correct one attached before writeback
+		 * occurs.
+		 */
+		bp->b_ops = &xfs_dquot_buf_ops;
 		xfs_qm_reset_dqcounts(mp, bp, firstid, type);
 		xfs_buf_delwri_queue(bp, buffer_list);
 		xfs_buf_relse(bp);
@@ -1261,7 +1272,7 @@ xfs_qm_dqiterate(
 					xfs_buf_readahead(mp->m_ddev_targp,
 					       XFS_FSB_TO_DADDR(mp, rablkno),
 					       mp->m_quotainfo->qi_dqchunklen,
-					       NULL);
+					       &xfs_dquot_buf_ops);
 					rablkno++;
 				}
 			}

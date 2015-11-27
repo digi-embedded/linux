@@ -548,11 +548,10 @@ static bool handle_mmio_cfg_reg(struct kvm_vcpu *vcpu,
 	u32 val;
 	u32 *reg;
 
-	offset >>= 1;
 	reg = vgic_bitmap_get_reg(&vcpu->kvm->arch.vgic.irq_cfg,
-				  vcpu->vcpu_id, offset);
+				  vcpu->vcpu_id, offset >> 1);
 
-	if (offset & 2)
+	if (offset & 4)
 		val = *reg >> 16;
 	else
 		val = *reg & 0xffff;
@@ -561,13 +560,13 @@ static bool handle_mmio_cfg_reg(struct kvm_vcpu *vcpu,
 	vgic_reg_access(mmio, &val, offset,
 			ACCESS_READ_VALUE | ACCESS_WRITE_VALUE);
 	if (mmio->is_write) {
-		if (offset < 4) {
+		if (offset < 8) {
 			*reg = ~0U; /* Force PPIs/SGIs to 1 */
 			return false;
 		}
 
 		val = vgic_cfg_compress(val);
-		if (offset & 2) {
+		if (offset & 4) {
 			*reg &= 0xffff;
 			*reg |= val << 16;
 		} else {
@@ -675,7 +674,7 @@ static bool read_set_clear_sgi_pend_reg(struct kvm_vcpu *vcpu,
 {
 	struct vgic_dist *dist = &vcpu->kvm->arch.vgic;
 	int sgi;
-	int min_sgi = (offset & ~0x3) * 4;
+	int min_sgi = (offset & ~0x3);
 	int max_sgi = min_sgi + 3;
 	int vcpu_id = vcpu->vcpu_id;
 	u32 reg = 0;
@@ -696,7 +695,7 @@ static bool write_set_clear_sgi_pend_reg(struct kvm_vcpu *vcpu,
 {
 	struct vgic_dist *dist = &vcpu->kvm->arch.vgic;
 	int sgi;
-	int min_sgi = (offset & ~0x3) * 4;
+	int min_sgi = (offset & ~0x3);
 	int max_sgi = min_sgi + 3;
 	int vcpu_id = vcpu->vcpu_id;
 	u32 reg;
@@ -916,6 +915,7 @@ static void vgic_dispatch_sgi(struct kvm_vcpu *vcpu, u32 reg)
 	case 0:
 		if (!target_cpus)
 			return;
+		break;
 
 	case 1:
 		target_cpus = ((1 << nrcpus) - 1) & ~(1 << vcpu_id) & 0xff;
@@ -1042,6 +1042,7 @@ static bool vgic_queue_irq(struct kvm_vcpu *vcpu, u8 sgi_source_id, int irq)
 			  lr, irq, vgic_cpu->vgic_lr[lr]);
 		BUG_ON(!test_bit(lr, vgic_cpu->lr_used));
 		vgic_cpu->vgic_lr[lr] |= GICH_LR_PENDING_BIT;
+		__clear_bit(lr, (unsigned long *)vgic_cpu->vgic_elrsr);
 		return true;
 	}
 
@@ -1055,6 +1056,7 @@ static bool vgic_queue_irq(struct kvm_vcpu *vcpu, u8 sgi_source_id, int irq)
 	vgic_cpu->vgic_lr[lr] = MK_LR_PEND(sgi_source_id, irq);
 	vgic_cpu->vgic_irq_lr_map[irq] = lr;
 	set_bit(lr, vgic_cpu->lr_used);
+	__clear_bit(lr, (unsigned long *)vgic_cpu->vgic_elrsr);
 
 	if (!vgic_irq_is_edge(vcpu, irq))
 		vgic_cpu->vgic_lr[lr] |= GICH_LR_EOI;
@@ -1208,6 +1210,14 @@ static bool vgic_process_maintenance(struct kvm_vcpu *vcpu)
 
 	if (vgic_cpu->vgic_misr & GICH_MISR_U)
 		vgic_cpu->vgic_hcr &= ~GICH_HCR_UIE;
+
+	/*
+	 * In the next iterations of the vcpu loop, if we sync the vgic state
+	 * after flushing it, but before entering the guest (this happens for
+	 * pending signals and vmid rollovers), then make sure we don't pick
+	 * up any old maintenance interrupts here.
+	 */
+	memset(vgic_cpu->vgic_eisr, 0, sizeof(vgic_cpu->vgic_eisr[0]) * 2);
 
 	return level_pending;
 }
@@ -1387,7 +1397,8 @@ out:
 int kvm_vgic_inject_irq(struct kvm *kvm, int cpuid, unsigned int irq_num,
 			bool level)
 {
-	if (vgic_update_irq_state(kvm, cpuid, irq_num, level))
+	if (likely(vgic_initialized(kvm)) &&
+	    vgic_update_irq_state(kvm, cpuid, irq_num, level))
 		vgic_kick_vcpus(kvm);
 
 	return 0;
@@ -1526,16 +1537,32 @@ int kvm_vgic_hyp_init(void)
 		goto out_unmap;
 	}
 
-	kvm_info("%s@%llx IRQ%d\n", vgic_node->name,
-		 vctrl_res.start, vgic_maint_irq);
-	on_each_cpu(vgic_init_maintenance_interrupt, NULL, 1);
-
 	if (of_address_to_resource(vgic_node, 3, &vcpu_res)) {
 		kvm_err("Cannot obtain VCPU resource\n");
 		ret = -ENXIO;
 		goto out_unmap;
 	}
+
+	if (!PAGE_ALIGNED(vcpu_res.start)) {
+		kvm_err("GICV physical address 0x%llx not page aligned\n",
+			(unsigned long long)vcpu_res.start);
+		ret = -ENXIO;
+		goto out_unmap;
+	}
+
+	if (!PAGE_ALIGNED(resource_size(&vcpu_res))) {
+		kvm_err("GICV size 0x%llx not a multiple of page size 0x%lx\n",
+			(unsigned long long)resource_size(&vcpu_res),
+			PAGE_SIZE);
+		ret = -ENXIO;
+		goto out_unmap;
+	}
+
 	vgic_vcpu_base = vcpu_res.start;
+
+	kvm_info("%s@%llx IRQ%d\n", vgic_node->name,
+		 vctrl_res.start, vgic_maint_irq);
+	on_each_cpu(vgic_init_maintenance_interrupt, NULL, 1);
 
 	goto out;
 
@@ -1594,7 +1621,7 @@ out:
 
 int kvm_vgic_create(struct kvm *kvm)
 {
-	int i, vcpu_lock_idx = -1, ret = 0;
+	int i, vcpu_lock_idx = -1, ret;
 	struct kvm_vcpu *vcpu;
 
 	mutex_lock(&kvm->lock);
@@ -1609,6 +1636,7 @@ int kvm_vgic_create(struct kvm *kvm)
 	 * vcpu->mutex.  By grabbing the vcpu->mutex of all VCPUs we ensure
 	 * that no other VCPUs are run while we create the vgic.
 	 */
+	ret = -EBUSY;
 	kvm_for_each_vcpu(i, vcpu, kvm) {
 		if (!mutex_trylock(&vcpu->mutex))
 			goto out_unlock;
@@ -1616,11 +1644,10 @@ int kvm_vgic_create(struct kvm *kvm)
 	}
 
 	kvm_for_each_vcpu(i, vcpu, kvm) {
-		if (vcpu->arch.has_run_once) {
-			ret = -EBUSY;
+		if (vcpu->arch.has_run_once)
 			goto out_unlock;
-		}
 	}
+	ret = 0;
 
 	spin_lock_init(&kvm->arch.vgic.lock);
 	kvm->arch.vgic.vctrl_base = vgic_vctrl_base;
@@ -1638,7 +1665,7 @@ out:
 	return ret;
 }
 
-static bool vgic_ioaddr_overlap(struct kvm *kvm)
+static int vgic_ioaddr_overlap(struct kvm *kvm)
 {
 	phys_addr_t dist = kvm->arch.vgic.vgic_dist_base;
 	phys_addr_t cpu = kvm->arch.vgic.vgic_cpu_base;
@@ -1667,10 +1694,11 @@ static int vgic_ioaddr_assign(struct kvm *kvm, phys_addr_t *ioaddr,
 	if (addr + size < addr)
 		return -EINVAL;
 
+	*ioaddr = addr;
 	ret = vgic_ioaddr_overlap(kvm);
 	if (ret)
-		return ret;
-	*ioaddr = addr;
+		*ioaddr = VGIC_ADDR_UNDEF;
+
 	return ret;
 }
 

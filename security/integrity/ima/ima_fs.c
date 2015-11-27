@@ -160,6 +160,8 @@ static int ima_measurements_show(struct seq_file *m, void *v)
 
 		if (is_ima_template && strcmp(field->field_id, "d") == 0)
 			show = IMA_SHOW_BINARY_NO_FIELD_LEN;
+		if (is_ima_template && strcmp(field->field_id, "n") == 0)
+			show = IMA_SHOW_BINARY_OLD_STRING_FMT;
 		field->field_show(m, show, &e->template_data[i]);
 	}
 	return 0;
@@ -184,9 +186,9 @@ static const struct file_operations ima_measurements_ops = {
 	.release = seq_release,
 };
 
-void ima_print_digest(struct seq_file *m, u8 *digest, int size)
+void ima_print_digest(struct seq_file *m, u8 *digest, u32 size)
 {
-	int i;
+	u32 i;
 
 	for (i = 0; i < size; i++)
 		seq_printf(m, "%02x", *(digest + i));

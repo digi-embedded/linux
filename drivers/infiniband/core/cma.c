@@ -859,19 +859,27 @@ static void cma_save_ib_info(struct rdma_cm_id *id, struct rdma_cm_id *listen_id
 	memcpy(&ib->sib_addr, &path->dgid, 16);
 }
 
+static __be16 ss_get_port(const struct sockaddr_storage *ss)
+{
+	if (ss->ss_family == AF_INET)
+		return ((struct sockaddr_in *)ss)->sin_port;
+	else if (ss->ss_family == AF_INET6)
+		return ((struct sockaddr_in6 *)ss)->sin6_port;
+	BUG();
+}
+
 static void cma_save_ip4_info(struct rdma_cm_id *id, struct rdma_cm_id *listen_id,
 			      struct cma_hdr *hdr)
 {
-	struct sockaddr_in *listen4, *ip4;
+	struct sockaddr_in *ip4;
 
-	listen4 = (struct sockaddr_in *) &listen_id->route.addr.src_addr;
 	ip4 = (struct sockaddr_in *) &id->route.addr.src_addr;
-	ip4->sin_family = listen4->sin_family;
+	ip4->sin_family = AF_INET;
 	ip4->sin_addr.s_addr = hdr->dst_addr.ip4.addr;
-	ip4->sin_port = listen4->sin_port;
+	ip4->sin_port = ss_get_port(&listen_id->route.addr.src_addr);
 
 	ip4 = (struct sockaddr_in *) &id->route.addr.dst_addr;
-	ip4->sin_family = listen4->sin_family;
+	ip4->sin_family = AF_INET;
 	ip4->sin_addr.s_addr = hdr->src_addr.ip4.addr;
 	ip4->sin_port = hdr->port;
 }
@@ -879,16 +887,15 @@ static void cma_save_ip4_info(struct rdma_cm_id *id, struct rdma_cm_id *listen_i
 static void cma_save_ip6_info(struct rdma_cm_id *id, struct rdma_cm_id *listen_id,
 			      struct cma_hdr *hdr)
 {
-	struct sockaddr_in6 *listen6, *ip6;
+	struct sockaddr_in6 *ip6;
 
-	listen6 = (struct sockaddr_in6 *) &listen_id->route.addr.src_addr;
 	ip6 = (struct sockaddr_in6 *) &id->route.addr.src_addr;
-	ip6->sin6_family = listen6->sin6_family;
+	ip6->sin6_family = AF_INET6;
 	ip6->sin6_addr = hdr->dst_addr.ip6;
-	ip6->sin6_port = listen6->sin6_port;
+	ip6->sin6_port = ss_get_port(&listen_id->route.addr.src_addr);
 
 	ip6 = (struct sockaddr_in6 *) &id->route.addr.dst_addr;
-	ip6->sin6_family = listen6->sin6_family;
+	ip6->sin6_family = AF_INET6;
 	ip6->sin6_addr = hdr->src_addr.ip6;
 	ip6->sin6_port = hdr->port;
 }
@@ -1284,15 +1291,6 @@ static int cma_req_handler(struct ib_cm_id *cm_id, struct ib_cm_event *ib_event)
 	struct rdma_id_private *listen_id, *conn_id;
 	struct rdma_cm_event event;
 	int offset, ret;
-	u8 smac[ETH_ALEN];
-	u8 alt_smac[ETH_ALEN];
-	u8 *psmac = smac;
-	u8 *palt_smac = alt_smac;
-	int is_iboe = ((rdma_node_get_transport(cm_id->device->node_type) ==
-			RDMA_TRANSPORT_IB) &&
-		       (rdma_port_get_link_layer(cm_id->device,
-			ib_event->param.req_rcvd.port) ==
-			IB_LINK_LAYER_ETHERNET));
 
 	listen_id = cm_id->context;
 	if (!cma_check_req_qp_type(&listen_id->id, ib_event))
@@ -1336,28 +1334,11 @@ static int cma_req_handler(struct ib_cm_id *cm_id, struct ib_cm_event *ib_event)
 	ret = conn_id->id.event_handler(&conn_id->id, &event);
 	if (ret)
 		goto err3;
-
-	if (is_iboe) {
-		if (ib_event->param.req_rcvd.primary_path != NULL)
-			rdma_addr_find_smac_by_sgid(
-				&ib_event->param.req_rcvd.primary_path->sgid,
-				psmac, NULL);
-		else
-			psmac = NULL;
-		if (ib_event->param.req_rcvd.alternate_path != NULL)
-			rdma_addr_find_smac_by_sgid(
-				&ib_event->param.req_rcvd.alternate_path->sgid,
-				palt_smac, NULL);
-		else
-			palt_smac = NULL;
-	}
 	/*
 	 * Acquire mutex to prevent user executing rdma_destroy_id()
 	 * while we're accessing the cm_id.
 	 */
 	mutex_lock(&lock);
-	if (is_iboe)
-		ib_update_cm_av(cm_id, psmac, palt_smac);
 	if (cma_comp(conn_id, RDMA_CM_CONNECT) &&
 	    (conn_id->id.qp_type != IB_QPT_UD))
 		ib_send_cm_mra(cm_id, CMA_CM_MRA_SETTING, NULL, 0);

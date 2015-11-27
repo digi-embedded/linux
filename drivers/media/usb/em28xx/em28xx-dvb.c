@@ -693,7 +693,8 @@ static void pctv_520e_init(struct em28xx *dev)
 static int em28xx_pctv_290e_set_lna(struct dvb_frontend *fe)
 {
 	struct dtv_frontend_properties *c = &fe->dtv_property_cache;
-	struct em28xx *dev = fe->dvb->priv;
+	struct em28xx_i2c_bus *i2c_bus = fe->dvb->priv;
+	struct em28xx *dev = i2c_bus->dev;
 #ifdef CONFIG_GPIOLIB
 	struct em28xx_dvb *dvb = dev->dvb;
 	int ret;
@@ -1467,7 +1468,7 @@ static int em28xx_dvb_fini(struct em28xx *dev)
 		return 0;
 	}
 
-	em28xx_info("Closing DVB extension");
+	em28xx_info("Closing DVB extension\n");
 
 	if (dev->dvb) {
 		struct em28xx_dvb *dvb = dev->dvb;
