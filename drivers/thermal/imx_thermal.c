@@ -418,7 +418,7 @@ static int imx_get_sensor_data(struct platform_device *pdev)
 
 	/*
 	 * Derived from linear interpolation:
-	 * slope = 0.4297157 - (0.0015976 * 25C fuse)
+	 * slope = FACTOR2 - (FACTOR1 * 25C fuse)
 	 * slope = (FACTOR2 - FACTOR1 * n1) / FACTOR0
 	 * offset = OFFSET / 1000000
 	 * (Nmeas - n1) / (Tmeas - t1) = slope
@@ -427,10 +427,10 @@ static int imx_get_sensor_data(struct platform_device *pdev)
 	 * and we don't want to lose precision from integer division. So...
 	 * Tmeas = (Nmeas - n1) / slope + t1 + offset
 	 * milli_Tmeas = 1000 * (Nmeas - n1) / slope + 1000 * t1 + OFFSET / 1000
-	 * milli_Tmeas = -1000 * (n1 - Nmeas) / slope + 1000 * t1 + OFFSET /1000
+	 * milli_Tmeas = -1000 * (n1 - Nmeas) / slope + 1000 * t1 + OFFSET / 1000
 	 * Let constant c1 = (-1000 / slope)
 	 * milli_Tmeas = (n1 - Nmeas) * c1 + 1000 * t1 + OFFSET / 1000
-	 * Let constant c2 = n1 *c1 + 1000 * t1 + OFFSET / 1000
+	 * Let constant c2 = n1 * c1 + 1000 * t1 + OFFSET / 1000
 	 * milli_Tmeas = c2 - Nmeas * c1
 	 */
 	temp64 = FACTOR0;
@@ -440,6 +440,20 @@ static int imx_get_sensor_data(struct platform_device *pdev)
 	temp64 = OFFSET;
 	do_div(temp64, 1000);
 	data->c2 = n1 * data->c1 + 1000 * t1 + temp64;
+
+	/*
+	 * Set the default passive cooling trip point to 20 °C below the
+	 * maximum die temperature. Can be changed from userspace.
+	 */
+	data->temp_passive = 1000 * (t2 - 20);
+
+	/*
+	 * The maximum die temperature is t2, let's give 5 °C cushion
+	 * for noise and possible temperature rise between measurements.
+	 */
+	data->temp_critical = 1000 * (t2 - 5);
+
+	return 0;
 }
 
 static irqreturn_t imx_thermal_alarm_irq(int irq, void *dev)
