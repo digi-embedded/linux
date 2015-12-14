@@ -25,6 +25,12 @@
 	};
 };
 
+&hdmi_core {
+	ipu_id = <0>;
+	disp_id = <1>;
+	status = "okay";
+};
+
 &ldb {
 	lvds-channel@0 {
 		crtc = "ipu1-di0";
