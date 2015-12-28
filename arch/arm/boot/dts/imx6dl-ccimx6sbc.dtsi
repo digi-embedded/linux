@@ -23,6 +23,16 @@
 		mxcfb0 = &mxcfb1;
 		mxcfb1 = &mxcfb2;
 	};
+
+	v4l2_cap_0 {
+		ipu_id = <0>;
+		csi_id = <0>;
+	};
+
+	v4l2_cap_1 {
+		ipu_id = <0>;
+		csi_id = <1>;
+	};
 };
 
 &hdmi_core {
@@ -37,4 +47,16 @@
 		status = "okay";
 		primary;
 	};
+};
+
+&i2c3 {
+	ov5640_mipi: ov5640_mipi@4c {
+		ipu_id = <0>;
+		csi_id = <1>;
+	};
+};
+
+&mipi_csi {
+	ipu_id = <0>;
+	csi_id = <1>;
 };
