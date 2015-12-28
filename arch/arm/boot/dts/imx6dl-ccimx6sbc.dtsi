@@ -26,12 +26,12 @@
 
 	v4l2_cap_0 {
 		ipu_id = <0>;
-		csi_id = <0>;
+		csi_id = <1>;
 	};
 
 	v4l2_cap_1 {
 		ipu_id = <0>;
-		csi_id = <1>;
+		csi_id = <0>;
 	};
 };
 
