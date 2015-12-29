@@ -9,6 +9,11 @@ Required properties:
 - fsl,phy_reg_cksymtx: hdmi phy register, clock symbol and transmitter control
   register offset 0x09, adjust hdmi signal pre-emphasis.
 
+Optional properties.
+- digi,dvi_mode: Force DVI mode. This is useful when using HDMI to DVI adapters
+  but the EDID settings flag HDMI capabilities. Note that DVI does not support
+  audio.
+
 Example:
 
 	hdmi_video {
@@ -16,5 +21,6 @@ Example:
 		fsl,hdcp;
 		fsl,phy_reg_vlev = <0x0294>;
 		fsl,phy_reg_cksymtx = <0x800d>;
+		digi,dvi_mode;
 	};
 
