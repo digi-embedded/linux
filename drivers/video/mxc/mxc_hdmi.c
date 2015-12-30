@@ -2190,12 +2190,18 @@ static void mxc_hdmi_setup(struct mxc_hdmi *hdmi, unsigned long event)
 
 	hdmi_disable_overflow_interrupts();
 
-	dev_dbg(&hdmi->pdev->dev, "CEA mode used vic=%d\n", hdmi->vic);
-	if (!hdmi->dvi_mode && hdmi->edid_cfg.hdmi_cap)
-		hdmi->hdmi_data.video_mode.mDVI = false;
-	else {
-		dev_dbg(&hdmi->pdev->dev, "CEA mode vic=%d work in DVI\n", hdmi->vic);
+
+	if (hdmi->vic == 0) {
+		dev_dbg(&hdmi->pdev->dev, "Non-CEA mode used in HDMI\n");
 		hdmi->hdmi_data.video_mode.mDVI = true;
+	} else {
+		dev_dbg(&hdmi->pdev->dev, "CEA mode used vic=%d\n", hdmi->vic);
+		if (!hdmi->dvi_mode && hdmi->edid_cfg.hdmi_cap)
+			hdmi->hdmi_data.video_mode.mDVI = false;
+		else {
+			dev_dbg(&hdmi->pdev->dev, "CEA mode vic=%d work in DVI\n", hdmi->vic);
+			hdmi->hdmi_data.video_mode.mDVI = true;
+		}
 	}
 
 	if ((hdmi->vic == 6) || (hdmi->vic == 7) ||
