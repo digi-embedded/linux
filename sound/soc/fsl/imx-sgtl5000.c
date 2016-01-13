@@ -79,14 +79,10 @@ static int hpjack_status_check(void)
 
 	if (hp_status != priv->hp_gpio_active_low) {
 		snprintf(buf, 32, "STATE=%d", 2);
-		snd_soc_update_bits(codec, SGTL5000_CHIP_DIG_POWER,
-				    SGTL5000_DAC_EN, SGTL5000_DAC_EN);
 		imx_hp_jack_gpio.debounce_time = 0;
 		ret = imx_hp_jack_gpio.report;
 	} else {
 		snprintf(buf, 32, "STATE=%d", 0);
-		snd_soc_update_bits(codec, SGTL5000_CHIP_DIG_POWER,
-				    SGTL5000_DAC_EN, 0);
 		imx_hp_jack_gpio.debounce_time = priv->hp_gpio_debounce_time;
 		ret = 0;
 	}
