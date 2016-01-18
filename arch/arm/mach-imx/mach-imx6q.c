@@ -440,6 +440,15 @@ static void imx6q_bt_init (void)
 	}
 }
 
+static int __init imx6q_som_init (void)
+{
+	imx6q_wifi_init();
+	imx6q_bt_init();
+
+	return 0;
+}
+device_initcall(imx6q_som_init);
+
 static void fixup_dt_audio_codec(void)
 {
 	if (mx6q_get_board_version() == 1) {
@@ -728,9 +737,6 @@ static void __init imx6q_init_late(void)
 		imx6q_opp_init();
 		platform_device_register(&imx6q_cpufreq_pdev);
 	}
-
-	imx6q_wifi_init();
-	imx6q_bt_init();
 
 	if (of_machine_is_compatible("fsl,imx6q-sabreauto")
 		|| of_machine_is_compatible("fsl,imx6dl-sabreauto"))
