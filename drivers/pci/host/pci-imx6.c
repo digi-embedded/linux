@@ -62,6 +62,7 @@ struct imx6_pcie {
 	int			power_on_gpio;
 	int			reset_gpio;
 	bool			gpio_active_high;
+	int			power_on_delay;
 	struct clk		*pcie_bus;
 	struct clk		*pcie_inbound_axi;
 	struct clk		*pcie_phy;
@@ -1250,6 +1251,10 @@ static int imx6_pcie_probe(struct platform_device *pdev)
 			dev_err(&pdev->dev, "unable to get power-on gpio\n");
 			return ret;
 		}
+
+		if (!of_property_read_u32(node, "power-on-delay-ms",
+				&imx6_pcie->power_on_delay))
+			msleep(imx6_pcie->power_on_delay);
 	}
 
 	imx6_pcie->reset_gpio = of_get_named_gpio(node, "reset-gpio", 0);

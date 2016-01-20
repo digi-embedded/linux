@@ -35,6 +35,9 @@ Additional required properties for imx6sx-pcie:
 - clock names: Must include the following additional entries:
 	- "pcie_inbound_axi"
 
+Optional properties:
+- power-on-delay-ms: Delay after power-on-gpio request (power off)
+
 Example:
 
 	pcie@0x01000000 {
