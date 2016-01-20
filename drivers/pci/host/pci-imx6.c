@@ -47,6 +47,7 @@ static u32 ddr_test_region = 0, test_region_size = SZ_2M;
 struct imx6_pcie {
 	int			reset_gpio;
 	int			power_on_gpio;
+	int			power_on_delay;
 	struct regulator	*regulator;
 	struct clk		*pcie_bus;
 	struct clk		*pcie_phy;
@@ -1067,6 +1068,10 @@ static int __init imx6_pcie_probe(struct platform_device *pdev)
 			dev_err(&pdev->dev, "unable to get power-on gpio\n");
 			return ret;
 		}
+
+		if (!of_property_read_u32(np, "power-on-delay-ms",
+				&imx6_pcie->power_on_delay))
+			msleep(imx6_pcie->power_on_delay);
 	}
 
 	/* Fetch clocks */
