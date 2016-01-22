@@ -21,6 +21,8 @@ Additional required properties for imx6sx-pcie:
 
 Optional properties:
 - power-on-delay-ms: Delay after power-on-gpio request (power off)
+- power-on-gpio: GPIO used for power on line
+- reset-gpio: GPIO used for reset line
 
 Example:
 
