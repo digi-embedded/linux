@@ -762,6 +762,7 @@
 	wake-up-gpio = <&gpio7 7 0>;
 	disable-gpio = <&gpio1 4 0>;
 	power-on-gpio = <&gpio6 10 0>;
+	power-on-delay-ms = <10>;
 	vin-supply = <&ldo6>;
 	status = "okay";
 };
