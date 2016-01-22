@@ -1619,6 +1619,8 @@ rx_processing_done:
 		 */
 		writel(0, fep->hwp + FEC_R_DES_ACTIVE(queue_id));
 	}
+	/* Make sure the update to bdp is performed before cur_rx */
+	wmb();
 	rxq->cur_rx = bdp;
 	toggle_activityled(ndev);
 	return pkt_received;
