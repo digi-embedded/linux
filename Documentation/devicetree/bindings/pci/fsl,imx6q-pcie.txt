@@ -19,6 +19,10 @@ Additional required properties for imx6sx-pcie:
 - power supplies:
 	- pcie-phy-supply: regulator used to power the PCIe PHY
 
+Optional properties:
+- reset-gpio: GPIO used for reset line
+- power-on-gpio: GPIO used for power on line
+
 Example:
 
 	pcie@0x01000000 {
