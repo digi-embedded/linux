@@ -133,7 +133,8 @@ static void async_run_entry_fn(struct work_struct *work)
 	/* 2) remove self from the pending queues */
 	spin_lock_irqsave(&async_lock, flags);
 	list_del_init(&entry->domain_list);
-	list_del_init(&entry->global_list);
+	if (entry->domain->registered)
+		list_del_init(&entry->global_list);
 
 	/* 3) free the entry */
 	kfree(entry);
