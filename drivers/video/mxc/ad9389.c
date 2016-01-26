@@ -678,6 +678,8 @@ static int ad9389_dispdrv_init(struct mxc_dispdrv_handle *disp,
 {
 	struct ad9389_dev *ad9389 = mxc_dispdrv_getdata(disp);
 	struct i2c_client *client = ad9389->client;
+	struct ad9389_pdata *pdata = client->dev.platform_data;
+	int ret;
 
 	mutex_lock(&ad9389->irq_lock);
 
@@ -685,6 +687,11 @@ static int ad9389_dispdrv_init(struct mxc_dispdrv_handle *disp,
 	ad9389->if_fmt = setting->if_fmt;
 	ad9389->default_bpp = setting->default_bpp;
 	ad9389->dft_mode_str = setting->dft_mode_str;
+
+	ret = ipu_di_to_crtc(&client->dev, pdata->ipu_id,
+                             pdata->disp_id, &setting->crtc);
+	if (ret < 0)
+		return ret;
 
 	if (!valid_mode(setting->if_fmt)) {
 		dev_warn(&client->dev, "Input pixel format not valid use default RGB24\n");
