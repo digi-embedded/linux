@@ -58,7 +58,6 @@
 &hdmi_core {
 	ipu_id = <1>;
 	disp_id = <1>;
-	status = "okay";
 };
 
 &ldb {

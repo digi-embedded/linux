@@ -59,3 +59,7 @@
 		};
 	};
 };
+
+&hdmi_core {
+	status = "okay";
+};
