@@ -81,6 +81,23 @@
 		};
 	};
 
+
+	ad9389_1920x1080: HDMI_1920_1080@0 {
+		display-timings {
+			timing {
+				clock-frequency = <130992926>; /* 7634 ps*/
+				hactive = <1920>;
+				vactive = <1080>;
+				hfront-porch = <88>;
+				hback-porch = <148>;
+				hsync-len = <44>;
+				vback-porch = <36>;
+				vfront-porch = <4>;
+				vsync-len = <5>;
+			};
+		};
+	};
+
 	v4l2_cap_0 {
 		compatible = "fsl,imx6q-v4l2-capture";
 		mclk_source = <0>;
@@ -253,6 +270,25 @@
 	hdmi: edid@50 {
 		compatible = "fsl,imx6-hdmi-i2c";
 		reg = <0x50>;
+	};
+
+	hdmi_ad9389: ad9889b@39 {
+		compatible = "ad,ad9889b-i2c";
+		reg = <0x39>;
+		pinctrl-names = "default";
+		interrupt-parent = <&gpio2>;
+		interrupts = <1 GPIO_ACTIVE_HIGH>;
+		ad,edid_addr = <0x3f>; 
+		display = <&ad9389_1920x1080>;
+		clocks = <&clks 131>, <&clks 132>,
+			 <&clks 134>, <&clks 137>,
+			 <&clks 39>, <&clks 40>,
+			 <&clks 41>, <&clks 44>;
+		clock-names = "ipu1_di0", "ipu1_di1",
+			      "ipu2_di0", "ipu2_di1",
+			      "ipu1_di0_sel", "ip11_di1_sel",
+			      "ipu2_di0_sel", "ip12_di1_sel";
+		status = "disabled";
 	};
 
 	fusion@10 {

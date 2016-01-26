@@ -54,6 +54,12 @@
 		ipu_id = <0>;
 		csi_id = <1>;
 	};
+
+	hdmi_ad9389: ad9889b@39 {
+		pinctrl-0 = <&pinctrl_ipu1>;
+		ipu_id = <0>;
+		disp_id = <0>;
+	};
 };
 
 &mipi_csi {
