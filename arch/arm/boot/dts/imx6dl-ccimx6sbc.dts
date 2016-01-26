@@ -19,3 +19,11 @@
 &hdmi_core {
 	status = "okay";
 };
+
+&ldb {
+	status = "okay";
+
+	lvds-channel@0 {
+		status = "okay";
+	};
+};
