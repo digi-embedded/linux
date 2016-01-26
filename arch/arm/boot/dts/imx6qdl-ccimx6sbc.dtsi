@@ -198,8 +198,6 @@
 };
 
 &ldb {
-	status = "okay";
-
 	lvds-channel@0 {
 		fsl,data-mapping = "spwg";
 		fsl,data-width = <18>;

@@ -63,13 +63,11 @@
 &ldb {
 	lvds-channel@0 {
 		crtc = "ipu1-di0";
-		status = "okay";
 		primary;
 	};
 
 	lvds-channel@1 {
 		crtc = "ipu1-di1";
-		status = "disabled";
 	};
 };
 
