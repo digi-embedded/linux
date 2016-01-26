@@ -31,7 +31,6 @@
 		default_bpp = <32>;
 		int_clk = <0>;
 		late_init = <0>;
-		status = "okay";
 	};
 
 	mxcfb4: fb@3 {
@@ -41,7 +40,6 @@
 		default_bpp = <16>;
 		int_clk = <0>;
 		late_init = <0>;
-		status = "okay";
 	};
 
 	v4l2_cap_0 {
