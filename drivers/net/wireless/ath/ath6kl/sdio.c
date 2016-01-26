@@ -803,7 +803,7 @@ static int ath6kl_sdio_config(struct ath6kl *ar)
 	}
 
 	/* give us some time to enable, in ms */
-	func->enable_timeout = 100;
+	func->enable_timeout = 200;
 
 	ret = sdio_set_block_size(func, HIF_MBOX_BLOCK_SIZE);
 	if (ret) {
