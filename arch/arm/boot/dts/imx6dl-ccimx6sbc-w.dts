@@ -38,3 +38,11 @@
 &audmux {
 	status = "okay";
 };
+
+&ecspi1 {
+	status = "okay";
+
+	spidev@0 {
+		status = "okay";
+	};
+};
