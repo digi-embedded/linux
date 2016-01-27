@@ -15,6 +15,10 @@
 /* ConnectCore 6 SBC carrier board */
 #include "imx6q-ccimx6sbc.dtsi"
 
+&fec {
+	status = "okay";
+};
+
 &hdmi_core {
 	status = "okay";
 };
