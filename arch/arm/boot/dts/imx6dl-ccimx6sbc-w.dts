@@ -34,3 +34,7 @@
 &mxcfb2 {
 	status = "okay";
 };
+
+&audmux {
+	status = "okay";
+};

@@ -46,3 +46,7 @@
 &sata {
 	status = "okay";
 };
+
+&audmux {
+	status = "okay";
+};
