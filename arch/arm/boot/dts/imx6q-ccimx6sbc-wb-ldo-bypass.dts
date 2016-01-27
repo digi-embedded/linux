@@ -60,6 +60,10 @@
 	};
 };
 
+&fec {
+	status = "okay";
+};
+
 &hdmi_core {
 	status = "okay";
 };

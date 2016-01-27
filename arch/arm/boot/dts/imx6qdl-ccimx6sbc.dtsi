@@ -163,7 +163,6 @@
 	phy-reset-duration = <10>;
 	phy-reset-wait = <1>;
 	phy-supply = <&ldo4>;
-	status = "okay";
 };
 
 &gpc {
