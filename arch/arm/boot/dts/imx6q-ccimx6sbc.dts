@@ -82,3 +82,7 @@
 &mipi_csi {
 	status = "okay";
 };
+
+&mipi_dsi {
+	status = "okay";
+};
