@@ -843,7 +843,6 @@
 	 * Remove this property when booting from emmc to allow card
 	 * detection to work. */
 	non-removable;
-	status = "okay";
 };
 
 &flexcan1 {
