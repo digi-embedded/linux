@@ -173,6 +173,7 @@ dtb-$(CONFIG_ARCH_MXC) += \
 	imx6q-phytec-pbab01.dtb \
 	imx6q-ccimx6sbc.dtb \
 	imx6q-ccimx6sbc-id129.dtb \
+	imx6q-ccimx6sbc-id130.dtb \
 	imx6q-ccimx6sbc-w.dtb \
 	imx6q-ccimx6sbc-wb.dtb \
 	imx6q-ccimx6sbc-wb-ldo-bypass.dtb \
