@@ -10,9 +10,9 @@
  */
 
 /dts-v1/;
-/* ConnectCore 6 (Quad wireless variant) */
+/* ConnectCore 6 (Quad/Dual wireless variant) */
 #include "imx6q-ccimx6-w.dtsi"
-/* ConnectCore 6 SBC carrier board */
+/* ConnectCore 6 Quad/Dual SBC carrier board */
 #include "imx6q-ccimx6sbc.dtsi"
 
 &fec {
