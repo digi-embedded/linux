@@ -1,0 +1,148 @@
+/*
+ * Copyright 2016 Digi International, Inc.
+ *
+ * The code contained herein is licensed under the GNU General Public
+ * License. You may obtain a copy of the GNU General Public License
+ * Version 2 or later at the following locations:
+ *
+ * http://www.opensource.org/licenses/gpl-license.html
+ * http://www.gnu.org/copyleft/gpl.html
+ */
+
+/dts-v1/;
+/* ConnectCore 6 (Quad/Dual wireless/bluetooth variant) */
+#include "imx6q-ccimx6-wb.dtsi"
+/* ConnectCore 6 Quad/Dual SBC carrier board */
+#include "imx6q-ccimx6sbc.dtsi"
+
+&fec {
+	status = "okay";
+};
+
+&hdmi_core {
+	status = "okay";
+};
+
+&hdmi_video {
+	status = "okay";
+};
+
+&hdmi_audio {
+	status = "okay";
+};
+
+&ldb {
+	status = "okay";
+
+	lvds-channel@0 {
+		status = "okay";
+	};
+};
+
+&mxcfb1 {
+	status = "okay";
+};
+
+&mxcfb2 {
+	status = "okay";
+};
+
+&mxcfb3 {
+	status = "okay";
+};
+
+&mxcfb4 {
+	status = "okay";
+};
+
+&sata {
+	status = "okay";
+};
+
+&audmux {
+	status = "okay";
+};
+
+&ecspi1 {
+	status = "okay";
+
+	spidev@0 {
+		status = "okay";
+	};
+};
+
+&i2c3 {
+	status = "okay";
+
+	fusion@10 {
+		status = "okay";
+	};
+};
+
+&mipi_csi {
+	status = "okay";
+};
+
+&mipi_dsi {
+	status = "okay";
+};
+
+&pcie {
+	status = "okay";
+};
+
+&ssi2 {
+	status = "okay";
+};
+
+&uart1 {
+	status = "okay";
+};
+
+&uart2 {
+	status = "okay";
+};
+
+&uart3 {
+	status = "okay";
+};
+
+&uart4 {
+	status = "okay";
+};
+
+&uart5 {
+	status = "okay";
+};
+
+&usbh1 {
+	status = "okay";
+};
+
+&usbotg {
+	status = "okay";
+};
+
+&usdhc2 {
+	status = "okay";
+};
+
+&flexcan1 {
+	status = "okay";
+};
+
+&flexcan2 {
+	status = "okay";
+};
+
+&v4l2_cap_0 {
+	status = "okay";
+};
+
+&v4l2_cap_1 {
+	status = "okay";
+};
+
+&v4l2_out {
+	status = "okay";
+};
