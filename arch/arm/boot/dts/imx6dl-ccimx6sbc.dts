@@ -115,3 +115,11 @@
 &usdhc2 {
 	status = "okay";
 };
+
+&flexcan1 {
+	status = "okay";
+};
+
+&flexcan2 {
+	status = "okay";
+};
