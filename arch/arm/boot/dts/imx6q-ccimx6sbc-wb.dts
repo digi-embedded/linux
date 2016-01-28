@@ -86,3 +86,7 @@
 &mipi_dsi {
 	status = "okay";
 };
+
+&pcie {
+	status = "okay";
+};
