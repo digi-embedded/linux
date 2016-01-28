@@ -821,7 +821,6 @@
 
 &usbh1 {
 	fsl,reset-gpio = <&gpio3 10 0>;
-	status = "okay";
 };
 
 &usbotg {
@@ -829,7 +828,6 @@
 	pinctrl-0 = <&pinctrl_usbotg>;
 	fsl,power-line-polarity-active-high;
 	fsl,over-current-polarity-active-low;
-	status = "okay";
 };
 
 &usdhc2 {
