@@ -111,3 +111,7 @@
 &usbotg {
 	status = "okay";
 };
+
+&usdhc2 {
+	status = "okay";
+};
