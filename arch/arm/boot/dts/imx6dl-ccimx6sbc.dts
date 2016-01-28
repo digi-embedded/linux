@@ -67,3 +67,7 @@
 		status = "okay";
 	};
 };
+
+&mipi_csi {
+	status = "okay";
+};
