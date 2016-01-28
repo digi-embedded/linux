@@ -175,20 +175,14 @@
 	pu-supply = <&reg_pu>;
 };
 
-&hdmi_audio {
-	status = "okay";
-};
-
 &hdmi_cec {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_hdmi_cec>;
-	status = "disabled";
 };
 
 &hdmi_video {
 	fsl,phy_reg_vlev = <0x0294>;
 	fsl,phy_reg_cksymtx = <0x800d>;
-	status = "okay";
 };
 
 &ldb {
