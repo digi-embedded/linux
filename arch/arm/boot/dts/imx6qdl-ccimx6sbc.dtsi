@@ -96,21 +96,18 @@
 		};
 	};
 
-	v4l2_cap_0 {
+	v4l2_cap_0: v4l2-cap@0 {
 		compatible = "fsl,imx6q-v4l2-capture";
 		mclk_source = <0>;
-		status = "okay";
 	};
 
-	v4l2_cap_1 {
+	v4l2_cap_1: v4l2-cap@1 {
 		compatible = "fsl,imx6q-v4l2-capture";
 		mclk_source = <0>;
-		status = "okay";
 	};
 
-	v4l2_out {
+	v4l2_out: v4l2-out {
 		compatible = "fsl,mxc_v4l2_output";
-		status = "okay";
 	};
 
 	mipi_dsi_reset: mipi-dsi-reset {

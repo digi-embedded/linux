@@ -134,3 +134,15 @@
 &flexcan2 {
 	status = "okay";
 };
+
+&v4l2_cap_0 {
+	status = "okay";
+};
+
+&v4l2_cap_1 {
+	status = "okay";
+};
+
+&v4l2_out {
+	status = "okay";
+};
