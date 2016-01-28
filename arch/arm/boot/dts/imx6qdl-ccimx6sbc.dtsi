@@ -251,7 +251,6 @@
 	clock-frequency = <100000>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_i2c3>;
-	status = "okay";
 
 	hdmi: edid@50 {
 		compatible = "fsl,imx6-hdmi-i2c";
@@ -286,7 +285,6 @@
 		/* Interrupt for LVDS1 */
 		//interrupt-parent = <&gpio3>;
 		//interrupts = <23 1>;
-		status = "okay";
 	};
 
 	sgtl5000: codec@0a {

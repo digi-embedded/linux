@@ -58,3 +58,11 @@
 		status = "okay";
 	};
 };
+
+&i2c3 {
+	status = "okay";
+
+	fusion@10 {
+		status = "okay";
+	};
+};
