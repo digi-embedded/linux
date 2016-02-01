@@ -329,12 +329,9 @@
 		compatible = "ovti,ov564x";
 		reg = <0x6c>;
 		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_ipu2>;
 		clocks = <&clks 201>;
 		clock-names = "csi_mclk";
 		pwn-gpios = <&gpio3 15 1>;
-		csi_id = <1>;
-		ipu_id = <1>;
 		mclk = <24000000>;
 		mclk_source = <0>;
 		digi,defer-probe;
