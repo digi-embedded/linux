@@ -84,6 +84,10 @@
 	status = "okay";
 };
 
+&codec_power {
+	status = "okay";
+};
+
 &ldb {
 	status = "okay";
 

@@ -133,6 +133,7 @@
 		vin-supply = <&bperi>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_aud_pwr_en>;
+		status = "disabled";
 	};
 };
 
