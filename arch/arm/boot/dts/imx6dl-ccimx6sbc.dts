@@ -32,6 +32,14 @@
 	status = "okay";
 };
 
+&sound_hdmi {
+	status = "okay";
+};
+
+&sound_sgtl5000 {
+	status = "okay";
+};
+
 &ldb {
 	status = "okay";
 
