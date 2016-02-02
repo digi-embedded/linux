@@ -252,6 +252,7 @@
 	hdmi: edid@50 {
 		compatible = "fsl,imx6-hdmi-i2c";
 		reg = <0x50>;
+		status = "disabled";
 	};
 
 	hdmi_ad9389: ad9889b@39 {
@@ -260,7 +261,7 @@
 		pinctrl-names = "default";
 		interrupt-parent = <&gpio2>;
 		interrupts = <1 GPIO_ACTIVE_HIGH>;
-		ad,edid_addr = <0x3f>; 
+		ad,edid_addr = <0x3f>;
 		display = <&ad9389_1920x1080>;
 		clocks = <&clks 131>, <&clks 132>,
 			 <&clks 134>, <&clks 137>,
@@ -282,6 +283,7 @@
 		/* Interrupt for LVDS1 */
 		//interrupt-parent = <&gpio3>;
 		//interrupts = <23 1>;
+		status = "disabled";
 	};
 
 	sgtl5000: codec@0a {
@@ -291,6 +293,7 @@
 		clocks = <&clks 201>;
 		VDDA-supply = <&codec_power>;
 		VDDIO-supply = <&codec_power>;
+		status = "disabled";
 	};
 
 	/* MIPI-CSI2 camera */
@@ -305,6 +308,7 @@
 				      &gpio3 15 1>;
 		mclk = <24000000>;
 		mclk_source = <0>;
+		status = "disabled";
 	};
 
 	/* Primary parallel camera */
@@ -321,10 +325,10 @@
 		mclk = <24000000>;
 		mclk_source = <0>;
 		digi,defer-probe;
+		status = "disabled";
 	};
 
 	/* Secondary parallel camera */
-/*
 	ov5642_2: ov5642_2@6c {
 		compatible = "ovti,ov564x";
 		reg = <0x6c>;
@@ -335,8 +339,8 @@
 		mclk = <24000000>;
 		mclk_source = <0>;
 		digi,defer-probe;
+		status = "disabled";
 	};
-*/
 };
 
 &iomuxc {

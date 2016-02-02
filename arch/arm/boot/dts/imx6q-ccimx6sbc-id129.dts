@@ -77,6 +77,24 @@
 	fusion@10 {
 		status = "okay";
 	};
+
+	hdmi: edid@50 {
+		status = "okay";
+	};
+
+	sgtl5000: codec@0a {
+		status = "okay";
+	};
+
+	/* MIPI-CSI2 camera */
+	ov5640_mipi: ov5640_mipi@4c {
+		status = "okay";
+	};
+
+	/* Primary parallel camera */
+	ov5642_1: ov5642_1@5c {
+		status = "okay";
+	};
 };
 
 &mipi_csi {
