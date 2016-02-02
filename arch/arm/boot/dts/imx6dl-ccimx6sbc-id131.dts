@@ -49,6 +49,10 @@
 
 &i2c3 {
 	status = "okay";
+
+	hdmi: edid@50 {
+		status = "okay";
+	};
 };
 
 &uart1 {

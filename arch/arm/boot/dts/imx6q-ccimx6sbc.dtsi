@@ -71,13 +71,11 @@
 		disp_id = <0>;
 	};
 
-/*
 	ov5642_2: ov5642_2@6c {
 		pinctrl-0 = <&pinctrl_ipu2_2>;
 		csi_id = <1>;
 		ipu_id = <1>;
 	};
-*/
 };
 
 &mipi_csi {
