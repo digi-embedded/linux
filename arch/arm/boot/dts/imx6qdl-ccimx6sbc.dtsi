@@ -115,6 +115,7 @@
 		reset-gpios = <&gpio6 11 GPIO_ACTIVE_LOW>;
 		reset-delay-us = <50>;
 		#reset-cells = <0>;
+		status = "disabled";
 	};
 
 	/* SGTL5000 codec is powered by 3V3 BUCK_PERI, but controlled
