@@ -81,7 +81,6 @@
 		};
 	};
 
-
 	ad9389_1920x1080: HDMI_1920_1080@0 {
 		display-timings {
 			timing {
@@ -101,15 +100,18 @@
 	v4l2_cap_0: v4l2-cap@0 {
 		compatible = "fsl,imx6q-v4l2-capture";
 		mclk_source = <0>;
+		status = "disabled";
 	};
 
 	v4l2_cap_1: v4l2-cap@1 {
 		compatible = "fsl,imx6q-v4l2-capture";
 		mclk_source = <0>;
+		status = "disabled";
 	};
 
 	v4l2_out: v4l2-out {
 		compatible = "fsl,mxc_v4l2_output";
+		status = "disabled";
 	};
 
 	mipi_dsi_reset: mipi-dsi-reset {
@@ -152,6 +154,7 @@
 		compatible = "spidev";
 		reg = <0>;
 		spi-max-frequency = <4000000>;
+		status = "disabled";
 	};
 };
 
