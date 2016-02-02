@@ -87,7 +87,7 @@
 		status = "okay";
 	};
 
-	/* Secondary parallel camera */
+	/* Parallel camera CSI1 */
 	ov5642_2: ov5642_2@6c {
 		status = "okay";
 	};
