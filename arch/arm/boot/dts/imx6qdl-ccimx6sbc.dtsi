@@ -22,7 +22,7 @@
 		regulator-max-microvolt = <5000000>;
 	};
 
-	sound {
+	sound_sgtl5000: sound-sgtl5000 {
 		compatible = "fsl,imx-audio-sgtl5000";
 		model = "sgtl5000-audio";
 		cpu-dai = <&ssi2>;
@@ -35,13 +35,15 @@
 		mux-ext-port = <3>;
 		hp-det-gpios = <&gpio2 0 0>;
 		hp-det-debounce = <250>;
+		status = "disabled";
 	};
 
-	sound-hdmi {
+	sound_hdmi: sound-hdmi {
 		compatible = "fsl,imx6q-audio-hdmi",
 			     "fsl,imx-audio-hdmi";
 		model = "imx-audio-hdmi";
 		hdmi-controller = <&hdmi_audio>;
+		status = "disabled";
 	};
 
 	mxcfb1: fb@0 {

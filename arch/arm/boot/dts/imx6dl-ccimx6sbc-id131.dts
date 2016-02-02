@@ -31,6 +31,10 @@
 	status = "okay";
 };
 
+&sound_hdmi {
+	status = "okay";
+};
+
 &ldb {
 	status = "okay";
 
