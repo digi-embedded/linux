@@ -26,6 +26,7 @@
 #include <linux/input.h>
 #include <linux/interrupt.h>
 #include <linux/platform_device.h>
+#include <linux/spinlock.h>
 #include <linux/workqueue.h>
 
 #include <linux/mfd/da9063/core.h>
@@ -40,7 +41,10 @@ struct da9063_onkey {
 	struct	input_dev *input;
 	int irq;
 	bool key_power;
+	bool suspended;
 };
+
+static DEFINE_SPINLOCK(lock);
 
 static void da9063_poll_on(struct work_struct *work)
 {
@@ -100,6 +104,11 @@ static irqreturn_t da9063_onkey_irq_handler(int irq, void *data)
 		dev_err(&onkey->input->dev, "Failed to read status: %d\n", ret);
 		goto out;
 	}
+	
+	/* do not report input keys if the system is suspended */
+	if (onkey->suspended)
+		goto out;
+
 	/* only report POWER if the key_power option is supported by driver */
 	if (onkey->key_power && (val >= 0) && (val & DA9063_NONKEY))
 	{
@@ -217,6 +226,32 @@ static int da9063_onkey_remove(struct platform_device *pdev)
 	return 0;
 }
 
+#ifdef CONFIG_PM
+static int da9063_onkey_resume(struct platform_device *pdev)
+{
+	struct da9063_onkey *onkey = platform_get_drvdata(pdev);
+	unsigned long flags;
+
+	spin_lock_irqsave(&lock, flags);	
+	onkey->suspended = false;
+	spin_unlock_irqrestore(&lock, flags);
+
+	return 0;
+}
+
+static int da9063_onkey_suspend(struct platform_device *pdev, pm_message_t state) 
+{
+	struct da9063_onkey *onkey = platform_get_drvdata(pdev);
+	unsigned long flags;
+
+	spin_lock_irqsave(&lock, flags);
+	onkey->suspended = true;
+	spin_unlock_irqrestore(&lock, flags);
+
+	return 0;
+}
+#endif
+
 #ifdef CONFIG_OF
 static const struct of_device_id dialog_dt_ids[] = {
         { .compatible = "dlg,da9063-onkey", },
@@ -228,6 +263,10 @@ MODULE_DEVICE_TABLE(of, dialog_dt_ids);
 static struct platform_driver da9063_onkey_driver = {
 	.probe	= da9063_onkey_probe,
 	.remove	= da9063_onkey_remove,
+#ifdef CONFIG_PM
+	.resume = da9063_onkey_resume,
+	.suspend = da9063_onkey_suspend,
+#endif
 	.driver	= {
 		.name	= DA9063_DRVNAME_ONKEY,
 		.owner	= THIS_MODULE,
