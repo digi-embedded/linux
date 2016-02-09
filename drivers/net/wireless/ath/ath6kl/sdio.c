@@ -518,7 +518,7 @@ static int ath6kl_sdio_power_on(struct ath6kl *ar)
 	if (ret) {
 		ath6kl_err("Unable to enable sdio func: %d)\n", ret);
 		sdio_release_host(func);
-		return ret;
+		return (ret == -ETIME) ? -EPROBE_DEFER : ret;
 	}
 
 	sdio_release_host(func);
