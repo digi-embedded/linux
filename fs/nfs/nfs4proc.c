@@ -2966,7 +2966,7 @@ int nfs4_proc_get_rootfh(struct nfs_server *server, struct nfs_fh *fhandle,
 {
 	int status;
 
-	switch (auth_probe) {
+	switch ((unsigned short)auth_probe) {
 	case false:
 		status = nfs4_lookup_root(server, fhandle, info);
 		if (status != -NFS4ERR_WRONGSEC)
