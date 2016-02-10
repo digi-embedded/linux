@@ -66,7 +66,6 @@ static int hpjack_status_check(void)
 	struct imx_priv *priv = &card_priv;
 	struct platform_device *pdev = priv->pdev;
 	char *envp[3], *buf;
-	struct snd_soc_codec *codec = priv->codec;
 	int hp_status, ret;
 
 	hp_status = gpio_get_value(priv->hp_gpio);
