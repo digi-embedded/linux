@@ -1392,7 +1392,8 @@ void ath6kl_rx(struct htc_target *target, struct htc_packet *packet)
 	if (vif->nw_type != AP_NETWORK &&
 	    ((packet->act_len < min_hdr_len) ||
 	     (packet->act_len > WMI_MAX_AMSDU_RX_DATA_FRAME_LENGTH))) {
-		ath6kl_info("frame len is too short or too long\n");
+		ath6kl_dbg(ATH6KL_DBG_WLAN_RX,
+			   "frame len is too short or too long\n");
 		vif->net_stats.rx_errors++;
 		vif->net_stats.rx_length_errors++;
 		dev_kfree_skb(skb);
