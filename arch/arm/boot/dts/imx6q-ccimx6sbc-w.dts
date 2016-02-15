@@ -10,6 +10,8 @@
  */
 
 /dts-v1/;
+/* i.MX6 Quad/Dual CPU */
+#include "imx6q.dtsi"
 /* ConnectCore 6 (Quad/Dual wireless variant) */
 #include "imx6q-ccimx6-w.dtsi"
 /* ConnectCore 6 Quad/Dual SBC carrier board */
