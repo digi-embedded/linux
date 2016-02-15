@@ -9,7 +9,7 @@
  * http://www.gnu.org/copyleft/gpl.html
  */
 
-#include "imx6q.dtsi"
+/* ConnectCore 6 (common) */
 #include "imx6qdl-ccimx6.dtsi"
 
 / {
