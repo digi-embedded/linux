@@ -831,10 +831,6 @@
 	no-1-8-v;
 	keep-power-in-suspend;
 	enable-sdio-wakeup;
-	/* Allows suspend/resume to work when using the sdcard as rootfs.
-	 * Remove this property when booting from emmc to allow card
-	 * detection to work. */
-	non-removable;
 };
 
 &flexcan1 {
