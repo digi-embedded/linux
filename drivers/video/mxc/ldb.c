@@ -89,6 +89,7 @@ struct ldb_chan {
 	int chno;
 	bool is_used;
 	bool online;
+	struct notifier_block nb;
 };
 
 struct ldb_data {
@@ -108,7 +109,6 @@ struct ldb_data {
 	struct clk *div_3_5_clk[2];
 	struct clk *div_7_clk[2];
 	struct clk *div_sel_clk[2];
-	struct notifier_block nb;
 };
 
 static const struct crtc_mux imx6q_lvds0_crtc_mux[] = {
@@ -288,13 +288,12 @@ MODULE_DEVICE_TABLE(of, ldb_dt_ids);
 
 static int ldb_fb_event(struct notifier_block *nb, unsigned long val, void *v)
 {
-	struct fb_event *event = v;
-	struct fb_info *fbi = event->info;
+	struct ldb_chan *chan = container_of(nb, struct ldb_chan, nb);
 
 	switch (val) {
 	case FB_EVENT_FB_REGISTERED:
 #if defined(CONFIG_LOGO)
-		fb_show_logo(fbi, 0);
+		fb_show_logo(chan->fbi, 0);
 #endif
 		break;
 
@@ -340,8 +339,8 @@ static int ldb_init(struct mxc_dispdrv_handle *mddh,
 
 	setting->crtc = chan->crtc;
 
-	ldb->nb.notifier_call = ldb_fb_event;
-	fb_register_client(&ldb->nb);
+	chan->nb.notifier_call = ldb_fb_event;
+	fb_register_client(&chan->nb);
 
 	return 0;
 }
@@ -549,6 +548,7 @@ static int ldb_enable(struct mxc_dispdrv_handle *mddh,
 	}
 
 	regmap_write(ldb->regmap, ldb->ctrl_reg, ldb->ctrl);
+
 	return 0;
 }
 
