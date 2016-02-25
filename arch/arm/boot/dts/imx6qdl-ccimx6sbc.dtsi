@@ -54,6 +54,7 @@
 		default_bpp = <16>;
 		int_clk = <0>;
 		late_init = <0>;
+		status = "disabled";
 	};
 
 	mxcfb2: fb@1 {
@@ -63,6 +64,7 @@
 		default_bpp = <16>;
 		int_clk = <0>;
 		late_init = <0>;
+		status = "disabled";
 	};
 
 	lq070y3dg3b: LQ70Y3DG3B@0 {
