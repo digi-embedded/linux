@@ -761,8 +761,6 @@
 };
 
 &mipi_dsi {
-	dev_id = <0>;
-	disp_id = <0>;
 	lcd_panel = "TRULY-WVGA";
 	resets = <&mipi_dsi_reset>;
 };
