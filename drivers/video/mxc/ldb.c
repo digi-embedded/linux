@@ -90,6 +90,7 @@ struct ldb_chan {
 	int chno;
 	bool is_used;
 	bool online;
+	struct notifier_block nb;
 };
 
 struct ldb_data {
@@ -302,6 +303,23 @@ static const struct of_device_id ldb_dt_ids[] = {
 };
 MODULE_DEVICE_TABLE(of, ldb_dt_ids);
 
+static int ldb_fb_event(struct notifier_block *nb, unsigned long val, void *v)
+{
+	struct ldb_chan *chan = container_of(nb, struct ldb_chan, nb);
+
+	switch (val) {
+	case FB_EVENT_FB_REGISTERED:
+#if defined(CONFIG_LOGO)
+		fb_show_logo(chan->fbi, 0);
+#endif
+		break;
+
+	default:
+		break;
+	}
+	return 0;
+}
+
 static int ldb_init(struct mxc_dispdrv_handle *mddh,
 		    struct mxc_dispdrv_setting *setting)
 {
@@ -337,6 +355,9 @@ static int ldb_init(struct mxc_dispdrv_handle *mddh,
 	fb_videomode_to_var(&fbi->var, &fb_vm);
 
 	setting->crtc = chan->crtc;
+
+	chan->nb.notifier_call = ldb_fb_event;
+	fb_register_client(&chan->nb);
 
 	return 0;
 }
