@@ -33,6 +33,15 @@
 		crtc = "ipu1-di0";
 		primary;
 	};
+
+	lvds-channel@1 {
+		crtc = "ipu1-di1";
+	};
+};
+
+&mipi_dsi {
+	dev_id = <0>;
+	disp_id = <0>;
 };
 
 &i2c3 {
