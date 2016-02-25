@@ -96,6 +96,9 @@
 	lvds-channel@0 {
 		status = "okay";
 	};
+	lvds-channel@1 {
+		status = "okay";
+	};
 };
 
 &mxcfb1 {
