@@ -9,7 +9,7 @@ Vivante GPU2d/3d on Freescale i.MX6
              Documentation/devicetree/bindings/reset/ for details.
 
  Optional properties:
-  - contiguous-size: Percentage of total system memory to allocate as
+  - contiguous-size-percentage: Percentage of total system memory to allocate as
     contiguous memory area. This needs to be less than the configured CMA size.
 
  Example:
@@ -26,6 +26,6 @@ Vivante GPU2d/3d on Freescale i.MX6
 		clock-names = "gpu2d_axi_clk", "openvg_axi_clk", "gpu2d_clk";
 		resets = <&src 3>, <&src 3>;
 		reset-names = "gpu2d", "gpuvg";
-		contiguous-size = <12>;
+		contiguous-size-percentage = <12>;
 	}
 

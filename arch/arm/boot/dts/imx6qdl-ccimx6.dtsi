@@ -150,7 +150,7 @@
 };
 
 &gpu {
-	contiguous-size = <12>;
+	contiguous-size-percentage = <12>;
 };
 
 &iomuxc {
