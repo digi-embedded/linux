@@ -47,6 +47,8 @@ struct cma *dma_contiguous_default_area;
 #define CMA_SIZE_MBYTES 0
 #endif
 
+#define MAX_CMA_SIZE (416 * SZ_1M)
+
 /*
  * Default global CMA area size can be defined in kernel's .config.
  * This is useful mainly for distro maintainers to create a kernel
@@ -127,6 +129,16 @@ void __init dma_contiguous_reserve(phys_addr_t limit)
 	if (selected_size && !dma_contiguous_default_area) {
 		pr_debug("%s: reserving %ld MiB for global area\n", __func__,
 			 (unsigned long)selected_size / SZ_1M);
+
+#ifdef CONFIG_CMA_SIZE_SEL_PERCENTAGE
+		if (selected_size > MAX_CMA_SIZE) {
+			pr_warn("requested %ld MiB, using maximum of %ld MiB 
+ 				instead", 
+				(unsigned long) selected_size / SZ_1M,
+				(unsigned long) MAX_CMA_SIZE / SZ_1M);
+			selected_size = MAX_CMA_SIZE;
+		}
+#endif
 
 		dma_contiguous_reserve_area(selected_size, 0, limit,
 					    &dma_contiguous_default_area);
