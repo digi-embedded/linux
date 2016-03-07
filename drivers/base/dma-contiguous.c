@@ -132,8 +132,7 @@ void __init dma_contiguous_reserve(phys_addr_t limit)
 
 #ifdef CONFIG_CMA_SIZE_SEL_PERCENTAGE
 		if (selected_size > MAX_CMA_SIZE) {
-			pr_warn("requested %ld MiB, using maximum of %ld MiB 
- 				instead", 
+			pr_warn("requested %ld MiB, using maximum of %ld MiB instead", 
 				(unsigned long) selected_size / SZ_1M,
 				(unsigned long) MAX_CMA_SIZE / SZ_1M);
 			selected_size = MAX_CMA_SIZE;
