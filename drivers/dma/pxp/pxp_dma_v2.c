@@ -21,7 +21,7 @@
  * Copyright 2008-2009 Embedded Alley Solutions, Inc All Rights Reserved.
  */
 
-#include <linux/busfreq-imx6.h>
+#include <linux/busfreq-imx.h>
 #include <linux/clk.h>
 #include <linux/dma-mapping.h>
 #include <linux/dmaengine.h>
@@ -222,6 +222,7 @@ static bool is_yuv(u32 pix_fmt)
 	    (pix_fmt == PXP_PIX_FMT_Y41P) |
 	    (pix_fmt == PXP_PIX_FMT_VUY444) |
 	    (pix_fmt == PXP_PIX_FMT_NV12) |
+	    (pix_fmt == PXP_PIX_FMT_NV21) |
 	    (pix_fmt == PXP_PIX_FMT_NV16) |
 	    (pix_fmt == PXP_PIX_FMT_NV61) |
 	    (pix_fmt == PXP_PIX_FMT_GREY) |
@@ -406,6 +407,18 @@ static void pxp_set_outbuf(struct pxps *pxp)
 
 	__raw_writel(out_params->paddr, pxp->base + HW_PXP_OUT_BUF);
 
+	if ((out_params->pixel_fmt == PXP_PIX_FMT_NV12) ||
+		(out_params->pixel_fmt == PXP_PIX_FMT_NV21) ||
+		(out_params->pixel_fmt == PXP_PIX_FMT_NV16) ||
+		(out_params->pixel_fmt == PXP_PIX_FMT_NV61)) {
+		dma_addr_t Y, U;
+
+		Y = out_params->paddr;
+		U = Y + (out_params->width * out_params->height);
+
+		__raw_writel(U, pxp->base + HW_PXP_OUT_BUF2);
+	}
+
 	if (proc_data->rotate == 90 || proc_data->rotate == 270)
 		__raw_writel(BF_PXP_OUT_LRC_X(out_params->height - 1) |
 				BF_PXP_OUT_LRC_Y(out_params->width - 1),
@@ -422,7 +435,8 @@ static void pxp_set_outbuf(struct pxps *pxp)
 		out_params->pixel_fmt == PXP_PIX_FMT_RGB32) {
 		__raw_writel(out_params->stride << 2,
 				pxp->base + HW_PXP_OUT_PITCH);
-	} else if (out_params->pixel_fmt == PXP_PIX_FMT_RGB565) {
+	} else if ((out_params->pixel_fmt == PXP_PIX_FMT_RGB565) ||
+		   (out_params->pixel_fmt == PXP_PIX_FMT_RGB555)) {
 		__raw_writel(out_params->stride << 1,
 				pxp->base + HW_PXP_OUT_PITCH);
 	} else if (out_params->pixel_fmt == PXP_PIX_FMT_UYVY ||
@@ -509,11 +523,12 @@ static void pxp_set_oln(int layer_no, struct pxps *pxp)
 				pxp->base + HW_PXP_OUT_AS_LRC);
 	}
 
-	if ((olparams_data->pixel_fmt == PXP_PIX_FMT_BGRA32) |
+	if ((olparams_data->pixel_fmt == PXP_PIX_FMT_BGRA32) ||
 		 (olparams_data->pixel_fmt == PXP_PIX_FMT_RGB32)) {
 		__raw_writel(pitch << 2,
 				pxp->base + HW_PXP_AS_PITCH);
-	} else if (olparams_data->pixel_fmt == PXP_PIX_FMT_RGB565) {
+	} else if ((olparams_data->pixel_fmt == PXP_PIX_FMT_RGB565) ||
+		   (olparams_data->pixel_fmt == PXP_PIX_FMT_RGB555)) {
 		__raw_writel(pitch << 1,
 				pxp->base + HW_PXP_AS_PITCH);
 	} else {
@@ -543,7 +558,11 @@ static void pxp_set_olparam(int layer_no, struct pxps *pxp)
 	} else if (olparams_data->pixel_fmt == PXP_PIX_FMT_RGB565) {
 		olparam |=
 		    BF_PXP_AS_CTRL_FORMAT(BV_PXP_AS_CTRL_FORMAT__RGB565);
+	} else if (olparams_data->pixel_fmt == PXP_PIX_FMT_RGB555) {
+		olparam |=
+		    BF_PXP_AS_CTRL_FORMAT(BV_PXP_AS_CTRL_FORMAT__RGB555);
 	}
+
 	if (olparams_data->global_alpha_enable) {
 		if (olparams_data->global_override) {
 			olparam |=
@@ -638,6 +657,7 @@ static int pxp_set_scaling(struct pxps *pxp)
 	struct pxp_proc_data *proc_data = &pxp->pxp_conf_state.proc_data;
 	struct pxp_config_data *pxp_conf = &pxp->pxp_conf_state;
 	struct pxp_layer_param *s0_params = &pxp_conf->s0_param;
+	struct pxp_layer_param *out_params = &pxp_conf->out_param;
 
 	proc_data->scaling = 1;
 	decx = proc_data->srect.width / proc_data->drect.width;
@@ -657,6 +677,8 @@ static int pxp_set_scaling(struct pxps *pxp)
 			 (proc_data->drect.width * decx);
 	} else {
 		if (!is_yuv(s0_params->pixel_fmt) ||
+		    (is_yuv(s0_params->pixel_fmt) ==
+		     is_yuv(out_params->pixel_fmt)) ||
 		    (s0_params->pixel_fmt == PXP_PIX_FMT_GREY) ||
 		    (s0_params->pixel_fmt == PXP_PIX_FMT_GY04) ||
 		    (s0_params->pixel_fmt == PXP_PIX_FMT_VUY444)) {
@@ -949,7 +971,8 @@ static void pxp_set_s0buf(struct pxps *pxp)
 
 	Y = s0_params->paddr;
 
-	if (s0_params->pixel_fmt == PXP_PIX_FMT_RGB565)
+	if ((s0_params->pixel_fmt == PXP_PIX_FMT_RGB565) ||
+		(s0_params->pixel_fmt == PXP_PIX_FMT_RGB555))
 		bpp = 2;
 	else if (s0_params->pixel_fmt == PXP_PIX_FMT_RGB32)
 		bpp = 4;
@@ -1021,7 +1044,8 @@ static void pxp_set_s0buf(struct pxps *pxp)
 		 s0_params->pixel_fmt == PXP_PIX_FMT_YVYU)
 		__raw_writel(pitch << 1,
 				pxp->base + HW_PXP_PS_PITCH);
-	else if (s0_params->pixel_fmt == PXP_PIX_FMT_RGB565)
+	else if ((s0_params->pixel_fmt == PXP_PIX_FMT_RGB565) ||
+		 (s0_params->pixel_fmt == PXP_PIX_FMT_RGB555))
 		__raw_writel(pitch << 1,
 				pxp->base + HW_PXP_PS_PITCH);
 	else
@@ -1295,6 +1319,7 @@ static irqreturn_t pxp_irq(int irq, void *dev_id)
 
 	if (list_empty(&head)) {
 		pxp->pxp_ongoing = 0;
+		pxp->lut_state = 0;
 		spin_unlock_irqrestore(&pxp->lock, flags);
 		return IRQ_NONE;
 	}
@@ -1325,6 +1350,7 @@ static irqreturn_t pxp_irq(int irq, void *dev_id)
 
 	complete(&pxp->complete);
 	pxp->pxp_ongoing = 0;
+	pxp->lut_state = 0;
 	mod_timer(&pxp->clk_timer, jiffies + msecs_to_jiffies(timeout_in_ms));
 
 	spin_unlock_irqrestore(&pxp->lock, flags);

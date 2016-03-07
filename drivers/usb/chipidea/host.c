@@ -26,6 +26,7 @@
 #include <linux/usb/chipidea.h>
 #include <linux/regulator/consumer.h>
 #include <linux/imx_gpc.h>
+#include <linux/platform_device.h>
 
 #include "../host/ehci.h"
 
@@ -33,7 +34,8 @@
 #include "bits.h"
 #include "host.h"
 
-static struct hc_driver __read_mostly ci_ehci_hc_driver;
+#define MAX_CI_NUM	8
+static struct hc_driver __read_mostly ci_ehci_hc_driver[MAX_CI_NUM];
 static int (*orig_bus_suspend)(struct usb_hcd *hcd);
 static int (*orig_bus_resume)(struct usb_hcd *hcd);
 static int (*orig_hub_control)(struct usb_hcd *hcd,
@@ -120,6 +122,38 @@ static int ci_imx_ehci_bus_resume(struct usb_hcd *hcd)
 
 	return 0;
 }
+
+#ifdef CONFIG_USB_OTG
+
+static int ci_start_port_reset(struct usb_hcd *hcd, unsigned port)
+{
+	struct ehci_hcd *ehci = hcd_to_ehci(hcd);
+	u32 __iomem *reg;
+	u32 status;
+
+	if (!port)
+		return -EINVAL;
+	port--;
+	/* start port reset before HNP protocol time out */
+	reg = &ehci->regs->port_status[port];
+	status = ehci_readl(ehci, reg);
+	if (!(status & PORT_CONNECT))
+		return -ENODEV;
+
+	/* khubd will finish the reset later */
+	if (ehci_is_TDI(ehci))
+		ehci_writel(ehci, status | (PORT_RESET & ~PORT_RWC_BITS), reg);
+	else
+		ehci_writel(ehci, status | PORT_RESET, reg);
+
+	return 0;
+}
+
+#else
+
+#define ci_start_port_reset    NULL
+
+#endif
 
 /* The below code is based on tegra ehci driver */
 static int ci_imx_ehci_hub_control(
@@ -213,7 +247,10 @@ done:
 
 static irqreturn_t host_irq(struct ci_hdrc *ci)
 {
-	return usb_hcd_irq(ci->irq, ci->hcd);
+	if (ci->hcd)
+		return usb_hcd_irq(ci->irq, ci->hcd);
+	else
+		return IRQ_NONE;
 }
 
 static int host_start(struct ci_hdrc *ci)
@@ -222,11 +259,13 @@ static int host_start(struct ci_hdrc *ci)
 	struct ehci_hcd *ehci;
 	struct ehci_ci_priv *priv;
 	int ret;
+	struct platform_device *pdev = to_platform_device(ci->dev);
 
 	if (usb_disabled())
 		return -ENODEV;
 
-	hcd = usb_create_hcd(&ci_ehci_hc_driver, ci->dev, dev_name(ci->dev));
+	hcd = usb_create_hcd(&ci_ehci_hc_driver[pdev->id],
+			ci->dev, dev_name(ci->dev));
 	if (!hcd)
 		return -ENOMEM;
 
@@ -264,6 +303,13 @@ static int host_start(struct ci_hdrc *ci)
 		} else {
 			priv->reg_vbus = ci->platdata->reg_vbus;
 		}
+	}
+
+	if (ci_otg_is_fsm_mode(ci)) {
+		if (ci->fsm.id && ci->fsm.otg->state <= OTG_STATE_B_HOST)
+			hcd->self.is_b_host = 1;
+		else
+			hcd->self.is_b_host = 0;
 	}
 
 	ret = usb_add_hcd(hcd, 0, 0);
@@ -316,6 +362,8 @@ static void host_stop(struct ci_hdrc *ci)
 		if (ci->platdata->reg_vbus && !ci_otg_is_fsm_mode(ci) &&
 			(ci->platdata->flags & CI_HDRC_IMX_VBUS_EARLY_ON))
 				regulator_disable(ci->platdata->reg_vbus);
+		if (hcd->self.is_b_host)
+			hcd->self.is_b_host = 0;
 	}
 	ci->hcd = NULL;
 }
@@ -396,27 +444,27 @@ static void ci_hdrc_host_restore_from_power_lost(struct ci_hdrc *ci)
 
 static void ci_hdrc_host_suspend(struct ci_hdrc *ci)
 {
-#ifdef CONFIG_PM_RUNTIME
 	if (ci_hdrc_host_has_device(ci))
 		imx_gpc_mf_request_on(ci->irq, 1);
-#endif
 
 	ci_hdrc_host_save_for_power_lost(ci);
 }
 
 static void ci_hdrc_host_resume(struct ci_hdrc *ci, bool power_lost)
 {
-#ifdef CONFIG_PM_RUNTIME
 	imx_gpc_mf_request_on(ci->irq, 0);
-#endif
+
 	if (power_lost)
 		ci_hdrc_host_restore_from_power_lost(ci);
 }
 
 void ci_hdrc_host_destroy(struct ci_hdrc *ci)
 {
-	if (ci->role == CI_ROLE_HOST && ci->hcd)
+	if (ci->role == CI_ROLE_HOST && ci->hcd) {
+		disable_irq_nosync(ci->irq);
 		host_stop(ci);
+		enable_irq(ci->irq);
+	}
 }
 
 static int ci_ehci_bus_suspend(struct usb_hcd *hcd)
@@ -460,7 +508,8 @@ static int ci_ehci_bus_suspend(struct usb_hcd *hcd)
 			 * If a transaction is in progress, there may be a delay in
 			 * suspending the port. Poll until the port is suspended.
 			 */
-			if (ehci_handshake(ehci, reg, PORT_SUSPEND,
+			if (test_bit(port, &ehci->bus_suspended) &&
+					ehci_handshake(ehci, reg, PORT_SUSPEND,
 							PORT_SUSPEND, 5000))
 				ehci_err(ehci, "timeout waiting for SUSPEND\n");
 
@@ -487,6 +536,8 @@ static int ci_ehci_bus_suspend(struct usb_hcd *hcd)
 int ci_hdrc_host_init(struct ci_hdrc *ci)
 {
 	struct ci_role_driver *rdrv;
+	struct platform_device *pdev = to_platform_device(ci->dev);
+	struct hc_driver *ci_ehci_driver = &ci_ehci_hc_driver[pdev->id];
 
 	if (!hw_read(ci, CAP_DCCPARAMS, DCCPARAMS_HC))
 		return -ENXIO;
@@ -503,16 +554,17 @@ int ci_hdrc_host_init(struct ci_hdrc *ci)
 	rdrv->name	= "host";
 	ci->roles[CI_ROLE_HOST] = rdrv;
 
-	ehci_init_driver(&ci_ehci_hc_driver, &ehci_ci_overrides);
-	orig_bus_suspend = ci_ehci_hc_driver.bus_suspend;
-	orig_bus_resume = ci_ehci_hc_driver.bus_resume;
-	orig_hub_control = ci_ehci_hc_driver.hub_control;
+	ehci_init_driver(ci_ehci_driver, &ehci_ci_overrides);
+	orig_bus_suspend = ci_ehci_driver->bus_suspend;
+	orig_bus_resume = ci_ehci_driver->bus_resume;
+	orig_hub_control = ci_ehci_driver->hub_control;
 
-	ci_ehci_hc_driver.bus_suspend = ci_ehci_bus_suspend;
+	ci_ehci_driver->bus_suspend = ci_ehci_bus_suspend;
 	if (ci->platdata->flags & CI_HDRC_IMX_EHCI_QUIRK) {
-		ci_ehci_hc_driver.bus_resume = ci_imx_ehci_bus_resume;
-		ci_ehci_hc_driver.hub_control = ci_imx_ehci_hub_control;
+		ci_ehci_driver->bus_resume = ci_imx_ehci_bus_resume;
+		ci_ehci_driver->hub_control = ci_imx_ehci_hub_control;
 	}
+	ci_ehci_driver->start_port_reset = ci_start_port_reset;
 
 	return 0;
 }

@@ -1,7 +1,7 @@
 /*
  * ALSA SoC IMX MQS driver
  *
- * Copyright (C) 2014 Freescale Semiconductor, Inc.
+ * Copyright (C) 2014-2015 Freescale Semiconductor, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -44,6 +44,8 @@ static int fsl_mqs_hw_params(struct snd_pcm_substream *substream,
 	struct snd_soc_codec *codec = dai->codec;
 	struct fsl_mqs *mqs_priv = snd_soc_codec_get_drvdata(codec);
 	int div, res;
+
+	mqs_priv->mclk_rate = clk_get_rate(mqs_priv->mclk);
 
 	mqs_priv->bclk = snd_soc_params_to_bclk(params);
 	mqs_priv->lrclk = params_rate(params);
@@ -184,8 +186,6 @@ static int fsl_mqs_probe(struct platform_device *pdev)
 		goto out;
 	}
 
-	mqs_priv->mclk_rate = clk_get_rate(mqs_priv->mclk);
-
 	dev_set_drvdata(&pdev->dev, mqs_priv);
 
 	return snd_soc_register_codec(&pdev->dev, &soc_codec_fsl_mqs,
@@ -204,12 +204,29 @@ static int fsl_mqs_remove(struct platform_device *pdev)
 	return 0;
 }
 
+#if CONFIG_PM_SLEEP
+static int fsl_mqs_suspend(struct device *dev)
+{
+	pinctrl_pm_select_sleep_state(dev);
+	return 0;
+}
+
+static int fsl_mqs_resume(struct device *dev)
+{
+	pinctrl_pm_select_default_state(dev);
+	return 0;
+}
+#endif /* CONFIG_PM_SLEEP */
+
+static const struct dev_pm_ops fsl_mqs_pm_ops = {
+	SET_SYSTEM_SLEEP_PM_OPS(fsl_mqs_suspend, fsl_mqs_resume)
+};
+
 static const struct of_device_id fsl_mqs_dt_ids[] = {
 	{ .compatible = "fsl,imx6sx-mqs", },
 	{}
 };
 MODULE_DEVICE_TABLE(of, fsl_mqs_dt_ids);
-
 
 static struct platform_driver fsl_mqs_driver = {
 	.probe		= fsl_mqs_probe,
@@ -218,6 +235,7 @@ static struct platform_driver fsl_mqs_driver = {
 		.name	= "fsl-mqs",
 		.owner	= THIS_MODULE,
 		.of_match_table = fsl_mqs_dt_ids,
+		.pm = &fsl_mqs_pm_ops,
 	},
 };
 

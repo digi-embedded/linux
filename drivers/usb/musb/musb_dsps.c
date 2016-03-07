@@ -732,6 +732,9 @@ static int dsps_resume(struct device *dev)
 	dsps_writel(mbase, wrp->mode, glue->context.mode);
 	dsps_writel(mbase, wrp->tx_mode, glue->context.tx_mode);
 	dsps_writel(mbase, wrp->rx_mode, glue->context.rx_mode);
+	if (musb->xceiv->otg->state == OTG_STATE_B_IDLE &&
+	    musb->port_mode == MUSB_PORT_MODE_DUAL_ROLE)
+		mod_timer(&glue->timer, jiffies + wrp->poll_seconds * HZ);
 
 	if (musb->xceiv->otg->state == OTG_STATE_B_IDLE &&
 	    musb->port_mode == MUSB_PORT_MODE_DUAL_ROLE)

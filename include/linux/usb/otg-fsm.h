@@ -56,12 +56,21 @@ enum otg_fsm_timer {
 	A_AIDL_BDIS,
 	B_ASE0_BRST,
 	A_BIDL_ADIS,
+	B_AIDL_BDIS,
 
 	/* Auxiliary timers */
 	B_SE0_SRP,
 	B_SRP_FAIL,
+	B_DATA_PLS,
+	B_SSEND_SRP,
 	A_WAIT_ENUM,
 	A_DP_END,
+	A_TST_MAINT,
+	B_SRP_REQD,
+	B_TST_SUSP,
+	A_ADP_PRB,
+	B_ADP_PRB,
+	B_ADP_SNS,
 	HNP_POLLING,
 
 	NUM_OTG_FSM_TIMERS,
@@ -104,6 +113,13 @@ struct otg_fsm {
 	int b_srp_done;
 	int b_hnp_enable;
 	int a_clr_err;
+	int hnp_polling;
+
+	/* OTG test device */
+	int tst_maint;
+	int otg_vbus_off;
+	int otg_srp_reqd;
+	int otg_hnp_reqd;
 
 	/* Informative variables */
 	int a_bus_drop_inf;
@@ -127,6 +143,7 @@ struct otg_fsm {
 	/* Current usb protocol used: 0:undefine; 1:host; 2:client */
 	int protocol;
 	struct mutex lock;
+	u8 host_req_flag;
 };
 
 struct otg_fsm_ops {

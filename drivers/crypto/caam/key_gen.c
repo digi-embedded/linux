@@ -69,6 +69,17 @@ int gen_split_key(struct device *jrdev, u8 *key_out, int split_key_len,
 		return -ENOMEM;
 	}
 
+	dma_addr_out = dma_map_single(jrdev, key_out, split_key_pad_len,
+				      DMA_FROM_DEVICE);
+	if (dma_mapping_error(jrdev, dma_addr_out)) {
+		dev_err(jrdev, "unable to map key output memory\n");
+		goto out_unmap_in;
+	}
+
+	init_job_desc(desc, 0);
+
+	dma_sync_single_for_device(jrdev, dma_addr_in, keylen, DMA_TO_DEVICE);
+
 	append_key(desc, dma_addr_in, keylen, CLASS_2 | KEY_DEST_CLASS_REG);
 
 	/* Sets MDHA up into an HMAC-INIT */

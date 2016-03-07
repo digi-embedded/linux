@@ -53,6 +53,7 @@ enum {
 enum ahci_imx_type {
 	AHCI_IMX53,
 	AHCI_IMX6Q,
+	AHCI_IMX6QP,
 };
 
 struct imx_ahci_priv {
@@ -66,6 +67,9 @@ struct imx_ahci_priv {
 	bool first_time;
 	u32 phy_params;
 };
+
+extern struct scsi_host_template ahci_platform_sht;
+void *sg_io_buffer_hack;
 
 static int ahci_imx_hotplug;
 module_param_named(hotplug, ahci_imx_hotplug, int, 0644);
@@ -231,7 +235,7 @@ static int imx_sata_enable(struct ahci_host_priv *hpriv)
 	if (ret < 0)
 		goto disable_regulator;
 
-	if (imxpriv->type == AHCI_IMX6Q) {
+	if (imxpriv->type == AHCI_IMX6Q || imxpriv->type == AHCI_IMX6QP) {
 		/*
 		 * set PHY Paremeters, two steps to configure the GPR13,
 		 * one write for rest of parameters, mask of first write
@@ -255,12 +259,26 @@ static int imx_sata_enable(struct ahci_host_priv *hpriv)
 				   IMX6Q_GPR13_SATA_MPLL_CLK_EN);
 
 		usleep_range(100, 200);
+	}
 
+
+	if (imxpriv->type == AHCI_IMX6Q) {
 		ret = imx_sata_phy_reset(hpriv);
-		if (ret) {
-			dev_err(dev, "failed to reset phy: %d\n", ret);
-			goto disable_clk;
-		}
+	} else if (imxpriv->type == AHCI_IMX6QP) {
+		/* 6qp adds the sata reset mechanism, use it for 6qp sata */
+		regmap_update_bits(imxpriv->gpr, IOMUXC_GPR5,
+				   BIT(10), 0);
+
+		regmap_update_bits(imxpriv->gpr, IOMUXC_GPR5,
+				   BIT(11), 0);
+		udelay(50);
+		regmap_update_bits(imxpriv->gpr, IOMUXC_GPR5,
+				   BIT(11), BIT(11));
+	}
+
+	if (ret) {
+		dev_err(dev, "failed to reset phy: %d\n", ret);
+		goto disable_clk;
 	}
 
 	usleep_range(1000, 2000);
@@ -283,7 +301,11 @@ static void imx_sata_disable(struct ahci_host_priv *hpriv)
 	if (imxpriv->no_device)
 		return;
 
-	if (imxpriv->type == AHCI_IMX6Q) {
+	if (imxpriv->type == AHCI_IMX6QP)
+		regmap_update_bits(imxpriv->gpr, IOMUXC_GPR5,
+				   BIT(10), BIT(10));
+
+	if (imxpriv->type == AHCI_IMX6Q || imxpriv->type == AHCI_IMX6QP) {
 		regmap_update_bits(imxpriv->gpr, IOMUXC_GPR13,
 				   IMX6Q_GPR13_SATA_MPLL_CLK_EN,
 				   !IMX6Q_GPR13_SATA_MPLL_CLK_EN);
@@ -338,7 +360,7 @@ static int ahci_imx_softreset(struct ata_link *link, unsigned int *class,
 
 	if (imxpriv->type == AHCI_IMX53)
 		ret = ahci_pmp_retry_srst_ops.softreset(link, class, deadline);
-	else if (imxpriv->type == AHCI_IMX6Q)
+	else if (imxpriv->type == AHCI_IMX6Q || imxpriv->type == AHCI_IMX6QP)
 		ret = ahci_ops.softreset(link, class, deadline);
 
 	return ret;
@@ -361,6 +383,7 @@ static const struct ata_port_info ahci_imx_port_info = {
 static const struct of_device_id imx_ahci_of_match[] = {
 	{ .compatible = "fsl,imx53-ahci", .data = (void *)AHCI_IMX53 },
 	{ .compatible = "fsl,imx6q-ahci", .data = (void *)AHCI_IMX6Q },
+	{ .compatible = "fsl,imx6qp-ahci", .data = (void *)AHCI_IMX6QP },
 	{},
 };
 MODULE_DEVICE_TABLE(of, imx_ahci_of_match);
@@ -564,7 +587,7 @@ static int imx_ahci_probe(struct platform_device *pdev)
 		return PTR_ERR(imxpriv->ahb_clk);
 	}
 
-	if (imxpriv->type == AHCI_IMX6Q) {
+	if (imxpriv->type == AHCI_IMX6Q || imxpriv->type == AHCI_IMX6QP) {
 		u32 reg_value;
 
 		imxpriv->gpr = syscon_regmap_lookup_by_compatible(
@@ -619,6 +642,24 @@ static int imx_ahci_probe(struct platform_device *pdev)
 
 	reg_val = clk_get_rate(imxpriv->ahb_clk) / 1000;
 	writel(reg_val, hpriv->mmio + IMX_TIMER1MS);
+
+	/*
+	* Due to IP bug on the Synopsis 3.00 SATA version,
+	* which is present on mx6q, and not on mx53,
+	* we should use sg_tablesize = 1 for reliable operation
+	*/
+	if (imxpriv->type == AHCI_IMX6Q || imxpriv->type == AHCI_IMX6QP) {
+		dma_addr_t dma;
+
+		ahci_platform_sht.sg_tablesize = 1;
+
+		sg_io_buffer_hack = dma_alloc_coherent(NULL, 0x10000,
+				&dma, GFP_KERNEL);
+		if (!sg_io_buffer_hack) {
+			ret = -ENOMEM;
+			goto disable_sata;
+		}
+	}
 
 	ret = ahci_platform_init_host(pdev, hpriv, &ahci_imx_port_info);
 	if (ret)

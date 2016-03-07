@@ -33,6 +33,18 @@
 		status = "okay";
 	};
 
+	hannstar_cabc {
+		compatible = "hannstar,cabc";
+
+		lvds0 {
+			gpios = <&gpio6 15 GPIO_ACTIVE_HIGH>;
+		};
+
+		lvds1 {
+			gpios = <&gpio6 16 GPIO_ACTIVE_HIGH>;
+		};
+	};
+
 	leds {
 		compatible = "gpio-leds";
 
@@ -43,7 +55,7 @@
 		};
 	};
 
-	memory {
+	memory: memory {
 		reg = <0x10000000 0x40000000>;
 	};
 
@@ -132,6 +144,7 @@
 		model = "wm8962-audio";
 		cpu-dai = <&ssi2>;
 		audio-codec = <&codec>;
+		asrc-controller = <&asrc>;
 		audio-routing =
 			"Headphone Jack", "HPOUTL",
 			"Headphone Jack", "HPOUTR",
@@ -140,7 +153,11 @@
 			"MICBIAS", "AMIC",
 			"IN3R", "MICBIAS",
 			"DMIC", "MICBIAS",
-			"DMICDAT", "DMIC";
+			"DMICDAT", "DMIC",
+			"CPU-Playback", "ASRC-Playback",
+			"Playback", "CPU-Playback",
+			"ASRC-Capture", "CPU-Capture",
+			"CPU-Capture", "Capture";
 		mux-int-port = <2>;
 		mux-ext-port = <3>;
 		hp-det-gpios = <&gpio7 8 1>;
@@ -252,6 +269,11 @@
 &cpu0 {
 	arm-supply = <&sw1a_reg>;
 	soc-supply = <&sw1c_reg>;
+};
+
+&clks {
+	fsl,ldb-di0-parent = <&clks IMX6QDL_CLK_PLL2_PFD0_352M>;
+	fsl,ldb-di1-parent = <&clks IMX6QDL_CLK_PLL2_PFD0_352M>;
 };
 
 &ecspi1 {
@@ -383,6 +405,7 @@
 				regulator-max-microvolt = <3300000>;
 				regulator-boot-on;
 				regulator-always-on;
+				regulator-ramp-delay = <6250>;
 			};
 
 			sw3a_reg: sw3a {
@@ -456,8 +479,8 @@
 		};
 	};
 
-	ov5640_mipi: ov5640_mipi@3c { /* i2c2 driver */
-		compatible = "ovti,ov5640_mipi";
+	ov564x_mipi: ov564x_mipi@3c { /* i2c2 driver */
+		compatible = "ovti,ov564x_mipi";
 		reg = <0x3c>;
 		clocks = <&clks 201>;
 		clock-names = "csi_mclk";
@@ -547,6 +570,8 @@
 				MX6QDL_PAD_GPIO_1__WDOG2_B 0x80000000
 				MX6QDL_PAD_NANDF_CS0__GPIO6_IO11 0x80000000
 				MX6QDL_PAD_NANDF_CS1__GPIO6_IO14 0x80000000
+				MX6QDL_PAD_NANDF_CS2__GPIO6_IO15 0x80000000
+				MX6QDL_PAD_NANDF_CS3__GPIO6_IO16 0x80000000
 			>;
 		};
 
@@ -909,6 +934,9 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_usbotg>;
 	disable-over-current;
+	srp-disable;
+	hnp-disable;
+	adp-disable;
 	status = "okay";
 };
 

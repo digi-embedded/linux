@@ -3,7 +3,7 @@
  * influence from lart.c (Abraham Van Der Merwe) and mtd_dataflash.c
  *
  * Copyright (C) 2005, Intec Automation Inc.
- * Copyright (C) 2014 Freescale Semiconductor, Inc.
+ * Copyright (C) 2014-2015 Freescale Semiconductor, Inc.
  *
  * This code is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -493,6 +493,7 @@ const struct spi_device_id spi_nor_ids[] = {
 	{ "mx25l12855e", INFO(0xc22618, 0, 64 * 1024, 256, 0) },
 	{ "mx25l25635e", INFO(0xc22019, 0, 64 * 1024, 512, 0) },
 	{ "mx25l25655e", INFO(0xc22619, 0, 64 * 1024, 512, 0) },
+	{ "mx25l51245g", INFO(0xc2201a, 0, 64 * 1024, 1024, SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ | SPI_NOR_DDR_QUAD_READ) },
 	{ "mx66l51235l", INFO(0xc2201a, 0, 64 * 1024, 1024, SPI_NOR_QUAD_READ) },
 	{ "mx66l1g55g",  INFO(0xc2261b, 0, 64 * 1024, 2048, SPI_NOR_QUAD_READ) },
 
@@ -876,6 +877,14 @@ static int set_ddr_quad_mode(struct spi_nor *nor, u32 jedec_id)
 			return status;
 		}
 		return status;
+	case CFI_MFR_MACRONIX:
+		status = macronix_quad_enable(nor);
+		if (status) {
+			dev_err(nor->dev,
+				"Macronix DDR quad-read not enabled\n");
+			return status;
+		}
+		return status;
 	case CFI_MFR_ST: /* Micron, actually */
 		/* DTR quad read works with the Extended SPI protocol. */
 		return 0;
@@ -1080,6 +1089,8 @@ int spi_nor_scan(struct spi_nor *nor, const struct spi_device_id *id,
 			nor->read_opcode = SPINOR_OP_READ_1_4_4_D;
 		} else if (JEDEC_MFR(info->jedec_id) == CFI_MFR_ST) {
 			nor->read_opcode = SPINOR_OP_READ_1_1_4_D;
+		} else if (JEDEC_MFR(info->jedec_id) == CFI_MFR_MACRONIX) {
+			nor->read_opcode = SPINOR_OP_READ_1_4_4_D;
 		} else {
 			dev_err(dev, "DDR Quad Read is not supported.\n");
 			return -EINVAL;

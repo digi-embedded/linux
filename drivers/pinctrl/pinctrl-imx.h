@@ -1,7 +1,7 @@
 /*
  * IMX pinmux core definitions
  *
- * Copyright (C) 2012-2013 Freescale Semiconductor, Inc.
+ * Copyright (C) 2012-2015 Freescale Semiconductor, Inc.
  * Copyright (C) 2012 Linaro Ltd.
  *
  * Author: Dong Aisheng <dong.aisheng@linaro.org>
@@ -81,10 +81,12 @@ struct imx_pinctrl_soc_info {
 	struct imx_pmx_func *functions;
 	unsigned int nfunctions;
 	unsigned int flags;
+	u32 grp_index;
 };
 
 #define ZERO_OFFSET_VALID	0x1
 #define SHARE_MUX_CONF_REG	0x2
+#define SHARE_INPUT_SELECT_REG 0x4
 
 #define NO_MUX		0x0
 #define NO_PAD		0x0
@@ -98,8 +100,6 @@ struct imx_pinctrl_soc_info {
 int imx_pinctrl_probe(struct platform_device *pdev,
 			struct imx_pinctrl_soc_info *info);
 int imx_pinctrl_remove(struct platform_device *pdev);
-#ifdef CONFIG_PM
-int imx_pinctrl_suspend(struct platform_device *pdev, pm_message_t state);
-int imx_pinctrl_resume(struct platform_device *pdev);
-#endif
+int imx_pinctrl_suspend(struct platform_device * pdev, pm_message_t state);
+int imx_pinctrl_resume(struct platform_device * pdev);
 #endif /* __DRIVERS_PINCTRL_IMX_H */

@@ -38,7 +38,6 @@
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/of_device.h>
-#include <linux/of_gpio.h>
 #include <linux/platform_device.h>
 #include <linux/regulator/consumer.h>
 #include <linux/regmap.h>
@@ -227,7 +226,6 @@ struct flexcan_priv {
 	struct clk *clk_ipg;
 	struct clk *clk_per;
 	struct flexcan_platform_data *pdata;
-	int stby_gpio;
 	const struct flexcan_devtype_data *devtype_data;
 	struct regulator *reg_xceiver;
 	struct flexcan_stop_mode stm;
@@ -300,14 +298,9 @@ static inline void flexcan_exit_stop_mode(struct flexcan_priv *priv)
 
 static inline int flexcan_transceiver_enable(const struct flexcan_priv *priv)
 {
-	if (priv->pdata){
-		if(gpio_is_valid(priv->stby_gpio))
-			gpio_set_value(priv->stby_gpio, 0);
-	} else {
-		if (priv->pdata->transceiver_switch) {
-			priv->pdata->transceiver_switch(1);
-			return 0;
-		}
+	if (priv->pdata && priv->pdata->transceiver_switch) {
+		priv->pdata->transceiver_switch(1);
+		return 0;
 	}
 
 	if (!priv->reg_xceiver)
@@ -318,14 +311,9 @@ static inline int flexcan_transceiver_enable(const struct flexcan_priv *priv)
 
 static inline int flexcan_transceiver_disable(const struct flexcan_priv *priv)
 {
-	if (priv->pdata){
-		if(gpio_is_valid(priv->stby_gpio))
-			gpio_set_value(priv->stby_gpio, 1);
-	} else {
-		if (priv->pdata->transceiver_switch) {
-			priv->pdata->transceiver_switch(0);
-			return 0;
-		}
+	if (priv->pdata && priv->pdata->transceiver_switch) {
+		priv->pdata->transceiver_switch(0);
+		return 0;
 	}
 
 	if (!priv->reg_xceiver)
@@ -854,7 +842,7 @@ static int flexcan_chip_start(struct net_device *dev)
 {
 	struct flexcan_priv *priv = netdev_priv(dev);
 	struct flexcan_regs __iomem *regs = priv->base;
-	int err;
+	int err, i;
 	u32 reg_mcr, reg_ctrl;
 
 	/* enable module */
@@ -922,8 +910,9 @@ static int flexcan_chip_start(struct net_device *dev)
 	flexcan_write(reg_ctrl, &regs->ctrl);
 
 	/* Abort any pending TX, mark Mailbox as INACTIVE */
-	flexcan_write(FLEXCAN_MB_CNT_CODE(0x4),
-		      &regs->cantxfg[FLEXCAN_TX_BUF_ID].can_ctrl);
+	for (i = FLEXCAN_RESERVED_BUF_ID; i <= FLEXCAN_TX_BUF_ID; i++)
+		flexcan_write(FLEXCAN_MB_CNT_CODE(0x4),
+			      &regs->cantxfg[i].can_ctrl);
 
 	/* acceptance mask/acceptance code (accept everything) */
 	flexcan_write(0x0, &regs->rxgmask);
@@ -1202,25 +1191,6 @@ static const struct platform_device_id flexcan_id_table[] = {
 };
 MODULE_DEVICE_TABLE(platform, flexcan_id_table);
 
-static int flexcan_gpio_init(struct device_node *np , struct net_device *dev)
-{
-	int ret;
-	struct flexcan_priv *priv = netdev_priv(dev);
-
-	if (!np)
-		return -EINVAL;
-
-	priv->stby_gpio = of_get_named_gpio(np, "stby-gpios", 0);
-	if (!gpio_is_valid(priv->stby_gpio))
-		return -ENODEV;
-
-	if( (ret = gpio_request(priv->stby_gpio, "can_stby")) == 0)
-		gpio_direction_output(priv->stby_gpio, 1);
-	else
-		netdev_err(dev, "Could not configure standby pin.\n");
-	return ret;
-}
-
 static int flexcan_probe(struct platform_device *pdev)
 {
 	const struct of_device_id *of_id;
@@ -1294,7 +1264,6 @@ static int flexcan_probe(struct platform_device *pdev)
 	priv->clk_per = clk_per;
 	priv->pdata = dev_get_platdata(&pdev->dev);
 	priv->devtype_data = devtype_data;
-	flexcan_gpio_init(pdev->dev.of_node,dev);
 
 	priv->reg_xceiver = devm_regulator_get(&pdev->dev, "xceiver");
 	if (IS_ERR(priv->reg_xceiver))

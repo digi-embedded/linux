@@ -58,7 +58,7 @@
 #include <linux/if_vlan.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/pm_runtime.h>
-#include <linux/busfreq-imx6.h>
+#include <linux/busfreq-imx.h>
 #include <linux/prefetch.h>
 #include <linux/mfd/syscon.h>
 #include <linux/regmap.h>
@@ -226,51 +226,7 @@ MODULE_PARM_DESC(macaddr, "FEC Ethernet MAC address");
 	((addr >= txq->tso_hdrs_dma) && \
 	(addr < txq->tso_hdrs_dma + txq->tx_ring_size * TSO_HEADER_SIZE))
 
-/* GPIO activity LED constants */
-#define ACTLED_TOGGLE_TIMEOUT	2	/* in jiffies */
-#define ACTLED_OFF_TIMEOUT	20	/* in jiffies */
-
 static int mii_cnt;
-
-static void toggle_activityled(struct net_device *ndev)
-{
-	struct fec_enet_private *fep = netdev_priv(ndev);
-
-	if (fep->gpio_actled >= 0) {
-		fep->rxtx_activity = 1;
-		/* run timer if not already running */
-		if(!timer_pending(&fep->activityled_timer)) {
-			mod_timer(&fep->activityled_timer,
-				  jiffies + ACTLED_TOGGLE_TIMEOUT);
-		}
-	}
-}
-
-static void activityled_timer_fn(unsigned long ndev)
-{
-	struct fec_enet_private *fep = netdev_priv((struct net_device *)ndev);
-
-	if (fep->rxtx_activity) {
-		/* toggle RX/TX Ethernet activity LED */
-		gpio_set_value(fep->gpio_actled,
-			       !gpio_get_value(fep->gpio_actled));
-		mod_timer(&fep->activityled_timer,
-			  jiffies + ACTLED_TOGGLE_TIMEOUT);
-		fep->rxtx_cnt = 0;
-		fep->rxtx_activity = 0;
-	} else {
-		if(fep->rxtx_cnt++ < ACTLED_OFF_TIMEOUT / ACTLED_TOGGLE_TIMEOUT)
-			mod_timer(&fep->activityled_timer,
-				  jiffies + ACTLED_TOGGLE_TIMEOUT);
-		else {
-			/* switch LED off */
-			gpio_set_value(fep->gpio_actled,
-				       fep->gpio_actled_inverted);
-			fep->rxtx_cnt = 0;
-		}
-	}
-
-}
 
 static inline
 struct bufdesc *fec_enet_get_nextdesc(struct bufdesc *bdp,
@@ -416,7 +372,7 @@ fec_enet_clear_csum(struct sk_buff *skb, struct net_device *ndev)
 	return 0;
 }
 
-static struct bufdesc *
+static int
 fec_enet_txq_submit_frag_skb(struct fec_enet_priv_tx_q *txq,
 			     struct sk_buff *skb,
 			     struct net_device *ndev)
@@ -491,7 +447,10 @@ fec_enet_txq_submit_frag_skb(struct fec_enet_priv_tx_q *txq,
 		bdp->cbd_sc = status;
 	}
 
-	return bdp;
+	txq->cur_tx = bdp;
+
+	return 0;
+
 dma_mapping_error:
 	bdp = txq->cur_tx;
 	for (i = 0; i < frag; i++) {
@@ -499,7 +458,7 @@ dma_mapping_error:
 		dma_unmap_single(&fep->pdev->dev, bdp->cbd_bufaddr,
 				bdp->cbd_datlen, DMA_TO_DEVICE);
 	}
-	return ERR_PTR(-ENOMEM);
+	return NETDEV_TX_OK;
 }
 
 static int fec_enet_txq_submit_skb(struct fec_enet_priv_tx_q *txq,
@@ -516,6 +475,7 @@ static int fec_enet_txq_submit_skb(struct fec_enet_priv_tx_q *txq,
 	unsigned int estatus = 0;
 	unsigned int index;
 	int entries_free;
+	int ret;
 
 	entries_free = fec_enet_get_free_txdesc_num(fep, txq);
 	if (entries_free < MAX_SKB_FRAGS + 1) {
@@ -533,7 +493,6 @@ static int fec_enet_txq_submit_skb(struct fec_enet_priv_tx_q *txq,
 
 	/* Fill in a Tx ring entry */
 	bdp = txq->cur_tx;
-	last_bdp = bdp;
 	status = bdp->cbd_sc;
 	status &= ~BD_ENET_TX_STATS;
 
@@ -562,9 +521,9 @@ static int fec_enet_txq_submit_skb(struct fec_enet_priv_tx_q *txq,
 	}
 
 	if (nr_frags) {
-		last_bdp = fec_enet_txq_submit_frag_skb(txq, skb, ndev);
-		if (IS_ERR(last_bdp))
-			return NETDEV_TX_OK;
+		ret = fec_enet_txq_submit_frag_skb(txq, skb, ndev);
+		if (ret)
+			return ret;
 	} else {
 		status |= (BD_ENET_TX_INTR | BD_ENET_TX_LAST);
 		if (fep->bufdesc_ex) {
@@ -593,19 +552,13 @@ static int fec_enet_txq_submit_skb(struct fec_enet_priv_tx_q *txq,
 		ebdp->cbd_esc = estatus;
 	}
 
+	last_bdp = txq->cur_tx;
 	index = fec_enet_get_bd_index(txq->tx_bd_base, last_bdp, fep);
 	/* Save skb pointer */
 	txq->tx_skbuff[index] = skb;
 
 	bdp->cbd_datlen = buflen;
 	bdp->cbd_bufaddr = addr;
-
-	/*
-	 * We need the preceding stores to the descriptor to complete
-	 * before updating the status field, which hands it over to the
-	 * hardware.  The corresponding rmb() is "in the hardware".
-	 */
-	wmb();
 
 	/* Send it on its way.  Tell FEC it's ready, interrupt when done,
 	 * it's the last BD of the frame, and to put the CRC on the end.
@@ -618,10 +571,6 @@ static int fec_enet_txq_submit_skb(struct fec_enet_priv_tx_q *txq,
 
 	skb_tx_timestamp(skb);
 
-	/* Make sure the update to bdp and tx_skbuff are performed before
-	 * cur_tx.
-	 */
-	wmb();
 	txq->cur_tx = bdp;
 
 	/* Trigger transmission start */
@@ -685,7 +634,7 @@ fec_enet_txq_put_data_tso(struct fec_enet_priv_tx_q *txq, struct sk_buff *skb,
 		if (fep->bufdesc_ex)
 			ebdp->cbd_esc |= BD_ENET_TX_INT;
 	}
-	mb();
+
 	bdp->cbd_sc = status;
 
 	return 0;
@@ -740,7 +689,7 @@ fec_enet_txq_put_hdr_tso(struct fec_enet_priv_tx_q *txq,
 		ebdp->cbd_bdu = 0;
 		ebdp->cbd_esc = estatus;
 	}
-	mb();
+
 	bdp->cbd_sc = status;
 
 	return 0;
@@ -1051,10 +1000,7 @@ fec_restart(struct net_device *ndev)
 		rcntl |= 0x40000000 | 0x00000020;
 
 		/* RGMII, RMII or MII */
-		if (fep->phy_interface == PHY_INTERFACE_MODE_RGMII ||
-		    fep->phy_interface == PHY_INTERFACE_MODE_RGMII_ID ||
-		    fep->phy_interface == PHY_INTERFACE_MODE_RGMII_RXID ||
-		    fep->phy_interface == PHY_INTERFACE_MODE_RGMII_TXID)
+		if (fep->phy_interface == PHY_INTERFACE_MODE_RGMII)
 			rcntl |= (1 << 6);
 		else if (fep->phy_interface == PHY_INTERFACE_MODE_RMII)
 			rcntl |= (1 << 8);
@@ -1294,11 +1240,10 @@ fec_enet_tx_queue(struct net_device *ndev, u16 queue_id)
 	/* get next bdp of dirty_tx */
 	bdp = fec_enet_get_nextdesc(bdp, fep, queue_id);
 
-	while (bdp != READ_ONCE(txq->cur_tx)) {
-		/* Order the load of cur_tx and cbd_sc */
-		rmb();
-		status = READ_ONCE(bdp->cbd_sc);
-		if (status & BD_ENET_TX_READY)
+	while (((status = bdp->cbd_sc) & BD_ENET_TX_READY) == 0) {
+
+		/* current queue is empty */
+		if (bdp == txq->cur_tx)
 			break;
 
 		bdp_t = bdp;
@@ -1362,10 +1307,6 @@ fec_enet_tx_queue(struct net_device *ndev, u16 queue_id)
 		/* Free the sk buffer associated with this last transmit */
 		dev_kfree_skb_any(skb);
 
-		/* Make sure the update to bdp and tx_skbuff are performed
-		 * before dirty_tx
-		 */
-		wmb();
 		txq->dirty_tx = bdp;
 
 		/* Update pointer to next buffer descriptor to be transmitted */
@@ -1379,8 +1320,6 @@ fec_enet_tx_queue(struct net_device *ndev, u16 queue_id)
 				netif_tx_wake_queue(nq);
 		}
 	}
-
-	toggle_activityled(ndev);
 
 	/* ERR006538: Keep the transmitter going */
 	if (bdp != txq->cur_tx &&
@@ -1495,7 +1434,6 @@ fec_enet_rx_queue(struct net_device *ndev, int budget, u16 queue_id)
 		if ((status & BD_ENET_RX_LAST) == 0)
 			netdev_err(ndev, "rcv is not +last\n");
 
-		writel(FEC_ENET_RXF, fep->hwp + FEC_IEVENT);
 
 		/* Check for errors. */
 		if (status & (BD_ENET_RX_LG | BD_ENET_RX_SH | BD_ENET_RX_NO |
@@ -1507,12 +1445,8 @@ fec_enet_rx_queue(struct net_device *ndev, int budget, u16 queue_id)
 			}
 			if (status & BD_ENET_RX_NO)	/* Frame alignment */
 				ndev->stats.rx_frame_errors++;
-			if (status & BD_ENET_RX_CR) {	/* CRC Error */
-				if (of_machine_is_compatible("digi,ccardimx28"))
-					ndev->stats.rx_errors--;
-				else
-					ndev->stats.rx_crc_errors++;
-			}
+			if (status & BD_ENET_RX_CR)	/* CRC Error */
+				ndev->stats.rx_crc_errors++;
 			if (status & BD_ENET_RX_OV)	/* FIFO overrun */
 				ndev->stats.rx_fifo_errors++;
 		}
@@ -1613,6 +1547,13 @@ fec_enet_rx_queue(struct net_device *ndev, int budget, u16 queue_id)
 		}
 
 rx_processing_done:
+		/* Clear the status flags for this buffer */
+		status &= ~BD_ENET_RX_STATS;
+
+		/* Mark the buffer empty */
+		status |= BD_ENET_RX_EMPTY;
+		bdp->cbd_sc = status;
+
 		if (fep->bufdesc_ex) {
 			struct bufdesc_ex *ebdp = (struct bufdesc_ex *)bdp;
 
@@ -1620,19 +1561,6 @@ rx_processing_done:
 			ebdp->cbd_prot = 0;
 			ebdp->cbd_bdu = 0;
 		}
-
-		/*
-		 * Ensure that the previous writes have completed before
-		 * the status update becomes visible.
-		 */
-		wmb();
-
-		/* Clear the status flags for this buffer */
-		status &= ~BD_ENET_RX_STATS;
-
-		/* Mark the buffer empty */
-		status |= BD_ENET_RX_EMPTY;
-		bdp->cbd_sc = status;
 
 		/* Update BD pointer to next entry */
 		bdp = fec_enet_get_nextdesc(bdp, fep, queue_id);
@@ -1643,8 +1571,6 @@ rx_processing_done:
 		 */
 		writel(0, fep->hwp + FEC_R_DES_ACTIVE(queue_id));
 	}
-	/* Make sure the update to bdp is performed before cur_rx */
-	wmb();
 	rxq->cur_rx = bdp;
 	return pkt_received;
 }
@@ -1655,8 +1581,6 @@ fec_enet_rx(struct net_device *ndev, int budget)
 	int     pkt_received = 0;
 	u16	queue_id;
 	struct fec_enet_private *fep = netdev_priv(ndev);
-
-	toggle_activityled(ndev);
 
 	for_each_set_bit(queue_id, &fep->work_rx, FEC_ENET_MAX_RX_QS) {
 		clear_bit(queue_id, &fep->work_rx);
@@ -1814,13 +1738,6 @@ static void fec_get_mac(struct net_device *ndev)
 /*
  * Phy section
  */
-static void gpioled_phylink(struct fec_enet_private *fep)
-{
-	if (fep->gpio_linkled >= 0)
-		gpio_set_value(fep->gpio_linkled,
-			       fep->link ^ fep->gpio_linkled_inverted);
-}
-
 static void fec_enet_adjust_link(struct net_device *ndev)
 {
 	struct fec_enet_private *fep = netdev_priv(ndev);
@@ -1879,8 +1796,6 @@ static void fec_enet_adjust_link(struct net_device *ndev)
 
 	if (status_change)
 		phy_print_status(phy_dev);
-
-	gpioled_phylink(fep);
 }
 
 static int fec_enet_mdio_read(struct mii_bus *bus, int mii_id, int regnum)
@@ -1889,7 +1804,7 @@ static int fec_enet_mdio_read(struct mii_bus *bus, int mii_id, int regnum)
 	unsigned long time_left;
 
 	fep->mii_timeout = 0;
-	reinit_completion(&fep->mdio_done);
+	init_completion(&fep->mdio_done);
 
 	/* start a read op */
 	writel(FEC_MMFR_ST | FEC_MMFR_OP_READ |
@@ -1916,7 +1831,7 @@ static int fec_enet_mdio_write(struct mii_bus *bus, int mii_id, int regnum,
 	unsigned long time_left;
 
 	fep->mii_timeout = 0;
-	reinit_completion(&fep->mdio_done);
+	init_completion(&fep->mdio_done);
 
 	/* start a write op */
 	writel(FEC_MMFR_ST | FEC_MMFR_OP_WRITE |
@@ -2254,82 +2169,6 @@ static void fec_enet_get_drvinfo(struct net_device *ndev,
 		sizeof(info->driver));
 	strlcpy(info->version, "Revision: 1.0", sizeof(info->version));
 	strlcpy(info->bus_info, dev_name(&ndev->dev), sizeof(info->bus_info));
-}
-
-static int fec_enet_get_regs_len(struct net_device *ndev)
-{
-	struct fec_enet_private *fep = netdev_priv(ndev);
-	struct resource *r;
-	int s = 0;
-
-	r = platform_get_resource(fep->pdev, IORESOURCE_MEM, 0);
-	if (r)
-		s = resource_size(r);
-
-	return s;
-}
-
-/* List of registers that can be safety be read to dump them with ethtool */
-#if defined(CONFIG_M523x) || defined(CONFIG_M527x) || defined(CONFIG_M528x) || \
-	defined(CONFIG_M520x) || defined(CONFIG_M532x) ||		\
-	defined(CONFIG_ARCH_MXC) || defined(CONFIG_SOC_IMX28)
-static u32 fec_enet_register_offset[] = {
-	FEC_IEVENT, FEC_IMASK, FEC_R_DES_ACTIVE_0, FEC_X_DES_ACTIVE_0,
-	FEC_ECNTRL, FEC_MII_DATA, FEC_MII_SPEED, FEC_MIB_CTRLSTAT, FEC_R_CNTRL,
-	FEC_X_CNTRL, FEC_ADDR_LOW, FEC_ADDR_HIGH, FEC_OPD, FEC_TXIC0, FEC_TXIC1,
-	FEC_TXIC2, FEC_RXIC0, FEC_RXIC1, FEC_RXIC2, FEC_HASH_TABLE_HIGH,
-	FEC_HASH_TABLE_LOW, FEC_GRP_HASH_TABLE_HIGH, FEC_GRP_HASH_TABLE_LOW,
-	FEC_X_WMRK, FEC_R_BOUND, FEC_R_FSTART, FEC_R_DES_START_1,
-	FEC_X_DES_START_1, FEC_R_BUFF_SIZE_1, FEC_R_DES_START_2,
-	FEC_X_DES_START_2, FEC_R_BUFF_SIZE_2, FEC_R_DES_START_0,
-	FEC_X_DES_START_0, FEC_R_BUFF_SIZE_0, FEC_R_FIFO_RSFL, FEC_R_FIFO_RSEM,
-	FEC_R_FIFO_RAEM, FEC_R_FIFO_RAFL, FEC_RACC, FEC_RCMR_1, FEC_RCMR_2,
-	FEC_DMA_CFG_1, FEC_DMA_CFG_2, FEC_R_DES_ACTIVE_1, FEC_X_DES_ACTIVE_1,
-	FEC_R_DES_ACTIVE_2, FEC_X_DES_ACTIVE_2, FEC_QOS_SCHEME,
-	RMON_T_DROP, RMON_T_PACKETS, RMON_T_BC_PKT, RMON_T_MC_PKT,
-	RMON_T_CRC_ALIGN, RMON_T_UNDERSIZE, RMON_T_OVERSIZE, RMON_T_FRAG,
-	RMON_T_JAB, RMON_T_COL, RMON_T_P64, RMON_T_P65TO127, RMON_T_P128TO255,
-	RMON_T_P256TO511, RMON_T_P512TO1023, RMON_T_P1024TO2047,
-	RMON_T_P_GTE2048, RMON_T_OCTETS,
-	IEEE_T_DROP, IEEE_T_FRAME_OK, IEEE_T_1COL, IEEE_T_MCOL, IEEE_T_DEF,
-	IEEE_T_LCOL, IEEE_T_EXCOL, IEEE_T_MACERR, IEEE_T_CSERR, IEEE_T_SQE,
-	IEEE_T_FDXFC, IEEE_T_OCTETS_OK,
-	RMON_R_PACKETS, RMON_R_BC_PKT, RMON_R_MC_PKT, RMON_R_CRC_ALIGN,
-	RMON_R_UNDERSIZE, RMON_R_OVERSIZE, RMON_R_FRAG, RMON_R_JAB,
-	RMON_R_RESVD_O, RMON_R_P64, RMON_R_P65TO127, RMON_R_P128TO255,
-	RMON_R_P256TO511, RMON_R_P512TO1023, RMON_R_P1024TO2047,
-	RMON_R_P_GTE2048, RMON_R_OCTETS,
-	IEEE_R_DROP, IEEE_R_FRAME_OK, IEEE_R_CRC, IEEE_R_ALIGN, IEEE_R_MACERR,
-	IEEE_R_FDXFC, IEEE_R_OCTETS_OK
-};
-#else
-static u32 fec_enet_register_offset[] = {
-	FEC_ECNTRL, FEC_IEVENT, FEC_IMASK, FEC_IVEC, FEC_R_DES_ACTIVE_0,
-	FEC_R_DES_ACTIVE_1, FEC_R_DES_ACTIVE_2, FEC_X_DES_ACTIVE_0,
-	FEC_X_DES_ACTIVE_1, FEC_X_DES_ACTIVE_2, FEC_MII_DATA, FEC_MII_SPEED,
-	FEC_R_BOUND, FEC_R_FSTART, FEC_X_WMRK, FEC_X_FSTART, FEC_R_CNTRL,
-	FEC_MAX_FRM_LEN, FEC_X_CNTRL, FEC_ADDR_LOW, FEC_ADDR_HIGH,
-	FEC_GRP_HASH_TABLE_HIGH, FEC_GRP_HASH_TABLE_LOW, FEC_R_DES_START_0,
-	FEC_R_DES_START_1, FEC_R_DES_START_2, FEC_X_DES_START_0,
-	FEC_X_DES_START_1, FEC_X_DES_START_2, FEC_R_BUFF_SIZE_0,
-	FEC_R_BUFF_SIZE_1, FEC_R_BUFF_SIZE_2
-};
-#endif
-
-static void fec_enet_get_regs(struct net_device *ndev,
-			      struct ethtool_regs *regs, void *regbuf)
-{
-	struct fec_enet_private *fep = netdev_priv(ndev);
-	u32 __iomem *theregs = (u32 __iomem *)fep->hwp;
-	u32 *buf = (u32 *)regbuf;
-	u32 i, off;
-
-	memset(buf, 0, regs->len);
-
-	for (i = 0; i < ARRAY_SIZE(fec_enet_register_offset); i++) {
-		off = fec_enet_register_offset[i] / 4;
-		buf[off] = readl(&theregs[off]);
-	}
 }
 
 static int fec_enet_get_ts_info(struct net_device *ndev,
@@ -2724,8 +2563,6 @@ static const struct ethtool_ops fec_enet_ethtool_ops = {
 	.get_settings		= fec_enet_get_settings,
 	.set_settings		= fec_enet_set_settings,
 	.get_drvinfo		= fec_enet_get_drvinfo,
-	.get_regs_len		= fec_enet_get_regs_len,
-	.get_regs		= fec_enet_get_regs,
 	.nway_reset		= fec_enet_nway_reset,
 	.get_link		= ethtool_op_get_link,
 	.get_coalesce		= fec_enet_get_coalesce,
@@ -2821,9 +2658,12 @@ static void fec_enet_free_queue(struct net_device *ndev)
 		}
 
 	for (i = 0; i < fep->num_rx_queues; i++)
-		kfree(fep->rx_queue[i]);
+		if (fep->rx_queue[i])
+			kfree(fep->rx_queue[i]);
+
 	for (i = 0; i < fep->num_tx_queues; i++)
-		kfree(fep->tx_queue[i]);
+		if (fep->tx_queue[i])
+			kfree(fep->tx_queue[i]);
 }
 
 static int fec_enet_alloc_queue(struct net_device *ndev)
@@ -3067,7 +2907,6 @@ fec_enet_close(struct net_device *ndev)
 	pinctrl_pm_select_sleep_state(&fep->pdev->dev);
 	pm_runtime_put_sync_suspend(ndev->dev.parent);
 	fec_enet_free_buffers(ndev);
-	gpioled_phylink(fep);
 
 	return 0;
 }
@@ -3319,8 +3158,8 @@ static int fec_enet_init(struct net_device *ndev)
 			fep->bufdesc_size;
 
 	/* Allocate memory for buffer descriptors. */
-	cbd_base = dmam_alloc_coherent(&fep->pdev->dev, bd_size, &bd_dma,
-				       GFP_KERNEL);
+	cbd_base = dma_alloc_coherent(NULL, bd_size, &bd_dma,
+				      GFP_KERNEL);
 	if (!cbd_base) {
 		return -ENOMEM;
 	}
@@ -3423,65 +3262,7 @@ static void fec_reset_phy(struct platform_device *pdev)
 		return;
 	}
 	msleep(msec);
-	gpio_set_value_cansleep(phy_reset, 1);
-}
-
-static void fec_gpio_led_init(struct platform_device *pdev)
-{
-	struct net_device *ndev = platform_get_drvdata(pdev);
-	struct fec_enet_private *fep = netdev_priv(ndev);
-	struct device_node *np = pdev->dev.of_node;
-	enum of_gpio_flags flags;
-	int init_st;
-
-	if (!np)
-		return;
-
-	fep->gpio_linkled = of_get_named_gpio_flags(np, "digi,gpio-link-led", 0,
-						    &flags);
-	if (fep->gpio_linkled >= 0) {
-		if (flags & OF_GPIO_ACTIVE_LOW) {
-			fep->gpio_linkled_inverted = 1;
-			init_st = GPIOF_OUT_INIT_HIGH;
-		}
-		else
-			init_st = GPIOF_OUT_INIT_LOW;
-
-		if (gpio_request_one(fep->gpio_linkled, init_st,
-				      "FEC link LED"))
-			printk("Unable to register gpio %d for link LED\n",
-			       fep->gpio_linkled);
-	}
-
-	fep->gpio_actled = of_get_named_gpio_flags(np, "digi,gpio-act-led", 0,
-						   &flags);
-	if (fep->gpio_actled >= 0) {
-		if (flags & OF_GPIO_ACTIVE_LOW) {
-			fep->gpio_actled_inverted = 1;
-			init_st = GPIOF_OUT_INIT_HIGH;
-		}
-		else
-			init_st = GPIOF_OUT_INIT_LOW;
-
-		if (gpio_request_one(fep->gpio_actled, init_st,
-				     "FEC activity LED")) {
-			printk("Unable to register gpio %d for activity LED\n",
-				fep->gpio_actled);
-		}
-		else {
-			if (flags & OF_GPIO_ACTIVE_LOW)
-				fep->gpio_actled_inverted = 1;
-			/* Initialize kernel timer for toggling the activity LED */
-			fep->rxtx_cnt = 0;
-			fep->activityled_timer.data = (unsigned long)ndev;
-			fep->activityled_timer.function = activityled_timer_fn;
-			fep->activityled_timer.expires = jiffies +
-							 ACTLED_TOGGLE_TIMEOUT;
-			init_timer(&fep->activityled_timer);
-			add_timer(&fep->activityled_timer);
-		}
-	}
-
+	gpio_set_value(phy_reset, 1);
 }
 #else /* CONFIG_OF */
 static void fec_reset_phy(struct platform_device *pdev)
@@ -3490,9 +3271,6 @@ static void fec_reset_phy(struct platform_device *pdev)
 	 * In case of platform probe, the reset has been done
 	 * by machine code.
 	 */
-}
-static inline void fec_gpio_led_init(struct platform_device *pdev)
-{
 }
 #endif /* CONFIG_OF */
 
@@ -3703,7 +3481,6 @@ fec_probe(struct platform_device *pdev)
 		fep->reg_phy = NULL;
 	}
 
-	fec_gpio_led_init(pdev);
 	fec_reset_phy(pdev);
 
 	if (fep->bufdesc_ex)
@@ -3764,7 +3541,6 @@ failed_register:
 failed_mii_init:
 failed_irq:
 failed_init:
-	fec_ptp_stop(pdev);
 	if (fep->reg_phy)
 		regulator_disable(fep->reg_phy);
 failed_regulator:
@@ -3784,12 +3560,14 @@ fec_drv_remove(struct platform_device *pdev)
 	struct net_device *ndev = platform_get_drvdata(pdev);
 	struct fec_enet_private *fep = netdev_priv(ndev);
 
+	cancel_delayed_work_sync(&fep->time_keep);
 	cancel_work_sync(&fep->tx_timeout_work);
-	fec_ptp_stop(pdev);
 	unregister_netdev(ndev);
 	fec_enet_mii_remove(fep);
 	if (fep->reg_phy)
 		regulator_disable(fep->reg_phy);
+	if (fep->ptp_clock)
+		ptp_clock_unregister(fep->ptp_clock);
 	of_node_put(fep->phy_node);
 	free_netdev(ndev);
 
@@ -3890,7 +3668,6 @@ failed_clk:
 	return ret;
 }
 
-#ifdef CONFIG_PM_RUNTIME
 static int fec_runtime_suspend(struct device *dev)
 {
 	release_bus_freq(BUS_FREQ_HIGH);
@@ -3902,7 +3679,6 @@ static int fec_runtime_resume(struct device *dev)
 	request_bus_freq(BUS_FREQ_HIGH);
 	return 0;
 }
-#endif
 
 static const struct dev_pm_ops fec_pm_ops = {
 	SET_RUNTIME_PM_OPS(fec_runtime_suspend, fec_runtime_resume, NULL)

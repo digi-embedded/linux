@@ -60,7 +60,7 @@
 
 	soc {
 		busfreq {
-			compatible = "fsl,imx6_busfreq";
+			compatible = "fsl,imx_busfreq";
 			clocks = <&clks IMX6QDL_CLK_PLL2_BUS>, <&clks IMX6QDL_CLK_PLL2_PFD2_396M>,
 				<&clks IMX6QDL_CLK_PLL2_198M>, <&clks IMX6QDL_CLK_ARM>,
 				<&clks IMX6QDL_CLK_PLL3_USB_OTG>, <&clks IMX6QDL_CLK_PERIPH>,
@@ -75,7 +75,7 @@
 			fsl,max_ddr_freq = <400000000>;
 		};
 
-		gpu: gpu@00130000 {
+		gpu@00130000 {
 			compatible = "fsl,imx6dl-gpu", "fsl,imx6q-gpu";
 			reg = <0x00130000 0x4000>, <0x00134000 0x4000>,
 			      <0x0 0x0>;
@@ -111,22 +111,6 @@
 			compatible = "mmio-sram";
 			reg = <0x00905000 0x1B000>;
 			clocks = <&clks IMX6QDL_CLK_OCRAM>;
-		};
-
-		hdmi_core: hdmi_core@00120000 {
-			compatible = "fsl,imx6dl-hdmi-core";
-		};
-
-		hdmi_video: hdmi_video@020e0000 {
-			compatible = "fsl,imx6dl-hdmi-video";
-		};
-
-		hdmi_audio: hdmi_audio@00120000 {
-			compatible = "fsl,imx6dl-hdmi-audio";
-		};
-
-		hdmi_cec: hdmi_cec@00120000 {
-			compatible = "fsl,imx6dl-hdmi-cec";
 		};
 
 		aips1: aips-bus@02000000 {
@@ -189,6 +173,26 @@
 			};
 		};
 	};
+};
+
+&ecspi1 {
+	dmas = <&sdma 3 7 1>, <&sdma 4 7 2>;
+	dma-names = "rx", "tx";
+};
+
+&ecspi2 {
+	dmas = <&sdma 5 7 1>, <&sdma 6 7 2>;
+	dma-names = "rx", "tx";
+};
+
+&ecspi3 {
+	dmas = <&sdma 7 7 1>, <&sdma 8 7 2>;
+	dma-names = "rx", "tx";
+};
+
+&ecspi4 {
+	dmas = <&sdma 9 7 1>, <&sdma 10 7 2>;
+	dma-names = "rx", "tx";
 };
 
 &ldb {

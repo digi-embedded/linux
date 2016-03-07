@@ -80,10 +80,6 @@
 #define YCBCR422_8BITS		3
 #define XVYCC444            4
 
-static bool only_cea = 1;
-module_param(only_cea, bool, 0644);
-MODULE_PARM_DESC(only_cea, "Allow only CEA modes");
-
 /*
  * We follow a flowchart which is in the "Synopsys DesignWare Courses
  * HDMI Transmitter Controller User Guide, 1.30a", section 3.1
@@ -181,7 +177,6 @@ struct mxc_hdmi {
 	struct fb_videomode default_mode;
 	struct fb_videomode previous_non_vga_mode;
 	bool requesting_vga_for_initialization;
-	bool dvi_mode;
 
 	int *gpr_base;
 	int *gpr_hdmi_base;
@@ -1810,7 +1805,7 @@ static void mxc_hdmi_edid_rebuild_modelist(struct mxc_hdmi *hdmi)
 		mode = &hdmi->fbi->monspecs.modedb[i];
 
 		if (!(mode->vmode & FB_VMODE_INTERLACED) &&
-				(!only_cea || mxc_edid_mode_to_vic(mode))) {
+				(mxc_edid_mode_to_vic(mode) != 0)) {
 
 			dev_dbg(&hdmi->pdev->dev, "Added mode %d:", i);
 			dev_dbg(&hdmi->pdev->dev,
@@ -1880,7 +1875,6 @@ static void mxc_hdmi_set_mode(struct mxc_hdmi *hdmi)
 	const struct fb_videomode *mode;
 	struct fb_videomode m;
 	struct fb_var_screeninfo var;
-	bool show_logo = !hdmi->dft_mode_set;
 
 	dev_dbg(&hdmi->pdev->dev, "%s\n", __func__);
 
@@ -1900,12 +1894,15 @@ static void mxc_hdmi_set_mode(struct mxc_hdmi *hdmi)
 		return;
 	}
 
-	/* If video mode same as previous, init HDMI again */
-	if (fb_mode_is_equal(&hdmi->previous_non_vga_mode, mode)) {
+	/* If both video mode and work mode same as previous,
+	 * init HDMI again */
+	if (fb_mode_is_equal(&hdmi->previous_non_vga_mode, mode) &&
+		(hdmi->edid_cfg.hdmi_cap != hdmi->hdmi_data.video_mode.mDVI)) {
 		dev_dbg(&hdmi->pdev->dev,
 				"%s: Video mode same as previous\n", __func__);
 		/* update fbi mode in case modelist is updated */
 		hdmi->fbi->mode = (struct fb_videomode *)mode;
+		fb_videomode_to_var(&hdmi->fbi->var, mode);
 		/* update hdmi setting in case EDID data updated  */
 		mxc_hdmi_setup(hdmi, 0);
 	} else {
@@ -1914,11 +1911,6 @@ static void mxc_hdmi_set_mode(struct mxc_hdmi *hdmi)
 		fb_videomode_to_var(&hdmi->fbi->var, mode);
 		dump_fb_videomode((struct fb_videomode *)mode);
 		mxc_hdmi_notify_fb(hdmi);
-#if defined(CONFIG_LOGO)
-		/* Show logo only once, before freeing the logos init mem */
-		if (show_logo && system_state == SYSTEM_BOOTING)
-			fb_show_logo(hdmi->fbi, 0);
-#endif
 	}
 
 }
@@ -1953,9 +1945,8 @@ static void mxc_hdmi_cable_connected(struct mxc_hdmi *hdmi)
 		mxc_hdmi_edid_rebuild_modelist(hdmi);
 		break;
 
-	/* Rebuild even if they're the same in case only_cea changed */
+	/* Nothing to do if EDID same */
 	case HDMI_EDID_SAME:
-		mxc_hdmi_edid_rebuild_modelist(hdmi);
 		break;
 
 	case HDMI_EDID_FAIL:
@@ -2187,18 +2178,12 @@ static void mxc_hdmi_setup(struct mxc_hdmi *hdmi, unsigned long event)
 
 	hdmi_disable_overflow_interrupts();
 
-
-	if (hdmi->vic == 0) {
-		dev_dbg(&hdmi->pdev->dev, "Non-CEA mode used in HDMI\n");
+	dev_dbg(&hdmi->pdev->dev, "CEA mode used vic=%d\n", hdmi->vic);
+	if (hdmi->edid_cfg.hdmi_cap)
+		hdmi->hdmi_data.video_mode.mDVI = false;
+	else {
+		dev_dbg(&hdmi->pdev->dev, "CEA mode vic=%d work in DVI\n", hdmi->vic);
 		hdmi->hdmi_data.video_mode.mDVI = true;
-	} else {
-		dev_dbg(&hdmi->pdev->dev, "CEA mode used vic=%d\n", hdmi->vic);
-		if (!hdmi->dvi_mode && hdmi->edid_cfg.hdmi_cap)
-			hdmi->hdmi_data.video_mode.mDVI = false;
-		else {
-			dev_dbg(&hdmi->pdev->dev, "CEA mode vic=%d work in DVI\n", hdmi->vic);
-			hdmi->hdmi_data.video_mode.mDVI = true;
-		}
 	}
 
 	if ((hdmi->vic == 6) || (hdmi->vic == 7) ||
@@ -2466,64 +2451,10 @@ static void hdmi_get_of_property(struct mxc_hdmi *hdmi)
 	if (ret)
 		dev_dbg(&pdev->dev, "No board specific HDMI PHY cksymtx\n");
 
-	hdmi->dvi_mode = of_property_read_bool(np, "digi,dvi_mode");
-
 	/* Specific phy config */
 	hdmi->phy_config.reg_cksymtx = phy_reg_cksymtx;
 	hdmi->phy_config.reg_vlev = phy_reg_vlev;
 
-}
-
-static int valid_mode(int pixel_fmt)
-{
-	return ((pixel_fmt == IPU_PIX_FMT_RGB24) ||
-		(pixel_fmt == IPU_PIX_FMT_BGR24) ||
-		(pixel_fmt == IPU_PIX_FMT_GBR24) ||
-		(pixel_fmt == IPU_PIX_FMT_YUV444) ||
-		(pixel_fmt == IPU_PIX_FMT_VYU444) ||
-		(pixel_fmt == IPU_PIX_FMT_YUYV) ||
-		(pixel_fmt == IPU_PIX_FMT_UYVY) ||
-		(pixel_fmt == IPU_PIX_FMT_YVYU) ||
-		(pixel_fmt == IPU_PIX_FMT_VYUY));
-}
-
-static void set_fb_bitfield(struct fb_bitfield *bf , u32 offset, u32 length,
-			    u32 msbr)
-{
-	bf->offset = offset;
-	bf->length = length;
-	bf->msb_right = msbr;
-}
-
-static int mxc_hdmi_var_color_format(struct mxc_hdmi *hdmi, int pixelfmt,
-				     struct fb_var_screeninfo *var)
-{
-	switch (pixelfmt) {
-	case IPU_PIX_FMT_RGB24:
-		set_fb_bitfield(&var->red, 0, 8, 0);
-		set_fb_bitfield(&var->green, 8, 8, 0);
-		set_fb_bitfield(&var->blue, 16, 8, 0);
-		set_fb_bitfield(&var->transp, 0, 0, 0);
-		break;
-	case IPU_PIX_FMT_BGR24:
-		set_fb_bitfield(&var->red, 16, 8, 0);
-		set_fb_bitfield(&var->green, 8, 8, 0);
-		set_fb_bitfield(&var->blue, 0, 8, 0);
-		set_fb_bitfield(&var->transp, 0, 0, 0);
-		break;
-	case IPU_PIX_FMT_GBR24:
-		set_fb_bitfield(&var->red, 16, 8, 0);
-		set_fb_bitfield(&var->green, 0, 8, 0);
-		set_fb_bitfield(&var->blue, 8, 8, 0);
-		set_fb_bitfield(&var->transp, 0, 0, 0);
-		break;
-	default:
-		dev_err(&hdmi->pdev->dev, "Unsupported pixel format %s\n",
-			ipu_pixelfmt_str(pixelfmt));
-		return -EINVAL;
-	}
-	var->bits_per_pixel = 24;
-	return 0;
 }
 
 /* HDMI Initialization Step A */
@@ -2559,10 +2490,7 @@ static int mxc_hdmi_disp_init(struct mxc_dispdrv_handle *disp,
 	if (ret < 0)
 		return ret;
 
-	if (!valid_mode(setting->if_fmt)) {
-		dev_warn(&hdmi->pdev->dev, "Input pixel format not valid use default RGB24\n");
-		setting->if_fmt = IPU_PIX_FMT_RGB24;
-	}
+	setting->if_fmt = IPU_PIX_FMT_RGB24;
 
 	hdmi->dft_mode_str = setting->dft_mode_str;
 	hdmi->default_bpp = setting->default_bpp;
@@ -2645,7 +2573,6 @@ static int mxc_hdmi_disp_init(struct mxc_dispdrv_handle *disp,
 
 	spin_lock_init(&hdmi->irq_lock);
 
-	mxc_hdmi_var_color_format(hdmi, setting->if_fmt, &hdmi->fbi->var);
 	/* Set the default mode and modelist when disp init. */
 	fb_find_mode(&hdmi->fbi->var, hdmi->fbi,
 		     hdmi->dft_mode_str, NULL, 0, NULL,

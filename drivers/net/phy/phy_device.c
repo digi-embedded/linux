@@ -34,7 +34,6 @@
 #include <linux/io.h>
 #include <linux/uaccess.h>
 #include <linux/of.h>
-#include <linux/micrel_phy.h>
 
 #include <asm/irq.h>
 
@@ -128,7 +127,7 @@ static int phy_needs_fixup(struct phy_device *phydev, struct phy_fixup *fixup)
 }
 
 /* Runs any matching fixups for this phydev */
-static int phy_scan_fixups(struct phy_device *phydev)
+int phy_scan_fixups(struct phy_device *phydev)
 {
 	struct phy_fixup *fixup;
 
@@ -147,6 +146,7 @@ static int phy_scan_fixups(struct phy_device *phydev)
 
 	return 0;
 }
+EXPORT_SYMBOL(phy_scan_fixups);
 
 struct phy_device *phy_device_create(struct mii_bus *bus, int addr, int phy_id,
 				     bool is_c45,
@@ -812,34 +812,14 @@ EXPORT_SYMBOL(genphy_setup_forced);
 int genphy_restart_aneg(struct phy_device *phydev)
 {
 	int ctl = phy_read(phydev, MII_BMCR);
-	struct phy_driver *pdrv = phydev->drv;
 
 	if (ctl < 0)
 		return ctl;
 
+	ctl |= BMCR_ANENABLE | BMCR_ANRESTART;
+
 	/* Don't isolate the PHY if we're negotiating */
 	ctl &= ~BMCR_ISOLATE;
-
-	/* Micrel KSZ8021/8031/8051 before silicon rev-A2 have an errata
-	 * to not use the ANRESTART flag, instead toggle the ANE flag to
-	 * restart the autonegotiation.
-	 */
-	if ( ((pdrv->phy_id & MICREL_PHY_ID_MASK) ==
-		(PHY_ID_KSZ8031 & MICREL_PHY_ID_MASK)) &&
-		((pdrv->phy_id & 0x0000000F) < 6) ) {
-
-		/* Set also reg to 100/Full to not send 10Mbit link pulses */
-		ctl |= (BMCR_SPEED100 | BMCR_FULLDPLX);
-		ctl &= ~(BMCR_ANENABLE);
-
-		phy_write(phydev, MII_BMCR, ctl);
-
-		udelay(500);
-
-		ctl |= (BMCR_ANENABLE);
-	}
-	else
-		ctl |= (BMCR_ANENABLE | BMCR_ANRESTART);
 
 	return phy_write(phydev, MII_BMCR, ctl);
 }

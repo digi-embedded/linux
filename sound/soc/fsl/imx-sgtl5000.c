@@ -14,11 +14,7 @@
 #include <linux/of.h>
 #include <linux/of_platform.h>
 #include <linux/i2c.h>
-#include <linux/of_gpio.h>
 #include <linux/clk.h>
-#include <linux/gpio.h>
-#include <linux/slab.h>
-#include <sound/jack.h>
 #include <sound/soc.h>
 
 #include "../codecs/sgtl5000.h"
@@ -35,85 +31,11 @@ struct imx_sgtl5000_data {
 	unsigned int clk_frequency;
 };
 
-struct imx_priv {
-	int hp_gpio;
-	int hp_gpio_active_low;
-	int hp_gpio_debounce_time;
-	struct snd_soc_codec *codec;
-	struct platform_device *pdev;
-};
-static struct imx_priv card_priv;
-
-static struct snd_soc_jack imx_hp_jack;
-static struct snd_soc_jack_pin imx_hp_jack_pins[] = {
-	{
-		.pin = "Headphone Jack",
-		.mask = SND_JACK_HEADPHONE,
-	},
-};
-
-#define DEFAULT_DEBOUNCE_TIME		250
-
-static struct snd_soc_jack_gpio imx_hp_jack_gpio = {
-	.name = "headphone detect",
-	.report = SND_JACK_HEADPHONE,
-	.debounce_time = DEFAULT_DEBOUNCE_TIME,
-	.invert = 0,
-};
-
-static int hpjack_status_check(void)
-{
-	struct imx_priv *priv = &card_priv;
-	struct platform_device *pdev = priv->pdev;
-	char *envp[3], *buf;
-	int hp_status, ret;
-
-	hp_status = gpio_get_value(priv->hp_gpio);
-
-	buf = kmalloc(32, GFP_ATOMIC);
-	if (!buf) {
-		dev_err(&pdev->dev, "%s kmalloc failed\n", __func__);
-		return -ENOMEM;
-	}
-
-	if (hp_status != priv->hp_gpio_active_low) {
-		snprintf(buf, 32, "STATE=%d", 2);
-		imx_hp_jack_gpio.debounce_time = 0;
-		ret = imx_hp_jack_gpio.report;
-	} else {
-		snprintf(buf, 32, "STATE=%d", 0);
-		imx_hp_jack_gpio.debounce_time = priv->hp_gpio_debounce_time;
-		ret = 0;
-	}
-
-	envp[0] = "NAME=headphone";
-	envp[1] = buf;
-	envp[2] = NULL;
-	kobject_uevent_env(&pdev->dev.kobj, KOBJ_CHANGE, envp);
-	kfree(buf);
-
-	return ret;
-}
-
 static int imx_sgtl5000_dai_init(struct snd_soc_pcm_runtime *rtd)
 {
 	struct imx_sgtl5000_data *data = snd_soc_card_get_drvdata(rtd->card);
 	struct device *dev = rtd->card->dev;
-	struct snd_soc_codec *codec = rtd->codec;
-	struct imx_priv *priv = &card_priv;
 	int ret;
-
-	priv->codec = codec;
-
-	if (gpio_is_valid(priv->hp_gpio)) {
-		imx_hp_jack_gpio.jack_status_check = hpjack_status_check;
-		snd_soc_jack_new(codec, "Headphone Jack", SND_JACK_HEADPHONE,
-				 &imx_hp_jack);
-		snd_soc_jack_add_pins(&imx_hp_jack,
-				      ARRAY_SIZE(imx_hp_jack_pins),
-				      imx_hp_jack_pins);
-		snd_soc_jack_add_gpios(&imx_hp_jack, 1, &imx_hp_jack_gpio);
-	}
 
 	ret = snd_soc_dai_set_sysclk(rtd->codec_dai, SGTL5000_SYSCLK,
 				     data->clk_frequency, SND_SOC_CLOCK_IN);
@@ -124,29 +46,6 @@ static int imx_sgtl5000_dai_init(struct snd_soc_pcm_runtime *rtd)
 
 	return 0;
 }
-
-static ssize_t show_headphone(struct device_driver *dev, char *buf)
-{
-	struct imx_priv *priv = &card_priv;
-	int hp_status;
-
-	if (!gpio_is_valid(priv->hp_gpio)) {
-		strcpy(buf, "no detect gpio connected\n");
-		return strlen(buf);
-	}
-
-	/* Check if headphone is plugged in */
-	hp_status = gpio_get_value(priv->hp_gpio) ? 1 : 0;
-
-	if (hp_status != priv->hp_gpio_active_low)
-		strcpy(buf, "headphone\n");
-	else
-		strcpy(buf, "no headphone\n");
-
-	return strlen(buf);
-}
-
-static DRIVER_ATTR(headphone, S_IRUGO | S_IWUSR, show_headphone, NULL);
 
 static const struct snd_soc_dapm_widget imx_sgtl5000_dapm_widgets[] = {
 	SND_SOC_DAPM_MIC("Mic Jack", NULL),
@@ -161,9 +60,6 @@ static int imx_sgtl5000_audmux_config(struct platform_device *pdev)
 	struct device_node *np = pdev->dev.of_node;
 	int int_port, ext_port;
 	int ret;
-	struct imx_priv *priv = &card_priv;
-
-	priv->pdev = pdev;
 
 	ret = of_property_read_u32(np, "mux-int-port", &int_port);
 	if (ret) {
@@ -174,18 +70,6 @@ static int imx_sgtl5000_audmux_config(struct platform_device *pdev)
 	if (ret) {
 		dev_err(&pdev->dev, "mux-ext-port missing or invalid\n");
 		return ret;
-	}
-
-	priv->hp_gpio = of_get_named_gpio_flags(np, "hp-det-gpios", 0,
-			(enum of_gpio_flags *)&priv->hp_gpio_active_low);
-
-	if (gpio_is_valid(priv->hp_gpio)) {
-		imx_hp_jack_gpio.gpio = priv->hp_gpio;
-		imx_hp_jack_gpio.invert = priv->hp_gpio_active_low;
-		priv->hp_gpio_debounce_time = DEFAULT_DEBOUNCE_TIME;
-		of_property_read_u32(np, "hp-det-debounce",
-				     &priv->hp_gpio_debounce_time);
-		imx_hp_jack_gpio.debounce_time = priv->hp_gpio_debounce_time;
 	}
 
 	/*
@@ -222,7 +106,6 @@ static int imx_sgtl5000_probe(struct platform_device *pdev)
 	struct platform_device *cpu_pdev;
 	struct i2c_client *codec_dev;
 	struct imx_sgtl5000_data *data = NULL;
-	struct imx_priv *priv = &card_priv;
 	int ret;
 
 	cpu_np = of_parse_phandle(pdev->dev.of_node, "cpu-dai", 0);
@@ -297,23 +180,11 @@ static int imx_sgtl5000_probe(struct platform_device *pdev)
 		goto fail;
 	}
 
-	if (gpio_is_valid(priv->hp_gpio)) {
-		ret = driver_create_file(pdev->dev.driver,
-					 &driver_attr_headphone);
-		if (ret) {
-			dev_err(&pdev->dev, "create hp attr failed (%d)\n",
-				ret);
-			goto clk_fail;
-		}
-	}
-
 	of_node_put(cpu_np);
 	of_node_put(codec_np);
 
 	return 0;
 
-clk_fail:
-	clk_put(data->codec_clk);
 fail:
 	if (data && !IS_ERR(data->codec_clk))
 		clk_put(data->codec_clk);
@@ -330,12 +201,7 @@ static int imx_sgtl5000_remove(struct platform_device *pdev)
 	struct snd_soc_card *card = platform_get_drvdata(pdev);
 	struct imx_sgtl5000_data *data = snd_soc_card_get_drvdata(card);
 
-	driver_remove_file(pdev->dev.driver, &driver_attr_headphone);
-	if (data->codec_clk) {
-		clk_disable_unprepare(data->codec_clk);
-		clk_put(data->codec_clk);
-	}
-	snd_soc_unregister_card(&data->card);
+	clk_put(data->codec_clk);
 
 	return 0;
 }

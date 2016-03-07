@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2014 Freescale Semiconductor, Inc. All Rights Reserved
+ * Copyright (C) 2013-2015 Freescale Semiconductor, Inc. All Rights Reserved
  */
 
 /*
@@ -67,6 +67,11 @@ struct mxcfb_gamma {
 	int slopek[16];
 };
 
+struct mxcfb_gpu_split_fmt {
+	struct fb_var_screeninfo var;
+	unsigned long offset;
+};
+
 struct mxcfb_rect {
 	__u32 top;
 	__u32 left;
@@ -89,6 +94,8 @@ struct mxcfb_rect {
 #define UPDATE_MODE_PARTIAL			0x0
 #define UPDATE_MODE_FULL			0x1
 
+#define WAVEFORM_MODE_GLR16			4
+#define WAVEFORM_MODE_GLD16			5
 #define WAVEFORM_MODE_AUTO			257
 
 #define TEMP_USE_AMBIENT			0x1000
@@ -101,6 +108,16 @@ struct mxcfb_rect {
 #define EPDC_FLAG_GROUP_UPDATE			0x400
 #define EPDC_FLAG_USE_DITHERING_Y1		0x2000
 #define EPDC_FLAG_USE_DITHERING_Y4		0x4000
+#define EPDC_FLAG_USE_REGAL				0x8000
+
+enum mxcfb_dithering_mode {
+	EPDC_FLAG_USE_DITHERING_PASSTHROUGH = 0x0,
+	EPDC_FLAG_USE_DITHERING_FLOYD_STEINBERG,
+	EPDC_FLAG_USE_DITHERING_ATKINSON,
+	EPDC_FLAG_USE_DITHERING_ORDERED,
+	EPDC_FLAG_USE_DITHERING_QUANT_ONLY,
+	EPDC_FLAG_USE_DITHERING_MAX,
+};
 
 #define FB_POWERDOWN_DISABLE			-1
 
@@ -118,6 +135,8 @@ struct mxcfb_update_data {
 	__u32 update_marker;
 	int temp;
 	unsigned int flags;
+	int dither_mode;
+	int quant_bit;
 	struct mxcfb_alt_buffer_data alt_buffer_data;
 };
 
@@ -160,6 +179,9 @@ struct mxcfb_csc_matrix {
 #define MXCFB_GET_FB_BLANK     _IOR('F', 0x2B, u_int32_t)
 #define MXCFB_SET_DIFMT		_IOW('F', 0x2C, u_int32_t)
 #define MXCFB_CSC_UPDATE	_IOW('F', 0x2D, struct mxcfb_csc_matrix)
+#define MXCFB_SET_GPU_SPLIT_FMT	_IOW('F', 0x2F, struct mxcfb_gpu_split_fmt)
+#define MXCFB_SET_PREFETCH	_IOW('F', 0x30, int)
+#define MXCFB_GET_PREFETCH	_IOR('F', 0x31, int)
 
 /* IOCTLs for E-ink panel updates */
 #define MXCFB_SET_WAVEFORM_MODES	_IOW('F', 0x2B, struct mxcfb_waveform_modes)

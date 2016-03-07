@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2014 Freescale Semiconductor, Inc.
+ * Copyright 2012-2015 Freescale Semiconductor, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -13,7 +13,8 @@
 
 #define FSL_SAI_FORMATS (SNDRV_PCM_FMTBIT_S16_LE |\
 			 SNDRV_PCM_FMTBIT_S20_3LE |\
-			 SNDRV_PCM_FMTBIT_S24_LE)
+			 SNDRV_PCM_FMTBIT_S24_LE |\
+			 SNDRV_PCM_FMTBIT_S32_LE)
 
 /* SAI Register Map Register */
 #define FSL_SAI_TCSR	0x00 /* SAI Transmit Control */
@@ -139,6 +140,7 @@ struct fsl_sai {
 	bool is_dsp_mode;
 	bool sai_on_imx;
 	bool synchronous[2];
+	bool is_stream_opened[2];
 
 	unsigned int mclk_id;
 	unsigned int mclk_streams;

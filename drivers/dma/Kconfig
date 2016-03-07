@@ -137,18 +137,7 @@ config MX3_IPU_IRQS
 	  To avoid bloating the irq_desc[] array we allocate a sufficient
 	  number of IRQ slots and map them dynamically to specific sources.
 
-config MXC_PXP_V2
-	bool "MXC PxP V2 support"
-	depends on ARM
-	select DMA_ENGINE
-	help
-          Support the PxP (Pixel Pipeline) on i.MX6 DualLite and i.MX6 SoloLite.
-	  If unsure, select N.
-
-config MXC_PXP_CLIENT_DEVICE
-	bool "MXC PxP Client Device"
-	default y
-	depends on MXC_PXP_V2
+source "drivers/dma/pxp/Kconfig"
 
 config TXX9_DMAC
 	tristate "Toshiba TXx9 SoC DMA support"
@@ -277,7 +266,7 @@ config IMX_DMA
 
 config MXS_DMA
 	bool "MXS DMA support"
-	depends on SOC_IMX23 || SOC_IMX28 || SOC_IMX6Q
+	depends on SOC_IMX23 || SOC_IMX28 || SOC_IMX6
 	select STMP_DEVICE
 	select DMA_ENGINE
 	help

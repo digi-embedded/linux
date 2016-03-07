@@ -711,6 +711,11 @@ __acquires(ci->lock)
 {
 	int retval;
 
+	if (ci_otg_is_fsm_mode(ci)) {
+		ci->fsm.otg_srp_reqd = 0;
+		ci->fsm.otg_hnp_reqd = 0;
+	}
+
 	spin_unlock(&ci->lock);
 	if (ci->gadget.speed != USB_SPEED_UNKNOWN) {
 		if (ci->driver)
@@ -853,8 +858,8 @@ __acquires(hwep->lock)
 			else
 				*(u8 *)req->buf = 0;
 		} else {
-			/* Assume that device is bus powered for now. */
-			*(u16 *)req->buf = ci->remote_wakeup << 1;
+			*(u16 *)req->buf = (ci->remote_wakeup << 1) |
+				ci->gadget.is_selfpowered;
 		}
 	} else if ((setup->bRequestType & USB_RECIP_MASK) \
 		   == USB_RECIP_ENDPOINT) {
@@ -962,6 +967,35 @@ __acquires(hwep->lock)
 		retval = 0;
 
 	return retval;
+}
+
+static int otg_a_alt_hnp_support(struct ci_hdrc *ci)
+{
+	dev_warn(&ci->gadget.dev,
+		"connect the device to an alternate port if you want HNP\n");
+	return isr_setup_status_phase(ci);
+}
+
+static int otg_srp_reqd(struct ci_hdrc *ci)
+{
+	if (ci_otg_is_fsm_mode(ci)) {
+		ci->fsm.otg_srp_reqd = 1;
+		return isr_setup_status_phase(ci);
+	} else {
+		return -ENOTSUPP;
+	}
+}
+
+static int otg_hnp_reqd(struct ci_hdrc *ci)
+{
+	if (ci_otg_is_fsm_mode(ci)) {
+		ci->fsm.otg_hnp_reqd = 1;
+		ci->fsm.b_bus_req = 1;
+		ci->gadget.host_request_flag = 1;
+		return isr_setup_status_phase(ci);
+	} else {
+		return -ENOTSUPP;
+	}
 }
 
 /**
@@ -1086,6 +1120,12 @@ __acquires(ci->lock)
 					err = isr_setup_status_phase(
 							ci);
 					break;
+				case TEST_OTG_SRP_REQD:
+					err = otg_srp_reqd(ci);
+					break;
+				case TEST_OTG_HNP_REQD:
+					err = otg_hnp_reqd(ci);
+					break;
 				default:
 					break;
 				}
@@ -1096,6 +1136,10 @@ __acquires(ci->lock)
 					err = isr_setup_status_phase(
 							ci);
 				}
+				break;
+			case USB_DEVICE_A_ALT_HNP_SUPPORT:
+				if (ci_otg_is_fsm_mode(ci))
+					err = otg_a_alt_hnp_support(ci);
 				break;
 			default:
 				goto delegate;
@@ -1559,6 +1603,19 @@ static int ci_udc_vbus_draw(struct usb_gadget *_gadget, unsigned ma)
 	return -ENOTSUPP;
 }
 
+static int ci_udc_selfpowered(struct usb_gadget *_gadget, int is_on)
+{
+	struct ci_hdrc *ci = container_of(_gadget, struct ci_hdrc, gadget);
+	struct ci_hw_ep *hwep = ci->ep0in;
+	unsigned long flags;
+
+	spin_lock_irqsave(hwep->lock, flags);
+	_gadget->is_selfpowered = (is_on != 0);
+	spin_unlock_irqrestore(hwep->lock, flags);
+
+	return 0;
+}
+
 /* Change Data+ pullup status
  * this func is used by usb_gadget_connect/disconnet
  */
@@ -1589,6 +1646,7 @@ static int ci_udc_stop(struct usb_gadget *gadget,
 static const struct usb_gadget_ops usb_gadget_ops = {
 	.vbus_session	= ci_udc_vbus_session,
 	.wakeup		= ci_udc_wakeup,
+	.set_selfpowered	= ci_udc_selfpowered,
 	.pullup		= ci_udc_pullup,
 	.vbus_draw	= ci_udc_vbus_draw,
 	.udc_start	= ci_udc_start,
@@ -1703,6 +1761,22 @@ static int ci_udc_start(struct usb_gadget *gadget,
 	return retval;
 }
 
+static void ci_udc_stop_for_otg_fsm(struct ci_hdrc *ci)
+{
+	if (!ci_otg_is_fsm_mode(ci))
+		return;
+
+	mutex_lock(&ci->fsm.lock);
+	if (ci->fsm.otg->state == OTG_STATE_A_PERIPHERAL) {
+		ci->fsm.a_bidl_adis_tmout = 1;
+		ci_hdrc_otg_fsm_start(ci);
+	} else if (ci->fsm.otg->state == OTG_STATE_B_PERIPHERAL) {
+		ci->fsm.protocol = PROTO_UNDEF;
+		ci->fsm.otg->state = OTG_STATE_UNDEFINED;
+	}
+	mutex_unlock(&ci->fsm.lock);
+}
+
 /**
  * ci_udc_stop: unregister a gadget driver
  */
@@ -1728,6 +1802,7 @@ static int ci_udc_stop(struct usb_gadget *gadget,
 	ci->driver = NULL;
 	spin_unlock_irqrestore(&ci->lock, flags);
 
+	ci_udc_stop_for_otg_fsm(ci);
 	return 0;
 }
 
@@ -1805,6 +1880,7 @@ static irqreturn_t udc_irq(struct ci_hdrc *ci)
 static int udc_start(struct ci_hdrc *ci)
 {
 	struct device *dev = ci->dev;
+	struct usb_otg_caps *otg_caps = &ci->platdata->ci_otg_caps;
 	int retval = 0;
 
 	spin_lock_init(&ci->lock);
@@ -1812,8 +1888,12 @@ static int udc_start(struct ci_hdrc *ci)
 	ci->gadget.ops          = &usb_gadget_ops;
 	ci->gadget.speed        = USB_SPEED_UNKNOWN;
 	ci->gadget.max_speed    = USB_SPEED_HIGH;
-	ci->gadget.is_otg       = ci->is_otg ? 1 : 0;
 	ci->gadget.name         = ci->platdata->name;
+	ci->gadget.otg_caps	= &ci->platdata->ci_otg_caps;
+
+	if (otg_caps->hnp_support || otg_caps->srp_support ||
+					otg_caps->adp_support)
+		ci->gadget.is_otg = 1;
 
 	INIT_LIST_HEAD(&ci->gadget.ep_list);
 
@@ -1956,7 +2036,8 @@ static void udc_id_switch_for_host(struct ci_hdrc *ci)
 	 * (in otg fsm mode, means B_IDLE->A_IDLE) due to ID change.
 	 */
 	if (!ci_otg_is_fsm_mode(ci) ||
-			ci->fsm.otg->state == OTG_STATE_B_IDLE)
+			ci->fsm.otg->state == OTG_STATE_B_IDLE ||
+			ci->fsm.otg->state == OTG_STATE_UNDEFINED)
 		hw_write_otgsc(ci, OTGSC_BSVIE | OTGSC_BSVIS, OTGSC_BSVIS);
 }
 

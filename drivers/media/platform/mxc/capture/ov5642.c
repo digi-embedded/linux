@@ -27,11 +27,8 @@
 #include <linux/clk.h>
 #include <linux/of_device.h>
 #include <linux/i2c.h>
-#include <linux/mfd/syscon.h>
-#include <linux/mfd/syscon/imx6q-iomuxc-gpr.h>
 #include <linux/of_gpio.h>
 #include <linux/pinctrl/consumer.h>
-#include <linux/regmap.h>
 #include <linux/regulator/consumer.h>
 #include <linux/fsl_devices.h>
 #include <media/v4l2-chip-ident.h>
@@ -3021,34 +3018,8 @@ static struct i2c_driver ov5642_i2c_driver = {
 	.id_table = ov5642_id,
 };
 
-static s32 update_device_addr(struct sensor_data *sensor)
-{
-	int ret;
-	u8 buf[4];
-	unsigned reg = 0x3100;
-	unsigned default_addr = 0x3c;
-	struct i2c_msg msg;
-
-	if (sensor->i2c_client->addr == default_addr)
-		return 0;
-
-	buf[0] = reg >> 8;
-	buf[1] = reg & 0xff;
-	buf[2] = sensor->i2c_client->addr << 1;
-	msg.addr = default_addr;
-	msg.flags = 0;
-	msg.len = 3;
-	msg.buf = buf;
-
-	ret = i2c_transfer(sensor->i2c_client->adapter, &msg, 1);
-	return ret;
-}
-
 static void ov5642_standby(s32 enable)
 {
-	if (!gpio_is_valid(pwn_gpio))
-		return;
-
 	if (enable)
 		gpio_set_value(pwn_gpio, 1);
 	else
@@ -3059,30 +3030,23 @@ static void ov5642_standby(s32 enable)
 
 static void ov5642_reset(void)
 {
-	mxc_camera_common_lock();
+	/* camera reset */
+	gpio_set_value(rst_gpio, 1);
 
-	if (gpio_is_valid(rst_gpio))
-		gpio_set_value(rst_gpio, 1);
+	/* camera power down */
+	gpio_set_value(pwn_gpio, 1);
+	msleep(5);
 
-	if (gpio_is_valid(pwn_gpio)) {
-		gpio_set_value(pwn_gpio, 1);
-		msleep(5);
-		gpio_set_value(pwn_gpio, 0);
-		msleep(5);
-	}
+	gpio_set_value(pwn_gpio, 0);
+	msleep(5);
 
-	if (gpio_is_valid(rst_gpio)) {
-		gpio_set_value(rst_gpio, 0);
-		msleep(1);
-		gpio_set_value(rst_gpio, 1);
-		msleep(20);
-	}
+	gpio_set_value(rst_gpio, 0);
+	msleep(1);
 
-	update_device_addr(&ov5642_data);
-	mxc_camera_common_unlock();
+	gpio_set_value(rst_gpio, 1);
+	msleep(5);
 
-	if (gpio_is_valid(pwn_gpio))
-		gpio_set_value(pwn_gpio, 1);
+	gpio_set_value(pwn_gpio, 1);
 }
 
 static int ov5642_power_on(struct device *dev)
@@ -3096,15 +3060,14 @@ static int ov5642_power_on(struct device *dev)
 				      OV5642_VOLTAGE_DIGITAL_IO);
 		ret = regulator_enable(io_regulator);
 		if (ret) {
-			pr_err("%s:io set voltage error.\n", __func__);
+			pr_err("%s:io set voltage error\n", __func__);
 			return ret;
 		} else {
 			dev_dbg(dev,
 				"%s:io set voltage ok\n", __func__);
 		}
 	} else {
-		pr_warn("%s: io voltage not provided, assuming powered.\n",
-				__func__);
+		pr_err("%s: cannot get io voltage error\n", __func__);
 		io_regulator = NULL;
 	}
 
@@ -3123,8 +3086,7 @@ static int ov5642_power_on(struct device *dev)
 		}
 	} else {
 		core_regulator = NULL;
-		pr_warn("%s: core voltage not provided, assuming powered.\n",
-				__func__);
+		pr_err("%s: cannot get core voltage error\n", __func__);
 	}
 
 	analog_regulator = devm_regulator_get(dev, "AVDD");
@@ -3143,8 +3105,7 @@ static int ov5642_power_on(struct device *dev)
 		}
 	} else {
 		analog_regulator = NULL;
-		pr_warn("%s: analog voltage not provided, assuming powered.\n",
-				__func__);
+		pr_err("%s: cannot get analog voltage error\n", __func__);
 	}
 
 	return ret;
@@ -3152,27 +3113,18 @@ static int ov5642_power_on(struct device *dev)
 
 static s32 ov5642_write_reg(u16 reg, u8 val)
 {
-	int ret;
 	u8 au8Buf[3] = {0};
 
 	au8Buf[0] = reg >> 8;
 	au8Buf[1] = reg & 0xff;
 	au8Buf[2] = val;
 
-	if ((reg == 0x3008) && (val & 0x80)) {
-		mxc_camera_common_lock();
-		ret = i2c_master_send(ov5642_data.i2c_client, au8Buf, 3);
-		update_device_addr(&ov5642_data);
-		mxc_camera_common_unlock();
-	} else {
-		ret = i2c_master_send(ov5642_data.i2c_client, au8Buf, 3);
+	if (i2c_master_send(ov5642_data.i2c_client, au8Buf, 3) < 0) {
+		pr_err("%s:write reg error:reg=%x,val=%x\n",
+			__func__, reg, val);
+		return -1;
 	}
 
-	if (ret < 0) {
-		pr_err("%s:write reg error:reg=%x,val=%x ret=%d\n",
-			__func__, reg, val, ret);
-		return ret;
-	}
 	return 0;
 }
 
@@ -3266,12 +3218,16 @@ static int ov5642_change_mode(enum ov5642_frame_rate new_frame_rate,
 		return -1;
 	}
 
-	if (new_mode == ov5642_mode_VGA_640_480) {
+	if ((new_frame_rate == old_frame_rate) &&
+	    (new_mode == ov5642_mode_VGA_640_480) &&
+		(orig_mode == ov5642_mode_QSXGA_2592_1944)) {
 		pModeSetting = ov5642_setting_QSXGA_2_VGA;
 		iModeSettingArySize = ARRAY_SIZE(ov5642_setting_QSXGA_2_VGA);
 		ov5642_data.pix.width = 640;
 		ov5642_data.pix.height = 480;
-	} else if (new_mode == ov5642_mode_QVGA_320_240) {
+	} else if ((new_frame_rate == old_frame_rate) &&
+	    (new_mode == ov5642_mode_QVGA_320_240) &&
+		(orig_mode == ov5642_mode_VGA_640_480)) {
 		pModeSetting = ov5642_setting_VGA_2_QVGA;
 		iModeSettingArySize = ARRAY_SIZE(ov5642_setting_VGA_2_QVGA);
 		ov5642_data.pix.width = 320;
@@ -4128,16 +4084,6 @@ static int ov5642_probe(struct i2c_client *client,
 	struct device *dev = &client->dev;
 	int retval;
 	u8 chip_id_high, chip_id_low;
-	struct regmap *gpr;
-	struct sensor_data *sensor = &ov5642_data;
-	static int defer_probe = 1;
-
-	if (of_property_read_bool(dev->of_node, "digi,defer-probe")) {
-		if (defer_probe) {
-			defer_probe = 0;
-			return -EPROBE_DEFER;
-		}
-	}
 
 	/* ov5642 pinctrl */
 	pinctrl = devm_pinctrl_get_select_default(dev);
@@ -4150,23 +4096,23 @@ static int ov5642_probe(struct i2c_client *client,
 	pwn_gpio = of_get_named_gpio(dev->of_node, "pwn-gpios", 0);
 	if (!gpio_is_valid(pwn_gpio)) {
 		dev_warn(dev, "no sensor pwdn pin available");
-	} else {
-		retval = devm_gpio_request_one(dev, pwn_gpio,
-			GPIOF_OUT_INIT_HIGH, "ov5642_pwdn");
-		if (retval < 0)
-			return retval;
+		return -EINVAL;
 	}
+	retval = devm_gpio_request_one(dev, pwn_gpio, GPIOF_OUT_INIT_HIGH,
+					"ov5642_pwdn");
+	if (retval < 0)
+		return retval;
 
 	/* request reset pin */
 	rst_gpio = of_get_named_gpio(dev->of_node, "rst-gpios", 0);
-	if (!gpio_is_valid(rst_gpio))
+	if (!gpio_is_valid(rst_gpio)) {
 		dev_warn(dev, "no sensor reset pin available");
-	else {
-		retval = devm_gpio_request_one(dev, rst_gpio,
-			GPIOF_OUT_INIT_HIGH, "ov5642_reset");
-		if (retval < 0)
-			return retval;
+		return -EINVAL;
 	}
+	retval = devm_gpio_request_one(dev, rst_gpio, GPIOF_OUT_INIT_HIGH,
+					"ov5642_reset");
+	if (retval < 0)
+		return retval;
 
 	/* Set initial values for the sensor struct. */
 	memset(&ov5642_data, 0, sizeof(ov5642_data));
@@ -4189,13 +4135,6 @@ static int ov5642_probe(struct i2c_client *client,
 					(u32 *) &(ov5642_data.mclk_source));
 	if (retval) {
 		dev_err(dev, "mclk_source missing or invalid\n");
-		return retval;
-	}
-
-	retval = of_property_read_u32(dev->of_node, "ipu_id",
-					&sensor->ipu_id);
-	if (retval) {
-		dev_err(dev, "ipu_id missing or invalid\n");
 		return retval;
 	}
 
@@ -4236,28 +4175,6 @@ static int ov5642_probe(struct i2c_client *client,
 		pr_warning("camera ov5642 is not found\n");
 		clk_disable_unprepare(ov5642_data.sensor_clk);
 		return -ENODEV;
-	}
-
-	gpr = syscon_regmap_lookup_by_compatible("fsl,imx6q-iomuxc-gpr");
-	if (!IS_ERR(gpr)) {
-		if (of_machine_is_compatible("fsl,imx6q")) {
-			int mask = ov5642_data.csi ? (1 << 20) : (1 << 19);
-
-			if (sensor->csi != sensor->ipu_id) {
-				pr_warning("%s: csi_id != ipu_id\n", __func__);
-				return -ENODEV;
-			}
-
-			regmap_update_bits(gpr, IOMUXC_GPR1, mask, mask);
-		} else if (of_machine_is_compatible("fsl,imx6dl")) {
-			int mask = ov5642_data.csi ? (7 << 3) : (7 << 0);
-			int val =  ov5642_data.csi ? (4 << 3) : (4 << 0);
-
-			regmap_update_bits(gpr, IOMUXC_GPR13, mask, val);
-		}
-	} else {
-		pr_err("%s: failed to find fsl,imx6q-iomux-gpr regmap\n",
-		       __func__);
 	}
 
 	ov5642_standby(1);

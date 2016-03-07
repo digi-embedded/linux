@@ -18,7 +18,7 @@ Optional properties:
 - vbus-supply: regulator for vbus
 - disable-over-current: disable over current detect
 - external-vbus-divider: enables off-chip resistor divider for Vbus
-- imx6-usb-charger-detection: enable imx6 usb charger detect function,
+- imx-usb-charger-detection: enable imx usb charger detect function,
   only set it when the user wants SoC usb charger detection capabilities.
   If the user wants to use charger IC's usb charger detection capabilities,
   please do not set it.
@@ -32,6 +32,8 @@ Optional properties:
   0 <= osc-clkgate-delay <= 7.
 - maximum-speed: limit the maximum connection speed to "full-speed".
 - tpl-support: TPL (Targeted Peripheral List) feature for targeted hosts
+- phy-clkgate-delay-us: the delay time(us) between putting phy into low power
+  mode and gate phy clock.
 
 Examples:
 usb@02184000 { /* USB OTG */
@@ -42,7 +44,7 @@ usb@02184000 { /* USB OTG */
 	fsl,usbmisc = <&usbmisc 0>;
 	disable-over-current;
 	external-vbus-divider;
-	imx6-usb-charger-detection;
+	imx-usb-charger-detection;
 	fsl,anatop = <&anatop>;
 	pinctrl-names = "idle", "active";
 	pinctrl-0 = <&pinctrl_usbh2_1>;
@@ -50,4 +52,5 @@ usb@02184000 { /* USB OTG */
 	osc-clkgate-delay = <0x3>;
 	maximum-speed = "full-speed";
 	tpl-support;
+	phy-clkgate-delay-us = <400>;
 };

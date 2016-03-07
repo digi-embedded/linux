@@ -1,5 +1,5 @@
 /*
- * Copyright 2005-2013 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright 2005-2015 Freescale Semiconductor, Inc. All Rights Reserved.
  */
 
 /*
@@ -434,13 +434,13 @@ static int _rgb_to_yuv(int n, int red, int green, int blue)
 static struct dp_csc_param_t dp_csc_array[CSC_NUM][CSC_NUM] = {
 	{{DP_COM_CONF_CSC_DEF_BOTH, (void *)&rgb2ycbcr_coeff}, {0, 0}, {0, 0},
 	{DP_COM_CONF_CSC_DEF_BG, (void *)&rgb2ycbcr_coeff},
-	{DP_COM_CONF_CSC_DEF_BG, (void *)&rgb2ycbcr_coeff} },
-	{{0, 0}, {DP_COM_CONF_CSC_DEF_BOTH, (void *)&ycbcr2rgb_coeff},
+	{DP_COM_CONF_CSC_DEF_BG, (void *)&rgb2ycbcr_coeff} },{{0, 0},
+	{DP_COM_CONF_CSC_DEF_BOTH, (void *)&ycbcr2rgb_coeff},
 	{DP_COM_CONF_CSC_DEF_BG, (void *)&ycbcr2rgb_coeff}, {0, 0},
-	{DP_COM_CONF_CSC_DEF_BG, (void *)&ycbcr2rgb_coeff} },
-	{{0, 0}, {DP_COM_CONF_CSC_DEF_FG, (void *)&ycbcr2rgb_coeff}, {0, 0},
-	{0, 0}, {0, 0} }, {{DP_COM_CONF_CSC_DEF_FG, (void *)&rgb2ycbcr_coeff},
-	{0, 0}, {0, 0}, {0, 0}, {0, 0} },
+	{DP_COM_CONF_CSC_DEF_BG, (void *)&ycbcr2rgb_coeff} },{{0, 0},
+	{DP_COM_CONF_CSC_DEF_FG, (void *)&ycbcr2rgb_coeff}, {0, 0}, {0, 0},
+	{0, 0} },{{DP_COM_CONF_CSC_DEF_FG, (void *)&rgb2ycbcr_coeff},
+	{0, 0},{0, 0}, {0, 0}, {0, 0} },
 	{{DP_COM_CONF_CSC_DEF_FG, (void *)&rgb2ycbcr_coeff},
 	{DP_COM_CONF_CSC_DEF_FG, (void *)&ycbcr2rgb_coeff}, {0, 0}, {0, 0},
 	{0, 0} }
@@ -565,7 +565,9 @@ int _ipu_dp_init(struct ipu_soc *ipu,
 		dev_dbg(ipu->dev, "_ipu_dp_init color key change to yuv fmt 0x%x!\n", color_key);
 	}
 
-	__ipu_dp_csc_setup(ipu, dp, dp_csc_array[ipu->bg_csc_type][ipu->fg_csc_type], true);
+	__ipu_dp_csc_setup(ipu, dp,
+			   dp_csc_array[ipu->bg_csc_type][ipu->fg_csc_type],
+			   false);
 
 	return 0;
 }
@@ -744,6 +746,7 @@ void _ipu_dp_dc_enable(struct ipu_soc *ipu, ipu_channel_t channel)
 	ipu_dc_write(ipu, reg, DC_WR_CH_CONF(dc_chan));
 
 	clk_prepare_enable(ipu->pixel_clk[di]);
+	ipu->pixel_clk_en[ipu->dc_di_assignment[dc_chan]] = true;
 }
 
 static irqreturn_t dc_irq_handler(int irq, void *dev_id)
@@ -809,9 +812,12 @@ void _ipu_dp_dc_disable(struct ipu_soc *ipu, ipu_channel_t channel, bool swap)
 
 		if (ipu_is_channel_busy(ipu, MEM_BG_SYNC)) {
 			ipu_cm_write(ipu, IPUIRQ_2_MASK(IPU_IRQ_DP_SF_END),
-					IPUIRQ_2_STATREG(IPU_IRQ_DP_SF_END));
-			while ((ipu_cm_read(ipu, IPUIRQ_2_STATREG(IPU_IRQ_DP_SF_END)) &
-						IPUIRQ_2_MASK(IPU_IRQ_DP_SF_END)) == 0) {
+				IPUIRQ_2_STATREG(ipu->devtype,
+							IPU_IRQ_DP_SF_END));
+			while ((ipu_cm_read(ipu,
+				IPUIRQ_2_STATREG(ipu->devtype,
+							IPU_IRQ_DP_SF_END)) &
+				IPUIRQ_2_MASK(IPU_IRQ_DP_SF_END)) == 0) {
 				msleep(2);
 				timeout -= 2;
 				if (timeout <= 0)
@@ -1171,7 +1177,7 @@ int32_t ipu_init_sync_panel(struct ipu_soc *ipu, int disp, uint32_t pixel_clk,
 	ipu_di_write(ipu, disp, di_gen, DI_GENERAL);
 
 	if (sig.interlaced) {
-		if (g_ipu_hw_rev >= IPU_V3DEX) {
+		if (ipu->devtype >= IPUv3EX) {
 			/* Setup internal HSYNC waveform */
 			_ipu_di_sync_config(ipu,
 					disp, 		/* display */
@@ -1935,15 +1941,6 @@ int32_t ipu_disp_get_window_pos(struct ipu_soc *ipu, ipu_channel_t channel,
 	return ret;
 }
 EXPORT_SYMBOL(ipu_disp_get_window_pos);
-
-void ipu_disp_direct_write(struct ipu_soc *ipu, ipu_channel_t channel, u32 value, u32 offset)
-{
-	if (channel == DIRECT_ASYNC0)
-		writel(value, ipu->disp_base[0] + offset);
-	else if (channel == DIRECT_ASYNC1)
-		writel(value, ipu->disp_base[1] + offset);
-}
-EXPORT_SYMBOL(ipu_disp_direct_write);
 
 void ipu_reset_disp_panel(struct ipu_soc *ipu)
 {

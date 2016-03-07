@@ -2016,7 +2016,7 @@ static int nand_write_page_raw_syndrome(struct mtd_info *mtd,
 			oob += chip->ecc.prepad;
 		}
 
-		chip->write_buf(mtd, oob, eccbytes);
+		chip->read_buf(mtd, oob, eccbytes);
 		oob += eccbytes;
 
 		if (chip->ecc.postpad) {
@@ -3091,7 +3091,7 @@ static int nand_flash_detect_onfi(struct mtd_info *mtd, struct nand_chip *chip,
 					int *busw)
 {
 	struct nand_onfi_params *p = &chip->onfi_params;
-	int i, j;
+	int i;
 	int val;
 
 	/* Try ONFI for unknown chip or LP */
@@ -3100,10 +3100,18 @@ static int nand_flash_detect_onfi(struct mtd_info *mtd, struct nand_chip *chip,
 		chip->read_byte(mtd) != 'F' || chip->read_byte(mtd) != 'I')
 		return 0;
 
+	/*
+	 * ONFI must be probed in 8-bit mode or with NAND_BUSWIDTH_AUTO, not
+	 * with NAND_BUSWIDTH_16
+	 */
+	if (chip->options & NAND_BUSWIDTH_16) {
+		pr_err("ONFI cannot be probed in 16-bit mode; aborting\n");
+		return 0;
+	}
+
 	chip->cmdfunc(mtd, NAND_CMD_PARAM, 0, -1);
 	for (i = 0; i < 3; i++) {
-		for (j = 0; j < sizeof(*p); j++)
-			((uint8_t *)p)[j] = chip->read_byte(mtd);
+		chip->read_buf(mtd, (uint8_t *)p, sizeof(*p));
 		if (onfi_crc16(ONFI_CRC_BASE, (uint8_t *)p, 254) ==
 				le16_to_cpu(p->crc)) {
 			break;
@@ -4047,8 +4055,10 @@ int nand_scan_tail(struct mtd_info *mtd)
 		ecc->layout->oobavail += ecc->layout->oobfree[i].length;
 	mtd->oobavail = ecc->layout->oobavail;
 
-	/* ECC sanity check: warn noisily if it's too weak */
-	WARN_ON(!nand_ecc_strength_good(mtd));
+	/* ECC sanity check: warn if it's too weak */
+	if (!nand_ecc_strength_good(mtd))
+		pr_warn("WARNING: %s: the ECC used on your system is too weak compared to the one required by the NAND chip\n",
+			mtd->name);
 
 	/*
 	 * Set the number of read / write steps for one page depending on ECC

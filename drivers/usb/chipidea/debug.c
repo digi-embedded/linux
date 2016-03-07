@@ -10,6 +10,7 @@
 #include <linux/usb/phy.h>
 #include <linux/usb/otg.h>
 #include <linux/usb/otg-fsm.h>
+#include <linux/usb/chipidea.h>
 
 #include "ci.h"
 #include "udc.h"
@@ -336,8 +337,8 @@ static int ci_registers_show(struct seq_file *s, void *unused)
 	struct ci_hdrc *ci = s->private;
 	u32 tmp_reg;
 
-	if (!ci)
-		return 0;
+	if (!ci || ci->in_lpm)
+		return -EPERM;
 
 	/* ------ Registers ----- */
 	tmp_reg = hw_read_intr_enable(ci);

@@ -77,6 +77,7 @@ int mx6q_get_board_version(void)
 }
 EXPORT_SYMBOL(mx6q_get_board_version);
 
+static struct fec_platform_data fec_pdata;
 static struct flexcan_platform_data flexcan_pdata[2];
 static int flexcan_en_gpio;
 static int flexcan_stby_gpio;
@@ -240,6 +241,10 @@ static int ar8031_phy_fixup(struct phy_device *dev)
 {
 	u16 val;
 
+	/* Set RGMII IO voltage to 1.8V */
+	phy_write(dev, 0x1d, 0x1f);
+	phy_write(dev, 0x1e, 0x8);
+
 	/* disable phy AR8031 SmartEEE function. */
 	phy_write(dev, 0xd, 0x3);
 	phy_write(dev, 0xe, 0x805d);
@@ -383,6 +388,30 @@ static void imx6q_wifi_init (void)
 			gpio_free(pwrdown_gpio);
 		}
 	}
+	of_node_put(np);
+}
+
+static void __init imx6q_enet_clk_sel(void)
+{
+	struct regmap *gpr;
+
+	gpr = syscon_regmap_lookup_by_compatible("fsl,imx6q-iomuxc-gpr");
+	if (!IS_ERR(gpr))
+		regmap_update_bits(gpr, IOMUXC_GPR5,
+				   IMX6Q_GPR5_ENET_TX_CLK_SEL, IMX6Q_GPR5_ENET_TX_CLK_SEL);
+	else
+		pr_err("failed to find fsl,imx6q-iomux-gpr regmap\n");
+}
+
+static inline void imx6q_enet_init(void)
+{
+	imx6_enet_mac_init("fsl,imx6q-fec");
+	imx6q_enet_phy_init();
+	if (!of_machine_is_compatible("digi,ccimx6"))
+		imx6q_1588_init();
+	if (cpu_is_imx6q() && imx_get_soc_revision() == IMX_CHIP_REVISION_2_0)
+		imx6q_enet_clk_sel();
+	imx6q_enet_plt_init();
 }
 
 static void imx6q_bt_init (void)
@@ -513,93 +542,6 @@ static void __init imx6q_csi_mux_init(void)
 	}
 }
 
-#define OCOTP_MACn(n)	(0x00000620 + (n) * 0x10)
-void __init imx6_enet_mac_init(const char *compatible)
-{
-	struct device_node *ocotp_np, *enet_np, *from = NULL;
-	void __iomem *base;
-	struct property *newmac;
-	u32 macaddr_low;
-	u32 macaddr_high = 0;
-	u32 macaddr1_high = 0;
-	u8 *macaddr;
-	int i;
-
-	for (i = 0; i < 2; i++) {
-		enet_np = of_find_compatible_node(from, NULL, compatible);
-		if (!enet_np)
-			return;
-
-		from = enet_np;
-
-		if (of_get_mac_address(enet_np))
-			goto put_enet_node;
-
-		ocotp_np = of_find_compatible_node(NULL, NULL, "fsl,imx6q-ocotp");
-		if (!ocotp_np) {
-			pr_warn("failed to find ocotp node\n");
-			goto put_enet_node;
-		}
-
-		base = of_iomap(ocotp_np, 0);
-		if (!base) {
-			pr_warn("failed to map ocotp\n");
-			goto put_ocotp_node;
-		}
-
-		macaddr_low = readl_relaxed(base + OCOTP_MACn(1));
-		if (i)
-			macaddr1_high = readl_relaxed(base + OCOTP_MACn(2));
-		else
-			macaddr_high = readl_relaxed(base + OCOTP_MACn(0));
-
-		newmac = kzalloc(sizeof(*newmac) + 6, GFP_KERNEL);
-		if (!newmac)
-			goto put_ocotp_node;
-
-		newmac->value = newmac + 1;
-		newmac->length = 6;
-		newmac->name = kstrdup("local-mac-address", GFP_KERNEL);
-		if (!newmac->name) {
-			kfree(newmac);
-			goto put_ocotp_node;
-		}
-
-		macaddr = newmac->value;
-		if (i) {
-			macaddr[5] = (macaddr_low >> 16) & 0xff;
-			macaddr[4] = (macaddr_low >> 24) & 0xff;
-			macaddr[3] = macaddr1_high & 0xff;
-			macaddr[2] = (macaddr1_high >> 8) & 0xff;
-			macaddr[1] = (macaddr1_high >> 16) & 0xff;
-			macaddr[0] = (macaddr1_high >> 24) & 0xff;
-		} else {
-			macaddr[5] = macaddr_high & 0xff;
-			macaddr[4] = (macaddr_high >> 8) & 0xff;
-			macaddr[3] = (macaddr_high >> 16) & 0xff;
-			macaddr[2] = (macaddr_high >> 24) & 0xff;
-			macaddr[1] = macaddr_low & 0xff;
-			macaddr[0] = (macaddr_low >> 8) & 0xff;
-		}
-
-		of_update_property(enet_np, newmac);
-
-put_ocotp_node:
-	of_node_put(ocotp_np);
-put_enet_node:
-	of_node_put(enet_np);
-	}
-}
-
-static inline void imx6q_enet_init(void)
-{
-	imx6_enet_mac_init("fsl,imx6q-fec");
-	imx6q_enet_phy_init();
-	if (!of_machine_is_compatible("digi,ccimx6"))
-			imx6q_1588_init();
-	imx6q_enet_plt_init();
-}
-
 /* Add auxdata to pass platform data */
 static const struct of_dev_auxdata imx6q_auxdata_lookup[] __initconst = {
 	OF_DEV_AUXDATA("fsl,imx6q-flexcan", 0x02090000, NULL, &flexcan_pdata[0]),
@@ -612,8 +554,11 @@ static void __init imx6q_init_machine(void)
 {
 	struct device *parent;
 
-	imx_print_silicon_rev(cpu_is_imx6dl() ? "i.MX6DL" : "i.MX6Q",
-			      imx_get_soc_revision());
+	if (cpu_is_imx6q() && imx_get_soc_revision() == IMX_CHIP_REVISION_2_0)
+		imx_print_silicon_rev("i.MX6QP", IMX_CHIP_REVISION_1_0);
+	else
+		imx_print_silicon_rev(cpu_is_imx6dl() ? "i.MX6DL" : "i.MX6Q",
+				 imx_get_soc_revision());
 
 	mxc_arch_reset_init_dt();
 
@@ -748,7 +693,9 @@ static void __init imx6q_map_io(void)
 	debug_ll_io_init();
 	imx_scu_map_io();
 	imx6_pm_map_io();
-	imx6_busfreq_map_io();
+#ifdef CONFIG_CPU_FREQ
+	imx_busfreq_map_io();
+#endif
 }
 
 static void __init imx6q_init_irq(void)

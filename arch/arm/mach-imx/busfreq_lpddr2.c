@@ -24,6 +24,7 @@
 #include <asm/mach/map.h>
 #include <asm/mach-types.h>
 #include <asm/tlb.h>
+#include <linux/busfreq-imx.h>
 #include <linux/clk.h>
 #include <linux/cpumask.h>
 #include <linux/delay.h>
@@ -40,8 +41,8 @@
 #include <linux/sched.h>
 #include <linux/smp.h>
 
+#include "common.h"
 #include "hardware.h"
-
 
 static struct device *busfreq_dev;
 static int curr_ddr_rate;
@@ -50,12 +51,8 @@ static DEFINE_SPINLOCK(freq_lock);
 void (*mx6_change_lpddr2_freq)(u32 ddr_freq, int bus_freq_mode) = NULL;
 
 extern unsigned int ddr_normal_rate;
-extern int low_bus_freq_mode;
-extern int ultra_low_bus_freq_mode;
 extern void mx6_lpddr2_freq_change(u32 freq, int bus_freq_mode);
-extern void imx6sx_lpddr2_freq_change(u32 freq, int bus_freq_mode);
-extern unsigned long save_ttbr1(void);
-extern void restore_ttbr1(unsigned long ttbr1);
+extern void imx6_up_lpddr2_freq_change(u32 freq, int bus_freq_mode);
 extern unsigned long ddr_freq_change_iram_base;
 extern unsigned long imx6_lpddr2_freq_change_start asm("imx6_lpddr2_freq_change_start");
 extern unsigned long imx6_lpddr2_freq_change_end asm("imx6_lpddr2_freq_change_end");
@@ -64,6 +61,7 @@ extern unsigned long imx6_lpddr2_freq_change_end asm("imx6_lpddr2_freq_change_en
 int update_lpddr2_freq(int ddr_rate)
 {
 	unsigned long ttbr1, flags;
+	int mode = get_bus_freq_mode();
 
 	if (ddr_rate == curr_ddr_rate)
 		return 0;
@@ -79,7 +77,7 @@ int update_lpddr2_freq(int ddr_rate)
 
 	/* Now change DDR frequency. */
 	mx6_change_lpddr2_freq(ddr_rate,
-		(low_bus_freq_mode | ultra_low_bus_freq_mode));
+		(mode == BUS_FREQ_LOW || mode == BUS_FREQ_ULTRA_LOW) ? 1 : 0);
 	restore_ttbr1(ttbr1);
 
 	curr_ddr_rate = ddr_rate;
@@ -101,10 +99,10 @@ int init_mmdc_lpddr2_settings(struct platform_device *busfreq_pdev)
 		mx6_change_lpddr2_freq = (void *)fncpy(
 			(void *)ddr_freq_change_iram_base,
 			&mx6_lpddr2_freq_change, ddr_code_size);
-	else if (cpu_is_imx6sx())
+	else if (cpu_is_imx6sx() || cpu_is_imx6ul())
 		mx6_change_lpddr2_freq = (void *)fncpy(
 			(void *)ddr_freq_change_iram_base,
-			&imx6sx_lpddr2_freq_change, ddr_code_size);
+			&imx6_up_lpddr2_freq_change, ddr_code_size);
 
 	curr_ddr_rate = ddr_normal_rate;
 

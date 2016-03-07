@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2014 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright 2004-2015 Freescale Semiconductor, Inc. All Rights Reserved.
  */
 
 /*
@@ -183,8 +183,7 @@ typedef struct _cam_data {
 	struct v4l2_rect crop_defrect;
 	struct v4l2_rect crop_current;
 
-	int (*enc_update_eba) (struct ipu_soc *ipu, int csi_id,  dma_addr_t eba,
-			       int *bufferNum);
+	int (*enc_update_eba) (void *private, dma_addr_t eba);
 	int (*enc_enable) (void *private);
 	int (*enc_disable) (void *private);
 	int (*enc_enable_csi) (void *private);
@@ -206,8 +205,6 @@ typedef struct _cam_data {
 	int capture_pid;
 	bool low_power;
 	wait_queue_head_t power_queue;
-	wait_queue_head_t ready_queue;
-	struct work_struct r_queue_wq;
 	unsigned int ipu_id;
 	unsigned int csi;
 	u8 mclk_source;
@@ -257,17 +254,9 @@ struct sensor_data {
 	u8 mclk_source;
 	struct clk *sensor_clk;
 	int csi;
-	int ipu_id;
 
 	void (*io_init)(void);
 };
 
 void set_mclk_rate(uint32_t *p_mclk_freq, uint32_t csi);
-void mxc_camera_common_lock(void);
-void mxc_camera_common_unlock(void);
-
-#define MXC_V4L2_GET_IPU_CHAN(x) (x ? CSI_MEM1 : CSI_MEM0)
-#define MXC_V4L2_GET_IPU_IRQ(x) (x ? IPU_IRQ_CSI1_OUT_EOF : \
-		IPU_IRQ_CSI0_OUT_EOF)
-
 #endif				/* __MXC_V4L2_CAPTURE_H__ */

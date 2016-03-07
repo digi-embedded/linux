@@ -58,8 +58,13 @@
 static int video_nr = -1;	/* -1 ==> auto assign */
 static struct pxp_data_format pxp_s0_formats[] = {
 	{
-		.name = "24-bit RGB",
+		.name = "32-bit RGB",
 		.bpp = 4,
+		.fourcc = V4L2_PIX_FMT_RGB32,
+		.colorspace = V4L2_COLORSPACE_SRGB,
+	}, {
+		.name = "24-bit RGB",
+		.bpp = 3,
 		.fourcc = V4L2_PIX_FMT_RGB24,
 		.colorspace = V4L2_COLORSPACE_SRGB,
 	}, {
@@ -104,7 +109,9 @@ static unsigned int v4l2_fmt_to_pxp_fmt(u32 v4l2_pix_fmt)
 {
 	u32 pxp_fmt = 0;
 
-	if (v4l2_pix_fmt == V4L2_PIX_FMT_RGB24)
+	if (v4l2_pix_fmt == V4L2_PIX_FMT_RGB32)
+		pxp_fmt = PXP_PIX_FMT_RGB32;
+	else if (v4l2_pix_fmt == V4L2_PIX_FMT_RGB24)
 		pxp_fmt = PXP_PIX_FMT_RGB24;
 	else if (v4l2_pix_fmt == V4L2_PIX_FMT_RGB565)
 		pxp_fmt = PXP_PIX_FMT_RGB565;
@@ -303,6 +310,8 @@ static int pxp_set_fbinfo(struct pxps *pxp)
 	pxp->pxp_conf.out_param.stride = pxp->fbi->var.xres;
 	if (pxp->fbi->var.bits_per_pixel == 16)
 		fb->fmt.pixelformat = V4L2_PIX_FMT_RGB565;
+	else if (pxp->fbi->var.bits_per_pixel == 32)
+		fb->fmt.pixelformat = V4L2_PIX_FMT_RGB32;
 	else
 		fb->fmt.pixelformat = V4L2_PIX_FMT_RGB24;
 
@@ -451,9 +460,11 @@ static int pxp_s_output(struct file *file, void *fh,
 		return -EINVAL;
 
 	/* Output buffer is same format as fbdev */
-	if (fmt->pixelformat == V4L2_PIX_FMT_RGB24  ||
+	if (fmt->pixelformat == V4L2_PIX_FMT_RGB32  ||
 		fmt->pixelformat == V4L2_PIX_FMT_YUV32)
 		bpp = 4;
+	else if (fmt->pixelformat == V4L2_PIX_FMT_RGB24)
+		bpp = 3;
 	else
 		bpp = 2;
 
@@ -470,7 +481,9 @@ static int pxp_s_output(struct file *file, void *fh,
 
 	pxp->pxp_conf.out_param.width = fmt->width;
 	pxp->pxp_conf.out_param.height = fmt->height;
-	if (fmt->pixelformat == V4L2_PIX_FMT_RGB24)
+	if (fmt->pixelformat == V4L2_PIX_FMT_RGB32)
+		pxp->pxp_conf.out_param.pixel_fmt = PXP_PIX_FMT_RGB32;
+	else if (fmt->pixelformat == V4L2_PIX_FMT_RGB24)
 		pxp->pxp_conf.out_param.pixel_fmt = PXP_PIX_FMT_RGB24;
 	else
 		pxp->pxp_conf.out_param.pixel_fmt = PXP_PIX_FMT_RGB565;
@@ -1034,16 +1047,17 @@ static int pxp_s_crop(struct file *file, void *fh,
 	w = max(w, PXP_MIN_PIX);
 	h = min(h, fbh);
 	h = max(h, PXP_MIN_PIX);
-	if ((l + w) > fbw)
-		l = 0;
-	if ((t + h) > fbh)
-		t = 0;
 
 	/* Round up values to PxP pixel block */
 	l = roundup(l, PXP_MIN_PIX);
 	t = roundup(t, PXP_MIN_PIX);
 	w = roundup(w, PXP_MIN_PIX);
 	h = roundup(h, PXP_MIN_PIX);
+
+	if ((l + w) > fbw)
+		l = 0;
+	if ((t + h) > fbh)
+		t = 0;
 
 	pxp->pxp_conf.proc_data.drect.left = l;
 	pxp->pxp_conf.proc_data.drect.top = t;

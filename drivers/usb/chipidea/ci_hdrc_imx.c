@@ -22,8 +22,7 @@
 #include <linux/of_device.h>
 #include <linux/regmap.h>
 #include <linux/mfd/syscon.h>
-#include <linux/power/imx6_usb_charger.h>
-#include <linux/busfreq-imx6.h>
+#include <linux/busfreq-imx.h>
 #include <linux/regulator/consumer.h>
 
 #include "ci.h"
@@ -78,12 +77,32 @@ static const struct ci_hdrc_imx_platform_flag imx6sx_usb_data = {
 	.burst_length = 0x1010,
 };
 
+static const struct ci_hdrc_imx_platform_flag imx6ul_usb_data = {
+	.flags = CI_HDRC_SUPPORTS_RUNTIME_PM |
+		CI_HDRC_IMX_EHCI_QUIRK |
+		CI_HDRC_OVERRIDE_AHB_BURST |
+		CI_HDRC_OVERRIDE_BURST_LENGTH |
+		CI_HDRC_IMX_VBUS_EARLY_ON,
+	.ahbburst_config = 0,
+	.burst_length = 0x1010,
+};
+
+static const struct ci_hdrc_imx_platform_flag imx7d_usb_data = {
+	.flags = CI_HDRC_SUPPORTS_RUNTIME_PM |
+		CI_HDRC_OVERRIDE_AHB_BURST |
+		CI_HDRC_OVERRIDE_BURST_LENGTH,
+	.ahbburst_config = 0,
+	.burst_length = 0x1010,
+};
+
 static const struct of_device_id ci_hdrc_imx_dt_ids[] = {
 	{ .compatible = "fsl,imx28-usb", .data = &imx28_usb_data},
 	{ .compatible = "fsl,imx27-usb", .data = &imx27_usb_data},
 	{ .compatible = "fsl,imx6q-usb", .data = &imx6q_usb_data},
 	{ .compatible = "fsl,imx6sl-usb", .data = &imx6sl_usb_data},
 	{ .compatible = "fsl,imx6sx-usb", .data = &imx6sx_usb_data},
+	{ .compatible = "fsl,imx6ul-usb", .data = &imx6ul_usb_data},
+	{ .compatible = "fsl,imx7d-usb", .data = &imx7d_usb_data},
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, ci_hdrc_imx_dt_ids);
@@ -95,13 +114,23 @@ struct ci_hdrc_imx_data {
 	struct imx_usbmisc_data *usbmisc_data;
 	bool supports_runtime_pm;
 	bool in_lpm;
-	bool imx6_usb_charger_detection;
+	bool imx_usb_charger_detection;
 	struct usb_charger charger;
 	struct regmap *anatop;
 	struct pinctrl *pinctrl;
 	struct pinctrl_state *pinctrl_hsic_active;
 	struct regulator *hsic_pad_regulator;
 	const struct ci_hdrc_imx_platform_flag *data;
+};
+
+static char *imx_usb_charger_supplied_to[] = {
+	"imx_usb_charger",
+};
+
+static enum power_supply_property imx_usb_charger_power_props[] = {
+	POWER_SUPPLY_PROP_PRESENT,	/* Charger detected */
+	POWER_SUPPLY_PROP_ONLINE,	/* VBUS online */
+	POWER_SUPPLY_PROP_CURRENT_MAX,	/* Maximum current in mA */
 };
 
 static inline bool is_imx6q_con(struct ci_hdrc_imx_data *imx_data)
@@ -119,10 +148,15 @@ static inline bool is_imx6sx_con(struct ci_hdrc_imx_data *imx_data)
 	return imx_data->data == &imx6sx_usb_data;
 }
 
+static inline bool is_imx7d_con(struct ci_hdrc_imx_data *imx_data)
+{
+	return imx_data->data == &imx7d_usb_data;
+}
+
 static inline bool imx_has_hsic_con(struct ci_hdrc_imx_data *imx_data)
 {
 	return is_imx6q_con(imx_data) ||  is_imx6sl_con(imx_data)
-		|| is_imx6sx_con(imx_data);
+		|| is_imx6sx_con(imx_data) || is_imx7d_con(imx_data);
 }
 
 /* Common functions shared by usbmisc drivers */
@@ -167,12 +201,6 @@ static struct imx_usbmisc_data *usbmisc_get_init_data(struct device *dev)
 	if (of_find_property(np, "disable-over-current", NULL))
 		data->disable_oc = 1;
 
-	if (of_find_property(np, "fsl,over-current-polarity-active-low", NULL))
-		data->oc_pol = 1;
-
-	if (of_find_property(np, "fsl,power-line-polarity-active-high", NULL))
-		data->pwr_pol = 1;
-
 	if (of_find_property(np, "external-vbus-divider", NULL))
 		data->evdo = 1;
 
@@ -210,21 +238,23 @@ static int ci_hdrc_imx_notify_event(struct ci_hdrc *ci, unsigned event)
 	switch (event) {
 	case CI_HDRC_CONTROLLER_VBUS_EVENT:
 		if (data->usbmisc_data && ci->vbus_active) {
-			if (data->imx6_usb_charger_detection) {
-				ret = imx6_usb_vbus_connect(&data->charger);
+			if (data->imx_usb_charger_detection) {
+				ret = imx_usbmisc_charger_detection(
+					data->usbmisc_data, true);
 				if (!ret && data->charger.psy.type !=
 							POWER_SUPPLY_TYPE_USB)
 					ret = CI_HDRC_NOTIFY_RET_DEFER_EVENT;
 			}
 		} else if (data->usbmisc_data && !ci->vbus_active) {
-			if (data->imx6_usb_charger_detection)
-				ret = imx6_usb_vbus_disconnect(&data->charger);
+			if (data->imx_usb_charger_detection)
+				ret = imx_usbmisc_charger_detection(
+					data->usbmisc_data, false);
 		}
 		break;
 	case CI_HDRC_CONTROLLER_CHARGER_POST_EVENT:
-		if (!data->imx6_usb_charger_detection)
+		if (!data->imx_usb_charger_detection)
 			return ret;
-		imx6_usb_charger_detect_post(&data->charger);
+		imx_usbmisc_charger_secondary_detection(data->usbmisc_data);
 		break;
 	case CI_HDRC_IMX_HSIC_ACTIVE_EVENT:
 		if (!IS_ERR(data->pinctrl) &&
@@ -248,11 +278,101 @@ static int ci_hdrc_imx_notify_event(struct ci_hdrc *ci, unsigned event)
 			return ret;
 		}
 		break;
+	case CI_HDRC_IMX_ADP_PROBE_ENABLE:
+		if (data->usbmisc_data)
+			imx_usbmisc_adp_probe_enable(data->usbmisc_data);
+		break;
+	case CI_HDRC_IMX_ADP_PROBE_START:
+		if (data->usbmisc_data)
+			imx_usbmisc_adp_probe_start(data->usbmisc_data);
+		break;
+	case CI_HDRC_IMX_ADP_SENSE_ENABLE:
+		if (data->usbmisc_data)
+			imx_usbmisc_adp_sense_enable(data->usbmisc_data);
+		break;
+	case CI_HDRC_IMX_ADP_IS_PROBE_INT:
+		if (data->usbmisc_data)
+			return imx_usbmisc_adp_is_probe_int(data->usbmisc_data);
+	case CI_HDRC_IMX_ADP_IS_SENSE_INT:
+		if (data->usbmisc_data)
+			return imx_usbmisc_adp_is_sense_int(data->usbmisc_data);
+	case CI_HDRC_IMX_ADP_SENSE_CONNECTION:
+		if (data->usbmisc_data)
+			return imx_usbmisc_adp_sense_connection(
+						data->usbmisc_data);
+	case CI_HDRC_IMX_ADP_ATTACH_EVENT:
+		if (data->usbmisc_data)
+			return imx_usbmisc_adp_attach_event(data->usbmisc_data);
+	case CI_HDRC_IMX_TERM_SELECT_OVERRIDE_FS:
+		if (data->usbmisc_data)
+			return imx_usbmisc_term_select_override(
+					data->usbmisc_data, true, 1);
+	case CI_HDRC_IMX_TERM_SELECT_OVERRIDE_OFF:
+		if (data->usbmisc_data)
+			return imx_usbmisc_term_select_override(
+					data->usbmisc_data, false, 0);
 	default:
 		dev_dbg(dev, "unknown event\n");
 	}
 
 	return ret;
+}
+
+static int imx_usb_charger_get_property(struct power_supply *psy,
+				enum power_supply_property psp,
+				union power_supply_propval *val)
+{
+	struct usb_charger *charger =
+		container_of(psy, struct usb_charger, psy);
+
+	switch (psp) {
+	case POWER_SUPPLY_PROP_PRESENT:
+		val->intval = charger->present;
+		break;
+	case POWER_SUPPLY_PROP_ONLINE:
+		val->intval = charger->online;
+		break;
+	case POWER_SUPPLY_PROP_CURRENT_MAX:
+		val->intval = charger->max_current;
+		break;
+	default:
+		return -EINVAL;
+	}
+	return 0;
+}
+/*
+ * imx_usb_register_charger - register a USB charger
+ * @charger: the charger to be initialized
+ * @name: name for the power supply
+
+ * Registers a power supply for the charger. The USB Controller
+ * driver will call this after filling struct usb_charger.
+ */
+static int imx_usb_register_charger(struct usb_charger *charger,
+		const char *name)
+{
+	struct power_supply	*psy = &charger->psy;
+
+	if (!charger->dev)
+		return -EINVAL;
+
+	if (name)
+		psy->name = name;
+	else
+		psy->name = "imx_usb_charger";
+
+	charger->bc = BATTERY_CHARGING_SPEC_1_2;
+	mutex_init(&charger->lock);
+
+	psy->type		= POWER_SUPPLY_TYPE_MAINS;
+	psy->properties		= imx_usb_charger_power_props;
+	psy->num_properties	= ARRAY_SIZE(imx_usb_charger_power_props);
+	psy->get_property	= imx_usb_charger_get_property;
+	psy->supplied_to	= imx_usb_charger_supplied_to;
+	psy->num_supplicants	= sizeof(imx_usb_charger_supplied_to)
+		/ sizeof(char *);
+
+	return power_supply_register(charger->dev, psy);
 }
 
 static int ci_hdrc_imx_probe(struct platform_device *pdev)
@@ -344,11 +464,6 @@ static int ci_hdrc_imx_probe(struct platform_device *pdev)
 	if (ret)
 		goto err_clk;
 
-	if (!data->usbmisc_data) {
-		dev_err(&pdev->dev, "No usbmisc data\n");
-		goto err_clk;
-	}
-
 	if (data->usbmisc_data->index > 1 && (imx_has_hsic_con(data))) {
 		pdata.flags |= CI_HDRC_IMX_IS_HSIC;
 		data->hsic_pad_regulator = devm_regulator_get(&pdev->dev,
@@ -377,9 +492,6 @@ static int ci_hdrc_imx_probe(struct platform_device *pdev)
 		}
 	}
 
-	if (of_find_property(np, "imx6-usb-charger-detection", NULL))
-		data->imx6_usb_charger_detection = true;
-
 	if (of_find_property(np, "fsl,anatop", NULL)) {
 		data->anatop = syscon_regmap_lookup_by_phandle(np,
 							"fsl,anatop");
@@ -391,17 +503,19 @@ static int ci_hdrc_imx_probe(struct platform_device *pdev)
 		}
 		if (data->usbmisc_data)
 			data->usbmisc_data->anatop = data->anatop;
-		if (data->imx6_usb_charger_detection) {
-			data->charger.anatop = data->anatop;
-			data->charger.dev = &pdev->dev;
-			ret = imx6_usb_create_charger(&data->charger,
-						"imx6_usb_charger");
-			if (ret && ret != -ENODEV)
-				goto disable_hsic_regulator;
-			if (!ret)
-				dev_dbg(&pdev->dev,
+	}
+
+	if (of_find_property(np, "imx-usb-charger-detection", NULL)) {
+		data->imx_usb_charger_detection = true;
+		data->charger.dev = &pdev->dev;
+		data->usbmisc_data->charger = &data->charger;
+		ret = imx_usb_register_charger(&data->charger,
+						"imx_usb_charger");
+		if (ret && ret != -ENODEV)
+			goto disable_hsic_regulator;
+		if (!ret)
+			dev_dbg(&pdev->dev,
 					"USB Charger is created\n");
-		}
 	}
 
 	ret = imx_usbmisc_init(data->usbmisc_data);
@@ -455,8 +569,8 @@ static int ci_hdrc_imx_probe(struct platform_device *pdev)
 disable_device:
 	ci_hdrc_remove_device(data->ci_pdev);
 remove_charger:
-	if (data->imx6_usb_charger_detection)
-		imx6_usb_remove_charger(&data->charger);
+	if (data->imx_usb_charger_detection)
+		power_supply_unregister(&data->charger.psy);
 disable_hsic_regulator:
 	if (data->hsic_pad_regulator)
 		ret = regulator_disable(data->hsic_pad_regulator);
@@ -478,8 +592,8 @@ static int ci_hdrc_imx_remove(struct platform_device *pdev)
 	ci_hdrc_remove_device(data->ci_pdev);
 	clk_disable_unprepare(data->clk);
 	release_bus_freq(BUS_FREQ_HIGH);
-	if (data->imx6_usb_charger_detection)
-		imx6_usb_remove_charger(&data->charger);
+	if (data->imx_usb_charger_detection)
+		power_supply_unregister(&data->charger.psy);
 	if (data->hsic_pad_regulator)
 		regulator_disable(data->hsic_pad_regulator);
 

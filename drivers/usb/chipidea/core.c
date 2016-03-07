@@ -623,8 +623,20 @@ static int ci_get_platdata(struct device *dev,
 				of_usb_host_tpl_support(dev->of_node);
 	}
 
+	if (platdata->dr_mode == USB_DR_MODE_OTG) {
+		/* We can support HNP and SRP */
+		platdata->ci_otg_caps.hnp_support = true;
+		platdata->ci_otg_caps.srp_support = true;
+		/* Update otg capabilities by DT properties */
+		of_usb_set_otg_caps(dev->of_node, &platdata->ci_otg_caps);
+	}
+
 	if (of_usb_get_maximum_speed(dev->of_node) == USB_SPEED_FULL)
 		platdata->flags |= CI_HDRC_FORCE_FULLSPEED;
+
+	if (of_find_property(dev->of_node, "phy-clkgate-delay-us", NULL))
+		of_property_read_u32(dev->of_node, "phy-clkgate-delay-us",
+					&platdata->phy_clkgate_delay_us);
 
 	return 0;
 }
@@ -716,10 +728,10 @@ EXPORT_SYMBOL_GPL(ci_hdrc_query_available_role);
 
 static inline void ci_role_destroy(struct ci_hdrc *ci)
 {
-	ci_hdrc_gadget_destroy(ci);
-	ci_hdrc_host_destroy(ci);
 	if (ci->is_otg)
 		ci_hdrc_otg_destroy(ci);
+	ci_hdrc_gadget_destroy(ci);
+	ci_hdrc_host_destroy(ci);
 }
 
 static void ci_get_otg_capable(struct ci_hdrc *ci)
@@ -986,6 +998,9 @@ static void ci_controller_suspend(struct ci_hdrc *ci)
 {
 	disable_irq(ci->irq);
 	ci_hdrc_enter_lpm(ci, true);
+	if (ci->platdata->phy_clkgate_delay_us)
+		usleep_range(ci->platdata->phy_clkgate_delay_us,
+				ci->platdata->phy_clkgate_delay_us + 50);
 	usb_phy_set_suspend(ci->usb_phy, 1);
 	ci->in_lpm = true;
 	enable_irq(ci->irq);
