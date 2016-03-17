@@ -155,6 +155,7 @@ static struct reg_default wm8962_reg[] = {
 	{ 40, 0x0000 },   /* R40    - SPKOUTL volume */
 	{ 41, 0x0000 },   /* R41    - SPKOUTR volume */
 
+	{ 49, 0x0010 },   /* R49    - Class D Control 1 */
 	{ 51, 0x0003 },   /* R51    - Class D Control 2 */
 
 	{ 56, 0x0506 },   /* R56    - Clocking 4 */
@@ -796,7 +797,6 @@ static bool wm8962_volatile_register(struct device *dev, unsigned int reg)
 	case WM8962_ALC2:
 	case WM8962_THERMAL_SHUTDOWN_STATUS:
 	case WM8962_ADDITIONAL_CONTROL_4:
-	case WM8962_CLASS_D_CONTROL_1:
 	case WM8962_DC_SERVO_6:
 	case WM8962_INTERRUPT_STATUS_1:
 	case WM8962_INTERRUPT_STATUS_2:
@@ -2926,12 +2926,21 @@ static int wm8962_set_fll(struct snd_soc_codec *codec, int fll_id, int source,
 static int wm8962_mute(struct snd_soc_dai *dai, int mute)
 {
 	struct snd_soc_codec *codec = dai->codec;
-	int val;
+	int val, ret;
 
 	if (mute)
-		val = WM8962_DAC_MUTE;
+		val = WM8962_DAC_MUTE | WM8962_DAC_MUTE_ALT;
 	else
 		val = 0;
+
+	/**
+	 * The DAC mute bit is mirrored in two registers, update both to keep
+	 * the register cache consistent.
+	 */
+	ret = snd_soc_update_bits(codec, WM8962_CLASS_D_CONTROL_1,
+				  WM8962_DAC_MUTE_ALT, val);
+	if (ret < 0)
+		return ret;
 
 	return snd_soc_update_bits(codec, WM8962_ADC_DAC_CONTROL_1,
 				   WM8962_DAC_MUTE, val);
@@ -3432,116 +3441,6 @@ static int wm8962_probe(struct snd_soc_codec *codec)
 				ret);
 		}
 	}
-
-	/* SYSCLK defaults to on; make sure it is off so we can safely
-	 * write to registers if the device is declocked.
-	 */
-	snd_soc_update_bits(codec, WM8962_CLOCKING2, WM8962_SYSCLK_ENA, 0);
-
-	/* Ensure we have soft control over all registers */
-	snd_soc_update_bits(codec, WM8962_CLOCKING2,
-			    WM8962_CLKREG_OVD, WM8962_CLKREG_OVD);
-
-	/* Ensure that the oscillator and PLLs are disabled */
-	snd_soc_update_bits(codec, WM8962_PLL2,
-			    WM8962_OSC_ENA | WM8962_PLL2_ENA | WM8962_PLL3_ENA,
-			    0);
-
-	/* Apply static configuration for GPIOs */
-	for (i = 0; i < ARRAY_SIZE(pdata->gpio_init); i++)
-		if (pdata->gpio_init[i]) {
-			wm8962_set_gpio_mode(codec, i + 1);
-			snd_soc_write(codec, 0x200 + i,
-					pdata->gpio_init[i] & 0xffff);
-		}
-
-	/* Put the speakers into mono mode? */
-	if (pdata->spk_mono)
-		snd_soc_update_bits(codec, WM8962_CLASS_D_CONTROL_2,
-				WM8962_SPK_MONO_MASK, WM8962_SPK_MONO);
-
-	/* Micbias setup, detection enable and detection
-	 * threasholds. */
-	if (pdata->mic_cfg)
-		snd_soc_update_bits(codec, WM8962_ADDITIONAL_CONTROL_4,
-				WM8962_MICDET_ENA |
-				WM8962_MICDET_THR_MASK |
-				WM8962_MICSHORT_THR_MASK |
-				WM8962_MICBIAS_LVL,
-				pdata->mic_cfg);
-
-	/* set the default volume for playback and record*/
-	snd_soc_update_bits(codec, WM8962_HPOUTL_VOLUME,
-			    WM8962_HPOUTL_VOL_MASK, 0x5d);
-	snd_soc_update_bits(codec, WM8962_HPOUTR_VOLUME,
-			    WM8962_HPOUTR_VOL_MASK, 0x5d);
-	snd_soc_update_bits(codec, WM8962_SPKOUTL_VOLUME,
-			    WM8962_SPKOUTL_VOL_MASK, 0x72);
-	snd_soc_update_bits(codec, WM8962_SPKOUTR_VOLUME,
-			    WM8962_SPKOUTR_VOL_MASK, 0x72);
-
-	snd_soc_update_bits(codec, WM8962_LEFT_INPUT_VOLUME,
-			    WM8962_INL_VOL_MASK, 0x3f);
-	snd_soc_update_bits(codec, WM8962_RIGHT_INPUT_VOLUME,
-			    WM8962_INR_VOL_MASK, 0x3f);
-	snd_soc_update_bits(codec, WM8962_LEFT_ADC_VOLUME,
-			    WM8962_ADCL_VOL_MASK, 0xd8);
-	snd_soc_update_bits(codec, WM8962_RIGHT_ADC_VOLUME,
-			    WM8962_ADCR_VOL_MASK, 0xd8);
-	snd_soc_update_bits(codec, WM8962_RIGHT_INPUT_MIXER_VOLUME,
-			    WM8962_IN3R_MIXINR_VOL_MASK, 0x7);
-
-	/* set the default volume for playback and record*/
-	snd_soc_update_bits(codec, WM8962_HPOUTL_VOLUME,
-			    WM8962_HPOUTL_VOL_MASK, 0x5d);
-	snd_soc_update_bits(codec, WM8962_HPOUTR_VOLUME,
-			    WM8962_HPOUTR_VOL_MASK, 0x5d);
-	snd_soc_update_bits(codec, WM8962_SPKOUTL_VOLUME,
-			    WM8962_SPKOUTL_VOL_MASK, 0x72);
-	snd_soc_update_bits(codec, WM8962_SPKOUTR_VOLUME,
-			    WM8962_SPKOUTR_VOL_MASK, 0x72);
-
-	snd_soc_update_bits(codec, WM8962_LEFT_INPUT_VOLUME,
-			    WM8962_INL_VOL_MASK, 0x3f);
-	snd_soc_update_bits(codec, WM8962_RIGHT_INPUT_VOLUME,
-			    WM8962_INR_VOL_MASK, 0x3f);
-	snd_soc_update_bits(codec, WM8962_LEFT_ADC_VOLUME,
-			    WM8962_ADCL_VOL_MASK, 0xd8);
-	snd_soc_update_bits(codec, WM8962_RIGHT_ADC_VOLUME,
-			    WM8962_ADCR_VOL_MASK, 0xd8);
-	snd_soc_update_bits(codec, WM8962_RIGHT_INPUT_MIXER_VOLUME,
-			    WM8962_IN3R_MIXINR_VOL_MASK, 0x7);
-
-	/* Latch volume update bits */
-	snd_soc_update_bits(codec, WM8962_LEFT_INPUT_VOLUME,
-			    WM8962_IN_VU, WM8962_IN_VU);
-	snd_soc_update_bits(codec, WM8962_RIGHT_INPUT_VOLUME,
-			    WM8962_IN_VU, WM8962_IN_VU);
-	snd_soc_update_bits(codec, WM8962_LEFT_ADC_VOLUME,
-			    WM8962_ADC_VU, WM8962_ADC_VU);
-	snd_soc_update_bits(codec, WM8962_RIGHT_ADC_VOLUME,
-			    WM8962_ADC_VU, WM8962_ADC_VU);
-	snd_soc_update_bits(codec, WM8962_LEFT_DAC_VOLUME,
-			    WM8962_DAC_VU, WM8962_DAC_VU);
-	snd_soc_update_bits(codec, WM8962_RIGHT_DAC_VOLUME,
-			    WM8962_DAC_VU, WM8962_DAC_VU);
-	snd_soc_update_bits(codec, WM8962_SPKOUTL_VOLUME,
-			    WM8962_SPKOUT_VU, WM8962_SPKOUT_VU);
-	snd_soc_update_bits(codec, WM8962_SPKOUTR_VOLUME,
-			    WM8962_SPKOUT_VU, WM8962_SPKOUT_VU);
-	snd_soc_update_bits(codec, WM8962_HPOUTL_VOLUME,
-			    WM8962_HPOUT_VU, WM8962_HPOUT_VU);
-	snd_soc_update_bits(codec, WM8962_HPOUTR_VOLUME,
-			    WM8962_HPOUT_VU, WM8962_HPOUT_VU);
-
-	/* Stereo control for EQ */
-	snd_soc_update_bits(codec, WM8962_EQ1, WM8962_EQ_SHARED_COEFF, 0);
-
-	/* Don't debouce interrupts so we don't need SYSCLK */
-	snd_soc_update_bits(codec, WM8962_IRQ_DEBOUNCE,
-			    WM8962_FLL_LOCK_DB | WM8962_PLL3_LOCK_DB |
-			    WM8962_PLL2_LOCK_DB | WM8962_TEMP_SHUT_DB,
-			    0);
 
 	wm8962_add_widgets(codec);
 
