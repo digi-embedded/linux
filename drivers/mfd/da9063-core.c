@@ -303,7 +303,7 @@ int da9063_device_init(struct da9063 *da9063, unsigned int irq)
 		return -EIO;
 	}
 	revision >>= DA9063_CHIP_VARIANT_SHIFT;
-	if (revision != DA9063_AD_REVISION && revision != DA9063_BB_REVISION) {
+	if (revision != DA9063_AD_REVISION && revision < DA9063_BB_REVISION) {
 		dev_err(da9063->dev, "Unknown chip revision: %d\n", revision);
 		return -ENODEV;
 	}
