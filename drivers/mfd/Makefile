@@ -168,3 +168,5 @@ obj-$(CONFIG_MFD_AS3711)	+= as3711.o
 obj-$(CONFIG_MFD_AS3722)	+= as3722.o
 obj-$(CONFIG_MFD_STW481X)	+= stw481x.o
 obj-$(CONFIG_MFD_MXC_HDMI)	+= mxc-hdmi-core.o
+mca-cc6ul-objs			:= mca-cc6ul-core.o mca-cc6ul-irq.o mca-cc6ul-i2c.o
+obj-$(CONFIG_MFD_MCA_CC6UL)	+= mca-cc6ul.o

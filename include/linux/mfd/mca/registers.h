@@ -1,0 +1,108 @@
+/*
+ *  Copyright 2016 Digi International Inc
+ *
+ *  This program is free software; you can redistribute  it and/or modify it
+ *  under  the terms of  the GNU General  Public License as published by the
+ *  Free Software Foundation;  either version 2 of the  License, or (at your
+ *  option) any later version.
+ */
+
+#ifndef MCA_CC6UL_REGISTERS_H_
+#define MCA_CC6UL_REGISTERS_H_
+
+/* EP0: Control and status */
+#define MCA_CC6UL_HWVER_H		0x0001
+#define MCA_CC6UL_HWVER_L		0x0002
+#define MCA_CC6UL_FWVER_H		0x0003
+#define MCA_CC6UL_FWVER_L		0x0004
+#define MCA_CC6UL_UID_0			0x0005
+#define MCA_CC6UL_UID_1			0x0006
+#define MCA_CC6UL_UID_2			0x0007
+#define MCA_CC6UL_UID_3			0x0008
+#define MCA_CC6UL_UID_4			0x0009
+#define MCA_CC6UL_UID_5			0x000A
+#define MCA_CC6UL_UID_6			0x000B
+#define MCA_CC6UL_UID_7			0x000C
+#define MCA_CC6UL_UID_8			0x000D
+#define MCA_CC6UL_UID_9			0x000E
+
+#define MCA_CC6UL_IRQ_STATUS_0		0x0020
+#define MCA_CC6UL_IRQ_STATUS_1		0x0021
+#define MCA_CC6UL_IRQ_STATUS_2		0x0022
+#define MCA_CC6UL_IRQ_STATUS_3		0x0023
+#define MCA_CC6UL_IRQ_MASK_0		0x0024
+#define MCA_CC6UL_IRQ_MASK_1		0x0025
+#define MCA_CC6UL_IRQ_MASK_2		0x0026
+#define MCA_CC6UL_IRQ_MASK_3		0x0027
+
+/* EP1: RTC */
+#define MCA_CC6UL_RTC_CONTROL		0x0101
+
+#define MCA_CC6UL_RTC_COUNT_YEAR	0x0103
+#define MCA_CC6UL_RTC_COUNT_MONTH	0x0104
+#define MCA_CC6UL_RTC_COUNT_DAY		0x0105
+#define MCA_CC6UL_RTC_COUNT_HOUR	0x0106
+#define MCA_CC6UL_RTC_COUNT_MIN		0x0107
+#define MCA_CC6UL_RTC_COUNT_SEC		0x0108
+
+#define MCA_CC6UL_RTC_ALARM_YEAR	0x010A
+#define MCA_CC6UL_RTC_ALARM_MONTH	0x010B
+#define MCA_CC6UL_RTC_ALARM_DAY		0x010C
+#define MCA_CC6UL_RTC_ALARM_HOUR	0x010D
+#define MCA_CC6UL_RTC_ALARM_MIN		0x010E
+#define MCA_CC6UL_RTC_ALARM_SEC		0x010F
+
+/*
+ * MCA registers bitfields
+ */
+
+/* MCA_CC6UL_IRQ_STATUS_A (addr=0x0020) */
+#define MCA_CC6UL_ONKEY			(1 << 0)
+#define MCA_CC6UL_RTC_ALARM		(1 << 1)
+#define MCA_CC6UL_RTC_1HZ		(1 << 2)
+
+/* MCA_CC6UL_IRQ_MASK_A (addr=0x0024) */
+#define MCA_CC6UL_M_ONKEY		(1 << 0)
+#define MCA_CC6UL_M_RTC_ALARM		(1 << 1)
+#define MCA_CC6UL_M_RTC_1HZ		(1 << 2)
+
+/* MCA_CC6UL_RTC_CONTROL (addr=0x0101) */
+#define MCA_CC6UL_RTC_ALARM_EN		(1 << 0)
+
+/* MCA_CC6UL_RTC_COUNT_YEAR (addr=0x0103) */
+#define MCA_CC6UL_RTC_COUNT_YEAR_MASK	0xFF
+
+/* MCA_CC6UL_RTC_COUNT_MONTH (addr=0x0104) */
+#define MCA_CC6UL_RTC_COUNT_MONTH_MASK	0x0F
+
+/* MCA_CC6UL_RTC_COUNT_DAY (addr=0x0105) */
+#define MCA_CC6UL_RTC_COUNT_DAY_MASK	0x1F
+
+/* MCA_CC6UL_RTC_COUNT_HOUR (addr=0x0106) */
+#define MCA_CC6UL_RTC_COUNT_HOUR_MASK	0x0F
+
+/* MCA_CC6UL_RTC_COUNT_MIN (addr=0x0107) */
+#define MCA_CC6UL_RTC_COUNT_MIN_MASK	0x3F
+
+/* MCA_CC6UL_RTC_COUNT_SEC (addr=0x0108) */
+#define MCA_CC6UL_RTC_COUNT_SEC_MASK	0x3F
+
+/* MCA_CC6UL_RTC_ALARM_YEAR (addr=0x010A) */
+#define MCA_CC6UL_RTC_ALARM_YEAR_MASK	0xFF
+
+/* MCA_CC6UL_RTC_ALARM_MONTH (addr=0x010B) */
+#define MCA_CC6UL_RTC_ALARM_MONTH_MASK	0x0F
+
+/* MCA_CC6UL_RTC_ALARM_DAY (addr=0x010C) */
+#define MCA_CC6UL_RTC_ALARM_DAY_MASK	0x1F
+
+/* MCA_CC6UL_RTC_ALARM_HOUR (addr=0x010D) */
+#define MCA_CC6UL_RTC_ALARM_HOUR_MASK	0x0F
+
+/* MCA_CC6UL_RTC_ALARM_MIN (addr=0x010E) */
+#define MCA_CC6UL_RTC_ALARM_MIN_MASK	0x3F
+
+/* MCA_CC6UL_RTC_ALARM_SEC (addr=0x010F) */
+#define MCA_CC6UL_RTC_ALARM_SEC_MASK	0x3F
+
+#endif /* MCA_CC6UL_REGISTERS_H_ */
