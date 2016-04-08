@@ -11,10 +11,10 @@
 #define MCA_CC6UL_REGISTERS_H_
 
 /* EP0: Control and status */
-#define MCA_CC6UL_HWVER_H		0x0001
-#define MCA_CC6UL_HWVER_L		0x0002
-#define MCA_CC6UL_FWVER_H		0x0003
-#define MCA_CC6UL_FWVER_L		0x0004
+#define MCA_CC6UL_HWVER_L		0x0001
+#define MCA_CC6UL_HWVER_H		0x0002
+#define MCA_CC6UL_FWVER_L		0x0003
+#define MCA_CC6UL_FWVER_H		0x0004
 #define MCA_CC6UL_UID_0			0x0005
 #define MCA_CC6UL_UID_1			0x0006
 #define MCA_CC6UL_UID_2			0x0007
