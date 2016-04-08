@@ -13,7 +13,7 @@
 #include <linux/mfd/core.h>
 #include <linux/interrupt.h>
 #include <linux/regmap.h>
-#include <linux/mfd/mca/core.h>
+#include <linux/mfd/mca-cc6ul/core.h>
 
 #define MCA_CC6UL_IRQ_0_OFFSET		0
 #define MCA_CC6UL_IRQ_1_OFFSET		1

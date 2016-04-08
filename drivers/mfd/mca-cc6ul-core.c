@@ -17,8 +17,8 @@
 #include <linux/crc16.h>
 #include <linux/regmap.h>
 
-#include <linux/mfd/mca/core.h>
-#include <linux/mfd/mca/registers.h>
+#include <linux/mfd/mca-cc6ul/core.h>
+#include <linux/mfd/mca-cc6ul/registers.h>
 
 #include <linux/proc_fs.h>
 #include <linux/kthread.h>

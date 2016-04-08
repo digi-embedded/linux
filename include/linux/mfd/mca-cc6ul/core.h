@@ -11,7 +11,7 @@
 #define MFD_MCA_CC6UL_CORE_H_
 
 #include <linux/interrupt.h>
-#include <linux/mfd/mca/registers.h>
+#include <linux/mfd/mca-cc6ul/registers.h>
 
 /* MCA CC6UL modules */
 #define MCA_CC6UL_DRVNAME_CORE		"mca-cc6ul-core"

@@ -16,8 +16,8 @@
 #include <linux/err.h>
 
 #include <linux/mfd/core.h>
-#include <linux/mfd/mca/core.h>
-#include <linux/mfd/mca/registers.h>
+#include <linux/mfd/mca-cc6ul/core.h>
+#include <linux/mfd/mca-cc6ul/registers.h>
 
 #include <linux/of.h>
 #include <linux/regulator/of_regulator.h>
