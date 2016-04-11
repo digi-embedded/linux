@@ -82,8 +82,8 @@ static void compute_crc(u8 *frame, u16 addr, size_t nregs, u8 *data, u16 *crc)
 #endif
 
 /* Read a block of registers */
-int mca_cc6ul_read_block(struct mca_cc6ul *mca, u16 addr, size_t nregs,
-			 u8 *data)
+int mca_cc6ul_read_block(struct mca_cc6ul *mca, u16 addr, u8 *data,
+			 size_t nregs)
 {
 	int ret;
 #ifdef MCA_CC6UL_CRC
@@ -119,8 +119,8 @@ int mca_cc6ul_read_block(struct mca_cc6ul *mca, u16 addr, size_t nregs,
 EXPORT_SYMBOL_GPL(mca_cc6ul_read_block);
 
 /* Write a block of data into MCA registers */
-int mca_cc6ul_write_block(struct mca_cc6ul *mca , u16 addr, size_t nregs,
-			  u8 *data)
+int mca_cc6ul_write_block(struct mca_cc6ul *mca , u16 addr, u8 *data,
+			  size_t nregs)
 {
 	u8 *frame;	/* register address + payload */
 	u8 *payload;
@@ -162,7 +162,7 @@ static ssize_t data_show(struct device *dev, struct device_attribute *attr,
 	struct mca_cc6ul *mca = dev_get_drvdata(dev);
 	int ret;
 
-	ret = mca_cc6ul_read_block(mca, mca->addr, mca->len, mca->data);
+	ret = mca_cc6ul_read_block(mca, mca->addr, mca->data, mca->len);
 	if (ret)
 		return ret;
 
@@ -185,7 +185,7 @@ static ssize_t data_store(struct device *dev, struct device_attribute *attr,
 
 	memcpy(mca->data, buf, count);
 
-	return mca_cc6ul_write_block(mca, mca->addr, count, mca->data);
+	return mca_cc6ul_write_block(mca, mca->addr, mca->data, count);
 }
 static DEVICE_ATTR(data, 0600, data_show, data_store);
 
