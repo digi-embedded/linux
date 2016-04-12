@@ -28,14 +28,14 @@ static const struct regmap_range mca_cc6ul_readable_ranges[] = {
 static const struct regmap_range mca_cc6ul_writeable_ranges[] = {
 	regmap_reg_range(MCA_CC6UL_IRQ_STATUS_0, MCA_CC6UL_IRQ_MASK_3),
 	regmap_reg_range(MCA_CC6UL_RTC_CONTROL, MCA_CC6UL_RTC_CONTROL),
-	regmap_reg_range(MCA_CC6UL_RTC_COUNT_YEAR, MCA_CC6UL_RTC_COUNT_SEC),
-	regmap_reg_range(MCA_CC6UL_RTC_ALARM_YEAR, MCA_CC6UL_RTC_ALARM_SEC),
+	regmap_reg_range(MCA_CC6UL_RTC_COUNT_YEAR_L, MCA_CC6UL_RTC_COUNT_SEC),
+	regmap_reg_range(MCA_CC6UL_RTC_ALARM_YEAR_L, MCA_CC6UL_RTC_ALARM_SEC),
 };
 
 static const struct regmap_range mca_cc6ul_volatile_ranges[] = {
 	/* Real volatile registers */
 	regmap_reg_range(MCA_CC6UL_IRQ_STATUS_0, MCA_CC6UL_IRQ_STATUS_3),
-	regmap_reg_range(MCA_CC6UL_RTC_COUNT_YEAR, MCA_CC6UL_RTC_COUNT_SEC),
+	regmap_reg_range(MCA_CC6UL_RTC_COUNT_YEAR_L, MCA_CC6UL_RTC_COUNT_SEC),
 
 	/*
 	 * Fake volatile registers.
@@ -51,7 +51,7 @@ static const struct regmap_range mca_cc6ul_volatile_ranges[] = {
 	regmap_reg_range(MCA_CC6UL_HWVER_L, MCA_CC6UL_UID_9),
 	regmap_reg_range(MCA_CC6UL_IRQ_MASK_0, MCA_CC6UL_IRQ_MASK_3),
 	regmap_reg_range(MCA_CC6UL_RTC_CONTROL, MCA_CC6UL_RTC_CONTROL),
-	regmap_reg_range(MCA_CC6UL_RTC_ALARM_YEAR, MCA_CC6UL_RTC_ALARM_SEC),
+	regmap_reg_range(MCA_CC6UL_RTC_ALARM_YEAR_L, MCA_CC6UL_RTC_ALARM_SEC),
 
 };
 
