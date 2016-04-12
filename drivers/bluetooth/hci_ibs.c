@@ -636,7 +636,7 @@ static inline int ibs_check_data_len(struct ibs_struct *ibs, int len)
 	BT_DBG("len %d room %d", len, room);
 
 	if (!len) {
-		hci_recv_frame(ibs->rx_skb);
+		hci_recv_frame(ibs->rx_skb->dev, ibs->rx_skb);
 	} else if (len > room) {
 		BT_ERR("Data length is too large");
 		kfree_skb(ibs->rx_skb);
@@ -679,7 +679,7 @@ static int ibs_recv(struct hci_uart *hu, void *data, int count)
 			switch (ibs->rx_state) {
 			case HCI_IBS_W4_DATA:
 				BT_DBG("Complete data");
-				hci_recv_frame(ibs->rx_skb);
+				hci_recv_frame(ibs->rx_skb->dev, ibs->rx_skb);
 
 				ibs->rx_state = HCI_IBS_W4_PACKET_TYPE;
 				ibs->rx_skb = NULL;
