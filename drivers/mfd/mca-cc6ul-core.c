@@ -275,9 +275,9 @@ int mca_cc6ul_device_init(struct mca_cc6ul *mca, u32 irq)
 		return ret;
 	}
 
-	ret = mfd_add_devices(mca->dev, PLATFORM_DEVID_AUTO,
-			      mca_cc6ul_devs, ARRAY_SIZE(mca_cc6ul_devs),
-			      NULL, mca->irq_base, NULL);
+	ret = mfd_add_devices(mca->dev, -1, mca_cc6ul_devs,
+			      ARRAY_SIZE(mca_cc6ul_devs), NULL, mca->irq_base,
+			      regmap_irq_get_domain(mca->regmap_irq));
 	if (ret) {
 		dev_err(mca->dev, "Cannot add MFD cells (%d)\n", ret);
 		goto err;
