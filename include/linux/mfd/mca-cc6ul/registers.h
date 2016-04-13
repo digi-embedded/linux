@@ -58,15 +58,15 @@
  * MCA registers bitfields
  */
 
-/* MCA_CC6UL_IRQ_STATUS_A (addr=0x0020) */
-#define MCA_CC6UL_ONKEY			(1 << 0)
-#define MCA_CC6UL_RTC_ALARM		(1 << 1)
-#define MCA_CC6UL_RTC_1HZ		(1 << 2)
+/* MCA_CC6UL_IRQ_STATUS_0 (addr=0x0020) */
+#define MCA_CC6UL_RTC_ALARM		(1 << 0)
+#define MCA_CC6UL_RTC_1HZ		(1 << 1)
+#define MCA_CC6UL_ONKEY			(1 << 2)
 
-/* MCA_CC6UL_IRQ_MASK_A (addr=0x0024) */
-#define MCA_CC6UL_M_ONKEY		(1 << 0)
-#define MCA_CC6UL_M_RTC_ALARM		(1 << 1)
-#define MCA_CC6UL_M_RTC_1HZ		(1 << 2)
+/* MCA_CC6UL_IRQ_MASK_0 (addr=0x0024) */
+#define MCA_CC6UL_M_RTC_ALARM		MCA_CC6UL_RTC_ALARM
+#define MCA_CC6UL_M_RTC_1HZ		MCA_CC6UL_RTC_1HZ
+#define MCA_CC6UL_M_ONKEY		MCA_CC6UL_ONKEY
 
 /* MCA_CC6UL_RTC_CONTROL (addr=0x0101) */
 #define MCA_CC6UL_RTC_ALARM_EN		(1 << 0)
