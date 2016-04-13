@@ -32,9 +32,9 @@
 
 /* Interrupts */
 enum mca_cc6ul_irqs {
-	MCA_CC6UL_IRQ_ONKEY = 0,
 	MCA_CC6UL_IRQ_RTC_ALARM,
 	MCA_CC6UL_IRQ_RTC_1HZ,
+	MCA_CC6UL_IRQ_ONKEY,
 	/* ... */
 
 	MCA_CC6UL_NUM_IRQS,
