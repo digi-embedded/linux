@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 Freescale Semiconductor, Inc. All Rights Reserved
+ * Copyright (C) 2013-2015 Freescale Semiconductor, Inc. All Rights Reserved
  */
 
 /*
@@ -53,4 +53,21 @@ struct v4l2_mxc_offset {
 	uint32_t v_offset;
 };
 
+struct v4l2_mxc_dest_crop {
+	__u32			type;	/* enum v4l2_buf_type */
+	struct v4l2_mxc_offset   offset;
+};
+
+/*
+ * Private IOCTLs
+ *
+ * VIDIOC_S_INOUT_CROP: Set input stream crop size
+ * VIDIOC_G_INOUT_CROP: Get input stream crop size
+ */
+#define VIDIOC_S_INPUT_CROP \
+	_IOWR('V', BASE_VIDIOC_PRIVATE + 1, struct v4l2_crop)
+#define VIDIOC_G_INPUT_CROP \
+	_IOWR('V', BASE_VIDIOC_PRIVATE + 2, struct v4l2_crop)
+#define VIDIOC_S_DEST_CROP \
+	_IOWR('V', BASE_VIDIOC_PRIVATE + 3, struct v4l2_mxc_dest_crop)
 #endif

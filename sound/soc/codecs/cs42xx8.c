@@ -45,6 +45,7 @@ struct cs42xx8_priv {
 	bool slave_mode;
 	unsigned long sysclk;
 	int rate[2];
+	u32 tx_channels;
 };
 
 /* -127.5dB to 0dB with step of 0.5dB */
@@ -250,6 +251,9 @@ static int cs42xx8_hw_params(struct snd_pcm_substream *substream,
 	u32 fm_tx, fm_rx;
 	u32 i, fm, val, mask;
 
+	if (tx)
+		cs42xx8->tx_channels = params_channels(params);
+
 	rate_tx = tx ? rate : cs42xx8->rate[0];
 	rate_rx = tx ? cs42xx8->rate[1] : rate;
 
@@ -260,7 +264,7 @@ static int cs42xx8_hw_params(struct snd_pcm_substream *substream,
 		fm_rx = CS42XX8_FM_AUTO;
 		fm_tx = CS42XX8_FM_AUTO;
 	} else {
-		if (rate_tx >= 0 && rate_tx < 50000)
+		if (rate_tx < 50000)
 			fm_tx = CS42XX8_FM_SINGLE;
 		else if (rate_tx > 50000 && rate_tx < 100000)
 			fm_tx = CS42XX8_FM_DOUBLE;
@@ -271,7 +275,7 @@ static int cs42xx8_hw_params(struct snd_pcm_substream *substream,
 			return -EINVAL;
 		}
 
-		if (rate_rx >= 0 && rate_rx < 50000)
+		if (rate_rx < 50000)
 			fm_rx = CS42XX8_FM_SINGLE;
 		else if (rate_rx > 50000 && rate_rx < 100000)
 			fm_rx = CS42XX8_FM_DOUBLE;
@@ -344,9 +348,11 @@ static int cs42xx8_digital_mute(struct snd_soc_dai *dai, int mute)
 {
 	struct snd_soc_codec *codec = dai->codec;
 	struct cs42xx8_priv *cs42xx8 = snd_soc_codec_get_drvdata(codec);
+	u8 dac_unmute = cs42xx8->tx_channels ?
+		        ~((0x1 << cs42xx8->tx_channels) - 1) : 0;
 
-	regmap_update_bits(cs42xx8->regmap, CS42XX8_DACMUTE,
-			   CS42XX8_DACMUTE_ALL, mute ? CS42XX8_DACMUTE_ALL : 0);
+	regmap_write(cs42xx8->regmap, CS42XX8_DACMUTE,
+		     mute ? CS42XX8_DACMUTE_ALL : dac_unmute);
 
 	return 0;
 }
@@ -599,7 +605,7 @@ err_enable:
 }
 EXPORT_SYMBOL_GPL(cs42xx8_probe);
 
-#ifdef CONFIG_PM_RUNTIME
+#ifdef CONFIG_PM
 static int cs42xx8_runtime_resume(struct device *dev)
 {
 	struct cs42xx8_priv *cs42xx8 = dev_get_drvdata(dev);

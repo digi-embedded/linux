@@ -26,7 +26,6 @@
 #include "ci.h"
 #include "udc.h"
 #include "bits.h"
-#include "debug.h"
 #include "otg.h"
 #include "otg_fsm.h"
 
@@ -86,10 +85,8 @@ static int hw_device_state(struct ci_hdrc *ci, u32 dma)
 		/* interrupt, error, port change, reset, sleep/suspend */
 		hw_write(ci, OP_USBINTR, ~0,
 			     USBi_UI|USBi_UEI|USBi_PCI|USBi_URI|USBi_SLI);
-		hw_write(ci, OP_USBCMD, USBCMD_RS, USBCMD_RS);
 	} else {
 		hw_write(ci, OP_USBINTR, ~0, 0);
-		hw_write(ci, OP_USBCMD, USBCMD_RS, 0);
 	}
 	return 0;
 }
@@ -406,9 +403,9 @@ static inline u8 _usb_addr(struct ci_hw_ep *ep)
 }
 
 /**
- * _hardware_queue: configures a request at hardware level
- * @gadget: gadget
+ * _hardware_enqueue: configures a request at hardware level
  * @hwep:   endpoint
+ * @hwreq:  request
  *
  * This function returns an error code
  */
@@ -437,19 +434,28 @@ static int _hardware_enqueue(struct ci_hw_ep *hwep, struct ci_hw_req *hwreq)
 	if (hwreq->req.dma % PAGE_SIZE)
 		pages--;
 
-	if (rest == 0)
-		add_td_to_list(hwep, hwreq, 0);
+	if (rest == 0) {
+		ret = add_td_to_list(hwep, hwreq, 0);
+		if (ret < 0)
+			goto done;
+	}
 
 	while (rest > 0) {
 		unsigned count = min(hwreq->req.length - hwreq->req.actual,
 					(unsigned)(pages * CI_HDRC_PAGE_SIZE));
-		add_td_to_list(hwep, hwreq, count);
+		ret = add_td_to_list(hwep, hwreq, count);
+		if (ret < 0)
+			goto done;
+
 		rest -= count;
 	}
 
-	if (hwreq->req.zero && hwreq->req.length
-	    && (hwreq->req.length % hwep->ep.maxpacket == 0))
-		add_td_to_list(hwep, hwreq, 0);
+	if (hwreq->req.zero && hwreq->req.length && hwep->dir == TX
+	    && (hwreq->req.length % hwep->ep.maxpacket == 0)) {
+		ret = add_td_to_list(hwep, hwreq, 0);
+		if (ret < 0)
+			goto done;
+	}
 
 	firstnode = list_first_entry(&hwreq->tds, struct td_node, td);
 
@@ -647,7 +653,7 @@ __acquires(hwep->lock)
 
 		if (hwreq->req.complete != NULL) {
 			spin_unlock(hwep->lock);
-			hwreq->req.complete(&hwep->ep, &hwreq->req);
+			usb_gadget_giveback_request(&hwep->ep, &hwreq->req);
 			spin_lock(hwep->lock);
 		}
 	}
@@ -717,10 +723,8 @@ __acquires(ci->lock)
 	}
 
 	spin_unlock(&ci->lock);
-	if (ci->gadget.speed != USB_SPEED_UNKNOWN) {
-		if (ci->driver)
-			ci->driver->disconnect(&ci->gadget);
-	}
+	if (ci->gadget.speed != USB_SPEED_UNKNOWN)
+		usb_gadget_udc_reset(&ci->gadget, ci->driver);
 
 	retval = _gadget_stop_activity(&ci->gadget);
 	if (retval)
@@ -733,8 +737,6 @@ __acquires(ci->lock)
 	ci->status = usb_ep_alloc_request(&ci->ep0in->ep, GFP_ATOMIC);
 	if (ci->status == NULL)
 		retval = -ENOMEM;
-
-	usb_gadget_set_state(&ci->gadget, USB_STATE_DEFAULT);
 
 done:
 	spin_lock(&ci->lock);
@@ -761,8 +763,12 @@ static void isr_get_status_complete(struct usb_ep *ep, struct usb_request *req)
 
 /**
  * _ep_queue: queues (submits) an I/O request to an endpoint
+ * @ep:        endpoint
+ * @req:       request
+ * @gfp_flags: GFP flags (not used)
  *
  * Caller must hold lock
+ * This function returns an error code
  */
 static int _ep_queue(struct usb_ep *ep, struct usb_request *req,
 		    gfp_t __maybe_unused gfp_flags)
@@ -781,7 +787,6 @@ static int _ep_queue(struct usb_ep *ep, struct usb_request *req,
 			       ci->ep0out : ci->ep0in;
 		if (!list_empty(&hwep->qh.queue)) {
 			_ep_nuke(hwep);
-			retval = -EOVERFLOW;
 			dev_warn(hwep->ci->dev, "endpoint ctrl %X nuked\n",
 				 _usb_addr(hwep));
 		}
@@ -958,7 +963,7 @@ __acquires(hwep->lock)
 			if ((hwep->type == USB_ENDPOINT_XFER_CONTROL) &&
 					hwreq->req.length)
 				hweptemp = hwep->ci->ep0in;
-			hwreq->req.complete(&hweptemp->ep, &hwreq->req);
+			usb_gadget_giveback_request(&hweptemp->ep, &hwreq->req);
 			spin_lock(hwep->lock);
 		}
 	}
@@ -1141,6 +1146,13 @@ __acquires(ci->lock)
 				if (ci_otg_is_fsm_mode(ci))
 					err = otg_a_alt_hnp_support(ci);
 				break;
+			case USB_DEVICE_A_HNP_SUPPORT:
+				if (ci_otg_is_fsm_mode(ci)) {
+					ci->gadget.a_hnp_support = 1;
+					err = isr_setup_status_phase(
+							ci);
+				}
+				break;
 			default:
 				goto delegate;
 			}
@@ -1248,8 +1260,8 @@ static int ep_enable(struct usb_ep *ep,
 
 	if (hwep->type == USB_ENDPOINT_XFER_CONTROL)
 		cap |= QH_IOS;
-	if (hwep->num)
-		cap |= QH_ZLT;
+
+	cap |= QH_ZLT;
 	cap |= (hwep->ep.maxpacket << __ffs(QH_MAX_PKT)) & QH_MAX_PKT;
 	/*
 	 * For ISO-TX, we set mult at QH as the largest value, and use
@@ -1408,6 +1420,7 @@ static int ep_dequeue(struct usb_ep *ep, struct usb_request *req)
 	struct ci_hw_ep  *hwep  = container_of(ep,  struct ci_hw_ep, ep);
 	struct ci_hw_req *hwreq = container_of(req, struct ci_hw_req, req);
 	unsigned long flags;
+	struct td_node *node, *tmpnode;
 
 	if (ep == NULL || req == NULL || hwreq->req.status != -EALREADY ||
 		hwep->ep.desc == NULL || list_empty(&hwreq->queue) ||
@@ -1418,6 +1431,12 @@ static int ep_dequeue(struct usb_ep *ep, struct usb_request *req)
 	if (hwep->ci->gadget.speed != USB_SPEED_UNKNOWN)
 		hw_ep_flush(hwep->ci, hwep->num, hwep->dir);
 
+	list_for_each_entry_safe(node, tmpnode, &hwreq->tds, td) {
+		dma_pool_free(hwep->td_pool, node->ptr, node->dma);
+		list_del(&node->td);
+		kfree(node);
+	}
+
 	/* pop request */
 	list_del_init(&hwreq->queue);
 
@@ -1427,7 +1446,7 @@ static int ep_dequeue(struct usb_ep *ep, struct usb_request *req)
 
 	if (hwreq->req.complete != NULL) {
 		spin_unlock(hwep->lock);
-		hwreq->req.complete(&hwep->ep, &hwreq->req);
+		usb_gadget_giveback_request(&hwep->ep, &hwreq->req);
 		spin_lock(hwep->lock);
 	}
 
@@ -1454,10 +1473,6 @@ static int ep_set_halt(struct usb_ep *ep, int value)
 
 	spin_lock_irqsave(hwep->lock, flags);
 
-	if (hwep->ci->gadget.speed == USB_SPEED_UNKNOWN) {
-		spin_unlock_irqrestore(hwep->lock, flags);
-		return 0;
-	}
 #ifndef STALL_IN
 	/* g_file_storage MS compliant but g_zero fails chapter 9 compliance */
 	if (value && hwep->type == USB_ENDPOINT_XFER_BULK && hwep->dir == TX &&
@@ -1623,21 +1638,23 @@ static int ci_udc_pullup(struct usb_gadget *_gadget, int is_on)
 {
 	struct ci_hdrc *ci = container_of(_gadget, struct ci_hdrc, gadget);
 
-	if (!ci->vbus_active)
-		return -EOPNOTSUPP;
+	/* Data+ pullup controlled by OTG state machine in OTG fsm mode */
+	if (ci_otg_is_fsm_mode(ci))
+		return 0;
 
+	pm_runtime_get_sync(&ci->gadget.dev);
 	if (is_on)
 		hw_write(ci, OP_USBCMD, USBCMD_RS, USBCMD_RS);
 	else
 		hw_write(ci, OP_USBCMD, USBCMD_RS, 0);
+	pm_runtime_put_sync(&ci->gadget.dev);
 
 	return 0;
 }
 
 static int ci_udc_start(struct usb_gadget *gadget,
 			 struct usb_gadget_driver *driver);
-static int ci_udc_stop(struct usb_gadget *gadget,
-			struct usb_gadget_driver *driver);
+static int ci_udc_stop(struct usb_gadget *gadget);
 /**
  * Device operations part of the API to the USB controller hardware,
  * which don't involve endpoints (or i/o)
@@ -1761,27 +1778,10 @@ static int ci_udc_start(struct usb_gadget *gadget,
 	return retval;
 }
 
-static void ci_udc_stop_for_otg_fsm(struct ci_hdrc *ci)
-{
-	if (!ci_otg_is_fsm_mode(ci))
-		return;
-
-	mutex_lock(&ci->fsm.lock);
-	if (ci->fsm.otg->state == OTG_STATE_A_PERIPHERAL) {
-		ci->fsm.a_bidl_adis_tmout = 1;
-		ci_hdrc_otg_fsm_start(ci);
-	} else if (ci->fsm.otg->state == OTG_STATE_B_PERIPHERAL) {
-		ci->fsm.protocol = PROTO_UNDEF;
-		ci->fsm.otg->state = OTG_STATE_UNDEFINED;
-	}
-	mutex_unlock(&ci->fsm.lock);
-}
-
 /**
  * ci_udc_stop: unregister a gadget driver
  */
-static int ci_udc_stop(struct usb_gadget *gadget,
-			struct usb_gadget_driver *driver)
+static int ci_udc_stop(struct usb_gadget *gadget)
 {
 	struct ci_hdrc *ci = container_of(gadget, struct ci_hdrc, gadget);
 	unsigned long flags;
@@ -1802,7 +1802,6 @@ static int ci_udc_stop(struct usb_gadget *gadget,
 	ci->driver = NULL;
 	spin_unlock_irqrestore(&ci->lock, flags);
 
-	ci_udc_stop_for_otg_fsm(ci);
 	return 0;
 }
 
@@ -1889,10 +1888,10 @@ static int udc_start(struct ci_hdrc *ci)
 	ci->gadget.speed        = USB_SPEED_UNKNOWN;
 	ci->gadget.max_speed    = USB_SPEED_HIGH;
 	ci->gadget.name         = ci->platdata->name;
-	ci->gadget.otg_caps	= &ci->platdata->ci_otg_caps;
+	ci->gadget.otg_caps	= otg_caps;
 
-	if (otg_caps->hnp_support || otg_caps->srp_support ||
-					otg_caps->adp_support)
+	if (ci->is_otg && (otg_caps->hnp_support || otg_caps->srp_support ||
+						otg_caps->adp_support))
 		ci->gadget.is_otg = 1;
 
 	INIT_LIST_HEAD(&ci->gadget.ep_list);
@@ -1996,7 +1995,9 @@ void ci_hdrc_gadget_connect(struct usb_gadget *gadget, int is_active)
 		hw_device_reset(ci);
 		hw_device_state(ci, ci->ep0out->qh.dma);
 		usb_gadget_set_state(gadget, USB_STATE_POWERED);
+		usb_udc_vbus_handler(gadget, true);
 	} else {
+		usb_udc_vbus_handler(gadget, false);
 		if (ci->driver)
 			ci->driver->disconnect(gadget);
 		hw_device_state(ci, 0);
@@ -2055,10 +2056,6 @@ static void udc_suspend_for_power_lost(struct ci_hdrc *ci)
 /* Power lost with device mode */
 static void udc_resume_from_power_lost(struct ci_hdrc *ci)
 {
-	/* Force disconnect if power lost with vbus on */
-	if (!ci_otg_is_fsm_mode(ci) && ci->vbus_active)
-		usb_gadget_vbus_disconnect(&ci->gadget);
-
 	if (ci->is_otg)
 		hw_write_otgsc(ci, OTGSC_BSVIS | OTGSC_BSVIE,
 					OTGSC_BSVIS | OTGSC_BSVIE);

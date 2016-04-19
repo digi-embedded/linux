@@ -54,6 +54,7 @@
 #include "vivante_drv.h"
 
 #include "drm_pciids.h"
+#include "drm_legacy.h"
 
 static char platformdevicename[] = "Vivante GCCore";
 static struct platform_device *pplatformdev;
@@ -63,13 +64,14 @@ static const struct file_operations viv_driver_fops = {
 	.open = drm_open,
 	.release = drm_release,
 	.unlocked_ioctl = drm_ioctl,
-	.mmap = drm_mmap,
+	.mmap = drm_legacy_mmap,
 	.poll = drm_poll,
 	.llseek = noop_llseek,
 };
 
 static struct drm_driver driver = {
 	.fops = &viv_driver_fops,
+	.set_busid = drm_platform_set_busid,
 	.name = DRIVER_NAME,
 	.desc = DRIVER_DESC,
 	.date = DRIVER_DATE,

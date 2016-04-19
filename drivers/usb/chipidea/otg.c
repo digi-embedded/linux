@@ -1,7 +1,7 @@
 /*
  * otg.c - ChipIdea USB IP core OTG driver
  *
- * Copyright (C) 2013-2015 Freescale Semiconductor, Inc.
+ * Copyright (C) 2013-2016 Freescale Semiconductor, Inc.
  *
  * Author: Peter Chen
  *
@@ -69,6 +69,7 @@ enum ci_role ci_otg_role(struct ci_hdrc *ci)
 static int ci_is_vbus_glitch(struct ci_hdrc *ci)
 {
 	int i;
+
 	for (i = 0; i < CI_VBUS_CONNECT_TIMEOUT_MS/20; i++) {
 		if (hw_read_otgsc(ci, OTGSC_AVV)) {
 			return 0;
@@ -111,6 +112,7 @@ void ci_handle_vbus_change(struct ci_hdrc *ci)
 void ci_handle_id_switch(struct ci_hdrc *ci)
 {
 	enum ci_role role = ci_otg_role(ci);
+	int ret = 0;
 
 	if (role != ci->role) {
 		dev_dbg(ci->dev, "switching from %s to %s\n",
@@ -123,10 +125,29 @@ void ci_handle_id_switch(struct ci_hdrc *ci)
 		}
 
 		ci_role_stop(ci);
-		/* wait vbus lower than OTGSC_BSV */
-		hw_wait_reg(ci, OP_OTGSC, OTGSC_BSV, 0,
-				CI_VBUS_STABLE_TIMEOUT_MS);
+
+		if (role == CI_ROLE_GADGET)
+			/* wait vbus lower than OTGSC_BSV */
+			ret = hw_wait_reg(ci, OP_OTGSC, OTGSC_BSV, 0,
+					CI_VBUS_STABLE_TIMEOUT_MS);
+		else if (ci->vbus_active)
+			/*
+			 * If the role switch happens(e.g. during
+			 * system sleep), and we lose vbus drop
+			 * event, disconnect gadget for it before
+			 * start host.
+			 */
+		       usb_gadget_vbus_disconnect(&ci->gadget);
+
 		ci_role_start(ci, role);
+		/*
+		 * If the role switch happens(e.g. during system
+		 * sleep) and vbus keeps on afterwards, we connect
+		 * gadget as vbus connect event lost.
+		 */
+		if (ret == -ETIMEDOUT)
+			usb_gadget_vbus_connect(&ci->gadget);
+
 	}
 }
 

@@ -141,7 +141,7 @@ static ssize_t ecx_transmit_led_message(struct ata_port *ap, u32 state,
 					ssize_t size)
 {
 	struct ahci_host_priv *hpriv =  ap->host->private_data;
-	struct ecx_plat_data *pdata = (struct ecx_plat_data *) hpriv->plat_data;
+	struct ecx_plat_data *pdata = hpriv->plat_data;
 	struct ahci_port_priv *pp = ap->private_data;
 	unsigned long flags;
 	int pmp, i;
@@ -568,8 +568,7 @@ static int ahci_highbank_probe(struct platform_device *pdev)
 	ahci_init_controller(host);
 	ahci_print_info(host, "platform");
 
-	rc = ata_host_activate(host, irq, ahci_interrupt, 0,
-					&ahci_highbank_platform_sht);
+	rc = ahci_host_activate(host, irq, &ahci_highbank_platform_sht);
 	if (rc)
 		goto err0;
 
@@ -635,7 +634,6 @@ static struct platform_driver ahci_highbank_driver = {
 	.remove = ata_platform_remove_one,
         .driver = {
                 .name = "highbank-ahci",
-                .owner = THIS_MODULE,
                 .of_match_table = ahci_of_match,
                 .pm = &ahci_highbank_pm_ops,
         },

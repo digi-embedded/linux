@@ -282,10 +282,8 @@ static int imx_pwm_probe(struct platform_device *pdev)
 		return -ENODEV;
 
 	imx = devm_kzalloc(&pdev->dev, sizeof(*imx), GFP_KERNEL);
-	if (imx == NULL) {
-		dev_err(&pdev->dev, "failed to allocate memory\n");
+	if (imx == NULL)
 		return -ENOMEM;
-	}
 
 	imx->clk_per = devm_clk_get(&pdev->dev, "per");
 	if (IS_ERR(imx->clk_per)) {
@@ -338,7 +336,6 @@ static int imx_pwm_remove(struct platform_device *pdev)
 static struct platform_driver imx_pwm_driver = {
 	.driver		= {
 		.name	= "imx-pwm",
-		.owner = THIS_MODULE,
 		.of_match_table = imx_pwm_dt_ids,
 	},
 	.probe		= imx_pwm_probe,

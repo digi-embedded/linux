@@ -28,14 +28,16 @@
 #define DA9063_DRVNAME_ONKEY		"da9063-onkey"
 #define DA9063_DRVNAME_RTC		"da9063-rtc"
 #define DA9063_DRVNAME_VIBRATION	"da9063-vibration"
-#define DA9063_DRVNAME_LEDS		"da9063-leds"
 #define DA9063_DRVNAME_GPIO		"da9063-gpio"
-
-#define DA9063_AD_REVISION              3
-#define DA9063_BB_REVISION              5
 
 enum da9063_models {
 	PMIC_DA9063 = 0x61,
+};
+
+enum da9063_variant_codes {
+	PMIC_DA9063_AD = 0x3,
+	PMIC_DA9063_BB = 0x5,
+	PMIC_DA9063_CA = 0x6,
 };
 
 /* Interrupts */
@@ -77,7 +79,7 @@ struct da9063 {
 	/* Device */
 	struct device	*dev;
 	unsigned short	model;
-	unsigned short	revision;
+	unsigned char	variant_code;
 	unsigned int	t_offset;
 	unsigned int	flags;
 

@@ -15,6 +15,7 @@ Required properties:
 Optional properties:
 
 - clock-frequency : The oscillator frequency driving the flexcan device
+
 - xceiver-supply: Regulator that powers the CAN transceiver
 - stop-mode: register bits of stop mode control, the format is
   <&gpr req_gpr req_bit ack_gpr ack_bit>.
@@ -26,7 +27,6 @@ Optional properties:
 - trx_en_gpio : enable gpio
 - trx_stby_gpio : standby gpio
 - trx_nerr_gpio : NERR gpio
-- trx_wakeup_gpio : local wakeup gpio
 
 Example:
 

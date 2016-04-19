@@ -338,7 +338,6 @@ static void mv_otg_update_inputs(struct mv_otg *mvotg)
 static void mv_otg_update_state(struct mv_otg *mvotg)
 {
 	struct mv_otg_ctrl *otg_ctrl = &mvotg->otg_ctrl;
-	struct usb_phy *phy = &mvotg->phy;
 	int old_state = mvotg->phy.otg->state;
 
 	switch (old_state) {
@@ -441,10 +440,12 @@ run:
 				mv_otg_start_periphrals(mvotg, 0);
 			mv_otg_reset(mvotg);
 			mv_otg_disable(mvotg);
+			usb_phy_set_event(&mvotg->phy, USB_EVENT_NONE);
 			break;
 		case OTG_STATE_B_PERIPHERAL:
 			mv_otg_enable(mvotg);
 			mv_otg_start_periphrals(mvotg, 1);
+			usb_phy_set_event(&mvotg->phy, USB_EVENT_ENUMERATED);
 			break;
 		case OTG_STATE_A_IDLE:
 			otg->default_a = 1;
@@ -686,10 +687,8 @@ static int mv_otg_probe(struct platform_device *pdev)
 	}
 
 	mvotg = devm_kzalloc(&pdev->dev, sizeof(*mvotg), GFP_KERNEL);
-	if (!mvotg) {
-		dev_err(&pdev->dev, "failed to allocate memory!\n");
+	if (!mvotg)
 		return -ENOMEM;
-	}
 
 	otg = devm_kzalloc(&pdev->dev, sizeof(*otg), GFP_KERNEL);
 	if (!otg)
@@ -858,10 +857,10 @@ static int mv_otg_suspend(struct platform_device *pdev, pm_message_t state)
 {
 	struct mv_otg *mvotg = platform_get_drvdata(pdev);
 
-	if (mvotg->phy.state != OTG_STATE_B_IDLE) {
+	if (mvotg->phy.otg->state != OTG_STATE_B_IDLE) {
 		dev_info(&pdev->dev,
 			 "OTG state is not B_IDLE, it is %d!\n",
-			 mvotg->phy.state);
+			 mvotg->phy.otg->state);
 		return -EAGAIN;
 	}
 
@@ -896,7 +895,6 @@ static struct platform_driver mv_otg_driver = {
 	.probe = mv_otg_probe,
 	.remove = mv_otg_remove,
 	.driver = {
-		   .owner = THIS_MODULE,
 		   .name = driver_name,
 		   },
 #ifdef CONFIG_PM

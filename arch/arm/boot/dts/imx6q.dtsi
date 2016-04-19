@@ -1,6 +1,6 @@
 
 /*
- * Copyright 2013-2014 Freescale Semiconductor, Inc.
+ * Copyright 2013-2015 Freescale Semiconductor, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -15,6 +15,7 @@
 / {
 	aliases {
 		ipu1 = &ipu2;
+		spi4 = &ecspi5;
 	};
 
 	cpus {
@@ -48,11 +49,12 @@
 				 <&clks IMX6QDL_CLK_STEP>,
 				 <&clks IMX6QDL_CLK_PLL1_SW>,
 				 <&clks IMX6QDL_CLK_PLL1_SYS>,
-				 <&clks IMX6QDL_PLL1_BYPASS>,
 				 <&clks IMX6QDL_CLK_PLL1>,
-				 <&clks IMX6QDL_PLL1_BYPASS_SRC> ;
+				 <&clks IMX6QDL_PLL1_BYPASS>,
+				 <&clks IMX6QDL_PLL1_BYPASS_SRC>;
 			clock-names = "arm", "pll2_pfd2_396m", "step",
-				      "pll1_sw", "pll1_sys", "pll1_bypass", "pll1", "pll1_bypass_src";
+				      "pll1_sw", "pll1_sys", "pll1",
+				      "pll1_bypass", "pll1_bypass_src";
 			arm-supply = <&reg_arm>;
 			pu-supply = <&reg_pu>;
 			soc-supply = <&reg_soc>;
@@ -80,8 +82,22 @@
 		};
 	};
 
+	reserved-memory {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		/* global autoconfigured region for contiguous allocations */
+		linux,cma {
+			compatible = "shared-dma-pool";
+			reusable;
+			size = <0x14000000>;
+			linux,cma-default;
+		};
+	};
+
 	soc {
-		busfreq {
+		busfreq: busfreq {
 			compatible = "fsl,imx_busfreq";
 			clocks = <&clks 171>, <&clks 6>, <&clks 11>, <&clks 104>, <&clks 172>, <&clks 58>,
 				<&clks 18>, <&clks 60>, <&clks 20>, <&clks 3>;
@@ -95,9 +111,11 @@
 		gpu: gpu@00130000 {
 			compatible = "fsl,imx6q-gpu";
 			reg = <0x00130000 0x4000>, <0x00134000 0x4000>,
-			      <0x02204000 0x4000>, <0x0 0x0>;
+			      <0x02204000 0x4000>, <0x0 0x0>,
+			      <0x0 0x8000000>;
 			reg-names = "iobase_3d", "iobase_2d",
-				    "iobase_vg", "phys_baseaddr";
+				    "iobase_vg", "phys_baseaddr",
+				    "contiguous_mem";
 			interrupts = <0 9 IRQ_TYPE_LEVEL_HIGH>,
 				     <0 10 IRQ_TYPE_LEVEL_HIGH>,
 				     <0 11 IRQ_TYPE_LEVEL_HIGH>;
@@ -111,18 +129,6 @@
 			resets = <&src 0>, <&src 3>, <&src 3>;
 			reset-names = "gpu3d", "gpu2d", "gpuvg";
 			power-domains = <&gpc 1>;
-		};
-
-		ocrams: sram@00900000 {
-			compatible = "fsl,lpm-sram";
-			reg = <0x00900000 0x4000>;
-			clocks = <&clks IMX6QDL_CLK_OCRAM>;
-		};
-
-		ocrams_ddr: sram@00904000 {
-			compatible = "fsl,ddr-lpm-sram";
-			reg = <0x00904000 0x1000>;
-			clocks = <&clks IMX6QDL_CLK_OCRAM>;
 		};
 
 		ocram: sram@00905000 {
@@ -142,7 +148,49 @@
 					clocks = <&clks IMX6Q_CLK_ECSPI5>,
 						 <&clks IMX6Q_CLK_ECSPI5>;
 					clock-names = "ipg", "per";
+					dmas = <&sdma 11 7 1>, <&sdma 12 7 2>;
+					dma-names = "rx", "tx";
 					status = "disabled";
+				};
+			};
+
+			iomuxc: iomuxc@020e0000 {
+				compatible = "fsl,imx6q-iomuxc";
+
+				ipu2 {
+					pinctrl_ipu2_1: ipu2grp-1 {
+						fsl,pins = <
+							MX6QDL_PAD_DI0_DISP_CLK__IPU2_DI0_DISP_CLK 0x10
+							MX6QDL_PAD_DI0_PIN15__IPU2_DI0_PIN15       0x10
+							MX6QDL_PAD_DI0_PIN2__IPU2_DI0_PIN02        0x10
+							MX6QDL_PAD_DI0_PIN3__IPU2_DI0_PIN03        0x10
+							MX6QDL_PAD_DI0_PIN4__IPU2_DI0_PIN04        0x80000000
+							MX6QDL_PAD_DISP0_DAT0__IPU2_DISP0_DATA00   0x10
+							MX6QDL_PAD_DISP0_DAT1__IPU2_DISP0_DATA01   0x10
+							MX6QDL_PAD_DISP0_DAT2__IPU2_DISP0_DATA02   0x10
+							MX6QDL_PAD_DISP0_DAT3__IPU2_DISP0_DATA03   0x10
+							MX6QDL_PAD_DISP0_DAT4__IPU2_DISP0_DATA04   0x10
+							MX6QDL_PAD_DISP0_DAT5__IPU2_DISP0_DATA05   0x10
+							MX6QDL_PAD_DISP0_DAT6__IPU2_DISP0_DATA06   0x10
+							MX6QDL_PAD_DISP0_DAT7__IPU2_DISP0_DATA07   0x10
+							MX6QDL_PAD_DISP0_DAT8__IPU2_DISP0_DATA08   0x10
+							MX6QDL_PAD_DISP0_DAT9__IPU2_DISP0_DATA09   0x10
+							MX6QDL_PAD_DISP0_DAT10__IPU2_DISP0_DATA10  0x10
+							MX6QDL_PAD_DISP0_DAT11__IPU2_DISP0_DATA11  0x10
+							MX6QDL_PAD_DISP0_DAT12__IPU2_DISP0_DATA12  0x10
+							MX6QDL_PAD_DISP0_DAT13__IPU2_DISP0_DATA13  0x10
+							MX6QDL_PAD_DISP0_DAT14__IPU2_DISP0_DATA14  0x10
+							MX6QDL_PAD_DISP0_DAT15__IPU2_DISP0_DATA15  0x10
+							MX6QDL_PAD_DISP0_DAT16__IPU2_DISP0_DATA16  0x10
+							MX6QDL_PAD_DISP0_DAT17__IPU2_DISP0_DATA17  0x10
+							MX6QDL_PAD_DISP0_DAT18__IPU2_DISP0_DATA18  0x10
+							MX6QDL_PAD_DISP0_DAT19__IPU2_DISP0_DATA19  0x10
+							MX6QDL_PAD_DISP0_DAT20__IPU2_DISP0_DATA20  0x10
+							MX6QDL_PAD_DISP0_DAT21__IPU2_DISP0_DATA21  0x10
+							MX6QDL_PAD_DISP0_DAT22__IPU2_DISP0_DATA22  0x10
+							MX6QDL_PAD_DISP0_DAT23__IPU2_DISP0_DATA23  0x10
+						>;
+					};
 				};
 			};
 		};
@@ -171,6 +219,8 @@
 		};
 
 		ipu2: ipu@02800000 {
+			#address-cells = <1>;
+			#size-cells = <0>;
 			compatible = "fsl,imx6q-ipu";
 			reg = <0x02800000 0x400000>;
 			interrupts = <0 8 IRQ_TYPE_LEVEL_HIGH>,
@@ -183,31 +233,14 @@
 				      "di0", "di1",
 				      "di0_sel", "di1_sel",
 				      "ldb_di0", "ldb_di1";
+
 			resets = <&src 4>;
 			bypass_reset = <0>;
+
+			};
 		};
 	};
-};
 
-&ecspi1 {
-	dmas = <&sdma 3 7 1>, <&sdma 4 7 2>;
-	dma-names = "rx", "tx";
-};
-
-&ecspi2 {
-	dmas = <&sdma 5 7 1>, <&sdma 6 7 2>;
-	dma-names = "rx", "tx";
-};
-
-&ecspi3 {
-	dmas = <&sdma 7 7 1>, <&sdma 8 7 2>;
-	dma-names = "rx", "tx";
-};
-
-&ecspi4 {
-	dmas = <&sdma 9 7 1>, <&sdma 10 7 2>;
-	dma-names = "rx", "tx";
-};
 
 &ldb {
 	compatible = "fsl,imx6q-ldb", "fsl,imx53-ldb";
@@ -224,4 +257,9 @@
 		      "ldb_di0_div_3_5", "ldb_di1_div_3_5",
 		      "ldb_di0_div_7", "ldb_di1_div_7",
 		      "ldb_di0_div_sel", "ldb_di1_div_sel";
+
+};
+
+&vpu {
+	compatible = "fsl,imx6q-vpu", "cnm,coda960";
 };

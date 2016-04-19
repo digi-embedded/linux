@@ -66,19 +66,22 @@
 #define PM_INFO_MX7_ANATOP_V_OFFSET		0x58
 #define PM_INFO_MX7_LPSR_P_OFFSET		0x5c
 #define PM_INFO_MX7_LPSR_V_OFFSET		0x60
-#define PM_INFO_MX7_TTBR1_V_OFFSET		0x64
-#define PM_INFO_DDRC_REG_NUM_OFFSET		0x68
-#define PM_INFO_DDRC_REG_OFFSET			0x6c
-#define PM_INFO_DDRC_VALUE_OFFSET		0x70
-#define PM_INFO_DDRC_PHY_REG_NUM_OFFSET		0x16c
-#define PM_INFO_DDRC_PHY_REG_OFFSET		0x170
-#define PM_INFO_DDRC_PHY_VALUE_OFFSET		0x174
+#define PM_INFO_MX7_GIC_DIST_P_OFFSET		0x64
+#define PM_INFO_MX7_GIC_DIST_V_OFFSET		0x68
+#define PM_INFO_MX7_TTBR1_V_OFFSET		0x6c
+#define PM_INFO_DDRC_REG_NUM_OFFSET		0x70
+#define PM_INFO_DDRC_REG_OFFSET			0x74
+#define PM_INFO_DDRC_VALUE_OFFSET		0x78
+#define PM_INFO_DDRC_PHY_REG_NUM_OFFSET		0x174
+#define PM_INFO_DDRC_PHY_REG_OFFSET		0x178
+#define PM_INFO_DDRC_PHY_VALUE_OFFSET		0x17c
 
 #define MX7_SRC_GPR1	0x74
 #define MX7_SRC_GPR2	0x78
 #define GPC_PGC_C0	0x800
 #define GPC_PGC_FM	0xa00
 #define ANADIG_SNVS_MISC_CTRL	0x380
+#define ANADIG_DIGPROG	0x800
 #define DDRC_STAT	0x4
 #define DDRC_PWRCTL	0x30
 #define DDRC_PSTAT	0x3fc
@@ -89,6 +92,10 @@
 #define DDRPHY_LP_CON0	0x18
 
 #define CCM_SNVS_LPCG	0x250
+#define MX7D_GPC_IMR1	0x30
+#define MX7D_GPC_IMR2	0x34
+#define MX7D_GPC_IMR3	0x38
+#define MX7D_GPC_IMR4	0x3c
 
 	.align 3
 
@@ -298,6 +305,23 @@
 	orr	r7, r7, #(1 << 3)
 	str	r7, [r11, #DDRC_PWRCTL]
 
+	ldr	r11, [r0, #PM_INFO_MX7_ANATOP_V_OFFSET]
+	ldr	r7, [r11, #ANADIG_DIGPROG]
+	and	r7, r7, #0x11
+	cmp	r7, #0x10
+	beq	10f
+
+	/* TO 1.1 */
+	ldr	r11, [r0, #PM_INFO_MX7_IOMUXC_GPR_V_OFFSET]
+	ldr	r7, =0x38000000
+	str	r7, [r11]
+
+	/* LPSR mode need to use TO1.0 flow as IOMUX lost power */
+	ldr	r10, [r0, #PM_INFO_MX7_LPSR_V_OFFSET]
+	ldr	r7, [r10]
+	cmp	r7, #0x0
+	beq	11f
+10:
 	/* reset ddr_phy  */
 	ldr	r11, [r0, #PM_INFO_MX7_ANATOP_V_OFFSET]
 	ldr	r7, =0x0
@@ -316,6 +340,12 @@
 	ldr	r11, [r0, #PM_INFO_MX7_ANATOP_V_OFFSET]
 	ldr	r7, =(0x1 << 29)
 	str	r7, [r11, #ANADIG_SNVS_MISC_CTRL]
+11:
+	ldr	r11, [r0, #PM_INFO_MX7_SRC_V_OFFSET]
+	ldr	r6, =0x1000
+	ldr	r7, [r11, r6]
+	orr	r7, r7, #0x1
+	str	r7, [r11, r6]
 
 	.endm
 
@@ -342,9 +372,6 @@
 	ldr	r6, =50
 	wait_delay
 
-	ldr	r7, =0x0
-	str	r7, [r1, #ANADIG_SNVS_MISC_CTRL]
-
 	/* clear ddr_phy reset */
 	ldr	r6, =0x1000
 	ldr	r7, [r2, r6]
@@ -353,16 +380,16 @@
 	ldr	r7, [r2, r6]
 	bic	r7, r7, #0x1
 	str	r7, [r2, r6]
-
+13:
 	ldr	r6, [r0, #PM_INFO_DDRC_REG_NUM_OFFSET]
 	ldr	r7, =PM_INFO_DDRC_REG_OFFSET
 	add	r7, r7, r0
-9:
+14:
 	ldr	r8, [r7], #0x4
 	ldr	r9, [r7], #0x4
 	str	r9, [r3, r8]
 	subs	r6, r6, #0x1
-	bne	9b
+	bne	14b
 	ldr	r7, =0x20
 	str	r7, [r3, #DDRC_PWRCTL]
 	ldr	r7, =0x0
@@ -374,6 +401,23 @@
 	bic	r7, r7, #0x2
 	str	r7, [r2, r6]
 
+	ldr	r7, [r1, #ANADIG_DIGPROG]
+	and	r7, r7, #0x11
+	cmp	r7, #0x10
+	beq	12f
+
+	/*
+	 * TKT262940:
+	 * System hang when press RST for DDR PAD is
+	 * in retention mode, fixed on TO1.1
+	 */
+	ldr	r7, [r11]
+	bic	r7, r7, #(1 << 27)
+	str	r7, [r11]
+	ldr	r7, [r11]
+	bic	r7, r7, #(1 << 29)
+	str	r7, [r11]
+12:
 	ldr	r7, =(0x1 << 30)
 	str	r7, [r1, #ANADIG_SNVS_MISC_CTRL]
 
@@ -385,12 +429,12 @@
 	ldr	r7, =PM_INFO_DDRC_PHY_REG_OFFSET
 	add	r7, r7, r0
 
-10:
+15:
 	ldr	r8, [r7], #0x4
 	ldr	r9, [r7], #0x4
 	str	r9, [r4, r8]
 	subs	r6, r6, #0x1
-	bne	10b
+	bne	15b
 
 	ldr	r7, =0x0
 	add	r9, r10, #0x4000
@@ -408,46 +452,51 @@
 	str	r7, [r4, #DDRPHY_LP_CON0]
 
 	/* wait until self-refresh mode entered */
-11:
+16:
 	ldr	r7, [r3, #DDRC_STAT]
 	and	r7, r7, #0x3
 	cmp	r7, #0x3
-	bne	11b
+	bne	16b
 	ldr	r7, =0x0
 	str	r7, [r3, #DDRC_SWCTL]
 	ldr	r7, =0x1
 	str	r7, [r3, #DDRC_DFIMISC]
 	ldr	r7, =0x1
 	str	r7, [r3, #DDRC_SWCTL]
-12:
+17:
 	ldr	r7, [r3, #DDRC_SWSTAT]
 	and	r7, r7, #0x1
 	cmp	r7, #0x1
-	bne	12b
-13:
+	bne	17b
+18:
 	ldr	r7, [r3, #DDRC_STAT]
 	and	r7, r7, #0x20
 	cmp	r7, #0x20
-	bne	13b
+	bne	18b
 
 	/* let DDR out of self-refresh */
 	ldr	r7, =0x0
 	str	r7, [r3, #DDRC_PWRCTL]
-14:
+19:
 	ldr	r7, [r3, #DDRC_STAT]
 	and	r7, r7, #0x30
 	cmp	r7, #0x0
-	bne	14b
+	bne	19b
 
-15:
+20:
 	ldr	r7, [r3, #DDRC_STAT]
 	and	r7, r7, #0x3
 	cmp	r7, #0x1
-	bne	15b
+	bne	20b
 
 	/* enable port */
 	ldr	r7, =0x1
 	str	r7, [r3, #DDRC_PCTRL_0]
+
+	/* enable auto self-refresh */
+	ldr	r7, [r3, #DDRC_PWRCTL]
+	orr	r7, r7, #(1 << 0)
+	str	r7, [r3, #DDRC_PWRCTL]
 
 	.endm
 
@@ -506,6 +555,12 @@ ENTRY(imx7_suspend)
 	cmp	r7, #0x0
 	beq	ddr_retention_enter_out
 
+	/* disable STOP mode before entering LPSR */
+	ldr	r11, [r0, #PM_INFO_MX7_GPC_V_OFFSET]
+	ldr	r7, [r11]
+	bic	r7, #0xf
+	str	r7, [r11]
+
 	/* shut down vddsoc to enter lpsr mode */
 	ldr	r11, [r0, #PM_INFO_MX7_SNVS_V_OFFSET]
 	ldr	r7, [r11, #0x38]
@@ -521,8 +576,64 @@ wait_shutdown:
 
 ddr_only_self_refresh:
 	ddrc_enter_self_refresh
+	b	wfi
 ddr_retention_enter_out:
 
+	ldr	r11, [r0, #PM_INFO_MX7_GIC_DIST_V_OFFSET]
+	ldr	r7, =0x0
+	ldr	r8, =0x1000
+	str	r7, [r11, r8]
+
+	ldr	r11, [r0, #PM_INFO_MX7_GPC_V_OFFSET]
+	ldr	r4, [r11, #MX7D_GPC_IMR1]
+	ldr	r5, [r11, #MX7D_GPC_IMR2]
+	ldr	r6, [r11, #MX7D_GPC_IMR3]
+	ldr	r7, [r11, #MX7D_GPC_IMR4]
+
+	ldr	r8, =0xffffffff
+	str	r8, [r11, #MX7D_GPC_IMR1]
+	str	r8, [r11, #MX7D_GPC_IMR2]
+	str	r8, [r11, #MX7D_GPC_IMR3]
+	str	r8, [r11, #MX7D_GPC_IMR4]
+
+	/*
+	 * enable the RBC bypass counter here
+	 * to hold off the interrupts. RBC counter
+	 * = 8 (240us). With this setting, the latency
+	 * from wakeup interrupt to ARM power up
+	 * is ~250uS.
+	 */
+	ldr	r8, [r11, #0x14]
+	bic	r8, r8, #(0x3f << 24)
+	orr	r8, r8, #(0x8 << 24)
+	str	r8, [r11, #0x14]
+
+	/* enable the counter. */
+	ldr	r8, [r11, #0x14]
+	orr	r8, r8, #(0x1 << 30)
+	str	r8, [r11, #0x14]
+
+	/* unmask all the GPC interrupts. */
+	str	r4, [r11, #MX7D_GPC_IMR1]
+	str	r5, [r11, #MX7D_GPC_IMR2]
+	str	r6, [r11, #MX7D_GPC_IMR3]
+	str	r7, [r11, #MX7D_GPC_IMR4]
+
+	/*
+	 * now delay for a short while (3usec)
+	 * ARM is at 1GHz at this point
+	 * so a short loop should be enough.
+	 * this delay is required to ensure that
+	 * the RBC counter can start counting in
+	 * case an interrupt is already pending
+	 * or in case an interrupt arrives just
+	 * as ARM is about to assert DSM_request.
+	 */
+	ldr	r7, =2000
+rbc_loop:
+	subs	r7, r7, #0x1
+	bne	rbc_loop
+wfi:
 	/* Zzz, enter stop mode */
 	wfi
 	nop
@@ -549,14 +660,13 @@ wfi_ddr_retention_out:
 	cmp	r7, #0
 	beq	standby_out
 
+	ldr	r11, [r0, #PM_INFO_MX7_GIC_DIST_V_OFFSET]
+	ldr	r7, =0x1
+	ldr	r8, =0x1000
+	str	r7, [r11, r8]
+
 	restore_ttbr1
 standby_out:
-	/* make sure SNVS clk is disabled */
-	ldr	r11, [r0, #PM_INFO_MX7_CCM_V_OFFSET]
-	add	r11, r11, #0x4000
-	ldr	r7, =0x0
-	str	r7, [r11, #CCM_SNVS_LPCG]
-
 	pop	{r4-r12}
 	/* return to suspend finish */
 	mov	pc, lr
@@ -591,11 +701,6 @@ resume:
 dsm_ddr_self_refresh_out:
 	ddrc_exit_self_refresh
 dsm_ddr_retention_out:
-	/* make sure SNVS clk is disabled */
-	ldr	r11, [r0, #PM_INFO_MX7_CCM_P_OFFSET]
-	add	r11, r11, #0x4000
-	ldr	r7, =0x0
-	str	r7, [r11, #CCM_SNVS_LPCG]
 
 	mov	pc, lr
 ENDPROC(imx7_suspend)

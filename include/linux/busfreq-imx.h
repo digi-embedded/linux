@@ -27,9 +27,10 @@ enum busfreq_event {
   * BUS_FREQ_LOW  - DDR @ 24MHz, AHB @ 24MHz.
   * BUS_FREQ_ULTRA_LOW - DDR @ 1MHz, AHB - 3MHz.
   *
-  * Drivers need to request/release the bus/ddr frequencies based on their performance
-  * requirements. Drivers cannot request/release BUS_FREQ_ULTRA_LOW mode as
-  * this mode is automatically entered from either BUS_FREQ_AUDIO or BUS_FREQ_LOW
+  * Drivers need to request/release the bus/ddr frequencies based on
+  * their performance requirements. Drivers cannot request/release
+  * BUS_FREQ_ULTRA_LOW mode as this mode is automatically entered from
+  * either BUS_FREQ_AUDIO or BUS_FREQ_LOW
   * modes.
   */
 enum bus_freq_mode {
@@ -49,11 +50,9 @@ int get_bus_freq_mode(void);
 #else
 static inline void request_bus_freq(enum bus_freq_mode mode)
 {
-	return;
 }
 static inline void release_bus_freq(enum bus_freq_mode mode)
 {
-	return;
 }
 static inline int register_busfreq_notifier(struct notifier_block *nb)
 {

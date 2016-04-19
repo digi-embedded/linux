@@ -341,7 +341,6 @@ struct fsl_asrc_pair {
  * @channel_avail: non-occupied channel numbers
  * @asrc_rate: default sample rate for ASoC Back-Ends
  * @asrc_width: default sample width for ASoC Back-Ends
- * @name: driver name
  */
 struct fsl_asrc {
 	struct snd_dmaengine_dai_dma_data dma_params_rx;
@@ -364,8 +363,6 @@ struct fsl_asrc {
 	int asrc_width;
 
 	u32 regcache_cfg;
-
-	char name[32];
 };
 
 extern struct snd_soc_platform_driver fsl_asrc_platform;

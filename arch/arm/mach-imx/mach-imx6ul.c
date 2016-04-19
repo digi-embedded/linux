@@ -5,20 +5,17 @@
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  */
-
-#include <linux/can/platform/flexcan.h>
+#include <linux/fec.h>
 #include <linux/gpio.h>
 #include <linux/irqchip.h>
+#include <linux/mfd/syscon.h>
+#include <linux/mfd/syscon/imx6q-iomuxc-gpr.h>
+#include <linux/netdevice.h>
 #include <linux/of_address.h>
 #include <linux/of_gpio.h>
 #include <linux/of_platform.h>
 #include <linux/phy.h>
 #include <linux/regmap.h>
-#include <linux/mfd/syscon.h>
-#include <linux/mfd/syscon/imx6q-iomuxc-gpr.h>
-#include <linux/pm_opp.h>
-#include <linux/fec.h>
-#include <linux/netdevice.h>
 #include <asm/mach/arch.h>
 #include <asm/mach/map.h>
 
@@ -61,22 +58,18 @@ static inline void imx6ul_enet_init(void)
 {
 	imx6ul_enet_clk_init();
 	imx6ul_enet_phy_init();
-	imx6_enet_mac_init("fsl,imx6ul-fec");
+	imx6_enet_mac_init("fsl,imx6ul-fec", "fsl,imx6ul-ocotp");
 }
 
 static void __init imx6ul_init_machine(void)
 {
 	struct device *parent;
 
-	mxc_arch_reset_init_dt();
-
 	parent = imx_soc_device_init();
 	if (parent == NULL)
 		pr_warn("failed to initialize soc device\n");
 
-	of_platform_populate(NULL, of_default_bus_match_table,
-					NULL, parent);
-
+	of_platform_populate(NULL, of_default_bus_match_table, NULL, NULL);
 	imx6ul_enet_init();
 	imx_anatop_init();
 	imx6ul_pm_init();
@@ -84,16 +77,11 @@ static void __init imx6ul_init_machine(void)
 
 static void __init imx6ul_init_irq(void)
 {
+	imx_gpc_check_dt();
 	imx_init_revision_from_anatop();
 	imx_src_init();
-	imx_gpc_init();
 	irqchip_init();
 }
-
-static const char *imx6ul_dt_compat[] __initdata = {
-	"fsl,imx6ul",
-	NULL,
-};
 
 static void __init imx6ul_init_late(void)
 {
@@ -106,16 +94,18 @@ static void __init imx6ul_map_io(void)
 {
 	debug_ll_io_init();
 	imx6_pm_map_io();
-#ifdef CONFIG_CPU_FREQ
 	imx_busfreq_map_io();
-#endif
 }
 
-DT_MACHINE_START(IMX6UL, "Freescale i.MX6 UltraLite (Device Tree)")
+static const char *imx6ul_dt_compat[] __initconst = {
+	"fsl,imx6ul",
+	NULL,
+};
+
+DT_MACHINE_START(IMX6UL, "Freescale i.MX6 Ultralite (Device Tree)")
 	.map_io		= imx6ul_map_io,
 	.init_irq	= imx6ul_init_irq,
 	.init_machine	= imx6ul_init_machine,
 	.init_late	= imx6ul_init_late,
 	.dt_compat	= imx6ul_dt_compat,
-	.restart	= mxc_restart,
 MACHINE_END

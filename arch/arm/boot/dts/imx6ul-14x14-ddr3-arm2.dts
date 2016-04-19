@@ -13,7 +13,7 @@
 
 / {
 	model = "Freescale i.MX6 UltraLite DDR3 ARM2 Board";
-	compatible = "fsl,imx6ul-ddr3-arm2", "fsl,imx6ul";
+	compatible = "fsl,imx6ul-14x14-ddr3-arm2", "fsl,imx6ul";
 
 	chosen {
 		stdout-path = &uart1;
@@ -21,6 +21,19 @@
 
 	memory {
 		reg = <0x80000000 0x40000000>;
+	};
+
+	reserved-memory {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		linux,cma {
+			compatible = "shared-dma-pool";
+			reusable;
+			size = <0x14000000>;
+			linux,cma-default;
+		};
 	};
 
 	pxp_v4l2 {
@@ -81,20 +94,9 @@
 	};
 };
 
-&ecspi1 {
-	fsl,spi-num-chipselects = <1>;
-	cs-gpios = <&gpio4 26 0>;
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_ecspi1_1 &pinctrl_ecspi1_cs_1>;
-	status = "okay";
-
-	flash: n25q032@0 {
-		#address-cells = <1>;
-		#size-cells = <1>;
-		compatible = "st,n25q032";
-		spi-max-frequency = <20000000>;
-		reg = <0>;
-	};
+&clks {
+	assigned-clocks = <&clks IMX6UL_CLK_PLL4_AUDIO_DIV>;
+	assigned-clock-rates = <786432000>;
 };
 
 &cpu0 {
@@ -119,6 +121,22 @@
 	arm-supply = <&sw1a_reg>;
 	soc-supply = <&sw1a_reg>;
 	fsl,arm-soc-shared = <1>;
+};
+
+&ecspi1 {
+	fsl,spi-num-chipselects = <1>;
+	cs-gpios = <&gpio4 26 0>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_ecspi1_1 &pinctrl_ecspi1_cs_1>;
+	status = "okay";
+
+	flash: n25q032@0 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "st,n25q032";
+		spi-max-frequency = <20000000>;
+		reg = <0>;
+	};
 };
 
 &fec1 {
@@ -164,7 +182,6 @@
 	fsl,cpu_pupscr_sw = <0x0>;
 	fsl,cpu_pdnscr_iso2sw = <0x1>;
 	fsl,cpu_pdnscr_iso = <0x1>;
-	fsl,wdog-reset = <1>; /* watchdog select of reset source */
 	fsl,ldo-bypass = <1>; /* use ldo-bypass, u-boot will check it and configure */
 };
 
@@ -262,107 +279,6 @@
 	};
 };
 
-&pxp {
-	status = "okay";
-};
-
-&qspi {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_qspi>;
-	status = "okay";
-	fsl,qspi-has-second-chip = <1>;
-	ddrsmp=<0>;
-
-	flash0: n25q256a@0 {
-		#address-cells = <1>;
-		#size-cells = <1>;
-		compatible = "micron,n25q256a";
-		spi-max-frequency = <29000000>;
-		spi-nor,ddr-quad-read-dummy = <6>;
-		reg = <0>;
-	};
-
-	flash1: n25q256a@1 {
-		#address-cells = <1>;
-		#size-cells = <1>;
-		compatible = "micron,n25q256a";
-		spi-max-frequency = <29000000>;
-		spi-nor,ddr-quad-read-dummy = <6>;
-		reg = <1>;
-	};
-
-	flash2: n25q256a@2 {
-		#address-cells = <1>;
-		#size-cells = <1>;
-		compatible = "micron,n25q256a";
-		spi-max-frequency = <29000000>;
-		spi-nor,ddr-quad-read-dummy = <6>;
-		reg = <2>;
-	};
-
-	flash3: n25q256a@3 {
-		#address-cells = <1>;
-		#size-cells = <1>;
-		compatible = "micron,n25q256a";
-		spi-max-frequency = <29000000>;
-		spi-nor,ddr-quad-read-dummy = <6>;
-		reg = <3>;
-	};
-};
-
-&uart1 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_uart1>;
-	status = "okay";
-};
-
-&uart2 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_uart2
-		     &pinctrl_bt>;
-	fsl,uart-has-rtscts;
-	/* for DTE mode, add below change */
-	/* fsl,dte-mode; */
-	/* pinctrl-0 = <&pinctrl_uart2dte>; */
-	status = "okay";
-};
-
-&usbotg1 {
-	vbus-supply = <&reg_usb_otg1_vbus>;
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_usb_otg1_id>;
-	srp-disable;
-	hnp-disable;
-	adp-disable;
-	status = "okay";
-};
-
-&usdhc1 {
-	pinctrl-names = "default", "state_100mhz", "state_200mhz";
-	pinctrl-0 = <&pinctrl_usdhc1>;
-	pinctrl-1 = <&pinctrl_usdhc1_100mhz>;
-	pinctrl-2 = <&pinctrl_usdhc1_200mhz>;
-	cd-gpios = <&gpio1 19 0>;
-	wp-gpios = <&gpio1 18 0>;
-	keep-power-in-suspend;
-	enable-sdio-wakeup;
-	vmmc-supply = <&reg_sd1_vmmc>;
-	status = "okay";
-};
-
-&usdhc2 {
-	pinctrl-names = "default", "state_100mhz", "state_200mhz";
-	pinctrl-0 = <&pinctrl_usdhc2>;
-	pinctrl-1 = <&pinctrl_usdhc2_100mhz>;
-	pinctrl-2 = <&pinctrl_usdhc2_200mhz>;
-	cd-gpios = <&gpio4 17 0>;
-	wp-gpios = <&gpio4 18 0>;
-	keep-power-in-suspend;
-	enable-sdio-wakeup;
-	vmmc-supply = <&reg_sd2_vmmc>;
-	status = "okay";
-};
-
 &iomuxc {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_hog &pinctrl_hog1 &pinctrl_hog_sd>;
@@ -388,6 +304,13 @@
 			fsl,pins = <
 				MX6UL_PAD_GPIO1_IO09__GPIO1_IO09        0x17059 /* SD1 RESET */
 				MX6UL_PAD_GPIO1_IO08__USDHC2_VSELECT    0x17059 /* SD2 VSELECT */
+			>;
+		};
+
+		pinctrl_adc1: adc1grp {
+			fsl,pins = <
+				MX6UL_PAD_GPIO1_IO00__GPIO1_IO00        0xb0
+				MX6UL_PAD_GPIO1_IO01__GPIO1_IO01        0xb0
 			>;
 		};
 
@@ -477,6 +400,13 @@
 			>;
 		};
 
+		pinctrl_i2c1: i2c1grp {
+			fsl,pins = <
+				MX6UL_PAD_GPIO1_IO03__I2C1_SDA	0x4001b8b1
+				MX6UL_PAD_GPIO1_IO02__I2C1_SCL	0x4001b8b1
+			>;
+		};
+
 		pinctrl_i2c4: i2c4grp {
 			fsl,pins = <
 				MX6UL_PAD_UART2_TX_DATA__I2C4_SCL	0x4001b8b0
@@ -523,6 +453,13 @@
 			>;
 		};
 
+		pinctrl_mqs: mqsgrp {
+			fsl,pins = <
+				MX6UL_PAD_JTAG_TDI__MQS_LEFT         0x11088
+				MX6UL_PAD_JTAG_TDO__MQS_RIGHT        0x11088
+			>;
+		};
+
 		pinctrl_pwm1: pmw1grp {
 			fsl,pins = <
 				MX6UL_PAD_ENET1_RX_DATA0__PWM1_OUT 0x110b0
@@ -545,13 +482,6 @@
 				MX6UL_PAD_NAND_DATA05__QSPI_B_DATA03  0x70a1
 				MX6UL_PAD_NAND_WE_B__QSPI_B_SS0_B     0x70a1
 				MX6UL_PAD_NAND_DATA00__QSPI_B_SS1_B   0x70a1
-			>;
-		};
-
-		pinctrl_mqs: mqsgrp {
-			fsl,pins = <
-				MX6UL_PAD_JTAG_TDI__MQS_LEFT         0x11088
-				MX6UL_PAD_JTAG_TDO__MQS_RIGHT        0x11088
 			>;
 		};
 
@@ -579,20 +509,6 @@
 				MX6UL_PAD_GPIO1_IO02__GPIO1_IO02	0xb0
 				MX6UL_PAD_GPIO1_IO03__GPIO1_IO03	0xb0
 				MX6UL_PAD_GPIO1_IO04__GPIO1_IO04	0xb0
-			>;
-		};
-
-		pinctrl_adc1: adc1grp {
-			fsl,pins = <
-				MX6UL_PAD_GPIO1_IO00__GPIO1_IO00        0xb0
-				MX6UL_PAD_GPIO1_IO01__GPIO1_IO01        0xb0
-			>;
-		};
-
-		pinctrl_i2c1: i2c1grp {
-			fsl,pins = <
-				MX6UL_PAD_GPIO1_IO03__I2C1_SDA	0x4001b8b1
-				MX6UL_PAD_GPIO1_IO02__I2C1_SCL	0x4001b8b1
 			>;
 		};
 
@@ -744,4 +660,105 @@
 			>;
 		};
 	};
+};
+
+&pxp {
+	status = "okay";
+};
+
+&qspi {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_qspi>;
+	status = "okay";
+	fsl,qspi-has-second-chip = <1>;
+	ddrsmp=<0>;
+
+	flash0: n25q256a@0 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "micron,n25q256a";
+		spi-max-frequency = <29000000>;
+		spi-nor,ddr-quad-read-dummy = <6>;
+		reg = <0>;
+	};
+
+	flash1: n25q256a@1 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "micron,n25q256a";
+		spi-max-frequency = <29000000>;
+		spi-nor,ddr-quad-read-dummy = <6>;
+		reg = <1>;
+	};
+
+	flash2: n25q256a@2 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "micron,n25q256a";
+		spi-max-frequency = <29000000>;
+		spi-nor,ddr-quad-read-dummy = <6>;
+		reg = <2>;
+	};
+
+	flash3: n25q256a@3 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "micron,n25q256a";
+		spi-max-frequency = <29000000>;
+		spi-nor,ddr-quad-read-dummy = <6>;
+		reg = <3>;
+	};
+};
+
+&uart1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_uart1>;
+	status = "okay";
+};
+
+&uart2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_uart2
+		     &pinctrl_bt>;
+	fsl,uart-has-rtscts;
+	/* for DTE mode, add below change */
+	/* fsl,dte-mode; */
+	/* pinctrl-0 = <&pinctrl_uart2dte>; */
+	status = "okay";
+};
+
+&usbotg1 {
+	vbus-supply = <&reg_usb_otg1_vbus>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_usb_otg1_id>;
+	srp-disable;
+	hnp-disable;
+	adp-disable;
+	status = "okay";
+};
+
+&usdhc1 {
+	pinctrl-names = "default", "state_100mhz", "state_200mhz";
+	pinctrl-0 = <&pinctrl_usdhc1>;
+	pinctrl-1 = <&pinctrl_usdhc1_100mhz>;
+	pinctrl-2 = <&pinctrl_usdhc1_200mhz>;
+	cd-gpios = <&gpio1 19 GPIO_ACTIVE_LOW>;
+	wp-gpios = <&gpio1 18 GPIO_ACTIVE_HIGH>;
+	keep-power-in-suspend;
+	enable-sdio-wakeup;
+	vmmc-supply = <&reg_sd1_vmmc>;
+	status = "okay";
+};
+
+&usdhc2 {
+	pinctrl-names = "default", "state_100mhz", "state_200mhz";
+	pinctrl-0 = <&pinctrl_usdhc2>;
+	pinctrl-1 = <&pinctrl_usdhc2_100mhz>;
+	pinctrl-2 = <&pinctrl_usdhc2_200mhz>;
+	cd-gpios = <&gpio4 17 GPIO_ACTIVE_LOW>;
+	wp-gpios = <&gpio4 18 GPIO_ACTIVE_HIGH>;
+	keep-power-in-suspend;
+	enable-sdio-wakeup;
+	vmmc-supply = <&reg_sd2_vmmc>;
+	status = "okay";
 };

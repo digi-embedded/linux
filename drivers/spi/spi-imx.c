@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2007, 2015 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright 2004-2007, 2016 Freescale Semiconductor, Inc. All Rights Reserved.
  * Copyright (C) 2008 Juergen Beisert
  *
  * This program is free software; you can redistribute it and/or
@@ -75,6 +75,7 @@ enum spi_imx_devtype {
 	IMX31_CSPI,
 	IMX35_CSPI,	/* CSPI on all i.mx except above */
 	IMX51_ECSPI,	/* ECSPI on i.mx51 and later */
+	IMX6UL_ECSPI,
 };
 
 struct spi_imx_data;
@@ -93,7 +94,6 @@ struct spi_imx_data {
 
 	struct completion xfer_done;
 	void __iomem *base;
-	int irq;
 	struct clk *clk_per;
 	struct clk *clk_ipg;
 	unsigned long spi_clk;
@@ -107,6 +107,7 @@ struct spi_imx_data {
 
 	/* DMA */
 	unsigned int dma_is_inited;
+	unsigned int dma_finished;
 	bool usedma;
 	u32 rx_wml;
 	u32 tx_wml;
@@ -132,7 +133,8 @@ static inline int is_imx35_cspi(struct spi_imx_data *d)
 
 static inline unsigned spi_imx_get_fifosize(struct spi_imx_data *d)
 {
-	return (d->devtype_data->devtype == IMX51_ECSPI) ? 64 : 8;
+	return (d->devtype_data->devtype == IMX51_ECSPI
+		|| d->devtype_data->devtype == IMX6UL_ECSPI) ? 64 : 8;
 }
 
 #define MXC_SPI_BUF_RX(type)						\
@@ -207,7 +209,7 @@ static bool spi_imx_can_dma(struct spi_master *master, struct spi_device *spi,
 {
 	struct spi_imx_data *spi_imx = spi_master_get_devdata(master);
 
-	if (spi_imx->dma_is_inited &&
+	if (transfer && spi_imx->dma_is_inited &&
 		(transfer->len > spi_imx_get_fifosize(spi_imx)))
 		return true;
 	return false;
@@ -308,11 +310,14 @@ static void __maybe_unused mx51_ecspi_trigger(struct spi_imx_data *spi_imx)
 {
 	u32 reg = readl(spi_imx->base + MX51_ECSPI_CTRL);
 	/*
-	 * To workaround TKT238285, SDMA script need use XCH instead of SMC
-	 * just like PIO mode.
+	 * To workaround ERR008517, SDMA script need use XCH instead of SMC
+	 * just like PIO mode and it fix on i.mx6ul
 	 */
 	if (!spi_imx->usedma)
 		reg |= MX51_ECSPI_CTRL_XCH;
+	else if (!spi_imx->dma_finished &&
+		 spi_imx->devtype_data->devtype == IMX6UL_ECSPI)
+		reg |= MX51_ECSPI_CTRL_SMC;
 	else
 		reg &= ~MX51_ECSPI_CTRL_SMC;
 	writel(reg, spi_imx->base + MX51_ECSPI_CTRL);
@@ -378,8 +383,10 @@ static int __maybe_unused mx51_ecspi_config(struct spi_imx_data *spi_imx,
 	 * and enable DMA request.
 	 */
 	if (spi_imx->dma_is_inited) {
-		spi_imx->rx_wml = spi_imx_get_fifosize(spi_imx) / 2;
+		if (spi_imx->devtype_data->devtype != IMX6UL_ECSPI)
+			spi_imx->tx_wml = 1;
 		dma = (spi_imx->rx_wml - 1) << MX51_ECSPI_DMA_RX_WML_OFFSET
+		      | (spi_imx->tx_wml - 1) << MX51_ECSPI_DMA_TX_WML_OFFSET
 		      | (1 << MX51_ECSPI_DMA_TEDEN_OFFSET)
 		      | (1 << MX51_ECSPI_DMA_RXDEN_OFFSET);
 		writel(dma, spi_imx->base + MX51_ECSPI_DMA);
@@ -674,6 +681,15 @@ static struct spi_imx_devtype_data imx51_ecspi_devtype_data = {
 	.devtype = IMX51_ECSPI,
 };
 
+static struct spi_imx_devtype_data imx6ul_ecspi_devtype_data = {
+	.intctrl = mx51_ecspi_intctrl,
+	.config = mx51_ecspi_config,
+	.trigger = mx51_ecspi_trigger,
+	.rx_available = mx51_ecspi_rx_available,
+	.reset = mx51_ecspi_reset,
+	.devtype = IMX6UL_ECSPI,
+};
+
 static struct platform_device_id spi_imx_devtype[] = {
 	{
 		.name = "imx1-cspi",
@@ -694,6 +710,9 @@ static struct platform_device_id spi_imx_devtype[] = {
 		.name = "imx51-ecspi",
 		.driver_data = (kernel_ulong_t) &imx51_ecspi_devtype_data,
 	}, {
+		.name = "imx6ul-ecspi",
+		.driver_data = (kernel_ulong_t) &imx6ul_ecspi_devtype_data,
+	}, {
 		/* sentinel */
 	}
 };
@@ -705,6 +724,7 @@ static const struct of_device_id spi_imx_dt_ids[] = {
 	{ .compatible = "fsl,imx31-cspi", .data = &imx31_cspi_devtype_data, },
 	{ .compatible = "fsl,imx35-cspi", .data = &imx35_cspi_devtype_data, },
 	{ .compatible = "fsl,imx51-ecspi", .data = &imx51_ecspi_devtype_data, },
+	{ .compatible = "fsl,imx6ul-ecspi", .data = &imx6ul_ecspi_devtype_data, },
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, spi_imx_dt_ids);
@@ -885,6 +905,8 @@ static int spi_imx_sdma_init(struct device *dev, struct spi_imx_data *spi_imx,
 	master->max_dma_len = MAX_SDMA_BD_BYTES;
 	spi_imx->bitbang.master->flags = SPI_MASTER_MUST_RX |
 					 SPI_MASTER_MUST_TX;
+	spi_imx->rx_wml = spi_imx->rx_config.src_maxburst;
+	spi_imx->tx_wml = spi_imx->tx_config.dst_maxburst;
 	spi_imx->dma_is_inited = 1;
 
 	return 0;
@@ -939,10 +961,10 @@ static int spi_imx_dma_transfer(struct spi_imx_data *spi_imx,
 
 	if (tx) {
 		desc_tx = dmaengine_prep_slave_sg(master->dma_tx,
-					tx->sgl, tx->nents, DMA_TO_DEVICE,
+					tx->sgl, tx->nents, DMA_MEM_TO_DEV,
 					DMA_PREP_INTERRUPT | DMA_CTRL_ACK);
 		if (!desc_tx)
-			goto no_dma;
+			goto tx_nodma;
 
 		desc_tx->callback = spi_imx_dma_tx_callback;
 		desc_tx->callback_param = (void *)spi_imx;
@@ -963,10 +985,10 @@ static int spi_imx_dma_transfer(struct spi_imx_data *spi_imx,
 			sgl_last->length = orig_length & wml_mask;
 
 		desc_rx = dmaengine_prep_slave_sg(master->dma_rx,
-					rx->sgl, rx->nents, DMA_FROM_DEVICE,
+					rx->sgl, rx->nents, DMA_DEV_TO_MEM,
 					DMA_PREP_INTERRUPT | DMA_CTRL_ACK);
 		if (!desc_rx)
-			goto no_dma;
+			goto rx_nodma;
 
 		desc_rx->callback = spi_imx_dma_rx_callback;
 		desc_rx->callback_param = (void *)spi_imx;
@@ -977,6 +999,7 @@ static int spi_imx_dma_transfer(struct spi_imx_data *spi_imx,
 	reinit_completion(&spi_imx->dma_tx_completion);
 
 	/* Trigger the cspi module. */
+	spi_imx->dma_finished = 0;
 	spi_imx->devtype_data->trigger(spi_imx);
 
 	dma_async_issue_pending(master->dma_tx);
@@ -1020,6 +1043,10 @@ static int spi_imx_dma_transfer(struct spi_imx_data *spi_imx,
 		}
 	}
 
+	spi_imx->dma_finished = 1;
+	if (spi_imx->devtype_data->devtype == IMX6UL_ECSPI)
+		spi_imx->devtype_data->trigger(spi_imx);
+
 	if (!ret)
 		ret = -ETIMEDOUT;
 	else if (ret > 0)
@@ -1027,7 +1054,9 @@ static int spi_imx_dma_transfer(struct spi_imx_data *spi_imx,
 
 	return ret;
 
-no_dma:
+rx_nodma:
+	dmaengine_terminate_all(master->dma_tx);
+tx_nodma:
 	pr_warn_once("%s %s: DMA not available, falling back to PIO\n",
 		     dev_driver_string(&master->dev),
 		     dev_name(&master->dev));
@@ -1133,7 +1162,7 @@ static int spi_imx_probe(struct platform_device *pdev)
 	struct spi_master *master;
 	struct spi_imx_data *spi_imx;
 	struct resource *res;
-	int i, ret, num_cs;
+	int i, ret, num_cs, irq;
 
 	if (!np && !mxc_platform_info) {
 		dev_err(&pdev->dev, "can't get the platform data\n");
@@ -1200,16 +1229,16 @@ static int spi_imx_probe(struct platform_device *pdev)
 		goto out_master_put;
 	}
 
-	spi_imx->irq = platform_get_irq(pdev, 0);
-	if (spi_imx->irq < 0) {
-		ret = spi_imx->irq;
+	irq = platform_get_irq(pdev, 0);
+	if (irq < 0) {
+		ret = irq;
 		goto out_master_put;
 	}
 
-	ret = devm_request_irq(&pdev->dev, spi_imx->irq, spi_imx_isr, 0,
+	ret = devm_request_irq(&pdev->dev, irq, spi_imx_isr, 0,
 			       dev_name(&pdev->dev), spi_imx);
 	if (ret) {
-		dev_err(&pdev->dev, "can't get irq%d: %d\n", spi_imx->irq, ret);
+		dev_err(&pdev->dev, "can't get irq%d: %d\n", irq, ret);
 		goto out_master_put;
 	}
 
@@ -1238,7 +1267,8 @@ static int spi_imx_probe(struct platform_device *pdev)
 	 * Only validated on i.mx6 now, can remove the constrain if validated on
 	 * other chips.
 	 */
-	if (spi_imx->devtype_data == &imx51_ecspi_devtype_data
+	if ((spi_imx->devtype_data == &imx51_ecspi_devtype_data
+	    || spi_imx->devtype_data == &imx6ul_ecspi_devtype_data)
 	    && spi_imx_sdma_init(&pdev->dev, spi_imx, master, res))
 		dev_err(&pdev->dev, "dma setup error,use pio instead\n");
 
@@ -1307,7 +1337,6 @@ static SIMPLE_DEV_PM_OPS(imx_spi_pm, spi_imx_suspend, spi_imx_resume);
 static struct platform_driver spi_imx_driver = {
 	.driver = {
 		   .name = DRIVER_NAME,
-		   .owner = THIS_MODULE,
 		   .of_match_table = spi_imx_dt_ids,
 		   .pm = IMX_SPI_PM,
 	},

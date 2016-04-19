@@ -237,16 +237,23 @@ static int anatop_regulator_probe(struct platform_device *pdev)
 	int ret = 0;
 	u32 val;
 
-	initdata = of_get_regulator_init_data(dev, np);
 	sreg = devm_kzalloc(dev, sizeof(*sreg), GFP_KERNEL);
 	if (!sreg)
 		return -ENOMEM;
-	sreg->initdata = initdata;
 	sreg->name = of_get_property(np, "regulator-name", NULL);
+
+	if (!sreg->name) {
+		dev_err(dev, "no regulator-name set\n");
+		return -EINVAL;
+	}
+
 	rdesc = &sreg->rdesc;
 	rdesc->name = sreg->name;
 	rdesc->type = REGULATOR_VOLTAGE;
 	rdesc->owner = THIS_MODULE;
+
+	initdata = of_get_regulator_init_data(dev, np, rdesc);
+	sreg->initdata = initdata;
 
 	if (strcmp(sreg->name, "vddpu") == 0)
 		vddpu = sreg;
@@ -339,6 +346,23 @@ static int anatop_regulator_probe(struct platform_device *pdev)
 			sreg->sel = 0;
 			sreg->bypass = true;
 		}
+
+		/*
+		 * In case vddpu was disabled by the bootloader, we need to set
+		 * a sane default until imx6-cpufreq was probed and changes the
+		 * voltage to the correct value. In this case we set 1.25V.
+		 */
+		if (!sreg->sel && !strcmp(sreg->name, "vddpu"))
+			sreg->sel = 22;
+
+		/* set the default voltage of the pcie phy to be 1.100v */
+		if (!sreg->sel && !strcmp(sreg->name, "vddpcie-phy"))
+			sreg->sel = 0x10;
+
+		if (!sreg->sel) {
+			dev_err(&pdev->dev, "Failed to read a valid default voltage selector.\n");
+			return -EINVAL;
+		}
 	} else {
 		rdesc->ops = &anatop_rops;
 	}
@@ -356,7 +380,7 @@ static int anatop_regulator_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static struct of_device_id of_anatop_regulator_match_tbl[] = {
+static const struct of_device_id of_anatop_regulator_match_tbl[] = {
 	{ .compatible = "fsl,anatop-regulator", },
 	{ /* end */ }
 };
@@ -364,7 +388,6 @@ static struct of_device_id of_anatop_regulator_match_tbl[] = {
 static struct platform_driver anatop_regulator_driver = {
 	.driver = {
 		.name	= "anatop_regulator",
-		.owner  = THIS_MODULE,
 		.of_match_table = of_anatop_regulator_match_tbl,
 	},
 	.probe	= anatop_regulator_probe,

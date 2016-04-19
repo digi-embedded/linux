@@ -4,13 +4,13 @@
  * Copyright (C) 2012-2015 Freescale Semiconductor, Inc., All Rights Reserved
  */
 
-#include <linux/of_address.h>
-#include <linux/of_irq.h>
 #include "compat.h"
 #include "intern.h"
 #include "secvio.h"
 #include "regs.h"
-
+#include <linux/of.h>
+#include <linux/of_irq.h>
+#include <linux/of_address.h>
 /*
  * These names are associated with each violation handler.
  * The source names were taken from MX6, and are based on recommendations
@@ -305,4 +305,3 @@ module_platform_driver(snvs_secvio_driver);
 MODULE_LICENSE("Dual BSD/GPL");
 MODULE_DESCRIPTION("FSL SNVS Security Violation Handler");
 MODULE_AUTHOR("Freescale Semiconductor - MCU");
-

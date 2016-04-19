@@ -28,6 +28,8 @@
 #include <linux/libata.h>
 #include "ahci.h"
 
+#define DRV_NAME "ahci-imx"
+
 enum {
 	/* Timer 1-ms Register */
 	IMX_TIMER1MS				= 0x00e0,
@@ -68,7 +70,6 @@ struct imx_ahci_priv {
 	u32 phy_params;
 };
 
-extern struct scsi_host_template ahci_platform_sht;
 void *sg_io_buffer_hack;
 
 static int ahci_imx_hotplug;
@@ -225,11 +226,9 @@ static int imx_sata_enable(struct ahci_host_priv *hpriv)
 	if (imxpriv->no_device)
 		return 0;
 
-	if (hpriv->target_pwr) {
-		ret = regulator_enable(hpriv->target_pwr);
-		if (ret)
-			return ret;
-	}
+	ret = ahci_platform_enable_regulators(hpriv);
+	if (ret)
+		return ret;
 
 	ret = clk_prepare_enable(imxpriv->sata_ref_clk);
 	if (ret < 0)
@@ -288,8 +287,7 @@ static int imx_sata_enable(struct ahci_host_priv *hpriv)
 disable_clk:
 	clk_disable_unprepare(imxpriv->sata_ref_clk);
 disable_regulator:
-	if (hpriv->target_pwr)
-		regulator_disable(hpriv->target_pwr);
+	ahci_platform_disable_regulators(hpriv);
 
 	return ret;
 }
@@ -313,8 +311,7 @@ static void imx_sata_disable(struct ahci_host_priv *hpriv)
 
 	clk_disable_unprepare(imxpriv->sata_ref_clk);
 
-	if (hpriv->target_pwr)
-		regulator_disable(hpriv->target_pwr);
+	ahci_platform_disable_regulators(hpriv);
 }
 
 static void ahci_imx_error_handler(struct ata_port *ap)
@@ -547,6 +544,10 @@ static u32 imx_ahci_parse_props(struct device *dev,
 	return reg_value;
 }
 
+static struct scsi_host_template ahci_platform_sht = {
+	AHCI_SHT(DRV_NAME),
+};
+
 static int imx_ahci_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -661,7 +662,8 @@ static int imx_ahci_probe(struct platform_device *pdev)
 		}
 	}
 
-	ret = ahci_platform_init_host(pdev, hpriv, &ahci_imx_port_info);
+	ret = ahci_platform_init_host(pdev, hpriv, &ahci_imx_port_info,
+				      &ahci_platform_sht);
 	if (ret)
 		goto disable_sata;
 
@@ -719,8 +721,7 @@ static struct platform_driver imx_ahci_driver = {
 	.probe = imx_ahci_probe,
 	.remove = ata_platform_remove_one,
 	.driver = {
-		.name = "ahci-imx",
-		.owner = THIS_MODULE,
+		.name = DRV_NAME,
 		.of_match_table = imx_ahci_of_match,
 		.pm = &ahci_imx_pm_ops,
 	},

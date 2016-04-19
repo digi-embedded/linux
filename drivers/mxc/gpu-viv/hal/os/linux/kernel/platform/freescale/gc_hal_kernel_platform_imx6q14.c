@@ -2,7 +2,7 @@
 *
 *    The MIT License (MIT)
 *
-*    Copyright (c) 2014 Vivante Corporation
+*    Copyright (c) 2014 - 2016 Vivante Corporation
 *
 *    Permission is hereby granted, free of charge, to any person obtaining a
 *    copy of this software and associated documentation files (the "Software"),
@@ -26,7 +26,7 @@
 *
 *    The GPL License (GPL)
 *
-*    Copyright (C) 2014  Vivante Corporation
+*    Copyright (C) 2014 - 2016 Vivante Corporation
 *
 *    This program is free software; you can redistribute it and/or
 *    modify it under the terms of the GNU General Public License
@@ -74,7 +74,7 @@
 #include <linux/pm_runtime.h>
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 10, 0)
 #include <mach/busfreq.h>
-#elif LINUX_VERSION_CODE < KERNEL_VERSION(3, 14, 0)
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(3, 14, 29)
 #include <linux/busfreq-imx6.h>
 #include <linux/reset.h>
 #else
@@ -92,6 +92,7 @@
 
 #include <linux/regulator/consumer.h>
 
+#ifdef CONFIG_DEVICE_THERMAL
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
 #include <linux/device_cooling.h>
 #define REG_THERMAL_NOTIFIER(a) register_devfreq_cooling_notifier(a);
@@ -101,6 +102,11 @@ extern int register_thermal_notifier(struct notifier_block *nb);
 extern int unregister_thermal_notifier(struct notifier_block *nb);
 #define REG_THERMAL_NOTIFIER(a) register_thermal_notifier(a);
 #define UNREG_THERMAL_NOTIFIER(a) unregister_thermal_notifier(a);
+#endif
+#endif
+
+#ifndef gcdFSL_CONTIGUOUS_SIZE
+#define gcdFSL_CONTIGUOUS_SIZE (4 << 20)
 #endif
 
 static int initgpu3DMinClock = 1;
@@ -207,7 +213,7 @@ static int force_contiguous_lowmem_shrink(IN gckKERNEL Kernel)
 		selected_tasksize = tasksize;
 		selected_oom_adj = oom_adj;
 	}
-	if (selected) {
+    if (selected && selected_oom_adj > 0) {
 		gckOS_Print("<gpu> send sigkill to %d (%s), adj %d, size %d\n",
 			     selected->pid, selected->comm,
 			     selected_oom_adj, selected_tasksize);
@@ -233,6 +239,7 @@ _ShrinkMemory(
     struct platform_device *pdev;
     gckGALDEVICE galDevice;
     gckKERNEL kernel;
+    gceSTATUS status = gcvSTATUS_OK;
 
     pdev = Platform->device;
 
@@ -242,18 +249,19 @@ _ShrinkMemory(
 
     if (kernel != gcvNULL)
     {
-        force_contiguous_lowmem_shrink(kernel);
+        if (force_contiguous_lowmem_shrink(kernel) != 0)
+            status = gcvSTATUS_OUT_OF_MEMORY;
     }
     else
     {
         gcmkPRINT("%s(%d) can't find kernel! ", __FUNCTION__, __LINE__);
     }
 
-    return gcvSTATUS_OK;
+    return status;
 }
 #endif
 
-#if gcdENABLE_FSCALE_VAL_ADJUST
+#if gcdENABLE_FSCALE_VAL_ADJUST && defined(CONFIG_DEVICE_THERMAL)
 static int thermal_hot_pm_notify(struct notifier_block *nb, unsigned long event,
        void *dummy)
 {
@@ -435,7 +443,16 @@ gckPLATFORM_AdjustParam(
         Args->registerMemSizeVG = res->end - res->start + 1;
     }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,1,0)
+    res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "contiguous_mem");
+    if (res)
+    {
+        if( Args->contiguousBase == 0 )
+           Args->contiguousBase = res->start;
+        if( Args->contiguousSize == ~0U )
+           Args->contiguousSize = res->end - res->start + 1;
+    }
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
        Args->contiguousBase = 0;
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0)
        prop = of_get_property(dn, "contiguousbase", NULL);
@@ -449,8 +466,12 @@ gckPLATFORM_AdjustParam(
        Args->contiguousSize = pdata->reserved_mem_size;
      }
 #endif
-    if (Args->contiguousSize == 0)
+    if (Args->contiguousSize == ~0U)
+    {
        gckOS_Print("Warning: No contiguous memory is reserverd for gpu.!\n ");
+       gckOS_Print("Warning: Will use default value(%d) for the reserved memory!\n ",gcdFSL_CONTIGUOUS_SIZE);
+       Args->contiguousSize = gcdFSL_CONTIGUOUS_SIZE;
+    }
 
     Args->gpu3DMinClock = initgpu3DMinClock;
 
@@ -883,7 +904,7 @@ _AdjustDriver(
     memcpy(&gpu_pm_ops, driver->driver.pm, sizeof(struct dev_pm_ops));
 
     /* Add runtime PM callback. */
-#ifdef CONFIG_PM_RUNTIME
+#ifdef CONFIG_PM
     gpu_pm_ops.runtime_suspend = gpu_runtime_suspend;
     gpu_pm_ops.runtime_resume = gpu_runtime_resume;
     gpu_pm_ops.runtime_idle = NULL;

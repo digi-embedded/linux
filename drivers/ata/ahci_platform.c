@@ -22,6 +22,8 @@
 #include <linux/ahci_platform.h>
 #include "ahci.h"
 
+#define DRV_NAME "ahci"
+
 static const struct ata_port_info ahci_port_info = {
 	.flags		= AHCI_FLAG_COMMON,
 	.pio_mask	= ATA_PIO4,
@@ -29,10 +31,13 @@ static const struct ata_port_info ahci_port_info = {
 	.port_ops	= &ahci_platform_ops,
 };
 
+static struct scsi_host_template ahci_platform_sht = {
+	AHCI_SHT(DRV_NAME),
+};
+
 static int ahci_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
-	struct ahci_platform_data *pdata = dev_get_platdata(dev);
 	struct ahci_host_priv *hpriv;
 	int rc;
 
@@ -44,29 +49,15 @@ static int ahci_probe(struct platform_device *pdev)
 	if (rc)
 		return rc;
 
-	/*
-	 * Some platforms might need to prepare for mmio region access,
-	 * which could be done in the following init call. So, the mmio
-	 * region shouldn't be accessed before init (if provided) has
-	 * returned successfully.
-	 */
-	if (pdata && pdata->init) {
-		rc = pdata->init(dev, hpriv->mmio);
-		if (rc)
-			goto disable_resources;
-	}
-
 	if (of_device_is_compatible(dev->of_node, "hisilicon,hisi-ahci"))
 		hpriv->flags |= AHCI_HFLAG_NO_FBS | AHCI_HFLAG_NO_NCQ;
 
-	rc = ahci_platform_init_host(pdev, hpriv, &ahci_port_info);
+	rc = ahci_platform_init_host(pdev, hpriv, &ahci_port_info,
+				     &ahci_platform_sht);
 	if (rc)
-		goto pdata_exit;
+		goto disable_resources;
 
 	return 0;
-pdata_exit:
-	if (pdata && pdata->exit)
-		pdata->exit(dev);
 disable_resources:
 	ahci_platform_disable_resources(hpriv);
 	return rc;
@@ -76,6 +67,8 @@ static SIMPLE_DEV_PM_OPS(ahci_pm_ops, ahci_platform_suspend,
 			 ahci_platform_resume);
 
 static const struct of_device_id ahci_of_match[] = {
+	{ .compatible = "generic-ahci", },
+	/* Keep the following compatibles for device tree compatibility */
 	{ .compatible = "snps,spear-ahci", },
 	{ .compatible = "snps,exynos5440-ahci", },
 	{ .compatible = "ibm,476gtr-ahci", },
@@ -89,8 +82,7 @@ static struct platform_driver ahci_driver = {
 	.probe = ahci_probe,
 	.remove = ata_platform_remove_one,
 	.driver = {
-		.name = "ahci",
-		.owner = THIS_MODULE,
+		.name = DRV_NAME,
 		.of_match_table = ahci_of_match,
 		.pm = &ahci_pm_ops,
 	},

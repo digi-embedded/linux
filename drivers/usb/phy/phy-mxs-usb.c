@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2015 Freescale Semiconductor, Inc.
+ * Copyright 2012-2016 Freescale Semiconductor, Inc.
  * Copyright (C) 2012 Marek Vasut <marex@denx.de>
  * on behalf of DENX Software Engineering GmbH
  *
@@ -254,7 +254,7 @@ static int mxs_phy_hw_init(struct mxs_phy *mxs_phy)
 /* Return true if the vbus is there */
 static bool mxs_phy_get_vbus_status(struct mxs_phy *mxs_phy)
 {
-	unsigned int vbus_value;
+	unsigned int vbus_value = 0;
 
 	if (mxs_phy->port_id == 0)
 		regmap_read(mxs_phy->regmap_anatop,
@@ -555,10 +555,8 @@ static int mxs_phy_probe(struct platform_device *pdev)
 	}
 
 	mxs_phy = devm_kzalloc(&pdev->dev, sizeof(*mxs_phy), GFP_KERNEL);
-	if (!mxs_phy) {
-		dev_err(&pdev->dev, "Failed to allocate USB PHY structure!\n");
+	if (!mxs_phy)
 		return -ENOMEM;
-	}
 
 	/* Some SoCs don't have anatop registers */
 	if (of_get_property(np, "fsl,anatop", NULL)) {
@@ -686,7 +684,6 @@ static struct platform_driver mxs_phy_driver = {
 	.remove = mxs_phy_remove,
 	.driver = {
 		.name = DRIVER_NAME,
-		.owner	= THIS_MODULE,
 		.of_match_table = mxs_phy_dt_ids,
 		.pm = &mxs_phy_pm,
 	 },

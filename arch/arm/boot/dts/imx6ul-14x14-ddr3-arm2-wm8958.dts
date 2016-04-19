@@ -57,7 +57,6 @@
 	assigned-clock-rates = <786432000>;
 };
 
-
 &i2c4 {
 	clock-frequency = <100000>;
 	pinctrl-names = "default";

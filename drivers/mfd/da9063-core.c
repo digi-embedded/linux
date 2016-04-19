@@ -35,7 +35,6 @@
 #include <linux/kthread.h>
 #include <linux/uaccess.h>
 #include <linux/of.h>
-#include <linux/clockchips.h>
 
 static struct da9063 * da9063_data;
 
@@ -175,7 +174,7 @@ static const struct mfd_cell da9063_devs[] = {
 	},
 	{
 		.name		= DA9063_DRVNAME_WATCHDOG,
-		.of_compatible  = "dlg,da9063-watchdog",
+		.of_compatible	= "dlg,da9063-watchdog",
 	},
 	{
 		.name		= DA9063_DRVNAME_HWMON,
@@ -283,7 +282,7 @@ void da9063_power_off ( void ) {
 
 int da9063_device_init(struct da9063 *da9063, unsigned int irq)
 {
-	int model, revision, t_offset;
+	int model, variant_id, variant_code, t_offset;
 	int ret;
 
 	da9063->chip_irq = irq;
@@ -298,30 +297,32 @@ int da9063_device_init(struct da9063 *da9063, unsigned int irq)
 		return -ENODEV;
 	}
 
-	ret = regmap_read(da9063->regmap, DA9063_REG_CHIP_VARIANT, &revision);
+	ret = regmap_read(da9063->regmap, DA9063_REG_CHIP_VARIANT, &variant_id);
 	if (ret < 0) {
-		dev_err(da9063->dev, "Cannot read chip revision id.\n");
+		dev_err(da9063->dev, "Cannot read chip variant id.\n");
 		return -EIO;
 	}
-	revision >>= DA9063_CHIP_VARIANT_SHIFT;
-	if (revision != DA9063_AD_REVISION && revision < DA9063_BB_REVISION) {
-		dev_err(da9063->dev, "Unknown chip revision: %d\n", revision);
+
+	variant_code = variant_id >> DA9063_CHIP_VARIANT_SHIFT;
+	if (variant_code < PMIC_DA9063_BB && variant_code != PMIC_DA9063_AD) {
+		dev_err(da9063->dev,
+			"Cannot support variant code: 0x%02X\n", variant_code);
 		return -ENODEV;
 	}
 
-	ret = regmap_read(da9063->regmap, DA9063_REG_T_OFFSET, &t_offset);
-	if (ret < 0) {
-		dev_err(da9063->dev, "Cannot read chip temperature offset.\n");
-		return -EIO;
-	}
+        ret = regmap_read(da9063->regmap, DA9063_REG_T_OFFSET, &t_offset);
+        if (ret < 0) {
+                dev_err(da9063->dev, "Cannot read chip temperature offset.\n");
+                return -EIO;
+        }
 
 	da9063->model = model;
-	da9063->revision = revision;
+	da9063->variant_code = variant_code;
 	da9063->t_offset = t_offset;
 
 	dev_info(da9063->dev,
 		 "Device detected (model-ID: 0x%02X  rev-ID: 0x%02X t_offset: 0x%02X)\n",
-		 model, revision, t_offset);
+		 model, variant_code, t_offset);
 
 	ret = da9063_irq_init(da9063);
 	if (ret) {

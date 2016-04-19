@@ -87,6 +87,7 @@ static void check_vbus_state(struct tahvo_usb *tu)
 			if (tu->phy.otg->gadget)
 				usb_gadget_vbus_connect(tu->phy.otg->gadget);
 			tu->phy.otg->state = OTG_STATE_B_PERIPHERAL;
+			usb_phy_set_event(&tu->phy, USB_EVENT_ENUMERATED);
 			break;
 		case OTG_STATE_A_IDLE:
 			/*
@@ -105,6 +106,7 @@ static void check_vbus_state(struct tahvo_usb *tu)
 			if (tu->phy.otg->gadget)
 				usb_gadget_vbus_disconnect(tu->phy.otg->gadget);
 			tu->phy.otg->state = OTG_STATE_B_IDLE;
+			usb_phy_set_event(&tu->phy, USB_EVENT_NONE);
 			break;
 		case OTG_STATE_A_HOST:
 			tu->phy.otg->state = OTG_STATE_A_IDLE;
@@ -399,7 +401,8 @@ static int tahvo_usb_probe(struct platform_device *pdev)
 	dev_set_drvdata(&pdev->dev, tu);
 
 	tu->irq = platform_get_irq(pdev, 0);
-	ret = request_threaded_irq(tu->irq, NULL, tahvo_usb_vbus_interrupt, 0,
+	ret = request_threaded_irq(tu->irq, NULL, tahvo_usb_vbus_interrupt,
+				   IRQF_ONESHOT,
 				   "tahvo-vbus", tu);
 	if (ret) {
 		dev_err(&pdev->dev, "could not register tahvo-vbus irq: %d\n",
@@ -448,7 +451,6 @@ static struct platform_driver tahvo_usb_driver = {
 	.remove		= tahvo_usb_remove,
 	.driver		= {
 		.name	= "tahvo-usb",
-		.owner	= THIS_MODULE,
 	},
 };
 module_platform_driver(tahvo_usb_driver);

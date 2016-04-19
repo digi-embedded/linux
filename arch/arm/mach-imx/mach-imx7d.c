@@ -19,6 +19,12 @@
 #include "common.h"
 #include "cpuidle.h"
 
+static struct property device_disabled = {
+	.name = "status",
+	.length = sizeof("disabled"),
+	.value = "disabled",
+};
+
 static int ar8031_phy_fixup(struct phy_device *dev)
 {
 	u16 val;
@@ -70,6 +76,23 @@ static void __init imx7d_enet_phy_init(void)
 	}
 }
 
+static void __init imx7d_enet_mdio_fixup(void)
+{
+	struct regmap *gpr;
+
+	/* The management data input/output (MDIO) bus where often high-speed,
+	 * open-drain operation is required. i.MX7D TO1.0 ENET MDIO pin has no
+	 * open drain as IC ticket number: TKT252980, i.MX7D TO1.1 fix the issue.
+	 * GPR1[8:7] are reserved bits at TO1.0, there no need to add version check.
+	 */
+	gpr = syscon_regmap_lookup_by_compatible("fsl,imx7d-iomuxc-gpr");
+	if (!IS_ERR(gpr))
+		regmap_update_bits(gpr, IOMUXC_GPR0, IMX7D_GPR0_ENET_MDIO_OPEN_DRAIN_MASK,
+				   IMX7D_GPR0_ENET_MDIO_OPEN_DRAIN_MASK);
+	else
+		pr_err("failed to find fsl,imx7d-iomux-gpr regmap\n");
+}
+
 static void __init imx7d_enet_clk_sel(void)
 {
 	struct regmap *gpr;
@@ -85,16 +108,26 @@ static void __init imx7d_enet_clk_sel(void)
 
 static inline void imx7d_enet_init(void)
 {
-	imx6_enet_mac_init("fsl,imx7d-fec");
+	imx6_enet_mac_init("fsl,imx7d-fec", "fsl,imx7d-ocotp");
+	imx7d_enet_mdio_fixup();
 	imx7d_enet_phy_init();
 	imx7d_enet_clk_sel();
+}
+
+static inline void imx7d_disable_arm_arch_timer(void)
+{
+	struct device_node *node;
+
+	node = of_find_compatible_node(NULL, NULL, "arm,armv7-timer");
+	if (node) {
+		pr_info("disable arm arch timer for nosmp!\n");
+		of_add_property(node, &device_disabled);
+	}
 }
 
 static void __init imx7d_init_machine(void)
 {
 	struct device *parent;
-
-	mxc_arch_reset_init_dt();
 
 	parent = imx_soc_device_init();
 	if (parent == NULL)
@@ -108,10 +141,13 @@ static void __init imx7d_init_machine(void)
 
 static void __init imx7d_init_irq(void)
 {
+	imx_gpcv2_check_dt();
 	imx_init_revision_from_anatop();
 	imx_src_init();
-	imx_gpcv2_init();
 	irqchip_init();
+#ifndef CONFIG_SMP
+	imx7d_disable_arm_arch_timer();
+#endif
 }
 
 static void __init imx7d_init_late(void)
@@ -141,5 +177,4 @@ DT_MACHINE_START(IMX7D, "Freescale i.MX7 Dual (Device Tree)")
 	.init_machine	= imx7d_init_machine,
 	.init_late	= imx7d_init_late,
 	.dt_compat	= imx7d_dt_compat,
-	.restart	= mxc_restart,
 MACHINE_END

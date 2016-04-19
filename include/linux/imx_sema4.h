@@ -29,7 +29,7 @@ enum {
 	SEMA4_CP1NTF	= 0x88,
 };
 
-static const unsigned int idx_sema4[16] = {
+static const unsigned int idx_sema4[SEMA4_NUM_GATES] = {
 	1 << 7, 1 << 6, 1 << 5, 1 << 4,
 	1 << 3, 1 << 2, 1 << 1, 1 << 0,
 	1 << 15, 1 << 14, 1 << 13, 1 << 12,
@@ -37,26 +37,23 @@ static const unsigned int idx_sema4[16] = {
 };
 
 struct imx_sema4_mutex {
-	unsigned int		valid;
-	unsigned int		gate_num;
+	u32			valid;
+	u32			gate_num;
 	unsigned char		gate_val;
 	wait_queue_head_t       wait_q;
 };
 
 struct imx_sema4_mutex_device {
 	struct device		*dev;
-	unsigned short		cpntf_val;
-	unsigned short		cpine_val;
+	u16			cpntf_val;
+	u16			cpine_val;
 	void __iomem		*ioaddr;	/* Mapped address */
 	spinlock_t		lock;		/* Mutex */
 	int			irq;
-	struct clk		*clk;
 
-	unsigned short		alloced;
-	struct imx_sema4_mutex	*mutex_ptr[16];
+	u16			alloced;
+	struct imx_sema4_mutex	*mutex_ptr[SEMA4_NUM_GATES];
 };
-
-extern struct imx_sema4_mutex *mcc_shm_ptr;
 
 struct imx_sema4_mutex *
 	imx_sema4_mutex_create(u32 dev_num, u32 mutex_num);

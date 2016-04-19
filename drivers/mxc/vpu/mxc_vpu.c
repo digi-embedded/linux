@@ -1,5 +1,5 @@
 /*
- * Copyright 2006-2014 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright 2006-2015 Freescale Semiconductor, Inc. All Rights Reserved.
  */
 
 /*
@@ -175,7 +175,9 @@ static int cpu_is_mx6q(void)
 static void vpu_reset(void)
 {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
-	device_reset(vpu_dev);
+	int ret;
+
+	ret = device_reset(vpu_dev);
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(3, 5, 0)
 	imx_src_reset_vpu();
 #else

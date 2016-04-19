@@ -43,7 +43,7 @@
 #include <linux/regmap.h>
 #include <linux/slab.h>
 #include <linux/time.h>
-#include <linux/v4l2-mediabus.h>
+#include <linux/media-bus-format.h>
 #include <media/v4l2-common.h>
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-dev.h>
@@ -244,7 +244,7 @@ struct mx6s_fmt {
 	char  name[32];
 	u32   fourcc;		/* v4l2 format id */
 	u32   pixelformat;
-	enum v4l2_mbus_pixelcode mbus_code;
+	u32   mbus_code;
 	int   bpp;
 };
 
@@ -253,25 +253,25 @@ static struct mx6s_fmt formats[] = {
 		.name		= "UYVY-16",
 		.fourcc		= V4L2_PIX_FMT_UYVY,
 		.pixelformat	= V4L2_PIX_FMT_UYVY,
-		.mbus_code	= V4L2_MBUS_FMT_UYVY8_2X8,
+		.mbus_code	= MEDIA_BUS_FMT_UYVY8_2X8,
 		.bpp		= 2,
 	}, {
 		.name		= "YUYV-16",
 		.fourcc		= V4L2_PIX_FMT_YUYV,
 		.pixelformat	= V4L2_PIX_FMT_YUYV,
-		.mbus_code	= V4L2_MBUS_FMT_YUYV8_2X8,
+		.mbus_code	= MEDIA_BUS_FMT_YUYV8_2X8,
 		.bpp		= 2,
 	}, {
 		.name		= "YUV32 (X-Y-U-V)",
 		.fourcc		= V4L2_PIX_FMT_YUV32,
 		.pixelformat	= V4L2_PIX_FMT_YUV32,
-		.mbus_code	= V4L2_MBUS_FMT_AYUV8_1X32,
+		.mbus_code	= MEDIA_BUS_FMT_AYUV8_1X32,
 		.bpp		= 4,
 	}, {
 		.name		= "RAWRGB8 (SBGGR8)",
 		.fourcc		= V4L2_PIX_FMT_SBGGR8,
 		.pixelformat	= V4L2_PIX_FMT_SBGGR8,
-		.mbus_code	= V4L2_MBUS_FMT_SBGGR8_1X8,
+		.mbus_code	= MEDIA_BUS_FMT_SBGGR8_1X8,
 		.bpp		= 1,
 	}
 };
@@ -321,7 +321,7 @@ struct mx6s_csi_dev {
 	v4l2_std_id std;
 	struct mx6s_fmt		*fmt;
 	struct v4l2_pix_format pix;
-	enum v4l2_mbus_pixelcode mbus_code;
+	u32 mbus_code;
 
 	unsigned int frame_count;
 
@@ -371,7 +371,7 @@ struct mx6s_fmt *format_by_fourcc(int fourcc)
 	return NULL;
 }
 
-struct mx6s_fmt *format_by_mbus(enum v4l2_mbus_pixelcode code)
+struct mx6s_fmt *format_by_mbus(u32 code)
 {
 	int i;
 
@@ -912,6 +912,7 @@ static int mx6s_start_streaming(struct vb2_queue *vq, unsigned int count)
 			       internal.queue);
 	buf->internal.bufnum = 0;
 	vb = &buf->vb;
+	vb->state = VB2_BUF_STATE_ACTIVE;
 
 	phys = vb2_dma_contig_plane_dma_addr(vb, 0);
 
@@ -923,6 +924,7 @@ static int mx6s_start_streaming(struct vb2_queue *vq, unsigned int count)
 			       internal.queue);
 	buf->internal.bufnum = 1;
 	vb = &buf->vb;
+	vb->state = VB2_BUF_STATE_ACTIVE;
 
 	phys = vb2_dma_contig_plane_dma_addr(vb, 0);
 	mx6s_update_csi_buf(csi_dev, phys, buf->internal.bufnum);
@@ -933,7 +935,7 @@ static int mx6s_start_streaming(struct vb2_queue *vq, unsigned int count)
 	return mx6s_csi_enable(csi_dev);
 }
 
-static int mx6s_stop_streaming(struct vb2_queue *vq)
+static void mx6s_stop_streaming(struct vb2_queue *vq)
 {
 	struct mx6s_csi_dev *csi_dev = vb2_get_drv_priv(vq);
 	unsigned long flags;
@@ -944,11 +946,18 @@ static int mx6s_stop_streaming(struct vb2_queue *vq)
 
 	spin_lock_irqsave(&csi_dev->slock, flags);
 
-
 	list_for_each_entry_safe(buf, tmp,
 				&csi_dev->active_bufs, internal.queue) {
 		list_del_init(&buf->internal.queue);
-		vb2_buffer_done(&buf->vb, VB2_BUF_STATE_ERROR);
+		if (buf->vb.state == VB2_BUF_STATE_ACTIVE)
+			vb2_buffer_done(&buf->vb, VB2_BUF_STATE_ERROR);
+	}
+
+	list_for_each_entry_safe(buf, tmp,
+				&csi_dev->capture, internal.queue) {
+		list_del_init(&buf->internal.queue);
+		if (buf->vb.state == VB2_BUF_STATE_ACTIVE)
+			vb2_buffer_done(&buf->vb, VB2_BUF_STATE_ERROR);
 	}
 
 	INIT_LIST_HEAD(&csi_dev->capture);
@@ -963,8 +972,6 @@ static int mx6s_stop_streaming(struct vb2_queue *vq)
 	dma_free_coherent(csi_dev->v4l2_dev.dev,
 				csi_dev->discard_size, b,
 				csi_dev->discard_buffer_dma);
-
-	return 0;
 }
 
 static struct vb2_ops mx6s_videobuf_ops = {
@@ -1053,6 +1060,7 @@ static void mx6s_csi_frame_done(struct mx6s_csi_dev *csi_dev,
 	list_move_tail(csi_dev->capture.next, &csi_dev->active_bufs);
 
 	vb = &buf->vb;
+	vb->state = VB2_BUF_STATE_ACTIVE;
 
 	phys = vb2_dma_contig_plane_dma_addr(vb, 0);
 	mx6s_update_csi_buf(csi_dev, phys, bufnum);
@@ -1174,7 +1182,7 @@ static int mx6s_csi_open(struct file *file)
 	q->ops = &mx6s_videobuf_ops;
 	q->mem_ops = &vb2_dma_contig_memops;
 	q->buf_struct_size = sizeof(struct mx6s_buffer);
-	q->timestamp_type = V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC;
+	q->timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC;
 	q->lock = &csi_dev->lock;
 
 	ret = vb2_queue_init(q);
@@ -1308,7 +1316,7 @@ static int mx6s_vidioc_s_std(struct file *file, void *priv, v4l2_std_id a)
 	struct mx6s_csi_dev *csi_dev = video_drvdata(file);
 	struct v4l2_subdev *sd = csi_dev->sd;
 
-	return v4l2_subdev_call(sd, core, s_std, a);
+	return v4l2_subdev_call(sd, video, s_std, a);
 }
 
 static int mx6s_vidioc_g_std(struct file *file, void *priv, v4l2_std_id *a)
@@ -1316,7 +1324,7 @@ static int mx6s_vidioc_g_std(struct file *file, void *priv, v4l2_std_id *a)
 	struct mx6s_csi_dev *csi_dev = video_drvdata(file);
 	struct v4l2_subdev *sd = csi_dev->sd;
 
-	return v4l2_subdev_call(sd, core, g_std, a);
+	return v4l2_subdev_call(sd, video, g_std, a);
 }
 
 static int mx6s_vidioc_reqbufs(struct file *file, void *priv,
@@ -1373,7 +1381,7 @@ static int mx6s_vidioc_enum_fmt_vid_cap(struct file *file, void  *priv,
 {
 	struct mx6s_csi_dev *csi_dev = video_drvdata(file);
 	struct v4l2_subdev *sd = csi_dev->sd;
-	enum v4l2_mbus_pixelcode code;
+	u32 code;
 	struct mx6s_fmt *fmt;
 	int ret;
 
@@ -1445,6 +1453,7 @@ static int mx6s_vidioc_s_fmt_vid_cap(struct file *file, void *priv,
 		return ret;
 
 	csi_dev->fmt           = format_by_fourcc(f->fmt.pix.pixelformat);
+	csi_dev->mbus_code     = csi_dev->fmt->mbus_code;
 	csi_dev->pix.width     = f->fmt.pix.width;
 	csi_dev->pix.height    = f->fmt.pix.height;
 	csi_dev->pix.sizeimage = f->fmt.pix.sizeimage;
@@ -1484,7 +1493,8 @@ static int mx6s_vidioc_querycap(struct file *file, void  *priv,
 	snprintf(cap->bus_info, sizeof(cap->bus_info), "platform:%s",
 		 dev_name(csi_dev->dev));
 
-	cap->capabilities = V4L2_CAP_VIDEO_CAPTURE | V4L2_CAP_STREAMING;
+	cap->device_caps = V4L2_CAP_VIDEO_CAPTURE | V4L2_CAP_STREAMING;
+	cap->capabilities = cap->device_caps | V4L2_CAP_DEVICE_CAPS;
 	return 0;
 }
 
@@ -1589,8 +1599,39 @@ static int mx6s_vidioc_enum_framesizes(struct file *file, void *priv,
 {
 	struct mx6s_csi_dev *csi_dev = video_drvdata(file);
 	struct v4l2_subdev *sd = csi_dev->sd;
+	struct mx6s_fmt *fmt;
+	struct v4l2_subdev_frame_size_enum fse = {
+		.index = fsize->index,
+		.which = V4L2_SUBDEV_FORMAT_ACTIVE,
+	};
+	int ret;
 
-	return v4l2_subdev_call(sd, video, enum_framesizes, fsize);
+	fmt = format_by_fourcc(fsize->pixel_format);
+	if (fmt->pixelformat != fsize->pixel_format)
+		return -EINVAL;
+	fse.code = fmt->mbus_code;
+
+	ret = v4l2_subdev_call(sd, pad, enum_frame_size, NULL, &fse);
+	if (ret)
+		return ret;
+
+	if (fse.min_width == fse.max_width &&
+	    fse.min_height == fse.max_height) {
+		fsize->type = V4L2_FRMSIZE_TYPE_DISCRETE;
+		fsize->discrete.width = fse.min_width;
+		fsize->discrete.height = fse.min_height;
+		return 0;
+	}
+
+	fsize->type = V4L2_FRMSIZE_TYPE_DISCRETE;
+	fsize->stepwise.min_width = fse.min_width;
+	fsize->stepwise.max_width = fse.max_width;
+	fsize->stepwise.min_height = fse.min_height;
+	fsize->stepwise.max_height = fse.max_height;
+	fsize->stepwise.step_width = 1;
+	fsize->stepwise.step_height = 1;
+
+	return 0;
 }
 
 static int mx6s_vidioc_enum_frameintervals(struct file *file, void *priv,
@@ -1598,8 +1639,26 @@ static int mx6s_vidioc_enum_frameintervals(struct file *file, void *priv,
 {
 	struct mx6s_csi_dev *csi_dev = video_drvdata(file);
 	struct v4l2_subdev *sd = csi_dev->sd;
+	struct mx6s_fmt *fmt;
+	struct v4l2_subdev_frame_interval_enum fie = {
+		.index = interval->index,
+		.width = interval->width,
+		.height = interval->height,
+		.which = V4L2_SUBDEV_FORMAT_ACTIVE,
+	};
+	int ret;
 
-	return v4l2_subdev_call(sd, video, enum_frameintervals, interval);
+	fmt = format_by_fourcc(interval->pixel_format);
+	if (fmt->pixelformat != interval->pixel_format)
+		return -EINVAL;
+	fie.code = fmt->mbus_code;
+
+	ret = v4l2_subdev_call(sd, pad, enum_frame_interval, NULL, &fie);
+	if (ret)
+		return ret;
+	interval->type = V4L2_FRMIVAL_TYPE_DISCRETE;
+	interval->discrete = fie.interval;
+	return 0;
 }
 
 static const struct v4l2_ioctl_ops mx6s_csi_ioctl_ops = {
@@ -1872,7 +1931,6 @@ static int mx6s_csi_remove(struct platform_device *pdev)
 	return 0;
 }
 
-#ifdef CONFIG_PM_RUNTIME
 static int mx6s_csi_runtime_suspend(struct device *dev)
 {
 	dev_dbg(dev, "csi v4l2 busfreq high release.\n");
@@ -1884,10 +1942,6 @@ static int mx6s_csi_runtime_resume(struct device *dev)
 	dev_dbg(dev, "csi v4l2 busfreq high request.\n");
 	return 0;
 }
-#else
-#define	mx6s_csi_runtime_suspend	NULL
-#define	mx6s_csi_runtime_resume		NULL
-#endif
 
 static const struct dev_pm_ops mx6s_csi_pm_ops = {
 	SET_RUNTIME_PM_OPS(mx6s_csi_runtime_suspend, mx6s_csi_runtime_resume, NULL)

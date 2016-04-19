@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015 Freescale Semiconductor, Inc.
+ * Copyright (C) 2015-2016 Freescale Semiconductor, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -118,7 +118,6 @@ static struct cpufreq_driver imx7d_cpufreq_driver = {
 	.target_index = imx7d_set_target,
 	.get = cpufreq_generic_get,
 	.init = imx7d_cpufreq_init,
-	.exit = cpufreq_generic_exit,
 	.name = "imx7d-cpufreq",
 	.attr = cpufreq_generic_attr,
 };
@@ -136,6 +135,9 @@ static int imx7_cpufreq_pm_notify(struct notifier_block *nb,
 	 * devices may be already suspended, to avoid such scenario,
 	 * we just increase cpufreq to highest setpoint before suspend.
 	 */
+	if (!data)
+		return NOTIFY_BAD;
+
 	switch (event) {
 	case PM_SUSPEND_PREPARE:
 		cpufreq_policy_min_pre_suspend = data->user_policy.min;
@@ -149,6 +151,7 @@ static int imx7_cpufreq_pm_notify(struct notifier_block *nb,
 	}
 
 	cpufreq_update_policy(0);
+	cpufreq_cpu_put(data);
 
 	return NOTIFY_OK;
 }
@@ -239,15 +242,16 @@ static int imx7d_cpufreq_probe(struct platform_device *pdev)
 	if (ret > 0)
 		transition_latency += ret * 1000;
 
+	mutex_init(&set_cpufreq_lock);
+
 	ret = cpufreq_register_driver(&imx7d_cpufreq_driver);
 	if (ret) {
 		dev_err(cpu_dev, "failed register driver: %d\n", ret);
 		goto free_freq_table;
 	 }
 
-	mutex_init(&set_cpufreq_lock);
-
 	register_pm_notifier(&imx7_cpufreq_pm_notifier);
+
 	of_node_put(np);
 	return 0;
 

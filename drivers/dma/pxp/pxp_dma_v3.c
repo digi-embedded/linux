@@ -21,7 +21,6 @@
  * Copyright 2008-2009 Embedded Alley Solutions, Inc All Rights Reserved.
  */
 
-#include <linux/busfreq-imx.h>
 #include <linux/dma-mapping.h>
 #include <linux/init.h>
 #include <linux/interrupt.h>
@@ -1849,18 +1848,13 @@ static void __pxp_terminate_all(struct dma_chan *chan)
 	pxp_chan->status = PXP_CHANNEL_INITIALIZED;
 }
 
-static int pxp_control(struct dma_chan *chan, enum dma_ctrl_cmd cmd,
-			unsigned long arg)
+static int pxp_device_terminate_all(struct dma_chan *chan)
 {
 	struct pxp_channel *pxp_chan = to_pxp_channel(chan);
 
-	/* Only supports DMA_TERMINATE_ALL */
-	if (cmd != DMA_TERMINATE_ALL)
-		return -ENXIO;
-
-	mutex_lock(&pxp_chan->chan_mutex);
+	spin_lock(&pxp_chan->lock);
 	__pxp_terminate_all(chan);
-	mutex_unlock(&pxp_chan->chan_mutex);
+	spin_unlock(&pxp_chan->lock);
 
 	return 0;
 }
@@ -4196,7 +4190,7 @@ static int pxp_dma_init(struct pxps *pxp)
 
 	/* Compulsory for DMA_SLAVE fields */
 	dma->device_prep_slave_sg = pxp_prep_slave_sg;
-	dma->device_control = pxp_control;
+	dma->device_terminate_all = pxp_device_terminate_all;
 
 	/* Initialize PxP Channels */
 	INIT_LIST_HEAD(&dma->channels);
@@ -4281,13 +4275,8 @@ static int pxp_probe(struct platform_device *pdev)
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	irq = platform_get_irq(pdev, 0);
-	if (!res || irq < 0) {
-		err = -ENODEV;
-		goto exit;
-	}
-
 	std_irq = platform_get_irq(pdev, 1);
-	if (!res || irq < 0) {
+	if (!res || irq < 0 || std_irq < 0) {
 		err = -ENODEV;
 		goto exit;
 	}
@@ -4311,7 +4300,7 @@ static int pxp_probe(struct platform_device *pdev)
 	mutex_init(&pxp->clk_mutex);
 	sema_init(&pxp->sema, 1);
 
-	pxp->base = devm_request_and_ioremap(&pdev->dev, res);
+	pxp->base = devm_ioremap_resource(&pdev->dev, res);
 	if (pxp->base == NULL) {
 		dev_err(&pdev->dev, "Couldn't ioremap regs\n");
 		err = -ENODEV;
@@ -4435,10 +4424,9 @@ static int pxp_resume(struct device *dev)
 #define	pxp_resume	NULL
 #endif
 
-#ifdef CONFIG_PM_RUNTIME
+#ifdef CONFIG_PM
 static int pxp_runtime_suspend(struct device *dev)
 {
-	release_bus_freq(BUS_FREQ_HIGH);
 	dev_dbg(dev, "pxp busfreq high release.\n");
 
 	return 0;
@@ -4446,7 +4434,6 @@ static int pxp_runtime_suspend(struct device *dev)
 
 static int pxp_runtime_resume(struct device *dev)
 {
-	request_bus_freq(BUS_FREQ_HIGH);
 	dev_dbg(dev, "pxp busfreq high request.\n");
 
 	return 0;

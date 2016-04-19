@@ -183,7 +183,7 @@ static void start_hnp(struct ohci_hcd *ohci)
 	otg_start_hnp(hcd->usb_phy->otg);
 
 	local_irq_save(flags);
-	hcd->usb_phy->otg.state = OTG_STATE_A_SUSPEND;
+	hcd->usb_phy->otg->state = OTG_STATE_A_SUSPEND;
 	writel (RH_PS_PSS, &ohci->regs->roothub.portstatus [port]);
 	l = omap_readl(OTG_CTRL);
 	l &= ~OTG_A_BUSREQ;
@@ -283,7 +283,7 @@ static int ohci_omap_reset(struct usb_hcd *hcd)
 		ohci_to_hcd(ohci)->power_budget = 0;
 	}
 
-	/* FIXME khubd hub requests should manage power switching */
+	/* FIXME hub_wq hub requests should manage power switching */
 	omap_ohci_transceiver_power(1);
 
 	/* board init will have already handled HMC and mux setup.
@@ -481,7 +481,6 @@ static struct platform_driver ohci_hcd_omap_driver = {
 	.resume		= ohci_omap_resume,
 #endif
 	.driver		= {
-		.owner	= THIS_MODULE,
 		.name	= "ohci",
 	},
 };

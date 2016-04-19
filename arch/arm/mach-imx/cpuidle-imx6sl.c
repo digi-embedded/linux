@@ -73,13 +73,13 @@ static int imx6sl_enter_wait(struct cpuidle_device *dev,
 		imx6sl_wfi_in_iram_fn(wfi_iram_base, (mode == BUS_FREQ_AUDIO) ? 1 : 0 ,
 			ldo2p5_dummy_enable);
 	} else {
-		/*
-		 * Software workaround for ERR005311, see function
-		 * description for details.
-		 */
-		imx6sl_set_wait_clk(true);
-		cpu_do_idle();
-		imx6sl_set_wait_clk(false);
+	/*
+	 * Software workaround for ERR005311, see function
+	 * description for details.
+	 */
+	imx6sl_set_wait_clk(true);
+	cpu_do_idle();
+	imx6sl_set_wait_clk(false);
 	}
 	imx6q_set_lpm(WAIT_CLOCKED);
 
@@ -96,8 +96,7 @@ static struct cpuidle_driver imx6sl_cpuidle_driver = {
 		{
 			.exit_latency = 50,
 			.target_residency = 75,
-			.flags = CPUIDLE_FLAG_TIME_VALID |
-				CPUIDLE_FLAG_TIMER_STOP,
+			.flags = CPUIDLE_FLAG_TIMER_STOP,
 			.enter = imx6sl_enter_wait,
 			.name = "WAIT",
 			.desc = "Clock off",
@@ -109,6 +108,7 @@ static struct cpuidle_driver imx6sl_cpuidle_driver = {
 
 int __init imx6sl_cpuidle_init(void)
 {
+
 #ifdef CONFIG_CPU_FREQ
 	struct imx6_cpuidle_pm_info *pm_info;
 	int i;
@@ -143,8 +143,9 @@ int __init imx6sl_cpuidle_init(void)
 	wfi_code_size = (&mx6sl_lpm_wfi_end -&mx6sl_lpm_wfi_start) *4;
 
 	imx6sl_wfi_in_iram_fn = (void *)fncpy(wfi_iram_base + sizeof(*pm_info),
-		&imx6sl_low_power_wfi, wfi_code_size);
+		&imx6sl_low_power_idle, wfi_code_size);
 #endif
+
 	return cpuidle_register(&imx6sl_cpuidle_driver, NULL);
 }
 

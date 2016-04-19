@@ -25,19 +25,15 @@
 
 #include <linux/clk.h>
 #include <linux/delay.h>
-#include <linux/device.h>
 #include <linux/errno.h>
 #include <linux/interrupt.h>
 #include <linux/io.h>
 #include <linux/irq.h>
 #include <linux/kernel.h>
-#include <linux/memory.h>
 #include <linux/mfd/syscon.h>
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/of_graph.h>
-#include <linux/phy/phy.h>
-#include <linux/platform_data/mipi-csis.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <linux/regmap.h>
@@ -310,22 +306,22 @@ struct csi_state {
  */
 struct csis_pix_format {
 	unsigned int pix_width_alignment;
-	enum v4l2_mbus_pixelcode code;
+	u32 code;
 	u32 fmt_reg;
 	u8 data_alignment;
 };
 
 static const struct csis_pix_format mipi_csis_formats[] = {
 	{
-		.code = V4L2_MBUS_FMT_YUYV8_2X8,
+		.code = MEDIA_BUS_FMT_YUYV8_2X8,
 		.fmt_reg = MIPI_CSIS_ISPCFG_FMT_YCBCR422_8BIT,
 		.data_alignment = 16,
 	}, {
-		.code = V4L2_MBUS_FMT_VYUY8_2X8,
+		.code = MEDIA_BUS_FMT_VYUY8_2X8,
 		.fmt_reg = MIPI_CSIS_ISPCFG_FMT_YCBCR422_8BIT,
 		.data_alignment = 16,
 	}, {
-		.code = V4L2_MBUS_FMT_SBGGR8_1X8,
+		.code = MEDIA_BUS_FMT_SBGGR8_1X8,
 		.fmt_reg = MIPI_CSIS_ISPCFG_FMT_RAW8,
 		.data_alignment = 8,
 	}
@@ -345,8 +341,7 @@ static inline struct csi_state
 	return container_of(n, struct csi_state, subdev_notifier);
 }
 
-static const struct csis_pix_format *find_csis_format(
-	enum v4l2_mbus_pixelcode code)
+static const struct csis_pix_format *find_csis_format(u32 code)
 {
 	int i;
 
@@ -669,8 +664,10 @@ static int mipi_csis_s_stream(struct v4l2_subdev *mipi_sd, int enable)
 			goto unlock;
 		}
 		mipi_csis_start_stream(state);
+		v4l2_subdev_call(state->sensor_sd, video, s_stream, true);
 		state->flags |= ST_STREAMING;
 	} else {
+		v4l2_subdev_call(state->sensor_sd, video, s_stream, false);
 		mipi_csis_stop_stream(state);
 		state->flags &= ~ST_STREAMING;
 		if (debug > 0)
@@ -685,7 +682,7 @@ unlock:
 }
 
 static int mipi_csis_enum_mbus_fmt(struct v4l2_subdev *mipi_sd, unsigned int index,
-				enum v4l2_mbus_pixelcode *code)
+				u32 *code)
 {
 	struct csi_state *state = mipi_sd_to_csi_state(mipi_sd);
 	struct v4l2_subdev *sensor_sd = state->sensor_sd;
@@ -801,21 +798,23 @@ static int mipi_csis_g_parm(struct v4l2_subdev *mipi_sd, struct v4l2_streamparm 
 }
 
 static int mipi_csis_enum_framesizes(struct v4l2_subdev *mipi_sd,
-		struct v4l2_frmsizeenum *fsize)
+		struct v4l2_subdev_pad_config *cfg,
+		struct v4l2_subdev_frame_size_enum *fse)
 {
 	struct csi_state *state = mipi_sd_to_csi_state(mipi_sd);
 	struct v4l2_subdev *sensor_sd = state->sensor_sd;
 
-	return v4l2_subdev_call(sensor_sd, video, enum_framesizes, fsize);
+	return v4l2_subdev_call(sensor_sd, pad, enum_frame_size, NULL, fse);
 }
 
 static int mipi_csis_enum_frameintervals(struct v4l2_subdev *mipi_sd,
-		struct v4l2_frmivalenum *interval)
+		struct v4l2_subdev_pad_config *cfg,
+		struct v4l2_subdev_frame_interval_enum *fie)
 {
 	struct csi_state *state = mipi_sd_to_csi_state(mipi_sd);
 	struct v4l2_subdev *sensor_sd = state->sensor_sd;
 
-	return v4l2_subdev_call(sensor_sd, video, enum_frameintervals, interval);
+	return v4l2_subdev_call(sensor_sd, pad, enum_frame_interval, NULL, fie);
 }
 
 static int mipi_csis_log_status(struct v4l2_subdev *mipi_sd)
@@ -846,14 +845,17 @@ static struct v4l2_subdev_video_ops mipi_csis_video_ops = {
 
 	.s_parm = mipi_csis_s_parm,
 	.g_parm = mipi_csis_g_parm,
+};
 
-	.enum_framesizes     = mipi_csis_enum_framesizes,
-	.enum_frameintervals = mipi_csis_enum_frameintervals,
+static const struct v4l2_subdev_pad_ops mipi_csis_pad_ops = {
+	.enum_frame_size       = mipi_csis_enum_framesizes,
+	.enum_frame_interval   = mipi_csis_enum_frameintervals,
 };
 
 static struct v4l2_subdev_ops mipi_csis_subdev_ops = {
 	.core = &mipi_csis_core_ops,
 	.video = &mipi_csis_video_ops,
+	.pad = &mipi_csis_pad_ops,
 };
 
 static irqreturn_t mipi_csis_irq_handler(int irq, void *dev_id)
@@ -1200,7 +1202,6 @@ static int mipi_csis_resume(struct device *dev)
 }
 #endif
 
-#ifdef CONFIG_PM_RUNTIME
 static int mipi_csis_runtime_suspend(struct device *dev)
 {
 	return mipi_csis_pm_suspend(dev, true);
@@ -1210,7 +1211,6 @@ static int mipi_csis_runtime_resume(struct device *dev)
 {
 	return mipi_csis_pm_resume(dev, true);
 }
-#endif
 
 static int mipi_csis_remove(struct platform_device *pdev)
 {

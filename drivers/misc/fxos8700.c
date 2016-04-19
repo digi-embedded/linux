@@ -701,10 +701,10 @@ static ssize_t fxos8700_range_store(struct device *dev,
 	return count;
 }
 
-static DEVICE_ATTR(enable, 0666, fxos8700_enable_show, fxos8700_enable_store);
-static DEVICE_ATTR(poll_delay, 0666, fxos8700_poll_delay_show, fxos8700_poll_delay_store);
-static DEVICE_ATTR(position, 0666, fxos8700_position_show, fxos8700_position_store);
-static DEVICE_ATTR(range, 0666, fxos8700_range_show, fxos8700_range_store);
+static DEVICE_ATTR(enable, S_IWUSR | S_IRUGO, fxos8700_enable_show, fxos8700_enable_store);
+static DEVICE_ATTR(poll_delay, S_IWUSR | S_IRUGO, fxos8700_poll_delay_show, fxos8700_poll_delay_store);
+static DEVICE_ATTR(position, S_IWUSR | S_IRUGO, fxos8700_position_show, fxos8700_position_store);
+static DEVICE_ATTR(range, S_IWUSR | S_IRUGO, fxos8700_range_show, fxos8700_range_store);
 
 static struct attribute *fxos8700_attributes[] = {
 	&dev_attr_enable.attr,

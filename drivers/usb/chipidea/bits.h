@@ -26,7 +26,8 @@
 #define CIVERSION	      (0x7 << 29)
 
 /* SBUSCFG */
-#define SBUSCFG_AHBBRST		(BIT(0) | BIT(1) | BIT(2))
+#define AHBBRST_MASK		0x7
+
 /* HCCPARAMS */
 #define HCCPARAMS_LEN         BIT(17)
 
@@ -55,8 +56,14 @@
 #define DEVICEADDR_USBADRA    BIT(24)
 #define DEVICEADDR_USBADR     (0x7FUL << 25)
 
+/* TTCTRL */
+#define TTCTRL_TTHA_MASK	(0x7fUL << 24)
+/* Set non-zero value for internal TT Hub address representation */
+#define TTCTRL_TTHA		(0x7fUL << 24)
+
 /* BURSTSIZE */
-#define BURST_BITS		0xffff
+#define RX_BURST_MASK		0xff
+#define TX_BURST_MASK		0xff00
 
 /* PORTSC */
 #define PORTSC_CCS            BIT(0)

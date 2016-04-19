@@ -1,3 +1,4 @@
+
 /*
  * Texas Instruments AM35x "glue layer"
  *
@@ -32,7 +33,7 @@
 #include <linux/io.h>
 #include <linux/platform_device.h>
 #include <linux/dma-mapping.h>
-#include <linux/usb/usb_phy_gen_xceiv.h>
+#include <linux/usb/usb_phy_generic.h>
 #include <linux/platform_data/usb-omap.h>
 
 #include "musb_core.h"
@@ -85,6 +86,7 @@
 struct am35x_glue {
 	struct device		*dev;
 	struct platform_device	*musb;
+	struct platform_device	*phy;
 	struct clk		*phy_clk;
 	struct clk		*clk;
 };
@@ -360,7 +362,6 @@ static int am35x_musb_init(struct musb *musb)
 	if (!rev)
 		return -ENODEV;
 
-	usb_nop_xceiv_register();
 	musb->xceiv = usb_get_phy(USB_PHY_TYPE_USB2);
 	if (IS_ERR_OR_NULL(musb->xceiv))
 		return -EPROBE_DEFER;
@@ -402,13 +403,12 @@ static int am35x_musb_exit(struct musb *musb)
 		data->set_phy_power(0);
 
 	usb_put_phy(musb->xceiv);
-	usb_nop_xceiv_unregister();
 
 	return 0;
 }
 
 /* AM35x supports only 32bit read operation */
-void musb_read_fifo(struct musb_hw_ep *hw_ep, u16 len, u8 *dst)
+static void am35x_read_fifo(struct musb_hw_ep *hw_ep, u16 len, u8 *dst)
 {
 	void __iomem *fifo = hw_ep->fifo;
 	u32		val;
@@ -438,9 +438,11 @@ void musb_read_fifo(struct musb_hw_ep *hw_ep, u16 len, u8 *dst)
 }
 
 static const struct musb_platform_ops am35x_ops = {
+	.quirks		= MUSB_INDEXED_EP,
 	.init		= am35x_musb_init,
 	.exit		= am35x_musb_exit,
 
+	.read_fifo	= am35x_read_fifo,
 	.enable		= am35x_musb_enable,
 	.disable	= am35x_musb_disable,
 
@@ -505,6 +507,9 @@ static int am35x_probe(struct platform_device *pdev)
 
 	pdata->platform_ops		= &am35x_ops;
 
+	glue->phy = usb_phy_generic_register();
+	if (IS_ERR(glue->phy))
+		goto err7;
 	platform_set_drvdata(pdev, glue);
 
 	pinfo = am35x_dev_info;
@@ -518,10 +523,13 @@ static int am35x_probe(struct platform_device *pdev)
 	if (IS_ERR(musb)) {
 		ret = PTR_ERR(musb);
 		dev_err(&pdev->dev, "failed to register musb device: %d\n", ret);
-		goto err7;
+		goto err8;
 	}
 
 	return 0;
+
+err8:
+	usb_phy_generic_unregister(glue->phy);
 
 err7:
 	clk_disable(clk);
@@ -547,6 +555,7 @@ static int am35x_remove(struct platform_device *pdev)
 	struct am35x_glue	*glue = platform_get_drvdata(pdev);
 
 	platform_device_unregister(glue->musb);
+	usb_phy_generic_unregister(glue->phy);
 	clk_disable(glue->clk);
 	clk_disable(glue->phy_clk);
 	clk_put(glue->clk);

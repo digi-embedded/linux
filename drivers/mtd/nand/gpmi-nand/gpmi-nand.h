@@ -1,7 +1,7 @@
 /*
  * Freescale GPMI NAND Flash Driver
  *
- * Copyright (C) 2010-2015 Freescale Semiconductor, Inc.
+ * Copyright (C) 2010-2016 Freescale Semiconductor, Inc.
  * Copyright (C) 2008 Embedded Alley Solutions, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
@@ -196,6 +196,8 @@ struct gpmi_nand_data {
 	void			*auxiliary_virt;
 	dma_addr_t		auxiliary_phys;
 
+	void			*raw_buffer;
+
 	/* DMA channels */
 #define DMA_CHANS		8
 	struct dma_chan		*dma_chans[DMA_CHANS];
@@ -286,7 +288,7 @@ extern int gpmi_init(struct gpmi_nand_data *);
 extern int gpmi_extra_init(struct gpmi_nand_data *);
 extern void gpmi_clear_bch(struct gpmi_nand_data *);
 extern void gpmi_dump_info(struct gpmi_nand_data *);
-extern int bch_save_geometry(struct gpmi_nand_data *);
+extern int bch_create_debugfs(struct gpmi_nand_data *);
 extern int bch_set_geometry(struct gpmi_nand_data *);
 extern int gpmi_is_ready(struct gpmi_nand_data *, unsigned chip);
 extern int gpmi_send_command(struct gpmi_nand_data *);
@@ -298,6 +300,10 @@ extern int gpmi_send_page(struct gpmi_nand_data *,
 			dma_addr_t payload, dma_addr_t auxiliary);
 extern int gpmi_read_page(struct gpmi_nand_data *,
 			dma_addr_t payload, dma_addr_t auxiliary);
+
+void gpmi_copy_bits(u8 *dst, size_t dst_bit_off,
+		    const u8 *src, size_t src_bit_off,
+		    size_t nbits);
 
 /* BCH : Status Block Completion Codes */
 #define STATUS_GOOD		0x00

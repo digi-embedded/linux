@@ -258,12 +258,10 @@ static int spear13xx_pcie_link_up(struct pcie_port *pp)
 	return 0;
 }
 
-static int spear13xx_pcie_host_init(struct pcie_port *pp)
+static void spear13xx_pcie_host_init(struct pcie_port *pp)
 {
 	spear13xx_pcie_establish_link(pp);
 	spear13xx_pcie_enable_interrupts(pp);
-
-	return 0;
 }
 
 static struct pcie_host_ops spear13xx_pcie_host_ops = {
@@ -271,7 +269,8 @@ static struct pcie_host_ops spear13xx_pcie_host_ops = {
 	.host_init = spear13xx_pcie_host_init,
 };
 
-static int add_pcie_port(struct pcie_port *pp, struct platform_device *pdev)
+static int spear13xx_add_pcie_port(struct pcie_port *pp,
+					 struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	int ret;
@@ -300,7 +299,7 @@ static int add_pcie_port(struct pcie_port *pp, struct platform_device *pdev)
 	return 0;
 }
 
-static int __init spear13xx_pcie_probe(struct platform_device *pdev)
+static int spear13xx_pcie_probe(struct platform_device *pdev)
 {
 	struct spear13xx_pcie *spear13xx_pcie;
 	struct pcie_port *pp;
@@ -310,10 +309,8 @@ static int __init spear13xx_pcie_probe(struct platform_device *pdev)
 	int ret;
 
 	spear13xx_pcie = devm_kzalloc(dev, sizeof(*spear13xx_pcie), GFP_KERNEL);
-	if (!spear13xx_pcie) {
-		dev_err(dev, "no memory for SPEAr13xx pcie\n");
+	if (!spear13xx_pcie)
 		return -ENOMEM;
-	}
 
 	spear13xx_pcie->phy = devm_phy_get(dev, "pcie-phy");
 	if (IS_ERR(spear13xx_pcie->phy)) {
@@ -342,7 +339,7 @@ static int __init spear13xx_pcie_probe(struct platform_device *pdev)
 
 	pp->dev = dev;
 
-	dbi_base = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	dbi_base = platform_get_resource_byname(pdev, IORESOURCE_MEM, "dbi");
 	pp->dbi_base = devm_ioremap_resource(dev, dbi_base);
 	if (IS_ERR(pp->dbi_base)) {
 		dev_err(dev, "couldn't remap dbi base %p\n", dbi_base);
@@ -354,7 +351,7 @@ static int __init spear13xx_pcie_probe(struct platform_device *pdev)
 	if (of_property_read_bool(np, "st,pcie-is-gen1"))
 		spear13xx_pcie->is_gen1 = true;
 
-	ret = add_pcie_port(pp, pdev);
+	ret = spear13xx_add_pcie_port(pp, pdev);
 	if (ret < 0)
 		goto fail_clk;
 
@@ -367,17 +364,6 @@ fail_clk:
 	return ret;
 }
 
-static int __exit spear13xx_pcie_remove(struct platform_device *pdev)
-{
-	struct spear13xx_pcie *spear13xx_pcie = platform_get_drvdata(pdev);
-
-	clk_disable_unprepare(spear13xx_pcie->clk);
-
-	phy_exit(spear13xx_pcie->phy);
-
-	return 0;
-}
-
 static const struct of_device_id spear13xx_pcie_of_match[] = {
 	{ .compatible = "st,spear1340-pcie", },
 	{},
@@ -386,21 +372,19 @@ MODULE_DEVICE_TABLE(of, spear13xx_pcie_of_match);
 
 static struct platform_driver spear13xx_pcie_driver = {
 	.probe		= spear13xx_pcie_probe,
-	.remove		= spear13xx_pcie_remove,
 	.driver = {
 		.name	= "spear-pcie",
-		.owner	= THIS_MODULE,
 		.of_match_table = of_match_ptr(spear13xx_pcie_of_match),
 	},
 };
 
 /* SPEAr13xx PCIe driver does not allow module unload */
 
-static int __init pcie_init(void)
+static int __init spear13xx_pcie_init(void)
 {
 	return platform_driver_register(&spear13xx_pcie_driver);
 }
-module_init(pcie_init);
+module_init(spear13xx_pcie_init);
 
 MODULE_DESCRIPTION("ST Microelectronics SPEAr13xx PCIe host controller driver");
 MODULE_AUTHOR("Pratyush Anand <pratyush.anand@st.com>");

@@ -23,10 +23,6 @@
 #include <linux/platform_device.h>
 #include "common.h"
 #include "hardware.h"
-#include "mcc_config.h"
-#include <linux/imx_sema4.h>
-#include <linux/mcc_imx6sx.h>
-#include <linux/mcc_linux.h>
 
 #define MU_ATR0_OFFSET	0x0
 #define MU_ARR0_OFFSET	0x10
@@ -47,7 +43,6 @@
 #define MU_LPM_M4_WAKEUP_ENABLE_MASK	0xF
 #define MU_LPM_M4_WAKEUP_ENABLE_SHIFT	0x0
 
-#define MU_LPM_M4_A7_READY              0xFFFFAAAA
 #define MU_LPM_M4_RUN_MODE	        0x5A5A0001
 #define MU_LPM_M4_WAIT_MODE	        0x5A5A0002
 #define MU_LPM_M4_STOP_MODE	        0x5A5A0003
@@ -62,19 +57,21 @@ static struct imx_mu_rpmsg_box mu_rpmsg_box = {
 };
 
 static void __iomem *mu_base;
-static u32 mu_int_en;
 static u32 m4_message;
+static struct delayed_work rpmsg_work;
+
+static u32 mu_int_en;
 static struct delayed_work mu_work, rpmsg_work;
 static u32 m4_wake_irqs[4];
 static bool m4_freq_low;
+struct irq_domain *domain;
 static bool m4_in_stop;
 
-struct imx_sema4_mutex *mcc_shm_ptr;
-unsigned int imx_mcc_buffer_freed = 0, imx_mcc_buffer_queued = 0;
-/* Used for blocking send */
-static DECLARE_WAIT_QUEUE_HEAD(buffer_freed_wait_queue);
-/* Used for blocking recv */
-static DECLARE_WAIT_QUEUE_HEAD(buffer_queued_wait_queue);
+
+void imx_mu_set_m4_run_mode(void)
+{
+	m4_in_stop = false;
+}
 
 bool imx_mu_is_m4_in_stop(void)
 {
@@ -96,9 +93,11 @@ void imx_mu_enable_m4_irqs_in_gic(bool enable)
 		for (j = 0; j < 32; j++) {
 			if (m4_wake_irqs[i] & (1 << j)) {
 				if (enable)
-					enable_irq((i + 1) * 32 + j);
+					enable_irq(irq_find_mapping(
+						domain, i * 32 + j));
 				else
-					disable_irq((i + 1) * 32 + j);
+					disable_irq(irq_find_mapping(
+						domain, i * 32 + j));
 			}
 		}
 	}
@@ -107,6 +106,34 @@ void imx_mu_enable_m4_irqs_in_gic(bool enable)
 static irqreturn_t mcc_m4_dummy_isr(int irq, void *param)
 {
 	return IRQ_HANDLED;
+}
+
+int imx_mcc_bsp_int_disable(void)
+{
+	u32 val;
+
+	/* Disablethe bit31(GIE3) and bit19(GIR3) of MU_ACR */
+	mu_int_en = val = readl_relaxed(mu_base + MU_ACR);
+	val &= ~mu_int_en;
+	writel_relaxed(val, mu_base + MU_ACR);
+
+	/* flush */
+	val = readl_relaxed(mu_base + MU_ACR);
+	return 0;
+}
+
+int imx_mcc_bsp_int_enable(void)
+{
+	u32 val;
+
+	/* Enable bit31(GIE3) and bit19(GIR3) of MU_ACR */
+	val = readl_relaxed(mu_base + MU_ACR);
+	val |= mu_int_en;
+	writel_relaxed(val, mu_base + MU_ACR);
+
+	/* flush */
+	val = readl_relaxed(mu_base + MU_ACR);
+	return 0;
 }
 
 static int imx_mu_send_message(unsigned int index, unsigned int data)
@@ -128,8 +155,7 @@ static int imx_mu_send_message(unsigned int index, unsigned int data)
 	writel_relaxed(data, mu_base + index * 0x4 + MU_ATR0_OFFSET);
 
 	/*
-	 * make a double check, and make sure that TEn is not
-	 * empty after write
+	 * make a double check that TEn is not empty after write
 	 */
 	val = readl_relaxed(mu_base + MU_ASR);
 	ep = val & BIT(4);
@@ -139,16 +165,14 @@ static int imx_mu_send_message(unsigned int index, unsigned int data)
 		te_flag = 1;
 
 	/*
-	 * suspect that there is bug here. TEn flag is not
-	 * changed immediately, after the ATRn is filled up.
-	 *
+	 * Make sure that TEn flag is changed, after the ATRn is filled up.
 	 */
 	for (i = 0; i < 100; i++) {
 		val = readl_relaxed(mu_base + MU_ASR);
 		ep = val & BIT(4);
 		if (((val & (1 << (20 + 3 - index))) == 0) || (ep == BIT(4))) {
 			/*
-			 * IC BUG here. TEn flag is changes, after the
+			 * BUG here. TEn flag is changes, after the
 			 * ATRn is filled with MSG for a while.
 			 */
 			te_flag = 0;
@@ -169,7 +193,8 @@ static int imx_mu_send_message(unsigned int index, unsigned int data)
 static void mu_work_handler(struct work_struct *work)
 {
 	int ret;
-	u32 irq, enable, idx, mask;
+	u32 irq, enable, idx, mask, virq;
+	struct of_phandle_args args;
 
 	pr_debug("receive M4 message 0x%x\n", m4_message);
 
@@ -211,18 +236,29 @@ static void mu_work_handler(struct work_struct *work)
 			enable = (m4_message & MU_LPM_M4_WAKEUP_ENABLE_MASK) >>
 				MU_LPM_M4_WAKEUP_ENABLE_SHIFT;
 
-			idx = irq / 32 - 1;
+			/* to hwirq start from 0 */
+			irq -= 32;
+
+			idx = irq / 32;
 			mask = 1 << irq % 32;
 
-			if (enable && can_request_irq(irq, 0)) {
-				ret = request_irq(irq, mcc_m4_dummy_isr,
+			args.np = of_find_compatible_node(NULL, NULL, "fsl,imx6sx-gpc");
+			args.args_count = 3;
+			args.args[0] = 0;
+			args.args[1] = irq;
+			args.args[2] = IRQ_TYPE_LEVEL_HIGH;
+
+			virq = irq_create_of_mapping(&args);
+
+			if (enable && can_request_irq(virq, 0)) {
+				ret = request_irq(virq, mcc_m4_dummy_isr,
 					IRQF_NO_SUSPEND, "imx-m4-dummy", NULL);
 				if (ret) {
 					pr_err("%s: register interrupt %d failed, rc %d\n",
-						__func__, irq, ret);
+						__func__, virq, ret);
 					break;
 				}
-				disable_irq(irq);
+				disable_irq(virq);
 				m4_wake_irqs[idx] = m4_wake_irqs[idx] | mask;
 			}
 			imx_gpc_add_m4_wake_up_irq(irq, enable);
@@ -287,203 +323,11 @@ static void rpmsg_work_handler(struct work_struct *work)
 	m4_message = 0;
 }
 
-/*!
- * \brief This function clears the CPU-to-CPU int flag for the particular core.
- *
- * Implementation is platform-specific.
- */
-void mcc_clear_cpu_to_cpu_interrupt(void)
-{
-	u32 val;
-
-	val = readl_relaxed(mu_base + MU_ASR);
-	/* write 1 to BIT31 to clear the bit31(GIP3) of MU_ASR */
-	val = val | (1 << 31);
-	writel_relaxed(val, mu_base + MU_ASR);
-}
-
-/*!
- * \brief This function triggers the CPU-to-CPU interrupt.
- *
- * Platform-specific software triggering the inter-CPU interrupts.
- */
-int mcc_triger_cpu_to_cpu_interrupt(void)
-{
-	int i = 0;
-	u32 val;
-
-	val = readl_relaxed(mu_base + MU_ACR);
-
-	if ((val & BIT(19)) == 0) {
-		/* Enable the bit19(GIR3) of MU_ACR */
-		val = readl_relaxed(mu_base + MU_ACR);
-		val |= BIT(19);
-		writel_relaxed(val, mu_base + MU_ACR);
-
-		/* wait for the EP bit of the SR is cleared */
-		do {
-			val = readl_relaxed(mu_base + MU_ASR);
-			udelay(10);
-		} while (((val & BIT(4)) > 0) && (i++ < 100));
-
-		if (i >= 100)
-			pr_info("The Processor A event is still pending.\n");
-	}
-
-	return 0;
-}
-
-/*!
- * \brief This function disable the CPU-to-CPU interrupt.
- *
- * Platform-specific software disable the inter-CPU interrupts.
- */
-int imx_mcc_bsp_int_disable(void)
-{
-	u32 val;
-
-	/* Disablethe bit31(GIE3) and bit19(GIR3) of MU_ACR */
-	mu_int_en = val = readl_relaxed(mu_base + MU_ACR);
-	val &= ~mu_int_en;
-	writel_relaxed(val, mu_base + MU_ACR);
-
-	/* flush */
-	val = readl_relaxed(mu_base + MU_ACR);
-	return 0;
-}
-
-/*!
- * \brief This function enable the CPU-to-CPU interrupt.
- *
- * Platform-specific software enable the inter-CPU interrupts.
- */
-int imx_mcc_bsp_int_enable(void)
-{
-	u32 val;
-
-	/* Enable bit31(GIE3) and bit19(GIR3) of MU_ACR */
-	val = readl_relaxed(mu_base + MU_ACR);
-	val |= mu_int_en;
-	writel_relaxed(val, mu_base + MU_ACR);
-
-	/* flush */
-	val = readl_relaxed(mu_base + MU_ACR);
-	return 0;
-}
-
-#ifdef CONFIG_HAVE_IMX_MCC
-int mcc_wait_for_buffer_freed(MCC_RECEIVE_BUFFER **buffer, unsigned int timeout)
-{
-    int return_value;
-    unsigned long timeout_j; /* jiffies */
-    MCC_RECEIVE_BUFFER *buf = null;
-
-	/*
-	 * Blocking calls: CPU-to-CPU ISR sets the event and thus
-	 * resumes tasks waiting for a free MCC buffer.
-	 * As the interrupt request is send to all cores when a buffer
-	 * is freed it could happen that several tasks from different
-	 * cores/nodes are waiting for a free buffer and all of them
-	 * are notified that the buffer has been freed. This function
-	 * has to check (after the wake up) that a buffer is really
-	 * available and has not been already grabbed by another
-	 * "competitor task" that has been faster. If so, it has to
-	 * wait again for the next notification.
-	 */
-	while (buf == null) {
-		if (timeout == 0xffffffff) {
-			/*
-			 * In order to level up the robust, do not always
-			 * wait event here. Wake up itself after every 1~s.
-			 */
-			timeout_j = usecs_to_jiffies(1000);
-			wait_event_timeout(buffer_freed_wait_queue,
-					imx_mcc_buffer_freed == 1, timeout_j);
-		} else {
-			timeout_j = msecs_to_jiffies(timeout);
-			wait_event_timeout(buffer_freed_wait_queue,
-					imx_mcc_buffer_freed == 1, timeout_j);
-		}
-
-		return_value = mcc_get_semaphore();
-		if (return_value != MCC_SUCCESS)
-			return return_value;
-
-		MCC_DCACHE_INVALIDATE_MLINES((void *)
-				&bookeeping_data->free_list,
-				sizeof(MCC_RECEIVE_LIST *));
-
-		buf = mcc_dequeue_buffer(&bookeeping_data->free_list);
-		mcc_release_semaphore();
-		if (imx_mcc_buffer_freed)
-			imx_mcc_buffer_freed = 0;
-	}
-
-	*buffer = buf;
-	return MCC_SUCCESS;
-}
-
-int mcc_wait_for_buffer_queued(MCC_ENDPOINT *endpoint, unsigned int timeout)
-{
-	unsigned long timeout_j; /* jiffies */
-	MCC_RECEIVE_LIST *tmp_list;
-
-	/* Get list of buffers kept by the particular endpoint */
-	tmp_list = mcc_get_endpoint_list(*endpoint);
-
-	if (timeout == 0xffffffff) {
-		wait_event(buffer_queued_wait_queue,
-				imx_mcc_buffer_queued == 1);
-		mcc_get_semaphore();
-		/*
-		* double check if the tmp_list head is still null
-		* or not, if yes, wait again.
-		*/
-		while (tmp_list->head == null) {
-			imx_mcc_buffer_queued = 0;
-			mcc_release_semaphore();
-			wait_event(buffer_queued_wait_queue,
-					imx_mcc_buffer_queued == 1);
-			mcc_get_semaphore();
-		}
-	} else {
-		timeout_j = msecs_to_jiffies(timeout);
-		wait_event_timeout(buffer_queued_wait_queue,
-				imx_mcc_buffer_queued == 1, timeout_j);
-		mcc_get_semaphore();
-	}
-
-	if (imx_mcc_buffer_queued)
-		imx_mcc_buffer_queued = 0;
-
-	if (tmp_list->head == null) {
-		pr_err("%s can't get queued buffer.\n", __func__);
-		mcc_release_semaphore();
-		return MCC_ERR_TIMEOUT;
-	}
-
-	tmp_list->head = (MCC_RECEIVE_BUFFER *)
-		MCC_MEM_PHYS_TO_VIRT(tmp_list->head);
-	mcc_release_semaphore();
-
-	return MCC_SUCCESS;
-}
-#endif
-
 static irqreturn_t imx_mu_isr(int irq, void *param)
 {
 	u32 irqs;
 
 	irqs = readl_relaxed(mu_base + MU_ASR);
-
-	if (irqs & (1 << 27)) {
-		/* get message from receive buffer */
-		m4_message = readl_relaxed(mu_base + MU_ARR0_OFFSET);
-		/* disable RIE3 interrupt */
-		writel_relaxed(readl_relaxed(mu_base + MU_ACR) & (~BIT(27)),
-			mu_base + MU_ACR);
-		schedule_delayed_work(&mu_work, 0);
-	}
 
 	/* RPMSG */
 	if (irqs & (1 << 26)) {
@@ -492,67 +336,13 @@ static irqreturn_t imx_mu_isr(int irq, void *param)
 		schedule_delayed_work(&rpmsg_work, 0);
 	}
 
-	/*
-	 * MCC CPU-to-CPU interrupt.
-	 * Each core can interrupt the other. There are two logical signals:
-	 * - Receive data available for (Node,Port)
-	 * - signaled when a buffer is queued to a Receive Data Queue.
-	 * - Buffer available
-	 * - signaled when a buffer is queued to the Free Buffer Queue.
-	 * It is possible that several signals can occur while one interrupt
-	 * is being processed.
-	 * Therefore, a Receive Signal Queue of received signals is also
-	 * required
-	 * - one for each core.
-	 * The interrupting core queues to the tail and the interrupted core
-	 * pulls from the head.
-	 * For a circular file, no semaphore is required since only the sender
-	 * modifies the tail and only the receiver modifies the head.
-	 */
-	if (irqs & (1 << 31)) {
-		/*
-		 * Try to lock the core mutex. If successfully locked, perform
-		 * mcc_dequeue_signal(), release the gate and finally clear the
-		 * interrupt flag. If trylock fails (HW semaphore already locked
-		 * by another core), do not clear the interrupt flag  this
-		 * way the CPU-to-CPU isr is re-issued again until the HW
-		 * semaphore is locked. Higher priority ISRs will be serviced
-		 * while issued at the time we are waiting for the unlocked
-		 * gate. To prevent trylog failure due to core mutex currently
-		 * locked by our own core(a task), the cpu-to-cpu isr is
-		 * temporarily disabled when mcc_get_semaphore() is called and
-		 * re-enabled again when mcc_release_semaphore() is issued.
-		 */
-		MCC_SIGNAL serviced_signal;
-		if (SEMA4_A9_LOCK == imx_sema4_mutex_trylock(mcc_shm_ptr)) {
-			while (MCC_SUCCESS == mcc_dequeue_signal(
-				MCC_CORE_NUMBER, &serviced_signal)) {
-				if ((serviced_signal.type == BUFFER_QUEUED) &&
-					(serviced_signal.destination.core ==
-					MCC_CORE_NUMBER)) {
-					/*
-					 * Unblock receiver, in case of
-					 * asynchronous communication
-					 */
-					imx_mcc_buffer_queued = 1;
-					wake_up(&buffer_queued_wait_queue);
-				} else if (serviced_signal.type ==
-					BUFFER_FREED) {
-					/*
-					 * Unblock sender, in case of
-					 * asynchronous communication
-					 */
-					imx_mcc_buffer_freed = 1;
-					wake_up(&buffer_freed_wait_queue);
-				}
-			}
-
-			/* Clear the interrupt flag */
-			mcc_clear_cpu_to_cpu_interrupt();
-
-			/* Unlocks the core mutex */
-			imx_sema4_mutex_unlock(mcc_shm_ptr);
-		}
+	if (irqs & (1 << 27)) {
+		/* get message from receive buffer */
+		m4_message = readl_relaxed(mu_base + MU_ARR0_OFFSET);
+		/* disable RIE3 interrupt */
+		writel_relaxed(readl_relaxed(mu_base + MU_ACR) & (~BIT(27)),
+			mu_base + MU_ACR);
+		schedule_delayed_work(&mu_work, 0);
 	}
 
 	return IRQ_HANDLED;
@@ -570,7 +360,6 @@ static int imx_mu_probe(struct platform_device *pdev)
 	WARN_ON(!mu_base);
 
 	irq = platform_get_irq(pdev, 0);
-
 	ret = request_irq(irq, imx_mu_isr,
 		IRQF_EARLY_RESUME, "imx-mu", &mu_rpmsg_box);
 	if (ret) {
@@ -595,12 +384,7 @@ static int imx_mu_probe(struct platform_device *pdev)
 			}
 		}
 
-		/* Up to now, mu only used for mcc on imx7d */
-		/* enable the bit31(GIE3) of MU_ACR, used for MCC */
-		writel_relaxed(readl_relaxed(mu_base + MU_ACR) | BIT(31),
-			mu_base + MU_ACR);
 		INIT_DELAYED_WORK(&mu_work, mu_work_handler);
-		INIT_DELAYED_WORK(&rpmsg_work, rpmsg_work_handler);
 		/* enable the bit26(RIE1) of MU_ACR */
 		writel_relaxed(readl_relaxed(mu_base + MU_ACR) |
 			BIT(26) | BIT(27), mu_base + MU_ACR);
@@ -616,7 +400,7 @@ static int imx_mu_probe(struct platform_device *pdev)
 			mu_base + MU_ACR);
 
 		/* MU always as a wakeup source for low power mode */
-		imx_gpc_add_m4_wake_up_irq(irq, true);
+		imx_gpc_add_m4_wake_up_irq(irq_to_desc(irq)->irq_data.hwirq, true);
 	}
 
 	INIT_DELAYED_WORK(&rpmsg_work, rpmsg_work_handler);
@@ -645,8 +429,8 @@ static struct platform_driver imx_mu_driver = {
 	.probe = imx_mu_probe,
 };
 
-static int __init imx6_mu_init(void)
+static int __init imx_mu_init(void)
 {
 	return platform_driver_register(&imx_mu_driver);
 }
-subsys_initcall(imx6_mu_init);
+subsys_initcall(imx_mu_init);

@@ -16,11 +16,6 @@
 	};
 };
 
-&iomuxc {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_hog>;
-};
-
 /*
  * The flollowing modules are conflicting with M4, disable them when m4
  * is running.
@@ -42,15 +37,11 @@
 };
 
 &i2c3 {
-        status = "disabled";
+	status = "disabled";
 };
 
-&mcctest{
-	status = "okay";
-};
-
-&mcctty{
-	status = "okay";
+&ocram {
+	reg = <0x00901000 0x1E000>;
 };
 
 &ocram {
@@ -90,7 +81,7 @@
 			IMX6SX_CLK_QSPI2 IMX6SX_CLK_SSI1
 			IMX6SX_CLK_SSI2 IMX6SX_CLK_SSI3
 			IMX6SX_CLK_UART_SERIAL IMX6SX_CLK_UART_IPG
-			IMX6SX_CLK_PERIPH_CLK2_SEL IMX6SX_CLK_OCRAM_ALT_SEL
+			IMX6SX_CLK_PERIPH_CLK2_SEL IMX6SX_CLK_DUMMY
 			IMX6SX_CLK_I2C1 IMX6SX_CLK_I2C2
 			IMX6SX_CLK_I2C3 IMX6SX_CLK_I2C4
 			IMX6SX_CLK_EPIT1 IMX6SX_CLK_EPIT2>;

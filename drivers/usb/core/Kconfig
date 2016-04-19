@@ -1,16 +1,8 @@
 #
 # USB Core configuration
 #
-config USB_DEBUG
-	bool "USB verbose debug messages"
-	help
-	  Say Y here if you want the USB core & hub drivers to produce a bunch
-	  of debug messages to the system log. Select this if you are having a
-	  problem with USB support and want to see more of what is going on.
-
 config USB_ANNOUNCE_NEW_DEVICES
 	bool "USB announce new devices"
-	default N
 	help
 	  Say Y here if you want the USB core to always announce the
 	  idVendor, idProduct, Manufacturer, Product, and SerialNumber
@@ -51,7 +43,7 @@ config USB_DYNAMIC_MINORS
 
 config USB_OTG
 	bool "OTG support"
-	depends on PM_RUNTIME
+	depends on PM
 	default n
 	help
 	  The most notable feature of USB OTG is support for a

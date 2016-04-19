@@ -11,15 +11,12 @@
 #include <linux/errno.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
-#include <linux/gpio.h>
+#include <linux/gpio/consumer.h>
 #include <linux/input.h>
 #include <linux/slab.h>
 #include <linux/completion.h>
 #include <linux/delay.h>
 #include <linux/of.h>
-#include <linux/of_device.h>
-#include <linux/of_gpio.h>
-#include <linux/of_irq.h>
 #include <linux/interrupt.h>
 #include <linux/platform_device.h>
 #include <linux/clk.h>
@@ -85,11 +82,8 @@ struct imx6ul_tsc {
 	void __iomem *adc_regs;
 	struct clk *tsc_clk;
 	struct clk *adc_clk;
+	struct gpio_desc *xnur_gpio;
 
-	int tsc_irq;
-	int adc_irq;
-	int value;
-	int xnur_gpio;
 	int measure_delay_time;
 	int pre_charge_time;
 
@@ -107,6 +101,8 @@ static void imx6ul_adc_init(struct imx6ul_tsc *tsc)
 	int adc_gs;
 	int adc_cfg;
 	int timeout;
+
+	reinit_completion(&tsc->completion);
 
 	adc_cfg = readl(tsc->adc_regs + REG_ADC_CFG);
 	adc_cfg |= ADC_12BIT_MODE | ADC_IPG_CLK;
@@ -199,16 +195,49 @@ static void imx6ul_tsc_init(struct imx6ul_tsc *tsc)
 	imx6ul_tsc_set(tsc);
 }
 
-static irqreturn_t tsc_irq(int irq, void *dev_id)
+static void imx6ul_tsc_disable(struct imx6ul_tsc *tsc)
 {
-	struct imx6ul_tsc *tsc = (struct imx6ul_tsc *)dev_id;
-	int status;
-	int x, y;
-	int xnur;
-	int debug_mode2;
+	int tsc_flow;
+	int adc_cfg;
+
+	/* TSC controller enters to idle status */
+	tsc_flow = readl(tsc->tsc_regs + REG_TSC_FLOW_CONTROL);
+	tsc_flow |= TSC_DISABLE;
+	writel(tsc_flow, tsc->tsc_regs + REG_TSC_FLOW_CONTROL);
+
+	/* ADC controller enters to stop mode */
+	adc_cfg = readl(tsc->adc_regs + REG_ADC_HC0);
+	adc_cfg |= ADC_CONV_DISABLE;
+	writel(adc_cfg, tsc->adc_regs + REG_ADC_HC0);
+}
+
+/* Delay some time (max 2ms), wait the pre-charge done. */
+static bool tsc_wait_detect_mode(struct imx6ul_tsc *tsc)
+{
+	unsigned long timeout = jiffies + msecs_to_jiffies(2);
 	int state_machine;
+	int debug_mode2;
+
+	do {
+		if (time_after(jiffies, timeout))
+			return false;
+
+		usleep_range(200, 400);
+		debug_mode2 = readl(tsc->tsc_regs + REG_TSC_DEBUG_MODE2);
+		state_machine = (debug_mode2 >> 20) & 0x7;
+	} while (state_machine != DETECT_MODE);
+
+	usleep_range(200, 400);
+	return true;
+}
+
+static irqreturn_t tsc_irq_fn(int irq, void *dev_id)
+{
+	struct imx6ul_tsc *tsc = dev_id;
+	int status;
+	int value;
+	int x, y;
 	int start;
-	unsigned long timeout;
 
 	status = readl(tsc->tsc_regs + REG_TSC_INT_STATUS);
 
@@ -222,38 +251,22 @@ static irqreturn_t tsc_irq(int irq, void *dev_id)
 	writel(start, tsc->tsc_regs + REG_TSC_FLOW_CONTROL);
 
 	if (status & MEASURE_SIGNAL) {
-		tsc->value = readl(tsc->tsc_regs + REG_TSC_MEASURE_VALUE);
-		x = (tsc->value >> 16) & 0x0fff;
-		y = tsc->value & 0x0fff;
+		value = readl(tsc->tsc_regs + REG_TSC_MEASURE_VALUE);
+		x = (value >> 16) & 0x0fff;
+		y = value & 0x0fff;
 
 		/*
-		 * Delay some time(max 2ms), wait the pre-charge done.
-		 * After the pre-change mode, TSC go into detect mode.
-		 * And in detect mode, we can get the xnur gpio value.
-		 * If xnur is low, this means the touch screen still
-		 * be touched. If xnur is high, this means finger leave
-		 * the touch screen.
+		 * In detect mode, we can get the xnur gpio value,
+		 * otherwise assume contact is stiull active.
 		 */
-		timeout = jiffies + HZ/500;
-		do {
-			if (time_after(jiffies, timeout)) {
-				xnur = 0;
-				goto touch_event;
-			}
-			usleep_range(200, 400);
-			debug_mode2 = readl(tsc->tsc_regs + REG_TSC_DEBUG_MODE2);
-			state_machine = (debug_mode2 >> 20) & 0x7;
-		} while (state_machine != DETECT_MODE);
-		usleep_range(200, 400);
-
-		xnur = gpio_get_value(tsc->xnur_gpio);
-touch_event:
-		if (xnur == 0) {
+		if (!tsc_wait_detect_mode(tsc) ||
+		    gpiod_get_value_cansleep(tsc->xnur_gpio)) {
 			input_report_key(tsc->input, BTN_TOUCH, 1);
 			input_report_abs(tsc->input, ABS_X, x);
 			input_report_abs(tsc->input, ABS_Y, y);
-		} else
+		} else {
 			input_report_key(tsc->input, BTN_TOUCH, 0);
+		}
 
 		input_sync(tsc->input);
 	}
@@ -261,9 +274,9 @@ touch_event:
 	return IRQ_HANDLED;
 }
 
-static irqreturn_t adc_irq(int irq, void *dev_id)
+static irqreturn_t adc_irq_fn(int irq, void *dev_id)
 {
-	struct imx6ul_tsc *tsc = (struct imx6ul_tsc *)dev_id;
+	struct imx6ul_tsc *tsc = dev_id;
 	int coco;
 	int value;
 
@@ -276,232 +289,232 @@ static irqreturn_t adc_irq(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
+static int imx6ul_tsc_open(struct input_dev *input_dev)
+{
+	struct imx6ul_tsc *tsc = input_get_drvdata(input_dev);
+	int err;
+
+	err = clk_prepare_enable(tsc->adc_clk);
+	if (err) {
+		dev_err(tsc->dev,
+			"Could not prepare or enable the adc clock: %d\n",
+			err);
+		return err;
+	}
+
+	err = clk_prepare_enable(tsc->tsc_clk);
+	if (err) {
+		dev_err(tsc->dev,
+			"Could not prepare or enable the tsc clock: %d\n",
+			err);
+		clk_disable_unprepare(tsc->adc_clk);
+		return err;
+	}
+
+	imx6ul_tsc_init(tsc);
+
+	return 0;
+}
+
+static void imx6ul_tsc_close(struct input_dev *input_dev)
+{
+	struct imx6ul_tsc *tsc = input_get_drvdata(input_dev);
+
+	imx6ul_tsc_disable(tsc);
+
+	clk_disable_unprepare(tsc->tsc_clk);
+	clk_disable_unprepare(tsc->adc_clk);
+}
+
+static int imx6ul_tsc_probe(struct platform_device *pdev)
+{
+	struct device_node *np = pdev->dev.of_node;
+	struct imx6ul_tsc *tsc;
+	struct input_dev *input_dev;
+	struct resource *tsc_mem;
+	struct resource *adc_mem;
+	int err;
+	int tsc_irq;
+	int adc_irq;
+
+	tsc = devm_kzalloc(&pdev->dev, sizeof(struct imx6ul_tsc), GFP_KERNEL);
+	if (!tsc)
+		return -ENOMEM;
+
+	input_dev = devm_input_allocate_device(&pdev->dev);
+	if (!input_dev)
+		return -ENOMEM;
+
+	input_dev->name = "iMX6UL TouchScreen Controller";
+	input_dev->id.bustype = BUS_HOST;
+
+	input_dev->open = imx6ul_tsc_open;
+	input_dev->close = imx6ul_tsc_close;
+
+	input_set_capability(input_dev, EV_KEY, BTN_TOUCH);
+	input_set_abs_params(input_dev, ABS_X, 0, 0xFFF, 0, 0);
+	input_set_abs_params(input_dev, ABS_Y, 0, 0xFFF, 0, 0);
+
+	input_set_drvdata(input_dev, tsc);
+
+	tsc->dev = &pdev->dev;
+	tsc->input = input_dev;
+	init_completion(&tsc->completion);
+
+	tsc->xnur_gpio = devm_gpiod_get(&pdev->dev, "xnur", GPIOD_IN);
+	if (IS_ERR(tsc->xnur_gpio)) {
+		err = PTR_ERR(tsc->xnur_gpio);
+		dev_err(&pdev->dev,
+			"failed to request GPIO tsc_X- (xnur): %d\n", err);
+		return err;
+	}
+
+	tsc_mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	tsc->tsc_regs = devm_ioremap_resource(&pdev->dev, tsc_mem);
+	if (IS_ERR(tsc->tsc_regs)) {
+		err = PTR_ERR(tsc->tsc_regs);
+		dev_err(&pdev->dev, "failed to remap tsc memory: %d\n", err);
+		return err;
+	}
+
+	adc_mem = platform_get_resource(pdev, IORESOURCE_MEM, 1);
+	tsc->adc_regs = devm_ioremap_resource(&pdev->dev, adc_mem);
+	if (IS_ERR(tsc->adc_regs)) {
+		err = PTR_ERR(tsc->adc_regs);
+		dev_err(&pdev->dev, "failed to remap adc memory: %d\n", err);
+		return err;
+	}
+
+	tsc->tsc_clk = devm_clk_get(&pdev->dev, "tsc");
+	if (IS_ERR(tsc->tsc_clk)) {
+		err = PTR_ERR(tsc->tsc_clk);
+		dev_err(&pdev->dev, "failed getting tsc clock: %d\n", err);
+		return err;
+	}
+
+	tsc->adc_clk = devm_clk_get(&pdev->dev, "adc");
+	if (IS_ERR(tsc->adc_clk)) {
+		err = PTR_ERR(tsc->adc_clk);
+		dev_err(&pdev->dev, "failed getting adc clock: %d\n", err);
+		return err;
+	}
+
+	tsc_irq = platform_get_irq(pdev, 0);
+	if (tsc_irq < 0) {
+		dev_err(&pdev->dev, "no tsc irq resource?\n");
+		return tsc_irq;
+	}
+
+	adc_irq = platform_get_irq(pdev, 1);
+	if (adc_irq <= 0) {
+		dev_err(&pdev->dev, "no adc irq resource?\n");
+		return adc_irq;
+	}
+
+	err = devm_request_threaded_irq(tsc->dev, tsc_irq,
+					NULL, tsc_irq_fn, IRQF_ONESHOT,
+					dev_name(&pdev->dev), tsc);
+	if (err) {
+		dev_err(&pdev->dev,
+			"failed requesting tsc irq %d: %d\n",
+			tsc_irq, err);
+		return err;
+	}
+
+	err = devm_request_irq(tsc->dev, adc_irq, adc_irq_fn, 0,
+				dev_name(&pdev->dev), tsc);
+	if (err) {
+		dev_err(&pdev->dev,
+			"failed requesting adc irq %d: %d\n",
+			adc_irq, err);
+		return err;
+	}
+
+	err = of_property_read_u32(np, "measure-delay-time",
+				   &tsc->measure_delay_time);
+	if (err)
+		tsc->measure_delay_time = 0xffff;
+
+	err = of_property_read_u32(np, "pre-charge-time",
+				   &tsc->pre_charge_time);
+	if (err)
+		tsc->pre_charge_time = 0xfff;
+
+	err = input_register_device(tsc->input);
+	if (err) {
+		dev_err(&pdev->dev,
+			"failed to register input device: %d\n", err);
+		return err;
+	}
+
+	platform_set_drvdata(pdev, tsc);
+	return 0;
+}
+
+static int __maybe_unused imx6ul_tsc_suspend(struct device *dev)
+{
+	struct platform_device *pdev = to_platform_device(dev);
+	struct imx6ul_tsc *tsc = platform_get_drvdata(pdev);
+	struct input_dev *input_dev = tsc->input;
+
+	mutex_lock(&input_dev->mutex);
+
+	if (input_dev->users) {
+		imx6ul_tsc_disable(tsc);
+
+		clk_disable_unprepare(tsc->tsc_clk);
+		clk_disable_unprepare(tsc->adc_clk);
+	}
+
+	mutex_unlock(&input_dev->mutex);
+
+	return 0;
+}
+
+static int __maybe_unused imx6ul_tsc_resume(struct device *dev)
+{
+	struct platform_device *pdev = to_platform_device(dev);
+	struct imx6ul_tsc *tsc = platform_get_drvdata(pdev);
+	struct input_dev *input_dev = tsc->input;
+	int retval = 0;
+
+	mutex_lock(&input_dev->mutex);
+
+	if (input_dev->users) {
+		retval = clk_prepare_enable(tsc->adc_clk);
+		if (retval)
+			goto out;
+
+		retval = clk_prepare_enable(tsc->tsc_clk);
+		if (retval) {
+			clk_disable_unprepare(tsc->adc_clk);
+			goto out;
+		}
+
+		imx6ul_tsc_init(tsc);
+	}
+
+out:
+	mutex_unlock(&input_dev->mutex);
+	return retval;
+}
+
+static SIMPLE_DEV_PM_OPS(imx6ul_tsc_pm_ops,
+			 imx6ul_tsc_suspend, imx6ul_tsc_resume);
+
 static const struct of_device_id imx6ul_tsc_match[] = {
 	{ .compatible = "fsl,imx6ul-tsc", },
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, imx6ul_tsc_match);
 
-static int imx6ul_tsc_probe(struct platform_device *pdev)
-{
-	struct imx6ul_tsc *tsc;
-	struct resource *tsc_mem;
-	struct resource *adc_mem;
-	struct input_dev *input_dev;
-	struct device_node *np = pdev->dev.of_node;
-	int err;
-
-	tsc = kzalloc(sizeof(struct imx6ul_tsc), GFP_KERNEL);
-	if (!tsc) {
-		err = -ENOMEM;
-		goto err_free_mem_tsc;
-	}
-
-	input_dev = input_allocate_device();
-	if (!input_dev) {
-		err = -ENOMEM;
-		goto err_free_mem;
-	}
-
-	tsc->dev = &pdev->dev;
-
-	tsc->input = input_dev;
-	tsc->input->evbit[0] = BIT_MASK(EV_KEY) | BIT_MASK(EV_ABS);
-	tsc->input->keybit[BIT_WORD(BTN_TOUCH)] = BIT_MASK(BTN_TOUCH);
-	input_set_abs_params(tsc->input, ABS_X, 0, 0xFFF, 0, 0);
-	input_set_abs_params(tsc->input, ABS_Y, 0, 0xFFF, 0, 0);
-
-	tsc->input->name = "iMX6UL TouchScreen Controller";
-
-	tsc->xnur_gpio = of_get_named_gpio(np, "xnur-gpio", 0);
-	err = gpio_request_one(tsc->xnur_gpio, GPIOF_IN, "tsc_X-");
-	if (err) {
-		dev_err(&pdev->dev, "failed to request GPIO tsc_X-\n");
-		goto err_free_mem;
-	}
-
-	tsc_mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	tsc->tsc_regs = devm_ioremap_resource(&pdev->dev, tsc_mem);
-	if (IS_ERR(tsc->tsc_regs)) {
-		dev_err(&pdev->dev, "failed to remap tsc memory\n");
-		err = PTR_ERR(tsc->tsc_regs);
-		goto err_free_mem;
-	}
-
-	adc_mem = platform_get_resource(pdev, IORESOURCE_MEM, 1);
-	tsc->adc_regs = devm_ioremap_resource(&pdev->dev, adc_mem);
-	if (IS_ERR(tsc->adc_regs)) {
-		dev_err(&pdev->dev, "failed to remap adc memory\n");
-		err = PTR_ERR(tsc->adc_regs);
-		goto err_free_mem;
-	}
-
-	tsc->tsc_clk = devm_clk_get(&pdev->dev, "tsc");
-	if (IS_ERR(tsc->tsc_clk)) {
-		dev_err(&pdev->dev, "failed getting tsc clock\n");
-		err = PTR_ERR(tsc->tsc_clk);
-		goto err_free_mem;
-	}
-
-	tsc->adc_clk = devm_clk_get(&pdev->dev, "adc");
-	if (IS_ERR(tsc->adc_clk)) {
-		dev_err(&pdev->dev, "failed getting adc clock\n");
-		err = PTR_ERR(tsc->adc_clk);
-		goto err_free_mem;
-	}
-
-	tsc->tsc_irq = platform_get_irq(pdev, 0);
-	if (tsc->tsc_irq <= 0) {
-		dev_err(&pdev->dev, "no tsc irq resource?\n");
-		err = -EINVAL;
-		goto err_free_mem;
-	}
-
-	tsc->adc_irq = platform_get_irq(pdev, 1);
-	if (tsc->adc_irq <= 0) {
-		dev_err(&pdev->dev, "no adc irq resource?\n");
-		err = -EINVAL;
-		goto err_free_mem;
-	}
-
-	err = devm_request_threaded_irq(tsc->dev, tsc->tsc_irq,
-					NULL, tsc_irq,
-					IRQF_TRIGGER_HIGH | IRQF_ONESHOT,
-					dev_name(&pdev->dev), tsc);
-	if (err < 0) {
-		dev_err(&pdev->dev,
-			"failed requesting tsc irq %d\n",
-					    tsc->tsc_irq);
-		goto err_free_mem;
-	}
-
-	err = devm_request_irq(tsc->dev, tsc->adc_irq,
-				adc_irq, 0,
-				dev_name(&pdev->dev), tsc);
-	if (err < 0) {
-		dev_err(&pdev->dev,
-			"failed requesting adc irq %d\n",
-					    tsc->adc_irq);
-		goto err_free_mem;
-	}
-
-	err = of_property_read_u32(np, "measure_delay_time",
-				&tsc->measure_delay_time);
-	if (err)
-		tsc->measure_delay_time = 0xffff;
-
-	err = of_property_read_u32(np, "pre_charge_time",
-				&tsc->pre_charge_time);
-	if (err)
-		tsc->pre_charge_time = 0xfff;
-
-	init_completion(&tsc->completion);
-
-	err = clk_prepare_enable(tsc->adc_clk);
-	if (err) {
-		dev_err(&pdev->dev,
-			"Could not prepare or enable the adc clock.\n");
-		goto err_free_mem;
-	}
-
-	err = clk_prepare_enable(tsc->tsc_clk);
-	if (err) {
-		dev_err(&pdev->dev,
-			"Could not prepare or enable the tsc clock.\n");
-		goto error_tsc_clk_enable;
-	}
-
-	err = input_register_device(tsc->input);
-	if (err < 0) {
-		dev_err(&pdev->dev, "failed to register input device\n");
-		err = -EIO;
-		goto err_input_register;
-	}
-
-	imx6ul_tsc_init(tsc);
-
-	platform_set_drvdata(pdev, tsc);
-	return 0;
-
-err_input_register:
-	clk_disable_unprepare(tsc->tsc_clk);
-error_tsc_clk_enable:
-	clk_disable_unprepare(tsc->adc_clk);
-err_free_mem:
-	input_free_device(tsc->input);
-err_free_mem_tsc:
-	kfree(tsc);
-	return err;
-}
-
-static int imx6ul_tsc_remove(struct platform_device *pdev)
-{
-	struct imx6ul_tsc *tsc = platform_get_drvdata(pdev);
-
-	clk_disable_unprepare(tsc->tsc_clk);
-	clk_disable_unprepare(tsc->adc_clk);
-	input_unregister_device(tsc->input);
-	kfree(tsc);
-
-	return 0;
-}
-
-#ifdef CONFIG_PM_SLEEP
-static int imx6ul_tsc_suspend(struct device *dev)
-{
-	struct platform_device *pdev = to_platform_device(dev);
-	struct imx6ul_tsc *tsc = platform_get_drvdata(pdev);
-	int tsc_flow;
-	int adc_cfg;
-
-	/* TSC controller enters to idle status */
-	tsc_flow = readl(tsc->tsc_regs + REG_TSC_FLOW_CONTROL);
-	tsc_flow |= TSC_DISABLE;
-	writel(tsc_flow, tsc->tsc_regs + REG_TSC_FLOW_CONTROL);
-
-	/* ADC controller enters to stop mode */
-	adc_cfg = readl(tsc->adc_regs + REG_ADC_HC0);
-	adc_cfg |= ADC_CONV_DISABLE;
-	writel(adc_cfg, tsc->adc_regs + REG_ADC_HC0);
-
-	clk_disable_unprepare(tsc->tsc_clk);
-	clk_disable_unprepare(tsc->adc_clk);
-
-	return 0;
-}
-
-static int imx6ul_tsc_resume(struct device *dev)
-{
-	struct platform_device *pdev = to_platform_device(dev);
-	struct imx6ul_tsc *tsc = platform_get_drvdata(pdev);
-	int err;
-
-	err = clk_prepare_enable(tsc->adc_clk);
-	if (err)
-		return err;
-
-	err = clk_prepare_enable(tsc->tsc_clk);
-	if (err)
-		return err;
-
-	imx6ul_tsc_init(tsc);
-	return 0;
-}
-#endif
-
-static SIMPLE_DEV_PM_OPS(imx6ul_tsc_pm_ops,
-			 imx6ul_tsc_suspend,
-			 imx6ul_tsc_resume);
-
 static struct platform_driver imx6ul_tsc_driver = {
 	.driver		= {
 		.name	= "imx6ul-tsc",
-		.owner	= THIS_MODULE,
 		.of_match_table	= imx6ul_tsc_match,
 		.pm	= &imx6ul_tsc_pm_ops,
 	},
 	.probe		= imx6ul_tsc_probe,
-	.remove		= imx6ul_tsc_remove,
 };
 module_platform_driver(imx6ul_tsc_driver);
 

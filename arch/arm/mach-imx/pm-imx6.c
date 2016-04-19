@@ -14,12 +14,6 @@
 #include <linux/init.h>
 #include <linux/io.h>
 #include <linux/irq.h>
-#include <linux/of.h>
-#include <linux/of_address.h>
-#include <linux/of_device.h>
-#include <linux/of_fdt.h>
-#include <linux/of_irq.h>
-#include <linux/suspend.h>
 #include <linux/genalloc.h>
 #include <linux/mfd/syscon.h>
 #include <linux/mfd/syscon/imx6q-iomuxc-gpr.h>
@@ -28,6 +22,7 @@
 #include <linux/of_fdt.h>
 #include <linux/of_platform.h>
 #include <linux/regmap.h>
+#include <linux/slab.h>
 #include <linux/suspend.h>
 #include <asm/cacheflush.h>
 #include <asm/fncpy.h>
@@ -73,13 +68,13 @@
 #define CCGR6				0x80
 
 #define MX6Q_SUSPEND_OCRAM_SIZE		0x1000
-#define MX6_MAX_MMDC_IO_NUM		33
+#define MX6_MAX_MMDC_IO_NUM		36
 #define MX6_MAX_MMDC_NUM		36
 
-#define ROMC_ROMPATCH0D		0xf0
+#define ROMC_ROMPATCH0D			0xf0
 #define ROMC_ROMPATCHCNTL		0xf4
 #define ROMC_ROMPATCHENL		0xfc
-#define ROMC_ROMPATCH0A		0x100
+#define ROMC_ROMPATCH0A			0x100
 #define BM_ROMPATCHCNTL_0D		(0x1 << 0)
 #define BM_ROMPATCHCNTL_DIS		(0x1 << 29)
 #define BM_ROMPATCHENL_0D		(0x1 << 0)
@@ -96,6 +91,9 @@
 #define UART_UBMR	0xa8
 #define UART_UBRC	0xac
 #define UART_UTS	0xb4
+
+extern unsigned long iram_tlb_base_addr;
+extern unsigned long iram_tlb_phys_addr;
 
 /* QSPI register layout */
 #define QSPI_MCR			0x00
@@ -273,8 +271,7 @@ static void __iomem *ccm_base;
 static void __iomem *suspend_ocram_base;
 static void (*imx6_suspend_in_ocram_fn)(void __iomem *ocram_vbase);
 struct regmap *romcp;
-extern unsigned long iram_tlb_base_addr;
-extern unsigned long iram_tlb_phys_addr;
+
 /*
  * suspend ocram space layout:
  * ======================== high address ======================
@@ -316,6 +313,18 @@ static const u32 imx6q_mmdc_io_offset[] __initconst = {
 	0x7a0, 0x7a4, 0x7a8, 0x748, /* GPR_B4DS ~ GPR_B7DS */
 	0x59c, 0x5a0, 0x750, 0x774, /* SODT0, SODT1, MODE_CTL, MODE */
 	0x74c,			    /* GPR_ADDS */
+};
+
+static const u32 imx6q_mmdc_io_lpddr2_offset[] __initconst = {
+	0x5ac, 0x5b4, 0x528, 0x520, /* DQM0 ~ DQM3 */
+	0x514, 0x510, 0x5bc, 0x5c4, /* DQM4 ~ DQM7 */
+	0x784, 0x788, 0x794, 0x79c, /* GPR_B0DS ~ GPR_B3DS */
+	0x7a0, 0x7a4, 0x7a8, 0x748, /* GPR_B4DS ~ GPR_B7DS */
+	0x56c, 0x578, 0x588, 0x594, /* CAS, RAS, SDCLK_0, SDCLK_1 */
+	0x5a8, 0x5b0, 0x524, 0x51c, /* SDQS0 ~ SDQS3 */
+	0x518, 0x50c, 0x5b8, 0x5c0, /* SDQS4 ~ SDQS7 */
+	0x59c, 0x5a0, 0x750, 0x774, /* SODT0, SODT1, MODE_CTL, MODE */
+	0x74c, 0x590, 0x598, 0x57c, /* GRP_ADDS, SDCKE0, SDCKE1, RESET */
 };
 
 static const u32 imx6dl_mmdc_io_offset[] __initconst = {
@@ -381,7 +390,7 @@ static const u32 imx6ul_mmdc_io_offset[] __initconst = {
 	0x244, 0x248, 0x24c, 0x250, /* DQM0, DQM1, RAS, CAS */
 	0x27c, 0x498, 0x4a4, 0x490, /* SDCLK0, GPR_B0DS-B1DS, GPR_ADDS */
 	0x280, 0x284, 0x260, 0x264, /* SDQS0~1, SODT0, SODT1 */
-	0x494, 0x4b0,	            /* MODE_CTL, MODE, */
+	0x494, 0x4b0,               /* MODE_CTL, MODE, */
 };
 
 static const u32 imx6ul_mmdc_offset[] __initconst = {
@@ -420,6 +429,17 @@ static const struct imx6_pm_socdata imx6q_pm_data __initconst = {
 	.gpc_compat = "fsl,imx6q-gpc",
 	.mmdc_io_num = ARRAY_SIZE(imx6q_mmdc_io_offset),
 	.mmdc_io_offset = imx6q_mmdc_io_offset,
+	.mmdc_num = 0,
+	.mmdc_offset = NULL,
+};
+
+static const struct imx6_pm_socdata imx6q_lpddr2_pm_data __initconst = {
+	.mmdc_compat = "fsl,imx6q-mmdc",
+	.src_compat = "fsl,imx6q-src",
+	.iomuxc_compat = "fsl,imx6q-iomuxc",
+	.gpc_compat = "fsl,imx6q-gpc",
+	.mmdc_io_num = ARRAY_SIZE(imx6q_mmdc_io_lpddr2_offset),
+	.mmdc_io_offset = imx6q_mmdc_io_lpddr2_offset,
 	.mmdc_num = 0,
 	.mmdc_offset = NULL,
 };
@@ -490,6 +510,37 @@ static const struct imx6_pm_socdata imx6ul_lpddr2_pm_data __initconst = {
 	.mmdc_offset = imx6ul_mmdc_lpddr2_offset,
 };
 
+static struct map_desc iram_tlb_io_desc __initdata = {
+	/* .virtual and .pfn are run-time assigned */
+	.length     = SZ_1M,
+	.type       = MT_MEMORY_RWX_NONCACHED,
+};
+
+/*
+ * AIPS1 and AIPS2 is not used, because it will trigger a BUG_ON if
+ * lowlevel debug and earlyprintk are configured.
+ *
+ * it is because there is a vm conflict because UART1 is mapped early if
+ * AIPS1 is mapped using 1M size.
+ *
+ * Thus no use AIPS1 and AIPS2 to avoid kernel BUG_ON.
+ */
+static struct map_desc imx6_pm_io_desc[] __initdata = {
+	imx_map_entry(MX6Q, MMDC_P0, MT_DEVICE),
+	imx_map_entry(MX6Q, MMDC_P1, MT_DEVICE),
+	imx_map_entry(MX6Q, SRC, MT_DEVICE),
+	imx_map_entry(MX6Q, IOMUXC, MT_DEVICE),
+	imx_map_entry(MX6Q, CCM, MT_DEVICE),
+	imx_map_entry(MX6Q, ANATOP, MT_DEVICE),
+	imx_map_entry(MX6Q, GPC, MT_DEVICE),
+	imx_map_entry(MX6Q, L2,	MT_DEVICE),
+};
+
+static const char * const low_power_ocram_match[] __initconst = {
+	"fsl,lpm-sram",
+	NULL
+};
+
 /*
  * This structure is for passing necessary data for low level ocram
  * suspend code(arch/arm/mach-imx/suspend-imx6.S), if this struct
@@ -502,7 +553,8 @@ struct imx6_cpu_pm_info {
 	phys_addr_t resume_addr; /* The physical resume address for asm code */
 	u32 ddr_type;
 	u32 pm_info_size; /* Size of pm_info. */
-	struct imx6_pm_base mmdc_base;
+	struct imx6_pm_base mmdc0_base;
+	struct imx6_pm_base mmdc1_base;
 	struct imx6_pm_base src_base;
 	struct imx6_pm_base iomuxc_base;
 	struct imx6_pm_base ccm_base;
@@ -513,28 +565,20 @@ struct imx6_cpu_pm_info {
 	u32 mmdc_io_num; /* Number of MMDC IOs which need saved/restored. */
 	u32 mmdc_io_val[MX6_MAX_MMDC_IO_NUM][2]; /* To save offset and value */
 	u32 mmdc_num; /* Number of MMDC registers which need saved/restored. */
-	u32 mmdc_val[MX6_MAX_MMDC_NUM][2]; /* To save offset and value */
+	u32 mmdc_val[MX6_MAX_MMDC_NUM][2];
 } __aligned(8);
 
 void imx6q_set_int_mem_clk_lpm(bool enable)
 {
-	if ((cpu_is_imx6q() && imx_get_soc_revision() >
-		IMX_CHIP_REVISION_1_1) ||
-		(cpu_is_imx6dl() && imx_get_soc_revision() >
-		IMX_CHIP_REVISION_1_0) || cpu_is_imx6sx() ||
-		cpu_is_imx6ul()) {
-		u32 val;
+	u32 val = readl_relaxed(ccm_base + CGPR);
 
-		val = readl_relaxed(ccm_base + CGPR);
-		if (enable)
-			val |= BM_CGPR_INT_MEM_CLK_LPM;
-		else
-			val &= ~BM_CGPR_INT_MEM_CLK_LPM;
-		writel_relaxed(val, ccm_base + CGPR);
-	}
+	val &= ~BM_CGPR_INT_MEM_CLK_LPM;
+	if (enable)
+		val |= BM_CGPR_INT_MEM_CLK_LPM;
+	writel_relaxed(val, ccm_base + CGPR);
 }
 
-void imx6q_enable_rbc(bool enable)
+void imx6_enable_rbc(bool enable)
 {
 	u32 val;
 
@@ -586,7 +630,6 @@ static void imx6q_enable_wb(bool enable)
 
 int imx6q_set_lpm(enum mxc_cpu_pwr_mode mode)
 {
-	struct irq_desc *iomuxc_irq_desc;
 	u32 val = readl_relaxed(ccm_base + CLPCR);
 
 	val &= ~BM_CLPCR_LPM;
@@ -601,9 +644,10 @@ int imx6q_set_lpm(enum mxc_cpu_pwr_mode mode)
 		val |= 0x2 << BP_CLPCR_LPM;
 		val &= ~BM_CLPCR_VSTBY;
 		val &= ~BM_CLPCR_SBYOS;
-		if (cpu_is_imx6sl())
+		if (cpu_is_imx6sl() || cpu_is_imx6sx())
 			val |= BM_CLPCR_BYPASS_PMIC_READY;
-		if (cpu_is_imx6sl() || cpu_is_imx6sx() || cpu_is_imx6ul())
+		if (cpu_is_imx6sl() || cpu_is_imx6sx() ||
+		    cpu_is_imx6ul())
 			val |= BM_CLPCR_BYP_MMDC_CH0_LPM_HS;
 		else
 			val |= BM_CLPCR_BYP_MMDC_CH1_LPM_HS;
@@ -618,9 +662,10 @@ int imx6q_set_lpm(enum mxc_cpu_pwr_mode mode)
 		val |= 0x3 << BP_CLPCR_STBY_COUNT;
 		val |= BM_CLPCR_VSTBY;
 		val |= BM_CLPCR_SBYOS;
-		if (cpu_is_imx6sl())
+		if (cpu_is_imx6sl() || cpu_is_imx6sx())
 			val |= BM_CLPCR_BYPASS_PMIC_READY;
-		if (cpu_is_imx6sl() || cpu_is_imx6sx() || cpu_is_imx6ul())
+		if (cpu_is_imx6sl() || cpu_is_imx6sx() ||
+		    cpu_is_imx6ul())
 			val |= BM_CLPCR_BYP_MMDC_CH0_LPM_HS;
 		else
 			val |= BM_CLPCR_BYP_MMDC_CH1_LPM_HS;
@@ -640,11 +685,12 @@ int imx6q_set_lpm(enum mxc_cpu_pwr_mode mode)
 	 *    Low-Power mode.
 	 * 3) Software should mask IRQ #32 right after CCM Low-Power mode
 	 *    is set (set bits 0-1 of CCM_CLPCR).
+	 *
+	 * Note that IRQ #32 is GIC SPI #0.
 	 */
-	iomuxc_irq_desc = irq_to_desc(32);
-	imx_gpc_irq_unmask(&iomuxc_irq_desc->irq_data);
+	imx_gpc_hwirq_unmask(0);
 	writel_relaxed(val, ccm_base + CLPCR);
-	imx_gpc_irq_mask(&iomuxc_irq_desc->irq_data);
+	imx_gpc_hwirq_mask(0);
 
 	return 0;
 }
@@ -751,13 +797,6 @@ static int imx6q_pm_enter(suspend_state_t state)
 	}
 #endif
 
-	if (!iram_tlb_base_addr) {
-		pr_warn("No IRAM/OCRAM memory allocated for suspend/resume \
-			 code. Please ensure device tree has an entry for \
-			 fsl,lpm-sram.\n");
-		return -EINVAL;
-	}
-
 	switch (state) {
 	case PM_SUSPEND_STANDBY:
 		imx6q_set_lpm(STOP_POWER_ON);
@@ -789,10 +828,9 @@ static int imx6q_pm_enter(suspend_state_t state)
 		 * RBC setting, so we do NOT need to do that here.
 		 */
 		if (!imx6_suspend_in_ocram_fn)
-			imx6q_enable_rbc(true);
+			imx6_enable_rbc(true);
 		imx_gpc_pre_suspend(true);
 		imx_anatop_pre_suspend();
-		imx_set_cpu_jump(0, v7_cpu_resume);
 		if (cpu_is_imx6sx() && imx_gpc_is_mf_mix_off()) {
 			ccm_ccgr4 = readl_relaxed(ccm_base + CCGR4);
 			ccm_ccgr6 = readl_relaxed(ccm_base + CCGR6);
@@ -835,7 +873,7 @@ static int imx6q_pm_enter(suspend_state_t state)
 			imx_smp_prepare();
 		imx_anatop_post_resume();
 		imx_gpc_post_resume();
-		imx6q_enable_rbc(false);
+		imx6_enable_rbc(false);
 		imx6q_enable_wb(false);
 		imx6q_set_int_mem_clk_lpm(true);
 		imx6q_set_lpm(WAIT_CLOCKED);
@@ -869,25 +907,13 @@ void __init imx6q_pm_set_ccm_base(void __iomem *base)
 	ccm_base = base;
 }
 
-static struct map_desc iram_tlb_io_desc __initdata = {
-	/* .virtual and .pfn are run-time assigned */
-	.length     = SZ_1M,
-	.type       = MT_MEMORY_RWX_NONCACHED,
-};
-
-static const char * const low_power_ocram_match[] __initconst = {
-	"fsl,lpm-sram",
-	NULL
-};
-
 static int __init imx6_dt_find_lpsram(unsigned long node, const char *uname,
 				      int depth, void *data)
 {
 	unsigned long lpram_addr;
-	__be32 *prop;
+	const __be32 *prop = of_get_flat_dt_prop(node, "reg", NULL);
 
 	if (of_flat_dt_match(node, low_power_ocram_match)) {
-		prop = of_get_flat_dt_prop(node, "reg", NULL);
 		if (!prop)
 			return -EINVAL;
 
@@ -904,27 +930,6 @@ static int __init imx6_dt_find_lpsram(unsigned long node, const char *uname,
 
 	return 0;
 }
-
-/*
- * AIPS1 and AIPS2 is not used, because it will trigger a BUG_ON if
- * lowlevel debug and earlyprintk are configured.
- *
- * it is because there is a vm conflict because UART1 is mapped early if
- * AIPS1 is mapped using 1M size.
- *
- * Thus no use AIPS1 and AIPS2 to avoid kernel BUG_ON.
- */
-static struct map_desc imx6_pm_io_desc[] __initdata = {
-	imx_map_entry(MX6Q, MMDC_P0, MT_DEVICE),
-	imx_map_entry(MX6Q, MMDC_P1, MT_DEVICE),
-	imx_map_entry(MX6Q, SRC, MT_DEVICE),
-	imx_map_entry(MX6Q, IOMUXC, MT_DEVICE),
-	imx_map_entry(MX6Q, CCM, MT_DEVICE),
-	imx_map_entry(MX6Q, ANATOP, MT_DEVICE),
-	imx_map_entry(MX6Q, GPC, MT_DEVICE),
-	imx_map_entry(MX6Q, L2, MT_DEVICE),
-	imx_map_entry(MX6Q, SEMA4, MT_DEVICE),
-};
 
 void __init imx6_pm_map_io(void)
 {
@@ -1001,10 +1006,10 @@ static int __init imx6q_suspend_init(const struct imx6_pm_socdata *socdata)
 {
 	struct device_node *node;
 	struct imx6_cpu_pm_info *pm_info;
-	int i, ret = 0;
-	const u32 *mmdc_io_offset_array;
-	const u32 *mmdc_offset_array;
 	unsigned long iram_paddr;
+	int i, ret = 0;
+	const u32 *mmdc_offset_array;
+	const u32 *mmdc_io_offset_array;
 
 	suspend_set_ops(&imx6q_pm_ops);
 
@@ -1029,7 +1034,6 @@ static int __init imx6q_suspend_init(const struct imx6_pm_socdata *socdata)
 	suspend_ocram_base = (void *)IMX_IO_P2V(iram_paddr);
 
 	pm_info = suspend_ocram_base;
-	/* pbase points to iram_paddr. */
 	pm_info->pbase = iram_paddr;
 	pm_info->resume_addr = virt_to_phys(v7_cpu_resume);
 	pm_info->pm_info_size = sizeof(*pm_info);
@@ -1043,9 +1047,13 @@ static int __init imx6q_suspend_init(const struct imx6_pm_socdata *socdata)
 	pm_info->ccm_base.vbase = (void __iomem *)
 				   IMX_IO_P2V(MX6Q_CCM_BASE_ADDR);
 
-	pm_info->mmdc_base.pbase = MX6Q_MMDC_P0_BASE_ADDR;
-	pm_info->mmdc_base.vbase = (void __iomem *)
+	pm_info->mmdc0_base.pbase = MX6Q_MMDC_P0_BASE_ADDR;
+	pm_info->mmdc0_base.vbase = (void __iomem *)
 				    IMX_IO_P2V(MX6Q_MMDC_P0_BASE_ADDR);
+
+	pm_info->mmdc1_base.pbase = MX6Q_MMDC_P1_BASE_ADDR;
+	pm_info->mmdc1_base.vbase = (void __iomem *)
+				    IMX_IO_P2V(MX6Q_MMDC_P1_BASE_ADDR);
 
 	pm_info->src_base.pbase = MX6Q_SRC_BASE_ADDR;
 	pm_info->src_base.vbase = (void __iomem *)
@@ -1073,7 +1081,6 @@ static int __init imx6q_suspend_init(const struct imx6_pm_socdata *socdata)
 	pm_info->mmdc_num = socdata->mmdc_num;
 	mmdc_offset_array = socdata->mmdc_offset;
 
-	/* initialize MMDC IO settings */
 	for (i = 0; i < pm_info->mmdc_io_num; i++) {
 		pm_info->mmdc_io_val[i][0] =
 			mmdc_io_offset_array[i];
@@ -1081,12 +1088,13 @@ static int __init imx6q_suspend_init(const struct imx6_pm_socdata *socdata)
 			readl_relaxed(pm_info->iomuxc_base.vbase +
 			mmdc_io_offset_array[i]);
 	}
+
 	/* initialize MMDC settings */
 	for (i = 0; i < pm_info->mmdc_num; i++) {
 		pm_info->mmdc_val[i][0] =
 			mmdc_offset_array[i];
 		pm_info->mmdc_val[i][1] =
-			readl_relaxed(pm_info->mmdc_base.vbase +
+			readl_relaxed(pm_info->mmdc0_base.vbase +
 			mmdc_offset_array[i]);
 	}
 
@@ -1194,7 +1202,10 @@ static void __init imx6_pm_common_init(const struct imx6_pm_socdata
 
 void __init imx6q_pm_init(void)
 {
-	imx6_pm_common_init(&imx6q_pm_data);
+	if (imx_mmdc_get_ddr_type() == IMX_DDR_TYPE_LPDDR2)
+		imx6_pm_common_init(&imx6q_lpddr2_pm_data);
+	else
+		imx6_pm_common_init(&imx6q_pm_data);
 }
 
 void __init imx6dl_pm_init(void)

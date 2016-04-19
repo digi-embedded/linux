@@ -7,7 +7,7 @@ Part I - The DT node for the controller:
 ------------------------------
 
 Required properties:
-  - compatible : Should be "fsl,vf610-qspi"
+  - compatible : Should be "fsl,vf610-qspi" or "fsl,imx6sx-qspi"
   - reg : the first contains the register location and length,
           the second contains the memory mapping address and length
   - reg-names: Should contain the reg names "QuadSPI" and "QuadSPI-memory"
@@ -23,7 +23,6 @@ Optional properties:
 			      But if there are two NOR flashes connected to the
 			      bus, you should enable this property.
 			      (Please check the board's schematic.)
-  - ddrsmp: The value for DDR internal sampling point, range is 0 - 7.
 
 Part II - The DT nodes for each SPI NOR flash
 ------------------------------

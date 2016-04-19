@@ -50,8 +50,9 @@ enum ci_hw_regs {
 	OP_USBINTR,
 	OP_DEVICEADDR,
 	OP_ENDPTLISTADDR,
-	OP_PORTSC,
+	OP_TTCTRL,
 	OP_BURSTSIZE,
+	OP_PORTSC,
 	OP_DEVLC,
 	OP_OTGSC,
 	OP_USBMODE,
@@ -171,7 +172,6 @@ struct hw_bank {
  * @hr_timeouts: time out list for active otg fsm timers
  * @enabled_otg_timer_bits: bits of enabled otg timers
  * @next_otg_timer: next nearest enabled timer to be expired
- * @hnp_polling_work: work for hnp polling
  * @work: work for role changing
  * @wq: workqueue thread
  * @qh_pool: allocation pool for queue heads
@@ -204,8 +204,6 @@ struct hw_bank {
  * @in_lpm: if the core in low power mode
  * @wakeup_int: if wakeup interrupt occur
  * @rev: The revision number for controller
- * @adp_probe_event: indicates to enable adp probe
- * @adp_sense_event: indicates to enable adp sense
  */
 struct ci_hdrc {
 	struct device			*dev;
@@ -270,8 +268,6 @@ struct ci_hdrc {
 	u32				pm_portsc;
 	u32				pm_usbmode;
 	struct work_struct		power_lost_work;
-	bool				adp_probe_event;
-	bool				adp_sense_event;
 };
 
 static inline struct ci_role_driver *ci_role(struct ci_hdrc *ci)
@@ -435,8 +431,8 @@ static inline bool ci_otg_is_fsm_mode(struct ci_hdrc *ci)
 	struct usb_otg_caps *otg_caps = &ci->platdata->ci_otg_caps;
 
 	return ci->is_otg && ci->roles[CI_ROLE_HOST] &&
-		ci->roles[CI_ROLE_GADGET] && (otg_caps->hnp_support ||
-			otg_caps->srp_support || otg_caps->adp_support);
+		ci->roles[CI_ROLE_GADGET] && (otg_caps->srp_support ||
+		otg_caps->hnp_support || otg_caps->adp_support);
 #else
 	return false;
 #endif
@@ -455,7 +451,10 @@ u8 hw_port_test_get(struct ci_hdrc *ci);
 int hw_wait_reg(struct ci_hdrc *ci, enum ci_hw_regs reg, u32 mask,
 				u32 value, unsigned int timeout_ms);
 
+void ci_platform_configure(struct ci_hdrc *ci);
 int hw_controller_reset(struct ci_hdrc *ci);
-void ci_hdrc_ahb_config(struct ci_hdrc *ci);
 
+int dbg_create_files(struct ci_hdrc *ci);
+
+void dbg_remove_files(struct ci_hdrc *ci);
 #endif	/* __DRIVERS_USB_CHIPIDEA_CI_H */

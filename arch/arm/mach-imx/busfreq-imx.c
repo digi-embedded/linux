@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2015 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright (C) 2011-2016 Freescale Semiconductor, Inc. All Rights Reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -38,11 +38,10 @@
 
 #define LPAPM_CLK		24000000
 #define LOW_AUDIO_CLK		50000000
-#define HIGH_AUDIO_CLK	100000000
+#define HIGH_AUDIO_CLK		100000000
 
-#define	MMDC_MDMISC_DDR_TYPE_DDR3	0
-#define	MMDC_MDMISC_DDR_TYPE_LPDDR2	1
-
+#define MMDC_MDMISC_DDR_TYPE_DDR3	0
+#define MMDC_MDMISC_DDR_TYPE_LPDDR2	1
 
 unsigned int ddr_med_rate;
 unsigned int ddr_normal_rate;
@@ -59,55 +58,30 @@ static int med_bus_freq_mode;
 static int bus_freq_scaling_initialized;
 static struct device *busfreq_dev;
 static int busfreq_suspended;
-static u32 org_arm_rate;
 static int bus_freq_scaling_is_active;
 static int high_bus_count, med_bus_count, audio_bus_count, low_bus_count;
 static unsigned int ddr_low_rate;
 static int cur_bus_freq_mode;
+static u32 org_arm_rate;
 
 extern unsigned long iram_tlb_phys_addr;
 extern int unsigned long iram_tlb_base_addr;
 
 extern int init_mmdc_lpddr2_settings(struct platform_device *dev);
-extern int init_mmdc_ddr3_settings_imx6q(struct platform_device *dev);
+extern int init_mmdc_lpddr2_settings_mx6q(struct platform_device *dev);
 extern int init_mmdc_ddr3_settings_imx6_up(struct platform_device *dev);
+extern int init_mmdc_ddr3_settings_imx6_smp(struct platform_device *dev);
 extern int init_ddrc_ddr_settings(struct platform_device *dev);
 extern int update_ddr_freq_imx_smp(int ddr_rate);
 extern int update_ddr_freq_imx6_up(int ddr_rate);
 extern int update_lpddr2_freq(int ddr_rate);
+extern int update_lpddr2_freq_smp(int ddr_rate);
 
 DEFINE_MUTEX(bus_freq_mutex);
 
-static struct clk *mmdc_clk;
-static struct clk *pll2_400;
-static struct clk *periph_clk;
-static struct clk *periph_pre_clk;
-static struct clk *periph_clk2_sel;
-static struct clk *periph_clk2;
 static struct clk *osc_clk;
-static struct clk *cpu_clk;
-static struct clk *pll3;
-static struct clk *pll2;
-static struct clk *pll2_bus;
-static struct clk *pll2_bypass_src;
-static struct clk *pll2_bypass;
-static struct clk *pll2_200;
-static struct clk *pll1_sys;
-static struct clk *periph2_clk;
-static struct clk *ocram_clk;
 static struct clk *ahb_clk;
-static struct clk *pll1_sw_clk;
-static struct clk *periph2_pre_clk;
-static struct clk *periph2_clk2_sel;
-static struct clk *periph2_clk2;
-static struct clk *step_clk;
-static struct clk *axi_alt_sel_clk;
 static struct clk *axi_sel_clk;
-static struct clk *pll3_pfd1_540m;
-static struct clk *m4_clk;
-static struct clk *pll1;
-static struct clk *pll1_bypass;
-static struct clk *pll1_bypass_src;
 static struct clk *dram_root;
 static struct clk *dram_alt_sel;
 static struct clk *dram_alt_root;
@@ -118,11 +92,48 @@ static struct clk *pll_dram;
 static struct clk *ahb_sel_clk;
 static struct clk *axi_clk;
 
-static u32 pll2_org_rate;
+static struct clk *m4_clk;
+static struct clk *arm_clk;
+static struct clk *pll3_clk;
+static struct clk *step_clk;
+static struct clk *mmdc_clk;
+static struct clk *ocram_clk;
+static struct clk *pll1_clk;
+static struct clk *pll1_bypass_clk;
+static struct clk *pll1_bypass_src_clk;
+static struct clk *pll1_sys_clk;
+static struct clk *pll1_sw_clk;
+static struct clk *pll2_bypass_src_clk;
+static struct clk *pll2_bypass_clk;
+static struct clk *pll2_clk;
+static struct clk *pll2_400_clk;
+static struct clk *pll2_200_clk;
+static struct clk *pll2_bus_clk;
+static struct clk *periph_clk;
+static struct clk *periph_pre_clk;
+static struct clk *periph_clk2_clk;
+static struct clk *periph_clk2_sel_clk;
+static struct clk *periph2_clk;
+static struct clk *periph2_pre_clk;
+static struct clk *periph2_clk2_clk;
+static struct clk *periph2_clk2_sel_clk;
+static struct clk *axi_alt_sel_clk;
+static struct clk *pll3_pfd1_540m_clk;
+
 static struct delayed_work low_bus_freq_handler;
 static struct delayed_work bus_freq_daemon;
 
 static RAW_NOTIFIER_HEAD(busfreq_notifier_chain);
+
+static bool check_m4_sleep(void)
+{
+	unsigned long timeout = jiffies + msecs_to_jiffies(500);
+
+	while (imx_gpc_is_m4_sleeping() == 0)
+		if (time_after(jiffies, timeout))
+			return false;
+	return  true;
+}
 
 static int busfreq_notify(enum busfreq_event event)
 {
@@ -145,14 +156,356 @@ int unregister_busfreq_notifier(struct notifier_block *nb)
 }
 EXPORT_SYMBOL(unregister_busfreq_notifier);
 
-static bool check_m4_sleep(void)
+/*
+ * enter_lpm_imx6_up and exit_lpm_imx6_up is used by
+ * i.MX6SX/i.MX6UL for entering and exiting lpm mode.
+ */
+static void enter_lpm_imx6_up(void)
 {
-	unsigned long timeout = jiffies + msecs_to_jiffies(500);
+	if (cpu_is_imx6sx() && imx_src_is_m4_enabled())
+		if (!check_m4_sleep())
+			pr_err("M4 is NOT in sleep!!!\n");
 
-	while (imx_gpc_is_m4_sleeping() == 0)
-		if (time_after(jiffies, timeout))
-			return false;
-	return  true;
+	/* set periph_clk2 to source from OSC for periph */
+	imx_clk_set_parent(periph_clk2_sel_clk, osc_clk);
+	imx_clk_set_parent(periph_clk, periph_clk2_clk);
+	/* set ahb/ocram to 24MHz */
+	imx_clk_set_rate(ahb_clk, LPAPM_CLK);
+	imx_clk_set_rate(ocram_clk, LPAPM_CLK);
+
+	if (audio_bus_count) {
+		/* Need to ensure that PLL2_PFD_400M is kept ON. */
+		clk_prepare_enable(pll2_400_clk);
+		if (ddr_type == IMX_DDR_TYPE_DDR3)
+			update_ddr_freq_imx6_up(LOW_AUDIO_CLK);
+		else if (ddr_type == IMX_DDR_TYPE_LPDDR2)
+			update_lpddr2_freq(HIGH_AUDIO_CLK);
+		imx_clk_set_parent(periph2_clk2_sel_clk, pll3_clk);
+		imx_clk_set_parent(periph2_pre_clk, pll2_400_clk);
+		imx_clk_set_parent(periph2_clk, periph2_pre_clk);
+		/*
+		 * As periph2_clk's parent is not changed from
+		 * high mode to audio mode, so clk framework
+		 * will not update its children's freq, but we
+		 * change the mmdc's podf in asm code, so here
+		 * need to update mmdc rate to make sure clk
+		 * tree is right, although it will not do any
+		 * change to hardware.
+		 */
+		if (high_bus_freq_mode) {
+			if (ddr_type == IMX_DDR_TYPE_DDR3)
+				imx_clk_set_rate(mmdc_clk, LOW_AUDIO_CLK);
+			else if (ddr_type == IMX_DDR_TYPE_LPDDR2)
+				imx_clk_set_rate(mmdc_clk, HIGH_AUDIO_CLK);
+		}
+		audio_bus_freq_mode = 1;
+		low_bus_freq_mode = 0;
+		cur_bus_freq_mode = BUS_FREQ_AUDIO;
+	} else {
+		if (ddr_type == IMX_DDR_TYPE_DDR3)
+			update_ddr_freq_imx6_up(LPAPM_CLK);
+		else if (ddr_type == IMX_DDR_TYPE_LPDDR2)
+			update_lpddr2_freq(LPAPM_CLK);
+		imx_clk_set_parent(periph2_clk2_sel_clk, osc_clk);
+		imx_clk_set_parent(periph2_clk, periph2_clk2_clk);
+
+		if (audio_bus_freq_mode)
+			clk_disable_unprepare(pll2_400_clk);
+		low_bus_freq_mode = 1;
+		audio_bus_freq_mode = 0;
+		cur_bus_freq_mode = BUS_FREQ_LOW;
+	}
+}
+
+static void enter_lpm_imx6_smp(void)
+{
+	if (cpu_is_imx6dl())
+		/* Set axi to periph_clk */
+		imx_clk_set_parent(axi_sel_clk, periph_clk);
+
+	if (audio_bus_count) {
+		/* Need to ensure that PLL2_PFD_400M is kept ON. */
+		clk_prepare_enable(pll2_400_clk);
+		if (ddr_type == MMDC_MDMISC_DDR_TYPE_DDR3)
+			update_ddr_freq_imx_smp(LOW_AUDIO_CLK);
+		else if (ddr_type == MMDC_MDMISC_DDR_TYPE_LPDDR2)
+			update_lpddr2_freq_smp(HIGH_AUDIO_CLK);
+		/* Make sure periph clk's parent also got updated */
+		imx_clk_set_parent(periph_clk2_sel_clk, pll3_clk);
+		imx_clk_set_parent(periph_pre_clk, pll2_200_clk);
+		imx_clk_set_parent(periph_clk, periph_pre_clk);
+		audio_bus_freq_mode = 1;
+		low_bus_freq_mode = 0;
+		cur_bus_freq_mode = BUS_FREQ_AUDIO;
+	} else {
+		if (ddr_type == MMDC_MDMISC_DDR_TYPE_DDR3)
+			update_ddr_freq_imx_smp(LPAPM_CLK);
+		else if (ddr_type == MMDC_MDMISC_DDR_TYPE_LPDDR2)
+			update_lpddr2_freq_smp(LPAPM_CLK);
+		/* Make sure periph clk's parent also got updated */
+		imx_clk_set_parent(periph_clk2_sel_clk, osc_clk);
+		/* Set periph_clk parent to OSC via periph_clk2_sel */
+		imx_clk_set_parent(periph_clk, periph_clk2_clk);
+		if (audio_bus_freq_mode)
+			clk_disable_unprepare(pll2_400_clk);
+		low_bus_freq_mode = 1;
+		audio_bus_freq_mode = 0;
+		cur_bus_freq_mode = BUS_FREQ_LOW;
+	}
+}
+
+static void exit_lpm_imx6_up(void)
+{
+	clk_prepare_enable(pll2_400_clk);
+
+	/*
+	 * lower ahb/ocram's freq first to avoid too high
+	 * freq during parent switch from OSC to pll3.
+	 */
+	if (cpu_is_imx6ul())
+		imx_clk_set_rate(ahb_clk, LPAPM_CLK / 4);
+	else
+		imx_clk_set_rate(ahb_clk, LPAPM_CLK / 3);
+
+	imx_clk_set_rate(ocram_clk, LPAPM_CLK / 2);
+	/* set periph clk to from pll2_bus on i.MX6UL */
+	if (cpu_is_imx6ul())
+		imx_clk_set_parent(periph_pre_clk, pll2_bus_clk);
+	/* set periph clk to from pll2_400 */
+	else
+		imx_clk_set_parent(periph_pre_clk, pll2_400_clk);
+	imx_clk_set_parent(periph_clk, periph_pre_clk);
+	/* set periph_clk2 to pll3 */
+	imx_clk_set_parent(periph_clk2_sel_clk, pll3_clk);
+
+	if (ddr_type == IMX_DDR_TYPE_DDR3)
+		update_ddr_freq_imx6_up(ddr_normal_rate);
+	else if (ddr_type == IMX_DDR_TYPE_LPDDR2)
+		update_lpddr2_freq(ddr_normal_rate);
+	/* correct parent info after ddr freq change in asm code */
+	imx_clk_set_parent(periph2_pre_clk, pll2_400_clk);
+	imx_clk_set_parent(periph2_clk, periph2_pre_clk);
+	imx_clk_set_parent(periph2_clk2_sel_clk, pll3_clk);
+
+	/*
+	 * As periph2_clk's parent is not changed from
+	 * audio mode to high mode, so clk framework
+	 * will not update its children's freq, but we
+	 * change the mmdc's podf in asm code, so here
+	 * need to update mmdc rate to make sure clk
+	 * tree is right, although it will not do any
+	 * change to hardware.
+	 */
+	if (audio_bus_freq_mode)
+		imx_clk_set_rate(mmdc_clk, ddr_normal_rate);
+
+	clk_disable_unprepare(pll2_400_clk);
+
+	if (audio_bus_freq_mode)
+		clk_disable_unprepare(pll2_400_clk);
+}
+
+static void exit_lpm_imx6_smp(void)
+{
+	struct clk *periph_clk_parent;
+
+	if (cpu_is_imx6q() && ddr_type == MMDC_MDMISC_DDR_TYPE_DDR3)
+		periph_clk_parent = pll2_bus_clk;
+	else
+		periph_clk_parent = pll2_400_clk;
+
+	clk_prepare_enable(pll2_400_clk);
+	if (ddr_type == MMDC_MDMISC_DDR_TYPE_DDR3)
+		update_ddr_freq_imx_smp(ddr_normal_rate);
+	else if (ddr_type == MMDC_MDMISC_DDR_TYPE_LPDDR2)
+		update_lpddr2_freq_smp(ddr_normal_rate);
+	/* Make sure periph clk's parent also got updated */
+	imx_clk_set_parent(periph_clk2_sel_clk, pll3_clk);
+	imx_clk_set_parent(periph_pre_clk, periph_clk_parent);
+	imx_clk_set_parent(periph_clk, periph_pre_clk);
+	if (cpu_is_imx6dl()) {
+		/* Set axi to pll3_pfd1_540m */
+		imx_clk_set_parent(axi_alt_sel_clk, pll3_pfd1_540m_clk);
+		imx_clk_set_parent(axi_sel_clk, axi_alt_sel_clk);
+	}
+	clk_disable_unprepare(pll2_400_clk);
+	if (audio_bus_freq_mode)
+		clk_disable_unprepare(pll2_400_clk);
+}
+
+static void enter_lpm_imx6sl(void)
+{
+	if (high_bus_freq_mode) {
+		/* Set periph_clk to be sourced from OSC_CLK */
+		imx_clk_set_parent(periph_clk2_sel_clk, osc_clk);
+		imx_clk_set_parent(periph_clk, periph_clk2_clk);
+		/* Ensure AHB/AXI clks are at 24MHz. */
+		imx_clk_set_rate(ahb_clk, LPAPM_CLK);
+		imx_clk_set_rate(ocram_clk, LPAPM_CLK);
+	}
+	if (audio_bus_count) {
+		/* Set AHB to 8MHz to lower pwer.*/
+		imx_clk_set_rate(ahb_clk, LPAPM_CLK / 3);
+
+		/* Set up DDR to 100MHz. */
+		update_lpddr2_freq(HIGH_AUDIO_CLK);
+
+		/* Fix the clock tree in kernel */
+		imx_clk_set_parent(periph2_pre_clk, pll2_200_clk);
+		imx_clk_set_parent(periph2_clk, periph2_pre_clk);
+
+		if (low_bus_freq_mode || ultra_low_bus_freq_mode) {
+			/*
+			 * Fix the clock tree in kernel, make sure
+			 * pll2_bypass is updated as it is
+			 * sourced from PLL2.
+			 */
+			imx_clk_set_parent(pll2_bypass_clk, pll2_clk);
+			/*
+			 * Swtich ARM to run off PLL2_PFD2_400MHz
+			 * since DDR is anyway at 100MHz.
+			 */
+			imx_clk_set_parent(step_clk, pll2_400_clk);
+			imx_clk_set_parent(pll1_sw_clk, step_clk);
+
+			/*
+			 * Need to ensure that PLL1 is bypassed and enabled
+			 * before ARM-PODF is set.
+			 */
+			clk_set_parent(pll1_bypass_clk, pll1_bypass_src_clk);
+
+			/*
+			 * Ensure that the clock will be
+			 * at original speed.
+			 */
+			imx_clk_set_rate(arm_clk, org_arm_rate);
+		}
+		low_bus_freq_mode = 0;
+		ultra_low_bus_freq_mode = 0;
+		audio_bus_freq_mode = 1;
+		cur_bus_freq_mode = BUS_FREQ_AUDIO;
+	} else {
+		u32 arm_div, pll1_rate;
+		org_arm_rate = clk_get_rate(arm_clk);
+		if (low_bus_freq_mode && low_bus_count == 0) {
+			/*
+			 * We are already in DDR @ 24MHz state, but
+			 * no one but ARM needs the DDR. In this case,
+			 * we can lower the DDR freq to 1MHz when ARM
+			 * enters WFI in this state. Keep track of this state.
+			 */
+			ultra_low_bus_freq_mode = 1;
+			low_bus_freq_mode = 0;
+			audio_bus_freq_mode = 0;
+			cur_bus_freq_mode = BUS_FREQ_ULTRA_LOW;
+		} else {
+			if (!ultra_low_bus_freq_mode && !low_bus_freq_mode) {
+				/*
+				 * Anyway, make sure the AHB is running at 24MHz
+				 * in low_bus_freq_mode.
+				 */
+				if (audio_bus_freq_mode)
+					imx_clk_set_rate(ahb_clk, LPAPM_CLK);
+				/*
+				 * Set DDR to 24MHz.
+				 * Since we are going to bypass PLL2,
+				 * we need to move ARM clk off PLL2_PFD2
+				 * to PLL1. Make sure the PLL1 is running
+				 * at the lowest possible freq.
+				 * To work well with CPUFREQ we want to ensure that
+				 * the CPU freq does not change, so attempt to
+				 * get a freq as close to 396MHz as possible.
+				 */
+				imx_clk_set_rate(pll1_clk,
+					clk_round_rate(pll1_clk, (org_arm_rate * 2)));
+				pll1_rate = clk_get_rate(pll1_clk);
+				arm_div = pll1_rate / org_arm_rate;
+				if (pll1_rate / arm_div > org_arm_rate)
+					arm_div++;
+				/*
+				  * Need to ensure that PLL1 is bypassed and enabled
+				  * before ARM-PODF is set.
+				  */
+				clk_set_parent(pll1_bypass_clk, pll1_clk);
+				/*
+				 * Ensure ARM CLK is lower before
+				 * changing the parent.
+				 */
+				imx_clk_set_rate(arm_clk, org_arm_rate / arm_div);
+				/* Now set the ARM clk parent to PLL1_SYS. */
+				imx_clk_set_parent(pll1_sw_clk, pll1_sys_clk);
+
+				/*
+				 * Set STEP_CLK back to OSC to save power and
+				 * also to maintain the parent.The WFI iram code
+				 * will switch step_clk to osc, but the clock API
+				 * is not aware of the change and when a new request
+				 * to change the step_clk parent to pll2_pfd2_400M
+				 * is requested sometime later, the change is ignored.
+				 */
+				imx_clk_set_parent(step_clk, osc_clk);
+				/* Now set DDR to 24MHz. */
+				update_lpddr2_freq(LPAPM_CLK);
+
+				/*
+				 * Fix the clock tree in kernel.
+				 * Make sure PLL2 rate is updated as it gets
+				 * bypassed in the DDR freq change code.
+				 */
+				imx_clk_set_parent(pll2_bypass_clk, pll2_bypass_src_clk);
+				imx_clk_set_parent(periph2_clk2_sel_clk, pll2_bus_clk);
+				imx_clk_set_parent(periph2_clk, periph2_clk2_clk);
+			}
+			if (low_bus_count == 0) {
+				ultra_low_bus_freq_mode = 1;
+				low_bus_freq_mode = 0;
+				cur_bus_freq_mode = BUS_FREQ_ULTRA_LOW;
+			} else {
+				ultra_low_bus_freq_mode = 0;
+				low_bus_freq_mode = 1;
+				cur_bus_freq_mode = BUS_FREQ_LOW;
+			}
+			audio_bus_freq_mode = 0;
+		}
+	}
+}
+
+static void exit_lpm_imx6sl(void)
+{
+	/* Change DDR freq in IRAM. */
+	update_lpddr2_freq(ddr_normal_rate);
+
+	/*
+	 * Fix the clock tree in kernel.
+	 * Make sure PLL2 rate is updated as it gets
+	 * un-bypassed in the DDR freq change code.
+	 */
+	imx_clk_set_parent(pll2_bypass_clk, pll2_clk);
+	imx_clk_set_parent(periph2_pre_clk, pll2_400_clk);
+	imx_clk_set_parent(periph2_clk, periph2_pre_clk);
+
+	/* Ensure that periph_clk is sourced from PLL2_400. */
+	imx_clk_set_parent(periph_pre_clk, pll2_400_clk);
+	/*
+	 * Before switching the perhiph_clk, ensure that the
+	 * AHB/AXI will not be too fast.
+	 */
+	imx_clk_set_rate(ahb_clk, LPAPM_CLK / 3);
+	imx_clk_set_rate(ocram_clk, LPAPM_CLK / 2);
+	imx_clk_set_parent(periph_clk, periph_pre_clk);
+
+	if (low_bus_freq_mode || ultra_low_bus_freq_mode) {
+		/* Move ARM from PLL1_SW_CLK to PLL2_400. */
+		imx_clk_set_parent(step_clk, pll2_400_clk);
+		imx_clk_set_parent(pll1_sw_clk, step_clk);
+		/*
+		  * Need to ensure that PLL1 is bypassed and enabled
+		  * before ARM-PODF is set.
+		  */
+		clk_set_parent(pll1_bypass_clk, pll1_bypass_src_clk);
+		imx_clk_set_rate(arm_clk, org_arm_rate);
+		ultra_low_bus_freq_mode = 0;
+	}
 }
 
 static void enter_lpm_imx7d(void)
@@ -199,348 +552,38 @@ static void exit_lpm_imx7d(void)
 	clk_set_parent(dram_root, pll_dram);
 }
 
-/*
- * enter_lpm_imx6_up and exit_lpm_imx6_up is used by
- * i.MX6SX/i.MX6UL for entering and exiting lpm mode.
- */
-static void enter_lpm_imx6_up(void)
-{
-	if (cpu_is_imx6sx() && imx_src_is_m4_enabled())
-		if (!check_m4_sleep())
-			pr_err("M4 is NOT in sleep!!!\n");
-
-	/* set periph_clk2 to source from OSC for periph */
-	imx_clk_set_parent(periph_clk2_sel, osc_clk);
-	imx_clk_set_parent(periph_clk, periph_clk2);
-	/* set ahb/ocram to 24MHz */
-	imx_clk_set_rate(ahb_clk, LPAPM_CLK);
-	imx_clk_set_rate(ocram_clk, LPAPM_CLK);
-
-	if (audio_bus_count) {
-		/* Need to ensure that PLL2_PFD_400M is kept ON. */
-		clk_prepare_enable(pll2_400);
-		if (ddr_type == MMDC_MDMISC_DDR_TYPE_DDR3)
-			update_ddr_freq_imx6_up(LOW_AUDIO_CLK);
-		else if (ddr_type == MMDC_MDMISC_DDR_TYPE_LPDDR2)
-			update_lpddr2_freq(HIGH_AUDIO_CLK);
-		imx_clk_set_parent(periph2_clk2_sel, pll3);
-		imx_clk_set_parent(periph2_pre_clk, pll2_400);
-		imx_clk_set_parent(periph2_clk, periph2_pre_clk);
-		/*
-		 * As periph2_clk's parent is not changed from
-		 * high mode to audio mode, so clk framework
-		 * will not update its children's freq, but we
-		 * change the mmdc's podf in asm code, so here
-		 * need to update mmdc rate to make sure clk
-		 * tree is right, although it will not do any
-		 * change to hardware.
-		 */
-		if (high_bus_freq_mode) {
-			if (ddr_type == MMDC_MDMISC_DDR_TYPE_DDR3)
-				imx_clk_set_rate(mmdc_clk, LOW_AUDIO_CLK);
-			else if (ddr_type == MMDC_MDMISC_DDR_TYPE_LPDDR2)
-				imx_clk_set_rate(mmdc_clk, HIGH_AUDIO_CLK);
-		}
-		audio_bus_freq_mode = 1;
-		low_bus_freq_mode = 0;
-		cur_bus_freq_mode = BUS_FREQ_AUDIO;
-	} else {
-		if (ddr_type == MMDC_MDMISC_DDR_TYPE_DDR3)
-			update_ddr_freq_imx6_up(LPAPM_CLK);
-		else if (ddr_type == MMDC_MDMISC_DDR_TYPE_LPDDR2)
-			update_lpddr2_freq(LPAPM_CLK);
-		imx_clk_set_parent(periph2_clk2_sel, osc_clk);
-		imx_clk_set_parent(periph2_clk, periph2_clk2);
-
-		if (audio_bus_freq_mode)
-			clk_disable_unprepare(pll2_400);
-		low_bus_freq_mode = 1;
-		audio_bus_freq_mode = 0;
-		cur_bus_freq_mode = BUS_FREQ_LOW;
-	}
-}
-
-static void exit_lpm_imx6_up(void)
-{
-	clk_prepare_enable(pll2_400);
-
-	/*
-	 * lower ahb/ocram's freq first to avoid too high
-	 * freq during parent switch from OSC to pll3.
-	 */
-	if (cpu_is_imx6ul())
-		imx_clk_set_rate(ahb_clk, LPAPM_CLK / 4);
-	else
-		imx_clk_set_rate(ahb_clk, LPAPM_CLK / 3);
-	imx_clk_set_rate(ocram_clk, LPAPM_CLK / 2);
-	/* set periph clk to from pll2_bus on i.MX6UL */
-	if (cpu_is_imx6ul())
-		imx_clk_set_parent(periph_pre_clk, pll2_bus);
-	/* set periph clk to from pll2_400 */
-	else
-		imx_clk_set_parent(periph_pre_clk, pll2_400);
-	imx_clk_set_parent(periph_clk, periph_pre_clk);
-	/* set periph_clk2 to pll3 */
-	imx_clk_set_parent(periph_clk2_sel, pll3);
-
-	if (ddr_type == MMDC_MDMISC_DDR_TYPE_DDR3)
-		update_ddr_freq_imx6_up(ddr_normal_rate);
-	else if (ddr_type == MMDC_MDMISC_DDR_TYPE_LPDDR2)
-		update_lpddr2_freq(ddr_normal_rate);
-	/* correct parent info after ddr freq change in asm code */
-	imx_clk_set_parent(periph2_pre_clk, pll2_400);
-	imx_clk_set_parent(periph2_clk, periph2_pre_clk);
-	imx_clk_set_parent(periph2_clk2_sel, pll3);
-
-	/*
-	 * As periph2_clk's parent is not changed from
-	 * audio mode to high mode, so clk framework
-	 * will not update its children's freq, but we
-	 * change the mmdc's podf in asm code, so here
-	 * need to update mmdc rate to make sure clk
-	 * tree is right, although it will not do any
-	 * change to hardware.
-	 */
-	if (audio_bus_freq_mode)
-		imx_clk_set_rate(mmdc_clk, ddr_normal_rate);
-
-	clk_disable_unprepare(pll2_400);
-
-	if (audio_bus_freq_mode)
-		clk_disable_unprepare(pll2_400);
-}
-
-static void enter_lpm_imx6sl(void)
-{
-	if (high_bus_freq_mode) {
-		pll2_org_rate = clk_get_rate(pll2_bus);
-		/* Set periph_clk to be sourced from OSC_CLK */
-		imx_clk_set_parent(periph_clk2_sel, osc_clk);
-		imx_clk_set_parent(periph_clk, periph_clk2);
-		/* Ensure AHB/AXI clks are at 24MHz. */
-		imx_clk_set_rate(ahb_clk, LPAPM_CLK);
-		imx_clk_set_rate(ocram_clk, LPAPM_CLK);
-	}
-	if (audio_bus_count) {
-		/* Set AHB to 8MHz to lower pwer.*/
-		imx_clk_set_rate(ahb_clk, LPAPM_CLK / 3);
-
-		/* Set up DDR to 100MHz. */
-		update_lpddr2_freq(HIGH_AUDIO_CLK);
-
-		/* Fix the clock tree in kernel */
-		imx_clk_set_parent(periph2_pre_clk, pll2_200);
-		imx_clk_set_parent(periph2_clk, periph2_pre_clk);
-
-		if (low_bus_freq_mode || ultra_low_bus_freq_mode) {
-			/*
-			 * Fix the clock tree in kernel, make sure
-			 * pll2_bypass is updated as it is
-			 * sourced from PLL2.
-			 */
-			imx_clk_set_parent(pll2_bypass, pll2);
-			/*
-			 * Swtich ARM to run off PLL2_PFD2_400MHz
-			 * since DDR is anyway at 100MHz.
-			 */
-			imx_clk_set_parent(step_clk, pll2_400);
-			imx_clk_set_parent(pll1_sw_clk, step_clk);
-			/*
-			  * Need to ensure that PLL1 is bypassed and enabled
-			  * before ARM-PODF is set.
-			  */
-			clk_set_parent(pll1_bypass, pll1_bypass_src);
-
-			/*
-			 * Ensure that the clock will be
-			 * at original speed.
-			 */
-			imx_clk_set_rate(cpu_clk, org_arm_rate);
-		}
-		low_bus_freq_mode = 0;
-		ultra_low_bus_freq_mode = 0;
-		audio_bus_freq_mode = 1;
-		cur_bus_freq_mode = BUS_FREQ_AUDIO;
-	} else {
-		u32 arm_div, pll1_rate;
-		org_arm_rate = clk_get_rate(cpu_clk);
-		if (low_bus_freq_mode && low_bus_count == 0) {
-			/*
-			 * We are already in DDR @ 24MHz state, but
-			 * no one but ARM needs the DDR. In this case,
-			 * we can lower the DDR freq to 1MHz when ARM
-			 * enters WFI in this state. Keep track of this state.
-			 */
-			ultra_low_bus_freq_mode = 1;
-			low_bus_freq_mode = 0;
-			audio_bus_freq_mode = 0;
-			cur_bus_freq_mode = BUS_FREQ_ULTRA_LOW;
-		} else {
-			if (!ultra_low_bus_freq_mode && !low_bus_freq_mode) {
-				/*
-				 * Anyway, make sure the AHB is running at 24MHz
-				 * in low_bus_freq_mode.
-				 */
-				if (audio_bus_freq_mode)
-					imx_clk_set_rate(ahb_clk, LPAPM_CLK);
-				/*
-				 * Set DDR to 24MHz.
-				 * Since we are going to bypass PLL2,
-				 * we need to move ARM clk off PLL2_PFD2
-				 * to PLL1. Make sure the PLL1 is running
-				 * at the lowest possible freq.
-				 * To work well with CPUFREQ we want to ensure that
-				 * the CPU freq does not change, so attempt to
-				 * get a freq as close to 396MHz as possible.
-				 */
-				imx_clk_set_rate(pll1,
-					clk_round_rate(pll1, (org_arm_rate * 2)));
-				pll1_rate = clk_get_rate(pll1);
-				arm_div = pll1_rate / org_arm_rate;
-				if (pll1_rate / arm_div > org_arm_rate)
-					arm_div++;
-				/*
-				  * Need to ensure that PLL1 is bypassed and enabled
-				  * before ARM-PODF is set.
-				  */
-				clk_set_parent(pll1_bypass, pll1);
-				/*
-				 * Ensure ARM CLK is lower before
-				 * changing the parent.
-				 */
-				imx_clk_set_rate(cpu_clk, org_arm_rate / arm_div);
-				/* Now set the ARM clk parent to PLL1_SYS. */
-				imx_clk_set_parent(pll1_sw_clk, pll1_sys);
-
-				/*
-				 * Set STEP_CLK back to OSC to save power and
-				 * also to maintain the parent.The WFI iram code
-				 * will switch step_clk to osc, but the clock API
-				 * is not aware of the change and when a new request
-				 * to change the step_clk parent to pll2_pfd2_400M
-				 * is requested sometime later, the change is ignored.
-				 */
-				imx_clk_set_parent(step_clk, osc_clk);
-				/* Now set DDR to 24MHz. */
-				update_lpddr2_freq(LPAPM_CLK);
-
-				/*
-				 * Fix the clock tree in kernel.
-				 * Make sure PLL2 rate is updated as it gets
-				 * bypassed in the DDR freq change code.
-				 */
-				imx_clk_set_parent(pll2_bypass, pll2_bypass_src);
-				imx_clk_set_parent(periph2_clk2_sel, pll2_bus);
-				imx_clk_set_parent(periph2_clk, periph2_clk2);
-			}
-			if (low_bus_count == 0) {
-				ultra_low_bus_freq_mode = 1;
-				low_bus_freq_mode = 0;
-				cur_bus_freq_mode = BUS_FREQ_ULTRA_LOW;
-			} else {
-				ultra_low_bus_freq_mode = 0;
-				low_bus_freq_mode = 1;
-				cur_bus_freq_mode = BUS_FREQ_LOW;
-			}
-			audio_bus_freq_mode = 0;
-		}
-	}
-}
-
-static void exit_lpm_imx6sl(void)
-{
-	/* Change DDR freq in IRAM. */
-	update_lpddr2_freq(ddr_normal_rate);
-
-	/*
-	 * Fix the clock tree in kernel.
-	 * Make sure PLL2 rate is updated as it gets
-	 * un-bypassed in the DDR freq change code.
-	 */
-	imx_clk_set_parent(pll2_bypass, pll2);
-	imx_clk_set_parent(periph2_pre_clk, pll2_400);
-	imx_clk_set_parent(periph2_clk, periph2_pre_clk);
-
-	/* Ensure that periph_clk is sourced from PLL2_400. */
-	imx_clk_set_parent(periph_pre_clk, pll2_400);
-	/*
-	 * Before switching the perhiph_clk, ensure that the
-	 * AHB/AXI will not be too fast.
-	 */
-	imx_clk_set_rate(ahb_clk, LPAPM_CLK / 3);
-	imx_clk_set_rate(ocram_clk, LPAPM_CLK / 2);
-	imx_clk_set_parent(periph_clk, periph_pre_clk);
-
-	if (low_bus_freq_mode || ultra_low_bus_freq_mode) {
-		/* Move ARM from PLL1_SW_CLK to PLL2_400. */
-		imx_clk_set_parent(step_clk, pll2_400);
-		imx_clk_set_parent(pll1_sw_clk, step_clk);
-		/*
-		  * Need to ensure that PLL1 is bypassed and enabled
-		  * before ARM-PODF is set.
-		  */
-		clk_set_parent(pll1_bypass, pll1_bypass_src);
-		imx_clk_set_rate(cpu_clk, org_arm_rate);
-		ultra_low_bus_freq_mode = 0;
-	}
-}
-
 static void reduce_bus_freq(void)
 {
 	if (cpu_is_imx6())
-		clk_prepare_enable(pll3);
+		clk_prepare_enable(pll3_clk);
+
 	if (audio_bus_count && (low_bus_freq_mode || ultra_low_bus_freq_mode))
 		busfreq_notify(LOW_BUSFREQ_EXIT);
 	else if (!audio_bus_count)
 		busfreq_notify(LOW_BUSFREQ_ENTER);
+
 	if (cpu_is_imx7d())
 		enter_lpm_imx7d();
-	else if (cpu_is_imx6sl())
-		enter_lpm_imx6sl();
 	else if (cpu_is_imx6sx() || cpu_is_imx6ul())
 		enter_lpm_imx6_up();
-	else {
-		if (cpu_is_imx6dl())
-			/* Set axi to periph_clk */
-			imx_clk_set_parent(axi_sel_clk, periph_clk);
-
-		if (audio_bus_count) {
-			/* Need to ensure that PLL2_PFD_400M is kept ON. */
-			clk_prepare_enable(pll2_400);
-			update_ddr_freq_imx_smp(LOW_AUDIO_CLK);
-			/* Make sure periph clk's parent also got updated */
-			imx_clk_set_parent(periph_clk2_sel, pll3);
-			imx_clk_set_parent(periph_pre_clk, pll2_200);
-			imx_clk_set_parent(periph_clk, periph_pre_clk);
-			audio_bus_freq_mode = 1;
-			low_bus_freq_mode = 0;
-			cur_bus_freq_mode = BUS_FREQ_AUDIO;
-		} else {
-			update_ddr_freq_imx_smp(LPAPM_CLK);
-			/* Make sure periph clk's parent also got updated */
-			imx_clk_set_parent(periph_clk2_sel, osc_clk);
-			/* Set periph_clk parent to OSC via periph_clk2_sel */
-			imx_clk_set_parent(periph_clk, periph_clk2);
-			if (audio_bus_freq_mode)
-				clk_disable_unprepare(pll2_400);
-			low_bus_freq_mode = 1;
-			audio_bus_freq_mode = 0;
-			cur_bus_freq_mode = BUS_FREQ_LOW;
-		}
-	}
-	if (cpu_is_imx6())
-		clk_disable_unprepare(pll3);
+	else if (cpu_is_imx6q() || cpu_is_imx6dl())
+		enter_lpm_imx6_smp();
+	else if (cpu_is_imx6sl())
+		enter_lpm_imx6sl();
 
 	med_bus_freq_mode = 0;
 	high_bus_freq_mode = 0;
 
+	if (cpu_is_imx6())
+		clk_disable_unprepare(pll3_clk);
+
 	if (audio_bus_freq_mode)
-		dev_dbg(busfreq_dev, "Bus freq set to audio mode. Count:\
-			high %d, med %d, audio %d\n",
+		dev_dbg(busfreq_dev,
+			"Bus freq set to audio mode. Count: high %d, med %d, audio %d\n",
 			high_bus_count, med_bus_count, audio_bus_count);
 	if (low_bus_freq_mode)
-		dev_dbg(busfreq_dev, "Bus freq set to low mode. Count:\
-			high %d, med %d, audio %d\n",
+		dev_dbg(busfreq_dev,
+			"Bus freq set to low mode. Count: high %d, med %d, audio %d\n",
 			high_bus_count, med_bus_count, audio_bus_count);
 }
 
@@ -590,18 +633,11 @@ int set_low_bus_freq(void)
  */
 static int set_high_bus_freq(int high_bus_freq)
 {
-	struct clk *periph_clk_parent;
-
 	if (bus_freq_scaling_initialized && bus_freq_scaling_is_active)
 		cancel_delayed_work_sync(&low_bus_freq_handler);
 
 	if (busfreq_suspended)
 		return 0;
-
-	if (cpu_is_imx6q())
-		periph_clk_parent = pll2_bus;
-	else
-		periph_clk_parent = pll2_400;
 
 	if (!bus_freq_scaling_initialized || !bus_freq_scaling_is_active)
 		return 0;
@@ -617,38 +653,16 @@ static int set_high_bus_freq(int high_bus_freq)
 		busfreq_notify(LOW_BUSFREQ_EXIT);
 
 	if (cpu_is_imx6())
-		clk_prepare_enable(pll3);
+		clk_prepare_enable(pll3_clk);
 
 	if (cpu_is_imx7d())
 		exit_lpm_imx7d();
-	else if (cpu_is_imx6sl())
-		exit_lpm_imx6sl();
 	else if (cpu_is_imx6sx() || cpu_is_imx6ul())
 		exit_lpm_imx6_up();
-	else {
-		if (high_bus_freq) {
-			clk_prepare_enable(pll2_400);
-			update_ddr_freq_imx_smp(ddr_normal_rate);
-			/* Make sure periph clk's parent also got updated */
-			imx_clk_set_parent(periph_clk2_sel, pll3);
-			imx_clk_set_parent(periph_pre_clk, periph_clk_parent);
-			imx_clk_set_parent(periph_clk, periph_pre_clk);
-			if (cpu_is_imx6dl()) {
-				/* Set axi to pll3_pfd1_540m */
-				imx_clk_set_parent(axi_alt_sel_clk, pll3_pfd1_540m);
-				imx_clk_set_parent(axi_sel_clk, axi_alt_sel_clk);
-			}
-			clk_disable_unprepare(pll2_400);
-		} else {
-			update_ddr_freq_imx_smp(ddr_med_rate);
-			/* Make sure periph clk's parent also got updated */
-			imx_clk_set_parent(periph_clk2_sel, pll3);
-			imx_clk_set_parent(periph_pre_clk, pll2_400);
-			imx_clk_set_parent(periph_clk, periph_pre_clk);
-		}
-		if (audio_bus_freq_mode)
-			clk_disable_unprepare(pll2_400);
-	}
+	else if (cpu_is_imx6q() || cpu_is_imx6dl())
+		exit_lpm_imx6_smp();
+	else if (cpu_is_imx6sl())
+		exit_lpm_imx6sl();
 
 	high_bus_freq_mode = 1;
 	med_bus_freq_mode = 0;
@@ -657,14 +671,15 @@ static int set_high_bus_freq(int high_bus_freq)
 	cur_bus_freq_mode = BUS_FREQ_HIGH;
 
 	if (cpu_is_imx6())
-		clk_disable_unprepare(pll3);
+		clk_disable_unprepare(pll3_clk);
+
 	if (high_bus_freq_mode)
-		dev_dbg(busfreq_dev, "Bus freq set to high mode. Count:\
-			high %d, med %d, audio %d\n",
+		dev_dbg(busfreq_dev,
+			"Bus freq set to high mode. Count: high %d, med %d, audio %d\n",
 			high_bus_count, med_bus_count, audio_bus_count);
 	if (med_bus_freq_mode)
-		dev_dbg(busfreq_dev, "Bus freq set to med mode. Count:\
-			high %d, med %d, audio %d\n",
+		dev_dbg(busfreq_dev,
+			"Bus freq set to med mode. Count: high %d, med %d, audio %d\n",
 			high_bus_count, med_bus_count, audio_bus_count);
 
 	return 0;
@@ -675,8 +690,7 @@ void request_bus_freq(enum bus_freq_mode mode)
 	mutex_lock(&bus_freq_mutex);
 
 	if (mode == BUS_FREQ_ULTRA_LOW) {
-		dev_dbg(busfreq_dev, "This mode is automatically entered, cannot \
-			be requested.\n");
+		dev_dbg(busfreq_dev, "This mode cannot be requested!\n");
 		mutex_unlock(&bus_freq_mutex);
 		return;
 	}
@@ -697,14 +711,6 @@ void request_bus_freq(enum bus_freq_mode mode)
 	}
 	cancel_delayed_work_sync(&low_bus_freq_handler);
 
-	if (cpu_is_imx6dl() || cpu_is_imx6sx()) {
-		/* No support for medium setpoint on i.MX6DL and i.MX6SX. */
-		if (mode == BUS_FREQ_MED) {
-			high_bus_count++;
-			mode = BUS_FREQ_HIGH;
-		}
-	}
-
 	if ((mode == BUS_FREQ_HIGH) && (!high_bus_freq_mode)) {
 		set_high_bus_freq(1);
 		mutex_unlock(&bus_freq_mutex);
@@ -724,7 +730,6 @@ void request_bus_freq(enum bus_freq_mode mode)
 		return;
 	}
 	mutex_unlock(&bus_freq_mutex);
-	return;
 }
 EXPORT_SYMBOL(request_bus_freq);
 
@@ -733,8 +738,8 @@ void release_bus_freq(enum bus_freq_mode mode)
 	mutex_lock(&bus_freq_mutex);
 
 	if (mode == BUS_FREQ_ULTRA_LOW) {
-		dev_dbg(busfreq_dev, "This mode is automatically entered, cannot \
-			be released.\n");
+		dev_dbg(busfreq_dev,
+			"This mode cannot be released!\n");
 		mutex_unlock(&bus_freq_mutex);
 		return;
 	}
@@ -779,14 +784,6 @@ void release_bus_freq(enum bus_freq_mode mode)
 		return;
 	}
 
-	if (cpu_is_imx6dl() || cpu_is_imx6sx()) {
-		/* No support for medium setpoint on i.MX6DL and i.MX6SX. */
-		if (mode == BUS_FREQ_MED) {
-			high_bus_count--;
-			mode = BUS_FREQ_HIGH;
-		}
-	}
-
 	if ((!audio_bus_freq_mode) && (high_bus_count == 0) &&
 		(med_bus_count == 0) && (audio_bus_count != 0)) {
 		set_low_bus_freq();
@@ -809,7 +806,6 @@ void release_bus_freq(enum bus_freq_mode mode)
 	}
 
 	mutex_unlock(&bus_freq_mutex);
-	return;
 }
 EXPORT_SYMBOL(release_bus_freq);
 
@@ -834,20 +830,23 @@ static int __init imx_dt_find_ddr_sram(unsigned long node,
 		const char *uname, int depth, void *data)
 {
 	unsigned long ddr_iram_addr;
-	__be32 *prop;
+	const __be32 *prop;
 
 	if (of_flat_dt_match(node, ddr_freq_iram_match)) {
-		unsigned long len;
+		unsigned int len;
+
 		prop = of_get_flat_dt_prop(node, "reg", &len);
 		if (prop == NULL || len != (sizeof(unsigned long) * 2))
-			return EINVAL;
+			return -EINVAL;
 		ddr_iram_addr = be32_to_cpu(prop[0]);
 		ddr_freq_change_total_size = be32_to_cpu(prop[1]);
 		ddr_freq_change_iram_phys = ddr_iram_addr;
 
 		/* Make sure ddr_freq_change_iram_phys is 8 byte aligned. */
 		if ((uintptr_t)(ddr_freq_change_iram_phys) & (FNCPY_ALIGN - 1))
-			ddr_freq_change_iram_phys += FNCPY_ALIGN - ((uintptr_t)ddr_freq_change_iram_phys % (FNCPY_ALIGN));
+			ddr_freq_change_iram_phys += FNCPY_ALIGN -
+				((uintptr_t)ddr_freq_change_iram_phys %
+				(FNCPY_ALIGN));
 	}
 	return 0;
 }
@@ -860,21 +859,27 @@ void __init imx_busfreq_map_io(void)
 	 */
 	WARN_ON(of_scan_flat_dt(imx_dt_find_ddr_sram, NULL));
 	if (ddr_freq_change_iram_phys) {
-		ddr_freq_change_iram_base = IMX_IO_P2V(ddr_freq_change_iram_phys);
-		if ((iram_tlb_phys_addr & 0xFFF00000) != (ddr_freq_change_iram_phys & 0xFFF00000)) {
+		ddr_freq_change_iram_base = IMX_IO_P2V(
+			ddr_freq_change_iram_phys);
+		if ((iram_tlb_phys_addr & 0xFFF00000) !=
+			(ddr_freq_change_iram_phys & 0xFFF00000)) {
 			/* We need to create a 1M page table entry. */
-			ddr_iram_io_desc.virtual = IMX_IO_P2V(ddr_freq_change_iram_phys & 0xFFF00000);
-			ddr_iram_io_desc.pfn = __phys_to_pfn(ddr_freq_change_iram_phys & 0xFFF00000);
+			ddr_iram_io_desc.virtual = IMX_IO_P2V(
+				ddr_freq_change_iram_phys & 0xFFF00000);
+			ddr_iram_io_desc.pfn = __phys_to_pfn(
+				ddr_freq_change_iram_phys & 0xFFF00000);
 			iotable_init(&ddr_iram_io_desc, 1);
 		}
-		memset((void *)ddr_freq_change_iram_base, 0, ddr_freq_change_total_size);
+		memset((void *)ddr_freq_change_iram_base, 0,
+			ddr_freq_change_total_size);
 	}
 }
 
 static void bus_freq_daemon_handler(struct work_struct *work)
 {
 	mutex_lock(&bus_freq_mutex);
-	if ((!low_bus_freq_mode) && (!ultra_low_bus_freq_mode) && (high_bus_count == 0) &&
+	if ((!low_bus_freq_mode) && (!ultra_low_bus_freq_mode)
+		&& (high_bus_count == 0) &&
 		(med_bus_count == 0) && (audio_bus_count == 0))
 		set_low_bus_freq();
 	mutex_unlock(&bus_freq_mutex);
@@ -971,230 +976,96 @@ static int busfreq_probe(struct platform_device *pdev)
 
 	/* Return if no IRAM space is allocated for ddr freq change code. */
 	if (!ddr_freq_change_iram_base)
-		return ENOMEM;
+		return -ENOMEM;
 
 	if (cpu_is_imx6()) {
-		pll2_400 = devm_clk_get(&pdev->dev, "pll2_pfd2_396m");
-		if (IS_ERR(pll2_400)) {
-			dev_err(busfreq_dev, "%s: failed to get pll2_pfd2_396m\n",
-			__func__);
-			return PTR_ERR(pll2_400);
-		}
-
-		pll2_200 = devm_clk_get(&pdev->dev, "pll2_198m");
-		if (IS_ERR(pll2_200)) {
-			dev_err(busfreq_dev, "%s: failed to get pll2_198m\n",
-				__func__);
-			return PTR_ERR(pll2_200);
-		}
-
-		pll2_bus = devm_clk_get(&pdev->dev, "pll2_bus");
-		if (IS_ERR(pll2_bus)) {
-			dev_err(busfreq_dev, "%s: failed to get pll2_bus\n",
-				__func__);
-			return PTR_ERR(pll2_bus);
-		}
-
-		cpu_clk = devm_clk_get(&pdev->dev, "arm");
-		if (IS_ERR(cpu_clk)) {
-			dev_err(busfreq_dev, "%s: failed to get cpu_clk\n",
-				__func__);
-			return PTR_ERR(cpu_clk);
-		}
-
-		pll3 = devm_clk_get(&pdev->dev, "pll3_usb_otg");
-		if (IS_ERR(pll3)) {
-			dev_err(busfreq_dev, "%s: failed to get pll3_usb_otg\n",
-				__func__);
-			return PTR_ERR(pll3);
-		}
-
-		periph_clk = devm_clk_get(&pdev->dev, "periph");
-		if (IS_ERR(periph_clk)) {
-			dev_err(busfreq_dev, "%s: failed to get periph\n",
-				__func__);
-			return PTR_ERR(periph_clk);
-		}
-
-		periph_pre_clk = devm_clk_get(&pdev->dev, "periph_pre");
-		if (IS_ERR(periph_pre_clk)) {
-			dev_err(busfreq_dev, "%s: failed to get periph_pre\n",
-				__func__);
-			return PTR_ERR(periph_pre_clk);
-		}
-
-		periph_clk2 = devm_clk_get(&pdev->dev, "periph_clk2");
-		if (IS_ERR(periph_clk2)) {
-			dev_err(busfreq_dev, "%s: failed to get periph_clk2\n",
-				__func__);
-			return PTR_ERR(periph_clk2);
-		}
-
-		periph_clk2_sel = devm_clk_get(&pdev->dev, "periph_clk2_sel");
-		if (IS_ERR(periph_clk2_sel)) {
-			dev_err(busfreq_dev, "%s: failed to get periph_clk2_sel\n",
-				__func__);
-			return PTR_ERR(periph_clk2_sel);
-		}
-
 		osc_clk = devm_clk_get(&pdev->dev, "osc");
-		if (IS_ERR(osc_clk)) {
-			dev_err(busfreq_dev, "%s: failed to get osc_clk\n",
-				__func__);
-			return PTR_ERR(osc_clk);
+		pll2_400_clk = devm_clk_get(&pdev->dev, "pll2_pfd2_396m");
+		pll2_200_clk = devm_clk_get(&pdev->dev, "pll2_198m");
+		pll2_bus_clk = devm_clk_get(&pdev->dev, "pll2_bus");
+		pll3_clk = devm_clk_get(&pdev->dev, "pll3_usb_otg");
+		periph_clk = devm_clk_get(&pdev->dev, "periph");
+		periph_pre_clk = devm_clk_get(&pdev->dev, "periph_pre");
+		periph_clk2_clk = devm_clk_get(&pdev->dev, "periph_clk2");
+		periph_clk2_sel_clk = devm_clk_get(&pdev->dev,
+			"periph_clk2_sel");
+		if (IS_ERR(osc_clk) || IS_ERR(pll2_400_clk)
+			|| IS_ERR(pll2_200_clk) || IS_ERR(pll2_bus_clk)
+			|| IS_ERR(pll3_clk) || IS_ERR(periph_clk)
+			|| IS_ERR(periph_pre_clk) || IS_ERR(periph_clk2_clk)
+			|| IS_ERR(periph_clk2_sel_clk)) {
+			dev_err(busfreq_dev,
+				"%s: failed to get busfreq clk\n", __func__);
+			return -EINVAL;
 		}
 	}
 
 	if (cpu_is_imx6dl()) {
 		axi_alt_sel_clk = devm_clk_get(&pdev->dev, "axi_alt_sel");
-		if (IS_ERR(axi_alt_sel_clk)) {
-			dev_err(busfreq_dev, "%s: failed to get axi_alt_sel_clk\n",
-				__func__);
-			return PTR_ERR(axi_alt_sel_clk);
-		}
-
 		axi_sel_clk = devm_clk_get(&pdev->dev, "axi_sel");
-		if (IS_ERR(axi_sel_clk)) {
-			dev_err(busfreq_dev, "%s: failed to get axi_sel_clk\n",
-				__func__);
-			return PTR_ERR(axi_sel_clk);
-		}
-
-		pll3_pfd1_540m = devm_clk_get(&pdev->dev, "pll3_pfd1_540m");
-		if (IS_ERR(pll3_pfd1_540m)) {
+		pll3_pfd1_540m_clk = devm_clk_get(&pdev->dev, "pll3_pfd1_540m");
+		if (IS_ERR(axi_alt_sel_clk) || IS_ERR(axi_sel_clk)
+			|| IS_ERR(pll3_pfd1_540m_clk)) {
 			dev_err(busfreq_dev,
-				"%s: failed to get pll3_pfd1_540m\n", __func__);
-			return PTR_ERR(pll3_pfd1_540m);
+				"%s: failed to get busfreq clk\n", __func__);
+			return -EINVAL;
 		}
 	}
 
-	if (cpu_is_imx6sl() || cpu_is_imx6sx() || cpu_is_imx6ul()) {
+	if (cpu_is_imx6sx() || cpu_is_imx6ul() || cpu_is_imx6sl()) {
 		ahb_clk = devm_clk_get(&pdev->dev, "ahb");
-		if (IS_ERR(ahb_clk)) {
-			dev_err(busfreq_dev, "%s: failed to get ahb_clk\n",
-				__func__);
-			return PTR_ERR(ahb_clk);
-		}
-
 		ocram_clk = devm_clk_get(&pdev->dev, "ocram");
-		if (IS_ERR(ocram_clk)) {
-			dev_err(busfreq_dev, "%s: failed to get ocram_clk\n",
-				__func__);
-			return PTR_ERR(ocram_clk);
-		}
-
 		periph2_clk = devm_clk_get(&pdev->dev, "periph2");
-		if (IS_ERR(periph2_clk)) {
-			dev_err(busfreq_dev, "%s: failed to get periph2\n",
-				__func__);
-			return PTR_ERR(periph2_clk);
-		}
-
 		periph2_pre_clk = devm_clk_get(&pdev->dev, "periph2_pre");
-		if (IS_ERR(periph2_pre_clk)) {
+		periph2_clk2_clk = devm_clk_get(&pdev->dev, "periph2_clk2");
+		periph2_clk2_sel_clk =
+			devm_clk_get(&pdev->dev, "periph2_clk2_sel");
+		if (IS_ERR(ahb_clk) || IS_ERR(ocram_clk)
+			|| IS_ERR(periph2_clk) || IS_ERR(periph2_pre_clk)
+			|| IS_ERR(periph2_clk2_clk)
+			|| IS_ERR(periph2_clk2_sel_clk)) {
 			dev_err(busfreq_dev,
-				"%s: failed to get periph2_pre_clk\n",
-				__func__);
-			return PTR_ERR(periph2_pre_clk);
-		}
-
-		periph2_clk2 = devm_clk_get(&pdev->dev, "periph2_clk2");
-		if (IS_ERR(periph2_clk2)) {
-			dev_err(busfreq_dev,
-				"%s: failed to get periph2_clk2\n",
-				__func__);
-			return PTR_ERR(periph2_clk2);
-		}
-
-		periph2_clk2_sel = devm_clk_get(&pdev->dev, "periph2_clk2_sel");
-		if (IS_ERR(periph2_clk2_sel)) {
-			dev_err(busfreq_dev,
-				"%s: failed to get periph2_clk2_sel\n",
-				__func__);
-			return PTR_ERR(periph2_clk2_sel);
-		}
-
-		step_clk = devm_clk_get(&pdev->dev, "step");
-		if (IS_ERR(step_clk)) {
-			dev_err(busfreq_dev,
-				"%s: failed to get step_clk\n",
-				__func__);
-			return PTR_ERR(step_clk);
+				"%s: failed to get busfreq clk for imx6ul/sx/sl.\n", __func__);
+			return -EINVAL;
 		}
 	}
-	if (cpu_is_imx6sl()) {
-		pll1 = devm_clk_get(&pdev->dev, "pll1");
-		if (IS_ERR(pll1)) {
-			dev_err(busfreq_dev, "%s: failed to get pll1\n",
-				__func__);
-			return PTR_ERR(pll1);
-		}
 
-		pll1_bypass = devm_clk_get(&pdev->dev, "pll1_bypass");
-		if (IS_ERR(pll1_bypass)) {
-			dev_err(busfreq_dev, "%s: failed to get pll1_bypass\n",
-				__func__);
-			return PTR_ERR(pll1_bypass);
-		}
-
-		pll1_bypass_src = devm_clk_get(&pdev->dev, "pll1_bypass_src");
-		if (IS_ERR(pll1_bypass_src)) {
-			dev_err(busfreq_dev, "%s: failed to get pll1_bypass_src\n",
-				__func__);
-			return PTR_ERR(pll1_bypass_src);
-		}
-
-		pll1_sys = devm_clk_get(&pdev->dev, "pll1_sys");
-		if (IS_ERR(pll1_sys)) {
-			dev_err(busfreq_dev, "%s: failed to get pll1_sys\n",
-				__func__);
-			return PTR_ERR(pll1_sys);
-		}
-
-		pll1_sw_clk = devm_clk_get(&pdev->dev, "pll1_sw");
-		if (IS_ERR(pll1_sw_clk)) {
-			dev_err(busfreq_dev, "%s: failed to get pll1_sw_clk\n",
-				__func__);
-			return PTR_ERR(pll1_sw_clk);
-		}
-
-		pll2_bypass_src = devm_clk_get(&pdev->dev, "pll2_bypass_src");
-		if (IS_ERR(pll2_bypass_src)) {
-			dev_err(busfreq_dev, "%s: failed to get pll2_bypass_src\n",
-				__func__);
-			return PTR_ERR(pll2_bypass_src);
-		}
-
-		pll2 = devm_clk_get(&pdev->dev, "pll2");
-		if (IS_ERR(pll2)) {
-			dev_err(busfreq_dev, "%s: failed to get pll2\n",
-				__func__);
-			return PTR_ERR(pll2);
-		}
-
-		pll2_bypass = devm_clk_get(&pdev->dev, "pll2_bypass");
-		if (IS_ERR(pll2_bypass)) {
-			dev_err(busfreq_dev, "%s: failed to get pll2_bypass\n",
-				__func__);
-			return PTR_ERR(pll2_bypass);
-		}
-	}
 	if (cpu_is_imx6sx() || cpu_is_imx6ul()) {
 		mmdc_clk = devm_clk_get(&pdev->dev, "mmdc");
 		if (IS_ERR(mmdc_clk)) {
 			dev_err(busfreq_dev,
-				"%s: failed to get mmdc_clk\n",
-				__func__);
-			return PTR_ERR(mmdc_clk);
+				"%s: failed to get mmdc clk for imx6sx/ul.\n", __func__);
+			return -EINVAL;
 		}
 	}
+
 	if (cpu_is_imx6sx()) {
 		m4_clk = devm_clk_get(&pdev->dev, "m4");
 		if (IS_ERR(m4_clk)) {
+			dev_err(busfreq_dev, "%s: failed to get m4 clk.\n", __func__);
+			return -EINVAL;
+		}
+	}
+
+	if (cpu_is_imx6sl()) {
+		arm_clk = devm_clk_get(&pdev->dev, "arm");
+		step_clk = devm_clk_get(&pdev->dev, "step");
+		pll1_clk = devm_clk_get(&pdev->dev, "pll1");
+		pll1_bypass_src_clk = devm_clk_get(&pdev->dev, "pll1_bypass_src");
+		pll1_bypass_clk = devm_clk_get(&pdev->dev, "pll1_bypass");
+		pll1_sys_clk = devm_clk_get(&pdev->dev, "pll1_sys");
+		pll1_sw_clk = devm_clk_get(&pdev->dev, "pll1_sw");
+		pll2_bypass_src_clk = devm_clk_get(&pdev->dev, "pll2_bypass_src");
+		pll2_bypass_clk = devm_clk_get(&pdev->dev, "pll2_bypass");
+		pll2_clk = devm_clk_get(&pdev->dev, "pll2");
+		if (IS_ERR(arm_clk) || IS_ERR(step_clk) || IS_ERR(pll1_clk)
+			|| IS_ERR(pll1_bypass_src_clk) || IS_ERR(pll1_bypass_clk)
+			|| IS_ERR(pll1_sys_clk) || IS_ERR(pll1_sw_clk)
+			|| IS_ERR(pll2_bypass_src_clk) || IS_ERR(pll2_bypass_clk)
+			|| IS_ERR(pll2_clk)) {
 			dev_err(busfreq_dev,
-				"%s: failed to get m4_clk\n",
-				__func__);
-			return PTR_ERR(m4_clk);
+				"%s failed to get busfreq clk for imx6sl.\n", __func__);
+			return -EINVAL;
 		}
 	}
 
@@ -1247,14 +1118,6 @@ static int busfreq_probe(struct platform_device *pdev)
 	bus_freq_scaling_initialized = 1;
 
 	ddr_low_rate = LPAPM_CLK;
-	if (cpu_is_imx6q()) {
-		if (of_property_read_u32(pdev->dev.of_node, "fsl,med_ddr_freq",
-				&ddr_med_rate)) {
-			dev_info(busfreq_dev,
-					"DDR medium rate not supported.\n");
-			ddr_med_rate = ddr_normal_rate;
-		}
-	}
 
 	INIT_DELAYED_WORK(&low_bus_freq_handler, reduce_bus_freq_handler);
 	INIT_DELAYED_WORK(&bus_freq_daemon, bus_freq_daemon_handler);
@@ -1266,10 +1129,13 @@ static int busfreq_probe(struct platform_device *pdev)
 		msecs_to_jiffies(10000));
 
 	/*
-	 * Need to make sure to an entry for the ddr freq change code address in the IRAM page table.
-	 * This is only required if the DDR freq code and suspend/idle code are in different OCRAM spaces.
+	 * Need to make sure to an entry for the ddr freq change code
+	 * address in the IRAM page table.
+	 * This is only required if the DDR freq code and suspend/idle
+	 * code are in different OCRAM spaces.
 	 */
-	if ((iram_tlb_phys_addr & 0xFFF00000) != (ddr_freq_change_iram_phys & 0xFFF00000)) {
+	if ((iram_tlb_phys_addr & 0xFFF00000) !=
+		(ddr_freq_change_iram_phys & 0xFFF00000)) {
 		unsigned long i;
 
 		/*
@@ -1278,22 +1144,33 @@ static int busfreq_probe(struct platform_device *pdev)
 		 */
 		i = ((IMX_IO_P2V(ddr_freq_change_iram_phys) >> 20) << 2) / 4;
 		*((unsigned long *)iram_tlb_base_addr + i) =
-			(ddr_freq_change_iram_phys  & 0xFFF00000) | TT_ATTRIB_NON_CACHEABLE_1M;
+			(ddr_freq_change_iram_phys  & 0xFFF00000) |
+			TT_ATTRIB_NON_CACHEABLE_1M;
 	}
 
 	if (cpu_is_imx7d()) {
+		ddr_type = imx_ddrc_get_ddr_type();
+		/* reduce ddr3 normal rate to 400M due to CKE issue on TO1.1 */
+		if (imx_get_soc_revision() == IMX_CHIP_REVISION_1_1 &&
+			ddr_type == IMX_DDR_TYPE_DDR3) {
+			ddr_normal_rate = 400000000;
+			pr_info("ddr3 normal rate changed to 400MHz for TO1.1.\n");
+		}
 		err = init_ddrc_ddr_settings(pdev);
-	} else if (cpu_is_imx6sl()) {
-		err = init_mmdc_lpddr2_settings(pdev);
 	} else if (cpu_is_imx6sx() || cpu_is_imx6ul()) {
 		ddr_type = imx_mmdc_get_ddr_type();
-		/* check whether it is a DDR3 or LPDDR2 board */
-		if (ddr_type == MMDC_MDMISC_DDR_TYPE_DDR3)
+		if (ddr_type == IMX_DDR_TYPE_DDR3)
 			err = init_mmdc_ddr3_settings_imx6_up(pdev);
-		else if (ddr_type == MMDC_MDMISC_DDR_TYPE_LPDDR2)
+		else if (ddr_type == IMX_DDR_TYPE_LPDDR2)
 			err = init_mmdc_lpddr2_settings(pdev);
-	} else {
-		err = init_mmdc_ddr3_settings_imx6q(pdev);
+	} else if (cpu_is_imx6q() || cpu_is_imx6dl()) {
+		ddr_type = imx_mmdc_get_ddr_type();
+		if (ddr_type == MMDC_MDMISC_DDR_TYPE_DDR3)
+			err = init_mmdc_ddr3_settings_imx6_smp(pdev);
+		else if (ddr_type == MMDC_MDMISC_DDR_TYPE_LPDDR2)
+			err = init_mmdc_lpddr2_settings_mx6q(pdev);
+	} else if (cpu_is_imx6sl()) {
+		err = init_mmdc_lpddr2_settings(pdev);
 	}
 
 	if (cpu_is_imx6sx()) {

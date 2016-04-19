@@ -29,16 +29,19 @@
 #include <linux/mutex.h>
 #include <linux/pm_qos.h>
 
-/* Controller needs driver to fill txfifo, TKT253890 */
-#define QUADSPI_QUIRK_TKT253890		(1 << 0)
 /* Controller needs driver to swap endian */
-#define QUADSPI_QUIRK_SWAP_ENDIAN	(1 << 1)
+#define QUADSPI_QUIRK_SWAP_ENDIAN	(1 << 0)
+/* Controller needs 4x internal clock */
+#define QUADSPI_QUIRK_4X_INT_CLK	(1 << 1)
 /* Controller needs DDR delay */
 #define QUADSPI_QUIRK_DDR_DELAY		(1 << 2)
-/* Controller cannot wake up wait mode, TKT245618 */
-#define QUADSPI_QUIRK_TKT245618		(1 << 3)
-/* Controller needs 4x internal clock */
-#define QUADSPI_QUIRK_4X_INT_CLK	(1 << 4)
+/*
+ * TKT253890, Controller needs driver to fill txfifo till 16 byte to
+ * trigger data transfer even though extern data will not transferred.
+ */
+#define QUADSPI_QUIRK_TKT253890		(1 << 2)
+/* Controller cannot wake up from wait mode, TKT245618 */
+#define QUADSPI_QUIRK_TKT245618         (1 << 3)
 
 /* The registers */
 #define QUADSPI_MCR			0x00
@@ -211,6 +214,10 @@
 #define SEQID_RDCR		9
 #define SEQID_EN4B		10
 #define SEQID_BRWR		11
+#define SEQID_RD_EVCR		12
+#define SEQID_WD_EVCR		13
+
+#define QUADSPI_MIN_IOMAP SZ_4M
 
 enum fsl_qspi_devtype {
 	FSL_QUADSPI_VYBRID,
@@ -232,7 +239,7 @@ static struct fsl_qspi_devtype_data vybrid_data = {
 	.rxfifo = 128,
 	.txfifo = 64,
 	.ahb_buf_size = 1024,
-	.driver_data = QUADSPI_QUIRK_SWAP_ENDIAN
+	.driver_data = QUADSPI_QUIRK_SWAP_ENDIAN,
 };
 
 static struct fsl_qspi_devtype_data imx6sx_data = {
@@ -240,9 +247,9 @@ static struct fsl_qspi_devtype_data imx6sx_data = {
 	.rxfifo = 128,
 	.txfifo = 512,
 	.ahb_buf_size = 1024,
-	.driver_data = QUADSPI_QUIRK_TKT245618
+	.driver_data = QUADSPI_QUIRK_4X_INT_CLK
 		| QUADSPI_QUIRK_DDR_DELAY
-		| QUADSPI_QUIRK_4X_INT_CLK
+		| QUADSPI_QUIRK_TKT245618,
 };
 
 static struct fsl_qspi_devtype_data imx7d_data = {
@@ -251,8 +258,7 @@ static struct fsl_qspi_devtype_data imx7d_data = {
 	.txfifo = 512,
 	.ahb_buf_size = 1024,
 	.driver_data = QUADSPI_QUIRK_TKT253890
-		| QUADSPI_QUIRK_DDR_DELAY
-		| QUADSPI_QUIRK_4X_INT_CLK
+		       | QUADSPI_QUIRK_4X_INT_CLK,
 };
 
 static struct fsl_qspi_devtype_data imx6ul_data = {
@@ -261,8 +267,7 @@ static struct fsl_qspi_devtype_data imx6ul_data = {
 	.txfifo = 512,
 	.ahb_buf_size = 1024,
 	.driver_data = QUADSPI_QUIRK_TKT253890
-		| QUADSPI_QUIRK_DDR_DELAY
-		| QUADSPI_QUIRK_4X_INT_CLK
+		       | QUADSPI_QUIRK_4X_INT_CLK,
 };
 
 #define FSL_QSPI_MAX_CHIP	4
@@ -282,24 +287,15 @@ struct fsl_qspi {
 	u32 nor_num;
 	u32 clk_rate;
 	unsigned int chip_base_addr; /* We may support two chips. */
+	bool has_second_chip;
 	u32 ddr_smp;
 	struct mutex lock;
-	struct pm_qos_request	pm_qos_req;
+	struct pm_qos_request pm_qos_req;
 };
 
 static inline int needs_swap_endian(struct fsl_qspi *q)
 {
 	return q->devtype_data->driver_data & QUADSPI_QUIRK_SWAP_ENDIAN;
-}
-
-static inline int needs_wakeup_wait_mode(struct fsl_qspi *q)
-{
-	return q->devtype_data->driver_data & QUADSPI_QUIRK_TKT245618;
-}
-
-static inline int needs_fill_txfifo(struct fsl_qspi *q)
-{
-	return q->devtype_data->driver_data & QUADSPI_QUIRK_TKT253890;
 }
 
 static inline int needs_ddr_delay(struct fsl_qspi *q)
@@ -310,6 +306,16 @@ static inline int needs_ddr_delay(struct fsl_qspi *q)
 static inline int needs_4x_clock(struct fsl_qspi *q)
 {
 	return q->devtype_data->driver_data & QUADSPI_QUIRK_4X_INT_CLK;
+}
+
+static inline int needs_fill_txfifo(struct fsl_qspi *q)
+{
+	return q->devtype_data->driver_data & QUADSPI_QUIRK_TKT253890;
+}
+
+static inline int needs_wakeup_wait_mode(struct fsl_qspi *q)
+{
+	return q->devtype_data->driver_data & QUADSPI_QUIRK_TKT245618;
 }
 
 /*
@@ -464,6 +470,13 @@ static void fsl_qspi_init_lut(struct fsl_qspi *q)
 	lut_base = SEQID_BRWR * 4;
 	writel(LUT0(CMD, PAD1, SPINOR_OP_BRWR), base + QUADSPI_LUT(lut_base));
 
+	/* Read EVCR register */
+	lut_base = SEQID_RD_EVCR * 4;
+	writel(LUT0(CMD, PAD1, SPINOR_OP_RD_EVCR), base + QUADSPI_LUT(lut_base));
+
+	/* Write EVCR register */
+	lut_base = SEQID_WD_EVCR * 4;
+	writel(LUT0(CMD, PAD1, SPINOR_OP_WD_EVCR), base + QUADSPI_LUT(lut_base));
 	fsl_qspi_lock_lut(q);
 }
 
@@ -500,6 +513,10 @@ static int fsl_qspi_get_seqid(struct fsl_qspi *q, u8 cmd)
 		return SEQID_EN4B;
 	case SPINOR_OP_BRWR:
 		return SEQID_BRWR;
+	case SPINOR_OP_RD_EVCR:
+		return SEQID_RD_EVCR;
+	case SPINOR_OP_WD_EVCR:
+		return SEQID_WD_EVCR;
 	default:
 		dev_err(q->dev, "Unsupported cmd 0x%.2x\n", cmd);
 		break;
@@ -542,8 +559,7 @@ fsl_qspi_runcmd(struct fsl_qspi *q, u8 cmd, unsigned int addr, int len)
 	writel((seqid << QUADSPI_IPCR_SEQID_SHIFT) | len, base + QUADSPI_IPCR);
 
 	/* Wait for the interrupt. */
-	err = wait_for_completion_timeout(&q->c, msecs_to_jiffies(1000));
-	if (!err) {
+	if (!wait_for_completion_timeout(&q->c, msecs_to_jiffies(1000))) {
 		dev_err(q->dev,
 			"cmd 0x%.2x timeout, addr@%.8x, FR:0x%.8x, SR:0x%.8x\n",
 			cmd, addr, readl(base + QUADSPI_FR),
@@ -620,7 +636,7 @@ static int fsl_qspi_nor_write(struct fsl_qspi *q, struct spi_nor *nor,
 
 	/* clear the TX FIFO. */
 	tmp = readl(q->iobase + QUADSPI_MCR);
-	writel(tmp | QUADSPI_MCR_CLR_RXF_MASK, q->iobase + QUADSPI_MCR);
+	writel(tmp | QUADSPI_MCR_CLR_TXF_MASK, q->iobase + QUADSPI_MCR);
 
 	/* fill the TX data to the FIFO */
 	for (j = 0, i = ((count + 3) / 4); j < i; j++) {
@@ -629,9 +645,9 @@ static int fsl_qspi_nor_write(struct fsl_qspi *q, struct spi_nor *nor,
 		txbuf++;
 	}
 
-	for (; i < 4; i++)
-		/* fill the TXFIFO upto 16 bytes for i.MX7d */
-		if (needs_fill_txfifo(q))
+	/* fill the TXFIFO upto 16 bytes for i.MX7d */
+	if (needs_fill_txfifo(q))
+		for (; i < 4; i++)
 			writel(tmp, q->iobase + QUADSPI_TBDR);
 
 	/* Trigger it */
@@ -674,7 +690,7 @@ static void fsl_qspi_init_abh_read(struct fsl_qspi *q)
 	u32 reg, reg2;
 	int seqid;
 
-	/* AHB configuration for access buffer 0/1/2 . */
+	/* AHB configuration for access buffer 0/1/2 .*/
 	writel(QUADSPI_BUFXCR_INVALID_MSTRID, base + QUADSPI_BUF0CR);
 	writel(QUADSPI_BUFXCR_INVALID_MSTRID, base + QUADSPI_BUF1CR);
 	writel(QUADSPI_BUFXCR_INVALID_MSTRID, base + QUADSPI_BUF2CR);
@@ -706,13 +722,13 @@ static void fsl_qspi_init_abh_read(struct fsl_qspi *q)
 		reg2 = readl(q->iobase + QUADSPI_SMPR);
 		reg2 &= ~QUADSPI_SMPR_DDRSMP_MASK;
 		reg2 |= ((q->ddr_smp << QUADSPI_SMPR_DDRSMP_SHIFT) &
-			QUADSPI_SMPR_DDRSMP_MASK);
+				QUADSPI_SMPR_DDRSMP_MASK);
 		writel(reg2, q->iobase + QUADSPI_SMPR);
 
 		/* Enable the module again (enable the DDR too) */
 		reg |= QUADSPI_MCR_DDR_EN_MASK;
 		if (needs_ddr_delay(q) &&
-		    (q->devtype_data->devtype == FSL_QUADSPI_IMX6SX))
+			(q->devtype_data->devtype == FSL_QUADSPI_IMX6SX))
 			reg |= MX6SX_QUADSPI_MCR_TX_DDR_DELAY_EN_MASK;
 
 		writel(reg, q->iobase + QUADSPI_MCR);
@@ -726,7 +742,6 @@ static void fsl_qspi_init_abh_read(struct fsl_qspi *q)
 		}
 	}
 }
-
 /* This function was used to prepare and enable QSPI clock */
 static int fsl_qspi_clk_prep_enable(struct fsl_qspi *q)
 {
@@ -743,21 +758,20 @@ static int fsl_qspi_clk_prep_enable(struct fsl_qspi *q)
 	}
 
 	if (needs_wakeup_wait_mode(q))
-		pm_qos_add_request(&q->pm_qos_req,
-				PM_QOS_CPU_DMA_LATENCY,
-				0);
+		pm_qos_add_request(&q->pm_qos_req, PM_QOS_CPU_DMA_LATENCY, 0);
 
 	return 0;
 }
 
 /* This function was used to disable and unprepare QSPI clock */
-static int fsl_qspi_clk_disable_unprep(struct fsl_qspi *q)
+static void fsl_qspi_clk_disable_unprep(struct fsl_qspi *q)
 {
 	if (needs_wakeup_wait_mode(q))
 		pm_qos_remove_request(&q->pm_qos_req);
+
 	clk_disable_unprepare(q->clk);
 	clk_disable_unprepare(q->clk_en);
-	return 0;
+
 }
 
 /* We use this function to do some basic init for spi_nor_scan(). */
@@ -767,7 +781,7 @@ static int fsl_qspi_nor_setup(struct fsl_qspi *q)
 	u32 reg;
 	int ret;
 
-	/* disable and unprepare clock first */
+	/* disable and unprepare clock to avoid glitch pass to controller */
 	fsl_qspi_clk_disable_unprep(q);
 
 	/* the default frequency, we will change it in the future. */
@@ -775,7 +789,6 @@ static int fsl_qspi_nor_setup(struct fsl_qspi *q)
 	if (ret)
 		return ret;
 
-	/* prepare and enable the clock */
 	ret = fsl_qspi_clk_prep_enable(q);
 	if (ret)
 		return ret;
@@ -810,8 +823,10 @@ static int fsl_qspi_nor_setup(struct fsl_qspi *q)
 	writel(QUADSPI_MCR_RESERVED_MASK | QUADSPI_MCR_END_CFG_MASK,
 			base + QUADSPI_MCR);
 
-	/* enable the interrupt */
+	/* clear all interrupt status */
 	writel(0xffffffff, q->iobase + QUADSPI_FR);
+
+	/* enable the interrupt */
 	writel(QUADSPI_RSER_TFIE, q->iobase + QUADSPI_RSER);
 
 	return 0;
@@ -825,14 +840,13 @@ static int fsl_qspi_nor_setup_last(struct fsl_qspi *q)
 	if (needs_4x_clock(q))
 		rate *= 4;
 
-	/* disable and unprepare clock first */
+	/* disable and unprepare clock to avoid glitch pass to controller */
 	fsl_qspi_clk_disable_unprep(q);
 
 	ret = clk_set_rate(q->clk, rate);
 	if (ret)
 		return ret;
 
-	/* prepare and enable the clock */
 	ret = fsl_qspi_clk_prep_enable(q);
 	if (ret)
 		return ret;
@@ -846,7 +860,7 @@ static int fsl_qspi_nor_setup_last(struct fsl_qspi *q)
 	return 0;
 }
 
-static struct of_device_id fsl_qspi_dt_ids[] = {
+static const struct of_device_id fsl_qspi_dt_ids[] = {
 	{ .compatible = "fsl,vf610-qspi", .data = (void *)&vybrid_data, },
 	{ .compatible = "fsl,imx6sx-qspi", .data = (void *)&imx6sx_data, },
 	{ .compatible = "fsl,imx7d-qspi", .data = (void *)&imx7d_data, },
@@ -915,39 +929,34 @@ static int fsl_qspi_read(struct spi_nor *nor, loff_t from,
 {
 	struct fsl_qspi *q = nor->priv;
 	u8 cmd = nor->read_opcode;
-	int ret;
-
-	/* Wait until the previous command is finished. */
-	ret = nor->wait_till_ready(nor);
-	if (ret)
-		return ret;
 
 	/* if necessary,ioremap buffer before AHB read, */
-	/* generally 4MB should be large enough */
 	if (!q->ahb_addr) {
+		q->memmap_offs = q->chip_base_addr + from;
+		q->memmap_len = len > QUADSPI_MIN_IOMAP ? len : QUADSPI_MIN_IOMAP;
+
 		q->ahb_addr = ioremap_nocache(
-				q->memmap_phy + q->chip_base_addr + from,
-				len > SZ_4M ? len : SZ_4M);
+				q->memmap_phy + q->memmap_offs,
+				q->memmap_len);
 		if (!q->ahb_addr) {
 			dev_err(q->dev, "ioremap failed\n");
 			return -ENOMEM;
 		}
-		q->memmap_offs = q->chip_base_addr + from;
-		q->memmap_len = len > SZ_4M ? len : SZ_4M;
 	/* ioremap if the data requested is out of range */
 	} else if (q->chip_base_addr + from < q->memmap_offs
 			|| q->chip_base_addr + from + len >
 			q->memmap_offs + q->memmap_len) {
 		iounmap(q->ahb_addr);
+
+		q->memmap_offs = q->chip_base_addr + from;
+		q->memmap_len = len > QUADSPI_MIN_IOMAP ? len : QUADSPI_MIN_IOMAP;
 		q->ahb_addr = ioremap_nocache(
-				q->memmap_phy + q->chip_base_addr + from,
-				len > SZ_4M ? len : SZ_4M);
+				q->memmap_phy + q->memmap_offs,
+				q->memmap_len);
 		if (!q->ahb_addr) {
 			dev_err(q->dev, "ioremap failed\n");
 			return -ENOMEM;
 		}
-		q->memmap_offs = q->chip_base_addr + from;
-		q->memmap_len = len > SZ_4M ? len : SZ_4M;
 	}
 
 	dev_dbg(q->dev, "cmd [%x],read from 0x%p, len:%d\n",
@@ -959,7 +968,6 @@ static int fsl_qspi_read(struct spi_nor *nor, loff_t from,
 		len);
 
 	*retlen += len;
-
 	return 0;
 }
 
@@ -970,16 +978,6 @@ static int fsl_qspi_erase(struct spi_nor *nor, loff_t offs)
 
 	dev_dbg(nor->dev, "%dKiB at 0x%08x:0x%08x\n",
 		nor->mtd->erasesize / 1024, q->chip_base_addr, (u32)offs);
-
-	/* Wait until finished previous write command. */
-	ret = nor->wait_till_ready(nor);
-	if (ret)
-		return ret;
-
-	/* Send write enable, then erase commands. */
-	ret = nor->write_reg(nor, SPINOR_OP_WREN, NULL, 0, 0);
-	if (ret)
-		return ret;
 
 	ret = fsl_qspi_runcmd(q, nor->erase_opcode, offs, 0);
 	if (ret)
@@ -998,10 +996,14 @@ static int fsl_qspi_prep(struct spi_nor *nor, enum spi_nor_ops ops)
 
 	ret = fsl_qspi_clk_prep_enable(q);
 	if (ret)
-		return ret;
+		goto err_mutex;
 
 	fsl_qspi_set_base_addr(q, nor);
 	return 0;
+
+err_mutex:
+	mutex_unlock(&q->lock);
+	return ret;
 }
 
 static void fsl_qspi_unprep(struct spi_nor *nor, enum spi_nor_ops ops)
@@ -1022,7 +1024,6 @@ static int fsl_qspi_probe(struct platform_device *pdev)
 	struct spi_nor *nor;
 	struct mtd_info *mtd;
 	int ret, i = 0;
-	bool has_second_chip = false;
 	const struct of_device_id *of_id =
 			of_match_device(fsl_qspi_dt_ids, &pdev->dev);
 
@@ -1030,37 +1031,47 @@ static int fsl_qspi_probe(struct platform_device *pdev)
 	if (!q)
 		return -ENOMEM;
 
-	q->dev = dev;
-	q->devtype_data = (struct fsl_qspi_devtype_data *)of_id->data;
-
 	q->nor_num = of_get_child_count(dev->of_node);
 	if (!q->nor_num || q->nor_num > FSL_QSPI_MAX_CHIP)
 		return -ENODEV;
 
+	q->dev = dev;
+	q->devtype_data = (struct fsl_qspi_devtype_data *)of_id->data;
+	platform_set_drvdata(pdev, q);
+
 	/* find the resources */
 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "QuadSPI");
-	q->iobase = devm_ioremap_resource(dev, res);
-	if (IS_ERR(q->iobase)) {
-		ret = PTR_ERR(q->iobase);
-		goto map_failed;
+	if (!res) {
+		dev_err(dev, "QuadSPI get resource IORESOURCE_MEM failed\n");
+		return -ENODEV;
 	}
+	q->iobase = devm_ioremap_resource(dev, res);
+	if (IS_ERR(q->iobase))
+		return PTR_ERR(q->iobase);
 
 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM,
 					"QuadSPI-memory");
+	if (!res) {
+		dev_err(dev,
+			"QuadSPI-memory get resource IORESOURCE_MEM failed\n");
+		return -ENODEV;
+	}
+	if (!devm_request_mem_region(dev, res->start, resource_size(res),
+				     res->name)) {
+		dev_err(dev, "can't request region for resource %pR\n", res);
+		return -EBUSY;
+	}
+
 	q->memmap_phy = res->start;
 
 	/* find the clocks */
 	q->clk_en = devm_clk_get(dev, "qspi_en");
-	if (IS_ERR(q->clk_en)) {
-		ret = PTR_ERR(q->clk_en);
-		goto map_failed;
-	}
+	if (IS_ERR(q->clk_en))
+		return PTR_ERR(q->clk_en);
 
 	q->clk = devm_clk_get(dev, "qspi");
-	if (IS_ERR(q->clk)) {
-		ret = PTR_ERR(q->clk);
-		goto map_failed;
-	}
+	if (IS_ERR(q->clk))
+		return PTR_ERR(q->clk);
 
 	/* find ddrsmp value */
 	ret = of_property_read_u32(dev->of_node, "ddrsmp",
@@ -1071,43 +1082,40 @@ static int fsl_qspi_probe(struct platform_device *pdev)
 	ret = fsl_qspi_clk_prep_enable(q);
 	if (ret) {
 		dev_err(dev, "can not enable the clock\n");
-		goto map_failed;
+		goto clk_failed;
 	}
 
 	/* find the irq */
 	ret = platform_get_irq(pdev, 0);
 	if (ret < 0) {
-		dev_err(dev, "failed to get the irq\n");
+		dev_err(dev, "failed to get the irq: %d\n", ret);
 		goto irq_failed;
 	}
 
 	ret = devm_request_irq(dev, ret,
 			fsl_qspi_irq_handler, 0, pdev->name, q);
 	if (ret) {
-		dev_err(dev, "failed to request irq.\n");
+		dev_err(dev, "failed to request irq: %d\n", ret);
 		goto irq_failed;
 	}
-
-	platform_set_drvdata(pdev, q);
 
 	ret = fsl_qspi_nor_setup(q);
 	if (ret)
 		goto irq_failed;
 
 	if (of_get_property(np, "fsl,qspi-has-second-chip", NULL))
-		has_second_chip = true;
+		q->has_second_chip = true;
 
 	mutex_init(&q->lock);
 
 	/* iterate the subnodes. */
 	for_each_available_child_of_node(dev->of_node, np) {
-		const struct spi_device_id *id;
 		enum read_mode mode = SPI_NOR_QUAD;
 		char modalias[40];
 		u32 dummy = 0;
 
 		/* skip the holes */
-		if (!has_second_chip)
+		if (!q->has_second_chip)
 			i *= 2;
 
 		nor = &q->nor[i];
@@ -1131,18 +1139,12 @@ static int fsl_qspi_probe(struct platform_device *pdev)
 
 		ret = of_modalias_node(np, modalias, sizeof(modalias));
 		if (ret < 0)
-			goto irq_failed;
-
-		id = spi_nor_match_id(modalias);
-		if (!id) {
-			ret = -EINVAL;
-			goto irq_failed;
-		}
+			goto mutex_failed;
 
 		ret = of_property_read_u32(np, "spi-max-frequency",
 				&q->clk_rate);
 		if (ret < 0)
-			goto irq_failed;
+			goto mutex_failed;
 
 		/* Can we enable the DDR Quad Read? */
 		ret = of_property_read_u32(np, "spi-nor,ddr-quad-read-dummy",
@@ -1153,14 +1155,14 @@ static int fsl_qspi_probe(struct platform_device *pdev)
 		/* set the chip address for READID */
 		fsl_qspi_set_base_addr(q, nor);
 
-		ret = spi_nor_scan(nor, id, mode);
+		ret = spi_nor_scan(nor, modalias, mode);
 		if (ret)
-			goto irq_failed;
+			goto mutex_failed;
 
 		ppdata.of_node = np;
 		ret = mtd_device_parse_register(mtd, NULL, &ppdata, NULL, 0);
 		if (ret)
-			goto irq_failed;
+			goto mutex_failed;
 
 		/* Set the correct NOR size now. */
 		if (q->nor_size == 0) {
@@ -1191,16 +1193,20 @@ static int fsl_qspi_probe(struct platform_device *pdev)
 		goto last_init_failed;
 
 	fsl_qspi_clk_disable_unprep(q);
-	dev_info(dev, "QuadSPI SPI NOR flash driver\n");
 	return 0;
 
 last_init_failed:
-	for (i = 0; i < FSL_QSPI_MAX_CHIP; i++)
+	for (i = 0; i < q->nor_num; i++) {
+		/* skip the holes */
+		if (!q->has_second_chip)
+			i *= 2;
 		mtd_device_unregister(&q->mtd[i]);
-
+	}
+mutex_failed:
+	mutex_destroy(&q->lock);
 irq_failed:
 	fsl_qspi_clk_disable_unprep(q);
-map_failed:
+clk_failed:
 	dev_err(dev, "Freescale QuadSPI probe failed\n");
 	return ret;
 }
@@ -1210,12 +1216,18 @@ static int fsl_qspi_remove(struct platform_device *pdev)
 	struct fsl_qspi *q = platform_get_drvdata(pdev);
 	int i;
 
-	for (i = 0; i < FSL_QSPI_MAX_CHIP; i++)
+	for (i = 0; i < q->nor_num; i++) {
+		/* skip the holes */
+		if (!q->has_second_chip)
+			i *= 2;
 		mtd_device_unregister(&q->mtd[i]);
+	}
 
 	/* disable the hardware */
 	writel(QUADSPI_MCR_MDIS_MASK, q->iobase + QUADSPI_MCR);
 	writel(0x0, q->iobase + QUADSPI_RSER);
+
+	mutex_destroy(&q->lock);
 
 	if (q->ahb_addr)
 		iounmap(q->ahb_addr);
@@ -1253,7 +1265,6 @@ static struct platform_driver fsl_qspi_driver = {
 	.driver = {
 		.name	= "fsl-quadspi",
 		.bus	= &platform_bus_type,
-		.owner	= THIS_MODULE,
 		.of_match_table = fsl_qspi_dt_ids,
 	},
 	.probe          = fsl_qspi_probe,

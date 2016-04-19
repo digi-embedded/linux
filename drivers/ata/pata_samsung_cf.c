@@ -360,7 +360,7 @@ static int pata_s3c_wait_after_reset(struct ata_link *link,
 /*
  * pata_s3c_bus_softreset - PATA device software reset
  */
-static unsigned int pata_s3c_bus_softreset(struct ata_port *ap,
+static int pata_s3c_bus_softreset(struct ata_port *ap,
 		unsigned long deadline)
 {
 	struct ata_ioports *ioaddr = &ap->ioaddr;
@@ -584,9 +584,13 @@ static int __init pata_s3c_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, host);
 
-	return ata_host_activate(host, info->irq,
-			info->irq ? pata_s3c_irq : NULL,
-			0, &pata_s3c_sht);
+	ret = ata_host_activate(host, info->irq,
+				info->irq ? pata_s3c_irq : NULL,
+				0, &pata_s3c_sht);
+	if (ret)
+		goto stop_clk;
+
+	return 0;
 
 stop_clk:
 	clk_disable(info->clk);
@@ -652,7 +656,6 @@ static struct platform_driver pata_s3c_driver = {
 	.id_table	= pata_s3c_driver_ids,
 	.driver		= {
 		.name	= DRV_NAME,
-		.owner	= THIS_MODULE,
 #ifdef CONFIG_PM_SLEEP
 		.pm	= &pata_s3c_pm_ops,
 #endif

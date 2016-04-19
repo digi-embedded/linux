@@ -1,6 +1,6 @@
 
 /*
- * Copyright 2013 Freescale Semiconductor, Inc.
+ * Copyright 2013-2015 Freescale Semiconductor, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -13,6 +13,10 @@
 #include "imx6qdl.dtsi"
 
 / {
+	aliases {
+		i2c3 = &i2c4;
+	};
+
 	cpus {
 		#address-cells = <1>;
 		#size-cells = <0>;
@@ -24,7 +28,7 @@
 			next-level-cache = <&L2>;
 			operating-points = <
 				/* kHz    uV */
-				996000  1275000
+				996000  1250000
 				792000  1175000
 				396000  1150000
 			>;
@@ -40,11 +44,12 @@
 				 <&clks IMX6QDL_CLK_STEP>,
 				 <&clks IMX6QDL_CLK_PLL1_SW>,
 				 <&clks IMX6QDL_CLK_PLL1_SYS>,
-				 <&clks IMX6QDL_PLL1_BYPASS>,
 				 <&clks IMX6QDL_CLK_PLL1>,
-				 <&clks IMX6QDL_PLL1_BYPASS_SRC> ;
+				 <&clks IMX6QDL_PLL1_BYPASS>,
+				 <&clks IMX6QDL_PLL1_BYPASS_SRC>;
 			clock-names = "arm", "pll2_pfd2_396m", "step",
-				      "pll1_sw", "pll1_sys", "pll1_bypass", "pll1", "pll1_bypass_src";
+				      "pll1_sw", "pll1_sys", "pll1",
+				      "pll1_bypass", "pll1_bypass_src";
 			arm-supply = <&reg_arm>;
 			pu-supply = <&reg_pu>;
 			soc-supply = <&reg_soc>;
@@ -55,6 +60,20 @@
 			device_type = "cpu";
 			reg = <1>;
 			next-level-cache = <&L2>;
+		};
+	};
+
+	reserved-memory {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		/* global autoconfigured region for contiguous allocations */
+		linux,cma {
+			compatible = "shared-dma-pool";
+			reusable;
+			size = <0x14000000>;
+			linux,cma-default;
 		};
 	};
 
@@ -78,9 +97,9 @@
 		gpu: gpu@00130000 {
 			compatible = "fsl,imx6dl-gpu", "fsl,imx6q-gpu";
 			reg = <0x00130000 0x4000>, <0x00134000 0x4000>,
-			      <0x0 0x0>;
+			      <0x0 0x0>, <0x0 0x8000000>;
 			reg-names = "iobase_3d", "iobase_2d",
-				    "phys_baseaddr";
+				    "phys_baseaddr", "contiguous_mem";
 			interrupts = <0 9 IRQ_TYPE_LEVEL_HIGH>,
 				     <0 10 IRQ_TYPE_LEVEL_HIGH>;
 			interrupt-names = "irq_3d", "irq_2d";
@@ -95,18 +114,6 @@
 			power-domains = <&gpc 1>;
 		};
 
-		ocrams: sram@00900000 {
-			compatible = "fsl,lpm-sram";
-			reg = <0x00900000 0x4000>;
-			clocks = <&clks IMX6QDL_CLK_OCRAM>;
-		};
-
-		ocrams_ddr: sram@00904000 {
-			compatible = "fsl,ddr-lpm-sram";
-			reg = <0x00904000 0x1000>;
-			clocks = <&clks IMX6QDL_CLK_OCRAM>;
-		};
-
 		ocram: sram@00905000 {
 			compatible = "mmio-sram";
 			reg = <0x00905000 0x1B000>;
@@ -114,10 +121,6 @@
 		};
 
 		aips1: aips-bus@02000000 {
-			vpu@02040000 {
-				iramsize = <0>;
-			};
-
 			iomuxc: iomuxc@020e0000 {
 				compatible = "fsl,imx6dl-iomuxc";
 			};
@@ -175,29 +178,8 @@
 	};
 };
 
-&ecspi1 {
-	dmas = <&sdma 3 7 1>, <&sdma 4 7 2>;
-	dma-names = "rx", "tx";
-};
-
-&ecspi2 {
-	dmas = <&sdma 5 7 1>, <&sdma 6 7 2>;
-	dma-names = "rx", "tx";
-};
-
-&ecspi3 {
-	dmas = <&sdma 7 7 1>, <&sdma 8 7 2>;
-	dma-names = "rx", "tx";
-};
-
-&ecspi4 {
-	dmas = <&sdma 9 7 1>, <&sdma 10 7 2>;
-	dma-names = "rx", "tx";
-};
-
 &ldb {
 	compatible = "fsl,imx6dl-ldb", "fsl,imx53-ldb";
-
 	clocks = <&clks IMX6QDL_CLK_LDB_DI0>, <&clks IMX6QDL_CLK_LDB_DI1>,
 		 <&clks IMX6QDL_CLK_IPU1_DI0_SEL>, <&clks IMX6QDL_CLK_IPU1_DI1_SEL>,
 		 <&clks IMX6QDL_CLK_IPU2_DI0_SEL>,
@@ -210,4 +192,12 @@
 		      "ldb_di0_div_3_5", "ldb_di1_div_3_5",
 		      "ldb_di0_div_7", "ldb_di1_div_7",
 		      "ldb_di0_div_sel", "ldb_di1_div_sel";
+};
+
+&vpu {
+	compatible = "fsl,imx6dl-vpu", "cnm,coda960";
+};
+
+&vpu_fsl {
+	iramsize = <0>;
 };

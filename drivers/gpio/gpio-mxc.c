@@ -519,7 +519,7 @@ static int mxc_gpio_probe(struct platform_device *pdev)
 out_irqdesc_free:
 	irq_free_descs(irq_base, 32);
 out_gpiochip_remove:
-	WARN_ON(gpiochip_remove(&port->bgc.gc) < 0);
+	gpiochip_remove(&port->bgc.gc);
 out_bgpio_remove:
 	bgpio_remove(&port->bgc);
 out_bgio:
@@ -534,7 +534,6 @@ static const struct dev_pm_ops mxc_gpio_pm_ops = {
 static struct platform_driver mxc_gpio_driver = {
 	.driver		= {
 		.name	= "gpio-mxc",
-		.owner	= THIS_MODULE,
 		.of_match_table = mxc_gpio_dt_ids,
 		.pm     = &mxc_gpio_pm_ops,
 	},

@@ -410,9 +410,9 @@ static ssize_t fxas2100x_position_store(struct device *dev,
 	return count;
 }
 
-static DEVICE_ATTR(enable, 0666, fxas2100x_enable_show, fxas2100x_enable_store);
-static DEVICE_ATTR(poll_delay, 0666, fxas2100x_poll_delay_show, fxas2100x_poll_delay_store);
-static DEVICE_ATTR(position, 0666, fxas2100x_position_show, fxas2100x_position_store);
+static DEVICE_ATTR(enable, S_IWUSR | S_IRUGO, fxas2100x_enable_show, fxas2100x_enable_store);
+static DEVICE_ATTR(poll_delay, S_IWUSR | S_IRUGO, fxas2100x_poll_delay_show, fxas2100x_poll_delay_store);
+static DEVICE_ATTR(position, S_IWUSR | S_IRUGO, fxas2100x_position_show, fxas2100x_position_store);
 
 static struct attribute *fxas2100x_attributes[] = {
 	&dev_attr_enable.attr,

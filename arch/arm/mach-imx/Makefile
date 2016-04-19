@@ -3,7 +3,7 @@ obj-y := time.o cpu.o system.o irq-common.o common.o
 obj-$(CONFIG_SOC_IMX1) += clk-imx1.o mm-imx1.o
 obj-$(CONFIG_SOC_IMX21) += clk-imx21.o mm-imx21.o
 
-obj-$(CONFIG_SOC_IMX25) += clk-imx25.o mm-imx25.o ehci-imx25.o cpu-imx25.o
+obj-$(CONFIG_SOC_IMX25) += clk-imx25.o cpu-imx25.o mach-imx25.o
 
 obj-$(CONFIG_SOC_IMX27) += cpu-imx27.o pm-imx27.o
 obj-$(CONFIG_SOC_IMX27) += clk-imx27.o mm-imx27.o ehci-imx27.o
@@ -12,7 +12,7 @@ obj-$(CONFIG_SOC_IMX31) += mm-imx3.o cpu-imx31.o clk-imx31.o iomux-imx31.o ehci-
 obj-$(CONFIG_SOC_IMX35) += mm-imx3.o cpu-imx35.o clk-imx35.o ehci-imx35.o pm-imx3.o
 
 imx5-pm-$(CONFIG_PM) += pm-imx5.o
-obj-$(CONFIG_SOC_IMX5) += cpu-imx5.o mm-imx5.o clk-imx51-imx53.o ehci-imx5.o $(imx5-pm-y)
+obj-$(CONFIG_SOC_IMX5) += cpu-imx5.o clk-imx51-imx53.o clk-cpu.o $(imx5-pm-y)
 
 obj-$(CONFIG_COMMON_CLK) += clk-pllv1.o clk-pllv2.o clk-pllv3.o clk-gate2.o \
 			    clk-pfd.o clk-busy.o clk.o \
@@ -31,10 +31,14 @@ obj-$(CONFIG_MXC_DEBUG_BOARD) += 3ds_debugboard.o
 ifeq ($(CONFIG_CPU_IDLE),y)
 obj-$(CONFIG_SOC_IMX5) += cpuidle-imx5.o
 obj-$(CONFIG_SOC_IMX6Q) += cpuidle-imx6q.o
-obj-$(CONFIG_SOC_IMX6SL) += cpuidle-imx6sl.o
-obj-$(CONFIG_SOC_IMX6SX) += cpuidle-imx6sx.o
-obj-$(CONFIG_SOC_IMX6UL) += cpuidle-imx6ul.o
-obj-$(CONFIG_SOC_IMX7D) += cpuidle-imx7d.o
+AFLAGS_imx6sl_low_power_idle.o :=-Wa,-march=armv7-a
+obj-$(CONFIG_SOC_IMX6SL) += cpuidle-imx6sl.o imx6sl_low_power_idle.o
+AFLAGS_imx6sx_low_power_idle.o :=-Wa,-march=armv7-a
+obj-$(CONFIG_SOC_IMX6SX) += cpuidle-imx6sx.o imx6sx_low_power_idle.o
+AFLAGS_imx6ul_low_power_idle.o :=-Wa,-march=armv7-a
+obj-$(CONFIG_SOC_IMX6UL) += cpuidle-imx6ul.o imx6ul_low_power_idle.o
+AFLAGS_imx7d_low_power_idle.o :=-Wa,-march=armv7-a
+obj-$(CONFIG_SOC_IMX7D) += cpuidle-imx7d.o imx7d_low_power_idle.o
 endif
 
 ifdef CONFIG_SND_IMX_SOC
@@ -42,35 +46,19 @@ obj-y += ssi-fiq.o
 obj-y += ssi-fiq-ksym.o
 endif
 
-# Support for CMOS sensor interface
-obj-$(CONFIG_MX1_VIDEO) += mx1-camera-fiq.o mx1-camera-fiq-ksym.o
-
 # i.MX1 based machines
-obj-$(CONFIG_ARCH_MX1ADS) += mach-mx1ads.o
 obj-$(CONFIG_MACH_SCB9328) += mach-scb9328.o
 obj-$(CONFIG_MACH_APF9328) += mach-apf9328.o
+obj-$(CONFIG_MACH_IMX1_DT) += imx1-dt.o
 
 # i.MX21 based machines
 obj-$(CONFIG_MACH_MX21ADS) += mach-mx21ads.o
 
-# i.MX25 based machines
-obj-$(CONFIG_MACH_MX25_3DS) += mach-mx25_3ds.o
-obj-$(CONFIG_MACH_EUKREA_CPUIMX25SD) += mach-eukrea_cpuimx25.o
-obj-$(CONFIG_MACH_EUKREA_MBIMXSD25_BASEBOARD) += eukrea_mbimxsd25-baseboard.o
-obj-$(CONFIG_MACH_IMX25_DT) += imx25-dt.o
-
 # i.MX27 based machines
 obj-$(CONFIG_MACH_MX27ADS) += mach-mx27ads.o
-obj-$(CONFIG_MACH_PCM038) += mach-pcm038.o
-obj-$(CONFIG_MACH_PCM970_BASEBOARD) += pcm970-baseboard.o
 obj-$(CONFIG_MACH_MX27_3DS) += mach-mx27_3ds.o
-obj-$(CONFIG_MACH_IMX27LITE) += mach-imx27lite.o
 obj-$(CONFIG_MACH_IMX27_VISSTRIM_M10) += mach-imx27_visstrim_m10.o
-obj-$(CONFIG_MACH_CPUIMX27) += mach-cpuimx27.o
-obj-$(CONFIG_MACH_EUKREA_MBIMX27_BASEBOARD) += eukrea_mbimx27-baseboard.o
 obj-$(CONFIG_MACH_PCA100) += mach-pca100.o
-obj-$(CONFIG_MACH_MXT_TD60) += mach-mxt_td60.o
-obj-$(CONFIG_MACH_IMX27IPCAM) += mach-imx27ipcam.o
 obj-$(CONFIG_MACH_IMX27_DT) += imx27-dt.o
 
 # i.MX31 based machines
@@ -102,15 +90,26 @@ obj-$(CONFIG_HAVE_IMX_GPCV2) += gpcv2.o
 obj-$(CONFIG_HAVE_IMX_MMDC) += mmdc.o
 obj-$(CONFIG_HAVE_IMX_DDRC) += ddrc.o
 obj-$(CONFIG_HAVE_IMX_SRC) += src.o
-obj-$(CONFIG_HAVE_IMX_MCC) += mcc_api.o mcc_common.o mcc_linux.o mcc_imx6sx.o
 obj-$(CONFIG_HAVE_IMX_RPMSG) += imx_rpmsg.o
+ifneq ($(CONFIG_SOC_IMX6)$(CONFIG_SOC_IMX7)$(CONFIG_SOC_LS1021A),)
 AFLAGS_headsmp.o :=-Wa,-march=armv7-a
 obj-$(CONFIG_SMP) += headsmp.o platsmp.o
 obj-$(CONFIG_HOTPLUG_CPU) += hotplug.o
-obj-$(CONFIG_SOC_IMX6Q) += clk-imx6q.o mach-imx6q.o
-obj-$(CONFIG_SOC_IMX6SL) += clk-imx6sl.o mach-imx6sl.o
-obj-$(CONFIG_SOC_IMX6SX) += clk-imx6sx.o mach-imx6sx.o mu.o
-obj-$(CONFIG_SOC_IMX6UL) += clk-imx6ul.o mach-imx6ul.o
+endif
+obj-y += busfreq_lpddr2.o busfreq-imx.o busfreq_ddr3.o
+AFLAGS_ddr3_freq_imx6.o :=-Wa,-march=armv7-a
+AFLAGS_smp_wfe_imx6.o :=-Wa,-march=armv7-a
+AFLAGS_lpddr2_freq_imx6q.o :=-Wa,-march=armv7-a
+obj-$(CONFIG_SOC_IMX6Q) += clk-imx6q.o mach-imx6q.o ddr3_freq_imx6.o \
+			smp_wfe_imx6.o lpddr2_freq_imx6q.o
+AFLAGS_lpddr2_freq_imx6.o :=-Wa,-march=armv7-a
+obj-$(CONFIG_SOC_IMX6SL) += clk-imx6sl.o mach-imx6sl.o lpddr2_freq_imx6.o
+AFLAGS_ddr3_freq_imx6sx.o :=-Wa,-march=armv7-a
+AFLAGS_lpddr2_freq_imx6sx.o :=-Wa,-march=armv7-a
+obj-$(CONFIG_SOC_IMX6SX) += clk-imx6sx.o mach-imx6sx.o ddr3_freq_imx6sx.o \
+			    lpddr2_freq_imx6sx.o mu.o
+obj-$(CONFIG_SOC_IMX6UL) += clk-imx6ul.o mach-imx6ul.o ddr3_freq_imx6sx.o \
+			    lpddr2_freq_imx6sx.o
 obj-$(CONFIG_SOC_IMX7D) += clk-imx7d.o mach-imx7d.o mu.o
 
 ifeq ($(CONFIG_SUSPEND),y)
@@ -120,43 +119,17 @@ obj-$(CONFIG_SOC_IMX6) += suspend-imx6.o
 obj-$(CONFIG_SOC_IMX7) += suspend-imx7.o
 endif
 obj-$(CONFIG_SOC_IMX6) += pm-imx6.o
-obj-$(CONFIG_SOC_IMX7) += pm-imx7.o
-
-ifeq ($(CONFIG_ARM_IMX6Q_CPUFREQ),y)
-obj-y += busfreq-imx.o busfreq_ddr3.o busfreq_lpddr2.o
-
-
-AFLAGS_ddr3_freq_imx6.o :=-Wa,-march=armv7-a
-obj-$(CONFIG_SOC_IMX6Q) += ddr3_freq_imx6.o
-
-AFLAGS_imx6sl_lpm_wfi.o :=-Wa,-march=armv7-a
-AFLAGS_lpddr2_freq_imx6.o :=-Wa,-march=armv7-a
-obj-$(CONFIG_SOC_IMX6SL) += imx6sl_lpm_wfi.o lpddr2_freq_imx6.o
-
-AFLAGS_imx6sx_low_power_idle.o :=-Wa,-march=armv7-a
-AFLAGS_ddr3_freq_imx6sx.o :=-Wa,-march=armv7-a
-AFLAGS_lpddr2_freq_imx6sx.o :=-Wa,-march=armv7-a
-obj-$(CONFIG_SOC_IMX6SX) += imx6sx_low_power_idle.o ddr3_freq_imx6sx.o lpddr2_freq_imx6sx.o
-
-AFLAGS_imx6ul_low_power_idle.o :=-Wa,-march=armv7-a
-obj-$(CONFIG_SOC_IMX6UL) += imx6ul_low_power_idle.o ddr3_freq_imx6sx.o lpddr2_freq_imx6sx.o
-
-AFLAGS_imx7d_low_power_idle.o :=-Wa,-march=armv7-a
-AFLAGS_lpddr3_freq_imx.o :=-Wa,-march=armv7-a
 AFLAGS_smp_wfe.o :=-Wa,-march=armv7-a
-obj-$(CONFIG_SOC_IMX7D) += imx7d_low_power_idle.o ddr3_freq_imx7d.o lpddr3_freq_imx.o smp_wfe.o
-endif
+AFLAGS_ddr3_freq_imx7d.o :=-Wa,-march=armv7-a
+AFLAGS_lpddr3_freq_imx.o :=-Wa,-march=armv7-a
+obj-$(CONFIG_SOC_IMX7) += pm-imx7.o  ddr3_freq_imx7d.o smp_wfe.o lpddr3_freq_imx.o
 
-
-# i.MX5 based machines
-obj-$(CONFIG_MACH_MX51_BABBAGE) += mach-mx51_babbage.o
-obj-$(CONFIG_MACH_EUKREA_CPUIMX51SD) += mach-cpuimx51sd.o
-obj-$(CONFIG_MACH_EUKREA_MBIMXSD51_BASEBOARD) += eukrea_mbimxsd51-baseboard.o
-
-obj-$(CONFIG_MACH_IMX51_DT) += imx51-dt.o
 obj-$(CONFIG_SOC_IMX50) += mach-imx50.o
+obj-$(CONFIG_SOC_IMX51) += mach-imx51.o
 obj-$(CONFIG_SOC_IMX53) += mach-imx53.o
 
 obj-$(CONFIG_SOC_VF610) += clk-vf610.o mach-vf610.o
+
+obj-$(CONFIG_SOC_LS1021A) += mach-ls1021a.o
 
 obj-y += devices/

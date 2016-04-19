@@ -141,15 +141,13 @@ static void dra7xx_pcie_enable_interrupts(struct pcie_port *pp)
 				   LEG_EP_INTERRUPTS);
 }
 
-static int dra7xx_pcie_host_init(struct pcie_port *pp)
+static void dra7xx_pcie_host_init(struct pcie_port *pp)
 {
 	dw_pcie_setup_rc(pp);
 	dra7xx_pcie_establish_link(pp);
 	if (IS_ENABLED(CONFIG_PCI_MSI))
 		dw_pcie_msi_init(pp);
 	dra7xx_pcie_enable_interrupts(pp);
-
-	return 0;
 }
 
 static struct pcie_host_ops dra7xx_pcie_host_ops = {
@@ -272,8 +270,8 @@ static irqreturn_t dra7xx_pcie_irq_handler(int irq, void *arg)
 	return IRQ_HANDLED;
 }
 
-static int add_pcie_port(struct dra7xx_pcie *dra7xx,
-			  struct platform_device *pdev)
+static int __init dra7xx_add_pcie_port(struct dra7xx_pcie *dra7xx,
+				       struct platform_device *pdev)
 {
 	int ret;
 	struct pcie_port *pp;
@@ -400,7 +398,7 @@ static int __init dra7xx_pcie_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, dra7xx);
 
-	ret = add_pcie_port(dra7xx, pdev);
+	ret = dra7xx_add_pcie_port(dra7xx, pdev);
 	if (ret < 0)
 		goto err_add_port;
 
@@ -448,7 +446,6 @@ static struct platform_driver dra7xx_pcie_driver = {
 	.remove		= __exit_p(dra7xx_pcie_remove),
 	.driver = {
 		.name	= "dra7-pcie",
-		.owner	= THIS_MODULE,
 		.of_match_table = of_dra7xx_pcie_match,
 	},
 };

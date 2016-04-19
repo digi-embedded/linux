@@ -22,15 +22,17 @@
 #include <linux/usb.h>
 #include <linux/irq.h>
 #include <linux/io.h>
+#include <linux/device.h>
 #include <linux/platform_device.h>
 #include <linux/dma-mapping.h>
-#include <linux/usb/usb_phy_gen_xceiv.h>
+#include <linux/usb/usb_phy_generic.h>
 
 #include "musb_core.h"
 
 struct tusb6010_glue {
 	struct device		*dev;
 	struct platform_device	*musb;
+	struct platform_device	*phy;
 };
 
 static void tusb_musb_set_vbus(struct musb *musb, int is_on);
@@ -42,7 +44,7 @@ static void tusb_musb_set_vbus(struct musb *musb, int is_on);
  * Checks the revision. We need to use the DMA register as 3.0 does not
  * have correct versions for TUSB_PRCM_REV or TUSB_INT_CTRL_REV.
  */
-u8 tusb_get_revision(struct musb *musb)
+static u8 tusb_get_revision(struct musb *musb)
 {
 	void __iomem	*tbase = musb->ctrl_base;
 	u32		die_id;
@@ -58,14 +60,13 @@ u8 tusb_get_revision(struct musb *musb)
 
 	return rev;
 }
-EXPORT_SYMBOL_GPL(tusb_get_revision);
 
-static int tusb_print_revision(struct musb *musb)
+static void tusb_print_revision(struct musb *musb)
 {
 	void __iomem	*tbase = musb->ctrl_base;
 	u8		rev;
 
-	rev = tusb_get_revision(musb);
+	rev = musb->tusb_revision;
 
 	pr_info("tusb: %s%i.%i %s%i.%i %s%i.%i %s%i.%i %s%i %s%i.%i\n",
 		"prcm",
@@ -84,8 +85,6 @@ static int tusb_print_revision(struct musb *musb)
 		TUSB_DIDR1_HI_CHIP_REV(musb_readl(tbase, TUSB_DIDR1_HI)),
 		"rev",
 		TUSB_REV_MAJOR(rev), TUSB_REV_MINOR(rev));
-
-	return tusb_get_revision(musb);
 }
 
 #define WBUS_QUIRK_MASK	(TUSB_PHY_OTG_CTRL_TESTM2 | TUSB_PHY_OTG_CTRL_TESTM1 \
@@ -125,6 +124,52 @@ static void tusb_wbus_quirk(struct musb *musb, int enabled)
 		phy_otg_ctrl = 0;
 		phy_otg_ena = 0;
 	}
+}
+
+static u32 tusb_fifo_offset(u8 epnum)
+{
+	return 0x200 + (epnum * 0x20);
+}
+
+static u32 tusb_ep_offset(u8 epnum, u16 offset)
+{
+	return 0x10 + offset;
+}
+
+/* TUSB mapping: "flat" plus ep0 special cases */
+static void tusb_ep_select(void __iomem *mbase, u8 epnum)
+{
+	musb_writeb(mbase, MUSB_INDEX, epnum);
+}
+
+/*
+ * TUSB6010 doesn't allow 8-bit access; 16-bit access is the minimum.
+ */
+static u8 tusb_readb(const void __iomem *addr, unsigned offset)
+{
+	u16 tmp;
+	u8 val;
+
+	tmp = __raw_readw(addr + (offset & ~1));
+	if (offset & 1)
+		val = (tmp >> 8);
+	else
+		val = tmp & 0xff;
+
+	return val;
+}
+
+static void tusb_writeb(void __iomem *addr, unsigned offset, u8 data)
+{
+	u16 tmp;
+
+	tmp = __raw_readw(addr + (offset & ~1));
+	if (offset & 1)
+		tmp = (data << 8) | (tmp & 0xff);
+	else
+		tmp = (tmp & 0xff00) | data;
+
+	__raw_writew(tmp, addr + (offset & ~1));
 }
 
 /*
@@ -174,7 +219,7 @@ static inline void tusb_fifo_read_unaligned(void __iomem *fifo,
 	}
 }
 
-void musb_write_fifo(struct musb_hw_ep *hw_ep, u16 len, const u8 *buf)
+static void tusb_write_fifo(struct musb_hw_ep *hw_ep, u16 len, const u8 *buf)
 {
 	struct musb *musb = hw_ep->musb;
 	void __iomem	*ep_conf = hw_ep->conf;
@@ -224,7 +269,7 @@ void musb_write_fifo(struct musb_hw_ep *hw_ep, u16 len, const u8 *buf)
 		tusb_fifo_write_unaligned(fifo, buf, len);
 }
 
-void musb_read_fifo(struct musb_hw_ep *hw_ep, u16 len, u8 *buf)
+static void tusb_read_fifo(struct musb_hw_ep *hw_ep, u16 len, u8 *buf)
 {
 	struct musb *musb = hw_ep->musb;
 	void __iomem	*ep_conf = hw_ep->conf;
@@ -349,7 +394,7 @@ static void tusb_allow_idle(struct musb *musb, u32 wakeup_enables)
 	u32		reg;
 
 	if ((wakeup_enables & TUSB_PRCM_WBUS)
-			&& (tusb_get_revision(musb) == TUSB_REV_30))
+			&& (musb->tusb_revision == TUSB_REV_30))
 		tusb_wbus_quirk(musb, 1);
 
 	tusb_set_clock_source(musb, 0);
@@ -434,7 +479,7 @@ static void musb_do_idle(unsigned long _musb)
 	if (!musb->is_active) {
 		u32	wakeups;
 
-		/* wait until khubd handles port change status */
+		/* wait until hub_wq handles port change status */
 		if (is_host_active(musb) && (musb->port1_status >> 16))
 			goto done;
 
@@ -797,7 +842,7 @@ static irqreturn_t tusb_musb_interrupt(int irq, void *__hci)
 		u32	reg;
 		u32	i;
 
-		if (tusb_get_revision(musb) == TUSB_REV_30)
+		if (musb->tusb_revision == TUSB_REV_30)
 			tusb_wbus_quirk(musb, 0);
 
 		/* there are issues re-locking the PLL on wakeup ... */
@@ -1011,10 +1056,11 @@ static int tusb_musb_start(struct musb *musb)
 		goto err;
 	}
 
-	ret = tusb_print_revision(musb);
-	if (ret < 2) {
+	musb->tusb_revision = tusb_get_revision(musb);
+	tusb_print_revision(musb);
+	if (musb->tusb_revision < 2) {
 		printk(KERN_ERR "tusb: Unsupported TUSB6010 revision %i\n",
-				ret);
+				musb->tusb_revision);
 		goto err;
 	}
 
@@ -1065,7 +1111,6 @@ static int tusb_musb_init(struct musb *musb)
 	void __iomem		*sync = NULL;
 	int			ret;
 
-	usb_nop_xceiv_register();
 	musb->xceiv = usb_get_phy(USB_PHY_TYPE_USB2);
 	if (IS_ERR_OR_NULL(musb->xceiv))
 		return -EPROBE_DEFER;
@@ -1117,7 +1162,6 @@ done:
 			iounmap(sync);
 
 		usb_put_phy(musb->xceiv);
-		usb_nop_xceiv_unregister();
 	}
 	return ret;
 }
@@ -1133,14 +1177,21 @@ static int tusb_musb_exit(struct musb *musb)
 	iounmap(musb->sync_va);
 
 	usb_put_phy(musb->xceiv);
-	usb_nop_xceiv_unregister();
 	return 0;
 }
 
 static const struct musb_platform_ops tusb_ops = {
+	.quirks		= MUSB_IN_TUSB,
 	.init		= tusb_musb_init,
 	.exit		= tusb_musb_exit,
 
+	.ep_offset	= tusb_ep_offset,
+	.ep_select	= tusb_ep_select,
+	.fifo_offset	= tusb_fifo_offset,
+	.readb		= tusb_readb,
+	.writeb		= tusb_writeb,
+	.read_fifo	= tusb_read_fifo,
+	.write_fifo	= tusb_write_fifo,
 	.enable		= tusb_musb_enable,
 	.disable	= tusb_musb_disable,
 
@@ -1164,18 +1215,17 @@ static int tusb_probe(struct platform_device *pdev)
 	struct platform_device		*musb;
 	struct tusb6010_glue		*glue;
 	struct platform_device_info	pinfo;
-	int				ret = -ENOMEM;
+	int				ret;
 
-	glue = kzalloc(sizeof(*glue), GFP_KERNEL);
-	if (!glue) {
-		dev_err(&pdev->dev, "failed to allocate glue context\n");
-		goto err0;
-	}
+	glue = devm_kzalloc(&pdev->dev, sizeof(*glue), GFP_KERNEL);
+	if (!glue)
+		return -ENOMEM;
 
 	glue->dev			= &pdev->dev;
 
 	pdata->platform_ops		= &tusb_ops;
 
+	usb_phy_generic_register();
 	platform_set_drvdata(pdev, glue);
 
 	memset(musb_resources, 0x00, sizeof(*musb_resources) *
@@ -1207,16 +1257,10 @@ static int tusb_probe(struct platform_device *pdev)
 	if (IS_ERR(musb)) {
 		ret = PTR_ERR(musb);
 		dev_err(&pdev->dev, "failed to register musb device: %d\n", ret);
-		goto err3;
+		return ret;
 	}
 
 	return 0;
-
-err3:
-	kfree(glue);
-
-err0:
-	return ret;
 }
 
 static int tusb_remove(struct platform_device *pdev)
@@ -1224,7 +1268,7 @@ static int tusb_remove(struct platform_device *pdev)
 	struct tusb6010_glue		*glue = platform_get_drvdata(pdev);
 
 	platform_device_unregister(glue->musb);
-	kfree(glue);
+	usb_phy_generic_unregister(glue->phy);
 
 	return 0;
 }

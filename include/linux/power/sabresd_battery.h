@@ -2,7 +2,7 @@
  * sabresd_battery.h - Maxim 8903 USB/Adapter Charger Driver
  *
  * Copyright (C) 2011 Samsung Electronics
- * Copyright (C) 2011-2014 Freescale Semiconductor, Inc.
+ * Copyright (C) 2011-2015 Freescale Semiconductor, Inc.
  * Based on max8903_charger.h
  *
  * This program is free software; you can redistribute it and/or modify

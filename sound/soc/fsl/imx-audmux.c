@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2014 Freescale Semiconductor, Inc.
+ * Copyright 2012-2015 Freescale Semiconductor, Inc.
  * Copyright 2012 Linaro Ltd.
  * Copyright 2009 Pengutronix, Sascha Hauer <s.hauer@pengutronix.de>
  *
@@ -343,6 +343,7 @@ static int imx_audmux_probe(struct platform_device *pdev)
 		break;
 	case IMX21_AUDMUX:
 		reg_max = 6;
+		break;
 	default:
 		dev_err(&pdev->dev, "unsupported version!\n");
 		return -EINVAL;
@@ -406,7 +407,6 @@ static struct platform_driver imx_audmux_driver = {
 	.id_table	= imx_audmux_ids,
 	.driver	= {
 		.name	= DRIVER_NAME,
-		.owner	= THIS_MODULE,
 		.pm = &imx_audmux_pm,
 		.of_match_table = imx_audmux_dt_ids,
 	}

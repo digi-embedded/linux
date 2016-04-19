@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2014 Freescale Semiconductor, Inc.
+ * Copyright (C) 2010-2015 Freescale Semiconductor, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -150,10 +150,8 @@ static int max17135_probe(struct i2c_client *client,
 
 	/* Create the PMIC data structure */
 	max17135 = kzalloc(sizeof(struct max17135), GFP_KERNEL);
-	if (max17135 == NULL) {
-		kfree(client);
+	if (max17135 == NULL)
 		return -ENOMEM;
-	}
 
 	/* Initialize the PMIC data structure */
 	i2c_set_clientdata(client, max17135);
@@ -196,16 +194,6 @@ static int max17135_remove(struct i2c_client *i2c)
 	struct max17135 *max17135 = i2c_get_clientdata(i2c);
 
 	mfd_remove_devices(max17135->dev);
-	return 0;
-}
-
-static int max17135_suspend(struct i2c_client *client, pm_message_t state)
-{
-	return 0;
-}
-
-static int max17135_resume(struct i2c_client *client)
-{
 	return 0;
 }
 
@@ -271,8 +259,6 @@ static struct i2c_driver max17135_driver = {
 	},
 	.probe = max17135_probe,
 	.remove = max17135_remove,
-	.suspend = max17135_suspend,
-	.resume = max17135_resume,
 	.id_table = max17135_id,
 	.detect = max17135_detect,
 	.address_list = &normal_i2c[0],

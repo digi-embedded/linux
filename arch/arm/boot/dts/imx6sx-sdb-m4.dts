@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 Freescale Semiconductor, Inc.
+ * Copyright (C) 2014-2015 Freescale Semiconductor, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -25,11 +25,11 @@
  * is running.
  */
 &adc1 {
-        status = "disabled";
+	status = "disabled";
 };
 
 &adc2 {
-        status = "disabled";
+	status = "disabled";
 };
 
 &flexcan1 {
@@ -41,15 +41,7 @@
 };
 
 &i2c3 {
-        status = "disabled";
-};
-
-&mcctest{
-	status = "okay";
-};
-
-&mcctty{
-	status = "okay";
+	status = "disabled";
 };
 
 &ocram {
@@ -88,7 +80,7 @@
 			IMX6SX_CLK_QSPI2 IMX6SX_CLK_SSI1
 			IMX6SX_CLK_SSI2 IMX6SX_CLK_SSI3
 			IMX6SX_CLK_UART_SERIAL IMX6SX_CLK_UART_IPG
-			IMX6SX_CLK_PERIPH_CLK2_SEL IMX6SX_CLK_OCRAM_ALT_SEL
+			IMX6SX_CLK_PERIPH_CLK2_SEL IMX6SX_CLK_DUMMY
 			IMX6SX_CLK_I2C1 IMX6SX_CLK_I2C2
 			IMX6SX_CLK_I2C3 IMX6SX_CLK_I2C4
 			IMX6SX_CLK_EPIT1 IMX6SX_CLK_EPIT2>;

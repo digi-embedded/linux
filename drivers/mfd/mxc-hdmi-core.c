@@ -1,20 +1,12 @@
 /*
- * Copyright (C) 2011-2014 Freescale Semiconductor, Inc.
+ * Copyright (C) 2011-2015 Freescale Semiconductor, Inc.
+
+ * The code contained herein is licensed under the GNU General Public
+ * License. You may obtain a copy of the GNU General Public License
+ * Version 2 or later at the following locations:
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
- *
+ * http://www.opensource.org/licenses/gpl-license.html
+ * http://www.gnu.org/copyleft/gpl.html
  */
 #include <linux/kernel.h>
 #include <linux/module.h>
@@ -161,9 +153,12 @@ int mxc_hdmi_register_audio(struct snd_pcm_substream *substream)
 	unsigned long flags, flags1;
 	int ret = 0;
 
+	if (!substream)
+		return -EINVAL;
+
 	snd_pcm_stream_lock_irqsave(substream, flags);
 
-	if (substream && check_hdmi_state()) {
+	if (check_hdmi_state()) {
 		spin_lock_irqsave(&hdmi_audio_lock, flags1);
 		if (hdmi_audio_stream_playback) {
 			pr_err("%s unconsist hdmi auido stream!\n", __func__);

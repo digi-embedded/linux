@@ -111,3 +111,4 @@ echo enabled > /sys/bus/usb/devices/1-1/power/wakeup
 If the system has only one usb port, and you want usb wakeup at this port, you
 can use below script to enable usb wakeup.
 for i in $(find /sys -name wakeup | grep usb);do echo enabled > $i;done;
+

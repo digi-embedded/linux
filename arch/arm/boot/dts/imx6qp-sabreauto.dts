@@ -29,6 +29,19 @@
 	prefetch;
 };
 
+&fec {
+	pinctrl-assert-gpios = <&max7322 0 GPIO_ACTIVE_HIGH>;
+};
+
+&i2c2 {
+	max7322: gpio@68 {
+		compatible = "maxim,max7322";
+		reg = <0x68>;
+		gpio-controller;
+		#gpio-cells = <2>;
+	};
+};
+
 &pcie {
 	reset-gpio = <&max7310_c 5 GPIO_ACTIVE_LOW>;
 	status = "okay";
@@ -60,25 +73,15 @@
 	status = "okay";
 };
 
+&reg_sd3_vmmc {
+	status = "okay";
+};
+
 &sata {
 	status = "okay";
 };
 
-&fec {
-	pinctrl-assert-gpios = <&max7322 0 GPIO_ACTIVE_HIGH>;
-};
-
-&i2c2 {
-	max7322: gpio@68 {
-		compatible = "maxim,max7322";
-		reg = <0x68>;
-		gpio-controller;
-		#gpio-cells = <2>;
-	};
-};
-
 &usdhc3 {
-	/* imx6qp-sabreauto board has no CD pin issue, so enable vmmc-supply */
 	vmmc-supply = <&reg_sd3_vmmc>;
 };
 
@@ -86,6 +89,3 @@
 	regulator-always-on;
 };
 
-&reg_sd3_vmmc {
-	status = "okay";
-};

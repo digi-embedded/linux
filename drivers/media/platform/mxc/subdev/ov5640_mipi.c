@@ -67,7 +67,7 @@ static int ov5640_framerates[] = {
 };
 
 struct ov5640_datafmt {
-	enum v4l2_mbus_pixelcode	code;
+	u32	code;
 	enum v4l2_colorspace		colorspace;
 };
 
@@ -701,7 +701,7 @@ static struct i2c_driver ov5640_i2c_driver = {
 };
 
 static const struct ov5640_datafmt ov5640_colour_fmts[] = {
-	{V4L2_MBUS_FMT_YUYV8_2X8, V4L2_COLORSPACE_JPEG},
+	{MEDIA_BUS_FMT_YUYV8_2X8, V4L2_COLORSPACE_JPEG},
 };
 
 static struct ov5640 *to_ov5640(const struct i2c_client *client)
@@ -711,7 +711,7 @@ static struct ov5640 *to_ov5640(const struct i2c_client *client)
 
 /* Find a data format by a pixel code in an array */
 static const struct ov5640_datafmt
-			*ov5640_find_datafmt(enum v4l2_mbus_pixelcode code)
+			*ov5640_find_datafmt(u32 code)
 {
 	int i;
 
@@ -870,7 +870,6 @@ static void OV5640_stream_off(void)
 {
 	ov5640_write_reg(0x4202, 0x0f);
 }
-
 
 static int OV5640_get_sysclk(void)
 {
@@ -1304,8 +1303,6 @@ static int ov5640_change_mode_exposure_calc(enum ov5640_frame_rate frame_rate,
 	}
 	OV5640_set_shutter(cap_shutter);
 
-	OV5640_stream_on();
-
 err:
 	return retval;
 }
@@ -1344,8 +1341,6 @@ static int ov5640_change_mode_direct(enum ov5640_frame_rate frame_rate,
 	retval = ov5640_download_firmware(pModeSetting, ArySize);
 	if (retval < 0)
 		goto err;
-
-	OV5640_stream_on();
 
 	OV5640_turn_on_AE_AG(1);
 
@@ -1640,7 +1635,7 @@ static int ov5640_g_fmt(struct v4l2_subdev *sd,
 }
 
 static int ov5640_enum_fmt(struct v4l2_subdev *sd, unsigned int index,
-			   enum v4l2_mbus_pixelcode *code)
+			   u32 *code)
 {
 	if (index >= ARRAY_SIZE(ov5640_colour_fmts))
 		return -EINVAL;
@@ -1658,19 +1653,20 @@ static int ov5640_enum_fmt(struct v4l2_subdev *sd, unsigned int index,
  * Return 0 if successful, otherwise -EINVAL.
  */
 static int ov5640_enum_framesizes(struct v4l2_subdev *sd,
-		struct v4l2_frmsizeenum *fsize)
+			       struct v4l2_subdev_pad_config *cfg,
+			       struct v4l2_subdev_frame_size_enum *fse)
 {
-	if (fsize->index > ov5640_mode_MAX)
+	if (fse->index > ov5640_mode_MAX)
 		return -EINVAL;
 
-	fsize->type = V4L2_FRMSIZE_TYPE_DISCRETE;
-	fsize->pixel_format = ov5640_data.pix.pixelformat;
-	fsize->discrete.width =
-			max(ov5640_mode_info_data[0][fsize->index].width,
-			    ov5640_mode_info_data[1][fsize->index].width);
-	fsize->discrete.height =
-			max(ov5640_mode_info_data[0][fsize->index].height,
-			    ov5640_mode_info_data[1][fsize->index].height);
+	fse->max_width =
+			max(ov5640_mode_info_data[0][fse->index].width,
+			    ov5640_mode_info_data[1][fse->index].width);
+	fse->min_width = fse->max_width;
+	fse->max_height =
+			max(ov5640_mode_info_data[0][fse->index].height,
+			    ov5640_mode_info_data[1][fse->index].height);
+	fse->min_height = fse->max_height;
 	return 0;
 }
 
@@ -1683,33 +1679,37 @@ static int ov5640_enum_framesizes(struct v4l2_subdev *sd,
  * Return 0 if successful, otherwise -EINVAL.
  */
 static int ov5640_enum_frameintervals(struct v4l2_subdev *sd,
-		struct v4l2_frmivalenum *fival)
+		struct v4l2_subdev_pad_config *cfg,
+		struct v4l2_subdev_frame_interval_enum *fie)
 {
 	int i, j, count = 0;
 
-	if (fival->index < 0 || fival->index > ov5640_mode_MAX)
+	if (fie->index < 0 || fie->index > ov5640_mode_MAX)
 		return -EINVAL;
 
-	if (fival->width == 0 || fival->height == 0 ||
-	    fival->pixel_format == 0) {
-		pr_warning("Please assign pixelformat, width and height.\n");
+	if (fie->width == 0 || fie->height == 0 ||
+	    fie->code == 0) {
+		pr_warning("Please assign pixel format, width and height.\n");
 		return -EINVAL;
 	}
 
-	fival->type = V4L2_FRMIVAL_TYPE_DISCRETE;
-	fival->discrete.numerator = 1;
+	fie->interval.numerator = 1;
 
-	for (i = 0; i < ARRAY_SIZE(ov5640_mode_info_data); i++)
-		for (j = 0; j < (ov5640_mode_MAX + 1); j++)
-			if (fival->pixel_format == ov5640_data.pix.pixelformat
-			 && fival->width == ov5640_mode_info_data[i][j].width
-			 && fival->height == ov5640_mode_info_data[i][j].height
-			 && ov5640_mode_info_data[i][j].init_data_ptr != NULL
-			 && fival->index == count++) {
-				fival->discrete.denominator =
+	count = 0;
+	for (i = 0; i < ARRAY_SIZE(ov5640_mode_info_data); i++) {
+		for (j = 0; j < (ov5640_mode_MAX + 1); j++) {
+			if (fie->width == ov5640_mode_info_data[i][j].width
+			 && fie->height == ov5640_mode_info_data[i][j].height
+			 && ov5640_mode_info_data[i][j].init_data_ptr != NULL) {
+				count++;
+			}
+			if (fie->index == (count - 1)) {
+				fie->interval.denominator =
 						ov5640_framerates[i];
 				return 0;
 			}
+		}
+	}
 
 	return -EINVAL;
 }
@@ -1752,16 +1752,29 @@ static int init_device(void)
 	return ret;
 }
 
+static int ov5640_s_stream(struct v4l2_subdev *sd, int enable)
+{
+	if (enable)
+		OV5640_stream_on();
+	else
+		OV5640_stream_off();
+	return 0;
+}
+
 static struct v4l2_subdev_video_ops ov5640_subdev_video_ops = {
 	.g_parm = ov5640_g_parm,
 	.s_parm = ov5640_s_parm,
+	.s_stream = ov5640_s_stream,
 
 	.s_mbus_fmt	= ov5640_s_fmt,
 	.g_mbus_fmt	= ov5640_g_fmt,
 	.try_mbus_fmt	= ov5640_try_fmt,
 	.enum_mbus_fmt	= ov5640_enum_fmt,
-	.enum_framesizes     = ov5640_enum_framesizes,
-	.enum_frameintervals = ov5640_enum_frameintervals,
+};
+
+static const struct v4l2_subdev_pad_ops ov5640_subdev_pad_ops = {
+	.enum_frame_size       = ov5640_enum_framesizes,
+	.enum_frame_interval   = ov5640_enum_frameintervals,
 };
 
 static struct v4l2_subdev_core_ops ov5640_subdev_core_ops = {
@@ -1775,6 +1788,7 @@ static struct v4l2_subdev_core_ops ov5640_subdev_core_ops = {
 static struct v4l2_subdev_ops ov5640_subdev_ops = {
 	.core	= &ov5640_subdev_core_ops,
 	.video	= &ov5640_subdev_video_ops,
+	.pad	= &ov5640_subdev_pad_ops,
 };
 
 

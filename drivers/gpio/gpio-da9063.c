@@ -71,7 +71,7 @@ static int da9063_gpio_get(struct gpio_chip *gc, unsigned offset)
 			return ret;
 		break;
 	case DA9063_OUTPUT:
-		ret = regmap_read(gpio->da9063->regmap, DA9063_REG_GPIO_MODE_0_7,
+		ret = regmap_read(gpio->da9063->regmap, DA9063_REG_GPIO_MODE0_7,
 				  &val);
 		if (ret < 0)
 			return ret;
@@ -86,7 +86,7 @@ static void da9063_gpio_set(struct gpio_chip *gc, unsigned offset, int value)
 	struct da9063_gpio *gpio = to_da9063_gpio(gc);
 
 	regmap_update_bits(gpio->da9063->regmap,
-			DA9063_REG_GPIO_MODE_0_7,
+			DA9063_REG_GPIO_MODE0_7,
 			1 << offset,
 			value << offset);
 }

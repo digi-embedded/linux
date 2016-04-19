@@ -143,7 +143,7 @@ static int imx_rng_data_present(struct hwrng *rng, int wait)
 	return level > 0 ? 1 : 0;
 }
 
-static int imx_rng_data_read(struct hwrng *rng, u32 * data)
+static int imx_rng_data_read(struct hwrng *rng, u32 *data)
 {
 	int err;
 	struct imx_rng_priv_data *prv = (struct imx_rng_priv_data *)rng->priv;

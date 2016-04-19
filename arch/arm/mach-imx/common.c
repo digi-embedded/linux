@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 Freescale Semiconductor, Inc.
+ * Copyright (C) 2015 Freescale Semiconductor, Inc.
  *
  * The code contained herein is licensed under the GNU General Public
  * License. You may obtain a copy of the GNU General Public License
@@ -38,8 +38,7 @@ void restore_ttbr1(unsigned long ttbr1)
 }
 
 #define OCOTP_MACn(n)	(0x00000620 + (n) * 0x10)
-
-void __init imx6_enet_mac_init(const char *compatible)
+void __init imx6_enet_mac_init(const char *enet_compat, const char *ocotp_compat)
 {
 	struct device_node *ocotp_np, *enet_np, *from = NULL;
 	void __iomem *base;
@@ -51,7 +50,7 @@ void __init imx6_enet_mac_init(const char *compatible)
 	int i;
 
 	for (i = 0; i < 2; i++) {
-		enet_np = of_find_compatible_node(from, NULL, compatible);
+		enet_np = of_find_compatible_node(from, NULL, enet_compat);
 		if (!enet_np)
 			return;
 
@@ -60,8 +59,7 @@ void __init imx6_enet_mac_init(const char *compatible)
 		if (of_get_mac_address(enet_np))
 			goto put_enet_node;
 
-		ocotp_np = of_find_compatible_node(NULL,
-			NULL, "fsl,imx6q-ocotp");
+		ocotp_np = of_find_compatible_node(NULL, NULL, ocotp_compat);
 		if (!ocotp_np) {
 			pr_warn("failed to find ocotp node\n");
 			goto put_enet_node;
@@ -137,13 +135,16 @@ void imx6_up_lpddr2_freq_change(u32 freq, int bus_freq_mode) {}
 
 #if !defined(CONFIG_SOC_IMX6Q)
 u32 mx6_ddr3_freq_change_start, mx6_ddr3_freq_change_end;
-u32 wfe_ddr3_freq_change_start, wfe_ddr3_freq_change_end;
+u32 mx6q_lpddr2_freq_change_start, mx6q_lpddr2_freq_change_end;
+u32 wfe_smp_freq_change_start, wfe_smp_freq_change_end;
 void mx6_ddr3_freq_change(u32 freq, void *ddr_settings,
 	bool dll_mode, void *iomux_offsets) {}
-void wfe_ddr3_freq_change(u32 cpuid, u32 *ddr_freq_change_done) {}
+void mx6q_lpddr2_freq_change(u32 freq, int bus_freq_mode) {}
+void wfe_smp_freq_change(u32 cpuid, u32 *ddr_freq_change_done) {}
 #endif
 
 #if !defined(CONFIG_SOC_IMX7D)
 void imx7_smp_wfe(u32 cpuid, u32 ocram_base) {}
 void imx7d_ddr3_freq_change(u32 freq) {}
 #endif
+

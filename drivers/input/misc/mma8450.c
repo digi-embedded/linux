@@ -1,7 +1,7 @@
 /*
  *  Driver for Freescale's 3-Axis Accelerometer MMA8450
  *
- *  Copyright (C) 2011-2014 Freescale Semiconductor, Inc. All Rights Reserved.
+ *  Copyright (C) 2011-2015 Freescale Semiconductor, Inc. All Rights Reserved.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -209,7 +209,7 @@ static ssize_t mma8450_scalemode_store(struct device *dev,
 	struct mma8450 *m = NULL;
 	struct i2c_client *client = to_i2c_client(dev);
 
-	ret = strict_strtoul(buf, 10, &mode);
+	ret = kstrtoul(buf, 10, &mode);
 	if (ret) {
 		dev_err(dev, "string transform error\n");
 		return ret;
@@ -269,7 +269,7 @@ static int mma8450_probe(struct i2c_client *c,
 					 I2C_FUNC_SMBUS_BYTE |
 					 I2C_FUNC_SMBUS_BYTE_DATA);
 	if (!err)
-		goto err_out;
+		return err;
 
 	client_id = i2c_smbus_read_byte_data(c, MMA8450_WHO_AM_I);
 
@@ -277,16 +277,16 @@ static int mma8450_probe(struct i2c_client *c,
 		dev_err(&c->dev,
 			"read chip ID 0x%x is not equal to 0x%x!\n", client_id,
 			MMA8450_ID);
-		err = -EINVAL;
-		goto err_out;
+		return -EINVAL;
 	}
 
-	m = kzalloc(sizeof(struct mma8450), GFP_KERNEL);
-	idev = input_allocate_polled_device();
-	if (!m || !idev) {
-		err = -ENOMEM;
-		goto err_free_mem;
-	}
+	m = devm_kzalloc(&c->dev, sizeof(*m), GFP_KERNEL);
+	if (!m)
+		return -ENOMEM;
+
+	idev = devm_input_allocate_polled_device(&c->dev);
+	if (!idev)
+		return -ENOMEM;
 
 	m->client = c;
 	m->idev = idev;
@@ -307,7 +307,7 @@ static int mma8450_probe(struct i2c_client *c,
 	err = input_register_polled_device(idev);
 	if (err) {
 		dev_err(&c->dev, "failed to register polled input device\n");
-		goto err_free_mem;
+		return err;
 	}
 
 	mutex_init(&m->mma8450_lock);
@@ -332,10 +332,6 @@ err_close:
 err_unreg_dev:
 	mutex_destroy(&m->mma8450_lock);
 	input_unregister_polled_device(idev);
-err_free_mem:
-	input_free_polled_device(idev);
-	kfree(m);
-err_out:
 	return err;
 }
 
@@ -348,8 +344,6 @@ static int mma8450_remove(struct i2c_client *c)
 	mma8450_close(idev);
 	mutex_destroy(&m->mma8450_lock);
 	input_unregister_polled_device(idev);
-	input_free_polled_device(idev);
-	kfree(m);
 
 	return 0;
 }
@@ -369,7 +363,6 @@ MODULE_DEVICE_TABLE(of, mma8450_dt_ids);
 static struct i2c_driver mma8450_driver = {
 	.driver = {
 		.name	= MMA8450_DRV_NAME,
-		.owner	= THIS_MODULE,
 		.of_match_table = mma8450_dt_ids,
 	},
 	.probe		= mma8450_probe,

@@ -415,7 +415,7 @@ static ssize_t isl29023_store_int_persists(struct device *dev,
 	unsigned long val;
 	int ret;
 
-	if ((strict_strtoul(buf, 10, &val) < 0) ||
+	if ((kstrtoul(buf, 10, &val) < 0) ||
 	    (val > ISL29023_INT_PERSISTS_16))
 		return -EINVAL;
 
@@ -448,7 +448,7 @@ static ssize_t isl29023_store_int_flag(struct device *dev,
 	unsigned long val;
 	int ret;
 
-	if ((strict_strtoul(buf, 10, &val) < 0) || (val > 1))
+	if ((kstrtoul(buf, 10, &val) < 0) || (val > 1))
 		return -EINVAL;
 
 	ret = isl29023_set_int_flag(client, val);
@@ -479,7 +479,7 @@ static ssize_t isl29023_store_int_lt(struct device *dev,
 	unsigned long val;
 	int ret;
 
-	if ((strict_strtoul(buf, 16, &val) < 0) || (val > 0xffff))
+	if ((kstrtoul(buf, 16, &val) < 0) || (val > 0xffff))
 		return -EINVAL;
 
 	ret = isl29023_set_int_lt(client, val);
@@ -510,7 +510,7 @@ static ssize_t isl29023_store_int_ht(struct device *dev,
 	unsigned long val;
 	int ret;
 
-	if ((strict_strtoul(buf, 16, &val) < 0) || (val > 0xffff))
+	if ((kstrtoul(buf, 16, &val) < 0) || (val > 0xffff))
 		return -EINVAL;
 
 	ret = isl29023_set_int_ht(client, val);
@@ -541,7 +541,7 @@ static ssize_t isl29023_store_range(struct device *dev,
 	unsigned long val;
 	int ret;
 
-	if ((strict_strtoul(buf, 10, &val) < 0) || (val > ISL29023_RANGE_64K))
+	if ((kstrtoul(buf, 10, &val) < 0) || (val > ISL29023_RANGE_64K))
 		return -EINVAL;
 
 	ret = isl29023_set_range(client, val);
@@ -574,7 +574,7 @@ static ssize_t isl29023_store_resolution(struct device *dev,
 	unsigned long val;
 	int ret;
 
-	if ((strict_strtoul(buf, 10, &val) < 0) || (val > ISL29023_RES_4))
+	if ((kstrtoul(buf, 10, &val) < 0) || (val > ISL29023_RES_4))
 		return -EINVAL;
 
 	ret = isl29023_set_resolution(client, val);
@@ -604,7 +604,7 @@ static ssize_t isl29023_store_mode(struct device *dev,
 	unsigned long val;
 	int ret;
 
-	if ((strict_strtoul(buf, 10, &val) < 0) ||
+	if ((kstrtoul(buf, 10, &val) < 0) ||
 	    (val > ISL29023_IR_CONT_MODE))
 		return -EINVAL;
 
@@ -640,7 +640,7 @@ static ssize_t isl29023_store_power_state(struct device *dev,
 	unsigned long val;
 	int ret;
 
-	if ((strict_strtoul(buf, 10, &val) < 0) || (val > 1))
+	if ((kstrtoul(buf, 10, &val) < 0) || (val > 1))
 		return -EINVAL;
 
 	ret = isl29023_set_power_state(client, val);
@@ -692,7 +692,7 @@ static ssize_t isl29023_store_int_lt_lux(struct device *dev,
 	int range, bitdepth, ret;
 	u8 lsb, msb;
 
-	if ((strict_strtoul(buf, 10, &val) < 0))
+	if ((kstrtoul(buf, 10, &val) < 0))
 		return -EINVAL;
 
 	/* No LUX data if not operational */
@@ -762,7 +762,7 @@ static ssize_t isl29023_store_int_ht_lux(struct device *dev,
 	int range, bitdepth, ret;
 	u8 lsb, msb;
 
-	if ((strict_strtoul(buf, 10, &val) < 0))
+	if ((kstrtoul(buf, 10, &val) < 0))
 		return -EINVAL;
 
 	/* No LUX data if not operational */
@@ -1012,18 +1012,20 @@ static int isl29023_remove(struct i2c_client *client)
 	return 0;
 }
 
-#ifdef CONFIG_PM
-static int isl29023_suspend(struct i2c_client *client, pm_message_t mesg)
+#ifdef CONFIG_PM_SLEEP
+static int isl29023_suspend(struct device *dev)
 {
+	struct i2c_client *client = to_i2c_client(dev);
 	struct isl29023_data *data = i2c_get_clientdata(client);
 
 	data->mode_before_suspend = isl29023_get_mode(client);
 	return isl29023_set_power_state(client, ISL29023_PD_MODE);
 }
 
-static int isl29023_resume(struct i2c_client *client)
+static int isl29023_resume(struct device *dev)
 {
 	int i;
+	struct i2c_client *client = to_i2c_client(dev);
 	struct isl29023_data *data = i2c_get_clientdata(client);
 
 	/* restore registers from cache */
@@ -1033,11 +1035,9 @@ static int isl29023_resume(struct i2c_client *client)
 
 	return isl29023_set_mode(client, data->mode_before_suspend);
 }
+#endif
 
-#else
-#define isl29023_suspend	NULL
-#define isl29023_resume		NULL
-#endif /* CONFIG_PM */
+static SIMPLE_DEV_PM_OPS(isl29023_pm_ops, isl29023_suspend, isl29023_resume);
 
 static const struct i2c_device_id isl29023_id[] = {
 	{ ISL29023_DRV_NAME, 0 },
@@ -1049,9 +1049,8 @@ static struct i2c_driver isl29023_driver = {
 	.driver = {
 		.name	= ISL29023_DRV_NAME,
 		.owner	= THIS_MODULE,
+		.pm	= &isl29023_pm_ops,
 	},
-	.suspend = isl29023_suspend,
-	.resume	= isl29023_resume,
 	.probe	= isl29023_probe,
 	.remove	= isl29023_remove,
 	.id_table = isl29023_id,

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2015 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright (C) 2010-2016 Freescale Semiconductor, Inc. All Rights Reserved.
  */
 
 /*
@@ -48,25 +48,45 @@ static int imx_cs42888_surround_hw_params(struct snd_pcm_substream *substream,
 	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
 	struct snd_soc_dai *codec_dai = rtd->codec_dai;
 	struct imx_priv *priv = &card_priv;
+	struct device *dev = &priv->pdev->dev;
 	u32 dai_format = 0;
+	int ret = 0;
 
 	dai_format = SND_SOC_DAIFMT_LEFT_J | SND_SOC_DAIFMT_NB_NF |
 		     SND_SOC_DAIFMT_CBS_CFS;
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
-		snd_soc_dai_set_sysclk(cpu_dai, ESAI_HCKT_EXTAL,
+		ret = snd_soc_dai_set_sysclk(cpu_dai, ESAI_HCKT_EXTAL,
 			       priv->mclk_freq, SND_SOC_CLOCK_OUT);
 	else
-		snd_soc_dai_set_sysclk(cpu_dai, ESAI_HCKR_EXTAL,
+		ret = snd_soc_dai_set_sysclk(cpu_dai, ESAI_HCKR_EXTAL,
 			       priv->mclk_freq, SND_SOC_CLOCK_OUT);
-	snd_soc_dai_set_sysclk(codec_dai, 0, priv->mclk_freq, SND_SOC_CLOCK_IN);
+	if (ret) {
+		dev_err(dev, "failed to set cpu sysclk: %d\n", ret);
+		return ret;
+	}
+
+	ret = snd_soc_dai_set_sysclk(codec_dai, 0,
+				priv->mclk_freq, SND_SOC_CLOCK_IN);
+	if (ret) {
+		dev_err(dev, "failed to set codec sysclk: %d\n", ret);
+		return ret;
+	}
 
 	/* set cpu DAI configuration */
-	snd_soc_dai_set_fmt(cpu_dai, dai_format);
+	ret = snd_soc_dai_set_fmt(cpu_dai, dai_format);
+	if (ret) {
+		dev_err(dev, "failed to set cpu dai fmt: %d\n", ret);
+		return ret;
+	}
 	/* set i.MX active slot mask */
 	snd_soc_dai_set_tdm_slot(cpu_dai, 0x3, 0x3, 2, 32);
 
 	/* set codec DAI configuration */
-	snd_soc_dai_set_fmt(codec_dai, dai_format);
+	ret = snd_soc_dai_set_fmt(codec_dai, dai_format);
+	if (ret) {
+		dev_err(dev, "failed to set codec dai fmt: %d\n", ret);
+		return ret;
+	}
 	return 0;
 }
 
@@ -80,13 +100,11 @@ static int imx_cs42888_surround_startup(struct snd_pcm_substream *substream)
 	int ret;
 
 	if (priv->mclk_freq == 24576000) {
-		support_rates[0] = 32000;
-		support_rates[1] = 48000;
-		support_rates[2] = 64000;
-		support_rates[3] = 96000;
-		support_rates[4] = 192000;
+		support_rates[0] = 48000;
+		support_rates[1] = 96000;
+		support_rates[2] = 192000;
 		constraint_rates.list = support_rates;
-		constraint_rates.count = 5;
+		constraint_rates.count = 3;
 
 		ret = snd_pcm_hw_constraint_list(runtime, 0, SNDRV_PCM_HW_PARAM_RATE,
 							&constraint_rates);
@@ -197,6 +215,7 @@ static struct snd_soc_card snd_soc_card_imx_cs42888 = {
 	.num_dapm_widgets = ARRAY_SIZE(imx_cs42888_dapm_widgets),
 	.dapm_routes = audio_map,
 	.num_dapm_routes = ARRAY_SIZE(audio_map),
+	.owner = THIS_MODULE,
 };
 
 /*
@@ -205,7 +224,7 @@ static struct snd_soc_card snd_soc_card_imx_cs42888 = {
 static int imx_cs42888_probe(struct platform_device *pdev)
 {
 	struct device_node *esai_np, *codec_np;
-	struct device_node *asrc_np;
+	struct device_node *asrc_np = NULL;
 	struct platform_device *esai_pdev;
 	struct platform_device *asrc_pdev = NULL;
 	struct i2c_client *codec_dev;
@@ -322,7 +341,6 @@ static struct platform_driver imx_cs42888_driver = {
 	.remove = imx_cs42888_remove,
 	.driver = {
 		.name = "imx-cs42888",
-		.owner = THIS_MODULE,
 		.pm = &snd_soc_pm_ops,
 		.of_match_table = imx_cs42888_dt_ids,
 	},

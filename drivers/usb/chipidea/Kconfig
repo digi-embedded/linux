@@ -10,6 +10,17 @@ config USB_CHIPIDEA
 
 if USB_CHIPIDEA
 
+config USB_CHIPIDEA_OF
+	tristate
+	depends on OF
+	default USB_CHIPIDEA
+
+config USB_CHIPIDEA_PCI
+	tristate
+	depends on PCI
+	depends on NOP_USB_XCEIV
+	default USB_CHIPIDEA
+
 config USB_CHIPIDEA_UDC
 	bool "ChipIdea device controller"
 	depends on USB_GADGET
@@ -24,10 +35,5 @@ config USB_CHIPIDEA_HOST
 	help
 	  Say Y here to enable host controller functionality of the
 	  ChipIdea driver.
-
-config USB_CHIPIDEA_DEBUG
-	bool "ChipIdea driver debug"
-	help
-	  Say Y here to enable debugging output of the ChipIdea driver.
 
 endif

@@ -36,8 +36,8 @@
 #define SRC_A7RCR1			0x008
 #define SRC_M4RCR			0x00C
 
-#define BP_SRC_A7RCR0_A7_CORE_RESET0	0
-#define BP_SRC_A7RCR1_A7_CORE1_ENABLE	1
+#define BP_SRC_A7RCR0_A7_CORE_RESET0   0
+#define BP_SRC_A7RCR1_A7_CORE1_ENABLE  1
 
 static void __iomem *src_base;
 static DEFINE_SPINLOCK(src_lock);
@@ -102,12 +102,12 @@ void imx_enable_cpu(int cpu, bool enable)
 	u32 mask, val;
 
 	cpu = cpu_logical_map(cpu);
-
 	spin_lock(&src_lock);
 	if (cpu_is_imx7d()) {
 		/* enable core */
 		if (enable)
 			imx_gpcv2_set_core1_pdn_pup_by_software(false);
+
 		mask = 1 << (BP_SRC_A7RCR1_A7_CORE1_ENABLE + cpu - 1);
 		val = readl_relaxed(src_base + SRC_A7RCR1);
 		val = enable ? val | mask : val & ~mask;
@@ -119,7 +119,7 @@ void imx_enable_cpu(int cpu, bool enable)
 		val |= 1 << (BP_SRC_SCR_CORE1_RST + cpu - 1);
 		writel_relaxed(val, src_base + SRC_SCR);
 	}
-	spin_unlock(&src_lock);
+		spin_unlock(&src_lock);
 }
 
 void imx_set_cpu_jump(int cpu, void *jump_addr)
@@ -128,10 +128,10 @@ void imx_set_cpu_jump(int cpu, void *jump_addr)
 	cpu = cpu_logical_map(cpu);
 	if (cpu_is_imx7d())
 		writel_relaxed(virt_to_phys(jump_addr),
-		       src_base + SRC_GPR1_V2 + cpu * 8);
+			src_base + SRC_GPR1_V2 + cpu * 8);
 	else
 		writel_relaxed(virt_to_phys(jump_addr),
-		       src_base + SRC_GPR1 + cpu * 8);
+			src_base + SRC_GPR1 + cpu * 8);
 	spin_unlock(&src_lock);
 }
 

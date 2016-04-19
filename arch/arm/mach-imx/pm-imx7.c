@@ -19,6 +19,7 @@
 #include <linux/of_device.h>
 #include <linux/of_fdt.h>
 #include <linux/of_irq.h>
+#include <linux/slab.h>
 #include <linux/suspend.h>
 #include <linux/genalloc.h>
 #include <linux/mfd/syscon.h>
@@ -77,6 +78,7 @@
 
 #define CCM_LPCG_START		0x4040
 #define CCM_LPCG_STEP		0x10
+#define CCM_PCIE_LPCG		0x4600
 
 #define BM_CCM_ROOT_POST_PODF	0x3f
 #define BM_CCM_ROOT_PRE_PODF	0x70000
@@ -117,6 +119,8 @@
 #define M4_PC_OFF		0x04
 #define M4_RCR_HALT		0xAB
 #define M4_RCR_GO		0xAA
+#define M4_OCRAMS_RESERVED_SIZE	0xc
+
 extern unsigned long iram_tlb_base_addr;
 extern unsigned long iram_tlb_phys_addr;
 
@@ -240,6 +244,11 @@ static const u32 imx7d_ddrc_phy_lpddr3_setting[][2] __initconst = {
 	{ 0x10, READ_DATA_FROM_HARDWARE },
 	{ 0x1c, READ_DATA_FROM_HARDWARE },
 	{ 0x9c, READ_DATA_FROM_HARDWARE },
+	{ 0x7c, READ_DATA_FROM_HARDWARE },
+	{ 0x80, READ_DATA_FROM_HARDWARE },
+	{ 0x84, READ_DATA_FROM_HARDWARE },
+	{ 0x88, READ_DATA_FROM_HARDWARE },
+	{ 0x6c, READ_DATA_FROM_HARDWARE },
 	{ 0x20, READ_DATA_FROM_HARDWARE },
 	{ 0x30, READ_DATA_FROM_HARDWARE },
 	{ 0x50, 0x01000008 },
@@ -287,6 +296,11 @@ static const u32 imx7d_ddrc_phy_ddr3_setting[][2] __initconst = {
 	{ 0x4, READ_DATA_FROM_HARDWARE },
 	{ 0x10, READ_DATA_FROM_HARDWARE },
 	{ 0x9c, READ_DATA_FROM_HARDWARE },
+	{ 0x7c, READ_DATA_FROM_HARDWARE },
+	{ 0x80, READ_DATA_FROM_HARDWARE },
+	{ 0x84, READ_DATA_FROM_HARDWARE },
+	{ 0x88, READ_DATA_FROM_HARDWARE },
+	{ 0x6c, READ_DATA_FROM_HARDWARE },
 	{ 0x20, READ_DATA_FROM_HARDWARE },
 	{ 0x30, READ_DATA_FROM_HARDWARE },
 	{ 0x50, 0x01000010 },
@@ -344,6 +358,7 @@ struct imx7_cpu_pm_info {
 	struct imx7_pm_base snvs_base;
 	struct imx7_pm_base anatop_base;
 	struct imx7_pm_base lpsr_base;
+	struct imx7_pm_base gic_base;
 	u32 ttbr1; /* Store TTBR1 */
 	u32 ddrc_num; /* Number of DDRC which need saved/restored. */
 	u32 ddrc_val[MX7_MAX_DDRC_NUM][2]; /* To save offset and value */
@@ -695,10 +710,20 @@ static int imx7_pm_enter(suspend_state_t state)
 		imx_anatop_pre_suspend();
 		imx_gpcv2_pre_suspend(true);
 		if (imx_gpcv2_is_mf_mix_off()) {
+			/*
+			 * per design requirement, EXSC for PCIe/EIM
+			 * will need clock to recover RDC setting on
+			 * resume, so enable PCIe/EIM LPCG for RDC
+			 * recovery when M/F mix off
+			 */
+			writel_relaxed(0x3, pm_info->ccm_base.vbase +
+				CCM_PCIE_LPCG);
 			/* stop m4 if mix will also be shutdown */
-			if (imx_src_is_m4_enabled() && imx_mu_is_m4_in_stop())
+			if (imx_src_is_m4_enabled() && imx_mu_is_m4_in_stop()) {
 				writel(M4_RCR_HALT,
 					pm_info->src_base.vbase + M4RCR);
+				imx_gpcv2_enable_wakeup_for_m4();
+			}
 			imx7_console_save(console_saved_reg);
 			memcpy(ocram_saved_in_ddr, ocram_base, ocram_size);
 			if (lpsr_enabled) {
@@ -730,23 +755,22 @@ static int imx7_pm_enter(suspend_state_t state)
 		}
 		if (imx_gpcv2_is_mf_mix_off() ||
 			imx7_pm_is_resume_from_lpsr()) {
+			writel_relaxed(0x0, pm_info->ccm_base.vbase +
+				CCM_PCIE_LPCG);
 			memcpy(ocram_base, ocram_saved_in_ddr, ocram_size);
 			imx7_console_restore(console_saved_reg);
 			if (imx_src_is_m4_enabled() && imx_mu_is_m4_in_stop()) {
+				imx_gpcv2_disable_wakeup_for_m4();
 				/* restore M4 image */
 				memcpy(lpm_m4tcm_base,
 				    lpm_m4tcm_saved_in_ddr, SZ_32K);
-				/* set sp from word in the image */
-				writel(*(lpm_m4tcm_saved_in_ddr),
-				    m4_bootrom_base + M4_SP_OFF);
-				/* set PC from next word */
-				writel(*(lpm_m4tcm_saved_in_ddr+1),
-				    m4_bootrom_base + M4_PC_OFF);
 				/* kick m4 to enable */
 				writel(M4_RCR_GO,
 					pm_info->src_base.vbase + M4RCR);
-                                /* offset high bus count for m4 image */
-                                request_bus_freq(BUS_FREQ_HIGH);
+				/* offset high bus count for m4 image */
+				request_bus_freq(BUS_FREQ_HIGH);
+				/* restore M4 to run mode */
+				imx_mu_set_m4_run_mode();
 				/* gpc wakeup */
 				imx_mu_lpm_ready(true);
 			}
@@ -788,10 +812,9 @@ static int __init imx7_dt_find_lpsram(unsigned long node, const char *uname,
 				      int depth, void *data)
 {
 	unsigned long lpram_addr;
-	__be32 *prop;
+	const __be32 *prop = of_get_flat_dt_prop(node, "reg", NULL);
 
 	if (of_flat_dt_match(node, low_power_ocram_match)) {
-		prop = of_get_flat_dt_prop(node, "reg", NULL);
 		if (!prop)
 			return -EINVAL;
 
@@ -821,12 +844,13 @@ void __init imx7_pm_map_io(void)
 
 	/* Return if no IRAM space is allocated for suspend/resume code. */
 	if (!iram_tlb_base_addr) {
-		pr_warn("No valid ocram avaiable for suspend/resume!\n");
+		pr_warn("No valid ocram available for suspend/resume!\n");
 		return;
 	}
 
-	/* Set all entries to 0. */
-	memset((void *)iram_tlb_base_addr, 0, MX7_IRAM_TLB_SIZE);
+	/* Set all entries to 0 except first 3 words reserved for M4. */
+	memset((void *)(iram_tlb_base_addr + M4_OCRAMS_RESERVED_SIZE),
+		0, MX7_IRAM_TLB_SIZE - M4_OCRAMS_RESERVED_SIZE);
 
 	/*
 	 * Make sure the IRAM virtual address has a mapping in the IRAM
@@ -872,6 +896,14 @@ void __init imx7_pm_map_io(void)
 			((MX7D_AIPS3_BASE_ADDR + i * 0x100000) & 0xFFF00000) |
 			TT_ATTRIB_NON_CACHEABLE_1M;
 	}
+
+	/*
+	 * Make sure the GIC virtual address has a mapping in the
+	 * IRAM page table.
+	 */
+	j = ((IMX_IO_P2V(MX7D_GIC_BASE_ADDR) >> 20) << 2) / 4;
+	*((unsigned long *)iram_tlb_base_addr + j) =
+		(MX7D_GIC_BASE_ADDR & 0xFFF00000) | TT_ATTRIB_NON_CACHEABLE_1M;
 }
 
 static int __init imx7_suspend_init(const struct imx7_pm_socdata *socdata)
@@ -950,6 +982,10 @@ static int __init imx7_suspend_init(const struct imx7_pm_socdata *socdata)
 	pm_info->lpsr_base.pbase = MX7D_LPSR_BASE_ADDR;
 	lpsr_base = pm_info->lpsr_base.vbase = (void __iomem *)
 				IMX_IO_P2V(MX7D_LPSR_BASE_ADDR);
+
+	pm_info->gic_base.pbase = MX7D_GIC_BASE_ADDR;
+	pm_info->gic_base.vbase = (void __iomem *)
+				IMX_IO_P2V(MX7D_GIC_BASE_ADDR);
 
 	pm_info->ddrc_num = socdata->ddrc_num;
 	ddrc_offset_array = socdata->ddrc_offset;

@@ -26,7 +26,6 @@
 #include <linux/usb/chipidea.h>
 #include <linux/regulator/consumer.h>
 #include <linux/imx_gpc.h>
-#include <linux/platform_device.h>
 
 #include "../host/ehci.h"
 
@@ -34,8 +33,7 @@
 #include "bits.h"
 #include "host.h"
 
-#define MAX_CI_NUM	8
-static struct hc_driver __read_mostly ci_ehci_hc_driver[MAX_CI_NUM];
+static struct hc_driver __read_mostly ci_ehci_hc_driver;
 static int (*orig_bus_suspend)(struct usb_hcd *hcd);
 static int (*orig_bus_resume)(struct usb_hcd *hcd);
 static int (*orig_hub_control)(struct usb_hcd *hcd,
@@ -65,6 +63,7 @@ static int ehci_ci_portpower(struct usb_hcd *hcd, int portnum, bool enable)
 	struct ehci_hcd *ehci = hcd_to_ehci(hcd);
 	struct ehci_ci_priv *priv = (struct ehci_ci_priv *)ehci->priv;
 	struct device *dev = hcd->self.controller;
+	struct ci_hdrc *ci = dev_get_drvdata(dev);
 	int ret = 0;
 	int port = HCS_N_PORTS(ehci->hcs_params);
 
@@ -85,12 +84,37 @@ static int ehci_ci_portpower(struct usb_hcd *hcd, int portnum, bool enable)
 			return ret;
 		}
 	}
+
+	if (enable && (ci->platdata->phy_mode == USBPHY_INTERFACE_MODE_HSIC)) {
+		/*
+		 * Marvell 28nm HSIC PHY requires forcing the port to HS mode.
+		 * As HSIC is always HS, this should be safe for others.
+		 */
+		hw_port_test_set(ci, 5);
+		hw_port_test_set(ci, 0);
+	}
 	return 0;
 };
+
+static int ehci_ci_reset(struct usb_hcd *hcd)
+{
+	struct device *dev = hcd->self.controller;
+	struct ci_hdrc *ci = dev_get_drvdata(dev);
+	int ret;
+
+	ret = ehci_setup(hcd);
+	if (ret)
+		return ret;
+
+	ci_platform_configure(ci);
+
+	return ret;
+}
 
 static const struct ehci_driver_overrides ehci_ci_overrides = {
 	.extra_priv_size = sizeof(struct ehci_ci_priv),
 	.port_power	 = ehci_ci_portpower,
+	.reset		 = ehci_ci_reset,
 };
 
 static int ci_imx_ehci_bus_resume(struct usb_hcd *hcd)
@@ -259,13 +283,11 @@ static int host_start(struct ci_hdrc *ci)
 	struct ehci_hcd *ehci;
 	struct ehci_ci_priv *priv;
 	int ret;
-	struct platform_device *pdev = to_platform_device(ci->dev);
 
 	if (usb_disabled())
 		return -ENODEV;
 
-	hcd = usb_create_hcd(&ci_ehci_hc_driver[pdev->id],
-			ci->dev, dev_name(ci->dev));
+	hcd = usb_create_hcd(&ci_ehci_hc_driver, ci->dev, dev_name(ci->dev));
 	if (!hcd)
 		return -ENOMEM;
 
@@ -292,7 +314,7 @@ static int host_start(struct ci_hdrc *ci)
 	priv->reg_vbus = NULL;
 
 	if (ci->platdata->reg_vbus && !ci_otg_is_fsm_mode(ci)) {
-		if (ci->platdata->flags & CI_HDRC_IMX_VBUS_EARLY_ON) {
+		if (ci->platdata->flags & CI_HDRC_TURN_VBUS_EARLY_ON) {
 			ret = regulator_enable(ci->platdata->reg_vbus);
 			if (ret) {
 				dev_err(ci->dev,
@@ -327,24 +349,16 @@ static int host_start(struct ci_hdrc *ci)
 		}
 	}
 
-	if (ci->platdata->flags & CI_HDRC_DISABLE_STREAMING)
-		hw_write(ci, OP_USBMODE, USBMODE_CI_SDIS, USBMODE_CI_SDIS);
-
 	if (ci->platdata->notify_event &&
 		(ci->platdata->flags & CI_HDRC_IMX_IS_HSIC))
 		ci->platdata->notify_event
 			(ci, CI_HDRC_IMX_HSIC_ACTIVE_EVENT);
 
-	if (ci->platdata->flags & CI_HDRC_DISABLE_HOST_STREAMING)
-		hw_write(ci, OP_USBMODE, USBMODE_CI_SDIS, USBMODE_CI_SDIS);
-
-	ci_hdrc_ahb_config(ci);
-
 	return ret;
 
 disable_reg:
 	if (ci->platdata->reg_vbus && !ci_otg_is_fsm_mode(ci) &&
-			(ci->platdata->flags & CI_HDRC_IMX_VBUS_EARLY_ON))
+			(ci->platdata->flags & CI_HDRC_TURN_VBUS_EARLY_ON))
 		regulator_disable(ci->platdata->reg_vbus);
 put_hcd:
 	usb_put_hcd(hcd);
@@ -360,7 +374,7 @@ static void host_stop(struct ci_hdrc *ci)
 		usb_remove_hcd(hcd);
 		usb_put_hcd(hcd);
 		if (ci->platdata->reg_vbus && !ci_otg_is_fsm_mode(ci) &&
-			(ci->platdata->flags & CI_HDRC_IMX_VBUS_EARLY_ON))
+			(ci->platdata->flags & CI_HDRC_TURN_VBUS_EARLY_ON))
 				regulator_disable(ci->platdata->reg_vbus);
 		if (hcd->self.is_b_host)
 			hcd->self.is_b_host = 0;
@@ -434,8 +448,6 @@ static void ci_hdrc_host_restore_from_power_lost(struct ci_hdrc *ci)
 	if (ci->pm_portsc & PORTSC_HSP)
 		usb_phy_notify_connect(ci->usb_phy, USB_SPEED_HIGH);
 
-	ci_hdrc_ahb_config(ci);
-
 	tmp = ehci_readl(ehci, &ehci->regs->command);
 	tmp |= CMD_RUN;
 	ehci_writel(ehci, tmp, &ehci->regs->command);
@@ -508,8 +520,9 @@ static int ci_ehci_bus_suspend(struct usb_hcd *hcd)
 			usleep_range(150, 200);
 
 			/*
-			 * If a transaction is in progress, there may be a delay in
-			 * suspending the port. Poll until the port is suspended.
+			 * If a transaction is in progress, there may be
+			 * a delay in suspending the port. Poll until the
+			 * port is suspended.
 			 */
 			if (test_bit(port, &ehci->bus_suspended) &&
 					ehci_handshake(ehci, reg, PORT_SUSPEND,
@@ -539,8 +552,6 @@ static int ci_ehci_bus_suspend(struct usb_hcd *hcd)
 int ci_hdrc_host_init(struct ci_hdrc *ci)
 {
 	struct ci_role_driver *rdrv;
-	struct platform_device *pdev = to_platform_device(ci->dev);
-	struct hc_driver *ci_ehci_driver = &ci_ehci_hc_driver[pdev->id];
 
 	if (!hw_read(ci, CAP_DCCPARAMS, DCCPARAMS_HC))
 		return -ENXIO;
@@ -557,17 +568,18 @@ int ci_hdrc_host_init(struct ci_hdrc *ci)
 	rdrv->name	= "host";
 	ci->roles[CI_ROLE_HOST] = rdrv;
 
-	ehci_init_driver(ci_ehci_driver, &ehci_ci_overrides);
-	orig_bus_suspend = ci_ehci_driver->bus_suspend;
-	orig_bus_resume = ci_ehci_driver->bus_resume;
-	orig_hub_control = ci_ehci_driver->hub_control;
-
-	ci_ehci_driver->bus_suspend = ci_ehci_bus_suspend;
-	if (ci->platdata->flags & CI_HDRC_IMX_EHCI_QUIRK) {
-		ci_ehci_driver->bus_resume = ci_imx_ehci_bus_resume;
-		ci_ehci_driver->hub_control = ci_imx_ehci_hub_control;
-	}
-	ci_ehci_driver->start_port_reset = ci_start_port_reset;
-
 	return 0;
+}
+
+void ci_hdrc_host_driver_init(void)
+{
+	ehci_init_driver(&ci_ehci_hc_driver, &ehci_ci_overrides);
+	orig_bus_suspend = ci_ehci_hc_driver.bus_suspend;
+	orig_bus_resume = ci_ehci_hc_driver.bus_resume;
+	orig_hub_control = ci_ehci_hc_driver.hub_control;
+
+	ci_ehci_hc_driver.bus_suspend = ci_ehci_bus_suspend;
+	ci_ehci_hc_driver.bus_resume = ci_imx_ehci_bus_resume;
+	ci_ehci_hc_driver.hub_control = ci_imx_ehci_hub_control;
+	ci_ehci_hc_driver.start_port_reset = ci_start_port_reset;
 }

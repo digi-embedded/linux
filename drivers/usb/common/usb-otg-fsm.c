@@ -70,12 +70,9 @@ static void otg_leave_state(struct otg_fsm *fsm, enum usb_otg_state old_state)
 	case OTG_STATE_B_IDLE:
 		otg_del_timer(fsm, B_SE0_SRP);
 		otg_del_timer(fsm, B_SRP_FAIL);
-		otg_del_timer(fsm, B_ADP_PRB);
-		otg_del_timer(fsm, B_ADP_SNS);
 		fsm->b_se0_srp = 0;
 		fsm->adp_sns = 0;
 		fsm->adp_prb = 0;
-		fsm->adp_change = 0;
 		break;
 	case OTG_STATE_B_SRP_INIT:
 		fsm->data_pulse = 0;
@@ -98,8 +95,6 @@ static void otg_leave_state(struct otg_fsm *fsm, enum usb_otg_state old_state)
 		break;
 	case OTG_STATE_A_IDLE:
 		fsm->adp_prb = 0;
-		fsm->adp_change = 0;
-		otg_del_timer(fsm, A_ADP_PRB);
 		break;
 	case OTG_STATE_A_WAIT_VRISE:
 		otg_del_timer(fsm, A_WAIT_VRISE);
@@ -334,7 +329,7 @@ int otg_statemachine(struct otg_fsm *fsm)
 			otg_set_state(fsm, OTG_STATE_A_VBUS_ERR);
 		else if (fsm->b_conn)
 			otg_set_state(fsm, OTG_STATE_A_HOST);
-		else if (fsm->id | fsm->a_bus_drop | fsm->a_wait_bcon_tmout)
+		else if (fsm->id || fsm->a_bus_drop || fsm->a_wait_bcon_tmout)
 			otg_set_state(fsm, OTG_STATE_A_WAIT_VFALL);
 		break;
 	case OTG_STATE_A_HOST:
@@ -399,13 +394,8 @@ static int otg_handle_role_switch(struct otg_fsm *fsm, struct usb_device *udev)
 				USB_DEVICE_B_HNP_ENABLE,
 				0, NULL, 0,
 				USB_CTRL_SET_TIMEOUT);
-			if (err < 0) {
-				/* Continue polling */
-				otg_add_timer(fsm, HNP_POLLING);
-				return 0;
-			} else {
+			if (err >= 0)
 				fsm->a_set_b_hnp_en = 1;
-			}
 		}
 		fsm->a_bus_req = 0;
 		if (fsm->tst_maint) {
@@ -435,6 +425,7 @@ int otg_hnp_polling(struct otg_fsm *fsm)
 	int retval;
 	enum usb_otg_state state = fsm->otg->state;
 	struct usb_otg_descriptor *desc = NULL;
+	u8 host_request_flag;
 
 	if ((state != OTG_STATE_A_HOST || !fsm->b_hnp_enable) &&
 					state != OTG_STATE_B_HOST)
@@ -470,7 +461,7 @@ int otg_hnp_polling(struct otg_fsm *fsm)
 		}
 	}
 
-	fsm->host_req_flag = 0;
+	*fsm->host_req_flag = 0;
 	/* Get host request flag from connected USB device */
 	retval = usb_control_msg(udev,
 				usb_rcvctrlpipe(udev, 0),
@@ -478,13 +469,14 @@ int otg_hnp_polling(struct otg_fsm *fsm)
 				USB_DIR_IN | USB_RECIP_DEVICE,
 				0,
 				OTG_STS_SELECTOR,
-				&fsm->host_req_flag,
+				fsm->host_req_flag,
 				1,
 				USB_CTRL_GET_TIMEOUT);
 	if (retval == 1) {
-		if (fsm->host_req_flag == HOST_REQUEST_FLAG) {
+		host_request_flag = *fsm->host_req_flag;
+		if (host_request_flag == HOST_REQUEST_FLAG) {
 			retval = otg_handle_role_switch(fsm, udev);
-		} else if (fsm->host_req_flag == 0) {
+		} else if (host_request_flag == 0) {
 			/* Continue polling */
 			otg_add_timer(fsm, HNP_POLLING);
 			retval = 0;

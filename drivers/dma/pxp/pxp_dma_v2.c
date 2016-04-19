@@ -21,7 +21,6 @@
  * Copyright 2008-2009 Embedded Alley Solutions, Inc All Rights Reserved.
  */
 
-#include <linux/busfreq-imx.h>
 #include <linux/clk.h>
 #include <linux/dma-mapping.h>
 #include <linux/dmaengine.h>
@@ -1098,8 +1097,6 @@ static void pxp_clk_enable(struct pxps *pxp)
 		return;
 	}
 
-	request_bus_freq(BUS_FREQ_HIGH);
-
 	pm_runtime_get_sync(pxp->dev);
 
 	if (pxp->clk_disp_axi)
@@ -1134,8 +1131,6 @@ static void pxp_clk_disable(struct pxps *pxp)
 	pm_runtime_put_sync_suspend(pxp->dev);
 
 	mutex_unlock(&pxp->clk_mutex);
-
-	release_bus_freq(BUS_FREQ_HIGH);
 }
 
 static inline void clkoff_callback(struct work_struct *w)
@@ -1319,7 +1314,6 @@ static irqreturn_t pxp_irq(int irq, void *dev_id)
 
 	if (list_empty(&head)) {
 		pxp->pxp_ongoing = 0;
-		pxp->lut_state = 0;
 		spin_unlock_irqrestore(&pxp->lock, flags);
 		return IRQ_NONE;
 	}
@@ -1350,7 +1344,6 @@ static irqreturn_t pxp_irq(int irq, void *dev_id)
 
 	complete(&pxp->complete);
 	pxp->pxp_ongoing = 0;
-	pxp->lut_state = 0;
 	mod_timer(&pxp->clk_timer, jiffies + msecs_to_jiffies(timeout_in_ms));
 
 	spin_unlock_irqrestore(&pxp->lock, flags);
@@ -1391,6 +1384,7 @@ static struct dma_async_tx_descriptor *pxp_prep_slave_sg(struct dma_chan *chan,
 	struct pxp_channel *pxp_chan = to_pxp_channel(chan);
 	struct pxp_dma *pxp_dma = to_pxp_dma(chan->device);
 	struct pxps *pxp = to_pxp(pxp_dma);
+	struct pxp_tx_desc *pos = NULL, *next = NULL;
 	struct pxp_tx_desc *desc = NULL;
 	struct pxp_tx_desc *first = NULL, *prev = NULL;
 	struct scatterlist *sg;
@@ -1410,6 +1404,16 @@ static struct dma_async_tx_descriptor *pxp_prep_slave_sg(struct dma_chan *chan,
 		desc = pxpdma_desc_alloc(pxp_chan);
 		if (!desc) {
 			dev_err(chan->device->dev, "no enough memory to allocate tx descriptor\n");
+
+			if (first) {
+				list_for_each_entry_safe(pos, next, &first->tx_list, list) {
+					list_del_init(&pos->list);
+					kmem_cache_free(tx_desc_cache, (void*)pos);
+				}
+				list_del_init(&first->list);
+				kmem_cache_free(tx_desc_cache, (void*)first);
+			}
+
 			return NULL;
 		}
 
@@ -1471,14 +1475,9 @@ static void __pxp_terminate_all(struct dma_chan *chan)
 	pxp_chan->status = PXP_CHANNEL_INITIALIZED;
 }
 
-static int pxp_control(struct dma_chan *chan, enum dma_ctrl_cmd cmd,
-			unsigned long arg)
+static int pxp_device_terminate_all(struct dma_chan *chan)
 {
 	struct pxp_channel *pxp_chan = to_pxp_channel(chan);
-
-	/* Only supports DMA_TERMINATE_ALL */
-	if (cmd != DMA_TERMINATE_ALL)
-		return -ENXIO;
 
 	spin_lock(&pxp_chan->lock);
 	__pxp_terminate_all(chan);
@@ -1564,7 +1563,7 @@ static int pxp_dma_init(struct pxps *pxp)
 
 	/* Compulsory for DMA_SLAVE fields */
 	dma->device_prep_slave_sg = pxp_prep_slave_sg;
-	dma->device_control = pxp_control;
+	dma->device_terminate_all = pxp_device_terminate_all;
 
 	/* Initialize PxP Channels */
 	INIT_LIST_HEAD(&dma->channels);
@@ -1717,7 +1716,7 @@ static int pxp_probe(struct platform_device *pdev)
 	spin_lock_init(&pxp->lock);
 	mutex_init(&pxp->clk_mutex);
 
-	pxp->base = devm_request_and_ioremap(&pdev->dev, res);
+	pxp->base = devm_ioremap_resource(&pdev->dev, res);
 	if (pxp->base == NULL) {
 		dev_err(&pdev->dev, "Couldn't ioremap regs\n");
 		err = -ENODEV;
@@ -1830,7 +1829,7 @@ static int pxp_resume(struct device *dev)
 #define	pxp_resume	NULL
 #endif
 
-#ifdef CONFIG_PM_RUNTIME
+#ifdef CONFIG_PM
 static int pxp_runtime_suspend(struct device *dev)
 {
 	dev_dbg(dev, "pxp busfreq high release.\n");

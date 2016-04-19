@@ -273,7 +273,7 @@ static ssize_t mma8451_enable_store(struct device *dev,
 	unsigned long enable;
 	u8 val = 0;
 
-	ret = strict_strtoul(buf, 10, &enable);
+	ret = kstrtoul(buf, 10, &enable);
 	if (ret) {
 		dev_err(dev, "string transform error\n");
 		return ret;
@@ -319,7 +319,7 @@ static ssize_t mma8451_position_store(struct device *dev,
 {
 	unsigned long  position;
 	int ret;
-	ret = strict_strtoul(buf, 10, &position);
+	ret = kstrtoul(buf, 10, &position);
 	if (ret) {
 		dev_err(dev, "string transform error\n");
 		return ret;
@@ -351,7 +351,7 @@ static ssize_t mma8451_scalemode_store(struct device *dev,
 	int ret, active_save;
 	struct i2c_client *client = mma8451_i2c_client;
 
-	ret = strict_strtoul(buf, 10, &mode);
+	ret = kstrtoul(buf, 10, &mode);
 	if (ret) {
 		dev_err(dev, "string transform error\n");
 		goto out;

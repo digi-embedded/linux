@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2015 Freescale Semiconductor, Inc.
+ * Copyright 2011-2016 Freescale Semiconductor, Inc.
  * Copyright 2011 Linaro Ltd.
  *
  * The code contained herein is licensed under the GNU General Public
@@ -85,7 +85,7 @@ static const char *cko_sels[] = { "cko1", "cko2", };
 static const char *lvds_sels[] = {
 	"dummy", "dummy", "dummy", "dummy", "dummy", "dummy",
 	"pll4_audio", "pll5_video", "pll8_mlb", "enet_ref",
-	"pcie_ref", "sata_ref",
+	"pcie_ref_125m", "sata_ref_100m",
 };
 static const char *pll_bypass_src_sels[] = { "osc", "lvds1_in", "lvds2_in", "dummy", };
 static const char *pll1_bypass_sels[] = { "pll1", "pll1_bypass_src", };
@@ -95,7 +95,7 @@ static const char *pll4_bypass_sels[] = { "pll4", "pll4_bypass_src", };
 static const char *pll5_bypass_sels[] = { "pll5", "pll5_bypass_src", };
 static const char *pll6_bypass_sels[] = { "pll6", "pll6_bypass_src", };
 static const char *pll7_bypass_sels[] = { "pll7", "pll7_bypass_src", };
- 
+
 static struct clk *clk[IMX6QDL_CLK_END];
 static struct clk_onecell_data clk_data;
 static void __iomem *anatop_base;
@@ -206,7 +206,7 @@ static void of_assigned_ldb_sels(struct device_node *node,
 	}
 }
 
-static void mmdc_ch1_handshake(bool enable)
+static void __init mmdc_ch1_handshake(bool enable)
 {
 	unsigned int reg;
 
@@ -366,8 +366,8 @@ static void __init imx6q_clocks_init(struct device_node *ccm_node)
 		post_div_table[1].div = 1;
 		post_div_table[2].div = 1;
 		video_div_table[1].div = 1;
-		video_div_table[2].div = 1;
-	};
+		video_div_table[3].div = 1;
+	}
 
 	clk[IMX6QDL_PLL1_BYPASS_SRC] = imx_clk_mux("pll1_bypass_src", base + 0x00, 14, 2, pll_bypass_src_sels, ARRAY_SIZE(pll_bypass_src_sels));
 	clk[IMX6QDL_PLL2_BYPASS_SRC] = imx_clk_mux("pll2_bypass_src", base + 0x30, 14, 2, pll_bypass_src_sels, ARRAY_SIZE(pll_bypass_src_sels));
@@ -410,7 +410,7 @@ static void __init imx6q_clocks_init(struct device_node *ccm_node)
 	clk[IMX6QDL_CLK_PLL5_VIDEO]    = imx_clk_gate("pll5_video",    "pll5_bypass", base + 0xa0, 13);
 	clk[IMX6QDL_CLK_PLL6_ENET]     = imx_clk_gate("pll6_enet",     "pll6_bypass", base + 0xe0, 13);
 	clk[IMX6QDL_CLK_PLL7_USB_HOST] = imx_clk_gate("pll7_usb_host", "pll7_bypass", base + 0x20, 13);
- 
+
 	/*
 	 * Bit 20 is the reserved and read-only bit, we do this only for:
 	 * - Do nothing for usbphy clk_enable/disable
@@ -451,7 +451,7 @@ static void __init imx6q_clocks_init(struct device_node *ccm_node)
 
 	clk[IMX6QDL_CLK_LVDS1_IN] = imx_clk_gate_exclusive("lvds1_in", "anaclk1", base + 0x160, 12, BIT(10));
 	clk[IMX6QDL_CLK_LVDS2_IN] = imx_clk_gate_exclusive("lvds2_in", "anaclk2", base + 0x160, 13, BIT(11));
- 
+
 	/*                                            name              parent_name        reg       idx */
 	clk[IMX6QDL_CLK_PLL2_PFD0_352M] = imx_clk_pfd("pll2_pfd0_352m", "pll2_bus",     base + 0x100, 0);
 	clk[IMX6QDL_CLK_PLL2_PFD1_594M] = imx_clk_pfd("pll2_pfd1_594m", "pll2_bus",     base + 0x100, 1);
@@ -725,7 +725,7 @@ static void __init imx6q_clocks_init(struct device_node *ccm_node)
 		clk[IMX6QDL_CLK_MLB] = imx_clk_gate2("mlb",            "gpu2d_core_podf",   base + 0x74, 18);
 	else
 		clk[IMX6QDL_CLK_MLB] = imx_clk_gate2("mlb",            "axi",               base + 0x74, 18);
-	clk[IMX6QDL_CLK_OCRAM]        = imx_clk_busy_gate("ocram",         "ahb",               base + 0x74, 28);
+	clk[IMX6QDL_CLK_OCRAM]        = imx_clk_gate2("ocram",         "ahb",               base + 0x74, 28);
 	clk[IMX6QDL_CLK_OPENVG_AXI]   = imx_clk_gate2("openvg_axi",    "axi",               base + 0x74, 30);
 	clk[IMX6QDL_CLK_PCIE_AXI]     = imx_clk_gate2("pcie_axi",      "pcie_axi_sel",      base + 0x78, 0);
 	clk[IMX6QDL_CLK_PER1_BCH]     = imx_clk_gate2("per1_bch",      "usdhc3",            base + 0x78, 12);
@@ -810,10 +810,9 @@ static void __init imx6q_clocks_init(struct device_node *ccm_node)
 	} else if (cpu_is_imx6q()) {
 		imx_clk_set_parent(clk[IMX6QDL_CLK_IPU1_SEL], clk[IMX6QDL_CLK_MMDC_CH0_AXI]);
 		imx_clk_set_parent(clk[IMX6QDL_CLK_IPU2_SEL], clk[IMX6QDL_CLK_MMDC_CH0_AXI]);
+		/* set eim_slow to 132Mhz */
+		imx_clk_set_rate(clk[IMX6QDL_CLK_EIM_SLOW], 132000000);
 	}
-
-	imx_clk_set_parent(clk[IMX6QDL_CLK_AXI_ALT_SEL], clk[IMX6QDL_CLK_PLL3_PFD1_540M]);
-	imx_clk_set_parent(clk[IMX6QDL_CLK_AXI_SEL], clk[IMX6QDL_CLK_AXI_ALT_SEL]);
 
 	/*
 	 * The gpmi needs 100MHz frequency in the EDO/Sync mode,
@@ -836,11 +835,8 @@ static void __init imx6q_clocks_init(struct device_node *ccm_node)
 		/* for mx6dl, change gpu3d_core parent to 594_PFD*/
 		imx_clk_set_parent(clk[IMX6QDL_CLK_GPU3D_CORE_SEL], clk[IMX6QDL_CLK_PLL2_PFD1_594M]);
 		imx_clk_set_rate(clk[IMX6QDL_CLK_GPU3D_CORE], 528000000);
-		/* for mx6dl, change gpu2d_core parent to 594_PFD*/
-		imx_clk_set_parent(clk[IMX6QDL_CLK_GPU2D_CORE_SEL], clk[IMX6QDL_CLK_PLL2_PFD1_594M]);
-		imx_clk_set_rate(clk[IMX6QDL_CLK_GPU2D_CORE], 528000000);
 	} else if (cpu_is_imx6q()) {
-		if(imx_get_soc_revision() == IMX_CHIP_REVISION_2_0) {
+		if (imx_get_soc_revision() == IMX_CHIP_REVISION_2_0) {
 			imx_clk_set_parent(clk[IMX6QDL_CLK_GPU3D_SHADER_SEL], clk[IMX6QDL_CLK_PLL3_PFD0_720M]);
 			imx_clk_set_rate(clk[IMX6QDL_CLK_GPU3D_SHADER], 720000000);
 			imx_clk_set_parent(clk[IMX6QDL_CLK_GPU3D_CORE_SEL], clk[IMX6QDL_CLK_PLL2_PFD1_594M]);
@@ -869,10 +865,7 @@ static void __init imx6q_clocks_init(struct device_node *ccm_node)
 
 	/* All existing boards with PCIe use LVDS1 */
 	if (IS_ENABLED(CONFIG_PCI_IMX6))
-		imx_clk_set_parent(clk[IMX6QDL_CLK_LVDS1_SEL], clk[IMX6QDL_CLK_SATA_REF]);
-
-	/* set eim_slow to 135Mhz */
-	imx_clk_set_rate(clk[IMX6QDL_CLK_EIM_SLOW], 135000000);
+		imx_clk_set_parent(clk[IMX6QDL_CLK_LVDS1_SEL], clk[IMX6QDL_CLK_SATA_REF_100M]);
 
 	/*
 	 * Enable clocks only after both parent and rate are all initialized
@@ -904,9 +897,7 @@ static void __init imx6q_clocks_init(struct device_node *ccm_node)
 	pr_info("VPU 352M is enabled!\n");
 #endif
 
-	/* Set initial power mode */
 	imx6q_set_lpm(WAIT_CLOCKED);
 
-	mxc_timer_init_dt(of_find_compatible_node(NULL, NULL, "fsl,imx6q-gpt"));
 }
 CLK_OF_DECLARE(imx6q, "fsl,imx6q-ccm", imx6q_clocks_init);

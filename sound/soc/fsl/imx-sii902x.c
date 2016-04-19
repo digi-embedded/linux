@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015 Freescale Semiconductor, Inc.
+ * Copyright (C) 2015-2016 Freescale Semiconductor, Inc.
  *
  * The code contained herein is licensed under the GNU General Public
  * License. You may obtain a copy of the GNU General Public License
@@ -156,8 +156,7 @@ static int imx_sii902x_hw_free(struct snd_pcm_substream *substream)
 static void imx_sii902x_shutdown(struct snd_pcm_substream *substream)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct snd_soc_dai *codec_dai = rtd->codec_dai;
-	struct snd_soc_card *card = codec_dai->codec->card;
+	struct snd_soc_card *card = rtd->card;
 	struct imx_sii902x_data *data = snd_soc_card_get_drvdata(card);
 	bool tx = substream->stream == SNDRV_PCM_STREAM_PLAYBACK;
 
@@ -173,7 +172,7 @@ static struct snd_soc_ops imx_sii902x_ops = {
 
 static int imx_sii902x_probe(struct platform_device *pdev)
 {
-	struct device_node *cpu_np, *sii902x_np;
+	struct device_node *cpu_np, *sii902x_np = NULL;
 	struct platform_device *cpu_pdev;
 	struct imx_sii902x_data *data;
 	int ret;
@@ -226,6 +225,7 @@ static int imx_sii902x_probe(struct platform_device *pdev)
 			    SND_SOC_DAIFMT_CBS_CFS;
 
 	data->card.dev = &pdev->dev;
+	data->card.owner = THIS_MODULE;
 	ret = snd_soc_of_parse_card_name(&data->card, "model");
 	if (ret)
 		goto fail;

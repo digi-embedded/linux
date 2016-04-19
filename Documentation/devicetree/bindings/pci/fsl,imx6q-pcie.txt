@@ -4,7 +4,7 @@ This PCIe host controller is based on the Synopsis Designware PCIe IP
 and thus inherits all the common properties defined in designware-pcie.txt.
 
 Required properties:
-- compatible: "fsl,imx6q-pcie", "fsl,imx6sx-pcie"
+- compatible: "fsl,imx6q-pcie"
 - reg: base addresse and length of the pcie controller
 - interrupts: A list of interrupt outputs of the controller. Must contain an
   entry for each entry in the interrupt-names property.
@@ -12,12 +12,6 @@ Required properties:
 	- "msi": The interrupt that is asserted when an MSI is received
 - clock-names: Must include the following additional entries:
 	- "pcie_phy"
-
-Additional required properties for imx6sx-pcie:
-- clock names: Must include the following additional entries:
-	- "pcie_inbound_axi"
-- power supplies:
-	- pcie-phy-supply: regulator used to power the PCIe PHY
 
 Optional properties:
 - power-on-delay-ms: Delay after power-on-gpio request (power off)
@@ -28,7 +22,9 @@ Example:
 
 	pcie@0x01000000 {
 		compatible = "fsl,imx6q-pcie", "snps,dw-pcie";
-		reg = <0x01ffc000 0x4000>;
+		reg = <0x01ffc000 0x04000>,
+		      <0x01f00000 0x80000>;
+		reg-names = "dbi", "config";
 		#address-cells = <3>;
 		#size-cells = <2>;
 		device_type = "pci";

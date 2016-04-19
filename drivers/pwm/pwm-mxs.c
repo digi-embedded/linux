@@ -40,6 +40,9 @@
 #define  PERIOD_CDIV(div)	(((div) & 0x7) << 20)
 #define  PERIOD_CDIV_MAX	8
 
+static const unsigned int cdiv[PERIOD_CDIV_MAX] = {
+	1, 2, 4, 8, 16, 64, 256, 1024
+};
 
 struct mxs_pwm_chip {
 	struct pwm_chip chip;
@@ -61,13 +64,13 @@ static int mxs_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm,
 
 	rate = clk_get_rate(mxs->clk);
 	while (1) {
-		c = rate / (1 << div);
+		c = rate / cdiv[div];
 		c = c * period_ns;
 		do_div(c, 1000000000);
 		if (c < PERIOD_PERIOD_MAX)
 			break;
 		div++;
-		if (div > PERIOD_CDIV_MAX)
+		if (div >= PERIOD_CDIV_MAX)
 			return -EINVAL;
 	}
 
@@ -194,6 +197,7 @@ static int mxs_pwm_probe(struct platform_device *pdev)
 	mxs->chip.of_xlate = of_pwm_xlate_with_flags;
 	mxs->chip.of_pwm_n_cells = 3;
 	mxs->chip.base = -1;
+	mxs->chip.can_sleep = true;
 	ret = of_property_read_u32(np, "fsl,pwm-number", &mxs->chip.npwm);
 	if (ret < 0) {
 		dev_err(&pdev->dev, "failed to get pwm number: %d\n", ret);
@@ -235,7 +239,6 @@ MODULE_DEVICE_TABLE(of, mxs_pwm_dt_ids);
 static struct platform_driver mxs_pwm_driver = {
 	.driver = {
 		.name = "mxs-pwm",
-		.owner = THIS_MODULE,
 		.of_match_table = mxs_pwm_dt_ids,
 	},
 	.probe = mxs_pwm_probe,

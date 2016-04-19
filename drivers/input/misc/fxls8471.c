@@ -431,17 +431,16 @@ static ssize_t fxls8471_range_store(struct device *dev,
 	return count;
 }
 
-static DEVICE_ATTR(enable, 0666, fxls8471_enable_show, fxls8471_enable_store);
-
-static DEVICE_ATTR(poll_delay, 0666, fxls8471_poll_delay_show,
+static DEVICE_ATTR(enable, S_IWUSR | S_IRUGO, fxls8471_enable_show, fxls8471_enable_store);
+static DEVICE_ATTR(poll_delay, S_IWUSR | S_IRUGO, fxls8471_poll_delay_show,
 		   fxls8471_poll_delay_store);
 
-static DEVICE_ATTR(position, 0666, fxls8471_position_show,
+static DEVICE_ATTR(position, S_IWUSR | S_IRUGO, fxls8471_position_show,
 		   fxls8471_position_store);
 
-static DEVICE_ATTR(data, 0666, fxls8471_data_show, NULL);
+static DEVICE_ATTR(data, S_IWUSR | S_IRUGO, fxls8471_data_show, NULL);
 
-static DEVICE_ATTR(range, 0666, fxls8471_range_show, fxls8471_range_store);
+static DEVICE_ATTR(range, S_IWUSR | S_IRUGO, fxls8471_range_show, fxls8471_range_store);
 
 static struct attribute *fxls8471_attributes[] = {
 	&dev_attr_enable.attr,
@@ -497,7 +496,7 @@ int fxls8471_driver_init(struct fxls8471_data *pdata)
 	result = misc_register(&fxls8471_device);
 	if (result != 0) {
 		printk(KERN_ERR "register acc miscdevice error");
-		goto err_regsiter_misc;
+		goto err_out;
 	}
 
 	result =
@@ -549,8 +548,6 @@ err_alloc_input_device:
 			   &fxls8471_attr_group);
 err_create_sysfs:
 	misc_deregister(&fxls8471_device);
-err_regsiter_misc:
-	kfree(pdata);
 err_out:
 	return result;
 }
@@ -560,8 +557,7 @@ int fxls8471_driver_remove(struct fxls8471_data *pdata)
 {
 	fxls8471_change_mode(pdata, STANDBY);
 	misc_deregister(&fxls8471_device);
-	if (pdata != NULL)
-		kfree(pdata);
+
 	return 0;
 }
 EXPORT_SYMBOL_GPL(fxls8471_driver_remove);

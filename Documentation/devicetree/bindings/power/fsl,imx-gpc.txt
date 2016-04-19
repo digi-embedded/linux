@@ -23,10 +23,15 @@ Example:
 	gpc: gpc@020dc000 {
 		compatible = "fsl,imx6q-gpc";
 		reg = <0x020dc000 0x4000>;
-		interrupts = <0 89 0x04 0 90 0x04>;
+		interrupts = <0 89 IRQ_TYPE_LEVEL_HIGH>,
+			     <0 90 IRQ_TYPE_LEVEL_HIGH>;
 		pu-supply = <&reg_pu>;
-		clocks = <&clks 122>, <&clks 74>, <&clks 121>,
-			 <&clks 26>, <&clks 143>, <&clks 168>;
+		clocks = <&clks IMX6QDL_CLK_GPU3D_CORE>,
+			 <&clks IMX6QDL_CLK_GPU3D_SHADER>,
+			 <&clks IMX6QDL_CLK_GPU2D_CORE>,
+			 <&clks IMX6QDL_CLK_GPU2D_AXI>,
+			 <&clks IMX6QDL_CLK_OPENVG_AXI>,
+			 <&clks IMX6QDL_CLK_VPU_AXI>;
 		#power-domain-cells = <1>;
 	};
 

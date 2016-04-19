@@ -37,6 +37,7 @@
 #include <linux/delay.h>
 #include <linux/console.h>
 #include <linux/mxcfb.h>
+#include <linux/platform_data/dma-imx.h>
 
 #include <media/videobuf-dma-contig.h>
 #include <media/v4l2-common.h>
@@ -58,13 +59,8 @@
 static int video_nr = -1;	/* -1 ==> auto assign */
 static struct pxp_data_format pxp_s0_formats[] = {
 	{
-		.name = "32-bit RGB",
-		.bpp = 4,
-		.fourcc = V4L2_PIX_FMT_RGB32,
-		.colorspace = V4L2_COLORSPACE_SRGB,
-	}, {
 		.name = "24-bit RGB",
-		.bpp = 3,
+		.bpp = 4,
 		.fourcc = V4L2_PIX_FMT_RGB24,
 		.colorspace = V4L2_COLORSPACE_SRGB,
 	}, {
@@ -109,14 +105,10 @@ static unsigned int v4l2_fmt_to_pxp_fmt(u32 v4l2_pix_fmt)
 {
 	u32 pxp_fmt = 0;
 
-	if (v4l2_pix_fmt == V4L2_PIX_FMT_RGB32)
-		pxp_fmt = PXP_PIX_FMT_RGB32;
-	else if (v4l2_pix_fmt == V4L2_PIX_FMT_RGB24)
+	if (v4l2_pix_fmt == V4L2_PIX_FMT_RGB24)
 		pxp_fmt = PXP_PIX_FMT_RGB24;
 	else if (v4l2_pix_fmt == V4L2_PIX_FMT_RGB565)
 		pxp_fmt = PXP_PIX_FMT_RGB565;
-	else if (v4l2_pix_fmt == V4L2_PIX_FMT_RGB555)
-		pxp_fmt = PXP_PIX_FMT_RGB555;
 	else if (v4l2_pix_fmt == V4L2_PIX_FMT_RGB555)
 		pxp_fmt = PXP_PIX_FMT_RGB555;
 	else if (v4l2_pix_fmt == V4L2_PIX_FMT_YUV420)
@@ -251,6 +243,14 @@ static void video_dma_done(void *arg)
 	spin_unlock(&pxp->lock);
 }
 
+static bool chan_filter(struct dma_chan *chan, void *arg)
+{
+	if (imx_dma_is_pxp(chan))
+		return true;
+	else
+		return false;
+}
+
 static int acquire_dma_channel(struct pxps *pxp)
 {
 	dma_cap_mask_t mask;
@@ -272,7 +272,7 @@ static int acquire_dma_channel(struct pxps *pxp)
 	dma_cap_zero(mask);
 	dma_cap_set(DMA_SLAVE, mask);
 	dma_cap_set(DMA_PRIVATE, mask);
-	chan = dma_request_channel(mask, NULL, NULL);
+	chan = dma_request_channel(mask, chan_filter, NULL);
 	if (!chan)
 		return -EBUSY;
 
@@ -310,8 +310,6 @@ static int pxp_set_fbinfo(struct pxps *pxp)
 	pxp->pxp_conf.out_param.stride = pxp->fbi->var.xres;
 	if (pxp->fbi->var.bits_per_pixel == 16)
 		fb->fmt.pixelformat = V4L2_PIX_FMT_RGB565;
-	else if (pxp->fbi->var.bits_per_pixel == 32)
-		fb->fmt.pixelformat = V4L2_PIX_FMT_RGB32;
 	else
 		fb->fmt.pixelformat = V4L2_PIX_FMT_RGB24;
 
@@ -420,7 +418,7 @@ static int pxp_enumoutput(struct file *file, void *fh,
 {
 	struct pxps *pxp = video_get_drvdata(video_devdata(file));
 
-	if ((o->index < 0) || (o->index > 1))
+	if (o->index > 1)
 		return -EINVAL;
 
 	memset(o, 0, sizeof(struct v4l2_output));
@@ -452,19 +450,17 @@ static int pxp_s_output(struct file *file, void *fh,
 			unsigned int i)
 {
 	struct pxps *pxp = video_get_drvdata(video_devdata(file));
-	struct v4l2_pix_format *fmt = &pxp->fb.fmt;
+	struct v4l2_pix_format *fmt = (struct v4l2_pix_format*)(&pxp->fb.fmt);
 	u32 size;
 	int ret, bpp;
 
-	if ((i < 0) || (i > 1))
+	if (i > 1)
 		return -EINVAL;
 
 	/* Output buffer is same format as fbdev */
-	if (fmt->pixelformat == V4L2_PIX_FMT_RGB32  ||
+	if (fmt->pixelformat == V4L2_PIX_FMT_RGB24  ||
 		fmt->pixelformat == V4L2_PIX_FMT_YUV32)
 		bpp = 4;
-	else if (fmt->pixelformat == V4L2_PIX_FMT_RGB24)
-		bpp = 3;
 	else
 		bpp = 2;
 
@@ -481,9 +477,7 @@ static int pxp_s_output(struct file *file, void *fh,
 
 	pxp->pxp_conf.out_param.width = fmt->width;
 	pxp->pxp_conf.out_param.height = fmt->height;
-	if (fmt->pixelformat == V4L2_PIX_FMT_RGB32)
-		pxp->pxp_conf.out_param.pixel_fmt = PXP_PIX_FMT_RGB32;
-	else if (fmt->pixelformat == V4L2_PIX_FMT_RGB24)
+	if (fmt->pixelformat == V4L2_PIX_FMT_RGB24)
 		pxp->pxp_conf.out_param.pixel_fmt = PXP_PIX_FMT_RGB24;
 	else
 		pxp->pxp_conf.out_param.pixel_fmt = PXP_PIX_FMT_RGB565;
@@ -495,9 +489,9 @@ static int pxp_enum_fmt_video_output(struct file *file, void *fh,
 				struct v4l2_fmtdesc *fmt)
 {
 	enum v4l2_buf_type type = fmt->type;
-	int index = fmt->index;
+	unsigned int index = fmt->index;
 
-	if ((fmt->index < 0) || (fmt->index >= ARRAY_SIZE(pxp_s0_formats)))
+	if (fmt->index >= ARRAY_SIZE(pxp_s0_formats))
 		return -EINVAL;
 
 	memset(fmt, 0, sizeof(struct v4l2_fmtdesc));
@@ -967,9 +961,9 @@ static int pxp_querycap(struct file *file, void *fh,
 
 	cap->version = (PXP_DRIVER_MAJOR << 8) + PXP_DRIVER_MINOR;
 
-	cap->capabilities = V4L2_CAP_VIDEO_OUTPUT |
-				V4L2_CAP_VIDEO_OUTPUT_OVERLAY |
-				V4L2_CAP_STREAMING;
+	cap->device_caps = V4L2_CAP_STREAMING |	V4L2_CAP_VIDEO_OUTPUT |
+				V4L2_CAP_VIDEO_OUTPUT_OVERLAY;
+	cap->capabilities = cap->device_caps | V4L2_CAP_DEVICE_CAPS;
 
 	return 0;
 }

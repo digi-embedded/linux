@@ -22,7 +22,20 @@
 	status = "disabled";
 };
 
+&adc2 {
+	status = "disabled";
+};
+
+
 &i2c1 {
+	status = "disabled";
+};
+
+&flexcan1 {
+	status = "disabled";
+};
+
+&flexcan2 {
 	status = "disabled";
 };
 
@@ -34,20 +47,24 @@
 	status = "disabled";
 };
 
-&mcctest{
-	status = "okay";
-};
-
-&mcctty{
-	status = "okay";
-};
-
 &ocram {
 	reg = <0x00901000 0xf000>;
 };
 
+&reg_can2_3v3 {
+	status = "disabled";
+};
+
 &rpmsg{
 	status = "okay";
+};
+
+&sim1 {
+	status = "disabled";
+};
+
+&tempmon {
+	status = "disabled";
 };
 
 &uart2 {

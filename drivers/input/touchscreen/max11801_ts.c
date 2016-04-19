@@ -2,7 +2,7 @@
  * Driver for MAXI MAX11801 - A Resistive touch screen controller with
  * i2c interface
  *
- * Copyright (C) 2011-2014 Freescale Semiconductor, Inc.
+ * Copyright (C) 2011-2015 Freescale Semiconductor, Inc.
  * Author: Zhang Jiejing <jiejing.zhang@freescale.com>
  *
  * Based on mcs5000_ts.c

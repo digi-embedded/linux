@@ -131,7 +131,7 @@
 		#address-cells = <1>;
 		#size-cells = <1>;
 		compatible = "simple-bus";
-		interrupt-parent = <&intc>;
+		interrupt-parent = <&gpc>;
 		ranges;
 
 		busfreq {
@@ -158,6 +158,16 @@
 			status = "disabled";
 		};
 
+		caam_sm: caam-sm@00100000 {
+			 compatible = "fsl,imx7d-caam-sm", "fsl,imx6q-caam-sm";
+			 reg = <0x00100000 0x3fff>;
+		};
+
+		irq_sec_vio: caam_secvio {
+			     compatible = "fsl,imx7d-caam-secvio", "fsl,imx6q-caam-secvio";
+			     interrupts = <GIC_SPI 20 IRQ_TYPE_LEVEL_HIGH>;
+		};
+
 		ocrams: sram@00900000 {
 			compatible = "fsl,lpm-sram";
 			reg = <0x00900000 0x4000>;
@@ -173,14 +183,37 @@
 			reg = <0x00905000 0x1B000>;
 		};
 
-		caam_sm: caam-sm@00100000 {
-			 compatible = "fsl,imx7d-caam-sm", "fsl,imx6q-caam-sm";
-			 reg = <0x00100000 0x3fff>;
+		dma_apbh: dma-apbh@01804000 {
+			compatible = "fsl,imx6ul-dma-apbh", "fsl,imx28-dma-apbh";
+			reg = <0x01804000 0x2000>;
+			interrupts = <GIC_SPI 13 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 13 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 13 IRQ_TYPE_LEVEL_HIGH>,
+				     <GIC_SPI 13 IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-names = "gpmi0", "gpmi1", "gpmi2", "gpmi3";
+			#dma-cells = <1>;
+			dma-channels = <4>;
+			clocks = <&clks IMX6UL_CLK_APBHDMA>;
 		};
 
-		irq_sec_vio: caam_secvio {
-			     compatible = "fsl,imx7d-caam-secvio", "fsl,imx6q-caam-secvio";
-			     interrupts = <GIC_SPI 20 IRQ_TYPE_LEVEL_HIGH>;
+		gpmi: gpmi-nand@01806000{
+			compatible = "fsl,imx6ul-gpmi-nand";
+			#address-cells = <1>;
+			#size-cells = <1>;
+			reg = <0x01806000 0x2000>, <0x01808000 0x4000>;
+			reg-names = "gpmi-nand", "bch";
+			interrupts = <GIC_SPI 15 IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-names = "bch";
+			clocks = <&clks IMX6UL_CLK_GPMI_IO>,
+				 <&clks IMX6UL_CLK_GPMI_APB>,
+				 <&clks IMX6UL_CLK_GPMI_BCH>,
+				 <&clks IMX6UL_CLK_GPMI_BCH_APB>,
+				 <&clks IMX6UL_CLK_PER_BCH>;
+			clock-names = "gpmi_io", "gpmi_apb", "gpmi_bch",
+				      "gpmi_bch_apb", "per1_bch";
+			dmas = <&dma_apbh 0>;
+			dma-names = "rx-tx";
+			status = "disabled";
 		};
 
 		aips1: aips-bus@02000000 {
@@ -275,12 +308,6 @@
 					status = "disabled";
 				};
 
-				mqs: mqs {
-					compatible = "fsl,imx6sx-mqs";
-					gpr = <&gpr>;
-					status = "disabled";
-				};
-
 				uart7: serial@02018000 {
 					compatible = "fsl,imx6ul-uart",
 						     "fsl,imx6q-uart", "fsl,imx21-uart";
@@ -319,7 +346,8 @@
 				};
 
 				sai1: sai@02028000 {
-					compatible = "fsl,imx6ul-sai";
+					compatible = "fsl,imx6ul-sai",
+						     "fsl,imx6sx-sai";
 					reg = <0x02028000 0x4000>;
 					interrupts = <GIC_SPI 97 IRQ_TYPE_LEVEL_HIGH>;
 					clocks = <&clks IMX6UL_CLK_SAI1_IPG>,
@@ -327,12 +355,13 @@
 						 <&clks 0>, <&clks 0>;
 					clock-names = "bus", "mclk1", "mclk2", "mclk3";
 					dma-names = "rx", "tx";
-					dmas = <&sdma 35 25 0>, <&sdma 36 25 0>;
+					dmas = <&sdma 35 24 0>, <&sdma 36 24 0>;
 					status = "disabled";
 				};
 
 				sai2: sai@0202c000 {
-					compatible = "fsl,imx6ul-sai";
+					compatible = "fsl,imx6ul-sai",
+						     "fsl,imx6sx-sai";
 					reg = <0x0202c000 0x4000>;
 					interrupts = <GIC_SPI 98 IRQ_TYPE_LEVEL_HIGH>;
 					clocks = <&clks IMX6UL_CLK_SAI2_IPG>,
@@ -340,12 +369,13 @@
 						 <&clks 0>, <&clks 0>;
 					clock-names = "bus", "mclk1", "mclk2", "mclk3";
 					dma-names = "rx", "tx";
-					dmas = <&sdma 37 25 0>, <&sdma 38 25 0>;
+					dmas = <&sdma 37 24 0>, <&sdma 38 24 0>;
 					status = "disabled";
 				};
 
 				sai3: sai@02030000 {
-					compatible = "fsl,imx6ul-sai";
+					compatible = "fsl,imx6ul-sai",
+						     "fsl,imx6sx-sai";
 					reg = <0x02030000 0x4000>;
 					interrupts = <GIC_SPI 24 IRQ_TYPE_LEVEL_HIGH>;
 					clocks = <&clks IMX6UL_CLK_DUMMY>,
@@ -381,9 +411,14 @@
 				};
 			};
 
-			touchctrl: touchctrl@02040000 {
-				compatible = "fsl,imx6ul-touchctrl";
-				reg = <0x02040000 0x4000>;
+			tsc: tsc@02040000 {
+				compatible = "fsl,imx6ul-tsc";
+				reg = <0x02040000 0x4000>, <0x0219c000 0x4000>;
+				interrupts = <GIC_SPI 3 IRQ_TYPE_LEVEL_HIGH>,
+					     <GIC_SPI 101 IRQ_TYPE_LEVEL_HIGH>;
+				clocks = <&clks IMX6UL_CLK_IPG>,
+					 <&clks IMX6UL_CLK_ADC2>;
+				clock-names = "tsc", "adc";
 				status = "disabled";
 			};
 
@@ -668,24 +703,30 @@
 			};
 
 			snvs: snvs@020cc000 {
-				compatible = "fsl,sec-v4.0-mon", "simple-bus";
-				#address-cells = <1>;
-				#size-cells = <1>;
-				ranges = <0 0x020cc000 0x4000>;
+				compatible = "fsl,sec-v4.0-mon", "syscon", "simple-mfd";
+				reg = <0x020cc000 0x4000>;
 
-				snvs-rtc-lp@34 {
+				snvs_rtc: snvs-rtc-lp {
 					compatible = "fsl,sec-v4.0-mon-rtc-lp";
-					reg = <0x34 0x58>;
+					regmap = <&snvs>;
+					offset = <0x34>;
 					interrupts = <GIC_SPI 19 IRQ_TYPE_LEVEL_HIGH>, <GIC_SPI 20 IRQ_TYPE_LEVEL_HIGH>;
 				};
-			};
 
-			snvs-pwrkey@0x020cc000 {
-				compatible = "fsl,imx6ul-snvs-pwrkey", "fsl,imx6sx-snvs-pwrkey";
-				reg = <0x020cc000 0x4000>;
-				interrupts = <GIC_SPI 4 IRQ_TYPE_LEVEL_HIGH>;
-				fsl,keycode = <116>; /* KEY_POWER */
-				fsl,wakeup;
+				snvs_poweroff: snvs-poweroff {
+					compatible = "syscon-poweroff";
+					regmap = <&snvs>;
+					offset = <0x38>;
+					mask = <0x60>;
+				};
+
+				snvs_pwrkey: snvs-powerkey {
+					compatible = "fsl,sec-v4.0-pwrkey";
+					regmap = <&snvs>;
+					interrupts = <GIC_SPI 4 IRQ_TYPE_LEVEL_HIGH>;
+					linux,keycode = <KEY_POWER>;
+					wakeup;
+				};
 			};
 
 			epit1: epit@020d0000 {
@@ -709,7 +750,10 @@
 			gpc: gpc@020dc000 {
 				compatible = "fsl,imx6ul-gpc", "fsl,imx6q-gpc";
 				reg = <0x020dc000 0x4000>;
+				interrupt-controller;
+				#interrupt-cells = <3>;
 				interrupts = <GIC_SPI 89 IRQ_TYPE_LEVEL_HIGH>;
+				interrupt-parent = <&intc>;
 				fsl,mf-mix-wakeup-irq = <0x7c00000 0x7d00 0x0 0x1400640>;
 			};
 
@@ -723,6 +767,12 @@
 				reg = <0x020e4000 0x4000>;
 			};
 
+			mqs: mqs {
+				compatible = "fsl,imx6sx-mqs";
+				gpr = <&gpr>;
+				status = "disabled";
+			};
+
 			gpt2: gpt@020e8000 {
 				compatible = "fsl,imx6ul-gpt", "fsl,imx31-gpt";
 				reg = <0x020e8000 0x4000>;
@@ -733,7 +783,7 @@
 			};
 
 			sdma: sdma@020ec000 {
-				compatible = "fsl,imx6sx-sdma", "fsl,imx35-sdma";
+				compatible = "fsl,imx6ul-sdma", "fsl,imx35-sdma";
 				reg = <0x020ec000 0x4000>;
 				interrupts = <GIC_SPI 2 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&clks IMX6UL_CLK_SDMA>,
@@ -829,6 +879,9 @@
 				fsl,usbphy = <&usbphy1>;
 				fsl,usbmisc = <&usbmisc 0>;
 				fsl,anatop = <&anatop>;
+				ahb-burst-config = <0x0>;
+				tx-burst-size-dword = <0x10>;
+				rx-burst-size-dword = <0x10>;
 				status = "disabled";
 			};
 
@@ -839,6 +892,9 @@
 				clocks = <&clks IMX6UL_CLK_USBOH3>;
 				fsl,usbphy = <&usbphy2>;
 				fsl,usbmisc = <&usbmisc 1>;
+				ahb-burst-config = <0x0>;
+				tx-burst-size-dword = <0x10>;
+				rx-burst-size-dword = <0x10>;
 				status = "disabled";
 			};
 
@@ -909,17 +965,6 @@
 				status = "disabled";
                         };
 
-			tsc: tsc@02040000 {
-				compatible = "fsl,imx6ul-tsc";
-				reg = <0x02040000 0x4000>, <0x0219c000 0x4000>;
-				interrupts = <GIC_SPI 3 IRQ_TYPE_LEVEL_HIGH>,
-					     <GIC_SPI 101 IRQ_TYPE_LEVEL_HIGH>;
-				clocks = <&clks IMX6UL_CLK_IPG>,
-					 <&clks IMX6UL_CLK_ADC2>;
-				clock-names = "tsc", "adc";
-				status = "disabled";
-			};
-
 			i2c1: i2c@021a0000 {
 				#address-cells = <1>;
 				#size-cells = <0>;
@@ -977,13 +1022,7 @@
 			};
 
 			ocotp: ocotp-ctrl@021bc000 {
-				compatible = "syscon";
-				reg = <0x021bc000 0x4000>;
-				clocks = <&clks IMX6UL_CLK_OCOTP>;
-			};
-
-			ocotp-fuse@021bc000 {
-				compatible = "fsl,imx6ul-ocotp", "fsl,imx6q-ocotp";
+				compatible = "fsl,imx6ul-ocotp", "syscon";
 				reg = <0x021bc000 0x4000>;
 				clocks = <&clks IMX6UL_CLK_OCOTP>;
 			};
@@ -1115,39 +1154,5 @@
 				status = "disabled";
 			};
 		};
-
-		dma_apbh: dma-apbh@01804000 {
-			compatible = "fsl,imx6ul-dma-apbh", "fsl,imx28-dma-apbh";
-			reg = <0x01804000 0x2000>;
-			interrupts = <GIC_SPI 13 IRQ_TYPE_LEVEL_HIGH>,
-				     <GIC_SPI 13 IRQ_TYPE_LEVEL_HIGH>,
-				     <GIC_SPI 13 IRQ_TYPE_LEVEL_HIGH>,
-				     <GIC_SPI 13 IRQ_TYPE_LEVEL_HIGH>;
-			interrupt-names = "gpmi0", "gpmi1", "gpmi2", "gpmi3";
-			#dma-cells = <1>;
-			dma-channels = <4>;
-			clocks = <&clks IMX6UL_CLK_APBHDMA>;
-		};
-
-		gpmi: gpmi-nand@01806000{
-			compatible = "fsl,imx6ul-gpmi-nand";
-			#address-cells = <1>;
-			#size-cells = <1>;
-			reg = <0x01806000 0x2000>, <0x01808000 0x4000>;
-			reg-names = "gpmi-nand", "bch";
-			interrupts = <GIC_SPI 15 IRQ_TYPE_LEVEL_HIGH>;
-			interrupt-names = "bch";
-			clocks = <&clks IMX6UL_CLK_GPMI_IO>,
-				 <&clks IMX6UL_CLK_GPMI_APB>,
-				 <&clks IMX6UL_CLK_GPMI_BCH>,
-				 <&clks IMX6UL_CLK_GPMI_BCH_APB>,
-				 <&clks IMX6UL_CLK_PER_BCH>;
-			clock-names = "gpmi_io", "gpmi_apb", "gpmi_bch",
-				      "gpmi_bch_apb", "per1_bch";
-			dmas = <&dma_apbh 0>;
-			dma-names = "rx-tx";
-			status = "disabled";
-		};
-
 	};
 };

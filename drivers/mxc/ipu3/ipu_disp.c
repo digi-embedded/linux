@@ -432,18 +432,33 @@ static int _rgb_to_yuv(int n, int red, int green, int blue)
  * Column is for FG:	RGB2YUV YUV2RGB RGB2RGB YUV2YUV CSC_NONE
  */
 static struct dp_csc_param_t dp_csc_array[CSC_NUM][CSC_NUM] = {
-	{{DP_COM_CONF_CSC_DEF_BOTH, (void *)&rgb2ycbcr_coeff}, {0, 0}, {0, 0},
+{
+	{DP_COM_CONF_CSC_DEF_BOTH, (void *)&rgb2ycbcr_coeff},
+	{0, 0}, {0, 0},
 	{DP_COM_CONF_CSC_DEF_BG, (void *)&rgb2ycbcr_coeff},
-	{DP_COM_CONF_CSC_DEF_BG, (void *)&rgb2ycbcr_coeff} },{{0, 0},
+	{DP_COM_CONF_CSC_DEF_BG, (void *)&rgb2ycbcr_coeff}
+},
+{
+	{0, 0},
 	{DP_COM_CONF_CSC_DEF_BOTH, (void *)&ycbcr2rgb_coeff},
-	{DP_COM_CONF_CSC_DEF_BG, (void *)&ycbcr2rgb_coeff}, {0, 0},
-	{DP_COM_CONF_CSC_DEF_BG, (void *)&ycbcr2rgb_coeff} },{{0, 0},
-	{DP_COM_CONF_CSC_DEF_FG, (void *)&ycbcr2rgb_coeff}, {0, 0}, {0, 0},
-	{0, 0} },{{DP_COM_CONF_CSC_DEF_FG, (void *)&rgb2ycbcr_coeff},
-	{0, 0},{0, 0}, {0, 0}, {0, 0} },
-	{{DP_COM_CONF_CSC_DEF_FG, (void *)&rgb2ycbcr_coeff},
-	{DP_COM_CONF_CSC_DEF_FG, (void *)&ycbcr2rgb_coeff}, {0, 0}, {0, 0},
-	{0, 0} }
+	{DP_COM_CONF_CSC_DEF_BG, (void *)&ycbcr2rgb_coeff},
+	{0, 0},
+	{DP_COM_CONF_CSC_DEF_BG, (void *)&ycbcr2rgb_coeff}
+},
+{
+	{0, 0},
+	{DP_COM_CONF_CSC_DEF_FG, (void *)&ycbcr2rgb_coeff},
+	{0, 0}, {0, 0}, {0, 0}
+},
+{
+	{DP_COM_CONF_CSC_DEF_FG, (void *)&rgb2ycbcr_coeff},
+	{0, 0}, {0, 0}, {0, 0}, {0, 0}
+},
+{
+	{DP_COM_CONF_CSC_DEF_FG, (void *)&rgb2ycbcr_coeff},
+	{DP_COM_CONF_CSC_DEF_FG, (void *)&ycbcr2rgb_coeff},
+	{0, 0}, {0, 0}, {0, 0}
+}
 };
 
 void __ipu_dp_csc_setup(struct ipu_soc *ipu,
@@ -1093,8 +1108,8 @@ int32_t ipu_init_sync_panel(struct ipu_soc *ipu, int disp, uint32_t pixel_clk,
 		dev_err(ipu->dev, "clk_get di1 failed");
 		return PTR_ERR(ldb_di1_clk);
 	}
-
-	if (ldb_di0_clk == di_parent || ldb_di1_clk == di_parent) {
+	if (!strcmp(__clk_get_name(di_parent), __clk_get_name(ldb_di0_clk)) ||
+		!strcmp(__clk_get_name(di_parent), __clk_get_name(ldb_di1_clk))) {
 		/* if di clk parent is tve/ldb, then keep it;*/
 		dev_dbg(ipu->dev, "use special clk parent\n");
 		ret = clk_set_parent(ipu->pixel_clk_sel[disp], ipu->di_clk[disp]);
@@ -1568,7 +1583,7 @@ void ipu_uninit_sync_panel(struct ipu_soc *ipu, int disp)
 	uint32_t reg;
 	uint32_t di_gen;
 
-	if ((disp != 0) || (disp != 1))
+	if (disp != 0 && disp != 1)
 		return;
 
 	mutex_lock(&ipu->mutex_lock);

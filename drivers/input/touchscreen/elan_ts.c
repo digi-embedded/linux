@@ -80,7 +80,7 @@ static int __elan_touch_poll(struct i2c_client *client)
 		mdelay(20);
 	} while (status == 1 && retry > 0);
 
-	return (status == 0 ? 0 : -ETIMEDOUT);
+	return status == 0 ? 0 : -ETIMEDOUT;
 }
 
 static int elan_touch_poll(struct i2c_client *client)
@@ -152,7 +152,7 @@ hand_shake_failed:
 	return rc;
 }
 
-static int elan_touch_recv_data(struct i2c_client *client, uint8_t * buf)
+static int elan_touch_recv_data(struct i2c_client *client, uint8_t *buf)
 {
 	int rc, bytes_to_recv = IDX_PACKET_SIZE;
 
@@ -167,7 +167,7 @@ static int elan_touch_recv_data(struct i2c_client *client, uint8_t * buf)
 	return rc;
 }
 
-static void elan_touch_report_data(struct i2c_client *client, uint8_t * buf)
+static void elan_touch_report_data(struct i2c_client *client, uint8_t *buf)
 {
 	switch (buf[0]) {
 	case idx_coordinate_packet:

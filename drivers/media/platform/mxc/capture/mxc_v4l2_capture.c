@@ -954,15 +954,6 @@ static int mxc_v4l2_s_fmt(cam_data *cam, struct v4l2_format *f)
 			size = f->fmt.pix.sizeimage;
 
 		cam->v2f.fmt.pix = f->fmt.pix;
-
-		if (cam->v2f.fmt.pix.priv != 0) {
-			if (copy_from_user(&cam->offset,
-					   (void *)cam->v2f.fmt.pix.priv,
-					   sizeof(cam->offset))) {
-				retval = -EFAULT;
-				break;
-			}
-		}
 		break;
 	case V4L2_BUF_TYPE_VIDEO_OVERLAY:
 		pr_debug("   type=V4L2_BUF_TYPE_VIDEO_OVERLAY\n");
@@ -1994,6 +1985,17 @@ static long mxc_v4l_do_ioctl(struct file *file,
 	}
 
 	/*!
+	 * V4l2 VIDIOC_S_DEST_CROP ioctl
+	 */
+	case VIDIOC_S_DEST_CROP: {
+		struct v4l2_mxc_dest_crop  *of = arg;
+		pr_debug("   case VIDIOC_S_DEST_CROP\n");
+		cam->offset.u_offset = of->offset.u_offset;
+		cam->offset.v_offset = of->offset.v_offset;
+		break;
+	}
+
+	/*!
 	 * V4l2 VIDIOC_S_FMT ioctl
 	 */
 	case VIDIOC_S_FMT: {
@@ -2561,7 +2563,7 @@ static struct v4l2_file_operations mxc_v4l_fops = {
 	.open = mxc_v4l_open,
 	.release = mxc_v4l_close,
 	.read = mxc_v4l_read,
-	.ioctl = mxc_v4l_ioctl,
+	.unlocked_ioctl = mxc_v4l_ioctl,
 	.mmap = mxc_mmap,
 	.poll = mxc_poll,
 };

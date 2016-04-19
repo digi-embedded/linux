@@ -176,7 +176,7 @@ __acquires(ep->musb->lock)
 				ep->end_point.name, request,
 				req->request.actual, req->request.length,
 				request->status);
-	req->request.complete(&req->ep->end_point, &req->request);
+	usb_gadget_giveback_request(&req->ep->end_point, &req->request);
 	spin_lock(&musb->lock);
 	ep->busy = busy;
 }
@@ -1612,9 +1612,7 @@ done:
 static int
 musb_gadget_set_self_powered(struct usb_gadget *gadget, int is_selfpowered)
 {
-	struct musb	*musb = gadget_to_musb(gadget);
-
-	musb->is_self_powered = !!is_selfpowered;
+	gadget->is_selfpowered = !!is_selfpowered;
 	return 0;
 }
 
@@ -1684,8 +1682,7 @@ static int musb_gadget_pullup(struct usb_gadget *gadget, int is_on)
 
 static int musb_gadget_start(struct usb_gadget *g,
 		struct usb_gadget_driver *driver);
-static int musb_gadget_stop(struct usb_gadget *g,
-		struct usb_gadget_driver *driver);
+static int musb_gadget_stop(struct usb_gadget *g);
 
 static const struct usb_gadget_ops musb_gadget_operations = {
 	.get_frame		= musb_gadget_get_frame,
@@ -1851,8 +1848,6 @@ static int musb_gadget_start(struct usb_gadget *g,
 
 	pm_runtime_get_sync(musb->controller);
 
-	dev_dbg(musb->controller, "registering driver %s\n", driver->function);
-
 	musb->softconnect = 0;
 	musb->gadget_driver = driver;
 
@@ -1881,52 +1876,13 @@ err:
 	return retval;
 }
 
-static void stop_activity(struct musb *musb, struct usb_gadget_driver *driver)
-{
-	int			i;
-	struct musb_hw_ep	*hw_ep;
-
-	/* don't disconnect if it's not connected */
-	if (musb->g.speed == USB_SPEED_UNKNOWN)
-		driver = NULL;
-	else
-		musb->g.speed = USB_SPEED_UNKNOWN;
-
-	/* deactivate the hardware */
-	if (musb->softconnect) {
-		musb->softconnect = 0;
-		musb_pullup(musb, 0);
-	}
-	musb_stop(musb);
-
-	/* killing any outstanding requests will quiesce the driver;
-	 * then report disconnect
-	 */
-	if (driver) {
-		for (i = 0, hw_ep = musb->endpoints;
-				i < musb->nr_endpoints;
-				i++, hw_ep++) {
-			musb_ep_select(musb->mregs, i);
-			if (hw_ep->is_shared_fifo /* || !epnum */) {
-				nuke(&hw_ep->ep_in, -ESHUTDOWN);
-			} else {
-				if (hw_ep->max_packet_sz_tx)
-					nuke(&hw_ep->ep_in, -ESHUTDOWN);
-				if (hw_ep->max_packet_sz_rx)
-					nuke(&hw_ep->ep_out, -ESHUTDOWN);
-			}
-		}
-	}
-}
-
 /*
  * Unregister the gadget driver. Used by gadget drivers when
  * unregistering themselves from the controller.
  *
  * @param driver the gadget driver to unregister
  */
-static int musb_gadget_stop(struct usb_gadget *g,
-		struct usb_gadget_driver *driver)
+static int musb_gadget_stop(struct usb_gadget *g)
 {
 	struct musb	*musb = gadget_to_musb(g);
 	unsigned long	flags;
@@ -1946,11 +1902,8 @@ static int musb_gadget_stop(struct usb_gadget *g,
 	(void) musb_gadget_vbus_draw(&musb->g, 0);
 
 	musb->xceiv->otg->state = OTG_STATE_UNDEFINED;
-	stop_activity(musb, driver);
+	musb_stop(musb);
 	otg_set_peripheral(musb->xceiv->otg, NULL);
-
-	dev_dbg(musb->controller, "unregistering driver %s\n",
-				  driver ? driver->function : "(removed)");
 
 	musb->is_active = 0;
 	musb->gadget_driver = NULL;
@@ -2090,9 +2043,12 @@ __acquires(musb->lock)
 				: NULL
 			);
 
-	/* report disconnect, if we didn't already (flushing EP state) */
-	if (musb->g.speed != USB_SPEED_UNKNOWN)
-		musb_g_disconnect(musb);
+	/* report reset, if we didn't already (flushing EP state) */
+	if (musb->gadget_driver && musb->g.speed != USB_SPEED_UNKNOWN) {
+		spin_unlock(&musb->lock);
+		usb_gadget_udc_reset(&musb->g, musb->gadget_driver);
+		spin_lock(&musb->lock);
+	}
 
 	/* clear HR */
 	else if (devctl & MUSB_DEVCTL_HR)

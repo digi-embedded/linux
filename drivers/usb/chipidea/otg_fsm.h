@@ -42,12 +42,10 @@
 					 * 155ms ~ 200 ms
 					 */
 
-#define TA_DP_END            (200)
+#define TA_DP_END             (200)
 #define TA_TST_MAINT         (9900)	/* OTG test device session maintain
 					 * timer, 9.9s~10.1s
 					 */
-
-#define TA_ADP_PRB           (1750)	/* ADP probe for A typical value */
 
 /*
  * B-device timing constants
@@ -78,12 +76,6 @@
 					 * via suspend bus after set config.
 					 * max: 100ms
 					 */
-
-#define TB_ADP_SNS           (2000)	/* max duration B-dev dose not get
-					 * sense irq.
-					 */
-
-#define TB_ADP_PRB           (2000)	/* ADP probe for B */
 
 #define T_HOST_REQ_POLL      (1500)	/* HNP polling interval 1s~2s */
 

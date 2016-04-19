@@ -112,7 +112,7 @@ static int imx6sx_enter_wait(struct cpuidle_device *dev,
 
 			cpu_cluster_pm_exit();
 			cpu_pm_exit();
-			imx6q_enable_rbc(false);
+			imx6_enable_rbc(false);
 	}
 
 	imx6q_set_lpm(WAIT_CLOCKED);
@@ -130,7 +130,6 @@ static struct cpuidle_driver imx6sx_cpuidle_driver = {
 		{
 			.exit_latency = 50,
 			.target_residency = 75,
-			.flags = CPUIDLE_FLAG_TIME_VALID,
 			.enter = imx6sx_enter_wait,
 			.name = "WAIT",
 			.desc = "Clock off",
@@ -144,7 +143,6 @@ static struct cpuidle_driver imx6sx_cpuidle_driver = {
 			 */
 			.exit_latency = 800,
 			.target_residency = 1000,
-			.flags = CPUIDLE_FLAG_TIME_VALID,
 			.enter = imx6sx_enter_wait,
 			.name = "LOW-POWER-IDLE",
 			.desc = "ARM power off",

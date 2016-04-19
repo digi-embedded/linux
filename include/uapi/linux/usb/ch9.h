@@ -687,12 +687,9 @@ struct usb_otg20_descriptor {
 	__u8  bLength;
 	__u8  bDescriptorType;
 
-	__u8  bmAttributes;	/* support for HNP, SRP, etc */
+	__u8  bmAttributes;	/* support for HNP, SRP and ADP, etc */
 	__le16 bcdOTG;		/* OTG and EH supplement release number
-				 * in binary-coded decimal (i.e. 2.0 is 0200H).
-				 * This field identifies the release of the
-				 * OTG and EH supplement with which the device
-				 * and its descriptors are compliant.
+				 * in binary-coded decimal(i.e. 2.0 is 0200H)
 				 */
 } __attribute__ ((packed));
 

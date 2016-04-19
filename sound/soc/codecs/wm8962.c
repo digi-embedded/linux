@@ -26,6 +26,7 @@
 #include <linux/regulator/consumer.h>
 #include <linux/slab.h>
 #include <linux/workqueue.h>
+#include <linux/mutex.h>
 #include <sound/core.h>
 #include <sound/jack.h>
 #include <sound/pcm.h>
@@ -67,6 +68,7 @@ struct wm8962_priv {
 	int fll_fref;
 	int fll_fout;
 
+	struct mutex dsp2_ena_lock;
 	u16 dsp2_ena;
 
 	struct delayed_work mic_work;
@@ -75,11 +77,9 @@ struct wm8962_priv {
 	struct regulator_bulk_data supplies[WM8962_NUM_SUPPLIES];
 	struct notifier_block disable_nb[WM8962_NUM_SUPPLIES];
 
-#if IS_ENABLED(CONFIG_INPUT)
 	struct input_dev *beep;
 	struct work_struct beep_work;
 	int beep_rate;
-#endif
 
 #ifdef CONFIG_GPIOLIB
 	struct gpio_chip gpio_chip;
@@ -1480,7 +1480,9 @@ static const DECLARE_TLV_DB_SCALE(eq_tlv, -1200, 100, 0);
 
 static int wm8962_dsp2_write_config(struct snd_soc_codec *codec)
 {
-	return regcache_sync_region(codec->control_data,
+	struct wm8962_priv *wm8962 = snd_soc_codec_get_drvdata(codec);
+
+	return regcache_sync_region(wm8962->regmap,
 				    WM8962_HDBASS_AI_1, WM8962_MAX_REGISTER);
 }
 
@@ -1551,7 +1553,7 @@ static int wm8962_dsp2_ena_get(struct snd_kcontrol *kcontrol,
 			       struct snd_ctl_elem_value *ucontrol)
 {
 	int shift = kcontrol->private_value;
-	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+	struct snd_soc_codec *codec = snd_soc_kcontrol_codec(kcontrol);
 	struct wm8962_priv *wm8962 = snd_soc_codec_get_drvdata(codec);
 
 	ucontrol->value.integer.value[0] = !!(wm8962->dsp2_ena & 1 << shift);
@@ -1563,14 +1565,14 @@ static int wm8962_dsp2_ena_put(struct snd_kcontrol *kcontrol,
 			       struct snd_ctl_elem_value *ucontrol)
 {
 	int shift = kcontrol->private_value;
-	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+	struct snd_soc_codec *codec = snd_soc_kcontrol_codec(kcontrol);
 	struct wm8962_priv *wm8962 = snd_soc_codec_get_drvdata(codec);
 	int old = wm8962->dsp2_ena;
 	int ret = 0;
 	int dsp2_running = snd_soc_read(codec, WM8962_DSP2_POWER_MANAGEMENT) &
 		WM8962_DSP2_ENA;
 
-	mutex_lock(&codec->mutex);
+	mutex_lock(&wm8962->dsp2_ena_lock);
 
 	if (ucontrol->value.integer.value[0])
 		wm8962->dsp2_ena |= 1 << shift;
@@ -1590,7 +1592,7 @@ static int wm8962_dsp2_ena_put(struct snd_kcontrol *kcontrol,
 	}
 
 out:
-	mutex_unlock(&codec->mutex);
+	mutex_unlock(&wm8962->dsp2_ena_lock);
 
 	return ret;
 }
@@ -1601,7 +1603,7 @@ out:
 static int wm8962_put_hp_sw(struct snd_kcontrol *kcontrol,
 			    struct snd_ctl_elem_value *ucontrol)
 {
-	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+	struct snd_soc_codec *codec = snd_soc_kcontrol_codec(kcontrol);
 	int ret;
 
 	/* Apply the update (if any) */
@@ -1631,7 +1633,7 @@ static int wm8962_put_hp_sw(struct snd_kcontrol *kcontrol,
 static int wm8962_put_spk_sw(struct snd_kcontrol *kcontrol,
 			    struct snd_ctl_elem_value *ucontrol)
 {
-	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
+	struct snd_soc_codec *codec = snd_soc_kcontrol_codec(kcontrol);
 	int ret;
 
 	/* Apply the update (if any) */
@@ -1659,16 +1661,16 @@ static const char *cap_hpf_mode_text[] = {
 	"Hi-fi", "Application"
 };
 
-static const struct soc_enum cap_hpf_mode =
-	SOC_ENUM_SINGLE(WM8962_ADC_DAC_CONTROL_2, 10, 2, cap_hpf_mode_text);
+static SOC_ENUM_SINGLE_DECL(cap_hpf_mode,
+			    WM8962_ADC_DAC_CONTROL_2, 10, cap_hpf_mode_text);
 
 
 static const char *cap_lhpf_mode_text[] = {
 	"LPF", "HPF"
 };
 
-static const struct soc_enum cap_lhpf_mode =
-	SOC_ENUM_SINGLE(WM8962_LHPF1, 1, 2, cap_lhpf_mode_text);
+static SOC_ENUM_SINGLE_DECL(cap_lhpf_mode,
+			    WM8962_LHPF1, 1, cap_lhpf_mode_text);
 
 static const struct snd_kcontrol_new wm8962_snd_controls[] = {
 SOC_DOUBLE("Input Mixer Switch", WM8962_INPUT_MIXER_CONTROL_1, 3, 2, 1, 1),
@@ -1867,7 +1869,7 @@ static int cp_event(struct snd_soc_dapm_widget *w,
 static int hp_event(struct snd_soc_dapm_widget *w,
 		    struct snd_kcontrol *kcontrol, int event)
 {
-	struct snd_soc_codec *codec = w->codec;
+	struct snd_soc_codec *codec = snd_soc_dapm_to_codec(w->dapm);
 	int timeout;
 	int reg;
 	int expected = (WM8962_DCS_STARTUP_DONE_HP1L |
@@ -1961,7 +1963,7 @@ static int hp_event(struct snd_soc_dapm_widget *w,
 static int out_pga_event(struct snd_soc_dapm_widget *w,
 			 struct snd_kcontrol *kcontrol, int event)
 {
-	struct snd_soc_codec *codec = w->codec;
+	struct snd_soc_codec *codec = snd_soc_dapm_to_codec(w->dapm);
 	int reg;
 
 	switch (w->shift) {
@@ -1994,7 +1996,7 @@ static int out_pga_event(struct snd_soc_dapm_widget *w,
 static int dsp2_event(struct snd_soc_dapm_widget *w,
 		      struct snd_kcontrol *kcontrol, int event)
 {
-	struct snd_soc_codec *codec = w->codec;
+	struct snd_soc_codec *codec = snd_soc_dapm_to_codec(w->dapm);
 	struct wm8962_priv *wm8962 = snd_soc_codec_get_drvdata(codec);
 
 	switch (event) {
@@ -2018,40 +2020,40 @@ static int dsp2_event(struct snd_soc_dapm_widget *w,
 
 static const char *st_text[] = { "None", "Left", "Right" };
 
-static const struct soc_enum str_enum =
-	SOC_ENUM_SINGLE(WM8962_DAC_DSP_MIXING_1, 2, 3, st_text);
+static SOC_ENUM_SINGLE_DECL(str_enum,
+			    WM8962_DAC_DSP_MIXING_1, 2, st_text);
 
 static const struct snd_kcontrol_new str_mux =
 	SOC_DAPM_ENUM("Right Sidetone", str_enum);
 
-static const struct soc_enum stl_enum =
-	SOC_ENUM_SINGLE(WM8962_DAC_DSP_MIXING_2, 2, 3, st_text);
+static SOC_ENUM_SINGLE_DECL(stl_enum,
+			    WM8962_DAC_DSP_MIXING_2, 2, st_text);
 
 static const struct snd_kcontrol_new stl_mux =
 	SOC_DAPM_ENUM("Left Sidetone", stl_enum);
 
 static const char *outmux_text[] = { "DAC", "Mixer" };
 
-static const struct soc_enum spkoutr_enum =
-	SOC_ENUM_SINGLE(WM8962_SPEAKER_MIXER_2, 7, 2, outmux_text);
+static SOC_ENUM_SINGLE_DECL(spkoutr_enum,
+			    WM8962_SPEAKER_MIXER_2, 7, outmux_text);
 
 static const struct snd_kcontrol_new spkoutr_mux =
 	SOC_DAPM_ENUM("SPKOUTR Mux", spkoutr_enum);
 
-static const struct soc_enum spkoutl_enum =
-	SOC_ENUM_SINGLE(WM8962_SPEAKER_MIXER_1, 7, 2, outmux_text);
+static SOC_ENUM_SINGLE_DECL(spkoutl_enum,
+			    WM8962_SPEAKER_MIXER_1, 7, outmux_text);
 
 static const struct snd_kcontrol_new spkoutl_mux =
 	SOC_DAPM_ENUM("SPKOUTL Mux", spkoutl_enum);
 
-static const struct soc_enum hpoutr_enum =
-	SOC_ENUM_SINGLE(WM8962_HEADPHONE_MIXER_2, 7, 2, outmux_text);
+static SOC_ENUM_SINGLE_DECL(hpoutr_enum,
+			    WM8962_HEADPHONE_MIXER_2, 7, outmux_text);
 
 static const struct snd_kcontrol_new hpoutr_mux =
 	SOC_DAPM_ENUM("HPOUTR Mux", hpoutr_enum);
 
-static const struct soc_enum hpoutl_enum =
-	SOC_ENUM_SINGLE(WM8962_HEADPHONE_MIXER_1, 7, 2, outmux_text);
+static SOC_ENUM_SINGLE_DECL(hpoutl_enum,
+			    WM8962_HEADPHONE_MIXER_1, 7, outmux_text);
 
 static const struct snd_kcontrol_new hpoutl_mux =
 	SOC_DAPM_ENUM("HPOUTL Mux", hpoutl_enum);
@@ -2888,17 +2890,19 @@ static int wm8962_set_fll(struct snd_soc_codec *codec, int fll_id, int source,
 	snd_soc_write(codec, WM8962_FLL_CONTROL_7, fll_div.lambda);
 	snd_soc_write(codec, WM8962_FLL_CONTROL_8, fll_div.n);
 
-	try_wait_for_completion(&wm8962->fll_lock);
+	reinit_completion(&wm8962->fll_lock);
 
-	pm_runtime_get_sync(codec->dev);
+	ret = pm_runtime_get_sync(codec->dev);
+	if (ret < 0) {
+		dev_err(codec->dev, "Failed to resume device: %d\n", ret);
+		return ret;
+	}
 
 	snd_soc_update_bits(codec, WM8962_FLL_CONTROL_1,
 			    WM8962_FLL_FRAC | WM8962_FLL_REFCLK_SRC_MASK |
 			    WM8962_FLL_ENA, fll1 | WM8962_FLL_ENA);
 
 	dev_dbg(codec->dev, "FLL configured for %dHz->%dHz\n", Fref, Fout);
-
-	ret = 0;
 
 	/* This should be a massive overestimate but go even
 	 * higher if we'll error out
@@ -2913,14 +2917,17 @@ static int wm8962_set_fll(struct snd_soc_codec *codec, int fll_id, int source,
 
 	if (timeout == 0 && wm8962->irq) {
 		dev_err(codec->dev, "FLL lock timed out");
-		ret = -ETIMEDOUT;
+		snd_soc_update_bits(codec, WM8962_FLL_CONTROL_1,
+				    WM8962_FLL_ENA, 0);
+		pm_runtime_put(codec->dev);
+		return -ETIMEDOUT;
 	}
 
 	wm8962->fll_fref = Fref;
 	wm8962->fll_fout = Fout;
 	wm8962->fll_src = source;
 
-	return ret;
+	return 0;
 }
 
 static int wm8962_mute(struct snd_soc_dai *dai, int mute)
@@ -3017,9 +3024,16 @@ static irqreturn_t wm8962_irq(int irq, void *data)
 	unsigned int active;
 	int reg, ret;
 
+	ret = pm_runtime_get_sync(dev);
+	if (ret < 0) {
+		dev_err(dev, "Failed to resume: %d\n", ret);
+		return IRQ_NONE;
+	}
+
 	ret = regmap_read(wm8962->regmap, WM8962_INTERRUPT_STATUS_2_MASK,
 			  &mask);
 	if (ret != 0) {
+		pm_runtime_put(dev);
 		dev_err(dev, "Failed to read interrupt mask: %d\n",
 			ret);
 		return IRQ_NONE;
@@ -3027,14 +3041,17 @@ static irqreturn_t wm8962_irq(int irq, void *data)
 
 	ret = regmap_read(wm8962->regmap, WM8962_INTERRUPT_STATUS_2, &active);
 	if (ret != 0) {
+		pm_runtime_put(dev);
 		dev_err(dev, "Failed to read interrupt: %d\n", ret);
 		return IRQ_NONE;
 	}
 
 	active &= ~mask;
 
-	if (!active)
+	if (!active) {
+		pm_runtime_put(dev);
 		return IRQ_NONE;
+	}
 
 	/* Acknowledge the interrupts */
 	ret = regmap_write(wm8962->regmap, WM8962_INTERRUPT_STATUS_2, active);
@@ -3084,6 +3101,8 @@ static irqreturn_t wm8962_irq(int irq, void *data)
 				   msecs_to_jiffies(250));
 	}
 
+	pm_runtime_put(dev);
+
 	return IRQ_HANDLED;
 }
 
@@ -3103,6 +3122,7 @@ static irqreturn_t wm8962_irq(int irq, void *data)
 int wm8962_mic_detect(struct snd_soc_codec *codec, struct snd_soc_jack *jack)
 {
 	struct wm8962_priv *wm8962 = snd_soc_codec_get_drvdata(codec);
+	struct snd_soc_dapm_context *dapm = &codec->dapm;
 	int irq_mask, enable;
 
 	wm8962->jack = jack;
@@ -3123,19 +3143,22 @@ int wm8962_mic_detect(struct snd_soc_codec *codec, struct snd_soc_jack *jack)
 	snd_soc_jack_report(wm8962->jack, 0,
 			    SND_JACK_MICROPHONE | SND_JACK_BTN_0);
 
+	snd_soc_dapm_mutex_lock(dapm);
+
 	if (jack) {
-		snd_soc_dapm_force_enable_pin(&codec->dapm, "SYSCLK");
-		snd_soc_dapm_force_enable_pin(&codec->dapm, "MICBIAS");
+		snd_soc_dapm_force_enable_pin_unlocked(dapm, "SYSCLK");
+		snd_soc_dapm_force_enable_pin_unlocked(dapm, "MICBIAS");
 	} else {
-		snd_soc_dapm_disable_pin(&codec->dapm, "SYSCLK");
-		snd_soc_dapm_disable_pin(&codec->dapm, "MICBIAS");
+		snd_soc_dapm_disable_pin_unlocked(dapm, "SYSCLK");
+		snd_soc_dapm_disable_pin_unlocked(dapm, "MICBIAS");
 	}
+
+	snd_soc_dapm_mutex_unlock(dapm);
 
 	return 0;
 }
 EXPORT_SYMBOL_GPL(wm8962_mic_detect);
 
-#if IS_ENABLED(CONFIG_INPUT)
 static int beep_rates[] = {
 	500, 1000, 2000, 4000,
 };
@@ -3267,15 +3290,6 @@ static void wm8962_free_beep(struct snd_soc_codec *codec)
 
 	snd_soc_update_bits(codec, WM8962_BEEP_GENERATOR_1, WM8962_BEEP_ENA,0);
 }
-#else
-static void wm8962_init_beep(struct snd_soc_codec *codec)
-{
-}
-
-static void wm8962_free_beep(struct snd_soc_codec *codec)
-{
-}
-#endif
 
 static void wm8962_set_gpio_mode(struct wm8962_priv *wm8962, int gpio)
 {
@@ -3390,11 +3404,8 @@ static void wm8962_init_gpio(struct snd_soc_codec *codec)
 static void wm8962_free_gpio(struct snd_soc_codec *codec)
 {
 	struct wm8962_priv *wm8962 = snd_soc_codec_get_drvdata(codec);
-	int ret;
 
-	ret = gpiochip_remove(&wm8962->gpio_chip);
-	if (ret != 0)
-		dev_err(codec->dev, "Failed to remove GPIOs: %d\n", ret);
+	gpiochip_remove(&wm8962->gpio_chip);
 }
 #else
 static void wm8962_init_gpio(struct snd_soc_codec *codec)
@@ -3414,13 +3425,6 @@ static int wm8962_probe(struct snd_soc_codec *codec)
 	bool dmicclk, dmicdat;
 
 	wm8962->codec = codec;
-	codec->control_data = wm8962->regmap;
-
-	ret = snd_soc_codec_set_cache_io(codec, 16, 16, SND_SOC_REGMAP);
-	if (ret != 0) {
-		dev_err(codec->dev, "Failed to set cache I/O: %d\n", ret);
-		return ret;
-	}
 
 	wm8962->disable_nb[0].notifier_call = wm8962_regulator_event_0;
 	wm8962->disable_nb[1].notifier_call = wm8962_regulator_event_1;
@@ -3554,10 +3558,11 @@ static int wm8962_i2c_probe(struct i2c_client *i2c,
 	unsigned int reg;
 	int ret, i, irq_pol, trigger;
 
-	wm8962 = devm_kzalloc(&i2c->dev, sizeof(struct wm8962_priv),
-			      GFP_KERNEL);
+	wm8962 = devm_kzalloc(&i2c->dev, sizeof(*wm8962), GFP_KERNEL);
 	if (wm8962 == NULL)
 		return -ENOMEM;
+
+	mutex_init(&wm8962->dsp2_ena_lock);
 
 	i2c_set_clientdata(i2c, wm8962);
 
@@ -3784,7 +3789,7 @@ static int wm8962_i2c_remove(struct i2c_client *client)
 	return 0;
 }
 
-#ifdef CONFIG_PM_RUNTIME
+#ifdef CONFIG_PM
 static int wm8962_runtime_resume(struct device *dev)
 {
 	struct wm8962_priv *wm8962 = dev_get_drvdata(dev);

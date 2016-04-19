@@ -9,6 +9,16 @@ DEFINE_SPINLOCK(imx_ccm_lock);
 
 bool uart_from_osc;
 
+void __init imx_check_clocks(struct clk *clks[], unsigned int count)
+{
+	unsigned i;
+
+	for (i = 0; i < count; i++)
+		if (IS_ERR(clks[i]))
+			pr_err("i.MX clk %u: register failed with %ld\n",
+			       i, PTR_ERR(clks[i]));
+}
+
 static struct clk * __init imx_obtain_fixed_clock_from_dt(const char *name)
 {
 	struct of_phandle_args phandle;
@@ -68,7 +78,7 @@ void imx_cscmr1_fixup(u32 *val)
 
 static int __init setup_uart_clk(char *uart_rate)
 {
-	uart_from_osc = true;
-	return 1;
+       uart_from_osc = true;
+       return 1;
 }
 __setup("uart_from_osc", setup_uart_clk);

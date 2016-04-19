@@ -8,7 +8,7 @@ Required properties:
       "fsl,imx51-sdma"
       "fsl,imx53-sdma"
       "fsl,imx6q-sdma"
-  The -to variants should be preferred since they allow to determnine the
+  The -to variants should be preferred since they allow to determine the
   correct ROM script addresses needed for the driver to work without additional
   firmware.
 - reg : Should contain SDMA registers location and length
@@ -54,8 +54,8 @@ The full ID of peripheral types can be found below.
 	21	ESAI
 	22	SSI Dual FIFO	(needs firmware ver >= 2)
 	23	Shared ASRC
-	24	HDMI Audio
-	25	SAI
+	24	SAI
+	25	HDMI Audio
 
 The third cell specifies the transfer priority as below.
 

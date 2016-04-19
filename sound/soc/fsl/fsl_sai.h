@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2015 Freescale Semiconductor, Inc.
+ * Copyright 2012-2013 Freescale Semiconductor, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -142,8 +142,9 @@ struct fsl_sai {
 	bool synchronous[2];
 	bool is_stream_opened[2];
 
-	unsigned int mclk_id;
+	unsigned int mclk_id[2];
 	unsigned int mclk_streams;
+
 	unsigned int slots;
 	unsigned int slot_width;
 

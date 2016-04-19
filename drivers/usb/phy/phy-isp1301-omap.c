@@ -94,7 +94,7 @@ struct isp1301 {
 
 #if defined(CONFIG_MACH_OMAP_H2) || defined(CONFIG_MACH_OMAP_H3)
 
-#if	defined(CONFIG_TPS65010) || defined(CONFIG_TPS65010_MODULE)
+#if	defined(CONFIG_TPS65010) || (defined(CONFIG_TPS65010_MODULE) && defined(MODULE))
 
 #include <linux/i2c/tps65010.h>
 
@@ -878,7 +878,6 @@ static struct platform_driver omap_otg_driver = {
 	.probe		= otg_probe,
 	.remove		= otg_remove,
 	.driver		= {
-		.owner	= THIS_MODULE,
 		.name	= "omap_otg",
 	},
 };
@@ -1011,7 +1010,7 @@ static void isp_update_otg(struct isp1301 *isp, u8 stat)
 				break;
 			case OTG_STATE_A_WAIT_VFALL:
 				state = OTG_STATE_A_IDLE;
-				/* khubd may take a while to notice and
+				/* hub_wq may take a while to notice and
 				 * handle this disconnect, so don't go
 				 * to B_IDLE quite yet.
 				 */
@@ -1295,7 +1294,7 @@ isp1301_set_host(struct usb_otg *otg, struct usb_bus *host)
 		return isp1301_otg_enable(isp);
 	return 0;
 
-#elif	!defined(CONFIG_USB_GADGET_OMAP)
+#elif !IS_ENABLED(CONFIG_USB_OMAP)
 	// FIXME update its refcount
 	otg->host = host;
 

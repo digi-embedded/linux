@@ -12,6 +12,7 @@ menuconfig RESET_CONTROLLER
 
 	  If unsure, say no.
 
+source "drivers/reset/sti/Kconfig"
 if RESET_CONTROLLER
 
 config RESET_GPIO

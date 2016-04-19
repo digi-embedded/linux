@@ -266,8 +266,6 @@ static int tiny_spi_probe(struct platform_device *pdev)
 
 	/* setup the state for the bitbang driver */
 	hw->bitbang.master = master;
-	if (!hw->bitbang.master)
-		return err;
 	hw->bitbang.setup_transfer = tiny_spi_setup_transfer;
 	hw->bitbang.chipselect = tiny_spi_chipselect;
 	hw->bitbang.txrx_bufs = tiny_spi_txrx_bufs;
@@ -353,7 +351,6 @@ static struct platform_driver tiny_spi_driver = {
 	.remove = tiny_spi_remove,
 	.driver = {
 		.name = DRV_NAME,
-		.owner = THIS_MODULE,
 		.pm = NULL,
 		.of_match_table = of_match_ptr(tiny_spi_match),
 	},
