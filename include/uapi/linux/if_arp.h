@@ -59,6 +59,7 @@
 #define ARPHRD_LAPB	516		/* LAPB				*/
 #define ARPHRD_DDCMP    517		/* Digital's DDCMP protocol     */
 #define ARPHRD_RAWHDLC	518		/* Raw HDLC			*/
+#define ARPHDR_RAWIP    530		/* Raw IP */
 
 #define ARPHRD_TUNNEL	768		/* IPIP tunnel			*/
 #define ARPHRD_TUNNEL6	769		/* IP6IP6 tunnel       		*/
@@ -156,6 +157,5 @@ struct arphdr {
 #endif
 
 };
-
 
 #endif /* _UAPI_LINUX_IF_ARP_H */

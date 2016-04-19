@@ -134,6 +134,8 @@ enum ieee80211_channel_flags {
 	IEEE80211_CHAN_NO_10MHZ		= 1<<12,
 };
 
+#define CFG80211_DEL_STA_V2 1
+
 #define IEEE80211_CHAN_NO_HT40 \
 	(IEEE80211_CHAN_NO_HT40PLUS | IEEE80211_CHAN_NO_HT40MINUS)
 
@@ -856,6 +858,69 @@ struct station_del_parameters {
 };
 
 /**
+ * enum station_info_flags - station information flags
+ *
+ * Used by the driver to indicate which info in &struct station_info
+ * it has filled in during get_station() or dump_station().
+ *
+ * @STATION_INFO_INACTIVE_TIME: @inactive_time filled
+ * @STATION_INFO_RX_BYTES: @rx_bytes filled
+ * @STATION_INFO_TX_BYTES: @tx_bytes filled
+ * @STATION_INFO_RX_BYTES64: @rx_bytes filled with 64-bit value
+ * @STATION_INFO_TX_BYTES64: @tx_bytes filled with 64-bit value
+ * @STATION_INFO_LLID: @llid filled
+ * @STATION_INFO_PLID: @plid filled
+ * @STATION_INFO_PLINK_STATE: @plink_state filled
+ * @STATION_INFO_SIGNAL: @signal filled
+ * @STATION_INFO_TX_BITRATE: @txrate fields are filled
+ *  (tx_bitrate, tx_bitrate_flags and tx_bitrate_mcs)
+ * @STATION_INFO_RX_PACKETS: @rx_packets filled with 32-bit value
+ * @STATION_INFO_TX_PACKETS: @tx_packets filled with 32-bit value
+ * @STATION_INFO_TX_RETRIES: @tx_retries filled
+ * @STATION_INFO_TX_FAILED: @tx_failed filled
+ * @STATION_INFO_RX_DROP_MISC: @rx_dropped_misc filled
+ * @STATION_INFO_SIGNAL_AVG: @signal_avg filled
+ * @STATION_INFO_RX_BITRATE: @rxrate fields are filled
+ * @STATION_INFO_BSS_PARAM: @bss_param filled
+ * @STATION_INFO_CONNECTED_TIME: @connected_time filled
+ * @STATION_INFO_ASSOC_REQ_IES: @assoc_req_ies filled
+ * @STATION_INFO_STA_FLAGS: @sta_flags filled
+ * @STATION_INFO_BEACON_LOSS_COUNT: @beacon_loss_count filled
+ * @STATION_INFO_T_OFFSET: @t_offset filled
+ * @STATION_INFO_LOCAL_PM: @local_pm filled
+ * @STATION_INFO_PEER_PM: @peer_pm filled
+ * @STATION_INFO_NONPEER_PM: @nonpeer_pm filled
+ */
+enum station_info_flags {
+	STATION_INFO_INACTIVE_TIME	= 1<<0,
+	STATION_INFO_RX_BYTES		= 1<<1,
+	STATION_INFO_TX_BYTES		= 1<<2,
+	STATION_INFO_LLID		= 1<<3,
+	STATION_INFO_PLID		= 1<<4,
+	STATION_INFO_PLINK_STATE	= 1<<5,
+	STATION_INFO_SIGNAL		= 1<<6,
+	STATION_INFO_TX_BITRATE		= 1<<7,
+	STATION_INFO_RX_PACKETS		= 1<<8,
+	STATION_INFO_TX_PACKETS		= 1<<9,
+	STATION_INFO_TX_RETRIES		= 1<<10,
+	STATION_INFO_TX_FAILED		= 1<<11,
+	STATION_INFO_RX_DROP_MISC	= 1<<12,
+	STATION_INFO_SIGNAL_AVG		= 1<<13,
+	STATION_INFO_RX_BITRATE		= 1<<14,
+	STATION_INFO_BSS_PARAM		= 1<<15,
+	STATION_INFO_CONNECTED_TIME	= 1<<16,
+	STATION_INFO_ASSOC_REQ_IES	= 1<<17,
+	STATION_INFO_STA_FLAGS		= 1<<18,
+	STATION_INFO_BEACON_LOSS_COUNT	= 1<<19,
+	STATION_INFO_T_OFFSET		= 1<<20,
+	STATION_INFO_LOCAL_PM		= 1<<21,
+	STATION_INFO_PEER_PM		= 1<<22,
+	STATION_INFO_NONPEER_PM		= 1<<23,
+	STATION_INFO_RX_BYTES64		= 1<<24,
+	STATION_INFO_TX_BYTES64		= 1<<25,
+};
+
+/**
  * enum cfg80211_station_type - the type of station being modified
  * @CFG80211_STA_AP_CLIENT: client of an AP interface
  * @CFG80211_STA_AP_MLME_CLIENT: client of an AP interface that has
@@ -914,6 +979,10 @@ enum rate_info_flags {
 	RATE_INFO_FLAGS_VHT_MCS			= BIT(1),
 	RATE_INFO_FLAGS_SHORT_GI		= BIT(2),
 	RATE_INFO_FLAGS_60G			= BIT(3),
+	RATE_INFO_FLAGS_40_MHZ_WIDTH		= BIT(4),
+	RATE_INFO_FLAGS_80_MHZ_WIDTH		= BIT(5),
+	RATE_INFO_FLAGS_80P80_MHZ_WIDTH		= BIT(6),
+	RATE_INFO_FLAGS_160_MHZ_WIDTH		= BIT(7),
 };
 
 /**
@@ -2758,6 +2827,7 @@ struct cfg80211_ops {
  * @WIPHY_FLAG_SUPPORTS_5_10_MHZ: Device supports 5 MHz and 10 MHz channels.
  * @WIPHY_FLAG_HAS_CHANNEL_SWITCH: Device supports channel switch in
  *	beaconing mode (AP, IBSS, Mesh, ...).
+ * @WIPHY_FLAG_DFS_OFFLOAD: The driver handles all the DFS related operations.
  */
 enum wiphy_flags {
 	/* use hole at 0 */
@@ -2783,6 +2853,7 @@ enum wiphy_flags {
 	WIPHY_FLAG_HAS_REMAIN_ON_CHANNEL	= BIT(21),
 	WIPHY_FLAG_SUPPORTS_5_10_MHZ		= BIT(22),
 	WIPHY_FLAG_HAS_CHANNEL_SWITCH		= BIT(23),
+	WIPHY_FLAG_DFS_OFFLOAD			= BIT(24),
 };
 
 /**
@@ -5092,6 +5163,16 @@ void cfg80211_crit_proto_stopped(struct wireless_dev *wdev, gfp_t gfp);
  * Return: the number of channels supported by the device.
  */
 unsigned int ieee80211_get_num_supported_channels(struct wiphy *wiphy);
+
+/**
+ * cfg80211_is_gratuitous_arp_unsolicited_na - packet is grat. ARP/unsol. NA
+ * @skb: the input packet, must be an ethernet frame already
+ *
+ * Return: %true if the packet is a gratuitous ARP or unsolicited NA packet.
+ * This is used to drop packets that shouldn't occur because the AP implements
+ * a proxy service.
+ */
+bool cfg80211_is_gratuitous_arp_unsolicited_na(struct sk_buff *skb);
 
 /**
  * cfg80211_check_combinations - check interface combinations
