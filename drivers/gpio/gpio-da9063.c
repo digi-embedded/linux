@@ -209,9 +209,10 @@ err_mem:
 static int da9063_gpio_remove(struct platform_device *pdev)
 {
 	struct da9063_gpio *gpio = platform_get_drvdata(pdev);
-	return gpiochip_remove(&gpio->gp);
-}
+	gpiochip_remove(&gpio->gp);
 
+	return 0;
+}
 
 static int da9063_gpio_suspend(struct platform_device *pdev, pm_message_t state)
 {
