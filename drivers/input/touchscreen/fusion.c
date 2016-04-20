@@ -390,25 +390,30 @@ static int fusion_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 	return ret;
 }
 
-#ifdef CONFIG_PM
-static int fusion_suspend(struct i2c_client *i2c, pm_message_t mesg)
+#ifdef CONFIG_PM_SLEEP
+static int fusion_suspend(struct device *dev)
 {
-	disable_irq(i2c->irq);
+	struct i2c_client *client = to_i2c_client(dev);
+
+	disable_irq(client->irq);
 	flush_workqueue(fusion.workq);
 
 	return 0;
 }
 
-static int fusion_resume(struct i2c_client *i2c)
+static int fusion_resume(struct device *dev)
 {
+	struct i2c_client *client = to_i2c_client(dev);
+
 	/* Give the controller time to come up */
 	schedule_timeout_uninterruptible(100);
-
-	enable_irq(i2c->irq);
+	enable_irq(client->irq);
 
 	return 0;
 }
 #endif
+
+static SIMPLE_DEV_PM_OPS(fusion_dev_pm_ops, fusion_suspend, fusion_resume);
 
 static int fusion_remove(struct i2c_client *i2c)
 {
@@ -440,13 +445,10 @@ static struct i2c_driver fusion_i2c_drv = {
 	.driver = {
 		.name		= DRV_NAME,
 		.of_match_table = fusion_dt_ids,
+		.pm		= &fusion_dev_pm_ops,
 	},
 	.probe          = fusion_probe,
 	.remove         = fusion_remove,
-#ifdef CONFIG_PM
-	.suspend		= fusion_suspend,
-	.resume			= fusion_resume,
-#endif
 	.id_table       = fusion_id,
 	.address_list   = normal_i2c,
 };
