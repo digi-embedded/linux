@@ -61,7 +61,7 @@ static struct snd_soc_jack_gpio imx_hp_jack_gpio = {
 	.invert = 0,
 };
 
-static int hpjack_status_check(void)
+static int hpjack_status_check(void *data)
 {
 	struct imx_priv *priv = &card_priv;
 	struct platform_device *pdev = priv->pdev;
@@ -107,11 +107,10 @@ static int imx_sgtl5000_dai_init(struct snd_soc_pcm_runtime *rtd)
 
 	if (gpio_is_valid(priv->hp_gpio)) {
 		imx_hp_jack_gpio.jack_status_check = hpjack_status_check;
-		snd_soc_jack_new(codec, "Headphone Jack", SND_JACK_HEADPHONE,
-				 &imx_hp_jack);
-		snd_soc_jack_add_pins(&imx_hp_jack,
-				      ARRAY_SIZE(imx_hp_jack_pins),
-				      imx_hp_jack_pins);
+		snd_soc_card_jack_new(rtd->card, "Headphone Jack",
+				      SND_JACK_HEADPHONE, &imx_hp_jack,
+				      imx_hp_jack_pins,
+				      ARRAY_SIZE(imx_hp_jack_pins));
 		snd_soc_jack_add_gpios(&imx_hp_jack, 1, &imx_hp_jack_gpio);
 	}
 
