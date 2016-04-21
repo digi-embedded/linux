@@ -1122,18 +1122,21 @@ static int ad9389_remove(struct i2c_client *client)
 	return 0;
 }
 
-#ifdef CONFIG_PM
-static int ad9389_suspend(struct i2c_client *client, pm_message_t state)
+#ifdef CONFIG_PM_SLEEP
+static int ad9389_suspend(struct device *dev)
 {
+	struct i2c_client *client = to_i2c_client(dev);
+
 	dev_dbg(&client->dev, "PM suspend\n");
 	ad9389_set_power_down(client, 1);
 
 	return 0;
 }
 
-static int ad9389_resume(struct i2c_client *client)
+static int ad9389_resume(struct device *dev)
 {
 	int ret;
+	struct i2c_client *client = to_i2c_client(dev);
 	static struct fb_var_screeninfo var;
 	struct ad9389_dev *ad9389 = dev_get_drvdata(&client->dev);
 
@@ -1171,13 +1174,12 @@ static int ad9389_resume(struct i2c_client *client)
 			}
 		}
 	}
+
 	return 0;
 }
-#else
-#define ad9389_suspend	NULL
-#define ad9389_resume	NULL
 #endif
 
+static SIMPLE_DEV_PM_OPS(ad9389_dev_pm_ops, ad9389_suspend, ad9389_resume);
 
 static struct i2c_device_id ad9389_id[] = {
 	{ "ad9389", 0 },
@@ -1196,6 +1198,7 @@ static const struct of_device_id ad9389b_i2c_match[] = {
 static struct i2c_driver ad9389_driver = {
 	.driver = {
 		.name = "ad9389",
+		.pm = &ad9389_dev_pm_ops,
 #ifdef CONFIG_OF
 		.of_match_table = ad9389b_i2c_match,
 #endif
@@ -1203,8 +1206,6 @@ static struct i2c_driver ad9389_driver = {
 	},
 	.probe		= ad9389_probe,
 	.remove		= ad9389_remove,
-	.suspend	= ad9389_suspend,
-	.resume		= ad9389_resume,
 	.id_table	= ad9389_id,
 
 };
