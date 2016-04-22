@@ -392,8 +392,8 @@
 		};
 	};
 
-	flexcan1 {
-		pinctrl_flexcan1: flexcan1 {
+	can1 {
+		pinctrl_flexcan1: can1 {
 			fsl,pins = <
 				MX6QDL_PAD_GPIO_7__FLEXCAN1_TX 0x1b0b0
 				MX6QDL_PAD_GPIO_8__FLEXCAN1_RX 0x1b0b0
@@ -402,8 +402,8 @@
 		};
 	};
 
-	flexcan2 {
-		pinctrl_flexcan2: flexcan2 {
+	can2 {
+		pinctrl_flexcan2: can2 {
 			fsl,pins = <
 				MX6QDL_PAD_SD3_DAT0__FLEXCAN2_TX 0x1b0b0
 				MX6QDL_PAD_SD3_DAT1__FLEXCAN2_RX 0x1b0b0
@@ -833,13 +833,13 @@
 	enable-sdio-wakeup;
 };
 
-&flexcan1 {
+&can1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan1>;
 	stby-gpios = <&gpio1 2 0>;
 };
 
-&flexcan2 {
+&can2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan2>;
 	stby-gpios = <&gpio1 5 0>;
