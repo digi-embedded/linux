@@ -10,6 +10,7 @@
  */
 
 /dts-v1/;
+#include <dt-bindings/gpio/gpio.h>
 /* i.MX6 Quad/Dual CPU */
 #include "imx6q.dtsi"
 /* ConnectCore 6 (common) */
@@ -125,9 +126,9 @@
 
 &pcie {
 	pinctrl-names = "default";
-	reset-gpio = <&gpio7 8 0>;
-	wake-up-gpio = <&gpio7 7 0>;
-	disable-gpio = <&gpio1 4 0>;
+	reset-gpio = <&gpio7 8 GPIO_ACTIVE_HIGH>;
+	wake-up-gpio = <&gpio7 7 GPIO_ACTIVE_HIGH>;
+	disable-gpio = <&gpio1 4 GPIO_ACTIVE_HIGH>;
 	vin-supply = <&ldo6>;
 	status = "okay";
 };

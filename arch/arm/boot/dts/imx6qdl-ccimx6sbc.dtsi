@@ -33,7 +33,7 @@
 			"Headphone Jack", "HP_OUT";
 		mux-int-port = <2>;
 		mux-ext-port = <3>;
-		hp-det-gpios = <&gpio2 0 0>;
+		hp-det-gpios = <&gpio2 0 GPIO_ACTIVE_HIGH>;
 		hp-det-debounce = <250>;
 		status = "disabled";
 	};
@@ -132,7 +132,7 @@
 		regulator-name = "aud_pwr_en";
 		regulator-min-microvolt = <3300000>;
 		regulator-max-microvolt = <3300000>;
-		gpio = <&gpio2 25 0>;
+		gpio = <&gpio2 25 GPIO_ACTIVE_HIGH>;
 		enable-active-high;
 		vin-supply = <&bperi>;
 		pinctrl-names = "default";
@@ -148,7 +148,7 @@
 
 &ecspi1 {
 	fsl,spi-num-chipselects = <2>;
-	cs-gpios = <&gpio2 30 0>,<&gpio4 10 0>;
+	cs-gpios = <&gpio2 30 GPIO_ACTIVE_HIGH>,<&gpio4 10 GPIO_ACTIVE_HIGH>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_ecspi1>;
 
@@ -165,7 +165,7 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_enet>;
 	phy-mode = "rgmii";
-	phy-reset-gpios = <&gpio1 25 0>;
+	phy-reset-gpios = <&gpio1 25 GPIO_ACTIVE_HIGH>;
 	phy-reset-duration = <10>;
 	phy-reset-wait = <1>;
 	phy-supply = <&ldo4>;
@@ -314,8 +314,8 @@
 		pinctrl-0 = <&pinctrl_mipi>;
 		clocks = <&clks 201>;
 		clock-names = "csi_mclk";
-		digi,alt-pwn-gpios = <&gpio5 0 1
-				      &gpio3 15 1>;
+		digi,alt-pwn-gpios = <&gpio5 0 GPIO_ACTIVE_LOW
+				      &gpio3 15 GPIO_ACTIVE_LOW>;
 		mclk = <24000000>;
 		mclk_source = <0>;
 		status = "disabled";
@@ -329,7 +329,7 @@
 		pinctrl-0 = <&pinctrl_ipu1_1>;
 		clocks = <&clks 201>;
 		clock-names = "csi_mclk";
-		pwn-gpios = <&gpio5 0 1>;
+		pwn-gpios = <&gpio5 0 GPIO_ACTIVE_LOW>;
 		csi_id = <0>;
 		ipu_id = <0>;
 		mclk = <24000000>;
@@ -768,10 +768,10 @@
 &pcie {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_pcie>;
-	reset-gpio = <&gpio7 8 0>;
-	wake-up-gpio = <&gpio7 7 0>;
-	disable-gpio = <&gpio1 4 0>;
-	power-on-gpio = <&gpio6 10 0>;
+	reset-gpio = <&gpio7 8 GPIO_ACTIVE_HIGH>;
+	wake-up-gpio = <&gpio7 7 GPIO_ACTIVE_HIGH>;
+	disable-gpio = <&gpio1 4 GPIO_ACTIVE_HIGH>;
+	power-on-gpio = <&gpio6 10 GPIO_ACTIVE_HIGH>;
 	power-on-delay-ms = <10>;
 	vin-supply = <&ldo6>;
 };
@@ -784,7 +784,7 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_uart1>;
 	fsl,uart-has-rtscts;
-	digi,pwr-en-gpio = <&gpio2 26 0>;
+	digi,pwr-en-gpio = <&gpio2 26 GPIO_ACTIVE_HIGH>;
 };
 
 &uart2 {
@@ -797,7 +797,7 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_uart3>;
 	fsl,uart-has-rtscts;
-	digi,pwr-en-gpio = <&gpio2 26 0>;
+	digi,pwr-en-gpio = <&gpio2 26 GPIO_ACTIVE_HIGH>;
 };
 
 &uart4 {
@@ -812,7 +812,7 @@
 };
 
 &usbh1 {
-	fsl,reset-gpio = <&gpio3 10 0>;
+	fsl,reset-gpio = <&gpio3 10 GPIO_ACTIVE_HIGH>;
 };
 
 &usbotg {
@@ -836,11 +836,11 @@
 &can1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan1>;
-	stby-gpios = <&gpio1 2 0>;
+	stby-gpios = <&gpio1 2 GPIO_ACTIVE_HIGH>;
 };
 
 &can2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan2>;
-	stby-gpios = <&gpio1 5 0>;
+	stby-gpios = <&gpio1 5 GPIO_ACTIVE_HIGH>;
 };

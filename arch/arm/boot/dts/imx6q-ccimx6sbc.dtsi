@@ -87,7 +87,7 @@
 		pinctrl-0 = <&pinctrl_ipu2_2>;
 		clocks = <&clks 201>;
 		clock-names = "csi_mclk";
-		pwn-gpios = <&gpio3 15 1>;
+		pwn-gpios = <&gpio3 15 GPIO_ACTIVE_LOW>;
 		mclk = <24000000>;
 		mclk_source = <0>;
 		digi,defer-probe;
