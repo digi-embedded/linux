@@ -39,24 +39,15 @@
 
 		rtc {
 			compatible = "dlg,da9063-rtc";
-			interrupts = <1 IRQ_TYPE_EDGE_FALLING>;
-			interrupts-names = "ALARM" , "TIMER";
-			interrupt-parent = <&pmic_dialog>;
 		};
 
 		onkey {
 			compatible = "dlg,da9063-onkey";
-			interrupts = <0 IRQ_TYPE_EDGE_FALLING>;
-			interrupts-names = "ONKEY";
-			interrupt-parent = <&pmic_dialog>;
 			dlg,key-power;
 		};
 
 		hwmon {
 			compatible = "dlg,da9063-hwmon";
-			interrupts = <3 IRQ_TYPE_EDGE_FALLING>;
-			interrupts-names = "HWMON";
-			interrupt-parent = <&pmic_dialog>;
 			dlg,tjunc-offset = <(-5)>;
 		};
 
@@ -68,9 +59,6 @@
 
 		regulators {
 			compatible = "dlg,da9063-regulator";
-			interrupts = <8 IRQ_TYPE_EDGE_FALLING>;
-			interrupts-names = "LDO_LIM";
-			interrupt-parent = <&pmic_dialog>;
 
 			bcore1: bcore1 {
 				regulator-name = "DA9063_BCORE1";
