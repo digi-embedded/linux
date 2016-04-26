@@ -10,6 +10,8 @@
 #ifndef MCA_CC6UL_REGISTERS_H_
 #define MCA_CC6UL_REGISTERS_H_
 
+#include <linux/bitops.h>
+
 /* EP0: Control and status */
 #define MCA_CC6UL_HWVER_L		0x0001
 #define MCA_CC6UL_HWVER_H		0x0002
@@ -59,9 +61,9 @@
  */
 
 /* MCA_CC6UL_IRQ_STATUS_0 (addr=0x0020) */
-#define MCA_CC6UL_RTC_ALARM		(1 << 0)
-#define MCA_CC6UL_RTC_1HZ		(1 << 1)
-#define MCA_CC6UL_ONKEY			(1 << 2)
+#define MCA_CC6UL_RTC_ALARM		BIT(0)
+#define MCA_CC6UL_RTC_1HZ		BIT(1)
+#define MCA_CC6UL_ONKEY			BIT(2)
 
 /* MCA_CC6UL_IRQ_MASK_0 (addr=0x0024) */
 #define MCA_CC6UL_M_RTC_ALARM		MCA_CC6UL_RTC_ALARM
@@ -69,10 +71,10 @@
 #define MCA_CC6UL_M_ONKEY		MCA_CC6UL_ONKEY
 
 /* MCA_CC6UL_RTC_CONTROL (addr=0x0101) */
-#define MCA_CC6UL_RTC_EN		(1 << 0)
-#define MCA_CC6UL_RTC_ALARM_EN		(1 << 1)
-#define MCA_CC6UL_RTC_1HZ_EN		(1 << 2)
-#define MCA_CC6UL_RTC_32KHZ_OUT_EN	(1 << 3)
+#define MCA_CC6UL_RTC_EN		BIT(0)
+#define MCA_CC6UL_RTC_ALARM_EN		BIT(1)
+#define MCA_CC6UL_RTC_1HZ_EN		BIT(2)
+#define MCA_CC6UL_RTC_32KHZ_OUT_EN	BIT(3)
 
 /* MCA_CC6UL_RTC_COUNT_YEAR_L (addr=0x0103) */
 /* MCA_CC6UL_RTC_ALARM_YEAR_L (addr=0x010A) */
