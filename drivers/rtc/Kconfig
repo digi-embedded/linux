@@ -806,6 +806,7 @@ config RTC_DRV_M48T59
 
 config RTC_DRV_MCA_CC6UL
 	tristate "Digi ConnectCore 6UL Micro Controller Assist RTC"
+	select MFD_MCA_CC6UL
 	help
 	  If you say Y here you will get support for the RTC in the
 	  Micro Controller Assist of Digi ConnectCore 6UL system-on-chip.
