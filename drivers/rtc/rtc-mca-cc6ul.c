@@ -55,41 +55,41 @@ static void mca_cc6ul_data_to_tm(u8 *data, struct rtc_time *tm)
 {
 	/* conversion from MCA RTC to struct time is month-1 and year-1900 */
 	tm->tm_year = (((data[DATA_YEAR_H] &
-			 MCA_CC6UL_RTC_COUNT_YEAR_H_MASK) << 8) |
-		       (data[DATA_YEAR_L] & MCA_CC6UL_RTC_COUNT_YEAR_L_MASK)) -
+			 MCA_CC6UL_RTC_YEAR_H_MASK) << 8) |
+		       (data[DATA_YEAR_L] & MCA_CC6UL_RTC_YEAR_L_MASK)) -
 		       1900;
-	tm->tm_mon  = (data[DATA_MONTH] & MCA_CC6UL_RTC_COUNT_MONTH_MASK) - 1;
-	tm->tm_mday = (data[DATA_DAY]   & MCA_CC6UL_RTC_COUNT_DAY_MASK);
-	tm->tm_hour = (data[DATA_HOUR]  & MCA_CC6UL_RTC_COUNT_HOUR_MASK);
-	tm->tm_min  = (data[DATA_MIN]   & MCA_CC6UL_RTC_COUNT_MIN_MASK);
-	tm->tm_sec  = (data[DATA_SEC]   & MCA_CC6UL_RTC_COUNT_SEC_MASK);
+	tm->tm_mon  = (data[DATA_MONTH] & MCA_CC6UL_RTC_MONTH_MASK) - 1;
+	tm->tm_mday = (data[DATA_DAY]   & MCA_CC6UL_RTC_DAY_MASK);
+	tm->tm_hour = (data[DATA_HOUR]  & MCA_CC6UL_RTC_HOUR_MASK);
+	tm->tm_min  = (data[DATA_MIN]   & MCA_CC6UL_RTC_MIN_MASK);
+	tm->tm_sec  = (data[DATA_SEC]   & MCA_CC6UL_RTC_SEC_MASK);
 }
 
 static void mca_cc6ul_tm_to_data(struct rtc_time *tm, u8 *data)
 {
 	/* conversion from struct time to MCA RTC is year+1900 */
-	data[DATA_YEAR_L]  &= (u8)~MCA_CC6UL_RTC_COUNT_YEAR_L_MASK;
-	data[DATA_YEAR_H]  &= (u8)~MCA_CC6UL_RTC_COUNT_YEAR_H_MASK;
+	data[DATA_YEAR_L]  &= (u8)~MCA_CC6UL_RTC_YEAR_L_MASK;
+	data[DATA_YEAR_H]  &= (u8)~MCA_CC6UL_RTC_YEAR_H_MASK;
 	data[DATA_YEAR_L]  |= (tm->tm_year + 1900) &
-			      MCA_CC6UL_RTC_COUNT_YEAR_L_MASK;
+			      MCA_CC6UL_RTC_YEAR_L_MASK;
 	data[DATA_YEAR_H]  |= ((tm->tm_year + 1900) >> 8) &
-			       MCA_CC6UL_RTC_COUNT_YEAR_H_MASK;
+			       MCA_CC6UL_RTC_YEAR_H_MASK;
 
 	/* conversion from struct time to MCA RTC is month+1 */
-	data[DATA_MONTH] &= ~MCA_CC6UL_RTC_COUNT_MONTH_MASK;
-	data[DATA_MONTH] |= (tm->tm_mon + 1) & MCA_CC6UL_RTC_COUNT_MONTH_MASK;
+	data[DATA_MONTH] &= ~MCA_CC6UL_RTC_MONTH_MASK;
+	data[DATA_MONTH] |= (tm->tm_mon + 1) & MCA_CC6UL_RTC_MONTH_MASK;
 
-	data[DATA_DAY]   &= ~MCA_CC6UL_RTC_COUNT_DAY_MASK;
-	data[DATA_DAY]   |= tm->tm_mday & MCA_CC6UL_RTC_COUNT_DAY_MASK;
+	data[DATA_DAY]   &= ~MCA_CC6UL_RTC_DAY_MASK;
+	data[DATA_DAY]   |= tm->tm_mday & MCA_CC6UL_RTC_DAY_MASK;
 
-	data[DATA_HOUR]  &= ~MCA_CC6UL_RTC_COUNT_HOUR_MASK;
-	data[DATA_HOUR]  |= tm->tm_hour & MCA_CC6UL_RTC_COUNT_HOUR_MASK;
+	data[DATA_HOUR]  &= ~MCA_CC6UL_RTC_HOUR_MASK;
+	data[DATA_HOUR]  |= tm->tm_hour & MCA_CC6UL_RTC_HOUR_MASK;
 
-	data[DATA_MIN]   &= ~MCA_CC6UL_RTC_COUNT_MIN_MASK;
-	data[DATA_MIN]   |= tm->tm_min & MCA_CC6UL_RTC_COUNT_MIN_MASK;
+	data[DATA_MIN]   &= ~MCA_CC6UL_RTC_MIN_MASK;
+	data[DATA_MIN]   |= tm->tm_min & MCA_CC6UL_RTC_MIN_MASK;
 
-	data[DATA_SEC]   &= ~MCA_CC6UL_RTC_COUNT_SEC_MASK;
-	data[DATA_SEC]   |= tm->tm_sec & MCA_CC6UL_RTC_COUNT_SEC_MASK;
+	data[DATA_SEC]   &= ~MCA_CC6UL_RTC_SEC_MASK;
+	data[DATA_SEC]   |= tm->tm_sec & MCA_CC6UL_RTC_SEC_MASK;
 }
 
 static int mca_cc6ul_rtc_stop_alarm(struct device *dev)
