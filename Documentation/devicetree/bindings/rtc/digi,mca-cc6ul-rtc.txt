@@ -1,0 +1,11 @@
+* Digi Real Time Clock for MCA of ConnectCore 6UL
+
+Required properties:
+- compatible: must be "digi,mca-cc6ul-rtc".
+
+Example:
+	mca: mca-cc6ul@7e {
+		rtc {
+			compatible = "digi,mca-cc6ul-rtc";
+		};
+	};
