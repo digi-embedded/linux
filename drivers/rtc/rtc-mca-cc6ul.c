@@ -254,11 +254,37 @@ static int mca_cc6ul_rtc_probe(struct platform_device *pdev)
 {
 	struct mca_cc6ul *mca = dev_get_drvdata(pdev->dev.parent);
 	struct mca_cc6ul_rtc *rtc;
-//	struct device_node *np;
+	struct device_node *np;
 	int ret;
 
 	if (!mca || !mca->dev->parent->of_node)
 		return -EPROBE_DEFER;
+
+	rtc = devm_kzalloc(&pdev->dev, sizeof *rtc, GFP_KERNEL);
+	if (!rtc)
+		return -ENOMEM;
+
+	platform_set_drvdata(pdev, rtc);
+	device_init_wakeup(&pdev->dev, 1);
+	rtc->mca = mca;
+
+	/* Find entry in device-tree */
+	if (mca->dev->of_node) {
+		/*
+		 * Return silently if RTC node does not exist
+		 * or if it is disabled
+		 */
+		np = of_find_compatible_node(mca->dev->of_node, NULL,
+					     "digi,mca-cc6ul-rtc");
+		if (!np) {
+			ret = -ENODEV;
+			goto err;
+		}
+		if (!of_device_is_available(np)) {
+			ret = -ENODEV;
+			goto err;
+		}
+	}
 
 	/* Enable RTC hardware */
 #ifdef MCA_CC6UL_CRC
@@ -269,25 +295,18 @@ static int mca_cc6ul_rtc_probe(struct platform_device *pdev)
 #endif
 	if (ret < 0) {
 		dev_err(&pdev->dev, "Failed to enable RTC.\n");
-		return ret;
+		goto err;
 	}
 
 	/* Register RTC device */
-	rtc = devm_kzalloc(&pdev->dev, sizeof *rtc, GFP_KERNEL);
-	if (!rtc)
-		return -ENOMEM;
-
-	platform_set_drvdata(pdev, rtc);
-	device_init_wakeup(&pdev->dev, 1);
-	rtc->mca = mca;
 	rtc->rtc_dev = rtc_device_register(MCA_CC6UL_DRVNAME_RTC, &pdev->dev,
 					   &mca_cc6ul_rtc_ops, THIS_MODULE);
 	if (IS_ERR(rtc->rtc_dev)) {
 		dev_err(&pdev->dev, "Failed to register RTC device: %ld\n",
 			PTR_ERR(rtc->rtc_dev));
-		return PTR_ERR(rtc->rtc_dev);
+		ret = PTR_ERR(rtc->rtc_dev);
+		goto err;
 	}
-	rtc->rtc_dev->dev.of_node = pdev->dev.of_node;
 
 	/*
 	 * Register interrupts. Complain on errors but let device
@@ -299,10 +318,13 @@ static int mca_cc6ul_rtc_probe(struct platform_device *pdev)
 	if (ret) {
 		dev_err(&pdev->dev, "Failed to request ALARM IRQ. (%d)\n", rtc->irq_alarm);
 		rtc->irq_alarm = -ENXIO;
-		return 0;
 	}
 
 	return 0;
+
+err:
+	rtc = NULL;
+	return ret;
 }
 
 static int mca_cc6ul_rtc_remove(struct platform_device *pdev)
