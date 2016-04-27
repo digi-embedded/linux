@@ -340,8 +340,8 @@ static int mca_cc6ul_rtc_remove(struct platform_device *pdev)
 
 #ifdef CONFIG_OF
 static const struct of_device_id mca_cc6ul_rtc_dt_ids[] = {
-        { .compatible = "digi,mca-cc6ul-rtc", },
-        { /* sentinel */ }
+	{ .compatible = "digi,mca-cc6ul-rtc", },
+	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, mca_cc6ul_rtc_dt_ids);
 #endif
@@ -353,7 +353,7 @@ static struct platform_driver mca_cc6ul_rtc_driver = {
 		.name	= MCA_CC6UL_DRVNAME_RTC,
 		.owner	= THIS_MODULE,
 #ifdef CONFIG_OF
-                .of_match_table = mca_cc6ul_rtc_dt_ids,
+		.of_match_table = mca_cc6ul_rtc_dt_ids,
 #endif
 	},
 };
