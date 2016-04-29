@@ -68,6 +68,8 @@ static struct cpufreq_driver *cpufreq_driver;
 static DEFINE_PER_CPU(struct cpufreq_policy *, cpufreq_cpu_data);
 static DEFINE_RWLOCK(cpufreq_driver_lock);
 
+static struct kset *cpufreq_kset;
+
 /* Flag to suspend/resume CPUFreq governors */
 static bool cpufreq_suspended;
 
@@ -783,6 +785,7 @@ static ssize_t store_scaling_governor(struct cpufreq_policy *policy,
 		return -EINVAL;
 
 	ret = cpufreq_set_policy(policy, &new_policy);
+	kobject_uevent(cpufreq_global_kobject, KOBJ_ADD);
 	return ret ? ret : count;
 }
 
@@ -2600,8 +2603,14 @@ static int __init cpufreq_core_init(void)
 	if (cpufreq_disabled())
 		return -ENODEV;
 
+	/* create cpufreq kset */
+	cpufreq_kset = kset_create_and_add("kset", NULL, &cpu_subsys.dev_root->kobj);
+	BUG_ON(!cpufreq_kset);
+
 	cpufreq_global_kobject = kobject_create_and_add("cpufreq", &cpu_subsys.dev_root->kobj);
 	BUG_ON(!cpufreq_global_kobject);
+
+	cpufreq_global_kobject->kset = cpufreq_kset;
 
 	register_syscore_ops(&cpufreq_syscore_ops);
 
