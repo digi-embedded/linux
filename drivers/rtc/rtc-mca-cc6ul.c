@@ -313,8 +313,10 @@ static int mca_cc6ul_rtc_probe(struct platform_device *pdev)
 	 * to be registered at least for date/time.
 	 */
 	rtc->irq_alarm = platform_get_irq_byname(pdev, "ALARM");
-	ret = request_threaded_irq(rtc->irq_alarm, NULL, mca_cc6ul_alarm_event,
-				IRQF_TRIGGER_LOW | IRQF_ONESHOT, "ALARM", rtc);
+	ret = devm_request_threaded_irq(&pdev->dev, rtc->irq_alarm, NULL,
+					mca_cc6ul_alarm_event,
+					IRQF_TRIGGER_LOW | IRQF_ONESHOT,
+					"ALARM", rtc);
 	if (ret) {
 		dev_err(&pdev->dev, "Failed to request ALARM IRQ. (%d)\n", rtc->irq_alarm);
 		rtc->irq_alarm = -ENXIO;
@@ -332,7 +334,7 @@ static int mca_cc6ul_rtc_remove(struct platform_device *pdev)
 	struct mca_cc6ul_rtc *rtc = platform_get_drvdata(pdev);
 
 	if (rtc->irq_alarm >= 0)
-		free_irq(rtc->irq_alarm, rtc);
+		devm_free_irq(&pdev->dev, rtc->irq_alarm, rtc);
 
 	rtc_device_unregister(rtc->rtc_dev);
 	return 0;
