@@ -34,6 +34,7 @@
 enum mca_cc6ul_irqs {
 	MCA_CC6UL_IRQ_RTC_ALARM,
 	MCA_CC6UL_IRQ_RTC_1HZ,
+	MCA_CC6UL_IRQ_WATCHDOG,
 	MCA_CC6UL_IRQ_ONKEY,
 	/* ... */
 

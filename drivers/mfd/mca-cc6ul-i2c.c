@@ -29,6 +29,7 @@ static const struct regmap_range mca_cc6ul_writeable_ranges[] = {
 	regmap_reg_range(MCA_CC6UL_IRQ_STATUS_0, MCA_CC6UL_IRQ_MASK_3),
 	regmap_reg_range(MCA_CC6UL_RTC_CONTROL, MCA_CC6UL_RTC_CONTROL),
 	regmap_reg_range(MCA_CC6UL_RTC_COUNT_YEAR_L, MCA_CC6UL_RTC_ALARM_SEC),
+	regmap_reg_range(MCA_CC6UL_WDT_CONTROL, MCA_CC6UL_WDT_REFRESH_3),
 };
 
 static const struct regmap_range mca_cc6ul_volatile_ranges[] = {
@@ -51,7 +52,7 @@ static const struct regmap_range mca_cc6ul_volatile_ranges[] = {
 	regmap_reg_range(MCA_CC6UL_IRQ_MASK_0, MCA_CC6UL_IRQ_MASK_3),
 	regmap_reg_range(MCA_CC6UL_RTC_CONTROL, MCA_CC6UL_RTC_CONTROL),
 	regmap_reg_range(MCA_CC6UL_RTC_ALARM_YEAR_L, MCA_CC6UL_RTC_ALARM_SEC),
-
+	regmap_reg_range(MCA_CC6UL_WDT_CONTROL, MCA_CC6UL_WDT_TIMEOUT),
 };
 
 static const struct regmap_access_table mca_cc6ul_readable_table = {
@@ -72,7 +73,7 @@ static const struct regmap_access_table mca_cc6ul_volatile_table = {
 static struct regmap_config mca_cc6ul_regmap_config = {
 	.reg_bits = 16,
 	.val_bits = 8,
-	.max_register = MCA_CC6UL_RTC_ALARM_SEC,
+	.max_register = 0xFFFF,
 
 	.rd_table = &mca_cc6ul_readable_table,
 	.wr_table = &mca_cc6ul_writeable_table,

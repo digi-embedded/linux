@@ -41,6 +41,15 @@ static struct resource mca_cc6ul_rtc_resources[] = {
 	}
 };
 
+static struct resource mca_cc6ul_watchdog_resources[] = {
+	{
+		.name   = "WATCHDOG",
+		.start  = MCA_CC6UL_IRQ_WATCHDOG,
+		.end    = MCA_CC6UL_IRQ_WATCHDOG,
+		.flags  = IORESOURCE_IRQ,
+	},
+};
+
 static struct resource mca_cc6ul_onkey_resources[] = {
 	{
 		.name   = "ONKEY",
@@ -59,6 +68,8 @@ static const struct mfd_cell mca_cc6ul_devs[] = {
 	},
 	{
 		.name           = MCA_CC6UL_DRVNAME_WATCHDOG,
+		.num_resources	= ARRAY_SIZE(mca_cc6ul_watchdog_resources),
+		.resources	= mca_cc6ul_watchdog_resources,
 		.of_compatible  = "digi,mca-cc6ul-watchdog",
 	},
 	{

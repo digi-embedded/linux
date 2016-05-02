@@ -22,10 +22,6 @@
 
 static const struct regmap_irq mca_cc6ul_irqs[] = {
 	/* MCA irqs A register */
-	[MCA_CC6UL_IRQ_ONKEY] = {
-                .reg_offset = MCA_CC6UL_IRQ_0_OFFSET,
-                .mask = MCA_CC6UL_M_ONKEY,
-        },
 	[MCA_CC6UL_IRQ_RTC_ALARM] = {
                 .reg_offset = MCA_CC6UL_IRQ_0_OFFSET,
                 .mask = MCA_CC6UL_M_RTC_ALARM,
@@ -33,6 +29,10 @@ static const struct regmap_irq mca_cc6ul_irqs[] = {
 	[MCA_CC6UL_IRQ_RTC_1HZ] = {
                 .reg_offset = MCA_CC6UL_IRQ_0_OFFSET,
                 .mask = MCA_CC6UL_M_RTC_1HZ,
+        },
+	[MCA_CC6UL_IRQ_WATCHDOG] = {
+                .reg_offset = MCA_CC6UL_IRQ_0_OFFSET,
+                .mask = MCA_CC6UL_M_WATCHDOG,
         },
 };
 
