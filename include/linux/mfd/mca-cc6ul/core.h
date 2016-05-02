@@ -41,6 +41,11 @@ enum mca_cc6ul_irqs {
 	MCA_CC6UL_NUM_IRQS,
 };
 
+#define MCA_CC6UL_IRQ_RTC_ALARM_NAME		"RTC ALARM"
+#define MCA_CC6UL_IRQ_RTC_1HZ_NAME		"RTC 1HZ"
+#define MCA_CC6UL_IRQ_WATCHDOG_NAME		"WATCHDOG"
+#define MCA_CC6UL_IRQ_ONKEY_NAME		"ONKEY"
+
 /* Number of interrupt registers */
 #define MCA_CC6UL_NUM_IRQ_REGS		4
 

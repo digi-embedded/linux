@@ -269,15 +269,16 @@ static int mca_cc6ul_wdt_probe(struct platform_device *pdev)
 
 	/* Register interrupt if so configured */
 	if (wdt->irqnoreset) {
-		wdt->irq_timeout = platform_get_irq_byname(pdev, "WATCHDOG");
+		wdt->irq_timeout = platform_get_irq_byname(pdev,
+						MCA_CC6UL_IRQ_WATCHDOG_NAME);
 		ret = devm_request_threaded_irq(&pdev->dev, wdt->irq_timeout,
 					NULL, mca_cc6ul_wdt_timeout_event,
 					IRQF_TRIGGER_LOW | IRQF_ONESHOT,
-					"WATCHDOG", wdt);
+					MCA_CC6UL_IRQ_WATCHDOG_NAME, wdt);
 		if (ret) {
 			dev_err(&pdev->dev,
-				"Failed to request WATCHDOG IRQ. (%d)\n",
-				wdt->irq_timeout);
+				"Failed to request %s IRQ. (%d)\n",
+				MCA_CC6UL_IRQ_WATCHDOG_NAME, wdt->irq_timeout);
 			wdt->irq_timeout = -ENXIO;
 			goto err;
 		}

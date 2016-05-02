@@ -312,13 +312,15 @@ static int mca_cc6ul_rtc_probe(struct platform_device *pdev)
 	 * Register interrupts. Complain on errors but let device
 	 * to be registered at least for date/time.
 	 */
-	rtc->irq_alarm = platform_get_irq_byname(pdev, "ALARM");
+	rtc->irq_alarm = platform_get_irq_byname(pdev,
+						 MCA_CC6UL_IRQ_RTC_ALARM_NAME);
 	ret = devm_request_threaded_irq(&pdev->dev, rtc->irq_alarm, NULL,
 					mca_cc6ul_alarm_event,
 					IRQF_TRIGGER_LOW | IRQF_ONESHOT,
-					"ALARM", rtc);
+					MCA_CC6UL_IRQ_RTC_ALARM_NAME, rtc);
 	if (ret) {
-		dev_err(&pdev->dev, "Failed to request ALARM IRQ. (%d)\n", rtc->irq_alarm);
+		dev_err(&pdev->dev, "Failed to request %s IRQ. (%d)\n",
+			MCA_CC6UL_IRQ_RTC_ALARM_NAME, rtc->irq_alarm);
 		rtc->irq_alarm = -ENXIO;
 	}
 

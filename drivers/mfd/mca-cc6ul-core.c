@@ -28,13 +28,13 @@
 
 static struct resource mca_cc6ul_rtc_resources[] = {
 	{
-		.name   = "ALARM",
+		.name   = MCA_CC6UL_IRQ_RTC_ALARM_NAME,
 		.start  = MCA_CC6UL_IRQ_RTC_ALARM,
 		.end    = MCA_CC6UL_IRQ_RTC_ALARM,
 		.flags  = IORESOURCE_IRQ,
 	},
 	{
-		.name   = "1HZ",
+		.name   = MCA_CC6UL_IRQ_RTC_1HZ_NAME,
 		.start  = MCA_CC6UL_IRQ_RTC_1HZ,
 		.end    = MCA_CC6UL_IRQ_RTC_1HZ,
 		.flags  = IORESOURCE_IRQ,
@@ -43,7 +43,7 @@ static struct resource mca_cc6ul_rtc_resources[] = {
 
 static struct resource mca_cc6ul_watchdog_resources[] = {
 	{
-		.name   = "WATCHDOG",
+		.name   = MCA_CC6UL_IRQ_WATCHDOG_NAME,
 		.start  = MCA_CC6UL_IRQ_WATCHDOG,
 		.end    = MCA_CC6UL_IRQ_WATCHDOG,
 		.flags  = IORESOURCE_IRQ,
@@ -52,7 +52,7 @@ static struct resource mca_cc6ul_watchdog_resources[] = {
 
 static struct resource mca_cc6ul_onkey_resources[] = {
 	{
-		.name   = "ONKEY",
+		.name   = MCA_CC6UL_IRQ_ONKEY_NAME,
 		.start  = MCA_CC6UL_IRQ_ONKEY,
 		.end    = MCA_CC6UL_IRQ_ONKEY,
 		.flags  = IORESOURCE_IRQ,
