@@ -191,7 +191,7 @@ static int da9063_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 	if (ret < 0)
 		return ret;
 
-	if (ret & (DA9063_E_ALARM))
+	if (val & (DA9063_E_ALARM))
 		alrm->pending = 1;
 	else
 		alrm->pending = 0;
