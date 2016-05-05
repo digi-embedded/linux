@@ -34,6 +34,12 @@
 #define DA9063_PORT_MASK		0x3
 #define DA9063_PORT_SHIFT(offset)	(4 * (offset % 2))
 
+/*
+ * Adjust the offset in gpio_get/gpio_set functions using
+ * REG_GPIO_MODE and REG_STATUS registers.
+ */
+#define DA9063_GPIO_SHIFT(offset)	(offset % 8)
+
 #define DA9063_INPUT			DA9063_GPI
 #define DA9063_OUTPUT			DA9063_PUSH_PULL
 
@@ -53,7 +59,7 @@ static int da9063_gpio_get(struct gpio_chip *gc, unsigned offset)
 	struct da9063_gpio *gpio = to_da9063_gpio(gc);
 	int gpio_direction = 0;
 	int ret;
-	unsigned int val;
+	unsigned int val, reg;
 
 	/* Get GPIO direction */
 	ret = regmap_read(gpio->da9063->regmap, (offset >> 1) +
@@ -65,30 +71,33 @@ static int da9063_gpio_get(struct gpio_chip *gc, unsigned offset)
 	gpio_direction >>= DA9063_PORT_SHIFT(offset);
 	switch (gpio_direction) {
 	case DA9063_INPUT:
-		ret = regmap_read(gpio->da9063->regmap, DA9063_REG_STATUS_B,
-				  &val);
+		reg = (offset >= 8) ? DA9063_REG_STATUS_C : DA9063_REG_STATUS_B;
+		ret = regmap_read(gpio->da9063->regmap, reg, &val);
 		if (ret < 0)
 			return ret;
 		break;
 	case DA9063_OUTPUT:
-		ret = regmap_read(gpio->da9063->regmap, DA9063_REG_GPIO_MODE0_7,
-				  &val);
+		reg = (offset >= 8) ?
+		       DA9063_REG_GPIO_MODE8_15 :
+		       DA9063_REG_GPIO_MODE0_7;
+		ret = regmap_read(gpio->da9063->regmap, reg, &val);
 		if (ret < 0)
 			return ret;
 	}
 
-	return val & (1 << offset);
-
+	return val & (1 << DA9063_GPIO_SHIFT(offset));
 }
 
 static void da9063_gpio_set(struct gpio_chip *gc, unsigned offset, int value)
 {
 	struct da9063_gpio *gpio = to_da9063_gpio(gc);
+	unsigned int reg = (offset >= 8) ?
+			    DA9063_REG_GPIO_MODE8_15 :
+			    DA9063_REG_GPIO_MODE0_7;
 
-	regmap_update_bits(gpio->da9063->regmap,
-			DA9063_REG_GPIO_MODE0_7,
-			1 << offset,
-			value << offset);
+	regmap_update_bits(gpio->da9063->regmap, reg,
+			   1 << DA9063_GPIO_SHIFT(offset),
+			   value << DA9063_GPIO_SHIFT(offset));
 }
 
 static int da9063_gpio_direction_input(struct gpio_chip *gc, unsigned offset)
