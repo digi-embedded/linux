@@ -26,7 +26,6 @@
 #define DA9063_GPI			0x1
 #define DA9063_OPEN_DRAIN		0x2
 #define DA9063_PUSH_PULL		0x3
-#define DA9063_OPEN_DRAIN		0x2
 
 #define DA9063_ACT_LOW			0x0
 #define DA9063_ACT_HIGH			0x1
