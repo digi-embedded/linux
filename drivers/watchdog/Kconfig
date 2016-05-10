@@ -120,7 +120,7 @@ config MCA_CC6UL_WATCHDOG
 	select MFD_MCA_CC6UL
 	help
 	  If you say yes here you will get support for the watchdog in the
-	  Micro Controller Assist of Digi ConnectCore 6UL system-on-chip.
+	  Micro Controller Assist of Digi ConnectCore 6UL system-on-module.
 
 config WM831X_WATCHDOG
 	tristate "WM831x watchdog"

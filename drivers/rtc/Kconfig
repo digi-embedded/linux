@@ -1004,7 +1004,7 @@ config RTC_DRV_MCA_CC6UL
 	select MFD_MCA_CC6UL
 	help
 	  If you say Y here you will get support for the RTC in the
-	  Micro Controller Assist of Digi ConnectCore 6UL system-on-chip.
+	  Micro Controller Assist of Digi ConnectCore 6UL system-on-module.
 
 	  This driver can also be built as a module, if so, the module
 	  will be called "rtc-mca-cc6ul".
