@@ -1,0 +1,21 @@
+Digi ConnectCore 6UL Micro Controller Assist GPIO
+
+Required properties:
+- compatible : Should be
+    - "digi,mca-cc6ul-gpio"
+
+- #gpio-cells : Should be two.
+  - first cell is the pin number
+  - second cell is used to specify flags. Flags are currently unused.
+
+- gpio-controller : Marks the device node as a GPIO controller.
+
+Example:
+
+	mca: mca-cc6ul@7e {
+		gpio {
+			compatible = "digi,mca-cc6ul-gpio";
+			gpio-controller;
+			#gpio-cells = <2>;
+		};
+	};

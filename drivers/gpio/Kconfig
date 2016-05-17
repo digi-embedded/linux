@@ -244,6 +244,13 @@ config GPIO_MB86S7X
 	help
 	  Say yes here to support the GPIO controller in Fujitsu MB86S70 SoCs.
 
+config GPIO_MCA_CC6UL
+	tristate "Digi ConnectCore 6UL Micro Controller Assist GPIO support"
+	select MFD_MCA_CC6UL
+	help
+	  If you say yes here you will get support for the GPIOs in the
+	  Micro Controller Assist of Digi ConnectCore 6UL system-on-module.
+
 config GPIO_MM_LANTIQ
 	bool "Lantiq Memory mapped GPIOs"
 	depends on LANTIQ && SOC_XWAY

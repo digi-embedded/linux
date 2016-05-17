@@ -73,6 +73,10 @@ static const struct mfd_cell mca_cc6ul_devs[] = {
 		.of_compatible  = "digi,mca-cc6ul-watchdog",
 	},
 	{
+		.name           = MCA_CC6UL_DRVNAME_GPIO,
+		.of_compatible = "digi,mca-cc6ul-gpio",
+	},
+	{
 		.name           = MCA_CC6UL_DRVNAME_ONKEY,
 		.num_resources  = ARRAY_SIZE(mca_cc6ul_onkey_resources),
 		.resources      = mca_cc6ul_onkey_resources,

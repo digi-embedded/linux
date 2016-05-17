@@ -30,12 +30,14 @@ static const struct regmap_range mca_cc6ul_writeable_ranges[] = {
 	regmap_reg_range(MCA_CC6UL_RTC_CONTROL, MCA_CC6UL_RTC_CONTROL),
 	regmap_reg_range(MCA_CC6UL_RTC_COUNT_YEAR_L, MCA_CC6UL_RTC_ALARM_SEC),
 	regmap_reg_range(MCA_CC6UL_WDT_CONTROL, MCA_CC6UL_WDT_REFRESH_3),
+	regmap_reg_range(MCA_CC6UL_GPIO_DIR_0, MCA_CC6UL_GPIO_TOGGLE_7),
 };
 
 static const struct regmap_range mca_cc6ul_volatile_ranges[] = {
 	/* Real volatile registers */
 	regmap_reg_range(MCA_CC6UL_IRQ_STATUS_0, MCA_CC6UL_IRQ_STATUS_3),
 	regmap_reg_range(MCA_CC6UL_RTC_COUNT_YEAR_L, MCA_CC6UL_RTC_COUNT_SEC),
+	regmap_reg_range(MCA_CC6UL_GPIO_DATA_0, MCA_CC6UL_GPIO_DATA_7),
 
 	/*
 	 * Fake volatile registers.
@@ -53,6 +55,7 @@ static const struct regmap_range mca_cc6ul_volatile_ranges[] = {
 	regmap_reg_range(MCA_CC6UL_RTC_CONTROL, MCA_CC6UL_RTC_CONTROL),
 	regmap_reg_range(MCA_CC6UL_RTC_ALARM_YEAR_L, MCA_CC6UL_RTC_ALARM_SEC),
 	regmap_reg_range(MCA_CC6UL_WDT_CONTROL, MCA_CC6UL_WDT_TIMEOUT),
+	regmap_reg_range(MCA_CC6UL_GPIO_NUM, MCA_CC6UL_GPIO_DIR_7),
 };
 
 static const struct regmap_access_table mca_cc6ul_readable_table = {
