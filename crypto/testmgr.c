@@ -1853,42 +1853,6 @@ static const struct alg_test_desc alg_test_descs[] = {
 			}
 		}
 	}, {
-		.alg = "authenc(hmac(sha1),cbc(aes))",
-		.test = alg_test_aead,
-		.fips_allowed = 1,
-		.suite = {
-			.aead = {
-				.enc = {
-					.vecs = hmac_sha1_aes_cbc_enc_tv_template,
-					.count = HMAC_SHA1_AES_CBC_ENC_TEST_VECTORS
-				}
-			}
-		}
-	}, {
-		.alg = "authenc(hmac(sha256),cbc(aes))",
-		.test = alg_test_aead,
-		.fips_allowed = 1,
-		.suite = {
-			.aead = {
-				.enc = {
-					.vecs = hmac_sha256_aes_cbc_enc_tv_template,
-					.count = HMAC_SHA256_AES_CBC_ENC_TEST_VECTORS
-				}
-			}
-		}
-	}, {
-		.alg = "authenc(hmac(sha512),cbc(aes))",
-		.test = alg_test_aead,
-		.fips_allowed = 1,
-		.suite = {
-			.aead = {
-				.enc = {
-					.vecs = hmac_sha512_aes_cbc_enc_tv_template,
-					.count = HMAC_SHA512_AES_CBC_ENC_TEST_VECTORS
-				}
-			}
-		}
-	}, {
 		.alg = "authenc(hmac(md5),cbc(aes))",
 		.test = alg_test_aead,
 		.fips_allowed = 1,
@@ -1898,6 +1862,18 @@ static const struct alg_test_desc alg_test_descs[] = {
 				  .vecs = hmac_md5_aes_cbc_enc_tv_template,
 				  .count = HMAC_MD5_AES_CBC_ENC_TEST_VECTORS
 				}
+			}
+		}
+	}, {
+		.alg = "authenc(hmac(sha1),cbc(aes))",
+		.test = alg_test_aead,
+		.fips_allowed = 1,
+		.suite = {
+			.aead = {
+			  .enc = {
+			    .vecs = hmac_sha1_aes_cbc_enc_tv_template,
+			    .count = HMAC_SHA1_AES_CBC_ENC_TEST_VECTORS
+			  }
 			}
 		}
 	}, {
@@ -1949,6 +1925,18 @@ static const struct alg_test_desc alg_test_descs[] = {
 			}
 		}
 	}, {
+		.alg = "authenc(hmac(sha256),cbc(aes))",
+		.test = alg_test_aead,
+		.fips_allowed = 1,
+		.suite = {
+			.aead = {
+			  .enc = {
+			    .vecs = hmac_sha256_aes_cbc_enc_tv_template,
+			    .count = HMAC_SHA256_AES_CBC_ENC_TEST_VECTORS
+			  }
+			}
+		}
+	}, {
 		.alg = "authenc(hmac(sha256),cbc(des))",
 		.test = alg_test_aead,
 		.fips_allowed = 1,
@@ -1993,6 +1981,18 @@ static const struct alg_test_desc alg_test_descs[] = {
 			  .enc = {
 			    .vecs = hmac_sha384_des3_ede_cbc_enc_tv_template,
 			    .count = HMAC_SHA384_DES3_EDE_CBC_ENC_TEST_VECTORS
+			  }
+			}
+		}
+	}, {
+		.alg = "authenc(hmac(sha512),cbc(aes))",
+		.test = alg_test_aead,
+		.fips_allowed = 1,
+		.suite = {
+			.aead = {
+			  .enc = {
+			    .vecs = hmac_sha512_aes_cbc_enc_tv_template,
+			    .count = HMAC_SHA512_AES_CBC_ENC_TEST_VECTORS
 			  }
 			}
 		}
