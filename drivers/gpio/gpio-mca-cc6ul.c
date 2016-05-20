@@ -78,7 +78,7 @@ static int mca_cc6ul_gpio_direction_output(struct gpio_chip *gc, unsigned num,
 	mca_cc6ul_gpio_set(gc, num, val);
 
 	ret = regmap_update_bits(gpio->mca->regmap, GPIO_DIR_REG(num),
-				 1 << num, 1);
+				 1 << num, 1 << num);
 	if (ret < 0)
 		return ret;
 
