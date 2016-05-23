@@ -40,7 +40,7 @@ static bool disable_scofix;
 static bool force_scofix;
 
 static int sco_conn;
-static int reset = 1;
+static bool reset = 1;
 
 static struct usb_driver btusb_driver;
 

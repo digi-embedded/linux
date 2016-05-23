@@ -729,7 +729,7 @@ static inline int ibs_check_data_len(struct ibs_struct *ibs, int len)
 	BT_DBG("len %d room %d", len, room);
 
 	if (!len) {
-		hci_recv_frame(ibs->rx_skb->dev, ibs->rx_skb);
+		hci_recv_frame((struct hci_dev *)ibs->rx_skb->dev, ibs->rx_skb);
 	} else if (len > room) {
 		BT_ERR("Data length is too large");
 		kfree_skb(ibs->rx_skb);
@@ -747,7 +747,7 @@ static inline int ibs_check_data_len(struct ibs_struct *ibs, int len)
 }
 
 /* Recv data */
-static int ibs_recv(struct hci_uart *hu, void *data, int count)
+static int ibs_recv(struct hci_uart *hu, const void *data, int count)
 {
 	struct ibs_struct *ibs = hu->priv;
 	register char *ptr;
@@ -759,7 +759,7 @@ static int ibs_recv(struct hci_uart *hu, void *data, int count)
 	BT_DBG("hu %p count %d rx_state %ld rx_count %ld",
 			hu, count, ibs->rx_state, ibs->rx_count);
 
-	ptr = data;
+	ptr = (char *)data;
 	while (count) {
 		if (ibs->rx_count) {
 			len = min_t(unsigned int, ibs->rx_count, count);
@@ -772,7 +772,7 @@ static int ibs_recv(struct hci_uart *hu, void *data, int count)
 			switch (ibs->rx_state) {
 			case HCI_IBS_W4_DATA:
 				BT_DBG("Complete data");
-				hci_recv_frame(ibs->rx_skb->dev, ibs->rx_skb);
+				hci_recv_frame((struct hci_dev *)ibs->rx_skb->dev, ibs->rx_skb);
 
 				ibs->rx_state = HCI_IBS_W4_PACKET_TYPE;
 				ibs->rx_skb = NULL;
