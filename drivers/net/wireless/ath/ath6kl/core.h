@@ -693,6 +693,7 @@ struct ath6kl {
 	enum ath6kl_state state;
 	unsigned int testmode;
 	unsigned int softmac_enable;
+	unsigned short reg_domain;
 
 	struct ath6kl_bmi bmi;
 	const struct ath6kl_hif_ops *hif_ops;
