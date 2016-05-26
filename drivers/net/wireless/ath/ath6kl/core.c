@@ -290,6 +290,15 @@ struct ath6kl *ath6kl_core_create(struct device *dev)
 			of_property_read_u16(node, "ath6kl-reg-domain",
 					&reg_domain);
 	}
+
+	if (!debug_mask) {
+		struct device_node *node;
+
+		node = of_find_compatible_node(NULL, NULL, "atheros,ath6kl");
+		if (node)
+			of_property_read_u32(node, "ath6kl-debug-mask",
+					&debug_mask);
+	}
 #endif
 	ar->reg_domain = (reg_domain == EINVAL) ? 0xffff : reg_domain;
 	ar->p2p = (ath6kl_p2p == EINVAL) ? 0 : !!ath6kl_p2p;

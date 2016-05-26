@@ -16,6 +16,9 @@ Optional properties:
 		       For a list of regulatory domain codes refer to the
 		       Atheros MKG-0920 document, "Setup for Country or
 		       regulatory domain on AR6002-Based target firmware".
+  - ath6kl-debug-mask: Debug mask (32 bits) to enable debug output on the
+		       atheros host driver. For valid masks refer to the
+		       file drivers/net/wireless/ath/ath6kl/debug.h.
 
 Example:
 
@@ -24,6 +27,7 @@ Example:
 		ath6kl-p2p-enable;
 		ath6kl-softmac-enable;
 		ath6kl-reg-domain = /bits/ 16 <0xd7>;
+		ath6kl-debug-mask = <0x00000040>;
 		digi,pwrdown-gpios = <&gpio_extender 3 0>;
 		digi,pwrdown_delay = <5>;
 		/* U-Boot will fill in the MAC address here */
