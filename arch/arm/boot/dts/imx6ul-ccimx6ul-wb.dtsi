@@ -40,6 +40,16 @@
 	status = "okay";
 };
 
+&i2c1 {
+	pmic: pfuze3000@08 {
+		regulators {
+			vgen3_reg: vccsd {
+				regulator-always-on;
+			};
+		};
+	};
+};
+
 &iomuxc {
 	imx6ul-ccimx6ul {
 		pinctrl_uart1: uart1grp {
