@@ -34,6 +34,7 @@ config BT_HCIBTUSB_BCM
 
 config BT_HCIBTSDIO
 	tristate "HCI SDIO driver"
+	depends on !BT_HCIUART_IBS
 	depends on MMC
 	help
 	  Bluetooth HCI SDIO driver.
