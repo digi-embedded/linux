@@ -2188,6 +2188,7 @@ int scsi_error_handler(void *data)
 		 * flag is checked
 		 */
 		set_current_state(TASK_INTERRUPTIBLE);
+
 		if (kthread_should_stop())
 			break;
 

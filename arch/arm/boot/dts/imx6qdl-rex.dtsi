@@ -41,7 +41,6 @@
 			compatible = "regulator-fixed";
 			reg = <1>;
 			pinctrl-names = "default";
-			pinctrl-0 = <&pinctrl_usbh1>;
 			regulator-name = "usbh1_vbus";
 			regulator-min-microvolt = <5000000>;
 			regulator-max-microvolt = <5000000>;
@@ -53,7 +52,6 @@
 			compatible = "regulator-fixed";
 			reg = <2>;
 			pinctrl-names = "default";
-			pinctrl-0 = <&pinctrl_usbotg>;
 			regulator-name = "usb_otg_vbus";
 			regulator-min-microvolt = <5000000>;
 			regulator-max-microvolt = <5000000>;
@@ -371,7 +369,7 @@
 	pinctrl-0 = <&pinctrl_usdhc2>;
 	bus-width = <4>;
 	cd-gpios = <&gpio2 2 GPIO_ACTIVE_LOW>;
-	wp-gpios = <&gpio2 3 GPIO_ACTIVE_LOW>;
+	wp-gpios = <&gpio2 3 GPIO_ACTIVE_HIGH>;
 	status = "okay";
 };
 
@@ -380,6 +378,6 @@
 	pinctrl-0 = <&pinctrl_usdhc3>;
 	bus-width = <4>;
 	cd-gpios = <&gpio2 0 GPIO_ACTIVE_LOW>;
-	wp-gpios = <&gpio2 1 GPIO_ACTIVE_LOW>;
+	wp-gpios = <&gpio2 1 GPIO_ACTIVE_HIGH>;
 	status = "okay";
 };

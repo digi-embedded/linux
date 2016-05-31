@@ -1493,6 +1493,13 @@ fec_enet_rx_queue(struct net_device *ndev, int budget, u16 queue_id)
 		pkt_received++;
 
 		writel(FEC_ENET_RXF, fep->hwp + FEC_IEVENT);
+		/* Since we have allocated space to hold a complete frame,
+		 * the last indicator should be set.
+		 */
+		if ((status & BD_ENET_RX_LAST) == 0)
+			netdev_err(ndev, "rcv is not +last\n");
+
+		writel(FEC_ENET_RXF, fep->hwp + FEC_IEVENT);
 
 		/* Check for errors. */
 		status ^= BD_ENET_RX_LAST;

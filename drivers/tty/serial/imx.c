@@ -1348,6 +1348,11 @@ imx_set_termios(struct uart_port *port, struct ktermios *termios,
 			} else {
 				ucr2 |= UCR2_CTSC;
 			}
+
+			/* Can we enable the DMA support? */
+			if (is_imx6q_uart(sport) && !uart_console(port)
+				&& !sport->dma_is_inited)
+				imx_uart_dma_init(sport);
 		} else {
 			termios->c_cflag &= ~CRTSCTS;
 		}
