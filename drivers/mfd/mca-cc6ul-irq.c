@@ -34,6 +34,14 @@ static const struct regmap_irq mca_cc6ul_irqs[] = {
                 .reg_offset = MCA_CC6UL_IRQ_0_OFFSET,
                 .mask = MCA_CC6UL_M_WATCHDOG,
         },
+	[MCA_CC6UL_IRQ_PWR_SLEEP] = {
+                .reg_offset = MCA_CC6UL_IRQ_0_OFFSET,
+                .mask = MCA_CC6UL_M_PWR_SLEEP,
+        },
+	[MCA_CC6UL_IRQ_PWR_OFF] = {
+                .reg_offset = MCA_CC6UL_IRQ_0_OFFSET,
+                .mask = MCA_CC6UL_M_PWR_OFF,
+        },
 };
 
 static const struct regmap_irq_chip mca_cc6ul_irq_chip = {

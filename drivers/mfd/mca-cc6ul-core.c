@@ -38,7 +38,7 @@ static struct resource mca_cc6ul_rtc_resources[] = {
 		.start  = MCA_CC6UL_IRQ_RTC_1HZ,
 		.end    = MCA_CC6UL_IRQ_RTC_1HZ,
 		.flags  = IORESOURCE_IRQ,
-	}
+	},
 };
 
 static struct resource mca_cc6ul_watchdog_resources[] = {
@@ -50,11 +50,17 @@ static struct resource mca_cc6ul_watchdog_resources[] = {
 	},
 };
 
-static struct resource mca_cc6ul_onkey_resources[] = {
+static struct resource mca_cc6ul_pwrkey_resources[] = {
 	{
-		.name   = MCA_CC6UL_IRQ_ONKEY_NAME,
-		.start  = MCA_CC6UL_IRQ_ONKEY,
-		.end    = MCA_CC6UL_IRQ_ONKEY,
+		.name   = MCA_CC6UL_IRQ_PWR_SLEEP_NAME,
+		.start  = MCA_CC6UL_IRQ_PWR_SLEEP,
+		.end    = MCA_CC6UL_IRQ_PWR_SLEEP,
+		.flags  = IORESOURCE_IRQ,
+	},
+	{
+		.name   = MCA_CC6UL_IRQ_PWR_OFF_NAME,
+		.start  = MCA_CC6UL_IRQ_PWR_OFF,
+		.end    = MCA_CC6UL_IRQ_PWR_OFF,
 		.flags  = IORESOURCE_IRQ,
 	},
 };
@@ -77,10 +83,10 @@ static const struct mfd_cell mca_cc6ul_devs[] = {
 		.of_compatible = "digi,mca-cc6ul-gpio",
 	},
 	{
-		.name           = MCA_CC6UL_DRVNAME_ONKEY,
-		.num_resources  = ARRAY_SIZE(mca_cc6ul_onkey_resources),
-		.resources      = mca_cc6ul_onkey_resources,
-		.of_compatible = "digi,mca-cc6ul-onkey",
+		.name           = MCA_CC6UL_DRVNAME_PWRKEY,
+		.num_resources  = ARRAY_SIZE(mca_cc6ul_pwrkey_resources),
+		.resources      = mca_cc6ul_pwrkey_resources,
+		.of_compatible = "digi,mca-cc6ul-pwrkey",
 	},
 };
 

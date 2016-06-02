@@ -18,7 +18,7 @@
 #define MCA_CC6UL_DRVNAME_RTC		"mca-cc6ul-rtc"
 #define MCA_CC6UL_DRVNAME_WATCHDOG	"mca-cc6ul-watchdog"
 #define MCA_CC6UL_DRVNAME_GPIO		"mca-cc6ul-gpio"
-#define MCA_CC6UL_DRVNAME_ONKEY		"mca-cc6ul-onkey"
+#define MCA_CC6UL_DRVNAME_PWRKEY	"mca-cc6ul-pwrkey"
 
 /* Uncomment to add CRC to frames */
 //#define MCA_CC6UL_CRC
@@ -36,7 +36,8 @@ enum mca_cc6ul_irqs {
 	MCA_CC6UL_IRQ_RTC_ALARM,
 	MCA_CC6UL_IRQ_RTC_1HZ,
 	MCA_CC6UL_IRQ_WATCHDOG,
-	MCA_CC6UL_IRQ_ONKEY,
+	MCA_CC6UL_IRQ_PWR_SLEEP,
+	MCA_CC6UL_IRQ_PWR_OFF,
 	/* ... */
 
 	MCA_CC6UL_NUM_IRQS,
@@ -45,7 +46,8 @@ enum mca_cc6ul_irqs {
 #define MCA_CC6UL_IRQ_RTC_ALARM_NAME		"RTC ALARM"
 #define MCA_CC6UL_IRQ_RTC_1HZ_NAME		"RTC 1HZ"
 #define MCA_CC6UL_IRQ_WATCHDOG_NAME		"WATCHDOG"
-#define MCA_CC6UL_IRQ_ONKEY_NAME		"ONKEY"
+#define MCA_CC6UL_IRQ_PWR_SLEEP_NAME		"SLEEP"
+#define MCA_CC6UL_IRQ_PWR_OFF_NAME		"PWR OFF"
 
 /* Number of interrupt registers */
 #define MCA_CC6UL_NUM_IRQ_REGS		4

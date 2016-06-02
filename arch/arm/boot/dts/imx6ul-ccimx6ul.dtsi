@@ -80,6 +80,15 @@
 		watchdog {
 			compatible = "digi,mca-cc6ul-wdt";
 		};
+
+		pwrkey {
+			compatible = "digi,mca-cc6ul-pwrkey";
+			digi,key-power;
+			digi,key-sleep;
+			digi,debounce-ms = <100>;
+			digi,pwroff-delay-sec = <6>;
+			digi,pwroff-guard-sec = <30>;
+		};
 	};
 
 	pmic: pfuze3000@08 {
