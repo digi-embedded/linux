@@ -343,6 +343,20 @@ static int mxs_phy_init(struct usb_phy *phy)
 {
 	int ret;
 	struct mxs_phy *mxs_phy = to_mxs_phy(phy);
+	struct mxs_phy_data *data = (struct mxs_phy_data *)mxs_phy->data;
+
+	/*
+	 * The ccimx6ulstarter board does not report correctly the VBUS_VALID
+	 * state on the register USB_ANALOG_USB2_VBUS_DETECT_STAT.
+	 * This is a workaround to avoid to disconnect the USB PHY if the
+	 * VBUS is not correctly detected. In this board we are directly
+	 * powering from 5V so it is always powered.
+	 */
+	if (of_machine_is_compatible("digi,ccimx6ulstarter") &&
+	   (mxs_phy->data->flags & MXS_PHY_DISCONNECT_LINE_WITHOUT_VBUS)) {
+		dev_dbg(phy->dev, "set flags to do not disconnect the usb line\n");
+		data->flags &= ~MXS_PHY_DISCONNECT_LINE_WITHOUT_VBUS;
+	}
 
 	mxs_phy_clock_switch_delay();
 	ret = clk_prepare_enable(mxs_phy->clk);
