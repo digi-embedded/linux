@@ -67,7 +67,7 @@
 		compatible = "digi,mca_cc6ul_dt_ids";
 		reg = <0x7e>;
 		interrupt-parent = <&gpio5>;
-		interrupts = <3 IRQ_TYPE_EDGE_FALLING>;
+		interrupts = <4 IRQ_TYPE_EDGE_FALLING>;
 		interrupt-controller;
 		#interrupt-cells = <2>;
 		pinctrl-names = "default";
@@ -85,8 +85,6 @@
 	pmic: pfuze3000@08 {
 		compatible = "fsl,pfuze3000";
 		reg = <0x08>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_pmic>;
 
 		regulators {
 			int_3v3: sw1a {
@@ -206,13 +204,6 @@
 		pinctrl_mca_cc6ul: mcagrp {
 			fsl,pins = <
 				/* MCA_nINT */
-				MX6UL_PAD_SNVS_TAMPER3__GPIO5_IO03	0xb0b1
-			>;
-		};
-
-		pinctrl_pmic: pmicgrp {
-			fsl,pins = <
-				/* PMIC_INTB */
 				MX6UL_PAD_SNVS_TAMPER4__GPIO5_IO04	0xb0b1
 			>;
 		};
