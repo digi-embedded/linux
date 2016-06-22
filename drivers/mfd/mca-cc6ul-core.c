@@ -26,6 +26,8 @@
 
 #include <asm/unaligned.h>
 
+static struct mca_cc6ul *pmca;
+
 static struct resource mca_cc6ul_rtc_resources[] = {
 	{
 		.name   = MCA_CC6UL_IRQ_RTC_ALARM_NAME,
@@ -282,6 +284,22 @@ static struct attribute_group mca_cc6ul_attr_group = {
 	.attrs	= mca_cc6ul_sysfs_entries,
 };
 
+static void mca_cc6ul_power_off(void)
+{
+	if (!pmca) {
+		printk("ERROR: unable to power off [%s:%d/%s()]!\n",
+		       __FILE__, __LINE__, __func__);
+		return;
+	}
+
+	/* Set power off bit in PWR_CTRL_0 register to shutdown */
+	regmap_update_bits(pmca->regmap, MCA_CC6UL_PWR_CTRL_0,
+			   MCA_CC6UL_PWR_GO_OFF, MCA_CC6UL_PWR_GO_OFF);
+
+	/* And That's All Folks... */
+	while (1) ;
+}
+
 int mca_cc6ul_device_init(struct mca_cc6ul *mca, u32 irq)
 {
 	int ret;
@@ -310,6 +328,9 @@ int mca_cc6ul_device_init(struct mca_cc6ul *mca, u32 irq)
 		goto out_dev;
 	}
 
+	pmca = mca;
+	pm_power_off = mca_cc6ul_power_off;
+
 	return 0;
 
 out_dev:
@@ -322,6 +343,7 @@ err:
 
 void mca_cc6ul_device_exit(struct mca_cc6ul *mca)
 {
+	pmca = NULL;
 	sysfs_remove_group(&mca->dev->kobj, &mca_cc6ul_attr_group);
 	mfd_remove_devices(mca->dev);
 	mca_cc6ul_irq_exit(mca);

@@ -224,3 +224,11 @@
 		};
 	};
 };
+
+&snvs_poweroff  {
+	/*
+	 * On the CC6UL the power off support is implemented in the MCA.
+	 * That is why the i.MX6UL power off functionality has to be disabled.
+	 */
+	status = "disabled";
+};
