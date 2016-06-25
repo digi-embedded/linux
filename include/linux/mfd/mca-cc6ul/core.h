@@ -61,6 +61,7 @@ struct mca_cc6ul {
 	u32 flags;
 	struct regmap *regmap;
 	struct regmap_irq_chip_data *regmap_irq;
+	struct notifier_block restart_handler;
 	int chip_irq;
 	u32 irq_base;
 	u16 addr;	/* for the sysfs */

@@ -20,6 +20,7 @@
 #include <linux/proc_fs.h>
 #include <linux/kthread.h>
 #include <linux/uaccess.h>
+#include <linux/reboot.h>
 
 #include <linux/mfd/mca-cc6ul/core.h>
 #include <linux/mfd/mca-cc6ul/registers.h>
@@ -329,6 +330,32 @@ static void mca_cc6ul_power_off(void)
 	while (1) ;
 }
 
+static int mca_cc6ul_restart_handler(struct notifier_block *nb,
+				     unsigned long mode, void *cmd)
+{
+	int ret;
+	struct mca_cc6ul *mca = container_of(nb, struct mca_cc6ul,
+					     restart_handler);
+	const uint8_t unlock_pattern[] = {'C', 'T', 'R', 'U'};
+
+	ret = regmap_bulk_write(mca->regmap, MCA_CC6UL_CTRL_UNLOCK_0,
+				unlock_pattern, sizeof(unlock_pattern));
+	if (ret) {
+		/* Hopefully other registered restart handler can do it... */
+		dev_warn(mca->dev, "failed to unlock CTRL registers (%d)\n",
+			 ret);
+		return NOTIFY_DONE;
+	}
+
+	/*
+	 * Set reset bit in CTRL_0 register to reboot. As IRQs are disabled, we
+	 * don't use regmap_update_bits, just write
+	 */
+	regmap_write(pmca->regmap, MCA_CC6UL_CTRL_0, MCA_CC6UL_RESET);
+
+	return NOTIFY_DONE;
+}
+
 int mca_cc6ul_device_init(struct mca_cc6ul *mca, u32 irq)
 {
 	int ret;
@@ -377,8 +404,24 @@ int mca_cc6ul_device_init(struct mca_cc6ul *mca, u32 irq)
 	imx6_board_pm_begin = mca_cc6ul_suspend_begin;
 	imx6_board_pm_end = mca_cc6ul_suspend_end;
 
+	/*
+	 * Register the MCA restart handler with high priority to ensure it is
+	 * called first
+	 */
+	mca->restart_handler.notifier_call = mca_cc6ul_restart_handler;
+	mca->restart_handler.priority = 200;
+	ret = register_restart_handler(&mca->restart_handler);
+	if (ret) {
+		dev_err(mca->dev,
+			"failed to register restart handler (%d)\n", ret);
+		goto out_fn_ptrs2;
+	}
+
 	return 0;
 
+out_fn_ptrs2:
+	imx6_board_pm_begin = NULL;
+	imx6_board_pm_end = NULL;
 out_fn_ptrs:
 	pm_power_off = NULL;
 out_sysfs_remove:
@@ -394,6 +437,7 @@ err:
 
 void mca_cc6ul_device_exit(struct mca_cc6ul *mca)
 {
+	unregister_restart_handler(&mca->restart_handler);
 	imx6_board_pm_begin = NULL;
 	imx6_board_pm_end = NULL;
 	pm_power_off = NULL;
