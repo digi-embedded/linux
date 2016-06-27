@@ -1789,18 +1789,6 @@ void ata_eh_analyze_ncq_error(struct ata_link *link)
 	memcpy(&qc->result_tf, &tf, sizeof(tf));
 	qc->result_tf.flags = ATA_TFLAG_ISADDR | ATA_TFLAG_LBA | ATA_TFLAG_LBA48;
 	qc->err_mask |= AC_ERR_DEV | AC_ERR_NCQ;
-	if (qc->result_tf.auxiliary) {
-		char sense_key, asc, ascq;
-
-		sense_key = (qc->result_tf.auxiliary >> 16) & 0xff;
-		asc = (qc->result_tf.auxiliary >> 8) & 0xff;
-		ascq = qc->result_tf.auxiliary & 0xff;
-		ata_dev_dbg(dev, "NCQ Autosense %02x/%02x/%02x\n",
-			    sense_key, asc, ascq);
-		ata_scsi_set_sense(qc->scsicmd, sense_key, asc, ascq);
-		qc->flags |= ATA_QCFLAG_SENSE_VALID;
-	}
-
 	ehc->i.err_mask &= ~AC_ERR_DEV;
 }
 
@@ -1829,25 +1817,6 @@ static unsigned int ata_eh_analyze_tf(struct ata_queued_cmd *qc,
 		qc->err_mask |= AC_ERR_HSM;
 		return ATA_EH_RESET;
 	}
-
-	/*
-	 * Sense data reporting does not work if the
-	 * device fault bit is set.
-	 */
-	if ((stat & ATA_SENSE) && !(stat & ATA_DF) &&
-	    !(qc->flags & ATA_QCFLAG_SENSE_VALID)) {
-		if (!(qc->ap->pflags & ATA_PFLAG_FROZEN)) {
-			tmp = ata_eh_request_sense(qc, qc->scsicmd);
-			if (tmp)
-				qc->err_mask |= tmp;
-		} else {
-			ata_dev_warn(qc->dev, "sense data available but port frozen\n");
-		}
-	}
-
-	/* Set by NCQ autosense or request sense above */
-	if (qc->flags & ATA_QCFLAG_SENSE_VALID)
-		return 0;
 
 	if (stat & (ATA_ERR | ATA_DF))
 		qc->err_mask |= AC_ERR_DEV;
