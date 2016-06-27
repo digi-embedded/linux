@@ -27,6 +27,11 @@
 	status = "okay";
 };
 
+/* CAN1 (Raspberry PI Expansion header) */
+&flexcan1 {
+	status = "okay";
+};
+
 /* UART1 (Bluetooth) */
 &uart1 {
 	status = "okay";

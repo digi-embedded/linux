@@ -47,6 +47,14 @@
 	};
 };
 
+/* CAN1 (Raspberry PI Expansion header) */
+&flexcan1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_flexcan1>;
+	xceiver-supply = <&ext_3v3>;
+	status = "disabled";
+};
+
 /* UART4 (Raspberry PI Expansion header) */
 &uart4 {
 	pinctrl-names = "default";
@@ -98,6 +106,13 @@
 				MX6UL_PAD_ENET1_TX_DATA0__ENET1_TDATA00	0x1b0b0
 				MX6UL_PAD_ENET1_TX_DATA1__ENET1_TDATA01	0x1b0b0
 				MX6UL_PAD_ENET1_TX_CLK__ENET1_REF_CLK1	0x4001b031
+			>;
+		};
+
+		pinctrl_flexcan1: flexcan1grp{
+			fsl,pins = <
+				MX6UL_PAD_LCD_DATA08__FLEXCAN1_TX	0x1b020
+				MX6UL_PAD_LCD_DATA09__FLEXCAN1_RX	0x1b020
 			>;
 		};
 
