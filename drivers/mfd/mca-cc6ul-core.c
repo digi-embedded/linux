@@ -16,15 +16,18 @@
 #include <linux/module.h>
 #include <linux/crc16.h>
 #include <linux/regmap.h>
-
-#include <linux/mfd/mca-cc6ul/core.h>
-#include <linux/mfd/mca-cc6ul/registers.h>
-
+#include <linux/suspend.h>
 #include <linux/proc_fs.h>
 #include <linux/kthread.h>
 #include <linux/uaccess.h>
 
+#include <linux/mfd/mca-cc6ul/core.h>
+#include <linux/mfd/mca-cc6ul/registers.h>
+
 #include <asm/unaligned.h>
+
+extern int (*imx6_board_pm_begin)(suspend_state_t);
+extern void (*imx6_board_pm_end)(void);
 
 static struct mca_cc6ul *pmca;
 
@@ -284,6 +287,32 @@ static struct attribute_group mca_cc6ul_attr_group = {
 	.attrs	= mca_cc6ul_sysfs_entries,
 };
 
+static int mca_cc6ul_notify_suspend_state(bool suspended)
+{
+	if (!pmca) {
+		printk("ERROR: %s() notifying %s [%s:%d]!\n", __func__,
+		       suspended ? "suspend" : "resume", __FILE__, __LINE__);
+		return -ENODEV;
+	}
+
+	/* Set the suspend bit in PWR_CTRL_0 acordingly to suspended value */
+	return regmap_update_bits(pmca->regmap, MCA_CC6UL_PWR_CTRL_0,
+				  MCA_CC6UL_PWR_GO_SUSPEND,
+				  suspended ? MCA_CC6UL_PWR_GO_SUSPEND : 0);
+}
+
+static int mca_cc6ul_suspend_begin(suspend_state_t state)
+{
+	/* Notify MCA that the system is entering suspend to ram  pm state */
+	return mca_cc6ul_notify_suspend_state(true);
+}
+
+static void mca_cc6ul_suspend_end(void)
+{
+	/* Notify MCA that the system is waking up from suspend to ram */
+	(void)mca_cc6ul_notify_suspend_state(false);
+}
+
 static void mca_cc6ul_power_off(void)
 {
 	if (!pmca) {
@@ -329,10 +358,32 @@ int mca_cc6ul_device_init(struct mca_cc6ul *mca, u32 irq)
 	}
 
 	pmca = mca;
+
+	if (pm_power_off != NULL) {
+		dev_err(mca->dev, "pm_power_off function already registered\n");
+		ret = -EBUSY;
+		goto out_sysfs_remove;
+	}
 	pm_power_off = mca_cc6ul_power_off;
+
+	if (imx6_board_pm_begin != NULL || imx6_board_pm_end != NULL) {
+		dev_err(mca->dev,
+			"imx6_board_pm_begin or imx6_board_pm_end functions"
+			" already registered\n");
+		ret = -EBUSY;
+		goto out_fn_ptrs;
+	}
+
+	imx6_board_pm_begin = mca_cc6ul_suspend_begin;
+	imx6_board_pm_end = mca_cc6ul_suspend_end;
 
 	return 0;
 
+out_fn_ptrs:
+	pm_power_off = NULL;
+out_sysfs_remove:
+	pmca = NULL;
+	sysfs_remove_group(&mca->dev->kobj, &mca_cc6ul_attr_group);
 out_dev:
 	mfd_remove_devices(mca->dev);
 err:
@@ -343,6 +394,9 @@ err:
 
 void mca_cc6ul_device_exit(struct mca_cc6ul *mca)
 {
+	imx6_board_pm_begin = NULL;
+	imx6_board_pm_end = NULL;
+	pm_power_off = NULL;
 	pmca = NULL;
 	sysfs_remove_group(&mca->dev->kobj, &mca_cc6ul_attr_group);
 	mfd_remove_devices(mca->dev);
