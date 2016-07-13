@@ -73,7 +73,7 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_mca_cc6ul>;
 
-		gpio {
+		mca_gpio: gpio {
 			compatible = "digi,mca-cc6ul-gpio";
 			gpio-controller;
 			#gpio-cells = <2>;
