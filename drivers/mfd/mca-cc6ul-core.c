@@ -221,7 +221,7 @@ static ssize_t hwver_show(struct device *dev, struct device_attribute *attr,
 {
 	struct mca_cc6ul *mca = dev_get_drvdata(dev);
 
-	return sprintf(buf, "0x%04x\n", mca->hwver);
+	return sprintf(buf, "%d\n", mca->hw_version);
 }
 static DEVICE_ATTR(hw_version, S_IRUGO, hwver_show, NULL);
 
@@ -231,7 +231,8 @@ static ssize_t fwver_show(struct device *dev, struct device_attribute *attr,
 {
 	struct mca_cc6ul *mca = dev_get_drvdata(dev);
 
-	return sprintf(buf, "0x%04x\n", mca->fwver);
+	return sprintf(buf, "%d.%d\n",
+		       (u8)(mca->fw_version >> 8), (u8)mca->fw_version);
 }
 static DEVICE_ATTR(fw_version, S_IRUGO, fwver_show, NULL);
 
@@ -359,10 +360,37 @@ static int mca_cc6ul_restart_handler(struct notifier_block *nb,
 int mca_cc6ul_device_init(struct mca_cc6ul *mca, u32 irq)
 {
 	int ret;
+	unsigned int val;
+
+	ret = regmap_read(mca->regmap, MCA_CC6UL_DEVICE_ID, &val);
+	if (ret != 0) {
+		dev_err(mca->dev, "Cannot read MCA Device ID (%d)\n", ret);
+		return ret;
+	}
+	mca->dev_id = (u8)val;
+
+	if (mca->dev_id != MCA_CC6UL_DEVICE_ID_VAL) {
+		dev_err(mca->dev, "Invalid MCA Device ID (%x)\n", mca->dev_id);
+		return -ENODEV;
+	}
+
+	ret = regmap_read(mca->regmap, MCA_CC6UL_HW_VER, &val);
+	if (ret != 0) {
+		dev_err(mca->dev, "Cannot read MCA Hardware Version (%d)\n",
+			ret);
+		return ret;
+	}
+	mca->hw_version = (u8)val;
+
+	ret = regmap_bulk_read(mca->regmap, MCA_CC6UL_FW_VER_L, &val, 2);
+	if (ret != 0) {
+		dev_err(mca->dev, "Cannot read MCA Firmware Version (%d)\n",
+			ret);
+		return ret;
+	}
+	mca->fw_version = (u16)val;
 
 	mca->chip_irq = irq;
-
-	/* TODO: Check HW and FW version */
 
 	ret = mca_cc6ul_irq_init(mca);
 	if (ret != 0) {

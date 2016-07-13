@@ -31,6 +31,8 @@
 #endif
 #define MCA_CC6UL_MAX_FRAME_DATA_LEN	256
 
+#define MCA_CC6UL_DEVICE_ID_VAL		0x61
+
 /* Interrupts */
 enum mca_cc6ul_irqs {
 	MCA_CC6UL_IRQ_RTC_ALARM,
@@ -56,8 +58,9 @@ enum mca_cc6ul_irqs {
 
 struct mca_cc6ul {
 	struct device *dev;
-	u16 hwver;
-	u16 fwver;
+	u8 dev_id;
+	u8 hw_version;
+	u16 fw_version;
 	u32 flags;
 	struct regmap *regmap;
 	struct regmap_irq_chip_data *regmap_irq;

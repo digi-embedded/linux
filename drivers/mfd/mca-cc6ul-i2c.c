@@ -52,7 +52,7 @@ static const struct regmap_range mca_cc6ul_volatile_ranges[] = {
 	 *
 	 * For this reasons we will consider all registers volatile.
 	 */
-	regmap_reg_range(MCA_CC6UL_HWVER_L, MCA_CC6UL_UID_9),
+	regmap_reg_range(MCA_CC6UL_DEVICE_ID, MCA_CC6UL_UID_9),
 	regmap_reg_range(MCA_CC6UL_IRQ_MASK_0, MCA_CC6UL_IRQ_MASK_3),
 	regmap_reg_range(MCA_CC6UL_PWR_KEY_DEBOUNCE, MCA_CC6UL_PWR_KEY_GUARD),
 	regmap_reg_range(MCA_CC6UL_RTC_CONTROL, MCA_CC6UL_RTC_CONTROL),
