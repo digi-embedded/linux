@@ -1875,8 +1875,8 @@ static int serial_imx_suspend(struct platform_device *dev, pm_message_t state)
 		if (of_machine_is_compatible("digi,ccimx6sbc") &&
 		    mx6q_get_board_version() >= 2) {
 			if (gpio_is_valid(sport->pwr_en_gpio))
-				gpio_set_value(sport->pwr_en_gpio,
-					       sport->pwr_en_act_low ? 1 : 0);
+				gpio_set_value_cansleep(sport->pwr_en_gpio,
+							sport->pwr_en_act_low ? 1 : 0);
 		}
 	}
 
@@ -1934,8 +1934,8 @@ static int serial_imx_resume(struct platform_device *dev)
 		if (of_machine_is_compatible("digi,ccimx6sbc") &&
 		    mx6q_get_board_version() >= 2) {
 			if (gpio_is_valid(sport->pwr_en_gpio))
-				gpio_set_value(sport->pwr_en_gpio,
-					       sport->pwr_en_act_low ? 0 : 1);
+				gpio_set_value_cansleep(sport->pwr_en_gpio,
+							sport->pwr_en_act_low ? 0 : 1);
 		}
 	}
 

@@ -303,7 +303,7 @@ static void ccardimx28_init_bt(void)
 	}
 	/* Start with Power pin low, then set high after 5ms to power BT */
 	msleep(5);
-	gpio_set_value(CCARDIMX28_BT_PWD_L, 1);
+	gpio_set_value_cansleep(CCARDIMX28_BT_PWD_L, 1);
 	/* Free the BT power pin to allow controlling it from user space */
 	gpio_free(CCARDIMX28_BT_PWD_L);
 }
@@ -324,9 +324,9 @@ static void ccardimx28_init_wifi(void)
 		if (!gpio_request_one(pwrdown_gpio, GPIOF_DIR_OUT,
 			      "wifi_chip_pwd_l")) {
 			/* Start with Power pin low, then set high to power Wifi */
-			gpio_set_value(pwrdown_gpio, 0);
+			gpio_set_value_cansleep(pwrdown_gpio, 0);
 			udelay(20);	/* minimum is 5us */
-			gpio_set_value(pwrdown_gpio, 1);
+			gpio_set_value_cansleep(pwrdown_gpio, 1);
 			/*
 			 * Free the Wifi chip PWD pin to allow controlling
 			 * it from user space
@@ -437,7 +437,7 @@ static void __init ccardimx28_post_init(void)
 	 */
 	if (!gpio_request_one(CCARDIMX28_FEC1_PHY_RESET, GPIOF_DIR_OUT,
 			      "enet1-phy-reset")) {
-		gpio_set_value(CCARDIMX28_FEC1_PHY_RESET, 1);
+		gpio_set_value_cansleep(CCARDIMX28_FEC1_PHY_RESET, 1);
 		gpio_free(CCARDIMX28_FEC1_PHY_RESET);
 	}
 
@@ -524,18 +524,18 @@ static void __init tx28_post_init(void)
 	}
 
 	/* Power up fec phy */
-	gpio_set_value(TX28_FEC_PHY_POWER, 1);
+	gpio_set_value_cansleep(TX28_FEC_PHY_POWER, 1);
 	msleep(26); /* 25ms according to data sheet */
 
 	/* Mode strap pins */
-	gpio_set_value(ENET0_RX_EN__GPIO_4_2, 1);
-	gpio_set_value(ENET0_RXD0__GPIO_4_3, 1);
-	gpio_set_value(ENET0_RXD1__GPIO_4_4, 1);
+	gpio_set_value_cansleep(ENET0_RX_EN__GPIO_4_2, 1);
+	gpio_set_value_cansleep(ENET0_RXD0__GPIO_4_3, 1);
+	gpio_set_value_cansleep(ENET0_RXD1__GPIO_4_4, 1);
 
 	udelay(100); /* minimum assertion time for nRST */
 
 	/* Deasserting FEC PHY RESET */
-	gpio_set_value(TX28_FEC_PHY_RESET, 1);
+	gpio_set_value_cansleep(TX28_FEC_PHY_RESET, 1);
 
 	pinctrl_put(pctl);
 }

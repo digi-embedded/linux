@@ -508,7 +508,7 @@ static int ci_hdrc_imx_probe(struct platform_device *pdev)
 		if (gpio_request_one(reset_gpio, GPIOF_OUT_INIT_LOW,
 			"usb_host_reset") >= 0) {
 			if( gpio_direction_output(reset_gpio, 0) >= 0)
-					gpio_set_value(reset_gpio, 1);
+					gpio_set_value_cansleep(reset_gpio, 1);
 			else
 				dev_warn(&pdev->dev,
 					"%d: gpio direction failed",reset_gpio);

@@ -347,7 +347,7 @@ static inline int flexcan_transceiver_enable(const struct flexcan_priv *priv)
 {
 	if (priv->pdata){
 		if(gpio_is_valid(priv->stby_gpio))
-			gpio_set_value(priv->stby_gpio, 0);
+			gpio_set_value_cansleep(priv->stby_gpio, 0);
 	} else {
 		if (priv->pdata && priv->pdata->transceiver_switch) {
 			priv->pdata->transceiver_switch(1);
@@ -365,7 +365,7 @@ static inline int flexcan_transceiver_disable(const struct flexcan_priv *priv)
 {
 	if (priv->pdata){
 		if(gpio_is_valid(priv->stby_gpio))
-			gpio_set_value(priv->stby_gpio, 1);
+			gpio_set_value_cansleep(priv->stby_gpio, 1);
 	} else {
 		if (priv->pdata && priv->pdata->transceiver_switch) {
 			priv->pdata->transceiver_switch(0);

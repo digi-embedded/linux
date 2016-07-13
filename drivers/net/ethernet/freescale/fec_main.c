@@ -254,8 +254,8 @@ static void activityled_timer_fn(unsigned long ndev)
 
 	if (fep->rxtx_activity) {
 		/* toggle RX/TX Ethernet activity LED */
-		gpio_set_value(fep->gpio_actled,
-			       !gpio_get_value(fep->gpio_actled));
+		gpio_set_value_cansleep(fep->gpio_actled,
+					!gpio_get_value(fep->gpio_actled));
 		mod_timer(&fep->activityled_timer,
 			  jiffies + ACTLED_TOGGLE_TIMEOUT);
 		fep->rxtx_cnt = 0;
@@ -266,8 +266,8 @@ static void activityled_timer_fn(unsigned long ndev)
 				  jiffies + ACTLED_TOGGLE_TIMEOUT);
 		else {
 			/* switch LED off */
-			gpio_set_value(fep->gpio_actled,
-				       fep->gpio_actled_inverted);
+			gpio_set_value_cansleep(fep->gpio_actled,
+						fep->gpio_actled_inverted);
 			fep->rxtx_cnt = 0;
 		}
 	}
@@ -1815,8 +1815,8 @@ static void fec_get_mac(struct net_device *ndev)
 static void gpioled_phylink(struct fec_enet_private *fep)
 {
 	if (fep->gpio_linkled >= 0)
-		gpio_set_value(fep->gpio_linkled,
-			       fep->link ^ fep->gpio_linkled_inverted);
+		gpio_set_value_cansleep(fep->gpio_linkled,
+					fep->link ^ fep->gpio_linkled_inverted);
 }
 
 static void fec_enet_adjust_link(struct net_device *ndev)
@@ -3421,7 +3421,7 @@ static void fec_reset_phy(struct platform_device *pdev)
 		return;
 	}
 	msleep(msec);
-	gpio_set_value(phy_reset, 1);
+	gpio_set_value_cansleep(phy_reset, 1);
 }
 
 static void fec_gpio_led_init(struct platform_device *pdev)

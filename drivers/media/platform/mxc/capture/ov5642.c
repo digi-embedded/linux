@@ -3050,9 +3050,9 @@ static void ov5642_standby(s32 enable)
 		return;
 
 	if (enable)
-		gpio_set_value(pwn_gpio, 1);
+		gpio_set_value_cansleep(pwn_gpio, 1);
 	else
-		gpio_set_value(pwn_gpio, 0);
+		gpio_set_value_cansleep(pwn_gpio, 0);
 
 	msleep(2);
 }
@@ -3065,19 +3065,19 @@ static void ov5642_reset(void)
 	mxc_camera_common_lock();
 
 	if (gpio_is_valid(rst_gpio))
-		gpio_set_value(rst_gpio, 1);
+		gpio_set_value_cansleep(rst_gpio, 1);
 
 	if (gpio_is_valid(pwn_gpio)) {
-		gpio_set_value(pwn_gpio, 1);
+		gpio_set_value_cansleep(pwn_gpio, 1);
 		msleep(5);
-		gpio_set_value(pwn_gpio, 0);
+		gpio_set_value_cansleep(pwn_gpio, 0);
 		msleep(5);
 	}
 
 	if (gpio_is_valid(rst_gpio)) {
-		gpio_set_value(rst_gpio, 0);
+		gpio_set_value_cansleep(rst_gpio, 0);
 		msleep(1);
-		gpio_set_value(rst_gpio, 1);
+		gpio_set_value_cansleep(rst_gpio, 1);
 		msleep(20);
 	}
 
@@ -3085,7 +3085,7 @@ static void ov5642_reset(void)
 	mxc_camera_common_unlock();
 
 	if (gpio_is_valid(pwn_gpio))
-		gpio_set_value(pwn_gpio, 1);
+		gpio_set_value_cansleep(pwn_gpio, 1);
 }
 
 static int ov5642_power_on(struct device *dev)
