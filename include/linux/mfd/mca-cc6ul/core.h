@@ -19,6 +19,7 @@
 #define MCA_CC6UL_DRVNAME_WATCHDOG	"mca-cc6ul-watchdog"
 #define MCA_CC6UL_DRVNAME_GPIO		"mca-cc6ul-gpio"
 #define MCA_CC6UL_DRVNAME_PWRKEY	"mca-cc6ul-pwrkey"
+#define MCA_CC6UL_DRVNAME_ADC		"mca-cc6ul-adc"
 
 /* Uncomment to add CRC to frames */
 //#define MCA_CC6UL_CRC

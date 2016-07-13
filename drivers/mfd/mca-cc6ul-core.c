@@ -94,6 +94,10 @@ static const struct mfd_cell mca_cc6ul_devs[] = {
 		.resources      = mca_cc6ul_pwrkey_resources,
 		.of_compatible = "digi,mca-cc6ul-pwrkey",
 	},
+	{
+		.name           = MCA_CC6UL_DRVNAME_ADC,
+		.of_compatible = "digi,mca-cc6ul-adc",
+	},
 };
 
 #ifdef MCA_CC6UL_CRC

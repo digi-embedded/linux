@@ -64,3 +64,8 @@
 &usdhc2 {
 	status = "okay";
 };
+
+/* MCA IOs connected to Grove connectors configured as ADCs */
+&mca_adc {
+	digi,adc-ch-list = <0 4>;
+};
