@@ -46,6 +46,10 @@
 	status = "okay";
 };
 
+&caam_keyblob {
+	status = "okay";
+};
+
 &ldb {
 	status = "okay";
 
