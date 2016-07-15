@@ -23,6 +23,10 @@
 	status = "okay";
 };
 
+&caam_keyblob {
+	status = "okay";
+};
+
 /* UART5 (Console) */
 &uart5 {
 	status = "okay";
