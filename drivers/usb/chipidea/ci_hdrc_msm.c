@@ -20,7 +20,6 @@
 static int ci_hdrc_msm_notify_event(struct ci_hdrc *ci, unsigned event)
 {
 	struct device *dev = ci->gadget.dev.parent;
-	int val;
 
 	switch (event) {
 	case CI_HDRC_CONTROLLER_RESET_EVENT:
@@ -35,10 +34,6 @@ static int ci_hdrc_msm_notify_event(struct ci_hdrc *ci, unsigned event)
 		 * Put the phy in non-driving mode. Otherwise host
 		 * may not detect soft-disconnection.
 		 */
-		val = usb_phy_io_read(ci->usb_phy, ULPI_FUNC_CTRL);
-		val &= ~ULPI_FUNC_CTRL_OPMODE_MASK;
-		val |= ULPI_FUNC_CTRL_OPMODE_NONDRIVING;
-		usb_phy_io_write(ci->usb_phy, val, ULPI_FUNC_CTRL);
 		usb_phy_notify_disconnect(ci->usb_phy, USB_SPEED_UNKNOWN);
 		break;
 	default:

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2014 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright (C) 2011-2015 Freescale Semiconductor, Inc. All Rights Reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,6 +25,7 @@
 #define MMDC0_MDCF1			0x10
 #define MMDC0_MDMISC		0x18
 #define MMDC0_MDSCR		0x1c
+#define MMDC0_MAARCR		0x400
 #define MMDC0_MAPSR			0x404
 #define MMDC0_MADPCR0		0x410
 #define MMDC0_MPZQHWCTRL	0x800
@@ -43,6 +44,9 @@
 
 #define L2_CACHE_SYNC		0x730
 
+#define IMX6QP_REVISION_ID 0x630100
+#define ANADIG_DIGPROG     0x260
+
 .extern iram_tlb_phys_addr
 #ifdef CONFIG_SMP
 .extern imx_scu_base
@@ -54,6 +58,16 @@
 .globl wfe_ddr3_freq_change_end
 
 	.align 3
+
+	.macro is_mx6qp
+
+	/* check if the SOC is i.MX6QP */
+	ldr	r0, =IMX_IO_P2V(MX6Q_ANATOP_BASE_ADDR)
+	ldr	r1, [r0, #ANADIG_DIGPROG]
+	ldr	r2, =IMX6QP_REVISION_ID
+	cmp	r1, r2
+
+	.endm
 
 	.macro	switch_to_528MHz
 
@@ -509,9 +523,25 @@ poll_conreq_set_1:
 	cmp	r0, #(0x4 << 12)
 	bne	poll_conreq_set_1
 
-	ldr	r0, =0x00008010
+	/*
+	 * if requested frequency is great than
+	 * 300MHz, skip setting bypass adopt mode.
+	 */
+	ldr	r1, =300000000
+	cmp	r4, r1
+	bge	1f
+
+	is_mx6qp
+	bne	1f
+	/* Switch to adopt mode, set MMDC0_MAARCR bit25~26 to 2b'01 */
+	ldr	r0, [r5, #MMDC0_MAARCR]
+	bic	r0, r0, #(0x3 << 25)
+	orr	r0, #(0x01 << 25)
+	str	r0 , [r5, #MMDC0_MAARCR]
+1:
+	ldr	r0, =0x00008050
 	str	r0, [r5, #MMDC0_MDSCR]
-	ldr	r0, =0x00008018
+	ldr	r0, =0x00008058
 	str	r0, [r5, #MMDC0_MDSCR]
 
 	/*
@@ -635,7 +665,7 @@ cont_1:
 	orr	r0, r0, #0x4
 	str	r0, [r5, #MMDC0_MDCF1]
 
-	ldr	r0, =0x00091680
+	ldr	r0, =0x00011680
 	str	r0, [r5, #MMDC0_MDMISC]
 
 	/* enable dqs pull down in the IOMUX. */
@@ -824,14 +854,14 @@ update_iomux1:
 	add	r8, r8, #8
 
 	/* update MISC register: WALAT, RALAT */
-	ldr	r0, =0x00081740
+	ldr	r0, =0x00001740
 	str	r0, [r5, #MMDC0_MDMISC]
 
 	/* configure ddr devices to dll on, odt. */
-	ldr	r0, =0x00028031
+	ldr	r0, =0x00048031
 	str	r0, [r5, #MMDC0_MDSCR]
 
-	ldr	r0, =0x00028039
+	ldr	r0, =0x00048039
 	str	r0, [r5, #MMDC0_MDSCR]
 
 	/* delay for while. */
@@ -848,10 +878,10 @@ cont7:
 	bgt	delay7
 
 	/* reset dll. */
-	ldr	r0, =0x09208030
+	ldr	r0, =0x09408030
 	str	r0, [r5, #MMDC0_MDSCR]
 
-	ldr	r0, =0x09208038
+	ldr	r0, =0x09408038
 	str	r0, [r5, #MMDC0_MDSCR]
 
 	/* delay for while. */
@@ -907,7 +937,7 @@ cont8:
 	add	r8, r8, #8
 
 	ldr	r2, =0x4818
-	str	r0, [r5, r2]
+	str	r3, [r5, r2]
 
 	/* delay for while. */
 	ldr	r1, =40
@@ -970,6 +1000,17 @@ update_calib:
 	bic	r0, r0, #(1 << 8)
 	str	r0, [r5, #MMDC0_MADPCR0]
 
+	is_mx6qp
+	bne	3f
+	/*
+	 * Switch back to adopt_bp mode, set MMDC0_MAARCR
+	 * bit25~26 to 2b'10.
+	 */
+	ldr	r0, [r5, #MMDC0_MAARCR]
+	bic	r0, r0, #(0x3 << 25)
+	orr	r0, r0, #(0x2 << 25)
+	str	r0, [r5, #MMDC0_MAARCR]
+3:
 	mov	r0, #0x0
 	str	r0, [r5, #MMDC0_MDSCR]
 poll_conreq_clear_2:

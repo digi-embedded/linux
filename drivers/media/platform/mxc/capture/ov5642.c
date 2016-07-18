@@ -3059,6 +3059,9 @@ static void ov5642_standby(s32 enable)
 
 static void ov5642_reset(void)
 {
+	if (!gpio_is_valid(pwn_gpio) || !gpio_is_valid(rst_gpio))
+		return;
+
 	mxc_camera_common_lock();
 
 	if (gpio_is_valid(rst_gpio))

@@ -1,20 +1,54 @@
 /****************************************************************************
 *
-*    Copyright (C) 2005 - 2014 by Vivante Corp.
+*    The MIT License (MIT)
 *
-*    This program is free software; you can redistribute it and/or modify
-*    it under the terms of the GNU General Public License as published by
-*    the Free Software Foundation; either version 2 of the license, or
-*    (at your option) any later version.
+*    Copyright (c) 2014 Vivante Corporation
+*
+*    Permission is hereby granted, free of charge, to any person obtaining a
+*    copy of this software and associated documentation files (the "Software"),
+*    to deal in the Software without restriction, including without limitation
+*    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+*    and/or sell copies of the Software, and to permit persons to whom the
+*    Software is furnished to do so, subject to the following conditions:
+*
+*    The above copyright notice and this permission notice shall be included in
+*    all copies or substantial portions of the Software.
+*
+*    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+*    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+*    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+*    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+*    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+*    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+*    DEALINGS IN THE SOFTWARE.
+*
+*****************************************************************************
+*
+*    The GPL License (GPL)
+*
+*    Copyright (C) 2014  Vivante Corporation
+*
+*    This program is free software; you can redistribute it and/or
+*    modify it under the terms of the GNU General Public License
+*    as published by the Free Software Foundation; either version 2
+*    of the License, or (at your option) any later version.
 *
 *    This program is distributed in the hope that it will be useful,
 *    but WITHOUT ANY WARRANTY; without even the implied warranty of
-*    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+*    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *    GNU General Public License for more details.
 *
 *    You should have received a copy of the GNU General Public License
-*    along with this program; if not write to the Free Software
-*    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+*    along with this program; if not, write to the Free Software Foundation,
+*    Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+*
+*****************************************************************************
+*
+*    Note: This software is released under dual MIT and GPL licenses. A
+*    recipient may use this file under the terms of either the MIT license or
+*    GPL License. If you wish to use only one license not the other, you can
+*    indicate your decision by deleting one of the above license notices in your
+*    version of this file.
 *
 *****************************************************************************/
 
@@ -35,7 +69,7 @@ gceMMU_TYPE;
 
 #define gcdMMU_TABLE_DUMP       0
 
-#define gcdUSE_MMU_EXCEPTION    1
+#define gcdUSE_MMU_EXCEPTION    0
 
 /*
     gcdMMU_CLEAR_VALUE
@@ -307,9 +341,11 @@ OnError:
 }
 
 static gctUINT32
-_SetPage(gctUINT32 PageAddress)
+_SetPage(gctUINT32 PageAddress, gctUINT32 PageAddressExt)
 {
     return PageAddress
+           /* AddressExt */
+           | (PageAddressExt << 4)
            /* writable */
            | (1 << 2)
            /* Ignore exception */
@@ -441,6 +477,7 @@ _FillFlatMapping(
     gctUINT32 sStart = (start & gcdMMU_STLB_64K_MASK) >> gcdMMU_STLB_64K_SHIFT;
     gctUINT32 sEnd = (end & gcdMMU_STLB_64K_MASK) >> gcdMMU_STLB_64K_SHIFT;
     gctBOOL ace = gckHARDWARE_IsFeatureAvailable(Mmu->hardware, gcvFEATURE_ACE);
+    gctPHYS_ADDR_T physical;
 
     /* Grab the mutex. */
     gcmkONERROR(gckOS_AcquireMutex(Mmu->os, Mmu->pageTableMutex, gcvINFINITE));
@@ -489,7 +526,9 @@ _FillFlatMapping(
             gcmkONERROR(gckOS_GetPhysicalAddress(
                 Mmu->os,
                 stlb->logical,
-                &stlb->physBase));
+                &physical));
+
+            gcmkSAFECASTPHYSADDRT(stlb->physBase, physical);
 
             if (stlb->physBase & (gcdMMU_STLB_64K_SIZE - 1))
             {
@@ -532,7 +571,7 @@ _FillFlatMapping(
             while (sStart <= last)
             {
                 gcmkASSERT(!(start & gcdMMU_PAGE_64K_MASK));
-                _WritePageEntry(stlb->logical + sStart, _SetPage(start));
+                _WritePageEntry(stlb->logical + sStart, _SetPage(start, 0));
 #if gcdMMU_TABLE_DUMP
                 gckOS_Print("%s(%d): insert STLB[%d]: %08x\n",
                     __FUNCTION__, __LINE__,
@@ -700,7 +739,8 @@ _SetupDynamicSpace(
     gceSTATUS status;
     gcsDynamicSpaceNode_PTR nodeArray = gcvNULL;
     gctINT i, nodeArraySize = 0;
-    gctUINT32 physical;
+    gctPHYS_ADDR_T physical;
+    gctUINT32 address;
     gctINT numEntries = 0;
     gctUINT32_PTR map;
     gctBOOL acquired = gcvFALSE;
@@ -759,6 +799,8 @@ _SetupDynamicSpace(
                 Mmu->pageTableLogical,
                 &physical));
 
+    gcmkSAFECASTPHYSADDRT(address, physical);
+
     /* Grab the mutex. */
     gcmkONERROR(gckOS_AcquireMutex(Mmu->os, Mmu->pageTableMutex, gcvINFINITE));
     acquired = gcvTRUE;
@@ -768,7 +810,7 @@ _SetupDynamicSpace(
          i < (gctINT)Mmu->dynamicMappingStart + numEntries;
          i++)
     {
-        mtlbEntry = physical
+        mtlbEntry = address
                   /* 4KB page size */
                   | (0 << 2)
                   /* Ignore exception */
@@ -791,7 +833,7 @@ _SetupDynamicSpace(
                 i,
                 _ReadPageEntry(Mmu->mtlbLogical + i));
 #endif
-        physical += gcdMMU_STLB_4K_SIZE;
+        address += gcdMMU_STLB_4K_SIZE;
     }
 
     /* Release the mutex. */
@@ -862,6 +904,7 @@ _Construct(
     gctUINT32 physBase;
     gctUINT32 physSize;
     gctUINT32 gpuAddress;
+    gctPHYS_ADDR_T gpuPhysical;
 
     gcmkHEADER_ARG("Kernel=0x%x MmuSize=%lu", Kernel, MmuSize);
 
@@ -983,7 +1026,9 @@ _Construct(
             gckOS_QueryOption(mmu->os, "physSize", &physSize));
 
         gcmkONERROR(
-            gckOS_CPUPhysicalToGPUPhysical(mmu->os, physBase, &gpuAddress));
+            gckOS_CPUPhysicalToGPUPhysical(mmu->os, physBase, &gpuPhysical));
+
+        gcmkSAFECASTPHYSADDRT(gpuAddress, gpuPhysical);
 
         /* Setup [physBase - physSize) flat mapping. */
         gcmkONERROR(_FillFlatMapping(
@@ -1500,6 +1545,9 @@ _AllocatePages(
             {
                 /* Time to move out the trash! */
                 gcmkONERROR(_Collect(Mmu));
+
+                /* We are going to search from start, so reset previous to start. */
+                previous = ~0U;
             }
             else
             {
@@ -1809,7 +1857,7 @@ gckMMU_FreePages(
 gceSTATUS
 gckMMU_SetPage(
     IN gckMMU Mmu,
-    IN gctUINT32 PageAddress,
+    IN gctPHYS_ADDR_T PageAddress,
     IN gctUINT32 *PageEntry
     )
 {
@@ -1819,6 +1867,8 @@ gckMMU_SetPage(
     gckMMU mmu;
     gctUINT32 offset = (gctUINT32)PageEntry - (gctUINT32)Mmu->pageTableLogical;
 #endif
+    gctUINT32 addressExt;
+    gctUINT32 address;
 
     gcmkHEADER_ARG("Mmu=0x%x", Mmu);
 
@@ -1827,13 +1877,18 @@ gckMMU_SetPage(
     gcmkVERIFY_ARGUMENT(PageEntry != gcvNULL);
     gcmkVERIFY_ARGUMENT(!(PageAddress & 0xFFF));
 
+    /* [31:0]. */
+    address    = (gctUINT32)(PageAddress & 0xFFFFFFFF);
+    /* [39:32]. */
+    addressExt = (gctUINT32)((PageAddress >> 32) & 0xFF);
+
     if (Mmu->hardware->mmuVersion == 0)
     {
-        _WritePageEntry(PageEntry, PageAddress);
+        _WritePageEntry(PageEntry, address);
     }
     else
     {
-        _WritePageEntry(PageEntry, _SetPage(PageAddress));
+        _WritePageEntry(PageEntry, _SetPage(address, addressExt));
     }
 
 #if gcdMIRROR_PAGETABLE
@@ -1847,11 +1902,11 @@ gckMMU_SetPage(
 
             if (mmu->hardware->mmuVersion == 0)
             {
-                _WritePageEntry(pageEntry, PageAddress);
+                _WritePageEntry(pageEntry, address);
             }
             else
             {
-                _WritePageEntry(pageEntry, _SetPage(PageAddress));
+                _WritePageEntry(pageEntry, _SetPage(address, addressExt));
             }
         }
 

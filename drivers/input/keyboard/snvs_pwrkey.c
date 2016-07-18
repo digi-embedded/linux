@@ -18,6 +18,7 @@
 #include <linux/jiffies.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/clk.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
 #include <linux/platform_device.h>
@@ -31,6 +32,7 @@
 
 struct pwrkey_drv_data {
 	void __iomem *ioaddr;
+	struct clk *clk;
 	int irq;
 	int keycode;
 	int keystate;  /* 1:pressed */
@@ -46,14 +48,17 @@ static void imx_imx_snvs_check_for_events(unsigned long data)
 	void __iomem *ioaddr = pdata->ioaddr;
 	u32 state;
 
+	clk_enable(pdata->clk);
 	state = ((readl_relaxed(ioaddr + SNVS_HPSR_REG) & SNVS_HPSR_BTN) ?
 		1 : 0);
+	clk_disable(pdata->clk);
 
 	/* only report new event if status changed */
 	if (state ^ pdata->keystate) {
 		pdata->keystate = state;
 		input_event(input, EV_KEY, pdata->keycode, state);
 		input_sync(input);
+		pm_relax(pdata->input->dev.parent);
 	}
 
 	/* repeat check if pressed long */
@@ -70,12 +75,15 @@ static irqreturn_t imx_snvs_pwrkey_interrupt(int irq, void *dev_id)
 	void __iomem *ioaddr = pdata->ioaddr;
 	u32 lp_status;
 
+	clk_enable(pdata->clk);
+	pm_wakeup_event(pdata->input->dev.parent, 0);
 	lp_status = readl_relaxed(ioaddr + SNVS_LPSR_REG);
 	if (lp_status & SNVS_LPSR_SPO)
 		mod_timer(&pdata->check_timer, jiffies + msecs_to_jiffies(2));
 
 	/* clear SPO status */
 	writel_relaxed(lp_status, ioaddr + SNVS_LPSR_REG);
+	clk_disable(pdata->clk);
 
 	return IRQ_HANDLED;
 }
@@ -101,6 +109,12 @@ static int imx_snvs_pwrkey_probe(struct platform_device *pdev)
 	if (IS_ERR(pdata->ioaddr))
 		return PTR_ERR(pdata->ioaddr);
 
+	pdata->clk = devm_clk_get(&pdev->dev, NULL);
+	if (IS_ERR(pdata->clk)) {
+		dev_err(&pdev->dev, "can't get snvs clock\n");
+		pdata->clk = NULL;
+	}
+
 	if (of_property_read_u32(np, "fsl,keycode", &pdata->keycode)) {
 		pdata->keycode = KEY_POWER;
 		dev_warn(&pdev->dev, "KEY_POWER without setting in dts\n");
@@ -112,6 +126,12 @@ static int imx_snvs_pwrkey_probe(struct platform_device *pdev)
 	if (pdata->irq < 0) {
 		dev_err(&pdev->dev, "no irq defined in platform data\n");
 		return -EINVAL;
+	}
+
+	ret = clk_prepare_enable(pdata->clk);
+	if (ret) {
+		dev_err(&pdev->dev, "can't enable snvs clock\n");
+		return ret;
 	}
 
 	ioaddr = pdata->ioaddr;
@@ -129,17 +149,17 @@ static int imx_snvs_pwrkey_probe(struct platform_device *pdev)
 	if (pdata->irq >= 0) {
 		ret = devm_request_irq(&pdev->dev, pdata->irq,
 					imx_snvs_pwrkey_interrupt,
-					IRQF_TRIGGER_HIGH, pdev->name, pdev);
+					IRQF_TRIGGER_HIGH | IRQF_NO_SUSPEND, pdev->name, pdev);
 		if (ret) {
 			dev_err(&pdev->dev, "interrupt not available.\n");
-			return ret;
+			goto err_clk;
 		}
 	}
 
 	input = devm_input_allocate_device(&pdev->dev);
 	if (!input) {
 		dev_err(&pdev->dev, "failed to allocate the input device\n");
-		return -ENOMEM;
+		goto err_clk;
 	}
 
 	input->name = pdev->name;
@@ -153,17 +173,22 @@ static int imx_snvs_pwrkey_probe(struct platform_device *pdev)
 	if (ret < 0) {
 		dev_err(&pdev->dev, "failed to register input device\n");
 		input_free_device(input);
-		return ret;
+		goto err_clk;
 	}
 
 	pdata->input = input;
 	platform_set_drvdata(pdev, pdata);
 
 	device_init_wakeup(&pdev->dev, pdata->wakeup);
+	clk_disable(pdata->clk);
 
 	dev_info(&pdev->dev, "i.MX snvs powerkey probed\n");
 
 	return 0;
+
+err_clk:
+	clk_disable_unprepare(pdata->clk);
+	return ret;
 }
 
 static int imx_snvs_pwrkey_remove(struct platform_device *pdev)
@@ -172,6 +197,7 @@ static int imx_snvs_pwrkey_remove(struct platform_device *pdev)
 
 	input_unregister_device(pdata->input);
 	del_timer_sync(&pdata->check_timer);
+	clk_disable_unprepare(pdata->clk);
 
 	return 0;
 }

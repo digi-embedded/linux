@@ -45,6 +45,10 @@
 	status = "okay";
 };
 
+&caam_keyblob {
+	status = "okay";
+};
+
 &ldb {
 	status = "okay";
 
@@ -124,6 +128,11 @@
 };
 
 &pcie {
+	pinctrl-names = "default";
+	reset-gpio = <&gpio7 8 0>;
+	wake-up-gpio = <&gpio7 7 0>;
+	disable-gpio = <&gpio1 4 0>;
+	vin-supply = <&ldo6>;
 	status = "okay";
 };
 

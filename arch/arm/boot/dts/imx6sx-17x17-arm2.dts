@@ -121,6 +121,20 @@
 };
 
 &cpu0 {
+	operating-points = <
+		/* kHz    uV */
+		996000  1275000
+		792000  1175000
+		396000  1075000
+		198000	975000
+		>;
+	fsl,soc-operating-points = <
+		/* ARM kHz      SOC uV */
+		996000	1175000
+		792000	1175000
+		396000	1175000
+		198000	1175000
+	>;
 	arm-supply = <&sw1a_reg>;
 	soc-supply = <&sw1c_reg>;
 };
@@ -497,6 +511,9 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_usbotg1_1>;
 	disable-over-current;
+	srp-disable;
+	hnp-disable;
+	adp-disable;
 	status = "okay";
 };
 

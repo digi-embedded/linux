@@ -23,6 +23,7 @@
 
 #include "clk.h"
 #include "common.h"
+#include "hardware.h"
 
 #define CCM_CCGR_OFFSET(index)  (index * 2)
 #define CCDR    0x4
@@ -141,7 +142,6 @@ static u32 share_count_ssi2;
 static u32 share_count_ssi3;
 static u32 share_count_sai1;
 static u32 share_count_sai2;
-static bool uart_from_osc;
 
 /*
  * As IMX6SX_CLK_M4_PRE_SEL is NOT a glitchless MUX, so when
@@ -174,13 +174,6 @@ void imx6sx_set_m4_highfreq(bool high_freq)
 
 	imx_gpc_release_m4_in_sleep();
 }
-
-static int __init setup_uart_clk(char *uart_rate)
-{
-	uart_from_osc = true;
-	return 1;
-}
-__setup("uart_from_osc", setup_uart_clk);
 
 static void __init imx6sx_clocks_init(struct device_node *ccm_node)
 {
@@ -706,7 +699,7 @@ static int __init imx_amp_power_init(void)
 	int i;
 	void __iomem *shared_mem_base;
 
-	if (!imx_src_is_m4_enabled())
+	if (!(imx_src_is_m4_enabled() && cpu_is_imx6sx()))
 		return 0;
 
 	amp_power_mutex = imx_sema4_mutex_create(0, MCC_POWER_SHMEM_NUMBER);

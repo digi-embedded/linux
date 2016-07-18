@@ -10,15 +10,29 @@
 
 /{
 	memory {
-		linux,usable-memory = <0x80000000 0x3ff00000>;
-		reg = <0x80000000 0x40000000>;
+		linux,usable-memory = <0x80000000 0x1ff00000>,
+				<0xa0000000 0x1ff00000>,
+				<0xc0000000 0x40000000>;
 	};
+};
+
+&iomuxc {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_hog>;
 };
 
 /*
  * The flollowing modules are conflicting with M4, disable them when m4
  * is running.
  */
+&adc1 {
+        status = "disabled";
+};
+
+&adc2 {
+        status = "disabled";
+};
+
 &flexcan1 {
 	status = "disabled";
 };
@@ -39,16 +53,8 @@
 	status = "okay";
 };
 
-&uart2 {
-	status = "disabled";
-};
-
-&adc1 {
-        status = "disabled";
-};
-
-&adc2 {
-        status = "disabled";
+&ocram {
+	reg = <0x00901000 0xf000>;
 };
 
 &qspi1 {
@@ -60,8 +66,12 @@
 	status = "okay";
 };
 
-&ocram {
-	reg = <0x00901000 0x1E000>;
+&rpmsg{
+	status = "okay";
+};
+
+&uart2 {
+	status = "disabled";
 };
 
 &clks {

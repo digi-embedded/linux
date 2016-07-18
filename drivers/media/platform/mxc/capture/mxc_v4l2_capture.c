@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2014 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright 2004-2015 Freescale Semiconductor, Inc. All Rights Reserved.
  */
 
 /*
@@ -462,16 +462,14 @@ static int mxc_streamon(cam_data *cam)
 		list_del(cam->ready_q.next);
 		list_add_tail(&frame->queue, &cam->working_q);
 		frame->ipu_buf_num = cam->ping_pong_csi;
-		err = cam->enc_update_eba(cam->ipu, cam->csi,
-			frame->buffer.m.offset, &cam->ping_pong_csi);
+		err = cam->enc_update_eba(cam, frame->buffer.m.offset);
 
 		frame =
 		    list_entry(cam->ready_q.next, struct mxc_v4l_frame, queue);
 		list_del(cam->ready_q.next);
 		list_add_tail(&frame->queue, &cam->working_q);
 		frame->ipu_buf_num = cam->ping_pong_csi;
-		err |= cam->enc_update_eba(cam->ipu, cam->csi,
-			 frame->buffer.m.offset, &cam->ping_pong_csi);
+		err |= cam->enc_update_eba(cam, frame->buffer.m.offset);
 		spin_unlock_irqrestore(&cam->queue_int_lock, lock_flags);
 	} else {
 		spin_unlock_irqrestore(&cam->queue_int_lock, lock_flags);
@@ -2643,9 +2641,9 @@ next:
 					 struct mxc_v4l_frame,
 					 queue);
 		if (cam->enc_update_eba)
-			if (cam->enc_update_eba(cam->ipu, cam->csi,
-						ready_frame->buffer.m.offset,
-						&cam->ping_pong_csi) == 0) {
+			if (cam->enc_update_eba(
+				cam,
+				ready_frame->buffer.m.offset) == 0) {
 				list_del(cam->ready_q.next);
 				list_add_tail(&ready_frame->queue,
 					      &cam->working_q);
@@ -2654,9 +2652,7 @@ next:
 	} else {
 		if (cam->enc_update_eba)
 			cam->enc_update_eba(
-				cam->ipu, cam->csi,
-				cam->dummy_frame.buffer.m.offset,
-				&cam->ping_pong_csi);
+				cam, cam->dummy_frame.buffer.m.offset);
 	}
 
 	cam->local_buf_num = (cam->local_buf_num == 0) ? 1 : 0;
@@ -2978,6 +2974,7 @@ static int mxc_v4l2_suspend(struct platform_device *pdev, pm_message_t state)
 
 	if (cam->overlay_on == true)
 		stop_preview(cam);
+
 	if (cam->capture_on == true)
 		mxc_enc_disable(cam);
 
@@ -3032,6 +3029,7 @@ static int mxc_v4l2_resume(struct platform_device *pdev)
 
 	if (cam->overlay_on == true)
 		start_preview(cam);
+
 	if (cam->capture_on == true) {
 		cam->capture_on = false;
 		schedule_work(&cam->r_queue_wq);

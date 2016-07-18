@@ -804,6 +804,16 @@ config RTC_DRV_M48T59
 	  This driver can also be built as a module, if so, the module
 	  will be called "rtc-m48t59".
 
+config RTC_DRV_MCA_CC6UL
+	tristate "Digi ConnectCore 6UL Micro Controller Assist RTC"
+	select MFD_MCA_CC6UL
+	help
+	  If you say Y here you will get support for the RTC in the
+	  Micro Controller Assist of Digi ConnectCore 6UL system-on-chip.
+
+	  This driver can also be built as a module, if so, the module
+	  will be called "rtc-mca-cc6ul".
+
 config RTC_DRV_MSM6242
 	tristate "Oki MSM6242"
 	help

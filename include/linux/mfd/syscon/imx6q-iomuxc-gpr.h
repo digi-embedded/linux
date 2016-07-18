@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 Freescale Semiconductor, Inc.
+ * Copyright (C) 2012-2015 Freescale Semiconductor, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -95,11 +95,13 @@
 #define IMX6Q_GPR0_DMAREQ_MUX_SEL0_IOMUX	BIT(0)
 
 #define IMX6Q_GPR1_PCIE_REQ_MASK		(0x3 << 30)
+#define IMX6Q_GPR1_PCIE_SW_RST			BIT(29)
 #define IMX6Q_GPR1_PCIE_EXIT_L1			BIT(28)
 #define IMX6Q_GPR1_PCIE_RDY_L23			BIT(27)
 #define IMX6Q_GPR1_PCIE_ENTER_L1		BIT(26)
 #define IMX6Q_GPR1_MIPI_COLOR_SW		BIT(25)
 #define IMX6Q_GPR1_DPI_OFF			BIT(24)
+#define IMX6Q_GPR1_PCIE_SW_PERST		BIT(23)
 #define IMX6Q_GPR1_EXC_MON_MASK			BIT(22)
 #define IMX6Q_GPR1_EXC_MON_OKAY			0x0
 #define IMX6Q_GPR1_EXC_MON_SLVE			BIT(22)
@@ -243,6 +245,23 @@
 #define IMX6Q_GPR4_IPU_RD_CACHE_CTL		BIT(0)
 
 #define IMX6Q_GPR5_L2_CLK_STOP			BIT(8)
+#define IMX6Q_GPR5_ENET_TX_CLK_SEL		BIT(9)
+#define IMX6Q_GPR5_PRE_PRG_SEL0_MASK		(0x3 << 12)
+#define IMX6Q_GPR5_PRE_PRG_SEL0_SHIFT		12
+#define IMX6Q_GPR5_PRE_PRG_SEL0_MSB		13
+#define IMX6Q_GPR5_PRE_PRG_SEL0_LSB		12
+#define IMX6Q_GPR5_PRE_PRG_SEL0_PRE1_PRG0_CHAN1	(0x0 << 12)
+#define IMX6Q_GPR5_PRE_PRG_SEL0_PRE1_PRG0_CHAN2	(0x1 << 12)
+#define IMX6Q_GPR5_PRE_PRG_SEL0_PRE1_PRG1_CHAN1	(0x2 << 12)
+#define IMX6Q_GPR5_PRE_PRG_SEL0_PRE1_PRG1_CHAN2	(0x3 << 12)
+#define IMX6Q_GPR5_PRE_PRG_SEL1_MASK		(0x3 << 14)
+#define IMX6Q_GPR5_PRE_PRG_SEL1_SHIFT		14
+#define IMX6Q_GPR5_PRE_PRG_SEL1_MSB		15
+#define IMX6Q_GPR5_PRE_PRG_SEL1_LSB		14
+#define IMX6Q_GPR5_PRE_PRG_SEL1_PRE2_PRG0_CHAN1	(0x0 << 14)
+#define IMX6Q_GPR5_PRE_PRG_SEL1_PRE2_PRG0_CHAN2	(0x1 << 14)
+#define IMX6Q_GPR5_PRE_PRG_SEL1_PRE2_PRG1_CHAN1	(0x2 << 14)
+#define IMX6Q_GPR5_PRE_PRG_SEL1_PRE2_PRG1_CHAN2	(0x3 << 14)
 
 #define IMX6Q_GPR8_TX_SWING_LOW			(0x7f << 25)
 #define IMX6Q_GPR8_TX_SWING_FULL		(0x7f << 18)
@@ -282,6 +301,7 @@
 #define IMX6Q_GPR12_ARMP_AHB_CLK_EN		BIT(26)
 #define IMX6Q_GPR12_ARMP_ATB_CLK_EN		BIT(25)
 #define IMX6Q_GPR12_ARMP_APB_CLK_EN		BIT(24)
+#define IMX6Q_GPR12_PCIE_PM_TURN_OFF		BIT(16)
 #define IMX6Q_GPR12_DEVICE_TYPE			(0xf << 12)
 #define IMX6Q_GPR12_PCIE_CTL_2			BIT(10)
 #define IMX6Q_GPR12_LOS_LEVEL			(0x1f << 4)
@@ -445,4 +465,13 @@
 #define IMX6SX_GPR12_PCIE_TEST_PD		BIT(30)
 #define IMX6SX_GPR12_RX_EQ_MASK			(0x7 << 0)
 #define IMX6SX_GPR12_RX_EQ_2			(0x2 << 0)
+
+/* For imx6ul iomux gpr register field define */
+#define IMX6UL_GPR1_ENET1_CLK_DIR		(0x1 << 17)
+#define IMX6UL_GPR1_ENET2_CLK_DIR		(0x1 << 18)
+#define IMX6UL_GPR1_ENET1_CLK_OUTPUT		(0x1 << 17)
+#define IMX6UL_GPR1_ENET2_CLK_OUTPUT		(0x1 << 18)
+#define IMX6UL_GPR1_ENET_CLK_DIR		(0x3 << 17)
+#define IMX6UL_GPR1_ENET_CLK_OUTPUT		(0x3 << 17)
+
 #endif /* __LINUX_IMX6Q_IOMUXC_GPR_H */

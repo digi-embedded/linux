@@ -6,7 +6,7 @@
  * published by the Free Software Foundation.
  */
 
-#include <linux/busfreq-imx6.h>
+#include <linux/busfreq-imx.h>
 #include <linux/clk.h>
 #include <linux/cpu.h>
 #include <linux/cpufreq.h>
@@ -21,12 +21,15 @@
 
 #define PU_SOC_VOLTAGE_NORMAL	1250000
 #define PU_SOC_VOLTAGE_HIGH	1275000
+#define DC_VOLTAGE_MIN		1300000
+#define DC_VOLTAGE_MAX		1400000
 #define FREQ_1P2_GHZ		1200000000
 #define FREQ_396_MHZ		396000
 
 static struct regulator *arm_reg;
 static struct regulator *pu_reg;
 static struct regulator *soc_reg;
+static struct regulator *dc_reg;
 
 static struct clk *arm_clk;
 static struct clk *pll1_sys_clk;
@@ -36,6 +39,9 @@ static struct clk *pll2_pfd2_396m_clk;
 static struct clk *pll1_bypass;
 static struct clk *pll1_bypass_src;
 static struct clk *pll1;
+static struct clk *secondary_sel;
+static struct clk *pll2_bus;
+static struct clk *osc;
 
 static struct device *cpu_dev;
 static struct cpufreq_frequency_table *freq_table;
@@ -109,29 +115,48 @@ static int imx6q_set_target(struct cpufreq_policy *policy, unsigned int index)
 
 	/*
 	 * The setpoints are selected per PLL/PDF frequencies, so we need to
-	 * reprogram PLL for frequency scaling.  The procedure of reprogramming
+	 * reprogram PLL for frequency scaling. The procedure of reprogramming
 	 * PLL1 is as below.
+	 * For i.MX6UL, it has a secondary clk mux, the cpu frequency change
+	 * flow is slightly different from other I.MX6 SOC.
 	 *
+	 * The cpu frequency change flow for i.MX6(except i.MX6UL) is as below:
 	 *  - Enable pll2_pfd2_396m_clk and reparent pll1_sw_clk to it
 	 *  - Reprogram pll1_sys_clk and reparent pll1_sw_clk back to it
 	 *  - Disable pll2_pfd2_396m_clk
 	 */
-	clk_set_parent(step_clk, pll2_pfd2_396m_clk);
-	clk_set_parent(pll1_sw_clk, step_clk);
-	if (freq_hz > clk_get_rate(pll2_pfd2_396m_clk)) {
-		clk_set_rate(pll1, new_freq * 1000);
-		/*
-		  * Ensure pll1_bypass is set back to pll1.
-		  */
-		clk_set_parent(pll1_bypass, pll1);
-		clk_set_parent(pll1_sw_clk, pll1_sys_clk);
-	} else
-		/*
-		  * Need to ensure that PLL1 is bypassed and enabled
-		  * before ARM-PODF is set.
-		  */
-		clk_set_parent(pll1_bypass, pll1_bypass_src);
+	if (!IS_ERR(secondary_sel)) {
 
+		/* When changing pll1_sw source to pll1_sys, cpu may run at higher
+		 * than 528MHz, this will lead to the system unstable if the voltage
+		 * is lower than the voltage of 528MHz. So lower the cpu frequency to
+		 * one half before changing cpu frequency.
+		 */
+		clk_set_rate(arm_clk, (old_freq >> 1) * 1000);
+		clk_set_parent(pll1_sw_clk, pll1_sys_clk);
+		clk_set_parent(step_clk, osc);
+		if (freq_hz > clk_get_rate(pll2_pfd2_396m_clk))
+			clk_set_parent(secondary_sel, pll2_bus);
+		else
+			ret = clk_set_parent(secondary_sel, pll2_pfd2_396m_clk);
+		clk_set_parent(step_clk, secondary_sel);
+		clk_set_parent(pll1_sw_clk, step_clk);
+	} else {
+		clk_set_parent(step_clk, pll2_pfd2_396m_clk);
+		clk_set_parent(pll1_sw_clk, step_clk);
+		if (freq_hz > clk_get_rate(pll2_pfd2_396m_clk)) {
+			clk_set_rate(pll1, new_freq * 1000);
+
+			/* Ensure pll1_bypass is set back to pll1. */
+			clk_set_parent(pll1_bypass, pll1);
+			clk_set_parent(pll1_sw_clk, pll1_sys_clk);
+		} else
+			/*
+			 * Need to ensure that PLL1 is bypassed and enabled
+			 * before ARM-PODF is set.
+			 */
+			clk_set_parent(pll1_bypass, pll1_bypass_src);
+	}
 
 	/* Ensure the arm clock divider is what we expect */
 	ret = clk_set_rate(arm_clk, new_freq * 1000);
@@ -222,9 +247,15 @@ static int imx6_cpufreq_pm_notify(struct notifier_block *nb,
 	case PM_SUSPEND_PREPARE:
 		cpufreq_policy_min_pre_suspend = data->user_policy.min;
 		data->user_policy.min = data->user_policy.max;
+
+		if (!IS_ERR(dc_reg))
+			regulator_set_voltage_tol(dc_reg, DC_VOLTAGE_MAX, 0);
 		break;
 	case PM_POST_SUSPEND:
 		data->user_policy.min = cpufreq_policy_min_pre_suspend;
+
+		if (!IS_ERR(dc_reg))
+			regulator_set_voltage_tol(dc_reg, DC_VOLTAGE_MIN, 0);
 		break;
 	default:
 		break;
@@ -279,6 +310,11 @@ static int imx6q_cpufreq_probe(struct platform_device *pdev)
 		goto put_node;
 	}
 
+	/* below clks are just for i.MX6UL */
+	pll2_bus = devm_clk_get(cpu_dev, "pll2_bus");
+	secondary_sel = devm_clk_get(cpu_dev, "secondary_sel");
+	osc = devm_clk_get(cpu_dev, "osc");
+
 	arm_reg = devm_regulator_get_optional(cpu_dev, "arm");
 	pu_reg = devm_regulator_get_optional(cpu_dev, "pu");
 	soc_reg = devm_regulator_get_optional(cpu_dev, "soc");
@@ -287,6 +323,10 @@ static int imx6q_cpufreq_probe(struct platform_device *pdev)
 		ret = -ENOENT;
 		goto put_node;
 	}
+
+	dc_reg = devm_regulator_get_optional(cpu_dev, "dc");
+	if (!IS_ERR(dc_reg))
+		regulator_set_voltage_tol(dc_reg, DC_VOLTAGE_MIN, 0);
 
 	/*
 	 * soc_reg sync  with arm_reg if arm shares the same regulator
@@ -303,7 +343,9 @@ static int imx6q_cpufreq_probe(struct platform_device *pdev)
 	 * Just, incase the platform did not supply the OPP
 	 * table, it will try to get it.
 	 */
+	rcu_read_lock();
 	num = dev_pm_opp_get_opp_count(cpu_dev);
+	rcu_read_unlock();
 	if (num < 0) {
 		ret = of_init_opp_table(cpu_dev);
 		if (ret < 0) {
@@ -311,7 +353,9 @@ static int imx6q_cpufreq_probe(struct platform_device *pdev)
 			goto put_node;
 		}
 
+		rcu_read_lock();
 		num = dev_pm_opp_get_opp_count(cpu_dev);
+		rcu_read_unlock();
 		if (num < 0) {
 			ret = num;
 			dev_err(cpu_dev, "no OPP table is found: %d\n", ret);
@@ -406,13 +450,14 @@ soc_opp_out:
 	if (ret > 0)
 		transition_latency += ret * 1000;
 
+	mutex_init(&set_cpufreq_lock);
+
 	ret = cpufreq_register_driver(&imx6q_cpufreq_driver);
 	if (ret) {
 		dev_err(cpu_dev, "failed register driver: %d\n", ret);
 		goto free_freq_table;
 	}
 
-	mutex_init(&set_cpufreq_lock);
 	register_pm_notifier(&imx6_cpufreq_pm_notifier);
 
 	of_node_put(np);

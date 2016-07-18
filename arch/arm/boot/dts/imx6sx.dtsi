@@ -140,7 +140,7 @@
 		ranges;
 
 		busfreq {
-			compatible = "fsl,imx6_busfreq";
+			compatible = "fsl,imx_busfreq";
 			clocks = <&clks IMX6SX_CLK_PLL2_BUS>, <&clks IMX6SX_CLK_PLL2_PFD2>,
 				<&clks IMX6SX_CLK_PLL2_198M>, <&clks IMX6SX_CLK_ARM>,
 				<&clks IMX6SX_CLK_PLL3_USB_OTG>, <&clks IMX6SX_CLK_PERIPH>,
@@ -385,7 +385,7 @@
 					clocks = <&clks IMX6SX_CLK_SSI1_IPG>,
 						 <&clks IMX6SX_CLK_SSI1>;
 					clock-names = "ipg", "baud";
-					dmas = <&sdma 37 1 0>, <&sdma 38 1 0>;
+					dmas = <&sdma 37 22 0>, <&sdma 38 22 0>;
 					dma-names = "rx", "tx";
 					status = "disabled";
 				};
@@ -397,7 +397,7 @@
 					clocks = <&clks IMX6SX_CLK_SSI2_IPG>,
 						 <&clks IMX6SX_CLK_SSI2>;
 					clock-names = "ipg", "baud";
-					dmas = <&sdma 41 1 0>, <&sdma 42 1 0>;
+					dmas = <&sdma 41 22 0>, <&sdma 42 22 0>;
 					dma-names = "rx", "tx";
 					status = "disabled";
 				};
@@ -409,7 +409,7 @@
 					clocks = <&clks IMX6SX_CLK_SSI3_IPG>,
 						 <&clks IMX6SX_CLK_SSI3>;
 					clock-names = "ipg", "baud";
-					dmas = <&sdma 45 1 0>, <&sdma 46 1 0>;
+					dmas = <&sdma 45 22 0>, <&sdma 46 22 0>;
 					dma-names = "rx", "tx";
 					status = "disabled";
 				};
@@ -650,20 +650,21 @@
 					anatop-min-bit-val = <4>;
 					anatop-min-voltage = <800000>;
 					anatop-max-voltage = <1375000>;
+					anatop-enable-bit = <0>;
 				};
 
-				regulator-3p0@120 {
+				reg_3p0: regulator-3p0@120 {
 					compatible = "fsl,anatop-regulator";
 					regulator-name = "vdd3p0";
-					regulator-min-microvolt = <2800000>;
-					regulator-max-microvolt = <3150000>;
-					regulator-always-on;
+					regulator-min-microvolt = <2625000>;
+					regulator-max-microvolt = <3400000>;
 					anatop-reg-offset = <0x120>;
 					anatop-vol-bit-shift = <8>;
 					anatop-vol-bit-width = <5>;
 					anatop-min-bit-val = <0>;
 					anatop-min-voltage = <2625000>;
 					anatop-max-voltage = <3400000>;
+					anatop-enable-bit = <0>;
 				};
 
 				regulator-2p5@130 {
@@ -678,6 +679,7 @@
 					anatop-min-bit-val = <0>;
 					anatop-min-voltage = <2100000>;
 					anatop-max-voltage = <2875000>;
+					anatop-enable-bit = <0>;
 				};
 
 				reg_arm: regulator-vddcore@140 {
@@ -744,6 +746,7 @@
 				reg = <0x020c9000 0x1000>;
 				interrupts = <GIC_SPI 44 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&clks IMX6SX_CLK_USBPHY1>;
+				phy-3p0-supply = <&reg_3p0>;
 				fsl,anatop = <&anatop>;
 			};
 
@@ -752,6 +755,7 @@
 				reg = <0x020ca000 0x1000>;
 				interrupts = <GIC_SPI 45 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&clks IMX6SX_CLK_USBPHY2>;
+				phy-3p0-supply = <&reg_3p0>;
 				fsl,anatop = <&anatop>;
 			};
 
@@ -1395,6 +1399,11 @@
 				reg = <0x02294000 0x4000>;
 				interrupts = <0 90 0x04>;
 				status = "okay";
+			};
+
+			rpmsg: rpmsg{
+				compatible = "fsl,imx6sx-rpmsg";
+				status = "disabled";
 			};
 
 			mcctest: mcctest{

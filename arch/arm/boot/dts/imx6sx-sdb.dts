@@ -222,14 +222,14 @@
 &cpu0 {
 	operating-points = <
 		/* kHz    uV */
-		996000  1250000
+		996000  1275000
 		792000  1175000
 		396000  1175000
 		198000	1175000
 		>;
 	fsl,soc-operating-points = <
 		/* ARM kHz      SOC uV */
-		996000	1250000
+		996000	1275000
 		792000	1175000
 		396000	1175000
 		198000	1175000
@@ -444,6 +444,9 @@
 	vbus-supply = <&reg_usb_otg1_vbus>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_usb_otg1_id>;
+	srp-disable;
+	hnp-disable;
+	adp-disable;
 	status = "okay";
 };
 
@@ -451,6 +454,14 @@
 	vbus-supply = <&reg_usb_otg2_vbus>;
 	dr_mode = "host";
 	status = "okay";
+};
+
+&usbphy1 {
+	tx-d-cal = <0x5>;
+};
+
+&usbphy2 {
+	tx-d-cal = <0x5>;
 };
 
 &usdhc2 {
@@ -893,6 +904,13 @@
 				MX6SX_PAD_LCD1_VSYNC__LCDIF1_VSYNC 0x4001b0b0
 				MX6SX_PAD_LCD1_HSYNC__LCDIF1_HSYNC 0x4001b0b0
 				MX6SX_PAD_LCD1_RESET__GPIO3_IO_27 0x4001b0b0
+			>;
+		};
+
+		pinctrl_mqs: mqsgrp {
+			fsl,pins = <
+				MX6SX_PAD_SD2_CLK__MQS_RIGHT 0x120b0
+				MX6SX_PAD_SD2_CMD__MQS_LEFT  0x120b0
 			>;
 		};
 

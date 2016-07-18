@@ -637,7 +637,7 @@ static const struct ov5640_datafmt
 
 static inline void ov5640_power_down(int enable)
 {
-	gpio_set_value(pwn_gpio, enable);
+	gpio_set_value_cansleep(pwn_gpio, enable);
 
 	msleep(2);
 }
@@ -645,18 +645,18 @@ static inline void ov5640_power_down(int enable)
 static inline void ov5640_reset(void)
 {
 	/* camera reset */
-	gpio_set_value(rst_gpio, 1);
+	gpio_set_value_cansleep(rst_gpio, 1);
 
 	/* camera power down */
-	gpio_set_value(pwn_gpio, 1);
+	gpio_set_value_cansleep(pwn_gpio, 1);
 	msleep(5);
-	gpio_set_value(pwn_gpio, 0);
+	gpio_set_value_cansleep(pwn_gpio, 0);
 	msleep(5);
-	gpio_set_value(rst_gpio, 0);
+	gpio_set_value_cansleep(rst_gpio, 0);
 	msleep(1);
-	gpio_set_value(rst_gpio, 1);
+	gpio_set_value_cansleep(rst_gpio, 1);
 	msleep(5);
-	gpio_set_value(pwn_gpio, 1);
+	gpio_set_value_cansleep(pwn_gpio, 1);
 }
 
 static int ov5640_regulator_enable(struct device *dev)
@@ -1391,43 +1391,8 @@ static int ov5640_s_power(struct v4l2_subdev *sd, int on)
 	else
 		clk_disable(ov5640_data.sensor_clk);
 
-	if (on && !sensor->on) {
-		if (io_regulator)
-			if (regulator_enable(io_regulator) != 0)
-				return -EIO;
-		if (core_regulator)
-			if (regulator_enable(core_regulator) != 0)
-				return -EIO;
-		if (analog_regulator)
-			if (regulator_enable(analog_regulator) != 0)
-				return -EIO;
-		/* Make sure power on */
-		ov5640_power_down(0);
-	} else if (!on && sensor->on) {
-		if (analog_regulator)
-			regulator_disable(analog_regulator);
-		if (core_regulator)
-			regulator_disable(core_regulator);
-		if (io_regulator)
-			regulator_disable(io_regulator);
-
-		ov5640_power_down(1);
-	}
-
 	sensor->on = on;
 
-	return 0;
-}
-
-static int ov5640_s_stream(struct v4l2_subdev *sd, int enable)
-{
-	if (enable) {
-		clk_enable(ov5640_data.sensor_clk);
-		ov5640_power_down(0);
-	} else {
-		ov5640_power_down(1);
-		clk_disable(ov5640_data.sensor_clk);
-	}
 	return 0;
 }
 
@@ -1493,10 +1458,6 @@ static int ov5640_s_parm(struct v4l2_subdev *sd, struct v4l2_streamparm *a)
 	enum ov5640_frame_rate frame_rate;
 	int ret = 0;
 
-	/* Make sure power on */
-	clk_enable(ov5640_data.sensor_clk);
-	ov5640_power_down(0);
-
 	switch (a->type) {
 	/* This is the only case currently handled. */
 	case V4L2_BUF_TYPE_VIDEO_CAPTURE:
@@ -1561,8 +1522,6 @@ static int ov5640_s_parm(struct v4l2_subdev *sd, struct v4l2_streamparm *a)
 	}
 
 error:
-	ov5640_power_down(1);
-	clk_disable(ov5640_data.sensor_clk);
 	return ret;
 }
 
@@ -1691,6 +1650,24 @@ static int ov5640_enum_frameintervals(struct v4l2_subdev *sd,
 	return -EINVAL;
 }
 
+static int ov5640_set_clk_rate(void)
+{
+	u32 tgt_xclk;	/* target xclk */
+	int ret;
+
+	/* mclk */
+	tgt_xclk = ov5640_data.mclk;
+	tgt_xclk = min(tgt_xclk, (u32)OV5640_XCLK_MAX);
+	tgt_xclk = max(tgt_xclk, (u32)OV5640_XCLK_MIN);
+	ov5640_data.mclk = tgt_xclk;
+
+	pr_debug("   Setting mclk to %d MHz\n", tgt_xclk / 1000000);
+	ret = clk_set_rate(ov5640_data.sensor_clk, ov5640_data.mclk);
+	if (ret < 0)
+		pr_debug("set rate filed, rate=%d\n", ov5640_data.mclk);
+	return ret;
+}
+
 /*!
  * dev_init - V4L2 sensor init
  * @s: pointer to standard V4L2 device structure
@@ -1707,12 +1684,6 @@ static int init_device(void)
 
 	/* mclk */
 	tgt_xclk = ov5640_data.mclk;
-	tgt_xclk = min(tgt_xclk, (u32)OV5640_XCLK_MAX);
-	tgt_xclk = max(tgt_xclk, (u32)OV5640_XCLK_MIN);
-	ov5640_data.mclk = tgt_xclk;
-
-	pr_debug("   Setting mclk to %d MHz\n", tgt_xclk / 1000000);
-	clk_set_rate(ov5640_data.sensor_clk, ov5640_data.mclk);
 
 	/* Default camera frame rate is set in probe */
 	tgt_fps = ov5640_data.streamcap.timeperframe.denominator /
@@ -1731,7 +1702,6 @@ static int init_device(void)
 }
 
 static struct v4l2_subdev_video_ops ov5640_subdev_video_ops = {
-	.s_stream = ov5640_s_stream,
 	.g_parm = ov5640_g_parm,
 	.s_parm = ov5640_s_parm,
 
@@ -1828,6 +1798,9 @@ static int ov5640_probe(struct i2c_client *client,
 		return retval;
 	}
 
+	/* Set mclk rate before clk on */
+	ov5640_set_clk_rate();
+
 	clk_prepare_enable(ov5640_data.sensor_clk);
 
 	ov5640_data.io_init = ov5640_reset;
@@ -1868,8 +1841,6 @@ static int ov5640_probe(struct i2c_client *client,
 		return retval;
 	}
 
-	ov5640_power_down(1);
-
 	clk_disable(ov5640_data.sensor_clk);
 
 	v4l2_i2c_subdev_init(&ov5640_data.subdev, client, &ov5640_subdev_ops);
@@ -1896,6 +1867,8 @@ static int ov5640_remove(struct i2c_client *client)
 	v4l2_async_unregister_subdev(sd);
 
 	clk_unprepare(ov5640_data.sensor_clk);
+
+	ov5640_power_down(1);
 
 	if (analog_regulator)
 		regulator_disable(analog_regulator);

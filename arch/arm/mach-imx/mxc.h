@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2007, 2010, 2013 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright 2004-2007, 2010-2015 Freescale Semiconductor, Inc.
  * Copyright (C) 2008 Juergen Beisert (kernel@pengutronix.de)
  *
  * This program is free software; you can redistribute it and/or
@@ -38,6 +38,9 @@
 #define MXC_CPU_IMX6DL		0x61
 #define MXC_CPU_IMX6SX		0x62
 #define MXC_CPU_IMX6Q		0x63
+#define MXC_CPU_IMX6UL		0x64
+#define MXC_CPU_IMX7D		0x72
+#define MXC_ARCH_CA7		0xc07
 
 #define IMX_CHIP_REVISION_1_0		0x10
 #define IMX_CHIP_REVISION_1_1		0x11
@@ -55,10 +58,13 @@
 #define IMX_CHIP_REVISION_3_3		0x33
 #define IMX_CHIP_REVISION_UNKNOWN	0xff
 
+#define IMX_DDR_TYPE_DDR3		0
 #define IMX_DDR_TYPE_LPDDR2		1
+#define IMX_DDR_TYPE_LPDDR3		2
 
 #ifndef __ASSEMBLY__
 extern unsigned int __mxc_cpu_type;
+extern unsigned int __mxc_arch_type;
 #endif
 
 #ifdef CONFIG_SOC_IMX1
@@ -173,9 +179,33 @@ static inline bool cpu_is_imx6sx(void)
 	return __mxc_cpu_type == MXC_CPU_IMX6SX;
 }
 
+static inline bool cpu_is_imx6ul(void)
+{
+	return __mxc_cpu_type == MXC_CPU_IMX6UL;
+}
+
 static inline bool cpu_is_imx6q(void)
 {
 	return __mxc_cpu_type == MXC_CPU_IMX6Q;
+}
+
+static inline bool cpu_is_imx6(void)
+{
+	return __mxc_cpu_type == MXC_CPU_IMX6Q ||
+		__mxc_cpu_type == MXC_CPU_IMX6DL ||
+		__mxc_cpu_type == MXC_CPU_IMX6SL ||
+		__mxc_cpu_type == MXC_CPU_IMX6SX ||
+		__mxc_cpu_type == MXC_CPU_IMX6UL;
+}
+
+static inline bool cpu_is_imx7d(void)
+{
+	return __mxc_cpu_type == MXC_CPU_IMX7D;
+}
+
+static inline bool arm_is_ca7(void)
+{
+	return __mxc_arch_type == MXC_ARCH_CA7;
 }
 
 struct cpu_op {
@@ -187,7 +217,6 @@ int tzic_enable_wake(void);
 extern struct cpu_op *(*get_cpu_op)(int *op);
 #endif
 
-#define cpu_is_imx6()    (cpu_is_imx6q() || cpu_is_imx6dl() || cpu_is_imx6sl())
 #define cpu_is_mx3()	(cpu_is_mx31() || cpu_is_mx35())
 #define cpu_is_mx2()	(cpu_is_mx21() || cpu_is_mx27())
 

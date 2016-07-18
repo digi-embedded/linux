@@ -1215,6 +1215,18 @@ config MFD_STW481X
 	  in various ST Microelectronics and ST-Ericsson embedded
 	  Nomadik series.
 
+config MFD_MCA_CC6UL
+	bool "Digi Micro Controller Assist for ConnectCore 6UL"
+	select MFD_CORE
+	select REGMAP_I2C
+	select REGMAP_IRQ
+	depends on I2C=y
+	help
+	  Select this option to enable support for MCA on the ConnectCore 6UL.
+	  This includes the I2C driver and core APIs.
+	  Additional drivers must be enabled in order to use the functionality
+	  of the device (RTC, watchdog, ...).
+
 endmenu
 endif
 

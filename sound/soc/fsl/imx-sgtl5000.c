@@ -222,8 +222,8 @@ static int imx_sgtl5000_probe(struct platform_device *pdev)
 	struct platform_device *cpu_pdev;
 	struct i2c_client *codec_dev;
 	struct imx_sgtl5000_data *data = NULL;
-	struct imx_priv *priv = &card_priv;
 	int ret;
+	struct imx_priv *priv = &card_priv;
 
 	cpu_np = of_parse_phandle(pdev->dev.of_node, "cpu-dai", 0);
 	codec_np = of_parse_phandle(pdev->dev.of_node, "audio-codec", 0);
@@ -303,7 +303,7 @@ static int imx_sgtl5000_probe(struct platform_device *pdev)
 		if (ret) {
 			dev_err(&pdev->dev, "create hp attr failed (%d)\n",
 				ret);
-			goto clk_fail;
+			goto fail;
 		}
 	}
 
@@ -312,8 +312,6 @@ static int imx_sgtl5000_probe(struct platform_device *pdev)
 
 	return 0;
 
-clk_fail:
-	clk_put(data->codec_clk);
 fail:
 	if (data && !IS_ERR(data->codec_clk))
 		clk_put(data->codec_clk);
@@ -331,11 +329,7 @@ static int imx_sgtl5000_remove(struct platform_device *pdev)
 	struct imx_sgtl5000_data *data = snd_soc_card_get_drvdata(card);
 
 	driver_remove_file(pdev->dev.driver, &driver_attr_headphone);
-	if (data->codec_clk) {
-		clk_disable_unprepare(data->codec_clk);
-		clk_put(data->codec_clk);
-	}
-	snd_soc_unregister_card(&data->card);
+	clk_put(data->codec_clk);
 
 	return 0;
 }
