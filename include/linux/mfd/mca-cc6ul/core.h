@@ -53,8 +53,8 @@ enum mca_cc6ul_irqs {
 
 /* Number of interrupt registers */
 #define MCA_CC6UL_NUM_IRQ_REGS		4
-/* Max number of GPIOs */
-#define MCA_CC6UL_MAX_GPIOS		64
+/* Max number of IOs */
+#define MCA_CC6UL_MAX_IOS		64
 
 struct mca_cc6ul {
 	struct device *dev;

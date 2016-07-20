@@ -145,11 +145,11 @@ static int mca_cc6ul_gpio_probe(struct platform_device *pdev)
 		goto err;
 	}
 	gpio->gp.ngpio = val & MCA_CC6UL_GPIO_NUM_MASK;
-	if (gpio->gp.ngpio < 1 || gpio->gp.ngpio > MCA_CC6UL_MAX_GPIOS) {
+	if (gpio->gp.ngpio < 1 || gpio->gp.ngpio > MCA_CC6UL_MAX_IOS) {
 		ret = -EINVAL;
 		dev_err(mca->dev, "Read invalid number of gpios (%d). "
 			"Valid range is 1..%d.\n", gpio->gp.ngpio,
-			MCA_CC6UL_MAX_GPIOS);
+			MCA_CC6UL_MAX_IOS);
 		goto err;
 	}
 
