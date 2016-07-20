@@ -385,6 +385,7 @@ dtb-$(CONFIG_SOC_IMX6UL) += \
 	imx6ul-9x9-evk-csi.dtb \
 	imx6ul-9x9-evk-ldo.dtb \
 	imx6ul-ccimx6ulstarter.dtb \
+	imx6ul-ccimx6ulstarter-id129.dtb \
 	imx6ul-ccimx6ulstarter-wb.dtb \
 	imx6ul-ccimx6ulstarter-wb-mfg.dtb
 dtb-$(CONFIG_SOC_IMX7D) += \
