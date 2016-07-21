@@ -205,6 +205,15 @@ static int mca_cc6ul_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 	return 0;
 }
 
+static int mca_cc6ul_rtc_alarm_irq_enable(struct device *dev,
+					  unsigned int enabled)
+{
+	if (enabled)
+		return mca_cc6ul_rtc_start_alarm(dev);
+	else
+		return mca_cc6ul_rtc_stop_alarm(dev);
+}
+
 static int mca_cc6ul_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 {
 	struct mca_cc6ul_rtc *rtc = dev_get_drvdata(dev);
@@ -220,17 +229,10 @@ static int mca_cc6ul_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 	ret = regmap_bulk_write(rtc->mca->regmap, MCA_CC6UL_RTC_ALARM_YEAR_L,
 				data, ALARM_DATA_LEN);
 #endif
+	if (ret < 0)
+		return ret;
 
-	return ret;
-}
-
-static int mca_cc6ul_rtc_alarm_irq_enable(struct device *dev,
-					  unsigned int enabled)
-{
-	if (enabled)
-		return mca_cc6ul_rtc_start_alarm(dev);
-	else
-		return mca_cc6ul_rtc_stop_alarm(dev);
+	return mca_cc6ul_rtc_alarm_irq_enable(dev, alrm->enabled);
 }
 
 static irqreturn_t mca_cc6ul_alarm_event(int irq, void *data)
