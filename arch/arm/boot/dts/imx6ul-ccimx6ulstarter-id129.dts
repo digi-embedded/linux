@@ -37,6 +37,11 @@
 	status = "okay";
 };
 
+/* UART4 (Raspberry PI Expansion header) */
+&uart4 {
+	status = "okay";
+};
+
 /* UART5 (Console) */
 &uart5 {
 	status = "okay";
