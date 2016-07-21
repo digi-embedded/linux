@@ -237,3 +237,11 @@
 	 */
 	status = "disabled";
 };
+
+&snvs_rtc  {
+	/*
+	 * On the CC6UL the RTC is implemented in the MCA. Therefore we disable
+	 * the internal one.
+	 */
+	status = "disabled";
+};
