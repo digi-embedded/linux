@@ -179,11 +179,10 @@
 				regulator-always-on;
 			};
 
-			vcc_nand: vldo3 {
+			ldo3_ext: vldo3 {
 				regulator-min-microvolt = <1800000>;
 				regulator-max-microvolt = <3300000>;
 				regulator-boot-on;
-				regulator-always-on;
 			};
 
 			ldo4_ext: vldo4 {
