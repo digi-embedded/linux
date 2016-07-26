@@ -249,3 +249,11 @@
 	 */
 	status = "disabled";
 };
+
+&snvs_pwrkey  {
+	/*
+	 * On the CC6UL the powerkey is implemented in the MCA. Therefore we disable
+	 * the i.MX6UL builtin support.
+	 */
+	status = "disabled";
+};
