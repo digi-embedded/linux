@@ -217,11 +217,12 @@ static int mca_cc6ul_pwrkey_probe(struct platform_device *pdev)
 					MCA_CC6UL_IRQ_PWR_OFF_NAME);
 	pwrkey->irq_sleep = platform_get_irq_byname(pdev,
 					MCA_CC6UL_IRQ_PWR_SLEEP_NAME);
-	pwrkey->input->evbit[0] = BIT_MASK(EV_KEY);
-	input_set_capability(pwrkey->input, EV_KEY, KEY_POWER);
 	pwrkey->input->name = MCA_CC6UL_DRVNAME_PWRKEY;
 	pwrkey->input->phys = MCA_CC6UL_DRVNAME_PWRKEY "/input0";
 	pwrkey->input->dev.parent = &pdev->dev;
+
+	input_set_capability(pwrkey->input, EV_KEY, KEY_POWER);
+	input_set_capability(pwrkey->input, EV_KEY, KEY_SLEEP);
 
 	/* Initialize driver settings from device tree */
 	ret = of_mca_cc6ul_pwrkey_read_settings(np, pwrkey);
