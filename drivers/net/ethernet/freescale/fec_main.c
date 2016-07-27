@@ -3401,6 +3401,7 @@ static void fec_reset_phy(struct platform_device *pdev)
 	int err, phy_reset;
 	int msec = 1;
 	struct device_node *np = pdev->dev.of_node;
+	static int needs_free = 0;
 
 	if (!np)
 		return;
@@ -3414,14 +3415,25 @@ static void fec_reset_phy(struct platform_device *pdev)
 	if (!gpio_is_valid(phy_reset))
 		return;
 
+	/* Free PHY reset GPIO if requested previously by this driver */
+	if (needs_free)
+		devm_gpio_free(&pdev->dev, phy_reset);
+
 	err = devm_gpio_request_one(&pdev->dev, phy_reset,
 				    GPIOF_OUT_INIT_LOW, "phy-reset");
 	if (err) {
 		dev_err(&pdev->dev, "failed to get phy-reset-gpios: %d\n", err);
 		return;
 	}
+
 	msleep(msec);
 	gpio_set_value_cansleep(phy_reset, 1);
+
+	/*
+	 * Set flag to free the PHY reset gpio if this function needs to be
+	 * called again in the future.
+	 */
+	needs_free = 1;
 }
 
 static void fec_gpio_led_init(struct platform_device *pdev)
