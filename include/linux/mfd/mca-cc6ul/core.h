@@ -68,6 +68,7 @@ struct mca_cc6ul {
 	struct notifier_block restart_handler;
 	int chip_irq;
 	u32 irq_base;
+	int gpio_base;
 	u16 addr;	/* for the sysfs */
 	size_t len;	/* for the sysfs */
 	u8 data[MCA_CC6UL_MAX_FRAME_DATA_LEN + MCA_CC6UL_CRC_LEN];

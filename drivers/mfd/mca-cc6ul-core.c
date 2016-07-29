@@ -395,6 +395,7 @@ int mca_cc6ul_device_init(struct mca_cc6ul *mca, u32 irq)
 	mca->fw_version = (u16)val;
 
 	mca->chip_irq = irq;
+	mca->gpio_base = -1;
 
 	ret = mca_cc6ul_irq_init(mca);
 	if (ret != 0) {
