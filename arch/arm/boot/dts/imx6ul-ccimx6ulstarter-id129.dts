@@ -65,9 +65,9 @@
 	status = "okay";
 };
 
-/* MCA IOs connected to Grove connectors configured as ADCs */
+/* MCA IO0 connected to Grove ADC connector */
 &mca_adc {
-	digi,adc-ch-list = <0 4>;
+	digi,adc-ch-list = <0>;
 };
 
 /* I2C2 (Raspberry PI Expansion header and Grove connector) */
