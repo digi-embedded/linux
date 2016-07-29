@@ -70,3 +70,7 @@
 	digi,adc-ch-list = <0 4>;
 };
 
+/* I2C2 (Raspberry PI Expansion header and Grove connector) */
+&i2c2 {
+	status = "okay";
+};

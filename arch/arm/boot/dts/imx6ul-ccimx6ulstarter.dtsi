@@ -90,6 +90,12 @@
 	status = "disabled";
 };
 
+&i2c2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_i2c2>;
+	status = "disabled";
+};
+
 &iomuxc {
 	pinctrl-names = "default";
 
@@ -138,6 +144,13 @@
 				MX6UL_PAD_CSI_DATA01__USDHC2_DATA1	0x17059
 				MX6UL_PAD_CSI_DATA02__USDHC2_DATA2	0x17059
 				MX6UL_PAD_CSI_DATA03__USDHC2_DATA3	0x17059
+			>;
+		};
+
+		pinctrl_i2c2: i2c2grp {
+			fsl,pins = <
+				MX6UL_PAD_GPIO1_IO00__I2C2_SCL 0x4001b8b0
+				MX6UL_PAD_GPIO1_IO01__I2C2_SDA 0x4001b8b0
 			>;
 		};
 	};
