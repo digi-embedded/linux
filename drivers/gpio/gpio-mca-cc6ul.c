@@ -159,6 +159,8 @@ static int mca_cc6ul_gpio_probe(struct platform_device *pdev)
 		goto err;
 	}
 
+	mca->gpio_base = gpio->gp.base;
+
 	return 0;
 
 err:
@@ -170,6 +172,7 @@ static int mca_cc6ul_gpio_remove(struct platform_device *pdev)
 {
 	struct mca_cc6ul_gpio *gpio = platform_get_drvdata(pdev);
 
+	gpio->mca->gpio_base = -1;
 	gpiochip_remove(&gpio->gp);
 
 	return 0;
