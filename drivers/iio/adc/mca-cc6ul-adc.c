@@ -18,6 +18,7 @@
  * Boston, MA  02110-1301, USA.
  */
 
+#include <linux/gpio.h>
 #include <linux/iio/iio.h>
 #include <linux/mfd/mca-cc6ul/core.h>
 #include <linux/mfd/mca-cc6ul/registers.h>
@@ -106,6 +107,22 @@ static int mca_cc6ul_adc_probe(struct platform_device *pdev)
 				continue;
 
 			/*
+			 * Request the corresponding MCA GPIO so it can not be
+			 * used as GPIO by user space
+			 */
+			if (mca->gpio_base >= 0) {
+				ret = devm_gpio_request(&pdev->dev,
+							mca->gpio_base + ch,
+							"ADC");
+				if (ret != 0) {
+					dev_warn(&pdev->dev,
+						 "Error requesting GPIO %d. "
+						 "Cannot use ADC%d (%d)\n",
+						 mca->gpio_base + ch, ch, ret);
+					continue;
+				}
+			}
+			/*
 			 * Verify that the requested IOs are ADC capable and
 			 * enable the channel for ADC operation
 			 */
@@ -135,6 +152,7 @@ static int mca_cc6ul_adc_probe(struct platform_device *pdev)
 					ch, ret);
 				goto error_dev_free;
 			}
+
 			adc_ch_list[mca_adc->num_adcs] = (u8)ch;
 			mca_adc->num_adcs++;
 		}
@@ -183,6 +201,11 @@ error_free_ch:
 	devm_kfree(&pdev->dev, (void *)iio->channels);
 
 error_dev_free:
+	while (mca_adc->num_adcs && mca->gpio_base >= 0) {
+		devm_gpio_free(&pdev->dev,
+			       mca->gpio_base + adc_ch_list[mca_adc->num_adcs - 1]);
+		mca_adc->num_adcs--;
+	}
 	devm_iio_device_free(&pdev->dev, iio);
 
 	return ret;
@@ -190,7 +213,20 @@ error_dev_free:
 
 static int mca_cc6ul_adc_remove(struct platform_device *pdev)
 {
+	struct mca_cc6ul *mca = dev_get_drvdata(pdev->dev.parent);
 	struct iio_dev *iio = platform_get_drvdata(pdev);
+	struct iio_chan_spec *chan;
+	int i;
+
+	/* Release allocated resources */
+	if (mca && mca->gpio_base >= 0) {
+		for (i = 0, chan = (struct iio_chan_spec *)iio->channels;
+		     i < iio->num_channels;
+		     i++) {
+			devm_gpio_free(&pdev->dev,
+				       mca->gpio_base + chan->channel);
+		}
+	}
 
 	devm_kfree(&pdev->dev, (void *)iio->channels);
 	iio_device_unregister(iio);
