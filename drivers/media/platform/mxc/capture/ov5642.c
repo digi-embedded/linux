@@ -3041,6 +3041,9 @@ static s32 update_device_addr(struct sensor_data *sensor)
 	msg.buf = buf;
 
 	ret = i2c_transfer(sensor->i2c_client->adapter, &msg, 1);
+	if (ret < 0)
+		pr_warn("%s: Device address not updated: %d\n", __func__,
+				ret);
 	return ret;
 }
 
@@ -3059,7 +3062,7 @@ static void ov5642_standby(s32 enable)
 
 static void ov5642_reset(void)
 {
-	if (!gpio_is_valid(pwn_gpio) || !gpio_is_valid(rst_gpio))
+	if (!gpio_is_valid(pwn_gpio) && !gpio_is_valid(rst_gpio))
 		return;
 
 	mxc_camera_common_lock();
