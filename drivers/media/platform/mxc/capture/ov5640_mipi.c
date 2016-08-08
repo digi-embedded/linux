@@ -724,7 +724,7 @@ static void ov5640_standby(s32 enable)
 
 static void ov5640_reset(void)
 {
-	if (!gpio_is_valid(pwn_gpio) || !gpio_is_valid(rst_gpio))
+	if (!gpio_is_valid(pwn_gpio) && !gpio_is_valid(rst_gpio))
 		return;
 
 	mxc_camera_common_lock();
