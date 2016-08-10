@@ -62,6 +62,11 @@
 	status = "okay";
 };
 
+/* Disable the CPU watchdog. We use the MCA watchdog */
+&wdog1 {
+	status = "disabled";
+};
+
 &i2c1 {
 	clock-frequency = <100000>;
 	pinctrl-names = "default";
