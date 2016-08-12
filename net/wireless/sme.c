@@ -616,10 +616,33 @@ static bool cfg80211_is_all_idle(void)
 	return is_all_idle;
 }
 
+static bool cfg80211_is_all_countryie_ignore(void)
+{
+	struct cfg80211_registered_device *rdev;
+	struct wireless_dev *wdev;
+	bool is_all_countryie_ignore = true;
+
+	list_for_each_entry(rdev, &cfg80211_rdev_list, list) {
+		list_for_each_entry(wdev, &rdev->wdev_list, list) {
+			wdev_lock(wdev);
+			if (!(wdev->wiphy->regulatory_flags &
+			      REGULATORY_COUNTRY_IE_IGNORE)) {
+				is_all_countryie_ignore = false;
+				wdev_unlock(wdev);
+				goto out;
+			}
+			wdev_unlock(wdev);
+		}
+	}
+out:
+	return is_all_countryie_ignore;
+}
+
 static void disconnect_work(struct work_struct *work)
 {
 	rtnl_lock();
-	if (cfg80211_is_all_idle())
+	if (cfg80211_is_all_idle() &&
+	    !cfg80211_is_all_countryie_ignore())
 		regulatory_hint_disconnect();
 	rtnl_unlock();
 }
