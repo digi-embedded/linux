@@ -503,7 +503,7 @@ static const struct da9063_regulator_info da9063_regulator_info[] = {
 		DA9063_BUCK(DA9063, BPRO, 530, 10, 1800,
 			    da9063_buck_a_limits),
 		DA9063_BUCK_COMMON_FIELDS(BPRO),
-		.suspend = BFIELD(DA9063_REG_DVC_1, DA9063_VBPRO_SEL),
+		.suspend = BFIELD(DA9063_REG_BPRO_CONT, DA9063_BUCK_EN),
 		.ilimit = BFIELD(DA9063_REG_BUCK_ILIM_B,
 				 DA9063_BPRO_ILIM_MASK),
 	},
