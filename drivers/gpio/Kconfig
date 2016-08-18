@@ -247,6 +247,7 @@ config GPIO_MB86S7X
 config GPIO_MCA_CC6UL
 	tristate "Digi ConnectCore 6UL Micro Controller Assist GPIO support"
 	select MFD_MCA_CC6UL
+	select GPIOLIB_IRQCHIP
 	help
 	  If you say yes here you will get support for the GPIOs in the
 	  Micro Controller Assist of Digi ConnectCore 6UL system-on-module.

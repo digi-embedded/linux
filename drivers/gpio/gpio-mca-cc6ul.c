@@ -10,6 +10,7 @@
  *
  */
 #include <linux/gpio.h>
+#include <linux/gpio/driver.h>
 #include <linux/irqdomain.h>
 #include <linux/module.h>
 #include <linux/of_device.h>
@@ -28,15 +29,33 @@
 #define GPIO_SET_REG(x)		(MCA_CC6UL_GPIO_SET_0 + ((x) / 8))
 #define GPIO_CLEAR_REG(x)	(MCA_CC6UL_GPIO_CLEAR_0 + ((x) / 8))
 #define GPIO_TOGGLE_REG(x)	(MCA_CC6UL_GPIO_TOGGLE_0 + ((x) / 8))
+#define GPIO_IRQ_STATUS_REG(x)	(MCA_CC6UL_GPIO_IRQ_STATUS_0 + ((x) / 8))
+#define GPIO_IRQ_CFG_REG(x)	(MCA_CC6UL_GPIO_IRQ_CFG_0 + (x))
+
+#define GPIO_CFG_UPDATE		BIT(6)
+#define MCA_CC6UL_MAX_IO_BYTES	((MCA_CC6UL_MAX_IOS + 7) / 8)
+#define GPIO_BYTE(i)		((i) / 8)
+#define BYTE_OFFSET(i)		((i) % 8)
 
 struct mca_cc6ul_gpio {
 	struct mca_cc6ul *mca;
 	struct gpio_chip gp;
+	struct mutex irq_lock;
+	uint8_t irq_cfg[MCA_CC6UL_MAX_IOS];
+	uint8_t irq_capable[MCA_CC6UL_MAX_IO_BYTES];
+	int irq;
 };
 
 static inline struct mca_cc6ul_gpio *to_mca_cc6ul_gpio(struct gpio_chip *chip)
 {
 	return container_of(chip, struct mca_cc6ul_gpio, gp);
+}
+
+static inline bool mca_cc6ul_gpio_is_irq_capable(struct mca_cc6ul_gpio *gpio,
+						 u32 offset)
+{
+	return ((gpio->irq_capable[GPIO_BYTE(offset)] &
+	        (1 << BYTE_OFFSET(offset))) != 0);
 }
 
 static int mca_cc6ul_gpio_get(struct gpio_chip *gc, unsigned num)
@@ -85,15 +104,231 @@ static int mca_cc6ul_gpio_direction_output(struct gpio_chip *gc, unsigned num,
 	return 0;
 }
 
+static irqreturn_t mca_cc6ul_gpio_irq_handler(int irq, void *data)
+{
+	struct mca_cc6ul_gpio *gpio = data;
+	unsigned int pending_irqs, mask, this_irq;
+	int ret, i;
+
+	/*
+	 * TODO, generalize the code to properly support multiple GPIO banks.
+	 * For instance, in the code above the status reg accessed should change
+	 * depending on the irq number <-> GPIO bank.
+	 */
+	ret = regmap_read(gpio->mca->regmap, GPIO_IRQ_STATUS_REG(0), &pending_irqs);
+	if (ret < 0) {
+		dev_err(gpio->mca->dev,
+			"IRQ %d: Failed to read GPIO_IRQ_STATUS_REG (%d)\n",
+			irq, ret);
+		return IRQ_HANDLED;
+	}
+
+	for (i = 0; i < 8; i++) {
+		mask = 1 << i;
+		if (pending_irqs & mask) {
+			/* Ack the irq and call the handler */
+			this_irq = irq_find_mapping(gpio->gp.irqdomain, i);
+			ret = regmap_write(gpio->mca->regmap,
+					   GPIO_IRQ_STATUS_REG(0),
+					   mask);
+			if (ret)
+				dev_err(gpio->mca->dev,
+					"Failed to ack IRQ %d (%d)\n",
+					 this_irq, ret);
+
+			handle_nested_irq(this_irq);
+		}
+	}
+
+	return IRQ_HANDLED;
+}
+
+static void mca_cc6ul_gpio_irq_disable(struct irq_data *d)
+{
+	struct gpio_chip *gc = irq_data_get_irq_chip_data(d);
+	struct mca_cc6ul_gpio *gpio = to_mca_cc6ul_gpio(gc);
+
+	/*
+	 * Update the IRQ_EN bit and also set the CFG_UPDATE flag to mark what
+	 * registers have to be written later to the MCA, once we are out of
+	 * atomic context. Note that this flag is not cleared before writing
+	 * the MCA regsister.
+	 */
+	gpio->irq_cfg[d->hwirq] |= GPIO_CFG_UPDATE;
+	gpio->irq_cfg[d->hwirq] &= ~MCA_CC6UL_GPIO_IRQ_EN;
+}
+
+static void mca_cc6ul_gpio_irq_enable(struct irq_data *d)
+{
+	struct gpio_chip *gc = irq_data_get_irq_chip_data(d);
+	struct mca_cc6ul_gpio *gpio = to_mca_cc6ul_gpio(gc);
+
+	/*
+	 * Update the IRQ_EN bit and also set the CFG_UPDATE flag to mark what
+	 * registers have to be written later to the MCA, once we are out of
+	 * atomic context. Note that this flag is not cleared before writing
+	 * the MCA regsister.
+	 */
+	gpio->irq_cfg[d->hwirq] |= GPIO_CFG_UPDATE | MCA_CC6UL_GPIO_IRQ_EN;
+}
+
+static void mca_cc6ul_gpio_irq_bus_lock(struct irq_data *d)
+{
+	struct gpio_chip *gc = irq_data_get_irq_chip_data(d);
+	struct mca_cc6ul_gpio *gpio = to_mca_cc6ul_gpio(gc);
+
+	mutex_lock(&gpio->irq_lock);
+}
+
+static void mca_cc6ul_gpio_irq_bus_sync_unlock(struct irq_data *d)
+{
+	struct gpio_chip *gc = irq_data_get_irq_chip_data(d);
+	struct mca_cc6ul_gpio *gpio = to_mca_cc6ul_gpio(gc);
+	int i, ret;
+
+	for (i = 0; i < gc->ngpio; i++) {
+		/* Update only those registers that were flagged (modified) */
+		if (!(gpio->irq_cfg[i] & GPIO_CFG_UPDATE))
+			continue;
+
+		gpio->irq_cfg[i] &= ~GPIO_CFG_UPDATE;
+
+		ret = regmap_write(gpio->mca->regmap,
+				   GPIO_IRQ_CFG_REG(i),
+				   gpio->irq_cfg[i]);
+		if (ret) {
+			dev_err(gpio->mca->dev,
+				"Failed to configure IRQ %d\n",	d->irq);
+		}
+	}
+
+	mutex_unlock(&gpio->irq_lock);
+}
+
+static int mca_cc6ul_gpio_irq_set_type(struct irq_data *d, unsigned int type)
+{
+	struct gpio_chip *gc = irq_data_get_irq_chip_data(d);
+	struct mca_cc6ul_gpio *gpio = to_mca_cc6ul_gpio(gc);
+	u32 gpio_idx = d->hwirq;
+
+	if ((type & IRQ_TYPE_LEVEL_HIGH) || (type & IRQ_TYPE_LEVEL_LOW)) {
+		dev_err(gpio->mca->dev,
+			"IRQ %d: level IRQs are not supported\n", d->irq);
+		return -EINVAL;
+	}
+
+	/*
+	 * Update the edge flags based on type and set CFG_UPDATE to note that
+	 * the register was modified and has to be written back to the MCA in
+	 * mca_cc6ul_gpio_irq_bus_sync_unlock().
+	 */
+	gpio->irq_cfg[gpio_idx] &= ~MCA_CC6UL_M_GPIO_IRQ_CFG;
+	gpio->irq_cfg[gpio_idx] |= GPIO_CFG_UPDATE;
+
+	if (type & IRQ_TYPE_EDGE_RISING)
+		gpio->irq_cfg[gpio_idx] |= MCA_CC6UL_GPIO_IRQ_EDGE_RISE;
+
+	if (type & IRQ_TYPE_EDGE_FALLING)
+		gpio->irq_cfg[gpio_idx] |= MCA_CC6UL_GPIO_IRQ_EDGE_FALL;
+
+	return 0;
+}
+
+static int mca_cc6ul_gpio_to_irq(struct gpio_chip *gc, u32 offset)
+{
+	struct mca_cc6ul_gpio *gpio = to_mca_cc6ul_gpio(gc);
+
+	if (GPIO_BYTE(offset) >= MCA_CC6UL_MAX_IO_BYTES)
+		return -EINVAL;
+
+	/* Discard non irq capable gpios */
+	if (!mca_cc6ul_gpio_is_irq_capable(gpio, offset))
+		return -EINVAL;
+
+	return irq_find_mapping(gc->irqdomain, offset);
+}
+
+static struct irq_chip mca_cc6ul_gpio_irq_chip = {
+	.name			= "mca-cc6ul-gpio",
+	.irq_disable		= mca_cc6ul_gpio_irq_disable,
+	.irq_enable		= mca_cc6ul_gpio_irq_enable,
+	.irq_bus_lock		= mca_cc6ul_gpio_irq_bus_lock,
+	.irq_bus_sync_unlock	= mca_cc6ul_gpio_irq_bus_sync_unlock,
+	.irq_set_type		= mca_cc6ul_gpio_irq_set_type,
+};
+
+static int mca_cc6ul_gpio_irq_setup(struct mca_cc6ul_gpio *gpio)
+{
+	struct mca_cc6ul *mca = gpio->mca;
+	unsigned int val;
+	int ret, i;
+
+	mutex_init(&gpio->irq_lock);
+
+	for (i = 0; i < gpio->gp.ngpio; i++) {
+		gpio->irq_cfg[i] = 0;
+
+		ret = regmap_read(gpio->mca->regmap, GPIO_IRQ_CFG_REG(i), &val);
+		if (ret) {
+			dev_err(mca->dev,
+				"Failed to read GPIO[%d] irq config (%d)\n",
+				i, ret);
+			continue;
+		}
+
+		if (val & MCA_CC6UL_GPIO_IRQ_CAPABLE)
+			gpio->irq_capable[GPIO_BYTE(i)] |= 1 << BYTE_OFFSET(i);
+		else
+			gpio->irq_capable[GPIO_BYTE(i)] &= ~(1 << BYTE_OFFSET(i));
+	}
+
+	ret = devm_request_threaded_irq(mca->dev, gpio->irq,
+					NULL, mca_cc6ul_gpio_irq_handler,
+					IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
+					mca_cc6ul_gpio_irq_chip.name,
+					gpio);
+	if (ret) {
+		dev_err(mca->dev, "Failed to request %s IRQ (%d)\n",
+			MCA_CC6UL_IRQ_GPIOS_BANK0_NAME, gpio->irq);
+		return ret;
+	}
+
+	ret = gpiochip_irqchip_add(&gpio->gp,
+				   &mca_cc6ul_gpio_irq_chip,
+				   0,
+				   handle_edge_irq,
+				   IRQ_TYPE_NONE);
+	if (ret) {
+		dev_err(mca->dev,
+			"Failed to connect irqchip to gpiochip (%d)\n", ret);
+		return ret;
+	}
+
+	/*
+	 * gpiochip_irqchip_add() sets .to_irq with its own implementation but
+	 * we have to use our own version because not all GPIOs are irq capable.
+	 * Therefore, we overwrite it.
+	 */
+	gpio->gp.to_irq = mca_cc6ul_gpio_to_irq;
+
+	gpiochip_set_chained_irqchip(&gpio->gp,
+				     &mca_cc6ul_gpio_irq_chip,
+				     gpio->irq,
+				     NULL);
+
+	return 0;
+}
+
 static struct gpio_chip reference_gp = {
-	.label = "mca-cc6ul-gpio",
-	.owner = THIS_MODULE,
-	.get = mca_cc6ul_gpio_get,
-	.set = mca_cc6ul_gpio_set,
-	.direction_input = mca_cc6ul_gpio_direction_input,
-	.direction_output = mca_cc6ul_gpio_direction_output,
-	.can_sleep = 1,
-	.base = -1,
+	.label			= "mca-cc6ul-gpio",
+	.owner			= THIS_MODULE,
+	.get			= mca_cc6ul_gpio_get,
+	.set			= mca_cc6ul_gpio_set,
+	.direction_input	= mca_cc6ul_gpio_direction_input,
+	.direction_output	= mca_cc6ul_gpio_direction_output,
+	.to_irq			= mca_cc6ul_gpio_to_irq,
+	.can_sleep		= 1,
+	.base			= -1,
 };
 
 static const struct of_device_id mca_cc6ul_gpio_dt_ids[] = {
@@ -119,8 +354,11 @@ static int mca_cc6ul_gpio_probe(struct platform_device *pdev)
 	if (gpio->mca  == NULL)
 		return -EPROBE_DEFER;
 
+	gpio->irq = platform_get_irq_byname(pdev,
+					    MCA_CC6UL_IRQ_GPIOS_BANK0_NAME);
 	gpio->gp = reference_gp;
 	gpio->gp.of_node = pdev->dev.of_node;
+	gpio->gp.dev = &pdev->dev;
 	platform_set_drvdata(pdev, gpio);
 
 	/* Find entry in device-tree */
@@ -156,6 +394,12 @@ static int mca_cc6ul_gpio_probe(struct platform_device *pdev)
 	ret = gpiochip_add(&gpio->gp);
 	if (ret < 0) {
 		dev_err(&pdev->dev, "Could not register gpiochip, %d\n", ret);
+		goto err;
+	}
+
+	ret = mca_cc6ul_gpio_irq_setup(gpio);
+	if (ret) {
+		gpiochip_remove(&gpio->gp);
 		goto err;
 	}
 
