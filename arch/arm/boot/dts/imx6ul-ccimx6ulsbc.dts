@@ -1,0 +1,62 @@
+/*
+ * Copyright 2016 Digi International, Inc.
+ *
+ * The code contained herein is licensed under the GNU General Public
+ * License. You may obtain a copy of the GNU General Public License
+ * Version 2 or later at the following locations:
+ *
+ * http://www.opensource.org/licenses/gpl-license.html
+ * http://www.gnu.org/copyleft/gpl.html
+ */
+
+/dts-v1/;
+#include <dt-bindings/input/input.h>
+#include <dt-bindings/interrupt-controller/irq.h>
+/* i.MX6 UltraLite CPU */
+#include "imx6ul.dtsi"
+/* ConnectCore 6UL */
+#include "imx6ul-ccimx6ul.dtsi"
+/* ConnectCore 6UL SBC */
+#include "imx6ul-ccimx6ulsbc.dtsi"
+
+&caam_keyblob {
+	status = "okay";
+};
+
+/* ENET1 */
+&fec1 {
+	status = "okay";
+};
+
+/* CAN1 (multiplexed with UART3) */
+//&flexcan1 {
+//	status = "okay";
+//};
+
+/* CAN2 */
+&flexcan2 {
+	status = "okay";
+};
+
+/* UART3 (multiplexed with CAN1) */
+&uart3 {
+	status = "okay";
+};
+
+/* UART5 (Console) */
+&uart5 {
+	status = "okay";
+};
+
+&usbotg1 {
+	status = "okay";
+};
+
+&usbotg2 {
+	status = "okay";
+};
+
+/* USDHC2 (microSD) */
+&usdhc2 {
+	status = "okay";
+};
