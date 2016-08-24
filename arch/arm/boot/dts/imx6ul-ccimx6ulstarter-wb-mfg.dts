@@ -23,11 +23,6 @@
 	status = "okay";
 };
 
-/* UART1 (Bluetooth) */
-&uart1 {
-	status = "okay";
-};
-
 /* UART5 (Console) */
 &uart5 {
 	status = "okay";
@@ -38,11 +33,6 @@
 };
 
 &usbotg2 {
-	status = "okay";
-};
-
-/* USDHC1 (Wireless) */
-&usdhc1 {
 	status = "okay";
 };
 

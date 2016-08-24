@@ -32,11 +32,6 @@
 	status = "okay";
 };
 
-/* UART1 (Bluetooth) */
-&uart1 {
-	status = "okay";
-};
-
 /* UART4 (Raspberry PI Expansion header) */
 &uart4 {
 	status = "okay";
@@ -52,11 +47,6 @@
 };
 
 &usbotg2 {
-	status = "okay";
-};
-
-/* USDHC1 (Wireless) */
-&usdhc1 {
 	status = "okay";
 };
 
