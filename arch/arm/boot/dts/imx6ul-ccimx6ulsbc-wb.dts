@@ -28,6 +28,11 @@
 	status = "okay";
 };
 
+/* ENET2 */
+&fec2 {
+	status = "okay";
+};
+
 /* CAN1 (multiplexed with UART3) */
 //&flexcan1 {
 //	status = "okay";
