@@ -540,6 +540,7 @@ struct fec_enet_private {
 	int	wol_flag;
 	int	wake_irq;
 	u32	quirks;
+	int	phy_reset_req;
 
 	struct	napi_struct napi;
 	int	csum_flags;

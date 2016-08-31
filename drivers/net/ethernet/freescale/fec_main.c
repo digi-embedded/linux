@@ -3416,7 +3416,8 @@ static void fec_reset_phy(struct platform_device *pdev)
 	int err, phy_reset;
 	int msec = 1;
 	struct device_node *np = pdev->dev.of_node;
-	static int needs_free = 0;
+	struct net_device *ndev = platform_get_drvdata(pdev);
+	struct fec_enet_private *fep = netdev_priv(ndev);
 
 	if (!np)
 		return;
@@ -3431,7 +3432,7 @@ static void fec_reset_phy(struct platform_device *pdev)
 		return;
 
 	/* Free PHY reset GPIO if requested previously by this driver */
-	if (needs_free)
+	if (fep->phy_reset_req)
 		devm_gpio_free(&pdev->dev, phy_reset);
 
 	err = devm_gpio_request_one(&pdev->dev, phy_reset,
@@ -3448,7 +3449,7 @@ static void fec_reset_phy(struct platform_device *pdev)
 	 * Set flag to free the PHY reset gpio if this function needs to be
 	 * called again in the future.
 	 */
-	needs_free = 1;
+	fep->phy_reset_req = 1;
 }
 
 static void fec_gpio_led_init(struct platform_device *pdev)
@@ -3729,6 +3730,7 @@ fec_probe(struct platform_device *pdev)
 	}
 
 	fec_gpio_led_init(pdev);
+	fep->phy_reset_req = 0;
 	fec_reset_phy(pdev);
 
 	if (fep->bufdesc_ex)
