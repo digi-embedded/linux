@@ -77,7 +77,23 @@
 	status = "okay";
 };
 
-/* USDHC2 (microSD) */
+/* USDHC2 (microSD, conflicts with eMMC) */
 &usdhc2 {
+	pinctrl-assert-gpios = <&gpio5 1 GPIO_ACTIVE_LOW>;
+	broken-cd;	/* no carrier detect line (use polling) */
 	status = "okay";
 };
+
+/* USDHC2 (eMMC, conflicts with microSD) */
+//&usdhc2 {
+//	pinctrl-assert-gpios = <&gpio5 1 GPIO_ACTIVE_HIGH>;
+//	non-removable;
+//	/*
+//	 * Comment these two lines for 4-bit data bus or leave uncommented
+//	 * for 8-bit data bus
+//	 */
+//	pinctrl-0 = <&pinctrl_usdhc2_8databits>;
+//	bus-width = <8>;
+//
+//	status = "okay";
+//};
