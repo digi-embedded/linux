@@ -19,6 +19,10 @@
 /* ConnectCore 6UL StarterBoard */
 #include "imx6ul-ccimx6ulstarter.dtsi"
 
+&caam_keyblob {
+	status = "okay";
+};
+
 /* ECSPI3 (Raspberry PI Expansion header) */
 &ecspi3 {
 	/*
@@ -39,13 +43,19 @@
 	status = "okay";
 };
 
-&caam_keyblob {
-	status = "okay";
-};
-
 /* CAN1 (Raspberry PI Expansion header) */
 &flexcan1 {
 	status = "okay";
+};
+
+/* I2C2 (Raspberry PI Expansion header and Grove connector) */
+&i2c2 {
+	status = "okay";
+};
+
+/* MCA IO0 connected to Grove ADC connector */
+&mca_adc {
+	digi,adc-ch-list = <0>;
 };
 
 /* UART4 (Raspberry PI Expansion header) */
@@ -68,15 +78,5 @@
 
 /* USDHC2 (microSD) */
 &usdhc2 {
-	status = "okay";
-};
-
-/* MCA IO0 connected to Grove ADC connector */
-&mca_adc {
-	digi,adc-ch-list = <0>;
-};
-
-/* I2C2 (Raspberry PI Expansion header and Grove connector) */
-&i2c2 {
 	status = "okay";
 };

@@ -64,6 +64,12 @@
 	status = "disabled";
 };
 
+&i2c2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_i2c2>;
+	status = "disabled";
+};
+
 /* UART4 (Raspberry PI Expansion header) */
 &uart4 {
 	pinctrl-names = "default";
@@ -97,12 +103,6 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_usdhc2>;
 	broken-cd;      /* no carrier detect line (use polling) */
-	status = "disabled";
-};
-
-&i2c2 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_i2c2>;
 	status = "disabled";
 };
 
@@ -141,6 +141,13 @@
 			>;
 		};
 
+		pinctrl_i2c2: i2c2grp {
+			fsl,pins = <
+				MX6UL_PAD_GPIO1_IO00__I2C2_SCL 0x4001b8b0
+				MX6UL_PAD_GPIO1_IO01__I2C2_SDA 0x4001b8b0
+			>;
+		};
+
 		pinctrl_uart4: uart4grp {
 			fsl,pins = <
 				MX6UL_PAD_LCD_CLK__UART4_DCE_TX		0x1b0b1
@@ -163,13 +170,6 @@
 				MX6UL_PAD_CSI_DATA01__USDHC2_DATA1	0x17059
 				MX6UL_PAD_CSI_DATA02__USDHC2_DATA2	0x17059
 				MX6UL_PAD_CSI_DATA03__USDHC2_DATA3	0x17059
-			>;
-		};
-
-		pinctrl_i2c2: i2c2grp {
-			fsl,pins = <
-				MX6UL_PAD_GPIO1_IO00__I2C2_SCL 0x4001b8b0
-				MX6UL_PAD_GPIO1_IO01__I2C2_SDA 0x4001b8b0
 			>;
 		};
 	};
