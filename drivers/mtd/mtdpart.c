@@ -793,8 +793,8 @@ int add_mtd_partitions(struct mtd_info *master,
 		list_add(&slave->list, &mtd_partitions);
 		mutex_unlock(&mtd_partitions_mutex);
 
-		add_mtd_device(&slave->mtd);
-		mtd_add_partition_attrs(slave);
+		if (!add_mtd_device(&slave->mtd))
+			mtd_add_partition_attrs(slave);
 		if (parts[i].types)
 			mtd_parse_part(slave, parts[i].types);
 
