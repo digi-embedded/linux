@@ -293,9 +293,9 @@ static int blob_encap_jobdesc(u32 **desc, dma_addr_t keymod,
  * be refactored using a scheme that allows both 32 and 64 bit addressing
  */
 
-static int blob_decap_jobdesc(u32 **desc, dma_addr_t keymod, dma_addr_t blobbuf,
-			      u8 *outbuf, u16 secretsz, u8 keycolor,
-			      u8 blobtype, u8 auth)
+int blob_decap_jobdesc(u32 **desc, dma_addr_t keymod, dma_addr_t blobbuf,
+		       u8 *outbuf, u16 secretsz, u8 keycolor,
+		       u8 blobtype, u8 auth)
 {
 	u32 *tdesc, tmpdesc[INITIAL_DESCSZ];
 	u16 dsize, idx;
