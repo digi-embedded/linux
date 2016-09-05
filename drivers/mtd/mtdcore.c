@@ -44,6 +44,7 @@
 #include <linux/mtd/partitions.h>
 
 #include "mtdcore.h"
+#include "mtdcrypt.h"
 
 static struct backing_dev_info mtd_bdi = {
 };
@@ -443,6 +444,17 @@ int add_mtd_device(struct mtd_info *mtd)
 		not->add(mtd);
 
 	mutex_unlock(&mtd_table_mutex);
+
+	if (!(mtd->flags & MTD_NONENCRYPTED)) {
+		if (mtdcrypt_init_crypt_info(mtd) < 0) {
+			device_destroy(&mtd_class, MTD_DEVT(i) + 1);
+			device_unregister(&mtd->dev);
+			idr_remove(&mtd_idr, i);
+			pr_err("mtdcrypt: initialization error\n");
+			return 1;
+		}
+	}
+
 	/* We _know_ we aren't being removed, because
 	   our caller is still holding us here. So none
 	   of this try_ nonsense, and no bitching about it
@@ -478,6 +490,9 @@ int del_mtd_device(struct mtd_info *mtd)
 		ret = -ENODEV;
 		goto out_error;
 	}
+
+	if (!(mtd->flags & MTD_NONENCRYPTED))
+		mtdcrypt_destroy_crypt_info(mtd);
 
 	/* No need to get a refcount on the module containing
 		the notifier, since we hold the mtd_table_mutex */
@@ -875,14 +890,56 @@ int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 	if (!len)
 		return 0;
 
-	/*
-	 * In the absence of an error, drivers return a non-negative integer
-	 * representing the maximum number of bitflips that were corrected on
-	 * any one ecc region (if applicable; zero otherwise).
-	 */
-	ret_code = mtd->_read(mtd, from, len, retlen, buf);
-	if (unlikely(ret_code < 0))
-		return ret_code;
+	if (mtd->flags & MTD_NONENCRYPTED) {
+		/*
+		 * In the absence of an error, drivers return a non-negative
+		 * integer representing the maximum number of bitflips that
+		 * were corrected on any one ecc region (if applicable;
+		 * zero otherwise).
+		 */
+		ret_code = mtd->_read(mtd, from, len, retlen, buf);
+		if (unlikely(ret_code < 0))
+			return ret_code;
+	} else {
+		size_t alen = ALIGN(len, mtd->crypt_info->block_size);
+		loff_t afrom = ALIGN(from, mtd->crypt_info->block_size);
+		size_t olen = len;
+		unsigned int fromdiff = 0;
+		u_char *tmpbuf = NULL;
+
+		if (afrom != from) {
+			afrom -= mtd->crypt_info->block_size;
+			fromdiff = from - afrom;
+			len += fromdiff;
+			alen = ALIGN(len, mtd->crypt_info->block_size);
+		}
+		len = alen;
+
+		tmpbuf = kmalloc(len, GFP_KERNEL);
+		if (!tmpbuf)
+			return -ENOMEM;
+
+		/* Block aligned read */
+		ret_code = mtd->_read(mtd, afrom, len, retlen, tmpbuf);
+		if (unlikely(ret_code < 0)) {
+			kfree(tmpbuf);
+			return ret_code;
+		}
+
+		ret_code = mtdcrypt_crypt(mtd->crypt_info, tmpbuf, tmpbuf,
+				len, afrom >> mtd->crypt_info->block_shift,
+				MTD_DECRYPT);
+		if (unlikely(ret_code < 0)) {
+			kfree(tmpbuf);
+			pr_err("Decryption failed with %d\n", ret_code);
+			return ret_code;
+		}
+		/* Adjust for unaligned read */
+		memcpy(buf, tmpbuf + fromdiff, olen);
+		*retlen = olen;
+		kfree(tmpbuf);
+	}
+
 	if (mtd->ecc_strength == 0)
 		return 0;	/* device lacks ecc */
 	return ret_code >= mtd->bitflip_threshold ? -EUCLEAN : 0;
@@ -892,6 +949,13 @@ EXPORT_SYMBOL_GPL(mtd_read);
 int mtd_write(struct mtd_info *mtd, loff_t to, size_t len, size_t *retlen,
 	      const u_char *buf)
 {
+	int err = 0;
+	u_char *dstbuf = NULL;
+	loff_t ato;
+	size_t alen;
+	size_t olen = len;
+	unsigned int todiff = 0;
+
 	*retlen = 0;
 	if (to < 0 || to >= mtd->size || len > mtd->size - to)
 		return -EINVAL;
@@ -899,7 +963,48 @@ int mtd_write(struct mtd_info *mtd, loff_t to, size_t len, size_t *retlen,
 		return -EROFS;
 	if (!len)
 		return 0;
-	return mtd->_write(mtd, to, len, retlen, buf);
+	if (mtd->flags & MTD_NONENCRYPTED)
+		return mtd->_write(mtd, to, len, retlen, buf);
+
+	/* Encrypted access */
+	alen = ALIGN(len, mtd->crypt_info->block_size);
+	ato = ALIGN(to, mtd->crypt_info->block_size);
+
+	if (ato != to) {
+		/* Adjust for unaligned access */
+		ato -= mtd->crypt_info->block_size;
+		todiff = to - ato;
+		len += todiff;
+		alen = ALIGN(len, mtd->crypt_info->block_size);
+	}
+	if (alen != len)
+		len = alen;
+
+	dstbuf = kmalloc(len, GFP_KERNEL);
+	if (!dstbuf)
+		return -ENOMEM;
+
+	/* Read block aligned data */
+	err = mtd_read(mtd, ato, len, retlen, dstbuf);
+	if (unlikely(err < 0))
+		goto out;
+
+	/* Update partial block */
+	memcpy(dstbuf + todiff, buf, olen);
+
+	/* Encrypt whole block */
+	err = mtdcrypt_crypt(mtd->crypt_info, dstbuf, dstbuf, len,
+			ato >> mtd->crypt_info->block_shift, MTD_ENCRYPT);
+	if (unlikely(err < 0))
+		goto out;
+
+	/* Block aligned write */
+	err = mtd->_write(mtd, ato, len, retlen, dstbuf);
+	if (olen != *retlen)
+		*retlen = olen;
+out:
+	kfree(dstbuf);
+	return err;
 }
 EXPORT_SYMBOL_GPL(mtd_write);
 

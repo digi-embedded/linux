@@ -23,6 +23,16 @@ Optional properties:
   partition should only be mounted read-only. This is usually used for flash
   partitions containing early-boot firmware images or data which should not be
   clobbered.
+- encrypted : This parameter flags a partition as encrypted. All accesses to
+  and from this partition will be encrypted/decrypted.
+- encryption-keyblob-size : Size in bytes of the encryption key blob defined
+  above. The size of the key blob is the size of the key itself plus 48 bytes
+  of blob overhead. The maximum key size is 64 bytes so the maximum key blob
+  size is 112 bytes.
+- encryption-keyblob-part : Partition number where the CAAM encrypted crypto
+  key is stored. Defauls to 1.
+- encryption-keyblob-offset : Offset in the encryption-keyblob-part where the
+  CAAM encrypted crypto key is stored.
 
 Examples:
 
@@ -67,5 +77,9 @@ flash@2 {
 	partition@200000000 {
 		label = "filesystem #2";
 		reg = <0x2 0x00000000 0x1 0x00000000>;
+		encrypted;
+		encryption-keyblob-size = <80>;
+		encryption-keyblob-offset = <0x40000>;
+		encryption-keyblob-part = <1>;
 	};
 };

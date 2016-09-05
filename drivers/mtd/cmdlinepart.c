@@ -22,7 +22,7 @@
  *
  * mtdparts=<mtddef>[;<mtddef]
  * <mtddef>  := <mtd-id>:<partdef>[,<partdef>]
- * <partdef> := <size>[@<offset>][<name>][ro][lk]
+ * <partdef> := <size>[@<offset>][<name>][ro][lk][enc]
  * <mtd-id>  := unique name used in mapping driver/device (mtd->name)
  * <size>    := standard linux memsize OR "-" to denote all remaining space
  *              size is automatically truncated at end of device
@@ -165,6 +165,12 @@ static struct mtd_partition * newpart(char *s,
 	if (strncmp(s, "lk", 2) == 0) {
 		mask_flags |= MTD_POWERUP_LOCK;
 		s += 2;
+	}
+
+	if (strncmp(s, "enc", 3) == 0) {
+		/* Mask the nonencrypted bitmask */
+		mask_flags |= MTD_NONENCRYPTED;
+		s += 3;
 	}
 
 	/* test if more partitions are following */

@@ -356,6 +356,19 @@ out:
 	return ret;
 }
 
+int fsl_otp_get_hwid(unsigned int *hwid)
+{
+	unsigned int phy_index;
+	int i, j;
+
+	for (i = HW_OCTP_IDX_MAC0, j = 0; i <= HW_OCTP_IDX_MAC1; i++, j++) {
+		phy_index = fsl_otp_word_physical(fsl_otp, i);
+		if (fsl_otp_read(phy_index, &hwid[j]))
+			return -EPERM;
+	}
+	return 0;
+}
+
 static ssize_t fsl_otp_show(struct kobject *kobj, struct kobj_attribute *attr,
 			    char *buf)
 {
