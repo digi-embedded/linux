@@ -59,6 +59,20 @@
 	status = "okay";
 };
 
+/* Parallel LCD */
+&lcdif {
+	status = "okay";
+};
+
+/* LCD backlight (PWM5) */
+&lcd_backlight {
+	status = "okay";
+};
+
+&pwm5 {
+	status = "okay";
+};
+
 /* UART3 (multiplexed with CAN1) */
 &uart3 {
 	status = "okay";

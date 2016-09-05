@@ -14,6 +14,14 @@
 	compatible = "digi,ccimx6ulsbc", "digi,ccimx6ul", "fsl,imx6ul";
 	digi,machine,name = "ccimx6ulsbc";
 
+	lcd_backlight: backlight {
+		compatible = "pwm-backlight";
+		pwms = <&pwm5 0 5000000>;
+		brightness-levels = <0 4 8 16 32 64 128 255>;
+		default-brightness-level = <6>;
+		status = "disabled";
+	};
+
 	reg_usb_otg1_vbus: reg_usb_otg1:@0 {
 		compatible = "regulator-fixed";
 		regulator-name = "usb_otg1_vbus";
@@ -86,6 +94,48 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan2>;
 	xceiver-supply = <&ext_3v3>;
+	status = "disabled";
+};
+
+/* Parallel LCD */
+&lcdif {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lcdif_dat0_17
+		     &pinctrl_lcdif_ctrl1>;
+	display = <&f07a0102>;
+	status = "disabled";
+
+	f07a0102: display@0 {
+		bits-per-pixel = <16>;
+		bus-width = <18>;
+
+		display-timings {
+			native-mode = <&timing0>;
+			timing0: timing0 {
+				clock-frequency = <20000000>;
+				hactive = <800>;
+				vactive = <480>;
+				hfront-porch = <50>;
+				hback-porch = <0>;
+				hsync-len = <128>;
+				vback-porch = <25>;
+				vfront-porch = <10>;
+				vsync-len = <10>;
+				hsync-active = <0>;
+				vsync-active = <0>;
+				de-active = <1>;
+				pixelclk-active = <0>;
+			};
+		};
+	};
+};
+
+/* LCD backlight */
+&pwm5 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pwm5>;
+	clocks = <&clks IMX6UL_CLK_PWM5>,
+		 <&clks IMX6UL_CLK_PWM5>;
 	status = "disabled";
 };
 
@@ -197,6 +247,61 @@
 			fsl,pins = <
 				MX6UL_PAD_UART2_CTS_B__FLEXCAN2_TX	0x1b020
 				MX6UL_PAD_UART2_RTS_B__FLEXCAN2_RX	0x1b020
+			>;
+		};
+
+		pinctrl_lcdif_dat0_17: lcdifdatgrp0_17 {
+			fsl,pins = <
+				MX6UL_PAD_LCD_DATA00__LCDIF_DATA00	0x79
+				MX6UL_PAD_LCD_DATA01__LCDIF_DATA01	0x79
+				MX6UL_PAD_LCD_DATA02__LCDIF_DATA02	0x79
+				MX6UL_PAD_LCD_DATA03__LCDIF_DATA03	0x79
+				MX6UL_PAD_LCD_DATA04__LCDIF_DATA04	0x79
+				MX6UL_PAD_LCD_DATA05__LCDIF_DATA05	0x79
+				MX6UL_PAD_LCD_DATA06__LCDIF_DATA06	0x79
+				MX6UL_PAD_LCD_DATA07__LCDIF_DATA07	0x79
+				MX6UL_PAD_LCD_DATA08__LCDIF_DATA08	0x79
+				MX6UL_PAD_LCD_DATA09__LCDIF_DATA09	0x79
+				MX6UL_PAD_LCD_DATA10__LCDIF_DATA10	0x79
+				MX6UL_PAD_LCD_DATA11__LCDIF_DATA11	0x79
+				MX6UL_PAD_LCD_DATA12__LCDIF_DATA12	0x79
+				MX6UL_PAD_LCD_DATA13__LCDIF_DATA13	0x79
+				MX6UL_PAD_LCD_DATA14__LCDIF_DATA14	0x79
+				MX6UL_PAD_LCD_DATA15__LCDIF_DATA15	0x79
+				MX6UL_PAD_LCD_DATA16__LCDIF_DATA16	0x79
+				MX6UL_PAD_LCD_DATA17__LCDIF_DATA17	0x79
+			>;
+		};
+
+		pinctrl_lcdif_dat18_23: lcdifdatgrp18_23 {
+			fsl,pins = <
+				MX6UL_PAD_LCD_DATA18__LCDIF_DATA18	0x79
+				MX6UL_PAD_LCD_DATA19__LCDIF_DATA19	0x79
+				MX6UL_PAD_LCD_DATA20__LCDIF_DATA20	0x79
+				MX6UL_PAD_LCD_DATA21__LCDIF_DATA21	0x79
+				MX6UL_PAD_LCD_DATA22__LCDIF_DATA22	0x79
+				MX6UL_PAD_LCD_DATA23__LCDIF_DATA23	0x79
+			>;
+		};
+
+		pinctrl_lcdif_ctrl1: lcdifctrlgrp1 {
+			fsl,pins = <
+				MX6UL_PAD_LCD_CLK__LCDIF_CLK		0x79
+				MX6UL_PAD_LCD_ENABLE__LCDIF_ENABLE	0x79
+			>;
+		};
+
+		pinctrl_lcdif_ctrl2: lcdifctrlgrp2 {
+			fsl,pins = <
+				MX6UL_PAD_LCD_RESET__LCDIF_RESET	0x79
+				MX6UL_PAD_LCD_HSYNC__LCDIF_HSYNC	0x79
+				MX6UL_PAD_LCD_VSYNC__LCDIF_VSYNC	0x79
+			>;
+		};
+
+		pinctrl_pwm5: pwm5grp {
+			fsl,pins = <
+				MX6UL_PAD_NAND_DQS__PWM5_OUT		0x110b0
 			>;
 		};
 
