@@ -110,6 +110,8 @@ static int parse_ofpart_partitions(struct mtd_info *master,
 		parts[i].size = of_read_number(reg + a_cells, s_cells);
 		parts[i].of_node = pp;
 
+		master->crypt_info->np = pp;
+
 		partname = of_get_property(pp, "label", &len);
 		if (!partname)
 			partname = of_get_property(pp, "name", &len);
@@ -117,6 +119,10 @@ static int parse_ofpart_partitions(struct mtd_info *master,
 
 		if (of_get_property(pp, "read-only", &len))
 			parts[i].mask_flags |= MTD_WRITEABLE;
+
+		if (!(of_get_property(pp, "encrypted", &len)))
+			/* Mask the nonencrypted bitmask */
+			(*pparts)[i].mask_flags |= MTD_NONENCRYPTED;
 
 		if (of_get_property(pp, "lock", &len))
 			parts[i].mask_flags |= MTD_POWERUP_LOCK;
