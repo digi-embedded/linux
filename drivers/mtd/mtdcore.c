@@ -4,7 +4,7 @@
  * drivers and users.
  *
  * Copyright © 1999-2010 David Woodhouse <dwmw2@infradead.org>
- * Copyright © 2006      Red Hat UK Limited 
+ * Copyright © 2006      Red Hat UK Limited
  */
 
 #include <linux/module.h>
@@ -33,6 +33,7 @@
 #include <linux/mtd/partitions.h>
 
 #include "mtdcore.h"
+#include "mtdcrypt.h"
 
 struct backing_dev_info *mtd_bdi;
 
@@ -693,6 +694,17 @@ int add_mtd_device(struct mtd_info *mtd)
 		not->add(mtd);
 
 	mutex_unlock(&mtd_table_mutex);
+
+	if (!(mtd->flags & MTD_NONENCRYPTED)) {
+		if (mtdcrypt_init_crypt_info(mtd) < 0) {
+			device_destroy(&mtd_class, MTD_DEVT(i) + 1);
+			device_unregister(&mtd->dev);
+			idr_remove(&mtd_idr, i);
+			pr_err("mtdcrypt: initialization error\n");
+			return 1;
+		}
+	}
+
 	/* We _know_ we aren't being removed, because
 	   our caller is still holding us here. So none
 	   of this try_ nonsense, and no bitching about it
@@ -733,6 +745,9 @@ int del_mtd_device(struct mtd_info *mtd)
 		ret = -ENODEV;
 		goto out_error;
 	}
+
+	if (!(mtd->flags & MTD_NONENCRYPTED))
+		mtdcrypt_destroy_crypt_info(mtd);
 
 	/* No need to get a refcount on the module containing
 		the notifier, since we hold the mtd_table_mutex */
@@ -1144,16 +1159,64 @@ EXPORT_SYMBOL_GPL(mtd_get_unmapped_area);
 int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 	     u_char *buf)
 {
+	u_char *tmpbuf = NULL;
+	size_t alen;
+	loff_t afrom;
+	size_t olen = len;
+	unsigned int fromdiff = 0;
+
 	struct mtd_oob_ops ops = {
 		.len = len,
 		.datbuf = buf,
 	};
 	int ret;
 
-	ret = mtd_read_oob(mtd, from, &ops);
-	*retlen = ops.retlen;
+	if (mtd->flags & MTD_NONENCRYPTED) {
+		ret = mtd_read_oob(mtd, from, &ops);
+		*retlen = ops.retlen;
 
-	return ret;
+		return ret;
+	}
+
+	/* Encrypted access */
+	alen = ALIGN(len, mtd->crypt_info->block_size);
+	afrom = ALIGN(from, mtd->crypt_info->block_size);
+
+	if (afrom != from) {
+		afrom -= mtd->crypt_info->block_size;
+		fromdiff = from - afrom;
+		len += fromdiff;
+		alen = ALIGN(len, mtd->crypt_info->block_size);
+	}
+	len = alen;
+
+	tmpbuf = kmalloc(len, GFP_KERNEL);
+	if (!tmpbuf)
+		return -ENOMEM;
+
+	/* Block aligned read */
+	ret = mtd->_read(mtd, afrom, len, retlen, tmpbuf);
+	if (unlikely(ret < 0)) {
+		kfree(tmpbuf);
+		return ret;
+	}
+
+	ret = mtdcrypt_crypt(mtd->crypt_info, tmpbuf, tmpbuf,
+			len, afrom >> mtd->crypt_info->block_shift,
+			MTD_DECRYPT);
+	if (unlikely(ret < 0)) {
+		kfree(tmpbuf);
+		pr_err("Decryption failed with %d\n", ret);
+		return ret;
+	}
+	/* Adjust for unaligned read */
+	memcpy(buf, tmpbuf + fromdiff, olen);
+	*retlen = olen;
+	kfree(tmpbuf);
+
+	if (mtd->ecc_strength == 0)
+		return 0;	/* device lacks ecc */
+	return ret >= mtd->bitflip_threshold ? -EUCLEAN : 0;
 }
 EXPORT_SYMBOL_GPL(mtd_read);
 
@@ -1165,10 +1228,57 @@ int mtd_write(struct mtd_info *mtd, loff_t to, size_t len, size_t *retlen,
 		.datbuf = (u8 *)buf,
 	};
 	int ret;
+	u_char *dstbuf = NULL;
+	loff_t ato;
+	size_t alen;
+	size_t olen = len;
+	unsigned int todiff = 0;
 
-	ret = mtd_write_oob(mtd, to, &ops);
-	*retlen = ops.retlen;
+	if (mtd->flags & MTD_NONENCRYPTED) {
+		ret = mtd_write_oob(mtd, to, &ops);
+		*retlen = ops.retlen;
 
+		return ret;
+	}
+
+	/* Encrypted access */
+	alen = ALIGN(len, mtd->crypt_info->block_size);
+	ato = ALIGN(to, mtd->crypt_info->block_size);
+
+	if (ato != to) {
+		/* Adjust for unaligned access */
+		ato -= mtd->crypt_info->block_size;
+		todiff = to - ato;
+		len += todiff;
+		alen = ALIGN(len, mtd->crypt_info->block_size);
+	}
+	if (alen != len)
+		len = alen;
+
+	dstbuf = kmalloc(len, GFP_KERNEL);
+	if (!dstbuf)
+		return -ENOMEM;
+
+	/* Read block aligned data */
+	ret = mtd_read(mtd, ato, len, retlen, dstbuf);
+	if (unlikely(ret < 0))
+		goto out;
+
+	/* Update partial block */
+	memcpy(dstbuf + todiff, buf, olen);
+
+	/* Encrypt whole block */
+	ret = mtdcrypt_crypt(mtd->crypt_info, dstbuf, dstbuf, len,
+			ato >> mtd->crypt_info->block_shift, MTD_ENCRYPT);
+	if (unlikely(ret < 0))
+		goto out;
+
+	/* Block aligned write */
+	ret = mtd->_write(mtd, ato, len, retlen, dstbuf);
+	if (olen != *retlen)
+		*retlen = olen;
+out:
+	kfree(dstbuf);
 	return ret;
 }
 EXPORT_SYMBOL_GPL(mtd_write);
@@ -1947,7 +2057,7 @@ static struct backing_dev_info * __init mtd_bdi_init(char *name)
 	bdi->name = name;
 	/*
 	 * We put '-0' suffix to the name to get the same name format as we
-	 * used to get. Since this is called only once, we get a unique name. 
+	 * used to get. Since this is called only once, we get a unique name.
 	 */
 	ret = bdi_register(bdi, "%.28s-0", name);
 	if (ret)
