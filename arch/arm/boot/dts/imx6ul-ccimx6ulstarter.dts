@@ -58,6 +58,11 @@
 	digi,adc-ch-list = <0>;
 };
 
+/* Uncomment to Enable Tamper detection. Two interfaces (0 and 1) are available */
+//&mca_tamper {
+//	digi,tamper-if-list = <0 1>;
+//};
+
 /* UART4 (Raspberry PI Expansion header) */
 &uart4 {
 	status = "okay";

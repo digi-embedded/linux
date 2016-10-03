@@ -74,6 +74,11 @@
 	status = "okay";
 };
 
+/* Uncomment to Enable Tamper detection. Two interfaces (0 and 1) are available */
+//&mca_tamper {
+//	digi,tamper-if-list = <0 1>;
+//};
+
 &pwm5 {
 	status = "okay";
 };

@@ -71,6 +71,21 @@ static struct resource mca_cc6ul_pwrkey_resources[] = {
 	},
 };
 
+static struct resource mca_cc6ul_tamper_resources[] = {
+	{
+		.name   = MCA_CC6UL_IRQ_TAMPER0_NAME,
+		.start  = MCA_CC6UL_IRQ_TAMPER0,
+		.end    = MCA_CC6UL_IRQ_TAMPER0,
+		.flags  = IORESOURCE_IRQ,
+	},
+	{
+		.name   = MCA_CC6UL_IRQ_TAMPER1_NAME,
+		.start  = MCA_CC6UL_IRQ_TAMPER1,
+		.end    = MCA_CC6UL_IRQ_TAMPER1,
+		.flags  = IORESOURCE_IRQ,
+	},
+};
+
 static struct resource mca_cc6ul_gpios_resources[] = {
 	{
 		.name   = MCA_CC6UL_IRQ_GPIOS_BANK0_NAME,
@@ -108,6 +123,12 @@ static const struct mfd_cell mca_cc6ul_devs[] = {
 	{
 		.name           = MCA_CC6UL_DRVNAME_ADC,
 		.of_compatible = "digi,mca-cc6ul-adc",
+	},
+	{
+		.name           = MCA_CC6UL_DRVNAME_TAMPER,
+		.num_resources  = ARRAY_SIZE(mca_cc6ul_tamper_resources),
+		.resources      = mca_cc6ul_tamper_resources,
+		.of_compatible = "digi,mca-cc6ul-tamper",
 	},
 };
 

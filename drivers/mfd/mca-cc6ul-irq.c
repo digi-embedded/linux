@@ -42,6 +42,14 @@ static const struct regmap_irq mca_cc6ul_irqs[] = {
                 .reg_offset = MCA_CC6UL_IRQ_0_OFFSET,
                 .mask = MCA_CC6UL_M_PWR_OFF,
         },
+	[MCA_CC6UL_IRQ_TAMPER0] = {
+		.reg_offset = MCA_CC6UL_IRQ_0_OFFSET,
+		.mask = MCA_CC6UL_M_TAMPER0,
+	},
+	[MCA_CC6UL_IRQ_TAMPER1] = {
+		.reg_offset = MCA_CC6UL_IRQ_0_OFFSET,
+		.mask = MCA_CC6UL_M_TAMPER1,
+	},
 	[MCA_CC6UL_IRQ_GPIO_BANK_0] = {
 		.reg_offset = MCA_CC6UL_IRQ_1_OFFSET,
 		.mask = MCA_CC6UL_M_GPIO_BANK_0,

@@ -109,6 +109,10 @@
 		mca_adc: adc {
 			compatible = "digi,mca-cc6ul-adc";
 		};
+
+		mca_tamper: tamper {
+			compatible = "digi,mca-cc6ul-tamper";
+		};
 	};
 
 	pmic: pfuze3000@08 {
