@@ -119,7 +119,7 @@
 &lcdif {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lcdif_dat0_17
-		     &pinctrl_lcdif_ctrl1>;
+		     &pinctrl_lcdif_clken>;
 	display = <&f07a0102>;
 	status = "disabled";
 
@@ -315,18 +315,23 @@
 			>;
 		};
 
-		pinctrl_lcdif_ctrl1: lcdifctrlgrp1 {
+		pinctrl_lcdif_clken: lcdifctrlgrp1 {
 			fsl,pins = <
 				MX6UL_PAD_LCD_CLK__LCDIF_CLK		0x79
 				MX6UL_PAD_LCD_ENABLE__LCDIF_ENABLE	0x79
 			>;
 		};
 
-		pinctrl_lcdif_ctrl2: lcdifctrlgrp2 {
+		pinctrl_lcdif_hvsync: lcdifctrlgrp2 {
 			fsl,pins = <
-				MX6UL_PAD_LCD_RESET__LCDIF_RESET	0x79
 				MX6UL_PAD_LCD_HSYNC__LCDIF_HSYNC	0x79
 				MX6UL_PAD_LCD_VSYNC__LCDIF_VSYNC	0x79
+			>;
+		};
+
+		pinctrl_lcdif_reset: lcdifctrlgrp3 {
+			fsl,pins = <
+				MX6UL_PAD_LCD_RESET__LCDIF_RESET	0x79
 			>;
 		};
 
