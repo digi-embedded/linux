@@ -44,7 +44,7 @@
 
 &fec1 {
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_enet1 &pinctrl_enet1_mdio>;
+	pinctrl-0 = <&pinctrl_enet1>;
 	phy-mode = "rmii";
 	phy-handle = <&ethphy0>;
 	phy-reset-gpios = <&mca_gpio 7 GPIO_ACTIVE_LOW>;
@@ -63,7 +63,9 @@
 
 	/*
 	 * The MDIO bus is shared between ENET1 and ENET2. If you only want
-	 * to enable ENET1, this node must be moved to fec1 node.
+	 * to enable ENET1, this node must be moved to fec1 node, and the
+	 * pinctrl-0 of fec1 must contain the IOMUX for the MDIO bus on ENET1
+	 * (pintrl_enet1_mdio).
 	 */
 	mdio {
 		#address-cells = <1>;
