@@ -78,6 +78,14 @@
 	status = "okay";
 };
 
+&pxp {
+	status = "okay";
+};
+
+&pxp_v4l2 {
+	status = "okay";
+};
+
 /* UART2 */
 &uart2 {
 	/* RTS/CTS lines multiplexed with CAN2 */
