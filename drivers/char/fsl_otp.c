@@ -499,8 +499,16 @@ static int fsl_register_hwid(void) {
 		"digi,hwid,genid",
 		"digi,hwid,sn",
 	};
+	const char *compat_machines[] = {
+		"digi,ccimx6",
+		"digi,ccimx6ul",
+	};
 
-	np = of_find_compatible_node(NULL, NULL, "digi,ccimx6");
+	for (i = 0; i < ARRAY_SIZE(compat_machines); i++) {
+		np = of_find_compatible_node(NULL, NULL, compat_machines[i]);
+		if (np)
+			break;
+	}
 	if (!np)
 		return -EPERM;
 
@@ -577,8 +585,17 @@ static int fsl_register_hwid(void) {
 static int fsl_register_carrierboard(void) {
 	struct device_node *np = NULL;
 	const char *boardver_str;
+	int i;
+	const char *compat_machines[] = {
+		"digi,ccimx6",
+		"digi,ccimx6ul",
+	};
 
-	np = of_find_compatible_node(NULL, NULL, "digi,ccimx6");
+	for (i = 0; i < ARRAY_SIZE(compat_machines); i++) {
+		np = of_find_compatible_node(NULL, NULL, compat_machines[i]);
+		if (np)
+			break;
+	}
 	if (!np)
 		return -EPERM;
 
