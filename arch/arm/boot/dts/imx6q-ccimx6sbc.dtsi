@@ -88,6 +88,7 @@
 		clocks = <&clks 201>;
 		clock-names = "csi_mclk";
 		pwn-gpios = <&gpio3 15 1>;
+		digi,alt-pwn-gpios = <&gpio7 6 1>;
 		mclk = <24000000>;
 		mclk_source = <0>;
 		digi,defer-probe;
