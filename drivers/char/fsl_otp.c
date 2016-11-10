@@ -9,6 +9,7 @@
  */
 
 #include <linux/clk.h>
+#include <linux/clk-provider.h>
 #include <linux/delay.h>
 #include <linux/err.h>
 #include <linux/init.h>
@@ -328,9 +329,11 @@ static u32 fsl_otp_read(int index, u32 *value)
 	if (!fsl_otp)
 		return -ENODEV;
 
-	ret = clk_prepare_enable(otp_clk);
-	if (ret)
-		return -ENODEV;
+	if (!__clk_is_enabled(otp_clk)) {
+		ret = clk_prepare_enable(otp_clk);
+		if (ret)
+			return -ENODEV;
+	}
 
 	mutex_lock(&otp_mutex);
 
@@ -344,7 +347,12 @@ static u32 fsl_otp_read(int index, u32 *value)
 	*value = __raw_readl(otp_base + HW_OCOTP_CUST_N(index));
 out:
 	mutex_unlock(&otp_mutex);
-	clk_disable_unprepare(otp_clk);
+	/*
+	 * i.MX6UL hangs when the OTP clock is disabled during kernel boot.
+	 * The consumption for having the clock permanently active is
+	 * considered to be minimal.
+	 */
+// 	clk_disable_unprepare(otp_clk);
 	return ret;
 }
 
@@ -444,9 +452,11 @@ static ssize_t fsl_otp_store(struct kobject *kobj, struct kobj_attribute *attr,
 	if (ret < 0)
 		return -EINVAL;
 
-	ret = clk_prepare_enable(otp_clk);
-	if (ret)
-		return -ENODEV;
+	if (!__clk_is_enabled(otp_clk)) {
+		ret = clk_prepare_enable(otp_clk);
+		if (ret)
+			return -ENODEV;
+	}
 
 	mutex_lock(&otp_mutex);
 
@@ -468,7 +478,12 @@ static ssize_t fsl_otp_store(struct kobject *kobj, struct kobj_attribute *attr,
 
 out:
 	mutex_unlock(&otp_mutex);
-	clk_disable_unprepare(otp_clk);
+	/*
+	 * i.MX6UL hangs when the OTP clock is disabled during kernel boot.
+	 * The consumption for having the clock permanently active is
+	 * considered to be minimal.
+	 */
+// 	clk_disable_unprepare(otp_clk);
 	return ret ? 0 : count;
 }
 #endif /* CONFIG_FSL_OTP_WRITE */
