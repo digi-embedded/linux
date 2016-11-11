@@ -602,8 +602,9 @@ static int fsl_register_carrierboard(void) {
 	const char *boardver_str;
 	int i;
 	const char *compat_machines[] = {
-		"digi,ccimx6",
-		"digi,ccimx6ul",
+		"digi,ccimx6sbc",
+		"digi,ccimx6ulstarter",
+		"digi,ccimx6ulsbc",
 	};
 
 	for (i = 0; i < ARRAY_SIZE(compat_machines); i++) {
