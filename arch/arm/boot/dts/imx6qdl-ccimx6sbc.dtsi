@@ -314,6 +314,7 @@
 		pinctrl-0 = <&pinctrl_mipi>;
 		clocks = <&clks 201>;
 		clock-names = "csi_mclk";
+		pwn-gpios = <&gpio7 6 1>;
 		digi,alt-pwn-gpios = <&gpio5 0 1
 				      &gpio3 15 1>;
 		mclk = <24000000>;
@@ -330,6 +331,7 @@
 		clocks = <&clks 201>;
 		clock-names = "csi_mclk";
 		pwn-gpios = <&gpio5 0 1>;
+		digi,alt-pwn-gpios = <&gpio7 6 1>;
 		csi_id = <0>;
 		ipu_id = <0>;
 		mclk = <24000000>;
