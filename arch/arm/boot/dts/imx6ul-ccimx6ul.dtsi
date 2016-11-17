@@ -62,11 +62,6 @@
 	status = "okay";
 };
 
-/* Disable the CPU watchdog. We use the MCA watchdog */
-&wdog1 {
-	status = "disabled";
-};
-
 &i2c1 {
 	clock-frequency = <100000>;
 	pinctrl-names = "default";
@@ -203,6 +198,8 @@
 };
 
 &iomuxc {
+	pinctrl-0 = <&pinctrl_hog>;
+
 	imx6ul-ccimx6ul {
 		pinctrl_gpmi_nand: gpmigrp {
 			fsl,pins = <
@@ -237,6 +234,14 @@
 				MX6UL_PAD_SNVS_TAMPER4__GPIO5_IO04	0xb0b1
 			>;
 		};
+
+		/* Configure some pins as GPIO */
+		pinctrl_hog: hoggrp {
+			fsl,pins = <
+				/* Control GPIO to prevent CPU reset during MCA firmware update */
+				MX6UL_PAD_NAND_CE1_B__GPIO4_IO14	0xf030
+			>;
+		};
 	};
 };
 
@@ -264,15 +269,7 @@
 	status = "disabled";
 };
 
-/* Configure some pins as GPIO */
-&iomuxc {
-	pinctrl-0 = <&pinctrl_hog>;
-	imx6ul-ccimx6ul {
-		pinctrl_hog: hoggrp {
-			fsl,pins = <
-				/* Control GPIO to prevent CPU reset during MCA firmware update */
-				MX6UL_PAD_NAND_CE1_B__GPIO4_IO14	0xf030
-			>;
-		};
-	};
+/* Disable the CPU watchdog. We use the MCA watchdog */
+&wdog1 {
+	status = "disabled";
 };
