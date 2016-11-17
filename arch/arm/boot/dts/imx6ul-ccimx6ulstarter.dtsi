@@ -26,6 +26,15 @@
 	};
 };
 
+/* ECSPI3 (Raspberry PI Expansion header) */
+&ecspi3 {
+	fsl,spi-num-chipselects = <1>;
+	cs-gpios = <&gpio1 20 GPIO_ACTIVE_LOW>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_ecspi3>;
+	status = "disabled";
+};
+
 &fec1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_enet1>;
@@ -52,6 +61,12 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan1>;
 	xceiver-supply = <&ext_3v3>;
+	status = "disabled";
+};
+
+&i2c2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_i2c2>;
 	status = "disabled";
 };
 
@@ -87,6 +102,7 @@
 &usdhc2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_usdhc2>;
+	broken-cd;      /* no carrier detect line (use polling) */
 	status = "disabled";
 };
 
@@ -100,6 +116,15 @@
 	pinctrl-names = "default";
 
 	imx6ul-ccimx6ul {
+		pinctrl_ecspi3: ecspi3grp {
+			fsl,pins = <
+				MX6UL_PAD_UART2_RX_DATA__ECSPI3_SCLK	0x10b0
+				MX6UL_PAD_UART2_CTS_B__ECSPI3_MOSI	0x10b0
+				MX6UL_PAD_UART2_RTS_B__ECSPI3_MISO	0x10b0
+				MX6UL_PAD_UART2_TX_DATA__GPIO1_IO20	0x10b0 /* Chip Select */
+			>;
+		};
+
 		pinctrl_enet1: enet1grp {
 			fsl,pins = <
 				MX6UL_PAD_GPIO1_IO07__ENET1_MDC		0x1b0b0
@@ -119,6 +144,13 @@
 			fsl,pins = <
 				MX6UL_PAD_LCD_DATA08__FLEXCAN1_TX	0x1b020
 				MX6UL_PAD_LCD_DATA09__FLEXCAN1_RX	0x1b020
+			>;
+		};
+
+		pinctrl_i2c2: i2c2grp {
+			fsl,pins = <
+				MX6UL_PAD_GPIO1_IO00__I2C2_SCL 0x4001b8b0
+				MX6UL_PAD_GPIO1_IO01__I2C2_SDA 0x4001b8b0
 			>;
 		};
 

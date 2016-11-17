@@ -331,6 +331,8 @@
 					clocks = <&clks IMX6UL_CLK_UART1_IPG>,
 						 <&clks IMX6UL_CLK_UART1_SERIAL>;
 					clock-names = "ipg", "per";
+					dmas = <&sdma 25 4 0>, <&sdma 26 4 0>;
+					dma-names = "rx", "tx";
 					status = "disabled";
 				};
 

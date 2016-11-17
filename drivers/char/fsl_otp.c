@@ -9,6 +9,7 @@
  */
 
 #include <linux/clk.h>
+#include <linux/clk-provider.h>
 #include <linux/delay.h>
 #include <linux/err.h>
 #include <linux/init.h>
@@ -328,9 +329,11 @@ static u32 fsl_otp_read(int index, u32 *value)
 	if (!fsl_otp)
 		return -ENODEV;
 
-	ret = clk_prepare_enable(otp_clk);
-	if (ret)
-		return -ENODEV;
+	if (!__clk_is_enabled(otp_clk)) {
+		ret = clk_prepare_enable(otp_clk);
+		if (ret)
+			return -ENODEV;
+	}
 
 	mutex_lock(&otp_mutex);
 
@@ -344,8 +347,26 @@ static u32 fsl_otp_read(int index, u32 *value)
 	*value = __raw_readl(otp_base + HW_OCOTP_CUST_N(index));
 out:
 	mutex_unlock(&otp_mutex);
-	clk_disable_unprepare(otp_clk);
+	/*
+	 * i.MX6UL hangs when the OTP clock is disabled during kernel boot.
+	 * The consumption for having the clock permanently active is
+	 * considered to be minimal.
+	 */
+// 	clk_disable_unprepare(otp_clk);
 	return ret;
+}
+
+int fsl_otp_get_hwid(unsigned int *hwid)
+{
+	unsigned int phy_index;
+	int i, j;
+
+	for (i = HW_OCTP_IDX_MAC0, j = 0; i <= HW_OCTP_IDX_MAC1; i++, j++) {
+		phy_index = fsl_otp_word_physical(fsl_otp, i);
+		if (fsl_otp_read(phy_index, &hwid[j]))
+			return -EPERM;
+	}
+	return 0;
 }
 
 static ssize_t fsl_otp_show(struct kobject *kobj, struct kobj_attribute *attr,
@@ -444,9 +465,11 @@ static ssize_t fsl_otp_store(struct kobject *kobj, struct kobj_attribute *attr,
 	if (ret < 0)
 		return -EINVAL;
 
-	ret = clk_prepare_enable(otp_clk);
-	if (ret)
-		return -ENODEV;
+	if (!__clk_is_enabled(otp_clk)) {
+		ret = clk_prepare_enable(otp_clk);
+		if (ret)
+			return -ENODEV;
+	}
 
 	mutex_lock(&otp_mutex);
 
@@ -468,7 +491,12 @@ static ssize_t fsl_otp_store(struct kobject *kobj, struct kobj_attribute *attr,
 
 out:
 	mutex_unlock(&otp_mutex);
-	clk_disable_unprepare(otp_clk);
+	/*
+	 * i.MX6UL hangs when the OTP clock is disabled during kernel boot.
+	 * The consumption for having the clock permanently active is
+	 * considered to be minimal.
+	 */
+// 	clk_disable_unprepare(otp_clk);
 	return ret ? 0 : count;
 }
 #endif /* CONFIG_FSL_OTP_WRITE */
@@ -499,8 +527,16 @@ static int fsl_register_hwid(void) {
 		"digi,hwid,genid",
 		"digi,hwid,sn",
 	};
+	const char *compat_machines[] = {
+		"digi,ccimx6",
+		"digi,ccimx6ul",
+	};
 
-	np = of_find_compatible_node(NULL, NULL, "digi,ccimx6");
+	for (i = 0; i < ARRAY_SIZE(compat_machines); i++) {
+		np = of_find_compatible_node(NULL, NULL, compat_machines[i]);
+		if (np)
+			break;
+	}
 	if (!np)
 		return -EPERM;
 
@@ -577,8 +613,18 @@ static int fsl_register_hwid(void) {
 static int fsl_register_carrierboard(void) {
 	struct device_node *np = NULL;
 	const char *boardver_str;
+	int i;
+	const char *compat_machines[] = {
+		"digi,ccimx6sbc",
+		"digi,ccimx6ulstarter",
+		"digi,ccimx6ulsbc",
+	};
 
-	np = of_find_compatible_node(NULL, NULL, "digi,ccimx6");
+	for (i = 0; i < ARRAY_SIZE(compat_machines); i++) {
+		np = of_find_compatible_node(NULL, NULL, compat_machines[i]);
+		if (np)
+			break;
+	}
 	if (!np)
 		return -EPERM;
 

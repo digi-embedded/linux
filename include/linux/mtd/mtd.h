@@ -29,11 +29,17 @@
 
 #include <asm/div64.h>
 
+#include <linux/scatterlist.h>
+#include <linux/mempool.h>
+
 #define MTD_ERASE_PENDING	0x01
 #define MTD_ERASING		0x02
 #define MTD_ERASE_SUSPEND	0x04
 #define MTD_ERASE_DONE		0x08
 #define MTD_ERASE_FAILED	0x10
+
+#define MTD_ENCRYPT		1
+#define MTD_DECRYPT		0
 
 #define MTD_FAIL_ADDR_UNKNOWN -1LL
 
@@ -111,6 +117,38 @@ struct nand_ecclayout {
 
 struct module;	/* only needed for owner field in mtd_info */
 
+#define MAX_KEY_BYTES		64
+#define MAX_KEYBLOB_BYTES	(MAX_KEY_BYTES + 48 /*BLOB_OVERHEAD*/)
+#define KEY_ASCII_BYTES		(MAX_KEY_BYTES * 2)
+#define KEY_ASCIIBLOB_BYTES	(MAX_KEYBLOB_BYTES * 2)
+#define MAX_IV_BYTES		16	/* 128 bits */
+#define BLOCK_ID_BYTES		16
+#define MAX_CIPHER_NAME_SIZE	31
+
+struct mtd_crypt_info {
+#define STRUCT_INITIALIZED	0x00000001
+#define KEY_SET			0x00000002
+#define KEY_VALID		0x00000004
+/* mempool for a maximum block size of 512kB */
+#define MAX_POOL_SIZE		((512*1024)/PAGE_SIZE)
+	struct device *jr_dev;
+	struct device_node *np;
+	u32 flags;
+	unsigned int block_size;
+	unsigned int erase_size;
+	unsigned int block_shift;
+	size_t key_size;
+	unsigned char *key;
+	unsigned char root_iv[MAX_IV_BYTES];
+	unsigned char cipher[MAX_CIPHER_NAME_SIZE + 1];
+	struct crypto_hash *hash_tfm; /* Crypto context for generating
+				       * the initialization vectors */
+	struct crypto_ablkcipher *tfm;
+	struct mutex cs_tfm_mutex;
+	struct mutex cs_hash_tfm_mutex;
+	mempool_t *mem_pool;
+};
+
 struct mtd_info {
 	u_char type;
 	uint32_t flags;
@@ -181,6 +219,8 @@ struct mtd_info {
 	 */
 	int numeraseregions;
 	struct mtd_erase_region_info *eraseregions;
+
+	struct mtd_crypt_info *crypt_info;
 
 	/*
 	 * Do not call via these pointers, use corresponding mtd_*()
@@ -410,5 +450,7 @@ static inline int mtd_is_bitflip_or_eccerr(int err) {
 }
 
 unsigned mtd_mmap_capabilities(struct mtd_info *mtd);
+int mtdcrypt_init_crypt_info(struct mtd_info *mtd);
+void mtdcrypt_destroy_crypt_info(struct mtd_info *mtd);
 
 #endif /* __MTD_MTD_H__ */

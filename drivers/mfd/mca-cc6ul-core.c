@@ -71,6 +71,30 @@ static struct resource mca_cc6ul_pwrkey_resources[] = {
 	},
 };
 
+static struct resource mca_cc6ul_tamper_resources[] = {
+	{
+		.name   = MCA_CC6UL_IRQ_TAMPER0_NAME,
+		.start  = MCA_CC6UL_IRQ_TAMPER0,
+		.end    = MCA_CC6UL_IRQ_TAMPER0,
+		.flags  = IORESOURCE_IRQ,
+	},
+	{
+		.name   = MCA_CC6UL_IRQ_TAMPER1_NAME,
+		.start  = MCA_CC6UL_IRQ_TAMPER1,
+		.end    = MCA_CC6UL_IRQ_TAMPER1,
+		.flags  = IORESOURCE_IRQ,
+	},
+};
+
+static struct resource mca_cc6ul_gpios_resources[] = {
+	{
+		.name   = MCA_CC6UL_IRQ_GPIOS_BANK0_NAME,
+		.start  = MCA_CC6UL_IRQ_GPIO_BANK_0,
+		.end    = MCA_CC6UL_IRQ_GPIO_BANK_0,
+		.flags  = IORESOURCE_IRQ,
+	},
+};
+
 static const struct mfd_cell mca_cc6ul_devs[] = {
 	{
 		.name           = MCA_CC6UL_DRVNAME_RTC,
@@ -86,6 +110,8 @@ static const struct mfd_cell mca_cc6ul_devs[] = {
 	},
 	{
 		.name           = MCA_CC6UL_DRVNAME_GPIO,
+		.num_resources	= ARRAY_SIZE(mca_cc6ul_gpios_resources),
+		.resources	= mca_cc6ul_gpios_resources,
 		.of_compatible = "digi,mca-cc6ul-gpio",
 	},
 	{
@@ -97,6 +123,12 @@ static const struct mfd_cell mca_cc6ul_devs[] = {
 	{
 		.name           = MCA_CC6UL_DRVNAME_ADC,
 		.of_compatible = "digi,mca-cc6ul-adc",
+	},
+	{
+		.name           = MCA_CC6UL_DRVNAME_TAMPER,
+		.num_resources  = ARRAY_SIZE(mca_cc6ul_tamper_resources),
+		.resources      = mca_cc6ul_tamper_resources,
+		.of_compatible = "digi,mca-cc6ul-tamper",
 	},
 };
 
@@ -235,8 +267,9 @@ static ssize_t fwver_show(struct device *dev, struct device_attribute *attr,
 {
 	struct mca_cc6ul *mca = dev_get_drvdata(dev);
 
-	return sprintf(buf, "%d.%d\n",
-		       (u8)(mca->fw_version >> 8), (u8)mca->fw_version);
+	return sprintf(buf, "%d.%d %s\n",
+		       (u8)((mca->fw_version >> 8) & 0x7f), (u8)mca->fw_version,
+		       ((mca->fw_version >> 8) & 0x80) ? "(alpha)" : "");
 }
 static DEVICE_ATTR(fw_version, S_IRUGO, fwver_show, NULL);
 

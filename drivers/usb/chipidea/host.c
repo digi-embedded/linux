@@ -456,7 +456,7 @@ static void ci_hdrc_host_restore_from_power_lost(struct ci_hdrc *ci)
 
 static void ci_hdrc_host_suspend(struct ci_hdrc *ci)
 {
-#ifdef CONFIG_PM_RUNTIME
+#ifdef CONFIG_PM
 	if (ci_hdrc_host_has_device(ci))
 		imx_gpc_mf_request_on(ci->irq, 1);
 #endif
@@ -466,7 +466,7 @@ static void ci_hdrc_host_suspend(struct ci_hdrc *ci)
 
 static void ci_hdrc_host_resume(struct ci_hdrc *ci, bool power_lost)
 {
-#ifdef CONFIG_PM_RUNTIME
+#ifdef CONFIG_PM
 	imx_gpc_mf_request_on(ci->irq, 0);
 #endif
 	if (power_lost)

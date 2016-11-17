@@ -1016,7 +1016,7 @@ static int imx_uart_dma_init(struct imx_port *sport)
 	/* Prepare for RX : */
 	sport->dma_chan_rx = dma_request_slave_channel(dev, "rx");
 	if (!sport->dma_chan_rx) {
-		dev_dbg(dev, "cannot get the DMA channel.\n");
+		dev_err(dev, "cannot get the DMA channel.\n");
 		ret = -EINVAL;
 		goto err;
 	}

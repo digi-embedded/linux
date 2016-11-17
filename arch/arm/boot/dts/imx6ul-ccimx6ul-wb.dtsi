@@ -40,14 +40,8 @@
 	status = "okay";
 };
 
-&i2c1 {
-	pmic: pfuze3000@08 {
-		regulators {
-			vgen3_reg: vccsd {
-				regulator-always-on;
-			};
-		};
-	};
+&vdda_wlan {
+	regulator-always-on;
 };
 
 &iomuxc {

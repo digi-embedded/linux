@@ -19,11 +19,27 @@
 /* ConnectCore 6UL StarterBoard */
 #include "imx6ul-ccimx6ulstarter.dtsi"
 
-&fec1 {
+&caam_keyblob {
 	status = "okay";
 };
 
-&caam_keyblob {
+/* ECSPI3 (Raspberry PI Expansion header) */
+&ecspi3 {
+	/*
+	 * There are no SPI slave devices on the SBC.
+	 * Enable if adding your slave devices below.
+	 */
+	//status = "okay";
+
+	/* Add your slave devices here. Next is an example of spidev. */
+	//spidev@0 {
+	//	reg = <0>;
+	//	compatible = "spidev";
+	//	spi-max-frequency = <1000000>;
+	//};
+};
+
+&fec1 {
 	status = "okay";
 };
 
@@ -31,6 +47,21 @@
 &flexcan1 {
 	status = "okay";
 };
+
+/* I2C2 (Raspberry PI Expansion header and Grove connector) */
+&i2c2 {
+	status = "okay";
+};
+
+/* MCA IO0 connected to Grove ADC connector */
+&mca_adc {
+	digi,adc-ch-list = <0>;
+};
+
+/* Uncomment to Enable Tamper detection. Two interfaces (0 and 1) are available */
+//&mca_tamper {
+//	digi,tamper-if-list = <0 1>;
+//};
 
 /* UART4 (Raspberry PI Expansion header) */
 &uart4 {
@@ -52,15 +83,5 @@
 
 /* USDHC2 (microSD) */
 &usdhc2 {
-	status = "okay";
-};
-
-/* MCA IO0 connected to Grove ADC connector */
-&mca_adc {
-	digi,adc-ch-list = <0>;
-};
-
-/* I2C2 (Raspberry PI Expansion header and Grove connector) */
-&i2c2 {
 	status = "okay";
 };

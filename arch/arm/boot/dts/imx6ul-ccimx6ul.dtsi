@@ -62,11 +62,6 @@
 	status = "okay";
 };
 
-/* Disable the CPU watchdog. We use the MCA watchdog */
-&wdog1 {
-	status = "disabled";
-};
-
 &i2c1 {
 	clock-frequency = <100000>;
 	pinctrl-names = "default";
@@ -108,6 +103,10 @@
 
 		mca_adc: adc {
 			compatible = "digi,mca-cc6ul-adc";
+		};
+
+		mca_tamper: tamper {
+			compatible = "digi,mca-cc6ul-tamper";
 		};
 	};
 
@@ -199,6 +198,8 @@
 };
 
 &iomuxc {
+	pinctrl-0 = <&pinctrl_hog>;
+
 	imx6ul-ccimx6ul {
 		pinctrl_gpmi_nand: gpmigrp {
 			fsl,pins = <
@@ -216,9 +217,7 @@
 				MX6UL_PAD_NAND_DATA05__RAWNAND_DATA05	0xb0b1
 				MX6UL_PAD_NAND_DATA06__RAWNAND_DATA06	0xb0b1
 				MX6UL_PAD_NAND_DATA07__RAWNAND_DATA07	0xb0b1
-				MX6UL_PAD_NAND_DQS__RAWNAND_DQS		0x00b1
 				MX6UL_PAD_NAND_READY_B__RAWNAND_READY_B	0xb0b1
-				MX6UL_PAD_NAND_CE1_B__RAWNAND_CE1_B	0xb0b1
 			>;
 		};
 
@@ -233,6 +232,14 @@
 			fsl,pins = <
 				/* MCA_nINT */
 				MX6UL_PAD_SNVS_TAMPER4__GPIO5_IO04	0xb0b1
+			>;
+		};
+
+		/* Configure some pins as GPIO */
+		pinctrl_hog: hoggrp {
+			fsl,pins = <
+				/* Control GPIO to prevent CPU reset during MCA firmware update */
+				MX6UL_PAD_NAND_CE1_B__GPIO4_IO14	0xf030
 			>;
 		};
 	};
@@ -259,5 +266,10 @@
 	 * On the CC6UL the powerkey is implemented in the MCA. Therefore we disable
 	 * the i.MX6UL builtin support.
 	 */
+	status = "disabled";
+};
+
+/* Disable the CPU watchdog. We use the MCA watchdog */
+&wdog1 {
 	status = "disabled";
 };

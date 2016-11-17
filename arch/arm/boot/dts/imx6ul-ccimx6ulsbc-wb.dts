@@ -1,0 +1,142 @@
+/*
+ * Copyright 2016 Digi International, Inc.
+ *
+ * The code contained herein is licensed under the GNU General Public
+ * License. You may obtain a copy of the GNU General Public License
+ * Version 2 or later at the following locations:
+ *
+ * http://www.opensource.org/licenses/gpl-license.html
+ * http://www.gnu.org/copyleft/gpl.html
+ */
+
+/dts-v1/;
+#include <dt-bindings/input/input.h>
+#include <dt-bindings/interrupt-controller/irq.h>
+/* i.MX6 UltraLite CPU */
+#include "imx6ul.dtsi"
+/* ConnectCore 6UL (wireless/bluetooth variant) */
+#include "imx6ul-ccimx6ul-wb.dtsi"
+/* ConnectCore 6UL SBC */
+#include "imx6ul-ccimx6ulsbc.dtsi"
+
+&caam_keyblob {
+	status = "okay";
+};
+
+/* ECSPI1 */
+&ecspi1 {
+	/*
+	 * There are no SPI slave devices on the SBC.
+	 * Enable if adding your slave devices below.
+	 */
+	//status = "okay";
+
+	/* Add your slave devices here. Next is an example of spidev. */
+	//spidev@0 {
+	//	reg = <0>;
+	//	compatible = "spidev";
+	//	spi-max-frequency = <1000000>;
+	//};
+};
+
+/* ENET1 */
+&fec1 {
+	status = "okay";
+};
+
+/* ENET2 */
+&fec2 {
+	status = "okay";
+};
+
+/* CAN1 (multiplexed with UART3 RTS/CTS) */
+&flexcan1 {
+	status = "okay";
+};
+
+/* CAN2 (multiplexed with UART2 RTS/CTS) */
+&flexcan2 {
+	status = "okay";
+};
+
+/* Fusion touch */
+&fusion_touch {
+	status = "okay";
+};
+
+/* Parallel LCD */
+&lcdif {
+	status = "okay";
+};
+
+/* LCD backlight (PWM5) */
+&lcd_backlight {
+	status = "okay";
+};
+
+/* Uncomment to Enable Tamper detection. Two interfaces (0 and 1) are available */
+//&mca_tamper {
+//	digi,tamper-if-list = <0 1>;
+//};
+
+&pwm5 {
+	status = "okay";
+};
+
+&pxp {
+	status = "okay";
+};
+
+&pxp_v4l2 {
+	status = "okay";
+};
+
+/* UART2 */
+&uart2 {
+	/* RTS/CTS lines multiplexed with CAN2 */
+	// pinctrl-0 = <&pinctrl_uart2_4wires>;
+	// fsl,uart-has-rtscts;
+	status = "okay";
+};
+
+/* UART3 */
+&uart3 {
+	/* RTS/CTS lines multiplexed with CAN1 */
+	// pinctrl-0 = <&pinctrl_uart3_4wires>;
+	// fsl,uart-has-rtscts;
+	status = "okay";
+};
+
+/* UART5 (Console) */
+&uart5 {
+	status = "okay";
+};
+
+&usbotg1 {
+	status = "okay";
+};
+
+&usbotg2 {
+	status = "okay";
+};
+
+/* USDHC2 (microSD, conflicts with eMMC) */
+&usdhc2 {
+	pinctrl-assert-gpios = <&gpio5 1 GPIO_ACTIVE_LOW>;
+	broken-cd;	/* no carrier detect line (use polling) */
+	status = "okay";
+};
+
+/* USDHC2 (eMMC, conflicts with microSD) */
+//&usdhc2 {
+//	pinctrl-assert-gpios = <&gpio5 1 GPIO_ACTIVE_HIGH>;
+//	non-removable;
+//	/*
+//	 * Comment these two lines for 4-bit data bus or leave uncommented
+//	 * for 8-bit data bus
+//	 */
+//	pinctrl-0 = <&pinctrl_usdhc2_8databits>;
+//	bus-width = <8>;
+//
+//	status = "okay";
+//};
