@@ -68,10 +68,10 @@
 };
 
 &i2c3 {
-        ov5640_mipi: ov5640_mipi@4c {
-                ipu_id = <1>;
-                csi_id = <1>;
-        };
+	ov5640_mipi: ov5640_mipi@4c {
+		ipu_id = <1>;
+		csi_id = <0>;
+	};
 
 	hdmi_ad9389: ad9889b@39 {
 		pinctrl-0 = <&pinctrl_ipu2>;
@@ -100,12 +100,12 @@
 
 &mipi_csi {
         ipu_id = <1>;
-        csi_id = <1>;
+        csi_id = <0>;
 };
 
 &v4l2_cap_0 {
 	ipu_id = <1>;
-	csi_id = <1>;
+	csi_id = <0>;
 };
 
 &v4l2_cap_1 {
