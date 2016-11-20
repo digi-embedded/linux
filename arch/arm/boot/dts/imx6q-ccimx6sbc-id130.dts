@@ -176,6 +176,8 @@
 };
 
 &v4l2_cap_1 {
+	ipu_id = <1>;
+	csi_id = <1>;
 	status = "okay";
 };
 
