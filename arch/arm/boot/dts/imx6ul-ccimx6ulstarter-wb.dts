@@ -76,6 +76,11 @@
 //	digi,tamper-if-list = <0 1>;
 //};
 
+/* PWM1 (Raspberry PI Expansion header) */
+//&pwm1 {
+//	status = "okay";
+//};
+
 /* UART4 (Raspberry PI Expansion header) */
 &uart4 {
 	status = "okay";
