@@ -10,6 +10,9 @@ Required properties:
 - clocks: The clock is needed by the ADC controller, ADC clock source is ipg clock.
 - clock-names: Must contain "adc", matching entry in the clocks property.
 - vref-supply: The regulator supply ADC reference voltage.
+- max-channel: value of the highest adc channel number that is valid in
+               'adc-ch-list' (0 - max-channel). This value is platform specific.
+- adc-ch-list: list of channels that will be enabled.
 
 Example:
 adc0: adc@4003b000 {
@@ -19,4 +22,6 @@ adc0: adc@4003b000 {
 	clocks = <&clks VF610_CLK_ADC0>;
 	clock-names = "adc";
 	vref-supply = <&reg_vcc_3v3_mcu>;
+	max-channel = <9>;
+	adc-ch-list = <2 4 5>;
 };

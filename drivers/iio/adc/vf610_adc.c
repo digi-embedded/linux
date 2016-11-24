@@ -603,9 +603,21 @@ static int vf610_adc_probe(struct platform_device *pdev)
 	struct vf610_adc *info;
 	struct iio_dev *indio_dev;
 	struct resource *mem;
+	struct device_node *np;
+	struct iio_chan_spec *chan;
+	struct property *prop;
 	int irq;
 	int ret;
-	u32 channels;
+	u32 channels = 0;
+	u32 adc_ch_list[ARRAY_SIZE(vf610_adc_iio_channels)];
+	u32 ch, max_channel;
+	const __be32 *cur;
+	bool ch_list = true;
+
+	/* Return if vf610-adc node does not exist or if it is disabled */
+	np = of_find_compatible_node(NULL, NULL, "fsl,vf610-adc");
+	if (!np)
+		return -ENODEV;
 
 	indio_dev = devm_iio_device_alloc(&pdev->dev, sizeof(struct vf610_adc));
 	if (!indio_dev) {
@@ -656,10 +668,30 @@ static int vf610_adc_probe(struct platform_device *pdev)
 
 	init_completion(&info->completion);
 
-	ret  = of_property_read_u32(pdev->dev.of_node,
-					"num-channels", &channels);
-	if (ret)
-		channels = ARRAY_SIZE(vf610_adc_iio_channels);
+	ret = of_property_read_u32(pdev->dev.of_node,
+				   "max-channel", &max_channel);
+	if (ret || max_channel > ARRAY_SIZE(vf610_adc_iio_channels))
+		max_channel = ARRAY_SIZE(vf610_adc_iio_channels);
+
+	/* Get the list of channels enabled */
+	of_property_for_each_u32(np, "adc-ch-list", prop, cur, ch) {
+		if (ch > max_channel) {
+			dev_warn(&pdev->dev,
+				 "invalid adc channel %d (must be between 0-%d)\n",
+				 ch, max_channel);
+			continue;
+		}
+		adc_ch_list[channels++] = ch;
+	}
+
+	if (!channels) {
+		/* No 'ach-ch-list', check if 'num-channels' was provided */
+		ch_list = false;
+		ret = of_property_read_u32(pdev->dev.of_node,
+					   "num-channels", &channels);
+		if (ret)
+			channels = ARRAY_SIZE(vf610_adc_iio_channels);
+	}
 
 	indio_dev->name = dev_name(&pdev->dev);
 	indio_dev->dev.parent = &pdev->dev;
@@ -668,6 +700,16 @@ static int vf610_adc_probe(struct platform_device *pdev)
 	indio_dev->modes = INDIO_DIRECT_MODE;
 	indio_dev->channels = vf610_adc_iio_channels;
 	indio_dev->num_channels = (int)channels;
+
+	/* Re-set the channel number acordingly to the channel list */
+	if (ch_list) {
+		for (ch = 0, chan = (struct iio_chan_spec *)indio_dev->channels;
+		     ch < indio_dev->num_channels;
+		     ch++, chan++) {
+			/* TODO, handle properly the IIO_TEMP channel */
+			chan->channel = adc_ch_list[ch];
+		}
+	}
 
 	ret = clk_prepare_enable(info->clk);
 	if (ret) {
@@ -757,7 +799,7 @@ static struct platform_driver vf610_adc_driver = {
 	.remove         = vf610_adc_remove,
 	.driver         = {
 		.name   = DRIVER_NAME,
-		.of_match_table = vf610_adc_match,
+		.of_match_table = of_match_ptr(vf610_adc_match),
 		.pm     = &vf610_adc_pm_ops,
 	},
 };
