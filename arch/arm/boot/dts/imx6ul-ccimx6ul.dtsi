@@ -62,6 +62,10 @@
 	fsl,arm-soc-shared = <1>;
 };
 
+&gpc {
+	fsl,ldo-bypass = <1>;
+};
+
 &gpmi {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_gpmi_nand>;
