@@ -33,6 +33,12 @@
 	};
 };
 
+&adc1 {
+	vref-supply = <&vdda_adc_3v3>;
+	max-channel = <9>;
+	status = "disabled";
+};
+
 &cpu0 {
 	/*
 	 * on i.MX6UL, VDD_ARM_IN and VDD_SOC_IN are the same, yet
@@ -160,10 +166,11 @@
 				regulator-always-on;
 			};
 
-			vdda_adc_3p3: vldo1 {
-				regulator-min-microvolt = <1800000>;
+			vdda_adc_3v3: vldo1 {
+				compatible = "regulator-fixed";
+				regulator-name = "vref-adc-3v3";
+				regulator-min-microvolt = <3300000>;
 				regulator-max-microvolt = <3300000>;
-				regulator-always-on;
 			};
 
 			ldo2_ext: vldo2 {
