@@ -1,0 +1,41 @@
+Freescale i.MX audio complex with MAX98088/MAX98089 codec
+
+Required properties:
+- compatible : "fsl,imx-audio-max98088","fsl,imx-audio-max98089"
+- model : The user-visible name of this sound complex
+- cpu-dai : The phandle of CPU dai
+- gpr : The phandle of i.MX IOMUXC GPR for managing SAI MCLK
+- audio-codec : The phandle of the MAX98088/MAX98089 audio codec
+- audio-routing : A list of the connections between audio components.
+  Each entry is a pair of strings, the first being the connection's sink,
+  the second being the connection's source. Valid names could be power
+  supplies, MAX98088/MAX98089 pins, and the jacks on the board.
+
+  e.g. Board connectors:
+   * Headphone Jack
+   * Ext Spk
+   * Mic1
+   * Mic2
+   * LineInA
+   * LineInB
+   * LineOut
+
+Not implemented:
+- Regulators for power supplies
+- Interrupt handling
+- Jack detection (JACKSNS)
+
+Example:
+
+sound {
+        compatible = "fsl,imx-audio-max98088";
+        model = "imx-max98088";
+        cpu-dai = <&ssi2>;
+        gpr = <&gpr>;
+        audio-codec = <&codec>;
+        audio-routing =
+                "Headphone Jack","HPL",
+                "Headphone Jack","HPR",
+                "Ext Spk","SPKL",
+                "Ext Spk","SPKR";
+};
