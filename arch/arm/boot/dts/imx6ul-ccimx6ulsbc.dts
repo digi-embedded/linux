@@ -87,6 +87,11 @@
 	status = "okay";
 };
 
+/* Audio chip */
+&max98089 {
+	status = "okay";
+};
+
 /* Uncomment to Enable Tamper detection. Two interfaces (0 and 1) are available */
 //&mca_tamper {
 //	digi,tamper-if-list = <0 1>;
@@ -101,6 +106,14 @@
 };
 
 &pxp_v4l2 {
+	status = "okay";
+};
+
+&sai2 {
+	status = "okay";
+};
+
+&sound_max98089 {
 	status = "okay";
 };
 
