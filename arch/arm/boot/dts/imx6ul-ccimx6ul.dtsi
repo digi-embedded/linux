@@ -175,6 +175,7 @@
 				regulator-name = "vref-adc-3v3";
 				regulator-min-microvolt = <3300000>;
 				regulator-max-microvolt = <3300000>;
+				regulator-always-on;
 			};
 
 			ldo2_ext: vldo2 {
