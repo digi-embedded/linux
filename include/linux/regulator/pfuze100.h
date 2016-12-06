@@ -62,6 +62,7 @@
 #define PFUZE3000_V33		10
 #define PFUZE3000_VLDO3		11
 #define PFUZE3000_VLDO4		12
+#define PFUZE3000_VCOIN		13
 
 struct regulator_init_data;
 

@@ -49,6 +49,7 @@
 #define PFUZE100_REVID			0x3
 #define PFUZE100_FABID			0x4
 
+#define PFUZE3000_COINCTL		0x1a
 #define PFUZE3000_MEMA			0x1c
 #define PFUZE3000_MEMB			0x1d
 #define PFUZE3000_MEMC			0x1e
@@ -137,6 +138,10 @@ static const int pfuze3000_sw2lo[] = {
 
 static const int pfuze3000_sw2hi[] = {
 	2500000, 2800000, 2850000, 3000000, 3100000, 3150000, 3200000, 3300000,
+};
+
+static const int pfuze3000_coin_chg[] = {
+	2500000, 2700000, 2800000, 2900000, 3000000, 3100000, 3200000, 3300000,
 };
 
 static const struct i2c_device_id pfuze_device_id[] = {
@@ -633,6 +638,22 @@ static struct regulator_ops pfuze3000_swbust_regulator_ops = {
 	.mode_mask = mmask,						\
 }
 
+#define PFUZE3000_VCOIN_REG(_chip, _name, base, mask, voltages) {	\
+	.desc = {							\
+		.name = #_name,						\
+		.n_voltages = ARRAY_SIZE(voltages),			\
+		.ops = &pfuze100_swb_regulator_ops,			\
+		.type = REGULATOR_VOLTAGE,				\
+		.id = _chip ## _ ## _name,				\
+		.owner = THIS_MODULE,					\
+		.volt_table = voltages,					\
+		.vsel_reg = (base),					\
+		.vsel_mask = (mask),					\
+		.enable_reg = (base),					\
+		.enable_mask = 0x08,					\
+	},								\
+}
+
 /* PFUZE100 */
 static struct pfuze_regulator pfuze100_regulators[] = {
 	PFUZE100_SW_REG(PFUZE100, SW1AB, PFUZE100_SW1ABVOL, 300000, 1875000, 25000),
@@ -688,6 +709,7 @@ static struct pfuze_regulator pfuze3000_regulators[] = {
 	PFUZE100_VGEN2_REG(PFUZE3000, V33, PFUZE100_VGEN4VOL, 2850000, 3300000, 150000),
 	PFUZE100_VGEN_REG(PFUZE3000, VLDO3, PFUZE100_VGEN5VOL, 1800000, 3300000, 100000),
 	PFUZE100_VGEN_REG(PFUZE3000, VLDO4, PFUZE100_VGEN6VOL, 1800000, 3300000, 100000),
+	PFUZE3000_VCOIN_REG(PFUZE3000, VCOIN, PFUZE3000_COINCTL, 0x07, pfuze3000_coin_chg),
 };
 
 static struct pfuze_regulator *pfuze_regulators;
@@ -746,6 +768,7 @@ static struct of_regulator_match pfuze3000_matches[] = {
 	{ .name = "v33",	},
 	{ .name = "vldo3",	},
 	{ .name = "vldo4",	},
+	{ .name = "vcoin",	},
 };
 
 static struct of_regulator_match *pfuze_matches;
