@@ -49,6 +49,10 @@
 #define PFUZE100_REVID			0x3
 #define PFUZE100_FABID			0x4
 
+#define PFUZE3000_MEMA			0x1c
+#define PFUZE3000_MEMB			0x1d
+#define PFUZE3000_MEMC			0x1e
+#define PFUZE3000_MEMD			0x1f
 #define PFUZE100_SW1ABVOL		0x20
 #define PFUZE100_SW1CVOL		0x2e
 #define PFUZE100_SW2VOL			0x35
@@ -80,6 +84,9 @@
 #define PFUZE3000_SW_SPEED_MASK		0x40
 #define PFUZE3000_SW_SPEED_SHIFT	0x06
 
+#define PFUZE3000_NVRAM_BASE_ADDR	PFUZE3000_MEMA
+#define PFUZE3000_NVRAM_SIZE		(PFUZE3000_MEMD - PFUZE3000_MEMA + 1)
+
 enum chips { PFUZE100, PFUZE200, PFUZE3000 = 3 };
 
 struct pfuze_regulator {
@@ -99,6 +106,7 @@ struct pfuze_chip {
 	unsigned int reg_save_array[PFUZE100_REG_SAVED_NUM];
 	struct pfuze_regulator regulator_descs[PFUZE100_MAX_REGULATOR];
 	struct regulator_dev *regulators[PFUZE100_MAX_REGULATOR];
+	struct bin_attribute *nvram;
 };
 
 static const int pfuze100_swbst[] = {
@@ -814,6 +822,60 @@ static inline struct device_node *match_of_node(int index)
 }
 #endif
 
+static ssize_t pfuze3000_nvram_read(struct file *filp, struct kobject *kobj,
+				    struct bin_attribute *attr,
+				    char *buf, loff_t off, size_t count)
+{
+	struct i2c_client *client;
+	struct pfuze_chip *pfuze;
+	int ret;
+
+	client = kobj_to_i2c_client(kobj);
+	pfuze = i2c_get_clientdata(client);
+
+	if (unlikely(off >= PFUZE3000_NVRAM_SIZE) || unlikely(!count))
+		return 0;
+	if ((off + count) > PFUZE3000_NVRAM_SIZE)
+		count = PFUZE3000_NVRAM_SIZE - off;
+
+	ret = regmap_bulk_read(pfuze->regmap,
+			       PFUZE3000_NVRAM_BASE_ADDR + off, buf, count);
+	if (ret) {
+		dev_err(&client->dev, "%s error (%d)\n", __func__, ret);
+		return ret;
+	}
+
+	return count;
+}
+
+static ssize_t pfuze3000_nvram_write(struct file *filp, struct kobject *kobj,
+		struct bin_attribute *attr,
+		char *buf, loff_t off, size_t count)
+{
+	struct i2c_client *client;
+	struct pfuze_chip *pfuze;
+	int ret;
+
+	client = kobj_to_i2c_client(kobj);
+	pfuze = i2c_get_clientdata(client);
+
+	if (unlikely(off >= PFUZE3000_NVRAM_SIZE))
+		return -EFBIG;
+	if ((off + count) > PFUZE3000_NVRAM_SIZE)
+		count = PFUZE3000_NVRAM_SIZE - off;
+	if (unlikely(!count))
+		return count;
+
+	ret = regmap_bulk_write(pfuze->regmap,
+				PFUZE3000_NVRAM_BASE_ADDR + off, buf, count);
+	if (ret) {
+		dev_err(&client->dev, "%s error (%d)\n", __func__, ret);
+		return ret;
+	}
+
+	return count;
+}
+
 static int pfuze_identify(struct pfuze_chip *pfuze_chip)
 {
 	unsigned int value;
@@ -987,6 +1049,32 @@ static int pfuze100_regulator_probe(struct i2c_client *client,
 
 	if (of_get_property(client->dev.of_node, "fsl,lpsr-mode", NULL))
 		pfuze_chip->need_restore = true;
+
+	if (of_get_property(client->dev.of_node, "fsl,nvram", NULL)) {
+		pfuze_chip->nvram = devm_kzalloc(&client->dev,
+						 sizeof(struct bin_attribute),
+						 GFP_KERNEL);
+		if (!pfuze_chip->nvram) {
+			dev_err(&client->dev,
+				"cannot allocate memory for nvram sysfs\n");
+		} else {
+			pfuze_chip->nvram->attr.name = "nvram";
+			pfuze_chip->nvram->attr.mode = S_IRUGO | S_IWUSR;
+
+			sysfs_bin_attr_init(pfuze_chip->nvram);
+
+			pfuze_chip->nvram->read = pfuze3000_nvram_read;
+			pfuze_chip->nvram->write = pfuze3000_nvram_write;
+
+			ret = sysfs_create_bin_file(&client->dev.kobj,
+						    pfuze_chip->nvram);
+			if (ret) {
+				dev_err(&client->dev,
+					"unable to create sysfs file: %s\n",
+					pfuze_chip->nvram->attr.name);
+			}
+		}
+	}
 
 	return 0;
 }
