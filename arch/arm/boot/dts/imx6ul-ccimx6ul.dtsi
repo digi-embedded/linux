@@ -144,12 +144,15 @@
 			ext_3v3: sw2 {
 				regulator-min-microvolt = <2500000>;
 				regulator-max-microvolt = <3300000>;
+				regulator-always-on;
 				regulator-boot-on;
+				regulator-ramp-delay = <6250>;
 			};
 
 			vcc_ddr3: sw3 {
 				regulator-min-microvolt = <900000>;
 				regulator-max-microvolt = <1650000>;
+				regulator-always-on;
 				regulator-boot-on;
 			};
 
