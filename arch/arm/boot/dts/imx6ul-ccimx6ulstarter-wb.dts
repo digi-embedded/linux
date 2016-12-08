@@ -69,6 +69,7 @@
 /* MCA IO0 connected to Grove ADC connector */
 &mca_adc {
 	digi,adc-ch-list = <0>;
+	digi,adc-vref = <3000000>;
 };
 
 /* Uncomment to Enable Tamper detection. Two interfaces (0 and 1) are available */
