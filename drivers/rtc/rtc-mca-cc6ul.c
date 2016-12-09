@@ -1,5 +1,5 @@
 /* rtc-mca-cc6ul.c - Real time clock device driver for MCA on ConnectCore 6UL
- * Copyright (C) 2016  Digi International
+ * Copyright (C) 2016, 2017  Digi International
  * Copyright (c) Dialog Semiconductor Ltd.
  *
  * This library is free software; you can redistribute it and/or
@@ -49,6 +49,7 @@ struct mca_cc6ul_rtc {
 	struct rtc_device *rtc_dev;
 	struct mca_cc6ul *mca;
 	int irq_alarm;
+	bool alarm_enabled;
 };
 
 static void mca_cc6ul_data_to_tm(u8 *data, struct rtc_time *tm)
@@ -208,10 +209,27 @@ static int mca_cc6ul_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 static int mca_cc6ul_rtc_alarm_irq_enable(struct device *dev,
 					  unsigned int enabled)
 {
-	if (enabled)
-		return mca_cc6ul_rtc_start_alarm(dev);
-	else
-		return mca_cc6ul_rtc_stop_alarm(dev);
+	struct mca_cc6ul_rtc *rtc = dev_get_drvdata(dev);
+	int ret;
+
+	if (enabled) {
+		ret = mca_cc6ul_rtc_start_alarm(dev);
+		if (ret != 0) {
+			dev_err(dev, "Failed to enable alarm IRQ (%d)\n", ret);
+			goto exit_alarm_irq;
+		}
+		rtc->alarm_enabled = 1;
+	} else {
+		ret = mca_cc6ul_rtc_stop_alarm(dev);
+		if (ret != 0) {
+			dev_err(dev, "Failed to disable alarm IRQ (%d)\n", ret);
+			goto exit_alarm_irq;
+		}
+		rtc->alarm_enabled = 0;
+	}
+
+exit_alarm_irq:
+	return ret;
 }
 
 static int mca_cc6ul_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alrm)
@@ -344,6 +362,46 @@ static int mca_cc6ul_rtc_remove(struct platform_device *pdev)
 	return 0;
 }
 
+#ifdef CONFIG_PM
+static int mca_cc6ul_rtc_suspend(struct device *dev)
+{
+	struct platform_device *pdev = to_platform_device(dev);
+	struct mca_cc6ul_rtc *rtc = platform_get_drvdata(pdev);
+	int ret;
+
+	if (!device_may_wakeup(&pdev->dev) && rtc->alarm_enabled) {
+		/* Disable the alarm irq to avoid unwanted wakeups */
+		ret = mca_cc6ul_rtc_stop_alarm(&pdev->dev);
+		if (ret < 0)
+			dev_err(&pdev->dev, "Failed to disable RTC Alarm\n");
+	}
+
+	return 0;
+}
+
+static int mca_cc6ul_rtc_resume(struct device *dev)
+{
+	struct platform_device *pdev = to_platform_device(dev);
+	struct mca_cc6ul_rtc *rtc = platform_get_drvdata(pdev);
+	int ret;
+
+	if (!device_may_wakeup(&pdev->dev) && rtc->alarm_enabled) {
+		/* Enable the alarm irq, just in case it was disabled suspending */
+		ret = mca_cc6ul_rtc_start_alarm(&pdev->dev);
+		if (ret < 0)
+			dev_err(&pdev->dev, "Failed to restart RTC Alarm\n");
+	}
+
+	return 0;
+}
+
+static const struct dev_pm_ops mca_cc6ul_rtc_pm_ops = {
+	.suspend	= mca_cc6ul_rtc_suspend,
+	.resume		= mca_cc6ul_rtc_resume,
+	.poweroff	= mca_cc6ul_rtc_suspend,
+};
+#endif
+
 #ifdef CONFIG_OF
 static const struct of_device_id mca_cc6ul_rtc_dt_ids[] = {
 	{ .compatible = "digi,mca-cc6ul-rtc", },
@@ -358,6 +416,9 @@ static struct platform_driver mca_cc6ul_rtc_driver = {
 	.driver		= {
 		.name	= MCA_CC6UL_DRVNAME_RTC,
 		.owner	= THIS_MODULE,
+#ifdef CONFIG_PM
+		.pm	= &mca_cc6ul_rtc_pm_ops,
+#endif
 #ifdef CONFIG_OF
 		.of_match_table = mca_cc6ul_rtc_dt_ids,
 #endif
