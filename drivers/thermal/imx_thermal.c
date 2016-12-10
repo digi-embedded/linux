@@ -285,7 +285,11 @@ static int imx_get_temp_internal(struct imx_thermal_data *data,
 	u32 val;
 
 	mutex_lock(&data->mutex);
-	if (data->mode == THERMAL_DEVICE_ENABLED) {
+
+	regmap_read(map, soc_data->sensor_ctrl, &val);
+
+	if (data->mode == THERMAL_DEVICE_ENABLED &&
+	    !(val & soc_data->power_down_mask)) {
 		/* Check if a measurement is currently in progress */
 		regmap_read(map, soc_data->temp_data, &val);
 		wait = !(val & soc_data->temp_valid_mask);
