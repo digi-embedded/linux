@@ -1888,6 +1888,10 @@ static int mx6s_csi_probe(struct platform_device *pdev)
 	if (ret < 0)
 		goto err_irq;
 
+	v4l2_info(&csi_dev->v4l2_dev,
+		  "capture device registered as /dev/video%d\n",
+		  csi_dev->vdev->num);
+
 	pm_runtime_enable(csi_dev->dev);
 	return 0;
 
