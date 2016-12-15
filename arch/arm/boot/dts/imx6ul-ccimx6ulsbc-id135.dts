@@ -36,6 +36,15 @@
 	status = "okay";
 };
 
+/*
+ * CSI camera conflicts with microSD/eMMC.
+ * Before enabling the camera you need to disable
+ * usdhc2 node.
+ */
+// &csi {
+// 	status = "okay";
+// };
+
 /* ECSPI1 */
 &ecspi1 {
 	/*
@@ -95,6 +104,15 @@
 //&mca_tamper {
 //	digi,tamper-if-list = <0 1>;
 //};
+
+/*
+ * CSI camera conflicts with microSD/eMMC.
+ * Before enabling the camera you need to disable
+ * usdhc2 node.
+ */
+// &ov5642 {
+// 	status = "okay";
+// };
 
 &pwm5 {
 	status = "okay";
