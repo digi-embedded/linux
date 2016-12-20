@@ -2251,6 +2251,46 @@ static int imx_uart_probe_dt(struct imx_port *sport,
 	if (of_property_read_bool(np, "linux,rs485-enabled-at-boot-time"))
 		rs485conf->flags |= SER_RS485_ENABLED;
 
+	/*
+	 * UART1 on CC6UL SOM with hardware version (HV) < 4 have crossed RX/TX
+	 * lines going to the Bluetooth chip. To make the Bluetooth chip work
+	 * UART1 (index 0) needs:
+	 *  - force DTE mode
+	 *  - not use HW flow control
+	 *  - use dte-no-flow pinctrl
+	 */
+	if (of_machine_is_compatible("digi,ccimx6ul") &&
+	    sport->port.line == 0) {
+		struct device_node *rn;
+		const char *hwid_hv;
+		unsigned int hv = 0;
+		struct pinctrl_state *pins_dte_noflow;
+		struct pinctrl *pinctrl;
+
+		rn = of_find_node_by_path("/");
+		if (!of_property_read_string(rn, "digi,hwid,hv", &hwid_hv)) {
+			if (kstrtoul(hwid_hv, 0, (unsigned long *)&hv))
+				dev_warn(&pdev->dev,
+					 "Invalid 'digi,hwid,hv'\n");
+			if (hv > 0 && hv < 4) {
+				dev_info(&pdev->dev,
+					 "Forcing DTE mode and no hw-flow on CC6UL with HV=%d",
+					 hv);
+				sport->dte_mode = 1;
+				sport->have_rtscts = 0;
+				pinctrl = devm_pinctrl_get(&pdev->dev);
+				pins_dte_noflow = pinctrl_lookup_state(pinctrl,
+							"dte_noflow");
+				if (IS_ERR(pins_dte_noflow))
+					dev_warn(&pdev->dev,
+						 "could not get 'dte_noflow' pinctrl required for UART1\n");
+				else
+					pinctrl_select_state(pinctrl,
+							     pins_dte_noflow);
+			}
+		}
+	}
+
 	return 0;
 }
 #else
