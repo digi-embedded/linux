@@ -24,9 +24,22 @@
 
 /* UART1 (Bluetooth) */
 &uart1 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_uart1_dte_noflow>;
-	fsl,dte-mode;
+	pinctrl-names = "default", "dte_noflow";
+	pinctrl-0 = <&pinctrl_uart1>;
+	pinctrl-1 = <&pinctrl_uart1_dte_noflow>;
+	fsl,uart-has-rtscts;
+	/*
+	 * NOTE: The default configuration for CC6UL SOM hardware vesion 4
+	 * onwards is:
+	 * 	- pinctrl-0
+	 * 	- HW flow control enabled (fsl,uart-has-rtscts)
+	 * 	- DCE mode (default)
+	 * For SOMs with hardware version < 4 the UART driver changes the
+	 * configuration of UART1 to:
+	 * 	- pinctrl-1
+	 * 	- no HW flow control
+	 * 	- DTE mode
+	 */
 	status = "okay";
 };
 
@@ -60,6 +73,8 @@
 			fsl,pins = <
 				MX6UL_PAD_UART1_TX_DATA__UART1_DTE_RX	0x1b0b1
 				MX6UL_PAD_UART1_RX_DATA__UART1_DTE_TX	0x1b0b1
+				MX6UL_PAD_UART1_RTS_B__GPIO1_IO19	0x1b0b1
+				MX6UL_PAD_UART1_CTS_B__GPIO1_IO18	0x1b0b1
 			>;
 		};
 
