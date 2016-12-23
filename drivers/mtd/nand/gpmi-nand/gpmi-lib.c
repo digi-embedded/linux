@@ -974,6 +974,9 @@ static int enable_edo_mode(struct gpmi_nand_data *this, int mode)
 	unsigned long rate;
 	int ret;
 
+	if (!(onfi_opt_cmd(nand) & ONFI_OPT_CMD_SET_GET_FEATURES))
+		goto skip_feature_set;
+
 	feature = kzalloc(ONFI_SUBFEATURE_PARAM_LEN, GFP_KERNEL);
 	if (!feature)
 		return -ENOMEM;
@@ -995,7 +998,9 @@ static int enable_edo_mode(struct gpmi_nand_data *this, int mode)
 		goto err_out;
 
 	nand->select_chip(mtd, -1);
+	kfree(feature);
 
+skip_feature_set:
 	pm_runtime_get_sync(this->dev);
 	clk_disable_unprepare(r->clock[0]);
 	/* [3] set the main IO clock, 100MHz for mode 5, 80MHz for mode 4. */
@@ -1003,14 +1008,13 @@ static int enable_edo_mode(struct gpmi_nand_data *this, int mode)
 	clk_set_rate(r->clock[0], rate);
 	clk_prepare_enable(r->clock[0]);
 	pm_runtime_mark_last_busy(this->dev);
-        pm_runtime_put_autosuspend(this->dev);	
+	pm_runtime_put_autosuspend(this->dev);
 
 	/* Let the gpmi_begin() re-compute the timing again. */
 	this->flags &= ~GPMI_TIMING_INIT_OK;
 
 	this->flags |= GPMI_ASYNC_EDO_ENABLED;
 	this->timing_mode = mode;
-	kfree(feature);
 	dev_info(this->dev, "enable the asynchronous EDO mode %d\n", mode);
 	return 0;
 
