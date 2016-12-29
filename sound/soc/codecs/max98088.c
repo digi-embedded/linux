@@ -508,6 +508,8 @@ static const struct snd_kcontrol_new max98088_snd_controls[] = {
 
        SOC_SINGLE("THD Limiter Threshold", M98088_REG_46_THDLMT_CFG, 4, 15, 0),
        SOC_SINGLE("THD Limiter Time", M98088_REG_46_THDLMT_CFG, 0, 7, 0),
+
+       SOC_SINGLE("REC Output Mode", M98088_REG_2A_MIC_REC_CNTL, 7, 1, 0),
 };
 
 /* Left speaker mixer switch */
