@@ -360,13 +360,32 @@ int mca_cc6ul_suspend(struct device *dev)
 				  MCA_CC6UL_PWR_GO_SUSPEND);
 }
 
+#define MCA_MAX_RESUME_RD_RETRIES 10
 int mca_cc6ul_resume(struct device *dev)
 {
 	struct mca_cc6ul *mca = dev_get_drvdata(dev);
+	unsigned int val;
+	int ret, retries = 0;
 
 	if (!mca) {
 		dev_err(dev, " mca was null in %s\n", __func__);
 		return -ENODEV;
+	}
+
+	/*
+	 * Generate traffic on the i2c bus to wakeup the MCA, in case it was in
+	 * low power
+	 */
+	do {
+		ret = regmap_read(mca->regmap, MCA_CC6UL_DEVICE_ID, &val);
+		if (!ret && mca->dev_id == (u8)val)
+			break;
+		udelay(50);
+	} while (retries++ < MCA_MAX_RESUME_RD_RETRIES);
+
+	if (retries == MCA_MAX_RESUME_RD_RETRIES) {
+		dev_err(mca->dev, "unable to wake up MCA (%d)\n", ret);
+		return ret;
 	}
 
 	/* Reset the suspend bit in PWR_CTRL_0 */
