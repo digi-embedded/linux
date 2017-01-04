@@ -32,6 +32,9 @@ extern void (*imx6_board_pm_end)(void);
 
 static struct mca_cc6ul *pmca;
 
+static const char _enabled[] = "enabled";
+static const char _disabled[] = "disabled";
+
 static struct resource mca_cc6ul_rtc_resources[] = {
 	{
 		.name   = MCA_CC6UL_IRQ_RTC_ALARM_NAME,
@@ -218,7 +221,69 @@ int mca_cc6ul_write_block(struct mca_cc6ul *mca , u16 addr, u8 *data,
 }
 EXPORT_SYMBOL_GPL(mca_cc6ul_write_block);
 
+static int mca_cc6ul_unlock_ctrl(struct mca_cc6ul *mca)
+{
+	int ret;
+	const uint8_t unlock_pattern[] = {'C', 'T', 'R', 'U'};
+
+	ret = regmap_bulk_write(mca->regmap, MCA_CC6UL_CTRL_UNLOCK_0,
+				unlock_pattern, sizeof(unlock_pattern));
+	if (ret)
+		dev_warn(mca->dev, "failed to unlock CTRL registers (%d)\n",
+			 ret);
+
+	return ret;
+}
+
 /* sysfs attributes */
+static ssize_t ext_32khz_show(struct device *dev, struct device_attribute *attr,
+			 char *buf)
+{
+	struct mca_cc6ul *mca = dev_get_drvdata(dev);
+	unsigned int val;
+	int ret;
+
+	ret = regmap_read(mca->regmap, MCA_CC6UL_CTRL_0, &val);
+	if (ret != 0) {
+		dev_err(mca->dev, "Cannot read MCA CTRL_0 register(%d)\n",
+			ret);
+		return 0;
+	}
+
+	return sprintf(buf, "%s\n", val & MCA_CC6UL_EXT32K_EN ?
+		       _enabled : _disabled);
+}
+
+static ssize_t ext_32khz_store(struct device *dev, struct device_attribute *attr,
+			  const char *buf, size_t count)
+{
+	struct mca_cc6ul *mca = dev_get_drvdata(dev);
+	bool enable;
+	int ret;
+
+	if (!strncmp(buf, _enabled, sizeof(_enabled)))
+		enable = true;
+	else if (!strncmp(buf, _disabled, sizeof(_disabled)))
+		enable = false;
+	else
+		return -EINVAL;
+
+	ret = mca_cc6ul_unlock_ctrl(mca);
+	if (ret)
+		return ret;
+
+	ret = regmap_update_bits(mca->regmap, MCA_CC6UL_CTRL_0,
+				 MCA_CC6UL_EXT32K_EN,
+				 enable ? MCA_CC6UL_EXT32K_EN : 0);
+	if (ret) {
+		dev_err(mca->dev, "Cannot update MCA CTRL_0 register (%d)\n", ret);
+		return ret;
+	}
+
+	return count;
+}
+static DEVICE_ATTR(ext_32khz, 0600, ext_32khz_show, ext_32khz_store);
+
 static ssize_t data_show(struct device *dev, struct device_attribute *attr,
 			 char *buf)
 {
@@ -313,6 +378,7 @@ static ssize_t len_store(struct device *dev,
 static DEVICE_ATTR(len, 0600, len_show, len_store);
 
 static struct attribute *mca_cc6ul_sysfs_entries[] = {
+	&dev_attr_ext_32khz.attr,
 	&dev_attr_data.attr,
 	&dev_attr_hw_version.attr,
 	&dev_attr_fw_version.attr,
