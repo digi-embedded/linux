@@ -184,6 +184,8 @@
 #define IMX_RXBD_NUM 20
 #define IMX_MODULE_MAX_CLK_RATE	80000000
 
+extern int digi_get_board_version(void);
+
 /* i.MX21 type uart runs on all i.mx except i.MX1 and i.MX6q */
 enum imx_uart_type {
 	IMX1_UART,
@@ -1873,7 +1875,7 @@ static int serial_imx_suspend(struct platform_device *dev, pm_message_t state)
 		disable_irq(sport->port.irq);
 	} else {
 		if (of_machine_is_compatible("digi,ccimx6sbc") &&
-		    mx6q_get_board_version() >= 2) {
+		    digi_get_board_version() >= 2) {
 			if (gpio_is_valid(sport->pwr_en_gpio))
 				gpio_set_value_cansleep(sport->pwr_en_gpio,
 							sport->pwr_en_act_low ? 1 : 0);
@@ -1932,7 +1934,7 @@ static int serial_imx_resume(struct platform_device *dev)
 		enable_irq(sport->port.irq);
 	} else {
 		if (of_machine_is_compatible("digi,ccimx6sbc") &&
-		    mx6q_get_board_version() >= 2) {
+		    digi_get_board_version() >= 2) {
 			if (gpio_is_valid(sport->pwr_en_gpio))
 				gpio_set_value_cansleep(sport->pwr_en_gpio,
 							sport->pwr_en_act_low ? 0 : 1);

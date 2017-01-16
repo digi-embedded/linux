@@ -155,3 +155,28 @@ void imx7_smp_wfe(u32 cpuid, u32 ocram_base) {}
 void imx7d_ddr3_freq_change(u32 freq) {}
 #endif
 
+static int digi_board_version = -EINVAL;
+
+int digi_get_board_version(void)
+{
+	struct device_node *np = NULL;
+	const char *boardver_str;
+	char buf[4];
+
+	/* Only need to read the carrier board once */
+	if (digi_board_version > 0)
+		return digi_board_version;
+
+	np = of_find_compatible_node(NULL, NULL, "digi,ccimx6");
+	if (!np)
+		return -EPERM;
+
+	if (!of_property_read_string(np, "digi,carrierboard,version",
+				&boardver_str)) {
+		strncpy(buf, boardver_str, sizeof(buf));
+		if (!kstrtoint(boardver_str, 10, &digi_board_version))
+			pr_info("Board version: %d\n", digi_board_version);
+	}
+	return digi_board_version;
+}
+EXPORT_SYMBOL(digi_get_board_version);
