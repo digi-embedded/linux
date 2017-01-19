@@ -326,30 +326,72 @@ static struct attribute_group mca_cc6ul_attr_group = {
 	.attrs	= mca_cc6ul_sysfs_entries,
 };
 
-static int mca_cc6ul_notify_suspend_state(bool suspended)
-{
-	if (!pmca) {
-		printk("ERROR: %s() notifying %s [%s:%d]!\n", __func__,
-		       suspended ? "suspend" : "resume", __FILE__, __LINE__);
-		return -ENODEV;
-	}
-
-	/* Set the suspend bit in PWR_CTRL_0 acordingly to suspended value */
-	return regmap_update_bits(pmca->regmap, MCA_CC6UL_PWR_CTRL_0,
-				  MCA_CC6UL_PWR_GO_SUSPEND,
-				  suspended ? MCA_CC6UL_PWR_GO_SUSPEND : 0);
-}
-
 static int mca_cc6ul_suspend_begin(suspend_state_t state)
 {
-	/* Notify MCA that the system is entering suspend to ram  pm state */
-	return mca_cc6ul_notify_suspend_state(true);
+	/*
+	 * This hook will be used in future to notify the MCA that the system
+	 * starts entering in low power mode.
+	 * Nothing to do now.
+	 */
+	return 0;
 }
 
 static void mca_cc6ul_suspend_end(void)
 {
-	/* Notify MCA that the system is waking up from suspend to ram */
-	(void)mca_cc6ul_notify_suspend_state(false);
+	/*
+	 * This hook will be used in future to notify the MCA that the system
+	 * has succesfully exit the low power mode.
+	 * Nothing to do now.
+	 */
+}
+
+int mca_cc6ul_suspend(struct device *dev)
+{
+	struct mca_cc6ul *mca = dev_get_drvdata(dev);
+
+	if (!mca) {
+		dev_err(dev, " mca was null in %s\n", __func__);
+		return -ENODEV;
+	}
+
+	/* Set the suspend bit in PWR_CTRL_0 */
+	return regmap_update_bits(pmca->regmap, MCA_CC6UL_PWR_CTRL_0,
+				  MCA_CC6UL_PWR_GO_SUSPEND,
+				  MCA_CC6UL_PWR_GO_SUSPEND);
+}
+
+#define MCA_MAX_RESUME_RD_RETRIES 10
+int mca_cc6ul_resume(struct device *dev)
+{
+	struct mca_cc6ul *mca = dev_get_drvdata(dev);
+	unsigned int val;
+	int ret, retries = 0;
+
+	if (!mca) {
+		dev_err(dev, " mca was null in %s\n", __func__);
+		return -ENODEV;
+	}
+
+	/*
+	 * Generate traffic on the i2c bus to wakeup the MCA, in case it was in
+	 * low power
+	 */
+	do {
+		ret = regmap_read(mca->regmap, MCA_CC6UL_DEVICE_ID, &val);
+		if (!ret && mca->dev_id == (u8)val)
+			break;
+		udelay(50);
+	} while (retries++ < MCA_MAX_RESUME_RD_RETRIES);
+
+	if (retries == MCA_MAX_RESUME_RD_RETRIES) {
+		dev_err(mca->dev, "unable to wake up MCA (%d)\n", ret);
+		return ret;
+	}
+
+	/* Reset the suspend bit in PWR_CTRL_0 */
+	return regmap_update_bits(pmca->regmap, MCA_CC6UL_PWR_CTRL_0,
+				  MCA_CC6UL_PWR_GO_SUSPEND,
+				  0);
 }
 
 static void mca_cc6ul_power_off(void)

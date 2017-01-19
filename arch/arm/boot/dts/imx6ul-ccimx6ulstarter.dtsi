@@ -70,6 +70,12 @@
 	status = "disabled";
 };
 
+&pwm1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pwm1>;
+	status = "disabled";
+};
+
 /* UART4 (Raspberry PI Expansion header) */
 &uart4 {
 	pinctrl-names = "default";
@@ -151,6 +157,12 @@
 			fsl,pins = <
 				MX6UL_PAD_GPIO1_IO00__I2C2_SCL 0x4001b8b0
 				MX6UL_PAD_GPIO1_IO01__I2C2_SDA 0x4001b8b0
+			>;
+		};
+
+		pinctrl_pwm1: pwm1grp {
+			fsl,pins = <
+				MX6UL_PAD_LCD_DATA00__PWM1_OUT		0x10b0
 			>;
 		};
 

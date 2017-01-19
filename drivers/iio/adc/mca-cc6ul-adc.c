@@ -27,9 +27,15 @@
 #include <linux/platform_device.h>
 #include <linux/regmap.h>
 
+#define MCA_VREF_uV(v)		((u32)((v) * 1000 * 1000))
+#define MCA_ADC_MIN_VREF	MCA_VREF_uV(1.8)
+#define MCA_ADC_MAX_VREF	MCA_VREF_uV(3.3)
+#define MCA_ADC_DEF_VREF	MCA_VREF_uV(3)
+
 struct mca_cc6ul_adc {
 	struct mca_cc6ul *mca;
 	u8 num_adcs;
+	u32 vref;
 };
 
 static int mca_adc_read_raw(struct iio_dev *iio,
@@ -55,6 +61,11 @@ static int mca_adc_read_raw(struct iio_dev *iio,
 		*value = val;
 		return IIO_VAL_INT;
 
+	case IIO_CHAN_INFO_SCALE:
+		*value = adc->vref / 1000;
+		*shift = channel->scan_type.realbits;
+		return IIO_VAL_FRACTIONAL_LOG2;
+
 	default:
 		break;
 	}
@@ -77,7 +88,7 @@ static int mca_cc6ul_adc_probe(struct platform_device *pdev)
 	u8 adc_ch_list[MCA_CC6UL_MAX_IOS];
 	struct property *prop;
 	const __be32 *cur;
-	u32 ch, cfg;
+	u32 ch, cfg, vref;
 	int ret = 0;
 
 	if (!mca || !mca->dev || !mca->dev->parent ||
@@ -100,6 +111,16 @@ static int mca_cc6ul_adc_probe(struct platform_device *pdev)
 					     "digi,mca-cc6ul-adc");
 		if (!np || !of_device_is_available(np))
 			return -ENODEV;
+
+		ret = of_property_read_u32(mca->dev->of_node, "digi,adc-vref", &vref);
+		if (ret || vref < MCA_ADC_MIN_VREF || vref > MCA_ADC_MAX_VREF) {
+			vref = MCA_ADC_DEF_VREF;
+			dev_warn(&pdev->dev, ret ?
+				 "adc-vref DT property not provided, using default %u uV\n" :
+				 "adc-vref out of range, using default %u uV\n",
+				 vref);
+		}
+		mca_adc->vref = vref;
 
 		of_property_for_each_u32(np, "digi,adc-ch-list",
 					 prop, cur, ch) {
@@ -183,6 +204,7 @@ static int mca_cc6ul_adc_probe(struct platform_device *pdev)
 		chan->scan_type.realbits = 12;
 		chan->scan_type.storagebits = 16;
 		chan->info_mask_separate = BIT(IIO_CHAN_INFO_RAW);
+		chan->info_mask_shared_by_type = BIT(IIO_CHAN_INFO_SCALE);
 	}
 
 	ret = iio_device_register(iio);

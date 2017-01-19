@@ -85,5 +85,7 @@ int mca_cc6ul_device_init(struct mca_cc6ul *mca, u32 irq);
 int mca_cc6ul_irq_init(struct mca_cc6ul *mca);
 void mca_cc6ul_device_exit(struct mca_cc6ul *mca);
 void mca_cc6ul_irq_exit(struct mca_cc6ul *mca);
+int mca_cc6ul_suspend(struct device *dev);
+int mca_cc6ul_resume(struct device *dev);
 
 #endif /* MFD_MCA_CC6UL_CORE_H_ */

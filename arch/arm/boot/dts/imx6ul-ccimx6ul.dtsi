@@ -33,6 +33,12 @@
 	};
 };
 
+&adc1 {
+	vref-supply = <&vdda_adc_3v3>;
+	max-channel = <9>;
+	status = "disabled";
+};
+
 &cpu0 {
 	/*
 	 * on i.MX6UL, VDD_ARM_IN and VDD_SOC_IN are the same, yet
@@ -54,6 +60,10 @@
 	arm-supply = <&vdd_arm_soc_in>;
 	soc-supply = <&vdd_arm_soc_in>;
 	fsl,arm-soc-shared = <1>;
+};
+
+&gpc {
+	fsl,ldo-bypass = <1>;
 };
 
 &gpmi {
@@ -113,6 +123,7 @@
 	pmic: pfuze3000@08 {
 		compatible = "fsl,pfuze3000";
 		reg = <0x08>;
+		fsl,nvram;
 
 		regulators {
 			int_3v3: sw1a {
@@ -134,12 +145,15 @@
 			ext_3v3: sw2 {
 				regulator-min-microvolt = <2500000>;
 				regulator-max-microvolt = <3300000>;
+				regulator-always-on;
 				regulator-boot-on;
+				regulator-ramp-delay = <6250>;
 			};
 
 			vcc_ddr3: sw3 {
 				regulator-min-microvolt = <900000>;
 				regulator-max-microvolt = <1650000>;
+				regulator-always-on;
 				regulator-boot-on;
 			};
 
@@ -160,8 +174,10 @@
 				regulator-always-on;
 			};
 
-			vdda_adc_3p3: vldo1 {
-				regulator-min-microvolt = <1800000>;
+			vdda_adc_3v3: vldo1 {
+				compatible = "regulator-fixed";
+				regulator-name = "vref-adc-3v3";
+				regulator-min-microvolt = <3300000>;
 				regulator-max-microvolt = <3300000>;
 				regulator-always-on;
 			};
@@ -191,6 +207,11 @@
 
 			ldo4_ext: vldo4 {
 				regulator-min-microvolt = <1800000>;
+				regulator-max-microvolt = <3300000>;
+			};
+
+			vcoin_chg: vcoin {
+				regulator-min-microvolt = <2500000>;
 				regulator-max-microvolt = <3300000>;
 			};
 		};

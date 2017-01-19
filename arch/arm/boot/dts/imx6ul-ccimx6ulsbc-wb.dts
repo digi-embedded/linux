@@ -19,9 +19,31 @@
 /* ConnectCore 6UL SBC */
 #include "imx6ul-ccimx6ulsbc.dtsi"
 
+/*
+ * Uncomment to enable the i.MX6UL SoC ADCs.
+ * Include in adc-ch-list the ADC channels (from 0 to 9) that you want to
+ * enable. Note that the iomux has to be configured accordingly in pinctrl_adc1
+ * to configure the pad for ADC operation
+ */
+//&adc1 {
+//	pinctrl-names = "default";
+//	pinctrl-0 = <&pinctrl_adc1>;
+//	adc-ch-list = <2 3 5>;
+//	status = "okay";
+//};
+
 &caam_keyblob {
 	status = "okay";
 };
+
+/*
+ * CSI camera conflicts with microSD/eMMC.
+ * Before enabling the camera you need to disable
+ * usdhc2 node.
+ */
+// &csi {
+// 	status = "okay";
+// };
 
 /* ECSPI1 */
 &ecspi1 {
@@ -74,10 +96,24 @@
 	status = "okay";
 };
 
+/* Audio chip */
+&max98089 {
+	status = "okay";
+};
+
 /* Uncomment to Enable Tamper detection. Two interfaces (0 and 1) are available */
 //&mca_tamper {
 //	digi,tamper-if-list = <0 1>;
 //};
+
+/*
+ * CSI camera conflicts with microSD/eMMC.
+ * Before enabling the camera you need to disable
+ * usdhc2 node.
+ */
+// &ov5642 {
+// 	status = "okay";
+// };
 
 &pwm5 {
 	status = "okay";
@@ -88,6 +124,14 @@
 };
 
 &pxp_v4l2 {
+	status = "okay";
+};
+
+&sai2 {
+	status = "okay";
+};
+
+&sound_max98089 {
 	status = "okay";
 };
 
@@ -140,3 +184,21 @@
 //
 //	status = "okay";
 //};
+
+/* Pin mux configuration */
+&iomuxc {
+	pinctrl-0 = <&pinctrl_hog>;
+	imx6ul-ccimx6ul {
+		/* Uncomment specific pins of the ADC channels enabled in 'adc-ch-list' */
+		//pinctrl_adc1: adc1grp {
+		//	fsl,pins = <
+		//		/* EXP_GPIO_1 -> GPIO1_5/ADC1_IN5 */
+		//		MX6UL_PAD_GPIO1_IO05__GPIO1_IO05        0xb0
+		//		/* EXP_GPIO_2 -> GPIO1_3/ADC1_IN3 */
+		//		MX6UL_PAD_GPIO1_IO03__GPIO1_IO03        0xb0
+		//		/* EXP_GPIO_3 -> GPIO1_2/ADC1_IN2 */
+		//		MX6UL_PAD_GPIO1_IO02__GPIO1_IO02        0xb0
+		//	>;
+		//};
+	};
+};

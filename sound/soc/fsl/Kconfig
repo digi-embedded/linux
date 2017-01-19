@@ -330,6 +330,18 @@ config SND_SOC_IMX_SGTL5000
 	  Say Y if you want to add support for SoC audio on an i.MX board with
 	  a sgtl5000 codec.
 
+config SND_SOC_IMX_MAX98088
+	tristate "SoC Audio support for i.MX boards with max98088/max98089"
+	depends on OF && I2C
+	select SND_SOC_MAX98088
+	select SND_SOC_IMX_PCM_DMA
+	select SND_SOC_IMX_AUDMUX
+	select SND_SOC_FSL_SAI
+	select SND_SOC_FSL_SSI
+	help
+	  Say Y if you want to add support for SoC audio on an i.MX board with
+	  a max98088/max98089 codec.
+
 config SND_SOC_IMX_MQS
 	tristate "SoC Audio support for i.MX boards with MQS"
 	depends on OF

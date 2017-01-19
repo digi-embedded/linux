@@ -5,6 +5,8 @@ Required properties:
 - reg: I2C slave address
 - fsl,lpsr-mode: some registers need to be saved and restored in lpsr mode
   for pfuze3000
+- fsl,nvram: provide access to the non volatile registers (MEMA - MEMD)
+  through the sysfs
 
 Required child node:
 - regulators: This is the list of child nodes that specify the regulator
@@ -215,6 +217,7 @@ Example 3: PFUZE3000
 	pmic: pfuze3000@08 {
 		compatible = "fsl,pfuze3000";
 		reg = <0x08>;
+		fsl,nvram;
 
 		regulators {
 			sw1a_reg: sw1a {

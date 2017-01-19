@@ -43,6 +43,7 @@ struct max98088_priv {
 	enum max98088_type devtype;
 	struct max98088_pdata *pdata;
 	unsigned int sysclk;
+	unsigned int prescaler;
 	struct max98088_cdata dai[2];
 	int eq_textcnt;
 	const char **eq_texts;
@@ -766,6 +767,8 @@ static const struct snd_kcontrol_new max98088_snd_controls[] = {
 
        SOC_SINGLE("THD Limiter Threshold", M98088_REG_46_THDLMT_CFG, 4, 15, 0),
        SOC_SINGLE("THD Limiter Time", M98088_REG_46_THDLMT_CFG, 0, 7, 0),
+
+       SOC_SINGLE("REC Output Mode", M98088_REG_2A_MIC_REC_CNTL, 7, 1, 0),
 };
 
 /* Left speaker mixer switch */
@@ -1263,7 +1266,8 @@ static int max98088_dai1_hw_params(struct snd_pcm_substream *substream,
                }
                ni = 65536ULL * (rate < 50000 ? 96ULL : 48ULL)
                                * (unsigned long long int)rate;
-               do_div(ni, (unsigned long long int)max98088->sysclk);
+		do_div(ni, (unsigned long long int)(max98088->sysclk /
+		       max98088->prescaler));
                snd_soc_write(codec, M98088_REG_12_DAI1_CLKCFG_HI,
                        (ni >> 8) & 0x7F);
                snd_soc_write(codec, M98088_REG_13_DAI1_CLKCFG_LO,
@@ -1330,7 +1334,8 @@ static int max98088_dai2_hw_params(struct snd_pcm_substream *substream,
                }
                ni = 65536ULL * (rate < 50000 ? 96ULL : 48ULL)
                                * (unsigned long long int)rate;
-               do_div(ni, (unsigned long long int)max98088->sysclk);
+		do_div(ni, (unsigned long long int)(max98088->sysclk /
+		       max98088->prescaler));
                snd_soc_write(codec, M98088_REG_1A_DAI2_CLKCFG_HI,
                        (ni >> 8) & 0x7F);
                snd_soc_write(codec, M98088_REG_1B_DAI2_CLKCFG_LO,
@@ -1356,19 +1361,26 @@ static int max98088_dai_set_sysclk(struct snd_soc_dai *dai,
 {
        struct snd_soc_codec *codec = dai->codec;
        struct max98088_priv *max98088 = snd_soc_codec_get_drvdata(codec);
+	unsigned int prescaler = 0;
 
        /* Requested clock frequency is already setup */
        if (freq == max98088->sysclk)
                return 0;
 
-       /* Setup clocks for slave mode, and using the PLL
-        * PSCLK = 0x01 (when master clk is 10MHz to 20MHz)
-        *         0x02 (when master clk is 20MHz to 30MHz)..
-        */
+	/* Setup clocks for slave mode, and using the PLL
+	 * PSCLK = 0x01 (when master clk is 10MHz to 20MHz)
+	 *         0x02 (when master clk is 20MHz to 40MHz)..
+	 *         0x04 (when master clk is 40MHz to 60MHz)..
+	 */
        if ((freq >= 10000000) && (freq < 20000000)) {
                snd_soc_write(codec, M98088_REG_10_SYS_CLK, 0x10);
-       } else if ((freq >= 20000000) && (freq < 30000000)) {
-               snd_soc_write(codec, M98088_REG_10_SYS_CLK, 0x20);
+		prescaler = 1;
+	} else if ((freq >= 20000000) && (freq < 40000000)) {
+		snd_soc_write(codec, M98088_REG_10_SYS_CLK, 0x20);
+		prescaler = 2;
+	} else if ((freq >= 40000000) && (freq < 60000000)) {
+		snd_soc_write(codec, M98088_REG_10_SYS_CLK, 0x30);
+		prescaler = 4;
        } else {
                dev_err(codec->dev, "Invalid master clock frequency\n");
                return -EINVAL;
@@ -1381,9 +1393,12 @@ static int max98088_dai_set_sysclk(struct snd_soc_dai *dai,
                        M98088_SHDNRUN, M98088_SHDNRUN);
        }
 
-       dev_dbg(dai->dev, "Clock source is %d at %uHz\n", clk_id, freq);
+	dev_dbg(dai->dev, "Clock source is %d, freq=%uHz, prescaler:%u\n",
+		clk_id, freq, prescaler);
 
        max98088->sysclk = freq;
+	max98088->prescaler = prescaler;
+
        return 0;
 }
 
@@ -1898,6 +1913,7 @@ static int max98088_probe(struct snd_soc_codec *codec)
        /* initialize private data */
 
        max98088->sysclk = (unsigned)-1;
+	max98088->prescaler = (unsigned)-1;
        max98088->eq_textcnt = 0;
 
        cdata = &max98088->dai[0];
@@ -2009,10 +2025,18 @@ static const struct i2c_device_id max98088_i2c_id[] = {
 };
 MODULE_DEVICE_TABLE(i2c, max98088_i2c_id);
 
+static const struct of_device_id max98088_of_match[] = {
+	{ .compatible = "maxim,max98088", },
+	{ .compatible = "maxim,max98089", },
+	{ /* sentinel */ }
+};
+MODULE_DEVICE_TABLE(of, max98088_of_match);
+
 static struct i2c_driver max98088_i2c_driver = {
 	.driver = {
 		.name = "max98088",
 		.owner = THIS_MODULE,
+		.of_match_table = max98088_of_match,
 	},
 	.probe  = max98088_i2c_probe,
 	.remove = max98088_i2c_remove,

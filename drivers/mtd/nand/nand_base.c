@@ -3530,6 +3530,18 @@ static void nand_decode_ext_id(struct mtd_info *mtd, struct nand_chip *chip,
 			mtd->oobsize = 32 * mtd->writesize >> 9;
 		}
 
+		if (id_data[0] == NAND_MFR_AMD) {
+			switch (id_data[1]) {
+			case 0xda:
+			case 0xdc:
+			case 0xca:
+			case 0xcc:
+				mtd->oobsize <<= 1;
+				chip->ecc_strength_ds = 1 << (id_data[4] & 0x03);
+				chip->ecc_step_ds = 512;
+				break;
+			}
+		}
 	}
 }
 

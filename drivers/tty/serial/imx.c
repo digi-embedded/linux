@@ -184,6 +184,8 @@
 #define IMX_RXBD_NUM 20
 #define IMX_MODULE_MAX_CLK_RATE	80000000
 
+extern int digi_get_board_version(void);
+
 /* i.MX21 type uart runs on all i.mx except i.MX1 and i.MX6q */
 enum imx_uart_type {
 	IMX1_UART,
@@ -1873,7 +1875,7 @@ static int serial_imx_suspend(struct platform_device *dev, pm_message_t state)
 		disable_irq(sport->port.irq);
 	} else {
 		if (of_machine_is_compatible("digi,ccimx6sbc") &&
-		    mx6q_get_board_version() >= 2) {
+		    digi_get_board_version() >= 2) {
 			if (gpio_is_valid(sport->pwr_en_gpio))
 				gpio_set_value_cansleep(sport->pwr_en_gpio,
 							sport->pwr_en_act_low ? 1 : 0);
@@ -1932,7 +1934,7 @@ static int serial_imx_resume(struct platform_device *dev)
 		enable_irq(sport->port.irq);
 	} else {
 		if (of_machine_is_compatible("digi,ccimx6sbc") &&
-		    mx6q_get_board_version() >= 2) {
+		    digi_get_board_version() >= 2) {
 			if (gpio_is_valid(sport->pwr_en_gpio))
 				gpio_set_value_cansleep(sport->pwr_en_gpio,
 							sport->pwr_en_act_low ? 0 : 1);
@@ -2010,6 +2012,46 @@ static int serial_imx_probe_dt(struct imx_port *sport,
 
 	if (of_property_read_bool(np, "linux,rs485-enabled-at-boot-time"))
 		rs485conf->flags |= SER_RS485_ENABLED;
+
+	/*
+	 * UART1 on CC6UL SOM with hardware version (HV) < 4 have crossed RX/TX
+	 * lines going to the Bluetooth chip. To make the Bluetooth chip work
+	 * UART1 (index 0) needs:
+	 *  - force DTE mode
+	 *  - not use HW flow control
+	 *  - use dte-no-flow pinctrl
+	 */
+	if (of_machine_is_compatible("digi,ccimx6ul") &&
+	    sport->port.line == 0) {
+		struct device_node *rn;
+		const char *hwid_hv;
+		unsigned int hv = 0;
+		struct pinctrl_state *pins_dte_noflow;
+		struct pinctrl *pinctrl;
+
+		rn = of_find_node_by_path("/");
+		if (!of_property_read_string(rn, "digi,hwid,hv", &hwid_hv)) {
+			if (kstrtoul(hwid_hv, 0, (unsigned long *)&hv))
+				dev_warn(&pdev->dev,
+					 "Invalid 'digi,hwid,hv'\n");
+			if (hv > 0 && hv < 4) {
+				dev_info(&pdev->dev,
+					 "Forcing DTE mode and no hw-flow on CC6UL with HV=%d",
+					 hv);
+				sport->dte_mode = 1;
+				sport->have_rtscts = 0;
+				pinctrl = devm_pinctrl_get(&pdev->dev);
+				pins_dte_noflow = pinctrl_lookup_state(pinctrl,
+							"dte_noflow");
+				if (IS_ERR(pins_dte_noflow))
+					dev_warn(&pdev->dev,
+						 "could not get 'dte_noflow' pinctrl required for UART1\n");
+				else
+					pinctrl_select_state(pinctrl,
+							     pins_dte_noflow);
+			}
+		}
+	}
 
 	sport->devdata = of_id->data;
 

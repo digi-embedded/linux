@@ -142,6 +142,22 @@ static int mca_cc6ul_i2c_remove(struct i2c_client *i2c)
 	return 0;
 }
 
+#ifdef CONFIG_PM
+static int mca_cc6ul_i2c_suspend(struct device *dev)
+{
+	return mca_cc6ul_suspend(dev);
+}
+
+static int mca_cc6ul_i2c_resume(struct device *dev)
+{
+	return mca_cc6ul_resume(dev);
+}
+
+static SIMPLE_DEV_PM_OPS(mca_cc6ul_i2c_pm_ops,
+			 mca_cc6ul_i2c_suspend,
+			 mca_cc6ul_i2c_resume);
+#endif
+
 static const struct i2c_device_id mca_cc6ul_i2c_id[] = {
         {"mca_cc6ul", 0},
         {},
@@ -152,6 +168,9 @@ static struct i2c_driver mca_cc6ul_i2c_driver = {
 	.driver = {
 		.name = "mca_cc6ul",
 		.of_match_table = of_match_ptr(mca_cc6ul_dt_ids),
+#ifdef CONFIG_PM
+		.pm = &mca_cc6ul_i2c_pm_ops,
+#endif
 	},
 	.probe    = mca_cc6ul_i2c_probe,
 	.remove   = mca_cc6ul_i2c_remove,

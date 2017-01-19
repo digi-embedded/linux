@@ -1295,6 +1295,10 @@ static int pxp_probe(struct platform_device *pdev)
 		goto freevdev;
 	}
 
+	v4l2_info(v4l2_dev,
+		  "video output device registered as /dev/video%d\n",
+		  pxp->vdev->num);
+
 	dev_info(&pdev->dev, "initialized\n");
 
 exit:

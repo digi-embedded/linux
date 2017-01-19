@@ -8,9 +8,11 @@ Required properties:
 
 Optional properties:
 - adc-ch-list: list of MCA IOs to be enabled as ADCs
+- adc-vref: ADC reference voltage in uV, corresponds with the VCC_MCA voltage.
 
 Example:
 
 	&mca_adc {
 		digi,adc-ch-list = <0 4>;
+		digi,adc-vref = <3000000>;
 	};

@@ -1,4 +1,5 @@
 /*
+ * Copyright (C) 2016 Digi International, Inc. All Rights Reserved.
  * Copyright (C) 2012-2014 Freescale Semiconductor, Inc. All Rights Reserved.
  */
 
@@ -34,9 +35,9 @@
 #include <linux/regmap.h>
 #include <linux/regulator/consumer.h>
 #include <linux/fsl_devices.h>
-#include <media/v4l2-chip-ident.h>
-#include "v4l2-int-device.h"
-#include "mxc_v4l2_capture.h"
+#include <linux/v4l2-mediabus.h>
+#include <media/v4l2-ctrls.h>
+#include <media/v4l2-device.h>
 
 #define OV5642_VOLTAGE_ANALOG               2800000
 #define OV5642_VOLTAGE_DIGITAL_CORE         1500000
@@ -76,6 +77,11 @@ static int ov5642_framerates[] = {
 	[ov5642_30_fps] = 30,
 };
 
+struct ov5642_datafmt {
+	u32 code;
+	enum v4l2_colorspace colorspace;
+};
+
 struct reg_value {
 	u16 u16RegAddr;
 	u8 u8Val;
@@ -91,45 +97,37 @@ struct ov5642_mode_info {
 	u32 init_data_size;
 };
 
+struct ov5642 {
+	struct v4l2_subdev subdev;
+	struct i2c_client *i2c_client;
+	struct v4l2_pix_format pix;
+	const struct ov5642_datafmt *fmt;
+	struct v4l2_captureparm streamcap;
+	bool on;
+
+	/* control settings */
+	int brightness;
+	int hue;
+	int contrast;
+	int saturation;
+	int red;
+	int green;
+	int blue;
+	int ae_mode;
+
+	u32 mclk;
+	u8 mclk_source;
+	struct clk *sensor_clk;
+	int csi;
+
+	void (*io_init)(void);
+};
+
 /*!
  * Maintains the information on the current state of the sesor.
  */
-static struct sensor_data ov5642_data;
+static struct ov5642 ov5642_data;
 static int pwn_gpio, rst_gpio;
-
-static struct reg_value ov5642_rot_none_VGA[] = {
-	{0x3818, 0xc1, 0x00, 0x00}, {0x3621, 0x87, 0x00, 0x00},
-};
-
-static struct reg_value ov5642_rot_vert_flip_VGA[] = {
-	{0x3818, 0x20, 0xbf, 0x00}, {0x3621, 0x20, 0xff, 0x00},
-};
-
-static struct reg_value ov5642_rot_horiz_flip_VGA[] = {
-	{0x3818, 0x81, 0x00, 0x01}, {0x3621, 0xa7, 0x00, 0x00},
-};
-
-static struct reg_value ov5642_rot_180_VGA[] = {
-	{0x3818, 0x60, 0xff, 0x00}, {0x3621, 0x00, 0xdf, 0x00},
-};
-
-
-static struct reg_value ov5642_rot_none_FULL[] = {
-	{0x3818, 0xc0, 0x00, 0x00}, {0x3621, 0x09, 0x00, 0x00},
-};
-
-static struct reg_value ov5642_rot_vert_flip_FULL[] = {
-	{0x3818, 0x20, 0xbf, 0x01}, {0x3621, 0x20, 0xff, 0x00},
-};
-
-static struct reg_value ov5642_rot_horiz_flip_FULL[] = {
-	{0x3818, 0x80, 0x00, 0x01}, {0x3621, 0x29, 0x00, 0x00},
-};
-
-static struct reg_value ov5642_rot_180_FULL[] = {
-	{0x3818, 0x60, 0xff, 0x00}, {0x3621, 0x00, 0xdf, 0x00},
-};
-
 
 static struct reg_value ov5642_initial_setting[] = {
 	{0x3103, 0x93, 0, 0}, {0x3008, 0x82, 0, 0}, {0x3017, 0x7f, 0, 0},
@@ -3004,7 +3002,6 @@ static s32 ov5642_read_reg(u16 reg, u8 *val);
 static s32 ov5642_write_reg(u16 reg, u8 val);
 
 static const struct i2c_device_id ov5642_id[] = {
-	{"ov5642", 0},
 	{"ov564x", 0},
 	{},
 };
@@ -3014,14 +3011,36 @@ MODULE_DEVICE_TABLE(i2c, ov5642_id);
 static struct i2c_driver ov5642_i2c_driver = {
 	.driver = {
 		  .owner = THIS_MODULE,
-		  .name  = "ov5642",
+		  .name  = "ov564x",
 		  },
 	.probe  = ov5642_probe,
 	.remove = ov5642_remove,
 	.id_table = ov5642_id,
 };
 
-static s32 update_device_addr(struct sensor_data *sensor)
+static const struct ov5642_datafmt ov5642_colour_fmts[] = {
+	{MEDIA_BUS_FMT_YUYV8_2X8, V4L2_COLORSPACE_JPEG},
+};
+
+static struct ov5642 *to_ov5642(const struct i2c_client *client)
+{
+	return container_of(i2c_get_clientdata(client), struct ov5642, subdev);
+}
+
+/* Find a data format by a pixel code in an array */
+static const struct ov5642_datafmt
+			*ov5642_find_datafmt(u32 code)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(ov5642_colour_fmts); i++)
+		if (ov5642_colour_fmts[i].code == code)
+			return ov5642_colour_fmts + i;
+
+	return NULL;
+}
+
+static s32 update_device_addr(void)
 {
 	int ret;
 	u8 buf[4];
@@ -3029,21 +3048,18 @@ static s32 update_device_addr(struct sensor_data *sensor)
 	unsigned default_addr = 0x3c;
 	struct i2c_msg msg;
 
-	if (sensor->i2c_client->addr == default_addr)
+	if (ov5642_data.i2c_client->addr == default_addr)
 		return 0;
 
 	buf[0] = reg >> 8;
 	buf[1] = reg & 0xff;
-	buf[2] = sensor->i2c_client->addr << 1;
+	buf[2] = ov5642_data.i2c_client->addr << 1;
 	msg.addr = default_addr;
 	msg.flags = 0;
 	msg.len = 3;
 	msg.buf = buf;
 
-	ret = i2c_transfer(sensor->i2c_client->adapter, &msg, 1);
-	if (ret < 0)
-		pr_warn("%s: Device address not updated: %d\n", __func__,
-				ret);
+	ret = i2c_transfer(ov5642_data.i2c_client->adapter, &msg, 1);
 	return ret;
 }
 
@@ -3062,11 +3078,6 @@ static void ov5642_standby(s32 enable)
 
 static void ov5642_reset(void)
 {
-	if (!gpio_is_valid(pwn_gpio) && !gpio_is_valid(rst_gpio))
-		return;
-
-	mxc_camera_common_lock();
-
 	if (gpio_is_valid(rst_gpio))
 		gpio_set_value_cansleep(rst_gpio, 1);
 
@@ -3084,14 +3095,13 @@ static void ov5642_reset(void)
 		msleep(20);
 	}
 
-	update_device_addr(&ov5642_data);
-	mxc_camera_common_unlock();
+	update_device_addr();
 
 	if (gpio_is_valid(pwn_gpio))
 		gpio_set_value_cansleep(pwn_gpio, 1);
 }
 
-static int ov5642_power_on(struct device *dev)
+static int ov5642_regulator_enable(struct device *dev)
 {
 	int ret = 0;
 
@@ -3166,10 +3176,8 @@ static s32 ov5642_write_reg(u16 reg, u8 val)
 	au8Buf[2] = val;
 
 	if ((reg == 0x3008) && (val & 0x80)) {
-		mxc_camera_common_lock();
 		ret = i2c_master_send(ov5642_data.i2c_client, au8Buf, 3);
-		update_device_addr(&ov5642_data);
-		mxc_camera_common_unlock();
+		update_device_addr();
 	} else {
 		ret = i2c_master_send(ov5642_data.i2c_client, au8Buf, 3);
 	}
@@ -3207,47 +3215,38 @@ static s32 ov5642_read_reg(u16 reg, u8 *val)
 	return u8RdVal;
 }
 
-static int ov5642_set_rot_mode(struct reg_value *rot_mode)
+#ifdef CONFIG_VIDEO_ADV_DEBUG
+static int ov5642_get_register(struct v4l2_subdev *sd,
+			       struct v4l2_dbg_register *reg)
 {
-	s32 i = 0;
-	s32 iModeSettingArySize = 2;
-	register u32 Delay_ms = 0;
-	register u16 RegAddr = 0;
-	register u8 Mask = 0;
-	register u8 Val = 0;
-	u8 RegVal = 0;
-	int retval = 0;
-	for (i = 0; i < iModeSettingArySize; ++i, ++rot_mode) {
-		Delay_ms = rot_mode->u32Delay_ms;
-		RegAddr = rot_mode->u16RegAddr;
-		Val = rot_mode->u8Val;
-		Mask = rot_mode->u8Mask;
+	struct i2c_client *client = v4l2_get_subdevdata(sd);
+	int ret;
+	u8 val;
 
-		if (Mask) {
-			retval = ov5642_read_reg(RegAddr, &RegVal);
-			if (retval < 0) {
-				pr_err("%s, read reg 0x%x failed\n",
-						__func__, RegAddr);
-				goto err;
-			}
+	if (reg->reg & ~0xffff)
+		return -EINVAL;
 
-			Val |= RegVal;
-			Val &= Mask;
-		}
+	reg->size = 1;
 
-		retval = ov5642_write_reg(RegAddr, Val);
-		if (retval < 0) {
-			pr_err("%s, write reg 0x%x failed\n",
-					__func__, RegAddr);
-			goto err;
-		}
+	ret = ov5642_read_reg(reg->reg, &val);
+	if (!ret)
+		reg->val = (__u64)val;
 
-		if (Delay_ms)
-			mdelay(Delay_ms);
-	}
-err:
-	return retval;
+	return ret;
 }
+
+static int ov5642_set_register(struct v4l2_subdev *sd,
+			       const struct v4l2_dbg_register *reg)
+{
+	struct i2c_client *client = v4l2_get_subdevdata(sd);
+
+	if (reg->reg & ~0xffff || reg->val & ~0xff)
+		return -EINVAL;
+
+	return ov5642_write_reg(reg->reg, reg->val);
+}
+#endif
+
 static int ov5642_init_mode(enum ov5642_frame_rate frame_rate,
 		enum ov5642_mode mode);
 static int ov5642_write_snapshot_para(enum ov5642_frame_rate frame_rate,
@@ -3494,67 +3493,23 @@ static int ov5642_write_snapshot_para(enum ov5642_frame_rate frame_rate,
 	return ret ;
 }
 
-
-/* --------------- IOCTL functions from v4l2_int_ioctl_desc --------------- */
-
-static int ioctl_g_ifparm(struct v4l2_int_device *s, struct v4l2_ifparm *p)
-{
-	if (s == NULL) {
-		pr_err("   ERROR!! no slave device set!\n");
-		return -1;
-	}
-
-	memset(p, 0, sizeof(*p));
-	p->u.bt656.clock_curr = ov5642_data.mclk;
-	pr_debug("   clock_curr=mclk=%d\n", ov5642_data.mclk);
-	p->if_type = V4L2_IF_TYPE_BT656;
-	p->u.bt656.mode = V4L2_IF_TYPE_BT656_MODE_NOBT_8BIT;
-	p->u.bt656.clock_min = OV5642_XCLK_MIN;
-	p->u.bt656.clock_max = OV5642_XCLK_MAX;
-	p->u.bt656.bt_sync_correct = 1;  /* Indicate external vsync */
-
-	return 0;
-}
-
 /*!
- * ioctl_s_power - V4L2 sensor interface handler for VIDIOC_S_POWER ioctl
+ * ov5642_s_power - V4L2 sensor interface handler for VIDIOC_S_POWER ioctl
  * @s: pointer to standard V4L2 device structure
  * @on: indicates power mode (on or off)
  *
  * Turns the power on or off, depending on the value of on and returns the
  * appropriate error code.
  */
-static int ioctl_s_power(struct v4l2_int_device *s, int on)
+static int ov5642_s_power(struct v4l2_subdev *sd, int on)
 {
-	struct sensor_data *sensor = s->priv;
+	struct i2c_client *client = v4l2_get_subdevdata(sd);
+	struct ov5642 *sensor = to_ov5642(client);
 
-	if (on && !sensor->on) {
-		if (io_regulator)
-			if (regulator_enable(io_regulator) != 0)
-				return -EIO;
-		if (core_regulator)
-			if (regulator_enable(core_regulator) != 0)
-				return -EIO;
-		if (gpo_regulator)
-			if (regulator_enable(gpo_regulator) != 0)
-				return -EIO;
-		if (analog_regulator)
-			if (regulator_enable(analog_regulator) != 0)
-				return -EIO;
-		/* Make sure power on */
-		ov5642_standby(0);
-	} else if (!on && sensor->on) {
-		if (analog_regulator)
-			regulator_disable(analog_regulator);
-		if (core_regulator)
-			regulator_disable(core_regulator);
-		if (io_regulator)
-			regulator_disable(io_regulator);
-		if (gpo_regulator)
-			regulator_disable(gpo_regulator);
-
-		ov5642_standby(1);
-	}
+	if (on)
+		clk_enable(ov5642_data.sensor_clk);
+	else
+		clk_disable(ov5642_data.sensor_clk);
 
 	sensor->on = on;
 
@@ -3562,15 +3517,16 @@ static int ioctl_s_power(struct v4l2_int_device *s, int on)
 }
 
 /*!
- * ioctl_g_parm - V4L2 sensor interface handler for VIDIOC_G_PARM ioctl
- * @s: pointer to standard V4L2 device structure
+ * ov5642_g_parm - V4L2 sensor interface handler for VIDIOC_G_PARM ioctl
+ * @s: pointer to standard V4L2 sub device structure
  * @a: pointer to standard V4L2 VIDIOC_G_PARM ioctl structure
  *
  * Returns the sensor's video CAPTURE parameters.
  */
-static int ioctl_g_parm(struct v4l2_int_device *s, struct v4l2_streamparm *a)
+static int ov5642_g_parm(struct v4l2_subdev *sd, struct v4l2_streamparm *a)
 {
-	struct sensor_data *sensor = s->priv;
+	struct i2c_client *client = v4l2_get_subdevdata(sd);
+	struct ov5642 *sensor = to_ov5642(client);
 	struct v4l2_captureparm *cparm = &a->parm.capture;
 	int ret = 0;
 
@@ -3605,23 +3561,25 @@ static int ioctl_g_parm(struct v4l2_int_device *s, struct v4l2_streamparm *a)
 }
 
 /*!
- * ioctl_s_parm - V4L2 sensor interface handler for VIDIOC_S_PARM ioctl
- * @s: pointer to standard V4L2 device structure
+ * ov5460_s_parm - V4L2 sensor interface handler for VIDIOC_S_PARM ioctl
+ * @s: pointer to standard V4L2 sub device structure
  * @a: pointer to standard V4L2 VIDIOC_S_PARM ioctl structure
  *
  * Configures the sensor to use the input parameters, if possible.  If
  * not possible, reverts to the old parameters and returns the
  * appropriate error code.
  */
-static int ioctl_s_parm(struct v4l2_int_device *s, struct v4l2_streamparm *a)
+static int ov5642_s_parm(struct v4l2_subdev *sd, struct v4l2_streamparm *a)
 {
-	struct sensor_data *sensor = s->priv;
+	struct i2c_client *client = v4l2_get_subdevdata(sd);
+	struct ov5642 *sensor = to_ov5642(client);
 	struct v4l2_fract *timeperframe = &a->parm.capture.timeperframe;
 	u32 tgt_fps, old_fps;	/* target frames per secound */
 	enum ov5642_frame_rate new_frame_rate, old_frame_rate;
 	int ret = 0;
 
 	/* Make sure power on */
+	clk_enable(ov5642_data.sensor_clk);
 	ov5642_standby(0);
 
 	switch (a->type) {
@@ -3655,7 +3613,7 @@ static int ioctl_s_parm(struct v4l2_int_device *s, struct v4l2_streamparm *a)
 			new_frame_rate = ov5642_30_fps;
 		else {
 			pr_err(" The camera frame rate is not supported!\n");
-			return -EINVAL;
+			goto error;
 		}
 
 		if (sensor->streamcap.timeperframe.numerator != 0)
@@ -3677,7 +3635,7 @@ static int ioctl_s_parm(struct v4l2_int_device *s, struct v4l2_streamparm *a)
 				a->parm.capture.capturemode,
 				sensor->streamcap.capturemode);
 		if (ret < 0)
-			return ret;
+			goto error;
 
 		sensor->streamcap.timeperframe = *timeperframe;
 		sensor->streamcap.capturemode =
@@ -3703,228 +3661,128 @@ static int ioctl_s_parm(struct v4l2_int_device *s, struct v4l2_streamparm *a)
 		break;
 	}
 
+error:
+	ov5642_standby(1);
+	clk_disable(ov5642_data.sensor_clk);
 	return ret;
 }
 
-/*!
- * ioctl_g_fmt_cap - V4L2 sensor interface handler for ioctl_g_fmt_cap
- * @s: pointer to standard V4L2 device structure
- * @f: pointer to standard V4L2 v4l2_format structure
- *
- * Returns the sensor's current pixel format in the v4l2_format
- * parameter.
- */
-static int ioctl_g_fmt_cap(struct v4l2_int_device *s, struct v4l2_format *f)
+static int ov5642_try_fmt(struct v4l2_subdev *sd,
+			  struct v4l2_mbus_framefmt *mf)
 {
-	struct sensor_data *sensor = s->priv;
+	const struct ov5642_datafmt *fmt = ov5642_find_datafmt(mf->code);
 
-	f->fmt.pix = sensor->pix;
+	if (!fmt) {
+		mf->code	= ov5642_colour_fmts[0].code;
+		mf->colorspace	= ov5642_colour_fmts[0].colorspace;
+	}
+
+	mf->field	= V4L2_FIELD_NONE;
 
 	return 0;
 }
 
-/*!
- * ioctl_g_ctrl - V4L2 sensor interface handler for VIDIOC_G_CTRL ioctl
- * @s: pointer to standard V4L2 device structure
- * @vc: standard V4L2 VIDIOC_G_CTRL ioctl structure
- *
- * If the requested control is supported, returns the control's current
- * value from the video_control[] array.  Otherwise, returns -EINVAL
- * if the control is not supported.
- */
-static int ioctl_g_ctrl(struct v4l2_int_device *s, struct v4l2_control *vc)
+static int ov5642_s_fmt(struct v4l2_subdev *sd,
+			struct v4l2_mbus_framefmt *mf)
 {
-	int ret = 0;
+	struct i2c_client *client = v4l2_get_subdevdata(sd);
+	struct ov5642 *sensor = to_ov5642(client);
 
-	switch (vc->id) {
-	case V4L2_CID_BRIGHTNESS:
-		vc->value = ov5642_data.brightness;
-		break;
-	case V4L2_CID_HUE:
-		vc->value = ov5642_data.hue;
-		break;
-	case V4L2_CID_CONTRAST:
-		vc->value = ov5642_data.contrast;
-		break;
-	case V4L2_CID_SATURATION:
-		vc->value = ov5642_data.saturation;
-		break;
-	case V4L2_CID_RED_BALANCE:
-		vc->value = ov5642_data.red;
-		break;
-	case V4L2_CID_BLUE_BALANCE:
-		vc->value = ov5642_data.blue;
-		break;
-	case V4L2_CID_EXPOSURE:
-		vc->value = ov5642_data.ae_mode;
-		break;
-	default:
-		ret = -EINVAL;
-	}
+	/* MIPI CSI could have changed the format, double-check */
+	if (!ov5642_find_datafmt(mf->code))
+		return -EINVAL;
 
-	return ret;
+	ov5642_try_fmt(sd, mf);
+	sensor->fmt = ov5642_find_datafmt(mf->code);
+
+	return 0;
+}
+
+static int ov5642_g_fmt(struct v4l2_subdev *sd,
+			struct v4l2_mbus_framefmt *mf)
+{
+	struct i2c_client *client = v4l2_get_subdevdata(sd);
+	struct ov5642 *sensor = to_ov5642(client);
+
+	const struct ov5642_datafmt *fmt = sensor->fmt;
+
+	mf->code	= fmt->code;
+	mf->colorspace	= fmt->colorspace;
+	mf->field	= V4L2_FIELD_NONE;
+
+	return 0;
+}
+
+static int ov5642_enum_fmt(struct v4l2_subdev *sd, unsigned int index,
+			   u32 *code)
+{
+	if (index >= ARRAY_SIZE(ov5642_colour_fmts))
+		return -EINVAL;
+
+	*code = ov5642_colour_fmts[index].code;
+	return 0;
 }
 
 /*!
- * ioctl_s_ctrl - V4L2 sensor interface handler for VIDIOC_S_CTRL ioctl
- * @s: pointer to standard V4L2 device structure
- * @vc: standard V4L2 VIDIOC_S_CTRL ioctl structure
- *
- * If the requested control is supported, sets the control's current
- * value in HW (and updates the video_control[] array).  Otherwise,
- * returns -EINVAL if the control is not supported.
- */
-static int ioctl_s_ctrl(struct v4l2_int_device *s, struct v4l2_control *vc)
-{
-	int retval = 0;
-	struct sensor_data *sensor = s->priv;
-	__u32 captureMode = sensor->streamcap.capturemode;
-	struct reg_value *rot_mode = NULL;
-
-	pr_debug("In ov5642:ioctl_s_ctrl %d\n",
-		 vc->id);
-
-	switch (vc->id) {
-	case V4L2_CID_BRIGHTNESS:
-		break;
-	case V4L2_CID_CONTRAST:
-		break;
-	case V4L2_CID_SATURATION:
-		break;
-	case V4L2_CID_HUE:
-		break;
-	case V4L2_CID_AUTO_WHITE_BALANCE:
-		break;
-	case V4L2_CID_DO_WHITE_BALANCE:
-		break;
-	case V4L2_CID_RED_BALANCE:
-		break;
-	case V4L2_CID_BLUE_BALANCE:
-		break;
-	case V4L2_CID_GAMMA:
-		break;
-	case V4L2_CID_EXPOSURE:
-		break;
-	case V4L2_CID_AUTOGAIN:
-		break;
-	case V4L2_CID_GAIN:
-		break;
-	case V4L2_CID_HFLIP:
-		break;
-	case V4L2_CID_VFLIP:
-		break;
-	case V4L2_CID_MXC_ROT:
-	case V4L2_CID_MXC_VF_ROT:
-		switch (vc->value) {
-		case V4L2_MXC_ROTATE_NONE:
-			if (captureMode == ov5642_mode_QSXGA_2592_1944)
-				rot_mode = ov5642_rot_none_FULL;
-			else
-				rot_mode = ov5642_rot_none_VGA;
-
-			if (ov5642_set_rot_mode(rot_mode))
-				retval = -EPERM;
-			break;
-		case V4L2_MXC_ROTATE_VERT_FLIP:
-			if (captureMode == ov5642_mode_QSXGA_2592_1944)
-				rot_mode = ov5642_rot_vert_flip_FULL;
-			else
-				rot_mode = ov5642_rot_vert_flip_VGA ;
-
-			if (ov5642_set_rot_mode(rot_mode))
-				retval = -EPERM;
-			break;
-		case V4L2_MXC_ROTATE_HORIZ_FLIP:
-			if (captureMode == ov5642_mode_QSXGA_2592_1944)
-				rot_mode = ov5642_rot_horiz_flip_FULL;
-			else
-				rot_mode = ov5642_rot_horiz_flip_VGA;
-
-			if (ov5642_set_rot_mode(rot_mode))
-				retval = -EPERM;
-			break;
-		case V4L2_MXC_ROTATE_180:
-			if (captureMode == ov5642_mode_QSXGA_2592_1944)
-				rot_mode = ov5642_rot_180_FULL;
-			else
-				rot_mode = ov5642_rot_180_VGA;
-
-			if (ov5642_set_rot_mode(rot_mode))
-				retval = -EPERM;
-			break;
-		default:
-			retval = -EPERM;
-			break;
-		}
-		break;
-	default:
-		retval = -EPERM;
-		break;
-	}
-
-	return retval;
-}
-
-/*!
- * ioctl_enum_framesizes - V4L2 sensor interface handler for
- *			   VIDIOC_ENUM_FRAMESIZES ioctl
+ * ov5642_enum_framesizes - V4L2 sensor interface handler for
+ *			    VIDIOC_ENUM_FRAMESIZES ioctl
  * @s: pointer to standard V4L2 device structure
  * @fsize: standard V4L2 VIDIOC_ENUM_FRAMESIZES ioctl structure
  *
  * Return 0 if successful, otherwise -EINVAL.
  */
-static int ioctl_enum_framesizes(struct v4l2_int_device *s,
-				 struct v4l2_frmsizeenum *fsize)
+static int ov5642_enum_framesizes(struct v4l2_subdev *sd,
+				  struct v4l2_subdev_pad_config *cfg,
+				  struct v4l2_subdev_frame_size_enum *fse)
 {
-	if (fsize->index > ov5642_mode_MAX)
+	if (fse->index > ov5642_mode_MAX)
 		return -EINVAL;
 
-	fsize->pixel_format = ov5642_data.pix.pixelformat;
-	fsize->discrete.width =
-			max(ov5642_mode_info_data[0][fsize->index].width,
-			    ov5642_mode_info_data[1][fsize->index].width);
-	fsize->discrete.height =
-			max(ov5642_mode_info_data[0][fsize->index].height,
-			    ov5642_mode_info_data[1][fsize->index].height);
+	fse->max_width = max(ov5642_mode_info_data[0][fse->index].width,
+			     ov5642_mode_info_data[1][fse->index].width);
+	fse->min_width = fse->max_width;
+	fse->max_height = max(ov5642_mode_info_data[0][fse->index].height,
+			      ov5642_mode_info_data[1][fse->index].height);
+	fse->min_height = fse->max_height;
+
 	return 0;
 }
 
 /*!
- * ioctl_enum_frameintervals - V4L2 sensor interface handler for
- *			       VIDIOC_ENUM_FRAMEINTERVALS ioctl
+ * ov5642_enum_frameintervals - V4L2 sensor interface handler for
+ * 				VIDIOC_ENUM_FRAMEINTERVALS ioctl
  * @s: pointer to standard V4L2 device structure
  * @fival: standard V4L2 VIDIOC_ENUM_FRAMEINTERVALS ioctl structure
  *
  * Return 0 if successful, otherwise -EINVAL.
  */
-static int ioctl_enum_frameintervals(struct v4l2_int_device *s,
-					 struct v4l2_frmivalenum *fival)
+static int ov5642_enum_frameintervals(struct v4l2_subdev *sd,
+		struct v4l2_subdev_pad_config *cfg,
+		struct v4l2_subdev_frame_interval_enum *fie)
 {
 	int i, j, count;
 
-	if (fival->index < 0 || fival->index > ov5642_mode_MAX)
+	if (fie->index < 0 || fie->index > ov5642_mode_MAX)
 		return -EINVAL;
 
-	if (fival->pixel_format == 0 || fival->width == 0 ||
-			fival->height == 0) {
+	if (fie->code == 0 || fie->width == 0 ||
+			fie->height == 0) {
 		pr_warning("Please assign pixelformat, width and height.\n");
 		return -EINVAL;
 	}
 
-	fival->type = V4L2_FRMIVAL_TYPE_DISCRETE;
-	fival->discrete.numerator = 1;
+	fie->interval.numerator = 1;
 
 	count = 0;
 	for (i = 0; i < ARRAY_SIZE(ov5642_mode_info_data); i++) {
 		for (j = 0; j < (ov5642_mode_MAX + 1); j++) {
-			if (fival->pixel_format == ov5642_data.pix.pixelformat
-			 && fival->width == ov5642_mode_info_data[i][j].width
-			 && fival->height == ov5642_mode_info_data[i][j].height
-			 && ov5642_mode_info_data[i][j].init_data_ptr != NULL) {
+			if (fie->width == ov5642_mode_info_data[i][j].width &&
+			    fie->height == ov5642_mode_info_data[i][j].height &&
+			    ov5642_mode_info_data[i][j].init_data_ptr != NULL) {
 				count++;
 			}
-			if (fival->index == (count - 1)) {
-				fival->discrete.denominator =
+			if (fie->index == (count - 1)) {
+				fie->interval.denominator =
 						ov5642_framerates[i];
 				return 0;
 			}
@@ -3934,49 +3792,22 @@ static int ioctl_enum_frameintervals(struct v4l2_int_device *s,
 	return -EINVAL;
 }
 
-/*!
- * ioctl_g_chip_ident - V4L2 sensor interface handler for
- *			VIDIOC_DBG_G_CHIP_IDENT ioctl
- * @s: pointer to standard V4L2 device structure
- * @id: pointer to int
- *
- * Return 0.
- */
-static int ioctl_g_chip_ident(struct v4l2_int_device *s, int *id)
+static int ov5642_set_clk_rate(void)
 {
-	((struct v4l2_dbg_chip_ident *)id)->match.type =
-					V4L2_CHIP_MATCH_I2C_DRIVER;
-	strcpy(((struct v4l2_dbg_chip_ident *)id)->match.name, "ov5642_camera");
+	u32 tgt_xclk;	/* target xclk */
+	int ret;
 
-	return 0;
-}
+	/* mclk */
+	tgt_xclk = ov5642_data.mclk;
+	tgt_xclk = min(tgt_xclk, (u32)OV5642_XCLK_MAX);
+	tgt_xclk = max(tgt_xclk, (u32)OV5642_XCLK_MIN);
+	ov5642_data.mclk = tgt_xclk;
 
-/*!
- * ioctl_init - V4L2 sensor interface handler for VIDIOC_INT_INIT
- * @s: pointer to standard V4L2 device structure
- */
-static int ioctl_init(struct v4l2_int_device *s)
-{
-
-	return 0;
-}
-
-/*!
- * ioctl_enum_fmt_cap - V4L2 sensor interface handler for VIDIOC_ENUM_FMT
- * @s: pointer to standard V4L2 device structure
- * @fmt: pointer to standard V4L2 fmt description structure
- *
- * Return 0.
- */
-static int ioctl_enum_fmt_cap(struct v4l2_int_device *s,
-			      struct v4l2_fmtdesc *fmt)
-{
-	if (fmt->index > 0)	/* only 1 pixelformat support so far */
-		return -EINVAL;
-
-	fmt->pixelformat = ov5642_data.pix.pixelformat;
-
-	return 0;
+	pr_debug("   Setting mclk to %d MHz\n", tgt_xclk / 1000000);
+	ret = clk_set_rate(ov5642_data.sensor_clk, ov5642_data.mclk);
+	if (ret < 0)
+		pr_debug("set rate filed, rate=%d\n", ov5642_data.mclk);
+	return ret;
 }
 
 /*!
@@ -3985,7 +3816,7 @@ static int ioctl_enum_fmt_cap(struct v4l2_int_device *s,
  *
  * Initialise the device when slave attaches to the master.
  */
-static int ioctl_dev_init(struct v4l2_int_device *s)
+static int init_device(void)
 {
 	struct reg_value *pModeSetting = NULL;
 	s32 i = 0;
@@ -3997,7 +3828,6 @@ static int ioctl_dev_init(struct v4l2_int_device *s)
 	u8 RegVal = 0;
 	int retval = 0;
 
-	struct sensor_data *sensor = s->priv;
 	u32 tgt_xclk;	/* target xclk */
 	u32 tgt_fps;	/* target frames per secound */
 	enum ov5642_frame_rate frame_rate;
@@ -4006,15 +3836,10 @@ static int ioctl_dev_init(struct v4l2_int_device *s)
 
 	/* mclk */
 	tgt_xclk = ov5642_data.mclk;
-	tgt_xclk = min(tgt_xclk, (u32)OV5642_XCLK_MAX);
-	tgt_xclk = max(tgt_xclk, (u32)OV5642_XCLK_MIN);
-	ov5642_data.mclk = tgt_xclk;
-
-	pr_debug("   Setting mclk to %d MHz\n", tgt_xclk / 1000000);
 
 	/* Default camera frame rate is set in probe */
-	tgt_fps = sensor->streamcap.timeperframe.denominator /
-		  sensor->streamcap.timeperframe.numerator;
+	tgt_fps = ov5642_data.streamcap.timeperframe.denominator /
+		  ov5642_data.streamcap.timeperframe.numerator;
 
 	if (tgt_fps == 15)
 		frame_rate = ov5642_15_fps;
@@ -4052,73 +3877,33 @@ err:
 	return retval;
 }
 
-/*!
- * ioctl_dev_exit - V4L2 sensor interface handler for vidioc_int_dev_exit_num
- * @s: pointer to standard V4L2 device structure
- *
- * Delinitialise the device when slave detaches to the master.
- */
-static int ioctl_dev_exit(struct v4l2_int_device *s)
-{
-	return 0;
-}
+static struct v4l2_subdev_video_ops ov5642_subdev_video_ops = {
+	.g_parm = ov5642_g_parm,
+	.s_parm = ov5642_s_parm,
 
-/*!
- * This structure defines all the ioctls for this module and links them to the
- * enumeration.
- */
-static struct v4l2_int_ioctl_desc ov5642_ioctl_desc[] = {
-	{ vidioc_int_dev_init_num,
-	  (v4l2_int_ioctl_func *)ioctl_dev_init },
-	{ vidioc_int_dev_exit_num, ioctl_dev_exit},
-	{ vidioc_int_s_power_num,
-	  (v4l2_int_ioctl_func *)ioctl_s_power },
-	{ vidioc_int_g_ifparm_num,
-	  (v4l2_int_ioctl_func *)ioctl_g_ifparm },
-/*	{ vidioc_int_g_needs_reset_num,
-	  (v4l2_int_ioctl_func *)ioctl_g_needs_reset }, */
-/*	{ vidioc_int_reset_num,
-	  (v4l2_int_ioctl_func *)ioctl_reset }, */
-	{ vidioc_int_init_num,
-	  (v4l2_int_ioctl_func *)ioctl_init },
-	{ vidioc_int_enum_fmt_cap_num,
-	  (v4l2_int_ioctl_func *)ioctl_enum_fmt_cap },
-/*	{ vidioc_int_try_fmt_cap_num,
-	  (v4l2_int_ioctl_func *)ioctl_try_fmt_cap }, */
-	{ vidioc_int_g_fmt_cap_num,
-	  (v4l2_int_ioctl_func *)ioctl_g_fmt_cap },
-/*	{ vidioc_int_s_fmt_cap_num,
-	  (v4l2_int_ioctl_func *)ioctl_s_fmt_cap }, */
-	{ vidioc_int_g_parm_num,
-	  (v4l2_int_ioctl_func *)ioctl_g_parm },
-	{ vidioc_int_s_parm_num,
-	  (v4l2_int_ioctl_func *)ioctl_s_parm },
-/*	{ vidioc_int_queryctrl_num,
-	  (v4l2_int_ioctl_func *)ioctl_queryctrl }, */
-	{ vidioc_int_g_ctrl_num,
-	  (v4l2_int_ioctl_func *)ioctl_g_ctrl },
-	{ vidioc_int_s_ctrl_num,
-	  (v4l2_int_ioctl_func *)ioctl_s_ctrl },
-	{ vidioc_int_enum_framesizes_num,
-	  (v4l2_int_ioctl_func *)ioctl_enum_framesizes },
-	{ vidioc_int_enum_frameintervals_num,
-	  (v4l2_int_ioctl_func *)ioctl_enum_frameintervals },
-	{ vidioc_int_g_chip_ident_num,
-	  (v4l2_int_ioctl_func *)ioctl_g_chip_ident },
+	.s_mbus_fmt	= ov5642_s_fmt,
+	.g_mbus_fmt	= ov5642_g_fmt,
+	.try_mbus_fmt	= ov5642_try_fmt,
+	.enum_mbus_fmt	= ov5642_enum_fmt,
 };
 
-static struct v4l2_int_slave ov5642_slave = {
-	.ioctls = ov5642_ioctl_desc,
-	.num_ioctls = ARRAY_SIZE(ov5642_ioctl_desc),
+static const struct v4l2_subdev_pad_ops ov5642_subdev_pad_ops = {
+	.enum_frame_size       = ov5642_enum_framesizes,
+	.enum_frame_interval   = ov5642_enum_frameintervals,
 };
 
-static struct v4l2_int_device ov5642_int_device = {
-	.module = THIS_MODULE,
-	.name = "ov5642",
-	.type = v4l2_int_type_slave,
-	.u = {
-		.slave = &ov5642_slave,
-	},
+static struct v4l2_subdev_core_ops ov5642_subdev_core_ops = {
+	.s_power	= ov5642_s_power,
+#ifdef CONFIG_VIDEO_ADV_DEBUG
+	.g_register	= ov5642_get_register,
+	.s_register	= ov5642_set_register,
+#endif
+};
+
+static struct v4l2_subdev_ops ov5642_subdev_ops = {
+	.core	= &ov5642_subdev_core_ops,
+	.video	= &ov5642_subdev_video_ops,
+	.pad	= &ov5642_subdev_pad_ops,
 };
 
 /*!
@@ -4134,8 +3919,6 @@ static int ov5642_probe(struct i2c_client *client,
 	struct device *dev = &client->dev;
 	int retval;
 	u8 chip_id_high, chip_id_low;
-	struct regmap *gpr;
-	struct sensor_data *sensor = &ov5642_data;
 	static int defer_probe = 1;
 
 	if (of_property_read_bool(dev->of_node, "digi,defer-probe")) {
@@ -4198,19 +3981,15 @@ static int ov5642_probe(struct i2c_client *client,
 		return retval;
 	}
 
-	retval = of_property_read_u32(dev->of_node, "ipu_id",
-					&sensor->ipu_id);
-	if (retval) {
-		dev_err(dev, "ipu_id missing or invalid\n");
-		return retval;
-	}
-
 	retval = of_property_read_u32(dev->of_node, "csi_id",
 					&(ov5642_data.csi));
 	if (retval) {
 		dev_err(dev, "csi_id missing or invalid\n");
 		return retval;
 	}
+
+	/* Set mclk rate before clk on */
+	ov5642_set_clk_rate();
 
 	clk_prepare_enable(ov5642_data.sensor_clk);
 
@@ -4225,7 +4004,7 @@ static int ov5642_probe(struct i2c_client *client,
 	ov5642_data.streamcap.timeperframe.denominator = DEFAULT_FPS;
 	ov5642_data.streamcap.timeperframe.numerator = 1;
 
-	ov5642_power_on(&client->dev);
+	ov5642_regulator_enable(&client->dev);
 
 	ov5642_reset();
 
@@ -4244,34 +4023,23 @@ static int ov5642_probe(struct i2c_client *client,
 		return -ENODEV;
 	}
 
-	gpr = syscon_regmap_lookup_by_compatible("fsl,imx6q-iomuxc-gpr");
-	if (!IS_ERR(gpr)) {
-		if (of_machine_is_compatible("fsl,imx6q")) {
-			int mask = ov5642_data.csi ? (1 << 20) : (1 << 19);
-
-			if (sensor->csi != sensor->ipu_id) {
-				pr_warning("%s: csi_id != ipu_id\n", __func__);
-				return -ENODEV;
-			}
-
-			regmap_update_bits(gpr, IOMUXC_GPR1, mask, mask);
-		} else if (of_machine_is_compatible("fsl,imx6dl")) {
-			int mask = ov5642_data.csi ? (7 << 3) : (7 << 0);
-			int val =  ov5642_data.csi ? (4 << 3) : (4 << 0);
-
-			regmap_update_bits(gpr, IOMUXC_GPR13, mask, val);
-		}
-	} else {
-		pr_err("%s: failed to find fsl,imx6q-iomux-gpr regmap\n",
-		       __func__);
+	retval = init_device();
+	if (retval < 0) {
+		clk_disable_unprepare(ov5642_data.sensor_clk);
+		pr_warning("camera ov5642 init failed\n");
+		ov5642_standby(1);
+		return retval;
 	}
 
 	ov5642_standby(1);
+	clk_disable(ov5642_data.sensor_clk);
 
-	ov5642_int_device.priv = &ov5642_data;
-	retval = v4l2_int_device_register(&ov5642_int_device);
+	v4l2_i2c_subdev_init(&ov5642_data.subdev, client, &ov5642_subdev_ops);
 
-	clk_disable_unprepare(ov5642_data.sensor_clk);
+	retval = v4l2_async_register_subdev(&ov5642_data.subdev);
+	if (retval < 0)
+		dev_err(&client->dev, "%s--Async register failed, ret=%d\n",
+			__func__, retval);
 
 	pr_info("camera ov5642 is found\n");
 	return retval;
@@ -4285,7 +4053,13 @@ static int ov5642_probe(struct i2c_client *client,
  */
 static int ov5642_remove(struct i2c_client *client)
 {
-	v4l2_int_device_unregister(&ov5642_int_device);
+	struct v4l2_subdev *sd = i2c_get_clientdata(client);
+
+	v4l2_async_unregister_subdev(sd);
+
+	clk_unprepare(ov5642_data.sensor_clk);
+
+	ov5642_standby(1);
 
 	if (gpo_regulator)
 		regulator_disable(gpo_regulator);

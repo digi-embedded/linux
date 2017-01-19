@@ -25,6 +25,4 @@ struct imxuart_platform_data {
 	unsigned int flags;
 };
 
-extern int mx6q_get_board_version(void);
-
 #endif

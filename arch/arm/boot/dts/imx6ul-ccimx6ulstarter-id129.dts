@@ -19,6 +19,19 @@
 /* ConnectCore 6UL StarterBoard */
 #include "imx6ul-ccimx6ulstarter.dtsi"
 
+/*
+ * Uncomment to enable the i.MX6UL SoC ADCs.
+ * Include in adc-ch-list the ADC channels (from 0 to 9) that you want to
+ * enable. Note that the iomux has to be configured accordingly in pinctrl_adc1
+ * to configure the pad for ADC operation
+ */
+//&adc1 {
+//	pinctrl-names = "default";
+//	pinctrl-0 = <&pinctrl_adc1>;
+//	adc-ch-list = <4>;
+//	status = "okay";
+//};
+
 &caam_keyblob {
 	status = "okay";
 };
@@ -56,11 +69,17 @@
 /* MCA IO0 connected to Grove ADC connector */
 &mca_adc {
 	digi,adc-ch-list = <0>;
+	digi,adc-vref = <3000000>;
 };
 
 /* Uncomment to Enable Tamper detection. Two interfaces (0 and 1) are available */
 //&mca_tamper {
 //	digi,tamper-if-list = <0 1>;
+//};
+
+/* PWM1 (Raspberry PI Expansion header) */
+//&pwm1 {
+//	status = "okay";
 //};
 
 /* UART4 (Raspberry PI Expansion header) */
@@ -84,4 +103,18 @@
 /* USDHC2 (microSD) */
 &usdhc2 {
 	status = "okay";
+};
+
+/* Pin mux configuration */
+&iomuxc {
+	pinctrl-0 = <&pinctrl_hog>;
+	imx6ul-ccimx6ul {
+		/* Uncomment specific pins of the ADC channels enabled in 'adc-ch-list' */
+		//pinctrl_adc1: adc1grp {
+		//	fsl,pins = <
+		//		/* GPIO1_4/ADC1_IN4 (pin 7 of the expansion header) */
+		//		MX6UL_PAD_GPIO1_IO04__GPIO1_IO04        0xb0
+		//	>;
+		//};
+	};
 };
