@@ -1,7 +1,7 @@
 /*
  * Watchdog driver for MCA on ConnectCore 6UL.
  *
- * Copyright(c) 2016 Digi International Inc.
+ * Copyright(c) 2016, 2017 Digi International Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -42,6 +42,7 @@ struct mca_cc6ul_wdt {
 	unsigned int default_timeout;
 	bool irqnoreset;
 	bool nowayout;
+	bool fullreset;
 	unsigned int irq_timeout;
 };
 
@@ -76,10 +77,11 @@ static int mca_cc6ul_config_options(struct mca_cc6ul_wdt *wdt)
 
 	control |= wdt->nowayout ? MCA_CC6UL_WDT_NOWAYOUT : 0;
 	control |= wdt->irqnoreset ? MCA_CC6UL_WDT_IRQNORESET : 0;
+	control |= wdt->fullreset ? MCA_CC6UL_WDT_FULLRESET : 0;
 
 	ret = regmap_update_bits(wdt->mca->regmap, MCA_CC6UL_WDT_CONTROL,
-			MCA_CC6UL_WDT_NOWAYOUT | MCA_CC6UL_WDT_IRQNORESET,
-			control);
+			MCA_CC6UL_WDT_NOWAYOUT | MCA_CC6UL_WDT_IRQNORESET |
+			MCA_CC6UL_WDT_FULLRESET, control);
 	if (ret)
 		goto err;
 
@@ -180,6 +182,7 @@ static int of_mca_cc6ul_wdt_init(struct device_node *np,
 
 	/* parse options */
 	wdt->irqnoreset = of_property_read_bool(np, "digi,irq-no-reset");
+	wdt->fullreset = of_property_read_bool(np, "digi,full-reset");
 
 	if (!of_property_read_u32_index(np, "digi,timeout-sec", 0, &timeout)) {
 		if (timeout < wdt->wdd.min_timeout ||
@@ -276,9 +279,10 @@ static int mca_cc6ul_wdt_probe(struct platform_device *pdev)
 		goto err;
 	}
 
-	pr_info("Watchdog driver for MCA of CC6UL (timeout=%d sec, nowayout=%d, %s)\n",
+	pr_info("Watchdog driver for MCA of CC6UL (timeout=%d sec, nowayout=%d, %s%s)\n",
 		wdt->default_timeout, nowayout,
-		wdt->irqnoreset ? "interrupt (no reset)" : "reset");
+		wdt->irqnoreset ? "interrupt (no reset)" : "reset",
+		wdt->irqnoreset ? "" : wdt->fullreset ? " (full)" : " (MPU only)");
 
 	return 0;
 

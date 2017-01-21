@@ -1,5 +1,5 @@
 /*
- *  Copyright 2016 Digi International Inc
+ *  Copyright 2017 Digi International Inc
  *
  *  This program is free software; you can redistribute  it and/or modify it
  *  under  the terms of  the GNU General  Public License as published by the
@@ -328,6 +328,8 @@
 #define MCA_CC6UL_WDT_ENABLE		BIT(0)
 #define MCA_CC6UL_WDT_NOWAYOUT		BIT(1)
 #define MCA_CC6UL_WDT_IRQNORESET	BIT(2)
+#define MCA_CC6UL_WDT_PRETIMEOUT	BIT(3)
+#define MCA_CC6UL_WDT_FULLRESET		BIT(4)
 
 /* MCA_CC6UL_WDT_TIMEOUT (addr=0x0202) */
 #define MCA_CC6UL_WDT_TIMEOUT_MASK	0xFF
