@@ -56,11 +56,7 @@ static int mca_cc6ul_wdt_set_timeout(struct watchdog_device *wdd,
 	    timeout > wdt->wdd.max_timeout) {
 		ret = -EINVAL;
 	} else {
-#ifdef MCA_CC6UL_CRC
-		// TODO: add wrapper for regmap_update_bits with CRC
-#else
 		ret = regmap_write(mca->regmap, MCA_CC6UL_WDT_TIMEOUT, timeout);
-#endif
 	}
 
 	if (ret < 0) {
@@ -80,15 +76,12 @@ static int mca_cc6ul_config_options(struct mca_cc6ul_wdt *wdt)
 
 	control |= wdt->nowayout ? MCA_CC6UL_WDT_NOWAYOUT : 0;
 	control |= wdt->irqnoreset ? MCA_CC6UL_WDT_IRQNORESET : 0;
-#ifdef MCA_CC6UL_CRC
-	// TODO: add wrapper for regmap_update_bits with CRC
-#else
+
 	ret = regmap_update_bits(wdt->mca->regmap, MCA_CC6UL_WDT_CONTROL,
 			MCA_CC6UL_WDT_NOWAYOUT | MCA_CC6UL_WDT_IRQNORESET,
 			control);
 	if (ret)
 		goto err;
-#endif
 
 	/* Set timeout */
 	ret = mca_cc6ul_wdt_set_timeout(&wdt->wdd, wdt->default_timeout);
@@ -107,21 +100,13 @@ static int mca_cc6ul_wdt_ping(struct watchdog_device *wdd)
 	struct mca_cc6ul_wdt *wdt = watchdog_get_drvdata(wdd);
 	struct mca_cc6ul *mca = wdt->mca;
 	const char *pattern = WDT_REFRESH_PATTERN;
-	int ret = 0;
 
 	/*
 	 * Refresh the watchdog timer by writing refresh pattern to REFRESH_x
 	 * registers
 	 */
-#ifdef MCA_CC6UL_CRC
-	ret = mca_cc6ul_write_block(mca, MCA_CC6UL_WDT_REFRESH_0, pattern,
-				    WDT_REFRESH_LEN);
-#else
-	ret = regmap_bulk_write(mca->regmap, MCA_CC6UL_WDT_REFRESH_0,
-				pattern, WDT_REFRESH_LEN);
-#endif
-
-	return ret;
+	return regmap_bulk_write(mca->regmap, MCA_CC6UL_WDT_REFRESH_0,
+				 pattern, WDT_REFRESH_LEN);
 }
 
 static void mca_cc6ul_wdt_release_resources(struct kref *r)
