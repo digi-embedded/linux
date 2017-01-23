@@ -297,7 +297,7 @@ static struct packet_offload ipv6_packet_offload __read_mostly = {
 	.type = cpu_to_be16(ETH_P_IPV6),
 	.callbacks = {
 		.gso_segment = ipv6_gso_segment,
-		.gro_receive = ipv6_gro_receive,
+		.gro_receive = sit_gro_receive,
 		.gro_complete = ipv6_gro_complete,
 	},
 };
