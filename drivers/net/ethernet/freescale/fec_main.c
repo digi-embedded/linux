@@ -69,8 +69,6 @@
 
 static void set_multicast_list(struct net_device *ndev);
 static void fec_enet_itr_coal_init(struct net_device *ndev);
-static int fec_enet_mdio_read(struct mii_bus *bus, int mii_id, int regnum);
-static void fec_reset_phy(struct platform_device *pdev);
 
 #define DRIVER_NAME	"fec"
 
@@ -1879,19 +1877,6 @@ static void fec_enet_adjust_link(struct net_device *ndev)
 
 	if (status_change)
 		phy_print_status(phy_dev);
-
-	/*
-	 * Check for errors on SYM_ERR_CNT register (address 0x1A) of
-	 * Microchip LAN8720a PHY (ID=0x7C0F1)
-	 */
-	if (fep->phy_dev->phy_id == 0x7C0F1) {
-		if (fec_enet_mdio_read(fep->mii_bus,
-				       fep->phy_dev->addr, 0x1A)) {
-			dev_info(&fep->pdev->dev,
-				 "PHY errors detected. Resetting PHY\n");
-			fec_reset_phy(fep->pdev);
-		}
-	}
 
 	gpioled_phylink(fep);
 }
