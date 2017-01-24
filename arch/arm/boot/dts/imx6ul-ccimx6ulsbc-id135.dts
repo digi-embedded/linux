@@ -42,7 +42,7 @@
  * usdhc2 node.
  */
 // &csi {
-// 	status = "okay";
+//	status = "okay";
 // };
 
 /* ECSPI1 */
@@ -111,7 +111,7 @@
  * usdhc2 node.
  */
 // &ov5642 {
-// 	status = "okay";
+//	status = "okay";
 // };
 
 &pwm5 {
