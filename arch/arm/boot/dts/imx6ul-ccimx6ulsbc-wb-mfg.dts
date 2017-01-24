@@ -88,11 +88,16 @@
 	pinctrl-assert-gpios = <&gpio5 1 GPIO_ACTIVE_HIGH>;
 	non-removable;
 	/*
-	 * Comment these two lines for 4-bit data bus or leave uncommented
+	 * Comment the following lines for 4-bit data bus or leave uncommented
 	 * for 8-bit data bus
 	 */
-	//pinctrl-0 = <&pinctrl_usdhc2_8databits>;
-	//bus-width = <8>;
+//	pinctrl-0 = <&pinctrl_usdhc2_8databits
+//		     &pinctrl_usdhc2_mux_selector>;
+//	pinctrl-1 = <&pinctrl_usdhc2_8databits_100mhz
+//		     &pinctrl_usdhc2_mux_selector>;
+//	pinctrl-2 = <&pinctrl_usdhc2_8databits_200mhz
+//		     &pinctrl_usdhc2_mux_selector>;
+//	bus-width = <8>;
 
 	status = "okay";
 };
