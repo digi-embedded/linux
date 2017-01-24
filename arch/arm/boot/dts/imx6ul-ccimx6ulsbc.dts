@@ -41,9 +41,9 @@
  * Before enabling the camera you need to disable
  * usdhc2 node.
  */
-// &csi {
-// 	status = "okay";
-// };
+//&csi {
+//	status = "okay";
+//};
 
 /* ECSPI1 */
 &ecspi1 {
@@ -111,9 +111,9 @@
  * Before enabling the camera you need to disable
  * usdhc2 node.
  */
-// &ov5642 {
-// 	status = "okay";
-// };
+//&ov5642 {
+//	status = "okay";
+//};
 
 &pwm5 {
 	status = "okay";

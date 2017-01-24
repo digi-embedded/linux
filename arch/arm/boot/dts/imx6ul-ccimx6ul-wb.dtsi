@@ -31,14 +31,14 @@
 	/*
 	 * NOTE: The default configuration for CC6UL SOM hardware vesion 4
 	 * onwards is:
-	 * 	- pinctrl-0
-	 * 	- HW flow control enabled (fsl,uart-has-rtscts)
-	 * 	- DCE mode (default)
+	 *	- pinctrl-0
+	 *	- HW flow control enabled (fsl,uart-has-rtscts)
+	 *	- DCE mode (default)
 	 * For SOMs with hardware version < 4 the UART driver changes the
 	 * configuration of UART1 to:
-	 * 	- pinctrl-1
-	 * 	- no HW flow control
-	 * 	- DTE mode
+	 *	- pinctrl-1
+	 *	- no HW flow control
+	 *	- DTE mode
 	 */
 	status = "okay";
 };
