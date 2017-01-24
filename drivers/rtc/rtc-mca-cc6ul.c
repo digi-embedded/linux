@@ -97,25 +97,17 @@ static int mca_cc6ul_rtc_stop_alarm(struct device *dev)
 {
 	struct mca_cc6ul_rtc *rtc = dev_get_drvdata(dev);
 
-#ifdef MCA_CC6UL_CRC
-	// TODO: add wrapper for regmap_update_bits with CRC
-#else
 	return regmap_update_bits(rtc->mca->regmap, MCA_CC6UL_RTC_CONTROL,
 				  MCA_CC6UL_RTC_ALARM_EN, 0);
-#endif
 }
 
 static int mca_cc6ul_rtc_start_alarm(struct device *dev)
 {
 	struct mca_cc6ul_rtc *rtc = dev_get_drvdata(dev);
 
-#ifdef MCA_CC6UL_CRC
-	// TODO: add wrapper for regmap_update_bits with CRC
-#else
 	return regmap_update_bits(rtc->mca->regmap, MCA_CC6UL_RTC_CONTROL,
 				  MCA_CC6UL_RTC_ALARM_EN,
 				  MCA_CC6UL_RTC_ALARM_EN);
-#endif
 }
 
 static int mca_cc6ul_rtc_read_time(struct device *dev, struct rtc_time *tm)
@@ -124,13 +116,8 @@ static int mca_cc6ul_rtc_read_time(struct device *dev, struct rtc_time *tm)
 	u8 data[CLOCK_DATA_LEN] = { [0 ... (CLOCK_DATA_LEN - 1)] = 0 };
 	int ret;
 
-#ifdef MCA_CC6UL_CRC
-	ret = mca_cc6ul_read_block(rtc->mca, MCA_CC6UL_RTC_COUNT_YEAR_L, data
-				   CLOCK_DATA_LEN);
-#else
 	ret = regmap_bulk_read(rtc->mca->regmap, MCA_CC6UL_RTC_COUNT_YEAR_L,
 			       data, CLOCK_DATA_LEN);
-#endif
 	if (ret < 0) {
 		dev_err(dev, "Failed to read RTC time data: %d\n", ret);
 		return ret;
@@ -148,13 +135,8 @@ static int mca_cc6ul_rtc_set_time(struct device *dev, struct rtc_time *tm)
 
 	mca_cc6ul_tm_to_data(tm, data);
 
-#ifdef MCA_CC6UL_CRC
-	ret = mca_cc6ul_write_block(rtc->mca, MCA_CC6UL_RTC_COUNT_YEAR_L, data,
-				    CLOCK_DATA_LEN);
-#else
 	ret = regmap_bulk_write(rtc->mca->regmap, MCA_CC6UL_RTC_COUNT_YEAR_L,
 				data, CLOCK_DATA_LEN);
-#endif
 	if (ret < 0) {
 		dev_err(dev, "Failed to set RTC time data: %d\n", ret);
 		return ret;
@@ -170,35 +152,20 @@ static int mca_cc6ul_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 	int ret;
 	unsigned int val;
 
-#ifdef MCA_CC6UL_CRC
-	ret = mca_cc6ul_read_block(rtc->mca, MCA_CC6UL_RTC_ALARM_YEAR_L, data,
-				   ALARM_DATA_LEN);
-#else
 	ret = regmap_bulk_read(rtc->mca->regmap, MCA_CC6UL_RTC_ALARM_YEAR_L,
 			       data, ALARM_DATA_LEN);
-#endif
 	if (ret < 0)
 		return ret;
 
 	mca_cc6ul_data_to_tm(data, &alrm->time);
 
 	/* Enable status */
-#ifdef MCA_CC6UL_CRC
-	ret = mca_cc6ul_read_block(rtc->mca, MCA_CC6UL_RTC_CONTROL,
-				   (u8 *)&val, 1);
-#else
 	ret = regmap_read(rtc->mca->regmap, MCA_CC6UL_RTC_CONTROL, &val);
-#endif
 	if (ret < 0)
 		return ret;
 
 	/* Pending status */
-#ifdef MCA_CC6UL_CRC
-	ret = mca_cc6ul_read_block(rtc->mca, MCA_CC6UL_IRQ_STATUS_0,
-				   (u8 *)&val, 1);
-#else
 	ret = regmap_read(rtc->mca->regmap, MCA_CC6UL_IRQ_STATUS_0, &val);
-#endif
 	if (ret < 0)
 		return ret;
 	alrm->pending = (val & MCA_CC6UL_M_RTC_ALARM) ? 1 : 0;
@@ -240,13 +207,8 @@ static int mca_cc6ul_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 
 	mca_cc6ul_tm_to_data(&alrm->time, data);
 
-#ifdef MCA_CC6UL_CRC
-	ret = mca_cc6ul_write_block(rtc->mca, MCA_CC6UL_RTC_ALARM_YEAR_L,
-				    data, ALARM_DATA_LEN);
-#else
 	ret = regmap_bulk_write(rtc->mca->regmap, MCA_CC6UL_RTC_ALARM_YEAR_L,
 				data, ALARM_DATA_LEN);
-#endif
 	if (ret < 0)
 		return ret;
 
@@ -307,12 +269,8 @@ static int mca_cc6ul_rtc_probe(struct platform_device *pdev)
 	}
 
 	/* Enable RTC hardware */
-#ifdef MCA_CC6UL_CRC
-	// TODO: add wrapper for regmap_update_bits with CRC
-#else
 	ret = regmap_update_bits(mca->regmap, MCA_CC6UL_RTC_CONTROL,
 				 MCA_CC6UL_RTC_EN, MCA_CC6UL_RTC_EN);
-#endif
 	if (ret < 0) {
 		dev_err(&pdev->dev, "Failed to enable RTC.\n");
 		goto err;
