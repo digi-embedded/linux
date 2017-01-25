@@ -1,5 +1,5 @@
 /*
- *  Copyright 2016 Digi International Inc
+ *  Copyright 2016, 2017 Digi International Inc
  *
  *  This program is free software; you can redistribute  it and/or modify it
  *  under  the terms of  the GNU General  Public License as published by the
@@ -332,9 +332,9 @@ static ssize_t fwver_show(struct device *dev, struct device_attribute *attr,
 {
 	struct mca_cc6ul *mca = dev_get_drvdata(dev);
 
-	return sprintf(buf, "%d.%d %s\n",
-		       (u8)((mca->fw_version >> 8) & 0x7f), (u8)mca->fw_version,
-		       ((mca->fw_version >> 8) & 0x80) ? "(alpha)" : "");
+	return sprintf(buf, "%d.%d %s\n", MCA_FW_VER_MAJOR(mca->fw_version),
+		       MCA_FW_VER_MINOR(mca->fw_version),
+		       mca->fw_is_alpha ? "(alpha)" : "");
 }
 static DEVICE_ATTR(fw_version, S_IRUGO, fwver_show, NULL);
 
@@ -533,7 +533,8 @@ int mca_cc6ul_device_init(struct mca_cc6ul *mca, u32 irq)
 			ret);
 		return ret;
 	}
-	mca->fw_version = (u16)val;
+	mca->fw_version = (u16)(val & ~MCA_FW_VER_ALPHA_MASK);
+	mca->fw_is_alpha = val & MCA_FW_VER_ALPHA_MASK ? true : false;
 
 	mca->chip_irq = irq;
 	mca->gpio_base = -1;
