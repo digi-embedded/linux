@@ -14,7 +14,6 @@
 #include <linux/mfd/core.h>
 #include <linux/slab.h>
 #include <linux/module.h>
-#include <linux/crc16.h>
 #include <linux/regmap.h>
 #include <linux/suspend.h>
 #include <linux/proc_fs.h>
@@ -140,27 +139,11 @@ static const struct mfd_cell mca_cc6ul_devs[] = {
 	},
 };
 
-#ifdef MCA_CC6UL_CRC
-static void compute_crc(u8 *frame, u16 addr, size_t nregs, u8 *data, u16 *crc)
-{
-	/* Fill frame pointer with register address + data */
-	put_unaligned_le16(addr, frame);
-	memcpy(frame + sizeof(addr), data, nregs);
-
-	/* Compute CRC over full frame (register address + data) */
-	*crc = crc16(0, (u8 *)frame, nregs + sizeof(addr));
-}
-#endif
-
 /* Read a block of registers */
 int mca_cc6ul_read_block(struct mca_cc6ul *mca, u16 addr, u8 *data,
 			 size_t nregs)
 {
 	int ret;
-#ifdef MCA_CC6UL_CRC
-	u8 *frame;	/* register address + payload */
-	u16 calc_crc, crc;
-#endif
 
 	/* TODO, check limits nregs... */
 
@@ -168,22 +151,6 @@ int mca_cc6ul_read_block(struct mca_cc6ul *mca, u16 addr, u8 *data,
 	if (ret != 0)
 		return ret;
 
-#ifdef MCA_CC6UL_CRC
-	/* Verify CRC */
-	frame = kzalloc(sizeof(addr) + nregs + MCA_CC6UL_CRC_LEN,
-			GFP_KERNEL | GFP_DMA);
-	if (!frame)
-		return -ENOMEM;
-
-	crc = get_unaligned_le16(&data[nregs]);
-	compute_crc(frame, addr, nregs, data, &calc_crc);
-	if (calc_crc != crc) {
-		dev_warn(mca->dev, "Frame with incorrect CRC received!\n");
-		ret = -EPROTO;
-	}
-
-	kfree(frame);
-#endif
 	return ret;
 
 }
@@ -196,30 +163,18 @@ int mca_cc6ul_write_block(struct mca_cc6ul *mca , u16 addr, u8 *data,
 	u8 *frame;	/* register address + payload */
 	u8 *payload;
 	int ret;
-#ifdef MCA_CC6UL_CRC
-	u16 crc;
-#endif
 
 	/* TODO, check limits nregs... */
 
-	frame = kzalloc(sizeof(addr) + nregs + MCA_CC6UL_CRC_LEN,
-			GFP_KERNEL | GFP_DMA);
+	frame = kzalloc(sizeof(addr) + nregs, GFP_KERNEL | GFP_DMA);
 	if (!frame)
 		return -ENOMEM;
 
 	payload = frame + sizeof(addr);
-#ifdef MCA_CC6UL_CRC
-	/* Fill frame pointer with register address + data and compute CRC */
-	compute_crc(frame, addr, nregs, data, &crc);
-
-	/* Append it after payload */
-	put_unaligned_le16(crc, payload + nregs);
-#else
 	memcpy(payload, data, nregs);
-#endif
-	/* Write payload + CRC */
-	ret = regmap_raw_write(mca->regmap, addr, payload,
-			       nregs + MCA_CC6UL_CRC_LEN);
+
+	/* Write payload */
+	ret = regmap_raw_write(mca->regmap, addr, payload, nregs);
 
 	kfree(frame);
 	return ret;
