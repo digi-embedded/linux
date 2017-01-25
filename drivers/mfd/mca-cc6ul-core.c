@@ -250,39 +250,6 @@ static ssize_t ext_32khz_store(struct device *dev, struct device_attribute *attr
 }
 static DEVICE_ATTR(ext_32khz, 0600, ext_32khz_show, ext_32khz_store);
 
-static ssize_t data_show(struct device *dev, struct device_attribute *attr,
-			 char *buf)
-{
-	struct mca_cc6ul *mca = dev_get_drvdata(dev);
-	int ret;
-
-	ret = mca_cc6ul_read_block(mca, mca->addr, mca->data, mca->len);
-	if (ret)
-		return ret;
-
-	hex_dump_to_buffer(mca->data, mca->len, 16, 1, buf,
-			   MCA_CC6UL_MAX_FRAME_DATA_LEN, 0);
-
-	/* Append new line (buf contains 3 chars per register value) */
-	buf[(3 * mca->len)] = '\n';
-
-	return (3 * mca->len + 2);
-}
-
-static ssize_t data_store(struct device *dev, struct device_attribute *attr,
-			  const char *buf, size_t count)
-{
-	struct mca_cc6ul *mca = dev_get_drvdata(dev);
-
-	if (count >= MCA_CC6UL_MAX_FRAME_DATA_LEN)
-		return -ENOSPC;
-
-	memcpy(mca->data, buf, count);
-
-	return mca_cc6ul_write_block(mca, mca->addr, mca->data, count);
-}
-static DEVICE_ATTR(data, 0600, data_show, data_store);
-
 static ssize_t hwver_show(struct device *dev, struct device_attribute *attr,
 			  char *buf)
 {
@@ -312,7 +279,7 @@ static ssize_t tick_cnt_show(struct device *dev, struct device_attribute *attr,
 
 	ret = mca_cc6ul_get_tick_cnt(mca, &tick_cnt);
 	if (ret) {
-		dev_err(mca->dev, "Cannot read MCA tick counter(%d)\n",	ret);
+		dev_err(mca->dev, "Cannot read MCA tick counter(%d)\n", ret);
 		return ret;
 	}
 
@@ -320,52 +287,10 @@ static ssize_t tick_cnt_show(struct device *dev, struct device_attribute *attr,
 }
 static DEVICE_ATTR(tick_cnt, S_IRUGO, tick_cnt_show, NULL);
 
-static ssize_t addr_show(struct device *dev, struct device_attribute *attr,
-			 char *buf)
-{
-	struct mca_cc6ul *mca = dev_get_drvdata(dev);
-
-	return sprintf(buf, "0x%04x\n", mca->addr);
-}
-
-static ssize_t addr_store(struct device *dev, struct device_attribute *attr,
-			  const char *buf, size_t count)
-{
-	struct mca_cc6ul *mca = dev_get_drvdata(dev);
-
-	mca->addr = (u16)simple_strtoul(buf, NULL, 0);
-
-	return count;
-}
-static DEVICE_ATTR(addr, 0600, addr_show, addr_store);
-
-static ssize_t len_show(struct device *dev, struct device_attribute *attr,
-			char *buf)
-{
-	struct mca_cc6ul *mca = dev_get_drvdata(dev);
-
-	return sprintf(buf, "%d\n", mca->len);
-}
-
-static ssize_t len_store(struct device *dev,
-			  struct device_attribute *attr,
-			  const char *buf, size_t count)
-{
-	struct mca_cc6ul *mca = dev_get_drvdata(dev);
-
-	mca->len = (size_t)simple_strtoul(buf, NULL, 0);
-
-	return count;
-}
-static DEVICE_ATTR(len, 0600, len_show, len_store);
-
 static struct attribute *mca_cc6ul_sysfs_entries[] = {
 	&dev_attr_ext_32khz.attr,
-	&dev_attr_data.attr,
 	&dev_attr_hw_version.attr,
 	&dev_attr_fw_version.attr,
-	&dev_attr_addr.attr,
-	&dev_attr_len.attr,
 	NULL,
 };
 
@@ -568,7 +493,7 @@ int mca_cc6ul_device_init(struct mca_cc6ul *mca, u32 irq)
 			      regmap_irq_get_domain(mca->regmap_irq));
 	if (ret) {
 		dev_err(mca->dev, "Cannot add MFD cells (%d)\n", ret);
-		goto err;
+		goto out_irq;
 	}
 
 	ret = sysfs_create_group(&mca->dev->kobj, &mca_cc6ul_attr_group);
@@ -586,12 +511,19 @@ int mca_cc6ul_device_init(struct mca_cc6ul *mca, u32 irq)
 		goto out_sysfs_remove;
 	}
 
+	ret = mca_cc6ul_debug_init(mca);
+	if (ret) {
+		dev_err(mca->dev, "Cannot create sysfs debug entries (%d)\n",
+			ret);
+		goto out_sysfs_remove;
+	}
+
 	pmca = mca;
 
 	if (pm_power_off != NULL) {
 		dev_err(mca->dev, "pm_power_off function already registered\n");
 		ret = -EBUSY;
-		goto out_sysfs_remove;
+		goto out_debug_remove;
 	}
 	pm_power_off = mca_cc6ul_power_off;
 
@@ -626,12 +558,14 @@ out_fn_ptrs2:
 	imx6_board_pm_end = NULL;
 out_fn_ptrs:
 	pm_power_off = NULL;
-out_sysfs_remove:
+out_debug_remove:
 	pmca = NULL;
+	mca_cc6ul_debug_exit(mca);
+out_sysfs_remove:
 	sysfs_remove_group(&mca->dev->kobj, &mca_cc6ul_attr_group);
 out_dev:
 	mfd_remove_devices(mca->dev);
-err:
+out_irq:
 	mca_cc6ul_irq_exit(mca);
 
 	return ret;
@@ -644,6 +578,7 @@ void mca_cc6ul_device_exit(struct mca_cc6ul *mca)
 	imx6_board_pm_end = NULL;
 	pm_power_off = NULL;
 	pmca = NULL;
+	mca_cc6ul_debug_exit(mca);
 	sysfs_remove_group(&mca->dev->kobj, &mca_cc6ul_attr_group);
 	mfd_remove_devices(mca->dev);
 	mca_cc6ul_irq_exit(mca);
