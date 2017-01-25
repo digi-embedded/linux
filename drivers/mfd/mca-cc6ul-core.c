@@ -30,6 +30,11 @@
 extern int (*imx6_board_pm_begin)(suspend_state_t);
 extern void (*imx6_board_pm_end)(void);
 
+struct dyn_attribute {
+	u16			since;	/* Minimum firmware version required */
+	struct attribute	*attr;
+};
+
 static struct mca_cc6ul *pmca;
 
 static const char _enabled[] = "enabled";
@@ -235,6 +240,12 @@ static int mca_cc6ul_unlock_ctrl(struct mca_cc6ul *mca)
 	return ret;
 }
 
+static int mca_cc6ul_get_tick_cnt(struct mca_cc6ul *mca, u32 *tick)
+{
+	return regmap_bulk_read(mca->regmap, MCA_CC6UL_TIMER_TICK_0,
+				tick, sizeof(*tick));
+}
+
 /* sysfs attributes */
 static ssize_t ext_32khz_show(struct device *dev, struct device_attribute *attr,
 			 char *buf)
@@ -326,7 +337,6 @@ static ssize_t hwver_show(struct device *dev, struct device_attribute *attr,
 }
 static DEVICE_ATTR(hw_version, S_IRUGO, hwver_show, NULL);
 
-
 static ssize_t fwver_show(struct device *dev, struct device_attribute *attr,
 			  char *buf)
 {
@@ -337,6 +347,23 @@ static ssize_t fwver_show(struct device *dev, struct device_attribute *attr,
 		       mca->fw_is_alpha ? "(alpha)" : "");
 }
 static DEVICE_ATTR(fw_version, S_IRUGO, fwver_show, NULL);
+
+static ssize_t tick_cnt_show(struct device *dev, struct device_attribute *attr,
+			     char *buf)
+{
+	struct mca_cc6ul *mca = dev_get_drvdata(dev);
+	u32 tick_cnt;
+	int ret;
+
+	ret = mca_cc6ul_get_tick_cnt(mca, &tick_cnt);
+	if (ret) {
+		dev_err(mca->dev, "Cannot read MCA tick counter(%d)\n",	ret);
+		return ret;
+	}
+
+	return sprintf(buf, "%u\n", tick_cnt);
+}
+static DEVICE_ATTR(tick_cnt, S_IRUGO, tick_cnt_show, NULL);
 
 static ssize_t addr_show(struct device *dev, struct device_attribute *attr,
 			 char *buf)
@@ -390,6 +417,13 @@ static struct attribute *mca_cc6ul_sysfs_entries[] = {
 static struct attribute_group mca_cc6ul_attr_group = {
 	.name	= NULL,			/* put in device directory */
 	.attrs	= mca_cc6ul_sysfs_entries,
+};
+
+static struct dyn_attribute mca_cc6ul_sysfs_dyn_entries[] = {
+	{
+		.since =	MCA_MAKE_FW_VER(0,15),
+		.attr =		&dev_attr_tick_cnt.attr,
+	},
 };
 
 static int mca_cc6ul_suspend_begin(suspend_state_t state)
@@ -502,6 +536,35 @@ static int mca_cc6ul_restart_handler(struct notifier_block *nb,
 	return NOTIFY_DONE;
 }
 
+static int mca_cc6ul_add_dyn_sysfs_entries(struct mca_cc6ul *mca,
+					   const struct dyn_attribute *dattr,
+					   int num_entries,
+					   const struct attribute_group *grp)
+{
+	int ret, i;
+
+	if (!mca || !dattr || !grp)
+		return -EINVAL;
+
+	for (i = 0; i < num_entries; i++, dattr++) {
+		if (!dattr->attr)
+			continue;
+
+		/* Create the sysfs files if the MCA fw supports the feature*/
+		if (mca->fw_version >= dattr->since) {
+			ret = sysfs_add_file_to_group(&mca->dev->kobj,
+						      dattr->attr,
+						      grp->name);
+			if (ret)
+				dev_warn(mca->dev,
+					 "Cannot create sysfs file %s (%d)\n",
+					 dattr->attr->name, ret);
+		}
+	}
+
+	return 0;
+}
+
 int mca_cc6ul_device_init(struct mca_cc6ul *mca, u32 irq)
 {
 	int ret;
@@ -557,6 +620,15 @@ int mca_cc6ul_device_init(struct mca_cc6ul *mca, u32 irq)
 	if (ret) {
 		dev_err(mca->dev, "Cannot create sysfs entries (%d)\n", ret);
 		goto out_dev;
+	}
+
+	ret = mca_cc6ul_add_dyn_sysfs_entries(mca, mca_cc6ul_sysfs_dyn_entries,
+					      ARRAY_SIZE(mca_cc6ul_sysfs_dyn_entries),
+					      &mca_cc6ul_attr_group);
+	if (ret) {
+		dev_err(mca->dev, "Cannot create sysfs dynamic entries (%d)\n",
+			ret);
+		goto out_sysfs_remove;
 	}
 
 	pmca = mca;

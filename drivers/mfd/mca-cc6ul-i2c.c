@@ -44,6 +44,7 @@ static const struct regmap_range mca_cc6ul_volatile_ranges[] = {
 	regmap_reg_range(MCA_CC6UL_IRQ_STATUS_0, MCA_CC6UL_IRQ_STATUS_3),
 	regmap_reg_range(MCA_CC6UL_TAMPER0_DATE_START, MCA_CC6UL_TAMPER0_EVENT),
 	regmap_reg_range(MCA_CC6UL_TAMPER1_DATE_START, MCA_CC6UL_TAMPER1_EVENT),
+	regmap_reg_range(MCA_CC6UL_TIMER_TICK_0, MCA_CC6UL_TIMER_TICK_3),
 	regmap_reg_range(MCA_CC6UL_RTC_COUNT_YEAR_L, MCA_CC6UL_RTC_COUNT_SEC),
 	regmap_reg_range(MCA_CC6UL_GPIO_DATA_0, MCA_CC6UL_GPIO_DATA_7),
 	regmap_reg_range(MCA_CC6UL_GPIO_IRQ_STATUS_0, MCA_CC6UL_GPIO_IRQ_STATUS_7),
