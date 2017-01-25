@@ -250,6 +250,54 @@ static ssize_t ext_32khz_store(struct device *dev, struct device_attribute *attr
 }
 static DEVICE_ATTR(ext_32khz, 0600, ext_32khz_show, ext_32khz_store);
 
+static ssize_t vref_show(struct device *dev, struct device_attribute *attr,
+			 char *buf)
+{
+	struct mca_cc6ul *mca = dev_get_drvdata(dev);
+	unsigned int val;
+	int ret;
+
+	ret = regmap_read(mca->regmap, MCA_CC6UL_CTRL_0, &val);
+	if (ret) {
+		dev_err(mca->dev, "Cannot read MCA CTRL_0 register(%d)\n",
+			ret);
+		return 0;
+	}
+
+	return sprintf(buf, "%s\n", val & MCA_CC6UL_VREF_EN ?
+	_enabled : _disabled);
+}
+
+static ssize_t vref_store(struct device *dev, struct device_attribute *attr,
+			  const char *buf, size_t count)
+{
+	struct mca_cc6ul *mca = dev_get_drvdata(dev);
+	bool enable;
+	int ret;
+
+	if (!strncmp(buf, _enabled, sizeof(_enabled) - 1))
+		enable = true;
+	else if (!strncmp(buf, _disabled, sizeof(_disabled) - 1))
+		enable = false;
+	else
+		return -EINVAL;
+
+	ret = mca_cc6ul_unlock_ctrl(mca);
+	if (ret)
+		return ret;
+
+	ret = regmap_update_bits(mca->regmap, MCA_CC6UL_CTRL_0,
+				 MCA_CC6UL_VREF_EN,
+				 enable ? MCA_CC6UL_VREF_EN : 0);
+	if (ret) {
+		dev_err(mca->dev, "Cannot update MCA CTRL_0 register (%d)\n", ret);
+		return ret;
+	}
+
+	return count;
+}
+static DEVICE_ATTR(vref, 0600, vref_show, vref_store);
+
 static ssize_t hwver_show(struct device *dev, struct device_attribute *attr,
 			  char *buf)
 {
@@ -303,6 +351,10 @@ static struct dyn_attribute mca_cc6ul_sysfs_dyn_entries[] = {
 	{
 		.since =	MCA_MAKE_FW_VER(0,15),
 		.attr =		&dev_attr_tick_cnt.attr,
+	},
+	{
+		.since =	MCA_MAKE_FW_VER(0,15),
+		.attr =		&dev_attr_vref.attr,
 	},
 };
 
