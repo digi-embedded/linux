@@ -100,6 +100,7 @@
 
 		watchdog {
 			compatible = "digi,mca-cc6ul-wdt";
+			digi,full-reset;
 		};
 
 		pwrkey {

@@ -1,5 +1,5 @@
 /*
- *  Copyright 2016 Digi International Inc
+ *  Copyright 2016, 2017 Digi International Inc
  *
  *  This program is free software; you can redistribute  it and/or modify it
  *  under  the terms of  the GNU General  Public License as published by the
@@ -34,6 +34,10 @@
 #define MCA_CC6UL_MAX_FRAME_DATA_LEN	256
 
 #define MCA_CC6UL_DEVICE_ID_VAL		0x61
+#define MCA_MAKE_FW_VER(a,b)		(u16)(((a) << 8) | ((b) & 0xff))
+#define MCA_FW_VER_MAJOR(v)		(((v) >> 8) & 0xff)
+#define MCA_FW_VER_MINOR(v)		((v) & 0xff)
+#define MCA_FW_VER_ALPHA_MASK		BIT(15)
 
 /* Interrupts */
 enum mca_cc6ul_irqs {
@@ -68,6 +72,7 @@ struct mca_cc6ul {
 	struct device *dev;
 	u8 dev_id;
 	u8 hw_version;
+	bool fw_is_alpha;
 	u16 fw_version;
 	u32 flags;
 	struct regmap *regmap;
@@ -87,5 +92,7 @@ void mca_cc6ul_device_exit(struct mca_cc6ul *mca);
 void mca_cc6ul_irq_exit(struct mca_cc6ul *mca);
 int mca_cc6ul_suspend(struct device *dev);
 int mca_cc6ul_resume(struct device *dev);
+int mca_cc6ul_debug_init(struct mca_cc6ul *mca);
+void mca_cc6ul_debug_exit(struct mca_cc6ul *mca);
 
 #endif /* MFD_MCA_CC6UL_CORE_H_ */

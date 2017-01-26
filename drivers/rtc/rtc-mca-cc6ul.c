@@ -1,5 +1,5 @@
 /* rtc-mca-cc6ul.c - Real time clock device driver for MCA on ConnectCore 6UL
- * Copyright (C) 2016  Digi International
+ * Copyright (C) 2016, 2017  Digi International
  * Copyright (c) Dialog Semiconductor Ltd.
  *
  * This library is free software; you can redistribute it and/or
@@ -49,6 +49,7 @@ struct mca_cc6ul_rtc {
 	struct rtc_device *rtc_dev;
 	struct mca_cc6ul *mca;
 	int irq_alarm;
+	bool alarm_enabled;
 };
 
 static void mca_cc6ul_data_to_tm(u8 *data, struct rtc_time *tm)
@@ -96,25 +97,17 @@ static int mca_cc6ul_rtc_stop_alarm(struct device *dev)
 {
 	struct mca_cc6ul_rtc *rtc = dev_get_drvdata(dev);
 
-#ifdef MCA_CC6UL_CRC
-	// TODO: add wrapper for regmap_update_bits with CRC
-#else
 	return regmap_update_bits(rtc->mca->regmap, MCA_CC6UL_RTC_CONTROL,
 				  MCA_CC6UL_RTC_ALARM_EN, 0);
-#endif
 }
 
 static int mca_cc6ul_rtc_start_alarm(struct device *dev)
 {
 	struct mca_cc6ul_rtc *rtc = dev_get_drvdata(dev);
 
-#ifdef MCA_CC6UL_CRC
-	// TODO: add wrapper for regmap_update_bits with CRC
-#else
 	return regmap_update_bits(rtc->mca->regmap, MCA_CC6UL_RTC_CONTROL,
 				  MCA_CC6UL_RTC_ALARM_EN,
 				  MCA_CC6UL_RTC_ALARM_EN);
-#endif
 }
 
 static int mca_cc6ul_rtc_read_time(struct device *dev, struct rtc_time *tm)
@@ -123,13 +116,8 @@ static int mca_cc6ul_rtc_read_time(struct device *dev, struct rtc_time *tm)
 	u8 data[CLOCK_DATA_LEN] = { [0 ... (CLOCK_DATA_LEN - 1)] = 0 };
 	int ret;
 
-#ifdef MCA_CC6UL_CRC
-	ret = mca_cc6ul_read_block(rtc->mca, MCA_CC6UL_RTC_COUNT_YEAR_L, data
-				   CLOCK_DATA_LEN);
-#else
 	ret = regmap_bulk_read(rtc->mca->regmap, MCA_CC6UL_RTC_COUNT_YEAR_L,
 			       data, CLOCK_DATA_LEN);
-#endif
 	if (ret < 0) {
 		dev_err(dev, "Failed to read RTC time data: %d\n", ret);
 		return ret;
@@ -147,13 +135,8 @@ static int mca_cc6ul_rtc_set_time(struct device *dev, struct rtc_time *tm)
 
 	mca_cc6ul_tm_to_data(tm, data);
 
-#ifdef MCA_CC6UL_CRC
-	ret = mca_cc6ul_write_block(rtc->mca, MCA_CC6UL_RTC_COUNT_YEAR_L, data,
-				    CLOCK_DATA_LEN);
-#else
 	ret = regmap_bulk_write(rtc->mca->regmap, MCA_CC6UL_RTC_COUNT_YEAR_L,
 				data, CLOCK_DATA_LEN);
-#endif
 	if (ret < 0) {
 		dev_err(dev, "Failed to set RTC time data: %d\n", ret);
 		return ret;
@@ -169,35 +152,20 @@ static int mca_cc6ul_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 	int ret;
 	unsigned int val;
 
-#ifdef MCA_CC6UL_CRC
-	ret = mca_cc6ul_read_block(rtc->mca, MCA_CC6UL_RTC_ALARM_YEAR_L, data,
-				   ALARM_DATA_LEN);
-#else
 	ret = regmap_bulk_read(rtc->mca->regmap, MCA_CC6UL_RTC_ALARM_YEAR_L,
 			       data, ALARM_DATA_LEN);
-#endif
 	if (ret < 0)
 		return ret;
 
 	mca_cc6ul_data_to_tm(data, &alrm->time);
 
 	/* Enable status */
-#ifdef MCA_CC6UL_CRC
-	ret = mca_cc6ul_read_block(rtc->mca, MCA_CC6UL_RTC_CONTROL,
-				   (u8 *)&val, 1);
-#else
 	ret = regmap_read(rtc->mca->regmap, MCA_CC6UL_RTC_CONTROL, &val);
-#endif
 	if (ret < 0)
 		return ret;
 
 	/* Pending status */
-#ifdef MCA_CC6UL_CRC
-	ret = mca_cc6ul_read_block(rtc->mca, MCA_CC6UL_IRQ_STATUS_0,
-				   (u8 *)&val, 1);
-#else
 	ret = regmap_read(rtc->mca->regmap, MCA_CC6UL_IRQ_STATUS_0, &val);
-#endif
 	if (ret < 0)
 		return ret;
 	alrm->pending = (val & MCA_CC6UL_M_RTC_ALARM) ? 1 : 0;
@@ -208,10 +176,27 @@ static int mca_cc6ul_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 static int mca_cc6ul_rtc_alarm_irq_enable(struct device *dev,
 					  unsigned int enabled)
 {
-	if (enabled)
-		return mca_cc6ul_rtc_start_alarm(dev);
-	else
-		return mca_cc6ul_rtc_stop_alarm(dev);
+	struct mca_cc6ul_rtc *rtc = dev_get_drvdata(dev);
+	int ret;
+
+	if (enabled) {
+		ret = mca_cc6ul_rtc_start_alarm(dev);
+		if (ret != 0) {
+			dev_err(dev, "Failed to enable alarm IRQ (%d)\n", ret);
+			goto exit_alarm_irq;
+		}
+		rtc->alarm_enabled = 1;
+	} else {
+		ret = mca_cc6ul_rtc_stop_alarm(dev);
+		if (ret != 0) {
+			dev_err(dev, "Failed to disable alarm IRQ (%d)\n", ret);
+			goto exit_alarm_irq;
+		}
+		rtc->alarm_enabled = 0;
+	}
+
+exit_alarm_irq:
+	return ret;
 }
 
 static int mca_cc6ul_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alrm)
@@ -222,13 +207,8 @@ static int mca_cc6ul_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 
 	mca_cc6ul_tm_to_data(&alrm->time, data);
 
-#ifdef MCA_CC6UL_CRC
-	ret = mca_cc6ul_write_block(rtc->mca, MCA_CC6UL_RTC_ALARM_YEAR_L,
-				    data, ALARM_DATA_LEN);
-#else
 	ret = regmap_bulk_write(rtc->mca->regmap, MCA_CC6UL_RTC_ALARM_YEAR_L,
 				data, ALARM_DATA_LEN);
-#endif
 	if (ret < 0)
 		return ret;
 
@@ -289,12 +269,8 @@ static int mca_cc6ul_rtc_probe(struct platform_device *pdev)
 	}
 
 	/* Enable RTC hardware */
-#ifdef MCA_CC6UL_CRC
-	// TODO: add wrapper for regmap_update_bits with CRC
-#else
 	ret = regmap_update_bits(mca->regmap, MCA_CC6UL_RTC_CONTROL,
 				 MCA_CC6UL_RTC_EN, MCA_CC6UL_RTC_EN);
-#endif
 	if (ret < 0) {
 		dev_err(&pdev->dev, "Failed to enable RTC.\n");
 		goto err;
@@ -344,6 +320,46 @@ static int mca_cc6ul_rtc_remove(struct platform_device *pdev)
 	return 0;
 }
 
+#ifdef CONFIG_PM
+static int mca_cc6ul_rtc_suspend(struct device *dev)
+{
+	struct platform_device *pdev = to_platform_device(dev);
+	struct mca_cc6ul_rtc *rtc = platform_get_drvdata(pdev);
+	int ret;
+
+	if (!device_may_wakeup(&pdev->dev) && rtc->alarm_enabled) {
+		/* Disable the alarm irq to avoid unwanted wakeups */
+		ret = mca_cc6ul_rtc_stop_alarm(&pdev->dev);
+		if (ret < 0)
+			dev_err(&pdev->dev, "Failed to disable RTC Alarm\n");
+	}
+
+	return 0;
+}
+
+static int mca_cc6ul_rtc_resume(struct device *dev)
+{
+	struct platform_device *pdev = to_platform_device(dev);
+	struct mca_cc6ul_rtc *rtc = platform_get_drvdata(pdev);
+	int ret;
+
+	if (!device_may_wakeup(&pdev->dev) && rtc->alarm_enabled) {
+		/* Enable the alarm irq, just in case it was disabled suspending */
+		ret = mca_cc6ul_rtc_start_alarm(&pdev->dev);
+		if (ret < 0)
+			dev_err(&pdev->dev, "Failed to restart RTC Alarm\n");
+	}
+
+	return 0;
+}
+
+static const struct dev_pm_ops mca_cc6ul_rtc_pm_ops = {
+	.suspend	= mca_cc6ul_rtc_suspend,
+	.resume		= mca_cc6ul_rtc_resume,
+	.poweroff	= mca_cc6ul_rtc_suspend,
+};
+#endif
+
 #ifdef CONFIG_OF
 static const struct of_device_id mca_cc6ul_rtc_dt_ids[] = {
 	{ .compatible = "digi,mca-cc6ul-rtc", },
@@ -358,6 +374,9 @@ static struct platform_driver mca_cc6ul_rtc_driver = {
 	.driver		= {
 		.name	= MCA_CC6UL_DRVNAME_RTC,
 		.owner	= THIS_MODULE,
+#ifdef CONFIG_PM
+		.pm	= &mca_cc6ul_rtc_pm_ops,
+#endif
 #ifdef CONFIG_OF
 		.of_match_table = mca_cc6ul_rtc_dt_ids,
 #endif

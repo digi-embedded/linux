@@ -1,5 +1,5 @@
 /*
- *  Copyright 2016 Digi International Inc
+ *  Copyright 2016, 2017 Digi International Inc
  *
  *  This program is free software; you can redistribute  it and/or modify it
  *  under  the terms of  the GNU General  Public License as published by the
@@ -14,7 +14,6 @@
 #include <linux/mfd/core.h>
 #include <linux/slab.h>
 #include <linux/module.h>
-#include <linux/crc16.h>
 #include <linux/regmap.h>
 #include <linux/suspend.h>
 #include <linux/proc_fs.h>
@@ -30,7 +29,15 @@
 extern int (*imx6_board_pm_begin)(suspend_state_t);
 extern void (*imx6_board_pm_end)(void);
 
+struct dyn_attribute {
+	u16			since;	/* Minimum firmware version required */
+	struct attribute	*attr;
+};
+
 static struct mca_cc6ul *pmca;
+
+static const char _enabled[] = "enabled";
+static const char _disabled[] = "disabled";
 
 static struct resource mca_cc6ul_rtc_resources[] = {
 	{
@@ -132,27 +139,11 @@ static const struct mfd_cell mca_cc6ul_devs[] = {
 	},
 };
 
-#ifdef MCA_CC6UL_CRC
-static void compute_crc(u8 *frame, u16 addr, size_t nregs, u8 *data, u16 *crc)
-{
-	/* Fill frame pointer with register address + data */
-	put_unaligned_le16(addr, frame);
-	memcpy(frame + sizeof(addr), data, nregs);
-
-	/* Compute CRC over full frame (register address + data) */
-	*crc = crc16(0, (u8 *)frame, nregs + sizeof(addr));
-}
-#endif
-
 /* Read a block of registers */
 int mca_cc6ul_read_block(struct mca_cc6ul *mca, u16 addr, u8 *data,
 			 size_t nregs)
 {
 	int ret;
-#ifdef MCA_CC6UL_CRC
-	u8 *frame;	/* register address + payload */
-	u16 calc_crc, crc;
-#endif
 
 	/* TODO, check limits nregs... */
 
@@ -160,22 +151,6 @@ int mca_cc6ul_read_block(struct mca_cc6ul *mca, u16 addr, u8 *data,
 	if (ret != 0)
 		return ret;
 
-#ifdef MCA_CC6UL_CRC
-	/* Verify CRC */
-	frame = kzalloc(sizeof(addr) + nregs + MCA_CC6UL_CRC_LEN,
-			GFP_KERNEL | GFP_DMA);
-	if (!frame)
-		return -ENOMEM;
-
-	crc = get_unaligned_le16(&data[nregs]);
-	compute_crc(frame, addr, nregs, data, &calc_crc);
-	if (calc_crc != crc) {
-		dev_warn(mca->dev, "Frame with incorrect CRC received!\n");
-		ret = -EPROTO;
-	}
-
-	kfree(frame);
-#endif
 	return ret;
 
 }
@@ -188,69 +163,140 @@ int mca_cc6ul_write_block(struct mca_cc6ul *mca , u16 addr, u8 *data,
 	u8 *frame;	/* register address + payload */
 	u8 *payload;
 	int ret;
-#ifdef MCA_CC6UL_CRC
-	u16 crc;
-#endif
 
 	/* TODO, check limits nregs... */
 
-	frame = kzalloc(sizeof(addr) + nregs + MCA_CC6UL_CRC_LEN,
-			GFP_KERNEL | GFP_DMA);
+	frame = kzalloc(sizeof(addr) + nregs, GFP_KERNEL | GFP_DMA);
 	if (!frame)
 		return -ENOMEM;
 
 	payload = frame + sizeof(addr);
-#ifdef MCA_CC6UL_CRC
-	/* Fill frame pointer with register address + data and compute CRC */
-	compute_crc(frame, addr, nregs, data, &crc);
-
-	/* Append it after payload */
-	put_unaligned_le16(crc, payload + nregs);
-#else
 	memcpy(payload, data, nregs);
-#endif
-	/* Write payload + CRC */
-	ret = regmap_raw_write(mca->regmap, addr, payload,
-			       nregs + MCA_CC6UL_CRC_LEN);
+
+	/* Write payload */
+	ret = regmap_raw_write(mca->regmap, addr, payload, nregs);
 
 	kfree(frame);
 	return ret;
 }
 EXPORT_SYMBOL_GPL(mca_cc6ul_write_block);
 
+static int mca_cc6ul_unlock_ctrl(struct mca_cc6ul *mca)
+{
+	int ret;
+	const uint8_t unlock_pattern[] = {'C', 'T', 'R', 'U'};
+
+	ret = regmap_bulk_write(mca->regmap, MCA_CC6UL_CTRL_UNLOCK_0,
+				unlock_pattern, sizeof(unlock_pattern));
+	if (ret)
+		dev_warn(mca->dev, "failed to unlock CTRL registers (%d)\n",
+			 ret);
+
+	return ret;
+}
+
+static int mca_cc6ul_get_tick_cnt(struct mca_cc6ul *mca, u32 *tick)
+{
+	return regmap_bulk_read(mca->regmap, MCA_CC6UL_TIMER_TICK_0,
+				tick, sizeof(*tick));
+}
+
 /* sysfs attributes */
-static ssize_t data_show(struct device *dev, struct device_attribute *attr,
-			 char *buf)
+static ssize_t ext_32khz_show(struct device *dev, struct device_attribute *attr,
+			      char *buf)
 {
 	struct mca_cc6ul *mca = dev_get_drvdata(dev);
+	unsigned int val;
 	int ret;
 
-	ret = mca_cc6ul_read_block(mca, mca->addr, mca->data, mca->len);
+	ret = regmap_read(mca->regmap, MCA_CC6UL_CTRL_0, &val);
+	if (ret) {
+		dev_err(mca->dev, "Cannot read MCA CTRL_0 register(%d)\n",
+			ret);
+		return 0;
+	}
+
+	return sprintf(buf, "%s\n", val & MCA_CC6UL_EXT32K_EN ?
+		       _enabled : _disabled);
+}
+
+static ssize_t ext_32khz_store(struct device *dev, struct device_attribute *attr,
+			       const char *buf, size_t count)
+{
+	struct mca_cc6ul *mca = dev_get_drvdata(dev);
+	bool enable;
+	int ret;
+
+	if (!strncmp(buf, _enabled, sizeof(_enabled) - 1))
+		enable = true;
+	else if (!strncmp(buf, _disabled, sizeof(_disabled) - 1))
+		enable = false;
+	else
+		return -EINVAL;
+
+	ret = mca_cc6ul_unlock_ctrl(mca);
 	if (ret)
 		return ret;
 
-	hex_dump_to_buffer(mca->data, mca->len, 16, 1, buf,
-			   MCA_CC6UL_MAX_FRAME_DATA_LEN, 0);
+	ret = regmap_update_bits(mca->regmap, MCA_CC6UL_CTRL_0,
+				 MCA_CC6UL_EXT32K_EN,
+				 enable ? MCA_CC6UL_EXT32K_EN : 0);
+	if (ret) {
+		dev_err(mca->dev, "Cannot update MCA CTRL_0 register (%d)\n", ret);
+		return ret;
+	}
 
-	/* Append new line (buf contains 3 chars per register value) */
-	buf[(3 * mca->len)] = '\n';
+	return count;
+}
+static DEVICE_ATTR(ext_32khz, 0600, ext_32khz_show, ext_32khz_store);
 
-	return (3 * mca->len + 2);
+static ssize_t vref_show(struct device *dev, struct device_attribute *attr,
+			 char *buf)
+{
+	struct mca_cc6ul *mca = dev_get_drvdata(dev);
+	unsigned int val;
+	int ret;
+
+	ret = regmap_read(mca->regmap, MCA_CC6UL_CTRL_0, &val);
+	if (ret) {
+		dev_err(mca->dev, "Cannot read MCA CTRL_0 register(%d)\n",
+			ret);
+		return 0;
+	}
+
+	return sprintf(buf, "%s\n", val & MCA_CC6UL_VREF_EN ?
+	_enabled : _disabled);
 }
 
-static ssize_t data_store(struct device *dev, struct device_attribute *attr,
+static ssize_t vref_store(struct device *dev, struct device_attribute *attr,
 			  const char *buf, size_t count)
 {
 	struct mca_cc6ul *mca = dev_get_drvdata(dev);
+	bool enable;
+	int ret;
 
-	if (count >= MCA_CC6UL_MAX_FRAME_DATA_LEN)
-		return -ENOSPC;
+	if (!strncmp(buf, _enabled, sizeof(_enabled) - 1))
+		enable = true;
+	else if (!strncmp(buf, _disabled, sizeof(_disabled) - 1))
+		enable = false;
+	else
+		return -EINVAL;
 
-	memcpy(mca->data, buf, count);
+	ret = mca_cc6ul_unlock_ctrl(mca);
+	if (ret)
+		return ret;
 
-	return mca_cc6ul_write_block(mca, mca->addr, mca->data, count);
+	ret = regmap_update_bits(mca->regmap, MCA_CC6UL_CTRL_0,
+				 MCA_CC6UL_VREF_EN,
+				 enable ? MCA_CC6UL_VREF_EN : 0);
+	if (ret) {
+		dev_err(mca->dev, "Cannot update MCA CTRL_0 register (%d)\n", ret);
+		return ret;
+	}
+
+	return count;
 }
-static DEVICE_ATTR(data, 0600, data_show, data_store);
+static DEVICE_ATTR(vref, 0600, vref_show, vref_store);
 
 static ssize_t hwver_show(struct device *dev, struct device_attribute *attr,
 			  char *buf)
@@ -261,69 +307,55 @@ static ssize_t hwver_show(struct device *dev, struct device_attribute *attr,
 }
 static DEVICE_ATTR(hw_version, S_IRUGO, hwver_show, NULL);
 
-
 static ssize_t fwver_show(struct device *dev, struct device_attribute *attr,
 			  char *buf)
 {
 	struct mca_cc6ul *mca = dev_get_drvdata(dev);
 
-	return sprintf(buf, "%d.%d %s\n",
-		       (u8)((mca->fw_version >> 8) & 0x7f), (u8)mca->fw_version,
-		       ((mca->fw_version >> 8) & 0x80) ? "(alpha)" : "");
+	return sprintf(buf, "%d.%d %s\n", MCA_FW_VER_MAJOR(mca->fw_version),
+		       MCA_FW_VER_MINOR(mca->fw_version),
+		       mca->fw_is_alpha ? "(alpha)" : "");
 }
 static DEVICE_ATTR(fw_version, S_IRUGO, fwver_show, NULL);
 
-static ssize_t addr_show(struct device *dev, struct device_attribute *attr,
-			 char *buf)
+static ssize_t tick_cnt_show(struct device *dev, struct device_attribute *attr,
+			     char *buf)
 {
 	struct mca_cc6ul *mca = dev_get_drvdata(dev);
+	u32 tick_cnt;
+	int ret;
 
-	return sprintf(buf, "0x%04x\n", mca->addr);
+	ret = mca_cc6ul_get_tick_cnt(mca, &tick_cnt);
+	if (ret) {
+		dev_err(mca->dev, "Cannot read MCA tick counter(%d)\n", ret);
+		return ret;
+	}
+
+	return sprintf(buf, "%u\n", tick_cnt);
 }
-
-static ssize_t addr_store(struct device *dev, struct device_attribute *attr,
-			  const char *buf, size_t count)
-{
-	struct mca_cc6ul *mca = dev_get_drvdata(dev);
-
-	mca->addr = (u16)simple_strtoul(buf, NULL, 0);
-
-	return count;
-}
-static DEVICE_ATTR(addr, 0600, addr_show, addr_store);
-
-static ssize_t len_show(struct device *dev, struct device_attribute *attr,
-			char *buf)
-{
-	struct mca_cc6ul *mca = dev_get_drvdata(dev);
-
-	return sprintf(buf, "%d\n", mca->len);
-}
-
-static ssize_t len_store(struct device *dev,
-			  struct device_attribute *attr,
-			  const char *buf, size_t count)
-{
-	struct mca_cc6ul *mca = dev_get_drvdata(dev);
-
-	mca->len = (size_t)simple_strtoul(buf, NULL, 0);
-
-	return count;
-}
-static DEVICE_ATTR(len, 0600, len_show, len_store);
+static DEVICE_ATTR(tick_cnt, S_IRUGO, tick_cnt_show, NULL);
 
 static struct attribute *mca_cc6ul_sysfs_entries[] = {
-	&dev_attr_data.attr,
+	&dev_attr_ext_32khz.attr,
 	&dev_attr_hw_version.attr,
 	&dev_attr_fw_version.attr,
-	&dev_attr_addr.attr,
-	&dev_attr_len.attr,
 	NULL,
 };
 
 static struct attribute_group mca_cc6ul_attr_group = {
 	.name	= NULL,			/* put in device directory */
 	.attrs	= mca_cc6ul_sysfs_entries,
+};
+
+static struct dyn_attribute mca_cc6ul_sysfs_dyn_entries[] = {
+	{
+		.since =	MCA_MAKE_FW_VER(0,15),
+		.attr =		&dev_attr_tick_cnt.attr,
+	},
+	{
+		.since =	MCA_MAKE_FW_VER(0,15),
+		.attr =		&dev_attr_vref.attr,
+	},
 };
 
 static int mca_cc6ul_suspend_begin(suspend_state_t state)
@@ -436,6 +468,35 @@ static int mca_cc6ul_restart_handler(struct notifier_block *nb,
 	return NOTIFY_DONE;
 }
 
+static int mca_cc6ul_add_dyn_sysfs_entries(struct mca_cc6ul *mca,
+					   const struct dyn_attribute *dattr,
+					   int num_entries,
+					   const struct attribute_group *grp)
+{
+	int ret, i;
+
+	if (!mca || !dattr || !grp)
+		return -EINVAL;
+
+	for (i = 0; i < num_entries; i++, dattr++) {
+		if (!dattr->attr)
+			continue;
+
+		/* Create the sysfs files if the MCA fw supports the feature*/
+		if (mca->fw_version >= dattr->since) {
+			ret = sysfs_add_file_to_group(&mca->dev->kobj,
+						      dattr->attr,
+						      grp->name);
+			if (ret)
+				dev_warn(mca->dev,
+					 "Cannot create sysfs file %s (%d)\n",
+					 dattr->attr->name, ret);
+		}
+	}
+
+	return 0;
+}
+
 int mca_cc6ul_device_init(struct mca_cc6ul *mca, u32 irq)
 {
 	int ret;
@@ -467,7 +528,8 @@ int mca_cc6ul_device_init(struct mca_cc6ul *mca, u32 irq)
 			ret);
 		return ret;
 	}
-	mca->fw_version = (u16)val;
+	mca->fw_version = (u16)(val & ~MCA_FW_VER_ALPHA_MASK);
+	mca->fw_is_alpha = val & MCA_FW_VER_ALPHA_MASK ? true : false;
 
 	mca->chip_irq = irq;
 	mca->gpio_base = -1;
@@ -483,7 +545,7 @@ int mca_cc6ul_device_init(struct mca_cc6ul *mca, u32 irq)
 			      regmap_irq_get_domain(mca->regmap_irq));
 	if (ret) {
 		dev_err(mca->dev, "Cannot add MFD cells (%d)\n", ret);
-		goto err;
+		goto out_irq;
 	}
 
 	ret = sysfs_create_group(&mca->dev->kobj, &mca_cc6ul_attr_group);
@@ -492,12 +554,28 @@ int mca_cc6ul_device_init(struct mca_cc6ul *mca, u32 irq)
 		goto out_dev;
 	}
 
+	ret = mca_cc6ul_add_dyn_sysfs_entries(mca, mca_cc6ul_sysfs_dyn_entries,
+					      ARRAY_SIZE(mca_cc6ul_sysfs_dyn_entries),
+					      &mca_cc6ul_attr_group);
+	if (ret) {
+		dev_err(mca->dev, "Cannot create sysfs dynamic entries (%d)\n",
+			ret);
+		goto out_sysfs_remove;
+	}
+
+	ret = mca_cc6ul_debug_init(mca);
+	if (ret) {
+		dev_err(mca->dev, "Cannot create sysfs debug entries (%d)\n",
+			ret);
+		goto out_sysfs_remove;
+	}
+
 	pmca = mca;
 
 	if (pm_power_off != NULL) {
 		dev_err(mca->dev, "pm_power_off function already registered\n");
 		ret = -EBUSY;
-		goto out_sysfs_remove;
+		goto out_debug_remove;
 	}
 	pm_power_off = mca_cc6ul_power_off;
 
@@ -532,12 +610,14 @@ out_fn_ptrs2:
 	imx6_board_pm_end = NULL;
 out_fn_ptrs:
 	pm_power_off = NULL;
-out_sysfs_remove:
+out_debug_remove:
 	pmca = NULL;
+	mca_cc6ul_debug_exit(mca);
+out_sysfs_remove:
 	sysfs_remove_group(&mca->dev->kobj, &mca_cc6ul_attr_group);
 out_dev:
 	mfd_remove_devices(mca->dev);
-err:
+out_irq:
 	mca_cc6ul_irq_exit(mca);
 
 	return ret;
@@ -550,6 +630,7 @@ void mca_cc6ul_device_exit(struct mca_cc6ul *mca)
 	imx6_board_pm_end = NULL;
 	pm_power_off = NULL;
 	pmca = NULL;
+	mca_cc6ul_debug_exit(mca);
 	sysfs_remove_group(&mca->dev->kobj, &mca_cc6ul_attr_group);
 	mfd_remove_devices(mca->dev);
 	mca_cc6ul_irq_exit(mca);

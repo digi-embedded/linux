@@ -1,5 +1,5 @@
 /*
- *  Copyright 2016 Digi International Inc
+ *  Copyright 2017 Digi International Inc
  *
  *  This program is free software; you can redistribute  it and/or modify it
  *  under  the terms of  the GNU General  Public License as published by the
@@ -75,6 +75,11 @@
 
 #define MCA_CC6UL_TAMPER_REGS_LEN	(MCA_CC6UL_TAMPER1_CFG0 - \
 					 MCA_CC6UL_TAMPER0_CFG0)
+
+#define MCA_CC6UL_TIMER_TICK_0		0x0057
+#define MCA_CC6UL_TIMER_TICK_1		0x0058
+#define MCA_CC6UL_TIMER_TICK_2		0x0059
+#define MCA_CC6UL_TIMER_TICK_3		0x005a
 
 /* EP1: RTC */
 #define MCA_CC6UL_RTC_CONTROL		0x0101
@@ -275,6 +280,7 @@
 #define MCA_CC6UL_RESET			BIT(0)
 #define MCA_CC6UL_EXT32K_EN		BIT(1)
 #define MCA_CC6UL_JMP_BL		BIT(2)
+#define MCA_CC6UL_VREF_EN		BIT(5)
 
 /* MCA_CC6UL_TAMPERn_CFG0 (addr=0x0037 & 0x0046) */
 #define MCA_CC6UL_TAMPER_DET_EN		BIT(0)
@@ -328,6 +334,8 @@
 #define MCA_CC6UL_WDT_ENABLE		BIT(0)
 #define MCA_CC6UL_WDT_NOWAYOUT		BIT(1)
 #define MCA_CC6UL_WDT_IRQNORESET	BIT(2)
+#define MCA_CC6UL_WDT_PRETIMEOUT	BIT(3)
+#define MCA_CC6UL_WDT_FULLRESET		BIT(4)
 
 /* MCA_CC6UL_WDT_TIMEOUT (addr=0x0202) */
 #define MCA_CC6UL_WDT_TIMEOUT_MASK	0xFF
