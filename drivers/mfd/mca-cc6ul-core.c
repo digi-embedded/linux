@@ -227,9 +227,9 @@ static ssize_t ext_32khz_store(struct device *dev, struct device_attribute *attr
 	bool enable;
 	int ret;
 
-	if (!strncmp(buf, _enabled, sizeof(_enabled)))
+	if (!strncmp(buf, _enabled, sizeof(_enabled) - 1))
 		enable = true;
-	else if (!strncmp(buf, _disabled, sizeof(_disabled)))
+	else if (!strncmp(buf, _disabled, sizeof(_disabled) - 1))
 		enable = false;
 	else
 		return -EINVAL;
