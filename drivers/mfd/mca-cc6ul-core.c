@@ -203,14 +203,14 @@ static int mca_cc6ul_get_tick_cnt(struct mca_cc6ul *mca, u32 *tick)
 
 /* sysfs attributes */
 static ssize_t ext_32khz_show(struct device *dev, struct device_attribute *attr,
-			 char *buf)
+			      char *buf)
 {
 	struct mca_cc6ul *mca = dev_get_drvdata(dev);
 	unsigned int val;
 	int ret;
 
 	ret = regmap_read(mca->regmap, MCA_CC6UL_CTRL_0, &val);
-	if (ret != 0) {
+	if (ret) {
 		dev_err(mca->dev, "Cannot read MCA CTRL_0 register(%d)\n",
 			ret);
 		return 0;
@@ -221,7 +221,7 @@ static ssize_t ext_32khz_show(struct device *dev, struct device_attribute *attr,
 }
 
 static ssize_t ext_32khz_store(struct device *dev, struct device_attribute *attr,
-			  const char *buf, size_t count)
+			       const char *buf, size_t count)
 {
 	struct mca_cc6ul *mca = dev_get_drvdata(dev);
 	bool enable;
