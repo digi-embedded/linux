@@ -111,11 +111,13 @@
 
 		ethphy0: ethernet-phy@0 {
 			compatible = "ethernet-phy-ieee802.3-c22";
+			smsc,disable-energy-detect;
 			reg = <0>;
 		};
 
 		ethphy1: ethernet-phy@1 {
 			compatible = "ethernet-phy-ieee802.3-c22";
+			smsc,disable-energy-detect;
 			reg = <1>;
 		};
 	};
