@@ -107,7 +107,6 @@
 
 /* Pin mux configuration */
 &iomuxc {
-	pinctrl-0 = <&pinctrl_hog>;
 	imx6ul-ccimx6ul {
 		/* Uncomment specific pins of the ADC channels enabled in 'adc-ch-list' */
 		//pinctrl_adc1: adc1grp {
