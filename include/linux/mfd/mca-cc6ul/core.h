@@ -85,6 +85,7 @@ struct mca_cc6ul {
 	size_t len;	/* for the sysfs */
 	u8 data[MCA_CC6UL_MAX_FRAME_DATA_LEN + MCA_CC6UL_CRC_LEN];
 	int fw_update_gpio;
+	int som_hv;
 };
 
 int mca_cc6ul_device_init(struct mca_cc6ul *mca, u32 irq);
