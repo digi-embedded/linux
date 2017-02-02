@@ -568,7 +568,16 @@ int mca_cc6ul_device_init(struct mca_cc6ul *mca, u32 irq)
 	mca->fw_version = (u16)(val & ~MCA_FW_VER_ALPHA_MASK);
 	mca->fw_is_alpha = val & MCA_FW_VER_ALPHA_MASK ? true : false;
 
+	/* Write the SOM hardware version to MCA register */
 	mca->som_hv = digi_get_som_hv();
+	if (mca->som_hv > 0) {
+		ret = regmap_write(mca->regmap, MCA_CC6UL_HWVER_SOM,
+				   mca->som_hv);
+		if (ret != 0)
+			dev_warn(mca->dev,
+				 "Cannot set SOM hardware version (%d)\n", ret);
+	}
+
 	mca->fw_update_gpio = of_get_named_gpio(mca->dev->of_node,
 						"fw-update-gpio", 0);
 	if (gpio_is_valid(mca->fw_update_gpio) && mca->som_hv >= 4) {
