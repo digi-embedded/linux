@@ -85,6 +85,7 @@
 		interrupts = <4 IRQ_TYPE_EDGE_FALLING>;
 		interrupt-controller;
 		#interrupt-cells = <2>;
+		fw-update-gpio = <&gpio4 14 GPIO_ACTIVE_LOW>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_mca_cc6ul>;
 
@@ -219,8 +220,6 @@
 };
 
 &iomuxc {
-	pinctrl-0 = <&pinctrl_hog>;
-
 	imx6ul-ccimx6ul {
 		pinctrl_gpmi_nand: gpmigrp {
 			fsl,pins = <
@@ -253,13 +252,7 @@
 			fsl,pins = <
 				/* MCA_nINT */
 				MX6UL_PAD_SNVS_TAMPER4__GPIO5_IO04	0xb0b1
-			>;
-		};
-
-		/* Configure some pins as GPIO */
-		pinctrl_hog: hoggrp {
-			fsl,pins = <
-				/* Control GPIO to prevent CPU reset during MCA firmware update */
+				/* MCA_FW_UPDATE */
 				MX6UL_PAD_NAND_CE1_B__GPIO4_IO14	0xf030
 			>;
 		};
