@@ -399,6 +399,18 @@ static void __init imx6ul_clocks_init(struct device_node *ccm_node)
 	clks[IMX6UL_CLK_PWM6]		= imx_clk_gate2("pwm6",		"perclk",	 base +	0x80,	28);
 	clks[IMX6UL_CLK_PWM7]		= imx_clk_gate2("Pwm7",		"perclk",	 base + 0x80,	30);
 
+	/* 
+	 * It has been observed that the target could hang during boot if these
+	 * clocks are disabled during LCD driver initialization.
+	 *
+	 * U-Boot disables these clocks when authenticating images, so ensure
+	 * they are enabled to avoid this problem.
+	 */
+	clk_prepare_enable(clks[IMX6UL_CLK_CAAM_MEM]);
+	clk_prepare_enable(clks[IMX6UL_CLK_CAAM_ACLK]);
+	clk_prepare_enable(clks[IMX6UL_CLK_CAAM_IPG]);
+	clk_prepare_enable(clks[IMX6UL_CLK_EIM]);
+
 	/* mask handshake of mmdc */
 	writel_relaxed(BM_CCM_CCDR_MMDC_CH0_MASK, base + CCDR);
 
