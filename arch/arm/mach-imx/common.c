@@ -182,3 +182,30 @@ int digi_get_board_version(void)
 	return digi_board_version;
 }
 EXPORT_SYMBOL(digi_get_board_version);
+
+static int digi_som_hv = -EINVAL;
+
+int digi_get_som_hv(void)
+{
+	struct device_node *np = NULL;
+	const char *som_hv_str;
+	char buf[4];
+
+	/* Only need to read the HV once */
+	if (digi_som_hv > 0)
+		return digi_som_hv;
+
+	np = of_find_node_by_path("/");
+	if (!np)
+		return -EPERM;
+
+	if (!of_property_read_string(np, "digi,hwid,hv", &som_hv_str)) {
+		strncpy(buf, som_hv_str, sizeof(buf));
+		if (!kstrtoint(som_hv_str, 16, &digi_som_hv))
+			pr_debug("SOM HV: %d\n", digi_som_hv);
+	}
+	of_node_put(np);
+
+	return digi_som_hv;
+}
+EXPORT_SYMBOL(digi_get_som_hv);
