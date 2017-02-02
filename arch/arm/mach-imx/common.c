@@ -167,7 +167,7 @@ int digi_get_board_version(void)
 	if (digi_board_version > 0)
 		return digi_board_version;
 
-	np = of_find_compatible_node(NULL, NULL, "digi,ccimx6");
+	np = of_find_node_by_path("/");
 	if (!np)
 		return -EPERM;
 
@@ -175,8 +175,10 @@ int digi_get_board_version(void)
 				&boardver_str)) {
 		strncpy(buf, boardver_str, sizeof(buf));
 		if (!kstrtoint(boardver_str, 10, &digi_board_version))
-			pr_info("Board version: %d\n", digi_board_version);
+			pr_debug("Board version: %d\n", digi_board_version);
 	}
+	of_node_put(np);
+
 	return digi_board_version;
 }
 EXPORT_SYMBOL(digi_get_board_version);
