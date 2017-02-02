@@ -568,9 +568,10 @@ int mca_cc6ul_device_init(struct mca_cc6ul *mca, u32 irq)
 	mca->fw_version = (u16)(val & ~MCA_FW_VER_ALPHA_MASK);
 	mca->fw_is_alpha = val & MCA_FW_VER_ALPHA_MASK ? true : false;
 
+	mca->som_hv = digi_get_som_hv();
 	mca->fw_update_gpio = of_get_named_gpio(mca->dev->of_node,
 						"fw-update-gpio", 0);
-	if (gpio_is_valid(mca->fw_update_gpio) && digi_get_som_hv() >= 4) {
+	if (gpio_is_valid(mca->fw_update_gpio) && mca->som_hv >= 4) {
 		/*
 		 * On the CC6UL HV >= 4 this GPIO must be driven low
 		 * so that the CPU resets together with the reset button.
