@@ -26,6 +26,7 @@ static const struct regmap_range mca_cc6ul_readable_ranges[] = {
 };
 
 static const struct regmap_range mca_cc6ul_writeable_ranges[] = {
+	regmap_reg_range(MCA_CC6UL_HWVER_SOM, MCA_CC6UL_HWVER_SOM),
 	regmap_reg_range(MCA_CC6UL_IRQ_STATUS_0, MCA_CC6UL_IRQ_MASK_3),
 	regmap_reg_range(MCA_CC6UL_PWR_CTRL_0, MCA_CC6UL_PWR_KEY_GUARD),
 	regmap_reg_range(MCA_CC6UL_CTRL_UNLOCK_0, MCA_CC6UL_CTRL_UNLOCK_3),
@@ -62,6 +63,7 @@ static const struct regmap_range mca_cc6ul_volatile_ranges[] = {
 	 *
 	 * For this reasons we will consider all registers volatile.
 	 */
+	regmap_reg_range(MCA_CC6UL_HWVER_SOM, MCA_CC6UL_HWVER_SOM),
 	regmap_reg_range(MCA_CC6UL_DEVICE_ID, MCA_CC6UL_UID_9),
 	regmap_reg_range(MCA_CC6UL_IRQ_MASK_0, MCA_CC6UL_IRQ_MASK_3),
 	regmap_reg_range(MCA_CC6UL_PWR_KEY_DEBOUNCE, MCA_CC6UL_PWR_KEY_GUARD),
