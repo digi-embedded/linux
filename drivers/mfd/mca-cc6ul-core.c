@@ -10,6 +10,8 @@
 #include <linux/device.h>
 #include <linux/sysfs.h>
 #include <linux/delay.h>
+#include <linux/gpio.h>
+#include <linux/of_gpio.h>
 #include <linux/interrupt.h>
 #include <linux/mfd/core.h>
 #include <linux/slab.h>
@@ -28,6 +30,7 @@
 
 extern int (*imx6_board_pm_begin)(suspend_state_t);
 extern void (*imx6_board_pm_end)(void);
+extern int digi_get_som_hv(void);
 
 struct dyn_attribute {
 	u16			since;	/* Minimum firmware version required */
@@ -335,10 +338,44 @@ static ssize_t tick_cnt_show(struct device *dev, struct device_attribute *attr,
 }
 static DEVICE_ATTR(tick_cnt, S_IRUGO, tick_cnt_show, NULL);
 
+static ssize_t fw_update_show(struct device *dev, struct device_attribute *attr,
+			      char *buf)
+{
+	struct mca_cc6ul *mca = dev_get_drvdata(dev);
+
+	if (!gpio_is_valid(mca->fw_update_gpio))
+		return -EINVAL;
+
+	return sprintf(buf, "%d\n",
+		       gpio_get_value_cansleep(mca->fw_update_gpio));
+}
+
+static ssize_t fw_update_store(struct device *dev,
+			       struct device_attribute *attr,
+			       const char *buf, size_t count)
+{
+	struct mca_cc6ul *mca = dev_get_drvdata(dev);
+	ssize_t status;
+	long value;
+
+	if (!gpio_is_valid(mca->fw_update_gpio))
+		return -EINVAL;
+
+	status = kstrtol(buf, 0, &value);
+	if (status == 0) {
+		gpio_set_value_cansleep(mca->fw_update_gpio, value);
+		status = count;
+	}
+
+	return status;
+}
+static DEVICE_ATTR(fw_update, 0600, fw_update_show, fw_update_store);
+
 static struct attribute *mca_cc6ul_sysfs_entries[] = {
 	&dev_attr_ext_32khz.attr,
 	&dev_attr_hw_version.attr,
 	&dev_attr_fw_version.attr,
+	&dev_attr_fw_update.attr,
 	NULL,
 };
 
@@ -531,6 +568,22 @@ int mca_cc6ul_device_init(struct mca_cc6ul *mca, u32 irq)
 	mca->fw_version = (u16)(val & ~MCA_FW_VER_ALPHA_MASK);
 	mca->fw_is_alpha = val & MCA_FW_VER_ALPHA_MASK ? true : false;
 
+	mca->fw_update_gpio = of_get_named_gpio(mca->dev->of_node,
+						"fw-update-gpio", 0);
+	if (gpio_is_valid(mca->fw_update_gpio) && digi_get_som_hv() >= 4) {
+		/*
+		 * On the CC6UL HV >= 4 this GPIO must be driven low
+		 * so that the CPU resets together with the reset button.
+		 */
+		if (devm_gpio_request_one(mca->dev, mca->fw_update_gpio,
+					  GPIOF_OUT_INIT_LOW, "mca-fw-update"))
+			dev_warn(mca->dev, "failed to get fw-update-gpio: %d\n",
+				 ret);
+	} else {
+		/* Invalidate GPIO */
+		mca->fw_update_gpio = -EINVAL;
+	}
+
 	mca->chip_irq = irq;
 	mca->gpio_base = -1;
 
@@ -552,6 +605,10 @@ int mca_cc6ul_device_init(struct mca_cc6ul *mca, u32 irq)
 	if (ret) {
 		dev_err(mca->dev, "Cannot create sysfs entries (%d)\n", ret);
 		goto out_dev;
+	}
+	if (mca->fw_update_gpio == -EINVAL) {
+		/* Remove fw_update entry */
+		sysfs_remove_file(&mca->dev->kobj, &dev_attr_fw_update.attr);
 	}
 
 	ret = mca_cc6ul_add_dyn_sysfs_entries(mca, mca_cc6ul_sysfs_dyn_entries,

@@ -22,6 +22,10 @@ Required properties:
 - interrupts : IRQ line information.
 - interrupt-controller
 
+Optional properties:
+
+- fw-update-gpio : Control GPIO for MCA firmware update.
+
 Sub-nodes:
 
 - adc : This node defines settings for the ADC channels associated with the
@@ -55,6 +59,7 @@ Example:
 		interrupts = <4 IRQ_TYPE_EDGE_FALLING>;
 		interrupt-controller;
 		#interrupt-cells = <2>;
+		fw-update-gpio = <&gpio4 14 GPIO_ACTIVE_HIGH>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_mca_cc6ul>;
 
