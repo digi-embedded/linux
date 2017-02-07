@@ -307,13 +307,8 @@
 
 /* USDHC2 (microSD/eMMC) */
 &usdhc2 {
-	pinctrl-names = "default", "state_100mhz", "state_200mhz";
-	pinctrl-0 = <&pinctrl_usdhc2
-		     &pinctrl_usdhc2_mux_selector>;
-	pinctrl-1 = <&pinctrl_usdhc2_100mhz
-		     &pinctrl_usdhc2_mux_selector>;
-	pinctrl-2 = <&pinctrl_usdhc2_200mhz
-		     &pinctrl_usdhc2_mux_selector>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_usdhc2>;
 	status = "disabled";
 };
 
@@ -525,12 +520,6 @@
 			>;
 		};
 
-		pinctrl_usdhc2_mux_selector: usdhc2grp-mux-selector {
-			fsl,pins = <
-				MX6UL_PAD_SNVS_TAMPER1__GPIO5_IO01	0x79
-			>;
-		};
-
 		pinctrl_usdhc2: usdhc2grp {
 			fsl,pins = <
 				MX6UL_PAD_CSI_HSYNC__USDHC2_CMD		0x17059
@@ -539,28 +528,8 @@
 				MX6UL_PAD_CSI_DATA01__USDHC2_DATA1	0x17059
 				MX6UL_PAD_CSI_DATA02__USDHC2_DATA2	0x17059
 				MX6UL_PAD_CSI_DATA03__USDHC2_DATA3	0x17059
-			>;
-		};
-
-		pinctrl_usdhc2_100mhz: usdhc2grp100mhz {
-			fsl,pins = <
-				MX6UL_PAD_CSI_HSYNC__USDHC2_CMD		0x170b9
-				MX6UL_PAD_CSI_VSYNC__USDHC2_CLK		0x100b9
-				MX6UL_PAD_CSI_DATA00__USDHC2_DATA0	0x170b9
-				MX6UL_PAD_CSI_DATA01__USDHC2_DATA1	0x170b9
-				MX6UL_PAD_CSI_DATA02__USDHC2_DATA2	0x170b9
-				MX6UL_PAD_CSI_DATA03__USDHC2_DATA3	0x170b9
-			>;
-		};
-
-		pinctrl_usdhc2_200mhz: usdhc2grp200mhz {
-			fsl,pins = <
-				MX6UL_PAD_CSI_HSYNC__USDHC2_CMD		0x170f9
-				MX6UL_PAD_CSI_VSYNC__USDHC2_CLK		0x100f9
-				MX6UL_PAD_CSI_DATA00__USDHC2_DATA0	0x170f9
-				MX6UL_PAD_CSI_DATA01__USDHC2_DATA1	0x170f9
-				MX6UL_PAD_CSI_DATA02__USDHC2_DATA2	0x170f9
-				MX6UL_PAD_CSI_DATA03__USDHC2_DATA3	0x170f9
+				/* Mux selector between eMMC/SD# */
+				MX6UL_PAD_SNVS_TAMPER1__GPIO5_IO01	0x79
 			>;
 		};
 
@@ -576,36 +545,8 @@
 				MX6UL_PAD_CSI_DATA05__USDHC2_DATA5	0x17059
 				MX6UL_PAD_CSI_DATA06__USDHC2_DATA6	0x17059
 				MX6UL_PAD_CSI_DATA07__USDHC2_DATA7	0x17059
-			>;
-		};
-
-		pinctrl_usdhc2_8databits_100mhz: usdhc2-8databits-grp100mhz {
-			fsl,pins = <
-				MX6UL_PAD_CSI_HSYNC__USDHC2_CMD		0x170b9
-				MX6UL_PAD_CSI_VSYNC__USDHC2_CLK		0x100b9
-				MX6UL_PAD_CSI_DATA00__USDHC2_DATA0	0x170b9
-				MX6UL_PAD_CSI_DATA01__USDHC2_DATA1	0x170b9
-				MX6UL_PAD_CSI_DATA02__USDHC2_DATA2	0x170b9
-				MX6UL_PAD_CSI_DATA03__USDHC2_DATA3	0x170b9
-				MX6UL_PAD_CSI_DATA04__USDHC2_DATA4	0x170b9
-				MX6UL_PAD_CSI_DATA05__USDHC2_DATA5	0x170b9
-				MX6UL_PAD_CSI_DATA06__USDHC2_DATA6	0x170b9
-				MX6UL_PAD_CSI_DATA07__USDHC2_DATA7	0x170b9
-			>;
-		};
-
-		pinctrl_usdhc2_8databits_200mhz: usdhc2-8databits-grp200mhz {
-			fsl,pins = <
-				MX6UL_PAD_CSI_HSYNC__USDHC2_CMD		0x170f9
-				MX6UL_PAD_CSI_VSYNC__USDHC2_CLK		0x100f9
-				MX6UL_PAD_CSI_DATA00__USDHC2_DATA0	0x170f9
-				MX6UL_PAD_CSI_DATA01__USDHC2_DATA1	0x170f9
-				MX6UL_PAD_CSI_DATA02__USDHC2_DATA2	0x170f9
-				MX6UL_PAD_CSI_DATA03__USDHC2_DATA3	0x170f9
-				MX6UL_PAD_CSI_DATA04__USDHC2_DATA4	0x170f9
-				MX6UL_PAD_CSI_DATA05__USDHC2_DATA5	0x170f9
-				MX6UL_PAD_CSI_DATA06__USDHC2_DATA6	0x170f9
-				MX6UL_PAD_CSI_DATA07__USDHC2_DATA7	0x170f9
+				/* Mux selector between eMMC/SD# */
+				MX6UL_PAD_SNVS_TAMPER1__GPIO5_IO01	0x79
 			>;
 		};
 
