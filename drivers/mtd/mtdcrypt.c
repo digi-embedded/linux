@@ -717,8 +717,8 @@ static int mtdcrypt_set_key(struct mtd_info *mtd)
 		dump_hex(crypt_info->key, crypt_info->key_size);
 	}
 	crypt_info->flags |= KEY_VALID;
-#if defined(CONFIG_CRYPTO_DEV_FSL_CAAM)
 out_err2:
+#if defined(CONFIG_CRYPTO_DEV_FSL_CAAM)
 	kfree(keymod);
 #endif
 out_err1:
