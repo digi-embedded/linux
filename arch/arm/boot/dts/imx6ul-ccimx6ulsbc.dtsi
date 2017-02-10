@@ -446,7 +446,7 @@
 
 		pinctrl_lcdif_clken: lcdifctrlgrp1 {
 			fsl,pins = <
-				MX6UL_PAD_LCD_CLK__LCDIF_CLK		0x79
+				MX6UL_PAD_LCD_CLK__LCDIF_CLK		0x17050
 				MX6UL_PAD_LCD_ENABLE__LCDIF_ENABLE	0x79
 			>;
 		};
