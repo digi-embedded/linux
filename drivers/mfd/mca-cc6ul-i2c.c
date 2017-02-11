@@ -156,9 +156,14 @@ static int mca_cc6ul_i2c_resume(struct device *dev)
 	return mca_cc6ul_resume(dev);
 }
 
-static SIMPLE_DEV_PM_OPS(mca_cc6ul_i2c_pm_ops,
-			 mca_cc6ul_i2c_suspend,
-			 mca_cc6ul_i2c_resume);
+/*
+ * Use suspend_late/resume_early so the mca_cc6ul continues being functional
+ * during the regular suspend/resume callbacks of other drivers, just in case
+ * they use any functionality of the mca.
+ */
+static const struct dev_pm_ops mca_cc6ul_i2c_pm_ops = {
+	SET_LATE_SYSTEM_SLEEP_PM_OPS(mca_cc6ul_i2c_suspend, mca_cc6ul_i2c_resume)
+};
 #endif
 
 static const struct i2c_device_id mca_cc6ul_i2c_id[] = {
