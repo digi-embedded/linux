@@ -23,6 +23,8 @@
 		startup-delay-us = <25000>;
 		enable-active-high;
 		vin-supply = <&ext_3v3>;
+		regulator-boot-on;
+		regulator-always-on;
 	};
 };
 
