@@ -526,6 +526,7 @@ static int fsl_register_hwid(void) {
 		"digi,hwid,week",
 		"digi,hwid,genid",
 		"digi,hwid,sn",
+		"digi,hwid,wid",
 	};
 	const char *compat_machines[] = {
 		"digi,ccimx6",
@@ -551,10 +552,10 @@ static int fsl_register_hwid(void) {
 	 *
 	 *                      MAC1 (Bank 4 Word 3)
 	 *
-	 *       | 31..26 | 25..20 |   |  15..8  | 7..4 | 3..0 |
-	 *       +--------+--------+---+---------+------+------+
-	 * HWID: |  Year  |  Week  | - | Variant |  HV  | Cert |
-	 *       +--------+--------+---+---------+------+------+
+	 *       | 31..26 | 25..20 | 19..16 |  15..8  | 7..4 | 3..0 |
+	 *       +--------+--------+--------+---------+------+------+
+	 * HWID: |  Year  |  Week  |  WID   | Variant |  HV  | Cert |
+	 *       +--------+--------+--------+---------+------+------+
 	 *
 	 *                      MAC0 (Bank 4 Word 2)
 	 *
@@ -582,6 +583,8 @@ static int fsl_register_hwid(void) {
 				sprintf(str, "0x%x", (mac1 >> 4) & 0xf);
 			else if (!strcmp("digi,hwid,cert", propnames[i]))
 				sprintf(str, "0x%x", mac1 & 0xf);
+			else if (!strcmp("digi,hwid,wid", propnames[i]))
+				sprintf(str, "0x%x", (mac1 >> 16) & 0xf);
 			else
 				continue;
 
