@@ -336,7 +336,7 @@ static int pfuze3000_buckreg_set_suspend_voltage(struct regulator_dev *rdev, int
 	struct pfuze_chip *pfuze = rdev_get_drvdata(rdev);
 	int sel;
 
-	sel = regulator_map_voltage_linear(rdev, uV, uV);
+	sel = regulator_map_voltage_ascend(rdev, uV, uV);
 	if (sel < 0)
 		return sel;
 
