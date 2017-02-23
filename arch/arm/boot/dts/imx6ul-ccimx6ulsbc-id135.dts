@@ -32,6 +32,15 @@
 //	status = "okay";
 //};
 
+/*
+ * Uncomment to enable the I/O Expander ADCs.
+ * Include in adc-ch-list the ADC channels that you want to enable.
+ */
+// &mca_ioexp_adc {
+// 	digi,adc-ch-list = <3>;
+// 	digi,adc-vref = <3300000>;
+// };
+
 &caam_keyblob {
 	status = "okay";
 };
@@ -167,6 +176,10 @@
 &usdhc2 {
 	pinctrl-assert-gpios = <&gpio5 1 GPIO_ACTIVE_LOW>;
 	broken-cd;	/* no carrier detect line (use polling) */
+	status = "okay";
+};
+
+&mca_ioexp {
 	status = "okay";
 };
 

@@ -93,6 +93,10 @@
 			compatible = "digi,mca-cc6ul-gpio";
 			gpio-controller;
 			#gpio-cells = <2>;
+
+			interrupt-parent = <&mca_cc6ul>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
 		};
 
 		rtc {

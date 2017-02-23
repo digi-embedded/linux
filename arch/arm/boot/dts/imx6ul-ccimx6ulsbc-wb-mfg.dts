@@ -97,6 +97,10 @@
 	status = "okay";
 };
 
+&mca_ioexp {
+	status = "okay";
+};
+
 /* Configure all unused pins as GPIO */
 &iomuxc {
 	pinctrl-0 = <&pinctrl_hog>;
