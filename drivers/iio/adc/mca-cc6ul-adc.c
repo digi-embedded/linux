@@ -112,7 +112,7 @@ static int mca_cc6ul_adc_probe(struct platform_device *pdev)
 		if (!np || !of_device_is_available(np))
 			return -ENODEV;
 
-		ret = of_property_read_u32(mca->dev->of_node, "digi,adc-vref", &vref);
+		ret = of_property_read_u32(np, "digi,adc-vref", &vref);
 		if (ret || vref < MCA_ADC_MIN_VREF || vref > MCA_ADC_MAX_VREF) {
 			vref = MCA_ADC_DEF_VREF;
 			dev_warn(&pdev->dev, ret ?
