@@ -234,7 +234,7 @@ static int pfuze100_regulator_ldo_suspend_do_enable(struct regulator_dev *rdev, 
 	return regmap_update_bits(pfuze->regmap,
 				  rdev->desc->vsel_reg,
 				  pfuze_reg->stby_mask,
-				  en ? pfuze_reg->stby_mask : 0);
+				  en ? 0 : pfuze_reg->stby_mask);
 }
 
 static int pfuze100_regulator_ldo_suspend_enable(struct regulator_dev *rdev)
