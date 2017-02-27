@@ -115,6 +115,7 @@
 
 		mca_adc: adc {
 			compatible = "digi,mca-cc6ul-adc";
+			digi,adc-vref = <3000000>;
 		};
 
 		mca_tamper: tamper {
