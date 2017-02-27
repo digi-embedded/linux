@@ -81,9 +81,6 @@ struct mca_cc6ul {
 	int chip_irq;
 	u32 irq_base;
 	int gpio_base;
-	u16 addr;	/* for the sysfs */
-	size_t len;	/* for the sysfs */
-	u8 data[MCA_CC6UL_MAX_FRAME_DATA_LEN + MCA_CC6UL_CRC_LEN];
 	int fw_update_gpio;
 	int som_hv;
 };
@@ -94,7 +91,5 @@ void mca_cc6ul_device_exit(struct mca_cc6ul *mca);
 void mca_cc6ul_irq_exit(struct mca_cc6ul *mca);
 int mca_cc6ul_suspend(struct device *dev);
 int mca_cc6ul_resume(struct device *dev);
-int mca_cc6ul_debug_init(struct mca_cc6ul *mca);
-void mca_cc6ul_debug_exit(struct mca_cc6ul *mca);
 
 #endif /* MFD_MCA_CC6UL_CORE_H_ */

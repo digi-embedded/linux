@@ -630,19 +630,12 @@ int mca_cc6ul_device_init(struct mca_cc6ul *mca, u32 irq)
 		goto out_sysfs_remove;
 	}
 
-	ret = mca_cc6ul_debug_init(mca);
-	if (ret) {
-		dev_err(mca->dev, "Cannot create sysfs debug entries (%d)\n",
-			ret);
-		goto out_sysfs_remove;
-	}
-
 	pmca = mca;
 
 	if (pm_power_off != NULL) {
 		dev_err(mca->dev, "pm_power_off function already registered\n");
 		ret = -EBUSY;
-		goto out_debug_remove;
+		goto out_sysfs_remove;
 	}
 	pm_power_off = mca_cc6ul_power_off;
 
@@ -677,10 +670,8 @@ out_fn_ptrs2:
 	imx6_board_pm_end = NULL;
 out_fn_ptrs:
 	pm_power_off = NULL;
-out_debug_remove:
-	pmca = NULL;
-	mca_cc6ul_debug_exit(mca);
 out_sysfs_remove:
+	pmca = NULL;
 	sysfs_remove_group(&mca->dev->kobj, &mca_cc6ul_attr_group);
 out_dev:
 	mfd_remove_devices(mca->dev);
@@ -697,7 +688,6 @@ void mca_cc6ul_device_exit(struct mca_cc6ul *mca)
 	imx6_board_pm_end = NULL;
 	pm_power_off = NULL;
 	pmca = NULL;
-	mca_cc6ul_debug_exit(mca);
 	sysfs_remove_group(&mca->dev->kobj, &mca_cc6ul_attr_group);
 	mfd_remove_devices(mca->dev);
 	mca_cc6ul_irq_exit(mca);
