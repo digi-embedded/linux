@@ -88,10 +88,6 @@
 #define PFUZE3000_NVRAM_BASE_ADDR	PFUZE3000_MEMA
 #define PFUZE3000_NVRAM_SIZE		(PFUZE3000_MEMD - PFUZE3000_MEMA + 1)
 
-#define PFUZE100_SW1AMODE	0x23
-#define PFUZE100_SW2MODE	0x38
-#define PFUZE100_BUCK_APS_PFM	0x0c
-
 enum chips { PFUZE100, PFUZE200, PFUZE3000 = 3 };
 
 struct pfuze_regulator {
@@ -1023,24 +1019,6 @@ static int pfuze100_regulator_probe(struct i2c_client *client,
 	dev_info(&client->dev, "pfuze%s found.\n",
 		(pfuze_chip->chip_id == PFUZE100) ? "100" :
 		((pfuze_chip->chip_id == PFUZE200) ? "200" : "3000"));
-
-	if (of_machine_is_compatible("digi,ccimx6ul")) {
-		/*
-		 * Configure SW1A and SW2 buck regulators as APS/PFM, otherwise
-		 * the wireless interface could fail during suspend/resume.
-		 */
-		ret = regmap_write(pfuze_chip->regmap, PFUZE100_SW1AMODE,
-				   PFUZE100_BUCK_APS_PFM);
-		if (ret)
-			dev_warn(&client->dev,
-				 "error writing SW1AMODE register (%d)\n", ret);
-
-		ret = regmap_write(pfuze_chip->regmap, PFUZE100_SW2MODE,
-				   PFUZE100_BUCK_APS_PFM);
-		if (ret)
-			dev_warn(&client->dev,
-				 "error writing SW2MODE register (%d)\n", ret);
-	}
 
 	memcpy(pfuze_chip->regulator_descs, pfuze_regulators,
 		sizeof(pfuze_chip->regulator_descs));
