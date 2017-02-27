@@ -1,5 +1,5 @@
 /*
- *  Copyright 2016 Digi International Inc
+ *  Copyright 2016, 2017 Digi International Inc
  *
  *  This program is free software; you can redistribute  it and/or modify it
  *  under  the terms of  the GNU General  Public License as published by the
@@ -13,6 +13,7 @@
 #include <linux/mfd/core.h>
 #include <linux/interrupt.h>
 #include <linux/regmap.h>
+#include <linux/mfd/mca-common/core.h>
 #include <linux/mfd/mca-cc6ul/core.h>
 
 #define MCA_CC6UL_IRQ_0_OFFSET		0
@@ -52,7 +53,7 @@ static const struct regmap_irq mca_cc6ul_irqs[] = {
 	},
 	[MCA_CC6UL_IRQ_GPIO_BANK_0] = {
 		.reg_offset = MCA_CC6UL_IRQ_1_OFFSET,
-		.mask = MCA_CC6UL_M_GPIO_BANK_0,
+		.mask = MCA_GPIO_BANK_0,
 	},
 };
 

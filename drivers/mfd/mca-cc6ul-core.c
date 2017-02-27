@@ -23,8 +23,8 @@
 #include <linux/uaccess.h>
 #include <linux/reboot.h>
 
+#include <linux/mfd/mca-common/core.h>
 #include <linux/mfd/mca-cc6ul/core.h>
-#include <linux/mfd/mca-cc6ul/registers.h>
 
 #include <asm/unaligned.h>
 
@@ -98,7 +98,7 @@ static struct resource mca_cc6ul_tamper_resources[] = {
 
 static struct resource mca_cc6ul_gpios_resources[] = {
 	{
-		.name   = MCA_CC6UL_IRQ_GPIOS_BANK0_NAME,
+		.name   = MCA_IRQ_GPIO_BANK_0_NAME,
 		.start  = MCA_CC6UL_IRQ_GPIO_BANK_0,
 		.end    = MCA_CC6UL_IRQ_GPIO_BANK_0,
 		.flags  = IORESOURCE_IRQ,
