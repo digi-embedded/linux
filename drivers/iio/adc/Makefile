@@ -23,6 +23,7 @@ obj-$(CONFIG_LP8788_ADC) += lp8788_adc.o
 obj-$(CONFIG_MAX1027) += max1027.o
 obj-$(CONFIG_MAX1363) += max1363.o
 obj-$(CONFIG_MCA_CC6UL_ADC) += mca-cc6ul-adc.o mca-common-adc.o
+obj-$(CONFIG_MFD_MCA_IOEXP) += mca-ioexp-adc.o mca-common-adc.o
 obj-$(CONFIG_MCP320X) += mcp320x.o
 obj-$(CONFIG_MCP3422) += mcp3422.o
 obj-$(CONFIG_MEN_Z188_ADC) += men_z188_adc.o

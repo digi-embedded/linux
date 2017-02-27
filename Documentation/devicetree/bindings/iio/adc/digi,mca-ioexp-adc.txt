@@ -1,0 +1,19 @@
+* Digi I/O Expander ADCs device tree bindings
+
+The Digi I/O Expander ADC driver allows to read voltages from the MCA IOs that
+are ADC capable. Check the I/O Expander ADC-capable IOs on the CC6UL Hardware
+Reference Manual.
+
+Required properties:
+- compatible: must be "digi,mca-ioexp-adc".
+
+Optional properties:
+- adc-ch-list: list of I/O Expander IOs to be enabled as ADCs
+- adc-vref: ADC reference voltage in uV.
+
+Example:
+
+	&mca_ioexp_adc {
+		digi,adc-ch-list = <0 4>;
+		digi,adc-vref = <3000000>;
+	};

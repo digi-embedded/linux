@@ -190,3 +190,7 @@ obj-$(CONFIG_MFD_MT6397)	+= mt6397-core.o
 
 mca-cc6ul-objs			:= mca-cc6ul-core.o mca-cc6ul-irq.o mca-cc6ul-i2c.o
 obj-$(CONFIG_MFD_MCA_CC6UL)	+= mca-cc6ul.o
+
+mca-ioexp-objs			:= mca-ioexp-core.o mca-ioexp-irq.o mca-ioexp-i2c.o
+obj-$(CONFIG_MFD_MCA_IOEXP)	+= mca-ioexp.o
+
