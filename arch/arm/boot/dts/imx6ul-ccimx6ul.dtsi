@@ -131,25 +131,35 @@
 			int_3v3: sw1a {
 				regulator-min-microvolt = <700000>;
 				regulator-max-microvolt = <3300000>;
+				regulator-ramp-delay = <6250>;
 				regulator-boot-on;
 				regulator-always-on;
-				regulator-ramp-delay = <6250>;
+				regulator-state-mem {
+					regulator-off-in-suspend;
+				};
 			};
 
 			vdd_arm_soc_in: sw1b {
 				regulator-min-microvolt = <700000>;
 				regulator-max-microvolt = <1475000>;
+				regulator-ramp-delay = <6250>;
 				regulator-boot-on;
 				regulator-always-on;
-				regulator-ramp-delay = <6250>;
+				regulator-state-mem {
+					regulator-on-in-suspend;
+					regulator-suspend-microvolt = <925000>;
+				};
 			};
 
 			ext_3v3: sw2 {
 				regulator-min-microvolt = <2500000>;
 				regulator-max-microvolt = <3300000>;
+				regulator-ramp-delay = <6250>;
 				regulator-always-on;
 				regulator-boot-on;
-				regulator-ramp-delay = <6250>;
+				regulator-state-mem {
+					regulator-off-in-suspend;
+				};
 			};
 
 			vcc_ddr3: sw3 {
@@ -157,6 +167,10 @@
 				regulator-max-microvolt = <1650000>;
 				regulator-always-on;
 				regulator-boot-on;
+				regulator-state-mem {
+					regulator-on-in-suspend;
+					regulator-suspend-microvolt = <1300000>;
+				};
 			};
 
 			swbst_reg: swbst {
@@ -182,6 +196,9 @@
 				regulator-min-microvolt = <3300000>;
 				regulator-max-microvolt = <3300000>;
 				regulator-always-on;
+				regulator-state-mem {
+					regulator-off-in-suspend;
+				};
 			};
 
 			ldo2_ext: vldo2 {
@@ -192,6 +209,11 @@
 			vdda_wlan: vccsd {
 				regulator-min-microvolt = <2850000>;
 				regulator-max-microvolt = <3300000>;
+				regulator-always-on;
+				regulator-boot-on;
+				regulator-state-mem {
+					regulator-off-in-suspend;
+				};
 			};
 
 			vdd_high_in: v33 {
