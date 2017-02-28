@@ -260,8 +260,9 @@
 
 /* SAI2 */
 &sai2 {
-	pinctrl-names = "default";
+	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&pinctrl_sai2>;
+	pinctrl-1 = <&pinctrl_sai2_sleep>;
 	assigned-clocks = <&clks IMX6UL_CLK_SAI2_SEL>,
 			  <&clks IMX6UL_CLK_PLL4_AUDIO_DIV>,
 			  <&clks IMX6UL_CLK_SAI2>;
@@ -481,6 +482,18 @@
 				MX6UL_PAD_JTAG_TDO__SAI2_TX_SYNC	0x17088
 				/* Interrupt */
 				MX6UL_PAD_SNVS_TAMPER7__GPIO5_IO07	0x80000000
+			>;
+		};
+
+		pinctrl_sai2_sleep: sai2grp_sleep {
+			fsl,pins = <
+				MX6UL_PAD_JTAG_TRST_B__GPIO1_IO15	0x3000
+				MX6UL_PAD_JTAG_TCK__GPIO1_IO14		0x3000
+				MX6UL_PAD_JTAG_TMS__SAI2_MCLK		0x3000
+				MX6UL_PAD_JTAG_TMS__GPIO1_IO11		0x3000
+				MX6UL_PAD_JTAG_TDO__GPIO1_IO12		0x3000
+				/* Interrupt */
+				MX6UL_PAD_SNVS_TAMPER7__GPIO5_IO07	0x3000
 			>;
 		};
 
