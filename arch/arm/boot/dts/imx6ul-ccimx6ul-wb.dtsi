@@ -54,10 +54,6 @@
 	status = "okay";
 };
 
-&vdda_wlan {
-	regulator-always-on;
-};
-
 &iomuxc {
 	imx6ul-ccimx6ul {
 		/* This iomux (pinctrl_uart1) does not work for SOM v3 or older */
