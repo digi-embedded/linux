@@ -463,20 +463,37 @@ int mca_cc6ul_resume(struct device *dev)
 				  0);
 }
 
+#define MCA_MAX_PWROFF_TRIES 5
 static void mca_cc6ul_power_off(void)
 {
+	int try = 0;
+	int ret;
+
 	if (!pmca) {
-		printk("ERROR: unable to power off [%s:%d/%s()]!\n",
+		printk(KERN_ERR "ERROR: unable to power off [%s:%d/%s()]!\n",
 		       __FILE__, __LINE__, __func__);
 		return;
 	}
 
-	/* Set power off bit in PWR_CTRL_0 register to shutdown */
-	regmap_update_bits(pmca->regmap, MCA_CC6UL_PWR_CTRL_0,
-			   MCA_CC6UL_PWR_GO_OFF, MCA_CC6UL_PWR_GO_OFF);
+	do {
+		/* Set power off bit in PWR_CTRL_0 register to shutdown */
+		ret = regmap_update_bits(pmca->regmap, MCA_CC6UL_PWR_CTRL_0,
+					 MCA_CC6UL_PWR_GO_OFF,
+					 MCA_CC6UL_PWR_GO_OFF);
+		if (ret)
+			printk(KERN_ERR "ERROR: accesing PWR_CTRL_0 register "
+			       "[%s:%d/%s()]!\n", __FILE__, __LINE__, __func__);
 
-	/* And That's All Folks... */
-	while (1) ;
+		/*
+		 * Even if the regmap update returned with success, retry...
+		 * we are powering off, so there is nothing bad by doing it.
+		 */
+		mdelay(50);
+	} while (++try < MCA_MAX_PWROFF_TRIES);
+
+	/* Print a warning and return, so at least userland can log the issue */
+	printk(KERN_ERR "ERROR: unable to power off [%s:%d/%s()]!\n",
+	       __FILE__, __LINE__, __func__);
 }
 
 #define MCA_MAX_RESET_TRIES 5
