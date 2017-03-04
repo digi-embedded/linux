@@ -479,28 +479,40 @@ static void mca_cc6ul_power_off(void)
 	while (1) ;
 }
 
+#define MCA_MAX_RESET_TRIES 5
 static int mca_cc6ul_restart_handler(struct notifier_block *nb,
 				     unsigned long mode, void *cmd)
 {
 	int ret;
+	int try = 0;
 	struct mca_cc6ul *mca = container_of(nb, struct mca_cc6ul,
 					     restart_handler);
 	const uint8_t unlock_pattern[] = {'C', 'T', 'R', 'U'};
 
-	ret = regmap_bulk_write(mca->regmap, MCA_CC6UL_CTRL_UNLOCK_0,
-				unlock_pattern, sizeof(unlock_pattern));
-	if (ret) {
-		/* Hopefully other registered restart handler can do it... */
-		dev_warn(mca->dev, "failed to unlock CTRL registers (%d)\n",
-			 ret);
-		return NOTIFY_DONE;
-	}
+	do {
+		ret = regmap_bulk_write(mca->regmap, MCA_CC6UL_CTRL_UNLOCK_0,
+					unlock_pattern, sizeof(unlock_pattern));
+		if (ret) {
+			dev_err(mca->dev, "failed to unlock ctrl regs (%d)\n",
+				ret);
+			goto reset_retry;
+		}
 
-	/*
-	 * Set reset bit in CTRL_0 register to reboot. As IRQs are disabled, we
-	 * don't use regmap_update_bits, just write
-	 */
-	regmap_write(pmca->regmap, MCA_CC6UL_CTRL_0, MCA_CC6UL_RESET);
+		ret = regmap_write(pmca->regmap, MCA_CC6UL_CTRL_0,
+				   MCA_CC6UL_RESET);
+		if (ret)
+			dev_err(mca->dev, "failed to reset (%d)\n", ret);
+
+		/*
+		 * The MCA will reset the cpu, so the retry should not happen...
+		 * and if it happens, something went wrong, and retrying is the
+		 * right thing to do.
+		 */
+reset_retry:
+		mdelay(10);
+	} while (++try < MCA_MAX_RESET_TRIES);
+
+	dev_err(mca->dev, "failed to reboot!\n");
 
 	return NOTIFY_DONE;
 }
