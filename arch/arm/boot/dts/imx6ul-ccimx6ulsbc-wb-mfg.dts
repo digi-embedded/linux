@@ -62,6 +62,19 @@
 	status = "okay";
 };
 
+/* Audio chip */
+&max98089 {
+	status = "okay";
+};
+
+&sai2 {
+	status = "okay";
+};
+
+&sound_max98089 {
+	status = "okay";
+};
+
 /* UART3 */
 &uart3 {
 	/* RTS/CTS lines multiplexed with CAN1 */
