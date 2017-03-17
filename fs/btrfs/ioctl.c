@@ -567,6 +567,10 @@ static noinline int create_subvol(struct inode *dir,
 		goto fail;
 	}
 
+	mutex_lock(&new_root->objectid_mutex);
+	new_root->highest_objectid = new_dirid;
+	mutex_unlock(&new_root->objectid_mutex);
+
 	/*
 	 * insert the directory item
 	 */
@@ -1606,6 +1610,9 @@ static noinline int btrfs_ioctl_snap_create_transid(struct file *file,
 	int namelen;
 	int ret = 0;
 
+	if (!S_ISDIR(file_inode(file)->i_mode))
+		return -ENOTDIR;
+
 	ret = mnt_want_write_file(file);
 	if (ret)
 		goto out;
@@ -1635,7 +1642,7 @@ static noinline int btrfs_ioctl_snap_create_transid(struct file *file,
 
 		src_inode = file_inode(src.file);
 		if (src_inode->i_sb != file_inode(file)->i_sb) {
-			btrfs_info(BTRFS_I(src_inode)->root->fs_info,
+			btrfs_info(BTRFS_I(file_inode(file))->root->fs_info,
 				   "Snapshot src from another FS");
 			ret = -EXDEV;
 		} else if (!inode_owner_or_capable(src_inode)) {
@@ -1663,6 +1670,9 @@ static noinline int btrfs_ioctl_snap_create(struct file *file,
 	struct btrfs_ioctl_vol_args *vol_args;
 	int ret;
 
+	if (!S_ISDIR(file_inode(file)->i_mode))
+		return -ENOTDIR;
+
 	vol_args = memdup_user(arg, sizeof(*vol_args));
 	if (IS_ERR(vol_args))
 		return PTR_ERR(vol_args);
@@ -1685,6 +1695,9 @@ static noinline int btrfs_ioctl_snap_create_v2(struct file *file,
 	u64 *ptr = NULL;
 	bool readonly = false;
 	struct btrfs_qgroup_inherit *inherit = NULL;
+
+	if (!S_ISDIR(file_inode(file)->i_mode))
+		return -ENOTDIR;
 
 	vol_args = memdup_user(arg, sizeof(*vol_args));
 	if (IS_ERR(vol_args))
@@ -2313,6 +2326,9 @@ static noinline int btrfs_ioctl_snap_destroy(struct file *file,
 	int namelen;
 	int ret;
 	int err = 0;
+
+	if (!S_ISDIR(dir->i_mode))
+		return -ENOTDIR;
 
 	vol_args = memdup_user(arg, sizeof(*vol_args));
 	if (IS_ERR(vol_args))
@@ -5488,3 +5504,26 @@ long btrfs_ioctl(struct file *file, unsigned int
 
 	return -ENOTTY;
 }
+
+#ifdef CONFIG_COMPAT
+long btrfs_compat_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+{
+	/*
+	 * These all access 32-bit values anyway so no further
+	 * handling is necessary.
+	 */
+	switch (cmd) {
+	case FS_IOC32_GETFLAGS:
+		cmd = FS_IOC_GETFLAGS;
+		break;
+	case FS_IOC32_SETFLAGS:
+		cmd = FS_IOC_SETFLAGS;
+		break;
+	case FS_IOC32_GETVERSION:
+		cmd = FS_IOC_GETVERSION;
+		break;
+	}
+
+	return btrfs_ioctl(file, cmd, (unsigned long) compat_ptr(arg));
+}
+#endif
