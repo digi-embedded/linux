@@ -81,9 +81,9 @@
 &ecspi1 {
 	status = "okay";
 
-	spidev@0 {
-		status = "okay";
-	};
+//	spidev@0 {
+//		status = "okay";
+//	};
 };
 
 &i2c3 {
