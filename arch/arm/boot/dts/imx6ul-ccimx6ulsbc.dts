@@ -196,6 +196,7 @@
 
 &mca_ioexp {
 	status = "okay";
+	restore-config-on-resume;
 };
 
 /* Pin mux configuration */

@@ -109,13 +109,171 @@ static struct attribute_group mca_ioexp_attr_group = {
 	.attrs	= mca_ioexp_sysfs_entries,
 };
 
+static int read_reg_group(struct mca_ioexp *ioexp,
+			  unsigned int start_addr,
+			  unsigned int count,
+			  uint8_t *dest)
+{
+	unsigned int i;
+	unsigned int error;
+
+	if (count == 0 || !dest)
+		return -1;
+
+	for (i = 0; i < count; i++) {
+		const unsigned int reg_addr = start_addr + i;
+		unsigned int value;
+
+		error = regmap_read(ioexp->regmap, reg_addr, &value);
+		if (error) {
+			dev_err(ioexp->dev,
+				"Error reading register %02X (%d)\n",
+				reg_addr, error);
+			return -1;
+		}
+		dest[i] = value;
+	}
+
+	return 0;
+}
+
 int mca_ioexp_suspend(struct device *dev)
 {
+	struct mca_ioexp *ioexp = dev_get_drvdata(dev);
+	int error;
+
+	if (!ioexp->preserved_regs)
+		return 0;
+
+
+	error = read_reg_group(ioexp, MCA_GPIO_DIR_0,
+			       ioexp->preserved_regs->gpio_dir.cnt,
+			       ioexp->preserved_regs->gpio_dir.values);
+	if (error) {
+		dev_err(ioexp->dev,
+			"Failed to preserve MCA_GPIO_DIR registers.\n");
+		goto exit;
+	}
+
+	error = read_reg_group(ioexp, MCA_GPIO_DATA_0,
+			       ioexp->preserved_regs->gpio_data.cnt,
+			       ioexp->preserved_regs->gpio_data.values);
+	if (error) {
+		dev_err(ioexp->dev,
+			"Failed to preserve MCA_GPIO_DATA registers.\n");
+		goto exit;
+	}
+
+	error = read_reg_group(ioexp, MCA_GPIO_IRQ_CFG_0,
+			       ioexp->preserved_regs->irq_cfg.cnt,
+			       ioexp->preserved_regs->irq_cfg.values);
+	if (error) {
+		dev_err(ioexp->dev,
+			"Failed to preserve MCA_GPIO_IRQ_CFG registers.\n");
+		goto exit;
+	}
+
+	error = read_reg_group(ioexp, MCA_IOEXP_IRQ_MASK_0,
+			       ioexp->preserved_regs->irq_mask.cnt,
+			       ioexp->preserved_regs->irq_mask.values);
+	if (error) {
+		dev_err(ioexp->dev,
+			"Failed to preserve MCA_IOEXP_IRQ_MASK registers.\n");
+		goto exit;
+	}
+
+	error = read_reg_group(ioexp, MCA_REG_ADC_CFG_0,
+			       ioexp->preserved_regs->adc_cfg.cnt,
+			       ioexp->preserved_regs->adc_cfg.values);
+	if (error) {
+		dev_err(ioexp->dev,
+			"Failed to preserve MCA_REG_ADC_CFG registers.\n");
+		goto exit;
+	}
+
+	disable_irq(ioexp->chip_irq);
 	return 0;
+
+exit:
+	if (error)
+		dev_err(ioexp->dev, "Configuration will be lost on resume. The IOs in use might need to be reconfigured in order to work properly.\n");
+
+	disable_irq(ioexp->chip_irq);
+
+	/* Do not return errors or the device will not go to sleep. */
+	return 0;
+}
+
+static int write_reg_group(struct mca_ioexp *ioexp,
+			   unsigned int start_addr,
+			   unsigned int count,
+			   uint8_t *values)
+{
+	unsigned int i;
+	unsigned int error;
+
+	if (count == 0 || !values)
+		return -1;
+
+	for (i = 0; i < count; i++) {
+		const unsigned int reg_addr = start_addr + i;
+		const unsigned int value = values[i];
+
+		error = regmap_write(ioexp->regmap, reg_addr, value);
+		if (error) {
+			dev_err(ioexp->dev,
+				"Error writing register %02X (%d)\n",
+				reg_addr, error);
+		}
+	}
+
+	return error;
 }
 
 int mca_ioexp_resume(struct device *dev)
 {
+	struct mca_ioexp *ioexp = dev_get_drvdata(dev);
+	int error;
+
+	if (!ioexp->preserved_regs)
+		return 0;
+
+	error = write_reg_group(ioexp, MCA_GPIO_DIR_0,
+				ioexp->preserved_regs->gpio_dir.cnt,
+				ioexp->preserved_regs->gpio_dir.values);
+	if (error)
+		dev_err(ioexp->dev,
+			"Failed to restore MCA_GPIO_DIR registers.\n");
+
+	error = write_reg_group(ioexp, MCA_GPIO_DATA_0,
+				ioexp->preserved_regs->gpio_data.cnt,
+				ioexp->preserved_regs->gpio_data.values);
+	if (error)
+		dev_err(ioexp->dev,
+			"Failed to restore MCA_GPIO_DATA registers.\n");
+
+	error = write_reg_group(ioexp, MCA_GPIO_IRQ_CFG_0,
+				ioexp->preserved_regs->irq_cfg.cnt,
+				ioexp->preserved_regs->irq_cfg.values);
+	if (error)
+		dev_err(ioexp->dev,
+			"Failed to restore MCA_GPIO_IRQ_CFG registers.\n");
+
+	error = write_reg_group(ioexp, MCA_IOEXP_IRQ_MASK_0,
+				ioexp->preserved_regs->irq_mask.cnt,
+				ioexp->preserved_regs->irq_mask.values);
+	if (error)
+		dev_err(ioexp->dev,
+			"Failed to restore MCA_IOEXP_IRQ_MASK registers.\n");
+
+	error = write_reg_group(ioexp, MCA_REG_ADC_CFG_0,
+				ioexp->preserved_regs->adc_cfg.cnt,
+				ioexp->preserved_regs->adc_cfg.values);
+	if (error)
+		dev_err(ioexp->dev,
+			"Failed to restore MCA_REG_ADC_CFG registers.\n");
+
+	enable_irq(ioexp->chip_irq);
 	return 0;
 }
 
@@ -160,6 +318,49 @@ int mca_ioexp_device_init(struct mca_ioexp *ioexp, u32 irq)
 	ioexp->chip_irq = irq;
 	ioexp->gpio_base = -1;
 
+	if (of_find_property(ioexp->dev->of_node, "restore-config-on-resume",
+			     NULL)) {
+		unsigned int gpio_num;
+
+		ioexp->preserved_regs = kzalloc(sizeof *ioexp->preserved_regs,
+						GFP_KERNEL | GFP_DMA);
+		if (!ioexp->preserved_regs) {
+			dev_err(ioexp->dev,
+				"Failed to allocate memory for preserved registers.\n");
+			return -ENOMEM;
+		}
+
+		ret = regmap_read(ioexp->regmap, MCA_GPIO_NUM, &gpio_num);
+		if (ret) {
+			dev_err(ioexp->dev,
+				"Error reading MCA_GPIO_NUM (%d)\n", ret);
+			return ret;
+		}
+
+		ioexp->preserved_regs->gpio_dir.cnt = (gpio_num + 7) / 8;
+		ioexp->preserved_regs->gpio_dir.values =
+				kzalloc(ioexp->preserved_regs->gpio_dir.cnt,
+					GFP_KERNEL | GFP_DMA);
+		ioexp->preserved_regs->gpio_data.cnt = (gpio_num + 7) / 8;
+		ioexp->preserved_regs->gpio_data.values =
+				kzalloc(ioexp->preserved_regs->gpio_data.cnt,
+					GFP_KERNEL | GFP_DMA);
+		ioexp->preserved_regs->irq_cfg.cnt = gpio_num;
+		ioexp->preserved_regs->irq_cfg.values =
+				kzalloc(ioexp->preserved_regs->irq_cfg.cnt,
+					GFP_KERNEL | GFP_DMA);
+		ioexp->preserved_regs->irq_mask.cnt = 4;
+		ioexp->preserved_regs->irq_mask.values =
+				kzalloc(ioexp->preserved_regs->irq_mask.cnt,
+					GFP_KERNEL | GFP_DMA);
+		ioexp->preserved_regs->adc_cfg.cnt = gpio_num;
+		ioexp->preserved_regs->adc_cfg.values =
+				kzalloc(ioexp->preserved_regs->adc_cfg.cnt,
+					GFP_KERNEL | GFP_DMA);
+
+	} else {
+		ioexp->preserved_regs = NULL;
+	}
 	ret = mca_ioexp_irq_init(ioexp);
 	if (ret) {
 		dev_err(ioexp->dev, "Cannot initialize interrupts (%d)\n", ret);
@@ -169,7 +370,7 @@ int mca_ioexp_device_init(struct mca_ioexp *ioexp, u32 irq)
 	ret = mfd_add_devices(ioexp->dev, -1, mca_ioexp_devs,
 			      ARRAY_SIZE(mca_ioexp_devs), NULL, ioexp->irq_base,
 			      regmap_irq_get_domain(ioexp->regmap_irq));
-	
+
 	if (ret) {
 		dev_err(ioexp->dev, "Cannot add MFD cells (%d)\n", ret);
 		goto out_irq;
@@ -196,6 +397,17 @@ void mca_ioexp_device_exit(struct mca_ioexp *ioexp)
 	sysfs_remove_group(&ioexp->dev->kobj, &mca_ioexp_attr_group);
 	mfd_remove_devices(ioexp->dev);
 	mca_ioexp_irq_exit(ioexp);
+
+	if (!ioexp->preserved_regs) {
+		kfree(ioexp->preserved_regs->gpio_dir.values);
+		kfree(ioexp->preserved_regs->gpio_data.values);
+		kfree(ioexp->preserved_regs->irq_cfg.values);
+		kfree(ioexp->preserved_regs->irq_mask.values);
+		kfree(ioexp->preserved_regs->adc_cfg.values);
+		kfree(ioexp->preserved_regs);
+
+		ioexp->preserved_regs = NULL;
+	}
 }
 
 MODULE_AUTHOR("Digi International Inc");

@@ -26,7 +26,7 @@ static const struct regmap_range mca_ioexp_readable_ranges[] = {
 static const struct regmap_range mca_ioexp_writeable_ranges[] = {
 	regmap_reg_range(MCA_IOEXP_IRQ_STATUS_0, MCA_IOEXP_IRQ_MASK_3),
 	regmap_reg_range(MCA_GPIO_DIR_0, MCA_GPIO_IRQ_CFG_63),
-	regmap_reg_range(MCA_REG_ADC_CFG_0, MCA_REG_ADC_CFG_7),
+	regmap_reg_range(MCA_REG_ADC_CFG_0, MCA_REG_ADC_CFG_63),
 };
 
 static const struct regmap_range mca_ioexp_volatile_ranges[] = {
@@ -52,7 +52,7 @@ static const struct regmap_range mca_ioexp_volatile_ranges[] = {
 	regmap_reg_range(MCA_GPIO_NUM, MCA_GPIO_DIR_7),
 	regmap_reg_range(MCA_GPIO_IRQ_CFG_0, MCA_GPIO_IRQ_CFG_63),
 	regmap_reg_range(MCA_REG_ADC_NUM_CH, MCA_REG_ADC_NUM_BYTES),
-	regmap_reg_range(MCA_REG_ADC_CFG_0, MCA_REG_ADC_CFG_7),
+	regmap_reg_range(MCA_REG_ADC_CFG_0, MCA_REG_ADC_CFG_63),
 };
 
 static const struct regmap_access_table mca_ioexp_readable_table = {

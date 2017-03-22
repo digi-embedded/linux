@@ -48,6 +48,33 @@ struct mca_ioexp {
 	int chip_irq;
 	u32 irq_base;
 	int gpio_base;
+
+	struct {
+		struct {
+			uint8_t *values;
+			uint8_t cnt;
+		} gpio_dir;
+
+		struct {
+			uint8_t *values;
+			uint8_t cnt;
+		} gpio_data;
+
+		struct {
+			uint8_t *values;
+			uint8_t cnt;
+		} irq_cfg;
+
+		struct {
+			uint8_t *values;
+			uint8_t cnt;
+		} irq_mask;
+
+		struct {
+			uint8_t *values;
+			uint8_t cnt;
+		} adc_cfg;
+	} *preserved_regs;
 };
 
 int mca_ioexp_device_init(struct mca_ioexp *ioexp, u32 irq);

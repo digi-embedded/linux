@@ -86,6 +86,8 @@
 #define MCA_REG_ADC_CFG_5	0x0409
 #define MCA_REG_ADC_CFG_6	0x040a
 #define MCA_REG_ADC_CFG_7	0x040b
+/* ... */
+#define MCA_REG_ADC_CFG_63	0x0443
 
 #define MCA_REG_ADC_TIMER_L_0	0x0424
 #define MCA_REG_ADC_TIMER_H_0	0x0425

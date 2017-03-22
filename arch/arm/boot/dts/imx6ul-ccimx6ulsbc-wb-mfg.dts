@@ -112,6 +112,7 @@
 
 &mca_ioexp {
 	status = "okay";
+	restore-config-on-resume;
 };
 
 /* Configure all unused pins as GPIO */

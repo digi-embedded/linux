@@ -181,6 +181,7 @@
 
 &mca_ioexp {
 	status = "okay";
+	restore-config-on-resume;
 };
 
 /* USDHC2 (eMMC, conflicts with microSD) */
