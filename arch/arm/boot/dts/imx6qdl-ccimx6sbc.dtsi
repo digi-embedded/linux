@@ -14,7 +14,7 @@
 		compatible = "regulator-fixed";
 		gpio = <&gpio_extender 7 0>;
 		regulator-name = "gpio-ext-reg";
-		regulator-boot-on;
+		regulator-always-on;
 		/* Leave enabled for MIPI camera suspend  to work */
 		/* regulator-always-on; */
 		enable-active-high;
