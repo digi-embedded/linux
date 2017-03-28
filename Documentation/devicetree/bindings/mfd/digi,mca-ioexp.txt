@@ -19,6 +19,13 @@ Required properties:
 - interrupts : IRQ line information.
 - interrupt-controller
 
+Optional properties:
+
+- restore-config-on-resume : Read configuration registers before going to sleep
+  and write them back on resume, allowing the I/O Expander to be powered off.
+  This also disables the IRQ of this device which means that it will not be
+  available as a wake-up source.
+
 Sub-nodes:
 
 - adc : This node defines settings for the ADC channels associated with the
@@ -43,11 +50,13 @@ Example:
 		#interrupt-cells = <2>;
 		pinctrl-names = "default";
 
+		restore-config-on-resume;
+
 		mca_ioexp_gpio: gpio {
 			compatible = "digi,mca-ioexp-gpio";
 			gpio-controller;
 			#gpio-cells = <2>;
-			
+
 			interrupt-parent = <&mca_ioexp>;
 			interrupt-controller;
 			#interrupt-cells = <2>;
