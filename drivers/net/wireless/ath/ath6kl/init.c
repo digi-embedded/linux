@@ -766,17 +766,17 @@ static int ath6kl_fetch_board_file(struct ath6kl *ar)
 	if (WARN_ON(ar->hw.fw_board == NULL))
 		return -EINVAL;
 
+	if (check_device_tree(ar)) {
+		/* got board file from device tree */
+		return 0;
+	}
+
 	filename = ar->hw.fw_board;
 
 	ret = ath6kl_get_fw(ar, filename, &ar->fw_board,
 			    &ar->fw_board_len);
 	if (ret == 0) {
 		/* managed to get proper board file */
-		return 0;
-	}
-
-	if (check_device_tree(ar)) {
-		/* got board file from device tree */
 		return 0;
 	}
 
