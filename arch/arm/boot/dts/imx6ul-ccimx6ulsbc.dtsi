@@ -218,10 +218,8 @@
 &lcdif {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lcdif_dat0_17
-		     &pinctrl_lcdif_clken
-		     &pinctrl_lcdif_hvsync>;
-	lcd-supply = <&ldo4_ext>;	/* BU90T82 LVDS bridge power */
-	display = <&f10a0102>;
+		     &pinctrl_lcdif_clken>;
+	display = <&f07a0102>;
 	status = "disabled";
 
 	f07a0102: display@0 {
