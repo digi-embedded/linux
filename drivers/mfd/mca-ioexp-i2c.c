@@ -132,6 +132,17 @@ static int mca_ioexp_i2c_remove(struct i2c_client *i2c)
 	return 0;
 }
 
+static void mca_ioexp_i2c_shutdown(struct i2c_client *i2c)
+{
+	struct mca_ioexp *ioexp = i2c_get_clientdata(i2c);
+
+	/*
+	 * Disable the IRQ so that the I/O Expander does not wake-up the MCA
+	 * when powered off.
+	 */
+	disable_irq(ioexp->chip_irq);
+}
+
 #ifdef CONFIG_PM
 static int mca_ioexp_i2c_suspend(struct device *dev)
 {
@@ -164,6 +175,7 @@ static struct i2c_driver mca_ioexp_i2c_driver = {
 	},
 	.probe    = mca_ioexp_i2c_probe,
 	.remove   = mca_ioexp_i2c_remove,
+	.shutdown = mca_ioexp_i2c_shutdown,
 	.id_table = mca_ioexp_i2c_id,
 };
 
