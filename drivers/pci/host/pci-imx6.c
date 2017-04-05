@@ -1124,7 +1124,7 @@ static int __init imx6_pcie_probe(struct platform_device *pdev)
 	/* Fetch supply */
 	imx6_pcie->regulator = devm_regulator_get(&pdev->dev, "vin");
 	if (!IS_ERR(imx6_pcie->regulator)) {
-		regulator_set_voltage(imx6_pcie->regulator, 3300000, 3300000);
+		regulator_set_voltage(imx6_pcie->regulator, 1500000, 1500000);
 		ret = regulator_enable(imx6_pcie->regulator);
 		if (ret) {
 			dev_err(&pdev->dev, "set regulator voltage failed\n");
