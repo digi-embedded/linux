@@ -139,7 +139,7 @@ static int da9063_rtc_read_time(struct device *dev, struct rtc_time *tm)
 static int da9063_rtc_set_time(struct device *dev, struct rtc_time *tm)
 {
 	struct da9063_rtc *rtc = dev_get_drvdata(dev);
-	u8 data[RTC_DATA_LEN];
+	u8 data[RTC_DATA_LEN] = {0};
 	int ret;
 
 	da9063_tm_to_data(tm, data);
@@ -183,7 +183,7 @@ static int da9063_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 static int da9063_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 {
 	struct da9063_rtc *rtc = dev_get_drvdata(dev);
-	u8 data[RTC_DATA_LEN];
+	u8 data[RTC_DATA_LEN] = {0};
 	int ret;
 
 	da9063_tm_to_data(&alrm->time, data);
