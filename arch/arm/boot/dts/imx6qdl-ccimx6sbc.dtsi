@@ -314,6 +314,7 @@
 		pinctrl-0 = <&pinctrl_mipi>;
 		clocks = <&clks 201>;
 		clock-names = "csi_mclk";
+		pwn-gpios = <&gpio7 6 GPIO_ACTIVE_LOW>;
 		digi,alt-pwn-gpios = <&gpio5 0 GPIO_ACTIVE_LOW
 				      &gpio3 15 GPIO_ACTIVE_LOW>;
 		mclk = <24000000>;

@@ -97,3 +97,7 @@
 &usdhc2 {
 	status = "okay";
 };
+
+&v4l2_out {
+        status = "okay";
+};
