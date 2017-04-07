@@ -86,9 +86,9 @@
 };
 
 /* CAN2 (multiplexed with UART2 RTS/CTS) */
-&flexcan2 {
-	status = "okay";
-};
+// &flexcan2 {
+// 	status = "okay";
+// };
 
 /* Fusion touch */
 &fusion_touch {
@@ -146,8 +146,8 @@
 /* UART2 */
 &uart2 {
 	/* RTS/CTS lines multiplexed with CAN2 */
-	// pinctrl-0 = <&pinctrl_uart2_4wires>;
-	// fsl,uart-has-rtscts;
+	pinctrl-0 = <&pinctrl_uart2_4wires>;
+	fsl,uart-has-rtscts;
 	status = "okay";
 };
 
