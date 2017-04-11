@@ -95,9 +95,11 @@
 		gpu: gpu@00130000 {
 			compatible = "fsl,imx6q-gpu";
 			reg = <0x00130000 0x4000>, <0x00134000 0x4000>,
-			      <0x02204000 0x4000>, <0x0 0x0>;
+			      <0x02204000 0x4000>, <0x0 0x0>,
+			      <0x0 0x8000000>;
 			reg-names = "iobase_3d", "iobase_2d",
-				    "iobase_vg", "phys_baseaddr";
+				    "iobase_vg", "phys_baseaddr",
+				    "contiguous_mem";
 			interrupts = <0 9 IRQ_TYPE_LEVEL_HIGH>,
 				     <0 10 IRQ_TYPE_LEVEL_HIGH>,
 				     <0 11 IRQ_TYPE_LEVEL_HIGH>;

@@ -933,9 +933,9 @@
 			gpu: gpu@02200000 {
 				compatible = "fsl,imx6sl-gpu", "fsl,imx6q-gpu";
 				reg = <0x02200000 0x4000>, <0x02204000 0x4000>,
-					  <0x80000000 0x0>;
+					  <0x80000000 0x0>, <0x0 0x8000000>;
 				reg-names = "iobase_2d", "iobase_vg",
-						"phys_baseaddr";
+						"phys_baseaddr", "contiguous_mem";
 				interrupts = <GIC_SPI 10 IRQ_TYPE_LEVEL_HIGH>, <GIC_SPI 11 IRQ_TYPE_LEVEL_HIGH>;
 				interrupt-names = "irq_2d", "irq_vg";
 				clocks = <&clks IMX6SL_CLK_MMDC_ROOT>,
