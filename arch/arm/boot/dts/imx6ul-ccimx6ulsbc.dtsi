@@ -59,6 +59,9 @@
 		status = "disabled";
 	};
 
+	xbee {
+		digi,reset-gpio = <&mca_ioexp_gpio 7 GPIO_ACTIVE_HIGH>;
+	};
 };
 
 &csi {
