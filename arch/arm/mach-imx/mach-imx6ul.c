@@ -154,6 +154,34 @@ static void __init imx6ul_init_irq(void)
 	irqchip_init();
 }
 
+static void __init imx6ul_xbee_init(void)
+{
+	struct device_node *np;
+	int reset_gpio;
+	enum of_gpio_flags flags;
+
+	np = of_find_node_by_path("/xbee");
+	if (!np)
+		return;
+
+	/* Read the XBee reset gpio */
+	reset_gpio = of_get_named_gpio_flags(np, "digi,reset-gpio", 0, &flags);
+	if (gpio_is_valid(reset_gpio)) {
+		if (!gpio_request_one(reset_gpio, GPIOF_DIR_OUT, "xbee-reset")) {
+			int assert_reset = (flags & OF_GPIO_ACTIVE_LOW);
+
+			gpio_set_value_cansleep(reset_gpio, assert_reset);
+			mdelay(1);
+			gpio_set_value_cansleep(reset_gpio, !assert_reset);
+			gpio_free(reset_gpio);
+		} else {
+			pr_warn("failed to get xbee-reset gpio\n");
+		}
+	}
+
+	of_node_put(np);
+}
+
 static void __init imx6ul_init_late(void)
 {
 	if (IS_ENABLED(CONFIG_ARM_IMX6Q_CPUFREQ)) {
@@ -162,6 +190,7 @@ static void __init imx6ul_init_late(void)
 	}
 
 	imx6ul_cpuidle_init();
+	imx6ul_xbee_init();
 }
 
 static void __init imx6ul_map_io(void)

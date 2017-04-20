@@ -1,0 +1,14 @@
+XBEE
+
+Required properties: None.
+
+Optional properties:
+
+  - digi,reset-gpio: GPIO used to reset the XBee.
+
+Example:
+
+	xbee {
+		digi,reset-gpio = <&mca_ioexp_gpio 7 GPIO_ACTIVE_HIGH>;
+	};
+
