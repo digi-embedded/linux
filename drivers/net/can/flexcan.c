@@ -345,14 +345,12 @@ static inline void flexcan_exit_stop_mode(struct flexcan_priv *priv)
 
 static inline int flexcan_transceiver_enable(const struct flexcan_priv *priv)
 {
-	if (priv->pdata){
-		if(gpio_is_valid(priv->stby_gpio))
-			gpio_set_value_cansleep(priv->stby_gpio, 0);
-	} else {
-		if (priv->pdata && priv->pdata->transceiver_switch) {
-			priv->pdata->transceiver_switch(1);
-			return 0;
-		}
+	if (gpio_is_valid(priv->stby_gpio))
+		gpio_set_value_cansleep(priv->stby_gpio, 0);
+
+	if (priv->pdata && priv->pdata->transceiver_switch) {
+		priv->pdata->transceiver_switch(1);
+		return 0;
 	}
 
 	if (!priv->reg_xceiver)
@@ -363,14 +361,12 @@ static inline int flexcan_transceiver_enable(const struct flexcan_priv *priv)
 
 static inline int flexcan_transceiver_disable(const struct flexcan_priv *priv)
 {
-	if (priv->pdata){
-		if(gpio_is_valid(priv->stby_gpio))
-			gpio_set_value_cansleep(priv->stby_gpio, 1);
-	} else {
-		if (priv->pdata && priv->pdata->transceiver_switch) {
-			priv->pdata->transceiver_switch(0);
-			return 0;
-		}
+	if (gpio_is_valid(priv->stby_gpio))
+		gpio_set_value_cansleep(priv->stby_gpio, 1);
+
+	if (priv->pdata && priv->pdata->transceiver_switch) {
+		priv->pdata->transceiver_switch(0);
+		return 0;
 	}
 
 	if (!priv->reg_xceiver)
