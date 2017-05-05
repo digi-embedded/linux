@@ -204,7 +204,7 @@
 			compatible = "digi,mca-ioexp-gpio";
 			gpio-controller;
 			#gpio-cells = <2>;
-			
+
 			interrupt-parent = <&mca_ioexp>;
 			interrupt-controller;
 			#interrupt-cells = <2>;
@@ -467,7 +467,7 @@
 
 		pinctrl_fusion_touch: fusiongrp{
 			fsl,pins = <
-				MX6UL_PAD_SNVS_TAMPER2__GPIO5_IO02	0x80000000
+				MX6UL_PAD_SNVS_TAMPER2__GPIO5_IO02	0x3000
 			>;
 		};
 
