@@ -38,7 +38,6 @@
 struct mca_adc {
 	struct device *dev;
 	struct regmap *regmap;
-	u8 num_adcs;
 	u32 vref;
 };
 

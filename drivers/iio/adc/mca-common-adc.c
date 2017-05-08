@@ -80,6 +80,7 @@ int mca_adc_probe(struct platform_device *pdev, struct device *mca_dev,
 	struct device_node *np;
 	struct iio_chan_spec *chan;
 	u8 adc_ch_list[MCA_MAX_IOS];
+	u8 num_adcs = 0;
 	struct property *prop;
 	const __be32 *cur;
 	u32 ch, cfg, vref;
@@ -94,7 +95,6 @@ int mca_adc_probe(struct platform_device *pdev, struct device *mca_dev,
 		return -ENOMEM;
 	}
 	mca_adc = iio_priv(iio);
-	mca_adc->num_adcs = 0;
 	mca_adc->regmap = regmap;
 	mca_adc->dev = mca_dev;
 
@@ -166,12 +166,12 @@ int mca_adc_probe(struct platform_device *pdev, struct device *mca_dev,
 				goto error_dev_free;
 			}
 
-			adc_ch_list[mca_adc->num_adcs] = (u8)ch;
-			mca_adc->num_adcs++;
+			adc_ch_list[num_adcs] = (u8)ch;
+			num_adcs++;
 		}
 	}
 
-	if (mca_adc->num_adcs == 0)
+	if (num_adcs == 0)
 		goto error_dev_free;
 
 	iio->dev.parent = &pdev->dev;
@@ -179,14 +179,14 @@ int mca_adc_probe(struct platform_device *pdev, struct device *mca_dev,
 	iio->modes = INDIO_DIRECT_MODE;
 	iio->info = &mca_adc_info;
 	iio->channels = devm_kzalloc(&pdev->dev,
-				     mca_adc->num_adcs * sizeof(struct iio_chan_spec),
+				     num_adcs * sizeof(struct iio_chan_spec),
 				     GFP_KERNEL);
 	if (!iio->channels)
 		goto error_dev_free;
 
 	/* Initialize the ADC channels */
 	for (iio->num_channels = 0, chan = (struct iio_chan_spec *)iio->channels;
-	     iio->num_channels < mca_adc->num_adcs;
+	     iio->num_channels < num_adcs;
 	     iio->num_channels++, chan++) {
 		chan->type = IIO_VOLTAGE;
 		chan->indexed = 1;
@@ -214,11 +214,11 @@ int mca_adc_probe(struct platform_device *pdev, struct device *mca_dev,
 error_free_ch:
 	devm_kfree(&pdev->dev, (void *)iio->channels);
 
-	error_dev_free:
-	while (mca_adc->num_adcs && gpio_base >= 0) {
+error_dev_free:
+	while (num_adcs && gpio_base >= 0) {
 		devm_gpio_free(&pdev->dev,
-			       gpio_base + adc_ch_list[mca_adc->num_adcs - 1]);
-		mca_adc->num_adcs--;
+			       gpio_base + adc_ch_list[num_adcs - 1]);
+		num_adcs--;
 	}
 	devm_iio_device_free(&pdev->dev, iio);
 
