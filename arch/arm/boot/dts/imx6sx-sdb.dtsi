@@ -203,6 +203,7 @@
 			"IN3R", "AMIC";
 		mux-int-port = <2>;
 		mux-ext-port = <6>;
+		codec-master;
 		hp-det-gpios = <&gpio1 17 1>;
 	};
 
@@ -597,6 +598,12 @@
 	status = "okay";
 };
 
+&pwm4 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pwm4>;
+	status = "okay";
+};
+
 &pxp {
         status = "okay";
 };
@@ -896,6 +903,12 @@
 		pinctrl_pwm3: pwm3grp-1 {
 			fsl,pins = <
 				MX6SX_PAD_SD1_DATA2__PWM3_OUT 0x110b0
+			>;
+		};
+
+		pinctrl_pwm4: pwm4grp-1 {
+			fsl,pins = <
+				MX6SX_PAD_SD1_DATA1__PWM4_OUT 0x110b0
 			>;
 		};
 

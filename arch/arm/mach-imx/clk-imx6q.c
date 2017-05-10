@@ -150,6 +150,10 @@ static unsigned int share_count_prg1;
 #define CCSR_PLL3_SW_CLK_SEL	BIT(0)
 #define CBCMR_PRE_PERIPH_CLK_SEL_MASK	0xC0000
 
+#define OCOTP_CFG3			0x440
+#define OCOTP_CFG3_SPEED_SHIFT		16
+#define OCOTP_CFG3_SPEED_1P2GHZ		0x3
+
 static int ldb_di_sel_by_clock_id(int clock_id)
 {
 	switch (clock_id) {
@@ -347,6 +351,7 @@ static void __init imx6q_clocks_init(struct device_node *ccm_node)
 	struct device_node *np;
 	void __iomem *base;
 	int i;
+	u32 val;
 
 	clk[IMX6QDL_CLK_DUMMY] = imx_clk_fixed("dummy", 0);
 	clk[IMX6QDL_CLK_CKIL] = imx_obtain_fixed_clock("ckil", 0);
@@ -864,8 +869,21 @@ static void __init imx6q_clocks_init(struct device_node *ccm_node)
 	imx_clk_set_parent(clk[IMX6QDL_CLK_SPDIF_SEL], clk[IMX6QDL_CLK_PLL3_PFD3_454M]);
 
 	/* All existing boards with PCIe use LVDS1 */
-	if (IS_ENABLED(CONFIG_PCI_IMX6))
+	if (IS_ENABLED(CONFIG_PCI_IMX6)) {
 		imx_clk_set_parent(clk[IMX6QDL_CLK_LVDS1_SEL], clk[IMX6QDL_CLK_SATA_REF_100M]);
+		np = of_find_compatible_node(NULL, NULL, "snps,dw-pcie");
+		 /* external oscillator is used or not. */
+		if (of_property_read_u32(np, "ext_osc", &val) < 0)
+			val = 0;
+		/*
+		 * imx6qp sabresd revb board has the external osc used by pcie
+		 * - pll6 should be set bypass mode later in driver.
+		 * - lvds_clk1 should be selected as pll6 bypass src, set here.
+		 */
+		if (cpu_is_imx6q() && imx_get_soc_revision() == IMX_CHIP_REVISION_2_0
+				&& (val == 1))
+			imx_clk_set_parent(clk[IMX6QDL_PLL6_BYPASS_SRC], clk[IMX6QDL_CLK_LVDS1_IN]);
+	}
 
 	/*
 	 * Enable clocks only after both parent and rate are all initialized
@@ -899,5 +917,34 @@ static void __init imx6q_clocks_init(struct device_node *ccm_node)
 
 	imx6q_set_lpm(WAIT_CLOCKED);
 
+	/*
+	 * for i.MX6QP with speeding grading set to 1.2GHz,
+	 * VPU should run at 396MHz.
+	 */
+	if (cpu_is_imx6q() && imx_get_soc_revision() == IMX_CHIP_REVISION_2_0) {
+		np = of_find_compatible_node(NULL, NULL, "fsl,imx6q-ocotp");
+		WARN_ON(!np);
+
+		base = of_iomap(np, 0);
+		WARN_ON(!base);
+
+		/*
+		 * SPEED_GRADING[1:0] defines the max speed of ARM:
+		 * 2b'11: 1200000000Hz;
+		 * 2b'10: 996000000Hz;
+		 * 2b'01: 852000000Hz; -- i.MX6Q Only, exclusive with 996MHz.
+		 * 2b'00: 792000000Hz;
+		 * We need to set the max speed of ARM according to fuse map.
+		 */
+		val = readl_relaxed(base + OCOTP_CFG3);
+		val >>= OCOTP_CFG3_SPEED_SHIFT;
+		val &= 0x3;
+		if (val == OCOTP_CFG3_SPEED_1P2GHZ) {
+			imx_clk_set_parent(clk[IMX6QDL_CLK_VPU_AXI_SEL], clk[IMX6QDL_CLK_PLL2_PFD2_396M]);
+			imx_clk_set_rate(clk[IMX6QDL_CLK_VPU_AXI_PODF], 396000000);
+			pr_info("VPU frequency set to 396MHz!\n");
+		}
+		iounmap(base);
+	}
 }
 CLK_OF_DECLARE(imx6q, "fsl,imx6q-ccm", imx6q_clocks_init);

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright (C) 2015-2016 Freescale Semiconductor, Inc. All Rights Reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,39 +24,17 @@
 .globl mx6q_lpddr2_freq_change_start
 .globl mx6q_lpddr2_freq_change_end
 
-	.macro	switch_to_400MHz
-
-	/* check if periph_clk_sel is already set. */
-	ldr	r9, [r2, #CCM_CBCDR]
-	and	r9, r9, #(1 << 25)
-	cmp	r9, #(1 << 25)
-	beq	set_ahb_podf_before_switch1
-
-	/* change periph_clk to be sourced from pll3_clk. */
-	ldr	r9, [r2, #CCM_CBCMR]
-	bic	r9, r9, #(3 << 12)
-	str	r9, [r2, #CCM_CBCMR]
-
-	ldr	r9, [r2, #CCM_CBCDR]
-	bic	r9, r9, #(0x38 << 24)
-	str	r9, [r2, #CCM_CBCDR]
-
-	/* now switch periph_clk to pll3_main_clk. */
-	ldr	r9, [r2, #CCM_CBCDR]
-	orr	r9, r9, #(1 << 25)
-	str	r9, [r2, #CCM_CBCDR]
-
-periph_clk_switch5:
+	.macro	wait_for_ccm_handshake
+	/* wait for div update */
+1:
 	ldr	r9, [r2, #CCM_CDHIPR]
 	cmp	r9, #0
-	bne	periph_clk_switch5
+	bne	1b
 
-	b	switch_pre_periph_clk_400
+	.endm
 
-set_ahb_podf_before_switch1:
-	/*
-	 * set the MMDC_DIV=1, AXI_DIV = 2, AHB_DIV=4,
-	 */
+	.macro	switch_to_400MHz
+	/* set the MMDC_DIV=1, AXI_DIV=2, AHB_DIV=3 */
 	ldr	r9, [r2, #CCM_CBCDR]
 	ldr	r6, =0x3f1f00
 	bic	r9, r9, r6
@@ -64,94 +42,50 @@ set_ahb_podf_before_switch1:
 	orr	r9, r9, #(1 << 16)
 	str	r9, [r2, #CCM_CBCDR]
 
-wait_div_update400_1:
-	ldr	r9, [r2, #CCM_CDHIPR]
-	cmp	r9, #0
-	bne	wait_div_update400_1
+	wait_for_ccm_handshake
 
-switch_pre_periph_clk_400:
-
-	/* now switch pre_periph_clk to PFD_400MHz. */
-	ldr	r9, [r2, #CCM_CBCMR]
-	bic	r9, r9, #(0xc << 16)
-	orr	r9, r9, #(0x4 << 16)
-	str	r9, [r2, #CCM_CBCMR]
+	/* check periph_clk_sel */
+	ldr	r9, [r2, #CCM_CBCDR]
+	and	r9, r9, #(1 << 25)
+	cmp	r9, #(1 << 25)
+	bne	skip_periph_clk_switch_400m
 
 	/* now switch periph_clk back. */
 	ldr	r9, [r2, #CCM_CBCDR]
 	bic	r9, r9, #(1 << 25)
 	str	r9, [r2, #CCM_CBCDR]
 
-periph_clk_switch6:
-	ldr	r9, [r2, #CCM_CDHIPR]
-	cmp	r9, #0
-	bne	periph_clk_switch6
+	wait_for_ccm_handshake
+
+skip_periph_clk_switch_400m:
 
 	.endm
 
 	.macro	switch_to_100MHz
+	/* set the MMDC_DIV=4, AXI_DIV=8, AHB_DIV=8 */
+	ldr	r9, [r2, #CCM_CBCDR]
+	ldr	r6, =0x3f1f00
+	bic	r9, r9, r6
+	orr	r9, r9, #(0x1F << 16)
+	orr	r9, r9, #(0x1D << 8)
+	str	r9, [r2, #CCM_CBCDR]
+
+	wait_for_ccm_handshake
+
 	/* check if periph_clk_sel is already set. */
 	ldr	r9, [r2, #CCM_CBCDR]
 	and	r9, r9, #(1 << 25)
 	cmp	r9, #(1 << 25)
-	beq	switch_pre_periph_clk_100
-	/*
-	 * set the periph_clk to be sourced from PLL2_PFD_200M
-	 * change periph_clk to be sourced from pll3_clk.
-	 * ensure PLL3 is the source and set the divider to 1.
-	 */
-	ldr	r9, [r2, #CCM_CBCMR]
-	bic	r9, r9, #(0x3 << 12)
-	str	r9, [r2, #CCM_CBCMR]
-
-	ldr	r9, [r2, #CCM_CBCDR]
-	bic	r9, r9, #(0x38 << 24)
-	str	r9, [r2, #CCM_CBCDR]
-
-	/* now switch periph_clk to pll3_main_clk. */
-	ldr	r9, [r2, #CCM_CBCDR]
-	orr	r9, r9, #(1 << 25)
-	str	r9, [r2, #CCM_CBCDR]
-
-periph_clk_switch_100:
-	ldr	r9, [r2, #CCM_CDHIPR]
-	cmp	r9, #0
-	bne	periph_clk_switch_100
-
-switch_pre_periph_clk_100:
-	/* now switch pre_periph_clk to PFD_200MHz. */
-	ldr	r9, [r2, #CCM_CBCMR]
-	orr	r9, r9, #(0xc << 16)
-	str	r9, [r2, #CCM_CBCMR]
-
-	/* set the MMDC_DIV=2, AXI_DIV=4, AHB_DIV=8 */
-	ldr	r9, [r2, #CCM_CBCDR]
-	ldr	r6, =0x3f1f00
-	bic	r9, r9, r6
-	orr	r9, r9, #(0x8 << 16)
-	orr	r9, r9, #(0x3 << 16)
-
-	/*
-	 * if changing AHB divider remember to change
-	 * the IPGPER divider too below.
-	 */
-	orr	r9, r9, #0x1d00
-	str	r9, [r2, #CCM_CBCDR]
-
-wait_div_update_100:
-	ldr	r9, [r2, #CCM_CDHIPR]
-	cmp	r9, #0
-	bne	wait_div_update_100
+	bne	skip_periph_clk_switch_100m
 
 	/* now switch periph_clk back. */
 	ldr	r9, [r2, #CCM_CBCDR]
 	bic	r9, r9, #(1 << 25)
 	str	r9, [r2, #CCM_CBCDR]
 
-periph_clk_switch2:
-	ldr	r9, [r2, #CCM_CDHIPR]
-	cmp	r9, #0
-	bne	periph_clk_switch2
+	wait_for_ccm_handshake
+
+skip_periph_clk_switch_100m:
 
 	.endm
 
@@ -169,7 +103,7 @@ periph_clk_switch2:
 	str	r9, [r2, #CCM_CBCMR]
 
 	ldr	r9, [r2, #CCM_CBCDR]
-	bic	r9, r9, #(0x38 << 24)
+	bic	r9, r9, #(0x7 << 27)
 	str	r9, [r2, #CCM_CBCDR]
 
 	/* now switch periph_clk to 24MHz. */
@@ -177,10 +111,7 @@ periph_clk_switch2:
 	orr	r9, r9, #(1 << 25)
 	str	r9, [r2, #CCM_CBCDR]
 
-periph_clk_switch1:
-	ldr	r9, [r2, #CCM_CDHIPR]
-	cmp	r9, #0
-	bne	periph_clk_switch1
+	wait_for_ccm_handshake
 
 	/* change all the dividers to 1. */
 	ldr	r9, [r2, #CCM_CBCDR]
@@ -190,10 +121,7 @@ periph_clk_switch1:
 	str	r9, [r2, #CCM_CBCDR]
 
 	/* Wait for the divider to change. */
-wait_div_update:
-	ldr	r9, [r2, #CCM_CDHIPR]
-	cmp	r9, #0
-	bne	wait_div_update
+	wait_for_ccm_handshake
 
 	.endm
 
@@ -209,10 +137,7 @@ wait_div_update:
 	bic	r9, r9, #(1 << 25)
 	str	r9, [r2, #CCM_CBCDR]
 
-periph_clk_switch_pll2_pfd2:
-	ldr	r9, [r2, #CCM_CDHIPR]
-	cmp	r9, #0
-	bne periph_clk_switch_pll2_pfd2
+	wait_for_ccm_handshake
 
 	ldr	r9, [r2, #CCM_CBCDR]
 	ldr	r6, =0x3f1f00
@@ -221,22 +146,19 @@ periph_clk_switch_pll2_pfd2:
 	orr	r9, r9, #(0x7 << 19)
 	str	r9, [r2, #CCM_CBCDR]
 
-wait_div_update2:
-	ldr	r9, [r2, #CCM_CDHIPR]
-	cmp	r9, #0
-	bne	wait_div_update2
+	wait_for_ccm_handshake
 
 	.endm
 
-	.macro set_timings_below_100MHz_operation
+	.macro	set_timings_below_100MHz_operation
 	/* Set MMDCx_MISC[RALAT] = 2 cycles */
 	ldr	r6, [r8, #0x18]
 	bic	r6, r6, #(0x7 << 6)
 	orr	r6, r6, #(0x2 << 6)
 	str	r6, [r8, #0x18]
 
-	/* Adjust LPDDR2 timmings for 24Mhz operation */
-	ldr	r5, =0x03032073
+	/* Adjust LPDDR2 timings for 24Mhz operation */
+	ldr	r5, =0x03162073
 	str	r5, [r8, #0xC]  	/* MMDC0_MDCFG0 */
 	ldr	r7, =0x00020482
 	str	r7, [r8, #0x10] 	/* MMDC0_MDCFG1 */
@@ -264,37 +186,30 @@ skip_below_100Mhz_ch1_timings:
 
 	.endm
 
-	.macro set_timmings_above_100MHz_operation
-	/* Set MMDCx_MISC[RALAT] = 5 cycles */
-	ldr	r6, [r8, #0x18]
-	bic	r6, r6, #(0x7 << 6)
-	orr	r6, r6, #(0x5 << 6)
-	str	r6, [r8, #0x18]
-
-	/* Adjust LPDDR2 timmings for 400Mhz operation */
-	ldr	r5, =0x33374133
-	str	r5, [r8, #0xC]  	/* MMDC0_MDCFG0 */
-	ldr	r7, =0x00100A82
-	str	r7, [r8, #0x10] 	/* MMDC0_MDCFG1 */
-	ldr	r9, =0x00000093
-	str	r9, [r8, #0x14] 	/* MMDC0_MDCFG2 */
-	ldr	r10, =0x001A0889
-	str	r10, [r8, #0x38] 	/* MMDC0_MDCFG3LP */
+	.macro	set_timings_above_100MHz_operation
+	/* restore timing from mmdc_settings_info */
+	ldr	r6, [r1, #0x0]
+	ldr	r7, [r1, #0x4]
+tloop:
+	ldr	r9, [r7], #0x4
+	ldr	r10, [r7], #0x4
+	str	r10, [r8, r9]
+	subs	r6, r6, #0x1
+	bne	tloop
 
 	/* Check if lpddr2 channel 1 is enabled */
 	ldr	r6, [r8, #0x18]
 	ands	r6, r6, #(1 << 2)
 	beq	skip_above_100Mhz_ch1_timings
 
-	ldr	r6, [r4, #0x18]
-	bic	r6, r6, #(0x7 << 6)
-	orr	r6, r6, #(0x5 << 6)
-	str	r6, [r4, #0x18]
-
-	str	r5, [r4, #0xC]  	/* MMDC1_MDCFG0 */
-	str	r7, [r4, #0x10] 	/* MMDC1_MDCFG1 */
-	str	r9, [r4, #0x14] 	/* MMDC1_MDCFG2 */
-	str	r10, [r4, #0x38] 	/* MMDC1_MDCFG3LP */
+	ldr	r6, [r1, #0x0]
+	ldr	r7, [r1, #0x4]
+tloop2:
+	ldr	r9, [r7], #0x4
+	ldr	r10, [r7], #0x4
+	str	r10, [r4, r9]
+	subs	r6, r6, #0x1
+	bne	tloop2
 
 skip_above_100Mhz_ch1_timings:
 
@@ -390,7 +305,7 @@ skip_lower_force_measure_ch1:
 
 	.macro	mmdc_clk_above_100MHz
 
-	set_timmings_above_100MHz_operation
+	set_timings_above_100MHz_operation
 
 	/* Make sure that the PHY measurement unit is NOT in bypass mode */
 	ldr	r5, =0x8B8
@@ -438,7 +353,7 @@ skip_above_force_measure_ch1:
  *  Make sure DDR is in self-refresh.
  *  IRQs are already disabled.
  * r0 : DDR freq.
- * r1: low_bus_freq_mode flag
+ * r1 : mmdc_settings_info
  */
 	.align 3
 ENTRY(mx6q_lpddr2_freq_change)
@@ -633,7 +548,7 @@ done:
 
 	ldr	r10,=100000000
 	cmp	r0, r10
-	blt	skip_mmdc_clk_check
+	ble	skip_mmdc_clk_check
 	mmdc_clk_above_100MHz
 
 skip_mmdc_clk_check:
