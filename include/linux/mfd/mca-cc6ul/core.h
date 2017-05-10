@@ -21,6 +21,7 @@
 #define MCA_CC6UL_DRVNAME_PWRKEY	"mca-cc6ul-pwrkey"
 #define MCA_CC6UL_DRVNAME_ADC		"mca-cc6ul-adc"
 #define MCA_CC6UL_DRVNAME_TAMPER	"mca-cc6ul-tamper"
+#define MCA_CC6UL_DRVNAME_COMPARATOR	"mca-cc6ul-comparator"
 
 /* Uncomment to add CRC to frames */
 //#define MCA_CC6UL_CRC
@@ -48,6 +49,7 @@ enum mca_cc6ul_irqs {
 	MCA_CC6UL_IRQ_PWR_OFF,
 	MCA_CC6UL_IRQ_TAMPER0,
 	MCA_CC6UL_IRQ_TAMPER1,
+	MCA_CC6UL_IRQ_ADC,
 	MCA_CC6UL_IRQ_GPIO_BANK_0,
 	/* ... */
 
@@ -61,6 +63,7 @@ enum mca_cc6ul_irqs {
 #define MCA_CC6UL_IRQ_PWR_OFF_NAME		"PWR OFF"
 #define MCA_CC6UL_IRQ_TAMPER0_NAME		"TAMPER0"
 #define MCA_CC6UL_IRQ_TAMPER1_NAME		"TAMPER1"
+#define MCA_CC6UL_IRQ_ADC_NAME			"ADC"
 
 /* Number of interrupt registers */
 #define MCA_CC6UL_NUM_IRQ_REGS		4

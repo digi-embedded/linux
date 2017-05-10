@@ -39,6 +39,7 @@ struct mca_adc {
 	struct device *dev;
 	struct regmap *regmap;
 	u32 vref;
+	int irq;
 };
 
 struct mca_gpio {

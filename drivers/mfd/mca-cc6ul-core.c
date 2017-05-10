@@ -81,6 +81,15 @@ static struct resource mca_cc6ul_pwrkey_resources[] = {
 	},
 };
 
+static struct resource mca_cc6ul_adc_resources[] = {
+	{
+		.name   = MCA_CC6UL_IRQ_ADC_NAME,
+		.start  = MCA_CC6UL_IRQ_ADC,
+		.end    = MCA_CC6UL_IRQ_ADC,
+		.flags  = IORESOURCE_IRQ,
+	},
+};
+
 static struct resource mca_cc6ul_tamper_resources[] = {
 	{
 		.name   = MCA_CC6UL_IRQ_TAMPER0_NAME,
@@ -133,6 +142,8 @@ static const struct mfd_cell mca_cc6ul_devs[] = {
 	{
 		.name           = MCA_CC6UL_DRVNAME_ADC,
 		.of_compatible = "digi,mca-cc6ul-adc",
+		.num_resources  = ARRAY_SIZE(mca_cc6ul_adc_resources),
+		.resources      = mca_cc6ul_adc_resources,
 	},
 	{
 		.name           = MCA_CC6UL_DRVNAME_TAMPER,

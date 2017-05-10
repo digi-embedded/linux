@@ -182,7 +182,7 @@ int mca_ioexp_suspend(struct device *dev)
 		goto exit;
 	}
 
-	error = read_reg_group(ioexp, MCA_REG_ADC_CFG_0,
+	error = read_reg_group(ioexp, MCA_REG_ADC_CFG0_0,
 			       ioexp->preserved_regs->adc_cfg.cnt,
 			       ioexp->preserved_regs->adc_cfg.values);
 	if (error) {
@@ -266,7 +266,7 @@ int mca_ioexp_resume(struct device *dev)
 		dev_err(ioexp->dev,
 			"Failed to restore MCA_IOEXP_IRQ_MASK registers.\n");
 
-	error = write_reg_group(ioexp, MCA_REG_ADC_CFG_0,
+	error = write_reg_group(ioexp, MCA_REG_ADC_CFG0_0,
 				ioexp->preserved_regs->adc_cfg.cnt,
 				ioexp->preserved_regs->adc_cfg.values);
 	if (error)

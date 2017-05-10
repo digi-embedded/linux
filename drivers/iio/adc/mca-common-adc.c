@@ -19,6 +19,7 @@
  */
 
 #include <linux/gpio.h>
+#include <linux/iio/events.h>
 #include <linux/iio/iio.h>
 #include <linux/module.h>
 #include <linux/of.h>
@@ -37,31 +38,30 @@ int mca_adc_read_raw(struct iio_dev *iio,
 		     int *shift, long mask)
 {
 	struct mca_adc *adc = iio_priv(iio);
+	const int val_reg = MCA_REG_ADC_VAL_L_0 + channel->channel * 2;
 	u16 val;
 	int ret;
 
 	switch (mask) {
-		case IIO_CHAN_INFO_RAW:
-			ret = regmap_bulk_read(adc->regmap,
-					       MCA_REG_ADC_VAL_L_0 + channel->channel * 2,
-			  &val, sizeof(val));
-			if (ret < 0) {
-				dev_err(adc->dev, "Error reading ADC%d value (%d)\n",
-					channel->channel, ret);
-				return ret;
-			}
+	case IIO_CHAN_INFO_RAW:
+		ret = regmap_bulk_read(adc->regmap, val_reg, &val, sizeof(val));
+		if (ret < 0) {
+			dev_err(adc->dev, "Error reading ADC%d value (%d)\n",
+				channel->channel, ret);
+			return ret;
+		}
 
-			dev_dbg(adc->dev, "ADC%d = 0x%04x\n", channel->channel, val);
-			*value = val;
-			return IIO_VAL_INT;
+		dev_dbg(adc->dev, "ADC%d = 0x%04x\n", channel->channel, val);
+		*value = val;
+		return IIO_VAL_INT;
 
-		case IIO_CHAN_INFO_SCALE:
-			*value = adc->vref / 1000;
-			*shift = channel->scan_type.realbits;
-			return IIO_VAL_FRACTIONAL_LOG2;
+	case IIO_CHAN_INFO_SCALE:
+		*value = adc->vref / 1000;
+		*shift = channel->scan_type.realbits;
+		return IIO_VAL_FRACTIONAL_LOG2;
 
-		default:
-			break;
+	default:
+		break;
 	}
 
 	return -EINVAL;
@@ -72,19 +72,595 @@ static const struct iio_info mca_adc_info = {
 	.driver_module = THIS_MODULE,
 };
 
+static u64 generate_comparator_event(struct mca_adc *adc, int ch)
+{
+
+	const u8 rising_mask = (MCA_REG_ADC_CFG1_EN_RISING |
+				MCA_REG_ADC_CFG1_RISING_MASK);
+	const u8 falling_mask = (MCA_REG_ADC_CFG1_EN_FALLING |
+				 MCA_REG_ADC_CFG1_FALLING_MASK);
+	const u8 both_mask = rising_mask | falling_mask;
+
+	u16 cfg1_base = ch < 32 ? MCA_REG_ADC_CFG1_0 : MCA_REG_ADC_CFG1_32;
+	u8 ch_offset = ch < 32 ? ch : ch - 32;
+	u8 cfg1;
+	enum iio_event_direction edge;
+	int ret;
+
+	ret = regmap_raw_read(adc->regmap, cfg1_base + ch_offset, &cfg1,
+			      sizeof(cfg1));
+	if (ret) {
+		dev_err(adc->dev, "Error reading ADC%d CFG0 register (%d)\n",
+			ch, ret);
+		return ~0;
+	}
+
+	if ((cfg1 & both_mask) == both_mask)
+		edge = IIO_EV_DIR_EITHER;
+	else if ((cfg1 & rising_mask) == rising_mask)
+		edge = IIO_EV_DIR_RISING;
+	else if ((cfg1 & falling_mask) == falling_mask)
+		edge = IIO_EV_DIR_FALLING;
+	else
+		return ~0;
+
+	return IIO_EVENT_CODE(IIO_ACTIVITY, 0, IIO_NO_MOD, edge,
+			      IIO_EV_TYPE_CHANGE, ch, 0, 0);
+}
+
+static irqreturn_t comparator_irq_handler(int irq, void *private)
+{
+	struct iio_dev *iio = private;
+	struct mca_adc *adc = iio_priv(iio);
+	int ret;
+	int i;
+	u8 adc_irqs[8];
+
+	ret = regmap_bulk_read(adc->regmap, MCA_REG_ADC_IRQ_0,
+			       &adc_irqs, ARRAY_SIZE(adc_irqs));
+	if (ret) {
+		dev_err(adc->dev, "Error reading ADC IRQ registers (%d)\n",
+			ret);
+		goto exit;
+	}
+
+	for (i = 0; i < ARRAY_SIZE(adc_irqs); i++) {
+		const u8 adc_irq = adc_irqs[i];
+		int j;
+
+		for (j = 0; j < 8; j++) {
+			const u8 mask = 1 << j;
+
+			if (mask & adc_irq) {
+				u8 ch = i * 8 + j;
+				u64 event = generate_comparator_event(adc, ch);
+
+				if (event == ~0)
+					continue;
+				/* Notify the event */
+				iio_push_event(iio, event, iio_get_time_ns());
+			}
+		}
+		/* ACK the IRQs by writing a 1 in the flags */
+		ret = regmap_write(adc->regmap, MCA_REG_ADC_IRQ_0 + i, adc_irq);
+		if (ret) {
+			dev_err(adc->dev, "Error ACKing IRQ %d (%d)\n",
+				i, ret);
+			continue;
+		}
+	}
+
+exit:
+	return IRQ_HANDLED;
+}
+
+static const struct iio_event_spec comparator_events[] = {
+	{
+		.type = IIO_EV_TYPE_THRESH,
+		.dir = IIO_EV_DIR_RISING,
+		.mask_separate = BIT(IIO_EV_INFO_VALUE) |
+		BIT(IIO_EV_INFO_ENABLE),
+	},
+	{
+		.type = IIO_EV_TYPE_THRESH,
+		.dir = IIO_EV_DIR_FALLING,
+		.mask_separate = BIT(IIO_EV_INFO_VALUE) |
+		BIT(IIO_EV_INFO_ENABLE),
+	},
+	{
+		.type = IIO_EV_TYPE_THRESH,
+		.dir = IIO_EV_DIR_EITHER,
+		.mask_separate = BIT(IIO_EV_INFO_VALUE) |
+		BIT(IIO_EV_INFO_ENABLE),
+	},
+};
+
+static ssize_t cmp_thr_lo_read(struct iio_dev *iio,
+			       uintptr_t private,
+			       struct iio_chan_spec const *iio_ch,
+			       char *buf)
+{
+	struct mca_adc *adc = iio_priv(iio);
+	int ch = iio_ch->channel;
+	u16 threshold;
+	int ret;
+
+	ret = regmap_bulk_read(adc->regmap, MCA_REG_ADC_THRESH_LO_L_0 + ch * 2,
+			       &threshold, sizeof(threshold));
+	if (ret)
+		dev_err(adc->dev,
+			"Error reading MCA_REG_ADC_THRESH_LO_L_%d (%d)\n",
+			ch, ret);
+
+	return sprintf(buf, "%d\n", threshold);
+}
+
+static ssize_t cmp_thr_lo_write(struct iio_dev *iio,
+				uintptr_t private,
+				struct iio_chan_spec const *iio_ch,
+				const char *buf,
+				size_t len)
+{
+	struct mca_adc *adc = iio_priv(iio);
+	int ch = iio_ch->channel;
+	unsigned long threshold;
+	int ret;
+
+	ret = kstrtoul(buf, 0, &threshold);
+	if (ret) {
+		dev_err(adc->dev,
+			"%s: error parsing input (%s)\n",
+			__func__, buf);
+		return ret;
+	}
+
+	ret = regmap_bulk_write(adc->regmap, MCA_REG_ADC_THRESH_LO_L_0 + ch * 2,
+				(u16 *)&threshold, sizeof(u16));
+	if (ret)
+		dev_err(adc->dev,
+			"Error writing MCA_REG_ADC_THRESH_LO_L_%d (%d)\n",
+			ch, ret);
+
+	return len;
+}
+
+static ssize_t cmp_thr_hi_read(struct iio_dev *iio,
+			       uintptr_t private,
+			       struct iio_chan_spec const *iio_ch,
+			       char *buf)
+{
+	struct mca_adc *adc = iio_priv(iio);
+	int ch = iio_ch->channel;
+	u16 threshold;
+	int ret;
+
+	ret = regmap_bulk_read(adc->regmap, MCA_REG_ADC_THRESH_HI_L_0 + ch * 2,
+			       &threshold, sizeof(threshold));
+	if (ret)
+		dev_err(adc->dev,
+			"Error reading MCA_REG_ADC_THRESH_HI_L_%d (%d)\n",
+			ch, ret);
+
+	return sprintf(buf, "%d\n", threshold);
+}
+
+static ssize_t cmp_thr_hi_write(struct iio_dev *iio,
+				uintptr_t private,
+				struct iio_chan_spec const *iio_ch,
+				const char *buf,
+				size_t len)
+{
+	struct mca_adc *adc = iio_priv(iio);
+	int ch = iio_ch->channel;
+	unsigned long threshold;
+	int ret;
+
+	ret = kstrtoul(buf, 0, &threshold);
+	if (ret) {
+		dev_err(adc->dev,
+			"%s: error parsing input (%s)\n",
+			__func__, buf);
+		return ret;
+	}
+
+	ret = regmap_bulk_write(adc->regmap, MCA_REG_ADC_THRESH_HI_L_0 + ch * 2,
+				(u16 *)&threshold, sizeof(u16));
+	if (ret)
+		dev_err(adc->dev,
+			"Error writing MCA_REG_ADC_THRESH_HI_L_%d (%d)\n",
+			ch, ret);
+
+	return len;
+}
+
+static ssize_t cmp_sample_rate_read(struct iio_dev *iio,
+				    uintptr_t private,
+				    struct iio_chan_spec const *iio_ch,
+				    char *buf)
+{
+	struct mca_adc *adc = iio_priv(iio);
+	int ch = iio_ch->channel;
+	u16 ticks;
+	int ret;
+
+	ret = regmap_bulk_read(adc->regmap, MCA_REG_ADC_TICKS_L_0 + ch * 2,
+			       &ticks, sizeof(ticks));
+	if (ret)
+		dev_err(adc->dev, "Error reading MCA_REG_ADC_TICKS_L_%d (%d)\n",
+			ch, ret);
+
+	return sprintf(buf, "%d\n", ticks);
+}
+
+static ssize_t cmp_sample_rate_write(struct iio_dev *iio,
+				     uintptr_t private,
+				     struct iio_chan_spec const *iio_ch,
+				     const char *buf,
+				     size_t len)
+{
+	struct mca_adc *adc = iio_priv(iio);
+	int ch = iio_ch->channel;
+	unsigned long ticks;
+	int ret;
+
+	ret = kstrtoul(buf, 0, &ticks);
+	if (ret) {
+		dev_err(adc->dev,
+			"%s: error parsing input (%s)\n",
+			__func__, buf);
+		return ret;
+	}
+
+	ret = regmap_bulk_write(adc->regmap, MCA_REG_ADC_TICKS_L_0 + ch * 2,
+				(u16 *)&ticks, sizeof(u16));
+	if (ret)
+		dev_err(adc->dev, "Error writing MCA_REG_ADC_TICKS_L_%d (%d)\n",
+			ch, ret);
+
+	return len;
+}
+
+static ssize_t cmp_irq_edge_read(struct iio_dev *iio,
+				 uintptr_t private,
+				 struct iio_chan_spec const *iio_ch,
+				 char *buf)
+{
+	struct mca_adc *adc = iio_priv(iio);
+	int ch = iio_ch->channel;
+	unsigned int cfg0;
+	int ret;
+	char const *edge_str;
+
+	ret = regmap_read(adc->regmap, MCA_REG_ADC_CFG0_0 + ch, &cfg0);
+	if (ret)
+		dev_err(adc->dev, "Error reading MCA_REG_ADC_CFG0_%d (%d)\n",
+			ch, ret);
+
+	if (cfg0 & MCA_REG_ADC_CFG0_IRQ_EN) {
+		unsigned int cfg1;
+
+		ret = regmap_read(adc->regmap, MCA_REG_ADC_CFG1_0 + ch, &cfg1);
+		if (ret)
+			dev_err(adc->dev,
+				"Error reading MCA_REG_ADC_CFG1_%d (%d)\n",
+				ch, ret);
+
+		if ((cfg1 & MCA_REG_ADC_CFG1_EN_RISING) &&
+		    (cfg1 & MCA_REG_ADC_CFG1_EN_FALLING))
+			edge_str = "both";
+		else if (cfg1 & MCA_REG_ADC_CFG1_EN_RISING)
+			edge_str = "rising";
+		else if (cfg1 & MCA_REG_ADC_CFG1_EN_FALLING)
+			edge_str = "falling";
+		else
+			edge_str = "none";
+	} else {
+		edge_str = "none";
+	}
+
+	return sprintf(buf, "%s\n", edge_str);
+}
+
+static ssize_t cmp_irq_edge_write(struct iio_dev *iio,
+				  uintptr_t private,
+				  struct iio_chan_spec const *iio_ch,
+				  const char *buf,
+				  size_t len)
+{
+	struct mca_adc *adc = iio_priv(iio);
+	int ch = iio_ch->channel;
+	int ret;
+	unsigned int cfg1_val;
+
+	if (!strncmp(buf, "both", strlen("both")))
+		cfg1_val = MCA_REG_ADC_CFG1_EN_RISING |
+			   MCA_REG_ADC_CFG1_EN_FALLING;
+	else if (!strncmp(buf, "rising", strlen("rising")))
+		cfg1_val = MCA_REG_ADC_CFG1_EN_RISING;
+	else if (!strncmp(buf, "falling", strlen("falling")))
+		cfg1_val = MCA_REG_ADC_CFG1_EN_FALLING;
+	else if (!strncmp(buf, "none", strlen("none")))
+		cfg1_val = 0;
+	else
+		return -EINVAL;
+
+	ret = regmap_update_bits(adc->regmap, MCA_REG_ADC_CFG1_0 + ch,
+				 MCA_REG_ADC_CFG1_EN_RISING |
+				 MCA_REG_ADC_CFG1_EN_FALLING,
+				 cfg1_val);
+	if (ret)
+		dev_err(adc->dev, "Error writing MCA_REG_ADC_CFG1_%d (%d)\n",
+			ch, ret);
+
+	/* Enable the IRQ if an edge is configured */
+	ret = regmap_update_bits(adc->regmap, MCA_REG_ADC_CFG0_0 + ch,
+				 MCA_REG_ADC_CFG0_IRQ_EN,
+				 cfg1_val ? MCA_REG_ADC_CFG0_IRQ_EN : 0);
+
+	if (ret)
+		dev_err(adc->dev, "Error writing MCA_REG_ADC_CFG0_%d (%d)\n",
+			ch, ret);
+
+	return len;
+}
+
+static ssize_t wakeup_read(struct iio_dev *iio,
+			   uintptr_t private,
+			   struct iio_chan_spec const *iio_ch,
+			   char *buf)
+{
+	struct mca_adc *adc = iio_priv(iio);
+	int ch = iio_ch->channel;
+	unsigned int cfg0;
+	int ret;
+
+	ret = regmap_read(adc->regmap, MCA_REG_ADC_CFG0_0 + ch, &cfg0);
+	if (ret)
+		dev_err(adc->dev, "Error reading MCA_REG_ADC_CFG0_%d (%d)\n",
+			ch, ret);
+
+	return sprintf(buf, "%s\n",
+		       !!(cfg0 & MCA_REG_ADC_CFG0_RUNS_LP) ?
+							"enabled" : "disabled");
+
+}
+
+static ssize_t wakeup_write(struct iio_dev *iio,
+			    uintptr_t private,
+			    struct iio_chan_spec const *iio_ch,
+			    const char *buf,
+			    size_t len)
+{
+	struct mca_adc *adc = iio_priv(iio);
+	int ch = iio_ch->channel;
+	int ret;
+
+	if (!strncmp(buf, "enabled", strlen("enabled")))
+		ret = regmap_update_bits(adc->regmap, MCA_REG_ADC_CFG0_0 + ch,
+					 MCA_REG_ADC_CFG0_RUNS_LP,
+					 MCA_REG_ADC_CFG0_RUNS_LP);
+	else if (!strncmp(buf, "disabled", strlen("disabled")))
+		ret = regmap_update_bits(adc->regmap, MCA_REG_ADC_CFG0_0 + ch,
+					 MCA_REG_ADC_CFG0_RUNS_LP,
+					 0);
+	else
+		return -EINVAL;
+
+	if (ret)
+		dev_err(adc->dev, "Error reading MCA_REG_ADC_CFG0_%d (%d)\n",
+			ch, ret);
+
+	return len;
+}
+
+static ssize_t averager_read(struct iio_dev *iio,
+			     uintptr_t private,
+			     struct iio_chan_spec const *iio_ch,
+			     char *buf)
+{
+	struct mca_adc *adc = iio_priv(iio);
+	int ch = iio_ch->channel;
+	u8 averager_samples;
+	unsigned int cfg0;
+	int ret;
+
+	ret = regmap_read(adc->regmap, MCA_REG_ADC_CFG0_0 + ch, &cfg0);
+	if (ret)
+		dev_err(adc->dev, "Error reading MCA_REG_ADC_CFG0_%d (%d)\n",
+			ch, ret);
+
+	averager_samples = (cfg0 & MCA_REG_ADC_CFG0_AVG_MASK) >>
+			   MCA_REG_ADC_CFG0_AVG_SHIFT;
+	averager_samples = 1 << averager_samples;
+
+	return sprintf(buf, "%d\n", averager_samples);
+}
+
+static ssize_t averager_write(struct iio_dev *iio,
+			      uintptr_t private,
+			      struct iio_chan_spec const *iio_ch,
+			      const char *buf,
+			      size_t len)
+{
+	struct mca_adc *adc = iio_priv(iio);
+	int ch = iio_ch->channel;
+	unsigned long averager_samples;
+	unsigned int cfg0_val;
+	int ret;
+
+	ret = kstrtoul(buf, 0, &averager_samples);
+	if (ret) {
+		dev_err(adc->dev,
+			"%s: error parsing input (%s)\n",
+			__func__, buf);
+		return ret;
+	}
+
+	switch (averager_samples) {
+	case 1:
+		cfg0_val = 0 << MCA_REG_ADC_CFG0_AVG_SHIFT;
+		break;
+	case 2:
+		cfg0_val = 1 << MCA_REG_ADC_CFG0_AVG_SHIFT;
+		break;
+	case 4:
+		cfg0_val = 2 << MCA_REG_ADC_CFG0_AVG_SHIFT;
+		break;
+	case 8:
+		cfg0_val = 3 << MCA_REG_ADC_CFG0_AVG_SHIFT;
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	ret = regmap_update_bits(adc->regmap, MCA_REG_ADC_CFG0_0 + ch,
+				 MCA_REG_ADC_CFG0_AVG_MASK,
+				 cfg0_val);
+	if (ret)
+		dev_err(adc->dev, "Error reading MCA_REG_ADC_CFG0_%d (%d)\n",
+			ch, ret);
+	return len;
+}
+
+static ssize_t cmp_out_read(struct iio_dev *iio,
+			    uintptr_t private,
+			    struct iio_chan_spec const *iio_ch,
+			    char *buf)
+{
+	struct mca_adc *adc = iio_priv(iio);
+	int ch = iio_ch->channel;
+	unsigned int cfg1;
+	int ret;
+
+	ret = regmap_read(adc->regmap, MCA_REG_ADC_CFG1_0 + ch, &cfg1);
+	if (ret)
+		dev_err(adc->dev, "Error reading MCA_REG_ADC_CFG1_%d (%d)\n",
+			ch, ret);
+
+	return sprintf(buf, "%d\n", !!(cfg1 & MCA_REG_ADC_CFG1_CMP_OUT));
+}
+
+static const struct iio_chan_spec_ext_info adc_comp_attr[] = {
+	{
+		.name = "cmp_thr_l",
+		.shared = IIO_SEPARATE,
+		.read = &cmp_thr_lo_read,
+		.write = &cmp_thr_lo_write,
+	},
+	{
+		.name = "cmp_thr_h",
+		.shared = IIO_SEPARATE,
+		.read = &cmp_thr_hi_read,
+		.write = &cmp_thr_hi_write,
+	},
+	{
+		.name = "cmp_rate",
+		.shared = IIO_SEPARATE,
+		.read = &cmp_sample_rate_read,
+		.write = &cmp_sample_rate_write,
+	},
+	{
+		.name = "cmp_edge",
+		.shared = IIO_SEPARATE,
+		.read = &cmp_irq_edge_read,
+		.write = &cmp_irq_edge_write,
+	},
+	{
+		.name = "cmp_out",
+		.shared = IIO_SEPARATE,
+		.read = &cmp_out_read,
+		.write = NULL,
+	},
+	{
+		.name = "wakeup",
+		.shared = IIO_SEPARATE,
+		.read = &wakeup_read,
+		.write = &wakeup_write,
+	},
+	{
+		.name = "averager",
+		.shared = IIO_SEPARATE,
+		.read = &averager_read,
+		.write = &averager_write,
+	},
+	{
+		/* Centinel */
+		.name = NULL,
+	},
+
+};
+
+static void init_adc_channels(struct platform_device *pdev,
+			      struct regmap *regmap,
+			      int gpio_base, struct iio_chan_spec *iio_ch,
+			      u8 *ch_list, u8 cnt, bool is_comparator)
+{
+	struct iio_chan_spec *chan;
+	u8 i;
+
+	for (i = 0, chan = iio_ch; i < cnt; i++, chan++) {
+		unsigned int cfg0_mask = MCA_REG_ADC_CFG0_EN;
+		u8 ch = ch_list[i];
+		int ret;
+
+		/*
+		 * Request the corresponding MCA GPIO so it can not be
+		 * used as GPIO by user space
+		 */
+		if (gpio_base >= 0) {
+			ret = devm_gpio_request(&pdev->dev, gpio_base + ch,
+						"ADC");
+			if (ret) {
+				dev_warn(&pdev->dev,
+					 "Error requesting GPIO %d. Cannot use ADC%d (%d)\n",
+					 gpio_base + ch, ch, ret);
+				continue;
+			}
+		}
+
+		if (is_comparator)
+			cfg0_mask |= MCA_REG_ADC_CFG0_MODE_1;
+
+		/* Enable the ADC channel as a comparator */
+		ret = regmap_update_bits(regmap, MCA_REG_ADC_CFG0_0 + ch,
+					 cfg0_mask, cfg0_mask);
+		if (ret)
+			dev_err(&pdev->dev,
+				"Error writing MCA_REG_ADC_CFG0_%d (%d)\n",
+				ch, ret);
+
+		chan->type = IIO_VOLTAGE;
+		chan->indexed = 1;
+		chan->channel = ch;
+		chan->scan_index = i;
+		chan->scan_type.sign = 'u';
+		chan->scan_type.realbits = 12;
+		chan->scan_type.storagebits = 16;
+		chan->info_mask_separate = BIT(IIO_CHAN_INFO_RAW);
+		chan->info_mask_shared_by_type = BIT(IIO_CHAN_INFO_SCALE);
+		if (is_comparator) {
+			chan->event_spec = comparator_events;
+			chan->num_event_specs = ARRAY_SIZE(comparator_events);
+			chan->ext_info = adc_comp_attr;
+		}
+	}
+}
+
 int mca_adc_probe(struct platform_device *pdev, struct device *mca_dev,
 		  struct regmap *regmap, int gpio_base, char const *dt_compat)
 {
 	struct mca_adc *mca_adc;
 	struct iio_dev *iio;
 	struct device_node *np;
-	struct iio_chan_spec *chan;
+	struct iio_chan_spec *iio_ch_list;
 	u8 adc_ch_list[MCA_MAX_IOS];
 	u8 num_adcs = 0;
+	u8 num_comps = 0;
 	struct property *prop;
 	const __be32 *cur;
 	u32 ch, cfg, vref;
 	int ret = 0;
+	u8 adc_comp_ch_list[MCA_MAX_IOS];
 
 	if (!mca_dev || !mca_dev->parent || !mca_dev->parent->of_node)
 		return -EPROBE_DEFER;
@@ -97,6 +673,7 @@ int mca_adc_probe(struct platform_device *pdev, struct device *mca_dev,
 	mca_adc = iio_priv(iio);
 	mca_adc->regmap = regmap;
 	mca_adc->dev = mca_dev;
+	mca_adc->irq = -1;
 
 	/* Find entry in device-tree */
 	if (mca_dev->of_node) {
@@ -111,7 +688,7 @@ int mca_adc_probe(struct platform_device *pdev, struct device *mca_dev,
 			dev_warn(&pdev->dev, ret ?
 				 "adc-vref DT property not provided, using default %u uV\n" :
 				 "adc-vref out of range, using default %u uV\n",
-			vref);
+				 vref);
 		}
 		mca_adc->vref = vref;
 
@@ -121,82 +698,101 @@ int mca_adc_probe(struct platform_device *pdev, struct device *mca_dev,
 				continue;
 
 			/*
-			 * Request the corresponding MCA GPIO so it can not be
-			 * used as GPIO by user space
-			 */
-			if (gpio_base >= 0) {
-				ret = devm_gpio_request(&pdev->dev,
-							gpio_base + ch,
-							"ADC");
-				if (ret != 0) {
-					dev_warn(&pdev->dev,
-						 "Error requesting GPIO %d. "
-						 "Cannot use ADC%d (%d)\n",
-						 gpio_base + ch, ch, ret);
-					continue;
-				}
-			}
-			/*
 			 * Verify that the requested IOs are ADC capable and
 			 * enable the channel for ADC operation
 			 */
-			ret = regmap_read(regmap, MCA_REG_ADC_CFG_0 + ch, &cfg);
-			if (ret != 0) {
+			ret = regmap_read(regmap, MCA_REG_ADC_CFG0_0 + ch,
+					  &cfg);
+			if (ret) {
 				dev_err(mca_dev,
-					"Failed read ADC%d CFG register (%d)\n",
+					"Error reading ADC%d CFG register (%d)\n",
 					ch, ret);
 				goto error_dev_free;
 			}
 
 			/* Remove the channel from the list if not capable */
-			if (!(cfg & MCA_REG_ADC_CAPABLE)) {
+			if (!(cfg & MCA_REG_ADC_CFG0_CAPABLE)) {
 				dev_warn(mca_dev,
-					 "Removing ADC%d, IO no ADC capable\n",
+					 "Removing ADC%d, IO not ADC capable\n",
 					 ch);
 				continue;
-			}
-
-			/* Enable the channel for ADC operation*/
-			ret = regmap_update_bits(regmap,
-						 MCA_REG_ADC_CFG_0 + ch,
-						 MCA_REG_ADC_EN, MCA_REG_ADC_EN);
-			if (ret != 0) {
-				dev_err(mca_dev, "Error enabling ADC%d (%d)\n",
-					ch, ret);
-				goto error_dev_free;
 			}
 
 			adc_ch_list[num_adcs] = (u8)ch;
 			num_adcs++;
 		}
+
+		of_property_for_each_u32(np, "digi,comparator-ch-list",
+					 prop, cur, ch) {
+			u32 cfg;
+
+			if (ch >= MCA_MAX_IOS)
+				continue;
+
+			/*
+			 * Verify that the requested IOs are ADC capable
+			 */
+			ret = regmap_read(regmap, MCA_REG_ADC_CFG0_0 + ch,
+					  &cfg);
+			if (ret) {
+				dev_err(&pdev->dev,
+					"Failed read ADC%d CFG register (%d)\n",
+					ch, ret);
+				continue;
+			}
+
+			/* Remove the channel from the list if not capable */
+			if (!(cfg & MCA_REG_ADC_CFG0_CAPABLE)) {
+				dev_warn(&pdev->dev,
+					 "Removing ADC%d, IO no ADC capable\n",
+					 ch);
+				continue;
+			}
+
+			adc_comp_ch_list[num_comps] = (u8)ch;
+			num_comps++;
+		}
 	}
 
-	if (num_adcs == 0)
+	if (!num_adcs && !num_comps)
 		goto error_dev_free;
 
 	iio->dev.parent = &pdev->dev;
 	iio->name = dev_name(&pdev->dev);
 	iio->modes = INDIO_DIRECT_MODE;
 	iio->info = &mca_adc_info;
-	iio->channels = devm_kzalloc(&pdev->dev,
-				     num_adcs * sizeof(struct iio_chan_spec),
-				     GFP_KERNEL);
-	if (!iio->channels)
+	iio->num_channels = num_adcs + num_comps;
+	iio_ch_list = devm_kzalloc(&pdev->dev,
+				   iio->num_channels * sizeof(iio->channels[0]),
+				   GFP_KERNEL);
+	if (!iio_ch_list)
 		goto error_dev_free;
 
-	/* Initialize the ADC channels */
-	for (iio->num_channels = 0, chan = (struct iio_chan_spec *)iio->channels;
-	     iio->num_channels < num_adcs;
-	     iio->num_channels++, chan++) {
-		chan->type = IIO_VOLTAGE;
-		chan->indexed = 1;
-		chan->channel = adc_ch_list[iio->num_channels];
-		chan->scan_index = iio->num_channels;
-		chan->scan_type.sign = 'u';
-		chan->scan_type.realbits = 12;
-		chan->scan_type.storagebits = 16;
-		chan->info_mask_separate = BIT(IIO_CHAN_INFO_RAW);
-		chan->info_mask_shared_by_type = BIT(IIO_CHAN_INFO_SCALE);
+	iio->channels = iio_ch_list;
+
+	init_adc_channels(pdev, regmap, gpio_base, &iio_ch_list[0], adc_ch_list,
+			  num_adcs, false);
+	init_adc_channels(pdev, regmap, gpio_base, &iio_ch_list[num_adcs],
+			  adc_comp_ch_list, num_comps, true);
+
+	if (num_comps) {
+		mca_adc->irq = platform_get_irq_byname(pdev, "ADC");
+		if (mca_adc->irq) {
+			ret = devm_request_threaded_irq(&pdev->dev,
+							mca_adc->irq,
+							NULL,
+							&comparator_irq_handler,
+							IRQF_TRIGGER_LOW |
+							IRQF_ONESHOT,
+							dev_name(&pdev->dev),
+							iio);
+			if (ret) {
+				dev_err(&pdev->dev,
+					"Requested Comparator IRQ (%d).\n",
+					mca_adc->irq);
+				goto error_free_ch;
+			}
+		}
 	}
 
 	ret = iio_device_register(iio);
@@ -212,7 +808,7 @@ int mca_adc_probe(struct platform_device *pdev, struct device *mca_dev,
 	return 0;
 
 error_free_ch:
-	devm_kfree(&pdev->dev, (void *)iio->channels);
+	devm_kfree(&pdev->dev, (void *)iio_ch_list);
 
 error_dev_free:
 	while (num_adcs && gpio_base >= 0) {
@@ -230,6 +826,7 @@ int mca_adc_remove(struct platform_device *pdev, int gpio_base)
 	struct iio_dev *iio = platform_get_drvdata(pdev);
 	struct iio_chan_spec *chan;
 	int i;
+	struct mca_adc *adc = iio_priv(iio);
 
 	/* Release allocated resources */
 	if (gpio_base >= 0) {
@@ -239,6 +836,9 @@ int mca_adc_remove(struct platform_device *pdev, int gpio_base)
 			devm_gpio_free(&pdev->dev, gpio_base + chan->channel);
 		}
 	}
+
+	if (adc->irq != -1)
+		devm_free_irq(&pdev->dev, adc->irq, iio);
 
 	devm_kfree(&pdev->dev, (void *)iio->channels);
 	iio_device_unregister(iio);

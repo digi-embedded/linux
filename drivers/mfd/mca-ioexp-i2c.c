@@ -26,7 +26,9 @@ static const struct regmap_range mca_ioexp_readable_ranges[] = {
 static const struct regmap_range mca_ioexp_writeable_ranges[] = {
 	regmap_reg_range(MCA_IOEXP_IRQ_STATUS_0, MCA_IOEXP_IRQ_MASK_3),
 	regmap_reg_range(MCA_GPIO_DIR_0, MCA_GPIO_IRQ_CFG_63),
-	regmap_reg_range(MCA_REG_ADC_CFG_0, MCA_REG_ADC_CFG_63),
+	regmap_reg_range(MCA_REG_ADC_CFG0_0, MCA_REG_ADC_CFG0_31),
+	regmap_reg_range(MCA_REG_ADC_CFG1_0, MCA_REG_ADC_CFG1_31),
+	regmap_reg_range(MCA_REG_ADC_CFG2_0, MCA_REG_ADC_CFG2_31),
 };
 
 static const struct regmap_range mca_ioexp_volatile_ranges[] = {
@@ -34,7 +36,7 @@ static const struct regmap_range mca_ioexp_volatile_ranges[] = {
 	regmap_reg_range(MCA_IOEXP_IRQ_STATUS_0, MCA_IOEXP_IRQ_STATUS_3),
 	regmap_reg_range(MCA_GPIO_DATA_0, MCA_GPIO_DATA_7),
 	regmap_reg_range(MCA_GPIO_IRQ_STATUS_0, MCA_GPIO_IRQ_STATUS_7),
-	regmap_reg_range(MCA_REG_ADC_VAL_L_0, MCA_REG_ADC_VAL_H_7),
+	regmap_reg_range(MCA_REG_ADC_VAL_L_0, MCA_REG_ADC_VAL_H_31),
 
 	/*
 	 * Fake volatile registers.
@@ -52,7 +54,9 @@ static const struct regmap_range mca_ioexp_volatile_ranges[] = {
 	regmap_reg_range(MCA_GPIO_NUM, MCA_GPIO_DIR_7),
 	regmap_reg_range(MCA_GPIO_IRQ_CFG_0, MCA_GPIO_IRQ_CFG_63),
 	regmap_reg_range(MCA_REG_ADC_NUM_CH, MCA_REG_ADC_NUM_BYTES),
-	regmap_reg_range(MCA_REG_ADC_CFG_0, MCA_REG_ADC_CFG_63),
+	regmap_reg_range(MCA_REG_ADC_CFG0_0, MCA_REG_ADC_CFG0_31),
+	regmap_reg_range(MCA_REG_ADC_CFG1_0, MCA_REG_ADC_CFG1_31),
+	regmap_reg_range(MCA_REG_ADC_CFG2_0, MCA_REG_ADC_CFG2_31),
 };
 
 static const struct regmap_access_table mca_ioexp_readable_table = {
@@ -118,8 +122,8 @@ static int mca_ioexp_i2c_probe(struct i2c_client *i2c,
 
 err_regmap:
 	devm_kfree(ioexp->dev, ioexp);
-	
-	return ret;	
+
+	return ret;
 }
 
 static int mca_ioexp_i2c_remove(struct i2c_client *i2c)

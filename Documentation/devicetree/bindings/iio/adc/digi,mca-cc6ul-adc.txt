@@ -3,16 +3,23 @@
 The MCA ADC driver allows to read voltages from the MCA IOs that are ADC
 capable. Check the MCA ADC-capable IOs on the CC6UL Hardware Reference Manual.
 
+Also, the ADC inputs can be configured as analog comparators. In this mode the
+input is sampled periodically and an interrupt is generated based on the
+comparison of the value with two thresholds. See the documentation for more
+information on this feature.
+
 Required properties:
 - compatible: must be "digi,mca-cc6ul-adc".
 
 Optional properties:
 - adc-ch-list: list of MCA IOs to be enabled as ADCs
+- comparator-ch-list: list of MCA IOs to be enabled as Analog Comparators
 - adc-vref: ADC reference voltage in uV, corresponds with the VCC_MCA voltage.
 
 Example:
 
 	&mca_adc {
 		digi,adc-ch-list = <0 4>;
+		digi,comparator-ch-list = <3>;
 		digi,adc-vref = <3000000>;
 	};
