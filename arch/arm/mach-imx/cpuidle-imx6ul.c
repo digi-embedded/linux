@@ -246,12 +246,12 @@ int __init imx6ul_cpuidle_init(void)
 		imx6ul_wfi_in_iram_fn = (void *)fncpy(wfi_iram_base + sizeof(*cpuidle_pm_info),
 			&imx6ul_low_power_idle, wfi_code_size);
 	} else {
-
+#ifdef CONFIG_SOC_IMX6ULL
 		wfi_code_size = (&mx6ull_lpm_wfi_end -&mx6ull_lpm_wfi_start) *4;
 
 		imx6ul_wfi_in_iram_fn = (void *)fncpy(wfi_iram_base + sizeof(*cpuidle_pm_info),
 			&imx6ull_low_power_idle, wfi_code_size);
-
+#endif
 	}
 #endif
 
