@@ -308,7 +308,7 @@
 
 	/* MIPI-CSI2 camera */
 	ov5640_mipi: ov5640_mipi@4c {
-		compatible = "ovti,ov5640_mipi";
+		compatible = "ovti,ov564x_mipi";
 		reg = <0x4c>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_mipi>;
@@ -331,6 +331,7 @@
 		clocks = <&clks 201>;
 		clock-names = "csi_mclk";
 		pwn-gpios = <&gpio5 0 GPIO_ACTIVE_LOW>;
+		digi,alt-pwn-gpios = <&gpio7 6 1>;
 		csi_id = <0>;
 		ipu_id = <0>;
 		mclk = <24000000>;
