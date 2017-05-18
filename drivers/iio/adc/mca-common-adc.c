@@ -31,6 +31,7 @@
 #define MCA_VREF_uV(v)		((u32)((v) * 1000 * 1000))
 #define MCA_ADC_MIN_VREF	MCA_VREF_uV(1.8)
 #define MCA_ADC_MAX_VREF	MCA_VREF_uV(3.3)
+#define MCA_ADC_INT_VREF	MCA_VREF_uV(1.2)
 #define MCA_ADC_DEF_VREF	MCA_VREF_uV(3)
 
 int mca_adc_read_raw(struct iio_dev *iio,
@@ -646,6 +647,31 @@ static void init_adc_channels(struct platform_device *pdev,
 	}
 }
 
+static u32 get_vref(struct device *mca_dev, struct regmap *regmap,
+		    struct device_node *np)
+{
+	int ret;
+	u32 vref = MCA_ADC_DEF_VREF;
+
+	if (of_property_read_bool(np, "digi,internal-vref")) {
+		ret = regmap_write(regmap, MCA_REG_ADC_CFG_0,
+				   MCA_REG_ADC_CFG_0_INT_VREF);
+		if (ret)
+			dev_err(mca_dev,
+				"Error configuring ADC internal VREF (%d)\n",
+				ret);
+		else
+			vref = MCA_ADC_INT_VREF;
+	} else {
+		ret = of_property_read_u32(np, "digi,adc-vref", &vref);
+		if (ret || vref < MCA_ADC_MIN_VREF || vref > MCA_ADC_MAX_VREF)
+			dev_warn(mca_dev, "adc-vref %s, using default %u uV\n",
+				 ret ? "not provided" : "out of range", vref);
+	}
+
+	return vref;
+}
+
 int mca_adc_probe(struct platform_device *pdev, struct device *mca_dev,
 		  struct regmap *regmap, int gpio_base, char const *dt_compat)
 {
@@ -658,7 +684,7 @@ int mca_adc_probe(struct platform_device *pdev, struct device *mca_dev,
 	u8 num_comps = 0;
 	struct property *prop;
 	const __be32 *cur;
-	u32 ch, cfg, vref;
+	u32 ch, cfg;
 	int ret = 0;
 	u8 adc_comp_ch_list[MCA_MAX_IOS];
 
@@ -682,15 +708,7 @@ int mca_adc_probe(struct platform_device *pdev, struct device *mca_dev,
 		if (!np || !of_device_is_available(np))
 			return -ENODEV;
 
-		ret = of_property_read_u32(np, "digi,adc-vref", &vref);
-		if (ret || vref < MCA_ADC_MIN_VREF || vref > MCA_ADC_MAX_VREF) {
-			vref = MCA_ADC_DEF_VREF;
-			dev_warn(&pdev->dev, ret ?
-				 "adc-vref DT property not provided, using default %u uV\n" :
-				 "adc-vref out of range, using default %u uV\n",
-				 vref);
-		}
-		mca_adc->vref = vref;
+		mca_adc->vref = get_vref(mca_dev, regmap, np);
 
 		of_property_for_each_u32(np, "digi,adc-ch-list",
 					 prop, cur, ch) {

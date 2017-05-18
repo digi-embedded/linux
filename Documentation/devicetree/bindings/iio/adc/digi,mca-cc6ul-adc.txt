@@ -12,9 +12,14 @@ Required properties:
 - compatible: must be "digi,mca-cc6ul-adc".
 
 Optional properties:
-- adc-ch-list: list of MCA IOs to be enabled as ADCs
-- comparator-ch-list: list of MCA IOs to be enabled as Analog Comparators
-- adc-vref: ADC reference voltage in uV, corresponds with the VCC_MCA voltage.
+- digi,adc-ch-list: list of MCA IOs to be enabled as ADCs
+- digi,comparator-ch-list: list of MCA IOs to be enabled as Analog Comparators
+- digi,adc-vref: ADC reference voltage in uV, corresponds with the VCC_MCA
+  voltage.
+- digi,internal-vref: if present, the internal 1.2 V reference will be used.
+  This will force MCA_IO2/EXT_VREF to be configured as a 1.2 V output, and a 100
+  nF capacitor must be placed between this line and GND for it to properly.
+  Finally, if this property is set, the adc-vref will be ignored.
 
 Example:
 

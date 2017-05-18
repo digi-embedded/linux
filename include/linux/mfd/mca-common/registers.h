@@ -912,4 +912,7 @@
 #define MCA_REG_ADC_CFG1_IRQ_FLAGS_MASK	0xE0
 #define MCA_REG_ADC_CFG1_RO_MASK	0xF0
 
+/* Global ADC CFG_0 flags */
+#define MCA_REG_ADC_CFG_0_INT_VREF	(1 << 0)
+
 #endif /* MCA_COMMON_REGISTERS_H_ */

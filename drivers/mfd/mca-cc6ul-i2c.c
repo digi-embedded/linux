@@ -45,6 +45,7 @@ static const struct regmap_range mca_cc6ul_writeable_ranges[] = {
 	regmap_reg_range(MCA_REG_ADC_THRESH_HI_L_0, MCA_REG_ADC_THRESH_HI_H_7),
 	regmap_reg_range(MCA_REG_ADC_TICKS_L_0, MCA_REG_ADC_TICKS_H_7),
 	regmap_reg_range(MCA_REG_ADC_IRQ_0, MCA_REG_ADC_IRQ_7),
+	regmap_reg_range(MCA_REG_ADC_CFG_0, MCA_REG_ADC_CFG_2),
 	regmap_reg_range(MCA_REG_ADC_BUFF_CH, MCA_REG_ADC_BUFF_SAMPLE_7),
 };
 
@@ -92,6 +93,7 @@ static const struct regmap_range mca_cc6ul_volatile_ranges[] = {
 	regmap_reg_range(MCA_REG_ADC_THRESH_HI_L_0, MCA_REG_ADC_THRESH_HI_H_7),
 	regmap_reg_range(MCA_REG_ADC_TICKS_L_0, MCA_REG_ADC_TICKS_H_7),
 	regmap_reg_range(MCA_REG_ADC_IRQ_0, MCA_REG_ADC_IRQ_7),
+	regmap_reg_range(MCA_REG_ADC_CFG_0, MCA_REG_ADC_CFG_2),
 	regmap_reg_range(MCA_REG_ADC_BUFF_CH, MCA_REG_ADC_BUFF_SAMPLE_7),
 };
 
