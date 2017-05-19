@@ -4419,6 +4419,13 @@ authencesn:
 			if (!aes_inst)
 				continue;
 
+		/* AES GCM is not supported by the hardware */
+		if (((driver_algs[i].class1_alg_type & OP_ALG_ALGSEL_MASK) 
+			== OP_ALG_ALGSEL_AES) &&
+		    ((driver_algs[i].class1_alg_type & OP_ALG_AAI_MASK) 
+			== OP_ALG_AAI_GCM))
+			continue;
+			
 		t_alg = caam_alg_alloc(&driver_algs[i]);
 		if (IS_ERR(t_alg)) {
 			err = PTR_ERR(t_alg);
