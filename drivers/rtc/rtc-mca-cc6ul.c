@@ -145,6 +145,22 @@ static int mca_cc6ul_rtc_set_time(struct device *dev, struct rtc_time *tm)
 	return ret;
 }
 
+/*
+ * The MCA RTC alarm expires (triggers the irq) when the RTC time matches the
+ * value programmed in the alarm register and the RTC counter increments.
+ * This means, one second after the programmed value. To correct this, the
+ * alarm value is adjusted when it is being written/read, decrementing/incremen-
+ * ting the value by 1 second.
+ */
+static void mca_cc6ul_rtc_adjust_alarm_time(struct rtc_wkalrm *alrm, bool inc)
+{
+	unsigned long time;
+
+	rtc_tm_to_time(&alrm->time, &time);
+	time = inc ? time + 1 : time - 1;
+	rtc_time_to_tm(time, &alrm->time);
+}
+
 static int mca_cc6ul_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 {
 	struct mca_cc6ul_rtc *rtc = dev_get_drvdata(dev);
@@ -158,6 +174,7 @@ static int mca_cc6ul_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 		return ret;
 
 	mca_cc6ul_data_to_tm(data, &alrm->time);
+	mca_cc6ul_rtc_adjust_alarm_time(alrm, true);
 
 	/* Enable status */
 	ret = regmap_read(rtc->mca->regmap, MCA_CC6UL_RTC_CONTROL, &val);
@@ -205,6 +222,7 @@ static int mca_cc6ul_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 	u8 data[CLOCK_DATA_LEN] = { [0 ... (CLOCK_DATA_LEN - 1)] = 0 };
 	int ret;
 
+	mca_cc6ul_rtc_adjust_alarm_time(alrm, false);
 	mca_cc6ul_tm_to_data(&alrm->time, data);
 
 	ret = regmap_bulk_write(rtc->mca->regmap, MCA_CC6UL_RTC_ALARM_YEAR_L,
