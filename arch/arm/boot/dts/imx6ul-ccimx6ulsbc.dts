@@ -20,7 +20,10 @@
 #include "imx6ul-ccimx6ulsbc.dtsi"
 
 /*
- * Uncomment to enable the i.MX6UL SoC ADCs.
+ * Uncomment to enable the i.MX6UL SoC ADCs on the GPIO connector:
+ *  - EXP_GPIO_1 (channel 5)
+ *  - EXP_GPIO_2 (channel 3)
+ *  - EXP_GPIO_3 (channel 2)
  * Include in adc-ch-list the ADC channels (from 0 to 9) that you want to
  * enable. Note that the iomux has to be configured accordingly in pinctrl_adc1
  * to configure the pad for ADC operation
@@ -101,17 +104,31 @@
 	status = "okay";
 };
 
+/*
+ * Uncomment to enable MCA ADC channels on GPIO connector:
+ *  - MCA_IO1 (channel 1)
+ *  - MCA_IO3 (channel 3)
+ * Edit adc-ch-list to include the ADC channels that you want to enable.
+ */
+// &mca_adc {
+// 	digi,adc-ch-list = <1 3>;
+// 	digi,adc-vref = <3000000>;
+// };
+
 &mca_ioexp {
 	status = "okay";
 	restore-config-on-resume;
 };
 
 /*
- * Uncomment to enable the I/O Expander ADCs.
+ * Uncomment to enable the I/O Expander ADCs on GPIO connector:
+ *  - IOEXP_3 (channel 3)
+ *  - IOEXP_4 (channel 4)
+ *  - IOEXP_5 (channel 5)
  * Include in adc-ch-list the ADC channels that you want to enable.
  */
 // &mca_ioexp_adc {
-// 	digi,adc-ch-list = <3>;
+// 	digi,adc-ch-list = <3 4 5>;
 // 	digi,adc-vref = <3300000>;
 // };
 
