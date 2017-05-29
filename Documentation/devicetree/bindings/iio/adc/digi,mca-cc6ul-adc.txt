@@ -17,9 +17,10 @@ Optional properties:
 - digi,adc-vref: ADC reference voltage in uV, corresponds with the VCC_MCA
   voltage.
 - digi,internal-vref: if present, the internal 1.2 V reference will be used.
-  This will force MCA_IO2/EXT_VREF to be configured as a 1.2 V output, and a 100
-  nF capacitor must be placed between this line and GND for it to properly.
-  Finally, if this property is set, the adc-vref will be ignored.
+  This will force MCA_IO2/EXT_VREF to be configured as a 1.2 V output, and a
+  100 nF capacitor must be placed between this line and GND for it to work
+  properly.
+  If this property is set, the value in 'digi,adc-vref' will be ignored.
 
 Example:
 
