@@ -32,15 +32,6 @@
 //	status = "okay";
 //};
 
-/*
- * Uncomment to enable the I/O Expander ADCs.
- * Include in adc-ch-list the ADC channels that you want to enable.
- */
-// &mca_ioexp_adc {
-// 	digi,adc-ch-list = <3>;
-// 	digi,adc-vref = <3300000>;
-// };
-
 &caam_keyblob {
 	status = "okay";
 };
@@ -109,6 +100,20 @@
 &max98089 {
 	status = "okay";
 };
+
+&mca_ioexp {
+	status = "okay";
+	restore-config-on-resume;
+};
+
+/*
+ * Uncomment to enable the I/O Expander ADCs.
+ * Include in adc-ch-list the ADC channels that you want to enable.
+ */
+// &mca_ioexp_adc {
+// 	digi,adc-ch-list = <3>;
+// 	digi,adc-vref = <3300000>;
+// };
 
 /* Uncomment to Enable Tamper detection. Two interfaces (0 and 1) are available */
 //&mca_tamper {
@@ -193,11 +198,6 @@
 //
 //	status = "okay";
 //};
-
-&mca_ioexp {
-	status = "okay";
-	restore-config-on-resume;
-};
 
 /* Pin mux configuration */
 &iomuxc {
