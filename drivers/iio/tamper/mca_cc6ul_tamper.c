@@ -35,7 +35,8 @@
 #include <linux/rtc.h>
 #include <linux/slab.h>
 
-#define MCA_TAMPER_INTERFACES		2
+#define MCA_TAMPER_INTERFACES		4
+#define DIGITAL_TAMPER_COUNT		2
 
 /* Tamper register offsets */
 enum {
@@ -52,6 +53,9 @@ enum {
 	DATE_MIN,
 	DATE_SEC,
 	EVENT 		= MCA_CC6UL_TAMPER0_EVENT - MCA_CC6UL_TAMPER0_CFG0,
+	TICKS		= MCA_CC6UL_TAMPER2_TICKS_L - MCA_CC6UL_TAMPER2_CFG0,
+	THR_L		= MCA_CC6UL_TAMPER2_THRESH_LO_L - MCA_CC6UL_TAMPER2_CFG0,
+	THR_H		= MCA_CC6UL_TAMPER2_THRESH_HI_L - MCA_CC6UL_TAMPER2_CFG0,
 };
 
 struct mca_cc6ul_tamper {
@@ -75,13 +79,28 @@ static int mca_cc6ul_tamper_read_raw(struct iio_dev *iio,
 	struct mca_cc6ul_tamper *tp = iio_priv(iio);
 	u32 value;
 	int ret;
+	unsigned int event_reg;
+
+	switch (tp->iface) {
+	case 0:
+		event_reg = MCA_CC6UL_TAMPER0_EVENT;
+		break;
+	case 1:
+		event_reg = MCA_CC6UL_TAMPER1_EVENT;
+		break;
+	case 2:
+		event_reg = MCA_CC6UL_TAMPER2_EVENT;
+		break;
+	case 3:
+		event_reg = MCA_CC6UL_TAMPER3_EVENT;
+		break;
+	default:
+		return -EINVAL;
+	}
 
 	switch (mask) {
 	case IIO_CHAN_INFO_RAW:
-		ret = regmap_read(tp->mca->regmap,
-				  MCA_CC6UL_TAMPER0_EVENT +
-				  tp->iface * MCA_CC6UL_TAMPER_REGS_LEN,
-				  &value);
+		ret = regmap_read(tp->mca->regmap, event_reg, &value);
 		if (ret < 0) {
 			dev_err(tp->mca->dev,
 				"Error reading Tamper%d event register (%d)\n",
@@ -90,11 +109,13 @@ static int mca_cc6ul_tamper_read_raw(struct iio_dev *iio,
 		}
 
 		*val = value;
-		return IIO_VAL_INT;
+		break;
 
 	default:
 		return -EINVAL;
 	}
+
+	return IIO_VAL_INT;
 }
 
 static const struct iio_event_spec mca_cc6ul_tamper_events[] = {
@@ -105,30 +126,51 @@ static const struct iio_event_spec mca_cc6ul_tamper_events[] = {
 	},
 };
 
+static unsigned int get_tamper_base_reg(unsigned int iface)
+{
+	switch (iface) {
+		case 0:
+			return MCA_CC6UL_TAMPER0_CFG0;
+		case 1:
+			return MCA_CC6UL_TAMPER1_CFG0;
+		case 2:
+			return MCA_CC6UL_TAMPER2_CFG0;
+		case 3:
+			return MCA_CC6UL_TAMPER3_CFG0;
+		default:
+			break;
+	}
+
+	return ~0;
+}
+
 /* Sysfs interface */
-#define TAMPER_SYSFS_SHOW_REG(reg, addr)				\
+#define TAMPER_SYSFS_SHOW_REG(reg, addr, type)				\
 static ssize_t show_##reg(struct device *dev,				\
 			  struct device_attribute *attr, char *buf)	\
 {									\
 	struct iio_dev *iio = dev_to_iio_dev(dev);			\
 	struct mca_cc6ul_tamper *tp = iio_priv(iio);			\
 	int ret;							\
-	u32 val;							\
+	type val;							\
+	unsigned int tamper_base_reg = get_tamper_base_reg(tp->iface);	\
 									\
-	ret = regmap_read(tp->mca->regmap,				\
-			  MCA_CC6UL_TAMPER0_CFG0 + addr +		\
-			  tp->iface * MCA_CC6UL_TAMPER_REGS_LEN,	\
-			  &val);					\
+	if (tamper_base_reg == ~0)					\
+		return -1;						\
+									\
+	ret = regmap_bulk_read(tp->mca->regmap,				\
+			       tamper_base_reg + addr,			\
+			       &val, sizeof(val));			\
 	if (ret != 0) {							\
 		dev_err(tp->mca->dev,					\
 			"Failed reading Tamper%d #reg register (%d)\n",	\
 			tp->iface, ret);				\
 		return 0;						\
 	}								\
-	return sprintf(buf, "0x%02x\n", (u8)val);			\
+	return sprintf(buf, "0x%04x\n", (type)val);			\
 }
 
-#define TAMPER_SYSFS_STORE_REG(reg, addr)				\
+#define TAMPER_SYSFS_STORE_REG(reg, addr, type)				\
 static ssize_t store_##reg(struct device *dev, 				\
 			   struct device_attribute *attr,		\
 			   const char *buf, size_t count)		\
@@ -136,14 +178,22 @@ static ssize_t store_##reg(struct device *dev, 				\
 	struct iio_dev *iio = dev_to_iio_dev(dev);			\
 	struct mca_cc6ul_tamper *tp = iio_priv(iio);			\
 	int ret;							\
-	u8 val;								\
+	unsigned long val;						\
+	unsigned int tamper_base_reg = get_tamper_base_reg(tp->iface);	\
 									\
-	val = (u8)simple_strtoul(buf, NULL, 0);				\
+	if (tamper_base_reg == ~0)					\
+		return -1;						\
 									\
-	ret = regmap_write(tp->mca->regmap,				\
-			   MCA_CC6UL_TAMPER0_CFG0 + addr +		\
-			   tp->iface * MCA_CC6UL_TAMPER_REGS_LEN,	\
-			   val);					\
+	ret = kstrtoul(buf, 0, &val);					\
+	if (ret) {							\
+		dev_err(tp->mca->dev,					\
+			"%s: error parsing input (%s)\n",		\
+			__func__, buf);					\
+		return ret;						\
+	}								\
+	ret = regmap_bulk_write(tp->mca->regmap,			\
+				tamper_base_reg + addr,			\
+				&val, sizeof(type));			\
 	if (ret != 0) {							\
 		dev_err(tp->mca->dev,					\
 			"Failed write Tamper%d #reg register (%d)\n",	\
@@ -153,25 +203,113 @@ static ssize_t store_##reg(struct device *dev, 				\
 	return count;							\
 }
 
-TAMPER_SYSFS_SHOW_REG(config0, CFG0)
-TAMPER_SYSFS_SHOW_REG(io_in, IO_IN)
-TAMPER_SYSFS_SHOW_REG(io_out, IO_OUT)
-TAMPER_SYSFS_SHOW_REG(pwroff_delay_ms, DELAY_PWROFF)
-TAMPER_SYSFS_SHOW_REG(tp_events, EVENT)
+#define MCA_CC6UL_TAMPER_DEV_ATTR(name)		(&iio_dev_attr_##name.dev_attr.attr)
 
-TAMPER_SYSFS_STORE_REG(config0, CFG0)
-TAMPER_SYSFS_STORE_REG(io_in, IO_IN)
-TAMPER_SYSFS_STORE_REG(io_out, IO_OUT)
-TAMPER_SYSFS_STORE_REG(pwroff_delay_ms, DELAY_PWROFF)
-TAMPER_SYSFS_STORE_REG(tp_events, EVENT)
+static ssize_t show_tp_events(struct device *dev, struct device_attribute *attr,
+			      char *buf)
+{
+	struct iio_dev *iio = dev_to_iio_dev(dev);
+	struct mca_cc6ul_tamper *tp = iio_priv(iio);
+	int ret;
+	unsigned int val;
+	unsigned int tamper_base_reg = get_tamper_base_reg(tp->iface);
+
+	if (tamper_base_reg == ~0)
+		return -1;
+
+	ret = regmap_read(tp->mca->regmap, tamper_base_reg + EVENT, &val);
+	if (ret != 0) {
+		dev_err(tp->mca->dev,
+			"Failed reading Tamper%d #reg register (%d)\n",
+			tp->iface, ret);
+		return 0;
+	}
+
+	switch (val) {
+	case 0x00:
+		ret = sprintf(buf, "none\n");
+		break;
+	case MCA_CC6UL_TAMPER_SIGNALED:
+		ret = sprintf(buf, "signaled\n");
+		break;
+	case (MCA_CC6UL_TAMPER_ACKED | MCA_CC6UL_TAMPER_SIGNALED):
+		ret = sprintf(buf, "signaled+acked\n");
+		break;
+	default:
+		ret = sprintf(buf, "unknown (0x%04x)\n", (u8)val);
+		break;
+	}
+	return ret;
+}
+
+static ssize_t store_tp_events(struct device *dev, struct device_attribute *attr,
+			       const char *buf, size_t count)
+{
+	struct iio_dev *iio = dev_to_iio_dev(dev);
+	struct mca_cc6ul_tamper *tp = iio_priv(iio);
+	int ret;
+	unsigned long val;
+	unsigned int tamper_base_reg = get_tamper_base_reg(tp->iface);
+
+	if (tamper_base_reg == ~0)
+		return -1;
+
+	if (!strncmp(buf, "ack", strlen("ack")))
+		val = MCA_CC6UL_TAMPER_ACKED;
+	else if (!strncmp(buf, "clear", strlen("clear")))
+		val = MCA_CC6UL_TAMPER_CLEAR;
+	else {
+		/* Check if string is a raw value */
+		ret = kstrtoul(buf, 0, &val);
+		if (ret || (val != MCA_CC6UL_TAMPER_CLEAR &&
+			    val != MCA_CC6UL_TAMPER_ACKED)) {
+			dev_err(tp->mca->dev,
+				"%s: error parsing input (%s)\n",
+				__func__, buf);
+			return ret;
+		}
+	}
+
+	ret = regmap_write(tp->mca->regmap, tamper_base_reg + EVENT, val);
+	if (ret != 0) {
+		dev_err(tp->mca->dev,
+		"Failed write Tamper%d #reg register (%d)\n",
+		tp->iface, ret);
+		return 0;
+	}
+
+	return count;
+}
+
+static IIO_DEVICE_ATTR(tamper_events, S_IRUGO | S_IWUSR, show_tp_events, store_tp_events, 0);
+
+#ifdef MCA_TAMPER_HAS_EXTRA_SYSFS_ENTRIES
+TAMPER_SYSFS_SHOW_REG(config0, CFG0, u8)
+TAMPER_SYSFS_SHOW_REG(config1, CFG1, u8)
+TAMPER_SYSFS_SHOW_REG(io_in, IO_IN, u8)
+TAMPER_SYSFS_SHOW_REG(io_out, IO_OUT, u8)
+TAMPER_SYSFS_SHOW_REG(pwroff_delay_ms, DELAY_PWROFF, u8)
+TAMPER_SYSFS_SHOW_REG(srate, TICKS, u16)
+TAMPER_SYSFS_SHOW_REG(thr_l, THR_L, u16)
+TAMPER_SYSFS_SHOW_REG(thr_h, THR_H, u16)
+
+TAMPER_SYSFS_STORE_REG(config0, CFG0, u8)
+TAMPER_SYSFS_STORE_REG(config1, CFG1, u8)
+TAMPER_SYSFS_STORE_REG(io_in, IO_IN, u8)
+TAMPER_SYSFS_STORE_REG(io_out, IO_OUT, u8)
+TAMPER_SYSFS_STORE_REG(pwroff_delay_ms, DELAY_PWROFF, u8)
+TAMPER_SYSFS_STORE_REG(srate, TICKS, u16)
+TAMPER_SYSFS_STORE_REG(thr_l, THR_L, u16)
+TAMPER_SYSFS_STORE_REG(thr_h, THR_H, u16)
 
 static IIO_DEVICE_ATTR(config0, S_IRUGO | S_IWUSR, show_config0, store_config0, 0);
+static IIO_DEVICE_ATTR(config1, S_IRUGO | S_IWUSR, show_config1, store_config1, 0);
 static IIO_DEVICE_ATTR(io_in, S_IRUGO | S_IWUSR, show_io_in, store_io_in, 0);
 static IIO_DEVICE_ATTR(io_out, S_IRUGO | S_IWUSR, show_io_out, store_io_out, 0);
 static IIO_DEVICE_ATTR(pwroff_delay_ms, S_IRUGO | S_IWUSR, show_pwroff_delay_ms, store_pwroff_delay_ms, 0);
-static IIO_DEVICE_ATTR(tamper_events, S_IRUGO | S_IWUSR, show_tp_events, store_tp_events, 0);
-
-#define MCA_CC6UL_TAMPER_DEV_ATTR(name)		(&iio_dev_attr_##name.dev_attr.attr)
+static IIO_DEVICE_ATTR(srate, S_IRUGO | S_IWUSR, show_srate, store_srate, 0);
+static IIO_DEVICE_ATTR(thr_l, S_IRUGO | S_IWUSR, show_thr_l, store_thr_l, 0);
+static IIO_DEVICE_ATTR(thr_h, S_IRUGO | S_IWUSR, show_thr_h, store_thr_h, 0);
 
 static struct attribute *mca_cc6ul_tamper_attributes[] = {
 	MCA_CC6UL_TAMPER_DEV_ATTR(config0),
@@ -181,6 +319,37 @@ static struct attribute *mca_cc6ul_tamper_attributes[] = {
 	MCA_CC6UL_TAMPER_DEV_ATTR(tamper_events),
 	NULL,
 };
+
+static struct attribute *mca_cc6ul_tamper_analog_attributes[] = {
+	MCA_CC6UL_TAMPER_DEV_ATTR(config0),
+	MCA_CC6UL_TAMPER_DEV_ATTR(config1),
+	MCA_CC6UL_TAMPER_DEV_ATTR(io_in),
+	MCA_CC6UL_TAMPER_DEV_ATTR(io_out),
+	MCA_CC6UL_TAMPER_DEV_ATTR(pwroff_delay_ms),
+	MCA_CC6UL_TAMPER_DEV_ATTR(tamper_events),
+	MCA_CC6UL_TAMPER_DEV_ATTR(srate),
+	MCA_CC6UL_TAMPER_DEV_ATTR(thr_l),
+	MCA_CC6UL_TAMPER_DEV_ATTR(thr_h),
+	NULL,
+};
+
+static const struct attribute_group mca_cc6ul_tamper_analog_attribute_group = {
+	.name	= "tamper_analog",
+	.attrs	= mca_cc6ul_tamper_analog_attributes,
+};
+
+static const struct iio_info mca_cc6ul_tamper_analog_info = {
+	.driver_module		= THIS_MODULE,
+	.attrs			= &mca_cc6ul_tamper_analog_attribute_group,
+	.read_raw		= &mca_cc6ul_tamper_read_raw,
+};
+
+#else
+static struct attribute *mca_cc6ul_tamper_attributes[] = {
+	MCA_CC6UL_TAMPER_DEV_ATTR(tamper_events),
+	NULL,
+};
+#endif /* MCA_TAMPER_HAS_EXTRA_SYSFS_ENTRIES */
 
 static const struct attribute_group mca_cc6ul_tamper_attribute_group = {
 	.name	= "tamper",
@@ -233,13 +402,15 @@ static irqreturn_t mca_cc6ul_tamper_irq_handler(int irq, void *private)
 	time64_t tamper_t64;
 	u64 event;
 	int ret;
+	unsigned int tamper_base_reg = get_tamper_base_reg(tp->iface);
+
+	if (tamper_base_reg == ~0)
+		goto irq_out;
 
 	dev_dbg(tp->mca->dev, "Tamper %d IRQ (%d)\n", tp->iface, irq);
 
-	ret = regmap_bulk_read(tp->mca->regmap,
-			       MCA_CC6UL_TAMPER0_CFG0 +
-			       tp->iface * MCA_CC6UL_TAMPER_REGS_LEN,
-			       data, sizeof(data));
+	ret = regmap_bulk_read(tp->mca->regmap, tamper_base_reg, data,
+			       sizeof(data));
 	if (ret != 0) {
 		dev_err(tp->mca->dev, "Failed reading Tamper%d registers (%d)\n",
 			tp->iface, ret);
@@ -270,11 +441,11 @@ static int mca_cc6ul_init_hardware(struct mca_cc6ul_tamper *tp)
 {
 	int ret;
 	u8 data[MCA_CC6UL_TAMPER_REGS_LEN];
+	unsigned int tamper_base_reg = get_tamper_base_reg(tp->iface);
 
 	/* Verify if the tamper interface is enabled */
 	ret = regmap_bulk_read(tp->mca->regmap,
-			       MCA_CC6UL_TAMPER0_CFG0 +
-			       tp->iface * MCA_CC6UL_TAMPER_REGS_LEN,
+			       tamper_base_reg,
 			       data, sizeof(data));
 	if (ret != 0) {
 		dev_err(tp->mca->dev,
@@ -397,7 +568,6 @@ static int mca_cc6ul_tamper_probe(struct platform_device *pdev)
 		sprintf(mca_tamper[iface]->name, "TAMPER%d", iface);
 		iiod[iface]->name = mca_tamper[iface]->name;
 		iiod[iface]->modes = INDIO_DIRECT_MODE;
-		iiod[iface]->info = &mca_cc6ul_tamper_info;
 		channels = devm_kzalloc(&pdev->dev,
 					sizeof(struct iio_chan_spec),
 					GFP_KERNEL);
@@ -407,6 +577,15 @@ static int mca_cc6ul_tamper_probe(struct platform_device *pdev)
 			ret = -ENOMEM;
 			goto exit_error;
 		}
+
+#ifdef MCA_TAMPER_HAS_EXTRA_SYSFS_ENTRIES
+		if (iface < DIGITAL_TAMPER_COUNT)
+			iiod[iface]->info = &mca_cc6ul_tamper_info;
+		else
+			iiod[iface]->info = &mca_cc6ul_tamper_analog_info;
+#else
+		iiod[iface]->info = &mca_cc6ul_tamper_info;
+#endif
 		iiod[iface]->num_channels = 1;
 		mca_cc6ul_init_channel(channels, iface);
 

@@ -103,6 +103,18 @@ static struct resource mca_cc6ul_tamper_resources[] = {
 		.end    = MCA_CC6UL_IRQ_TAMPER1,
 		.flags  = IORESOURCE_IRQ,
 	},
+	{
+		.name   = MCA_CC6UL_IRQ_TAMPER2_NAME,
+		.start  = MCA_CC6UL_IRQ_TAMPER2,
+		.end    = MCA_CC6UL_IRQ_TAMPER2,
+		.flags  = IORESOURCE_IRQ,
+	},
+	{
+		.name   = MCA_CC6UL_IRQ_TAMPER3_NAME,
+		.start  = MCA_CC6UL_IRQ_TAMPER3,
+		.end    = MCA_CC6UL_IRQ_TAMPER3,
+		.flags  = IORESOURCE_IRQ,
+	},
 };
 
 static struct resource mca_cc6ul_gpios_resources[] = {
