@@ -339,8 +339,8 @@ static void mca_cc6ul_init_channel(struct iio_chan_spec *chan, int idx)
 static int mca_cc6ul_tamper_probe(struct platform_device *pdev)
 {
 	struct mca_cc6ul *mca = dev_get_drvdata(pdev->dev.parent);
-	struct mca_cc6ul_tamper **mca_tamper;
-	struct iio_dev *iiod;
+	struct mca_cc6ul_tamper **mca_tamper = NULL;
+	struct iio_dev *iiod[MCA_TAMPER_INTERFACES] = {NULL};
 	struct device_node *np;
 	struct property *prop;
 	const __be32 *cur;
@@ -353,11 +353,12 @@ static int mca_cc6ul_tamper_probe(struct platform_device *pdev)
 	pr_info("Tamper driver for MCA of CC6UL\n");
 
 	mca_tamper = devm_kzalloc(&pdev->dev,
-				  sizeof(struct mca_tamper *) * MCA_TAMPER_INTERFACES,
+				  sizeof(*mca_tamper) * MCA_TAMPER_INTERFACES,
 				  GFP_KERNEL);
 	if (!mca_tamper) {
 		dev_err(&pdev->dev, "Failed to allocate memory for mca_tamper\n");
-		return -ENOMEM;
+		ret = -ENOMEM;
+		goto exit_error;
 	}
 
 	platform_set_drvdata(pdev, mca_tamper);
@@ -368,40 +369,46 @@ static int mca_cc6ul_tamper_probe(struct platform_device *pdev)
 	/* Return if node does not exist or if it is disabled */
 	np = of_find_compatible_node(mca->dev->of_node, NULL,
 				     "digi,mca-cc6ul-tamper");
-	if (!np || !of_device_is_available(np))
-		return -ENODEV;
+	if (!np || !of_device_is_available(np)) {
+		ret = -ENODEV;
+		goto exit_error;
+	}
 
 	of_property_for_each_u32(np, "digi,tamper-if-list",
 				 prop, cur, iface) {
+		struct iio_chan_spec *channels;
+
 		if (iface >= MCA_TAMPER_INTERFACES)
 			continue;
 
-		iiod = devm_iio_device_alloc(&pdev->dev, sizeof(*mca_tamper));
-		if (!iiod) {
+		iiod[iface] = devm_iio_device_alloc(&pdev->dev,
+						    sizeof(*mca_tamper));
+		if (!iiod[iface]) {
 			dev_err(&pdev->dev, "Failed to allocate iio device\n");
-			return -ENOMEM;
+			ret = -ENOMEM;
+			goto exit_error;
 		}
-		mca_tamper[iface] = iio_priv(iiod);
+		mca_tamper[iface] = iio_priv(iiod[iface]);
 		mca_tamper[iface]->mca = mca;
 		mca_tamper[iface]->iface = iface;
-		mca_tamper[iface]->iio = iiod;
+		mca_tamper[iface]->iio = iiod[iface];
 
-		iiod->dev.parent = &pdev->dev;
+		iiod[iface]->dev.parent = &pdev->dev;
 		sprintf(mca_tamper[iface]->name, "TAMPER%d", iface);
-		iiod->name = mca_tamper[iface]->name;
-		iiod->modes = INDIO_DIRECT_MODE;
-		iiod->info = &mca_cc6ul_tamper_info;
-		iiod->channels = devm_kzalloc(&pdev->dev,
-					      sizeof(struct iio_chan_spec),
-					      GFP_KERNEL);
-		if (!iiod->channels) {
+		iiod[iface]->name = mca_tamper[iface]->name;
+		iiod[iface]->modes = INDIO_DIRECT_MODE;
+		iiod[iface]->info = &mca_cc6ul_tamper_info;
+		channels = devm_kzalloc(&pdev->dev,
+					sizeof(struct iio_chan_spec),
+					GFP_KERNEL);
+		iiod[iface]->channels = channels;
+		if (!iiod[iface]->channels) {
 			dev_err(&pdev->dev, "Failed to allocate iio channels\n");
-			return -ENOMEM;
+			ret = -ENOMEM;
+			goto exit_error;
 		}
-
-		iiod->num_channels = 1;
-		mca_cc6ul_init_channel((struct iio_chan_spec *)iiod->channels,
-				       iface);
+		iiod[iface]->num_channels = 1;
+		mca_cc6ul_init_channel(channels, iface);
 
 		ret = mca_cc6ul_init_hardware(mca_tamper[iface]);
 		if (ret != 0) {
@@ -420,7 +427,7 @@ static int mca_cc6ul_tamper_probe(struct platform_device *pdev)
 					NULL, mca_cc6ul_tamper_irq_handler,
 					IRQF_TRIGGER_LOW | IRQF_ONESHOT,
 					mca_tamper[iface]->name,
-					iiod);
+					iiod[iface]);
 			if (ret) {
 				dev_err(&pdev->dev,
 					"Requested TAMPER %d IRQ (%d).\n",
@@ -429,7 +436,7 @@ static int mca_cc6ul_tamper_probe(struct platform_device *pdev)
 			}
 		}
 
-		ret = iio_device_register(iiod);
+		ret = iio_device_register(iiod[iface]);
 		if (ret) {
 			dev_err(&pdev->dev,
 				"Failed to register mca tamper iio device\n");
@@ -440,6 +447,16 @@ static int mca_cc6ul_tamper_probe(struct platform_device *pdev)
 	}
 
 	return 0;
+
+exit_error:
+	kfree(mca_tamper);
+	for (iface = 0; iface < ARRAY_SIZE(iiod); iface++) {
+		if (iiod[iface])
+			kfree(iiod[iface]->channels);
+		kfree(iiod[iface]);
+	}
+
+	return ret;
 }
 
 static int mca_cc6ul_tamper_remove(struct platform_device *pdev)
@@ -467,6 +484,7 @@ static int mca_cc6ul_tamper_remove(struct platform_device *pdev)
 		iio_device_unregister(mca_tamper[iface]->iio);
 		devm_iio_device_free(&pdev->dev, mca_tamper[iface]->iio);
 	}
+	kfree(mca_tamper);
 
 	return 0;
 }
