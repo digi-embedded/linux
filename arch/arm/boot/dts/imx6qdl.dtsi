@@ -273,7 +273,7 @@
 				ecspi1: ecspi@02008000 {
 					#address-cells = <1>;
 					#size-cells = <0>;
-					compatible = "fsl,imx6q-ecspi", "fsl,imx51-ecspi";
+					compatible = "fsl,imx6q-ecspi", "fsl,imx53-ecspi";
 					reg = <0x02008000 0x4000>;
 					interrupts = <0 31 IRQ_TYPE_LEVEL_HIGH>;
 					clocks = <&clks IMX6QDL_CLK_ECSPI1>,
@@ -287,7 +287,7 @@
 				ecspi2: ecspi@0200c000 {
 					#address-cells = <1>;
 					#size-cells = <0>;
-					compatible = "fsl,imx6q-ecspi", "fsl,imx51-ecspi";
+					compatible = "fsl,imx6q-ecspi", "fsl,imx53-ecspi";
 					reg = <0x0200c000 0x4000>;
 					interrupts = <0 32 IRQ_TYPE_LEVEL_HIGH>;
 					clocks = <&clks IMX6QDL_CLK_ECSPI2>,
@@ -301,7 +301,7 @@
 				ecspi3: ecspi@02010000 {
 					#address-cells = <1>;
 					#size-cells = <0>;
-					compatible = "fsl,imx6q-ecspi", "fsl,imx51-ecspi";
+					compatible = "fsl,imx6q-ecspi", "fsl,imx53-ecspi";
 					reg = <0x02010000 0x4000>;
 					interrupts = <0 33 IRQ_TYPE_LEVEL_HIGH>;
 					clocks = <&clks IMX6QDL_CLK_ECSPI3>,
@@ -315,7 +315,7 @@
 				ecspi4: ecspi@02014000 {
 					#address-cells = <1>;
 					#size-cells = <0>;
-					compatible = "fsl,imx6q-ecspi", "fsl,imx51-ecspi";
+					compatible = "fsl,imx6q-ecspi", "fsl,imx53-ecspi";
 					reg = <0x02014000 0x4000>;
 					interrupts = <0 34 IRQ_TYPE_LEVEL_HIGH>;
 					clocks = <&clks IMX6QDL_CLK_ECSPI4>,

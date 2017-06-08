@@ -144,7 +144,7 @@
 				ecspi5: ecspi@02018000 {
 					#address-cells = <1>;
 					#size-cells = <0>;
-					compatible = "fsl,imx6q-ecspi", "fsl,imx51-ecspi";
+					compatible = "fsl,imx6q-ecspi", "fsl,imx53-ecspi";
 					reg = <0x02018000 0x4000>;
 					interrupts = <0 35 IRQ_TYPE_LEVEL_HIGH>;
 					clocks = <&clks IMX6Q_CLK_ECSPI5>,
