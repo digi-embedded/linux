@@ -126,6 +126,16 @@ static const struct iio_event_spec mca_cc6ul_tamper_events[] = {
 	},
 };
 
+static void mca_cc6ul_tamper_get_time(u8 *data, struct rtc_time *tm)
+{
+	tm->tm_year = ((data[DATE_YEAR_H] << 8) | data[DATE_YEAR_L]) - 1900;
+	tm->tm_mon  = (data[DATE_MONTH] & MCA_CC6UL_RTC_MONTH_MASK) - 1;
+	tm->tm_mday = (data[DATE_DAY]   & MCA_CC6UL_RTC_DAY_MASK);
+	tm->tm_hour = (data[DATE_HOUR]  & MCA_CC6UL_RTC_HOUR_MASK);
+	tm->tm_min  = (data[DATE_MIN]   & MCA_CC6UL_RTC_MIN_MASK);
+	tm->tm_sec  = (data[DATE_SEC]   & MCA_CC6UL_RTC_SEC_MASK);
+}
+
 static unsigned int get_tamper_base_reg(unsigned int iface)
 {
 	switch (iface) {
@@ -281,7 +291,39 @@ static ssize_t store_tp_events(struct device *dev, struct device_attribute *attr
 	return count;
 }
 
+static ssize_t show_timestamp(struct device *dev, struct device_attribute *attr,
+			      char *buf)
+{
+	struct iio_dev *iio = dev_to_iio_dev(dev);
+	struct mca_cc6ul_tamper *tp = iio_priv(iio);
+	unsigned int tamper_base_reg = get_tamper_base_reg(tp->iface);
+	time64_t tamper_t64 = -1;
+	struct rtc_time tm;
+	u8 data[MCA_CC6UL_TAMPER_REGS_LEN];
+	int ret;
+
+	if (tamper_base_reg == ~0)
+		return -1;
+
+	ret = regmap_bulk_read(tp->mca->regmap, tamper_base_reg, data,
+			       sizeof(data));
+	if (ret != 0) {
+		dev_err(tp->mca->dev, "Failed reading Tamper%d registers (%d)\n",
+			tp->iface, ret);
+		return ret;
+	}
+
+	/* Confirm the event and get the timestamp */
+	if (data[EVENT] & MCA_CC6UL_TAMPER_SIGNALED) {
+		mca_cc6ul_tamper_get_time(data, &tm);
+		tamper_t64 = rtc_tm_to_time64(&tm);
+	}
+
+	return sprintf(buf, "%lld\n", tamper_t64);
+}
+
 static IIO_DEVICE_ATTR(tamper_events, S_IRUGO | S_IWUSR, show_tp_events, store_tp_events, 0);
+static IIO_DEVICE_ATTR(timestamp, S_IRUGO, show_timestamp, NULL, 0);
 
 #ifdef MCA_TAMPER_HAS_EXTRA_SYSFS_ENTRIES
 TAMPER_SYSFS_SHOW_REG(config0, CFG0, u8)
@@ -327,6 +369,7 @@ static struct attribute *mca_cc6ul_tamper_analog_attributes[] = {
 	MCA_CC6UL_TAMPER_DEV_ATTR(io_out),
 	MCA_CC6UL_TAMPER_DEV_ATTR(pwroff_delay_ms),
 	MCA_CC6UL_TAMPER_DEV_ATTR(tamper_events),
+	MCA_CC6UL_TAMPER_DEV_ATTR(timestamp),
 	MCA_CC6UL_TAMPER_DEV_ATTR(srate),
 	MCA_CC6UL_TAMPER_DEV_ATTR(thr_l),
 	MCA_CC6UL_TAMPER_DEV_ATTR(thr_h),
@@ -347,6 +390,7 @@ static const struct iio_info mca_cc6ul_tamper_analog_info = {
 #else
 static struct attribute *mca_cc6ul_tamper_attributes[] = {
 	MCA_CC6UL_TAMPER_DEV_ATTR(tamper_events),
+	MCA_CC6UL_TAMPER_DEV_ATTR(timestamp),
 	NULL,
 };
 #endif /* MCA_TAMPER_HAS_EXTRA_SYSFS_ENTRIES */
@@ -361,16 +405,6 @@ static const struct iio_info mca_cc6ul_tamper_info = {
 	.attrs			= &mca_cc6ul_tamper_attribute_group,
 	.read_raw		= &mca_cc6ul_tamper_read_raw,
 };
-
-static void mca_cc6ul_tamper_get_time(u8 *data, struct rtc_time *tm)
-{
-	tm->tm_year = ((data[DATE_YEAR_H] << 8) | data[DATE_YEAR_L]) - 1900;
-	tm->tm_mon  = (data[DATE_MONTH] & MCA_CC6UL_RTC_MONTH_MASK) - 1;
-	tm->tm_mday = (data[DATE_DAY]   & MCA_CC6UL_RTC_DAY_MASK);
-	tm->tm_hour = (data[DATE_HOUR]  & MCA_CC6UL_RTC_HOUR_MASK);
-	tm->tm_min  = (data[DATE_MIN]   & MCA_CC6UL_RTC_MIN_MASK);
-	tm->tm_sec  = (data[DATE_SEC]   & MCA_CC6UL_RTC_SEC_MASK);
-}
 
 #ifdef MCA_TAMPER_DUMP_REGISTERS
 static void mca_cc6ul_tamper_regs_dump(u8 *data)
