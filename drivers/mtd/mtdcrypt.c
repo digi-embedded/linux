@@ -1,7 +1,7 @@
 /**
  * MTD encryption layer
  *
- * Copyright (C) 2016 Digi International Inc.
+ * Copyright (C) 2016, 2017 Digi International Inc.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
@@ -571,10 +571,21 @@ void strtohex(char *in, unsigned long *out, int len)
 	}
 }
 
+static int adjust_offset_skipping_bad_blocks(struct mtd_info *mtd, int offset)
+{
+	if (mtd_block_isbad(mtd, offset)) {
+		const int new_offset = offset + mtd->erasesize;
+
+		return adjust_offset_skipping_bad_blocks(mtd, new_offset);
+	}
+
+	return offset;
+}
+
 static int mtdcrypt_get_key_from_part(int keyblob_part, int keyblob_size,
 				      int keyblob_offset, char *keyblob_str)
 {
-	struct mtd_info *mtd_envpart;
+	struct mtd_info *mtd_part;
 	int retlen;
 
 	if (keyblob_size > MAX_KEYBLOB_BYTES) {
@@ -582,9 +593,11 @@ static int mtdcrypt_get_key_from_part(int keyblob_part, int keyblob_size,
 		return -EINVAL;
 	}
 
-	mtd_envpart = get_mtd_device(NULL, keyblob_part);
-	if (mtd_read(mtd_envpart, keyblob_offset, keyblob_size,
-				&retlen, keyblob_str)) {
+	mtd_part = get_mtd_device(NULL, keyblob_part);
+	keyblob_offset = adjust_offset_skipping_bad_blocks(mtd_part,
+							   keyblob_offset);
+	if (mtd_read(mtd_part, keyblob_offset, keyblob_size,
+		     &retlen, keyblob_str)) {
 		pr_err("mtdcrypt: Failed to read keyblob from media\n");
 		return -EINVAL;
 	}
@@ -602,6 +615,7 @@ static int mtdcrypt_set_key(struct mtd_info *mtd)
 	char *keyblob_str = NULL;
 #if defined(CONFIG_CRYPTO_DEV_FSL_CAAM)
 	char *keymod = NULL;
+	bool using_default_keyblob_loc = false;
 #endif
 	int ret = 0;
 
@@ -657,13 +671,15 @@ static int mtdcrypt_set_key(struct mtd_info *mtd)
 		if (ret)
 			goto out_err1;
 	} else {
-		/* Default values */
+#if defined(CONFIG_CRYPTO_DEV_FSL_CAAM)
+		using_default_keyblob_loc = true;
+#endif
+		/* Default values since dey-2.2-r2 */
 		keyblob_size = DEFAULT_KEY_BYTES + BLOB_OVERHEAD;
-		/* environment partition in default mtdparts */
-		keyblob_part = 1;
-		/* On the third erase block, after two erase blocks used
-		 * for the redundant U-Boot environments */
-		keyblob_offset = mtd->crypt_info->erase_size * 2;
+		/* Safe partition in default mtdparts */
+		keyblob_part = 2;
+		/* First block */
+		keyblob_offset = 0;
 		ret = mtdcrypt_get_key_from_part(keyblob_part, keyblob_size,
 				keyblob_offset, keyblob_str);
 		if (ret)
@@ -696,6 +712,30 @@ static int mtdcrypt_set_key(struct mtd_info *mtd)
 	ret = mtdcrypt_decrypt_key(crypt_info->jr_dev, keyblob_str,
 				keyblob_size, keymod,
 				crypt_info->key);
+	if (ret && using_default_keyblob_loc) {
+		/* Default values up to dey-2.2-r1 */
+		keyblob_size = DEFAULT_KEY_BYTES + BLOB_OVERHEAD;
+		/* environment partition in default mtdparts */
+		keyblob_part = 1;
+		/*
+		 * On the third erase block, after two erase blocks used
+		 * for the redundant U-Boot environments.
+		 */
+		keyblob_offset = mtd->crypt_info->erase_size * 2;
+
+		ret = mtdcrypt_get_key_from_part(keyblob_part, keyblob_size,
+						 keyblob_offset, keyblob_str);
+		if (ret) {
+			pr_err("mtdcrypt: reading default keyblob failed.\n");
+			ret = -EINVAL;
+			goto out_err2;
+		}
+
+		ret = mtdcrypt_decrypt_key(crypt_info->jr_dev, keyblob_str,
+					   keyblob_size, keymod,
+					   crypt_info->key);
+	}
+
 	if (ret) {
 		pr_err("mtdcrypt: Key decryption error.\n");
 		ret = -EINVAL;
