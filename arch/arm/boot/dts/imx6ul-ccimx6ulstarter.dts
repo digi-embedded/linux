@@ -37,20 +37,23 @@
 };
 
 /* ECSPI3 (as master - Raspberry PI Expansion header) */
-&ecspi3 {
-	/*
-	 * There are no SPI slave devices on the SBC.
-	 * Enable if adding your slave devices below.
-	 */
-	//status = "okay";
-
-	/* Add your slave devices here. Next is an example of spidev. */
-	//spidev@0 {
-	//	reg = <0>;
-	//	compatible = "spidev";
-	//	spi-max-frequency = <1000000>;
-	//};
-};
+// &ecspi3 {
+// 	/*
+// 	 * There are no SPI slave devices on the SBC.
+// 	 * Enable if adding your slave devices below.
+// 	 */
+// 	status = "okay";
+//
+// 	/*
+// 	 * Add your slave devices here. Next is an example of spidev.
+// 	 * Expect a harmless kernel warning if you enable spidev as slave.
+// 	 */
+// 	spidev@0 {
+// 		reg = <0>;
+// 		compatible = "spidev";
+// 		spi-max-frequency = <1000000>;
+// 	};
+// };
 
 /* ECSPI3 (as slave - Raspberry PI Expansion header) */
 // &ecspi3 {
