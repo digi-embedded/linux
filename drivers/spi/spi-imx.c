@@ -1,4 +1,5 @@
 /*
+ * Copyright 2017 Digi International Inc., All Rights Reserved
  * Copyright 2004-2007 Freescale Semiconductor, Inc. All Rights Reserved.
  * Copyright (C) 2008 Juergen Beisert
  *
@@ -59,6 +60,8 @@
 #define MAX_SDMA_BD_BYTES  (1 << 15)
 /* The maximum bytes that IMX53_ECSPI can transfer in slave mode.*/
 #define MX53_MAX_TRANSFER_BYTES                512
+/* Default speed to configure for slave mode */
+#define SPI_SLAVE_DEFAULT_SPEED			100000
 
 struct spi_imx_config {
 	unsigned int speed_hz;
@@ -1016,6 +1019,8 @@ static int spi_imx_setupxfer(struct spi_device *spi,
 
 	if (!config.speed_hz)
 		config.speed_hz = spi->max_speed_hz;
+	if (!config.speed_hz && spi_imx->slave_mode)
+		config.speed_hz = SPI_SLAVE_DEFAULT_SPEED;
 	if (!config.bpw)
 		config.bpw = spi->bits_per_word;
 
