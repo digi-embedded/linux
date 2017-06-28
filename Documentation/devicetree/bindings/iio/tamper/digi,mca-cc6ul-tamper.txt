@@ -6,10 +6,13 @@ Required properties:
 - compatible: must be "digi,mca-cc6ul-tamper".
 
 Optional properties:
-- tamper-if-list: list of enabled tamper interfaces (0 and 1 are available)
+- tamper-if-list: list of enabled tamper interfaces. Interfaces 0 and 1 are for
+		  digital signals while 2 and 3 are for analog comparison. Refer
+		  to the documentation for more information on how to use these
+		  features.
 
 Example:
 
 	&mca_tamper {
-		digi,tamper-if-list = <0 1>;
+		digi,tamper-if-list = <0 1 2 3>;
 	};

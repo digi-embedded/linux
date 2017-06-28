@@ -63,12 +63,17 @@
 	status = "okay";
 };
 
-&pwm5 {
+/* Audio chip */
+&max98089 {
 	status = "okay";
 };
 
-/* Audio chip */
-&max98089 {
+&mca_ioexp {
+	status = "okay";
+	restore-config-on-resume;
+};
+
+&pwm5 {
 	status = "okay";
 };
 
@@ -113,11 +118,6 @@
 	//bus-width = <8>;
 
 	status = "okay";
-};
-
-&mca_ioexp {
-	status = "okay";
-	restore-config-on-resume;
 };
 
 /* Configure all unused pins as GPIO */

@@ -46,7 +46,9 @@ struct cma *dma_contiguous_default_area;
  * Users, who want to set the size of global CMA area for their system
  * should use cma= kernel parameter.
  */
+#ifndef CONFIG_CMA_SIZE_SEL_PERCENTAGE
 static const phys_addr_t size_bytes = CMA_SIZE_MBYTES * SZ_1M;
+#endif
 static phys_addr_t size_cmdline = -1;
 static phys_addr_t base_cmdline;
 static phys_addr_t limit_cmdline;

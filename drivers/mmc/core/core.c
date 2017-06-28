@@ -2462,6 +2462,17 @@ static int mmc_rescan_try_freq(struct mmc_host *host, unsigned freq)
 	mmc_power_up(host, host->ocr_avail);
 
 	/*
+	 * For removable cards that need polling using commands, assume card is
+	 * not present if SD_SEND_IF_COND times out.
+	 */
+	if ((host->caps & MMC_CAP_NEEDS_POLL) &&
+	    !(host->caps & MMC_CAP_NONREMOVABLE)) {
+		if (mmc_send_if_cond(host, host->ocr_avail) ==
+			-ETIMEDOUT)
+			goto out;
+	}
+
+	/*
 	 * Some eMMCs (with VCCQ always on) may not be reset after power up, so
 	 * do a hardware reset if possible.
 	 */
@@ -2485,6 +2496,7 @@ static int mmc_rescan_try_freq(struct mmc_host *host, unsigned freq)
 	if (!mmc_attach_mmc(host))
 		return 0;
 
+out:
 	mmc_power_off(host);
 	return -EIO;
 }

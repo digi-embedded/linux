@@ -81,9 +81,9 @@
 &ecspi1 {
 	status = "okay";
 
-	spidev@0 {
-		status = "okay";
-	};
+//	spidev@0 {
+//		status = "okay";
+//	};
 };
 
 &i2c3 {
@@ -177,6 +177,8 @@
 };
 
 &v4l2_cap_1 {
+	ipu_id = <1>;
+	csi_id = <1>;
 	status = "okay";
 };
 

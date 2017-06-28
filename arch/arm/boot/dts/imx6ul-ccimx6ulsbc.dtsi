@@ -22,6 +22,11 @@
 		status = "disabled";
 	};
 
+	pxp_v4l2: pxp-v4l2 {
+		compatible = "fsl,imx6ul-pxp-v4l2", "fsl,imx6sx-pxp-v4l2", "fsl,imx6sl-pxp-v4l2";
+		status = "disabled";
+	};
+
 	reg_usb_otg1_vbus: reg_usb_otg1:@0 {
 		compatible = "regulator-fixed";
 		regulator-name = "usb_otg1_vbus";
@@ -29,11 +34,6 @@
 		regulator-max-microvolt = <5000000>;
 		gpio = <&gpio1 4 GPIO_ACTIVE_HIGH>;
 		enable-active-high;
-	};
-
-	pxp_v4l2: pxp-v4l2 {
-		compatible = "fsl,imx6ul-pxp-v4l2", "fsl,imx6sx-pxp-v4l2", "fsl,imx6sl-pxp-v4l2";
-		status = "disabled";
 	};
 
 	sound_max98089: sound-max98089 {
@@ -79,7 +79,7 @@
 	fsl,spi-num-chipselects = <1>;
 	cs-gpios = <&gpio3 26 GPIO_ACTIVE_LOW>;
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_ecspi1>;
+	pinctrl-0 = <&pinctrl_ecspi1_master>;
 	status = "disabled";
 };
 
@@ -204,7 +204,7 @@
 			compatible = "digi,mca-ioexp-gpio";
 			gpio-controller;
 			#gpio-cells = <2>;
-			
+
 			interrupt-parent = <&mca_ioexp>;
 			interrupt-controller;
 			#interrupt-cells = <2>;
@@ -393,12 +393,21 @@
 			>;
 		};
 
-		pinctrl_ecspi1: ecspi1grp {
+		pinctrl_ecspi1_master: ecspi1grp1 {
 			fsl,pins = <
 				MX6UL_PAD_LCD_DATA20__ECSPI1_SCLK	0x10b0
 				MX6UL_PAD_LCD_DATA22__ECSPI1_MOSI	0x10b0
 				MX6UL_PAD_LCD_DATA23__ECSPI1_MISO	0x10b0
 				MX6UL_PAD_LCD_DATA21__GPIO3_IO26	0x10b0 /* Chip Select */
+			>;
+		};
+
+		pinctrl_ecspi1_slave: ecspi1grp2 {
+			fsl,pins = <
+				MX6UL_PAD_LCD_DATA20__ECSPI1_SCLK	0x10b0
+				MX6UL_PAD_LCD_DATA22__ECSPI1_MOSI	0x10b0
+				MX6UL_PAD_LCD_DATA23__ECSPI1_MISO	0x10b0
+				MX6UL_PAD_LCD_DATA21__ECSPI1_SS0	0x10b0 /* Chip Select */
 			>;
 		};
 
@@ -465,7 +474,7 @@
 
 		pinctrl_fusion_touch: fusiongrp{
 			fsl,pins = <
-				MX6UL_PAD_SNVS_TAMPER2__GPIO5_IO02	0x80000000
+				MX6UL_PAD_SNVS_TAMPER2__GPIO5_IO02	0x3000
 			>;
 		};
 
@@ -545,7 +554,6 @@
 			fsl,pins = <
 				MX6UL_PAD_JTAG_TRST_B__GPIO1_IO15	0x3000
 				MX6UL_PAD_JTAG_TCK__GPIO1_IO14		0x3000
-				MX6UL_PAD_JTAG_TMS__SAI2_MCLK		0x3000
 				MX6UL_PAD_JTAG_TMS__GPIO1_IO11		0x3000
 				MX6UL_PAD_JTAG_TDO__GPIO1_IO12		0x3000
 				/* Interrupt */

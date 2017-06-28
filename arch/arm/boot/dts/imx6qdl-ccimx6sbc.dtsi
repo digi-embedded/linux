@@ -14,7 +14,7 @@
 		compatible = "regulator-fixed";
 		gpio = <&gpio_extender 7 0>;
 		regulator-name = "gpio-ext-reg";
-		regulator-boot-on;
+		regulator-always-on;
 		/* Leave enabled for MIPI camera suspend  to work */
 		/* regulator-always-on; */
 		enable-active-high;
@@ -152,12 +152,12 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_ecspi1>;
 
-	spidev@0 {
-		compatible = "spidev";
-		reg = <0>;
-		spi-max-frequency = <4000000>;
-		status = "disabled";
-	};
+//	spidev@0 {
+//		compatible = "spidev";
+//		reg = <0>;
+//		spi-max-frequency = <4000000>;
+//		status = "disabled";
+//	};
 };
 
 /* 10/100/1000 KSZ9031 PHY */
@@ -308,12 +308,13 @@
 
 	/* MIPI-CSI2 camera */
 	ov5640_mipi: ov5640_mipi@4c {
-		compatible = "ovti,ov5640_mipi";
+		compatible = "ovti,ov564x_mipi";
 		reg = <0x4c>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_mipi>;
 		clocks = <&clks 201>;
 		clock-names = "csi_mclk";
+		pwn-gpios = <&gpio7 6 GPIO_ACTIVE_LOW>;
 		digi,alt-pwn-gpios = <&gpio5 0 GPIO_ACTIVE_LOW
 				      &gpio3 15 GPIO_ACTIVE_LOW>;
 		mclk = <24000000>;
@@ -330,6 +331,7 @@
 		clocks = <&clks 201>;
 		clock-names = "csi_mclk";
 		pwn-gpios = <&gpio5 0 GPIO_ACTIVE_LOW>;
+		digi,alt-pwn-gpios = <&gpio7 6 1>;
 		csi_id = <0>;
 		ipu_id = <0>;
 		mclk = <24000000>;

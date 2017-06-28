@@ -29,6 +29,11 @@
 #define IMX_SPDIF_DMABUF_SIZE	(64 * 1024)
 #define IMX_ESAI_DMABUF_SIZE	(256 * 1024)
 
+#define IMX_DEFAULT_DMABUF_SIZE	(64 * 1024)
+#define IMX_SAI_DMABUF_SIZE	(64 * 1024)
+#define IMX_SPDIF_DMABUF_SIZE	(64 * 1024)
+#define IMX_ESAI_DMABUF_SIZE	(256 * 1024)
+
 static inline void
 imx_pcm_dma_params_init_data(struct imx_dma_data *dma_data,
 	int dma, enum sdma_peripheral_type peripheral_type)

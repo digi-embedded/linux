@@ -199,7 +199,7 @@ struct mxsfb_devdata {
 };
 
 struct mxsfb_info {
-	struct fb_info fb_info;
+	struct fb_info *fb_info;
 	struct platform_device *pdev;
 	struct clk *clk_pix;
 	struct clk *clk_axi;
@@ -249,8 +249,6 @@ static const struct mxsfb_devdata mxsfb_devdata[] = {
 		.ipversion = 4,
 	},
 };
-
-#define to_imxfb_host(x) (container_of(x, struct mxsfb_info, fb_info))
 
 static int mxsfb_map_videomem(struct fb_info *info);
 static int mxsfb_unmap_videomem(struct fb_info *info);
@@ -436,7 +434,7 @@ static irqreturn_t mxsfb_irq_handler(int irq, void *dev_id)
 static int mxsfb_check_var(struct fb_var_screeninfo *var,
 		struct fb_info *fb_info)
 {
-	struct mxsfb_info *host = to_imxfb_host(fb_info);
+	struct mxsfb_info *host = fb_info->par;
 	const struct fb_bitfield *rgb = NULL;
 
 	if (var->xres < MIN_XRES)
@@ -503,7 +501,7 @@ static int mxsfb_check_var(struct fb_var_screeninfo *var,
 
 static void mxsfb_enable_controller(struct fb_info *fb_info)
 {
-	struct mxsfb_info *host = to_imxfb_host(fb_info);
+	struct mxsfb_info *host = fb_info->par;
 	u32 reg;
 	int ret;
 
@@ -578,7 +576,7 @@ static void mxsfb_enable_controller(struct fb_info *fb_info)
 
 static void mxsfb_disable_controller(struct fb_info *fb_info)
 {
-	struct mxsfb_info *host = to_imxfb_host(fb_info);
+	struct mxsfb_info *host = fb_info->par;
 	unsigned loop;
 	u32 reg;
 	int ret;
@@ -641,7 +639,7 @@ static bool mxsfb_par_equal(struct fb_info *fbi, struct mxsfb_info *host)
 
 static int mxsfb_set_par(struct fb_info *fb_info)
 {
-	struct mxsfb_info *host = to_imxfb_host(fb_info);
+	struct mxsfb_info *host = fb_info->par;
 	u32 ctrl, vdctrl0, vdctrl4;
 	int line_size, fb_size;
 	int reenable = 0;
@@ -831,7 +829,7 @@ static int mxsfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
 
 static int mxsfb_wait_for_vsync(struct fb_info *fb_info)
 {
-	struct mxsfb_info *host = to_imxfb_host(fb_info);
+	struct mxsfb_info *host = fb_info->par;
 	int ret = 0;
 
 	if (host->cur_blank != FB_BLANK_UNBLANK) {
@@ -875,7 +873,7 @@ static int mxsfb_ioctl(struct fb_info *fb_info, unsigned int cmd,
 
 static int mxsfb_blank(int blank, struct fb_info *fb_info)
 {
-	struct mxsfb_info *host = to_imxfb_host(fb_info);
+	struct mxsfb_info *host = fb_info->par;
 
 	host->cur_blank = blank;
 
@@ -906,7 +904,7 @@ static int mxsfb_blank(int blank, struct fb_info *fb_info)
 			pm_runtime_get_sync(&host->pdev->dev);
 
 			writel(0, host->base + LCDC_CTRL);
-			mxsfb_set_par(&host->fb_info);
+			mxsfb_set_par(host->fb_info);
 			mxsfb_enable_controller(fb_info);
 		}
 		break;
@@ -918,7 +916,7 @@ static int mxsfb_pan_display(struct fb_var_screeninfo *var,
 		struct fb_info *fb_info)
 {
 	int ret = 0;
-	struct mxsfb_info *host = to_imxfb_host(fb_info);
+	struct mxsfb_info *host = fb_info->par;
 	unsigned offset;
 
 	if (host->cur_blank != FB_BLANK_UNBLANK) {
@@ -1002,7 +1000,7 @@ static struct fb_ops mxsfb_ops = {
 
 static int mxsfb_restore_mode(struct mxsfb_info *host)
 {
-	struct fb_info *fb_info = &host->fb_info;
+	struct fb_info *fb_info = host->fb_info;
 	unsigned line_count;
 	unsigned period;
 	unsigned long pa, fbsize;
@@ -1043,6 +1041,7 @@ static int mxsfb_restore_mode(struct mxsfb_info *host)
 		break;
 	case 3:
 		bits_per_pixel = 32;
+		break;
 	case 1:
 	default:
 		return -EINVAL;
@@ -1105,7 +1104,7 @@ static int mxsfb_restore_mode(struct mxsfb_info *host)
 
 static int mxsfb_init_fbinfo_dt(struct mxsfb_info *host)
 {
-	struct fb_info *fb_info = &host->fb_info;
+	struct fb_info *fb_info = host->fb_info;
 	struct fb_var_screeninfo *var = &fb_info->var;
 	struct device *dev = &host->pdev->dev;
 	struct device_node *np = host->pdev->dev.of_node;
@@ -1208,7 +1207,7 @@ put_display_node:
 
 static int mxsfb_init_fbinfo(struct mxsfb_info *host)
 {
-	struct fb_info *fb_info = &host->fb_info;
+	struct fb_info *fb_info = host->fb_info;
 	struct fb_var_screeninfo *var = &fb_info->var;
 	struct fb_modelist *modelist;
 	int ret;
@@ -1264,7 +1263,7 @@ static int mxsfb_init_fbinfo(struct mxsfb_info *host)
 static void mxsfb_dispdrv_init(struct platform_device *pdev,
 			      struct fb_info *fbi)
 {
-	struct mxsfb_info *host = to_imxfb_host(fbi);
+	struct mxsfb_info *host = fbi->par;
 	struct mxc_dispdrv_setting setting;
 	struct device *dev = &pdev->dev;
 	char disp_dev[32];
@@ -1287,7 +1286,7 @@ static void mxsfb_dispdrv_init(struct platform_device *pdev,
 
 static void mxsfb_free_videomem(struct mxsfb_info *host)
 {
-	struct fb_info *fb_info = &host->fb_info;
+	struct fb_info *fb_info = host->fb_info;
 
 	mxsfb_unmap_videomem(fb_info);
 }
@@ -1399,20 +1398,28 @@ static int mxsfb_probe(struct platform_device *pdev)
 		return -ENODEV;
 	}
 
-	fb_info = framebuffer_alloc(sizeof(struct mxsfb_info), &pdev->dev);
-	if (!fb_info) {
-		dev_err(&pdev->dev, "Failed to allocate fbdev\n");
+	host = devm_kzalloc(&pdev->dev, sizeof(struct mxsfb_info), GFP_KERNEL);
+	if (!host) {
+		dev_err(&pdev->dev, "Failed to allocate IO resource\n");
 		return -ENOMEM;
 	}
 
-	host = to_imxfb_host(fb_info);
+	fb_info = framebuffer_alloc(sizeof(struct fb_info), &pdev->dev);
+	if (!fb_info) {
+		dev_err(&pdev->dev, "Failed to allocate fbdev\n");
+		devm_kfree(&pdev->dev, host);
+		return -ENOMEM;
+	}
+	host->fb_info = fb_info;
+	fb_info->par = host;
 
 	ret = devm_request_irq(&pdev->dev, irq, mxsfb_irq_handler, 0,
 			  dev_name(&pdev->dev), host);
 	if (ret) {
 		dev_err(&pdev->dev, "request_irq (%d) failed with error %d\n",
 				irq, ret);
-		return -ENODEV;
+		ret = -ENODEV;
+		goto fb_release;
 	}
 
 	host->base = devm_ioremap_resource(&pdev->dev, res);
@@ -1480,8 +1487,6 @@ static int mxsfb_probe(struct platform_device *pdev)
 		}
 	}
 
-	platform_set_drvdata(pdev, fb_info);
-
 	if (!host->enabled) {
 		writel(0, host->base + LCDC_CTRL);
 		mxsfb_set_par(fb_info);
@@ -1515,16 +1520,18 @@ fb_destroy:
 	fb_destroy_modelist(&fb_info->modelist);
 fb_pm_runtime_disable:
 	pm_runtime_disable(&host->pdev->dev);
+	devm_kfree(&pdev->dev, fb_info->pseudo_palette);
 fb_release:
 	framebuffer_release(fb_info);
+	devm_kfree(&pdev->dev, host);
 
 	return ret;
 }
 
 static int mxsfb_remove(struct platform_device *pdev)
 {
-	struct fb_info *fb_info = platform_get_drvdata(pdev);
-	struct mxsfb_info *host = to_imxfb_host(fb_info);
+	struct mxsfb_info *host = platform_get_drvdata(pdev);
+	struct fb_info *fb_info = host->fb_info;
 
 	if (host->enabled)
 		mxsfb_disable_controller(fb_info);
@@ -1533,17 +1540,18 @@ static int mxsfb_remove(struct platform_device *pdev)
 	unregister_framebuffer(fb_info);
 	mxsfb_free_videomem(host);
 
-	framebuffer_release(fb_info);
-
 	platform_set_drvdata(pdev, NULL);
+
+	devm_kfree(&pdev->dev, fb_info->pseudo_palette);
+	framebuffer_release(fb_info);
+	devm_kfree(&pdev->dev, host);
 
 	return 0;
 }
 
 static void mxsfb_shutdown(struct platform_device *pdev)
 {
-	struct fb_info *fb_info = platform_get_drvdata(pdev);
-	struct mxsfb_info *host = to_imxfb_host(fb_info);
+	struct mxsfb_info *host = platform_get_drvdata(pdev);
 
 	/*
 	 * Force stop the LCD controller as keeping it running during reboot
@@ -1574,8 +1582,8 @@ static int mxsfb_runtime_resume(struct device *dev)
 
 static int mxsfb_suspend(struct device *pdev)
 {
-	struct fb_info *fb_info = dev_get_drvdata(pdev);
-	struct mxsfb_info *host = to_imxfb_host(fb_info);
+	struct mxsfb_info *host = dev_get_drvdata(pdev);
+	struct fb_info *fb_info = host->fb_info;
 	int saved_blank;
 
 	console_lock();
@@ -1592,8 +1600,8 @@ static int mxsfb_suspend(struct device *pdev)
 
 static int mxsfb_resume(struct device *pdev)
 {
-	struct fb_info *fb_info = dev_get_drvdata(pdev);
-	struct mxsfb_info *host = to_imxfb_host(fb_info);
+	struct mxsfb_info *host = dev_get_drvdata(pdev);
+	struct fb_info *fb_info = host->fb_info;
 
 	pinctrl_pm_select_default_state(pdev);
 

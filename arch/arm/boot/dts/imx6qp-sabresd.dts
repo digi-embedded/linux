@@ -68,14 +68,17 @@
 };
 
 &ov564x {
+	AVDD-supply = <&vgen6_reg>; /* 2.8v */
 	DOVDD-supply = <&sw4_reg>; /* 1.8v */
 };
 
 &ov564x_mipi {
+	AVDD-supply = <&vgen6_reg>; /* 2.8v */
 	DOVDD-supply = <&sw4_reg>; /* 1.8v */
 };
 
 &pcie {
+	pcie-bus-supply = <&vgen3_reg>; /* 1.8v pwr up pcie ext osc on revb */
 	reset-gpio = <&gpio7 12 0>;
 	status = "okay";
 };
