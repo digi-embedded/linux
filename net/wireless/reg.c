@@ -1415,7 +1415,8 @@ static void reg_set_request_processed(void)
 		need_more_processing = true;
 	spin_unlock(&reg_requests_lock);
 
-	if (lr->initiator == NL80211_REGDOM_SET_BY_USER)
+	if (lr->initiator == NL80211_REGDOM_SET_BY_USER ||
+	    lr->initiator == NL80211_REGDOM_SET_BY_CORE)
 		cancel_delayed_work(&reg_timeout);
 
 	if (need_more_processing)
@@ -1697,6 +1698,7 @@ static void reg_process_hint(struct regulatory_request *reg_request)
 	switch (reg_request->initiator) {
 	case NL80211_REGDOM_SET_BY_CORE:
 		reg_process_hint_core(reg_request);
+		schedule_delayed_work(&reg_timeout, msecs_to_jiffies(3142));
 		return;
 	case NL80211_REGDOM_SET_BY_USER:
 		treatment = reg_process_hint_user(reg_request);
