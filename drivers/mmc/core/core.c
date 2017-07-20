@@ -2451,8 +2451,13 @@ int mmc_hw_reset(struct mmc_host *host)
 }
 EXPORT_SYMBOL(mmc_hw_reset);
 
+
 static int mmc_rescan_try_freq(struct mmc_host *host, unsigned freq)
 {
+#define N_POLLS_DURING_BOOT 20
+	static int n_polls;
+	int ret;
+
 	host->f_init = freq;
 
 #ifdef CONFIG_MMC_DEBUG
@@ -2462,14 +2467,20 @@ static int mmc_rescan_try_freq(struct mmc_host *host, unsigned freq)
 	mmc_power_up(host, host->ocr_avail);
 
 	/*
-	 * For removable cards that need polling using commands, assume card is
-	 * not present if SD_SEND_IF_COND times out.
+	 * For removable cards that need polling using commands, assume card
+	 * is not present if SD_SEND_IF_COND times out.
+	 * This can make the uSD detection fail when booting from uSD,
+	 * so do not apply this workaround during boot.
 	 */
-	if ((host->caps & MMC_CAP_NEEDS_POLL) &&
-	    !(host->caps & MMC_CAP_NONREMOVABLE)) {
-		if (mmc_send_if_cond(host, host->ocr_avail) ==
-			-ETIMEDOUT)
-			goto out;
+	if (n_polls >= N_POLLS_DURING_BOOT) {
+		if ((host->caps & MMC_CAP_NEEDS_POLL) &&
+		    !(host->caps & MMC_CAP_NONREMOVABLE)) {
+				ret = mmc_send_if_cond(host, host->ocr_avail);
+				if (ret == -ETIMEDOUT)
+					goto out;
+		}
+	} else {
+		n_polls++;
 	}
 
 	/*
