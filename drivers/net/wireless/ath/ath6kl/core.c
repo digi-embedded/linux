@@ -75,6 +75,9 @@ int ath6kl_core_init(struct ath6kl *ar, enum ath6kl_htc_type htc_type)
 	struct ath6kl_bmi_target_info targ_info;
 	struct wireless_dev *wdev;
 	int ret = 0, i;
+#ifdef CONFIG_OF
+	struct device_node *node;
+#endif
 
 	switch (htc_type) {
 	case ATH6KL_HTC_TYPE_MBOX:
@@ -127,8 +130,6 @@ int ath6kl_core_init(struct ath6kl *ar, enum ath6kl_htc_type htc_type)
 	ar->testmode = testmode;
 #ifdef CONFIG_OF
 	if (softmac_enable == EINVAL) {
-		struct device_node *node;
-
 		node = of_find_compatible_node(NULL, NULL, "atheros,ath6kl");
 		if (node)
 			softmac_enable =
@@ -161,6 +162,22 @@ int ath6kl_core_init(struct ath6kl *ar, enum ath6kl_htc_type htc_type)
 				  ar->fw_capabilities);
 	}
 
+#ifdef CONFIG_OF
+	/*
+	 * The firmware used in the ccimx6 SoM has builtin support for the
+	 * inactivity timeout, but that capability is not flagged in the binary
+	 * file. That is needed by the ccimx6 when working in AP mode, otherwise
+	 * the supplicant/hostapd will handle it internally and, because it is
+	 * not properly done, it will disconnect the clients after the inactivity
+	 * timeout (300 seconds by default).
+	 *
+	 * To avoid that, we set here the capability in the firmware bit-stream.
+	 */
+	node = of_find_compatible_node(NULL, NULL, "digi,ccimx6");
+	if (node)
+		__set_bit(ATH6KL_FW_CAPABILITY_INACTIVITY_TIMEOUT,
+			  ar->fw_capabilities);
+#endif
 	/* Indicate that WMI is enabled (although not ready yet) */
 	set_bit(WMI_ENABLED, &ar->flag);
 	ar->wmi = ath6kl_wmi_init(ar);
