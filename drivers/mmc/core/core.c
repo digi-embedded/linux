@@ -2451,7 +2451,6 @@ int mmc_hw_reset(struct mmc_host *host)
 }
 EXPORT_SYMBOL(mmc_hw_reset);
 
-
 static int mmc_rescan_try_freq(struct mmc_host *host, unsigned freq)
 {
 #define N_POLLS_DURING_BOOT 20
