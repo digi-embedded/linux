@@ -43,7 +43,7 @@ static int mca_cc6ul_gpio_remove(struct platform_device *pdev)
 	struct mca_cc6ul *mca = (struct mca_cc6ul *)gpio->parent; /* TODO */
 
 	mca->gpio_base = -1;
-	gpiochip_remove(&gpio->gp);
+	gpiochip_remove(&gpio->gc);
 
 	return 0;
 }

@@ -46,7 +46,7 @@ struct mca_gpio {
 	void * parent;
 	struct regmap *regmap;
 	struct device *dev;
-	struct gpio_chip gp;
+	struct gpio_chip gc;
 	struct mutex irq_lock;
 	uint8_t irq_cfg[MCA_MAX_IOS];
 	uint8_t irq_capable[MCA_MAX_IO_BYTES];

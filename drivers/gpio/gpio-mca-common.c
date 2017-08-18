@@ -118,7 +118,7 @@ static irqreturn_t mca_gpio_irq_handler(int irq, void *data)
 	unsigned int pending_irqs, mask, this_irq;
 	int ret, i, j;
 
-	for (i = 0; i < (gpio->gp.ngpio + 7) / 8; i++) {
+	for (i = 0; i < (gpio->gc.ngpio + 7) / 8; i++) {
 		ret = regmap_read(gpio->regmap, GPIO_IRQ_STATUS_REG(i), &pending_irqs);
 		if (ret < 0) {
 			dev_err(gpio->dev,
@@ -131,7 +131,7 @@ static irqreturn_t mca_gpio_irq_handler(int irq, void *data)
 			mask = 1 << j;
 			if (pending_irqs & mask) {
 				/* Ack the irq and call the handler */
-				this_irq = irq_find_mapping(gpio->gp.irqdomain, j + i * 8);
+				this_irq = irq_find_mapping(gpio->gc.irqdomain, j + i * 8);
 				ret = regmap_write(gpio->regmap,
 						   GPIO_IRQ_STATUS_REG(i),
 						   mask);
@@ -271,7 +271,7 @@ static int mca_gpio_irq_setup(struct mca_gpio *gpio)
 
 	mutex_init(&gpio->irq_lock);
 
-	for (i = 0; i < gpio->gp.ngpio; i++) {
+	for (i = 0; i < gpio->gc.ngpio; i++) {
 		gpio->irq_cfg[i] = 0;
 
 		ret = regmap_read(gpio->regmap, GPIO_IRQ_CFG_REG(i), &val);
@@ -303,7 +303,7 @@ static int mca_gpio_irq_setup(struct mca_gpio *gpio)
 		}
 	}
 
-	ret = gpiochip_irqchip_add(&gpio->gp,
+	ret = gpiochip_irqchip_add(&gpio->gc,
 				   &mca_gpio_irq_chip,
 				   0,
 				   handle_edge_irq,
@@ -319,12 +319,12 @@ static int mca_gpio_irq_setup(struct mca_gpio *gpio)
 	 * we have to use our own version because not all GPIOs are irq capable.
 	 * Therefore, we overwrite it.
 	 */
-	gpio->gp.to_irq = mca_gpio_to_irq;
+	gpio->gc.to_irq = mca_gpio_to_irq;
 
 	for (i = 0; i < MCA_MAX_GPIO_IRQ_BANKS; i++) {
 		if (gpio->irq[i] < 0)
 			continue;
-		gpiochip_set_chained_irqchip(&gpio->gp,
+		gpiochip_set_chained_irqchip(&gpio->gc,
 					     &mca_gpio_irq_chip,
 					     gpio->irq[i],
 					     NULL);
@@ -333,7 +333,7 @@ static int mca_gpio_irq_setup(struct mca_gpio *gpio)
 	return 0;
 }
 
-static struct gpio_chip reference_gp = {
+static struct gpio_chip reference_gc = {
 	.label			= "mca-gpio",
 	.owner			= THIS_MODULE,
 	.get			= mca_gpio_get,
@@ -369,9 +369,9 @@ int mca_gpio_probe(struct platform_device *pdev, struct device *mca_dev,
 		gpio->irq[i] = platform_get_irq_byname(pdev,
 						       irq_gpio_bank_name[i]);
 	}
-	gpio->gp = reference_gp;
-	gpio->gp.of_node = pdev->dev.of_node;
-	gpio->gp.dev = &pdev->dev;
+	gpio->gc = reference_gc;
+	gpio->gc.of_node = pdev->dev.of_node;
+	gpio->gc.dev = &pdev->dev;
 	platform_set_drvdata(pdev, gpio);
 
 	/* Find entry in device-tree */
@@ -394,16 +394,16 @@ int mca_gpio_probe(struct platform_device *pdev, struct device *mca_dev,
 		dev_err(mca_dev, "Could not read number of gpios.\n");
 		goto err;
 	}
-	gpio->gp.ngpio = val & MCA_GPIO_NUM_MASK;
-	if (gpio->gp.ngpio < 1 || gpio->gp.ngpio > MCA_MAX_IOS) {
+	gpio->gc.ngpio = val & MCA_GPIO_NUM_MASK;
+	if (gpio->gc.ngpio < 1 || gpio->gc.ngpio > MCA_MAX_IOS) {
 		ret = -EINVAL;
 		dev_err(mca_dev, "Read invalid number of gpios (%d). "
-			"Valid range is 1..%d.\n", gpio->gp.ngpio,
+			"Valid range is 1..%d.\n", gpio->gc.ngpio,
 			MCA_MAX_IOS);
 		goto err;
 	}
 
-	ret = gpiochip_add(&gpio->gp);
+	ret = gpiochip_add(&gpio->gc);
 	if (ret < 0) {
 		dev_err(&pdev->dev, "Could not register gpiochip, %d\n", ret);
 		goto err;
@@ -411,12 +411,12 @@ int mca_gpio_probe(struct platform_device *pdev, struct device *mca_dev,
 
 	ret = mca_gpio_irq_setup(gpio);
 	if (ret) {
-		gpiochip_remove(&gpio->gp);
+		gpiochip_remove(&gpio->gc);
 		goto err;
 	}
 
 	if (gpio_base)
-		*gpio_base = gpio->gp.base;
+		*gpio_base = gpio->gc.base;
 
 	return 0;
 

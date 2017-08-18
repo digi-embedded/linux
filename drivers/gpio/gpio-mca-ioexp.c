@@ -43,7 +43,7 @@ static int mca_ioexp_gpio_remove(struct platform_device *pdev)
 	struct mca_ioexp *mca = (struct mca_ioexp *)gpio->parent; /* TODO */
 
 	mca->gpio_base = -1;
-	gpiochip_remove(&gpio->gp);
+	gpiochip_remove(&gpio->gc);
 	return 0;
 }
 
