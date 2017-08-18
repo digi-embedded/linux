@@ -56,7 +56,7 @@ static char const *const irq_gpio_bank_name[] = {
 
 static inline struct mca_gpio *to_mca_gpio(struct gpio_chip *chip)
 {
-	return container_of(chip, struct mca_gpio, gp);
+	return gpiochip_get_data(chip);
 }
 
 static inline bool mca_gpio_is_irq_capable(struct mca_gpio *gpio,
@@ -403,7 +403,7 @@ int mca_gpio_probe(struct platform_device *pdev, struct device *mca_dev,
 		goto err;
 	}
 
-	ret = gpiochip_add(&gpio->gc);
+	ret = gpiochip_add_data(&gpio->gc, gpio);
 	if (ret < 0) {
 		dev_err(&pdev->dev, "Could not register gpiochip, %d\n", ret);
 		goto err;
