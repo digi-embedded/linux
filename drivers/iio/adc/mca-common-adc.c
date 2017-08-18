@@ -34,11 +34,11 @@
 #define MCA_ADC_INT_VREF	MCA_VREF_uV(1.2)
 #define MCA_ADC_DEF_VREF	MCA_VREF_uV(3)
 
-int mca_adc_read_raw(struct iio_dev *iio,
+int mca_adc_read_raw(struct iio_dev *indio_dev,
 		     struct iio_chan_spec const *channel, int *value,
 		     int *shift, long mask)
 {
-	struct mca_adc *adc = iio_priv(iio);
+	struct mca_adc *adc = iio_priv(indio_dev);
 	const int val_reg = MCA_REG_ADC_VAL_L_0 + channel->channel * 2;
 	u16 val;
 	int ret;
@@ -111,8 +111,8 @@ static u64 generate_comparator_event(struct mca_adc *adc, int ch)
 
 static irqreturn_t comparator_irq_handler(int irq, void *private)
 {
-	struct iio_dev *iio = private;
-	struct mca_adc *adc = iio_priv(iio);
+	struct iio_dev *indio_dev = private;
+	struct mca_adc *adc = iio_priv(indio_dev);
 	int ret;
 	int i;
 	u8 adc_irqs[8];
@@ -139,7 +139,8 @@ static irqreturn_t comparator_irq_handler(int irq, void *private)
 				if (event == ~0)
 					continue;
 				/* Notify the event */
-				iio_push_event(iio, event, iio_get_time_ns());
+				iio_push_event(indio_dev, event,
+					       iio_get_time_ns());
 			}
 		}
 		/* ACK the IRQs by writing a 1 in the flags */
@@ -176,12 +177,12 @@ static const struct iio_event_spec comparator_events[] = {
 	},
 };
 
-static ssize_t cmp_thr_lo_read(struct iio_dev *iio,
+static ssize_t cmp_thr_lo_read(struct iio_dev *indio_dev,
 			       uintptr_t private,
 			       struct iio_chan_spec const *iio_ch,
 			       char *buf)
 {
-	struct mca_adc *adc = iio_priv(iio);
+	struct mca_adc *adc = iio_priv(indio_dev);
 	int ch = iio_ch->channel;
 	u16 threshold;
 	int ret;
@@ -196,13 +197,13 @@ static ssize_t cmp_thr_lo_read(struct iio_dev *iio,
 	return sprintf(buf, "%d\n", threshold);
 }
 
-static ssize_t cmp_thr_lo_write(struct iio_dev *iio,
+static ssize_t cmp_thr_lo_write(struct iio_dev *indio_dev,
 				uintptr_t private,
 				struct iio_chan_spec const *iio_ch,
 				const char *buf,
 				size_t len)
 {
-	struct mca_adc *adc = iio_priv(iio);
+	struct mca_adc *adc = iio_priv(indio_dev);
 	int ch = iio_ch->channel;
 	unsigned long threshold;
 	int ret;
@@ -225,12 +226,12 @@ static ssize_t cmp_thr_lo_write(struct iio_dev *iio,
 	return len;
 }
 
-static ssize_t cmp_thr_hi_read(struct iio_dev *iio,
+static ssize_t cmp_thr_hi_read(struct iio_dev *indio_dev,
 			       uintptr_t private,
 			       struct iio_chan_spec const *iio_ch,
 			       char *buf)
 {
-	struct mca_adc *adc = iio_priv(iio);
+	struct mca_adc *adc = iio_priv(indio_dev);
 	int ch = iio_ch->channel;
 	u16 threshold;
 	int ret;
@@ -245,13 +246,13 @@ static ssize_t cmp_thr_hi_read(struct iio_dev *iio,
 	return sprintf(buf, "%d\n", threshold);
 }
 
-static ssize_t cmp_thr_hi_write(struct iio_dev *iio,
+static ssize_t cmp_thr_hi_write(struct iio_dev *indio_dev,
 				uintptr_t private,
 				struct iio_chan_spec const *iio_ch,
 				const char *buf,
 				size_t len)
 {
-	struct mca_adc *adc = iio_priv(iio);
+	struct mca_adc *adc = iio_priv(indio_dev);
 	int ch = iio_ch->channel;
 	unsigned long threshold;
 	int ret;
@@ -274,12 +275,12 @@ static ssize_t cmp_thr_hi_write(struct iio_dev *iio,
 	return len;
 }
 
-static ssize_t cmp_sample_rate_read(struct iio_dev *iio,
+static ssize_t cmp_sample_rate_read(struct iio_dev *indio_dev,
 				    uintptr_t private,
 				    struct iio_chan_spec const *iio_ch,
 				    char *buf)
 {
-	struct mca_adc *adc = iio_priv(iio);
+	struct mca_adc *adc = iio_priv(indio_dev);
 	int ch = iio_ch->channel;
 	u16 ticks;
 	int ret;
@@ -293,13 +294,13 @@ static ssize_t cmp_sample_rate_read(struct iio_dev *iio,
 	return sprintf(buf, "%d\n", ticks);
 }
 
-static ssize_t cmp_sample_rate_write(struct iio_dev *iio,
+static ssize_t cmp_sample_rate_write(struct iio_dev *indio_dev,
 				     uintptr_t private,
 				     struct iio_chan_spec const *iio_ch,
 				     const char *buf,
 				     size_t len)
 {
-	struct mca_adc *adc = iio_priv(iio);
+	struct mca_adc *adc = iio_priv(indio_dev);
 	int ch = iio_ch->channel;
 	unsigned long ticks;
 	int ret;
@@ -321,12 +322,12 @@ static ssize_t cmp_sample_rate_write(struct iio_dev *iio,
 	return len;
 }
 
-static ssize_t cmp_irq_edge_read(struct iio_dev *iio,
+static ssize_t cmp_irq_edge_read(struct iio_dev *indio_dev,
 				 uintptr_t private,
 				 struct iio_chan_spec const *iio_ch,
 				 char *buf)
 {
-	struct mca_adc *adc = iio_priv(iio);
+	struct mca_adc *adc = iio_priv(indio_dev);
 	int ch = iio_ch->channel;
 	unsigned int cfg0;
 	int ret;
@@ -362,13 +363,13 @@ static ssize_t cmp_irq_edge_read(struct iio_dev *iio,
 	return sprintf(buf, "%s\n", edge_str);
 }
 
-static ssize_t cmp_irq_edge_write(struct iio_dev *iio,
+static ssize_t cmp_irq_edge_write(struct iio_dev *indio_dev,
 				  uintptr_t private,
 				  struct iio_chan_spec const *iio_ch,
 				  const char *buf,
 				  size_t len)
 {
-	struct mca_adc *adc = iio_priv(iio);
+	struct mca_adc *adc = iio_priv(indio_dev);
 	int ch = iio_ch->channel;
 	int ret;
 	unsigned int cfg1_val;
@@ -405,12 +406,12 @@ static ssize_t cmp_irq_edge_write(struct iio_dev *iio,
 	return len;
 }
 
-static ssize_t wakeup_read(struct iio_dev *iio,
+static ssize_t wakeup_read(struct iio_dev *indio_dev,
 			   uintptr_t private,
 			   struct iio_chan_spec const *iio_ch,
 			   char *buf)
 {
-	struct mca_adc *adc = iio_priv(iio);
+	struct mca_adc *adc = iio_priv(indio_dev);
 	int ch = iio_ch->channel;
 	unsigned int cfg0;
 	int ret;
@@ -426,13 +427,13 @@ static ssize_t wakeup_read(struct iio_dev *iio,
 
 }
 
-static ssize_t wakeup_write(struct iio_dev *iio,
+static ssize_t wakeup_write(struct iio_dev *indio_dev,
 			    uintptr_t private,
 			    struct iio_chan_spec const *iio_ch,
 			    const char *buf,
 			    size_t len)
 {
-	struct mca_adc *adc = iio_priv(iio);
+	struct mca_adc *adc = iio_priv(indio_dev);
 	int ch = iio_ch->channel;
 	int ret;
 
@@ -454,12 +455,12 @@ static ssize_t wakeup_write(struct iio_dev *iio,
 	return len;
 }
 
-static ssize_t averager_read(struct iio_dev *iio,
+static ssize_t averager_read(struct iio_dev *indio_dev,
 			     uintptr_t private,
 			     struct iio_chan_spec const *iio_ch,
 			     char *buf)
 {
-	struct mca_adc *adc = iio_priv(iio);
+	struct mca_adc *adc = iio_priv(indio_dev);
 	int ch = iio_ch->channel;
 	u8 averager_samples;
 	unsigned int cfg0;
@@ -477,13 +478,13 @@ static ssize_t averager_read(struct iio_dev *iio,
 	return sprintf(buf, "%d\n", averager_samples);
 }
 
-static ssize_t averager_write(struct iio_dev *iio,
+static ssize_t averager_write(struct iio_dev *indio_dev,
 			      uintptr_t private,
 			      struct iio_chan_spec const *iio_ch,
 			      const char *buf,
 			      size_t len)
 {
-	struct mca_adc *adc = iio_priv(iio);
+	struct mca_adc *adc = iio_priv(indio_dev);
 	int ch = iio_ch->channel;
 	unsigned long averager_samples;
 	unsigned int cfg0_val;
@@ -523,12 +524,12 @@ static ssize_t averager_write(struct iio_dev *iio,
 	return len;
 }
 
-static ssize_t cmp_out_read(struct iio_dev *iio,
+static ssize_t cmp_out_read(struct iio_dev *indio_dev,
 			    uintptr_t private,
 			    struct iio_chan_spec const *iio_ch,
 			    char *buf)
 {
-	struct mca_adc *adc = iio_priv(iio);
+	struct mca_adc *adc = iio_priv(indio_dev);
 	int ch = iio_ch->channel;
 	unsigned int cfg1;
 	int ret;
@@ -676,7 +677,7 @@ int mca_adc_probe(struct platform_device *pdev, struct device *mca_dev,
 		  struct regmap *regmap, int gpio_base, char const *dt_compat)
 {
 	struct mca_adc *mca_adc;
-	struct iio_dev *iio;
+	struct iio_dev *indio_dev;
 	struct device_node *np;
 	struct iio_chan_spec *iio_ch_list;
 	u8 adc_ch_list[MCA_MAX_IOS];
@@ -691,12 +692,12 @@ int mca_adc_probe(struct platform_device *pdev, struct device *mca_dev,
 	if (!mca_dev || !mca_dev->parent || !mca_dev->parent->of_node)
 		return -EPROBE_DEFER;
 
-	iio = devm_iio_device_alloc(&pdev->dev, sizeof(*mca_adc));
-	if (!iio) {
-		dev_err(&pdev->dev, "Failed to allocate iio device\n");
+	indio_dev = devm_iio_device_alloc(&pdev->dev, sizeof(*mca_adc));
+	if (!indio_dev) {
+		dev_err(&pdev->dev, "Failed to allocate indio_dev device\n");
 		return -ENOMEM;
 	}
-	mca_adc = iio_priv(iio);
+	mca_adc = iio_priv(indio_dev);
 	mca_adc->regmap = regmap;
 	mca_adc->dev = mca_dev;
 	mca_adc->irq = -1;
@@ -775,18 +776,19 @@ int mca_adc_probe(struct platform_device *pdev, struct device *mca_dev,
 	if (!num_adcs && !num_comps)
 		goto error_dev_free;
 
-	iio->dev.parent = &pdev->dev;
-	iio->name = dev_name(&pdev->dev);
-	iio->modes = INDIO_DIRECT_MODE;
-	iio->info = &mca_adc_info;
-	iio->num_channels = num_adcs + num_comps;
+	indio_dev->dev.parent = &pdev->dev;
+	indio_dev->name = dev_name(&pdev->dev);
+	indio_dev->modes = INDIO_DIRECT_MODE;
+	indio_dev->info = &mca_adc_info;
+	indio_dev->num_channels = num_adcs + num_comps;
 	iio_ch_list = devm_kzalloc(&pdev->dev,
-				   iio->num_channels * sizeof(iio->channels[0]),
+				   indio_dev->num_channels *
+				   sizeof(indio_dev->channels[0]),
 				   GFP_KERNEL);
 	if (!iio_ch_list)
 		goto error_dev_free;
 
-	iio->channels = iio_ch_list;
+	indio_dev->channels = iio_ch_list;
 
 	init_adc_channels(pdev, regmap, gpio_base, &iio_ch_list[0], adc_ch_list,
 			  num_adcs, false);
@@ -803,7 +805,7 @@ int mca_adc_probe(struct platform_device *pdev, struct device *mca_dev,
 							IRQF_TRIGGER_LOW |
 							IRQF_ONESHOT,
 							dev_name(&pdev->dev),
-							iio);
+							indio_dev);
 			if (ret) {
 				dev_err(&pdev->dev,
 					"Requested Comparator IRQ (%d).\n",
@@ -813,13 +815,13 @@ int mca_adc_probe(struct platform_device *pdev, struct device *mca_dev,
 		}
 	}
 
-	ret = iio_device_register(iio);
+	ret = iio_device_register(indio_dev);
 	if (ret) {
-		dev_err(&pdev->dev, "Failed to register mca adc iio device\n");
+		dev_err(&pdev->dev, "Failed to register mca adc indio_dev device\n");
 		goto error_free_ch;
 	}
 
-	platform_set_drvdata(pdev, iio);
+	platform_set_drvdata(pdev, indio_dev);
 
 	pr_info("ADC driver for MCA\n");
 
@@ -834,33 +836,33 @@ error_dev_free:
 			       gpio_base + adc_ch_list[num_adcs - 1]);
 		num_adcs--;
 	}
-	devm_iio_device_free(&pdev->dev, iio);
+	devm_iio_device_free(&pdev->dev, indio_dev);
 
 	return ret;
 }
 
 int mca_adc_remove(struct platform_device *pdev, int gpio_base)
 {
-	struct iio_dev *iio = platform_get_drvdata(pdev);
+	struct iio_dev *indio_dev = platform_get_drvdata(pdev);
 	struct iio_chan_spec *chan;
 	int i;
-	struct mca_adc *adc = iio_priv(iio);
+	struct mca_adc *adc = iio_priv(indio_dev);
 
 	/* Release allocated resources */
 	if (gpio_base >= 0) {
-		for (i = 0, chan = (struct iio_chan_spec *)iio->channels;
-		     i < iio->num_channels;
+		for (i = 0, chan = (struct iio_chan_spec *)indio_dev->channels;
+		     i < indio_dev->num_channels;
 		     i++) {
 			devm_gpio_free(&pdev->dev, gpio_base + chan->channel);
 		}
 	}
 
 	if (adc->irq != -1)
-		devm_free_irq(&pdev->dev, adc->irq, iio);
+		devm_free_irq(&pdev->dev, adc->irq, indio_dev);
 
-	devm_kfree(&pdev->dev, (void *)iio->channels);
-	iio_device_unregister(iio);
-	devm_iio_device_free(&pdev->dev, iio);
+	devm_kfree(&pdev->dev, (void *)indio_dev->channels);
+	iio_device_unregister(indio_dev);
+	devm_iio_device_free(&pdev->dev, indio_dev);
 
 	return 0;
 }
