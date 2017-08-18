@@ -140,7 +140,7 @@ static irqreturn_t comparator_irq_handler(int irq, void *private)
 					continue;
 				/* Notify the event */
 				iio_push_event(indio_dev, event,
-					       iio_get_time_ns());
+					       iio_get_time_ns(indio_dev));
 			}
 		}
 		/* ACK the IRQs by writing a 1 in the flags */
