@@ -126,6 +126,15 @@ static struct resource mca_cc6ul_gpios_resources[] = {
 	},
 };
 
+static struct resource mca_cc6ul_uart_resources[] = {
+	{
+		.name   = MCA_CC6UL_IRQ_UART_NAME,
+		.start  = MCA_CC6UL_IRQ_UART,
+		.end    = MCA_CC6UL_IRQ_UART,
+		.flags  = IORESOURCE_IRQ,
+	},
+};
+
 static const struct mfd_cell mca_cc6ul_devs[] = {
 	{
 		.name           = MCA_CC6UL_DRVNAME_RTC,
@@ -162,6 +171,12 @@ static const struct mfd_cell mca_cc6ul_devs[] = {
 		.num_resources  = ARRAY_SIZE(mca_cc6ul_tamper_resources),
 		.resources      = mca_cc6ul_tamper_resources,
 		.of_compatible = "digi,mca-cc6ul-tamper",
+	},
+	{
+		.name           = MCA_CC6UL_DRVNAME_UART,
+		.num_resources  = ARRAY_SIZE(mca_cc6ul_uart_resources),
+		.resources      = mca_cc6ul_uart_resources,
+		.of_compatible = "digi,mca-cc6ul-uart",
 	},
 };
 

@@ -49,6 +49,7 @@ static const struct regmap_range mca_cc6ul_writeable_ranges[] = {
 	regmap_reg_range(MCA_REG_ADC_IRQ_0, MCA_REG_ADC_IRQ_7),
 	regmap_reg_range(MCA_REG_ADC_CFG_0, MCA_REG_ADC_CFG_2),
 	regmap_reg_range(MCA_REG_ADC_BUFF_CH, MCA_REG_ADC_BUFF_SAMPLE_7),
+	regmap_reg_range(MCA_REG_UART_THR, MCA_REG_UART_RTSPIN),
 };
 
 static const struct regmap_range mca_cc6ul_volatile_ranges[] = {
@@ -101,6 +102,7 @@ static const struct regmap_range mca_cc6ul_volatile_ranges[] = {
 	regmap_reg_range(MCA_REG_ADC_IRQ_0, MCA_REG_ADC_IRQ_7),
 	regmap_reg_range(MCA_REG_ADC_CFG_0, MCA_REG_ADC_CFG_2),
 	regmap_reg_range(MCA_REG_ADC_BUFF_CH, MCA_REG_ADC_BUFF_SAMPLE_7),
+	regmap_reg_range(MCA_REG_UART_RHR, MCA_REG_UART_RTSPIN),
 };
 
 static const struct regmap_access_table mca_cc6ul_readable_table = {
@@ -127,7 +129,7 @@ static struct regmap_config mca_cc6ul_regmap_config = {
 	.wr_table = &mca_cc6ul_writeable_table,
 	.volatile_table = &mca_cc6ul_volatile_table,
 
-	.cache_type = REGCACHE_RBTREE,
+	.cache_type = REGCACHE_NONE,
 };
 
 static const struct of_device_id mca_cc6ul_dt_ids[] = {

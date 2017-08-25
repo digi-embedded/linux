@@ -67,6 +67,10 @@ static const struct regmap_irq mca_cc6ul_irqs[] = {
 		.reg_offset = MCA_CC6UL_IRQ_2_OFFSET,
 		.mask = MCA_CC6UL_M_TAMPER3,
 	},
+	[MCA_CC6UL_IRQ_UART] = {
+		.reg_offset = MCA_CC6UL_IRQ_2_OFFSET,
+		.mask = MCA_CC6UL_M_UART,
+	},
 };
 
 static const struct regmap_irq_chip mca_cc6ul_irq_chip = {

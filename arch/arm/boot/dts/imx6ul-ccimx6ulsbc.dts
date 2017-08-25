@@ -135,6 +135,19 @@
 // 	digi,adc-vref = <3000000>;
 // };
 
+/*
+ * Uncomment to enable MCA UART:
+ *  - MCA_IO1 (TX)
+ *  - MCA_IO2 (RX)
+ */
+//&mca_uart {
+//	status = "okay";
+//
+//	/* Uncomment to enable CTS and/or RTS in any MCA GPIO-capable line */
+//	//rts-pin = <3>;
+//	//cts-pin = <5>;
+//};
+
 &mca_ioexp {
 	status = "okay";
 	restore-config-on-resume;
