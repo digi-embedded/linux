@@ -95,12 +95,12 @@
 };
 
 /* CAN1 (multiplexed with UART3 RTS/CTS) */
-&flexcan1 {
+&can1 {
 	status = "okay";
 };
 
 /* CAN2 (multiplexed with UART2 RTS/CTS) */
-// &flexcan2 {
+// &can2 {
 // 	status = "okay";
 // };
 

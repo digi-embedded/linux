@@ -77,7 +77,7 @@
 };
 
 /* CAN1 (Raspberry PI Expansion header) */
-&flexcan1 {
+&can1 {
 	status = "okay";
 };
 
