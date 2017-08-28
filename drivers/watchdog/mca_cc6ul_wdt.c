@@ -115,20 +115,6 @@ static void mca_cc6ul_wdt_release_resources(struct kref *r)
 {
 }
 
-static void mca_cc6ul_wdt_ref(struct watchdog_device *wdd)
-{
-	struct mca_cc6ul_wdt *wdt = watchdog_get_drvdata(wdd);
-
-	kref_get(&wdt->kref);
-}
-
-static void mca_cc6ul_wdt_unref(struct watchdog_device *wdd)
-{
-	struct mca_cc6ul_wdt *wdt = watchdog_get_drvdata(wdd);
-
-	kref_put(&wdt->kref, mca_cc6ul_wdt_release_resources);
-}
-
 static int mca_cc6ul_wdt_start(struct watchdog_device *wdd)
 {
 	struct mca_cc6ul_wdt *wdt = watchdog_get_drvdata(wdd);
@@ -171,8 +157,6 @@ static const struct watchdog_ops mca_cc6ul_wdt_ops = {
 	.stop = mca_cc6ul_wdt_stop,
 	.ping = mca_cc6ul_wdt_ping,
 	.set_timeout = mca_cc6ul_wdt_set_timeout,
-	.ref = mca_cc6ul_wdt_ref,
-	.unref = mca_cc6ul_wdt_unref,
 };
 
 static int of_mca_cc6ul_wdt_init(struct device_node *np,
