@@ -605,9 +605,6 @@ static void imx_start_tx(struct uart_port *port)
 	unsigned long temp;
 
 	if (port->rs485.flags & SER_RS485_ENABLED) {
-		/* Delay before send */
-		if (port->rs485.delay_rts_before_send)
-			mdelay(port->rs485.delay_rts_before_send);
 		/* enable transmitter and shifter empty irq */
 		temp = readl(port->membase + UCR2);
 		if (port->rs485.flags & SER_RS485_RTS_ON_SEND)
@@ -615,6 +612,10 @@ static void imx_start_tx(struct uart_port *port)
 		else
 			temp |= UCR2_CTS;
 		writel(temp, port->membase + UCR2);
+
+		/* Delay before send */
+		if (port->rs485.delay_rts_before_send)
+			mdelay(port->rs485.delay_rts_before_send);
 
 		temp = readl(port->membase + UCR4);
 		temp |= UCR4_TCEN;
