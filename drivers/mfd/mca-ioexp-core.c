@@ -92,7 +92,7 @@ static ssize_t fwver_show(struct device *dev, struct device_attribute *attr,
 {
 	struct mca_ioexp *ioexp = dev_get_drvdata(dev);
 
-	return sprintf(buf, "%d.%d %s\n", MCA_FW_VER_MAJOR(ioexp->fw_version),
+	return sprintf(buf, "%d.%02d %s\n", MCA_FW_VER_MAJOR(ioexp->fw_version),
 		       MCA_FW_VER_MINOR(ioexp->fw_version),
 		       ioexp->fw_is_alpha ? "(alpha)" : "");
 }
