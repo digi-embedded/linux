@@ -69,6 +69,8 @@
 #define DMA_THRESHOLD	16
 #define DMA_TIMEOUT	1000
 
+#define NO_DMA_TIMEOUT	1000
+
 /* IMX I2C registers:
  * the I2C register offset is different between SoCs,
  * to provid support for all these chips, split the
@@ -743,6 +745,24 @@ static int i2c_imx_dma_read(struct imx_i2c_struct *i2c_imx,
 	return 0;
 }
 
+static int wait_for_transfer_completed(struct imx_i2c_struct *i2c_imx)
+{
+	unsigned long timeout = jiffies + msecs_to_jiffies(NO_DMA_TIMEOUT);
+
+	while (1) {
+		unsigned int i2sr;
+
+		i2sr = imx_i2c_read_reg(i2c_imx, IMX_I2C_I2SR);
+		if (i2sr & I2SR_ICF)
+			break;
+		if (time_after(jiffies, timeout))
+			return -ETIMEDOUT;
+		schedule();
+	}
+
+	return 0;
+}
+
 static int i2c_imx_write(struct imx_i2c_struct *i2c_imx, struct i2c_msg *msgs)
 {
 	int i, result;
@@ -750,6 +770,12 @@ static int i2c_imx_write(struct imx_i2c_struct *i2c_imx, struct i2c_msg *msgs)
 	dev_dbg(&i2c_imx->adapter.dev, "<%s> write slave address: addr=0x%x\n",
 		__func__, msgs->addr << 1);
 
+	result = wait_for_transfer_completed(i2c_imx);
+	if (result) {
+		dev_dbg(&i2c_imx->adapter.dev,
+			"<%s> Timeout\n", __func__);
+		return result;
+	}
 	/* write slave address */
 	imx_i2c_write_reg(msgs->addr << 1, i2c_imx, IMX_I2C_I2DR);
 	result = i2c_imx_trx_complete(i2c_imx);
@@ -762,6 +788,12 @@ static int i2c_imx_write(struct imx_i2c_struct *i2c_imx, struct i2c_msg *msgs)
 
 	/* write data */
 	for (i = 0; i < msgs->len; i++) {
+		result = wait_for_transfer_completed(i2c_imx);
+		if (result) {
+			dev_dbg(&i2c_imx->adapter.dev,
+				"<%s> Timeout\n", __func__);
+			return result;
+		}
 		dev_dbg(&i2c_imx->adapter.dev,
 			"<%s> write byte: B%d=0x%X\n",
 			__func__, i, msgs->buf[i]);
@@ -786,6 +818,12 @@ static int i2c_imx_read(struct imx_i2c_struct *i2c_imx, struct i2c_msg *msgs, bo
 		"<%s> write slave address: addr=0x%x\n",
 		__func__, (msgs->addr << 1) | 0x01);
 
+	result = wait_for_transfer_completed(i2c_imx);
+	if (result) {
+		dev_dbg(&i2c_imx->adapter.dev,
+			"<%s> Timeout\n", __func__);
+		return result;
+	}
 	/* write slave address */
 	imx_i2c_write_reg((msgs->addr << 1) | 0x01, i2c_imx, IMX_I2C_I2DR);
 	result = i2c_imx_trx_complete(i2c_imx);
@@ -808,6 +846,13 @@ static int i2c_imx_read(struct imx_i2c_struct *i2c_imx, struct i2c_msg *msgs, bo
 	if ((msgs->len - 1) || block_data)
 		temp &= ~I2CR_TXAK;
 	imx_i2c_write_reg(temp, i2c_imx, IMX_I2C_I2CR);
+
+	result = wait_for_transfer_completed(i2c_imx);
+	if (result) {
+		dev_dbg(&i2c_imx->adapter.dev,
+			"<%s> Timeout\n", __func__);
+		return result;
+	}
 	imx_i2c_read_reg(i2c_imx, IMX_I2C_I2DR); /* dummy read */
 
 	dev_dbg(&i2c_imx->adapter.dev, "<%s> read data\n", __func__);
@@ -828,6 +873,12 @@ static int i2c_imx_read(struct imx_i2c_struct *i2c_imx, struct i2c_msg *msgs, bo
 		 * msgs->len.
 		 */
 		if ((!i) && block_data) {
+			result = wait_for_transfer_completed(i2c_imx);
+			if (result) {
+				dev_dbg(&i2c_imx->adapter.dev,
+					"<%s> Timeout\n", __func__);
+				return result;
+			}
 			len = imx_i2c_read_reg(i2c_imx, IMX_I2C_I2DR);
 			if ((len == 0) || (len > I2C_SMBUS_BLOCK_MAX))
 				return -EPROTO;
@@ -868,14 +919,23 @@ static int i2c_imx_read(struct imx_i2c_struct *i2c_imx, struct i2c_msg *msgs, bo
 			temp |= I2CR_TXAK;
 			imx_i2c_write_reg(temp, i2c_imx, IMX_I2C_I2CR);
 		}
-		if ((!i) && block_data)
+
+		if ((!i) && block_data) {
 			msgs->buf[0] = len;
-		else
+		} else {
+			result = wait_for_transfer_completed(i2c_imx);
+			if (result) {
+				dev_dbg(&i2c_imx->adapter.dev,
+					"<%s> Timeout\n", __func__);
+				return result;
+			}
 			msgs->buf[i] = imx_i2c_read_reg(i2c_imx, IMX_I2C_I2DR);
 		dev_dbg(&i2c_imx->adapter.dev,
 			"<%s> read byte: B%d=0x%X\n",
 			__func__, i, msgs->buf[i]);
+		}
 	}
+
 	return 0;
 }
 
