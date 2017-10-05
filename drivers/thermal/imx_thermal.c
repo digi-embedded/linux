@@ -1,5 +1,6 @@
 /*
  * Copyright 2013-2016 Freescale Semiconductor, Inc.
+ * Copyright 2017 NXP.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -59,6 +60,9 @@
 #define TEMPSENSE2_PANIC_VALUE_SHIFT	16
 #define TEMPSENSE2_PANIC_VALUE_MASK	0xfff0000
 
+#define OCOTP_MEM0			0x0480
+#define OCOTP_ANA1			0x04e0
+
 /* i.MX7D specific */
 #define IMX7_ANADIG_DIGPROG			0x800
 #define IMX7_TEMPSENSE0				0X300
@@ -81,6 +85,7 @@
 #define IMX6_OCOTP_ANA1		0x04e0
 #define IMX7_OCOTP_ANA1		0x04f0
 
+
 /* The driver supports 1 passive trip point and 1 critical trip point */
 enum imx_thermal_trip {
 	IMX_TRIP_PASSIVE,
@@ -88,11 +93,6 @@ enum imx_thermal_trip {
 	IMX_TRIP_NUM,
 };
 
-/*
- * It defines the temperature in millicelsius for passive trip point
- * that will trigger cooling action when crossed.
- */
-#define IMX_TEMP_PASSIVE		85000
 #define IMX_TEMP_PASSIVE_COOL_DELTA	10000
 
 #define IMX_POLLING_DELAY		2000 /* millisecond */
@@ -223,22 +223,25 @@ struct imx_thermal_data {
 	enum thermal_device_mode mode;
 	struct regmap *tempmon;
 	u32 c1, c2; /* See formula in imx_get_sensor_data() */
-	unsigned long temp_passive;
-	unsigned long temp_critical;
-	unsigned long alarm_temp;
-	unsigned long last_temp;
+	int temp_passive;
+	int temp_critical;
+	int temp_max;
+	int alarm_temp;
+	int last_temp;
 	bool irq_enabled;
 	int irq;
 	struct clk *thermal_clk;
 	struct mutex mutex;
 	const struct thermal_soc_data *socdata;
+	const char *temp_grade;
 };
 
 static struct imx_thermal_data *imx_thermal_data;
 static int skip_finish_check;
+static u32 imx7_lpsr_save[2];
 
 static void imx_set_panic_temp(struct imx_thermal_data *data,
-			       signed long panic_temp)
+			       int panic_temp)
 {
 	const struct thermal_soc_data *soc_data = data->socdata;
 	struct regmap *map = data->tempmon;
@@ -256,7 +259,7 @@ static void imx_set_panic_temp(struct imx_thermal_data *data,
 }
 
 static void imx_set_alarm_temp(struct imx_thermal_data *data,
-			       signed long alarm_temp)
+			       int alarm_temp)
 {
 	const struct thermal_soc_data *soc_data = data->socdata;
 	struct regmap *map = data->tempmon;
@@ -275,8 +278,7 @@ static void imx_set_alarm_temp(struct imx_thermal_data *data,
 		     alarm_value << soc_data->high_alarm_shift);
 }
 
-static int imx_get_temp_internal(struct imx_thermal_data *data,
-				 unsigned long *temp)
+static int imx_get_temp_internal(struct imx_thermal_data *data, int *temp)
 {
 	const struct thermal_soc_data *soc_data = data->socdata;
 	struct regmap *map = data->tempmon;
@@ -356,13 +358,13 @@ static int imx_get_temp_internal(struct imx_thermal_data *data,
 		if (data->alarm_temp == data->temp_critical &&
 			*temp < data->temp_passive) {
 			imx_set_alarm_temp(data, data->temp_passive);
-			dev_dbg(&data->tz->device, "thermal alarm off: T < %lu\n",
+			dev_dbg(&data->tz->device, "thermal alarm off: T < %d\n",
 				data->alarm_temp / 1000);
 		}
 	}
 
 	if (*temp != data->last_temp) {
-		dev_dbg(&data->tz->device, "millicelsius: %ld\n", *temp);
+		dev_dbg(&data->tz->device, "millicelsius: %d\n", *temp);
 		data->last_temp = *temp;
 	}
 
@@ -376,7 +378,7 @@ static int imx_get_temp_internal(struct imx_thermal_data *data,
 	return 0;
 }
 
-static int imx_get_temp(struct thermal_zone_device *tz, unsigned long *temp)
+static int imx_get_temp(struct thermal_zone_device *tz, int *temp)
 {
 	struct imx_thermal_data *data = tz->devdata;
 	return imx_get_temp_internal(data, temp);
@@ -427,7 +429,7 @@ static int imx_set_mode(struct thermal_zone_device *tz,
 	}
 
 	data->mode = mode;
-	thermal_zone_device_update(tz);
+	thermal_zone_device_update(tz, THERMAL_EVENT_UNSPECIFIED);
 
 	return 0;
 }
@@ -440,8 +442,7 @@ static int imx_get_trip_type(struct thermal_zone_device *tz, int trip,
 	return 0;
 }
 
-static int imx_get_crit_temp(struct thermal_zone_device *tz,
-			     unsigned long *temp)
+static int imx_get_crit_temp(struct thermal_zone_device *tz, int *temp)
 {
 	struct imx_thermal_data *data = tz->devdata;
 
@@ -450,7 +451,7 @@ static int imx_get_crit_temp(struct thermal_zone_device *tz,
 }
 
 static int imx_get_trip_temp(struct thermal_zone_device *tz, int trip,
-			     unsigned long *temp)
+			     int *temp)
 {
 	struct imx_thermal_data *data = tz->devdata;
 
@@ -460,7 +461,7 @@ static int imx_get_trip_temp(struct thermal_zone_device *tz, int trip,
 }
 
 static int imx_set_trip_temp(struct thermal_zone_device *tz, int trip,
-			     unsigned long temp)
+			     int temp)
 {
 	struct imx_thermal_data *data = tz->devdata;
 
@@ -471,7 +472,7 @@ static int imx_set_trip_temp(struct thermal_zone_device *tz, int trip,
 	}
 
 	if (trip == IMX_TRIP_PASSIVE) {
-		if (temp > IMX_TEMP_PASSIVE)
+		if (temp > (data->temp_max - (1000 * 10)))
 			return -EINVAL;
 		data->temp_passive = temp;
 		imx_set_alarm_temp(data, temp);
@@ -487,7 +488,8 @@ static int imx_bind(struct thermal_zone_device *tz,
 
 	ret = thermal_zone_bind_cooling_device(tz, IMX_TRIP_PASSIVE, cdev,
 					       THERMAL_NO_LIMIT,
-					       THERMAL_NO_LIMIT);
+					       THERMAL_NO_LIMIT,
+					       THERMAL_WEIGHT_DEFAULT);
 	if (ret) {
 		dev_err(&tz->device,
 			"binding zone %s with cdev %s failed:%d\n",
@@ -518,7 +520,7 @@ static int imx_get_trend(struct thermal_zone_device *tz,
 	int trip, enum thermal_trend *trend)
 {
 	int ret;
-	unsigned long trip_temp;
+	int trip_temp;
 
 	ret = imx_get_trip_temp(tz, trip, &trip_temp);
 	if (ret < 0)
@@ -600,7 +602,6 @@ static int imx_get_sensor_data(struct platform_device *pdev)
 {
 	struct imx_thermal_data *data = platform_get_drvdata(pdev);
 	struct regmap *map;
-	int hottemp;
 	int ret;
 	u32 val;
 
@@ -632,33 +633,39 @@ static int imx_get_sensor_data(struct platform_device *pdev)
 	else
 		imx6_calibrate_data(data, val);
 
-	/*
-	 * Sensor data layout:
-	 *   [31:20] - sensor value @ 25C
-	 *    [19:8] - sensor value @ hot temperature
-	 *     [7:0] - hot temperature value (depends on CPU variant)
-	 */
-	hottemp = val & 0xff;
+	/* use OTP for thermal grade */
+	ret = regmap_read(map, OCOTP_MEM0, &val);
+	if (ret) {
+		dev_err(&pdev->dev, "failed to read temp grade: %d\n", ret);
+		return ret;
+	}
+
+	/* The maximum die temp is specified by the Temperature Grade */
+	switch ((val >> 6) & 0x3) {
+	case 0: /* Commercial (0 to 95C) */
+		data->temp_grade = "Commercial";
+		data->temp_max = 95000;
+		break;
+	case 1: /* Extended Commercial (-20 to 105C) */
+		data->temp_grade = "Extended Commercial";
+		data->temp_max = 105000;
+		break;
+	case 2: /* Industrial (-40 to 105C) */
+		data->temp_grade = "Industrial";
+		data->temp_max = 105000;
+		break;
+	case 3: /* Automotive (-40 to 125C) */
+		data->temp_grade = "Automotive";
+		data->temp_max = 125000;
+		break;
+	}
 
 	/*
-	 * Set the default passive cooling trip point to 20C below the
-	 * maximum die temperature.
-	 * Can be changed from userspace.
+	 * Set the critical trip point at 5C under max
+	 * Set the passive trip point at 20C under max (can change via sysfs)
 	 */
-	data->temp_passive = IMX_TEMP_PASSIVE;
-
-
-	/*
-	 * Set the default passive cooling trip point to 20 °C below the
-	 * maximum die temperature. Can be changed from userspace.
-	 */
-	data->temp_passive = 1000 * (hottemp - 20);
-
-	/*
-	 * The maximum die temperature is hottemp, let's give 5 °C cushion
-	 * for noise and possible temperature rise between measurements.
-	 */
-	data->temp_critical = 1000 * (hottemp - 5);
+	data->temp_critical = data->temp_max - (1000 * 5);
+	data->temp_passive = data->temp_max - (1000 * 20);
 
 	return 0;
 }
@@ -677,10 +684,10 @@ static irqreturn_t imx_thermal_alarm_irq_thread(int irq, void *dev)
 {
 	struct imx_thermal_data *data = dev;
 
-	dev_dbg(&data->tz->device, "THERMAL ALARM: T > %lu\n",
+	dev_dbg(&data->tz->device, "THERMAL ALARM: T > %d\n",
 		data->alarm_temp / 1000);
 
-	thermal_zone_device_update(data->tz);
+	thermal_zone_device_update(data->tz, THERMAL_EVENT_UNSPECIFIED);
 
 	return IRQ_HANDLED;
 }
@@ -741,13 +748,11 @@ static struct notifier_block thermal_notifier = {
 
 static int imx_thermal_probe(struct platform_device *pdev)
 {
-	const struct of_device_id *of_id =
-		of_match_device(of_imx_thermal_match, &pdev->dev);
 	struct imx_thermal_data *data;
 	struct regmap *map;
 	int measure_freq;
 	int ret, revision;
-	unsigned long temp;
+	int temp;
 
 	data = devm_kzalloc(&pdev->dev, sizeof(*data), GFP_KERNEL);
 	if (!data)
@@ -762,7 +767,7 @@ static int imx_thermal_probe(struct platform_device *pdev)
 	}
 	data->tempmon = map;
 
-	data->socdata = of_id->data;
+	data->socdata = of_device_get_match_data(&pdev->dev);
 
 	/* make sure the IRQ flag is clear before enabling irq on i.MX6SX */
 	if (data->socdata->version == TEMPMON_IMX6SX) {
@@ -872,6 +877,11 @@ static int imx_thermal_probe(struct platform_device *pdev)
 		return ret;
 	}
 
+	dev_info(&pdev->dev, "%s CPU temperature grade - max:%dC"
+		 " critical:%dC passive:%dC\n", data->temp_grade,
+		 data->temp_max / 1000, data->temp_critical / 1000,
+		 data->temp_passive / 1000);
+
 	/* Enable measurements at ~ 10 Hz */
 	regmap_write(map, data->socdata->measure_freq_ctrl + REG_CLR,
 		     data->socdata->measure_freq_mask);
@@ -893,6 +903,10 @@ static int imx_thermal_probe(struct platform_device *pdev)
 			0, "imx_thermal", data);
 	if (ret < 0) {
 		dev_err(&pdev->dev, "failed to request alarm irq: %d\n", ret);
+		clk_disable_unprepare(data->thermal_clk);
+		thermal_zone_device_unregister(data->tz);
+		cpufreq_cooling_unregister(data->cdev[0]);
+		devfreq_cooling_unregister(data->cdev[1]);
 		return ret;
 	}
 
@@ -948,6 +962,16 @@ static int imx_thermal_suspend(struct device *dev)
 		     data->socdata->measure_temp_mask);
 	regmap_write(map, data->socdata->sensor_ctrl + REG_SET,
 		     data->socdata->power_down_mask);
+
+	/*
+	 * Save the temp sensor registers of i.MX7D as the tempmon
+	 * will lost power in LPSR mode
+	 */
+	if (data->socdata->version == TEMPMON_IMX7) {
+		regmap_read(map, data->socdata->sensor_ctrl, &imx7_lpsr_save[0]);
+		regmap_read(map, data->socdata->high_alarm_ctrl, &imx7_lpsr_save[1]);
+	}
+
 	data->mode = THERMAL_DEVICE_DISABLED;
 	clk_disable_unprepare(data->thermal_clk);
 
@@ -960,6 +984,16 @@ static int imx_thermal_resume(struct device *dev)
 	struct regmap *map = data->tempmon;
 
 	clk_prepare_enable(data->thermal_clk);
+
+	/*
+	 * restore the temp sensor registers of i.MX7D as the tempmon
+	 * will lost power in LPSR mode
+	 */
+	if (data->socdata->version == TEMPMON_IMX7) {
+		regmap_write(map, data->socdata->sensor_ctrl, imx7_lpsr_save[0]);
+		regmap_write(map, data->socdata->high_alarm_ctrl, imx7_lpsr_save[1]);
+	}
+
 	/* Enabled thermal sensor after resume */
 	regmap_write(map, data->socdata->sensor_ctrl + REG_CLR,
 		     data->socdata->power_down_mask);

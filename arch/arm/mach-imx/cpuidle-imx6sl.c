@@ -68,20 +68,20 @@ static int imx6sl_enter_wait(struct cpuidle_device *dev,
 {
 	int mode = get_bus_freq_mode();
 
-	imx6q_set_lpm(WAIT_UNCLOCKED);
+	imx6_set_lpm(WAIT_UNCLOCKED);
 	if ((mode == BUS_FREQ_AUDIO) || (mode == BUS_FREQ_ULTRA_LOW)) {
 		imx6sl_wfi_in_iram_fn(wfi_iram_base, (mode == BUS_FREQ_AUDIO) ? 1 : 0 ,
 			ldo2p5_dummy_enable);
 	} else {
-	/*
-	 * Software workaround for ERR005311, see function
-	 * description for details.
-	 */
-	imx6sl_set_wait_clk(true);
-	cpu_do_idle();
-	imx6sl_set_wait_clk(false);
+		/*
+		 * Software workaround for ERR005311, see function
+		 * description for details.
+		 */
+		imx6sl_set_wait_clk(true);
+		cpu_do_idle();
+		imx6sl_set_wait_clk(false);
 	}
-	imx6q_set_lpm(WAIT_CLOCKED);
+	imx6_set_lpm(WAIT_CLOCKED);
 
 	return index;
 }

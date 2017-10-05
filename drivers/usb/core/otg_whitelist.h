@@ -16,7 +16,7 @@
  * YOU _SHOULD_ CHANGE THIS LIST TO MATCH YOUR PRODUCT AND ITS TESTING!
  */
 
-static struct usb_device_id whitelist_table [] = {
+static struct usb_device_id whitelist_table[] = {
 /* Add FSL i.mx whitelist, the default list is for USB Compliance Test */
 #if defined(CONFIG_USB_EHSET_TEST_FIXTURE)	\
 	|| defined(CONFIG_USB_EHSET_TEST_FIXTURE_MODULE)

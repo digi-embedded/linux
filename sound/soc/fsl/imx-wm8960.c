@@ -225,7 +225,8 @@ static int imx_hifi_hw_params(struct snd_pcm_substream *substream,
 	}
 
 	if (!data->is_codec_master) {
-		ret = snd_soc_dai_set_tdm_slot(cpu_dai, 0, 0, 2, params_width(params));
+		ret = snd_soc_dai_set_tdm_slot(cpu_dai, 0, 0, 2,
+					       params_physical_width(params));
 		if (ret) {
 			dev_err(dev, "failed to set cpu dai tdm slot: %d\n", ret);
 			return ret;
@@ -342,7 +343,9 @@ static struct snd_soc_ops imx_hifi_ops = {
 
 static int imx_wm8960_late_probe(struct snd_soc_card *card)
 {
-	struct snd_soc_dai *codec_dai = card->rtd[0].codec_dai;
+	struct snd_soc_pcm_runtime *rtd = list_first_entry(
+		&card->rtd_list, struct snd_soc_pcm_runtime, list);
+	struct snd_soc_dai *codec_dai = rtd->codec_dai;
 	struct snd_soc_codec *codec = codec_dai->codec;
 	struct imx_wm8960_data *data = snd_soc_card_get_drvdata(card);
 
@@ -402,6 +405,7 @@ static struct snd_soc_dai_link imx_wm8960_dai[] = {
 		.ignore_pmdown_time = 1,
 		.dpcm_playback = 1,
 		.dpcm_capture = 1,
+		.dpcm_merged_chan = 1,
 	},
 	{
 		.name = "HiFi-ASRC-BE",
@@ -417,10 +421,39 @@ static struct snd_soc_dai_link imx_wm8960_dai[] = {
 	},
 };
 
+static int of_parse_gpr(struct platform_device *pdev,
+			struct imx_wm8960_data *data)
+{
+	int ret;
+	struct of_phandle_args args;
+
+	if (of_device_is_compatible(pdev->dev.of_node,
+				    "fsl,imx7d-evk-wm8960"))
+		return 0;
+
+	ret = of_parse_phandle_with_fixed_args(pdev->dev.of_node,
+					       "gpr", 3, 0, &args);
+	if (ret) {
+		dev_warn(&pdev->dev, "failed to get gpr property\n");
+		return ret;
+	}
+
+	data->gpr = syscon_node_to_regmap(args.np);
+	if (IS_ERR(data->gpr)) {
+		ret = PTR_ERR(data->gpr);
+		dev_err(&pdev->dev, "failed to get gpr regmap\n");
+		return ret;
+	}
+
+	regmap_update_bits(data->gpr, args.args[0], args.args[1],
+			   args.args[2]);
+
+	return 0;
+}
+
 static int imx_wm8960_probe(struct platform_device *pdev)
 {
 	struct device_node *cpu_np, *codec_np = NULL;
-	struct device_node *gpr_np;
 	struct platform_device *cpu_pdev;
 	struct imx_priv *priv = &card_priv;
 	struct i2c_client *codec_dev;
@@ -476,18 +509,9 @@ static int imx_wm8960_probe(struct platform_device *pdev)
 		goto fail;
 	}
 
-	gpr_np = of_parse_phandle(pdev->dev.of_node, "gpr", 0);
-        if (gpr_np) {
-		data->gpr = syscon_node_to_regmap(gpr_np);
-		if (IS_ERR(data->gpr)) {
-			ret = PTR_ERR(data->gpr);
-			dev_err(&pdev->dev, "failed to get gpr regmap\n");
-			goto fail;
-		}
-
-		/* set SAI2_MCLK_DIR to enable codec MCLK for imx7d */
-		regmap_update_bits(data->gpr, 4, 1<<20, 1<<20);
-	}
+	ret = of_parse_gpr(pdev, data);
+	if (ret)
+		goto fail;
 
 	of_property_read_u32_array(pdev->dev.of_node, "hp-det", data->hp_det, 2);
 
@@ -569,7 +593,7 @@ static int imx_wm8960_probe(struct platform_device *pdev)
 		priv->is_headset_jack = true;
 
 	if (gpio_is_valid(imx_hp_jack_gpio.gpio)) {
-		priv->headphone_kctl = snd_kctl_jack_new("Headphone", 0, NULL);
+		priv->headphone_kctl = snd_kctl_jack_new("Headphone", NULL);
 		ret = snd_ctl_add(priv->snd_card, priv->headphone_kctl);
 		if (ret)
 			dev_warn(&pdev->dev, "failed to create headphone jack kctl\n");
@@ -629,6 +653,7 @@ static int imx_wm8960_remove(struct platform_device *pdev)
 
 static const struct of_device_id imx_wm8960_dt_ids[] = {
 	{ .compatible = "fsl,imx-audio-wm8960", },
+	{ .compatible = "fsl,imx7d-evk-wm8960"  },
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, imx_wm8960_dt_ids);

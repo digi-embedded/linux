@@ -2,9 +2,11 @@
  * Freescale On-Chip OTP driver
  *
  * Copyright (C) 2010-2016 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright 2017 NXP
+ * Copyright 2014-2017 Digi International Inc., All Rights Reserved
  *
  * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the termsCopyright 2014-2016 Digi International Inc., All Rights Reserved of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License.
  */
 
@@ -34,6 +36,8 @@
 #define BP_OCOTP_CTRL_ADDR		0
 #define BM_OCOTP_CTRL_ADDR		0x0000007F
 #define BM_OCOTP_CTRL_ADDR_MX7D		0x0000000F
+#define BP_OCOTP_CTRL_ADDR_MX7ULP	0
+#define BM_OCOTP_CTRL_ADDR_MX7ULP	0x000000FF
 
 #define HW_OCOTP_TIMING			0x00000010
 #define BP_OCOTP_TIMING_STROBE_READ	16
@@ -57,10 +61,19 @@
 #define HW_OCOTP_DATA2_MX7D		0x00000040
 #define HW_OCOTP_DATA3_MX7D		0x00000050
 
+#define HW_OCOTP_PDN_ULP		0x00000010
+#define HW_OCOTP_OUT_STATUS_ULP		0x00000090
+#define HW_OCOTP_OUT_STATUS_CLR_ULP	0x00000098
+
+#define BM_OUT_STATUS_DED_RELOAD_ULP	(1 << 20)
+#define BM_OUT_STATUS_SEC_RELOAD_ULP	(1 << 19)
+#define BM_OUT_STATUS_PROGFAIL		(1 << 12)
+#define BM_OUT_STATUS_LOCKED		(1 << 11)
+#define BM_OUT_STATUS_DED_ULP		(1 << 10)
+
 #define HW_OCOTP_CUST_N(n)	(0x00000400 + (n) * 0x10)
 #define HW_OCTP_IDX_MAC0	0x22
 #define HW_OCTP_IDX_MAC1	0x23
-
 #define BF(value, field)	(((value) << BP_##field) & BM_##field)
 
 #define DEF_RELAX		20	/* > 16.5ns */
@@ -102,6 +115,17 @@ static const char *imx6sl_otp_desc[][8] = {
 	BANK8(SW_GP0, SW_GP1, SW_GP2, SW_GP3, SW_GP4, MISC_CONF, FIELD_RETURN, SRK_REVOKE),
 	BANK8(GP_LO0, GP_LO1, GP_LO2, GP_LO3, GP_LO4, GP_LO5, GP_LO6, GP_LO7),
 	BANK8(GP_HI0, GP_HI1, GP_HI2, GP_HI3, GP_HI4, GP_HI5, GP_HI6, GP_HI7),
+};
+
+static const char *imx6sll_otp_desc[][8] = {
+	BANK8(LOCK, CFG0, CFG1, CFG2, CFG3, CFG4, CFG5, CFG6),
+	BANK8(MEM0, MEM1, MEM2, MEM3, MEM4, ANA0, ANA1, USB),
+	BANK8(OTPMK0, OTPMK1, OTPMK2, OTPMK3, OTPMK4, OTPMK5, OTPMK6, OTPMK7),
+	BANK8(SRK0, SRK1, SRK2, SRK3, SRK4, SRK5, SRK6, SRK7),
+	BANK8(SJC_RESP0, SJC_RESP1, MAC0, MAC1, MAC2, CRC0, GP1, GP2),
+	BANK8(SW_GP0, SW_GP1, SW_GP2, SW_GP3, SW_GP4, MISC_CONF, FIELD_RETURN, SRK_REVOKE),
+	BANK8(ROM_PATCH0, ROM_PATCH1, ROM_PATCH2, ROM_PATCH3, ROM_PATCH4, ROM_PATCH5, ROM_PATCH6, ROM_PATCH7),
+	BANK8(GP30, GP31, GP32, GP33, GP40, GP41, GP42, GP43),
 };
 
 static const char *imx6ul_otp_desc[][8] = {
@@ -153,6 +177,40 @@ static const char *imx7d_otp_desc[][4] = {
 	BANK4(CRC_GP10, CRC_GP11, CRC_GP20, CRC_GP21),
 };
 
+static const char *imx7ulp_otp_desc[][8] = {
+	BANK8(TESTER0, TESTER1, TESTER2, TESTER3, TESTER4, TESTER5, TESTER6, TESTER7),
+	BANK8(LOCK0, LOCK1, LOCK2, CFG0, CFG1, CFG2, CFG3, CFG4),
+	BANK8(BOOT0, BOOT1, BOOT2, BOOT3, BOOT4, BOOT5, BOOT6, BOOT7),
+	BANK8(MEM0, MEM1, MEM2, MEM3, ANA0, ANA1, ANA2, ANA3),
+	BANK8(OTPMK0, OTPMK1, OTPMK2, OTPMK3, OTPMK4, OTPMK5, OTPMK6, OTPMK7),
+	BANK8(A7_SRK0, A7_SRK1, A7_SRK2, A7_SRK3, A7_SRK4, A7_SRK5, A7_SRK6, A7_SRK7),
+	BANK8(M4_SRK0, M4_SRK1, M4_SRK2, M4_SRK3, M4_SRK4, M4_SRK5, M4_SRK6, M4_SRK7),
+	BANK8(SJC_RESP0, SJC_RESP1, GP0, GP1, GP2, GP3, GP4, GP5),
+	BANK8(MAU_KEY0, MAU_KEY1, MAU_KEY2, MAU_KEY3, MAU_KEY4, MAU_KEY5, MAU_KEY6, MAU_KEY7),
+	BANK8(TESTER10, TESTER11, TESTER12, TESTER13, TESTER14, TESTER15, FIELD_RETURN, SRK_REVOKE),
+	BANK8(PMU0, PMU1, PMU2, PMU3, PMU4, PMU5, PMU6, PMU7),
+	BANK8(A7_PATCH0, A7_PATCH1, A7_PATCH2, A7_PATCH3, A7_PATCH4, A7_PATCH5, A7_PATCH6, A7_PATCH7),
+	BANK8(A7_PATCH10, A7_PATCH11, A7_PATCH12, A7_PATCH13, A7_PATCH14, A7_PATCH15, A7_PATCH16, A7_PATCH17),
+	BANK8(A7_PATCH20, A7_PATCH21, A7_PATCH22, A7_PATCH23, A7_PATCH24, A7_PATCH25, A7_PATCH26, A7_PATCH27),
+	BANK8(A7_PATCH30, A7_PATCH31, A7_PATCH32, A7_PATCH33, A7_PATCH34, A7_PATCH35, A7_PATCH36, A7_PATCH37),
+	BANK8(GP10, GP11, GP12, GP13, GP14, GP15, GP16, GP17),
+	BANK8(GP20, GP21, GP22, GP23, GP24, GP25, GP26, GP27),
+	BANK8(GP30, GP31, GP32, GP33, GP34, GP35, GP36, GP37),
+	BANK8(GP40, GP41, GP42, GP43, GP44, GP45, GP46, GP47),
+	BANK8(GP50, GP51, GP52, GP53, GP54, GP55, GP56, GP57),
+	BANK8(M4_PATCH0, M4_PATCH1, M4_PATCH2, M4_PATCH3, M4_PATCH4, M4_PATCH5, M4_PATCH6, M4_PATCH7),
+	BANK8(M4_PATCH10, M4_PATCH11, M4_PATCH12, M4_PATCH13, M4_PATCH14, M4_PATCH15, M4_PATCH16, M4_PATCH17),
+	BANK8(M4_PATCH20, M4_PATCH21, M4_PATCH22, M4_PATCH23, M4_PATCH24, M4_PATCH25, M4_PATCH26, M4_PATCH27),
+	BANK8(M4_PATCH30, M4_PATCH31, M4_PATCH32, M4_PATCH33, M4_PATCH34, M4_PATCH35, M4_PATCH36, M4_PATCH37),
+	BANK8(GP60, GP61, GP62, GP63, GP64, GP65, GP66, GP67),
+	BANK8(GP70, GP71, GP72, GP73, GP74, GP75, GP76, GP77),
+	BANK8(GP80, GP81, GP82, GP83, GP84, GP85, GP86, GP87),
+	BANK8(GP90, GP91, GP92, GP93, GP94, GP95, GP96, GP97),
+	BANK8(TRIM0, TRIM1, TRIM2, TRIM3, TRIM4, TRIM5, TRIM6, TRIM7),
+	BANK8(OTFAD_KEY0, OTFAD_KEY1, OTFAD_KEY2, OTFAD_KEY3, OTFAD_CFG0, OTFAD_CFG1, OTFAD_CFG2, OTFAD_CFG3),
+	BANK8(CRC0, CRC1, CRC2, CRC3, CRC4, CRC5, CRC6, CRC7),
+};
+
 static DEFINE_MUTEX(otp_mutex);
 static void __iomem *otp_base;
 static struct clk *otp_clk;
@@ -165,9 +223,11 @@ enum fsl_otp_devtype {
 	FSL_OTP_MX6DL,
 	FSL_OTP_MX6SX,
 	FSL_OTP_MX6SL,
+	FSL_OTP_MX6SLL,
 	FSL_OTP_MX6UL,
 	FSL_OTP_MX6ULL,
 	FSL_OTP_MX7D,
+	FSL_OTP_MX7ULP,
 };
 
 struct fsl_otp_devtype_data {
@@ -199,18 +259,23 @@ static struct fsl_otp_devtype_data *fsl_otp;
  * account for this hole in address space.
  *
  * Similar hole exists between bank 14 and bank 15 of size 0x80
- * on iMX6QP, iMX6DQ, iMX6SDL and iMX6SX.
+ * on iMX6QP, iMX6DQ, iMX6SDL, i.MX6SLL and iMX6SX.
  * Note: iMX6SL has only 0-7 banks and there is no hole.
  * Note: iMX6UL doesn't have this one.
+ *
+ * To i.MX6SLL, there are 9 banks. bank 7 and bank8 only contain 4 words
+ * each. Other banks contains 8 words.
  */
 static u32 fsl_otp_bank_physical(struct fsl_otp_devtype_data *d, int bank)
 {
 	u32 phy_bank;
 
 	if ((bank == 0) || (d->devtype == FSL_OTP_MX6SL) ||
-	    (d->devtype == FSL_OTP_MX7D))
+	    (d->devtype == FSL_OTP_MX7D) || (d->devtype == FSL_OTP_MX7ULP))
 		phy_bank = bank;
-	else if ((d->devtype == FSL_OTP_MX6UL) || (d->devtype == FSL_OTP_MX6ULL)) {
+	else if ((d->devtype == FSL_OTP_MX6UL) ||
+		 (d->devtype == FSL_OTP_MX6ULL) ||
+		 (d->devtype == FSL_OTP_MX6SLL)) {
 		if (bank >= 6)
 			phy_bank = fsl_otp_bank_physical(d, 5) + bank - 3;
 		else
@@ -284,6 +349,11 @@ static void imx7_set_otp_timing(void)
 	__raw_writel(reg, otp_base + HW_OCOTP_TIMING);
 }
 
+static void imx7ulp_set_otp_timing(void)
+{
+	/* No need to setup timing for ULP */
+}
+
 static struct fsl_otp_devtype_data imx6q_data = {
 	.devtype = FSL_OTP_MX6Q,
 	.bank_desc = (const char **)imx6q_otp_desc,
@@ -294,6 +364,14 @@ static struct fsl_otp_devtype_data imx6q_data = {
 static struct fsl_otp_devtype_data imx6sl_data = {
 	.devtype = FSL_OTP_MX6SL,
 	.bank_desc = (const char **)imx6sl_otp_desc,
+	.fuse_nums = 8 * 8,
+	.set_otp_timing = imx6_set_otp_timing,
+};
+
+static struct fsl_otp_devtype_data imx6sll_data = {
+	.devtype = FSL_OTP_MX6SLL,
+	.bank_desc = (const char **)imx6sll_otp_desc,
+	/* Bank 7 and Bank 8 are 4 words each */
 	.fuse_nums = 8 * 8,
 	.set_otp_timing = imx6_set_otp_timing,
 };
@@ -318,6 +396,13 @@ static struct fsl_otp_devtype_data imx7d_data = {
 	.bank_desc = (const char **)imx7d_otp_desc,
 	.fuse_nums = 16 * 4,
 	.set_otp_timing = imx7_set_otp_timing,
+};
+
+static struct fsl_otp_devtype_data imx7ulp_data = {
+	.devtype = FSL_OTP_MX7ULP,
+	.bank_desc = (const char **)imx7ulp_otp_desc,
+	.fuse_nums = 31 * 8,
+	.set_otp_timing = imx7ulp_set_otp_timing,
 };
 
 static int otp_wait_busy(u32 flags)
@@ -364,7 +449,18 @@ static u32 fsl_otp_read(int index, u32 *value)
 		goto out;
 	}
 
+	if (fsl_otp->devtype == FSL_OTP_MX7ULP) {
+		*value = __raw_readl(otp_base + HW_OCOTP_OUT_STATUS_ULP);
+		if (*value & BM_OUT_STATUS_DED_ULP) {
+			__raw_writel(BM_OUT_STATUS_DED_ULP, otp_base + HW_OCOTP_OUT_STATUS_CLR_ULP);
+			goto out;
+		}
+	}
+
 	*value = __raw_readl(otp_base + HW_OCOTP_CUST_N(index));
+	if (fsl_otp->devtype == FSL_OTP_MX7ULP) {
+		__raw_writel(1, otp_base + HW_OCOTP_PDN_ULP);
+	}
 out:
 	mutex_unlock(&otp_mutex);
 	/*
@@ -411,6 +507,26 @@ static int imx6_otp_write_bits(int addr, u32 data, u32 magic)
 	c = __raw_readl(otp_base + HW_OCOTP_CTRL);
 	c &= ~BM_OCOTP_CTRL_ADDR;
 	c |= BF(addr, OCOTP_CTRL_ADDR);
+	c |= BF(magic, OCOTP_CTRL_WR_UNLOCK);
+	__raw_writel(c, otp_base + HW_OCOTP_CTRL);
+
+	/* init the data register */
+	__raw_writel(data, otp_base + HW_OCOTP_DATA);
+	otp_wait_busy(0);
+
+	mdelay(2); /* Write Postamble */
+
+	return 0;
+}
+
+static int imx7ulp_otp_write_bits(int addr, u32 data, u32 magic)
+{
+	u32 c; /* for control register */
+
+	/* init the control register */
+	c = __raw_readl(otp_base + HW_OCOTP_CTRL);
+	c &= ~BM_OCOTP_CTRL_ADDR_MX7ULP;
+	c |= BF(addr, OCOTP_CTRL_ADDR_MX7ULP);
 	c |= BF(magic, OCOTP_CTRL_WR_UNLOCK);
 	__raw_writel(c, otp_base + HW_OCOTP_CTRL);
 
@@ -475,7 +591,9 @@ static ssize_t fsl_otp_store(struct kobject *kobj, struct kobj_attribute *attr,
 			     const char *buf, size_t count)
 {
 	unsigned int index = attr - otp_kattr;
+	unsigned int phy_index;
 	unsigned long value;
+	unsigned long tmp;
 	int ret;
 
 	if (!fsl_otp)
@@ -493,6 +611,29 @@ static ssize_t fsl_otp_store(struct kobject *kobj, struct kobj_attribute *attr,
 
 	mutex_lock(&otp_mutex);
 
+	phy_index = fsl_otp_word_physical(fsl_otp, index);
+	if ((fsl_otp->devtype == FSL_OTP_MX7ULP) && (phy_index > 15)) {
+		fsl_otp->set_otp_timing();
+		ret = otp_wait_busy(0);
+		if (ret)
+			goto out;
+
+		tmp = __raw_readl(otp_base + HW_OCOTP_OUT_STATUS_ULP);
+		if (tmp & BM_OUT_STATUS_DED_ULP) {
+			__raw_writel(BM_OUT_STATUS_DED_ULP, otp_base + HW_OCOTP_OUT_STATUS_CLR_ULP);
+			goto out;
+		}
+
+		tmp = __raw_readl(otp_base + HW_OCOTP_CUST_N(phy_index));
+
+		__raw_writel(1, otp_base + HW_OCOTP_PDN_ULP);
+
+		if (tmp != 0) {
+			ret = -EPERM;
+			goto out;
+		}
+	}
+
 	fsl_otp->set_otp_timing();
 	ret = otp_wait_busy(0);
 	if (ret)
@@ -500,14 +641,28 @@ static ssize_t fsl_otp_store(struct kobject *kobj, struct kobj_attribute *attr,
 
 	if (fsl_otp->devtype == FSL_OTP_MX7D)
 		imx7_otp_write_bits(index, value, 0x3e77);
+	else if (fsl_otp->devtype == FSL_OTP_MX7ULP)
+		imx7ulp_otp_write_bits(index, value, 0x3e77);
 	else
 		imx6_otp_write_bits(index, value, 0x3e77);
+
+	if (fsl_otp->devtype == FSL_OTP_MX7ULP) {
+		value = __raw_readl(otp_base + HW_OCOTP_OUT_STATUS_ULP);
+		if (value & (BM_OUT_STATUS_LOCKED | BM_OUT_STATUS_PROGFAIL))
+			printk("ulp prog fail\n");
+
+		otp_wait_busy(0);
+	}
 
 	/* Reload all the shadow registers */
 	__raw_writel(BM_OCOTP_CTRL_RELOAD_SHADOWS,
 		     otp_base + HW_OCOTP_CTRL_SET);
 	udelay(1);
 	otp_wait_busy(BM_OCOTP_CTRL_RELOAD_SHADOWS);
+
+	if (fsl_otp->devtype == FSL_OTP_MX7ULP) {
+		__raw_writel(1, otp_base + HW_OCOTP_PDN_ULP);
+	}
 
 out:
 	mutex_unlock(&otp_mutex);
@@ -517,16 +672,18 @@ out:
 	 * considered to be minimal.
 	 */
 // 	clk_disable_unprepare(otp_clk);
-	return ret ? 0 : count;
+	return ret ? ret : count;
 }
 #endif /* CONFIG_FSL_OTP_WRITE */
 
 static const struct of_device_id fsl_otp_dt_ids[] = {
 	{ .compatible = "fsl,imx6q-ocotp", .data = (void *)&imx6q_data, },
 	{ .compatible = "fsl,imx6sl-ocotp", .data = (void *)&imx6sl_data, },
+	{ .compatible = "fsl,imx6sll-ocotp", .data = (void *)&imx6sll_data, },
 	{ .compatible = "fsl,imx6ul-ocotp", .data = (void *)&imx6ul_data, },
 	{ .compatible = "fsl,imx6ull-ocotp", .data = (void *)&imx6ull_data, },
 	{ .compatible = "fsl,imx7d-ocotp", .data = (void *)&imx7d_data, },
+	{ .compatible = "fsl,imx7ulp-ocotp", .data = (void *)&imx7ulp_data, },
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, fsl_otp_dt_ids);

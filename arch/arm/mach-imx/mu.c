@@ -29,6 +29,11 @@
 #define MU_ARR1_OFFSET	0x14
 #define MU_ASR		0x20
 #define MU_ACR		0x24
+#define MX7ULP_MU_TR0	0x20
+#define MX7ULP_MU_RR0	0x40
+#define MX7ULP_MU_RR1	0x44
+#define MX7ULP_MU_SR	0x60
+#define MX7ULP_MU_CR	0x64
 
 #define MU_LPM_HANDSHAKE_INDEX		0
 #define MU_RPMSG_HANDSHAKE_INDEX	1
@@ -47,26 +52,18 @@
 #define MU_LPM_M4_WAIT_MODE	        0x5A5A0002
 #define MU_LPM_M4_STOP_MODE	        0x5A5A0003
 
-struct imx_mu_rpmsg_box {
-	const char *name;
-	struct blocking_notifier_head notifier;
-};
-
-static struct imx_mu_rpmsg_box mu_rpmsg_box = {
-	.name	= "m4",
-};
+#define MAX_NUM 10     /*  enlarge it if overflow happen */
 
 static void __iomem *mu_base;
-static u32 m4_message;
-static struct delayed_work rpmsg_work;
-
-static u32 mu_int_en;
-static struct delayed_work mu_work, rpmsg_work;
+static u32 m4_message[MAX_NUM];
+static u32 in_idx, out_idx;
+static struct delayed_work mu_work;
 static u32 m4_wake_irqs[4];
 static bool m4_freq_low;
 struct irq_domain *domain;
 static bool m4_in_stop;
-
+static struct clk *clk;
+static DEFINE_SPINLOCK(mu_lock);
 
 void imx_mu_set_m4_run_mode(void)
 {
@@ -108,34 +105,6 @@ static irqreturn_t mcc_m4_dummy_isr(int irq, void *param)
 	return IRQ_HANDLED;
 }
 
-int imx_mcc_bsp_int_disable(void)
-{
-	u32 val;
-
-	/* Disablethe bit31(GIE3) and bit19(GIR3) of MU_ACR */
-	mu_int_en = val = readl_relaxed(mu_base + MU_ACR);
-	val &= ~mu_int_en;
-	writel_relaxed(val, mu_base + MU_ACR);
-
-	/* flush */
-	val = readl_relaxed(mu_base + MU_ACR);
-	return 0;
-}
-
-int imx_mcc_bsp_int_enable(void)
-{
-	u32 val;
-
-	/* Enable bit31(GIE3) and bit19(GIR3) of MU_ACR */
-	val = readl_relaxed(mu_base + MU_ACR);
-	val |= mu_int_en;
-	writel_relaxed(val, mu_base + MU_ACR);
-
-	/* flush */
-	val = readl_relaxed(mu_base + MU_ACR);
-	return 0;
-}
-
 static int imx_mu_send_message(unsigned int index, unsigned int data)
 {
 	u32 val, ep;
@@ -144,7 +113,10 @@ static int imx_mu_send_message(unsigned int index, unsigned int data)
 
 	/* wait for transfer buffer empty, and no event pending */
 	do {
-		val = readl_relaxed(mu_base + MU_ASR);
+		if (cpu_is_imx7ulp())
+			val = readl_relaxed(mu_base + MX7ULP_MU_SR);
+		else
+			val = readl_relaxed(mu_base + MU_ASR);
 		ep = val & BIT(4);
 		if (time_after(jiffies, timeout)) {
 			pr_err("Waiting MU transmit buffer empty timeout!\n");
@@ -152,12 +124,18 @@ static int imx_mu_send_message(unsigned int index, unsigned int data)
 		}
 	} while (((val & (1 << (20 + 3 - index))) == 0) || (ep == BIT(4)));
 
-	writel_relaxed(data, mu_base + index * 0x4 + MU_ATR0_OFFSET);
+	if (cpu_is_imx7ulp())
+		writel_relaxed(data, mu_base + index * 0x4 + MX7ULP_MU_TR0);
+	else
+		writel_relaxed(data, mu_base + index * 0x4 + MU_ATR0_OFFSET);
 
 	/*
 	 * make a double check that TEn is not empty after write
 	 */
-	val = readl_relaxed(mu_base + MU_ASR);
+	if (cpu_is_imx7ulp())
+		val = readl_relaxed(mu_base + MX7ULP_MU_SR);
+	else
+		val = readl_relaxed(mu_base + MU_ASR);
 	ep = val & BIT(4);
 	if (((val & (1 << (20 + (3 - index)))) == 0) || (ep == BIT(4)))
 		return 0;
@@ -168,7 +146,10 @@ static int imx_mu_send_message(unsigned int index, unsigned int data)
 	 * Make sure that TEn flag is changed, after the ATRn is filled up.
 	 */
 	for (i = 0; i < 100; i++) {
-		val = readl_relaxed(mu_base + MU_ASR);
+		if (cpu_is_imx7ulp())
+			val = readl_relaxed(mu_base + MX7ULP_MU_SR);
+		else
+			val = readl_relaxed(mu_base + MU_ASR);
 		ep = val & BIT(4);
 		if (((val & (1 << (20 + 3 - index))) == 0) || (ep == BIT(4))) {
 			/*
@@ -195,10 +176,16 @@ static void mu_work_handler(struct work_struct *work)
 	int ret;
 	u32 irq, enable, idx, mask, virq;
 	struct of_phandle_args args;
+	u32 message;
+	unsigned long flags;
 
-	pr_debug("receive M4 message 0x%x\n", m4_message);
+	spin_lock_irqsave(&mu_lock, flags);
+	message = m4_message[out_idx % MAX_NUM];
+	spin_unlock_irqrestore(&mu_lock, flags);
 
-	switch (m4_message) {
+	pr_debug("receive M4 message 0x%x\n", message);
+
+	switch (message) {
 	case MU_LPM_M4_RUN_MODE:
 	case MU_LPM_M4_WAIT_MODE:
 		m4_in_stop = false;
@@ -228,12 +215,12 @@ static void mu_work_handler(struct work_struct *work)
 		m4_freq_low = true;
 		break;
 	default:
-		if ((m4_message & MU_LPM_M4_WAKEUP_SRC_MASK) ==
+		if ((message & MU_LPM_M4_WAKEUP_SRC_MASK) ==
 			MU_LPM_M4_WAKEUP_SRC_VAL) {
-			irq = (m4_message & MU_LPM_M4_WAKEUP_IRQ_MASK) >>
+			irq = (message & MU_LPM_M4_WAKEUP_IRQ_MASK) >>
 				MU_LPM_M4_WAKEUP_IRQ_SHIFT;
 
-			enable = (m4_message & MU_LPM_M4_WAKEUP_ENABLE_MASK) >>
+			enable = (message & MU_LPM_M4_WAKEUP_ENABLE_MASK) >>
 				MU_LPM_M4_WAKEUP_ENABLE_SHIFT;
 
 			/* to hwirq start from 0 */
@@ -265,83 +252,75 @@ static void mu_work_handler(struct work_struct *work)
 		}
 		break;
 	}
-	m4_message = 0;
-	/* enable RIE3 interrupt */
-	writel_relaxed(readl_relaxed(mu_base + MU_ACR) | BIT(27),
-		mu_base + MU_ACR);
-}
 
-int imx_mu_rpmsg_send(unsigned int rpmsg)
-{
-	return imx_mu_send_message(MU_RPMSG_HANDSHAKE_INDEX, rpmsg);
+	spin_lock_irqsave(&mu_lock, flags);
+	m4_message[out_idx % MAX_NUM] = 0;
+	out_idx++;
+	spin_unlock_irqrestore(&mu_lock, flags);
+
+	/* enable RIE3 interrupt */
+	if (cpu_is_imx7ulp())
+		writel_relaxed(readl_relaxed(mu_base + MX7ULP_MU_CR) | BIT(27),
+			mu_base + MX7ULP_MU_CR);
+	else
+		writel_relaxed(readl_relaxed(mu_base + MU_ACR) | BIT(27),
+			mu_base + MU_ACR);
 }
 
 int imx_mu_lpm_ready(bool ready)
 {
 	u32 val;
 
-	val = readl_relaxed(mu_base + MU_ACR);
-	if (ready)
-		writel_relaxed(val | BIT(0), mu_base + MU_ACR);
-	else
-		writel_relaxed(val & ~BIT(0), mu_base + MU_ACR);
+	if (cpu_is_imx7ulp()) {
+		val = readl_relaxed(mu_base + MX7ULP_MU_CR);
+		if (ready)
+			writel_relaxed(val | BIT(0), mu_base + MX7ULP_MU_CR);
+		else
+			writel_relaxed(val & ~BIT(0), mu_base + MX7ULP_MU_CR);
+	} else {
+		val = readl_relaxed(mu_base + MU_ACR);
+		if (ready)
+			writel_relaxed(val | BIT(0), mu_base + MU_ACR);
+		else
+			writel_relaxed(val & ~BIT(0), mu_base + MU_ACR);
+	}
 	return 0;
-}
-
-int imx_mu_rpmsg_register_nb(const char *name, struct notifier_block *nb)
-{
-	if ((name == NULL) || (nb == NULL))
-		return -EINVAL;
-
-	if (!strcmp(mu_rpmsg_box.name, name))
-		blocking_notifier_chain_register(&(mu_rpmsg_box.notifier), nb);
-	else
-		return -ENOENT;
-
-	return 0;
-}
-
-int imx_mu_rpmsg_unregister_nb(const char *name, struct notifier_block *nb)
-{
-	if ((name == NULL) || (nb == NULL))
-		return -EINVAL;
-
-	if (!strcmp(mu_rpmsg_box.name, name))
-		blocking_notifier_chain_unregister(&(mu_rpmsg_box.notifier),
-				nb);
-	else
-		return -ENOENT;
-
-	return 0;
-}
-
-static void rpmsg_work_handler(struct work_struct *work)
-{
-
-	blocking_notifier_call_chain(&(mu_rpmsg_box.notifier), 4,
-						(void *)m4_message);
-	m4_message = 0;
 }
 
 static irqreturn_t imx_mu_isr(int irq, void *param)
 {
 	u32 irqs;
+	unsigned long flags;
 
-	irqs = readl_relaxed(mu_base + MU_ASR);
-
-	/* RPMSG */
-	if (irqs & (1 << 26)) {
-		/* get message from receive buffer */
-		m4_message = readl_relaxed(mu_base + MU_ARR1_OFFSET);
-		schedule_delayed_work(&rpmsg_work, 0);
-	}
+	if (cpu_is_imx7ulp())
+		irqs = readl_relaxed(mu_base + MX7ULP_MU_SR);
+	else
+		irqs = readl_relaxed(mu_base + MU_ASR);
 
 	if (irqs & (1 << 27)) {
+		spin_lock_irqsave(&mu_lock, flags);
 		/* get message from receive buffer */
-		m4_message = readl_relaxed(mu_base + MU_ARR0_OFFSET);
+		if (cpu_is_imx7ulp())
+			m4_message[in_idx % MAX_NUM] = readl_relaxed(mu_base +
+						MX7ULP_MU_RR0);
+		else
+			m4_message[in_idx % MAX_NUM] = readl_relaxed(mu_base +
+						MU_ARR0_OFFSET);
 		/* disable RIE3 interrupt */
-		writel_relaxed(readl_relaxed(mu_base + MU_ACR) & (~BIT(27)),
-			mu_base + MU_ACR);
+		if (cpu_is_imx7ulp())
+			writel_relaxed(readl_relaxed(mu_base + MX7ULP_MU_CR)
+					& (~BIT(27)), mu_base + MX7ULP_MU_CR);
+		else
+			writel_relaxed(readl_relaxed(mu_base + MU_ACR)
+					& (~BIT(27)), mu_base + MU_ACR);
+		in_idx++;
+		if (in_idx == out_idx) {
+			spin_unlock_irqrestore(&mu_lock, flags);
+			pr_err("MU overflow!\n");
+			return IRQ_HANDLED;
+		}
+		spin_unlock_irqrestore(&mu_lock, flags);
+
 		schedule_delayed_work(&mu_work, 0);
 	}
 
@@ -353,15 +332,19 @@ static int imx_mu_probe(struct platform_device *pdev)
 	int ret;
 	u32 irq;
 	struct device_node *np;
-	struct clk *clk;
+	struct device *dev = &pdev->dev;
 
 	np = of_find_compatible_node(NULL, NULL, "fsl,imx6sx-mu");
 	mu_base = of_iomap(np, 0);
 	WARN_ON(!mu_base);
 
-	irq = platform_get_irq(pdev, 0);
+	ret = of_device_is_compatible(np, "fsl,imx7ulp-mu");
+	if (ret)
+		irq = platform_get_irq(pdev, 1);
+	else
+		irq = platform_get_irq(pdev, 0);
 	ret = request_irq(irq, imx_mu_isr,
-		IRQF_EARLY_RESUME, "imx-mu", &mu_rpmsg_box);
+			  IRQF_EARLY_RESUME | IRQF_SHARED, "imx-mu", dev);
 	if (ret) {
 		pr_err("%s: register interrupt %d failed, rc %d\n",
 			__func__, irq, ret);
@@ -384,32 +367,22 @@ static int imx_mu_probe(struct platform_device *pdev)
 			}
 		}
 
-		INIT_DELAYED_WORK(&mu_work, mu_work_handler);
-		/* enable the bit26(RIE1) of MU_ACR */
-		writel_relaxed(readl_relaxed(mu_base + MU_ACR) |
-			BIT(26) | BIT(27), mu_base + MU_ACR);
 		/* MU always as a wakeup source for low power mode */
 		imx_gpcv2_add_m4_wake_up_irq(irq_to_desc(irq)->irq_data.hwirq,
 			true);
 	} else {
-		INIT_DELAYED_WORK(&mu_work, mu_work_handler);
-
-		/* enable the bit27(RIE3) of MU_ACR */
-		writel_relaxed(readl_relaxed(mu_base + MU_ACR) | BIT(27),
-			mu_base + MU_ACR);
-		/* enable the bit31(GIE3) of MU_ACR, used for MCC */
-		writel_relaxed(readl_relaxed(mu_base + MU_ACR) | BIT(31),
-			mu_base + MU_ACR);
-
 		/* MU always as a wakeup source for low power mode */
 		imx_gpc_add_m4_wake_up_irq(irq_to_desc(irq)->irq_data.hwirq, true);
 	}
 
-	INIT_DELAYED_WORK(&rpmsg_work, rpmsg_work_handler);
-	/* enable the bit26(RIE1) of MU_ACR */
-	writel_relaxed(readl_relaxed(mu_base + MU_ACR) | BIT(26),
-			mu_base + MU_ACR);
-	BLOCKING_INIT_NOTIFIER_HEAD(&(mu_rpmsg_box.notifier));
+	INIT_DELAYED_WORK(&mu_work, mu_work_handler);
+	/* bit0 of MX7ULP_MU_CR used to let m4 to know MU is ready now */
+	if (cpu_is_imx7ulp())
+		writel_relaxed(readl_relaxed(mu_base + MX7ULP_MU_CR) |
+			BIT(0) | BIT(26) | BIT(27), mu_base + MX7ULP_MU_CR);
+	else
+		writel_relaxed(readl_relaxed(mu_base + MU_ACR) |
+			BIT(26) | BIT(27), mu_base + MU_ACR);
 
 	pr_info("MU is ready for cross core communication!\n");
 
@@ -419,13 +392,36 @@ static int imx_mu_probe(struct platform_device *pdev)
 static const struct of_device_id imx_mu_ids[] = {
 	{ .compatible = "fsl,imx6sx-mu" },
 	{ .compatible = "fsl,imx7d-mu" },
+	{ .compatible = "fsl,imx7ulp-mu" },
 	{ }
+};
+
+#ifdef CONFIG_PM_SLEEP
+static int mu_suspend(struct device *dev)
+{
+	return 0;
+}
+
+static int mu_resume(struct device *dev)
+{
+	if (!cpu_is_imx7ulp())
+		return 0;
+
+	writel_relaxed(readl_relaxed(mu_base + MX7ULP_MU_CR) |
+			BIT(0) | BIT(26) | BIT(27), mu_base + MX7ULP_MU_CR);
+
+	return 0;
+}
+#endif
+static const struct dev_pm_ops mu_pm_ops = {
+	SET_LATE_SYSTEM_SLEEP_PM_OPS(mu_suspend, mu_resume)
 };
 
 static struct platform_driver imx_mu_driver = {
 	.driver = {
 		.name   = "imx-mu",
 		.owner  = THIS_MODULE,
+		.pm = &mu_pm_ops,
 		.of_match_table = imx_mu_ids,
 	},
 	.probe = imx_mu_probe,

@@ -18,6 +18,7 @@
 
 #include "flow.h"
 #include "datapath.h"
+#include "flow_netlink.h"
 #include <linux/uaccess.h>
 #include <linux/netdevice.h>
 #include <linux/etherdevice.h>
@@ -31,6 +32,7 @@
 #include <linux/module.h>
 #include <linux/in.h>
 #include <linux/rcupdate.h>
+#include <linux/cpumask.h>
 #include <linux/if_arp.h>
 #include <linux/ip.h>
 #include <linux/ipv6.h>
@@ -78,17 +80,12 @@ struct sw_flow *ovs_flow_alloc(void)
 {
 	struct sw_flow *flow;
 	struct flow_stats *stats;
-	int node;
 
-	flow = kmem_cache_alloc(flow_cache, GFP_KERNEL);
+	flow = kmem_cache_zalloc(flow_cache, GFP_KERNEL);
 	if (!flow)
 		return ERR_PTR(-ENOMEM);
 
-	flow->sf_acts = NULL;
-	flow->mask = NULL;
-	flow->id.unmasked_key = NULL;
-	flow->id.ufid_len = 0;
-	flow->stats_last_writer = NUMA_NO_NODE;
+	flow->stats_last_writer = -1;
 
 	/* Initialize the default stat node. */
 	stats = kmem_cache_alloc_node(flow_stats_cache,
@@ -100,10 +97,6 @@ struct sw_flow *ovs_flow_alloc(void)
 	spin_lock_init(&stats->lock);
 
 	RCU_INIT_POINTER(flow->stats[0], stats);
-
-	for_each_node(node)
-		if (node != 0)
-			RCU_INIT_POINTER(flow->stats[node], NULL);
 
 	return flow;
 err:
@@ -141,15 +134,17 @@ static struct flex_array *alloc_buckets(unsigned int n_buckets)
 
 static void flow_free(struct sw_flow *flow)
 {
-	int node;
+	int cpu;
 
 	if (ovs_identifier_is_key(&flow->id))
 		kfree(flow->id.unmasked_key);
-	kfree((struct sw_flow_actions __force *)flow->sf_acts);
-	for_each_node(node)
-		if (flow->stats[node])
+	if (flow->sf_acts)
+		ovs_nla_free_flow_actions((struct sw_flow_actions __force *)flow->sf_acts);
+	/* We open code this to make sure cpu 0 is always considered */
+	for (cpu = 0; cpu < nr_cpu_ids; cpu = cpumask_next(cpu, cpu_possible_mask))
+		if (flow->stats[cpu])
 			kmem_cache_free(flow_stats_cache,
-					(struct flow_stats __force *)flow->stats[node]);
+					(struct flow_stats __force *)flow->stats[cpu]);
 	kmem_cache_free(flow_cache, flow);
 }
 
@@ -426,7 +421,7 @@ static u32 flow_hash(const struct sw_flow_key *key,
 
 static int flow_key_start(const struct sw_flow_key *key)
 {
-	if (key->tun_key.ipv4_dst)
+	if (key->tun_proto)
 		return 0;
 	else
 		return rounddown(offsetof(struct sw_flow_key, phy),
@@ -754,7 +749,7 @@ int ovs_flow_init(void)
 	BUILD_BUG_ON(sizeof(struct sw_flow_key) % sizeof(long));
 
 	flow_cache = kmem_cache_create("sw_flow", sizeof(struct sw_flow)
-				       + (num_possible_nodes()
+				       + (nr_cpu_ids
 					  * sizeof(struct flow_stats *)),
 				       0, 0, NULL);
 	if (flow_cache == NULL)

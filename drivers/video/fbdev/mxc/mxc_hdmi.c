@@ -72,10 +72,6 @@
 #define YCBCR422_8BITS		3
 #define XVYCC444            4
 
-static bool only_cea = 1;
-module_param(only_cea, bool, 0644);
-MODULE_PARM_DESC(only_cea, "Allow only CEA modes");
-
 /*
  * We follow a flowchart which is in the "Synopsys DesignWare Courses
  * HDMI Transmitter Controller User Guide, 1.30a", section 3.1
@@ -227,7 +223,7 @@ static inline int cpu_is_imx6dl(struct mxc_hdmi *hdmi)
 	return hdmi->cpu_type == IMX6DL_HDMI;
 }
 #ifdef DEBUG
-static void dump_fb_videomode(struct fb_videomode *m)
+static void dump_fb_videomode(const struct fb_videomode *m)
 {
 	pr_debug("fb_videomode = %d %d %d %d %d %d %d %d %d %d %d %d %d\n",
 		m->refresh, m->xres, m->yres, m->pixclock, m->left_margin,
@@ -235,7 +231,7 @@ static void dump_fb_videomode(struct fb_videomode *m)
 		m->hsync_len, m->vsync_len, m->sync, m->vmode, m->flag);
 }
 #else
-static void dump_fb_videomode(struct fb_videomode *m)
+static void dump_fb_videomode(const struct fb_videomode *m)
 {}
 #endif
 
@@ -1807,7 +1803,7 @@ static void mxc_hdmi_edid_rebuild_modelist(struct mxc_hdmi *hdmi)
 		mode = &hdmi->fbi->monspecs.modedb[i];
 
 		if (!(mode->vmode & FB_VMODE_INTERLACED) &&
-				(!only_cea || mxc_edid_mode_to_vic(mode))) {
+				(mxc_edid_mode_to_vic(mode) != 0)) {
 
 			dev_dbg(&hdmi->pdev->dev, "Added mode %d:", i);
 			dev_dbg(&hdmi->pdev->dev,
@@ -1835,27 +1831,35 @@ static void  mxc_hdmi_default_edid_cfg(struct mxc_hdmi *hdmi)
 
 static void  mxc_hdmi_default_modelist(struct mxc_hdmi *hdmi)
 {
-	u32 i;
-	const struct fb_videomode *mode;
+	struct fb_modelist *modelist;
+	struct fb_videomode *m;
 
 	dev_dbg(&hdmi->pdev->dev, "%s\n", __func__);
 
-	/* If not EDID data read, set up default modelist  */
+	/* If no EDID data read, set up default modelist; since we don't know
+	 * the supported modes of the current sink, we will use only one mode in
+	 * this modelist:
+	 * the default_mode set up at init (usually got from cmdline)
+	 */
 	dev_info(&hdmi->pdev->dev, "create default modelist\n");
 
-	console_lock();
+	/* If the current modelist is already default, don't re-create it*/
+	if (list_is_singular(&hdmi->fbi->modelist)) {
+		modelist = list_entry((&hdmi->fbi->modelist)->next,
+				struct fb_modelist, list);
+		m = &modelist->mode;
+		if (fb_mode_is_equal(m, &hdmi->default_mode)) {
+			dev_info(&hdmi->pdev->dev,
+				"Modelist is already default, no need to re-create!\n");
+			return;
+		}
 
-	fb_destroy_modelist(&hdmi->fbi->modelist);
-
-	/*Add all no interlaced CEA mode to default modelist */
-	for (i = 0; i < ARRAY_SIZE(mxc_cea_mode); i++) {
-		mode = &mxc_cea_mode[i];
-		if (!(mode->vmode & FB_VMODE_INTERLACED) && (mode->xres != 0))
-			fb_add_videomode(mode, &hdmi->fbi->modelist);
 	}
 
+	console_lock();
+	fb_destroy_modelist(&hdmi->fbi->modelist);
+	fb_add_videomode(&hdmi->default_mode, &hdmi->fbi->modelist);
 	fb_new_modelist(hdmi->fbi);
-
 	console_unlock();
 }
 
@@ -1953,9 +1957,8 @@ static void mxc_hdmi_cable_connected(struct mxc_hdmi *hdmi)
 		mxc_hdmi_edid_rebuild_modelist(hdmi);
 		break;
 
-	/* Rebuild even if they're the same in case only_cea changed */
+	/* Nothing to do if EDID same */
 	case HDMI_EDID_SAME:
-		mxc_hdmi_edid_rebuild_modelist(hdmi);
 		break;
 
 	case HDMI_EDID_FAIL:
@@ -2187,18 +2190,12 @@ static void mxc_hdmi_setup(struct mxc_hdmi *hdmi, unsigned long event)
 
 	hdmi_disable_overflow_interrupts();
 
-
-	if (hdmi->vic == 0) {
-		dev_dbg(&hdmi->pdev->dev, "Non-CEA mode used in HDMI\n");
+	dev_dbg(&hdmi->pdev->dev, "CEA mode used vic=%d\n", hdmi->vic);
+	if (hdmi->edid_cfg.hdmi_cap)
+		hdmi->hdmi_data.video_mode.mDVI = false;
+	else {
+		dev_dbg(&hdmi->pdev->dev, "CEA mode vic=%d work in DVI\n", hdmi->vic);
 		hdmi->hdmi_data.video_mode.mDVI = true;
-	} else {
-		dev_dbg(&hdmi->pdev->dev, "CEA mode used vic=%d\n", hdmi->vic);
-		if (!hdmi->dvi_mode && hdmi->edid_cfg.hdmi_cap)
-			hdmi->hdmi_data.video_mode.mDVI = false;
-		else {
-			dev_dbg(&hdmi->pdev->dev, "CEA mode vic=%d work in DVI\n", hdmi->vic);
-			hdmi->hdmi_data.video_mode.mDVI = true;
-		}
 	}
 
 	if ((hdmi->vic == 6) || (hdmi->vic == 7) ||
@@ -2666,17 +2663,16 @@ static int mxc_hdmi_disp_init(struct mxc_dispdrv_handle *disp,
 
 	/* Find a nearest mode in default modelist */
 	fb_var_to_videomode(&m, &hdmi->fbi->var);
-	dump_fb_videomode(&m);
 
 	hdmi->dft_mode_set = false;
-	/* Save default video mode */
-	memcpy(&hdmi->default_mode, &m, sizeof(struct fb_videomode));
-
 	mode = fb_find_nearest_mode(&m, &hdmi->fbi->modelist);
 	if (!mode) {
 		pr_err("%s: could not find mode in modelist\n", __func__);
 		return -1;
 	}
+	dump_fb_videomode(mode);
+	/* Save default video mode */
+	memcpy(&hdmi->default_mode, mode, sizeof(struct fb_videomode));
 
 	fb_videomode_to_var(&hdmi->fbi->var, mode);
 
@@ -2809,13 +2805,14 @@ static long mxc_hdmi_ioctl(struct file *file,
 				sizeof(g_hdmi->hdmi_data)) ? -EFAULT : 0;
 		break;
 	case HDMI_IOC_GET_CPU_TYPE:
-		*argp = g_hdmi->cpu_type;
+		ret = put_user(g_hdmi->cpu_type, argp);
 		break;
 	default:
 		pr_debug("Unsupport cmd %d\n", cmd);
 		break;
-     }
-     return ret;
+	}
+
+	return ret;
 }
 
 static int mxc_hdmi_release(struct inode *inode, struct file *file)

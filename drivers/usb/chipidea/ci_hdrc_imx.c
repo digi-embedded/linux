@@ -24,6 +24,7 @@
 #include <linux/mfd/syscon.h>
 #include <linux/regulator/consumer.h>
 #include <linux/busfreq-imx.h>
+#include <linux/pm_qos.h>
 
 #include "ci.h"
 #include "ci_hdrc_imx.h"
@@ -31,6 +32,11 @@
 struct ci_hdrc_imx_platform_flag {
 	unsigned int flags;
 	bool runtime_pm;
+};
+
+static const struct ci_hdrc_imx_platform_flag imx23_usb_data = {
+	.flags = CI_HDRC_TURN_VBUS_EARLY_ON |
+		CI_HDRC_DISABLE_STREAMING,
 };
 
 static const struct ci_hdrc_imx_platform_flag imx27_usb_data = {
@@ -75,7 +81,14 @@ static const struct ci_hdrc_imx_platform_flag imx7d_usb_data = {
 	.flags = CI_HDRC_SUPPORTS_RUNTIME_PM,
 };
 
+static const struct ci_hdrc_imx_platform_flag imx7ulp_usb_data = {
+	.flags = CI_HDRC_SUPPORTS_RUNTIME_PM |
+		CI_HDRC_IMX_EHCI_QUIRK |
+		CI_HDRC_PMQOS,
+};
+
 static const struct of_device_id ci_hdrc_imx_dt_ids[] = {
+	{ .compatible = "fsl,imx23-usb", .data = &imx23_usb_data},
 	{ .compatible = "fsl,imx28-usb", .data = &imx28_usb_data},
 	{ .compatible = "fsl,imx27-usb", .data = &imx27_usb_data},
 	{ .compatible = "fsl,imx6q-usb", .data = &imx6q_usb_data},
@@ -83,6 +96,7 @@ static const struct of_device_id ci_hdrc_imx_dt_ids[] = {
 	{ .compatible = "fsl,imx6sx-usb", .data = &imx6sx_usb_data},
 	{ .compatible = "fsl,imx6ul-usb", .data = &imx6ul_usb_data},
 	{ .compatible = "fsl,imx7d-usb", .data = &imx7d_usb_data},
+	{ .compatible = "fsl,imx7ulp-usb", .data = &imx7ulp_usb_data},
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, ci_hdrc_imx_dt_ids);
@@ -107,6 +121,7 @@ struct ci_hdrc_imx_data {
 	struct clk *clk_ahb;
 	struct clk *clk_per;
 	/* --------------------------------- */
+	struct pm_qos_request pm_qos_req;
 };
 
 static char *imx_usb_charger_supplied_to[] = {
@@ -187,8 +202,8 @@ static struct imx_usbmisc_data *usbmisc_get_init_data(struct device *dev)
 	if (of_find_property(np, "disable-over-current", NULL))
 		data->disable_oc = 1;
 
-	if (of_find_property(np, "fsl,over-current-polarity-active-low", NULL))
-		data->oc_pol = 1;
+	if (of_find_property(np, "over-current-active-high", NULL))
+		data->oc_polarity = 1;
 
 	if (of_find_property(np, "fsl,power-line-polarity-active-high", NULL))
 		data->pwr_pol = 1;
@@ -470,6 +485,7 @@ static int ci_hdrc_imx_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, data);
 
 	data->data = imx_platform_flag;
+	pdata.flags |= imx_platform_flag->flags;
 	data->usbmisc_data = usbmisc_get_init_data(&pdev->dev);
 	if (IS_ERR(data->usbmisc_data))
 		return PTR_ERR(data->usbmisc_data);
@@ -521,6 +537,10 @@ static int ci_hdrc_imx_probe(struct platform_device *pdev)
 		return ret;
 
 	request_bus_freq(BUS_FREQ_HIGH);
+	if (pdata.flags & CI_HDRC_PMQOS)
+		pm_qos_add_request(&data->pm_qos_req,
+			PM_QOS_CPU_DMA_LATENCY, 0);
+
 	ret = imx_prepare_enable_clks(&pdev->dev);
 	if (ret)
 		goto err_bus_freq;
@@ -535,7 +555,6 @@ static int ci_hdrc_imx_probe(struct platform_device *pdev)
 	}
 
 	pdata.usb_phy = data->phy;
-	pdata.flags |= imx_platform_flag->flags;
 	if (pdata.flags & CI_HDRC_SUPPORTS_RUNTIME_PM)
 		data->supports_runtime_pm = true;
 
@@ -649,6 +668,8 @@ disable_hsic_regulator:
 err_clk:
 	imx_disable_unprepare_clks(&pdev->dev);
 err_bus_freq:
+	if (pdata.flags & CI_HDRC_PMQOS)
+		pm_qos_remove_request(&data->pm_qos_req);
 	release_bus_freq(BUS_FREQ_HIGH);
 	return ret;
 }
@@ -664,6 +685,8 @@ static int ci_hdrc_imx_remove(struct platform_device *pdev)
 	}
 	ci_hdrc_remove_device(data->ci_pdev);
 	imx_disable_unprepare_clks(&pdev->dev);
+	if (data->data->flags & CI_HDRC_PMQOS)
+		pm_qos_remove_request(&data->pm_qos_req);
 	release_bus_freq(BUS_FREQ_HIGH);
 	if (data->hsic_pad_regulator)
 		regulator_disable(data->hsic_pad_regulator);
@@ -689,6 +712,8 @@ static int imx_controller_suspend(struct device *dev)
 	}
 
 	imx_disable_unprepare_clks(dev);
+	if (data->data->flags & CI_HDRC_PMQOS)
+		pm_qos_remove_request(&data->pm_qos_req);
 	release_bus_freq(BUS_FREQ_HIGH);
 	data->in_lpm = true;
 
@@ -708,9 +733,12 @@ static int imx_controller_resume(struct device *dev)
 	}
 
 	request_bus_freq(BUS_FREQ_HIGH);
+	if (data->data->flags & CI_HDRC_PMQOS)
+		pm_qos_add_request(&data->pm_qos_req,
+			PM_QOS_CPU_DMA_LATENCY, 0);
 	ret = imx_prepare_enable_clks(dev);
 	if (ret)
-		return ret;
+		goto err_bus_freq;
 
 	data->in_lpm = false;
 
@@ -742,6 +770,10 @@ hsic_set_clk_fail:
 	imx_usbmisc_set_wakeup(data->usbmisc_data, true);
 clk_disable:
 	imx_disable_unprepare_clks(dev);
+err_bus_freq:
+	if (data->data->flags & CI_HDRC_PMQOS)
+		pm_qos_remove_request(&data->pm_qos_req);
+	release_bus_freq(BUS_FREQ_HIGH);
 	return ret;
 }
 

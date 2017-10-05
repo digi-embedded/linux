@@ -1543,10 +1543,33 @@ union wmi_connect_event_common {
 } __packed;
 
 struct wmi_connect_event {
-	union wmi_connect_event_common u;
-	u8 beacon_ie_len;
-	u8 assoc_req_len;
-	u8 assoc_resp_len;
+	union {
+		struct {
+			__le16 ch;
+			u8 bssid[ETH_ALEN];
+			__le16 listen_intvl;
+			__le16 beacon_intvl;
+			__le32 nw_type;
+		} sta;
+		struct {
+			u8 aid;
+			u8 phymode;
+			u8 mac_addr[ETH_ALEN];
+			u8 auth;
+			u8 keymgmt;
+			__le16 cipher;
+			u8 apsd_info;
+			u8 unused[3];
+		} ap_sta;
+		struct {
+			__le16 ch;
+			u8 bssid[ETH_ALEN];
+			u8 unused[8];
+		} ap_bss;
+	} u;
+	u16 beacon_ie_len;
+	u16 assoc_req_len;
+	u16 assoc_resp_len;
 	u8 assoc_info[1];
 } __packed;
 
@@ -2638,7 +2661,7 @@ int ath6kl_wmi_set_wmm_txop(struct wmi *wmi, u8 if_idx, enum wmi_txop_cfg cfg);
 int ath6kl_wmi_set_keepalive_cmd(struct wmi *wmi, u8 if_idx,
 				 u8 keep_alive_intvl);
 int ath6kl_wmi_set_htcap_cmd(struct wmi *wmi, u8 if_idx,
-			     enum ieee80211_band band,
+			     enum nl80211_band band,
 			     struct ath6kl_htcap *htcap);
 int ath6kl_wmi_test_cmd(struct wmi *wmi, void *buf, size_t len);
 

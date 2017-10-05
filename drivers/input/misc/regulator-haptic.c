@@ -124,7 +124,7 @@ regulator_haptic_parse_dt(struct device *dev, struct regulator_haptic *haptic)
 
 	node = dev->of_node;
 	if(!node) {
-		dev_err(dev, "Missing dveice tree data\n");
+		dev_err(dev, "Missing device tree data\n");
 		return -EINVAL;
 	}
 
@@ -249,6 +249,7 @@ static const struct of_device_id regulator_haptic_dt_match[] = {
 	{ .compatible = "regulator-haptic" },
 	{ /* sentinel */ },
 };
+MODULE_DEVICE_TABLE(of, regulator_haptic_dt_match);
 
 static struct platform_driver regulator_haptic_driver = {
 	.probe		= regulator_haptic_probe,

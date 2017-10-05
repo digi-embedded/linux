@@ -30,12 +30,15 @@
 #include <linux/regmap.h>
 #include <linux/regulator/driver.h>
 #include <linux/regulator/of_regulator.h>
+#include <linux/regulator/machine.h>
 
 #define LDO_RAMP_UP_UNIT_IN_CYCLES      64 /* 64 cycles per step */
 #define LDO_RAMP_UP_FREQ_IN_MHZ         24 /* cycle based on 24M OSC */
 
 #define LDO_POWER_GATE			0x00
 #define LDO_FET_FULL_ON			0x1f
+
+#define LDO_MIN_DROPOUT_UV		125000
 
 struct anatop_regulator {
 	const char *name;
@@ -94,8 +97,12 @@ static int anatop_core_regmap_enable(struct regulator_dev *reg)
 	 * The vddpu has to stay at the same voltage level as vddsoc
 	 * whenever it's about to be enabled.
 	 */
-	if (anatop_reg == vddpu && vddsoc)
+	if (anatop_reg == vddpu && vddsoc) {
 		anatop_reg->sel = vddsoc->sel;
+		anatop_reg->bypass = vddsoc->bypass;
+		if (anatop_reg->bypass)
+			anatop_reg->rdesc.min_dropout_uV = 0;
+	}
 
 	sel = anatop_reg->bypass ? LDO_FET_FULL_ON : anatop_reg->sel;
 	return regulator_set_voltage_sel_regmap(reg, sel);
@@ -163,6 +170,10 @@ static int anatop_regmap_set_bypass(struct regulator_dev *reg, bool enable)
 
 	sel = enable ? LDO_FET_FULL_ON : anatop_reg->sel;
 	anatop_reg->bypass = enable;
+	if (anatop_reg->bypass)
+		anatop_reg->rdesc.min_dropout_uV = 0;
+	else
+		anatop_reg->rdesc.min_dropout_uV = LDO_MIN_DROPOUT_UV;
 
 	return regulator_set_voltage_sel_regmap(reg, sel);
 }
@@ -253,6 +264,7 @@ static int anatop_regulator_probe(struct platform_device *pdev)
 	rdesc->owner = THIS_MODULE;
 
 	initdata = of_get_regulator_init_data(dev, np, rdesc);
+	initdata->supply_regulator = "vin";
 	sreg->initdata = initdata;
 
 	if (strcmp(sreg->name, "vddpu") == 0)
@@ -324,6 +336,7 @@ static int anatop_regulator_probe(struct platform_device *pdev)
 	rdesc->vsel_reg = sreg->control_reg;
 	rdesc->vsel_mask = ((1 << sreg->vol_bit_width) - 1) <<
 			   sreg->vol_bit_shift;
+	rdesc->min_dropout_uV = LDO_MIN_DROPOUT_UV;
 
 	config.dev = &pdev->dev;
 	config.init_data = initdata;
@@ -345,6 +358,7 @@ static int anatop_regulator_probe(struct platform_device *pdev)
 		if (sreg->sel == LDO_FET_FULL_ON) {
 			sreg->sel = 0;
 			sreg->bypass = true;
+			rdesc->min_dropout_uV = 0;
 		}
 
 		/*
@@ -370,9 +384,10 @@ static int anatop_regulator_probe(struct platform_device *pdev)
 	/* register regulator */
 	rdev = devm_regulator_register(dev, rdesc, &config);
 	if (IS_ERR(rdev)) {
-		dev_err(dev, "failed to register %s\n",
-			rdesc->name);
-		return PTR_ERR(rdev);
+		ret = PTR_ERR(rdev);
+		if (ret != -EPROBE_DEFER)
+			dev_err(dev, "failed to register %s\n",	rdesc->name);
+		return ret;
 	}
 
 	platform_set_drvdata(pdev, rdev);
@@ -384,6 +399,7 @@ static const struct of_device_id of_anatop_regulator_match_tbl[] = {
 	{ .compatible = "fsl,anatop-regulator", },
 	{ /* end */ }
 };
+MODULE_DEVICE_TABLE(of, of_anatop_regulator_match_tbl);
 
 static struct platform_driver anatop_regulator_driver = {
 	.driver = {

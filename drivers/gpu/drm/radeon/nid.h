@@ -46,6 +46,13 @@
 
 #define DMIF_ADDR_CONFIG  				0xBD4
 
+/* fusion vce clocks */
+#define CG_ECLK_CNTL                                    0x620
+#       define ECLK_DIVIDER_MASK                        0x7f
+#       define ECLK_DIR_CNTL_EN                         (1 << 8)
+#define CG_ECLK_STATUS                                  0x624
+#       define ECLK_STATUS                              (1 << 0)
+
 /* DCE6 only */
 #define DMIF_ADDR_CALC  				0xC00
 
@@ -1130,6 +1137,7 @@
 #define UVD_UDEC_ADDR_CONFIG				0xEF4C
 #define UVD_UDEC_DB_ADDR_CONFIG				0xEF50
 #define UVD_UDEC_DBW_ADDR_CONFIG			0xEF54
+#define UVD_NO_OP					0xEFFC
 #define UVD_RBC_RB_RPTR					0xF690
 #define UVD_RBC_RB_WPTR					0xF694
 #define UVD_STATUS					0xf6bc

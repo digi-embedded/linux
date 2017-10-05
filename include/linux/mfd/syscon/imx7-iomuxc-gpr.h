@@ -9,8 +9,6 @@
 #ifndef __LINUX_IMX7_IOMUXC_GPR_H
 #define __LINUX_IMX7_IOMUXC_GPR_H
 
-#include <linux/bitops.h>
-
 #define IOMUXC_GPR0	0x00
 #define IOMUXC_GPR1	0x04
 #define IOMUXC_GPR2	0x08

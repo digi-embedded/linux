@@ -463,7 +463,7 @@ static int vdoa_probe(struct platform_device *pdev)
 		return PTR_ERR(vdoa->vdoa_clk);
 	}
 
-	vdoa->iram_pool = of_get_named_gen_pool(np, "iram", 0);
+	vdoa->iram_pool = of_gen_pool_get(np, "iram", 0);
 	if (!vdoa->iram_pool) {
 		dev_err(&pdev->dev, "iram pool not available\n");
 		return -ENOMEM;

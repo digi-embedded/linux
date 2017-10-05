@@ -529,10 +529,8 @@ static int ads784x_hwmon_register(struct spi_device *spi, struct ads7846 *ts)
 
 	ts->hwmon = hwmon_device_register_with_groups(&spi->dev, spi->modalias,
 						      ts, ads7846_attr_groups);
-	if (IS_ERR(ts->hwmon))
-		return PTR_ERR(ts->hwmon);
 
-	return 0;
+	return PTR_ERR_OR_ZERO(ts->hwmon);
 }
 
 static void ads784x_hwmon_unregister(struct spi_device *spi,
@@ -1242,7 +1240,8 @@ static const struct ads7846_platform_data *ads7846_probe_dt(struct device *dev)
 		dev_info(dev, "Set pendown gpio debounce time to %d microseconds\n",
 			 pdata->gpio_pendown_debounce);
 
-	pdata->wakeup = of_property_read_bool(node, "linux,wakeup");
+	pdata->wakeup = of_property_read_bool(node, "wakeup-source") ||
+			of_property_read_bool(node, "linux,wakeup");
 
 	pdata->gpio_pendown = of_get_named_gpio(dev->of_node, "pendown-gpio", 0);
 
@@ -1478,7 +1477,6 @@ static int ads7846_remove(struct spi_device *spi)
 
 	ads784x_hwmon_unregister(spi, ts);
 
-	regulator_disable(ts->reg);
 	regulator_put(ts->reg);
 
 	if (!ts->get_pendown_state) {
@@ -1503,7 +1501,6 @@ static int ads7846_remove(struct spi_device *spi)
 static struct spi_driver ads7846_driver = {
 	.driver = {
 		.name	= "ads7846",
-		.owner	= THIS_MODULE,
 		.pm	= &ads7846_pm,
 		.of_match_table = of_match_ptr(ads7846_dt_ids),
 	},

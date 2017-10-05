@@ -30,6 +30,7 @@
 #include <linux/of_gpio.h>
 #include <linux/regulator/of_regulator.h>
 #include <linux/regulator/machine.h>
+#include <linux/pinctrl/consumer.h>
 
 struct fixed_voltage_data {
 	struct regulator_desc desc;
@@ -79,20 +80,11 @@ of_get_fixed_voltage_config(struct device *dev,
 		config->enabled_at_boot = true;
 
 	config->gpio = of_get_named_gpio(np, "gpio", 0);
-	/*
-	 * of_get_named_gpio() currently returns ENODEV rather than
-	 * EPROBE_DEFER. This code attempts to be compatible with both
-	 * for now; the ENODEV check can be removed once the API is fixed.
-	 * of_get_named_gpio() doesn't differentiate between a missing
-	 * property (which would be fine here, since the GPIO is optional)
-	 * and some other error. Patches have been posted for both issues.
-	 * Once they are check in, we should replace this with:
-	 * if (config->gpio < 0 && config->gpio != -ENOENT)
-	 */
-	if ((config->gpio == -ENODEV) || (config->gpio == -EPROBE_DEFER))
-		return ERR_PTR(-EPROBE_DEFER);
+	if ((config->gpio < 0) && (config->gpio != -ENOENT))
+		return ERR_PTR(config->gpio);
 
 	of_property_read_u32(np, "startup-delay-us", &config->startup_delay);
+	of_property_read_u32(np, "off-on-delay", &config->off_on_delay);
 
 	config->enable_high = of_property_read_bool(np, "enable-active-high");
 	config->gpio_is_open_drain = of_property_read_bool(np,
@@ -143,6 +135,7 @@ static int reg_fixed_voltage_probe(struct platform_device *pdev)
 	drvdata->desc.ops = &fixed_voltage_ops;
 
 	drvdata->desc.enable_time = config->startup_delay;
+	drvdata->desc.off_on_delay = config->off_on_delay;
 
 	if (config->input_supply) {
 		drvdata->desc.supply_name = devm_kstrdup(&pdev->dev,
@@ -209,11 +202,32 @@ static const struct of_device_id fixed_of_match[] = {
 MODULE_DEVICE_TABLE(of, fixed_of_match);
 #endif
 
+#ifdef CONFIG_PM_SLEEP
+static int reg_fixed_voltage_suspend(struct device *dev)
+{
+	pinctrl_pm_select_sleep_state(dev);
+
+	return 0;
+}
+static int reg_fixed_voltage_resume(struct device *dev)
+{
+	pinctrl_pm_select_default_state(dev);
+
+	return 0;
+}
+#endif
+
+static const struct dev_pm_ops reg_fixed_voltage_pm_ops = {
+	SET_LATE_SYSTEM_SLEEP_PM_OPS(reg_fixed_voltage_suspend,
+		reg_fixed_voltage_resume)
+};
+
 static struct platform_driver regulator_fixed_voltage_driver = {
 	.probe		= reg_fixed_voltage_probe,
 	.driver		= {
 		.name		= "reg-fixed-voltage",
 		.of_match_table = of_match_ptr(fixed_of_match),
+		.pm = &reg_fixed_voltage_pm_ops,
 	},
 };
 

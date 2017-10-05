@@ -166,7 +166,7 @@ int copy_siginfo_to_user32(compat_siginfo_t __user *to, const siginfo_t *from)
 #ifdef BUS_MCEERR_AO
 		/*
 		 * Other callers might not initialize the si_lsb field,
-		 * so check explicitely for the right codes here.
+		 * so check explicitly for the right codes here.
 		 */
 		if (from->si_signo == SIGBUS &&
 		    (from->si_code == BUS_MCEERR_AR || from->si_code == BUS_MCEERR_AO))
@@ -356,7 +356,7 @@ static int compat_restore_sigframe(struct pt_regs *regs,
 	 */
 	regs->syscallno = ~0UL;
 
-	err |= !valid_user_regs(&regs->user_regs);
+	err |= !valid_user_regs(&regs->user_regs, current);
 
 	aux = (struct compat_aux_sigframe __user *) sf->uc.uc_regspace;
 	if (err == 0)
@@ -394,7 +394,7 @@ badframe:
 	if (show_unhandled_signals)
 		pr_info_ratelimited("%s[%d]: bad frame in %s: pc=%08llx sp=%08llx\n",
 				    current->comm, task_pid_nr(current), __func__,
-				    regs->pc, regs->sp);
+				    regs->pc, regs->compat_sp);
 	force_sig(SIGSEGV, current);
 	return 0;
 }
@@ -431,7 +431,7 @@ badframe:
 	if (show_unhandled_signals)
 		pr_info_ratelimited("%s[%d]: bad frame in %s: pc=%08llx sp=%08llx\n",
 				    current->comm, task_pid_nr(current), __func__,
-				    regs->pc, regs->sp);
+				    regs->pc, regs->compat_sp);
 	force_sig(SIGSEGV, current);
 	return 0;
 }

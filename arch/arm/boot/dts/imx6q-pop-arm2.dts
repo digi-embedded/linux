@@ -187,6 +187,11 @@
 	pinctrl-0 = <&pinctrl_i2c2>;
 	status = "okay";
 
+	hdmi_edid: edid@50 {
+		compatible = "fsl,imx6-hdmi-i2c";
+		reg = <0x50>;
+	};
+
 	egalax_ts@04 {
 		compatible = "eeti,egalax_ts";
 		reg = <0x04>;
@@ -195,11 +200,6 @@
 		interrupt-parent = <&gpio3>;
 		interrupts = <31 2>;
 		wakeup-gpios = <&gpio3 31 0>;
-	};
-
-	hdmi: edid@50 {
-		compatible = "fsl,imx6-hdmi-i2c";
-		reg = <0x50>;
 	};
 };
 

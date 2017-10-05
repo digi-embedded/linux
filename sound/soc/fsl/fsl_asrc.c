@@ -2,6 +2,7 @@
  * Freescale ASRC ALSA SoC Digital Audio Interface (DAI) driver
  *
  * Copyright (C) 2014-2016 Freescale Semiconductor, Inc.
+ * Copyright 2017 NXP
  *
  * Author: Nicolin Chen <nicoleotsuka@gmail.com>
  *
@@ -21,11 +22,15 @@
 #include <sound/pcm_params.h>
 
 #include "fsl_asrc.h"
+#include "imx-pcm.h"
 
 #define IDEAL_RATIO_DECIMAL_DEPTH 26
 
 #define pair_err(fmt, ...) \
 	dev_err(&asrc_priv->pdev->dev, "Pair %c: " fmt, 'A' + index, ##__VA_ARGS__)
+
+#define pair_warn(fmt, ...) \
+	dev_warn(&asrc_priv->pdev->dev, "Pair %c: " fmt, 'A' + index, ##__VA_ARGS__)
 
 #define pair_dbg(fmt, ...) \
 	dev_dbg(&asrc_priv->pdev->dev, "Pair %c: " fmt, 'A' + index, ##__VA_ARGS__)
@@ -314,7 +319,7 @@ static int fsl_asrc_config_pair(struct fsl_asrc_pair *pair, bool p2p_in, bool p2
 	}
 
 	if ((outrate > 8000 && outrate < 30000) &&
-			(outrate/inrate > 24 || inrate/outrate > 8)) {
+	    (outrate/inrate > 24 || inrate/outrate > 8)) {
 		pair_err("exceed supported ratio range [1/24, 8] for \
 				inrate/outrate: %d/%d\n", inrate, outrate);
 		return -EINVAL;
@@ -352,6 +357,11 @@ static int fsl_asrc_config_pair(struct fsl_asrc_pair *pair, bool p2p_in, bool p2
 		pair_err("failed to support output sample rate %dHz by asrck_%x\n",
 				outrate, clk_index[OUT]);
 		return -EINVAL;
+	}
+
+	if (div[IN] > 1024 && div[OUT] > 1024) {
+		pair_warn("both divider (%d, %d) are larger than threshold\n",
+							div[IN], div[OUT]);
 	}
 
 	if (div[IN] > 1024)
@@ -641,7 +651,7 @@ static int fsl_asrc_dai_probe(struct snd_soc_dai *dai)
 #define FSL_ASRC_RATES		 SNDRV_PCM_RATE_8000_192000
 #define FSL_ASRC_FORMATS	(SNDRV_PCM_FMTBIT_S24_LE | \
 				 SNDRV_PCM_FMTBIT_S16_LE | \
-				 SNDRV_PCM_FMTBIT_S20_3LE)
+				 SNDRV_PCM_FMTBIT_S24_3LE)
 
 static struct snd_soc_dai_driver fsl_asrc_dai = {
 	.probe = fsl_asrc_dai_probe,
@@ -810,7 +820,7 @@ static const struct regmap_config fsl_asrc_regmap_config = {
 	.readable_reg = fsl_asrc_readable_reg,
 	.volatile_reg = fsl_asrc_volatile_reg,
 	.writeable_reg = fsl_asrc_writeable_reg,
-	.cache_type = REGCACHE_RBTREE,
+	.cache_type = REGCACHE_FLAT,
 };
 
 #include "fsl_asrc_m2m.c"
@@ -840,26 +850,6 @@ static bool fsl_asrc_check_xrun(struct snd_pcm_substream *substream)
 	return ret;
 }
 
-static int stop_lock_stream(struct snd_pcm_substream *substream)
-{
-	if (substream) {
-		snd_pcm_stream_lock_irq(substream);
-		if (substream->runtime->status->state == SNDRV_PCM_STATE_RUNNING)
-			substream->ops->trigger(substream, SNDRV_PCM_TRIGGER_STOP);
-	}
-	return 0;
-}
-
-static int start_unlock_stream(struct snd_pcm_substream *substream)
-{
-	if (substream) {
-		if (substream->runtime->status->state == SNDRV_PCM_STATE_RUNNING)
-			substream->ops->trigger(substream, SNDRV_PCM_TRIGGER_START);
-		snd_pcm_stream_unlock_irq(substream);
-	}
-	return 0;
-}
-
 static void fsl_asrc_reset(struct snd_pcm_substream *substream, bool stop)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
@@ -868,11 +858,10 @@ static void fsl_asrc_reset(struct snd_pcm_substream *substream, bool stop)
 	struct snd_dmaengine_dai_dma_data *dma_params_be = NULL;
 	struct snd_soc_dpcm *dpcm;
 	struct snd_pcm_substream *be_substream;
+	unsigned long flags = 0;
 
-	if (stop) {
-		stop_lock_stream(asrc_priv->substream[0]);
-		stop_lock_stream(asrc_priv->substream[1]);
-	}
+	if (stop)
+		imx_stop_lock_pcm_streams(asrc_priv->substream, 2, &flags);
 
 	/* find the be for this fe stream */
 	list_for_each_entry(dpcm, &rtd->dpcm[substream->stream].be_clients, list_be) {
@@ -888,10 +877,8 @@ static void fsl_asrc_reset(struct snd_pcm_substream *substream, bool stop)
 		break;
 	}
 
-	if (stop) {
-		start_unlock_stream(asrc_priv->substream[1]);
-		start_unlock_stream(asrc_priv->substream[0]);
-	}
+	if (stop)
+		imx_start_unlock_pcm_streams(asrc_priv->substream, 2, &flags);
 }
 
 /**
@@ -1031,11 +1018,9 @@ static int fsl_asrc_probe(struct platform_device *pdev)
 		return PTR_ERR(asrc_priv->ipg_clk);
 	}
 
-	asrc_priv->dma_clk = devm_clk_get(&pdev->dev, "dma");
-	if (IS_ERR(asrc_priv->dma_clk)) {
-		dev_err(&pdev->dev, "failed to get dma script clock\n");
-		return PTR_ERR(asrc_priv->dma_clk);
-	}
+	asrc_priv->spba_clk = devm_clk_get(&pdev->dev, "spba");
+	if (IS_ERR(asrc_priv->spba_clk))
+		dev_warn(&pdev->dev, "failed to get spba clock\n");
 
 	for (i = 0; i < ASRC_CLK_MAX_NUM; i++) {
 		sprintf(tmp, "asrck_%x", i);
@@ -1046,7 +1031,7 @@ static int fsl_asrc_probe(struct platform_device *pdev)
 		}
 	}
 
-	if (of_device_is_compatible(pdev->dev.of_node, "fsl,imx35-asrc")) {
+	if (of_device_is_compatible(np, "fsl,imx35-asrc")) {
 		asrc_priv->channel_bits = 3;
 		clk_map[IN] = input_clk_map_imx35;
 		clk_map[OUT] = output_clk_map_imx35;
@@ -1059,7 +1044,7 @@ static int fsl_asrc_probe(struct platform_device *pdev)
 	ret = fsl_asrc_init(asrc_priv);
 	if (ret) {
 		dev_err(&pdev->dev, "failed to init asrc %d\n", ret);
-		return -EINVAL;
+		return ret;
 	}
 
 	asrc_priv->channel_avail = 10;
@@ -1068,14 +1053,14 @@ static int fsl_asrc_probe(struct platform_device *pdev)
 				   &asrc_priv->asrc_rate);
 	if (ret) {
 		dev_err(&pdev->dev, "failed to get output rate\n");
-		return -EINVAL;
+		return ret;
 	}
 
 	ret = of_property_read_u32(np, "fsl,asrc-width",
 				   &asrc_priv->asrc_width);
 	if (ret) {
 		dev_err(&pdev->dev, "failed to get output width\n");
-		return -EINVAL;
+		return ret;
 	}
 
 	asrc_priv->dma_params_tx.check_xrun = fsl_asrc_check_xrun;
@@ -1111,8 +1096,6 @@ static int fsl_asrc_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	dev_info(&pdev->dev, "driver registered\n");
-
 	return 0;
 }
 
@@ -1120,15 +1103,37 @@ static int fsl_asrc_probe(struct platform_device *pdev)
 static int fsl_asrc_runtime_resume(struct device *dev)
 {
 	struct fsl_asrc *asrc_priv = dev_get_drvdata(dev);
-	int i;
+	int i, ret;
 
-	clk_prepare_enable(asrc_priv->mem_clk);
-	clk_prepare_enable(asrc_priv->ipg_clk);
-	clk_prepare_enable(asrc_priv->dma_clk);
-	for (i = 0; i < ASRC_CLK_MAX_NUM; i++)
-		clk_prepare_enable(asrc_priv->asrck_clk[i]);
+	ret = clk_prepare_enable(asrc_priv->mem_clk);
+	if (ret)
+		return ret;
+	ret = clk_prepare_enable(asrc_priv->ipg_clk);
+	if (ret)
+		goto disable_mem_clk;
+	if (!IS_ERR(asrc_priv->spba_clk)) {
+		ret = clk_prepare_enable(asrc_priv->spba_clk);
+		if (ret)
+			goto disable_ipg_clk;
+	}
+	for (i = 0; i < ASRC_CLK_MAX_NUM; i++) {
+		ret = clk_prepare_enable(asrc_priv->asrck_clk[i]);
+		if (ret)
+			goto disable_asrck_clk;
+	}
 
 	return 0;
+
+disable_asrck_clk:
+	for (i--; i >= 0; i--)
+		clk_disable_unprepare(asrc_priv->asrck_clk[i]);
+	if (!IS_ERR(asrc_priv->spba_clk))
+		clk_disable_unprepare(asrc_priv->spba_clk);
+disable_ipg_clk:
+	clk_disable_unprepare(asrc_priv->ipg_clk);
+disable_mem_clk:
+	clk_disable_unprepare(asrc_priv->mem_clk);
+	return ret;
 }
 
 static int fsl_asrc_runtime_suspend(struct device *dev)
@@ -1138,7 +1143,8 @@ static int fsl_asrc_runtime_suspend(struct device *dev)
 
 	for (i = 0; i < ASRC_CLK_MAX_NUM; i++)
 		clk_disable_unprepare(asrc_priv->asrck_clk[i]);
-	clk_disable_unprepare(asrc_priv->dma_clk);
+	if (!IS_ERR(asrc_priv->spba_clk))
+		clk_disable_unprepare(asrc_priv->spba_clk);
 	clk_disable_unprepare(asrc_priv->ipg_clk);
 	clk_disable_unprepare(asrc_priv->mem_clk);
 
@@ -1154,7 +1160,7 @@ static int fsl_asrc_suspend(struct device *dev)
 	fsl_asrc_m2m_suspend(asrc_priv);
 
 	regmap_read(asrc_priv->regmap, REG_ASRCFG,
-				&asrc_priv->regcache_cfg);
+		    &asrc_priv->regcache_cfg);
 
 	regcache_cache_only(asrc_priv->regmap, true);
 	regcache_mark_dirty(asrc_priv->regmap);
@@ -1177,7 +1183,8 @@ static int fsl_asrc_resume(struct device *dev)
 	regcache_sync(asrc_priv->regmap);
 
 	regmap_update_bits(asrc_priv->regmap, REG_ASRCFG,
-			0x1FFFC0, asrc_priv->regcache_cfg);
+			   ASRCFG_NDPRi_ALL_MASK | ASRCFG_POSTMODi_ALL_MASK |
+			   ASRCFG_PREMODi_ALL_MASK, asrc_priv->regcache_cfg);
 
 	/* Restart enabled pairs */
 	regmap_update_bits(asrc_priv->regmap, REG_ASRCTR,

@@ -249,7 +249,7 @@ static void exynos5_usbdrd_phy_isol(struct phy_usb_instance *inst,
 static unsigned int
 exynos5_usbdrd_pipe3_set_refclk(struct phy_usb_instance *inst)
 {
-	static u32 reg;
+	u32 reg;
 	struct exynos5_usbdrd_phy *phy_drd = to_usbdrd_phy(inst);
 
 	/* restore any previous reference clock settings */
@@ -295,7 +295,7 @@ exynos5_usbdrd_pipe3_set_refclk(struct phy_usb_instance *inst)
 static unsigned int
 exynos5_usbdrd_utmi_set_refclk(struct phy_usb_instance *inst)
 {
-	static u32 reg;
+	u32 reg;
 	struct exynos5_usbdrd_phy *phy_drd = to_usbdrd_phy(inst);
 
 	/* restore any previous reference clock settings */
@@ -537,7 +537,7 @@ static struct phy *exynos5_usbdrd_phy_xlate(struct device *dev,
 	return phy_drd->phys[args->args[0]].phy;
 }
 
-static struct phy_ops exynos5_usbdrd_phy_ops = {
+static const struct phy_ops exynos5_usbdrd_phy_ops = {
 	.init		= exynos5_usbdrd_phy_init,
 	.exit		= exynos5_usbdrd_phy_exit,
 	.power_on	= exynos5_usbdrd_phy_power_on,

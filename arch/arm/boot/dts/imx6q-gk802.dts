@@ -50,7 +50,7 @@
 			label = "recovery";
 			gpios = <&gpio3 16 1>;
 			linux,code = <0x198>; /* KEY_RESTART */
-			gpio-key,wakeup;
+			wakeup-source;
 		};
 	};
 
@@ -99,7 +99,7 @@
 	clock-frequency = <100000>;
 	status = "okay";
 
-	hdmi: edid@50 {
+	hdmi_edid: edid@50 {
 		compatible = "fsl,imx6-hdmi-i2c";
 		reg = <0x50>;
 	};

@@ -42,7 +42,7 @@ static const struct snd_pcm_hardware imx_pcm_hardware = {
 		SNDRV_PCM_INFO_RESUME,
 	.buffer_bytes_max = IMX_DEFAULT_DMABUF_SIZE,
 	.period_bytes_min = 128,
-	.period_bytes_max = 65535, /* Limited by SDMA engine */
+	.period_bytes_max = 65532, /* Limited by SDMA engine */
 	.periods_min = 2,
 	.periods_max = 255,
 	.fifo_size = 0,
@@ -102,6 +102,8 @@ int imx_pcm_dma_init(struct platform_device *pdev, size_t size)
 
 	config = devm_kzalloc(&pdev->dev,
 			sizeof(struct snd_dmaengine_pcm_config), GFP_KERNEL);
+	if (!config)
+		return -ENOMEM;
 	*config = imx_dmaengine_pcm_config;
 	if (size)
 		config->prealloc_buffer_size = size;

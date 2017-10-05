@@ -1,5 +1,8 @@
 /*
- * Copyright (C) 2015-2016 Freescale Semiconductor, Inc.
+ * Freescale imx6ul pinctrl driver
+ *
+ * Author: Anson Huang <Anson.Huang@freescale.com>
+ * Copyright (C) 2015 Freescale Semiconductor, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -9,7 +12,6 @@
 #include <linux/err.h>
 #include <linux/init.h>
 #include <linux/io.h>
-#include <linux/module.h>
 #include <linux/of.h>
 #include <linux/of_device.h>
 #include <linux/pinctrl/pinctrl.h>
@@ -315,6 +317,7 @@ static struct pinctrl_pin_desc imx6ull_snvs_pinctrl_pads[] = {
 static struct imx_pinctrl_soc_info imx6ul_pinctrl_info = {
 	.pins = imx6ul_pinctrl_pads,
 	.npins = ARRAY_SIZE(imx6ul_pinctrl_pads),
+	.gpr_compatible = "fsl,imx6ul-iomuxc-gpr",
 };
 
 static struct imx_pinctrl_soc_info imx6ull_snvs_pinctrl_info = {
@@ -347,11 +350,9 @@ static int imx6ul_pinctrl_probe(struct platform_device *pdev)
 static struct platform_driver imx6ul_pinctrl_driver = {
 	.driver = {
 		.name = "imx6ul-pinctrl",
-		.owner = THIS_MODULE,
 		.of_match_table = of_match_ptr(imx6ul_pinctrl_of_match),
 	},
 	.probe = imx6ul_pinctrl_probe,
-	.remove = imx_pinctrl_remove,
 };
 
 static int __init imx6ul_pinctrl_init(void)
@@ -359,13 +360,3 @@ static int __init imx6ul_pinctrl_init(void)
 	return platform_driver_register(&imx6ul_pinctrl_driver);
 }
 arch_initcall(imx6ul_pinctrl_init);
-
-static void __exit imx6ul_pinctrl_exit(void)
-{
-	platform_driver_unregister(&imx6ul_pinctrl_driver);
-}
-module_exit(imx6ul_pinctrl_exit);
-
-MODULE_AUTHOR("Anson Huang <Anson.Huang@freescale.com>");
-MODULE_DESCRIPTION("Freescale imx6ul pinctrl driver");
-MODULE_LICENSE("GPL v2");

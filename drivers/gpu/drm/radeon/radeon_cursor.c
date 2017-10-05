@@ -90,16 +90,38 @@ static void radeon_show_cursor(struct drm_crtc *crtc)
 	struct radeon_crtc *radeon_crtc = to_radeon_crtc(crtc);
 	struct radeon_device *rdev = crtc->dev->dev_private;
 
+	if (radeon_crtc->cursor_out_of_bounds)
+		return;
+
 	if (ASIC_IS_DCE4(rdev)) {
+		WREG32(EVERGREEN_CUR_SURFACE_ADDRESS_HIGH + radeon_crtc->crtc_offset,
+		       upper_32_bits(radeon_crtc->cursor_addr));
+		WREG32(EVERGREEN_CUR_SURFACE_ADDRESS + radeon_crtc->crtc_offset,
+		       lower_32_bits(radeon_crtc->cursor_addr));
 		WREG32(RADEON_MM_INDEX, EVERGREEN_CUR_CONTROL + radeon_crtc->crtc_offset);
 		WREG32(RADEON_MM_DATA, EVERGREEN_CURSOR_EN |
 		       EVERGREEN_CURSOR_MODE(EVERGREEN_CURSOR_24_8_PRE_MULT) |
 		       EVERGREEN_CURSOR_URGENT_CONTROL(EVERGREEN_CURSOR_URGENT_1_2));
 	} else if (ASIC_IS_AVIVO(rdev)) {
+		if (rdev->family >= CHIP_RV770) {
+			if (radeon_crtc->crtc_id)
+				WREG32(R700_D2CUR_SURFACE_ADDRESS_HIGH,
+				       upper_32_bits(radeon_crtc->cursor_addr));
+			else
+				WREG32(R700_D1CUR_SURFACE_ADDRESS_HIGH,
+				       upper_32_bits(radeon_crtc->cursor_addr));
+		}
+
+		WREG32(AVIVO_D1CUR_SURFACE_ADDRESS + radeon_crtc->crtc_offset,
+		       lower_32_bits(radeon_crtc->cursor_addr));
 		WREG32(RADEON_MM_INDEX, AVIVO_D1CUR_CONTROL + radeon_crtc->crtc_offset);
 		WREG32(RADEON_MM_DATA, AVIVO_D1CURSOR_EN |
 		       (AVIVO_D1CURSOR_MODE_24BPP << AVIVO_D1CURSOR_MODE_SHIFT));
 	} else {
+		/* offset is from DISP(2)_BASE_ADDRESS */
+		WREG32(RADEON_CUR_OFFSET + radeon_crtc->crtc_offset,
+		       radeon_crtc->cursor_addr - radeon_crtc->legacy_display_base_addr);
+
 		switch (radeon_crtc->crtc_id) {
 		case 0:
 			WREG32(RADEON_MM_INDEX, RADEON_CRTC_GEN_CNTL);
@@ -124,21 +146,25 @@ static int radeon_cursor_move_locked(struct drm_crtc *crtc, int x, int y)
 	int xorigin = 0, yorigin = 0;
 	int w = radeon_crtc->cursor_width;
 
+	radeon_crtc->cursor_x = x;
+	radeon_crtc->cursor_y = y;
+
 	if (ASIC_IS_AVIVO(rdev)) {
 		/* avivo cursor are offset into the total surface */
 		x += crtc->x;
 		y += crtc->y;
 	}
-	DRM_DEBUG("x %d y %d c->x %d c->y %d\n", x, y, crtc->x, crtc->y);
 
-	if (x < 0) {
+	if (x < 0)
 		xorigin = min(-x, radeon_crtc->max_cursor_width - 1);
-		x = 0;
-	}
-	if (y < 0) {
+	if (y < 0)
 		yorigin = min(-y, radeon_crtc->max_cursor_height - 1);
-		y = 0;
+
+	if (!ASIC_IS_AVIVO(rdev)) {
+		x += crtc->x;
+		y += crtc->y;
 	}
+	DRM_DEBUG("x %d y %d c->x %d c->y %d\n", x, y, crtc->x, crtc->y);
 
 	/* fixed on DCE6 and newer */
 	if (ASIC_IS_AVIVO(rdev) && !ASIC_IS_DCE6(rdev)) {
@@ -161,26 +187,30 @@ static int radeon_cursor_move_locked(struct drm_crtc *crtc, int x, int y)
 		if (i > 1) {
 			int cursor_end, frame_end;
 
-			cursor_end = x - xorigin + w;
+			cursor_end = x + w;
 			frame_end = crtc->x + crtc->mode.crtc_hdisplay;
 			if (cursor_end >= frame_end) {
 				w = w - (cursor_end - frame_end);
 				if (!(frame_end & 0x7f))
 					w--;
-			} else {
-				if (!(cursor_end & 0x7f))
-					w--;
+			} else if (cursor_end <= 0) {
+				goto out_of_bounds;
+			} else if (!(cursor_end & 0x7f)) {
+				w--;
 			}
 			if (w <= 0) {
-				w = 1;
-				cursor_end = x - xorigin + w;
-				if (!(cursor_end & 0x7f)) {
-					x--;
-					WARN_ON_ONCE(x < 0);
-				}
+				goto out_of_bounds;
 			}
 		}
 	}
+
+	if (x <= (crtc->x - w) || y <= (crtc->y - radeon_crtc->cursor_height) ||
+	    x >= (crtc->x + crtc->mode.crtc_hdisplay) ||
+	    y >= (crtc->y + crtc->mode.crtc_vdisplay))
+		goto out_of_bounds;
+
+	x += xorigin;
+	y += yorigin;
 
 	if (ASIC_IS_DCE4(rdev)) {
 		WREG32(EVERGREEN_CUR_POSITION + radeon_crtc->crtc_offset, (x << 16) | y);
@@ -193,6 +223,9 @@ static int radeon_cursor_move_locked(struct drm_crtc *crtc, int x, int y)
 		WREG32(AVIVO_D1CUR_SIZE + radeon_crtc->crtc_offset,
 		       ((w - 1) << 16) | (radeon_crtc->cursor_height - 1));
 	} else {
+		x -= crtc->x;
+		y -= crtc->y;
+
 		if (crtc->mode.flags & DRM_MODE_FLAG_DBLSCAN)
 			y *= 2;
 
@@ -210,9 +243,19 @@ static int radeon_cursor_move_locked(struct drm_crtc *crtc, int x, int y)
 		       yorigin * 256);
 	}
 
-	radeon_crtc->cursor_x = x;
-	radeon_crtc->cursor_y = y;
+	if (radeon_crtc->cursor_out_of_bounds) {
+		radeon_crtc->cursor_out_of_bounds = false;
+		if (radeon_crtc->cursor_bo)
+			radeon_show_cursor(crtc);
+	}
 
+	return 0;
+
+ out_of_bounds:
+	if (!radeon_crtc->cursor_out_of_bounds) {
+		radeon_hide_cursor(crtc);
+		radeon_crtc->cursor_out_of_bounds = true;
+	}
 	return 0;
 }
 
@@ -226,34 +269,6 @@ int radeon_crtc_cursor_move(struct drm_crtc *crtc,
 	radeon_lock_cursor(crtc, false);
 
 	return ret;
-}
-
-static void radeon_set_cursor(struct drm_crtc *crtc)
-{
-	struct radeon_crtc *radeon_crtc = to_radeon_crtc(crtc);
-	struct radeon_device *rdev = crtc->dev->dev_private;
-
-	if (ASIC_IS_DCE4(rdev)) {
-		WREG32(EVERGREEN_CUR_SURFACE_ADDRESS_HIGH + radeon_crtc->crtc_offset,
-		       upper_32_bits(radeon_crtc->cursor_addr));
-		WREG32(EVERGREEN_CUR_SURFACE_ADDRESS + radeon_crtc->crtc_offset,
-		       lower_32_bits(radeon_crtc->cursor_addr));
-	} else if (ASIC_IS_AVIVO(rdev)) {
-		if (rdev->family >= CHIP_RV770) {
-			if (radeon_crtc->crtc_id)
-				WREG32(R700_D2CUR_SURFACE_ADDRESS_HIGH,
-				       upper_32_bits(radeon_crtc->cursor_addr));
-			else
-				WREG32(R700_D1CUR_SURFACE_ADDRESS_HIGH,
-				       upper_32_bits(radeon_crtc->cursor_addr));
-		}
-		WREG32(AVIVO_D1CUR_SURFACE_ADDRESS + radeon_crtc->crtc_offset,
-		       lower_32_bits(radeon_crtc->cursor_addr));
-	} else {
-		/* offset is from DISP(2)_BASE_ADDRESS */
-		WREG32(RADEON_CUR_OFFSET + radeon_crtc->crtc_offset,
-		       radeon_crtc->cursor_addr - radeon_crtc->legacy_display_base_addr);
-	}
 }
 
 int radeon_crtc_cursor_set2(struct drm_crtc *crtc,
@@ -283,7 +298,7 @@ int radeon_crtc_cursor_set2(struct drm_crtc *crtc,
 		return -EINVAL;
 	}
 
-	obj = drm_gem_object_lookup(crtc->dev, file_priv, handle);
+	obj = drm_gem_object_lookup(file_priv, handle);
 	if (!obj) {
 		DRM_ERROR("Cannot find cursor object %x for crtc %d\n", handle, radeon_crtc->crtc_id);
 		return -ENOENT;
@@ -306,25 +321,25 @@ int radeon_crtc_cursor_set2(struct drm_crtc *crtc,
 		return ret;
 	}
 
-	radeon_crtc->cursor_width = width;
-	radeon_crtc->cursor_height = height;
-
 	radeon_lock_cursor(crtc, true);
 
-	if (hot_x != radeon_crtc->cursor_hot_x ||
+	if (width != radeon_crtc->cursor_width ||
+	    height != radeon_crtc->cursor_height ||
+	    hot_x != radeon_crtc->cursor_hot_x ||
 	    hot_y != radeon_crtc->cursor_hot_y) {
 		int x, y;
 
 		x = radeon_crtc->cursor_x + radeon_crtc->cursor_hot_x - hot_x;
 		y = radeon_crtc->cursor_y + radeon_crtc->cursor_hot_y - hot_y;
 
-		radeon_cursor_move_locked(crtc, x, y);
-
+		radeon_crtc->cursor_width = width;
+		radeon_crtc->cursor_height = height;
 		radeon_crtc->cursor_hot_x = hot_x;
 		radeon_crtc->cursor_hot_y = hot_y;
+
+		radeon_cursor_move_locked(crtc, x, y);
 	}
 
-	radeon_set_cursor(crtc);
 	radeon_show_cursor(crtc);
 
 	radeon_lock_cursor(crtc, false);
@@ -362,7 +377,6 @@ void radeon_cursor_reset(struct drm_crtc *crtc)
 		radeon_cursor_move_locked(crtc, radeon_crtc->cursor_x,
 					  radeon_crtc->cursor_y);
 
-		radeon_set_cursor(crtc);
 		radeon_show_cursor(crtc);
 
 		radeon_lock_cursor(crtc, false);

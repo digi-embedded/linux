@@ -21,7 +21,6 @@
 #include <linux/reboot.h>
 #include <linux/micrel_phy.h>
 #include <linux/of_address.h>
-#include <linux/of_gpio.h>
 #include <linux/of_platform.h>
 #include <linux/phy.h>
 #include <linux/pinctrl/consumer.h>
@@ -269,277 +268,6 @@ static void __init apx4devkit_init(void)
 					   apx4devkit_phy_fixup);
 }
 
-static int ccardimx28_phy_fixup(struct phy_device *phy)
-{
-	phy->dev_flags |= MICREL_PHY_50MHZ_CLK;
-	return 0;
-}
-
-#define CCARDIMX28_FEC1_PHY_RESET	MXS_GPIO_NR(4, 13)
-#define CCARDIMX28_BT_DISABLE		MXS_GPIO_NR(3, 26)
-#define CCARDIMX28_BT_GPIO7		MXS_GPIO_NR(3, 27)
-#define CCARDIMX28_BT_PWD_L		MXS_GPIO_NR(0, 21)
-#define CCARDIMX28_BT_HOST_WAKE	 	MXS_GPIO_NR(0, 17)
-#define CCARDIMX28_BT_WAKE		MXS_GPIO_NR(2, 16)
-
-static const struct gpio ccardimx28_bt_gpios[] __initconst = {
-	{ CCARDIMX28_BT_DISABLE, GPIOF_OUT_INIT_HIGH, "bt-disable" },
-	{ CCARDIMX28_BT_GPIO7, GPIOF_DIR_IN, "bt-gpio7" },
-	{ CCARDIMX28_BT_PWD_L, GPIOF_OUT_INIT_LOW, "bt-pwd-l" },
-	{ CCARDIMX28_BT_HOST_WAKE, GPIOF_DIR_IN, "bt-host-wake" },
-	{ CCARDIMX28_BT_WAKE, GPIOF_OUT_INIT_HIGH, "bt-wake" },
-};
-
-static void ccardimx28_init_bt(void)
-{
-	int ret;
-
-	ret = gpio_request_array(ccardimx28_bt_gpios,
-				 ARRAY_SIZE(ccardimx28_bt_gpios));
-	if (ret) {
-		pr_err("%s: failed to request bluetooth gpios: %d\n",
-		       __func__, ret);
-		return;
-	}
-	/* Start with Power pin low, then set high after 5ms to power BT */
-	msleep(5);
-	gpio_set_value_cansleep(CCARDIMX28_BT_PWD_L, 1);
-	/* Free the BT power pin to allow controlling it from user space */
-	gpio_free(CCARDIMX28_BT_PWD_L);
-}
-
-static void ccardimx28_init_wifi(void)
-{
-	struct device_node *np;
-	int pwrdown_gpio;
-	enum of_gpio_flags flags;
-
-	np = of_find_node_by_path("/wireless");
-	if (!np)
-		return;
-
-	/* Read the power down gpio */
-	pwrdown_gpio = of_get_named_gpio_flags(np, "digi,pwrdown-gpio", 0, &flags);
-	if (gpio_is_valid(pwrdown_gpio)) {
-		if (!gpio_request_one(pwrdown_gpio, GPIOF_DIR_OUT,
-			      "wifi_chip_pwd_l")) {
-			/* Start with Power pin low, then set high to power Wifi */
-			gpio_set_value_cansleep(pwrdown_gpio, 0);
-			udelay(20);	/* minimum is 5us */
-			gpio_set_value_cansleep(pwrdown_gpio, 1);
-			/*
-			 * Free the Wifi chip PWD pin to allow controlling
-			 * it from user space
-			 */
-			gpio_free(pwrdown_gpio);
-		}
-	}
-}
-
-static int ccardimx28_register_hwid(void)
-{
-	struct device_node *np;
-	const u32 *ocotp = mxs_get_ocotp();
-	u8 *hwid;
-	char str[20];
-	struct property *hwidprop;
-	const char *hwidpropname;
-	int ret, i;
-	const char *propnames[] = {
-		"digi,hwid,tf",
-		"digi,hwid,variant",
-		"digi,hwid,hv",
-		"digi,hwid,cert",
-		"digi,hwid,year",
-		"digi,hwid,month",
-		"digi,hwid,sn",
-	};
-
-	np = of_find_compatible_node(NULL, NULL, "digi,ccardimx28");
-	if (!np)
-		return -EINVAL;
-
-	/* Retrieve HWID from OTP bits */
-	hwid = (u8 *)ocotp;
-
-	/*
-	 * Try to read the HWID fields from DT. If not found, create those
-	 * properties from the information on the OTP bits.
-	 */
-	for (i = 0; i < ARRAY_SIZE(propnames); i++) {
-		ret = of_property_read_string(np, propnames[i], &hwidpropname);
-		if (ret) {
-			/* Convert HWID fields to strings */
-			if (!strcmp("digi,hwid,tf", propnames[i]))
-				sprintf(str, "0x%02x", hwid[6]);
-			else if (!strcmp("digi,hwid,variant", propnames[i]))
-				sprintf(str, "0x%02x", hwid[5]);
-			else if (!strcmp("digi,hwid,hv", propnames[i]))
-				sprintf(str, "0x%x", hwid[4] >> 4);
-			else if (!strcmp("digi,hwid,cert", propnames[i]))
-				sprintf(str, "0x%x", hwid[4] & 0xf);
-			else if (!strcmp("digi,hwid,year", propnames[i]))
-				sprintf(str, "20%02d", hwid[3]);
-			else if (!strcmp("digi,hwid,month", propnames[i]))
-				sprintf(str, "%02d", hwid[2] >> 4);
-			else if (!strcmp("digi,hwid,sn", propnames[i]))
-				sprintf(str, "%d", ocotp[0] & 0xfffff);
-			else
-				continue;
-
-			hwidprop = kzalloc(sizeof(*hwidprop) + strlen(str),
-					   GFP_KERNEL);
-			if (!hwidprop)
-				return -ENOMEM;
-
-			hwidprop->value = hwidprop + 1;
-			hwidprop->length = strlen(str);
-			hwidprop->name = kstrdup(propnames[i], GFP_KERNEL);
-			if (!hwidprop->name) {
-				kfree(hwidprop);
-				return -ENOMEM;
-			}
-			strncpy(hwidprop->value, str, strlen(str));
-			of_update_property(np, hwidprop);
-		}
-	}
-
-	return 0;
-}
-
-static void __init ccardimx28_init(void)
-{
-	int ret;
-
-	/*
-	 * Read the HWID from OTP bits and register it to DT if not already
-	 * there, to be exposed to the filesystem via procfs.
-	 */
-	ret = ccardimx28_register_hwid();
-	if (ret)
-		pr_err("%s: failed to register hwid: %d\n", __func__, ret);
-
-	if (IS_BUILTIN(CONFIG_PHYLIB))
-		phy_register_fixup_for_uid(PHY_ID_KSZ8031, MICREL_PHY_ID_MASK,
-					   ccardimx28_phy_fixup);
-
-	enable_clk_enet_out();
-
-	mxs_saif_clkmux_select(MXS_DIGCTL_SAIF_CLKMUX_EXTMSTR0);
-}
-
-static void __init ccardimx28_post_init(void)
-{
-	/* Take ENET1 PHY out of reset so that the address
-	 * is properly latched by the time ENET0 MDIO bus
-	 * (shared between ENET0 and ENET1) does the PHY
-	 * autodetection.
-	 */
-	if (!gpio_request_one(CCARDIMX28_FEC1_PHY_RESET, GPIOF_DIR_OUT,
-			      "enet1-phy-reset")) {
-		gpio_set_value_cansleep(CCARDIMX28_FEC1_PHY_RESET, 1);
-		gpio_free(CCARDIMX28_FEC1_PHY_RESET);
-	}
-
-	/* Bluetooth
-	 * TODO: check the variant has BT */
-	if (IS_ENABLED(CONFIG_BT))
-		ccardimx28_init_bt();
-
-	/* Wireless
-	 * TODO: check the variant has Wifi */
-	ccardimx28_init_wifi();
-}
-
-static int cpx2_phy_fixup(struct phy_device *phy)
-{
-	phy->dev_flags |= MICREL_PHY_50MHZ_CLK;
-	return 0;
-}
-
-static void __init cpx2_init(void)
-{
-	if (IS_BUILTIN(CONFIG_PHYLIB))
-		phy_register_fixup_for_uid(PHY_ID_KSZ8021, MICREL_PHY_ID_MASK,
-					   cpx2_phy_fixup);
-
-	enable_clk_enet_out();
-}
-
-#define ENET0_MDC__GPIO_4_0	MXS_GPIO_NR(4, 0)
-#define ENET0_MDIO__GPIO_4_1	MXS_GPIO_NR(4, 1)
-#define ENET0_RX_EN__GPIO_4_2	MXS_GPIO_NR(4, 2)
-#define ENET0_RXD0__GPIO_4_3	MXS_GPIO_NR(4, 3)
-#define ENET0_RXD1__GPIO_4_4	MXS_GPIO_NR(4, 4)
-#define ENET0_TX_EN__GPIO_4_6	MXS_GPIO_NR(4, 6)
-#define ENET0_TXD0__GPIO_4_7	MXS_GPIO_NR(4, 7)
-#define ENET0_TXD1__GPIO_4_8	MXS_GPIO_NR(4, 8)
-#define ENET_CLK__GPIO_4_16	MXS_GPIO_NR(4, 16)
-
-#define TX28_FEC_PHY_POWER	MXS_GPIO_NR(3, 29)
-#define TX28_FEC_PHY_RESET	MXS_GPIO_NR(4, 13)
-#define TX28_FEC_nINT		MXS_GPIO_NR(4, 5)
-
-static const struct gpio tx28_gpios[] __initconst = {
-	{ ENET0_MDC__GPIO_4_0, GPIOF_OUT_INIT_LOW, "GPIO_4_0" },
-	{ ENET0_MDIO__GPIO_4_1, GPIOF_OUT_INIT_LOW, "GPIO_4_1" },
-	{ ENET0_RX_EN__GPIO_4_2, GPIOF_OUT_INIT_LOW, "GPIO_4_2" },
-	{ ENET0_RXD0__GPIO_4_3, GPIOF_OUT_INIT_LOW, "GPIO_4_3" },
-	{ ENET0_RXD1__GPIO_4_4, GPIOF_OUT_INIT_LOW, "GPIO_4_4" },
-	{ ENET0_TX_EN__GPIO_4_6, GPIOF_OUT_INIT_LOW, "GPIO_4_6" },
-	{ ENET0_TXD0__GPIO_4_7, GPIOF_OUT_INIT_LOW, "GPIO_4_7" },
-	{ ENET0_TXD1__GPIO_4_8, GPIOF_OUT_INIT_LOW, "GPIO_4_8" },
-	{ ENET_CLK__GPIO_4_16, GPIOF_OUT_INIT_LOW, "GPIO_4_16" },
-	{ TX28_FEC_PHY_POWER, GPIOF_OUT_INIT_LOW, "fec-phy-power" },
-	{ TX28_FEC_PHY_RESET, GPIOF_OUT_INIT_LOW, "fec-phy-reset" },
-	{ TX28_FEC_nINT, GPIOF_DIR_IN, "fec-int" },
-};
-
-static void __init tx28_post_init(void)
-{
-	struct device_node *np;
-	struct platform_device *pdev;
-	struct pinctrl *pctl;
-	int ret;
-
-	enable_clk_enet_out();
-
-	np = of_find_compatible_node(NULL, NULL, "fsl,imx28-fec");
-	pdev = of_find_device_by_node(np);
-	if (!pdev) {
-		pr_err("%s: failed to find fec device\n", __func__);
-		return;
-	}
-
-	pctl = pinctrl_get_select(&pdev->dev, "gpio_mode");
-	if (IS_ERR(pctl)) {
-		pr_err("%s: failed to get pinctrl state\n", __func__);
-		return;
-	}
-
-	ret = gpio_request_array(tx28_gpios, ARRAY_SIZE(tx28_gpios));
-	if (ret) {
-		pr_err("%s: failed to request gpios: %d\n", __func__, ret);
-		return;
-	}
-
-	/* Power up fec phy */
-	gpio_set_value_cansleep(TX28_FEC_PHY_POWER, 1);
-	msleep(26); /* 25ms according to data sheet */
-
-	/* Mode strap pins */
-	gpio_set_value_cansleep(ENET0_RX_EN__GPIO_4_2, 1);
-	gpio_set_value_cansleep(ENET0_RXD0__GPIO_4_3, 1);
-	gpio_set_value_cansleep(ENET0_RXD1__GPIO_4_4, 1);
-
-	udelay(100); /* minimum assertion time for nRST */
-
-	/* Deasserting FEC PHY RESET */
-	gpio_set_value_cansleep(TX28_FEC_PHY_RESET, 1);
-
-	pinctrl_put(pctl);
-}
-
 static void __init crystalfontz_init(void)
 {
 	update_fec_mac_prop(OUI_CRYSTALFONTZ);
@@ -695,20 +423,10 @@ static void __init mxs_machine_init(void)
 		duckbill_init();
 	else if (of_machine_is_compatible("msr,m28cu3"))
 		m28cu3_init();
-	else if (of_machine_is_compatible("digi,ccardimx28"))
-		ccardimx28_init();
-	else if (of_machine_is_compatible("digi,cpx2"))
-		cpx2_init();
 
-	of_platform_populate(NULL, of_default_bus_match_table,
-			     NULL, parent);
+	of_platform_default_populate(NULL, NULL, parent);
 
 	mxs_restart_init();
-
-	if (of_machine_is_compatible("karo,tx28"))
-		tx28_post_init();
-	if (of_machine_is_compatible("digi,ccardimx28"))
-		ccardimx28_post_init();
 }
 
 #define MXS_CLKCTRL_RESET_CHIP		(1 << 1)
@@ -732,7 +450,7 @@ static void mxs_restart(enum reboot_mode mode, const char *cmd)
 	soft_restart(0);
 }
 
-static const char *mxs_dt_compat[] __initdata = {
+static const char *const mxs_dt_compat[] __initconst = {
 	"fsl,imx28",
 	"fsl,imx23",
 	NULL,

@@ -1,7 +1,7 @@
-What:		/sys/module/hid_logitech/drivers/hid:logitech/<dev>/range.
+What:		/sys/bus/hid/drivers/logitech/<dev>/range
 Date:		July 2011
 KernelVersion:	3.2
-Contact:	Michal Malý <madcatxster@gmail.com>
+Contact:	Michal Malý <madcatxster@devoid-pointer.net>
 Description:	Display minimum, maximum and current range of the steering
 		wheel. Writing a value within min and max boundaries sets the
 		range of the wheel.
@@ -9,7 +9,7 @@ Description:	Display minimum, maximum and current range of the steering
 What:		/sys/bus/hid/drivers/logitech/<dev>/alternate_modes
 Date:		Feb 2015
 KernelVersion:	4.1
-Contact:	Michal Malý <madcatxster@gmail.com>
+Contact:	Michal Malý <madcatxster@devoid-pointer.net>
 Description:	Displays a set of alternate modes supported by a wheel. Each
 		mode is listed as follows:
 		  Tag: Mode Name
@@ -35,6 +35,12 @@ Description:	Displays a set of alternate modes supported by a wheel. Each
 		  DF-EX <*--------> G25 <-> G27
 		  DF-EX <*----------------> G27
 
+		G29:
+		  DF-EX <*> DFP <-> G25 <-> G27 <-> G29
+		  DF-EX <*--------> G25 <-> G27 <-> G29
+		  DF-EX <*----------------> G27 <-> G29
+		  DF-EX <*------------------------> G29
+
 		DFGT:
 		  DF-EX <*> DFP <-> DFGT
 		  DF-EX <*--------> DFGT
@@ -45,8 +51,17 @@ Description:	Displays a set of alternate modes supported by a wheel. Each
 What:		/sys/bus/hid/drivers/logitech/<dev>/real_id
 Date:		Feb 2015
 KernelVersion:	4.1
-Contact:	Michal Malý <madcatxster@gmail.com>
+Contact:	Michal Malý <madcatxster@devoid-pointer.net>
 Description:	Displays the real model of the wheel regardless of any
 		alternate mode the wheel might be switched to.
 		It is a read-only value.
 		This entry is not created for devices that have only one mode.
+
+What:		/sys/bus/hid/drivers/logitech/<dev>/combine_pedals
+Date:		Sep 2016
+KernelVersion:	4.9
+Contact:	Simon Wood <simon@mungewell.org>
+Description:	Controls whether a combined value of accelerator and brake is
+		reported on the Y axis of the controller. Useful for older games
+		which can do not work with separate accelerator/brake axis.
+		Off ('0') by default, enabled by setting '1'.

@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2007, 2014-2015 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright 2004-2007, 2014 Freescale Semiconductor, Inc. All Rights Reserved.
  * Copyright 2008 Juergen Beisert, kernel@pengutronix.de
  *
  * This program is free software; you can redistribute it and/or
@@ -22,6 +22,7 @@
 
 #ifndef __ASSEMBLY__
 #include <asm/io.h>
+#include <soc/imx/revision.h>
 #endif
 #include <asm/sizes.h>
 
@@ -94,10 +95,10 @@
  *	ANATOP	0x020c8000+0x004000	->	0xf42c8000+0x004000
  *	UART4	0x021f0000+0x004000	->	0xf42f0000+0x004000
  * mx7d:
- *     CCM	0x30380000+0x010000	->	0xf5380000+0x010000
- *     ANATOP	0x30360000+0x010000	->	0xf5360000+0x010000
- *     UART1	0x30860000+0x010000	->	0xf5860000+0x010000
- */
+ *     CCM     0x30380000+0x010000     ->      0xf5380000+0x010000
+ *     ANATOP  0x30360000+0x010000     ->      0xf5360000+0x010000
+ *     UART1   0x30860000+0x010000     ->      0xf5860000+0x010000
+*/
 #define IMX_IO_P2V(x)	(						\
 			(0xf4000000 +					\
 			(((x) & 0x50000000) >> 4) +			\
@@ -114,9 +115,9 @@
 #include "mx2x.h"
 #include "mx21.h"
 #include "mx27.h"
-#include "mx1.h"
 #include "mx6.h"
 #include "mx7.h"
+#include "mx7ulp.h"
 
 #define imx_map_entry(soc, name, _type)	{				\
 	.virtual = soc ## _IO_P2V(soc ## _ ## name ## _BASE_ADDR),	\
@@ -125,7 +126,7 @@
 	.type = _type,							\
 }
 
-/* There's a off-by-one betweem the gpio bank number and the gpiochip */
+/* There's an off-by-one between the gpio bank number and the gpiochip */
 /* range e.g. GPIO_1_5 is gpio 5 under linux */
 #define IMX_GPIO_NR(bank, nr)		(((bank) - 1) * 32 + (nr))
 

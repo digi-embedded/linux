@@ -4,6 +4,7 @@ comment "Common SoC Audio options for Freescale CPUs:"
 
 config SND_SOC_FSL_ASRC
 	tristate "Asynchronous Sample Rate Converter (ASRC) module support"
+	depends on HAS_DMA
 	select REGMAP_MMIO
 	select SND_SOC_GENERIC_DMAENGINE_PCM
 	help
@@ -55,6 +56,15 @@ config SND_SOC_FSL_ESAI
 	  This option is only useful for out-of-tree drivers since
 	  in-tree drivers select it automatically.
 
+config SND_SOC_FSL_RPMSG_I2S
+	tristate "I2S base on the RPMSG support"
+	depends on RPMSG
+	help
+	  Say Y if you want to add rpmsg i2s support for the Freescale CPUs.
+	  which is depends on the rpmsg.
+	  This option is only useful for out-of-tree drivers since
+	  in-tree drivers select it automatically.
+
 config SND_SOC_FSL_UTILS
 	tristate
 
@@ -63,6 +73,11 @@ config SND_SOC_FSL_HDMI
 
 config SND_SOC_IMX_PCM_DMA
 	tristate
+	select SND_SOC_GENERIC_DMAENGINE_PCM
+
+config SND_SOC_IMX_PCM_RPMSG
+	tristate
+	depends on RPMSG
 	select SND_SOC_GENERIC_DMAENGINE_PCM
 
 config SND_SOC_IMX_AUDMUX
@@ -307,6 +322,17 @@ config SND_SOC_IMX_WM8962_ANDROID
 	  Say Y if you want to add support for SoC audio on an i.MX board with
 	  a wm8962 codec in android.
 
+config SND_SOC_IMX_RPMSG
+	tristate "SoC Audio support for i.MX boards with rpmsg"
+	depends on OF && I2C && INPUT
+	select SND_SOC_IMX_PCM_RPMSG
+	select SND_SOC_FSL_RPMSG_I2S
+	help
+	  SoC Audio support for i.MX boards with rpmsg.
+	  There should be rpmsg devices defined in other core
+	  Say Y if you want to add support for SoC audio on an i.MX board with
+	  a rpmsg devices.
+
 config SND_SOC_IMX_ES8328
 	tristate "SoC Audio support for i.MX boards with the ES8328 codec"
 	depends on OF && (I2C || SPI)
@@ -318,6 +344,17 @@ config SND_SOC_IMX_ES8328
 	help
 	  Say Y if you want to add support for the ES8328 audio codec connected
 	  via SSI/I2S over either SPI or I2C.
+
+config SND_SOC_IMX_XTOR
+	tristate "SoC Audio support for i.MX boards with xtor codec"
+	select SND_SOC_IMX_PCM_DMA
+	select SND_SOC_FSL_ESAI
+	select SND_SOC_FSL_SAI
+	select SND_SOC_FSL_UTILS
+	help
+	  SoC Audio support for i.MX boards with xtor codec
+	  Say Y if you want to add support for SoC audio on
+	  an i.MX board with a xtor codec.
 
 config SND_SOC_IMX_SGTL5000
 	tristate "SoC Audio support for i.MX boards with sgtl5000"
@@ -370,6 +407,8 @@ config SND_SOC_IMX_MC13783
 config SND_SOC_FSL_ASOC_CARD
 	tristate "Generic ASoC Sound Card with ASRC support"
 	depends on OF && I2C
+	# enforce SND_SOC_FSL_ASOC_CARD=m if SND_AC97_CODEC=m:
+	depends on SND_AC97_CODEC || SND_AC97_CODEC=n
 	select SND_SOC_IMX_AUDMUX
 	select SND_SOC_IMX_PCM_DMA
 	select SND_SOC_FSL_ESAI
@@ -377,8 +416,8 @@ config SND_SOC_FSL_ASOC_CARD
 	select SND_SOC_FSL_SSI
 	help
 	 ALSA SoC Audio support with ASRC feature for Freescale SoCs that have
-	 ESAI/SAI/SSI and connect with external CODECs such as WM8962, CS42888
-	 and SGTL5000.
+	 ESAI/SAI/SSI and connect with external CODECs such as WM8962, CS42888,
+	 CS4271, CS4272 and SGTL5000.
 	 Say Y if you want to add support for Freescale Generic ASoC Sound Card.
 
 config SND_SOC_IMX_SI476X

@@ -1,7 +1,7 @@
 /*
  * Freescale eSDHC controller driver generics for OF and pltfm.
  *
- * Copyright 2007-2013 Freescale Semiconductor, Inc.
+ * Copyright (c) 2007 Freescale Semiconductor, Inc.
  * Copyright (c) 2009 MontaVista Software, Inc.
  * Copyright (c) 2010 Pengutronix e.K.
  *   Author: Wolfram Sang <w.sang@pengutronix.de>
@@ -24,8 +24,9 @@
 				SDHCI_QUIRK_PIO_NEEDS_DELAY | \
 				SDHCI_QUIRK_NO_HISPD_BIT)
 
+#define ESDHC_PROCTL		0x28
+
 #define ESDHC_SYSTEM_CONTROL	0x2c
-#define ESDHC_SYS_CTRL_RSTA	(1 << 24)
 #define ESDHC_CLOCK_MASK	0x0000fff0
 #define ESDHC_PREDIV_SHIFT	8
 #define ESDHC_DIVIDER_SHIFT	4

@@ -34,7 +34,8 @@ struct smb_rqst;
  *****************************************************************
  */
 extern int map_smb2_to_linux_error(char *buf, bool log_err);
-extern int smb2_check_message(char *buf, unsigned int length);
+extern int smb2_check_message(char *buf, unsigned int length,
+			      struct TCP_Server_Info *server);
 extern unsigned int smb2_calc_size(void *buf);
 extern char *smb2_get_data_area_len(int *off, int *len, struct smb2_hdr *hdr);
 extern __le16 *cifs_convert_path_to_utf16(const char *from,
@@ -95,6 +96,7 @@ extern int smb2_open_file(const unsigned int xid,
 extern int smb2_unlock_range(struct cifsFileInfo *cfile,
 			     struct file_lock *flock, const unsigned int xid);
 extern int smb2_push_mandatory_locks(struct cifsFileInfo *cfile);
+extern void smb2_reconnect_server(struct work_struct *work);
 
 /*
  * SMB2 Worker functions - most of protocol specific implementation details
@@ -140,6 +142,8 @@ extern int SMB2_query_directory(const unsigned int xid, struct cifs_tcon *tcon,
 extern int SMB2_rename(const unsigned int xid, struct cifs_tcon *tcon,
 		       u64 persistent_fid, u64 volatile_fid,
 		       __le16 *target_file);
+extern int SMB2_rmdir(const unsigned int xid, struct cifs_tcon *tcon,
+		      u64 persistent_fid, u64 volatile_fid);
 extern int SMB2_set_hardlink(const unsigned int xid, struct cifs_tcon *tcon,
 			     u64 persistent_fid, u64 volatile_fid,
 			     __le16 *target_file);

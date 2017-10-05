@@ -89,6 +89,7 @@ static int gpio_backlight_probe(struct platform_device *pdev)
 	struct backlight_device *bl;
 	struct gpio_backlight *gbl;
 	struct device_node *np = pdev->dev.of_node;
+	unsigned long flags = GPIOF_DIR_OUT;
 	int ret;
 
 	if (!pdata && !np) {
@@ -114,9 +115,12 @@ static int gpio_backlight_probe(struct platform_device *pdev)
 		gbl->def_value = pdata->def_value;
 	}
 
-	ret = devm_gpio_request_one(gbl->dev, gbl->gpio, GPIOF_DIR_OUT |
-				    (gbl->active ? GPIOF_INIT_LOW
-						 : GPIOF_INIT_HIGH),
+	if (gbl->active)
+		flags |= gbl->def_value ? GPIOF_INIT_HIGH : GPIOF_INIT_LOW;
+	else
+		flags |= gbl->def_value ? GPIOF_INIT_LOW : GPIOF_INIT_HIGH;
+
+	ret = devm_gpio_request_one(gbl->dev, gbl->gpio, flags,
 				    pdata ? pdata->name : "backlight");
 	if (ret < 0) {
 		dev_err(&pdev->dev, "unable to request GPIO\n");
@@ -146,12 +150,30 @@ static struct of_device_id gpio_backlight_of_match[] = {
 	{ .compatible = "gpio-backlight" },
 	{ /* sentinel */ }
 };
+
+MODULE_DEVICE_TABLE(of, gpio_backlight_of_match);
 #endif
+
+static int gpio_backlight_suspend(struct device *dev)
+{
+	return 0;
+}
+
+static int gpio_backlight_resume(struct device *dev)
+{
+	return 0;
+}
+
+static const struct dev_pm_ops mipi_dsi_pm_ops = {
+	.suspend = gpio_backlight_suspend,
+	.resume  = gpio_backlight_resume,
+};
 
 static struct platform_driver gpio_backlight_driver = {
 	.driver		= {
 		.name		= "gpio-backlight",
 		.of_match_table = of_match_ptr(gpio_backlight_of_match),
+		.pm = &mipi_dsi_pm_ops,
 	},
 	.probe		= gpio_backlight_probe,
 };

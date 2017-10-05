@@ -16,7 +16,6 @@
 #ifndef MB86A20S_H
 #define MB86A20S_H
 
-#include <linux/kconfig.h>
 #include <linux/dvb/frontend.h>
 
 /**
@@ -45,7 +44,7 @@ static inline struct dvb_frontend *mb86a20s_attach(
 	printk(KERN_WARNING "%s: driver disabled by Kconfig\n", __func__);
 	return NULL;
 }
-static struct i2c_adapter *
+static inline struct i2c_adapter *
 	mb86a20s_get_tuner_i2c_adapter(struct dvb_frontend *fe)
 {
 	printk(KERN_WARNING "%s: driver disabled by Kconfig\n", __func__);

@@ -4,6 +4,7 @@
  * Based on imx-sgtl5000.c
  * Copyright (C) 2012 Freescale Semiconductor, Inc.
  * Copyright (C) 2012 Linaro Ltd.
+ * Copyright 2017 NXP
  *
  * The code contained herein is licensed under the GNU General Public
  * License. You may obtain a copy of the GNU General Public License
@@ -113,12 +114,12 @@ static int hpjack_status_check(void *data)
 
 	if (hp_status != priv->hp_active_low) {
 		snprintf(buf, 32, "STATE=%d", 2);
-		snd_soc_dapm_disable_pin(&priv->codec->dapm, "Ext Spk");
+		snd_soc_dapm_disable_pin(snd_soc_codec_get_dapm(priv->codec), "Ext Spk");
 		ret = imx_hp_jack_gpio.report;
 		snd_kctl_jack_report(priv->snd_card, priv->headphone_kctl, 1);
 	} else {
 		snprintf(buf, 32, "STATE=%d", 0);
-		snd_soc_dapm_enable_pin(&priv->codec->dapm, "Ext Spk");
+		snd_soc_dapm_enable_pin(snd_soc_codec_get_dapm(priv->codec), "Ext Spk");
 		ret = 0;
 		snd_kctl_jack_report(priv->snd_card, priv->headphone_kctl, 0);
 	}
@@ -160,11 +161,11 @@ static int micjack_status_check(void *data)
 
 	if (mic_status != priv->mic_active_low) {
 		snprintf(buf, 32, "STATE=%d", 2);
-		snd_soc_dapm_disable_pin(&priv->codec->dapm, "DMIC");
+		snd_soc_dapm_disable_pin(snd_soc_codec_get_dapm(priv->codec), "DMIC");
 		ret = imx_mic_jack_gpio.report;
 	} else {
 		snprintf(buf, 32, "STATE=%d", 0);
-		snd_soc_dapm_enable_pin(&priv->codec->dapm, "DMIC");
+		snd_soc_dapm_enable_pin(snd_soc_codec_get_dapm(priv->codec), "DMIC");
 		ret = 0;
 	}
 
@@ -263,7 +264,8 @@ static int imx_wm8962_set_bias_level(struct snd_soc_card *card,
 	switch (level) {
 	case SND_SOC_BIAS_PREPARE:
 		if (dapm->bias_level == SND_SOC_BIAS_STANDBY) {
-			if (sample_format == SNDRV_PCM_FORMAT_S24_LE)
+			if (sample_format == SNDRV_PCM_FORMAT_S24_LE
+				|| sample_format == SNDRV_PCM_FORMAT_S20_3LE)
 				pll_out = sample_rate * 384;
 			else
 				pll_out = sample_rate * 256;
@@ -353,7 +355,8 @@ static int imx_hifi_hw_params(struct snd_pcm_substream *substream,
 		return ret;
 	}
 
-	if (sample_format == SNDRV_PCM_FORMAT_S24_LE)
+	if (sample_format == SNDRV_PCM_FORMAT_S24_LE
+		|| sample_format == SNDRV_PCM_FORMAT_S20_3LE)
 		pll_out = sample_rate * 384;
 	else
 		pll_out = sample_rate * 256;
@@ -431,7 +434,9 @@ static struct snd_soc_ops imx_hifi_ops = {
 
 static int imx_wm8962_gpio_init(struct snd_soc_card *card)
 {
-	struct snd_soc_dai *codec_dai = card->rtd[0].codec_dai;
+	struct snd_soc_pcm_runtime *rtd = list_first_entry(
+		&card->rtd_list, struct snd_soc_pcm_runtime, list);
+	struct snd_soc_dai *codec_dai = rtd->codec_dai;
 	struct snd_soc_codec *codec = codec_dai->codec;
 	struct imx_priv *priv = &card_priv;
 
@@ -517,12 +522,15 @@ static DRIVER_ATTR(microphone, S_IRUGO | S_IWUSR, show_mic, NULL);
 
 static int imx_wm8962_late_probe(struct snd_soc_card *card)
 {
-	struct snd_soc_dai *codec_dai = card->rtd[0].codec_dai;
+	struct snd_soc_pcm_runtime *rtd;
+	struct snd_soc_dai *codec_dai;
 	struct imx_priv *priv = &card_priv;
 	struct imx_wm8962_data *data = snd_soc_card_get_drvdata(card);
 	struct device *dev = &priv->pdev->dev;
 	int ret;
 
+	rtd = snd_soc_get_pcm_runtime(card, card->dai_link[0].name);
+	codec_dai = rtd->codec_dai;
 	ret = snd_soc_dai_set_sysclk(codec_dai, WM8962_SYSCLK_MCLK,
 			data->clk_frequency, SND_SOC_CLOCK_IN);
 	if (ret < 0)
@@ -703,6 +711,7 @@ audmux_bypass:
 		data->dai[1].ignore_pmdown_time = 1;
 		data->dai[1].dpcm_playback = 1;
 		data->dai[1].dpcm_capture = 1;
+		data->dai[1].dpcm_merged_chan = 1;
 
 		data->dai[2].name = "HiFi-ASRC-BE";
 		data->dai[2].stream_name = "HiFi-ASRC-BE";
@@ -766,7 +775,7 @@ audmux_bypass:
 	}
 
 	priv->snd_card = data->card.snd_card;
-	priv->headphone_kctl = snd_kctl_jack_new("Headphone", 0, NULL);
+	priv->headphone_kctl = snd_kctl_jack_new("Headphone", NULL);
 	ret = snd_ctl_add(data->card.snd_card, priv->headphone_kctl);
 	if (ret)
 		goto fail;

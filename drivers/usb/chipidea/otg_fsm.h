@@ -67,7 +67,6 @@
 #define TB_SSEND_SRP         (1500)	/* minimum 1.5 sec, section:5.1.2 */
 
 #define TB_AIDL_BDIS         (20)	/* 4ms ~ 150ms, section 5.2.1 */
-
 #define TB_SRP_REQD          (2000)	/* For otg_srp_reqd to start data
 					 * pulse after A(PET) turn off v-bus
 					 */
@@ -77,9 +76,7 @@
 					 * max: 100ms
 					 */
 
-#define T_HOST_REQ_POLL      (1500)	/* HNP polling interval 1s~2s */
-
-#ifdef CONFIG_USB_OTG_FSM
+#if IS_ENABLED(CONFIG_USB_OTG_FSM)
 
 int ci_hdrc_otg_fsm_init(struct ci_hdrc *ci);
 int ci_otg_fsm_work(struct ci_hdrc *ci);

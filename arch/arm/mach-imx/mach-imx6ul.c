@@ -5,12 +5,10 @@
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  */
-#include <linux/fec.h>
-#include <linux/gpio.h>
 #include <linux/irqchip.h>
 #include <linux/mfd/syscon.h>
 #include <linux/mfd/syscon/imx6q-iomuxc-gpr.h>
-#include <linux/netdevice.h>
+#include <linux/micrel_phy.h>
 #include <linux/of_address.h>
 #include <linux/of_gpio.h>
 #include <linux/of_platform.h>
@@ -50,15 +48,32 @@ static int ksz8081_phy_fixup(struct phy_device *dev)
 	return 0;
 }
 
-#define PHY_ID_KSZ8081	0x00221560
 static void __init imx6ul_enet_phy_init(void)
 {
-	phy_register_fixup_for_uid(PHY_ID_KSZ8081, 0xffffffff,	ksz8081_phy_fixup);
+	if (IS_BUILTIN(CONFIG_PHYLIB)) {
+		/*
+		 * i.MX6UL EVK board RevA, RevB, RevC all use KSZ8081
+		 * Silicon revision 00, the PHY ID is 0x00221560, pass our
+		 * test with the phy fixup.
+		 */
+		phy_register_fixup(PHY_ANY_ID, PHY_ID_KSZ8081, 0xffffffff,
+				   ksz8081_phy_fixup);
+
+		/*
+		 * i.MX6UL EVK board RevC1 board use KSZ8081
+		 * Silicon revision 01, the PHY ID is 0x00221561.
+		 * This silicon revision still need the phy fixup setting.
+		 */
+		#define PHY_ID_KSZ8081_MNRN61	0x00221561
+		phy_register_fixup(PHY_ANY_ID, PHY_ID_KSZ8081_MNRN61,
+				   0xffffffff, ksz8081_phy_fixup);
+	}
 }
 
 #define OCOTP_CFG3			0x440
 #define OCOTP_CFG3_SPEED_SHIFT		16
 #define OCOTP_CFG3_SPEED_696MHZ		0x2
+#define OCOTP_CFG3_SPEED_1_GHZ		0x3
 
 static void __init imx6ul_opp_check_speed_grading(struct device *cpu_dev)
 {
@@ -66,7 +81,11 @@ static void __init imx6ul_opp_check_speed_grading(struct device *cpu_dev)
 	void __iomem *base;
 	u32 val;
 
-	np = of_find_compatible_node(NULL, NULL, "fsl,imx6ul-ocotp");
+	if (cpu_is_imx6ul())
+		np = of_find_compatible_node(NULL, NULL, "fsl,imx6ul-ocotp");
+	else
+		np = of_find_compatible_node(NULL, NULL, "fsl,imx6ull-ocotp");
+
 	if (!np) {
 		pr_warn("failed to find ocotp node\n");
 		return;
@@ -82,17 +101,30 @@ static void __init imx6ul_opp_check_speed_grading(struct device *cpu_dev)
 	 * Speed GRADING[1:0] defines the max speed of ARM:
 	 * 2b'00: Reserved;
 	 * 2b'01: 528000000Hz;
-	 * 2b'10: 700000000Hz;
-	 * 2b'11: Reserved;
+	 * 2b'10: 700000000Hz(i.MX6UL), 800000000Hz(i.MX6ULL);
+	 * 2b'11: Reserved(i.MX6UL), 1GHz(i.MX6ULL);
 	 * We need to set the max speed of ARM according to fuse map.
 	 */
 	val = readl_relaxed(base + OCOTP_CFG3);
 	val >>= OCOTP_CFG3_SPEED_SHIFT;
 	val &= 0x3;
+	if (cpu_is_imx6ul()) {
+		if (val < OCOTP_CFG3_SPEED_696MHZ) {
+			if (dev_pm_opp_disable(cpu_dev, 696000000))
+				pr_warn("Failed to disable 696MHz OPP\n");
+		}
+	}
 
-	if (val != OCOTP_CFG3_SPEED_696MHZ) {
-		if (dev_pm_opp_disable(cpu_dev, 696000000))
-			pr_warn("Failed to disable 696MHz OPP\n");
+	if (cpu_is_imx6ull()) {
+		if (val != OCOTP_CFG3_SPEED_1_GHZ) {
+			if (dev_pm_opp_disable(cpu_dev, 996000000))
+				pr_warn("Failed to disable 996MHz OPP\n");
+		}
+
+		if (val != OCOTP_CFG3_SPEED_696MHZ) {
+			if (dev_pm_opp_disable(cpu_dev, 792000000))
+				pr_warn("Failed to disable 792MHz OPP\n");
+		}
 	}
 	iounmap(base);
 
@@ -115,7 +147,7 @@ static void __init imx6ul_opp_init(void)
 		return;
 	}
 
-	if (of_init_opp_table(cpu_dev)) {
+	if (dev_pm_opp_of_add_table(cpu_dev)) {
 		pr_warn("failed to init OPP table\n");
 		goto put_node;
 	}
@@ -144,7 +176,7 @@ static void __init imx6ul_init_machine(void)
 	if (parent == NULL)
 		pr_warn("failed to initialize soc device\n");
 
-	of_platform_populate(NULL, of_default_bus_match_table, NULL, NULL);
+	of_platform_default_populate(NULL, NULL, parent);
 	imx6ul_enet_init();
 	imx_anatop_init();
 	imx6ul_pm_init();
@@ -156,6 +188,7 @@ static void __init imx6ul_init_irq(void)
 	imx_init_revision_from_anatop();
 	imx_src_init();
 	irqchip_init();
+	imx6_pm_ccm_init("fsl,imx6ul-ccm");
 }
 
 static void __init imx6ul_xbee_init(void)
@@ -189,8 +222,7 @@ static void __init imx6ul_xbee_init(void)
 static void __init imx6ul_init_late(void)
 {
 	if (IS_ENABLED(CONFIG_ARM_IMX6Q_CPUFREQ)) {
-		if (cpu_is_imx6ul())
-			imx6ul_opp_init();
+		imx6ul_opp_init();
 		platform_device_register_simple("imx6q-cpufreq", -1, NULL, 0);
 	}
 
@@ -205,13 +237,13 @@ static void __init imx6ul_map_io(void)
 	imx_busfreq_map_io();
 }
 
-static const char *imx6ul_dt_compat[] __initconst = {
+static const char * const imx6ul_dt_compat[] __initconst = {
 	"fsl,imx6ul",
 	"fsl,imx6ull",
 	NULL,
 };
 
-DT_MACHINE_START(IMX6UL, "Freescale i.MX6 Ultralite (Device Tree)")
+DT_MACHINE_START(IMX6UL, "Freescale i.MX6 UltraLite (Device Tree)")
 	.map_io		= imx6ul_map_io,
 	.init_irq	= imx6ul_init_irq,
 	.init_machine	= imx6ul_init_machine,

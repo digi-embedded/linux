@@ -2678,7 +2678,7 @@ static int mxc_mlb150_probe(struct platform_device *pdev)
 		}
 	}
 
-	drvdata->iram_pool = of_get_named_gen_pool(np, "iram", 0);
+	drvdata->iram_pool = of_gen_pool_get(np, "iram", 0);
 	if (!drvdata->iram_pool) {
 		dev_err(&pdev->dev, "iram pool not available\n");
 		ret = -ENOMEM;

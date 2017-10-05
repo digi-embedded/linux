@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2013 Freescale Semiconductor, Inc.
+ * Copyright 2012-2016 Freescale Semiconductor, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -9,10 +9,10 @@
 #ifndef __FSL_SAI_H
 #define __FSL_SAI_H
 
+#include <linux/pm_qos.h>
 #include <sound/dmaengine_pcm.h>
 
 #define FSL_SAI_FORMATS (SNDRV_PCM_FMTBIT_S16_LE |\
-			 SNDRV_PCM_FMTBIT_S20_3LE |\
 			 SNDRV_PCM_FMTBIT_S24_LE |\
 			 SNDRV_PCM_FMTBIT_S32_LE)
 
@@ -23,8 +23,10 @@
 #define FSL_SAI_TCR3	0x0c /* SAI Transmit Configuration 3 */
 #define FSL_SAI_TCR4	0x10 /* SAI Transmit Configuration 4 */
 #define FSL_SAI_TCR5	0x14 /* SAI Transmit Configuration 5 */
-#define FSL_SAI_TDR	0x20 /* SAI Transmit Data */
-#define FSL_SAI_TFR	0x40 /* SAI Transmit FIFO */
+#define FSL_SAI_TDR0    0x20 /* SAI Transmit Data */
+#define FSL_SAI_TDR1    0x24 /* SAI Transmit Data */
+#define FSL_SAI_TFR0    0x40 /* SAI Transmit FIFO */
+#define FSL_SAI_TFR1    0x44 /* SAI Transmit FIFO */
 #define FSL_SAI_TMR	0x60 /* SAI Transmit Mask */
 #define FSL_SAI_RCSR	0x80 /* SAI Receive Control */
 #define FSL_SAI_RCR1	0x84 /* SAI Receive Configuration 1 */
@@ -32,8 +34,10 @@
 #define FSL_SAI_RCR3	0x8c /* SAI Receive Configuration 3 */
 #define FSL_SAI_RCR4	0x90 /* SAI Receive Configuration 4 */
 #define FSL_SAI_RCR5	0x94 /* SAI Receive Configuration 5 */
-#define FSL_SAI_RDR	0xa0 /* SAI Receive Data */
-#define FSL_SAI_RFR	0xc0 /* SAI Receive FIFO */
+#define FSL_SAI_RDR0    0xa0 /* SAI Receive Data */
+#define FSL_SAI_RDR1    0xa4 /* SAI Receive Data */
+#define FSL_SAI_RFR0    0xc0 /* SAI Receive FIFO */
+#define FSL_SAI_RFR1    0xc4 /* SAI Receive FIFO */
 #define FSL_SAI_RMR	0xe0 /* SAI Receive Mask */
 
 #define FSL_SAI_xCSR(tx)	(tx ? FSL_SAI_TCSR : FSL_SAI_RCSR)
@@ -46,8 +50,9 @@
 #define FSL_SAI_xFR(tx)		(tx ? FSL_SAI_TFR : FSL_SAI_RFR)
 #define FSL_SAI_xMR(tx)		(tx ? FSL_SAI_TMR : FSL_SAI_RMR)
 
-/* SAI Transmit/Recieve Control Register */
+/* SAI Transmit/Receive Control Register */
 #define FSL_SAI_CSR_TERE	BIT(31)
+#define FSL_SAI_CSR_SE		BIT(30)
 #define FSL_SAI_CSR_FR		BIT(25)
 #define FSL_SAI_CSR_SR		BIT(24)
 #define FSL_SAI_CSR_xF_SHIFT	16
@@ -68,10 +73,10 @@
 #define FSL_SAI_CSR_FRIE	BIT(8)
 #define FSL_SAI_CSR_FRDE	BIT(0)
 
-/* SAI Transmit and Recieve Configuration 1 Register */
+/* SAI Transmit and Receive Configuration 1 Register */
 #define FSL_SAI_CR1_RFW_MASK	0x1f
 
-/* SAI Transmit and Recieve Configuration 2 Register */
+/* SAI Transmit and Receive Configuration 2 Register */
 #define FSL_SAI_CR2_SYNC	BIT(30)
 #define FSL_SAI_CR2_MSEL_MASK	(0x3 << 26)
 #define FSL_SAI_CR2_MSEL_BUS	0
@@ -83,12 +88,20 @@
 #define FSL_SAI_CR2_BCD_MSTR	BIT(24)
 #define FSL_SAI_CR2_DIV_MASK	0xff
 
-/* SAI Transmit and Recieve Configuration 3 Register */
-#define FSL_SAI_CR3_TRCE	BIT(16)
+/* SAI Transmit and Receive Configuration 3 Register */
+#define FSL_SAI_CR3_TRCE0	BIT(16)
+#define FSL_SAI_CR3_TRCE1	BIT(17)
+#define FSL_SAI_CR3_TRCE(x)	(x << 16)
 #define FSL_SAI_CR3_WDFL(x)	(x)
 #define FSL_SAI_CR3_WDFL_MASK	0x1f
 
-/* SAI Transmit and Recieve Configuration 4 Register */
+/* SAI Transmit and Receive Configuration 4 Register */
+
+#define FSL_SAI_CR4_FCONT	BIT(28)
+#define FSL_SAI_CR4_FCOMB_SHIFT BIT(26)
+#define FSL_SAI_CR4_FCOMB_SOFT  BIT(27)
+#define FSL_SAI_CR4_FPACK_8     (0x2 << 24)
+#define FSL_SAI_CR4_FPACK_16    (0x3 << 24)
 #define FSL_SAI_CR4_FRSZ(x)	(((x) - 1) << 16)
 #define FSL_SAI_CR4_FRSZ_MASK	(0x1f << 16)
 #define FSL_SAI_CR4_SYWD(x)	(((x) - 1) << 8)
@@ -98,7 +111,7 @@
 #define FSL_SAI_CR4_FSP		BIT(1)
 #define FSL_SAI_CR4_FSD_MSTR	BIT(0)
 
-/* SAI Transmit and Recieve Configuration 5 Register */
+/* SAI Transmit and Receive Configuration 5 Register */
 #define FSL_SAI_CR5_WNW(x)	(((x) - 1) << 24)
 #define FSL_SAI_CR5_WNW_MASK	(0x1f << 24)
 #define FSL_SAI_CR5_W0W(x)	(((x) - 1) << 16)
@@ -129,27 +142,39 @@
 #define FSL_SAI_MAXBURST_TX 6
 #define FSL_SAI_MAXBURST_RX 6
 
+#define SAI_FLAG_PMQOS   BIT(0)
+
+struct fsl_sai_soc_data {
+	unsigned int fifo_depth;
+	unsigned int fifos;
+	unsigned int dataline;
+	unsigned int flags;
+	bool imx;
+};
+
 struct fsl_sai {
 	struct platform_device *pdev;
 	struct regmap *regmap;
 	struct clk *bus_clk;
 	struct clk *mclk_clk[FSL_SAI_MCLK_MAX];
 
-	bool is_slave_mode;
+	bool slave_mode[2];
 	bool is_lsb_first;
 	bool is_dsp_mode;
-	bool sai_on_imx;
+	bool i2s_xtor;
 	bool synchronous[2];
 	bool is_stream_opened[2];
+	unsigned int dataline[2];
 
 	unsigned int mclk_id[2];
 	unsigned int mclk_streams;
-
 	unsigned int slots;
 	unsigned int slot_width;
 
 	struct snd_dmaengine_dai_dma_data dma_params_rx;
 	struct snd_dmaengine_dai_dma_data dma_params_tx;
+	const struct fsl_sai_soc_data *soc;
+	struct pm_qos_request pm_qos_req;
 };
 
 #define TX 1

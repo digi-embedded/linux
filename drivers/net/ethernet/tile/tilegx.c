@@ -40,6 +40,7 @@
 #include <linux/tcp.h>
 #include <linux/net_tstamp.h>
 #include <linux/ptp_clock_kernel.h>
+#include <linux/tick.h>
 
 #include <asm/checksum.h>
 #include <asm/homecache.h>
@@ -461,7 +462,7 @@ static void tile_tx_timestamp(struct sk_buff *skb, int instance)
 	if (unlikely((shtx->tx_flags & SKBTX_HW_TSTAMP) != 0)) {
 		struct mpipe_data *md = &mpipe_data[instance];
 		struct skb_shared_hwtstamps shhwtstamps;
-		struct timespec ts;
+		struct timespec64 ts;
 
 		shtx->tx_flags |= SKBTX_IN_PROGRESS;
 		gxio_mpipe_get_timestamp(&md->context, &ts);
@@ -885,9 +886,9 @@ static struct ptp_clock_info ptp_mpipe_caps = {
 /* Sync mPIPE's timestamp up with Linux system time and register PTP clock. */
 static void register_ptp_clock(struct net_device *dev, struct mpipe_data *md)
 {
-	struct timespec ts;
+	struct timespec64 ts;
 
-	getnstimeofday(&ts);
+	ktime_get_ts64(&ts);
 	gxio_mpipe_set_timestamp(&md->context, &ts);
 
 	mutex_init(&md->ptp_lock);
@@ -2273,7 +2274,8 @@ static int __init tile_net_init_module(void)
 		tile_net_dev_init(name, mac);
 
 	if (!network_cpus_init())
-		network_cpus_map = *cpu_online_mask;
+		cpumask_and(&network_cpus_map, housekeeping_cpumask(),
+			    cpu_online_mask);
 
 	return 0;
 }

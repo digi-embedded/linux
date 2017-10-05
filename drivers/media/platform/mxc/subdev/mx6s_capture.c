@@ -285,7 +285,7 @@ struct mx6s_buf_internal {
 /* buffer for one video frame */
 struct mx6s_buffer {
 	/* common v4l buffer stuff -- must be first */
-	struct vb2_buffer			vb;
+	struct vb2_v4l2_buffer			vb;
 	struct mx6s_buf_internal	internal;
 };
 
@@ -302,7 +302,6 @@ struct mx6s_csi_dev {
 	struct v4l2_device	v4l2_dev;
 
 	struct vb2_queue			vb2_vidq;
-	struct vb2_alloc_ctx		*alloc_ctx;
 	struct v4l2_ctrl_handler	ctrl_handler;
 
 	struct mutex		lock;
@@ -339,8 +338,11 @@ struct mx6s_csi_dev {
 	struct v4l2_async_subdev	*async_subdevs[2];
 
 	bool csi_mux_mipi;
+	const bool *rx_fifo_rst;
 	struct mx6s_csi_mux csi_mux;
 };
+
+static const struct of_device_id mx6s_csi_dt_ids[];
 
 static inline int csi_read(struct mx6s_csi_dev *csi, unsigned int offset)
 {
@@ -601,23 +603,47 @@ static void csi_set_imagpara(struct mx6s_csi_dev *csi,
 	__raw_writel(cr3 | BIT_DMA_REFLASH_RFF, csi->regbase + CSI_CSICR3);
 }
 
+static void csi_error_recovery(struct mx6s_csi_dev *csi_dev)
+{
+	u32 cr1, cr3, cr18;
+	/* software reset */
+
+	/* Disable csi  */
+	cr18 = csi_read(csi_dev, CSI_CSICR18);
+	cr18 &= ~BIT_CSI_ENABLE;
+	csi_write(csi_dev, cr18, CSI_CSICR18);
+
+	/* Clear RX FIFO */
+	cr1 = csi_read(csi_dev, CSI_CSICR1);
+	csi_write(csi_dev, cr1 & ~BIT_FCC, CSI_CSICR1);
+	cr1 = csi_read(csi_dev, CSI_CSICR1);
+	csi_write(csi_dev, cr1 | BIT_CLR_RXFIFO, CSI_CSICR1);
+
+	cr1 = csi_read(csi_dev, CSI_CSICR1);
+	csi_write(csi_dev, cr1 | BIT_FCC, CSI_CSICR1);
+
+	/* DMA reflash */
+	cr3 = csi_read(csi_dev, CSI_CSICR3);
+	cr3 |= BIT_DMA_REFLASH_RFF;
+	csi_write(csi_dev, cr3, CSI_CSICR3);
+
+	/* Ensable csi  */
+	cr18 |= BIT_CSI_ENABLE;
+	csi_write(csi_dev, cr18, CSI_CSICR18);
+}
+
 /*
  *  Videobuf operations
  */
 static int mx6s_videobuf_setup(struct vb2_queue *vq,
-			const struct v4l2_format *fmt,
 			unsigned int *count, unsigned int *num_planes,
-			unsigned int sizes[], void *alloc_ctxs[])
+			unsigned int sizes[], struct device *alloc_devs[])
 {
 	struct mx6s_csi_dev *csi_dev = vb2_get_drv_priv(vq);
 
 	dev_dbg(csi_dev->dev, "count=%d, size=%d\n", *count, sizes[0]);
 
-	/* TODO: support for VIDIOC_CREATE_BUFS not ready */
-	if (fmt != NULL)
-		return -ENOTTY;
-
-	alloc_ctxs[0] = csi_dev->alloc_ctx;
+	alloc_devs[0] = csi_dev->dev;
 
 	sizes[0] = csi_dev->pix.sizeimage;
 
@@ -666,8 +692,9 @@ out:
 
 static void mx6s_videobuf_queue(struct vb2_buffer *vb)
 {
+	struct vb2_v4l2_buffer *vbuf = to_vb2_v4l2_buffer(vb);
 	struct mx6s_csi_dev *csi_dev = vb2_get_drv_priv(vb->vb2_queue);
-	struct mx6s_buffer *buf = container_of(vb, struct mx6s_buffer, vb);
+	struct mx6s_buffer *buf = container_of(vbuf, struct mx6s_buffer, vb);
 	unsigned long flags;
 
 	dev_dbg(csi_dev->dev, "%s (vb=0x%p) 0x%p %lu\n", __func__,
@@ -887,7 +914,7 @@ static int mx6s_start_streaming(struct vb2_queue *vq, unsigned int count)
 	buf = list_first_entry(&csi_dev->capture, struct mx6s_buffer,
 			       internal.queue);
 	buf->internal.bufnum = 0;
-	vb = &buf->vb;
+	vb = &buf->vb.vb2_buf;
 	vb->state = VB2_BUF_STATE_ACTIVE;
 
 	phys = vb2_dma_contig_plane_dma_addr(vb, 0);
@@ -899,7 +926,7 @@ static int mx6s_start_streaming(struct vb2_queue *vq, unsigned int count)
 	buf = list_first_entry(&csi_dev->capture, struct mx6s_buffer,
 			       internal.queue);
 	buf->internal.bufnum = 1;
-	vb = &buf->vb;
+	vb = &buf->vb.vb2_buf;
 	vb->state = VB2_BUF_STATE_ACTIVE;
 
 	phys = vb2_dma_contig_plane_dma_addr(vb, 0);
@@ -925,15 +952,15 @@ static void mx6s_stop_streaming(struct vb2_queue *vq)
 	list_for_each_entry_safe(buf, tmp,
 				&csi_dev->active_bufs, internal.queue) {
 		list_del_init(&buf->internal.queue);
-		if (buf->vb.state == VB2_BUF_STATE_ACTIVE)
-			vb2_buffer_done(&buf->vb, VB2_BUF_STATE_ERROR);
+		if (buf->vb.vb2_buf.state == VB2_BUF_STATE_ACTIVE)
+			vb2_buffer_done(&buf->vb.vb2_buf, VB2_BUF_STATE_ERROR);
 	}
 
 	list_for_each_entry_safe(buf, tmp,
 				&csi_dev->capture, internal.queue) {
 		list_del_init(&buf->internal.queue);
-		if (buf->vb.state == VB2_BUF_STATE_ACTIVE)
-			vb2_buffer_done(&buf->vb, VB2_BUF_STATE_ERROR);
+		if (buf->vb.vb2_buf.state == VB2_BUF_STATE_ACTIVE)
+			vb2_buffer_done(&buf->vb.vb2_buf, VB2_BUF_STATE_ERROR);
 	}
 
 	INIT_LIST_HEAD(&csi_dev->capture);
@@ -980,7 +1007,7 @@ static void mx6s_csi_frame_done(struct mx6s_csi_dev *csi_dev,
 	} else {
 		buf = mx6s_ibuf_to_buf(ibuf);
 
-		vb = &buf->vb;
+		vb = &buf->vb.vb2_buf;
 		phys = vb2_dma_contig_plane_dma_addr(vb, 0);
 		if (bufnum == 1) {
 			if (csi_read(csi_dev, CSI_CSIDMASA_FB2) != phys) {
@@ -998,8 +1025,8 @@ static void mx6s_csi_frame_done(struct mx6s_csi_dev *csi_dev,
 				vb2_get_plane_payload(vb, 0));
 
 		list_del_init(&buf->internal.queue);
-		v4l2_get_timestamp(&vb->v4l2_buf.timestamp);
-		vb->v4l2_buf.sequence = csi_dev->frame_count;
+		vb->timestamp =ktime_get_ns();
+		to_vb2_v4l2_buffer(vb)->sequence = csi_dev->frame_count;
 		if (err)
 			vb2_buffer_done(vb, VB2_BUF_STATE_ERROR);
 		else
@@ -1035,7 +1062,7 @@ static void mx6s_csi_frame_done(struct mx6s_csi_dev *csi_dev,
 
 	list_move_tail(csi_dev->capture.next, &csi_dev->active_bufs);
 
-	vb = &buf->vb;
+	vb = &buf->vb.vb2_buf;
 	vb->state = VB2_BUF_STATE_ACTIVE;
 
 	phys = vb2_dma_contig_plane_dma_addr(vb, 0);
@@ -1046,7 +1073,7 @@ static irqreturn_t mx6s_csi_irq_handler(int irq, void *data)
 {
 	struct mx6s_csi_dev *csi_dev =  data;
 	unsigned long status;
-	u32 cr1, cr3, cr18;
+	u32 cr3, cr18;
 
 	spin_lock(&csi_dev->slock);
 
@@ -1062,37 +1089,16 @@ static irqreturn_t mx6s_csi_irq_handler(int irq, void *data)
 		return IRQ_HANDLED;
 	}
 
-	if (status & BIT_RFF_OR_INT)
+	if (status & BIT_RFF_OR_INT) {
 		dev_warn(csi_dev->dev, "%s Rx fifo overflow\n", __func__);
-	if (status & BIT_HRESP_ERR_INT)
+		if (*csi_dev->rx_fifo_rst)
+			csi_error_recovery(csi_dev);
+	}
+
+	if (status & BIT_HRESP_ERR_INT) {
 		dev_warn(csi_dev->dev, "%s Hresponse error detected\n",
 			__func__);
-
-	if (status & (BIT_RFF_OR_INT|BIT_HRESP_ERR_INT)) {
-		/* software reset */
-
-		/* Disable csi  */
-		cr18 = csi_read(csi_dev, CSI_CSICR18);
-		cr18 &= ~BIT_CSI_ENABLE;
-		csi_write(csi_dev, cr18, CSI_CSICR18);
-
-		/* Clear RX FIFO */
-		cr1 = csi_read(csi_dev, CSI_CSICR1);
-		csi_write(csi_dev, cr1 & ~BIT_FCC, CSI_CSICR1);
-		cr1 = csi_read(csi_dev, CSI_CSICR1);
-		csi_write(csi_dev, cr1 | BIT_CLR_RXFIFO, CSI_CSICR1);
-
-		cr1 = csi_read(csi_dev, CSI_CSICR1);
-		csi_write(csi_dev, cr1 | BIT_FCC, CSI_CSICR1);
-
-		/* DMA reflash */
-		cr3 = csi_read(csi_dev, CSI_CSICR3);
-		cr3 |= BIT_DMA_REFLASH_RFF;
-		csi_write(csi_dev, cr3, CSI_CSICR3);
-
-		/* Ensable csi  */
-		cr18 |= BIT_CSI_ENABLE;
-		csi_write(csi_dev, cr18, CSI_CSICR18);
+		csi_error_recovery(csi_dev);
 	}
 
 	if (status & BIT_ADDR_CH_ERR_INT) {
@@ -1149,10 +1155,6 @@ static int mx6s_csi_open(struct file *file)
 	if (mutex_lock_interruptible(&csi_dev->lock))
 		return -ERESTARTSYS;
 
-	csi_dev->alloc_ctx = vb2_dma_contig_init_ctx(csi_dev->dev);
-	if (IS_ERR(csi_dev->alloc_ctx))
-		goto unlock;
-
 	q->type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	q->io_modes = VB2_MMAP | VB2_USERPTR;
 	q->drv_priv = csi_dev;
@@ -1164,7 +1166,7 @@ static int mx6s_csi_open(struct file *file)
 
 	ret = vb2_queue_init(q);
 	if (ret < 0)
-		goto eallocctx;
+		goto unlock;
 
 	pm_runtime_get_sync(csi_dev->dev);
 
@@ -1176,8 +1178,6 @@ static int mx6s_csi_open(struct file *file)
 	mutex_unlock(&csi_dev->lock);
 
 	return ret;
-eallocctx:
-	vb2_dma_contig_cleanup_ctx(csi_dev->alloc_ctx);
 unlock:
 	mutex_unlock(&csi_dev->lock);
 	return ret;
@@ -1195,7 +1195,6 @@ static int mx6s_csi_close(struct file *file)
 	mx6s_csi_deinit(csi_dev);
 	v4l2_subdev_call(sd, core, s_power, 0);
 
-	vb2_dma_contig_cleanup_ctx(csi_dev->alloc_ctx);
 	mutex_unlock(&csi_dev->lock);
 
 	file->private_data = NULL;
@@ -1358,24 +1357,25 @@ static int mx6s_vidioc_enum_fmt_vid_cap(struct file *file, void  *priv,
 {
 	struct mx6s_csi_dev *csi_dev = video_drvdata(file);
 	struct v4l2_subdev *sd = csi_dev->sd;
-	u32 code;
+	struct v4l2_subdev_mbus_code_enum code = {
+		.which = V4L2_SUBDEV_FORMAT_ACTIVE,
+		.index = f->index,
+	};
 	struct mx6s_fmt *fmt;
 	int ret;
 
-	int index = f->index;
-
 	WARN_ON(priv != file->private_data);
 
-	ret = v4l2_subdev_call(sd, video, enum_mbus_fmt, index, &code);
+	ret = v4l2_subdev_call(sd, pad, enum_mbus_code, NULL, &code);
 	if (ret < 0) {
 		/* no more formats */
 		dev_dbg(csi_dev->dev, "No more fmt\n");
 		return -EINVAL;
 	}
 
-	fmt = format_by_mbus(code);
+	fmt = format_by_mbus(code.code);
 	if (!fmt) {
-		dev_err(csi_dev->dev, "mbus (0x%08x) invalid.\n", code);
+		dev_err(csi_dev->dev, "mbus (0x%08x) invalid.\n", code.code);
 		return -EINVAL;
 	}
 
@@ -1391,7 +1391,9 @@ static int mx6s_vidioc_try_fmt_vid_cap(struct file *file, void *priv,
 	struct mx6s_csi_dev *csi_dev = video_drvdata(file);
 	struct v4l2_subdev *sd = csi_dev->sd;
 	struct v4l2_pix_format *pix = &f->fmt.pix;
-	struct v4l2_mbus_framefmt mbus_fmt;
+	struct v4l2_subdev_format format = {
+		.which = V4L2_SUBDEV_FORMAT_ACTIVE,
+	};
 	struct mx6s_fmt *fmt;
 	int ret;
 
@@ -1408,9 +1410,9 @@ static int mx6s_vidioc_try_fmt_vid_cap(struct file *file, void *priv,
 		return -EINVAL;
 	}
 
-	v4l2_fill_mbus_format(&mbus_fmt, pix, fmt->mbus_code);
-	ret = v4l2_subdev_call(sd, video, s_mbus_fmt, &mbus_fmt);
-	v4l2_fill_pix_format(pix, &mbus_fmt);
+	v4l2_fill_mbus_format(&format.format, pix, fmt->mbus_code);
+	ret = v4l2_subdev_call(sd, pad, set_fmt, NULL, &format);
+	v4l2_fill_pix_format(pix, &format.format);
 
 	if (pix->field != V4L2_FIELD_INTERLACED)
 		pix->field = V4L2_FIELD_NONE;
@@ -1778,6 +1780,7 @@ static int mx6sx_register_subdevs(struct mx6s_csi_dev *csi_dev)
 static int mx6s_csi_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
+	const struct of_device_id *of_id;
 	struct mx6s_csi_dev *csi_dev;
 	struct video_device *vdev;
 	struct resource *res;
@@ -1831,6 +1834,11 @@ static int mx6s_csi_probe(struct platform_device *pdev)
 	csi_dev->dev = dev;
 
 	mx6s_csi_mux_sel(csi_dev);
+
+	of_id = of_match_node(mx6s_csi_dt_ids, csi_dev->dev->of_node);
+	if (!of_id)
+		return -EINVAL;
+	csi_dev->rx_fifo_rst = of_id->data;
 
 	snprintf(csi_dev->v4l2_dev.name,
 		 sizeof(csi_dev->v4l2_dev.name), "CSI");
@@ -1934,8 +1942,16 @@ static const struct dev_pm_ops mx6s_csi_pm_ops = {
 	SET_RUNTIME_PM_OPS(mx6s_csi_runtime_suspend, mx6s_csi_runtime_resume, NULL)
 };
 
+static const u8 mx6s_fifo_rst = true;
+static const u8 mx6sl_fifo_rst = false;
+
 static const struct of_device_id mx6s_csi_dt_ids[] = {
-	{ .compatible = "fsl,imx6s-csi", },
+	{ .compatible = "fsl,imx6s-csi",
+	  .data = &mx6s_fifo_rst,
+	},
+	{ .compatible = "fsl,imx6sl-csi",
+	  .data = &mx6sl_fifo_rst,
+	},
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, mx6s_csi_dt_ids);

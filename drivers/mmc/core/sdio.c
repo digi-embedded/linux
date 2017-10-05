@@ -106,8 +106,6 @@ static int sdio_read_cccr(struct mmc_card *card, u32 ocr)
 	unsigned char data;
 	unsigned char speed;
 
-	memset(&card->cccr, 0, sizeof(struct sdio_cccr));
-
 	ret = mmc_io_rw_direct(card, 0, 0, SDIO_CCCR_CCCR, 0, &data);
 	if (ret)
 		goto out;
@@ -535,8 +533,8 @@ static int mmc_sdio_init_uhs_card(struct mmc_card *card)
 	 * SDR104 mode SD-cards. Note that tuning is mandatory for SDR104.
 	 */
 	if (!mmc_host_is_spi(card->host) &&
-	    ((card->sw_caps.sd3_bus_mode & SD_MODE_UHS_SDR50) ||
-	     (card->sw_caps.sd3_bus_mode & SD_MODE_UHS_SDR104)))
+	    ((card->host->ios.timing == MMC_TIMING_UHS_SDR50) ||
+	      (card->host->ios.timing == MMC_TIMING_UHS_SDR104)))
 		err = mmc_execute_tuning(card);
 out:
 	return err;
@@ -630,7 +628,7 @@ try_again:
 	 */
 	if (!powered_resume && (rocr & ocr & R4_18V_PRESENT)) {
 		err = mmc_set_signal_voltage(host, MMC_SIGNAL_VOLTAGE_180,
-					ocr);
+					ocr_card);
 		if (err == -EAGAIN) {
 			sdio_reset(host);
 			mmc_go_idle(host);
@@ -941,11 +939,10 @@ static int mmc_sdio_pre_suspend(struct mmc_host *host)
  */
 static int mmc_sdio_suspend(struct mmc_host *host)
 {
-	if (mmc_card_keep_power(host) && mmc_card_wake_sdio_irq(host)) {
-		mmc_claim_host(host);
+	mmc_claim_host(host);
+
+	if (mmc_card_keep_power(host) && mmc_card_wake_sdio_irq(host))
 		sdio_disable_wide(host->card);
-		mmc_release_host(host);
-	}
 
 	if (!mmc_card_keep_power(host)) {
 		mmc_power_off(host);
@@ -953,6 +950,8 @@ static int mmc_sdio_suspend(struct mmc_host *host)
 		mmc_retune_timer_stop(host);
 		mmc_retune_needed(host);
 	}
+
+	mmc_release_host(host);
 
 	return 0;
 }
@@ -999,13 +998,10 @@ static int mmc_sdio_resume(struct mmc_host *host)
 	}
 
 	if (!err && host->sdio_irqs) {
-		if (!(host->caps2 & MMC_CAP2_SDIO_IRQ_NOTHREAD)) {
+		if (!(host->caps2 & MMC_CAP2_SDIO_IRQ_NOTHREAD))
 			wake_up_process(host->sdio_irq_thread);
-		} else if (host->caps & MMC_CAP_SDIO_IRQ) {
-			mmc_host_clk_hold(host);
+		else if (host->caps & MMC_CAP_SDIO_IRQ)
 			host->ops->enable_sdio_irq(host, 1);
-			mmc_host_clk_release(host);
-		}
 	}
 
 	mmc_release_host(host);
@@ -1062,15 +1058,24 @@ out:
 static int mmc_sdio_runtime_suspend(struct mmc_host *host)
 {
 	/* No references to the card, cut the power to it. */
+	mmc_claim_host(host);
 	mmc_power_off(host);
+	mmc_release_host(host);
+
 	return 0;
 }
 
 static int mmc_sdio_runtime_resume(struct mmc_host *host)
 {
+	int ret;
+
 	/* Restore power and re-initialize. */
+	mmc_claim_host(host);
 	mmc_power_up(host, host->card->ocr);
-	return mmc_sdio_power_restore(host);
+	ret = mmc_sdio_power_restore(host);
+	mmc_release_host(host);
+
+	return ret;
 }
 
 static int mmc_sdio_reset(struct mmc_host *host)

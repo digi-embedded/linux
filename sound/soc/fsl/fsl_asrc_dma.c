@@ -29,7 +29,7 @@ static struct snd_pcm_hardware snd_imx_hardware = {
 		SNDRV_PCM_INFO_RESUME,
 	.buffer_bytes_max = FSL_ASRC_DMABUF_SIZE,
 	.period_bytes_min = 128,
-	.period_bytes_max = 65535, /* Limited by SDMA engine */
+	.period_bytes_max = 65532, /* Limited by SDMA engine */
 	.periods_min = 2,
 	.periods_max = 255,
 	.fifo_size = 0,
@@ -343,7 +343,7 @@ static snd_pcm_uframes_t fsl_asrc_dma_pcm_pointer(struct snd_pcm_substream *subs
 	return bytes_to_frames(substream->runtime, pair->pos);
 }
 
-static struct snd_pcm_ops fsl_asrc_dma_pcm_ops = {
+static const struct snd_pcm_ops fsl_asrc_dma_pcm_ops = {
 	.ioctl		= snd_pcm_lib_ioctl,
 	.hw_params	= fsl_asrc_dma_hw_params,
 	.hw_free	= fsl_asrc_dma_hw_free,

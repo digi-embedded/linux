@@ -13,6 +13,7 @@ Optional properties:
 - anatop-delay-reg-offset: Anatop MFD step time register offset
 - anatop-delay-bit-shift: Bit shift for the step time register
 - anatop-delay-bit-width: Number of bits used in the step time register
+- vin-supply: The supply for this regulator
 - anatop-enable-bit: Regulator output offset bit, only for 3p0, 2p5, and 1p1.
 
 Any property defined as part of the core regulator

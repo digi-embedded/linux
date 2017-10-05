@@ -6,9 +6,9 @@
  *	- Copyright 2011 Fenghua Yu <fenghua.yu@intel.com>
  */
 #include <linux/linkage.h>
-#include <asm/dwarf2.h>
-#include <asm/cpufeature.h>
+#include <asm/cpufeatures.h>
 #include <asm/alternative-asm.h>
+#include <asm/export.h>
 
 #undef memmove
 
@@ -27,7 +27,6 @@
 
 ENTRY(memmove)
 ENTRY(__memmove)
-	CFI_STARTPROC
 
 	/* Handle more 32 bytes in loop */
 	mov %rdi, %rax
@@ -207,6 +206,7 @@ ENTRY(__memmove)
 	movb %r11b, (%rdi)
 13:
 	retq
-	CFI_ENDPROC
 ENDPROC(__memmove)
 ENDPROC(memmove)
+EXPORT_SYMBOL(__memmove)
+EXPORT_SYMBOL(memmove)

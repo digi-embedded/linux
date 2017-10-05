@@ -1,0 +1,98 @@
+* Freescale MXS LCD Interface (LCDIF)
+
+Required properties:
+- compatible: Should be "fsl,<chip>-lcdif".  Supported chips include
+  imx23 and imx28.
+- reg: Address and length of the register set for lcdif
+- interrupts: Should contain lcdif interrupts
+- display : phandle to display node (see below for details)
+
+Optional properties:
+- disp-dev: Display device driver name
+- disp-videomode: Display device video mode name; this is used if the panel
+  supports multiple video modes, in order to chose the right one (see below for
+  examples)
+
+* display node
+
+Required properties:
+- bits-per-pixel : <16> for RGB565, <32> for RGB888/666.
+- bus-width : number of data lines.  Could be <8>, <16>, <18> or <24>.
+
+Required sub-node:
+- display-timings : Refer to binding doc display-timing.txt for details.
+
+Examples:
+
+lcdif@80030000 {
+	compatible = "fsl,imx28-lcdif";
+	reg = <0x80030000 2000>;
+	interrupts = <38 86>;
+
+	display: display {
+		bits-per-pixel = <32>;
+		bus-width = <24>;
+
+		display-timings {
+			native-mode = <&timing0>;
+			timing0: timing0 {
+				clock-frequency = <33500000>;
+				hactive = <800>;
+				vactive = <480>;
+				hfront-porch = <164>;
+				hback-porch = <89>;
+				hsync-len = <10>;
+				vback-porch = <23>;
+				vfront-porch = <10>;
+				vsync-len = <10>;
+				hsync-active = <0>;
+				vsync-active = <0>;
+				de-active = <1>;
+				pixelclk-active = <0>;
+			};
+		};
+	};
+};
+
+Examples - optional properties:
+
+Snippet from imx7d-sdb-mipi-dsi.dts:
+
+&lcdif {
+	disp-dev = "mipi_dsi_samsung";
+	disp-videomode = "TRUULY-WVGA-SYNC-LOW";
+};
+
+&mipi_dsi {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_mipi_dsi_reset>;
+	lcd_panel = "TRULY-WVGA-TFT3P5581E";
+	resets = <&mipi_dsi_reset>;
+	status = "okay";
+};
+
+In the above example, the panel supports 2 video modes (snippet from
+drivers/video/fbdev/mxc/mxcfb_hx8363_wvga.c):
+
+#define ACTIVE_HIGH_NAME	"TRUULY-WVGA-SYNC-HIGH"
+#define ACTIVE_LOW_NAME		"TRUULY-WVGA-SYNC-LOW"
+
+static struct fb_videomode truly_lcd_modedb[] = {
+	{
+		ACTIVE_HIGH_NAME, 50, 480, 854, 41042,
+		40, 60,
+		3, 3,
+		8, 4,
+		0x0,
+		FB_VMODE_NONINTERLACED,
+		0,
+	}, {
+		ACTIVE_LOW_NAME, 50, 480, 854, 41042,
+		40, 60,
+		3, 3,
+		8, 4,
+		FB_SYNC_OE_LOW_ACT,
+		FB_VMODE_NONINTERLACED,
+		0,
+	},
+};

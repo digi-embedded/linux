@@ -34,8 +34,10 @@
  *  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <linux/fs.h>
 #include <linux/slab.h>
-#include <linux/nfs_fs.h>
+#include <linux/posix_acl.h>
+
 #include "nfsfh.h"
 #include "nfsd.h"
 #include "acl.h"
@@ -52,10 +54,6 @@
 #define NFS4_ANYONE_MODE (NFS4_ACE_READ_ATTRIBUTES | NFS4_ACE_READ_ACL | NFS4_ACE_SYNCHRONIZE)
 #define NFS4_OWNER_MODE (NFS4_ACE_WRITE_ATTRIBUTES | NFS4_ACE_WRITE_ACL)
 
-/* We don't support these bits; insist they be neither allowed nor denied */
-#define NFS4_MASK_UNSUPP (NFS4_ACE_DELETE | NFS4_ACE_WRITE_OWNER \
-		| NFS4_ACE_READ_NAMED_ATTRS | NFS4_ACE_WRITE_NAMED_ATTRS)
-
 /* flags used to simulate posix default ACLs */
 #define NFS4_INHERITANCE_FLAGS (NFS4_ACE_FILE_INHERIT_ACE \
 		| NFS4_ACE_DIRECTORY_INHERIT_ACE)
@@ -63,9 +61,6 @@
 #define NFS4_SUPPORTED_FLAGS (NFS4_INHERITANCE_FLAGS \
 		| NFS4_ACE_INHERIT_ONLY_ACE \
 		| NFS4_ACE_IDENTIFIER_GROUP)
-
-#define MASK_EQUAL(mask1, mask2) \
-	( ((mask1) & NFS4_ACE_MASK_ALL) == ((mask2) & NFS4_ACE_MASK_ALL) )
 
 static u32
 mask_from_posix(unsigned short perm, unsigned int flags)
@@ -107,7 +102,7 @@ deny_mask_from_posix(unsigned short perm, u32 flags)
 /* We only map from NFSv4 to POSIX ACLs when setting ACLs, when we err on the
  * side of being more restrictive, so the mode bit mapping below is
  * pessimistic.  An optimistic version would be needed to handle DENY's,
- * but we espect to coalesce all ALLOWs and DENYs before mapping to mode
+ * but we expect to coalesce all ALLOWs and DENYs before mapping to mode
  * bits. */
 
 static void
@@ -125,11 +120,6 @@ low_mode_from_nfs4(u32 perm, unsigned short *mode, unsigned int flags)
 	if ((perm & NFS4_EXECUTE_MODE) == NFS4_EXECUTE_MODE)
 		*mode |= ACL_EXECUTE;
 }
-
-struct ace_container {
-	struct nfs4_ace  *ace;
-	struct list_head  ace_l;
-};
 
 static short ace2type(struct nfs4_ace *);
 static void _posix_to_nfsv4_one(struct posix_acl *, struct nfs4_acl *,
@@ -384,7 +374,6 @@ pace_gt(struct posix_acl_entry *pace1, struct posix_acl_entry *pace2)
 static void
 sort_pacl_range(struct posix_acl *pacl, int start, int end) {
 	int sorted = 0, i;
-	struct posix_acl_entry tmp;
 
 	/* We just do a bubble sort; easy to do in place, and we're not
 	 * expecting acl's to be long enough to justify anything more. */
@@ -394,9 +383,8 @@ sort_pacl_range(struct posix_acl *pacl, int start, int end) {
 			if (pace_gt(&pacl->a_entries[i],
 				    &pacl->a_entries[i+1])) {
 				sorted = 0;
-				tmp = pacl->a_entries[i];
-				pacl->a_entries[i] = pacl->a_entries[i+1];
-				pacl->a_entries[i+1] = tmp;
+				swap(pacl->a_entries[i],
+				     pacl->a_entries[i + 1]);
 			}
 		}
 	}
@@ -472,7 +460,7 @@ init_state(struct posix_acl_state *state, int cnt)
 	state->empty = 1;
 	/*
 	 * In the worst case, each individual acl could be for a distinct
-	 * named user or group, but we don't no which, so we allocate
+	 * named user or group, but we don't know which, so we allocate
 	 * enough space for either:
 	 */
 	alloc = sizeof(struct posix_ace_state_array)
@@ -782,9 +770,6 @@ nfsd4_set_nfs4_acl(struct svc_rqst *rqstp, struct svc_fh *fhp,
 	dentry = fhp->fh_dentry;
 	inode = d_inode(dentry);
 
-	if (!inode->i_op->set_acl || !IS_POSIXACL(inode))
-		return nfserr_attrnotsupp;
-
 	if (S_ISDIR(inode->i_mode))
 		flags = NFS4_ACL_DIR;
 
@@ -794,16 +779,19 @@ nfsd4_set_nfs4_acl(struct svc_rqst *rqstp, struct svc_fh *fhp,
 	if (host_error < 0)
 		goto out_nfserr;
 
-	host_error = inode->i_op->set_acl(inode, pacl, ACL_TYPE_ACCESS);
+	fh_lock(fhp);
+
+	host_error = set_posix_acl(inode, ACL_TYPE_ACCESS, pacl);
 	if (host_error < 0)
-		goto out_release;
+		goto out_drop_lock;
 
 	if (S_ISDIR(inode->i_mode)) {
-		host_error = inode->i_op->set_acl(inode, dpacl,
-						  ACL_TYPE_DEFAULT);
+		host_error = set_posix_acl(inode, ACL_TYPE_DEFAULT, dpacl);
 	}
 
-out_release:
+out_drop_lock:
+	fh_unlock(fhp);
+
 	posix_acl_release(pacl);
 	posix_acl_release(dpacl);
 out_nfserr:

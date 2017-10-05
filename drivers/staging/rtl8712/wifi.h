@@ -28,15 +28,7 @@
 
 #include <linux/compiler.h>
 
-#ifdef BIT
-#undef BIT
-#endif
-#define BIT(x)	(1 << (x))
-
-#define WLAN_ETHHDR_LEN		14
-#define WLAN_ETHADDR_LEN	6
 #define WLAN_IEEE_OUI_LEN	3
-#define WLAN_ADDR_LEN		6
 #define WLAN_CRC_LEN		4
 #define WLAN_BSSID_LEN		6
 #define WLAN_BSS_TS_LEN		8
@@ -52,7 +44,6 @@
 
 #define WLAN_MIN_ETHFRM_LEN	60
 #define WLAN_MAX_ETHFRM_LEN	1514
-#define WLAN_ETHHDR_LEN		14
 
 #define P80211CAPTURE_VERSION	0x80211001
 
@@ -385,7 +376,8 @@ static inline unsigned char *get_hdr_bssid(unsigned char *pframe)
 
 /*-----------------------------------------------------------------------------
 			Below is for the security related definition
-------------------------------------------------------------------------------*/
+ *-----------------------------------------------------------------------------
+ */
 #define _RESERVED_FRAME_TYPE_	0
 #define _SKB_FRAME_TYPE_	2
 #define _PRE_ALLOCMEM_		1
@@ -429,7 +421,8 @@ static inline unsigned char *get_hdr_bssid(unsigned char *pframe)
 
 /* ---------------------------------------------------------------------------
 					Below is the fixed elements...
------------------------------------------------------------------------------*/
+ * ---------------------------------------------------------------------------
+ */
 #define _AUTH_ALGM_NUM_			2
 #define _AUTH_SEQ_NUM_			2
 #define _BEACON_ITERVAL_		2
@@ -457,20 +450,23 @@ static inline unsigned char *get_hdr_bssid(unsigned char *pframe)
 
 /*-----------------------------------------------------------------------------
 				Below is the definition for 802.11i / 802.1x
-------------------------------------------------------------------------------*/
+ *------------------------------------------------------------------------------
+ */
 #define _IEEE8021X_MGT_			1	/*WPA */
 #define _IEEE8021X_PSK_			2	/* WPA with pre-shared key */
 
 /*-----------------------------------------------------------------------------
 				Below is the definition for WMM
-------------------------------------------------------------------------------*/
+ *------------------------------------------------------------------------------
+ */
 #define _WMM_IE_Length_				7  /* for WMM STA */
 #define _WMM_Para_Element_Length_		24
 
 
 /*-----------------------------------------------------------------------------
 				Below is the definition for 802.11n
-------------------------------------------------------------------------------*/
+ *------------------------------------------------------------------------------
+ */
 
 /* block-ack parameters */
 #define IEEE80211_ADDBA_PARAM_POLICY_MASK 0x0002

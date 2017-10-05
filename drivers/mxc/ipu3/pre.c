@@ -923,7 +923,7 @@ static int ipu_pre_probe(struct platform_device *pdev)
 		return err;
 	}
 
-	pre->iram_pool = of_get_named_gen_pool(pdev->dev.of_node, "ocram", 0);
+	pre->iram_pool = of_gen_pool_get(pdev->dev.of_node, "ocram", 0);
 	if (!pre->iram_pool) {
 		dev_err(&pdev->dev, "no iram exist for pre\n");
 		return -ENOMEM;

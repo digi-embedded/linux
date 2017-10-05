@@ -33,6 +33,7 @@
 #include "xfs_trans.h"
 #include "xfs_buf_item.h"
 #include "xfs_cksum.h"
+#include "xfs_log.h"
 
 /*
  * Function declarations.
@@ -93,9 +94,11 @@ xfs_dir3_free_verify(
 
 		if (hdr3->magic != cpu_to_be32(XFS_DIR3_FREE_MAGIC))
 			return false;
-		if (!uuid_equal(&hdr3->uuid, &mp->m_sb.sb_uuid))
+		if (!uuid_equal(&hdr3->uuid, &mp->m_sb.sb_meta_uuid))
 			return false;
 		if (be64_to_cpu(hdr3->blkno) != bp->b_bn)
+			return false;
+		if (!xfs_log_check_lsn(mp, be64_to_cpu(hdr3->lsn)))
 			return false;
 	} else {
 		if (hdr->magic != cpu_to_be32(XFS_DIR2_FREE_MAGIC))
@@ -147,6 +150,7 @@ xfs_dir3_free_write_verify(
 }
 
 const struct xfs_buf_ops xfs_dir3_free_buf_ops = {
+	.name = "xfs_dir3_free",
 	.verify_read = xfs_dir3_free_read_verify,
 	.verify_write = xfs_dir3_free_write_verify,
 };
@@ -226,7 +230,7 @@ xfs_dir3_free_get_buf(
 
 		hdr3->hdr.blkno = cpu_to_be64(bp->b_bn);
 		hdr3->hdr.owner = cpu_to_be64(dp->i_ino);
-		uuid_copy(&hdr3->hdr.uuid, &mp->m_sb.sb_uuid);
+		uuid_copy(&hdr3->hdr.uuid, &mp->m_sb.sb_meta_uuid);
 	} else
 		hdr.magic = XFS_DIR2_FREE_MAGIC;
 	dp->d_ops->free_hdr_to_disk(bp->b_addr, &hdr);
@@ -1845,8 +1849,7 @@ xfs_dir2_node_addname_int(
 
 			if (dp->d_ops->db_to_fdb(args->geo, dbno) != fbno) {
 				xfs_alert(mp,
-			"%s: dir ino %llu needed freesp block %lld for\n"
-			"  data block %lld, got %lld ifbno %llu lastfbno %d",
+"%s: dir ino %llu needed freesp block %lld for data block %lld, got %lld ifbno %llu lastfbno %d",
 					__func__, (unsigned long long)dp->i_ino,
 					(long long)dp->d_ops->db_to_fdb(
 								args->geo, dbno),
@@ -2232,6 +2235,9 @@ xfs_dir2_node_trim_free(
 
 	dp = args->dp;
 	tp = args->trans;
+
+	*rvalp = 0;
+
 	/*
 	 * Read the freespace block.
 	 */
@@ -2252,7 +2258,6 @@ xfs_dir2_node_trim_free(
 	 */
 	if (freehdr.nused > 0) {
 		xfs_trans_brelse(tp, bp);
-		*rvalp = 0;
 		return 0;
 	}
 	/*

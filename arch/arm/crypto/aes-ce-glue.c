@@ -15,6 +15,7 @@
 #include <crypto/ablk_helper.h>
 #include <crypto/algapi.h>
 #include <linux/module.h>
+#include <crypto/xts.h>
 
 MODULE_DESCRIPTION("AES-ECB/CBC/CTR/XTS using ARMv8 Crypto Extensions");
 MODULE_AUTHOR("Ard Biesheuvel <ard.biesheuvel@linaro.org>");
@@ -87,8 +88,13 @@ static int ce_aes_expandkey(struct crypto_aes_ctx *ctx, const u8 *in_key,
 		u32 *rki = ctx->key_enc + (i * kwords);
 		u32 *rko = rki + kwords;
 
+#ifndef CONFIG_CPU_BIG_ENDIAN
 		rko[0] = ror32(ce_aes_sub(rki[kwords - 1]), 8);
 		rko[0] = rko[0] ^ rki[0] ^ rcon[i];
+#else
+		rko[0] = rol32(ce_aes_sub(rki[kwords - 1]), 8);
+		rko[0] = rko[0] ^ rki[0] ^ (rcon[i] << 24);
+#endif
 		rko[1] = rko[0] ^ rki[1];
 		rko[2] = rko[1] ^ rki[2];
 		rko[3] = rko[2] ^ rki[3];
@@ -151,6 +157,10 @@ static int xts_set_key(struct crypto_tfm *tfm, const u8 *in_key,
 {
 	struct crypto_aes_xts_ctx *ctx = crypto_tfm_ctx(tfm);
 	int ret;
+
+	ret = xts_check_key(tfm, in_key, key_len);
+	if (ret)
+		return ret;
 
 	ret = ce_aes_expandkey(&ctx->key1, in_key, key_len / 2);
 	if (!ret)
@@ -279,7 +289,7 @@ static int ctr_encrypt(struct blkcipher_desc *desc, struct scatterlist *dst,
 		err = blkcipher_walk_done(desc, &walk,
 					  walk.nbytes % AES_BLOCK_SIZE);
 	}
-	if (nbytes) {
+	if (walk.nbytes % AES_BLOCK_SIZE) {
 		u8 *tdst = walk.dst.virt.addr + blocks * AES_BLOCK_SIZE;
 		u8 *tsrc = walk.src.virt.addr + blocks * AES_BLOCK_SIZE;
 		u8 __aligned(8) tail[AES_BLOCK_SIZE];
@@ -364,7 +374,7 @@ static struct crypto_alg aes_algs[] = { {
 	.cra_blkcipher = {
 		.min_keysize	= AES_MIN_KEY_SIZE,
 		.max_keysize	= AES_MAX_KEY_SIZE,
-		.ivsize		= AES_BLOCK_SIZE,
+		.ivsize		= 0,
 		.setkey		= ce_aes_setkey,
 		.encrypt	= ecb_encrypt,
 		.decrypt	= ecb_decrypt,
@@ -441,7 +451,7 @@ static struct crypto_alg aes_algs[] = { {
 	.cra_ablkcipher = {
 		.min_keysize	= AES_MIN_KEY_SIZE,
 		.max_keysize	= AES_MAX_KEY_SIZE,
-		.ivsize		= AES_BLOCK_SIZE,
+		.ivsize		= 0,
 		.setkey		= ablk_set_key,
 		.encrypt	= ablk_encrypt,
 		.decrypt	= ablk_decrypt,

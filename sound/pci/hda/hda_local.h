@@ -330,7 +330,7 @@ int snd_hda_multi_out_analog_cleanup(struct hda_codec *codec,
 /*
  * generic proc interface
  */
-#ifdef CONFIG_PROC_FS
+#ifdef CONFIG_SND_PROC_FS
 int snd_hda_codec_proc_new(struct hda_codec *codec);
 #else
 static inline int snd_hda_codec_proc_new(struct hda_codec *codec) { return 0; }
@@ -681,12 +681,7 @@ static inline bool
 snd_hda_check_power_state(struct hda_codec *codec, hda_nid_t nid,
 			  unsigned int target_state)
 {
-	unsigned int state = snd_hda_codec_read(codec, nid, 0,
-						AC_VERB_GET_POWER_STATE, 0);
-	if (state & AC_PWRST_ERROR)
-		return true;
-	state = (state >> 4) & 0x0f;
-	return (state == target_state);
+	return snd_hdac_check_power_state(&codec->core, nid, target_state);
 }
 
 unsigned int snd_hda_codec_eapd_power_filter(struct hda_codec *codec,
@@ -777,7 +772,7 @@ int snd_hdmi_get_eld_ati(struct hda_codec *codec, hda_nid_t nid,
 			 unsigned char *buf, int *eld_size,
 			 bool rev3_or_later);
 
-#ifdef CONFIG_PROC_FS
+#ifdef CONFIG_SND_PROC_FS
 void snd_hdmi_print_eld_info(struct hdmi_eld *eld,
 			     struct snd_info_buffer *buffer);
 void snd_hdmi_write_eld_info(struct hdmi_eld *eld,

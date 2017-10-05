@@ -20,8 +20,8 @@
 #include <linux/timecounter.h>
 
 #if defined(CONFIG_M523x) || defined(CONFIG_M527x) || defined(CONFIG_M528x) || \
-    defined(CONFIG_M520x) || defined(CONFIG_M532x) || \
-    defined(CONFIG_ARCH_MXC) || defined(CONFIG_SOC_IMX28)
+    defined(CONFIG_M520x) || defined(CONFIG_M532x) || defined(CONFIG_ARM) || \
+    defined(CONFIG_ARM64)
 /*
  *	Just figures, Motorola would have to change the offsets for
  *	registers in the same peripheral device on different models
@@ -192,28 +192,45 @@
 
 /*
  *	Define the buffer descriptor structure.
+ *
+ *	Evidently, ARM SoCs have the FEC block generated in a
+ *	little endian mode so adjust endianness accordingly.
  */
-#if defined(CONFIG_ARCH_MXC) || defined(CONFIG_SOC_IMX28)
+#if defined(CONFIG_ARM) || defined(CONFIG_ARM64)
+#define fec32_to_cpu le32_to_cpu
+#define fec16_to_cpu le16_to_cpu
+#define cpu_to_fec32 cpu_to_le32
+#define cpu_to_fec16 cpu_to_le16
+#define __fec32 __le32
+#define __fec16 __le16
+
 struct bufdesc {
-	unsigned short cbd_datlen;	/* Data length */
-	unsigned short cbd_sc;	/* Control and status info */
-	unsigned long cbd_bufaddr;	/* Buffer address */
+	__fec16 cbd_datlen;	/* Data length */
+	__fec16 cbd_sc;		/* Control and status info */
+	__fec32 cbd_bufaddr;	/* Buffer address */
 };
 #else
+#define fec32_to_cpu be32_to_cpu
+#define fec16_to_cpu be16_to_cpu
+#define cpu_to_fec32 cpu_to_be32
+#define cpu_to_fec16 cpu_to_be16
+#define __fec32 __be32
+#define __fec16 __be16
+
 struct bufdesc {
-	unsigned short	cbd_sc;			/* Control and status info */
-	unsigned short	cbd_datlen;		/* Data length */
-	unsigned long	cbd_bufaddr;		/* Buffer address */
+	__fec16	cbd_sc;		/* Control and status info */
+	__fec16	cbd_datlen;	/* Data length */
+	__fec32	cbd_bufaddr;	/* Buffer address */
 };
 #endif
 
 struct bufdesc_ex {
 	struct bufdesc desc;
-	unsigned long cbd_esc;
-	unsigned long cbd_prot;
-	unsigned long cbd_bdu;
-	unsigned long ts;
-	unsigned short res0[4];
+	__fec32 cbd_esc;
+	__fec32 cbd_prot;
+	__fec32 cbd_bdu;
+	__fec32 ts;
+	__fec16 res0[4];
 };
 
 /*
@@ -277,7 +294,7 @@ struct bufdesc_ex {
 
 
 /* This device has up to three irqs on some platforms */
-#define FEC_IRQ_NUM		3
+#define FEC_IRQ_NUM		4
 
 /* Maximum number of queues supported
  * ENET with AVB IP can support up to 3 independent tx queues and rx queues.
@@ -295,12 +312,6 @@ struct bufdesc_ex {
 #define FEC_R_BUFF_SIZE(X)	(((X) == 1) ? FEC_R_BUFF_SIZE_1 : \
 				(((X) == 2) ? \
 					FEC_R_BUFF_SIZE_2 : FEC_R_BUFF_SIZE_0))
-#define FEC_R_DES_ACTIVE(X)	(((X) == 1) ? FEC_R_DES_ACTIVE_1 : \
-				(((X) == 2) ? \
-				   FEC_R_DES_ACTIVE_2 : FEC_R_DES_ACTIVE_0))
-#define FEC_X_DES_ACTIVE(X)	(((X) == 1) ? FEC_X_DES_ACTIVE_1 : \
-				(((X) == 2) ? \
-				   FEC_X_DES_ACTIVE_2 : FEC_X_DES_ACTIVE_0))
 
 #define FEC_DMA_CFG(X)		(((X) == 2) ? FEC_DMA_CFG_2 : FEC_DMA_CFG_1)
 
@@ -368,6 +379,7 @@ struct bufdesc_ex {
 #define FEC_ENET_TS_TIMER       ((uint)0x00008000)
 
 #define FEC_DEFAULT_IMASK (FEC_ENET_TXF | FEC_ENET_RXF | FEC_ENET_MII | FEC_ENET_TS_TIMER)
+#define FEC_NAPI_IMASK	(FEC_ENET_MII | FEC_ENET_TS_TIMER)
 #define FEC_RX_DISABLED_IMASK (FEC_DEFAULT_IMASK & (~FEC_ENET_RXF))
 
 #define FEC_ENET_ETHEREN	((uint)0x00000002)
@@ -436,12 +448,32 @@ struct bufdesc_ex {
 #define FEC_QUIRK_SINGLE_MDIO		(1 << 11)
 /* Controller supports RACC register */
 #define FEC_QUIRK_HAS_RACC		(1 << 12)
+/* Controller supports interrupt coalesc */
+#define FEC_QUIRK_HAS_COALESCE		(1 << 13)
+/* Interrupt doesn't wake CPU from deep idle */
+#define FEC_QUIRK_ERR006687		(1 << 14)
 /*
  * i.MX6Q/DL ENET cannot wake up system in wait mode because ENET tx & rx
  * interrupt signal don't connect to GPC. So use pm qos to avoid cpu enter
  * to wait mode.
  */
-#define FEC_QUIRK_BUG_WAITMODE         (1 << 13)
+#define FEC_QUIRK_BUG_WAITMODE		(1 << 15)
+
+/* PHY fixup flag define */
+#define FEC_QUIRK_AR8031_FIXUP		(1 << 0)
+
+struct bufdesc_prop {
+	int qid;
+	/* Address of Rx and Tx buffers */
+	struct bufdesc	*base;
+	struct bufdesc	*last;
+	struct bufdesc	*cur;
+	void __iomem	*reg_desc_active;
+	dma_addr_t	dma;
+	unsigned short ring_size;
+	unsigned char dsize;
+	unsigned char dsize_log2;
+};
 
 struct fec_enet_stop_mode {
 	struct regmap *gpr;
@@ -450,32 +482,21 @@ struct fec_enet_stop_mode {
 };
 
 struct fec_enet_priv_tx_q {
-	int index;
+	struct bufdesc_prop bd;
 	unsigned char *tx_bounce[TX_RING_SIZE];
 	struct  sk_buff *tx_skbuff[TX_RING_SIZE];
-
-	dma_addr_t	bd_dma;
-	struct bufdesc	*tx_bd_base;
-	uint tx_ring_size;
 
 	unsigned short tx_stop_threshold;
 	unsigned short tx_wake_threshold;
 
-	struct bufdesc	*cur_tx;
 	struct bufdesc	*dirty_tx;
 	char *tso_hdrs;
 	dma_addr_t tso_hdrs_dma;
 };
 
 struct fec_enet_priv_rx_q {
-	int index;
+	struct bufdesc_prop bd;
 	struct  sk_buff *rx_skbuff[RX_RING_SIZE];
-
-	dma_addr_t	bd_dma;
-	struct bufdesc	*rx_bd_base;
-	uint rx_ring_size;
-
-	struct bufdesc	*cur_rx;
 };
 
 /* The FEC buffer descriptors track the ring buffers.  The rx_bd_base and
@@ -515,22 +536,20 @@ struct fec_enet_private {
 	unsigned long work_ts;
 	unsigned long work_mdio;
 
-	unsigned short bufdesc_size;
-
 	struct	platform_device *pdev;
 
 	int	dev_id;
 
 	/* Phylib and MDIO interface */
 	struct	mii_bus *mii_bus;
-	struct	phy_device *phy_dev;
 	int	mii_timeout;
 	int	mii_bus_share;
-	bool	miibus_up_failed;
+	bool	active_in_suspend;
 	uint	phy_speed;
 	phy_interface_t	phy_interface;
 	struct device_node *phy_node;
 	int	link;
+	bool	fixed_link;
 	int	full_duplex;
 	int	speed;
 	struct	completion mdio_done;
@@ -540,24 +559,14 @@ struct fec_enet_private {
 	int	wol_flag;
 	int	wake_irq;
 	u32	quirks;
-	int	phy_reset_req;
 	bool	phy_reset_in_suspend;
 	int	phy_reset_gpio;
-	u32	phy_reset_duration;
+	u32	fixups;
 
 	struct	napi_struct napi;
 	int	csum_flags;
 
 	struct work_struct tx_timeout_work;
-
-	/* GPIO LEDs */
-	int gpio_linkled;
-	bool gpio_linkled_inverted;
-	int gpio_actled;
-	bool gpio_actled_inverted;
-	unsigned int rxtx_activity;
-	unsigned int rxtx_cnt;
-	struct timer_list activityled_timer;
 
 	struct ptp_clock *ptp_clock;
 	struct ptp_clock_info ptp_caps;
@@ -595,14 +604,19 @@ struct fec_enet_private {
 	int pps_enable;
 	unsigned int next_counter;
 
+	u64 ethtool_stats[0];
+
 	struct fec_enet_stop_mode gpr;
 };
 
 void fec_ptp_init(struct platform_device *pdev);
+void fec_ptp_stop(struct platform_device *pdev);
 void fec_ptp_start_cyclecounter(struct net_device *ndev);
 int fec_ptp_set(struct net_device *ndev, struct ifreq *ifr);
 int fec_ptp_get(struct net_device *ndev, struct ifreq *ifr);
 uint fec_ptp_check_pps_event(struct fec_enet_private *fep);
+void fec_enet_register_fixup(struct net_device *ndev);
+int of_fec_enet_parse_fixup(struct device_node *np);
 
 /****************************************************************************/
 #endif /* FEC_H */

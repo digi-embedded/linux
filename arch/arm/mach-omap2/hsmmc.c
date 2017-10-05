@@ -26,7 +26,7 @@
 #include "hsmmc.h"
 #include "control.h"
 
-#if defined(CONFIG_MMC_OMAP_HS) || defined(CONFIG_MMC_OMAP_HS_MODULE)
+#if IS_ENABLED(CONFIG_MMC_OMAP_HS)
 
 static u16 control_pbias_offset;
 static u16 control_devconf1_offset;
@@ -70,7 +70,7 @@ static void omap_hsmmc1_before_set_reg(struct device *dev,
 
 		reg = omap_ctrl_readl(control_pbias_offset);
 		if (cpu_is_omap3630()) {
-			/* Set MMC I/O to 52Mhz */
+			/* Set MMC I/O to 52MHz */
 			prog_io = omap_ctrl_readl(OMAP343X_CONTROL_PROG_IO1);
 			prog_io |= OMAP3630_PRG_SDMMC1_SPEEDCTRL;
 			omap_ctrl_writel(prog_io, OMAP343X_CONTROL_PROG_IO1);

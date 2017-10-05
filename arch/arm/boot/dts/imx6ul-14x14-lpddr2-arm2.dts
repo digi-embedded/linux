@@ -52,6 +52,7 @@
 			regulator-min-microvolt = <3000000>;
 			regulator-max-microvolt = <3000000>;
 			gpio = <&gpio4 11 GPIO_ACTIVE_HIGH>;
+			off-on-delay = <20000>;
 			enable-active-high;
 		};
 
@@ -129,9 +130,17 @@
 		396000	1175000
 		198000	1175000
 	>;
-	arm-supply = <&sw1a_reg>;
-	soc-supply = <&sw1a_reg>;
 	fsl,arm-soc-shared = <1>;
+};
+
+&reg_arm {
+	vin-supply = <&sw1a_reg>;
+	regulator-allow-bypass;
+};
+
+&reg_soc {
+	vin-supply = <&sw1a_reg>;
+	regulator-allow-bypass;
 };
 
 &fec1 {
@@ -165,7 +174,7 @@
 	};
 };
 
-&flexcan1 {
+&can1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan1>;
 	xceiver-supply = <&reg_can1_3v3>;
@@ -177,7 +186,6 @@
 	fsl,cpu_pupscr_sw = <0x1>;
 	fsl,cpu_pdnscr_iso2sw = <0x1>;
 	fsl,cpu_pdnscr_iso = <0x1>;
-	fsl,wdog-reset = <1>; /* watchdog select of reset source */
 	fsl,ldo-bypass = <1>; /* use ldo-bypass, u-boot will check it and configure */
 };
 
@@ -341,8 +349,8 @@
 	pinctrl-0 = <&pinctrl_usdhc1>;
 	pinctrl-1 = <&pinctrl_usdhc1_100mhz>;
 	pinctrl-2 = <&pinctrl_usdhc1_200mhz>;
-	cd-gpios = <&gpio4 26 0>;
-	wp-gpios = <&gpio4 25 0>;
+	cd-gpios = <&gpio4 26 GPIO_ACTIVE_LOW>;
+	wp-gpios = <&gpio4 25 GPIO_ACTIVE_HIGH>;
 	keep-power-in-suspend;
 	enable-sdio-wakeup;
 	vmmc-supply = <&reg_sd1_vmmc>;

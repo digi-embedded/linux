@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: dhd_sdio.c 634247 2016-04-27 05:53:55Z $
+ * $Id: dhd_sdio.c 663157 2016-12-08 12:19:27Z $
  */
 
 #include <typedefs.h>
@@ -65,6 +65,9 @@
 #include <dhd_dbg.h>
 #include <dhdioctl.h>
 #include <sdiovar.h>
+
+/* Murata Work-around code for HT Avail failure (due to no external slow clk) */
+#define MURATA_WORKAROUND_FOR_HTAVAIL 1
 
 #ifdef PROP_TXSTATUS
 #include <dhd_wlfc.h>
@@ -291,7 +294,7 @@ typedef struct dhd_bus {
 	bool		sleeping;		/* Is SDIO bus sleeping? */
 #if defined(SUPPORT_P2P_GO_PS)
 	wait_queue_head_t bus_sleep;
-#endif /* LINUX && SUPPORT_P2P_GO_PS */
+#endif /* LINUX && (SUPPORT_P2P_GO_PS || !OEM_ANDROID) */
 	uint		rxflow_mode;		/* Rx flow control mode */
 	bool		rxflow;			/* Is rx flow control on */
 	uint		prev_rxlim_hit;		/* Is prev rx limit exceeded (per dpc schedule) */
@@ -381,9 +384,9 @@ typedef struct dhd_bus {
 	bool		txglom_enable;	/* Flag to indicate whether tx glom is enabled/disabled */
 	uint32		txglomsize;	/* Glom size limitation */
 	void		*pad_pkt;
-#ifdef HW_OOB
-	int		bus_wake_on_resume; /* addition to fix suspend/resume powersave issue */
-#endif
+#if defined(CUSTOMER_IMX)
+	int		bus_wake_on_resume;
+#endif /* CUSTOMER_IMX */
 } dhd_bus_t;
 
 /* clkstate */
@@ -420,10 +423,6 @@ uint dhd_dpcpoll = FALSE;
 
 module_param(dhd_doflow, uint, 0644);
 module_param(dhd_dpcpoll, uint, 0644);
-
-#if defined(OOB_PARAM)
-extern uint dhd_oob_disable;
-#endif /* OOB_PARAM */
 
 static bool dhd_alignctl;
 
@@ -1137,6 +1136,10 @@ dhdsdio_htclk(dhd_bus_t *bus, bool on, bool pendok)
 	bcmsdh_info_t *sdh;
 	uint32 delay = PMU_MAX_TRANSITION_DLY;
 
+#ifdef MURATA_WORKAROUND_FOR_HTAVAIL
+	int try_count, try_err;
+#endif /* MURATA_WORKAROUND_FOR_HTAVAIL */
+
 	DHD_TRACE(("%s: Enter\n", __FUNCTION__));
 
 	clkctl = 0;
@@ -1186,7 +1189,7 @@ dhdsdio_htclk(dhd_bus_t *bus, bool on, bool pendok)
 		/* Go to pending and await interrupt if appropriate */
 		if (1 &&
 #if defined(OOB_PARAM)
-			dhd_oob_disable &&
+			bus->dhd->oob_disable &&
 #endif /* OOB_PARAM */
 			!SBSDIO_CLKAV(clkctl, bus->alp_only) && pendok) {
 			/* Allow only clock-available interrupt */
@@ -1218,6 +1221,11 @@ dhdsdio_htclk(dhd_bus_t *bus, bool on, bool pendok)
 			delay += PMU_TRANSITION_DLY_EXTRA;
 		}
 
+#ifdef MURATA_WORKAROUND_FOR_HTAVAIL
+	/* loop 20 times to test condition */
+	for (try_count = 0; try_count < 20; try_count++) {
+		try_err = 0;
+#endif /* MURATA_WORKAROUND_FOR_HTAVAIL */
 		/* Otherwise, wait here (polling) for HT Avail */
 		if (!SBSDIO_CLKAV(clkctl, bus->alp_only)) {
 			SPINWAIT_SLEEP(sdioh_spinwait_sleep,
@@ -1228,13 +1236,33 @@ dhdsdio_htclk(dhd_bus_t *bus, bool on, bool pendok)
 		}
 		if (err) {
 			DHD_ERROR(("%s: HT Avail request error: %d\n", __FUNCTION__, err));
+#ifdef MURATA_WORKAROUND_FOR_HTAVAIL
+			try_err = 1;
+#else
 			return BCME_ERROR;
+#endif /* MURATA_WORKAROUND_FOR_HTAVAIL */
 		}
 		if (!SBSDIO_CLKAV(clkctl, bus->alp_only)) {
 			DHD_ERROR(("%s: HT Avail timeout (%d): clkctl 0x%02x\n",
 			           __FUNCTION__, PMU_MAX_TRANSITION_DLY, clkctl));
+#ifdef MURATA_WORKAROUND_FOR_HTAVAIL
+			try_err = 1;
+#else
+			return BCME_ERROR;
+#endif /* MURATA_WORKAROUND_FOR_HTAVAIL */
+		}
+
+#ifdef MURATA_WORKAROUND_FOR_HTAVAIL
+		if (try_err == 0)
+			break;
+	} /* for (try_count = 0; try_count < 20; try_count++) */
+		if (try_err == 1) {
+			DHD_ERROR(("%s: HT Avail request error: retried %d times. UNRECOVERABLE!\n", __FUNCTION__, try_count));
 			return BCME_ERROR;
 		}
+		if (try_count > 0)
+			DHD_ERROR(("%s: HT Avail request NO ERROR: retried %d times.\n", __FUNCTION__, try_count));
+#endif /* MURATA_WORKAROUND_FOR_HTAVAIL */
 
 		/* Mark clock available */
 		bus->clkstate = CLK_AVAIL;
@@ -1502,7 +1530,7 @@ dhdsdio_bussleep(dhd_bus_t *bus, bool sleep)
 		bus->sleeping = TRUE;
 #if defined(SUPPORT_P2P_GO_PS)
 		wake_up(&bus->bus_sleep);
-#endif /* LINUX && SUPPORT_P2P_GO_PS */
+#endif /* LINUX && (SUPPORT_P2P_GO_PS || !OEM_ANDROID) */
 	} else {
 		/* Waking up: bus power up is ok, set local state */
 
@@ -2150,6 +2178,13 @@ dhdsdio_sendfromq(dhd_bus_t *bus, uint maxframes)
 		num_pkt = MIN(num_pkt, pktq_mlen(&bus->txq, tx_prec_map));
 		for (i = 0; i < num_pkt; i++) {
 			pkts[i] = pktq_mdeq(&bus->txq, ~bus->flowcontrol, &prec_out);
+			if (!pkts[i]) {
+				DHD_ERROR(("%s: pktg_mlen non-zero when no pkt\n",
+					__FUNCTION__));
+				ASSERT(0);
+				break;
+			}
+			PKTORPHAN(pkts[i]);
 			datalen += PKTLEN(osh, pkts[i]);
 		}
 		dhd_os_sdunlock_txq(bus->dhd);
@@ -6020,7 +6055,7 @@ clkwait:
 		          __FUNCTION__, rxdone, framecnt));
 		bus->intdis = FALSE;
 #if defined(OOB_INTR_ONLY)
-		OOB_PARAM_IF(!dhd_oob_disable) {
+		OOB_PARAM_IF(!(bus->dhd->oob_disable)) {
 			bcmsdh_oob_intr_set(bus->sdh, TRUE);
 		}
 #endif /* defined(OOB_INTR_ONLY) */
@@ -6028,7 +6063,7 @@ clkwait:
 	}
 
 #if defined(OOB_INTR_ONLY) && !defined(HW_OOB)
-	OOB_PARAM_IF(!dhd_oob_disable) {
+	OOB_PARAM_IF(!(bus->dhd->oob_disable)) {
 		/* In case of SW-OOB(using edge trigger),
 		 * Check interrupt status in the dongle again after enable irq on the host.
 		 * and rechedule dpc if interrupt is pended in the dongle.
@@ -6163,7 +6198,7 @@ dhdsdio_isr(void *arg)
 	bus->intdis = TRUE;
 
 #if defined(SDIO_ISR_THREAD) || defined(OOB_PARAM)
-	OOB_PARAM_IF(dhd_oob_disable) {
+	OOB_PARAM_IF(bus->dhd->oob_disable) {
 		DHD_TRACE(("Calling dhdsdio_dpc() from %s\n", __FUNCTION__));
 		DHD_OS_WAKE_LOCK(bus->dhd);
 		dhdsdio_dpc(bus);
@@ -6488,7 +6523,7 @@ int dhd_bus_oob_intr_register(dhd_pub_t *dhdp)
 	int err = 0;
 
 #if defined(OOB_INTR_ONLY)
-	OOB_PARAM_IF(!dhd_oob_disable) {
+	OOB_PARAM_IF(!(dhdp->oob_disable)) {
 		err = bcmsdh_oob_intr_register(dhdp->bus->sdh, dhdsdio_isr, dhdp->bus);
 	}
 #endif
@@ -6498,7 +6533,7 @@ int dhd_bus_oob_intr_register(dhd_pub_t *dhdp)
 void dhd_bus_oob_intr_unregister(dhd_pub_t *dhdp)
 {
 #if defined(OOB_INTR_ONLY)
-	OOB_PARAM_IF(!dhd_oob_disable) {
+	OOB_PARAM_IF(!(dhdp->oob_disable)) {
 		bcmsdh_oob_intr_unregister(dhdp->bus->sdh);
 	}
 #endif
@@ -6507,7 +6542,7 @@ void dhd_bus_oob_intr_unregister(dhd_pub_t *dhdp)
 void dhd_bus_oob_intr_set(dhd_pub_t *dhdp, bool enable)
 {
 #if defined(OOB_INTR_ONLY)
-	OOB_PARAM_IF(!dhd_oob_disable) {
+	OOB_PARAM_IF(!(dhdp->oob_disable)) {
 		bcmsdh_oob_intr_set(dhdp->bus->sdh, enable);
 	}
 #endif
@@ -6539,13 +6574,7 @@ dhd_bus_watchdog(dhd_pub_t *dhdp)
 	DHD_TIMER(("%s: Enter\n", __FUNCTION__));
 
 	bus = dhdp->bus;
-#ifdef HW_OOB
-	/* this code segment added to fix suspend/resume powersave issue */
-	if (bus->bus_wake_on_resume) {
-		BUS_WAKE(bus);
-		bus->bus_wake_on_resume = 0;
-	}
-#endif
+
 	if (bus->dhd->dongle_reset)
 		return FALSE;
 
@@ -6560,6 +6589,15 @@ dhd_bus_watchdog(dhd_pub_t *dhdp)
 
 	if (dhdp->busstate == DHD_BUS_DOWN)
 		return FALSE;
+
+
+#if defined(CUSTOMER_IMX)
+	if (bus->bus_wake_on_resume) {
+		BUS_WAKE(bus);
+		bus->bus_wake_on_resume = 0;
+	}
+#endif /* CUSTOMER_IMX */
+
 
 	/* Poll period: check device if appropriate. */
 	if (!SLPAUTO_ENAB(bus) && (bus->poll && (++bus->polltick >= bus->pollrate))) {
@@ -6915,7 +6953,7 @@ dhdsdio_probe(uint16 venid, uint16 devid, uint16 bus_no, uint16 slot,
 
 #if defined(SUPPORT_P2P_GO_PS)
 	init_waitqueue_head(&bus->bus_sleep);
-#endif /* LINUX && SUPPORT_P2P_GO_PS */
+#endif /* LINUX && (SUPPORT_P2P_GO_PS || !OEM_ANDROID) */
 
 	/* attempt to attach to the dongle */
 	if (!(dhdsdio_probe_attach(bus, osh, sdh, regsva, devid))) {
@@ -7128,7 +7166,9 @@ dhdsdio_probe_attach(struct dhd_bus *bus, osl_t *osh, void *sdh, void *regsva,
 				bus->dongle_ram_base = CR4_4360_RAM_BASE;
 				break;
 			case BCM4345_CHIP_ID:
-				bus->dongle_ram_base = CR4_4345_RAM_BASE;
+				/* RAM base changed from 4345c0 (chiprev=6) onwards */
+				bus->dongle_ram_base = (bus->sih->chiprev < 6)
+					? CR4_4345_LT_C0_RAM_BASE : CR4_4345_GE_C0_RAM_BASE;
 				break;
 			default:
 				bus->dongle_ram_base = 0;
@@ -7213,6 +7253,7 @@ dhdsdio_probe_malloc(dhd_bus_t *bus, osl_t *osh, void *sdh)
 		/* release rxbuf which was already located as above */
 		if (bus->rxbuf) {
 			DHD_OS_PREFREE(bus->dhd, DHD_PREALLOC_RXBUF, bus->rxbuf, bus->rxblen);
+			bus->rxbuf = NULL;
 		}
 		goto fail;
 	}
@@ -7486,42 +7527,55 @@ dhdsdio_suspend(void *context)
 	int ret = 0;
 
 	dhd_bus_t *bus = (dhd_bus_t*)context;
-#ifdef SUPPORT_P2P_GO_PS
+#if defined(SUPPORT_P2P_GO_PS)
 	int wait_time = 0;
 
 	if (bus->idletime > 0) {
-		wait_time = msecs_to_jiffies(bus->idletime * dhd_watchdog_ms);
+		wait_time = 2 * (msecs_to_jiffies(bus->idletime * dhd_watchdog_ms));
 	}
-#endif /* SUPPORT_P2P_GO_PS */
+#endif /* SUPPORT_P2P_GO_PS || !OEM_ANDROID */
 	ret = dhd_os_check_wakelock(bus->dhd);
-#ifdef SUPPORT_P2P_GO_PS
+#if defined(SUPPORT_P2P_GO_PS)
+	/* Sometimes DHD enters into suspend state when bus is still awake due
+	 * to absence of wake locks on Non-Android platforms, so perform bus
+	 * sleep status check using bus_sleep event to prevent dhd entering
+	 * into suspend state when bus is still awake.
+	 */
 	if ((!ret) && (bus->dhd->up) && (bus->dhd->op_mode != DHD_FLAG_HOSTAP_MODE)) {
 		if (wait_event_timeout(bus->bus_sleep, bus->sleeping, wait_time) == 0) {
 			if (!bus->sleeping) {
-				return 1;
+				DHD_ERROR(("%s: cannot suspend because bus is awake\n",
+					__FUNCTION__));
+				return -EBUSY;
 			}
 		}
 	}
-#endif /* SUPPORT_P2P_GO_PS */
+#endif /* SUPPORT_P2P_GO_PS || !OEM_ANDROID */
 	return ret;
 }
 
 static int
 dhdsdio_resume(void *context)
 {
-#if defined(OOB_INTR_ONLY)
-	dhd_bus_t *bus = (dhd_bus_t*)context;
 
-	OOB_PARAM_IF(!dhd_oob_disable) {
+#if defined(OOB_INTR_ONLY) || defined(CUSTOMER_IMX)
+	dhd_bus_t *bus = (dhd_bus_t*)context;
+#endif /* defined(OOB_INTR_ONLY)||defined(BCMSPI_ANDROID)||
+	* defined(CUSTOMER_IMX) */
+
+#if defined(OOB_INTR_ONLY)
+
+	OOB_PARAM_IF(!(bus->dhd->oob_disable)) {
 		if (dhd_os_check_if_up(bus->dhd))
 			bcmsdh_oob_intr_set(bus->sdh, TRUE);
 	}
-#endif 
-#ifdef HW_OOB
-	/* this code segment added to fix suspend/resume powersave issue */
+#endif
+
+#if defined(CUSTOMER_IMX)
 	bus->bus_wake_on_resume = 1;
 	dhd_os_wd_timer(bus->dhd, 1000);
-#endif
+#endif /* CUSTOMER_IMX */
+
 	return 0;
 }
 
@@ -8014,7 +8068,7 @@ dhd_bus_devreset(dhd_pub_t *dhdp, uint8 flag)
 			dhd_bus_stop(bus, FALSE);
 
 #if defined(OOB_INTR_ONLY)
-			OOB_PARAM_IF(!dhd_oob_disable) {
+			OOB_PARAM_IF(!(dhdp->oob_disable)) {
 				/* Clean up any pending IRQ */
 				dhd_enable_oob_intr(bus, FALSE);
 				bcmsdh_oob_intr_set(bus->sdh, FALSE);
@@ -8057,7 +8111,7 @@ dhd_bus_devreset(dhd_pub_t *dhdp, uint8 flag)
 					bcmerror = dhd_bus_init((dhd_pub_t *) bus->dhd, FALSE);
 					if (bcmerror == BCME_OK) {
 #if defined(OOB_INTR_ONLY)
-						OOB_PARAM_IF(!dhd_oob_disable) {
+						OOB_PARAM_IF(!(dhdp->oob_disable)) {
 							dhd_enable_oob_intr(bus, TRUE);
 							bcmsdh_oob_intr_register(bus->sdh,
 								dhdsdio_isr, bus);
@@ -8080,8 +8134,15 @@ dhd_bus_devreset(dhd_pub_t *dhdp, uint8 flag)
 						dhdsdio_release_dongle(bus, bus->dhd->osh,
 							TRUE, FALSE);
 					}
-				} else
+				} else {
+					DHD_ERROR(("%s Failed to download binary to the dongle\n",
+						__FUNCTION__));
+					if (bus->sih != NULL) {
+						si_detach(bus->sih);
+						bus->sih = NULL;
+					}
 					bcmerror = BCME_SDIO_ERROR;
+				}
 			} else
 				bcmerror = BCME_SDIO_ERROR;
 
@@ -8215,7 +8276,6 @@ dhd_bus_pktq_flush(dhd_pub_t *dhdp)
 	}
 }
 
-#ifdef BCMSDIO
 int
 dhd_sr_config(dhd_pub_t *dhd, bool on)
 {
@@ -8237,7 +8297,6 @@ dhd_get_chipid(dhd_pub_t *dhd)
 	else
 		return 0;
 }
-#endif /* BCMSDIO */
 
 #ifdef DEBUGGER
 uint32 dhd_sdio_reg_read(void *h, uint32 addr)
@@ -8273,3 +8332,12 @@ void dhd_sdio_reg_write(void *h, uint32 addr, uint32 val)
 	dhd_os_sdunlock(bus->dhd);
 }
 #endif /* DEBUGGER */
+
+
+#ifdef OOB_PARAM
+uint
+dhd_get_oob_disable(struct dhd_bus *bus)
+{
+	return bus->dhd->oob_disable;
+}
+#endif /* OOB_PARAM */

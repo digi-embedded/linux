@@ -17,10 +17,11 @@
  * this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "omap_drv.h"
+#include <drm/drm_atomic_helper.h>
+#include <drm/drm_crtc.h>
+#include <drm/drm_crtc_helper.h>
 
-#include "drm_crtc.h"
-#include "drm_crtc_helper.h"
+#include "omap_drv.h"
 
 /*
  * connector funcs
@@ -31,7 +32,6 @@
 struct omap_connector {
 	struct drm_connector base;
 	struct omap_dss_device *dssdev;
-	struct drm_encoder *encoder;
 	bool hdmi_mode;
 };
 
@@ -62,6 +62,9 @@ void copy_timings_omap_to_drm(struct drm_display_mode *mode,
 	if (timings->interlace)
 		mode->flags |= DRM_MODE_FLAG_INTERLACE;
 
+	if (timings->double_pixel)
+		mode->flags |= DRM_MODE_FLAG_DBLCLK;
+
 	if (timings->hsync_level == OMAPDSS_SIG_ACTIVE_HIGH)
 		mode->flags |= DRM_MODE_FLAG_PHSYNC;
 	else
@@ -89,6 +92,7 @@ void copy_timings_drm_to_omap(struct omap_video_timings *timings,
 	timings->vbp = mode->vtotal - mode->vsync_end;
 
 	timings->interlace = !!(mode->flags & DRM_MODE_FLAG_INTERLACE);
+	timings->double_pixel = !!(mode->flags & DRM_MODE_FLAG_DBLCLK);
 
 	if (mode->flags & DRM_MODE_FLAG_PHSYNC)
 		timings->hsync_level = OMAPDSS_SIG_ACTIVE_HIGH;
@@ -251,24 +255,19 @@ static int omap_connector_mode_valid(struct drm_connector *connector,
 	return ret;
 }
 
-struct drm_encoder *omap_connector_attached_encoder(
-		struct drm_connector *connector)
-{
-	struct omap_connector *omap_connector = to_omap_connector(connector);
-	return omap_connector->encoder;
-}
-
 static const struct drm_connector_funcs omap_connector_funcs = {
-	.dpms = drm_helper_connector_dpms,
+	.dpms = drm_atomic_helper_connector_dpms,
+	.reset = drm_atomic_helper_connector_reset,
 	.detect = omap_connector_detect,
 	.fill_modes = drm_helper_probe_single_connector_modes,
 	.destroy = omap_connector_destroy,
+	.atomic_duplicate_state = drm_atomic_helper_connector_duplicate_state,
+	.atomic_destroy_state = drm_atomic_helper_connector_destroy_state,
 };
 
 static const struct drm_connector_helper_funcs omap_connector_helper_funcs = {
 	.get_modes = omap_connector_get_modes,
 	.mode_valid = omap_connector_mode_valid,
-	.best_encoder = omap_connector_attached_encoder,
 };
 
 /* initialize connector */
@@ -288,7 +287,6 @@ struct drm_connector *omap_connector_init(struct drm_device *dev,
 		goto fail;
 
 	omap_connector->dssdev = dssdev;
-	omap_connector->encoder = encoder;
 
 	connector = &omap_connector->base;
 

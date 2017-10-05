@@ -22,7 +22,7 @@
 static unsigned int rpmsg_pingpong;
 static int rx_count;
 
-static void rpmsg_pingpong_cb(struct rpmsg_channel *rpdev, void *data, int len,
+static int rpmsg_pingpong_cb(struct rpmsg_device *rpdev, void *data, int len,
 						void *priv, u32 src)
 {
 	int err;
@@ -36,16 +36,18 @@ static void rpmsg_pingpong_cb(struct rpmsg_channel *rpdev, void *data, int len,
 	/* pingpongs should not live forever */
 	if (rx_count >= MSG_LIMIT) {
 		dev_info(&rpdev->dev, "goodbye!\n");
-		return;
+		return 0;
 	}
 	rpmsg_pingpong++;
-	err = rpmsg_sendto(rpdev, (void *)(&rpmsg_pingpong), 4, src);
+	err = rpmsg_sendto(rpdev->ept, (void *)(&rpmsg_pingpong), 4, src);
 
 	if (err)
 		dev_err(&rpdev->dev, "rpmsg_send failed: %d\n", err);
+
+	return err;
 }
 
-static int rpmsg_pingpong_probe(struct rpmsg_channel *rpdev)
+static int rpmsg_pingpong_probe(struct rpmsg_device *rpdev)
 {
 	int err;
 
@@ -56,7 +58,7 @@ static int rpmsg_pingpong_probe(struct rpmsg_channel *rpdev)
 	 * send a message to our remote processor, and tell remote
 	 * processor about this channel
 	 */
-	err = rpmsg_send(rpdev, MSG, strlen(MSG));
+	err = rpmsg_send(rpdev->ept, MSG, strlen(MSG));
 	if (err) {
 		dev_err(&rpdev->dev, "rpmsg_send failed: %d\n", err);
 		return err;
@@ -64,7 +66,7 @@ static int rpmsg_pingpong_probe(struct rpmsg_channel *rpdev)
 
 	rpmsg_pingpong = 0;
 	rx_count = 0;
-	err = rpmsg_sendto(rpdev, (void *)(&rpmsg_pingpong), 4, rpdev->dst);
+	err = rpmsg_sendto(rpdev->ept, (void *)(&rpmsg_pingpong), 4, rpdev->dst);
 	if (err) {
 		dev_err(&rpdev->dev, "rpmsg_send failed: %d\n", err);
 		return err;
@@ -73,7 +75,7 @@ static int rpmsg_pingpong_probe(struct rpmsg_channel *rpdev)
 	return 0;
 }
 
-static void rpmsg_pingpong_remove(struct rpmsg_channel *rpdev)
+static void rpmsg_pingpong_remove(struct rpmsg_device *rpdev)
 {
 	dev_info(&rpdev->dev, "rpmsg pingpong driver is removed\n");
 }

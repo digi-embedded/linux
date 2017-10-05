@@ -55,7 +55,7 @@ int opal_get_sensor_data(u32 sensor_hndl, u32 *sensor_data)
 			goto out_token;
 		}
 
-		ret = opal_error_code(be64_to_cpu(msg.params[1]));
+		ret = opal_error_code(opal_get_async_rc(msg));
 		*sensor_data = be32_to_cpu(data);
 		break;
 
@@ -77,7 +77,7 @@ out:
 }
 EXPORT_SYMBOL_GPL(opal_get_sensor_data);
 
-static __init int opal_sensor_init(void)
+int __init opal_sensor_init(void)
 {
 	struct platform_device *pdev;
 	struct device_node *sensor;
@@ -93,4 +93,3 @@ static __init int opal_sensor_init(void)
 
 	return PTR_ERR_OR_ZERO(pdev);
 }
-machine_subsys_initcall(powernv, opal_sensor_init);

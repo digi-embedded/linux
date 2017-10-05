@@ -62,7 +62,7 @@ static irqreturn_t snvs_secvio_interrupt(int irq, void *snvsdev)
 	}
 
 	/* Now ACK cause */
-	setbits32(&svpriv->svregs->hp.secvio_status, svpriv->irqcause);
+	clrsetbits_32(&svpriv->svregs->hp.secvio_status, 0, svpriv->irqcause);
 
 	/* And run deferred service */
 	preempt_disable();
@@ -93,7 +93,7 @@ static void snvs_secvio_dispatch(unsigned long indev)
 		};
 
 	/* Re-enable now-serviced interrupts */
-	setbits32(&svpriv->svregs->hp.secvio_intcfg, svpriv->irqcause);
+	clrsetbits_32(&svpriv->svregs->hp.secvio_intcfg, 0, svpriv->irqcause);
 }
 
 /*

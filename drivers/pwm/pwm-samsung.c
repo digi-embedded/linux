@@ -193,9 +193,18 @@ static unsigned long pwm_samsung_calc_tin(struct samsung_pwm_chip *chip,
 	 * divider settings and choose the lowest divisor that can generate
 	 * frequencies lower than requested.
 	 */
-	for (div = variant->div_base; div < 4; ++div)
-		if ((rate >> (variant->bits + div)) < freq)
-			break;
+	if (variant->bits < 32) {
+		/* Only for s3c24xx */
+		for (div = variant->div_base; div < 4; ++div)
+			if ((rate >> (variant->bits + div)) < freq)
+				break;
+	} else {
+		/*
+		 * Other variants have enough counter bits to generate any
+		 * requested rate, so no need to check higher divisors.
+		 */
+		div = variant->div_base;
+	}
 
 	pwm_samsung_set_divisor(chip, chan, BIT(div));
 
@@ -456,6 +465,7 @@ static const struct of_device_id samsung_pwm_matches[] = {
 	{ .compatible = "samsung,exynos4210-pwm", .data = &s5p64x0_variant },
 	{},
 };
+MODULE_DEVICE_TABLE(of, samsung_pwm_matches);
 
 static int pwm_samsung_parse_dt(struct samsung_pwm_chip *chip)
 {

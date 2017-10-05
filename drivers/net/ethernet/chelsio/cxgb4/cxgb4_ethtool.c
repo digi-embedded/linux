@@ -35,88 +35,155 @@ static void set_msglevel(struct net_device *dev, u32 val)
 }
 
 static const char stats_strings[][ETH_GSTRING_LEN] = {
-	"TxOctetsOK         ",
-	"TxFramesOK         ",
-	"TxBroadcastFrames  ",
-	"TxMulticastFrames  ",
-	"TxUnicastFrames    ",
-	"TxErrorFrames      ",
+	"tx_octets_ok           ",
+	"tx_frames_ok           ",
+	"tx_broadcast_frames    ",
+	"tx_multicast_frames    ",
+	"tx_unicast_frames      ",
+	"tx_error_frames        ",
 
-	"TxFrames64         ",
-	"TxFrames65To127    ",
-	"TxFrames128To255   ",
-	"TxFrames256To511   ",
-	"TxFrames512To1023  ",
-	"TxFrames1024To1518 ",
-	"TxFrames1519ToMax  ",
+	"tx_frames_64           ",
+	"tx_frames_65_to_127    ",
+	"tx_frames_128_to_255   ",
+	"tx_frames_256_to_511   ",
+	"tx_frames_512_to_1023  ",
+	"tx_frames_1024_to_1518 ",
+	"tx_frames_1519_to_max  ",
 
-	"TxFramesDropped    ",
-	"TxPauseFrames      ",
-	"TxPPP0Frames       ",
-	"TxPPP1Frames       ",
-	"TxPPP2Frames       ",
-	"TxPPP3Frames       ",
-	"TxPPP4Frames       ",
-	"TxPPP5Frames       ",
-	"TxPPP6Frames       ",
-	"TxPPP7Frames       ",
+	"tx_frames_dropped      ",
+	"tx_pause_frames        ",
+	"tx_ppp0_frames         ",
+	"tx_ppp1_frames         ",
+	"tx_ppp2_frames         ",
+	"tx_ppp3_frames         ",
+	"tx_ppp4_frames         ",
+	"tx_ppp5_frames         ",
+	"tx_ppp6_frames         ",
+	"tx_ppp7_frames         ",
 
-	"RxOctetsOK         ",
-	"RxFramesOK         ",
-	"RxBroadcastFrames  ",
-	"RxMulticastFrames  ",
-	"RxUnicastFrames    ",
+	"rx_octets_ok           ",
+	"rx_frames_ok           ",
+	"rx_broadcast_frames    ",
+	"rx_multicast_frames    ",
+	"rx_unicast_frames      ",
 
-	"RxFramesTooLong    ",
-	"RxJabberErrors     ",
-	"RxFCSErrors        ",
-	"RxLengthErrors     ",
-	"RxSymbolErrors     ",
-	"RxRuntFrames       ",
+	"rx_frames_too_long     ",
+	"rx_jabber_errors       ",
+	"rx_fcs_errors          ",
+	"rx_length_errors       ",
+	"rx_symbol_errors       ",
+	"rx_runt_frames         ",
 
-	"RxFrames64         ",
-	"RxFrames65To127    ",
-	"RxFrames128To255   ",
-	"RxFrames256To511   ",
-	"RxFrames512To1023  ",
-	"RxFrames1024To1518 ",
-	"RxFrames1519ToMax  ",
+	"rx_frames_64           ",
+	"rx_frames_65_to_127    ",
+	"rx_frames_128_to_255   ",
+	"rx_frames_256_to_511   ",
+	"rx_frames_512_to_1023  ",
+	"rx_frames_1024_to_1518 ",
+	"rx_frames_1519_to_max  ",
 
-	"RxPauseFrames      ",
-	"RxPPP0Frames       ",
-	"RxPPP1Frames       ",
-	"RxPPP2Frames       ",
-	"RxPPP3Frames       ",
-	"RxPPP4Frames       ",
-	"RxPPP5Frames       ",
-	"RxPPP6Frames       ",
-	"RxPPP7Frames       ",
+	"rx_pause_frames        ",
+	"rx_ppp0_frames         ",
+	"rx_ppp1_frames         ",
+	"rx_ppp2_frames         ",
+	"rx_ppp3_frames         ",
+	"rx_ppp4_frames         ",
+	"rx_ppp5_frames         ",
+	"rx_ppp6_frames         ",
+	"rx_ppp7_frames         ",
 
-	"RxBG0FramesDropped ",
-	"RxBG1FramesDropped ",
-	"RxBG2FramesDropped ",
-	"RxBG3FramesDropped ",
-	"RxBG0FramesTrunc   ",
-	"RxBG1FramesTrunc   ",
-	"RxBG2FramesTrunc   ",
-	"RxBG3FramesTrunc   ",
+	"rx_bg0_frames_dropped  ",
+	"rx_bg1_frames_dropped  ",
+	"rx_bg2_frames_dropped  ",
+	"rx_bg3_frames_dropped  ",
+	"rx_bg0_frames_trunc    ",
+	"rx_bg1_frames_trunc    ",
+	"rx_bg2_frames_trunc    ",
+	"rx_bg3_frames_trunc    ",
 
-	"TSO                ",
-	"TxCsumOffload      ",
-	"RxCsumGood         ",
-	"VLANextractions    ",
-	"VLANinsertions     ",
-	"GROpackets         ",
-	"GROmerged          ",
-	"WriteCoalSuccess   ",
-	"WriteCoalFail      ",
+	"tso                    ",
+	"tx_csum_offload        ",
+	"rx_csum_good           ",
+	"vlan_extractions       ",
+	"vlan_insertions        ",
+	"gro_packets            ",
+	"gro_merged             ",
+};
+
+static char adapter_stats_strings[][ETH_GSTRING_LEN] = {
+	"db_drop                ",
+	"db_full                ",
+	"db_empty               ",
+	"tcp_ipv4_out_rsts      ",
+	"tcp_ipv4_in_segs       ",
+	"tcp_ipv4_out_segs      ",
+	"tcp_ipv4_retrans_segs  ",
+	"tcp_ipv6_out_rsts      ",
+	"tcp_ipv6_in_segs       ",
+	"tcp_ipv6_out_segs      ",
+	"tcp_ipv6_retrans_segs  ",
+	"usm_ddp_frames         ",
+	"usm_ddp_octets         ",
+	"usm_ddp_drops          ",
+	"rdma_no_rqe_mod_defer  ",
+	"rdma_no_rqe_pkt_defer  ",
+	"tp_err_ofld_no_neigh   ",
+	"tp_err_ofld_cong_defer ",
+	"write_coal_success     ",
+	"write_coal_fail        ",
+};
+
+static char channel_stats_strings[][ETH_GSTRING_LEN] = {
+	"--------Channel--------- ",
+	"tp_cpl_requests        ",
+	"tp_cpl_responses       ",
+	"tp_mac_in_errs         ",
+	"tp_hdr_in_errs         ",
+	"tp_tcp_in_errs         ",
+	"tp_tcp6_in_errs        ",
+	"tp_tnl_cong_drops      ",
+	"tp_tnl_tx_drops        ",
+	"tp_ofld_vlan_drops     ",
+	"tp_ofld_chan_drops     ",
+	"fcoe_octets_ddp        ",
+	"fcoe_frames_ddp        ",
+	"fcoe_frames_drop       ",
+};
+
+static char loopback_stats_strings[][ETH_GSTRING_LEN] = {
+	"-------Loopback----------- ",
+	"octets_ok              ",
+	"frames_ok              ",
+	"bcast_frames           ",
+	"mcast_frames           ",
+	"ucast_frames           ",
+	"error_frames           ",
+	"frames_64              ",
+	"frames_65_to_127       ",
+	"frames_128_to_255      ",
+	"frames_256_to_511      ",
+	"frames_512_to_1023     ",
+	"frames_1024_to_1518    ",
+	"frames_1519_to_max     ",
+	"frames_dropped         ",
+	"bg0_frames_dropped     ",
+	"bg1_frames_dropped     ",
+	"bg2_frames_dropped     ",
+	"bg3_frames_dropped     ",
+	"bg0_frames_trunc       ",
+	"bg1_frames_trunc       ",
+	"bg2_frames_trunc       ",
+	"bg3_frames_trunc       ",
 };
 
 static int get_sset_count(struct net_device *dev, int sset)
 {
 	switch (sset) {
 	case ETH_SS_STATS:
-		return ARRAY_SIZE(stats_strings);
+		return ARRAY_SIZE(stats_strings) +
+		       ARRAY_SIZE(adapter_stats_strings) +
+		       ARRAY_SIZE(channel_stats_strings) +
+		       ARRAY_SIZE(loopback_stats_strings);
 	default:
 		return -EOPNOTSUPP;
 	}
@@ -144,8 +211,11 @@ static void get_drvinfo(struct net_device *dev, struct ethtool_drvinfo *info)
 		sizeof(info->version));
 	strlcpy(info->bus_info, pci_name(adapter->pdev),
 		sizeof(info->bus_info));
+	info->regdump_len = get_regs_len(dev);
 
-	if (adapter->params.fw_vers)
+	if (!adapter->params.fw_vers)
+		strcpy(info->fw_version, "N/A");
+	else
 		snprintf(info->fw_version, sizeof(info->fw_version),
 			 "%u.%u.%u.%u, TP %u.%u.%u.%u",
 			 FW_HDR_FW_VER_MAJOR_G(adapter->params.fw_vers),
@@ -168,8 +238,18 @@ static void get_drvinfo(struct net_device *dev, struct ethtool_drvinfo *info)
 
 static void get_strings(struct net_device *dev, u32 stringset, u8 *data)
 {
-	if (stringset == ETH_SS_STATS)
+	if (stringset == ETH_SS_STATS) {
 		memcpy(data, stats_strings, sizeof(stats_strings));
+		data += sizeof(stats_strings);
+		memcpy(data, adapter_stats_strings,
+		       sizeof(adapter_stats_strings));
+		data += sizeof(adapter_stats_strings);
+		memcpy(data, channel_stats_strings,
+		       sizeof(channel_stats_strings));
+		data += sizeof(channel_stats_strings);
+		memcpy(data, loopback_stats_strings,
+		       sizeof(loopback_stats_strings));
+	}
 }
 
 /* port stats maintained per queue of the port. They should be in the same
@@ -183,6 +263,45 @@ struct queue_port_stats {
 	u64 vlan_ins;
 	u64 gro_pkts;
 	u64 gro_merged;
+};
+
+struct adapter_stats {
+	u64 db_drop;
+	u64 db_full;
+	u64 db_empty;
+	u64 tcp_v4_out_rsts;
+	u64 tcp_v4_in_segs;
+	u64 tcp_v4_out_segs;
+	u64 tcp_v4_retrans_segs;
+	u64 tcp_v6_out_rsts;
+	u64 tcp_v6_in_segs;
+	u64 tcp_v6_out_segs;
+	u64 tcp_v6_retrans_segs;
+	u64 frames;
+	u64 octets;
+	u64 drops;
+	u64 rqe_dfr_mod;
+	u64 rqe_dfr_pkt;
+	u64 ofld_no_neigh;
+	u64 ofld_cong_defer;
+	u64 wc_success;
+	u64 wc_fail;
+};
+
+struct channel_stats {
+	u64 cpl_req;
+	u64 cpl_rsp;
+	u64 mac_in_errs;
+	u64 hdr_in_errs;
+	u64 tcp_in_errs;
+	u64 tcp6_in_errs;
+	u64 tnl_cong_drops;
+	u64 tnl_tx_drops;
+	u64 ofld_vlan_drops;
+	u64 ofld_chan_drops;
+	u64 octets_ddp;
+	u64 frames_ddp;
+	u64 frames_drop;
 };
 
 static void collect_sge_port_stats(const struct adapter *adap,
@@ -205,30 +324,121 @@ static void collect_sge_port_stats(const struct adapter *adap,
 	}
 }
 
+static void collect_adapter_stats(struct adapter *adap, struct adapter_stats *s)
+{
+	struct tp_tcp_stats v4, v6;
+	struct tp_rdma_stats rdma_stats;
+	struct tp_err_stats err_stats;
+	struct tp_usm_stats usm_stats;
+	u64 val1, val2;
+
+	memset(s, 0, sizeof(*s));
+
+	spin_lock(&adap->stats_lock);
+	t4_tp_get_tcp_stats(adap, &v4, &v6);
+	t4_tp_get_rdma_stats(adap, &rdma_stats);
+	t4_get_usm_stats(adap, &usm_stats);
+	t4_tp_get_err_stats(adap, &err_stats);
+	spin_unlock(&adap->stats_lock);
+
+	s->db_drop = adap->db_stats.db_drop;
+	s->db_full = adap->db_stats.db_full;
+	s->db_empty = adap->db_stats.db_empty;
+
+	s->tcp_v4_out_rsts = v4.tcp_out_rsts;
+	s->tcp_v4_in_segs = v4.tcp_in_segs;
+	s->tcp_v4_out_segs = v4.tcp_out_segs;
+	s->tcp_v4_retrans_segs = v4.tcp_retrans_segs;
+	s->tcp_v6_out_rsts = v6.tcp_out_rsts;
+	s->tcp_v6_in_segs = v6.tcp_in_segs;
+	s->tcp_v6_out_segs = v6.tcp_out_segs;
+	s->tcp_v6_retrans_segs = v6.tcp_retrans_segs;
+
+	if (is_offload(adap)) {
+		s->frames = usm_stats.frames;
+		s->octets = usm_stats.octets;
+		s->drops = usm_stats.drops;
+		s->rqe_dfr_mod = rdma_stats.rqe_dfr_mod;
+		s->rqe_dfr_pkt = rdma_stats.rqe_dfr_pkt;
+	}
+
+	s->ofld_no_neigh = err_stats.ofld_no_neigh;
+	s->ofld_cong_defer = err_stats.ofld_cong_defer;
+
+	if (!is_t4(adap->params.chip)) {
+		int v;
+
+		v = t4_read_reg(adap, SGE_STAT_CFG_A);
+		if (STATSOURCE_T5_G(v) == 7) {
+			val2 = t4_read_reg(adap, SGE_STAT_MATCH_A);
+			val1 = t4_read_reg(adap, SGE_STAT_TOTAL_A);
+			s->wc_success = val1 - val2;
+			s->wc_fail = val2;
+		}
+	}
+}
+
+static void collect_channel_stats(struct adapter *adap, struct channel_stats *s,
+				  u8 i)
+{
+	struct tp_cpl_stats cpl_stats;
+	struct tp_err_stats err_stats;
+	struct tp_fcoe_stats fcoe_stats;
+
+	memset(s, 0, sizeof(*s));
+
+	spin_lock(&adap->stats_lock);
+	t4_tp_get_cpl_stats(adap, &cpl_stats);
+	t4_tp_get_err_stats(adap, &err_stats);
+	t4_get_fcoe_stats(adap, i, &fcoe_stats);
+	spin_unlock(&adap->stats_lock);
+
+	s->cpl_req = cpl_stats.req[i];
+	s->cpl_rsp = cpl_stats.rsp[i];
+	s->mac_in_errs = err_stats.mac_in_errs[i];
+	s->hdr_in_errs = err_stats.hdr_in_errs[i];
+	s->tcp_in_errs = err_stats.tcp_in_errs[i];
+	s->tcp6_in_errs = err_stats.tcp6_in_errs[i];
+	s->tnl_cong_drops = err_stats.tnl_cong_drops[i];
+	s->tnl_tx_drops = err_stats.tnl_tx_drops[i];
+	s->ofld_vlan_drops = err_stats.ofld_vlan_drops[i];
+	s->ofld_chan_drops = err_stats.ofld_chan_drops[i];
+	s->octets_ddp = fcoe_stats.octets_ddp;
+	s->frames_ddp = fcoe_stats.frames_ddp;
+	s->frames_drop = fcoe_stats.frames_drop;
+}
+
 static void get_stats(struct net_device *dev, struct ethtool_stats *stats,
 		      u64 *data)
 {
 	struct port_info *pi = netdev_priv(dev);
 	struct adapter *adapter = pi->adapter;
-	u32 val1, val2;
+	struct lb_port_stats s;
+	int i;
+	u64 *p0;
 
-	t4_get_port_stats(adapter, pi->tx_chan, (struct port_stats *)data);
+	t4_get_port_stats_offset(adapter, pi->tx_chan,
+				 (struct port_stats *)data,
+				 &pi->stats_base);
 
 	data += sizeof(struct port_stats) / sizeof(u64);
 	collect_sge_port_stats(adapter, pi, (struct queue_port_stats *)data);
 	data += sizeof(struct queue_port_stats) / sizeof(u64);
-	if (!is_t4(adapter->params.chip)) {
-		t4_write_reg(adapter, SGE_STAT_CFG_A, STATSOURCE_T5_V(7));
-		val1 = t4_read_reg(adapter, SGE_STAT_TOTAL_A);
-		val2 = t4_read_reg(adapter, SGE_STAT_MATCH_A);
-		*data = val1 - val2;
-		data++;
-		*data = val2;
-		data++;
-	} else {
-		memset(data, 0, 2 * sizeof(u64));
-		*data += 2;
-	}
+	collect_adapter_stats(adapter, (struct adapter_stats *)data);
+	data += sizeof(struct adapter_stats) / sizeof(u64);
+
+	*data++ = (u64)pi->port_id;
+	collect_channel_stats(adapter, (struct channel_stats *)data,
+			      pi->port_id);
+	data += sizeof(struct channel_stats) / sizeof(u64);
+
+	*data++ = (u64)pi->port_id;
+	memset(&s, 0, sizeof(s));
+	t4_get_lb_stats(adapter, pi->port_id, &s);
+
+	p0 = &s.octets;
+	for (i = 0; i < ARRAY_SIZE(loopback_stats_strings) - 1; i++)
+		*data++ = (unsigned long long)*p0++;
 }
 
 static void get_regs(struct net_device *dev, struct ethtool_regs *regs,
@@ -250,7 +460,7 @@ static int restart_autoneg(struct net_device *dev)
 		return -EAGAIN;
 	if (p->link_cfg.autoneg != AUTONEG_ENABLE)
 		return -EINVAL;
-	t4_restart_aneg(p->adapter, p->adapter->fn, p->tx_chan);
+	t4_restart_aneg(p->adapter, p->adapter->pf, p->tx_chan);
 	return 0;
 }
 
@@ -267,126 +477,53 @@ static int identify_port(struct net_device *dev,
 	else
 		return -EINVAL;
 
-	return t4_identify_port(adap, adap->fn, netdev2pinfo(dev)->viid, val);
+	return t4_identify_port(adap, adap->pf, netdev2pinfo(dev)->viid, val);
 }
 
-static unsigned int from_fw_linkcaps(enum fw_port_type type, unsigned int caps)
+/**
+ *	from_fw_port_mod_type - translate Firmware Port/Module type to Ethtool
+ *	@port_type: Firmware Port Type
+ *	@mod_type: Firmware Module Type
+ *
+ *	Translate Firmware Port/Module type to Ethtool Port Type.
+ */
+static int from_fw_port_mod_type(enum fw_port_type port_type,
+				 enum fw_port_module_type mod_type)
 {
-	unsigned int v = 0;
-
-	if (type == FW_PORT_TYPE_BT_SGMII || type == FW_PORT_TYPE_BT_XFI ||
-	    type == FW_PORT_TYPE_BT_XAUI) {
-		v |= SUPPORTED_TP;
-		if (caps & FW_PORT_CAP_SPEED_100M)
-			v |= SUPPORTED_100baseT_Full;
-		if (caps & FW_PORT_CAP_SPEED_1G)
-			v |= SUPPORTED_1000baseT_Full;
-		if (caps & FW_PORT_CAP_SPEED_10G)
-			v |= SUPPORTED_10000baseT_Full;
-	} else if (type == FW_PORT_TYPE_KX4 || type == FW_PORT_TYPE_KX) {
-		v |= SUPPORTED_Backplane;
-		if (caps & FW_PORT_CAP_SPEED_1G)
-			v |= SUPPORTED_1000baseKX_Full;
-		if (caps & FW_PORT_CAP_SPEED_10G)
-			v |= SUPPORTED_10000baseKX4_Full;
-	} else if (type == FW_PORT_TYPE_KR) {
-		v |= SUPPORTED_Backplane | SUPPORTED_10000baseKR_Full;
-	} else if (type == FW_PORT_TYPE_BP_AP) {
-		v |= SUPPORTED_Backplane | SUPPORTED_10000baseR_FEC |
-		     SUPPORTED_10000baseKR_Full | SUPPORTED_1000baseKX_Full;
-	} else if (type == FW_PORT_TYPE_BP4_AP) {
-		v |= SUPPORTED_Backplane | SUPPORTED_10000baseR_FEC |
-		     SUPPORTED_10000baseKR_Full | SUPPORTED_1000baseKX_Full |
-		     SUPPORTED_10000baseKX4_Full;
-	} else if (type == FW_PORT_TYPE_FIBER_XFI ||
-		   type == FW_PORT_TYPE_FIBER_XAUI ||
-		   type == FW_PORT_TYPE_SFP ||
-		   type == FW_PORT_TYPE_QSFP_10G ||
-		   type == FW_PORT_TYPE_QSA) {
-		v |= SUPPORTED_FIBRE;
-		if (caps & FW_PORT_CAP_SPEED_1G)
-			v |= SUPPORTED_1000baseT_Full;
-		if (caps & FW_PORT_CAP_SPEED_10G)
-			v |= SUPPORTED_10000baseT_Full;
-	} else if (type == FW_PORT_TYPE_BP40_BA ||
-		   type == FW_PORT_TYPE_QSFP) {
-		v |= SUPPORTED_40000baseSR4_Full;
-		v |= SUPPORTED_FIBRE;
-	}
-
-	if (caps & FW_PORT_CAP_ANEG)
-		v |= SUPPORTED_Autoneg;
-	return v;
-}
-
-static unsigned int to_fw_linkcaps(unsigned int caps)
-{
-	unsigned int v = 0;
-
-	if (caps & ADVERTISED_100baseT_Full)
-		v |= FW_PORT_CAP_SPEED_100M;
-	if (caps & ADVERTISED_1000baseT_Full)
-		v |= FW_PORT_CAP_SPEED_1G;
-	if (caps & ADVERTISED_10000baseT_Full)
-		v |= FW_PORT_CAP_SPEED_10G;
-	if (caps & ADVERTISED_40000baseSR4_Full)
-		v |= FW_PORT_CAP_SPEED_40G;
-	return v;
-}
-
-static int get_settings(struct net_device *dev, struct ethtool_cmd *cmd)
-{
-	const struct port_info *p = netdev_priv(dev);
-
-	if (p->port_type == FW_PORT_TYPE_BT_SGMII ||
-	    p->port_type == FW_PORT_TYPE_BT_XFI ||
-	    p->port_type == FW_PORT_TYPE_BT_XAUI) {
-		cmd->port = PORT_TP;
-	} else if (p->port_type == FW_PORT_TYPE_FIBER_XFI ||
-		   p->port_type == FW_PORT_TYPE_FIBER_XAUI) {
-		cmd->port = PORT_FIBRE;
-	} else if (p->port_type == FW_PORT_TYPE_SFP ||
-		   p->port_type == FW_PORT_TYPE_QSFP_10G ||
-		   p->port_type == FW_PORT_TYPE_QSA ||
-		   p->port_type == FW_PORT_TYPE_QSFP) {
-		if (p->mod_type == FW_PORT_MOD_TYPE_LR ||
-		    p->mod_type == FW_PORT_MOD_TYPE_SR ||
-		    p->mod_type == FW_PORT_MOD_TYPE_ER ||
-		    p->mod_type == FW_PORT_MOD_TYPE_LRM)
-			cmd->port = PORT_FIBRE;
-		else if (p->mod_type == FW_PORT_MOD_TYPE_TWINAX_PASSIVE ||
-			 p->mod_type == FW_PORT_MOD_TYPE_TWINAX_ACTIVE)
-			cmd->port = PORT_DA;
+	if (port_type == FW_PORT_TYPE_BT_SGMII ||
+	    port_type == FW_PORT_TYPE_BT_XFI ||
+	    port_type == FW_PORT_TYPE_BT_XAUI) {
+		return PORT_TP;
+	} else if (port_type == FW_PORT_TYPE_FIBER_XFI ||
+		   port_type == FW_PORT_TYPE_FIBER_XAUI) {
+		return PORT_FIBRE;
+	} else if (port_type == FW_PORT_TYPE_SFP ||
+		   port_type == FW_PORT_TYPE_QSFP_10G ||
+		   port_type == FW_PORT_TYPE_QSA ||
+		   port_type == FW_PORT_TYPE_QSFP) {
+		if (mod_type == FW_PORT_MOD_TYPE_LR ||
+		    mod_type == FW_PORT_MOD_TYPE_SR ||
+		    mod_type == FW_PORT_MOD_TYPE_ER ||
+		    mod_type == FW_PORT_MOD_TYPE_LRM)
+			return PORT_FIBRE;
+		else if (mod_type == FW_PORT_MOD_TYPE_TWINAX_PASSIVE ||
+			 mod_type == FW_PORT_MOD_TYPE_TWINAX_ACTIVE)
+			return PORT_DA;
 		else
-			cmd->port = PORT_OTHER;
-	} else {
-		cmd->port = PORT_OTHER;
+			return PORT_OTHER;
 	}
 
-	if (p->mdio_addr >= 0) {
-		cmd->phy_address = p->mdio_addr;
-		cmd->transceiver = XCVR_EXTERNAL;
-		cmd->mdio_support = p->port_type == FW_PORT_TYPE_BT_SGMII ?
-			MDIO_SUPPORTS_C22 : MDIO_SUPPORTS_C45;
-	} else {
-		cmd->phy_address = 0;  /* not really, but no better option */
-		cmd->transceiver = XCVR_INTERNAL;
-		cmd->mdio_support = 0;
-	}
-
-	cmd->supported = from_fw_linkcaps(p->port_type, p->link_cfg.supported);
-	cmd->advertising = from_fw_linkcaps(p->port_type,
-					    p->link_cfg.advertising);
-	ethtool_cmd_speed_set(cmd,
-			      netif_carrier_ok(dev) ? p->link_cfg.speed : 0);
-	cmd->duplex = DUPLEX_FULL;
-	cmd->autoneg = p->link_cfg.autoneg;
-	cmd->maxtxpkt = 0;
-	cmd->maxrxpkt = 0;
-	return 0;
+	return PORT_OTHER;
 }
 
-static unsigned int speed_to_caps(int speed)
+/**
+ *	speed_to_fw_caps - translate Port Speed to Firmware Port Capabilities
+ *	@speed: speed in Kb/s
+ *
+ *	Translates a specific Port Speed into a Firmware Port Capabilities
+ *	value.
+ */
+static unsigned int speed_to_fw_caps(int speed)
 {
 	if (speed == 100)
 		return FW_PORT_CAP_SPEED_100M;
@@ -394,54 +531,246 @@ static unsigned int speed_to_caps(int speed)
 		return FW_PORT_CAP_SPEED_1G;
 	if (speed == 10000)
 		return FW_PORT_CAP_SPEED_10G;
+	if (speed == 25000)
+		return FW_PORT_CAP_SPEED_25G;
 	if (speed == 40000)
 		return FW_PORT_CAP_SPEED_40G;
+	if (speed == 100000)
+		return FW_PORT_CAP_SPEED_100G;
 	return 0;
 }
 
-static int set_settings(struct net_device *dev, struct ethtool_cmd *cmd)
+/**
+ *	fw_caps_to_lmm - translate Firmware to ethtool Link Mode Mask
+ *	@port_type: Firmware Port Type
+ *	@fw_caps: Firmware Port Capabilities
+ *	@link_mode_mask: ethtool Link Mode Mask
+ *
+ *	Translate a Firmware Port Capabilities specification to an ethtool
+ *	Link Mode Mask.
+ */
+static void fw_caps_to_lmm(enum fw_port_type port_type,
+			   unsigned int fw_caps,
+			   unsigned long *link_mode_mask)
 {
-	unsigned int cap;
-	struct port_info *p = netdev_priv(dev);
-	struct link_config *lc = &p->link_cfg;
-	u32 speed = ethtool_cmd_speed(cmd);
+	#define SET_LMM(__lmm_name) __set_bit(ETHTOOL_LINK_MODE_ ## __lmm_name \
+					## _BIT, link_mode_mask)
 
-	if (cmd->duplex != DUPLEX_FULL)     /* only full-duplex supported */
+	#define FW_CAPS_TO_LMM(__fw_name, __lmm_name) \
+		do { \
+			if (fw_caps & FW_PORT_CAP_ ## __fw_name) \
+				SET_LMM(__lmm_name); \
+		} while (0)
+
+	switch (port_type) {
+	case FW_PORT_TYPE_BT_SGMII:
+	case FW_PORT_TYPE_BT_XFI:
+	case FW_PORT_TYPE_BT_XAUI:
+		SET_LMM(TP);
+		FW_CAPS_TO_LMM(SPEED_100M, 100baseT_Full);
+		FW_CAPS_TO_LMM(SPEED_1G, 1000baseT_Full);
+		FW_CAPS_TO_LMM(SPEED_10G, 10000baseT_Full);
+		break;
+
+	case FW_PORT_TYPE_KX4:
+	case FW_PORT_TYPE_KX:
+		SET_LMM(Backplane);
+		FW_CAPS_TO_LMM(SPEED_1G, 1000baseKX_Full);
+		FW_CAPS_TO_LMM(SPEED_10G, 10000baseKX4_Full);
+		break;
+
+	case FW_PORT_TYPE_KR:
+		SET_LMM(Backplane);
+		SET_LMM(10000baseKR_Full);
+		break;
+
+	case FW_PORT_TYPE_BP_AP:
+		SET_LMM(Backplane);
+		SET_LMM(10000baseR_FEC);
+		SET_LMM(10000baseKR_Full);
+		SET_LMM(1000baseKX_Full);
+		break;
+
+	case FW_PORT_TYPE_BP4_AP:
+		SET_LMM(Backplane);
+		SET_LMM(10000baseR_FEC);
+		SET_LMM(10000baseKR_Full);
+		SET_LMM(1000baseKX_Full);
+		SET_LMM(10000baseKX4_Full);
+		break;
+
+	case FW_PORT_TYPE_FIBER_XFI:
+	case FW_PORT_TYPE_FIBER_XAUI:
+	case FW_PORT_TYPE_SFP:
+	case FW_PORT_TYPE_QSFP_10G:
+	case FW_PORT_TYPE_QSA:
+		SET_LMM(FIBRE);
+		FW_CAPS_TO_LMM(SPEED_1G, 1000baseT_Full);
+		FW_CAPS_TO_LMM(SPEED_10G, 10000baseT_Full);
+		break;
+
+	case FW_PORT_TYPE_BP40_BA:
+	case FW_PORT_TYPE_QSFP:
+		SET_LMM(FIBRE);
+		SET_LMM(40000baseSR4_Full);
+		break;
+
+	case FW_PORT_TYPE_CR_QSFP:
+	case FW_PORT_TYPE_SFP28:
+		SET_LMM(FIBRE);
+		SET_LMM(25000baseCR_Full);
+		break;
+
+	case FW_PORT_TYPE_KR4_100G:
+	case FW_PORT_TYPE_CR4_QSFP:
+		SET_LMM(FIBRE);
+		SET_LMM(100000baseCR4_Full);
+		break;
+
+	default:
+		break;
+	}
+
+	FW_CAPS_TO_LMM(ANEG, Autoneg);
+	FW_CAPS_TO_LMM(802_3_PAUSE, Pause);
+	FW_CAPS_TO_LMM(802_3_ASM_DIR, Asym_Pause);
+
+	#undef FW_CAPS_TO_LMM
+	#undef SET_LMM
+}
+
+/**
+ *	lmm_to_fw_caps - translate ethtool Link Mode Mask to Firmware
+ *	capabilities
+ *
+ *	@link_mode_mask: ethtool Link Mode Mask
+ *
+ *	Translate ethtool Link Mode Mask into a Firmware Port capabilities
+ *	value.
+ */
+static unsigned int lmm_to_fw_caps(const unsigned long *link_mode_mask)
+{
+	unsigned int fw_caps = 0;
+
+	#define LMM_TO_FW_CAPS(__lmm_name, __fw_name) \
+		do { \
+			if (test_bit(ETHTOOL_LINK_MODE_ ## __lmm_name ## _BIT, \
+				     link_mode_mask)) \
+				fw_caps |= FW_PORT_CAP_ ## __fw_name; \
+		} while (0)
+
+	LMM_TO_FW_CAPS(100baseT_Full, SPEED_100M);
+	LMM_TO_FW_CAPS(1000baseT_Full, SPEED_1G);
+	LMM_TO_FW_CAPS(10000baseT_Full, SPEED_10G);
+	LMM_TO_FW_CAPS(40000baseSR4_Full, SPEED_40G);
+	LMM_TO_FW_CAPS(25000baseCR_Full, SPEED_25G);
+	LMM_TO_FW_CAPS(100000baseCR4_Full, SPEED_100G);
+
+	#undef LMM_TO_FW_CAPS
+
+	return fw_caps;
+}
+
+static int get_link_ksettings(struct net_device *dev,
+			      struct ethtool_link_ksettings *link_ksettings)
+{
+	const struct port_info *pi = netdev_priv(dev);
+	struct ethtool_link_settings *base = &link_ksettings->base;
+
+	ethtool_link_ksettings_zero_link_mode(link_ksettings, supported);
+	ethtool_link_ksettings_zero_link_mode(link_ksettings, advertising);
+	ethtool_link_ksettings_zero_link_mode(link_ksettings, lp_advertising);
+
+	base->port = from_fw_port_mod_type(pi->port_type, pi->mod_type);
+
+	if (pi->mdio_addr >= 0) {
+		base->phy_address = pi->mdio_addr;
+		base->mdio_support = (pi->port_type == FW_PORT_TYPE_BT_SGMII
+				      ? ETH_MDIO_SUPPORTS_C22
+				      : ETH_MDIO_SUPPORTS_C45);
+	} else {
+		base->phy_address = 255;
+		base->mdio_support = 0;
+	}
+
+	fw_caps_to_lmm(pi->port_type, pi->link_cfg.supported,
+		       link_ksettings->link_modes.supported);
+	fw_caps_to_lmm(pi->port_type, pi->link_cfg.advertising,
+		       link_ksettings->link_modes.advertising);
+	fw_caps_to_lmm(pi->port_type, pi->link_cfg.lp_advertising,
+		       link_ksettings->link_modes.lp_advertising);
+
+	if (netif_carrier_ok(dev)) {
+		base->speed = pi->link_cfg.speed;
+		base->duplex = DUPLEX_FULL;
+	} else {
+		base->speed = SPEED_UNKNOWN;
+		base->duplex = DUPLEX_UNKNOWN;
+	}
+
+	base->autoneg = pi->link_cfg.autoneg;
+	if (pi->link_cfg.supported & FW_PORT_CAP_ANEG)
+		ethtool_link_ksettings_add_link_mode(link_ksettings,
+						     supported, Autoneg);
+	if (pi->link_cfg.autoneg)
+		ethtool_link_ksettings_add_link_mode(link_ksettings,
+						     advertising, Autoneg);
+
+	return 0;
+}
+
+static int set_link_ksettings(struct net_device *dev,
+			      const struct ethtool_link_ksettings
+						*link_ksettings)
+{
+	struct port_info *pi = netdev_priv(dev);
+	struct link_config *lc = &pi->link_cfg;
+	const struct ethtool_link_settings *base = &link_ksettings->base;
+	struct link_config old_lc;
+	unsigned int fw_caps;
+	int ret = 0;
+
+	/* only full-duplex supported */
+	if (base->duplex != DUPLEX_FULL)
 		return -EINVAL;
 
 	if (!(lc->supported & FW_PORT_CAP_ANEG)) {
 		/* PHY offers a single speed.  See if that's what's
 		 * being requested.
 		 */
-		if (cmd->autoneg == AUTONEG_DISABLE &&
-		    (lc->supported & speed_to_caps(speed)))
+		if (base->autoneg == AUTONEG_DISABLE &&
+		    (lc->supported & speed_to_fw_caps(base->speed)))
 			return 0;
 		return -EINVAL;
 	}
 
-	if (cmd->autoneg == AUTONEG_DISABLE) {
-		cap = speed_to_caps(speed);
+	old_lc = *lc;
+	if (base->autoneg == AUTONEG_DISABLE) {
+		fw_caps = speed_to_fw_caps(base->speed);
 
-		if (!(lc->supported & cap) ||
-		    (speed == 1000) ||
-		    (speed == 10000) ||
-		    (speed == 40000))
+		if (!(lc->supported & fw_caps))
 			return -EINVAL;
-		lc->requested_speed = cap;
+		lc->requested_speed = fw_caps;
 		lc->advertising = 0;
 	} else {
-		cap = to_fw_linkcaps(cmd->advertising);
-		if (!(lc->supported & cap))
+		fw_caps =
+			lmm_to_fw_caps(link_ksettings->link_modes.advertising);
+
+		if (!(lc->supported & fw_caps))
 			return -EINVAL;
 		lc->requested_speed = 0;
-		lc->advertising = cap | FW_PORT_CAP_ANEG;
+		lc->advertising = fw_caps | FW_PORT_CAP_ANEG;
 	}
-	lc->autoneg = cmd->autoneg;
+	lc->autoneg = base->autoneg;
 
-	if (netif_running(dev))
-		return t4_link_start(p->adapter, p->adapter->fn, p->tx_chan,
-				     lc);
-	return 0;
+	/* If the firmware rejects the Link Configuration request, back out
+	 * the changes and report the error.
+	 */
+	ret = t4_link_l1cfg(pi->adapter, pi->adapter->mbox, pi->tx_chan, lc);
+	if (ret)
+		*lc = old_lc;
+
+	return ret;
 }
 
 static void get_pauseparam(struct net_device *dev,
@@ -472,7 +801,7 @@ static int set_pauseparam(struct net_device *dev,
 	if (epause->tx_pause)
 		lc->requested_fc |= PAUSE_TX;
 	if (netif_running(dev))
-		return t4_link_start(p->adapter, p->adapter->fn, p->tx_chan,
+		return t4_link_l1cfg(p->adapter, p->adapter->mbox, p->tx_chan,
 				     lc);
 	return 0;
 }
@@ -578,7 +907,7 @@ static int get_coalesce(struct net_device *dev, struct ethtool_coalesce *c)
 	const struct sge_rspq *rq = &adap->sge.ethrxq[pi->first_qset].rspq;
 
 	c->rx_coalesce_usecs = qtimer_val(adap, rq);
-	c->rx_max_coalesced_frames = (rq->intr_params & QINTR_CNT_EN) ?
+	c->rx_max_coalesced_frames = (rq->intr_params & QINTR_CNT_EN_F) ?
 		adap->sge.counter_val[rq->pktcnt_idx] : 0;
 	c->use_adaptive_rx_coalesce = get_adaptive_rx_setting(dev);
 	return 0;
@@ -617,7 +946,7 @@ static int eeprom_ptov(unsigned int phys_addr, unsigned int fn, unsigned int sz)
  */
 static int eeprom_rd_phys(struct adapter *adap, unsigned int phys_addr, u32 *v)
 {
-	int vaddr = eeprom_ptov(phys_addr, adap->fn, EEPROMPFSIZE);
+	int vaddr = eeprom_ptov(phys_addr, adap->pf, EEPROMPFSIZE);
 
 	if (vaddr >= 0)
 		vaddr = pci_read_vpd(adap->pdev, vaddr, sizeof(u32), v);
@@ -626,7 +955,7 @@ static int eeprom_rd_phys(struct adapter *adap, unsigned int phys_addr, u32 *v)
 
 static int eeprom_wr_phys(struct adapter *adap, unsigned int phys_addr, u32 v)
 {
-	int vaddr = eeprom_ptov(phys_addr, adap->fn, EEPROMPFSIZE);
+	int vaddr = eeprom_ptov(phys_addr, adap->pf, EEPROMPFSIZE);
 
 	if (vaddr >= 0)
 		vaddr = pci_write_vpd(adap->pdev, vaddr, sizeof(u32), &v);
@@ -640,7 +969,7 @@ static int get_eeprom(struct net_device *dev, struct ethtool_eeprom *e,
 {
 	int i, err = 0;
 	struct adapter *adapter = netdev2adap(dev);
-	u8 *buf = kmalloc(EEPROMSIZE, GFP_KERNEL);
+	u8 *buf = t4_alloc_mem(EEPROMSIZE);
 
 	if (!buf)
 		return -ENOMEM;
@@ -651,7 +980,7 @@ static int get_eeprom(struct net_device *dev, struct ethtool_eeprom *e,
 
 	if (!err)
 		memcpy(data, buf + e->offset, e->len);
-	kfree(buf);
+	t4_free_mem(buf);
 	return err;
 }
 
@@ -669,8 +998,8 @@ static int set_eeprom(struct net_device *dev, struct ethtool_eeprom *eeprom,
 	aligned_offset = eeprom->offset & ~3;
 	aligned_len = (eeprom->len + (eeprom->offset & 3) + 3) & ~3;
 
-	if (adapter->fn > 0) {
-		u32 start = 1024 + adapter->fn * EEPROMPFSIZE;
+	if (adapter->pf > 0) {
+		u32 start = 1024 + adapter->pf * EEPROMPFSIZE;
 
 		if (aligned_offset < start ||
 		    aligned_offset + aligned_len > start + EEPROMPFSIZE)
@@ -680,7 +1009,7 @@ static int set_eeprom(struct net_device *dev, struct ethtool_eeprom *eeprom,
 	if (aligned_offset != eeprom->offset || aligned_len != eeprom->len) {
 		/* RMW possibly needed for first or last words.
 		 */
-		buf = kmalloc(aligned_len, GFP_KERNEL);
+		buf = t4_alloc_mem(aligned_len);
 		if (!buf)
 			return -ENOMEM;
 		err = eeprom_rd_phys(adapter, aligned_offset, (u32 *)buf);
@@ -708,7 +1037,7 @@ static int set_eeprom(struct net_device *dev, struct ethtool_eeprom *eeprom,
 		err = t4_seeprom_wp(adapter, true);
 out:
 	if (buf != data)
-		kfree(buf);
+		t4_free_mem(buf);
 	return err;
 }
 
@@ -718,6 +1047,20 @@ static int set_flash(struct net_device *netdev, struct ethtool_flash *ef)
 	const struct firmware *fw;
 	struct adapter *adap = netdev2adap(netdev);
 	unsigned int mbox = PCIE_FW_MASTER_M + 1;
+	u32 pcie_fw;
+	unsigned int master;
+	u8 master_vld = 0;
+
+	pcie_fw = t4_read_reg(adap, PCIE_FW_A);
+	master = PCIE_FW_MASTER_G(pcie_fw);
+	if (pcie_fw & PCIE_FW_MASTER_VLD_F)
+		master_vld = 1;
+	/* if csiostor is the master return */
+	if (master_vld && (master != adap->pf)) {
+		dev_warn(adap->pdev_dev,
+			 "cxgb4 driver needs to be loaded as MASTER to support FW flash\n");
+		return -EOPNOTSUPP;
+	}
 
 	ef->data[sizeof(ef->data) - 1] = '\0';
 	ret = request_firmware(&fw, ef->data, adap->pdev_dev);
@@ -740,35 +1083,18 @@ static int set_flash(struct net_device *netdev, struct ethtool_flash *ef)
 	return ret;
 }
 
-#define WOL_SUPPORTED (WAKE_BCAST | WAKE_MAGIC)
-#define BCAST_CRC 0xa0ccc1a6
-
-static void get_wol(struct net_device *dev, struct ethtool_wolinfo *wol)
+static int get_ts_info(struct net_device *dev, struct ethtool_ts_info *ts_info)
 {
-	wol->supported = WAKE_BCAST | WAKE_MAGIC;
-	wol->wolopts = netdev2adap(dev)->wol;
-	memset(&wol->sopass, 0, sizeof(wol->sopass));
-}
+	ts_info->so_timestamping = SOF_TIMESTAMPING_TX_SOFTWARE |
+				   SOF_TIMESTAMPING_RX_SOFTWARE |
+				   SOF_TIMESTAMPING_SOFTWARE;
 
-static int set_wol(struct net_device *dev, struct ethtool_wolinfo *wol)
-{
-	int err = 0;
-	struct port_info *pi = netdev_priv(dev);
+	ts_info->so_timestamping |= SOF_TIMESTAMPING_RX_HARDWARE |
+				    SOF_TIMESTAMPING_RAW_HARDWARE;
 
-	if (wol->wolopts & ~WOL_SUPPORTED)
-		return -EINVAL;
-	t4_wol_magic_enable(pi->adapter, pi->tx_chan,
-			    (wol->wolopts & WAKE_MAGIC) ? dev->dev_addr : NULL);
-	if (wol->wolopts & WAKE_BCAST) {
-		err = t4_wol_pat_enable(pi->adapter, pi->tx_chan, 0xfe, ~0ULL,
-					~0ULL, 0, false);
-		if (!err)
-			err = t4_wol_pat_enable(pi->adapter, pi->tx_chan, 1,
-						~6ULL, ~0ULL, BCAST_CRC, true);
-	} else {
-		t4_wol_pat_enable(pi->adapter, pi->tx_chan, 0, 0, 0, 0, false);
-	}
-	return err;
+	ts_info->phc_index = -1;
+
+	return 0;
 }
 
 static u32 get_rss_table_size(struct net_device *dev)
@@ -807,11 +1133,15 @@ static int set_rss_table(struct net_device *dev, const u32 *p, const u8 *key,
 	if (!p)
 		return 0;
 
-	for (i = 0; i < pi->rss_size; i++)
-		pi->rss[i] = p[i];
-	if (pi->adapter->flags & FULL_INIT_DONE)
+	/* Interface must be brought up atleast once */
+	if (pi->adapter->flags & FULL_INIT_DONE) {
+		for (i = 0; i < pi->rss_size; i++)
+			pi->rss[i] = p[i];
+
 		return cxgb4_write_rss(pi, pi->rss);
-	return 0;
+	}
+
+	return -EPERM;
 }
 
 static int get_rxnfc(struct net_device *dev, struct ethtool_rxnfc *info,
@@ -878,8 +1208,8 @@ static int get_rxnfc(struct net_device *dev, struct ethtool_rxnfc *info,
 }
 
 static const struct ethtool_ops cxgb_ethtool_ops = {
-	.get_settings      = get_settings,
-	.set_settings      = set_settings,
+	.get_link_ksettings = get_link_ksettings,
+	.set_link_ksettings = set_link_ksettings,
 	.get_drvinfo       = get_drvinfo,
 	.get_msglevel      = get_msglevel,
 	.set_msglevel      = set_msglevel,
@@ -900,13 +1230,12 @@ static const struct ethtool_ops cxgb_ethtool_ops = {
 	.get_ethtool_stats = get_stats,
 	.get_regs_len      = get_regs_len,
 	.get_regs          = get_regs,
-	.get_wol           = get_wol,
-	.set_wol           = set_wol,
 	.get_rxnfc         = get_rxnfc,
 	.get_rxfh_indir_size = get_rss_table_size,
 	.get_rxfh	   = get_rss_table,
 	.set_rxfh	   = set_rss_table,
 	.flash_device      = set_flash,
+	.get_ts_info       = get_ts_info
 };
 
 void cxgb4_set_ethtool_ops(struct net_device *netdev)

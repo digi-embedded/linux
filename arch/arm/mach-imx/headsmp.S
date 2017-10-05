@@ -12,6 +12,7 @@
 
 #include <linux/linkage.h>
 #include <linux/init.h>
+#include <asm/assembler.h>
 
 diag_reg_offset:
 	.word	g_diag_reg - .
@@ -25,6 +26,7 @@ diag_reg_offset:
 	.endm
 
 ENTRY(v7_secondary_startup)
+ARM_BE8(setend be)			@ go BE8 if entered LE
 	mrc	p15, 0, r0, c0, c0, 0
 	ldr	r1, =0xf00
 	orr	r1, r1, #0xff

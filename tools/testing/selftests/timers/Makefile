@@ -8,9 +8,9 @@ LDFLAGS += -lrt -lpthread
 TEST_PROGS = posix_timers nanosleep nsleep-lat set-timer-lat mqueue-lat \
 	     inconsistency-check raw_skew threadtest rtctest
 
-TEST_PROGS_EXTENDED = alarmtimer-suspend valid-adjtimex change_skew \
+TEST_PROGS_EXTENDED = alarmtimer-suspend valid-adjtimex adjtick change_skew \
 		      skew_consistency clocksource-switch leap-a-day \
-		      leapcrash set-tai set-2038
+		      leapcrash set-tai set-2038 set-tz
 
 bins = $(TEST_PROGS) $(TEST_PROGS_EXTENDED)
 
@@ -24,11 +24,13 @@ include ../lib.mk
 run_destructive_tests: run_tests
 	./alarmtimer-suspend
 	./valid-adjtimex
+	./adjtick
 	./change_skew
 	./skew_consistency
 	./clocksource-switch
 	./leap-a-day -s -i 10
 	./leapcrash
+	./set-tz
 	./set-tai
 	./set-2038
 

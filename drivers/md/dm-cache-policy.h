@@ -90,9 +90,6 @@ struct policy_result {
 	dm_cblock_t cblock;	/* POLICY_HIT, POLICY_NEW, POLICY_REPLACE */
 };
 
-typedef int (*policy_walk_fn)(void *context, dm_cblock_t cblock,
-			      dm_oblock_t oblock, uint32_t hint);
-
 /*
  * The cache policy object.  Just a bunch of methods.  It is envisaged that
  * this structure will be embedded in a bigger, policy specific structure
@@ -158,8 +155,11 @@ struct dm_cache_policy {
 	int (*load_mapping)(struct dm_cache_policy *p, dm_oblock_t oblock,
 			    dm_cblock_t cblock, uint32_t hint, bool hint_valid);
 
-	int (*walk_mappings)(struct dm_cache_policy *p, policy_walk_fn fn,
-			     void *context);
+	/*
+	 * Gets the hint for a given cblock.  Called in a single threaded
+	 * context.  So no locking required.
+	 */
+	uint32_t (*get_hint)(struct dm_cache_policy *p, dm_cblock_t cblock);
 
 	/*
 	 * Override functions used on the error paths of the core target.
@@ -178,7 +178,9 @@ struct dm_cache_policy {
 	int (*remove_cblock)(struct dm_cache_policy *p, dm_cblock_t cblock);
 
 	/*
-	 * Provide a dirty block to be written back by the core target.
+	 * Provide a dirty block to be written back by the core target.  If
+	 * critical_only is set then the policy should only provide work if
+	 * it urgently needs it.
 	 *
 	 * Returns:
 	 *
@@ -186,7 +188,8 @@ struct dm_cache_policy {
 	 *
 	 * -ENODATA: no dirty blocks available
 	 */
-	int (*writeback_work)(struct dm_cache_policy *p, dm_oblock_t *oblock, dm_cblock_t *cblock);
+	int (*writeback_work)(struct dm_cache_policy *p, dm_oblock_t *oblock, dm_cblock_t *cblock,
+			      bool critical_only);
 
 	/*
 	 * How full is the cache?
@@ -197,16 +200,16 @@ struct dm_cache_policy {
 	 * Because of where we sit in the block layer, we can be asked to
 	 * map a lot of little bios that are all in the same block (no
 	 * queue merging has occurred).  To stop the policy being fooled by
-	 * these the core target sends regular tick() calls to the policy.
+	 * these, the core target sends regular tick() calls to the policy.
 	 * The policy should only count an entry as hit once per tick.
 	 */
-	void (*tick)(struct dm_cache_policy *p);
+	void (*tick)(struct dm_cache_policy *p, bool can_block);
 
 	/*
 	 * Configuration.
 	 */
-	int (*emit_config_values)(struct dm_cache_policy *p,
-				  char *result, unsigned maxlen);
+	int (*emit_config_values)(struct dm_cache_policy *p, char *result,
+				  unsigned maxlen, ssize_t *sz_ptr);
 	int (*set_config_value)(struct dm_cache_policy *p,
 				const char *key, const char *value);
 

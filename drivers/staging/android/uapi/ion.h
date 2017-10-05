@@ -2,6 +2,7 @@
  * drivers/staging/android/uapi/ion.h
  *
  * Copyright (C) 2011 Google, Inc.
+ * Copyright (C) 2016 Freescale Semiconductor, Inc.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -40,29 +41,31 @@ enum ion_heap_type {
 	ION_HEAP_TYPE_CARVEOUT,
 	ION_HEAP_TYPE_CHUNK,
 	ION_HEAP_TYPE_DMA,
-	ION_HEAP_TYPE_CUSTOM, /* must be last so device specific heaps always
-				 are at the end of this enum */
-	ION_NUM_HEAPS = 16,
+	ION_HEAP_TYPE_CUSTOM, /*
+			       * must be last so device specific heaps always
+			       * are at the end of this enum
+			       */
 };
 
-#define ION_HEAP_SYSTEM_MASK		(1 << ION_HEAP_TYPE_SYSTEM)
-#define ION_HEAP_SYSTEM_CONTIG_MASK	(1 << ION_HEAP_TYPE_SYSTEM_CONTIG)
-#define ION_HEAP_CARVEOUT_MASK		(1 << ION_HEAP_TYPE_CARVEOUT)
-#define ION_HEAP_TYPE_DMA_MASK		(1 << ION_HEAP_TYPE_DMA)
-
+#define ION_CMA_HEAP_ID     0
 #define ION_NUM_HEAP_IDS		(sizeof(unsigned int) * 8)
 
 /**
  * allocation flags - the lower 16 bits are used by core ion, the upper 16
  * bits are reserved for use by the heaps themselves.
  */
-#define ION_FLAG_CACHED 1		/* mappings of this buffer should be
-					   cached, ion will do cache
-					   maintenance when the buffer is
-					   mapped for dma */
-#define ION_FLAG_CACHED_NEEDS_SYNC 2	/* mappings of this buffer will created
-					   at mmap time, if this is set
-					   caches must be managed manually */
+
+/*
+ * mappings of this buffer should be cached, ion will do cache maintenance
+ * when the buffer is mapped for dma
+ */
+#define ION_FLAG_CACHED 1
+
+/*
+ * mappings of this buffer will created at mmap time, if this is set
+ * caches must be managed manually
+ */
+#define ION_FLAG_CACHED_NEEDS_SYNC 2
 
 /**
  * DOC: Ion Userspace API
@@ -127,6 +130,53 @@ struct ion_custom_data {
 	unsigned long arg;
 };
 
+#define MAX_HEAP_NAME			32
+
+/**
+ * struct ion_heap_data - data about a heap
+ * @name - first 32 characters of the heap name
+ * @type - heap type
+ * @heap_id - heap id for the heap
+ */
+struct ion_heap_data {
+	char name[MAX_HEAP_NAME];
+	__u32 type;
+	__u32 heap_id;
+	__u32 reserved0;
+	__u32 reserved1;
+	__u32 reserved2;
+};
+
+/**
+ * struct ion_heap_query - collection of data about all heaps
+ * @cnt - total number of heaps to be copied
+ * @heaps - buffer to copy heap data
+ */
+struct ion_heap_query {
+	__u32 cnt; /* Total number of heaps to be copied */
+	__u32 reserved0; /* align to 64bits */
+	__u64 heaps; /* buffer to be populated */
+	__u32 reserved1;
+	__u32 reserved2;
+};
+
+struct ion_phys_data {
+	ion_user_handle_t handle;
+	unsigned long phys;
+};
+
+struct ion_phys_dma_data {
+	unsigned long phys;
+	size_t size;
+	int dmafd;
+};
+
+struct ion_phys_virt_data {
+	unsigned long virt;
+	unsigned long phys;
+	size_t size;
+};
+
 #define ION_IOC_MAGIC		'I'
 
 /**
@@ -179,7 +229,7 @@ struct ion_custom_data {
  * DOC: ION_IOC_SYNC - syncs a shared file descriptors to memory
  *
  * Deprecated in favor of using the dma_buf api's correctly (syncing
- * will happend automatically when the buffer is mapped to a device).
+ * will happen automatically when the buffer is mapped to a device).
  * If necessary should be used after touching a cached buffer from the cpu,
  * this will make the buffer in memory coherent.
  */
@@ -192,5 +242,20 @@ struct ion_custom_data {
  * passes appropriate userdata for that ioctl
  */
 #define ION_IOC_CUSTOM		_IOWR(ION_IOC_MAGIC, 6, struct ion_custom_data)
+
+/**
+ * DOC: ION_IOC_HEAP_QUERY - information about available heaps
+ *
+ * Takes an ion_heap_query structure and populates information about
+ * available Ion heaps.
+ */
+#define ION_IOC_HEAP_QUERY     _IOWR(ION_IOC_MAGIC, 8, \
+					struct ion_heap_query)
+
+#define ION_IOC_PHYS   _IOWR(ION_IOC_MAGIC, 8, struct ion_phys_data)
+
+#define ION_IOC_PHYS_DMA   _IOWR(ION_IOC_MAGIC, 9, struct ion_phys_dma_data)
+
+#define ION_IOC_PHYS_VIRT   _IOWR(ION_IOC_MAGIC, 10, struct ion_phys_virt_data)
 
 #endif /* _UAPI_LINUX_ION_H */

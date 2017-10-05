@@ -605,20 +605,30 @@ static void ci_otg_loc_conn(struct otg_fsm *fsm, int on)
 
 /*
  * Generate SOF by host.
- * This is controlled through suspend/resume the port.
  * In host mode, controller will automatically send SOF.
  * Suspend will block the data on the port.
+ *
+ * This is controlled through usbcore by usb autosuspend,
+ * so the usb device class driver need support autosuspend,
+ * otherwise the bus suspend will not happen.
  */
 static void ci_otg_loc_sof(struct otg_fsm *fsm, int on)
 {
-	struct ci_hdrc	*ci = container_of(fsm, struct ci_hdrc, fsm);
+	struct usb_device *udev;
 
-	if (on)
-		hw_write(ci, OP_PORTSC, PORTSC_W1C_BITS | PORTSC_FPR,
-							PORTSC_FPR);
-	else
-		hw_write(ci, OP_PORTSC, PORTSC_W1C_BITS | PORTSC_SUSP,
-							PORTSC_SUSP);
+	if (!fsm->otg->host)
+		return;
+
+	udev = usb_hub_find_child(fsm->otg->host->root_hub, 1);
+	if (!udev)
+		return;
+
+	if (on) {
+		usb_disable_autosuspend(udev);
+	} else {
+		pm_runtime_set_autosuspend_delay(&udev->dev, 0);
+		usb_enable_autosuspend(udev);
+	}
 }
 
 /*
@@ -930,6 +940,10 @@ int ci_hdrc_otg_fsm_init(struct ci_hdrc *ci)
 	ci->fsm.id = hw_read_otgsc(ci, OTGSC_ID) ? 1 : 0;
 	ci->fsm.otg->state = OTG_STATE_UNDEFINED;
 	ci->fsm.ops = &ci_otg_ops;
+	ci->gadget.hnp_polling_support = 1;
+	ci->fsm.host_req_flag = devm_kzalloc(ci->dev, 1, GFP_KERNEL);
+	if (!ci->fsm.host_req_flag)
+		return -ENOMEM;
 
 	mutex_init(&ci->fsm.lock);
 
@@ -988,6 +1002,42 @@ void ci_hdrc_otg_fsm_remove(struct ci_hdrc *ci)
 
 	sysfs_remove_group(&ci->dev->kobj, &inputs_attr_group);
 	del_timer_sync(&ci->hnp_polling_timer);
+}
+
+/* Restart OTG fsm if resume from power lost */
+void ci_hdrc_otg_fsm_restart(struct ci_hdrc *ci)
+{
+	struct otg_fsm *fsm = &ci->fsm;
+	int id_status = fsm->id;
+
+	/* Update fsm if power lost in peripheral state */
+	if (ci->fsm.otg->state == OTG_STATE_B_PERIPHERAL) {
+		fsm->b_sess_vld = 0;
+		otg_statemachine(fsm);
+	}
+
+	hw_write_otgsc(ci, OTGSC_IDIE, OTGSC_IDIE);
+	hw_write_otgsc(ci, OTGSC_AVVIE, OTGSC_AVVIE);
+
+	/* Update fsm variables for restart */
+	fsm->id = hw_read_otgsc(ci, OTGSC_ID) ? 1 : 0;
+	if (fsm->id) {
+		fsm->b_ssend_srp =
+			hw_read_otgsc(ci, OTGSC_BSV) ? 0 : 1;
+		fsm->b_sess_vld =
+			hw_read_otgsc(ci, OTGSC_BSV) ? 1 : 0;
+	} else if (fsm->id != id_status) {
+		/* ID changes to be 0 */
+		fsm->a_bus_drop = 0;
+		fsm->a_bus_req = 1;
+		ci->id_event = true;
+	}
+
+	if (ci_hdrc_host_has_device(ci) &&
+			!hw_read(ci, OP_PORTSC, PORTSC_CCS))
+		fsm->b_conn = 0;
+
+	ci_otg_fsm_work(ci);
 }
 
 /* Restart OTG fsm if resume from power lost */

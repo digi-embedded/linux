@@ -16,6 +16,7 @@
 #include <net/net_namespace.h>
 #include <net/sock.h>
 #include <net/fib_rules.h>
+#include <net/ip_tunnels.h>
 
 int fib_default_rule_add(struct fib_rules_ops *ops,
 			 u32 pref, u32 table, u32 flags)
@@ -43,7 +44,7 @@ int fib_default_rule_add(struct fib_rules_ops *ops,
 }
 EXPORT_SYMBOL(fib_default_rule_add);
 
-u32 fib_default_rule_pref(struct fib_rules_ops *ops)
+static u32 fib_default_rule_pref(struct fib_rules_ops *ops)
 {
 	struct list_head *pos;
 	struct fib_rule *rule;
@@ -59,7 +60,6 @@ u32 fib_default_rule_pref(struct fib_rules_ops *ops)
 
 	return 0;
 }
-EXPORT_SYMBOL(fib_default_rule_pref);
 
 static void notify_rule_change(int event, struct fib_rule *rule,
 			       struct fib_rules_ops *ops, struct nlmsghdr *nlh,
@@ -173,7 +173,8 @@ void fib_rules_unregister(struct fib_rules_ops *ops)
 EXPORT_SYMBOL_GPL(fib_rules_unregister);
 
 static int fib_rule_match(struct fib_rule *rule, struct fib_rules_ops *ops,
-			  struct flowi *fl, int flags)
+			  struct flowi *fl, int flags,
+			  struct fib_lookup_arg *arg)
 {
 	int ret = 0;
 
@@ -184,6 +185,12 @@ static int fib_rule_match(struct fib_rule *rule, struct fib_rules_ops *ops,
 		goto out;
 
 	if ((rule->mark ^ fl->flowi_mark) & rule->mark_mask)
+		goto out;
+
+	if (rule->tun_id && (rule->tun_id != fl->flowi_tun_key.tun_id))
+		goto out;
+
+	if (rule->l3mdev && !l3mdev_fib_rule_match(rule->fr_net, fl, arg))
 		goto out;
 
 	ret = ops->match(rule, fl, flags);
@@ -201,7 +208,7 @@ int fib_rules_lookup(struct fib_rules_ops *ops, struct flowi *fl,
 
 	list_for_each_entry_rcu(rule, &ops->rules_list, list) {
 jumped:
-		if (!fib_rule_match(rule, ops, fl, flags))
+		if (!fib_rule_match(rule, ops, fl, flags, arg))
 			continue;
 
 		if (rule->action == FR_ACT_GOTO) {
@@ -262,7 +269,50 @@ errout:
 	return err;
 }
 
-static int fib_nl_newrule(struct sk_buff *skb, struct nlmsghdr* nlh)
+static int rule_exists(struct fib_rules_ops *ops, struct fib_rule_hdr *frh,
+		       struct nlattr **tb, struct fib_rule *rule)
+{
+	struct fib_rule *r;
+
+	list_for_each_entry(r, &ops->rules_list, list) {
+		if (r->action != rule->action)
+			continue;
+
+		if (r->table != rule->table)
+			continue;
+
+		if (r->pref != rule->pref)
+			continue;
+
+		if (memcmp(r->iifname, rule->iifname, IFNAMSIZ))
+			continue;
+
+		if (memcmp(r->oifname, rule->oifname, IFNAMSIZ))
+			continue;
+
+		if (r->mark != rule->mark)
+			continue;
+
+		if (r->mark_mask != rule->mark_mask)
+			continue;
+
+		if (r->tun_id != rule->tun_id)
+			continue;
+
+		if (r->fr_net != rule->fr_net)
+			continue;
+
+		if (r->l3mdev != rule->l3mdev)
+			continue;
+
+		if (!ops->compare(r, frh, tb))
+			continue;
+		return 1;
+	}
+	return 0;
+}
+
+int fib_nl_newrule(struct sk_buff *skb, struct nlmsghdr *nlh)
 {
 	struct net *net = sock_net(skb->sk);
 	struct fib_rule_hdr *frh = nlmsg_data(nlh);
@@ -295,8 +345,8 @@ static int fib_nl_newrule(struct sk_buff *skb, struct nlmsghdr* nlh)
 	}
 	rule->fr_net = net;
 
-	if (tb[FRA_PRIORITY])
-		rule->pref = nla_get_u32(tb[FRA_PRIORITY]);
+	rule->pref = tb[FRA_PRIORITY] ? nla_get_u32(tb[FRA_PRIORITY])
+	                              : fib_default_rule_pref(ops);
 
 	if (tb[FRA_IIFNAME]) {
 		struct net_device *dev;
@@ -330,6 +380,17 @@ static int fib_nl_newrule(struct sk_buff *skb, struct nlmsghdr* nlh)
 	if (tb[FRA_FWMASK])
 		rule->mark_mask = nla_get_u32(tb[FRA_FWMASK]);
 
+	if (tb[FRA_TUN_ID])
+		rule->tun_id = nla_get_be64(tb[FRA_TUN_ID]);
+
+	if (tb[FRA_L3MDEV]) {
+#ifdef CONFIG_NET_L3_MASTER_DEV
+		rule->l3mdev = nla_get_u8(tb[FRA_L3MDEV]);
+		if (rule->l3mdev != 1)
+#endif
+			goto errout_free;
+	}
+
 	rule->action = frh->action;
 	rule->flags = frh->flags;
 	rule->table = frh_get_table(frh, tb);
@@ -342,9 +403,6 @@ static int fib_nl_newrule(struct sk_buff *skb, struct nlmsghdr* nlh)
 		rule->suppress_ifgroup = nla_get_u32(tb[FRA_SUPPRESS_IFGROUP]);
 	else
 		rule->suppress_ifgroup = -1;
-
-	if (!tb[FRA_PRIORITY] && ops->default_pref)
-		rule->pref = ops->default_pref(ops);
 
 	err = -EINVAL;
 	if (tb[FRA_GOTO]) {
@@ -367,6 +425,15 @@ static int fib_nl_newrule(struct sk_buff *skb, struct nlmsghdr* nlh)
 			unresolved = 1;
 	} else if (rule->action == FR_ACT_GOTO)
 		goto errout_free;
+
+	if (rule->l3mdev && rule->table)
+		goto errout_free;
+
+	if ((nlh->nlmsg_flags & NLM_F_EXCL) &&
+	    rule_exists(ops, frh, tb, rule)) {
+		err = -EEXIST;
+		goto errout_free;
+	}
 
 	err = ops->configure(rule, skb, frh, tb);
 	if (err < 0)
@@ -407,6 +474,9 @@ static int fib_nl_newrule(struct sk_buff *skb, struct nlmsghdr* nlh)
 	if (unresolved)
 		ops->unresolved_rules++;
 
+	if (rule->tun_id)
+		ip_tunnel_need_metadata();
+
 	notify_rule_change(RTM_NEWRULE, rule, ops, nlh, NETLINK_CB(skb).portid);
 	flush_route_cache(ops);
 	rules_ops_put(ops);
@@ -418,8 +488,9 @@ errout:
 	rules_ops_put(ops);
 	return err;
 }
+EXPORT_SYMBOL_GPL(fib_nl_newrule);
 
-static int fib_nl_delrule(struct sk_buff *skb, struct nlmsghdr* nlh)
+int fib_nl_delrule(struct sk_buff *skb, struct nlmsghdr *nlh)
 {
 	struct net *net = sock_net(skb->sk);
 	struct fib_rule_hdr *frh = nlmsg_data(nlh);
@@ -473,6 +544,14 @@ static int fib_nl_delrule(struct sk_buff *skb, struct nlmsghdr* nlh)
 		    (rule->mark_mask != nla_get_u32(tb[FRA_FWMASK])))
 			continue;
 
+		if (tb[FRA_TUN_ID] &&
+		    (rule->tun_id != nla_get_be64(tb[FRA_TUN_ID])))
+			continue;
+
+		if (tb[FRA_L3MDEV] &&
+		    (rule->l3mdev != nla_get_u8(tb[FRA_L3MDEV])))
+			continue;
+
 		if (!ops->compare(rule, frh, tb))
 			continue;
 
@@ -486,6 +565,9 @@ static int fib_nl_delrule(struct sk_buff *skb, struct nlmsghdr* nlh)
 			if (err)
 				goto errout;
 		}
+
+		if (rule->tun_id)
+			ip_tunnel_unneed_metadata();
 
 		list_del_rcu(&rule->list);
 
@@ -523,6 +605,7 @@ errout:
 	rules_ops_put(ops);
 	return err;
 }
+EXPORT_SYMBOL_GPL(fib_nl_delrule);
 
 static inline size_t fib_rule_nlmsg_size(struct fib_rules_ops *ops,
 					 struct fib_rule *rule)
@@ -535,7 +618,8 @@ static inline size_t fib_rule_nlmsg_size(struct fib_rules_ops *ops,
 			 + nla_total_size(4) /* FRA_SUPPRESS_PREFIXLEN */
 			 + nla_total_size(4) /* FRA_SUPPRESS_IFGROUP */
 			 + nla_total_size(4) /* FRA_FWMARK */
-			 + nla_total_size(4); /* FRA_FWMASK */
+			 + nla_total_size(4) /* FRA_FWMASK */
+			 + nla_total_size_64bit(8); /* FRA_TUN_ID */
 
 	if (ops->nlmsg_payload)
 		payload += ops->nlmsg_payload(rule);
@@ -591,7 +675,11 @@ static int fib_nl_fill_rule(struct sk_buff *skb, struct fib_rule *rule,
 	    ((rule->mark_mask || rule->mark) &&
 	     nla_put_u32(skb, FRA_FWMASK, rule->mark_mask)) ||
 	    (rule->target &&
-	     nla_put_u32(skb, FRA_GOTO, rule->target)))
+	     nla_put_u32(skb, FRA_GOTO, rule->target)) ||
+	    (rule->tun_id &&
+	     nla_put_be64(skb, FRA_TUN_ID, rule->tun_id, FRA_PAD)) ||
+	    (rule->l3mdev &&
+	     nla_put_u8(skb, FRA_L3MDEV, rule->l3mdev)))
 		goto nla_put_failure;
 
 	if (rule->suppress_ifgroup != -1) {

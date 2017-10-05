@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2015 Freescale Semiconductor, Inc.
+ * Copyright (C) 2012 Freescale Semiconductor, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -452,6 +452,8 @@
 #define IMX6SX_GPR5_VADC_TO_CSI_CAPTURE_EN_MASK		(0x1 << 26)
 #define IMX6SX_GPR5_VADC_TO_CSI_CAPTURE_EN_ENABLE	(0x1 << 26)
 #define IMX6SX_GPR5_VADC_TO_CSI_CAPTURE_EN_DISABLE	(0x0 << 26)
+#define IMX6SX_GPR5_PCIE_PERST				BIT(18)
+#define IMX6SX_GPR5_PCIE_BTNRST_RESET			BIT(19)
 #define IMX6SX_GPR5_CSI1_MUX_CTRL_MASK			(0x3 << 4)
 #define IMX6SX_GPR5_CSI1_MUX_CTRL_EXT_PIN		(0x0 << 4)
 #define IMX6SX_GPR5_CSI1_MUX_CTRL_CVD			(0x1 << 4)
@@ -465,13 +467,10 @@
 #define IMX6SX_GPR5_DISP_MUX_DCIC1_LVDS			(0x1 << 1)
 #define IMX6SX_GPR5_DISP_MUX_DCIC1_MASK			(0x1 << 1)
 
-#define IMX6SX_GPR5_PCIE_BTNRST			BIT(19)
-#define IMX6SX_GPR5_PCIE_PERST			BIT(18)
-
-#define IMX6SX_GPR12_PCIE_PM_TURN_OFF		BIT(16)
-#define IMX6SX_GPR12_PCIE_TEST_PD		BIT(30)
-#define IMX6SX_GPR12_RX_EQ_MASK			(0x7 << 0)
-#define IMX6SX_GPR12_RX_EQ_2			(0x2 << 0)
+#define IMX6SX_GPR12_PCIE_PM_TURN_OFF			BIT(16)
+#define IMX6SX_GPR12_PCIE_TEST_POWERDOWN		BIT(30)
+#define IMX6SX_GPR12_PCIE_RX_EQ_MASK			(0x7 << 0)
+#define IMX6SX_GPR12_PCIE_RX_EQ_2			(0x2 << 0)
 
 /* For imx6dl iomux gpr register field definitions */
 #define IMX6DL_GPR3_LVDS1_MUX_CTL_MASK		(0x3 << 8)
@@ -490,5 +489,11 @@
 #define IMX6UL_GPR1_ENET2_CLK_OUTPUT		(0x1 << 18)
 #define IMX6UL_GPR1_ENET_CLK_DIR		(0x3 << 17)
 #define IMX6UL_GPR1_ENET_CLK_OUTPUT		(0x3 << 17)
+#define IMX6UL_GPR1_SAI1_MCLK_DIR		(0x1 << 19)
+#define IMX6UL_GPR1_SAI2_MCLK_DIR		(0x1 << 20)
+#define IMX6UL_GPR1_SAI3_MCLK_DIR		(0x1 << 21)
+#define IMX6UL_GPR1_SAI_MCLK_MASK		(0x7 << 19)
+#define MCLK_DIR(x) (x == 1 ? IMX6UL_GPR1_SAI1_MCLK_DIR : x == 2 ? \
+		     IMX6UL_GPR1_SAI2_MCLK_DIR : IMX6UL_GPR1_SAI3_MCLK_DIR)
 
 #endif /* __LINUX_IMX6Q_IOMUXC_GPR_H */

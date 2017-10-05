@@ -621,7 +621,7 @@ static int tm6000_prepare_isoc(struct tm6000_core *dev)
 		    dev->isoc_in.maxsize, size);
 
 
-	if (!dev->urb_buffer && tm6000_alloc_urb_buffers(dev) < 0) {
+	if (tm6000_alloc_urb_buffers(dev) < 0) {
 		tm6000_err("cannot allocate memory for urb buffers\n");
 
 		/* call free, as some buffers might have been allocated */
@@ -635,7 +635,6 @@ static int tm6000_prepare_isoc(struct tm6000_core *dev)
 	for (i = 0; i < dev->isoc_ctl.num_bufs; i++) {
 		urb = usb_alloc_urb(max_packets, GFP_KERNEL);
 		if (!urb) {
-			tm6000_err("cannot alloc isoc_ctl.urb %i\n", i);
 			tm6000_uninit_isoc(dev);
 			usb_free_urb(urb);
 			return -ENOMEM;
@@ -714,8 +713,7 @@ static void free_buffer(struct videobuf_queue *vq, struct tm6000_buffer *buf)
 	struct tm6000_core   *dev = fh->dev;
 	unsigned long flags;
 
-	if (in_interrupt())
-		BUG();
+	BUG_ON(in_interrupt());
 
 	/* We used to wait for the buffer to finish here, but this didn't work
 	   because, as we were keeping the state as VIDEOBUF_QUEUED,

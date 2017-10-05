@@ -46,7 +46,7 @@
 
 #define DP_AUX_I2C_WRITE		0x0
 #define DP_AUX_I2C_READ			0x1
-#define DP_AUX_I2C_STATUS		0x2
+#define DP_AUX_I2C_WRITE_STATUS_UPDATE	0x2
 #define DP_AUX_I2C_MOT			0x4
 #define DP_AUX_NATIVE_WRITE		0x8
 #define DP_AUX_NATIVE_READ		0x9
@@ -73,6 +73,7 @@
 # define DP_ENHANCED_FRAME_CAP		    (1 << 7)
 
 #define DP_MAX_DOWNSPREAD                   0x003
+# define DP_MAX_DOWNSPREAD_0_5		    (1 << 0)
 # define DP_NO_AUX_HANDSHAKE_LINK_TRAINING  (1 << 6)
 
 #define DP_NORP                             0x004
@@ -210,14 +211,16 @@
 # define DP_DS_PORT_TYPE_DVI		    2
 # define DP_DS_PORT_TYPE_HDMI		    3
 # define DP_DS_PORT_TYPE_NON_EDID	    4
+# define DP_DS_PORT_TYPE_DP_DUALMODE        5
+# define DP_DS_PORT_TYPE_WIRELESS           6
 # define DP_DS_PORT_HPD			    (1 << 3)
 /* offset 1 for VGA is maximum megapixels per second / 8 */
 /* offset 2 */
-# define DP_DS_VGA_MAX_BPC_MASK		    (3 << 0)
-# define DP_DS_VGA_8BPC			    0
-# define DP_DS_VGA_10BPC		    1
-# define DP_DS_VGA_12BPC		    2
-# define DP_DS_VGA_16BPC		    3
+# define DP_DS_MAX_BPC_MASK	            (3 << 0)
+# define DP_DS_8BPC		            0
+# define DP_DS_10BPC		            1
+# define DP_DS_12BPC		            2
+# define DP_DS_16BPC		            3
 
 /* link configuration */
 #define	DP_LINK_BW_SET		            0x100
@@ -420,7 +423,7 @@
 
 #define DP_TEST_SINK_MISC		    0x246
 # define DP_TEST_CRC_SUPPORTED		    (1 << 5)
-# define DP_TEST_COUNT_MASK		    0x7
+# define DP_TEST_COUNT_MASK		    0xf
 
 #define DP_TEST_RESPONSE		    0x260
 # define DP_TEST_ACK			    (1 << 0)
@@ -442,6 +445,9 @@
 #define DP_SOURCE_OUI			    0x300
 #define DP_SINK_OUI			    0x400
 #define DP_BRANCH_OUI			    0x500
+#define DP_BRANCH_ID                        0x503
+#define DP_BRANCH_HW_REV                    0x509
+#define DP_BRANCH_SW_REV                    0x50A
 
 #define DP_SET_POWER                        0x600
 # define DP_SET_POWER_D0                    0x1
@@ -455,16 +461,52 @@
 # define DP_EDP_14			    0x03
 
 #define DP_EDP_GENERAL_CAP_1		    0x701
+# define DP_EDP_TCON_BACKLIGHT_ADJUSTMENT_CAP		(1 << 0)
+# define DP_EDP_BACKLIGHT_PIN_ENABLE_CAP		(1 << 1)
+# define DP_EDP_BACKLIGHT_AUX_ENABLE_CAP		(1 << 2)
+# define DP_EDP_PANEL_SELF_TEST_PIN_ENABLE_CAP		(1 << 3)
+# define DP_EDP_PANEL_SELF_TEST_AUX_ENABLE_CAP		(1 << 4)
+# define DP_EDP_FRC_ENABLE_CAP				(1 << 5)
+# define DP_EDP_COLOR_ENGINE_CAP			(1 << 6)
+# define DP_EDP_SET_POWER_CAP				(1 << 7)
 
 #define DP_EDP_BACKLIGHT_ADJUSTMENT_CAP     0x702
+# define DP_EDP_BACKLIGHT_BRIGHTNESS_PWM_PIN_CAP	(1 << 0)
+# define DP_EDP_BACKLIGHT_BRIGHTNESS_AUX_SET_CAP	(1 << 1)
+# define DP_EDP_BACKLIGHT_BRIGHTNESS_BYTE_COUNT		(1 << 2)
+# define DP_EDP_BACKLIGHT_AUX_PWM_PRODUCT_CAP		(1 << 3)
+# define DP_EDP_BACKLIGHT_FREQ_PWM_PIN_PASSTHRU_CAP	(1 << 4)
+# define DP_EDP_BACKLIGHT_FREQ_AUX_SET_CAP		(1 << 5)
+# define DP_EDP_DYNAMIC_BACKLIGHT_CAP			(1 << 6)
+# define DP_EDP_VBLANK_BACKLIGHT_UPDATE_CAP		(1 << 7)
 
 #define DP_EDP_GENERAL_CAP_2		    0x703
+# define DP_EDP_OVERDRIVE_ENGINE_ENABLED		(1 << 0)
 
 #define DP_EDP_GENERAL_CAP_3		    0x704    /* eDP 1.4 */
+# define DP_EDP_X_REGION_CAP_MASK			(0xf << 0)
+# define DP_EDP_X_REGION_CAP_SHIFT			0
+# define DP_EDP_Y_REGION_CAP_MASK			(0xf << 4)
+# define DP_EDP_Y_REGION_CAP_SHIFT			4
 
 #define DP_EDP_DISPLAY_CONTROL_REGISTER     0x720
+# define DP_EDP_BACKLIGHT_ENABLE			(1 << 0)
+# define DP_EDP_BLACK_VIDEO_ENABLE			(1 << 1)
+# define DP_EDP_FRC_ENABLE				(1 << 2)
+# define DP_EDP_COLOR_ENGINE_ENABLE			(1 << 3)
+# define DP_EDP_VBLANK_BACKLIGHT_UPDATE_ENABLE		(1 << 7)
 
 #define DP_EDP_BACKLIGHT_MODE_SET_REGISTER  0x721
+# define DP_EDP_BACKLIGHT_CONTROL_MODE_MASK		(3 << 0)
+# define DP_EDP_BACKLIGHT_CONTROL_MODE_PWM		(0 << 0)
+# define DP_EDP_BACKLIGHT_CONTROL_MODE_PRESET		(1 << 0)
+# define DP_EDP_BACKLIGHT_CONTROL_MODE_DPCD		(2 << 0)
+# define DP_EDP_BACKLIGHT_CONTROL_MODE_PRODUCT		(3 << 0)
+# define DP_EDP_BACKLIGHT_FREQ_PWM_PIN_PASSTHRU_ENABLE	(1 << 2)
+# define DP_EDP_BACKLIGHT_FREQ_AUX_SET_ENABLE		(1 << 3)
+# define DP_EDP_DYNAMIC_BACKLIGHT_ENABLE		(1 << 4)
+# define DP_EDP_REGIONAL_BACKLIGHT_ENABLE		(1 << 5)
+# define DP_EDP_UPDATE_REGION_BRIGHTNESS		(1 << 6) /* eDP 1.4 */
 
 #define DP_EDP_BACKLIGHT_BRIGHTNESS_MSB     0x722
 #define DP_EDP_BACKLIGHT_BRIGHTNESS_LSB     0x723
@@ -568,6 +610,10 @@
 #define MODE_I2C_READ	4
 #define MODE_I2C_STOP	8
 
+/* DP 1.2 MST PORTs - Section 2.5.1 v1.2a spec */
+#define DP_MST_PHYSICAL_PORT_0 0
+#define DP_MST_LOGICAL_PORT_0 8
+
 #define DP_LINK_STATUS_SIZE	   6
 bool drm_dp_channel_eq_ok(const u8 link_status[DP_LINK_STATUS_SIZE],
 			  int lane_count);
@@ -578,8 +624,10 @@ u8 drm_dp_get_adjust_request_voltage(const u8 link_status[DP_LINK_STATUS_SIZE],
 u8 drm_dp_get_adjust_request_pre_emphasis(const u8 link_status[DP_LINK_STATUS_SIZE],
 					  int lane);
 
+#define DP_BRANCH_OUI_HEADER_SIZE	0xc
 #define DP_RECEIVER_CAP_SIZE		0xf
 #define EDP_PSR_RECEIVER_CAP_SIZE	2
+#define EDP_DISPLAY_CTL_CAP_SIZE	3
 
 void drm_dp_link_train_clock_recovery_delay(const u8 dpcd[DP_RECEIVER_CAP_SIZE]);
 void drm_dp_link_train_channel_eq_delay(const u8 dpcd[DP_RECEIVER_CAP_SIZE]);
@@ -614,6 +662,8 @@ struct edp_vsc_psr {
 #define EDP_VSC_PSR_UPDATE_RFB		(1<<1)
 #define EDP_VSC_PSR_CRC_VALUES_VALID	(1<<2)
 
+int drm_dp_psr_setup_time(const u8 psr_cap[EDP_PSR_RECEIVER_CAP_SIZE]);
+
 static inline int
 drm_dp_max_link_rate(const u8 dpcd[DP_RECEIVER_CAP_SIZE])
 {
@@ -631,6 +681,13 @@ drm_dp_enhanced_frame_cap(const u8 dpcd[DP_RECEIVER_CAP_SIZE])
 {
 	return dpcd[DP_DPCD_REV] >= 0x11 &&
 		(dpcd[DP_MAX_LANE_COUNT] & DP_ENHANCED_FRAME_CAP);
+}
+
+static inline bool
+drm_dp_tps3_supported(const u8 dpcd[DP_RECEIVER_CAP_SIZE])
+{
+	return dpcd[DP_DPCD_REV] >= 0x12 &&
+		dpcd[DP_MAX_LANE_COUNT] & DP_TPS3_SUPPORTED;
 }
 
 /*
@@ -679,9 +736,9 @@ struct drm_dp_aux_msg {
  * An AUX channel can also be used to transport I2C messages to a sink. A
  * typical application of that is to access an EDID that's present in the
  * sink device. The .transfer() function can also be used to execute such
- * transactions. The drm_dp_aux_register_i2c_bus() function registers an
- * I2C adapter that can be passed to drm_probe_ddc(). Upon removal, drivers
- * should call drm_dp_aux_unregister_i2c_bus() to remove the I2C adapter.
+ * transactions. The drm_dp_aux_register() function registers an I2C
+ * adapter that can be passed to drm_probe_ddc(). Upon removal, drivers
+ * should call drm_dp_aux_unregister() to remove the I2C adapter.
  * The I2C adapter uses long transfers by default; if a partial response is
  * received, the adapter will drop down to the size given by the partial
  * response for this transaction only.
@@ -697,7 +754,14 @@ struct drm_dp_aux {
 	struct mutex hw_mutex;
 	ssize_t (*transfer)(struct drm_dp_aux *aux,
 			    struct drm_dp_aux_msg *msg);
-	unsigned i2c_nack_count, i2c_defer_count;
+	/**
+	 * @i2c_nack_count: Counts I2C NACKs, used for DP validation.
+	 */
+	unsigned i2c_nack_count;
+	/**
+	 * @i2c_defer_count: Counts I2C DEFERs, used for DP validation.
+	 */
+	unsigned i2c_defer_count;
 };
 
 ssize_t drm_dp_dpcd_read(struct drm_dp_aux *aux, unsigned int offset,
@@ -754,7 +818,15 @@ int drm_dp_link_probe(struct drm_dp_aux *aux, struct drm_dp_link *link);
 int drm_dp_link_power_up(struct drm_dp_aux *aux, struct drm_dp_link *link);
 int drm_dp_link_power_down(struct drm_dp_aux *aux, struct drm_dp_link *link);
 int drm_dp_link_configure(struct drm_dp_aux *aux, struct drm_dp_link *link);
+int drm_dp_downstream_max_clock(const u8 dpcd[DP_RECEIVER_CAP_SIZE],
+				const u8 port_cap[4]);
+int drm_dp_downstream_max_bpc(const u8 dpcd[DP_RECEIVER_CAP_SIZE],
+			      const u8 port_cap[4]);
+int drm_dp_downstream_id(struct drm_dp_aux *aux, char id[6]);
+void drm_dp_downstream_debug(struct seq_file *m, const u8 dpcd[DP_RECEIVER_CAP_SIZE],
+			     const u8 port_cap[4], struct drm_dp_aux *aux);
 
+void drm_dp_aux_init(struct drm_dp_aux *aux);
 int drm_dp_aux_register(struct drm_dp_aux *aux);
 void drm_dp_aux_unregister(struct drm_dp_aux *aux);
 

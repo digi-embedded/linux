@@ -60,6 +60,13 @@ enum usb_otg_state {
 	OTG_STATE_A_VBUS_ERR,
 };
 
+/* The usb role of phy to be working with */
+enum usb_current_mode {
+	USB_MODE_NONE,
+	USB_MODE_HOST,
+	USB_MODE_DEVICE,
+};
+
 struct usb_phy;
 struct usb_otg;
 
@@ -126,6 +133,9 @@ struct usb_phy {
 			enum usb_device_speed speed);
 	int	(*notify_resume)(struct usb_phy *x,
 			enum usb_device_speed speed);
+
+	int	(*set_mode)(struct usb_phy *x,
+			enum usb_current_mode mode);
 
 };
 
@@ -201,6 +211,15 @@ usb_phy_vbus_off(struct usb_phy *x)
 	return x->set_vbus(x, false);
 }
 
+static inline int
+usb_phy_set_mode(struct usb_phy *x, enum usb_current_mode mode)
+{
+	if (!x || !x->set_mode)
+		return 0;
+
+	return x->set_mode(x, mode);
+}
+
 /* for usb host and peripheral controller drivers */
 #if IS_ENABLED(CONFIG_USB_PHY)
 extern struct usb_phy *usb_get_phy(enum usb_phy_type type);
@@ -210,6 +229,8 @@ extern struct usb_phy *usb_get_phy_dev(struct device *dev, u8 index);
 extern struct usb_phy *devm_usb_get_phy_dev(struct device *dev, u8 index);
 extern struct usb_phy *devm_usb_get_phy_by_phandle(struct device *dev,
 	const char *phandle, u8 index);
+extern struct usb_phy *devm_usb_get_phy_by_node(struct device *dev,
+	struct device_node *node, struct notifier_block *nb);
 extern void usb_put_phy(struct usb_phy *);
 extern void devm_usb_put_phy(struct device *dev, struct usb_phy *x);
 extern int usb_bind_phy(const char *dev_name, u8 index,
@@ -239,6 +260,12 @@ static inline struct usb_phy *devm_usb_get_phy_dev(struct device *dev, u8 index)
 
 static inline struct usb_phy *devm_usb_get_phy_by_phandle(struct device *dev,
 	const char *phandle, u8 index)
+{
+	return ERR_PTR(-ENXIO);
+}
+
+static inline struct usb_phy *devm_usb_get_phy_by_node(struct device *dev,
+	struct device_node *node, struct notifier_block *nb)
 {
 	return ERR_PTR(-ENXIO);
 }

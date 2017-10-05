@@ -72,33 +72,37 @@ static int tegra_timer_set_next_event(unsigned long cycles,
 	return 0;
 }
 
-static void tegra_timer_set_mode(enum clock_event_mode mode,
-				    struct clock_event_device *evt)
+static inline void timer_shutdown(struct clock_event_device *evt)
 {
-	u32 reg;
-
 	timer_writel(0, TIMER3_BASE + TIMER_PTV);
+}
 
-	switch (mode) {
-	case CLOCK_EVT_MODE_PERIODIC:
-		reg = 0xC0000000 | ((1000000/HZ)-1);
-		timer_writel(reg, TIMER3_BASE + TIMER_PTV);
-		break;
-	case CLOCK_EVT_MODE_ONESHOT:
-		break;
-	case CLOCK_EVT_MODE_UNUSED:
-	case CLOCK_EVT_MODE_SHUTDOWN:
-	case CLOCK_EVT_MODE_RESUME:
-		break;
-	}
+static int tegra_timer_shutdown(struct clock_event_device *evt)
+{
+	timer_shutdown(evt);
+	return 0;
+}
+
+static int tegra_timer_set_periodic(struct clock_event_device *evt)
+{
+	u32 reg = 0xC0000000 | ((1000000 / HZ) - 1);
+
+	timer_shutdown(evt);
+	timer_writel(reg, TIMER3_BASE + TIMER_PTV);
+	return 0;
 }
 
 static struct clock_event_device tegra_clockevent = {
-	.name		= "timer0",
-	.rating		= 300,
-	.features	= CLOCK_EVT_FEAT_ONESHOT | CLOCK_EVT_FEAT_PERIODIC,
-	.set_next_event	= tegra_timer_set_next_event,
-	.set_mode	= tegra_timer_set_mode,
+	.name			= "timer0",
+	.rating			= 300,
+	.features		= CLOCK_EVT_FEAT_ONESHOT |
+				  CLOCK_EVT_FEAT_PERIODIC |
+				  CLOCK_EVT_FEAT_DYNIRQ,
+	.set_next_event		= tegra_timer_set_next_event,
+	.set_state_shutdown	= tegra_timer_shutdown,
+	.set_state_periodic	= tegra_timer_set_periodic,
+	.set_state_oneshot	= tegra_timer_shutdown,
+	.tick_resume		= tegra_timer_shutdown,
 };
 
 static u64 notrace tegra_read_sched_clock(void)
@@ -161,7 +165,7 @@ static struct irqaction tegra_timer_irq = {
 	.dev_id		= &tegra_clockevent,
 };
 
-static void __init tegra20_init_timer(struct device_node *np)
+static int __init tegra20_init_timer(struct device_node *np)
 {
 	struct clk *clk;
 	unsigned long rate;
@@ -170,13 +174,13 @@ static void __init tegra20_init_timer(struct device_node *np)
 	timer_reg_base = of_iomap(np, 0);
 	if (!timer_reg_base) {
 		pr_err("Can't map timer registers\n");
-		BUG();
+		return -ENXIO;
 	}
 
 	tegra_timer_irq.irq = irq_of_parse_and_map(np, 2);
 	if (tegra_timer_irq.irq <= 0) {
 		pr_err("Failed to map timer IRQ\n");
-		BUG();
+		return -EINVAL;
 	}
 
 	clk = of_clk_get(np, 0);
@@ -207,10 +211,12 @@ static void __init tegra20_init_timer(struct device_node *np)
 
 	sched_clock_register(tegra_read_sched_clock, 32, 1000000);
 
-	if (clocksource_mmio_init(timer_reg_base + TIMERUS_CNTR_1US,
-		"timer_us", 1000000, 300, 32, clocksource_mmio_readl_up)) {
+	ret = clocksource_mmio_init(timer_reg_base + TIMERUS_CNTR_1US,
+				    "timer_us", 1000000, 300, 32,
+				    clocksource_mmio_readl_up);
+	if (ret) {
 		pr_err("Failed to register clocksource\n");
-		BUG();
+		return ret;
 	}
 
 	tegra_delay_timer.read_current_timer =
@@ -221,24 +227,26 @@ static void __init tegra20_init_timer(struct device_node *np)
 	ret = setup_irq(tegra_timer_irq.irq, &tegra_timer_irq);
 	if (ret) {
 		pr_err("Failed to register timer IRQ: %d\n", ret);
-		BUG();
+		return ret;
 	}
 
 	tegra_clockevent.cpumask = cpu_all_mask;
 	tegra_clockevent.irq = tegra_timer_irq.irq;
 	clockevents_config_and_register(&tegra_clockevent, 1000000,
 					0x1, 0x1fffffff);
+
+	return 0;
 }
 CLOCKSOURCE_OF_DECLARE(tegra20_timer, "nvidia,tegra20-timer", tegra20_init_timer);
 
-static void __init tegra20_init_rtc(struct device_node *np)
+static int __init tegra20_init_rtc(struct device_node *np)
 {
 	struct clk *clk;
 
 	rtc_base = of_iomap(np, 0);
 	if (!rtc_base) {
 		pr_err("Can't map RTC registers");
-		BUG();
+		return -ENXIO;
 	}
 
 	/*
@@ -251,20 +259,6 @@ static void __init tegra20_init_rtc(struct device_node *np)
 	else
 		clk_prepare_enable(clk);
 
-	register_persistent_clock(NULL, tegra_read_persistent_clock64);
+	return register_persistent_clock(NULL, tegra_read_persistent_clock64);
 }
 CLOCKSOURCE_OF_DECLARE(tegra20_rtc, "nvidia,tegra20-rtc", tegra20_init_rtc);
-
-#ifdef CONFIG_PM
-static u32 usec_config;
-
-void tegra_timer_suspend(void)
-{
-	usec_config = timer_readl(TIMERUS_USEC_CFG);
-}
-
-void tegra_timer_resume(void)
-{
-	timer_writel(usec_config, TIMERUS_USEC_CFG);
-}
-#endif

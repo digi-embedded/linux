@@ -1347,10 +1347,14 @@ static int ov5647_s_parm(struct v4l2_subdev *sd, struct v4l2_streamparm *a)
 	return ret;
 }
 
-static int ov5647_try_fmt(struct v4l2_subdev *sd,
-			  struct v4l2_mbus_framefmt *mf)
+static int ov5647_set_fmt(struct v4l2_subdev *sd,
+			  struct v4l2_subdev_pad_config *cfg,
+			  struct v4l2_subdev_format *format)
 {
+	struct v4l2_mbus_framefmt *mf = &format->format;
 	const struct ov5647_datafmt *fmt = ov5647_find_datafmt(mf->code);
+	struct i2c_client *client = v4l2_get_subdevdata(sd);
+	struct ov5647 *sensor = to_ov5647(client);
 
 	if (!fmt) {
 		mf->code	= ov5647_colour_fmts[0].code;
@@ -1359,32 +1363,25 @@ static int ov5647_try_fmt(struct v4l2_subdev *sd,
 
 	mf->field	= V4L2_FIELD_NONE;
 
-	return 0;
-}
+	if (format->which == V4L2_SUBDEV_FORMAT_TRY)
+		return 0;
 
-static int ov5647_s_fmt(struct v4l2_subdev *sd,
-			struct v4l2_mbus_framefmt *mf)
-{
-	struct i2c_client *client = v4l2_get_subdevdata(sd);
-	struct ov5647 *sensor = to_ov5647(client);
-
-	/* MIPI CSI could have changed the format, double-check */
-	if (!ov5647_find_datafmt(mf->code))
-		return -EINVAL;
-
-	ov5647_try_fmt(sd, mf);
-	sensor->fmt = ov5647_find_datafmt(mf->code);
+	sensor->fmt = fmt;
 
 	return 0;
 }
 
-static int ov5647_g_fmt(struct v4l2_subdev *sd,
-			struct v4l2_mbus_framefmt *mf)
+static int ov5647_get_fmt(struct v4l2_subdev *sd,
+			  struct v4l2_subdev_pad_config *cfg,
+			  struct v4l2_subdev_format *format)
 {
+	struct v4l2_mbus_framefmt *mf = &format->format;
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	struct ov5647 *sensor = to_ov5647(client);
-
 	const struct ov5647_datafmt *fmt = sensor->fmt;
+
+	if (format->pad)
+		return -EINVAL;
 
 	mf->code	= fmt->code;
 	mf->colorspace	= fmt->colorspace;
@@ -1393,13 +1390,14 @@ static int ov5647_g_fmt(struct v4l2_subdev *sd,
 	return 0;
 }
 
-static int ov5647_enum_fmt(struct v4l2_subdev *sd, unsigned int index,
-			   u32 *code)
+static int ov5647_enum_mbus_code(struct v4l2_subdev *sd,
+				 struct v4l2_subdev_pad_config *cfg,
+				 struct v4l2_subdev_mbus_code_enum *code)
 {
-	if (index >= ARRAY_SIZE(ov5647_colour_fmts))
+	if (code->pad || code->index >= ARRAY_SIZE(ov5647_colour_fmts))
 		return -EINVAL;
 
-	*code = ov5647_colour_fmts[index].code;
+	code->code = ov5647_colour_fmts[code->index].code;
 	return 0;
 }
 
@@ -1525,16 +1523,14 @@ static struct v4l2_subdev_video_ops ov5647_subdev_video_ops = {
 	.g_parm = ov5647_g_parm,
 	.s_parm = ov5647_s_parm,
 	.s_stream = ov5647_s_stream,
-
-	.s_mbus_fmt	= ov5647_s_fmt,
-	.g_mbus_fmt	= ov5647_g_fmt,
-	.try_mbus_fmt	= ov5647_try_fmt,
-	.enum_mbus_fmt	= ov5647_enum_fmt,
 };
 
 static const struct v4l2_subdev_pad_ops ov5647_subdev_pad_ops = {
 	.enum_frame_size       = ov5647_enum_framesizes,
 	.enum_frame_interval   = ov5647_enum_frameintervals,
+	.enum_mbus_code        = ov5647_enum_mbus_code,
+	.set_fmt               = ov5647_set_fmt,
+	.get_fmt               = ov5647_get_fmt,
 };
 
 static struct v4l2_subdev_core_ops ov5647_subdev_core_ops = {

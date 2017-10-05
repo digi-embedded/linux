@@ -111,7 +111,7 @@ static int ipc_tx_message(struct sst_generic_ipc *ipc, u64 header,
 	list_add_tail(&msg->list, &ipc->tx_list);
 	spin_unlock_irqrestore(&ipc->dsp->spinlock, flags);
 
-	queue_kthread_work(&ipc->kworker, &ipc->kwork);
+	kthread_queue_work(&ipc->kworker, &ipc->kwork);
 
 	if (wait)
 		return tx_wait_done(ipc, msg, rx_data);
@@ -129,11 +129,31 @@ static int msg_empty_list_init(struct sst_generic_ipc *ipc)
 		return -ENOMEM;
 
 	for (i = 0; i < IPC_EMPTY_LIST_SIZE; i++) {
+		ipc->msg[i].tx_data = kzalloc(ipc->tx_data_max_size, GFP_KERNEL);
+		if (ipc->msg[i].tx_data == NULL)
+			goto free_mem;
+
+		ipc->msg[i].rx_data = kzalloc(ipc->rx_data_max_size, GFP_KERNEL);
+		if (ipc->msg[i].rx_data == NULL) {
+			kfree(ipc->msg[i].tx_data);
+			goto free_mem;
+		}
+
 		init_waitqueue_head(&ipc->msg[i].waitq);
 		list_add(&ipc->msg[i].list, &ipc->empty_list);
 	}
 
 	return 0;
+
+free_mem:
+	while (i > 0) {
+		kfree(ipc->msg[i-1].tx_data);
+		kfree(ipc->msg[i-1].rx_data);
+		--i;
+	}
+	kfree(ipc->msg);
+
+	return -ENOMEM;
 }
 
 static void ipc_tx_msgs(struct kthread_work *work)
@@ -142,7 +162,6 @@ static void ipc_tx_msgs(struct kthread_work *work)
 		container_of(work, struct sst_generic_ipc, kwork);
 	struct ipc_message *msg;
 	unsigned long flags;
-	u64 ipcx;
 
 	spin_lock_irqsave(&ipc->dsp->spinlock, flags);
 
@@ -153,8 +172,8 @@ static void ipc_tx_msgs(struct kthread_work *work)
 
 	/* if the DSP is busy, we will TX messages after IRQ.
 	 * also postpone if we are in the middle of procesing completion irq*/
-	ipcx = sst_dsp_shim_read_unlocked(ipc->dsp, SST_IPCX);
-	if (ipcx & (SST_IPCX_BUSY | SST_IPCX_DONE)) {
+	if (ipc->ops.is_dsp_busy && ipc->ops.is_dsp_busy(ipc->dsp)) {
+		dev_dbg(ipc->dev, "ipc_tx_msgs dsp busy\n");
 		spin_unlock_irqrestore(&ipc->dsp->spinlock, flags);
 		return;
 	}
@@ -262,7 +281,7 @@ int sst_ipc_init(struct sst_generic_ipc *ipc)
 		return -ENOMEM;
 
 	/* start the IPC message thread */
-	init_kthread_worker(&ipc->kworker);
+	kthread_init_worker(&ipc->kworker);
 	ipc->tx_thread = kthread_run(kthread_worker_fn,
 					&ipc->kworker, "%s",
 					dev_name(ipc->dev));
@@ -273,18 +292,25 @@ int sst_ipc_init(struct sst_generic_ipc *ipc)
 		return ret;
 	}
 
-	init_kthread_work(&ipc->kwork, ipc_tx_msgs);
+	kthread_init_work(&ipc->kwork, ipc_tx_msgs);
 	return 0;
 }
 EXPORT_SYMBOL_GPL(sst_ipc_init);
 
 void sst_ipc_fini(struct sst_generic_ipc *ipc)
 {
+	int i;
+
 	if (ipc->tx_thread)
 		kthread_stop(ipc->tx_thread);
 
-	if (ipc->msg)
+	if (ipc->msg) {
+		for (i = 0; i < IPC_EMPTY_LIST_SIZE; i++) {
+			kfree(ipc->msg[i].tx_data);
+			kfree(ipc->msg[i].rx_data);
+		}
 		kfree(ipc->msg);
+	}
 }
 EXPORT_SYMBOL_GPL(sst_ipc_fini);
 

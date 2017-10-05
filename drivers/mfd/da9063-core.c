@@ -3,10 +3,10 @@
  *
  * Copyright 2012 Dialog Semiconductors Ltd.
  * Copyright 2013 Philipp Zabel, Pengutronix
- * Copyright 2013  Digi International Inc.
+ * Copyright 2013-2017  Digi International Inc.
  *
- * Author: Krystian Garbaciak <krystian.garbaciak@diasemi.com>,
- *         Michal Hajduk <michal.hajduk@diasemi.com>
+ * Author: Krystian Garbaciak, Dialog Semiconductor
+ * Author: Michal Hajduk, Dialog Semiconductor
  *
  *  This program is free software; you can redistribute  it and/or modify it
  *  under  the terms of  the GNU General  Public License as published by the
@@ -64,6 +64,7 @@ static struct resource da9063_rtc_resources[] = {
 
 static struct resource da9063_onkey_resources[] = {
 	{
+		.name	= "ONKEY",
 		.start	= DA9063_IRQ_ONKEY,
 		.end	= DA9063_IRQ_ONKEY,
 		.flags	= IORESOURCE_IRQ,
@@ -186,13 +187,13 @@ static const struct mfd_cell da9063_devs[] = {
 		.name		= DA9063_DRVNAME_ONKEY,
 		.num_resources	= ARRAY_SIZE(da9063_onkey_resources),
 		.resources	= da9063_onkey_resources,
-		.of_compatible  = "dlg,da9063-onkey",
+		.of_compatible	= "dlg,da9063-onkey",
 	},
 	{
 		.name		= DA9063_DRVNAME_RTC,
 		.num_resources	= ARRAY_SIZE(da9063_rtc_resources),
 		.resources	= da9063_rtc_resources,
-		.of_compatible  = "dlg,da9063-rtc",
+		.of_compatible	= "dlg,da9063-rtc",
 	},
 	{
 		.name		= DA9063_DRVNAME_VIBRATION,
@@ -205,6 +206,54 @@ static const struct mfd_cell da9063_devs[] = {
 		.of_compatible  = "dlg,da9063-gpio",
 	},
 };
+
+static int da9063_clear_fault_log(struct da9063 *da9063)
+{
+	int ret = 0;
+	int fault_log = 0;
+
+	ret = regmap_read(da9063->regmap, DA9063_REG_FAULT_LOG, &fault_log);
+	if (ret < 0) {
+		dev_err(da9063->dev, "Cannot read FAULT_LOG.\n");
+		return -EIO;
+	}
+
+	if (fault_log) {
+		if (fault_log & DA9063_TWD_ERROR)
+			dev_dbg(da9063->dev,
+				"Fault log entry detected: DA9063_TWD_ERROR\n");
+		if (fault_log & DA9063_POR)
+			dev_dbg(da9063->dev,
+				"Fault log entry detected: DA9063_POR\n");
+		if (fault_log & DA9063_VDD_FAULT)
+			dev_dbg(da9063->dev,
+				"Fault log entry detected: DA9063_VDD_FAULT\n");
+		if (fault_log & DA9063_VDD_START)
+			dev_dbg(da9063->dev,
+				"Fault log entry detected: DA9063_VDD_START\n");
+		if (fault_log & DA9063_TEMP_CRIT)
+			dev_dbg(da9063->dev,
+				"Fault log entry detected: DA9063_TEMP_CRIT\n");
+		if (fault_log & DA9063_KEY_RESET)
+			dev_dbg(da9063->dev,
+				"Fault log entry detected: DA9063_KEY_RESET\n");
+		if (fault_log & DA9063_NSHUTDOWN)
+			dev_dbg(da9063->dev,
+				"Fault log entry detected: DA9063_NSHUTDOWN\n");
+		if (fault_log & DA9063_WAIT_SHUT)
+			dev_dbg(da9063->dev,
+				"Fault log entry detected: DA9063_WAIT_SHUT\n");
+	}
+
+	ret = regmap_write(da9063->regmap,
+			   DA9063_REG_FAULT_LOG,
+			   fault_log);
+	if (ret < 0)
+		dev_err(da9063->dev,
+			"Cannot reset FAULT_LOG values %d\n", ret);
+
+	return ret;
+}
 
 int da9063_dump(struct da9063 *da9063)
 {
@@ -289,6 +338,10 @@ int da9063_device_init(struct da9063 *da9063, unsigned int irq)
 	int model, variant_id, variant_code, t_offset;
 	int ret;
 
+	ret = da9063_clear_fault_log(da9063);
+	if (ret < 0)
+		dev_err(da9063->dev, "Cannot clear fault log\n");
+
 	da9063->chip_irq = irq;
 
 	ret = regmap_read(da9063->regmap, DA9063_REG_CHIP_ID, &model);
@@ -354,5 +407,6 @@ void da9063_device_exit(struct da9063 *da9063)
 }
 
 MODULE_DESCRIPTION("PMIC driver for Dialog DA9063");
-MODULE_AUTHOR("Krystian Garbaciak <krystian.garbaciak@diasemi.com>, Michal Hajduk <michal.hajduk@diasemi.com>");
+MODULE_AUTHOR("Krystian Garbaciak");
+MODULE_AUTHOR("Michal Hajduk");
 MODULE_LICENSE("GPL");

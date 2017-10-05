@@ -901,7 +901,7 @@ static int vpu_dev_probe(struct platform_device *pdev)
 	if (!err && iramsize)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
 	{
-		iram_pool = of_get_named_gen_pool(np, "iram", 0);
+		iram_pool = of_gen_pool_get(np, "iram", 0);
 		if (!iram_pool) {
 			dev_err(&pdev->dev, "iram pool not available\n");
 			return -ENOMEM;

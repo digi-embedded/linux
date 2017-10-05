@@ -1,4 +1,4 @@
-/*
+ /*
  *  sst-atom-controls.c - Intel MID Platform driver DPCM ALSA controls for Mrfld
  *
  *  Copyright (C) 2013-14 Intel Corp
@@ -132,7 +132,7 @@ static int sst_send_slot_map(struct sst_data *drv)
 			      sizeof(cmd.header) + cmd.header.length);
 }
 
-int sst_slot_enum_info(struct snd_kcontrol *kcontrol,
+static int sst_slot_enum_info(struct snd_kcontrol *kcontrol,
 		       struct snd_ctl_elem_info *uinfo)
 {
 	struct sst_enum *e = (struct sst_enum *)kcontrol->private_value;
@@ -195,7 +195,7 @@ static int sst_check_and_send_slot_map(struct sst_data *drv, struct snd_kcontrol
 
 	if (e->w && e->w->power)
 		ret = sst_send_slot_map(drv);
-	else
+	else if (!e->w)
 		dev_err(&drv->pdev->dev, "Slot control: %s doesn't have DAPM widget!!!\n",
 				kcontrol->id.name);
 	return ret;
@@ -443,7 +443,7 @@ static int sst_gain_get(struct snd_kcontrol *kcontrol,
 		break;
 
 	case SST_GAIN_MUTE:
-		ucontrol->value.integer.value[0] = gv->mute ? 1 : 0;
+		ucontrol->value.integer.value[0] = gv->mute ? 0 : 1;
 		break;
 
 	case SST_GAIN_RAMP_DURATION:
@@ -479,7 +479,7 @@ static int sst_gain_put(struct snd_kcontrol *kcontrol,
 		break;
 
 	case SST_GAIN_MUTE:
-		gv->mute = !!ucontrol->value.integer.value[0];
+		gv->mute = !ucontrol->value.integer.value[0];
 		dev_dbg(cmpnt->dev, "%s: Mute %d\n", mc->pname, gv->mute);
 		break;
 
@@ -534,6 +534,7 @@ static const DECLARE_TLV_DB_SCALE(sst_gain_tlv_common, SST_GAIN_MIN_VALUE * 10, 
 
 /* Look up table to convert MIXER SW bit regs to SWM inputs */
 static const uint swm_mixer_input_ids[SST_SWM_INPUT_COUNT] = {
+	[SST_IP_MODEM]		= SST_SWM_IN_MODEM,
 	[SST_IP_CODEC0]		= SST_SWM_IN_CODEC0,
 	[SST_IP_CODEC1]		= SST_SWM_IN_CODEC1,
 	[SST_IP_LOOP0]		= SST_SWM_IN_SPROT_LOOP,
@@ -674,6 +675,7 @@ static int sst_swm_mixer_event(struct snd_soc_dapm_widget *w,
 /* SBA mixers - 16 inputs */
 #define SST_SBA_DECLARE_MIX_CONTROLS(kctl_name)							\
 	static const struct snd_kcontrol_new kctl_name[] = {					\
+		SOC_DAPM_SINGLE("modem_in Switch", SND_SOC_NOPM, SST_IP_MODEM, 1, 0),		\
 		SOC_DAPM_SINGLE("codec_in0 Switch", SND_SOC_NOPM, SST_IP_CODEC0, 1, 0),		\
 		SOC_DAPM_SINGLE("codec_in1 Switch", SND_SOC_NOPM, SST_IP_CODEC1, 1, 0),		\
 		SOC_DAPM_SINGLE("sprot_loop_in Switch", SND_SOC_NOPM, SST_IP_LOOP0, 1, 0),	\
@@ -684,6 +686,7 @@ static int sst_swm_mixer_event(struct snd_soc_dapm_widget *w,
 	}
 
 #define SST_SBA_MIXER_GRAPH_MAP(mix_name)			\
+	{ mix_name, "modem_in Switch",	"modem_in" },		\
 	{ mix_name, "codec_in0 Switch",	"codec_in0" },		\
 	{ mix_name, "codec_in1 Switch",	"codec_in1" },		\
 	{ mix_name, "sprot_loop_in Switch",	"sprot_loop_in" },	\
@@ -713,6 +716,7 @@ SST_SBA_DECLARE_MIX_CONTROLS(sst_mix_media_l2_controls);
 SST_SBA_DECLARE_MIX_CONTROLS(sst_mix_voip_controls);
 SST_SBA_DECLARE_MIX_CONTROLS(sst_mix_codec0_controls);
 SST_SBA_DECLARE_MIX_CONTROLS(sst_mix_codec1_controls);
+SST_SBA_DECLARE_MIX_CONTROLS(sst_mix_modem_controls);
 
 /*
  * sst_handle_vb_timer - Start/Stop the DSP scheduler
@@ -774,8 +778,120 @@ int sst_handle_vb_timer(struct snd_soc_dai *dai, bool enable)
 	return ret;
 }
 
+int sst_fill_ssp_slot(struct snd_soc_dai *dai, unsigned int tx_mask,
+		unsigned int rx_mask, int slots, int slot_width)
+{
+	struct sst_data *ctx = snd_soc_dai_get_drvdata(dai);
+
+	ctx->ssp_cmd.nb_slots = slots;
+	ctx->ssp_cmd.active_tx_slot_map = tx_mask;
+	ctx->ssp_cmd.active_rx_slot_map = rx_mask;
+	ctx->ssp_cmd.nb_bits_per_slots = slot_width;
+
+	return 0;
+}
+
+static int sst_get_frame_sync_polarity(struct snd_soc_dai *dai,
+		unsigned int fmt)
+{
+	int format;
+
+	format = fmt & SND_SOC_DAIFMT_INV_MASK;
+	dev_dbg(dai->dev, "Enter:%s, format=%x\n", __func__, format);
+
+	switch (format) {
+	case SND_SOC_DAIFMT_NB_NF:
+		return SSP_FS_ACTIVE_LOW;
+	case SND_SOC_DAIFMT_NB_IF:
+		return SSP_FS_ACTIVE_HIGH;
+	case SND_SOC_DAIFMT_IB_IF:
+		return SSP_FS_ACTIVE_LOW;
+	case SND_SOC_DAIFMT_IB_NF:
+		return SSP_FS_ACTIVE_HIGH;
+	default:
+		dev_err(dai->dev, "Invalid frame sync polarity %d\n", format);
+	}
+
+	return -EINVAL;
+}
+
+static int sst_get_ssp_mode(struct snd_soc_dai *dai, unsigned int fmt)
+{
+	int format;
+
+	format = (fmt & SND_SOC_DAIFMT_MASTER_MASK);
+	dev_dbg(dai->dev, "Enter:%s, format=%x\n", __func__, format);
+
+	switch (format) {
+	case SND_SOC_DAIFMT_CBS_CFS:
+		return SSP_MODE_MASTER;
+	case SND_SOC_DAIFMT_CBM_CFM:
+		return SSP_MODE_SLAVE;
+	default:
+		dev_err(dai->dev, "Invalid ssp protocol: %d\n", format);
+	}
+
+	return -EINVAL;
+}
+
+
+int sst_fill_ssp_config(struct snd_soc_dai *dai, unsigned int fmt)
+{
+	unsigned int mode;
+	int fs_polarity;
+	struct sst_data *ctx = snd_soc_dai_get_drvdata(dai);
+
+	mode = fmt & SND_SOC_DAIFMT_FORMAT_MASK;
+
+	switch (mode) {
+	case SND_SOC_DAIFMT_DSP_B:
+		ctx->ssp_cmd.ssp_protocol = SSP_MODE_PCM;
+		ctx->ssp_cmd.mode = sst_get_ssp_mode(dai, fmt) | (SSP_PCM_MODE_NETWORK << 1);
+		ctx->ssp_cmd.start_delay = 0;
+		ctx->ssp_cmd.data_polarity = 1;
+		ctx->ssp_cmd.frame_sync_width = 1;
+		break;
+
+	case SND_SOC_DAIFMT_DSP_A:
+		ctx->ssp_cmd.ssp_protocol = SSP_MODE_PCM;
+		ctx->ssp_cmd.mode = sst_get_ssp_mode(dai, fmt) | (SSP_PCM_MODE_NETWORK << 1);
+		ctx->ssp_cmd.start_delay = 1;
+		ctx->ssp_cmd.data_polarity = 1;
+		ctx->ssp_cmd.frame_sync_width = 1;
+		break;
+
+	case SND_SOC_DAIFMT_I2S:
+		ctx->ssp_cmd.ssp_protocol = SSP_MODE_I2S;
+		ctx->ssp_cmd.mode = sst_get_ssp_mode(dai, fmt) | (SSP_PCM_MODE_NORMAL << 1);
+		ctx->ssp_cmd.start_delay = 1;
+		ctx->ssp_cmd.data_polarity = 0;
+		ctx->ssp_cmd.frame_sync_width = ctx->ssp_cmd.nb_bits_per_slots;
+		break;
+
+	case SND_SOC_DAIFMT_LEFT_J:
+		ctx->ssp_cmd.ssp_protocol = SSP_MODE_I2S;
+		ctx->ssp_cmd.mode = sst_get_ssp_mode(dai, fmt) | (SSP_PCM_MODE_NORMAL << 1);
+		ctx->ssp_cmd.start_delay = 0;
+		ctx->ssp_cmd.data_polarity = 0;
+		ctx->ssp_cmd.frame_sync_width = ctx->ssp_cmd.nb_bits_per_slots;
+		break;
+
+	default:
+		dev_dbg(dai->dev, "using default ssp configs\n");
+	}
+
+	fs_polarity = sst_get_frame_sync_polarity(dai, fmt);
+	if (fs_polarity < 0)
+		return fs_polarity;
+
+	ctx->ssp_cmd.frame_sync_polarity = fs_polarity;
+
+	return 0;
+}
+
 /**
  * sst_ssp_config - contains SSP configuration for media UC
+ * this can be overwritten by set_dai_xxx APIs
  */
 static const struct sst_ssp_config sst_ssp_configs = {
 	.ssp_id = SSP_CODEC,
@@ -789,47 +905,65 @@ static const struct sst_ssp_config sst_ssp_configs = {
 	.fs_frequency = SSP_FS_48_KHZ,
 	.active_slot_map = 0xF,
 	.start_delay = 0,
+	.frame_sync_polarity = SSP_FS_ACTIVE_HIGH,
+	.data_polarity = 1,
 };
+
+void sst_fill_ssp_defaults(struct snd_soc_dai *dai)
+{
+	const struct sst_ssp_config *config;
+	struct sst_data *ctx = snd_soc_dai_get_drvdata(dai);
+
+	config = &sst_ssp_configs;
+
+	ctx->ssp_cmd.selection = config->ssp_id;
+	ctx->ssp_cmd.nb_bits_per_slots = config->bits_per_slot;
+	ctx->ssp_cmd.nb_slots = config->slots;
+	ctx->ssp_cmd.mode = config->ssp_mode | (config->pcm_mode << 1);
+	ctx->ssp_cmd.duplex = config->duplex;
+	ctx->ssp_cmd.active_tx_slot_map = config->active_slot_map;
+	ctx->ssp_cmd.active_rx_slot_map = config->active_slot_map;
+	ctx->ssp_cmd.frame_sync_frequency = config->fs_frequency;
+	ctx->ssp_cmd.frame_sync_polarity = config->frame_sync_polarity;
+	ctx->ssp_cmd.data_polarity = config->data_polarity;
+	ctx->ssp_cmd.frame_sync_width = config->fs_width;
+	ctx->ssp_cmd.ssp_protocol = config->ssp_protocol;
+	ctx->ssp_cmd.start_delay = config->start_delay;
+	ctx->ssp_cmd.reserved1 = ctx->ssp_cmd.reserved2 = 0xFF;
+}
 
 int send_ssp_cmd(struct snd_soc_dai *dai, const char *id, bool enable)
 {
-	struct sst_cmd_sba_hw_set_ssp cmd;
 	struct sst_data *drv = snd_soc_dai_get_drvdata(dai);
-	const struct sst_ssp_config *config;
+	int ssp_id;
 
 	dev_info(dai->dev, "Enter: enable=%d port_name=%s\n", enable, id);
 
-	SST_FILL_DEFAULT_DESTINATION(cmd.header.dst);
-	cmd.header.command_id = SBA_HW_SET_SSP;
-	cmd.header.length = sizeof(struct sst_cmd_sba_hw_set_ssp)
+	if (strcmp(id, "ssp0-port") == 0)
+		ssp_id = SSP_MODEM;
+	else if (strcmp(id, "ssp2-port") == 0)
+		ssp_id = SSP_CODEC;
+	else {
+		dev_dbg(dai->dev, "port %s is not supported\n", id);
+		return -1;
+	}
+
+	SST_FILL_DEFAULT_DESTINATION(drv->ssp_cmd.header.dst);
+	drv->ssp_cmd.header.command_id = SBA_HW_SET_SSP;
+	drv->ssp_cmd.header.length = sizeof(struct sst_cmd_sba_hw_set_ssp)
 				- sizeof(struct sst_dsp_header);
 
-	config = &sst_ssp_configs;
-	dev_dbg(dai->dev, "ssp_id: %u\n", config->ssp_id);
+	drv->ssp_cmd.selection = ssp_id;
+	dev_dbg(dai->dev, "ssp_id: %u\n", ssp_id);
 
 	if (enable)
-		cmd.switch_state = SST_SWITCH_ON;
+		drv->ssp_cmd.switch_state = SST_SWITCH_ON;
 	else
-		cmd.switch_state = SST_SWITCH_OFF;
-
-	cmd.selection = config->ssp_id;
-	cmd.nb_bits_per_slots = config->bits_per_slot;
-	cmd.nb_slots = config->slots;
-	cmd.mode = config->ssp_mode | (config->pcm_mode << 1);
-	cmd.duplex = config->duplex;
-	cmd.active_tx_slot_map = config->active_slot_map;
-	cmd.active_rx_slot_map = config->active_slot_map;
-	cmd.frame_sync_frequency = config->fs_frequency;
-	cmd.frame_sync_polarity = SSP_FS_ACTIVE_HIGH;
-	cmd.data_polarity = 1;
-	cmd.frame_sync_width = config->fs_width;
-	cmd.ssp_protocol = config->ssp_protocol;
-	cmd.start_delay = config->start_delay;
-	cmd.reserved1 = cmd.reserved2 = 0xFF;
+		drv->ssp_cmd.switch_state = SST_SWITCH_OFF;
 
 	return sst_fill_and_send_cmd(drv, SST_IPC_IA_CMD, SST_FLAG_BLOCKED,
-				SST_TASK_SBA, 0, &cmd,
-				sizeof(cmd.header) + cmd.header.length);
+				SST_TASK_SBA, 0, &drv->ssp_cmd,
+				sizeof(drv->ssp_cmd.header) + drv->ssp_cmd.header.length);
 }
 
 static int sst_set_be_modules(struct snd_soc_dapm_widget *w,
@@ -926,8 +1060,10 @@ static int sst_set_media_loop(struct snd_soc_dapm_widget *w,
 }
 
 static const struct snd_soc_dapm_widget sst_dapm_widgets[] = {
+	SST_AIF_IN("modem_in", sst_set_be_modules),
 	SST_AIF_IN("codec_in0", sst_set_be_modules),
 	SST_AIF_IN("codec_in1", sst_set_be_modules),
+	SST_AIF_OUT("modem_out", sst_set_be_modules),
 	SST_AIF_OUT("codec_out0", sst_set_be_modules),
 	SST_AIF_OUT("codec_out1", sst_set_be_modules),
 
@@ -982,12 +1118,16 @@ static const struct snd_soc_dapm_widget sst_dapm_widgets[] = {
 		      sst_mix_codec0_controls, sst_swm_mixer_event),
 	SST_SWM_MIXER("codec_out1 mix 0", SND_SOC_NOPM, SST_TASK_SBA, SST_SWM_OUT_CODEC1,
 		      sst_mix_codec1_controls, sst_swm_mixer_event),
+	SST_SWM_MIXER("modem_out mix 0", SND_SOC_NOPM, SST_TASK_SBA, SST_SWM_OUT_MODEM,
+		      sst_mix_modem_controls, sst_swm_mixer_event),
+
 };
 
 static const struct snd_soc_dapm_route intercon[] = {
 	{"media0_in", NULL, "Compress Playback"},
 	{"media1_in", NULL, "Headset Playback"},
 	{"media2_in", NULL, "pcm0_out"},
+	{"media3_in", NULL, "Deepbuffer Playback"},
 
 	{"media0_out mix 0", "media0_in Switch", "media0_in"},
 	{"media0_out mix 0", "media1_in Switch", "media1_in"},
@@ -1026,6 +1166,9 @@ static const struct snd_soc_dapm_route intercon[] = {
 	SST_SBA_MIXER_GRAPH_MAP("codec_out0 mix 0"),
 	{"codec_out1", NULL, "codec_out1 mix 0"},
 	SST_SBA_MIXER_GRAPH_MAP("codec_out1 mix 0"),
+	{"modem_out", NULL, "modem_out mix 0"},
+	SST_SBA_MIXER_GRAPH_MAP("modem_out mix 0"),
+
 
 };
 static const char * const slot_names[] = {
@@ -1095,6 +1238,9 @@ static const struct snd_kcontrol_new sst_gain_controls[] = {
 	SST_GAIN("media_loop2_out", SST_PATH_INDEX_MEDIA_LOOP2_OUT, SST_TASK_SBA, 0, &sst_gains[13]),
 	SST_GAIN("sprot_loop_out", SST_PATH_INDEX_SPROT_LOOP_OUT, SST_TASK_SBA, 0, &sst_gains[14]),
 	SST_VOLUME("media0_in", SST_PATH_INDEX_MEDIA0_IN, SST_TASK_MMX, 0, &sst_gains[15]),
+	SST_GAIN("modem_in", SST_PATH_INDEX_MODEM_IN, SST_TASK_SBA, 0, &sst_gains[16]),
+	SST_GAIN("modem_out", SST_PATH_INDEX_MODEM_OUT, SST_TASK_SBA, 0, &sst_gains[17]),
+
 };
 
 #define SST_GAIN_NUM_CONTROLS 3
@@ -1177,7 +1323,7 @@ int sst_send_pipe_gains(struct snd_soc_dai *dai, int stream, int mute)
 		dev_dbg(dai->dev, "Stream name=%s\n",
 				dai->playback_widget->name);
 		w = dai->playback_widget;
-		list_for_each_entry(p, &w->sinks, list_source) {
+		snd_soc_dapm_widget_for_each_sink_path(w, p) {
 			if (p->connected && !p->connected(w, p->sink))
 				continue;
 
@@ -1196,7 +1342,7 @@ int sst_send_pipe_gains(struct snd_soc_dai *dai, int stream, int mute)
 		dev_dbg(dai->dev, "Stream name=%s\n",
 				dai->capture_widget->name);
 		w = dai->capture_widget;
-		list_for_each_entry(p, &w->sources, list_sink) {
+		snd_soc_dapm_widget_for_each_source_path(w, p) {
 			if (p->connected && !p->connected(w, p->sink))
 				continue;
 
@@ -1280,36 +1426,32 @@ static int sst_fill_widget_module_info(struct snd_soc_dapm_widget *w,
 	down_read(&card->controls_rwsem);
 
 	list_for_each_entry(kctl, &card->controls, list) {
-		idx = strstr(kctl->id.name, " ");
+		idx = strchr(kctl->id.name, ' ');
 		if (idx == NULL)
 			continue;
-		index  = strlen(kctl->id.name) - strlen(idx);
+		index = idx - (char*)kctl->id.name;
+		if (strncmp(kctl->id.name, w->name, index))
+			continue;
 
-		if (strstr(kctl->id.name, "Volume") &&
-		    !strncmp(kctl->id.name, w->name, index))
+		if (strstr(kctl->id.name, "Volume"))
 			ret = sst_fill_module_list(kctl, w, SST_MODULE_GAIN);
 
-		else if (strstr(kctl->id.name, "params") &&
-			 !strncmp(kctl->id.name, w->name, index))
+		else if (strstr(kctl->id.name, "params"))
 			ret = sst_fill_module_list(kctl, w, SST_MODULE_ALGO);
 
 		else if (strstr(kctl->id.name, "Switch") &&
-			 !strncmp(kctl->id.name, w->name, index) &&
 			 strstr(kctl->id.name, "Gain")) {
 			struct sst_gain_mixer_control *mc =
 						(void *)kctl->private_value;
 
 			mc->w = w;
 
-		} else if (strstr(kctl->id.name, "interleaver") &&
-			 !strncmp(kctl->id.name, w->name, index)) {
+		} else if (strstr(kctl->id.name, "interleaver")) {
 			struct sst_enum *e = (void *)kctl->private_value;
 
 			e->w = w;
 
-		} else if (strstr(kctl->id.name, "deinterleaver") &&
-			 !strncmp(kctl->id.name, w->name, index)) {
-
+		} else if (strstr(kctl->id.name, "deinterleaver")) {
 			struct sst_enum *e = (void *)kctl->private_value;
 
 			e->w = w;

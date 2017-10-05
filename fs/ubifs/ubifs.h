@@ -37,41 +37,18 @@
 #include <linux/pagemap.h>
 #include <linux/backing-dev.h>
 #include <linux/security.h>
+#include <linux/xattr.h>
 #include "ubifs-media.h"
 
 /* Version of this UBIFS implementation */
 #define UBIFS_VERSION 1
 
-/* Normal UBIFS messages */
-#define ubifs_msg(c, fmt, ...)                                      \
-	pr_notice("UBIFS (ubi%d:%d): " fmt "\n",                    \
-		  (c)->vi.ubi_num, (c)->vi.vol_id, ##__VA_ARGS__)
-/* UBIFS error messages */
-#define ubifs_err(c, fmt, ...)                                      \
-	pr_err("UBIFS error (ubi%d:%d pid %d): %s: " fmt "\n",      \
-	       (c)->vi.ubi_num, (c)->vi.vol_id, current->pid,       \
-	       __func__, ##__VA_ARGS__)
-/* UBIFS warning messages */
-#define ubifs_warn(c, fmt, ...)                                     \
-	pr_warn("UBIFS warning (ubi%d:%d pid %d): %s: " fmt "\n",   \
-		(c)->vi.ubi_num, (c)->vi.vol_id, current->pid,      \
-		__func__, ##__VA_ARGS__)
-/*
- * A variant of 'ubifs_err()' which takes the UBIFS file-sytem description
- * object as an argument.
- */
-#define ubifs_errc(c, fmt, ...)                                     \
-	do {                                                        \
-		if (!(c)->probing)                                  \
-			ubifs_err(c, fmt, ##__VA_ARGS__);           \
-	} while (0)
-
 /* UBIFS file system VFS magic number */
 #define UBIFS_SUPER_MAGIC 0x24051905
 
 /* Number of UBIFS blocks per VFS page */
-#define UBIFS_BLOCKS_PER_PAGE (PAGE_CACHE_SIZE / UBIFS_BLOCK_SIZE)
-#define UBIFS_BLOCKS_PER_PAGE_SHIFT (PAGE_CACHE_SHIFT - UBIFS_BLOCK_SHIFT)
+#define UBIFS_BLOCKS_PER_PAGE (PAGE_SIZE / UBIFS_BLOCK_SIZE)
+#define UBIFS_BLOCKS_PER_PAGE_SHIFT (PAGE_SHIFT - UBIFS_BLOCK_SHIFT)
 
 /* "File system end of life" sequence number watermark */
 #define SQNUM_WARN_WATERMARK 0xFFFFFFFF00000000ULL
@@ -180,6 +157,7 @@ enum {
 	WB_MUTEX_1 = 0,
 	WB_MUTEX_2 = 1,
 	WB_MUTEX_3 = 2,
+	WB_MUTEX_4 = 3,
 };
 
 /*
@@ -858,9 +836,9 @@ struct ubifs_compressor {
  * @mod_dent: non-zero if the operation removes or modifies an existing
  *            directory entry
  * @new_ino: non-zero if the operation adds a new inode
- * @new_ino_d: now much data newly created inode contains
+ * @new_ino_d: how much data newly created inode contains
  * @dirtied_ino: how many inodes the operation makes dirty
- * @dirtied_ino_d: now much data dirtied inode contains
+ * @dirtied_ino_d: how much data dirtied inode contains
  * @idx_growth: how much the index will supposedly grow
  * @data_growth: how much new data the operation will supposedly add
  * @dd_growth: how much data that makes other data dirty the operation will
@@ -1470,7 +1448,6 @@ extern spinlock_t ubifs_infos_lock;
 extern atomic_long_t ubifs_clean_zn_cnt;
 extern struct kmem_cache *ubifs_inode_slab;
 extern const struct super_operations ubifs_super_operations;
-extern const struct xattr_handler *ubifs_xattr_handlers[];
 extern const struct address_space_operations ubifs_file_address_operations;
 extern const struct file_operations ubifs_file_operations;
 extern const struct inode_operations ubifs_file_inode_operations;
@@ -1544,10 +1521,15 @@ int ubifs_jnl_write_data(struct ubifs_info *c, const struct inode *inode,
 			 const union ubifs_key *key, const void *buf, int len);
 int ubifs_jnl_write_inode(struct ubifs_info *c, const struct inode *inode);
 int ubifs_jnl_delete_inode(struct ubifs_info *c, const struct inode *inode);
+int ubifs_jnl_xrename(struct ubifs_info *c, const struct inode *fst_dir,
+		      const struct dentry *fst_dentry,
+		      const struct inode *snd_dir,
+		      const struct dentry *snd_dentry, int sync);
 int ubifs_jnl_rename(struct ubifs_info *c, const struct inode *old_dir,
 		     const struct dentry *old_dentry,
 		     const struct inode *new_dir,
-		     const struct dentry *new_dentry, int sync);
+		     const struct dentry *new_dentry,
+		     const struct inode *whiteout, int sync);
 int ubifs_jnl_truncate(struct ubifs_info *c, const struct inode *inode,
 		       loff_t old_size, loff_t new_size);
 int ubifs_jnl_delete_xattr(struct ubifs_info *c, const struct inode *host,
@@ -1746,6 +1728,9 @@ int ubifs_calc_dark(const struct ubifs_info *c, int spc);
 /* file.c */
 int ubifs_fsync(struct file *file, loff_t start, loff_t end, int datasync);
 int ubifs_setattr(struct dentry *dentry, struct iattr *attr);
+#ifdef CONFIG_UBIFS_ATIME_SUPPORT
+int ubifs_update_time(struct inode *inode, struct timespec *time, int flags);
+#endif
 
 /* dir.c */
 struct inode *ubifs_new_inode(struct ubifs_info *c, const struct inode *dir,
@@ -1754,12 +1739,8 @@ int ubifs_getattr(struct vfsmount *mnt, struct dentry *dentry,
 		  struct kstat *stat);
 
 /* xattr.c */
-int ubifs_setxattr(struct dentry *dentry, const char *name,
-		   const void *value, size_t size, int flags);
-ssize_t ubifs_getxattr(struct dentry *dentry, const char *name, void *buf,
-		       size_t size);
+extern const struct xattr_handler *ubifs_xattr_handlers[];
 ssize_t ubifs_listxattr(struct dentry *dentry, char *buffer, size_t size);
-int ubifs_removexattr(struct dentry *dentry, const char *name);
 int ubifs_init_security(struct inode *dentry, struct inode *inode,
 			const struct qstr *qstr);
 
@@ -1799,5 +1780,22 @@ int ubifs_decompress(const struct ubifs_info *c, const void *buf, int len,
 #include "debug.h"
 #include "misc.h"
 #include "key.h"
+
+/* Normal UBIFS messages */
+__printf(2, 3)
+void ubifs_msg(const struct ubifs_info *c, const char *fmt, ...);
+__printf(2, 3)
+void ubifs_err(const struct ubifs_info *c, const char *fmt, ...);
+__printf(2, 3)
+void ubifs_warn(const struct ubifs_info *c, const char *fmt, ...);
+/*
+ * A conditional variant of 'ubifs_err()' which doesn't output anything
+ * if probing (ie. MS_SILENT set).
+ */
+#define ubifs_errc(c, fmt, ...)						\
+do {									\
+	if (!(c)->probing)						\
+		ubifs_err(c, fmt, ##__VA_ARGS__);			\
+} while (0)
 
 #endif /* !__UBIFS_H__ */

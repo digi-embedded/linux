@@ -19,15 +19,6 @@
  * Do not change this as the FIQ handler depends on this size
  */
 #define IMX_SSI_DMABUF_SIZE	(64 * 1024)
-#define IMX_SAI_DMABUF_SIZE	(64 * 1024)
-#define IMX_SPDIF_DMABUF_SIZE	(64 * 1024)
-#define IMX_ESAI_DMABUF_SIZE	(256 * 1024)
-#define IMX_ASRC_DMABUF_SIZE	(256 * 1024)
-
-#define IMX_DEFAULT_DMABUF_SIZE	(64 * 1024)
-#define IMX_SAI_DMABUF_SIZE	(64 * 1024)
-#define IMX_SPDIF_DMABUF_SIZE	(64 * 1024)
-#define IMX_ESAI_DMABUF_SIZE	(256 * 1024)
 
 #define IMX_DEFAULT_DMABUF_SIZE	(64 * 1024)
 #define IMX_SAI_DMABUF_SIZE	(64 * 1024)
@@ -52,10 +43,24 @@ struct imx_pcm_fiq_params {
 	struct snd_dmaengine_dai_dma_data *dma_params_tx;
 };
 
+#if IS_ENABLED(CONFIG_SND_SOC_IMX_PCM_RPMSG)
+int imx_rpmsg_platform_register(struct device *dev);
+#else
+static inline int imx_rpmsg_platform_register(struct device *dev)
+{
+	return -ENODEV;
+}
+#endif
+
 #if IS_ENABLED(CONFIG_SND_SOC_IMX_PCM_DMA)
 int imx_pcm_dma_init(struct platform_device *pdev, size_t size);
+int imx_pcm_platform_register(struct device *dev);
 #else
 static inline int imx_pcm_dma_init(struct platform_device *pdev, size_t size)
+{
+	return -ENODEV;
+}
+static inline int imx_pcm_platform_register(struct device *dev)
 {
 	return -ENODEV;
 }
@@ -76,5 +81,40 @@ static inline void imx_pcm_fiq_exit(struct platform_device *pdev)
 {
 }
 #endif
+
+static inline void imx_pcm_stream_trigger(struct snd_pcm_substream *s, int tr)
+{
+	if (s->runtime->status->state == SNDRV_PCM_STATE_RUNNING && s->ops)
+		s->ops->trigger(s, tr);
+}
+
+static inline void imx_stop_lock_pcm_streams(struct snd_pcm_substream **s,
+					     int count, unsigned long *flags)
+{
+	int i;
+
+	local_irq_save(*flags);
+	for (i = 0; i < count; i++) {
+		if (!s[i])
+			continue;
+		snd_pcm_stream_lock(s[i]);
+		imx_pcm_stream_trigger(s[i], SNDRV_PCM_TRIGGER_STOP);
+	}
+}
+
+static inline void imx_start_unlock_pcm_streams(struct snd_pcm_substream **s,
+						int count, unsigned long *flags)
+{
+	int i;
+
+	for (i = count - 1; i >= 0; i--) {
+		if (!s[i])
+			continue;
+		imx_pcm_stream_trigger(s[i], SNDRV_PCM_TRIGGER_START);
+		snd_pcm_stream_unlock(s[i]);
+	}
+	local_irq_restore(*flags);
+}
+
 
 #endif /* _IMX_PCM_H */

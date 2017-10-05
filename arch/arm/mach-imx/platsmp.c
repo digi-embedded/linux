@@ -53,14 +53,21 @@ static int imx_boot_secondary(unsigned int cpu, struct task_struct *idle)
 	return 0;
 }
 
+#define MXC_ARCH_CA7           0xc07
+static unsigned long __mxc_arch_type;
+
+static inline bool arm_is_ca7(void)
+{
+       return __mxc_arch_type == MXC_ARCH_CA7;
+}
 /*
  * Initialise the CPU possible map early - this describes the CPUs
  * which may be present or become present in the system.
  */
 static void __init imx_smp_init_cpus(void)
 {
-	int i, ncores;
 	unsigned long arch_type;
+	int i, ncores;
 
 	asm volatile(
 		".align 4\n"
@@ -68,7 +75,7 @@ static void __init imx_smp_init_cpus(void)
 		: "=r" (arch_type)
 	);
 	/* MIDR[15:4] defines ARCH type */
-	mxc_set_arch_type((arch_type >> 4) & 0xfff);
+	__mxc_arch_type = (arch_type >> 4) & 0xfff;
 
 	if (arm_is_ca7()) {
 		unsigned long val;
@@ -109,7 +116,7 @@ static void __init imx_smp_prepare_cpus(unsigned int max_cpus)
 	sync_cache_w(&g_diag_reg);
 }
 
-struct smp_operations  imx_smp_ops __initdata = {
+const struct smp_operations imx_smp_ops __initconst = {
 	.smp_init_cpus		= imx_smp_init_cpus,
 	.smp_prepare_cpus	= imx_smp_prepare_cpus,
 	.smp_boot_secondary	= imx_boot_secondary,
@@ -144,7 +151,7 @@ static void __init ls1021a_smp_prepare_cpus(unsigned int max_cpus)
 	iounmap(dcfg_base);
 }
 
-struct smp_operations  ls1021a_smp_ops __initdata = {
+const struct smp_operations ls1021a_smp_ops __initconst = {
 	.smp_prepare_cpus	= ls1021a_smp_prepare_cpus,
 	.smp_boot_secondary	= ls1021a_boot_secondary,
 };

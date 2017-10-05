@@ -23,8 +23,6 @@
 
 static int init_display(struct fbtft_par *par)
 {
-	fbtft_par_dbg(DEBUG_INIT_DISPLAY, par, "%s()\n", __func__);
-
 	par->fbtftops.reset(par);
 
 	write_reg(par, 0xae); /* Display Off */
@@ -54,9 +52,6 @@ static int init_display(struct fbtft_par *par)
 
 static void set_addr_win(struct fbtft_par *par, int xs, int ys, int xe, int ye)
 {
-	fbtft_par_dbg(DEBUG_SET_ADDR_WIN, par,
-		"%s(xs=%d, ys=%d, xe=%d, ye=%d)\n", __func__, xs, ys, xe, ye);
-
 	write_reg(par, 0x15, xs, xe);
 	write_reg(par, 0x75, ys, ye);
 }
@@ -65,7 +60,7 @@ static void write_reg8_bus8(struct fbtft_par *par, int len, ...)
 {
 	va_list args;
 	int i, ret;
-	u8 *buf = (u8 *)par->buf;
+	u8 *buf = par->buf;
 
 	if (unlikely(par->debug & DEBUG_WRITE_REGISTER)) {
 		va_start(args, len);
@@ -107,33 +102,30 @@ static void write_reg8_bus8(struct fbtft_par *par, int len, ...)
 }
 
 /*
-	Grayscale Lookup Table
-	GS1 - GS63
-	The driver Gamma curve contains the relative values between the entries
-	in the Lookup table.
-
-	From datasheet:
-	8.8 Gray Scale Decoder
-
-		there are total 180 Gamma Settings (Setting 0 to Setting 180)
-		available for the Gray Scale table.
-
-		The gray scale is defined in incremental way, with reference
-		to the length of previous table entry:
-			Setting of GS1 has to be >= 0
-			Setting of GS2 has to be > Setting of GS1 +1
-			Setting of GS3 has to be > Setting of GS2 +1
-			:
-			Setting of GS63 has to be > Setting of GS62 +1
-
-
-*/
+ * Grayscale Lookup Table
+ * GS1 - GS63
+ * The driver Gamma curve contains the relative values between the entries
+ * in the Lookup table.
+ *
+ * From datasheet:
+ * 8.8 Gray Scale Decoder
+ *
+ * there are total 180 Gamma Settings (Setting 0 to Setting 180)
+ * available for the Gray Scale table.
+ *
+ * The gray scale is defined in incremental way, with reference
+ * to the length of previous table entry:
+ * Setting of GS1 has to be >= 0
+ * Setting of GS2 has to be > Setting of GS1 +1
+ * Setting of GS3 has to be > Setting of GS2 +1
+ * :
+ * Setting of GS63 has to be > Setting of GS62 +1
+ *
+ */
 static int set_gamma(struct fbtft_par *par, unsigned long *curves)
 {
 	unsigned long tmp[GAMMA_NUM * GAMMA_LEN];
 	int i, acc = 0;
-
-	fbtft_par_dbg(DEBUG_INIT_DISPLAY, par, "%s()\n", __func__);
 
 	for (i = 0; i < 63; i++) {
 		if (i > 0 && curves[i] < 2) {
@@ -175,7 +167,6 @@ static int blank(struct fbtft_par *par, bool on)
 		write_reg(par, 0xAF);
 	return 0;
 }
-
 
 static struct fbtft_display display = {
 	.regwidth = 8,

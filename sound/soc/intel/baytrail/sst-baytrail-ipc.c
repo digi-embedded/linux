@@ -184,15 +184,9 @@ struct sst_byt {
 
 static inline u64 sst_byt_header(int msg_id, int data, bool large, int str_id)
 {
-	u64 header;
-
-	header = IPC_HEADER_MSG_ID(msg_id) |
-		 IPC_HEADER_STR_ID(str_id) |
-		 IPC_HEADER_LARGE(large) |
-		 IPC_HEADER_DATA(data) |
-		 SST_BYT_IPCX_BUSY;
-
-	return header;
+	return IPC_HEADER_MSG_ID(msg_id) | IPC_HEADER_STR_ID(str_id) |
+	       IPC_HEADER_LARGE(large) | IPC_HEADER_DATA(data) |
+	       SST_BYT_IPCX_BUSY;
 }
 
 static inline u16 sst_byt_header_msg_id(u64 header)
@@ -344,7 +338,7 @@ static irqreturn_t sst_byt_irq_thread(int irq, void *context)
 	spin_unlock_irqrestore(&sst->spinlock, flags);
 
 	/* continue to send any remaining messages... */
-	queue_kthread_work(&ipc->kworker, &ipc->kwork);
+	kthread_queue_work(&ipc->kworker, &ipc->kwork);
 
 	return IRQ_HANDLED;
 }
@@ -679,6 +673,14 @@ static u64 byt_reply_msg_match(u64 header, u64 *mask)
 	return header;
 }
 
+static bool byt_is_dsp_busy(struct sst_dsp *dsp)
+{
+	u64 ipcx;
+
+	ipcx = sst_dsp_shim_read_unlocked(dsp, SST_IPCX);
+	return (ipcx & (SST_IPCX_BUSY | SST_IPCX_DONE));
+}
+
 int sst_byt_dsp_init(struct device *dev, struct sst_pdata *pdata)
 {
 	struct sst_byt *byt;
@@ -693,12 +695,17 @@ int sst_byt_dsp_init(struct device *dev, struct sst_pdata *pdata)
 	if (byt == NULL)
 		return -ENOMEM;
 
+	byt->dev = dev;
+
 	ipc = &byt->ipc;
 	ipc->dev = dev;
 	ipc->ops.tx_msg = byt_tx_msg;
 	ipc->ops.shim_dbg = byt_shim_dbg;
 	ipc->ops.tx_data_copy = byt_tx_data_copy;
 	ipc->ops.reply_msg_match = byt_reply_msg_match;
+	ipc->ops.is_dsp_busy = byt_is_dsp_busy;
+	ipc->tx_data_max_size = IPC_MAX_MAILBOX_BYTES;
+	ipc->rx_data_max_size = IPC_MAX_MAILBOX_BYTES;
 
 	err = sst_ipc_init(ipc);
 	if (err != 0)

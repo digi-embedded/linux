@@ -1,5 +1,6 @@
 /*
- * Copyright (C) 2011-2015 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright (C) 2011-2016 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright 2017 NXP.
  */
 
 /*
@@ -56,6 +57,7 @@ void (*mx6_change_lpddr2_freq)(u32 ddr_freq, int bus_freq_mode) = NULL;
 extern unsigned int ddr_normal_rate;
 extern void mx6_lpddr2_freq_change(u32 freq, int bus_freq_mode);
 extern void imx6_up_lpddr2_freq_change(u32 freq, int bus_freq_mode);
+extern void imx6sll_lpddr2_freq_change(u32 freq, int bus_freq_mode);
 extern unsigned long save_ttbr1(void);
 extern void restore_ttbr1(unsigned long ttbr1);
 extern void mx6q_lpddr2_freq_change(u32 freq, void *ddr_settings);
@@ -69,6 +71,7 @@ extern unsigned long iram_tlb_phys_addr;
 struct mmdc_settings_info {
 	u32 size;
 	void *settings;
+	int freq;
 } __aligned(8);
 static struct mmdc_settings_info *mmdc_settings_info;
 void (*mx6_change_lpddr2_freq_smp)(u32 ddr_freq, struct mmdc_settings_info
@@ -136,8 +139,13 @@ int update_lpddr2_freq(int ddr_rate)
 	ttbr1 = save_ttbr1();
 
 	/* Now change DDR frequency. */
-	mx6_change_lpddr2_freq(ddr_rate,
-		(mode == BUS_FREQ_LOW || mode == BUS_FREQ_ULTRA_LOW) ? 1 : 0);
+	if (cpu_is_imx6sl())
+		mx6_change_lpddr2_freq(ddr_rate,
+			(mode == BUS_FREQ_LOW || mode == BUS_FREQ_ULTRA_LOW) ? 1 : 0);
+	else
+		mx6_change_lpddr2_freq(ddr_rate,
+			(mode == BUS_FREQ_LOW || mode == BUS_FREQ_AUDIO) ? 1 : 0);
+
 	restore_ttbr1(ttbr1);
 
 	curr_ddr_rate = ddr_rate;
@@ -159,10 +167,14 @@ int init_mmdc_lpddr2_settings(struct platform_device *busfreq_pdev)
 		mx6_change_lpddr2_freq = (void *)fncpy(
 			(void *)ddr_freq_change_iram_base,
 			&mx6_lpddr2_freq_change, ddr_code_size);
-	if (cpu_is_imx6sx() || cpu_is_imx6ul())
+	if (cpu_is_imx6sx() || cpu_is_imx6ul() || cpu_is_imx6ull())
 		mx6_change_lpddr2_freq = (void *)fncpy(
 			(void *)ddr_freq_change_iram_base,
 			&imx6_up_lpddr2_freq_change, ddr_code_size);
+	if (cpu_is_imx6sll())
+		mx6_change_lpddr2_freq = (void *)fncpy(
+			(void *)ddr_freq_change_iram_base,
+			&imx6sll_lpddr2_freq_change, ddr_code_size);
 
 	curr_ddr_rate = ddr_normal_rate;
 
@@ -190,6 +202,7 @@ int update_lpddr2_freq_smp(int ddr_rate)
 
 	mmdc_settings_info->size = mmdc_settings_size;
 	mmdc_settings_info->settings = iram_mmdc_settings;
+	mmdc_settings_info->freq = curr_ddr_rate;
 
 	/* ensure that all Cores are in WFE. */
 	local_irq_disable();
@@ -243,12 +256,12 @@ int update_lpddr2_freq_smp(int ddr_rate)
 	 */
 	ttbr1 = save_ttbr1();
 
+	curr_ddr_rate = ddr_rate;
+
 	/* Now change DDR frequency. */
 	mx6_change_lpddr2_freq_smp(ddr_rate, mmdc_settings_info);
 
 	restore_ttbr1(ttbr1);
-
-	curr_ddr_rate = ddr_rate;
 
 #ifdef CONFIG_SMP
 	wmb();
@@ -340,7 +353,7 @@ int init_mmdc_lpddr2_settings_mx6q(struct platform_device *busfreq_pdev)
 			&wfe_smp_freq_change, wfe_code_size);
 #endif
 	iram_settings_size = (void *)ddr_freq_change_iram_base + wfe_code_size + 0x8;
-	iram_mmdc_settings = (void *)iram_settings_size + 0x8;
+	iram_mmdc_settings = (void *)iram_settings_size + sizeof(*mmdc_settings_info);
 	iram_ddr_freq_chage = (void *)iram_mmdc_settings + (mmdc_settings_size * 8) + 0x8;
 	mmdc_settings_info = (struct mmdc_settings_info *)iram_settings_size;
 

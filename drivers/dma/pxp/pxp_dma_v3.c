@@ -1,6 +1,8 @@
 /*
  * Copyright (C) 2010-2016 Freescale Semiconductor, Inc.
  *
+ * Copyright 2017 NXP
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
@@ -47,6 +49,7 @@
 #include <linux/of.h>
 
 #include "regs-pxp_v3.h"
+#include "reg_bitfields.h"
 
 #ifdef CONFIG_MXC_FPGA_M4_TEST
 #include "cm4_image.c"
@@ -78,14 +81,225 @@ void __iomem *pinctrl_base;
 
 #define CONFIG_FB_MXC_EINK_FPGA
 
+/* define all the pxp 2d nodes */
+#define PXP_2D_PS		0
+#define PXP_2D_AS		1
+#define PXP_2D_INPUT_FETCH0	2
+#define PXP_2D_INPUT_FETCH1	3
+#define PXP_2D_CSC1		4
+#define PXP_2D_ROTATION1	5
+#define PXP_2D_ALPHA0_S0	6
+#define PXP_2D_ALPHA0_S1	7
+#define PXP_2D_ALPHA1_S0	8
+#define PXP_2D_ALPHA1_S1	9
+#define PXP_2D_CSC2		10
+#define PXP_2D_LUT		11
+#define PXP_2D_ROTATION0	12
+#define PXP_2D_OUT		13
+#define PXP_2D_INPUT_STORE0	14
+#define PXP_2D_INPUT_STORE1	15
+#define PXP_2D_NUM		16
+
+#define PXP_2D_ALPHA0_S0_S1	0xaa
+#define PXP_2D_ALPHA1_S0_S1	0xbb
+
+#define PXP_2D_MUX_BASE		50
+#define PXP_2D_MUX_MUX0		(PXP_2D_MUX_BASE + 0)
+#define PXP_2D_MUX_MUX1		(PXP_2D_MUX_BASE + 1)
+#define PXP_2D_MUX_MUX2		(PXP_2D_MUX_BASE + 2)
+#define PXP_2D_MUX_MUX3		(PXP_2D_MUX_BASE + 3)
+#define PXP_2D_MUX_MUX4		(PXP_2D_MUX_BASE + 4)
+#define PXP_2D_MUX_MUX5		(PXP_2D_MUX_BASE + 5)
+#define PXP_2D_MUX_MUX6		(PXP_2D_MUX_BASE + 6)
+#define PXP_2D_MUX_MUX7		(PXP_2D_MUX_BASE + 7)
+#define PXP_2D_MUX_MUX8		(PXP_2D_MUX_BASE + 8)
+#define PXP_2D_MUX_MUX9		(PXP_2D_MUX_BASE + 9)
+#define PXP_2D_MUX_MUX10	(PXP_2D_MUX_BASE + 10)
+#define PXP_2D_MUX_MUX11	(PXP_2D_MUX_BASE + 11)
+#define PXP_2D_MUX_MUX12	(PXP_2D_MUX_BASE + 12)
+#define PXP_2D_MUX_MUX13	(PXP_2D_MUX_BASE + 13)
+#define PXP_2D_MUX_MUX14	(PXP_2D_MUX_BASE + 14)
+#define PXP_2D_MUX_MUX15	(PXP_2D_MUX_BASE + 15)
+
+/* define pxp 2d node types */
+#define PXP_2D_TYPE_INPUT	1
+#define PXP_2D_TYPE_ALU		2
+#define PXP_2D_TYPE_OUTPUT	3
+
+#define DISTANCE_INFINITY	0xffff
+#define NO_PATH_NODE		0xffffffff
+
+#define PXP_MAX_INPUT_NUM	2
+#define PXP_MAX_OUTPUT_NUM	2
+
+#define FETCH_NOOP		0x01
+#define FETCH_EXPAND		0x02
+#define FETCH_SHIFT		0x04
+
+#define STORE_NOOP		0x01
+#define STORE_SHIFT		0x02
+#define STORE_SHRINK		0x04
+
+#define NEED_YUV_SWAP		0x02
+
+#define IN_NEED_COMPOSITE	(0x01 | IN_NEED_FMT_UNIFIED)
+#define IN_NEED_CSC		(0x02 | IN_NEED_FMT_UNIFIED)
+#define IN_NEED_SCALE		(0x04 | IN_NEED_FMT_UNIFIED)
+#define IN_NEED_ROTATE_FLIP	(0x08 | IN_NEED_FMT_UNIFIED)
+#define IN_NEED_FMT_UNIFIED	0x10
+#define IN_NEED_SHIFT		0x20
+#define IN_NEED_LUT		(0x40 | IN_NEED_UNIFIED)
+
+#define OUT_NEED_SHRINK		0x100
+#define OUT_NEED_SHIFT		0x200
+
+#define PXP_ROTATE_0	0
+#define PXP_ROTATE_90	1
+#define PXP_ROTATE_180	2
+#define PXP_ROTATE_270	3
+
+#define PXP_H_FLIP     1
+#define PXP_V_FLIP     2
+
+#define PXP_OP_TYPE_2D		0x001
+#define PXP_OP_TYPE_DITHER	0x002
+#define PXP_OP_TYPE_WFE_A	0x004
+#define PXP_OP_TYPE_WFE_B	0x008
+
+/* define store engine output mode */
+#define STORE_MODE_NORMAL	1
+#define STORE_MODE_BYPASS	2
+#define STORE_MODE_DUAL		3
+#define STORE_MODE_HANDSHAKE	4
+
+/* define fetch engine input mode */
+#define FETCH_MODE_NORMAL	1
+#define FETCH_MODE_BYPASS	2
+#define FETCH_MODE_HANDSHAKE	3
+
+#define COMMON_FMT_BPP		32
+
+#define R_COMP		0
+#define G_COMP		1
+#define B_COMP		2
+#define A_COMP		3
+
+#define Y_COMP		0
+#define U_COMP		1
+#define V_COMP		2
+#define Y1_COMP		4
+
 static LIST_HEAD(head);
 static int timeout_in_ms = 600;
 static unsigned int block_size;
 static struct kmem_cache *tx_desc_cache;
+static struct kmem_cache *edge_node_cache;
 static struct pxp_collision_info col_info;
+static dma_addr_t paddr;
+static bool v3p_flag;
+static int alpha_blending_version;
+static bool pxp_legacy;
 
 struct pxp_dma {
 	struct dma_device dma;
+};
+
+enum pxp_alpha_blending_version {
+	PXP_ALPHA_BLENDING_NONE	 = 0x0,
+	PXP_ALPHA_BLENDING_V1	 = 0x1,
+	PXP_ALPHA_BLENDING_V2	 = 0x2,
+};
+
+struct pxp_alpha_global {
+	unsigned int color_key_enable;
+	bool combine_enable;
+	bool global_alpha_enable;
+	bool global_override;
+	bool alpha_invert;
+	bool local_alpha_enable;
+	unsigned char global_alpha;
+	int comp_mask;
+};
+
+struct rectangle {
+	uint16_t x;
+	uint16_t y;
+	uint16_t width;
+	uint16_t height;
+};
+
+struct pxp_alpha_info {
+	uint8_t alpha_mode;
+	uint8_t rop_type;
+
+	struct pxp_alpha s0_alpha;
+	struct pxp_alpha s1_alpha;
+};
+
+struct pxp_op_info{
+	uint16_t op_type;
+	uint16_t rotation;
+	uint8_t  flip;
+	uint8_t  fill_en;
+	uint32_t fill_data;
+	uint8_t  alpha_blending;
+	struct pxp_alpha_info alpha_info;
+
+	/* Dithering specific data */
+	uint32_t dither_mode;
+	uint32_t quant_bit;
+
+	/*
+	 * partial:
+	 *         0 - full update
+	 *         1 - partial update
+	 * alpha_en:
+	 *         0 - upd is {Y4[3:0],4'b0000} format
+	 *         1 - upd is {Y4[3:0],3'b000,alpha} format
+	 * reagl_en:
+	 *         0 - use normal waveform algorithm
+	 *         1 - enable reagl/-d waveform algorithm
+	 * detection_only:
+	 *         0 - write working buffer
+	 *         1 - do no write working buffer, detection only
+	 * lut:
+	 *         valid value 0-63
+	 *         set to the lut used for next update
+	 */
+	bool partial_update;
+	bool alpha_en;
+	bool lut_update;
+	bool reagl_en;		/* enable reagl/-d */
+	bool reagl_d_en;	/* enable reagl or reagl-d */
+	bool detection_only;
+	int lut;
+	uint32_t lut_status_1;
+	uint32_t lut_status_2;
+};
+
+struct pxp_pixmap {
+	uint8_t channel_id;
+	uint8_t bpp;
+	int32_t pitch;
+	uint16_t width;
+	uint16_t height;
+	struct rectangle crop;
+	uint32_t rotate;
+	uint8_t flip;
+	uint32_t format;	/* fourcc pixmap format */
+	uint32_t flags;
+	bool valid;
+	dma_addr_t paddr;
+	struct pxp_alpha_global g_alpha;
+};
+
+struct pxp_task_info {
+	uint8_t input_num;
+	uint8_t output_num;
+	struct pxp_pixmap input[PXP_MAX_INPUT_NUM];
+	struct pxp_pixmap output[PXP_MAX_OUTPUT_NUM];
+	struct pxp_op_info op_info;
+	uint32_t pxp_2d_flags;
 };
 
 struct pxps {
@@ -109,6 +323,7 @@ struct pxps {
 	struct work_struct work;
 
 	const struct pxp_devdata *devdata;
+	struct pxp_task_info task;
 
 	/* describes most recent processing configuration */
 	struct pxp_config_data pxp_conf_state;
@@ -127,9 +342,537 @@ struct pxps {
 #define to_pxp_channel(d) container_of(d, struct pxp_channel, dma_chan)
 #define to_pxp(id) container_of(id, struct pxps, pxp_dma)
 
+#define to_pxp_task_info(op) container_of((op), struct pxp_task_info, op_info)
+#define to_pxp_from_task(task) container_of((task), struct pxps, task)
+
 #define PXP_DEF_BUFS	2
 #define PXP_MIN_PIX	8
+
+static uint8_t active_bpp(uint8_t bpp)
+{
+	switch(bpp) {
+	case 8:
+		return 0x0;
+	case 16:
+		return 0x1;
+	case 32:
+		return 0x2;
+	case 64:
+		return 0x3;
+	default:
+		return 0xff;
+	}
+}
+
+static uint8_t rotate_map(uint32_t degree)
+{
+	switch (degree) {
+	case 0:
+		return PXP_ROTATE_0;
+	case 90:
+		return PXP_ROTATE_90;
+	case 180:
+		return PXP_ROTATE_180;
+	case 270:
+		return PXP_ROTATE_270;
+	default:
+		return 0;
+	}
+}
+
+static uint8_t expand_format(uint32_t format)
+{
+	switch (format) {
+	case PXP_PIX_FMT_RGB565:
+	case PXP_PIX_FMT_BGR565:
+		return 0x0;
+	case PXP_PIX_FMT_RGB555:
+		return 0x1;
+	case PXP_PIX_FMT_YUYV:
+	case PXP_PIX_FMT_YVYU:
+		return 0x5;
+	case PXP_PIX_FMT_UYVY:
+	case PXP_PIX_FMT_VYUY:
+		return 0x6;
+	case PXP_PIX_FMT_NV16:
+		return 0x7;
+	default:
+		return 0xff;
+	}
+}
+
+struct color_component {
+	uint8_t id;
+	uint8_t	offset;
+	uint8_t length;
+	uint8_t mask;
+};
+
+struct color {
+	uint32_t format;
+	struct color_component comp[4];
+};
+
+struct color rgb_colors[] = {
+	{
+		.format = PXP_PIX_FMT_RGB565,
+		.comp = {
+				{ .id = B_COMP,	.offset = 0,  .length = 5, .mask = 0x1f, },
+				{ .id = G_COMP,	.offset = 5,  .length = 6, .mask = 0x3f, },
+				{ .id = R_COMP, .offset = 11, .length = 5, .mask = 0x1f, },
+				{ .id = A_COMP,	.offset = 0,  .length = 0, .mask = 0x0,  },
+			},
+	}, {
+		.format  = PXP_PIX_FMT_BGR565,
+		.comp = {
+				{ .id = R_COMP,	.offset = 0,  .length = 5, .mask = 0x1f, },
+				{ .id = G_COMP,	.offset = 5,  .length = 6, .mask = 0x3f, },
+				{ .id = B_COMP, .offset = 11, .length = 6, .mask = 0x3f, },
+				{ .id = A_COMP,	.offset = 0,  .length = 0, .mask = 0x0,  },
+			},
+	}, {
+		.format = PXP_PIX_FMT_ARGB555,
+		.comp = {
+				{ .id = B_COMP,	.offset = 0,  .length = 5, .mask = 0x1f, },
+				{ .id = G_COMP,	.offset = 5,  .length = 5, .mask = 0x1f, },
+				{ .id = R_COMP, .offset = 10, .length = 5, .mask = 0x1f, },
+				{ .id = A_COMP,	.offset = 15, .length = 1, .mask = 0x1,  },
+			},
+	}, {
+		.format = PXP_PIX_FMT_XRGB555,
+		.comp = {
+				{ .id = B_COMP,	.offset = 0,  .length = 5, .mask = 0x1f, },
+				{ .id = G_COMP,	.offset = 5,  .length = 5, .mask = 0x1f, },
+				{ .id = R_COMP, .offset = 10, .length = 5, .mask = 0x1f, },
+				{ .id = A_COMP,	.offset = 15, .length = 1, .mask = 0x1,  },
+			},
+	}, {
+		.format = PXP_PIX_FMT_RGB555,
+		.comp = {
+				{ .id = B_COMP,	.offset = 0,  .length = 5, .mask = 0x1f, },
+				{ .id = G_COMP,	.offset = 5,  .length = 5, .mask = 0x1f, },
+				{ .id = R_COMP, .offset = 10, .length = 5, .mask = 0x1f, },
+				{ .id = A_COMP,	.offset = 15, .length = 1, .mask = 0x1,  },
+			},
+	}, {
+		.format = PXP_PIX_FMT_RGBA555,
+		.comp = {
+				{ .id = A_COMP,	.offset = 0,  .length = 1, .mask = 0x1,  },
+				{ .id = B_COMP,	.offset = 1,  .length = 5, .mask = 0x1f, },
+				{ .id = G_COMP, .offset = 6,  .length = 5, .mask = 0x1f, },
+				{ .id = R_COMP,	.offset = 11, .length = 5, .mask = 0x1f, },
+			},
+	}, {
+		.format = PXP_PIX_FMT_ARGB444,
+		.comp = {
+				{ .id = B_COMP,	.offset = 0,  .length = 4, .mask = 0xf,  },
+				{ .id = G_COMP,	.offset = 4,  .length = 4, .mask = 0xf,  },
+				{ .id = R_COMP, .offset = 8,  .length = 4, .mask = 0xf,  },
+				{ .id = A_COMP,	.offset = 12, .length = 4, .mask = 0xf,  },
+			},
+	}, {
+		.format = PXP_PIX_FMT_XRGB444,
+		.comp = {
+				{ .id = B_COMP,	.offset = 0,  .length = 4, .mask = 0xf,  },
+				{ .id = G_COMP,	.offset = 4,  .length = 4, .mask = 0xf,  },
+				{ .id = R_COMP, .offset = 8,  .length = 4, .mask = 0xf,  },
+				{ .id = A_COMP,	.offset = 12, .length = 4, .mask = 0xf,  },
+			},
+	}, {
+		.format = PXP_PIX_FMT_RGBA444,
+		.comp = {
+				{ .id = A_COMP,	.offset = 0,  .length = 4, .mask = 0xf,  },
+				{ .id = B_COMP,	.offset = 4,  .length = 4, .mask = 0xf,  },
+				{ .id = G_COMP, .offset = 8,  .length = 4, .mask = 0xf,  },
+				{ .id = R_COMP,	.offset = 12, .length = 4, .mask = 0xf,  },
+			},
+	}, {
+		.format  = PXP_PIX_FMT_RGB24,
+		.comp = {
+				{ .id = B_COMP, .offset = 0,  .length = 8, .mask = 0xff, },
+				{ .id = G_COMP,	.offset = 8,  .length = 8, .mask = 0xff, },
+				{ .id = R_COMP,	.offset = 16, .length = 8, .mask = 0xff, },
+				{ .id = A_COMP,	.offset = 0,  .length = 0, .mask = 0x0,  },
+			},
+	}, {
+		.format  = PXP_PIX_FMT_BGR24,
+		.comp = {
+				{ .id = R_COMP,	.offset = 0,  .length = 8, .mask = 0xff, },
+				{ .id = G_COMP,	.offset = 8,  .length = 8, .mask = 0xff, },
+				{ .id = B_COMP, .offset = 16, .length = 8, .mask = 0xff, },
+				{ .id = A_COMP,	.offset = 0,  .length = 0, .mask = 0x0,  },
+			},
+	}, {
+		.format  = PXP_PIX_FMT_XRGB32,
+		.comp = {
+				{ .id = B_COMP, .offset = 0,  .length = 8, .mask = 0xff, },
+				{ .id = G_COMP,	.offset = 8,  .length = 8, .mask = 0xff, },
+				{ .id = R_COMP,	.offset = 16, .length = 8, .mask = 0xff, },
+				{ .id = A_COMP,	.offset = 24, .length = 8, .mask = 0xff, },
+			},
+	}, {
+		.format  = PXP_PIX_FMT_RGBX32,
+		.comp = {
+				{ .id = A_COMP,	.offset = 0,  .length = 8, .mask = 0xff, },
+				{ .id = B_COMP, .offset = 8,  .length = 8, .mask = 0xff, },
+				{ .id = G_COMP,	.offset = 16, .length = 8, .mask = 0xff, },
+				{ .id = R_COMP,	.offset = 24, .length = 8, .mask = 0xff, },
+			},
+	}, {
+		.format  = PXP_PIX_FMT_XBGR32,
+		.comp = {
+				{ .id = R_COMP,	.offset = 0,  .length = 8, .mask = 0xff, },
+				{ .id = G_COMP,	.offset = 8,  .length = 8, .mask = 0xff, },
+				{ .id = B_COMP, .offset = 16, .length = 8, .mask = 0xff, },
+				{ .id = A_COMP,	.offset = 24, .length = 8, .mask = 0xff, },
+			},
+	}, {
+		.format  = PXP_PIX_FMT_BGRX32,
+		.comp = {
+				{ .id = A_COMP,	.offset = 0,  .length = 8, .mask = 0xff, },
+				{ .id = R_COMP,	.offset = 8,  .length = 8, .mask = 0xff, },
+				{ .id = G_COMP,	.offset = 16, .length = 8, .mask = 0xff, },
+				{ .id = B_COMP, .offset = 24, .length = 8, .mask = 0xff, },
+			},
+	}, {
+		.format  = PXP_PIX_FMT_ARGB32,
+		.comp = {
+				{ .id = B_COMP, .offset = 0,  .length = 8, .mask = 0xff, },
+				{ .id = G_COMP,	.offset = 8,  .length = 8, .mask = 0xff, },
+				{ .id = R_COMP,	.offset = 16, .length = 8, .mask = 0xff, },
+				{ .id = A_COMP,	.offset = 24, .length = 8, .mask = 0xff, },
+			},
+	}, {
+		.format  = PXP_PIX_FMT_ABGR32,
+		.comp = {
+				{ .id = R_COMP,	.offset = 0,  .length = 8, .mask = 0xff, },
+				{ .id = G_COMP,	.offset = 8,  .length = 8, .mask = 0xff, },
+				{ .id = B_COMP, .offset = 16, .length = 8, .mask = 0xff, },
+				{ .id = A_COMP,	.offset = 24, .length = 8, .mask = 0xff, },
+			},
+	}, {
+		.format  = PXP_PIX_FMT_RGBA32,
+		.comp = {
+				{ .id = A_COMP,	.offset = 0,  .length = 8, .mask = 0xff, },
+				{ .id = B_COMP, .offset = 8,  .length = 8, .mask = 0xff, },
+				{ .id = G_COMP,	.offset = 16, .length = 8, .mask = 0xff, },
+				{ .id = R_COMP,	.offset = 24, .length = 8, .mask = 0xff, },
+			},
+	}, {
+		.format  = PXP_PIX_FMT_BGRA32,
+		.comp = {
+				{ .id = A_COMP,	.offset = 0,  .length = 8, .mask = 0xff, },
+				{ .id = R_COMP,	.offset = 8,  .length = 8, .mask = 0xff, },
+				{ .id = G_COMP,	.offset = 16, .length = 8, .mask = 0xff, },
+				{ .id = B_COMP, .offset = 24, .length = 8, .mask = 0xff, },
+			},
+	},
+};
+
+/* only one plane yuv formats */
+struct color yuv_colors[] = {
+	{
+		.format  = PXP_PIX_FMT_GREY,
+		.comp = {
+				{ .id = Y_COMP,	 .offset = 0,  .length = 8, .mask = 0xff, },
+				{ .id = U_COMP,  .offset = 8,  .length = 0, .mask = 0x00, },
+				{ .id = V_COMP,	 .offset = 16, .length = 0, .mask = 0x00, },
+				{ .id = A_COMP,	 .offset = 24, .length = 0, .mask = 0x00, },
+			},
+	}, {
+		.format  = PXP_PIX_FMT_YUYV,
+		.comp = {
+				{ .id = V_COMP,	 .offset = 0,  .length = 8, .mask = 0xff, },
+				{ .id = Y1_COMP, .offset = 8,  .length = 8, .mask = 0xff, },
+				{ .id = U_COMP,	 .offset = 16, .length = 8, .mask = 0xff, },
+				{ .id = Y_COMP,	 .offset = 24, .length = 8, .mask = 0xff, },
+			},
+	}, {
+		.format  = PXP_PIX_FMT_UYVY,
+		.comp = {
+				{ .id = Y1_COMP, .offset = 0,  .length = 8, .mask = 0xff, },
+				{ .id = V_COMP,  .offset = 8,  .length = 8, .mask = 0xff, },
+				{ .id = Y_COMP,	 .offset = 16, .length = 8, .mask = 0xff, },
+				{ .id = U_COMP,	 .offset = 24, .length = 8, .mask = 0xff, },
+			},
+	}, {
+		.format  = PXP_PIX_FMT_YVYU,
+		.comp = {
+				{ .id = U_COMP,	 .offset = 0,  .length = 8, .mask = 0xff, },
+				{ .id = Y1_COMP, .offset = 8,  .length = 8, .mask = 0xff, },
+				{ .id = V_COMP,	 .offset = 16, .length = 8, .mask = 0xff, },
+				{ .id = Y_COMP,	 .offset = 24, .length = 8, .mask = 0xff, },
+			},
+	}, {
+		.format  = PXP_PIX_FMT_VYUY,
+		.comp = {
+				{ .id = Y1_COMP, .offset = 0,  .length = 8, .mask = 0xff, },
+				{ .id = U_COMP,  .offset = 8,  .length = 8, .mask = 0xff, },
+				{ .id = Y_COMP,	 .offset = 16, .length = 8, .mask = 0xff, },
+				{ .id = V_COMP,	 .offset = 24, .length = 8, .mask = 0xff, },
+			},
+	}, {
+		.format  = PXP_PIX_FMT_YUV444,
+		.comp = {
+				{ .id = V_COMP, .offset = 0,  .length = 8, .mask = 0xff, },
+				{ .id = U_COMP,	.offset = 8,  .length = 8, .mask = 0xff, },
+				{ .id = Y_COMP,	.offset = 16, .length = 8, .mask = 0xff, },
+				{ .id = A_COMP,	.offset = 24, .length = 8, .mask = 0xff, },
+			},
+	}, {
+		.format  = PXP_PIX_FMT_YVU444,
+		.comp = {
+				{ .id = U_COMP,	.offset = 0,  .length = 8, .mask = 0xff, },
+				{ .id = V_COMP, .offset = 8,  .length = 8, .mask = 0xff, },
+				{ .id = Y_COMP,	.offset = 16, .length = 8, .mask = 0xff, },
+				{ .id = A_COMP,	.offset = 24, .length = 8, .mask = 0xff, },
+			},
+	},
+};
+
+/* 4 to 1 mux */
+struct mux {
+	uint32_t id;
+	uint8_t mux_inputs[4];
+	uint8_t mux_outputs[2];
+};
+
+/* Adjacent list structure */
+struct edge_node {
+	uint32_t adjvex;
+	uint32_t prev_vnode;
+	struct edge_node *next;
+	uint32_t mux_used;
+	struct mux_config muxes;
+};
+
+struct vetex_node {
+	uint8_t type;
+	struct edge_node *first;
+};
+
+struct path_node {
+	struct list_head node;
+	uint32_t id;
+	uint32_t distance;
+	uint32_t prev_node;
+};
+
+static struct vetex_node adj_list[PXP_2D_NUM];
+static struct path_node path_table[PXP_2D_NUM][PXP_2D_NUM];
+
+static bool adj_array_v3[PXP_2D_NUM][PXP_2D_NUM] = {
+      /* 0  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15 */
+	{0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, /* 0  */
+	{0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0}, /* 1  */
+	{0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0, 1, 0}, /* 2  */
+	{0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1}, /* 3  */
+	{0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0}, /* 4  */
+	{0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0}, /* 5  */
+	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0}, /* 6  */
+	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0}, /* 7  */
+	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1, 0}, /* 8  */
+	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1, 0}, /* 9  */
+	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0}, /* 10 */
+	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0}, /* 11 */
+	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0}, /* 12 */
+	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, /* 13 */
+	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, /* 14 */
+	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, /* 15 */
+};
+
+
+static struct mux muxes_v3[16] = {
+	{
+		/* mux0 */
+		.id = 0,
+		.mux_inputs = {PXP_2D_CSC1, PXP_2D_INPUT_FETCH0, PXP_2D_INPUT_FETCH1, 0xff},
+		.mux_outputs = {PXP_2D_ROTATION1, 0xff},
+	}, {
+		/* mux1 */
+		.id = 1,
+		.mux_inputs = {PXP_2D_INPUT_FETCH0, PXP_2D_ROTATION1, 0xff, 0xff},
+		.mux_outputs = {PXP_2D_ALPHA1_S1, PXP_2D_MUX_MUX5},
+	}, {
+		/* mux2 */
+		.id = 2,
+		.mux_inputs = {PXP_2D_INPUT_FETCH1, PXP_2D_ROTATION1, 0xff, 0xff},
+		.mux_outputs = {PXP_2D_ALPHA1_S0, 0xff},
+	}, {
+		/* mux3 */
+		.id = 3,
+		.mux_inputs = {PXP_2D_CSC1, PXP_2D_ROTATION1, 0xff, 0xff},
+		.mux_outputs = {PXP_2D_ALPHA0_S0, 0xff},
+	}, {
+		/* mux4 is not used in ULT1 */
+		.id = 4,
+		.mux_inputs = {0xff, 0xff, 0xff, 0xff},
+		.mux_outputs = {0xff, 0xff},
+	}, {
+		/* mux5 */
+		.id = 5,
+		.mux_inputs = {PXP_2D_MUX_MUX1, PXP_2D_ALPHA1_S0_S1, 0xff, 0xff},
+		.mux_outputs = {PXP_2D_MUX_MUX7, 0xff},
+	}, {
+		/* mux6 */
+		.id = 6,
+		.mux_inputs = {PXP_2D_ALPHA1_S0_S1, PXP_2D_ALPHA0_S0_S1, 0xff, 0xff},
+		.mux_outputs = {PXP_2D_CSC2, 0xff},
+	}, {
+		/* mux7 */
+		.id = 7,
+		.mux_inputs = {PXP_2D_MUX_MUX5, PXP_2D_CSC2, 0xff, 0xff},
+		.mux_outputs = {PXP_2D_MUX_MUX9, PXP_2D_MUX_MUX10},
+	}, {
+		/* mux8 */
+		.id = 8,
+		.mux_inputs = {PXP_2D_CSC2, PXP_2D_ALPHA0_S0_S1, 0xff, 0xff},
+		.mux_outputs = {PXP_2D_MUX_MUX9, PXP_2D_MUX_MUX11},
+	}, {
+		/* mux9 */
+		.id = 9,
+		.mux_inputs = {PXP_2D_MUX_MUX7, PXP_2D_MUX_MUX8, 0xff, 0xff},
+		.mux_outputs = {PXP_2D_LUT, 0xff},
+	}, {
+		/* mux10 */
+		.id = 10,
+		.mux_inputs = {PXP_2D_MUX_MUX7, PXP_2D_LUT, 0xff, 0xff},
+		.mux_outputs = {PXP_2D_MUX_MUX12, PXP_2D_MUX_MUX15},
+	}, {
+		/* mux11 */
+		.id = 11,
+		.mux_inputs = {PXP_2D_LUT, PXP_2D_MUX_MUX8, 0xff, 0xff},
+		.mux_outputs = {PXP_2D_MUX_MUX12, PXP_2D_MUX_MUX14},
+	}, {
+		/* mux12 */
+		.id = 12,
+		.mux_inputs = {PXP_2D_MUX_MUX10, PXP_2D_MUX_MUX11, 0xff, 0xff},
+		.mux_outputs = {PXP_2D_ROTATION0, 0xff},
+	}, {
+		/* mux13 */
+		.id = 13,
+		.mux_inputs = {PXP_2D_INPUT_FETCH1, 0xff, 0xff, 0xff},
+		.mux_outputs = {PXP_2D_INPUT_STORE1, 0xff},
+	}, {
+		/* mux14 */
+		.id = 14,
+		.mux_inputs = {PXP_2D_ROTATION0, PXP_2D_MUX_MUX11, 0xff, 0xff},
+		.mux_outputs = {PXP_2D_OUT, 0xff},
+	}, {
+		/* mux15 */
+		.id = 15,
+		.mux_inputs = {PXP_2D_INPUT_FETCH0, PXP_2D_MUX_MUX10, 0xff, 0xff},
+		.mux_outputs = {PXP_2D_INPUT_STORE0, 0xff},
+	},
+};
+
+static bool adj_array_v3p[PXP_2D_NUM][PXP_2D_NUM] = {
+      /* 0  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15 */
+	{0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, /* 0  */
+	{0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0}, /* 1  */
+	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, /* 2  */
+	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, /* 3  */
+	{0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0}, /* 4  */
+	{0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0}, /* 5  */
+	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0}, /* 6  */
+	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0}, /* 7  */
+	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, /* 8  */
+	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, /* 9  */
+	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0}, /* 10 */
+	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0}, /* 11 */
+	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0}, /* 12 */
+	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, /* 13 */
+	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, /* 14 */
+	{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, /* 15 */
+};
+
+static struct mux muxes_v3p[16] = {
+	{
+		/* mux0 */
+		.id = 0,
+		.mux_inputs = {0xff, 0xff, 0xff, 0xff},
+		.mux_outputs = {0xff, 0xff},
+	}, {
+		/* mux1 */
+		.id = 1,
+		.mux_inputs = {0xff, 0xff, 0xff, 0xff},
+		.mux_outputs = {0xff, 0xff},
+	}, {
+		/* mux2 */
+		.id = 2,
+		.mux_inputs = {0xff, 0xff, 0xff, 0xff},
+		.mux_outputs = {0xff, 0xff},
+	}, {
+		/* mux3 */
+		.id = 3,
+		.mux_inputs = {PXP_2D_CSC1, PXP_2D_ROTATION1, 0xff, 0xff},
+		.mux_outputs = {PXP_2D_ALPHA0_S0, 0xff},
+	}, {
+		/* mux4 is not used in ULT1 */
+		.id = 4,
+		.mux_inputs = {0xff, 0xff, 0xff, 0xff},
+		.mux_outputs = {0xff, 0xff},
+	}, {
+		/* mux5 */
+		.id = 5,
+		.mux_inputs = {0xff, 0xff, 0xff, 0xff},
+		.mux_outputs = {0xff, 0xff},
+	}, {
+		/* mux6 */
+		.id = 6,
+		.mux_inputs = {0xff, 0xff, 0xff, 0xff},
+		.mux_outputs = {0xff, 0xff},
+	},  {
+		/* mux7 */
+		.id = 7,
+		.mux_inputs = {0xff, 0xff, 0xff, 0xff},
+		.mux_outputs = {0xff, 0xff},
+	}, {
+		/* mux8 */
+		.id = 8,
+		.mux_inputs = {PXP_2D_CSC2, PXP_2D_ALPHA0_S0_S1, 0xff, 0xff},
+		.mux_outputs = {PXP_2D_MUX_MUX9, PXP_2D_MUX_MUX11},
+	}, {
+		/* mux9 */
+		.id = 9,
+		.mux_inputs = {0xff, PXP_2D_MUX_MUX8, 0xff, 0xff},
+		.mux_outputs = {PXP_2D_LUT, 0xff},
+	}, {
+		/* mux10 */
+		.id = 10,
+		.mux_inputs = {0xff, 0xff, 0xff, 0xff},
+		.mux_outputs = {0xff, 0xff},
+	}, {
+		/* mux11 */
+		.id = 11,
+		.mux_inputs = {PXP_2D_LUT, PXP_2D_MUX_MUX8, 0xff, 0xff},
+		.mux_outputs = {PXP_2D_MUX_MUX12, PXP_2D_ROTATION0},
+	}, {
+		/* mux12 */
+		.id = 12,
+		.mux_inputs = {PXP_2D_ROTATION0, PXP_2D_MUX_MUX11, 0xff, 0xff},
+		.mux_outputs = {PXP_2D_MUX_MUX14, 0xff},
+	}, {
+		/* mux13 */
+		.id = 13,
+		.mux_inputs = {0xff, 0xff, 0xff, 0xff},
+		.mux_outputs = {0xff, 0xff},
+	}, {
+		/* mux14 */
+		.id = 14,
+		.mux_inputs = {0xff, PXP_2D_MUX_MUX12, 0xff, 0xff},
+		.mux_outputs = {PXP_2D_OUT, 0xff},
+	}, {
+		/* mux15 */
+		.id = 15,
+		.mux_inputs = {0xff, 0xff, 0xff, 0xff},
+		.mux_outputs = {0xff, 0xff},
+	},
+};
+
 static void __iomem *pxp_reg_base;
+
+#define pxp_writel(val, reg) writel(val, pxp_reg_base + (reg))
 
 static __attribute__((aligned (1024*4))) unsigned int active_matrix_data_8x8[64]={
    0x06050100, 0x04030207, 0x06050100, 0x04030207,
@@ -150,72 +893,41 @@ static __attribute__((aligned (1024*4))) unsigned int active_matrix_data_8x8[64]
    0x03020706, 0x05010004, 0x03020706, 0x05010004
     };
 
-static __attribute__((aligned (1024*4))) unsigned int dither_data_8x8[64]={
-		1,
-		49*2,
-		13*2,
-		61*2,
-		4*2,
-		52*2,
-		16*2,
-		64*2,
-		33*2,
-		17*2,
-		45*2,
-		29*2,
-		36*2,
-		20*2,
-		48*2,
-		32*2,
-		9*2,
-		57*2,
-		5*2,
-		53*2,
-		12*2,
-		60*2,
-		8*2,
-		56*2,
-		41*2,
-		25*2,
-		37*2,
-		21*2,
-		44*2,
-		28*2,
-		40*2,
-		24*2,
-		3*2,
-		51*2,
-		15*2,
-		63*2,
-		2*2,
-		50*2,
-		14*2,
-		62*2,
-		35*2,
-		19*2,
-		47*2,
-		31*2,
-		34*2,
-		18*2,
-		46*2,
-		30*2,
-		11*2,
-		59*2,
-		7*2,
-		55*2,
-		10*2,
-		58*2,
-		6*2,
-		54*2,
-		43*2,
-		27*2,
-		39*2,
-		23*2,
-		42*2,
-		26*2,
-		38*2,
-		22*2
-		};
+static __attribute__((aligned (1024*4))) unsigned int bit1_dither_data_8x8[64]={
+
+	1,       49*2,    13*2,    61*2,    4*2,     52*2,    16*2,    64*2,
+	33*2,    17*2,    45*2,    29*2,    36*2,    20*2,    48*2,    32*2,
+	9*2,     57*2,    5*2,     53*2,    12*2,    60*2,    8*2,     56*2,
+	41*2,    25*2,    37*2,    21*2,    44*2,    28*2,    40*2,    24*2,
+	3*2,     51*2,    15*2,    63*2,    2*2,     50*2,    14*2,    62*2,
+	35*2,    19*2,    47*2,    31*2,    34*2,    18*2,    46*2,    30*2,
+	11*2,    59*2,    7*2,     55*2,    10*2,    58*2,    6*2,     54*2,
+	43*2,    27*2,    39*2,    23*2,    42*2,    26*2,    38*2,    22*2
+};
+
+static __attribute__((aligned (1024*4))) unsigned int bit2_dither_data_8x8[64]={
+
+	1,     49,    13,    61,    4,     52,    16,    64,
+	33,    17,    45,    29,    36,    20,    48,    32,
+	9,     57,    5,     53,    12,    60,    8,     56,
+	41,    25,    37,    21,    44,    28,    40,    24,
+	3,     51,    15,    63,    2,     50,    14,    62,
+	35,    19,    47,    31,    34,    18,    46,    30,
+	11,    59,    7,     55,    10,    58,    6,     54,
+	43,    27,    39,    23,    42,    26,    38,    22
+};
+
+static __attribute__((aligned (1024*4))) unsigned int bit4_dither_data_8x8[64]={
+
+	1,       49/4,    13/4,    61/4,    4/4,     52/4,    16/4,    64/4,
+	33/4,    17/4,    45/4,    29/4,    36/4,    20/4,    48/4,    32/4,
+	9/4,     57/4,    5/4,     53/4,    12/4,    60/4,    8/4,     56/4,
+	41/4,    25/4,    37/4,    21/4,    44/4,    28/4,    40/4,    24/4,
+	3/4,     51/4,    15/4,    63/4,    2/4,     50/4,    14/4,    62/4,
+	35/4,    19/4,    47/4,    31/4,    34/4,    18/4,    46/4,    30/4,
+	11/4,    59/4,    7/4,     55/4,    10/4,    58/4,    6/4,     54/4,
+	43/4,    27/4,    39/4,    23/4,    42/4,    26/4,    38/4,    22/4
+};
 
 static void pxp_dithering_configure(struct pxps *pxp);
 static void pxp_dithering_configure_v3p(struct pxps *pxp);
@@ -228,6 +940,8 @@ static void pxp_wfe_b_process(struct pxps *pxp);
 static void pxp_wfe_b_configure(struct pxps *pxp);
 static void pxp_lut_status_set(struct pxps *pxp, unsigned int lut);
 static void pxp_lut_status_set_v3p(struct pxps *pxp, unsigned int lut);
+static void pxp_lut_status_clr(unsigned int lut);
+static void pxp_lut_status_clr_v3p(unsigned int lut);
 static void pxp_start2(struct pxps *pxp);
 static void pxp_data_path_config_v3p(struct pxps *pxp);
 static void pxp_soft_reset(struct pxps *pxp);
@@ -242,6 +956,10 @@ static void pxp_histogram_enable(struct pxps *pxp,
 				 unsigned int width,
 				 unsigned int height);
 static void pxp_histogram_disable(struct pxps *pxp);
+static void pxp_lut_cleanup_multiple(struct pxps *pxp, u64 lut, bool set);
+static void pxp_lut_cleanup_multiple_v3p(struct pxps *pxp, u64 lut, bool set);
+static void pxp_luts_deactivate(struct pxps *pxp, u64 lut_status);
+static void pxp_set_colorkey(struct pxps *pxp);
 
 enum {
 	DITHER0_LUT = 0x0,	/* Select the LUT memory for access */
@@ -268,7 +986,9 @@ struct pxp_devdata {
 	void (*pxp_wfe_a_configure)(struct pxps *pxp);
 	void (*pxp_wfe_a_process)(struct pxps *pxp);
 	void (*pxp_lut_status_set)(struct pxps *pxp, unsigned int lut);
+	void (*pxp_lut_status_clr)(unsigned int lut);
 	void (*pxp_dithering_configure)(struct pxps *pxp);
+	void (*pxp_lut_cleanup_multiple)(struct pxps *pxp, u64 lut, bool set);
 	void (*pxp_data_path_config)(struct pxps *pxp);
 	unsigned int version;
 };
@@ -278,6 +998,8 @@ static const struct pxp_devdata pxp_devdata[] = {
 		.pxp_wfe_a_configure = pxp_wfe_a_configure,
 		.pxp_wfe_a_process = pxp_wfe_a_process,
 		.pxp_lut_status_set = pxp_lut_status_set,
+		.pxp_lut_status_clr = pxp_lut_status_clr,
+		.pxp_lut_cleanup_multiple = pxp_lut_cleanup_multiple,
 		.pxp_dithering_configure = pxp_dithering_configure,
 		.pxp_data_path_config = NULL,
 		.version = 30,
@@ -286,6 +1008,8 @@ static const struct pxp_devdata pxp_devdata[] = {
 		.pxp_wfe_a_configure = pxp_wfe_a_configure_v3p,
 		.pxp_wfe_a_process = pxp_wfe_a_process_v3p,
 		.pxp_lut_status_set = pxp_lut_status_set_v3p,
+		.pxp_lut_status_clr = pxp_lut_status_clr_v3p,
+		.pxp_lut_cleanup_multiple = pxp_lut_cleanup_multiple_v3p,
 		.pxp_dithering_configure = pxp_dithering_configure_v3p,
 		.pxp_data_path_config = pxp_data_path_config_v3p,
 		.version = 31,
@@ -379,6 +1103,10 @@ static void dump_pxp_reg(struct pxps *pxp)
 		__raw_readl(pxp->base + HW_PXP_LUT_EXTMEM));
 	dev_dbg(pxp->dev, "PXP_CFA 0x%x",
 		__raw_readl(pxp->base + HW_PXP_CFA));
+	dev_dbg(pxp->dev, "PXP_ALPHA_A_CTRL 0x%x",
+		__raw_readl(pxp->base + HW_PXP_ALPHA_A_CTRL));
+	dev_dbg(pxp->dev, "PXP_ALPHA_B_CTRL 0x%x",
+		__raw_readl(pxp->base + HW_PXP_ALPHA_B_CTRL));
 	dev_dbg(pxp->dev, "PXP_POWER_REG0 0x%x",
 		__raw_readl(pxp->base + HW_PXP_POWER_REG0));
 	dev_dbg(pxp->dev, "PXP_NEXT 0x%x",
@@ -408,45 +1136,96 @@ static void print_param(struct pxp_layer_param *p, char *s)
 		p->top, p->left, p->width, p->height, p->stride, p->paddr);
 }
 
-static bool is_yuv(u32 pix_fmt)
+/* when it is, return yuv plane number */
+static uint8_t is_yuv(uint32_t format)
 {
-	if ((pix_fmt == PXP_PIX_FMT_YUYV) |
-	    (pix_fmt == PXP_PIX_FMT_UYVY) |
-	    (pix_fmt == PXP_PIX_FMT_YVYU) |
-	    (pix_fmt == PXP_PIX_FMT_VYUY) |
-	    (pix_fmt == PXP_PIX_FMT_Y41P) |
-	    (pix_fmt == PXP_PIX_FMT_VUY444) |
-	    (pix_fmt == PXP_PIX_FMT_NV12) |
-	    (pix_fmt == PXP_PIX_FMT_NV21) |
-	    (pix_fmt == PXP_PIX_FMT_NV16) |
-	    (pix_fmt == PXP_PIX_FMT_NV61) |
-	    (pix_fmt == PXP_PIX_FMT_GREY) |
-	    (pix_fmt == PXP_PIX_FMT_GY04) |
-	    (pix_fmt == PXP_PIX_FMT_YVU410P) |
-	    (pix_fmt == PXP_PIX_FMT_YUV410P) |
-	    (pix_fmt == PXP_PIX_FMT_YVU420P) |
-	    (pix_fmt == PXP_PIX_FMT_YUV420P) |
-	    (pix_fmt == PXP_PIX_FMT_YUV420P2) |
-	    (pix_fmt == PXP_PIX_FMT_YVU422P) |
-	    (pix_fmt == PXP_PIX_FMT_YUV422P)) {
-		return true;
-	} else {
-		return false;
+	switch (format) {
+	case PXP_PIX_FMT_GREY:
+	case PXP_PIX_FMT_GY04:
+	case PXP_PIX_FMT_YUYV:
+	case PXP_PIX_FMT_UYVY:
+	case PXP_PIX_FMT_YVYU:
+	case PXP_PIX_FMT_VYUY:
+	case PXP_PIX_FMT_YUV444:
+	case PXP_PIX_FMT_YVU444:
+		return 1;
+	case PXP_PIX_FMT_NV12:
+	case PXP_PIX_FMT_NV21:
+	case PXP_PIX_FMT_NV16:
+	case PXP_PIX_FMT_NV61:
+		return 2;
+	case PXP_PIX_FMT_YUV420P:
+	case PXP_PIX_FMT_YUV422P:
+	case PXP_PIX_FMT_YVU420P:
+	case PXP_PIX_FMT_YVU422P:
+		return 3;
+	default:
+		return 0;
 	}
 }
 
-
-static void pxp_set_ctrl(struct pxps *pxp)
+static u32 get_bpp_from_fmt(u32 pix_fmt)
 {
-	struct pxp_config_data *pxp_conf = &pxp->pxp_conf_state;
-	struct pxp_proc_data *proc_data = &pxp_conf->proc_data;
-	u32 ctrl;
-	u32 fmt_ctrl;
-	int need_swap = 0;   /* to support YUYV and YVYU formats */
+	unsigned int bpp = 0;
 
-	/* Configure S0 input format */
-	switch (pxp_conf->s0_param.pixel_fmt) {
-	case PXP_PIX_FMT_RGB32:
+	switch (pix_fmt) {
+	case PXP_PIX_FMT_GREY:
+	case PXP_PIX_FMT_NV16:
+	case PXP_PIX_FMT_NV61:
+	case PXP_PIX_FMT_NV12:
+	case PXP_PIX_FMT_NV21:
+	case PXP_PIX_FMT_YUV422P:
+	case PXP_PIX_FMT_YVU422P:
+	case PXP_PIX_FMT_YUV420P:
+	case PXP_PIX_FMT_YVU420P:
+		bpp = 8;
+		break;
+	case PXP_PIX_FMT_RGB555:
+	case PXP_PIX_FMT_ARGB555:
+	case PXP_PIX_FMT_XRGB555:
+	case PXP_PIX_FMT_RGBA555:
+	case PXP_PIX_FMT_ARGB444:
+	case PXP_PIX_FMT_XRGB444:
+	case PXP_PIX_FMT_RGBA444:
+	case PXP_PIX_FMT_RGB565:
+	case PXP_PIX_FMT_BGR565:
+	case PXP_PIX_FMT_YUYV:
+	case PXP_PIX_FMT_YVYU:
+	case PXP_PIX_FMT_UYVY:
+	case PXP_PIX_FMT_VYUY:
+		bpp = 16;
+		break;
+	case PXP_PIX_FMT_RGB24:
+	case PXP_PIX_FMT_BGR24:
+		bpp = 24;
+		break;
+	case PXP_PIX_FMT_XRGB32:
+	case PXP_PIX_FMT_RGBX32:
+	case PXP_PIX_FMT_XBGR32:
+	case PXP_PIX_FMT_BGRX32:
+	case PXP_PIX_FMT_ARGB32:
+	case PXP_PIX_FMT_RGBA32:
+	case PXP_PIX_FMT_ABGR32:
+	case PXP_PIX_FMT_BGRA32:
+	case PXP_PIX_FMT_YUV444:
+	case PXP_PIX_FMT_YVU444:
+		bpp = 32;
+		break;
+	default:
+		pr_err("%s: pix_fmt unsupport yet: 0x%x\n", __func__, pix_fmt);
+		break;
+	}
+
+	return bpp;
+}
+
+static uint32_t pxp_parse_ps_fmt(uint32_t format)
+{
+	uint32_t fmt_ctrl;
+
+	switch (format) {
+	case PXP_PIX_FMT_XRGB32:
+	case PXP_PIX_FMT_ARGB32:
 		fmt_ctrl = BV_PXP_PS_CTRL_FORMAT__RGB888;
 		break;
 	case PXP_PIX_FMT_RGB565:
@@ -478,14 +1257,12 @@ static void pxp_set_ctrl(struct pxps *pxp)
 		break;
 	case PXP_PIX_FMT_YUYV:
 		fmt_ctrl = BV_PXP_PS_CTRL_FORMAT__UYVY1P422;
-		need_swap = 1;
 		break;
 	case PXP_PIX_FMT_VYUY:
 		fmt_ctrl = BV_PXP_PS_CTRL_FORMAT__VYUY1P422;
 		break;
 	case PXP_PIX_FMT_YVYU:
 		fmt_ctrl = BV_PXP_PS_CTRL_FORMAT__VYUY1P422;
-		need_swap = 1;
 		break;
 	case PXP_PIX_FMT_NV12:
 		fmt_ctrl = BV_PXP_PS_CTRL_FORMAT__YUV2P420;
@@ -499,21 +1276,100 @@ static void pxp_set_ctrl(struct pxps *pxp)
 	case PXP_PIX_FMT_NV61:
 		fmt_ctrl = BV_PXP_PS_CTRL_FORMAT__YVU2P422;
 		break;
+	case PXP_PIX_FMT_RGBA32:
+	case PXP_PIX_FMT_RGBX32:
+		fmt_ctrl = BV_PXP_PS_CTRL_FORMAT__RGBA888;
+		break;
 	default:
+		pr_debug("PS doesn't support this format\n");
 		fmt_ctrl = 0;
 	}
 
-	ctrl = BF_PXP_PS_CTRL_FORMAT(fmt_ctrl) |
-		(need_swap ? BM_PXP_PS_CTRL_WB_SWAP : 0);
-	__raw_writel(ctrl, pxp->base + HW_PXP_PS_CTRL_SET);
+	return fmt_ctrl;
+}
 
-	/* Configure output format based on out_channel format */
-	switch (pxp_conf->out_param.pixel_fmt) {
-	case PXP_PIX_FMT_RGB32:
-		fmt_ctrl = BV_PXP_OUT_CTRL_FORMAT__RGB888;
-		break;
+static void pxp_set_colorkey(struct pxps *pxp)
+{
+	struct pxp_config_data *pxp_conf = &pxp->pxp_conf_state;
+	struct pxp_layer_param *s0_params = &pxp_conf->s0_param;
+	struct pxp_layer_param *ol_params = &pxp_conf->ol_param[0];
+
+	/* Low and high are set equal. V4L does not allow a chromakey range */
+	if (s0_params->color_key_enable == 0 || s0_params->color_key == -1) {
+		/* disable color key */
+		pxp_writel(0xFFFFFF, HW_PXP_PS_CLRKEYLOW_0);
+		pxp_writel(0, HW_PXP_PS_CLRKEYHIGH_0);
+	} else {
+		pxp_writel(s0_params->color_key, HW_PXP_PS_CLRKEYLOW_0);
+		pxp_writel(s0_params->color_key, HW_PXP_PS_CLRKEYHIGH_0);
+	}
+
+	if (ol_params->color_key_enable != 0 && ol_params->color_key != -1) {
+		pxp_writel(ol_params->color_key, HW_PXP_AS_CLRKEYLOW_0);
+		pxp_writel(ol_params->color_key, HW_PXP_AS_CLRKEYHIGH_0);
+	} else {
+		/* disable color key */
+		pxp_writel(0xFFFFFF, HW_PXP_AS_CLRKEYLOW_0);
+		pxp_writel(0, HW_PXP_AS_CLRKEYHIGH_0);
+	}
+}
+
+static uint32_t pxp_parse_as_fmt(uint32_t format)
+{
+	uint32_t fmt_ctrl;
+
+	switch (format) {
 	case PXP_PIX_FMT_BGRA32:
+	case PXP_PIX_FMT_ARGB32:
+		fmt_ctrl = BV_PXP_AS_CTRL_FORMAT__ARGB8888;
+		break;
+	case PXP_PIX_FMT_RGBA32:
+		fmt_ctrl = BV_PXP_AS_CTRL_FORMAT__RGBA8888;
+		break;
+	case PXP_PIX_FMT_XRGB32:
+		fmt_ctrl = BV_PXP_AS_CTRL_FORMAT__RGB888;
+		break;
+	case PXP_PIX_FMT_ARGB555:
+		fmt_ctrl = BV_PXP_AS_CTRL_FORMAT__ARGB1555;
+		break;
+	case PXP_PIX_FMT_ARGB444:
+		fmt_ctrl = BV_PXP_AS_CTRL_FORMAT__ARGB4444;
+		break;
+	case PXP_PIX_FMT_RGBA555:
+		fmt_ctrl = BV_PXP_AS_CTRL_FORMAT__RGBA5551;
+		break;
+	case PXP_PIX_FMT_RGBA444:
+		fmt_ctrl = BV_PXP_AS_CTRL_FORMAT__RGBA4444;
+		break;
+	case PXP_PIX_FMT_RGB555:
+		fmt_ctrl = BV_PXP_AS_CTRL_FORMAT__RGB555;
+		break;
+	case PXP_PIX_FMT_RGB444:
+		fmt_ctrl = BV_PXP_AS_CTRL_FORMAT__RGB444;
+		break;
+	case PXP_PIX_FMT_RGB565:
+		fmt_ctrl = BV_PXP_AS_CTRL_FORMAT__RGB565;
+		break;
+	default:
+		pr_debug("AS doesn't support this format\n");
+		fmt_ctrl = 0xf;
+		break;
+	}
+
+	return fmt_ctrl;
+}
+
+static uint32_t pxp_parse_out_fmt(uint32_t format)
+{
+	uint32_t fmt_ctrl;
+
+	switch (format) {
+	case PXP_PIX_FMT_BGRA32:
+	case PXP_PIX_FMT_ARGB32:
 		fmt_ctrl = BV_PXP_OUT_CTRL_FORMAT__ARGB8888;
+		break;
+	case PXP_PIX_FMT_XRGB32:
+		fmt_ctrl = BV_PXP_OUT_CTRL_FORMAT__RGB888;
 		break;
 	case PXP_PIX_FMT_RGB24:
 		fmt_ctrl = BV_PXP_OUT_CTRL_FORMAT__RGB888P;
@@ -549,405 +1405,1497 @@ static void pxp_set_ctrl(struct pxps *pxp)
 		fmt_ctrl = BV_PXP_OUT_CTRL_FORMAT__YVU2P422;
 		break;
 	default:
+		pr_debug("OUT doesn't support this format\n");
 		fmt_ctrl = 0;
 	}
 
-	ctrl = BF_PXP_OUT_CTRL_FORMAT(fmt_ctrl);
-	__raw_writel(ctrl, pxp->base + HW_PXP_OUT_CTRL);
+	return fmt_ctrl;
+}
 
-	ctrl = 0;
-	if (proc_data->scaling)
-		;
-	if (proc_data->vflip)
-		ctrl |= BM_PXP_CTRL_VFLIP0;
-	if (proc_data->hflip)
-		ctrl |= BM_PXP_CTRL_HFLIP0;
-	if (proc_data->rotate) {
-		ctrl |= BF_PXP_CTRL_ROTATE0(proc_data->rotate / 90);
-#if 0
-		if (proc_data->rot_pos)
-			ctrl |= BM_PXP_CTRL_ROT_POS;
-#endif
+static void set_mux(struct mux_config *path_ctrl)
+{
+	struct mux_config *mux = path_ctrl;
+
+	*(uint32_t *)path_ctrl = 0xFFFFFFFF;
+
+	mux->mux0_sel = 0;
+	mux->mux3_sel = 1;
+	mux->mux6_sel = 1;
+	mux->mux8_sel = 0;
+	mux->mux9_sel = 1;
+	mux->mux11_sel = 0;
+	mux->mux12_sel = 1;
+	mux->mux14_sel = 0;
+}
+
+static void set_mux_val(struct mux_config *muxes,
+			uint32_t mux_id,
+			uint32_t mux_val)
+{
+	BUG_ON(!muxes);
+	BUG_ON(mux_id > 15);
+
+	switch (mux_id) {
+	case 0:
+		muxes->mux0_sel  = mux_val;
+		break;
+	case 1:
+		muxes->mux1_sel  = mux_val;
+		break;
+	case 2:
+		muxes->mux2_sel  = mux_val;
+		break;
+	case 3:
+		muxes->mux3_sel  = mux_val;
+		break;
+	case 4:
+		muxes->mux4_sel  = mux_val;
+		break;
+	case 5:
+		muxes->mux5_sel  = mux_val;
+		break;
+	case 6:
+		muxes->mux6_sel  = mux_val;
+		break;
+	case 7:
+		muxes->mux7_sel  = mux_val;
+		break;
+	case 8:
+		muxes->mux8_sel  = mux_val;
+		break;
+	case 9:
+		muxes->mux9_sel  = mux_val;
+		break;
+	case 10:
+		muxes->mux10_sel = mux_val;
+		break;
+	case 11:
+		muxes->mux11_sel = mux_val;
+		break;
+	case 12:
+		muxes->mux12_sel = mux_val;
+		break;
+	case 13:
+		muxes->mux13_sel = mux_val;
+		break;
+	case 14:
+		muxes->mux14_sel = mux_val;
+		break;
+	case 15:
+		muxes->mux15_sel = mux_val;
+		break;
+	default:
+		break;
+	}
+}
+
+static uint32_t get_mux_val(struct mux_config *muxes,
+			    uint32_t mux_id)
+{
+	BUG_ON(!muxes);
+	BUG_ON(mux_id > 15);
+
+	switch (mux_id) {
+	case 0:
+		return muxes->mux0_sel;
+	case 1:
+		return muxes->mux1_sel;
+	case 2:
+		return muxes->mux2_sel;
+	case 3:
+		return muxes->mux3_sel;
+	case 4:
+		return muxes->mux4_sel;
+	case 5:
+		return muxes->mux5_sel;
+	case 6:
+		return muxes->mux6_sel;
+	case 7:
+		return muxes->mux7_sel;
+	case 8:
+		return muxes->mux8_sel;
+	case 9:
+		return muxes->mux9_sel;
+	case 10:
+		return muxes->mux10_sel;
+	case 11:
+		return muxes->mux11_sel;
+	case 12:
+		return muxes->mux12_sel;
+	case 13:
+		return muxes->mux13_sel;
+	case 14:
+		return muxes->mux14_sel;
+	case 15:
+		return muxes->mux15_sel;
+	default:
+		return -EINVAL;
+	}
+}
+
+static uint32_t pxp_store_ctrl_config(struct pxp_pixmap *out, uint8_t mode,
+				      uint8_t fill_en, uint8_t combine_2ch)
+{
+	struct store_ctrl ctrl;
+	uint8_t output_active_bpp;
+
+	memset((void*)&ctrl, 0x0, sizeof(ctrl));
+
+	if (combine_2ch) {
+		ctrl.combine_2channel = 1;
+		if (out) {
+			output_active_bpp = active_bpp(out->bpp);
+			ctrl.pack_in_sel  = (output_active_bpp < 0x3) ? 1 : 0;
+			ctrl.store_memory_en = 1;
+		}
+	} else {
+		if (fill_en) {
+			ctrl.fill_data_en = 1;
+			ctrl.wr_num_bytes = 2;
+		}
+		ctrl.store_memory_en = 1;
 	}
 
-	/* In default, the block size is set to 8x8
-	 * But block size can be set to 16x16 due to
-	 * blocksize variable modification
-	 */
-	ctrl |= block_size << 23;
+	if (out->rotate || out->flip)
+		ctrl.block_en = 1;
 
-	__raw_writel(ctrl, pxp->base + HW_PXP_CTRL);
+	ctrl.ch_en = 1;
+
+	return *(uint32_t *)&ctrl;
+}
+
+static uint32_t pxp_store_size_config(struct pxp_pixmap *out)
+{
+	struct store_size size;
+
+	memset((void*)&size, 0x0, sizeof(size));
+
+	size.out_height = out->height - 1;
+	size.out_width  = out->width - 1;
+
+	return *(uint32_t *)&size;
+}
+
+static uint32_t pxp_store_pitch_config(struct pxp_pixmap *out0,
+				       struct pxp_pixmap *out1)
+{
+	struct store_pitch pitch;
+
+	memset((void*)&pitch, 0x0, sizeof(pitch));
+
+	pitch.ch0_out_pitch = out0->pitch;
+	pitch.ch1_out_pitch = out1 ? out1->pitch : 0;
+
+	return *(uint32_t *)&pitch;
+}
+
+static struct color *pxp_find_rgb_color(uint32_t format)
+{
+	int i;
+
+	for (i = 0; i < sizeof(rgb_colors) / sizeof(struct color); i++) {
+		if (rgb_colors[i].format == format)
+			return &rgb_colors[i];
+	}
+
+	return NULL;
+}
+
+static struct color_component *pxp_find_comp(struct color *color, uint8_t id)
+{
+	int i;
+
+	for (i = 0; i < 4; i++) {
+		if (id == color->comp[i].id)
+			return &color->comp[i];
+	}
+
+	return NULL;
+}
+
+static struct color *pxp_find_yuv_color(uint32_t format)
+{
+	int i;
+
+	for (i = 0; i < sizeof(yuv_colors) / sizeof(struct color); i++) {
+		if (yuv_colors[i].format == format)
+			return &yuv_colors[i];
+	}
+
+	return NULL;
+}
+
+static uint64_t pxp_store_d_shift_calc(uint32_t in_fmt, uint32_t out_fmt,
+				       struct store_d_mask *d_mask)
+{
+	int i, shift_width, shift_flag, drop = 0;
+	struct store_d_shift d_shift;
+	struct color *input_color, *output_color;
+	struct color_component *input_comp, *output_comp;
+
+	BUG_ON((in_fmt == out_fmt));
+	memset((void*)&d_shift, 0x0, sizeof(d_shift));
+	memset((void*)d_mask, 0x0, sizeof(*d_mask) * 8);
+
+	if (!is_yuv(in_fmt)) {
+		input_color  = pxp_find_rgb_color(in_fmt);
+		output_color = pxp_find_rgb_color(out_fmt);
+	} else {
+		input_color  = pxp_find_yuv_color(in_fmt);
+		output_color = pxp_find_yuv_color(out_fmt);
+	}
+
+	for (i = 0; i < 4; i++) {
+		input_comp  = &input_color->comp[i];
+		if (!input_comp->length)
+			continue;
+
+		output_comp = pxp_find_comp(output_color, input_comp->id);
+		if (!output_comp->length)
+			continue;
+
+		/* only rgb format can drop color bits */
+		if (input_comp->length > output_comp->length) {
+			drop = input_comp->length - output_comp->length;
+			input_comp->offset += drop;
+		}
+		d_mask[i].d_mask_l = output_comp->mask << input_comp->offset;
+
+		shift_width = input_comp->offset - output_comp->offset;
+		if (shift_width > 0)
+			shift_flag = 0;		/* right shift */
+		else if (shift_width < 0) {
+			shift_flag = 1;		/* left shift */
+			shift_width = -shift_width;
+		} else
+			shift_width = shift_flag = 0; /* no shift require */
+
+		switch (i) {
+		case 0:
+			d_shift.d_shift_width0 = shift_width;
+			d_shift.d_shift_flag0  = shift_flag;
+			break;
+		case 1:
+			d_shift.d_shift_width1 = shift_width;
+			d_shift.d_shift_flag1  = shift_flag;
+			break;
+		case 2:
+			d_shift.d_shift_width2 = shift_width;
+			d_shift.d_shift_flag2  = shift_flag;
+			break;
+		case 3:
+			d_shift.d_shift_width3 = shift_width;
+			d_shift.d_shift_flag3  = shift_flag;
+			break;
+		default:
+			printk(KERN_ERR "unsupport d shift\n");
+			break;
+		}
+
+		input_comp->offset -= drop;
+	}
+
+	return *(uint64_t *)&d_shift;
+}
+
+static uint32_t pxp_store_shift_ctrl_config(struct pxp_pixmap *out,
+					    uint8_t shift_bypass)
+{
+	struct store_shift_ctrl shift_ctrl;
+
+	memset((void*)&shift_ctrl, 0x0, sizeof(shift_ctrl));
+
+	shift_ctrl.output_active_bpp = active_bpp(out->bpp);
+	/* Not general data */
+	if (!shift_bypass) {
+		switch(out->format) {
+		case PXP_PIX_FMT_YUYV:
+			shift_bypass = 1;
+		case PXP_PIX_FMT_YVYU:
+			shift_ctrl.out_yuv422_1p_en = 1;
+			break;
+		case PXP_PIX_FMT_NV16:
+			shift_bypass = 1;
+		case PXP_PIX_FMT_NV61:
+			shift_ctrl.out_yuv422_2p_en = 1;
+			break;
+		default:
+			break;
+		}
+	}
+	shift_ctrl.shift_bypass = shift_bypass;
+
+	return *(uint32_t *)&shift_ctrl;
+}
+
+static uint32_t pxp_fetch_ctrl_config(struct pxp_pixmap *in,
+				      uint8_t mode)
+{
+	struct fetch_ctrl ctrl;
+
+	memset((void*)&ctrl, 0x0, sizeof(ctrl));
+
+	if (mode == FETCH_MODE_NORMAL)
+		ctrl.bypass_pixel_en = 0;
+
+	if (in->flip == PXP_H_FLIP)
+		ctrl.hflip = 1;
+	else if (in->flip == PXP_V_FLIP)
+		ctrl.vflip = 1;
+
+	ctrl.rotation_angle = rotate_map(in->rotate);
+
+	if (in->rotate || in->flip)
+		ctrl.block_en = 1;
+
+	ctrl.ch_en = 1;
+
+	return *(uint32_t *)&ctrl;
+}
+
+static uint32_t pxp_fetch_active_size_ulc(struct pxp_pixmap *in)
+{
+	struct fetch_active_size_ulc size_ulc;
+
+	memset((void*)&size_ulc, 0x0, sizeof(size_ulc));
+
+	size_ulc.active_size_ulc_x = 0;
+	size_ulc.active_size_ulc_y = 0;
+
+	return *(uint32_t *)&size_ulc;
+}
+
+static uint32_t pxp_fetch_active_size_lrc(struct pxp_pixmap *in)
+{
+	struct fetch_active_size_lrc size_lrc;
+
+	memset((void*)&size_lrc, 0x0, sizeof(size_lrc));
+
+	size_lrc.active_size_lrc_x = in->crop.width - 1;
+	size_lrc.active_size_lrc_y = in->crop.height - 1;
+
+	return *(uint32_t *)&size_lrc;
+}
+
+static uint32_t pxp_fetch_pitch_config(struct pxp_pixmap *in0,
+				       struct pxp_pixmap *in1)
+{
+	struct fetch_pitch pitch;
+
+	memset((void*)&pitch, 0x0, sizeof(pitch));
+
+	if (in0)
+		pitch.ch0_input_pitch = in0->pitch;
+	if (in1)
+		pitch.ch1_input_pitch = in1->pitch;
+
+	return *(uint32_t *)&pitch;
+}
+
+static uint32_t pxp_fetch_shift_ctrl_config(struct pxp_pixmap *in,
+					    uint8_t shift_bypass,
+					    uint8_t need_expand)
+{
+	uint8_t input_expand_format;
+	struct fetch_shift_ctrl shift_ctrl;
+
+	memset((void*)&shift_ctrl, 0x0, sizeof(shift_ctrl));
+
+	shift_ctrl.input_active_bpp = active_bpp(in->bpp);
+	shift_ctrl.shift_bypass = shift_bypass;
+
+	if (in->bpp == 32)
+		need_expand = 0;
+
+	if (need_expand) {
+		input_expand_format = expand_format(in->format);
+
+		if (input_expand_format <= 0x7) {
+			shift_ctrl.expand_en = 1;
+			shift_ctrl.expand_format = input_expand_format;
+		}
+	}
+
+	return *(uint32_t *)&shift_ctrl;
+}
+
+static uint32_t pxp_fetch_shift_calc(uint32_t in_fmt, uint32_t out_fmt,
+				     struct fetch_shift_width *shift_width)
+{
+	int i;
+	struct fetch_shift_offset shift_offset;
+	struct color *input_color, *output_color;
+	struct color_component *input_comp, *output_comp;
+
+	memset((void*)&shift_offset, 0x0, sizeof(shift_offset));
+	memset((void*)shift_width, 0x0, sizeof(*shift_width));
+
+	if (!is_yuv(in_fmt)) {
+		input_color  = pxp_find_rgb_color(in_fmt);
+		output_color = pxp_find_rgb_color(out_fmt);
+	} else {
+		input_color  = pxp_find_yuv_color(in_fmt);
+		output_color = pxp_find_yuv_color(out_fmt);
+	}
+
+	for(i = 0; i < 4; i++) {
+		output_comp = &output_color->comp[i];
+		if (!output_comp->length)
+			continue;
+
+		input_comp = pxp_find_comp(input_color, output_comp->id);
+		switch (i) {
+		case 0:
+			shift_offset.offset0 = input_comp->offset;
+			shift_width->width0  = input_comp->length;
+			break;
+		case 1:
+			shift_offset.offset1 = input_comp->offset;
+			shift_width->width1  = input_comp->length;
+			break;
+		case 2:
+			shift_offset.offset2 = input_comp->offset;
+			shift_width->width2  = input_comp->length;
+			break;
+		case 3:
+			shift_offset.offset3 = input_comp->offset;
+			shift_width->width3  = input_comp->length;
+			break;
+		}
+	}
+
+	return *(uint32_t *)&shift_offset;
 }
 
 static int pxp_start(struct pxps *pxp)
 {
-	__raw_writel(BM_PXP_CTRL_IRQ_ENABLE, pxp->base + HW_PXP_CTRL_SET);
-	__raw_writel(BM_PXP_CTRL_ENABLE | BM_PXP_CTRL_ENABLE_CSC2 |
-		BM_PXP_CTRL_ENABLE_LUT | BM_PXP_CTRL_ENABLE_ROTATE0 |
-		BM_PXP_CTRL_ENABLE_PS_AS_OUT, pxp->base + HW_PXP_CTRL_SET);
+	__raw_writel(BM_PXP_CTRL_ENABLE_ROTATE1 | BM_PXP_CTRL_ENABLE |
+		BM_PXP_CTRL_ENABLE_CSC2 | BM_PXP_CTRL_ENABLE_LUT |
+		BM_PXP_CTRL_ENABLE_PS_AS_OUT | BM_PXP_CTRL_ENABLE_ROTATE0,
+			pxp->base + HW_PXP_CTRL_SET);
 	dump_pxp_reg(pxp);
 
 	return 0;
 }
 
-static void pxp_set_outbuf(struct pxps *pxp)
+static bool fmt_ps_support(uint32_t format)
 {
-	struct pxp_config_data *pxp_conf = &pxp->pxp_conf_state;
-	struct pxp_layer_param *out_params = &pxp_conf->out_param;
-	struct pxp_proc_data *proc_data = &pxp_conf->proc_data;
-
-	__raw_writel(out_params->paddr, pxp->base + HW_PXP_OUT_BUF);
-
-	if ((out_params->pixel_fmt == PXP_PIX_FMT_NV12) ||
-		(out_params->pixel_fmt == PXP_PIX_FMT_NV21) ||
-		(out_params->pixel_fmt == PXP_PIX_FMT_NV16) ||
-		(out_params->pixel_fmt == PXP_PIX_FMT_NV61)) {
-		dma_addr_t Y, U;
-
-		Y = out_params->paddr;
-		U = Y + (out_params->width * out_params->height);
-
-		__raw_writel(U, pxp->base + HW_PXP_OUT_BUF2);
-	}
-
-	if (proc_data->rotate == 90 || proc_data->rotate == 270)
-		__raw_writel(BF_PXP_OUT_LRC_X(out_params->height - 1) |
-				BF_PXP_OUT_LRC_Y(out_params->width - 1),
-				pxp->base + HW_PXP_OUT_LRC);
-	else
-		__raw_writel(BF_PXP_OUT_LRC_X(out_params->width - 1) |
-				BF_PXP_OUT_LRC_Y(out_params->height - 1),
-				pxp->base + HW_PXP_OUT_LRC);
-
-	if (out_params->pixel_fmt == PXP_PIX_FMT_RGB24) {
-		__raw_writel(out_params->stride * 3,
-				pxp->base + HW_PXP_OUT_PITCH);
-	} else if (out_params->pixel_fmt == PXP_PIX_FMT_BGRA32 ||
-		 out_params->pixel_fmt == PXP_PIX_FMT_RGB32) {
-		__raw_writel(out_params->stride << 2,
-				pxp->base + HW_PXP_OUT_PITCH);
-	} else if ((out_params->pixel_fmt == PXP_PIX_FMT_RGB565) ||
-		   (out_params->pixel_fmt == PXP_PIX_FMT_RGB555)) {
-		__raw_writel(out_params->stride << 1,
-				pxp->base + HW_PXP_OUT_PITCH);
-	} else if (out_params->pixel_fmt == PXP_PIX_FMT_UYVY ||
-		(out_params->pixel_fmt == PXP_PIX_FMT_VYUY)) {
-		__raw_writel(out_params->stride << 1,
-				pxp->base + HW_PXP_OUT_PITCH);
-	} else if (out_params->pixel_fmt == PXP_PIX_FMT_GREY ||
-		   out_params->pixel_fmt == PXP_PIX_FMT_NV12 ||
-		   out_params->pixel_fmt == PXP_PIX_FMT_NV21 ||
-		   out_params->pixel_fmt == PXP_PIX_FMT_NV16 ||
-		   out_params->pixel_fmt == PXP_PIX_FMT_NV61) {
-		__raw_writel(out_params->stride,
-				pxp->base + HW_PXP_OUT_PITCH);
-	} else if (out_params->pixel_fmt == PXP_PIX_FMT_GY04) {
-		__raw_writel(out_params->stride >> 1,
-				pxp->base + HW_PXP_OUT_PITCH);
-	} else {
-		__raw_writel(0, pxp->base + HW_PXP_OUT_PITCH);
-	}
-
-	/* set global alpha if necessary */
-	if (out_params->global_alpha_enable) {
-		__raw_writel(out_params->global_alpha << 24,
-				pxp->base + HW_PXP_OUT_CTRL_SET);
-		__raw_writel(BM_PXP_OUT_CTRL_ALPHA_OUTPUT,
-				pxp->base + HW_PXP_OUT_CTRL_SET);
+	switch (format) {
+	case PXP_PIX_FMT_XRGB32:
+	case PXP_PIX_FMT_ARGB32:
+	case PXP_PIX_FMT_RGB555:
+	case PXP_PIX_FMT_XRGB555:
+	case PXP_PIX_FMT_ARGB555:
+	case PXP_PIX_FMT_RGB444:
+	case PXP_PIX_FMT_XRGB444:
+	case PXP_PIX_FMT_ARGB444:
+	case PXP_PIX_FMT_RGB565:
+	case PXP_PIX_FMT_YUV444:
+	case PXP_PIX_FMT_UYVY:
+	/* need word byte swap */
+	case PXP_PIX_FMT_YUYV:
+	case PXP_PIX_FMT_VYUY:
+	/* need word byte swap */
+	case PXP_PIX_FMT_YVYU:
+	case PXP_PIX_FMT_GREY:
+	case PXP_PIX_FMT_GY04:
+	case PXP_PIX_FMT_NV16:
+	case PXP_PIX_FMT_NV12:
+	case PXP_PIX_FMT_NV61:
+	case PXP_PIX_FMT_NV21:
+	case PXP_PIX_FMT_YUV422P:
+	case PXP_PIX_FMT_YUV420P:
+	case PXP_PIX_FMT_YVU420P:
+	case PXP_PIX_FMT_RGBA32:
+	case PXP_PIX_FMT_RGBX32:
+	case PXP_PIX_FMT_RGBA555:
+	case PXP_PIX_FMT_RGBA444:
+		return true;
+	default:
+		return false;
 	}
 }
 
-static void pxp_set_s0colorkey(struct pxps *pxp)
+static bool fmt_as_support(uint32_t format)
 {
-	struct pxp_config_data *pxp_conf = &pxp->pxp_conf_state;
-	struct pxp_layer_param *s0_params = &pxp_conf->s0_param;
-
-	/* Low and high are set equal. V4L does not allow a chromakey range */
-	if (s0_params->color_key_enable == 0 || s0_params->color_key == -1) {
-		/* disable color key */
-		__raw_writel(0xFFFFFF, pxp->base + HW_PXP_PS_CLRKEYLOW_0);
-		__raw_writel(0, pxp->base + HW_PXP_PS_CLRKEYHIGH_0);
-	} else {
-		__raw_writel(s0_params->color_key,
-			     pxp->base + HW_PXP_PS_CLRKEYLOW_0);
-		__raw_writel(s0_params->color_key,
-			     pxp->base + HW_PXP_PS_CLRKEYHIGH_0);
+	switch (format) {
+	case PXP_PIX_FMT_ARGB32:
+	case PXP_PIX_FMT_RGBA32:
+	case PXP_PIX_FMT_XRGB32:
+	case PXP_PIX_FMT_BGRA32:
+	case PXP_PIX_FMT_ARGB555:
+	case PXP_PIX_FMT_ARGB444:
+	case PXP_PIX_FMT_RGBA555:
+	case PXP_PIX_FMT_RGBA444:
+	case PXP_PIX_FMT_RGB555:
+	case PXP_PIX_FMT_RGB444:
+	case PXP_PIX_FMT_RGB565:
+		return true;
+	default:
+		return false;
 	}
 }
 
-static void pxp_set_olcolorkey(int layer_no, struct pxps *pxp)
+static bool fmt_out_support(uint32_t format)
 {
-	struct pxp_config_data *pxp_conf = &pxp->pxp_conf_state;
-	struct pxp_layer_param *ol_params = &pxp_conf->ol_param[layer_no];
-
-	/* Low and high are set equal. V4L does not allow a chromakey range */
-	if (ol_params->color_key_enable != 0 && ol_params->color_key != -1) {
-		__raw_writel(ol_params->color_key,
-			     pxp->base + HW_PXP_AS_CLRKEYLOW_0);
-		__raw_writel(ol_params->color_key,
-			     pxp->base + HW_PXP_AS_CLRKEYHIGH_0);
-	} else {
-		/* disable color key */
-		__raw_writel(0xFFFFFF, pxp->base + HW_PXP_AS_CLRKEYLOW_0);
-		__raw_writel(0, pxp->base + HW_PXP_AS_CLRKEYHIGH_0);
+	switch (format) {
+	case PXP_PIX_FMT_ARGB32:
+	case PXP_PIX_FMT_XRGB32:
+	case PXP_PIX_FMT_BGRA32:
+	case PXP_PIX_FMT_RGB24:
+	case PXP_PIX_FMT_ARGB555:
+	case PXP_PIX_FMT_ARGB444:
+	case PXP_PIX_FMT_RGB555:
+	case PXP_PIX_FMT_RGB444:
+	case PXP_PIX_FMT_RGB565:
+	case PXP_PIX_FMT_YUV444:
+	case PXP_PIX_FMT_UYVY:
+	case PXP_PIX_FMT_VYUY:
+	case PXP_PIX_FMT_GREY:
+	case PXP_PIX_FMT_GY04:
+	case PXP_PIX_FMT_NV16:
+	case PXP_PIX_FMT_NV12:
+	case PXP_PIX_FMT_NV61:
+	case PXP_PIX_FMT_NV21:
+		return true;
+	default:
+		return false;
 	}
 }
 
-static void pxp_set_oln(int layer_no, struct pxps *pxp)
+/* common means 'ARGB32/XRGB32/YUV444' */
+static uint8_t fmt_fetch_to_common(uint32_t in)
 {
-	struct pxp_config_data *pxp_conf = &pxp->pxp_conf_state;
-	struct pxp_layer_param *olparams_data = &pxp_conf->ol_param[layer_no];
-	dma_addr_t phys_addr = olparams_data->paddr;
-	u32 pitch = olparams_data->stride ? olparams_data->stride :
-					    olparams_data->width;
+	switch (in) {
+	case PXP_PIX_FMT_ARGB32:
+	case PXP_PIX_FMT_XRGB32:
+	case PXP_PIX_FMT_YUV444:
+		return FETCH_NOOP;
 
-	__raw_writel(phys_addr, pxp->base + HW_PXP_AS_BUF);
+	case PXP_PIX_FMT_RGB565:
+	case PXP_PIX_FMT_RGB555:
+	case PXP_PIX_FMT_ARGB555:
+	case PXP_PIX_FMT_RGB444:
+	case PXP_PIX_FMT_ARGB444:
+	case PXP_PIX_FMT_YUYV:
+	case PXP_PIX_FMT_UYVY:
+	case PXP_PIX_FMT_NV16:
+		return FETCH_EXPAND;
 
-	/* Fixme */
-	if (olparams_data->width == 0 && olparams_data->height == 0) {
-		__raw_writel(0xffffffff, pxp->base + HW_PXP_OUT_AS_ULC);
-		__raw_writel(0x0, pxp->base + HW_PXP_OUT_AS_LRC);
-	} else {
-		__raw_writel(0x0, pxp->base + HW_PXP_OUT_AS_ULC);
-		__raw_writel(BF_PXP_OUT_AS_LRC_X(olparams_data->width - 1) |
-				BF_PXP_OUT_AS_LRC_Y(olparams_data->height - 1),
-				pxp->base + HW_PXP_OUT_AS_LRC);
-	}
+	case PXP_PIX_FMT_RGBA32:
+	case PXP_PIX_FMT_RGBX32:
+	case PXP_PIX_FMT_BGRA32:
+	case PXP_PIX_FMT_BGRX32:
+	case PXP_PIX_FMT_ABGR32:
+	case PXP_PIX_FMT_XBGR32:
+	case PXP_PIX_FMT_YVU444:
+		return FETCH_SHIFT;
 
-	if ((olparams_data->pixel_fmt == PXP_PIX_FMT_BGRA32) ||
-		 (olparams_data->pixel_fmt == PXP_PIX_FMT_RGB32)) {
-		__raw_writel(pitch << 2,
-				pxp->base + HW_PXP_AS_PITCH);
-	} else if ((olparams_data->pixel_fmt == PXP_PIX_FMT_RGB565) ||
-		   (olparams_data->pixel_fmt == PXP_PIX_FMT_RGB555)) {
-		__raw_writel(pitch << 1,
-				pxp->base + HW_PXP_AS_PITCH);
-	} else {
-		__raw_writel(0, pxp->base + HW_PXP_AS_PITCH);
+	case PXP_PIX_FMT_BGR565:
+	case PXP_PIX_FMT_YVYU:
+	case PXP_PIX_FMT_VYUY:
+		return FETCH_EXPAND | FETCH_SHIFT;
+
+	default:
+		return 0;
 	}
 }
 
-static void pxp_set_olparam(int layer_no, struct pxps *pxp)
+static uint8_t fmt_store_from_common(uint32_t out)
 {
-	struct pxp_config_data *pxp_conf = &pxp->pxp_conf_state;
-	struct pxp_layer_param *olparams_data = &pxp_conf->ol_param[layer_no];
-	u32 olparam;
+	switch (out) {
+	case PXP_PIX_FMT_ARGB32:
+	case PXP_PIX_FMT_XRGB32:
+	case PXP_PIX_FMT_YUV444:
+		return STORE_NOOP;
 
-	olparam = BF_PXP_AS_CTRL_ALPHA(olparams_data->global_alpha);
-	if (olparams_data->pixel_fmt == PXP_PIX_FMT_RGB32) {
-		olparam |=
-		    BF_PXP_AS_CTRL_FORMAT(BV_PXP_AS_CTRL_FORMAT__RGB888);
-	} else if (olparams_data->pixel_fmt == PXP_PIX_FMT_BGRA32) {
-		olparam |=
-		    BF_PXP_AS_CTRL_FORMAT(BV_PXP_AS_CTRL_FORMAT__ARGB8888);
-		if (!olparams_data->combine_enable) {
-			olparam |=
-				BF_PXP_AS_CTRL_ALPHA_CTRL
-				(BV_PXP_AS_CTRL_ALPHA_CTRL__ROPs);
-			olparam |= 0x3 << 16;
-		}
-	} else if (olparams_data->pixel_fmt == PXP_PIX_FMT_RGB565) {
-		olparam |=
-		    BF_PXP_AS_CTRL_FORMAT(BV_PXP_AS_CTRL_FORMAT__RGB565);
-	} else if (olparams_data->pixel_fmt == PXP_PIX_FMT_RGB555) {
-		olparam |=
-		    BF_PXP_AS_CTRL_FORMAT(BV_PXP_AS_CTRL_FORMAT__RGB555);
+	case PXP_PIX_FMT_YUYV:
+	case PXP_PIX_FMT_NV16:
+		return STORE_SHRINK;
+
+	case PXP_PIX_FMT_RGBA32:
+	case PXP_PIX_FMT_RGBX32:
+	case PXP_PIX_FMT_BGRA32:
+	case PXP_PIX_FMT_BGRX32:
+	case PXP_PIX_FMT_ABGR32:
+	case PXP_PIX_FMT_XBGR32:
+	case PXP_PIX_FMT_YVU444:
+	case PXP_PIX_FMT_RGB565:
+	case PXP_PIX_FMT_RGB555:
+	case PXP_PIX_FMT_ARGB555:
+	case PXP_PIX_FMT_RGB444:
+	case PXP_PIX_FMT_ARGB444:
+	case PXP_PIX_FMT_GREY:
+		return STORE_SHIFT;
+
+	case PXP_PIX_FMT_YVYU:
+	case PXP_PIX_FMT_NV61:
+		return STORE_SHIFT | STORE_SHRINK;
+
+	default:
+		return 0;
 	}
-
-	if (olparams_data->global_alpha_enable) {
-		if (olparams_data->global_override) {
-			olparam |=
-				BF_PXP_AS_CTRL_ALPHA_CTRL
-				(BV_PXP_AS_CTRL_ALPHA_CTRL__Override);
-		} else {
-			olparam |=
-				BF_PXP_AS_CTRL_ALPHA_CTRL
-				(BV_PXP_AS_CTRL_ALPHA_CTRL__Multiply);
-		}
-		if (olparams_data->alpha_invert)
-			olparam |= BM_PXP_AS_CTRL_ALPHA0_INVERT;
-	}
-	if (olparams_data->color_key_enable)
-		olparam |= BM_PXP_AS_CTRL_ENABLE_COLORKEY;
-
-	__raw_writel(olparam, pxp->base + HW_PXP_AS_CTRL);
 }
 
-static void pxp_set_s0param(struct pxps *pxp)
+static void filter_possible_inputs(struct pxp_pixmap *input,
+				   uint32_t *possible)
 {
-	struct pxp_config_data *pxp_conf = &pxp->pxp_conf_state;
-	struct pxp_proc_data *proc_data = &pxp_conf->proc_data;
-	struct pxp_layer_param *out_params = &pxp_conf->out_param;
-	u32 s0param_ulc, s0param_lrc;
+	uint8_t clear = 0xff;
+	uint8_t position = 0;
 
-	/* contains the coordinate for the PS in the OUTPUT buffer. */
-	if ((pxp_conf->s0_param).width == 0 &&
-		(pxp_conf->s0_param).height == 0) {
-		__raw_writel(0xffffffff, pxp->base + HW_PXP_OUT_PS_ULC);
-		__raw_writel(0x0, pxp->base + HW_PXP_OUT_PS_LRC);
-	} else {
-		switch (proc_data->rotate) {
-		case 0:
-			s0param_ulc = BF_PXP_OUT_PS_ULC_X(proc_data->drect.left);
-			s0param_ulc |= BF_PXP_OUT_PS_ULC_Y(proc_data->drect.top);
-			s0param_lrc = BF_PXP_OUT_PS_LRC_X(((s0param_ulc & BM_PXP_OUT_PS_ULC_X) >> 16) + proc_data->drect.width - 1);
-			s0param_lrc |= BF_PXP_OUT_PS_LRC_Y((s0param_ulc & BM_PXP_OUT_PS_ULC_Y) + proc_data->drect.height - 1);
+	do {
+		position = find_next_bit((unsigned long *)possible, 32, position);
+		if (position >= sizeof(uint32_t) * 8)
 			break;
-		case 90:
-			s0param_ulc = BF_PXP_OUT_PS_ULC_Y(out_params->width - (proc_data->drect.left + proc_data->drect.width));
-			s0param_ulc |= BF_PXP_OUT_PS_ULC_X(proc_data->drect.top);
-			s0param_lrc = BF_PXP_OUT_PS_LRC_X(((s0param_ulc & BM_PXP_OUT_PS_ULC_X) >> 16) + proc_data->drect.height - 1);
-			s0param_lrc |= BF_PXP_OUT_PS_LRC_Y((s0param_ulc & BM_PXP_OUT_PS_ULC_Y) + proc_data->drect.width - 1);
+
+		switch (position) {
+		case PXP_2D_PS:
+			if (!fmt_ps_support(input->format))
+				clear = PXP_2D_PS;
 			break;
-		case 180:
-			s0param_ulc = BF_PXP_OUT_PS_ULC_X(out_params->width - (proc_data->drect.left + proc_data->drect.width));
-			s0param_ulc |= BF_PXP_OUT_PS_ULC_Y(out_params->height - (proc_data->drect.top + proc_data->drect.height));
-			s0param_lrc = BF_PXP_OUT_PS_LRC_X(((s0param_ulc & BM_PXP_OUT_PS_ULC_X) >> 16) + proc_data->drect.width - 1);
-			s0param_lrc |= BF_PXP_OUT_PS_LRC_Y((s0param_ulc & BM_PXP_OUT_PS_ULC_Y) + proc_data->drect.height - 1);
+		case PXP_2D_AS:
+			if (!fmt_as_support(input->format))
+				clear = PXP_2D_AS;
 			break;
-		case 270:
-			s0param_ulc = BF_PXP_OUT_PS_ULC_X(out_params->height - (proc_data->drect.top + proc_data->drect.height));
-			s0param_ulc |= BF_PXP_OUT_PS_ULC_Y(proc_data->drect.left);
-			s0param_lrc = BF_PXP_OUT_PS_LRC_X(((s0param_ulc & BM_PXP_OUT_PS_ULC_X) >> 16) + proc_data->drect.height - 1);
-			s0param_lrc |= BF_PXP_OUT_PS_LRC_Y((s0param_ulc & BM_PXP_OUT_PS_ULC_Y) + proc_data->drect.width - 1);
+		case PXP_2D_INPUT_FETCH0:
+		case PXP_2D_INPUT_FETCH1:
+			if ((is_yuv(input->format) == 3)) {
+				clear = position;
+				break;
+			}
+			if ((input->flags & IN_NEED_FMT_UNIFIED) ||
+			     is_yuv(input->format) == 2)
+				if (!fmt_fetch_to_common(input->format))
+					clear = position;
 			break;
 		default:
-			return;
+			pr_err("invalid input node: %d\n", position);
+			clear = position;
+			break;
 		}
-		__raw_writel(s0param_ulc, pxp->base + HW_PXP_OUT_PS_ULC);
-		__raw_writel(s0param_lrc, pxp->base + HW_PXP_OUT_PS_LRC);
-	}
 
-	/* Since user apps always pass the rotated drect
-	 * to this driver, we need to first swap the width
-	 * and height which is used to calculate the scale
-	 * factors later.
-	 */
-	if (proc_data->rotate == 90 || proc_data->rotate == 270) {
-		int temp;
-		temp = proc_data->drect.width;
-		proc_data->drect.width = proc_data->drect.height;
-		proc_data->drect.height = temp;
-	}
+		if (clear != 0xff) {
+			clear_bit(clear, (unsigned long*)possible);
+			clear = 0xff;
+		}
+
+		position++;
+	} while (1);
 }
 
-/* crop behavior is re-designed in h/w. */
-static void pxp_set_s0crop(struct pxps *pxp)
+static void filter_possible_outputs(struct pxp_pixmap *output,
+				    uint32_t *possible)
 {
-	/*
-	 * place-holder, it's implemented in other functions in this driver.
-	 * Refer to "Clipping source images" section in RM for detail.
-	 */
+	uint8_t clear = 0xff;
+	uint8_t position = 0;
+
+	do {
+		position = find_next_bit((unsigned long *)possible, 32, position);
+		if (position >= sizeof(uint32_t) * 8)
+			break;
+
+		switch (position) {
+		case PXP_2D_OUT:
+			if (!fmt_out_support(output->format))
+				clear = PXP_2D_OUT;
+			break;
+		case PXP_2D_INPUT_STORE0:
+		case PXP_2D_INPUT_STORE1:
+			if (output->flags) {
+				if (!fmt_store_from_common(output->format))
+					clear = position;
+			}
+			break;
+		default:
+			pr_err("invalid output node: %d\n", position);
+			clear = position;
+			break;
+		}
+
+		if (clear != 0xff) {
+			clear_bit(clear, (unsigned long*)possible);
+			clear = 0xff;
+		}
+
+		position++;
+	} while (1);
 }
 
-static int pxp_set_scaling(struct pxps *pxp)
+static uint32_t calc_shortest_path(uint32_t *nodes_used)
 {
-	int ret = 0;
-	u32 xscale, yscale, s0scale;
-	u32 decx, decy, xdec = 0, ydec = 0;
-	struct pxp_proc_data *proc_data = &pxp->pxp_conf_state.proc_data;
-	struct pxp_config_data *pxp_conf = &pxp->pxp_conf_state;
-	struct pxp_layer_param *s0_params = &pxp_conf->s0_param;
-	struct pxp_layer_param *out_params = &pxp_conf->out_param;
+	uint32_t distance = 0;
+	uint32_t from = 0, to = 0, bypass, end;
 
-	proc_data->scaling = 1;
+	do {
+		from = find_next_bit((unsigned long *)nodes_used, 32, from);
+		if (from >= sizeof(uint32_t) * 8)
+			break;
 
-	if (!proc_data->drect.width || !proc_data->drect.height) {
+		if (to != 0) {
+			if (path_table[to][from].distance == DISTANCE_INFINITY)
+				return DISTANCE_INFINITY;
+
+			distance += path_table[to][from].distance;
+			/* backtrace */
+			end = from;
+			while (1) {
+				bypass = path_table[to][end].prev_node;
+				if (bypass == to)
+					break;
+				set_bit(bypass, (unsigned long*)nodes_used);
+				end = bypass;
+			}
+		}
+
+		to = find_next_bit((unsigned long *)nodes_used, 32, from + 1);
+		if (to >= sizeof(uint32_t) * 8)
+			break;
+
+		if (path_table[from][to].distance == DISTANCE_INFINITY)
+			return DISTANCE_INFINITY;
+
+		distance += path_table[from][to].distance;
+		/* backtrace */
+		end = to;
+		while (1) {
+			bypass = path_table[from][end].prev_node;
+			if (bypass == from)
+				break;
+			set_bit(bypass, (unsigned long*)nodes_used);
+			end = bypass;
+		}
+
+		from = to + 1;
+	} while (1);
+
+	return distance;
+}
+
+static uint32_t find_best_path(uint32_t inputs,
+			       uint32_t outputs,
+			       struct pxp_pixmap *in,
+			       uint32_t *nodes_used)
+{
+	uint32_t outs;
+	uint32_t nodes_add, best_nodes_used = 0;
+	uint8_t in_pos = 0, out_pos = 0;
+	uint32_t nodes_in_path, best_nodes_in_path = 0;
+	uint32_t best_distance = DISTANCE_INFINITY, distance;
+
+	do {
+		outs = outputs;
+		in_pos = find_next_bit((unsigned long *)&inputs, 32, in_pos);
+		if (in_pos >= sizeof(uint32_t) * 8)
+			break;
+		nodes_add = 0;
+		set_bit(in_pos, (unsigned long *)&nodes_add);
+
+		switch (in_pos) {
+		case PXP_2D_PS:
+			if ((in->flags & IN_NEED_CSC) == IN_NEED_CSC) {
+				if (is_yuv(in->format))
+					set_bit(PXP_2D_CSC1,
+						(unsigned long *)&nodes_add);
+				else
+					set_bit(PXP_2D_CSC2,
+						(unsigned long *)&nodes_add);
+			}
+			if ((in->flags & IN_NEED_ROTATE_FLIP) == IN_NEED_ROTATE_FLIP)
+				set_bit(PXP_2D_ROTATION1,
+					(unsigned long *)&nodes_add);
+			clear_bit(PXP_2D_INPUT_STORE0, (unsigned long *)&outs);
+			break;
+		case PXP_2D_AS:
+			if ((in->flags & IN_NEED_CSC) == IN_NEED_CSC)
+				set_bit(PXP_2D_CSC2,
+					(unsigned long *)&nodes_add);
+			if ((in->flags & IN_NEED_ROTATE_FLIP) == IN_NEED_ROTATE_FLIP)
+				set_bit(PXP_2D_ROTATION0,
+					(unsigned long *)&nodes_add);
+			clear_bit(PXP_2D_INPUT_STORE0, (unsigned long *)&outs);
+			break;
+		case PXP_2D_INPUT_FETCH0:
+		case PXP_2D_INPUT_FETCH1:
+			if ((in->flags & IN_NEED_CSC) == IN_NEED_CSC)
+				set_bit(PXP_2D_CSC2,
+					(unsigned long *)&nodes_add);
+			clear_bit(PXP_2D_OUT, (unsigned long *)&outs);
+			if ((in->flags & IN_NEED_ROTATE_FLIP) == IN_NEED_ROTATE_FLIP)
+				set_bit(PXP_2D_ROTATION1,
+					(unsigned long *)&nodes_add);
+			break;
+		default:
+			/* alph0_s0/s1, alpha1_s0/s1 */
+			break;
+		}
+
+		nodes_add |= *nodes_used;
+
+		do {
+			out_pos = find_next_bit((unsigned long *)&outs, 32, out_pos);
+			if (out_pos >= sizeof(uint32_t) * 8)
+				break;
+			set_bit(out_pos, (unsigned long *)&nodes_add);
+
+			switch(out_pos) {
+			case PXP_2D_ALPHA0_S0:
+			case PXP_2D_ALPHA0_S1:
+			case PXP_2D_ALPHA1_S0:
+			case PXP_2D_ALPHA1_S1:
+				clear_bit(PXP_2D_CSC2, (unsigned long *)&nodes_add);
+				clear_bit(PXP_2D_ROTATION0, (unsigned long *)&nodes_add);
+				clear_bit(PXP_2D_LUT, (unsigned long *)&nodes_add);
+				break;
+			default:
+				break;
+			}
+
+			nodes_in_path = nodes_add;
+			distance = calc_shortest_path(&nodes_in_path);
+			if (best_distance > distance) {
+				best_distance = distance;
+				best_nodes_used = nodes_add;
+				best_nodes_in_path = nodes_in_path;
+			}
+			pr_debug("%s: out_pos = %d, nodes_in_path = 0x%x, nodes_add = 0x%x, distance = 0x%x\n",
+				 __func__, out_pos, nodes_in_path, nodes_add, distance);
+
+			clear_bit(out_pos, (unsigned long *)&nodes_add);
+
+			out_pos++;
+		} while (1);
+
+		in_pos++;
+	} while (1);
+
+	*nodes_used = best_nodes_used;
+
+	return best_nodes_in_path;
+}
+
+static uint32_t ps_calc_scaling(struct pxp_pixmap *input,
+				struct pxp_pixmap *output,
+				struct ps_ctrl *ctrl)
+{
+	struct ps_scale scale;
+	uint32_t decx, decy;
+
+	memset((void*)&scale, 0x0, sizeof(scale));
+
+	if (!output->crop.width || !output->crop.height) {
 		pr_err("Invalid drect width and height passed in\n");
-		return -EINVAL;
+		return 0;
 	}
 
-	decx = proc_data->srect.width / proc_data->drect.width;
-	decy = proc_data->srect.height / proc_data->drect.height;
+	if ((input->rotate == 90) || (input->rotate == 270))
+		swap(output->crop.width, output->crop.height);
+
+	decx = input->crop.width  / output->crop.width;
+	decy = input->crop.height / output->crop.height;
+
 	if (decx > 1) {
 		if (decx >= 2 && decx < 4) {
 			decx = 2;
-			xdec = 1;
+			ctrl->decx = 1;
 		} else if (decx >= 4 && decx < 8) {
 			decx = 4;
-			xdec = 2;
+			ctrl->decx = 2;
 		} else if (decx >= 8) {
 			decx = 8;
-			xdec = 3;
+			ctrl->decx = 3;
 		}
-		xscale = proc_data->srect.width * 0x1000 /
-			 (proc_data->drect.width * decx);
+		scale.xscale = input->crop.width * 0x1000 /
+				(output->crop.width * decx);
 	} else {
-		if (!is_yuv(s0_params->pixel_fmt) ||
-		    (is_yuv(s0_params->pixel_fmt) ==
-		     is_yuv(out_params->pixel_fmt)) ||
-		    (s0_params->pixel_fmt == PXP_PIX_FMT_GREY) ||
-		    (s0_params->pixel_fmt == PXP_PIX_FMT_GY04) ||
-		    (s0_params->pixel_fmt == PXP_PIX_FMT_VUY444)) {
-			if ((proc_data->srect.width > 1) &&
-			    (proc_data->drect.width > 1))
-				xscale = (proc_data->srect.width - 1) * 0x1000 /
-					 (proc_data->drect.width - 1);
+		if (!is_yuv(input->format) ||
+		    (is_yuv(input->format) == is_yuv(output->format)) ||
+		    (input->format == PXP_PIX_FMT_GREY) ||
+		    (input->format == PXP_PIX_FMT_GY04) ||
+		    (input->format == PXP_PIX_FMT_VUY444)) {
+			if ((input->crop.width > 1) &&
+			    (output->crop.width > 1))
+				scale.xscale = (input->crop.width - 1) * 0x1000 /
+						(output->crop.width - 1);
 			else
-				xscale = proc_data->srect.width * 0x1000 /
-					 proc_data->drect.width;
+				scale.xscale = input->crop.width * 0x1000 /
+						output->crop.width;
 		} else {
-			if ((proc_data->srect.width > 2) &&
-			    (proc_data->drect.width > 1))
-				xscale = (proc_data->srect.width - 2) * 0x1000 /
-					 (proc_data->drect.width - 1);
+			if ((input->crop.width > 2) &&
+			    (output->crop.width > 1))
+				scale.xscale = (input->crop.width - 2) * 0x1000 /
+						(output->crop.width - 1);
 			else
-				xscale = proc_data->srect.width * 0x1000 /
-					 proc_data->drect.width;
+				scale.xscale = input->crop.width * 0x1000 /
+						output->crop.width;
 		}
 	}
+
 	if (decy > 1) {
 		if (decy >= 2 && decy < 4) {
 			decy = 2;
-			ydec = 1;
+			ctrl->decy = 1;
 		} else if (decy >= 4 && decy < 8) {
 			decy = 4;
-			ydec = 2;
+			ctrl->decy = 2;
 		} else if (decy >= 8) {
 			decy = 8;
-			ydec = 3;
+			ctrl->decy = 3;
 		}
-		yscale = proc_data->srect.height * 0x1000 /
-			 (proc_data->drect.height * decy);
+		scale.yscale = input->crop.height * 0x1000 /
+				(output->crop.height * decy);
 	} else {
-		if ((proc_data->srect.height > 1) &&
-		    (proc_data->drect.height > 1))
-			yscale = (proc_data->srect.height - 1) * 0x1000 /
-				 (proc_data->drect.height - 1);
+		if ((input->crop.height > 1) && (output->crop.height > 1))
+			scale.yscale = (input->crop.height - 1) * 0x1000 /
+					(output->crop.height - 1);
 		else
-			yscale = proc_data->srect.height * 0x1000 /
-				 proc_data->drect.height;
+			scale.yscale = input->crop.height * 0x1000 /
+					output->crop.height;
 	}
 
-	__raw_writel((xdec << 10) | (ydec << 8), pxp->base + HW_PXP_PS_CTRL);
-
-	if (xscale > PXP_DOWNSCALE_THRESHOLD)
-		xscale = PXP_DOWNSCALE_THRESHOLD;
-	if (yscale > PXP_DOWNSCALE_THRESHOLD)
-		yscale = PXP_DOWNSCALE_THRESHOLD;
-	s0scale = BF_PXP_PS_SCALE_YSCALE(yscale) |
-		BF_PXP_PS_SCALE_XSCALE(xscale);
-	__raw_writel(s0scale, pxp->base + HW_PXP_PS_SCALE);
-
-	pxp_set_ctrl(pxp);
-
-	return ret;
+	return *(uint32_t *)&scale;
 }
 
-static void pxp_set_bg(struct pxps *pxp)
+static int pxp_ps_config(struct pxp_pixmap *input,
+			 struct pxp_pixmap *output)
 {
-	__raw_writel(pxp->pxp_conf_state.proc_data.bgcolor,
-		     pxp->base + HW_PXP_PS_BACKGROUND_0);
+	uint32_t offset, U, V;
+	struct ps_ctrl ctrl;
+	struct coordinate out_ps_ulc, out_ps_lrc;
+
+	memset((void*)&ctrl, 0x0, sizeof(ctrl));
+
+	ctrl.format = pxp_parse_ps_fmt(input->format);
+
+	switch (output->rotate) {
+	case 0:
+		out_ps_ulc.x = output->crop.x;
+		out_ps_ulc.y = output->crop.y;
+		out_ps_lrc.x = out_ps_ulc.x + output->crop.width - 1;
+		out_ps_lrc.y = out_ps_ulc.y + output->crop.height - 1;
+		break;
+	case 90:
+		out_ps_ulc.x = output->crop.y;
+		out_ps_ulc.y = output->width - (output->crop.x + output->crop.width);
+		out_ps_lrc.x = out_ps_ulc.x + output->crop.height - 1;
+		out_ps_lrc.y = out_ps_ulc.y + output->crop.width - 1;
+		break;
+	case 180:
+		out_ps_ulc.x = output->width - (output->crop.x + output->crop.width);
+		out_ps_ulc.y = output->height - (output->crop.y + output->crop.height);
+		out_ps_lrc.x = out_ps_ulc.x + output->crop.width - 1;
+		out_ps_lrc.y = out_ps_ulc.y + output->crop.height - 1;
+		break;
+	case 270:
+		out_ps_ulc.x = output->height - (output->crop.y + output->crop.height);
+		out_ps_ulc.y = output->crop.x;
+		out_ps_lrc.x = out_ps_ulc.x + output->crop.height - 1;
+		out_ps_lrc.y = out_ps_ulc.y + output->crop.width - 1;
+		break;
+	default:
+		pr_err("PxP only support rotate 0 90 180 270\n");
+		return -EINVAL;
+		break;
+	}
+
+	if ((input->format == PXP_PIX_FMT_YUYV) ||
+	    (input->format == PXP_PIX_FMT_YVYU))
+		ctrl.wb_swap = 1;
+
+	pxp_writel(ps_calc_scaling(input, output, &ctrl),
+		   HW_PXP_PS_SCALE);
+	pxp_writel(*(uint32_t *)&ctrl, HW_PXP_PS_CTRL);
+
+	offset = input->crop.y * input->pitch +
+		 input->crop.x * (input->bpp >> 3);
+	pxp_writel(input->paddr + offset, HW_PXP_PS_BUF);
+
+	switch (is_yuv(input->format)) {
+	case 0:		/* RGB */
+	case 1:		/* 1 Plane YUV */
+		break;
+	case 2:		/* NV16,NV61,NV12,NV21 */
+		if ((input->format == PXP_PIX_FMT_NV16) ||
+		    (input->format == PXP_PIX_FMT_NV61)) {
+			U = input->paddr + input->width * input->height;
+			pxp_writel(U + offset, HW_PXP_PS_UBUF);
+		}
+		else {
+			U = input->paddr + input->width * input->height;
+			pxp_writel(U + (offset >> 1), HW_PXP_PS_UBUF);
+		}
+		break;
+	case 3:		/* YUV422P, YUV420P */
+		if (input->format == PXP_PIX_FMT_YUV422P) {
+			U = input->paddr + input->width * input->height;
+			pxp_writel(U + (offset >> 1), HW_PXP_PS_UBUF);
+			V = U + (input->width * input->height >> 1);
+			pxp_writel(V + (offset >> 1), HW_PXP_PS_VBUF);
+		} else if (input->format == PXP_PIX_FMT_YUV420P) {
+			U = input->paddr + input->width * input->height;
+			pxp_writel(U + (offset >> 2), HW_PXP_PS_UBUF);
+			V = U + (input->width * input->height >> 2);
+			pxp_writel(V + (offset >> 2), HW_PXP_PS_VBUF);
+		} else if (input->format == PXP_PIX_FMT_YVU420P) {
+			U = input->paddr + input->width * input->height;
+			V = U + (input->width * input->height >> 2);
+			pxp_writel(U + (offset >> 2), HW_PXP_PS_VBUF);
+			pxp_writel(V + (offset >> 2), HW_PXP_PS_UBUF);
+		}
+
+		break;
+	default:
+		break;
+	}
+
+	pxp_writel(input->pitch, HW_PXP_PS_PITCH);
+	pxp_writel(*(uint32_t *)&out_ps_ulc, HW_PXP_OUT_PS_ULC);
+	pxp_writel(*(uint32_t *)&out_ps_lrc, HW_PXP_OUT_PS_LRC);
+
+	pxp_writel(BF_PXP_CTRL_ENABLE_PS_AS_OUT(1) |
+		   BF_PXP_CTRL_IRQ_ENABLE(1),
+		   HW_PXP_CTRL_SET);
+
+	return 0;
 }
 
-static void pxp_set_lut(struct pxps *pxp)
+static int pxp_as_config(struct pxp_pixmap *input,
+			 struct pxp_pixmap *output)
 {
-	struct pxp_config_data *pxp_conf = &pxp->pxp_conf_state;
-	int lut_op = pxp_conf->proc_data.lut_transform;
+	uint32_t offset;
+	struct as_ctrl ctrl;
+	struct coordinate out_as_ulc, out_as_lrc;
+
+	memset((void*)&ctrl, 0x0, sizeof(ctrl));
+
+	ctrl.format = pxp_parse_as_fmt(input->format);
+
+	if (alpha_blending_version == PXP_ALPHA_BLENDING_V1) {
+		if (input->format == PXP_PIX_FMT_BGRA32) {
+			if (!input->g_alpha.combine_enable) {
+				ctrl.alpha_ctrl = BV_PXP_AS_CTRL_ALPHA_CTRL__ROPs;
+				ctrl.rop = 0x3;
+			}
+		}
+
+		if (input->g_alpha.global_alpha_enable) {
+			if (input->g_alpha.global_override)
+				ctrl.alpha_ctrl = BV_PXP_AS_CTRL_ALPHA_CTRL__Override;
+			else
+				ctrl.alpha_ctrl = BV_PXP_AS_CTRL_ALPHA_CTRL__Multiply;
+
+			if (input->g_alpha.alpha_invert)
+				ctrl.alpha0_invert = 0x1;
+		}
+
+		if (input->g_alpha.color_key_enable) {
+			ctrl.enable_colorkey = 1;
+		}
+
+		ctrl.alpha = input->g_alpha.global_alpha;
+	}
+
+	out_as_ulc.x = out_as_ulc.y = 0;
+	if (input->g_alpha.combine_enable) {
+		out_as_lrc.x = input->width - 1;
+		out_as_lrc.y = input->height - 1;
+	} else {
+		out_as_lrc.x = output->crop.width - 1;
+		out_as_lrc.y = output->crop.height - 1;
+	}
+
+	offset = input->crop.y * input->pitch +
+		 input->crop.x * (input->bpp >> 3);
+	pxp_writel(input->paddr + offset, HW_PXP_AS_BUF);
+
+	pxp_writel(input->pitch, HW_PXP_AS_PITCH);
+	pxp_writel(*(uint32_t *)&out_as_ulc, HW_PXP_OUT_AS_ULC);
+	pxp_writel(*(uint32_t *)&out_as_lrc, HW_PXP_OUT_AS_LRC);
+
+	pxp_writel(*(uint32_t *)&ctrl, HW_PXP_AS_CTRL);
+	pxp_writel(BF_PXP_CTRL_ENABLE_PS_AS_OUT(1) |
+		   BF_PXP_CTRL_IRQ_ENABLE(1),
+		   HW_PXP_CTRL_SET);
+
+	return 0;
+}
+
+static uint32_t pxp_fetch_size_config(struct pxp_pixmap *input)
+{
+	struct fetch_size total_size;
+
+	memset((void*)&total_size, 0x0, sizeof(total_size));
+
+	total_size.input_total_width  = input->width - 1;
+	total_size.input_total_height = input->height - 1;
+
+	return *(uint32_t *)&total_size;
+}
+
+static int pxp_fetch_config(struct pxp_pixmap *input,
+			    uint32_t fetch_index)
+{
+	uint8_t  shift_bypass = 1, expand_en = 0;
+	uint32_t flags, pitch = 0, offset, UV = 0;
+	uint32_t in_fmt, out_fmt;
+	uint32_t size_ulc, size_lrc;
+	uint32_t fetch_ctrl, total_size;
+	uint32_t shift_ctrl, shift_offset = 0;
+	struct fetch_shift_width shift_width;
+
+	memset((unsigned int *)&shift_width, 0x0, sizeof(shift_width));
+	fetch_ctrl = pxp_fetch_ctrl_config(input, FETCH_MODE_NORMAL);
+	size_ulc = pxp_fetch_active_size_ulc(input);
+	size_lrc = pxp_fetch_active_size_lrc(input);
+	total_size = pxp_fetch_size_config(input);
+
+	if (input->flags) {
+		flags = fmt_fetch_to_common(input->format);
+		shift_bypass = (flags & FETCH_SHIFT) ? 0 : 1;
+		expand_en    = (flags & FETCH_EXPAND) ? 1 : 0;
+
+		if (!shift_bypass) {
+			if (expand_en) {
+				if (is_yuv(input->format)) {
+					in_fmt  = PXP_PIX_FMT_YVU444;
+					out_fmt = PXP_PIX_FMT_YUV444;
+				} else {
+					in_fmt  = PXP_PIX_FMT_ABGR32;
+					out_fmt = PXP_PIX_FMT_ARGB32;
+				}
+			} else {
+				in_fmt  = input->format;
+				out_fmt = is_yuv(input->format) ?
+						 PXP_PIX_FMT_YUV444 :
+						 PXP_PIX_FMT_ARGB32;
+			}
+
+			shift_offset = pxp_fetch_shift_calc(in_fmt, out_fmt,
+							    &shift_width);
+		}
+	}
+	shift_ctrl = pxp_fetch_shift_ctrl_config(input, shift_bypass, expand_en);
+
+	offset = input->crop.y * input->pitch +
+		 input->crop.x * (input->bpp >> 3);
+	if (is_yuv(input->format) == 2)
+		UV = input->paddr + input->width * input->height;
+
+	switch (fetch_index) {
+	case PXP_2D_INPUT_FETCH0:
+		pitch = __raw_readl(pxp_reg_base + HW_PXP_INPUT_FETCH_PITCH);
+		pitch |= pxp_fetch_pitch_config(input, NULL);
+		pxp_writel(fetch_ctrl, HW_PXP_INPUT_FETCH_CTRL_CH0);
+		pxp_writel(size_ulc, HW_PXP_INPUT_FETCH_ACTIVE_SIZE_ULC_CH0);
+		pxp_writel(size_lrc, HW_PXP_INPUT_FETCH_ACTIVE_SIZE_LRC_CH0);
+		pxp_writel(total_size, HW_PXP_INPUT_FETCH_SIZE_CH0);
+		pxp_writel(shift_ctrl, HW_PXP_INPUT_FETCH_SHIFT_CTRL_CH0);
+		pxp_writel(input->paddr + offset, HW_PXP_INPUT_FETCH_ADDR_0_CH0);
+		if (UV)
+			pxp_writel(UV + offset, HW_PXP_INPUT_FETCH_ADDR_1_CH0);
+		pxp_writel(shift_ctrl, HW_PXP_INPUT_FETCH_SHIFT_CTRL_CH0);
+		if (shift_offset)
+			pxp_writel(*(uint32_t *)&shift_offset, HW_PXP_INPUT_FETCH_SHIFT_OFFSET_CH0);
+		pxp_writel(*(uint32_t *)&shift_width, HW_PXP_INPUT_FETCH_SHIFT_WIDTH_CH0);
+		break;
+	case PXP_2D_INPUT_FETCH1:
+		pitch = __raw_readl(pxp_reg_base + HW_PXP_INPUT_FETCH_PITCH);
+		pitch |= pxp_fetch_pitch_config(NULL, input);
+		pxp_writel(fetch_ctrl, HW_PXP_INPUT_FETCH_CTRL_CH1);
+		pxp_writel(size_ulc, HW_PXP_INPUT_FETCH_ACTIVE_SIZE_ULC_CH1);
+		pxp_writel(size_lrc, HW_PXP_INPUT_FETCH_ACTIVE_SIZE_LRC_CH1);
+		pxp_writel(total_size, HW_PXP_INPUT_FETCH_SIZE_CH1);
+		pxp_writel(shift_ctrl, HW_PXP_INPUT_FETCH_SHIFT_CTRL_CH1);
+		pxp_writel(input->paddr + offset, HW_PXP_INPUT_FETCH_ADDR_0_CH1);
+		if (UV)
+			pxp_writel(UV + offset, HW_PXP_INPUT_FETCH_ADDR_1_CH1);
+		pxp_writel(shift_ctrl, HW_PXP_INPUT_FETCH_SHIFT_CTRL_CH1);
+		if (shift_offset)
+			pxp_writel(*(uint32_t *)&shift_offset, HW_PXP_INPUT_FETCH_SHIFT_OFFSET_CH1);
+		pxp_writel(*(uint32_t *)&shift_width, HW_PXP_INPUT_FETCH_SHIFT_WIDTH_CH1);
+		break;
+	default:
+		break;
+	}
+
+	pxp_writel(pitch, HW_PXP_INPUT_FETCH_PITCH);
+	pxp_writel(BF_PXP_CTRL_ENABLE_INPUT_FETCH_STORE(1), HW_PXP_CTRL_SET);
+
+	return 0;
+}
+
+static int pxp_csc1_config(struct pxp_pixmap *input,
+			   bool is_ycbcr)
+{
+	BUG_ON(!is_yuv(input->format));
+
+	if (!is_ycbcr) {
+		/* YUV -> RGB */
+		pxp_writel(0x04030000, HW_PXP_CSC1_COEF0);
+		pxp_writel(0x01230208, HW_PXP_CSC1_COEF1);
+		pxp_writel(0x076b079c, HW_PXP_CSC1_COEF2);
+
+		return 0;
+	}
+
+	/* YCbCr -> RGB */
+	pxp_writel(0x84ab01f0, HW_PXP_CSC1_COEF0);
+	pxp_writel(0x01980204, HW_PXP_CSC1_COEF1);
+	pxp_writel(0x0730079c, HW_PXP_CSC1_COEF2);
+
+	return 0;
+}
+
+static int pxp_rotation1_config(struct pxp_pixmap *input)
+{
+	uint8_t rotate;
+
+	if (input->flip == PXP_H_FLIP)
+		pxp_writel(BF_PXP_CTRL_HFLIP1(1), HW_PXP_CTRL_SET);
+	else if (input->flip == PXP_V_FLIP)
+		pxp_writel(BF_PXP_CTRL_VFLIP1(1), HW_PXP_CTRL_SET);
+
+	rotate = rotate_map(input->rotate);
+	pxp_writel(BF_PXP_CTRL_ROTATE1(rotate), HW_PXP_CTRL_SET);
+
+	pxp_writel(BF_PXP_CTRL_ENABLE_ROTATE1(1), HW_PXP_CTRL_SET);
+
+	return 0;
+}
+
+static int pxp_rotation0_config(struct pxp_pixmap *input)
+{
+	uint8_t rotate;
+
+	if (input->flip == PXP_H_FLIP)
+		pxp_writel(BF_PXP_CTRL_HFLIP0(1), HW_PXP_CTRL_SET);
+	else if (input->flip == PXP_V_FLIP)
+		pxp_writel(BF_PXP_CTRL_VFLIP0(1), HW_PXP_CTRL_SET);
+
+	rotate = rotate_map(input->rotate);
+	pxp_writel(BF_PXP_CTRL_ROTATE0(rotate), HW_PXP_CTRL_SET);
+
+	pxp_writel(BF_PXP_CTRL_ENABLE_ROTATE0(1), HW_PXP_CTRL_SET);
+
+	return 0;
+}
+
+static int pxp_csc2_config(struct pxp_pixmap *output)
+{
+	if (is_yuv(output->format)) {
+		/* RGB -> YUV */
+		pxp_writel(0x4, HW_PXP_CSC2_CTRL);
+		pxp_writel(0x0096004D, HW_PXP_CSC2_COEF0);
+		pxp_writel(0x05DA001D, HW_PXP_CSC2_COEF1);
+		pxp_writel(0x007005B6, HW_PXP_CSC2_COEF2);
+		pxp_writel(0x057C009E, HW_PXP_CSC2_COEF3);
+		pxp_writel(0x000005E6, HW_PXP_CSC2_COEF4);
+		pxp_writel(0x00000000, HW_PXP_CSC2_COEF5);
+	}
+
+	pxp_writel(BF_PXP_CTRL_ENABLE_CSC2(1), HW_PXP_CTRL_SET);
+
+	return 0;
+}
+
+static int pxp_out_config(struct pxp_pixmap *output)
+{
+	uint32_t offset, UV;
+	struct out_ctrl ctrl;
+	struct coordinate out_lrc;
+
+	memset((void*)&ctrl, 0x0, sizeof(ctrl));
+
+	ctrl.format = pxp_parse_out_fmt(output->format);
+	offset = output->crop.y * output->pitch +
+		 output->crop.x * (output->bpp >> 3);
+
+	pxp_writel(*(uint32_t *)&ctrl, HW_PXP_OUT_CTRL);
+
+	pxp_writel(output->paddr, HW_PXP_OUT_BUF);
+	if (is_yuv(output->format) == 2) {
+		UV = output->paddr + output->width * output->height;
+		if ((output->format == PXP_PIX_FMT_NV16) ||
+		    (output->format == PXP_PIX_FMT_NV61))
+			pxp_writel(UV + offset, HW_PXP_OUT_BUF2);
+		else
+			pxp_writel(UV + (offset >> 1), HW_PXP_OUT_BUF2);
+	}
+
+	if (output->rotate == 90 || output->rotate == 270) {
+		out_lrc.y = output->width - 1;
+		out_lrc.x = output->height - 1;
+	} else {
+		out_lrc.x = output->width - 1;
+		out_lrc.y = output->height - 1;
+	}
+
+	pxp_writel(*(uint32_t *)&out_lrc, HW_PXP_OUT_LRC);
+
+	pxp_writel(output->pitch, HW_PXP_OUT_PITCH);
+
+	/* set global alpha if necessary */
+	if (output->g_alpha.global_alpha_enable) {
+		pxp_writel(output->g_alpha.global_alpha << 24, HW_PXP_OUT_CTRL_SET);
+		pxp_writel(BM_PXP_OUT_CTRL_ALPHA_OUTPUT, HW_PXP_OUT_CTRL_SET);
+	}
+
+	pxp_writel(BF_PXP_CTRL_ENABLE_PS_AS_OUT(1) |
+		   BF_PXP_CTRL_IRQ_ENABLE(1),
+		   HW_PXP_CTRL_SET);
+
+	return 0;
+}
+
+static int pxp_store_config(struct pxp_pixmap *output,
+			    struct pxp_op_info *op)
+{
+	uint8_t combine_2ch, flags;
+	uint32_t in_fmt, out_fmt, offset, UV = 0;
+	uint64_t d_shift = 0;
+	struct store_d_mask d_mask[8];
+	uint32_t store_ctrl, store_size, store_pitch, shift_ctrl;
+
+	memset((void*)d_mask, 0x0, sizeof(*d_mask) * 8);
+	combine_2ch = (output->bpp == 64) ? 1 : 0;
+	store_ctrl  = pxp_store_ctrl_config(output, STORE_MODE_NORMAL,
+					    op->fill_en, combine_2ch);
+	store_size  = pxp_store_size_config(output);
+	store_pitch = pxp_store_pitch_config(output, NULL);
+
+	pxp_writel(store_ctrl, HW_PXP_INPUT_STORE_CTRL_CH0);
+
+	if (output->flags) {
+		flags = fmt_store_from_common(output->format);
+		if (flags == STORE_NOOP)
+			shift_ctrl = pxp_store_shift_ctrl_config(output, 1);
+		else if (flags & STORE_SHIFT) {
+			in_fmt = is_yuv(output->format) ? PXP_PIX_FMT_YUV444 :
+							  PXP_PIX_FMT_ARGB32;
+			out_fmt = (flags & STORE_SHRINK) ? PXP_PIX_FMT_YVU444 :
+							   output->format;
+			d_shift = pxp_store_d_shift_calc(in_fmt, out_fmt, d_mask);
+			shift_ctrl = pxp_store_shift_ctrl_config(output, 0);
+		} else
+			shift_ctrl = pxp_store_shift_ctrl_config(output, 0);
+
+		if (flags & STORE_SHIFT) {
+			pxp_writel((uint32_t)d_shift, HW_PXP_INPUT_STORE_D_SHIFT_L_CH0);
+			/* TODO use only 4 masks */
+			pxp_writel(d_mask[0].d_mask_l, HW_PXP_INPUT_STORE_D_MASK0_L_CH0);
+			pxp_writel(d_mask[0].d_mask_h, HW_PXP_INPUT_STORE_D_MASK0_H_CH0);
+			pxp_writel(d_mask[1].d_mask_l, HW_PXP_INPUT_STORE_D_MASK1_L_CH0);
+			pxp_writel(d_mask[1].d_mask_h, HW_PXP_INPUT_STORE_D_MASK1_H_CH0);
+			pxp_writel(d_mask[2].d_mask_l, HW_PXP_INPUT_STORE_D_MASK2_L_CH0);
+			pxp_writel(d_mask[2].d_mask_h, HW_PXP_INPUT_STORE_D_MASK2_H_CH0);
+			pxp_writel(d_mask[3].d_mask_l, HW_PXP_INPUT_STORE_D_MASK3_L_CH0);
+			pxp_writel(d_mask[3].d_mask_h, HW_PXP_INPUT_STORE_D_MASK3_H_CH0);
+		}
+	} else
+		shift_ctrl = pxp_store_shift_ctrl_config(output, 1);
+
+	pxp_writel(shift_ctrl, HW_PXP_INPUT_STORE_SHIFT_CTRL_CH0);
+	pxp_writel(store_size, HW_PXP_INPUT_STORE_SIZE_CH0);
+	pxp_writel(store_pitch, HW_PXP_INPUT_STORE_PITCH);
+	if (op->fill_en) {
+		uint32_t lrc;
+
+		lrc = (output->width - 1) | ((output->height - 1) << 16);
+		pxp_writel(op->fill_data, HW_PXP_INPUT_STORE_FILL_DATA_CH0);
+
+		pxp_writel(0x1, HW_PXP_INPUT_FETCH_CTRL_CH0);
+		pxp_writel(0, HW_PXP_INPUT_FETCH_ACTIVE_SIZE_ULC_CH0);
+		pxp_writel(lrc, HW_PXP_INPUT_FETCH_ACTIVE_SIZE_LRC_CH0);
+	}
+
+	offset = output->crop.y * output->pitch +
+		 output->crop.x * (output->bpp >> 3);
+	if (is_yuv(output->format == 2)) {
+		UV = output->paddr + output->width * output->height;
+		pxp_writel(UV + offset, HW_PXP_INPUT_STORE_ADDR_1_CH0);
+	}
+	pxp_writel(output->paddr + offset, HW_PXP_INPUT_STORE_ADDR_0_CH0);
+
+	pxp_writel(BF_PXP_CTRL_ENABLE_INPUT_FETCH_STORE(1), HW_PXP_CTRL_SET);
+
+	return 0;
+}
+
+static int pxp_alpha_config(struct pxp_op_info *op,
+			    uint8_t alpha_node)
+{
+	uint32_t as_ctrl;
+	struct pxp_alpha_ctrl alpha_ctrl;
+	struct pxp_alpha_info *alpha = &op->alpha_info;
+	struct pxp_alpha *s0_alpha, *s1_alpha;
+
+	memset((void*)&alpha_ctrl, 0x0, sizeof(alpha_ctrl));
+
+	if (alpha_blending_version != PXP_ALPHA_BLENDING_V1) {
+		if (alpha->alpha_mode == ALPHA_MODE_ROP) {
+			switch (alpha_node) {
+			case PXP_2D_ALPHA0_S0:
+				as_ctrl = __raw_readl(pxp_reg_base + HW_PXP_AS_CTRL);
+				as_ctrl |= BF_PXP_AS_CTRL_ALPHA_CTRL(BV_PXP_AS_CTRL_ALPHA_CTRL__ROPs);
+				as_ctrl |= BF_PXP_AS_CTRL_ROP(alpha->rop_type);
+				pxp_writel(as_ctrl, HW_PXP_AS_CTRL);
+				break;
+			case PXP_2D_ALPHA1_S0:
+				pxp_writel(BM_PXP_ALPHA_B_CTRL_1_ROP_ENABLE |
+					   BF_PXP_ALPHA_B_CTRL_1_ROP(alpha->rop_type),
+					   HW_PXP_ALPHA_B_CTRL_1);
+				pxp_writel(BF_PXP_CTRL_ENABLE_ALPHA_B(1), HW_PXP_CTRL_SET);
+				break;
+			default:
+				break;
+			}
+
+			return 0;
+		}
+
+		s0_alpha = &alpha->s0_alpha;
+		s1_alpha = &alpha->s1_alpha;
+
+		alpha_ctrl.poter_duff_enable = 1;
+
+		alpha_ctrl.s0_s1_factor_mode = s1_alpha->factor_mode;
+		alpha_ctrl.s0_global_alpha_mode = s0_alpha->global_alpha_mode;
+		alpha_ctrl.s0_alpha_mode = s0_alpha->alpha_mode;
+		alpha_ctrl.s0_color_mode = s0_alpha->color_mode;
+
+		alpha_ctrl.s1_s0_factor_mode = s0_alpha->factor_mode;
+		alpha_ctrl.s1_global_alpha_mode = s1_alpha->global_alpha_mode;
+		alpha_ctrl.s1_alpha_mode = s1_alpha->alpha_mode;
+		alpha_ctrl.s1_color_mode = s1_alpha->color_mode;
+
+		alpha_ctrl.s0_global_alpha = s0_alpha->global_alpha_value;
+		alpha_ctrl.s1_global_alpha = s1_alpha->global_alpha_value;
+
+		switch (alpha_node) {
+		case PXP_2D_ALPHA0_S0:
+			pxp_writel(*(uint32_t *)&alpha_ctrl, HW_PXP_ALPHA_A_CTRL);
+			break;
+		case PXP_2D_ALPHA1_S0:
+			pxp_writel(*(uint32_t *)&alpha_ctrl, HW_PXP_ALPHA_B_CTRL);
+			pxp_writel(BF_PXP_CTRL_ENABLE_ALPHA_B(1), HW_PXP_CTRL_SET);
+			break;
+		default:
+			break;
+		}
+	}
+
+	return 0;
+}
+
+static void pxp_lut_config(struct pxp_op_info *op)
+{
+	struct pxp_task_info *task = to_pxp_task_info(op);
+	struct pxps *pxp = to_pxp_from_task(task);
+	struct pxp_proc_data *proc_data = &pxp->pxp_conf_state.proc_data;
+	int lut_op = proc_data->lut_transform;
 	u32 reg_val;
 	int i;
 	bool use_cmap = (lut_op & PXP_LUT_USE_CMAP) ? true : false;
-	u8 *cmap = pxp_conf->proc_data.lut_map;
+	u8 *cmap = proc_data->lut_map;
 	u32 entry_src;
 	u32 pix_val;
 	u8 entry[4];
@@ -957,7 +2905,7 @@ static void pxp_set_lut(struct pxps *pxp)
 	 * Unless CMAP is needed and it has been updated.
 	 */
 	if ((pxp->lut_state == lut_op) &&
-		!(use_cmap && pxp_conf->proc_data.lut_map_updated))
+		!(use_cmap && proc_data->lut_map_updated))
 		return;
 
 	if (lut_op == PXP_LUT_NONE) {
@@ -1059,194 +3007,491 @@ static void pxp_set_lut(struct pxps *pxp)
 		}
 	}
 
+	pxp_writel(BM_PXP_CTRL_ENABLE_ROTATE1 | BM_PXP_CTRL_ENABLE_ROTATE0 |
+			BM_PXP_CTRL_ENABLE_CSC2 | BM_PXP_CTRL_ENABLE_LUT,
+			HW_PXP_CTRL_SET);
+
 	pxp->lut_state = lut_op;
 }
 
-static void pxp_set_csc(struct pxps *pxp)
+static int pxp_2d_task_config(struct pxp_pixmap *input,
+			      struct pxp_pixmap *output,
+			      struct pxp_op_info *op,
+			      uint32_t nodes_used)
 {
-	struct pxp_config_data *pxp_conf = &pxp->pxp_conf_state;
-	struct pxp_layer_param *s0_params = &pxp_conf->s0_param;
-	struct pxp_layer_param *ol_params = &pxp_conf->ol_param[0];
-	struct pxp_layer_param *out_params = &pxp_conf->out_param;
+	uint8_t position = 0;
 
-	bool input_is_YUV = is_yuv(s0_params->pixel_fmt);
-	bool output_is_YUV = is_yuv(out_params->pixel_fmt);
 
-	if (input_is_YUV && output_is_YUV) {
-		/*
-		 * Input = YUV, Output = YUV
-		 * No CSC unless we need to do combining
-		 */
-		if (ol_params->combine_enable) {
-			/* Must convert to RGB for combining with RGB overlay */
+	do {
+		position = find_next_bit((unsigned long *)&nodes_used, 32, position);
+		if (position >= sizeof(uint32_t) * 8)
+			break;
 
-			/* CSC1 - YUV->RGB */
-			__raw_writel(0x04030000, pxp->base + HW_PXP_CSC1_COEF0);
-			__raw_writel(0x01230208, pxp->base + HW_PXP_CSC1_COEF1);
-			__raw_writel(0x076b079c, pxp->base + HW_PXP_CSC1_COEF2);
-
-			/* CSC2 - RGB->YUV */
-			__raw_writel(0x4, pxp->base + HW_PXP_CSC2_CTRL);
-			__raw_writel(0x0096004D, pxp->base + HW_PXP_CSC2_COEF0);
-			__raw_writel(0x05DA001D, pxp->base + HW_PXP_CSC2_COEF1);
-			__raw_writel(0x007005B6, pxp->base + HW_PXP_CSC2_COEF2);
-			__raw_writel(0x057C009E, pxp->base + HW_PXP_CSC2_COEF3);
-			__raw_writel(0x000005E6, pxp->base + HW_PXP_CSC2_COEF4);
-			__raw_writel(0x00000000, pxp->base + HW_PXP_CSC2_COEF5);
-		} else {
-			/* Input & Output both YUV, so bypass both CSCs */
-
-			/* CSC1 - Bypass */
-			__raw_writel(0x40000000, pxp->base + HW_PXP_CSC1_COEF0);
-
-			/* CSC2 - Bypass */
-			__raw_writel(0x1, pxp->base + HW_PXP_CSC2_CTRL);
+		switch (position) {
+		case PXP_2D_PS:
+			pxp_ps_config(input, output);
+			break;
+		case PXP_2D_AS:
+			pxp_as_config(input, output);
+			break;
+		case PXP_2D_INPUT_FETCH0:
+		case PXP_2D_INPUT_FETCH1:
+			pxp_fetch_config(input, position);
+			break;
+		case PXP_2D_CSC1:
+			pxp_csc1_config(input, true);
+			break;
+		case PXP_2D_ROTATION1:
+			pxp_rotation1_config(input);
+			break;
+		case PXP_2D_ALPHA0_S0:
+		case PXP_2D_ALPHA1_S0:
+			pxp_alpha_config(op, position);
+			break;
+		case PXP_2D_ALPHA0_S1:
+		case PXP_2D_ALPHA1_S1:
+			break;
+		case PXP_2D_CSC2:
+			pxp_csc2_config(output);
+			break;
+		case PXP_2D_LUT:
+			pxp_lut_config(op);
+			break;
+		case PXP_2D_ROTATION0:
+			pxp_rotation0_config(input);
+			break;
+		case PXP_2D_OUT:
+			pxp_out_config(output);
+			break;
+		case PXP_2D_INPUT_STORE0:
+		case PXP_2D_INPUT_STORE1:
+			pxp_store_config(output, op);
+			break;
+		default:
+			break;
 		}
-	} else if (input_is_YUV && !output_is_YUV) {
-		/*
-		 * Input = YUV, Output = RGB
-		 * Use CSC1 to convert to RGB
-		 */
 
-		/* CSC1 - YUV->RGB */
-		__raw_writel(0x84ab01f0, pxp->base + HW_PXP_CSC1_COEF0);
-		__raw_writel(0x01980204, pxp->base + HW_PXP_CSC1_COEF1);
-		__raw_writel(0x0730079c, pxp->base + HW_PXP_CSC1_COEF2);
+		position++;
+	} while (1);
 
-		/* CSC2 - Bypass */
-		__raw_writel(0x1, pxp->base + HW_PXP_CSC2_CTRL);
-	} else if (!input_is_YUV && output_is_YUV) {
-		/*
-		 * Input = RGB, Output = YUV
-		 * Use CSC2 to convert to YUV
-		 */
-
-		/* CSC1 - Bypass */
-		__raw_writel(0x40000000, pxp->base + HW_PXP_CSC1_COEF0);
-
-		/* CSC2 - RGB->YUV */
-		__raw_writel(0x4, pxp->base + HW_PXP_CSC2_CTRL);
-		__raw_writel(0x0096004D, pxp->base + HW_PXP_CSC2_COEF0);
-		__raw_writel(0x05DA001D, pxp->base + HW_PXP_CSC2_COEF1);
-		__raw_writel(0x007005B6, pxp->base + HW_PXP_CSC2_COEF2);
-		__raw_writel(0x057C009E, pxp->base + HW_PXP_CSC2_COEF3);
-		__raw_writel(0x000005E6, pxp->base + HW_PXP_CSC2_COEF4);
-		__raw_writel(0x00000000, pxp->base + HW_PXP_CSC2_COEF5);
-	} else {
-		/*
-		 * Input = RGB, Output = RGB
-		 * Input & Output both RGB, so bypass both CSCs
-		 */
-
-		/* CSC1 - Bypass */
-		__raw_writel(0x40000000, pxp->base + HW_PXP_CSC1_COEF0);
-
-		/* CSC2 - Bypass */
-		__raw_writel(0x1, pxp->base + HW_PXP_CSC2_CTRL);
-	}
-
-	/* YCrCb colorspace */
-	/* Not sure when we use this...no YCrCb formats are defined for PxP */
-	/*
-	   __raw_writel(0x84ab01f0, HW_PXP_CSCCOEFF0_ADDR);
-	   __raw_writel(0x01230204, HW_PXP_CSCCOEFF1_ADDR);
-	   __raw_writel(0x0730079c, HW_PXP_CSCCOEFF2_ADDR);
-	 */
-
+	return 0;
 }
 
-static void pxp_set_s0buf(struct pxps *pxp)
+static void mux_config_helper(struct mux_config *path_ctrl,
+			      struct edge_node *enode)
 {
-	struct pxp_config_data *pxp_conf = &pxp->pxp_conf_state;
-	struct pxp_layer_param *s0_params = &pxp_conf->s0_param;
-	struct pxp_proc_data *proc_data = &pxp_conf->proc_data;
-	dma_addr_t Y, U, V;
-	dma_addr_t Y1, U1, V1;
-	u32 offset, bpp = 1;
-	u32 pitch = s0_params->stride ? s0_params->stride :
-					s0_params->width;
+	uint32_t mux_val, mux_pos = 0;
 
-	Y = s0_params->paddr;
+	if (enode->mux_used) {
+		do {
+			mux_pos = find_next_bit((unsigned long *)&enode->mux_used,
+						32, mux_pos);
+			if (mux_pos >= 16)
+				break;
 
-	if ((s0_params->pixel_fmt == PXP_PIX_FMT_RGB565) ||
-		(s0_params->pixel_fmt == PXP_PIX_FMT_RGB555))
-		bpp = 2;
-	else if (s0_params->pixel_fmt == PXP_PIX_FMT_RGB32)
-		bpp = 4;
-	offset = (proc_data->srect.top * s0_params->width +
-		 proc_data->srect.left) * bpp;
-	/* clipping or cropping */
-	Y1 = Y + offset;
-	__raw_writel(Y1, pxp->base + HW_PXP_PS_BUF);
-	if ((s0_params->pixel_fmt == PXP_PIX_FMT_YUV420P) ||
-	    (s0_params->pixel_fmt == PXP_PIX_FMT_YVU420P) ||
-	    (s0_params->pixel_fmt == PXP_PIX_FMT_GREY)    ||
-	    (s0_params->pixel_fmt == PXP_PIX_FMT_YUV422P)) {
-		/* Set to 1 if YUV format is 4:2:2 rather than 4:2:0 */
-		int s = 2;
-		if (s0_params->pixel_fmt == PXP_PIX_FMT_YUV422P)
-			s = 1;
+			mux_val = get_mux_val(&enode->muxes, mux_pos);
+			pr_debug("%s: mux_pos = %d, mux_val = %d\n",
+				  __func__, mux_pos, mux_val);
+			set_mux_val(path_ctrl, mux_pos, mux_val);
 
-		offset = proc_data->srect.top * s0_params->width / 4 +
-			 proc_data->srect.left / 2;
-		U = Y + (s0_params->width * s0_params->height);
-		U1 = U + offset;
-		V = U + ((s0_params->width * s0_params->height) >> s);
-		V1 = V + offset;
-		if (s0_params->pixel_fmt == PXP_PIX_FMT_YVU420P) {
-			__raw_writel(V1, pxp->base + HW_PXP_PS_UBUF);
-			__raw_writel(U1, pxp->base + HW_PXP_PS_VBUF);
-		} else {
-			__raw_writel(U1, pxp->base + HW_PXP_PS_UBUF);
-			__raw_writel(V1, pxp->base + HW_PXP_PS_VBUF);
+			mux_pos++;
+		} while (1);
+	}
+}
+
+static void pxp_2d_calc_mux(uint32_t nodes, struct mux_config *path_ctrl)
+{
+	struct edge_node *enode;
+	uint8_t from = 0, to = 0;
+
+	do {
+		from = find_next_bit((unsigned long *)&nodes, 32, from);
+		if (from >= sizeof(uint32_t) * 8)
+			break;
+
+		if (to != 0) {
+			enode = adj_list[to].first;
+			while (enode) {
+				if (enode->adjvex == from) {
+					mux_config_helper(path_ctrl, enode);
+					break;
+				}
+				enode = enode->next;
+			}
 		}
-	} else if ((s0_params->pixel_fmt == PXP_PIX_FMT_NV12) ||
-		 (s0_params->pixel_fmt == PXP_PIX_FMT_NV21) ||
-		 (s0_params->pixel_fmt == PXP_PIX_FMT_NV16) ||
-		 (s0_params->pixel_fmt == PXP_PIX_FMT_NV61)) {
-		int s = 2;
-		if ((s0_params->pixel_fmt == PXP_PIX_FMT_NV16) ||
-		    (s0_params->pixel_fmt == PXP_PIX_FMT_NV61))
-			s = 1;
 
-		offset = (proc_data->srect.top * s0_params->width +
-			  proc_data->srect.left) / s;
-		U = Y + (s0_params->width * s0_params->height);
-		U1 = U + offset;
+		to = find_next_bit((unsigned long *)&nodes, 32, from + 1);
+		if (to >= sizeof(uint32_t) * 8)
+			break;
 
-		__raw_writel(U1, pxp->base + HW_PXP_PS_UBUF);
+		enode = adj_list[from].first;
+		while (enode) {
+			if (enode->adjvex == to) {
+				mux_config_helper(path_ctrl, enode);
+				break;
+			}
+			enode = enode->next;
+		}
+
+		from = to + 1;
+	} while (1);
+}
+
+static int pxp_2d_op_handler(struct pxps *pxp)
+{
+	struct mux_config path_ctrl0;
+	struct pxp_proc_data *proc_data = &pxp->pxp_conf_state.proc_data;
+	struct pxp_task_info *task = &pxp->task;
+	struct pxp_op_info *op = &task->op_info;
+	struct pxp_pixmap *input, *output, *input_s0, *input_s1;
+	uint32_t possible_inputs, possible_outputs;
+	uint32_t possible_inputs_s0, possible_inputs_s1;
+	uint32_t inputs_filter_s0, inputs_filter_s1;
+	uint32_t nodes_used = 0, nodes_in_path;
+	uint32_t partial_nodes_used = 0;
+	uint32_t nodes_used_s0 = 0, nodes_used_s1 = 0;
+	uint32_t nodes_in_path_s0, nodes_in_path_s1;
+
+	output = &task->output[0];
+	if (!output->pitch)
+		return -EINVAL;
+
+	*(unsigned int*)&path_ctrl0 = 0xffffffff;
+
+reparse:
+	switch (task->input_num) {
+	case 0:
+		/* Fill operation: use input store engine */
+		if (is_yuv(output->format) > 1)
+			return -EINVAL;
+
+		if (output->bpp > 32)
+			return -EINVAL;
+
+		nodes_used = 1 << PXP_2D_INPUT_STORE0;
+		pxp_2d_task_config(NULL, output, op, nodes_used);
+		break;
+	case 1:
+		/* No Composite */
+		possible_inputs  = (1 << PXP_2D_PS) |
+				   (1 << PXP_2D_AS) |
+				   (1 << PXP_2D_INPUT_FETCH0);
+		possible_outputs = (1 << PXP_2D_OUT) |
+				   (1 << PXP_2D_INPUT_STORE0);
+
+		input = &task->input[0];
+		if (!input->pitch)
+			return -EINVAL;
+
+		if (input->rotate || input->flip) {
+			input->flags |= IN_NEED_ROTATE_FLIP;
+			output->rotate = input->rotate;
+			output->flip = input->flip;
+		}
+
+		if (!is_yuv(input->format) != !is_yuv(output->format))
+			input->flags |= IN_NEED_CSC;
+		else if (input->format != output->format)
+			input->flags |= IN_NEED_FMT_UNIFIED;
+
+		if ((input->rotate == 90) || (input->rotate == 270)) {
+			if ((input->crop.width != output->crop.height) ||
+			    (input->crop.height != output->crop.width))
+				input->flags |= IN_NEED_SCALE;
+		} else {
+			if ((input->crop.width != output->crop.width) ||
+			    (input->crop.height != output->crop.height))
+				input->flags |= IN_NEED_SCALE;
+		}
+
+		if (input->flags) {
+			/* only ps has scaling function */
+			if ((input->flags & IN_NEED_SCALE) == IN_NEED_SCALE)
+				possible_inputs = 1 << PXP_2D_PS;
+			output->flags |= (output->bpp < 32) ? OUT_NEED_SHRINK :
+							      OUT_NEED_SHIFT;
+		}
+
+		filter_possible_inputs(input, &possible_inputs);
+		filter_possible_outputs(output, &possible_outputs);
+
+		if (!possible_inputs || !possible_outputs) {
+			dev_err(&pxp->pdev->dev, "unsupport 2d operation\n");
+			return -EINVAL;
+		}
+
+		if (proc_data->lut_transform)
+			nodes_used |= (1 << PXP_2D_LUT);
+
+		nodes_in_path = find_best_path(possible_inputs,
+					       possible_outputs,
+					       input, &nodes_used);
+
+		if (nodes_in_path & (1 << PXP_2D_ROTATION1)) {
+			clear_bit(PXP_2D_ROTATION1, (unsigned long *)&nodes_in_path);
+			set_bit(PXP_2D_ROTATION0, (unsigned long *)&nodes_in_path);
+		}
+
+		if (nodes_used & (1 << PXP_2D_ROTATION1)) {
+			clear_bit(PXP_2D_ROTATION1, (unsigned long *)&nodes_used);
+			set_bit(PXP_2D_ROTATION0, (unsigned long *)&nodes_used);
+		}
+
+		pr_debug("%s: nodes_in_path = 0x%x, nodes_used = 0x%x\n",
+			  __func__, nodes_in_path, nodes_used);
+		if (!nodes_used) {
+			dev_err(&pxp->pdev->dev, "unsupport 2d operation\n");
+			return -EINVAL;
+		}
+
+		/* If use input fetch0, should use
+		 * alpha b instead of alpha a */
+		if (nodes_in_path & (1 << PXP_2D_ALPHA0_S0)) {
+			if (nodes_in_path & (1 << PXP_2D_INPUT_FETCH0)) {
+				clear_bit(PXP_2D_ALPHA0_S0,
+					  (unsigned long *)&nodes_in_path);
+				set_bit(PXP_2D_ALPHA1_S1,
+					  (unsigned long *)&nodes_in_path);
+			}
+		}
+
+		/* In this case input read in
+		 * by input fetch engine
+		 */
+		if ((nodes_in_path & (1 << PXP_2D_ALPHA1_S1)) ||
+		    (nodes_in_path & (1 << PXP_2D_ALPHA1_S0))) {
+			memcpy(&task->input[1], input, sizeof(*input));
+			if (input->rotate == 90 || input->rotate == 270) {
+				uint32_t temp;
+
+				input = &task->input[1];
+				input->rotate = 0;
+				input->flags  = 0;
+				temp = input->width;
+				input->width  = input->height;
+				input->height = temp;
+				input->pitch  = input->width * (input->bpp >> 3);
+				temp = input->crop.width;
+				input->crop.width  = input->crop.height;
+				input->crop.height = temp;
+			}
+
+			op->alpha_info.alpha_mode = ALPHA_MODE_ROP;
+			/* s0 AND s1 */
+			op->alpha_info.rop_type = 0x0;
+			task->input_num = 2;
+			goto reparse;
+		}
+
+		pxp_2d_calc_mux(nodes_in_path, &path_ctrl0);
+		pr_debug("%s: path_ctrl0 = 0x%x\n",
+			 __func__, *(uint32_t *)&path_ctrl0);
+		pxp_2d_task_config(input, output, op, nodes_used);
+		break;
+	case 2:
+		/* Composite */
+		input_s0 = &task->input[0];
+		input_s1 = &task->input[1];
+		if (!input_s0->pitch || !input_s1->pitch)
+			return -EINVAL;
+
+		possible_inputs_s0 = (1 << PXP_2D_PS) |
+				     (1 << PXP_2D_INPUT_FETCH0) |
+				     (1 << PXP_2D_INPUT_FETCH1);
+		possible_inputs_s1 = (1 << PXP_2D_AS) |
+				     (1 << PXP_2D_INPUT_FETCH0);
+		possible_outputs   = (1 << PXP_2D_OUT) |
+				     (1 << PXP_2D_INPUT_STORE0);
+
+		if (input_s0->rotate || input_s0->flip) {
+			input_s0->flags |= IN_NEED_ROTATE_FLIP;
+			output->rotate = input_s0->rotate;
+			output->flip = input_s0->flip;
+		}
+		if (input_s1->rotate || input_s1->flip) {
+			input_s1->flags |= IN_NEED_ROTATE_FLIP;
+			clear_bit(PXP_2D_AS,
+				  (unsigned long *)&possible_inputs_s1);
+		}
+
+		if (is_yuv(input_s0->format) && is_yuv(input_s1->format))
+			return -EINVAL;
+
+		if (is_yuv(input_s0->format)){
+			/* need do yuv -> rgb conversion by csc1 */
+			possible_inputs_s0 = 1 << PXP_2D_PS;
+			input_s0->flags |= IN_NEED_CSC;
+		} else if (is_yuv(input_s1->format)) {
+			possible_inputs_s1 = 1 << PXP_2D_PS;
+			input_s1->flags |= IN_NEED_CSC;
+		}
+
+		filter_possible_inputs(input_s0, &possible_inputs_s0);
+		filter_possible_inputs(input_s1, &possible_inputs_s1);
+
+		if (!possible_inputs_s0 || !possible_inputs_s0)
+			return -EINVAL;
+
+		filter_possible_outputs(output, &possible_outputs);
+		if (!possible_outputs)
+			return -EINVAL;
+
+		pr_debug("%s: poss_s0 = 0x%x, poss_s1 = 0x%x, poss_out = 0x%x\n",
+			 __func__, possible_inputs_s0, possible_inputs_s1, possible_outputs);
+
+		inputs_filter_s0 = possible_inputs_s0;
+		inputs_filter_s1 = possible_inputs_s1;
+
+		/* Using alpha0, possible cases:
+		 * 1. PS --> S0, AS --> S1;
+		 */
+		if (possible_inputs_s1 & (1 << PXP_2D_AS)) {
+			clear_bit(PXP_2D_INPUT_FETCH0,
+				  (unsigned long *)&possible_inputs_s0);
+			clear_bit(PXP_2D_INPUT_FETCH1,
+				  (unsigned long *)&possible_inputs_s0);
+			clear_bit(PXP_2D_INPUT_STORE0,
+				  (unsigned long *)&possible_outputs);
+
+			if (!possible_inputs_s0 || !possible_outputs)
+				goto alpha1;
+
+			nodes_in_path_s0 = find_best_path(possible_inputs_s0,
+							  1 << PXP_2D_ALPHA0_S0,
+							  input_s0,
+							  &partial_nodes_used);
+			if (!nodes_in_path_s0)
+				goto alpha1;
+
+			nodes_used_s0 |= partial_nodes_used;
+			partial_nodes_used = 0;
+
+			if (is_yuv(output->format))
+				set_bit(PXP_2D_CSC2,
+					(unsigned long *)&partial_nodes_used);
+			if (output->rotate || output->flip)
+				set_bit(PXP_2D_ROTATION0,
+					(unsigned long *)&partial_nodes_used);
+
+			nodes_in_path_s0 |= find_best_path(1 << PXP_2D_ALPHA0_S0,
+							   possible_outputs,
+							   input_s0,
+							   &partial_nodes_used);
+			if (!(nodes_in_path_s0 & possible_outputs))
+				goto alpha1;
+			nodes_used_s0 |= partial_nodes_used;
+
+			possible_inputs_s1 = (1 << PXP_2D_AS);
+			nodes_in_path_s1 = find_best_path(possible_inputs_s1,
+							  1 << PXP_2D_ALPHA0_S1,
+							  input_s1,
+							  &nodes_used_s1);
+			if (!nodes_in_path_s1)
+				goto alpha1;
+
+			goto config;
+		}
+alpha1:
+		partial_nodes_used = 0;
+		possible_inputs_s0 = inputs_filter_s0;
+		possible_inputs_s1 = inputs_filter_s1;
+
+		/* Using alpha1, possible cases:
+		 * 1. FETCH1 --> S0, FETCH0 --> S1;
+		 */
+		clear_bit(PXP_2D_PS,
+			  (unsigned long *)&possible_inputs_s0);
+		clear_bit(PXP_2D_INPUT_FETCH0,
+			  (unsigned long *)&possible_inputs_s0);
+		clear_bit(PXP_2D_OUT,
+			  (unsigned long *)&possible_outputs);
+
+		if (!possible_inputs_s0 || !possible_outputs)
+			return -EINVAL;
+
+		nodes_in_path_s0 = find_best_path(possible_inputs_s0,
+						  1 << PXP_2D_ALPHA1_S0,
+						  input_s0,
+						  &partial_nodes_used);
+		pr_debug("%s: nodes_in_path_s0 = 0x%x\n", __func__, nodes_in_path_s0);
+		BUG_ON(!nodes_in_path_s0);
+
+		nodes_used_s0 |= partial_nodes_used;
+		if ((nodes_used_s0 & (1 << PXP_2D_INPUT_FETCH0)) ||
+		    (nodes_used_s0 & (1 << PXP_2D_INPUT_FETCH1)))
+			clear_bit(PXP_2D_OUT, (unsigned long *)&possible_outputs);
+		else
+			clear_bit(PXP_2D_INPUT_STORE0,
+				  (unsigned long *)&possible_outputs);
+		partial_nodes_used = 0;
+
+		if (is_yuv(output->format))
+			set_bit(PXP_2D_CSC2,
+				(unsigned long *)&partial_nodes_used);
+		if (output->rotate || output->flip)
+			set_bit(PXP_2D_ROTATION0,
+				(unsigned long *)&partial_nodes_used);
+
+		nodes_in_path_s0 |= find_best_path(1 << PXP_2D_ALPHA1_S0,
+						   possible_outputs,
+						   input_s0,
+						   &partial_nodes_used);
+		BUG_ON(!(nodes_in_path_s0 & possible_outputs));
+		nodes_used_s0 |= partial_nodes_used;
+		pr_debug("%s: nodes_in_path_s0 = 0x%x, nodes_used_s0 = 0x%x\n",
+			 __func__, nodes_in_path_s0, nodes_used_s0);
+
+		clear_bit(PXP_2D_AS,
+			  (unsigned long *)&possible_inputs_s1);
+		BUG_ON(!possible_inputs_s1);
+
+		nodes_in_path_s1 = find_best_path(possible_inputs_s1,
+						  1 << PXP_2D_ALPHA1_S1,
+						  input_s1,
+						  &nodes_used_s1);
+		pr_debug("%s: poss_s1 = 0x%x, nodes_used_s1 = 0x%x\n",
+			 __func__, possible_inputs_s1, nodes_used_s1);
+		BUG_ON(!nodes_in_path_s1);
+		/* To workaround an IC bug */
+		path_ctrl0.mux4_sel = 0x0;
+config:
+		if (nodes_in_path_s0 & (1 << PXP_2D_ROTATION1)) {
+			clear_bit(PXP_2D_ROTATION1, (unsigned long *)&nodes_in_path_s0);
+			set_bit(PXP_2D_ROTATION0, (unsigned long *)&nodes_in_path_s0);
+		}
+
+		pr_debug("%s: nodes_in_path_s0 = 0x%x, nodes_used_s0 = 0x%x, nodes_in_path_s1 = 0x%x, nodes_used_s1 = 0x%x\n",
+			 __func__, nodes_in_path_s0, nodes_used_s0, nodes_in_path_s1, nodes_used_s1);
+		pxp_2d_calc_mux(nodes_in_path_s0, &path_ctrl0);
+		pxp_2d_calc_mux(nodes_in_path_s1, &path_ctrl0);
+
+		pr_debug("%s: s0 paddr = 0x%x, s1 paddr = 0x%x, out paddr = 0x%x\n",
+			 __func__, input_s0->paddr, input_s1->paddr, output->paddr);
+
+		if (nodes_used_s0 & (1 << PXP_2D_ROTATION1)) {
+			clear_bit(PXP_2D_ROTATION1, (unsigned long *)&nodes_used_s0);
+			set_bit(PXP_2D_ROTATION0, (unsigned long *)&nodes_used_s0);
+		}
+
+		pxp_2d_task_config(input_s0, output, op, nodes_used_s0);
+		pxp_2d_task_config(input_s1, output, op, nodes_used_s1);
+		break;
+	default:
+		break;
 	}
 
-	/* TODO: only support RGB565, Y8, Y4, YUV420 */
-	if (s0_params->pixel_fmt == PXP_PIX_FMT_GREY ||
-	    s0_params->pixel_fmt == PXP_PIX_FMT_YUV420P ||
-	    s0_params->pixel_fmt == PXP_PIX_FMT_YVU420P ||
-	    s0_params->pixel_fmt == PXP_PIX_FMT_NV12 ||
-	    s0_params->pixel_fmt == PXP_PIX_FMT_NV21 ||
-	    s0_params->pixel_fmt == PXP_PIX_FMT_NV16 ||
-	    s0_params->pixel_fmt == PXP_PIX_FMT_NV61 ||
-	    s0_params->pixel_fmt == PXP_PIX_FMT_YUV422P) {
-		__raw_writel(pitch, pxp->base + HW_PXP_PS_PITCH);
-	}
-	else if (s0_params->pixel_fmt == PXP_PIX_FMT_GY04)
-		__raw_writel(pitch >> 1,
-				pxp->base + HW_PXP_PS_PITCH);
-	else if (s0_params->pixel_fmt == PXP_PIX_FMT_RGB32 ||
-			 s0_params->pixel_fmt == PXP_PIX_FMT_VUY444)
-		__raw_writel(pitch << 2,
-				pxp->base + HW_PXP_PS_PITCH);
-	else if (s0_params->pixel_fmt == PXP_PIX_FMT_UYVY ||
-		 s0_params->pixel_fmt == PXP_PIX_FMT_YUYV ||
-		 s0_params->pixel_fmt == PXP_PIX_FMT_VYUY ||
-		 s0_params->pixel_fmt == PXP_PIX_FMT_YVYU)
-		__raw_writel(pitch << 1,
-				pxp->base + HW_PXP_PS_PITCH);
-	else if ((s0_params->pixel_fmt == PXP_PIX_FMT_RGB565) ||
-		 (s0_params->pixel_fmt == PXP_PIX_FMT_RGB555))
-		__raw_writel(pitch << 1,
-				pxp->base + HW_PXP_PS_PITCH);
-	else
-		__raw_writel(0, pxp->base + HW_PXP_PS_PITCH);
+	__raw_writel(proc_data->bgcolor,
+			 pxp->base + HW_PXP_PS_BACKGROUND_0);
+	pxp_set_colorkey(pxp);
+
+	if (proc_data->lut_transform && pxp_is_v3(pxp))
+		set_mux(&path_ctrl0);
+
+	pr_debug("%s: path_ctrl0 = 0x%x\n",
+		 __func__, *(uint32_t *)&path_ctrl0);
+	pxp_writel(*(uint32_t *)&path_ctrl0, HW_PXP_DATA_PATH_CTRL0);
+
+	return 0;
 }
 
 /**
@@ -1257,82 +3502,71 @@ static void pxp_set_s0buf(struct pxps *pxp)
  */
 static int pxp_config(struct pxps *pxp, struct pxp_channel *pxp_chan)
 {
+	int ret = 0;
+	struct pxp_task_info *task = &pxp->task;
+	struct pxp_op_info *op = &task->op_info;
 	struct pxp_config_data *pxp_conf_data = &pxp->pxp_conf_state;
 	struct pxp_proc_data *proc_data = &pxp_conf_data->proc_data;
-	int ol_nr;
-	int i;
 
-	if ((proc_data->working_mode & PXP_MODE_STANDARD) == PXP_MODE_STANDARD) {
+	switch (op->op_type) {
+	case PXP_OP_TYPE_2D:
+		pxp_writel(0xffffffff, HW_PXP_OUT_AS_ULC);
+		pxp_writel(0x0, HW_PXP_OUT_AS_LRC);
+		pxp_writel(0xffffffff, HW_PXP_OUT_PS_ULC);
+		pxp_writel(0x0, HW_PXP_OUT_PS_LRC);
+		pxp_writel(0x0, HW_PXP_INPUT_FETCH_PITCH);
+		pxp_writel(0x40000000, HW_PXP_CSC1_COEF0);
+		ret = pxp_2d_op_handler(pxp);
+		break;
+	case PXP_OP_TYPE_DITHER:
+		pxp_dithering_process(pxp);
+		if (pxp_is_v3p(pxp)) {
+			__raw_writel(
+				BM_PXP_CTRL_ENABLE         |
+				BM_PXP_CTRL_ENABLE_DITHER  |
+				BM_PXP_CTRL_ENABLE_CSC2    |
+				BM_PXP_CTRL_ENABLE_LUT     |
+				BM_PXP_CTRL_ENABLE_ROTATE0 |
+				BM_PXP_CTRL_ENABLE_PS_AS_OUT,
+				pxp->base + HW_PXP_CTRL_SET);
+			return 0;
+		}
+		break;
+	case PXP_OP_TYPE_WFE_A:
+		pxp_luts_deactivate(pxp, proc_data->lut_sels);
 
-		/* now only test dithering feature */
-		if ((proc_data->engine_enable & PXP_ENABLE_DITHER) == PXP_ENABLE_DITHER) {
-			pxp_dithering_process(pxp);
-			if (pxp_is_v3p(pxp)) {
-				__raw_writel(
-					BM_PXP_CTRL_ENABLE         |
-					BM_PXP_CTRL_ENABLE_DITHER  |
-					BM_PXP_CTRL_ENABLE_CSC2    |
-					BM_PXP_CTRL_ENABLE_LUT     |
-					BM_PXP_CTRL_ENABLE_ROTATE0 |
-					BM_PXP_CTRL_ENABLE_PS_AS_OUT,
-					pxp->base + HW_PXP_CTRL_SET);
-				return 0;
-			}
-}
-
-		if ((proc_data->engine_enable & PXP_ENABLE_WFE_A) == PXP_ENABLE_WFE_A)
-		{
-			/* We should enable histogram in standard mode 
+		if (proc_data->lut_cleanup == 0) {
+			/* We should enable histogram in standard mode
 			 * in wfe_a processing for waveform mode selection
 			 */
 			pxp_histogram_enable(pxp, pxp_conf_data->wfe_a_fetch_param[0].width,
 					pxp_conf_data->wfe_a_fetch_param[0].height);
 
-			/* collision detection should be always enable in standard mode */
 			pxp_luts_activate(pxp, (u64)proc_data->lut_status_1 |
 					((u64)proc_data->lut_status_2 << 32));
 
+			/* collision detection should be always enable in standard mode */
 			pxp_collision_detection_enable(pxp, pxp_conf_data->wfe_a_fetch_param[0].width,
-						pxp_conf_data->wfe_a_fetch_param[0].height);
-
-			if (pxp->devdata && pxp->devdata->pxp_wfe_a_configure)
-				pxp->devdata->pxp_wfe_a_configure(pxp);
-			if (pxp->devdata && pxp->devdata->pxp_wfe_a_process)
-				pxp->devdata->pxp_wfe_a_process(pxp);
+					pxp_conf_data->wfe_a_fetch_param[0].height);
 		}
 
-		if ((proc_data->engine_enable & PXP_ENABLE_WFE_B) == PXP_ENABLE_WFE_B) {
-			pxp_wfe_b_configure(pxp);
-			pxp_wfe_b_process(pxp);
-		}
-
-
-		return 0;
+		if (pxp->devdata && pxp->devdata->pxp_wfe_a_configure)
+			pxp->devdata->pxp_wfe_a_configure(pxp);
+		if (pxp->devdata && pxp->devdata->pxp_wfe_a_process)
+			pxp->devdata->pxp_wfe_a_process(pxp);
+		break;
+	case PXP_OP_TYPE_WFE_B:
+		pxp_wfe_b_configure(pxp);
+		pxp_wfe_b_process(pxp);
+		break;
+	default:
+		/* Unsupport */
+		ret = -EINVAL;
+		pr_err("Invalid pxp operation type passed\n");
+		break;
 	}
 
-	/* Configure PxP regs */
-	pxp_set_ctrl(pxp);
-	pxp_set_s0param(pxp);
-	pxp_set_s0crop(pxp);
-	pxp_set_scaling(pxp);
-	ol_nr = pxp_conf_data->layer_nr - 2;
-	while (ol_nr > 0) {
-		i = pxp_conf_data->layer_nr - 2 - ol_nr;
-		pxp_set_oln(i, pxp);
-		pxp_set_olparam(i, pxp);
-		/* only the color key in higher overlay will take effect. */
-		pxp_set_olcolorkey(i, pxp);
-		ol_nr--;
-	}
-	pxp_set_s0colorkey(pxp);
-	pxp_set_csc(pxp);
-	pxp_set_bg(pxp);
-	pxp_set_lut(pxp);
-
-	pxp_set_s0buf(pxp);
-	pxp_set_outbuf(pxp);
-
-	return 0;
+	return ret;
 }
 
 static void pxp_clk_enable(struct pxps *pxp)
@@ -1401,6 +3635,45 @@ static struct pxp_tx_desc *pxpdma_first_queued(struct pxp_channel *pxp_chan)
 	return list_entry(pxp_chan->queue.next, struct pxp_tx_desc, list);
 }
 
+static int convert_param_to_pixmap(struct pxp_pixmap *pixmap,
+				   struct pxp_layer_param *param)
+{
+	if (!param->width || !param->height)
+		return -EINVAL;
+
+	pixmap->width  = param->width;
+	pixmap->height = param->height;
+	pixmap->format = param->pixel_fmt;
+	pixmap->paddr  = param->paddr;
+	pixmap->bpp    = get_bpp_from_fmt(pixmap->format);
+
+	if (pxp_legacy) {
+		pixmap->pitch = (param->stride) ? (param->stride * pixmap->bpp >> 3) :
+						(param->width * pixmap->bpp >> 3);
+	} else {
+		if (!param->stride || (param->stride == param->width))
+			pixmap->pitch  = param->width * pixmap->bpp >> 3;
+		else
+			pixmap->pitch = param->stride;
+	}
+
+	pixmap->crop.x = param->crop.left;
+	pixmap->crop.y = param->crop.top;
+	pixmap->crop.width  = param->crop.width;
+	pixmap->crop.height = param->crop.height;
+
+	pixmap->g_alpha.color_key_enable = param->color_key_enable;
+	pixmap->g_alpha.combine_enable = param->combine_enable;
+	pixmap->g_alpha.global_alpha_enable = param->global_alpha_enable;
+	pixmap->g_alpha.global_override = param->global_override;
+	pixmap->g_alpha.global_alpha = param->global_alpha;
+	pixmap->g_alpha.alpha_invert = param->alpha_invert;
+	pixmap->g_alpha.local_alpha_enable = param->local_alpha_enable;
+	pixmap->g_alpha.comp_mask = param->comp_mask;
+
+	return 0;
+}
+
 /* called with pxp_chan->lock held */
 static void __pxpdma_dostart(struct pxp_channel *pxp_chan)
 {
@@ -1410,18 +3683,33 @@ static void __pxpdma_dostart(struct pxp_channel *pxp_chan)
 	struct pxp_proc_data *proc_data = &config_data->proc_data;
 	struct pxp_tx_desc *desc;
 	struct pxp_tx_desc *child;
-	int i = 0;
+	struct pxp_task_info *task = &pxp->task;
+	struct pxp_op_info *op = &task->op_info;
+	struct pxp_alpha_info *alpha = &op->alpha_info;
+	struct pxp_layer_param *param = NULL;
+	struct pxp_pixmap *input, *output;
+	int i = 0, ret;
+	bool combine_enable = false;
 
 	memset(&pxp->pxp_conf_state.s0_param, 0,  sizeof(struct pxp_layer_param));
 	memset(&pxp->pxp_conf_state.out_param, 0,  sizeof(struct pxp_layer_param));
-	memset(pxp->pxp_conf_state.ol_param, 0,  sizeof(struct pxp_layer_param) * 8);
+	memset(pxp->pxp_conf_state.ol_param, 0,  sizeof(struct pxp_layer_param));
 	memset(&pxp->pxp_conf_state.proc_data, 0,  sizeof(struct pxp_proc_data));
+
+	memset(task, 0, sizeof(*task));
 	/* S0 */
 	desc = list_first_entry(&head, struct pxp_tx_desc, list);
 	memcpy(&pxp->pxp_conf_state.s0_param,
 	       &desc->layer_param.s0_param, sizeof(struct pxp_layer_param));
 	memcpy(&pxp->pxp_conf_state.proc_data,
 	       &desc->proc_data, sizeof(struct pxp_proc_data));
+
+	if (proc_data->combine_enable)
+		alpha_blending_version = PXP_ALPHA_BLENDING_V2;
+	else
+		alpha_blending_version = PXP_ALPHA_BLENDING_NONE;
+
+	pxp_legacy = (proc_data->pxp_legacy) ? true : false;
 
 	/* Save PxP configuration */
 	list_for_each_entry(child, &desc->tx_list, list) {
@@ -1433,6 +3721,11 @@ static void __pxpdma_dostart(struct pxp_channel *pxp_chan)
 			memcpy(&pxp->pxp_conf_state.ol_param[i - 1],
 			       &child->layer_param.ol_param,
 			       sizeof(struct pxp_layer_param));
+			if (pxp->pxp_conf_state.ol_param[i - 1].width != 0 &&
+				pxp->pxp_conf_state.ol_param[i - 1].height != 0) {
+				if (pxp->pxp_conf_state.ol_param[i - 1].combine_enable)
+					alpha_blending_version = PXP_ALPHA_BLENDING_V1;
+			}
 		}
 
 		if (proc_data->engine_enable & PXP_ENABLE_DITHER) {
@@ -1452,6 +3745,7 @@ static void __pxpdma_dostart(struct pxp_channel *pxp_chan)
 				memcpy(&pxp->pxp_conf_state.dither_store_param[1],
 				       &child->layer_param.processing_param,
 				       sizeof(struct pxp_layer_param));
+			op->op_type = PXP_OP_TYPE_DITHER;
 		}
 
 		if (proc_data->engine_enable & PXP_ENABLE_WFE_A) {
@@ -1471,6 +3765,7 @@ static void __pxpdma_dostart(struct pxp_channel *pxp_chan)
 				memcpy(&pxp->pxp_conf_state.wfe_a_store_param[1],
 				       &child->layer_param.processing_param,
 				       sizeof(struct pxp_layer_param));
+			op->op_type = PXP_OP_TYPE_WFE_A;
 		}
 
 		if (proc_data->engine_enable & PXP_ENABLE_WFE_B) {
@@ -1490,25 +3785,115 @@ static void __pxpdma_dostart(struct pxp_channel *pxp_chan)
 				memcpy(&pxp->pxp_conf_state.wfe_b_store_param[1],
 				       &child->layer_param.processing_param,
 				       sizeof(struct pxp_layer_param));
+			op->op_type = PXP_OP_TYPE_WFE_B;
 		}
 
 		i++;
 	}
+
+	if (!op->op_type) {
+		op->op_type = PXP_OP_TYPE_2D;
+
+		if ((alpha_blending_version == PXP_ALPHA_BLENDING_V1) ||
+			(alpha_blending_version == PXP_ALPHA_BLENDING_V2))
+			combine_enable = true;
+
+		if (combine_enable)
+			task->input_num = 2;
+		else if (proc_data->fill_en)
+			task->input_num = 0;
+		else
+			task->input_num = 1;
+
+		output = &task->output[0];
+		switch (task->input_num) {
+		case 0:
+			op->fill_en   = 1;
+			op->fill_data = proc_data->bgcolor;
+			break;
+		case 1:
+			param = &pxp->pxp_conf_state.s0_param;
+			input = &task->input[0];
+
+			ret = convert_param_to_pixmap(input, param);
+			if (ret < 0) {
+				param = &pxp->pxp_conf_state.ol_param[0];
+				ret = convert_param_to_pixmap(input, param);
+				BUG_ON(ret < 0);
+			} else {
+				input->crop.x = proc_data->srect.left;
+				input->crop.y = proc_data->srect.top;
+				input->crop.width  = proc_data->srect.width;
+				input->crop.height = proc_data->srect.height;
+			}
+
+			input->rotate = proc_data->rotate;
+			input->flip = (proc_data->hflip) ? PXP_H_FLIP :
+				      (proc_data->vflip) ? PXP_V_FLIP : 0;
+			break;
+		case 2:
+			/* s0 */
+			param = &pxp->pxp_conf_state.s0_param;
+			input = &task->input[0];
+
+			ret = convert_param_to_pixmap(input, param);
+			BUG_ON(ret < 0);
+			input->crop.x = proc_data->srect.left;
+			input->crop.y = proc_data->srect.top;
+			input->crop.width  = proc_data->srect.width;
+			input->crop.height = proc_data->srect.height;
+			alpha->s0_alpha = param->alpha;
+
+			input->rotate = proc_data->rotate;
+			input->flip   = (proc_data->hflip) ? PXP_H_FLIP :
+					(proc_data->vflip) ? PXP_V_FLIP : 0;
+
+			/* overlay */
+			param = &pxp->pxp_conf_state.ol_param[0];
+			input = &task->input[1];
+
+			ret = convert_param_to_pixmap(input, param);
+			BUG_ON(ret < 0);
+			alpha->s1_alpha = param->alpha;
+			alpha->alpha_mode = proc_data->alpha_mode;
+			break;
+		}
+
+		param = &pxp->pxp_conf_state.out_param;
+		ret = convert_param_to_pixmap(output, param);
+		BUG_ON(ret < 0);
+
+		output->crop.x = proc_data->drect.left;
+		output->crop.y = proc_data->drect.top;
+		output->crop.width  = proc_data->drect.width;
+		output->crop.height = proc_data->drect.height;
+	}
+
 	pr_debug("%s:%d S0 w/h %d/%d paddr %08x\n", __func__, __LINE__,
 		 pxp->pxp_conf_state.s0_param.width,
 		 pxp->pxp_conf_state.s0_param.height,
 		 pxp->pxp_conf_state.s0_param.paddr);
+	pr_debug("%s:%d S0 crop (top, left)=(%d, %d), (width, height)=(%d, %d)\n",
+		__func__, __LINE__,
+		pxp->pxp_conf_state.s0_param.crop.top,
+		pxp->pxp_conf_state.s0_param.crop.left,
+		pxp->pxp_conf_state.s0_param.crop.width,
+		pxp->pxp_conf_state.s0_param.crop.height);
 	pr_debug("%s:%d OUT w/h %d/%d paddr %08x\n", __func__, __LINE__,
 		 pxp->pxp_conf_state.out_param.width,
 		 pxp->pxp_conf_state.out_param.height,
 		 pxp->pxp_conf_state.out_param.paddr);
 }
 
-static void pxpdma_dostart_work(struct pxps *pxp)
+static int pxpdma_dostart_work(struct pxps *pxp)
 {
+	int ret;
 	struct pxp_channel *pxp_chan = NULL;
 	unsigned long flags;
+	dma_async_tx_callback callback;
+	void *callback_param;
 	struct pxp_tx_desc *desc = NULL;
+	struct pxp_tx_desc *child, *_child;
 	struct pxp_config_data *config_data = &pxp->pxp_conf_state;
 	struct pxp_proc_data *proc_data = &config_data->proc_data;
 
@@ -1520,7 +3905,24 @@ static void pxpdma_dostart_work(struct pxps *pxp)
 	__pxpdma_dostart(pxp_chan);
 
 	/* Configure PxP */
-	pxp_config(pxp, pxp_chan);
+	ret = pxp_config(pxp, pxp_chan);
+	if (ret) {
+		callback = desc->txd.callback;
+		callback_param = desc->txd.callback_param;
+
+		callback(callback_param);
+
+		/* Unsupport operation */
+		list_for_each_entry_safe(child, _child, &desc->tx_list, list) {
+			list_del_init(&child->list);
+			kmem_cache_free(tx_desc_cache, (void *)child);
+		}
+		list_del_init(&desc->list);
+		kmem_cache_free(tx_desc_cache, (void *)desc);
+
+		spin_unlock_irqrestore(&pxp->lock, flags);
+		return -EINVAL;
+	}
 
 	if (proc_data->working_mode & PXP_MODE_STANDARD) {
 		if(!pxp_is_v3p(pxp) || !(proc_data->engine_enable & PXP_ENABLE_DITHER))
@@ -1529,6 +3931,8 @@ static void pxpdma_dostart_work(struct pxps *pxp)
 		pxp_start(pxp);
 
 	spin_unlock_irqrestore(&pxp->lock, flags);
+
+	return 0;
 }
 
 static void pxpdma_dequeue(struct pxp_channel *pxp_chan, struct pxps *pxp)
@@ -1611,7 +4015,6 @@ static irqreturn_t pxp_irq(int irq, void *dev_id)
 
 	dump_pxp_reg(pxp);
 
-
 	if (__raw_readl(pxp->base + HW_PXP_STAT) & BM_PXP_STAT_IRQ0)
 		__raw_writel(BM_PXP_STAT_IRQ0, pxp->base + HW_PXP_STAT_CLR);
 	else {
@@ -1619,6 +4022,17 @@ static irqreturn_t pxp_irq(int irq, void *dev_id)
 
 		pxp_irq_status = __raw_readl(pxp->base + HW_PXP_IRQ);
 		BUG_ON(!pxp_irq_status);
+
+		if (pxp_irq_status & BM_PXP_IRQ_FIRST_CH0_PREFETCH_IRQ)
+			irq_clr |= BM_PXP_IRQ_FIRST_CH0_PREFETCH_IRQ;
+		if (pxp_irq_status & BM_PXP_IRQ_FIRST_CH1_PREFETCH_IRQ)
+			irq_clr |= BM_PXP_IRQ_FIRST_CH1_PREFETCH_IRQ;
+		if (pxp_irq_status & BM_PXP_IRQ_FIRST_CH0_STORE_IRQ)
+			irq_clr |= BM_PXP_IRQ_FIRST_CH0_STORE_IRQ;
+		if (pxp_irq_status & BM_PXP_IRQ_FIRST_CH1_STORE_IRQ)
+			irq_clr |= BM_PXP_IRQ_FIRST_CH1_STORE_IRQ;
+		if (pxp_irq_status & BM_PXP_IRQ_FIRST_STORE_IRQ)
+			irq_clr |= BM_PXP_IRQ_FIRST_STORE_IRQ;
 
 		if (pxp_irq_status & BM_PXP_IRQ_WFE_B_STORE_IRQ)
 			irq_clr |= BM_PXP_IRQ_WFE_B_STORE_IRQ;
@@ -1648,6 +4062,8 @@ static irqreturn_t pxp_irq(int irq, void *dev_id)
 		/*XXX other irqs status clear should be added below */
 
 		__raw_writel(irq_clr, pxp->base + HW_PXP_IRQ_CLR);
+
+		pxp_writel(BM_PXP_CTRL_ENABLE, HW_PXP_CTRL_CLR);
 	}
 	pxp_collision_status_report(pxp, &col_info);
 	pxp_histogram_status_report(pxp, &hist_status);
@@ -1657,6 +4073,7 @@ static irqreturn_t pxp_irq(int irq, void *dev_id)
 	pxp_collision_detection_disable(pxp);
 	pxp_histogram_disable(pxp);
 
+	pxp_writel(0x0, HW_PXP_CTRL);
 	pxp_soft_reset(pxp);
 	if (pxp->devdata && pxp->devdata->pxp_data_path_config)
 		pxp->devdata->pxp_data_path_config(pxp);
@@ -1692,7 +4109,6 @@ static irqreturn_t pxp_irq(int irq, void *dev_id)
 	}
 	list_del_init(&desc->list);
 	kmem_cache_free(tx_desc_cache, (void *)desc);
-
 
 	complete(&pxp->complete);
 	pxp->pxp_ongoing = 0;
@@ -1986,6 +4402,9 @@ static void pxp_sram_init(struct pxps *pxp, u32 select,
  */
 static void pxp_wfe_a_configure(struct pxps *pxp)
 {
+	struct pxp_config_data *pxp_conf = &pxp->pxp_conf_state;
+	struct pxp_proc_data *proc_data = &pxp_conf->proc_data;
+
 	/* FETCH */
 	__raw_writel(
 		BF_PXP_WFA_FETCH_CTRL_BF1_EN(1) |
@@ -2208,21 +4627,21 @@ static void pxp_wfe_a_configure(struct pxps *pxp)
 		pxp->base + HW_PXP_ALU_A_CTRL);
 
 	/* WFE A */
-	__raw_writel(0x3F3F3F03, pxp->base + HW_PXP_WFE_A_STAGE1_MUX0);
+	__raw_writel(0x3F3F0303, pxp->base + HW_PXP_WFE_A_STAGE1_MUX0);
 	__raw_writel(0x0C00000C, pxp->base + HW_PXP_WFE_A_STAGE1_MUX1);
 	__raw_writel(0x01040000, pxp->base + HW_PXP_WFE_A_STAGE1_MUX2);
 	__raw_writel(0x0A0A0904, pxp->base + HW_PXP_WFE_A_STAGE1_MUX3);
 	__raw_writel(0x00000B0B, pxp->base + HW_PXP_WFE_A_STAGE1_MUX4);
 
 	__raw_writel(0x1800280E, pxp->base + HW_PXP_WFE_A_STAGE2_MUX0);
-	__raw_writel(0x00280E00, pxp->base + HW_PXP_WFE_A_STAGE2_MUX1);
-	__raw_writel(0x280E0018, pxp->base + HW_PXP_WFE_A_STAGE2_MUX2);
-	__raw_writel(0x00001800, pxp->base + HW_PXP_WFE_A_STAGE2_MUX3);
+	__raw_writel(0x00280E01, pxp->base + HW_PXP_WFE_A_STAGE2_MUX1);
+	__raw_writel(0x280E0118, pxp->base + HW_PXP_WFE_A_STAGE2_MUX2);
+	__raw_writel(0x00011800, pxp->base + HW_PXP_WFE_A_STAGE2_MUX3);
 	__raw_writel(0, pxp->base + HW_PXP_WFE_A_STAGE2_MUX4);
 	__raw_writel(0x1800280E, pxp->base + HW_PXP_WFE_A_STAGE2_MUX5);
-	__raw_writel(0x00280E00, pxp->base + HW_PXP_WFE_A_STAGE2_MUX6);
-	__raw_writel(0x1A0E0018, pxp->base + HW_PXP_WFE_A_STAGE2_MUX7);
-	__raw_writel(0x1B002911, pxp->base + HW_PXP_WFE_A_STAGE2_MUX8);
+	__raw_writel(0x00280E01, pxp->base + HW_PXP_WFE_A_STAGE2_MUX6);
+	__raw_writel(0x1A0E0118, pxp->base + HW_PXP_WFE_A_STAGE2_MUX7);
+	__raw_writel(0x1B012911, pxp->base + HW_PXP_WFE_A_STAGE2_MUX8);
 	__raw_writel(0x00002911, pxp->base + HW_PXP_WFE_A_STAGE2_MUX9);
 	__raw_writel(0, pxp->base + HW_PXP_WFE_A_STAGE2_MUX10);
 	__raw_writel(0, pxp->base + HW_PXP_WFE_A_STAGE2_MUX11);
@@ -2233,14 +4652,14 @@ static void pxp_wfe_a_configure(struct pxps *pxp)
 	__raw_writel(0x03020100, pxp->base + HW_PXP_WFE_A_STAGE3_MUX2);
 	__raw_writel(0x3F3F3F3F, pxp->base + HW_PXP_WFE_A_STAGE3_MUX3);
 
-	__raw_writel(0x000F0F0F, pxp->base + HW_PXP_WFE_A_STAGE2_5X6_MASKS_0);
+	__raw_writel(0x001F1F1F, pxp->base + HW_PXP_WFE_A_STAGE2_5X6_MASKS_0);
 	__raw_writel(0x3f030100, pxp->base + HW_PXP_WFE_A_STAGE2_5X6_ADDR_0);
 
 	__raw_writel(0x00000700, pxp->base + HW_PXP_WFE_A_STG2_5X1_OUT0);
-	__raw_writel(0x0000F000, pxp->base + HW_PXP_WFE_A_STG2_5X1_OUT1);
+	__raw_writel(0x00007000, pxp->base + HW_PXP_WFE_A_STG2_5X1_OUT1);
 	__raw_writel(0x0000A000, pxp->base + HW_PXP_WFE_A_STG2_5X1_OUT2);
 	__raw_writel(0x000000C0, pxp->base + HW_PXP_WFE_A_STG2_5X1_OUT3);
-	__raw_writel(0x070F0F0F, pxp->base + HW_PXP_WFE_A_STG2_5X1_MASKS);
+	__raw_writel(0x071F1F1F, pxp->base + HW_PXP_WFE_A_STG2_5X1_MASKS);
 
 	__raw_writel(0xFFFFFFFF, pxp->base + HW_PXP_WFE_A_STG1_8X1_OUT0_2);
 	__raw_writel(0xFFFFFFFF, pxp->base + HW_PXP_WFE_A_STG1_8X1_OUT0_3);
@@ -2280,28 +4699,28 @@ static void pxp_wfe_a_configure(struct pxps *pxp)
 	__raw_writel(0x04040404, pxp->base + HW_PXP_WFE_A_STG2_5X6_OUT0_1);
 	__raw_writel(0x04050505, pxp->base + HW_PXP_WFE_A_STG2_5X6_OUT0_2);
 	__raw_writel(0x04040404, pxp->base + HW_PXP_WFE_A_STG2_5X6_OUT0_3);
-	__raw_writel(0, pxp->base + HW_PXP_WFE_A_STG2_5X6_OUT0_4);
-	__raw_writel(0, pxp->base + HW_PXP_WFE_A_STG2_5X6_OUT0_5);
-	__raw_writel(0, pxp->base + HW_PXP_WFE_A_STG2_5X6_OUT0_6);
-	__raw_writel(0, pxp->base + HW_PXP_WFE_A_STG2_5X6_OUT0_7);
+	__raw_writel(0x04040404, pxp->base + HW_PXP_WFE_A_STG2_5X6_OUT0_4);
+	__raw_writel(0x04040404, pxp->base + HW_PXP_WFE_A_STG2_5X6_OUT0_5);
+	__raw_writel(0x04040404, pxp->base + HW_PXP_WFE_A_STG2_5X6_OUT0_6);
+	__raw_writel(0x04040404, pxp->base + HW_PXP_WFE_A_STG2_5X6_OUT0_7);
 
 	__raw_writel(0x05050505, pxp->base + HW_PXP_WFE_A_STG2_5X6_OUT1_0);
 	__raw_writel(0x05050505, pxp->base + HW_PXP_WFE_A_STG2_5X6_OUT1_1);
 	__raw_writel(0x05080808, pxp->base + HW_PXP_WFE_A_STG2_5X6_OUT1_2);
 	__raw_writel(0x05050505, pxp->base + HW_PXP_WFE_A_STG2_5X6_OUT1_3);
-	__raw_writel(0, pxp->base + HW_PXP_WFE_A_STG2_5X6_OUT1_4);
-	__raw_writel(0, pxp->base + HW_PXP_WFE_A_STG2_5X6_OUT1_5);
-	__raw_writel(0, pxp->base + HW_PXP_WFE_A_STG2_5X6_OUT1_6);
-	__raw_writel(0, pxp->base + HW_PXP_WFE_A_STG2_5X6_OUT1_7);
+	__raw_writel(0x05050505, pxp->base + HW_PXP_WFE_A_STG2_5X6_OUT1_4);
+	__raw_writel(0x05050505, pxp->base + HW_PXP_WFE_A_STG2_5X6_OUT1_5);
+	__raw_writel(0x05050505, pxp->base + HW_PXP_WFE_A_STG2_5X6_OUT1_6);
+	__raw_writel(0x05050505, pxp->base + HW_PXP_WFE_A_STG2_5X6_OUT1_7);
 
 	__raw_writel(0x07070707, pxp->base + HW_PXP_WFE_A_STG2_5X6_OUT2_0);
 	__raw_writel(0x07070707, pxp->base + HW_PXP_WFE_A_STG2_5X6_OUT2_1);
 	__raw_writel(0x070C0C0C, pxp->base + HW_PXP_WFE_A_STG2_5X6_OUT2_2);
 	__raw_writel(0x07070707, pxp->base + HW_PXP_WFE_A_STG2_5X6_OUT2_3);
-	__raw_writel(0, pxp->base + HW_PXP_WFE_A_STG2_5X6_OUT2_4);
-	__raw_writel(0, pxp->base + HW_PXP_WFE_A_STG2_5X6_OUT2_5);
-	__raw_writel(0, pxp->base + HW_PXP_WFE_A_STG2_5X6_OUT2_6);
-	__raw_writel(0, pxp->base + HW_PXP_WFE_A_STG2_5X6_OUT2_7);
+	__raw_writel(0X0F0F0F0F, pxp->base + HW_PXP_WFE_A_STG2_5X6_OUT2_4);
+	__raw_writel(0X0F0F0F0F, pxp->base + HW_PXP_WFE_A_STG2_5X6_OUT2_5);
+	__raw_writel(0X0F0F0F0F, pxp->base + HW_PXP_WFE_A_STG2_5X6_OUT2_6);
+	__raw_writel(0X0F0F0F0F, pxp->base + HW_PXP_WFE_A_STG2_5X6_OUT2_7);
 
 	__raw_writel(0, pxp->base + HW_PXP_WFE_A_STG2_5X6_OUT3_0);
 	__raw_writel(0, pxp->base + HW_PXP_WFE_A_STG2_5X6_OUT3_1);
@@ -2311,10 +4730,17 @@ static void pxp_wfe_a_configure(struct pxps *pxp)
 	__raw_writel(0, pxp->base + HW_PXP_WFE_A_STG2_5X6_OUT3_5);
 	__raw_writel(0, pxp->base + HW_PXP_WFE_A_STG2_5X6_OUT3_6);
 	__raw_writel(0, pxp->base + HW_PXP_WFE_A_STG2_5X6_OUT3_7);
+
+	if (pxp->devdata && pxp->devdata->pxp_lut_cleanup_multiple)
+		pxp->devdata->pxp_lut_cleanup_multiple(pxp,
+					proc_data->lut_sels, 1);
 }
 
 static void pxp_wfe_a_configure_v3p(struct pxps *pxp)
 {
+	struct pxp_config_data *pxp_conf = &pxp->pxp_conf_state;
+	struct pxp_proc_data *proc_data = &pxp_conf->proc_data;
+
 	/* FETCH */
 	__raw_writel(
 		BF_PXP_WFB_FETCH_CTRL_BF1_EN(1) |
@@ -2384,16 +4810,6 @@ static void pxp_wfe_a_configure_v3p(struct pxps *pxp)
 		pxp->base + HW_PXP_WFB_ARRAY_PIXEL4_MASK);
 
 	__raw_writel(1, pxp->base + HW_PXP_WFB_ARRAY_REG2);
-
-	__raw_writel(
-		BF_PXP_WFB_ARRAY_FLAG0_MASK_SIGN_Y(0) |
-		BF_PXP_WFB_ARRAY_FLAG0_MASK_OFFSET_Y(0) |
-		BF_PXP_WFB_ARRAY_FLAG0_MASK_SIGN_X(0) |
-		BF_PXP_WFB_ARRAY_FLAG0_MASK_OFFSET_X(0) |
-		BF_PXP_WFB_ARRAY_FLAG0_MASK_BUF_SEL(2) |    // 0: Y4C  1: WB   2: sw_reg2
-		BF_PXP_WFB_ARRAY_FLAG0_MASK_H_OFS(0) |
-		BF_PXP_WFB_ARRAY_FLAG0_MASK_L_OFS(0),
-		pxp->base + HW_PXP_WFB_ARRAY_FLAG0_MASK);
 
 	/* STORE */
 	__raw_writel(
@@ -2472,6 +4888,13 @@ static void pxp_wfe_a_configure_v3p(struct pxps *pxp)
 	__raw_writel(BF_PXP_WFE_B_STORE_D_MASK4_L_CH0_D_MASK4_L_CH0(0x0), /* fetch Y4 */
 		pxp->base + HW_PXP_WFE_B_STORE_D_MASK4_L_CH0);
 
+	__raw_writel(0x0, pxp->base + HW_PXP_WFE_B_STORE_D_MASK5_H_CH0);
+	__raw_writel(0x0, pxp->base + HW_PXP_WFE_B_STORE_D_MASK5_L_CH0);
+	__raw_writel(0x0, pxp->base + HW_PXP_WFE_B_STORE_D_MASK6_H_CH0);
+	__raw_writel(0x0, pxp->base + HW_PXP_WFE_B_STORE_D_MASK6_L_CH0);
+	__raw_writel(0x0, pxp->base + HW_PXP_WFE_B_STORE_D_MASK7_H_CH0);
+	__raw_writel(0x0, pxp->base + HW_PXP_WFE_B_STORE_D_MASK7_L_CH0);
+
 	__raw_writel(
 		BF_PXP_WFE_B_STORE_D_SHIFT_L_CH0_D_SHIFT_WIDTH0(32) |
 		BF_PXP_WFE_B_STORE_D_SHIFT_L_CH0_D_SHIFT_FLAG0(1) |
@@ -2494,30 +4917,41 @@ static void pxp_wfe_a_configure_v3p(struct pxps *pxp)
 		pxp->base + HW_PXP_WFE_B_STORE_D_SHIFT_H_CH0);
 
 	__raw_writel(
-		BF_PXP_WFE_B_STORE_F_SHIFT_H_CH0_F_SHIFT_WIDTH4(3)|
+		BF_PXP_WFE_B_STORE_F_SHIFT_L_CH0_F_SHIFT_WIDTH0(1)|
+		BF_PXP_WFE_B_STORE_F_SHIFT_L_CH0_F_SHIFT_FLAG0(1)|
+		BF_PXP_WFE_B_STORE_F_SHIFT_L_CH0_F_SHIFT_WIDTH1(1)|
+		BF_PXP_WFE_B_STORE_F_SHIFT_L_CH0_F_SHIFT_FLAG1(0)|
+		BF_PXP_WFE_B_STORE_F_SHIFT_L_CH0_F_SHIFT_WIDTH2(32+6)|
+		BF_PXP_WFE_B_STORE_F_SHIFT_L_CH0_F_SHIFT_FLAG2(1)|
+		BF_PXP_WFE_B_STORE_F_SHIFT_L_CH0_F_SHIFT_WIDTH3(32+6)|
+		BF_PXP_WFE_B_STORE_F_SHIFT_L_CH0_F_SHIFT_FLAG3(1),
+		pxp->base + HW_PXP_WFE_B_STORE_F_SHIFT_L_CH0);
+
+	__raw_writel(
+		BF_PXP_WFE_B_STORE_F_SHIFT_H_CH0_F_SHIFT_WIDTH4(0)|
 		BF_PXP_WFE_B_STORE_F_SHIFT_H_CH0_F_SHIFT_FLAG4(0)|
-		BF_PXP_WFE_B_STORE_F_SHIFT_H_CH0_F_SHIFT_WIDTH5(5)|
+		BF_PXP_WFE_B_STORE_F_SHIFT_H_CH0_F_SHIFT_WIDTH5(0)|
 		BF_PXP_WFE_B_STORE_F_SHIFT_H_CH0_F_SHIFT_FLAG5(0)|
-		BF_PXP_WFE_B_STORE_F_SHIFT_H_CH0_F_SHIFT_WIDTH6(32+2)|
-		BF_PXP_WFE_B_STORE_F_SHIFT_H_CH0_F_SHIFT_FLAG6(1)|
-		BF_PXP_WFE_B_STORE_F_SHIFT_H_CH0_F_SHIFT_WIDTH7(32+2)|
-		BF_PXP_WFE_B_STORE_F_SHIFT_H_CH0_F_SHIFT_FLAG7(1),
+		BF_PXP_WFE_B_STORE_F_SHIFT_H_CH0_F_SHIFT_WIDTH6(0)|
+		BF_PXP_WFE_B_STORE_F_SHIFT_H_CH0_F_SHIFT_FLAG6(0)|
+		BF_PXP_WFE_B_STORE_F_SHIFT_H_CH0_F_SHIFT_WIDTH7(0)|
+		BF_PXP_WFE_B_STORE_F_SHIFT_H_CH0_F_SHIFT_FLAG7(0),
 		pxp->base + HW_PXP_WFE_B_STORE_F_SHIFT_H_CH0);
 
 	__raw_writel(
-		BF_PXP_WFE_B_STORE_F_MASK_H_CH0_F_MASK4(0x10)|
-		BF_PXP_WFE_B_STORE_F_MASK_H_CH0_F_MASK5(0x20)|
-		BF_PXP_WFE_B_STORE_F_MASK_H_CH0_F_MASK6(0x40)|
-		BF_PXP_WFE_B_STORE_F_MASK_H_CH0_F_MASK7(0x80),
-		pxp->base + HW_PXP_WFE_B_STORE_F_MASK_H_CH0);
-
+		BF_PXP_WFE_B_STORE_F_MASK_L_CH0_F_MASK0(0x1) |
+		BF_PXP_WFE_B_STORE_F_MASK_L_CH0_F_MASK1(0x2) |
+		BF_PXP_WFE_B_STORE_F_MASK_L_CH0_F_MASK2(0x4) |
+		BF_PXP_WFE_B_STORE_F_MASK_L_CH0_F_MASK3(0x8),
+		pxp->base + HW_PXP_WFE_B_STORE_F_MASK_L_CH0);
 
 	__raw_writel(
-		BF_PXP_WFE_B_STORE_F_MASK_L_CH0_F_MASK0(0x0) |
-		BF_PXP_WFE_B_STORE_F_MASK_L_CH0_F_MASK1(0x0) |
-		BF_PXP_WFE_B_STORE_F_MASK_L_CH0_F_MASK2(0x0) |
-		BF_PXP_WFE_B_STORE_F_MASK_L_CH0_F_MASK3(0x0),
-		pxp->base + HW_PXP_WFE_B_STORE_F_MASK_L_CH0);
+		BF_PXP_WFE_B_STORE_F_MASK_H_CH0_F_MASK4(0x0)|
+		BF_PXP_WFE_B_STORE_F_MASK_H_CH0_F_MASK5(0x0)|
+		BF_PXP_WFE_B_STORE_F_MASK_H_CH0_F_MASK6(0x0)|
+		BF_PXP_WFE_B_STORE_F_MASK_H_CH0_F_MASK7(0x0),
+		pxp->base + HW_PXP_WFE_B_STORE_F_MASK_H_CH0);
+
 
 	/* ALU */
 	__raw_writel(BF_PXP_ALU_B_INST_ENTRY_ENTRY_ADDR(0),
@@ -2551,33 +4985,33 @@ static void pxp_wfe_a_configure_v3p(struct pxps *pxp)
 	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STAGE1_MUX1);
 	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STAGE1_MUX2);
 	__raw_writel(0x03000000, pxp->base + HW_PXP_WFE_B_STAGE1_MUX3);
-	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STAGE1_MUX4);
+	__raw_writel(0x00000003, pxp->base + HW_PXP_WFE_B_STAGE1_MUX4);
 	__raw_writel(0x04000000, pxp->base + HW_PXP_WFE_B_STAGE1_MUX5);
-	__raw_writel(0x00090401, pxp->base + HW_PXP_WFE_B_STAGE1_MUX6);
-	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STAGE1_MUX7);
+	__raw_writel(0x0A090401, pxp->base + HW_PXP_WFE_B_STAGE1_MUX6);
+	__raw_writel(0x000B0B0A, pxp->base + HW_PXP_WFE_B_STAGE1_MUX7);
 	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STAGE1_MUX8);
 
 	__raw_writel(0x1901290C, pxp->base + HW_PXP_WFE_B_STAGE2_MUX0);
-	__raw_writel(0x01290C00, pxp->base + HW_PXP_WFE_B_STAGE2_MUX1);
-	__raw_writel(0x290C0019, pxp->base + HW_PXP_WFE_B_STAGE2_MUX2);
-	__raw_writel(0x00001901, pxp->base + HW_PXP_WFE_B_STAGE2_MUX3);
+	__raw_writel(0x01290C02, pxp->base + HW_PXP_WFE_B_STAGE2_MUX1);
+	__raw_writel(0x290C0219, pxp->base + HW_PXP_WFE_B_STAGE2_MUX2);
+	__raw_writel(0x00021901, pxp->base + HW_PXP_WFE_B_STAGE2_MUX3);
 	__raw_writel(0, pxp->base + HW_PXP_WFE_B_STAGE2_MUX4);
 	__raw_writel(0x1901290C, pxp->base + HW_PXP_WFE_B_STAGE2_MUX5);
-	__raw_writel(0x01290C00, pxp->base + HW_PXP_WFE_B_STAGE2_MUX6);
-	__raw_writel(0x1B0C0019, pxp->base + HW_PXP_WFE_B_STAGE2_MUX7);
-	__raw_writel(0x1C002A0F, pxp->base + HW_PXP_WFE_B_STAGE2_MUX8);
-	__raw_writel(0x00002A0F, pxp->base + HW_PXP_WFE_B_STAGE2_MUX9);
+	__raw_writel(0x01290C02, pxp->base + HW_PXP_WFE_B_STAGE2_MUX6);
+	__raw_writel(0x1B0C0219, pxp->base + HW_PXP_WFE_B_STAGE2_MUX7);
+	__raw_writel(0x1C022A0F, pxp->base + HW_PXP_WFE_B_STAGE2_MUX8);
+	__raw_writel(0x02002A0F, pxp->base + HW_PXP_WFE_B_STAGE2_MUX9);
 	__raw_writel(0, pxp->base + HW_PXP_WFE_B_STAGE2_MUX10);
 	__raw_writel(0, pxp->base + HW_PXP_WFE_B_STAGE2_MUX11);
 	__raw_writel(0, pxp->base + HW_PXP_WFE_B_STAGE2_MUX12);
 
-	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STAGE3_MUX0);
-	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STAGE3_MUX1);
-	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STAGE3_MUX2);
-	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STAGE3_MUX3);
-	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STAGE3_MUX4);
+	__raw_writel(0x2a123a1d, pxp->base + HW_PXP_WFE_B_STAGE3_MUX0);
+	__raw_writel(0x00000013, pxp->base + HW_PXP_WFE_B_STAGE3_MUX1);
+	__raw_writel(0x2a123a1d, pxp->base + HW_PXP_WFE_B_STAGE3_MUX2);
+	__raw_writel(0x00000013, pxp->base + HW_PXP_WFE_B_STAGE3_MUX3);
+	__raw_writel(0x3b202c1d, pxp->base + HW_PXP_WFE_B_STAGE3_MUX4);
 	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STAGE3_MUX5);
-	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STAGE3_MUX6);
+	__raw_writel(0x003b202d, pxp->base + HW_PXP_WFE_B_STAGE3_MUX6);
 	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STAGE3_MUX7);
 	__raw_writel(0x07060504, pxp->base + HW_PXP_WFE_B_STAGE3_MUX8);
 	__raw_writel(0x00000008, pxp->base + HW_PXP_WFE_B_STAGE3_MUX9);
@@ -2601,10 +5035,10 @@ static void pxp_wfe_a_configure_v3p(struct pxps *pxp)
 	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STG1_5X8_OUT1_6);
 	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STG1_5X8_OUT1_7);
 
-	__raw_writel(0x0000000F, pxp->base + HW_PXP_WFE_B_STAGE1_5X8_MASKS_0);
+	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STAGE1_5X8_MASKS_0);
 
 	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STG1_5X1_OUT0);
-	__raw_writel(0x0000000F, pxp->base + HW_PXP_WFE_B_STG1_5X1_MASKS);
+	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STG1_5X1_MASKS);
 
 	__raw_writel(0xFFFFFFFF, pxp->base + HW_PXP_WFE_B_STG1_8X1_OUT0_2);
 	__raw_writel(0xFFFFFFFF, pxp->base + HW_PXP_WFE_B_STG1_8X1_OUT0_3);
@@ -2650,40 +5084,40 @@ static void pxp_wfe_a_configure_v3p(struct pxps *pxp)
 	__raw_writel(0, pxp->base + HW_PXP_WFE_B_STG1_8X1_OUT4_7);
 
 	__raw_writel(0x00000700, pxp->base + HW_PXP_WFE_B_STG2_5X1_OUT0);
-	__raw_writel(0x0000F000, pxp->base + HW_PXP_WFE_B_STG2_5X1_OUT1);
+	__raw_writel(0x00007000, pxp->base + HW_PXP_WFE_B_STG2_5X1_OUT1);
 	__raw_writel(0x0000A000, pxp->base + HW_PXP_WFE_B_STG2_5X1_OUT2);
 	__raw_writel(0x000000C0, pxp->base + HW_PXP_WFE_B_STG2_5X1_OUT3);
-	__raw_writel(0x070F0F0F, pxp->base + HW_PXP_WFE_B_STG2_5X1_MASKS);
+	__raw_writel(0x070F1F1F, pxp->base + HW_PXP_WFE_B_STG2_5X1_MASKS);
 
-	__raw_writel(0x000F0F0F, pxp->base + HW_PXP_WFE_B_STAGE2_5X6_MASKS_0);
+	__raw_writel(0x001F1F1F, pxp->base + HW_PXP_WFE_B_STAGE2_5X6_MASKS_0);
 	__raw_writel(0x3f232120, pxp->base + HW_PXP_WFE_B_STAGE2_5X6_ADDR_0);
 
 	__raw_writel(0x04040404, pxp->base + HW_PXP_WFE_B_STG2_5X6_OUT0_0);
 	__raw_writel(0x04040404, pxp->base + HW_PXP_WFE_B_STG2_5X6_OUT0_1);
 	__raw_writel(0x04050505, pxp->base + HW_PXP_WFE_B_STG2_5X6_OUT0_2);
 	__raw_writel(0x04040404, pxp->base + HW_PXP_WFE_B_STG2_5X6_OUT0_3);
-	__raw_writel(0, pxp->base + HW_PXP_WFE_B_STG2_5X6_OUT0_4);
-	__raw_writel(0, pxp->base + HW_PXP_WFE_B_STG2_5X6_OUT0_5);
-	__raw_writel(0, pxp->base + HW_PXP_WFE_B_STG2_5X6_OUT0_6);
-	__raw_writel(0, pxp->base + HW_PXP_WFE_B_STG2_5X6_OUT0_7);
+	__raw_writel(0x04040404, pxp->base + HW_PXP_WFE_B_STG2_5X6_OUT0_4);
+	__raw_writel(0x04040404, pxp->base + HW_PXP_WFE_B_STG2_5X6_OUT0_5);
+	__raw_writel(0x04040404, pxp->base + HW_PXP_WFE_B_STG2_5X6_OUT0_6);
+	__raw_writel(0x04040404, pxp->base + HW_PXP_WFE_B_STG2_5X6_OUT0_7);
 
 	__raw_writel(0x05050505, pxp->base + HW_PXP_WFE_B_STG2_5X6_OUT1_0);
 	__raw_writel(0x05050505, pxp->base + HW_PXP_WFE_B_STG2_5X6_OUT1_1);
 	__raw_writel(0x05080808, pxp->base + HW_PXP_WFE_B_STG2_5X6_OUT1_2);
 	__raw_writel(0x05050505, pxp->base + HW_PXP_WFE_B_STG2_5X6_OUT1_3);
-	__raw_writel(0, pxp->base + HW_PXP_WFE_B_STG2_5X6_OUT1_4);
-	__raw_writel(0, pxp->base + HW_PXP_WFE_B_STG2_5X6_OUT1_5);
-	__raw_writel(0, pxp->base + HW_PXP_WFE_B_STG2_5X6_OUT1_6);
-	__raw_writel(0, pxp->base + HW_PXP_WFE_B_STG2_5X6_OUT1_7);
+	__raw_writel(0x05050505, pxp->base + HW_PXP_WFE_B_STG2_5X6_OUT1_4);
+	__raw_writel(0x05050505, pxp->base + HW_PXP_WFE_B_STG2_5X6_OUT1_5);
+	__raw_writel(0x05050505, pxp->base + HW_PXP_WFE_B_STG2_5X6_OUT1_6);
+	__raw_writel(0x05050505, pxp->base + HW_PXP_WFE_B_STG2_5X6_OUT1_7);
 
 	__raw_writel(0x07070707, pxp->base + HW_PXP_WFE_B_STG2_5X6_OUT2_0);
 	__raw_writel(0x07070707, pxp->base + HW_PXP_WFE_B_STG2_5X6_OUT2_1);
 	__raw_writel(0x070C0C0C, pxp->base + HW_PXP_WFE_B_STG2_5X6_OUT2_2);
 	__raw_writel(0x07070707, pxp->base + HW_PXP_WFE_B_STG2_5X6_OUT2_3);
-	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STG2_5X6_OUT2_4);
-	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STG2_5X6_OUT2_5);
-	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STG2_5X6_OUT2_6);
-	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STG2_5X6_OUT2_7);
+	__raw_writel(0x0F0F0F0F, pxp->base + HW_PXP_WFE_B_STG2_5X6_OUT2_4);
+	__raw_writel(0x0F0F0F0F, pxp->base + HW_PXP_WFE_B_STG2_5X6_OUT2_5);
+	__raw_writel(0x0F0F0F0F, pxp->base + HW_PXP_WFE_B_STG2_5X6_OUT2_6);
+	__raw_writel(0x0F0F0F0F, pxp->base + HW_PXP_WFE_B_STG2_5X6_OUT2_7);
 
 	__raw_writel(0, pxp->base + HW_PXP_WFE_B_STG2_5X6_OUT3_0);
 	__raw_writel(0, pxp->base + HW_PXP_WFE_B_STG2_5X6_OUT3_1);
@@ -2694,25 +5128,47 @@ static void pxp_wfe_a_configure_v3p(struct pxps *pxp)
 	__raw_writel(0, pxp->base + HW_PXP_WFE_B_STG2_5X6_OUT3_6);
 	__raw_writel(0, pxp->base + HW_PXP_WFE_B_STG2_5X6_OUT3_7);
 
-	__raw_writel(0x00007F7F, pxp->base + HW_PXP_WFE_B_STG3_F8X1_MASKS);
+	__raw_writel(0x070F1F1F, pxp->base + HW_PXP_WFE_B_STG3_F8X1_MASKS);
 
-	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STG3_F8X1_OUT0_0);
-	__raw_writel(0x00FF00FF, pxp->base + HW_PXP_WFE_B_STG3_F8X1_OUT0_1);
+	__raw_writel(0x00000700, pxp->base + HW_PXP_WFE_B_STG3_F8X1_OUT0_0);
+	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STG3_F8X1_OUT0_1);
 	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STG3_F8X1_OUT0_2);
-	__raw_writel(0x000000FF, pxp->base + HW_PXP_WFE_B_STG3_F8X1_OUT0_3);
+	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STG3_F8X1_OUT0_3);
 	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STG3_F8X1_OUT0_4);
 	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STG3_F8X1_OUT0_5);
 	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STG3_F8X1_OUT0_6);
 	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STG3_F8X1_OUT0_7);
 
-	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STG3_F8X1_OUT1_0);
-	__raw_writel(0xFF3FFF3F, pxp->base + HW_PXP_WFE_B_STG3_F8X1_OUT1_1);
+	__raw_writel(0x00007000, pxp->base + HW_PXP_WFE_B_STG3_F8X1_OUT1_0);
+	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STG3_F8X1_OUT1_1);
 	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STG3_F8X1_OUT1_2);
-	__raw_writel(0xFFFFFF1F, pxp->base + HW_PXP_WFE_B_STG3_F8X1_OUT1_3);
+	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STG3_F8X1_OUT1_3);
 	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STG3_F8X1_OUT1_4);
 	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STG3_F8X1_OUT1_5);
 	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STG3_F8X1_OUT1_6);
 	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STG3_F8X1_OUT1_7);
+
+	__raw_writel(0x0000A000, pxp->base + HW_PXP_WFE_B_STG3_F8X1_OUT2_0);
+	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STG3_F8X1_OUT2_1);
+	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STG3_F8X1_OUT2_2);
+	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STG3_F8X1_OUT2_3);
+	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STG3_F8X1_OUT2_4);
+	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STG3_F8X1_OUT2_5);
+	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STG3_F8X1_OUT2_6);
+	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STG3_F8X1_OUT2_7);
+
+	__raw_writel(0x000000C0, pxp->base + HW_PXP_WFE_B_STG3_F8X1_OUT3_0);
+	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STG3_F8X1_OUT3_1);
+	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STG3_F8X1_OUT3_2);
+	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STG3_F8X1_OUT3_3);
+	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STG3_F8X1_OUT3_4);
+	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STG3_F8X1_OUT3_5);
+	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STG3_F8X1_OUT3_6);
+	__raw_writel(0x00000000, pxp->base + HW_PXP_WFE_B_STG3_F8X1_OUT3_7);
+
+	if (pxp->devdata && pxp->devdata->pxp_lut_cleanup_multiple)
+		pxp->devdata->pxp_lut_cleanup_multiple(pxp,
+					proc_data->lut_sels, 1);
 }
 
 /*
@@ -2842,6 +5298,26 @@ static void pxp_wfe_a_process(struct pxps *pxp)
 		BF_PXP_WFE_A_CTRL_ENABLE(1) |
 		BF_PXP_WFE_A_CTRL_SW_RESET(1),
 		pxp->base + HW_PXP_WFE_A_CTRL);
+
+       if (proc_data->alpha_en) {
+		__raw_writel(BF_PXP_WFA_ARRAY_FLAG0_MASK_SIGN_Y(0) |
+			BF_PXP_WFA_ARRAY_FLAG0_MASK_OFFSET_Y(0) |
+			BF_PXP_WFA_ARRAY_FLAG0_MASK_SIGN_X(0) |
+			BF_PXP_WFA_ARRAY_FLAG0_MASK_OFFSET_X(0) |
+			BF_PXP_WFA_ARRAY_FLAG0_MASK_BUF_SEL(0) |
+			BF_PXP_WFA_ARRAY_FLAG0_MASK_H_OFS(0) |
+			BF_PXP_WFA_ARRAY_FLAG0_MASK_L_OFS(0),
+			pxp->base + HW_PXP_WFA_ARRAY_FLAG0_MASK);
+        } else {
+		__raw_writel(BF_PXP_WFA_ARRAY_FLAG0_MASK_SIGN_Y(0) |
+			BF_PXP_WFA_ARRAY_FLAG0_MASK_OFFSET_Y(0) |
+			BF_PXP_WFA_ARRAY_FLAG0_MASK_SIGN_X(0) |
+			BF_PXP_WFA_ARRAY_FLAG0_MASK_OFFSET_X(0) |
+			BF_PXP_WFA_ARRAY_FLAG0_MASK_BUF_SEL(2) |
+			BF_PXP_WFA_ARRAY_FLAG0_MASK_H_OFS(0) |
+			BF_PXP_WFA_ARRAY_FLAG0_MASK_L_OFS(0),
+			pxp->base + HW_PXP_WFA_ARRAY_FLAG0_MASK);
+        }
 
 	/* disable CH1 when only doing detection */
 	v = __raw_readl(pxp->base + HW_PXP_WFE_A_STORE_CTRL_CH1);
@@ -3189,7 +5665,6 @@ static void pxp_wfe_b_configure(struct pxps *pxp)
 		pxp->base + HW_PXP_WFB_ARRAY_FLAG9_MASK);
 
 	pxp_sram_init(pxp, WFE_B, (u32)active_matrix_data_8x8, 64);
-
 
 	/* Store */
 	__raw_writel(
@@ -3886,6 +6361,40 @@ void pxp_fill(
 }
 EXPORT_SYMBOL(pxp_fill);
 
+static void pxp_lut_cleanup_multiple(struct pxps *pxp, u64 lut, bool set)
+{
+	struct pxp_config_data *pxp_conf = &pxp->pxp_conf_state;
+	struct pxp_proc_data *proc_data = &pxp_conf->proc_data;
+
+	if (proc_data->lut_cleanup == 1) {
+		if (set) {
+			__raw_writel((u32)lut, pxp->base + HW_PXP_WFE_A_STG1_8X1_OUT1_0 + 0x4);
+			__raw_writel((u32)(lut>>32), pxp->base + HW_PXP_WFE_A_STG1_8X1_OUT1_1 + 0x4);
+		} else {
+			pxp_luts_deactivate(pxp, lut);
+			__raw_writel(0, pxp->base + HW_PXP_WFE_A_STG1_8X1_OUT1_0);
+			__raw_writel(0, pxp->base + HW_PXP_WFE_A_STG1_8X1_OUT1_1);
+		}
+	}
+}
+
+static void pxp_lut_cleanup_multiple_v3p(struct pxps *pxp, u64 lut, bool set)
+{
+	struct pxp_config_data *pxp_conf = &pxp->pxp_conf_state;
+	struct pxp_proc_data *proc_data = &pxp_conf->proc_data;
+
+	if (proc_data->lut_cleanup == 1) {
+		if (set) {
+			__raw_writel((u32)lut, pxp->base + HW_PXP_WFE_B_STG1_8X1_OUT1_0 + 0x4);
+			__raw_writel((u32)(lut>>32), pxp->base + HW_PXP_WFE_B_STG1_8X1_OUT1_1 + 0x4);
+		} else {
+			pxp_luts_deactivate(pxp, lut);
+			__raw_writel(0, pxp->base + HW_PXP_WFE_B_STG1_8X1_OUT1_0);
+			__raw_writel(0, pxp->base + HW_PXP_WFE_B_STG1_8X1_OUT1_1);
+		}
+	}
+}
+
 #ifdef CONFIG_MXC_FPGA_M4_TEST
 void m4_process(void)
 {
@@ -3959,11 +6468,26 @@ static void pxp_lut_status_clr(unsigned int lut)
 	}
 }
 
+static void pxp_lut_status_clr_v3p(unsigned int lut)
+{
+	if(lut<32)
+		__raw_writel(
+				__raw_readl(pxp_reg_base + HW_PXP_WFE_B_STG1_8X1_OUT0_0) & (~(1 << lut)),
+				pxp_reg_base + HW_PXP_WFE_B_STG1_8X1_OUT0_0);
+	else
+	{
+		lut = lut -32;
+		__raw_writel(
+				__raw_readl(pxp_reg_base + HW_PXP_WFE_B_STG1_8X1_OUT0_1) & (~(1 << lut)),
+				pxp_reg_base + HW_PXP_WFE_B_STG1_8X1_OUT0_1);
+	}
+}
+
 /* this function should be called in the epdc
  * driver explicitly when some epdc lut becomes
  * idle. So it should be exported.
  */
-void pxp_luts_deactivate(u64 lut_status)
+static void pxp_luts_deactivate(struct pxps *pxp, u64 lut_status)
 {
 	int i = 0;
 
@@ -3972,7 +6496,8 @@ void pxp_luts_deactivate(u64 lut_status)
 
 	for (i = 0; i < 64; i++) {
 		if (lut_status & (1ULL << i))
-			pxp_lut_status_clr(i);
+			if (pxp->devdata && pxp->devdata->pxp_lut_status_clr)
+				pxp->devdata->pxp_lut_status_clr(i);
 	}
 }
 
@@ -3981,22 +6506,15 @@ static void pxp_histogram_enable(struct pxps *pxp,
 				 unsigned int width,
 				 unsigned int height)
 {
-	u32 val = 0;
-
 	__raw_writel(
 			BF_PXP_HIST_B_BUF_SIZE_HEIGHT(height)|
 			BF_PXP_HIST_B_BUF_SIZE_WIDTH(width),
 			pxp->base + HW_PXP_HIST_B_BUF_SIZE);
 
-	if (pxp_is_v3(pxp))
-		val = 64;
-	else if (pxp_is_v3p(pxp))
-		val = 64 + 4;
-
 	__raw_writel(
 			BF_PXP_HIST_B_MASK_MASK_EN(1)|
 			BF_PXP_HIST_B_MASK_MASK_MODE(0)|
-			BF_PXP_HIST_B_MASK_MASK_OFFSET(val)|
+			BF_PXP_HIST_B_MASK_MASK_OFFSET(64)|
 			BF_PXP_HIST_B_MASK_MASK_WIDTH(0)|
 			BF_PXP_HIST_B_MASK_MASK_VALUE0(1) |
 			BF_PXP_HIST_B_MASK_MASK_VALUE1(0),
@@ -4037,22 +6555,15 @@ static void pxp_collision_detection_enable(struct pxps *pxp,
 					   unsigned int width,
 					   unsigned int height)
 {
-	u32 val = 0;
-
 	__raw_writel(
 			BF_PXP_HIST_A_BUF_SIZE_HEIGHT(height)|
 			BF_PXP_HIST_A_BUF_SIZE_WIDTH(width),
 			pxp_reg_base + HW_PXP_HIST_A_BUF_SIZE);
 
-	if (pxp_is_v3(pxp))
-		val = 65;
-	else if (pxp_is_v3p(pxp))
-		val = 65 + 4;
-
 	__raw_writel(
 			BF_PXP_HIST_A_MASK_MASK_EN(1)|
 			BF_PXP_HIST_A_MASK_MASK_MODE(0)|
-			BF_PXP_HIST_A_MASK_MASK_OFFSET(val)|
+			BF_PXP_HIST_A_MASK_MASK_OFFSET(65)|
 			BF_PXP_HIST_A_MASK_MASK_WIDTH(0)|
 			BF_PXP_HIST_A_MASK_MASK_VALUE0(1) |
 			BF_PXP_HIST_A_MASK_MASK_VALUE1(0),
@@ -4361,33 +6872,100 @@ static void dither_store_config(struct pxps *pxp)
 
 static void pxp_set_final_lut_data(struct pxps *pxp)
 {
-	__raw_writel(
-			BF_PXP_DITHER_FINAL_LUT_DATA0_DATA0(0x0) |
-			BF_PXP_DITHER_FINAL_LUT_DATA0_DATA1(0x0) |
-			BF_PXP_DITHER_FINAL_LUT_DATA0_DATA2(0x0) |
-			BF_PXP_DITHER_FINAL_LUT_DATA0_DATA3(0x0),
-			pxp->base + HW_PXP_DITHER_FINAL_LUT_DATA0);
+	struct pxp_config_data *pxp_conf = &pxp->pxp_conf_state;
+	struct pxp_proc_data *proc_data = &pxp_conf->proc_data;
 
-	__raw_writel(
-			BF_PXP_DITHER_FINAL_LUT_DATA1_DATA4(0x0) |
-			BF_PXP_DITHER_FINAL_LUT_DATA1_DATA5(0x0) |
-			BF_PXP_DITHER_FINAL_LUT_DATA1_DATA6(0x0) |
-			BF_PXP_DITHER_FINAL_LUT_DATA1_DATA7(0x0),
-			pxp->base + HW_PXP_DITHER_FINAL_LUT_DATA1);
+	if(proc_data->quant_bit < 2) {
+		pxp_sram_init(pxp, DITHER0_LUT, (u32)bit1_dither_data_8x8, 64);
 
-	__raw_writel(
-			BF_PXP_DITHER_FINAL_LUT_DATA2_DATA8(0xff) |
-			BF_PXP_DITHER_FINAL_LUT_DATA2_DATA9(0xff) |
-			BF_PXP_DITHER_FINAL_LUT_DATA2_DATA10(0xff)|
-			BF_PXP_DITHER_FINAL_LUT_DATA2_DATA11(0xff),
-			pxp->base + HW_PXP_DITHER_FINAL_LUT_DATA2);
+		__raw_writel(
+				BF_PXP_DITHER_FINAL_LUT_DATA0_DATA0(0x0) |
+				BF_PXP_DITHER_FINAL_LUT_DATA0_DATA1(0x0) |
+				BF_PXP_DITHER_FINAL_LUT_DATA0_DATA2(0x0) |
+				BF_PXP_DITHER_FINAL_LUT_DATA0_DATA3(0x0),
+				pxp->base + HW_PXP_DITHER_FINAL_LUT_DATA0);
 
-	__raw_writel(
-			BF_PXP_DITHER_FINAL_LUT_DATA3_DATA12(0xff) |
-			BF_PXP_DITHER_FINAL_LUT_DATA3_DATA13(0xff) |
-			BF_PXP_DITHER_FINAL_LUT_DATA3_DATA14(0xff) |
-			BF_PXP_DITHER_FINAL_LUT_DATA3_DATA15(0xff),
-			pxp->base + HW_PXP_DITHER_FINAL_LUT_DATA3);
+		__raw_writel(
+				BF_PXP_DITHER_FINAL_LUT_DATA1_DATA4(0x0) |
+				BF_PXP_DITHER_FINAL_LUT_DATA1_DATA5(0x0) |
+				BF_PXP_DITHER_FINAL_LUT_DATA1_DATA6(0x0) |
+				BF_PXP_DITHER_FINAL_LUT_DATA1_DATA7(0x0),
+				pxp->base + HW_PXP_DITHER_FINAL_LUT_DATA1);
+
+		__raw_writel(
+				BF_PXP_DITHER_FINAL_LUT_DATA2_DATA8(0xf0) |
+				BF_PXP_DITHER_FINAL_LUT_DATA2_DATA9(0xf0) |
+				BF_PXP_DITHER_FINAL_LUT_DATA2_DATA10(0xf0)|
+				BF_PXP_DITHER_FINAL_LUT_DATA2_DATA11(0xf0),
+				pxp->base + HW_PXP_DITHER_FINAL_LUT_DATA2);
+
+		__raw_writel(
+				BF_PXP_DITHER_FINAL_LUT_DATA3_DATA12(0xf0) |
+				BF_PXP_DITHER_FINAL_LUT_DATA3_DATA13(0xf0) |
+				BF_PXP_DITHER_FINAL_LUT_DATA3_DATA14(0xf0) |
+				BF_PXP_DITHER_FINAL_LUT_DATA3_DATA15(0xf0),
+				pxp->base + HW_PXP_DITHER_FINAL_LUT_DATA3);
+	} else if(proc_data->quant_bit < 4) {
+		pxp_sram_init(pxp, DITHER0_LUT, (u32)bit2_dither_data_8x8, 64);
+
+		__raw_writel(
+				BF_PXP_DITHER_FINAL_LUT_DATA0_DATA0(0x0) |
+				BF_PXP_DITHER_FINAL_LUT_DATA0_DATA1(0x0) |
+				BF_PXP_DITHER_FINAL_LUT_DATA0_DATA2(0x0) |
+				BF_PXP_DITHER_FINAL_LUT_DATA0_DATA3(0x0),
+				pxp->base + HW_PXP_DITHER_FINAL_LUT_DATA0);
+
+		__raw_writel(
+				BF_PXP_DITHER_FINAL_LUT_DATA1_DATA4(0x50) |
+				BF_PXP_DITHER_FINAL_LUT_DATA1_DATA5(0x50) |
+				BF_PXP_DITHER_FINAL_LUT_DATA1_DATA6(0x50) |
+				BF_PXP_DITHER_FINAL_LUT_DATA1_DATA7(0x50),
+				pxp->base + HW_PXP_DITHER_FINAL_LUT_DATA1);
+
+		__raw_writel(
+				BF_PXP_DITHER_FINAL_LUT_DATA2_DATA8(0xa0) |
+				BF_PXP_DITHER_FINAL_LUT_DATA2_DATA9(0xa0) |
+				BF_PXP_DITHER_FINAL_LUT_DATA2_DATA10(0xa0)|
+				BF_PXP_DITHER_FINAL_LUT_DATA2_DATA11(0xa0),
+				pxp->base + HW_PXP_DITHER_FINAL_LUT_DATA2);
+
+		__raw_writel(
+				BF_PXP_DITHER_FINAL_LUT_DATA3_DATA12(0xf0) |
+				BF_PXP_DITHER_FINAL_LUT_DATA3_DATA13(0xf0) |
+				BF_PXP_DITHER_FINAL_LUT_DATA3_DATA14(0xf0) |
+				BF_PXP_DITHER_FINAL_LUT_DATA3_DATA15(0xf0),
+				pxp->base + HW_PXP_DITHER_FINAL_LUT_DATA3);
+	} else {
+		pxp_sram_init(pxp, DITHER0_LUT, (u32)bit4_dither_data_8x8, 64);
+
+		__raw_writel(
+				BF_PXP_DITHER_FINAL_LUT_DATA0_DATA0(0x0) |
+				BF_PXP_DITHER_FINAL_LUT_DATA0_DATA1(0x10) |
+				BF_PXP_DITHER_FINAL_LUT_DATA0_DATA2(0x20) |
+				BF_PXP_DITHER_FINAL_LUT_DATA0_DATA3(0x30),
+				pxp->base + HW_PXP_DITHER_FINAL_LUT_DATA0);
+
+		__raw_writel(
+				BF_PXP_DITHER_FINAL_LUT_DATA1_DATA4(0x40) |
+				BF_PXP_DITHER_FINAL_LUT_DATA1_DATA5(0x50) |
+				BF_PXP_DITHER_FINAL_LUT_DATA1_DATA6(0x60) |
+				BF_PXP_DITHER_FINAL_LUT_DATA1_DATA7(0x70),
+				pxp->base + HW_PXP_DITHER_FINAL_LUT_DATA1);
+
+		__raw_writel(
+				BF_PXP_DITHER_FINAL_LUT_DATA2_DATA8(0x80) |
+				BF_PXP_DITHER_FINAL_LUT_DATA2_DATA9(0x90) |
+				BF_PXP_DITHER_FINAL_LUT_DATA2_DATA10(0xa0)|
+				BF_PXP_DITHER_FINAL_LUT_DATA2_DATA11(0xb0),
+				pxp->base + HW_PXP_DITHER_FINAL_LUT_DATA2);
+
+		__raw_writel(
+				BF_PXP_DITHER_FINAL_LUT_DATA3_DATA12(0xc0) |
+				BF_PXP_DITHER_FINAL_LUT_DATA3_DATA13(0xd0) |
+				BF_PXP_DITHER_FINAL_LUT_DATA3_DATA14(0xe0) |
+				BF_PXP_DITHER_FINAL_LUT_DATA3_DATA15(0xf0),
+				pxp->base + HW_PXP_DITHER_FINAL_LUT_DATA3);
+	}
 }
 
 static void pxp_dithering_process(struct pxps *pxp)
@@ -4398,28 +6976,6 @@ static void pxp_dithering_process(struct pxps *pxp)
 
 	if (pxp->devdata && pxp->devdata->pxp_dithering_configure)
 		pxp->devdata->pxp_dithering_configure(pxp);
-	pxp_sram_init(pxp, DITHER0_LUT, (u32)dither_data_8x8, 64);
-
-	__raw_writel(
-			BF_PXP_INIT_MEM_CTRL_ADDR(0) |
-			BF_PXP_INIT_MEM_CTRL_SELECT(0) |/*select the lut memory for access */
-			BF_PXP_INIT_MEM_CTRL_START(1),
-			pxp->base + HW_PXP_INIT_MEM_CTRL);
-
-
-	{
-		int i;
-		for (i = 0; i < 64; i++)
-			__raw_writel(
-					BF_PXP_INIT_MEM_DATA_DATA(dither_data_8x8[i]),
-					pxp->base + HW_PXP_INIT_MEM_DATA);
-	}
-
-	__raw_writel(
-			BF_PXP_INIT_MEM_CTRL_ADDR(0) |
-			BF_PXP_INIT_MEM_CTRL_SELECT(0) |/*select the lut memory for access*/
-			BF_PXP_INIT_MEM_CTRL_START(0),
-			pxp->base + HW_PXP_INIT_MEM_CTRL);
 
 	if (pxp_is_v3(pxp))
 		val = BF_PXP_DITHER_CTRL_ENABLE0            (1) |
@@ -4435,20 +6991,29 @@ static void pxp_dithering_process(struct pxps *pxp)
 		      BF_PXP_DITHER_CTRL_BUSY2              (0) |
 		      BF_PXP_DITHER_CTRL_BUSY1              (0) |
 		      BF_PXP_DITHER_CTRL_BUSY0              (0);
-	else if (pxp_is_v3p(pxp))
+	else if (pxp_is_v3p(pxp)) {
+		if (proc_data->dither_mode != 0 &&
+			proc_data->dither_mode != 3) {
+			dev_err(pxp->dev, "Not supported dithering mode. "
+					"Forced to be Orderred mode!\n");
+			proc_data->dither_mode = 3;
+		}
+
 		val = BF_PXP_DITHER_CTRL_ENABLE0            (1) |
 		      BF_PXP_DITHER_CTRL_ENABLE1            (1) |
 		      BF_PXP_DITHER_CTRL_ENABLE2            (1) |
-		      BF_PXP_DITHER_CTRL_DITHER_MODE2       (3) |
-		      BF_PXP_DITHER_CTRL_DITHER_MODE1       (3) |
+		      BF_PXP_DITHER_CTRL_DITHER_MODE2(proc_data->dither_mode) |
+		      BF_PXP_DITHER_CTRL_DITHER_MODE1(proc_data->dither_mode) |
 		      BF_PXP_DITHER_CTRL_DITHER_MODE0(proc_data->dither_mode) |
 		      BF_PXP_DITHER_CTRL_LUT_MODE           (0) |
 		      BF_PXP_DITHER_CTRL_IDX_MATRIX0_SIZE   (1) |
 		      BF_PXP_DITHER_CTRL_IDX_MATRIX1_SIZE   (1) |
 		      BF_PXP_DITHER_CTRL_IDX_MATRIX2_SIZE   (1) |
+		      BF_PXP_DITHER_CTRL_FINAL_LUT_ENABLE   (0) |
 		      BF_PXP_DITHER_CTRL_BUSY2              (0) |
 		      BF_PXP_DITHER_CTRL_BUSY1              (0) |
 		      BF_PXP_DITHER_CTRL_BUSY0              (0);
+	}
 	__raw_writel(val, pxp->base + HW_PXP_DITHER_CTRL);
 
 	switch(proc_data->dither_mode) {
@@ -4523,6 +7088,14 @@ static void pxp_dithering_configure_v3p(struct pxps *pxp)
 			BF_PXP_OUT_LRC_Y(store_ch0->height - 1),
 			pxp->base + HW_PXP_OUT_LRC);
 
+	__raw_writel(BF_PXP_OUT_AS_ULC_X(1) |
+			BF_PXP_OUT_AS_ULC_Y(1),
+			pxp->base + HW_PXP_OUT_AS_ULC);
+
+	__raw_writel(BF_PXP_OUT_AS_LRC_X(0) |
+			BF_PXP_OUT_AS_LRC_Y(0),
+			pxp->base + HW_PXP_OUT_AS_LRC);
+
 	__raw_writel(BF_PXP_OUT_PS_ULC_X(0) |
 			BF_PXP_OUT_PS_ULC_Y(0),
 			pxp->base + HW_PXP_OUT_PS_ULC);
@@ -4536,6 +7109,13 @@ static void pxp_dithering_configure_v3p(struct pxps *pxp)
 	__raw_writel(fetch_ch0->stride, pxp->base + HW_PXP_PS_PITCH);
 
 	__raw_writel(0x40000000, pxp->base + HW_PXP_CSC1_COEF0);
+
+	__raw_writel(BF_PXP_DITHER_STORE_SIZE_CH0_OUT_WIDTH(store_ch0->width-1)|
+		BF_PXP_DITHER_STORE_SIZE_CH0_OUT_HEIGHT(store_ch0->height-1),
+		pxp->base + HW_PXP_DITHER_STORE_SIZE_CH0);
+
+	__raw_writel(BF_PXP_DATA_PATH_CTRL0_MUX14_SEL(1),
+			pxp->base + HW_PXP_DATA_PATH_CTRL0_CLR);
 }
 
 static void pxp_start2(struct pxps *pxp)
@@ -4969,124 +7549,308 @@ static int pxp_dispatch_thread(void *argv)
 		pxp->pxp_ongoing = 1;
 		spin_unlock_irqrestore(&pxp->lock, flags);
 		init_completion(&pxp->complete);
-		pxpdma_dostart_work(pxp);
+		ret = pxpdma_dostart_work(pxp);
+		if (ret) {
+			pxp->pxp_ongoing = 0;
+			continue;
+		}
 		ret = wait_for_completion_timeout(&pxp->complete, 2 * HZ);
 		if (ret == 0) {
 			printk(KERN_EMERG "%s: task is timeout\n\n", __func__);
 			break;
+		}
+		if (pxp->devdata && pxp->devdata->pxp_lut_cleanup_multiple)
+			pxp->devdata->pxp_lut_cleanup_multiple(pxp, 0, 0);
+	}
+
+	return 0;
+}
+
+static int pxp_init_interrupt(struct platform_device *pdev)
+{
+	int legacy_irq, std_irq, err;
+	struct pxps *pxp = platform_get_drvdata(pdev);
+
+	legacy_irq = platform_get_irq(pdev, 0);
+	if (legacy_irq < 0) {
+		dev_err(&pdev->dev, "failed to get pxp legacy irq: %d\n",
+			legacy_irq);
+		return legacy_irq;
+	}
+
+	std_irq = platform_get_irq(pdev, 1);
+	if (std_irq < 0) {
+		dev_err(&pdev->dev, "failed to get pxp standard irq: %d\n",
+			std_irq);
+		return std_irq;
+	}
+
+	err = devm_request_irq(&pdev->dev, legacy_irq, pxp_irq, 0,
+				"pxp-dmaengine-legacy", pxp);
+	if (err) {
+		dev_err(&pdev->dev, "Request pxp legacy irq failed: %d\n", err);
+		return err;
+	}
+
+	err = devm_request_irq(&pdev->dev, std_irq, pxp_irq, 0,
+				"pxp-dmaengine-std", pxp);
+	if (err) {
+		dev_err(&pdev->dev, "Request pxp standard irq failed: %d\n", err);
+		return err;
+	}
+
+	pxp->irq = legacy_irq;
+
+	/* enable all the possible irq raised by PXP */
+	__raw_writel(0xffff, pxp->base + HW_PXP_IRQ_MASK);
+
+	return 0;
+}
+
+static int pxp_create_attrs(struct platform_device *pdev)
+{
+	int ret = 0;
+
+	if ((ret = device_create_file(&pdev->dev, &dev_attr_clk_off_timeout))) {
+		dev_err(&pdev->dev,
+			"Unable to create file from clk_off_timeout\n");
+		return ret;
+	}
+
+	if ((ret = device_create_file(&pdev->dev, &dev_attr_block_size))) {
+		device_remove_file(&pdev->dev, &dev_attr_clk_off_timeout);
+
+		dev_err(&pdev->dev,
+			"Unable to create file from block_size\n");
+		return ret;
+	}
+
+	return 0;
+}
+
+static void pxp_remove_attrs(struct platform_device *pdev)
+{
+	device_remove_file(&pdev->dev, &dev_attr_clk_off_timeout);
+	device_remove_file(&pdev->dev, &dev_attr_block_size);
+}
+
+static void pxp_init_timer(struct pxps *pxp)
+{
+	INIT_WORK(&pxp->work, clkoff_callback);
+
+	init_timer(&pxp->clk_timer);
+	pxp->clk_timer.function = pxp_clkoff_timer;
+	pxp->clk_timer.data = (unsigned long)pxp;
+}
+
+static bool is_mux_node(uint32_t node_id)
+{
+	if ((node_id < PXP_2D_MUX_MUX0) ||
+	    (node_id > PXP_2D_MUX_MUX15))
+		return false;
+
+	return true;
+}
+
+static bool search_mux_chain(uint32_t mux_id,
+			     struct edge_node *enode)
+{
+	bool found = false;
+	uint32_t i, j, next_mux = 0;
+	uint32_t output;
+	struct mux *muxes;
+
+	muxes = (v3p_flag) ? muxes_v3p : muxes_v3;
+
+	for (i = 0; i < 2; i++) {
+		output = muxes[mux_id].mux_outputs[i];
+		if (output == 0xff)
+			break;
+
+		if ((output == enode->adjvex)) {
+			/* found */
+			found = true;
+			break;
+		} else if (is_mux_node(output)) {
+			next_mux = output - PXP_2D_MUX_BASE;
+			found = search_mux_chain(next_mux, enode);
+
+			if (found) {
+				for (j = 0; j < 4; j++) {
+					if (muxes[next_mux].mux_inputs[j] ==
+					    (mux_id + PXP_2D_MUX_BASE))
+						break;
+				}
+
+				set_bit(next_mux, (unsigned long *)&enode->mux_used);
+				set_mux_val(&enode->muxes, next_mux, j);
+				break;
+			}
+		}
+	}
+
+	return found;
+}
+
+static void enode_mux_config(unsigned int vnode_id,
+			     struct edge_node *enode)
+{
+	uint32_t i, j;
+	bool via_mux = false, need_search = false;
+	struct mux *muxes;
+
+	BUG_ON(vnode_id >= PXP_2D_NUM);
+	BUG_ON(enode->adjvex >= PXP_2D_NUM);
+
+	muxes = (v3p_flag) ? muxes_v3p : muxes_v3;
+
+	for (i = 0; i < 16; i++) {
+		for (j = 0; j < 4; j++) {
+			if (muxes[i].mux_inputs[j] == 0xff)
+				break;
+
+			if (muxes[i].mux_inputs[j] == vnode_id)
+				need_search = true;
+			else if (muxes[i].mux_inputs[j] == PXP_2D_ALPHA0_S0_S1) {
+				if ((vnode_id == PXP_2D_ALPHA0_S0) ||
+				    (vnode_id == PXP_2D_ALPHA0_S1))
+					need_search = true;
+			} else if (muxes[i].mux_inputs[j] == PXP_2D_ALPHA1_S0_S1) {
+				if ((vnode_id == PXP_2D_ALPHA1_S0) ||
+				    (vnode_id == PXP_2D_ALPHA1_S1))
+					need_search = true;
+			}
+
+			if (need_search) {
+				via_mux = search_mux_chain(i, enode);
+				need_search = false;
+				break;
+			}
+		}
+
+		if (via_mux) {
+			set_bit(i, (unsigned long *)&enode->mux_used);
+			set_mux_val(&enode->muxes, i, j);
+			break;
+		}
+	}
+}
+
+static int pxp_create_initial_graph(struct platform_device *pdev)
+{
+	int i, j, first;
+	static bool (*adj_array)[PXP_2D_NUM];
+	struct edge_node *enode, *curr = NULL;
+
+	adj_array = (v3p_flag) ? adj_array_v3p : adj_array_v3;
+
+	for (i = 0; i < PXP_2D_NUM; i++) {
+		switch (i) {
+		case PXP_2D_PS:
+		case PXP_2D_AS:
+		case PXP_2D_INPUT_FETCH0:
+		case PXP_2D_INPUT_FETCH1:
+			adj_list[i].type = PXP_2D_TYPE_INPUT;
+			break;
+		case PXP_2D_OUT:
+		case PXP_2D_INPUT_STORE0:
+		case PXP_2D_INPUT_STORE1:
+			adj_list[i].type = PXP_2D_TYPE_OUTPUT;
+			break;
+		default:
+			adj_list[i].type = PXP_2D_TYPE_ALU;
+			break;
+		}
+
+		first = -1;
+
+		for (j = 0; j < PXP_2D_NUM; j++) {
+			if (adj_array[i][j]) {
+				enode = kmem_cache_alloc(edge_node_cache,
+							 GFP_KERNEL | __GFP_ZERO);
+				if (!enode) {
+					dev_err(&pdev->dev, "allocate edge node failed\n");
+					return -ENOMEM;
+				}
+				enode->adjvex = j;
+				enode->prev_vnode = i;
+
+				if (unlikely(first == -1)) {
+					first = j;
+					adj_list[i].first = enode;
+				} else
+					curr->next = enode;
+
+				curr = enode;
+				enode_mux_config(i, enode);
+				dev_dbg(&pdev->dev, "(%d -> %d): mux_used 0x%x, mux_config 0x%x\n\n",
+					 i, j, enode->mux_used, *(unsigned int*)&enode->muxes);
+			}
 		}
 	}
 
 	return 0;
 }
 
-static int pxp_probe(struct platform_device *pdev)
+/* Calculate the shortest paths start via
+ * 'from' node to other nodes
+ */
+static void pxp_find_shortest_path(unsigned int from)
 {
-	const struct of_device_id *of_id =
-			of_match_device(imx_pxpdma_dt_ids, &pdev->dev);
-	struct pxps *pxp;
-	struct resource *res;
-	int irq, std_irq;
-	int err = 0;
+	int i;
+	struct edge_node *enode;
+	struct path_node *pnode, *adjnode;
+	struct list_head queue;
 
-	if (of_id)
-		pdev->id_entry = of_id->data;
+	INIT_LIST_HEAD(&queue);
+	list_add_tail(&path_table[from][from].node, &queue);
 
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	irq = platform_get_irq(pdev, 0);
-	std_irq = platform_get_irq(pdev, 1);
-	if (!res || irq < 0 || std_irq < 0) {
-		err = -ENODEV;
-		goto exit;
+	while(!list_empty(&queue)) {
+		pnode = list_entry(queue.next, struct path_node, node);
+		enode = adj_list[pnode->id].first;
+		while (enode) {
+			adjnode = &path_table[from][enode->adjvex];
+
+			if (adjnode->distance == DISTANCE_INFINITY) {
+				adjnode->distance  = pnode->distance + 1;
+				adjnode->prev_node = pnode->id;
+				list_add_tail(&adjnode->node, &queue);
+			}
+
+			enode = enode->next;
+		}
+		list_del_init(&pnode->node);
 	}
 
-	pxp = devm_kzalloc(&pdev->dev, sizeof(*pxp), GFP_KERNEL);
-	if (!pxp) {
-		dev_err(&pdev->dev, "failed to allocate control object\n");
-		err = -ENOMEM;
-		goto exit;
+	for (i = 0; i < PXP_2D_NUM; i++)
+		pr_debug("From %u: to %d (id = %d, distance = 0x%x, prev_node = %d\n",
+			 from, i, path_table[from][i].id, path_table[from][i].distance,
+			 path_table[from][i].prev_node);
+}
+
+static int pxp_gen_shortest_paths(struct platform_device *pdev)
+{
+	int i, j;
+
+	for (i = 0; i < PXP_2D_NUM; i++) {
+		for (j = 0; j < PXP_2D_NUM; j++) {
+			path_table[i][j].id = j;
+			path_table[i][j].distance = DISTANCE_INFINITY;
+			path_table[i][j].prev_node = NO_PATH_NODE;
+			INIT_LIST_HEAD(&path_table[i][j].node);
+		}
+
+		path_table[i][i].distance = 0;
+
+		pxp_find_shortest_path(i);
 	}
 
-	pxp->dev = &pdev->dev;
-
-	platform_set_drvdata(pdev, pxp);
-	pxp->irq = irq;
-
-	pxp->pxp_ongoing = 0;
-	pxp->lut_state = 0;
-
-	spin_lock_init(&pxp->lock);
-	mutex_init(&pxp->clk_mutex);
-
-	pxp->base = devm_ioremap_resource(&pdev->dev, res);
-	if (pxp->base == NULL) {
-		dev_err(&pdev->dev, "Couldn't ioremap regs\n");
-		err = -ENODEV;
-		goto exit;
-	}
-	pxp_reg_base = pxp->base;
-
-	pxp->pdev = pdev;
-	pxp->devdata = &pxp_devdata[pdev->id_entry->driver_data];
-
-	pxp->ipg_clk = devm_clk_get(&pdev->dev, "pxp_ipg");
-	pxp->axi_clk = devm_clk_get(&pdev->dev, "pxp_axi");
-
-	if (IS_ERR(pxp->ipg_clk) || IS_ERR(pxp->axi_clk)) {
-		dev_err(&pdev->dev, "pxp clocks invalid\n");
-		err = -EINVAL;
-		goto exit;
-	}
-
-	err = devm_request_irq(&pdev->dev, pxp->irq, pxp_irq, 0,
-				"pxp-dmaengine", pxp);
-	if (err)
-		goto exit;
-
-	err = devm_request_irq(&pdev->dev, std_irq, pxp_irq, 0,
-				"pxp-dmaengine-std", pxp);
-	if (err)
-		goto exit;
-
-	/* enable all the possible irq raised by PXP */
-	__raw_writel(0xffff, pxp->base + HW_PXP_IRQ_MASK);
-
-	/* Initialize DMA engine */
-	err = pxp_dma_init(pxp);
-	if (err < 0)
-		goto exit;
-
-	if (device_create_file(&pdev->dev, &dev_attr_clk_off_timeout)) {
-		dev_err(&pdev->dev,
-			"Unable to create file from clk_off_timeout\n");
-		goto exit;
-	}
-
-	device_create_file(&pdev->dev, &dev_attr_block_size);
-	pxp_clk_enable(pxp);
-	dump_pxp_reg(pxp);
-	pxp_clk_disable(pxp);
-
-	INIT_WORK(&pxp->work, clkoff_callback);
-	init_timer(&pxp->clk_timer);
-	pxp->clk_timer.function = pxp_clkoff_timer;
-	pxp->clk_timer.data = (unsigned long)pxp;
-
-	init_waitqueue_head(&pxp->thread_waitq);
-	/* allocate a kernel thread to dispatch pxp conf */
-	pxp->dispatch = kthread_run(pxp_dispatch_thread, pxp, "pxp_dispatch");
-	if (IS_ERR(pxp->dispatch)) {
-		err = PTR_ERR(pxp->dispatch);
-		goto exit;
-	}
-	tx_desc_cache = kmem_cache_create("tx_desc", sizeof(struct pxp_tx_desc),
-					  0, SLAB_HWCACHE_ALIGN, NULL);
-	if (!tx_desc_cache) {
-		err = -ENOMEM;
-		goto exit;
-	}
+	return 0;
+}
 
 #ifdef	CONFIG_MXC_FPGA_M4_TEST
+static void pxp_config_m4(struct platform_device *pdev)
+{
 	fpga_tcml_base = ioremap(FPGA_TCML_ADDR, SZ_32K);
 	if (fpga_tcml_base == NULL) {
 		dev_err(&pdev->dev,
@@ -5106,11 +7870,126 @@ static int pxp_probe(struct platform_device *pdev)
 	for (i = 0; i < 1024 * 32 / 4; i++) {
 		*(((unsigned int *)(fpga_tcml_base)) + i) = cm4_image[i];
 	}
+}
+#endif
+
+static int pxp_probe(struct platform_device *pdev)
+{
+	const struct of_device_id *of_id =
+			of_match_device(imx_pxpdma_dt_ids, &pdev->dev);
+	struct pxps *pxp;
+	struct resource *res;
+	int err = 0;
+
+	if (of_id)
+		pdev->id_entry = of_id->data;
+
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+
+	pxp = devm_kzalloc(&pdev->dev, sizeof(*pxp), GFP_KERNEL);
+	if (!pxp) {
+		dev_err(&pdev->dev, "failed to allocate control object\n");
+		err = -ENOMEM;
+		goto exit;
+	}
+
+	pxp->dev = &pdev->dev;
+
+	platform_set_drvdata(pdev, pxp);
+
+	spin_lock_init(&pxp->lock);
+	mutex_init(&pxp->clk_mutex);
+
+	pxp->base = devm_ioremap_resource(&pdev->dev, res);
+	if (pxp->base == NULL) {
+		dev_err(&pdev->dev, "Couldn't ioremap regs\n");
+		err = -ENODEV;
+		goto exit;
+	}
+	pxp_reg_base = pxp->base;
+
+	pxp->pdev = pdev;
+	pxp->devdata = &pxp_devdata[pdev->id_entry->driver_data];
+
+	v3p_flag = (pxp_is_v3p(pxp)) ? true : false;
+
+	pxp->ipg_clk = devm_clk_get(&pdev->dev, "pxp_ipg");
+	pxp->axi_clk = devm_clk_get(&pdev->dev, "pxp_axi");
+
+	if (IS_ERR(pxp->ipg_clk) || IS_ERR(pxp->axi_clk)) {
+		dev_err(&pdev->dev, "pxp clocks invalid\n");
+		err = -EINVAL;
+		goto exit;
+	}
+
+	pxp_soft_reset(pxp);
+	pxp_writel(0x0, HW_PXP_CTRL);
+	/* Initialize DMA engine */
+	err = pxp_dma_init(pxp);
+	if (err < 0)
+		goto exit;
+
+	pxp_clk_enable(pxp);
+	pxp_soft_reset(pxp);
+
+	/* Initialize PXP Interrupt */
+	err = pxp_init_interrupt(pdev);
+	if (err < 0)
+		goto exit;
+
+	if (pxp->devdata && pxp->devdata->pxp_data_path_config)
+		pxp->devdata->pxp_data_path_config(pxp);
+
+	dump_pxp_reg(pxp);
+	pxp_clk_disable(pxp);
+
+	pxp_init_timer(pxp);
+
+	init_waitqueue_head(&pxp->thread_waitq);
+	/* allocate a kernel thread to dispatch pxp conf */
+	pxp->dispatch = kthread_run(pxp_dispatch_thread, pxp, "pxp_dispatch");
+	if (IS_ERR(pxp->dispatch)) {
+		err = PTR_ERR(pxp->dispatch);
+		goto exit;
+	}
+	tx_desc_cache = kmem_cache_create("tx_desc", sizeof(struct pxp_tx_desc),
+					  0, SLAB_HWCACHE_ALIGN, NULL);
+	if (!tx_desc_cache) {
+		err = -ENOMEM;
+		goto exit;
+	}
+
+	edge_node_cache = kmem_cache_create("edge_node", sizeof(struct edge_node),
+					    0, SLAB_HWCACHE_ALIGN, NULL);
+	if (!edge_node_cache) {
+		err = -ENOMEM;
+		kmem_cache_destroy(tx_desc_cache);
+		goto exit;
+	}
+
+	err = pxp_create_attrs(pdev);
+	if (err) {
+		kmem_cache_destroy(tx_desc_cache);
+		kmem_cache_destroy(edge_node_cache);
+		goto exit;
+	}
+
+	if ((err = pxp_create_initial_graph(pdev))) {
+		kmem_cache_destroy(tx_desc_cache);
+		kmem_cache_destroy(edge_node_cache);
+		goto exit;
+	}
+
+	pxp_gen_shortest_paths(pdev);
+
+#ifdef	CONFIG_MXC_FPGA_M4_TEST
+	pxp_config_m4(pdev);
 #endif
 	register_pxp_device();
-
 	pm_runtime_enable(pxp->dev);
 
+	dma_alloc_coherent(NULL, PAGE_ALIGN(1920 * 1088 * 4),
+			   &paddr, GFP_KERNEL);
 
 exit:
 	if (err)
@@ -5124,13 +8003,13 @@ static int pxp_remove(struct platform_device *pdev)
 
 	unregister_pxp_device();
 	kmem_cache_destroy(tx_desc_cache);
+	kmem_cache_destroy(edge_node_cache);
 	kthread_stop(pxp->dispatch);
 	cancel_work_sync(&pxp->work);
 	del_timer_sync(&pxp->clk_timer);
 	clk_disable_unprepare(pxp->ipg_clk);
 	clk_disable_unprepare(pxp->axi_clk);
-	device_remove_file(&pdev->dev, &dev_attr_clk_off_timeout);
-	device_remove_file(&pdev->dev, &dev_attr_block_size);
+	pxp_remove_attrs(pdev);
 	dma_async_device_unregister(&(pxp->pxp_dma.dma));
 
 	return 0;
@@ -5157,7 +8036,11 @@ static int pxp_resume(struct device *dev)
 
 	pxp_clk_enable(pxp);
 	/* Pull PxP out of reset */
-	__raw_writel(0, pxp->base + HW_PXP_CTRL);
+	pxp_soft_reset(pxp);
+	if (pxp->devdata && pxp->devdata->pxp_data_path_config)
+		pxp->devdata->pxp_data_path_config(pxp);
+	/* enable all the possible irq raised by PXP */
+	__raw_writel(0xffff, pxp->base + HW_PXP_IRQ_MASK);
 	pxp_clk_disable(pxp);
 
 	return 0;

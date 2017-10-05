@@ -103,27 +103,31 @@ static void sun5i_clkevt_time_start(struct sun5i_timer_clkevt *ce, u8 timer, boo
 	       ce->timer.base + TIMER_CTL_REG(timer));
 }
 
-static void sun5i_clkevt_mode(enum clock_event_mode mode,
-			      struct clock_event_device *clkevt)
+static int sun5i_clkevt_shutdown(struct clock_event_device *clkevt)
 {
 	struct sun5i_timer_clkevt *ce = to_sun5i_timer_clkevt(clkevt);
 
-	switch (mode) {
-	case CLOCK_EVT_MODE_PERIODIC:
-		sun5i_clkevt_time_stop(ce, 0);
-		sun5i_clkevt_time_setup(ce, 0, ce->timer.ticks_per_jiffy);
-		sun5i_clkevt_time_start(ce, 0, true);
-		break;
-	case CLOCK_EVT_MODE_ONESHOT:
-		sun5i_clkevt_time_stop(ce, 0);
-		sun5i_clkevt_time_start(ce, 0, false);
-		break;
-	case CLOCK_EVT_MODE_UNUSED:
-	case CLOCK_EVT_MODE_SHUTDOWN:
-	default:
-		sun5i_clkevt_time_stop(ce, 0);
-		break;
-	}
+	sun5i_clkevt_time_stop(ce, 0);
+	return 0;
+}
+
+static int sun5i_clkevt_set_oneshot(struct clock_event_device *clkevt)
+{
+	struct sun5i_timer_clkevt *ce = to_sun5i_timer_clkevt(clkevt);
+
+	sun5i_clkevt_time_stop(ce, 0);
+	sun5i_clkevt_time_start(ce, 0, false);
+	return 0;
+}
+
+static int sun5i_clkevt_set_periodic(struct clock_event_device *clkevt)
+{
+	struct sun5i_timer_clkevt *ce = to_sun5i_timer_clkevt(clkevt);
+
+	sun5i_clkevt_time_stop(ce, 0);
+	sun5i_clkevt_time_setup(ce, 0, ce->timer.ticks_per_jiffy);
+	sun5i_clkevt_time_start(ce, 0, true);
+	return 0;
 }
 
 static int sun5i_clkevt_next_event(unsigned long evt,
@@ -286,7 +290,10 @@ static int __init sun5i_setup_clockevent(struct device_node *node, void __iomem 
 	ce->clkevt.name = node->name;
 	ce->clkevt.features = CLOCK_EVT_FEAT_PERIODIC | CLOCK_EVT_FEAT_ONESHOT;
 	ce->clkevt.set_next_event = sun5i_clkevt_next_event;
-	ce->clkevt.set_mode = sun5i_clkevt_mode;
+	ce->clkevt.set_state_shutdown = sun5i_clkevt_shutdown;
+	ce->clkevt.set_state_periodic = sun5i_clkevt_set_periodic;
+	ce->clkevt.set_state_oneshot = sun5i_clkevt_set_oneshot;
+	ce->clkevt.tick_resume = sun5i_clkevt_shutdown;
 	ce->clkevt.rating = 340;
 	ce->clkevt.irq = irq;
 	ce->clkevt.cpumask = cpu_possible_mask;
@@ -316,33 +323,42 @@ err_free:
 	return ret;
 }
 
-static void __init sun5i_timer_init(struct device_node *node)
+static int __init sun5i_timer_init(struct device_node *node)
 {
 	struct reset_control *rstc;
 	void __iomem *timer_base;
 	struct clk *clk;
-	int irq;
+	int irq, ret;
 
 	timer_base = of_io_request_and_map(node, 0, of_node_full_name(node));
-	if (!timer_base)
-		panic("Can't map registers");
+	if (IS_ERR(timer_base)) {
+		pr_err("Can't map registers");
+		return PTR_ERR(timer_base);;
+	}
 
 	irq = irq_of_parse_and_map(node, 0);
-	if (irq <= 0)
-		panic("Can't parse IRQ");
+	if (irq <= 0) {
+		pr_err("Can't parse IRQ");
+		return -EINVAL;
+	}
 
 	clk = of_clk_get(node, 0);
-	if (IS_ERR(clk))
-		panic("Can't get timer clock");
+	if (IS_ERR(clk)) {
+		pr_err("Can't get timer clock");
+		return PTR_ERR(clk);
+	}
 
 	rstc = of_reset_control_get(node, NULL);
 	if (!IS_ERR(rstc))
 		reset_control_deassert(rstc);
 
-	sun5i_setup_clocksource(node, timer_base, clk, irq);
-	sun5i_setup_clockevent(node, timer_base, clk, irq);
+	ret = sun5i_setup_clocksource(node, timer_base, clk, irq);
+	if (ret)
+		return ret;
+
+	return sun5i_setup_clockevent(node, timer_base, clk, irq);
 }
 CLOCKSOURCE_OF_DECLARE(sun5i_a13, "allwinner,sun5i-a13-hstimer",
-		       sun5i_timer_init);
+			   sun5i_timer_init);
 CLOCKSOURCE_OF_DECLARE(sun7i_a20, "allwinner,sun7i-a20-hstimer",
-		       sun5i_timer_init);
+			   sun5i_timer_init);

@@ -1,16 +1,16 @@
 /* Copyright 2002 Andi Kleen, SuSE Labs */
 
 #include <linux/linkage.h>
-#include <asm/dwarf2.h>
-#include <asm/cpufeature.h>
+#include <asm/cpufeatures.h>
 #include <asm/alternative-asm.h>
+#include <asm/export.h>
 
 .weak memset
 
 /*
  * ISO C memset - set a memory block to a byte value. This function uses fast
  * string to get better performance than the original function. The code is
- * simpler and shorter than the orignal function as well.
+ * simpler and shorter than the original function as well.
  *
  * rdi   destination
  * rsi   value (char)
@@ -44,6 +44,8 @@ ENTRY(__memset)
 	ret
 ENDPROC(memset)
 ENDPROC(__memset)
+EXPORT_SYMBOL(memset)
+EXPORT_SYMBOL(__memset)
 
 /*
  * ISO C memset - set a memory block to a byte value. This function uses
@@ -66,7 +68,6 @@ ENTRY(memset_erms)
 ENDPROC(memset_erms)
 
 ENTRY(memset_orig)
-	CFI_STARTPROC
 	movq %rdi,%r10
 
 	/* expand byte value  */
@@ -78,7 +79,6 @@ ENTRY(memset_orig)
 	movl  %edi,%r9d
 	andl  $7,%r9d
 	jnz  .Lbad_alignment
-	CFI_REMEMBER_STATE
 .Lafter_bad_alignment:
 
 	movq  %rdx,%rcx
@@ -128,7 +128,6 @@ ENTRY(memset_orig)
 	movq	%r10,%rax
 	ret
 
-	CFI_RESTORE_STATE
 .Lbad_alignment:
 	cmpq $7,%rdx
 	jbe	.Lhandle_7
@@ -139,5 +138,4 @@ ENTRY(memset_orig)
 	subq %r8,%rdx
 	jmp .Lafter_bad_alignment
 .Lfinal:
-	CFI_ENDPROC
 ENDPROC(memset_orig)

@@ -18,6 +18,13 @@ config FB_MXC_SYNC_PANEL
 	depends on FB_MXC
 	tristate "Synchronous Panel Framebuffer"
 
+config FB_MXC_OVERLAY
+	depends on FB_MXC
+	tristate "Overlay Framebuffer"
+	default n
+	help
+	  Enhanced LCD controller of MXC has overlay function.
+
 config FB_MXC_MIPI_DSI
 	tristate "MXC MIPI_DSI"
 	depends on FB_MXC_SYNC_PANEL
@@ -28,10 +35,15 @@ config FB_MXC_MIPI_DSI_SAMSUNG
 	depends on FB_MXC_SYNC_PANEL
 	depends on FB_MXS
 
+config FB_MXC_MIPI_DSI_NORTHWEST
+	tristate "MXC MIPI_DSI_NORTHWEST"
+	depends on FB_MXC_SYNC_PANEL
+	depends on FB_MXS
+
 config FB_MXC_TRULY_WVGA_SYNC_PANEL
 	tristate "TRULY WVGA Panel"
 	depends on FB_MXC_SYNC_PANEL
-	depends on FB_MXC_MIPI_DSI || FB_MXC_MIPI_DSI_SAMSUNG
+	depends on FB_MXC_MIPI_DSI || FB_MXC_MIPI_DSI_SAMSUNG || FB_MXC_MIPI_DSI_NORTHWEST
 
 config FB_MXC_TRULY_PANEL_TFT3P5079E
 	tristate "TRULY Panel TFT3P5079E"
@@ -41,7 +53,7 @@ config FB_MXC_TRULY_PANEL_TFT3P5079E
 config FB_MXC_TRULY_PANEL_TFT3P5581E
 	tristate "TRULY Panel TFT3P5581E"
 	depends on FB_MXC_SYNC_PANEL
-	depends on FB_MXC_MIPI_DSI_SAMSUNG
+	depends on FB_MXC_MIPI_DSI_SAMSUNG || FB_MXC_MIPI_DSI_NORTHWEST
 
 config FB_MXC_LDB
 	tristate "MXC LDB"
@@ -81,6 +93,12 @@ config FB_MXC_DCIC
 	depends on FB_MXC_SYNC_PANEL
 	depends on MXC_IPU_V3 || FB_MXS
 	select VIDEOMODE_HELPERS
+
+config FB_MXC_ADV7535
+	tristate "ADI ADV7535 support"
+	depends on I2C
+	help
+	  Driver support for the ADV7535 DSI-to-HDMI module
 
 config HANNSTAR_CABC
 	tristate "Hannstar CABC function"

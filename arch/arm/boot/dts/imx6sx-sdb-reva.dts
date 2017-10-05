@@ -41,9 +41,17 @@
 		396000	1175000
 		198000	1175000
 	>;
-	arm-supply = <&sw1a_reg>;
-	soc-supply = <&sw1c_reg>;
 	fsl,arm-soc-shared = <0>;
+};
+
+&reg_arm {
+	vin-supply = <&sw1a_reg>;
+	regulator-allow-bypass;
+};
+
+&reg_soc {
+	vin-supply = <&sw1c_reg>;
+	regulator-allow-bypass;
 };
 
 &i2c1 {
@@ -164,7 +172,7 @@
 		reg = <0>;
 		#address-cells = <1>;
 		#size-cells = <1>;
-		compatible = "spansion,s25fl128s";
+		compatible = "spansion,s25fl128s", "jedec,spi-nor";
 		spi-max-frequency = <29000000>;
 	};
 
@@ -172,7 +180,7 @@
 		reg = <1>;
 		#address-cells = <1>;
 		#size-cells = <1>;
-		compatible = "spansion,s25fl128s";
+		compatible = "spansion,s25fl128s", "jedec,spi-nor";
 		spi-max-frequency = <29000000>;
 	};
 };

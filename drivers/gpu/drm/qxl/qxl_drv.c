@@ -196,17 +196,18 @@ static int qxl_pm_restore(struct device *dev)
 	return qxl_drm_resume(drm_dev, false);
 }
 
-static u32 qxl_noop_get_vblank_counter(struct drm_device *dev, int crtc)
-{
-	return dev->vblank[crtc].count.counter;
-}
-
-static int qxl_noop_enable_vblank(struct drm_device *dev, int crtc)
+static u32 qxl_noop_get_vblank_counter(struct drm_device *dev,
+				       unsigned int pipe)
 {
 	return 0;
 }
 
-static void qxl_noop_disable_vblank(struct drm_device *dev, int crtc)
+static int qxl_noop_enable_vblank(struct drm_device *dev, unsigned int pipe)
+{
+	return 0;
+}
+
+static void qxl_noop_disable_vblank(struct drm_device *dev, unsigned int pipe)
 {
 }
 
@@ -255,7 +256,7 @@ static struct drm_driver qxl_driver = {
 	.gem_prime_vmap = qxl_gem_prime_vmap,
 	.gem_prime_vunmap = qxl_gem_prime_vunmap,
 	.gem_prime_mmap = qxl_gem_prime_mmap,
-	.gem_free_object = qxl_gem_object_free,
+	.gem_free_object_unlocked = qxl_gem_object_free,
 	.gem_open_object = qxl_gem_object_open,
 	.gem_close_object = qxl_gem_object_close,
 	.fops = &qxl_fops,
@@ -271,10 +272,8 @@ static struct drm_driver qxl_driver = {
 
 static int __init qxl_init(void)
 {
-#ifdef CONFIG_VGA_CONSOLE
 	if (vgacon_text_force() && qxl_modeset == -1)
 		return -EINVAL;
-#endif
 
 	if (qxl_modeset == 0)
 		return -EINVAL;

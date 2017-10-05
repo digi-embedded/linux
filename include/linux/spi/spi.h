@@ -23,12 +23,78 @@
 #include <linux/scatterlist.h>
 
 struct dma_chan;
+struct spi_master;
+struct spi_transfer;
+struct spi_flash_read_message;
 
 /*
- * INTERFACES between SPI master-side drivers and SPI slave protocol handlers,
- * and SPI infrastructure.
+ * INTERFACES between SPI master-side drivers and SPI infrastructure.
+ * (There's no SPI slave support for Linux yet...)
  */
 extern struct bus_type spi_bus_type;
+
+/**
+ * struct spi_statistics - statistics for spi transfers
+ * @lock:          lock protecting this structure
+ *
+ * @messages:      number of spi-messages handled
+ * @transfers:     number of spi_transfers handled
+ * @errors:        number of errors during spi_transfer
+ * @timedout:      number of timeouts during spi_transfer
+ *
+ * @spi_sync:      number of times spi_sync is used
+ * @spi_sync_immediate:
+ *                 number of times spi_sync is executed immediately
+ *                 in calling context without queuing and scheduling
+ * @spi_async:     number of times spi_async is used
+ *
+ * @bytes:         number of bytes transferred to/from device
+ * @bytes_tx:      number of bytes sent to device
+ * @bytes_rx:      number of bytes received from device
+ *
+ * @transfer_bytes_histo:
+ *                 transfer bytes histogramm
+ *
+ * @transfers_split_maxsize:
+ *                 number of transfers that have been split because of
+ *                 maxsize limit
+ */
+struct spi_statistics {
+	spinlock_t		lock; /* lock for the whole structure */
+
+	unsigned long		messages;
+	unsigned long		transfers;
+	unsigned long		errors;
+	unsigned long		timedout;
+
+	unsigned long		spi_sync;
+	unsigned long		spi_sync_immediate;
+	unsigned long		spi_async;
+
+	unsigned long long	bytes;
+	unsigned long long	bytes_rx;
+	unsigned long long	bytes_tx;
+
+#define SPI_STATISTICS_HISTO_SIZE 17
+	unsigned long transfer_bytes_histo[SPI_STATISTICS_HISTO_SIZE];
+
+	unsigned long transfers_split_maxsize;
+};
+
+void spi_statistics_add_transfer_stats(struct spi_statistics *stats,
+				       struct spi_transfer *xfer,
+				       struct spi_master *master);
+
+#define SPI_STATISTICS_ADD_TO_FIELD(stats, field, count)	\
+	do {							\
+		unsigned long flags;				\
+		spin_lock_irqsave(&(stats)->lock, flags);	\
+		(stats)->field += count;			\
+		spin_unlock_irqrestore(&(stats)->lock, flags);	\
+	} while (0)
+
+#define SPI_STATISTICS_INCREMENT_FIELD(stats, field)	\
+	SPI_STATISTICS_ADD_TO_FIELD(stats, field, 1)
 
 /**
  * struct spi_device - Master side proxy for an SPI slave device
@@ -59,6 +125,8 @@ extern struct bus_type spi_bus_type;
  *	for driver coldplugging, and in uevents used for hotplugging
  * @cs_gpio: gpio number of the chipselect line (optional, -ENOENT when
  *	when not using a GPIO line)
+ *
+ * @statistics: statistics for the spi_device
  *
  * A @spi_device is used to interchange data between an SPI slave
  * (usually a discrete chip) and CPU memory.
@@ -97,6 +165,9 @@ struct spi_device {
 	void			*controller_data;
 	char			modalias[SPI_NAME_SIZE];
 	int			cs_gpio;	/* chip select gpio */
+
+	/* the statistics */
+	struct spi_statistics	statistics;
 
 	/*
 	 * likely need more hooks for more protocol options affecting how
@@ -190,7 +261,7 @@ static inline struct spi_driver *to_spi_driver(struct device_driver *drv)
 	return drv ? container_of(drv, struct spi_driver, driver) : NULL;
 }
 
-extern int spi_register_driver(struct spi_driver *sdrv);
+extern int __spi_register_driver(struct module *owner, struct spi_driver *sdrv);
 
 /**
  * spi_unregister_driver - reverse effect of spi_register_driver
@@ -202,6 +273,10 @@ static inline void spi_unregister_driver(struct spi_driver *sdrv)
 	if (sdrv)
 		driver_unregister(&sdrv->driver);
 }
+
+/* use a define to avoid include chaining to get THIS_MODULE */
+#define spi_register_driver(driver) \
+	__spi_register_driver(THIS_MODULE, driver)
 
 /**
  * module_spi_driver() - Helper macro for registering a SPI driver
@@ -235,9 +310,13 @@ static inline void spi_unregister_driver(struct spi_driver *sdrv)
  * @min_speed_hz: Lowest supported transfer speed
  * @max_speed_hz: Highest supported transfer speed
  * @flags: other constraints relevant to this driver
-* @slave: indicates that this is an SPI slave controller
+ * @max_transfer_size: function that returns the max transfer size for
+ *	a &spi_device; may be %NULL, so the default %SIZE_MAX will be used.
+ * @max_message_size: function that returns the max message size for
+ *	a &spi_device; may be %NULL, so the default %SIZE_MAX will be used.
+ * @io_mutex: mutex for physical bus access
  * @bus_lock_spinlock: spinlock for SPI bus locking
- * @bus_lock_mutex: mutex for SPI bus locking
+ * @bus_lock_mutex: mutex for exclusion of multiple callers
  * @bus_lock_flag: indicates that the SPI bus is locked for exclusive use
  * @setup: updates the device mode and clocking records used by a
  *	device's SPI controller; protocol code may call this.  This
@@ -294,14 +373,20 @@ static inline void spi_unregister_driver(struct spi_driver *sdrv)
  * @handle_err: the subsystem calls the driver to handle an error that occurs
  *		in the generic implementation of transfer_one_message().
  * @unprepare_message: undo any work done by prepare_message().
- * @slave_abort: abort the ongoing transfer request on an SPI slave controller
+ * @spi_flash_read: to support spi-controller hardwares that provide
+ *                  accelerated interface to read from flash devices.
+ * @flash_read_supported: spi device supports flash read
  * @cs_gpios: Array of GPIOs to use as chip select lines; one per CS
  *	number. Any individual value may be -ENOENT for CS lines that
  *	are not GPIOs (driven by the SPI controller itself).
+ * @statistics: statistics for the spi_master
  * @dma_tx: DMA transmit channel
  * @dma_rx: DMA receive channel
  * @dummy_rx: dummy receive buffer for full-duplex devices
  * @dummy_tx: dummy transmit buffer for full-duplex devices
+ * @fw_translate_cs: If the boot firmware uses different numbering scheme
+ *	what Linux expects, this optional hook can be used to translate
+ *	between the two.
  *
  * Each SPI master controller can communicate with one or more @spi_device
  * children.  These make a small bus, sharing MOSI, MISO and SCK signals
@@ -358,8 +443,15 @@ struct spi_master {
 #define SPI_MASTER_MUST_RX      BIT(3)		/* requires rx */
 #define SPI_MASTER_MUST_TX      BIT(4)		/* requires tx */
 
-	/* flag indicating this is an SPI slave controller */
-	bool			slave;
+	/*
+	 * on some hardware transfer / message size may be constrained
+	 * the limit may depend on device transfer settings
+	 */
+	size_t (*max_transfer_size)(struct spi_device *spi);
+	size_t (*max_message_size)(struct spi_device *spi);
+
+	/* I/O mutex */
+	struct mutex		io_mutex;
 
 	/* lock and mutex for SPI bus locking */
 	spinlock_t		bus_lock_spinlock;
@@ -443,7 +535,9 @@ struct spi_master {
 			       struct spi_message *message);
 	int (*unprepare_message)(struct spi_master *master,
 				 struct spi_message *message);
-	int (*slave_abort)(struct spi_master *spi);
+	int (*spi_flash_read)(struct  spi_device *spi,
+			      struct spi_flash_read_message *msg);
+	bool (*flash_read_supported)(struct spi_device *spi);
 
 	/*
 	 * These hooks are for drivers that use a generic implementation
@@ -458,6 +552,9 @@ struct spi_master {
 	/* gpio chip select */
 	int			*cs_gpios;
 
+	/* statistics */
+	struct spi_statistics	statistics;
+
 	/* DMA channels for use with core dmaengine helpers */
 	struct dma_chan		*dma_tx;
 	struct dma_chan		*dma_rx;
@@ -465,6 +562,8 @@ struct spi_master {
 	/* dummy data for full duplex devices */
 	void			*dummy_rx;
 	void			*dummy_tx;
+
+	int (*fw_translate_cs)(struct spi_master *master, unsigned cs);
 };
 
 static inline void *spi_master_get_devdata(struct spi_master *master)
@@ -490,11 +589,6 @@ static inline void spi_master_put(struct spi_master *master)
 		put_device(&master->dev);
 }
 
-static inline bool spi_controller_is_slave(struct spi_master *ctlr)
-{
-	return IS_ENABLED(CONFIG_SPI_SLAVE) && ctlr->slave;
-}
-
 /* PM calls that need to be issued by the driver */
 extern int spi_master_suspend(struct spi_master *master);
 extern int spi_master_resume(struct spi_master *master);
@@ -505,23 +599,8 @@ extern void spi_finalize_current_message(struct spi_master *master);
 extern void spi_finalize_current_transfer(struct spi_master *master);
 
 /* the spi driver core manages memory for the spi_master classdev */
-extern struct spi_master *__spi_alloc_controller(struct device *host,
-						 unsigned int size, bool slave);
-
-static inline struct spi_master *spi_alloc_master(struct device *host,
-						  unsigned int size)
-{
-	return __spi_alloc_controller(host, size, false);
-}
-
-static inline struct spi_master *spi_alloc_slave(struct device *host,
-						 unsigned int size)
-{
-	if (!IS_ENABLED(CONFIG_SPI_SLAVE))
-		return NULL;
-
-	return __spi_alloc_controller(host, size, true);
-}
+extern struct spi_master *
+spi_alloc_master(struct device *host, unsigned size);
 
 extern int spi_register_master(struct spi_master *master);
 extern int devm_spi_register_master(struct device *dev,
@@ -529,6 +608,38 @@ extern int devm_spi_register_master(struct device *dev,
 extern void spi_unregister_master(struct spi_master *master);
 
 extern struct spi_master *spi_busnum_to_master(u16 busnum);
+
+/*
+ * SPI resource management while processing a SPI message
+ */
+
+typedef void (*spi_res_release_t)(struct spi_master *master,
+				  struct spi_message *msg,
+				  void *res);
+
+/**
+ * struct spi_res - spi resource management structure
+ * @entry:   list entry
+ * @release: release code called prior to freeing this resource
+ * @data:    extra data allocated for the specific use-case
+ *
+ * this is based on ideas from devres, but focused on life-cycle
+ * management during spi_message processing
+ */
+struct spi_res {
+	struct list_head        entry;
+	spi_res_release_t       release;
+	unsigned long long      data[]; /* guarantee ull alignment */
+};
+
+extern void *spi_res_alloc(struct spi_device *spi,
+			   spi_res_release_t release,
+			   size_t size, gfp_t gfp);
+extern void spi_res_add(struct spi_message *message, void *res);
+extern void spi_res_free(void *res);
+
+extern void spi_res_release(struct spi_master *master,
+			    struct spi_message *message);
 
 /*---------------------------------------------------------------------------*/
 
@@ -668,6 +779,7 @@ struct spi_transfer {
  * @status: zero for success, else negative errno
  * @queue: for use by whichever driver currently owns the message
  * @state: for use by whichever driver currently owns the message
+ * @resources: for resource management when the spi message is processed
  *
  * A @spi_message is used to execute an atomic sequence of data transfers,
  * each represented by a struct spi_transfer.  The sequence is "atomic"
@@ -714,12 +826,21 @@ struct spi_message {
 	 */
 	struct list_head	queue;
 	void			*state;
+
+	/* list of spi_res reources when the spi message is processed */
+	struct list_head        resources;
 };
+
+static inline void spi_message_init_no_memset(struct spi_message *m)
+{
+	INIT_LIST_HEAD(&m->transfers);
+	INIT_LIST_HEAD(&m->resources);
+}
 
 static inline void spi_message_init(struct spi_message *m)
 {
 	memset(m, 0, sizeof *m);
-	INIT_LIST_HEAD(&m->transfers);
+	spi_message_init_no_memset(m);
 }
 
 static inline void
@@ -785,7 +906,83 @@ extern int spi_setup(struct spi_device *spi);
 extern int spi_async(struct spi_device *spi, struct spi_message *message);
 extern int spi_async_locked(struct spi_device *spi,
 			    struct spi_message *message);
-extern int spi_slave_abort(struct spi_device *spi);
+
+static inline size_t
+spi_max_message_size(struct spi_device *spi)
+{
+	struct spi_master *master = spi->master;
+	if (!master->max_message_size)
+		return SIZE_MAX;
+	return master->max_message_size(spi);
+}
+
+static inline size_t
+spi_max_transfer_size(struct spi_device *spi)
+{
+	struct spi_master *master = spi->master;
+	size_t tr_max = SIZE_MAX;
+	size_t msg_max = spi_max_message_size(spi);
+
+	if (master->max_transfer_size)
+		tr_max = master->max_transfer_size(spi);
+
+	/* transfer size limit must not be greater than messsage size limit */
+	return min(tr_max, msg_max);
+}
+
+/*---------------------------------------------------------------------------*/
+
+/* SPI transfer replacement methods which make use of spi_res */
+
+struct spi_replaced_transfers;
+typedef void (*spi_replaced_release_t)(struct spi_master *master,
+				       struct spi_message *msg,
+				       struct spi_replaced_transfers *res);
+/**
+ * struct spi_replaced_transfers - structure describing the spi_transfer
+ *                                 replacements that have occurred
+ *                                 so that they can get reverted
+ * @release:            some extra release code to get executed prior to
+ *                      relasing this structure
+ * @extradata:          pointer to some extra data if requested or NULL
+ * @replaced_transfers: transfers that have been replaced and which need
+ *                      to get restored
+ * @replaced_after:     the transfer after which the @replaced_transfers
+ *                      are to get re-inserted
+ * @inserted:           number of transfers inserted
+ * @inserted_transfers: array of spi_transfers of array-size @inserted,
+ *                      that have been replacing replaced_transfers
+ *
+ * note: that @extradata will point to @inserted_transfers[@inserted]
+ * if some extra allocation is requested, so alignment will be the same
+ * as for spi_transfers
+ */
+struct spi_replaced_transfers {
+	spi_replaced_release_t release;
+	void *extradata;
+	struct list_head replaced_transfers;
+	struct list_head *replaced_after;
+	size_t inserted;
+	struct spi_transfer inserted_transfers[];
+};
+
+extern struct spi_replaced_transfers *spi_replace_transfers(
+	struct spi_message *msg,
+	struct spi_transfer *xfer_first,
+	size_t remove,
+	size_t insert,
+	spi_replaced_release_t release,
+	size_t extradatasize,
+	gfp_t gfp);
+
+/*---------------------------------------------------------------------------*/
+
+/* SPI transfer transformation methods */
+
+extern int spi_split_transfers_maxsize(struct spi_master *master,
+				       struct spi_message *msg,
+				       size_t maxsize,
+				       gfp_t gfp);
 
 /*---------------------------------------------------------------------------*/
 
@@ -800,54 +997,6 @@ extern int spi_bus_lock(struct spi_master *master);
 extern int spi_bus_unlock(struct spi_master *master);
 
 /**
- * spi_write - SPI synchronous write
- * @spi: device to which data will be written
- * @buf: data buffer
- * @len: data buffer size
- * Context: can sleep
- *
- * This writes the buffer and returns zero or a negative error code.
- * Callable only from contexts that can sleep.
- */
-static inline int
-spi_write(struct spi_device *spi, const void *buf, size_t len)
-{
-	struct spi_transfer	t = {
-			.tx_buf		= buf,
-			.len		= len,
-		};
-	struct spi_message	m;
-
-	spi_message_init(&m);
-	spi_message_add_tail(&t, &m);
-	return spi_sync(spi, &m);
-}
-
-/**
- * spi_read - SPI synchronous read
- * @spi: device from which data will be read
- * @buf: data buffer
- * @len: data buffer size
- * Context: can sleep
- *
- * This reads the buffer and returns zero or a negative error code.
- * Callable only from contexts that can sleep.
- */
-static inline int
-spi_read(struct spi_device *spi, void *buf, size_t len)
-{
-	struct spi_transfer	t = {
-			.rx_buf		= buf,
-			.len		= len,
-		};
-	struct spi_message	m;
-
-	spi_message_init(&m);
-	spi_message_add_tail(&t, &m);
-	return spi_sync(spi, &m);
-}
-
-/**
  * spi_sync_transfer - synchronous SPI data transfer
  * @spi: device with which data will be exchanged
  * @xfers: An array of spi_transfers
@@ -858,7 +1007,7 @@ spi_read(struct spi_device *spi, void *buf, size_t len)
  *
  * For more specific semantics see spi_sync().
  *
- * It returns zero on success, else a negative error code.
+ * Return: Return: zero on success, else a negative error code.
  */
 static inline int
 spi_sync_transfer(struct spi_device *spi, struct spi_transfer *xfers,
@@ -869,6 +1018,52 @@ spi_sync_transfer(struct spi_device *spi, struct spi_transfer *xfers,
 	spi_message_init_with_transfers(&msg, xfers, num_xfers);
 
 	return spi_sync(spi, &msg);
+}
+
+/**
+ * spi_write - SPI synchronous write
+ * @spi: device to which data will be written
+ * @buf: data buffer
+ * @len: data buffer size
+ * Context: can sleep
+ *
+ * This function writes the buffer @buf.
+ * Callable only from contexts that can sleep.
+ *
+ * Return: zero on success, else a negative error code.
+ */
+static inline int
+spi_write(struct spi_device *spi, const void *buf, size_t len)
+{
+	struct spi_transfer	t = {
+			.tx_buf		= buf,
+			.len		= len,
+		};
+
+	return spi_sync_transfer(spi, &t, 1);
+}
+
+/**
+ * spi_read - SPI synchronous read
+ * @spi: device from which data will be read
+ * @buf: data buffer
+ * @len: data buffer size
+ * Context: can sleep
+ *
+ * This function reads the buffer @buf.
+ * Callable only from contexts that can sleep.
+ *
+ * Return: zero on success, else a negative error code.
+ */
+static inline int
+spi_read(struct spi_device *spi, void *buf, size_t len)
+{
+	struct spi_transfer	t = {
+			.rx_buf		= buf,
+			.len		= len,
+		};
+
+	return spi_sync_transfer(spi, &t, 1);
 }
 
 /* this copies txbuf and rxbuf data; for small transfers only! */
@@ -882,9 +1077,10 @@ extern int spi_write_then_read(struct spi_device *spi,
  * @cmd: command to be written before data is read back
  * Context: can sleep
  *
- * This returns the (unsigned) eight bit number returned by the
- * device, or else a negative error code.  Callable only from
- * contexts that can sleep.
+ * Callable only from contexts that can sleep.
+ *
+ * Return: the (unsigned) eight bit number returned by the
+ * device, or else a negative error code.
  */
 static inline ssize_t spi_w8r8(struct spi_device *spi, u8 cmd)
 {
@@ -903,12 +1099,13 @@ static inline ssize_t spi_w8r8(struct spi_device *spi, u8 cmd)
  * @cmd: command to be written before data is read back
  * Context: can sleep
  *
- * This returns the (unsigned) sixteen bit number returned by the
- * device, or else a negative error code.  Callable only from
- * contexts that can sleep.
- *
  * The number is returned in wire-order, which is at least sometimes
  * big-endian.
+ *
+ * Callable only from contexts that can sleep.
+ *
+ * Return: the (unsigned) sixteen bit number returned by the
+ * device, or else a negative error code.
  */
 static inline ssize_t spi_w8r16(struct spi_device *spi, u8 cmd)
 {
@@ -927,13 +1124,13 @@ static inline ssize_t spi_w8r16(struct spi_device *spi, u8 cmd)
  * @cmd: command to be written before data is read back
  * Context: can sleep
  *
- * This returns the (unsigned) sixteen bit number returned by the device in cpu
- * endianness, or else a negative error code. Callable only from contexts that
- * can sleep.
- *
  * This function is similar to spi_w8r16, with the exception that it will
  * convert the read 16 bit data word from big-endian to native endianness.
  *
+ * Callable only from contexts that can sleep.
+ *
+ * Return: the (unsigned) sixteen bit number returned by the device in cpu
+ * endianness, or else a negative error code.
  */
 static inline ssize_t spi_w8r16be(struct spi_device *spi, u8 cmd)
 
@@ -947,6 +1144,48 @@ static inline ssize_t spi_w8r16be(struct spi_device *spi, u8 cmd)
 
 	return be16_to_cpu(result);
 }
+
+/**
+ * struct spi_flash_read_message - flash specific information for
+ * spi-masters that provide accelerated flash read interfaces
+ * @buf: buffer to read data
+ * @from: offset within the flash from where data is to be read
+ * @len: length of data to be read
+ * @retlen: actual length of data read
+ * @read_opcode: read_opcode to be used to communicate with flash
+ * @addr_width: number of address bytes
+ * @dummy_bytes: number of dummy bytes
+ * @opcode_nbits: number of lines to send opcode
+ * @addr_nbits: number of lines to send address
+ * @data_nbits: number of lines for data
+ * @rx_sg: Scatterlist for receive data read from flash
+ * @cur_msg_mapped: message has been mapped for DMA
+ */
+struct spi_flash_read_message {
+	void *buf;
+	loff_t from;
+	size_t len;
+	size_t retlen;
+	u8 read_opcode;
+	u8 addr_width;
+	u8 dummy_bytes;
+	u8 opcode_nbits;
+	u8 addr_nbits;
+	u8 data_nbits;
+	struct sg_table rx_sg;
+	bool cur_msg_mapped;
+};
+
+/* SPI core interface for flash read support */
+static inline bool spi_flash_read_supported(struct spi_device *spi)
+{
+	return spi->master->spi_flash_read &&
+	       (!spi->master->flash_read_supported ||
+	       spi->master->flash_read_supported(spi));
+}
+
+int spi_flash_read(struct spi_device *spi,
+		   struct spi_flash_read_message *msg);
 
 /*---------------------------------------------------------------------------*/
 
@@ -1064,12 +1303,7 @@ spi_add_device(struct spi_device *spi);
 extern struct spi_device *
 spi_new_device(struct spi_master *, struct spi_board_info *);
 
-static inline void
-spi_unregister_device(struct spi_device *spi)
-{
-	if (spi)
-		device_unregister(&spi->dev);
-}
+extern void spi_unregister_device(struct spi_device *spi);
 
 extern const struct spi_device_id *
 spi_get_device_id(const struct spi_device *sdev);

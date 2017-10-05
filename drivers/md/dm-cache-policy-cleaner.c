@@ -83,7 +83,7 @@ static struct list_head *list_pop(struct list_head *q)
 static int alloc_hash(struct hash *hash, unsigned elts)
 {
 	hash->nr_buckets = next_power(elts >> 4, 16);
-	hash->hash_bits = ffs(hash->nr_buckets) - 1;
+	hash->hash_bits = __ffs(hash->nr_buckets);
 	hash->table = vzalloc(sizeof(*hash->table) * hash->nr_buckets);
 
 	return hash->table ? 0 : -ENOMEM;
@@ -359,7 +359,8 @@ static struct wb_cache_entry *get_next_dirty_entry(struct policy *p)
 
 static int wb_writeback_work(struct dm_cache_policy *pe,
 			     dm_oblock_t *oblock,
-			     dm_cblock_t *cblock)
+			     dm_cblock_t *cblock,
+			     bool critical_only)
 {
 	int r = -ENOENT;
 	struct policy *p = to_policy(pe);
@@ -394,7 +395,7 @@ static void init_policy_functions(struct policy *p)
 	p->policy.set_dirty = wb_set_dirty;
 	p->policy.clear_dirty = wb_clear_dirty;
 	p->policy.load_mapping = wb_load_mapping;
-	p->policy.walk_mappings = NULL;
+	p->policy.get_hint = NULL;
 	p->policy.remove_mapping = wb_remove_mapping;
 	p->policy.writeback_work = wb_writeback_work;
 	p->policy.force_mapping = wb_force_mapping;

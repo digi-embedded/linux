@@ -33,6 +33,26 @@
 
 	.endm
 
+	.macro set_mmdc_misc_ralat_2_cycles
+
+	/* Set MMDCx_MISC[RALAT] = 2 cycles */
+	ldr	r6, [r8, #0x18]
+	bic	r6, r6, #(0x7 << 6)
+	orr	r6, r6, #(0x2 << 6)
+	str	r6, [r8, #0x18]
+
+	/* Check if lpddr2 channel 1 is enabled */
+	ldr 	r6, [r8, #0x18]
+	ands	r6, r6, #(1 << 2)
+	beq	1f
+
+	ldr	r6, [r4, #0x18]
+	bic	r6, r6, #(0x7 << 6)
+	orr	r6, r6, #(0x2 << 6)
+	str	r6, [r4, #0x18]
+1:
+	.endm
+
 	.macro	switch_to_400MHz
 	/* set the MMDC_DIV=1, AXI_DIV=2, AHB_DIV=3 */
 	ldr	r9, [r2, #CCM_CBCDR]
@@ -151,11 +171,7 @@ skip_periph_clk_switch_100m:
 	.endm
 
 	.macro	set_timings_below_100MHz_operation
-	/* Set MMDCx_MISC[RALAT] = 2 cycles */
-	ldr	r6, [r8, #0x18]
-	bic	r6, r6, #(0x7 << 6)
-	orr	r6, r6, #(0x2 << 6)
-	str	r6, [r8, #0x18]
+	set_mmdc_misc_ralat_2_cycles
 
 	/* Adjust LPDDR2 timings for 24Mhz operation */
 	ldr	r5, =0x03162073
@@ -172,11 +188,6 @@ skip_periph_clk_switch_100m:
 	ands	r6, r6, #(1 << 2)
 	beq	skip_below_100Mhz_ch1_timings
 
-	ldr	r6, [r4, #0x18]
-	bic	r6, r6, #(0x7 << 6)
-	orr	r6, r6, #(0x2 << 6)
-	str	r6, [r4, #0x18]
-
 	str	r5, [r4, #0xC]  	/* MMDC1_MDCFG0 */
 	str	r7, [r4, #0x10] 	/* MMDC1_MDCFG1 */
 	str	r9, [r4, #0x14] 	/* MMDC1_MDCFG2 */
@@ -186,38 +197,54 @@ skip_below_100Mhz_ch1_timings:
 
 	.endm
 
-	.macro	set_timings_above_100MHz_operation
+	.macro restore_mmdc_settings_info
 	/* restore timing from mmdc_settings_info */
 	ldr	r6, [r1, #0x0]
 	ldr	r7, [r1, #0x4]
-tloop:
+1:
 	ldr	r9, [r7], #0x4
 	ldr	r10, [r7], #0x4
 	str	r10, [r8, r9]
 	subs	r6, r6, #0x1
-	bne	tloop
+	bne	1b
 
 	/* Check if lpddr2 channel 1 is enabled */
 	ldr	r6, [r8, #0x18]
 	ands	r6, r6, #(1 << 2)
-	beq	skip_above_100Mhz_ch1_timings
+	beq	3f
 
 	ldr	r6, [r1, #0x0]
 	ldr	r7, [r1, #0x4]
-tloop2:
+2:
 	ldr	r9, [r7], #0x4
 	ldr	r10, [r7], #0x4
 	str	r10, [r4, r9]
 	subs	r6, r6, #0x1
-	bne	tloop2
-
-skip_above_100Mhz_ch1_timings:
+	bne	2b
+3:
 
 	.endm
 
-	.macro	mmdc_clk_lower_100MHz
+	.macro	mmdc_clk_lower_equal_100MHz
 
+	ldr     r10, =100000000
+	cmp     r0, r10
+	beq	set_timmings_100MHz
 	set_timings_below_100MHz_operation
+	b	common_to_lower_equal_100MHz
+
+set_timmings_100MHz:
+	restore_mmdc_settings_info
+	set_mmdc_misc_ralat_2_cycles
+
+common_to_lower_equal_100MHz:
+
+	/* if MMDC is not in 400MHz mode, skip double mu count */
+	ldr	r5, [r1, #0x8]
+	ldr	r6, =400000000
+	cmp	r5, r6
+	bne	skip_lower_force_measure_ch1
+
 	/*
 	 * Prior to reducing the DDR frequency (at 528/400 MHz),
 	 * read the Measure unit count bits (MU_UNIT_DEL_NUM)
@@ -305,7 +332,7 @@ skip_lower_force_measure_ch1:
 
 	.macro	mmdc_clk_above_100MHz
 
-	set_timings_above_100MHz_operation
+	restore_mmdc_settings_info
 
 	/* Make sure that the PHY measurement unit is NOT in bypass mode */
 	ldr	r5, =0x8B8
@@ -347,6 +374,35 @@ skip_above_force_measure_ch1:
 
 	.endm
 
+	.macro	disable_l1_dcache
+
+	/*
+	 * Flush all data from the L1 data cache before disabling
+	 * SCTLR.C bit.
+	 */
+	push	{r0 - r11, lr}
+
+	ldr	r7, =v7_flush_kern_cache_all
+	mov	lr, pc
+	mov	pc, r7
+	pop	{r0 - r11, lr}
+
+	/* disable d-cache */
+	mrc	p15, 0, r6, c1, c0, 0
+	bic	r6, r6, #0x4
+	mcr	p15, 0, r6, c1, c0, 0
+	dsb
+	isb
+
+	push	{r0 - r11, lr}
+
+	ldr	r7, =v7_flush_kern_cache_all
+	mov	lr, pc
+	mov	pc, r7
+	pop	{r0 - r11, lr}
+
+	.endm
+
 /*
  *  mx6_lpddr2_freq_change
  *
@@ -359,6 +415,17 @@ skip_above_force_measure_ch1:
 ENTRY(mx6q_lpddr2_freq_change)
 mx6q_lpddr2_freq_change_start:
 	push	{r2-r10}
+
+	/*
+	  * Need to flush and disable L1 before
+	  * disabling L2, we need data to
+	  * coherent. Flushing L1 pushes
+	  * everyhting to L2. We sync L2 later, but
+	  * it can still have dirty lines.
+	  * While exiting, we need to enable L2 first
+	  * and then L1.
+	  */
+	disable_l1_dcache
 
 	/*
 	 * To ensure no page table walks occur in DDR, we
@@ -401,14 +468,6 @@ mx6q_lpddr2_freq_change_start:
 	/* flush the TLB */
 	ldr	r6, =0x0
 	mcr	p15, 0, r6, c8, c3, 0
-
-	/* Disable L1 data cache. */
-	mrc	p15, 0, r6, c1, c0, 0
-	bic	r6, r6, #0x4
-	mcr	p15, 0, r6, c1, c0, 0
-
-	dsb
-	isb
 
 #ifdef CONFIG_CACHE_L2X0
 	/*
@@ -518,7 +577,7 @@ skip_sbs_ch1:
 	ldr	r10, =100000000
 	cmp	r0, r10
 	bgt	set_ddr_mu_above_100
-	mmdc_clk_lower_100MHz
+	mmdc_clk_lower_equal_100MHz
 
 set_ddr_mu_above_100:
 	ldr	r10, =24000000

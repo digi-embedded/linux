@@ -356,7 +356,7 @@ xfs_compat_attrlist_by_handle(
 			   sizeof(compat_xfs_fsop_attrlist_handlereq_t)))
 		return -EFAULT;
 	if (al_hreq.buflen < sizeof(struct attrlist) ||
-	    al_hreq.buflen > XATTR_LIST_MAX)
+	    al_hreq.buflen > XFS_XATTR_LIST_MAX)
 		return -EINVAL;
 
 	/*
@@ -532,11 +532,7 @@ xfs_file_compat_ioctl(
 	struct xfs_inode	*ip = XFS_I(inode);
 	struct xfs_mount	*mp = ip->i_mount;
 	void			__user *arg = (void __user *)p;
-	int			ioflags = 0;
 	int			error;
-
-	if (filp->f_mode & FMODE_NOCMTIME)
-		ioflags |= XFS_IO_INVIS;
 
 	trace_xfs_file_compat_ioctl(ip);
 
@@ -589,7 +585,7 @@ xfs_file_compat_ioctl(
 		if (xfs_compat_flock64_copyin(&bf, arg))
 			return -EFAULT;
 		cmd = _NATIVE_IOC(cmd, struct xfs_flock64);
-		return xfs_ioc_space(ip, inode, filp, ioflags, cmd, &bf);
+		return xfs_ioc_space(filp, cmd, &bf);
 	}
 	case XFS_IOC_FSGEOMETRY_V1_32:
 		return xfs_compat_ioc_fsgeometry_v1(mp, arg);

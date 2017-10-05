@@ -30,10 +30,10 @@
 #include <media/tuner.h>
 #include <media/tveeprom.h>
 #include <media/videobuf2-dma-sg.h>
-#include <media/cx2341x.h>
+#include <media/drv-intf/cx2341x.h>
 #include <media/videobuf2-dvb.h>
-#include <media/ir-kbd-i2c.h>
-#include <media/wm8775.h>
+#include <media/i2c/ir-kbd-i2c.h>
+#include <media/i2c/wm8775.h>
 
 #include "cx88-reg.h"
 #include "tuner-xc2028.h"
@@ -321,13 +321,12 @@ struct cx88_riscmem {
 /* buffer for one video frame */
 struct cx88_buffer {
 	/* common v4l buffer stuff -- must be first */
-	struct vb2_buffer vb;
+	struct vb2_v4l2_buffer vb;
 	struct list_head       list;
 
 	/* cx88 specific */
 	unsigned int           bpl;
 	struct cx88_riscmem    risc;
-	u32                    count;
 };
 
 struct cx88_dmaqueue {
@@ -376,9 +375,10 @@ struct cx88_core {
 
 	/* config info -- dvb */
 #if IS_ENABLED(CONFIG_VIDEO_CX88_DVB)
-	int 			   (*prev_set_voltage)(struct dvb_frontend *fe, fe_sec_voltage_t voltage);
+	int	(*prev_set_voltage)(struct dvb_frontend *fe,
+				    enum fe_sec_voltage voltage);
 #endif
-	void			   (*gate_ctrl)(struct cx88_core  *core, int open);
+	void	(*gate_ctrl)(struct cx88_core *core, int open);
 
 	/* state info */
 	struct task_struct         *kthread;
@@ -485,7 +485,6 @@ struct cx8800_dev {
 	/* pci i/o */
 	struct pci_dev             *pci;
 	unsigned char              pci_rev,pci_lat;
-	void			   *alloc_ctx;
 
 	const struct cx8800_fmt    *fmt;
 
@@ -549,7 +548,6 @@ struct cx8802_dev {
 	/* pci i/o */
 	struct pci_dev             *pci;
 	unsigned char              pci_rev,pci_lat;
-	void			   *alloc_ctx;
 
 	/* dma queues */
 	struct cx88_dmaqueue       mpegq;

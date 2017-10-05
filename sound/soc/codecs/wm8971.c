@@ -577,7 +577,7 @@ static int wm8971_set_bias_level(struct snd_soc_codec *codec,
 		flush_delayed_work(&wm8971->charge_work);
 		break;
 	case SND_SOC_BIAS_STANDBY:
-		if (codec->dapm.bias_level == SND_SOC_BIAS_OFF) {
+		if (snd_soc_codec_get_bias_level(codec) == SND_SOC_BIAS_OFF) {
 			snd_soc_cache_sync(codec);
 			/* charge output caps - set vmid to 5k for quick power up */
 			snd_soc_write(codec, WM8971_PWR1, pwr_reg | 0x01c0);
@@ -594,7 +594,6 @@ static int wm8971_set_bias_level(struct snd_soc_codec *codec,
 		snd_soc_write(codec, WM8971_PWR1, 0x0001);
 		break;
 	}
-	codec->dapm.bias_level = level;
 	return 0;
 }
 
@@ -650,17 +649,19 @@ static int wm8971_probe(struct snd_soc_codec *codec)
 	return 0;
 }
 
-static struct snd_soc_codec_driver soc_codec_dev_wm8971 = {
+static const struct snd_soc_codec_driver soc_codec_dev_wm8971 = {
 	.probe =	wm8971_probe,
 	.set_bias_level = wm8971_set_bias_level,
 	.suspend_bias_off = true,
 
-	.controls = wm8971_snd_controls,
-	.num_controls = ARRAY_SIZE(wm8971_snd_controls),
-	.dapm_widgets = wm8971_dapm_widgets,
-	.num_dapm_widgets = ARRAY_SIZE(wm8971_dapm_widgets),
-	.dapm_routes = wm8971_dapm_routes,
-	.num_dapm_routes = ARRAY_SIZE(wm8971_dapm_routes),
+	.component_driver = {
+		.controls		= wm8971_snd_controls,
+		.num_controls		= ARRAY_SIZE(wm8971_snd_controls),
+		.dapm_widgets		= wm8971_dapm_widgets,
+		.num_dapm_widgets	= ARRAY_SIZE(wm8971_dapm_widgets),
+		.dapm_routes		= wm8971_dapm_routes,
+		.num_dapm_routes	= ARRAY_SIZE(wm8971_dapm_routes),
+	},
 };
 
 static const struct regmap_config wm8971_regmap = {
@@ -711,7 +712,6 @@ MODULE_DEVICE_TABLE(i2c, wm8971_i2c_id);
 static struct i2c_driver wm8971_i2c_driver = {
 	.driver = {
 		.name = "wm8971",
-		.owner = THIS_MODULE,
 	},
 	.probe =    wm8971_i2c_probe,
 	.remove =   wm8971_i2c_remove,

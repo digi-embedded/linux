@@ -90,7 +90,6 @@ int mmc_send_status(struct mmc_card *card, u32 *status)
 
 static int _mmc_select_card(struct mmc_host *host, struct mmc_card *card)
 {
-	int err;
 	struct mmc_command cmd = {0};
 
 	BUG_ON(!host);
@@ -105,11 +104,7 @@ static int _mmc_select_card(struct mmc_host *host, struct mmc_card *card)
 		cmd.flags = MMC_RSP_NONE | MMC_CMD_AC;
 	}
 
-	err = mmc_wait_for_cmd(host, &cmd, MMC_CMD_RETRIES);
-	if (err)
-		return err;
-
-	return 0;
+	return mmc_wait_for_cmd(host, &cmd, MMC_CMD_RETRIES);
 }
 
 int mmc_select_card(struct mmc_card *card)
@@ -244,7 +239,6 @@ int mmc_all_send_cid(struct mmc_host *host, u32 *cid)
 
 int mmc_set_relative_addr(struct mmc_card *card)
 {
-	int err;
 	struct mmc_command cmd = {0};
 
 	BUG_ON(!card);
@@ -254,11 +248,7 @@ int mmc_set_relative_addr(struct mmc_card *card)
 	cmd.arg = card->rca << 16;
 	cmd.flags = MMC_RSP_R1 | MMC_CMD_AC;
 
-	err = mmc_wait_for_cmd(card->host, &cmd, MMC_CMD_RETRIES);
-	if (err)
-		return err;
-
-	return 0;
+	return mmc_wait_for_cmd(card->host, &cmd, MMC_CMD_RETRIES);
 }
 
 static int
@@ -490,6 +480,7 @@ int __mmc_switch(struct mmc_card *card, u8 set, u8 index, u8 value,
 	u32 status = 0;
 	bool use_r1b_resp = use_busy_signal;
 	bool expired = false;
+	bool busy = false;
 
 	mmc_retune_hold(host);
 
@@ -551,19 +542,24 @@ int __mmc_switch(struct mmc_card *card, u8 set, u8 index, u8 value,
 	/* Must check status to be sure of no errors. */
 	timeout = jiffies + msecs_to_jiffies(timeout_ms) + 1;
 	do {
+		/*
+		 * Due to the possibility of being preempted after
+		 * sending the status command, check the expiration
+		 * time first.
+		 */
+		expired = time_after(jiffies, timeout);
 		if (send_status) {
-			/*
-			 * Due to the possibility of being preempted after
-			 * sending the status command, check the expiration
-			 * time first.
-			 */
-			expired = time_after(jiffies, timeout);
 			err = __mmc_send_status(card, &status, ignore_crc);
 			if (err)
 				goto out;
 		}
 		if ((host->caps & MMC_CAP_WAIT_WHILE_BUSY) && use_r1b_resp)
 			break;
+		if (host->ops->card_busy) {
+			if (!host->ops->card_busy(host))
+				break;
+			busy = true;
+		}
 		if (mmc_host_is_spi(host))
 			break;
 
@@ -572,19 +568,20 @@ int __mmc_switch(struct mmc_card *card, u8 set, u8 index, u8 value,
 		 * does'nt support MMC_CAP_WAIT_WHILE_BUSY, then we can only
 		 * rely on waiting for the stated timeout to be sufficient.
 		 */
-		if (!send_status) {
+		if (!send_status && !host->ops->card_busy) {
 			mmc_delay(timeout_ms);
 			goto out;
 		}
 
 		/* Timeout if the device never leaves the program state. */
-		if (expired && R1_CURRENT_STATE(status) == R1_STATE_PRG) {
+		if (expired &&
+		    (R1_CURRENT_STATE(status) == R1_STATE_PRG || busy)) {
 			pr_err("%s: Card stuck in programming state! %s\n",
 				mmc_hostname(host), __func__);
 			err = -ETIMEDOUT;
 			goto out;
 		}
-	} while (R1_CURRENT_STATE(status) == R1_STATE_PRG);
+	} while (R1_CURRENT_STATE(status) == R1_STATE_PRG || busy);
 
 	err = mmc_switch_status_error(host, status);
 out:
@@ -592,7 +589,6 @@ out:
 
 	return err;
 }
-EXPORT_SYMBOL_GPL(__mmc_switch);
 
 int mmc_switch(struct mmc_card *card, u8 set, u8 index, u8 value,
 		unsigned int timeout_ms)
@@ -602,7 +598,7 @@ int mmc_switch(struct mmc_card *card, u8 set, u8 index, u8 value,
 }
 EXPORT_SYMBOL_GPL(mmc_switch);
 
-int mmc_send_tuning(struct mmc_host *host)
+int mmc_send_tuning(struct mmc_host *host, u32 opcode, int *cmd_error)
 {
 	struct mmc_request mrq = {NULL};
 	struct mmc_command cmd = {0};
@@ -612,16 +608,13 @@ int mmc_send_tuning(struct mmc_host *host)
 	const u8 *tuning_block_pattern;
 	int size, err = 0;
 	u8 *data_buf;
-	u32 opcode;
 
 	if (ios->bus_width == MMC_BUS_WIDTH_8) {
 		tuning_block_pattern = tuning_blk_pattern_8bit;
 		size = sizeof(tuning_blk_pattern_8bit);
-		opcode = MMC_SEND_TUNING_BLOCK_HS200;
 	} else if (ios->bus_width == MMC_BUS_WIDTH_4) {
 		tuning_block_pattern = tuning_blk_pattern_4bit;
 		size = sizeof(tuning_blk_pattern_4bit);
-		opcode = MMC_SEND_TUNING_BLOCK;
 	} else
 		return -EINVAL;
 
@@ -651,6 +644,9 @@ int mmc_send_tuning(struct mmc_host *host)
 	sg_init_one(&sg, data_buf, size);
 
 	mmc_wait_for_req(host, &mrq);
+
+	if (cmd_error)
+		*cmd_error = cmd.error;
 
 	if (cmd.error) {
 		err = cmd.error;
@@ -750,7 +746,7 @@ mmc_send_bus_test(struct mmc_card *card, struct mmc_host *host, u8 opcode,
 
 int mmc_bus_test(struct mmc_card *card, u8 bus_width)
 {
-	int err, width;
+	int width;
 
 	if (bus_width == MMC_BUS_WIDTH_8)
 		width = 8;
@@ -766,8 +762,7 @@ int mmc_bus_test(struct mmc_card *card, u8 bus_width)
 	 * is a problem.  This improves chances that the test will work.
 	 */
 	mmc_send_bus_test(card, card->host, MMC_BUS_TEST_W, width);
-	err = mmc_send_bus_test(card, card->host, MMC_BUS_TEST_R, width);
-	return err;
+	return mmc_send_bus_test(card, card->host, MMC_BUS_TEST_R, width);
 }
 
 int mmc_send_hpi_cmd(struct mmc_card *card, u32 *status)

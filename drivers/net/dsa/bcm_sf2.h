@@ -19,10 +19,14 @@
 #include <linux/mutex.h>
 #include <linux/mii.h>
 #include <linux/ethtool.h>
+#include <linux/types.h>
+#include <linux/bitops.h>
+#include <linux/if_vlan.h>
 
 #include <net/dsa.h>
 
 #include "bcm_sf2_regs.h"
+#include "b53/b53_priv.h"
 
 struct bcm_sf2_hw_params {
 	u16	top_rev;
@@ -46,8 +50,6 @@ struct bcm_sf2_port_status {
 	unsigned int link;
 
 	struct ethtool_eee eee;
-
-	u32 vlan_ctl_mask;
 };
 
 struct bcm_sf2_priv {
@@ -69,6 +71,9 @@ struct bcm_sf2_priv {
 	u32				irq1_stat;
 	u32				irq1_mask;
 
+	/* Backing b53_device */
+	struct b53_device		*dev;
+
 	/* Mutex protecting access to the MIB counters */
 	struct mutex			stats_mutex;
 
@@ -78,13 +83,26 @@ struct bcm_sf2_priv {
 
 	/* Mask of ports enabled for Wake-on-LAN */
 	u32				wol_ports_mask;
+
+	/* MoCA port location */
+	int				moca_port;
+
+	/* Bitmask of ports having an integrated PHY */
+	unsigned int			int_phy_mask;
+
+	/* Master and slave MDIO bus controller */
+	unsigned int			indir_phy_mask;
+	struct device_node		*master_mii_dn;
+	struct mii_bus			*slave_mii_bus;
+	struct mii_bus			*master_mii_bus;
 };
 
-struct bcm_sf2_hw_stats {
-	const char	*string;
-	u16		reg;
-	u8		sizeof_stat;
-};
+static inline struct bcm_sf2_priv *bcm_sf2_to_priv(struct dsa_switch *ds)
+{
+	struct b53_device *dev = ds->priv;
+
+	return dev->priv;
+}
 
 #define SF2_IO_MACRO(name) \
 static inline u32 name##_readl(struct bcm_sf2_priv *priv, u32 off)	\
@@ -125,8 +143,8 @@ static inline void name##_writeq(struct bcm_sf2_priv *priv, u64 val,	\
 static inline void intrl2_##which##_mask_clear(struct bcm_sf2_priv *priv, \
 						u32 mask)		\
 {									\
-	intrl2_##which##_writel(priv, mask, INTRL2_CPU_MASK_CLEAR);	\
 	priv->irq##which##_mask &= ~(mask);				\
+	intrl2_##which##_writel(priv, mask, INTRL2_CPU_MASK_CLEAR);	\
 }									\
 static inline void intrl2_##which##_mask_set(struct bcm_sf2_priv *priv, \
 						u32 mask)		\

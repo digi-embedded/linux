@@ -5,16 +5,16 @@
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  */
-
 #include <linux/irqchip.h>
+#include <linux/mfd/syscon.h>
+#include <linux/mfd/syscon/imx7-iomuxc-gpr.h>
 #include <linux/of_platform.h>
-#include <asm/mach/arch.h>
-#include <asm/mach/map.h>
 #include <linux/phy.h>
 #include <linux/pm_opp.h>
 #include <linux/regmap.h>
-#include <linux/mfd/syscon.h>
-#include <linux/mfd/syscon/imx7-iomuxc-gpr.h>
+
+#include <asm/mach/arch.h>
+#include <asm/mach/map.h>
 
 #include "common.h"
 #include "cpuidle.h"
@@ -61,17 +61,15 @@ static int bcm54220_phy_fixup(struct phy_device *dev)
 	return 0;
 }
 
-#define PHY_ID_AR8031   0x004dd074
+#define PHY_ID_AR8031	0x004dd074
 #define PHY_ID_BCM54220	0x600d8589
-#define PHY_ID_BCM5422x	0x600d8599
+
 static void __init imx7d_enet_phy_init(void)
 {
 	if (IS_BUILTIN(CONFIG_PHYLIB)) {
 		phy_register_fixup_for_uid(PHY_ID_AR8031, 0xffffffff,
 					   ar8031_phy_fixup);
 		phy_register_fixup_for_uid(PHY_ID_BCM54220, 0xffffffff,
-					   bcm54220_phy_fixup);
-		phy_register_fixup_for_uid(PHY_ID_BCM5422x, 0xffffffff,
 					   bcm54220_phy_fixup);
 	}
 }
@@ -133,7 +131,7 @@ static void __init imx7d_init_machine(void)
 	if (parent == NULL)
 		pr_warn("failed to initialize soc device\n");
 
-	of_platform_populate(NULL, of_default_bus_match_table, NULL, NULL);
+	of_platform_default_populate(NULL, NULL, parent);
 	imx7d_pm_init();
 	imx_anatop_init();
 	imx7d_enet_init();
@@ -158,11 +156,6 @@ static void __init imx7d_init_late(void)
 	imx7d_cpuidle_init();
 }
 
-static const char *imx7d_dt_compat[] __initconst = {
-	"fsl,imx7d",
-	NULL,
-};
-
 static void __init imx7d_map_io(void)
 {
 	debug_ll_io_init();
@@ -170,8 +163,14 @@ static void __init imx7d_map_io(void)
 	imx_busfreq_map_io();
 }
 
+static const char *const imx7d_dt_compat[] __initconst = {
+	"fsl,imx7d",
+	"fsl,imx7s",
+	NULL,
+};
+
 DT_MACHINE_START(IMX7D, "Freescale i.MX7 Dual (Device Tree)")
-	.map_io		= imx7d_map_io,
+	.map_io         = imx7d_map_io,
 	.smp            = smp_ops(imx_smp_ops),
 	.init_irq	= imx7d_init_irq,
 	.init_machine	= imx7d_init_machine,

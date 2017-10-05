@@ -126,10 +126,7 @@ struct dwc3_omap {
 	u32			debug_offset;
 	u32			irq0_offset;
 
-	u32			dma_status:1;
-
-	struct extcon_specific_cable_nb extcon_vbus_dev;
-	struct extcon_specific_cable_nb extcon_id_dev;
+	struct extcon_dev	*edev;
 	struct notifier_block	vbus_nb;
 	struct notifier_block	id_nb;
 
@@ -168,7 +165,7 @@ static void dwc3_omap_write_utmi_ctrl(struct dwc3_omap *omap, u32 value)
 
 static u32 dwc3_omap_read_irq0_status(struct dwc3_omap *omap)
 {
-	return dwc3_omap_readl(omap->base, USBOTGSS_IRQSTATUS_0 -
+	return dwc3_omap_readl(omap->base, USBOTGSS_IRQSTATUS_RAW_0 -
 						omap->irq0_offset);
 }
 
@@ -181,7 +178,7 @@ static void dwc3_omap_write_irq0_status(struct dwc3_omap *omap, u32 value)
 
 static u32 dwc3_omap_read_irqmisc_status(struct dwc3_omap *omap)
 {
-	return dwc3_omap_readl(omap->base, USBOTGSS_IRQSTATUS_MISC +
+	return dwc3_omap_readl(omap->base, USBOTGSS_IRQSTATUS_RAW_MISC +
 						omap->irqmisc_offset);
 }
 
@@ -225,102 +222,78 @@ static void dwc3_omap_set_mailbox(struct dwc3_omap *omap,
 
 	switch (status) {
 	case OMAP_DWC3_ID_GROUND:
-		dev_dbg(omap->dev, "ID GND\n");
-
 		if (omap->vbus_reg) {
 			ret = regulator_enable(omap->vbus_reg);
 			if (ret) {
-				dev_dbg(omap->dev, "regulator enable failed\n");
+				dev_err(omap->dev, "regulator enable failed\n");
 				return;
 			}
 		}
 
 		val = dwc3_omap_read_utmi_ctrl(omap);
-		val &= ~(USBOTGSS_UTMI_OTG_CTRL_IDDIG
-				| USBOTGSS_UTMI_OTG_CTRL_VBUSVALID
-				| USBOTGSS_UTMI_OTG_CTRL_SESSEND);
-		val |= USBOTGSS_UTMI_OTG_CTRL_SESSVALID
-				| USBOTGSS_UTMI_OTG_CTRL_POWERPRESENT;
+		val &= ~USBOTGSS_UTMI_OTG_CTRL_IDDIG;
 		dwc3_omap_write_utmi_ctrl(omap, val);
 		break;
 
 	case OMAP_DWC3_VBUS_VALID:
-		dev_dbg(omap->dev, "VBUS Connect\n");
-
 		val = dwc3_omap_read_utmi_ctrl(omap);
 		val &= ~USBOTGSS_UTMI_OTG_CTRL_SESSEND;
-		val |= USBOTGSS_UTMI_OTG_CTRL_IDDIG
-				| USBOTGSS_UTMI_OTG_CTRL_VBUSVALID
-				| USBOTGSS_UTMI_OTG_CTRL_SESSVALID
-				| USBOTGSS_UTMI_OTG_CTRL_POWERPRESENT;
+		val |= USBOTGSS_UTMI_OTG_CTRL_VBUSVALID
+				| USBOTGSS_UTMI_OTG_CTRL_SESSVALID;
 		dwc3_omap_write_utmi_ctrl(omap, val);
 		break;
 
 	case OMAP_DWC3_ID_FLOAT:
 		if (omap->vbus_reg)
 			regulator_disable(omap->vbus_reg);
+		val = dwc3_omap_read_utmi_ctrl(omap);
+		val |= USBOTGSS_UTMI_OTG_CTRL_IDDIG;
+		dwc3_omap_write_utmi_ctrl(omap, val);
 
 	case OMAP_DWC3_VBUS_OFF:
-		dev_dbg(omap->dev, "VBUS Disconnect\n");
-
 		val = dwc3_omap_read_utmi_ctrl(omap);
 		val &= ~(USBOTGSS_UTMI_OTG_CTRL_SESSVALID
-				| USBOTGSS_UTMI_OTG_CTRL_VBUSVALID
-				| USBOTGSS_UTMI_OTG_CTRL_POWERPRESENT);
-		val |= USBOTGSS_UTMI_OTG_CTRL_SESSEND
-				| USBOTGSS_UTMI_OTG_CTRL_IDDIG;
+				| USBOTGSS_UTMI_OTG_CTRL_VBUSVALID);
+		val |= USBOTGSS_UTMI_OTG_CTRL_SESSEND;
 		dwc3_omap_write_utmi_ctrl(omap, val);
 		break;
 
 	default:
-		dev_dbg(omap->dev, "invalid state\n");
+		dev_WARN(omap->dev, "invalid state\n");
 	}
 }
+
+static void dwc3_omap_enable_irqs(struct dwc3_omap *omap);
+static void dwc3_omap_disable_irqs(struct dwc3_omap *omap);
 
 static irqreturn_t dwc3_omap_interrupt(int irq, void *_omap)
 {
 	struct dwc3_omap	*omap = _omap;
-	u32			reg;
 
-	reg = dwc3_omap_read_irqmisc_status(omap);
-
-	if (reg & USBOTGSS_IRQMISC_DMADISABLECLR) {
-		dev_dbg(omap->dev, "DMA Disable was Cleared\n");
-		omap->dma_status = false;
+	if (dwc3_omap_read_irqmisc_status(omap) ||
+	    dwc3_omap_read_irq0_status(omap)) {
+		/* mask irqs */
+		dwc3_omap_disable_irqs(omap);
+		return IRQ_WAKE_THREAD;
 	}
 
-	if (reg & USBOTGSS_IRQMISC_OEVT)
-		dev_dbg(omap->dev, "OTG Event\n");
+	return IRQ_NONE;
+}
 
-	if (reg & USBOTGSS_IRQMISC_DRVVBUS_RISE)
-		dev_dbg(omap->dev, "DRVVBUS Rise\n");
+static irqreturn_t dwc3_omap_interrupt_thread(int irq, void *_omap)
+{
+	struct dwc3_omap	*omap = _omap;
+	u32			reg;
 
-	if (reg & USBOTGSS_IRQMISC_CHRGVBUS_RISE)
-		dev_dbg(omap->dev, "CHRGVBUS Rise\n");
-
-	if (reg & USBOTGSS_IRQMISC_DISCHRGVBUS_RISE)
-		dev_dbg(omap->dev, "DISCHRGVBUS Rise\n");
-
-	if (reg & USBOTGSS_IRQMISC_IDPULLUP_RISE)
-		dev_dbg(omap->dev, "IDPULLUP Rise\n");
-
-	if (reg & USBOTGSS_IRQMISC_DRVVBUS_FALL)
-		dev_dbg(omap->dev, "DRVVBUS Fall\n");
-
-	if (reg & USBOTGSS_IRQMISC_CHRGVBUS_FALL)
-		dev_dbg(omap->dev, "CHRGVBUS Fall\n");
-
-	if (reg & USBOTGSS_IRQMISC_DISCHRGVBUS_FALL)
-		dev_dbg(omap->dev, "DISCHRGVBUS Fall\n");
-
-	if (reg & USBOTGSS_IRQMISC_IDPULLUP_FALL)
-		dev_dbg(omap->dev, "IDPULLUP Fall\n");
-
+	/* clear irq status flags */
+	reg = dwc3_omap_read_irqmisc_status(omap);
 	dwc3_omap_write_irqmisc_status(omap, reg);
 
 	reg = dwc3_omap_read_irq0_status(omap);
-
 	dwc3_omap_write_irq0_status(omap, reg);
+
+	/* unmask irqs */
+	dwc3_omap_enable_irqs(omap);
 
 	return IRQ_HANDLED;
 }
@@ -366,8 +339,6 @@ static void dwc3_omap_disable_irqs(struct dwc3_omap *omap)
 
 	dwc3_omap_write_irqmisc_clr(omap, reg);
 }
-
-static u64 dwc3_omap_dma_mask = DMA_BIT_MASK(32);
 
 static int dwc3_omap_id_notifier(struct notifier_block *nb,
 	unsigned long event, void *ptr)
@@ -434,7 +405,7 @@ static void dwc3_omap_set_utmi_mode(struct dwc3_omap *omap)
 		reg &= ~USBOTGSS_UTMI_OTG_CTRL_SW_MODE;
 		break;
 	default:
-		dev_dbg(omap->dev, "UNKNOWN utmi mode %d\n", utmi_mode);
+		dev_WARN(omap->dev, "UNKNOWN utmi mode %d\n", utmi_mode);
 	}
 
 	dwc3_omap_write_utmi_ctrl(omap, reg);
@@ -454,23 +425,23 @@ static int dwc3_omap_extcon_register(struct dwc3_omap *omap)
 		}
 
 		omap->vbus_nb.notifier_call = dwc3_omap_vbus_notifier;
-		ret = extcon_register_interest(&omap->extcon_vbus_dev,
-					       edev->name, "USB",
-					       &omap->vbus_nb);
+		ret = extcon_register_notifier(edev, EXTCON_USB,
+						&omap->vbus_nb);
 		if (ret < 0)
 			dev_vdbg(omap->dev, "failed to register notifier for USB\n");
 
 		omap->id_nb.notifier_call = dwc3_omap_id_notifier;
-		ret = extcon_register_interest(&omap->extcon_id_dev,
-					       edev->name, "USB-HOST",
-					       &omap->id_nb);
+		ret = extcon_register_notifier(edev, EXTCON_USB_HOST,
+						&omap->id_nb);
 		if (ret < 0)
 			dev_vdbg(omap->dev, "failed to register notifier for USB-HOST\n");
 
-		if (extcon_get_cable_state(edev, "USB") == true)
+		if (extcon_get_cable_state_(edev, EXTCON_USB) == true)
 			dwc3_omap_set_mailbox(omap, OMAP_DWC3_VBUS_VALID);
-		if (extcon_get_cable_state(edev, "USB-HOST") == true)
+		if (extcon_get_cable_state_(edev, EXTCON_USB_HOST) == true)
 			dwc3_omap_set_mailbox(omap, OMAP_DWC3_ID_GROUND);
+
+		omap->edev = edev;
 	}
 
 	return 0;
@@ -526,13 +497,12 @@ static int dwc3_omap_probe(struct platform_device *pdev)
 	omap->irq	= irq;
 	omap->base	= base;
 	omap->vbus_reg	= vbus_reg;
-	dev->dma_mask	= &dwc3_omap_dma_mask;
 
 	pm_runtime_enable(dev);
 	ret = pm_runtime_get_sync(dev);
 	if (ret < 0) {
 		dev_err(dev, "get_sync failed with err %d\n", ret);
-		goto err0;
+		goto err1;
 	}
 
 	dwc3_omap_map_offset(omap);
@@ -540,43 +510,36 @@ static int dwc3_omap_probe(struct platform_device *pdev)
 
 	/* check the DMA Status */
 	reg = dwc3_omap_readl(omap->base, USBOTGSS_SYSCONFIG);
-	omap->dma_status = !!(reg & USBOTGSS_SYSCONFIG_DMADISABLE);
 
-	ret = devm_request_irq(dev, omap->irq, dwc3_omap_interrupt, 0,
-			"dwc3-omap", omap);
+	ret = devm_request_threaded_irq(dev, omap->irq, dwc3_omap_interrupt,
+					dwc3_omap_interrupt_thread, IRQF_SHARED,
+					"dwc3-omap", omap);
 	if (ret) {
 		dev_err(dev, "failed to request IRQ #%d --> %d\n",
 				omap->irq, ret);
 		goto err1;
 	}
 
-	dwc3_omap_enable_irqs(omap);
-
 	ret = dwc3_omap_extcon_register(omap);
 	if (ret < 0)
-		goto err2;
+		goto err1;
 
 	ret = of_platform_populate(node, NULL, NULL, dev);
 	if (ret) {
 		dev_err(&pdev->dev, "failed to create dwc3 core\n");
-		goto err3;
+		goto err2;
 	}
+
+	dwc3_omap_enable_irqs(omap);
 
 	return 0;
 
-err3:
-	if (omap->extcon_vbus_dev.edev)
-		extcon_unregister_interest(&omap->extcon_vbus_dev);
-	if (omap->extcon_id_dev.edev)
-		extcon_unregister_interest(&omap->extcon_id_dev);
-
 err2:
-	dwc3_omap_disable_irqs(omap);
+	extcon_unregister_notifier(omap->edev, EXTCON_USB, &omap->vbus_nb);
+	extcon_unregister_notifier(omap->edev, EXTCON_USB_HOST, &omap->id_nb);
 
 err1:
 	pm_runtime_put_sync(dev);
-
-err0:
 	pm_runtime_disable(dev);
 
 	return ret;
@@ -586,10 +549,8 @@ static int dwc3_omap_remove(struct platform_device *pdev)
 {
 	struct dwc3_omap	*omap = platform_get_drvdata(pdev);
 
-	if (omap->extcon_vbus_dev.edev)
-		extcon_unregister_interest(&omap->extcon_vbus_dev);
-	if (omap->extcon_id_dev.edev)
-		extcon_unregister_interest(&omap->extcon_id_dev);
+	extcon_unregister_notifier(omap->edev, EXTCON_USB, &omap->vbus_nb);
+	extcon_unregister_notifier(omap->edev, EXTCON_USB_HOST, &omap->id_nb);
 	dwc3_omap_disable_irqs(omap);
 	of_platform_depopulate(omap->dev);
 	pm_runtime_put_sync(&pdev->dev);

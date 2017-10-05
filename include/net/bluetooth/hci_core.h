@@ -25,6 +25,7 @@
 #ifndef __HCI_CORE_H
 #define __HCI_CORE_H
 
+#include <linux/leds.h>
 #include <net/bluetooth/hci.h>
 #include <net/bluetooth/hci_sock.h>
 
@@ -77,6 +78,7 @@ struct discovery_state {
 	u8			last_adv_data_len;
 	bool			report_invalid_rssi;
 	bool			result_filtering;
+	bool			limited;
 	s8			rssi;
 	u16			uuid_count;
 	u8			(*uuids)[16];
@@ -156,15 +158,21 @@ struct oob_data {
 };
 
 struct adv_info {
-	struct delayed_work timeout_exp;
+	struct list_head list;
+	bool pending;
 	__u8	instance;
 	__u32	flags;
 	__u16	timeout;
+	__u16	remaining_time;
+	__u16	duration;
 	__u16	adv_data_len;
 	__u8	adv_data[HCI_MAX_AD_LENGTH];
 	__u16	scan_rsp_len;
 	__u8	scan_rsp_data[HCI_MAX_AD_LENGTH];
 };
+
+#define HCI_MAX_ADV_INSTANCES		5
+#define HCI_DEFAULT_ADV_DURATION	2
 
 #define HCI_MAX_SHORT_NAME_LENGTH	10
 
@@ -203,6 +211,7 @@ struct hci_dev {
 	__u8		dev_name[HCI_MAX_NAME_LENGTH];
 	__u8		short_name[HCI_MAX_SHORT_NAME_LENGTH];
 	__u8		eir[HCI_MAX_EIR_LENGTH];
+	__u16		appearance;
 	__u8		dev_class[3];
 	__u8		major_class;
 	__u8		minor_class;
@@ -321,6 +330,14 @@ struct hci_dev {
 	struct work_struct	cmd_work;
 	struct work_struct	tx_work;
 
+	struct work_struct	discov_update;
+	struct work_struct	bg_scan_update;
+	struct work_struct	scan_update;
+	struct work_struct	connectable_update;
+	struct work_struct	discoverable_update;
+	struct delayed_work	le_scan_disable;
+	struct delayed_work	le_scan_restart;
+
 	struct sk_buff_head	rx_q;
 	struct sk_buff_head	raw_q;
 	struct sk_buff_head	cmd_q;
@@ -356,6 +373,8 @@ struct hci_dev {
 
 	atomic_t		promisc;
 
+	const char		*hw_info;
+	const char		*fw_info;
 	struct dentry		*debugfs;
 
 	struct device		dev;
@@ -364,21 +383,26 @@ struct hci_dev {
 
 	DECLARE_BITMAP(dev_flags, __HCI_NUM_FLAGS);
 
-	struct delayed_work	le_scan_disable;
-	struct delayed_work	le_scan_restart;
-
 	__s8			adv_tx_power;
 	__u8			adv_data[HCI_MAX_AD_LENGTH];
 	__u8			adv_data_len;
 	__u8			scan_rsp_data[HCI_MAX_AD_LENGTH];
 	__u8			scan_rsp_data_len;
 
-	struct adv_info		adv_instance;
+	struct list_head	adv_instances;
+	unsigned int		adv_instance_cnt;
+	__u8			cur_adv_instance;
+	__u16			adv_instance_timeout;
+	struct delayed_work	adv_instance_expire;
 
 	__u8			irk[16];
 	__u32			rpa_timeout;
 	struct delayed_work	rpa_expired;
 	bdaddr_t		rpa;
+
+#if IS_ENABLED(CONFIG_BT_LEDS)
+	struct led_trigger	*power_led;
+#endif
 
 	int (*open)(struct hci_dev *hdev);
 	int (*close)(struct hci_dev *hdev);
@@ -388,6 +412,8 @@ struct hci_dev {
 	int (*send)(struct hci_dev *hdev, struct sk_buff *skb);
 	void (*notify)(struct hci_dev *hdev, unsigned int evt);
 	void (*hw_error)(struct hci_dev *hdev, u8 code);
+	int (*post_init)(struct hci_dev *hdev);
+	int (*set_diag)(struct hci_dev *hdev, bool enable);
 	int (*set_bdaddr)(struct hci_dev *hdev, const bdaddr_t *bdaddr);
 };
 
@@ -459,6 +485,7 @@ struct hci_conn {
 	struct delayed_work auto_accept_work;
 	struct delayed_work idle_work;
 	struct delayed_work le_conn_timeout;
+	struct work_struct  le_scan_cleanup;
 
 	struct device	dev;
 	struct dentry	*debugfs;
@@ -502,9 +529,11 @@ struct hci_conn_params {
 		HCI_AUTO_CONN_DIRECT,
 		HCI_AUTO_CONN_ALWAYS,
 		HCI_AUTO_CONN_LINK_LOSS,
+		HCI_AUTO_CONN_EXPLICIT,
 	} auto_connect;
 
 	struct hci_conn *conn;
+	bool explicit_connect;
 };
 
 extern struct list_head hci_dev_list;
@@ -530,10 +559,22 @@ extern struct mutex hci_cb_list_lock;
 /* ----- HCI interface to upper protocols ----- */
 int l2cap_connect_ind(struct hci_dev *hdev, bdaddr_t *bdaddr);
 int l2cap_disconn_ind(struct hci_conn *hcon);
-int l2cap_recv_acldata(struct hci_conn *hcon, struct sk_buff *skb, u16 flags);
+void l2cap_recv_acldata(struct hci_conn *hcon, struct sk_buff *skb, u16 flags);
 
+#if IS_ENABLED(CONFIG_BT_BREDR)
 int sco_connect_ind(struct hci_dev *hdev, bdaddr_t *bdaddr, __u8 *flags);
-int sco_recv_scodata(struct hci_conn *hcon, struct sk_buff *skb);
+void sco_recv_scodata(struct hci_conn *hcon, struct sk_buff *skb);
+#else
+static inline int sco_connect_ind(struct hci_dev *hdev, bdaddr_t *bdaddr,
+				  __u8 *flags)
+{
+	return 0;
+}
+
+static inline void sco_recv_scodata(struct hci_conn *hcon, struct sk_buff *skb)
+{
+}
+#endif
 
 /* ----- Inquiry cache ----- */
 #define INQUIRY_CACHE_AGE_MAX   (HZ*30)   /* 30 seconds */
@@ -559,11 +600,6 @@ static inline void hci_discovery_filter_clear(struct hci_dev *hdev)
 	hdev->discovery.uuids = NULL;
 	hdev->discovery.scan_start = 0;
 	hdev->discovery.scan_duration = 0;
-}
-
-static inline void adv_info_init(struct hci_dev *hdev)
-{
-	memset(&hdev->adv_instance, 0, sizeof(struct adv_info));
 }
 
 bool hci_discovery_active(struct hci_dev *hdev);
@@ -622,6 +658,8 @@ enum {
 	HCI_CONN_DROP,
 	HCI_CONN_PARAM_REMOVAL_PEND,
 	HCI_CONN_NEW_LINK_KEY,
+	HCI_CONN_SCANNING,
+	HCI_CONN_AUTH_FAILURE,
 };
 
 static inline bool hci_conn_ssp_enabled(struct hci_conn *conn)
@@ -771,6 +809,30 @@ static inline struct hci_conn *hci_conn_hash_lookup_ba(struct hci_dev *hdev,
 	return NULL;
 }
 
+static inline struct hci_conn *hci_conn_hash_lookup_le(struct hci_dev *hdev,
+						       bdaddr_t *ba,
+						       __u8 ba_type)
+{
+	struct hci_conn_hash *h = &hdev->conn_hash;
+	struct hci_conn  *c;
+
+	rcu_read_lock();
+
+	list_for_each_entry_rcu(c, &h->list, list) {
+		if (c->type != LE_LINK)
+		       continue;
+
+		if (ba_type == c->dst_type && !bacmp(&c->dst, ba)) {
+			rcu_read_unlock();
+			return c;
+		}
+	}
+
+	rcu_read_unlock();
+
+	return NULL;
+}
+
 static inline struct hci_conn *hci_conn_hash_lookup_state(struct hci_dev *hdev,
 							__u8 type, __u16 state)
 {
@@ -781,6 +843,26 @@ static inline struct hci_conn *hci_conn_hash_lookup_state(struct hci_dev *hdev,
 
 	list_for_each_entry_rcu(c, &h->list, list) {
 		if (c->type == type && c->state == state) {
+			rcu_read_unlock();
+			return c;
+		}
+	}
+
+	rcu_read_unlock();
+
+	return NULL;
+}
+
+static inline struct hci_conn *hci_lookup_le_connect(struct hci_dev *hdev)
+{
+	struct hci_conn_hash *h = &hdev->conn_hash;
+	struct hci_conn  *c;
+
+	rcu_read_lock();
+
+	list_for_each_entry_rcu(c, &h->list, list) {
+		if (c->type == LE_LINK && c->state == BT_CONNECT &&
+		    !test_bit(HCI_CONN_SCANNING, &c->flags)) {
 			rcu_read_unlock();
 			return c;
 		}
@@ -806,6 +888,9 @@ void hci_chan_del(struct hci_chan *chan);
 void hci_chan_list_flush(struct hci_conn *conn);
 struct hci_chan *hci_chan_lookup_handle(struct hci_dev *hdev, __u16 handle);
 
+struct hci_conn *hci_connect_le_scan(struct hci_dev *hdev, bdaddr_t *dst,
+				     u8 dst_type, u8 sec_level,
+				     u16 conn_timeout);
 struct hci_conn *hci_connect_le(struct hci_dev *hdev, bdaddr_t *dst,
 				u8 dst_type, u8 sec_level, u16 conn_timeout,
 				u8 role);
@@ -934,7 +1019,7 @@ static inline void hci_set_drvdata(struct hci_dev *hdev, void *data)
 }
 
 struct hci_dev *hci_dev_get(int index);
-struct hci_dev *hci_get_route(bdaddr_t *dst, bdaddr_t *src);
+struct hci_dev *hci_get_route(bdaddr_t *dst, bdaddr_t *src, u8 src_type);
 
 struct hci_dev *hci_alloc_dev(void);
 void hci_free_dev(struct hci_dev *hdev);
@@ -943,8 +1028,13 @@ void hci_unregister_dev(struct hci_dev *hdev);
 int hci_suspend_dev(struct hci_dev *hdev);
 int hci_resume_dev(struct hci_dev *hdev);
 int hci_reset_dev(struct hci_dev *hdev);
+int hci_recv_frame(struct hci_dev *hdev, struct sk_buff *skb);
+int hci_recv_diag(struct hci_dev *hdev, struct sk_buff *skb);
+__printf(2, 3) void hci_set_hw_info(struct hci_dev *hdev, const char *fmt, ...);
+__printf(2, 3) void hci_set_fw_info(struct hci_dev *hdev, const char *fmt, ...);
 int hci_dev_open(__u16 dev);
 int hci_dev_close(__u16 dev);
+int hci_dev_do_close(struct hci_dev *hdev);
 int hci_dev_reset(__u16 dev);
 int hci_dev_reset_stat(__u16 dev);
 int hci_dev_cmd(unsigned int cmd, void __user *arg);
@@ -966,7 +1056,6 @@ struct hci_conn_params *hci_conn_params_lookup(struct hci_dev *hdev,
 struct hci_conn_params *hci_conn_params_add(struct hci_dev *hdev,
 					    bdaddr_t *addr, u8 addr_type);
 void hci_conn_params_del(struct hci_dev *hdev, bdaddr_t *addr, u8 addr_type);
-void hci_conn_params_clear_all(struct hci_dev *hdev);
 void hci_conn_params_clear_disabled(struct hci_dev *hdev);
 
 struct hci_conn_params *hci_pend_le_action_lookup(struct list_head *list,
@@ -1008,9 +1097,16 @@ int hci_add_remote_oob_data(struct hci_dev *hdev, bdaddr_t *bdaddr,
 int hci_remove_remote_oob_data(struct hci_dev *hdev, bdaddr_t *bdaddr,
 			       u8 bdaddr_type);
 
-void hci_event_packet(struct hci_dev *hdev, struct sk_buff *skb);
+void hci_adv_instances_clear(struct hci_dev *hdev);
+struct adv_info *hci_find_adv_instance(struct hci_dev *hdev, u8 instance);
+struct adv_info *hci_get_next_instance(struct hci_dev *hdev, u8 instance);
+int hci_add_adv_instance(struct hci_dev *hdev, u8 instance, u32 flags,
+			 u16 adv_data_len, u8 *adv_data,
+			 u16 scan_rsp_len, u8 *scan_rsp_data,
+			 u16 timeout, u16 duration);
+int hci_remove_adv_instance(struct hci_dev *hdev, u8 instance);
 
-int hci_recv_frame(struct hci_dev *hdev, struct sk_buff *skb);
+void hci_event_packet(struct hci_dev *hdev, struct sk_buff *skb);
 
 void hci_init_sysfs(struct hci_dev *hdev);
 void hci_conn_init_sysfs(struct hci_conn *conn);
@@ -1199,31 +1295,41 @@ static inline void hci_role_switch_cfm(struct hci_conn *conn, __u8 status,
 	mutex_unlock(&hci_cb_list_lock);
 }
 
-static inline bool eir_has_data_type(u8 *data, size_t data_len, u8 type)
+static inline void *eir_get_data(u8 *eir, size_t eir_len, u8 type,
+				 size_t *data_len)
 {
 	size_t parsed = 0;
 
-	if (data_len < 2)
-		return false;
+	if (eir_len < 2)
+		return NULL;
 
-	while (parsed < data_len - 1) {
-		u8 field_len = data[0];
+	while (parsed < eir_len - 1) {
+		u8 field_len = eir[0];
 
 		if (field_len == 0)
 			break;
 
 		parsed += field_len + 1;
 
-		if (parsed > data_len)
+		if (parsed > eir_len)
 			break;
 
-		if (data[1] == type)
-			return true;
+		if (eir[1] != type) {
+			eir += field_len + 1;
+			continue;
+		}
 
-		data += field_len + 1;
+		/* Zero length data */
+		if (field_len == 1)
+			return NULL;
+
+		if (data_len)
+			*data_len = field_len - 1;
+
+		return &eir[2];
 	}
 
-	return false;
+	return NULL;
 }
 
 static inline bool hci_bdaddr_is_rpa(bdaddr_t *bdaddr, u8 addr_type)
@@ -1272,7 +1378,7 @@ static inline int hci_check_conn_params(u16 min, u16 max, u16 latency,
 	if (max >= to_multiplier * 8)
 		return -EINVAL;
 
-	max_latency = (to_multiplier * 8 / max) - 1;
+	max_latency = (to_multiplier * 4 / max) - 1;
 	if (latency > 499 || latency > max_latency)
 		return -EINVAL;
 
@@ -1294,11 +1400,17 @@ void hci_send_sco(struct hci_conn *conn, struct sk_buff *skb);
 
 void *hci_sent_cmd_data(struct hci_dev *hdev, __u16 opcode);
 
+struct sk_buff *hci_cmd_sync(struct hci_dev *hdev, u16 opcode, u32 plen,
+			     const void *param, u32 timeout);
+
 /* ----- HCI Sockets ----- */
 void hci_send_to_sock(struct hci_dev *hdev, struct sk_buff *skb);
 void hci_send_to_channel(unsigned short channel, struct sk_buff *skb,
 			 int flag, struct sock *skip_sk);
 void hci_send_to_monitor(struct hci_dev *hdev, struct sk_buff *skb);
+void hci_send_monitor_ctrl_event(struct hci_dev *hdev, u16 event,
+				 void *data, u16 data_len, ktime_t tstamp,
+				 int flag, struct sock *skip_sk);
 
 void hci_sock_dev_event(struct hci_dev *hdev, int event);
 
@@ -1344,13 +1456,13 @@ void hci_mgmt_chan_unregister(struct hci_mgmt_chan *c);
 #define DISCOV_BREDR_INQUIRY_LEN	0x08
 #define DISCOV_LE_RESTART_DELAY		msecs_to_jiffies(200)	/* msec */
 
+void mgmt_fill_version_info(void *ver);
 int mgmt_new_settings(struct hci_dev *hdev);
 void mgmt_index_added(struct hci_dev *hdev);
 void mgmt_index_removed(struct hci_dev *hdev);
 void mgmt_set_powered_failed(struct hci_dev *hdev, int err);
-int mgmt_powered(struct hci_dev *hdev, u8 powered);
-int mgmt_update_adv_data(struct hci_dev *hdev);
-void mgmt_discoverable_timeout(struct hci_dev *hdev);
+void mgmt_power_on(struct hci_dev *hdev, int err);
+void __mgmt_power_off(struct hci_dev *hdev);
 void mgmt_new_link_key(struct hci_dev *hdev, struct link_key *key,
 		       bool persistent);
 void mgmt_device_connected(struct hci_dev *hdev, struct hci_conn *conn,
@@ -1389,6 +1501,8 @@ void mgmt_ssp_enable_complete(struct hci_dev *hdev, u8 enable, u8 status);
 void mgmt_set_class_of_dev_complete(struct hci_dev *hdev, u8 *dev_class,
 				    u8 status);
 void mgmt_set_local_name_complete(struct hci_dev *hdev, u8 *name, u8 status);
+void mgmt_start_discovery_complete(struct hci_dev *hdev, u8 status);
+void mgmt_stop_discovery_complete(struct hci_dev *hdev, u8 status);
 void mgmt_device_found(struct hci_dev *hdev, bdaddr_t *bdaddr, u8 link_type,
 		       u8 addr_type, u8 *dev_class, s8 rssi, u32 flags,
 		       u8 *eir, u16 eir_len, u8 *scan_rsp, u8 scan_rsp_len);
@@ -1397,19 +1511,26 @@ void mgmt_remote_name(struct hci_dev *hdev, bdaddr_t *bdaddr, u8 link_type,
 void mgmt_discovering(struct hci_dev *hdev, u8 discovering);
 bool mgmt_powering_down(struct hci_dev *hdev);
 void mgmt_new_ltk(struct hci_dev *hdev, struct smp_ltk *key, bool persistent);
-void mgmt_new_irk(struct hci_dev *hdev, struct smp_irk *irk);
+void mgmt_new_irk(struct hci_dev *hdev, struct smp_irk *irk, bool persistent);
 void mgmt_new_csrk(struct hci_dev *hdev, struct smp_csrk *csrk,
 		   bool persistent);
 void mgmt_new_conn_param(struct hci_dev *hdev, bdaddr_t *bdaddr,
 			 u8 bdaddr_type, u8 store_hint, u16 min_interval,
 			 u16 max_interval, u16 latency, u16 timeout);
-void mgmt_reenable_advertising(struct hci_dev *hdev);
 void mgmt_smp_complete(struct hci_conn *conn, bool complete);
+bool mgmt_get_connectable(struct hci_dev *hdev);
+void mgmt_set_connectable_complete(struct hci_dev *hdev, u8 status);
+void mgmt_set_discoverable_complete(struct hci_dev *hdev, u8 status);
+u8 mgmt_get_adv_discov_flags(struct hci_dev *hdev);
+void mgmt_advertising_added(struct sock *sk, struct hci_dev *hdev,
+			    u8 instance);
+void mgmt_advertising_removed(struct sock *sk, struct hci_dev *hdev,
+			      u8 instance);
 
 u8 hci_le_conn_update(struct hci_conn *conn, u16 min, u16 max, u16 latency,
 		      u16 to_multiplier);
 void hci_le_start_enc(struct hci_conn *conn, __le16 ediv, __le64 rand,
-							__u8 ltk[16]);
+		      __u8 ltk[16], __u8 key_size);
 
 void hci_copy_identity_address(struct hci_dev *hdev, bdaddr_t *bdaddr,
 			       u8 *bdaddr_type);

@@ -178,6 +178,7 @@ struct hw_bank {
  * @td_pool: allocation pool for transfer descriptors
  * @gadget: device side representation for peripheral controller
  * @driver: gadget driver
+ * @resume_state: save the state of gadget suspend from
  * @hw_ep_max: total number of endpoints supported by hardware
  * @ci_hw_ep: array of endpoints
  * @ep0_dir: ep0 direction
@@ -204,6 +205,7 @@ struct hw_bank {
  * @in_lpm: if the core in low power mode
  * @wakeup_int: if wakeup interrupt occur
  * @rev: The revision number for controller
+ * @mutex: protect code from concorrent running
  */
 struct ci_hdrc {
 	struct device			*dev;
@@ -219,8 +221,6 @@ struct ci_hdrc {
 	ktime_t				hr_timeouts[NUM_OTG_FSM_TIMERS];
 	unsigned			enabled_otg_timer_bits;
 	enum otg_fsm_timer		next_otg_timer;
-	struct timer_list		hnp_polling_timer;
-	struct work_struct		hnp_polling_work;
 	struct work_struct		work;
 	struct workqueue_struct		*wq;
 
@@ -229,6 +229,7 @@ struct ci_hdrc {
 
 	struct usb_gadget		gadget;
 	struct usb_gadget_driver	*driver;
+	enum usb_device_state		resume_state;
 	unsigned			hw_ep_max;
 	struct ci_hw_ep			ci_hw_ep[ENDPT_MAX];
 	u32				ep0_dir;
@@ -268,6 +269,7 @@ struct ci_hdrc {
 	u32				pm_portsc;
 	u32				pm_usbmode;
 	struct work_struct		power_lost_work;
+	struct mutex			mutex;
 };
 
 static inline struct ci_role_driver *ci_role(struct ci_hdrc *ci)
@@ -287,9 +289,21 @@ static inline int ci_role_start(struct ci_hdrc *ci, enum ci_role role)
 		return -ENXIO;
 
 	ret = ci->roles[role]->start(ci);
-	if (!ret)
-		ci->role = role;
-	return ret;
+	if (ret)
+		return ret;
+
+	ci->role = role;
+
+	if (ci->usb_phy) {
+		if (role == CI_ROLE_HOST)
+			usb_phy_set_mode(ci->usb_phy,
+					USB_MODE_HOST);
+		else
+			usb_phy_set_mode(ci->usb_phy,
+					USB_MODE_DEVICE);
+	}
+
+	return 0;
 }
 
 static inline void ci_role_stop(struct ci_hdrc *ci)
@@ -302,6 +316,9 @@ static inline void ci_role_stop(struct ci_hdrc *ci)
 	ci->role = CI_ROLE_END;
 
 	ci->roles[role]->stop(ci);
+
+	if (ci->usb_phy)
+		usb_phy_set_mode(ci->usb_phy, USB_MODE_NONE);
 }
 
 /**
@@ -447,9 +464,6 @@ int hw_device_reset(struct ci_hdrc *ci);
 int hw_port_test_set(struct ci_hdrc *ci, u8 mode);
 
 u8 hw_port_test_get(struct ci_hdrc *ci);
-
-int hw_wait_reg(struct ci_hdrc *ci, enum ci_hw_regs reg, u32 mask,
-				u32 value, unsigned int timeout_ms);
 
 void ci_platform_configure(struct ci_hdrc *ci);
 int hw_controller_reset(struct ci_hdrc *ci);

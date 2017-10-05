@@ -470,7 +470,10 @@ static int _setup_disp_channel1(struct fb_info *fbi)
 		if (mxc_fbi->alpha_chan_en)
 			params.mem_dp_bg_sync.alpha_chan_en = true;
 	}
-	ipu_init_channel(mxc_fbi->ipu, mxc_fbi->ipu_ch, &params);
+	if (ipu_init_channel(mxc_fbi->ipu, mxc_fbi->ipu_ch, &params) < 0) {
+		dev_err(fbi->device, "init ipu channel fail\n");
+		return -EINVAL;
+	}
 
 	return 0;
 }
@@ -3521,8 +3524,11 @@ static int mxcfb_probe(struct platform_device *pdev)
 		mxcfbi->ipu_ch_nf_irq = IPU_IRQ_BG_SYNC_NFACK;
 		mxcfbi->ipu_alp_ch_irq = IPU_IRQ_BG_ALPHA_SYNC_EOF;
 		mxcfbi->ipu_ch = MEM_BG_SYNC;
-		/* Unblank all framebuffers by default */
-		mxcfbi->cur_blank = mxcfbi->next_blank = FB_BLANK_UNBLANK;
+		/* Unblank the primary fb only by default */
+		if (pdev->id == 0)
+			mxcfbi->cur_blank = mxcfbi->next_blank = FB_BLANK_UNBLANK;
+		else
+			mxcfbi->cur_blank = mxcfbi->next_blank = FB_BLANK_POWERDOWN;
 
 		ret = mxcfb_register(fbi);
 		if (ret < 0)
@@ -3560,7 +3566,7 @@ static int mxcfb_probe(struct platform_device *pdev)
 		mxcfbi->ipu_ch_nf_irq = IPU_IRQ_DC_SYNC_NFACK;
 		mxcfbi->ipu_alp_ch_irq = -1;
 		mxcfbi->ipu_ch = MEM_DC_SYNC;
-		mxcfbi->cur_blank = mxcfbi->next_blank = FB_BLANK_UNBLANK;
+		mxcfbi->cur_blank = mxcfbi->next_blank = FB_BLANK_POWERDOWN;
 
 		ret = mxcfb_register(fbi);
 		if (ret < 0)

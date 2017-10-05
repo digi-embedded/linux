@@ -275,7 +275,7 @@ int regulator_map_voltage_linear(struct regulator_dev *rdev,
 EXPORT_SYMBOL_GPL(regulator_map_voltage_linear);
 
 /**
- * regulator_map_voltage_linear - map_voltage() for multiple linear ranges
+ * regulator_map_voltage_linear_range - map_voltage() for multiple linear ranges
  *
  * @rdev: Regulator to operate on
  * @min_uV: Lower bound for voltage
@@ -454,14 +454,41 @@ EXPORT_SYMBOL_GPL(regulator_set_bypass_regmap);
 int regulator_get_bypass_regmap(struct regulator_dev *rdev, bool *enable)
 {
 	unsigned int val;
+	unsigned int val_on = rdev->desc->bypass_val_on;
 	int ret;
 
 	ret = regmap_read(rdev->regmap, rdev->desc->bypass_reg, &val);
 	if (ret != 0)
 		return ret;
 
-	*enable = val & rdev->desc->bypass_mask;
+	if (!val_on)
+		val_on = rdev->desc->bypass_mask;
+
+	*enable = (val & rdev->desc->bypass_mask) == val_on;
 
 	return 0;
 }
 EXPORT_SYMBOL_GPL(regulator_get_bypass_regmap);
+
+/**
+ * regulator_set_active_discharge_regmap - Default set_active_discharge()
+ *					   using regmap
+ *
+ * @rdev: device to operate on.
+ * @enable: state to set, 0 to disable and 1 to enable.
+ */
+int regulator_set_active_discharge_regmap(struct regulator_dev *rdev,
+					  bool enable)
+{
+	unsigned int val;
+
+	if (enable)
+		val = rdev->desc->active_discharge_on;
+	else
+		val = rdev->desc->active_discharge_off;
+
+	return regmap_update_bits(rdev->regmap,
+				  rdev->desc->active_discharge_reg,
+				  rdev->desc->active_discharge_mask, val);
+}
+EXPORT_SYMBOL_GPL(regulator_set_active_discharge_regmap);

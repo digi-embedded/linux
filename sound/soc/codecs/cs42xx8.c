@@ -1,7 +1,7 @@
 /*
  * Cirrus Logic CS42448/CS42888 Audio CODEC Digital Audio Interface (DAI) driver
  *
- * Copyright (C) 2014 Freescale Semiconductor, Inc.
+ * Copyright (C) 2014-2016 Freescale Semiconductor, Inc.
  *
  * Author: Nicolin Chen <Guangyu.Chen@freescale.com>
  *
@@ -43,8 +43,8 @@ struct cs42xx8_priv {
 
 	bool slave_mode;
 	unsigned long sysclk;
-	int rate[2];
 	u32 tx_channels;
+	int rate[2];
 };
 
 /* -127.5dB to 0dB with step of 0.5dB */
@@ -446,7 +446,7 @@ EXPORT_SYMBOL_GPL(cs42xx8_regmap_config);
 static int cs42xx8_codec_probe(struct snd_soc_codec *codec)
 {
 	struct cs42xx8_priv *cs42xx8 = snd_soc_codec_get_drvdata(codec);
-	struct snd_soc_dapm_context *dapm = &codec->dapm;
+	struct snd_soc_dapm_context *dapm = snd_soc_codec_get_dapm(codec);
 
 	switch (cs42xx8->drvdata->num_adcs) {
 	case 3:
@@ -472,12 +472,14 @@ static const struct snd_soc_codec_driver cs42xx8_driver = {
 	.probe = cs42xx8_codec_probe,
 	.idle_bias_off = true,
 
-	.controls = cs42xx8_snd_controls,
-	.num_controls = ARRAY_SIZE(cs42xx8_snd_controls),
-	.dapm_widgets = cs42xx8_dapm_widgets,
-	.num_dapm_widgets = ARRAY_SIZE(cs42xx8_dapm_widgets),
-	.dapm_routes = cs42xx8_dapm_routes,
-	.num_dapm_routes = ARRAY_SIZE(cs42xx8_dapm_routes),
+	.component_driver = {
+		.controls		= cs42xx8_snd_controls,
+		.num_controls		= ARRAY_SIZE(cs42xx8_snd_controls),
+		.dapm_widgets		= cs42xx8_dapm_widgets,
+		.num_dapm_widgets	= ARRAY_SIZE(cs42xx8_dapm_widgets),
+		.dapm_routes		= cs42xx8_dapm_routes,
+		.num_dapm_routes	= ARRAY_SIZE(cs42xx8_dapm_routes),
+	},
 };
 
 const struct cs42xx8_driver_data cs42448_data = {
@@ -492,7 +494,7 @@ const struct cs42xx8_driver_data cs42888_data = {
 };
 EXPORT_SYMBOL_GPL(cs42888_data);
 
-static const struct of_device_id cs42xx8_of_match[] = {
+const struct of_device_id cs42xx8_of_match[] = {
 	{ .compatible = "cirrus,cs42448", .data = &cs42448_data, },
 	{ .compatible = "cirrus,cs42888", .data = &cs42888_data, },
 	{ /* sentinel */ }
@@ -502,16 +504,24 @@ EXPORT_SYMBOL_GPL(cs42xx8_of_match);
 
 int cs42xx8_probe(struct device *dev, struct regmap *regmap)
 {
-	const struct of_device_id *of_id = of_match_device(cs42xx8_of_match, dev);
+	const struct of_device_id *of_id;
 	struct cs42xx8_priv *cs42xx8;
 	int ret, val, i;
+
+	if (IS_ERR(regmap)) {
+		ret = PTR_ERR(regmap);
+		dev_err(dev, "failed to allocate regmap: %d\n", ret);
+		return ret;
+	}
 
 	cs42xx8 = devm_kzalloc(dev, sizeof(*cs42xx8), GFP_KERNEL);
 	if (cs42xx8 == NULL)
 		return -ENOMEM;
 
+	cs42xx8->regmap = regmap;
 	dev_set_drvdata(dev, cs42xx8);
 
+	of_id = of_match_device(cs42xx8_of_match, dev);
 	if (of_id)
 		cs42xx8->drvdata = of_id->data;
 
@@ -548,13 +558,6 @@ int cs42xx8_probe(struct device *dev, struct regmap *regmap)
 
 	/* Make sure hardware reset done */
 	msleep(5);
-
-	cs42xx8->regmap = regmap;
-	if (IS_ERR(cs42xx8->regmap)) {
-		ret = PTR_ERR(cs42xx8->regmap);
-		dev_err(dev, "failed to allocate regmap: %d\n", ret);
-		goto err_enable;
-	}
 
 	/*
 	 * We haven't marked the chip revision as volatile due to

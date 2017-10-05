@@ -100,11 +100,14 @@ static int ehci_ci_reset(struct usb_hcd *hcd)
 {
 	struct device *dev = hcd->self.controller;
 	struct ci_hdrc *ci = dev_get_drvdata(dev);
+	struct ehci_hcd *ehci = hcd_to_ehci(hcd);
 	int ret;
 
 	ret = ehci_setup(hcd);
 	if (ret)
 		return ret;
+
+	ehci->need_io_watchdog = 0;
 
 	ci_platform_configure(ci);
 
@@ -372,6 +375,8 @@ static void host_stop(struct ci_hdrc *ci)
 
 	if (hcd) {
 		usb_remove_hcd(hcd);
+		ci->role = CI_ROLE_END;
+		synchronize_irq(ci->irq);
 		usb_put_hcd(hcd);
 		if (ci->platdata->reg_vbus && !ci_otg_is_fsm_mode(ci) &&
 			(ci->platdata->flags & CI_HDRC_TURN_VBUS_EARLY_ON))
@@ -380,6 +385,7 @@ static void host_stop(struct ci_hdrc *ci)
 			hcd->self.is_b_host = 0;
 	}
 	ci->hcd = NULL;
+	ci->otg.host = NULL;
 }
 
 bool ci_hdrc_host_has_device(struct ci_hdrc *ci)
@@ -425,6 +431,12 @@ static void ci_hdrc_host_restore_from_power_lost(struct ci_hdrc *ci)
 	struct ehci_hcd *ehci;
 	unsigned long   flags;
 	u32 tmp;
+	int step_ms;
+	/*
+	 * If the vbus is off during system suspend, most of devices will pull
+	 * DP up within 200ms when they see vbus, set 1000ms for safety.
+	 */
+	int timeout_ms = 1000;
 
 	if (!ci->hcd)
 		return;
@@ -452,6 +464,15 @@ static void ci_hdrc_host_restore_from_power_lost(struct ci_hdrc *ci)
 	tmp |= CMD_RUN;
 	ehci_writel(ehci, tmp, &ehci->regs->command);
 	spin_unlock_irqrestore(&ehci->lock, flags);
+
+	if (!(ci->pm_portsc & PORTSC_CCS))
+		return;
+
+	for (step_ms = 0; step_ms < timeout_ms; step_ms += 25) {
+		if (ehci_readl(ehci, &ehci->regs->port_status[0]) & PORTSC_CCS)
+			break;
+		msleep(25);
+	}
 }
 
 static void ci_hdrc_host_suspend(struct ci_hdrc *ci)

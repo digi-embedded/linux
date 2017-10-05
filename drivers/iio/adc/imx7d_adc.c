@@ -73,10 +73,11 @@
 #define IMX7D_REG_ADC_INT_CHB_COV_INT_EN			BIT(9)
 #define IMX7D_REG_ADC_INT_CHC_COV_INT_EN			BIT(10)
 #define IMX7D_REG_ADC_INT_CHD_COV_INT_EN			BIT(11)
-#define IMX7D_REG_ADC_INT_CHANNEL_INT_EN			(IMX7D_REG_ADC_INT_CHA_COV_INT_EN | \
-								 IMX7D_REG_ADC_INT_CHB_COV_INT_EN | \
-								 IMX7D_REG_ADC_INT_CHC_COV_INT_EN | \
-								 IMX7D_REG_ADC_INT_CHD_COV_INT_EN)
+#define IMX7D_REG_ADC_INT_CHANNEL_INT_EN \
+	(IMX7D_REG_ADC_INT_CHA_COV_INT_EN | \
+	 IMX7D_REG_ADC_INT_CHB_COV_INT_EN | \
+	 IMX7D_REG_ADC_INT_CHC_COV_INT_EN | \
+	 IMX7D_REG_ADC_INT_CHD_COV_INT_EN)
 #define IMX7D_REG_ADC_INT_STATUS_CHANNEL_INT_STATUS		0xf00
 #define IMX7D_REG_ADC_INT_STATUS_CHANNEL_CONV_TIME_OUT		0xf0000
 
@@ -198,9 +199,11 @@ static void imx7d_adc_sample_rate_set(struct imx7d_adc *info)
 	 * clear the bit 31 of register REG_ADC_CH_A\B\C\D_CFG1.
 	 */
 	for (i = 0; i < 4; i++) {
-		tmp_cfg1 = readl(info->regs + i * IMX7D_EACH_CHANNEL_REG_OFFSET);
+		tmp_cfg1 =
+			readl(info->regs + i * IMX7D_EACH_CHANNEL_REG_OFFSET);
 		tmp_cfg1 &= ~IMX7D_REG_ADC_CH_CFG1_CHANNEL_EN;
-		writel(tmp_cfg1, info->regs + i * IMX7D_EACH_CHANNEL_REG_OFFSET);
+		writel(tmp_cfg1,
+		       info->regs + i * IMX7D_EACH_CHANNEL_REG_OFFSET);
 	}
 
 	adc_analogure_clk = imx7d_adc_analogue_clk[adc_feature->clk_pre_div];
@@ -217,13 +220,16 @@ static void imx7d_adc_hw_init(struct imx7d_adc *info)
 
 	/* power up and enable adc analogue core */
 	cfg = readl(info->regs + IMX7D_REG_ADC_ADC_CFG);
-	cfg &= ~(IMX7D_REG_ADC_ADC_CFG_ADC_CLK_DOWN | IMX7D_REG_ADC_ADC_CFG_ADC_POWER_DOWN);
+	cfg &= ~(IMX7D_REG_ADC_ADC_CFG_ADC_CLK_DOWN |
+		 IMX7D_REG_ADC_ADC_CFG_ADC_POWER_DOWN);
 	cfg |= IMX7D_REG_ADC_ADC_CFG_ADC_EN;
 	writel(cfg, info->regs + IMX7D_REG_ADC_ADC_CFG);
 
 	/* enable channel A,B,C,D interrupt */
-	writel(IMX7D_REG_ADC_INT_CHANNEL_INT_EN, info->regs + IMX7D_REG_ADC_INT_SIG_EN);
-	writel(IMX7D_REG_ADC_INT_CHANNEL_INT_EN, info->regs + IMX7D_REG_ADC_INT_EN);
+	writel(IMX7D_REG_ADC_INT_CHANNEL_INT_EN,
+	       info->regs + IMX7D_REG_ADC_INT_SIG_EN);
+	writel(IMX7D_REG_ADC_INT_CHANNEL_INT_EN,
+	       info->regs + IMX7D_REG_ADC_INT_EN);
 
 	imx7d_adc_sample_rate_set(info);
 }
@@ -250,13 +256,21 @@ static void imx7d_adc_channel_set(struct imx7d_adc *info)
 	 */
 	cfg1 |= IMX7D_REG_ADC_CH_CFG1_CHANNEL_SEL(channel);
 
-	/* read register REG_ADC_CH_A\B\C\D_CFG2, according to the channel chosen */
-	cfg2 = readl(info->regs + IMX7D_EACH_CHANNEL_REG_OFFSET * channel + IMX7D_REG_ADC_CHANNEL_CFG2_BASE);
+	/*
+	 * read register REG_ADC_CH_A\B\C\D_CFG2, according to the
+	 * channel chosen
+	 */
+	cfg2 = readl(info->regs + IMX7D_EACH_CHANNEL_REG_OFFSET * channel +
+		     IMX7D_REG_ADC_CHANNEL_CFG2_BASE);
 
 	cfg2 |= imx7d_adc_average_num[info->adc_feature.avg_num];
 
-	/* write the register REG_ADC_CH_A\B\C\D_CFG2, according to the channel chosen */
-	writel(cfg2, info->regs + IMX7D_EACH_CHANNEL_REG_OFFSET * channel + IMX7D_REG_ADC_CHANNEL_CFG2_BASE);
+	/*
+	 * write the register REG_ADC_CH_A\B\C\D_CFG2, according to
+	 * the channel chosen
+	 */
+	writel(cfg2, info->regs + IMX7D_EACH_CHANNEL_REG_OFFSET * channel +
+	       IMX7D_REG_ADC_CHANNEL_CFG2_BASE);
 	writel(cfg1, info->regs + IMX7D_EACH_CHANNEL_REG_OFFSET * channel);
 }
 
@@ -441,7 +455,8 @@ static int imx7d_adc_probe(struct platform_device *pdev)
 	info->regs = devm_ioremap_resource(&pdev->dev, mem);
 	if (IS_ERR(info->regs)) {
 		ret = PTR_ERR(info->regs);
-		dev_err(&pdev->dev, "Failed to remap adc memory, err = %d\n", ret);
+		dev_err(&pdev->dev,
+			"Failed to remap adc memory, err = %d\n", ret);
 		return ret;
 	}
 
@@ -461,13 +476,16 @@ static int imx7d_adc_probe(struct platform_device *pdev)
 	info->vref = devm_regulator_get(&pdev->dev, "vref");
 	if (IS_ERR(info->vref)) {
 		ret = PTR_ERR(info->vref);
-		dev_err(&pdev->dev, "Failed getting reference voltage, err = %d\n", ret);
+		dev_err(&pdev->dev,
+			"Failed getting reference voltage, err = %d\n", ret);
 		return ret;
 	}
 
 	ret = regulator_enable(info->vref);
 	if (ret) {
-		dev_err(&pdev->dev, "Can't enable adc reference top voltage, err = %d\n", ret);
+		dev_err(&pdev->dev,
+			"Can't enable adc reference top voltage, err = %d\n",
+			ret);
 		return ret;
 	}
 
@@ -523,7 +541,9 @@ static int imx7d_adc_remove(struct platform_device *pdev)
 	struct imx7d_adc *info = iio_priv(indio_dev);
 
 	iio_device_unregister(indio_dev);
+
 	imx7d_adc_power_down(info);
+
 	clk_disable_unprepare(info->clk);
 	regulator_disable(info->vref);
 
@@ -552,7 +572,8 @@ static int __maybe_unused imx7d_adc_resume(struct device *dev)
 	ret = regulator_enable(info->vref);
 	if (ret) {
 		dev_err(info->dev,
-			"Can't enable adc reference top voltage, err = %d\n", ret);
+			"Can't enable adc reference top voltage, err = %d\n",
+			ret);
 		return ret;
 	}
 

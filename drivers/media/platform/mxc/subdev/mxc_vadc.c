@@ -493,21 +493,27 @@ static int vadc_querystd(struct v4l2_subdev *sd, v4l2_std_id *std)
 	return 0;
 }
 
-static int vadc_enum_mbus_fmt(struct v4l2_subdev *sd,
-				unsigned index,	u32 *code)
+static int vadc_enum_mbus_code(struct v4l2_subdev *sd,
+			       struct v4l2_subdev_pad_config *cfg,
+			       struct v4l2_subdev_mbus_code_enum *code)
 {
 	/* support only one format  */
-	if (index >= 1)
+	if (code->pad || code->index >= 1)
 		return -EINVAL;
 
-	*code = MEDIA_BUS_FMT_AYUV8_1X32;
+	code->code = MEDIA_BUS_FMT_AYUV8_1X32;
 	return 0;
 }
 
-static int vadc_mbus_fmt(struct v4l2_subdev *sd,
-			    struct v4l2_mbus_framefmt *fmt)
+static int vadc_get_fmt(struct v4l2_subdev *sd,
+			struct v4l2_subdev_pad_config *cfg,
+			struct v4l2_subdev_format *format)
 {
 	struct vadc_state *state = to_state(sd);
+	struct v4l2_mbus_framefmt *fmt = &format->format;
+
+	if (format->pad)
+		return -EINVAL;
 
 	fmt->code = MEDIA_BUS_FMT_AYUV8_1X32;
 	fmt->colorspace = V4L2_COLORSPACE_SMPTE170M;
@@ -516,6 +522,13 @@ static int vadc_mbus_fmt(struct v4l2_subdev *sd,
 	fmt->height = state->fmt->v4l2_std & V4L2_STD_NTSC ? 480 : 576;
 
 	return 0;
+}
+
+static int vadc_set_fmt(struct v4l2_subdev *sd,
+			struct v4l2_subdev_pad_config *cfg,
+			struct v4l2_subdev_format *format)
+{
+	return vadc_get_fmt(sd, cfg, format);
 }
 
 static int vadc_enum_framesizes(struct v4l2_subdev *sd,
@@ -566,15 +579,15 @@ static int vadc_s_parm(struct v4l2_subdev *sd, struct v4l2_streamparm *parms)
 
 static const struct v4l2_subdev_video_ops vadc_video_ops = {
 	.querystd              = vadc_querystd,
-	.enum_mbus_fmt         = vadc_enum_mbus_fmt,
-	.try_mbus_fmt          = vadc_mbus_fmt,
-	.g_mbus_fmt            = vadc_mbus_fmt,
-	.s_mbus_fmt            = vadc_mbus_fmt,
 	.s_parm                = vadc_s_parm,
 	.g_std                 = vadc_g_std,
 };
 
+
 static const struct v4l2_subdev_pad_ops vadc_pad_ops = {
+	.get_fmt	       = vadc_get_fmt,
+	.set_fmt	       = vadc_set_fmt,
+	.enum_mbus_code        = vadc_enum_mbus_code,
 	.enum_frame_size       = vadc_enum_framesizes,
 	.enum_frame_interval   = vadc_enum_frameintervals,
 };

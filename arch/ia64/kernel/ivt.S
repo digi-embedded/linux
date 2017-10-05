@@ -57,6 +57,7 @@
 #include <asm/thread_info.h>
 #include <asm/unistd.h>
 #include <asm/errno.h>
+#include <asm/export.h>
 
 #if 0
 # define PSR_DEFAULT_BITS	psr.ac
@@ -85,6 +86,7 @@
 
 	.align 32768	// align on 32KB boundary
 	.global ia64_ivt
+	EXPORT_DATA_SYMBOL(ia64_ivt)
 ia64_ivt:
 /////////////////////////////////////////////////////////////////////////////////////////
 // 0x0000 Entry 0 (size 64 bundles) VHPT Translation (8,20,47)
@@ -937,7 +939,6 @@ END(interrupt)
 	 *	- ar.fpsr: set to kernel settings
 	 *	-  b6: preserved (same as on entry)
 	 */
-#ifdef __IA64_ASM_PARAVIRTUALIZED_NATIVE
 GLOBAL_ENTRY(ia64_syscall_setup)
 #if PT(B6) != 0
 # error This code assumes that b6 is the first field in pt_regs.
@@ -1029,7 +1030,6 @@ GLOBAL_ENTRY(ia64_syscall_setup)
 (p10)	mov r8=-EINVAL
 	br.ret.sptk.many b7
 END(ia64_syscall_setup)
-#endif /* __IA64_ASM_PARAVIRTUALIZED_NATIVE */
 
 	.org ia64_ivt+0x3c00
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -1043,7 +1043,7 @@ END(ia64_syscall_setup)
 	DBG_FAULT(16)
 	FAULT(16)
 
-#if defined(CONFIG_VIRT_CPU_ACCOUNTING_NATIVE) && defined(__IA64_ASM_PARAVIRTUALIZED_NATIVE)
+#if defined(CONFIG_VIRT_CPU_ACCOUNTING_NATIVE)
 	/*
 	 * There is no particular reason for this code to be here, other than
 	 * that there happens to be space here that would go unused otherwise.

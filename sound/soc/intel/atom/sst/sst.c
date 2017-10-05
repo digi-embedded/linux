@@ -190,7 +190,8 @@ int sst_driver_ops(struct intel_sst_drv *sst)
 
 	default:
 		dev_err(sst->dev,
-			"SST Driver capablities missing for dev_id: %x", sst->dev_id);
+			"SST Driver capabilities missing for dev_id: %x",
+			sst->dev_id);
 		return -EINVAL;
 	};
 }
@@ -368,8 +369,8 @@ static inline void sst_restore_shim64(struct intel_sst_drv *ctx,
 	 * initialize by FW or driver when firmware is loaded
 	 */
 	spin_lock_irqsave(&ctx->ipc_spin_lock, irq_flags);
-	sst_shim_write64(shim, SST_IMRX, shim_regs->imrx),
-	sst_shim_write64(shim, SST_CSR, shim_regs->csr),
+	sst_shim_write64(shim, SST_IMRX, shim_regs->imrx);
+	sst_shim_write64(shim, SST_CSR, shim_regs->csr);
 	spin_unlock_irqrestore(&ctx->ipc_spin_lock, irq_flags);
 }
 
@@ -441,7 +442,7 @@ static int intel_sst_suspend(struct device *dev)
 		struct stream_info *stream = &ctx->streams[i];
 
 		if (stream->status == STREAM_RUNNING) {
-			dev_err(dev, "stream %d is running, cant susupend, abort\n", i);
+			dev_err(dev, "stream %d is running, can't suspend, abort\n", i);
 			return -EBUSY;
 		}
 	}

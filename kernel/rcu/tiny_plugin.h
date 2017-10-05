@@ -23,7 +23,7 @@
  */
 
 #include <linux/kthread.h>
-#include <linux/module.h>
+#include <linux/init.h>
 #include <linux/debugfs.h>
 #include <linux/seq_file.h>
 
@@ -60,12 +60,17 @@ EXPORT_SYMBOL_GPL(rcu_scheduler_active);
 
 /*
  * During boot, we forgive RCU lockdep issues.  After this function is
- * invoked, we start taking RCU lockdep issues seriously.
+ * invoked, we start taking RCU lockdep issues seriously.  Note that unlike
+ * Tree RCU, Tiny RCU transitions directly from RCU_SCHEDULER_INACTIVE
+ * to RCU_SCHEDULER_RUNNING, skipping the RCU_SCHEDULER_INIT stage.
+ * The reason for this is that Tiny RCU does not need kthreads, so does
+ * not have to care about the fact that the scheduler is half-initialized
+ * at a certain phase of the boot process.
  */
 void __init rcu_scheduler_starting(void)
 {
 	WARN_ON(nr_context_switches() > 0);
-	rcu_scheduler_active = 1;
+	rcu_scheduler_active = RCU_SCHEDULER_RUNNING;
 }
 
 #endif /* #ifdef CONFIG_DEBUG_LOCK_ALLOC */
@@ -122,18 +127,7 @@ free_out:
 	debugfs_remove_recursive(rcudir);
 	return 1;
 }
-
-static void __exit rcutiny_trace_cleanup(void)
-{
-	debugfs_remove_recursive(rcudir);
-}
-
-module_init(rcutiny_trace_init);
-module_exit(rcutiny_trace_cleanup);
-
-MODULE_AUTHOR("Paul E. McKenney");
-MODULE_DESCRIPTION("Read-Copy Update tracing for tiny implementation");
-MODULE_LICENSE("GPL");
+device_initcall(rcutiny_trace_init);
 
 static void check_cpu_stall(struct rcu_ctrlblk *rcp)
 {
@@ -144,16 +138,17 @@ static void check_cpu_stall(struct rcu_ctrlblk *rcp)
 		return;
 	rcp->ticks_this_gp++;
 	j = jiffies;
-	js = ACCESS_ONCE(rcp->jiffies_stall);
+	js = READ_ONCE(rcp->jiffies_stall);
 	if (rcp->rcucblist && ULONG_CMP_GE(j, js)) {
 		pr_err("INFO: %s stall on CPU (%lu ticks this GP) idle=%llx (t=%lu jiffies q=%ld)\n",
 		       rcp->name, rcp->ticks_this_gp, DYNTICK_TASK_EXIT_IDLE,
 		       jiffies - rcp->gp_start, rcp->qlen);
 		dump_stack();
-		ACCESS_ONCE(rcp->jiffies_stall) = jiffies +
-			3 * rcu_jiffies_till_stall_check() + 3;
+		WRITE_ONCE(rcp->jiffies_stall,
+			   jiffies + 3 * rcu_jiffies_till_stall_check() + 3);
 	} else if (ULONG_CMP_GE(j, js)) {
-		ACCESS_ONCE(rcp->jiffies_stall) = jiffies + rcu_jiffies_till_stall_check();
+		WRITE_ONCE(rcp->jiffies_stall,
+			   jiffies + rcu_jiffies_till_stall_check());
 	}
 }
 
@@ -161,7 +156,8 @@ static void reset_cpu_stall_ticks(struct rcu_ctrlblk *rcp)
 {
 	rcp->ticks_this_gp = 0;
 	rcp->gp_start = jiffies;
-	ACCESS_ONCE(rcp->jiffies_stall) = jiffies + rcu_jiffies_till_stall_check();
+	WRITE_ONCE(rcp->jiffies_stall,
+		   jiffies + rcu_jiffies_till_stall_check());
 }
 
 static void check_cpu_stalls(void)

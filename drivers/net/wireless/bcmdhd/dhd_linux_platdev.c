@@ -70,10 +70,6 @@ struct wifi_platform_data {
 struct regulator *wifi_regulator = NULL;
 #endif /* CONFIG_DTS */
 
-#if defined(OOB_PARAM)
-extern uint dhd_oob_disable;
-#endif /* OOB_PARAM */
-
 bool cfg_multichip = FALSE;
 bcmdhd_wifi_platdata_t *dhd_wifi_platdata = NULL;
 static int wifi_plat_dev_probe_ret = 0;
@@ -297,9 +293,10 @@ static int wifi_plat_dev_drv_probe(struct platform_device *pdev)
 	struct resource *resource;
 	wifi_adapter_info_t *adapter;
 #ifdef CONFIG_DTS
-#if defined(OOB_INTR_ONLY) && defined(HW_OOB)
+#if defined(OOB_INTR_ONLY)
 	int irq, gpio;
-#endif /* defined(OOB_INTR_ONLY) && defined (HW_OOB) */
+#endif /* defined(OOB_INTR_ONLY) */
+	int ret = 0;
 #endif /* CONFIG_DTS */
 
 	/* Android style wifi platform data device ("bcmdhd_wlan" or "bcm4329_wlan")
@@ -318,14 +315,26 @@ static int wifi_plat_dev_drv_probe(struct platform_device *pdev)
 		adapter->intr_flags = resource->flags;
 	}
 
+#ifdef OOB_PARAM
+	adapter->oob_disable = FALSE;
+#endif /* OOB_PARAM */
+
 #ifdef CONFIG_DTS
+	/* get firmware from dts */
+	ret = of_property_read_string(pdev->dev.of_node, "bcmdhd_fw", &adapter->fw_path);
+	if (!ret)
+		DHD_INFO(("fw path:%s\n", adapter->fw_path));
+	ret = of_property_read_string(pdev->dev.of_node, "bcmdhd_nv", &adapter->nv_path);
+	if (!ret)
+		DHD_INFO(("nv path:%s\n", adapter->nv_path));
+
 	wifi_regulator = regulator_get(&pdev->dev, "wlreg_on");
 	if (wifi_regulator == NULL) {
 		DHD_ERROR(("%s regulator is null\n", __FUNCTION__));
 		return -1;
 	}
-#if defined(OOB_INTR_ONLY) && defined(HW_OOB)
-	OOB_PARAM_IF(!dhd_oob_disable) {
+#if defined(OOB_INTR_ONLY)
+	OOB_PARAM_IF(!(adapter->oob_disable)) {
 		/* This is to get the irq for the OOB */
 		gpio = of_get_gpio(pdev->dev.of_node, 0);
 
@@ -333,7 +342,7 @@ static int wifi_plat_dev_drv_probe(struct platform_device *pdev)
 			DHD_ERROR(("%s no GPIO for OOB in device tree.\n", __FUNCTION__));
 #if defined(OOB_PARAM)
 			DHD_ERROR(("%s continue with non-OOB mode.\n", __FUNCTION__));
-			dhd_oob_disable = TRUE;
+			adapter->oob_disable = TRUE;
 			goto out;
 #else
 			return -1;
@@ -345,17 +354,27 @@ static int wifi_plat_dev_drv_probe(struct platform_device *pdev)
 			DHD_ERROR(("%s irq information is incorrect\n", __FUNCTION__));
 			return -1;
 		}
-		adapter->irq_num = irq;
 
-		/* need to change the flags according to our requirement */
-		adapter->intr_flags = IORESOURCE_IRQ | IORESOURCE_IRQ_HIGHLEVEL |
-			IORESOURCE_IRQ_SHAREABLE;
+	adapter->irq_num = irq;
+
+	/* Murata -- HW_OOB define depends on chipset.
+	 * HW_OOB makes host interrupt level-sensitive versus edge-sensitive.
+	 * ZP (BCM4339), 1DX (BCM4343W), 1FX (BCM43364), ZX/SN8000 (BCM43362)
+	 * are level-sensitive (HW_OOB defined).
+	 * Type 1BW (BCM43340) is edge-sensitive (HW_OOB NOT defined).
+	 */
+#ifdef HW_OOB /* HW_OOB defined means level sensitive interrupts */
+	adapter->intr_flags = IORESOURCE_IRQ | IORESOURCE_IRQ_HIGHLEVEL |
+			      IORESOURCE_IRQ_SHAREABLE;
+#else
+	adapter->intr_flags = IORESOURCE_IRQ | IORESOURCE_IRQ_HIGHEDGE |
+			      IORESOURCE_IRQ_SHAREABLE;
+#endif /* HW_OOB */
 	}
-
 #if defined(OOB_PARAM)
 out:
 #endif /* defined(OOB_PARAM) */
-#endif /* defined(OOB_INTR_ONLY) && defined (HW_OOB) */
+#endif /* defined(OOB_INTR_ONLY) */
 #endif /* CONFIG_DTS */
 
 	wifi_plat_dev_probe_ret = dhd_wifi_platform_load();
@@ -385,10 +404,14 @@ static int wifi_plat_dev_drv_remove(struct platform_device *pdev)
 
 static int wifi_plat_dev_drv_suspend(struct platform_device *pdev, pm_message_t state)
 {
+#ifdef OOB_PARAM
+	wifi_adapter_info_t *adapter;
+	adapter = &dhd_wifi_platdata->adapters[0];
+#endif /* OOB_PARAM */
+
 	DHD_TRACE(("##> %s\n", __FUNCTION__));
-#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 39)) && defined(OOB_INTR_ONLY) && \
-	defined(BCMSDIO)
-	OOB_PARAM_IF(!dhd_oob_disable) {
+#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 39)) && defined(OOB_INTR_ONLY)
+	OOB_PARAM_IF(!(adapter->oob_disable)) {
 		bcmsdh_oob_intr_set(0);
 	}
 #endif /* (OOB_INTR_ONLY) */
@@ -397,10 +420,14 @@ static int wifi_plat_dev_drv_suspend(struct platform_device *pdev, pm_message_t 
 
 static int wifi_plat_dev_drv_resume(struct platform_device *pdev)
 {
+#ifdef OOB_PARAM
+	wifi_adapter_info_t *adapter;
+	adapter = &dhd_wifi_platdata->adapters[0];
+#endif /* OOB_PARAM */
+
 	DHD_TRACE(("##> %s\n", __FUNCTION__));
-#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 39)) && defined(OOB_INTR_ONLY) && \
-	defined(BCMSDIO)
-	OOB_PARAM_IF(!dhd_oob_disable) {
+#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 39)) && defined(OOB_INTR_ONLY)
+	OOB_PARAM_IF(!(adapter->oob_disable)) {
 		if (dhd_os_check_if_up(wl_cfg80211_get_dhdp()))
 			bcmsdh_oob_intr_set(1);
 	}
@@ -653,7 +680,6 @@ extern uint dhd_deferred_tx;
 extern struct semaphore dhd_registration_sem;
 #endif 
 
-#ifdef BCMSDIO
 static int dhd_wifi_platform_load_sdio(void)
 {
 	int i;
@@ -766,12 +792,6 @@ fail:
 
 	return err;
 }
-#else /* BCMSDIO */
-static int dhd_wifi_platform_load_sdio(void)
-{
-	return 0;
-}
-#endif /* BCMSDIO */
 
 static int dhd_wifi_platform_load_usb(void)
 {

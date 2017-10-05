@@ -50,12 +50,23 @@ static int imx_cs42888_surround_hw_params(struct snd_pcm_substream *substream,
 	struct snd_soc_dai *codec_dai = rtd->codec_dai;
 	struct imx_priv *priv = &card_priv;
 	struct device *dev = &priv->pdev->dev;
-	u32 dai_format = 0;
+	u32 channels = params_channels(params);
+	u32 max_tdm_rate;
+
+	bool enable_tdm = channels > 1 && channels % 2;
+	u32 dai_format = SND_SOC_DAIFMT_NB_NF |
+		(enable_tdm ? SND_SOC_DAIFMT_DSP_A : SND_SOC_DAIFMT_LEFT_J);
+
 	int ret = 0;
 
 	if (priv->is_codec_master) {
-		dai_format = SND_SOC_DAIFMT_LEFT_J | SND_SOC_DAIFMT_NB_NF |
-			     SND_SOC_DAIFMT_CBM_CFM;
+		/* TDM is not supported by codec in master mode */
+		if (enable_tdm) {
+			dev_err(dev, "%d channels are not supported in codec master mode\n",
+				channels);
+			return -EINVAL;
+		}
+		dai_format |= SND_SOC_DAIFMT_CBM_CFM;
 		if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
 			ret = snd_soc_dai_set_sysclk(cpu_dai, ESAI_HCKT_EXTAL,
 				       priv->mclk_freq, SND_SOC_CLOCK_IN);
@@ -75,8 +86,7 @@ static int imx_cs42888_surround_hw_params(struct snd_pcm_substream *substream,
 		}
 
 	} else {
-		dai_format = SND_SOC_DAIFMT_LEFT_J | SND_SOC_DAIFMT_NB_NF |
-			     SND_SOC_DAIFMT_CBS_CFS;
+		dai_format |= SND_SOC_DAIFMT_CBS_CFS;
 		if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
 			ret = snd_soc_dai_set_sysclk(cpu_dai, ESAI_HCKT_EXTAL,
 				       priv->mclk_freq, SND_SOC_CLOCK_OUT);
@@ -103,7 +113,25 @@ static int imx_cs42888_surround_hw_params(struct snd_pcm_substream *substream,
 		return ret;
 	}
 	/* set i.MX active slot mask */
-	snd_soc_dai_set_tdm_slot(cpu_dai, 0x3, 0x3, 2, 32);
+	if (enable_tdm) {
+		/* 2 required by ESAI BCLK divisors, 8 slots, 32 width */
+		max_tdm_rate = priv->mclk_freq / (2*8*32);
+		if (params_rate(params) > max_tdm_rate) {
+			dev_err(dev,
+				"maximum supported sampling rate for %d channels is %dKHz\n",
+				channels, max_tdm_rate / 1000);
+			return -EINVAL;
+		}
+
+		/*
+		 * Per datasheet, the codec expects 8 slots and 32 bits
+		 * for every slot in TDM mode.
+		 */
+		snd_soc_dai_set_tdm_slot(cpu_dai,
+					 BIT(channels) - 1, BIT(channels) - 1,
+					 8, 32);
+	} else
+		snd_soc_dai_set_tdm_slot(cpu_dai, 0x3, 0x3, 2, 32);
 
 	/* set codec DAI configuration */
 	ret = snd_soc_dai_set_fmt(codec_dai, dai_format);
@@ -217,6 +245,7 @@ static struct snd_soc_dai_link imx_cs42888_dai[] = {
 		.ignore_pmdown_time = 1,
 		.dpcm_playback = 1,
 		.dpcm_capture = 1,
+		.dpcm_merged_chan = 1,
 	},
 	{
 		.name = "HiFi-ASRC-BE",

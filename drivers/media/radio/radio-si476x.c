@@ -31,7 +31,7 @@
 #include <media/v4l2-event.h>
 #include <media/v4l2-device.h>
 
-#include <media/si476x.h>
+#include <media/drv-intf/si476x.h>
 #include <linux/mfd/si476x-core.h>
 
 #define FM_FREQ_RANGE_LOW   64000000
@@ -568,8 +568,8 @@ static int si476x_radio_do_post_powerup_init(struct si476x_radio *radio,
 	err = regcache_sync_region(radio->core->regmap,
 				   SI476X_PROP_DIGITAL_IO_INPUT_SAMPLE_RATE,
 				   SI476X_PROP_DIGITAL_IO_OUTPUT_FORMAT);
-		if (err < 0)
-			return err;
+	if (err < 0)
+		return err;
 
 	err = regcache_sync_region(radio->core->regmap,
 				   SI476X_PROP_AUDIO_DEEMPHASIS,
