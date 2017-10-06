@@ -73,6 +73,8 @@
 #define HCI_IBS_W4_SCO_HDR	3
 #define HCI_IBS_W4_DATA		4
 
+static int error_notified = 0;
+
 /* HCI_IBS transmit side sleep protocol states */
 enum tx_ibs_states_e {
 	HCI_IBS_TX_ASLEEP,
@@ -849,9 +851,26 @@ static int ibs_recv(struct hci_uart *hu, const void *data, int count)
 			continue;
 
 		default:
-			BT_ERR("Unknown HCI packet type %2.2x", (__u8)*ptr);
 			hu->hdev->stat.err_rx++;
 			ptr++; count--;
+			if (printk_ratelimit())	{
+				/*
+				 * Reset the notify variable, so we will notify the error
+				 * again in case the user did not reattached the BT FW.
+				 */
+				error_notified = 0;
+				BT_ERR("Unknown HCI packet type %2.2x", (__u8)*ptr);
+			} else {
+				/*
+				 * If we get too many consecutive messages, we lost the
+				 * communication with the BT chip.
+				 */
+				if (!error_notified) {
+					BT_ERR("Communication with BT Chip broken");
+					error_notified = 1;
+				}
+				return -EIO;
+			}
 			continue;
 		};
 

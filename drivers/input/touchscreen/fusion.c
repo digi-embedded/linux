@@ -291,6 +291,16 @@ static int fusion_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 		goto bail1;
 	}
 
+	/* Prevent registering the same controller twice */
+	if (fusion.workq) {
+		printk(KERN_INFO
+			"Fusion: Touchscreen already registered with bus id (%d) with slave address 0x%x\n",
+			i2c_adapter_id(fusion.client->adapter),
+			fusion.client->addr);
+		ret = -EBUSY;
+		goto bail1;
+	}
+
 	/* Attach the I2C client */
 	fusion.client =  i2c;
 	i2c_set_clientdata(i2c, &fusion);

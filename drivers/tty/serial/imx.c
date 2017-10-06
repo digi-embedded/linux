@@ -605,9 +605,6 @@ static void imx_start_tx(struct uart_port *port)
 	unsigned long temp;
 
 	if (port->rs485.flags & SER_RS485_ENABLED) {
-		/* Delay before send */
-		if (port->rs485.delay_rts_before_send)
-			mdelay(port->rs485.delay_rts_before_send);
 		/* enable transmitter and shifter empty irq */
 		temp = readl(port->membase + UCR2);
 		if (port->rs485.flags & SER_RS485_RTS_ON_SEND)
@@ -615,6 +612,10 @@ static void imx_start_tx(struct uart_port *port)
 		else
 			temp |= UCR2_CTS;
 		writel(temp, port->membase + UCR2);
+
+		/* Delay before send */
+		if (port->rs485.delay_rts_before_send)
+			mdelay(port->rs485.delay_rts_before_send);
 
 		temp = readl(port->membase + UCR4);
 		temp |= UCR4_TCEN;
@@ -1598,11 +1599,6 @@ static int imx_rs485_config(struct uart_port *port,
 {
 	struct imx_port *sport = (struct imx_port *)port;
 
-	/* unimplemented */
-	rs485conf->delay_rts_before_send = 0;
-	rs485conf->delay_rts_after_send = 0;
-	rs485conf->flags |= SER_RS485_RX_DURING_TX;
-
 	/* RTS is required to control the transmitter */
 	if (!sport->have_rtscts)
 		rs485conf->flags &= ~SER_RS485_ENABLED;
@@ -1993,6 +1989,8 @@ static int serial_imx_probe_dt(struct imx_port *sport,
 	}
 
 	/* RS-485 properties */
+	rs485conf->flags = 0;
+
 	if (of_property_read_bool(np, "rs485-rts-active-high"))
 		rs485conf->flags |= SER_RS485_RTS_ON_SEND;
 	else
@@ -2116,8 +2114,6 @@ static int serial_imx_probe(struct platform_device *pdev)
 	sport->port.fifosize = 32;
 	sport->port.ops = &imx_pops;
 	sport->port.rs485_config = imx_rs485_config;
-	sport->port.rs485.flags =
-		SER_RS485_RTS_ON_SEND | SER_RS485_RX_DURING_TX;
 	sport->port.flags = UPF_BOOT_AUTOCONF;
 	init_timer(&sport->timer);
 	sport->timer.function = imx_timeout;
