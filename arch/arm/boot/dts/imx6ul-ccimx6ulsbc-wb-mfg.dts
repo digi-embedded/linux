@@ -89,7 +89,7 @@
 &uart3 {
 	/* RTS/CTS lines multiplexed with CAN1 */
 	// pinctrl-0 = <&pinctrl_uart3_4wires>;
-	// fsl,uart-has-rtscts;
+	// uart-has-rtscts;
 	status = "okay";
 };
 

@@ -887,20 +887,20 @@
 &uart1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_uart1>;
-	fsl,uart-has-rtscts;
+	uart-has-rtscts;
 	digi,pwr-en-gpio = <&gpio2 26 GPIO_ACTIVE_HIGH>;
 };
 
 &uart2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_uart2>;
-	fsl,uart-has-rtscts;
+	uart-has-rtscts;
 };
 
 &uart3 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_uart3>;
-	fsl,uart-has-rtscts;
+	uart-has-rtscts;
 	digi,pwr-en-gpio = <&gpio2 26 GPIO_ACTIVE_HIGH>;
 };
 
@@ -912,7 +912,7 @@
 &uart5 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_uart5>;
-	fsl,uart-has-rtscts;
+	uart-has-rtscts;
 };
 
 &usbh1 {
