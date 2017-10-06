@@ -61,7 +61,7 @@
 &i2c3 {
 	status = "okay";
 
-	hdmi: edid@50 {
+	edid@50 {
 		status = "okay";
 	};
 };
