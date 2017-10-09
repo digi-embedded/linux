@@ -400,7 +400,6 @@
 	dr_mode = "otg";
 	vbus-supply = <&reg_usb_otg1_vbus>;
 	pinctrl-0 = <&pinctrl_usbotg1>;
-	fsl,over-current-polarity-active-low;
 	digi,power-line-active-high;
 	status = "disabled";
 };
