@@ -922,7 +922,7 @@
 &usbotg {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_usbotg>;
-	fsl,power-line-polarity-active-high;
+	digi,power-line-active-high;
 	fsl,over-current-polarity-active-low;
 };
 

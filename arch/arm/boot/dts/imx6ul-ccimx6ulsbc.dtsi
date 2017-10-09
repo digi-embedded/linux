@@ -401,13 +401,13 @@
 	vbus-supply = <&reg_usb_otg1_vbus>;
 	pinctrl-0 = <&pinctrl_usbotg1>;
 	fsl,over-current-polarity-active-low;
-	fsl,power-line-polarity-active-high;
+	digi,power-line-active-high;
 	status = "disabled";
 };
 
 &usbotg2 {
 	dr_mode = "host";
-	fsl,power-line-polarity-active-high;
+	digi,power-line-active-high;
 	disable-over-current;
 	status = "disabled";
 };
