@@ -121,7 +121,7 @@ static int parse_ofpart_partitions(struct mtd_info *master,
 
 		if (!(of_get_property(pp, "encrypted", &len)))
 			/* Mask the nonencrypted bitmask */
-			(*pparts)[i].mask_flags |= MTD_NONENCRYPTED;
+			parts[i].mask_flags |= MTD_NONENCRYPTED;
 
 		if (of_get_property(pp, "lock", &len))
 			parts[i].mask_flags |= MTD_POWERUP_LOCK;

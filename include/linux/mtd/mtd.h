@@ -235,9 +235,10 @@ struct mtd_crypt_info {
 	unsigned char *key;
 	unsigned char root_iv[MAX_IV_BYTES];
 	unsigned char cipher[MAX_CIPHER_NAME_SIZE + 1];
-	struct crypto_hash *hash_tfm; /* Crypto context for generating
+	struct crypto_ahash *hash_tfm; /* Crypto context for generating
 				       * the initialization vectors */
-	struct crypto_ablkcipher *tfm;
+	struct ahash_request *hash_req;
+	struct crypto_skcipher *skcipher;
 	struct mutex cs_tfm_mutex;
 	struct mutex cs_hash_tfm_mutex;
 	mempool_t *mem_pool;
