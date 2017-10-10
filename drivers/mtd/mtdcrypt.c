@@ -13,9 +13,10 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * General Public License for more details.
  */
+#include <crypto/hash.h>
+#include <crypto/skcipher.h>
 #include <linux/scatterlist.h>
 #include <linux/random.h>
-#include <linux/crypto.h>
 #include <linux/mtd/mtd.h>
 #include <linux/moduleparam.h>
 #include <linux/platform_device.h>
@@ -86,41 +87,41 @@ static int mtdcrypt_calculate_md5(char *dst, struct mtd_crypt_info *crypt_info,
 		char *src, int len)
 {
 	struct scatterlist sg;
-	struct hash_desc desc = {
-		.tfm = crypt_info->hash_tfm,
-		.flags = CRYPTO_TFM_REQ_MAY_SLEEP
-	};
+	struct crypto_ahash *tfm = crypt_info->hash_tfm;
+	struct ahash_request *req = crypt_info->hash_req;
 	int rc = 0;
 
 	mutex_lock(&crypt_info->cs_hash_tfm_mutex);
 	sg_init_one(&sg, (u8 *)src, len);
-	if (!desc.tfm) {
-		desc.tfm = crypto_alloc_hash("md5", 0, CRYPTO_ALG_ASYNC);
-		if (IS_ERR(desc.tfm)) {
-			rc = PTR_ERR(desc.tfm);
+	if (!tfm) {
+		tfm = crypto_alloc_ahash("md5", 0, CRYPTO_ALG_ASYNC);
+		if (IS_ERR(tfm)) {
+			rc = PTR_ERR(tfm);
 			pr_err("mtdcrypt: Error attempting to allocate crypto context; rc = [%d]\n",
 					rc);
 			goto out;
 		}
-		crypt_info->hash_tfm = desc.tfm;
+		req = ahash_request_alloc(tfm, GFP_ATOMIC);
+		if (!req) {
+			crypto_free_ahash(tfm);
+
+			pr_err("mtdcrypt: Error attempting to allocate ahash req\n");
+			rc = -ENOMEM;
+			goto out;
+		}
+		ahash_request_set_callback(req, 0, NULL, NULL);
+
+		crypt_info->hash_tfm = tfm;
+		crypt_info->hash_req = req;
 	}
-	rc = crypto_hash_init(&desc);
-	if (rc) {
-		pr_err("mtdcrypt: Error initializing crypto hash; rc = [%d]\n",
-				rc);
+
+	ahash_request_set_crypt(req, &sg, dst, len);
+	if (crypto_ahash_digest(req)) {
+		pr_err("mtdcrypt: Error computing crypto hash");
+		rc = -1;
 		goto out;
 	}
-	rc = crypto_hash_update(&desc, &sg, len);
-	if (rc) {
-		pr_err("mtdcrypt:Error updating crypto hash; rc = [%d]\n", rc);
-		goto out;
-	}
-	rc = crypto_hash_final(&desc, dst);
-	if (rc) {
-		pr_err("mtdcrypt: Error finalizing crypto hash; rc = [%d]\n",
-				rc);
-		goto out;
-	}
+
 out:
 	mutex_unlock(&crypt_info->cs_hash_tfm_mutex);
 	return rc;
@@ -248,31 +249,32 @@ static int mtdcrypt_scatterlist(struct mtd_crypt_info *crypt_info,
 			     struct scatterlist *src_sg, int size,
 			     unsigned char *iv, int op)
 {
-	struct ablkcipher_request *req;
+	struct skcipher_request *req;
 	struct mtdcrypt_result ecr;
 	int rc = 0;
 
-	BUG_ON(!crypt_info || !crypt_info->tfm ||
+	BUG_ON(!crypt_info || !crypt_info->skcipher ||
 		!(crypt_info->flags & STRUCT_INITIALIZED));
 
 	init_completion(&ecr.completion);
 
 	mutex_lock(&crypt_info->cs_tfm_mutex);
-	req = ablkcipher_request_alloc(crypt_info->tfm, GFP_NOFS);
+	req = skcipher_request_alloc(crypt_info->skcipher, GFP_KERNEL);
 	if (!req) {
 		mutex_unlock(&crypt_info->cs_tfm_mutex);
 		rc = -ENOMEM;
 		goto out;
 	}
 
-	ablkcipher_request_set_callback(req,
+	skcipher_request_set_callback(req,
 			CRYPTO_TFM_REQ_MAY_BACKLOG | CRYPTO_TFM_REQ_MAY_SLEEP,
 			mtdcrypt_complete, &ecr);
 
 	mutex_unlock(&crypt_info->cs_tfm_mutex);
-	ablkcipher_request_set_crypt(req, src_sg, dst_sg, size, iv);
-	rc = op == MTD_ENCRYPT ? crypto_ablkcipher_encrypt(req) :
-			     crypto_ablkcipher_decrypt(req);
+
+	skcipher_request_set_crypt(req, src_sg, dst_sg, size, iv);
+	rc = op == MTD_ENCRYPT ? crypto_skcipher_encrypt(req) :
+			     crypto_skcipher_decrypt(req);
 	if (rc == -EINPROGRESS || rc == -EBUSY) {
 		struct mtdcrypt_result *ecr = req->base.data;
 
@@ -281,7 +283,8 @@ static int mtdcrypt_scatterlist(struct mtd_crypt_info *crypt_info,
 		reinit_completion(&ecr->completion);
 	}
 out:
-	ablkcipher_request_free(req);
+	if (req)
+		skcipher_request_free(req);
 	return rc;
 }
 
@@ -833,7 +836,7 @@ int mtdcrypt_init_crypt_info(struct mtd_info *mtd)
 	caam_jr_free(mtd->crypt_info->jr_dev);
 #endif
 	mtdcrypt_compute_root_iv(mtd->crypt_info);
-	if (mtd->crypt_info->tfm) {
+	if (mtd->crypt_info->skcipher) {
 		rc = 0;
 		goto out_unlock;
 	}
@@ -841,17 +844,18 @@ int mtdcrypt_init_crypt_info(struct mtd_info *mtd)
 					mtd->crypt_info->cipher, "cbc");
 	if (rc)
 		goto out_unlock;
-	mtd->crypt_info->tfm = crypto_alloc_ablkcipher(full_alg_name, 0, 0);
-	if (IS_ERR(mtd->crypt_info->tfm)) {
-		rc = PTR_ERR(mtd->crypt_info->tfm);
-		mtd->crypt_info->tfm = NULL;
+	mtd->crypt_info->skcipher = crypto_alloc_skcipher(full_alg_name, 0, 0);
+	if (IS_ERR(mtd->crypt_info->skcipher)) {
+		rc = PTR_ERR(mtd->crypt_info->skcipher);
+		mtd->crypt_info->skcipher = NULL;
 		pr_err("mtdcrypt: Error initializing cipher [%s]\n",
 				full_alg_name);
 		goto out_free;
 	}
-	crypto_ablkcipher_set_flags(mtd->crypt_info->tfm,
+
+	crypto_skcipher_set_flags(mtd->crypt_info->skcipher,
 			CRYPTO_TFM_REQ_WEAK_KEY);
-	rc = crypto_ablkcipher_setkey(mtd->crypt_info->tfm,
+	rc = crypto_skcipher_setkey(mtd->crypt_info->skcipher,
 			mtd->crypt_info->key, mtd->crypt_info->key_size);
 	if (rc) {
 		pr_err("mtdcrypt: Error setting key; rc = [%d]\n", rc);
