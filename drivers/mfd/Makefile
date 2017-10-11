@@ -221,3 +221,5 @@ obj-$(CONFIG_MFD_MCA_CC6UL)	+= mca-cc6ul.o
 
 mca-ioexp-objs			:= mca-ioexp-core.o mca-ioexp-irq.o mca-ioexp-i2c.o
 obj-$(CONFIG_MFD_MCA_IOEXP)	+= mca-ioexp.o
+
+obj-$(CONFIG_MFD_RPISENSE_CORE)	+= rpisense-core.o
