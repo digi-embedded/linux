@@ -18,6 +18,7 @@
 #include <linux/errno.h>
 #include <linux/string.h>
 #include <linux/mm.h>
+#include <linux/of.h>
 #include <linux/slab.h>
 #include <linux/uaccess.h>
 #include <linux/delay.h>
@@ -282,7 +283,9 @@ static struct platform_driver rpisense_fb_driver = {
 	.driver = {
 		.name = "rpi-sense-fb",
 		.owner = THIS_MODULE,
+		.of_match_table = of_match_ptr(rpisense_fb_id),
 	},
+	.id_table = rpisense_fb_device_id,
 };
 
 module_platform_driver(rpisense_fb_driver);

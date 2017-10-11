@@ -14,6 +14,7 @@
  */
 
 #include <linux/module.h>
+#include <linux/of.h>
 
 #include <linux/mfd/rpisense/joystick.h>
 #include <linux/mfd/rpisense/core.h>
@@ -143,7 +144,9 @@ static struct platform_driver rpisense_js_driver = {
 	.driver = {
 		.name = "rpi-sense-js",
 		.owner = THIS_MODULE,
+		.of_match_table = of_match_ptr(rpisense_js_id),
 	},
+	.id_table = rpisense_js_device_id,
 };
 
 module_platform_driver(rpisense_js_driver);
