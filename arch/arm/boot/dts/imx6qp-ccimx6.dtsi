@@ -1,0 +1,195 @@
+/*
+ * Copyright 2017, Digi International Inc.
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+/ {
+	caam_keyblob: caam-keyblob {
+		compatible = "fsl,sec-v4.0-keyblob";
+		status = "disabled";
+	};
+
+	memory {
+		/* U-boot to fill memory details here */
+	};
+};
+
+&cpu0 {
+	arm-supply = <&reg_arm>;
+	soc-supply = <&reg_soc>;
+	pu-supply = <&reg_pu>;
+};
+
+&i2c2 {
+	clock-frequency = <100000>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_i2c2>;
+	status = "okay";
+
+	pmic_dialog: dialog@58 {
+		compatible = "dlg,da9063";
+		reg = <0x58>;
+		interrupt-parent = <&gpio7>;
+		interrupts = <12 2>;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_pmic_dialog>;
+
+		rtc {
+			compatible = "dlg,da9063-rtc";
+		};
+
+		onkey {
+			compatible = "dlg,da9063-onkey";
+			dlg,key-power;
+		};
+
+		hwmon {
+			compatible = "dlg,da9063-hwmon";
+			dlg,tjunc-offset = <(-5)>;
+		};
+
+		gpio_extender: gpio {
+			compatible = "dlg,da9063-gpio";
+			gpio-controller;
+			#gpio-cells = <2>;
+		};
+
+		regulators {
+			compatible = "dlg,da9063-regulator";
+
+			bcore1: bcore1 {
+				regulator-name = "DA9063_BCORE1";
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			bcore2: bcore2 {
+				regulator-name = "DA9063_BCORE2";
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			bpro: bpro {
+				regulator-name = "DA9063_BPRO";
+				regulator-boot-on;
+				regulator-always-on;
+				regulator-suspend-mem-disabled;
+				regulator-suspend-standby-disabled;
+			};
+
+			bmem: bmem {
+				regulator-name = "DA9063_BMEM";
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			bio: bio {
+				regulator-name = "DA9063_BIO";
+				regulator-boot-on;
+			};
+
+			bperi: bperi {
+				regulator-name = "DA9063_BPERI";
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			ldo2: ldo2 {
+				regulator-name = "DA9063_LDO2";
+				regulator-boot-on;
+			};
+
+			ldo3: ldo3 {
+				regulator-name = "DA9063_LDO3";
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			ldo4: ldo4 {
+				regulator-name = "DA9063_LDO4";
+				regulator-min-microvolt = <2500000>;
+				regulator-max-microvolt = <2500000>;
+			};
+
+			ldo5: ldo5 {
+				regulator-name = "DA9063_LDO5";
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			ldo6: ldo6 {
+				regulator-name = "DA9063_LDO6";
+				regulator-min-microvolt = <900000>;
+				regulator-max-microvolt = <3600000>;
+				regulator-suspend-mem-disabled;
+				regulator-suspend-standby-disabled;
+			};
+
+			ldo9: ldo9 {
+				regulator-name = "DA9063_LDO9";
+				regulator-min-microvolt = <3300000>;
+				regulator-max-microvolt = <3300000>;
+			};
+
+			ldo10: ldo10 {
+				regulator-name = "DA9063_LDO10";
+				regulator-min-microvolt = <3300000>;
+				regulator-max-microvolt = <3300000>;
+			};
+
+			ldo11: ldo11 {
+				regulator-name = "DA9063_LDO11";
+				regulator-boot-on;
+				regulator-always-on;
+			};
+		};
+	};
+};
+
+&gpu {
+	contiguous-size-percentage = <12>;
+};
+
+&iomuxc {
+	pmic_dialog {
+		pinctrl_pmic_dialog: pmic_dialoggrp {
+			fsl,pins = <
+				MX6QDL_PAD_GPIO_17__GPIO7_IO12 0x1b0b0
+			>;
+		};
+	};
+};
+
+/* Connected to wireless chip */
+&usdhc1 {
+	pinctrl-names = "default", "state_100mhz", "state_200mhz";
+	pinctrl-0 = <&pinctrl_usdhc1>;
+	pinctrl-1 = <&pinctrl_usdhc1_100mhz>;
+	pinctrl-2 = <&pinctrl_usdhc1_200mhz>;
+	status = "disabled";
+};
+
+/* Connected to eMMC */
+&usdhc4 {
+	pinctrl-names = "default", "state_100mhz", "state_200mhz";
+	pinctrl-0 = <&pinctrl_usdhc4>;
+	pinctrl-1 = <&pinctrl_usdhc4_100mhz>;
+	pinctrl-2 = <&pinctrl_usdhc4_200mhz>;
+	bus-width = <8>;
+	non-removable;
+	no-1-8-v;
+	status = "okay";
+};
