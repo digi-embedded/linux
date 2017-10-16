@@ -180,6 +180,7 @@
 	pinctrl-1 = <&pinctrl_usdhc1_100mhz>;
 	pinctrl-2 = <&pinctrl_usdhc1_200mhz>;
 	status = "disabled";
+	vqmmc-supply = <&ldo10>;
 };
 
 /* Connected to eMMC */
