@@ -47,10 +47,7 @@
 			regulator-min-microvolt = <3000000>;
 			regulator-max-microvolt = <3000000>;
 			gpio = <&gpio1 9 GPIO_ACTIVE_HIGH>;
-<<<<<<< HEAD
-=======
 			off-on-delay = <20000>;
->>>>>>> rel_imx_4.9.x_1.0.0_ga
 			enable-active-high;
 		};
 
@@ -119,13 +116,6 @@
 		396000	1175000
 		198000	1175000
 	>;
-<<<<<<< HEAD
-	arm-supply = <&sw1a_reg>;
-	soc-supply = <&sw1a_reg>;
-	fsl,arm-soc-shared = <1>;
-};
-
-=======
 	fsl,arm-soc-shared = <1>;
 };
 
@@ -139,7 +129,6 @@
 	regulator-allow-bypass;
 };
 
->>>>>>> rel_imx_4.9.x_1.0.0_ga
 &csi {
 	status = "okay";
 
@@ -259,13 +248,8 @@
 			};
 
 			sw3b_reg: sw3b {
-<<<<<<< HEAD
-				regulator-min-microvolt = <400000>;
-				regulator-max-microvolt = <1975000>;
-=======
 				regulator-min-microvolt = <800000>;
 				regulator-max-microvolt = <3300000>;
->>>>>>> rel_imx_4.9.x_1.0.0_ga
 				regulator-always-on;
 			};
 
@@ -397,17 +381,10 @@
 
 			VCOM_reg: VCOM {
 				regulator-name = "VCOM";
-<<<<<<< HEAD
-				/* 2's-compliment, -4325000 */
-				regulator-min-microvolt = <0xffbe0178>;
-				/* 2's-compliment, -500000 */
-				regulator-max-microvolt = <0xfff85ee0>;
-=======
 				/* Real max: -500000 */
 				regulator-max-microvolt = <4325000>;
 				/* Real min: -4325000 */
 				regulator-min-microvolt = <500000>;
->>>>>>> rel_imx_4.9.x_1.0.0_ga
 			};
 
 			VNEG_reg: VNEG {
@@ -1048,9 +1025,5 @@
 &wdog1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_wdog>;
-<<<<<<< HEAD
-	fsl,wdog_b;
-=======
 	fsl,ext-reset-output;
->>>>>>> rel_imx_4.9.x_1.0.0_ga
 };

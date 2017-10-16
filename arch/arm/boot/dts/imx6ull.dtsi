@@ -1,9 +1,6 @@
 /*
  * Copyright 2015-2016 Freescale Semiconductor, Inc.
-<<<<<<< HEAD
-=======
  * Copyright 2017 NXP.
->>>>>>> rel_imx_4.9.x_1.0.0_ga
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -61,22 +58,16 @@
 			clock-latency = <61036>; /* two CLK32 periods */
 			operating-points = <
 				/* kHz	uV */
-<<<<<<< HEAD
-=======
 				996000	1275000
 				792000	1225000
->>>>>>> rel_imx_4.9.x_1.0.0_ga
 				528000	1175000
 				396000	1025000
 				198000	950000
 			>;
 			fsl,soc-operating-points = <
 				/* KHz	uV */
-<<<<<<< HEAD
-=======
 				996000	1175000
 				792000	1175000
->>>>>>> rel_imx_4.9.x_1.0.0_ga
 				528000	1175000
 				396000	1175000
 				198000	1175000
@@ -95,11 +86,8 @@
 				 <&clks IMX6UL_CLK_OSC>;
 			clock-names = "arm", "pll2_bus",  "pll2_pfd2_396m", "secondary_sel", "step",
 				      "pll1_sw", "pll1_sys", "pll1_bypass", "pll1", "pll1_bypass_src", "osc";
-<<<<<<< HEAD
-=======
 			arm-supply = <&reg_arm>;
 			soc-supply = <&reg_soc>;
->>>>>>> rel_imx_4.9.x_1.0.0_ga
 		};
 	};
 
@@ -261,11 +249,7 @@
 						      "rxtx1", "rxtx2",
 						      "rxtx3", "rxtx4",
 						      "rxtx5", "rxtx6",
-<<<<<<< HEAD
-						      "rxtx7", "dma";
-=======
 						      "rxtx7", "spba";
->>>>>>> rel_imx_4.9.x_1.0.0_ga
 					status = "disabled";
 				};
 
@@ -359,11 +343,7 @@
 						 <&clks IMX6UL_CLK_ESAI_IPG>,
 						 <&clks IMX6UL_CLK_SPBA>;
 					clock-names = "core", "mem", "extal",
-<<<<<<< HEAD
-						      "fsys", "dma";
-=======
 						      "fsys", "spba";
->>>>>>> rel_imx_4.9.x_1.0.0_ga
 					dmas = <&sdma 0 21 0>, <&sdma 47 21 0>;
 					dma-names = "rx", "tx";
 					dma-source = <&gpr 0 14 0 15>;
@@ -430,11 +410,7 @@
 						"asrck_1", "asrck_2", "asrck_3", "asrck_4",
 						"asrck_5", "asrck_6", "asrck_7", "asrck_8",
 						"asrck_9", "asrck_a", "asrck_b", "asrck_c",
-<<<<<<< HEAD
-						"asrck_d", "asrck_e", "asrck_f", "dma";
-=======
 						"asrck_d", "asrck_e", "asrck_f", "spba";
->>>>>>> rel_imx_4.9.x_1.0.0_ga
 					dmas = <&sdma 17 23 1>, <&sdma 18 23 1>, <&sdma 19 23 1>,
 						<&sdma 20 23 1>, <&sdma 21 23 1>, <&sdma 22 23 1>;
 					dma-names = "rxa", "rxb", "rxc",
@@ -523,13 +499,8 @@
 				reg = <0x02098000 0x4000>;
 				interrupts = <GIC_SPI 55 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&clks IMX6UL_CLK_GPT1_BUS>,
-<<<<<<< HEAD
-					 <&clks IMX6UL_CLK_GPT1_SERIAL>;
-				clock-names = "ipg", "per";
-=======
 					 <&clks IMX6UL_CLK_GPT_3M>;
 				clock-names = "ipg", "osc_per";
->>>>>>> rel_imx_4.9.x_1.0.0_ga
 			};
 
 			gpio1: gpio@0209c000 {
@@ -752,11 +723,7 @@
 					regmap = <&snvs>;
 					interrupts = <GIC_SPI 4 IRQ_TYPE_LEVEL_HIGH>;
 					linux,keycode = <KEY_POWER>;
-<<<<<<< HEAD
-					wakeup;
-=======
 					wakeup-source;
->>>>>>> rel_imx_4.9.x_1.0.0_ga
 				};
 			};
 

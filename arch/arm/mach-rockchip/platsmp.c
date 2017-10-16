@@ -89,31 +89,6 @@ static int pmu_set_power_domain(int pd, bool on)
 	 */
 	if (!IS_ERR(rstc) && !on)
 		reset_control_assert(rstc);
-<<<<<<< HEAD
-
-	ret = regmap_update_bits(pmu, PMU_PWRDN_CON, BIT(pd), val);
-	if (ret < 0) {
-		pr_err("%s: could not update power domain\n", __func__);
-		return ret;
-	}
-
-	ret = -1;
-	while (ret != on) {
-		ret = pmu_power_domain_is_on(pd);
-		if (ret < 0) {
-			pr_err("%s: could not read power domain state\n",
-				 __func__);
-			return ret;
-		}
-	}
-
-	if (!IS_ERR(rstc)) {
-		if (on)
-			reset_control_deassert(rstc);
-		reset_control_put(rstc);
-	}
-
-=======
 
 	if (has_pmu) {
 		ret = regmap_update_bits(pmu, PMU_PWRDN_CON, BIT(pd), val);
@@ -140,7 +115,6 @@ static int pmu_set_power_domain(int pd, bool on)
 		reset_control_put(rstc);
 	}
 
->>>>>>> rel_imx_4.9.x_1.0.0_ga
 	return 0;
 }
 
@@ -179,11 +153,7 @@ static int rockchip_boot_secondary(unsigned int cpu, struct task_struct *idle)
 		 * The cpu0 need to wait the other cpus other than cpu0 entering
 		 * the wfe state.The wait time is affected by many aspects.
 		 * (e.g: cpu frequency, bootrom frequency, sram frequency, ...)
-<<<<<<< HEAD
-		 * */
-=======
 		 */
->>>>>>> rel_imx_4.9.x_1.0.0_ga
 		mdelay(1); /* ensure the cpus other than cpu0 to startup */
 
 		writel(virt_to_phys(secondary_startup), sram_base_addr + 8);

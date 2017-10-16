@@ -65,13 +65,6 @@ void __init dove_init_irq(void)
 	orion_irq_init(1, IRQ_VIRT_BASE + IRQ_MASK_LOW_OFF);
 	orion_irq_init(33, IRQ_VIRT_BASE + IRQ_MASK_HIGH_OFF);
 
-<<<<<<< HEAD
-	orion_irq_init(1, IRQ_VIRT_BASE + IRQ_MASK_LOW_OFF);
-	orion_irq_init(33, IRQ_VIRT_BASE + IRQ_MASK_HIGH_OFF);
-
-#ifdef CONFIG_MULTI_IRQ_HANDLER
-=======
->>>>>>> rel_imx_4.9.x_1.0.0_ga
 	set_handle_irq(dove_legacy_handle_irq);
 
 	/*

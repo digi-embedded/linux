@@ -11,18 +11,6 @@
 &cpu0 {
 	operating-points = <
 		/* kHz	uV */
-<<<<<<< HEAD
-		528000	1175000
-		99000	950000
-	>;
-	fsl,soc-operating-points = <
-		/* KHz	uV */
-		528000	1175000
-		99000	1175000
-	>;
-	arm-supply = <&reg_arm>;
-	soc-supply = <&reg_soc>;
-=======
 		996000	1275000
 		792000	1225000
 		528000	1175000
@@ -37,15 +25,12 @@
 		396000	1175000
 		198000	1175000
 	>;
->>>>>>> rel_imx_4.9.x_1.0.0_ga
 	fsl,arm-soc-shared = <0>;
 };
 
 &gpc {
 	fsl,ldo-bypass = <0>; /* use ldo-enable, u-boot will check it and configure */
 };
-<<<<<<< HEAD
-=======
 
 &reg_arm {
 	/delete-property/ vin-supply;
@@ -54,4 +39,3 @@
 &reg_soc {
 	/delete-property/ vin-supply;
 };
->>>>>>> rel_imx_4.9.x_1.0.0_ga

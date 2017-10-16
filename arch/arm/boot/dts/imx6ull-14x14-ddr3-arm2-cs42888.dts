@@ -72,11 +72,7 @@
 		cpu-dai = <&sai2>;
 		audio-codec = <&codec_b>;
 		codec-master;
-<<<<<<< HEAD
-		gpr = <&gpr>;
-=======
 		gpr = <&gpr 4 0x100000 0x100000>;
->>>>>>> rel_imx_4.9.x_1.0.0_ga
 		hp-det-gpios = <&gpio5 0 1>;
 	};
 };
