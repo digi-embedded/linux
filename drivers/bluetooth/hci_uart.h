@@ -43,13 +43,13 @@
 #define HCI_UART_H4DS	3
 #define HCI_UART_LL	4
 #define HCI_UART_ATH3K	5
-#define HCI_UART_INTEL	6
-#define HCI_UART_BCM	7
-#define HCI_UART_QCA	8
-#define HCI_UART_AG6XX	9
-#define HCI_UART_NOKIA	10
-#define HCI_UART_MRVL	11
-#define HCI_UART_IBS	12
+#define HCI_UART_IBS	6
+#define HCI_UART_INTEL	7
+#define HCI_UART_BCM	8
+#define HCI_UART_QCA	9
+#define HCI_UART_AG6XX	10
+#define HCI_UART_NOKIA	11
+#define HCI_UART_MRVL	12
 
 #define HCI_UART_RAW_DEVICE	0
 #define HCI_UART_RESET_ON_INIT	1
