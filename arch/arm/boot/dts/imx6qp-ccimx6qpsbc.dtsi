@@ -17,7 +17,7 @@
 / {
 	model = "Digi International ConnectCore 6 QuadPlus Single Board Computer.";
 	compatible = "digi,ccimx6qpsbc", "digi,ccimx6sbc", "digi,ccimx6qp", "digi,ccimx6", "fsl,imx6qp";
-	digi,machine,name = "ccimx6sbc";
+	digi,machine,name = "ccimx6qpsbc";
 
 	aliases {
 		mxcfb0 = &mxcfb1;
