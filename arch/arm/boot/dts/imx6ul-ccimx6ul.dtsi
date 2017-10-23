@@ -57,8 +57,6 @@
 		396000	1175000
 		198000	1175000
 	>;
-	arm-supply = <&vdd_arm_soc_in>;
-	soc-supply = <&vdd_arm_soc_in>;
 	fsl,arm-soc-shared = <1>;
 };
 
@@ -289,6 +287,16 @@
 			>;
 		};
 	};
+};
+
+&reg_arm {
+	vin-supply = <&vdd_arm_soc_in>;
+	regulator-allow-bypass;
+};
+
+&reg_soc {
+	vin-supply = <&vdd_arm_soc_in>;
+	regulator-allow-bypass;
 };
 
 &snvs_poweroff  {
