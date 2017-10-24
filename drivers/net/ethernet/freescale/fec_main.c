@@ -3607,7 +3607,6 @@ fec_probe(struct platform_device *pdev)
 	ret = fec_reset_phy(pdev);
 	if (ret)
 		goto failed_reset;
-	fec_reset_phy(pdev);
 
 	if (fep->bufdesc_ex)
 		fec_ptp_init(pdev);
