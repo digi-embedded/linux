@@ -1,0 +1,205 @@
+/*
+ * Copyright 2017, Digi International Inc.
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+/dts-v1/;
+#include <dt-bindings/gpio/gpio.h>
+/* i.MX6 QuadPlus CPU */
+#include "imx6qp.dtsi"
+/* ConnectCore 6 QuadPlus (non-wireless variant) */
+#include "imx6qp-ccimx6.dtsi"
+/* ConnectCore 6 QuadPlus SBC carrier board */
+#include "imx6qp-ccimx6qpsbc.dtsi"
+
+&audmux {
+	status = "okay";
+};
+
+&caam_keyblob {
+	status = "okay";
+};
+
+&can1 {
+	status = "okay";
+};
+
+&can2 {
+	status = "okay";
+};
+
+&codec_power {
+	status = "okay";
+};
+
+&ecspi1 {
+	status = "okay";
+
+//	spidev@0 {
+//		status = "okay";
+//	};
+};
+
+&fec {
+	status = "okay";
+};
+
+&hdmi_core {
+	status = "okay";
+};
+
+&hdmi_video {
+	status = "okay";
+};
+
+&hdmi_audio {
+	status = "okay";
+};
+
+&i2c3 {
+	status = "okay";
+
+	edid@50 {
+		status = "okay";
+	};
+
+	fusion@10 {
+		status = "okay";
+	};
+
+	/*
+	 * Fusion touch controller has I2C address 0x10. If using the latest Video Adapter Board,
+	 * an I2C-address translator moves it to address 0x14. This device tree has two 'fusion'
+	 * entries (one at 0x10 and another at 0x14), so that the touch works out of the box in old
+	 * and new displays, although this will make the kernel complain for the entry where the touch
+	 * does not respond. You can remove the 'fusion' node that doesn't match your display
+	 * to avoid this error message.
+	 */
+	fusion@14 {
+		status = "okay";
+	};
+
+	/* MIPI-CSI2 camera */
+	ov5640_mipi: ov5640_mipi@4c {
+		status = "okay";
+	};
+
+	/* Parallel camera CSI0 */
+	ov5642_1: ov5642_1@5c {
+		status = "okay";
+	};
+
+	sgtl5000: codec@0a {
+		status = "okay";
+	};
+};
+
+&ldb {
+	status = "okay";
+
+	lvds-channel@0 {
+		status = "okay";
+	};
+	lvds-channel@1 {
+		status = "okay";
+	};
+};
+
+&mipi_csi {
+	status = "okay";
+};
+
+&mipi_dsi {
+	status = "okay";
+};
+
+&mipi_dsi_reset {
+	status = "okay";
+};
+
+&mxcfb1 {
+	status = "okay";
+};
+
+&mxcfb2 {
+	status = "okay";
+};
+
+&mxcfb3 {
+	status = "okay";
+};
+
+&mxcfb4 {
+	status = "okay";
+};
+
+&pcie {
+	status = "okay";
+};
+
+&sata {
+	status = "okay";
+};
+
+&sound_hdmi {
+	status = "okay";
+};
+
+&sound_sgtl5000 {
+	status = "okay";
+};
+
+&ssi2 {
+	status = "okay";
+};
+
+&uart1 {
+	status = "okay";
+};
+
+&uart3 {
+	status = "okay";
+};
+
+&uart4 {
+	status = "okay";
+};
+
+&uart5 {
+	status = "okay";
+};
+
+&usbh1 {
+	status = "okay";
+};
+
+&usbotg {
+	status = "okay";
+};
+
+&usdhc2 {
+	status = "okay";
+};
+
+&v4l2_cap_0 {
+	status = "okay";
+};
+
+&v4l2_cap_1 {
+	status = "okay";
+};
+
+&v4l2_out {
+	status = "okay";
+};
