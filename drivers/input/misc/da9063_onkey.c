@@ -268,6 +268,7 @@ static int da9063_onkey_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "Failed to get platform IRQ: %d\n", error);
 		return error;
 	}
+	enable_irq_wake(irq);
 
 	error = devm_request_threaded_irq(&pdev->dev, irq,
 					  NULL, da9063_onkey_irq_handler,
