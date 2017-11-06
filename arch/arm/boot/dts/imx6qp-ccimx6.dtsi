@@ -20,7 +20,7 @@
 		status = "disabled";
 	};
 
-	memory {
+	memory: memory {
 		/* U-boot to fill memory details here */
 	};
 };
