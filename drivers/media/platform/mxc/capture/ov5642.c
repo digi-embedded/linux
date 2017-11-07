@@ -4250,7 +4250,8 @@ static int ov5642_probe(struct i2c_client *client,
 
 	gpr = syscon_regmap_lookup_by_compatible("fsl,imx6q-iomuxc-gpr");
 	if (!IS_ERR(gpr)) {
-		if (of_machine_is_compatible("fsl,imx6q")) {
+		if (of_machine_is_compatible("fsl,imx6q") ||
+		    of_machine_is_compatible("fsl,imx6qp")) {
 			int mask = ov5642_data.csi ? (1 << 20) : (1 << 19);
 
 			if (sensor->csi != sensor->ipu_id) {
@@ -4264,6 +4265,9 @@ static int ov5642_probe(struct i2c_client *client,
 			int val =  ov5642_data.csi ? (4 << 3) : (4 << 0);
 
 			regmap_update_bits(gpr, IOMUXC_GPR13, mask, val);
+		} else {
+			pr_err("%s: unable to set IPU muxing: unknown machine\n",
+			__func__);
 		}
 	} else {
 		pr_err("%s: failed to find fsl,imx6q-iomux-gpr regmap\n",
