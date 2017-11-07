@@ -425,30 +425,32 @@ static int goodix_reset(struct goodix_ts_data *ts)
 {
 	int error;
 
-	/* begin select I2C slave addr */
-	error = gpiod_direction_output(ts->gpiod_rst, 0);
-	if (error)
-		return error;
+	if (ts->gpiod_rst) {
+		/* begin select I2C slave addr */
+		error = gpiod_direction_output(ts->gpiod_rst, 0);
+		if (error)
+			return error;
 
-	msleep(20);				/* T2: > 10ms */
+		msleep(20);				/* T2: > 10ms */
 
-	/* HIGH: 0x28/0x29, LOW: 0xBA/0xBB */
-	error = gpiod_direction_output(ts->gpiod_int, ts->client->addr == 0x14);
-	if (error)
-		return error;
+		/* HIGH: 0x28/0x29, LOW: 0xBA/0xBB */
+		error = gpiod_direction_output(ts->gpiod_int, ts->client->addr == 0x14);
+		if (error)
+			return error;
 
-	usleep_range(100, 2000);		/* T3: > 100us */
+		usleep_range(100, 2000);		/* T3: > 100us */
 
-	error = gpiod_direction_output(ts->gpiod_rst, 1);
-	if (error)
-		return error;
+		error = gpiod_direction_output(ts->gpiod_rst, 1);
+		if (error)
+			return error;
 
-	usleep_range(6000, 10000);		/* T4: > 5ms */
+		usleep_range(6000, 10000);		/* T4: > 5ms */
 
-	/* end select I2C slave addr */
-	error = gpiod_direction_input(ts->gpiod_rst);
-	if (error)
-		return error;
+		/* end select I2C slave addr */
+		error = gpiod_direction_input(ts->gpiod_rst);
+		if (error)
+			return error;
+	}
 
 	error = goodix_int_sync(ts);
 	if (error)
@@ -741,7 +743,7 @@ static int goodix_ts_probe(struct i2c_client *client,
 	if (error)
 		return error;
 
-	if (ts->gpiod_int && ts->gpiod_rst) {
+	if (ts->gpiod_int) {
 		/* reset the controller */
 		error = goodix_reset(ts);
 		if (error) {
@@ -764,7 +766,7 @@ static int goodix_ts_probe(struct i2c_client *client,
 
 	ts->cfg_len = goodix_get_cfg_len(ts->id);
 
-	if (ts->gpiod_int && ts->gpiod_rst) {
+	if (ts->gpiod_int) {
 		/* update device config */
 		ts->cfg_name = devm_kasprintf(&client->dev, GFP_KERNEL,
 					      "goodix_%d_cfg.bin", ts->id);
@@ -795,7 +797,7 @@ static int goodix_ts_remove(struct i2c_client *client)
 {
 	struct goodix_ts_data *ts = i2c_get_clientdata(client);
 
-	if (ts->gpiod_int && ts->gpiod_rst)
+	if (ts->gpiod_int)
 		wait_for_completion(&ts->firmware_loading_complete);
 
 	return 0;
@@ -808,7 +810,7 @@ static int __maybe_unused goodix_suspend(struct device *dev)
 	int error;
 
 	/* We need gpio pins to suspend/resume */
-	if (!ts->gpiod_int || !ts->gpiod_rst) {
+	if (!ts->gpiod_int) {
 		disable_irq(client->irq);
 		return 0;
 	}
@@ -851,7 +853,7 @@ static int __maybe_unused goodix_resume(struct device *dev)
 	struct goodix_ts_data *ts = i2c_get_clientdata(client);
 	int error;
 
-	if (!ts->gpiod_int || !ts->gpiod_rst) {
+	if (!ts->gpiod_int) {
 		enable_irq(client->irq);
 		return 0;
 	}
