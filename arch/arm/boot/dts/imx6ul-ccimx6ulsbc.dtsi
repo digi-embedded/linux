@@ -276,7 +276,7 @@
 		bus-width = <18>;
 
 		display-timings {
-			native-mode = <&timing0>;
+			native-mode = <&timing2>;
 			timing2: timing2 {
 				clock-frequency = <27000000>;
 				hactive = <1280>;
@@ -300,7 +300,7 @@
 		bus-width = <18>;
 
 		display-timings {
-			native-mode = <&timing0>;
+			native-mode = <&timing3>;
 			timing3: timing3 {
 				clock-frequency = <68930000>;
 				hactive = <1280>;
