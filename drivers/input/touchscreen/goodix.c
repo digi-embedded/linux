@@ -1235,7 +1235,8 @@ reset:
 
 	ts->chip = goodix_get_chip_data(ts->id);
 
-	if (ts->load_cfg_from_disk) {
+	if (ts->gpiod_int && 
+	    !device_property_read_bool(&client->dev, "skip-firmware-request")) {
 		/* update device config */
 		ts->cfg_name = devm_kasprintf(&client->dev, GFP_KERNEL,
 					      "goodix_%s_cfg.bin", ts->id);
@@ -1277,7 +1278,7 @@ static int goodix_ts_remove(struct i2c_client *client)
 	struct goodix_ts_data *ts = i2c_get_clientdata(client);
 	int error;
 
-	if (ts->load_cfg_from_disk)
+	if (ts->gpiod_int)
 		wait_for_completion(&ts->firmware_loading_complete);
 
 	kfree(ts->cfg.data);
@@ -1303,7 +1304,7 @@ static int __maybe_unused goodix_suspend(struct device *dev)
 		wait_for_completion(&ts->firmware_loading_complete);
 
 	/* We need gpio pins to suspend/resume */
-	if (ts->irq_pin_access_method == IRQ_PIN_ACCESS_NONE) {
+	if (!ts->gpiod_int) {
 		disable_irq(client->irq);
 		return 0;
 	}
