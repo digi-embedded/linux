@@ -105,6 +105,15 @@
 	status = "okay";
 };
 
+/*
+ * Uncomment to enable the goodix touch, used with:
+ *  - alc070004041
+ *  - g101evn010
+ */
+//&goodix_touch {
+//	status = "okay";
+//};
+
 /* Parallel LCD */
 &lcdif {
 	status = "okay";
