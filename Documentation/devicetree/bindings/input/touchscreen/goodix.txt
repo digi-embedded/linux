@@ -23,6 +23,9 @@ Optional properties:
  - touchscreen-inverted-y  : Y axis is inverted (boolean)
  - touchscreen-swapped-x-y : X and Y axis are swapped (boolean)
                              (swapping is done after inverting the axis)
+ - reload-fw-on-resume  : Reload the touch controller configuration when re-
+			  suming from suspend. This is required to allow
+			  powering off the device during low power modes.
 
 Example:
 
