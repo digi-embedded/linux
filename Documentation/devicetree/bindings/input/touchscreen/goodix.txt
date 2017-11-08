@@ -27,9 +27,9 @@ Optional properties:
  - touchscreen-size-x
  - touchscreen-size-y
  - touchscreen-swapped-x-y
-
-The touchscreen-* properties are documented in touchscreen.txt in this
-directory.
+ - reload-fw-on-resume  : Reload the touch controller configuration when re-
+			  suming from suspend. This is required to allow
+			  powering off the device during low power modes.
 
 Example:
 
