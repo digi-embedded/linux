@@ -503,10 +503,8 @@ static int mca_cc6ul_init_hardware(struct mca_cc6ul_tamper *tp)
 					"TAMPER IN");
 		if (ret != 0) {
 			dev_warn(tp->mca->dev,
-				 "Error requesting GPIO %d. "
-				 "Cannot use tamper %d (%d)\n",
-				 tp->mca->gpio_base + tp->io_in, tp->iface, ret);
-			return ret;
+				 "Error requesting GPIO %d for tamper %d input. It might be in use by other device.\n",
+				 tp->mca->gpio_base + tp->io_in, tp->iface);
 		}
 
 		if (data[CFG0] & MCA_CC6UL_TAMPER_OUT_EN) {
@@ -515,11 +513,9 @@ static int mca_cc6ul_init_hardware(struct mca_cc6ul_tamper *tp)
 						"TAMPER OUT");
 			if (ret != 0) {
 				dev_warn(tp->mca->dev,
-					 "Error requesting GPIO %d. "
-					 "Cannot use tamper %d (%d)\n",
+					 "Error requesting GPIO %d for tamper %d output. It might be in use by other device.\n",
 					 tp->mca->gpio_base + tp->io_out,
-					 tp->iface, ret);
-				return ret;
+					 tp->iface);
 			}
 		}
 	}
