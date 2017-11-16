@@ -111,6 +111,11 @@
 	};
 };
 
+/* Parallel LCD (shares IPU0:DI0 with MIPI display) */
+&lcd {
+	status = "okay";
+};
+
 &ldb {
 	status = "okay";
 
@@ -126,13 +131,17 @@
 	status = "okay";
 };
 
-&mipi_dsi {
-	status = "okay";
-};
-
-&mipi_dsi_reset {
-	status = "okay";
-};
+/*
+ * The MIPI display shares IPU0:DI0 with the parallel LCD.
+ * Comment the 'lcd' node before enabling MIPI display.
+ */
+// &mipi_dsi {
+// 	status = "okay";
+// };
+//
+// &mipi_dsi_reset {
+// 	status = "okay";
+// };
 
 &mxcfb1 {
 	prefetch;
