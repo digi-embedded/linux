@@ -161,6 +161,17 @@
 		status = "disabled";
 	};
 
+	goodix_touch: gt911@14 {
+		compatible = "goodix,gt9271";
+		reg = <0x14>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_goodix_touch>;
+		interrupt-parent = <&gpio5>;
+		interrupts = <2 IRQ_TYPE_EDGE_RISING>;
+		irq-gpios = <&gpio5 2 GPIO_ACTIVE_HIGH>;
+		status = "disabled";
+	};
+
 	max98089: codec@10 {
 		compatible = "maxim,max98089";
 		reg = <0x10>;
@@ -276,7 +287,7 @@
 		bus-width = <18>;
 
 		display-timings {
-			native-mode = <&timing0>;
+			native-mode = <&timing2>;
 			timing2: timing2 {
 				clock-frequency = <27000000>;
 				hactive = <1280>;
@@ -300,7 +311,7 @@
 		bus-width = <18>;
 
 		display-timings {
-			native-mode = <&timing0>;
+			native-mode = <&timing3>;
 			timing3: timing3 {
 				clock-frequency = <68930000>;
 				hactive = <1280>;
@@ -522,6 +533,12 @@
 		pinctrl_fusion_touch: fusiongrp{
 			fsl,pins = <
 				MX6UL_PAD_SNVS_TAMPER2__GPIO5_IO02	0x3000
+			>;
+		};
+
+		pinctrl_goodix_touch: goodixgrp{
+			fsl,pins = <
+				MX6UL_PAD_SNVS_TAMPER2__GPIO5_IO02	0x1020
 			>;
 		};
 
