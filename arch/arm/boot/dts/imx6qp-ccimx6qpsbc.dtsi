@@ -54,20 +54,15 @@
 		status = "disabled";
 	};
 
-	lq070y3dg3b: LQ70Y3DG3B@0 {
-		display-timings {
-			timing {
-				clock-frequency = <18520000>;
-				hactive = <800>;
-				vactive = <480>;
-				hfront-porch = <50>;
-				hback-porch = <0>;
-				hsync-len = <128>;
-				vback-porch = <25>;
-				vfront-porch = <10>;
-				vsync-len = <10>;
-			};
-		};
+	/* Parallel display */
+	lcd: display@di0 {
+		compatible = "fsl,lcd";
+		ipu_id = <0>;
+		disp_id = <0>;
+		default_ifmt = "RGB666";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_ipu1_di0>;
+		status = "disabled";
 	};
 
 	mipi_dsi_reset: mipi-dsi-reset {
@@ -102,9 +97,9 @@
 	mxcfb3: fb@2 {
 		compatible = "fsl,mxc_sdc_fb";
 		disp_dev = "lcd";
-		interface_pix_fmt = "RGB24";
-		mode_str ="LQ070Y3DG3B";
-		default_bpp = <32>;
+		interface_pix_fmt = "RGB666";
+		mode_str = "FUSION7";
+		default_bpp = <16>;
 		int_clk = <0>;
 		late_init = <0>;
 		status = "disabled";
@@ -692,14 +687,14 @@
 			>;
 		};
 
-		pinctrl_ipu1_2: ipu1grp-2 {
+		/* Parallel display */
+		pinctrl_ipu1_di0: ipu1grp-2 {
 			fsl,pins = <
+				/* DISP0_CLK */
 				MX6QDL_PAD_DI0_DISP_CLK__IPU1_DI0_DISP_CLK 0x10
-				MX6QDL_PAD_EIM_D29__IPU1_DI0_PIN14         0x10
+				/* DISP0_DRDY */
 				MX6QDL_PAD_DI0_PIN15__IPU1_DI0_PIN15       0x10
-				MX6QDL_PAD_DI0_PIN2__IPU1_DI0_PIN02        0x10
-				MX6QDL_PAD_DI0_PIN3__IPU1_DI0_PIN03        0x10
-				MX6QDL_PAD_EIM_D19__GPIO3_IO19		   0x80000000
+				/* Data bus */
 				MX6QDL_PAD_DISP0_DAT0__IPU1_DISP0_DATA00   0x10
 				MX6QDL_PAD_DISP0_DAT1__IPU1_DISP0_DATA01   0x10
 				MX6QDL_PAD_DISP0_DAT2__IPU1_DISP0_DATA02   0x10
