@@ -3590,7 +3590,18 @@ fec_probe(struct platform_device *pdev)
 
 	fep->reg_phy = devm_regulator_get(&pdev->dev, "phy");
 	if (!IS_ERR(fep->reg_phy)) {
-		ret = regulator_enable(fep->reg_phy);
+		int retries = 1;
+
+		if (of_machine_is_compatible("digi,ccimx6qpsbc") ||
+		    of_machine_is_compatible("digi,ccimx6sbc"))
+			retries = 3;
+
+		do {
+			ret = regulator_enable(fep->reg_phy);
+			if (ret && --retries)
+				udelay(10);
+		} while (ret && retries);
+
 		if (ret) {
 			dev_err(&pdev->dev,
 				"Failed to enable phy regulator: %d\n", ret);
