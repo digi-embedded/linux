@@ -2226,9 +2226,11 @@ again:
 
 	spin_lock(&mmc_blk_lock);
 	devidx = mmc_get_reserved_index(card->host);
-	if (devidx >= 0)
+	if (devidx >= 0) {
+		card->host->index = devidx;
 		devidx = ida_simple_get(&mmc_blk_ida, devidx, devidx,
 					GFP_NOWAIT);
+	}
 	ret = 0;
 	if (devidx < 0)
 		ret = ida_get_new_above(&mmc_blk_ida,
