@@ -390,6 +390,9 @@
 		/* Interrupt for LVDS1 */
 		//interrupt-parent = <&gpio3>;
 		//interrupts = <23 1>;
+		/* Interrupt for parallel LCD */
+		//interrupt-parent = <&gpio2>;
+		//interrupts = <1 1>;
 		status = "disabled";
 	};
 
@@ -410,6 +413,9 @@
 		/* Interrupt for LVDS1 */
 		//interrupt-parent = <&gpio3>;
 		//interrupts = <23 1>;
+		/* Interrupt for parallel LCD */
+		//interrupt-parent = <&gpio2>;
+		//interrupts = <1 1>;
 		status = "disabled";
 	};
 
@@ -997,6 +1003,8 @@
 				MX6QDL_PAD_GPIO_16__GPIO7_IO11	 0x80000000
 				/* LVDS1_PEN_IRQ_N */
 				MX6QDL_PAD_EIM_D23__GPIO3_IO23 0x80000000
+				/* LCD IRQ */
+				MX6QDL_PAD_NANDF_D1__GPIO2_IO01	0x80000000
 				/* AUD_CLK / CSI0_MCLK / CSI1_MCLK */
 				MX6QDL_PAD_GPIO_0__CCM_CLKO1    0x130b0
 				/* DSI_RESET */
