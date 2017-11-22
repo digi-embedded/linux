@@ -1,5 +1,5 @@
 /*
- * Copyright 2014 Digi International, Inc.
+ * Copyright 2014-2017 Digi International, Inc.
  *
  * The code contained herein is licensed under the GNU General Public
  * License. You may obtain a copy of the GNU General Public License
@@ -10,6 +10,20 @@
  */
 
 / {
+	/*
+	 * Some tools (like fw_printenv) rely on fixed mmcblk device indexes
+	 * but these are not guaranteed by the kernel.
+	 * The use of aliases allows to reorder the mmcblk indexes of every
+	 * mmc device. Notice that using aliases requires that ALL mmc devices
+	 * have one.
+	 */
+	aliases {
+		mmc0 = &usdhc4;
+		mmc1 = &usdhc2;
+		mmc2 = &usdhc3;
+		mmc3 = &usdhc1;
+	};
+
 	memory: memory {
 		/* U-boot to fill memory details here */
 	};

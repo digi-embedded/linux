@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2016 Freescale Semiconductor, Inc.
+ * Copyright 2011-2017 Freescale Semiconductor, Inc.
  * Copyright 2011 Linaro Ltd.
  *
  * The code contained herein is licensed under the GNU General Public
@@ -31,10 +31,6 @@
 		i2c1 = &i2c2;
 		i2c2 = &i2c3;
 		ipu0 = &ipu1;
-		mmc0 = &usdhc4;
-		mmc1 = &usdhc2;
-		mmc2 = &usdhc3;
-		mmc3 = &usdhc1;
 		serial0 = &uart1;
 		serial1 = &uart2;
 		serial2 = &uart3;
