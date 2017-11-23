@@ -509,6 +509,12 @@
 	vin-supply = <&ldo6>;
 };
 
+&pwm1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pwm1>;
+	status = "disabled";
+};
+
 &ssi2 {
 	fsl,mode = "i2s-slave";
 };
@@ -800,6 +806,14 @@
 				MX6QDL_PAD_GPIO_4__GPIO1_IO04   0x80000000
 				MX6QDL_PAD_SD3_RST__GPIO7_IO08 0x80000000
 				MX6QDL_PAD_NANDF_RB0__GPIO6_IO10 0x80000000
+			>;
+		};
+	};
+
+	pwm1 {
+		pinctrl_pwm1: pwm4grp {
+			fsl,pins = <
+				MX6QDL_PAD_DISP0_DAT8__PWM1_OUT 0x110b0
 			>;
 		};
 	};
