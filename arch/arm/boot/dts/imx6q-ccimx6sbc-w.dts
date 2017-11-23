@@ -153,6 +153,11 @@
 	status = "okay";
 };
 
+/* PWM1 on pin 10 of LCD connector */
+&pwm1 {
+	status = "okay";
+};
+
 &ssi2 {
 	status = "okay";
 };

@@ -602,6 +602,14 @@
 		};
 	};
 
+	pwm1 {
+		pinctrl_pwm1: pwm4grp {
+			fsl,pins = <
+				MX6QDL_PAD_DISP0_DAT8__PWM1_OUT 0x110b0
+			>;
+		};
+	};
+
 	uart1 {
 		pinctrl_uart1: uart1 {
 			fsl,pins = <
@@ -872,6 +880,12 @@
 	power-on-gpio = <&gpio6 10 GPIO_ACTIVE_HIGH>;
 	power-on-delay-ms = <10>;
 	vin-supply = <&ldo6>;
+};
+
+&pwm1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pwm1>;
+	status = "disabled";
 };
 
 &ssi2 {
