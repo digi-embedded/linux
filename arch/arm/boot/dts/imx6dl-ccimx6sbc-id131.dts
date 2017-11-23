@@ -66,6 +66,11 @@
 	};
 };
 
+/* PWM1 on pin 10 of LCD connector */
+&pwm1 {
+	status = "okay";
+};
+
 &uart1 {
 	status = "okay";
 };

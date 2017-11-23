@@ -195,6 +195,11 @@
 	status = "okay";
 };
 
+/* PWM1 on pin 10 of LCD connector */
+&pwm1 {
+	status = "okay";
+};
+
 &sata {
 	status = "okay";
 };

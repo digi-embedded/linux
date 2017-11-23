@@ -28,12 +28,12 @@
  * enable. Note that the iomux has to be configured accordingly in pinctrl_adc1
  * to configure the pad for ADC operation
  */
-//&adc1 {
-//	pinctrl-names = "default";
-//	pinctrl-0 = <&pinctrl_adc1>;
-//	adc-ch-list = <2 3 5>;
-//	status = "okay";
-//};
+&adc1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_adc1>;
+	adc-ch-list = <2>;
+	status = "okay";
+};
 
 &caam_keyblob {
 	status = "okay";
@@ -186,6 +186,11 @@
 //	status = "okay";
 // };
 
+/* PWM4 on pin 11 of GPIO connector */
+&pwm4 {
+	status = "okay";
+};
+
 &pwm5 {
 	status = "okay";
 };
@@ -260,15 +265,15 @@
 &iomuxc {
 	imx6ul-ccimx6ul {
 		/* Uncomment specific pins of the ADC channels enabled in 'adc-ch-list' */
-		//pinctrl_adc1: adc1grp {
-		//	fsl,pins = <
+		pinctrl_adc1: adc1grp {
+			fsl,pins = <
 		//		/* EXP_GPIO_1 -> GPIO1_5/ADC1_IN5 */
 		//		MX6UL_PAD_GPIO1_IO05__GPIO1_IO05        0xb0
 		//		/* EXP_GPIO_2 -> GPIO1_3/ADC1_IN3 */
 		//		MX6UL_PAD_GPIO1_IO03__GPIO1_IO03        0xb0
-		//		/* EXP_GPIO_3 -> GPIO1_2/ADC1_IN2 */
-		//		MX6UL_PAD_GPIO1_IO02__GPIO1_IO02        0xb0
-		//	>;
-		//};
+				/* EXP_GPIO_3 -> GPIO1_2/ADC1_IN2 */
+				MX6UL_PAD_GPIO1_IO02__GPIO1_IO02        0xb0
+			>;
+		};
 	};
 };
