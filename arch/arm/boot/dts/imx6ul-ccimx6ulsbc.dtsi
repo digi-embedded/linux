@@ -436,6 +436,7 @@
 
 &iomuxc {
 	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_hog>;
 
 	imx6ul-ccimx6ul {
 		pinctrl_csi: csigrp {
@@ -710,6 +711,10 @@
 				MX6UL_PAD_GPIO1_IO04__GPIO1_IO04	0x17059 /* USBOTG1 PWR */
 				MX6UL_PAD_GPIO1_IO01__USB_OTG1_OC	0x17059
 			>;
+		};
+
+		/* General purpose pinctrl */
+		pinctrl_hog: hoggrp {
 		};
 	};
 };
