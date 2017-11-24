@@ -133,6 +133,7 @@
 
 &iomuxc {
 	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_hog>;
 
 	imx6ul-ccimx6ul {
 		pinctrl_ecspi3_master: ecspi3grp1 {
@@ -213,6 +214,7 @@
 			>;
 		};
 
+		/* General purpose pinctrl */
 		pinctrl_hog: hoggrp {
 			fsl,pins = <
 				/* GPIOs BANK 3 */
