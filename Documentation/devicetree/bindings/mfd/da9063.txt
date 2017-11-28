@@ -51,6 +51,8 @@ Sub-nodes:
 - rtc : This node defines settings for the Real-Time Clock associated with
   the DA9063. There are currently no entries in this binding, however
   compatible = "dlg,da9063-rtc" should be added if a node is created.
+  The 32 kHz output can be enabled on probe by defining the "enable-32k-output"
+  boolean property.
 
 - onkey : This node defines the OnKey settings for controlling the key
   functionality of the device. The node should contain the compatible property
