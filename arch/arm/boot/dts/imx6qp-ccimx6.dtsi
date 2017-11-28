@@ -63,6 +63,7 @@
 
 		rtc {
 			compatible = "dlg,da9063-rtc";
+			enable-32k-output;
 		};
 
 		onkey {
