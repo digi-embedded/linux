@@ -1149,9 +1149,25 @@ static int sgtl5000_remove(struct snd_soc_codec *codec)
 	return 0;
 }
 
+#ifdef CONFIG_PM
+static int sgtl5000_resume(struct snd_soc_codec *codec)
+{
+	/* Bring the codec back up to standby to enable the reference bias */
+	sgtl5000_set_bias_level(codec, SND_SOC_BIAS_STANDBY);
+
+	/* Force to sync registers cached in memory with the hardware */
+	snd_soc_cache_sync(codec);
+
+	return 0;
+}
+#else
+#define sgtl5000_resume NULL
+#endif
+
 static struct snd_soc_codec_driver sgtl5000_driver = {
 	.probe = sgtl5000_probe,
 	.remove = sgtl5000_remove,
+	.resume = sgtl5000_resume,
 	.set_bias_level = sgtl5000_set_bias_level,
 	.suspend_bias_off = true,
 	.component_driver = {
