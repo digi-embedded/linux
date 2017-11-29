@@ -85,9 +85,15 @@
 &ecspi1 {
 	status = "okay";
 
-//	spidev@0 {
-//		status = "okay";
-//	};
+	/*
+	 * Add your slave devices here. Next is an example of spidev.
+	 * Expect a harmless kernel warning if you enable spidev as slave.
+	 */
+	spidev@0 {
+		reg = <0>;
+		compatible = "spidev";
+		spi-max-frequency = <4000000>;
+	};
 };
 
 &i2c3 {
@@ -146,6 +152,11 @@
 	wake-up-gpio = <&gpio7 7 GPIO_ACTIVE_HIGH>;
 	disable-gpio = <&gpio1 4 GPIO_ACTIVE_HIGH>;
 	vin-supply = <&ldo6>;
+	status = "okay";
+};
+
+/* PWM1 on pin 10 of LCD connector */
+&pwm1 {
 	status = "okay";
 };
 

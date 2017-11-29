@@ -338,6 +338,10 @@
 };
 
 &pwm4 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pwm4>;
+	clocks = <&clks IMX6UL_CLK_PWM4>,
+		<&clks IMX6UL_CLK_PWM4>;
 	status = "disabled";
 };
 
@@ -578,6 +582,12 @@
 		pinctrl_lcdif_reset: lcdifctrlgrp3 {
 			fsl,pins = <
 				MX6UL_PAD_LCD_RESET__LCDIF_RESET	0x79
+			>;
+		};
+
+		pinctrl_pwm4: pwm4grp {
+			fsl,pins = <
+				MX6UL_PAD_GPIO1_IO05__PWM4_OUT          0x110b0
 			>;
 		};
 
