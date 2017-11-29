@@ -136,10 +136,7 @@
 
 #include <trace/events/sock.h>
 
-#ifdef CONFIG_INET
 #include <net/tcp.h>
-#endif
-
 #include <net/busy_poll.h>
 
 static DEFINE_MUTEX(proto_list_mutex);
@@ -1500,6 +1497,8 @@ struct sock *sk_clone_lock(const struct sock *sk, const gfp_t priority)
 
 		sock_copy(newsk, sk);
 
+		newsk->sk_prot_creator = sk->sk_prot;
+
 		/* SANITY */
 		get_net(sock_net(newsk));
 		sk_node_init(&newsk->sk_node);
@@ -1641,17 +1640,17 @@ EXPORT_SYMBOL(sock_wfree);
 
 void skb_orphan_partial(struct sk_buff *skb)
 {
-	/* TCP stack sets skb->ooo_okay based on sk_wmem_alloc,
-	 * so we do not completely orphan skb, but transfert all
-	 * accounted bytes but one, to avoid unexpected reorders.
-	 */
 	if (skb->destructor == sock_wfree
 #ifdef CONFIG_INET
 	    || skb->destructor == tcp_wfree
 #endif
 		) {
-		atomic_sub(skb->truesize - 1, &skb->sk->sk_wmem_alloc);
-		skb->truesize = 1;
+		struct sock *sk = skb->sk;
+
+		if (atomic_inc_not_zero(&sk->sk_refcnt)) {
+			atomic_sub(skb->truesize, &sk->sk_wmem_alloc);
+			skb->destructor = sock_efree;
+		}
 	} else {
 		skb_orphan(skb);
 	}

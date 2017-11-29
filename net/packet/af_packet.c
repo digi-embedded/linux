@@ -2694,12 +2694,14 @@ static int packet_do_bind(struct sock *sk, const char *name, int ifindex,
 	int ret = 0;
 	bool unlisted = false;
 
-	if (po->fanout)
-		return -EINVAL;
-
 	lock_sock(sk);
 	spin_lock(&po->bind_lock);
 	rcu_read_lock();
+
+	if (po->fanout) {
+		ret = -EINVAL;
+		goto out_unlock;
+	}
 
 	if (name) {
 		dev = dev_get_by_name_rcu(sock_net(sk), name);
@@ -3370,14 +3372,19 @@ packet_setsockopt(struct socket *sock, int level, int optname, char __user *optv
 
 		if (optlen != sizeof(val))
 			return -EINVAL;
-		if (po->rx_ring.pg_vec || po->tx_ring.pg_vec)
-			return -EBUSY;
 		if (copy_from_user(&val, optval, sizeof(val)))
 			return -EFAULT;
 		if (val > INT_MAX)
 			return -EINVAL;
-		po->tp_reserve = val;
-		return 0;
+		lock_sock(sk);
+		if (po->rx_ring.pg_vec || po->tx_ring.pg_vec) {
+			ret = -EBUSY;
+		} else {
+			po->tp_reserve = val;
+			ret = 0;
+		}
+		release_sock(sk);
+		return ret;
 	}
 	case PACKET_LOSS:
 	{
@@ -3537,6 +3544,8 @@ static int packet_getsockopt(struct socket *sock, int level, int optname,
 	case PACKET_HDRLEN:
 		if (len > sizeof(int))
 			len = sizeof(int);
+		if (len < sizeof(int))
+			return -EINVAL;
 		if (copy_from_user(&val, optval, len))
 			return -EFAULT;
 		switch (val) {
@@ -3954,7 +3963,7 @@ static int packet_set_ring(struct sock *sk, union tpacket_req_u *req_u,
 		register_prot_hook(sk);
 	}
 	spin_unlock(&po->bind_lock);
-	if (closing && (po->tp_version > TPACKET_V2)) {
+	if (pg_vec && (po->tp_version > TPACKET_V2)) {
 		/* Because we don't support block-based V3 on tx-ring */
 		if (!tx_ring)
 			prb_shutdown_retire_blk_timer(po, tx_ring, rb_queue);

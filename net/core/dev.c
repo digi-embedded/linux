@@ -1214,8 +1214,9 @@ int dev_set_alias(struct net_device *dev, const char *alias, size_t len)
 	if (!new_ifalias)
 		return -ENOMEM;
 	dev->ifalias = new_ifalias;
+	memcpy(dev->ifalias, alias, len);
+	dev->ifalias[len] = 0;
 
-	strlcpy(dev->ifalias, alias, len+1);
 	return len;
 }
 
@@ -2283,6 +2284,9 @@ void __dev_kfree_skb_irq(struct sk_buff *skb, enum skb_free_reason reason)
 {
 	unsigned long flags;
 
+	if (unlikely(!skb))
+		return;
+
 	if (likely(atomic_read(&skb->users) == 1)) {
 		smp_rmb();
 		atomic_set(&skb->users, 0);
@@ -2464,9 +2468,10 @@ EXPORT_SYMBOL(skb_mac_gso_segment);
 static inline bool skb_needs_check(struct sk_buff *skb, bool tx_path)
 {
 	if (tx_path)
-		return skb->ip_summed != CHECKSUM_PARTIAL;
-	else
-		return skb->ip_summed == CHECKSUM_NONE;
+		return skb->ip_summed != CHECKSUM_PARTIAL &&
+		       skb->ip_summed != CHECKSUM_UNNECESSARY;
+
+	return skb->ip_summed == CHECKSUM_NONE;
 }
 
 /**
@@ -2485,11 +2490,12 @@ static inline bool skb_needs_check(struct sk_buff *skb, bool tx_path)
 struct sk_buff *__skb_gso_segment(struct sk_buff *skb,
 				  netdev_features_t features, bool tx_path)
 {
+	struct sk_buff *segs;
+
 	if (unlikely(skb_needs_check(skb, tx_path))) {
 		int err;
 
-		skb_warn_bad_offload(skb);
-
+		/* We're going to init ->check field in TCP or UDP header */
 		err = skb_cow_head(skb, 0);
 		if (err < 0)
 			return ERR_PTR(err);
@@ -2504,7 +2510,12 @@ struct sk_buff *__skb_gso_segment(struct sk_buff *skb,
 	skb_reset_mac_header(skb);
 	skb_reset_mac_len(skb);
 
-	return skb_mac_gso_segment(skb, features);
+	segs = skb_mac_gso_segment(skb, features);
+
+	if (unlikely(skb_needs_check(skb, tx_path)))
+		skb_warn_bad_offload(skb);
+
+	return segs;
 }
 EXPORT_SYMBOL(__skb_gso_segment);
 
@@ -6726,8 +6737,8 @@ struct rtnl_link_stats64 *dev_get_stats(struct net_device *dev,
 	} else {
 		netdev_stats_to_stats64(storage, &dev->stats);
 	}
-	storage->rx_dropped += atomic_long_read(&dev->rx_dropped);
-	storage->tx_dropped += atomic_long_read(&dev->tx_dropped);
+	storage->rx_dropped += (unsigned long)atomic_long_read(&dev->rx_dropped);
+	storage->tx_dropped += (unsigned long)atomic_long_read(&dev->tx_dropped);
 	return storage;
 }
 EXPORT_SYMBOL(dev_get_stats);

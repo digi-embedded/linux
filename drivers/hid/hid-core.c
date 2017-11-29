@@ -1228,6 +1228,7 @@ static void hid_input_field(struct hid_device *hid, struct hid_field *field,
 		/* Ignore report if ErrorRollOver */
 		if (!(field->flags & HID_MAIN_ITEM_VARIABLE) &&
 		    value[n] >= min && value[n] <= max &&
+		    value[n] - min < field->maxusage &&
 		    field->usage[value[n] - min].hid == HID_UP_KEYBOARD + 1)
 			goto exit;
 	}
@@ -1240,11 +1241,13 @@ static void hid_input_field(struct hid_device *hid, struct hid_field *field,
 		}
 
 		if (field->value[n] >= min && field->value[n] <= max
+			&& field->value[n] - min < field->maxusage
 			&& field->usage[field->value[n] - min].hid
 			&& search(value, field->value[n], count))
 				hid_process_event(hid, field, &field->usage[field->value[n] - min], 0, interrupt);
 
 		if (value[n] >= min && value[n] <= max
+			&& value[n] - min < field->maxusage
 			&& field->usage[value[n] - min].hid
 			&& search(field->value, value[n], count))
 				hid_process_event(hid, field, &field->usage[value[n] - min], 1, interrupt);
@@ -2388,6 +2391,7 @@ static const struct hid_device_id hid_ignore_list[] = {
 	{ HID_USB_DEVICE(USB_VENDOR_ID_PANJIT, 0x0002) },
 	{ HID_USB_DEVICE(USB_VENDOR_ID_PANJIT, 0x0003) },
 	{ HID_USB_DEVICE(USB_VENDOR_ID_PANJIT, 0x0004) },
+	{ HID_USB_DEVICE(USB_VENDOR_ID_PETZL, USB_DEVICE_ID_PETZL_HEADLAMP) },
 	{ HID_USB_DEVICE(USB_VENDOR_ID_PHILIPS, USB_DEVICE_ID_PHILIPS_IEEE802154_DONGLE) },
 	{ HID_USB_DEVICE(USB_VENDOR_ID_POWERCOM, USB_DEVICE_ID_POWERCOM_UPS) },
 #if defined(CONFIG_MOUSE_SYNAPTICS_USB) || defined(CONFIG_MOUSE_SYNAPTICS_USB_MODULE)

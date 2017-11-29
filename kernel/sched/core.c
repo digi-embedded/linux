@@ -5863,6 +5863,9 @@ enum s_alloc {
  * Build an iteration mask that can exclude certain CPUs from the upwards
  * domain traversal.
  *
+ * Only CPUs that can arrive at this group should be considered to continue
+ * balancing.
+ *
  * Asymmetric node setups can result in situations where the domain tree is of
  * unequal depth, make sure to skip domains that already cover the entire
  * range.
@@ -5874,18 +5877,31 @@ enum s_alloc {
  */
 static void build_group_mask(struct sched_domain *sd, struct sched_group *sg)
 {
-	const struct cpumask *span = sched_domain_span(sd);
+	const struct cpumask *sg_span = sched_group_cpus(sg);
 	struct sd_data *sdd = sd->private;
 	struct sched_domain *sibling;
 	int i;
 
-	for_each_cpu(i, span) {
+	for_each_cpu(i, sg_span) {
 		sibling = *per_cpu_ptr(sdd->sd, i);
-		if (!cpumask_test_cpu(i, sched_domain_span(sibling)))
+
+		/*
+		 * Can happen in the asymmetric case, where these siblings are
+		 * unused. The mask will not be empty because those CPUs that
+		 * do have the top domain _should_ span the domain.
+		 */
+		if (!sibling->child)
+			continue;
+
+		/* If we would not end up here, we can't continue from here */
+		if (!cpumask_equal(sg_span, sched_domain_span(sibling->child)))
 			continue;
 
 		cpumask_set_cpu(i, sched_group_mask(sg));
 	}
+
+	/* We must not have empty masks here */
+	WARN_ON_ONCE(cpumask_empty(sched_group_mask(sg)));
 }
 
 /*
@@ -7008,17 +7024,16 @@ static int cpuset_cpu_active(struct notifier_block *nfb, unsigned long action,
 		 * operation in the resume sequence, just build a single sched
 		 * domain, ignoring cpusets.
 		 */
-		num_cpus_frozen--;
-		if (likely(num_cpus_frozen)) {
-			partition_sched_domains(1, NULL, NULL);
+		partition_sched_domains(1, NULL, NULL);
+		if (--num_cpus_frozen)
 			break;
-		}
 
 		/*
 		 * This is the last CPU online operation. So fall through and
 		 * restore the original sched domains by considering the
 		 * cpuset configurations.
 		 */
+		cpuset_force_rebuild();
 
 	case CPU_ONLINE:
 		cpuset_update_active_cpus(true);
