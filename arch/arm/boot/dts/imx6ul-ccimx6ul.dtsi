@@ -58,6 +58,7 @@
 		198000	1175000
 	>;
 	fsl,arm-soc-shared = <1>;
+	clock-frequency = <528000000>;
 };
 
 &gpc {
