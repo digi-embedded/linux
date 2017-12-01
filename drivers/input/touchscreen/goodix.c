@@ -781,8 +781,7 @@ static int goodix_ts_remove(struct i2c_client *client)
 	if (ts->gpiod_int)
 		wait_for_completion(&ts->firmware_loading_complete);
 
-	if (ts->reload_fw_on_resume)
-		kfree(ts->cfg.data);
+	kfree(ts->cfg.data);
 
 	return 0;
 }
@@ -852,21 +851,24 @@ static int __maybe_unused goodix_resume(struct device *dev)
 		return 0;
 
 	if (ts->reload_fw_on_resume) {
-		/* reset the controller and send again the configuration */
 		error = goodix_reset(ts);
 		if (error) {
 			dev_err(&client->dev, "Controller reset failed.\n");
 			return error;
 		}
 
-		error = goodix_send_cfg(ts, &ts->cfg);
-		if (error) {
-			dev_err(&ts->client->dev, "Unable to load firmware\n");
-			return error;
+		/*
+		 * If the controller configuration was provided through the
+		 * firmware subsystem, send again the configuration
+		 */
+		if (ts->cfg.size > 0) {
+			error = goodix_send_cfg(ts, &ts->cfg);
+			if (error) {
+				dev_err(&ts->client->dev,
+					"Unable to load firmware\n");
+				return error;
+			}
 		}
-		error = goodix_int_sync(ts);
-		if (error)
-			return error;
 	} else {
 		/*
 		* Exit sleep mode by outputting HIGH level to INT pin
@@ -877,11 +879,11 @@ static int __maybe_unused goodix_resume(struct device *dev)
 			return error;
 
 		usleep_range(2000, 5000);
-
-		error = goodix_int_sync(ts);
-		if (error)
-			return error;
 	}
+
+	error = goodix_int_sync(ts);
+	if (error)
+		return error;
 
 	error = goodix_request_irq(ts);
 	if (error)
