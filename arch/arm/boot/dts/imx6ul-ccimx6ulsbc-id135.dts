@@ -111,6 +111,7 @@
  *  - g101evn010
  */
 //&goodix_touch {
+//	skip-firmware-request;
 //	reload-fw-on-resume;
 //	status = "okay";
 //};
