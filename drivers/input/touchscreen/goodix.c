@@ -1254,7 +1254,8 @@ reset:
 
 	ts->chip = goodix_get_chip_data(ts->id);
 
-	if (ts->load_cfg_from_disk) {
+	if (ts->load_cfg_from_disk &&
+	    !device_property_read_bool(&client->dev, "skip-firmware-request")) {
 		/* update device config */
 		ts->cfg_name = devm_kasprintf(&client->dev, GFP_KERNEL,
 					      "goodix_%s_cfg.bin", ts->id);
@@ -1273,6 +1274,8 @@ reset:
 
 		return 0;
 	} else {
+		complete_all(&ts->firmware_loading_complete);
+
 		error = goodix_configure_dev(ts);
 		if (error)
 			return error;
