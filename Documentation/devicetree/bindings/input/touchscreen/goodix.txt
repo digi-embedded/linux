@@ -26,6 +26,8 @@ Optional properties:
  - reload-fw-on-resume  : Reload the touch controller configuration when re-
 			  suming from suspend. This is required to allow
 			  powering off the device during low power modes.
+ - skip-firmware-request: Do not load the touch config through the kernel firm-
+                          ware framework. Use the on chip configuration.
 
 Example:
 
