@@ -419,6 +419,20 @@
 		status = "disabled";
 	};
 
+	goodix_touch: gt911@14 {
+		compatible = "goodix,gt9271";
+		reg = <0x14>;
+		/* Interrupt for LVDS0 */
+		interrupt-parent = <&gpio7>;
+		interrupts = <11 IRQ_TYPE_EDGE_RISING>;
+		irq-gpios = <&gpio7 11 GPIO_ACTIVE_HIGH>;
+		/* Interrupt for LVDS1 */
+		//interrupt-parent = <&gpio3>;
+		//interrupts = <23 IRQ_TYPE_EDGE_RISING>;
+		//irq-gpios = <&gpio3 23 GPIO_ACTIVE_HIGH>;
+		status = "disabled";
+	};
+
 	/* MIPI-CSI2 camera */
 	ov5640_mipi: ov5640_mipi@4c {
 		compatible = "ovti,ov564x_mipi";
