@@ -92,6 +92,8 @@ struct mca_cc6ul {
 	int gpio_base;
 	int fw_update_gpio;
 	int som_hv;
+	u32 last_mca_reset;
+	u32 last_mpu_reset;
 };
 
 int mca_cc6ul_device_init(struct mca_cc6ul *mca, u32 irq);
