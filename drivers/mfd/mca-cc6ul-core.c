@@ -37,6 +37,50 @@ struct dyn_attribute {
 	struct attribute	*attr;
 };
 
+struct mca_reason {
+	u32 		flag;
+	const char	*text;
+};
+
+static const struct mca_reason last_mca_reset[] = {
+	{MCA_CC6UL_LAST_MCA_RST_LLW,	"LL Wakeup"},
+	{MCA_CC6UL_LAST_MCA_RST_LVD,	"Low Voltage"},
+	{MCA_CC6UL_LAST_MCA_RST_WD,	"Watchdog"},
+	{MCA_CC6UL_LAST_MCA_RST_PIN,	"Reset Pin"},
+	{MCA_CC6UL_LAST_MCA_RST_PWRON,	"Power On"},
+	{MCA_CC6UL_LAST_MCA_RST_LOCKUP,	"Core Lockup"},
+	{MCA_CC6UL_LAST_MCA_RST_SW,	"Software"},
+	{MCA_CC6UL_LAST_MCA_RST_MDMAPP,	"MDM-APP debuger"},
+	{MCA_CC6UL_LAST_MCA_RST_SMAE, 	"Stop Mode Ack Error"},
+};
+
+static const struct mca_reason last_mpu_reset[] = {
+	{MCA_CC6UL_LAST_MPU_RST_PWRON,	"Power On"},
+	{MCA_CC6UL_LAST_MPU_RST_SYSR,	"System Reset"},
+	{MCA_CC6UL_LAST_MPU_RST_WD,	"Watchdog"},
+	{MCA_CC6UL_LAST_MPU_RST_OFFWAKE,"Off wakeup"},
+	{MCA_CC6UL_LAST_MPU_RST_MCARST,	"MCA reset"},
+};
+
+static const struct mca_reason last_wakeup[] = {
+	{MCA_CC6UL_LAST_WAKEUP_PWRIO,	"Power IO"},
+	{MCA_CC6UL_LAST_WAKEUP_TIMER,	"Timer"},
+	{MCA_CC6UL_LAST_WAKEUP_RTC,	"RTC"},
+	{MCA_CC6UL_LAST_WAKEUP_LPUART,	"LP UART"},
+	{MCA_CC6UL_LAST_WAKEUP_TAMPER0,	"Tamper0"},
+	{MCA_CC6UL_LAST_WAKEUP_TAMPER1,	"Tamper1"},
+	{MCA_CC6UL_LAST_WAKEUP_TAMPER2,	"Tamper2"},
+	{MCA_CC6UL_LAST_WAKEUP_TAMPER3,	"Tamper3"},
+	{MCA_CC6UL_LAST_WAKEUP_IO0,	"IO0"},
+	{MCA_CC6UL_LAST_WAKEUP_IO1,	"IO1"},
+	{MCA_CC6UL_LAST_WAKEUP_IO2,	"IO2"},
+	{MCA_CC6UL_LAST_WAKEUP_IO3,	"IO3"},
+	{MCA_CC6UL_LAST_WAKEUP_IO4,	"IO4"},
+	{MCA_CC6UL_LAST_WAKEUP_IO5,	"IO5"},
+	{MCA_CC6UL_LAST_WAKEUP_IO6,	"IO6"},
+	{MCA_CC6UL_LAST_WAKEUP_IO7,	"IO7"},
+};
+
 static struct mca_cc6ul *pmca;
 
 static const char _enabled[] = "enabled";
@@ -409,6 +453,92 @@ static ssize_t fw_update_store(struct device *dev,
 }
 static DEVICE_ATTR(fw_update, 0600, fw_update_show, fw_update_store);
 
+static ssize_t last_wakeup_reason_show(struct device *dev,
+				       struct device_attribute *attr,
+				       char *buf)
+{
+	struct mca_cc6ul *mca = dev_get_drvdata(dev);
+	bool comma = false;
+	u32 last_wakeup_val;
+	int ret, i;
+
+	ret = regmap_bulk_read(mca->regmap, MCA_CC6UL_LAST_WAKEUP_REASON_0,
+			       &last_wakeup_val, sizeof(last_wakeup_val));
+	if (ret) {
+		dev_err(mca->dev,
+			"Cannot read last MCA wakeup reason (%d)\n",
+			ret);
+		return ret;
+	}
+
+	buf[0] = 0;
+
+	for (i = 0; i < ARRAY_SIZE(last_wakeup); i++) {
+		if (last_wakeup[i].flag & last_wakeup_val) {
+			if (comma)
+				strcat(buf, ", ");
+			strcat(buf, last_wakeup[i].text);
+			comma = true;
+		}
+	}
+
+	if (comma)
+		strcat(buf, "\n");
+
+	return strlen(buf);
+}
+static DEVICE_ATTR(last_wakeup_reason, S_IRUGO, last_wakeup_reason_show, NULL);
+
+static ssize_t last_mca_reset_show(struct device *dev,
+				   struct device_attribute *attr, char *buf)
+{
+	struct mca_cc6ul *mca = dev_get_drvdata(dev);
+	bool comma = false;
+	int i;
+
+	buf[0] = 0;
+
+	for (i = 0; i < ARRAY_SIZE(last_mca_reset); i++) {
+		if (last_mca_reset[i].flag & mca->last_mca_reset) {
+			if (comma)
+				strcat(buf, ", ");
+			strcat(buf, last_mca_reset[i].text);
+			comma = true;
+		}
+	}
+
+	if (comma)
+		strcat(buf, "\n");
+
+	return strlen(buf);
+}
+static DEVICE_ATTR(last_mca_reset, S_IRUGO, last_mca_reset_show, NULL);
+
+static ssize_t last_mpu_reset_show(struct device *dev,
+				   struct device_attribute *attr, char *buf)
+{
+	struct mca_cc6ul *mca = dev_get_drvdata(dev);
+	bool comma = false;
+	int i;
+
+	buf[0] = 0;
+
+	for (i = 0; i < ARRAY_SIZE(last_mpu_reset); i++) {
+		if (last_mpu_reset[i].flag & mca->last_mpu_reset) {
+			if (comma)
+				strcat(buf, ", ");
+			strcat(buf, last_mpu_reset[i].text);
+			comma = true;
+		}
+	}
+
+	if (comma)
+		strcat(buf, "\n");
+
+	return strlen(buf);
+}
+static DEVICE_ATTR(last_mpu_reset, S_IRUGO, last_mpu_reset_show, NULL);
+
 static struct attribute *mca_cc6ul_sysfs_entries[] = {
 	&dev_attr_ext_32khz.attr,
 	&dev_attr_hw_version.attr,
@@ -430,6 +560,18 @@ static struct dyn_attribute mca_cc6ul_sysfs_dyn_entries[] = {
 	{
 		.since =	MCA_MAKE_FW_VER(0,15),
 		.attr =		&dev_attr_vref.attr,
+	},
+	{
+		.since =	MCA_MAKE_FW_VER(1,2),
+		.attr =		&dev_attr_last_wakeup_reason.attr,
+	},
+	{
+		.since =	MCA_MAKE_FW_VER(1,2),
+		.attr =		&dev_attr_last_mca_reset.attr,
+	},
+	{
+		.since =	MCA_MAKE_FW_VER(1,2),
+		.attr =		&dev_attr_last_mpu_reset.attr,
 	},
 };
 
@@ -634,6 +776,26 @@ int mca_cc6ul_device_init(struct mca_cc6ul *mca, u32 irq)
 	}
 	mca->fw_version = (u16)(val & ~MCA_FW_VER_ALPHA_MASK);
 	mca->fw_is_alpha = val & MCA_FW_VER_ALPHA_MASK ? true : false;
+
+	if (mca->fw_version >= MCA_MAKE_FW_VER(1, 2)) {
+		ret = regmap_bulk_read(mca->regmap, MCA_CC6UL_LAST_MCA_RESET_0,
+				       &mca->last_mca_reset,
+				       sizeof(mca->last_mca_reset));
+		if (ret) {
+			dev_err(mca->dev,
+				"Cannot read MCA last reset (%d)\n", ret);
+			return ret;
+		}
+
+		ret = regmap_bulk_read(mca->regmap, MCA_CC6UL_LAST_MPU_RESET_0,
+				       &mca->last_mpu_reset,
+				       sizeof(mca->last_mpu_reset));
+		if (ret) {
+			dev_err(mca->dev,
+				"Cannot read MPU last reset (%d)\n", ret);
+			return ret;
+		}
+	}
 
 	/* Write the SOM hardware version to MCA register */
 	mca->som_hv = digi_get_som_hv();
