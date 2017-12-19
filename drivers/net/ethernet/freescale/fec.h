@@ -561,6 +561,8 @@ struct fec_enet_private {
 	u32	quirks;
 	bool	phy_reset_in_suspend;
 	int	phy_reset_gpio;
+	u32	phy_reset_duration;
+	bool	phy_reset_active_high;
 	u32	fixups;
 
 	struct	napi_struct napi;
