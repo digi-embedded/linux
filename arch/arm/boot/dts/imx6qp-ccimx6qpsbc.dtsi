@@ -498,94 +498,6 @@
 	};
 };
 
-&mipi_csi {
-	v_channel = <0>;
-	lanes = <2>;
-        ipu_id = <1>;
-        csi_id = <0>;
-};
-
-&mipi_dsi {
-	lcd_panel = "TRULY-WVGA";
-	resets = <&mipi_dsi_reset>;
-	dev_id = <0>;
-	disp_id = <0>;
-};
-
-&pcie {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_pcie>;
-	reset-gpio = <&gpio7 8 GPIO_ACTIVE_HIGH>;
-	wake-up-gpio = <&gpio7 7 GPIO_ACTIVE_HIGH>;
-	disable-gpio = <&gpio1 4 GPIO_ACTIVE_HIGH>;
-	power-on-gpio = <&gpio6 10 GPIO_ACTIVE_HIGH>;
-	power-on-delay-ms = <10>;
-	vin-supply = <&ldo6>;
-};
-
-&pwm1 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_pwm1>;
-	status = "disabled";
-};
-
-&ssi2 {
-	fsl,mode = "i2s-slave";
-};
-
-&uart1 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_uart1>;
-	uart-has-rtscts;
-	digi,pwr-en-gpio = <&gpio2 26 GPIO_ACTIVE_HIGH>;
-};
-
-&uart2 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_uart2>;
-	uart-has-rtscts;
-};
-
-&uart3 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_uart3>;
-	uart-has-rtscts;
-	digi,pwr-en-gpio = <&gpio2 26 GPIO_ACTIVE_HIGH>;
-};
-
-&uart4 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_uart4>;
-};
-
-&uart5 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_uart5>;
-	uart-has-rtscts;
-};
-
-&usbh1 {
-	fsl,reset-gpio = <&gpio3 10 GPIO_ACTIVE_HIGH>;
-};
-
-&usbotg {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_usbotg>;
-	digi,power-line-active-high;
-};
-
-&usdhc2 {
-	pinctrl-names = "default", "state_100mhz", "state_200mhz";
-	pinctrl-0 = <&pinctrl_usdhc2>;
-	pinctrl-1 = <&pinctrl_usdhc2_100mhz>;
-	pinctrl-2 = <&pinctrl_usdhc2_200mhz>;
-	broken-cd;
-	no-1-8-v;
-	keep-power-in-suspend;
-	enable-sdio-wakeup;
-	vqmmc-supply = <&ldo9>;
-};
-
 &iomuxc {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_hog>;
@@ -1066,4 +978,92 @@
 			>;
 		};
 	};
+};
+
+&mipi_csi {
+	v_channel = <0>;
+	lanes = <2>;
+	ipu_id = <1>;
+	csi_id = <0>;
+};
+
+&mipi_dsi {
+	lcd_panel = "TRULY-WVGA";
+	resets = <&mipi_dsi_reset>;
+	dev_id = <0>;
+	disp_id = <0>;
+};
+
+&pcie {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pcie>;
+	reset-gpio = <&gpio7 8 GPIO_ACTIVE_HIGH>;
+	wake-up-gpio = <&gpio7 7 GPIO_ACTIVE_HIGH>;
+	disable-gpio = <&gpio1 4 GPIO_ACTIVE_HIGH>;
+	power-on-gpio = <&gpio6 10 GPIO_ACTIVE_HIGH>;
+	power-on-delay-ms = <10>;
+	vin-supply = <&ldo6>;
+};
+
+&pwm1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pwm1>;
+	status = "disabled";
+};
+
+&ssi2 {
+	fsl,mode = "i2s-slave";
+};
+
+&uart1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_uart1>;
+	uart-has-rtscts;
+	digi,pwr-en-gpio = <&gpio2 26 GPIO_ACTIVE_HIGH>;
+};
+
+&uart2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_uart2>;
+	uart-has-rtscts;
+};
+
+&uart3 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_uart3>;
+	uart-has-rtscts;
+	digi,pwr-en-gpio = <&gpio2 26 GPIO_ACTIVE_HIGH>;
+};
+
+&uart4 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_uart4>;
+};
+
+&uart5 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_uart5>;
+	uart-has-rtscts;
+};
+
+&usbh1 {
+	fsl,reset-gpio = <&gpio3 10 GPIO_ACTIVE_HIGH>;
+};
+
+&usbotg {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_usbotg>;
+	digi,power-line-active-high;
+};
+
+&usdhc2 {
+	pinctrl-names = "default", "state_100mhz", "state_200mhz";
+	pinctrl-0 = <&pinctrl_usdhc2>;
+	pinctrl-1 = <&pinctrl_usdhc2_100mhz>;
+	pinctrl-2 = <&pinctrl_usdhc2_200mhz>;
+	broken-cd;
+	no-1-8-v;
+	keep-power-in-suspend;
+	enable-sdio-wakeup;
+	vqmmc-supply = <&ldo9>;
 };

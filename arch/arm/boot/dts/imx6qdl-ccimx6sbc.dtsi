@@ -22,27 +22,43 @@
 		regulator-max-microvolt = <5000000>;
 	};
 
-	sound_sgtl5000: sound-sgtl5000 {
-		compatible = "fsl,imx-audio-sgtl5000";
-		model = "sgtl5000-audio";
-		cpu-dai = <&ssi2>;
-		audio-codec = <&sgtl5000>;
-		audio-routing =
-			"MIC_IN", "Mic Jack",
-			"Mic Jack", "Mic Bias",
-			"Headphone Jack", "HP_OUT";
-		mux-int-port = <2>;
-		mux-ext-port = <3>;
-		hp-det-gpios = <&gpio2 0 GPIO_ACTIVE_HIGH>;
-		hp-det-debounce = <250>;
+	ad9389_1920x1080: HDMI_1920_1080@0 {
+		display-timings {
+			timing {
+				clock-frequency = <130992926>; /* 7634 ps*/
+				hactive = <1920>;
+				vactive = <1080>;
+				hfront-porch = <88>;
+				hback-porch = <148>;
+				hsync-len = <44>;
+				vback-porch = <36>;
+				vfront-porch = <4>;
+				vsync-len = <5>;
+			};
+		};
+	};
+
+	/* SGTL5000 codec is powered by 3V3 BUCK_PERI, but controlled
+	 * by GPIO2_25 via a FET transistor
+	 */
+	codec_power: fixedregulator@0 {
+		compatible = "regulator-fixed";
+		regulator-name = "aud_pwr_en";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		gpio = <&gpio2 25 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		vin-supply = <&bperi>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_aud_pwr_en>;
 		status = "disabled";
 	};
 
-	sound_hdmi: sound-hdmi {
-		compatible = "fsl,imx6q-audio-hdmi",
-			     "fsl,imx-audio-hdmi";
-		model = "imx-audio-hdmi";
-		hdmi-controller = <&hdmi_audio>;
+	mipi_dsi_reset: mipi-dsi-reset {
+		compatible = "gpio-reset";
+		reset-gpios = <&gpio6 11 GPIO_ACTIVE_LOW>;
+		reset-delay-us = <50>;
+		#reset-cells = <0>;
 		status = "disabled";
 	};
 
@@ -83,20 +99,28 @@
 		};
 	};
 
-	ad9389_1920x1080: HDMI_1920_1080@0 {
-		display-timings {
-			timing {
-				clock-frequency = <130992926>; /* 7634 ps*/
-				hactive = <1920>;
-				vactive = <1080>;
-				hfront-porch = <88>;
-				hback-porch = <148>;
-				hsync-len = <44>;
-				vback-porch = <36>;
-				vfront-porch = <4>;
-				vsync-len = <5>;
-			};
-		};
+	sound_sgtl5000: sound-sgtl5000 {
+		compatible = "fsl,imx-audio-sgtl5000";
+		model = "sgtl5000-audio";
+		cpu-dai = <&ssi2>;
+		audio-codec = <&sgtl5000>;
+		audio-routing =
+			"MIC_IN", "Mic Jack",
+			"Mic Jack", "Mic Bias",
+			"Headphone Jack", "HP_OUT";
+		mux-int-port = <2>;
+		mux-ext-port = <3>;
+		hp-det-gpios = <&gpio2 0 GPIO_ACTIVE_HIGH>;
+		hp-det-debounce = <250>;
+		status = "disabled";
+	};
+
+	sound_hdmi: sound-hdmi {
+		compatible = "fsl,imx6q-audio-hdmi",
+			     "fsl,imx-audio-hdmi";
+		model = "imx-audio-hdmi";
+		hdmi-controller = <&hdmi_audio>;
+		status = "disabled";
 	};
 
 	v4l2_cap_0: v4l2-cap@0 {
@@ -115,35 +139,23 @@
 		compatible = "fsl,mxc_v4l2_output";
 		status = "disabled";
 	};
-
-	mipi_dsi_reset: mipi-dsi-reset {
-		compatible = "gpio-reset";
-		reset-gpios = <&gpio6 11 GPIO_ACTIVE_LOW>;
-		reset-delay-us = <50>;
-		#reset-cells = <0>;
-		status = "disabled";
-	};
-
-	/* SGTL5000 codec is powered by 3V3 BUCK_PERI, but controlled
-	 * by GPIO2_25 via a FET transistor
-	 */
-	codec_power: fixedregulator@0 {
-		compatible = "regulator-fixed";
-		regulator-name = "aud_pwr_en";
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
-		gpio = <&gpio2 25 GPIO_ACTIVE_HIGH>;
-		enable-active-high;
-		vin-supply = <&bperi>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_aud_pwr_en>;
-		status = "disabled";
-	};
 };
 
 &audmux {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_audmux>;
+};
+
+&can1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_flexcan1>;
+	stby-gpios = <&gpio1 2 GPIO_ACTIVE_HIGH>;
+};
+
+&can2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_flexcan2>;
+	stby-gpios = <&gpio1 5 GPIO_ACTIVE_HIGH>;
 };
 
 &ecspi1 {
@@ -392,16 +404,6 @@
 		status = "disabled";
 	};
 
-	sgtl5000: codec@0a {
-		compatible = "fsl,sgtl5000";
-		reg = <0x0a>;
-		clock-frequency = <24000000>;
-		clocks = <&clks 201>;
-		VDDA-supply = <&codec_power>;
-		VDDIO-supply = <&codec_power>;
-		status = "disabled";
-	};
-
 	/* MIPI-CSI2 camera */
 	ov5640_mipi: ov5640_mipi@4c {
 		compatible = "ovti,ov564x_mipi";
@@ -435,6 +437,16 @@
 		digi,defer-probe;
 		status = "disabled";
 	};
+
+	sgtl5000: codec@0a {
+		compatible = "fsl,sgtl5000";
+		reg = <0x0a>;
+		clock-frequency = <24000000>;
+		clocks = <&clks 201>;
+		VDDA-supply = <&codec_power>;
+		VDDIO-supply = <&codec_power>;
+		status = "disabled";
+	};
 };
 
 &iomuxc {
@@ -448,6 +460,35 @@
 				MX6QDL_PAD_CSI0_DAT4__AUD3_TXC  0x130b0
 				MX6QDL_PAD_CSI0_DAT5__AUD3_TXD  0x110b0
 				MX6QDL_PAD_CSI0_DAT6__AUD3_TXFS 0x130b0
+			>;
+		};
+	};
+
+	aud_pwr_en {
+		pinctrl_aud_pwr_en: aud_pwr_en {
+			fsl,pins = <
+
+				MX6QDL_PAD_EIM_OE__GPIO2_IO25 0x80000000
+			>;
+		};
+	};
+
+	can1 {
+		pinctrl_flexcan1: can1 {
+			fsl,pins = <
+				MX6QDL_PAD_GPIO_7__FLEXCAN1_TX 0x1b0b0
+				MX6QDL_PAD_GPIO_8__FLEXCAN1_RX 0x1b0b0
+				MX6QDL_PAD_GPIO_2__GPIO1_IO02  0x1b0b0
+			>;
+		};
+	};
+
+	can2 {
+		pinctrl_flexcan2: can2 {
+			fsl,pins = <
+				MX6QDL_PAD_SD3_DAT0__FLEXCAN2_TX 0x1b0b0
+				MX6QDL_PAD_SD3_DAT1__FLEXCAN2_RX 0x1b0b0
+				MX6QDL_PAD_GPIO_5__GPIO1_IO05    0x1b0b0
 			>;
 		};
 	};
@@ -490,26 +531,6 @@
 		};
 	};
 
-	can1 {
-		pinctrl_flexcan1: can1 {
-			fsl,pins = <
-				MX6QDL_PAD_GPIO_7__FLEXCAN1_TX 0x1b0b0
-				MX6QDL_PAD_GPIO_8__FLEXCAN1_RX 0x1b0b0
-				MX6QDL_PAD_GPIO_2__GPIO1_IO02  0x1b0b0
-			>;
-		};
-	};
-
-	can2 {
-		pinctrl_flexcan2: can2 {
-			fsl,pins = <
-				MX6QDL_PAD_SD3_DAT0__FLEXCAN2_TX 0x1b0b0
-				MX6QDL_PAD_SD3_DAT1__FLEXCAN2_RX 0x1b0b0
-				MX6QDL_PAD_GPIO_5__GPIO1_IO05    0x1b0b0
-			>;
-		};
-	};
-
 	hdmi_cec {
 		pinctrl_hdmi_cec: hdmicec {
 			fsl,pins = <
@@ -532,17 +553,6 @@
 			fsl,pins = <
 				MX6QDL_PAD_GPIO_3__I2C3_SCL 0x4001b8b1
 				MX6QDL_PAD_GPIO_6__I2C3_SDA 0x4001b8b1
-			>;
-		};
-	};
-
-	pcie {
-		pinctrl_pcie: pcie {
-			fsl,pins = <
-				MX6QDL_PAD_SD3_DAT3__GPIO7_IO07 0x80000000
-				MX6QDL_PAD_GPIO_4__GPIO1_IO04   0x80000000
-				MX6QDL_PAD_SD3_RST__GPIO7_IO08 0x80000000
-				MX6QDL_PAD_NANDF_RB0__GPIO6_IO10 0x80000000
 			>;
 		};
 	};
@@ -598,6 +608,25 @@
 				MX6QDL_PAD_DISP0_DAT21__IPU1_DISP0_DATA21  0x10
 				MX6QDL_PAD_DISP0_DAT22__IPU1_DISP0_DATA22  0x10
 				MX6QDL_PAD_DISP0_DAT23__IPU1_DISP0_DATA23  0x10
+			>;
+		};
+	};
+
+	mipi {
+		pinctrl_mipi: mipi {
+			fsl,pins = <
+				MX6QDL_PAD_SD3_DAT2__GPIO7_IO06 0x80000000
+			>;
+		};
+	};
+
+	pcie {
+		pinctrl_pcie: pcie {
+			fsl,pins = <
+				MX6QDL_PAD_SD3_DAT3__GPIO7_IO07 0x80000000
+				MX6QDL_PAD_GPIO_4__GPIO1_IO04   0x80000000
+				MX6QDL_PAD_SD3_RST__GPIO7_IO08 0x80000000
+				MX6QDL_PAD_NANDF_RB0__GPIO6_IO10 0x80000000
 			>;
 		};
 	};
@@ -790,23 +819,6 @@
 		};
 	};
 
-	mipi {
-			pinctrl_mipi: mipi {
-			fsl,pins = <
-				MX6QDL_PAD_SD3_DAT2__GPIO7_IO06 0x80000000
-			>;
-		};
-	};
-
-	aud_pwr_en {
-		pinctrl_aud_pwr_en: aud_pwr_en {
-			fsl,pins = <
-
-				MX6QDL_PAD_EIM_OE__GPIO2_IO25 0x80000000
-			>;
-		};
-	};
-
 	hog {
 		pinctrl_hog: hog {
 			fsl,pins = <
@@ -942,16 +954,4 @@
 	no-1-8-v;
 	keep-power-in-suspend;
 	enable-sdio-wakeup;
-};
-
-&can1 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_flexcan1>;
-	stby-gpios = <&gpio1 2 GPIO_ACTIVE_HIGH>;
-};
-
-&can2 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_flexcan2>;
-	stby-gpios = <&gpio1 5 GPIO_ACTIVE_HIGH>;
 };
