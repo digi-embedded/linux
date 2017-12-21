@@ -38,6 +38,17 @@
 		status = "disabled";
 	};
 
+	/* Parallel display */
+	lcd: display@di0 {
+		compatible = "fsl,lcd";
+		ipu_id = <0>;
+		disp_id = <0>;
+		default_ifmt = "RGB666";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_ipu1_di0>;
+		status = "disabled";
+	};
+
 	mipi_dsi_reset: mipi-dsi-reset {
 		compatible = "gpio-reset";
 		reset-gpios = <&gpio6 11 GPIO_ACTIVE_LOW>;
@@ -65,22 +76,6 @@
 		int_clk = <0>;
 		late_init = <0>;
 		status = "disabled";
-	};
-
-	lq070y3dg3b: LQ70Y3DG3B@0 {
-		display-timings {
-			timing {
-				clock-frequency = <18520000>;
-				hactive = <800>;
-				vactive = <480>;
-				hfront-porch = <50>;
-				hback-porch = <0>;
-				hsync-len = <128>;
-				vback-porch = <25>;
-				vfront-porch = <10>;
-				vsync-len = <10>;
-			};
-		};
 	};
 
 	sound_sgtl5000: sound-sgtl5000 {
@@ -351,6 +346,9 @@
 		/* Interrupt for LVDS1 */
 		//interrupt-parent = <&gpio3>;
 		//interrupts = <23 1>;
+		/* Interrupt for parallel LCD */
+		//interrupt-parent = <&gpio2>;
+		//interrupts = <1 1>;
 		status = "disabled";
 	};
 
@@ -563,14 +561,14 @@
 			>;
 		};
 
-		pinctrl_ipu1_2: ipu1grp-2 {
+		/* Parallel display */
+		pinctrl_ipu1_di0: ipu1grp-2 {
 			fsl,pins = <
+				/* DISP0_CLK */
 				MX6QDL_PAD_DI0_DISP_CLK__IPU1_DI0_DISP_CLK 0x10
-				MX6QDL_PAD_EIM_D29__IPU1_DI0_PIN14         0x10
+				/* DISP0_DRDY */
 				MX6QDL_PAD_DI0_PIN15__IPU1_DI0_PIN15       0x10
-				MX6QDL_PAD_DI0_PIN2__IPU1_DI0_PIN02        0x10
-				MX6QDL_PAD_DI0_PIN3__IPU1_DI0_PIN03        0x10
-				MX6QDL_PAD_EIM_D19__GPIO3_IO19		   0x80000000
+				/* Data bus */
 				MX6QDL_PAD_DISP0_DAT0__IPU1_DISP0_DATA00   0x10
 				MX6QDL_PAD_DISP0_DAT1__IPU1_DISP0_DATA01   0x10
 				MX6QDL_PAD_DISP0_DAT2__IPU1_DISP0_DATA02   0x10
@@ -825,6 +823,8 @@
 				MX6QDL_PAD_GPIO_16__GPIO7_IO11	 0x80000000
 				/* LVDS1_PEN_IRQ_N */
 				MX6QDL_PAD_EIM_D23__GPIO3_IO23 0x80000000
+				/* LCD IRQ */
+				MX6QDL_PAD_NANDF_D1__GPIO2_IO01	0x80000000
 				/* AUD_CLK / CSI0_MCLK / CSI1_MCLK */
 				MX6QDL_PAD_GPIO_0__CCM_CLKO1    0x130b0
 				/* DSI_RESET */
