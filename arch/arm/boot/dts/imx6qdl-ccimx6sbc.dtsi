@@ -371,6 +371,23 @@
 		/* Interrupt for LVDS1 */
 		//interrupt-parent = <&gpio3>;
 		//interrupts = <23 1>;
+		/* Interrupt for parallel LCD */
+		//interrupt-parent = <&gpio2>;
+		//interrupts = <1 1>;
+		status = "disabled";
+	};
+
+	goodix_touch: gt911@14 {
+		compatible = "goodix,gt9271";
+		reg = <0x14>;
+		/* Interrupt for LVDS0 */
+		interrupt-parent = <&gpio7>;
+		interrupts = <11 IRQ_TYPE_EDGE_RISING>;
+		irq-gpios = <&gpio7 11 GPIO_ACTIVE_HIGH>;
+		/* Interrupt for LVDS1 */
+		//interrupt-parent = <&gpio3>;
+		//interrupts = <23 IRQ_TYPE_EDGE_RISING>;
+		//irq-gpios = <&gpio3 23 GPIO_ACTIVE_HIGH>;
 		status = "disabled";
 	};
 

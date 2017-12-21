@@ -118,6 +118,12 @@
 		status = "okay";
 	};
 
+	/* Uncomment to enable the goodix touch, used with g101evn010 */
+	//goodix_touch: gt911@14 {
+	//	skip-firmware-request;
+	//	status = "okay";
+	//};
+
 	edid@50 {
 		status = "okay";
 	};
