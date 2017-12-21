@@ -193,6 +193,11 @@
 	pinctrl-0 = <&pinctrl_hdmi_cec>;
 };
 
+&hdmi_core {
+	ipu_id = <0>;
+	disp_id = <1>;
+};
+
 &hdmi_video {
 	fsl,phy_reg_vlev = <0x0294>;
 	fsl,phy_reg_cksymtx = <0x800d>;
