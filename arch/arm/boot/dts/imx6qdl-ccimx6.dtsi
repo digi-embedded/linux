@@ -24,13 +24,13 @@
 		mmc3 = &usdhc1;
 	};
 
-	memory: memory {
-		/* U-boot to fill memory details here */
-	};
-
 	caam_keyblob: caam-keyblob {
 		compatible = "fsl,sec-v4.0-keyblob";
 		status = "disabled";
+	};
+
+	memory: memory {
+		/* U-boot to fill memory details here */
 	};
 };
 

@@ -3319,22 +3319,21 @@ static int fec_enet_init(struct net_device *ndev)
 }
 
 #ifdef CONFIG_OF
-static int fec_reset_phy(struct platform_device *pdev)
+static int fec_reset_phy_init(struct platform_device *pdev)
 {
-	int err;
-	bool active_high = false;
-	int msec = 1;
 	struct device_node *np = pdev->dev.of_node;
 	struct net_device *ndev = platform_get_drvdata(pdev);
 	struct fec_enet_private *fep = netdev_priv(ndev);
+	int err;
 
 	if (!np)
 		return 0;
 
-	err = of_property_read_u32(np, "phy-reset-duration", &msec);
+	err = of_property_read_u32(np, "phy-reset-duration",
+				   &fep->phy_reset_duration);
 	/* A sane reset duration should not be longer than 1s */
-	if (!err && msec > 1000)
-		msec = 1;
+	if (err || fep->phy_reset_duration > 1000)
+		fep->phy_reset_duration = 1;
 
 	fep->phy_reset_gpio = of_get_named_gpio(np, "phy-reset-gpios", 0);
 	if (fep->phy_reset_gpio == -EPROBE_DEFER)
@@ -3342,25 +3341,44 @@ static int fec_reset_phy(struct platform_device *pdev)
 	else if (!gpio_is_valid(fep->phy_reset_gpio))
 		return 0;
 
-	active_high = of_property_read_bool(np, "phy-reset-active-high");
+	fep->phy_reset_active_high = of_property_read_bool(np,
+						"phy-reset-active-high");
 
 	err = devm_gpio_request_one(&pdev->dev, fep->phy_reset_gpio,
-			active_high ? GPIOF_OUT_INIT_HIGH : GPIOF_OUT_INIT_LOW,
-			"phy-reset");
+				fep->phy_reset_active_high ?
+					GPIOF_OUT_INIT_LOW :
+					GPIOF_OUT_INIT_HIGH,
+				"phy-reset");
 	if (err) {
 		dev_err(&pdev->dev, "failed to get phy-reset-gpios: %d\n", err);
 		return err;
 	}
+	fep->phy_reset_in_suspend = of_find_property(np,
+						     "digi,phy-reset-in-suspend",
+						     NULL);
 
+	return 0;
+}
+
+static void fec_reset_phy(struct platform_device *pdev)
+{
+	struct net_device *ndev = platform_get_drvdata(pdev);
+	struct fec_enet_private *fep = netdev_priv(ndev);
+	u32 msec = fep->phy_reset_duration;
+
+	if (fep->phy_reset_gpio < 0)
+		return;
+
+	gpio_set_value_cansleep(fep->phy_reset_gpio,
+				fep->phy_reset_active_high);
 	if (msec > 20)
 		msleep(msec);
 	else
 		usleep_range(msec * 1000, msec * 1000 + 1000);
-
-	gpio_set_value_cansleep(fep->phy_reset_gpio, !active_high);
-
-	return 0;
+	gpio_set_value_cansleep(fep->phy_reset_gpio,
+				!fep->phy_reset_active_high);
 }
+
 #else /* CONFIG_OF */
 static int fec_reset_phy(struct platform_device *pdev)
 {
@@ -3615,9 +3633,11 @@ fec_probe(struct platform_device *pdev)
 	pm_runtime_set_active(&pdev->dev);
 	pm_runtime_enable(&pdev->dev);
 
-	ret = fec_reset_phy(pdev);
+	ret = fec_reset_phy_init(pdev);
 	if (ret)
 		goto failed_reset;
+
+	fec_reset_phy(pdev);
 
 	if (fep->bufdesc_ex)
 		fec_ptp_init(pdev);
