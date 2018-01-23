@@ -2092,7 +2092,7 @@ static int serial_imx_probe_dt(struct imx_port *sport,
 		}
 		ret = gpio_request_one(sport->pwr_en_gpio, init_st,
 				"uart-pwr-en-gpio");
-		if (ret != -EBUSY)
+		if (ret < 0)
 			dev_err(&pdev->dev, "Could not assign uart pwr enable gpio\n");
 	}
 
