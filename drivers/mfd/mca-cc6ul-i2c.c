@@ -50,6 +50,7 @@ static const struct regmap_range mca_cc6ul_writeable_ranges[] = {
 	regmap_reg_range(MCA_REG_ADC_CFG_0, MCA_REG_ADC_CFG_2),
 	regmap_reg_range(MCA_REG_ADC_BUFF_CH, MCA_REG_ADC_BUFF_SAMPLE_7),
 	regmap_reg_range(MCA_REG_UART_THR, MCA_REG_UART_RTSPIN),
+	regmap_reg_range(MCA_CC6UL_MPU_NVRAM_START, MCA_CC6UL_MPU_NVRAM_END),
 };
 
 static const struct regmap_range mca_cc6ul_volatile_ranges[] = {
@@ -63,6 +64,7 @@ static const struct regmap_range mca_cc6ul_volatile_ranges[] = {
 	regmap_reg_range(MCA_CC6UL_LAST_MCA_RESET_0, MCA_CC6UL_LAST_MCA_RESET_3),
 	regmap_reg_range(MCA_CC6UL_LAST_MPU_RESET_0, MCA_CC6UL_LAST_MPU_RESET_3),
 	regmap_reg_range(MCA_CC6UL_LAST_WAKEUP_REASON_0, MCA_CC6UL_LAST_WAKEUP_REASON_3),
+	regmap_reg_range(MCA_CC6UL_MPU_NVRAM_START, MCA_CC6UL_MPU_NVRAM_END),
 	regmap_reg_range(MCA_CC6UL_RTC_COUNT_YEAR_L, MCA_CC6UL_RTC_COUNT_SEC),
 	regmap_reg_range(MCA_GPIO_DATA_0, MCA_GPIO_DATA_7),
 	regmap_reg_range(MCA_GPIO_IRQ_STATUS_0, MCA_GPIO_IRQ_STATUS_7),

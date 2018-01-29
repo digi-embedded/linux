@@ -94,6 +94,7 @@ struct mca_cc6ul {
 	int som_hv;
 	u32 last_mca_reset;
 	u32 last_mpu_reset;
+	struct bin_attribute *nvram;
 };
 
 int mca_cc6ul_device_init(struct mca_cc6ul *mca, u32 irq);
