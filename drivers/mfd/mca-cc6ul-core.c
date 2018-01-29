@@ -1,5 +1,5 @@
 /*
- *  Copyright 2016, 2017 Digi International Inc
+ *  Copyright 2016, 2017, 2018 Digi International Inc
  *
  *  This program is free software; you can redistribute  it and/or modify it
  *  under  the terms of  the GNU General  Public License as published by the
@@ -27,6 +27,8 @@
 #include <linux/mfd/mca-cc6ul/core.h>
 
 #include <asm/unaligned.h>
+
+#define MCA_CC6UL_NVRAM_SIZE	(MCA_CC6UL_MPU_NVRAM_END - MCA_CC6UL_MPU_NVRAM_START + 1)
 
 extern int (*imx6_board_pm_begin)(suspend_state_t);
 extern void (*imx6_board_pm_end)(void);
@@ -539,6 +541,60 @@ static ssize_t last_mpu_reset_show(struct device *dev,
 }
 static DEVICE_ATTR(last_mpu_reset, S_IRUGO, last_mpu_reset_show, NULL);
 
+static ssize_t nvram_read(struct file *filp, struct kobject *kobj,
+			  struct bin_attribute *attr, char *buf, loff_t off,
+			  size_t count)
+{
+	struct device *dev = kobj_to_dev(kobj);
+	struct mca_cc6ul *mca;
+	int ret;
+
+	if (!dev || (mca = dev_get_drvdata(dev)) == NULL)
+		return -ENODEV;
+
+	if (unlikely(off >= MCA_CC6UL_NVRAM_SIZE) || unlikely(!count))
+		return 0;
+	if ((off + count) > MCA_CC6UL_NVRAM_SIZE)
+		count = MCA_CC6UL_NVRAM_SIZE - off;
+
+	ret = regmap_bulk_read(mca->regmap,
+			       MCA_CC6UL_MPU_NVRAM_START + off, buf, count);
+	if (ret) {
+		dev_err(mca->dev, "%s error (%d)\n", __func__, ret);
+		return ret;
+	}
+
+	return count;
+}
+
+static ssize_t nvram_write(struct file *filp, struct kobject *kobj,
+			   struct bin_attribute *attr, char *buf, loff_t off,
+			   size_t count)
+{
+	struct device *dev = kobj_to_dev(kobj);
+	struct mca_cc6ul *mca;
+	int ret;
+
+	if (!dev || (mca = dev_get_drvdata(dev)) == NULL)
+		return -ENODEV;
+
+	if (unlikely(off >= MCA_CC6UL_NVRAM_SIZE))
+		return -EFBIG;
+	if ((off + count) > MCA_CC6UL_NVRAM_SIZE)
+		count = MCA_CC6UL_NVRAM_SIZE - off;
+	if (unlikely(!count))
+		return count;
+
+	ret = regmap_bulk_write(mca->regmap,
+				MCA_CC6UL_MPU_NVRAM_START + off, buf, count);
+	if (ret) {
+		dev_err(mca->dev, "%s error (%d)\n", __func__, ret);
+		return ret;
+	}
+
+	return count;
+}
+
 static struct attribute *mca_cc6ul_sysfs_entries[] = {
 	&dev_attr_ext_32khz.attr,
 	&dev_attr_hw_version.attr,
@@ -892,8 +948,34 @@ int mca_cc6ul_device_init(struct mca_cc6ul *mca, u32 irq)
 		goto out_fn_ptrs2;
 	}
 
+	if (mca->fw_version >= MCA_MAKE_FW_VER(1, 2)) {
+		mca->nvram = devm_kzalloc(mca->dev, sizeof(struct bin_attribute),
+					  GFP_KERNEL);
+		if (!mca->nvram) {
+			dev_err(mca->dev, "Cannot allocate memory for nvram\n");
+			goto out_fn_ptrs2;
+		}
+
+		sysfs_bin_attr_init(mca->nvram);
+
+		mca->nvram->attr.name = "nvram";
+		mca->nvram->attr.mode = S_IRUGO | S_IWUSR;
+
+		mca->nvram->read = nvram_read;
+		mca->nvram->write = nvram_write;
+
+		ret = sysfs_create_bin_file(&mca->dev->kobj, mca->nvram);
+		if (ret) {
+			dev_err(mca->dev, "Cannot create sysfs file: %s\n",
+				mca->nvram->attr.name);
+			goto out_nvram;
+		}
+	}
+
 	return 0;
 
+out_nvram:
+	kfree(mca->nvram);
 out_fn_ptrs2:
 	imx6_board_pm_begin = NULL;
 	imx6_board_pm_end = NULL;
@@ -920,6 +1002,7 @@ void mca_cc6ul_device_exit(struct mca_cc6ul *mca)
 	sysfs_remove_group(&mca->dev->kobj, &mca_cc6ul_attr_group);
 	mfd_remove_devices(mca->dev);
 	mca_cc6ul_irq_exit(mca);
+	kfree(mca->nvram);
 }
 
 MODULE_AUTHOR("Digi International Inc");
