@@ -282,31 +282,7 @@
 		};
 	};
 
-	alc070004041: display@2 {
-		bits-per-pixel = <16>;
-		bus-width = <18>;
-
-		display-timings {
-			native-mode = <&timing2>;
-			timing2: timing2 {
-				clock-frequency = <27000000>;
-				hactive = <1280>;
-				vactive = <800>;
-				hfront-porch = <90>;
-				hback-porch = <0>;
-				hsync-len = <10>;
-				vback-porch = <15>;
-				vfront-porch = <0>;
-				vsync-len = <5>;
-				hsync-active = <1>;
-				vsync-active = <1>;
-				de-active = <1>;
-				pixelclk-active = <0>;
-			};
-		};
-	};
-
-	g101evn010: display@3 {
+	g101evn010: display@2 {
 		bits-per-pixel = <16>;
 		bus-width = <18>;
 

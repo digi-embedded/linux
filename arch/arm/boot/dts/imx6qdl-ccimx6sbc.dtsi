@@ -203,25 +203,8 @@
 				vsync-len = <25>;
 			};
 
-			/* Civue ALC-070004-04-1 */
-			alc070004041_1: timing@1 {
-				clock-frequency = <27000000>;
-				hactive = <1280>;
-				vactive = <800>;
-				hfront-porch = <90>;
-				hback-porch = <0>;
-				hsync-len = <10>;
-				vback-porch = <15>;
-				vfront-porch = <0>;
-				vsync-len = <5>;
-				hsync-active = <1>;
-				vsync-active = <1>;
-				de-active = <1>;
-				pixelclk-active = <0>;
-			};
-
 			/* AUO G101EVN01.0 */
-			g101evn010_1: timing@2 {
+			g101evn010_1: timing@1 {
 				clock-frequency = <68930000>;
 				hactive = <1280>;
 				vactive = <800>;
@@ -258,25 +241,8 @@
 				vsync-len = <23>;
 			};
 
-			/* Civue ALC-070004-04-1 */
-			alc070004041_2: timing@1 {
-				clock-frequency = <27000000>;
-				hactive = <1280>;
-				vactive = <800>;
-				hfront-porch = <90>;
-				hback-porch = <0>;
-				hsync-len = <10>;
-				vback-porch = <15>;
-				vfront-porch = <0>;
-				vsync-len = <5>;
-				hsync-active = <1>;
-				vsync-active = <1>;
-				de-active = <1>;
-				pixelclk-active = <0>;
-			};
-
 			/* AUO G101EVN01.0 */
-			g101evn010_2: timing@2 {
+			g101evn010_2: timing@1 {
 				clock-frequency = <68930000>;
 				hactive = <1280>;
 				vactive = <800>;
