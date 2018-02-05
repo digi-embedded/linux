@@ -100,17 +100,17 @@
 // 	status = "okay";
 // };
 
-/* Fusion touch */
-&fusion_touch {
-	status = "okay";
-};
-
-/* Uncomment to enable the goodix touch, used with g101evn010 */
-//&goodix_touch {
-//	skip-firmware-request;
-//	reload-fw-on-resume;
+/* Uncomment to enable fusion touch */
+//&fusion_touch {
 //	status = "okay";
 //};
+
+/* Goodix touch */
+&goodix_touch {
+	skip-firmware-request;
+	reload-fw-on-resume;
+	status = "okay";
+};
 
 /* Parallel LCD */
 &lcdif {
