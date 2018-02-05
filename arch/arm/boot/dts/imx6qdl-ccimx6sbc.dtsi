@@ -188,7 +188,7 @@
 		fsl,data-width = <18>;
 
 		display-timings {
-			native-mode = <&hsd101pfw2_1>;
+			native-mode = <&g101evn010_1>;
 
 			/* Fusion 10" F10A-0102 */
 			hsd101pfw2_1: timing@0 {
@@ -226,7 +226,7 @@
 		fsl,data-width = <18>;
 
 		display-timings {
-			native-mode = <&hsd101pfw2_2>;
+			native-mode = <&g101evn010_2>;
 
 			/* Fusion 10" F10A-0102 */
 			hsd101pfw2_2: timing@0 {
