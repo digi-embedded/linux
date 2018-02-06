@@ -12,6 +12,7 @@
 
 #include <net/cfg80211.h>
 #include "fweh.h"
+#include "fwil_types.h"
 
 #if IS_MODULE(CONFIG_BRCMFMAC)
 #define BRCMF_EXPORT_SYMBOL_GPL(__sym)	EXPORT_SYMBOL_NS_GPL(__sym, BRCMFMAC)
@@ -145,6 +146,7 @@ struct brcmf_pub {
 	u8 sta_mac_idx;
 	const struct brcmf_fwvid_ops *vops;
 	void *vdata;
+	struct brcmf_pkt_filter_enable_le pkt_filter[MAX_PKT_FILTER_COUNT];
 };
 
 /* forward declarations */
@@ -224,5 +226,7 @@ int brcmf_net_mon_attach(struct brcmf_if *ifp);
 void brcmf_net_setcarrier(struct brcmf_if *ifp, bool on);
 int __init brcmf_core_init(void);
 void __exit brcmf_core_exit(void);
-
+int brcmf_pktfilter_add_remove(struct net_device *ndev, int filter_num,
+			       bool add);
+int brcmf_pktfilter_enable(struct net_device *ndev, bool enable);
 #endif /* BRCMFMAC_CORE_H */
