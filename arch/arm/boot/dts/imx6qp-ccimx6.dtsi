@@ -126,7 +126,12 @@
 
 			ldo2: ldo2 {
 				regulator-name = "DA9063_LDO2";
-				regulator-boot-on;
+				regulator-state-mem {
+					regulator-off-in-suspend;
+				};
+				regulator-state-disk {
+					regulator-off-in-suspend;
+				};
 			};
 
 			ldo3: ldo3 {
