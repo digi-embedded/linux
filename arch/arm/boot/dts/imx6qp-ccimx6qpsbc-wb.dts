@@ -1,5 +1,5 @@
 /*
- * Copyright 2017, Digi International Inc.
+ * Copyright 2017,2018 Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -112,8 +112,9 @@
 };
 
 /*
- * Parallel LCD (shares IPU0:DI0 with MIPI display)
- * Comment the 'mipi_dsi' and 'mipi_dsi_reset' nodes before enabling LCD display.
+ * Parallel LCD conflicts with other interfaces:
+ * IPU0:DI0 with MIPI display: comment the 'mipi_dsi' and 'mipi_dsi_reset' nodes.
+ * Pad DISP0_DAT8 with PWM1: comment the 'pwm1' node.
  */
 //&lcd {
 //	status = "okay";
@@ -135,7 +136,7 @@
 };
 
 /*
- * The MIPI display shares IPU0:DI0 with the parallel LCD.
+ * The MIPI display conflicts with IPU0:DI0 on the parallel LCD.
  */
 &mipi_dsi {
 	status = "okay";
@@ -195,7 +196,10 @@
 	status = "okay";
 };
 
-/* PWM1 on pin 10 of LCD connector */
+/*
+ * PWM1 uses pad DISP0_DAT8 on pin 10 of the parallel LCD connector.
+ * Disable PWM1 if you want to use the parallel LCD.
+ */
 &pwm1 {
 	status = "okay";
 };
