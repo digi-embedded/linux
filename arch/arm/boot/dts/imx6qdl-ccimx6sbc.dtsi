@@ -34,6 +34,12 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_aud_pwr_en>;
 		status = "disabled";
+		regulator-state-mem {
+			regulator-off-in-suspend;
+		};
+		regulator-state-disk {
+			regulator-off-in-suspend;
+		};
 	};
 
 	/* Parallel display */
