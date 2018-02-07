@@ -144,6 +144,12 @@
 				regulator-name = "DA9063_LDO4";
 				regulator-min-microvolt = <2500000>;
 				regulator-max-microvolt = <2500000>;
+				regulator-state-mem {
+					regulator-off-in-suspend;
+				};
+				regulator-state-disk {
+					regulator-off-in-suspend;
+				};
 			};
 
 			ldo5: ldo5 {
