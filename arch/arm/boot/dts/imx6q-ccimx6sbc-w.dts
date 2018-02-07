@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 Digi International, Inc.
+ * Copyright 2015-2018 Digi International, Inc.
  *
  * The code contained herein is licensed under the GNU General Public
  * License. You may obtain a copy of the GNU General Public License
@@ -49,6 +49,15 @@
 &caam_keyblob {
 	status = "okay";
 };
+
+/*
+ * Parallel LCD conflicts with other interfaces:
+ * IPU0:DI0 with MIPI display: comment the 'mipi_dsi' and 'mipi_dsi_reset' nodes.
+ * Pad DISP0_DAT8 with PWM1: comment the 'pwm1' node.
+ */
+//&lcd {
+//	status = "okay";
+//};
 
 &ldb {
 	status = "okay";
@@ -147,6 +156,9 @@
 	status = "okay";
 };
 
+/*
+ * The MIPI display conflicts with IPU0:DI0 on the parallel LCD.
+ */
 &mipi_dsi {
 	status = "okay";
 };
@@ -159,7 +171,10 @@
 	status = "okay";
 };
 
-/* PWM1 on pin 10 of LCD connector */
+/*
+ * PWM1 uses pad DISP0_DAT8 on pin 10 of the parallel LCD connector.
+ * Disable PWM1 if you want to use the parallel LCD.
+ */
 &pwm1 {
 	status = "okay";
 };
