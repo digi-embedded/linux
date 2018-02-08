@@ -107,8 +107,6 @@
 
 /* Goodix touch */
 &goodix_touch {
-	skip-firmware-request;
-	reload-fw-on-resume;
 	status = "okay";
 };
 

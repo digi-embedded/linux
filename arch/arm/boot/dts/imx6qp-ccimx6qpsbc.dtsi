@@ -396,6 +396,7 @@
 		//interrupt-parent = <&gpio3>;
 		//interrupts = <23 IRQ_TYPE_EDGE_RISING>;
 		//irq-gpios = <&gpio3 23 GPIO_ACTIVE_HIGH>;
+		skip-firmware-request;
 		status = "disabled";
 	};
 

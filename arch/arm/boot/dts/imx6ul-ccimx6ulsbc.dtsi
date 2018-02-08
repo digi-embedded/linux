@@ -169,6 +169,8 @@
 		interrupt-parent = <&gpio5>;
 		interrupts = <2 IRQ_TYPE_EDGE_RISING>;
 		irq-gpios = <&gpio5 2 GPIO_ACTIVE_HIGH>;
+		skip-firmware-request;
+		reload-fw-on-resume;
 		status = "disabled";
 	};
 
