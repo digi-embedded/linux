@@ -126,7 +126,6 @@
 	//};
 
 	goodix_touch: gt911@14 {
-		skip-firmware-request;
 		status = "okay";
 	};
 
