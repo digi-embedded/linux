@@ -172,6 +172,18 @@
 				};
 			};
 
+			ldo8: ldo8 {
+				regulator-name = "DA9063_LDO8";
+				regulator-min-microvolt = <900000>;
+				regulator-max-microvolt = <3600000>;
+				regulator-state-mem {
+					regulator-off-in-suspend;
+				};
+				regulator-state-disk {
+					regulator-off-in-suspend;
+				};
+			};
+
 			ldo11: ldo11 {
 				regulator-name = "DA9063_LDO11";
 				regulator-boot-on;
