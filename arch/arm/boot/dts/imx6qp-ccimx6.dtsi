@@ -99,7 +99,6 @@
 			bpro: bpro {
 				regulator-name = "DA9063_BPRO";
 				regulator-boot-on;
-				regulator-always-on;
 				regulator-state-mem {
 					regulator-off-in-suspend;
 				};
