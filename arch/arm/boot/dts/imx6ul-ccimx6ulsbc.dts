@@ -63,23 +63,6 @@
 	};
 };
 
-/* ECSPI1 (as slave) */
-// &ecspi1 {
-// 	pinctrl-0 = <&pinctrl_ecspi1_slave>;
-// 	spi-slave;
-// 	status = "okay";
-//
-// 	/*
-// 	 * Unique slave node. Property 'compatible' must be set to the
-// 	 * slave driver that will be registered by default.
-// 	 */
-// 	slave@0 {
-// 		reg = <0>;	/* must match the used CS line */
-// 		compatible = "spidev";
-// 		spi-max-frequency = <1000000>;
-// 	};
-// };
-
 /* ENET1 */
 &fec1 {
 	status = "okay";
