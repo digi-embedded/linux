@@ -27,7 +27,7 @@
 		status = "disabled";
 	};
 
-	reg_usb_otg1_vbus: reg_usb_otg1:@0 {
+	reg_usb_otg1_vbus: reg_usb_otg1@0 {
 		compatible = "regulator-fixed";
 		regulator-name = "usb_otg1_vbus";
 		regulator-min-microvolt = <5000000>;
