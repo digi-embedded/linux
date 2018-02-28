@@ -81,6 +81,7 @@ static const struct mca_reason last_wakeup[] = {
 	{MCA_CC6UL_LAST_WAKEUP_IO5,	"IO5"},
 	{MCA_CC6UL_LAST_WAKEUP_IO6,	"IO6"},
 	{MCA_CC6UL_LAST_WAKEUP_IO7,	"IO7"},
+	{MCA_CC6UL_LAST_WAKEUP_VCC,	"Vcc"},
 };
 
 static struct mca_cc6ul *pmca;
