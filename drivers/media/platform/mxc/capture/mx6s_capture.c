@@ -1992,8 +1992,33 @@ static int mx6s_csi_runtime_resume(struct device *dev)
 	return 0;
 }
 
+static int mx6s_csi_suspend(struct device *dev)
+{
+	struct v4l2_device *v4l2_dev = dev_get_drvdata(dev);
+	struct mx6s_csi_dev *csi_dev =
+				container_of(v4l2_dev, struct mx6s_csi_dev, v4l2_dev);
+
+	if (csi_dev->vb2_vidq.streaming)
+		mx6s_csi_disable(csi_dev);
+
+	return 0;
+}
+
+static int mx6s_csi_resume(struct device *dev)
+{
+	struct v4l2_device *v4l2_dev = dev_get_drvdata(dev);
+	struct mx6s_csi_dev *csi_dev =
+				container_of(v4l2_dev, struct mx6s_csi_dev, v4l2_dev);
+
+	if (csi_dev->vb2_vidq.streaming)
+		return mx6s_csi_enable(csi_dev);
+
+	return 0;
+}
+
 static const struct dev_pm_ops mx6s_csi_pm_ops = {
 	SET_RUNTIME_PM_OPS(mx6s_csi_runtime_suspend, mx6s_csi_runtime_resume, NULL)
+	SET_SYSTEM_SLEEP_PM_OPS(mx6s_csi_suspend, mx6s_csi_resume)
 };
 
 static const struct mx6s_csi_soc mx6s_soc = {
