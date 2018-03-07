@@ -177,6 +177,16 @@
 //	status = "okay";
 // };
 
+/*
+ * To use CSI camera with suspend/resume, uncomment ext_3v3
+ * regulator to leave it ON in suspend
+ */
+//&ext_3v3 {
+//	regulator-state-mem {
+//		regulator-on-in-suspend;
+//	};
+//};
+
 /* PWM4 on pin 11 of GPIO connector */
 &pwm4 {
 	status = "okay";
