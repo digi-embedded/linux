@@ -147,7 +147,8 @@ static irqreturn_t mca_cc6ul_wdt_timeout_event(int irq, void *data)
 }
 
 static struct watchdog_info mca_cc6ul_wdt_info = {
-	.options	= WDIOF_SETTIMEOUT | WDIOF_KEEPALIVEPING,
+	.options	= WDIOF_SETTIMEOUT | WDIOF_KEEPALIVEPING | \
+			  WDIOF_MAGICCLOSE,
 	.identity	= WATCHDOG_NAME,
 };
 
