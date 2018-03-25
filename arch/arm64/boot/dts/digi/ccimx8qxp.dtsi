@@ -24,6 +24,19 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lpi2c0>;
 	status = "okay";
+
+	mca_cc8x: mca@63 {
+		compatible = "digi,mca_cc8x";
+		reg = <0x63>;
+		/* Note that the IRQ has not been tested */
+		interrupt-parent = <&wu>;
+		interrupts = <GIC_SPI 112 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+		fw-update-gpio = <&gpio3 9 GPIO_ACTIVE_LOW>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_mca_cc8x>;
+	};
 };
 
 &rpmsg{
@@ -58,6 +71,22 @@
 			fsl,pins = <
 				SC_P_MIPI_CSI0_GPIO0_00_ADMA_I2C0_SCL	0x06000020
 				SC_P_MIPI_CSI0_GPIO0_01_ADMA_I2C0_SDA	0x06000020
+			>;
+		};
+
+		pinctrl_mca_cc8x: mcagrp {
+			fsl,pins = <
+				/*
+				 * MCA_nINT
+				 *
+				 * Currently, the MCA interrupt request line is
+				 * configured by the SCU
+				 *
+				 * SC_P_PMIC_INT_B_SCU_DSC_PMIC_INT_B	0xb0b1
+				 */
+
+				/* MCA_FW_UPDATE */
+				SC_P_QSPI0A_DATA0_LSIO_GPIO3_IO09	0x06000021
 			>;
 		};
 
