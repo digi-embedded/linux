@@ -51,6 +51,11 @@
 			interrupt-controller;
 			#interrupt-cells = <2>;
 		};
+
+		mca_wdt {
+			compatible = "digi,mca-cc8x-wdt";
+			digi,full-reset;
+		};
 	};
 };
 
