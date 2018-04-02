@@ -52,6 +52,10 @@
 			#interrupt-cells = <2>;
 		};
 
+		mca_rtc {
+			compatible = "digi,mca-cc8x-rtc";
+		};
+
 		mca_wdt {
 			compatible = "digi,mca-cc8x-wdt";
 			digi,full-reset;
