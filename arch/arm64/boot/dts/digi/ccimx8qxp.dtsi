@@ -36,6 +36,11 @@
 		fw-update-gpio = <&gpio3 9 GPIO_ACTIVE_LOW>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_mca_cc8x>;
+
+		mca_adc: adc {
+			compatible = "digi,mca-cc8x-adc";
+			digi,adc-vref = <3000000>;
+		};
 	};
 };
 
