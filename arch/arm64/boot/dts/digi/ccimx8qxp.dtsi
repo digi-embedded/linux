@@ -41,6 +41,16 @@
 			compatible = "digi,mca-cc8x-adc";
 			digi,adc-vref = <3000000>;
 		};
+
+		mca_gpio: gpio {
+			compatible = "digi,mca-cc8x-gpio";
+			gpio-controller;
+			#gpio-cells = <2>;
+
+			interrupt-parent = <&mca_cc8x>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
+		};
 	};
 };
 
