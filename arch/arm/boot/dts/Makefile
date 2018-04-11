@@ -445,6 +445,7 @@ dtb-$(CONFIG_SOC_IMX6Q) += \
 	imx6q-utilite-pro.dtb \
 	imx6q-wandboard.dtb \
 	imx6q-wandboard-revb1.dtb \
+	imx6qp-ccimx6qp-mfg.dtb \
 	imx6qp-ccimx6qp-mfg-rf.dtb \
 	imx6qp-ccimx6qpsbc.dtb \
 	imx6qp-ccimx6qpsbc-id160.dtb \
