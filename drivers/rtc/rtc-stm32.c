@@ -6,6 +6,7 @@
 
 #include <linux/bcd.h>
 #include <linux/clk.h>
+#include <linux/clk-provider.h>
 #include <linux/iopoll.h>
 #include <linux/ioport.h>
 #include <linux/mfd/syscon.h>
@@ -14,6 +15,8 @@
 #include <linux/pm_wakeirq.h>
 #include <linux/regmap.h>
 #include <linux/rtc.h>
+
+#include <dt-bindings/rtc/rtc-stm32.h>
 
 #define DRIVER_NAME "stm32_rtc"
 
@@ -39,6 +42,12 @@
 #define STM32_RTC_CR_FMT		BIT(6)
 #define STM32_RTC_CR_ALRAE		BIT(8)
 #define STM32_RTC_CR_ALRAIE		BIT(12)
+#define STM32_RTC_CR_COSEL		BIT(19)
+#define STM32_RTC_CR_OSEL_SHIFT		21
+#define STM32_RTC_CR_OSEL		GENMASK(22, 21)
+#define STM32_RTC_CR_COE		BIT(23)
+#define STM32_RTC_CR_TAMPOE		BIT(26)
+#define STM32_RTC_CR_OUT2EN		BIT(31)
 
 /* STM32_RTC_ISR/STM32_RTC_ICSR bit fields */
 #define STM32_RTC_ISR_ALRAWF		BIT(0)
@@ -75,6 +84,11 @@
 /* STM32_RTC_SR/_SCR bit fields */
 #define STM32_RTC_SR_ALRA		BIT(0)
 
+/* STM32_RTC_CFGR bit fields */
+#define STM32_RTC_CFGR_OUT2_RMP		BIT(0)
+#define STM32_RTC_CFGR_LSCOEN_OUT1	1
+#define STM32_RTC_CFGR_LSCOEN_OUT2_RMP	2
+
 /* STM32_RTC_VERR bit fields */
 #define STM32_RTC_VERR_MINREV_SHIFT	0
 #define STM32_RTC_VERR_MINREV		GENMASK(3, 0)
@@ -101,6 +115,7 @@ struct stm32_rtc_registers {
 	u16 wpr;
 	u16 sr;
 	u16 scr;
+	u16 cfgr;
 	u16 verr;
 };
 
@@ -115,6 +130,7 @@ struct stm32_rtc_data {
 	bool has_pclk;
 	bool need_dbp;
 	bool has_wakeirq;
+	bool has_lsco;
 };
 
 struct stm32_rtc {
@@ -128,7 +144,86 @@ struct stm32_rtc {
 	const struct stm32_rtc_data *data;
 	int irq_alarm;
 	int wakeirq_alarm;
+	int lsco;
+	struct clk *clk_lsco;
 };
+
+/*
+ *  -------------------------------------------------------------------------
+ * | TAMPOE | OSEL[1:0] | COE | OUT2EN |     RTC_OUT1     |     RTC_OUT2     |
+ * |	    |           |     |        |                  | or RTC_OUT2_RMP  |
+ * |-------------------------------------------------------------------------|
+ * |    0   |     00    |  0  | 0 or 1 |         -        |         -        |
+ * |--------|-----------|-----|--------|------------------|------------------|
+ * |    0   |     00    |  1  |    0   |      CALIB       |         -        |
+ * |--------|-----------|-----|--------|------------------|------------------|
+ * | 0 or 1 |    !=00   |  0  |    0   |     TAMPALRM     |         -        |
+ * |--------|-----------|-----|--------|------------------|------------------|
+ * |    0   |     00    |  1  |    1   |         -        |      CALIB       |
+ * |--------|-----------|-----|--------|------------------|------------------|
+ * | 0 or 1 |    !=00   |  0  |    1   |         -        |     TAMPALRM     |
+ * |--------|-----------|-----|--------|------------------|------------------|
+ * | 0 or 1 |    !=00   |  1  |    1   |     TAMPALRM     |      CALIB       |
+ *  -------------------------------------------------------------------------
+ */
+static int stm32_rtc_clk_lsco_check_availability(struct stm32_rtc *rtc)
+{
+	struct stm32_rtc_registers regs = rtc->data->regs;
+	unsigned int cr = readl_relaxed(rtc->base + regs.cr);
+	unsigned int cfgr = readl_relaxed(rtc->base + regs.cfgr);
+	unsigned int calib = STM32_RTC_CR_COE;
+	unsigned int tampalrm = STM32_RTC_CR_TAMPOE | STM32_RTC_CR_OSEL;
+
+	switch (rtc->lsco) {
+	case RTC_OUT1:
+		if ((!(cr & STM32_RTC_CR_OUT2EN) &&
+		     ((cr & calib) || cr & tampalrm)) ||
+		     ((cr & calib) && (cr & tampalrm)))
+			return -EBUSY;
+		break;
+	case RTC_OUT2_RMP:
+		if ((cr & STM32_RTC_CR_OUT2EN) &&
+		    (cfgr & STM32_RTC_CFGR_OUT2_RMP) &&
+		    ((cr & calib) || (cr & tampalrm)))
+			return -EBUSY;
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	if (clk_get_rate(rtc->rtc_ck) != 32768)
+		return -ERANGE;
+
+	return 0;
+}
+
+static int stm32_rtc_clk_lsco_register(struct platform_device *pdev)
+{
+	struct stm32_rtc *rtc = platform_get_drvdata(pdev);
+	struct stm32_rtc_registers regs = rtc->data->regs;
+	u8 lscoen;
+	int ret;
+
+	ret = stm32_rtc_clk_lsco_check_availability(rtc);
+	if (ret)
+		return ret;
+
+	lscoen = (rtc->lsco == RTC_OUT1) ? STM32_RTC_CFGR_LSCOEN_OUT1 :
+					   STM32_RTC_CFGR_LSCOEN_OUT2_RMP;
+
+	rtc->clk_lsco = clk_register_gate(&pdev->dev, "rtc_lsco",
+					  __clk_get_name(rtc->rtc_ck),
+					  CLK_IGNORE_UNUSED | CLK_IS_CRITICAL,
+					  rtc->base + regs.cfgr, lscoen,
+					  0, NULL);
+	if (IS_ERR(rtc->clk_lsco))
+		return PTR_ERR(rtc->clk_lsco);
+
+	of_clk_add_provider(pdev->dev.of_node,
+			    of_clk_src_simple_get, rtc->clk_lsco);
+
+	return 0;
+}
 
 static void stm32_rtc_wpr_unlock(struct stm32_rtc *rtc)
 {
@@ -548,6 +643,7 @@ static const struct stm32_rtc_data stm32_rtc_data = {
 	.has_pclk = false,
 	.need_dbp = true,
 	.has_wakeirq = false,
+	.has_lsco = false,
 	.regs = {
 		.tr = 0x00,
 		.dr = 0x04,
@@ -558,6 +654,7 @@ static const struct stm32_rtc_data stm32_rtc_data = {
 		.wpr = 0x24,
 		.sr = 0x0C, /* set to ISR offset to ease alarm management */
 		.scr = UNDEF_REG,
+		.cfgr = UNDEF_REG,
 		.verr = UNDEF_REG,
 	},
 	.events = {
@@ -570,6 +667,7 @@ static const struct stm32_rtc_data stm32h7_rtc_data = {
 	.has_pclk = true,
 	.need_dbp = true,
 	.has_wakeirq = false,
+	.has_lsco = false,
 	.regs = {
 		.tr = 0x00,
 		.dr = 0x04,
@@ -580,6 +678,7 @@ static const struct stm32_rtc_data stm32h7_rtc_data = {
 		.wpr = 0x24,
 		.sr = 0x0C, /* set to ISR offset to ease alarm management */
 		.scr = UNDEF_REG,
+		.cfgr = UNDEF_REG,
 		.verr = UNDEF_REG,
 	},
 	.events = {
@@ -601,6 +700,7 @@ static const struct stm32_rtc_data stm32mp1_data = {
 	.has_pclk = true,
 	.need_dbp = false,
 	.has_wakeirq = true,
+	.has_lsco = true,
 	.regs = {
 		.tr = 0x00,
 		.dr = 0x04,
@@ -611,6 +711,7 @@ static const struct stm32_rtc_data stm32mp1_data = {
 		.wpr = 0x24,
 		.sr = 0x50,
 		.scr = 0x5C,
+		.cfgr = 0x60,
 		.verr = 0x3F4,
 	},
 	.events = {
@@ -814,6 +915,21 @@ static int stm32_rtc_probe(struct platform_device *pdev)
 		goto err;
 	}
 
+	if (rtc->data->has_lsco) {
+		ret = of_property_read_s32(pdev->dev.of_node,
+					   "st,lsco", &rtc->lsco);
+		if (!ret) {
+			ret = stm32_rtc_clk_lsco_register(pdev);
+			if (ret)
+				dev_warn(&pdev->dev,
+					 "LSCO clock registration failed: %d\n",
+					 ret);
+		} else {
+			rtc->lsco = ret;
+			dev_dbg(&pdev->dev, "No LSCO clock: %d\n", ret);
+		}
+	}
+
 	/*
 	 * If INITS flag is reset (calendar year field set to 0x00), calendar
 	 * must be initialized
@@ -851,6 +967,9 @@ static int stm32_rtc_remove(struct platform_device *pdev)
 	struct stm32_rtc *rtc = platform_get_drvdata(pdev);
 	const struct stm32_rtc_registers *regs = &rtc->data->regs;
 	unsigned int cr;
+
+	if (!IS_ERR_OR_NULL(rtc->clk_lsco))
+		clk_unregister_gate(rtc->clk_lsco);
 
 	/* Disable interrupts */
 	stm32_rtc_wpr_unlock(rtc);
