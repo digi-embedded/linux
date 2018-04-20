@@ -83,7 +83,7 @@
 	//	status = "okay";
 	//};
 
-	//goodix_touch: gt911@14 {
+	//goodix_touch: gt9271@14 {
 	//	status = "okay";
 	//};
 

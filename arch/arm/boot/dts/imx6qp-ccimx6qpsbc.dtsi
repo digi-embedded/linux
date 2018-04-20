@@ -389,7 +389,7 @@
 		status = "disabled";
 	};
 
-	goodix_touch: gt911@14 {
+	goodix_touch: gt9271@14 {
 		compatible = "goodix,gt9271";
 		reg = <0x14>;
 		/* Interrupt for LVDS0 */

@@ -168,7 +168,7 @@
 	 * works every time, the touch controller's description must
 	 * be duplicated for both addresses.
 	 */
-	goodix_touch1: gt911@14 {
+	goodix_touch1: gt9271@14 {
 		compatible = "goodix,gt9271";
 		reg = <0x14>;
 		pinctrl-names = "default";
@@ -181,7 +181,7 @@
 		status = "disabled";
 	};
 
-	goodix_touch2: gt911@5D {
+	goodix_touch2: gt9271@5D {
 		compatible = "goodix,gt9271";
 		reg = <0x5D>;
 		pinctrl-names = "default";
