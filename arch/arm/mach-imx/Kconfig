@@ -523,6 +523,14 @@ config SOC_IMX6UL
 	help
 	  This enables support for Freescale i.MX6 UltraLite processor.
 
+config SOM_CC6UL
+	bool "Digi ConnectCore 6UL System-On-Module support"
+	select SOC_IMX6UL
+	select SOC_IMX6
+
+	help
+	  This enables support for Digi ConnectCore 6UL System-On-Module.
+
 config SOC_IMX7D
 	bool "i.MX7 Dual support"
 	select PINCTRL_IMX7D
