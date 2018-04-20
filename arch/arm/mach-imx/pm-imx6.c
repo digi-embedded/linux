@@ -69,6 +69,14 @@ static void __iomem *suspend_ocram_base;
 static void (*imx6_suspend_in_ocram_fn)(void __iomem *ocram_vbase);
 
 /*
+ * Function pointers to optional board pm functions
+ */
+int (*imx6_board_pm_begin)(suspend_state_t);
+void (*imx6_board_pm_end)(void);
+EXPORT_SYMBOL(imx6_board_pm_begin);
+EXPORT_SYMBOL(imx6_board_pm_end);
+
+/*
  * suspend ocram space layout:
  * ======================== high address ======================
  *                              .
@@ -410,12 +418,28 @@ static int imx6q_pm_enter(suspend_state_t state)
 	return 0;
 }
 
+static int imx6q_pm_begin(suspend_state_t state)
+{
+	if (imx6_board_pm_begin)
+		return imx6_board_pm_begin(state);
+
+	return 0;
+}
+
+static void imx6q_pm_end(void)
+{
+	if (imx6_board_pm_end)
+		imx6_board_pm_end();
+}
+
 static int imx6q_pm_valid(suspend_state_t state)
 {
 	return (state == PM_SUSPEND_STANDBY || state == PM_SUSPEND_MEM);
 }
 
 static const struct platform_suspend_ops imx6q_pm_ops = {
+	.begin = imx6q_pm_begin,
+	.end = imx6q_pm_end,
 	.enter = imx6q_pm_enter,
 	.valid = imx6q_pm_valid,
 };
