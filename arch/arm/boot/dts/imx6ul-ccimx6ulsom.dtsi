@@ -43,6 +43,18 @@
 	pinctrl-0 = <&pinctrl_i2c1>;
 	status = "okay";
 
+	mca_cc6ul: mca@7e {
+		compatible = "digi,mca_cc6ul_dt_ids";
+		reg = <0x7e>;
+		interrupt-parent = <&gpio5>;
+		interrupts = <4 IRQ_TYPE_EDGE_FALLING>;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+		fw-update-gpio = <&gpio4 14 GPIO_ACTIVE_LOW>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_mca_cc6ul>;
+	};
+
 	pfuze3000: pmic@8 {
 		compatible = "fsl,pfuze3000";
 		reg = <0x08>;
