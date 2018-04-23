@@ -78,6 +78,10 @@
 			compatible = "digi,mca-cc6ul-tamper";
 		};
 
+		mca_uart: uart {
+			compatible = "digi,mca-cc6ul-uart";
+			status = "disabled";
+		};
 	};
 
 	pfuze3000: pmic@8 {

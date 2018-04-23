@@ -176,6 +176,19 @@
 	digi,tamper-if-list = <0 1 2 3>;
 };
 
+/*
+ * Enable MCA UART:
+ *  - MCA_IO1 (TX)
+ *  - MCA_IO2 (RX)
+ */
+&mca_uart {
+	status = "okay";
+
+	/* Edit to nable CTS and/or RTS in any MCA GPIO-capable line */
+	rts-pin = <3>;
+	cts-pin = <5>;
+};
+
 &pwm1 {
 	status = "okay";
 };
@@ -452,3 +465,4 @@
 		>;
 	};
 };
+
