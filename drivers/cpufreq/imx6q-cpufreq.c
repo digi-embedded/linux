@@ -16,6 +16,7 @@
 #include <linux/pm_opp.h>
 #include <linux/platform_device.h>
 #include <linux/regulator/consumer.h>
+#include <linux/clk-provider.h>
 
 #define PU_SOC_VOLTAGE_NORMAL	1250000
 #define PU_SOC_VOLTAGE_HIGH	1275000
@@ -224,6 +225,7 @@ static void imx6q_opp_check_speed_grading(struct device *dev)
 	struct device_node *np;
 	void __iomem *base;
 	u32 val;
+	struct clk *ocotp_clk;
 
 	np = of_find_compatible_node(NULL, NULL, "fsl,imx6q-ocotp");
 	if (!np)
@@ -232,6 +234,17 @@ static void imx6q_opp_check_speed_grading(struct device *dev)
 	base = of_iomap(np, 0);
 	if (!base) {
 		dev_err(dev, "failed to map ocotp\n");
+		goto put_node;
+	}
+
+	ocotp_clk = of_clk_get(np, 0);
+	if (IS_ERR(ocotp_clk)) {
+		dev_err(dev, "failed to get ocotp clk\n");
+		goto put_node;
+	}
+
+	if (clk_prepare_enable(ocotp_clk)) {
+		dev_err(dev, "failed to prepare/enable ocotp clk\n");
 		goto put_node;
 	}
 
@@ -261,6 +274,7 @@ static void imx6q_opp_check_speed_grading(struct device *dev)
 				dev_warn(dev, "failed to disable 1.2GHz OPP\n");
 	}
 	iounmap(base);
+	clk_disable_unprepare(ocotp_clk);
 put_node:
 	of_node_put(np);
 }
@@ -274,6 +288,7 @@ static void imx6ul_opp_check_speed_grading(struct device *dev)
 	struct device_node *np;
 	void __iomem *base;
 	u32 val;
+	struct clk *ocotp_clk;
 
 	np = of_find_compatible_node(NULL, NULL, "fsl,imx6ul-ocotp");
 	if (!np)
@@ -282,6 +297,17 @@ static void imx6ul_opp_check_speed_grading(struct device *dev)
 	base = of_iomap(np, 0);
 	if (!base) {
 		dev_err(dev, "failed to map ocotp\n");
+		goto put_node;
+	}
+
+	ocotp_clk = of_clk_get(np, 0);
+	if (IS_ERR(ocotp_clk)) {
+		dev_err(dev, "failed to get ocotp clk\n");
+		goto put_node;
+	}
+
+	if (clk_prepare_enable(ocotp_clk)) {
+		dev_err(dev, "failed to prepare/enable ocotp clk\n");
 		goto put_node;
 	}
 
@@ -314,6 +340,7 @@ static void imx6ul_opp_check_speed_grading(struct device *dev)
 	}
 
 	iounmap(base);
+	clk_disable_unprepare(ocotp_clk);
 put_node:
 	of_node_put(np);
 }
