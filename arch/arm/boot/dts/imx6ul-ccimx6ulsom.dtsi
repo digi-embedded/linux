@@ -64,6 +64,10 @@
 			#interrupt-cells = <2>;
 		};
 
+		rtc {
+			compatible = "digi,mca-cc6ul-rtc";
+		};
+
 		watchdog {
 			compatible = "digi,mca-cc6ul-wdt";
 			digi,full-reset;
