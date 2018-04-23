@@ -69,6 +69,11 @@
 			digi,full-reset;
 		};
 
+		mca_adc: adc {
+			compatible = "digi,mca-cc6ul-adc";
+			digi,adc-vref = <3000000>;
+		};
+
 	};
 
 	pfuze3000: pmic@8 {
