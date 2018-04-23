@@ -53,6 +53,17 @@
 		fw-update-gpio = <&gpio4 14 GPIO_ACTIVE_LOW>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_mca_cc6ul>;
+
+		mca_gpio: gpio {
+			compatible = "digi,mca-cc6ul-gpio";
+			gpio-controller;
+			#gpio-cells = <2>;
+
+			interrupt-parent = <&mca_cc6ul>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
+		};
+
 	};
 
 	pfuze3000: pmic@8 {
