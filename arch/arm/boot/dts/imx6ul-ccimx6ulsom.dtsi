@@ -74,6 +74,10 @@
 			digi,adc-vref = <3000000>;
 		};
 
+		mca_tamper: tamper {
+			compatible = "digi,mca-cc6ul-tamper";
+		};
+
 	};
 
 	pfuze3000: pmic@8 {
