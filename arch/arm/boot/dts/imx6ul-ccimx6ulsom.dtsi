@@ -64,6 +64,11 @@
 			#interrupt-cells = <2>;
 		};
 
+		watchdog {
+			compatible = "digi,mca-cc6ul-wdt";
+			digi,full-reset;
+		};
+
 	};
 
 	pfuze3000: pmic@8 {

@@ -1,0 +1,22 @@
+* Digi Watchdog Timer for MCA of ConnectCore 6UL
+
+Required properties:
+- compatible: must be "digi,mca-cc6ul-wdt".
+
+Optional properties:
+- digi,timeout-sec: contains the watchdog timeout in seconds.
+- digi,irq-no-reset: if present, the watchdog will generate an interrupt instead
+	of a system reset.
+- digi,full-reset: if present, the watchdog will perform a full system reset,
+        including the MCA. Otherwise, only the microprocessor is reset. Note
+        that this option requires the system to be configured to generate a
+        reset and not an interrupt.
+
+Example:
+	mca: mca-cc6ul@7e {
+		watchdog {
+			compatible = "digi,mca-cc6ul-wdt";
+			digi,timeout-sec = <15>;
+			digi,irq-no-reset;
+		};
+	};
