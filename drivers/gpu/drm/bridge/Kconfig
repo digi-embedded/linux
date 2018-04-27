@@ -51,6 +51,14 @@ config DRM_MEGACHIPS_STDPXXXX_GE_B850V3_FW
           to DP++. This is used with the i.MX6 imx-ldb
           driver. You are likely to say N here.
 
+config DRM_LONTIUM_LT8912
+	tristate "Lontium LT8912 MIPI-DSI to LVDS and HDMI/MHL bridge"
+	depends on OF
+	select DRM_KMS_HELPER
+	select REGMAP_I2C
+	help
+	  Lontium LT8912 MIPI-DSI to LVDS and HDMI/MHL bridge chip driver.
+
 config DRM_NWL_DSI
 	tristate
 	select DRM_KMS_HELPER
