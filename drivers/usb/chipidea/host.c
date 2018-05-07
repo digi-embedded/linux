@@ -290,7 +290,8 @@ static int host_start(struct ci_hdrc *ci)
 	if (usb_disabled())
 		return -ENODEV;
 
-	hcd = usb_create_hcd(&ci_ehci_hc_driver, ci->dev, dev_name(ci->dev));
+	hcd = __usb_create_hcd(&ci_ehci_hc_driver, ci->dev->parent,
+			       ci->dev, dev_name(ci->dev), NULL);
 	if (!hcd)
 		return -ENOMEM;
 
@@ -477,19 +478,16 @@ static void ci_hdrc_host_restore_from_power_lost(struct ci_hdrc *ci)
 
 static void ci_hdrc_host_suspend(struct ci_hdrc *ci)
 {
-#ifdef CONFIG_PM
 	if (ci_hdrc_host_has_device(ci))
 		imx_gpc_mf_request_on(ci->irq, 1);
-#endif
 
 	ci_hdrc_host_save_for_power_lost(ci);
 }
 
 static void ci_hdrc_host_resume(struct ci_hdrc *ci, bool power_lost)
 {
-#ifdef CONFIG_PM
 	imx_gpc_mf_request_on(ci->irq, 0);
-#endif
+
 	if (power_lost)
 		ci_hdrc_host_restore_from_power_lost(ci);
 }

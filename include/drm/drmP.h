@@ -135,6 +135,7 @@ struct dma_buf_attachment;
 #define DRM_UT_PRIME		0x08
 #define DRM_UT_ATOMIC		0x10
 #define DRM_UT_VBL		0x20
+#define DRM_UT_LEASE		0x80
 
 extern __printf(6, 7)
 void drm_dev_printk(const struct device *dev, const char *level,
@@ -273,6 +274,9 @@ void drm_printk(const char *level, unsigned int category,
 #define DRM_DEBUG_VBL(fmt, ...)					\
 	drm_printk(KERN_DEBUG, DRM_UT_VBL, fmt, ##__VA_ARGS__)
 
+#define DRM_DEBUG_LEASE(fmt, ...)					\
+	drm_printk(KERN_DEBUG, DRM_UT_LEASE, fmt, ##__VA_ARGS__)
+
 #define _DRM_DEV_DEFINE_DEBUG_RATELIMITED(dev, level, fmt, args...)	\
 ({									\
 	static DEFINE_RATELIMIT_STATE(_rs,				\
@@ -361,6 +365,7 @@ struct drm_ioctl_desc {
 /* Event queued up for userspace to read */
 struct drm_pending_event {
 	struct completion *completion;
+	void (*completion_release)(struct completion *completion);
 	struct drm_event *event;
 	struct fence *fence;
 	struct list_head link;
@@ -775,6 +780,7 @@ struct drm_device {
 	struct drm_minor *control;		/**< Control node */
 	struct drm_minor *primary;		/**< Primary node */
 	struct drm_minor *render;		/**< Render node */
+	bool registered;
 
 	/* currently active master for this device. Protected by master_mutex */
 	struct drm_master *master;

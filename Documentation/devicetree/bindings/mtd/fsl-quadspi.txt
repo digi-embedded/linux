@@ -40,16 +40,6 @@ Optional properties:
   If you set the "spi-nor,ddr-quad-read-dummy", it means you enable the DDR
   quad read feature for the driver.
 
-Part II - The DT nodes for each SPI NOR flash
-------------------------------
-Required properties:
-- spi-max-frequency : Maximum frequency of the SPI bus the chip can operate at
-
-Optional properties:
-  Please refer to the Documentation/devicetree/bindings/mtd/spi-nor-flash.txt
-  If you set the "spi-nor,ddr-quad-read-dummy", it means you enable the DDR
-  quad read feature for the driver.
-
 Example:
 
 qspi0: quadspi@40044000 {

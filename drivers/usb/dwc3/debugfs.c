@@ -319,7 +319,6 @@ static ssize_t dwc3_mode_write(struct file *file,
 {
 	struct seq_file		*s = file->private_data;
 	struct dwc3		*dwc = s->private;
-	unsigned long		flags;
 	u32			mode = 0;
 	char			buf[32];
 
@@ -327,19 +326,16 @@ static ssize_t dwc3_mode_write(struct file *file,
 		return -EFAULT;
 
 	if (!strncmp(buf, "host", 4))
-		mode |= DWC3_GCTL_PRTCAP_HOST;
+		mode = DWC3_GCTL_PRTCAP_HOST;
 
 	if (!strncmp(buf, "device", 6))
-		mode |= DWC3_GCTL_PRTCAP_DEVICE;
+		mode = DWC3_GCTL_PRTCAP_DEVICE;
 
 	if (!strncmp(buf, "otg", 3))
-		mode |= DWC3_GCTL_PRTCAP_OTG;
+		mode = DWC3_GCTL_PRTCAP_OTG;
 
-	if (mode) {
-		spin_lock_irqsave(&dwc->lock, flags);
-		dwc3_set_mode(dwc, mode);
-		spin_unlock_irqrestore(&dwc->lock, flags);
-	}
+	dwc3_set_mode(dwc, mode);
+
 	return count;
 }
 

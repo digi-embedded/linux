@@ -35,10 +35,6 @@
 static int sdhci_pci_enable_dma(struct sdhci_host *host);
 static void sdhci_pci_set_bus_width(struct sdhci_host *host, int width);
 static void sdhci_pci_hw_reset(struct sdhci_host *host);
-static int sdhci_pci_select_drive_strength(struct sdhci_host *host,
-					   struct mmc_card *card,
-					   unsigned int max_dtr, int host_drv,
-					   int card_drv, int *drv_type);
 
 /*****************************************************************************\
  *                                                                           *
@@ -412,6 +408,8 @@ static void sdhci_intel_set_power(struct sdhci_host *host, unsigned char mode,
 	if (mode == MMC_POWER_OFF)
 		return;
 
+	spin_unlock_irq(&host->lock);
+
 	/*
 	 * Bus power might not enable after D3 -> D0 transition due to the
 	 * present state not yet having propagated. Retry for up to 2ms.
@@ -424,6 +422,8 @@ static void sdhci_intel_set_power(struct sdhci_host *host, unsigned char mode,
 		reg |= SDHCI_POWER_ON;
 		sdhci_writeb(host, reg, SDHCI_POWER_CONTROL);
 	}
+
+	spin_lock_irq(&host->lock);
 }
 
 static const struct sdhci_ops sdhci_intel_byt_ops = {
@@ -434,7 +434,6 @@ static const struct sdhci_ops sdhci_intel_byt_ops = {
 	.reset			= sdhci_reset,
 	.set_uhs_signaling	= sdhci_set_uhs_signaling,
 	.hw_reset		= sdhci_pci_hw_reset,
-	.select_drive_strength	= sdhci_pci_select_drive_strength,
 };
 
 static const struct sdhci_pci_fixes sdhci_intel_byt_emmc = {
@@ -1445,20 +1444,6 @@ static void sdhci_pci_hw_reset(struct sdhci_host *host)
 		slot->hw_reset(host);
 }
 
-static int sdhci_pci_select_drive_strength(struct sdhci_host *host,
-					   struct mmc_card *card,
-					   unsigned int max_dtr, int host_drv,
-					   int card_drv, int *drv_type)
-{
-	struct sdhci_pci_slot *slot = sdhci_priv(host);
-
-	if (!slot->select_drive_strength)
-		return 0;
-
-	return slot->select_drive_strength(host, card, max_dtr, host_drv,
-					   card_drv, drv_type);
-}
-
 static const struct sdhci_ops sdhci_pci_ops = {
 	.set_clock	= sdhci_set_clock,
 	.enable_dma	= sdhci_pci_enable_dma,
@@ -1466,7 +1451,6 @@ static const struct sdhci_ops sdhci_pci_ops = {
 	.reset		= sdhci_reset,
 	.set_uhs_signaling = sdhci_set_uhs_signaling,
 	.hw_reset		= sdhci_pci_hw_reset,
-	.select_drive_strength	= sdhci_pci_select_drive_strength,
 };
 
 /*****************************************************************************\
@@ -1481,6 +1465,7 @@ static int sdhci_pci_suspend(struct device *dev)
 	struct pci_dev *pdev = to_pci_dev(dev);
 	struct sdhci_pci_chip *chip;
 	struct sdhci_pci_slot *slot;
+	struct sdhci_host *host;
 	mmc_pm_flag_t slot_pm_flags;
 	mmc_pm_flag_t pm_flags = 0;
 	int i, ret;
@@ -1494,14 +1479,19 @@ static int sdhci_pci_suspend(struct device *dev)
 		if (!slot)
 			continue;
 
-		ret = sdhci_suspend_host(slot->host);
+		host = slot->host;
+
+		if (chip->pm_retune && host->tuning_mode != SDHCI_TUNING_MODE_3)
+			mmc_retune_needed(host->mmc);
+
+		ret = sdhci_suspend_host(host);
 
 		if (ret)
 			goto err_pci_suspend;
 
-		slot_pm_flags = slot->host->mmc->pm_flags;
+		slot_pm_flags = host->mmc->pm_flags;
 		if (slot_pm_flags & MMC_PM_WAKE_SDIO_IRQ)
-			sdhci_enable_irq_wakeups(slot->host);
+			sdhci_enable_irq_wakeups(host);
 
 		pm_flags |= slot_pm_flags;
 	}
@@ -1565,6 +1555,7 @@ static int sdhci_pci_runtime_suspend(struct device *dev)
 	struct pci_dev *pdev = to_pci_dev(dev);
 	struct sdhci_pci_chip *chip;
 	struct sdhci_pci_slot *slot;
+	struct sdhci_host *host;
 	int i, ret;
 
 	chip = pci_get_drvdata(pdev);
@@ -1576,10 +1567,15 @@ static int sdhci_pci_runtime_suspend(struct device *dev)
 		if (!slot)
 			continue;
 
-		ret = sdhci_runtime_suspend_host(slot->host);
+		host = slot->host;
 
+		ret = sdhci_runtime_suspend_host(host);
 		if (ret)
 			goto err_pci_runtime_suspend;
+
+		if (chip->rpm_retune &&
+		    host->tuning_mode != SDHCI_TUNING_MODE_3)
+			mmc_retune_needed(host->mmc);
 	}
 
 	if (chip->fixes && chip->fixes->suspend) {
@@ -1865,6 +1861,8 @@ static int sdhci_pci_probe(struct pci_dev *pdev,
 		chip->allow_runtime_pm = chip->fixes->allow_runtime_pm;
 	}
 	chip->num_slots = slots;
+	chip->pm_retune = true;
+	chip->rpm_retune = true;
 
 	pci_set_drvdata(pdev, chip);
 

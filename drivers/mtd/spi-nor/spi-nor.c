@@ -77,6 +77,7 @@ struct flash_info {
 					 * SPI_NOR_HAS_LOCK.
 					 */
 #define	SPI_NOR_DDR_QUAD_READ	BIT(10)  /* Flash supports DDR Quad Read */
+#define	SPI_NOR_DDR_OCTAL_READ	BIT(11)  /* Flash supports DDR Octal Read */
 };
 
 #define JEDEC_MFR(info)	((info)->id[0])
@@ -149,6 +150,7 @@ static inline int spi_nor_read_dummy_cycles(struct spi_nor *nor)
 {
 	switch (nor->flash_read) {
 	case SPI_NOR_DDR_QUAD:
+	case SPI_NOR_DDR_OCTAL:
 	{
 		struct device_node *np = spi_nor_get_flash_node(nor);
 		u32 dummy;
@@ -166,6 +168,7 @@ static inline int spi_nor_read_dummy_cycles(struct spi_nor *nor)
 	case SPI_NOR_FAST:
 	case SPI_NOR_DUAL:
 	case SPI_NOR_QUAD:
+	case SPI_NOR_OCTAL:
 		return 8;
 	case SPI_NOR_NORMAL:
 		return 0;
@@ -215,6 +218,7 @@ static inline int set_4byte(struct spi_nor *nor, const struct flash_info *info,
 
 	switch (JEDEC_MFR(info)) {
 	case SNOR_MFR_MICRON:
+	case SNOR_MFR_MICRONO:
 		/* Some Micron need WREN command; all will accept it */
 		need_wren = true;
 	case SNOR_MFR_MACRONIX:
@@ -907,6 +911,7 @@ static const struct flash_info spi_nor_ids[] = {
 	{ "n25q512ax3",  INFO(0x20ba20, 0, 64 * 1024, 1024, SECT_4K | USE_FSR | SPI_NOR_QUAD_READ) },
 	{ "n25q00",      INFO(0x20ba21, 0, 64 * 1024, 2048, SECT_4K | USE_FSR | SPI_NOR_QUAD_READ) },
 	{ "n25q00a",     INFO(0x20bb21, 0, 64 * 1024, 2048, SECT_4K | USE_FSR | SPI_NOR_QUAD_READ) },
+	{"mt35xu512aba", INFO(0x2c5b1a, 0, 128 * 1024, 512, SECT_4K | SPI_NOR_DDR_OCTAL_READ) },
 
 	/* PMC */
 	{ "pm25lv512",   INFO(0,        0, 32 * 1024,    2, SECT_4K_PMC) },
@@ -1272,6 +1277,13 @@ static int spansion_quad_enable(struct spi_nor *nor)
 		return -EINVAL;
 	}
 
+	ret = spi_nor_wait_till_ready(nor);
+	if (ret) {
+		dev_err(nor->dev,
+			"timeout while writing configuration register\n");
+		return ret;
+	}
+
 	/* read back and check it */
 	ret = read_cr(nor);
 	if (!(ret > 0 && (ret & CR_QUAD_EN_SPAN))) {
@@ -1304,6 +1316,7 @@ static int set_ddr_quad_mode(struct spi_nor *nor, const struct flash_info *info)
 		}
 		return status;
 	case CFI_MFR_ST: /* Micron, actually */
+	case CFI_MFR_MICRON: /* Original Micron */
 		/* DTR quad read works with the Extended SPI protocol. */
 		return 0;
 	default:
@@ -1324,6 +1337,7 @@ static int set_quad_mode(struct spi_nor *nor, const struct flash_info *info)
 		}
 		return status;
 	case SNOR_MFR_MICRON:
+	case SNOR_MFR_MICRONO:
 		return 0;
 	default:
 		status = spansion_quad_enable(nor);
@@ -1418,7 +1432,7 @@ int spi_nor_scan(struct spi_nor *nor, const char *name, enum read_mode mode)
 	mtd->_read = spi_nor_read;
 
 	/* NOR protection support for STmicro/Micron chips and similar */
-	if (JEDEC_MFR(info) == SNOR_MFR_MICRON ||
+	if (JEDEC_MFR(info) == SNOR_MFR_MICRON || SNOR_MFR_MICRONO ||
 			info->flags & SPI_NOR_HAS_LOCK) {
 		nor->flash_lock = stm_lock;
 		nor->flash_unlock = stm_unlock;
@@ -1479,8 +1493,11 @@ int spi_nor_scan(struct spi_nor *nor, const char *name, enum read_mode mode)
 	if (info->flags & SPI_NOR_NO_FR)
 		nor->flash_read = SPI_NOR_NORMAL;
 
-	/* DDR Quad/Quad/Dual-read mode takes precedence over fast/normal */
-	if (mode == SPI_NOR_DDR_QUAD && info->flags & SPI_NOR_DDR_QUAD_READ) {
+	/* DDR Octal/Quad/Dual-read mode takes precedence over fast/normal */
+	if (mode == SPI_NOR_DDR_OCTAL && info->flags & SPI_NOR_DDR_OCTAL_READ) {
+		nor->flash_read = SPI_NOR_DDR_OCTAL;
+	} else if (mode == SPI_NOR_DDR_QUAD &&
+		   info->flags & SPI_NOR_DDR_QUAD_READ) {
 		ret = set_ddr_quad_mode(nor, info);
 		if (ret) {
 			dev_err(dev, "DDR quad mode not supported\n");
@@ -1500,10 +1517,15 @@ int spi_nor_scan(struct spi_nor *nor, const char *name, enum read_mode mode)
 
 	/* Default commands */
 	switch (nor->flash_read) {
+	case SPI_NOR_DDR_OCTAL:
+		nor->read_opcode = SPINOR_OP_READ_1_1_8_D;
+		break;
 	case SPI_NOR_DDR_QUAD:
 		if (JEDEC_MFR(info) == CFI_MFR_AMD) { /* Spansion */
 			nor->read_opcode = SPINOR_OP_READ_1_4_4_D;
 		} else if (JEDEC_MFR(info) == CFI_MFR_ST) {
+			nor->read_opcode = SPINOR_OP_READ_1_1_4_D;
+		} else if (JEDEC_MFR(info) == CFI_MFR_MICRON) {
 			nor->read_opcode = SPINOR_OP_READ_1_1_4_D;
 		} else if (JEDEC_MFR(info) == CFI_MFR_MACRONIX) {
 			nor->read_opcode = SPINOR_OP_READ_1_4_4_D;
@@ -1539,6 +1561,10 @@ int spi_nor_scan(struct spi_nor *nor, const char *name, enum read_mode mode)
 		if (JEDEC_MFR(info) == SNOR_MFR_SPANSION) {
 			/* Dedicated 4-byte command set */
 			switch (nor->flash_read) {
+			case SPI_NOR_DDR_OCTAL:
+			case SPI_NOR_OCTAL:
+				nor->read_opcode = SPINOR_OP_READ_1_1_8_D;
+				break;
 			case SPI_NOR_DDR_QUAD:
 				nor->read_opcode = SPINOR_OP_READ4_1_4_4_D;
 				break;

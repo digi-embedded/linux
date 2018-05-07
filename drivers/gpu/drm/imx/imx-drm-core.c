@@ -15,10 +15,8 @@
  */
 #include <linux/component.h>
 #include <linux/device.h>
-#include <linux/dma-buf.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
-#include <linux/reservation.h>
 #include <drm/drmP.h>
 #include <drm/drm_atomic.h>
 #include <drm/drm_atomic_helper.h>
@@ -29,22 +27,14 @@
 #include <drm/drm_plane_helper.h>
 #include <drm/drm_of.h>
 #include <video/imx-ipu-v3.h>
+#include <video/dpu.h>
+#include <video/imx-dcss.h>
 
 #include "imx-drm.h"
-
-#define MAX_CRTC	4
 
 struct imx_drm_component {
 	struct device_node *of_node;
 	struct list_head list;
-};
-
-struct imx_drm_device {
-	struct drm_device			*drm;
-	struct imx_drm_crtc			*crtc[MAX_CRTC];
-	unsigned int				pipes;
-	struct drm_fbdev_cma			*fbhelper;
-	struct drm_atomic_state			*state;
 };
 
 struct imx_drm_crtc {
@@ -101,6 +91,9 @@ static const struct file_operations imx_drm_driver_fops = {
 	.open = drm_open,
 	.release = drm_release,
 	.unlocked_ioctl = drm_ioctl,
+#ifdef CONFIG_COMPAT
+	.compat_ioctl = drm_compat_ioctl,
+#endif
 	.mmap = drm_gem_cma_mmap,
 	.poll = drm_poll,
 	.read = drm_read,
@@ -119,94 +112,6 @@ void imx_drm_encoder_destroy(struct drm_encoder *encoder)
 	drm_encoder_cleanup(encoder);
 }
 EXPORT_SYMBOL_GPL(imx_drm_encoder_destroy);
-
-static void imx_drm_output_poll_changed(struct drm_device *drm)
-{
-	struct imx_drm_device *imxdrm = drm->dev_private;
-
-	drm_fbdev_cma_hotplug_event(imxdrm->fbhelper);
-}
-
-static int imx_drm_atomic_check(struct drm_device *dev,
-				struct drm_atomic_state *state)
-{
-	int ret;
-
-	ret = drm_atomic_helper_check_modeset(dev, state);
-	if (ret)
-		return ret;
-
-	ret = drm_atomic_helper_check_planes(dev, state);
-	if (ret)
-		return ret;
-
-	/*
-	 * Check modeset again in case crtc_state->mode_changed is
-	 * updated in plane's ->atomic_check callback.
-	 */
-	ret = drm_atomic_helper_check_modeset(dev, state);
-	if (ret)
-		return ret;
-
-	return ret;
-}
-
-static int imx_drm_atomic_commit(struct drm_device *dev,
-				 struct drm_atomic_state *state,
-				 bool nonblock)
-{
-	struct drm_plane_state *plane_state;
-	struct drm_plane *plane;
-	struct dma_buf *dma_buf;
-	int i;
-
-	/*
-	 * If the plane fb has an dma-buf attached, fish out the exclusive
-	 * fence for the atomic helper to wait on.
-	 */
-	for_each_plane_in_state(state, plane, plane_state, i) {
-		if ((plane->state->fb != plane_state->fb) && plane_state->fb) {
-			dma_buf = drm_fb_cma_get_gem_obj(plane_state->fb,
-							 0)->base.dma_buf;
-			if (!dma_buf)
-				continue;
-			plane_state->fence =
-				reservation_object_get_excl_rcu(dma_buf->resv);
-		}
-	}
-
-	return drm_atomic_helper_commit(dev, state, nonblock);
-}
-
-static const struct drm_mode_config_funcs imx_drm_mode_config_funcs = {
-	.fb_create = drm_fb_cma_create,
-	.output_poll_changed = imx_drm_output_poll_changed,
-	.atomic_check = imx_drm_atomic_check,
-	.atomic_commit = imx_drm_atomic_commit,
-};
-
-static void imx_drm_atomic_commit_tail(struct drm_atomic_state *state)
-{
-	struct drm_device *dev = state->dev;
-
-	drm_atomic_helper_commit_modeset_disables(dev, state);
-
-	drm_atomic_helper_commit_planes(dev, state,
-				DRM_PLANE_COMMIT_ACTIVE_ONLY |
-				DRM_PLANE_COMMIT_NO_DISABLE_AFTER_MODESET);
-
-	drm_atomic_helper_commit_modeset_enables(dev, state);
-
-	drm_atomic_helper_commit_hw_done(state);
-
-	drm_atomic_helper_wait_for_vblanks(dev, state);
-
-	drm_atomic_helper_cleanup_planes(dev, state);
-}
-
-static struct drm_mode_config_helper_funcs imx_drm_mode_config_helpers = {
-	.atomic_commit_tail = imx_drm_atomic_commit_tail,
-};
 
 /*
  * imx_drm_add_crtc - add a new crtc
@@ -339,6 +244,21 @@ static int compare_of(struct device *dev, void *data)
 		struct ipu_client_platformdata *pdata = dev->platform_data;
 
 		return pdata->of_node == np;
+	} else if (strcmp(dev->driver->name, "imx-dpu-crtc") == 0) {
+		struct dpu_client_platformdata *pdata = dev->platform_data;
+
+		return pdata->of_node == np;
+	}  else if (strcmp(dev->driver->name, "imx-dcss-crtc") == 0) {
+		struct dcss_client_platformdata *pdata = dev->platform_data;
+
+		return pdata->of_node == np;
+	}
+
+	/* This is a special case for dpu bliteng. */
+	if (strcmp(dev->driver->name, "imx-drm-dpu-bliteng") == 0) {
+		struct dpu_client_platformdata *pdata = dev->platform_data;
+
+		return pdata->of_node == np;
 	}
 
 	/* Special case for LDB, one device for two channels */
@@ -350,11 +270,114 @@ static int compare_of(struct device *dev, void *data)
 	return dev->of_node == np;
 }
 
+static const char *const imx_drm_dpu_comp_parents[] = {
+	"fsl,imx8qm-dpu",
+	"fsl,imx8qxp-dpu",
+};
+
+static const char *const imx_drm_dcss_comp_parents[] = {
+	"nxp,imx8mq-dcss",
+};
+
+static bool imx_drm_parent_is_compatible(struct device *dev,
+					 const char *const comp_parents[],
+					 int comp_parents_size)
+{
+	struct device_node *port, *parent;
+	bool ret = false;
+	int i;
+
+	port = of_parse_phandle(dev->of_node, "ports", 0);
+	if (!port)
+		return ret;
+
+	parent = of_get_parent(port);
+
+	for (i = 0; i < comp_parents_size; i++) {
+		if (of_device_is_compatible(parent, comp_parents[i])) {
+			ret = true;
+			break;
+		}
+	}
+
+	of_node_put(parent);
+
+	of_node_put(port);
+
+	return ret;
+}
+
+static inline bool has_dpu(struct device *dev)
+{
+	return imx_drm_parent_is_compatible(dev, imx_drm_dpu_comp_parents,
+					ARRAY_SIZE(imx_drm_dpu_comp_parents));
+}
+
+static inline bool has_dcss(struct device *dev)
+{
+	return imx_drm_parent_is_compatible(dev, imx_drm_dcss_comp_parents,
+					ARRAY_SIZE(imx_drm_dcss_comp_parents));
+}
+
+static void add_dpu_bliteng_components(struct device *dev,
+				       struct component_match **matchptr)
+{
+	/*
+	 * As there may be two dpu bliteng device,
+	 * so need add something in compare data to distinguish.
+	 * Use its parent dpu's of_node as the data here.
+	 */
+	struct device_node *port, *parent;
+	/* assume max dpu number is 8 */
+	struct device_node *dpu[8];
+	int num_dpu = 0;
+	int i, j;
+	bool found = false;
+
+	for (i = 0; ; i++) {
+		port = of_parse_phandle(dev->of_node, "ports", i);
+		if (!port)
+			break;
+
+		parent = of_get_parent(port);
+
+		for (j = 0; j < num_dpu; j++) {
+			if (dpu[j] == parent) {
+				found = true;
+				break;
+			}
+		}
+
+		if (found) {
+			found = false;
+		} else {
+			if (num_dpu >= ARRAY_SIZE(dpu)) {
+				dev_err(dev, "The number of found dpu is greater than max [%ld].\n",
+					ARRAY_SIZE(dpu));
+				of_node_put(parent);
+				of_node_put(port);
+				break;
+			}
+
+			dpu[num_dpu] = parent;
+			num_dpu++;
+
+			component_match_add(dev, matchptr, compare_of, parent);
+		}
+
+		of_node_put(parent);
+		of_node_put(port);
+	}
+}
+
 static int imx_drm_bind(struct device *dev)
 {
 	struct drm_device *drm;
 	struct imx_drm_device *imxdrm;
 	int ret;
+
+	if (has_dpu(dev))
+		imx_drm_driver.driver_features |= DRIVER_RENDER;
 
 	drm = drm_dev_alloc(&imx_drm_driver, dev);
 	if (IS_ERR(drm))
@@ -389,8 +412,11 @@ static int imx_drm_bind(struct device *dev)
 	drm->mode_config.min_height = 64;
 	drm->mode_config.max_width = 4096;
 	drm->mode_config.max_height = 4096;
-	drm->mode_config.funcs = &imx_drm_mode_config_funcs;
-	drm->mode_config.helper_private = &imx_drm_mode_config_helpers;
+
+	if (has_dpu(dev)) {
+		drm->mode_config.allow_fb_modifiers = true;
+		dev_dbg(dev, "allow fb modifiers\n");
+	}
 
 	drm_mode_config_init(drm);
 
@@ -417,6 +443,10 @@ static int imx_drm_bind(struct device *dev)
 		dev_warn(dev, "Invalid legacyfb_depth.  Defaulting to 16bpp\n");
 		legacyfb_depth = 16;
 	}
+
+	if (legacyfb_depth == 16 && has_dcss(dev))
+		legacyfb_depth = 32;
+
 	imxdrm->fbhelper = drm_fbdev_cma_init(drm, legacyfb_depth,
 				drm->mode_config.num_crtc, MAX_CRTC);
 	if (IS_ERR(imxdrm->fbhelper)) {
@@ -443,6 +473,7 @@ err_unbind:
 #endif
 	component_unbind_all(drm->dev, drm);
 err_vblank:
+	dev_set_drvdata(dev, NULL);
 	drm_vblank_cleanup(drm);
 err_kms:
 	drm_mode_config_cleanup(drm);
@@ -456,6 +487,9 @@ static void imx_drm_unbind(struct device *dev)
 {
 	struct drm_device *drm = dev_get_drvdata(dev);
 	struct imx_drm_device *imxdrm = drm->dev_private;
+
+	if (has_dpu(dev))
+		imx_drm_driver.driver_features &= ~DRIVER_RENDER;
 
 	drm_dev_unregister(drm);
 
@@ -479,7 +513,14 @@ static const struct component_master_ops imx_drm_ops = {
 
 static int imx_drm_platform_probe(struct platform_device *pdev)
 {
-	int ret = drm_of_component_probe(&pdev->dev, compare_of, &imx_drm_ops);
+	struct component_match *match = NULL;
+	int ret;
+
+	if (has_dpu(&pdev->dev))
+		add_dpu_bliteng_components(&pdev->dev, &match);
+
+	ret = drm_of_component_probe_with_match(&pdev->dev, match, compare_of,
+						&imx_drm_ops);
 
 	if (!ret)
 		ret = dma_set_coherent_mask(&pdev->dev, DMA_BIT_MASK(32));

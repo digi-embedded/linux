@@ -10,6 +10,8 @@ Required properties:
 	"fsl,imx6sx-usb"
 	"fsl,imx6ul-usb"
 	"fsl,imx7d-usb"
+	"fsl,imx7ulp-usb"
+	"fsl,imx8qm-usb"
 	"lsi,zevio-usb"
 	"qcom,ci-hdrc"
 	"chipidea,usb2"
@@ -76,6 +78,7 @@ Optional properties:
   needs to make sure it does not send more than 90%
   maximum_periodic_data_per_frame. The use case is multiple transactions, but
   less frame rate.
+- ci-disable-lpm: Some chipidea hardware need to disable low power mode
 
 i.mx specific properties
 - fsl,usbmisc: phandler of non-core register device, with one
@@ -96,7 +99,9 @@ i.mx specific properties
 - osc-clkgate-delay: the delay between powering up the xtal 24MHz clock
   and release the clock to the digital logic inside the analog block,
   0 <= osc-clkgate-delay <= 7.
-- digi,power-line-active-high: Power line signal polarity is active high.
+- power-polarity-active-high: add this property if port power function of ehci
+  is used to enable vbus, and the vbus power supply chip enable signal is high
+  active.
 
 Examples:
 

@@ -14,8 +14,19 @@ config FB_MXC
 	  If you plan to use the LCD display with your MXC system, say
 	  Y here.
 
+config FB_MXC_DISP_FRAMEWORK
+	tristate "Display driver framework"
+	help
+	  This is a framework that helps with registration and data handling
+	  between fb drivers and display drivers.
+
+	  It is selected by drivers which use this framework as linkage code
+	  between display controllers and panels.
+
 config FB_MXC_SYNC_PANEL
-	depends on FB_MXC
+	depends on FB_MXC && !FB_IMX64
+	depends on MXC_IPU_V3
+	select FB_MXC_DISP_FRAMEWORK
 	tristate "Synchronous Panel Framebuffer"
 
 config FB_MXC_OVERLAY
@@ -37,22 +48,22 @@ config FB_MXC_MIPI_DSI_SAMSUNG
 
 config FB_MXC_MIPI_DSI_NORTHWEST
 	tristate "MXC MIPI_DSI_NORTHWEST"
-	depends on FB_MXC_SYNC_PANEL
+	depends on FB_MXC_DISP_FRAMEWORK || FB_MXC_SYNC_PANEL
 	depends on FB_MXS
 
 config FB_MXC_TRULY_WVGA_SYNC_PANEL
 	tristate "TRULY WVGA Panel"
-	depends on FB_MXC_SYNC_PANEL
+	depends on FB_MXC_DISP_FRAMEWORK || FB_MXC_SYNC_PANEL
 	depends on FB_MXC_MIPI_DSI || FB_MXC_MIPI_DSI_SAMSUNG || FB_MXC_MIPI_DSI_NORTHWEST
 
 config FB_MXC_TRULY_PANEL_TFT3P5079E
 	tristate "TRULY Panel TFT3P5079E"
-	depends on FB_MXC_SYNC_PANEL
+	depends on FB_MXC_DISP_FRAMEWORK || FB_MXC_SYNC_PANEL
 	depends on FB_MXC_MIPI_DSI_SAMSUNG
 
 config FB_MXC_TRULY_PANEL_TFT3P5581E
 	tristate "TRULY Panel TFT3P5581E"
-	depends on FB_MXC_SYNC_PANEL
+	depends on FB_MXC_DISP_FRAMEWORK || FB_MXC_SYNC_PANEL
 	depends on FB_MXC_MIPI_DSI_SAMSUNG || FB_MXC_MIPI_DSI_NORTHWEST
 
 config FB_MXC_LDB
@@ -70,19 +81,19 @@ config FB_MXC_HDMI
 	help
 	  Driver for the on-chip MXC HDMI controller.
 
+config FB_MX8_HDMI
+	tristate "IMX 8 SOC HDMI"
+	depends on FB_IMX64
+	depends on FB_MXC_DISP_FRAMEWORK
+	select MX8_HDP_HDMI
+	help
+	  Candece HDMI driver which includes
+	  core and PHY management.
+
 config FB_MXC_EDID
      depends on FB_MXC && I2C
      tristate "MXC EDID support"
      default y
-
-config FB_MXC_AD9389
-	depends on I2C
-	tristate "AD9389/AD9889 HDMI/DVI transmitter support."
-	help
-	  Driver for the AD9389/AD9889 HDMI/DVI video transmitter.
-
-	  To compile this driver as a module choose M here. The module
-	  will be called ad9389.
 
 config FB_MXS_SII902X
 	tristate "Si Image SII9022 DVI/HDMI Interface Chip"
@@ -97,6 +108,7 @@ config FB_MXC_DCIC
 config FB_MXC_ADV7535
 	tristate "ADI ADV7535 support"
 	depends on I2C
+	depends on FB_MXC_MIPI_DSI || FB_MXC_MIPI_DSI_NORTHWEST
 	help
 	  Driver support for the ADV7535 DSI-to-HDMI module
 
@@ -123,3 +135,11 @@ config FB_MXC_EINK_V2_PANEL
 config FB_MXC_EINK_AUTO_UPDATE_MODE
 	bool "E-Ink Auto-update Mode Support"
 	depends on FB_MXC_EINK_PANEL
+
+config FB_DCSS
+	tristate "DCSS multi-layer framebuffer support"
+	depends on FB_MXC && ARCH_FSL_IMX8MQ
+	default y
+	help
+	  Framebuffer support the DCSS controller in imx8mq platform.
+	  DCSS support 3 layer compsition.

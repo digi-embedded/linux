@@ -8,6 +8,9 @@ Required properties:
     on LS1021A SoC with 32-bit big-endian register organization
   - "fsl,imx7ulp-lpuart" for lpuart  compatible with the one integrated
     on i.MX7ULP SoC with 32-bit little-endian register organization
+  - "fsl,imx8qm-lpuart"for lpuart  compatible with the one integrated
+    on i.MX8QM SoC with 32-bit little-endian register organization, which
+    is based on i.MX7ULP lpuart IP but add EEOP new feature.
 - reg : Address and length of the register set for the device
 - interrupts : Should contain uart interrupt
 - clocks : phandle + clock specifier pairs, one for each entry in clock-names

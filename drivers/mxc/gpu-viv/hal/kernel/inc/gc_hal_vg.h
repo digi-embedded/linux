@@ -384,7 +384,8 @@ gckKERNEL_UnmapMemory(
     IN gckKERNEL Kernel,
     IN gctPHYS_ADDR Physical,
     IN gctSIZE_T Bytes,
-    IN gctPOINTER Logical
+    IN gctPOINTER Logical,
+    IN gctUINT32 ProcessID
     );
 
 /* Dispatch a user-level command. */
@@ -466,6 +467,7 @@ gckVGHARDWARE_QueryChipIdentity(
     OUT gctUINT32* ChipRevision,
     OUT gctUINT32* ProductID,
     OUT gctUINT32* EcoID,
+    OUT gctUINT32* CustomerID,
     OUT gctUINT32* ChipFeatures,
     OUT gctUINT32* ChipMinorFeatures,
     OUT gctUINT32* ChipMinorFeatures1

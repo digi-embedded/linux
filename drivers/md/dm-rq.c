@@ -319,7 +319,7 @@ static void dm_unprep_request(struct request *rq)
 
 	if (!rq->q->mq_ops) {
 		rq->special = NULL;
-		rq->cmd_flags &= ~REQ_DONTPREP;
+		rq->rq_flags &= ~RQF_DONTPREP;
 	}
 
 	if (clone)
@@ -437,7 +437,7 @@ static void dm_softirq_done(struct request *rq)
 		return;
 	}
 
-	if (rq->cmd_flags & REQ_FAILED)
+	if (rq->rq_flags & RQF_FAILED)
 		mapped = false;
 
 	dm_done(clone, tio->error, mapped);
@@ -466,7 +466,7 @@ static void dm_complete_request(struct request *rq, int error)
  */
 static void dm_kill_unmapped_request(struct request *rq, int error)
 {
-	rq->cmd_flags |= REQ_FAILED;
+	rq->rq_flags |= RQF_FAILED;
 	dm_complete_request(rq, error);
 }
 
@@ -482,7 +482,7 @@ static void end_clone_request(struct request *clone, int error)
 		 * For just cleaning up the information of the queue in which
 		 * the clone was dispatched.
 		 * The clone is *NOT* freed actually here because it is alloced
-		 * from dm own mempool (REQ_ALLOCED isn't set).
+		 * from dm own mempool (RQF_ALLOCED isn't set).
 		 */
 		__blk_put_request(clone->q, clone);
 	}
@@ -503,7 +503,7 @@ static void dm_dispatch_clone_request(struct request *clone, struct request *rq)
 	int r;
 
 	if (blk_queue_io_stat(clone->q))
-		clone->cmd_flags |= REQ_IO_STAT;
+		clone->rq_flags |= RQF_IO_STAT;
 
 	clone->start_time = jiffies;
 	r = blk_insert_cloned_request(clone->q, clone);
@@ -639,7 +639,7 @@ static int dm_old_prep_fn(struct request_queue *q, struct request *rq)
 		return BLKPREP_DEFER;
 
 	rq->special = tio;
-	rq->cmd_flags |= REQ_DONTPREP;
+	rq->rq_flags |= RQF_DONTPREP;
 
 	return BLKPREP_OK;
 }
@@ -852,7 +852,8 @@ static void dm_old_request_fn(struct request_queue *q)
 int dm_old_init_request_queue(struct mapped_device *md)
 {
 	/* Fully initialize the queue */
-	if (!blk_init_allocated_queue(md->queue, dm_old_request_fn, NULL))
+	md->queue->request_fn = dm_old_request_fn;
+	if (blk_init_allocated_queue(md->queue) < 0)
 		return -EINVAL;
 
 	/* disable dm_old_request_fn's merge heuristic by default */
@@ -997,10 +998,14 @@ int dm_mq_init_request_queue(struct mapped_device *md, struct dm_table *t)
 	dm_init_md_queue(md);
 
 	/* backfill 'mq' sysfs registration normally done in blk_register_queue */
-	blk_mq_register_dev(disk_to_dev(md->disk), q);
+	err = blk_mq_register_dev(disk_to_dev(md->disk), q);
+	if (err)
+		goto out_cleanup_queue;
 
 	return 0;
 
+out_cleanup_queue:
+	blk_cleanup_queue(q);
 out_tag_set:
 	blk_mq_free_tag_set(md->tag_set);
 out_kfree_tag_set:

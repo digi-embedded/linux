@@ -1,8 +1,9 @@
 /*
  * Freescale UUT driver
  *
- * Copyright 2008-2014 Freescale Semiconductor, Inc.
+ * Copyright 2008-2016 Freescale Semiconductor, Inc.
  * Copyright 2008-2009 Embedded Alley Solutions, Inc All Rights Reserved.
+ * Copyright 2017 NXP
  */
 
 /*
@@ -13,6 +14,21 @@
  * http://www.opensource.org/licenses/gpl-license.html
  * http://www.gnu.org/copyleft/gpl.html
  */
+
+static bool is_utp_device(struct fsg_dev *fsg)
+{
+	struct usb_device_descriptor *pdesc;
+
+	if (!fsg || !fsg->common || !fsg->common->cdev)
+		return false;
+
+	pdesc = &fsg->common->cdev->desc;
+	if (pdesc->idVendor == UTP_IDVENDOR &&
+		pdesc->idProduct == UTP_IDPRODUCT)
+		return true;
+
+	return false;
+}
 
 static u64 get_be64(u8 *buf)
 {
@@ -109,12 +125,12 @@ static ssize_t utp_file_read(struct file *file,
 	if (free)
 		utp_user_data_free(uud);
 	else {
-		pr_info("sizeof = %d, size = %d\n",
+		pr_info("sizeof = %zd, size = %zd\n",
 			sizeof(uud->data),
 			uud->data.size);
 
-		pr_err("Will not free utp_user_data, because buffer size = %d,"
-			"need to put %d\n", size, size_to_put);
+		pr_err("Will not free utp_user_data, because buffer size = %zd need to put %zd\n",
+					size, size_to_put);
 	}
 
 	/*
@@ -191,7 +207,7 @@ static int utp_do_read(struct fsg_dev *fsg, void *data, size_t size)
 	if (unlikely(amount_left == 0))
 		return -EIO;		/* No default reply*/
 
-	pr_debug("%s: sending %d\n", __func__, size);
+	pr_debug("%s: sending %zd\n", __func__, size);
 	for (;;) {
 		/* Figure out how much we need to read:
 		 * Try to read the remaining amount.
@@ -220,7 +236,7 @@ static int utp_do_read(struct fsg_dev *fsg, void *data, size_t size)
 		}
 
 		/* Perform the read */
-		pr_info("Copied to %p, %d bytes started from %d\n",
+		pr_info("Copied to %p, %d bytes started from %zd\n",
 				bh->buf, amount, size - amount_left);
 		/* from upt buffer to file_storeage buffer */
 		memcpy(bh->buf, data + size - amount_left, amount);
@@ -293,8 +309,7 @@ static int utp_do_write(struct fsg_dev *fsg, void *data, size_t size)
 
 			/* amount is always divisible by 512, hence by
 			 * the bulk-out maxpacket size */
-			bh->outreq->length = bh->bulk_out_intended_length =
-					amount;
+			set_bulk_out_req_length(fsg->common, bh, amount);
 			bh->outreq->short_not_ok = 1;
 			start_transfer(fsg, fsg->bulk_out, bh->outreq,
 					&bh->outreq_busy, &bh->state);
@@ -431,6 +446,10 @@ static int utp_exec(struct fsg_dev *fsg,
 		if (uud->data.flags & UTP_FLAG_REPORT_BUSY)
 			pr_info("\tBUSY\n");
 #endif
+	} else {
+		pr_err("UTP write list is empty.\n");
+		mutex_unlock(&ctx->lock);
+		return 0;
 	}
 	mutex_unlock(&ctx->lock);
 

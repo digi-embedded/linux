@@ -1,5 +1,5 @@
 config BCMDHD
-	tristate "Broadcom FullMAC wireless cards support"
+	tristate "Broadcom FullMAC wireless cards support v1.141"
 	---help---
 	  This module adds support for wireless adapters based on
 	  Broadcom FullMAC chipset.
@@ -10,10 +10,6 @@ config BCMDHD
 config BCMDHD_SDIO
 	tristate "SDIO bus interface support"
 	depends on BCMDHD && MMC
-
-config BCMDHD_PCIE
-	bool "PCIe bus interface support"
-	depends on BCMDHD && PCI && !BCMDHD_SDIO
 
 config BCM4339
 	tristate "BCM4339 support"

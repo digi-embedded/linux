@@ -1,6 +1,7 @@
 =====================================================================
 SEC 4 Device Tree Binding
 Copyright (C) 2008-2011 Freescale Semiconductor Inc.
+Copyright 2017 NXP
 
  CONTENTS
    -Overview
@@ -10,6 +11,7 @@ Copyright (C) 2008-2011 Freescale Semiconductor Inc.
    -Run Time Integrity Check (RTIC) Memory Node
    -Secure Non-Volatile Storage (SNVS) Node
    -Secure Non-Volatile Storage (SNVS) Low Power (LP) RTC Node
+   -CAAM Secure Memory Storage Interface
    -Full Example
 
 NOTE: the SEC 4 is also known as Freescale's Cryptographic Accelerator
@@ -118,6 +120,12 @@ PROPERTIES
       Definition: A list of clock name strings in the same order as the
           clocks property.
 
+   - first-jr-index
+      Usage: required only for i.MX8QM and i.MX8QXP
+      Value type: <u32>
+      Definition: Specifies the first job ring index assigned to kernel
+          to read aliased register since CAAM page 0 is not accessible.
+
    Note: All other standard properties (see the ePAPR) are allowed
    but are optional.
 
@@ -137,6 +145,49 @@ EXAMPLE
 			 <&clks IMX6QDL_CLK_CAAM_IPG>,
 			 <&clks IMX6QDL_CLK_EIM_SLOW>;
 		clock-names = "mem", "aclk", "ipg", "emi_slow";
+	};
+
+=====================================================================
+SEC 4 Page 0
+
+Description
+
+    Most of CAAM's configuration registers are accessible in block0
+    of CAAM's register space. These registers are intended to be
+    accessed by specially privileged software (e.g. boot software,
+    hypervisor, secure operating system).
+
+PROPERTIES
+
+   - compatible
+      Usage: required
+      Value type: <string>
+      Definition: Must include "fsl,sec-v4.0-ctrl".
+
+   - reg
+      Usage: required
+      Value type: <prop-encoded-array>
+      Definition: A standard property.  Specifies the physical
+          address and length of the SEC4 configuration registers.
+
+   - secure-status
+      Usage: required
+      Value type: <string>
+      Definition: Must include "okay".
+
+   - status
+      Usage: required
+      Value type: <string>
+      Definition: Must include "disabled".
+
+EXAMPLE
+	sec_ctrl: ctrl@0 {
+		/* CAAM Page 0 only accessible */
+		/*	by secure world */
+		compatible = "fsl,sec-v4.0-ctrl";
+		reg = <0x2100000 0x1000>;
+		secure-status = "okay";
+		status = "disabled";
 	};
 
 =====================================================================
@@ -404,15 +455,6 @@ Secure Non-Volatile Storage (SNVS) Low Power (LP) RTC Node
 	  with snvs LP/HP registers access. The modules involved snvs LP/HP
 	  registers access are snvs-power key, snvs-rtc, and caam.
 
-  - clocks
-      Usage: optional
-      Value type: <prop-encoded-array>
-      Definition: A standard property.  Specifies the source clock for
-	  snvs register access. If i.MX clk driver defines the clock node,
-	  it needs user to specify the clocks in device tree for all modules
-	  with snvs LP/HP registers access. The modules involved snvs LP/HP
-	  registers access are snvs-power key, snvs-rtc, and caam.
-
 EXAMPLE
 	sec_mon_rtc_lp@1 {
 		compatible = "fsl,sec-v4.0-mon-rtc-lp";
@@ -461,6 +503,27 @@ EXAMPLE:
 	        linux,keycode = <116>; /* KEY_POWER */
 		wakeup-source;
 	};
+
+=====================================================================
+CAAM Secure Memory Storage Interface
+
+  A CAAM-SM child node that defines Secure Memory.
+
+  - compatible
+    Usage: required
+    Value type: <string>
+    Definition: Must include "fsl,imx6q-caam-sm".
+
+  - regmap
+    Usage: required
+    Value type: <phandle>
+    Definition: this is phandle to the register map node.
+
+EXAMPLE
+  caam_sm: caam-sm@31800000 {
+    compatible = "fsl,imx6q-caam-sm";
+    reg = <0 0x31800000 0 0x1ffff>;
+  };
 
 =====================================================================
 FULL EXAMPLE
@@ -551,5 +614,10 @@ FULL EXAMPLE
 			wakeup-source;
 		};
 	};
+
+  caam_sm: caam-sm@31800000 {
+    compatible = "fsl,imx6q-caam-sm";
+    reg = <0 0x31800000 0 0x1ffff>;
+  };
 
 =====================================================================

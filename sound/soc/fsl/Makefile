@@ -11,19 +11,25 @@ snd-soc-p1022-rdk-objs := p1022_rdk.o
 obj-$(CONFIG_SND_SOC_P1022_RDK) += snd-soc-p1022-rdk.o
 
 # Freescale SSI/DMA/SAI/SPDIF Support
-snd-soc-fsl-asoc-card-objs := fsl-asoc-card.o
+snd-soc-fsl-acm-objs := fsl_acm.o
+snd-soc-fsl-amix-objs := fsl_amix.o
 snd-soc-fsl-asrc-objs := fsl_asrc.o fsl_asrc_dma.o
+snd-soc-fsl-dma-workaround-objs := fsl_dma_workaround.o
+snd-soc-fsl-hifi4-objs := fsl_hifi4.o
 snd-soc-fsl-sai-objs := fsl_sai.o
 snd-soc-fsl-ssi-y := fsl_ssi.o
 snd-soc-fsl-ssi-$(CONFIG_DEBUG_FS) += fsl_ssi_dbg.o
 snd-soc-fsl-spdif-objs := fsl_spdif.o
-snd-soc-fsl-esai-objs := fsl_esai.o
+snd-soc-fsl-esai-objs := fsl_esai.o fsl_dma_workaround.o
 snd-soc-fsl-utils-objs := fsl_utils.o
 snd-soc-fsl-dma-objs := fsl_dma.o
 snd-soc-fsl-rpmsg-i2s-objs := fsl_rpmsg_i2s.o
-obj-$(CONFIG_SND_SOC_FSL_ASOC_CARD) += snd-soc-fsl-asoc-card.o
 snd-soc-fsl-hdmi-objs := fsl_hdmi.o
+snd-soc-fsl-asoc-card-objs := fsl-asoc-card.o
+obj-$(CONFIG_SND_SOC_FSL_ACM) += snd-soc-fsl-acm.o
+obj-$(CONFIG_SND_SOC_FSL_AMIX) += snd-soc-fsl-amix.o
 obj-$(CONFIG_SND_SOC_FSL_ASRC) += snd-soc-fsl-asrc.o
+obj-$(CONFIG_SND_SOC_FSL_HIFI4) += snd-soc-fsl-hifi4.o
 obj-$(CONFIG_SND_SOC_FSL_SAI) += snd-soc-fsl-sai.o
 obj-$(CONFIG_SND_SOC_FSL_SSI) += snd-soc-fsl-ssi.o
 obj-$(CONFIG_SND_SOC_FSL_SPDIF) += snd-soc-fsl-spdif.o
@@ -32,6 +38,7 @@ obj-$(CONFIG_SND_SOC_FSL_UTILS) += snd-soc-fsl-utils.o
 obj-$(CONFIG_SND_SOC_FSL_HDMI) += snd-soc-fsl-hdmi.o
 obj-$(CONFIG_SND_SOC_POWERPC_DMA) += snd-soc-fsl-dma.o
 obj-$(CONFIG_SND_SOC_FSL_RPMSG_I2S) += snd-soc-fsl-rpmsg-i2s.o
+obj-$(CONFIG_SND_SOC_FSL_ASOC_CARD) += snd-soc-fsl-asoc-card.o
 
 # MPC5200 Platform Support
 obj-$(CONFIG_SND_MPC52xx_DMA) += mpc5200_dma.o
@@ -64,6 +71,7 @@ snd-soc-imx-sgtl5000-objs := imx-sgtl5000.o
 snd-soc-imx-max98088-objs := imx-max98088.o
 snd-soc-imx-wm8958-objs := imx-wm8958.o
 snd-soc-imx-wm8960-objs := imx-wm8960.o
+snd-soc-imx-wm8524-objs := imx-wm8524.o
 snd-soc-imx-wm8962-objs := imx-wm8962.o
 snd-soc-imx-xtor-objs := imx-xtor.o
 snd-soc-imx-sii902x-objs := imx-sii902x.o
@@ -72,7 +80,10 @@ snd-soc-imx-mc13783-objs := imx-mc13783.o
 snd-soc-imx-mqs-objs := imx-mqs.o
 snd-soc-imx-si476x-objs := imx-si476x.o
 snd-soc-imx-hdmi-objs := imx-hdmi.o
+snd-soc-imx-cdnhdmi-objs := imx-cdnhdmi.o
 snd-soc-imx-rpmsg-objs := imx-rpmsg.o
+snd-soc-imx-amix-objs := imx-amix.o
+snd-soc-imx-pdm-objs := imx-pdm.o
 
 obj-$(CONFIG_SND_SOC_EUKREA_TLV320) += snd-soc-eukrea-tlv320.o
 obj-$(CONFIG_SND_SOC_PHYCORE_AC97) += snd-soc-phycore-ac97.o
@@ -84,6 +95,7 @@ obj-$(CONFIG_SND_SOC_IMX_SGTL5000) += snd-soc-imx-sgtl5000.o
 obj-$(CONFIG_SND_SOC_IMX_MAX98088) += snd-soc-imx-max98088.o
 obj-${CONFIG_SND_SOC_IMX_WM8958} += snd-soc-imx-wm8958.o
 obj-$(CONFIG_SND_SOC_IMX_WM8960) += snd-soc-imx-wm8960.o
+obj-$(CONFIG_SND_SOC_IMX_WM8524) += snd-soc-imx-wm8524.o
 obj-$(CONFIG_SND_SOC_IMX_WM8962) += snd-soc-imx-wm8962.o
 obj-$(CONFIG_SND_SOC_IMX_XTOR) += snd-soc-imx-xtor.o
 obj-$(CONFIG_SND_SOC_IMX_RPMSG) += snd-soc-imx-rpmsg.o
@@ -93,5 +105,8 @@ obj-$(CONFIG_SND_SOC_IMX_MC13783) += snd-soc-imx-mc13783.o
 obj-$(CONFIG_SND_SOC_IMX_MQS) += snd-soc-imx-mqs.o
 obj-$(CONFIG_SND_SOC_IMX_SI476X) += snd-soc-imx-si476x.o
 obj-$(CONFIG_SND_SOC_IMX_HDMI) += snd-soc-imx-hdmi.o
+obj-$(CONFIG_SND_SOC_IMX_AMIX) += snd-soc-imx-amix.o
+obj-$(CONFIG_SND_SOC_IMX_CDNHDMI) += snd-soc-imx-cdnhdmi.o
+obj-$(CONFIG_SND_SOC_IMX_PDM_MIC) += snd-soc-imx-pdm.o
 
 AFLAGS_hdmi_pcm.o := -march=armv7-a -mtune=cortex-a9 -mfpu=neon -mfloat-abi=softfp

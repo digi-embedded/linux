@@ -1,0 +1,78 @@
+NXP specific extensions to the Northwest Logic MIPI-DSI
+================================
+
+Platform specific extentions for the NWL MIPI-DSI host controller found in
+MX8 platforms. This is an encoder/bridge that manages the platform specific
+initializations required for the NWL MIPI-DSI host.
+
+Required properties:
+- compatible: 		"fsl,<chip>-mipi-dsi"
+	The following strings are expected:
+			"fsl,imx8qm-mipi-dsi"
+			"fsl,imx8qxp-mipi-dsi"
+- reg: 			the register range of the MIPI-DSI controller
+- interrupts: 		the interrupt number for this module
+- clock, clock-names: 	phandles to the MIPI-DSI clocks
+	The following clocks are expected on all platforms:
+		"phy_ref" - PHY_REF clock
+		"tx_esc"  - TX_ESC clock (used in escape mode)
+		"rx_esc"  - RX_ESC clock (used in escape mode)
+	The following clocks are expected on i.MX8qm and i.MX8qxp:
+		"bypass"  - bypass clock
+		"pixel"   - pixel clock (for the pixel link)
+- assigned-clocks:	phandles to clocks that requires initial configuration
+- assigned-clock-rates:	rates of the clocks that requires initial configuration
+	The following clocks needs to have an initial configuration:
+	"tx_esc" and "rx_esc"
+- port: 		input and output port nodes with endpoint definitions as
+			defined in Documentation/devicetree/bindings/graph.txt;
+			the input port should be connected to a display
+			interface and the output port should be connected to a
+			NWL MIPI-DSI host
+- phys: 		phandle to the phy module representing the DPHY
+			inside MIPI-DSI IP block
+- phy-names: 		should be "dphy"
+
+Optional properties:
+- power-domains 	phandle to the power domain
+- interrupt-parent 	phandle to the interrupt parent, if there is one;
+			usually, on i.MX8qm and i.MX8qxp there is an irq
+			steer handling the MIPI DSI interrupts
+- csr 			phandle to the CSR register set (required on i.MX8qm
+			and i.MX8qxp for the reset functions)
+- assigned-clock-parents phandles to parent clocks that needs to be assigned as
+			parents to clocks defined in assigned-clocks
+- sync-pol		horizontal and vertical sync polarity of the input
+			signal; can be <0> for LOW (negative) or <1> for HIGH
+			(positive) polarity; default value is <0>, when this
+			property is ommited
+- pwr-delay		delay used in enable, before enabling the clocks; this is
+			useful when the PLL needs some time to become stable;
+			this value represents milliseconds
+
+Example:
+	mipi_dsi1: mipi_dsi {
+		compatible = "fsl,imx8qxp-mipi-dsi";
+		clocks =
+			<&clk IMX8QXP_MIPI0_PIXEL_CLK>,
+			<&clk IMX8QXP_MIPI0_BYPASS_CLK>,
+			<&clk IMX8QXP_CLK_DUMMY>;
+		clock-names = "pixel", "bypass", "phy_ref";
+		power-domains = <&pd_mipi_dsi0>;
+		csr = <&mipi_dsi_csr1>;
+		phys = <&mipi_dsi_phy1>;
+		phy-names = "dphy";
+		status = "disabled";
+
+		port@0 {
+			mipi_dsi1_in: endpoint {
+				remote-endpoint = <&dpu_disp0_mipi_dsi>;
+			};
+		};
+
+		port@1 {
+			mipi_dsi1_out: endpoint {
+				remote-endpoint = <&mipi_dsi_bridge1_in>;
+			};
+		};
+	};

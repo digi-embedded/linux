@@ -492,6 +492,7 @@ static void mmci_dma_data_error(struct mmci_host *host)
 {
 	dev_err(mmc_dev(host->mmc), "error during DMA transfer!\n");
 	dmaengine_terminate_all(host->dma_current);
+	host->dma_in_progress = false;
 	host->dma_current = NULL;
 	host->dma_desc_current = NULL;
 	host->data->host_cookie = 0;
@@ -500,17 +501,14 @@ static void mmci_dma_data_error(struct mmci_host *host)
 static void mmci_dma_unmap(struct mmci_host *host, struct mmc_data *data)
 {
 	struct dma_chan *chan;
-	enum dma_data_direction dir;
 
-	if (data->flags & MMC_DATA_READ) {
-		dir = DMA_FROM_DEVICE;
+	if (data->flags & MMC_DATA_READ)
 		chan = host->dma_rx_channel;
-	} else {
-		dir = DMA_TO_DEVICE;
+	else
 		chan = host->dma_tx_channel;
-	}
 
-	dma_unmap_sg(chan->device->dev, data->sg, data->sg_len, dir);
+	dma_unmap_sg(chan->device->dev, data->sg, data->sg_len,
+		     mmc_get_dma_dir(data));
 }
 
 static void mmci_dma_finalize(struct mmci_host *host, struct mmc_data *data)
@@ -550,6 +548,7 @@ static void mmci_dma_finalize(struct mmci_host *host, struct mmc_data *data)
 		mmci_dma_release(host);
 	}
 
+	host->dma_in_progress = false;
 	host->dma_current = NULL;
 	host->dma_desc_current = NULL;
 }
@@ -572,17 +571,14 @@ static int __mmci_dma_prep_data(struct mmci_host *host, struct mmc_data *data,
 	struct dma_chan *chan;
 	struct dma_device *device;
 	struct dma_async_tx_descriptor *desc;
-	enum dma_data_direction buffer_dirn;
 	int nr_sg;
 	unsigned long flags = DMA_CTRL_ACK;
 
 	if (data->flags & MMC_DATA_READ) {
 		conf.direction = DMA_DEV_TO_MEM;
-		buffer_dirn = DMA_FROM_DEVICE;
 		chan = host->dma_rx_channel;
 	} else {
 		conf.direction = DMA_MEM_TO_DEV;
-		buffer_dirn = DMA_TO_DEVICE;
 		chan = host->dma_tx_channel;
 	}
 
@@ -595,7 +591,8 @@ static int __mmci_dma_prep_data(struct mmci_host *host, struct mmc_data *data,
 		return -EINVAL;
 
 	device = chan->device;
-	nr_sg = dma_map_sg(device->dev, data->sg, data->sg_len, buffer_dirn);
+	nr_sg = dma_map_sg(device->dev, data->sg, data->sg_len,
+			   mmc_get_dma_dir(data));
 	if (nr_sg == 0)
 		return -EINVAL;
 
@@ -614,7 +611,8 @@ static int __mmci_dma_prep_data(struct mmci_host *host, struct mmc_data *data,
 	return 0;
 
  unmap_exit:
-	dma_unmap_sg(device->dev, data->sg, data->sg_len, buffer_dirn);
+	dma_unmap_sg(device->dev, data->sg, data->sg_len,
+		     mmc_get_dma_dir(data));
 	return -ENOMEM;
 }
 
@@ -650,6 +648,7 @@ static int mmci_dma_start_data(struct mmci_host *host, unsigned int datactrl)
 	dev_vdbg(mmc_dev(host->mmc),
 		 "Submit MMCI DMA job, sglen %d blksz %04x blks %04x flags %08x\n",
 		 data->sg_len, data->blksz, data->blocks, data->flags);
+	host->dma_in_progress = true;
 	dmaengine_submit(host->dma_desc_current);
 	dma_async_issue_pending(host->dma_current);
 
@@ -684,8 +683,7 @@ static void mmci_get_next_data(struct mmci_host *host, struct mmc_data *data)
 	next->dma_chan = NULL;
 }
 
-static void mmci_pre_request(struct mmc_host *mmc, struct mmc_request *mrq,
-			     bool is_first_req)
+static void mmci_pre_request(struct mmc_host *mmc, struct mmc_request *mrq)
 {
 	struct mmci_host *host = mmc_priv(mmc);
 	struct mmc_data *data = mrq->data;
@@ -726,8 +724,10 @@ static void mmci_post_request(struct mmc_host *mmc, struct mmc_request *mrq,
 		if (host->dma_desc_current == next->dma_desc)
 			host->dma_desc_current = NULL;
 
-		if (host->dma_current == next->dma_chan)
+		if (host->dma_current == next->dma_chan) {
+			host->dma_in_progress = false;
 			host->dma_current = NULL;
+		}
 
 		next->dma_desc = NULL;
 		next->dma_chan = NULL;

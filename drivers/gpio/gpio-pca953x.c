@@ -818,10 +818,6 @@ static int pca953x_probe(struct i2c_client *client,
 	if (ret == -EPROBE_DEFER)
 		return -EPROBE_DEFER;
 
-	ret = device_reset(&client->dev);
-	if (ret == -ENODEV)
-		return -EPROBE_DEFER;
-
 	/* initialize cached registers from their original values.
 	 * we can't share this chip with another i2c master.
 	 */

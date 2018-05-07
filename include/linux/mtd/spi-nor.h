@@ -24,6 +24,7 @@
 #define SNOR_MFR_GIGADEVICE	0xc8
 #define SNOR_MFR_INTEL		CFI_MFR_INTEL
 #define SNOR_MFR_MICRON		CFI_MFR_ST /* ST Micro <--> Micron */
+#define SNOR_MFR_MICRONO	CFI_MFR_MICRON /* Original Micron */
 #define SNOR_MFR_MACRONIX	CFI_MFR_MACRONIX
 #define SNOR_MFR_SPANSION	CFI_MFR_AMD
 #define SNOR_MFR_SST		CFI_MFR_SST
@@ -46,8 +47,9 @@
 #define SPINOR_OP_READ_FAST	0x0b	/* Read data bytes (high frequency) */
 #define SPINOR_OP_READ_1_1_2	0x3b	/* Read data bytes (Dual SPI) */
 #define SPINOR_OP_READ_1_1_4	0x6b	/* Read data bytes (Quad SPI) */
-#define SPINOR_OP_READ_1_1_4_D	0x6d	/* Read data bytes (DDR Quad SPI) */
-#define SPINOR_OP_READ_1_4_4_D	0xed	/* Read data bytes (DDR Quad SPI) */
+#define SPINOR_OP_READ_1_1_4_D  0x6d    /* Read data bytes (DDR Quad SPI) */
+#define SPINOR_OP_READ_1_4_4_D  0xed    /* Read data bytes (DDR Quad SPI) */
+#define SPINOR_OP_READ_1_1_8_D	0x9d	/* Read data bytes (Octal Output SPI) */
 #define SPINOR_OP_PP		0x02	/* Page program (up to 256 bytes) */
 #define SPINOR_OP_BE_4K		0x20	/* Erase 4KiB block */
 #define SPINOR_OP_BE_4K_PMC	0xd7	/* Erase 4KiB block on PMC chips */
@@ -63,7 +65,7 @@
 #define SPINOR_OP_READ4_FAST	0x0c	/* Read data bytes (high frequency) */
 #define SPINOR_OP_READ4_1_1_2	0x3c	/* Read data bytes (Dual SPI) */
 #define SPINOR_OP_READ4_1_1_4	0x6c	/* Read data bytes (Quad SPI) */
-#define SPINOR_OP_READ4_1_4_4_D	0xee	/* Read data bytes (DDR Quad SPI) */
+#define SPINOR_OP_READ4_1_4_4_D 0xee    /* Read data bytes (DDR Quad SPI) */
 #define SPINOR_OP_PP_4B		0x12	/* Page program (up to 256 bytes) */
 #define SPINOR_OP_SE_4B		0xdc	/* Sector erase (usually 64KiB) */
 
@@ -112,6 +114,8 @@ enum read_mode {
 	SPI_NOR_DUAL,
 	SPI_NOR_QUAD,
 	SPI_NOR_DDR_QUAD,
+	SPI_NOR_OCTAL,
+	SPI_NOR_DDR_OCTAL,
 };
 
 #define SPI_NOR_MAX_CMD_SIZE	8

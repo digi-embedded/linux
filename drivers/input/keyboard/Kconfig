@@ -427,7 +427,7 @@ config KEYBOARD_RPMSG
 
 config KEYBOARD_SNVS_PWRKEY
 	tristate "IMX SNVS Power Key Driver"
-	depends on (SOC_IMX6SX || SOC_IMX6UL || SOC_IMX7)
+	depends on (SOC_IMX6SX || SOC_IMX6UL || SOC_IMX7 || ARCH_FSL_IMX8MQ)
 	depends on OF
 	help
 	  This is the snvs powerkey driver for the Freescale i.MX application
@@ -435,6 +435,13 @@ config KEYBOARD_SNVS_PWRKEY
 
 	  To compile this driver as a module, choose M here; the
 	  module will be called snvs_pwrkey.
+
+config KEYBOARD_IMX_SC_PWRKEY
+	tristate "IMX SC Power Key Driver"
+	depends on (ARCH_FSL_IMX8QM || ARCH_FSL_IMX8QXP)
+	help
+	  This is the virtual snvs powerkey driver for NXP i.mx8Q/QXP family
+	  whose SCU hold snvs inside.
 
 config KEYBOARD_PF1550_ONKEY
 	tristate "PF1550 OnKey Driver"

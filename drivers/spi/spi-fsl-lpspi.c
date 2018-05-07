@@ -2,6 +2,7 @@
  * Freescale i.MX7ULP LPSPI driver
  *
  * Copyright 2016 Freescale Semiconductor, Inc.
+ * Copyright 2017 NXP
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,20 +20,26 @@
 #include <linux/completion.h>
 #include <linux/delay.h>
 #include <linux/err.h>
+#include <linux/gpio.h>
 #include <linux/interrupt.h>
 #include <linux/io.h>
 #include <linux/irq.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
+#include <linux/platform_data/spi-imx.h>
 #include <linux/slab.h>
 #include <linux/spi/spi.h>
 #include <linux/spi/spi_bitbang.h>
 #include <linux/types.h>
 #include <linux/of.h>
 #include <linux/of_device.h>
+#include <linux/of_gpio.h>
+#include <linux/pm_runtime.h>
 
 #define DRIVER_NAME "fsl_lpspi"
+
+#define FSL_LPSPI_RPM_TIMEOUT 50 /* 50ms */
 
 /* i.MX7ULP LPSPI registers */
 #define IMX7ULP_VERID	0x0
@@ -67,6 +74,7 @@
 #define CFGR1_PCSCFG	(1 << 27)	/* PCS[3:2] disabled */
 #define CFGR1_PCSPOL	(1 << 8)	/* PCS active high */
 #define CFGR1_NOSTALL   (1 << 3)	/* NO STALL */
+#define CFGR1_SAMPLE	(1 << 1)	/* SAMPLE POINT*/
 #define CFGR1_MASTER	(1 << 0)	/* MASTER MODE */
 #define RSR_RXEMPTY	(1 << 1)
 #define TCR_CPOL	(1 << 31)
@@ -92,7 +100,8 @@ struct fsl_lpspi_data {
 
 	struct completion xfer_done;
 	void __iomem *base;
-	struct clk *clk;
+	struct clk *clk_per;
+	struct clk *clk_ipg;
 
 	void *rx_buf;
 	const void *tx_buf;
@@ -103,6 +112,8 @@ struct fsl_lpspi_data {
 	u8 txfifosize;
 	u8 rxfifosize;
 	unsigned remain;
+
+	int chipselect[0];
 };
 
 static const struct of_device_id fsl_lpspi_dt_ids[] = {
@@ -219,7 +230,7 @@ static int fsl_lpspi_set_bitrate(struct fsl_lpspi_data *fsl_lpspi)
 	unsigned int perclk_rate, scldiv;
 	struct lpspi_config config = fsl_lpspi->config;
 
-	perclk_rate = clk_get_rate(fsl_lpspi->clk);
+	perclk_rate = clk_get_rate(fsl_lpspi->clk_per);
 
 	for (prescale = 0; prescale < 8; prescale++) {
 		scldiv = perclk_rate / (clkdivs[prescale] * config.speed_hz) - 2;
@@ -255,7 +266,8 @@ static int fsl_lpspi_config(struct fsl_lpspi_data *fsl_lpspi)
 
 	fsl_lpspi_set_watermark(fsl_lpspi);
 
-	temp = CFGR1_PCSCFG | CFGR1_MASTER | CFGR1_NOSTALL;
+	temp = CFGR1_PCSCFG | CFGR1_MASTER
+		| CFGR1_SAMPLE | CFGR1_NOSTALL;
 
 	/* chip select polarity */
 	if (fsl_lpspi->config.mode & SPI_CS_HIGH)
@@ -291,6 +303,19 @@ static irqreturn_t fsl_lpspi_isr(int irq, void *dev_id)
 	}
 
 	return IRQ_NONE;
+}
+
+static void fsl_lpspi_chipselect(struct spi_device *spi, int is_active)
+{
+	struct fsl_lpspi_data *fsl_lpspi = spi_master_get_devdata(spi->master);
+	int gpio = fsl_lpspi->chipselect[spi->chip_select];
+	int active = is_active != BITBANG_CS_INACTIVE;
+	int dev_is_lowactive = !(spi->mode & SPI_CS_HIGH);
+
+	if (!gpio_is_valid(gpio))
+		return;
+
+	gpio_set_value(gpio, dev_is_lowactive ^ active);
 }
 
 static int fsl_lpspi_setupxfer(struct spi_device *spi,
@@ -343,12 +368,21 @@ static int fsl_lpspi_transfer(struct spi_device *spi,
 }
 
 /* The following funs are decided by spi framework */
-static void fsl_lpspi_chipselect(struct spi_device *spi, int is_active)
-{
-}
 
 static int fsl_lpspi_setup(struct spi_device *spi)
 {
+	struct fsl_lpspi_data *fsl_lpspi = spi_master_get_devdata(spi->master);
+	int gpio = fsl_lpspi->chipselect[spi->chip_select];
+
+	dev_dbg(&spi->dev, "%s: mode %d, %u bpw, %d hz\n", __func__,
+		 spi->mode, spi->bits_per_word, spi->max_speed_hz);
+
+	if (gpio_is_valid(gpio))
+		gpio_direction_output(gpio,
+				      spi->mode & SPI_CS_HIGH ? 0 : 1);
+
+	fsl_lpspi_chipselect(spi, BITBANG_CS_INACTIVE);
+
 	return 0;
 }
 
@@ -360,8 +394,15 @@ static int
 fsl_lpspi_prepare_message(struct spi_master *master, struct spi_message *msg)
 {
 	struct fsl_lpspi_data *fsl_lpspi = spi_master_get_devdata(master);
+	int ret;
 
-	return clk_enable(fsl_lpspi->clk);
+	ret = pm_runtime_get_sync(fsl_lpspi->dev);
+	if (ret < 0) {
+		dev_err(fsl_lpspi->dev, "failed to enable clock\n");
+		return ret;
+	}
+
+	return 0;
 }
 
 static int
@@ -369,17 +410,60 @@ fsl_lpspi_unprepare_message(struct spi_master *master, struct spi_message *msg)
 {
 	struct fsl_lpspi_data *fsl_lpspi = spi_master_get_devdata(master);
 
-	clk_disable(fsl_lpspi->clk);
+	pm_runtime_mark_last_busy(fsl_lpspi->dev);
+	pm_runtime_put_autosuspend(fsl_lpspi->dev);
+
+	return 0;
+}
+
+int fsl_lpspi_runtime_resume(struct device *dev)
+{
+	struct fsl_lpspi_data *fsl_lpspi = dev_get_drvdata(dev);
+	int ret;
+
+	ret = clk_prepare_enable(fsl_lpspi->clk_per);
+	if (ret)
+		return ret;
+
+	ret = clk_prepare_enable(fsl_lpspi->clk_ipg);
+	if (ret) {
+		clk_disable_unprepare(fsl_lpspi->clk_per);
+		return ret;
+	}
+
+	return 0;
+}
+
+int fsl_lpspi_runtime_suspend(struct device *dev)
+{
+	struct fsl_lpspi_data *fsl_lpspi = dev_get_drvdata(dev);
+
+	clk_disable_unprepare(fsl_lpspi->clk_per);
+	clk_disable_unprepare(fsl_lpspi->clk_ipg);
+
+	return 0;
+}
+
+static int fsl_lpspi_init_rpm(struct fsl_lpspi_data *fsl_lpspi)
+{
+	struct device *dev = fsl_lpspi->dev;
+
+	pm_runtime_enable(dev);
+	pm_runtime_set_autosuspend_delay(dev, FSL_LPSPI_RPM_TIMEOUT);
+	pm_runtime_use_autosuspend(dev);
 
 	return 0;
 }
 
 static int fsl_lpspi_probe(struct platform_device *pdev)
 {
+	struct device_node *np = pdev->dev.of_node;
 	struct spi_master *master;
 	struct fsl_lpspi_data *fsl_lpspi;
+	struct spi_imx_master *lpspi_platform_info =
+			dev_get_platdata(&pdev->dev);
 	struct resource *res;
-	int ret, irq;
+	int i, ret, irq;
 
 	master = spi_alloc_master(&pdev->dev, sizeof(struct fsl_lpspi_data));
 	if (!master)
@@ -393,6 +477,25 @@ static int fsl_lpspi_probe(struct platform_device *pdev)
 	fsl_lpspi = spi_master_get_devdata(master);
 	fsl_lpspi->bitbang.master = master;
 	fsl_lpspi->dev = &pdev->dev;
+	dev_set_drvdata(&pdev->dev, fsl_lpspi);
+
+	for (i = 0; i < master->num_chipselect; i++) {
+		int cs_gpio = of_get_named_gpio(np, "cs-gpios", i);
+
+		if (!gpio_is_valid(cs_gpio) && lpspi_platform_info)
+			cs_gpio = lpspi_platform_info->chipselect[i];
+
+		fsl_lpspi->chipselect[i] = cs_gpio;
+		if (!gpio_is_valid(cs_gpio))
+			continue;
+
+		ret = devm_gpio_request(&pdev->dev, fsl_lpspi->chipselect[i],
+					DRIVER_NAME);
+		if (ret) {
+			dev_err(&pdev->dev, "can't get cs gpios\n");
+			goto out_master_put;
+		}
+	}
 
 	fsl_lpspi->bitbang.chipselect = fsl_lpspi_chipselect;
 	fsl_lpspi->bitbang.master->setup = fsl_lpspi_setup;
@@ -419,9 +522,27 @@ static int fsl_lpspi_probe(struct platform_device *pdev)
 		goto out_master_put;
 	}
 
-	fsl_lpspi->clk = devm_clk_get(&pdev->dev, "ipg");
-	if (IS_ERR(fsl_lpspi->clk)) {
-		ret = PTR_ERR(fsl_lpspi->clk);
+	fsl_lpspi->clk_per = devm_clk_get(&pdev->dev, "per");
+	if (IS_ERR(fsl_lpspi->clk_per)) {
+		ret = PTR_ERR(fsl_lpspi->clk_per);
+		goto out_master_put;
+	}
+
+	fsl_lpspi->clk_ipg = devm_clk_get(&pdev->dev, "ipg");
+	if (IS_ERR(fsl_lpspi->clk_ipg)) {
+		ret = PTR_ERR(fsl_lpspi->clk_ipg);
+		goto out_master_put;
+	}
+
+	/* enable the clock */
+	ret = fsl_lpspi_init_rpm(fsl_lpspi);
+	if (ret)
+		goto out_master_put;
+
+	ret = devm_request_irq(&pdev->dev, irq, fsl_lpspi_isr, 0,
+			       dev_name(&pdev->dev), fsl_lpspi);
+	if (ret) {
+		dev_err(&pdev->dev, "can't get irq%d: %d\n", irq, ret);
 		goto out_master_put;
 	}
 
@@ -432,16 +553,7 @@ static int fsl_lpspi_probe(struct platform_device *pdev)
 		goto out_master_put;
 	}
 
-	ret = devm_request_irq(&pdev->dev, irq, fsl_lpspi_isr, 0,
-			       dev_name(&pdev->dev), fsl_lpspi);
-	if (ret) {
-		dev_err(&pdev->dev, "can't get irq%d: %d\n", irq, ret);
-		goto out_master_put;
-	}
-
-	ret = clk_prepare(fsl_lpspi->clk);
-	if (ret)
-		goto out_master_put;
+	dev_info(fsl_lpspi->dev, "lpspi probed\n");
 
 	return ret;
 
@@ -457,8 +569,8 @@ static int fsl_lpspi_remove(struct platform_device *pdev)
 	struct fsl_lpspi_data *fsl_lpspi = spi_master_get_devdata(master);
 
 	spi_bitbang_stop(&fsl_lpspi->bitbang);
+	pm_runtime_disable(fsl_lpspi->dev);
 
-	clk_unprepare(fsl_lpspi->clk);
 	spi_master_put(master);
 
 	return 0;
@@ -467,27 +579,39 @@ static int fsl_lpspi_remove(struct platform_device *pdev)
 #ifdef CONFIG_PM_SLEEP
 static int fsl_lpspi_suspend(struct device *dev)
 {
+	int ret;
+
 	pinctrl_pm_select_sleep_state(dev);
-	return 0;
+	ret = pm_runtime_force_suspend(dev);
+	return ret;
 }
 
 static int fsl_lpspi_resume(struct device *dev)
 {
+	int ret;
+
+	ret = pm_runtime_force_resume(dev);
+	if (ret) {
+		dev_err(dev, "Error in resume: %d\n", ret);
+		return ret;
+	}
+
 	pinctrl_pm_select_default_state(dev);
+
 	return 0;
 }
+#endif /* CONFIG_PM_SLEEP */
 
-static SIMPLE_DEV_PM_OPS(imx_lpspi_pm, fsl_lpspi_suspend, fsl_lpspi_resume);
-#define IMX_LPSPI_PM	(&imx_lpspi_pm)
-#else
-#define IMX_LPSPI_PM	NULL
-#endif
+static const struct dev_pm_ops fsl_lpspi_pm_ops = {
+	SET_RUNTIME_PM_OPS(fsl_lpspi_runtime_suspend, fsl_lpspi_runtime_resume, NULL)
+	SET_SYSTEM_SLEEP_PM_OPS(fsl_lpspi_suspend, fsl_lpspi_resume)
+};
 
 static struct platform_driver fsl_lpspi_driver = {
 	.driver = {
 			.name = DRIVER_NAME,
 			.of_match_table = fsl_lpspi_dt_ids,
-			.pm = IMX_LPSPI_PM,
+			.pm = &fsl_lpspi_pm_ops,
 		},
 	.probe = fsl_lpspi_probe,
 	.remove = fsl_lpspi_remove,

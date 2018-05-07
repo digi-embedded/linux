@@ -15,7 +15,19 @@ if NVMEM
 
 config NVMEM_IMX_OCOTP
 	tristate "i.MX6 On-Chip OTP Controller support"
-	depends on SOC_IMX6 || COMPILE_TEST
+	depends on SOC_IMX6 || ARCH_MXC_ARM64 || COMPILE_TEST
+	depends on HAS_IOMEM
+	help
+	  This is a driver for the On-Chip OTP Controller (OCOTP) available on
+	  i.MX6 SoCs, providing access to 4 Kbits of one-time programmable
+	  eFuses.
+
+	  This driver can also be built as a module. If so, the module
+	  will be called nvmem-imx-ocotp.
+
+config NVMEM_IMX_SCU_OCOTP
+	tristate "i.MX8QM On-Chip OTP Controller support"
+	depends on ARCH_MXC_ARM64|| COMPILE_TEST
 	depends on HAS_IOMEM
 	help
 	  This is a driver for the On-Chip OTP Controller (OCOTP) available on

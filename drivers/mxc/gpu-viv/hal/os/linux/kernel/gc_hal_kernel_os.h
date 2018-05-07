@@ -70,6 +70,10 @@ struct _LINUX_MDL_MAP
 
 struct _LINUX_MDL
 {
+    gckOS                   os;
+
+    atomic_t                refs;
+
     char *                  addr;
 
     gctINT                  numPages;

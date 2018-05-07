@@ -1,1 +1,1 @@
-obj-y += imx_mu.o
+obj-y += mx8_mu.o

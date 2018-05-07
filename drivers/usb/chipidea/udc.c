@@ -423,7 +423,8 @@ static int _hardware_enqueue(struct ci_hw_ep *hwep, struct ci_hw_req *hwreq)
 
 	hwreq->req.status = -EALREADY;
 
-	ret = usb_gadget_map_request(&ci->gadget, &hwreq->req, hwep->dir);
+	ret = usb_gadget_map_request_by_dev(ci->dev->parent,
+					    &hwreq->req, hwep->dir);
 	if (ret)
 		return ret;
 
@@ -603,7 +604,8 @@ static int _hardware_dequeue(struct ci_hw_ep *hwep, struct ci_hw_req *hwreq)
 		list_del_init(&node->td);
 	}
 
-	usb_gadget_unmap_request(&hwep->ci->gadget, &hwreq->req, hwep->dir);
+	usb_gadget_unmap_request_by_dev(hwep->ci->dev->parent,
+					&hwreq->req, hwep->dir);
 
 	hwreq->req.actual += actual;
 
@@ -1951,13 +1953,13 @@ static int udc_start(struct ci_hdrc *ci)
 	INIT_LIST_HEAD(&ci->gadget.ep_list);
 
 	/* alloc resources */
-	ci->qh_pool = dma_pool_create("ci_hw_qh", dev,
+	ci->qh_pool = dma_pool_create("ci_hw_qh", dev->parent,
 				       sizeof(struct ci_hw_qh),
 				       64, CI_HDRC_PAGE_SIZE);
 	if (ci->qh_pool == NULL)
 		return -ENOMEM;
 
-	ci->td_pool = dma_pool_create("ci_hw_td", dev,
+	ci->td_pool = dma_pool_create("ci_hw_td", dev->parent,
 				       sizeof(struct ci_hw_td),
 				       64, CI_HDRC_PAGE_SIZE);
 	if (ci->td_pool == NULL) {
@@ -2143,6 +2145,7 @@ static void udc_resume(struct ci_hdrc *ci, bool power_lost)
 int ci_hdrc_gadget_init(struct ci_hdrc *ci)
 {
 	struct ci_role_driver *rdrv;
+	int ret;
 
 	if (!hw_read(ci, CAP_DCCPARAMS, DCCPARAMS_DC))
 		return -ENXIO;
@@ -2157,7 +2160,10 @@ int ci_hdrc_gadget_init(struct ci_hdrc *ci)
 	rdrv->suspend	= udc_suspend;
 	rdrv->resume	= udc_resume;
 	rdrv->name	= "gadget";
-	ci->roles[CI_ROLE_GADGET] = rdrv;
 
-	return udc_start(ci);
+	ret = udc_start(ci);
+	if (!ret)
+		ci->roles[CI_ROLE_GADGET] = rdrv;
+
+	return ret;
 }

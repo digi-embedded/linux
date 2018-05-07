@@ -1,0 +1,44 @@
+#
+# IMX Soc drivers
+#
+menu "NXP IMX SoC drivers"
+
+menuconfig ARCH_MXC_ARM64
+	bool "NXP i.MX family"
+	depends on ARM64
+	help
+	  Support for NXP MXC/iMX-based ARM64 family of processors
+
+if ARCH_MXC_ARM64
+
+config ARCH_FSL_IMX8QM
+	bool "i.MX8QM"
+	select HAVE_IMX_MU
+	select HAVE_IMX_RPMSG
+	select HAVE_IMX8_SOC
+
+config ARCH_FSL_IMX8QXP
+	bool "i.MX8QXP"
+	select HAVE_IMX_MU
+	select HAVE_IMX_RPMSG
+	select HAVE_IMX8_SOC
+
+config ARCH_FSL_IMX8MQ
+	bool "i.MX8MQ"
+	select HAVE_IMX_MU
+	select HAVE_IMX_RPMSG
+	select HAVE_IMX8_SOC
+
+endif
+
+config HAVE_IMX_MU
+	bool
+
+config HAVE_IMX8_SOC
+	bool
+
+config HAVE_IMX_RPMSG
+	select RPMSG_VIRTIO
+	select RPMSG
+	bool
+endmenu

@@ -293,7 +293,6 @@
 
 
 struct dma_block {
-	dma_addr_t dma_paddr;
 	void *dma_vaddr;
 	unsigned int length;
 };
@@ -359,10 +358,12 @@ struct fsl_asrc {
 	struct clk *ipg_clk;
 	struct clk *spba_clk;
 	struct clk *asrck_clk[ASRC_CLK_MAX_NUM];
+	unsigned char *clk_map[2];
 	spinlock_t lock;
 
 	struct snd_pcm_substream *substream[2];
 	struct fsl_asrc_pair *pair[ASRC_PAIR_MAX_NUM];
+	struct miscdevice asrc_miscdev;
 	unsigned int channel_bits;
 	unsigned int channel_avail;
 	unsigned int pair_streams;
@@ -371,9 +372,12 @@ struct fsl_asrc {
 	int asrc_width;
 
 	u32 regcache_cfg;
+	char name[20];
 };
 
 extern struct snd_soc_platform_driver fsl_asrc_platform;
 struct dma_chan *fsl_asrc_get_dma_channel(struct fsl_asrc_pair *pair, bool dir);
+int fsl_asrc_request_pair(int channels, struct fsl_asrc_pair *pair);
+void fsl_asrc_release_pair(struct fsl_asrc_pair *pair);
 
 #endif /* _FSL_ASRC_H */

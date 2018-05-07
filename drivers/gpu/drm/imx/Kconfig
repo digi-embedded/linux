@@ -4,8 +4,8 @@ config DRM_IMX
 	select VIDEOMODE_HELPERS
 	select DRM_GEM_CMA_HELPER
 	select DRM_KMS_CMA_HELPER
-	depends on DRM && (ARCH_MXC || ARCH_MULTIPLATFORM)
-	depends on IMX_IPUV3_CORE
+	depends on DRM
+	depends on IMX_IPUV3_CORE || IMX_DPU_CORE || IMX_DCSS_CORE
 	help
 	  enable i.MX graphics support
 
@@ -29,14 +29,7 @@ config DRM_IMX_LDB
 	select DRM_PANEL
 	help
 	  Choose this to enable the internal LVDS Display Bridge (LDB)
-	  found on i.MX53 and i.MX6 processors.
-
-config DRM_IMX_IPUV3
-	tristate
-	depends on DRM_IMX
-	depends on IMX_IPUV3_CORE
-	default y if DRM_IMX=y
-	default m if DRM_IMX=m
+	  found on i.MX53, i.MX6 and i.MX8 processors.
 
 config DRM_IMX_HDMI
 	tristate "Freescale i.MX DRM HDMI"
@@ -44,3 +37,17 @@ config DRM_IMX_HDMI
 	depends on DRM_IMX
 	help
 	  Choose this if you want to use HDMI on i.MX6.
+
+config DRM_IMX_NWL_DSI
+	tristate "Support for Northwest Logic MIPI DSI displays"
+	depends on DRM_IMX
+	select MFD_SYSCON
+	select DRM_NWL_DSI
+	help
+	  Choose this to enable the internal NWL MIPI DSI controller
+	  found on i.MX8 processors.
+
+source "drivers/gpu/drm/imx/ipuv3/Kconfig"
+source "drivers/gpu/drm/imx/dpu/Kconfig"
+source "drivers/gpu/drm/imx/hdp/Kconfig"
+source "drivers/gpu/drm/imx/dcss/Kconfig"

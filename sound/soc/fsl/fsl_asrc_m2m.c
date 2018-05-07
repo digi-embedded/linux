@@ -29,11 +29,6 @@ struct fsl_asrc_m2m {
 	spinlock_t lock;
 };
 
-static struct miscdevice asrc_miscdev = {
-	.name	= "mxc_asrc",
-	.minor	= MISC_DYNAMIC_MINOR,
-};
-
 static void fsl_asrc_get_status(struct fsl_asrc_pair *pair,
 				struct asrc_status_flags *flags)
 {
@@ -134,14 +129,12 @@ static int fsl_allocate_dma_buf(struct fsl_asrc_pair *pair)
 		pair_err("failed to allocate input DMA buffer\n");
 		return -ENOMEM;
 	}
-	input->dma_paddr = virt_to_dma(NULL, input->dma_vaddr);
 
 	output->dma_vaddr = kzalloc(output->length, GFP_KERNEL);
 	if (!output->dma_vaddr) {
 		pair_err("failed to allocate output DMA buffer\n");
 		goto exit;
 	}
-	output->dma_paddr = virt_to_dma(NULL, output->dma_vaddr);
 
 	return 0;
 
@@ -218,7 +211,7 @@ static int fsl_asrc_dmaconfig(struct fsl_asrc_pair *pair, struct dma_chan *chan,
 		return -EINVAL;
 	}
 
-	ret = dma_map_sg(NULL, sg, sg_nent, slave_config.direction);
+	ret = dma_map_sg(&asrc_priv->pdev->dev, sg, sg_nent, slave_config.direction);
 	if (ret != sg_nent) {
 		pair_err("failed to map DMA sg for %sput task\n", DIR_STR(dir));
 		return -EINVAL;
@@ -333,17 +326,18 @@ int fsl_asrc_process_buffer_pre(struct completion *complete,
 	return 0;
 }
 
-#define mxc_asrc_dma_umap(m2m) \
+#define mxc_asrc_dma_umap(dev, m2m) \
 	do { \
-		dma_unmap_sg(NULL, m2m->sg[IN], m2m->sg_nodes[IN], \
+		dma_unmap_sg(dev, m2m->sg[IN], m2m->sg_nodes[IN], \
 			     DMA_MEM_TO_DEV); \
-		dma_unmap_sg(NULL, m2m->sg[OUT], m2m->sg_nodes[OUT], \
+		dma_unmap_sg(dev, m2m->sg[OUT], m2m->sg_nodes[OUT], \
 			     DMA_DEV_TO_MEM); \
 	} while (0)
 
 int fsl_asrc_process_buffer(struct fsl_asrc_pair *pair,
 			    struct asrc_convert_buffer *pbuf)
 {
+	struct fsl_asrc *asrc_priv = pair->asrc_priv;
 	struct fsl_asrc_m2m *m2m = pair->private;
 	enum asrc_pair_index index = pair->index;
 	unsigned long lock_flags;
@@ -352,18 +346,18 @@ int fsl_asrc_process_buffer(struct fsl_asrc_pair *pair,
 	/* Check input task first */
 	ret = fsl_asrc_process_buffer_pre(&m2m->complete[IN], index, IN);
 	if (ret) {
-		mxc_asrc_dma_umap(m2m);
+		mxc_asrc_dma_umap(&asrc_priv->pdev->dev, m2m);
 		return ret;
 	}
 
 	/* ...then output task*/
 	ret = fsl_asrc_process_buffer_pre(&m2m->complete[OUT], index, OUT);
 	if (ret) {
-		mxc_asrc_dma_umap(m2m);
+		mxc_asrc_dma_umap(&asrc_priv->pdev->dev, m2m);
 		return ret;
 	}
 
-	mxc_asrc_dma_umap(m2m);
+	mxc_asrc_dma_umap(&asrc_priv->pdev->dev, m2m);
 
 	/* Fetch the remaining data */
 	spin_lock_irqsave(&m2m->lock, lock_flags);
@@ -807,7 +801,8 @@ static long fsl_asrc_ioctl(struct file *file, unsigned int cmd, unsigned long ar
 
 static int fsl_asrc_open(struct inode *inode, struct file *file)
 {
-	struct fsl_asrc *asrc_priv = dev_get_drvdata(asrc_miscdev.this_device);
+	struct miscdevice *asrc_miscdev = file->private_data;
+	struct fsl_asrc *asrc_priv = dev_get_drvdata(asrc_miscdev->parent);
 	struct device *dev = &asrc_priv->pdev->dev;
 	struct fsl_asrc_pair *pair;
 	struct fsl_asrc_m2m *m2m;
@@ -907,20 +902,24 @@ static int fsl_asrc_m2m_init(struct fsl_asrc *asrc_priv)
 	struct device *dev = &asrc_priv->pdev->dev;
 	int ret;
 
-	asrc_miscdev.fops = &asrc_fops,
-	ret = misc_register(&asrc_miscdev);
+	asrc_priv->asrc_miscdev.fops = &asrc_fops;
+	asrc_priv->asrc_miscdev.parent = dev;
+	asrc_priv->asrc_miscdev.name = asrc_priv->name;
+	asrc_priv->asrc_miscdev.minor = MISC_DYNAMIC_MINOR;
+	ret = misc_register(&asrc_priv->asrc_miscdev);
 	if (ret) {
 		dev_err(dev, "failed to register char device %d\n", ret);
 		return ret;
 	}
-	dev_set_drvdata(asrc_miscdev.this_device, asrc_priv);
 
 	return 0;
 }
 
 static int fsl_asrc_m2m_remove(struct platform_device *pdev)
 {
-	misc_deregister(&asrc_miscdev);
+	struct fsl_asrc *asrc_priv = dev_get_drvdata(&pdev->dev);
+
+	misc_deregister(&asrc_priv->asrc_miscdev);
 	return 0;
 }
 

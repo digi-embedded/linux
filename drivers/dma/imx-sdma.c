@@ -8,6 +8,7 @@
  * Based on code from Freescale:
  *
  * Copyright 2004-2016 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright 2017 NXP.
  *
  * The code contained herein is licensed under the GNU General Public
  * License. You may obtain a copy of the GNU General Public License
@@ -182,6 +183,15 @@
 #define SDMA_WATERMARK_LEVEL_LWE	BIT(28)
 #define SDMA_WATERMARK_LEVEL_HWE	BIT(29)
 #define SDMA_WATERMARK_LEVEL_CONT	BIT(31)
+
+#define SDMA_DMA_BUSWIDTHS	(BIT(DMA_SLAVE_BUSWIDTH_1_BYTE) | \
+				 BIT(DMA_SLAVE_BUSWIDTH_2_BYTES) | \
+				 BIT(DMA_SLAVE_BUSWIDTH_3_BYTES) | \
+				 BIT(DMA_SLAVE_BUSWIDTH_4_BYTES))
+
+#define SDMA_DMA_DIRECTIONS	(BIT(DMA_DEV_TO_MEM) | \
+				 BIT(DMA_MEM_TO_DEV) | \
+				 BIT(DMA_DEV_TO_DEV))
 
 /*
  * Mode/Count of data node descriptors - IPCv2
@@ -424,6 +434,9 @@ struct sdma_engine {
 	bool				bd0_iram;
 	struct sdma_buffer_descriptor	*bd0;
 	bool				suspend_off;
+	int				idx;
+	/* clock ration for AHB:SDMA core. 1:1 is 1, 2:1 is 0*/
+	bool				clk_ratio;
 };
 
 static struct sdma_driver_data sdma_imx31 = {
@@ -557,6 +570,12 @@ static struct sdma_driver_data sdma_imx7d = {
 	.script_addrs = &sdma_script_imx7d,
 };
 
+static struct sdma_driver_data sdma_imx8m = {
+	.chnenbl0 = SDMA_CHNENBL0_IMX35,
+	.num_events = 48,
+	.script_addrs = &sdma_script_imx7d,
+};
+
 static const struct platform_device_id sdma_devtypes[] = {
 	{
 		.name = "imx25-sdma",
@@ -583,6 +602,9 @@ static const struct platform_device_id sdma_devtypes[] = {
 		.name = "imx7d-sdma",
 		.driver_data = (unsigned long)&sdma_imx7d,
 	}, {
+		.name = "imx8mq-sdma",
+		.driver_data = (unsigned long)&sdma_imx8m,
+	}, {
 		/* sentinel */
 	}
 };
@@ -598,9 +620,12 @@ static const struct of_device_id sdma_dt_ids[] = {
 	{ .compatible = "fsl,imx31-sdma", .data = &sdma_imx31, },
 	{ .compatible = "fsl,imx25-sdma", .data = &sdma_imx25, },
 	{ .compatible = "fsl,imx7d-sdma", .data = &sdma_imx7d, },
+	{ .compatible = "fsl,imx8mq-sdma", .data = &sdma_imx8m, },
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, sdma_dt_ids);
+
+static int sdma_dev_idx;
 
 #define SDMA_H_CONFIG_DSPDMA	BIT(12) /* indicates if the DSPDMA is used */
 #define SDMA_H_CONFIG_RTD_PINS	BIT(11) /* indicates if Real-Time Debug pins are enabled */
@@ -1167,6 +1192,8 @@ static int sdma_config_channel(struct dma_chan *chan)
 		sdmac->watermark_level = 0; /* FIXME: M3_BASE_ADDRESS */
 	}
 
+	sdmac->context_loaded = false;
+
 	ret = sdma_load_context(sdmac);
 
 	return ret;
@@ -1541,7 +1568,7 @@ static struct dma_async_tx_descriptor *sdma_prep_memcpy(
 			param &= ~BD_CONT;
 		}
 
-		dev_dbg(sdma->dev, "entry %d: count: %d dma: 0x%u %s%s\n",
+		dev_dbg(sdma->dev, "entry %d: count: %zd dma: 0x%x %s%s\n",
 				i, count, bd->buffer_addr,
 				param & BD_WRAP ? "wrap" : "",
 				param & BD_INTR ? " intr" : "");
@@ -1724,7 +1751,7 @@ static struct dma_async_tx_descriptor *sdma_prep_dma_cyclic(
 		if (i + 1 == num_periods)
 			param |= BD_WRAP;
 
-		dev_dbg(sdma->dev, "entry %d: count: %d dma: %pad %s%s\n",
+		dev_dbg(sdma->dev, "entry %d: count: %zd dma: %pad %s%s\n",
 				i, period_len, &dma_addr,
 				param & BD_WRAP ? "wrap" : "",
 				param & BD_INTR ? " intr" : "");
@@ -2084,7 +2111,10 @@ static int sdma_init(struct sdma_engine *sdma)
 
 	/* Set bits of CONFIG register but with static context switching */
 	/* FIXME: Check whether to set ACR bit depending on clock ratios */
-	writel_relaxed(0, sdma->regs + SDMA_H_CONFIG);
+	if (sdma->clk_ratio)
+		writel_relaxed(SDMA_H_CONFIG_ACR, sdma->regs + SDMA_H_CONFIG);
+	else
+		writel_relaxed(0, sdma->regs + SDMA_H_CONFIG);
 
 	writel_relaxed(ccb_phys, sdma->regs + SDMA_H_C0PTR);
 
@@ -2111,6 +2141,10 @@ static bool sdma_filter_fn(struct dma_chan *chan, void *fn_param)
 
 	if (!imx_dma_is_general_purpose(chan))
 		return false;
+	/* return false if it's not the right device */
+	if ((sdmac->sdma->drvdata == &sdma_imx8m)
+		&& (sdmac->sdma->idx != data->idx))
+		return false;
 
 	sdmac->data = *data;
 	chan->private = &sdmac->data;
@@ -2133,6 +2167,7 @@ static struct dma_chan *sdma_xlate(struct of_phandle_args *dma_spec,
 	data.dma_request = dma_spec->args[0];
 	data.peripheral_type = dma_spec->args[1];
 	data.priority = dma_spec->args[2];
+	data.idx = sdma->idx;
 
 	return dma_request_channel(mask, sdma_filter_fn, &data);
 }
@@ -2171,6 +2206,8 @@ static int sdma_probe(struct platform_device *pdev)
 	sdma = devm_kzalloc(&pdev->dev, sizeof(*sdma), GFP_KERNEL);
 	if (!sdma)
 		return -ENOMEM;
+
+	sdma->clk_ratio = of_property_read_bool(np, "fsl,ratio-1-1");
 
 	spin_lock_init(&sdma->channel_0_lock);
 
@@ -2290,9 +2327,9 @@ static int sdma_probe(struct platform_device *pdev)
 	sdma->dma_device.device_terminate_all = sdma_terminate_all;
 	sdma->dma_device.device_pause = sdma_channel_pause;
 	sdma->dma_device.device_resume = sdma_channel_resume;
-	sdma->dma_device.src_addr_widths = BIT(DMA_SLAVE_BUSWIDTH_4_BYTES);
-	sdma->dma_device.dst_addr_widths = BIT(DMA_SLAVE_BUSWIDTH_4_BYTES);
-	sdma->dma_device.directions = BIT(DMA_DEV_TO_MEM) | BIT(DMA_MEM_TO_DEV);
+	sdma->dma_device.src_addr_widths = SDMA_DMA_BUSWIDTHS;
+	sdma->dma_device.dst_addr_widths = SDMA_DMA_BUSWIDTHS;
+	sdma->dma_device.directions = SDMA_DMA_DIRECTIONS;
 	sdma->dma_device.residue_granularity = DMA_RESIDUE_GRANULARITY_BURST;
 	sdma->dma_device.device_prep_dma_memcpy = sdma_prep_memcpy;
 	sdma->dma_device.device_prep_dma_sg = sdma_prep_memcpy_sg;
@@ -2324,6 +2361,8 @@ static int sdma_probe(struct platform_device *pdev)
 		}
 		of_node_put(spba_bus);
 	}
+	/* There maybe multi sdma devices such as i.mx8mscale */
+	sdma->idx = sdma_dev_idx++;
 
 	return 0;
 
@@ -2437,19 +2476,21 @@ static int sdma_resume(struct device *dev)
 	ret = sdma_get_firmware(sdma, sdma->fw_name);
 	if (ret) {
 		dev_warn(&pdev->dev, "failed to get firware\n");
-		return ret;
+		goto out;
 	}
 
 	ret = sdma_save_restore_context(sdma, false);
 	if (ret) {
 		dev_err(sdma->dev, "restore context error!\n");
-		return ret;
+		goto out;
 	}
 
+	ret = 0;
+out:
 	clk_disable(sdma->clk_ipg);
 	clk_disable(sdma->clk_ahb);
 
-	return 0;
+	return ret;
 }
 #endif
 

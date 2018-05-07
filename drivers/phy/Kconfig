@@ -456,6 +456,7 @@ config PHY_QCOM_UFS
 config PHY_TUSB1210
 	tristate "TI TUSB1210 ULPI PHY module"
 	depends on USB_ULPI_BUS
+	depends on EXTCON || !EXTCON # if EXTCON=m, this cannot be built-in
 	select GENERIC_PHY
 	help
 	  Support for TI TUSB1210 USB ULPI PHY.
@@ -489,4 +490,29 @@ config PHY_NS2_PCIE
 	help
 	  Enable this to support the Broadcom Northstar2 PCIe PHY.
 	  If unsure, say N.
+
+config PHY_MIXEL_LVDS
+	bool
+	depends on OF
+	select GENERIC_PHY
+	default ARCH_FSL_IMX8QM
+
+config PHY_MIXEL_LVDS_COMBO
+	bool
+	depends on OF
+	select GENERIC_PHY
+	default ARCH_FSL_IMX8QXP
+
+config PHY_FSL_IMX8MQ_USB
+	bool
+	depends on OF
+	select GENERIC_PHY
+	default ARCH_FSL_IMX8MQ
+
+config PHY_MIXEL_MIPI_DSI
+	bool
+	depends on OF
+	select GENERIC_PHY
+	default ARCH_FSL_IMX8QM || ARCH_FSL_IMX8QXP
+
 endmenu

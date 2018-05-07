@@ -294,6 +294,7 @@ struct adv7511_video_config {
 enum adv7511_type {
 	ADV7511,
 	ADV7533,
+	ADV7535,
 };
 
 struct adv7511 {
@@ -315,6 +316,8 @@ struct adv7511 {
 	bool edid_read;
 
 	wait_queue_head_t wq;
+	struct work_struct hpd_work;
+
 	struct drm_bridge bridge;
 	struct drm_connector connector;
 

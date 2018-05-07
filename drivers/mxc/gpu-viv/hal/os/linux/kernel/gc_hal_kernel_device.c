@@ -195,7 +195,7 @@ int gc_meminfo_show(struct seq_file* m, void* data)
     gcsDATABASE_PTR database;
     gctUINT32 i;
 
-    gctUINT32 free = 0, used = 0, total = 0;
+    gctUINT32 free = 0, used = 0, total = 0, minFree = 0, maxUsed = 0;
 
     gcsDATABASE_COUNTERS contiguousCounter = {0, 0, 0};
     gcsDATABASE_COUNTERS virtualCounter = {0, 0, 0};
@@ -208,9 +208,11 @@ int gc_meminfo_show(struct seq_file* m, void* data)
         gcmkVERIFY_OK(
             gckOS_AcquireMutex(memory->os, memory->mutex, gcvINFINITE));
 
-        free  = memory->freeBytes;
-        used  = memory->bytes - memory->freeBytes;
-        total = memory->bytes;
+        free    = memory->freeBytes;
+        minFree = memory->minFreeBytes;
+        used    = memory->bytes - memory->freeBytes;
+        maxUsed = memory->bytes - memory->minFreeBytes;
+        total   = memory->bytes;
 
         gcmkVERIFY_OK(gckOS_ReleaseMutex(memory->os, memory->mutex));
     }
@@ -219,6 +221,8 @@ int gc_meminfo_show(struct seq_file* m, void* data)
     seq_printf(m, "    gcvPOOL_SYSTEM:\n");
     seq_printf(m, "        Free  : %10u B\n", free);
     seq_printf(m, "        Used  : %10u B\n", used);
+    seq_printf(m, "        MinFree  : %10u B\n", minFree);
+    seq_printf(m, "        MaxUsed  : %10u B\n", maxUsed);
     seq_printf(m, "        Total : %10u B\n", total);
 
     /* Acquire the database mutex. */
@@ -498,14 +502,12 @@ gc_version_show(struct seq_file *m, void *data)
     gcsINFO_NODE *node = m->private;
     gckGALDEVICE device = node->device;
     gcsPLATFORM * platform = device->platform;
-    gctCONST_STRING name;
 
     seq_printf(m, "%s built at %s\n",  gcvVERSION_STRING, HOST);
 
-    if (platform->ops->name)
+    if (platform->name)
     {
-        platform->ops->name(platform, &name);
-        seq_printf(m, "Platform path: %s\n", name);
+        seq_printf(m, "Platform path: %s\n", platform->name);
     }
     else
     {
@@ -597,7 +599,7 @@ gc_dump_trigger_show(struct seq_file *m, void *data)
 #if gcdENABLE_3D || gcdENABLE_2D
     seq_printf(m, "Get dump from /proc/kmsg or /sys/kernel/debug/gc/galcore_trace\n");
 
-    if (kernel && kernel->hardware->powerManagement == gcvFALSE)
+    if (kernel && kernel->hardware->options.powerManagement == gcvFALSE)
     {
         _DumpState(kernel);
     }
@@ -661,16 +663,37 @@ static int gc_vidmem_show(struct seq_file *m, void *unused)
     return 0;
 }
 
+static inline int strtoint_from_user(const char __user *s,
+                        size_t count, int *res)
+{
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,0,0)
+    int ret = kstrtoint_from_user(s, count, 10, res);
+
+    return ret < 0 ? ret : count;
+#else
+    /* sign, base 2 representation, newline, terminator */
+    char buf[1 + sizeof(long) * 8 + 1 + 1];
+
+    size_t len = min(count, sizeof(buf) - 1);
+
+    if (copy_from_user(buf, s, len))
+        return -EFAULT;
+    buf[len] = '\0';
+
+    *res = (int) simple_strtol(buf, NULL, 0);
+
+    return count;
+#endif
+}
+
 static int gc_vidmem_write(const char __user *buf, size_t count, void* data)
 {
-    dumpProcess = simple_strtol(buf, NULL, 0);
-    return count;
+    return strtoint_from_user(buf, count, &dumpProcess);
 }
 
 static int gc_dump_trigger_write(const char __user *buf, size_t count, void* data)
 {
-    dumpCore = simple_strtol(buf, NULL, 0);
-    return count;
+    return strtoint_from_user(buf, count, &dumpCore);
 }
 
 static gcsINFO InfoList[] =
@@ -800,9 +823,9 @@ _SetupVidMem(
     gceSTATUS status;
     gctUINT32 physAddr = ~0U;
     gckGALDEVICE device = Device;
-    struct resource* mem_region;
 
     /* set up the contiguous memory */
+    device->contiguousBase = ContiguousBase;
     device->contiguousSize = ContiguousSize;
 
     if (ContiguousSize > 0)
@@ -815,7 +838,7 @@ _SetupVidMem(
                 status = _AllocateMemory(
                     device,
                     device->contiguousSize,
-                    &device->contiguousBase,
+                    &device->contiguousLogical,
                     &device->contiguousPhysical,
                     &physAddr
                     );
@@ -833,18 +856,18 @@ _SetupVidMem(
 
                     if (gcmIS_SUCCESS(status))
                     {
-                        device->contiguousRequested = gcvTRUE;
-                        device->requestedContiguousBase = physAddr;
+                        device->contiguousVidMem->physical = device->contiguousPhysical;
+                        device->contiguousBase = physAddr;
                         break;
                     }
 
                     gcmkONERROR(_FreeMemory(
                         device,
-                        device->contiguousBase,
+                        device->contiguousLogical,
                         device->contiguousPhysical
                         ));
 
-                    device->contiguousBase     = gcvNULL;
+                    device->contiguousLogical  = gcvNULL;
                     device->contiguousPhysical = gcvNULL;
                 }
 
@@ -877,33 +900,19 @@ _SetupVidMem(
             }
             else
             {
-                if (Args->contiguousRequested == gcvFALSE)
-                {
-                    mem_region = request_mem_region(
-                        ContiguousBase, ContiguousSize, "galcore managed memory"
-                        );
+                gcmkONERROR(gckOS_RequestReservedMemory(
+                    device->os, ContiguousBase, ContiguousSize,
+                    "galcore contiguous memory",
+                    Args->contiguousRequested,
+                    &device->contiguousPhysical
+                    ));
 
-                    if (mem_region == gcvNULL)
-                    {
-                        gcmkTRACE_ZONE(
-                            gcvLEVEL_ERROR, gcvZONE_DRIVER,
-                            "%s(%d): Failed to claim %ld bytes @ 0x%08X\n",
-                            __FUNCTION__, __LINE__,
-                            ContiguousSize, ContiguousBase
-                            );
+                device->contiguousVidMem->physical = device->contiguousPhysical;
+                device->requestedContiguousBase = ContiguousBase;
+                device->requestedContiguousSize = ContiguousSize;
 
-                        gcmkONERROR(gcvSTATUS_OUT_OF_RESOURCES);
-                    }
-                }
-
-                device->requestedContiguousBase  = ContiguousBase;
-                device->requestedContiguousSize  = ContiguousSize;
-                device->contiguousRequested      = Args->contiguousRequested;
-
-                device->contiguousPhysical = gcvNULL;
                 device->contiguousPhysicalName = 0;
-                device->contiguousSize     = ContiguousSize;
-                device->contiguousMapped   = gcvTRUE;
+                device->contiguousSize = ContiguousSize;
             }
         }
     }
@@ -1099,6 +1108,8 @@ gckGALDEVICE_Construct(
     IN gctSIZE_T RegisterMemSizeVG,
     IN gctUINT32 ContiguousBase,
     IN gctSIZE_T ContiguousSize,
+    IN gctUINT32 ExternalBase,
+    IN gctSIZE_T ExternalSize,
     IN gctSIZE_T BankSize,
     IN gctINT FastClear,
     IN gctINT Compression,
@@ -1113,9 +1124,7 @@ gckGALDEVICE_Construct(
     )
 {
     gctUINT32 internalBaseAddress = 0, internalAlignment = 0;
-    gctUINT32 externalBaseAddress = 0, externalAlignment = 0;
-    gctUINT32 horizontalTileSize, verticalTileSize;
-    struct resource* mem_region;
+    gctUINT32 externalAlignment = 0;
     gctUINT32 physical;
     gckGALDEVICE device;
     gceSTATUS status;
@@ -1245,34 +1254,34 @@ gckGALDEVICE_Construct(
         physical = device->requestedRegisterMemBases[i];
 
         /* Set up register memory region. */
-        if ( physical != 0)
+        if (physical != 0)
         {
-
-            if ( Args->registerMemMapped )
+            if (Args->registerMemMapped)
             {
                 device->registerBases[i] = Args->registerMemAddress;
                 device->requestedRegisterMemBases[i] = 0;
 
-            } else {
-
-                mem_region = request_mem_region(physical,
-                        device->requestedRegisterMemSizes[i],
-                        "galcore register region");
-
-                if (mem_region == gcvNULL)
+            }
+            else
+            {
+#if USE_LINUX_PCIE
+                device->registerBases[i] = (gctPOINTER) pci_iomap(device->platform->device, 1,
+                        device->requestedRegisterMemSizes[i]);
+#else
+                if (!request_mem_region(physical, device->requestedRegisterMemSizes[i], "galcore register region"))
                 {
                     gcmkTRACE_ZONE(
                             gcvLEVEL_ERROR, gcvZONE_DRIVER,
-                            "%s(%d): Failed to claim %lu bytes @ 0x%08X\n",
+                            "%s(%d): Failed to claim %lu bytes @ 0x%zx\n",
                             __FUNCTION__, __LINE__,
                             physical, device->requestedRegisterMemSizes[i]
                      );
 
-                gcmkONERROR(gcvSTATUS_OUT_OF_RESOURCES);
+                    gcmkONERROR(gcvSTATUS_OUT_OF_RESOURCES);
                 }
-
-                device->registerBases[i] = (gctPOINTER) ioremap_nocache(
+                device->registerBases[i] = (gctPOINTER)ioremap_nocache(
                         physical, device->requestedRegisterMemSizes[i]);
+#endif
 
                 if (device->registerBases[i] == gcvNULL)
                 {
@@ -1307,6 +1316,10 @@ gckGALDEVICE_Construct(
     }
 
     gcmkONERROR(_SetupVidMem(device, ContiguousBase, ContiguousSize, BankSize, Args));
+
+    /* Set external base and size */
+    device->externalBase = ExternalBase;
+    device->externalSize = ExternalSize;
 
     if (device->irqLines[gcvCORE_MAJOR] != -1)
     {
@@ -1453,13 +1466,6 @@ gckGALDEVICE_Construct(
                 &device->systemMemorySize,
                 &device->systemMemoryBaseAddress
                 ));
-            /* query the amount of video memory */
-        gcmkONERROR(gckVGHARDWARE_QueryMemory(
-            device->kernels[i]->vg->hardware,
-            &device->internalSize, &internalBaseAddress, &internalAlignment,
-            &device->externalSize, &externalBaseAddress, &externalAlignment,
-            &horizontalTileSize, &verticalTileSize
-            ));
     }
     else
 #endif
@@ -1470,16 +1476,7 @@ gckGALDEVICE_Construct(
                 &device->systemMemorySize,
                 &device->systemMemoryBaseAddress
                 ));
-
-            /* query the amount of video memory */
-        gcmkONERROR(gckHARDWARE_QueryMemory(
-            device->kernels[i]->hardware,
-            &device->internalSize, &internalBaseAddress, &internalAlignment,
-            &device->externalSize, &externalBaseAddress, &externalAlignment,
-            &horizontalTileSize, &verticalTileSize
-            ));
     }
-
 
     /* Grab the first availiable kernel */
     for (i = 0; i < gcdMAX_GPU_COUNT; i++)
@@ -1517,7 +1514,6 @@ gckGALDEVICE_Construct(
             }
 
             device->internalPhysical = (gctPHYS_ADDR)(gctUINTPTR_T) physical;
-            device->internalPhysicalName = gcmPTR_TO_NAME(device->internalPhysical);
             physical += device->internalSize;
         }
     }
@@ -1527,30 +1523,37 @@ gckGALDEVICE_Construct(
         /* create the external memory heap */
         status = gckVIDMEM_Construct(
             device->os,
-            externalBaseAddress, device->externalSize, externalAlignment,
+            device->externalBase, device->externalSize, externalAlignment,
             0, &device->externalVidMem
             );
 
         if (gcmIS_ERROR(status))
         {
-            /* Error, disable internal heap. */
+            /* Error, disable external heap. */
             device->externalSize = 0;
         }
         else
         {
             /* Map external memory. */
-            device->externalLogical
-                = (gctPOINTER) ioremap_nocache(physical, device->externalSize);
-
-            if (device->externalLogical == gcvNULL)
-            {
-                gcmkONERROR(gcvSTATUS_OUT_OF_RESOURCES);
-            }
-
-            device->externalPhysical = (gctPHYS_ADDR)(gctUINTPTR_T) physical;
-            device->externalPhysicalName = gcmPTR_TO_NAME(device->externalPhysical);
-            physical += device->externalSize;
+            gcmkONERROR(gckOS_RequestReservedMemory(
+                    device->os,
+                    device->externalBase, device->externalSize,
+                    "galcore external memory",
+                    gcvTRUE,
+                    &device->externalPhysical
+                    ));
+            device->externalVidMem->physical = device->externalPhysical;
         }
+    }
+
+    if (device->internalPhysical)
+    {
+        device->internalPhysicalName = gcmPTR_TO_NAME(device->internalPhysical);
+    }
+
+    if (device->externalPhysical)
+    {
+        device->externalPhysicalName = gcmPTR_TO_NAME(device->externalPhysical);
     }
 
     if (device->contiguousPhysical)
@@ -1627,7 +1630,6 @@ gckGALDEVICE_Destroy(
             Device->contiguousPhysicalName = 0;
         }
 
-
         for (i = 0; i < gcdMAX_GPU_COUNT; i++)
         {
             if (Device->kernels[i] != gcvNULL)
@@ -1650,10 +1652,16 @@ gckGALDEVICE_Destroy(
             Device->internalVidMem = gcvNULL;
         }
 
+        if (Device->externalPhysical != gcvNULL)
+        {
+            gckOS_ReleaseReservedMemory(
+                Device->os,
+                Device->externalPhysical
+                );
+        }
+
         if (Device->externalLogical != gcvNULL)
         {
-            /* Unmap the external memory. */
-            iounmap(Device->externalLogical);
             Device->externalLogical = gcvNULL;
         }
 
@@ -1664,28 +1672,29 @@ gckGALDEVICE_Destroy(
             Device->externalVidMem = gcvNULL;
         }
 
-        if (Device->contiguousBase != gcvNULL)
+        if (Device->contiguousPhysical != gcvNULL)
         {
-            if (Device->contiguousMapped == gcvFALSE)
+            if (Device->requestedContiguousBase == 0)
             {
                 gcmkVERIFY_OK(_FreeMemory(
                     Device,
-                    Device->contiguousBase,
+                    Device->contiguousLogical,
                     Device->contiguousPhysical
                     ));
             }
+            else
+            {
+                gckOS_ReleaseReservedMemory(
+                    Device->os,
+                    Device->contiguousPhysical
+                    );
 
-            Device->contiguousBase     = gcvNULL;
+                Device->requestedContiguousBase = 0;
+                Device->requestedContiguousSize = 0;
+            }
+
+            Device->contiguousLogical  = gcvNULL;
             Device->contiguousPhysical = gcvNULL;
-        }
-
-        if (Device->requestedContiguousBase != 0
-         && Device->contiguousRequested == gcvFALSE
-        )
-        {
-            release_mem_region(Device->requestedContiguousBase, Device->requestedContiguousSize);
-            Device->requestedContiguousBase = 0;
-            Device->requestedContiguousSize = 0;
         }
 
         if (Device->contiguousVidMem != gcvNULL)
@@ -1697,16 +1706,19 @@ gckGALDEVICE_Destroy(
 
         for (i = 0; i < gcdMAX_GPU_COUNT; i++)
         {
-            if (Device->registerBases[i] != gcvNULL)
+            if (Device->registerBases[i])
             {
                 /* Unmap register memory. */
-                if ( Device->requestedRegisterMemBases[i] != 0 )
-                    iounmap(Device->registerBases[i]);
-
                 if (Device->requestedRegisterMemBases[i] != 0)
                 {
+#if USE_LINUX_PCIE
+                    pci_iounmap(Device->platform->device, Device->registerBases[i]);
+#else
+
+                    iounmap(Device->registerBases[i]);
                     release_mem_region(Device->requestedRegisterMemBases[i],
                             Device->requestedRegisterMemSizes[i]);
+#endif
                 }
 
                 Device->registerBases[i] = gcvNULL;
@@ -2192,6 +2204,10 @@ gckGALDEVICE_Stop(
 
         if (Device->kernels[i] != gcvNULL)
         {
+            gcmkONERROR(gckHARDWARE_SetPowerManagement(
+                Device->kernels[i]->hardware, gcvTRUE
+                ));
+
             /* Switch to OFF power state. */
             gcmkONERROR(gckHARDWARE_SetPowerManagementState(
                 Device->kernels[i]->hardware, gcvPOWER_OFF

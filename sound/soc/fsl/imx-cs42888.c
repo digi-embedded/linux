@@ -32,7 +32,10 @@
 #define SUPPORT_RATE_NUM    10
 
 struct imx_priv {
+	struct clk *codec_clk;
+	struct clk *esai_clk;
 	unsigned int mclk_freq;
+	unsigned int esai_freq;
 	struct platform_device *pdev;
 	struct platform_device *asrc_pdev;
 	u32 asrc_rate;
@@ -58,6 +61,9 @@ static int imx_cs42888_surround_hw_params(struct snd_pcm_substream *substream,
 		(enable_tdm ? SND_SOC_DAIFMT_DSP_A : SND_SOC_DAIFMT_LEFT_J);
 
 	int ret = 0;
+
+	priv->mclk_freq = clk_get_rate(priv->codec_clk);
+	priv->esai_freq = clk_get_rate(priv->esai_clk);
 
 	if (priv->is_codec_master) {
 		/* TDM is not supported by codec in master mode */
@@ -115,7 +121,10 @@ static int imx_cs42888_surround_hw_params(struct snd_pcm_substream *substream,
 	/* set i.MX active slot mask */
 	if (enable_tdm) {
 		/* 2 required by ESAI BCLK divisors, 8 slots, 32 width */
-		max_tdm_rate = priv->mclk_freq / (2*8*32);
+		if (priv->is_codec_master)
+			max_tdm_rate = priv->mclk_freq / (8*32);
+		else
+			max_tdm_rate = priv->esai_freq / (2*8*32);
 		if (params_rate(params) > max_tdm_rate) {
 			dev_err(dev,
 				"maximum supported sampling rate for %d channels is %dKHz\n",
@@ -151,7 +160,9 @@ static int imx_cs42888_surround_startup(struct snd_pcm_substream *substream)
 	static u32 support_rates[SUPPORT_RATE_NUM];
 	int ret;
 
-	if (priv->mclk_freq == 24576000) {
+	priv->mclk_freq = clk_get_rate(priv->codec_clk);
+
+	if (priv->mclk_freq % 12288000 == 0) {
 		support_rates[0] = 48000;
 		support_rates[1] = 96000;
 		support_rates[2] = 192000;
@@ -202,10 +213,10 @@ static const struct snd_soc_dapm_route audio_map[] = {
 	{"AIN1R", NULL, "Line In Jack"},
 	{"AIN2L", NULL, "Line In Jack"},
 	{"AIN2R", NULL, "Line In Jack"},
-	{"CPU-Playback",  NULL, "ASRC-Playback"},
 	{"Playback",  NULL, "CPU-Playback"},/* dai route for be and fe */
-	{"ASRC-Capture",  NULL, "CPU-Capture"},
 	{"CPU-Capture",  NULL, "Capture"},
+	{"CPU-Playback",  NULL, "ASRC-Playback"},
+	{"ASRC-Capture",  NULL, "CPU-Capture"},
 };
 
 static int be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
@@ -282,7 +293,6 @@ static int imx_cs42888_probe(struct platform_device *pdev)
 	struct platform_device *asrc_pdev = NULL;
 	struct i2c_client *codec_dev;
 	struct imx_priv *priv = &card_priv;
-	struct clk *codec_clk = NULL;
 	int ret;
 	u32 width;
 
@@ -322,6 +332,8 @@ static int imx_cs42888_probe(struct platform_device *pdev)
 		imx_cs42888_dai[0].cpu_dai_name    = dev_name(&esai_pdev->dev);
 		imx_cs42888_dai[0].platform_of_node = esai_np;
 		snd_soc_card_imx_cs42888.num_links = 1;
+		snd_soc_card_imx_cs42888.num_dapm_routes =
+			ARRAY_SIZE(audio_map) - 2;
 	} else {
 		imx_cs42888_dai[0].codec_of_node   = codec_np;
 		imx_cs42888_dai[0].cpu_dai_name    = dev_name(&esai_pdev->dev);
@@ -353,13 +365,19 @@ static int imx_cs42888_probe(struct platform_device *pdev)
 			priv->asrc_format = SNDRV_PCM_FORMAT_S16_LE;
 	}
 
-	codec_clk = devm_clk_get(&codec_dev->dev, NULL);
-	if (IS_ERR(codec_clk)) {
-		ret = PTR_ERR(codec_clk);
+	priv->codec_clk = devm_clk_get(&codec_dev->dev, NULL);
+	if (IS_ERR(priv->codec_clk)) {
+		ret = PTR_ERR(priv->codec_clk);
 		dev_err(&codec_dev->dev, "failed to get codec clk: %d\n", ret);
 		goto fail;
 	}
-	priv->mclk_freq = clk_get_rate(codec_clk);
+
+	priv->esai_clk = devm_clk_get(&esai_pdev->dev, "extal");
+	if (IS_ERR(priv->esai_clk)) {
+		ret = PTR_ERR(priv->esai_clk);
+		dev_err(&esai_pdev->dev, "failed to get cpu clk: %d\n", ret);
+		goto fail;
+	}
 
 	priv->is_codec_master = false;
 	if (of_property_read_bool(pdev->dev.of_node, "codec-master"))

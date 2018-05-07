@@ -1647,6 +1647,8 @@ static int ath10k_pci_hif_start(struct ath10k *ar)
 
 	ath10k_dbg(ar, ATH10K_DBG_BOOT, "boot hif start\n");
 
+	napi_enable(&ar->napi);
+
 	ath10k_pci_irq_enable(ar);
 	ath10k_pci_rx_post(ar);
 
@@ -1776,6 +1778,8 @@ static void ath10k_pci_hif_stop(struct ath10k *ar)
 	ath10k_pci_irq_disable(ar);
 	ath10k_pci_irq_sync(ar);
 	ath10k_pci_flush(ar);
+	ath10k_pci_sleep_sync(ar);
+
 	napi_synchronize(&ar->napi);
 	napi_disable(&ar->napi);
 
@@ -2531,7 +2535,6 @@ static int ath10k_pci_hif_power_up(struct ath10k *ar)
 		ath10k_err(ar, "could not wake up target CPU: %d\n", ret);
 		goto err_ce;
 	}
-	napi_enable(&ar->napi);
 
 	return 0;
 
@@ -3132,7 +3135,7 @@ int ath10k_pci_setup_resource(struct ath10k *ar)
 	setup_timer(&ar_pci->rx_post_retry, ath10k_pci_rx_replenish_retry,
 		    (unsigned long)ar);
 
-	if (QCA_REV_6174(ar))
+	if (QCA_REV_6174(ar) || QCA_REV_9377(ar))
 		ath10k_pci_override_ce_config(ar);
 
 	ret = ath10k_pci_alloc_pipes(ar);

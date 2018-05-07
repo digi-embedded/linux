@@ -1,7 +1,7 @@
 /*
  * caam - Freescale FSL CAAM support for hw_random
  *
- * Copyright (C) 2011-2015 Freescale Semiconductor, Inc.
+ * Copyright 2011 Freescale Semiconductor, Inc.
  *
  * Based on caamalg.c crypto API driver.
  *
@@ -80,12 +80,9 @@ static struct caam_rng_ctx *rng_ctx;
 
 static inline void rng_unmap_buf(struct device *jrdev, struct buf_data *bd)
 {
-	if (bd->addr) {
-		dma_sync_single_for_cpu(jrdev, bd->addr, RN_BUF_SIZE,
-					DMA_FROM_DEVICE);
+	if (bd->addr)
 		dma_unmap_single(jrdev, bd->addr, RN_BUF_SIZE,
 				 DMA_FROM_DEVICE);
-	}
 }
 
 static inline void rng_unmap_ctx(struct caam_rng_ctx *ctx)
@@ -214,9 +211,6 @@ static inline int rng_create_sh_desc(struct caam_rng_ctx *ctx)
 		dev_err(jrdev, "unable to map shared descriptor\n");
 		return -ENOMEM;
 	}
-	dma_sync_single_for_device(jrdev, ctx->sh_desc_dma, desc_bytes(desc),
-			       DMA_TO_DEVICE);
-
 #ifdef DEBUG
 	print_hex_dump(KERN_ERR, "rng shdesc@: ", DUMP_PREFIX_ADDRESS, 16, 4,
 		       desc, desc_bytes(desc), 1);
@@ -367,6 +361,7 @@ static int __init caam_rng_init(void)
 	struct device *ctrldev;
 	struct caam_drv_private *priv;
 	int err;
+	u32 cha_inst;
 
 	dev_node = of_find_compatible_node(NULL, NULL, "fsl,sec-v4.0");
 	if (!dev_node) {
@@ -393,7 +388,14 @@ static int __init caam_rng_init(void)
 		return -ENODEV;
 
 	/* Check for an instantiated RNG before registration */
-	if (!(rd_reg32(&priv->ctrl->perfmon.cha_num_ls) & CHA_ID_LS_RNG_MASK))
+	if (priv->has_seco) {
+		int i = priv->first_jr_index;
+
+		cha_inst = rd_reg32(&priv->jr[i]->perfmon.cha_num_ls);
+	} else {
+		cha_inst = rd_reg32(&priv->ctrl->perfmon.cha_num_ls);
+	}
+	if (!(cha_inst & CHA_ID_LS_RNG_MASK))
 		return -ENODEV;
 
 	dev = caam_jr_alloc();
@@ -409,10 +411,6 @@ static int __init caam_rng_init(void)
 	err = caam_init_rng(rng_ctx, dev);
 	if (err)
 		goto free_rng_ctx;
-
-#ifdef CONFIG_CRYPTO_DEV_FSL_CAAM_RNG_TEST
-	self_test(&caam_rng);
-#endif
 
 #ifdef CONFIG_CRYPTO_DEV_FSL_CAAM_RNG_TEST
 	self_test(&caam_rng);

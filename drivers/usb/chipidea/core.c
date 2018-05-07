@@ -523,13 +523,6 @@ static irqreturn_t ci_irq(int irq, void *data)
 	u32 otgsc = 0;
 
 	if (ci->in_lpm) {
-		/*
-		 * If we already have a wakeup irq pending there,
-		 * let's just return to wait resume finished firstly.
-		 */
-		if (ci->wakeup_int)
-			return IRQ_HANDLED;
-
 		disable_irq_nosync(irq);
 		ci->wakeup_int = true;
 		pm_runtime_get(ci->dev);
@@ -724,7 +717,7 @@ static int ci_extcon_register(struct ci_hdrc *ci)
 
 	id = &ci->platdata->id_extcon;
 	id->ci = ci;
-	if (!IS_ERR(id->edev)) {
+	if (!IS_ERR_OR_NULL(id->edev)) {
 		ret = devm_extcon_register_notifier(ci->dev, id->edev,
 						EXTCON_USB_HOST, &id->nb);
 		if (ret < 0) {
@@ -735,7 +728,7 @@ static int ci_extcon_register(struct ci_hdrc *ci)
 
 	vbus = &ci->platdata->vbus_extcon;
 	vbus->ci = ci;
-	if (!IS_ERR(vbus->edev)) {
+	if (!IS_ERR_OR_NULL(vbus->edev)) {
 		ret = devm_extcon_register_notifier(ci->dev, vbus->edev,
 						EXTCON_USB, &vbus->nb);
 		if (ret < 0) {
@@ -771,9 +764,6 @@ struct platform_device *ci_hdrc_add_device(struct device *dev,
 	}
 
 	pdev->dev.parent = dev;
-	pdev->dev.dma_mask = dev->dma_mask;
-	pdev->dev.dma_parms = dev->dma_parms;
-	dma_set_coherent_mask(&pdev->dev, dev->coherent_dma_mask);
 
 	ret = platform_device_add_resources(pdev, res, nres);
 	if (ret)
@@ -1145,10 +1135,8 @@ static int ci_controller_resume(struct device *dev)
 
 	dev_dbg(dev, "at %s\n", __func__);
 
-	if (!ci->in_lpm) {
-		WARN_ON(1);
+	if (!ci->in_lpm)
 		return 0;
-	}
 
 	ci_hdrc_enter_lpm(ci, false);
 	if (ci->usb_phy) {
@@ -1262,10 +1250,8 @@ static int ci_runtime_suspend(struct device *dev)
 
 	dev_dbg(dev, "at %s\n", __func__);
 
-	if (ci->in_lpm) {
-		WARN_ON(1);
+	if (ci->in_lpm)
 		return 0;
-	}
 
 	if (ci_otg_is_fsm_mode(ci))
 		ci_otg_fsm_suspend_for_srp(ci);

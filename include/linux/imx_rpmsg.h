@@ -27,6 +27,7 @@
 #define IMX_RPMSG_PMIC		2
 #define IMX_RPMSG_AUDIO		3
 #define IMX_RPMSG_KEY		4
+#define IMX_RPMSG_GPIO		5
 /* rpmsg version */
 #define IMX_RMPSG_MAJOR		1
 #define IMX_RMPSG_MINOR		0
@@ -40,6 +41,4 @@ struct imx_rpmsg_head {
 	u8 reserved[5];
 } __attribute__ ((packed));
 
-int imx_mu_rpmsg_register_nb(const char *name, struct notifier_block *nb);
-int imx_mu_rpmsg_unregister_nb(const char *name, struct notifier_block *nb);
 #endif /* __LINUX_IMX_RPMSG_H__ */

@@ -647,6 +647,7 @@ struct drm_gem_open {
 #define DRM_CAP_CURSOR_HEIGHT		0x9
 #define DRM_CAP_ADDFB2_MODIFIERS	0x10
 #define DRM_CAP_PAGE_FLIP_TARGET	0x11
+#define DRM_CAP_CRTC_IN_VBLANK_EVENT	0x12
 
 /** DRM_IOCTL_GET_CAP ioctl argument type */
 struct drm_get_cap {
@@ -814,6 +815,11 @@ extern "C" {
 #define DRM_IOCTL_MODE_CREATEPROPBLOB	DRM_IOWR(0xBD, struct drm_mode_create_blob)
 #define DRM_IOCTL_MODE_DESTROYPROPBLOB	DRM_IOWR(0xBE, struct drm_mode_destroy_blob)
 
+#define DRM_IOCTL_MODE_CREATE_LEASE    DRM_IOWR(0xC6, struct drm_mode_create_lease)
+#define DRM_IOCTL_MODE_LIST_LESSEES    DRM_IOWR(0xC7, struct drm_mode_list_lessees)
+#define DRM_IOCTL_MODE_GET_LEASE       DRM_IOWR(0xC8, struct drm_mode_get_lease)
+#define DRM_IOCTL_MODE_REVOKE_LEASE    DRM_IOWR(0xC9, struct drm_mode_revoke_lease)
+
 /**
  * Device specific ioctls should only be in their respective headers
  * The device specific ioctl range is from 0x40 to 0x9f.
@@ -851,7 +857,7 @@ struct drm_event_vblank {
 	__u32 tv_sec;
 	__u32 tv_usec;
 	__u32 sequence;
-	__u32 reserved;
+	__u32 crtc_id; /* 0 on older kernels that do not support this */
 };
 
 /* typedef area */
