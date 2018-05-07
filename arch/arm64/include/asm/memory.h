@@ -172,14 +172,6 @@ extern u64			kimage_voffset;
 #define MAX_MEMBLOCK_ADDR	U64_MAX
 
 /*
- * The maximum physical address that the linear direct mapping
- * of system RAM can cover. (PAGE_OFFSET can be interpreted as
- * a 2's complement signed quantity and negated to derive the
- * maximum size of the linear mapping.)
- */
-#define MAX_MEMBLOCK_ADDR	({ memstart_addr - PAGE_OFFSET - 1; })
-
-/*
  * PFNs are used to describe any physical page; this means
  * PFN 0 == physical address 0.
  *
