@@ -141,10 +141,24 @@
 			>;
 		};
 
-		pinctrl_lpi2c1: lpi1cgrp {
+		pinctrl_lpi2c0: lpi2c0grp {
 			fsl,pins = <
-				SC_P_USB_SS3_TC1_ADMA_I2C1_SCL	0x06000020
-				SC_P_USB_SS3_TC3_ADMA_I2C1_SDA	0x06000020
+				SC_P_MIPI_CSI0_GPIO0_00_ADMA_I2C0_SCL	0x06000020
+				SC_P_MIPI_CSI0_GPIO0_01_ADMA_I2C0_SDA	0x06000020
+			>;
+		};
+
+		pinctrl_lpi2c2: lpi2c2grp {
+			fsl,pins = <
+				SC_P_MIPI_DSI1_GPIO0_00_ADMA_I2C2_SCL	0x06000020
+				SC_P_MIPI_DSI1_GPIO0_01_ADMA_I2C2_SDA	0x06000020
+			>;
+		};
+
+		pinctrl_lpi2c3: lpi2c3grp {
+			fsl,pins = <
+				SC_P_SPI3_CS1_ADMA_I2C3_SCL	0x06000020
+				SC_P_MCLK_IN1_ADMA_I2C3_SDA	0x06000020
 			>;
 		};
 
@@ -327,13 +341,33 @@
 	status = "okay";
 };
 
-&i2c1 {
+/* I2C0 connected to MCA and crypto chip */
+&i2c0 {
 	#address-cells = <1>;
 	#size-cells = <0>;
 	clock-frequency = <100000>;
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_lpi2c1 &pinctrl_ioexp_rst>;
-	pinctrl-assert-gpios = <&gpio1 1 GPIO_ACTIVE_HIGH>;
+	pinctrl-0 = <&pinctrl_lpi2c0>;
+	status = "okay";
+};
+
+/* I2C2 available on Raspberry Pi expansion header */
+&i2c2 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	clock-frequency = <100000>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lpi2c2>;
+	status = "okay";
+};
+
+/* I2C3 available on Raspberry Pi expansion header */
+&i2c3 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	clock-frequency = <100000>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lpi2c3>;
 	status = "okay";
 };
 
