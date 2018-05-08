@@ -39,6 +39,17 @@
 			regulator-max-microvolt = <5000000>;
 			enable-active-high;
 		};
+
+		reg_3v3_eth0: regulator@1 {
+			compatible = "regulator-fixed";
+			reg = <1>;
+			regulator-name = "3v3_eth0";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			gpio = <&gpio5 8 GPIO_ACTIVE_HIGH>;
+			enable-active-high;
+			startup-delay-us = <25000>;
+		};
 	};
 };
 
@@ -83,22 +94,29 @@
 			>;
 		};
 
+		pinctrl_fec1_gpio: fec1gpiogrp {
+			fsl,pins = <
+				/* PHY reset */
+				SC_P_ENET0_RGMII_TXD2_LSIO_GPIO5_IO01	0x06000021
+				/* PHY power */
+				SC_P_ENET0_RGMII_RXD3_LSIO_GPIO5_IO08	0x06000021
+				/* PHY interrupt */
+				SC_P_ENET0_RGMII_TXD3_LSIO_GPIO5_IO02	0x06000021
+			>;
+		};
+
 		pinctrl_fec1: fec1grp {
 			fsl,pins = <
 				SC_P_ENET0_MDC_CONN_ENET0_MDC			0x06000020
 				SC_P_ENET0_MDIO_CONN_ENET0_MDIO			0x06000020
 				SC_P_ENET0_RGMII_TX_CTL_CONN_ENET0_RGMII_TX_CTL	0x06000020
-				SC_P_ENET0_RGMII_TXC_CONN_ENET0_RGMII_TXC	0x06000020
+				SC_P_ENET0_RGMII_TXC_CONN_ENET0_RCLK50M_OUT	0x06000020
 				SC_P_ENET0_RGMII_TXD0_CONN_ENET0_RGMII_TXD0	0x06000020
 				SC_P_ENET0_RGMII_TXD1_CONN_ENET0_RGMII_TXD1	0x06000020
-				SC_P_ENET0_RGMII_TXD2_CONN_ENET0_RGMII_TXD2	0x06000020
-				SC_P_ENET0_RGMII_TXD3_CONN_ENET0_RGMII_TXD3	0x06000020
-				SC_P_ENET0_RGMII_RXC_CONN_ENET0_RGMII_RXC	0x06000020
 				SC_P_ENET0_RGMII_RX_CTL_CONN_ENET0_RGMII_RX_CTL	0x06000020
 				SC_P_ENET0_RGMII_RXD0_CONN_ENET0_RGMII_RXD0	0x06000020
 				SC_P_ENET0_RGMII_RXD1_CONN_ENET0_RGMII_RXD1	0x06000020
-				SC_P_ENET0_RGMII_RXD2_CONN_ENET0_RGMII_RXD2	0x06000020
-				SC_P_ENET0_RGMII_RXD3_CONN_ENET0_RGMII_RXD3	0x06000020
+				SC_P_ENET0_RGMII_RXD2_CONN_ENET0_RMII_RX_ER	0x06000048
 			>;
 		};
 
@@ -258,10 +276,14 @@
 
 &fec1 {
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_fec1>;
-	phy-mode = "rgmii-id";
+	pinctrl-0 = <&pinctrl_fec1>, <&pinctrl_fec1_gpio>;
+	phy-mode = "rmii";
 	phy-handle = <&ethphy0>;
+	phy-supply = <&reg_3v3_eth0>;
+	phy-reset-gpios = <&gpio5 1 GPIO_ACTIVE_LOW>;
+	phy-reset-duration = <1>;
 	fsl,magic-packet;
+	digi,phy-reset-in-suspend;
 	status = "okay";
 
 	mdio {
@@ -270,6 +292,7 @@
 
 		ethphy0: ethernet-phy@0 {
 			compatible = "ethernet-phy-ieee802.3-c22";
+			smsc,disable-energy-detect;
 			reg = <0>;
 		};
 	};
