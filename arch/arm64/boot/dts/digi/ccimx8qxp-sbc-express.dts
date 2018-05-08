@@ -15,7 +15,10 @@
 
 /dts-v1/;
 
+/* i.MX8QXP CPU */
 #include "../freescale/fsl-imx8qxp.dtsi"
+/* Digi ConnectCore 8QXP SOM */
+#include "ccimx8qxp.dtsi"
 
 / {
 	model = "Digi ConnectCore 8X SBC Express";
@@ -53,6 +56,240 @@
 	};
 };
 
+&dpr1_channel1 {
+	status = "okay";
+};
+
+&dpr1_channel2 {
+	status = "okay";
+};
+
+&dpr1_channel3 {
+	status = "okay";
+};
+
+&dpr2_channel1 {
+	status = "okay";
+};
+
+&dpr2_channel2 {
+	status = "okay";
+};
+
+&dpr2_channel3 {
+	status = "okay";
+};
+
+&dpu1 {
+	status = "okay";
+};
+
+&fec1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_fec1>, <&pinctrl_fec1_gpio>;
+	phy-mode = "rmii";
+	phy-handle = <&ethphy0>;
+	phy-supply = <&reg_3v3_eth0>;
+	phy-reset-gpios = <&gpio5 1 GPIO_ACTIVE_LOW>;
+	phy-reset-duration = <1>;
+	fsl,magic-packet;
+	digi,phy-reset-in-suspend;
+	status = "okay";
+
+	mdio {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		ethphy0: ethernet-phy@0 {
+			compatible = "ethernet-phy-ieee802.3-c22";
+			smsc,disable-energy-detect;
+			reg = <0>;
+		};
+	};
+};
+
+&fec2 {
+	status = "disabled";
+};
+
+&flexcan1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_flexcan1>;
+	status = "okay";
+};
+
+&flexcan2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_flexcan2>;
+	status = "okay";
+};
+
+&gpu_3d0 {
+	status = "okay";
+};
+
+&i2c0_cm40 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	clock-frequency = <100000>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_cm40_i2c>;
+	status = "okay";
+};
+
+/* I2C2 available on Raspberry Pi expansion header */
+&i2c2 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	clock-frequency = <100000>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lpi2c2>;
+	status = "okay";
+};
+
+/* I2C3 available on Raspberry Pi expansion header */
+&i2c3 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	clock-frequency = <100000>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lpi2c3>;
+	status = "okay";
+};
+
+&imx8_gpu_ss {
+	status = "okay";
+};
+
+&intmux_cm40 {
+	status = "okay";
+};
+
+&isi_0 {
+	status = "okay";
+};
+
+&isi_1 {
+	status = "okay";
+};
+
+&isi_2 {
+	status = "okay";
+};
+
+&isi_3 {
+	status = "okay";
+};
+
+&lpuart0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lpuart0>;
+	status = "okay";
+};
+
+&lpuart1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lpuart1>;
+	status = "okay";
+};
+
+&lpuart2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lpuart2>;
+	status = "okay";
+};
+
+&lpuart3 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lpuart3>;
+	status = "okay";
+};
+
+&pcieb{
+	ext_osc = <1>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pcieb>;
+	clkreq-gpio = <&gpio4 1 GPIO_ACTIVE_LOW>;
+	reset-gpio = <&gpio4 0 GPIO_ACTIVE_LOW>;
+	status = "okay";
+};
+
+&pd_dma_lpuart2 {
+	debug_console;
+};
+
+&prg1 {
+	status = "okay";
+};
+
+&prg2 {
+	status = "okay";
+};
+
+&prg3 {
+	status = "okay";
+};
+
+&prg4 {
+	status = "okay";
+};
+
+&prg5 {
+	status = "okay";
+};
+
+&prg6 {
+	status = "okay";
+};
+
+&prg7 {
+	status = "okay";
+};
+
+&prg8 {
+	status = "okay";
+};
+
+&prg9 {
+	status = "okay";
+};
+
+&rpmsg{
+	/*
+	 * 64K for one rpmsg instance:
+	 * --0xb8000000~0xb800ffff: pingpong
+	 */
+	vdev-nums = <1>;
+	reg = <0x0 0xb8000000 0x0 0x10000>;
+	status = "okay";
+};
+
+&usbotg1 {
+	vbus-supply = <&reg_usb_otg1_vbus>;
+	srp-disable;
+	hnp-disable;
+	adp-disable;
+	power-polarity-active-high;
+	disable-over-current;
+	status = "okay";
+};
+
+/* Micro SD card */
+&usdhc2 {
+	pinctrl-names = "default", "state_100mhz", "state_200mhz";
+	pinctrl-0 = <&pinctrl_usdhc2>, <&pinctrl_usdhc2_gpio>;
+	pinctrl-1 = <&pinctrl_usdhc2_100mhz>, <&pinctrl_usdhc2_gpio>;
+	pinctrl-2 = <&pinctrl_usdhc2_200mhz>, <&pinctrl_usdhc2_gpio>;
+	bus-width = <4>;
+	cd-gpios = <&gpio5 9 GPIO_ACTIVE_HIGH>;
+	status = "okay";
+};
+
+&vpu {
+	status = "okay";
+};
+
+/* IOMUX */
 &iomuxc {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_hog>;
@@ -258,258 +495,4 @@
 			>;
 		};
 	};
-};
-
-&pd_dma_lpuart2 {
-	debug_console;
-};
-
-&lpuart0 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_lpuart0>;
-	status = "okay";
-};
-
-&lpuart1 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_lpuart1>;
-	status = "okay";
-};
-
-&lpuart2 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_lpuart2>;
-	status = "okay";
-};
-
-&lpuart3 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_lpuart3>;
-	status = "okay";
-};
-
-&fec1 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_fec1>, <&pinctrl_fec1_gpio>;
-	phy-mode = "rmii";
-	phy-handle = <&ethphy0>;
-	phy-supply = <&reg_3v3_eth0>;
-	phy-reset-gpios = <&gpio5 1 GPIO_ACTIVE_LOW>;
-	phy-reset-duration = <1>;
-	fsl,magic-packet;
-	digi,phy-reset-in-suspend;
-	status = "okay";
-
-	mdio {
-		#address-cells = <1>;
-		#size-cells = <0>;
-
-		ethphy0: ethernet-phy@0 {
-			compatible = "ethernet-phy-ieee802.3-c22";
-			smsc,disable-energy-detect;
-			reg = <0>;
-		};
-	};
-};
-
-&fec2 {
-	status = "disabled";
-};
-
-&flexcan1 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_flexcan1>;
-	status = "okay";
-};
-
-&flexcan2 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_flexcan2>;
-	status = "okay";
-};
-
-&intmux_cm40 {
-	status = "okay";
-};
-
-&i2c0_cm40 {
-	#address-cells = <1>;
-	#size-cells = <0>;
-	clock-frequency = <100000>;
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_cm40_i2c>;
-	status = "okay";
-};
-
-/* I2C0 connected to MCA and crypto chip */
-&i2c0 {
-	#address-cells = <1>;
-	#size-cells = <0>;
-	clock-frequency = <100000>;
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_lpi2c0>;
-	status = "okay";
-};
-
-/* I2C2 available on Raspberry Pi expansion header */
-&i2c2 {
-	#address-cells = <1>;
-	#size-cells = <0>;
-	clock-frequency = <100000>;
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_lpi2c2>;
-	status = "okay";
-};
-
-/* I2C3 available on Raspberry Pi expansion header */
-&i2c3 {
-	#address-cells = <1>;
-	#size-cells = <0>;
-	clock-frequency = <100000>;
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_lpi2c3>;
-	status = "okay";
-};
-
-&usbotg1 {
-	vbus-supply = <&reg_usb_otg1_vbus>;
-	srp-disable;
-	hnp-disable;
-	adp-disable;
-	power-polarity-active-high;
-	disable-over-current;
-	status = "okay";
-};
-
-&usdhc1 {
-	pinctrl-names = "default", "state_100mhz", "state_200mhz";
-	pinctrl-0 = <&pinctrl_usdhc1>;
-	pinctrl-1 = <&pinctrl_usdhc1_100mhz>;
-	pinctrl-2 = <&pinctrl_usdhc1_200mhz>;
-	bus-width = <8>;
-	non-removable;
-	status = "okay";
-};
-
-&usdhc2 {
-	pinctrl-names = "default", "state_100mhz", "state_200mhz";
-	pinctrl-0 = <&pinctrl_usdhc2>, <&pinctrl_usdhc2_gpio>;
-	pinctrl-1 = <&pinctrl_usdhc2_100mhz>, <&pinctrl_usdhc2_gpio>;
-	pinctrl-2 = <&pinctrl_usdhc2_200mhz>, <&pinctrl_usdhc2_gpio>;
-	bus-width = <4>;
-	cd-gpios = <&gpio5 9 GPIO_ACTIVE_HIGH>;
-	status = "okay";
-};
-
-&pcieb{
-	ext_osc = <1>;
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_pcieb>;
-	clkreq-gpio = <&gpio4 1 GPIO_ACTIVE_LOW>;
-	disable-gpio = <&pca9557_a 2 GPIO_ACTIVE_LOW>;
-	reset-gpio = <&gpio4 0 GPIO_ACTIVE_LOW>;
-	epdev_on-supply = <&epdev_on>;
-	status = "okay";
-};
-
-&prg1 {
-	status = "okay";
-};
-
-&prg2 {
-	status = "okay";
-};
-
-&prg3 {
-	status = "okay";
-};
-
-&prg4 {
-	status = "okay";
-};
-
-&prg5 {
-	status = "okay";
-};
-
-&prg6 {
-	status = "okay";
-};
-
-&prg7 {
-	status = "okay";
-};
-
-&prg8 {
-	status = "okay";
-};
-
-&prg9 {
-	status = "okay";
-};
-
-&dpr1_channel1 {
-	status = "okay";
-};
-
-&dpr1_channel2 {
-	status = "okay";
-};
-
-&dpr1_channel3 {
-	status = "okay";
-};
-
-&dpr2_channel1 {
-	status = "okay";
-};
-
-&dpr2_channel2 {
-	status = "okay";
-};
-
-&dpr2_channel3 {
-	status = "okay";
-};
-
-&dpu1 {
-	status = "okay";
-};
-
-&gpu_3d0 {
-	status = "okay";
-};
-
-&imx8_gpu_ss {
-	status = "okay";
-};
-
-&rpmsg{
-	/*
-	 * 64K for one rpmsg instance:
-	 * --0xb8000000~0xb800ffff: pingpong
-	 */
-	vdev-nums = <1>;
-	reg = <0x0 0xb8000000 0x0 0x10000>;
-	status = "okay";
-};
-
-&isi_0 {
-	status = "okay";
-};
-
-&isi_1 {
-	status = "okay";
-};
-
-&isi_2 {
-	status = "okay";
-};
-
-&isi_3 {
-	status = "okay";
-};
-
-&vpu {
-	status = "okay";
 };

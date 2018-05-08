@@ -1,0 +1,127 @@
+/*
+ * Copyright 2018, Digi International Inc.
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+/* I2C0 connected to MCA and crypto chip */
+&i2c0 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	clock-frequency = <100000>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lpi2c0>;
+	status = "okay";
+};
+
+/* Bluetooth UART */
+&lpuart1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lpuart1>;
+	status = "okay";
+};
+
+&rpmsg{
+	/*
+	 * 64K for one rpmsg instance:
+	 * --0xb8000000~0xb800ffff: pingpong
+	 */
+	vdev-nums = <1>;
+	reg = <0x0 0xb8000000 0x0 0x10000>;
+	status = "okay";
+};
+
+/* eMMC */
+&usdhc1 {
+	pinctrl-names = "default", "state_100mhz", "state_200mhz";
+	pinctrl-0 = <&pinctrl_usdhc1>;
+	pinctrl-1 = <&pinctrl_usdhc1_100mhz>;
+	pinctrl-2 = <&pinctrl_usdhc1_200mhz>;
+	bus-width = <8>;
+	non-removable;
+	status = "okay";
+};
+
+/* IOMUX */
+&iomuxc {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_hog>;
+
+	imx8qxp-mek {
+		/* Bluetooth UART */
+		pinctrl_lpuart1: lpuart1grp {
+			fsl,pins = <
+				SC_P_UART1_TX_ADMA_UART1_TX		0x06000020
+				SC_P_UART1_RX_ADMA_UART1_RX		0x06000020
+				SC_P_UART1_RTS_B_ADMA_UART1_RTS_B	0x06000020
+				SC_P_UART1_CTS_B_ADMA_UART1_CTS_B	0x06000020
+			>;
+		};
+
+		/* Internal I2C (MCA, Crypto chip) */
+		pinctrl_lpi2c0: lpi2c0grp {
+			fsl,pins = <
+				SC_P_MIPI_CSI0_GPIO0_00_ADMA_I2C0_SCL	0x06000020
+				SC_P_MIPI_CSI0_GPIO0_01_ADMA_I2C0_SDA	0x06000020
+			>;
+		};
+
+		/* eMMC */
+		pinctrl_usdhc1: usdhc1grp {
+			fsl,pins = <
+				SC_P_EMMC0_CLK_CONN_EMMC0_CLK		0x06000041
+				SC_P_EMMC0_CMD_CONN_EMMC0_CMD		0x00000021
+				SC_P_EMMC0_DATA0_CONN_EMMC0_DATA0	0x00000021
+				SC_P_EMMC0_DATA1_CONN_EMMC0_DATA1	0x00000021
+				SC_P_EMMC0_DATA2_CONN_EMMC0_DATA2	0x00000021
+				SC_P_EMMC0_DATA3_CONN_EMMC0_DATA3	0x00000021
+				SC_P_EMMC0_DATA4_CONN_EMMC0_DATA4	0x00000021
+				SC_P_EMMC0_DATA5_CONN_EMMC0_DATA5	0x00000021
+				SC_P_EMMC0_DATA6_CONN_EMMC0_DATA6	0x00000021
+				SC_P_EMMC0_DATA7_CONN_EMMC0_DATA7	0x00000021
+				SC_P_EMMC0_STROBE_CONN_EMMC0_STROBE	0x06000041
+			>;
+		};
+
+		pinctrl_usdhc1_100mhz: usdhc1grp100mhz {
+			fsl,pins = <
+				SC_P_EMMC0_CLK_CONN_EMMC0_CLK		0x06000040
+				SC_P_EMMC0_CMD_CONN_EMMC0_CMD		0x00000020
+				SC_P_EMMC0_DATA0_CONN_EMMC0_DATA0	0x00000020
+				SC_P_EMMC0_DATA1_CONN_EMMC0_DATA1	0x00000020
+				SC_P_EMMC0_DATA2_CONN_EMMC0_DATA2	0x00000020
+				SC_P_EMMC0_DATA3_CONN_EMMC0_DATA3	0x00000020
+				SC_P_EMMC0_DATA4_CONN_EMMC0_DATA4	0x00000020
+				SC_P_EMMC0_DATA5_CONN_EMMC0_DATA5	0x00000020
+				SC_P_EMMC0_DATA6_CONN_EMMC0_DATA6	0x00000020
+				SC_P_EMMC0_DATA7_CONN_EMMC0_DATA7	0x00000020
+				SC_P_EMMC0_STROBE_CONN_EMMC0_STROBE	0x06000040
+			>;
+		};
+
+		pinctrl_usdhc1_200mhz: usdhc1grp200mhz {
+			fsl,pins = <
+				SC_P_EMMC0_CLK_CONN_EMMC0_CLK		0x06000040
+				SC_P_EMMC0_CMD_CONN_EMMC0_CMD		0x00000020
+				SC_P_EMMC0_DATA0_CONN_EMMC0_DATA0	0x00000020
+				SC_P_EMMC0_DATA1_CONN_EMMC0_DATA1	0x00000020
+				SC_P_EMMC0_DATA2_CONN_EMMC0_DATA2	0x00000020
+				SC_P_EMMC0_DATA3_CONN_EMMC0_DATA3	0x00000020
+				SC_P_EMMC0_DATA4_CONN_EMMC0_DATA4	0x00000020
+				SC_P_EMMC0_DATA5_CONN_EMMC0_DATA5	0x00000020
+				SC_P_EMMC0_DATA6_CONN_EMMC0_DATA6	0x00000020
+				SC_P_EMMC0_DATA7_CONN_EMMC0_DATA7	0x00000020
+				SC_P_EMMC0_STROBE_CONN_EMMC0_STROBE	0x06000040
+			>;
+		};
+	};
+};
