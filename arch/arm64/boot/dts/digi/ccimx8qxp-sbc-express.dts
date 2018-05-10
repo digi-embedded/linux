@@ -146,6 +146,9 @@
 &i2c2 {
 	#address-cells = <1>;
 	#size-cells = <0>;
+	clocks = <&clk IMX8QXP_I2C2_CLK>,
+		 <&clk IMX8QXP_I2C2_IPG_CLK>;
+	clock-names = "per", "ipg";
 	clock-frequency = <100000>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lpi2c2>;
