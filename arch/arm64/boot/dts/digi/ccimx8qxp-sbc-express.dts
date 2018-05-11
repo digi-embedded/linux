@@ -303,6 +303,13 @@
 	pinctrl-0 = <&pinctrl_hog>;
 
 	imx8qxp-mek {
+		pinctrl_cm40_i2c: cm40i2cgrp {
+			fsl,pins = <
+				SC_P_ADC_IN1_M40_I2C0_SDA	0x0600004c
+				SC_P_ADC_IN0_M40_I2C0_SCL	0x0600004c
+			>;
+		};
+
 		pinctrl_hog: hoggrp {
 			fsl,pins = <
 				SC_P_MCLK_OUT0_ADMA_ACM_MCLK_OUT0	0x0600004c
@@ -379,13 +386,6 @@
 			>;
 		};
 
-		pinctrl_cm40_i2c: cm40i2cgrp {
-			fsl,pins = <
-				SC_P_ADC_IN1_M40_I2C0_SDA	0x0600004c
-				SC_P_ADC_IN0_M40_I2C0_SCL	0x0600004c
-			>;
-		};
-
 		pinctrl_lpi2c0: lpi2c0grp {
 			fsl,pins = <
 				SC_P_MIPI_CSI0_GPIO0_00_ADMA_I2C0_SCL	0x06000020
@@ -404,6 +404,14 @@
 			fsl,pins = <
 				SC_P_SPI3_CS1_ADMA_I2C3_SCL	0x06000020
 				SC_P_MCLK_IN1_ADMA_I2C3_SDA	0x06000020
+			>;
+		};
+
+		pinctrl_pcieb: pcieagrp{
+			fsl,pins = <
+				SC_P_PCIE_CTRL0_PERST_B_LSIO_GPIO4_IO00		0x06000021
+				SC_P_PCIE_CTRL0_CLKREQ_B_LSIO_GPIO4_IO01	0x06000021
+				SC_P_PCIE_CTRL0_WAKE_B_LSIO_GPIO4_IO02		0x06000021
 			>;
 		};
 
@@ -492,14 +500,6 @@
 				SC_P_USDHC1_DATA1_CONN_USDHC1_DATA1	0x06000020
 				SC_P_USDHC1_DATA2_CONN_USDHC1_DATA2	0x06000020
 				SC_P_USDHC1_DATA3_CONN_USDHC1_DATA3	0x06000020
-			>;
-		};
-
-		pinctrl_pcieb: pcieagrp{
-			fsl,pins = <
-				SC_P_PCIE_CTRL0_PERST_B_LSIO_GPIO4_IO00		0x06000021
-				SC_P_PCIE_CTRL0_CLKREQ_B_LSIO_GPIO4_IO01	0x06000021
-				SC_P_PCIE_CTRL0_WAKE_B_LSIO_GPIO4_IO02		0x06000021
 			>;
 		};
 	};
