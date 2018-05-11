@@ -26,13 +26,6 @@
 	status = "okay";
 };
 
-/* Bluetooth UART */
-&lpuart1 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_lpuart1>;
-	status = "okay";
-};
-
 &rpmsg{
 	/*
 	 * 64K for one rpmsg instance:
@@ -60,16 +53,6 @@
 	pinctrl-0 = <&pinctrl_hog>;
 
 	imx8qxp-mek {
-		/* Bluetooth UART */
-		pinctrl_lpuart1: lpuart1grp {
-			fsl,pins = <
-				SC_P_UART1_TX_ADMA_UART1_TX		0x06000020
-				SC_P_UART1_RX_ADMA_UART1_RX		0x06000020
-				SC_P_UART1_RTS_B_ADMA_UART1_RTS_B	0x06000020
-				SC_P_UART1_CTS_B_ADMA_UART1_CTS_B	0x06000020
-			>;
-		};
-
 		/* Internal I2C (MCA, Crypto chip) */
 		pinctrl_lpi2c0: lpi2c0grp {
 			fsl,pins = <

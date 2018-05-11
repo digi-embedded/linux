@@ -17,8 +17,8 @@
 
 /* i.MX8QXP CPU */
 #include "../freescale/fsl-imx8qxp.dtsi"
-/* Digi ConnectCore 8QXP SOM */
-#include "ccimx8qxp.dtsi"
+/* Digi ConnectCore 8QXP (wireless/bluetooth variant) */
+#include "ccimx8qxp-wb.dtsi"
 
 / {
 	model = "Digi ConnectCore 8X SBC Express";
@@ -252,12 +252,7 @@
 	status = "okay";
 };
 
-&lpuart1 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_lpuart1>;
-	status = "okay";
-};
-
+/* Console */
 &lpuart2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lpuart2>;
@@ -267,15 +262,6 @@
 &lpuart3 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lpuart3>;
-	status = "okay";
-};
-
-&pcieb{
-	ext_osc = <1>;
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_pcieb>;
-	clkreq-gpio = <&gpio4 1 GPIO_ACTIVE_LOW>;
-	reset-gpio = <&gpio4 0 GPIO_ACTIVE_LOW>;
 	status = "okay";
 };
 
