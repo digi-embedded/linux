@@ -34,15 +34,6 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 
-		reg_usb_otg1_vbus: regulator@0 {
-			compatible = "regulator-fixed";
-			reg = <0>;
-			regulator-name = "usb_otg1_vbus";
-			regulator-min-microvolt = <5000000>;
-			regulator-max-microvolt = <5000000>;
-			enable-active-high;
-		};
-
 		reg_3v3_eth0: regulator@1 {
 			compatible = "regulator-fixed";
 			reg = <1>;
@@ -316,11 +307,13 @@
 };
 
 &usbotg1 {
-	vbus-supply = <&reg_usb_otg1_vbus>;
-	srp-disable;
-	hnp-disable;
-	adp-disable;
-	power-polarity-active-high;
+	dr_mode = "host";
+	disable-over-current;
+	status = "okay";
+};
+
+&usbotg3 {
+	dr_mode = "host";
 	disable-over-current;
 	status = "okay";
 };
