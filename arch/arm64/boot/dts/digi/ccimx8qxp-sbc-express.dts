@@ -165,6 +165,26 @@
 	status = "okay";
 };
 
+&i2c0_mipi_lvds0 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_i2c0_mipi_lvds0>;
+	clock-frequency = <100000>;
+	status = "okay";
+
+	goodix_touch: gt9271@14 {
+		compatible = "goodix,gt9271";
+		reg = <0x14>;
+		/* Interrupt for LVDS0 */
+		interrupt-parent = <&gpio4>;
+		interrupts = <19 IRQ_TYPE_EDGE_FALLING>;
+		irq-gpios = <&gpio4 19 GPIO_ACTIVE_LOW>;
+		skip-firmware-request;
+		status = "okay";
+	};
+};
+
 &imx8_gpu_ss {
 	status = "okay";
 };
@@ -186,6 +206,43 @@
 };
 
 &isi_3 {
+	status = "okay";
+};
+
+&ldb1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lvds0>;
+	status = "okay";
+
+	lvds-channel@0 {
+		fsl,data-mapping = "jeida";
+		fsl,data-width = <24>;
+		status = "okay";
+
+		display-timings {
+			native-mode = <&g101evn010_1>;
+
+			/* AUO G101EVN01.0 */
+			g101evn010_1: timing@0 {
+				clock-frequency = <68930000>;
+				hactive = <1280>;
+				vactive = <800>;
+				hfront-porch = <120>;
+				hback-porch = <0>;
+				hsync-len = <8>;
+				vback-porch = <10>;
+				vfront-porch = <0>;
+				vsync-len = <6>;
+				hsync-active = <1>;
+				vsync-active = <1>;
+				de-active = <1>;
+				pixelclk-active = <0>;
+			};
+		};
+	};
+};
+
+&ldb1_phy {
 	status = "okay";
 };
 
@@ -346,6 +403,15 @@
 			>;
 		};
 
+		pinctrl_lvds0: lvds0grp {
+			fsl,pins = <
+				/* LVDS0 touch interrupt */
+				SC_P_USDHC1_RESET_B_LSIO_GPIO4_IO19	0x06000020
+				/* LVDS0 PWM backlight (as GPIO) */
+				SC_P_MIPI_DSI0_GPIO0_00_LSIO_GPIO1_IO27	0x06000020
+			>;
+		};
+
 		pinctrl_fec1_gpio: fec1gpiogrp {
 			fsl,pins = <
 				/* PHY reset */
@@ -383,6 +449,13 @@
 			fsl,pins = <
 				SC_P_FLEXCAN1_TX_ADMA_FLEXCAN1_TX		0x21
 				SC_P_FLEXCAN1_RX_ADMA_FLEXCAN1_RX		0x21
+			>;
+		};
+
+		pinctrl_i2c0_mipi_lvds0: mipi_lvds0_i2c0_grp {
+			fsl,pins = <
+				SC_P_MIPI_DSI0_I2C0_SCL_MIPI_DSI0_I2C0_SCL 0xc6000020
+				SC_P_MIPI_DSI0_I2C0_SDA_MIPI_DSI0_I2C0_SDA 0xc6000020
 			>;
 		};
 
