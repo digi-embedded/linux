@@ -60,7 +60,7 @@
 
 /* IOMUX */
 &iomuxc {
-	imx8qxp-mek {
+	ccimx8qxp {
 		/* UART1 Bluetooth */
 		pinctrl_lpuart1: lpuart1grp {
 			fsl,pins = <

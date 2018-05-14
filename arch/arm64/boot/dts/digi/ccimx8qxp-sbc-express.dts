@@ -345,7 +345,7 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_hog>;
 
-	imx8qxp-mek {
+	ccimx8qxp {
 		pinctrl_cm40_i2c: cm40i2cgrp {
 			fsl,pins = <
 				SC_P_ADC_IN1_M40_I2C0_SDA	0x0600004c
