@@ -164,9 +164,27 @@
 	clock-frequency = <100000>;
 	status = "okay";
 
-	goodix_touch: gt9271@14 {
+	/*
+	 * On the CC8X SBC, an inconsistent reset sequence makes
+	 * the Goodix display's touch controller respond to two I2C
+	 * addresses: 0x14 and 0x5D. To make sure the touchscreen
+	 * works every time, the touch controller's description must
+	 * be duplicated for both addresses.
+	 */
+	goodix_touch1: gt9271@14 {
 		compatible = "goodix,gt9271";
 		reg = <0x14>;
+		/* Interrupt for LVDS0 */
+		interrupt-parent = <&gpio4>;
+		interrupts = <19 IRQ_TYPE_EDGE_FALLING>;
+		irq-gpios = <&gpio4 19 GPIO_ACTIVE_LOW>;
+		skip-firmware-request;
+		status = "okay";
+	};
+
+	goodix_touch2: gt9271@5D {
+		compatible = "goodix,gt9271";
+		reg = <0x5D>;
 		/* Interrupt for LVDS0 */
 		interrupt-parent = <&gpio4>;
 		interrupts = <19 IRQ_TYPE_EDGE_FALLING>;
