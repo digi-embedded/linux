@@ -1,5 +1,5 @@
-/* rtc-mca-cc8x.c - Real time clock device driver for MCA on ConnectCore 8X
- * Copyright (C) 2018  Digi International
+/* rtc-mca.c - Real time clock device driver for MCA on ConnectCore modules
+ * Copyright (C) 2016 - 2018  Digi International
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -16,7 +16,6 @@
  * Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
  * Boston, MA  02110-1301, USA.
  */
-
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/init.h>
@@ -25,14 +24,34 @@
 #include <linux/rtc.h>
 #include <linux/slab.h>
 #include <linux/delay.h>
-#include <linux/mfd/mca-cc8x/registers.h>
-#include <linux/mfd/mca-cc8x/core.h>
+#include <linux/mfd/mca-common/core.h>
 #include <linux/of.h>
+#include <linux/of_device.h>
 #include <linux/of_irq.h>
 #include <linux/regmap.h>
 
+#define MCA_DRVNAME_RTC		"mca-rtc"
+
 #define CLOCK_DATA_LEN	(MCA_RTC_COUNT_SEC - MCA_RTC_COUNT_YEAR_L + 1)
 #define ALARM_DATA_LEN	(MCA_RTC_ALARM_SEC - MCA_RTC_ALARM_YEAR_L + 1)
+
+#ifdef CONFIG_OF
+enum mca_rtc_type {
+	CC6UL_MCA_RTC,
+	CC8X_MCA_RTC,
+};
+
+struct mca_rtc_data {
+	enum mca_rtc_type devtype;
+};
+#endif
+
+struct mca_rtc {
+	struct rtc_device *rtc_dev;
+	struct mca_drv *mca;
+	int irq_alarm;
+	bool alarm_enabled;
+};
 
 enum {
 	DATA_YEAR_L,
@@ -44,14 +63,7 @@ enum {
 	DATA_SEC,
 };
 
-struct mca_cc8x_rtc {
-	struct rtc_device *rtc_dev;
-	struct mca_drv *mca;
-	int irq_alarm;
-	bool alarm_enabled;
-};
-
-static void mca_cc8x_data_to_tm(u8 *data, struct rtc_time *tm)
+static void mca_data_to_tm(u8 *data, struct rtc_time *tm)
 {
 	/* conversion from MCA RTC to struct time is month-1 and year-1900 */
 	tm->tm_year = (((data[DATA_YEAR_H] &
@@ -65,7 +77,7 @@ static void mca_cc8x_data_to_tm(u8 *data, struct rtc_time *tm)
 	tm->tm_sec  = (data[DATA_SEC]   & MCA_RTC_SEC_MASK);
 }
 
-static void mca_cc8x_tm_to_data(struct rtc_time *tm, u8 *data)
+static void mca_tm_to_data(struct rtc_time *tm, u8 *data)
 {
 	/* conversion from struct time to MCA RTC is year+1900 */
 	data[DATA_YEAR_L]  &= (u8)~MCA_RTC_YEAR_L_MASK;
@@ -92,26 +104,26 @@ static void mca_cc8x_tm_to_data(struct rtc_time *tm, u8 *data)
 	data[DATA_SEC]   |= tm->tm_sec & MCA_RTC_SEC_MASK;
 }
 
-static int mca_cc8x_rtc_stop_alarm(struct device *dev)
+static int mca_rtc_stop_alarm(struct device *dev)
 {
-	struct mca_cc8x_rtc *rtc = dev_get_drvdata(dev);
+	struct mca_rtc *rtc = dev_get_drvdata(dev);
 
 	return regmap_update_bits(rtc->mca->regmap, MCA_RTC_CONTROL,
 				  MCA_RTC_ALARM_EN, 0);
 }
 
-static int mca_cc8x_rtc_start_alarm(struct device *dev)
+static int mca_rtc_start_alarm(struct device *dev)
 {
-	struct mca_cc8x_rtc *rtc = dev_get_drvdata(dev);
+	struct mca_rtc *rtc = dev_get_drvdata(dev);
 
 	return regmap_update_bits(rtc->mca->regmap, MCA_RTC_CONTROL,
 				  MCA_RTC_ALARM_EN,
 				  MCA_RTC_ALARM_EN);
 }
 
-static int mca_cc8x_rtc_read_time(struct device *dev, struct rtc_time *tm)
+static int mca_rtc_read_time(struct device *dev, struct rtc_time *tm)
 {
-	struct mca_cc8x_rtc *rtc = dev_get_drvdata(dev);
+	struct mca_rtc *rtc = dev_get_drvdata(dev);
 	u8 data[CLOCK_DATA_LEN] = { [0 ... (CLOCK_DATA_LEN - 1)] = 0 };
 	int ret;
 
@@ -122,17 +134,17 @@ static int mca_cc8x_rtc_read_time(struct device *dev, struct rtc_time *tm)
 		return ret;
 	}
 
-	mca_cc8x_data_to_tm(data, tm);
+	mca_data_to_tm(data, tm);
 	return rtc_valid_tm(tm);
 }
 
-static int mca_cc8x_rtc_set_time(struct device *dev, struct rtc_time *tm)
+static int mca_rtc_set_time(struct device *dev, struct rtc_time *tm)
 {
-	struct mca_cc8x_rtc *rtc = dev_get_drvdata(dev);
+	struct mca_rtc *rtc = dev_get_drvdata(dev);
 	u8 data[CLOCK_DATA_LEN] = { [0 ... (CLOCK_DATA_LEN - 1)] = 0 };
 	int ret;
 
-	mca_cc8x_tm_to_data(tm, data);
+	mca_tm_to_data(tm, data);
 
 	ret = regmap_bulk_write(rtc->mca->regmap, MCA_RTC_COUNT_YEAR_L,
 				data, CLOCK_DATA_LEN);
@@ -151,7 +163,7 @@ static int mca_cc8x_rtc_set_time(struct device *dev, struct rtc_time *tm)
  * alarm value is adjusted when it is being written/read, decrementing/incremen-
  * ting the value by 1 second.
  */
-static void mca_cc8x_rtc_adjust_alarm_time(struct rtc_wkalrm *alrm, bool inc)
+static void mca_rtc_adjust_alarm_time(struct rtc_wkalrm *alrm, bool inc)
 {
 	unsigned long time;
 
@@ -160,9 +172,9 @@ static void mca_cc8x_rtc_adjust_alarm_time(struct rtc_wkalrm *alrm, bool inc)
 	rtc_time_to_tm(time, &alrm->time);
 }
 
-static int mca_cc8x_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alrm)
+static int mca_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 {
-	struct mca_cc8x_rtc *rtc = dev_get_drvdata(dev);
+	struct mca_rtc *rtc = dev_get_drvdata(dev);
 	u8 data[CLOCK_DATA_LEN] = { [0 ... (CLOCK_DATA_LEN - 1)] = 0 };
 	int ret;
 	unsigned int val;
@@ -172,8 +184,8 @@ static int mca_cc8x_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 	if (ret < 0)
 		return ret;
 
-	mca_cc8x_data_to_tm(data, &alrm->time);
-	mca_cc8x_rtc_adjust_alarm_time(alrm, true);
+	mca_data_to_tm(data, &alrm->time);
+	mca_rtc_adjust_alarm_time(alrm, true);
 
 	/* Enable status */
 	ret = regmap_read(rtc->mca->regmap, MCA_RTC_CONTROL, &val);
@@ -184,26 +196,26 @@ static int mca_cc8x_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 	ret = regmap_read(rtc->mca->regmap, MCA_IRQ_STATUS_0, &val);
 	if (ret < 0)
 		return ret;
-	alrm->pending = (val & MCA_CC8X_M_RTC_ALARM) ? 1 : 0;
+	alrm->pending = (val & MCA_RTC_ALARM) ? 1 : 0;
 
 	return 0;
 }
 
-static int mca_cc8x_rtc_alarm_irq_enable(struct device *dev,
+static int mca_rtc_alarm_irq_enable(struct device *dev,
 					  unsigned int enabled)
 {
-	struct mca_cc8x_rtc *rtc = dev_get_drvdata(dev);
+	struct mca_rtc *rtc = dev_get_drvdata(dev);
 	int ret;
 
 	if (enabled) {
-		ret = mca_cc8x_rtc_start_alarm(dev);
+		ret = mca_rtc_start_alarm(dev);
 		if (ret != 0) {
 			dev_err(dev, "Failed to enable alarm IRQ (%d)\n", ret);
 			goto exit_alarm_irq;
 		}
 		rtc->alarm_enabled = 1;
 	} else {
-		ret = mca_cc8x_rtc_stop_alarm(dev);
+		ret = mca_rtc_stop_alarm(dev);
 		if (ret != 0) {
 			dev_err(dev, "Failed to disable alarm IRQ (%d)\n", ret);
 			goto exit_alarm_irq;
@@ -215,46 +227,48 @@ exit_alarm_irq:
 	return ret;
 }
 
-static int mca_cc8x_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alrm)
+static int mca_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 {
-	struct mca_cc8x_rtc *rtc = dev_get_drvdata(dev);
+	struct mca_rtc *rtc = dev_get_drvdata(dev);
 	u8 data[CLOCK_DATA_LEN] = { [0 ... (CLOCK_DATA_LEN - 1)] = 0 };
 	int ret;
 
-	mca_cc8x_rtc_adjust_alarm_time(alrm, false);
-	mca_cc8x_tm_to_data(&alrm->time, data);
+	mca_rtc_adjust_alarm_time(alrm, false);
+	mca_tm_to_data(&alrm->time, data);
 
 	ret = regmap_bulk_write(rtc->mca->regmap, MCA_RTC_ALARM_YEAR_L,
 				data, ALARM_DATA_LEN);
 	if (ret < 0)
 		return ret;
 
-	return mca_cc8x_rtc_alarm_irq_enable(dev, alrm->enabled);
+	return mca_rtc_alarm_irq_enable(dev, alrm->enabled);
 }
 
-static irqreturn_t mca_cc8x_alarm_event(int irq, void *data)
+static irqreturn_t mca_alarm_event(int irq, void *data)
 {
-	struct mca_cc8x_rtc *rtc = data;
+	struct mca_rtc *rtc = data;
 
 	rtc_update_irq(rtc->rtc_dev, 1, RTC_IRQF | RTC_AF);
 
 	return IRQ_HANDLED;
 }
 
-static const struct rtc_class_ops mca_cc8x_rtc_ops = {
-	.read_time = mca_cc8x_rtc_read_time,
-	.set_time = mca_cc8x_rtc_set_time,
-	.read_alarm = mca_cc8x_rtc_read_alarm,
-	.set_alarm = mca_cc8x_rtc_set_alarm,
-	.alarm_irq_enable = mca_cc8x_rtc_alarm_irq_enable,
+static const struct rtc_class_ops mca_rtc_ops = {
+	.read_time = mca_rtc_read_time,
+	.set_time = mca_rtc_set_time,
+	.read_alarm = mca_rtc_read_alarm,
+	.set_alarm = mca_rtc_set_alarm,
+	.alarm_irq_enable = mca_rtc_alarm_irq_enable,
 };
 
-static int mca_cc8x_rtc_probe(struct platform_device *pdev)
+static int mca_rtc_probe(struct platform_device *pdev)
 {
 	struct mca_drv *mca = dev_get_drvdata(pdev->dev.parent);
-	struct mca_cc8x_rtc *rtc;
-	struct device_node *np;
-	int ret;
+	struct mca_rtc *rtc;
+	const struct mca_rtc_data *devdata =
+				   of_device_get_match_data(&pdev->dev);
+	struct device_node *np = NULL;
+	int ret = 0;
 
 	if (!mca || !mca->dev->parent->of_node)
 		return -EPROBE_DEFER;
@@ -269,12 +283,14 @@ static int mca_cc8x_rtc_probe(struct platform_device *pdev)
 
 	/* Find entry in device-tree */
 	if (mca->dev->of_node) {
+		const char * compatible = pdev->dev.driver->
+				    of_match_table[devdata->devtype].compatible;
+
 		/*
 		 * Return silently if RTC node does not exist
 		 * or if it is disabled
 		 */
-		np = of_find_compatible_node(mca->dev->of_node, NULL,
-					     "digi,mca-cc8x-rtc");
+		np = of_find_compatible_node(mca->dev->of_node, NULL, compatible);
 		if (!np) {
 			ret = -ENODEV;
 			goto err;
@@ -294,8 +310,8 @@ static int mca_cc8x_rtc_probe(struct platform_device *pdev)
 	}
 
 	/* Register RTC device */
-	rtc->rtc_dev = rtc_device_register(MCA_CC8X_DRVNAME_RTC, &pdev->dev,
-					   &mca_cc8x_rtc_ops, THIS_MODULE);
+	rtc->rtc_dev = rtc_device_register(dev_name(&pdev->dev), &pdev->dev,
+					   &mca_rtc_ops, THIS_MODULE);
 	if (IS_ERR(rtc->rtc_dev)) {
 		dev_err(&pdev->dev, "Failed to register RTC device: %ld\n",
 			PTR_ERR(rtc->rtc_dev));
@@ -310,7 +326,7 @@ static int mca_cc8x_rtc_probe(struct platform_device *pdev)
 	rtc->irq_alarm = platform_get_irq_byname(pdev,
 						 MCA_IRQ_RTC_ALARM_NAME);
 	ret = devm_request_threaded_irq(&pdev->dev, rtc->irq_alarm, NULL,
-					mca_cc8x_alarm_event,
+					mca_alarm_event,
 					IRQF_TRIGGER_LOW | IRQF_ONESHOT,
 					MCA_IRQ_RTC_ALARM_NAME, rtc);
 	if (ret) {
@@ -326,9 +342,9 @@ err:
 	return ret;
 }
 
-static int mca_cc8x_rtc_remove(struct platform_device *pdev)
+static int mca_rtc_remove(struct platform_device *pdev)
 {
-	struct mca_cc8x_rtc *rtc = platform_get_drvdata(pdev);
+	struct mca_rtc *rtc = platform_get_drvdata(pdev);
 
 	if (rtc->irq_alarm >= 0)
 		devm_free_irq(&pdev->dev, rtc->irq_alarm, rtc);
@@ -338,15 +354,15 @@ static int mca_cc8x_rtc_remove(struct platform_device *pdev)
 }
 
 #ifdef CONFIG_PM
-static int mca_cc8x_rtc_suspend(struct device *dev)
+static int mca_rtc_suspend(struct device *dev)
 {
 	struct platform_device *pdev = to_platform_device(dev);
-	struct mca_cc8x_rtc *rtc = platform_get_drvdata(pdev);
+	struct mca_rtc *rtc = platform_get_drvdata(pdev);
 	int ret;
 
 	if (!device_may_wakeup(&pdev->dev) && rtc->alarm_enabled) {
 		/* Disable the alarm irq to avoid unwanted wakeups */
-		ret = mca_cc8x_rtc_stop_alarm(&pdev->dev);
+		ret = mca_rtc_stop_alarm(&pdev->dev);
 		if (ret < 0)
 			dev_err(&pdev->dev, "Failed to disable RTC Alarm\n");
 	}
@@ -354,15 +370,15 @@ static int mca_cc8x_rtc_suspend(struct device *dev)
 	return 0;
 }
 
-static int mca_cc8x_rtc_resume(struct device *dev)
+static int mca_rtc_resume(struct device *dev)
 {
 	struct platform_device *pdev = to_platform_device(dev);
-	struct mca_cc8x_rtc *rtc = platform_get_drvdata(pdev);
+	struct mca_rtc *rtc = platform_get_drvdata(pdev);
 	int ret;
 
 	if (!device_may_wakeup(&pdev->dev) && rtc->alarm_enabled) {
 		/* Enable the alarm irq, just in case it was disabled suspending */
-		ret = mca_cc8x_rtc_start_alarm(&pdev->dev);
+		ret = mca_rtc_start_alarm(&pdev->dev);
 		if (ret < 0)
 			dev_err(&pdev->dev, "Failed to restart RTC Alarm\n");
 	}
@@ -370,50 +386,62 @@ static int mca_cc8x_rtc_resume(struct device *dev)
 	return 0;
 }
 
-static const struct dev_pm_ops mca_cc8x_rtc_pm_ops = {
-	.suspend	= mca_cc8x_rtc_suspend,
-	.resume		= mca_cc8x_rtc_resume,
-	.poweroff	= mca_cc8x_rtc_suspend,
+static const struct dev_pm_ops mca_rtc_pm_ops = {
+	.suspend	= mca_rtc_suspend,
+	.resume		= mca_rtc_resume,
+	.poweroff	= mca_rtc_suspend,
 };
 #endif
 
 #ifdef CONFIG_OF
-static const struct of_device_id mca_cc8x_rtc_dt_ids[] = {
-	{ .compatible = "digi,mca-cc8x-rtc", },
+static struct mca_rtc_data mca_rtc_devdata[] = {
+	[CC6UL_MCA_RTC] = {
+		.devtype = CC6UL_MCA_RTC,
+	},
+	[CC8X_MCA_RTC] = {
+		.devtype = CC8X_MCA_RTC,
+	},
+};
+
+static const struct of_device_id mca_rtc_dt_ids[] = {
+	{ .compatible = "digi,mca-cc6ul-rtc",
+	  .data = &mca_rtc_devdata[CC6UL_MCA_RTC]},
+	{ .compatible = "digi,mca-cc8x-rtc",
+	  .data = &mca_rtc_devdata[CC8X_MCA_RTC]},
 	{ /* sentinel */ }
 };
-MODULE_DEVICE_TABLE(of, mca_cc8x_rtc_dt_ids);
+MODULE_DEVICE_TABLE(of, mca_rtc_dt_ids);
 #endif
 
-static struct platform_driver mca_cc8x_rtc_driver = {
-	.probe		= mca_cc8x_rtc_probe,
-	.remove		= mca_cc8x_rtc_remove,
+static struct platform_driver mca_rtc_driver = {
+	.probe		= mca_rtc_probe,
+	.remove		= mca_rtc_remove,
 	.driver		= {
-		.name	= MCA_CC8X_DRVNAME_RTC,
+		.name	= MCA_DRVNAME_RTC,
 		.owner	= THIS_MODULE,
 #ifdef CONFIG_PM
-		.pm	= &mca_cc8x_rtc_pm_ops,
+		.pm	= &mca_rtc_pm_ops,
 #endif
 #ifdef CONFIG_OF
-		.of_match_table = mca_cc8x_rtc_dt_ids,
+		.of_match_table = mca_rtc_dt_ids,
 #endif
 	},
 };
 
-static int __init mca_cc8x_rtc_init(void)
+static int __init mca_rtc_init(void)
 {
-	return platform_driver_register(&mca_cc8x_rtc_driver);
+	return platform_driver_register(&mca_rtc_driver);
 }
-module_init(mca_cc8x_rtc_init);
+module_init(mca_rtc_init);
 
-static void __exit mca_cc8x_rtc_exit(void)
+static void __exit mca_rtc_exit(void)
 {
-	platform_driver_unregister(&mca_cc8x_rtc_driver);
+	platform_driver_unregister(&mca_rtc_driver);
 }
-module_exit(mca_cc8x_rtc_exit);
+module_exit(mca_rtc_exit);
 
 /* Module information */
 MODULE_AUTHOR("Digi International Inc.");
-MODULE_DESCRIPTION("Real time clock device driver for MCA of ConnectCore 8X");
+MODULE_DESCRIPTION("Real time clock device driver for MCA of ConnectCore Modules");
 MODULE_LICENSE("GPL v2");
-MODULE_ALIAS("platform:" MCA_CC8X_DRVNAME_RTC);
+MODULE_ALIAS("platform:" MCA_DRVNAME_RTC);
