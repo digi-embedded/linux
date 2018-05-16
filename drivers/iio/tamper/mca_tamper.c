@@ -1,6 +1,6 @@
-/* mca_cc6ul_tamper.c - Tamper driver for MCA on ConnectCore 6UL
+/* mca_tamper.c - Tamper driver for MCA on ConnectCore modules
  *
- * Copyright (C) 2016  Digi International Inc
+ * Copyright (C) 2016 - 2018  Digi International Inc
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -26,17 +26,43 @@
 #include <linux/iio/sysfs.h>
 #include <linux/irq.h>
 #include <linux/kernel.h>
-#include <linux/mfd/mca-cc6ul/core.h>
-#include <linux/mfd/mca-cc6ul/registers.h>
+#include <linux/mfd/mca-common/core.h>
 #include <linux/module.h>
 #include <linux/of.h>
+#include <linux/of_device.h>
 #include <linux/platform_device.h>
 #include <linux/regmap.h>
 #include <linux/rtc.h>
 #include <linux/slab.h>
 
-#define MCA_TAMPER_INTERFACES		4
-#define DIGITAL_TAMPER_COUNT		2
+#define MCA_DRVNAME_TAMPER	"mca-tamper"
+
+#ifdef CONFIG_OF
+enum mca_tamper_type {
+	CC6UL_MCA_TAMPER,
+	CC8X_MCA_TAMPER,
+};
+
+struct mca_tamper_data {
+	enum mca_tamper_type devtype;
+	u16 num_tamper_ifaces;
+	u16 digital_tamper_cnt;
+};
+#endif
+
+struct mca_tamper {
+	struct mca_drv *mca;
+	struct iio_dev *iio;
+	char name[10];
+	uint8_t config0;
+	uint8_t config1;
+	uint8_t io_in;
+	uint8_t io_out;
+	uint8_t pwroff_delay_ms;
+	uint8_t event;
+	int irq;
+	int iface;
+};
 
 /* Tamper register offsets */
 enum {
@@ -58,25 +84,11 @@ enum {
 	THR_H		= MCA_TAMPER2_THRESH_HI_L - MCA_TAMPER2_CFG0,
 };
 
-struct mca_cc6ul_tamper {
-	struct mca_drv *mca;
-	struct iio_dev *iio;
-	char name[10];
-	uint8_t config0;
-	uint8_t config1;
-	uint8_t io_in;
-	uint8_t io_out;
-	uint8_t pwroff_delay_ms;
-	uint8_t event;
-	int irq;
-	int iface;
-};
-
-static int mca_cc6ul_tamper_read_raw(struct iio_dev *iio,
-				     struct iio_chan_spec const *ch,
-				     int *val, int *val2, long mask)
+static int mca_tamper_read_raw(struct iio_dev *iio,
+			       struct iio_chan_spec const *ch,
+			       int *val, int *val2, long mask)
 {
-	struct mca_cc6ul_tamper *tp = iio_priv(iio);
+	struct mca_tamper *tp = iio_priv(iio);
 	u32 value;
 	int ret;
 	unsigned int event_reg;
@@ -118,7 +130,7 @@ static int mca_cc6ul_tamper_read_raw(struct iio_dev *iio,
 	return IIO_VAL_INT;
 }
 
-static const struct iio_event_spec mca_cc6ul_tamper_events[] = {
+static const struct iio_event_spec mca_tamper_events[] = {
 	{
 		.type		= IIO_EV_TYPE_CHANGE,
 		.dir		= IIO_EV_DIR_NONE,
@@ -126,7 +138,7 @@ static const struct iio_event_spec mca_cc6ul_tamper_events[] = {
 	},
 };
 
-static void mca_cc6ul_tamper_get_time(u8 *data, struct rtc_time *tm)
+static void mca_tamper_get_time(u8 *data, struct rtc_time *tm)
 {
 	tm->tm_year = ((data[DATE_YEAR_H] << 8) | data[DATE_YEAR_L]) - 1900;
 	tm->tm_mon  = (data[DATE_MONTH] & MCA_RTC_MONTH_MASK) - 1;
@@ -160,7 +172,7 @@ static ssize_t show_##reg(struct device *dev,				\
 			  struct device_attribute *attr, char *buf)	\
 {									\
 	struct iio_dev *iio = dev_to_iio_dev(dev);			\
-	struct mca_cc6ul_tamper *tp = iio_priv(iio);			\
+	struct mca_tamper *tp = iio_priv(iio);			\
 	int ret;							\
 	type val;							\
 	unsigned int tamper_base_reg = get_tamper_base_reg(tp->iface);	\
@@ -186,7 +198,7 @@ static ssize_t store_##reg(struct device *dev, 				\
 			   const char *buf, size_t count)		\
 {									\
 	struct iio_dev *iio = dev_to_iio_dev(dev);			\
-	struct mca_cc6ul_tamper *tp = iio_priv(iio);			\
+	struct mca_tamper *tp = iio_priv(iio);			\
 	int ret;							\
 	unsigned long val;						\
 	unsigned int tamper_base_reg = get_tamper_base_reg(tp->iface);	\
@@ -213,13 +225,13 @@ static ssize_t store_##reg(struct device *dev, 				\
 	return count;							\
 }
 
-#define MCA_CC6UL_TAMPER_DEV_ATTR(name)		(&iio_dev_attr_##name.dev_attr.attr)
+#define MCA_TAMPER_DEV_ATTR(name)		(&iio_dev_attr_##name.dev_attr.attr)
 
 static ssize_t show_tp_events(struct device *dev, struct device_attribute *attr,
 			      char *buf)
 {
 	struct iio_dev *iio = dev_to_iio_dev(dev);
-	struct mca_cc6ul_tamper *tp = iio_priv(iio);
+	struct mca_tamper *tp = iio_priv(iio);
 	int ret;
 	unsigned int val;
 	unsigned int tamper_base_reg = get_tamper_base_reg(tp->iface);
@@ -256,7 +268,7 @@ static ssize_t store_tp_events(struct device *dev, struct device_attribute *attr
 			       const char *buf, size_t count)
 {
 	struct iio_dev *iio = dev_to_iio_dev(dev);
-	struct mca_cc6ul_tamper *tp = iio_priv(iio);
+	struct mca_tamper *tp = iio_priv(iio);
 	int ret;
 	unsigned long val;
 	unsigned int tamper_base_reg = get_tamper_base_reg(tp->iface);
@@ -283,8 +295,8 @@ static ssize_t store_tp_events(struct device *dev, struct device_attribute *attr
 	ret = regmap_write(tp->mca->regmap, tamper_base_reg + EVENT, val);
 	if (ret != 0) {
 		dev_err(tp->mca->dev,
-		"Failed write Tamper%d #reg register (%d)\n",
-		tp->iface, ret);
+			"Failed write Tamper%d #reg register (%d)\n",
+			tp->iface, ret);
 		return 0;
 	}
 
@@ -295,7 +307,7 @@ static ssize_t show_timestamp(struct device *dev, struct device_attribute *attr,
 			      char *buf)
 {
 	struct iio_dev *iio = dev_to_iio_dev(dev);
-	struct mca_cc6ul_tamper *tp = iio_priv(iio);
+	struct mca_tamper *tp = iio_priv(iio);
 	unsigned int tamper_base_reg = get_tamper_base_reg(tp->iface);
 	time64_t tamper_t64 = -1;
 	struct rtc_time tm;
@@ -315,7 +327,7 @@ static ssize_t show_timestamp(struct device *dev, struct device_attribute *attr,
 
 	/* Confirm the event and get the timestamp */
 	if (data[EVENT] & MCA_TAMPER_SIGNALED) {
-		mca_cc6ul_tamper_get_time(data, &tm);
+		mca_tamper_get_time(data, &tm);
 		tamper_t64 = rtc_tm_to_time64(&tm);
 	}
 
@@ -353,61 +365,61 @@ static IIO_DEVICE_ATTR(srate, S_IRUGO | S_IWUSR, show_srate, store_srate, 0);
 static IIO_DEVICE_ATTR(thr_l, S_IRUGO | S_IWUSR, show_thr_l, store_thr_l, 0);
 static IIO_DEVICE_ATTR(thr_h, S_IRUGO | S_IWUSR, show_thr_h, store_thr_h, 0);
 
-static struct attribute *mca_cc6ul_tamper_attributes[] = {
-	MCA_CC6UL_TAMPER_DEV_ATTR(config0),
-	MCA_CC6UL_TAMPER_DEV_ATTR(io_in),
-	MCA_CC6UL_TAMPER_DEV_ATTR(io_out),
-	MCA_CC6UL_TAMPER_DEV_ATTR(pwroff_delay_ms),
-	MCA_CC6UL_TAMPER_DEV_ATTR(tamper_events),
+static struct attribute *mca_tamper_attributes[] = {
+	MCA_TAMPER_DEV_ATTR(config0),
+	MCA_TAMPER_DEV_ATTR(io_in),
+	MCA_TAMPER_DEV_ATTR(io_out),
+	MCA_TAMPER_DEV_ATTR(pwroff_delay_ms),
+	MCA_TAMPER_DEV_ATTR(tamper_events),
 	NULL,
 };
 
-static struct attribute *mca_cc6ul_tamper_analog_attributes[] = {
-	MCA_CC6UL_TAMPER_DEV_ATTR(config0),
-	MCA_CC6UL_TAMPER_DEV_ATTR(config1),
-	MCA_CC6UL_TAMPER_DEV_ATTR(io_in),
-	MCA_CC6UL_TAMPER_DEV_ATTR(io_out),
-	MCA_CC6UL_TAMPER_DEV_ATTR(pwroff_delay_ms),
-	MCA_CC6UL_TAMPER_DEV_ATTR(tamper_events),
-	MCA_CC6UL_TAMPER_DEV_ATTR(timestamp),
-	MCA_CC6UL_TAMPER_DEV_ATTR(srate),
-	MCA_CC6UL_TAMPER_DEV_ATTR(thr_l),
-	MCA_CC6UL_TAMPER_DEV_ATTR(thr_h),
+static struct attribute *mca_tamper_analog_attributes[] = {
+	MCA_TAMPER_DEV_ATTR(config0),
+	MCA_TAMPER_DEV_ATTR(config1),
+	MCA_TAMPER_DEV_ATTR(io_in),
+	MCA_TAMPER_DEV_ATTR(io_out),
+	MCA_TAMPER_DEV_ATTR(pwroff_delay_ms),
+	MCA_TAMPER_DEV_ATTR(tamper_events),
+	MCA_TAMPER_DEV_ATTR(timestamp),
+	MCA_TAMPER_DEV_ATTR(srate),
+	MCA_TAMPER_DEV_ATTR(thr_l),
+	MCA_TAMPER_DEV_ATTR(thr_h),
 	NULL,
 };
 
-static const struct attribute_group mca_cc6ul_tamper_analog_attribute_group = {
+static const struct attribute_group mca_tamper_analog_attribute_group = {
 	.name	= "tamper_analog",
-	.attrs	= mca_cc6ul_tamper_analog_attributes,
+	.attrs	= mca_tamper_analog_attributes,
 };
 
-static const struct iio_info mca_cc6ul_tamper_analog_info = {
+static const struct iio_info mca_tamper_analog_info = {
 	.driver_module		= THIS_MODULE,
-	.attrs			= &mca_cc6ul_tamper_analog_attribute_group,
-	.read_raw		= &mca_cc6ul_tamper_read_raw,
+	.attrs			= &mca_tamper_analog_attribute_group,
+	.read_raw		= &mca_tamper_read_raw,
 };
 
 #else
-static struct attribute *mca_cc6ul_tamper_attributes[] = {
-	MCA_CC6UL_TAMPER_DEV_ATTR(tamper_events),
-	MCA_CC6UL_TAMPER_DEV_ATTR(timestamp),
+static struct attribute *mca_tamper_attributes[] = {
+	MCA_TAMPER_DEV_ATTR(tamper_events),
+	MCA_TAMPER_DEV_ATTR(timestamp),
 	NULL,
 };
 #endif /* MCA_TAMPER_HAS_EXTRA_SYSFS_ENTRIES */
 
-static const struct attribute_group mca_cc6ul_tamper_attribute_group = {
+static const struct attribute_group mca_tamper_attribute_group = {
 	.name	= "tamper",
-	.attrs	= mca_cc6ul_tamper_attributes,
+	.attrs	= mca_tamper_attributes,
 };
 
-static const struct iio_info mca_cc6ul_tamper_info = {
+static const struct iio_info mca_tamper_info = {
 	.driver_module		= THIS_MODULE,
-	.attrs			= &mca_cc6ul_tamper_attribute_group,
-	.read_raw		= &mca_cc6ul_tamper_read_raw,
+	.attrs			= &mca_tamper_attribute_group,
+	.read_raw		= &mca_tamper_read_raw,
 };
 
 #ifdef MCA_TAMPER_DUMP_REGISTERS
-static void mca_cc6ul_tamper_regs_dump(u8 *data)
+static void mca_tamper_regs_dump(u8 *data)
 {
 	printk("Tamper CFG0  = 0x%02x\n", data[CFG0]);
 	printk("Tamper CFG1  = 0x%02x\n", data[CFG1]);
@@ -424,13 +436,13 @@ static void mca_cc6ul_tamper_regs_dump(u8 *data)
 	printk("Tamper EVENT = 0x%02x\n", data[EVENT]);
 }
 #else
-static void mca_cc6ul_tamper_regs_dump(u8 *data) {}
+static void mca_tamper_regs_dump(u8 *data) {}
 #endif
 
-static irqreturn_t mca_cc6ul_tamper_irq_handler(int irq, void *private)
+static irqreturn_t mca_tamper_irq_handler(int irq, void *private)
 {
 	struct iio_dev *iio = private;
-	struct mca_cc6ul_tamper *tp = iio_priv(iio);
+	struct mca_tamper *tp = iio_priv(iio);
 	struct rtc_time tm;
 	u8 data[MCA_TAMPER_REGS_LEN];
 	time64_t tamper_t64;
@@ -458,8 +470,8 @@ static irqreturn_t mca_cc6ul_tamper_irq_handler(int irq, void *private)
 	if (data[EVENT] & MCA_TAMPER_ACKED)
 		goto irq_out;
 
-	mca_cc6ul_tamper_regs_dump(data);
-	mca_cc6ul_tamper_get_time(data, &tm);
+	mca_tamper_regs_dump(data);
+	mca_tamper_get_time(data, &tm);
 	tamper_t64 = rtc_tm_to_time64(&tm);
 
 	/* Notify the event... */
@@ -471,7 +483,7 @@ irq_out:
 	return IRQ_HANDLED;
 }
 
-static int mca_cc6ul_init_hardware(struct mca_cc6ul_tamper *tp)
+static int mca_init_hardware(struct mca_tamper *tp)
 {
 	int ret;
 	u8 data[MCA_TAMPER_REGS_LEN];
@@ -503,10 +515,8 @@ static int mca_cc6ul_init_hardware(struct mca_cc6ul_tamper *tp)
 					"TAMPER IN");
 		if (ret != 0) {
 			dev_warn(tp->mca->dev,
-				 "Error requesting GPIO %d. "
-				 "Cannot use tamper %d (%d)\n",
-				 tp->mca->gpio_base + tp->io_in, tp->iface, ret);
-			return ret;
+				 "Error requesting GPIO %d for tamper %d input. It might be in use by other device.\n",
+				 tp->mca->gpio_base + tp->io_in, tp->iface);
 		}
 
 		if (data[CFG0] & MCA_TAMPER_OUT_EN) {
@@ -515,11 +525,9 @@ static int mca_cc6ul_init_hardware(struct mca_cc6ul_tamper *tp)
 						"TAMPER OUT");
 			if (ret != 0) {
 				dev_warn(tp->mca->dev,
-					 "Error requesting GPIO %d. "
-					 "Cannot use tamper %d (%d)\n",
+					 "Error requesting GPIO %d for tamper %d output. It might be in use by other device.\n",
 					 tp->mca->gpio_base + tp->io_out,
-					 tp->iface, ret);
-				return ret;
+					 tp->iface);
 			}
 		}
 	}
@@ -527,7 +535,7 @@ static int mca_cc6ul_init_hardware(struct mca_cc6ul_tamper *tp)
 	return 0;
 }
 
-static void mca_cc6ul_init_channel(struct iio_chan_spec *chan, int idx)
+static void mca_init_channel(struct iio_chan_spec *chan, int idx)
 {
 	chan->type = IIO_ACTIVITY;
 	chan->indexed = 1;
@@ -537,28 +545,33 @@ static void mca_cc6ul_init_channel(struct iio_chan_spec *chan, int idx)
 	chan->scan_type.realbits = 1;
 	chan->scan_type.storagebits = 32;
 	chan->info_mask_separate = BIT(IIO_CHAN_INFO_RAW);
-	chan->event_spec = mca_cc6ul_tamper_events;
-	chan->num_event_specs = ARRAY_SIZE(mca_cc6ul_tamper_events);
+	chan->event_spec = mca_tamper_events;
+	chan->num_event_specs = ARRAY_SIZE(mca_tamper_events);
 }
 
-static int mca_cc6ul_tamper_probe(struct platform_device *pdev)
+static int mca_tamper_probe(struct platform_device *pdev)
 {
 	struct mca_drv *mca = dev_get_drvdata(pdev->dev.parent);
-	struct mca_cc6ul_tamper **mca_tamper = NULL;
-	struct iio_dev *iiod[MCA_TAMPER_INTERFACES] = {NULL};
+	struct mca_tamper **mca_tamper = NULL;
+	const struct mca_tamper_data *devdata = of_device_get_match_data(&pdev->dev);
 	struct device_node *np;
 	struct property *prop;
 	const __be32 *cur;
 	u32 iface;
 	int ret = 0;
+	u16 num_tamper_ifaces;
+	u16 digital_tamper_cnt;
 
-	if (!mca || !mca->dev || !mca->dev->of_node)
+	if (!mca || !mca->dev || !mca->dev->of_node || !devdata)
 		return -EPROBE_DEFER;
 
-	pr_info("Tamper driver for MCA of CC6UL\n");
+	pr_info("Tamper driver for MCA\n");
+
+	num_tamper_ifaces = devdata->num_tamper_ifaces;
+	digital_tamper_cnt = devdata->digital_tamper_cnt;
 
 	mca_tamper = devm_kzalloc(&pdev->dev,
-				  sizeof(*mca_tamper) * MCA_TAMPER_INTERFACES,
+				  sizeof(*mca_tamper) * num_tamper_ifaces,
 				  GFP_KERNEL);
 	if (!mca_tamper) {
 		dev_err(&pdev->dev, "Failed to allocate memory for mca_tamper\n");
@@ -568,12 +581,15 @@ static int mca_cc6ul_tamper_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, mca_tamper);
 
-	for (iface = 0; iface < MCA_TAMPER_INTERFACES; iface++)
+	for (iface = 0; iface < num_tamper_ifaces; iface++)
 		mca_tamper[iface] = NULL;
 
-	/* Return if node does not exist or if it is disabled */
-	np = of_find_compatible_node(mca->dev->of_node, NULL,
-				     "digi,mca-cc6ul-tamper");
+	/* Return silently if RTC node does not exist or if it is disabled */
+	{
+		const char * compatible = pdev->dev.driver->
+				  of_match_table[devdata->devtype].compatible;
+		np = of_find_compatible_node(mca->dev->of_node, NULL, compatible);
+	}
 	if (!np || !of_device_is_available(np)) {
 		ret = -ENODEV;
 		goto exit_error;
@@ -582,48 +598,49 @@ static int mca_cc6ul_tamper_probe(struct platform_device *pdev)
 	of_property_for_each_u32(np, "digi,tamper-if-list",
 				 prop, cur, iface) {
 		struct iio_chan_spec *channels;
+		struct iio_dev *iiod = NULL;
 
-		if (iface >= MCA_TAMPER_INTERFACES)
+		if (iface >= num_tamper_ifaces)
 			continue;
 
-		iiod[iface] = devm_iio_device_alloc(&pdev->dev,
-						    sizeof(*mca_tamper));
-		if (!iiod[iface]) {
+		iiod = devm_iio_device_alloc(&pdev->dev,
+					     sizeof(*mca_tamper));
+		if (!iiod) {
 			dev_err(&pdev->dev, "Failed to allocate iio device\n");
 			ret = -ENOMEM;
 			goto exit_error;
 		}
-		mca_tamper[iface] = iio_priv(iiod[iface]);
+		mca_tamper[iface] = iio_priv(iiod);
 		mca_tamper[iface]->mca = mca;
 		mca_tamper[iface]->iface = iface;
-		mca_tamper[iface]->iio = iiod[iface];
+		mca_tamper[iface]->iio = iiod;
 
-		iiod[iface]->dev.parent = &pdev->dev;
+		iiod->dev.parent = &pdev->dev;
 		sprintf(mca_tamper[iface]->name, "TAMPER%d", iface);
-		iiod[iface]->name = mca_tamper[iface]->name;
-		iiod[iface]->modes = INDIO_DIRECT_MODE;
+		iiod->name = mca_tamper[iface]->name;
+		iiod->modes = INDIO_DIRECT_MODE;
 		channels = devm_kzalloc(&pdev->dev,
 					sizeof(struct iio_chan_spec),
 					GFP_KERNEL);
-		iiod[iface]->channels = channels;
-		if (!iiod[iface]->channels) {
+		iiod->channels = channels;
+		if (!iiod->channels) {
 			dev_err(&pdev->dev, "Failed to allocate iio channels\n");
 			ret = -ENOMEM;
 			goto exit_error;
 		}
 
 #ifdef MCA_TAMPER_HAS_EXTRA_SYSFS_ENTRIES
-		if (iface < DIGITAL_TAMPER_COUNT)
-			iiod[iface]->info = &mca_cc6ul_tamper_info;
+		if (iface < digital_tamper_cnt)
+			iiod->info = &mca_tamper_info;
 		else
-			iiod[iface]->info = &mca_cc6ul_tamper_analog_info;
+			iiod->info = &mca_tamper_analog_info;
 #else
-		iiod[iface]->info = &mca_cc6ul_tamper_info;
+		iiod->info = &mca_tamper_info;
 #endif
-		iiod[iface]->num_channels = 1;
-		mca_cc6ul_init_channel(channels, iface);
+		iiod->num_channels = 1;
+		mca_init_channel(channels, iface);
 
-		ret = mca_cc6ul_init_hardware(mca_tamper[iface]);
+		ret = mca_init_hardware(mca_tamper[iface]);
 		if (ret != 0) {
 			/* Skip the error msg if interface is not enabled */
 			if (ret != -ENODEV)
@@ -637,10 +654,10 @@ static int mca_cc6ul_tamper_probe(struct platform_device *pdev)
 		if (mca_tamper[iface]->irq) {
 			ret = devm_request_threaded_irq(&pdev->dev,
 					mca_tamper[iface]->irq,
-					NULL, mca_cc6ul_tamper_irq_handler,
+					NULL, mca_tamper_irq_handler,
 					IRQF_TRIGGER_LOW | IRQF_ONESHOT,
 					mca_tamper[iface]->name,
-					iiod[iface]);
+					iiod);
 			if (ret) {
 				dev_err(&pdev->dev,
 					"Requested TAMPER %d IRQ (%d).\n",
@@ -649,7 +666,7 @@ static int mca_cc6ul_tamper_probe(struct platform_device *pdev)
 			}
 		}
 
-		ret = iio_device_register(iiod[iface]);
+		ret = iio_device_register(iiod);
 		if (ret) {
 			dev_err(&pdev->dev,
 				"Failed to register mca tamper iio device\n");
@@ -662,23 +679,27 @@ static int mca_cc6ul_tamper_probe(struct platform_device *pdev)
 	return 0;
 
 exit_error:
-	kfree(mca_tamper);
-	for (iface = 0; iface < ARRAY_SIZE(iiod); iface++) {
-		if (iiod[iface])
-			kfree(iiod[iface]->channels);
-		kfree(iiod[iface]);
+	for (iface = 0; iface < num_tamper_ifaces; iface++) {
+		if (mca_tamper[iface]) {
+			if (mca_tamper[iface]->iio)
+				kfree(mca_tamper[iface]->iio->channels);
+			kfree(mca_tamper[iface]->iio);
+		}
 	}
+	kfree(mca_tamper);
 
 	return ret;
 }
 
-static int mca_cc6ul_tamper_remove(struct platform_device *pdev)
+static int mca_tamper_remove(struct platform_device *pdev)
 {
-	struct mca_cc6ul_tamper **mca_tamper = dev_get_drvdata(pdev->dev.parent);
+	struct mca_tamper **mca_tamper = dev_get_drvdata(pdev->dev.parent);
 	struct mca_drv *mca;
+	const struct mca_tamper_data *devdata = of_device_get_match_data(&pdev->dev);
+	u16 num_tamper_ifaces = devdata->num_tamper_ifaces;
 	u32 iface;
 
-	for (iface = 0; iface < MCA_TAMPER_INTERFACES; iface++) {
+	for (iface = 0; iface < num_tamper_ifaces; iface++) {
 		if (mca_tamper[iface] == NULL)
 			continue;
 		/* Release the resources allocated */
@@ -702,36 +723,53 @@ static int mca_cc6ul_tamper_remove(struct platform_device *pdev)
 	return 0;
 }
 
-static const struct of_device_id mca_cc6ul_tamper_ids[] = {
-        { .compatible = "digi,mca-cc6ul-tamper", },
-        { /* sentinel */ }
-};
-MODULE_DEVICE_TABLE(of, mca_cc6ul__ids);
-
-static struct platform_driver mca_cc6ul_tamper_driver = {
-	.probe	= mca_cc6ul_tamper_probe,
-	.remove	= mca_cc6ul_tamper_remove,
-	.driver	= {
-		.name	= MCA_CC6UL_DRVNAME_TAMPER,
-		.owner	= THIS_MODULE,
-		.of_match_table = of_match_ptr(mca_cc6ul_tamper_ids),
+#ifdef CONFIG_OF
+static struct mca_tamper_data mca_tamper_devdata[] = {
+	[CC6UL_MCA_TAMPER] = {
+		.devtype = CC6UL_MCA_TAMPER,
+		.num_tamper_ifaces = 4,
+		.digital_tamper_cnt = 2
+	},
+	[CC8X_MCA_TAMPER] = {
+		.devtype = CC8X_MCA_TAMPER,
+		.num_tamper_ifaces = 4,
+		.digital_tamper_cnt = 2
 	},
 };
 
-static int __init mca_cc6ul_tamper_init(void)
-{
-	return platform_driver_register(&mca_cc6ul_tamper_driver);
-}
-module_init(mca_cc6ul_tamper_init);
+static const struct of_device_id mca_tamper_ids[] = {
+        { .compatible = "digi,mca-cc6ul-tamper",
+          .data = &mca_tamper_devdata[CC6UL_MCA_TAMPER]},
+        { .compatible = "digi,mca-cc8x-tamper",
+          .data = &mca_tamper_devdata[CC8X_MCA_TAMPER]},
+        { /* sentinel */ }
+};
+MODULE_DEVICE_TABLE(of, mca_tamper_ids);
+#endif
 
-static void __exit mca_cc6ul_tamper_exit(void)
+static struct platform_driver mca_tamper_driver = {
+	.probe	= mca_tamper_probe,
+	.remove	= mca_tamper_remove,
+	.driver	= {
+		.name	= MCA_DRVNAME_TAMPER,
+		.owner	= THIS_MODULE,
+		.of_match_table = of_match_ptr(mca_tamper_ids),
+	},
+};
+
+static int __init mca_tamper_init(void)
 {
-	platform_driver_unregister(&mca_cc6ul_tamper_driver);
+	return platform_driver_register(&mca_tamper_driver);
 }
-module_exit(mca_cc6ul_tamper_exit);
+module_init(mca_tamper_init);
+
+static void __exit mca_tamper_exit(void)
+{
+	platform_driver_unregister(&mca_tamper_driver);
+}
+module_exit(mca_tamper_exit);
 
 MODULE_AUTHOR("Digi International Inc");
-MODULE_DESCRIPTION("Tamper driver for MCA of ConnectCore 6UL");
+MODULE_DESCRIPTION("Tamper driver for MCA of ConnectCore Modules");
 MODULE_LICENSE("GPL v2");
-MODULE_ALIAS("platform:" MCA_CC6UL_DRVNAME_TAMPER);
-
+MODULE_ALIAS("platform:" MCA_DRVNAME_TAMPER);

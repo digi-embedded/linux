@@ -4,15 +4,17 @@
 
 menu "Tamper devices"
 
-config TAMPER_MCA_CC6UL
-	tristate "Tamper support for MCA on Digi ConnectCore 6UL"
+config TAMPER_MCA
+	tristate "Tamper support for MCA on Digi ConnectCore SOMs"
+	select MFD_MCA_CC6UL if SOC_IMX6UL
+	select MFD_MCA_CC8X if ARCH_FSL_IMX8QXP
 
 	help
 	  Say Y here to build the tamper driver on the MCA of the
-	  ConnectCore 6UL module.
+	  ConnectCore system-on-modules.
 
 	  To compile this driver as a module, choose M here: the
-	  module will be called mca_cc6ul_tamper
+	  module will be called mca_tamper
 
 endmenu
 
