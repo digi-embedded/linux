@@ -1,7 +1,7 @@
 /*
- * Watchdog driver for MCA on ConnectCore 6UL.
+ * Watchdog driver for MCA on ConnectCore modules
  *
- * Copyright(c) 2016, 2017 Digi International Inc.
+ * Copyright(c) 2016 - 2018 Digi International Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -14,28 +14,35 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/of.h>
+#include <linux/of_device.h>
 #include <linux/platform_device.h>
 #include <linux/regmap.h>
 #include <linux/slab.h>
 #include <linux/types.h>
 #include <linux/watchdog.h>
 
-#include <linux/mfd/mca-cc6ul/core.h>
-#include <linux/mfd/mca-cc6ul/registers.h>
+#include <linux/mfd/mca-common/core.h>
+
+#define MCA_DRVNAME_WATCHDOG	"mca-watchdog"
 
 #define WDT_REFRESH_LEN		(MCA_WDT_REFRESH_3 - \
 				 MCA_WDT_REFRESH_0 + 1)
 #define WDT_REFRESH_PATTERN	"WDTP"
-#define WATCHDOG_NAME		"MCA CC6UL Watchdog"
+#define WATCHDOG_NAME		"MCA Watchdog"
 #define DEFAULT_TIMEOUT 30            /* 30 sec default timeout */
 
-static bool nowayout = WATCHDOG_NOWAYOUT;
-module_param(nowayout, bool, 0);
-MODULE_PARM_DESC(nowayout,
-		 "Watchdog cannot be stopped once started (default="
-		 __MODULE_STRING(WATCHDOG_NOWAYOUT) ")");
+#ifdef CONFIG_OF
+enum mca_wdt_type {
+	CC6UL_MCA_WDT,
+	CC8X_MCA_WDT,
+};
 
-struct mca_cc6ul_wdt {
+struct mca_wdt_data {
+	enum mca_wdt_type devtype;
+};
+#endif
+
+struct mca_wdt {
 	struct watchdog_device wdd;
 	struct mca_drv *mca;
 	struct kref kref;
@@ -46,10 +53,16 @@ struct mca_cc6ul_wdt {
 	unsigned int irq_timeout;
 };
 
-static int mca_cc6ul_wdt_set_timeout(struct watchdog_device *wdd,
-				     unsigned int timeout)
+static bool nowayout = WATCHDOG_NOWAYOUT;
+module_param(nowayout, bool, 0);
+MODULE_PARM_DESC(nowayout,
+		 "Watchdog cannot be stopped once started (default="
+		 __MODULE_STRING(WATCHDOG_NOWAYOUT) ")");
+
+static int mca_wdt_set_timeout(struct watchdog_device *wdd,
+			       unsigned int timeout)
 {
-	struct mca_cc6ul_wdt *wdt = watchdog_get_drvdata(wdd);
+	struct mca_wdt *wdt = watchdog_get_drvdata(wdd);
 	struct mca_drv *mca = wdt->mca;
 	int ret;
 
@@ -70,7 +83,7 @@ static int mca_cc6ul_wdt_set_timeout(struct watchdog_device *wdd,
 	return 0;
 }
 
-static int mca_cc6ul_config_options(struct mca_cc6ul_wdt *wdt)
+static int mca_config_options(struct mca_wdt *wdt)
 {
 	int ret = 0;
 	u8 control = 0;
@@ -80,13 +93,13 @@ static int mca_cc6ul_config_options(struct mca_cc6ul_wdt *wdt)
 	control |= wdt->fullreset ? MCA_WDT_FULLRESET : 0;
 
 	ret = regmap_update_bits(wdt->mca->regmap, MCA_WDT_CONTROL,
-			MCA_WDT_NOWAYOUT | MCA_WDT_IRQNORESET |
-			MCA_WDT_FULLRESET, control);
+				 MCA_WDT_NOWAYOUT | MCA_WDT_IRQNORESET |
+				 MCA_WDT_FULLRESET, control);
 	if (ret)
 		goto err;
 
 	/* Set timeout */
-	ret = mca_cc6ul_wdt_set_timeout(&wdt->wdd, wdt->default_timeout);
+	ret = mca_wdt_set_timeout(&wdt->wdd, wdt->default_timeout);
 	if (ret) {
 		dev_err(wdt->mca->dev, "Could not set watchdog timeout (%d)\n",
 			ret);
@@ -97,9 +110,9 @@ err:
 	return ret;
 }
 
-static int mca_cc6ul_wdt_ping(struct watchdog_device *wdd)
+static int mca_wdt_ping(struct watchdog_device *wdd)
 {
-	struct mca_cc6ul_wdt *wdt = watchdog_get_drvdata(wdd);
+	struct mca_wdt *wdt = watchdog_get_drvdata(wdd);
 	struct mca_drv *mca = wdt->mca;
 	const char *pattern = WDT_REFRESH_PATTERN;
 
@@ -111,13 +124,13 @@ static int mca_cc6ul_wdt_ping(struct watchdog_device *wdd)
 				 pattern, WDT_REFRESH_LEN);
 }
 
-static void mca_cc6ul_wdt_release_resources(struct kref *r)
+static void mca_wdt_release_resources(struct kref *r)
 {
 }
 
-static int mca_cc6ul_wdt_start(struct watchdog_device *wdd)
+static int mca_wdt_start(struct watchdog_device *wdd)
 {
-	struct mca_cc6ul_wdt *wdt = watchdog_get_drvdata(wdd);
+	struct mca_wdt *wdt = watchdog_get_drvdata(wdd);
 	int ret = 0;
 
 	/* Enable watchdog */
@@ -132,36 +145,36 @@ err:
 	return ret;
 }
 
-static int mca_cc6ul_wdt_stop(struct watchdog_device *wdd)
+static int mca_wdt_stop(struct watchdog_device *wdd)
 {
-	struct mca_cc6ul_wdt *wdt = watchdog_get_drvdata(wdd);
+	struct mca_wdt *wdt = watchdog_get_drvdata(wdd);
 
 	/* Disable watchdog */
 	return regmap_update_bits(wdt->mca->regmap, MCA_WDT_CONTROL,
 				  MCA_WDT_ENABLE, 0);
 }
 
-static irqreturn_t mca_cc6ul_wdt_timeout_event(int irq, void *data)
+static irqreturn_t mca_wdt_timeout_event(int irq, void *data)
 {
 	return IRQ_HANDLED;
 }
 
-static struct watchdog_info mca_cc6ul_wdt_info = {
+static struct watchdog_info mca_wdt_info = {
 	.options	= WDIOF_SETTIMEOUT | WDIOF_KEEPALIVEPING | \
 			  WDIOF_MAGICCLOSE,
 	.identity	= WATCHDOG_NAME,
 };
 
-static const struct watchdog_ops mca_cc6ul_wdt_ops = {
+static const struct watchdog_ops mca_wdt_ops = {
 	.owner = THIS_MODULE,
-	.start = mca_cc6ul_wdt_start,
-	.stop = mca_cc6ul_wdt_stop,
-	.ping = mca_cc6ul_wdt_ping,
-	.set_timeout = mca_cc6ul_wdt_set_timeout,
+	.start = mca_wdt_start,
+	.stop = mca_wdt_stop,
+	.ping = mca_wdt_ping,
+	.set_timeout = mca_wdt_set_timeout,
 };
 
-static int of_mca_cc6ul_wdt_init(struct device_node *np,
-				 struct mca_cc6ul_wdt *wdt)
+static int of_mca_wdt_init(struct device_node *np,
+			   struct mca_wdt *wdt)
 {
 	unsigned int timeout;
 
@@ -181,10 +194,11 @@ static int of_mca_cc6ul_wdt_init(struct device_node *np,
 	return 0;
 }
 
-static int mca_cc6ul_wdt_probe(struct platform_device *pdev)
+static int mca_wdt_probe(struct platform_device *pdev)
 {
 	struct mca_drv *mca = dev_get_drvdata(pdev->dev.parent);
-	struct mca_cc6ul_wdt *wdt;
+	struct mca_wdt *wdt;
+	const struct mca_wdt_data *devdata = (struct mca_wdt_data *)pdev->id_entry->driver_data;
 	struct device_node *np;
 	int ret;
 
@@ -199,8 +213,8 @@ static int mca_cc6ul_wdt_probe(struct platform_device *pdev)
 	wdt->nowayout = nowayout;
 	wdt->wdd.min_timeout = 0;
 	wdt->wdd.max_timeout = 0xff;
-	wdt->wdd.info = &mca_cc6ul_wdt_info;
-	wdt->wdd.ops = &mca_cc6ul_wdt_ops;
+	wdt->wdd.info = &mca_wdt_info;
+	wdt->wdd.ops = &mca_wdt_ops;
 	wdt->wdd.parent = &pdev->dev;
 
 	watchdog_set_drvdata(&wdt->wdd, wdt);
@@ -209,12 +223,14 @@ static int mca_cc6ul_wdt_probe(struct platform_device *pdev)
 
 	/* Find entry in device-tree */
         if (mca->dev->of_node) {
+		const char * compatible = pdev->dev.driver->
+				    of_match_table[devdata->devtype].compatible;
+
 		/*
 		 * Return silently if watchdog node does not exist
 		 * or if it is disabled
 		 */
-		np = of_find_compatible_node(mca->dev->of_node, NULL,
-					     "digi,mca-cc6ul-wdt");
+		np = of_find_compatible_node(mca->dev->of_node, NULL, compatible);
 		if (!np) {
 			ret = -ENODEV;
 			goto err;
@@ -225,13 +241,13 @@ static int mca_cc6ul_wdt_probe(struct platform_device *pdev)
 		}
 
 		/* Parse DT properties */
-		ret = of_mca_cc6ul_wdt_init(np, wdt);
+		ret = of_mca_wdt_init(np, wdt);
 		if (ret)
 			goto err;
         }
 
         /* Configure WDT options */
-        ret = mca_cc6ul_config_options(wdt);
+        ret = mca_config_options(wdt);
 	if (ret) {
 		dev_err(&pdev->dev, "Failed to configure WDT options\n");
 		goto err;
@@ -243,11 +259,11 @@ static int mca_cc6ul_wdt_probe(struct platform_device *pdev)
 	/* Register interrupt if so configured */
 	if (wdt->irqnoreset) {
 		wdt->irq_timeout = platform_get_irq_byname(pdev,
-						MCA_IRQ_WATCHDOG_NAME);
+							   MCA_IRQ_WATCHDOG_NAME);
 		ret = devm_request_threaded_irq(&pdev->dev, wdt->irq_timeout,
-					NULL, mca_cc6ul_wdt_timeout_event,
-					IRQF_TRIGGER_LOW | IRQF_ONESHOT,
-					MCA_IRQ_WATCHDOG_NAME, wdt);
+						NULL, mca_wdt_timeout_event,
+						IRQF_TRIGGER_LOW | IRQF_ONESHOT,
+						MCA_IRQ_WATCHDOG_NAME, wdt);
 		if (ret) {
 			dev_err(&pdev->dev,
 				"Failed to request %s IRQ. (%d)\n",
@@ -264,11 +280,10 @@ static int mca_cc6ul_wdt_probe(struct platform_device *pdev)
 		goto err;
 	}
 
-	pr_info("Watchdog driver for MCA of CC6UL (timeout=%d sec, nowayout=%d, %s%s)\n",
+	pr_info("Watchdog driver for MCA (timeout=%d sec, nowayout=%d, %s%s)\n",
 		wdt->default_timeout, nowayout,
 		wdt->irqnoreset ? "interrupt (no reset)" : "reset",
 		wdt->irqnoreset ? "" : wdt->fullreset ? " (full)" : " (MPU only)");
-
 	return 0;
 
 err:
@@ -276,36 +291,64 @@ err:
 	return ret;
 }
 
-static int mca_cc6ul_wdt_remove(struct platform_device *pdev)
+static int mca_wdt_remove(struct platform_device *pdev)
 {
-	struct mca_cc6ul_wdt *wdt = platform_get_drvdata(pdev);
+	struct mca_wdt *wdt = platform_get_drvdata(pdev);
 
 	if(wdt->irq_timeout)
 		devm_free_irq(&pdev->dev, wdt->irq_timeout, wdt);
 	watchdog_unregister_device(&wdt->wdd);
-	kref_put(&wdt->kref, mca_cc6ul_wdt_release_resources);
+	kref_put(&wdt->kref, mca_wdt_release_resources);
 
 	return 0;
 }
 
-static const struct of_device_id mca_cc6ul_wdt_match[] = {
-        { .compatible = "digi,mca-cc6ul-wdt", },
-        { /* sentinel */ }
-};
-MODULE_DEVICE_TABLE(of, mca_cc6ul_wdt_match);
-
-static struct platform_driver mca_cc6ul_wdt_driver = {
-	.probe = mca_cc6ul_wdt_probe,
-	.remove = mca_cc6ul_wdt_remove,
-	.driver = {
-		.name	= MCA_CC6UL_DRVNAME_WATCHDOG,
-		.of_match_table = of_match_ptr(mca_cc6ul_wdt_match),
+#ifdef CONFIG_OF
+static struct mca_wdt_data mca_wdt_devdata[] = {
+	[CC6UL_MCA_WDT] = {
+		.devtype = CC6UL_MCA_WDT,
+	},
+	[CC8X_MCA_WDT] = {
+		.devtype = CC8X_MCA_WDT,
 	},
 };
 
-module_platform_driver(mca_cc6ul_wdt_driver);
+static const struct platform_device_id mca_wdt_devtype[] = {
+	{
+		.name = "mca-cc6ul-watchdog",
+		.driver_data = (kernel_ulong_t)&mca_wdt_devdata[CC6UL_MCA_WDT],
+	}, {
+		.name = "mca-cc8x-watchdog",
+		.driver_data = (kernel_ulong_t)&mca_wdt_devdata[CC8X_MCA_WDT],
+	}, {
+		/* sentinel */	
+	}
+};
+MODULE_DEVICE_TABLE(platform, mca_wdt_devtype);
+
+static const struct of_device_id mca_wdt_match[] = {
+        { .compatible = "digi,mca-cc6ul-wdt",
+          .data = &mca_wdt_devdata[CC6UL_MCA_WDT]},
+        { .compatible = "digi,mca-cc8x-wdt",
+          .data = &mca_wdt_devdata[CC8X_MCA_WDT]},
+        { /* sentinel */ }
+};
+MODULE_DEVICE_TABLE(of, mca_wdt_match);
+#endif
+
+static struct platform_driver mca_wdt_driver = {
+	.probe = mca_wdt_probe,
+	.remove = mca_wdt_remove,
+	.id_table = mca_wdt_devtype,
+	.driver = {
+		.name	= MCA_DRVNAME_WATCHDOG,
+		.of_match_table = of_match_ptr(mca_wdt_match),
+	},
+};
+
+module_platform_driver(mca_wdt_driver);
 
 MODULE_AUTHOR("Digi International Inc.");
-MODULE_DESCRIPTION("Watchdog device driver for MCA of ConnectCore 6UL");
+MODULE_DESCRIPTION("Watchdog device driver for MCA of ConnectCore Modules");
 MODULE_LICENSE("GPL v2");
-MODULE_ALIAS("platform:" MCA_CC6UL_DRVNAME_WATCHDOG);
+MODULE_ALIAS("platform:" MCA_DRVNAME_WATCHDOG);
