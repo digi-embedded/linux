@@ -1,5 +1,5 @@
 /*
- *  Copyright 2017 Digi International Inc
+ *  Copyright 2017-2018 Digi International Inc
  *
  *  This program is free software; you can redistribute  it and/or modify it
  *  under  the terms of  the GNU General  Public License as published by the
@@ -11,6 +11,7 @@
 #define MFD_MCA_COMMON_CORE_H_
 
 #include <linux/interrupt.h>
+#include <linux/platform_device.h>
 #include <linux/mfd/mca-common/registers.h>
 #include <linux/gpio.h>
 
@@ -25,6 +26,11 @@
 #define MCA_IRQ_GPIO_BANK_3_NAME	"GPIO_BANK3"
 #define MCA_IRQ_GPIO_BANK_4_NAME	"GPIO_BANK4"
 #define MCA_IRQ_GPIO_BANK_5_NAME	"GPIO_BANK5"
+#define MCA_IRQ_RTC_ALARM_NAME		"RTC ALARM"
+#define MCA_IRQ_RTC_1HZ_NAME		"RTC 1HZ"
+#define MCA_IRQ_PWR_SLEEP_NAME		"SLEEP"
+#define MCA_IRQ_PWR_OFF_NAME		"PWR OFF"
+#define MCA_IRQ_WATCHDOG_NAME		"WATCHDOG"
 
 /* Number of interrupt registers */
 #define MCA_NUM_IRQ_REGS		4
@@ -34,6 +40,26 @@
 #define MCA_MAX_GPIO_IRQ_BANKS		6
 
 #define MCA_MAX_IO_BYTES		((MCA_MAX_IOS + 7) / 8)
+
+struct mca_drv {
+	struct device *dev;
+	u8 dev_id;
+	u8 hw_version;
+	bool fw_is_alpha;
+	u16 fw_version;
+	u32 flags;
+	struct regmap *regmap;
+	struct regmap_irq_chip_data *regmap_irq;
+	struct notifier_block restart_handler;
+	int chip_irq;
+	u32 irq_base;
+	int gpio_base;
+	int fw_update_gpio;
+	int som_hv;
+	u32 last_mca_reset;
+	u32 last_mpu_reset;
+	struct bin_attribute *nvram;
+};
 
 struct mca_adc {
 	struct device *dev;

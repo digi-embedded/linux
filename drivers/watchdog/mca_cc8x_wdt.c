@@ -23,8 +23,8 @@
 #include <linux/mfd/mca-cc8x/core.h>
 #include <linux/mfd/mca-cc8x/registers.h>
 
-#define WDT_REFRESH_LEN		(MCA_CC8X_WDT_REFRESH_3 - \
-				 MCA_CC8X_WDT_REFRESH_0 + 1)
+#define WDT_REFRESH_LEN		(MCA_WDT_REFRESH_3 - \
+				 MCA_WDT_REFRESH_0 + 1)
 #define WDT_REFRESH_PATTERN	"WDTP"
 #define WATCHDOG_NAME		"MCA CC8X Watchdog"
 #define DEFAULT_TIMEOUT 30            /* 30 sec default timeout */
@@ -37,7 +37,7 @@ MODULE_PARM_DESC(nowayout,
 
 struct mca_cc8x_wdt {
 	struct watchdog_device wdd;
-	struct mca_cc8x *mca;
+	struct mca_drv *mca;
 	struct kref kref;
 	unsigned int default_timeout;
 	bool irqnoreset;
@@ -50,14 +50,14 @@ static int mca_cc8x_wdt_set_timeout(struct watchdog_device *wdd,
 				     unsigned int timeout)
 {
 	struct mca_cc8x_wdt *wdt = watchdog_get_drvdata(wdd);
-	struct mca_cc8x *mca = wdt->mca;
+	struct mca_drv *mca = wdt->mca;
 	int ret;
 
 	if (timeout < wdt->wdd.min_timeout ||
 	    timeout > wdt->wdd.max_timeout) {
 		ret = -EINVAL;
 	} else {
-		ret = regmap_write(mca->regmap, MCA_CC8X_WDT_TIMEOUT, timeout);
+		ret = regmap_write(mca->regmap, MCA_WDT_TIMEOUT, timeout);
 	}
 
 	if (ret < 0) {
@@ -75,13 +75,13 @@ static int mca_cc8x_config_options(struct mca_cc8x_wdt *wdt)
 	int ret = 0;
 	u8 control = 0;
 
-	control |= wdt->nowayout ? MCA_CC8X_WDT_NOWAYOUT : 0;
-	control |= wdt->irqnoreset ? MCA_CC8X_WDT_IRQNORESET : 0;
-	control |= wdt->fullreset ? MCA_CC8X_WDT_FULLRESET : 0;
+	control |= wdt->nowayout ? MCA_WDT_NOWAYOUT : 0;
+	control |= wdt->irqnoreset ? MCA_WDT_IRQNORESET : 0;
+	control |= wdt->fullreset ? MCA_WDT_FULLRESET : 0;
 
-	ret = regmap_update_bits(wdt->mca->regmap, MCA_CC8X_WDT_CONTROL,
-			MCA_CC8X_WDT_NOWAYOUT | MCA_CC8X_WDT_IRQNORESET |
-			MCA_CC8X_WDT_FULLRESET, control);
+	ret = regmap_update_bits(wdt->mca->regmap, MCA_WDT_CONTROL,
+			MCA_WDT_NOWAYOUT | MCA_WDT_IRQNORESET |
+			MCA_WDT_FULLRESET, control);
 	if (ret)
 		goto err;
 
@@ -100,14 +100,14 @@ err:
 static int mca_cc8x_wdt_ping(struct watchdog_device *wdd)
 {
 	struct mca_cc8x_wdt *wdt = watchdog_get_drvdata(wdd);
-	struct mca_cc8x *mca = wdt->mca;
+	struct mca_drv *mca = wdt->mca;
 	const char *pattern = WDT_REFRESH_PATTERN;
 
 	/*
 	 * Refresh the watchdog timer by writing refresh pattern to REFRESH_x
 	 * registers
 	 */
-	return regmap_bulk_write(mca->regmap, MCA_CC8X_WDT_REFRESH_0,
+	return regmap_bulk_write(mca->regmap, MCA_WDT_REFRESH_0,
 				 pattern, WDT_REFRESH_LEN);
 }
 
@@ -121,8 +121,8 @@ static int mca_cc8x_wdt_start(struct watchdog_device *wdd)
 	int ret = 0;
 
 	/* Enable watchdog */
-	ret = regmap_update_bits(wdt->mca->regmap, MCA_CC8X_WDT_CONTROL,
-				 MCA_CC8X_WDT_ENABLE, MCA_CC8X_WDT_ENABLE);
+	ret = regmap_update_bits(wdt->mca->regmap, MCA_WDT_CONTROL,
+				 MCA_WDT_ENABLE, MCA_WDT_ENABLE);
 	if (ret) {
 		dev_err(wdt->mca->dev, "Could not enable watchdog (%d)\n", ret);
 		goto err;
@@ -137,8 +137,8 @@ static int mca_cc8x_wdt_stop(struct watchdog_device *wdd)
 	struct mca_cc8x_wdt *wdt = watchdog_get_drvdata(wdd);
 
 	/* Disable watchdog */
-	return regmap_update_bits(wdt->mca->regmap, MCA_CC8X_WDT_CONTROL,
-				  MCA_CC8X_WDT_ENABLE, 0);
+	return regmap_update_bits(wdt->mca->regmap, MCA_WDT_CONTROL,
+				  MCA_WDT_ENABLE, 0);
 }
 
 static irqreturn_t mca_cc8x_wdt_timeout_event(int irq, void *data)
@@ -183,7 +183,7 @@ static int of_mca_cc8x_wdt_init(struct device_node *np,
 
 static int mca_cc8x_wdt_probe(struct platform_device *pdev)
 {
-	struct mca_cc8x *mca = dev_get_drvdata(pdev->dev.parent);
+	struct mca_drv *mca = dev_get_drvdata(pdev->dev.parent);
 	struct mca_cc8x_wdt *wdt;
 	struct device_node *np;
 	int ret;
@@ -244,15 +244,15 @@ static int mca_cc8x_wdt_probe(struct platform_device *pdev)
 	/* Register interrupt if so configured */
 	if (wdt->irqnoreset) {
 		wdt->irq_timeout = platform_get_irq_byname(pdev,
-						MCA_CC8X_IRQ_WATCHDOG_NAME);
+						MCA_IRQ_WATCHDOG_NAME);
 		ret = devm_request_threaded_irq(&pdev->dev, wdt->irq_timeout,
 					NULL, mca_cc8x_wdt_timeout_event,
 					IRQF_TRIGGER_LOW | IRQF_ONESHOT,
-					MCA_CC8X_IRQ_WATCHDOG_NAME, wdt);
+					MCA_IRQ_WATCHDOG_NAME, wdt);
 		if (ret) {
 			dev_err(&pdev->dev,
 				"Failed to request %s IRQ. (%d)\n",
-				MCA_CC8X_IRQ_WATCHDOG_NAME, wdt->irq_timeout);
+				MCA_IRQ_WATCHDOG_NAME, wdt->irq_timeout);
 			wdt->irq_timeout = -ENXIO;
 			goto err;
 		}

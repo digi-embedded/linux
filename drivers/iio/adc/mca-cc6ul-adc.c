@@ -29,7 +29,7 @@
 
 static int mca_cc6ul_adc_probe(struct platform_device *pdev)
 {
-	struct mca_cc6ul *mca = dev_get_drvdata(pdev->dev.parent);
+	struct mca_drv *mca = dev_get_drvdata(pdev->dev.parent);
 	struct device *mca_dev = mca->dev;
 	int gpio_base = mca->gpio_base;
 	struct regmap *regmap = mca->regmap;
@@ -40,7 +40,7 @@ static int mca_cc6ul_adc_probe(struct platform_device *pdev)
 
 static int mca_cc6ul_adc_remove(struct platform_device *pdev)
 {
-	struct mca_cc6ul *mca = dev_get_drvdata(pdev->dev.parent);
+	struct mca_drv *mca = dev_get_drvdata(pdev->dev.parent);
 
 	if (!mca) {
 		dev_err(&pdev->dev, "Received a NULL pointer in mca\n");

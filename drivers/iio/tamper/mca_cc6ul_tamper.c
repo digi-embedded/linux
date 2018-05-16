@@ -41,25 +41,25 @@
 /* Tamper register offsets */
 enum {
 	CFG0 		= 0,
-	CFG1 		= MCA_CC6UL_TAMPER0_CFG1 - MCA_CC6UL_TAMPER0_CFG0,
-	IO_IN 		= MCA_CC6UL_TAMPER0_IO_IN - MCA_CC6UL_TAMPER0_CFG0,
-	IO_OUT 		= MCA_CC6UL_TAMPER0_IO_OUT - MCA_CC6UL_TAMPER0_CFG0,
-	DELAY_PWROFF 	= MCA_CC6UL_TAMPER0_DELAY_PWROFF - MCA_CC6UL_TAMPER0_CFG0,
-	DATE_YEAR_L 	= MCA_CC6UL_TAMPER0_DATE_START - MCA_CC6UL_TAMPER0_CFG0,
+	CFG1 		= MCA_TAMPER0_CFG1 - MCA_TAMPER0_CFG0,
+	IO_IN 		= MCA_TAMPER0_IO_IN - MCA_TAMPER0_CFG0,
+	IO_OUT 		= MCA_TAMPER0_IO_OUT - MCA_TAMPER0_CFG0,
+	DELAY_PWROFF 	= MCA_TAMPER0_DELAY_PWROFF - MCA_TAMPER0_CFG0,
+	DATE_YEAR_L 	= MCA_TAMPER0_DATE_START - MCA_TAMPER0_CFG0,
 	DATE_YEAR_H,
 	DATE_MONTH,
 	DATE_DAY,
 	DATE_HOUR,
 	DATE_MIN,
 	DATE_SEC,
-	EVENT 		= MCA_CC6UL_TAMPER0_EVENT - MCA_CC6UL_TAMPER0_CFG0,
-	TICKS		= MCA_CC6UL_TAMPER2_TICKS_L - MCA_CC6UL_TAMPER2_CFG0,
-	THR_L		= MCA_CC6UL_TAMPER2_THRESH_LO_L - MCA_CC6UL_TAMPER2_CFG0,
-	THR_H		= MCA_CC6UL_TAMPER2_THRESH_HI_L - MCA_CC6UL_TAMPER2_CFG0,
+	EVENT 		= MCA_TAMPER0_EVENT - MCA_TAMPER0_CFG0,
+	TICKS		= MCA_TAMPER2_TICKS_L - MCA_TAMPER2_CFG0,
+	THR_L		= MCA_TAMPER2_THRESH_LO_L - MCA_TAMPER2_CFG0,
+	THR_H		= MCA_TAMPER2_THRESH_HI_L - MCA_TAMPER2_CFG0,
 };
 
 struct mca_cc6ul_tamper {
-	struct mca_cc6ul *mca;
+	struct mca_drv *mca;
 	struct iio_dev *iio;
 	char name[10];
 	uint8_t config0;
@@ -83,16 +83,16 @@ static int mca_cc6ul_tamper_read_raw(struct iio_dev *iio,
 
 	switch (tp->iface) {
 	case 0:
-		event_reg = MCA_CC6UL_TAMPER0_EVENT;
+		event_reg = MCA_TAMPER0_EVENT;
 		break;
 	case 1:
-		event_reg = MCA_CC6UL_TAMPER1_EVENT;
+		event_reg = MCA_TAMPER1_EVENT;
 		break;
 	case 2:
-		event_reg = MCA_CC6UL_TAMPER2_EVENT;
+		event_reg = MCA_TAMPER2_EVENT;
 		break;
 	case 3:
-		event_reg = MCA_CC6UL_TAMPER3_EVENT;
+		event_reg = MCA_TAMPER3_EVENT;
 		break;
 	default:
 		return -EINVAL;
@@ -129,24 +129,24 @@ static const struct iio_event_spec mca_cc6ul_tamper_events[] = {
 static void mca_cc6ul_tamper_get_time(u8 *data, struct rtc_time *tm)
 {
 	tm->tm_year = ((data[DATE_YEAR_H] << 8) | data[DATE_YEAR_L]) - 1900;
-	tm->tm_mon  = (data[DATE_MONTH] & MCA_CC6UL_RTC_MONTH_MASK) - 1;
-	tm->tm_mday = (data[DATE_DAY]   & MCA_CC6UL_RTC_DAY_MASK);
-	tm->tm_hour = (data[DATE_HOUR]  & MCA_CC6UL_RTC_HOUR_MASK);
-	tm->tm_min  = (data[DATE_MIN]   & MCA_CC6UL_RTC_MIN_MASK);
-	tm->tm_sec  = (data[DATE_SEC]   & MCA_CC6UL_RTC_SEC_MASK);
+	tm->tm_mon  = (data[DATE_MONTH] & MCA_RTC_MONTH_MASK) - 1;
+	tm->tm_mday = (data[DATE_DAY]   & MCA_RTC_DAY_MASK);
+	tm->tm_hour = (data[DATE_HOUR]  & MCA_RTC_HOUR_MASK);
+	tm->tm_min  = (data[DATE_MIN]   & MCA_RTC_MIN_MASK);
+	tm->tm_sec  = (data[DATE_SEC]   & MCA_RTC_SEC_MASK);
 }
 
 static unsigned int get_tamper_base_reg(unsigned int iface)
 {
 	switch (iface) {
 		case 0:
-			return MCA_CC6UL_TAMPER0_CFG0;
+			return MCA_TAMPER0_CFG0;
 		case 1:
-			return MCA_CC6UL_TAMPER1_CFG0;
+			return MCA_TAMPER1_CFG0;
 		case 2:
-			return MCA_CC6UL_TAMPER2_CFG0;
+			return MCA_TAMPER2_CFG0;
 		case 3:
-			return MCA_CC6UL_TAMPER3_CFG0;
+			return MCA_TAMPER3_CFG0;
 		default:
 			break;
 	}
@@ -239,10 +239,10 @@ static ssize_t show_tp_events(struct device *dev, struct device_attribute *attr,
 	case 0x00:
 		ret = sprintf(buf, "none\n");
 		break;
-	case MCA_CC6UL_TAMPER_SIGNALED:
+	case MCA_TAMPER_SIGNALED:
 		ret = sprintf(buf, "signaled\n");
 		break;
-	case (MCA_CC6UL_TAMPER_ACKED | MCA_CC6UL_TAMPER_SIGNALED):
+	case (MCA_TAMPER_ACKED | MCA_TAMPER_SIGNALED):
 		ret = sprintf(buf, "signaled+acked\n");
 		break;
 	default:
@@ -265,14 +265,14 @@ static ssize_t store_tp_events(struct device *dev, struct device_attribute *attr
 		return -1;
 
 	if (!strncmp(buf, "ack", strlen("ack")))
-		val = MCA_CC6UL_TAMPER_ACKED;
+		val = MCA_TAMPER_ACKED;
 	else if (!strncmp(buf, "clear", strlen("clear")))
-		val = MCA_CC6UL_TAMPER_CLEAR;
+		val = MCA_TAMPER_CLEAR;
 	else {
 		/* Check if string is a raw value */
 		ret = kstrtoul(buf, 0, &val);
-		if (ret || (val != MCA_CC6UL_TAMPER_CLEAR &&
-			    val != MCA_CC6UL_TAMPER_ACKED)) {
+		if (ret || (val != MCA_TAMPER_CLEAR &&
+			    val != MCA_TAMPER_ACKED)) {
 			dev_err(tp->mca->dev,
 				"%s: error parsing input (%s)\n",
 				__func__, buf);
@@ -299,7 +299,7 @@ static ssize_t show_timestamp(struct device *dev, struct device_attribute *attr,
 	unsigned int tamper_base_reg = get_tamper_base_reg(tp->iface);
 	time64_t tamper_t64 = -1;
 	struct rtc_time tm;
-	u8 data[MCA_CC6UL_TAMPER_REGS_LEN];
+	u8 data[MCA_TAMPER_REGS_LEN];
 	int ret;
 
 	if (tamper_base_reg == ~0)
@@ -314,7 +314,7 @@ static ssize_t show_timestamp(struct device *dev, struct device_attribute *attr,
 	}
 
 	/* Confirm the event and get the timestamp */
-	if (data[EVENT] & MCA_CC6UL_TAMPER_SIGNALED) {
+	if (data[EVENT] & MCA_TAMPER_SIGNALED) {
 		mca_cc6ul_tamper_get_time(data, &tm);
 		tamper_t64 = rtc_tm_to_time64(&tm);
 	}
@@ -432,7 +432,7 @@ static irqreturn_t mca_cc6ul_tamper_irq_handler(int irq, void *private)
 	struct iio_dev *iio = private;
 	struct mca_cc6ul_tamper *tp = iio_priv(iio);
 	struct rtc_time tm;
-	u8 data[MCA_CC6UL_TAMPER_REGS_LEN];
+	u8 data[MCA_TAMPER_REGS_LEN];
 	time64_t tamper_t64;
 	u64 event;
 	int ret;
@@ -452,10 +452,10 @@ static irqreturn_t mca_cc6ul_tamper_irq_handler(int irq, void *private)
 	}
 
 	/* Confirm the event and get the timestamp */
-	if (!(data[EVENT] & MCA_CC6UL_TAMPER_SIGNALED))
+	if (!(data[EVENT] & MCA_TAMPER_SIGNALED))
 		goto irq_out;
 
-	if (data[EVENT] & MCA_CC6UL_TAMPER_ACKED)
+	if (data[EVENT] & MCA_TAMPER_ACKED)
 		goto irq_out;
 
 	mca_cc6ul_tamper_regs_dump(data);
@@ -474,7 +474,7 @@ irq_out:
 static int mca_cc6ul_init_hardware(struct mca_cc6ul_tamper *tp)
 {
 	int ret;
-	u8 data[MCA_CC6UL_TAMPER_REGS_LEN];
+	u8 data[MCA_TAMPER_REGS_LEN];
 	unsigned int tamper_base_reg = get_tamper_base_reg(tp->iface);
 
 	/* Verify if the tamper interface is enabled */
@@ -494,7 +494,7 @@ static int mca_cc6ul_init_hardware(struct mca_cc6ul_tamper *tp)
 	tp->io_out = data[IO_OUT];
 	tp->pwroff_delay_ms = data[DELAY_PWROFF];
 
-	if (!(data[CFG0] & MCA_CC6UL_TAMPER_DET_EN))
+	if (!(data[CFG0] & MCA_TAMPER_DET_EN))
 		return -ENODEV;
 
 	if (tp->mca->gpio_base >= 0) {
@@ -509,7 +509,7 @@ static int mca_cc6ul_init_hardware(struct mca_cc6ul_tamper *tp)
 			return ret;
 		}
 
-		if (data[CFG0] & MCA_CC6UL_TAMPER_OUT_EN) {
+		if (data[CFG0] & MCA_TAMPER_OUT_EN) {
 			ret = devm_gpio_request(tp->mca->dev,
 						tp->mca->gpio_base + tp->io_out,
 						"TAMPER OUT");
@@ -543,7 +543,7 @@ static void mca_cc6ul_init_channel(struct iio_chan_spec *chan, int idx)
 
 static int mca_cc6ul_tamper_probe(struct platform_device *pdev)
 {
-	struct mca_cc6ul *mca = dev_get_drvdata(pdev->dev.parent);
+	struct mca_drv *mca = dev_get_drvdata(pdev->dev.parent);
 	struct mca_cc6ul_tamper **mca_tamper = NULL;
 	struct iio_dev *iiod[MCA_TAMPER_INTERFACES] = {NULL};
 	struct device_node *np;
@@ -675,7 +675,7 @@ exit_error:
 static int mca_cc6ul_tamper_remove(struct platform_device *pdev)
 {
 	struct mca_cc6ul_tamper **mca_tamper = dev_get_drvdata(pdev->dev.parent);
-	struct mca_cc6ul *mca;
+	struct mca_drv *mca;
 	u32 iface;
 
 	for (iface = 0; iface < MCA_TAMPER_INTERFACES; iface++) {
@@ -686,7 +686,7 @@ static int mca_cc6ul_tamper_remove(struct platform_device *pdev)
 		if (mca->gpio_base >= 0) {
 			devm_gpio_free(&pdev->dev,
 				       mca->gpio_base + mca_tamper[iface]->io_in);
-			if (mca_tamper[iface]->config0 & MCA_CC6UL_TAMPER_OUT_EN)
+			if (mca_tamper[iface]->config0 & MCA_TAMPER_OUT_EN)
 				devm_gpio_free(&pdev->dev,
 					       mca->gpio_base + mca_tamper[iface]->io_out);
 		}

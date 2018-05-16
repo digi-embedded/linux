@@ -53,7 +53,7 @@ enum {
 };
 
 struct mca_uart {
-	struct mca_cc6ul *mca;
+	struct mca_drv *mca;
 	struct device *dev;
 	struct uart_driver uart;
 	struct uart_port port;
@@ -725,7 +725,7 @@ static struct attribute_group uart_port_extra_attr = {
 
 static int mca_uart_probe(struct platform_device *pdev)
 {
-	struct mca_cc6ul *mca = dev_get_drvdata(pdev->dev.parent);
+	struct mca_drv *mca = dev_get_drvdata(pdev->dev.parent);
 	struct regmap *regmap = mca->regmap;
 	struct mca_uart *mca_uart;
 	struct device_node *np;

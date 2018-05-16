@@ -41,7 +41,7 @@
 #define MAX_PWR_KEY_GUARD		255
 
 struct mca_cc6ul_pwrkey {
-	struct mca_cc6ul *mca;
+	struct mca_drv *mca;
 	struct	input_dev *input;
 	int irq_power;
 	int irq_sleep;
@@ -90,7 +90,7 @@ static int mca_cc6ul_pwrkey_initialize(struct mca_cc6ul_pwrkey *pwrkey)
 	int ret;
 	uint8_t pwrctrl0 = 0;
 
-	ret = regmap_write(pwrkey->mca->regmap, MCA_CC6UL_PWR_KEY_DEBOUNCE,
+	ret = regmap_write(pwrkey->mca->regmap, MCA_PWR_KEY_DEBOUNCE,
 			   (uint8_t)pwrkey->debounce_ms);
 	if (ret < 0) {
 		dev_err(pwrkey->mca->dev,
@@ -99,7 +99,7 @@ static int mca_cc6ul_pwrkey_initialize(struct mca_cc6ul_pwrkey *pwrkey)
 		return ret;
 	}
 
-	ret = regmap_write(pwrkey->mca->regmap, MCA_CC6UL_PWR_KEY_DELAY,
+	ret = regmap_write(pwrkey->mca->regmap, MCA_PWR_KEY_DELAY,
 			   (uint8_t)pwrkey->pwroff_delay_sec);
 	if (ret < 0) {
 		dev_err(pwrkey->mca->dev,
@@ -108,7 +108,7 @@ static int mca_cc6ul_pwrkey_initialize(struct mca_cc6ul_pwrkey *pwrkey)
 		return ret;
 	}
 
-	ret = regmap_write(pwrkey->mca->regmap, MCA_CC6UL_PWR_KEY_GUARD,
+	ret = regmap_write(pwrkey->mca->regmap, MCA_PWR_KEY_GUARD,
 			   (uint8_t)pwrkey->pwroff_guard_sec);
 	if (ret < 0) {
 		dev_err(pwrkey->mca->dev,
@@ -118,15 +118,15 @@ static int mca_cc6ul_pwrkey_initialize(struct mca_cc6ul_pwrkey *pwrkey)
 	}
 
 	if (pwrkey->key_power)
-		pwrctrl0 |= MCA_CC6UL_PWR_KEY_OFF_EN;
+		pwrctrl0 |= MCA_PWR_KEY_OFF_EN;
 
 	if (pwrkey->key_sleep)
-		pwrctrl0 |= MCA_CC6UL_PWR_KEY_SLEEP_EN;
+		pwrctrl0 |= MCA_PWR_KEY_SLEEP_EN;
 
 	if (pwrkey->pwroff_guard_sec != 0)
-		pwrctrl0 |= MCA_CC6UL_PWR_GUARD_EN;
+		pwrctrl0 |= MCA_PWR_GUARD_EN;
 
-	ret = regmap_write(pwrkey->mca->regmap, MCA_CC6UL_PWR_CTRL_0, pwrctrl0);
+	ret = regmap_write(pwrkey->mca->regmap, MCA_PWR_CTRL_0, pwrctrl0);
 	if (ret < 0) {
 		dev_err(pwrkey->mca->dev,
 			"Failed to set PWR_CTRL_0 0x%02x, %d\n",
@@ -179,7 +179,7 @@ static int of_mca_cc6ul_pwrkey_read_settings(struct device_node *np,
 
 static int mca_cc6ul_pwrkey_probe(struct platform_device *pdev)
 {
-	struct mca_cc6ul *mca = dev_get_drvdata(pdev->dev.parent);
+	struct mca_drv *mca = dev_get_drvdata(pdev->dev.parent);
 	struct mca_cc6ul_pwrkey *pwrkey;
 	struct device_node *np = NULL;
 	int ret = 0;
@@ -214,9 +214,9 @@ static int mca_cc6ul_pwrkey_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, pwrkey);
 	pwrkey->mca = mca;
 	pwrkey->irq_power = platform_get_irq_byname(pdev,
-					MCA_CC6UL_IRQ_PWR_OFF_NAME);
+					MCA_IRQ_PWR_OFF_NAME);
 	pwrkey->irq_sleep = platform_get_irq_byname(pdev,
-					MCA_CC6UL_IRQ_PWR_SLEEP_NAME);
+					MCA_IRQ_PWR_SLEEP_NAME);
 	pwrkey->input->name = MCA_CC6UL_DRVNAME_PWRKEY;
 	pwrkey->input->phys = MCA_CC6UL_DRVNAME_PWRKEY "/input0";
 	pwrkey->input->dev.parent = &pdev->dev;
@@ -242,10 +242,10 @@ static int mca_cc6ul_pwrkey_probe(struct platform_device *pdev)
 		ret = devm_request_threaded_irq(&pdev->dev, pwrkey->irq_power, NULL,
 						mca_cc6ul_pwrkey_power_off_irq_handler,
 						IRQF_TRIGGER_LOW | IRQF_ONESHOT,
-						MCA_CC6UL_IRQ_PWR_OFF_NAME, pwrkey);
+						MCA_IRQ_PWR_OFF_NAME, pwrkey);
 		if (ret) {
 			dev_err(&pdev->dev, "Failed to request %s IRQ (%d).\n",
-				MCA_CC6UL_IRQ_PWR_OFF_NAME, pwrkey->irq_power);
+				MCA_IRQ_PWR_OFF_NAME, pwrkey->irq_power);
 			goto err_free_inputdev;
 		}
 	}
@@ -254,10 +254,10 @@ static int mca_cc6ul_pwrkey_probe(struct platform_device *pdev)
 		ret = devm_request_threaded_irq(&pdev->dev, pwrkey->irq_sleep, NULL,
 						mca_cc6ul_pwrkey_sleep_irq_handler,
 						IRQF_TRIGGER_LOW | IRQF_ONESHOT,
-						MCA_CC6UL_IRQ_PWR_SLEEP_NAME, pwrkey);
+						MCA_IRQ_PWR_SLEEP_NAME, pwrkey);
 		if (ret) {
 			dev_err(&pdev->dev, "Failed to request %s IRQ (%d).\n",
-				MCA_CC6UL_IRQ_PWR_SLEEP_NAME, pwrkey->irq_sleep);
+				MCA_IRQ_PWR_SLEEP_NAME, pwrkey->irq_sleep);
 			goto err_irq1;
 		}
 		enable_irq_wake(pwrkey->irq_sleep);
