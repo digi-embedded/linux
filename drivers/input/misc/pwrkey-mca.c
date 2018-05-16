@@ -1,5 +1,5 @@
-/* pwrkey-mca-cc6ul.c - Power Key device driver for MCA on ConnectCore 6UL
- * Copyright (C) 2016  Digi International Inc
+/* pwrkey-mca.c - Power Key device driver for MCA on ConnectCore modules
+ * Copyright (C) 2016 - 2018  Digi International Inc
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -27,11 +27,13 @@
 #include <linux/platform_device.h>
 #include <linux/spinlock.h>
 #include <linux/workqueue.h>
-#include <linux/mfd/mca-cc6ul/registers.h>
-#include <linux/mfd/mca-cc6ul/core.h>
+#include <linux/mfd/mca-common/core.h>
 #include <linux/of.h>
+#include <linux/of_device.h>
 #include <linux/of_irq.h>
 #include <linux/regmap.h>
+
+#define MCA_DRVNAME_PWRKEY        "mca-pwrkey"
 
 #define DEFAULT_PWR_KEY_DEBOUNCE	150	/* 150 ms */
 #define DEFAULT_PWR_KEY_DELAY		4	/* 4 seconds */
@@ -40,9 +42,21 @@
 #define MAX_PWR_KEY_DELAY		255
 #define MAX_PWR_KEY_GUARD		255
 
-struct mca_cc6ul_pwrkey {
+#ifdef CONFIG_OF
+enum mca_pwrkey_type {
+	CC6UL_MCA_PWRKEY,
+	CC8X_MCA_PWRKEY,
+};
+
+struct mca_pwrkey_data {
+	enum mca_pwrkey_type devtype;
+	char drv_name_phys[40];
+};
+#endif
+
+struct mca_pwrkey {
 	struct mca_drv *mca;
-	struct	input_dev *input;
+	struct input_dev *input;
 	int irq_power;
 	int irq_sleep;
 	bool key_power;
@@ -57,9 +71,9 @@ struct mca_cc6ul_pwrkey {
 static DEFINE_SPINLOCK(lock);
 #endif
 
-static irqreturn_t mca_cc6ul_pwrkey_power_off_irq_handler(int irq, void *data)
+static irqreturn_t mca_pwrkey_power_off_irq_handler(int irq, void *data)
 {
-	struct mca_cc6ul_pwrkey *pwrkey = data;
+	struct mca_pwrkey *pwrkey = data;
 
 	dev_notice(&pwrkey->input->dev, "Power Button - KEY_POWER\n");
 
@@ -69,9 +83,9 @@ static irqreturn_t mca_cc6ul_pwrkey_power_off_irq_handler(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
-static irqreturn_t mca_cc6ul_pwrkey_sleep_irq_handler(int irq, void *data)
+static irqreturn_t mca_pwrkey_sleep_irq_handler(int irq, void *data)
 {
-	struct mca_cc6ul_pwrkey *pwrkey = data;
+	struct mca_pwrkey *pwrkey = data;
 
 	/* Report the event only if not coming from suspend */
 	if (!pwrkey->suspended) {
@@ -85,7 +99,7 @@ static irqreturn_t mca_cc6ul_pwrkey_sleep_irq_handler(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
-static int mca_cc6ul_pwrkey_initialize(struct mca_cc6ul_pwrkey *pwrkey)
+static int mca_pwrkey_initialize(struct mca_pwrkey *pwrkey)
 {
 	int ret;
 	uint8_t pwrctrl0 = 0;
@@ -137,8 +151,8 @@ static int mca_cc6ul_pwrkey_initialize(struct mca_cc6ul_pwrkey *pwrkey)
 	return 0;
 }
 
-static int of_mca_cc6ul_pwrkey_read_settings(struct device_node *np,
-					     struct mca_cc6ul_pwrkey *pwrkey)
+static int of_mca_pwrkey_read_settings(struct device_node *np,
+					     struct mca_pwrkey *pwrkey)
 {
 	uint32_t val;
 
@@ -177,10 +191,12 @@ static int of_mca_cc6ul_pwrkey_read_settings(struct device_node *np,
 	return 0;
 }
 
-static int mca_cc6ul_pwrkey_probe(struct platform_device *pdev)
+static int mca_pwrkey_probe(struct platform_device *pdev)
 {
 	struct mca_drv *mca = dev_get_drvdata(pdev->dev.parent);
-	struct mca_cc6ul_pwrkey *pwrkey;
+	struct mca_pwrkey *pwrkey;
+	const struct mca_pwrkey_data *devdata =
+				      of_device_get_match_data(&pdev->dev);
 	struct device_node *np = NULL;
 	int ret = 0;
 
@@ -190,14 +206,16 @@ static int mca_cc6ul_pwrkey_probe(struct platform_device *pdev)
 
 	/* Find entry in device-tree */
 	if (mca->dev->of_node) {
+		const char * compatible = pdev->dev.driver->
+				    of_match_table[devdata->devtype].compatible;
+
 		/* Return if pwrkey node does not exist or if it is disabled */
-		np = of_find_compatible_node(mca->dev->of_node, NULL,
-					     "digi,mca-cc6ul-pwrkey");
+		np = of_find_compatible_node(mca->dev->of_node, NULL, compatible);
 		if (!np || !of_device_is_available(np))
 			return -ENODEV;
 	}
 
-	pwrkey = devm_kzalloc(&pdev->dev, sizeof(struct mca_cc6ul_pwrkey),
+	pwrkey = devm_kzalloc(&pdev->dev, sizeof(struct mca_pwrkey),
 			     GFP_KERNEL);
 	if (!pwrkey) {
 		dev_err(&pdev->dev, "Failed to allocate memory.\n");
@@ -214,25 +232,25 @@ static int mca_cc6ul_pwrkey_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, pwrkey);
 	pwrkey->mca = mca;
 	pwrkey->irq_power = platform_get_irq_byname(pdev,
-					MCA_IRQ_PWR_OFF_NAME);
+						    MCA_IRQ_PWR_OFF_NAME);
 	pwrkey->irq_sleep = platform_get_irq_byname(pdev,
-					MCA_IRQ_PWR_SLEEP_NAME);
-	pwrkey->input->name = MCA_CC6UL_DRVNAME_PWRKEY;
-	pwrkey->input->phys = MCA_CC6UL_DRVNAME_PWRKEY "/input0";
+						    MCA_IRQ_PWR_SLEEP_NAME);
+	pwrkey->input->name = dev_name(&pdev->dev);
+	pwrkey->input->phys = devdata->drv_name_phys;
 	pwrkey->input->dev.parent = &pdev->dev;
 
 	input_set_capability(pwrkey->input, EV_KEY, KEY_POWER);
 	input_set_capability(pwrkey->input, EV_KEY, KEY_SLEEP);
 
 	/* Initialize driver settings from device tree */
-	ret = of_mca_cc6ul_pwrkey_read_settings(np, pwrkey);
+	ret = of_mca_pwrkey_read_settings(np, pwrkey);
 	if (ret) {
 		dev_err(&pdev->dev, "Failed to get %s dtb settings\n",
-			MCA_CC6UL_DRVNAME_PWRKEY);
+			dev_name(&pdev->dev));
 		goto err_free_inputdev;
 	}
 
-	ret = mca_cc6ul_pwrkey_initialize(pwrkey);
+	ret = mca_pwrkey_initialize(pwrkey);
 	if (ret) {
 		dev_err(&pdev->dev, "Failed to initilize pwrkey registers\n");
 		goto err_free_inputdev;
@@ -240,7 +258,7 @@ static int mca_cc6ul_pwrkey_probe(struct platform_device *pdev)
 
 	if (pwrkey->key_power) {
 		ret = devm_request_threaded_irq(&pdev->dev, pwrkey->irq_power, NULL,
-						mca_cc6ul_pwrkey_power_off_irq_handler,
+						mca_pwrkey_power_off_irq_handler,
 						IRQF_TRIGGER_LOW | IRQF_ONESHOT,
 						MCA_IRQ_PWR_OFF_NAME, pwrkey);
 		if (ret) {
@@ -252,7 +270,7 @@ static int mca_cc6ul_pwrkey_probe(struct platform_device *pdev)
 
 	if (pwrkey->key_sleep) {
 		ret = devm_request_threaded_irq(&pdev->dev, pwrkey->irq_sleep, NULL,
-						mca_cc6ul_pwrkey_sleep_irq_handler,
+						mca_pwrkey_sleep_irq_handler,
 						IRQF_TRIGGER_LOW | IRQF_ONESHOT,
 						MCA_IRQ_PWR_SLEEP_NAME, pwrkey);
 		if (ret) {
@@ -286,9 +304,9 @@ err_free:
 	return ret;
 }
 
-static int mca_cc6ul_pwrkey_remove(struct platform_device *pdev)
+static int mca_pwrkey_remove(struct platform_device *pdev)
 {
-	struct mca_cc6ul_pwrkey *pwrkey = platform_get_drvdata(pdev);
+	struct mca_pwrkey *pwrkey = platform_get_drvdata(pdev);
 
 	if (pwrkey->key_power)
 		free_irq(pwrkey->irq_power, pwrkey);
@@ -301,10 +319,10 @@ static int mca_cc6ul_pwrkey_remove(struct platform_device *pdev)
 }
 
 #ifdef CONFIG_PM_SLEEP
-static int __maybe_unused mca_cc6ul_pwrkey_resume(struct device *dev)
+static int __maybe_unused mca_pwrkey_resume(struct device *dev)
 {
 	struct platform_device *pdev = to_platform_device(dev);
-	struct mca_cc6ul_pwrkey *pwrkey = platform_get_drvdata(pdev);
+	struct mca_pwrkey *pwrkey = platform_get_drvdata(pdev);
 	unsigned long flags;
 
 	spin_lock_irqsave(&lock, flags);
@@ -314,10 +332,10 @@ static int __maybe_unused mca_cc6ul_pwrkey_resume(struct device *dev)
 	return 0;
 }
 
-static int __maybe_unused mca_cc6ul_pwrkey_suspend(struct device *dev)
+static int __maybe_unused mca_pwrkey_suspend(struct device *dev)
 {
 	struct platform_device *pdev = to_platform_device(dev);
-	struct mca_cc6ul_pwrkey *pwrkey = platform_get_drvdata(pdev);
+	struct mca_pwrkey *pwrkey = platform_get_drvdata(pdev);
 	unsigned long flags;
 
 	spin_lock_irqsave(&lock, flags);
@@ -327,41 +345,57 @@ static int __maybe_unused mca_cc6ul_pwrkey_suspend(struct device *dev)
 	return 0;
 }
 
-static SIMPLE_DEV_PM_OPS(mca_cc6ul_pwrkey_pm_ops, mca_cc6ul_pwrkey_suspend, mca_cc6ul_pwrkey_resume);
+SIMPLE_DEV_PM_OPS(mca_pwrkey_pm_ops, mca_pwrkey_suspend, mca_pwrkey_resume);
 #endif /* CONFIG_PM_SLEEP */
 
-static const struct of_device_id mca_cc6ul_pwrkey_ids[] = {
-        { .compatible = "digi,mca-cc6ul-pwrkey", },
+#ifdef CONFIG_OF
+static struct mca_pwrkey_data mca_pwrkey_devdata[] = {
+	[CC6UL_MCA_PWRKEY] = {
+		.devtype = CC6UL_MCA_PWRKEY,
+		.drv_name_phys= "mca-cc6ul-pwrkey/input0"
+	},
+	[CC8X_MCA_PWRKEY] = {
+		.devtype = CC8X_MCA_PWRKEY,
+		.drv_name_phys= "mca-cc8x-pwrkey/input0"
+	},
+};
+
+static const struct of_device_id mca_pwrkey_ids[] = {
+        { .compatible = "digi,mca-cc6ul-pwrkey",
+	  .data = &mca_pwrkey_devdata[CC6UL_MCA_PWRKEY]},
+        { .compatible = "digi,mca-cc8x-pwrkey",
+	  .data = &mca_pwrkey_devdata[CC8X_MCA_PWRKEY]},
         { /* sentinel */ }
 };
-MODULE_DEVICE_TABLE(of, mca_cc6ul__ids);
+MODULE_DEVICE_TABLE(of, mca_pwrkey_ids);
+#endif
 
-static struct platform_driver mca_cc6ul_pwrkey_driver = {
-	.probe	= mca_cc6ul_pwrkey_probe,
-	.remove	= mca_cc6ul_pwrkey_remove,
+static struct platform_driver mca_pwrkey_driver = {
+	.probe	= mca_pwrkey_probe,
+	.remove	= mca_pwrkey_remove,
 	.driver	= {
-		.name	= MCA_CC6UL_DRVNAME_PWRKEY,
+		.name	= MCA_DRVNAME_PWRKEY,
 		.owner	= THIS_MODULE,
-		.of_match_table = of_match_ptr(mca_cc6ul_pwrkey_ids),
+		.of_match_table = of_match_ptr(mca_pwrkey_ids),
 #ifdef CONFIG_PM_SLEEP
-		.pm	= &mca_cc6ul_pwrkey_pm_ops,
+		.pm	= &mca_pwrkey_pm_ops,
 #endif
 	},
 };
 
-static int __init mca_cc6ul_pwrkey_init(void)
+static int __init mca_pwrkey_init(void)
 {
-	return platform_driver_register(&mca_cc6ul_pwrkey_driver);
+	return platform_driver_register(&mca_pwrkey_driver);
 }
-module_init(mca_cc6ul_pwrkey_init);
+module_init(mca_pwrkey_init);
 
-static void __exit mca_cc6ul_pwrkey_exit(void)
+static void __exit mca_pwrkey_exit(void)
 {
-	platform_driver_unregister(&mca_cc6ul_pwrkey_driver);
+	platform_driver_unregister(&mca_pwrkey_driver);
 }
-module_exit(mca_cc6ul_pwrkey_exit);
+module_exit(mca_pwrkey_exit);
 
 MODULE_AUTHOR("Digi International Inc");
-MODULE_DESCRIPTION("pwrkey device driver for MCA of ConnectCore 6UL");
+MODULE_DESCRIPTION("pwrkey device driver for MCA of ConnectCore Modules");
 MODULE_LICENSE("GPL v2");
-MODULE_ALIAS("platform:" MCA_CC6UL_DRVNAME_PWRKEY);
+MODULE_ALIAS("platform:" MCA_DRVNAME_PWRKEY);
