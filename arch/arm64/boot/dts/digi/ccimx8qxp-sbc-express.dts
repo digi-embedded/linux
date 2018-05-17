@@ -366,7 +366,10 @@
 
 		pinctrl_hog: hoggrp {
 			fsl,pins = <
-				SC_P_MCLK_OUT0_ADMA_ACM_MCLK_OUT0	0x0600004c
+				/* User LED */
+				SC_P_MCLK_IN0_LSIO_GPIO0_IO19	0x06000020
+				/* User button */
+				SC_P_MCLK_OUT0_LSIO_GPIO0_IO20	0x06000020
 			>;
 		};
 
