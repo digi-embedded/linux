@@ -16,6 +16,8 @@
 #include <linux/mfd/mca-common/core.h>
 #include <linux/mfd/mca-cc8x/core.h>
 
+#include <soc/imx8/sc/svc/irq/api.h>
+
 #define MCA_CC8X_IRQ_0_OFFSET		0
 #define MCA_CC8X_IRQ_1_OFFSET		1
 #define MCA_CC8X_IRQ_2_OFFSET		2
@@ -73,6 +75,17 @@ static const struct regmap_irq mca_cc8x_irqs[] = {
 	},
 };
 
+/*
+ * This hook is used to call the SCU MU interrupt handler to manage the SC
+ * interrupts that could have been signaled by the SCU.
+ * This is needed because the MCA ISR replaces the original SCU MU ISR because
+ * both can not be registered as shared irq handlers.
+ */
+static int mca_cc8x_pre_irq(void *irq_drv_data)
+{
+	return imx8_scu_mu_isr(0, NULL);
+}
+
 static const struct regmap_irq_chip mca_cc8x_irq_chip = {
 	.name		= "mca-cc8x-irq",
 	.irqs		= mca_cc8x_irqs,
@@ -81,6 +94,7 @@ static const struct regmap_irq_chip mca_cc8x_irq_chip = {
 	.status_base	= MCA_CC8X_IRQ_STATUS_0,
 	.mask_base	= MCA_CC8X_IRQ_MASK_0,
 	.ack_base	= MCA_CC8X_IRQ_STATUS_0,
+	.handle_pre_irq	= mca_cc8x_pre_irq,
 	.init_ack_masked = true,
 };
 
@@ -104,7 +118,15 @@ int mca_cc8x_irq_init(struct mca_cc8x *mca)
 		return ret;
 	}
 
-	return 0;
+	ret = imx8_mu_enable_sc_irqs(SC_IRQ_TEMP_MCA | SC_IRQ_TEMP_PMIC0_HIGH | \
+				     SC_IRQ_TEMP_PMIC1_HIGH,
+				     SC_IRQ_RTC,
+				     SC_IRQ_BUTTON,
+				     SC_IRQ_WDOG);
+	if (ret)
+		dev_err(mca->dev, "Failed to reguest SC MU IRQs (%d)\n", ret);
+
+	return ret;
 }
 
 void mca_cc8x_irq_exit(struct mca_cc8x *mca)
