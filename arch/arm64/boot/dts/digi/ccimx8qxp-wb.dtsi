@@ -42,7 +42,6 @@
 &lpuart1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lpuart1>, <&pinctrl_lpuart1_gpio>;
-	uart-has-rtscts;
 	status = "okay";
 };
 
