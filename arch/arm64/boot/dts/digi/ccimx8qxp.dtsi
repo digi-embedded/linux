@@ -72,6 +72,11 @@
 	};
 };
 
+/* Disable CPU watchdog */
+&wdog {
+	status = "disabled";
+};
+
 &mu {
 	/*
 	 * Skip the registration of the SC interrupt handler on the MU ipc code.
