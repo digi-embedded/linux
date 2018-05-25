@@ -17,12 +17,12 @@
 
 /* i.MX8QXP CPU */
 #include "../freescale/fsl-imx8qxp.dtsi"
-/* Digi ConnectCore 8QXP (wireless/bluetooth variant) */
-#include "ccimx8qxp-wb.dtsi"
+/* Digi ConnectCore 8X (wireless/bluetooth variant) */
+#include "ccimx8x-wb.dtsi"
 
 / {
 	model = "Digi ConnectCore 8X SBC Express";
-	compatible = "digi,ccimx8qxp-sbc-express", "digi,ccimx8qxp", "fsl,imx8qxp";
+	compatible = "digi,ccimx8x-sbc-express", "digi,ccimx8x", "fsl,imx8qxp";
 
 	chosen {
 		bootargs = "console=ttyLP2,115200 earlycon=lpuart32,0x5a080000,115200";
@@ -361,7 +361,7 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_hog>;
 
-	ccimx8qxp {
+	ccimx8x {
 		pinctrl_cm40_i2c: cm40i2cgrp {
 			fsl,pins = <
 				SC_P_ADC_IN1_M40_I2C0_SDA	0x0600004c

@@ -13,8 +13,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* Digi ConnectCore 8QXP SOM (common) */
-#include "ccimx8qxp.dtsi"
+/* Digi ConnectCore 8X SOM (common) */
+#include "ccimx8x.dtsi"
 
 / {
 	wireless {
@@ -59,7 +59,7 @@
 
 /* IOMUX */
 &iomuxc {
-	ccimx8qxp {
+	ccimx8x {
 		/* UART1 Bluetooth */
 		pinctrl_lpuart1: lpuart1grp {
 			fsl,pins = <

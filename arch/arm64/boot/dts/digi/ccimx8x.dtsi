@@ -112,7 +112,7 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_hog>;
 
-	ccimx8qxp {
+	ccimx8x {
 		/* Internal I2C (MCA, Crypto chip) */
 		pinctrl_lpi2c0: lpi2c0grp {
 			fsl,pins = <
