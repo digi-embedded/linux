@@ -108,16 +108,33 @@
 	status = "disabled";
 };
 
+/*
+ * CAN1 port conflicts with LPUART0 RTS/CTS lines.
+ * Before enabling the port you need to configure
+ * lpuart0 node as 2 wires.
+ */
 &flexcan1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan1>;
-	status = "okay";
+	status = "disabled";
 };
 
+/* CAN2 */
 &flexcan2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan2>;
 	status = "okay";
+};
+
+/*
+ * CAN3 port conflicts with LPUART3 TX/RX lines.
+ * Before enabling the port you need to disable
+ * lpuart3 node.
+ */
+&flexcan3 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_flexcan3>;
+	status = "disabled";
 };
 
 &gpu_3d0 {
@@ -257,8 +274,9 @@
 
 /* LPUART0 on XBee socket */
 &lpuart0 {
+	/* RTS/CTS lines multiplexed with CAN1 */
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_lpuart0>, <&pinctrl_xbee_gpios>;
+	pinctrl-0 = <&pinctrl_lpuart0_4wires>, <&pinctrl_xbee_gpios>;
 	status = "okay";
 };
 
@@ -269,7 +287,9 @@
 	status = "okay";
 };
 
+/* LPUART3 on expansion header */
 &lpuart3 {
+	/* TX/RX lines multiplexed with CAN3 */
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lpuart3>;
 	status = "okay";
@@ -378,7 +398,14 @@
 			>;
 		};
 
-		pinctrl_lpuart0: lpuart0grp {
+		pinctrl_lpuart0_2wires: lpuart0grp_2wires {
+			fsl,pins = <
+				SC_P_UART0_RX_ADMA_UART0_RX		0x06000020
+				SC_P_UART0_TX_ADMA_UART0_TX		0x06000020
+			>;
+		};
+
+		pinctrl_lpuart0_4wires: lpuart0grp_4wires {
 			fsl,pins = <
 				SC_P_UART0_RX_ADMA_UART0_RX		0x06000020
 				SC_P_UART0_TX_ADMA_UART0_TX		0x06000020
@@ -447,6 +474,13 @@
 			fsl,pins = <
 				SC_P_FLEXCAN1_TX_ADMA_FLEXCAN1_TX		0x21
 				SC_P_FLEXCAN1_RX_ADMA_FLEXCAN1_RX		0x21
+			>;
+		};
+
+		pinctrl_flexcan3: flexcan2grp {
+			fsl,pins = <
+				SC_P_FLEXCAN2_TX_ADMA_FLEXCAN2_TX		0x21
+				SC_P_FLEXCAN2_RX_ADMA_FLEXCAN2_RX		0x21
 			>;
 		};
 
