@@ -169,6 +169,18 @@ static struct resource mca_cc8x_gpios_resources[] = {
 		.end    = MCA_CC8X_IRQ_GPIO_BANK_0,
 		.flags  = IORESOURCE_IRQ,
 	},
+	{
+		.name   = MCA_IRQ_GPIO_BANK_1_NAME,
+		.start  = MCA_CC8X_IRQ_GPIO_BANK_1,
+		.end    = MCA_CC8X_IRQ_GPIO_BANK_1,
+		.flags  = IORESOURCE_IRQ,
+	},
+	{
+		.name   = MCA_IRQ_GPIO_BANK_2_NAME,
+		.start  = MCA_CC8X_IRQ_GPIO_BANK_2,
+		.end    = MCA_CC8X_IRQ_GPIO_BANK_2,
+		.flags  = IORESOURCE_IRQ,
+	},
 };
 
 static struct resource mca_cc8x_uart_resources[] = {

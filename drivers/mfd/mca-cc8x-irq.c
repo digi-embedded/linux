@@ -61,6 +61,14 @@ static const struct regmap_irq mca_cc8x_irqs[] = {
 		.reg_offset = MCA_CC8X_IRQ_1_OFFSET,
 		.mask = MCA_GPIO_BANK_0,
 	},
+	[MCA_CC8X_IRQ_GPIO_BANK_1] = {
+		.reg_offset = MCA_CC8X_IRQ_1_OFFSET,
+		.mask = MCA_GPIO_BANK_1,
+	},
+	[MCA_CC8X_IRQ_GPIO_BANK_2] = {
+		.reg_offset = MCA_CC8X_IRQ_1_OFFSET,
+		.mask = MCA_GPIO_BANK_2,
+	},
 	[MCA_CC8X_IRQ_TAMPER2] = {
 		.reg_offset = MCA_CC8X_IRQ_2_OFFSET,
 		.mask = MCA_CC8X_M_TAMPER2,
