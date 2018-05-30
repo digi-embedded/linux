@@ -1,7 +1,7 @@
-* Digi Power Key for MCA of ConnectCore 6UL device tree bindings
+* Digi Power Key for MCA of ConnectCore SOMs device tree bindings
 
-The MCA Power key driver enables the POWER Key function on the ConnectCore 6UL
-embedded module.
+The MCA Power key driver enables the POWER Key function on the ConnectCore
+embedded modules.
 
 The Power Key is used to:
  - Power ON the system, from the OFF state.
@@ -31,7 +31,9 @@ When the system is in suspend state or in Power OFF, pressing the Power Key will
 wakeup the system.
 
 Required properties:
-- compatible: must be "digi,mca-cc6ul-pwrkey".
+- compatible: must be one of
+  "digi,mca-cc6ul-pwrkey"
+  "digi,mca-cc8x-pwrkey"
 
 Optional properties:
 - key-power: enable the KEY_POWER events
@@ -45,9 +47,20 @@ Optional properties:
                             the system. After that the MCA will switch it off.
 
 Example:
-	mca: mca-cc6ul@7e {
+	mca_cc6ul: mca@7e {
 		pwrkey {
 			compatible = "digi,mca-cc6ul-pwrkey";
+			digi,key-power;
+			digi,key-sleep;
+			digi,debounce-ms = <100>;
+			digi,pwroff-delay-sec = <6>;
+			digi,pwroff-guard-sec = <30>;
+		};
+	};
+
+	mca_cc8x: mca@63 {
+		pwrkey {
+			compatible = "digi,mca-cc8x-pwrkey";
 			digi,key-power;
 			digi,key-sleep;
 			digi,debounce-ms = <100>;

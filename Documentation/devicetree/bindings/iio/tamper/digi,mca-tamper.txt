@@ -1,9 +1,11 @@
-* Digi ConnectCore 6UL Micro Controller Assist tamper support
+* Digi ConnectCore SOMs Micro Controller Assist tamper support
 
 The MCA Tamper driver allows to detect tamper events.
 
 Required properties:
-- compatible: must be "digi,mca-cc6ul-tamper".
+- compatible: must be one of
+  "digi,mca-cc6ul-tamper".
+  "digi,mca-cc8x-tamper".
 
 Optional properties:
 - tamper-if-list: list of enabled tamper interfaces. Interfaces 0 and 1 are for

@@ -1,0 +1,19 @@
+* Digi Real Time Clock for MCA of ConnectCore SOMs
+
+Required properties:
+- compatible: must be one of
+  "digi,mca-cc6ul-rtc".
+  "digi,mca-cc8x-rtc".
+
+Example:
+	mca_cc6ul: mca@7e {
+		rtc {
+			compatible = "digi,mca-cc6ul-rtc";
+		};
+	};
+
+	mca_cc8x: mca@63 {
+		rtc {
+			compatible = "digi,mca-cc8x-rtc";
+		};
+	};
