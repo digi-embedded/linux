@@ -377,6 +377,23 @@
 	status = "okay";
 };
 
+/*
+ * Uncomment to enable MCA ADC channels on Rasberry Pi Expansion connector:
+ *  - MCA_IO1 (channel 1)
+ *  - MCA_IO2 (channel 2)
+ *  - MCA_IO3 (channel 3)
+ *  - MCA_IO4 (channel 4)
+ *  - MCA_IO5 (channel 5)
+ *  - MCA_IO6 (channel 6)
+ *  - MCA_IO7 (channel 7)
+ *  - MCA_IO8 (channel 8)
+ * Edit adc-ch-list to include the ADC channels that you want to enable.
+ */
+// &mca_adc {
+//	digi,adc-ch-list = <1 2 3 4 5 6 7 8>;
+//	digi,adc-vref = <3000000>;
+// };
+
 /* IOMUX */
 &iomuxc {
 	pinctrl-names = "default";
