@@ -653,8 +653,18 @@ static u32 get_vref(struct device *mca_dev, struct regmap *regmap,
 {
 	int ret;
 	u32 vref = MCA_ADC_DEF_VREF;
+	bool internal_vref_supported = true;
+	bool internal_vref_selected = of_property_read_bool(np, "digi,internal-vref");
 
-	if (of_property_read_bool(np, "digi,internal-vref")) {
+	if (of_machine_is_compatible("digi,ccimx8x"))
+		internal_vref_supported = false;
+
+	if (internal_vref_selected && !internal_vref_supported) {
+		dev_err(mca_dev,
+			"'digi,internal-vref' property not supported in this platform and hardware version. External Vref will be used instead\n");
+	}
+
+	if (internal_vref_supported && internal_vref_selected) {
 		ret = regmap_write(regmap, MCA_REG_ADC_CFG_0,
 				   MCA_REG_ADC_CFG_0_INT_VREF);
 		if (ret)
