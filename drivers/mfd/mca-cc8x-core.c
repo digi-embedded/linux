@@ -678,7 +678,7 @@ int mca_cc8x_resume(struct device *dev)
 		if (!ret && mca->dev_id == (u8)val)
 			break;
 		udelay(50);
-	} while (retries++ < MCA_MAX_RESUME_RD_RETRIES);
+	} while (++retries < MCA_MAX_RESUME_RD_RETRIES);
 
 	if (retries == MCA_MAX_RESUME_RD_RETRIES) {
 		dev_err(mca->dev, "unable to wake up MCA (%d)\n", ret);
