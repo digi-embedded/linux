@@ -79,6 +79,20 @@ static const struct mca_reason last_wakeup[] = {
 	{MCA_CC8X_LAST_WAKEUP_IO5,	"IO5"},
 	{MCA_CC8X_LAST_WAKEUP_IO6,	"IO6"},
 	{MCA_CC8X_LAST_WAKEUP_IO7,	"IO7"},
+	{MCA_CC8X_LAST_WAKEUP_IO8,	"IO8"},
+	{MCA_CC8X_LAST_WAKEUP_IO9,	"IO9"},
+	{MCA_CC8X_LAST_WAKEUP_IO10,	"IO10"},
+	{MCA_CC8X_LAST_WAKEUP_IO11,	"IO11"},
+	{MCA_CC8X_LAST_WAKEUP_IO12,	"IO12"},
+	{MCA_CC8X_LAST_WAKEUP_IO13,	"IO13"},
+	{MCA_CC8X_LAST_WAKEUP_IO14,	"IO14"},
+	{MCA_CC8X_LAST_WAKEUP_IO15,	"IO15"},
+	{MCA_CC8X_LAST_WAKEUP_IO16,	"IO16"},
+	{MCA_CC8X_LAST_WAKEUP_IO17,	"IO17"},
+	{MCA_CC8X_LAST_WAKEUP_IO18,	"IO18"},
+	{MCA_CC8X_LAST_WAKEUP_IO19,	"IO19"},
+	{MCA_CC8X_LAST_WAKEUP_IO20,	"IO20"},
+	{MCA_CC8X_LAST_WAKEUP_IO21,	"IO21"},
 	{MCA_CC8X_LAST_WAKEUP_VCC,	"Vcc"},
 };
 
@@ -629,15 +643,15 @@ static struct dyn_attribute mca_cc8x_sysfs_dyn_entries[] = {
 		.attr =		&dev_attr_vref.attr,
 	},
 	{
-		.since =	MCA_MAKE_FW_VER(0,0),
+		.since =	MCA_MAKE_FW_VER(0,4),
 		.attr =		&dev_attr_last_wakeup_reason.attr,
 	},
 	{
-		.since =	MCA_MAKE_FW_VER(0,0),
+		.since =	MCA_MAKE_FW_VER(0,4),
 		.attr =		&dev_attr_last_mca_reset.attr,
 	},
 	{
-		.since =	MCA_MAKE_FW_VER(0,0),
+		.since =	MCA_MAKE_FW_VER(0,4),
 		.attr =		&dev_attr_last_mpu_reset.attr,
 	},
 };
@@ -825,7 +839,7 @@ int mca_cc8x_device_init(struct mca_drv *mca, u32 irq)
 	mca->fw_version = (u16)(val & ~MCA_FW_VER_ALPHA_MASK);
 	mca->fw_is_alpha = val & MCA_FW_VER_ALPHA_MASK ? true : false;
 
-	if (mca->fw_version >= MCA_MAKE_FW_VER(1, 2)) {
+	if (mca->fw_version >= MCA_MAKE_FW_VER(0, 4)) {
 		ret = regmap_bulk_read(mca->regmap, MCA_CC8X_LAST_MCA_RESET_0,
 				       &mca->last_mca_reset,
 				       sizeof(mca->last_mca_reset));
