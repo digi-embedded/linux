@@ -13,9 +13,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* Digi ConnectCore 8X SOM (common) */
-#include "ccimx8x.dtsi"
-
 / {
 	wireless {
 		/* U-Boot will fill in the MAC address here */
