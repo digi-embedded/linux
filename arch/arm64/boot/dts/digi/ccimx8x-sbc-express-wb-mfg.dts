@@ -68,11 +68,8 @@
 	status = "disabled";
 };
 
-/*
- * CAN3 port conflicts with LPUART3 TX/RX lines.
- * Before enabling the port you need to disable
- * lpuart3 node.
- */
+
+/* CAN3 */
 &flexcan3 {
 	status = "disabled";
 };
@@ -189,7 +186,6 @@
 
 /* LPUART3 on expansion header */
 &lpuart3 {
-	/* TX/RX lines multiplexed with CAN3 */
 	status = "disabled";
 };
 
