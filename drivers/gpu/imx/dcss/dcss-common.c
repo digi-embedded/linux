@@ -98,6 +98,7 @@ enum dcss_color_space dcss_drm_fourcc_to_colorspace(u32 drm_fourcc)
 	case DRM_FORMAT_NV21:
 	case DRM_FORMAT_NV16:
 	case DRM_FORMAT_NV61:
+	case DRM_FORMAT_P010:
 		return DCSS_COLORSPACE_YUV;
 	default:
 		return DCSS_COLORSPACE_UNKNOWN;
@@ -166,7 +167,21 @@ static int dcss_submodules_init(struct dcss_soc *dcss)
 	if (ret)
 		goto hdr10_err;
 
+	ret = dcss_wrscl_init(dcss, dcss_base + dcss->devtype->wrscl_ofs);
+	if (ret)
+		goto wrscl_err;
+
+	ret = dcss_rdsrc_init(dcss, dcss_base + dcss->devtype->rdsrc_ofs);
+	if (ret)
+		goto rdsrc_err;
+
 	return 0;
+
+rdsrc_err:
+	dcss_rdsrc_exit(dcss);
+
+wrscl_err:
+	dcss_wrscl_exit(dcss);
 
 hdr10_err:
 	dcss_hdr10_exit(dcss);
@@ -257,7 +272,8 @@ static int dcss_clks_init(struct dcss_soc *dcss)
 	} clks[] = {
 		{"apb",   &dcss->apb_clk},
 		{"axi",   &dcss->axi_clk},
-		{"pixel", &dcss->p_clk},
+		{"pix_div", &dcss->pdiv_clk},
+		{"pix_out", &dcss->pout_clk},
 		{"rtrm",  &dcss->apb_clk},
 		{"dtrc",  &dcss->dtrc_clk},
 	};
@@ -292,11 +308,13 @@ static void dcss_clocks_enable(struct dcss_soc *dcss, bool en)
 		clk_prepare_enable(dcss->apb_clk);
 		clk_prepare_enable(dcss->rtrm_clk);
 		clk_prepare_enable(dcss->dtrc_clk);
-		clk_prepare_enable(dcss->p_clk);
+		clk_prepare_enable(dcss->pdiv_clk);
+		clk_prepare_enable(dcss->pout_clk);
 	}
 
 	if (!en && dcss->clks_on) {
-		clk_disable_unprepare(dcss->p_clk);
+		clk_disable_unprepare(dcss->pout_clk);
+		clk_disable_unprepare(dcss->pdiv_clk);
 		clk_disable_unprepare(dcss->dtrc_clk);
 		clk_disable_unprepare(dcss->rtrm_clk);
 		clk_disable_unprepare(dcss->apb_clk);
@@ -315,6 +333,8 @@ static int dcss_dump_regs_show(struct seq_file *s, void *data)
 	dcss_dtrc_dump_regs(s, s->private);
 	dcss_dpr_dump_regs(s, s->private);
 	dcss_scaler_dump_regs(s, s->private);
+	dcss_wrscl_dump_regs(s, s->private);
+	dcss_rdsrc_dump_regs(s, s->private);
 	dcss_dtg_dump_regs(s, s->private);
 	dcss_ss_dump_regs(s, s->private);
 	dcss_hdr10_dump_regs(s, s->private);
@@ -438,8 +458,6 @@ static int dcss_probe(struct platform_device *pdev)
 
 	dcss_debugfs_init(dcss);
 
-	pm_runtime_set_autosuspend_delay(&pdev->dev, 3000);
-	pm_runtime_use_autosuspend(&pdev->dev);
 	pm_runtime_enable(&pdev->dev);
 
 	dcss_bus_freq(dcss, true);
@@ -496,7 +514,6 @@ static int dcss_resume(struct device *dev)
 	dcss_clocks_enable(dcss, true);
 
 	dcss_blkctl_cfg(dcss);
-	dcss_hdr10_cfg(dcss);
 
 	dcss_ctxld_resume(dcss);
 
@@ -536,7 +553,6 @@ static int dcss_runtime_resume(struct device *dev)
 	dcss_clocks_enable(dcss, true);
 
 	dcss_blkctl_cfg(dcss);
-	dcss_hdr10_cfg(dcss);
 
 	dcss_ctxld_resume(dcss);
 

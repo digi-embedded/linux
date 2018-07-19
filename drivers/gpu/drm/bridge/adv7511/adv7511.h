@@ -302,6 +302,10 @@ struct adv7511 {
 	struct i2c_client *i2c_edid;
 	struct i2c_client *i2c_cec;
 
+	u32 addr_cec;
+	u32 addr_edid;
+	u32 addr_pkt;
+
 	struct regmap *regmap;
 	struct regmap *regmap_cec;
 	enum drm_connector_status status;
@@ -334,6 +338,7 @@ struct adv7511 {
 	struct device_node *host_node;
 	struct mipi_dsi_device *dsi;
 	u8 num_dsi_lanes;
+	u8 channel_id;
 	bool use_timing_gen;
 
 	enum adv7511_type type;

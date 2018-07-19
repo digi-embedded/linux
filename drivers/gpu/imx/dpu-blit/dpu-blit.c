@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2016 Freescale Semiconductor, Inc.
- * Copyright 2017 NXP
+ * Copyright 2017-2018 NXP
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -21,6 +21,7 @@
 #include <linux/platform_device.h>
 #include <linux/types.h>
 #include <video/dpu.h>
+#include <video/imx8-prefetch.h>
 
 #include "dpu-blit.h"
 #include "dpu-blit-registers.h"
@@ -87,6 +88,73 @@ static void dpu_cs_static_setup(struct dpu_bliteng *dpu_be)
 	dpu_be_write(dpu_be, COMMAND_BUFFER_SIZE / WORD_SIZE,
 		CMDSEQ_BUFFERSIZE);
 }
+
+static struct dprc *
+dpu_be_dprc_get(struct dpu_soc *dpu, int dprc_id)
+{
+	struct dprc *dprc;
+
+	dprc = dprc_lookup_by_phandle(dpu->dev,
+				      "fsl,dpr-channels",
+				      dprc_id);
+
+	return dprc;
+}
+
+void dpu_be_configure_prefetch(struct dpu_bliteng *dpu_be,
+			       u32 width, u32 height,
+			       u32 x_offset, u32 y_offset,
+			       u32 stride, u32 format, u64 modifier,
+			       u64 baddr, u64 uv_addr)
+{
+	static bool start = true;
+	static bool need_handle_start;
+	struct dprc *dprc;
+
+	/* Enable DPR, dprc1 is connected to plane0 */
+	dprc = dpu_be->dprc[1];
+
+	/*
+	 * Force sync command sequncer in conditions:
+	 * 1. tile work with dprc/prg (baddr)
+	 * 2. switch tile to linear (!start)
+	 */
+	if (!start || baddr) {
+		dpu_be_wait(dpu_be);
+	}
+
+	if (baddr == 0x0) {
+		if (!start) {
+			dprc_disable(dprc);
+			need_handle_start = false;
+		}
+		start = true;
+		return;
+	}
+
+	if (need_handle_start) {
+		dprc_first_frame_handle(dprc);
+		need_handle_start = false;
+	}
+
+	dprc_configure(dprc, 0,
+		       width, height,
+		       x_offset, y_offset,
+		       stride, format, modifier,
+		       baddr, uv_addr,
+		       start, start,
+		       false);
+
+	if (start) {
+		dprc_enable(dprc);
+		need_handle_start = true;
+	}
+
+	dprc_reg_update(dprc);
+
+	start = false;
+}
+EXPORT_SYMBOL(dpu_be_configure_prefetch);
 
 int dpu_bliteng_get_empty_instance(struct dpu_bliteng **dpu_be,
 	struct device *dev)
@@ -174,7 +242,11 @@ EXPORT_SYMBOL(dpu_be_blit);
 #define STORE9_SEQCOMPLETE_IRQ_MASK	(1U<<STORE9_SEQCOMPLETE_IRQ)
 void dpu_be_wait(struct dpu_bliteng *dpu_be)
 {
-	dpu_be_write(dpu_be, 0x10, PIXENGCFG_STORE9_TRIGGER);
+	dpu_cs_wait_fifo_space(dpu_be);
+
+	dpu_be_write(dpu_be, 0x14000001, CMDSEQ_HIF);
+	dpu_be_write(dpu_be, PIXENGCFG_STORE9_TRIGGER, CMDSEQ_HIF);
+	dpu_be_write(dpu_be, 0x10, CMDSEQ_HIF);
 
 	while ((dpu_be_read(dpu_be, COMCTRL_INTERRUPTSTATUS0) &
 		STORE9_SEQCOMPLETE_IRQ_MASK) == 0)
@@ -334,6 +406,10 @@ int dpu_bliteng_init(struct dpu_bliteng *dpu_bliteng)
 		return ret;
 
 	dpu_cs_static_setup(dpu_bliteng);
+
+	/* DPR, each blit engine has two dprc, 0 & 1 */
+	dpu_bliteng->dprc[0] = dpu_be_dprc_get(dpu, 0);
+	dpu_bliteng->dprc[1] = dpu_be_dprc_get(dpu, 1);
 
 	return 0;
 }

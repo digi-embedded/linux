@@ -1639,21 +1639,35 @@ lpuart32_serial_setbrg(struct lpuart_port *sport, unsigned int baudrate)
 	u32 sbr, osr, baud_diff, tmp_osr, tmp_sbr, tmp_diff, tmp;
 	u32 clk = sport->port.uartclk;
 
+	/*
+	 * The idea is to use the best OSR (over-sampling rate) possible.
+	 * Note, OSR is typically hard-set to 16 in other LPUART instantiations.
+	 * Loop to find the best OSR value possible, one that generates minimum
+	 * baud_diff iterate through the rest of the supported values of OSR.
+	 *
+	 * Calculation Formula:
+	 *  Baud Rate = baud clock / ((OSR+1) × SBR)
+	 */
 	baud_diff = baudrate;
 	osr = 0;
 	sbr = 0;
+
 	for (tmp_osr = 4; tmp_osr <= 32; tmp_osr++) {
+		/* calculate the temporary sbr value  */
 		tmp_sbr = (clk / (baudrate * tmp_osr));
 		if (tmp_sbr == 0)
 			tmp_sbr = 1;
 
-		/*calculate difference in actual buad w/ current values */
-		tmp_diff = (clk / (tmp_osr * tmp_sbr));
-		tmp_diff = tmp_diff - baudrate;
+		/*
+		 * calculate the baud rate difference based on the temporary
+		 * osr and sbr values
+		 */
+		tmp_diff = clk / (tmp_osr * tmp_sbr) - baudrate;
 
 		/* select best values between sbr and sbr+1 */
-		if (tmp_diff > (baudrate - (clk / (tmp_osr * (tmp_sbr + 1))))) {
-			tmp_diff = baudrate - (clk / (tmp_osr * (tmp_sbr + 1)));
+		tmp = clk / (tmp_osr * (tmp_sbr + 1));
+		if (tmp_diff > (baudrate - tmp)) {
+			tmp_diff = baudrate - tmp;
 			tmp_sbr++;
 		}
 
@@ -1661,17 +1675,17 @@ lpuart32_serial_setbrg(struct lpuart_port *sport, unsigned int baudrate)
 			baud_diff = tmp_diff;
 			osr = tmp_osr;
 			sbr = tmp_sbr;
+
+			if (!baud_diff)
+				break;
 		}
 	}
 
-	/*TODO handle buadrate outside acceptable rate
-	 * if (baudDiff > ((config->baudRate_Bps / 100) * 3))
-	 * {
-	 *    Unacceptable baud rate difference of more than 3%
-	 *    return kStatus_LPUART_BaudrateNotSupport;
-	 * }
-	 *
-	 */
+	/* handle buadrate outside acceptable rate */
+	if (baud_diff > ((baudrate / 100) * 3))
+		dev_warn(sport->port.dev,
+			 "unacceptable baud rate difference of more than 3%%\n");
+
 	tmp = lpuart32_read(sport->port.membase + UARTBAUD);
 
 	if ((osr > 3) && (osr < 8))
@@ -2156,7 +2170,7 @@ OF_EARLYCON_DECLARE(lpuart, "fsl,vf610-lpuart",
 		lpuart_early_console_setup);
 OF_EARLYCON_DECLARE(lpuart32, "fsl,ls1021a-lpuart",
 		lpuart32_early_console_setup);
-OF_EARLYCON_DECLARE(lpuart32, "fsl,lpuart",
+OF_EARLYCON_DECLARE(lpuart32, "fsl,imx7ulp-lpuart",
 		lpuart32_early_console_setup);
 EARLYCON_DECLARE(lpuart, lpuart_early_console_setup);
 EARLYCON_DECLARE(lpuart32, lpuart32_early_console_setup);
@@ -2484,6 +2498,37 @@ static int lpuart_suspend(struct device *dev)
 	return 0;
 }
 
+static void lpuart_console_fixup(struct lpuart_port *sport)
+{
+	struct tty_port *port = &sport->port.state->port;
+	struct uart_port *uport = &sport->port;
+	struct device_node *np = sport->port.dev->of_node;
+	struct ktermios termios;
+
+	if (!sport->lpuart32 || !np)
+		return;
+
+	/* i.MX7ULP enter VLLS mode that lpuart module power off and registers
+	 * all lost no matter the port is wakeup source.
+	 * For console port, console baud rate setting lost and print messy
+	 * log when enable the console port as wakeup source. To avoid the
+	 * issue happen, user should not enable uart port as wakeup source
+	 * in VLLS mode, or restore console setting here.
+	 */
+	if (of_device_is_compatible(np, "fsl,imx7ulp-lpuart") &&
+	    lpuart_uport_is_active(sport) && console_suspend_enabled &&
+	    uart_console(&sport->port)) {
+
+		mutex_lock(&port->mutex);
+		memset(&termios, 0, sizeof(struct ktermios));
+		termios.c_cflag = uport->cons->cflag;
+		if (port->tty && termios.c_cflag == 0)
+			termios = port->tty->termios;
+		uport->ops->set_termios(uport, &termios, NULL);
+		mutex_unlock(&port->mutex);
+	}
+}
+
 static inline void lpuart32_resume_init(struct lpuart_port *sport)
 {
 	unsigned long temp;
@@ -2623,6 +2668,7 @@ static int lpuart_resume(struct device *dev)
 		pm_runtime_enable(sport->port.dev);
 	}
 
+	lpuart_console_fixup(sport);
 	uart_resume_port(&lpuart_reg, &sport->port);
 
 	return 0;

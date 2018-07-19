@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2016 Freescale Semiconductor, Inc.
- * Copyright 2017 NXP
+ * Copyright 2017-2018 NXP
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -95,6 +95,9 @@ typedef enum {
 #define FGSFIFOFILLCLR		0x8C
 #define FGSREPD			0x90
 #define FGSRFTD			0x94
+
+#define KHZ			1000
+#define PLL_MIN_FREQ_HZ		648000000
 
 struct dpu_framegen {
 	void __iomem *base;
@@ -219,11 +222,11 @@ EXPORT_SYMBOL_GPL(framegen_shdtokgen);
 
 void framegen_cfg_videomode(struct dpu_framegen *fg, struct drm_display_mode *m)
 {
-	const struct dpu_devtype *devtype = fg->dpu->devtype;
 	u32 hact, htotal, hsync, hsbp;
 	u32 vact, vtotal, vsync, vsbp;
 	u32 val;
 	unsigned long disp_clock_rate, pll_clock_rate = 0;
+	int div = 0;
 
 	hact = m->crtc_hdisplay;
 	htotal = m->crtc_htotal;
@@ -264,26 +267,13 @@ void framegen_cfg_videomode(struct dpu_framegen *fg, struct drm_display_mode *m)
 	dpu_fg_write(fg, 0, FGCCR);
 	mutex_unlock(&fg->mutex);
 
-	clk_get_rate(fg->clk_pll);
-	clk_get_rate(fg->clk_disp);
-
 	disp_clock_rate = m->clock * 1000;
 
-	if (devtype->version == DPU_V1) {
-		/* FIXME: why the folders */
-		if (disp_clock_rate > 150000000)
-			pll_clock_rate = disp_clock_rate * 2;
-		else if (disp_clock_rate > 75000000)
-			pll_clock_rate = disp_clock_rate * 4;
-		else
-			pll_clock_rate = disp_clock_rate * 8;
-	} else if (devtype->version == DPU_V2) {
-		/* FIXME: why the hardcoded clock rate */
-		if (disp_clock_rate > 75000000)
-			pll_clock_rate = 1188000000;
-		else
-			pll_clock_rate = disp_clock_rate * 8;
-	}
+	/* find an even divisor for PLL */
+	do {
+		div += 2;
+		pll_clock_rate = disp_clock_rate * div;
+	} while (pll_clock_rate < PLL_MIN_FREQ_HZ);
 
 	/*
 	 * To workaround setting clock rate failure issue
@@ -348,16 +338,46 @@ void framegen_panic_displaymode(struct dpu_framegen *fg, fgdm_t mode)
 }
 EXPORT_SYMBOL_GPL(framegen_panic_displaymode);
 
-void framegen_wait_done(struct dpu_framegen *fg)
+void framegen_wait_done(struct dpu_framegen *fg, struct drm_display_mode *m)
 {
-	unsigned long timeout = jiffies + msecs_to_jiffies(60);
+	unsigned long timeout, pending_framedur_jiffies;
+	int frame_size = m->crtc_htotal * m->crtc_vtotal;
+	int dotclock, pending_framedur_ns;
 	u32 val;
+
+	dotclock = clk_get_rate(fg->clk_disp) / KHZ;
+	if (dotclock == 0) {
+		/* fall back to display mode's clock */
+		dotclock = m->crtc_clock;
+
+		dev_warn(fg->dpu->dev,
+				"pixel clock for FrameGen%d is zero\n", fg->id);
+	}
+
+	/*
+	 * The SoC designer indicates that there are two pending frames
+	 * to complete in the worst case.
+	 * So, three pending frames are enough for sure.
+	 */
+	pending_framedur_ns = div_u64((u64) 3 * frame_size * 1000000, dotclock);
+	pending_framedur_jiffies = nsecs_to_jiffies(pending_framedur_ns);
+	if (pending_framedur_jiffies > (3 * HZ)) {
+		pending_framedur_jiffies = 3 * HZ;
+
+		dev_warn(fg->dpu->dev,
+			 "truncate FrameGen%d pending frame duration to 3sec\n",
+			 fg->id);
+	}
+	timeout = jiffies + pending_framedur_jiffies;
 
 	mutex_lock(&fg->mutex);
 	do {
 		val = dpu_fg_read(fg, FGENSTS);
 	} while ((val & ENSTS) && time_before(jiffies, timeout));
 	mutex_unlock(&fg->mutex);
+
+	dev_dbg(fg->dpu->dev, "FrameGen%d pending frame duration is %ums\n",
+			 fg->id, jiffies_to_msecs(pending_framedur_jiffies));
 
 	if (val & ENSTS)
 		dev_err(fg->dpu->dev, "failed to wait for FrameGen%d done\n",

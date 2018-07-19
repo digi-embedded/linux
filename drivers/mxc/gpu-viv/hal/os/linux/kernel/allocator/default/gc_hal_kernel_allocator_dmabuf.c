@@ -2,7 +2,7 @@
 *
 *    The MIT License (MIT)
 *
-*    Copyright (c) 2014 - 2017 Vivante Corporation
+*    Copyright (c) 2014 - 2018 Vivante Corporation
 *
 *    Permission is hereby granted, free of charge, to any person obtaining a
 *    copy of this software and associated documentation files (the "Software"),
@@ -26,7 +26,7 @@
 *
 *    The GPL License (GPL)
 *
-*    Copyright (C) 2014 - 2017 Vivante Corporation
+*    Copyright (C) 2014 - 2018 Vivante Corporation
 *
 *    This program is free software; you can redistribute it and/or
 *    modify it under the terms of the GNU General Public License
@@ -277,8 +277,8 @@ _DmabufAttach(
 
     Mdl->priv = buf_desc;
 
-    /* Always treat it as a non-contigous buffer. */
-    Mdl->contiguous = gcvFALSE;
+    /* Need set it as true to avoid MMU mapping. */
+    Mdl->contiguous = gcvTRUE;
 
     gcmkFOOTER_NO();
     return gcvSTATUS_OK;
@@ -289,7 +289,7 @@ OnError:
         gcmkOS_SAFE_FREE(os, pagearray);
     }
 
-    if(sgt)
+    if (sgt)
     {
         dma_buf_unmap_attachment(attachment, sgt, DMA_BIDIRECTIONAL);
     }
@@ -361,7 +361,7 @@ _DmabufMapUser(
                     0L,
                     Mdl->numPages << PAGE_SHIFT,
                     PROT_READ | PROT_WRITE,
-                    MAP_SHARED,
+                    MAP_SHARED | MAP_NORESERVE,
                     0);
 
     if (IS_ERR(userLogical))
@@ -497,7 +497,9 @@ _DmabufAlloctorInit(
     gcmkONERROR(
         gckALLOCATOR_Construct(Os, &DmabufAllocatorOperations, &allocator));
 
-    allocator->capability = gcvALLOC_FLAG_DMABUF;
+    allocator->capability = gcvALLOC_FLAG_DMABUF
+                          | gcvALLOC_FLAG_DMABUF_EXPORTABLE
+                          ;
 
     /* Register private data. */
     allocator->privateData = priv;

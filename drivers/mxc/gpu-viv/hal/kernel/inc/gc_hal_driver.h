@@ -2,7 +2,7 @@
 *
 *    The MIT License (MIT)
 *
-*    Copyright (c) 2014 - 2017 Vivante Corporation
+*    Copyright (c) 2014 - 2018 Vivante Corporation
 *
 *    Permission is hereby granted, free of charge, to any person obtaining a
 *    copy of this software and associated documentation files (the "Software"),
@@ -26,7 +26,7 @@
 *
 *    The GPL License (GPL)
 *
-*    Copyright (C) 2014 - 2017 Vivante Corporation
+*    Copyright (C) 2014 - 2018 Vivante Corporation
 *
 *    This program is free software; you can redistribute it and/or
 *    modify it under the terms of the GNU General Public License
@@ -226,6 +226,7 @@ typedef enum _gceHAL_COMMAND_CODES
      */
     gcvHAL_GET_GRAPHIC_BUFFER_FD,
 
+    gcvHAL_SET_VIDEO_MEMORY_METADATA,
 
     /* Connect a video node to an OS native fd. */
     gcvHAL_GET_VIDEO_MEMORY_FD,
@@ -235,7 +236,6 @@ typedef enum _gceHAL_COMMAND_CODES
 
     /* Wrap a user memory into a video memory node. */
     gcvHAL_WRAP_USER_MEMORY,
-    gcvHAL_RELEASE_USER_MEMORY,
 
     /* Wait until GPU finishes access to a resource. */
     gcvHAL_WAIT_FENCE,
@@ -1244,6 +1244,22 @@ typedef struct _gcsHAL_INTERFACE
         }
         GetGraphicBufferFd;
 
+        struct _gcsHAL_VIDEO_MEMORY_METADATA
+        {
+            /* Allocated video memory. */
+            IN gctUINT32            node;
+
+            IN gctUINT32            readback;
+
+            INOUT gctINT32          ts_fd;
+            INOUT gctUINT32         fc_enabled;
+            INOUT gctUINT32         fc_value;
+            INOUT gctUINT32         fc_value_upper;
+
+            INOUT gctUINT32         compressed;
+            INOUT gctUINT32         compress_format;
+        }
+        SetVidMemMetadata;
 
         struct _gcsHAL_GET_VIDEO_MEMORY_FD
         {
@@ -1270,12 +1286,6 @@ typedef struct _gcsHAL_INTERFACE
             OUT gctUINT64               bytes;
         }
         WrapUserMemory;
-
-        struct _gcsHAL_RELEASE_USER_MEMORY
-        {
-            IN gctUINT32               node;
-        }
-        ReleaseUserMemory;
 
         struct _gcsHAL_WAIT_FENCE
         {

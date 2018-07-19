@@ -2,7 +2,7 @@
 *
 *    The MIT License (MIT)
 *
-*    Copyright (c) 2014 - 2017 Vivante Corporation
+*    Copyright (c) 2014 - 2018 Vivante Corporation
 *
 *    Permission is hereby granted, free of charge, to any person obtaining a
 *    copy of this software and associated documentation files (the "Software"),
@@ -26,7 +26,7 @@
 *
 *    The GPL License (GPL)
 *
-*    Copyright (C) 2014 - 2017 Vivante Corporation
+*    Copyright (C) 2014 - 2018 Vivante Corporation
 *
 *    This program is free software; you can redistribute it and/or
 *    modify it under the terms of the GNU General Public License
@@ -2537,19 +2537,6 @@ gckCOMMAND_Commit(
     /* Release the command queue. */
     gcmkONERROR(gckCOMMAND_ExitCommit(Command, gcvFALSE));
     commitEntered = gcvFALSE;
-
-    if  ((Command->kernel->hardware->options.gpuProfiler == gcvTRUE) &&
-         (Command->kernel->profileEnable == gcvTRUE))
-    {
-        gcmkONERROR(gckCOMMAND_Stall(Command, gcvTRUE));
-
-        if (Command->currContext)
-        {
-            gcmkONERROR(gckHARDWARE_UpdateContextProfile(
-                        hardware,
-                        Command->currContext));
-        }
-    }
 
     if (status == gcvSTATUS_INTERRUPTED)
     {

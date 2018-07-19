@@ -414,7 +414,7 @@ drm_atomic_replace_property_blob(struct drm_property_blob **blob,
 }
 
 static int
-drm_atomic_replace_property_blob_from_id(struct drm_crtc *crtc,
+drm_atomic_replace_property_blob_from_id(struct drm_device *dev,
 					 struct drm_property_blob **blob,
 					 uint64_t blob_id,
 					 ssize_t expected_size,
@@ -423,7 +423,7 @@ drm_atomic_replace_property_blob_from_id(struct drm_crtc *crtc,
 	struct drm_property_blob *new_blob = NULL;
 
 	if (blob_id != 0) {
-		new_blob = drm_property_lookup_blob(crtc->dev, blob_id);
+		new_blob = drm_property_lookup_blob(dev, blob_id);
 		if (new_blob == NULL)
 			return -EINVAL;
 
@@ -473,7 +473,7 @@ int drm_atomic_crtc_set_property(struct drm_crtc *crtc,
 		drm_property_unreference_blob(mode);
 		return ret;
 	} else if (property == config->degamma_lut_property) {
-		ret = drm_atomic_replace_property_blob_from_id(crtc,
+		ret = drm_atomic_replace_property_blob_from_id(dev,
 					&state->degamma_lut,
 					val,
 					-1,
@@ -481,7 +481,7 @@ int drm_atomic_crtc_set_property(struct drm_crtc *crtc,
 		state->color_mgmt_changed |= replaced;
 		return ret;
 	} else if (property == config->ctm_property) {
-		ret = drm_atomic_replace_property_blob_from_id(crtc,
+		ret = drm_atomic_replace_property_blob_from_id(dev,
 					&state->ctm,
 					val,
 					sizeof(struct drm_color_ctm),
@@ -489,7 +489,7 @@ int drm_atomic_crtc_set_property(struct drm_crtc *crtc,
 		state->color_mgmt_changed |= replaced;
 		return ret;
 	} else if (property == config->gamma_lut_property) {
-		ret = drm_atomic_replace_property_blob_from_id(crtc,
+		ret = drm_atomic_replace_property_blob_from_id(dev,
 					&state->gamma_lut,
 					val,
 					-1,
@@ -979,6 +979,8 @@ int drm_atomic_connector_set_property(struct drm_connector *connector,
 {
 	struct drm_device *dev = connector->dev;
 	struct drm_mode_config *config = &dev->mode_config;
+	bool replaced = false;
+	int ret;
 
 	if (property == config->prop_crtc_id) {
 		struct drm_crtc *crtc = drm_crtc_find(dev, NULL, val);
@@ -989,12 +991,36 @@ int drm_atomic_connector_set_property(struct drm_connector *connector,
 		 * now?) atomic writes to DPMS property:
 		 */
 		return -EINVAL;
+	} else if (property == config->link_status_property) {
+		/* Never downgrade from GOOD to BAD on userspace's request here,
+		 * only hw issues can do that.
+		 *
+		 * For an atomic property the userspace doesn't need to be able
+		 * to understand all the properties, but needs to be able to
+		 * restore the state it wants on VT switch. So if the userspace
+		 * tries to change the link_status from GOOD to BAD, driver
+		 * silently rejects it and returns a 0. This prevents userspace
+		 * from accidently breaking  the display when it restores the
+		 * state.
+		 */
+		if (state->link_status != DRM_LINK_STATUS_GOOD)
+			state->link_status = val;
+		} else if (property == config->hdr_source_metadata_property) {
+			ret = drm_atomic_replace_property_blob_from_id(dev,
+					&state->hdr_source_metadata_blob_ptr,
+					val,
+					-1,
+					&replaced);
+			state->hdr_metadata_changed |= replaced;
+			return ret;
 	} else if (connector->funcs->atomic_set_property) {
 		return connector->funcs->atomic_set_property(connector,
 				state, property, val);
 	} else {
 		return -EINVAL;
 	}
+
+	return 0;
 }
 EXPORT_SYMBOL(drm_atomic_connector_set_property);
 
@@ -1025,6 +1051,11 @@ drm_atomic_connector_get_property(struct drm_connector *connector,
 		*val = (state->crtc) ? state->crtc->base.id : 0;
 	} else if (property == config->dpms_property) {
 		*val = connector->dpms;
+	} else if (property == config->link_status_property) {
+		*val = state->link_status;
+	} else if (property == config->hdr_source_metadata_property) {
+		*val = (state->hdr_source_metadata_blob_ptr) ?
+			state->hdr_source_metadata_blob_ptr->base.id : 0;
 	} else if (connector->funcs->atomic_get_property) {
 		return connector->funcs->atomic_get_property(connector,
 				state, property, val);

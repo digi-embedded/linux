@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 NXP
+ * Copyright 2017-2018 NXP
  */
 /*
  * The code contained herein is licensed under the GNU General Public
@@ -98,8 +98,12 @@ static int mxc_isi_parse_dt(struct mxc_isi_dev *mxc_isi)
 	if (ret < 0)
 		return ret;
 
+	mxc_isi->parallel_csi = of_property_read_bool(node, "parallel_csi");
+
 	dev_dbg(dev, "%s, isi_%d,interface(%d, %d, %d)\n", __func__, mxc_isi->id,
 			mxc_isi->interface[0], mxc_isi->interface[1], mxc_isi->interface[2]);
+
+	mxc_isi->chain_buf = of_property_read_bool(node, "fsl,chain_buf");
 	return 0;
 }
 
@@ -175,6 +179,7 @@ static int mxc_isi_probe(struct platform_device *pdev)
 		goto err_sclk;
 	}
 
+	mxc_isi_channel_set_chain_buf(mxc_isi);
 	mxc_isi->flags = MXC_ISI_PM_POWERED;
 
 	pm_runtime_set_active(dev);
@@ -196,9 +201,11 @@ static int mxc_isi_remove(struct platform_device *pdev)
 	struct mxc_isi_dev *mxc_isi = platform_get_drvdata(pdev);
 	struct device *dev = &pdev->dev;
 
+	pm_runtime_get_sync(&pdev->dev);
 	mxc_isi_unregister_capture_subdev(mxc_isi);
 
 	clk_disable_unprepare(mxc_isi->clk);
+	pm_runtime_put_sync(&pdev->dev);
 	pm_runtime_disable(dev);
 
 	return 0;
@@ -209,6 +216,8 @@ static int mxc_isi_pm_suspend(struct device *dev)
 {
 	struct mxc_isi_dev *mxc_isi = dev_get_drvdata(dev);
 
+	pm_runtime_get_sync(dev);
+
 	if ((mxc_isi->flags & MXC_ISI_PM_SUSPENDED) ||
 		(mxc_isi->flags & MXC_ISI_RUNTIME_SUSPEND))
 		return 0;
@@ -216,6 +225,7 @@ static int mxc_isi_pm_suspend(struct device *dev)
 	clk_disable_unprepare(mxc_isi->clk);
 	mxc_isi->flags |= MXC_ISI_PM_SUSPENDED;
 	mxc_isi->flags &= ~MXC_ISI_PM_POWERED;
+	pm_runtime_put_sync(dev);
 
 	return 0;
 }
@@ -225,14 +235,21 @@ static int mxc_isi_pm_resume(struct device *dev)
 	struct mxc_isi_dev *mxc_isi = dev_get_drvdata(dev);
 	int ret;
 
+	pm_runtime_get_sync(dev);
 	if (mxc_isi->flags & MXC_ISI_PM_POWERED)
 		return 0;
 
+	ret = clk_prepare_enable(mxc_isi->clk);
+	if (ret) {
+		pr_info("== %s ret=%d\n", __func__, ret);
+		return -EAGAIN;
+	}
+
 	mxc_isi->flags |= MXC_ISI_PM_POWERED;
 	mxc_isi->flags &= ~MXC_ISI_PM_SUSPENDED;
+	pm_runtime_put_sync(dev);
 
-	ret = clk_prepare_enable(mxc_isi->clk);
-	return (ret) ? -EAGAIN : 0;
+	return 0;
 }
 #endif
 

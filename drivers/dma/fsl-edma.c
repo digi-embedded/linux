@@ -945,7 +945,7 @@ static void fsl_edma_irq_exit(
 	}
 }
 
-static void fsl_disable_clocks(struct fsl_edma_engine *fsl_edma)
+static void fsl_disable_clocks(struct fsl_edma_engine *fsl_edma, int nr_clocks)
 {
 	int i;
 
@@ -1057,25 +1057,25 @@ static int fsl_edma_probe(struct platform_device *pdev)
 
 		res = platform_get_resource(pdev, IORESOURCE_MEM, 1 + i);
 		fsl_edma->muxbase[i] = devm_ioremap_resource(&pdev->dev, res);
-		if (IS_ERR(fsl_edma->muxbase[i]))
+		if (IS_ERR(fsl_edma->muxbase[i])) {
+			/* on error: disable all previously enabled clks */
+			fsl_disable_clocks(fsl_edma, i);
 			return PTR_ERR(fsl_edma->muxbase[i]);
+		}
 
 		sprintf(clkname, "dmamux%d", i);
 		fsl_edma->muxclk[i] = devm_clk_get(&pdev->dev, clkname);
 		if (IS_ERR(fsl_edma->muxclk[i])) {
 			dev_err(&pdev->dev, "Missing DMAMUX block clock.\n");
+			/* on error: disable all previously enabled clks */
+			fsl_disable_clocks(fsl_edma, i);
 			return PTR_ERR(fsl_edma->muxclk[i]);
 		}
 
 		ret = clk_prepare_enable(fsl_edma->muxclk[i]);
-		if (ret) {
-			/* disable only clks which were enabled on error */
-			for (; i >= 0; i--)
-				clk_disable_unprepare(fsl_edma->muxclk[i]);
-
-			dev_err(&pdev->dev, "DMAMUX clk block failed.\n");
-			return ret;
-		}
+		if (ret)
+			/* on error: disable all previously enabled clks */
+			fsl_disable_clocks(fsl_edma, i);
 
 	}
 
@@ -1134,7 +1134,7 @@ static int fsl_edma_probe(struct platform_device *pdev)
 	if (ret) {
 		dev_err(&pdev->dev,
 			"Can't register Freescale eDMA engine. (%d)\n", ret);
-		fsl_disable_clocks(fsl_edma);
+		fsl_disable_clocks(fsl_edma, DMAMUX_NR);
 		return ret;
 	}
 
@@ -1143,7 +1143,7 @@ static int fsl_edma_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev,
 			"Can't register Freescale eDMA of_dma. (%d)\n", ret);
 		dma_async_device_unregister(&fsl_edma->dma_dev);
-		fsl_disable_clocks(fsl_edma);
+		fsl_disable_clocks(fsl_edma, DMAMUX_NR);
 		return ret;
 	}
 
@@ -1173,7 +1173,57 @@ static int fsl_edma_remove(struct platform_device *pdev)
 	fsl_edma_cleanup_vchan(&fsl_edma->dma_dev);
 	of_dma_controller_free(np);
 	dma_async_device_unregister(&fsl_edma->dma_dev);
-	fsl_disable_clocks(fsl_edma);
+	fsl_disable_clocks(fsl_edma, DMAMUX_NR);
+
+	return 0;
+}
+
+static int fsl_edma_register_save(struct device *dev)
+{
+	struct platform_device *pdev = to_platform_device(dev);
+	struct fsl_edma_engine *fsl_edma = platform_get_drvdata(pdev);
+	int i, j;
+
+	if (!(fsl_edma->quirks & FSL_EDMA_QUIRK_VLLS_MODE))
+		return 0;
+
+	/* save regs */
+	fsl_edma->edma_regs[0] =
+		edma_readl(fsl_edma, fsl_edma->membase + EDMA_CR);
+	fsl_edma->edma_regs[1] =
+		edma_readl(fsl_edma, fsl_edma->membase + EDMA_ERQ);
+	fsl_edma->edma_regs[2] =
+		edma_readl(fsl_edma, fsl_edma->membase + EDMA_EEI);
+	for (i = 0; i < fsl_edma->dmamux_nr; i++)
+		for (j = 0; j < fsl_edma->n_chans; j++)
+			fsl_edma->dmamux_regs[i * fsl_edma->n_chans + j] =
+				edma_readl(fsl_edma,
+					fsl_edma->muxbase[i] + j * 4);
+
+	return 0;
+}
+
+static int fsl_edma_register_restore(struct device *dev)
+{
+	struct platform_device *pdev = to_platform_device(dev);
+	struct fsl_edma_engine *fsl_edma = platform_get_drvdata(pdev);
+	int i, j;
+
+	if (!(fsl_edma->quirks & FSL_EDMA_QUIRK_VLLS_MODE))
+		return 0;
+
+	/* restore the regs */
+	for (i = 0; i < fsl_edma->dmamux_nr; i++)
+		for (j = 0; j < fsl_edma->n_chans; j++)
+			edma_writel(fsl_edma,
+			  fsl_edma->dmamux_regs[i * fsl_edma->n_chans + j],
+			  fsl_edma->muxbase[i] + j * 4);
+	edma_writel(fsl_edma, fsl_edma->edma_regs[1],
+			fsl_edma->membase + EDMA_ERQ);
+	edma_writel(fsl_edma, fsl_edma->edma_regs[2],
+			fsl_edma->membase + EDMA_EEI);
+	edma_writel(fsl_edma, fsl_edma->edma_regs[0],
+			fsl_edma->membase + EDMA_CR);
 
 	return 0;
 }

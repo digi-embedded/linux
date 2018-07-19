@@ -7,7 +7,6 @@
 
 /*!
  * Header file used to configure SoC pad list.
- *
  */
 
 #ifndef _SC_PADS_H
@@ -134,8 +133,8 @@
 #define SC_P_FLEXCAN1_TX                         108	/* ADMA.FLEXCAN1.TX, ADMA.SAI3.RXC, ADMA.DMA0.REQ_IN0, ADMA.SAI1.RXD, LSIO.GPIO1.IO18 */
 #define SC_P_FLEXCAN2_RX                         109	/* ADMA.FLEXCAN2.RX, ADMA.SAI3.RXD, ADMA.UART3.RX, ADMA.SAI1.RXFS, LSIO.GPIO1.IO19 */
 #define SC_P_FLEXCAN2_TX                         110	/* ADMA.FLEXCAN2.TX, ADMA.SAI3.RXFS, ADMA.UART3.TX, ADMA.SAI1.RXC, LSIO.GPIO1.IO20 */
-#define SC_P_UART0_RX                            111	/* ADMA.UART0.RX, ADMA.MQS.R, ADMA.FLEXCAN0.RX, LSIO.GPIO1.IO21 */
-#define SC_P_UART0_TX                            112	/* ADMA.UART0.TX, ADMA.MQS.L, ADMA.FLEXCAN0.TX, LSIO.GPIO1.IO22 */
+#define SC_P_UART0_RX                            111	/* ADMA.UART0.RX, ADMA.MQS.R, ADMA.FLEXCAN0.RX, SCU.UART0.RX, LSIO.GPIO1.IO21 */
+#define SC_P_UART0_TX                            112	/* ADMA.UART0.TX, ADMA.MQS.L, ADMA.FLEXCAN0.TX, SCU.UART0.TX, LSIO.GPIO1.IO22 */
 #define SC_P_UART2_TX                            113	/* ADMA.UART2.TX, ADMA.FTM.CH1, ADMA.FLEXCAN1.TX, LSIO.GPIO1.IO23 */
 #define SC_P_UART2_RX                            114	/* ADMA.UART2.RX, ADMA.FTM.CH0, ADMA.FLEXCAN1.RX, LSIO.GPIO1.IO24 */
 #define SC_P_COMP_CTL_GPIO_1V8_3V3_GPIOLH        115	/*  */
@@ -329,6 +328,7 @@
 #define SC_P_ENET0_RGMII_TXD3_CONN_MLB_SIG                      SC_P_ENET0_RGMII_TXD3              1
 #define SC_P_ENET0_RGMII_TXD3_CONN_NAND_RE_B                    SC_P_ENET0_RGMII_TXD3              2
 #define SC_P_ENET0_RGMII_TXD3_LSIO_GPIO5_IO02                   SC_P_ENET0_RGMII_TXD3              4
+#define SC_P_COMP_CTL_GPIO_1V8_3V3_ENET_ENETB0_PAD              SC_P_COMP_CTL_GPIO_1V8_3V3_ENET_ENETB0	0
 #define SC_P_ENET0_RGMII_RXC_CONN_ENET0_RGMII_RXC               SC_P_ENET0_RGMII_RXC               0
 #define SC_P_ENET0_RGMII_RXC_CONN_MLB_DATA                      SC_P_ENET0_RGMII_RXC               1
 #define SC_P_ENET0_RGMII_RXC_CONN_NAND_WE_B                     SC_P_ENET0_RGMII_RXC               2
@@ -351,6 +351,7 @@
 #define SC_P_ENET0_RGMII_RXD3_CONN_NAND_ALE                     SC_P_ENET0_RGMII_RXD3              2
 #define SC_P_ENET0_RGMII_RXD3_CONN_USDHC1_DATA3                 SC_P_ENET0_RGMII_RXD3              3
 #define SC_P_ENET0_RGMII_RXD3_LSIO_GPIO5_IO08                   SC_P_ENET0_RGMII_RXD3              4
+#define SC_P_COMP_CTL_GPIO_1V8_3V3_ENET_ENETB1_PAD              SC_P_COMP_CTL_GPIO_1V8_3V3_ENET_ENETB1	0
 #define SC_P_ENET0_REFCLK_125M_25M_CONN_ENET0_REFCLK_125M_25M   SC_P_ENET0_REFCLK_125M_25M         0
 #define SC_P_ENET0_REFCLK_125M_25M_CONN_ENET0_PPS               SC_P_ENET0_REFCLK_125M_25M         1
 #define SC_P_ENET0_REFCLK_125M_25M_CONN_ENET1_PPS               SC_P_ENET0_REFCLK_125M_25M         2
@@ -422,6 +423,7 @@
 #define SC_P_SPDIF0_EXT_CLK_ADMA_LCDIF_D12                      SC_P_SPDIF0_EXT_CLK                2
 #define SC_P_SPDIF0_EXT_CLK_CONN_ENET1_REFCLK_125M_25M          SC_P_SPDIF0_EXT_CLK                3
 #define SC_P_SPDIF0_EXT_CLK_LSIO_GPIO0_IO12                     SC_P_SPDIF0_EXT_CLK                4
+#define SC_P_COMP_CTL_GPIO_1V8_3V3_GPIORHB_PAD			SC_P_COMP_CTL_GPIO_1V8_3V3_GPIORHB 0
 #define SC_P_SPI3_SCK_ADMA_SPI3_SCK                             SC_P_SPI3_SCK                      0
 #define SC_P_SPI3_SCK_ADMA_LCDIF_D13                            SC_P_SPI3_SCK                      2
 #define SC_P_SPI3_SCK_LSIO_GPIO0_IO13                           SC_P_SPI3_SCK                      4
@@ -598,10 +600,12 @@
 #define SC_P_UART0_RX_ADMA_UART0_RX                             SC_P_UART0_RX                      0
 #define SC_P_UART0_RX_ADMA_MQS_R                                SC_P_UART0_RX                      1
 #define SC_P_UART0_RX_ADMA_FLEXCAN0_RX                          SC_P_UART0_RX                      2
+#define SC_P_UART0_RX_SCU_UART0_RX                              SC_P_UART0_RX                      3
 #define SC_P_UART0_RX_LSIO_GPIO1_IO21                           SC_P_UART0_RX                      4
 #define SC_P_UART0_TX_ADMA_UART0_TX                             SC_P_UART0_TX                      0
 #define SC_P_UART0_TX_ADMA_MQS_L                                SC_P_UART0_TX                      1
 #define SC_P_UART0_TX_ADMA_FLEXCAN0_TX                          SC_P_UART0_TX                      2
+#define SC_P_UART0_TX_SCU_UART0_TX                              SC_P_UART0_TX                      3
 #define SC_P_UART0_TX_LSIO_GPIO1_IO22                           SC_P_UART0_TX                      4
 #define SC_P_UART2_TX_ADMA_UART2_TX                             SC_P_UART2_TX                      0
 #define SC_P_UART2_TX_ADMA_FTM_CH1                              SC_P_UART2_TX                      1

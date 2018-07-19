@@ -8,7 +8,7 @@
  * Based on code from Freescale:
  *
  * Copyright 2004-2016 Freescale Semiconductor, Inc. All Rights Reserved.
- * Copyright 2017 NXP.
+ * Copyright 2018 NXP.
  *
  * The code contained herein is licensed under the GNU General Public
  * License. You may obtain a copy of the GNU General Public License
@@ -193,6 +193,10 @@
 				 BIT(DMA_MEM_TO_DEV) | \
 				 BIT(DMA_DEV_TO_DEV))
 
+#define SDMA_WATERMARK_LEVEL_FIFOS_OFF	8
+#define SDMA_WATERMARK_LEVEL_SW_DONE	BIT(23)
+#define SDMA_WATERMARK_LEVEL_SW_DONE_SEL_OFF 24
+
 /*
  * Mode/Count of data node descriptors - IPCv2
  */
@@ -358,6 +362,7 @@ struct sdma_channel {
 	u32				bd_size_sum;
 	bool				src_dualfifo;
 	bool				dst_dualfifo;
+	unsigned int			fifo_num;
 	struct dma_pool			*bd_pool;
 };
 
@@ -770,7 +775,6 @@ static void sdma_event_disable(struct sdma_channel *sdmac, unsigned int event)
 static void sdma_update_channel_loop(struct sdma_channel *sdmac)
 {
 	struct sdma_buffer_descriptor *bd;
-	struct sdma_desc *desc = sdmac->desc;
 	int error = 0;
 	enum dma_status	old_status = sdmac->status;
 
@@ -778,7 +782,9 @@ static void sdma_update_channel_loop(struct sdma_channel *sdmac)
 	 * loop mode. Iterate over descriptors, re-setup them and
 	 * call callback function.
 	 */
-	while (desc) {
+	while (sdmac->desc) {
+		struct sdma_desc *desc = sdmac->desc;
+
 		bd = &desc->bd[desc->buf_tail];
 
 		if (bd->mode.status & BD_DONE)
@@ -970,6 +976,9 @@ static void sdma_get_pc(struct sdma_channel *sdmac,
 	case IMX_DMATYPE_HDMI:
 		emi_2_per = sdma->script_addrs->hdmi_dma_addr;
 		break;
+	case IMX_DMATYPE_MULTI_SAI:
+		per_2_emi = sdma->script_addrs->sai_2_mcu_addr;
+		emi_2_per = sdma->script_addrs->mcu_2_sai_addr;
 	default:
 		break;
 	}
@@ -1132,6 +1141,20 @@ static void sdma_set_watermarklevel_for_p2p(struct sdma_channel *sdmac)
 		sdmac->watermark_level |= SDMA_WATERMARK_LEVEL_DD;
 }
 
+static void sdma_set_watermarklevel_for_sais(struct sdma_channel *sdmac)
+{
+	sdmac->watermark_level &= ~(0xFFF << SDMA_WATERMARK_LEVEL_FIFOS_OFF |
+				    SDMA_WATERMARK_LEVEL_SW_DONE);
+
+	/* For fifo_num
+	 * bit 0-7 is the fifo number;
+	 * bit 8-11 is the fifo offset,
+	 * so here only need to shift left fifo_num 8 bit for watermake_level
+	 */
+	sdmac->watermark_level |= sdmac->fifo_num<<
+				SDMA_WATERMARK_LEVEL_FIFOS_OFF;
+}
+
 static int sdma_config_channel(struct dma_chan *chan)
 {
 	struct sdma_channel *sdmac = to_sdma_chan(chan);
@@ -1181,6 +1204,9 @@ static int sdma_config_channel(struct dma_chan *chan)
 			    sdmac->direction == DMA_MEM_TO_DEV &&
 			    sdmac->sdma->drvdata == &sdma_imx6ul)
 				__set_bit(31, &sdmac->watermark_level);
+			else if (sdmac->peripheral_type ==
+					IMX_DMATYPE_MULTI_SAI)
+				sdma_set_watermarklevel_for_sais(sdmac);
 
 			__set_bit(sdmac->event_id0, sdmac->event_mask);
 		}
@@ -1776,12 +1802,14 @@ static int sdma_config(struct dma_chan *chan,
 		       struct dma_slave_config *dmaengine_cfg)
 {
 	struct sdma_channel *sdmac = to_sdma_chan(chan);
-
+	/* clear watermark_level before setting */
+	sdmac->watermark_level = 0;
 	if (dmaengine_cfg->direction == DMA_DEV_TO_MEM) {
 		sdmac->per_address = dmaengine_cfg->src_addr;
 		sdmac->watermark_level = dmaengine_cfg->src_maxburst *
 			dmaengine_cfg->src_addr_width;
 		sdmac->word_size = dmaengine_cfg->src_addr_width;
+		sdmac->fifo_num =  dmaengine_cfg->src_fifo_num;
 	} else if (dmaengine_cfg->direction == DMA_DEV_TO_DEV) {
 		sdmac->per_address2 = dmaengine_cfg->src_addr;
 		sdmac->per_address = dmaengine_cfg->dst_addr;
@@ -1801,6 +1829,7 @@ static int sdma_config(struct dma_chan *chan,
 		sdmac->watermark_level = dmaengine_cfg->dst_maxburst *
 			dmaengine_cfg->dst_addr_width;
 		sdmac->word_size = dmaengine_cfg->dst_addr_width;
+		sdmac->fifo_num =  dmaengine_cfg->dst_fifo_num;
 	}
 	sdmac->direction = dmaengine_cfg->direction;
 	return sdma_config_channel(chan);
@@ -1897,7 +1926,7 @@ static void sdma_issue_pending(struct dma_chan *chan)
 #define SDMA_SCRIPT_ADDRS_ARRAY_SIZE_V1	34
 #define SDMA_SCRIPT_ADDRS_ARRAY_SIZE_V2	38
 #define SDMA_SCRIPT_ADDRS_ARRAY_SIZE_V3	41
-#define SDMA_SCRIPT_ADDRS_ARRAY_SIZE_V4	42
+#define SDMA_SCRIPT_ADDRS_ARRAY_SIZE_V4	44
 
 static void sdma_add_scripts(struct sdma_engine *sdma,
 		const struct sdma_script_start_addrs *addr)

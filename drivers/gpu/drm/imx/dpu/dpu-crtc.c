@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 NXP
+ * Copyright 2017-2018 NXP
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -46,6 +46,8 @@ struct dpu_crtc {
 	int			content_shdld_irq;
 	int			dec_shdld_irq;
 
+	bool			has_prefetch_fixup;
+
 	struct completion	safety_shdld_done;
 	struct completion	content_shdld_done;
 	struct completion	dec_shdld_done;
@@ -90,18 +92,22 @@ crtc_state_get_dpu_plane_states(struct drm_crtc_state *state)
 static void dpu_crtc_enable(struct drm_crtc *crtc)
 {
 	struct dpu_crtc *dpu_crtc = to_dpu_crtc(crtc);
+	struct dpu_plane *dplane = to_dpu_plane(crtc->primary);
+	struct dpu_plane_res *res = &dplane->grp->res;
+	struct dpu_extdst *plane_ed = res->ed[dplane->stream_id];
 	unsigned long ret;
 
 	drm_crtc_vblank_on(crtc);
 
-	framegen_enable_clock(dpu_crtc->fg);
-	extdst_pixengcfg_sync_trigger(dpu_crtc->ed);
-	framegen_shdtokgen(dpu_crtc->fg);
-	framegen_enable(dpu_crtc->fg);
-
 	enable_irq(dpu_crtc->safety_shdld_irq);
 	enable_irq(dpu_crtc->content_shdld_irq);
 	enable_irq(dpu_crtc->dec_shdld_irq);
+
+	framegen_enable_clock(dpu_crtc->fg);
+	extdst_pixengcfg_sync_trigger(plane_ed);
+	extdst_pixengcfg_sync_trigger(dpu_crtc->ed);
+	framegen_shdtokgen(dpu_crtc->fg);
+	framegen_enable(dpu_crtc->fg);
 
 	ret = wait_for_completion_timeout(&dpu_crtc->safety_shdld_done, HZ);
 	if (ret == 0)
@@ -137,12 +143,13 @@ static void dpu_crtc_enable(struct drm_crtc *crtc)
 	tcon_set_operation_mode(dpu_crtc->tcon);
 }
 
-static void dpu_crtc_disable(struct drm_crtc *crtc)
+static void dpu_crtc_atomic_disable(struct drm_crtc *crtc,
+				    struct drm_crtc_state *old_crtc_state)
 {
 	struct dpu_crtc *dpu_crtc = to_dpu_crtc(crtc);
 
 	framegen_disable(dpu_crtc->fg);
-	framegen_wait_done(dpu_crtc->fg);
+	framegen_wait_done(dpu_crtc->fg, &old_crtc_state->adjusted_mode);
 	framegen_disable_clock(dpu_crtc->fg);
 
 	WARN_ON(!crtc->state->event);
@@ -321,14 +328,14 @@ static void dpu_crtc_atomic_begin(struct drm_crtc *crtc,
 		struct dpu_plane *dplane;
 		struct drm_plane *plane;
 		struct dpu_plane_res *res;
-		struct dpu_fetchdecode *fd;
-		struct dpu_fetcheco *fe;
-		struct dpu_hscaler *hs;
-		struct dpu_vscaler *vs;
+		struct dpu_fetchunit *fu;
+		struct dpu_fetchunit *fe = NULL;
+		struct dpu_hscaler *hs = NULL;
+		struct dpu_vscaler *vs = NULL;
 		struct dpu_layerblend *lb;
 		struct dpu_extdst *ed;
 		extdst_src_sel_t ed_src;
-		int fd_id, lb_id;
+		int lb_id;
 		bool crtc_disabling_on_primary = false;
 
 		old_dpstate = old_dcstate->dpu_plane_states[i];
@@ -339,26 +346,26 @@ static void dpu_crtc_atomic_begin(struct drm_crtc *crtc,
 		dplane = to_dpu_plane(plane_state->plane);
 		res = &dplane->grp->res;
 
-		fd_id = source_to_id(old_dpstate->source);
-		if (fd_id < 0)
+		fu = dpstate_to_fu(old_dpstate);
+		if (!fu)
 			return;
 
 		lb_id = blend_to_id(old_dpstate->blend);
 		if (lb_id < 0)
 			return;
 
-		fd = res->fd[fd_id];
 		lb = res->lb[lb_id];
 
-		fe = fetchdecode_get_fetcheco(fd);
-		hs = fetchdecode_get_hscaler(fd);
-		vs = fetchdecode_get_vscaler(fd);
-
 		layerblend_pixengcfg_clken(lb, CLKEN__DISABLE);
-		hscaler_pixengcfg_clken(hs, CLKEN__DISABLE);
-		vscaler_pixengcfg_clken(vs, CLKEN__DISABLE);
-		hscaler_mode(hs, SCALER_NEUTRAL);
-		vscaler_mode(vs, SCALER_NEUTRAL);
+		if (fetchunit_is_fetchdecode(fu)) {
+			fe = fetchdecode_get_fetcheco(fu);
+			hs = fetchdecode_get_hscaler(fu);
+			vs = fetchdecode_get_vscaler(fu);
+			hscaler_pixengcfg_clken(hs, CLKEN__DISABLE);
+			vscaler_pixengcfg_clken(vs, CLKEN__DISABLE);
+			hscaler_mode(hs, SCALER_NEUTRAL);
+			vscaler_mode(vs, SCALER_NEUTRAL);
+		}
 		if (old_dpstate->is_top) {
 			ed = res->ed[dplane->stream_id];
 			ed_src = dplane->stream_id ?
@@ -372,16 +379,19 @@ static void dpu_crtc_atomic_begin(struct drm_crtc *crtc,
 			crtc_disabling_on_primary = true;
 
 		if (crtc_disabling_on_primary && old_dpstate->use_prefetch) {
-			fetchdecode_pin_off(fd);
-			if (fetcheco_is_enabled(fe))
-				fetcheco_pin_off(fe);
+			fu->ops->pin_off(fu);
+			if (fetchunit_is_fetchdecode(fu) &&
+			    fe->ops->is_enabled(fe))
+				fe->ops->pin_off(fe);
 		} else {
-			fetchdecode_source_buffer_disable(fd);
-			fetchdecode_pixengcfg_dynamic_src_sel(fd,
+			fu->ops->disable_src_buf(fu);
+			fu->ops->unpin_off(fu);
+			if (fetchunit_is_fetchdecode(fu)) {
+				fetchdecode_pixengcfg_dynamic_src_sel(fu,
 								FD_SRC_DISABLE);
-			fetcheco_source_buffer_disable(fe);
-			fetchdecode_unpin_off(fd);
-			fetcheco_unpin_off(fe);
+				fe->ops->disable_src_buf(fe);
+				fe->ops->unpin_off(fe);
+			}
 		}
 	}
 }
@@ -403,12 +413,11 @@ static void dpu_crtc_atomic_flush(struct drm_crtc *crtc,
 	if (!crtc->state->active && !old_crtc_state->active)
 		return;
 
-	if (!need_modeset)
+	if (!need_modeset) {
 		enable_irq(dpu_crtc->content_shdld_irq);
 
-	extdst_pixengcfg_sync_trigger(ed);
+		extdst_pixengcfg_sync_trigger(ed);
 
-	if (!need_modeset) {
 		ret = wait_for_completion_timeout(&dpu_crtc->content_shdld_done,
 						  HZ);
 		if (ret == 0)
@@ -426,47 +435,45 @@ static void dpu_crtc_atomic_flush(struct drm_crtc *crtc,
 
 			crtc->state->event = NULL;
 		}
+	} else if (!crtc->state->active) {
+		extdst_pixengcfg_sync_trigger(ed);
 	}
 
 	for (i = 0; i < dpu_crtc->hw_plane_num; i++) {
 		struct dpu_plane_state *old_dpstate;
-		struct drm_plane_state *plane_state;
-		struct dpu_plane *dplane;
-		struct dpu_plane_res *res;
-		struct dpu_fetchdecode *fd;
-		struct dpu_fetcheco *fe;
+		struct dpu_fetchunit *fu;
+		struct dpu_fetchunit *fe;
 		struct dpu_hscaler *hs;
 		struct dpu_vscaler *vs;
-		int fd_id;
 
 		old_dpstate = old_dcstate->dpu_plane_states[i];
 		if (!old_dpstate)
 			continue;
 
-		plane_state = &old_dpstate->base;
-		dplane = to_dpu_plane(plane_state->plane);
-		res = &dplane->grp->res;
-
-		fd_id = source_to_id(old_dpstate->source);
-		if (fd_id < 0)
+		fu = dpstate_to_fu(old_dpstate);
+		if (!fu)
 			return;
 
-		fd = res->fd[fd_id];
-		if (!fetchdecode_is_enabled(fd) ||
-		     fetchdecode_is_pinned_off(fd))
-			fetchdecode_set_stream_id(fd, DPU_PLANE_SRC_DISABLED);
+		if (!fu->ops->is_enabled(fu) || fu->ops->is_pinned_off(fu))
+			fu->ops->set_stream_id(fu, DPU_PLANE_SRC_DISABLED);
 
-		fe = fetchdecode_get_fetcheco(fd);
-		if (!fetcheco_is_enabled(fe) || fetcheco_is_pinned_off(fe))
-			fetcheco_set_stream_id(fe, DPU_PLANE_SRC_DISABLED);
+		if (fetchunit_is_fetchdecode(fu)) {
+			fe = fetchdecode_get_fetcheco(fu);
+			if (!fe->ops->is_enabled(fe) ||
+			     fe->ops->is_pinned_off(fe))
+				fe->ops->set_stream_id(fe,
+							DPU_PLANE_SRC_DISABLED);
 
-		hs = fetchdecode_get_hscaler(fd);
-		if (!hscaler_is_enabled(hs))
-			hscaler_set_stream_id(hs, DPU_PLANE_SRC_DISABLED);
+			hs = fetchdecode_get_hscaler(fu);
+			if (!hscaler_is_enabled(hs))
+				hscaler_set_stream_id(hs,
+							DPU_PLANE_SRC_DISABLED);
 
-		vs = fetchdecode_get_vscaler(fd);
-		if (!vscaler_is_enabled(vs))
-			vscaler_set_stream_id(vs, DPU_PLANE_SRC_DISABLED);
+			vs = fetchdecode_get_vscaler(fu);
+			if (!vscaler_is_enabled(vs))
+				vscaler_set_stream_id(vs,
+							DPU_PLANE_SRC_DISABLED);
+		}
 	}
 }
 
@@ -512,7 +519,7 @@ static const struct drm_crtc_helper_funcs dpu_helper_funcs = {
 	.atomic_begin = dpu_crtc_atomic_begin,
 	.atomic_flush = dpu_crtc_atomic_flush,
 	.enable = dpu_crtc_enable,
-	.disable = dpu_crtc_disable,
+	.atomic_disable = dpu_crtc_atomic_disable,
 };
 
 static int dpu_enable_vblank(struct drm_crtc *crtc)
@@ -602,12 +609,14 @@ static int dpu_crtc_init(struct dpu_crtc *dpu_crtc,
 	struct device *dev = dpu_crtc->dev;
 	struct dpu_plane_grp *plane_grp = pdata->plane_grp;
 	unsigned int stream_id = pdata->stream_id;
+	bool has_prefetch_fixup = dpu_has_prefetch_fixup(dpu);
 	int i, ret;
 
 	init_completion(&dpu_crtc->safety_shdld_done);
 	init_completion(&dpu_crtc->content_shdld_done);
 	init_completion(&dpu_crtc->dec_shdld_done);
 
+	dpu_crtc->has_prefetch_fixup = has_prefetch_fixup;
 	dpu_crtc->stream_id = stream_id;
 	dpu_crtc->hw_plane_num = plane_grp->hw_plane_num;
 
@@ -622,9 +631,10 @@ static int dpu_crtc_init(struct dpu_crtc *dpu_crtc,
 		return ret;
 	}
 
-	plane_grp->res.fg = dpu_crtc->fg;
+	plane_grp->res.fg[stream_id] = dpu_crtc->fg;
 	dpu_crtc->plane[0] = dpu_plane_init(drm, 0, stream_id, plane_grp,
-					DRM_PLANE_TYPE_PRIMARY);
+					DRM_PLANE_TYPE_PRIMARY,
+					has_prefetch_fixup);
 	if (IS_ERR(dpu_crtc->plane[0])) {
 		ret = PTR_ERR(dpu_crtc->plane[0]);
 		dev_err(dev, "initializing plane0 failed with %d.\n", ret);
@@ -643,7 +653,8 @@ static int dpu_crtc_init(struct dpu_crtc *dpu_crtc,
 		dpu_crtc->plane[i] = dpu_plane_init(drm,
 					drm_crtc_mask(&dpu_crtc->base),
 					stream_id, plane_grp,
-					DRM_PLANE_TYPE_OVERLAY);
+					DRM_PLANE_TYPE_OVERLAY,
+					has_prefetch_fixup);
 		if (IS_ERR(dpu_crtc->plane[i])) {
 			ret = PTR_ERR(dpu_crtc->plane[i]);
 			dev_err(dev, "initializing plane%d failed with %d.\n",

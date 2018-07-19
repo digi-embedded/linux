@@ -3,15 +3,11 @@
  * JobR backend functionality
  *
  * Copyright 2008-2016 Freescale Semiconductor, Inc.
- * Copyright 2017 NXP
+ * Copyright 2017-2018 NXP
  */
 
 #include <linux/of_irq.h>
 #include <linux/of_address.h>
-#ifdef CONFIG_HAVE_IMX8_SOC
-#include <soc/imx/revision.h>
-#include <soc/imx8/soc.h>
-#endif
 #include "compat.h"
 #include "regs.h"
 #include "jr.h"
@@ -83,6 +79,8 @@ static int caam_jr_shutdown(struct device *dev)
 
 	ret = caam_reset_hw_jr(dev);
 
+	tasklet_kill(&jrp->irqtask);
+
 	/* Release interrupt */
 	free_irq(jrp->irq, dev);
 
@@ -144,7 +142,7 @@ static irqreturn_t caam_jr_interrupt(int irq, void *st_dev)
 
 	/*
 	 * Check the output ring for ready responses, kick
-	 * the threaded irq if jobs done.
+	 * tasklet if jobs done.
 	 */
 	irqstate = rd_reg32(&jrp->rregs->jrintstatus);
 	if (!irqstate)
@@ -166,13 +164,18 @@ static irqreturn_t caam_jr_interrupt(int irq, void *st_dev)
 	/* Have valid interrupt at this point, just ACK and trigger */
 	wr_reg32(&jrp->rregs->jrintstatus, irqstate);
 
-	return IRQ_WAKE_THREAD;
+	preempt_disable();
+	tasklet_schedule(&jrp->irqtask);
+	preempt_enable();
+
+	return IRQ_HANDLED;
 }
 
-static irqreturn_t caam_jr_threadirq(int irq, void *st_dev)
+/* Deferred service handler, run as interrupt-fired tasklet */
+static void caam_jr_dequeue(unsigned long devarg)
 {
 	int hw_idx, sw_idx, i, head, tail;
-	struct device *dev = st_dev;
+	struct device *dev = (struct device *)devarg;
 	struct caam_drv_private_jr *jrp = dev_get_drvdata(dev);
 	void (*usercall)(struct device *dev, u32 *desc, u32 status, void *arg);
 	u32 *userdesc, userstatus;
@@ -246,8 +249,6 @@ static irqreturn_t caam_jr_threadirq(int irq, void *st_dev)
 
 	/* reenable / unmask IRQs */
 	clrsetbits_32(&jrp->rregs->rconfig_lo, JRCFG_IMSK, 0);
-
-	return IRQ_HANDLED;
 }
 
 /**
@@ -407,10 +408,11 @@ static int caam_jr_init(struct device *dev)
 	if (error)
 		goto out_kill_deq;
 
+	tasklet_init(&jrp->irqtask, caam_jr_dequeue, (unsigned long)dev);
+
 	/* Connect job ring interrupt handler. */
-	error = request_threaded_irq(jrp->irq, caam_jr_interrupt,
-				     caam_jr_threadirq, IRQF_SHARED,
-				     dev_name(dev), dev);
+	error = request_irq(jrp->irq, caam_jr_interrupt, IRQF_SHARED,
+			    dev_name(dev), dev);
 	if (error) {
 		dev_err(dev, "can't connect JobR %d interrupt (%d)\n",
 			jrp->ridx, jrp->irq);
@@ -468,6 +470,7 @@ out_free_inpring:
 out_free_irq:
 	free_irq(jrp->irq, dev);
 out_kill_deq:
+	tasklet_kill(&jrp->irqtask);
 	return error;
 }
 
@@ -554,33 +557,15 @@ static int caam_jr_probe(struct platform_device *pdev)
 	 * then try to instantiate RNG
 	 */
 	if (jrppriv->ridx == jrpriv->ridx) {
-		if (of_machine_is_compatible("fsl,imx8qm") ||
-			of_machine_is_compatible("fsl,imx8qxp")) {
-			/*
-			 * This is a workaround for SOC REV_A0:
-			 * i.MX8QM and i.MX8QXP reach kernel level
-			 * with RNG un-instantiated. It is instantiated
-			 * here unlike REV_B0 and later.
-			 */
-#ifdef CONFIG_HAVE_IMX8_SOC
-			if (imx8_get_soc_revision() == IMX_CHIP_REVISION_1_0)
-				error = inst_rng_imx8(pdev);
-#endif /* CONFIG_HAVE_IMX8_SOC */
-		} else {
+		if (!of_machine_is_compatible("fsl,imx8qm") &&
+		    !of_machine_is_compatible("fsl,imx8qxp"))
 			/*
 			 * This call is done for legacy SOCs:
 			 * i.MX6 i.MX7 and i.MX8M (mScale).
 			 */
-			error = inst_rng_imx6(pdev);
-		}
+			error = inst_rng_imx(pdev);
 	}
 	if (error != 0) {
-#ifdef CONFIG_HAVE_IMX8_SOC
-		if (imx8_get_soc_revision() == IMX_CHIP_REVISION_1_0)
-			dev_err(jrdev,
-				"This is a known limitation on A0 SOC revision\n"
-				"RNG instantiation failed, CAAM needs a reboot\n");
-#endif /* CONFIG_HAVE_IMX8_SOC */
 		spin_lock(&driver_data.jr_alloc_lock);
 		list_del(&jrpriv->list_node);
 		spin_unlock(&driver_data.jr_alloc_lock);

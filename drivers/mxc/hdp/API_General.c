@@ -35,7 +35,7 @@
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE
  * OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
- * Copyright 2017 NXP
+ * Copyright 2017-2018 NXP
  *
  ******************************************************************************
  *
@@ -49,6 +49,7 @@
 #include "apb_cfg.h"
 #include "opcodes.h"
 #include "general_handler.h"
+#include "util.h"
 
 static u32 alive;
 
@@ -360,6 +361,11 @@ CDN_API_STATUS CDN_API_SetClock(state_struct *state, u8 MHz)
 	return cdn_apb_write(state, SW_CLK_H << 2, MHz);
 }
 
+CDN_API_STATUS CDN_API_GetClock(state_struct *state, u32 *MHz)
+{
+	return cdn_apb_read(state, SW_CLK_H << 2, MHz);
+}
+
 CDN_API_STATUS CDN_API_General_Read_Register(state_struct *state, u32 addr,
 					     GENERAL_Read_Register_response *resp)
 {
@@ -472,4 +478,33 @@ CDN_API_STATUS CDN_API_General_Phy_Test_Access_blocking(state_struct *state,
 							u8 *resp)
 {
 	internal_block_function(&state->mutex, CDN_API_General_Phy_Test_Access(state, resp));
+}
+
+CDN_API_STATUS CDN_API_General_GetHpdState(state_struct *state, u8 *hpd_state)
+{
+	CDN_API_STATUS ret;
+	*hpd_state = 0;
+
+	if (!state->running) {
+	    if (!internal_apb_available(state))
+			return CDN_BSY;
+		internal_tx_mkfullmsg(state, MB_MODULE_ID_GENERAL, GENERAL_GET_HPD_STATE, 0);
+		state->bus_type = CDN_BUS_TYPE_APB;
+		state->rxEnable = 1;
+		return CDN_STARTED;
+	}
+
+	internal_process_messages(state);
+	ret = internal_test_rx_head(state, MB_MODULE_ID_GENERAL, GENERAL_GET_HPD_STATE);
+	if (ret != CDN_OK)
+	    return ret;
+
+	internal_readmsg(state, 1, 1, hpd_state);
+
+	return CDN_OK;
+}
+
+CDN_API_STATUS CDN_API_General_GetHpdState_blocking(state_struct *state, u8 *hpd_state)
+{
+    internal_block_function(&state->mutex, CDN_API_General_GetHpdState(state, hpd_state));
 }

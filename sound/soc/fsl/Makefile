@@ -15,7 +15,7 @@ snd-soc-fsl-acm-objs := fsl_acm.o
 snd-soc-fsl-amix-objs := fsl_amix.o
 snd-soc-fsl-asrc-objs := fsl_asrc.o fsl_asrc_dma.o
 snd-soc-fsl-dma-workaround-objs := fsl_dma_workaround.o
-snd-soc-fsl-hifi4-objs := fsl_hifi4.o
+snd-soc-fsl-dsp-objs := fsl_dsp.o fsl_dsp_proxy.o
 snd-soc-fsl-sai-objs := fsl_sai.o
 snd-soc-fsl-ssi-y := fsl_ssi.o
 snd-soc-fsl-ssi-$(CONFIG_DEBUG_FS) += fsl_ssi_dbg.o
@@ -29,7 +29,7 @@ snd-soc-fsl-asoc-card-objs := fsl-asoc-card.o
 obj-$(CONFIG_SND_SOC_FSL_ACM) += snd-soc-fsl-acm.o
 obj-$(CONFIG_SND_SOC_FSL_AMIX) += snd-soc-fsl-amix.o
 obj-$(CONFIG_SND_SOC_FSL_ASRC) += snd-soc-fsl-asrc.o
-obj-$(CONFIG_SND_SOC_FSL_HIFI4) += snd-soc-fsl-hifi4.o
+obj-$(CONFIG_SND_SOC_FSL_DSP) += snd-soc-fsl-dsp.o
 obj-$(CONFIG_SND_SOC_FSL_SAI) += snd-soc-fsl-sai.o
 obj-$(CONFIG_SND_SOC_FSL_SSI) += snd-soc-fsl-ssi.o
 obj-$(CONFIG_SND_SOC_FSL_SPDIF) += snd-soc-fsl-spdif.o
@@ -84,6 +84,9 @@ snd-soc-imx-cdnhdmi-objs := imx-cdnhdmi.o
 snd-soc-imx-rpmsg-objs := imx-rpmsg.o
 snd-soc-imx-amix-objs := imx-amix.o
 snd-soc-imx-pdm-objs := imx-pdm.o
+snd-soc-imx-ak4458-objs := imx-ak4458.o
+snd-soc-imx-ak5558-objs := imx-ak5558.o
+snd-soc-imx-ak4497-objs := imx-ak4497.o
 
 obj-$(CONFIG_SND_SOC_EUKREA_TLV320) += snd-soc-eukrea-tlv320.o
 obj-$(CONFIG_SND_SOC_PHYCORE_AC97) += snd-soc-phycore-ac97.o
@@ -108,5 +111,8 @@ obj-$(CONFIG_SND_SOC_IMX_HDMI) += snd-soc-imx-hdmi.o
 obj-$(CONFIG_SND_SOC_IMX_AMIX) += snd-soc-imx-amix.o
 obj-$(CONFIG_SND_SOC_IMX_CDNHDMI) += snd-soc-imx-cdnhdmi.o
 obj-$(CONFIG_SND_SOC_IMX_PDM_MIC) += snd-soc-imx-pdm.o
+obj-$(CONFIG_SND_SOC_IMX_AK4458) += snd-soc-imx-ak4458.o
+obj-$(CONFIG_SND_SOC_IMX_AK5558) += snd-soc-imx-ak5558.o
+obj-$(CONFIG_SND_SOC_IMX_AK4497) += snd-soc-imx-ak4497.o
 
 AFLAGS_hdmi_pcm.o := -march=armv7-a -mtune=cortex-a9 -mfpu=neon -mfloat-abi=softfp

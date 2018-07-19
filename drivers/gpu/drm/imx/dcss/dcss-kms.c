@@ -22,6 +22,7 @@
 #include <linux/reservation.h>
 
 #include "imx-drm.h"
+#include "dcss-crtc.h"
 
 static void dcss_drm_output_poll_changed(struct drm_device *drm)
 {
@@ -77,9 +78,58 @@ static int dcss_drm_atomic_commit(struct drm_device *drm,
 	return drm_atomic_helper_commit(drm, state, nonblock);
 }
 
+static void dcss_kms_setup_output_pipe(struct drm_atomic_state *state)
+{
+	struct drm_crtc *crtc;
+	struct drm_connector *connector;
+	struct drm_connector_state *conn_state;
+	struct drm_display_info *di;
+	int i;
+
+	for_each_connector_in_state(state, connector, conn_state, i) {
+		if (!connector->state->best_encoder)
+			continue;
+
+		if (!connector->state->crtc->state->active ||
+		    !drm_atomic_crtc_needs_modeset(connector->state->crtc->state))
+			continue;
+
+		crtc = connector->state->crtc;
+		di = &connector->display_info;
+
+		dcss_crtc_setup_opipe(crtc, connector, di->hdmi.colorimetry,
+				      di->hdmi.hdr_panel_metadata.eotf,
+				      HDMI_QUANTIZATION_RANGE_FULL);
+	}
+}
+
+static void dcss_drm_atomic_commit_tail(struct drm_atomic_state *state)
+{
+	struct drm_device *dev = state->dev;
+
+	drm_atomic_helper_commit_modeset_disables(dev, state);
+
+	dcss_kms_setup_output_pipe(state);
+
+	drm_atomic_helper_commit_modeset_enables(dev, state);
+
+	drm_atomic_helper_commit_planes(dev, state,
+					DRM_PLANE_COMMIT_ACTIVE_ONLY);
+
+	drm_atomic_helper_commit_hw_done(state);
+
+	drm_atomic_helper_wait_for_vblanks(dev, state);
+
+	drm_atomic_helper_cleanup_planes(dev, state);
+}
+
 const struct drm_mode_config_funcs dcss_drm_mode_config_funcs = {
 	.fb_create = drm_fb_cma_create,
 	.output_poll_changed = dcss_drm_output_poll_changed,
 	.atomic_check = dcss_drm_atomic_check,
 	.atomic_commit = dcss_drm_atomic_commit,
+};
+
+struct drm_mode_config_helper_funcs dcss_drm_mode_config_helpers = {
+	.atomic_commit_tail = dcss_drm_atomic_commit_tail,
 };

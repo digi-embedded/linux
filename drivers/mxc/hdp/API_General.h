@@ -35,7 +35,7 @@
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE
  * OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
- * Copyright 2017 NXP
+ * Copyright 2017-2018 NXP
  *
  ******************************************************************************
  *
@@ -224,6 +224,8 @@ CDN_API_STATUS CDN_API_ApbConf_blocking(state_struct *state, u8 dpcd_bus_sel,
  */
 CDN_API_STATUS CDN_API_SetClock(state_struct *state, u8 MHz);
 
+CDN_API_STATUS CDN_API_GetClock(state_struct *state, u32 *MHz);
+
 CDN_API_STATUS CDN_API_General_Read_Register(state_struct *state, u32 addr,
 					     GENERAL_Read_Register_response *resp);
 CDN_API_STATUS CDN_API_General_Read_Register_blocking(state_struct *state,
@@ -240,5 +242,7 @@ CDN_API_STATUS CDN_API_General_Write_Field_blocking(state_struct *state,
 CDN_API_STATUS CDN_API_General_Phy_Test_Access(state_struct *state, u8 *resp);
 CDN_API_STATUS CDN_API_General_Phy_Test_Access_blocking(state_struct *state,
 							u8 *resp);
+CDN_API_STATUS CDN_API_General_GetHpdState(state_struct *state, u8 *hpd_state);
 
+CDN_API_STATUS CDN_API_General_GetHpdState_blocking(state_struct *state, u8 *hpd_state);
 #endif

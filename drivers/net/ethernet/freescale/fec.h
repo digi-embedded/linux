@@ -632,9 +632,9 @@ struct fec_enet_private {
 	int pps_enable;
 	unsigned int next_counter;
 
-	u64 ethtool_stats[0];
-
 	struct fec_enet_stop_mode gpr;
+
+	u64 ethtool_stats[0];
 };
 
 void fec_ptp_init(struct platform_device *pdev);
@@ -646,6 +646,7 @@ uint fec_ptp_check_pps_event(struct fec_enet_private *fep);
 void fec_enet_register_fixup(struct net_device *ndev);
 int of_fec_enet_parse_fixup(struct device_node *np);
 void fec_enet_get_mac_from_fuse(struct device_node *np, unsigned char *mac);
+void fec_enet_ipg_stop_misc_set(struct device_node *np, bool enabled);
 
 /****************************************************************************/
 #endif /* FEC_H */

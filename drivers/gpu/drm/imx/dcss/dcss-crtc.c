@@ -18,6 +18,7 @@
 #include <linux/component.h>
 #include <linux/pm_runtime.h>
 #include <drm/drmP.h>
+#include <drm/drm_atomic.h>
 #include <drm/drm_crtc_helper.h>
 #include <drm/drm_atomic_helper.h>
 #include <video/imx-dcss.h>
@@ -25,6 +26,7 @@
 #include "dcss-kms.h"
 #include "dcss-plane.h"
 #include "imx-drm.h"
+#include "dcss-crtc.h"
 
 struct dcss_crtc {
 	struct device *dev;
@@ -37,8 +39,14 @@ struct dcss_crtc {
 
 	struct drm_property *alpha;
 	struct drm_property *use_global;
+	struct drm_property *dtrc_table_ofs;
 
 	struct completion disable_completion;
+
+	enum dcss_hdr10_nonlinearity opipe_nl;
+	enum dcss_hdr10_gamut opipe_g;
+	enum dcss_hdr10_pixel_range opipe_pr;
+	u32 opipe_pix_format;
 };
 
 static void dcss_crtc_destroy(struct drm_crtc *crtc)
@@ -101,26 +109,6 @@ static const struct drm_crtc_funcs dcss_crtc_funcs = {
 	.atomic_destroy_state = dcss_crtc_destroy_state,
 };
 
-static void dcss_crtc_mode_set_nofb(struct drm_crtc *crtc)
-{
-	struct dcss_crtc *dcss_crtc = container_of(crtc, struct dcss_crtc,
-						   base);
-	struct drm_display_mode *mode = &crtc->state->adjusted_mode;
-	struct dcss_soc *dcss = dev_get_drvdata(dcss_crtc->dev->parent);
-	struct videomode vm;
-
-	drm_display_mode_to_videomode(mode, &vm);
-
-	pm_runtime_get_sync(dcss_crtc->dev->parent);
-
-	dcss_dtg_sync_set(dcss, &vm);
-	dcss_ss_sync_set(dcss, &vm, mode->flags & DRM_MODE_FLAG_PHSYNC,
-			 mode->flags & DRM_MODE_FLAG_PVSYNC);
-
-	pm_runtime_mark_last_busy(dcss_crtc->dev->parent);
-	pm_runtime_put_autosuspend(dcss_crtc->dev->parent);
-}
-
 static int dcss_crtc_atomic_check(struct drm_crtc *crtc,
 				  struct drm_crtc_state *state)
 {
@@ -154,13 +142,81 @@ static void dcss_crtc_atomic_flush(struct drm_crtc *crtc,
 		dcss_ctxld_enable(dcss);
 }
 
+void dcss_crtc_setup_opipe(struct drm_crtc *crtc, struct drm_connector *conn,
+			   u32 colorimetry, u32 eotf,
+			   enum hdmi_quantization_range qr)
+{
+	struct dcss_crtc *dcss_crtc = container_of(crtc, struct dcss_crtc,
+						   base);
+	struct drm_display_info *di = &conn->display_info;
+	int vic;
+
+	if ((colorimetry & BIT(HDMI_EXTENDED_COLORIMETRY_BT2020)) ||
+	    (colorimetry & BIT(HDMI_EXTENDED_COLORIMETRY_BT2020_CONST_LUM)))
+		dcss_crtc->opipe_g = G_REC2020;
+	else if (colorimetry & BIT(HDMI_EXTENDED_COLORIMETRY_ADOBE_RGB))
+		dcss_crtc->opipe_g = G_ADOBE_ARGB;
+	else
+		dcss_crtc->opipe_g = G_REC709;
+
+	if ((eotf & (1 << 2)) && dcss_crtc->opipe_g == G_REC2020)
+		dcss_crtc->opipe_nl = NL_REC2084;
+	else
+		dcss_crtc->opipe_nl = NL_REC709;
+
+	if (qr == HDMI_QUANTIZATION_RANGE_FULL)
+		dcss_crtc->opipe_pr = PR_FULL;
+	else
+		dcss_crtc->opipe_pr = PR_LIMITED;
+
+	vic = drm_match_cea_mode(&crtc->state->adjusted_mode);
+
+	/* FIXME: we should get the connector colorspace some other way */
+	if (vic == 97 &&
+	    (di->color_formats & DRM_COLOR_FORMAT_YCRCB420) &&
+	    (di->hdmi.y420_dc_modes & DRM_EDID_YCBCR420_DC_30))
+		dcss_crtc->opipe_pix_format = DRM_FORMAT_P010;
+	else
+		dcss_crtc->opipe_pix_format = DRM_FORMAT_ARGB8888;
+
+	DRM_DEBUG_KMS("OPIPE_CFG: gamut = %d, nl = %d, pr = %d, pix_fmt = %d\n",
+		      dcss_crtc->opipe_g, dcss_crtc->opipe_nl,
+		      dcss_crtc->opipe_pr, dcss_crtc->opipe_pix_format);
+}
+
+int dcss_crtc_get_opipe_cfg(struct drm_crtc *crtc,
+			    struct dcss_hdr10_pipe_cfg *opipe_cfg)
+{
+	struct dcss_crtc *dcss_crtc = container_of(crtc, struct dcss_crtc,
+						   base);
+
+	opipe_cfg->pixel_format = dcss_crtc->opipe_pix_format;
+	opipe_cfg->g = dcss_crtc->opipe_g;
+	opipe_cfg->nl = dcss_crtc->opipe_nl;
+	opipe_cfg->pr = dcss_crtc->opipe_pr;
+
+	return 0;
+}
+
 static void dcss_crtc_enable(struct drm_crtc *crtc)
 {
 	struct dcss_crtc *dcss_crtc = container_of(crtc, struct dcss_crtc,
 						   base);
 	struct dcss_soc *dcss = dev_get_drvdata(dcss_crtc->dev->parent);
+	struct drm_display_mode *mode = &crtc->state->adjusted_mode;
+	struct videomode vm;
+
+	drm_display_mode_to_videomode(mode, &vm);
 
 	pm_runtime_get_sync(dcss_crtc->dev->parent);
+
+	dcss_dtg_sync_set(dcss, &vm);
+
+	dcss_ss_subsam_set(dcss, dcss_crtc->opipe_pix_format);
+	dcss_ss_sync_set(dcss, &vm, mode->flags & DRM_MODE_FLAG_PHSYNC,
+			 mode->flags & DRM_MODE_FLAG_PVSYNC);
+
+	dcss_dtg_css_set(dcss, dcss_crtc->opipe_pix_format);
 
 	dcss_ss_enable(dcss, true);
 	dcss_dtg_enable(dcss, true, NULL);
@@ -196,12 +252,10 @@ static void dcss_crtc_atomic_disable(struct drm_crtc *crtc,
 	wait_for_completion_timeout(&dcss_crtc->disable_completion,
 				    msecs_to_jiffies(100));
 
-	pm_runtime_mark_last_busy(dcss_crtc->dev->parent);
-	pm_runtime_put_autosuspend(dcss_crtc->dev->parent);
+	pm_runtime_put_sync(dcss_crtc->dev->parent);
 }
 
 static const struct drm_crtc_helper_funcs dcss_helper_funcs = {
-	.mode_set_nofb = dcss_crtc_mode_set_nofb,
 	.atomic_check = dcss_crtc_atomic_check,
 	.atomic_begin = dcss_crtc_atomic_begin,
 	.atomic_flush = dcss_crtc_atomic_flush,
@@ -295,6 +349,14 @@ static int dcss_crtc_init(struct dcss_crtc *crtc,
 		return -ENOMEM;
 	}
 
+	crtc->dtrc_table_ofs = drm_property_create_range(drm, 0,
+							 "dtrc_table_ofs", 0,
+							 ULLONG_MAX);
+	if (!crtc->dtrc_table_ofs) {
+		dev_err(crtc->dev, "cannot create dtrc_table_ofs property\n");
+		return -ENOMEM;
+	}
+
 	/* attach alpha property to channel 0 */
 	drm_object_attach_property(&crtc->plane[0]->base.base,
 				   crtc->alpha, 255);
@@ -303,6 +365,15 @@ static int dcss_crtc_init(struct dcss_crtc *crtc,
 	drm_object_attach_property(&crtc->plane[0]->base.base,
 				   crtc->use_global, 0);
 	crtc->plane[0]->use_global_prop = crtc->use_global;
+
+	/* attach DTRC table offsets property to overlay planes */
+	drm_object_attach_property(&crtc->plane[1]->base.base,
+				   crtc->dtrc_table_ofs, 0);
+	crtc->plane[1]->dtrc_table_ofs_prop = crtc->dtrc_table_ofs;
+
+	drm_object_attach_property(&crtc->plane[2]->base.base,
+				   crtc->dtrc_table_ofs, 0);
+	crtc->plane[2]->dtrc_table_ofs_prop = crtc->dtrc_table_ofs;
 
 	crtc->irq = dcss_vblank_irq_get(dcss);
 	if (crtc->irq < 0) {
@@ -344,6 +415,9 @@ static int dcss_crtc_bind(struct device *dev, struct device *master,
 
 	if (!drm->mode_config.funcs)
 		drm->mode_config.funcs = &dcss_drm_mode_config_funcs;
+
+	if (!drm->mode_config.helper_private)
+		drm->mode_config.helper_private = &dcss_drm_mode_config_helpers;
 
 	dev_set_drvdata(dev, crtc);
 

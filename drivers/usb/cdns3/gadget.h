@@ -146,6 +146,9 @@
 #define CAST_INDEX_TO_EP_ADDR(index) \
 	((index / 2 + 1) | ((index % 2) ? 0x80 : 0x00))
 
+/* 18KB is the total size, and 2KB is used for EP0 and configuration */
+#define CDNS3_ONCHIP_BUF_SIZE	16	/* KB */
+#define CDNS3_EP_BUF_SIZE	2	/* KB */
 /*-------------------------------------------------------------------------*/
 /* Used structs */
 
@@ -160,6 +163,7 @@ struct usb_ss_dev;
 struct usb_ss_endpoint {
 	struct usb_ep endpoint;
 	struct list_head request_list;
+	struct list_head ep_match_pending_list;
 
 	struct usb_ss_trb *trb_pool;
 	dma_addr_t trb_pool_dma;
@@ -174,6 +178,7 @@ struct usb_ss_endpoint {
 	u8					dir;
 	u8					num;
 	u8					type;
+	bool					used;
 };
 
 struct usb_ss_dev {
@@ -205,6 +210,10 @@ struct usb_ss_dev {
 	int setup_pending;
 	struct device *sysdev;
 	bool start_gadget; /* The device mode is enabled */
+	struct list_head ep_match_list;
+	int onchip_mem_allocated_size; /* KB */
+	/* Memory is allocated for OUT */
+	int out_mem_is_allocated:1;
 };
 
 #endif /* __DRIVERS_CDNS3_GADGET */

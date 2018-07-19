@@ -3,12 +3,13 @@
  * Private/internal definitions between modules
  *
  * Copyright 2008-2016 Freescale Semiconductor, Inc.
- * Copyright 2017 NXP
+ * Copyright 2017-2018 NXP
  *
  */
 
 #ifndef INTERN_H
 #define INTERN_H
+#include "regs.h"
 
 /* Currently comes from Kconfig param as a ^2 (driver-required) */
 #define JOBR_DEPTH (1 << CONFIG_CRYPTO_DEV_FSL_CAAM_RINGSIZE)
@@ -35,8 +36,7 @@ struct caam_jrentry_info {
 	void (*callbk)(struct device *dev, u32 *desc, u32 status, void *arg);
 	void *cbkarg;	/* Argument per ring entry */
 	u32 *desc_addr_virt;	/* Stored virt addr for postprocessing */
-	/* CAAM Pointer Size in MCFGR[PS] is 0 by default (32bits) */
-	u32 desc_addr_dma;	/* Stored bus addr for done matching */
+	caam_dma_addr_t desc_addr_dma;	/* Stored bus addr for done matching */
 	u32 desc_size;	/* Stored size for postprocessing, header derived */
 };
 
@@ -46,6 +46,7 @@ struct caam_drv_private_jr {
 	struct device		*dev;
 	int ridx;
 	struct caam_job_ring __iomem *rregs;	/* JobR's register space */
+	struct tasklet_struct irqtask;
 	int irq;			/* One per queue */
 
 	/* Number of scatterlist crypt transforms active on the JobR */
@@ -57,8 +58,7 @@ struct caam_drv_private_jr {
 	spinlock_t inplock ____cacheline_aligned; /* Input ring index lock */
 	int inp_ring_write_index;	/* Input index "tail" */
 	int head;			/* entinfo (s/w ring) head index */
-	/* CAAM Pointer Size in MCFGR[PS] is 0 by default (32bits) */
-	u32 *inpring;	/* Base of input ring, alloc DMA-safe */
+	caam_dma_addr_t *inpring;	/* Base of input ring, alloc DMA-safe */
 	spinlock_t outlock ____cacheline_aligned; /* Output ring index lock */
 	int out_ring_read_index;	/* Output index "tail" */
 	int tail;			/* entinfo (s/w ring) tail index */
@@ -90,6 +90,7 @@ struct caam_drv_private {
 	/* JobR's register space */
 	struct caam_job_ring __iomem *jr[JOBR_MAX_COUNT];
 	dma_addr_t __iomem *sm_base;	/* Secure memory storage base */
+	phys_addr_t sm_phy;		/* Secure memory storage physical */
 	u32 sm_size;
 
 	/*

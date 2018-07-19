@@ -107,6 +107,10 @@ extern "C" {
 #define DRM_MODE_DIRTY_ON       1
 #define DRM_MODE_DIRTY_ANNOTATE 2
 
+/* Link Status options */
+#define DRM_MODE_LINK_STATUS_GOOD	0
+#define DRM_MODE_LINK_STATUS_BAD	1
+
 struct drm_mode_modeinfo {
 	__u32 clock;
 	__u16 hdisplay;
@@ -518,6 +522,27 @@ struct drm_color_lut {
 	__u16 reserved;
 };
 
+enum supported_eotf_type {
+	TRADITIONAL_GAMMA_SDR = 0,
+	TRADITIONA_GAMMA_HDR,
+	SMPTE_ST2084,
+	FUTURE_EOTF
+};
+
+/* HDR Metadata */
+struct hdr_static_metadata {
+	uint8_t eotf;
+	uint8_t type;
+	uint16_t display_primaries_x[3];
+	uint16_t display_primaries_y[3];
+	uint16_t white_point_x;
+	uint16_t white_point_y;
+	uint16_t max_mastering_display_luminance;
+	uint16_t min_mastering_display_luminance;
+	uint16_t max_fall;
+	uint16_t max_cll;
+};
+
 #define DRM_MODE_PAGE_FLIP_EVENT 0x01
 #define DRM_MODE_PAGE_FLIP_ASYNC 0x02
 #define DRM_MODE_PAGE_FLIP_TARGET_ABSOLUTE 0x4
@@ -643,24 +668,24 @@ struct drm_mode_atomic {
 struct drm_format_modifier_blob {
 #define FORMAT_BLOB_CURRENT 1
 	/* Version of this blob format */
-	u32 version;
+	__u32 version;
 
 	/* Flags */
-	u32 flags;
+	__u32 flags;
 
 	/* Number of fourcc formats supported */
-	u32 count_formats;
+	__u32 count_formats;
 
 	/* Where in this blob the formats exist (in bytes) */
-	u32 formats_offset;
+	__u32 formats_offset;
 
 	/* Number of drm_format_modifiers */
-	u32 count_modifiers;
+	__u32 count_modifiers;
 
 	/* Where in this blob the modifiers exist (in bytes) */
-	u32 modifiers_offset;
+	__u32 modifiers_offset;
 
-	/* u32 formats[] */
+	/* __u32 formats[] */
 	/* struct drm_format_modifier modifiers[] */
 };
 

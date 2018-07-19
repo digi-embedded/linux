@@ -2,7 +2,7 @@
 *
 *    The MIT License (MIT)
 *
-*    Copyright (c) 2014 - 2017 Vivante Corporation
+*    Copyright (c) 2014 - 2018 Vivante Corporation
 *
 *    Permission is hereby granted, free of charge, to any person obtaining a
 *    copy of this software and associated documentation files (the "Software"),
@@ -26,7 +26,7 @@
 *
 *    The GPL License (GPL)
 *
-*    Copyright (C) 2014 - 2017 Vivante Corporation
+*    Copyright (C) 2014 - 2018 Vivante Corporation
 *
 *    This program is free software; you can redistribute it and/or
 *    modify it under the terms of the GNU General Public License
@@ -171,7 +171,7 @@ OnError:
     return gcvSTATUS_OK;
 }
 
-gceSTATUS
+static gceSTATUS
 gckEVENT_IsEmpty(
     IN gckEVENT Event,
     OUT gctBOOL_PTR IsEmpty
@@ -1845,7 +1845,10 @@ gckEVENT_Submit(
         gcmkONERROR(gckCOMMAND_ExitCommit(command, FromPower));
 
 #if !gcdNULL_DRIVER
-        gcmkVERIFY_OK(_TryToIdleGPU(Event));
+        if (!FromPower)
+        {
+            gcmkVERIFY_OK(_TryToIdleGPU(Event));
+        }
 #endif
     }
 
@@ -2214,9 +2217,8 @@ gckEVENT_Notify(
 #if gcdUSE_MMU_EXCEPTION
 #if gcdALLOC_ON_FAULT
             status = gckHARDWARE_HandleFault(Event->kernel->hardware);
-
-            if (gcmIS_ERROR(status))
 #endif
+            if (gcmIS_ERROR(status))
             {
                 /* Dump error is fault can't be handle. */
                 gckHARDWARE_DumpMMUException(Event->kernel->hardware);

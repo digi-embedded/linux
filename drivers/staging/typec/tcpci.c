@@ -390,8 +390,6 @@ static int tcpci_set_vbus(struct tcpc_dev *tcpc, bool source, bool sink)
 			return ret;
 
 		tcpci->drive_vbus = false;
-		/* Enable force discharge */
-		tcpci_vbus_force_discharge(tcpc, true);
 	}
 
 	if (!sink) {
@@ -400,6 +398,10 @@ static int tcpci_set_vbus(struct tcpc_dev *tcpc, bool source, bool sink)
 		if (ret < 0)
 			return ret;
 	}
+
+	/* Enable force discharge */
+	if (!source && !sink)
+		tcpci_vbus_force_discharge(tcpc, true);
 
 	if (source) {
 		ret = regmap_write(tcpci->regmap, TCPC_COMMAND,
@@ -579,6 +581,12 @@ static irqreturn_t tcpci_irq(int irq, void *dev_id)
 		tcpci_read16(tcpci, TCPC_RX_HDR, &reg);
 		msg.header = reg;
 
+		/*
+		 * TCPC_RX_BYTE_CNT is the number of bytes in the
+		 * RX_BUFFER_DATA_OBJECTS plus three (for the RX_BUF_FRAME_TYPE
+		 * and RX_BUF_HEADER).
+		 */
+		cnt -= 3;
 		if (WARN_ON(cnt > sizeof(msg.payload)))
 			cnt = sizeof(msg.payload);
 
@@ -632,7 +640,7 @@ const struct tcpc_config tcpci_tcpc_config = {
 static int tcpci_parse_config(struct tcpci *tcpci)
 {
 	struct tcpc_config *tcfg;
-	int ret = 0;
+	int ret = -EINVAL;
 
 	tcpci->controls_vbus = true; /* XXX */
 
@@ -681,6 +689,39 @@ static int tcpci_parse_config(struct tcpci *tcpci)
 		return -EINVAL;
 	}
 
+	/*
+	 * In case DRP only for data role, power role is source only
+	 * we can use this property to disable power sink.
+	 */
+	if (device_property_read_bool(tcpci->dev, "sink-disable")) {
+		tcpci->sink_disable = true;
+
+		/* Provide a sink PDO to setup a PD session */
+		tcfg->nr_snk_pdo = 1;
+		tcfg->snk_pdo = devm_kzalloc(tcpci->dev,
+				sizeof(*tcfg->snk_pdo), GFP_KERNEL);
+		if (!tcfg->snk_pdo)
+			return -ENOMEM;
+
+		/*
+		 * Sink PDO setting:
+		 * - Voltage in 50mV units: 5V
+		 * - Operational Current in 10mA units: 100mA
+		 */
+		*tcfg->snk_pdo = PDO_FIXED(5000,
+					100,
+					PDO_FIXED_DUAL_ROLE |
+					PDO_FIXED_EXTPOWER |
+					PDO_FIXED_USB_COMM |
+					PDO_FIXED_DATA_SWAP);
+		tcfg->max_snk_mv = 5000;
+		tcfg->max_snk_ma = 2000;
+		tcfg->max_snk_mw = 10000;
+		tcfg->operating_snk_mw = 500;
+
+		return 0;
+	}
+
 	/* Check the num of snk pdo */
 	tcfg->nr_snk_pdo = device_property_read_u32_array(tcpci->dev,
 						"snk-pdos", NULL, 0);
@@ -709,16 +750,13 @@ static int tcpci_parse_config(struct tcpci *tcpci)
 						&tcfg->max_snk_mv) ||
 		device_property_read_u32(tcpci->dev, "max-snk-ma",
 						&tcfg->max_snk_ma) ||
+		device_property_read_u32(tcpci->dev, "max-snk-mw",
+						&tcfg->max_snk_mw) ||
 		device_property_read_u32(tcpci->dev, "op-snk-mw",
-						&tcfg->operating_snk_mw))
+						&tcfg->operating_snk_mw)) {
+		ret = -EINVAL;
 		goto snk_setting_wrong;
-
-	/*
-	 * In case DRP only for data role, power role is source only
-	 * we can use this property to disable power sink.
-	 */
-	if (device_property_read_bool(tcpci->dev, "sink-disable"))
-		tcpci->sink_disable = true;
+	}
 
 	return 0;
 
@@ -822,6 +860,8 @@ static int tcpci_probe(struct i2c_client *client,
 	if (err < 0)
 		goto err1;
 
+	device_set_wakeup_capable(tcpci->dev, true);
+
 	return 0;
 err1:
 	tcpm_unregister_port(tcpci->port);
@@ -836,6 +876,30 @@ static int tcpci_remove(struct i2c_client *client)
 
 	return 0;
 }
+
+static int tcpci_suspend(struct device *dev)
+{
+	struct tcpci *tcpci = dev_get_drvdata(dev);
+
+	if (device_may_wakeup(dev))
+		enable_irq_wake(tcpci->client->irq);
+
+	return 0;
+}
+
+static int tcpci_resume(struct device *dev)
+{
+	struct tcpci *tcpci = dev_get_drvdata(dev);
+
+	if (device_may_wakeup(dev))
+		disable_irq_wake(tcpci->client->irq);
+
+	return 0;
+}
+
+static const struct dev_pm_ops tcpci_pm_ops = {
+	SET_SYSTEM_SLEEP_PM_OPS(tcpci_suspend, tcpci_resume)
+};
 
 static const struct i2c_device_id tcpci_id[] = {
 	{ "tcpci", 0 },
@@ -854,6 +918,7 @@ MODULE_DEVICE_TABLE(of, tcpci_of_match);
 static struct i2c_driver tcpci_i2c_driver = {
 	.driver = {
 		.name = "tcpci",
+		.pm = &tcpci_pm_ops,
 		.of_match_table = of_match_ptr(tcpci_of_match),
 	},
 	.probe = tcpci_probe,

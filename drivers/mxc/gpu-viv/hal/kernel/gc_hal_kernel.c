@@ -2,7 +2,7 @@
 *
 *    The MIT License (MIT)
 *
-*    Copyright (c) 2014 - 2017 Vivante Corporation
+*    Copyright (c) 2014 - 2018 Vivante Corporation
 *
 *    Permission is hereby granted, free of charge, to any person obtaining a
 *    copy of this software and associated documentation files (the "Software"),
@@ -26,7 +26,7 @@
 *
 *    The GPL License (GPL)
 *
-*    Copyright (C) 2014 - 2017 Vivante Corporation
+*    Copyright (C) 2014 - 2018 Vivante Corporation
 *
 *    This program is free software; you can redistribute it and/or
 *    modify it under the terms of the GNU General Public License
@@ -146,10 +146,10 @@ gctCONST_STRING _DispatchText[] =
     gcmDEFINE2TEXT(gcvHAL_DESTROY_MMU),
     gcmDEFINE2TEXT(gcvHAL_SHBUF),
     gcmDEFINE2TEXT(gcvHAL_GET_GRAPHIC_BUFFER_FD),
+    gcmDEFINE2TEXT(gcvHAL_SET_VIDEO_MEMORY_METADATA),
     gcmDEFINE2TEXT(gcvHAL_GET_VIDEO_MEMORY_FD),
     gcmDEFINE2TEXT(gcvHAL_CONFIG_POWER_MANAGEMENT),
     gcmDEFINE2TEXT(gcvHAL_WRAP_USER_MEMORY),
-    gcmDEFINE2TEXT(gcvHAL_RELEASE_USER_MEMORY),
     gcmDEFINE2TEXT(gcvHAL_WAIT_FENCE),
 #if gcdDEC_ENABLE_AHB
     gcmDEFINE2TEXT(gcvHAL_DEC300_READ),
@@ -1033,6 +1033,17 @@ gckKERNEL_AllocateLinearMemory(
         *Pool = gcvPOOL_VIRTUAL;
     }
 
+    if (Flag & gcvALLOC_FLAG_DMABUF_EXPORTABLE)
+    {
+        gctSIZE_T pageSize = 0;
+        gckOS_GetPageSize(Kernel->os, &pageSize);
+
+        /* Usually, the exported dmabuf might be later imported to DRM,
+        ** while DRM requires input size to be page aligned.
+        */
+        Bytes = gcmALIGN(Bytes, pageSize);
+    }
+
 AllocateMemory:
 
     /* Get initial pool. */
@@ -1627,6 +1638,90 @@ gckKERNEL_BottomHalfUnlockVideoMemory(
 OnError:
     return status;
 }
+
+/*******************************************************************************
+**
+**  gckKERNEL_SetVidMemMetadata
+**
+**  Set/Get metadata to/from gckVIDMEM_NODE object.
+**
+**  INPUT:
+**
+**      gckKERNEL Kernel
+**          Pointer to an gckKERNEL object.
+**
+**      gctUINT32 ProcessID
+**          ProcessID of current process.
+**
+**  INOUT:
+**
+**      gcsHAL_INTERFACE * Interface
+**          Pointer to a interface structure
+*/
+#if defined(CONFIG_DMA_SHARED_BUFFER)
+#include <linux/dma-buf.h>
+
+gceSTATUS
+gckKERNEL_SetVidMemMetadata(
+    IN gckKERNEL Kernel,
+    IN gctUINT32 ProcessID,
+    INOUT gcsHAL_INTERFACE * Interface
+    )
+{
+    gceSTATUS status = gcvSTATUS_NOT_SUPPORTED;
+    gckVIDMEM_NODE nodeObj = gcvNULL;
+
+    gcmkHEADER_ARG("Kernel=0x%X ProcessID=%d", Kernel, ProcessID);
+
+    gcmkONERROR(gckVIDMEM_HANDLE_Lookup(Kernel, ProcessID, Interface->u.SetVidMemMetadata.node, &nodeObj));
+
+    if (Interface->u.SetVidMemMetadata.readback)
+    {
+        Interface->u.SetVidMemMetadata.ts_fd            = nodeObj->metadata.ts_fd;
+        Interface->u.SetVidMemMetadata.fc_enabled       = nodeObj->metadata.fc_enabled;
+        Interface->u.SetVidMemMetadata.fc_value         = nodeObj->metadata.fc_value;
+        Interface->u.SetVidMemMetadata.fc_value_upper   = nodeObj->metadata.fc_value_upper;
+        Interface->u.SetVidMemMetadata.compressed       = nodeObj->metadata.compressed;
+        Interface->u.SetVidMemMetadata.compress_format  = nodeObj->metadata.compress_format;
+    }
+    else
+    {
+        nodeObj->metadata.ts_fd             = Interface->u.SetVidMemMetadata.ts_fd;
+        if (nodeObj->metadata.ts_fd > 0)
+        {
+            nodeObj->metadata.ts_dma_buf    = dma_buf_get(nodeObj->metadata.ts_fd);
+            if (IS_ERR(nodeObj->metadata.ts_dma_buf))
+            {
+                gcmkONERROR(gcvSTATUS_NOT_FOUND);
+            }
+            dma_buf_put(nodeObj->metadata.ts_dma_buf);
+        }
+        nodeObj->metadata.fc_enabled        = Interface->u.SetVidMemMetadata.fc_enabled;
+        nodeObj->metadata.fc_value          = Interface->u.SetVidMemMetadata.fc_value;
+        nodeObj->metadata.fc_value_upper    = Interface->u.SetVidMemMetadata.fc_value_upper;
+        nodeObj->metadata.compressed        = Interface->u.SetVidMemMetadata.compressed;
+        nodeObj->metadata.compress_format   = Interface->u.SetVidMemMetadata.compress_format;
+    }
+
+    gcmkFOOTER();
+
+OnError:
+    return status;
+}
+
+#else
+
+gceSTATUS
+gckKERNEL_SetVidMemMetadata(
+    IN gckKERNEL Kernel,
+    IN gctUINT32 ProcessID,
+    INOUT gcsHAL_INTERFACE * Interface
+    )
+{
+    gcmkFATAL("The kernel did NOT support CONFIG_DMA_SHARED_BUFFER");
+    return gcvSTATUS_NOT_SUPPORTED;
+}
+#endif
 
 /*******************************************************************************
 **
@@ -2391,6 +2486,7 @@ gckKERNEL_Dispatch(
         }
         else
         {
+	    gctUINT32 i;
             if (Interface->u.Commit.count > 1 && Interface->engine == gcvENGINE_RENDER)
             {
                 gctUINT32 i;
@@ -2435,7 +2531,6 @@ gckKERNEL_Dispatch(
 
             if (Interface->u.Commit.count > 1 && Interface->engine == gcvENGINE_RENDER)
             {
-                gctUINT32 i;
 
                 for (i = 1; i < Interface->u.Commit.count; i++)
                 {
@@ -2472,6 +2567,23 @@ gckKERNEL_Dispatch(
                     }
                 }
             }
+
+	    for (i = 0; i < Interface->u.Commit.count; i++) {
+		    gceHARDWARE_TYPE type = Interface->hardwareType;
+		    gckKERNEL kernel = Device->map[type].kernels[i];
+
+		    if  ((kernel->hardware->options.gpuProfiler == gcvTRUE) &&
+		         (kernel->profileEnable == gcvTRUE)) {
+			    gcmkONERROR(gckCOMMAND_Stall(kernel->command, gcvTRUE));
+
+			    if (kernel->command->currContext) {
+				    gcmkONERROR(gckHARDWARE_UpdateContextProfile(
+							    kernel->hardware,
+							    kernel->command->currContext));
+			    }
+		    }
+	    }
+
         }
         gcmkONERROR(gckOS_ReleaseMutex(Kernel->os, Kernel->device->commitMutex));
         commitMutexAcquired = gcvFALSE;
@@ -3005,6 +3117,10 @@ gckKERNEL_Dispatch(
                                    0));
         break;
 
+    case gcvHAL_SET_VIDEO_MEMORY_METADATA:
+        gcmkONERROR(gckKERNEL_SetVidMemMetadata(Kernel, processID, Interface));
+        break;
+
     case gcvHAL_GET_VIDEO_MEMORY_FD:
         gcmkONERROR(gckVIDMEM_NODE_GetFd(
             Kernel,
@@ -3199,33 +3315,6 @@ gckKERNEL_Dispatch(
                                    gcvNULL,
                                    0));
         break;
-
-    case gcvHAL_RELEASE_USER_MEMORY:
-       {
-           gckVIDMEM_NODE nodeObject;
-           gctBOOL asynchronous = gcvFALSE;
-           gctUINT32 node = Interface->u.ReleaseUserMemory.node;
-
-           gcmkONERROR(gckKERNEL_RemoveProcessDB(Kernel,
-                                                 processID,
-                                                 gcvDB_VIDEO_MEMORY_LOCKED,
-                                                 gcmINT2PTR(node)));
-
-           gcmkONERROR(gckKERNEL_ReleaseVideoMemory( Kernel, processID, node));
-
-           gcmkONERROR(gckVIDMEM_HANDLE_Lookup(Kernel, processID, node, &nodeObject));
-
-           gcmkONERROR(gckVIDMEM_Unlock(Kernel, nodeObject, gcvSURF_BITMAP, &asynchronous));
-           if (gcvTRUE == asynchronous)
-           {
-               gcmkONERROR(gckCOMMAND_Stall(Kernel->command, gcvFALSE));
-               gcmkVERIFY_OK(gckVIDMEM_Unlock(Kernel, nodeObject, gcvSURF_BITMAP, gcvNULL));
-           }
-
-           gcmkONERROR(gckVIDMEM_NODE_Dereference(Kernel, nodeObject));
-       }
-
-       break;
 
     case gcvHAL_WAIT_FENCE:
         gcmkONERROR(gckKERNEL_WaitFence(
@@ -3461,23 +3550,7 @@ gckKERNEL_AttachProcessEx(
             if (Kernel->vg == gcvNULL)
 #endif
             {
-                gctBOOL empty = gcvFALSE;
-
-                while (gcvTRUE)
-                {
-                    /* Check whether the event queue is empty. */
-                    gcmkONERROR(gckEVENT_IsEmpty(Kernel->eventObj, &empty));
-
-                    if (empty == gcvTRUE)
-                    {
-                        break;
-                    }
-
-                    gcmkVERIFY_OK(gckOS_Delay(Kernel->os, 1));
-                };
-
                 /* Last client detached, switch to SUSPEND power state. */
-                Kernel->hardware->forcePowerOff = gcvTRUE;
                 gcmkONERROR(gckOS_Broadcast(Kernel->os,
                                             Kernel->hardware,
                                             gcvBROADCAST_LAST_PROCESS));
@@ -4298,7 +4371,7 @@ gckKERNEL_AllocateVirtualCommandBuffer(
 {
     gceSTATUS                       status;
     gckOS                           os = Kernel->os;
-    gckVIRTUAL_COMMAND_BUFFER_PTR    buffer;
+    gckVIRTUAL_COMMAND_BUFFER_PTR   buffer;
 
     gcmkHEADER_ARG("Os=0x%X InUserSpace=%d *Bytes=%lu",
         os, InUserSpace, gcmOPT_VALUE(Bytes));

@@ -2334,9 +2334,12 @@ static int serial_imx_remove(struct platform_device *pdev)
 
 static void serial_imx_restore_context(struct imx_port *sport)
 {
+	unsigned long flags = 0;
+
 	if (!sport->context_saved)
 		return;
 
+	spin_lock_irqsave(&sport->port.lock, flags);
 	writel(sport->saved_reg[4], sport->port.membase + UFCR);
 	writel(sport->saved_reg[5], sport->port.membase + UESC);
 	writel(sport->saved_reg[6], sport->port.membase + UTIM);
@@ -2348,11 +2351,15 @@ static void serial_imx_restore_context(struct imx_port *sport)
 	writel(sport->saved_reg[2], sport->port.membase + UCR3);
 	writel(sport->saved_reg[3], sport->port.membase + UCR4);
 	sport->context_saved = false;
+	spin_unlock_irqrestore(&sport->port.lock, flags);
 }
 
 static void serial_imx_save_context(struct imx_port *sport)
 {
+	unsigned long flags = 0;
+
 	/* Save necessary regs */
+	spin_lock_irqsave(&sport->port.lock, flags);
 	sport->saved_reg[0] = readl(sport->port.membase + UCR1);
 	sport->saved_reg[1] = readl(sport->port.membase + UCR2);
 	sport->saved_reg[2] = readl(sport->port.membase + UCR3);
@@ -2364,11 +2371,19 @@ static void serial_imx_save_context(struct imx_port *sport)
 	sport->saved_reg[8] = readl(sport->port.membase + UBMR);
 	sport->saved_reg[9] = readl(sport->port.membase + IMX21_UTS);
 	sport->context_saved = true;
+
+	if (uart_console(&sport->port) && sport->port.sysrq)
+		sport->saved_reg[0] |= UCR1_RRDYEN;
+	spin_unlock_irqrestore(&sport->port.lock, flags);
 }
 
 static void serial_imx_enable_wakeup(struct imx_port *sport, bool on)
 {
 	unsigned int val;
+
+	val = readl(sport->port.membase + USR1);
+	if (val & (USR1_AWAKE | USR1_RTSD))
+		writel(USR1_AWAKE | USR1_RTSD, sport->port.membase + USR1);
 
 	val = readl(sport->port.membase + UCR3);
 	if (on)
@@ -2422,7 +2437,6 @@ static int imx_serial_port_resume_noirq(struct device *dev)
 {
 	struct platform_device *pdev = to_platform_device(dev);
 	struct imx_port *sport = platform_get_drvdata(pdev);
-	unsigned int val;
 	int ret;
 
 	pinctrl_pm_select_default_state(dev);
@@ -2436,9 +2450,6 @@ static int imx_serial_port_resume_noirq(struct device *dev)
 	if (device_can_wakeup(&pdev->dev)) {
 		/* disable wakeup from i.MX UART */
 		serial_imx_enable_wakeup(sport, false);
-		val = readl(sport->port.membase + USR1);
-		if (val & (USR1_AWAKE | USR1_RTSD))
-			writel(USR1_AWAKE | USR1_RTSD, sport->port.membase + USR1);
 	} else {
 		if (of_machine_is_compatible("digi,ccimx6sbc") &&
 		    digi_get_board_version() >= 2) {

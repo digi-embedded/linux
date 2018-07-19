@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 NXP
+ * Copyright 2017-2018 NXP
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -26,10 +26,9 @@
 #include "imx-dp.h"
 #include "../imx-drm.h"
 
-struct imx_hdp *g_hdp;
 struct drm_display_mode *g_mode;
 
-static const struct drm_display_mode edid_cea_modes[] = {
+static struct drm_display_mode edid_cea_modes[] = {
 	/* 3 - 720x480@60Hz */
 	{ DRM_MODE("720x480", DRM_MODE_TYPE_DRIVER, 27000, 720, 736,
 		   798, 858, 0, 480, 489, 495, 525, 0,
@@ -64,116 +63,6 @@ static inline struct imx_hdp *enc_to_imx_hdp(struct drm_encoder *e)
 	return container_of(e, struct imx_hdp, encoder);
 }
 
-static u32 TMDS_rate_table[7] = {
-25200, 27000, 54000, 74250, 148500, 297000, 594000,
-};
-
-static u32 N_table_32k[8] = {
-/*25200, 27000, 54000, 74250, 148500, 297000, 594000,*/
-4096, 4096, 4096, 4096, 4096, 3072, 3072, 4096,
-};
-
-static u32 N_table_44k[8] = {
-6272, 6272, 6272, 6272, 6272, 4704, 9408, 6272,
-};
-
-static u32 N_table_48k[8] = {
-6144, 6144, 6144, 6144, 6144, 5120, 6144, 6144,
-};
-
-static int select_N_index(int vmode_index)
-{
-
-	int i = 0, j = 0;
-
-	for (i = 0; i < VIC_MODE_COUNT; i++) {
-		if (vic_table[i][23] == vmode_index)
-			break;
-	}
-
-	if (i == VIC_MODE_COUNT) {
-		pr_err("vmode is wrong!\n");
-		j = 7;
-		return j;
-	}
-
-	for (j = 0; j < 7; j++) {
-		if (vic_table[i][13] == TMDS_rate_table[j])
-			break;
-	}
-
-	return j;
-}
-
-u32 imx_hdp_audio(AUDIO_TYPE type, u32 sample_rate, u32 channels, u32 width)
-{
-	AUDIO_FREQ  freq;
-	AUDIO_WIDTH bits;
-	int ncts_n;
-	state_struct *state = &g_hdp->state;
-	int idx_n = select_N_index(g_hdp->vic);
-
-	switch (sample_rate) {
-	case 32000:
-		freq = AUDIO_FREQ_32;
-		ncts_n = N_table_32k[idx_n];
-		break;
-	case 44100:
-		freq = AUDIO_FREQ_44_1;
-		ncts_n = N_table_44k[idx_n];
-		break;
-	case 48000:
-		freq = AUDIO_FREQ_48;
-		ncts_n = N_table_48k[idx_n];
-		break;
-	case 88200:
-		freq = AUDIO_FREQ_88_2;
-		ncts_n = N_table_44k[idx_n] * 2;
-		break;
-	case 96000:
-		freq = AUDIO_FREQ_96;
-		ncts_n = N_table_48k[idx_n] * 2;
-		break;
-	case 176400:
-		freq = AUDIO_FREQ_176_4;
-		ncts_n = N_table_44k[idx_n] * 4;
-		break;
-	case 192000:
-		freq = AUDIO_FREQ_192;
-		ncts_n = N_table_48k[idx_n] * 4;
-		break;
-	default:
-		return -EINVAL;
-	}
-
-	switch (width) {
-	case 16:
-		bits = AUDIO_WIDTH_16;
-		break;
-	case 24:
-		bits = AUDIO_WIDTH_24;
-		break;
-	case 32:
-		bits = AUDIO_WIDTH_32;
-		break;
-	default:
-		return -EINVAL;
-	}
-
-
-	CDN_API_AudioOff_blocking(state, type);
-	CDN_API_AudioAutoConfig_blocking(state,
-				type,
-				channels,
-				freq,
-				0,
-				bits,
-				g_hdp->audio_type,
-				ncts_n,
-				AUDIO_MUTE_MODE_UNMUTE);
-	return 0;
-}
-
 static void imx_hdp_state_init(struct imx_hdp *hdp)
 {
 	state_struct *state = &hdp->state;
@@ -181,10 +70,26 @@ static void imx_hdp_state_init(struct imx_hdp *hdp)
 	memset(state, 0, sizeof(state_struct));
 	mutex_init(&state->mutex);
 
-	state->mem.regs_base = hdp->regs_base;
-	state->mem.ss_base = hdp->ss_base;
+	state->mem = &hdp->mem;
 	state->rw = hdp->rw;
 }
+
+#ifdef CONFIG_IMX_HDP_CEC
+static void imx_hdp_cec_init(struct imx_hdp *hdp)
+{
+	state_struct *state = &hdp->state;
+	struct imx_cec_dev *cec = &hdp->cec;
+	u32 clk_MHz;
+
+	memset(cec, 0, sizeof(struct imx_cec_dev));
+
+	CDN_API_GetClock(state, &clk_MHz);
+	cec->clk_div = clk_MHz * 10;
+	cec->dev = hdp->dev;
+	cec->mem = &hdp->mem;
+	cec->rw = hdp->rw;
+}
+#endif
 
 static void imx8qm_pixel_link_mux(state_struct *state, struct drm_display_mode *mode)
 {
@@ -199,7 +104,7 @@ static void imx8qm_pixel_link_mux(state_struct *state, struct drm_display_mode *
 	if (mode->flags & DRM_MODE_FLAG_INTERLACE)
 		val |= 0x2;
 
-	writel(val, hdp->ss_base + CSR_PIXEL_LINK_MUX_CTL);
+	writel(val, hdp->mem.ss_base + CSR_PIXEL_LINK_MUX_CTL);
 }
 
 int imx8qm_pixel_link_init(state_struct *state)
@@ -209,13 +114,13 @@ int imx8qm_pixel_link_init(state_struct *state)
 
 	sciErr = sc_ipc_getMuID(&hdp->mu_id);
 	if (sciErr != SC_ERR_NONE) {
-		pr_err("Cannot obtain MU ID\n");
+		DRM_ERROR("Cannot obtain MU ID\n");
 		return -EINVAL;
 	}
 
 	sciErr = sc_ipc_open(&hdp->ipcHndl, hdp->mu_id);
 	if (sciErr != SC_ERR_NONE) {
-		pr_err("sc_ipc_open failed! (sciError = %d)\n", sciErr);
+		DRM_ERROR("sc_ipc_open failed! (sciError = %d)\n", sciErr);
 		return -EINVAL;
 	}
 
@@ -245,19 +150,7 @@ void imx8qm_phy_reset(sc_ipc_t ipcHndl, u8 reset)
 	/* set the pixel link mode and pixel type */
 	sciErr = sc_misc_set_control(ipcHndl, SC_R_HDMI, SC_C_PHY_RESET, reset);
 	if (sciErr != SC_ERR_NONE)
-		pr_err("SC_R_HDMI PHY reset failed %d!\n", sciErr);
-}
-
-void imx8qm_hdmi_set_clock_root(sc_ipc_t ipcHndl)
-{
-	/* set clock source from av pll */
-	/* those clock default source from dig pll */
-	/* HDMI DI Pixel Link Mux Clock  */
-	sc_pm_set_clock_parent(ipcHndl, SC_R_HDMI, SC_PM_CLK_MISC0, 2);
-	/* HDMI DI Pixel Link Clock  */
-	sc_pm_set_clock_parent(ipcHndl, SC_R_HDMI, SC_PM_CLK_MISC1, 2);
-	/* HDMI DI Pixel Clock  */
-	sc_pm_set_clock_parent(ipcHndl, SC_R_HDMI, SC_PM_CLK_MISC3, 2);
+		DRM_ERROR("SC_R_HDMI PHY reset failed %d!\n", sciErr);
 }
 
 int imx8qm_clock_init(struct hdp_clks *clks)
@@ -570,31 +463,19 @@ void imx8qm_ipg_clock_set_rate(struct hdp_clks *clks)
 	clk_set_rate(clks->av_pll, 24000000);
 }
 
-static int imx_get_vic_index(struct drm_display_mode *mode)
+static u8 imx_hdp_link_rate(struct drm_display_mode *mode)
 {
-	int i;
-
-	for (i = 0; i < VIC_MODE_COUNT; i++) {
-		if (mode->hdisplay == vic_table[i][H_ACTIVE] &&
-			mode->vdisplay == vic_table[i][V_ACTIVE] &&
-			mode->clock == vic_table[i][PIXEL_FREQ_KHZ])
-			return i;
-	}
-	/* vidoe mode not support now  */
-	return -1;
+	if (mode->clock < 297000)
+		return AFE_LINK_RATE_1_6;
+	else if (mode->clock > 297000)
+		return AFE_LINK_RATE_5_4;
+	else
+		return AFE_LINK_RATE_2_7;
 }
 
 static void imx_hdp_mode_setup(struct imx_hdp *hdp, struct drm_display_mode *mode)
 {
-	int dp_vic;
 	int ret;
-
-	/* Check video mode supported by hdmi/dp phy */
-	dp_vic = imx_get_vic_index(mode);
-	if (dp_vic < 0) {
-		DRM_ERROR("Unsupport video mode now, %s, clk=%d\n", mode->name, mode->clock);
-		return;
-	}
 
 	/* set pixel clock before video mode setup */
 	imx_hdp_call(hdp, pixel_clock_disable, &hdp->clks);
@@ -606,16 +487,44 @@ static void imx_hdp_mode_setup(struct imx_hdp *hdp, struct drm_display_mode *mod
 	/* Config pixel link mux */
 	imx_hdp_call(hdp, pixel_link_mux, &hdp->state, mode);
 
+	hdp->link_rate = imx_hdp_link_rate(mode);
+
 	/* mode set */
-	ret = imx_hdp_call(hdp, phy_init, &hdp->state, dp_vic, 1, 8);
+	ret = imx_hdp_call(hdp, phy_init, &hdp->state, mode, hdp->format, hdp->bpc);
 	if (ret < 0) {
 		DRM_ERROR("Failed to initialise HDP PHY\n");
 		return;
 	}
-	imx_hdp_call(hdp, mode_set, &hdp->state, dp_vic, 1, 8, hdp->link_rate);
+	imx_hdp_call(hdp, mode_set, &hdp->state, mode,
+		     hdp->format, hdp->bpc, hdp->link_rate);
 
 	/* Get vic of CEA-861 */
 	hdp->vic = drm_match_cea_mode(mode);
+}
+
+bool imx_hdp_bridge_mode_fixup(struct drm_bridge *bridge,
+			       const struct drm_display_mode *mode,
+			       struct drm_display_mode *adjusted_mode)
+{
+	struct imx_hdp *hdp = bridge->driver_private;
+	struct drm_display_info *di = &hdp->connector.display_info;
+	int vic = drm_match_cea_mode(mode);
+
+	if (vic < 0)
+		return false;
+
+	if (vic == VIC_MODE_97_60Hz &&
+	    (di->color_formats & DRM_COLOR_FORMAT_YCRCB420) &&
+	    (di->hdmi.y420_dc_modes & DRM_EDID_YCBCR420_DC_30)) {
+		hdp->bpc = 10;
+		hdp->format = YCBCR_4_2_0;
+		return true;
+	}
+
+	hdp->bpc = 8;
+	hdp->format = PXL_RGB;
+
+	return true;
 }
 
 static void imx_hdp_bridge_mode_set(struct drm_bridge *bridge,
@@ -648,7 +557,7 @@ imx_hdp_connector_detect(struct drm_connector *connector, bool force)
 	struct imx_hdp *hdp = container_of(connector,
 						struct imx_hdp, connector);
 	int ret;
-	u8 hpd;
+	u8 hpd = 0xf;
 
 	ret = imx_hdp_call(hdp, get_hpd_state, &hdp->state, &hpd);
 	if (ret > 0)
@@ -657,21 +566,24 @@ imx_hdp_connector_detect(struct drm_connector *connector, bool force)
 	if (hpd == 1)
 		/* Cable Connected */
 		return connector_status_connected;
-	else
-		/* Cable Disconnedted  */
+	else if (hpd == 0)
+		/* Cable Disconnedted */
 		return connector_status_disconnected;
+	else {
+		/* Cable status unknown */
+		DRM_INFO("Unknow cable status, hdp=%u\n", hpd);
+		return connector_status_unknown;
+	}
 }
 
 static int imx_hdp_connector_get_modes(struct drm_connector *connector)
 {
 	struct drm_display_mode *mode;
+	struct imx_hdp *hdp = container_of(connector, struct imx_hdp, connector);
+	struct edid *edid;
 	int num_modes = 0;
 	int ret;
 	int i;
-
-	struct imx_hdp *hdp = container_of(connector, struct imx_hdp,
-					     connector);
-	struct edid *edid;
 
 	if (hdp->is_edid == true) {
 		edid = drm_do_get_edid(connector, hdp->ops->get_edid_block, &hdp->state);
@@ -709,17 +621,19 @@ imx_hdp_connector_mode_valid(struct drm_connector *connector,
 					     connector);
 	enum drm_mode_status mode_status = MODE_OK;
 	struct drm_cmdline_mode *cmdline_mode;
+
 	cmdline_mode = &connector->cmdline_mode;
 
 	/* cmdline mode is the max support video mode when edid disabled */
-	if (!hdp->is_edid)
+	if (!hdp->is_edid) {
 		if (cmdline_mode->xres != 0 &&
 			cmdline_mode->xres < mode->hdisplay)
 			return MODE_BAD_HVALUE;
+	}
 
 	if (hdp->is_4kp60 && mode->clock > 594000)
 		return MODE_CLOCK_HIGH;
-	else if (!hdp->is_4kp60 && mode->clock > 150000)
+	else if (!hdp->is_4kp60 && mode->clock > 297000)
 		return MODE_CLOCK_HIGH;
 
 	/* 4096x2160 is not supported now */
@@ -742,6 +656,43 @@ static void imx_hdp_connector_force(struct drm_connector *connector)
 	mutex_unlock(&hdp->mutex);
 }
 
+static int imx_hdp_set_property(struct drm_connector *connector,
+				struct drm_property *property, uint64_t val)
+{
+	struct imx_hdp *hdp = container_of(connector, struct imx_hdp,
+					   connector);
+	int ret;
+	struct drm_connector_state *conn_state;
+	union hdmi_infoframe frame;
+	struct hdr_static_metadata *hdr_metadata;
+
+	ret = drm_atomic_helper_connector_set_property(connector,
+						       property, val);
+	if (ret < 0)
+		return ret;
+
+	conn_state = connector->state;
+
+	if (conn_state->hdr_source_metadata_blob_ptr &&
+	    conn_state->hdr_source_metadata_blob_ptr->length &&
+	    hdp->ops->write_hdr_metadata) {
+		hdr_metadata = (struct hdr_static_metadata *)
+				conn_state->hdr_source_metadata_blob_ptr->data;
+
+		ret = drm_hdmi_infoframe_set_hdr_metadata(&frame.drm,
+							  hdr_metadata);
+
+		if (ret < 0) {
+			DRM_ERROR("could not set HDR metadata in infoframe\n");
+			return ret;
+		}
+
+		hdp->ops->write_hdr_metadata(&hdp->state, &frame);
+	}
+
+	return 0;
+}
+
 static const struct drm_connector_funcs imx_hdp_connector_funcs = {
 	.dpms = drm_atomic_helper_connector_dpms,
 	.fill_modes = drm_helper_probe_single_connector_modes,
@@ -751,6 +702,7 @@ static const struct drm_connector_funcs imx_hdp_connector_funcs = {
 	.reset = drm_atomic_helper_connector_reset,
 	.atomic_duplicate_state = drm_atomic_helper_connector_duplicate_state,
 	.atomic_destroy_state = drm_atomic_helper_connector_destroy_state,
+	.set_property = imx_hdp_set_property,
 };
 
 static const struct drm_connector_helper_funcs imx_hdp_connector_helper_funcs = {
@@ -762,8 +714,8 @@ static const struct drm_bridge_funcs imx_hdp_bridge_funcs = {
 	.enable = imx_hdp_bridge_enable,
 	.disable = imx_hdp_bridge_disable,
 	.mode_set = imx_hdp_bridge_mode_set,
+	.mode_fixup = imx_hdp_bridge_mode_fixup,
 };
-
 
 static void imx_hdp_imx_encoder_disable(struct drm_encoder *encoder)
 {
@@ -771,6 +723,39 @@ static void imx_hdp_imx_encoder_disable(struct drm_encoder *encoder)
 
 static void imx_hdp_imx_encoder_enable(struct drm_encoder *encoder)
 {
+	struct imx_hdp *hdp = container_of(encoder, struct imx_hdp, encoder);
+	union hdmi_infoframe frame;
+	struct hdr_static_metadata *hdr_metadata;
+	struct drm_connector_state *conn_state = hdp->connector.state;
+	int ret = 0;
+
+	if (!hdp->ops->write_hdr_metadata)
+		return;
+
+	if (hdp->hdr_metadata_present) {
+		hdr_metadata = (struct hdr_static_metadata *)
+				conn_state->hdr_source_metadata_blob_ptr->data;
+
+		ret = drm_hdmi_infoframe_set_hdr_metadata(&frame.drm,
+							  hdr_metadata);
+	} else {
+		hdr_metadata = devm_kzalloc(hdp->dev,
+					    sizeof(struct hdr_static_metadata),
+					    GFP_KERNEL);
+		hdr_metadata->eotf = 0;
+
+		ret = drm_hdmi_infoframe_set_hdr_metadata(&frame.drm,
+							  hdr_metadata);
+
+		devm_kfree(hdp->dev, hdr_metadata);
+	}
+
+	if (ret < 0) {
+		DRM_ERROR("could not set HDR metadata in infoframe\n");
+		return;
+	}
+
+	hdp->ops->write_hdr_metadata(&hdp->state, &frame);
 }
 
 static int imx_hdp_imx_encoder_atomic_check(struct drm_encoder *encoder,
@@ -778,8 +763,15 @@ static int imx_hdp_imx_encoder_atomic_check(struct drm_encoder *encoder,
 				    struct drm_connector_state *conn_state)
 {
 	struct imx_crtc_state *imx_crtc_state = to_imx_crtc_state(crtc_state);
+	struct imx_hdp *hdp = container_of(encoder, struct imx_hdp, encoder);
 
 	imx_crtc_state->bus_format = MEDIA_BUS_FMT_RGB101010_1X30;
+
+	if (conn_state->hdr_metadata_changed &&
+	    conn_state->hdr_source_metadata_blob_ptr &&
+	    conn_state->hdr_source_metadata_blob_ptr->length)
+		hdp->hdr_metadata_present = true;
+
 	return 0;
 }
 
@@ -922,7 +914,6 @@ static struct hdp_ops imx8qm_hdmi_ops = {
 	.pixel_link_mux = imx8qm_pixel_link_mux,
 
 	.clock_init = imx8qm_clock_init,
-	.set_clock_root = imx8qm_hdmi_set_clock_root,
 	.ipg_clock_set_rate = imx8qm_ipg_clock_set_rate,
 	.ipg_clock_enable = imx8qm_ipg_clock_enable,
 	.ipg_clock_disable = imx8qm_ipg_clock_disable,
@@ -959,10 +950,11 @@ static struct hdp_ops imx8mq_ops = {
 	.mode_set = hdmi_mode_set_t28hpc,
 	.get_edid_block = hdmi_get_edid_block,
 	.get_hpd_state = hdmi_get_hpd_state,
+	.write_hdr_metadata = hdmi_write_hdr_metadata,
 };
 
 static struct hdp_devtype imx8mq_hdmi_devtype = {
-	.is_edid = false,
+	.is_edid = true,
 	.is_4kp60 = true,
 	.audio_type = CDN_HDMITX_KIRAN,
 	.ops = &imx8mq_ops,
@@ -989,7 +981,7 @@ static void hotplug_work_func(struct work_struct *work)
 		/* Cable Connected */
 		DRM_INFO("HDMI/DP Cable Plug In\n");
 		enable_irq(hdp->irq[HPD_IRQ_OUT]);
-	} else {
+	} else if (connector->status == connector_status_disconnected) {
 		/* Cable Disconnedted  */
 		DRM_INFO("HDMI/DP Cable Plug Out\n");
 		enable_irq(hdp->irq[HPD_IRQ_IN]);
@@ -1036,7 +1028,6 @@ static int imx_hdp_imx_bind(struct device *dev, struct device *master,
 	bridge = &hdp->bridge;
 	connector = &hdp->connector;
 
-	g_hdp = hdp;
 	mutex_init(&hdp->mutex);
 
 	hdp->irq[HPD_IRQ_IN] = platform_get_irq_byname(pdev, "plug_in");
@@ -1049,24 +1040,27 @@ static int imx_hdp_imx_bind(struct device *dev, struct device *master,
 
 	/* register map */
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	hdp->regs_base = devm_ioremap_resource(dev, res);
-	if (IS_ERR(hdp->regs_base)) {
+	hdp->mem.regs_base = devm_ioremap_resource(dev, res);
+	if (IS_ERR(hdp->mem.regs_base)) {
 		dev_err(dev, "Failed to get HDP CTRL base register\n");
 		return -EINVAL;
 	}
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
-	hdp->ss_base = devm_ioremap_resource(dev, res);
-	if (IS_ERR(hdp->ss_base)) {
+	hdp->mem.ss_base = devm_ioremap_resource(dev, res);
+	if (IS_ERR(hdp->mem.ss_base)) {
 		dev_err(dev, "Failed to get HDP CRS base register\n");
 		return -EINVAL;
 	}
 
+	hdp->is_cec = of_property_read_bool(pdev->dev.of_node, "fsl,cec");
 	hdp->is_edid = devtype->is_edid;
 	hdp->is_4kp60 = devtype->is_4kp60;
 	hdp->audio_type = devtype->audio_type;
 	hdp->ops = devtype->ops;
 	hdp->rw = devtype->rw;
+	hdp->bpc = 8;
+	hdp->format = PXL_RGB;
 
 	/* HDP controller init */
 	imx_hdp_state_init(hdp);
@@ -1080,7 +1074,6 @@ static int imx_hdp_imx_bind(struct device *dev, struct device *master,
 		DRM_ERROR("Failed to initialize clock %d\n", ret);
 		return ret;
 	}
-	imx_hdp_call(hdp, set_clock_root, hdp->ipcHndl);
 
 	ret = imx_hdp_call(hdp, clock_init, &hdp->clks);
 	if (ret < 0) {
@@ -1103,7 +1096,6 @@ static int imx_hdp_imx_bind(struct device *dev, struct device *master,
 
 	ret = imx_hdp_call(hdp, fw_init, &hdp->state);
 	if (ret < 0) {
-		pr_err("Failed to initialise HDP firmware\n");
 		DRM_ERROR("Failed to initialise HDP firmware\n");
 		return ret;
 	}
@@ -1111,7 +1103,8 @@ static int imx_hdp_imx_bind(struct device *dev, struct device *master,
 	/* Pixel Format - 1 RGB, 2 YCbCr 444, 3 YCbCr 420 */
 	/* bpp (bits per subpixel) - 8 24bpp, 10 30bpp, 12 36bpp, 16 48bpp */
 	/* default set hdmi to 1080p60 mode */
-	ret = imx_hdp_call(hdp, phy_init, &hdp->state, 2, 1, 8);
+	ret = imx_hdp_call(hdp, phy_init, &hdp->state, &edid_cea_modes[2],
+			   hdp->format, hdp->bpc);
 	if (ret < 0) {
 		DRM_ERROR("Failed to initialise HDP PHY\n");
 		return ret;
@@ -1134,6 +1127,7 @@ static int imx_hdp_imx_bind(struct device *dev, struct device *master,
 			 DRM_MODE_ENCODER_TMDS, NULL);
 
 	/* bridge */
+	bridge->encoder = encoder;
 	bridge->driver_private = hdp;
 	bridge->funcs = &imx_hdp_bridge_funcs;
 	ret = drm_bridge_attach(drm, bridge);
@@ -1144,6 +1138,7 @@ static int imx_hdp_imx_bind(struct device *dev, struct device *master,
 
 	encoder->bridge = bridge;
 	hdp->connector.polled = DRM_CONNECTOR_POLL_HPD;
+	hdp->connector.ycbcr_420_allowed = true;
 
 	/* connector */
 	drm_connector_helper_add(connector,
@@ -1152,6 +1147,9 @@ static int imx_hdp_imx_bind(struct device *dev, struct device *master,
 	drm_connector_init(drm, connector,
 			   &imx_hdp_connector_funcs,
 			   DRM_MODE_CONNECTOR_HDMIA);
+
+	drm_object_attach_property(&connector->base,
+		connector->dev->mode_config.hdr_source_metadata_property, 0);
 
 	drm_mode_connector_attach_encoder(connector, encoder);
 
@@ -1191,6 +1189,14 @@ static int imx_hdp_imx_bind(struct device *dev, struct device *master,
 		if (hpd == 1)
 			enable_irq(hdp->irq[HPD_IRQ_OUT]);
 	}
+#ifdef CONFIG_IMX_HDP_CEC
+	if (hdp->is_cec) {
+		imx_hdp_cec_init(hdp);
+		imx_cec_register(&hdp->cec);
+	}
+#endif
+
+	imx_hdp_register_audio_driver(dev);
 
 	return 0;
 err_irq:
@@ -1203,6 +1209,10 @@ static void imx_hdp_imx_unbind(struct device *dev, struct device *master,
 {
 	struct imx_hdp *hdp = dev_get_drvdata(dev);
 
+#ifdef CONFIG_IMX_HDP_CEC
+	if (hdp->is_cec)
+		imx_cec_unregister(&hdp->cec);
+#endif
 	imx_hdp_call(hdp, pixel_clock_disable, &hdp->clks);
 	imx_hdp_call(hdp, pixel_link_deinit, &hdp->state);
 	drm_bridge_detach(&hdp->bridge);

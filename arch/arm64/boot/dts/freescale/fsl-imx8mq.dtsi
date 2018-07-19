@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2016 Freescale Semiconductor, Inc.
- * Copyright 2017 NXP
+ * Copyright 2017-2018 NXP
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -67,7 +67,7 @@
 		reg = <0x00000000 0x40000000 0 0xc0000000>;
 	};
 
-	reserved-memory {
+	resmem: reserved-memory {
 		#address-cells = <2>;
 		#size-cells = <2>;
 		ranges;
@@ -83,7 +83,7 @@
 
 		rpmsg_reserved: rpmsg@0xb8000000 {
 			no-map;
-			reg = <0 0xb8000000 0 0x100000>;
+			reg = <0 0xb8000000 0 0x400000>;
 		};
 	};
 
@@ -111,7 +111,7 @@
 
 	busfreq { /* BUSFREQ */
 		compatible = "fsl,imx_busfreq";
-		clocks = <&clk IMX8MQ_DRAM_PLL_OUT>, <&clk IMX8MQ_CLK_DRAM_ALT_SRC>,
+		clocks = <&clk IMX8MQ_DRAM_PLL1>, <&clk IMX8MQ_CLK_DRAM_ALT_SRC>,
 			 <&clk IMX8MQ_CLK_DRAM_APB_SRC>, <&clk IMX8MQ_CLK_DRAM_APB_PRE_DIV>,
 		         <&clk IMX8MQ_CLK_DRAM_CORE>, <&clk IMX8MQ_CLK_DRAM_ALT_ROOT>,
 			 <&clk IMX8MQ_SYS1_PLL_40M>, <&clk IMX8MQ_SYS1_PLL_400M>,
@@ -551,20 +551,33 @@
 		clocks = <&clk IMX8MQ_CLK_DISP_APB_ROOT>,
 			 <&clk IMX8MQ_CLK_DISP_AXI_ROOT>,
 			 <&clk IMX8MQ_CLK_DISP_RTRM_ROOT>,
-			 <&clk IMX8MQ_CLK_DC_PIXEL_DIV>,
+			 <&clk IMX8MQ_VIDEO2_PLL2_DIV>,
+			 <&clk IMX8MQ_VIDEO2_PLL_OUT>,
 			 <&clk IMX8MQ_CLK_DISP_DTRC_DIV>;
-		clock-names = "apb", "axi", "rtrm", "pixel", "dtrc";
+		clock-names = "apb", "axi", "rtrm", "pix_div", "pix_out", "dtrc";
 		assigned-clocks = <&clk IMX8MQ_CLK_DC_PIXEL_SRC>,
 				  <&clk IMX8MQ_CLK_DISP_AXI_SRC>,
 				  <&clk IMX8MQ_CLK_DISP_RTRM_SRC>,
-				  <&clk IMX8MQ_CLK_DISP_RTRM_PRE_DIV>;
+				  <&clk IMX8MQ_VIDEO2_PLL1_REF_SEL>,
+				  <&clk IMX8MQ_CLK_DISP_RTRM_PRE_DIV>,
+				  <&clk IMX8MQ_VIDEO2_PLL_OUT>,
+				  <&clk IMX8MQ_VIDEO2_PLL1>,
+				  <&clk IMX8MQ_VIDEO2_PLL1_OUT_DIV>,
+				  <&clk IMX8MQ_VIDEO2_PLL2>;
 		assigned-clock-parents = <&clk IMX8MQ_VIDEO_PLL1_OUT>,
 					 <&clk IMX8MQ_SYS1_PLL_800M>,
-					 <&clk IMX8MQ_SYS1_PLL_800M>;
+					 <&clk IMX8MQ_SYS1_PLL_800M>,
+					 <&clk IMX8MQ_VIDEO2_PHY_27MHZ>;
 		assigned-clock-rates = <594000000>,
 				       <800000000>,
 				       <400000000>,
-				       <400000000>;
+					   <27000000>,
+				       <400000000>,
+					   <297000000>,
+					   <1728000000>,
+					   <54000000>,
+					   <2376000000>;
+
 		status = "disabled";
 
 		dcss_disp0: port@0 {
@@ -580,12 +593,13 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 		compatible = "fsl,imx8mq-hdmi";
-		reg = <0x0 0x32c00000 0x0 0x33800>,	/* HDP registers */
+		reg = <0x0 0x32c00000 0x0 0x100000>,	/* HDP registers */
 				<0x0 0x32e40000 0x0 0x40000>;   /* HDP SEC register */
 		interrupts = <GIC_SPI 16 IRQ_TYPE_LEVEL_HIGH>,
 					<GIC_SPI 25 IRQ_TYPE_LEVEL_HIGH>;
 		interrupt-names = "plug_in", "plug_out";
 		interrupt-parent = <&gpc>;
+		fsl,cec;
 		status = "disabled";
 
 		port@0 {
@@ -625,6 +639,7 @@
 		assigned-clock-rates = <80000000>;
 		phys = <&mipi_dsi_phy>;
 		phy-names = "dphy";
+		no_clk_reset;
 		status = "disabled";
 
 		port@0 {
@@ -649,6 +664,7 @@
 		mux-sel = <&gpr>;
 		phys = <&mipi_dsi_phy>;
 		phy-names = "dphy";
+		no_clk_reset;
 		status = "disabled";
 
 		port@0 {
@@ -764,6 +780,17 @@
 			      "rxtx7", "spba";
 		dmas = <&sdma1 8 18 0>, <&sdma1 9 18 0>;
 		dma-names = "rx", "tx";
+		status = "disabled";
+	};
+
+	ecspi1: ecspi@30820000 {
+		compatible = "fsl,imx6ul-ecspi", "fsl,imx51-ecspi";
+		reg = <0x0 0x30820000 0x0 0x10000>;
+		interrupts = <GIC_SPI 31 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clk IMX8MQ_CLK_ECSPI1_ROOT>,
+			 <&clk IMX8MQ_CLK_ECSPI1_ROOT>;
+		clock-names = "ipg", "per";
+		interrupt-parent = <&gpc>;
 		status = "disabled";
 	};
 
@@ -887,6 +914,7 @@
 			power-domains = <&usb_otg1_pd>;
 			snps,power-down-scale = <2>;
 			usb3-resume-missing-cas;
+			usb3-lpm-capable;
 			status = "disabled";
 		};
 	};
@@ -927,6 +955,7 @@
 			power-domains = <&usb_otg2_pd>;
 			snps,power-down-scale = <2>;
 			usb3-resume-missing-cas;
+			usb3-lpm-capable;
 			status = "disabled";
 		};
 	};
@@ -1122,11 +1151,11 @@
 		assigned-clock-parents = <&clk IMX8MQ_GPU_PLL_OUT>, <&clk IMX8MQ_GPU_PLL_OUT>, <&clk IMX8MQ_GPU_PLL_OUT>, <&clk IMX8MQ_GPU_PLL_OUT>;
 		assigned-clock-rates = <800000000>, <800000000>, <800000000>, <800000000>;
 		power-domains = <&gpu_pd>;
-		depth-compression = <1>;
+		depth-compression = <0>;
 		status = "disabled";
 	};
 
-	imx_ion {
+	imx_ion: imx_ion {
 		compatible = "fsl,mxc-ion";
 		fsl,heap-id = <0>;
 	};
@@ -1183,6 +1212,7 @@
 		assigned-clock-parents = <&clk IMX8MQ_VPU_PLL_OUT>, <&clk IMX8MQ_VPU_PLL_OUT>, <&clk IMX8MQ_SYS1_PLL_800M>;
 		assigned-clock-rates = <600000000>, <600000000>, <800000000>;
 		power-domains = <&vpu_pd>;
+		regulator-supply = <&sw1c_reg>;
 		status = "disabled";
 	};
 
@@ -1228,23 +1258,19 @@
 		status = "disabled";
 	};
 
-	hdmi_cec: hdmi_cec@32c33800 {
-		compatible = "fsl,imx8-hdp-cec";
-		reg = <0x0 0x32c33800 0x0 0x200>;
-		status = "disabled";
-	};
-
 	pcie0: pcie@0x33800000 {
 		compatible = "fsl,imx8mq-pcie", "snps,dw-pcie";
 		reg = <0x0 0x33800000 0x0 0x400000>, <0x0 0x1ff00000 0x0 0x80000>;
 		reg-names = "dbi", "config";
+		reserved-region = <&rpmsg_reserved>;
 		#address-cells = <3>;
 		#size-cells = <2>;
 		device_type = "pci";
 		ranges =  <0x81000000 0 0x00000000 0x0 0x1ff80000 0 0x00010000 /* downstream I/O 64KB */
 			   0x82000000 0 0x18000000 0x0 0x18000000 0 0x07f00000>; /* non-prefetchable memory */
 		num-lanes = <1>;
-		interrupts = <GIC_SPI 122 IRQ_TYPE_LEVEL_HIGH>;
+		interrupts = <GIC_SPI 122 IRQ_TYPE_LEVEL_HIGH>,
+				<GIC_SPI 127 IRQ_TYPE_LEVEL_HIGH>; /* eDMA */
 		interrupt-names = "msi";
 		#interrupt-cells = <1>;
 		interrupt-map-mask = <0 0 0 0x7>;
@@ -1266,13 +1292,15 @@
 		compatible = "fsl,imx8mq-pcie", "snps,dw-pcie";
 		reg = <0x0 0x33c00000 0x0 0x400000>, <0x0 0x27f00000 0x0 0x80000>;
 		reg-names = "dbi", "config";
+		reserved-region = <&rpmsg_reserved>;
 		#address-cells = <3>;
 		#size-cells = <2>;
 		device_type = "pci";
 		ranges =  <0x81000000 0 0x00000000 0x0 0x27f80000 0 0x00010000 /* downstream I/O 64KB */
 			   0x82000000 0 0x20000000 0x0 0x20000000 0 0x07f00000>; /* non-prefetchable memory */
 		num-lanes = <1>;
-		interrupts = <GIC_SPI 74 IRQ_TYPE_LEVEL_HIGH>;
+		interrupts = <GIC_SPI 74 IRQ_TYPE_LEVEL_HIGH>,
+				<GIC_SPI 80 IRQ_TYPE_LEVEL_HIGH>; /* eDMA */
 		interrupt-names = "msi";
 		#interrupt-cells = <1>;
 		interrupt-map-mask = <0 0 0 0x7>;
@@ -1337,7 +1365,50 @@
 
 	caam_sm: caam-sm@00100000 {
 		compatible = "fsl,imx6q-caam-sm";
-		reg = <0 0x00100000 0 0x3fff>;
+		reg = <0 0x00100000 0 0x7fff>;
+	};
+
+	caam_snvs: caam-snvs@30370000 {
+		compatible = "fsl,imx6q-caam-snvs";
+		reg = <0 0x30370000 0 0x10000>;
+	};
+
+	irq_sec_vio: caam_secvio {
+		compatible = "fsl,imx7d-caam-secvio", "fsl,imx6q-caam-secvio";
+		interrupts = <GIC_SPI 20 IRQ_TYPE_LEVEL_HIGH>;
+		jtag-tamper = "disabled";
+		watchdog-tamper = "enabled";
+		internal-boot-tamper = "enabled";
+		external-pin-tamper = "disabled";
+	};
+
+	dma_apbh: dma-apbh@33000000 {
+		compatible = "fsl,imx7d-dma-apbh", "fsl,imx28-dma-apbh";
+		reg = <0 0x33000000 0 0x2000>;
+		interrupts = <GIC_SPI 12 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 12 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 12 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 12 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-names = "gpmi0", "gpmi1", "gpmi2", "gpmi3";
+		#dma-cells = <1>;
+		dma-channels = <4>;
+		clocks = <&clk IMX8MQ_CLK_NAND_USDHC_BUS_RAWNAND_CLK>;
+	};
+
+	gpmi: gpmi-nand@33002000{
+		compatible = "fsl,imx7d-gpmi-nand";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		reg = <0 0x33002000 0 0x2000>, <0 0x33004000 0 0x4000>;
+		reg-names = "gpmi-nand", "bch";
+		interrupts = <GIC_SPI 14 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-names = "bch";
+		clocks = <&clk IMX8MQ_CLK_RAWNAND_ROOT>,
+			<&clk IMX8MQ_CLK_NAND_USDHC_BUS_RAWNAND_CLK>;
+		clock-names = "gpmi_io", "gpmi_bch_apb";
+		dmas = <&dma_apbh 0>;
+		dma-names = "rx-tx";
+		status = "disabled";
 	};
 };
 

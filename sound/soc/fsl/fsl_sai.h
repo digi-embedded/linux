@@ -14,7 +14,10 @@
 
 #define FSL_SAI_FORMATS (SNDRV_PCM_FMTBIT_S16_LE |\
 			 SNDRV_PCM_FMTBIT_S24_LE |\
-			 SNDRV_PCM_FMTBIT_S32_LE)
+			 SNDRV_PCM_FMTBIT_S32_LE |\
+			 SNDRV_PCM_FMTBIT_DSD_U8 |\
+			 SNDRV_PCM_FMTBIT_DSD_U16_LE |\
+			 SNDRV_PCM_FMTBIT_DSD_U32_LE)
 
 /* SAI Register Map Register */
 #define FSL_SAI_TCSR(offset) (0x00 + offset) /* SAI Transmit Control */
@@ -25,6 +28,12 @@
 #define FSL_SAI_TCR5(offset) (0x14 + offset) /* SAI Transmit Configuration 5 */
 #define FSL_SAI_TDR0    0x20 /* SAI Transmit Data */
 #define FSL_SAI_TDR1    0x24 /* SAI Transmit Data */
+#define FSL_SAI_TDR2    0x28 /* SAI Transmit Data */
+#define FSL_SAI_TDR3    0x2C /* SAI Transmit Data */
+#define FSL_SAI_TDR4    0x30 /* SAI Transmit Data */
+#define FSL_SAI_TDR5    0x34 /* SAI Transmit Data */
+#define FSL_SAI_TDR6    0x38 /* SAI Transmit Data */
+#define FSL_SAI_TDR7    0x3C /* SAI Transmit Data */
 #define FSL_SAI_TFR0    0x40 /* SAI Transmit FIFO */
 #define FSL_SAI_TFR1    0x44 /* SAI Transmit FIFO */
 #define FSL_SAI_TFR2    0x48 /* SAI Transmit FIFO */
@@ -42,6 +51,12 @@
 #define FSL_SAI_RCR5(offset) (0x94 + offset) /* SAI Receive Configuration 5 */
 #define FSL_SAI_RDR0    0xa0 /* SAI Receive Data */
 #define FSL_SAI_RDR1    0xa4 /* SAI Receive Data */
+#define FSL_SAI_RDR2    0xa8 /* SAI Receive Data */
+#define FSL_SAI_RDR3    0xac /* SAI Receive Data */
+#define FSL_SAI_RDR4    0xb0 /* SAI Receive Data */
+#define FSL_SAI_RDR5    0xb4 /* SAI Receive Data */
+#define FSL_SAI_RDR6    0xb8 /* SAI Receive Data */
+#define FSL_SAI_RDR7    0xbc /* SAI Receive Data */
 #define FSL_SAI_RFR0    0xc0 /* SAI Receive FIFO */
 #define FSL_SAI_RFR1    0xc4 /* SAI Receive FIFO */
 #define FSL_SAI_RFR2    0xc8 /* SAI Receive FIFO */
@@ -119,6 +134,8 @@
 #define FSL_SAI_CR4_FRSZ_MASK	(0x1f << 16)
 #define FSL_SAI_CR4_SYWD(x)	(((x) - 1) << 8)
 #define FSL_SAI_CR4_SYWD_MASK	(0x1f << 8)
+#define FSL_SAI_CR4_CHMOD	(1 << 5)
+#define FSL_SAI_CR4_CHMOD_MASK	(1 << 5)
 #define FSL_SAI_CR4_MF		BIT(4)
 #define FSL_SAI_CR4_FSE		BIT(3)
 #define FSL_SAI_CR4_FSP		BIT(1)
@@ -150,6 +167,7 @@
 #define FSL_SAI_CLK_MAST3	3
 
 #define FSL_SAI_MCLK_MAX	4
+#define FSL_SAI_CLK_BIT		5
 
 /* SAI data transfer numbers per DMA request */
 #define FSL_SAI_MAXBURST_TX 6
@@ -177,9 +195,14 @@ struct fsl_sai {
 	bool slave_mode[2];
 	bool is_lsb_first;
 	bool is_dsp_mode;
+	bool is_multi_lane;
 	bool synchronous[2];
 	bool is_stream_opened[2];
+	bool is_dsd;
 	unsigned int dataline[2];
+	unsigned int dataline_dsd[2];
+	unsigned int dataline_off[2];
+	unsigned int dataline_off_dsd[2];
 	unsigned int masterflag[2];
 
 	unsigned int mclk_id[2];
@@ -192,6 +215,8 @@ struct fsl_sai {
 	struct snd_dmaengine_dai_dma_data dma_params_tx;
 	const struct fsl_sai_soc_data *soc;
 	struct pm_qos_request pm_qos_req;
+	struct pinctrl *pinctrl;
+	struct pinctrl_state *pins_state;
 };
 
 #define TX 1

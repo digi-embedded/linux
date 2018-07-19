@@ -110,6 +110,10 @@ struct dcss_dpr_ch {
 	u32 mode_ctrl;
 	u32 sys_ctrl;
 	u32 rtram_ctrl;
+
+	u32 pitch;
+
+	bool use_dtrc;
 };
 
 struct dcss_dpr_priv {
@@ -234,6 +238,9 @@ static u32 dcss_dpr_x_pix_wide_adjust(struct dcss_dpr_ch *ch, u32 pix_wide,
 
 	pix_in_64byte = pix_in_64byte_map[ch->pix_size][ch->tile];
 
+	if (pix_format == DRM_FORMAT_P010)
+		pix_wide = pix_wide * 10 / 8;
+
 	div_64byte_mod = pix_wide % pix_in_64byte;
 	offset = (div_64byte_mod == 0) ? 0 : (pix_in_64byte - div_64byte_mod);
 
@@ -252,7 +259,8 @@ static u32 dcss_dpr_y_pix_high_adjust(struct dcss_dpr_ch *ch, u32 pix_high,
 	return pix_high + offset;
 }
 
-void dcss_dpr_set_res(struct dcss_soc *dcss, int ch_num, u32 xres, u32 yres)
+void dcss_dpr_set_res(struct dcss_soc *dcss, int ch_num, u32 xres, u32 yres,
+		      u32 adj_w, u32 adj_h)
 {
 	struct dcss_dpr_priv *dpr = dcss->dpr_priv;
 	struct dcss_dpr_ch *ch = &dpr->ch[ch_num];
@@ -261,21 +269,36 @@ void dcss_dpr_set_res(struct dcss_soc *dcss, int ch_num, u32 xres, u32 yres)
 	u32 gap = DCSS_DPR_FRAME_2P_BASE_ADDR - DCSS_DPR_FRAME_1P_BASE_ADDR;
 	u32 pix_format = dpr->ch[ch_num].pix_format;
 
-	if (pix_format == DRM_FORMAT_NV12 || pix_format == DRM_FORMAT_NV21)
+	if (pix_format == DRM_FORMAT_NV12 ||
+	    pix_format == DRM_FORMAT_NV21 ||
+	    pix_format == DRM_FORMAT_P010)
 		max_planes = 2;
+
+	if (pix_format == DRM_FORMAT_P010)
+		adj_w = adj_w * 10 / 8;
 
 	for (plane = 0; plane < max_planes; plane++) {
 		yres = plane == 1 ? yres >> 1 : yres;
 
 		pix_x_wide = dcss_dpr_x_pix_wide_adjust(ch, xres, pix_format);
 		pix_y_high = dcss_dpr_y_pix_high_adjust(ch, yres, pix_format);
+
+		/* DTRC may need another width alignment. If it does, use it. */
+		if (pix_x_wide < adj_w)
+			pix_x_wide = adj_w;
+
+		if (pix_y_high != adj_h)
+			pix_y_high = plane == 0 ? adj_h : adj_h >> 1;
+
+		if (plane == 0)
+			ch->pitch = pix_x_wide;
+
 		dcss_dpr_write(dpr, ch_num, pix_x_wide,
 			       DCSS_DPR_FRAME_1P_PIX_X_CTRL + plane * gap);
 		dcss_dpr_write(dpr, ch_num, pix_y_high,
 			       DCSS_DPR_FRAME_1P_PIX_Y_CTRL + plane * gap);
 
-		dcss_dpr_write(dpr,
-			       ch_num, xres < 1920 ? 2 : xres > 1920 ? 6 : 5,
+		dcss_dpr_write(dpr, ch_num, ch->use_dtrc ? 7 : 2,
 			       DCSS_DPR_FRAME_1P_CTRL0 + plane * gap);
 	}
 }
@@ -286,11 +309,21 @@ void dcss_dpr_addr_set(struct dcss_soc *dcss, int ch_num, u32 luma_base_addr,
 {
 	struct dcss_dpr_ch *ch = &dcss->dpr_priv->ch[ch_num];
 
-	dcss_dpr_write(dcss->dpr_priv, ch_num, luma_base_addr,
-		       DCSS_DPR_FRAME_1P_BASE_ADDR);
+	if (ch->use_dtrc) {
+		luma_base_addr = 0x0;
+		chroma_base_addr = 0x10000000;
+	}
 
-	dcss_dpr_write(dcss->dpr_priv, ch_num, chroma_base_addr,
-		       DCSS_DPR_FRAME_2P_BASE_ADDR);
+	if (!dcss_dtrc_is_running(dcss, ch_num)) {
+		dcss_dpr_write(dcss->dpr_priv, ch_num, luma_base_addr,
+			       DCSS_DPR_FRAME_1P_BASE_ADDR);
+
+		dcss_dpr_write(dcss->dpr_priv, ch_num, chroma_base_addr,
+			       DCSS_DPR_FRAME_2P_BASE_ADDR);
+	}
+
+	if (ch->use_dtrc)
+		pitch = ch->pitch;
 
 	ch->frame_ctrl &= ~PITCH_MASK;
 	ch->frame_ctrl |= ((pitch << PITCH_POS) & PITCH_MASK);
@@ -385,9 +418,9 @@ void dcss_dpr_enable(struct dcss_soc *dcss, int ch_num, bool en)
 {
 	struct dcss_dpr_priv *dpr = dcss->dpr_priv;
 	struct dcss_dpr_ch *ch = &dpr->ch[ch_num];
+	u32 sys_ctrl;
 
-	ch->sys_ctrl &= ~(REPEAT_EN | RUN_EN);
-	ch->sys_ctrl |= (en ? REPEAT_EN | RUN_EN : 0);
+	sys_ctrl = (en ? REPEAT_EN | RUN_EN : 0);
 
 	if (en) {
 		dcss_dpr_write(dpr, ch_num, ch->mode_ctrl, DCSS_DPR_MODE_CTRL0);
@@ -397,7 +430,11 @@ void dcss_dpr_enable(struct dcss_soc *dcss, int ch_num, bool en)
 			       DCSS_DPR_RTRAM_CTRL0);
 	}
 
-	dcss_dpr_write(dpr, ch_num, ch->sys_ctrl, DCSS_DPR_SYSTEM_CTRL0);
+	if (ch->sys_ctrl != sys_ctrl)
+		dcss_dpr_write(dpr, ch_num, sys_ctrl,
+			       DCSS_DPR_SYSTEM_CTRL0);
+
+	ch->sys_ctrl = sys_ctrl;
 }
 EXPORT_SYMBOL(dcss_dpr_enable);
 
@@ -448,6 +485,7 @@ static void dcss_dpr_rtram_set(struct dcss_soc *dcss, int ch_num,
 	switch (pix_format) {
 	case DRM_FORMAT_NV21:
 	case DRM_FORMAT_NV12:
+	case DRM_FORMAT_P010:
 		ch->rtram_3buf_en = 1;
 		ch->rtram_4line_en = 0;
 		break;
@@ -466,9 +504,10 @@ static void dcss_dpr_rtram_set(struct dcss_soc *dcss, int ch_num,
 	ch->mode_ctrl |= (val & mask);
 
 	/* TODO: Should the thresholds be hardcoded? */
-	val = (3 << THRES_LOW_POS) & THRES_LOW_MASK;
+	val = (ch->rtram_4line_en ? 0 : NUM_ROWS_ACTIVE);
+	val |= (3 << THRES_LOW_POS) & THRES_LOW_MASK;
 	val |= (4 << THRES_HIGH_POS) & THRES_HIGH_MASK;
-	mask = THRES_LOW_MASK | THRES_HIGH_MASK;
+	mask = THRES_LOW_MASK | THRES_HIGH_MASK | NUM_ROWS_ACTIVE;
 
 	ch->rtram_ctrl &= ~mask;
 	ch->rtram_ctrl |= (val & mask);
@@ -528,6 +567,7 @@ static int dcss_dpr_get_bpp(u32 pix_format)
 	switch (pix_format) {
 	case DRM_FORMAT_NV12:
 	case DRM_FORMAT_NV21:
+	case DRM_FORMAT_P010:
 		bpp = 8;
 		break;
 
@@ -546,17 +586,56 @@ static int dcss_dpr_get_bpp(u32 pix_format)
 	return bpp;
 }
 
-void dcss_dpr_format_set(struct dcss_soc *dcss, int ch_num, u32 pix_format)
+void dcss_dpr_tile_derive(struct dcss_soc *dcss,
+			  int ch_num,
+			  uint64_t modifier)
+{
+	struct dcss_dpr_ch *ch = &dcss->dpr_priv->ch[ch_num];
+
+	switch (ch_num) {
+	case 0:
+		switch (modifier) {
+		case DRM_FORMAT_MOD_LINEAR:
+			dcss_dpr_tile_set(dcss, ch_num, TILE_LINEAR);
+			ch->tile = TILE_LINEAR;
+			break;
+		case DRM_FORMAT_MOD_VIVANTE_TILED:
+			dcss_dpr_tile_set(dcss, ch_num, TILE_GPU_STANDARD);
+			ch->tile = TILE_GPU_STANDARD;
+			break;
+		case DRM_FORMAT_MOD_VIVANTE_SUPER_TILED:
+		case DRM_FORMAT_MOD_VIVANTE_SUPER_TILED_FC:
+			dcss_dpr_tile_set(dcss, ch_num, TILE_GPU_SUPER);
+			ch->tile = TILE_GPU_SUPER;
+			break;
+		default:
+			WARN_ON(1);
+			break;
+		}
+		break;
+	case 1:
+	case 2:
+		dcss_dpr_tile_set(dcss, ch_num, TILE_LINEAR);
+		ch->tile = TILE_LINEAR;
+		break;
+	default:
+		WARN_ON(1);
+		return;
+	}
+}
+EXPORT_SYMBOL(dcss_dpr_tile_set);
+
+void dcss_dpr_format_set(struct dcss_soc *dcss, int ch_num, u32 pix_format,
+			 bool modifiers_present)
 {
 	struct dcss_dpr_ch *ch = &dcss->dpr_priv->ch[ch_num];
 	enum dcss_color_space dcss_cs;
-
-	dev_dbg(dcss->dev, "%s\n", __func__);
 
 	dcss_cs = dcss_drm_fourcc_to_colorspace(pix_format);
 	ch->planes = drm_format_num_planes(pix_format);
 	ch->bpp = dcss_dpr_get_bpp(pix_format);
 	ch->pix_format = pix_format;
+	ch->use_dtrc = ch_num && modifiers_present;
 
 	dev_dbg(dcss->dev, "pix_format = %s, colorspace = %d, bpp = %d\n",
 		drm_get_format_name(pix_format), dcss_cs, ch->bpp);
@@ -570,9 +649,5 @@ void dcss_dpr_format_set(struct dcss_soc *dcss, int ch_num, u32 pix_format)
 	dcss_dpr_2plane_en(dcss, ch_num, ch->planes == 2 ? true : false);
 
 	dcss_dpr_rtram_set(dcss, ch_num, pix_format);
-
-	/* TODO: do not hardcode tile type */
-	dcss_dpr_tile_set(dcss, ch_num, TILE_LINEAR);
-	ch->tile = TILE_LINEAR;
 }
 EXPORT_SYMBOL(dcss_dpr_format_set);

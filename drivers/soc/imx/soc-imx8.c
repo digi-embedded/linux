@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2016 Freescale Semiconductor, Inc.
- * Copyright 2017 NXP
+ * Copyright 2017-2018 NXP
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -103,6 +103,7 @@ static u32 imx_init_revision_from_scu(void)
 	sc_err_t sc_err = SC_ERR_NONE;
 	sc_ipc_t ipc_handle;
 	u32 id, rev;
+	u32 uid_l = 0, uid_h = 0;
 
 	sc_err = sc_ipc_getMuID(&mu_id);
 	if (sc_err != SC_ERR_NONE) {
@@ -118,7 +119,7 @@ static u32 imx_init_revision_from_scu(void)
 		return IMX_CHIP_REVISION_UNKNOWN;
 	};
 
-	sc_err = sc_misc_get_control(ipc_handle, SC_R_SC_PID0, SC_C_ID, &id);
+	sc_err = sc_misc_get_control(ipc_handle, SC_R_SYSTEM, SC_C_ID, &id);
 	if (sc_err != SC_ERR_NONE) {
 		WARN(1, "%s: Cannot get control\n", __func__);
 
@@ -131,6 +132,12 @@ static u32 imx_init_revision_from_scu(void)
 
 	imx8_set_soc_id(id);
 	imx8_set_soc_revision(rev);
+
+	sc_misc_unique_id(ipc_handle, &uid_l, &uid_h);
+
+	imx8_soc_uid = uid_h;
+	imx8_soc_uid <<= 32;
+	imx8_soc_uid |= uid_l;
 
 	return rev;
 }
@@ -191,6 +198,12 @@ static u32 imx8mq_soc_revision(void)
 	return imx_init_revision_from_atf();
 }
 
+static u32 imx8mm_soc_revision(void)
+{
+	imx8_soc_uid = imx8mq_soc_get_soc_uid();
+	return imx_init_revision_from_atf();
+}
+
 static struct imx8_soc_data imx8qm_soc_data = {
 	.name = "i.MX8QM",
 	.soc_revision = imx8qm_soc_revision,
@@ -206,10 +219,18 @@ static struct imx8_soc_data imx8mq_soc_data = {
 	.soc_revision = imx8mq_soc_revision,
 };
 
+static struct imx8_soc_data imx8mm_soc_data = {
+	.name = "i.MX8MM",
+	.soc_revision = imx8mm_soc_revision,
+};
+
 static const struct of_device_id imx8_soc_match[] = {
 	{ .compatible = "fsl,imx8qm", .data = &imx8qm_soc_data, },
 	{ .compatible = "fsl,imx8qxp", .data = &imx8qxp_soc_data, },
 	{ .compatible = "fsl,imx8mq", .data = &imx8mq_soc_data, },
+	{ .compatible = "fsl,imx8mm", .data = &imx8mm_soc_data, },
+	/* Fixme: this is a hack for big/little xen guest, b0 no need this */
+	{ .compatible = "xen,xenvm", .data = &imx8qm_soc_data, },
 	{ }
 };
 
@@ -251,7 +272,7 @@ static ssize_t imx8_get_soc_uid(struct device *dev,
 			struct device_attribute *attr,
 			char *buf)
 {
-	return sprintf(buf, "%016llx\n", imx8_soc_uid);
+	return sprintf(buf, "%016llX\n", imx8_soc_uid);
 }
 
 static struct device_attribute imx8_uid =
@@ -403,7 +424,8 @@ static void __init imx8mq_opp_init(void)
 		goto put_node;
 	}
 
-	imx8mq_opp_check_speed_grading(cpu_dev);
+	if (of_machine_is_compatible("fsl,imx8mq"))
+		imx8mq_opp_check_speed_grading(cpu_dev);
 
 put_node:
 	of_node_put(np);
@@ -411,7 +433,8 @@ put_node:
 
 static int __init imx8_register_cpufreq(void)
 {
-	if (of_machine_is_compatible("fsl,imx8mq")) {
+	if (of_machine_is_compatible("fsl,imx8mq") ||
+		of_machine_is_compatible("fsl,imx8mm")) {
 		imx8mq_opp_init();
 		platform_device_register_simple("imx8mq-cpufreq", -1, NULL, 0);
 	} else {

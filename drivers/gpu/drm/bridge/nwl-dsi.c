@@ -188,6 +188,7 @@ struct nwl_mipi_dsi {
 	struct drm_bridge		bridge;
 	struct drm_connector		connector;
 	struct mipi_dsi_host		host;
+	struct mipi_dsi_device		*dsi_device;
 
 	struct phy			*phy;
 
@@ -206,6 +207,7 @@ struct nwl_mipi_dsi {
 	u32				lanes;
 	u32				vc;
 	unsigned long			dsi_mode_flags;
+	bool				no_clk_reset;
 	bool				enabled;
 };
 
@@ -219,20 +221,52 @@ static inline u32 nwl_dsi_read(struct nwl_mipi_dsi *dsi, u32 reg)
 	return readl(dsi->base + reg);
 }
 
-static u32 nwl_dsi_get_dpi_pixel_format(enum mipi_dsi_pixel_format format)
+static enum mipi_dsi_pixel_format mipi_dsi_format_from_bus_format(
+		u32 bus_format)
 {
+	switch (bus_format) {
+	case MEDIA_BUS_FMT_RGB565_1X16:
+		return MIPI_DSI_FMT_RGB565;
+	case MEDIA_BUS_FMT_RGB666_1X18:
+		return MIPI_DSI_FMT_RGB666;
+	case MEDIA_BUS_FMT_RGB888_1X24:
+		return MIPI_DSI_FMT_RGB888;
+	default:
+		return MIPI_DSI_FMT_RGB888;
+	}
+}
 
+static enum dpi_interface_color_coding nwl_dsi_get_dpi_interface_color_coding(
+		enum mipi_dsi_pixel_format format)
+{
 	switch (format) {
 	case MIPI_DSI_FMT_RGB565:
-		return 0x00;
+		return DPI_16_BIT_565_PACKED;
 	case MIPI_DSI_FMT_RGB666:
-		return 0x01;
+		return DPI_18_BIT_ALIGNED;
 	case MIPI_DSI_FMT_RGB666_PACKED:
-		return 0x02;
+		return DPI_18_BIT_PACKED;
 	case MIPI_DSI_FMT_RGB888:
-		return 0x03;
+		return DPI_24_BIT;
 	default:
 		return DPI_24_BIT;
+	}
+}
+
+static enum dpi_pixel_format nwl_dsi_get_dpi_pixel_format(
+		enum mipi_dsi_pixel_format format)
+{
+	switch (format) {
+	case MIPI_DSI_FMT_RGB565:
+		return DPI_FMT_16_BIT;
+	case MIPI_DSI_FMT_RGB666:
+		return DPI_FMT_18_BIT;
+	case MIPI_DSI_FMT_RGB666_PACKED:
+		return DPI_FMT_18_BIT_LOOSELY_PACKED;
+	case MIPI_DSI_FMT_RGB888:
+		return DPI_FMT_24_BIT;
+	default:
+		return DPI_FMT_24_BIT;
 	}
 }
 
@@ -295,6 +329,8 @@ unsigned long nwl_dsi_get_bit_clock(struct drm_bridge *bridge,
 {
 	struct nwl_mipi_dsi *dsi;
 	int bpp;
+	u32 bus_format;
+	struct drm_crtc *crtc = 0;
 
 	/* Make sure the bridge is correctly initialized */
 	if (!bridge || !bridge->driver_private)
@@ -304,6 +340,18 @@ unsigned long nwl_dsi_get_bit_clock(struct drm_bridge *bridge,
 
 	if (dsi->lanes < 1 || dsi->lanes > 4)
 		return 0;
+
+	/* if CTRC updated the bus format, update dsi->format */
+	if (dsi->bridge.encoder)
+		crtc = dsi->bridge.encoder->crtc;
+	if (crtc && crtc->mode.private_flags & 0x1) {
+		bus_format = (crtc->mode.private_flags & 0x1FFFE) >> 1;
+		dsi->format = mipi_dsi_format_from_bus_format(bus_format);
+		/* propagate the format to the attached panel/bridge */
+		dsi->dsi_device->format = dsi->format;
+		/* clear bus format change indication*/
+		crtc->mode.private_flags &= ~0x1;
+	}
 
 	bpp = mipi_dsi_pixel_format_to_bpp(dsi->format);
 
@@ -338,12 +386,19 @@ static void nwl_dsi_config_host(struct nwl_mipi_dsi *dsi)
 
 static void nwl_dsi_config_dpi(struct nwl_mipi_dsi *dsi)
 {
+	struct device *dev = dsi->dev;
 	struct videomode *vm = &dsi->vm;
-	u32 color_format = nwl_dsi_get_dpi_pixel_format(dsi->format);
+	enum dpi_pixel_format pixel_format =
+			nwl_dsi_get_dpi_pixel_format(dsi->format);
+	enum dpi_interface_color_coding color_coding =
+			nwl_dsi_get_dpi_interface_color_coding(dsi->format);
 	bool burst_mode;
 
-	nwl_dsi_write(dsi, INTERFACE_COLOR_CODING, DPI_24_BIT);
-	nwl_dsi_write(dsi, PIXEL_FORMAT, color_format);
+	nwl_dsi_write(dsi, INTERFACE_COLOR_CODING, color_coding);
+	nwl_dsi_write(dsi, PIXEL_FORMAT, pixel_format);
+	DRM_DEV_DEBUG_DRIVER(dev, "DSI format is: %d (CC=%d, PF=%d)\n",
+			dsi->format, color_coding, pixel_format);
+
 	/*TODO: need to make polarity configurable */
 	nwl_dsi_write(dsi, VSYNC_POLARITY, 0x00);
 	nwl_dsi_write(dsi, HSYNC_POLARITY, 0x00);
@@ -488,6 +543,8 @@ static int nwl_dsi_host_attach(struct mipi_dsi_host *host,
 
 	if (device->lanes < 1 || device->lanes > 4)
 		return -EINVAL;
+
+	dsi->dsi_device = device;
 
 	/*
 	 * Someone has attached to us; it could be a panel or another bridge.
@@ -1000,11 +1057,14 @@ static void nwl_dsi_bridge_detach(struct drm_bridge *bridge)
 	if (dsi->panel) {
 		drm_panel_detach(dsi->panel);
 		drm_connector_cleanup(&dsi->connector);
+		dsi->panel = NULL;
 	} else if (dsi->next_bridge) {
 		drm_bridge_detach(dsi->next_bridge);
 		nwl_dsi_del_bridge(dsi->next_bridge->encoder, dsi->next_bridge);
+		dsi->next_bridge = NULL;
 	}
-	mipi_dsi_host_unregister(&dsi->host);
+	if (dsi->host.dev)
+		mipi_dsi_host_unregister(&dsi->host);
 }
 
 static void nwl_dsi_bridge_enable(struct drm_bridge *bridge)
@@ -1031,34 +1091,47 @@ static void nwl_dsi_bridge_enable(struct drm_bridge *bridge)
 
 	nwl_dsi_enable_clocks(dsi, CLK_PHY_REF | CLK_TX_ESC);
 
-	nwl_dsi_config_host(dsi);
-	nwl_dsi_config_dpi(dsi);
-
 	phy_init(dsi->phy);
 
 	ret = phy_power_on(dsi->phy);
 	if (ret < 0) {
 		DRM_DEV_ERROR(dev, "Failed to power on DPHY (%d)\n", ret);
-		return;
+		goto phy_err;
 	}
 
 	nwl_dsi_init_interrupts(dsi);
+	nwl_dsi_config_dpi(dsi);
 
 	if (dsi->panel && drm_panel_prepare(dsi->panel)) {
 		DRM_DEV_ERROR(dev, "Failed to setup panel\n");
-		return;
+		goto prepare_err;
+	}
+
+	nwl_dsi_config_host(dsi);
+
+	if (dsi->panel && drm_panel_enable(dsi->panel)) {
+		DRM_DEV_ERROR(dev, "Failed to enable panel\n");
+		drm_panel_unprepare(dsi->panel);
+		goto enable_err;
 	}
 
 	if (dsi->dsi_mode_flags & MIPI_DSI_CLOCK_NON_CONTINUOUS)
 		nwl_dsi_write(dsi, CFG_NONCONTINUOUS_CLK, 0x00);
 
-	if (dsi->panel && drm_panel_enable(dsi->panel)) {
-		DRM_DEV_ERROR(dev, "Failed to enable panel\n");
-		drm_panel_unprepare(dsi->panel);
-		return;
-	}
-
 	dsi->enabled = true;
+
+	return;
+
+enable_err:
+	drm_panel_unprepare(dsi->panel);
+
+prepare_err:
+	phy_power_off(dsi->phy);
+
+phy_err:
+	phy_exit(dsi->phy);
+	nwl_dsi_disable_clocks(dsi, CLK_PHY_REF | CLK_TX_ESC);
+	devm_free_irq(dev, dsi->irq, dsi);
 }
 
 static void nwl_dsi_bridge_disable(struct drm_bridge *bridge)
@@ -1077,11 +1150,13 @@ static void nwl_dsi_bridge_disable(struct drm_bridge *bridge)
 		drm_panel_unprepare(dsi->panel);
 	}
 
-	nwl_dsi_disable_clocks(dsi, CLK_PHY_REF | CLK_TX_ESC);
-	devm_free_irq(dev, dsi->irq, dsi);
-
 	phy_power_off(dsi->phy);
 	phy_exit(dsi->phy);
+
+	if (!dsi->no_clk_reset)
+		nwl_dsi_disable_clocks(dsi, CLK_PHY_REF | CLK_TX_ESC);
+
+	devm_free_irq(dev, dsi->irq, dsi);
 
 	dsi->enabled = false;
 }
@@ -1163,6 +1238,8 @@ static int nwl_dsi_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
+	dsi->no_clk_reset = of_property_read_bool(dev->of_node, "no_clk_reset");
+
 	dsi->dev = dev;
 	platform_set_drvdata(pdev, dsi);
 
@@ -1171,24 +1248,17 @@ static int nwl_dsi_probe(struct platform_device *pdev)
 	dsi->bridge.of_node = dev->of_node;
 
 	ret = drm_bridge_add(&dsi->bridge);
-	if (ret < 0) {
+	if (ret < 0)
 		dev_err(dev, "Failed to add nwl-dsi bridge (%d)\n", ret);
-		goto err_host;
-	}
 
-	return 0;
-
-err_host:
-	mipi_dsi_host_unregister(&dsi->host);
 	return ret;
-
 }
 
 static int nwl_dsi_remove(struct platform_device *pdev)
 {
 	struct nwl_mipi_dsi *dsi = platform_get_drvdata(pdev);
 
-	mipi_dsi_host_unregister(&dsi->host);
+	drm_bridge_remove(&dsi->bridge);
 
 	return 0;
 }

@@ -2,12 +2,13 @@
  * Controller-level driver, kernel property detection, initialization
  *
  * Copyright 2008-2016 Freescale Semiconductor, Inc.
- * Copyright 2017 NXP
+ * Copyright 2017-2018 NXP
  */
 
 #include <linux/device.h>
 #include <linux/of_address.h>
 #include <linux/of_irq.h>
+#include <linux/pm_domain.h>
 
 #include "compat.h"
 #include "regs.h"
@@ -445,6 +446,8 @@ static int enable_jobrings(struct caam_drv_private *ctrlpriv, int block_offset)
 					ring);
 				continue;
 			}
+			/* Power up the job ring.*/
+			genpd_dev_pm_attach(&ctrlpriv->jrpdev[ring]->dev);
 
 			if (of_property_read_u32_index(np, "reg", 0, &index)) {
 				pr_warn("%s read reg property error %d.",
@@ -454,7 +457,7 @@ static int enable_jobrings(struct caam_drv_private *ctrlpriv, int block_offset)
 			/* Get actual job ring index from its offset
 			 * ex: CAAM JR2 offset 0x30000 index = 2
 			 */
-			while (index > 16)
+			while (index >= 16)
 				index = index >> 4;
 			index -= 1;
 			ctrlpriv->jr[index] = (struct caam_job_ring __force *)
@@ -464,6 +467,7 @@ static int enable_jobrings(struct caam_drv_private *ctrlpriv, int block_offset)
 			ctrlpriv->total_jobrs++;
 			ring++;
 		}
+
 	return 0;
 }
 
@@ -578,6 +582,7 @@ static int caam_probe(struct platform_device *pdev)
 	u64 caam_id;
 	struct device *dev;
 	struct device_node *nprop, *np;
+	struct resource res_regs;
 	struct caam_ctrl __iomem *ctrl;
 	struct caam_drv_private *ctrlpriv;
 	u32 comp_params;
@@ -652,11 +657,25 @@ static int caam_probe(struct platform_device *pdev)
 		goto disable_clocks;
 	}
 
-	ctrlpriv->sm_base = of_iomap(np, 0);
+	/* Get CAAM SM registers base address from device tree */
+	ret = of_address_to_resource(np, 0, &res_regs);
+	if (ret) {
+		dev_err(dev, "failed to retrieve registers base from device tree\n");
+		ret = -ENODEV;
+		goto disable_clocks;
+	}
+
+	ctrlpriv->sm_phy = res_regs.start;
+	ctrlpriv->sm_base = devm_ioremap_resource(dev, &res_regs);
+	if (IS_ERR(ctrlpriv->sm_base)) {
+		ret = PTR_ERR(ctrlpriv->sm_base);
+		goto disable_clocks;
+	}
+
 	if (!of_machine_is_compatible("fsl,imx8mq") &&
 	     !of_machine_is_compatible("fsl,imx8qm") &&
 	     !of_machine_is_compatible("fsl,imx8qxp"))
-		ctrlpriv->sm_size = 0x3fff;
+		ctrlpriv->sm_size = resource_size(&res_regs);
 	else
 	    ctrlpriv->sm_size = PG_SIZE_64K;
 
@@ -717,8 +736,8 @@ iounmap_ctrl:
 	iounmap(ctrl);
 disable_clocks:
 	if (!of_machine_is_compatible("fsl,imx8mq") &&
-	    !of_machine_is_compatible("fsl,imx8qm") &&
-	    !of_machine_is_compatible("fsl,imx8qxp")) {
+	     !of_machine_is_compatible("fsl,imx8qm") &&
+	     !of_machine_is_compatible("fsl,imx8qxp")) {
 		clk_disable_unprepare(ctrlpriv->caam_emi_slow);
 		clk_disable_unprepare(ctrlpriv->caam_aclk);
 		clk_disable_unprepare(ctrlpriv->caam_mem);

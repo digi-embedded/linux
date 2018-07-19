@@ -38,6 +38,8 @@
 
 static void cdns3_usb_phy_init(void __iomem *regs)
 {
+	u32 value;
+
 	pr_debug("begin of %s\n", __func__);
 
 	writel(0x0830, regs + PHY_PMA_CMN_CTRL1);
@@ -65,7 +67,7 @@ static void cdns3_usb_phy_init(void __iomem *regs)
 	writel(0x7798, regs + TB_ADDR_TX_PSC_A1);
 	writel(0x509b, regs + TB_ADDR_TX_PSC_A2);
 	writel(0x3, regs + TB_ADDR_TX_DIAG_ECTRL_OVRD);
-	writel(0x5098, regs + TB_ADDR_TX_PSC_A3);
+	writel(0x509b, regs + TB_ADDR_TX_PSC_A3);
 	writel(0x2090, regs + TB_ADDR_TX_PSC_CAL);
 	writel(0x2090, regs + TB_ADDR_TX_PSC_RDY);
 
@@ -118,6 +120,11 @@ static void cdns3_usb_phy_init(void __iomem *regs)
 	writel(0x01e0, regs + TB_ADDR_TX_RCVDET_ST_TMR);
 	writel(0x0090, regs + TB_ADDR_XCVR_DIAG_LANE_FCM_EN_MGN_TMR);
 
+	/* RXDET_IN_P3_32KHZ, Receiver detect slow clock enable */
+	value = readl(regs + TB_ADDR_TX_RCVDETSC_CTRL);
+	value |= RXDET_IN_P3_32KHZ;
+	writel(value, regs + TB_ADDR_TX_RCVDETSC_CTRL);
+
 	udelay(10);
 
 	pr_debug("end of %s\n", __func__);
@@ -159,6 +166,8 @@ static void cdns_set_role(struct cdns3 *cdns, enum cdns3_roles role)
 		writel(value, cdns->none_core_regs + USB3_CORE_CTRL1);
 		mdelay(1);
 		cdns3_usb_phy_init(cdns->phy_regs);
+		/* Force B Session Valid as 1 */
+		writel(0x0060, cdns->phy_regs + 0x380a4);
 		mdelay(1);
 
 		value = readl(cdns->none_core_regs + USB3_INT_REG);
@@ -192,6 +201,8 @@ static void cdns_set_role(struct cdns3 *cdns, enum cdns3_roles role)
 		writel(value, cdns->none_core_regs + USB3_CORE_CTRL1);
 
 		cdns3_usb_phy_init(cdns->phy_regs);
+		/* Force B Session Valid as 1 */
+		writel(0x0060, cdns->phy_regs + 0x380a4);
 		value = readl(cdns->none_core_regs + USB3_INT_REG);
 		value |= DEV_INT_EN;
 		writel(value, cdns->none_core_regs + USB3_INT_REG);
@@ -376,7 +387,7 @@ static void cdns3_remove_roles(struct cdns3 *cdns)
 	cdns3_host_remove(cdns);
 }
 
-static int cdsn3_do_role_switch(struct cdns3 *cdns, enum cdns3_roles role)
+static int cdns3_do_role_switch(struct cdns3 *cdns, enum cdns3_roles role)
 {
 	int ret = 0;
 	enum cdns3_roles current_role;
@@ -398,10 +409,6 @@ static int cdsn3_do_role_switch(struct cdns3 *cdns, enum cdns3_roles role)
 	}
 
 	cdns_set_role(cdns, role);
-	if (role == CDNS3_ROLE_GADGET || role == CDNS3_ROLE_HOST)
-		/* Force B Session Valid as 1 */
-		writel(0x0060, cdns->phy_regs + 0x380a4);
-
 	ret = cdns3_role_start(cdns, role);
 	if (ret) {
 		/* Back to current role */
@@ -420,6 +427,9 @@ static int cdsn3_do_role_switch(struct cdns3 *cdns, enum cdns3_roles role)
  *
  * @work: work queue item structure
  *
+ * Handles below events:
+ * - Role switch for dual-role devices
+ * - CDNS3_ROLE_GADGET <--> CDNS3_ROLE_END for peripheral-only devices
  */
 static void cdns3_role_switch(struct work_struct *work)
 {
@@ -430,12 +440,16 @@ static void cdns3_role_switch(struct work_struct *work)
 	host = extcon_get_state(cdns->extcon, EXTCON_USB_HOST);
 	device = extcon_get_state(cdns->extcon, EXTCON_USB);
 
-	if (host)
-		cdsn3_do_role_switch(cdns, CDNS3_ROLE_HOST);
-	else if (device)
-		cdsn3_do_role_switch(cdns, CDNS3_ROLE_GADGET);
+	if (host) {
+		if (cdns->roles[CDNS3_ROLE_HOST])
+			cdns3_do_role_switch(cdns, CDNS3_ROLE_HOST);
+		return;
+	}
+
+	if (device)
+		cdns3_do_role_switch(cdns, CDNS3_ROLE_GADGET);
 	else
-		cdsn3_do_role_switch(cdns, CDNS3_ROLE_END);
+		cdns3_do_role_switch(cdns, CDNS3_ROLE_END);
 }
 
 static int cdns3_extcon_notifier(struct notifier_block *nb, unsigned long event,
@@ -567,14 +581,16 @@ static int cdns3_probe(struct platform_device *pdev)
 	if (ret)
 		goto err1;
 
-	INIT_WORK(&cdns->role_switch_wq, cdns3_role_switch);
-	ret = cdns3_register_extcon(cdns);
-	if (ret)
-		goto err2;
-
 	ret = cdns3_core_init_role(cdns);
 	if (ret)
 		goto err2;
+
+	if (cdns->roles[CDNS3_ROLE_GADGET]) {
+		INIT_WORK(&cdns->role_switch_wq, cdns3_role_switch);
+		ret = cdns3_register_extcon(cdns);
+		if (ret)
+			goto err3;
+	}
 
 	cdns->role = cdns3_get_role(cdns);
 	dev_dbg(dev, "the init role is %d\n", cdns->role);
@@ -594,7 +610,12 @@ static int cdns3_probe(struct platform_device *pdev)
 	device_set_wakeup_capable(dev, true);
 	pm_runtime_set_active(dev);
 	pm_runtime_enable(dev);
-	pm_runtime_set_autosuspend_delay(dev, 2000);
+	/*
+	 * The controller needs less time between bus and controller suspend,
+	 * and we also needs a small delay to avoid frequently entering low
+	 * power mode.
+	 */
+	pm_runtime_set_autosuspend_delay(dev, 20);
 	pm_runtime_mark_last_busy(dev);
 	pm_runtime_use_autosuspend(dev);
 	dev_dbg(dev, "Cadence USB3 core: probe succeed\n");
@@ -673,7 +694,6 @@ static void cdns3_enter_suspend(struct cdns3 *cdns, bool suspend, bool wakeup)
 {
 	void __iomem *otg_regs = cdns->otg_regs;
 	void __iomem *xhci_regs = cdns->xhci_regs;
-	void __iomem *phy_regs = cdns->phy_regs;
 	void __iomem *none_core_regs = cdns->none_core_regs;
 	u32 value;
 	int timeout_us = 100000;
@@ -681,6 +701,7 @@ static void cdns3_enter_suspend(struct cdns3 *cdns, bool suspend, bool wakeup)
 	if (cdns->role != CDNS3_ROLE_HOST)
 		return;
 
+	disable_irq(cdns->irq);
 	if (suspend) {
 		value = readl(otg_regs + OTGREFCLK);
 		value |= OTG_STB_CLK_SWITCH_EN;
@@ -692,10 +713,6 @@ static void cdns3_enter_suspend(struct cdns3 *cdns, bool suspend, bool wakeup)
 		if (cdns3_role(cdns)->suspend)
 			cdns3_role(cdns)->suspend(cdns, wakeup);
 
-		/* RXDET_IN_P3_32KHZ, Receiver detect slow clock enable */
-		value = readl(phy_regs + TB_ADDR_TX_RCVDETSC_CTRL);
-		value |= RXDET_IN_P3_32KHZ;
-		writel(value, phy_regs + TB_ADDR_TX_RCVDETSC_CTRL);
 		/*
 		 * SW should ensure LPM_2_STB_SWITCH_EN and RXDET_IN_P3_32KHZ
 		 * are aligned before setting CFG_RXDET_P3_EN
@@ -751,9 +768,6 @@ static void cdns3_enter_suspend(struct cdns3 *cdns, bool suspend, bool wakeup)
 
 		dev_dbg(cdns->dev, "phy_refclk_req cleared\n");
 
-		/* rxdet fix in P3, default is 0x5098 */
-		writel(0x509b, phy_regs + TB_ADDR_TX_PSC_A3);
-
 		cdns3_set_wakeup(none_core_regs, true);
 	} else {
 		value = readl(none_core_regs + USB3_INT_REG);
@@ -776,11 +790,6 @@ static void cdns3_enter_suspend(struct cdns3 *cdns, bool suspend, bool wakeup)
 		value &= ~CFG_RXDET_P3_EN;
 		writel(value, xhci_regs + XECP_AUX_CTRL_REG1);
 
-		/* clear RXDET_IN_P3_32KHZ */
-		value = readl(phy_regs + TB_ADDR_TX_RCVDETSC_CTRL);
-		value &= ~RXDET_IN_P3_32KHZ;
-		writel(value, phy_regs + TB_ADDR_TX_RCVDETSC_CTRL);
-
 		/* clear mdctrl_clk_sel */
 		value = readl(none_core_regs + USB3_CORE_CTRL1);
 		value &= ~MDCTRL_CLK_SEL;
@@ -798,8 +807,6 @@ static void cdns3_enter_suspend(struct cdns3 *cdns, bool suspend, bool wakeup)
 			dev_err(cdns->dev, "wait mdctrl_clk_status timeout\n");
 
 		dev_dbg(cdns->dev, "mdctrl_clk_status cleared\n");
-
-		writel(0x5098, phy_regs + TB_ADDR_TX_PSC_A3);
 
 		/* Wait until OTG_NRDY is 0 */
 		value = readl(otg_regs + OTGSTS);
@@ -822,6 +829,7 @@ static void cdns3_enter_suspend(struct cdns3 *cdns, bool suspend, bool wakeup)
 		if (timeout_us <= 0)
 			dev_err(cdns->dev, "wait xhci_power_on_ready timeout\n");
 	}
+	enable_irq(cdns->irq);
 }
 
 #ifdef CONFIG_PM_SLEEP

@@ -2,7 +2,7 @@
 *
 *    The MIT License (MIT)
 *
-*    Copyright (c) 2014 - 2017 Vivante Corporation
+*    Copyright (c) 2014 - 2018 Vivante Corporation
 *
 *    Permission is hereby granted, free of charge, to any person obtaining a
 *    copy of this software and associated documentation files (the "Software"),
@@ -26,7 +26,7 @@
 *
 *    The GPL License (GPL)
 *
-*    Copyright (C) 2014 - 2017 Vivante Corporation
+*    Copyright (C) 2014 - 2018 Vivante Corporation
 *
 *    This program is free software; you can redistribute it and/or
 *    modify it under the terms of the GNU General Public License
@@ -292,14 +292,6 @@ typedef gctTHREADFUNCRESULT (gctTHREADFUNCTYPE * gctTHREADFUNC) (
 /******************************************************************************\
 ****************************** Kernel Debug Macro ******************************
 \******************************************************************************/
-
-/* Set signal to signaled state for specified process. */
-gceSTATUS
-gckOS_SetSignal(
-    IN gckOS Os,
-    IN gctHANDLE Process,
-    IN gctSIGNAL Signal
-    );
 
 /* Return the kernel logical pointer for the given physical one. */
 gceSTATUS

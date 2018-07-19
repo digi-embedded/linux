@@ -2,7 +2,7 @@
 *
 *    The MIT License (MIT)
 *
-*    Copyright (c) 2014 - 2017 Vivante Corporation
+*    Copyright (c) 2014 - 2018 Vivante Corporation
 *
 *    Permission is hereby granted, free of charge, to any person obtaining a
 *    copy of this software and associated documentation files (the "Software"),
@@ -26,7 +26,7 @@
 *
 *    The GPL License (GPL)
 *
-*    Copyright (C) 2014 - 2017 Vivante Corporation
+*    Copyright (C) 2014 - 2018 Vivante Corporation
 *
 *    This program is free software; you can redistribute it and/or
 *    modify it under the terms of the GNU General Public License
@@ -2617,6 +2617,9 @@ gckVIDMEM_NODE_Allocate(
 
     node = pointer;
 
+    node->metadata.magic = VIV_VIDMEM_METADATA_MAGIC;
+    node->metadata.ts_fd = -1;
+
     node->node = VideoNode;
     node->kernel = Kernel;
     node->type = Type;
@@ -2898,10 +2901,17 @@ static struct dma_buf_ops _dmabuf_ops =
     .unmap_dma_buf = _dmabuf_unmap,
     .mmap = _dmabuf_mmap,
     .release = _dmabuf_release,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,12,0)
+    .map_atomic = _dmabuf_kmap,
+    .unmap_atomic = _dmabuf_kunmap,
+    .map = _dmabuf_kmap,
+    .unmap = _dmabuf_kunmap,
+#  else
     .kmap_atomic = _dmabuf_kmap,
     .kunmap_atomic = _dmabuf_kunmap,
     .kmap = _dmabuf_kmap,
     .kunmap = _dmabuf_kunmap,
+#  endif
 };
 #endif
 
@@ -3150,7 +3160,6 @@ OnError:
     gcmkFOOTER();
     return status;
 }
-
 
 typedef struct _gcsVIDMEM_NODE_FDPRIVATE
 {

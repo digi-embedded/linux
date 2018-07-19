@@ -1474,6 +1474,9 @@ static int mxsfb_dispdrv_init(struct platform_device *pdev,
 	struct device *dev = &pdev->dev;
 	char disp_dev[32];
 
+	if (!strlen(host->disp_dev))
+		return 0;
+
 	memset(&setting, 0x0, sizeof(setting));
 	setting.fbi = fbi;
 	memcpy(disp_dev, host->disp_dev, strlen(host->disp_dev));
@@ -1663,6 +1666,7 @@ static void overlayfb_setup(struct mxsfb_layer *ofb)
 			break;
 		case 32: /* ARGB8888 */
 			format = 0x0;
+			global_alpha_en = 1;
 			break;
 		default:
 			return;
@@ -2296,7 +2300,7 @@ static int mxsfb_probe(struct platform_device *pdev)
 		if (ret == -EPROBE_DEFER)
 			dev_info(&pdev->dev,
 				 "Defer fb probe due to dispdrv not ready\n");
-		goto fb_pm_runtime_disable;
+		goto fb_free_videomem;
 	}
 
 	if (!host->dispdrv) {
@@ -2342,6 +2346,8 @@ fb_unregister:
 #endif
 fb_destroy:
 	fb_destroy_modelist(&fb_info->modelist);
+fb_free_videomem:
+	mxsfb_free_videomem(host);
 fb_pm_runtime_disable:
 	clk_disable_pix(host);
 	clk_disable_axi(host);

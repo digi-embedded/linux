@@ -16,8 +16,22 @@ config IMX8_MIPI_CSI2
 	tristate "IMX8 MIPI CSI2 Controller"
 	default y
 
+config IMX8_PARALLEL_CSI
+	tristate "IMX8 PARALLEL CSI Controller"
+	default y
+
 config IMX8_MIPI_CSI2_YAV
 	tristate "IMX8 MIPI CSI2 Controller Yet Another Version"
+	default y
+
+config MXC_CAMERA_OV5640_V3
+	tristate "Maxim OV5640_V3 driver support"
+	depends on I2C
+	default y
+
+config MXC_CAMERA_OV5640_MIPI_V3
+	tristate "Maxim OV5640_MIPI_V3 driver support"
+	depends on I2C
 	default y
 
 config GMSL_MAX9286
@@ -33,6 +47,8 @@ config IMX8_JPEG
 	select V4L2_MEM2MEM_DEV
 	select VIDEOBUF2_DMA_CONTIG
 	default y
+
+source "drivers/media/platform/imx8/hdmi/Kconfig"
 
 endmenu
 endif #VIDEO_MX8_CAPTURE

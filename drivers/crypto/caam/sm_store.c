@@ -1,6 +1,7 @@
 /*
  * CAAM Secure Memory Storage Interface
  * Copyright (C) 2008-2015 Freescale Semiconductor, Inc.
+ * Copyright 2018 NXP
  *
  * Loosely based on the SHW Keystore API for SCC/SCC2
  * Experimental implementation and NOT intended for upstream use. Expect
@@ -36,6 +37,7 @@
 #include "error.h"
 #include "sm.h"
 #include <linux/of_address.h>
+#include <soc/imx8/soc.h>
 
 #define SECMEM_KEYMOD_LEN 8
 #define GENMEM_KEYMOD_LEN 16
@@ -58,50 +60,43 @@ void sm_show_page(struct device *dev, struct sm_page_descriptor *pgdesc)
 
 #define INITIAL_DESCSZ 16	/* size of tmp buffer for descriptor const. */
 
-static __always_inline int sm_set_cmd_reg(struct caam_drv_private_sm *smpriv,
-					  struct caam_drv_private_jr *jrpriv,
-					  u32 val)
-{
-
-	if (smpriv->sm_reg_offset == SM_V1_OFFSET) {
-		struct caam_secure_mem_v1 *sm_regs_v1;
-		sm_regs_v1 = (struct caam_secure_mem_v1 *)
-			((void *)jrpriv->rregs + SM_V1_OFFSET);
-		wr_reg32(&sm_regs_v1->sm_cmd, val);
-
-	} else if (smpriv->sm_reg_offset == SM_V2_OFFSET) {
-		struct caam_secure_mem_v2 *sm_regs_v2;
-		sm_regs_v2 = (struct caam_secure_mem_v2 *)
-			((void *)jrpriv->rregs + SM_V2_OFFSET);
-		wr_reg32(&sm_regs_v2->sm_cmd, val);
-	} else {
-		return -EINVAL;
-	}
-
-	return 0;
-}
-
-static __always_inline u32 sm_get_status_reg(struct caam_drv_private_sm *smpriv,
+static __always_inline u32 sm_send_cmd(struct caam_drv_private_sm *smpriv,
 					     struct caam_drv_private_jr *jrpriv,
-					     u32 *val)
+					     u32 cmd, u32 *status)
 {
+	void __iomem *write_address;
+	void __iomem *read_address;
+
 	if (smpriv->sm_reg_offset == SM_V1_OFFSET) {
 		struct caam_secure_mem_v1 *sm_regs_v1;
 		sm_regs_v1 = (struct caam_secure_mem_v1 *)
 			((void *)jrpriv->rregs + SM_V1_OFFSET);
-		*val = rd_reg32(&sm_regs_v1->sm_status);
+		write_address = &sm_regs_v1->sm_cmd;
+		read_address = &sm_regs_v1->sm_status;
+
 	} else if (smpriv->sm_reg_offset == SM_V2_OFFSET) {
 		struct caam_secure_mem_v2 *sm_regs_v2;
 		sm_regs_v2 = (struct caam_secure_mem_v2 *)
 			((void *)jrpriv->rregs + SM_V2_OFFSET);
-		*val = rd_reg32(&sm_regs_v2->sm_status);
+		write_address = &sm_regs_v2->sm_cmd;
+		read_address = &sm_regs_v2->sm_status;
+
 	} else {
 		return -EINVAL;
 	}
 
+	wr_reg32(write_address, cmd);
+
+	udelay(10);
+
+	/* Read until the command has terminated and the status is correct */
+	do {
+		*status = rd_reg32(read_address);
+	} while (((*status & SMCS_CMDERR_MASK) >>  SMCS_CMDERR_SHIFT)
+				   == SMCS_CMDERR_INCOMP);
+
 	return 0;
 }
-
 /*
  * Construct a black key conversion job descriptor
  *
@@ -136,7 +131,7 @@ static int blacken_key_jobdesc(u32 **desc, void *key, u16 keysz, bool auth)
 
 	/* Load key to class 1 key register */
 	tmpdesc[idx++] = CMD_KEY | CLASS_1 | (keysz & KEY_LENGTH_MASK);
-	tmpdesc[idx++] = (u32)key;
+	tmpdesc[idx++] = (uintptr_t)key;
 
 	/* ...and write back out via FIFO store*/
 	tmpdesc[idx] = CMD_FIFO_STORE | CLASS_1 | (keysz & KEY_LENGTH_MASK);
@@ -148,7 +143,7 @@ static int blacken_key_jobdesc(u32 **desc, void *key, u16 keysz, bool auth)
 		tmpdesc[idx] |= FIFOST_TYPE_KEY_CCM_JKEK;
 
 	idx++;
-	tmpdesc[idx++] = (u32)key;
+	tmpdesc[idx++] = (uintptr_t)key;
 
 	/* finish off the job header */
 	tmpdesc[0] = CMD_DESC_HDR | HDR_ONE | (idx & HDR_DESCLEN_MASK);
@@ -269,7 +264,7 @@ static int blob_encap_jobdesc(u32 **desc, dma_addr_t keymod,
 
 	/* Input data, should be somewhere in secure memory */
 	tmpdesc[idx++] = CMD_SEQ_IN_PTR | secretsz;
-	tmpdesc[idx++] = (u32)secretbuf;
+	tmpdesc[idx++] = (uintptr_t)secretbuf;
 
 	/* Set blob encap, then color */
 	tmpdesc[idx] = CMD_OPERATION | OP_TYPE_ENCAP_PROTOCOL | OP_PCLID_BLOB;
@@ -385,7 +380,7 @@ static int blob_decap_jobdesc(u32 **desc, dma_addr_t keymod, dma_addr_t blobbuf,
 	tmpdesc[idx++] = CMD_SEQ_IN_PTR | (secretsz + BLOB_OVERHEAD);
 	tmpdesc[idx++] = (u32)blobbuf;
 	tmpdesc[idx++] = CMD_SEQ_OUT_PTR | secretsz;
-	tmpdesc[idx++] = (u32)outbuf;
+	tmpdesc[idx++] = (uintptr_t)outbuf;
 
 	/* Decapsulate from secure memory partition to black blob */
 	tmpdesc[idx] = CMD_OPERATION | OP_TYPE_DECAP_PROTOCOL | OP_PCLID_BLOB;
@@ -501,7 +496,7 @@ int slot_dealloc(struct device *dev, u32 unit, u32 slot)
 
 	if (ksdata->slot[slot].allocated == 1) {
 		/* Forcibly overwrite the data from the keystore */
-		memset(ksdata->base_address + slot * smpriv->slot_size, 0,
+		memset_io(ksdata->base_address + slot * smpriv->slot_size, 0,
 		       smpriv->slot_size);
 
 		ksdata->slot[slot].allocated = 0;
@@ -564,7 +559,7 @@ u32 slot_get_base(struct device *dev, u32 unit, u32 slot)
 		slot, (u32)ksdata->base_address);
 #endif
 
-	return (u32)(ksdata->base_address);
+	return (uintptr_t)(ksdata->base_address);
 }
 
 u32 slot_get_offset(struct device *dev, u32 unit, u32 slot)
@@ -784,7 +779,6 @@ int sm_keystore_slot_load(struct device *dev, u32 unit, u32 slot,
 	struct caam_drv_private_sm *smpriv = dev_get_drvdata(dev);
 	int retval = -EINVAL;
 	u32 slot_size;
-	u32 i;
 	u8 __iomem *slot_location;
 
 	spin_lock(&smpriv->kslock);
@@ -798,8 +792,7 @@ int sm_keystore_slot_load(struct device *dev, u32 unit, u32 slot,
 
 	slot_location = smpriv->slot_get_address(dev, unit, slot);
 
-	for (i = 0; i < key_length; i++)
-		slot_location[i] = key_data[i];
+	memcpy_toio(slot_location, key_data, key_length);
 
 	retval = 0;
 
@@ -827,7 +820,7 @@ int sm_keystore_slot_read(struct device *dev, u32 unit, u32 slot,
 		goto out;
 	}
 
-	memcpy(key_data, slot_addr, key_length);
+	memcpy_fromio(key_data, slot_addr, key_length);
 	retval = 0;
 
 out:
@@ -990,10 +983,12 @@ int caam_sm_startup(struct platform_device *pdev)
 	struct device *ctrldev, *smdev;
 	struct caam_drv_private *ctrlpriv;
 	struct caam_drv_private_sm *smpriv;
+	struct platform_device *jrpdev;
 	struct caam_drv_private_jr *jrpriv;	/* need this for reg page */
 	struct platform_device *sm_pdev;
 	struct sm_page_descriptor *lpagedesc;
-	u32 page, pgstat, lpagect, detectedpage, smvid;
+	u32 page, pgstat, lpagect, detectedpage, smvid, smpart;
+	int ret = 0;
 
 	struct device_node *np;
 	ctrldev = &pdev->dev;
@@ -1003,8 +998,10 @@ int caam_sm_startup(struct platform_device *pdev)
 	 * If ctrlpriv is NULL, it's probably because the caam driver wasn't
 	 * properly initialized (e.g. RNG4 init failed). Thus, bail out here.
 	 */
-	if (!ctrlpriv)
-		return -ENODEV;
+	if (!ctrlpriv) {
+		ret = -ENODEV;
+		goto exit;
+	}
 
 	/*
 	 * Set up the private block for secure memory
@@ -1013,25 +1010,21 @@ int caam_sm_startup(struct platform_device *pdev)
 	smpriv = kzalloc(sizeof(struct caam_drv_private_sm), GFP_KERNEL);
 	if (smpriv == NULL) {
 		dev_err(ctrldev, "can't alloc private mem for secure memory\n");
-		return -ENOMEM;
+		ret = -ENOMEM;
+		goto exit;
 	}
 	smpriv->parentdev = ctrldev; /* copy of parent dev is handy */
 	spin_lock_init(&smpriv->kslock);
 
 	/* Create the dev */
-#ifdef CONFIG_OF
 	np = of_find_compatible_node(NULL, NULL, "fsl,imx6q-caam-sm");
 	if (np)
 		of_node_clear_flag(np, OF_POPULATED);
 	sm_pdev = of_platform_device_create(np, "caam_sm", ctrldev);
-#else
-	sm_pdev = platform_device_register_data(ctrldev, "caam_sm", 0,
-						smpriv,
-					sizeof(struct caam_drv_private_sm));
-#endif
+
 	if (sm_pdev == NULL) {
-		kfree(smpriv);
-		return -EINVAL;
+		ret = -EINVAL;
+		goto free_smpriv;
 	}
 
 	/* Save a pointer to the platform device for Secure Memory */
@@ -1041,7 +1034,18 @@ int caam_sm_startup(struct platform_device *pdev)
 	ctrlpriv->smdev = smdev;
 
 	/* Set the Secure Memory Register Map Version */
-	smvid = rd_reg32(&ctrlpriv->ctrl->perfmon.smvid);
+	if (ctrlpriv->has_seco) {
+		int i = ctrlpriv->first_jr_index;
+
+		smvid = rd_reg32(&ctrlpriv->jr[i]->perfmon.smvid);
+		smpart = rd_reg32(&ctrlpriv->jr[i]->perfmon.smpart);
+
+	} else {
+		smvid = rd_reg32(&ctrlpriv->ctrl->perfmon.smvid);
+		smpart = rd_reg32(&ctrlpriv->ctrl->perfmon.smpart);
+
+	}
+
 	if (smvid < SMVID_V2)
 		smpriv->sm_reg_offset = SM_V1_OFFSET;
 	else
@@ -1051,16 +1055,14 @@ int caam_sm_startup(struct platform_device *pdev)
 	 * Collect configuration limit data for reference
 	 * This batch comes from the partition data/vid registers in perfmon
 	 */
-	smpriv->max_pages = ((rd_reg32(&ctrlpriv->ctrl->perfmon.smpart)
-			    & SMPART_MAX_NUMPG_MASK) >>
+	smpriv->max_pages = ((smpart & SMPART_MAX_NUMPG_MASK) >>
 			    SMPART_MAX_NUMPG_SHIFT) + 1;
-	smpriv->top_partition = ((rd_reg32(&ctrlpriv->ctrl->perfmon.smpart)
-				  & SMPART_MAX_PNUM_MASK) >>
+	smpriv->top_partition = ((smpart & SMPART_MAX_PNUM_MASK) >>
 				SMPART_MAX_PNUM_SHIFT) + 1;
-	smpriv->top_page =  ((rd_reg32(&ctrlpriv->ctrl->perfmon.smpart)
-			    & SMPART_MAX_PG_MASK) >> SMPART_MAX_PG_SHIFT) + 1;
-	smpriv->page_size = 1024 << ((rd_reg32(&ctrlpriv->ctrl->perfmon.smvid)
-			    & SMVID_PG_SIZE_MASK) >> SMVID_PG_SIZE_SHIFT);
+	smpriv->top_page =  ((smpart & SMPART_MAX_PG_MASK) >>
+				SMPART_MAX_PG_SHIFT) + 1;
+	smpriv->page_size = 1024 << ((smvid & SMVID_PG_SIZE_MASK) >>
+				SMVID_PG_SIZE_SHIFT);
 	smpriv->slot_size = 1 << CONFIG_CRYPTO_DEV_FSL_CAAM_SM_SLOTSIZE;
 
 #ifdef SM_DEBUG
@@ -1082,24 +1084,38 @@ int caam_sm_startup(struct platform_device *pdev)
 	 * we can divorce the controller and ring drivers, and then assign
 	 * an SM instance to any ring instance).
 	 */
-	smpriv->smringdev = &ctrlpriv->jrpdev[0]->dev;
+	jrpdev = ctrlpriv->jrpdev[0];
+	if (!jrpdev) {
+		dev_err(smdev, "Platform device for job ring not created\n");
+		ret = -ENODEV;
+		goto unregister_smpdev;
+	}
+
+	smpriv->smringdev = &jrpdev->dev;
+	if (!smpriv->smringdev) {
+		dev_err(smdev, "Device for job ring not created\n");
+		ret = -ENODEV;
+		goto unregister_smpdev;
+	}
+
 	jrpriv = dev_get_drvdata(smpriv->smringdev);
 	lpagect = 0;
 	pgstat = 0;
 	lpagedesc = kzalloc(sizeof(struct sm_page_descriptor)
 			    * smpriv->max_pages, GFP_KERNEL);
 	if (lpagedesc == NULL) {
-		kfree(smpriv);
-		return -ENOMEM;
+		ret = -ENOMEM;
+		goto free_smpriv;
 	}
 
 	for (page = 0; page < smpriv->max_pages; page++) {
-		if (sm_set_cmd_reg(smpriv, jrpriv,
-				   ((page << SMC_PAGE_SHIFT) & SMC_PAGE_MASK) |
-				   (SMC_CMD_PAGE_INQUIRY & SMC_CMD_MASK)))
-			return -EINVAL;
-		if (sm_get_status_reg(smpriv, jrpriv, &pgstat))
-			return -EINVAL;
+		if (sm_send_cmd(smpriv, jrpriv,
+				((page << SMC_PAGE_SHIFT) & SMC_PAGE_MASK) |
+				(SMC_CMD_PAGE_INQUIRY & SMC_CMD_MASK),
+				&pgstat)) {
+			ret = -EINVAL;
+			goto free_lpagedesc;
+		}
 
 		if (((pgstat & SMCS_PGWON_MASK) >> SMCS_PGOWN_SHIFT)
 		    == SMCS_PGOWN_OWNED) { /* our page? */
@@ -1107,11 +1123,19 @@ int caam_sm_startup(struct platform_device *pdev)
 				(pgstat & SMCS_PAGE_MASK) >> SMCS_PAGE_SHIFT;
 			lpagedesc[page].own_part =
 				(pgstat & SMCS_PART_SHIFT) >> SMCS_PART_MASK;
-			lpagedesc[page].pg_base = ctrlpriv->sm_base +
-				((smpriv->page_size * page) / sizeof(u32));
-			/* FIXME: get base address from platform property... */
-			lpagedesc[page].pg_phys = (u32 *)0x00100000 +
-				((smpriv->page_size * page) / sizeof(u32));
+			lpagedesc[page].pg_base = (u8 *)ctrlpriv->sm_base +
+				(smpriv->page_size * page);
+			if (ctrlpriv->has_seco) {
+/* FIXME: get different addresses viewed by CPU and CAAM from
+ * platform property
+ */
+				lpagedesc[page].pg_phys = (u8 *)0x20800000 +
+					(smpriv->page_size * page);
+			} else {
+				lpagedesc[page].pg_phys =
+					(u8 *) ctrlpriv->sm_phy +
+					(smpriv->page_size * page);
+			}
 			lpagect++;
 #ifdef SM_DEBUG
 			dev_info(smdev,
@@ -1125,9 +1149,8 @@ int caam_sm_startup(struct platform_device *pdev)
 	smpriv->pagedesc = kzalloc(sizeof(struct sm_page_descriptor) * lpagect,
 				   GFP_KERNEL);
 	if (smpriv->pagedesc == NULL) {
-		kfree(lpagedesc);
-		kfree(smpriv);
-		return -ENOMEM;
+		ret = -ENOMEM;
+		goto free_lpagedesc;
 	}
 	smpriv->localpages = lpagect;
 
@@ -1148,7 +1171,17 @@ int caam_sm_startup(struct platform_device *pdev)
 
 	sm_init_keystore(smdev);
 
-	return 0;
+	goto exit;
+
+free_lpagedesc:
+	kfree(lpagedesc);
+unregister_smpdev:
+	of_device_unregister(smpriv->sm_pdev);
+free_smpriv:
+	kfree(smpriv);
+
+exit:
+	return ret;
 }
 
 void caam_sm_shutdown(struct platform_device *pdev)
@@ -1174,7 +1207,7 @@ void caam_sm_shutdown(struct platform_device *pdev)
 	kfree(smpriv);
 }
 EXPORT_SYMBOL(caam_sm_shutdown);
-#ifdef CONFIG_OF
+
 static void  __exit caam_sm_exit(void)
 {
 	struct device_node *dev_node;
@@ -1231,4 +1264,3 @@ module_exit(caam_sm_exit);
 MODULE_LICENSE("Dual BSD/GPL");
 MODULE_DESCRIPTION("FSL CAAM Secure Memory / Keystore");
 MODULE_AUTHOR("Freescale Semiconductor - NMSG/MAD");
-#endif

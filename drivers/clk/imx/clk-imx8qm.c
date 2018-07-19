@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2016 Freescale Semiconductor, Inc.
- * Copyright 2017 NXP
+ * Copyright 2017-2018 NXP
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -123,6 +123,22 @@ static const char *dc1_sels[] = {
 	"dc1_bypass0_div",
 };
 
+static const char *hdmi_sels[] = {
+	"dummy",
+	"hdmi_dig_pll_clk",
+	"hdmi_av_pll_clk",
+	"dummy",
+	"hdmi_av_pll_bypass_clk",
+};
+
+static const char *hdmi_rx_sels[] = {
+	"dummy",
+	"hdmi_rx_dig_pll_clk",
+	"dummy",
+	"dummy",
+	"hdmi_rx_bypass_clk",
+};
+
 
 static struct clk *clks[IMX8QM_CLK_END];
 static struct clk_onecell_data clk_data;
@@ -237,9 +253,9 @@ static int imx8qm_clk_probe(struct platform_device *pdev)
 	clks[IMX8QM_LVDS1_PHY_DIV] = imx_clk_divider_scu("lvds1_phy_div", SC_R_LVDS_1, SC_PM_CLK_PHY);
 
 	/* vpu/zpu subsystem */
-	clks[IMX8QM_VPU_DDR_DIV] = imx_clk_divider_scu("vpu_ddr_div", SC_R_VPU_PID0, SC_PM_CLK_SLV_BUS);
-	clks[IMX8QM_VPU_SYS_DIV] = imx_clk_divider_scu("vpu_sys_div", SC_R_VPU_PID0, SC_PM_CLK_MST_BUS);
-	clks[IMX8QM_VPU_XUVI_DIV] = imx_clk_divider_scu("vpu_xuvi_div", SC_R_VPU_PID0, SC_PM_CLK_PER);
+	clks[IMX8QM_VPU_DDR_DIV] = imx_clk_divider_scu("vpu_ddr_div", SC_R_VPU, SC_PM_CLK_SLV_BUS);
+	clks[IMX8QM_VPU_SYS_DIV] = imx_clk_divider_scu("vpu_sys_div", SC_R_VPU, SC_PM_CLK_MST_BUS);
+	clks[IMX8QM_VPU_XUVI_DIV] = imx_clk_divider_scu("vpu_xuvi_div", SC_R_VPU, SC_PM_CLK_PER);
 	clks[IMX8QM_VPU_UART_DIV] = imx_clk_divider_scu("vpu_uart_div", SC_R_VPU_UART, SC_PM_CLK_PER);
 	clks[IMX8QM_VPU_CORE_DIV] = imx_clk_divider_scu("vpu_core_div", SC_R_VPUCORE, SC_PM_CLK_PER);
 
@@ -285,13 +301,16 @@ static int imx8qm_clk_probe(struct platform_device *pdev)
 
 	/* RX-HDMI */
 	clks[IMX8QM_HDMI_RX_I2S_BYPASS_CLK] = imx_clk_divider_scu("hdmi_rx_i2s_bypass_clk", SC_R_HDMI_RX_BYPASS, SC_PM_CLK_MISC0);
-	clks[IMX8QM_HDMI_RX_BYPASS_CLK] = imx_clk_divider_scu("hdmi_rx_bypass_clk", SC_R_HDMI_RX_BYPASS, SC_PM_CLK_MISC1);
-	clks[IMX8QM_HDMI_RX_SPDIF_BYPASS_CLK] = imx_clk_divider_scu("hdmi_rx_spdif_bypass_clk", SC_R_HDMI_RX_BYPASS, SC_PM_CLK_MISC2);
+	clks[IMX8QM_HDMI_RX_SPDIF_BYPASS_CLK] = imx_clk_divider_scu("hdmi_rx_spdif_bypass_clk", SC_R_HDMI_RX_BYPASS, SC_PM_CLK_MISC1);
+	clks[IMX8QM_HDMI_RX_BYPASS_CLK] = imx_clk_divider_scu("hdmi_rx_bypass_clk", SC_R_HDMI_RX_BYPASS, SC_PM_CLK_MISC2);
 	clks[IMX8QM_HDMI_RX_I2C0_DIV] = imx_clk_divider_scu("hdmi_rx_i2c0_div", SC_R_HDMI_RX_I2C_0, SC_PM_CLK_MISC2);
 	clks[IMX8QM_HDMI_RX_SPDIF_DIV] = imx_clk_divider_scu("hdmi_rx_spdif_div", SC_R_HDMI_RX, SC_PM_CLK_MISC0);
-	clks[IMX8QM_HDMI_RX_HD_REF_DIV] = imx_clk_divider_scu("hdmi_rx_hd_ref_div", SC_R_HDMI_RX, SC_PM_CLK_MISC1);
-	clks[IMX8QM_HDMI_RX_HD_CORE_DIV] = imx_clk_divider_scu("hdmi_rx_hd_core_div", SC_R_HDMI_RX, SC_PM_CLK_MISC2);
-	clks[IMX8QM_HDMI_RX_PXL_DIV] = imx_clk_divider_scu("hdmi_rx_pxl_div", SC_R_HDMI_RX, SC_PM_CLK_MISC3);
+	clks[IMX8QM_HDMI_RX_HD_REF_SEL] = imx_clk_mux2_scu("hdmi_rx_hd_ref_sel", hdmi_rx_sels, ARRAY_SIZE(hdmi_rx_sels), SC_R_HDMI_RX, SC_PM_CLK_MISC1);
+	clks[IMX8QM_HDMI_RX_HD_REF_DIV] = imx_clk_divider2_scu("hdmi_rx_hd_ref_div", "hdmi_rx_hd_ref_sel", SC_R_HDMI_RX, SC_PM_CLK_MISC1);
+	clks[IMX8QM_HDMI_RX_HD_CORE_SEL] = imx_clk_mux2_scu("hdmi_rx_hd_core_sel", hdmi_rx_sels, ARRAY_SIZE(hdmi_rx_sels), SC_R_HDMI_RX, SC_PM_CLK_MISC2);
+	clks[IMX8QM_HDMI_RX_HD_CORE_DIV] = imx_clk_divider2_scu("hdmi_rx_hd_core_div", "hdmi_rx_hd_core_sel", SC_R_HDMI_RX, SC_PM_CLK_MISC2);
+	clks[IMX8QM_HDMI_RX_PXL_SEL] = imx_clk_mux2_scu("hdmi_rx_pxl_sel", hdmi_rx_sels, ARRAY_SIZE(hdmi_rx_sels), SC_R_HDMI_RX, SC_PM_CLK_MISC3);
+	clks[IMX8QM_HDMI_RX_PXL_DIV] = imx_clk_divider2_scu("hdmi_rx_pxl_div", "hdmi_rx_pxl_sel", SC_R_HDMI_RX, SC_PM_CLK_MISC3);
 	clks[IMX8QM_HDMI_RX_I2S_DIV] = imx_clk_divider_scu("hdmi_rx_i2s_div", SC_R_HDMI_RX, SC_PM_CLK_MISC4);
 	clks[IMX8QM_HDMI_RX_PWM_DIV] = imx_clk_divider_scu("hdmi_rx_pwm_div", SC_R_HDMI_RX_PWM_0, SC_PM_CLK_MISC2);
 
@@ -313,9 +332,13 @@ static int imx8qm_clk_probe(struct platform_device *pdev)
 	clks[IMX8QM_HDMI_IPG_DIV] = imx_clk_divider_scu("hdmi_ipg_div", SC_R_HDMI, SC_PM_CLK_MISC);
 	clks[IMX8QM_HDMI_I2S_BYPASS_CLK] = imx_clk_divider_scu("hdmi_i2s_bypass_clk", SC_R_HDMI_I2S, SC_PM_CLK_BYPASS);
 	clks[IMX8QM_HDMI_I2C0_DIV] = imx_clk_divider_scu("hdmi_i2c0_div", SC_R_HDMI_I2C_0, SC_PM_CLK_MISC2);
-	clks[IMX8QM_HDMI_PXL_DIV] = imx_clk_divider_scu("hdmi_pxl_div", SC_R_HDMI, SC_PM_CLK_MISC3);
-	clks[IMX8QM_HDMI_PXL_LINK_DIV] = imx_clk_divider_scu("hdmi_pxl_link_div", SC_R_HDMI, SC_PM_CLK_MISC1);
-	clks[IMX8QM_HDMI_PXL_MUX_DIV] = imx_clk_divider_scu("hdmi_pxl_mux_div", SC_R_HDMI, SC_PM_CLK_MISC0);
+	clks[IMX8QM_HDMI_AV_PLL_BYPASS_CLK] = imx_clk_divider_scu("hdmi_av_pll_bypass_clk", SC_R_HDMI, SC_PM_CLK_BYPASS);
+	clks[IMX8QM_HDMI_PXL_SEL] = imx_clk_mux2_scu("hdmi_pxl_sel", hdmi_sels, ARRAY_SIZE(hdmi_sels), SC_R_HDMI, SC_PM_CLK_MISC3);
+	clks[IMX8QM_HDMI_PXL_DIV] = imx_clk_divider2_scu("hdmi_pxl_div", "hdmi_pxl_sel", SC_R_HDMI, SC_PM_CLK_MISC3);
+	clks[IMX8QM_HDMI_PXL_LINK_SEL] = imx_clk_mux2_scu("hdmi_pxl_link_sel", hdmi_sels, ARRAY_SIZE(hdmi_sels), SC_R_HDMI, SC_PM_CLK_MISC1);
+	clks[IMX8QM_HDMI_PXL_LINK_DIV] = imx_clk_divider2_scu("hdmi_pxl_link_div", "hdmi_pxl_link_sel", SC_R_HDMI, SC_PM_CLK_MISC1);
+	clks[IMX8QM_HDMI_PXL_MUX_SEL] = imx_clk_mux2_scu("hdmi_pxl_mux_sel", hdmi_sels, ARRAY_SIZE(hdmi_sels), SC_R_HDMI, SC_PM_CLK_MISC0);
+	clks[IMX8QM_HDMI_PXL_MUX_DIV] = imx_clk_divider2_scu("hdmi_pxl_mux_div", "hdmi_pxl_mux_sel", SC_R_HDMI, SC_PM_CLK_MISC0);
 	clks[IMX8QM_HDMI_I2S_DIV] = imx_clk_divider_scu("hdmi_i2s_div", SC_R_HDMI_I2S, SC_PM_CLK_MISC0);
 	clks[IMX8QM_HDMI_HDP_CORE_DIV] = imx_clk_divider_scu("hdmi_core_div", SC_R_HDMI, SC_PM_CLK_MISC2);
 
@@ -347,7 +370,8 @@ static int imx8qm_clk_probe(struct platform_device *pdev)
 	clks[IMX8QM_IMG_PXL_CLK] = imx_clk_fixed("pxl_img_clk_root", SC_600MHZ);
 	clks[IMX8QM_HSIO_AXI_CLK] = imx_clk_fixed("axi_hsio_clk_root", SC_400MHZ);
 	clks[IMX8QM_HSIO_PER_CLK] = imx_clk_fixed("per_hsio_clk_root", SC_133MHZ);
-	clks[IMX8QM_HDMI_RX_IPG_CLK] = imx_clk_fixed("ipg_hdmi_rx_clk_root", SC_400MHZ);
+	clks[IMX8QM_HDMI_RX_IPG_CLK] = imx_clk_fixed("ipg_hdmi_rx_clk_root", SC_200MHZ);
+	clks[IMX8QM_HDMI_RX_DIG_PLL_CLK] = imx_clk_fixed("hdmi_rx_dig_pll_clk", SC_800MHZ);
 	clks[IMX8QM_ENET_25MHZ_CLK] = imx_clk_fixed("enet_25MHz", SC_25MHZ);
 	clks[IMX8QM_ENET_125MHZ_CLK] = imx_clk_fixed("enet_125MHz", SC_125MHZ);
 	clks[IMX8QM_LSIO_BUS_CLK] = imx_clk_fixed("lsio_bus_clk_root", SC_100MHZ);
@@ -535,19 +559,9 @@ static int imx8qm_clk_probe(struct platform_device *pdev)
 	clks[IMX8QM_FSPI1_IPG_S_CLK] = imx_clk_gate2_scu("fspi1_ipg_s_clk", "lsio_bus_clk_root", LPCG_ADDR(FSPI_1_LPCG), 0x18, FUNCTION_NAME(PD_LSIO_FSPI_1));
 	clks[IMX8QM_FSPI1_IPG_CLK] = imx_clk_gate2_scu("fspi1_ipg_clk", "fspi1_ipg_s_clk", LPCG_ADDR(FSPI_1_LPCG), 0x14, FUNCTION_NAME(PD_LSIO_FSPI_1));
 	clks[IMX8QM_FSPI1_CLK] = imx_clk_gate_scu("fspi_1_clk", "fspi_1_div", SC_R_FSPI_1, SC_PM_CLK_PER, LPCG_ADDR(FSPI_1_LPCG), 0, 0);
-	clks[IMX8QM_GPIO0_IPG_S_CLK] = imx_clk_gate2_scu("gpio0_ipg_s_clk", "lsio_bus_clk_root", LPCG_ADDR(GPIO_0_LPCG), 0x10, FUNCTION_NAME(PD_LSIO_GPIO_0));
-	clks[IMX8QM_GPIO1_IPG_S_CLK] = imx_clk_gate2_scu("gpio1_ipg_s_clk", "lsio_bus_clk_root", LPCG_ADDR(GPIO_1_LPCG), 0x10, FUNCTION_NAME(PD_LSIO_GPIO_1));
-	clks[IMX8QM_GPIO2_IPG_S_CLK] = imx_clk_gate2_scu("gpio2_ipg_s_clk", "lsio_bus_clk_root", LPCG_ADDR(GPIO_2_LPCG), 0x10, FUNCTION_NAME(PD_LSIO_GPIO_2));
-	clks[IMX8QM_GPIO3_IPG_S_CLK] = imx_clk_gate2_scu("gpio3_ipg_s_clk", "lsio_bus_clk_root", LPCG_ADDR(GPIO_3_LPCG), 0x10, FUNCTION_NAME(PD_LSIO_GPIO_3));
-	clks[IMX8QM_GPIO4_IPG_S_CLK] = imx_clk_gate2_scu("gpio4_ipg_s_clk", "lsio_bus_clk_root", LPCG_ADDR(GPIO_4_LPCG), 0x10, FUNCTION_NAME(PD_LSIO_GPIO_4));
-	clks[IMX8QM_GPIO5_IPG_S_CLK] = imx_clk_gate2_scu("gpio5_ipg_s_clk", "lsio_bus_clk_root", LPCG_ADDR(GPIO_5_LPCG), 0x10, FUNCTION_NAME(PD_LSIO_GPIO_5));
-	clks[IMX8QM_GPIO6_IPG_S_CLK] = imx_clk_gate2_scu("gpio6_ipg_s_clk", "lsio_bus_clk_root", LPCG_ADDR(GPIO_6_LPCG), 0x10, FUNCTION_NAME(PD_LSIO_GPIO_6));
-	clks[IMX8QM_GPIO7_IPG_S_CLK] = imx_clk_gate2_scu("gpio7_ipg_s_clk", "lsio_bus_clk_root", LPCG_ADDR(GPIO_7_LPCG), 0x10, FUNCTION_NAME(PD_LSIO_GPIO_7));
 	clks[IMX8QM_ROMCP_REG_CLK] = imx_clk_gate2_scu("romcp_reg_clk", "lsio_bus_clk_root", LPCG_ADDR(ROMCP_LPCG), 0x10, FUNCTION_NAME(PD_LSIO));
 	clks[IMX8QM_ROMCP_CLK] = imx_clk_gate2_scu("romcp_clk", "lsio_mem_clk_root", LPCG_ADDR(ROMCP_LPCG), 0x0, FUNCTION_NAME(PD_LSIO));
 	clks[IMX8QM_96KROM_CLK] = imx_clk_gate2_scu("96krom_clk", "lsio_mem_clk_root", LPCG_ADDR(ROMCP_LPCG), 0x4, FUNCTION_NAME(PD_LSIO));
-	clks[IMX8QM_OCRAM_MEM_CLK] = imx_clk_gate2_scu("ocram_lk", "lsio_mem_clk_root", LPCG_ADDR(OCRAM_LPCG), 0x4, FUNCTION_NAME(PD_LSIO));
-	clks[IMX8QM_OCRAM_CTRL_CLK] = imx_clk_gate2_scu("ocram_ctrl_clk", "lsio_mem_clk_root", LPCG_ADDR(OCRAM_LPCG), 0x0, FUNCTION_NAME(PD_LSIO));
 
 	/* Audio */
 	clks[IMX8QM_AUD_ACM_AUD_PLL_CLK0_CLK] = imx_clk_gate_scu("aud_acm_aud_pll_clk0_clk", "aud_acm_aud_pll_clk0_div", SC_R_AUDIO_PLL_0, SC_PM_CLK_MISC0, LPCG_ADDR(AUD_PLL_CLK0_LPCG), 0, 0);
@@ -669,18 +683,12 @@ static int imx8qm_clk_probe(struct platform_device *pdev)
 	clks[IMX8QM_ACM_ASRC1_MUX_CLK_CLK] = imx_clk_gate_scu("aud_asrc1_mux_clk", "acm_asrc1_mclk_sel", SC_R_ASRC_1, SC_PM_CLK_PER, NULL, 0, 0);
 
 	/* MIPI CSI */
-	clks[IMX8QM_CSI0_IPG_CLK_S] = imx_clk_gate2_scu("mipi_csi0_ipg_s", "ipg_mipi_csi_clk_root", LPCG_ADDR(MIPI_CSI_0_LPCG + 0x8), 16, FUNCTION_NAME(PD_MIPI_CSI0));
-	clks[IMX8QM_CSI0_LIS_IPG_CLK] = imx_clk_gate2_scu("mipi_csi0_ipg", "mipi_csi0_ipg_s", LPCG_ADDR(MIPI_CSI_0_LPCG), 16, FUNCTION_NAME(PD_MIPI_CSI0));
-	clks[IMX8QM_CSI0_APB_CLK] = imx_clk_gate2_scu("mipi_csi0_apb_clk", "ipg_mipi_csi_clk_root", LPCG_ADDR(MIPI_CSI_0_LPCG + 0x4), 16,  FUNCTION_NAME(PD_MIPI_CSI0));
 	clks[IMX8QM_CSI0_I2C0_IPG_CLK] = imx_clk_gate2_scu("mipi_csi0_i2c0_ipg_s", "ipg_mipi_csi_clk_root", LPCG_ADDR(MIPI_CSI_0_LPCG + 0x14), 16, FUNCTION_NAME(PD_MIPI_CSI0_I2C0));
 	clks[IMX8QM_CSI0_I2C0_CLK] = imx_clk_gate_scu("mipi_csi0_i2c0_clk", "mipi_csi0_i2c0_div", SC_R_CSI_0_I2C_0, SC_PM_CLK_PER, LPCG_ADDR(MIPI_CSI_0_LPCG + 0x14), 0, 0);
 	clks[IMX8QM_CSI0_PWM0_IPG_CLK] = imx_clk_gate2_scu("mipi_csi0_pwm0_ipg_s", "ipg_mipi_csi_clk_root", LPCG_ADDR(MIPI_CSI_0_LPCG + 0x10), 16, FUNCTION_NAME(PD_MIPI_CSI0_PWM));
 	clks[IMX8QM_CSI0_PWM0_CLK] = imx_clk_gate_scu("mipi_csi0_pwm0_clk", "mipi_csi0_pwm0_div", SC_R_CSI_0_PWM_0, SC_PM_CLK_PER, LPCG_ADDR(MIPI_CSI_0_LPCG + 0x10), 0, 0);
 	clks[IMX8QM_CSI0_CORE_CLK] = imx_clk_gate_scu("mipi_csi0_core_clk", "mipi_csi0_core_div", SC_R_CSI_0, SC_PM_CLK_PER, LPCG_ADDR(MIPI_CSI_0_LPCG + 0x18), 16, 0);
 	clks[IMX8QM_CSI0_ESC_CLK] = imx_clk_gate_scu("mipi_csi0_esc_clk", "mipi_csi0_esc_div", SC_R_CSI_0, SC_PM_CLK_MISC, LPCG_ADDR(MIPI_CSI_0_LPCG + 0x1C), 16, 0);
-	clks[IMX8QM_CSI1_IPG_CLK_S] = imx_clk_gate2_scu("mipi_csi1_ipg_s", "ipg_mipi_csi_clk_root", LPCG_ADDR(MIPI_CSI_1_LPCG + 0x8), 16, FUNCTION_NAME(PD_MIPI_CSI1));
-	clks[IMX8QM_CSI1_LIS_IPG_CLK] = imx_clk_gate2_scu("mipi_csi1_ipg", "mipi_csi1_ipg_s", LPCG_ADDR(MIPI_CSI_1_LPCG), 16, FUNCTION_NAME(PD_MIPI_CSI1));
-	clks[IMX8QM_CSI1_APB_CLK] = imx_clk_gate2_scu("mipi_csi1_apb_clk", "ipg_mipi_csi_clk_root", LPCG_ADDR(MIPI_CSI_1_LPCG + 0x4), 16, FUNCTION_NAME(PD_MIPI_CSI1));
 	clks[IMX8QM_CSI1_I2C0_IPG_CLK] = imx_clk_gate2_scu("mipi_csi1_i2c0_ipg_s", "ipg_mipi_csi_clk_root", LPCG_ADDR(MIPI_CSI_1_LPCG + 0x14), 16, FUNCTION_NAME(PD_MIPI_CSI1_I2C0));
 	clks[IMX8QM_CSI1_I2C0_CLK] = imx_clk_gate_scu("mipi_csi1_i2c0_clk", "mipi_csi1_i2c0_div", SC_R_CSI_1_I2C_0, SC_PM_CLK_PER, LPCG_ADDR(MIPI_CSI_1_LPCG + 0x14), 0, 0);
 	clks[IMX8QM_CSI1_PWM0_IPG_CLK] = imx_clk_gate2_scu("mipi_csi1_pwm0_ipg_s", "ipg_mipi_csi_clk_root", LPCG_ADDR(MIPI_CSI_1_LPCG + 0x10), 16, FUNCTION_NAME(PD_MIPI_CSI0_PWM));
@@ -696,15 +704,15 @@ static int imx8qm_clk_probe(struct platform_device *pdev)
 	clks[IMX8QM_HDMI_RX_I2C_IPG_CLK] = imx_clk_gate2_scu("hdmi_rx_i2c_ipg_clk", "hdmi_rx_i2c_ipg_s_clk", LPCG_ADDR(RX_HDMI_LPCG + 0x18), 0, FUNCTION_NAME(PD_HDMI_RX_I2C));
 	clks[IMX8QM_HDMI_RX_I2C_DIV_CLK] = imx_clk_gate2_scu("hdmi_rx_i2c0_div_clk", "hdmi_rx_i2c0_div", LPCG_ADDR(RX_HDMI_LPCG + 0x14), 0, FUNCTION_NAME(PD_HDMI_RX_I2C));
 	clks[IMX8QM_HDMI_RX_I2C0_CLK] = imx_clk_gate_scu("hdmi_rx_i2c0_clk", "hdmi_rx_i2c0_div_clk", SC_R_HDMI_RX_I2C_0, SC_PM_CLK_MISC2, LPCG_ADDR(RX_HDMI_LPCG + 0x10), 0, 0);
-	clks[IMX8QM_HDMI_RX_SPDIF_CLK] = imx_clk_gate_scu("hdmi_rx_spdif_clk", "hdmi_rx_spdif_div", SC_R_HDMI_RX, SC_PM_CLK_MISC0, NULL, 0, 0);
+	clks[IMX8QM_HDMI_RX_SPDIF_CLK] = imx_clk_gate_scu("hdmi_rx_spdif_clk", "hdmi_rx_spdif_bypass_clk", SC_R_HDMI_RX, SC_PM_CLK_MISC0, NULL, 0, 0);
 	clks[IMX8QM_HDMI_RX_HD_REF_CLK] = imx_clk_gate_scu("hdmi_rx_hd_ref_clk", "hdmi_rx_hd_ref_div", SC_R_HDMI_RX, SC_PM_CLK_MISC1, NULL, 0, 0);
 	clks[IMX8QM_HDMI_RX_HD_CORE_CLK] = imx_clk_gate_scu("hdmi_rx_hd_core_clk", "hdmi_rx_hd_core_div", SC_R_HDMI_RX, SC_PM_CLK_MISC2, LPCG_ADDR(RX_HDMI_LPCG + 0x28), 0, 0);
 	clks[IMX8QM_HDMI_RX_PXL_CLK] = imx_clk_gate_scu("hdmi_rx_pxl_clk", "hdmi_rx_pxl_div", SC_R_HDMI_RX, SC_PM_CLK_MISC3, LPCG_ADDR(RX_HDMI_LPCG + 0x2C), 0, 0);
-	clks[IMX8QM_HDMI_RX_I2S_CLK] = imx_clk_gate_scu("hdmi_rx_i2s_clk", "hdmi_rx_i2s_div", SC_R_HDMI_RX, SC_PM_CLK_MISC4, NULL, 0, 0);
+	clks[IMX8QM_HDMI_RX_I2S_CLK] = imx_clk_gate_scu("hdmi_rx_i2s_clk", "hdmi_rx_i2s_bypass_clk", SC_R_HDMI_RX, SC_PM_CLK_MISC4, NULL, 0, 0);
 	clks[IMX8QM_HDMI_RX_PWM_CLK] = imx_clk_gate_scu("hdmi_rx_pwm_clk", "hdmi_rx_pwm_div", SC_R_HDMI_RX_PWM_0, SC_PM_CLK_MISC2, LPCG_ADDR(RX_HDMI_LPCG + 0xC), 0, 0);
-	clks[IMX8QM_HDMI_RX_SINK_PCLK] = imx_clk_gate2_scu("hdmi_rx_sink_pclk", "ipg_hdmi_rx_clk_root", LPCG_ADDR(RX_HDMI_LPCG + 0x20), 0, FUNCTION_NAME(PD_HDMI_RX));
-	clks[IMX8QM_HDMI_RX_SINK_SCLK] = imx_clk_gate2_scu("hdmi_rx_sink_sclk", "ipg_hdmi_rx_clk_root", LPCG_ADDR(RX_HDMI_LPCG + 0x24), 0, FUNCTION_NAME(PD_HDMI_RX));
-	clks[IMX8QM_HDMI_RX_PXL_ENC_CLK] = imx_clk_gate2_scu("hdmi_rx_sink_enc_clk", "hdmi_rx_pxl_clk", LPCG_ADDR(RX_HDMI_LPCG + 0x30), 0, FUNCTION_NAME(PD_HDMI_RX));
+	clks[IMX8QM_HDMI_RX_SINK_PCLK] = imx_clk_gate2_scu("hdmi_rx_sink_pclk", "ipg_hdmi_rx_clk_root", LPCG_ADDR(RX_HDMI_LPCG + 0x20), 0, FUNCTION_NAME(PD_HDMI_RX_BYPASS));
+	clks[IMX8QM_HDMI_RX_SINK_SCLK] = imx_clk_gate2_scu("hdmi_rx_sink_sclk", "ipg_hdmi_rx_clk_root", LPCG_ADDR(RX_HDMI_LPCG + 0x24), 0, FUNCTION_NAME(PD_HDMI_RX_BYPASS));
+	clks[IMX8QM_HDMI_RX_PXL_ENC_CLK] = imx_clk_gate2_scu("hdmi_rx_sink_enc_clk", "hdmi_rx_pxl_clk", LPCG_ADDR(RX_HDMI_LPCG + 0x30), 0, FUNCTION_NAME(PD_HDMI_RX_BYPASS));
 
 	/* MIPI-DI */
 	clks[IMX8QM_MIPI0_LIS_IPG_CLK] = imx_clk_gate2_scu("mipi0_lis_ipg_clk", "mipi0_clk_root", LPCG_ADDR(MIPI_DSI_0_LPCG + 0x0), 0, FUNCTION_NAME(PD_MIPI_0_DSI));
@@ -839,9 +847,9 @@ static int imx8qm_clk_probe(struct platform_device *pdev)
 	clks[IMX8QM_LVDS1_LIS_IPG_CLK] = imx_clk_gate2_scu("lvds1_lis_ipg_clk", "ipg_lvds_clk_root", LPCG_ADDR(DI_LVDS_1_LPCG + 0x0), 16, FUNCTION_NAME(PD_LVDS1));
 
 	/* vpu/zpu subsystem */
-	clks[IMX8QM_VPU_DDR_CLK] = imx_clk_gate_scu("vpu_ddr_clk", "vpu_ddr_div", SC_R_VPU_PID0, SC_PM_CLK_SLV_BUS, NULL, 0, 0);
-	clks[IMX8QM_VPU_SYS_CLK] = imx_clk_gate_scu("vpu_sys_clk", "vpu_sys_div", SC_R_VPU_PID0, SC_PM_CLK_MST_BUS, NULL, 0, 0);
-	clks[IMX8QM_VPU_XUVI_CLK] = imx_clk_gate_scu("vpu_xuvi_clk", "vpu_xuvi_div", SC_R_VPU_PID0, SC_PM_CLK_PER, NULL, 0, 0);
+	clks[IMX8QM_VPU_DDR_CLK] = imx_clk_gate_scu("vpu_ddr_clk", "vpu_ddr_div", SC_R_VPU, SC_PM_CLK_SLV_BUS, NULL, 0, 0);
+	clks[IMX8QM_VPU_SYS_CLK] = imx_clk_gate_scu("vpu_sys_clk", "vpu_sys_div", SC_R_VPU, SC_PM_CLK_MST_BUS, NULL, 0, 0);
+	clks[IMX8QM_VPU_XUVI_CLK] = imx_clk_gate_scu("vpu_xuvi_clk", "vpu_xuvi_div", SC_R_VPU, SC_PM_CLK_PER, NULL, 0, 0);
 	clks[IMX8QM_VPU_UART_CLK] = imx_clk_gate_scu("vpu_uart_clk", "vpu_uart_div", SC_R_VPU_UART, SC_PM_CLK_PER, NULL, 0, 0);
 	clks[IMX8QM_VPU_CORE_CLK] = imx_clk_gate_scu("vpu_core_clk", "vpu_core_div", SC_R_VPUCORE, SC_PM_CLK_PER, NULL, 0, 0);
 
@@ -883,7 +891,7 @@ static int imx8qm_clk_probe(struct platform_device *pdev)
 	clks[IMX8QM_HSIO_PHY_X1_PER_CLK] = imx_clk_gate2_scu("hsio_phy_x1_per_clk", "per_hsio_clk_root", LPCG_ADDR(HSIO_PHY_X1_CRR1_LPCG), 16, FUNCTION_NAME(PD_HSIO_PCIE_B));
 	clks[IMX8QM_HSIO_PHY_X2_PER_CLK] = imx_clk_gate2_scu("hsio_phy_x2_per_clk", "per_hsio_clk_root", LPCG_ADDR(HSIO_PHY_X2_CRR0_LPCG), 16, FUNCTION_NAME(PD_HSIO_PCIE_A));
 	clks[IMX8QM_HSIO_MISC_PER_CLK] = imx_clk_gate2_scu("hsio_misc_per_clk", "per_hsio_clk_root", LPCG_ADDR(HSIO_MISC_LPCG), 16, FUNCTION_NAME(PD_HSIO));
-	clks[IMX8QM_HSIO_PHY_X1_APB_CLK] = imx_clk_gate2_scu("hsio_phy_x1_apb_clk", "per_hsio_clk_root", LPCG_ADDR(HSIO_PHY_X1_LPCG), 16, FUNCTION_NAME(PD_HSIO_PCIE_B));
+	clks[IMX8QM_HSIO_PHY_X1_APB_CLK] = imx_clk_gate2_scu("hsio_phy_x1_apb_clk", "per_hsio_clk_root", LPCG_ADDR(HSIO_PHY_X1_LPCG), 16, FUNCTION_NAME(PD_HSIO_SATA_0));
 	clks[IMX8QM_HSIO_PHY_X2_APB_0_CLK] = imx_clk_gate2_scu("hsio_phy_x2_apb_0_clk", "per_hsio_clk_root", LPCG_ADDR(HSIO_PHY_X2_LPCG), 16, FUNCTION_NAME(PD_HSIO_PCIE_A));
 	clks[IMX8QM_HSIO_PHY_X2_APB_1_CLK] = imx_clk_gate2_scu("hsio_phy_x2_apb_1_clk", "per_hsio_clk_root", LPCG_ADDR(HSIO_PHY_X2_LPCG), 20, FUNCTION_NAME(PD_HSIO_PCIE_A));
 	clks[IMX8QM_HSIO_SATA_CLK] = imx_clk_gate2_scu("hsio_sata_clk", "axi_hsio_clk_root", LPCG_ADDR(HSIO_SATA_LPCG), 16, FUNCTION_NAME(PD_HSIO_SATA_0));

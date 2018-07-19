@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 NXP.
+ * Copyright 2017-2018 NXP.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -44,12 +44,12 @@ enum imx_thermal_trip {
 
 static const sc_rsrc_t imx8qm_sensor_hw_id[] = {
 	SC_R_A53, SC_R_A72, SC_R_GPU_0_PID0, SC_R_GPU_1_PID0,
-	SC_R_DRC_0, SC_R_DRC_1, SC_R_VPU_PID0, SC_R_PMIC_0,
-	SC_R_PMIC_1, SC_R_PMIC_2,
+	SC_R_DRC_0, SC_R_PMIC_0, SC_R_PMIC_1, SC_R_PMIC_2,
 };
 
 static const sc_rsrc_t imx8qxp_sensor_hw_id[] = {
-	SC_R_DRC_0,
+	SC_R_SYSTEM, SC_R_DRC_0, SC_R_PMIC_0,
+	SC_R_PMIC_1, SC_R_PMIC_2,
 };
 
 const int *sensor_hw_id;
@@ -132,6 +132,7 @@ MODULE_DEVICE_TABLE(of, imx_sc_tsens_table);
 
 static int imx_sc_tsens_probe(struct platform_device *pdev)
 {
+	struct device_node *tz_np, *child_tz_np = NULL;
 	struct device_node *np = pdev->dev.of_node;
 	struct imx_sc_tsens_device *tsens_dev;
 	struct imx_sc_sensor *sensor;
@@ -169,7 +170,15 @@ static int imx_sc_tsens_probe(struct platform_device *pdev)
 
 	tsens_dev->sensor_num = tsens_num;
 
+	tz_np = of_find_node_by_name(NULL, "thermal-zones");
+	if (!tz_np)
+		return -ENODEV;
+
 	for (sensor_id = 0; sensor_id < tsens_num; sensor_id++) {
+		child_tz_np = of_get_next_child(tz_np, child_tz_np);
+		if (!of_device_is_available(child_tz_np))
+			continue;
+
 		sensor = &tsens_dev->sensor[sensor_id];
 		sensor->hw_id = sensor_hw_id[sensor_id];
 		tzd = devm_thermal_zone_of_sensor_register(&pdev->dev, sensor_id, sensor,

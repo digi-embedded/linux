@@ -1,7 +1,7 @@
 /*
  * Copyright 2015-2016 Freescale Semiconductor, Inc.
  * Copyright 2016 Toradex AG
- * Copyright 2017 NXP.
+ * Copyright 2017-2018 NXP
  *
  * This file is dual-licensed: you can use it either under the terms
  * of the GPL or the X11 license, at your option. Note that this dual
@@ -160,6 +160,15 @@
 			clocks = <&clks IMX7D_OCRAM_CLK>;
 		};
 
+		ocram_optee {
+			compatible = "fsl,optee-lpm-sram";
+			reg = <0x00180000 0x8000>;
+			overw_reg = <&ocrams_ddr 0x00904000 0x1000>,
+					<&ocram 0x00905000 0x1b000>,
+					<&ocrams 0x00900000 0x4000>;
+			overw_clock = <&ocrams &clks IMX7D_OCRAM_CLK>;
+		};
+
 		dma_apbh: dma-apbh@33000000 {
 			compatible = "fsl,imx7d-dma-apbh", "fsl,imx28-dma-apbh";
 			reg = <0x33000000 0x2000>;
@@ -199,7 +208,8 @@
 			ranges =  <0x81000000 0 0          0x4ff80000 0 0x00010000 /* downstream I/O 64KB */
 				   0x82000000 0 0x40000000 0x40000000 0 0x0ff00000>; /* non-prefetchable memory */
 			num-lanes = <1>;
-			interrupts = <GIC_SPI 122 IRQ_TYPE_LEVEL_HIGH>;
+			interrupts = <GIC_SPI 122 IRQ_TYPE_LEVEL_HIGH>,
+					<GIC_SPI 127 IRQ_TYPE_LEVEL_HIGH>; /* eDMA */
 			interrupt-names = "msi";
 			#interrupt-cells = <1>;
 			interrupt-map-mask = <0 0 0 0x7>;

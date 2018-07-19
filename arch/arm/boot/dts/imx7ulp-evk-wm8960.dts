@@ -25,8 +25,8 @@
 		clks_m4: scg0@41027000 {
 			compatible = "fsl,imx7ulp-scg0";
 			reg = <0x41027000 0x1000>;
-			clocks = <&cm4_ckil>, <&cm4_osc>, <&cm4_sirc>, <&cm4_firc>;
-			clock-names = "cm4_ckil", "cm4_osc", "cm4_sirc", "cm4_firc";
+			clocks = <&cm4_rosc>, <&cm4_sosc>, <&cm4_sirc>, <&cm4_firc>;
+			clock-names = "cm4_rosc", "cm4_sosc", "cm4_sirc", "cm4_firc";
 			#clock-cells = <1>;
 		};
 
@@ -83,18 +83,18 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 
-		cm4_ckil: clock@6 {
+		cm4_rosc: clock@6 {
 			compatible = "fixed-clock";
 			#clock-cells = <0>;
 			clock-frequency = <32768>;
-			clock-output-names = "cm4_ckil";
+			clock-output-names = "cm4_rosc";
 		};
 
-		cm4_osc: clock@7 {
+		cm4_sosc: clock@7 {
 			compatible = "fixed-clock";
 			#clock-cells = <0>;
 			clock-frequency = <24000000>;
-			clock-output-names = "cm4_osc";
+			clock-output-names = "cm4_sosc";
 		};
 
 		cm4_sirc: clock@8 {
@@ -117,7 +117,7 @@
 	};
 
 	sound {
-		compatible = "fsl,imx7ulp-evk-wm8960",
+		compatible = "fsl,imx7d-evk-wm8960",
 			     "fsl,imx-audio-wm8960";
 		model = "wm8960-audio";
 		cpu-dai = <&sai0>;
@@ -125,8 +125,6 @@
 		codec-master;
 		/* JD3: hp detect high for headphone*/
 		hp-det = <3 0>;
-		hp-det-gpios = <&gpio3 0 0>;
-		mic-det-gpios = <&gpio3 0 0>;
 		audio-routing =
 			"Headphone Jack", "HP_L",
 			"Headphone Jack", "HP_R",
@@ -149,31 +147,18 @@
 	imx7ulp-evk-0 {
 		pinctrl_hog_0_1: hoggrp-0-1 {
 			fsl,pins = <
-				ULP1_PAD_PTA24__PTA24		0x127
-				ULP1_PAD_PTB0__CLKOUT		0x900
+				IMX7ULP_PAD_PTA24__PTA24		0x127
+				IMX7ULP_PAD_PTB0__CLKOUT0		0x900
 			>;
 		};
 
 		pinctrl_sai0: sai0_grp {
 			fsl,pins = <
-				ULP1_PAD_PTA4__I2S0_MCLK        0x700
-				ULP1_PAD_PTA5__I2S0_TX_BCLK     0x0700
-				ULP1_PAD_PTA2__I2S0_RXD0        0x0700
-				ULP1_PAD_PTA6__I2S0_TX_FS       0x0700
-				ULP1_PAD_PTA7__I2S0_TXD0        0x0700
-			>;
-		};
-	};
-};
-
-&iomuxc1 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_hog_1 &pinctrl_hog_audio>;
-
-	imx7ulp-evk {
-		pinctrl_hog_audio: hoggrp-audio {
-			fsl,pins = <
-				ULP1_PAD_PTF0__PTF0		0x30100
+				IMX7ULP_PAD_PTA4__I2S0_MCLK        0x700
+				IMX7ULP_PAD_PTA5__I2S0_TX_BCLK     0x0700
+				IMX7ULP_PAD_PTA2__I2S0_RXD0        0x0700
+				IMX7ULP_PAD_PTA6__I2S0_TX_FS       0x0700
+				IMX7ULP_PAD_PTA7__I2S0_TXD0        0x0700
 			>;
 		};
 	};
@@ -188,10 +173,8 @@
 		clocks = <&clks_m4 IMX7ULP_CLK_SCG0_CLKOUT>;
 		clock-names = "mclk";
 		wlf,shared-lrclk;
-		assigned-clocks = <&clks_m4 IMX7ULP_CM4_CLK_APLL_SEL>,
-				  <&clks_m4 IMX7ULP_CLK_SCG0_CLKOUT>;
-		assigned-clock-parents = <&clks_m4 IMX7ULP_CM4_CLK_APLL_VCO_POST_DIV2>,
-					 <&clks_m4 IMX7ULP_CM4_CLK_APLL_SEL>;
+		assigned-clocks = <&clks_m4 IMX7ULP_CLK_SCG0_CLKOUT>;
+		assigned-clock-parents = <&clks_m4 IMX7ULP_CM4_CLK_SOSC>;
 	};
 };
 
@@ -201,7 +184,7 @@
 			  <&clks_m4 IMX7ULP_CM4_CLK_APLL_VCO_POST_DIV1>,
 			  <&clks_m4 IMX7ULP_CM4_CLK_APLL_VCO_POST_DIV2>,
 			  <&clks_m4 IMX7ULP_CM4_CLK_APLL_PFD0_PRE_DIV>;
-	assigned-clock-parents = <&clks_m4 IMX7ULP_CM4_CLK_OSC>;
+	assigned-clock-parents = <&clks_m4 IMX7ULP_CM4_CLK_SOSC>;
 	assigned-clock-rates = <0>, <540672000>, <49152000>, <12288000>, <270336000>;
 };
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 NXP
+ * Copyright 2017-2018 NXP
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -37,6 +37,7 @@
 #define HIGH_FREQ_3200MTS	0x0
 #define AUDIO_FREQ_400MTS	0x1
 #define LOW_BUS_FREQ_100MTS	0x2
+#define LOW_BUS_FREQ_667MTS	0x1
 #define WAIT_BUS_FREQ_DONE	0xf
 
 static struct device *busfreq_dev;
@@ -103,63 +104,54 @@ static void reduce_bus_freq(void)
 {
 	high_bus_freq_mode = 0;
 
-	/* prepare the necessary clk before frequency change */
-	clk_prepare_enable(sys1_pll_40m);
-	clk_prepare_enable(dram_alt_root);
-
 	/*
 	 * below piece of code has some redundant part, keep
 	 * it at present, we may need update the audio freq
 	 * in the future if needed.
 	 */
 	if (audio_bus_count) {
-		clk_prepare_enable(sys1_pll_100m);
+		if (cur_bus_freq_mode == BUS_FREQ_HIGH) {
 
-		update_bus_freq(LOW_BUS_FREQ_100MTS);
+			update_bus_freq(LOW_BUS_FREQ_667MTS);
 
-		/* correct the clock tree info */
-		clk_disable_unprepare(sys1_pll_100m);
-		clk_set_parent(dram_alt_src, sys1_pll_100m);
-		clk_set_parent(dram_core_clk, dram_alt_root);
-		clk_set_parent(dram_apb_src, sys1_pll_40m);
-		clk_set_rate(dram_apb_pre_div, 20000000);
-		/* reduce the NOC & bus clock */
-		clk_set_rate(noc_div, clk_get_rate(noc_div) / 8);
-		clk_set_rate(ahb_div, clk_get_rate(ahb_div) / 6);
-		clk_set_parent(main_axi_src, osc_25m);
+			/*
+			 * the dram_apb and dram_core clk rate is changed
+			 * in ATF side, below two lines of code is just used
+			 * to upate the clock tree info in kernel side.
+			 */
+			clk_set_rate(dram_apb_pre_div, 160000000);
+			clk_get_rate(dram_pll_clk);
+			/* reduce the NOC & bus clock */
+			clk_set_rate(noc_div, clk_get_rate(noc_div) / 8);
+			clk_set_rate(ahb_div, clk_get_rate(ahb_div) / 6);
+			clk_set_parent(main_axi_src, osc_25m);
+		}
 
 		low_bus_freq_mode = 0;
 		audio_bus_freq_mode = 1;
 		cur_bus_freq_mode = BUS_FREQ_AUDIO;
 	} else {
-		clk_prepare_enable(sys1_pll_100m);
+		if (cur_bus_freq_mode == BUS_FREQ_HIGH) {
 
-		update_bus_freq(LOW_BUS_FREQ_100MTS);
+			update_bus_freq(LOW_BUS_FREQ_667MTS);
 
-		/* correct the clock tree info */
-		clk_disable_unprepare(sys1_pll_100m);
-		clk_set_parent(dram_alt_src, sys1_pll_100m);
-		clk_set_parent(dram_core_clk, dram_alt_root);
-		clk_set_parent(dram_apb_src, sys1_pll_40m);
-		clk_set_rate(dram_apb_pre_div, 20000000);
-		clk_prepare_enable(sys1_pll_400m);
-		/* reduce the NOC & bus clock */
-		clk_set_rate(noc_div, clk_get_rate(noc_div) / 8);
-		clk_set_rate(ahb_div, clk_get_rate(ahb_div) / 6);
-		clk_set_parent(main_axi_src, osc_25m);
+			clk_set_rate(dram_apb_pre_div, 160000000);
+			clk_get_rate(dram_pll_clk);
+			/* reduce the NOC & bus clock */
+			clk_set_rate(noc_div, clk_get_rate(noc_div) / 8);
+			clk_set_rate(ahb_div, clk_get_rate(ahb_div) / 6);
+			clk_set_parent(main_axi_src, osc_25m);
+		}
 
 		low_bus_freq_mode = 1;
 		audio_bus_freq_mode = 0;
 		cur_bus_freq_mode = BUS_FREQ_LOW;
 	}
 
-	clk_disable_unprepare(sys1_pll_40m);
-	clk_disable_unprepare(dram_alt_root);
-
 	if (audio_bus_freq_mode)
-		printk(KERN_DEBUG "ddrc freq set to audio mode: 25MHz\n");
+		printk(KERN_DEBUG "ddrc freq set to audio mode: 167MHz\n");
 	if (low_bus_freq_mode)
-		printk(KERN_DEBUG "ddrc freq set to low bus mode: 25MHz\n");
+		printk(KERN_DEBUG "ddrc freq set to low bus mode: 167MHz\n");
 }
 
 static void reduce_bus_freq_handler(struct work_struct *work)
@@ -216,19 +208,11 @@ static int set_high_bus_freq(int high_bus_freq)
 	if (high_bus_freq_mode)
 		return 0;
 
-	/*  enable the clks needed in frequency */
-	clk_prepare_enable(sys1_pll_800m);
-	clk_prepare_enable(dram_pll_clk);
-
 	/* switch the DDR freqeuncy */
-	update_bus_freq(0x0);
+	update_bus_freq(HIGH_FREQ_3200MTS);
 
-	/* correct the clock tree info */
-	clk_set_parent(dram_apb_src, sys1_pll_800m);
 	clk_set_rate(dram_apb_pre_div, 200000000);
-	clk_set_parent(dram_core_clk, dram_pll_clk);
-	clk_disable_unprepare(sys1_pll_800m);
-	clk_disable_unprepare(dram_pll_clk);
+	clk_get_rate(dram_pll_clk);
 	clk_set_rate(noc_div, 800000000);
 	clk_set_rate(ahb_div, 133333333);
 	clk_set_parent(main_axi_src, sys2_pll_333m);
@@ -326,6 +310,7 @@ void release_bus_freq(enum bus_freq_mode mode)
 		(audio_bus_count == 0)) {
 		set_low_bus_freq();
 		mutex_unlock(&bus_freq_mutex);
+		return;
 	}
 
 	mutex_unlock(&bus_freq_mutex);

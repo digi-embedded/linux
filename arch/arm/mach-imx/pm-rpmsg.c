@@ -230,8 +230,7 @@ static int pm_rpmsg_probe(struct rpmsg_device *rpdev)
 		pm_heart_beat_work_handler);
 
 	pm_rpmsg.first_flag = true;
-	schedule_delayed_work(&heart_beat_work,
-			msecs_to_jiffies(100));
+	schedule_delayed_work(&heart_beat_work, 0);
 
 	pm_rpmsg.restart_handler.notifier_call = pm_restart_handler;
 	pm_rpmsg.restart_handler.priority = 128;
@@ -315,8 +314,10 @@ static const struct of_device_id pm_heartbeat_id[] = {
 };
 MODULE_DEVICE_TABLE(of, pm_heartbeat_id);
 
-static SIMPLE_DEV_PM_OPS(pm_heartbeat_ops, pm_heartbeat_suspend,
-			 pm_heartbeat_resume);
+static const struct dev_pm_ops pm_heartbeat_ops = {
+	 SET_LATE_SYSTEM_SLEEP_PM_OPS(pm_heartbeat_suspend,
+				      pm_heartbeat_resume)
+};
 
 static struct platform_driver pm_heartbeat_driver = {
 	.driver = {

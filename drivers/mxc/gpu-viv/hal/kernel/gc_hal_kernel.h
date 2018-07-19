@@ -2,7 +2,7 @@
 *
 *    The MIT License (MIT)
 *
-*    Copyright (c) 2014 - 2017 Vivante Corporation
+*    Copyright (c) 2014 - 2018 Vivante Corporation
 *
 *    Permission is hereby granted, free of charge, to any person obtaining a
 *    copy of this software and associated documentation files (the "Software"),
@@ -26,7 +26,7 @@
 *
 *    The GPL License (GPL)
 *
-*    Copyright (C) 2014 - 2017 Vivante Corporation
+*    Copyright (C) 2014 - 2018 Vivante Corporation
 *
 *    This program is free software; you can redistribute it and/or
 *    modify it under the terms of the GNU General Public License
@@ -59,8 +59,8 @@
 #include "gc_hal.h"
 #include "gc_hal_kernel_hardware.h"
 #include "gc_hal_driver.h"
-
 #include "gc_hal_kernel_mutex.h"
+#include "gc_hal_kernel_metadata.h"
 
 #if gcdENABLE_VG
 #include "gc_hal_kernel_vg.h"
@@ -1095,6 +1095,8 @@ struct _gckVIDMEM
 
 typedef struct _gcsVIDMEM_NODE
 {
+    _VIV_VIDMEM_METADATA        metadata;
+
     /* Pointer to gcuVIDMEM_NODE. */
     gcuVIDMEM_NODE_PTR          node;
 

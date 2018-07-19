@@ -18,33 +18,33 @@
 	status = "disabled";
 };
 
-&hdmi_cec {
-	status = "disabled";
-};
-
 &dcss {
 	status = "okay";
 	disp-dev = "mipi_disp";
 
-	assigned-clocks = <&clk IMX8MQ_CLK_DISP_AXI_SRC>,
-			  <&clk IMX8MQ_CLK_DISP_APB_SRC>,
+	clocks = <&clk IMX8MQ_CLK_DISP_APB_ROOT>,
+		 <&clk IMX8MQ_CLK_DISP_AXI_ROOT>,
+		 <&clk IMX8MQ_CLK_DISP_RTRM_ROOT>,
+		 <&clk IMX8MQ_CLK_DC_PIXEL_DIV>,
+		 <&clk IMX8MQ_CLK_DUMMY>,
+		 <&clk IMX8MQ_CLK_DISP_DTRC_DIV>;
+	clock-names = "apb", "axi", "rtrm", "pix_div", "pix_out", "dtrc";
+
+	assigned-clocks = <&clk IMX8MQ_CLK_DC_PIXEL_SRC>,
+			  <&clk IMX8MQ_CLK_DISP_AXI_SRC>,
 			  <&clk IMX8MQ_CLK_DISP_RTRM_SRC>,
-			  <&clk IMX8MQ_CLK_DISP_RTRM_PRE_DIV>,
-			  <&clk IMX8MQ_CLK_DC_PIXEL_SRC>,
 			  <&clk IMX8MQ_VIDEO_PLL1_REF_SEL>,
+			  <&clk IMX8MQ_CLK_DISP_RTRM_PRE_DIV>,
 			  <&clk IMX8MQ_VIDEO_PLL1>;
-	assigned-clock-parents = <&clk IMX8MQ_SYS1_PLL_800M>,
-				 <&clk IMX8MQ_SYS2_PLL_125M>,
+	assigned-clock-parents = <&clk IMX8MQ_VIDEO_PLL1_OUT>,
 				 <&clk IMX8MQ_SYS1_PLL_800M>,
-				 <&clk IMX8MQ_CLK_DISP_RTRM_CG>,
-				 <&clk IMX8MQ_VIDEO_PLL1_OUT>,
+				 <&clk IMX8MQ_SYS1_PLL_800M>,
 				 <&clk IMX8MQ_CLK_25M>;
-	assigned-clock-rates = <800000000>,
-			       <125000000>,
+	assigned-clock-rates = <600000000>,
+			       <800000000>,
 			       <400000000>,
-			       <400000000>,
-			       <120000000>,
 			       <0>,
+			       <400000000>,
 			       <599999999>;
 
 	dcss_disp0: port@0 {
@@ -114,5 +114,25 @@
 				MX8MQ_IOMUXC_ECSPI1_SCLK_GPIO5_IO6	0x16
 			>;
 		};
+
+		pinctrl_i2c1_synaptics_dsx_io: synaptics_dsx_iogrp {
+			fsl,pins = <
+				MX8MQ_IOMUXC_ECSPI1_MOSI_GPIO5_IO7              0x19
+			>;
+		};
+
+	};
+};
+
+&i2c1 {
+	synaptics_dsx_ts@20 {
+		compatible = "synaptics_dsx";
+		reg = <0x20>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_i2c1_synaptics_dsx_io>;
+		interrupt-parent = <&gpio5>;
+		interrupts = <7 8>;
+	/*	rest-gpios = <&gpio5 6 GPIO_ACTIVE_HIGH>;  */
+		status = "disabled";
 	};
 };

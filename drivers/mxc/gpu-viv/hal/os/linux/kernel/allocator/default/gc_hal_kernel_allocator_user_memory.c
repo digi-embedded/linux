@@ -2,7 +2,7 @@
 *
 *    The MIT License (MIT)
 *
-*    Copyright (c) 2014 - 2017 Vivante Corporation
+*    Copyright (c) 2014 - 2018 Vivante Corporation
 *
 *    Permission is hereby granted, free of charge, to any person obtaining a
 *    copy of this software and associated documentation files (the "Software"),
@@ -26,7 +26,7 @@
 *
 *    The GPL License (GPL)
 *
-*    Copyright (C) 2014 - 2017 Vivante Corporation
+*    Copyright (C) 2014 - 2018 Vivante Corporation
 *
 *    This program is free software; you can redistribute it and/or
 *    modify it under the terms of the GNU General Public License
@@ -330,6 +330,13 @@ _Import(
         struct vm_area_struct *vma = NULL;
         unsigned long vaddr = memory;
 
+        for (i = 0; i < pageCount; i++)
+        {
+            u32 data;
+            get_user(data, (u32 *)((memory & PAGE_MASK) + PAGE_SIZE * i));
+            put_user(data, (u32 *)((memory & PAGE_MASK) + PAGE_SIZE * i));
+        }
+
         vma = find_vma(current->mm, vaddr);
 
         if (!vma)
@@ -389,18 +396,6 @@ _Import(
     {
         gcmkONERROR(gcvSTATUS_OUT_OF_RESOURCES);
     }
-
-
-#ifdef CONFIG_ARM
-    if (memory)
-    {
-        for (i = 0; i < pageCount; i++)
-        {
-            u32 data;
-            get_user(data, (u32 *)((memory & PAGE_MASK) + PAGE_SIZE * i));
-        }
-    }
-#endif
 
     if (UserMemory->type == UM_PAGE_MAP)
     {
