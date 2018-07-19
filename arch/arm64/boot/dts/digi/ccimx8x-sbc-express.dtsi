@@ -208,6 +208,42 @@
 	debug_console;
 };
 
+&prg1 {
+	status = "okay";
+};
+
+&prg2 {
+	status = "okay";
+};
+
+&prg3 {
+	status = "okay";
+};
+
+&prg4 {
+	status = "okay";
+};
+
+&prg5 {
+	status = "okay";
+};
+
+&prg6 {
+	status = "okay";
+};
+
+&prg7 {
+	status = "okay";
+};
+
+&prg8 {
+	status = "okay";
+};
+
+&prg9 {
+	status = "okay";
+};
+
 &rpmsg{
 	/*
 	 * 64K for one rpmsg instance:
