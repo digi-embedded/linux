@@ -651,6 +651,14 @@
 	status = "disabled";
 };
 
+&vpu_decoder {
+	status = "disabled";
+};
+
+&vpu_encoder {
+	status = "disabled";
+};
+
 /* IOMUX */
 &iomuxc {
 	pinctrl-names = "default";

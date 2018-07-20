@@ -308,3 +308,11 @@
 &vpu {
 	status = "okay";
 };
+
+&vpu_decoder {
+	status = "okay";
+};
+
+&vpu_encoder {
+	status = "okay";
+};
