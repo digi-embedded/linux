@@ -34,6 +34,8 @@
 #define MCA_ADC_INT_VREF	MCA_VREF_uV(1.2)
 #define MCA_ADC_DEF_VREF	MCA_VREF_uV(3)
 
+extern int digi_get_som_hv(void);
+
 int mca_adc_read_raw(struct iio_dev *indio_dev,
 		     struct iio_chan_spec const *channel, int *value,
 		     int *shift, long mask)
@@ -656,7 +658,11 @@ static u32 get_vref(struct device *mca_dev, struct regmap *regmap,
 	bool internal_vref_supported = true;
 	bool internal_vref_selected = of_property_read_bool(np, "digi,internal-vref");
 
-	if (of_machine_is_compatible("digi,ccimx8x"))
+	/*
+	 * Disable internal_vref only for CC8X SOM HW version 0.
+	 * CC8X SOM HW version 1 has internal_vref functionality enabled.
+	 */
+	if (of_machine_is_compatible("digi,ccimx8x") && digi_get_som_hv() == 0)
 		internal_vref_supported = false;
 
 	if (internal_vref_selected && !internal_vref_supported) {
