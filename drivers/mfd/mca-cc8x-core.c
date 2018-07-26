@@ -30,8 +30,6 @@
 
 #define MCA_CC8X_NVRAM_SIZE	(MCA_CC8X_MPU_NVRAM_END - MCA_CC8X_MPU_NVRAM_START + 1)
 
-extern int digi_get_som_hv(void);
-
 struct dyn_attribute {
 	u16			since;	/* Minimum firmware version required */
 	struct attribute	*attr;
@@ -859,16 +857,14 @@ int mca_cc8x_device_init(struct mca_drv *mca, u32 irq)
 		}
 	}
 
-	/* Write the SOM hardware version to MCA register */
-	// FIXME mca->som_hv = digi_get_som_hv();
-	mca->som_hv = 0x01;
-	if (mca->som_hv > 0) {
-		ret = regmap_write(mca->regmap, MCA_CC8X_HWVER_SOM,
-				   mca->som_hv);
-		if (ret != 0)
-			dev_warn(mca->dev,
-				 "Cannot set SOM hardware version (%d)\n", ret);
-	}
+	/*
+	 * Read the SOM hardware version the MCA is using. For CC8X module it
+	 * is set by uboot
+	 */
+	ret = regmap_read(mca->regmap, MCA_CC8X_HWVER_SOM, &mca->som_hv);
+	if (ret != 0)
+		dev_warn(mca->dev,
+			 "Cannot read SOM hardware version (%d)\n", ret);
 
 	mca->fw_update_gpio = of_get_named_gpio(mca->dev->of_node,
 						"fw-update-gpio", 0);
