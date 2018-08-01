@@ -192,7 +192,7 @@
 #define IMX_RXBD_NUM 20
 #define IMX_MODULE_MAX_CLK_RATE	80000000
 
-#if defined(CONFIG_SOC_IMX6Q) || defined(CONFIG_SOC_IMX6UL)
+#if defined(CONFIG_SOC_IMX6Q) || defined(CONFIG_SOC_IMX6UL) || defined (CONFIG_HAVE_IMX8_SOC)
 extern int digi_get_board_version(void);
 #else
 int digi_get_board_version(void) { return 0; }
