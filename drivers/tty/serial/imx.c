@@ -182,6 +182,12 @@
 #define UART_NR 8
 #define IMX_MODULE_MAX_CLK_RATE	80000000
 
+#if defined(CONFIG_SOC_IMX6Q) || defined(CONFIG_SOC_IMX6UL) || defined (CONFIG_HAVE_IMX8_SOC)
+extern int digi_get_board_version(void);
+#else
+int digi_get_board_version(void) { return 0; }
+#endif
+
 /* i.MX21 type uart runs on all i.mx except i.MX1 and i.MX6q */
 enum imx_uart_type {
 	IMX1_UART,
