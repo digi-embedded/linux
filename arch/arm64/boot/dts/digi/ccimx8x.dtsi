@@ -101,6 +101,30 @@
 			compatible = "digi,mca-cc8x-wdt";
 			digi,full-reset;
 		};
+
+		pwms {
+			compatible = "digi,mca-pwm";
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			mca_pwm0: pwm@0 {
+				reg = <0>;
+				pwm-channels = <6>;
+				#pwm-cells = <3>;
+			};
+
+			mca_pwm1: pwm@1 {
+				reg = <1>;
+				pwm-channels = <2>;
+				#pwm-cells = <3>;
+			};
+
+			mca_pwm2: pwm@2 {
+				reg = <2>;
+				pwm-channels = <2>;
+				#pwm-cells = <3>;
+			};
+		};
 	};
 };
 

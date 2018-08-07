@@ -247,6 +247,10 @@ static const struct mfd_cell mca_cc8x_devs[] = {
 		.resources      = mca_cc8x_uart_resources,
 		.of_compatible = "digi,mca-cc8x-uart",
 	},
+	{
+		.name           = MCA_CC8X_DRVNAME_PWM,
+		.of_compatible	= "digi,mca-pwm",
+	},
 };
 
 /* Read a block of registers */

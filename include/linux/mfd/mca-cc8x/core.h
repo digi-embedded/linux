@@ -24,6 +24,7 @@
 #define MCA_CC8X_DRVNAME_TAMPER		"mca-cc8x-tamper"
 #define MCA_CC8X_DRVNAME_COMPARATOR	"mca-cc8x-comparator"
 #define MCA_CC8X_DRVNAME_UART		"mca-cc8x-uart"
+#define MCA_CC8X_DRVNAME_PWM		"mca-pwm"
 
 #define MCA_CC8X_DEVICE_ID_VAL		0x4A
 
