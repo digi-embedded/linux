@@ -3001,6 +3001,7 @@ static int gpmi_pm_suspend(struct device *dev)
 static int gpmi_pm_resume(struct device *dev)
 {
 	struct gpmi_nand_data *this = dev_get_drvdata(dev);
+	struct nand_chip *chip = &this->nand;
 	int ret;
 
 	ret = pm_runtime_force_resume(dev);
@@ -3028,6 +3029,9 @@ static int gpmi_pm_resume(struct device *dev)
 		dev_err(this->dev, "Error setting BCH : %d\n", ret);
 		return ret;
 	}
+
+	/* Some NAND chips, like Micron, require a reset after power-up */
+	nand_reset(chip, 0);
 
 	/* re-apply the timing setting */
 	this->hw.must_apply_timings = true;
