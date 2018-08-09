@@ -2477,7 +2477,8 @@ static int gpmi_pm_suspend(struct device *dev)
 static int gpmi_pm_resume(struct device *dev)
 {
 	struct gpmi_nand_data *this = dev_get_drvdata(dev);
-	int ret;
+	struct nand_chip *chip = &this->nand;
+	int ret, i;
 
 	/* enable clock, acquire dma */
 	ret = pm_runtime_force_resume(dev);
@@ -2502,6 +2503,9 @@ static int gpmi_pm_resume(struct device *dev)
 		dev_err(this->dev, "Error setting BCH : %d\n", ret);
 		return ret;
 	}
+
+	for (i = 0; i < chip->numchips; i++)
+		nand_reset(chip, i);
 
 	/* re-init others */
 	gpmi_extra_init(this);
