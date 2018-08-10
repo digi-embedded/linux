@@ -307,7 +307,7 @@
 	pinctrl-2 = <&pinctrl_usdhc2_200mhz>, <&pinctrl_usdhc2_gpio>;
 	bus-width = <4>;
 	no-1-8-v;
-	cd-gpios = <&gpio5 9 GPIO_ACTIVE_HIGH>;
+	cd-gpios = <&gpio4 22 GPIO_ACTIVE_HIGH>;
 	status = "disabled";
 };
 
@@ -455,7 +455,7 @@
 		pinctrl_usdhc2_gpio: usdhc2gpiogrp {
 			fsl,pins = <
 				/* Card detect */
-				SC_P_ENET0_REFCLK_125M_25M_LSIO_GPIO5_IO09	0x06000021
+				SC_P_USDHC1_CD_B_LSIO_GPIO4_IO22	0x06000021
 			>;
 		};
 
