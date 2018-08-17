@@ -54,6 +54,10 @@
 	status = "okay";
 };
 
+&fec2 {
+	status = "okay";
+};
+
 /*
  * CAN1 port conflicts with LPUART0 RTS/CTS lines.
  * Before enabling the port you need to configure
