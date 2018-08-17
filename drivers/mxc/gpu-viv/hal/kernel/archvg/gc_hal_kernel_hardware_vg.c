@@ -2,7 +2,7 @@
 *
 *    The MIT License (MIT)
 *
-*    Copyright (c) 2014 - 2017 Vivante Corporation
+*    Copyright (c) 2014 - 2018 Vivante Corporation
 *
 *    Permission is hereby granted, free of charge, to any person obtaining a
 *    copy of this software and associated documentation files (the "Software"),
@@ -26,7 +26,7 @@
 *
 *    The GPL License (GPL)
 *
-*    Copyright (C) 2014 - 2017 Vivante Corporation
+*    Copyright (C) 2014 - 2018 Vivante Corporation
 *
 *    This program is free software; you can redistribute it and/or
 *    modify it under the terms of the GNU General Public License
@@ -441,7 +441,7 @@ gckVGHARDWARE_Construct(
         gcmkERR_BREAK(gckOS_CreateMutex(Os, &hardware->powerMutex));
 
         /* Enable power management by default. */
-        hardware->powerManagement = gcvTRUE;
+        hardware->options.powerManagement = gcvTRUE;
 
         /* Return pointer to the gckVGHARDWARE object. */
         *Hardware = hardware;
@@ -669,6 +669,7 @@ gckVGHARDWARE_QueryChipIdentity(
     OUT gctUINT32 * ChipRevision,
     OUT gctUINT32 * ProductID,
     OUT gctUINT32 * EcoID,
+    OUT gctUINT32* CustomerID,
     OUT gctUINT32* ChipFeatures,
     OUT gctUINT32* ChipMinorFeatures,
     OUT gctUINT32* ChipMinorFeatures2
@@ -701,7 +702,7 @@ gckVGHARDWARE_QueryChipIdentity(
         {
             features = ((((gctUINT32) (features)) & ~(((gctUINT32) (((gctUINT32) ((((1 ?
  0:0) - (0 ? 0:0) + 1) == 32) ? ~0U : (~(~0U << ((1 ? 0:0) - (0 ? 0:0) + 1))))))) << (0 ?
- 0:0))) | (((gctUINT32) ((gctUINT32) (Hardware->allowFastClear) & ((gctUINT32) ((((1 ?
+ 0:0))) | (((gctUINT32) ((gctUINT32) (Hardware->options.allowFastClear) & ((gctUINT32) ((((1 ?
  0:0) - (0 ? 0:0) + 1) == 32) ? ~0U : (~(~0U << ((1 ? 0:0) - (0 ? 0:0) + 1))))))) << (0 ?
  0:0)));
         }
@@ -743,8 +744,20 @@ gckVGHARDWARE_QueryChipIdentity(
         *ChipMinorFeatures2 = Hardware->chipMinorFeatures2;
     }
 
-    *ProductID = Hardware->productID;
-    *EcoID = Hardware->ecoID;
+    if (ProductID != gcvNULL)
+    {
+        *ProductID = Hardware->productID;
+    }
+
+    if (EcoID != gcvNULL)
+    {
+        *EcoID = Hardware->ecoID;
+    }
+
+    if (CustomerID != gcvNULL)
+    {
+        *CustomerID = Hardware->customerID;
+    }
 
     gcmkFOOTER_NO();
     /* Success. */
@@ -1574,7 +1587,7 @@ gckVGHARDWARE_SetFastClear(
                                      0x00414,
                      debug));
 
-        Hardware->allowFastClear = Enable;
+        Hardware->options.allowFastClear = Enable;
 
         status = gcvFALSE;
     }
@@ -1774,7 +1787,7 @@ gckVGHARDWARE_SetPowerManagementState(
     command = Hardware->kernel->command;
     gcmkVERIFY_OBJECT(command, gcvOBJ_COMMAND);
 
-    if (Hardware->powerManagement == gcvFALSE)
+    if (Hardware->options.powerManagement == gcvFALSE)
     {
         gcmkFOOTER_NO();
         return gcvSTATUS_OK;
@@ -1786,18 +1799,6 @@ gckVGHARDWARE_SetPowerManagementState(
     /* Convert the broadcast power state. */
     switch (State)
     {
-    case gcvPOWER_SUSPEND_ATPOWERON:
-        /* Convert to SUSPEND and don't wait for STALL. */
-        State = gcvPOWER_SUSPEND;
-        stall = gcvFALSE;
-        break;
-
-    case gcvPOWER_OFF_ATPOWERON:
-        /* Convert to OFF and don't wait for STALL. */
-        State = gcvPOWER_OFF;
-        stall = gcvFALSE;
-        break;
-
     case gcvPOWER_IDLE_BROADCAST:
         /* Convert to IDLE and note we are inside broadcast. */
         State     = gcvPOWER_IDLE;
@@ -1813,13 +1814,6 @@ gckVGHARDWARE_SetPowerManagementState(
     case gcvPOWER_OFF_BROADCAST:
         /* Convert to OFF and note we are inside broadcast. */
         State     = gcvPOWER_OFF;
-        broadcast = gcvTRUE;
-        break;
-
-    case gcvPOWER_OFF_RECOVERY:
-        /* Convert to OFF and note we are inside recovery. */
-        State     = gcvPOWER_OFF;
-        stall     = gcvFALSE;
         broadcast = gcvTRUE;
         break;
 
@@ -2212,7 +2206,7 @@ gckVGHARDWARE_SetPowerManagement(
     /* Verify the arguments. */
     gcmkVERIFY_OBJECT(Hardware, gcvOBJ_HARDWARE);
 
-    Hardware->powerManagement = PowerManagement;
+    Hardware->options.powerManagement = PowerManagement;
 
     /* Success. */
     gcmkFOOTER_NO();

@@ -52,119 +52,37 @@
 *
 *****************************************************************************/
 
+#ifndef __gc_hal_kernel_metadata_h_
+#define __gc_hal_kernel_metadata_h_
 
-#include <stdarg.h>
-
-#ifndef __gc_hal_kernel_debugfs_h_
-#define __gc_hal_kernel_debugfs_h_
-
- #define MAX_LINE_SIZE 768           /* Max bytes for a line of debug info */
-
-
- typedef struct _gcsDEBUGFS_Node gcsDEBUGFS_Node;
-
-typedef struct _gcsDEBUGFS_DIR *gckDEBUGFS_DIR;
-typedef struct _gcsDEBUGFS_DIR
-{
-    struct dentry *     root;
-    struct list_head    nodeList;
-}
-gcsDEBUGFS_DIR;
-
-typedef struct _gcsINFO
-{
-    const char *        name;
-    int                 (*show)(struct seq_file*, void*);
-    int                 (*write)(const char __user *buf, size_t count, void*);
-}
-gcsINFO;
-
-typedef struct _gcsINFO_NODE
-{
-    gcsINFO *          info;
-    gctPOINTER         device;
-    struct dentry *    entry;
-    struct list_head   head;
-}
-gcsINFO_NODE;
-
-gceSTATUS
-gckDEBUGFS_DIR_Init(
-    IN gckDEBUGFS_DIR Dir,
-    IN struct dentry *root,
-    IN gctCONST_STRING Name
-    );
-
-gceSTATUS
-gckDEBUGFS_DIR_CreateFiles(
-    IN gckDEBUGFS_DIR Dir,
-    IN gcsINFO * List,
-    IN int count,
-    IN gctPOINTER Data
-    );
-
-gceSTATUS
-gckDEBUGFS_DIR_RemoveFiles(
-    IN gckDEBUGFS_DIR Dir,
-    IN gcsINFO * List,
-    IN int count
-    );
-
-void
-gckDEBUGFS_DIR_Deinit(
-    IN gckDEBUGFS_DIR Dir
-    );
-
-/*******************************************************************************
- **
- **                             System Related
- **
- *******************************************************************************/
-
-gctINT gckDEBUGFS_IsEnabled(void);
-
-gctINT gckDEBUGFS_Initialize(void);
-
-gctINT gckDEBUGFS_Terminate(void);
-
-
-/*******************************************************************************
- **
- **                             Node Related
- **
- *******************************************************************************/
-
-gctINT
-gckDEBUGFS_CreateNode(
-    IN gctPOINTER Device,
-    IN gctINT SizeInKB,
-    IN struct dentry * Root,
-    IN gctCONST_STRING NodeName,
-    OUT gcsDEBUGFS_Node **Node
-    );
-
-void gckDEBUGFS_FreeNode(
-            IN gcsDEBUGFS_Node  * Node
-            );
-
-
-
-void gckDEBUGFS_SetCurrentNode(
-            IN gcsDEBUGFS_Node  * Node
-            );
-
-
-
-void gckDEBUGFS_GetCurrentNode(
-            OUT gcsDEBUGFS_Node  ** Node
-            );
-
-
-ssize_t gckDEBUGFS_Print(
-                IN gctCONST_STRING  Message,
-                ...
-                );
-
+#ifdef __cplusplus
+extern "C" {
 #endif
 
+/* Macro to combine four characters into a Charcater Code. */
+#define __FOURCC(a, b, c, d) \
+    ((uint32_t)(a) | ((uint32_t)(b) << 8) | ((uint32_t)(c) << 16) | ((uint32_t)(d) << 24))
 
+#define VIV_VIDMEM_METADATA_MAGIC __FOURCC('v', 'i', 'v', 'm')
+
+/* Metadata for cross-device fd share with additional (ts) info. */
+typedef struct _VIV_VIDMEM_METADATA
+{
+    uint32_t magic;
+
+    int32_t  ts_fd;
+    void *   ts_dma_buf;
+
+    uint32_t fc_enabled;
+    uint32_t fc_value;
+    uint32_t fc_value_upper;
+
+    uint32_t compressed;
+    uint32_t compress_format;
+} _VIV_VIDMEM_METADATA;
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* __gc_hal_kernel_metadata_h_ */
