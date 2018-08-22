@@ -13,6 +13,16 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+/* Limit cma-reserved to 320 MiB to avoid slowdowns on 1 GiB RAM variants */
+/ {
+	reserved-memory {
+		linux,cma {
+			size = <0 0x14000000>;
+			alloc-ranges = <0 0x96000000 0 0x14000000>;
+		};
+	};
+};
+
 /* I2C0 connected to MCA and crypto chip */
 &i2c0 {
 	#address-cells = <1>;
