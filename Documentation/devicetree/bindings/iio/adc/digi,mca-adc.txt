@@ -20,12 +20,16 @@ Optional properties:
 - digi,comparator-ch-list: list of MCA IOs to be enabled as Analog Comparators
 - digi,adc-vref: ADC reference voltage in uV, corresponds with the VCC_MCA
   voltage.
-- digi,internal-vref: (not available for ConnectCore 8X)
-  if present, the internal 1.2 V reference will be used.
-  On the ConnectCore 6UL, this will force MCA_IO2/EXT_VREF to be configured as
-  a 1.2 V output, and a 100 nF capacitor must be placed between this line and
-  GND for it to work properly.
-  If this property is set, the value in 'digi,adc-vref' will be ignored.
+- digi,internal-vref:
+  If this property is set:
+     - Internal 1.2 V reference will be used.
+     - The value in 'digi,adc-vref' will be ignored.
+     - On the ConnectCore 8X version 1 this functionality is not available.
+       Later versions of ConnectCore 8X have this functionality available and
+       will force EXT_VREF pin to be configured as a 1.2 V output.
+     - On the ConnectCore 6UL, this will force MCA_IO2/EXT_VREF pin to be
+       configured as a 1.2 V output and a 100 nF capacitor must be placed between
+       MCA_IO2/EXT_VREF line and GND for it to work properly.
 
 Example:
 

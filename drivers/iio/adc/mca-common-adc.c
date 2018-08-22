@@ -659,10 +659,10 @@ static u32 get_vref(struct device *mca_dev, struct regmap *regmap,
 	bool internal_vref_selected = of_property_read_bool(np, "digi,internal-vref");
 
 	/*
-	 * Disable internal_vref only for CC8X SOM HW version 0.
-	 * CC8X SOM HW version 1 has internal_vref functionality enabled.
+	 * Disable internal_vref only for CC8X SOM HW version 1.
+	 * CC8X SOM HW version 2 has internal_vref functionality enabled.
 	 */
-	if (of_machine_is_compatible("digi,ccimx8x") && digi_get_som_hv() == 0)
+	if (of_machine_is_compatible("digi,ccimx8x") && digi_get_som_hv() < 2)
 		internal_vref_supported = false;
 
 	if (internal_vref_selected && !internal_vref_supported) {
