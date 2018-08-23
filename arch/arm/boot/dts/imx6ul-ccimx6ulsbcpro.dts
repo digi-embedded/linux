@@ -101,7 +101,7 @@
 	emmc-usd-mux {
 		gpio-hog;
 		gpios = <1 GPIO_ACTIVE_LOW>;
-		output-low;
+		output-high;
 	};
 };
 
@@ -202,9 +202,10 @@
 
 /* USDHC2 (microSD conflicts with eMMC) */
 &usdhc2 {
-	non-removable;
-	pinctrl-0 = <&pinctrl_usdhc2_8databits>;
-	bus-width = <8>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_usdhc2>;
+	no-1-8-v;
+	broken-cd;	/* no carrier detect line (use polling) */
 	status = "okay";
 };
 
