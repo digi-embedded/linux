@@ -9,6 +9,7 @@
 
 #include <linux/clk.h>
 #include <linux/debugfs.h>
+#include <linux/gpio/driver.h>
 #include <linux/mutex.h>
 #include <linux/regulator/consumer.h>
 #include <linux/spi/spi.h>
@@ -25,6 +26,7 @@ enum mcp25xxfd_model {
 struct mcp25xxfd_priv {
 	struct spi_device *spi;
 	struct clk *clk;
+	struct gpio_chip gpio;
 
 	/* the actual model of the mcp25xxfd */
 	enum mcp25xxfd_model model;
