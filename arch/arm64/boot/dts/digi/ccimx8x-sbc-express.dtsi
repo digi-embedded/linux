@@ -182,6 +182,17 @@
 	status = "disabled";
 };
 
+/* LPSPI3 on Raspberry Pi expansion header */
+&lpspi3 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lpspi3>;
+	fsl,spi-num-chipselects = <1>;
+	cs-gpios = <&gpio0 16 GPIO_ACTIVE_LOW>;
+	status = "disabled";
+};
+
 /* LPUART0 on XBee socket */
 &lpuart0 {
 	/* RTS/CTS lines multiplexed with CAN1 */
@@ -334,6 +345,15 @@
 				SC_P_MCLK_IN0_LSIO_GPIO0_IO19	0x06000020
 				/* User button */
 				SC_P_MCLK_OUT0_LSIO_GPIO0_IO20	0x06000020
+			>;
+		};
+
+		pinctrl_lpspi3: lpspi3grp {
+			fsl,pins = <
+				SC_P_SPI3_SCK_ADMA_SPI3_SCK	0x0600004c
+				SC_P_SPI3_SDO_ADMA_SPI3_SDO	0x0600004c
+				SC_P_SPI3_SDI_ADMA_SPI3_SDI	0x0600004c
+				SC_P_SPI3_CS0_LSIO_GPIO0_IO16	0x0600004c
 			>;
 		};
 

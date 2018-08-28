@@ -169,6 +169,21 @@
 	status = "okay";
 };
 
+/* LPSPI3 on Raspberry Pi expansion header */
+&lpspi3 {
+	status = "okay";
+
+	/*
+	 * Add your slave devices here. Next is an example of spidev.
+	 * Expect a harmless kernel warning if you enable spidev as slave.
+	 */
+	spidev@0 {
+		compatible = "spidev";
+		spi-max-frequency = <4000000>;
+		reg = <0>;
+	};
+};
+
 /* LPUART0 on XBee socket */
 &lpuart0 {
 	/* RTS/CTS lines multiplexed with CAN1 */
