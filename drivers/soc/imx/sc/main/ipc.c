@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2016 Freescale Semiconductor, Inc.
- * Copyright 2017 NXP
+ * Copyright 2017-2018 NXP
  *
  * SPDX-License-Identifier:     GPL-2.0+
  */
@@ -259,7 +259,7 @@ static void scu_mu_work_handler(struct work_struct *work)
 	 * the right group for itself, return directly if not.
 	 */
 	for (i = 0; i < SC_IRQ_NUM_GROUP; i++) {
-		sciErr = sc_irq_status(mu_ipcHandle, SC_R_MU_0A, i,
+		sciErr = sc_irq_status(mu_ipcHandle, SC_R_MU_1A, i,
 					&irq_status);
 		/* no irq? */
 		if (!irq_status)
@@ -291,7 +291,7 @@ int imx8_mu_enable_sc_irqs(u32 grp_temp, u32 grp_rtc, u32 grp_wake, u32 grp_wdog
 
 	/* Request for the MCA interrupt. */
 	if (grp_temp & SC_IRQ_TEMP_MCA) {
-		sciErr = sc_irq_enable(mu_ipcHandle, SC_R_MU_0A, SC_IRQ_GROUP_TEMP,
+		sciErr = sc_irq_enable(mu_ipcHandle, SC_R_MU_1A, SC_IRQ_GROUP_TEMP,
 				       SC_IRQ_TEMP_MCA, true);
 		if (sciErr)
 			pr_info("Cannot request MCA interrupt\n");
@@ -299,7 +299,7 @@ int imx8_mu_enable_sc_irqs(u32 grp_temp, u32 grp_rtc, u32 grp_wake, u32 grp_wdog
 
 	/* Request for the high temp interrupt. */
 	if (grp_temp & SC_IRQ_TEMP_PMIC0_HIGH) {
-		sciErr = sc_irq_enable(mu_ipcHandle, SC_R_MU_0A, SC_IRQ_GROUP_TEMP,
+		sciErr = sc_irq_enable(mu_ipcHandle, SC_R_MU_1A, SC_IRQ_GROUP_TEMP,
 				       SC_IRQ_TEMP_PMIC0_HIGH, true);
 		if (sciErr)
 			pr_info("Cannot request PMIC0_TEMP interrupt\n");
@@ -307,7 +307,7 @@ int imx8_mu_enable_sc_irqs(u32 grp_temp, u32 grp_rtc, u32 grp_wake, u32 grp_wdog
 
 	/* Request for the high temp interrupt. */
 	if (grp_temp & SC_IRQ_TEMP_PMIC1_HIGH) {
-		sciErr = sc_irq_enable(mu_ipcHandle, SC_R_MU_0A, SC_IRQ_GROUP_TEMP,
+		sciErr = sc_irq_enable(mu_ipcHandle, SC_R_MU_1A, SC_IRQ_GROUP_TEMP,
 				       SC_IRQ_TEMP_PMIC1_HIGH, true);
 		if (sciErr)
 			pr_info("Cannot request PMIC1_TEMP interrupt\n");
@@ -315,7 +315,7 @@ int imx8_mu_enable_sc_irqs(u32 grp_temp, u32 grp_rtc, u32 grp_wake, u32 grp_wdog
 
 	/* Request for the rtc alarm interrupt. */
 	if (grp_rtc & SC_IRQ_RTC) {
-		sciErr = sc_irq_enable(mu_ipcHandle, SC_R_MU_0A, SC_IRQ_GROUP_RTC,
+		sciErr = sc_irq_enable(mu_ipcHandle, SC_R_MU_1A, SC_IRQ_GROUP_RTC,
 				       SC_IRQ_RTC, true);
 		if (sciErr)
 			pr_info("Cannot request ALARM_RTC interrupt\n");
@@ -323,7 +323,7 @@ int imx8_mu_enable_sc_irqs(u32 grp_temp, u32 grp_rtc, u32 grp_wake, u32 grp_wdog
 
 	/* Request for the ON/OFF interrupt. */
 	if (grp_wake & SC_IRQ_BUTTON) {
-		sciErr = sc_irq_enable(mu_ipcHandle, SC_R_MU_0A, SC_IRQ_GROUP_WAKE,
+		sciErr = sc_irq_enable(mu_ipcHandle, SC_R_MU_1A, SC_IRQ_GROUP_WAKE,
 				       SC_IRQ_BUTTON, true);
 		if (sciErr)
 			pr_info("Cannot request ON/OFF interrupt\n");
@@ -331,7 +331,7 @@ int imx8_mu_enable_sc_irqs(u32 grp_temp, u32 grp_rtc, u32 grp_wake, u32 grp_wdog
 
 	/* Request for the watchdog interrupt. */
 	if (grp_wdog & SC_IRQ_WDOG) {
-		sciErr = sc_irq_enable(mu_ipcHandle, SC_R_MU_0A, SC_IRQ_GROUP_WDOG,
+		sciErr = sc_irq_enable(mu_ipcHandle, SC_R_MU_1A, SC_IRQ_GROUP_WDOG,
 				       SC_IRQ_WDOG, true);
 		if (sciErr)
 			pr_info("Cannot request WDOG interrupt\n");
@@ -371,17 +371,21 @@ int __init imx8_mu_init(void)
 	if (!skip_irq_req) {
 		irq = of_irq_get(np, 0);
 
-		err = request_irq(irq, imx8_scu_mu_isr,
-				  IRQF_EARLY_RESUME, "imx8_mu_isr", NULL);
-		if (err) {
-			pr_info("imx8_mu_init :request_irq failed %d, err = %d\n",
-				irq, err);
-		}
+		if (irq <= 0) {
+			/* SCU works just fine without irq */
+			pr_warn("imx8_mu_init: no irq: %d\n", irq);
+		} else {
+			err = request_irq(irq, imx8_scu_mu_isr,
+				  	IRQF_EARLY_RESUME, "imx8_mu_isr", NULL);
+			if (err) {
+				pr_err("imx8_mu_init: request_irq %d failed: %d\n",
+					irq, err);
+				return err;
+			}
 
-		err = irq_set_irq_wake(irq, 1);
-		if (err) {
-			pr_info("set mu irq wake up error %d.\n", err);
-			return err;
+			err = irq_set_irq_wake(irq, 1);
+			if (err)
+				pr_err("imx8mu_init: set_irq_wake failed: %d\n", err);
 		}
 	}
 
