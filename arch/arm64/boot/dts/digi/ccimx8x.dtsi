@@ -38,7 +38,6 @@
 	mca_cc8x: mca@63 {
 		compatible = "digi,mca_cc8x";
 		reg = <0x63>;
-		/* Note that the IRQ has not been tested */
 		interrupt-parent = <&wu>;
 		interrupts = <GIC_SPI 177 IRQ_TYPE_LEVEL_HIGH>;
 		interrupt-controller;

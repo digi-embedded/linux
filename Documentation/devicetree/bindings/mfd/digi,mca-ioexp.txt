@@ -30,12 +30,12 @@ Sub-nodes:
 
 - adc : This node defines settings for the ADC channels associated with the
   I/O Expander. Refer to binding at:
-  "Documentation/devicetree/bindings/iio/adc/digi,mca-ioexp-adc.txt"
+  "Documentation/devicetree/bindings/iio/adc/digi,mca-adc.txt"
 
 - gpio : This node defines settings for the GPIO pins associated with the I/O
   Expander.
   Refer to binding at:
-  "Documentation/devicetree/bindings/gpio/gpio-mca-ioexp.txt"
+  "Documentation/devicetree/bindings/gpio/gpio-mca.txt"
 
 Example:
 

@@ -1,6 +1,6 @@
-* Digi ConnectCore 6UL Micro-Controller Assist (MCA)
+* Digi ConnectCore 8X Micro-Controller Assist (MCA)
 
-The CC6UL MCA consists of a varied group of sub-devices (I2C Only):
+The CC8X MCA consists of a varied group of sub-devices (I2C Only):
 
 Device                   Description
 ------                   ------------
@@ -14,8 +14,8 @@ watchdog                 Watchdog
 
 Required properties:
 
-- compatible : Should be "digi,mca_cc6ul_dt_ids"
-- reg : Specifies the I2C slave address (this defaults to 0x7e but it can be
+- compatible : Should be "digi,mca_cc8x"
+- reg : Specifies the I2C slave address (this defaults to 0x63 but it can be
   modified to match the chip's OTP settings).
 - interrupt-parent : Specifies the reference to the interrupt controller for
   the MCA.
@@ -52,24 +52,24 @@ Sub-nodes:
 
 Example:
 
-	mca_cc6ul: mca@7e {
-		compatible = "digi,mca_cc6ul_dt_ids";
-		reg = <0x7e>;
-		interrupt-parent = <&gpio5>;
-		interrupts = <4 IRQ_TYPE_EDGE_FALLING>;
+	mca_cc8x: mca@63 {
+		compatible = "digi,mca_cc8x";
+		reg = <0x63>;
+		interrupt-parent = <&wu>;
+		interrupts = <GIC_SPI 177 IRQ_TYPE_EDGE_HIGH>;
 		interrupt-controller;
 		#interrupt-cells = <2>;
-		fw-update-gpio = <&gpio4 14 GPIO_ACTIVE_HIGH>;
+		fw-update-gpio = <&gpio3 9 GPIO_ACTIVE_LOW>;
 		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_mca_cc6ul>;
+		pinctrl-0 = <&pinctrl_mca_cc8x>;
 
 		adc {
-			compatible = "digi,mca-cc6ul-adc";
+			compatible = "digi,mca-cc8x-adc";
 			digi,adc-ch-list = <4>;
 		};
 
 		pwrkey {
-			compatible = "digi,mca-cc6ul-pwrkey";
+			compatible = "digi,mca-cc8x-pwrkey";
 			digi,key-power;
 			digi,key-sleep;
 			digi,debounce-ms = <100>;
@@ -78,16 +78,16 @@ Example:
 		};
 
 		gpio {
-			compatible = "digi,mca-cc6ul-gpio";
+			compatible = "digi,mca-cc8x-gpio";
 			gpio-controller;
 			#gpio-cells = <2>;
 		};
 
 		rtc {
-			compatible = "digi,mca-cc6ul-rtc";
+			compatible = "digi,mca-cc8x-rtc";
 		};
 
 		watchdog {
-			compatible = "digi,mca-cc6ul-wdt";
+			compatible = "digi,mca-cc8x-wdt";
 		};
 	};
