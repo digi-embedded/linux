@@ -59,47 +59,45 @@
 
 /* IOMUX */
 &iomuxc {
-	ccimx8x {
-		/* UART1 Bluetooth (2 wires) */
-		pinctrl_lpuart1_2wires: lpuart1grp_2wires {
-			fsl,pins = <
-				SC_P_UART1_TX_ADMA_UART1_TX		0x06000020
-				SC_P_UART1_RX_ADMA_UART1_RX		0x06000020
-			>;
-		};
+	/* UART1 Bluetooth (2 wires) */
+	pinctrl_lpuart1_2wires: lpuart1grp_2wires {
+		fsl,pins = <
+			SC_P_UART1_TX_ADMA_UART1_TX		0x06000020
+			SC_P_UART1_RX_ADMA_UART1_RX		0x06000020
+		>;
+	};
 
-		/* UART1 Bluetooth (4 wires) */
-		pinctrl_lpuart1_4wires: lpuart1grp_4wires {
-			fsl,pins = <
-				SC_P_UART1_TX_ADMA_UART1_TX		0x06000020
-				SC_P_UART1_RX_ADMA_UART1_RX		0x06000020
-				SC_P_UART1_RTS_B_ADMA_UART1_RTS_B	0x06000020
-				SC_P_UART1_CTS_B_ADMA_UART1_CTS_B	0x06000020
-			>;
-		};
+	/* UART1 Bluetooth (4 wires) */
+	pinctrl_lpuart1_4wires: lpuart1grp_4wires {
+		fsl,pins = <
+			SC_P_UART1_TX_ADMA_UART1_TX		0x06000020
+			SC_P_UART1_RX_ADMA_UART1_RX		0x06000020
+			SC_P_UART1_RTS_B_ADMA_UART1_RTS_B	0x06000020
+			SC_P_UART1_CTS_B_ADMA_UART1_CTS_B	0x06000020
+		>;
+	};
 
-		pinctrl_lpuart1_gpio: lpuart1grp_gpio {
-			fsl,pins = <
-				/* Bluetooth enable (BT_EN) */
-				SC_P_QSPI0A_DATA1_LSIO_GPIO3_IO10	0x06000021
-			>;
-		};
+	pinctrl_lpuart1_gpio: lpuart1grp_gpio {
+		fsl,pins = <
+			/* Bluetooth enable (BT_EN) */
+			SC_P_QSPI0A_DATA1_LSIO_GPIO3_IO10	0x06000021
+		>;
+	};
 
-		/* PCI Wireless */
-		pinctrl_pcieb: pcieagrp {
-			fsl,pins = <
-				SC_P_PCIE_CTRL0_PERST_B_LSIO_GPIO4_IO00		0x06000021
-				SC_P_PCIE_CTRL0_CLKREQ_B_LSIO_GPIO4_IO01	0x06000021
-				SC_P_PCIE_CTRL0_WAKE_B_LSIO_GPIO4_IO02		0x06000021
-			>;
-		};
-		pinctrl_pcieb_gpio: pcieagrp_gpio {
-			fsl,pins = <
-				/* Wireless enable (WL_EN) */
-				SC_P_QSPI0A_DATA2_LSIO_GPIO3_IO11		0x06000021
-				/* Voltage for RF domain (3V3_RF_EN) */
-				SC_P_QSPI0A_DATA3_LSIO_GPIO3_IO12		0x06000021
-			>;
-		};
+	/* PCI Wireless */
+	pinctrl_pcieb: pcieagrp {
+		fsl,pins = <
+			SC_P_PCIE_CTRL0_PERST_B_LSIO_GPIO4_IO00		0x06000021
+			SC_P_PCIE_CTRL0_CLKREQ_B_LSIO_GPIO4_IO01	0x06000021
+			SC_P_PCIE_CTRL0_WAKE_B_LSIO_GPIO4_IO02		0x06000021
+		>;
+	};
+	pinctrl_pcieb_gpio: pcieagrp_gpio {
+		fsl,pins = <
+			/* Wireless enable (WL_EN) */
+			SC_P_QSPI0A_DATA2_LSIO_GPIO3_IO11		0x06000021
+			/* Voltage for RF domain (3V3_RF_EN) */
+			SC_P_QSPI0A_DATA3_LSIO_GPIO3_IO12		0x06000021
+		>;
 	};
 };
