@@ -98,15 +98,6 @@
 	status = "disabled";
 };
 
-&i2c0_cm40 {
-	#address-cells = <1>;
-	#size-cells = <0>;
-	clock-frequency = <100000>;
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_cm40_i2c>;
-	status = "disabled";
-};
-
 /* I2C2 available on Raspberry Pi expansion header */
 &i2c2 {
 	#address-cells = <1>;
@@ -332,13 +323,6 @@
 	pinctrl-0 = <&pinctrl_hog>;
 
 	ccimx8x {
-		pinctrl_cm40_i2c: cm40i2cgrp {
-			fsl,pins = <
-				SC_P_ADC_IN1_M40_I2C0_SDA	0x0600004c
-				SC_P_ADC_IN0_M40_I2C0_SCL	0x0600004c
-			>;
-		};
-
 		pinctrl_hog: hoggrp {
 			fsl,pins = <
 				/* User LED */

@@ -92,10 +92,6 @@
 	status = "okay";
 };
 
-&i2c0_cm40 {
-	status = "okay";
-};
-
 /* I2C2 available on Raspberry Pi expansion header */
 &i2c2 {
 	status = "okay";
