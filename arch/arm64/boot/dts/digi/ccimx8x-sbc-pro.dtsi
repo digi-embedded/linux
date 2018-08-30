@@ -198,8 +198,7 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lpspi0>;
 	fsl,spi-num-chipselects = <2>;
-	cs-gpios = <&gpio1 8 GPIO_ACTIVE_LOW>,
-		   <&gpio1 7 GPIO_ACTIVE_LOW>;
+	cs-gpios = <0>, <1>;
 	status = "disabled";
 };
 
@@ -363,8 +362,8 @@
 				SC_P_SPI0_SCK_ADMA_SPI0_SCK	0x0600004c
 				SC_P_SPI0_SDO_ADMA_SPI0_SDO	0x0600004c
 				SC_P_SPI0_SDI_ADMA_SPI0_SDI	0x0600004c
-				SC_P_SPI0_CS0_LSIO_GPIO1_IO08	0x0600004c
-				SC_P_SPI0_CS1_LSIO_GPIO1_IO07	0x0600004c
+				SC_P_SPI0_CS0_ADMA_SPI0_CS0	0x0600004c
+				SC_P_SPI0_CS1_ADMA_SPI0_CS1	0x0600004c
 			>;
 		};
 
