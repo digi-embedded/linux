@@ -932,7 +932,7 @@ int mca_cc8x_device_init(struct mca_drv *mca, u32 irq)
 		goto out_pwr_off;
 	}
 
-	if (mca->fw_version >= MCA_MAKE_FW_VER(1, 2)) {
+	if (mca->fw_version >= MCA_MAKE_FW_VER(0, 8)) {
 		mca->nvram = devm_kzalloc(mca->dev, sizeof(struct bin_attribute),
 					  GFP_KERNEL);
 		if (!mca->nvram) {
