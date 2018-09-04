@@ -100,7 +100,7 @@
 
 /* I2C3 available on Raspberry Pi expansion header */
 &i2c3 {
-	status = "okay";
+	status = "disabled";
 };
 
 &i2c0_mipi_lvds0 {
@@ -169,10 +169,10 @@
 /* LPUART0 on XBee socket */
 &lpuart0 {
 	/* RTS/CTS lines multiplexed with CAN1 */
-	pinctrl-0 = <&pinctrl_lpuart0_4wires>, <&pinctrl_xbee_gpios>;
+	//pinctrl-0 = <&pinctrl_lpuart0_4wires>, <&pinctrl_xbee_gpios>;
 	/* Comment the line above and uncomment the next one to use 2-wires */
-	//pinctrl-0 = <&pinctrl_lpuart0_2wires>, <&pinctrl_xbee_gpios>;
-	status = "disabled";
+	pinctrl-0 = <&pinctrl_lpuart0_2wires>, <&pinctrl_xbee_gpios>;
+	status = "okay";
 };
 
 /* Console */
@@ -182,7 +182,7 @@
 
 /* LPUART3 on expansion header */
 &lpuart3 {
-	status = "disabled";
+	status = "okay";
 };
 
 &usbotg1 {
@@ -234,8 +234,6 @@
 			SC_P_USDHC1_WP_LSIO_GPIO4_IO21		0x06000020
 			/* GPIO4_22 (J12 PIN31) */
 			SC_P_USDHC1_CD_B_LSIO_GPIO4_IO22	0x06000020
-			/* UART3_RX (J12 PIN10) */
-			SC_P_SCU_GPIO0_00_LSIO_GPIO2_IO03	0x06000020
 			/* GPIO1_IO29 (J12 PIN16) */
 			SC_P_MIPI_DSI1_I2C0_SCL_LSIO_GPIO1_IO29	0x06000020
 			/* GPIO1_IO30 (J12 PIN18) */
@@ -249,23 +247,13 @@
 			/* GPIO5_03 (J12 PIN32) */
 			SC_P_ENET0_RGMII_RXC_LSIO_GPIO5_IO03	0x06000020
 			/* GPIO1_19 (J12 PIN40) */
-			SC_P_FLEXCAN2_RX_LSIO_GPIO1_IO19	0x06000020
+			SC_P_FLEXCAN2_RX_LSIO_GPIO1_IO19		0x06000020
 
-			/* XBee connector */
-			/* XBEE_UART_RX (J12 PIN2)*/
-			SC_P_UART0_RX_LSIO_GPIO1_IO21		0x06000020
-			/* XBEE_UART_TX (J12 PIN3) */
-			SC_P_UART0_TX_LSIO_GPIO1_IO22		0x06000020
-			/* XBEE_RESET (J12 PIN5) */
-			SC_P_QSPI0A_DQS_LSIO_GPIO3_IO13		0x06000020
-			/* XBEE_SLEEP_RQ (J12 PIN9) */
-			SC_P_QSPI0A_SCLK_LSIO_GPIO3_IO16	0x06000020
-			/* XBEE_UART_CTS (J13 PIN5) */
-			SC_P_FLEXCAN0_TX_LSIO_GPIO1_IO16	0x06000020
-			/* XBEE_ON/SLP_N (J13 PIN8) */
-			SC_P_QSPI0A_SS0_B_LSIO_GPIO3_IO14	0x06000020
-			/* XBEE_UART_RTS (J13 PIN9) */
-			SC_P_FLEXCAN0_RX_LSIO_GPIO1_IO15	0x06000020
+			/* J17 connector */
+			/* ADC_IN0 (J17 PIN2) */
+			SC_P_ADC_IN0_LSIO_GPIO1_IO10			0x06000020
+			/* ADC_IN0 (J17 PIN3) */
+			SC_P_ADC_IN1_LSIO_GPIO1_IO09			0x06000020
 		>;
 	};
 };
