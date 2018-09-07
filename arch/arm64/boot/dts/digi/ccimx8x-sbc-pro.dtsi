@@ -199,6 +199,58 @@
 	status = "disabled";
 };
 
+&i2c0_mipi_lvds1 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_i2c0_mipi_lvds1>;
+	clock-frequency = <100000>;
+	status = "disabled";
+
+	/*
+	 * On the CC8X SBC, an inconsistent reset sequence makes
+	 * the Goodix display's touch controller respond to two I2C
+	 * addresses: 0x14 and 0x5D. To make sure the touchscreen
+	 * works every time, the touch controller's description must
+	 * be duplicated for both addresses.
+	 */
+	lvds1_goodix_touch1: gt9271@14 {
+		compatible = "goodix,gt9271";
+		reg = <0x14>;
+		/* Interrupt for LVDS1 */
+		interrupt-parent = <&gpio3>;
+		interrupts = <19 IRQ_TYPE_EDGE_FALLING>;
+		irq-gpios = <&gpio3 19 GPIO_ACTIVE_LOW>;
+		skip-firmware-request;
+		status = "disabled";
+	};
+
+	lvds1_goodix_touch2: gt9271@5D {
+		compatible = "goodix,gt9271";
+		reg = <0x5D>;
+		/* Interrupt for LVDS1 */
+		interrupt-parent = <&gpio3>;
+		interrupts = <19 IRQ_TYPE_EDGE_FALLING>;
+		irq-gpios = <&gpio3 19 GPIO_ACTIVE_LOW>;
+		skip-firmware-request;
+		status = "disabled";
+	};
+};
+
+&ldb2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lvds1>;
+	status = "disabled";
+
+	lvds-channel@0 {
+		status = "disabled";
+	};
+};
+
+&ldb2_phy {
+	status = "disabled";
+};
+
 /* LPSPI0 on expansion header */
 &lpspi0 {
 	#address-cells = <1>;
@@ -408,6 +460,15 @@
 		>;
 	};
 
+	pinctrl_lvds1: lvds1grp {
+		fsl,pins = <
+			/* LVDS1 touch interrupt */
+			SC_P_QSPI0B_DATA1_LSIO_GPIO3_IO19       0x06000020
+			/* LVDS1 PWM backlight (as GPIO) */
+			SC_P_MIPI_DSI1_GPIO0_00_LSIO_GPIO1_IO31 0x06000020
+		>;
+	};
+
 	/* FEC shared MDIO bus */
 	pinctrl_fec_mdio: fecmdiogrp {
 		fsl,pins = <
@@ -501,6 +562,13 @@
 		fsl,pins = <
 			SC_P_MIPI_DSI0_I2C0_SCL_MIPI_DSI0_I2C0_SCL 0xc6000020
 			SC_P_MIPI_DSI0_I2C0_SDA_MIPI_DSI0_I2C0_SDA 0xc6000020
+		>;
+	};
+
+	pinctrl_i2c0_mipi_lvds1: mipi_lvds1_i2c0_grp {
+		fsl,pins = <
+			SC_P_MIPI_DSI1_I2C0_SCL_MIPI_DSI1_I2C0_SCL 0xc6000020
+			SC_P_MIPI_DSI1_I2C0_SDA_MIPI_DSI1_I2C0_SDA 0xc6000020
 		>;
 	};
 
