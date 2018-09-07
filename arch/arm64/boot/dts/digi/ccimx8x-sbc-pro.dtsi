@@ -166,9 +166,9 @@
 		compatible = "goodix,gt9271";
 		reg = <0x14>;
 		/* Interrupt for LVDS0 */
-		interrupt-parent = <&gpio4>;
-		interrupts = <19 IRQ_TYPE_EDGE_FALLING>;
-		irq-gpios = <&gpio4 19 GPIO_ACTIVE_LOW>;
+		interrupt-parent = <&gpio3>;
+		interrupts = <20 IRQ_TYPE_EDGE_FALLING>;
+		irq-gpios = <&gpio3 20 GPIO_ACTIVE_LOW>;
 		skip-firmware-request;
 		status = "disabled";
 	};
@@ -177,9 +177,9 @@
 		compatible = "goodix,gt9271";
 		reg = <0x5D>;
 		/* Interrupt for LVDS0 */
-		interrupt-parent = <&gpio4>;
-		interrupts = <19 IRQ_TYPE_EDGE_FALLING>;
-		irq-gpios = <&gpio4 19 GPIO_ACTIVE_LOW>;
+		interrupt-parent = <&gpio3>;
+		interrupts = <20 IRQ_TYPE_EDGE_FALLING>;
+		irq-gpios = <&gpio3 20 GPIO_ACTIVE_LOW>;
 		skip-firmware-request;
 		status = "disabled";
 	};
@@ -402,7 +402,7 @@
 	pinctrl_lvds0: lvds0grp {
 		fsl,pins = <
 			/* LVDS0 touch interrupt */
-			SC_P_USDHC1_RESET_B_LSIO_GPIO4_IO19	0x06000020
+			SC_P_QSPI0B_DATA2_LSIO_GPIO3_IO20	0x06000020
 			/* LVDS0 PWM backlight (as GPIO) */
 			SC_P_MIPI_DSI0_GPIO0_00_LSIO_GPIO1_IO27	0x06000020
 		>;
