@@ -37,6 +37,23 @@
 			enable-active-high;
 			startup-delay-us = <1000>;
 		};
+
+		reg_5v_display: regulator@2 {
+			compatible = "regulator-fixed";
+			reg = <2>;
+			regulator-name = "5v_display";
+			regulator-min-microvolt = <5000000>;
+			regulator-max-microvolt = <5000000>;
+			gpio = <&gpio0 13 GPIO_ACTIVE_HIGH>;
+			enable-active-high;
+
+			/*
+			 * Configured as always-on because, at the moment, there
+			 * are no consumers to switch it on. Remove once the
+			 * backlight-pwm is added.
+			 */
+			regulator-always-on;
+		};
 	};
 };
 
@@ -337,6 +354,8 @@
 			SC_P_MCLK_IN0_LSIO_GPIO0_IO19	0x06000020
 			/* User button */
 			SC_P_MCLK_OUT0_LSIO_GPIO0_IO20	0x06000020
+			/* Display regulator enable */
+			SC_P_SPI3_SCK_LSIO_GPIO0_IO13	0x06000020
 		>;
 	};
 
