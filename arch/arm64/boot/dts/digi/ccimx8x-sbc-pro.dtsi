@@ -55,7 +55,46 @@
 			 */
 			regulator-always-on;
 		};
+
+		reg_3v3_audio: regulator@3 {
+			compatible = "regulator-fixed";
+			reg = <3>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_reg_3v3_aud>;
+			regulator-name = "3v3_audio";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			gpio = <&gpio0 14 GPIO_ACTIVE_HIGH>;
+			enable-active-high;
+			startup-delay-us = <1000>;
+		};
 	};
+
+	sound_max98089: sound-max98089 {
+		compatible = "fsl,imx-audio-max98088";
+		model = "imx-max98088";
+		cpu-dai = <&sai0>;
+		audio-codec = <&max98089>;
+		asrc-controller = <&asrc0>;
+		audio-routing =
+			"Headphone Jack", "HPL",
+			"Headphone Jack", "HPR",
+			"Ext Spk", "SPKL",
+			"Ext Spk", "SPKR",
+			"LineOut", "RECL",
+			"LineOut", "RECR",
+			"Mic1", "MIC1",
+			"Mic2", "MIC2",
+			"LineInA", "INA1",
+			"LineInA", "INA2",
+			"LineInB", "INB1",
+			"LineInB", "INB2";
+		status = "disabled";
+	};
+};
+
+&asrc0 {
+	fsl,asrc-rate  = <48000>;
 };
 
 &fec1 {
@@ -158,6 +197,22 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lpi2c3>;
 	status = "disabled";
+
+	max98089: codec@10 {
+		compatible = "maxim,max98089";
+		reg = <0x10>;
+		clocks = <&clk IMX8QXP_AUD_MCLKOUT1>;
+		clock-names = "mclk";
+		power-domains = <&pd_mclk_out1>;
+		vcc-supply = <&reg_3v3_audio>;
+		assigned-clocks = <&clk IMX8QXP_AUD_PLL0_DIV>,
+				  <&clk IMX8QXP_AUD_ACM_AUD_PLL_CLK0_DIV>,
+				  <&clk IMX8QXP_AUD_ACM_AUD_REC_CLK0_DIV>,
+				  <&clk IMX8QXP_AUD_MCLKOUT1>;
+		assigned-clock-rates = <786432000>, <49152000>, <12288000>, <12288000>;
+		status = "disabled";
+	};
+
 };
 
 &i2c0_mipi_lvds0 {
@@ -396,6 +451,17 @@
 	vdev-nums = <1>;
 	reg = <0x0 0x90000000 0x0 0x10000>;
 	status = "okay";
+};
+
+&sai0 {
+	assigned-clocks = <&clk IMX8QXP_AUD_PLL0_DIV>,
+			  <&clk IMX8QXP_AUD_ACM_AUD_PLL_CLK0_DIV>,
+			  <&clk IMX8QXP_AUD_ACM_AUD_REC_CLK0_DIV>,
+			  <&clk IMX8QXP_AUD_SAI_0_MCLK>;
+	assigned-clock-rates = <786432000>, <49152000>, <12288000>, <49152000>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_sai0>;
+	status = "disabled";
 };
 
 &tsens {
@@ -664,6 +730,23 @@
 			SC_P_PCIE_CTRL0_PERST_B_LSIO_GPIO4_IO00		0x04000021
 			SC_P_PCIE_CTRL0_CLKREQ_B_LSIO_GPIO4_IO01	0x04000021
 			SC_P_PCIE_CTRL0_WAKE_B_LSIO_GPIO4_IO02		0x04000021
+		>;
+	};
+
+	pinctrl_reg_3v3_aud: reg_3v3_aud_grp {
+		fsl,pins = <
+			/* Audio power enable */
+			SC_P_SPI3_SDO_LSIO_GPIO0_IO14		0x06000020
+		>;
+	};
+
+	pinctrl_sai0: sai0grp {
+		fsl,pins = <
+			SC_P_SAI0_RXD_ADMA_SAI0_RXD		0x06000040
+			SC_P_SAI0_TXD_ADMA_SAI0_TXD		0x06000060
+			SC_P_SAI0_TXFS_ADMA_SAI0_TXFS		0x06000040
+			SC_P_SAI0_TXC_ADMA_SAI0_TXC		0x06000040
+			SC_P_SPI3_CS0_ADMA_ACM_MCLK_OUT1	0x06000040
 		>;
 	};
 

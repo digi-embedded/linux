@@ -272,6 +272,23 @@
 	status = "disabled";
 };
 
+/* Audio support */
+&asrc0 {
+	status = "okay";
+};
+
+&sai0 {
+	status = "okay";
+};
+
+&max98089 {
+	status = "okay";
+};
+
+&sound_max98089 {
+	status = "okay";
+};
+
 /*
  * Uncomment to enable MCA ADC channels on Rasberry Pi Expansion connector:
  *  - MCA_IO1 (channel 1)
