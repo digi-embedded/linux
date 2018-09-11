@@ -113,6 +113,11 @@
 	pinctrl-2 = <&pinctrl_usdhc1_200mhz>;
 	bus-width = <8>;
 	non-removable;
+	/*
+	 * This property should be removed once the eMMC voltage is configured
+	 * to 1.8V.
+	 */
+	no-1-8-v;
 	status = "okay";
 };
 

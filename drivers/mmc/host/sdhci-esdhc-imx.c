@@ -1316,9 +1316,11 @@ sdhci_esdhc_imx_probe_dt(struct platform_device *pdev,
 			 * fall back to not support uhs by specify no 1.8v quirk
 			 */
 			host->quirks2 |= SDHCI_QUIRK2_NO_1_8_V;
+			host->quirks2 &= ~SDHCI_QUIRK2_CAPS_BIT63_FOR_HS400;
 		}
 	} else {
 		host->quirks2 |= SDHCI_QUIRK2_NO_1_8_V;
+		host->quirks2 &= ~SDHCI_QUIRK2_CAPS_BIT63_FOR_HS400;
 	}
 
 	/* call to generic mmc_of_parse to support additional capabilities */
