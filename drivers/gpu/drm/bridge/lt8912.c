@@ -270,6 +270,7 @@ static int lt8912_connector_get_modes(struct drm_connector *connector)
 {
 	struct lt8912 *lt8912 = connector_to_lt8912(connector);
 	struct drm_display_mode *mode;
+	u32 bus_flags = 0;
 	int ret;
 
 	/* TODO: EDID handing */
@@ -279,7 +280,7 @@ static int lt8912_connector_get_modes(struct drm_connector *connector)
 		return -EINVAL;
 
 	ret = of_get_drm_display_mode(lt8912->dev->of_node, mode,
-				      OF_USE_NATIVE_MODE);
+				      &bus_flags, OF_USE_NATIVE_MODE);
 	if (ret) {
 		dev_err(lt8912->dev, "failed to get display timings\n");
 		drm_mode_destroy(connector->dev, mode);
