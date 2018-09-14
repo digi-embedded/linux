@@ -19,6 +19,12 @@
 			linux,cma-default;
 		};
 	};
+
+	bluetooth {
+	};
+
+	wireless {
+	};
 };
 
 &adc1 {
