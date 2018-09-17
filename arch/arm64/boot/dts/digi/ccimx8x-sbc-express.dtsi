@@ -14,8 +14,9 @@
  */
 
 / {
-	model = "Digi ConnectCore 8X SBC Express";
+	model = "Digi International ConnectCore 8X SBC Express.";
 	compatible = "digi,ccimx8x-sbc-express", "digi,ccimx8x", "fsl,imx8qxp";
+	digi,machine,name = "ccimx8x-sbc-express";
 
 	chosen {
 		bootargs = "console=ttyLP2,115200 earlycon=lpuart32,0x5a080000,115200";
