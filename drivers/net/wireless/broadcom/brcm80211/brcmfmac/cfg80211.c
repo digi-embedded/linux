@@ -3955,11 +3955,13 @@ static s32 brcmf_cfg80211_suspend(struct wiphy *wiphy,
 		brcmf_set_mpc(ifp, 1);
 
 	} else {
-		/* Configure WOWL parameters */
-		brcmf_configure_wowl(cfg, ifp, wowl);
+		if (brcmf_feat_is_enabled(ifp, BRCMF_FEAT_WOWL)) {
+			/* Configure WOWL parameters */
+			brcmf_configure_wowl(cfg, ifp, wowl);
 
-		/* Prevent disassociation due to inactivity with keep-alive */
-		brcmf_keepalive_start(ifp, 30);
+			/* Prevent disassociation due to inactivity with keep-alive */
+			brcmf_keepalive_start(ifp, 30);
+		}
 	}
 
 exit:
