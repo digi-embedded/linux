@@ -114,7 +114,8 @@
 };
 
 /*
- * CAN1 port conflicts with LPUART0 RTS/CTS lines.
+ * CAN0
+ * Conflicts with LPUART0 RTS/CTS lines.
  * Before enabling the port you need to configure
  * lpuart0 node as 2 wires.
  */
@@ -124,17 +125,25 @@
 	status = "disabled";
 };
 
-/* CAN2 */
+/* CAN1 on expansion header */
 &flexcan2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan2>;
+	stby-gpios = <&gpio1 0 GPIO_ACTIVE_HIGH>;
 	status = "disabled";
 };
 
-/* CAN3 */
+/*
+ * CAN2 on expansion header.
+ * Conflicts with LPUART3 RX/TX lines.
+ * Requires signal CAN/RS485# (GPIO3_IO23) to be driven high
+ */
 &flexcan3 {
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_flexcan3>;
+	pinctrl-0 = <&pinctrl_flexcan3>,
+		    <&pinctrl_flexcan3_lpuart3_gpios>;
+	stby-gpios = <&gpio1 2 GPIO_ACTIVE_HIGH>;
+	pinctrl-assert-gpios = <&gpio3 23 GPIO_ACTIVE_HIGH>;
 	status = "disabled";
 };
 
@@ -265,7 +274,7 @@
 
 /* LPUART0 on XBee socket */
 &lpuart0 {
-	/* RTS/CTS lines multiplexed with CAN1 */
+	/* RTS/CTS lines multiplexed with CAN0 */
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lpuart0_4wires>, <&pinctrl_xbee_gpios>;
 	status = "disabled";
@@ -278,10 +287,16 @@
 	status = "disabled";
 };
 
-/* LPUART3 on expansion header */
+/*
+ * LPUART3 on expansion header.
+ * Conflicts with CAN2.
+ * Requires signal CAN/RS485# (GPIO3_IO23) to be driven low
+ */
 &lpuart3 {
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_lpuart3>;
+	pinctrl-0 = <&pinctrl_lpuart3>,
+		    <&pinctrl_flexcan3_lpuart3_gpios>;
+	pinctrl-assert-gpios = <&gpio3 23 GPIO_ACTIVE_LOW>;
 	status = "disabled";
 };
 
@@ -549,6 +564,7 @@
 		fsl,pins = <
 			SC_P_FLEXCAN1_TX_ADMA_FLEXCAN1_TX		0x21
 			SC_P_FLEXCAN1_RX_ADMA_FLEXCAN1_RX		0x21
+			SC_P_SPI2_CS0_LSIO_GPIO1_IO00                   0x06000020
 		>;
 	};
 
@@ -556,6 +572,13 @@
 		fsl,pins = <
 			SC_P_FLEXCAN2_TX_ADMA_FLEXCAN2_TX		0x21
 			SC_P_FLEXCAN2_RX_ADMA_FLEXCAN2_RX		0x21
+			SC_P_SPI2_SDI_LSIO_GPIO1_IO02                   0x06000020
+		>;
+	};
+
+	pinctrl_flexcan3_lpuart3_gpios: flexcan2lpuart3gpios-grp {
+		fsl,pins = <
+			SC_P_QSPI0B_SS0_B_LSIO_GPIO3_IO23 0x06000060
 		>;
 	};
 

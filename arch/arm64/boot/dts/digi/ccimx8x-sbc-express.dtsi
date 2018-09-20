@@ -75,7 +75,7 @@
 };
 
 /*
- * CAN1 port conflicts with LPUART0 RTS/CTS lines.
+ * CAN0 port conflicts with LPUART0 RTS/CTS lines.
  * Before enabling the port you need to configure
  * lpuart0 node as 2 wires.
  */
@@ -85,14 +85,14 @@
 	status = "disabled";
 };
 
-/* CAN2 */
+/* CAN1 */
 &flexcan2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan2>;
 	status = "disabled";
 };
 
-/* CAN3 */
+/* CAN2 */
 &flexcan3 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan3>;
@@ -187,7 +187,7 @@
 
 /* LPUART0 on XBee socket */
 &lpuart0 {
-	/* RTS/CTS lines multiplexed with CAN1 */
+	/* RTS/CTS lines multiplexed with CAN0 */
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lpuart0_4wires>, <&pinctrl_xbee_gpios>;
 	status = "disabled";

@@ -55,7 +55,7 @@
 };
 
 /*
- * CAN1 port conflicts with LPUART0 RTS/CTS lines.
+ * CAN0 port conflicts with LPUART0 RTS/CTS lines.
  * Before enabling the port you need to configure
  * lpuart0 node as 2 wires.
  */
@@ -64,7 +64,7 @@
 };
 
 /*
- * CAN2 port's pins are configured as GPIO by
+ * CAN1 port's pins are configured as GPIO by
  * default. Before enabling the port, you must remove
  * the SC_P_FLEXCAN1_RX_LSIO_GPIO1_IO17 and
  * SC_P_FLEXCAN1_TX_LSIO_GPIO1_IO18 entries from
@@ -75,7 +75,7 @@
 };
 
 /*
- * CAN3 port's pins are configured as GPIO by
+ * CAN2 port's pins are configured as GPIO by
  * default. Before enabling the port, you must remove
  * the SC_P_FLEXCAN2_RX_LSIO_GPIO1_IO19 and
  * SC_P_FLEXCAN2_TX_LSIO_GPIO1_IO20 entries from
@@ -194,7 +194,7 @@
 
 /* LPUART0 on XBee socket */
 &lpuart0 {
-	/* RTS/CTS lines multiplexed with CAN1 */
+	/* RTS/CTS lines multiplexed with CAN0 */
 	pinctrl-0 = <&pinctrl_lpuart0_4wires>, <&pinctrl_xbee_gpios>;
 	/* Comment the line above and uncomment the next one to use 2-wires */
 	//pinctrl-0 = <&pinctrl_lpuart0_2wires>, <&pinctrl_xbee_gpios>;

@@ -59,7 +59,8 @@
 };
 
 /*
- * CAN1 port conflicts with LPUART0 RTS/CTS lines.
+ * CAN0
+ * Conflicts with LPUART0 RTS/CTS lines.
  * Before enabling the port you need to configure
  * lpuart0 node as 2 wires.
  */
@@ -67,12 +68,15 @@
 	status = "disabled";
 };
 
-/* CAN2 */
+/* CAN1 on expansion header */
 &flexcan2 {
 	status = "okay";
 };
 
-/* CAN3 */
+/*
+ * CAN2 on expansion header.
+ * Conflicts with LPUART3 RX/TX lines.
+ */
 &flexcan3 {
 	status = "okay";
 };
@@ -236,7 +240,7 @@
 
 /* LPUART0 on XBee socket */
 &lpuart0 {
-	/* RTS/CTS lines multiplexed with CAN1 */
+	/* RTS/CTS lines multiplexed with CAN0 */
 	pinctrl-0 = <&pinctrl_lpuart0_4wires>, <&pinctrl_xbee_gpios>;
 	/* Comment the line above and uncomment the next one to use 2-wires */
 	//pinctrl-0 = <&pinctrl_lpuart0_2wires>, <&pinctrl_xbee_gpios>;
@@ -248,9 +252,12 @@
 	status = "okay";
 };
 
-/* LPUART3 on expansion header */
+/*
+ * LPUART3 on expansion header.
+ * Conflicts with CAN2.
+ */
 &lpuart3 {
-	status = "okay";
+	status = "disabled";
 };
 
 /*
