@@ -21,6 +21,19 @@
 			alloc-ranges = <0 0x96000000 0 0x14000000>;
 		};
 	};
+	regulators {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		reg_3v3_ext: regulator-som@1 {
+			compatible = "regulator-fixed";
+			reg = <1>;
+			regulator-name = "3v3_ext";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+		};
+	};
 };
 
 /* I2C0 connected to MCA and crypto chip */
