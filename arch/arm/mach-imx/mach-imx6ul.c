@@ -205,7 +205,7 @@ static void __init imx6ul_xbee_init(void)
 	reset_gpio = of_get_named_gpio_flags(np, "digi,reset-gpio", 0, &flags);
 	if (gpio_is_valid(reset_gpio)) {
 		if (!gpio_request_one(reset_gpio, GPIOF_DIR_OUT, "xbee-reset")) {
-			int assert_reset = (flags & OF_GPIO_ACTIVE_LOW);
+			int assert_reset = !(flags & OF_GPIO_ACTIVE_LOW);
 
 			gpio_set_value_cansleep(reset_gpio, assert_reset);
 			mdelay(1);

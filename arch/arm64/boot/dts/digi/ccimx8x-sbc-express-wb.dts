@@ -63,14 +63,26 @@
 	status = "disabled";
 };
 
-/* CAN2 */
+/*
+ * CAN2 port's pins are configured as GPIO by
+ * default. Before enabling the port, you must remove
+ * the SC_P_FLEXCAN1_RX_LSIO_GPIO1_IO17 and
+ * SC_P_FLEXCAN1_TX_LSIO_GPIO1_IO18 entries from
+ * the pinctrl_hog node.
+ */
 &flexcan2 {
-	status = "okay";
+	status = "disabled";
 };
 
-/* CAN3 */
+/*
+ * CAN3 port's pins are configured as GPIO by
+ * default. Before enabling the port, you must remove
+ * the SC_P_FLEXCAN2_RX_LSIO_GPIO1_IO19 and
+ * SC_P_FLEXCAN2_TX_LSIO_GPIO1_IO20 entries from
+ * the pinctrl_hog node.
+ */
 &flexcan3 {
-	status = "okay";
+	status = "disabled";
 };
 
 /*
