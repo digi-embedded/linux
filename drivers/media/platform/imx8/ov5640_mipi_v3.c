@@ -520,22 +520,34 @@ static const struct ov5640_datafmt
 
 static inline void ov5640_power_down(struct ov5640 *sensor, int enable)
 {
-	gpio_set_value_cansleep(sensor->pwn_gpio, enable);
+	if (gpio_is_valid(sensor->pwn_gpio))
+		gpio_set_value_cansleep(sensor->pwn_gpio, enable);
 
 	udelay(2000);
 }
 
 static inline void ov5640_reset(struct ov5640 *sensor)
 {
-	gpio_set_value_cansleep(sensor->pwn_gpio, 1);
-	gpio_set_value_cansleep(sensor->rst_gpio, 0);
-	udelay(5000);
+	if (!gpio_is_valid(sensor->pwn_gpio) &&
+	    !gpio_is_valid(sensor->rst_gpio))
+		return;
 
-	gpio_set_value_cansleep(sensor->pwn_gpio, 0);
-	udelay(1000);
+	if (gpio_is_valid(sensor->pwn_gpio))
+		gpio_set_value_cansleep(sensor->pwn_gpio, 1);
+	if (gpio_is_valid(sensor->rst_gpio)) {
+		gpio_set_value_cansleep(sensor->rst_gpio, 0);
+		udelay(5000);
+	}
 
-	gpio_set_value_cansleep(sensor->rst_gpio, 1);
-	msleep(20);
+	if (gpio_is_valid(sensor->pwn_gpio)) {
+		udelay(1000);
+		gpio_set_value_cansleep(sensor->pwn_gpio, 0);
+	}
+
+	if (gpio_is_valid(sensor->rst_gpio)) {
+		gpio_set_value_cansleep(sensor->rst_gpio, 1);
+		msleep(20);
+	}
 }
 
 static int ov5640_regulator_enable(struct device *dev)
