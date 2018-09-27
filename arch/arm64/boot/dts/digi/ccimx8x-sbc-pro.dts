@@ -110,6 +110,10 @@
 	status = "okay";
 };
 
+&i2c0_csi0 {
+	status = "okay";
+};
+
 &i2c0_mipi_lvds0 {
 	status = "okay";
 };
@@ -276,6 +280,14 @@
 //	digi,adc-ch-list = <1 2 3 4 5 6 7 8>;
 //	digi,adc-vref = <3000000>;
 // };
+
+&mipi_csi_0 {
+	status = "okay";
+};
+
+&ov5640_mipi {
+	status = "okay";
+};
 
 &usbotg1 {
 	/*

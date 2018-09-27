@@ -114,6 +114,18 @@
 	status = "okay";
 };
 
+&ov5640_mipi {
+	status = "okay";
+};
+
+&mipi_csi_0 {
+	status = "okay";
+};
+
+&i2c0_csi0 {
+	status = "okay";
+};
+
 &imx8_gpu_ss {
 	status = "okay";
 };
