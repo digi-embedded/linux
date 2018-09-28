@@ -330,6 +330,10 @@ dtb-$(CONFIG_SOC_IMX6Q) += \
 	imx6dl-aristainetos_7.dtb \
 	imx6dl-aristainetos2_4.dtb \
 	imx6dl-aristainetos2_7.dtb \
+	imx6dl-ccimx6sbc.dtb \
+	imx6dl-ccimx6sbc-id131.dtb \
+	imx6dl-ccimx6sbc-w.dtb \
+	imx6dl-ccimx6sbc-wb.dtb \
 	imx6dl-cubox-i.dtb \
 	imx6dl-dfi-fs700-m60.dtb \
 	imx6dl-gw51xx.dtb \
@@ -387,6 +391,12 @@ dtb-$(CONFIG_SOC_IMX6Q) += \
 	imx6q-b650v3.dtb \
 	imx6q-b850v3.dtb \
 	imx6q-pop-arm2.dtb \
+	imx6q-ccimx6sbc.dtb \
+	imx6q-ccimx6sbc-id129.dtb \
+	imx6q-ccimx6sbc-id130.dtb \
+	imx6q-ccimx6sbc-w.dtb \
+	imx6q-ccimx6sbc-wb.dtb \
+	imx6q-ccimx6sbc-wb-ldo-bypass.dtb \
 	imx6q-cm-fx6.dtb \
 	imx6q-cubox-i.dtb \
 	imx6q-dfi-fs700-m60.dtb \
@@ -435,6 +445,9 @@ dtb-$(CONFIG_SOC_IMX6Q) += \
 	imx6q-utilite-pro.dtb \
 	imx6q-wandboard.dtb \
 	imx6q-wandboard-revb1.dtb \
+	imx6qp-ccimx6qpsbc.dtb \
+	imx6qp-ccimx6qpsbc-id160.dtb \
+	imx6qp-ccimx6qpsbc-wb.dtb \
 	imx6qp-nitrogen6_max.dtb \
 	imx6qp-sabreauto.dtb \
 	imx6qp-sabreauto-ecspi.dtb \
