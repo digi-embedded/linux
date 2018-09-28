@@ -299,6 +299,8 @@
 /* Chip ID and variant */
 #define	DA9063_REG_CHIP_ID		0x181
 #define	DA9063_REG_CHIP_VARIANT		0x182
+#define	DA9063_REG_CHIP_CUSTOMER_ID	0x183
+#define	DA9063_REG_CHIP_CONFIG_ID	0x184
 
 /*
  * PMIC registers bits
@@ -354,6 +356,7 @@
 #define	DA9063_KEY_RESET			0x20
 #define	DA9063_NSHUTDOWN			0x40
 #define	DA9063_WAIT_SHUT			0x80
+#define DA9063_REG_FAULT_LOG_VAL_MASK		0xFF
 
 /* DA9063_REG_EVENT_A (addr=0x06) */
 #define	DA9063_E_NONKEY				0x01
@@ -826,6 +829,7 @@
 #define	DA9063_VLDO4_SEL			0x80
 
 /* DA9063_REG_ADC_MAN (addr=0x34) */
+#define	DA9063_ADC_MUX_SHIFT			0
 #define	DA9063_ADC_MUX_MASK			0x0F
 #define		DA9063_ADC_MUX_VSYS		0x00
 #define		DA9063_ADC_MUX_ADCIN1		0x01
@@ -854,14 +858,17 @@
 #define	DA9063_VSYS_VAL_BASE			0x00
 
 /* DA9063_REG_ADC_RES_L (addr=0x37) */
+#define	DA9063_ADC_RES_L_SHIFT			6
 #define	DA9063_ADC_RES_L_BITS			2
 #define	DA9063_ADC_RES_L_MASK			0xC0
 
 /* DA9063_REG_ADC_RES_H (addr=0x38) */
+#define	DA9063_ADC_RES_M_SHIFT			0
 #define	DA9063_ADC_RES_M_BITS			8
 #define	DA9063_ADC_RES_M_MASK			0xFF
 
 /* DA9063_REG_(xxx_RES/ADC_RES_H) (addr=0x39-0x3F) */
+#define	DA9063_ADC_VAL_SHIFT			0
 #define	DA9063_ADC_VAL_MASK			0xFF
 
 /* DA9063_REG_COUNT_S (addr=0x40) */

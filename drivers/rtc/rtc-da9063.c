@@ -54,6 +54,7 @@ struct da9063_compatible_rtc_regmap {
 	/* MASKS */
 	int rtc_enable_mask;
 	int rtc_crystal_mask;
+	int rtc_32k_out_mask;
 	int rtc_event_alarm_mask;
 	int rtc_alarm_on_mask;
 	int rtc_alarm_status_mask;
@@ -89,6 +90,7 @@ static const struct da9063_compatible_rtc_regmap da9063_ad_regs = {
 	/* MASKS */
 	.rtc_enable_mask            = DA9063_RTC_EN,
 	.rtc_crystal_mask           = DA9063_CRYSTAL,
+	.rtc_32k_out_mask           = DA9063_OUT_32K_EN,
 	.rtc_enable_32k_crystal_reg = DA9063_REG_EN_32K,
 	.rtc_event_alarm_mask       = DA9063_E_ALARM,
 	.rtc_alarm_on_mask          = DA9063_ALARM_ON,
@@ -118,6 +120,7 @@ static const struct da9063_compatible_rtc_regmap da9063_bb_regs = {
 	/* MASKS */
 	.rtc_enable_mask            = DA9063_RTC_EN,
 	.rtc_crystal_mask           = DA9063_CRYSTAL,
+	.rtc_32k_out_mask           = DA9063_OUT_32K_EN,
 	.rtc_enable_32k_crystal_reg = DA9063_REG_EN_32K,
 	.rtc_event_alarm_mask       = DA9063_E_ALARM,
 	.rtc_alarm_on_mask          = DA9063_ALARM_ON,
@@ -147,6 +150,7 @@ static const struct da9063_compatible_rtc_regmap da9062_aa_regs = {
 	/* MASKS */
 	.rtc_enable_mask            = DA9062AA_RTC_EN_MASK,
 	.rtc_crystal_mask           = DA9062AA_CRYSTAL_MASK,
+	.rtc_32k_out_mask           = DA9062AA_EN_32KOUT_MASK,
 	.rtc_enable_32k_crystal_reg = DA9062AA_EN_32K,
 	.rtc_event_alarm_mask       = DA9062AA_M_ALARM_MASK,
 	.rtc_alarm_on_mask          = DA9062AA_ALARM_ON_MASK,
@@ -263,7 +267,7 @@ static int da9063_rtc_set_time(struct device *dev, struct rtc_time *tm)
 {
 	struct da9063_compatible_rtc *rtc = dev_get_drvdata(dev);
 	const struct da9063_compatible_rtc_regmap *config = rtc->config;
-	u8 data[RTC_DATA_LEN];
+	u8 data[RTC_DATA_LEN] = {0};
 	int ret;
 
 	da9063_tm_to_data(tm, data, rtc);
@@ -314,7 +318,7 @@ static int da9063_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 {
 	struct da9063_compatible_rtc *rtc = dev_get_drvdata(dev);
 	const struct da9063_compatible_rtc_regmap *config = rtc->config;
-	u8 data[RTC_DATA_LEN];
+	u8 data[RTC_DATA_LEN] = {0};
 	int ret;
 
 	da9063_tm_to_data(&alrm->time, data, rtc);
@@ -432,6 +436,17 @@ static int da9063_rtc_probe(struct platform_device *pdev)
 		return ret;
 	}
 
+	if (of_get_property(pdev->dev.of_node, "enable-32k-output", NULL)) {
+		ret = regmap_update_bits(rtc->regmap,
+					 config->rtc_enable_32k_crystal_reg,
+					 config->rtc_32k_out_mask,
+					 config->rtc_32k_out_mask);
+		if (ret < 0) {
+			dev_err(&pdev->dev, "Failed to enable 32 kHz output\n");
+			return ret;
+		}
+	}
+
 	ret = regmap_update_bits(rtc->regmap,
 				 config->rtc_alarm_secs_reg,
 				 config->rtc_alarm_status_mask,
@@ -471,11 +486,14 @@ static int da9063_rtc_probe(struct platform_device *pdev)
 	}
 
 	platform_set_drvdata(pdev, rtc);
+	device_init_wakeup(&pdev->dev, 1);
 
 	rtc->rtc_dev = devm_rtc_device_register(&pdev->dev, DA9063_DRVNAME_RTC,
 					   &da9063_rtc_ops, THIS_MODULE);
 	if (IS_ERR(rtc->rtc_dev))
 		return PTR_ERR(rtc->rtc_dev);
+
+	rtc->rtc_dev->dev.of_node = pdev->dev.of_node;
 
 	da9063_data_to_tm(data, &rtc->alarm_time, rtc);
 	rtc->rtc_sync = false;
