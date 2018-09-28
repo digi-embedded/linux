@@ -15,12 +15,14 @@
 #include <linux/cpu.h>
 #include <linux/delay.h>
 #include <linux/export.h>
+#include <linux/gpio.h>
 #include <linux/init.h>
 #include <linux/io.h>
 #include <linux/irq.h>
 #include <linux/irqchip.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
+#include <linux/of_gpio.h>
 #include <linux/of_irq.h>
 #include <linux/of_platform.h>
 #include <linux/pm_opp.h>
@@ -35,10 +37,13 @@
 #include <asm/mach/arch.h>
 #include <asm/mach/map.h>
 #include <asm/system_misc.h>
+#include <linux/delay.h>
 
 #include "common.h"
 #include "cpuidle.h"
 #include "hardware.h"
+
+extern int digi_get_board_version(void);
 
 /* For imx6q sabrelite board: set KSZ9021RN RGMII pad skew */
 static int ksz9021rn_phy_fixup(struct phy_device *phydev)
@@ -314,6 +319,140 @@ static inline void imx6q_enet_init(void)
 		imx6q_enet_clk_sel();
 }
 
+static void imx6q_wifi_init (void)
+{
+	struct device_node *np;
+	unsigned int pwrdown_gpio, pwrdown_delay;
+	enum of_gpio_flags flags;
+
+	np = of_find_node_by_path("/wireless");
+	if (!np)
+		return;
+
+	if (of_property_read_u32(np, "digi,pwrdown_delay",
+			&pwrdown_delay) < 0)
+		pwrdown_delay = 5;
+
+	/* Read the power down gpio */
+	pwrdown_gpio = of_get_named_gpio_flags(np, "digi,pwrdown-gpios", 0, &flags);
+	if (gpio_is_valid(pwrdown_gpio)) {
+		if (!gpio_request_one(pwrdown_gpio, GPIOF_DIR_OUT,
+			"wifi_chip_pwd_l")) {
+			/* Start with Power pin low, then set high to power Wifi */
+			gpio_set_value_cansleep(pwrdown_gpio, 0);
+			mdelay(pwrdown_delay);
+			gpio_set_value_cansleep(pwrdown_gpio, 1);
+			mdelay(pwrdown_delay);
+			/*
+			 * Free the Wifi chip PWD pin to allow controlling
+			 * it from user space
+			 */
+			gpio_free(pwrdown_gpio);
+		}
+	}
+	of_node_put(np);
+}
+
+static void imx6q_bt_init (void)
+{
+	struct device_node *np;
+	unsigned int pwrdown_gpio, disable_gpio, pwrdown_delay, disable_delay;
+	enum of_gpio_flags flags;
+
+	np = of_find_node_by_path("/bluetooth");
+	if (!np)
+		return;
+
+	/* Read the power down gpio */
+	pwrdown_gpio = of_get_named_gpio_flags(np, "digi,pwrdown-gpios", 0,
+			&flags);
+	if (of_property_read_u32(np, "digi,pwrdown_delay", &pwrdown_delay) < 0)
+		pwrdown_delay = 5;
+
+	if (gpio_is_valid(pwrdown_gpio)) {
+		if (!gpio_request_one(pwrdown_gpio, GPIOF_DIR_OUT,
+			"bt_chip_pwd_l")) {
+			/* Start with Power pin low, then set high to power  */
+			gpio_set_value_cansleep(pwrdown_gpio, 0);
+			mdelay(pwrdown_delay);
+			gpio_set_value_cansleep(pwrdown_gpio, 1);
+			mdelay(pwrdown_delay);
+			/*
+			 * Free the chip PWD pin to allow controlling
+			 * it from user space
+			 */
+			gpio_free(pwrdown_gpio);
+		}
+	}
+
+	/* Read the disable gpio */
+	disable_gpio = of_get_named_gpio_flags(np, "digi,disable-gpios", 0,
+			&flags);
+	if (of_property_read_u32(np, "digi,disable_delay", &disable_delay) < 0)
+		disable_delay = 5;
+
+	if (gpio_is_valid(disable_gpio)) {
+		if (!gpio_request_one(disable_gpio, GPIOF_DIR_OUT,
+			"bt_chip_dis_l")) {
+			/* Start with Power pin low, then set high to power  */
+			gpio_set_value_cansleep(disable_gpio, 0);
+			mdelay(disable_delay);
+			gpio_set_value_cansleep(disable_gpio, 1);
+			mdelay(disable_delay);
+			/*
+			 * Free the chip PWD pin to allow controlling
+			 * it from user space
+			 */
+			gpio_free(disable_gpio);
+		}
+	}
+}
+
+static int __init imx6q_som_init (void)
+{
+	imx6q_wifi_init();
+	imx6q_bt_init();
+
+	return 0;
+}
+device_initcall(imx6q_som_init);
+
+static void fixup_dt_audio_codec(void)
+{
+	if (digi_get_board_version() == 1) {
+		/* 
+		 * SBCv1 has the codec directly powered from DA9063_BPERI
+		 * without any controlling GPIO, while SBCv2 (default DT)
+		 * controls it with GPIO2_25 so it uses a fixed gpio regulator.
+		 */
+		struct device_node *regulator_np = NULL;
+		struct device_node *codec_np = NULL;
+		struct property *propVDDA = NULL;
+		struct property *propVDDIO = NULL;
+
+		regulator_np = of_find_node_by_name(NULL, "DA9063_BPERI");
+		if (!regulator_np)
+			return;
+
+		codec_np = of_find_compatible_node(NULL, NULL, "fsl,sgtl5000");
+		if (!codec_np)
+			return;
+
+		propVDDA = of_find_property(codec_np, "VDDA-supply", NULL);
+		if (!propVDDA)
+			return;
+
+		propVDDIO = of_find_property(codec_np, "VDDIO-supply", NULL);
+		if (!propVDDIO)
+			return;
+
+		*(phandle *)propVDDA->value =
+				be32_to_cpu(regulator_np->phandle);
+		*(phandle *)propVDDIO->value =
+				be32_to_cpu(regulator_np->phandle);
+	}
+}
+
 static void __init imx6q_init_machine(void)
 {
 	struct device *parent;
@@ -330,10 +469,14 @@ static void __init imx6q_init_machine(void)
 
 	of_platform_default_populate(NULL, NULL, parent);
 
+	if (of_machine_is_compatible("digi,ccimx6sbc"))
+		fixup_dt_audio_codec();
+
 	imx6q_enet_init();
 	imx_anatop_init();
 	imx6q_csi_mux_init();
 	cpu_is_imx6q() ?  imx6q_pm_init() : imx6dl_pm_init();
+	imx6q_1588_init();
 	imx6q_axi_init();
 }
 
