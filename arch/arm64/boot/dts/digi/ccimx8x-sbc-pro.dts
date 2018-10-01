@@ -298,6 +298,20 @@
 //	digi,adc-vref = <3000000>;
 // };
 
+/*
+ * Enable only if the parallel camera is physically connected.
+ * If not, the MIPI camera may not work.
+ * Similarly, if the MIPI camera is not physically connected you need to
+ * disable the MIPI (mipi_csi_0) so that the parallel camera works.
+ */
+// &parallel_csi {
+//        status = "okay";
+// };
+
+&ov5640 {
+       status = "okay";
+};
+
 &mipi_csi_0 {
 	status = "okay";
 };
