@@ -108,13 +108,12 @@
 		 <&clk IMX8QXP_ENET0_REF_50MHZ_CLK>,
 		 <&clk IMX8QXP_ENET0_PTP_CLK>,
 		 <&clk IMX8QXP_ENET0_TX_CLK>;
-	phy-mode = "rgmii-txid";
+	phy-mode = "rgmii-id";
 	phy-handle = <&ethphy1>;
 	phy-supply = <&reg_3v3_eth0>;
 	phy-reset-gpios = <&gpio3 18 GPIO_ACTIVE_LOW>;
 	phy-reset-duration = <1>;
 	fsl,magic-packet;
-	fsl,rgmii_rxc_dly;
 	digi,phy-reset-in-suspend;
 	status = "disabled";
 
@@ -142,13 +141,12 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_fec2_gpio>,
 		    <&pinctrl_fec2>;
-	phy-mode = "rgmii-txid";
+	phy-mode = "rgmii-id";
 	phy-handle = <&ethphy0>;
 	phy-supply = <&reg_3v3_eth0>;
 	phy-reset-gpios = <&gpio3 22 GPIO_ACTIVE_LOW>;
 	phy-reset-duration = <1>;
 	fsl,magic-packet;
-	fsl,rgmii_rxc_dly;
 	status = "disabled";
 };
 
