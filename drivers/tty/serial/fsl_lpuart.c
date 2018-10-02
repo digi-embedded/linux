@@ -1471,6 +1471,50 @@ static int lpuart_config_rs485(struct uart_port *port,
 	return 0;
 }
 
+static int lpuart32_config_rs485(struct uart_port *port,
+			struct serial_rs485 *rs485)
+{
+	if (rs485->flags & SER_RS485_ENABLED) {
+
+		u32 modem = lpuart32_read(port, UARTMODIR) &
+					  ~(UARTMODIR_TXRTSPOL | UARTMODIR_TXRTSE);
+
+		/* Enable auto RS-485 RTS mode */
+		modem |= UARTMODIR_TXRTSE;
+
+		/*
+		 * RTS needs to be logic HIGH either during transer _or_ after
+		 * transfer, other variants are not supported by the hardware.
+		 */
+
+		if (!(rs485->flags & (SER_RS485_RTS_ON_SEND |
+				SER_RS485_RTS_AFTER_SEND)))
+			rs485->flags |= SER_RS485_RTS_ON_SEND;
+
+		if (rs485->flags & SER_RS485_RTS_ON_SEND &&
+				rs485->flags & SER_RS485_RTS_AFTER_SEND)
+			rs485->flags &= ~SER_RS485_RTS_AFTER_SEND;
+
+		/*
+		 * The hardware defaults to RTS logic HIGH while transfer.
+		 * Switch polarity in case RTS shall be logic HIGH
+		 * after transfer.
+		 * Note: UART is assumed to be active high.
+		 */
+		if (rs485->flags & SER_RS485_RTS_ON_SEND)
+			modem &= ~UARTMODIR_TXRTSPOL;
+		else if (rs485->flags & SER_RS485_RTS_AFTER_SEND)
+			modem |= UARTMODIR_TXRTSPOL;
+
+		/* Store the new configuration */
+		port->rs485 = *rs485;
+
+		lpuart32_write(port, modem, UARTMODIR);
+	}
+
+	return 0;
+}
+
 static unsigned int lpuart_get_mctrl(struct uart_port *port)
 {
 	unsigned int temp = 0;
@@ -1544,6 +1588,20 @@ static void lpuart32_set_mctrl(struct uart_port *port, unsigned int mctrl)
 		temp &= ~UARTCTRL_LOOPS;
 
 	lpuart32_write(port, temp, UARTCTRL);
+
+	/* Make sure RXRTSE bit is not set when RS485 is enabled */
+	if (!(port->rs485.flags & SER_RS485_ENABLED)) {
+		temp = lpuart32_read(port, UARTMODIR) &
+			~(UARTMODIR_RXRTSE | UARTMODIR_TXCTSE);
+
+		if (mctrl & TIOCM_RTS)
+			temp |= UARTMODIR_RXRTSE;
+
+		if (mctrl & TIOCM_CTS)
+			temp |= UARTMODIR_TXCTSE;
+
+		lpuart32_write(port, temp, UARTMODIR);
+	}
 }
 
 static void lpuart_break_ctl(struct uart_port *port, int break_state)
@@ -1647,7 +1705,8 @@ static void lpuart32_setup_watermark(struct lpuart_port *sport)
 	/* set RTS watermark */
 	if (!uart_console(&sport->port)) {
 		val = lpuart32_read(&sport->port, UARTMODIR);
-		val = (sport->rxfifo_size >> 1) << UARTMODIR_RTSWATER_S;
+		val &= ~(UARTMODIR_RTSWATER_M);
+		val |= sport->rts_watermark << UARTMODIR_RTSWATER_S;
 		lpuart32_write(&sport->port, val, UARTMODIR);
 	}
 
@@ -2153,6 +2212,22 @@ lpuart32_set_termios(struct uart_port *port, struct ktermios *termios,
 			termios->c_cflag |= CS8;
 		}
 		ctrl |= UARTCTRL_M;
+	}
+
+	/*
+	 * When auto RS-485 RTS mode is enabled,
+	 * hardware flow control need to be disabled.
+	 */
+	if (sport->port.rs485.flags & SER_RS485_ENABLED) {
+		termios->c_cflag &= ~CRTSCTS;
+
+		/* Enable auto RS-485 RTS mode */
+		modem |= UARTMODIR_TXRTSE;
+
+		if (sport->port.rs485.flags & SER_RS485_RTS_ON_SEND)
+			modem &= ~UARTMODIR_TXRTSPOL;
+		else if (sport->port.rs485.flags & SER_RS485_RTS_AFTER_SEND)
+			modem |= UARTMODIR_TXRTSPOL;
 	}
 
 	if (termios->c_cflag & CRTSCTS) {
@@ -2729,11 +2804,10 @@ static int lpuart_probe(struct platform_device *pdev)
 		sport->port.ops = &lpuart_pops;
 	sport->port.flags = UPF_BOOT_AUTOCONF;
 
-	sport->port.rs485_config = lpuart_config_rs485;
-
-	ret = lpuart_attach_pd(&pdev->dev);
-	if (ret)
-		return ret;
+	if (lpuart_is_32(sport))
+		sport->port.rs485_config = lpuart32_config_rs485;
+	else
+		sport->port.rs485_config = lpuart_config_rs485;
 
 	sport->ipg_clk = devm_clk_get(&pdev->dev, "ipg");
 	if (IS_ERR(sport->ipg_clk)) {
@@ -2813,6 +2887,17 @@ static int lpuart_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "driver doesn't support RTS delays\n");
 
 	lpuart_config_rs485(&sport->port, &sport->port.rs485);
+
+	uart_get_rs485_mode(&pdev->dev, &sport->port.rs485);
+
+	if (sport->port.rs485.flags & SER_RS485_RX_DURING_TX)
+		dev_err(&pdev->dev, "driver doesn't support RX during TX\n");
+
+	if (sport->port.rs485.delay_rts_before_send ||
+	    sport->port.rs485.delay_rts_after_send)
+		dev_err(&pdev->dev, "driver doesn't support RTS delays\n");
+
+	sport->port.rs485_config(&sport->port, &sport->port.rs485);
 
 	sport->dma_tx_chan = dma_request_slave_channel(sport->port.dev, "tx");
 	if (!sport->dma_tx_chan)
