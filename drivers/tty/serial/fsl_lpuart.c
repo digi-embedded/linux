@@ -31,6 +31,8 @@
 #include <linux/serial_core.h>
 #include <linux/slab.h>
 #include <linux/tty_flip.h>
+#include <linux/gpio.h>
+#include <linux/of_gpio.h>
 
 /* All registers are 8-bit width */
 #define UARTBDH			0x00
@@ -254,6 +256,8 @@ struct lpuart_port {
 	unsigned int		txfifo_watermark;
 	unsigned int		rxfifo_watermark;
 	unsigned int		rts_watermark;
+	unsigned int		rts_gpio;
+	bool			rts_act_low;
 	bool			lpuart32;
 	bool			dma_eeop;
 
@@ -323,10 +327,20 @@ static void lpuart_stop_tx(struct uart_port *port)
 
 static void lpuart32_stop_tx(struct uart_port *port)
 {
+	struct lpuart_port *sport = container_of(port, struct lpuart_port, port);
 	unsigned long temp;
 
 	temp = lpuart32_read(port->membase + UARTCTRL);
-	temp &= ~(UARTCTRL_TIE | UARTCTRL_TCIE);
+	temp &= ~UARTCTRL_TIE;
+
+	if ((sport->port.rs485.flags & SER_RS485_ENABLED) &&
+	    (lpuart32_read(port->membase + UARTSTAT) & UARTSTAT_TC)) {
+		if (gpio_is_valid(sport->rts_gpio))
+			gpio_set_value(sport->rts_gpio, sport->rts_act_low ? 1 : 0);
+
+		temp &= ~UARTCTRL_TCIE;
+	}
+
 	lpuart32_write(temp, port->membase + UARTCTRL);
 }
 
@@ -570,6 +584,15 @@ static void lpuart32_start_tx(struct uart_port *port)
 	struct lpuart_port *sport = container_of(port, struct lpuart_port, port);
 	struct circ_buf *xmit = &sport->port.state->xmit;
 	unsigned long temp;
+
+	if (sport->port.rs485.flags & SER_RS485_ENABLED) {
+		if (gpio_is_valid(sport->rts_gpio))
+			gpio_set_value(sport->rts_gpio, sport->rts_act_low ? 0 : 1);
+
+		temp = lpuart32_read(port->membase + UARTCTRL);
+		temp |= UARTCTRL_TCIE;
+		lpuart32_write(temp, port->membase + UARTCTRL);
+	}
 
 	if (sport->lpuart_dma_tx_use) {
 		if (!uart_circ_empty(xmit) && !uart_tx_stopped(port))
@@ -2270,6 +2293,8 @@ static int lpuart_probe(struct platform_device *pdev)
 	struct device_node *np = pdev->dev.of_node;
 	struct lpuart_port *sport;
 	struct resource *res;
+	int init_st = GPIOF_OUT_INIT_HIGH;
+	enum of_gpio_flags flags;
 	int ret;
 
 	sport = devm_kzalloc(&pdev->dev, sizeof(*sport), GFP_KERNEL);
@@ -2376,6 +2401,20 @@ static int lpuart_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "driver doesn't support RTS delays\n");
 
 	sport->port.rs485_config(&sport->port, &sport->port.rs485);
+
+	sport->rts_gpio = of_get_named_gpio_flags(np, "digi,rts-gpio", 0 , &flags);
+	sport->rts_act_low = false;
+	if (gpio_is_valid(sport->rts_gpio)) {
+		if (flags & OF_GPIO_ACTIVE_LOW) {
+			sport->rts_act_low = true;
+			init_st = GPIOF_OUT_INIT_LOW;
+		}
+		ret = gpio_request_one(sport->rts_gpio, init_st, "rs485-rts-gpio");
+		if (ret < 0)
+			dev_err(&pdev->dev, "Could not assign rs485 rts gpio\n");
+		else
+			gpio_set_value(sport->rts_gpio, sport->rts_act_low ? 1 : 0);
+	}
 
 	sport->dma_tx_chan = dma_request_slave_channel(sport->port.dev, "tx");
 	if (!sport->dma_tx_chan)
