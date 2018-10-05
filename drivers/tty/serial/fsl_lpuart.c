@@ -1994,7 +1994,7 @@ lpuart32_set_termios(struct uart_port *port, struct ktermios *termios,
 			ctrl &= ~UARTCTRL_PE;
 			ctrl |= UARTCTRL_M;
 		} else {
-			ctrl |= UARTCR1_PE;
+			ctrl |= UARTCTRL_PE;
 			if ((termios->c_cflag & CSIZE) == CS8)
 				ctrl |= UARTCTRL_M;
 			if (termios->c_cflag & PARODD)
@@ -2002,6 +2002,8 @@ lpuart32_set_termios(struct uart_port *port, struct ktermios *termios,
 			else
 				ctrl &= ~UARTCTRL_PT;
 		}
+	} else {
+		ctrl &= ~UARTCTRL_PE;
 	}
 
 	/* ask the core to calculate the divisor */
