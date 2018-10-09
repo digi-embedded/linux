@@ -203,10 +203,6 @@
 	};
 };
 
-&gpu {
-	contiguous-size-percentage = <12>;
-};
-
 &iomuxc {
 	pmic_dialog {
 		pinctrl_pmic_dialog: pmic_dialoggrp {
