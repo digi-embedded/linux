@@ -205,7 +205,7 @@
 
 #define UARTMODIR_IREN		0x00020000
 #define UARTMODIR_RTSWATER_S	0x8
-#define UARTMODIR_RTSWATER_M	0x0000ff00
+#define UARTMODIR_RTSWATER_M	0x00001f00
 #define UARTMODIR_TXCTSSRC	0x00000020
 #define UARTMODIR_TXCTSC	0x00000010
 #define UARTMODIR_RXRTSE	0x00000008
@@ -1438,7 +1438,7 @@ static void lpuart32_setup_watermark(struct lpuart_port *sport)
 	} else {
 		val = lpuart32_read(&sport->port, UARTMODIR);
 		val &= ~(UARTMODIR_RTSWATER_M);
-		val |= sport->rts_watermark << UARTMODIR_RTSWATER_S;
+		val |= (sport->rts_watermark << UARTMODIR_RTSWATER_S) & UARTMODIR_RTSWATER_M;
 		lpuart32_write(&sport->port, val, UARTMODIR);
 		val = (sport->rxfifo_watermark << UARTWATER_RXWATER_OFF) |
 			(sport->txfifo_watermark << UARTWATER_TXWATER_OFF);
@@ -1974,10 +1974,10 @@ lpuart32_set_termios(struct uart_port *port, struct ktermios *termios,
 	}
 
 	if (termios->c_cflag & CRTSCTS) {
-		modem |= (UARTMODEM_RXRTSE | UARTMODEM_TXCTSE);
+		modem |= (UARTMODIR_RXRTSE | UARTMODIR_TXCTSE);
 	} else {
 		termios->c_cflag &= ~CRTSCTS;
-		modem &= ~(UARTMODEM_RXRTSE | UARTMODEM_TXCTSE);
+		modem &= ~(UARTMODIR_RXRTSE | UARTMODIR_TXCTSE);
 	}
 
 	if (termios->c_cflag & CSTOPB)
