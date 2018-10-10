@@ -185,15 +185,17 @@
 	status = "okay";
 };
 
+/* USB_OTG1 */
 &usbotg1 {
 	/*
-	 * To configure this USB port as a device set dr_mode to "otg";
+	 * To configure this USB controller as a device set dr_mode to "otg";
 	 * to configure it as a host set to "host" instead.
 	 */
 	dr_mode = "host";
 	status = "okay";
 };
 
+/* USB_OTG2 */
 &usbotg3 {
 	status = "okay";
 };
