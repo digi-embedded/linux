@@ -416,8 +416,6 @@
 	#size-cells = <0>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lpspi0>;
-	fsl,spi-num-chipselects = <2>;
-	cs-gpios = <0>, <1>;
 	status = "disabled";
 };
 
