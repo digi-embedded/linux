@@ -114,6 +114,7 @@
 	status = "okay";
 };
 
+/* MIPI-DSI0 I2C available on LVDS connector */
 &i2c0_mipi_lvds0 {
 	status = "okay";
 };

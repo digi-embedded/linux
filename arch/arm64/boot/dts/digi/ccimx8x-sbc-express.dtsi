@@ -125,6 +125,7 @@
 	status = "disabled";
 };
 
+/* MIPI-DSI0 I2C available on LVDS connector */
 &i2c0_mipi_lvds0 {
 	#address-cells = <1>;
 	#size-cells = <0>;

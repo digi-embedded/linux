@@ -198,7 +198,13 @@
 	status = "disabled";
 };
 
-/* I2C3 available on Raspberry Pi expansion header */
+/*
+ * I2C3 connected to Audio codec and USB 3.0 PD PHY.
+ * Also available on:
+ * - Expansion header
+ * - PCIe connector
+ * - Parallel Camera connector
+ */
 &i2c3 {
 	#address-cells = <1>;
 	#size-cells = <0>;
@@ -271,6 +277,7 @@
 	interface = <2 0 2>;	/* INPUT: 2-MIPI CSI0 */
 };
 
+/* MIPI-DSI0 I2C available on LVDS0 connector */
 &i2c0_mipi_lvds0 {
 	#address-cells = <1>;
 	#size-cells = <0>;
@@ -309,6 +316,7 @@
 	};
 };
 
+/* MIPI-CSI0 I2C available on MIPI Camera connector */
 &i2c0_csi0 {
 	#address-cells = <1>;
 	#size-cells = <0>;
@@ -369,6 +377,7 @@
 	status = "disabled";
 };
 
+/* MIPI-DSI1 I2C available on LVDS1 connector */
 &i2c0_mipi_lvds1 {
 	#address-cells = <1>;
 	#size-cells = <0>;
