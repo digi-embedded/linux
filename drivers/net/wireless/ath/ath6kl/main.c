@@ -621,8 +621,8 @@ static void ath6kl_check_ch_switch(struct ath6kl *ar, u16 channel)
 
 void ath6kl_connect_event(struct ath6kl_vif *vif, u16 channel, u8 *bssid,
 			  u16 listen_int, u16 beacon_int,
-			  enum network_type net_type, u8 beacon_ie_len,
-			  u8 assoc_req_len, u8 assoc_resp_len,
+			  enum network_type net_type, u16 beacon_ie_len,
+			  u16 assoc_req_len, u16 assoc_resp_len,
 			  u8 *assoc_info)
 {
 	struct ath6kl *ar = vif->ar;
