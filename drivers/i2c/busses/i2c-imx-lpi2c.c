@@ -73,6 +73,9 @@
 #define MCFGR1_IGNACK	BIT(9)
 #define MRDR_RXEMPTY	BIT(14)
 
+#define MCCRx_SETHOLF_MASK     0x3F
+#define MCFGR1_PRESCALE_MASK   0x07
+
 #define I2C_CLK_RATIO	2
 #define CHUNK_DATA	256
 
@@ -120,6 +123,7 @@ struct lpi2c_imx_struct {
 	struct pinctrl *pinctrl;
 	struct pinctrl_state *pinctrl_pins_default;
 	struct pinctrl_state *pinctrl_pins_gpio;
+	unsigned int		hold_time;
 };
 
 static void lpi2c_imx_intctrl(struct lpi2c_imx_struct *lpi2c_imx,
@@ -218,10 +222,11 @@ static void lpi2c_imx_stop(struct lpi2c_imx_struct *lpi2c_imx)
 /* CLKLO = I2C_CLK_RATIO * CLKHI, SETHOLD = CLKHI, DATAVD = CLKHI/2 */
 static int lpi2c_imx_config(struct lpi2c_imx_struct *lpi2c_imx)
 {
-	u8 prescale, filt, sethold, clkhi, clklo, datavd;
+	u8 prescale, filt, sethold = 0, clkhi, clklo, datavd;
 	unsigned int clk_rate, clk_cycle;
 	enum lpi2c_imx_pincfg pincfg;
 	unsigned int temp;
+	unsigned int min_prescaler = 0;
 
 	lpi2c_imx_set_mode(lpi2c_imx);
 
@@ -236,7 +241,23 @@ static int lpi2c_imx_config(struct lpi2c_imx_struct *lpi2c_imx)
 	else
 		filt = 2;
 
-	for (prescale = 0; prescale <= 7; prescale++) {
+	if (lpi2c_imx->hold_time) {
+		unsigned long hold_time_ns;
+
+		for (min_prescaler = 0; min_prescaler <= MCFGR1_PRESCALE_MASK;
+		     min_prescaler++) {
+			hold_time_ns = (MCCRx_SETHOLF_MASK + 1) * (1 << min_prescaler) *
+				       1000 / (clk_rate / 1000 / 1000);
+			if (hold_time_ns >= lpi2c_imx->hold_time)
+				break;
+		}
+
+		sethold = lpi2c_imx->hold_time / (1 << min_prescaler) *
+				 (clk_rate / 1000 / 1000) / 1000 - 1;
+		sethold &= MCCRx_SETHOLF_MASK;
+	}
+
+	for (prescale = min_prescaler; prescale <= MCFGR1_PRESCALE_MASK; prescale++) {
 		clk_cycle = clk_rate / ((1 << prescale) * lpi2c_imx->bitrate)
 			    - 3 - (filt >> 1);
 		clkhi = (clk_cycle + I2C_CLK_RATIO) / (I2C_CLK_RATIO + 1);
@@ -245,7 +266,7 @@ static int lpi2c_imx_config(struct lpi2c_imx_struct *lpi2c_imx)
 			break;
 	}
 
-	if (prescale > 7)
+	if (prescale > MCFGR1_PRESCALE_MASK)
 		return -EINVAL;
 
 	/* set MCFGR1: PINCFG, PRESCALE, IGNACK */
@@ -265,8 +286,21 @@ static int lpi2c_imx_config(struct lpi2c_imx_struct *lpi2c_imx)
 	writel(temp, lpi2c_imx->base + LPI2C_MCFGR2);
 
 	/* set MCCR: DATAVD, SETHOLD, CLKHI, CLKLO */
-	sethold = clkhi;
+	if (!lpi2c_imx->hold_time)
+		sethold = clkhi;
+
 	datavd = clkhi >> 1;
+
+	/* Some timing parameter restrictions established by the manufacturer */
+	if (clkhi < 1)
+		clkhi = 1;
+	if (clklo < 3)
+		clklo = 3;
+	if (sethold < 2)
+		sethold = 2;
+	if (datavd < clkhi)
+		datavd = clkhi;
+
 	temp = datavd << 24 | sethold << 16 | clkhi << 8 | clklo;
 
 	if (lpi2c_imx->mode == HS)
@@ -671,6 +705,11 @@ static int lpi2c_imx_probe(struct platform_device *pdev)
 				   "clock-frequency", &lpi2c_imx->bitrate);
 	if (ret)
 		lpi2c_imx->bitrate = LPI2C_DEFAULT_RATE;
+
+	ret = of_property_read_u32(pdev->dev.of_node,
+				   "digi,hold-time-ns", &lpi2c_imx->hold_time);
+	if (ret)
+		lpi2c_imx->hold_time = 0;
 
 	i2c_set_adapdata(&lpi2c_imx->adapter, lpi2c_imx);
 	platform_set_drvdata(pdev, lpi2c_imx);
