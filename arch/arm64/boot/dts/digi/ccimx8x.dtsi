@@ -45,6 +45,7 @@
 	clock-names = "per", "ipg";
 	clock-frequency = <100000>;
 	pinctrl-names = "default";
+	digi,hold-time-ns = <3500>;
 	pinctrl-0 = <&pinctrl_lpi2c0>;
 	status = "okay";
 
