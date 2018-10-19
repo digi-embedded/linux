@@ -8,6 +8,9 @@ Required properties:
 - interrupts : lpi2c interrupt
 - clocks : lpi2c clock specifier
 
+Optional properties:
+- digi,hold-time-ns : Forces start, repeated start and stop i2c hold time
+
 Examples:
 
 lpi2c7: lpi2c7@40a50000 {
