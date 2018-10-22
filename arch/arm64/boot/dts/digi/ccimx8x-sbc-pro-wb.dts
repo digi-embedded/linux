@@ -264,12 +264,12 @@
 	};
 };
 
-/* LPUART0 on XBee socket */
+/* LPUART0 on expansion header */
 &lpuart0 {
 	/* RTS/CTS lines multiplexed with CAN0 */
-	pinctrl-0 = <&pinctrl_lpuart0_4wires>, <&pinctrl_xbee_gpios>;
+	pinctrl-0 = <&pinctrl_lpuart0_4wires>;
 	/* Comment the line above and uncomment the next one to use 2-wires */
-	//pinctrl-0 = <&pinctrl_lpuart0_2wires>, <&pinctrl_xbee_gpios>;
+	//pinctrl-0 = <&pinctrl_lpuart0_2wires>;
 	status = "okay";
 };
 
