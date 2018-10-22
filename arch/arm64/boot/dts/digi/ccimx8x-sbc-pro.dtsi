@@ -68,6 +68,17 @@
 			enable-active-high;
 			startup-delay-us = <1000>;
 		};
+
+		reg_3v3_pcie: regulator@4 {
+			compatible = "regulator-fixed";
+			reg = <4>;
+			regulator-name = "epdev_on";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			gpio = <&gpio0 31 GPIO_ACTIVE_HIGH>; /* PCIE_VCC_EN */
+			enable-active-high;
+			startup-delay-us = <100000>;
+		};
 	};
 
 	sound_max98089: sound-max98089 {
@@ -796,14 +807,6 @@
 			SC_P_CSI_EN_LSIO_GPIO3_IO02	0xC0000041
 			/* CSI Camera reset */
 			SC_P_CSI_RESET_LSIO_GPIO3_IO03	0xC0000041
-		>;
-	};
-
-	pinctrl_pcieb: pcieagrp{
-		fsl,pins = <
-			SC_P_PCIE_CTRL0_PERST_B_LSIO_GPIO4_IO00		0x04000021
-			SC_P_PCIE_CTRL0_CLKREQ_B_LSIO_GPIO4_IO01	0x04000021
-			SC_P_PCIE_CTRL0_WAKE_B_LSIO_GPIO4_IO02		0x04000021
 		>;
 	};
 

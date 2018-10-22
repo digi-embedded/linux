@@ -264,6 +264,17 @@
 	status = "disabled";
 };
 
+/* PCIE (Mini Card) */
+&pcieb {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pcieb>;
+	ext_osc = <1>;
+	reset-gpio = <&gpio3 16 GPIO_ACTIVE_LOW>; /* PCIE_RESET_N */
+	disable-gpio = <&gpio0 30 GPIO_ACTIVE_HIGH>; /* PCIE_DIS_N */
+	epdev_on-supply = <&reg_3v3_pcie>;
+	status = "okay";
+};
+
 /* Audio support */
 &asrc0 {
 	status = "okay";
@@ -340,4 +351,21 @@
 
 &vpu {
 	status = "okay";
+};
+
+/* IOMUX */
+&iomuxc {
+	/* PCIE (Mini Card) */
+	pinctrl_pcieb: pcieagrp {
+		fsl,pins = <
+			/* PCIE_RESET_N */
+			SC_P_QSPI0A_SCLK_LSIO_GPIO3_IO16	0x06000021
+			/* PCIE_DIS_N */
+			SC_P_SAI1_RXC_LSIO_GPIO0_IO30		0x06000021
+			/* PCIE_WAKE_N */
+			SC_P_SAI1_RXD_LSIO_GPIO0_IO29		0x06000021
+			/* Voltage for PCIe domain (PCIE_VCC_EN) */
+			SC_P_SAI1_RXFS_LSIO_GPIO0_IO31		0x06000021
+		>;
+	};
 };
