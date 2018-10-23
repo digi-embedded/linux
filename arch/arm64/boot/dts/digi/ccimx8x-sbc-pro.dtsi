@@ -42,6 +42,8 @@
 		reg_5v_display: regulator@2 {
 			compatible = "regulator-fixed";
 			reg = <2>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_reg_5v_display>;
 			regulator-name = "5v_display";
 			regulator-min-microvolt = <5000000>;
 			regulator-max-microvolt = <5000000>;
@@ -603,8 +605,6 @@
 
 	pinctrl_hog: hoggrp {
 		fsl,pins = <
-			/* Display regulator enable */
-			SC_P_SPI3_SCK_LSIO_GPIO0_IO13	0x06000020
 		>;
 	};
 
@@ -819,6 +819,13 @@
 		fsl,pins = <
 			/* Audio power enable */
 			SC_P_SPI3_SDO_LSIO_GPIO0_IO14		0x06000020
+		>;
+	};
+
+	pinctrl_reg_5v_display: reg_5v_display_grp {
+		fsl,pins = <
+			/* 5V regulator power enable */
+			SC_P_SPI3_SCK_LSIO_GPIO0_IO13		0x06000020
 		>;
 	};
 
