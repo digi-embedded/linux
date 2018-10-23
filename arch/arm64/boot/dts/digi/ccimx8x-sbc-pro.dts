@@ -315,10 +315,6 @@
 	status = "okay";
 };
 
-&vpu {
-	status = "okay";
-};
-
 &vpu_decoder {
 	status = "okay";
 };
