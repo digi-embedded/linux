@@ -603,10 +603,6 @@
 
 	pinctrl_hog: hoggrp {
 		fsl,pins = <
-			/* User LED */
-			SC_P_MCLK_IN0_LSIO_GPIO0_IO19	0x06000020
-			/* User button */
-			SC_P_MCLK_OUT0_LSIO_GPIO0_IO20	0x06000020
 			/* Display regulator enable */
 			SC_P_SPI3_SCK_LSIO_GPIO0_IO13	0x06000020
 		>;
