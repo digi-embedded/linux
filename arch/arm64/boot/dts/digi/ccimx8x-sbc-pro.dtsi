@@ -76,7 +76,7 @@
 			reg = <4>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&pinctrl_reg_3v3_pcie>;
-			regulator-name = "epdev_on";
+			regulator-name = "vcc";
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
 			gpio = <&gpio0 31 GPIO_ACTIVE_HIGH>; /* PCIE_VCC_EN */
@@ -524,6 +524,11 @@
 
 &pd_dma_lpuart2 {
 	debug_console;
+};
+
+/* PCIE (Mini Card) */
+&pcieb {
+	vcc-supply = <&reg_3v3_pcie>;
 };
 
 &prg1 {
