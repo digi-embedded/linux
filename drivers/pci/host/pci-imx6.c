@@ -93,6 +93,7 @@ struct imx_pcie {
 	struct regmap		*reg_gpc;
 	void __iomem		*phy_base;
 	struct regulator	*regulator;
+	struct regulator	*vcc;
 	struct regulator	*pcie_phy_regulator;
 	struct regulator	*pcie_bus_regulator;
 	struct regulator	*epdev_on;
@@ -2109,7 +2110,19 @@ static int imx_pcie_probe(struct platform_device *pdev)
 		}
 	} else {
 		imx_pcie->regulator = NULL;
-		dev_warn(&pdev->dev, "cannot get regulator voltage\n");
+		dev_warn(&pdev->dev, "cannot get vin regulator voltage\n");
+	}
+
+	imx_pcie->vcc = devm_regulator_get(&pdev->dev, "vcc");
+	if (IS_ERR(imx_pcie->vcc)) {
+		if (PTR_ERR(imx_pcie->vcc) == -EPROBE_DEFER)
+			return -EPROBE_DEFER;
+		dev_info(dev, "no vcc regulator found\n");
+		imx_pcie->vcc = NULL;
+	} else {
+		ret = regulator_enable(imx_pcie->vcc);
+		if (ret)
+			dev_err(dev, "failed to enable the vcc regulator\n");
 	}
 
 	imx_pcie->dis_gpio = of_get_named_gpio(node, "disable-gpio", 0);

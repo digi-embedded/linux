@@ -34,6 +34,7 @@ Optional properties:
   L=operation state).
 - power-on-delay-ms: Delay after power-on-gpio request (power off)
 - power-on-gpio: GPIO used for power on line
+- vcc-supply: regulator to manage the PCIe VCC line.
 
 Additional required properties for imx6sx-pcie:
 - clock names: Must include the following additional entries:
