@@ -74,6 +74,8 @@
 		reg_3v3_pcie: regulator@4 {
 			compatible = "regulator-fixed";
 			reg = <4>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_reg_3v3_pcie>;
 			regulator-name = "epdev_on";
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
@@ -872,6 +874,13 @@
 		fsl,pins = <
 			/* 5V regulator power enable */
 			SC_P_SPI3_SCK_LSIO_GPIO0_IO13		0x06000020
+		>;
+	};
+
+	pinctrl_reg_3v3_pcie: reg_3v3_pcie_grp {
+		fsl,pins = <
+			/* Voltage for PCIe domain (PCIE_VCC_EN) */
+			SC_P_SAI1_RXFS_LSIO_GPIO0_IO31		0x06000021
 		>;
 	};
 
