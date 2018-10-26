@@ -134,36 +134,13 @@
 
 &ldb1 {
 	status = "okay";
-
-	lvds-channel@0 {
-		fsl,data-mapping = "jeida";
-		fsl,data-width = <24>;
-		status = "okay";
-
-		display-timings {
-			native-mode = <&g101evn010_1>;
-
-			/* AUO G101EVN01.0 */
-			g101evn010_1: timing@0 {
-				clock-frequency = <68930000>;
-				hactive = <1280>;
-				vactive = <800>;
-				hfront-porch = <120>;
-				hback-porch = <0>;
-				hsync-len = <8>;
-				vback-porch = <10>;
-				vfront-porch = <0>;
-				vsync-len = <6>;
-				hsync-active = <1>;
-				vsync-active = <1>;
-				de-active = <1>;
-				pixelclk-active = <0>;
-			};
-		};
-	};
 };
 
 &ldb1_phy {
+	status = "okay";
+};
+
+&lvds0 {
 	status = "okay";
 };
 

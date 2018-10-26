@@ -81,21 +81,6 @@
 	status = "okay";
 };
 
-/*
- * On the CC8X SBC, an inconsistent reset sequence makes
- * the Goodix display's touch controller respond to two I2C
- * addresses: 0x14 and 0x5D. To make sure the touchscreen
- * works every time, the touch controller's description must
- * be duplicated for both addresses.
- */
-&goodix_touch1 {
-	status = "okay";
-};
-
-&goodix_touch2 {
-	status = "okay";
-};
-
 &gpu_3d0 {
 	status = "okay";
 };
@@ -147,42 +132,51 @@
 
 &ldb1 {
 	status = "okay";
-
-	lvds-channel@0 {
-		fsl,data-mapping = "jeida";
-		fsl,data-width = <24>;
-		status = "okay";
-
-		display-timings {
-			native-mode = <&g101evn010_1>;
-
-			/* AUO G101EVN01.0 */
-			g101evn010_1: timing@0 {
-				clock-frequency = <68930000>;
-				hactive = <1280>;
-				vactive = <800>;
-				hfront-porch = <120>;
-				hback-porch = <0>;
-				hsync-len = <8>;
-				vback-porch = <10>;
-				vfront-porch = <0>;
-				vsync-len = <6>;
-				hsync-active = <1>;
-				vsync-active = <1>;
-				de-active = <1>;
-				pixelclk-active = <0>;
-			};
-		};
-	};
 };
 
 &ldb1_phy {
 	status = "okay";
 };
 
+&lvds0 {
+	status = "okay";
+};
+
+/*
+ * On the CC8X SBC, an inconsistent reset sequence makes
+ * the Goodix display's touch controller respond to two I2C
+ * addresses: 0x14 and 0x5D. To make sure the touchscreen
+ * works every time, the touch controller's description must
+ * be duplicated for both addresses.
+ */
+&lvds0_goodix_touch1 {
+	status = "okay";
+};
+
+&lvds0_goodix_touch2 {
+	status = "okay";
+};
+
 /*
  * Uncomment to enable display support on the 2nd video interface.
  */
+///* MIPI-DSI1 I2C available on LVDS1 connector */
+//&i2c0_mipi_lvds1 {
+//	status = "okay";
+//};
+//
+//&ldb2 {
+//	status = "okay";
+//};
+//
+//&ldb2_phy {
+//	status = "okay";
+//};
+//
+//&lvds1 {
+//	status = "okay";
+//};
+//
 //&lvds1_goodix_touch1 {
 //	status = "okay";
 //};
@@ -191,45 +185,6 @@
 //	status = "okay";
 //};
 //
-///* MIPI-DSI1 I2C available on LVDS1 connector */
-//&i2c0_mipi_lvds1 {
-//	status = "okay";
-//};
-//
-//&ldb2 {
-//	status = "okay";
-//
-//	lvds-channel@0 {
-//		fsl,data-mapping = "jeida";
-//		fsl,data-width = <24>;
-//		status = "okay";
-//
-//		display-timings {
-//			native-mode = <&lvds1_g101evn010_1>;
-//
-//			/* AUO G101EVN01.0 */
-//			lvds1_g101evn010_1: timing@0 {
-//				clock-frequency = <68930000>;
-//				hactive = <1280>;
-//				vactive = <800>;
-//				hfront-porch = <120>;
-//				hback-porch = <0>;
-//				hsync-len = <8>;
-//				vback-porch = <10>;
-//				vfront-porch = <0>;
-//				vsync-len = <6>;
-//				hsync-active = <1>;
-//				vsync-active = <1>;
-//				de-active = <1>;
-//				pixelclk-active = <0>;
-//			};
-//		};
-//	};
-//};
-//
-//&ldb2_phy {
-//	status = "okay";
-//};
 
 /* LPSPI0 on expansion header */
 &lpspi0 {

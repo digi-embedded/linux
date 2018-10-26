@@ -295,7 +295,7 @@
 	 * works every time, the touch controller's description must
 	 * be duplicated for both addresses.
 	 */
-	goodix_touch1: gt9271@14 {
+	lvds0_goodix_touch1: gt9271@14 {
 		compatible = "goodix,gt9271";
 		reg = <0x14>;
 		/* Interrupt for LVDS0 */
@@ -306,7 +306,7 @@
 		status = "disabled";
 	};
 
-	goodix_touch2: gt9271@5D {
+	lvds0_goodix_touch2: gt9271@5D {
 		compatible = "goodix,gt9271";
 		reg = <0x5D>;
 		/* Interrupt for LVDS0 */
@@ -370,8 +370,31 @@
 	pinctrl-0 = <&pinctrl_lvds0>;
 	status = "disabled";
 
-	lvds-channel@0 {
+	lvds0: lvds-channel@0 {
+		fsl,data-mapping = "jeida";
+		fsl,data-width = <24>;
 		status = "disabled";
+
+		display-timings {
+			native-mode = <&lvds0_g101evn010_1>;
+
+			/* AUO G101EVN01.0 */
+			lvds0_g101evn010_1: timing@0 {
+				clock-frequency = <68930000>;
+				hactive = <1280>;
+				vactive = <800>;
+				hfront-porch = <120>;
+				hback-porch = <0>;
+				hsync-len = <8>;
+				vback-porch = <10>;
+				vfront-porch = <0>;
+				vsync-len = <6>;
+				hsync-active = <1>;
+				vsync-active = <1>;
+				de-active = <1>;
+				pixelclk-active = <0>;
+			};
+		};
 	};
 };
 
@@ -423,8 +446,31 @@
 	pinctrl-0 = <&pinctrl_lvds1>;
 	status = "disabled";
 
-	lvds-channel@0 {
+	lvds1: lvds-channel@0 {
+		fsl,data-mapping = "jeida";
+		fsl,data-width = <24>;
 		status = "disabled";
+
+		display-timings {
+			native-mode = <&lvds1_g101evn010_1>;
+
+			/* AUO G101EVN01.0 */
+			lvds1_g101evn010_1: timing@0 {
+				clock-frequency = <68930000>;
+				hactive = <1280>;
+				vactive = <800>;
+				hfront-porch = <120>;
+				hback-porch = <0>;
+				hsync-len = <8>;
+				vback-porch = <10>;
+				vfront-porch = <0>;
+				vsync-len = <6>;
+				hsync-active = <1>;
+				vsync-active = <1>;
+				de-active = <1>;
+				pixelclk-active = <0>;
+			};
+		};
 	};
 };
 
