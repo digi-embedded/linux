@@ -96,7 +96,9 @@
 
 &fec2 {
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_enet2 &pinctrl_enet2_mdio>;
+	pinctrl-0 = <&pinctrl_enet2>,
+		    <&pinctrl_enet2_mdio>,
+		    <&pinctrl_enet2_gpio>;
 	phy-mode = "rmii";
 	phy-handle = <&ethphy1>;
 	phy-reset-gpios = <&gpio5 6 GPIO_ACTIVE_LOW>;
@@ -518,6 +520,13 @@
 			fsl,pins = <
 				MX6UL_PAD_GPIO1_IO07__ENET2_MDC		0x1b0b0
 				MX6UL_PAD_GPIO1_IO06__ENET2_MDIO	0x1b0b0
+			>;
+		};
+
+		pinctrl_enet2_gpio: enet2gpiogrp {
+			fsl,pins = <
+				/* PHY reset */
+				MX6UL_PAD_SNVS_TAMPER6__GPIO5_IO06	0x0b0b0
 			>;
 		};
 
