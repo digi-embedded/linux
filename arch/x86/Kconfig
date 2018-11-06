@@ -147,6 +147,7 @@ config X86
 	select HAVE_UID16			if X86_32 || IA32_EMULATION
 	select HAVE_UNSTABLE_SCHED_CLOCK
 	select HAVE_USER_RETURN_NOTIFIER
+	select HOTPLUG_SMT			if SMP
 	select IRQ_FORCED_THREADING
 	select MODULES_USE_ELF_RELA		if X86_64
 	select MODULES_USE_ELF_REL		if X86_32
@@ -1057,7 +1058,7 @@ config X86_MCE_THRESHOLD
 	def_bool y
 
 config X86_MCE_INJECT
-	depends on X86_MCE
+	depends on X86_MCE && X86_LOCAL_APIC
 	tristate "Machine check injector support"
 	---help---
 	  Provide support for injecting machine checks for testing purposes.
