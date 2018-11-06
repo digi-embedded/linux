@@ -1040,6 +1040,96 @@ OnError:
     return ret;
 }
 
+static ssize_t gpu_mult_show(struct device *dev, struct device_attribute *attr,
+                             char *buf)
+{
+    static gctUINT gpu_clk_mult, min_clk_mult, max_clk_mult;
+    gckHARDWARE hardware;
+    gckGALDEVICE galDevice;
+
+    galDevice = dev_get_drvdata(dev);
+    if (!(galDevice) ||
+        !(galDevice->kernels[gcvCORE_MAJOR])) {
+        /* GPU is not ready, so it is meaningless to change GPU freq. */
+        dev_err(dev, "galDevice or galDevice->kernels is NULL!\n");
+        return NOTIFY_OK;
+    }
+
+    hardware = galDevice->kernels[gcvCORE_MAJOR]->hardware;
+    if (!hardware) {
+        dev_err(dev, "hardware is NULL!\n");
+        return NOTIFY_OK;
+    }
+
+    gckHARDWARE_GetFscaleValue(hardware, &gpu_clk_mult, &min_clk_mult,
+                               &max_clk_mult);
+
+    return sprintf(buf, "%d\n", gpu_clk_mult);
+}
+
+static ssize_t gpu_mult_store(struct device *dev,
+                              struct device_attribute *attr,
+                              const char *buf, size_t count)
+{
+    gckHARDWARE hardware;
+    gckGALDEVICE galDevice;
+    int err;
+    unsigned long gpu_clk_mult;
+
+    galDevice = dev_get_drvdata(dev);
+    if (!(galDevice) ||
+        !(galDevice->kernels[gcvCORE_MAJOR])) {
+        /* GPU is not ready, so it is meaningless to change GPU freq. */
+        dev_err(dev, "galDevice or galDevice->kernels is NULL!\n");
+        return NOTIFY_OK;
+    }
+
+    hardware = galDevice->kernels[gcvCORE_MAJOR]->hardware;
+    if (!hardware) {
+        dev_err(dev, "hardware is NULL!\n");
+        return NOTIFY_OK;
+    }
+
+    err = kstrtoul(buf, 0, &gpu_clk_mult);
+
+    if (of_machine_is_compatible("fsl,imx6dl")) {
+        if (gpu_clk_mult < 3 || gpu_clk_mult > 64) {
+            dev_err(dev, "gpu clock multiplier must be between 3 and 64\n");
+            return NOTIFY_OK;
+        }
+    } else if (of_machine_is_compatible("fsl,imx6q")) {
+        if (gpu_clk_mult < 2 || gpu_clk_mult > 64) {
+            dev_err(dev, "gpu clock multiplier must be between 2 and 64\n");
+            return NOTIFY_OK;
+        }
+    } else if (of_machine_is_compatible("fsl,imx8qxp")) {
+        if (gpu_clk_mult < 1 || gpu_clk_mult > 64) {
+            dev_err(dev, "gpu clock multiplier must be between 1 and 64\n");
+            return NOTIFY_OK;
+        }
+    } else {
+        dev_err(dev, "Platform not supported.\n");
+        return NOTIFY_OK;
+    }
+
+    gckHARDWARE_SetFscaleValue(hardware, (gctUINT)gpu_clk_mult);
+
+    dev_dbg(dev, "gpu clock multiplier set to %d\n", (gctUINT)gpu_clk_mult);
+
+    return count;
+}
+static DEVICE_ATTR(gpu_mult, S_IRWXU, gpu_mult_show, gpu_mult_store);
+
+static struct attribute *gpu_sysfs_entries[] = {
+    &dev_attr_gpu_mult.attr,
+    NULL,
+};
+
+static struct attribute_group gpu_attr_group = {
+    .name	= NULL,        /* put in device directory */
+    .attrs	= gpu_sysfs_entries,
+};
+
 static struct file_operations driver_fops =
 {
     .owner      = THIS_MODULE,
@@ -1165,6 +1255,14 @@ static int drv_init(void)
         __FUNCTION__, __LINE__,
         irqLine, contiguousSize, registerMemBase
         );
+
+    ret = sysfs_create_group(&device->platform->device->dev.kobj,
+                             &gpu_attr_group);
+    if (ret) {
+        dev_err(&device->platform->device->dev,
+                "Cannot create sysfs entries for gpu (%d)\n", ret);
+        goto OnError;
+    }
 
     /* Success. */
     gcmkFOOTER();
