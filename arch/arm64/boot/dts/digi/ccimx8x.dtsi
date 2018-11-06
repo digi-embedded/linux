@@ -51,6 +51,7 @@
 	clocks = <&clk IMX8QXP_I2C0_CLK>,
 		 <&clk IMX8QXP_I2C0_IPG_CLK>;
 	clock-names = "per", "ipg";
+	assigned-clock-rates = <48000000>;
 	clock-frequency = <1000000>;
 	pinctrl-names = "default";
 	digi,hold-time-ns = <8000>;
