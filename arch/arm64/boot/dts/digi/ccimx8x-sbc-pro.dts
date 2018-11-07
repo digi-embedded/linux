@@ -266,6 +266,14 @@
 // };
 
 /*
+ * Uncomment to Enable Tamper detection. There are 2 digital (0 and 1) and 2
+ * analog (2 and 3) tamper interfaces.
+ */
+//&mca_tamper {
+//	digi,tamper-if-list = <0 1 2 3>;
+//};
+
+/*
  * Enable only if the parallel camera is physically connected.
  * If not, the MIPI camera may not work.
  * Similarly, if the MIPI camera is not physically connected you need to

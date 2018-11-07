@@ -125,6 +125,10 @@
 				#pwm-cells = <3>;
 			};
 		};
+
+		mca_tamper: tamper {
+			compatible = "digi,mca-cc8x-tamper";
+		};
 	};
 };
 
