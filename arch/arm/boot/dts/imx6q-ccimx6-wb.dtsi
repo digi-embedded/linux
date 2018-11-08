@@ -26,6 +26,11 @@
 		digi,disable-gpios = <&gpio1 9 GPIO_ACTIVE_HIGH>;
 		/* U-Boot will fill in the MAC address here */
 	};
+
+	bt_rfkill {
+		compatible = "fsl,mxc_bt_rfkill";
+		bt-power-gpios = <&gpio_extender 4 0>;
+	};
 };
 
 &i2c2 {
