@@ -41,7 +41,7 @@
 /* UART1 (Bluetooth) */
 &lpuart1 {
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_lpuart1_2wires>, <&pinctrl_lpuart1_gpio>;
+	pinctrl-0 = <&pinctrl_lpuart1_4wires>, <&pinctrl_lpuart1_gpio>;
 	status = "okay";
 };
 
