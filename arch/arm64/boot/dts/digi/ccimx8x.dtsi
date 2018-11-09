@@ -93,11 +93,11 @@
 			digi,pwroff-guard-sec = <30>;
 		};
 
-		mca_rtc {
+		rtc {
 			compatible = "digi,mca-cc8x-rtc";
 		};
 
-		mca_wdt {
+		wdt {
 			compatible = "digi,mca-cc8x-wdt";
 			digi,full-reset;
 		};
