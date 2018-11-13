@@ -143,10 +143,6 @@
 	status = "okay";
 };
 
-&mipi_dsi_reset {
-	status = "okay";
-};
-
 &pcie {
 	status = "okay";
 };

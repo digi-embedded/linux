@@ -118,7 +118,7 @@
 
 /*
  * Parallel LCD conflicts with other interfaces:
- * IPU0:DI0 with MIPI display: comment the 'mipi_dsi' and 'mipi_dsi_reset' nodes.
+ * IPU0:DI0 with MIPI display: comment the 'mipi_dsi' node.
  * Pad DISP0_DAT8 with PWM1: comment the 'pwm1' node.
  */
 //&lcd {
@@ -144,10 +144,6 @@
  * The MIPI display conflicts with IPU0:DI0 on the parallel LCD.
  */
 &mipi_dsi {
-	status = "okay";
-};
-
-&mipi_dsi_reset {
 	status = "okay";
 };
 

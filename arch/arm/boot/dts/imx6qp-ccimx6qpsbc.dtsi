@@ -69,14 +69,6 @@
 		status = "disabled";
 	};
 
-	mipi_dsi_reset: mipi-dsi-reset {
-		compatible = "gpio-reset";
-		reset-gpios = <&gpio6 11 GPIO_ACTIVE_LOW>;
-		reset-delay-us = <50>;
-		#reset-cells = <0>;
-		status = "disabled";
-	};
-
 	mxcfb1: fb@0 {
 		compatible = "fsl,mxc_sdc_fb";
 		disp_dev = "hdmi";
@@ -960,7 +952,8 @@
 
 &mipi_dsi {
 	lcd_panel = "TRULY-WVGA";
-	resets = <&mipi_dsi_reset>;
+	reset-gpios = <&gpio6 11 GPIO_ACTIVE_LOW>;
+	reset-delay-us = <50>;
 	dev_id = <0>;
 	disp_id = <0>;
 };
