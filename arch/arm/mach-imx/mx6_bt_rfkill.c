@@ -48,40 +48,25 @@ struct mxc_bt_rfkill_data {
 struct mxc_bt_rfkill_pdata {
 };
 
-static void mxc_bt_rfkill_reset(void *rfkdata)
-{
-	struct mxc_bt_rfkill_data *data = rfkdata;
-	printk(KERN_INFO "mxc_bt_rfkill_reset\n");
-	if (gpio_is_valid(data->bt_power_gpio)) {
-		gpio_set_value_cansleep(data->bt_power_gpio, 0);
-		msleep(500);
-		gpio_set_value_cansleep(data->bt_power_gpio, 1);
-		msleep(200);
-	}
-}
-
 static int mxc_bt_rfkill_power_change(void *rfkdata, int status)
 {
-	if (status)
-		mxc_bt_rfkill_reset(rfkdata);
+	struct mxc_bt_rfkill_data *data = rfkdata;
+
+	printk(KERN_INFO "rfkill: BT RF %s\n", status ? "on" : "off");
+	gpio_set_value_cansleep(data->bt_power_gpio, status);
+	msleep(200);
 	return 0;
 }
+
 static int mxc_bt_set_block(void *rfkdata, bool blocked)
 {
-	int ret;
-
 	/* Bluetooth stack will reset the bluetooth chip during
 	 * resume, since we keep bluetooth's power during suspend,
 	 * don't let rfkill to actually reset the chip. */
 	if (system_in_suspend)
 		return 0;
-	pr_info("rfkill: BT RF going to : %s\n", blocked ? "off" : "on");
-	if (!blocked)
-		ret = mxc_bt_rfkill_power_change(rfkdata, 1);
 	else
-		ret = mxc_bt_rfkill_power_change(rfkdata, 0);
-
-	return ret;
+		return mxc_bt_rfkill_power_change(rfkdata, !blocked);
 }
 
 static const struct rfkill_ops mxc_bt_rfkill_ops = {
