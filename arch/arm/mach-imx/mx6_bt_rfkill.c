@@ -170,7 +170,9 @@ static int mxc_bt_rfkill_probe(struct platform_device *pdev)
 			goto error_request_gpio;
 		}
 	} else {
-		printk("bt power gpio not valid (%d)!\n", data->bt_power_gpio);
+		printk(KERN_ERR "bt power gpio not valid (%d)!\n", data->bt_power_gpio);
+		rc = -EINVAL;
+		goto error_request_gpio;
 	}
 
 	rc = register_pm_notifier(&mxc_bt_power_notifier);
