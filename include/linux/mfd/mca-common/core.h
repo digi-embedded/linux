@@ -59,6 +59,7 @@ struct mca_drv {
 	u32 last_mca_reset;
 	u32 last_mpu_reset;
 	struct bin_attribute *nvram;
+	struct device *i2c_adapter_dev;
 };
 
 struct mca_adc {

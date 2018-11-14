@@ -23,6 +23,7 @@
 #include <linux/kthread.h>
 #include <linux/uaccess.h>
 #include <linux/reboot.h>
+#include <linux/i2c.h>
 
 #include <linux/mfd/mca-common/core.h>
 #include <linux/mfd/mca-cc8x/core.h>
@@ -39,6 +40,31 @@ struct dyn_attribute {
 struct mca_reason {
 	u32 		flag;
 	const char	*text;
+};
+
+enum lpi2c_imx_mode {
+	STANDARD,	/* 100+Kbps */
+	FAST,		/* 400+Kbps */
+	FAST_PLUS,	/* 1.0+Mbps */
+	HS,		/* 3.4+Mbps */
+	ULTRA_FAST,	/* 5.0+Mbps */
+};
+
+struct lpi2c_imx_struct {
+	struct i2c_adapter	adapter;
+	int			irq;
+	struct clk		*clk_per;
+	struct clk		*clk_ipg;
+	void __iomem		*base;
+	__u8			*rx_buf;
+	__u8			*tx_buf;
+	struct completion	complete;
+	unsigned int		msglen;
+	unsigned int		delivered;
+	unsigned int		block_data;
+	unsigned int		bitrate;
+	enum lpi2c_imx_mode	mode;
+	unsigned int		hold_time;
 };
 
 static const struct mca_reason last_mca_reset[] = {
@@ -469,9 +495,13 @@ static ssize_t fw_update_store(struct device *dev,
 	struct mca_drv *mca = dev_get_drvdata(dev);
 	ssize_t status;
 	long value;
+	struct lpi2c_imx_struct *lpi2c_imx = dev_get_drvdata(mca->i2c_adapter_dev);
 
 	if (!gpio_is_valid(mca->fw_update_gpio))
 		return -EINVAL;
+
+	/* Set i2c bus speed to 100kbps during firmware update */
+	lpi2c_imx->bitrate = 100000;
 
 	status = kstrtol(buf, 0, &value);
 	if (status == 0) {
