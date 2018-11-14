@@ -18,6 +18,7 @@
 #include <linux/module.h>
 #include <linux/regmap.h>
 #include <linux/suspend.h>
+#include <linux/pm_runtime.h>
 #include <linux/proc_fs.h>
 #include <linux/kthread.h>
 #include <linux/uaccess.h>
@@ -924,6 +925,20 @@ int mca_cc8x_device_init(struct mca_drv *mca, u32 irq)
 	pm_power_off = mca_cc8x_power_off;
 
 	/*
+	 * To avoid error messages when resuming from suspend, increase the I2C
+	 * bus' usage counter so the linux pm_runtime framework wakes it from
+	 * suspend before trying to read the MCA's IRQ status. This indicates that
+	 * the bus is in use when the system is going to suspend, making linux wake
+	 * it up as soon as possible so any operations that were halted continue
+	 * without issues after resuming.
+	 *
+	 * The device hierarchy is the following:
+	 *
+	 * mca_cc8x 0-0063 -> i2c i2c-0 -> imx-lpi2c 5a800000.i2c
+	 */
+	pm_runtime_get_noresume(mca->dev->parent->parent);
+
+	/*
 	 * Register the MCA restart handler with high priority to ensure it is
 	 * called first
 	 */
@@ -982,6 +997,7 @@ void mca_cc8x_device_exit(struct mca_drv *mca)
 	unregister_restart_handler(&mca->restart_handler);
 	pm_power_off = NULL;
 	pmca = NULL;
+	pm_runtime_put_noidle(mca->dev->parent->parent);
 	sysfs_remove_group(&mca->dev->kobj, &mca_cc8x_attr_group);
 	mfd_remove_devices(mca->dev);
 	mca_cc8x_irq_exit(mca);
