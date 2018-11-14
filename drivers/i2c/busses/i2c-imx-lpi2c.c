@@ -320,7 +320,7 @@ static int lpi2c_imx_master_enable(struct lpi2c_imx_struct *lpi2c_imx)
 
 	ret = pm_runtime_get_sync(lpi2c_imx->adapter.dev.parent);
 	if (ret < 0)
-		return ret;
+		goto rpm_put;
 
 	temp = MCR_RST;
 	writel(temp, lpi2c_imx->base + LPI2C_MCR);
