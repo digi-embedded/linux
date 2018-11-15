@@ -65,9 +65,6 @@
 	lvds-channel@0 {
 		status = "okay";
 	};
-	lvds-channel@1 {
-		status = "okay";
-	};
 };
 
 &mxcfb1 {
@@ -75,14 +72,6 @@
 };
 
 &mxcfb2 {
-	status = "okay";
-};
-
-&mxcfb3 {
-	status = "okay";
-};
-
-&mxcfb4 {
 	status = "okay";
 };
 
