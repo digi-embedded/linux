@@ -445,6 +445,16 @@
 
 	pinctrl_fec1: fec1grp {
 		fsl,pins = <
+			/*
+			 * The SCFW of B0 defaults ENET0 domains to 2.5V:
+			 * - VDD_ENET0_1P8_2P5_3P3
+			 * - VDD_ENET0_VSELECT_1P8_2P5_3P3
+			 * Turn the domains back to 1.8/3.3V detector
+			 */
+			SC_P_COMP_CTL_GPIO_1V8_3V3_ENET_ENETB0_PAD	0x000014a0
+			SC_P_COMP_CTL_GPIO_1V8_3V3_ENET_ENETB1_PAD	0x000014a0
+
+			/* Pad settings for ENET RMII */
 			SC_P_ENET0_MDC_CONN_ENET0_MDC			0x06000020
 			SC_P_ENET0_MDIO_CONN_ENET0_MDIO			0x06000020
 			SC_P_ENET0_RGMII_TX_CTL_CONN_ENET0_RGMII_TX_CTL	0x06000020
