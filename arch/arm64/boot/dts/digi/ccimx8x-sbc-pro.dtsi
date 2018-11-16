@@ -83,6 +83,18 @@
 			enable-active-high;
 			startup-delay-us = <100000>;
 		};
+
+		reg_3v3_usb_hub: regulator@5 {
+			compatible = "regulator-fixed";
+			reg = <5>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_reg_3v3_usb_hub>;
+			regulator-name = "3v3_usb_hub";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			gpio = <&gpio0 15 GPIO_ACTIVE_HIGH>;
+			enable-active-high;
+		};
 	};
 
 	sound_max98089: sound-max98089 {
@@ -617,12 +629,13 @@
 	};
 };
 
-/* USB_OTG1 */
+/* USB_OTG1 connected to usb hub */
 &usbotg1 {
-	/*
-	 * To configure this USB controller as a device set dr_mode to "otg";
-	 * to configure it as a host set to "host" instead.
-	 */
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_usbotg1>;
+
+	vbus-supply = <&reg_3v3_usb_hub>;
+	fsl,reset-gpio = <&gpio1 3 GPIO_ACTIVE_LOW>;
 	dr_mode = "host";
 	disable-over-current;
 	status = "disabled";
@@ -937,6 +950,13 @@
 		>;
 	};
 
+	pinctrl_reg_3v3_usb_hub: reg_3v3_usb_hub_grp {
+		fsl,pins = <
+			/* GPIO0_15 USB hub power enable */
+			SC_P_SPI3_SDI_LSIO_GPIO0_IO15		0x06000020
+		>;
+	};
+
 	pinctrl_sai0: sai0grp {
 		fsl,pins = <
 			SC_P_SAI0_RXD_ADMA_SAI0_RXD		0x06000040
@@ -944,6 +964,13 @@
 			SC_P_SAI0_TXFS_ADMA_SAI0_TXFS		0x06000040
 			SC_P_SAI0_TXC_ADMA_SAI0_TXC		0x06000040
 			SC_P_SPI3_CS0_ADMA_ACM_MCLK_OUT1	0x06000040
+		>;
+	};
+
+	pinctrl_usbotg1: usbotg1grp {
+		fsl,pins = <
+			/* USB hub reset */
+			SC_P_SPI2_SCK_LSIO_GPIO1_IO03		0x06000020
 		>;
 	};
 
