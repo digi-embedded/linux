@@ -328,6 +328,13 @@
 				//dlg,inverse-polarity;
 				linux,default-trigger = "backlight";
 			};
+
+			/* PWM1 entry for Android API */
+			pwm1@0xc6 {
+				dlg,led-gpio-reg = <0x1c 0x0f>;
+				dlg,led-reg = <0xc7>;
+				linux,default-trigger = "pwm";
+			};
 		};
 	};
 };
