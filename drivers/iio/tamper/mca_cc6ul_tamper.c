@@ -471,6 +471,29 @@ irq_out:
 	return IRQ_HANDLED;
 }
 
+static int mca_cc6ul_tamper_is_enabled(struct mca_cc6ul *mca, int iface)
+{
+	int ret;
+	u8 data[MCA_CC6UL_TAMPER_REGS_LEN];
+	unsigned int tamper_base_reg = get_tamper_base_reg(iface);
+
+	/* Get tamper configuration registers */
+	ret = regmap_bulk_read(mca->regmap,
+			       tamper_base_reg,
+			       data, sizeof(data));
+	if (ret != 0) {
+		dev_err(mca->dev,
+			"Failed reading tamper%d registers (%d)\n",
+			iface, ret);
+		return ret;
+	}
+
+	/* Verify if the tamper interface is enabled */
+	if (!(data[CFG0] & MCA_CC6UL_TAMPER_DET_EN))
+		return -1;
+	return 0;
+}
+
 static int mca_cc6ul_init_hardware(struct mca_cc6ul_tamper *tp)
 {
 	int ret;
@@ -581,6 +604,11 @@ static int mca_cc6ul_tamper_probe(struct platform_device *pdev)
 
 		if (iface >= MCA_TAMPER_INTERFACES)
 			continue;
+
+		if (mca_cc6ul_tamper_is_enabled(mca, iface) != 0) {
+			dev_info(&pdev->dev, "Tamper %d disabled\n", iface);
+			continue;
+		}
 
 		iiod[iface] = devm_iio_device_alloc(&pdev->dev,
 						    sizeof(*mca_tamper));
