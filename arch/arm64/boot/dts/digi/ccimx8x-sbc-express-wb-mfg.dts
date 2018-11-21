@@ -183,7 +183,11 @@
 	status = "okay";
 };
 
-&vpu {
+&vpu_decoder {
+	status = "okay";
+};
+
+&vpu_encoder {
 	status = "okay";
 };
 
