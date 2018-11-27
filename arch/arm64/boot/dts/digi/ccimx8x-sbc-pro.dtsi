@@ -95,6 +95,17 @@
 			gpio = <&gpio0 15 GPIO_ACTIVE_HIGH>;
 			enable-active-high;
 		};
+
+		reg_3v3_usb_sw: regulator@6 {
+			compatible = "regulator-fixed";
+			reg = <6>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_reg_3v3_usb_sw>;
+			regulator-name = "3v3_usb_sw";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			gpio = <&gpio4 5 GPIO_ACTIVE_LOW>;
+		};
 	};
 
 	sound_max98089: sound-max98089 {
@@ -264,6 +275,21 @@
 				remote-endpoint = <&parallel_csi_ep>;
 			};
 		};
+	};
+
+	typec_ptn5110: typec@52 {
+		compatible = "usb,tcpci";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_typec>;
+		reg = <0x52>;
+		interrupt-parent = <&gpio4>;
+		interrupts = <4 IRQ_TYPE_LEVEL_LOW>;
+		ss-sel-gpios = <&gpio4 6 GPIO_ACTIVE_LOW>;
+		src-pdos = <0x380190c8 0x3803c0c8>;
+		port-type = "drp";
+		sink-disable;
+		default-role = "source";
+		status = "okay";
 	};
 };
 
@@ -647,9 +673,28 @@
 
 /* USB_OTG2/USB_SS3 */
 &usbotg3 {
-	dr_mode = "host";
-	disable-over-current;
+	dr_mode = "otg";
+	extcon = <&typec_ptn5110>;
 	status = "disabled";
+};
+
+/* usbotg3 phy */
+&usbphynop1 {
+	/*
+	 * On the SBCPro version 2, the USB 3.0 interface does not work properly
+	 * due to a hardware issue.
+	 *
+	 * Declaring a consumer for reg_3v3_usb_sw regulator will enable it and
+	 * will power the USB3 switch, causing problems with the detection of
+	 * usb devices connected to the TypeC connector.
+	 * By keeping the switch unpowered at least we ensure that the USB 2.0
+	 * interface available on the TypeC connector will work.
+	 *
+	 * Uncomment the following line only on hardware where this problem has
+	 * been corrected.
+	 */
+
+	 /* vcc-supply = <&reg_3v3_usb_sw>; */
 };
 
 /* Micro SD card */
@@ -961,6 +1006,13 @@
 		>;
 	};
 
+	pinctrl_reg_3v3_usb_sw: reg_3v3_usb_sw_grp {
+		fsl,pins = <
+			/* GPIO4_5 USB3 switch power enable */
+			SC_P_USB_SS3_TC2_LSIO_GPIO4_IO05	0x06000020
+		>;
+	};
+
 	pinctrl_sai0: sai0grp {
 		fsl,pins = <
 			SC_P_SAI0_RXD_ADMA_SAI0_RXD		0x06000040
@@ -975,6 +1027,17 @@
 		fsl,pins = <
 			/* USB hub reset */
 			SC_P_SPI2_SCK_LSIO_GPIO1_IO03		0x06000020
+		>;
+	};
+
+	pinctrl_typec: typecgrp {
+		fsl,pins = <
+			/* USB3 switch bus selector (SEL) */
+			SC_P_USB_SS3_TC3_LSIO_GPIO4_IO06	0x06000021
+			/* PTN5110 irq line (ALERT) */
+			SC_P_USB_SS3_TC1_LSIO_GPIO4_IO04	0x06000021
+			/* PTN5110 debug irq (DBG_ACC) */
+			SC_P_USB_SS3_TC0_LSIO_GPIO4_IO03	0x06000021
 		>;
 	};
 
