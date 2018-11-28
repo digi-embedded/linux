@@ -148,6 +148,7 @@
 		interrupt-parent = <&gpio4>;
 		interrupts = <19 IRQ_TYPE_EDGE_FALLING>;
 		irq-gpios = <&gpio4 19 GPIO_ACTIVE_LOW>;
+		reload-fw-on-resume;
 		skip-firmware-request;
 		status = "disabled";
 	};
@@ -159,6 +160,7 @@
 		interrupt-parent = <&gpio4>;
 		interrupts = <19 IRQ_TYPE_EDGE_FALLING>;
 		irq-gpios = <&gpio4 19 GPIO_ACTIVE_LOW>;
+		reload-fw-on-resume;
 		skip-firmware-request;
 		status = "disabled";
 	};
