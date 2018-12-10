@@ -29,9 +29,14 @@ struct lt8912 {
 	struct drm_display_mode mode;
 	struct device *dev;
 	struct mipi_dsi_device *dsi;
+	struct device_node *host_node;
+	u8 num_dsi_lanes;
+	u8 channel_id;
 	struct regmap *regmap[3];
 	struct gpio_desc *reset_n;
 };
+
+static int lt8912_attach_dsi(struct lt8912 *lt);
 
 static inline struct lt8912 *bridge_to_lt8912(struct drm_bridge *b)
 {
@@ -353,7 +358,8 @@ static int lt8912_bridge_attach(struct drm_bridge *bridge)
 	drm_connector_helper_add(connector, &lt8912_connector_helper_funcs);
 	drm_mode_connector_attach_encoder(connector, bridge->encoder);
 
-	return 0;
+	ret = lt8912_attach_dsi(lt);
+	return ret;
 }
 
 static const struct drm_bridge_funcs lt8912_bridge_funcs = {
@@ -372,7 +378,7 @@ static const struct regmap_config lt8912_regmap_config = {
 };
 
 static int lt8912_i2c_init(struct lt8912 *lt,
-			   struct i2c_adapter *adapter)
+			   struct i2c_client *client)
 {
 	struct i2c_board_info info[] = {
 		{ I2C_BOARD_INFO("lt8912p0", 0x48), },
@@ -383,13 +389,15 @@ static int lt8912_i2c_init(struct lt8912 *lt,
 	unsigned int i;
 	int ret;
 
+	if (!lt || !client)
+		return -ENODEV;
+
 	for (i = 0; i < ARRAY_SIZE(info); i++) {
-		struct i2c_client *client;
-
-		client = i2c_new_device(adapter, &info[i]);
-		if (!client)
-			return -ENODEV;
-
+		if (i > 0 ) {
+			client = i2c_new_device(client->adapter, &info[i]);
+			if (!client)
+				return -ENODEV;
+		}
 		regmap = devm_regmap_init_i2c(client, &lt8912_regmap_config);
 		if (IS_ERR(regmap)) {
 			ret = PTR_ERR(regmap);
@@ -404,47 +412,111 @@ static int lt8912_i2c_init(struct lt8912 *lt,
 	return 0;
 }
 
-static int lt8912_probe(struct mipi_dsi_device *dsi)
+int lt8912_attach_dsi(struct lt8912 *lt)
 {
-	struct device *dev = &dsi->dev;
+	struct device *dev = lt->dev;
+	struct mipi_dsi_host *host;
+	struct mipi_dsi_device *dsi;
+	int ret = 0;
+	const struct mipi_dsi_device_info info = { .type = "lt8912",
+						   .channel = lt->channel_id,
+						   .node = NULL,
+						 };
+
+	host = of_find_mipi_dsi_host_by_node(lt->host_node);
+	if (!host) {
+		dev_err(dev, "failed to find dsi host\n");
+		return -EPROBE_DEFER;
+	}
+
+	dsi = mipi_dsi_device_register_full(host, &info);
+	if (IS_ERR(dsi)) {
+		dev_err(dev, "failed to create dsi device\n");
+		ret = PTR_ERR(dsi);
+		goto err_dsi_device;
+	}
+
+	lt->dsi = dsi;
+
+	dsi->lanes = lt->num_dsi_lanes;
+	dsi->format = MIPI_DSI_FMT_RGB888;
+/* adv7533	dsi->mode_flags = MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_VIDEO_SYNC_PULSE |
+			  MIPI_DSI_MODE_EOT_PACKET | MIPI_DSI_MODE_VIDEO_HSE;
+*/
+	dsi->mode_flags = MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_VIDEO_BURST |
+			  MIPI_DSI_MODE_LPM | MIPI_DSI_MODE_EOT_PACKET;
+
+	ret = mipi_dsi_attach(dsi);
+	if (ret < 0) {
+		dev_err(dev, "failed to attach dsi to host\n");
+		goto err_dsi_attach;
+	}
+
+	return 0;
+
+err_dsi_attach:
+	mipi_dsi_device_unregister(dsi);
+err_dsi_device:
+	return ret;
+}
+
+void lt8912_detach_dsi(struct lt8912 *lt)
+{
+	mipi_dsi_detach(lt->dsi);
+	mipi_dsi_device_unregister(lt->dsi);
+}
+
+
+static int lt8912_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
+{
+	struct device *dev = &i2c->dev;
 	struct lt8912 *lt;
-	struct device_node *node;
-	struct i2c_adapter *adapter;
+	struct device_node *endpoint;
 	int ret;
+
+	static int initialize_it = 1;
+
+	if(!initialize_it) {
+		initialize_it = 1;
+		return -EPROBE_DEFER;
+	}
 
 	lt = devm_kzalloc(dev, sizeof(*lt), GFP_KERNEL);
 	if (!lt)
 		return -ENOMEM;
 
 	lt->dev = dev;
-	lt->dsi = dsi;
-	mipi_dsi_set_drvdata(dsi, lt);
 
-	lt->reset_n = devm_gpiod_get(dev, "reset", GPIOD_ASIS);
+	lt->reset_n = devm_gpiod_get_optional(dev, "reset", GPIOD_ASIS);
 	if (IS_ERR(lt->reset_n)) {
 		ret = PTR_ERR(lt->reset_n);
 		dev_err(dev, "failed to request reset GPIO: %d\n", ret);
 		return ret;
 	}
 
-	node = of_parse_phandle(dev->of_node, "i2c-bus", 0);
-	if (!node) {
-		dev_err(dev, "No i2c-bus found\n");
-		return -ENODEV;
-	}
-
-	adapter = of_find_i2c_adapter_by_node(node);
-	of_node_put(node);
-	if (!adapter) {
-		dev_err(dev, "No i2c adapter found\n");
-		return -EPROBE_DEFER;
-	}
-
-	ret = lt8912_i2c_init(lt, adapter);
+	ret = lt8912_i2c_init(lt, i2c);
 	if (ret)
 		return ret;
 
 	/* TODO: interrupt handing */
+
+	lt->num_dsi_lanes = 4;
+	lt->channel_id = 1;
+
+	endpoint = of_graph_get_next_endpoint(dev->of_node, NULL);
+	if (!endpoint)
+		return -ENODEV;
+
+	lt->host_node = of_graph_get_remote_port_parent(endpoint);
+	if (!lt->host_node) {
+		of_node_put(endpoint);
+		return -ENODEV;
+	}
+
+	of_node_put(endpoint);
+	of_node_put(lt->host_node);
+
+//	mipi_dsi_set_drvdata(lt->dsi, lt);
 
 	lt->bridge.funcs = &lt8912_bridge_funcs;
 	lt->bridge.of_node = dev->of_node;
@@ -454,30 +526,23 @@ static int lt8912_probe(struct mipi_dsi_device *dsi)
 		return ret;
 	}
 
-	dsi->lanes = 4;
-	dsi->format = MIPI_DSI_FMT_RGB888;
-	dsi->mode_flags = MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_VIDEO_BURST |
-			  MIPI_DSI_MODE_LPM | MIPI_DSI_MODE_EOT_PACKET;
-
-	ret = mipi_dsi_attach(dsi);
-	if (ret) {
-		drm_bridge_remove(&lt->bridge);
-		dev_err(dev, "failed to attach dsi to host: %d\n", ret);
-		return ret;
-	}
-
 	return 0;
 }
 
-static int lt8912_remove(struct mipi_dsi_device *dsi)
+static int lt8912_remove(struct i2c_client *i2c)
 {
-	struct lt8912 *lt = mipi_dsi_get_drvdata(dsi);
+	struct lt8912 *lt = i2c_get_clientdata(i2c);
 
-	mipi_dsi_detach(dsi);
+	mipi_dsi_detach(lt->dsi);
 	drm_bridge_remove(&lt->bridge);
 
 	return 0;
 }
+
+static const struct i2c_device_id lt8912_i2c_ids[] = {
+	{ "lt8912", 0 },
+	{ }
+};
 
 static const struct of_device_id lt8912_of_match[] = {
 	{ .compatible = "lontium,lt8912" },
@@ -486,14 +551,34 @@ static const struct of_device_id lt8912_of_match[] = {
 MODULE_DEVICE_TABLE(of, lt8912_of_match);
 
 static struct mipi_dsi_driver lt8912_driver = {
+	.driver.name = "lt8912",
+};
+
+static struct i2c_driver lt8912_i2c_driver = {
 	.driver = {
 		.name = "lt8912",
 		.of_match_table = lt8912_of_match,
 	},
+	.id_table = lt8912_i2c_ids,
 	.probe = lt8912_probe,
 	.remove = lt8912_remove,
 };
-module_mipi_dsi_driver(lt8912_driver);
+
+static int __init lt8912_i2c_drv_init(void)
+{
+	mipi_dsi_driver_register(&lt8912_driver);
+
+	return i2c_add_driver(&lt8912_i2c_driver);
+}
+module_init(lt8912_i2c_drv_init);
+
+static void __exit lt8912_i2c_exit(void)
+{
+	i2c_del_driver(&lt8912_i2c_driver);
+
+	mipi_dsi_driver_unregister(&lt8912_driver);
+}
+module_exit(lt8912_i2c_exit);
 
 MODULE_AUTHOR("Wyon Bi <bivvy.bi@rock-chips.com>");
 MODULE_DESCRIPTION("Lontium LT8912 MIPI-DSI to LVDS and HDMI/MHL bridge");
