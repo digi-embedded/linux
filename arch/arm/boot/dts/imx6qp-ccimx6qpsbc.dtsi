@@ -310,22 +310,14 @@
 			lvds0-backlight@0xc6 {
 				dlg,led-gpio-reg = <0x1a 0xf0>;
 				dlg,led-reg = <0xc6>;
-				/*
-				 * If using the latest Video Adapter Board
-				 * uncomment to invert the backlight polarity
-				 */
-				//dlg,inverse-polarity;
+				dlg,inverse-polarity;
 				linux,default-trigger = "backlight";
 			};
 
 			lvds1-backlight@0xc6 {
 				dlg,led-gpio-reg = <0x1c 0xf0>;
 				dlg,led-reg = <0xc8>;
-				/*
-				 * If using the latest Video Adapter Board
-				 * uncomment to invert the backlight polarity
-				 */
-				//dlg,inverse-polarity;
+				dlg,inverse-polarity;
 				linux,default-trigger = "backlight";
 			};
 
