@@ -70,7 +70,7 @@ static const struct vmbus_device vmbus_devs[] = {
 	/* PCIE */
 	{ .dev_type = HV_PCIE,
 	  HV_PCIE_GUID,
-	  .perf_device = true,
+	  .perf_device = false,
 	},
 
 	/* Synthetic Frame Buffer */
@@ -779,6 +779,7 @@ static void vmbus_onoffer(struct vmbus_channel_message_header *hdr)
 	/* Allocate the channel object and save this offer. */
 	newchannel = alloc_channel();
 	if (!newchannel) {
+		vmbus_release_relid(offer->child_relid);
 		pr_err("Unable to allocate channel object\n");
 		return;
 	}

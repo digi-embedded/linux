@@ -64,6 +64,7 @@ MODULE_FIRMWARE("radeon/oland_smc.bin");
 MODULE_FIRMWARE("radeon/oland_k_smc.bin");
 MODULE_FIRMWARE("radeon/hainan_smc.bin");
 MODULE_FIRMWARE("radeon/hainan_k_smc.bin");
+MODULE_FIRMWARE("radeon/banks_k_2_smc.bin");
 
 union power_info {
 	struct _ATOM_POWERPLAY_INFO info;
@@ -3506,6 +3507,21 @@ static void si_apply_state_adjust_rules(struct amdgpu_device *adev,
 			max_sclk = 75000;
 			max_mclk = 80000;
 		}
+		if ((adev->pdev->revision == 0xC3) ||
+		    (adev->pdev->device == 0x6665)) {
+			max_sclk = 60000;
+			max_mclk = 80000;
+		}
+	} else if (adev->asic_type == CHIP_OLAND) {
+		if ((adev->pdev->revision == 0xC7) ||
+		    (adev->pdev->revision == 0x80) ||
+		    (adev->pdev->revision == 0x81) ||
+		    (adev->pdev->revision == 0x83) ||
+		    (adev->pdev->revision == 0x87) ||
+		    (adev->pdev->device == 0x6604) ||
+		    (adev->pdev->device == 0x6605)) {
+			max_sclk = 75000;
+		}
 	}
 	/* Apply dpm quirks */
 	while (p && p->chip_device != 0) {
@@ -6433,9 +6449,9 @@ static void si_set_pcie_lane_width_in_smc(struct amdgpu_device *adev,
 {
 	u32 lane_width;
 	u32 new_lane_width =
-		(amdgpu_new_state->caps & ATOM_PPLIB_PCIE_LINK_WIDTH_MASK) >> ATOM_PPLIB_PCIE_LINK_WIDTH_SHIFT;
+		((amdgpu_new_state->caps & ATOM_PPLIB_PCIE_LINK_WIDTH_MASK) >> ATOM_PPLIB_PCIE_LINK_WIDTH_SHIFT) + 1;
 	u32 current_lane_width =
-		(amdgpu_current_state->caps & ATOM_PPLIB_PCIE_LINK_WIDTH_MASK) >> ATOM_PPLIB_PCIE_LINK_WIDTH_SHIFT;
+		((amdgpu_current_state->caps & ATOM_PPLIB_PCIE_LINK_WIDTH_MASK) >> ATOM_PPLIB_PCIE_LINK_WIDTH_SHIFT) + 1;
 
 	if (new_lane_width != current_lane_width) {
 		amdgpu_set_pcie_lanes(adev, new_lane_width);
@@ -6943,7 +6959,6 @@ static int si_dpm_enable(struct amdgpu_device *adev)
 
 	si_enable_auto_throttle_source(adev, AMDGPU_DPM_AUTO_THROTTLE_SRC_THERMAL, true);
 	si_thermal_start_thermal_controller(adev);
-	ni_update_current_ps(adev, boot_ps);
 
 	return 0;
 }
@@ -7711,10 +7726,11 @@ static int si_dpm_init_microcode(struct amdgpu_device *adev)
 			((adev->pdev->device == 0x6660) ||
 			(adev->pdev->device == 0x6663) ||
 			(adev->pdev->device == 0x6665) ||
-			(adev->pdev->device == 0x6667))) ||
-		    ((adev->pdev->revision == 0xc3) &&
-			(adev->pdev->device == 0x6665)))
+			 (adev->pdev->device == 0x6667))))
 			chip_name = "hainan_k";
+		else if ((adev->pdev->revision == 0xc3) &&
+			 (adev->pdev->device == 0x6665))
+			chip_name = "banks_k_2";
 		else
 			chip_name = "hainan";
 		break;
@@ -7819,7 +7835,7 @@ static int si_dpm_hw_init(void *handle)
 	else
 		adev->pm.dpm_enabled = true;
 	mutex_unlock(&adev->pm.mutex);
-
+	amdgpu_pm_compute_clocks(adev);
 	return ret;
 }
 

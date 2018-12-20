@@ -13,6 +13,7 @@
 #include <linux/dmi.h>
 #include <asm/efi.h>
 #include <asm/uv/uv.h>
+#include <asm/sections.h>
 
 #define EFI_MIN_RESERVE 5120
 
@@ -201,6 +202,10 @@ void __init efi_arch_mem_reserve(phys_addr_t addr, u64 size)
 		return;
 	}
 
+	/* No need to reserve regions that will never be freed. */
+	if (md.attribute & EFI_MEMORY_RUNTIME)
+		return;
+
 	size += addr % EFI_PAGE_SIZE;
 	size = round_up(size, EFI_PAGE_SIZE);
 	addr = round_down(addr, EFI_PAGE_SIZE);
@@ -353,6 +358,9 @@ void __init efi_free_boot_services(void)
 
 		free_bootmem_late(start, size);
 	}
+
+	if (!num_entries)
+		return;
 
 	new_size = efi.memmap.desc_size * num_entries;
 	new_phys = efi_memmap_alloc(num_entries);

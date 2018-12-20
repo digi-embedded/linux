@@ -309,7 +309,6 @@ static int __fpu__restore_sig(void __user *buf, void __user *buf_fx, int size)
 		 * thread's fpu state, reconstruct fxstate from the fsave
 		 * header. Sanitize the copied state etc.
 		 */
-		struct fpu *fpu = &tsk->thread.fpu;
 		struct user_i387_ia32_struct env;
 		int err = 0;
 
@@ -329,6 +328,10 @@ static int __fpu__restore_sig(void __user *buf, void __user *buf_fx, int size)
 		} else {
 			err = __copy_from_user(&fpu->state.xsave,
 					       buf_fx, state_size);
+
+			/* xcomp_bv must be 0 when using uncompacted format */
+			if (!err && state_size > offsetof(struct xregs_state, header) && fpu->state.xsave.header.xcomp_bv)
+				err = -EINVAL;
 		}
 
 		if (err || __copy_from_user(&env, buf, sizeof(env))) {
@@ -340,11 +343,9 @@ static int __fpu__restore_sig(void __user *buf, void __user *buf_fx, int size)
 		}
 
 		fpu->fpstate_active = 1;
-		if (use_eager_fpu()) {
-			preempt_disable();
-			fpu__restore(fpu);
-			preempt_enable();
-		}
+		preempt_disable();
+		fpu__restore(fpu);
+		preempt_enable();
 
 		return err;
 	} else {

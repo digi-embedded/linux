@@ -127,12 +127,19 @@ static void flush_tmregs_to_thread(struct task_struct *tsk)
 	 * If task is not current, it will have been flushed already to
 	 * it's thread_struct during __switch_to().
 	 *
-	 * A reclaim flushes ALL the state.
+	 * A reclaim flushes ALL the state or if not in TM save TM SPRs
+	 * in the appropriate thread structures from live.
 	 */
 
-	if (tsk == current && MSR_TM_SUSPENDED(mfmsr()))
-		tm_reclaim_current(TM_CAUSE_SIGNAL);
+	if ((!cpu_has_feature(CPU_FTR_TM)) || (tsk != current))
+		return;
 
+	if (MSR_TM_SUSPENDED(mfmsr())) {
+		tm_reclaim_current(TM_CAUSE_SIGNAL);
+	} else {
+		tm_enable();
+		tm_save_sprs(&(tsk->thread));
+	}
 }
 #else
 static inline void flush_tmregs_to_thread(struct task_struct *tsk) { }
@@ -2373,6 +2380,7 @@ static int ptrace_set_debugreg(struct task_struct *task, unsigned long addr,
 	/* Create a new breakpoint request if one doesn't exist already */
 	hw_breakpoint_init(&attr);
 	attr.bp_addr = hw_brk.address;
+	attr.bp_len = 8;
 	arch_bp_generic_fields(hw_brk.type,
 			       &attr.bp_type);
 

@@ -134,9 +134,7 @@ struct vscsibk_pend {
 	struct page *pages[VSCSI_MAX_GRANTS];
 
 	struct se_cmd se_cmd;
-};
 
-struct scsiback_tmr {
 	atomic_t tmr_complete;
 	wait_queue_head_t tmr_wait;
 };
@@ -599,26 +597,20 @@ static void scsiback_device_action(struct vscsibk_pend *pending_req,
 	struct scsiback_tpg *tpg = pending_req->v2p->tpg;
 	struct scsiback_nexus *nexus = tpg->tpg_nexus;
 	struct se_cmd *se_cmd = &pending_req->se_cmd;
-	struct scsiback_tmr *tmr;
 	u64 unpacked_lun = pending_req->v2p->lun;
 	int rc, err = FAILED;
 
-	tmr = kzalloc(sizeof(struct scsiback_tmr), GFP_KERNEL);
-	if (!tmr) {
-		target_put_sess_cmd(se_cmd);
-		goto err;
-	}
-
-	init_waitqueue_head(&tmr->tmr_wait);
+	init_waitqueue_head(&pending_req->tmr_wait);
 
 	rc = target_submit_tmr(&pending_req->se_cmd, nexus->tvn_se_sess,
 			       &pending_req->sense_buffer[0],
-			       unpacked_lun, tmr, act, GFP_KERNEL,
+			       unpacked_lun, NULL, act, GFP_KERNEL,
 			       tag, TARGET_SCF_ACK_KREF);
 	if (rc)
 		goto err;
 
-	wait_event(tmr->tmr_wait, atomic_read(&tmr->tmr_complete));
+	wait_event(pending_req->tmr_wait,
+		   atomic_read(&pending_req->tmr_complete));
 
 	err = (se_cmd->se_tmr_req->response == TMR_FUNCTION_COMPLETE) ?
 		SUCCESS : FAILED;
@@ -626,9 +618,8 @@ static void scsiback_device_action(struct vscsibk_pend *pending_req,
 	scsiback_do_resp_with_sense(NULL, err, 0, pending_req);
 	transport_generic_free_cmd(&pending_req->se_cmd, 1);
 	return;
+
 err:
-	if (tmr)
-		kfree(tmr);
 	scsiback_do_resp_with_sense(NULL, err, 0, pending_req);
 }
 
@@ -1023,6 +1014,7 @@ static void scsiback_do_add_lun(struct vscsibk_info *info, const char *state,
 {
 	struct v2p_entry *entry;
 	unsigned long flags;
+	int err;
 
 	if (try) {
 		spin_lock_irqsave(&info->v2p_lock, flags);
@@ -1038,8 +1030,11 @@ static void scsiback_do_add_lun(struct vscsibk_info *info, const char *state,
 			scsiback_del_translation_entry(info, vir);
 		}
 	} else if (!try) {
-		xenbus_printf(XBT_NIL, info->dev->nodename, state,
+		err = xenbus_printf(XBT_NIL, info->dev->nodename, state,
 			      "%d", XenbusStateClosed);
+		if (err)
+			xenbus_dev_error(info->dev, err,
+				"%s: writing %s", __func__, state);
 	}
 }
 
@@ -1078,8 +1073,11 @@ static void scsiback_do_1lun_hotplug(struct vscsibk_info *info, int op,
 	snprintf(str, sizeof(str), "vscsi-devs/%s/p-dev", ent);
 	val = xenbus_read(XBT_NIL, dev->nodename, str, NULL);
 	if (IS_ERR(val)) {
-		xenbus_printf(XBT_NIL, dev->nodename, state,
+		err = xenbus_printf(XBT_NIL, dev->nodename, state,
 			      "%d", XenbusStateClosed);
+		if (err)
+			xenbus_dev_error(info->dev, err,
+				"%s: writing %s", __func__, state);
 		return;
 	}
 	strlcpy(phy, val, VSCSI_NAMELEN);
@@ -1090,8 +1088,11 @@ static void scsiback_do_1lun_hotplug(struct vscsibk_info *info, int op,
 	err = xenbus_scanf(XBT_NIL, dev->nodename, str, "%u:%u:%u:%u",
 			   &vir.hst, &vir.chn, &vir.tgt, &vir.lun);
 	if (XENBUS_EXIST_ERR(err)) {
-		xenbus_printf(XBT_NIL, dev->nodename, state,
+		err = xenbus_printf(XBT_NIL, dev->nodename, state,
 			      "%d", XenbusStateClosed);
+		if (err)
+			xenbus_dev_error(info->dev, err,
+				"%s: writing %s", __func__, state);
 		return;
 	}
 
@@ -1389,12 +1390,6 @@ static int scsiback_check_stop_free(struct se_cmd *se_cmd)
 static void scsiback_release_cmd(struct se_cmd *se_cmd)
 {
 	struct se_session *se_sess = se_cmd->se_sess;
-	struct se_tmr_req *se_tmr = se_cmd->se_tmr_req;
-
-	if (se_tmr && se_cmd->se_cmd_flags & SCF_SCSI_TMR_CDB) {
-		struct scsiback_tmr *tmr = se_tmr->fabric_tmr_ptr;
-		kfree(tmr);
-	}
 
 	percpu_ida_free(&se_sess->sess_tag_pool, se_cmd->map_tag);
 }
@@ -1455,11 +1450,11 @@ static int scsiback_queue_status(struct se_cmd *se_cmd)
 
 static void scsiback_queue_tm_rsp(struct se_cmd *se_cmd)
 {
-	struct se_tmr_req *se_tmr = se_cmd->se_tmr_req;
-	struct scsiback_tmr *tmr = se_tmr->fabric_tmr_ptr;
+	struct vscsibk_pend *pending_req = container_of(se_cmd,
+				struct vscsibk_pend, se_cmd);
 
-	atomic_set(&tmr->tmr_complete, 1);
-	wake_up(&tmr->tmr_wait);
+	atomic_set(&pending_req->tmr_complete, 1);
+	wake_up(&pending_req->tmr_wait);
 }
 
 static void scsiback_aborted_task(struct se_cmd *se_cmd)
