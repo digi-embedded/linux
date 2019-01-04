@@ -639,7 +639,10 @@ static int brcmf_usb_tx(struct device *dev, struct sk_buff *skb)
 		goto fail;
 	}
 
-	skb_orphan(skb);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 16, 0))
+	if (devinfo->bus_pub.bus->allow_skborphan)
+		skb_orphan(skb);
+#endif
 	req->skb = skb;
 	req->devinfo = devinfo;
 	usb_fill_bulk_urb(req->urb, devinfo->usbdev, devinfo->tx_pipe,
@@ -1276,6 +1279,9 @@ static int brcmf_usb_probe_cb(struct brcmf_usbdev_info *devinfo,
 	bus->proto_type = BRCMF_PROTO_BCDC;
 	bus->fwvid = fwvid;
 	bus->always_use_fws_queue = true;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 16, 0))
+	bus->allow_skborphan = true;
+#endif
 #ifdef CONFIG_PM
 	bus->wowl_supported = true;
 #endif
