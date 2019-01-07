@@ -1,0 +1,103 @@
+/*
+ * Copyright 2018, Digi International Inc.
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+ /* Digi ConnectCore 8X (common) */
+ #include "ccimx8x.dtsi"
+
+/ {
+	wireless {
+		/* U-Boot will fill in the MAC address here */
+	};
+
+	bluetooth {
+		/* U-Boot will fill in the MAC address here */
+	};
+
+	regulators {
+		epdev_on: 3v3_rf_on {
+			compatible = "regulator-fixed";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			regulator-name = "epdev_on";
+			startup-delay-us = <100000>;
+			gpio = <&gpio3 12 GPIO_ACTIVE_HIGH>;
+			enable-active-high;
+		};
+	};
+};
+
+/* UART1 (Bluetooth) */
+&lpuart1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lpuart1_4wires>, <&pinctrl_lpuart1_gpio>;
+	status = "okay";
+};
+
+/* PCIE (Wireless) */
+&pcieb{
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pcieb>, <&pinctrl_pcieb_gpio>;
+	ext_osc = <1>;
+	clkreq-gpio = <&gpio4 1 GPIO_ACTIVE_LOW>;
+	reset-gpio = <&gpio4 0 GPIO_ACTIVE_LOW>;
+	disable-gpio = <&gpio3 11 GPIO_ACTIVE_HIGH>;
+	epdev_on-supply = <&epdev_on>;
+	status = "okay";
+};
+
+/* IOMUX */
+&iomuxc {
+	/* UART1 Bluetooth (2 wires) */
+	pinctrl_lpuart1_2wires: lpuart1grp_2wires {
+		fsl,pins = <
+			SC_P_UART1_TX_ADMA_UART1_TX		0x06000020
+			SC_P_UART1_RX_ADMA_UART1_RX		0x06000020
+		>;
+	};
+
+	/* UART1 Bluetooth (4 wires) */
+	pinctrl_lpuart1_4wires: lpuart1grp_4wires {
+		fsl,pins = <
+			SC_P_UART1_TX_ADMA_UART1_TX		0x06000020
+			SC_P_UART1_RX_ADMA_UART1_RX		0x06000020
+			SC_P_UART1_RTS_B_ADMA_UART1_RTS_B	0x06000020
+			SC_P_UART1_CTS_B_ADMA_UART1_CTS_B	0x06000020
+		>;
+	};
+
+	pinctrl_lpuart1_gpio: lpuart1grp_gpio {
+		fsl,pins = <
+			/* Bluetooth enable (BT_EN) */
+			SC_P_QSPI0A_DATA1_LSIO_GPIO3_IO10	0x06000021
+		>;
+	};
+
+	/* PCI Wireless */
+	pinctrl_pcieb: pcieagrp {
+		fsl,pins = <
+			SC_P_PCIE_CTRL0_PERST_B_LSIO_GPIO4_IO00		0x06000021
+			SC_P_PCIE_CTRL0_CLKREQ_B_LSIO_GPIO4_IO01	0x06000021
+			SC_P_PCIE_CTRL0_WAKE_B_LSIO_GPIO4_IO02		0x06000021
+		>;
+	};
+	pinctrl_pcieb_gpio: pcieagrp_gpio {
+		fsl,pins = <
+			/* Wireless enable (WL_EN) */
+			SC_P_QSPI0A_DATA2_LSIO_GPIO3_IO11		0x06000021
+			/* Voltage for RF domain (3V3_RF_EN) */
+			SC_P_QSPI0A_DATA3_LSIO_GPIO3_IO12		0x06000021
+		>;
+	};
+};
