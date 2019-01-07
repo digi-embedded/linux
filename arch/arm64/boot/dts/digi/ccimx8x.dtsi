@@ -1,0 +1,249 @@
+/*
+ * Copyright 2018, Digi International Inc.
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+/ {
+	aliases {
+		i2c0 = &i2c0;
+		i2c1 = &i2c1;
+		i2c2 = &i2c2;
+		i2c3 = &i2c3;
+	};
+
+	/* Limit cma-reserved to 320 MiB to avoid slowdowns on 1 GiB RAM variants */
+	reserved-memory {
+		linux,cma {
+			size = <0 0x14000000>;
+			alloc-ranges = <0 0x96000000 0 0x14000000>;
+		};
+	};
+
+	regulators {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		reg_3v3_ext: regulator-som@1 {
+			compatible = "regulator-fixed";
+			reg = <1>;
+			regulator-name = "3v3_ext";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+		};
+	};
+};
+
+/* I2C0 connected to MCA and crypto chip */
+&i2c0 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	clocks = <&clk IMX8QXP_I2C0_CLK>,
+		 <&clk IMX8QXP_I2C0_IPG_CLK>;
+	clock-names = "per", "ipg";
+	assigned-clock-rates = <48000000>;
+	clock-frequency = <1000000>;
+	pinctrl-names = "default";
+	digi,hold-time-ns = <8000>;
+	pinctrl-0 = <&pinctrl_lpi2c0>;
+	status = "okay";
+
+	mca_cc8x: mca@63 {
+		compatible = "digi,mca_cc8x";
+		reg = <0x63>;
+		interrupt-parent = <&wu>;
+		interrupts = <GIC_SPI 177 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+		fw-update-gpio = <&gpio3 9 GPIO_ACTIVE_LOW>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_mca_cc8x>;
+
+		mca_adc: adc {
+			compatible = "digi,mca-cc8x-adc";
+			digi,adc-vref = <3000000>;
+		};
+
+		mca_gpio: gpio {
+			compatible = "digi,mca-cc8x-gpio";
+			gpio-controller;
+			#gpio-cells = <2>;
+
+			interrupt-parent = <&mca_cc8x>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
+		};
+
+		pwrkey {
+			compatible = "digi,mca-cc8x-pwrkey";
+			digi,key-power;
+			digi,key-sleep;
+			digi,debounce-ms = <100>;
+			digi,pwroff-delay-sec = <6>;
+			digi,pwroff-guard-sec = <30>;
+		};
+
+		rtc {
+			compatible = "digi,mca-cc8x-rtc";
+		};
+
+		wdt {
+			compatible = "digi,mca-cc8x-wdt";
+			digi,full-reset;
+		};
+
+		pwms {
+			compatible = "digi,mca-pwm";
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			mca_pwm0: pwm@0 {
+				reg = <0>;
+				pwm-channels = <6>;
+				#pwm-cells = <3>;
+			};
+
+			mca_pwm1: pwm@1 {
+				reg = <1>;
+				pwm-channels = <2>;
+				#pwm-cells = <3>;
+			};
+
+			mca_pwm2: pwm@2 {
+				reg = <2>;
+				pwm-channels = <2>;
+				#pwm-cells = <3>;
+			};
+		};
+
+		mca_tamper: tamper {
+			compatible = "digi,mca-cc8x-tamper";
+		};
+	};
+};
+
+/* Disable CPU watchdog */
+&wdog {
+	status = "disabled";
+};
+
+&mu {
+	/*
+	 * Skip the registration of the SC interrupt handler on the MU ipc code.
+	 * The MCA will register its own interrupt handler and will call the
+	 * MU isr acordingly.
+	 */
+	digi,skip-irq-req;
+};
+
+&rpmsg{
+	/*
+	 * 64K for one rpmsg instance:
+	 * --0xb8000000~0xb800ffff: pingpong
+	 */
+	vdev-nums = <1>;
+	reg = <0x0 0xb8000000 0x0 0x10000>;
+	status = "okay";
+};
+
+/* eMMC */
+&usdhc1 {
+	pinctrl-names = "default", "state_100mhz", "state_200mhz";
+	pinctrl-0 = <&pinctrl_usdhc1>;
+	pinctrl-1 = <&pinctrl_usdhc1_100mhz>;
+	pinctrl-2 = <&pinctrl_usdhc1_200mhz>;
+	bus-width = <8>;
+	non-removable;
+	/*
+	 * This property should be removed once the eMMC voltage is configured
+	 * to 1.8V.
+	 */
+	no-1-8-v;
+	status = "okay";
+};
+
+/* IOMUX */
+&iomuxc {
+	/* Internal I2C (MCA, Crypto chip) */
+	pinctrl_lpi2c0: lpi2c0grp {
+		fsl,pins = <
+			SC_P_MIPI_CSI0_GPIO0_00_ADMA_I2C0_SCL	0x06000066
+			SC_P_MIPI_CSI0_GPIO0_01_ADMA_I2C0_SDA	0x06000066
+		>;
+	};
+
+	pinctrl_mca_cc8x: mcagrp {
+		fsl,pins = <
+			/*
+			 * MCA_nINT
+			 *
+			 * Currently, the MCA interrupt request line is
+			 * configured by the SCU
+			 *
+			 * SC_P_PMIC_INT_B_SCU_DSC_PMIC_INT_B	0xb0b1
+			 */
+
+			/* MCA_FW_UPDATE */
+			SC_P_QSPI0A_DATA0_LSIO_GPIO3_IO09	0x06000021
+		>;
+	};
+
+	/* eMMC */
+	pinctrl_usdhc1: usdhc1grp {
+		fsl,pins = <
+			SC_P_EMMC0_CLK_CONN_EMMC0_CLK		0x06000041
+			SC_P_EMMC0_CMD_CONN_EMMC0_CMD		0x00000021
+			SC_P_EMMC0_DATA0_CONN_EMMC0_DATA0	0x00000021
+			SC_P_EMMC0_DATA1_CONN_EMMC0_DATA1	0x00000021
+			SC_P_EMMC0_DATA2_CONN_EMMC0_DATA2	0x00000021
+			SC_P_EMMC0_DATA3_CONN_EMMC0_DATA3	0x00000021
+			SC_P_EMMC0_DATA4_CONN_EMMC0_DATA4	0x00000021
+			SC_P_EMMC0_DATA5_CONN_EMMC0_DATA5	0x00000021
+			SC_P_EMMC0_DATA6_CONN_EMMC0_DATA6	0x00000021
+			SC_P_EMMC0_DATA7_CONN_EMMC0_DATA7	0x00000021
+			SC_P_EMMC0_STROBE_CONN_EMMC0_STROBE	0x00000041
+		>;
+	};
+
+	pinctrl_usdhc1_100mhz: usdhc1grp100mhz {
+		fsl,pins = <
+			SC_P_EMMC0_CLK_CONN_EMMC0_CLK		0x06000040
+			SC_P_EMMC0_CMD_CONN_EMMC0_CMD		0x00000020
+			SC_P_EMMC0_DATA0_CONN_EMMC0_DATA0	0x00000020
+			SC_P_EMMC0_DATA1_CONN_EMMC0_DATA1	0x00000020
+			SC_P_EMMC0_DATA2_CONN_EMMC0_DATA2	0x00000020
+			SC_P_EMMC0_DATA3_CONN_EMMC0_DATA3	0x00000020
+			SC_P_EMMC0_DATA4_CONN_EMMC0_DATA4	0x00000020
+			SC_P_EMMC0_DATA5_CONN_EMMC0_DATA5	0x00000020
+			SC_P_EMMC0_DATA6_CONN_EMMC0_DATA6	0x00000020
+			SC_P_EMMC0_DATA7_CONN_EMMC0_DATA7	0x00000020
+			SC_P_EMMC0_STROBE_CONN_EMMC0_STROBE	0x00000040
+		>;
+	};
+
+	pinctrl_usdhc1_200mhz: usdhc1grp200mhz {
+		fsl,pins = <
+			SC_P_EMMC0_CLK_CONN_EMMC0_CLK		0x06000040
+			SC_P_EMMC0_CMD_CONN_EMMC0_CMD		0x00000020
+			SC_P_EMMC0_DATA0_CONN_EMMC0_DATA0	0x00000020
+			SC_P_EMMC0_DATA1_CONN_EMMC0_DATA1	0x00000020
+			SC_P_EMMC0_DATA2_CONN_EMMC0_DATA2	0x00000020
+			SC_P_EMMC0_DATA3_CONN_EMMC0_DATA3	0x00000020
+			SC_P_EMMC0_DATA4_CONN_EMMC0_DATA4	0x00000020
+			SC_P_EMMC0_DATA5_CONN_EMMC0_DATA5	0x00000020
+			SC_P_EMMC0_DATA6_CONN_EMMC0_DATA6	0x00000020
+			SC_P_EMMC0_DATA7_CONN_EMMC0_DATA7	0x00000020
+			SC_P_EMMC0_STROBE_CONN_EMMC0_STROBE	0x00000040
+		>;
+	};
+};
