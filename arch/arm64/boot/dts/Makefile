@@ -10,6 +10,7 @@ subdir-y += arm
 subdir-y += bitmain
 subdir-y += broadcom
 subdir-y += cavium
+subdir-y += digi
 subdir-y += exynos
 subdir-y += freescale
 subdir-y += hisilicon
