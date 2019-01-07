@@ -21,6 +21,7 @@
 
 /* Includes */
 
+#include <linux/irq.h>
 #include <soc/imx8/sc/types.h>
 
 /* Defines */
@@ -64,6 +65,8 @@
 #define SC_IRQ_TEMP_PMIC1_LOW    (1UL << 19U)	/* PMIC1 temp alarm interrupt */
 #define SC_IRQ_TEMP_PMIC2_HIGH   (1UL << 20U)	/* PMIC2 temp alarm interrupt */
 #define SC_IRQ_TEMP_PMIC2_LOW    (1UL << 21U)	/* PMIC2 temp alarm interrupt */
+/* ... */
+#define SC_IRQ_TEMP_MCA          (1UL << 31U)	/* MCA interrupt on CC8X */
 /*@}*/
 
 /*!
@@ -162,6 +165,22 @@ sc_err_t sc_irq_enable(sc_ipc_t ipc, sc_rsrc_t resource,
 sc_err_t sc_irq_status(sc_ipc_t ipc, sc_rsrc_t resource,
 		       sc_irq_group_t group, uint32_t *status);
 
-#endif				/* SC_IRQ_API_H */
+/*!
+ * SCU MU interrupt handler. This function is automatically called by the linux
+ * kernel, if it has been registered as the MU irq handler, or by the MCA irq
+ * handler on the CC8X platform, which registers a different ISR.
+ * The MCA irq handler handles its own interupts and calls this function to
+ * manage additional SC interrupts that could have been enabled.
+ */
+irqreturn_t imx8_scu_mu_isr(int irq, void *param);
+
+/*!
+ * Function to enable the different SC interrupts available on each functional
+ * group (TEMP/PMIC, RTC, WAKE/BUTTON and WATCHDOG).
+ */
+int imx8_mu_enable_sc_irqs(u32 grp_temp, u32 grp_rtc, u32 grp_wake,
+			   u32 grp_wdog);
+
+#endif				/* _SC_IRQ_API_H */
 
 /**@}*/
