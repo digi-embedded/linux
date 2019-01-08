@@ -35,5 +35,6 @@ obj-y += potentiometer/
 obj-y += potentiostat/
 obj-y += pressure/
 obj-y += proximity/
+obj-y += tamper/
 obj-y += temperature/
 obj-y += trigger/
