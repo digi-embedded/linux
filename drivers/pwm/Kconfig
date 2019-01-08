@@ -287,6 +287,15 @@ config PWM_LPSS_PLATFORM
 	  To compile this driver as a module, choose M here: the module
 	  will be called pwm-lpss-platform.
 
+config PWM_MCA
+	tristate "Digi MCA PWM support"
+	depends on MFD_MCA_CC8X
+	help
+	  PWM framework driver for Digi MCA.
+
+	  To compile this driver as a module, choose M here: the module
+	  will be called pwm-mca.
+
 config PWM_MESON
 	tristate "Amlogic Meson PWM driver"
 	depends on ARCH_MESON
