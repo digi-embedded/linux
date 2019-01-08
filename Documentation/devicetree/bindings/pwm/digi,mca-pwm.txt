@@ -1,0 +1,50 @@
+Digi ConnectCore SOMs Micro Controller Assist PWM
+
+Required properties:
+	- compatible: must be "digi,mca-pwm"
+	- #address-cells: must be 1
+	- #size-cells: must be 0
+
+	  The child nodes of this node represent the PWM controllers, this
+	  means, the pwmchips. If the nodes are not present no pwmchips will be
+	  added to the system.
+
+	  The properties of the PWM nodes are the following:
+
+		Required properties:
+			* reg: index of the MCA PWM controller.
+			* pwm-channels: number of channels of the PWM
+			  controller. Note that the frequency is common for all
+			  the channels of the pwmchip. If different frequency
+			  values are set on different channels the frequency of
+			  all the channels will match the value of the last
+			  channel set.
+			* #pwm-cells: It must be three.See pwm.txt in this
+			  directory for a description of the cells format.
+
+Example:
+	mca_cc8x: mca@63 {
+		pwms {
+			compatible = "digi,mca-pwm";
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			mca_pwm0: pwm@0 {
+				reg = <0>;
+				pwm-channels = <6>;
+				#pwm-cells = <3>;
+			};
+
+			mca_pwm1: pwm@1 {
+				reg = <1>;
+				pwm-channels = <2>;
+				#pwm-cells = <3>;
+			};
+
+			mca_pwm2: pwm@2 {
+				reg = <2>;
+				pwm-channels = <2>;
+				#pwm-cells = <3>;
+			};
+		};
+	};
