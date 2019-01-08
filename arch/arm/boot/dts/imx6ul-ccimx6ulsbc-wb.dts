@@ -88,20 +88,8 @@
 //	status = "okay";
 //};
 
-/*
- * Goodix touch
- * On the CC6UL SBC, an inconsistent reset sequence makes the
- * Goodix display's touch controller respond to two I2C
- * addresses: 0x14 and 0x5D. To make sure the touchscreen
- * works every time, the touch controller's description must
- * be duplicated for both addresses. This is why there are two
- * entries for the Goodix touch.
- */
-&goodix_touch1 {
-	status = "okay";
-};
-
-&goodix_touch2 {
+/* Goodix touch */
+&goodix_touch {
 	status = "okay";
 };
 
