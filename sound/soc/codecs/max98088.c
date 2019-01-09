@@ -16,6 +16,7 @@
 #include <linux/pm.h>
 #include <linux/i2c.h>
 #include <linux/regmap.h>
+#include <linux/regulator/consumer.h>
 #include <sound/core.h>
 #include <sound/pcm.h>
 #include <sound/pcm_params.h>
@@ -40,6 +41,7 @@ struct max98088_cdata {
 
 struct max98088_priv {
 	struct regmap *regmap;
+	struct regulator *vcc;
 	enum max98088_type devtype;
 	struct max98088_pdata *pdata;
 	unsigned int sysclk;
@@ -1730,6 +1732,54 @@ static const struct snd_soc_codec_driver soc_codec_dev_max98088 = {
 	},
 };
 
+#ifdef CONFIG_PM
+static int max98088_i2c_suspend(struct device *dev)
+{
+	struct max98088_priv *max98088 = dev_get_drvdata(dev);
+	int ret;
+
+	if (max98088->vcc) {
+		ret = regulator_disable(max98088->vcc);
+		if (ret) {
+			dev_err(dev, "Failed to disable vcc (%d)\n", ret);
+			return ret;
+		}
+
+		regcache_mark_dirty(max98088->regmap);
+		regcache_cache_only(max98088->regmap, true);
+	}
+
+	return 0;
+}
+
+static int max98088_i2c_resume(struct device *dev)
+{
+	struct max98088_priv *max98088 = dev_get_drvdata(dev);
+	int ret;
+
+	if (max98088->vcc) {
+		ret = regulator_enable(max98088->vcc);
+		if (ret) {
+			dev_err(dev, "Failed to enable vcc (%d)\n", ret);
+			return ret;
+		}
+	}
+
+	regcache_cache_only(max98088->regmap, false);
+	ret = regcache_sync(max98088->regmap);
+	if (ret) {
+		dev_err(dev, "Failed to sync cache (%d)\n", ret);
+		return ret;
+	}
+
+	return 0;
+}
+
+static const struct dev_pm_ops max98088_pm_ops = {
+	SET_RUNTIME_PM_OPS(max98088_i2c_suspend, max98088_i2c_resume, NULL)
+};
+#endif
+
 static int max98088_i2c_probe(struct i2c_client *i2c,
 			      const struct i2c_device_id *id)
 {
@@ -1741,7 +1791,26 @@ static int max98088_i2c_probe(struct i2c_client *i2c,
        if (max98088 == NULL)
                return -ENOMEM;
 
-       max98088->regmap = devm_regmap_init_i2c(i2c, &max98088_regmap);
+	max98088->vcc = devm_regulator_get_optional(&i2c->dev, "vcc");
+	if (IS_ERR(max98088->vcc)) {
+		if (PTR_ERR(max98088->vcc) == -EPROBE_DEFER) {
+			ret = -EPROBE_DEFER;
+			goto free_mem;
+		}
+
+		max98088->vcc = NULL;
+		dev_dbg(&i2c->dev, "No vcc codec regulator\n");
+	}
+
+	if (max98088->vcc) {
+		ret = regulator_enable(max98088->vcc);
+		if (ret) {
+			dev_err(&i2c->dev, "Failed to enable vcc regulator\n");
+			goto free_mem;
+		}
+	}
+
+	max98088->regmap = devm_regmap_init_i2c(i2c, &max98088_regmap);
        if (IS_ERR(max98088->regmap))
 	       return PTR_ERR(max98088->regmap);
 
@@ -1752,12 +1821,24 @@ static int max98088_i2c_probe(struct i2c_client *i2c,
 
        ret = snd_soc_register_codec(&i2c->dev,
                        &soc_codec_dev_max98088, &max98088_dai[0], 2);
+
+	return 0;
+
+free_mem:
+	kfree(max98088);
+
        return ret;
 }
 
 static int max98088_i2c_remove(struct i2c_client *client)
 {
+	struct max98088_priv *max98088 = dev_get_drvdata(&client->dev);
+
        snd_soc_unregister_codec(&client->dev);
+
+	if (max98088->vcc)
+		regulator_disable(max98088->vcc);
+
        return 0;
 }
 
@@ -1779,7 +1860,10 @@ static struct i2c_driver max98088_i2c_driver = {
 	.driver = {
 		.name = "max98088",
 		.owner = THIS_MODULE,
-		.of_match_table = max98088_of_match,
+#ifdef CONFIG_PM
+		.pm = &max98088_pm_ops,
+#endif
+		.of_match_table = of_match_ptr(max98088_of_match),
 	},
 	.probe  = max98088_i2c_probe,
 	.remove = max98088_i2c_remove,
