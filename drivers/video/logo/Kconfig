@@ -19,6 +19,10 @@ config FB_LOGO_CENTERED
 	bool "Show the logo centered in the screen"
 	depends on FB=y
 
+config FB_LOGO_FORCE_SINGLE
+	bool "Show only one logo, even on SMP systems"
+	depends on FB=y
+
 config LOGO_LINUX_MONO
 	bool "Standard black and white Linux logo"
 	default y
