@@ -131,6 +131,9 @@
 	lvds-channel@0 {
 		status = "okay";
 	};
+	lvds-channel@1 {
+		status = "okay";
+	};
 };
 
 &mipi_csi {
@@ -150,6 +153,16 @@
 };
 
 &mxcfb2 {
+	prefetch;
+	status = "okay";
+};
+
+&mxcfb3 {
+	prefetch;
+	status = "okay";
+};
+
+&mxcfb4 {
 	prefetch;
 	status = "okay";
 };

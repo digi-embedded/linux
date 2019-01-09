@@ -66,6 +66,14 @@
 	status = "okay";
 };
 
+&mxcfb3 {
+	status = "okay";
+};
+
+&mxcfb4 {
+	status = "okay";
+};
+
 &audmux {
 	status = "okay";
 };
