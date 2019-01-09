@@ -1468,6 +1468,13 @@ sdhci_esdhc_imx_probe_dt(struct platform_device *pdev,
 	if (of_find_property(np, "auto-cmd23-broken", NULL))
 		host->quirks2 |= SDHCI_QUIRK2_ACMD23_BROKEN;
 
+	if (of_find_property(np, "no-1-8-v", NULL)) {
+		dev_warn(mmc_dev(host->mmc),
+				"could not get ultra high speed state, work on normal mode\n");
+		host->quirks2 |= SDHCI_QUIRK2_NO_1_8_V;
+		host->quirks2 &= ~SDHCI_QUIRK2_CAPS_BIT63_FOR_HS400;
+	}
+
 	if (of_property_read_u32(np, "fsl,delay-line", &boarddata->delay_line))
 		boarddata->delay_line = 0;
 
