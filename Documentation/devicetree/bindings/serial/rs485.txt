@@ -17,6 +17,8 @@ Optional properties:
   feature at boot time. It can be disabled later with proper ioctl.
 - rs485-rx-during-tx: empty property that enables the receiving of data even
   while sending data.
+- digi,rts-gpio: use a standard GPIO (instead of RTS) to control transfer direction.
+  Requires disabling DMA on the UART.
 
 RS485 example for Atmel USART:
 	usart0: serial@fff8c000 {
@@ -29,3 +31,15 @@ RS485 example for Atmel USART:
 		rs485-rts-delay = <0 200>;		// in milliseconds
 	};
 
+RS485 example for Digi ccimx8x-sbc-pro:
+	&lpuart3 {
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_lpuart3>,
+			    <&pinctrl_flexcan3_lpuart3_gpios>;
+		pinctrl-assert-gpios = <&gpio3 23 GPIO_ACTIVE_LOW>;
+		linux,rs485-enabled-at-boot-time;
+		/* Disable DMA on this port to let 'digi,rts-gpio' work */
+		/delete-property/dmas;
+		/delete-property/dma-names;
+		digi,rts-gpio = <&gpio3 24 GPIO_ACTIVE_HIGH>;
+};
