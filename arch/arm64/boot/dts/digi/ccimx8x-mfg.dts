@@ -147,6 +147,10 @@
 	status = "okay";
 };
 
+&pixel_combiner {
+	status = "okay";
+};
+
 &prg1 {
 	status = "okay";
 };
