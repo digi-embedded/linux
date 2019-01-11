@@ -238,6 +238,10 @@
 	debug_console;
 };
 
+&pixel_combiner {
+	status = "okay";
+};
+
 &prg1 {
 	status = "okay";
 };
