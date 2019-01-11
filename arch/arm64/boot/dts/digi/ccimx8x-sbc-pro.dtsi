@@ -573,6 +573,10 @@
 	vcc-supply = <&reg_3v3_pcie>;
 };
 
+&pixel_combiner {
+	status = "okay";
+};
+
 &prg1 {
 	status = "okay";
 };
