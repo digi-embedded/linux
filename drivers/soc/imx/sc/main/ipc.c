@@ -449,6 +449,8 @@ int __init imx8_mu_init(void)
 		}
 	}
 
+	register_syscore_ops(&imx8_mu_syscore_ops);
+
 	pr_info("*****Initialized MU\n");
 	return scu_mu_id;
 }
