@@ -24,6 +24,7 @@
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/of_device.h>
+#include <linux/of_gpio.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <linux/regulator/consumer.h>
@@ -339,6 +340,8 @@ struct flexcan_priv {
 
 	struct clk *clk_ipg;
 	struct clk *clk_per;
+	struct flexcan_platform_data *pdata;
+	int stby_gpio;
 	const struct flexcan_devtype_data *devtype_data;
 	struct regulator *reg_xceiver;
 	struct flexcan_stop_mode stm;
@@ -644,6 +647,9 @@ static void flexcan_clks_disable(const struct flexcan_priv *priv)
 
 static inline int flexcan_transceiver_enable(const struct flexcan_priv *priv)
 {
+	if (gpio_is_valid(priv->stby_gpio))
+		gpio_set_value_cansleep(priv->stby_gpio, 0);
+
 	if (!priv->reg_xceiver)
 		return 0;
 
@@ -1957,6 +1963,25 @@ static const struct platform_device_id flexcan_id_table[] = {
 };
 MODULE_DEVICE_TABLE(platform, flexcan_id_table);
 
+static int flexcan_gpio_init(struct device_node *np , struct net_device *dev)
+{
+	int ret;
+	struct flexcan_priv *priv = netdev_priv(dev);
+
+	if (!np)
+		return -EINVAL;
+
+	priv->stby_gpio = of_get_named_gpio(np, "stby-gpios", 0);
+	if (!gpio_is_valid(priv->stby_gpio))
+		return -ENODEV;
+
+	if( (ret = gpio_request(priv->stby_gpio, "can_stby")) == 0)
+		gpio_direction_output(priv->stby_gpio, 1);
+	else
+		netdev_err(dev, "Could not configure standby pin.\n");
+	return ret;
+}
+
 static int flexcan_probe(struct platform_device *pdev)
 {
 	const struct of_device_id *of_id;
@@ -2052,6 +2077,8 @@ static int flexcan_probe(struct platform_device *pdev)
 	priv->clk_src = clk_src;
 	priv->devtype_data = devtype_data;
 	priv->reg_xceiver = reg_xceiver;
+	flexcan_gpio_init(pdev->dev.of_node,dev);
+	priv->offload.is_canfd = false;
 
 	if (priv->devtype_data->quirks & FLEXCAN_QUIRK_TIMESTAMP_SUPPORT_FD) {
 		if (priv->devtype_data->quirks & FLEXCAN_QUIRK_USE_OFF_TIMESTAMP) {
