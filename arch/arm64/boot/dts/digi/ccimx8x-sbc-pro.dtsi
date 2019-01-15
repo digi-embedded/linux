@@ -49,13 +49,6 @@
 			regulator-max-microvolt = <5000000>;
 			gpio = <&gpio0 13 GPIO_ACTIVE_HIGH>;
 			enable-active-high;
-
-			/*
-			 * Configured as always-on because, at the moment, there
-			 * are no consumers to switch it on. Remove once the
-			 * backlight-pwm is added.
-			 */
-			regulator-always-on;
 		};
 
 		reg_3v3_audio: regulator@3 {
@@ -197,7 +190,7 @@
 &flexcan1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan1>;
-	xceiver-supply = <&reg_3v3_ext>;
+	xceiver-supply = <&reg_5v_display>;
 	disable-fd-mode;
 	status = "disabled";
 };
@@ -206,7 +199,7 @@
 &flexcan2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan2>;
-	xceiver-supply = <&reg_3v3_ext>;
+	xceiver-supply = <&reg_5v_display>;
 	stby-gpios = <&gpio1 0 GPIO_ACTIVE_HIGH>;
 	disable-fd-mode;
 	status = "disabled";
@@ -221,7 +214,7 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan3>,
 		    <&pinctrl_flexcan3_lpuart3_gpios>;
-	xceiver-supply = <&reg_3v3_ext>;
+	xceiver-supply = <&reg_5v_display>;
 	stby-gpios = <&gpio1 2 GPIO_ACTIVE_HIGH>;
 	pinctrl-assert-gpios = <&gpio3 23 GPIO_ACTIVE_HIGH>;
 	disable-fd-mode;
