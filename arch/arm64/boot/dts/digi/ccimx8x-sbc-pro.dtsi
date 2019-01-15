@@ -649,6 +649,13 @@
 	status = "okay";
 };
 
+/* PWM signal on Expansion connector: SPI0_CS1 (conflicts with SPI0 CS1) */
+&pwm_adma_lcdif {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pwm_adma>;
+	status = "disabled";
+};
+
 &rpmsg{
 	/*
 	 * 64K for one rpmsg instance:
@@ -1017,6 +1024,13 @@
 			SC_P_CSI_EN_LSIO_GPIO3_IO02	0xC0000041
 			/* CSI Camera reset */
 			SC_P_CSI_RESET_LSIO_GPIO3_IO03	0xC0000041
+		>;
+	};
+
+	pinctrl_pwm_adma: pwm_adma_grp {
+		fsl,pins = <
+			/* PWM on Expansion connector */
+			SC_P_SPI0_CS1_ADMA_LCD_PWM0_OUT		0x00000060
 		>;
 	};
 
