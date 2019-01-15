@@ -155,6 +155,14 @@
 	status = "okay";
 };
 
+&lvds_backlight0 {
+	status = "okay";
+};
+
+&pwm_mipi_lvds0 {
+	status = "okay";
+};
+
 /* LPSPI3 on Raspberry Pi expansion header */
 &lpspi3 {
 	status = "okay";
