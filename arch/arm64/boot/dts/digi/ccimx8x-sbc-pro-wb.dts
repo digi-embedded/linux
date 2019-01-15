@@ -164,6 +164,14 @@
 	status = "okay";
 };
 
+&lvds_backlight0 {
+	status = "okay";
+};
+
+&pwm_mipi_lvds0 {
+	status = "okay";
+};
+
 /*
  * On the CC8X SBC, an inconsistent reset sequence makes
  * the Goodix display's touch controller respond to two I2C
@@ -182,7 +190,7 @@
 /*
  * Uncomment to enable display support on the 2nd video interface.
  */
-///* MIPI-DSI1 I2C available on LVDS1 connector */
+/* MIPI-DSI1 I2C available on LVDS1 connector */
 //&i2c0_mipi_lvds1 {
 //	status = "okay";
 //};
@@ -199,6 +207,14 @@
 //	status = "okay";
 //};
 //
+//&lvds_backlight1 {
+//	status = "okay";
+//};
+//
+//&pwm_mipi_lvds1 {
+//	status = "okay";
+//};
+//
 //&lvds1_goodix_touch1 {
 //	status = "okay";
 //};
@@ -206,7 +222,6 @@
 //&lvds1_goodix_touch2 {
 //	status = "okay";
 //};
-//
 
 /* LPSPI0 on expansion header */
 &lpspi0 {
