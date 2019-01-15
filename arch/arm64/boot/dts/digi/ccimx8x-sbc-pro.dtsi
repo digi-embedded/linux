@@ -197,7 +197,7 @@
 &flexcan1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan1>;
-	xceiver-supply = <&reg_3v3_ext>;
+	xceiver-supply = <&reg_5v_display>;
 	status = "disabled";
 };
 
@@ -205,7 +205,7 @@
 &flexcan2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan2>;
-	xceiver-supply = <&reg_3v3_ext>;
+	xceiver-supply = <&reg_5v_display>;
 	stby-gpios = <&gpio1 0 GPIO_ACTIVE_HIGH>;
 	status = "disabled";
 };
@@ -219,7 +219,7 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan3>,
 		    <&pinctrl_flexcan3_lpuart3_gpios>;
-	xceiver-supply = <&reg_3v3_ext>;
+	xceiver-supply = <&reg_5v_display>;
 	stby-gpios = <&gpio1 2 GPIO_ACTIVE_HIGH>;
 	pinctrl-assert-gpios = <&gpio3 23 GPIO_ACTIVE_HIGH>;
 	status = "disabled";
