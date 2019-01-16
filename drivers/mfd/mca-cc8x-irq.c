@@ -117,7 +117,7 @@ int mca_cc8x_irq_init(struct mca_drv *mca)
 
 	mca->irq_base = -1;
 	ret = regmap_add_irq_chip(mca->regmap, mca->chip_irq,
-				  IRQF_TRIGGER_LOW | IRQF_ONESHOT | IRQF_SHARED,
+				  IRQF_ONESHOT | IRQF_SHARED,
 				  mca->irq_base, &mca_cc8x_irq_chip,
 				  &mca->regmap_irq);
 	if (ret) {
