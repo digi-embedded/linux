@@ -22,6 +22,20 @@
 /* Digi ConnectCore 8X SBC Express */
 #include "ccimx8x-sbc-express.dtsi"
 
+/*
+ * Uncomment to enable i.MX8X ADC channels on Raspberry Pi Expansion connector:
+ *  - ADC_IN0 (channel 0)
+ *  - ADC_IN1 (channel 1)
+ * Edit pinctrl_adc0 to include the ADC channels that you want to enable.
+ * Notice that some pads may already be configured with another use in
+ * pinctrl_expansion. Remove them to ensure they are only configured as ADCs.
+ */
+//&adc0 {
+//	pinctrl-names = "default";
+//	pinctrl-0 = <&pinctrl_adc0>;
+//	status = "okay";
+//};
+
 &dpr1_channel1 {
 	status = "okay";
 };
@@ -273,6 +287,16 @@
 			/* Remove these if you wish to use the flexcan3 interface */
 			SC_P_FLEXCAN2_RX_LSIO_GPIO1_IO19	0x06000020
 			SC_P_FLEXCAN2_TX_LSIO_GPIO1_IO20	0x06000020
+		>;
+	};
+
+	/* Uncomment the pads you wish to use as ADCs */
+	pinctrl_adc0: adc0grp {
+		fsl,pins = <
+	//		/* ADC_IN0 */
+	//		SC_P_ADC_IN0_ADMA_ADC_IN0		0xc0000060
+	//		/* ADC_IN1 */
+	//		SC_P_ADC_IN1_ADMA_ADC_IN1		0xc0000060
 		>;
 	};
 };
