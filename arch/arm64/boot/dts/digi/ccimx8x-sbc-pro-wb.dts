@@ -22,6 +22,24 @@
 /* Digi ConnectCore 8X SBC Pro */
 #include "ccimx8x-sbc-pro.dtsi"
 
+/*
+ * Uncomment to enable i.MX8X ADC channels on Expansion connector:
+ *  - ADC_IN0 (channel 0)
+ *  - ADC_IN1 (channel 1)
+ *  - ADC_IN2 (channel 2)
+ *  - ADC_IN3 (channel 3)
+ *  - ADC_IN4 (channel 4)
+ *  - ADC_IN5 (channel 5)
+ * Edit pinctrl_adc0 to include the ADC channels that you want to enable.
+ * Notice that some pads may already be configured with another use in
+ * pinctrl_expansion. Remove them to ensure they are only configured as ADCs.
+ */
+//&adc0 {
+//	pinctrl-names = "default";
+//	pinctrl-0 = <&pinctrl_adc0>;
+//	status = "okay";
+//};
+
 &dpr1_channel1 {
 	status = "okay";
 };
@@ -344,6 +362,14 @@
 			SC_P_QSPI0A_SS1_B_LSIO_GPIO3_IO15		0x06000020
 			/* EXP_I2C_GPIO */
 			SC_P_QSPI0A_SS0_B_LSIO_GPIO3_IO14		0x06000020
+			/* GPIO4_19 */
+			SC_P_USDHC1_RESET_B_LSIO_GPIO4_IO19		0x06000020
+			/* GPIO0_12 */
+			SC_P_SPDIF0_EXT_CLK_LSIO_GPIO0_IO12		0x06000020
+			/* GPIO5_09 */
+			SC_P_ENET0_REFCLK_125M_25M_LSIO_GPIO5_IO09	0x06000020
+
+			/* Remove the pads you wish to use as ADCs */
 			/* ADC_IN0 */
 			SC_P_ADC_IN0_LSIO_GPIO1_IO10			0x06000020
 			/* ADC_IN1 */
@@ -356,12 +382,24 @@
 			SC_P_ADC_IN4_LSIO_GPIO1_IO14			0x06000020
 			/* ADC_IN5 */
 			SC_P_ADC_IN5_LSIO_GPIO1_IO13			0x06000020
-			/* GPIO4_19 */
-			SC_P_USDHC1_RESET_B_LSIO_GPIO4_IO19		0x06000020
-			/* GPIO0_12 */
-			SC_P_SPDIF0_EXT_CLK_LSIO_GPIO0_IO12		0x06000020
-			/* GPIO5_09 */
-			SC_P_ENET0_REFCLK_125M_25M_LSIO_GPIO5_IO09	0x06000020
+		>;
+	};
+
+	/* Uncomment the pads you wish to use as ADCs */
+	pinctrl_adc0: adc0grp {
+		fsl,pins = <
+	//		/* ADC_IN0 */
+	//		SC_P_ADC_IN0_ADMA_ADC_IN0		0xc0000060
+	//		/* ADC_IN1 */
+	//		SC_P_ADC_IN1_ADMA_ADC_IN1		0xc0000060
+	//		/* M40_UART_RX */
+	//		SC_P_ADC_IN2_ADMA_ADC_IN2		0xc0000060
+	//		/* M40_UART_TX */
+	//		SC_P_ADC_IN3_ADMA_ADC_IN3		0xc0000060
+	//		/* ADC_IN4 */
+	//		SC_P_ADC_IN4_ADMA_ADC_IN4		0xc0000060
+	//		/* ADC_IN5 */
+	//		SC_P_ADC_IN5_ADMA_ADC_IN5		0xc0000060
 		>;
 	};
 };
