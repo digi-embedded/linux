@@ -85,6 +85,7 @@ MODULE_LICENSE("GPL");
 
 struct at803x_priv {
 	bool phy_reset:1;
+	bool is_suspended:1;
 	struct gpio_desc *gpiod_reset;
 	u32 quirks;
 };
@@ -97,6 +98,8 @@ struct at803x_context {
 	u16 smart_speed;
 	u16 led_control;
 };
+
+static int at803x_config_init(struct phy_device *phydev);
 
 static int at803x_debug_reg_read(struct phy_device *phydev, u16 reg)
 {
@@ -271,6 +274,7 @@ static int at803x_suspend(struct phy_device *phydev)
 {
 	int value;
 	int wol_enabled;
+	struct at803x_priv *priv = phydev->priv;
 
 	mutex_lock(&phydev->lock);
 
@@ -288,16 +292,21 @@ static int at803x_suspend(struct phy_device *phydev)
 
 	mutex_unlock(&phydev->lock);
 
+	priv->is_suspended = true;
 	return 0;
 }
 
 static int at803x_resume(struct phy_device *phydev)
 {
 	int value;
+	struct at803x_priv *priv = phydev->priv;
 
 	value = phy_read(phydev, MII_BMCR);
 	value &= ~(BMCR_PDOWN | BMCR_ISOLATE);
 	phy_write(phydev, MII_BMCR, value);
+
+	if(priv->is_suspended)
+		return at803x_config_init(phydev);
 
 	return 0;
 }
@@ -381,6 +390,7 @@ static int at803x_config_init(struct phy_device *phydev)
 			return ret;
 	}
 
+	priv->is_suspended = false;
 	return 0;
 }
 
