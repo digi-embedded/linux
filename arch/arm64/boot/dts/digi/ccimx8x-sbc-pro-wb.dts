@@ -288,12 +288,11 @@
  *  - MCA_IO6 (channel 6)
  *  - MCA_IO7 (channel 7)
  *  - MCA_IO8 (channel 8)
- *  - MCA_IO11 (channel 11)
- *  - MCA_IO12 (channel 12)
+ *  - MCA_IO14 (channel 14)
  * Edit adc-ch-list to include the ADC channels that you want to enable.
  */
 // &mca_adc {
-//	digi,adc-ch-list = <5 6 7 8 11 12>;
+//	digi,adc-ch-list = <5 6 7 8 14>;
 //	digi,adc-vref = <3000000>;
 // };
 
