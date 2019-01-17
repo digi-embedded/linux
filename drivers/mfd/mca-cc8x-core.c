@@ -119,6 +119,7 @@ static const struct mca_reason last_wakeup[] = {
 	{MCA_CC8X_LAST_WAKEUP_IO20,	"IO20"},
 	{MCA_CC8X_LAST_WAKEUP_IO21,	"IO21"},
 	{MCA_CC8X_LAST_WAKEUP_VCC,	"Vcc"},
+	{MCA_CC8X_LAST_WAKEUP_CPU,	"CPU"},
 };
 
 static struct mca_drv *pmca;
