@@ -74,7 +74,6 @@
 	phy-reset-gpios = <&gpio5 1 GPIO_ACTIVE_LOW>;
 	phy-reset-duration = <1>;
 	fsl,magic-packet;
-	digi,phy-reset-in-suspend;
 	status = "disabled";
 
 	mdio {

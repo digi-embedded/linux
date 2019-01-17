@@ -185,7 +185,6 @@
 	phy-reset-gpios = <&gpio3 18 GPIO_ACTIVE_LOW>;
 	phy-reset-duration = <1>;
 	fsl,magic-packet;
-	digi,phy-reset-in-suspend;
 	status = "disabled";
 
 	mdio {
