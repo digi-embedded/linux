@@ -247,7 +247,10 @@
 
 /* IOMUX */
 &iomuxc {
-	pinctrl_hog: hoggrp {
+	pinctrl-0 = <&pinctrl_hog>, <&pinctrl_expansion>;
+
+	/* Expansion, MIPI and Parallel Camera Connectors */
+	pinctrl_expansion: expansiongrp {
 		fsl,pins = <
 			/* Expansion connector */
 			/* J20 connector */
