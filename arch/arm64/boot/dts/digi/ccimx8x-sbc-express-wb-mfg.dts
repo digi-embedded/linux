@@ -193,9 +193,11 @@
 
 /* IOMUX */
 &iomuxc {
-	pinctrl_hog: hoggrp {
+	pinctrl-0 = <&pinctrl_hog>, <&pinctrl_expansion>;
+
+	/* Raspberry Pi Expansion Connector */
+	pinctrl_expansion: expansiongrp {
 		fsl,pins = <
-			/* RaspberryPi connector */
 			/* I2C2_SDA (J12 PIN3) */
 			SC_P_MIPI_DSI1_GPIO0_01_LSIO_GPIO2_IO00	0x06000020
 			/* I2C2_SCL (J12 PIN5) */

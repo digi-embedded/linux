@@ -326,3 +326,42 @@
 &vpu_encoder {
 	status = "okay";
 };
+
+/* IOMUX */
+&iomuxc {
+	pinctrl-0 = <&pinctrl_hog>, <&pinctrl_expansion>;
+
+	/* Expansion Connector */
+	pinctrl_expansion: expansiongrp {
+		fsl,pins = <
+			/* GPIO4_20 */
+			SC_P_USDHC1_VSELECT_LSIO_GPIO4_IO20		0x06000020
+			/* GPIO4_21 */
+			SC_P_USDHC1_WP_LSIO_GPIO4_IO21			0x06000020
+			/* SPI0_IRQ_N */
+			SC_P_SPI2_SDO_LSIO_GPIO1_IO01			0x06000020
+			/* EXP_I2C_IRQ_N */
+			SC_P_QSPI0A_SS1_B_LSIO_GPIO3_IO15		0x06000020
+			/* EXP_I2C_GPIO */
+			SC_P_QSPI0A_SS0_B_LSIO_GPIO3_IO14		0x06000020
+			/* ADC_IN0 */
+			SC_P_ADC_IN0_LSIO_GPIO1_IO10			0x06000020
+			/* ADC_IN1 */
+			SC_P_ADC_IN1_LSIO_GPIO1_IO09			0x06000020
+			/* M40_UART_RX */
+			SC_P_ADC_IN2_LSIO_GPIO1_IO12			0x06000020
+			/* M40_UART_TX */
+			SC_P_ADC_IN3_LSIO_GPIO1_IO11			0x06000020
+			/* ADC_IN4 */
+			SC_P_ADC_IN4_LSIO_GPIO1_IO14			0x06000020
+			/* ADC_IN5 */
+			SC_P_ADC_IN5_LSIO_GPIO1_IO13			0x06000020
+			/* GPIO4_19 */
+			SC_P_USDHC1_RESET_B_LSIO_GPIO4_IO19		0x06000020
+			/* GPIO0_12 */
+			SC_P_SPDIF0_EXT_CLK_LSIO_GPIO0_IO12		0x06000020
+			/* GPIO5_09 */
+			SC_P_ENET0_REFCLK_125M_25M_LSIO_GPIO5_IO09	0x06000020
+		>;
+	};
+};
