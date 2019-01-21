@@ -68,7 +68,7 @@
  * default. Before enabling the port, you must remove
  * the SC_P_FLEXCAN1_RX_LSIO_GPIO1_IO17 and
  * SC_P_FLEXCAN1_TX_LSIO_GPIO1_IO18 entries from
- * the pinctrl_hog node.
+ * the pinctrl_expansion node.
  */
 &flexcan2 {
 	status = "disabled";
@@ -79,7 +79,7 @@
  * default. Before enabling the port, you must remove
  * the SC_P_FLEXCAN2_RX_LSIO_GPIO1_IO19 and
  * SC_P_FLEXCAN2_TX_LSIO_GPIO1_IO20 entries from
- * the pinctrl_hog node.
+ * the pinctrl_expansion node.
  */
 &flexcan3 {
 	status = "disabled";
@@ -248,4 +248,31 @@
 
 &vpu_encoder {
 	status = "okay";
+};
+
+/* IOMUX */
+&iomuxc {
+	pinctrl-0 = <&pinctrl_hog>, <&pinctrl_expansion>;
+
+	/* Raspberry Pi Expansion Connector */
+	pinctrl_expansion: expansiongrp {
+		fsl,pins = <
+			SC_P_MIPI_DSI0_GPIO0_01_LSIO_GPIO1_IO28	0x06000020
+			SC_P_USDHC1_WP_LSIO_GPIO4_IO21		0x06000020
+			SC_P_USDHC1_CD_B_LSIO_GPIO4_IO22	0x06000020
+			SC_P_MIPI_DSI1_I2C0_SCL_LSIO_GPIO1_IO29	0x06000020
+			SC_P_MIPI_DSI1_I2C0_SDA_LSIO_GPIO1_IO30	0x06000020
+			SC_P_QSPI0A_SS1_B_LSIO_GPIO3_IO15	0x06000020
+			SC_P_USDHC1_VSELECT_LSIO_GPIO4_IO20	0x06000020
+			SC_P_ENET0_RGMII_RXC_LSIO_GPIO5_IO03	0x06000020
+
+			/* Remove these if you wish to use the flexcan2 interface */
+			SC_P_FLEXCAN1_RX_LSIO_GPIO1_IO17	0x06000020
+			SC_P_FLEXCAN1_TX_LSIO_GPIO1_IO18	0x06000020
+
+			/* Remove these if you wish to use the flexcan3 interface */
+			SC_P_FLEXCAN2_RX_LSIO_GPIO1_IO19	0x06000020
+			SC_P_FLEXCAN2_TX_LSIO_GPIO1_IO20	0x06000020
+		>;
+	};
 };
