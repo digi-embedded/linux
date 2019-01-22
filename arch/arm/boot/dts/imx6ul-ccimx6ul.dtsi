@@ -1,0 +1,330 @@
+/*
+ * Copyright 2016 Digi International, Inc.
+ *
+ * The code contained herein is licensed under the GNU General Public
+ * License. You may obtain a copy of the GNU General Public License
+ * Version 2 or later at the following locations:
+ *
+ * http://www.opensource.org/licenses/gpl-license.html
+ * http://www.gnu.org/copyleft/gpl.html
+ */
+
+/ {
+	memory: memory {
+		/* U-boot to fill memory details here */
+	};
+
+	reserved-memory {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		linux,cma {
+			compatible = "shared-dma-pool";
+			reusable;
+			size = <0x4000000>;
+			linux,cma-default;
+		};
+	};
+
+	caam_keyblob: caam-keyblob {
+		compatible = "fsl,sec-v4.0-keyblob";
+		status = "disabled";
+	};
+};
+
+&adc1 {
+	vref-supply = <&vdda_adc_3v3>;
+	max-channel = <9>;
+	status = "disabled";
+};
+
+&cpu0 {
+	/*
+	 * on i.MX6UL, VDD_ARM_IN and VDD_SOC_IN are the same, yet
+	 * to align with other platform sand use the same cpufreq
+	 * driver, we must still use separated OPP define for ARM and SOC.
+	 */
+	operating-points = <
+		/* kHz	uV */
+		528000	1175000
+		396000	1175000
+		198000	1175000
+	>;
+	fsl,soc-operating-points = <
+		/* KHz	uV */
+		528000	1175000
+		396000	1175000
+		198000	1175000
+	>;
+	fsl,arm-soc-shared = <1>;
+	clock-frequency = <528000000>;
+};
+
+&gpc {
+	fsl,ldo-bypass = <1>;
+};
+
+&gpmi {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_gpmi_nand>;
+	status = "okay";
+};
+
+&i2c1 {
+	clock-frequency = <100000>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_i2c1>;
+	status = "okay";
+
+	mca_cc6ul: mca@7e {
+		compatible = "digi,mca_cc6ul_dt_ids";
+		reg = <0x7e>;
+		interrupt-parent = <&gpio5>;
+		interrupts = <4 IRQ_TYPE_EDGE_FALLING>;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+		fw-update-gpio = <&gpio4 14 GPIO_ACTIVE_LOW>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_mca_cc6ul>;
+
+		mca_gpio: gpio {
+			compatible = "digi,mca-cc6ul-gpio";
+			gpio-controller;
+			#gpio-cells = <2>;
+
+			interrupt-parent = <&mca_cc6ul>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
+		};
+
+		rtc {
+			compatible = "digi,mca-cc6ul-rtc";
+		};
+
+		watchdog {
+			compatible = "digi,mca-cc6ul-wdt";
+			digi,full-reset;
+		};
+
+		pwrkey {
+			compatible = "digi,mca-cc6ul-pwrkey";
+			digi,key-power;
+			digi,key-sleep;
+			digi,debounce-ms = <100>;
+			digi,pwroff-delay-sec = <6>;
+			digi,pwroff-guard-sec = <30>;
+		};
+
+		mca_adc: adc {
+			compatible = "digi,mca-cc6ul-adc";
+			digi,adc-vref = <3000000>;
+		};
+
+		mca_tamper: tamper {
+			compatible = "digi,mca-cc6ul-tamper";
+		};
+
+		mca_uart: uart {
+			compatible = "digi,mca-cc6ul-uart";
+			status = "disabled";
+		};
+	};
+
+	pmic: pfuze3000@08 {
+		compatible = "fsl,pfuze3000";
+		reg = <0x08>;
+		fsl,nvram;
+
+		regulators {
+			int_3v3: sw1a {
+				regulator-min-microvolt = <700000>;
+				regulator-max-microvolt = <3300000>;
+				regulator-ramp-delay = <6250>;
+				regulator-boot-on;
+				regulator-always-on;
+				regulator-state-mem {
+					regulator-off-in-suspend;
+				};
+			};
+
+			vdd_arm_soc_in: sw1b {
+				regulator-min-microvolt = <700000>;
+				regulator-max-microvolt = <1475000>;
+				regulator-ramp-delay = <6250>;
+				regulator-boot-on;
+				regulator-always-on;
+				regulator-state-mem {
+					regulator-on-in-suspend;
+					regulator-suspend-microvolt = <925000>;
+				};
+			};
+
+			ext_3v3: sw2 {
+				regulator-min-microvolt = <2500000>;
+				regulator-max-microvolt = <3300000>;
+				regulator-ramp-delay = <6250>;
+				regulator-always-on;
+				regulator-boot-on;
+				regulator-state-mem {
+					regulator-off-in-suspend;
+				};
+			};
+
+			vcc_ddr3: sw3 {
+				regulator-min-microvolt = <900000>;
+				regulator-max-microvolt = <1650000>;
+				regulator-always-on;
+				regulator-boot-on;
+				regulator-state-mem {
+					regulator-on-in-suspend;
+					regulator-suspend-microvolt = <1300000>;
+				};
+			};
+
+			swbst_reg: swbst {
+				regulator-min-microvolt = <5000000>;
+				regulator-max-microvolt = <5150000>;
+			};
+
+			vdd_snvs_3v3: vsnvs {
+				regulator-min-microvolt = <1000000>;
+				regulator-max-microvolt = <3000000>;
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			vrefddr: vrefddr {
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			vdda_adc_3v3: vldo1 {
+				compatible = "regulator-fixed";
+				regulator-name = "vref-adc-3v3";
+				regulator-min-microvolt = <3300000>;
+				regulator-max-microvolt = <3300000>;
+				regulator-always-on;
+				regulator-state-mem {
+					regulator-off-in-suspend;
+				};
+			};
+
+			ldo2_ext: vldo2 {
+				regulator-min-microvolt = <800000>;
+				regulator-max-microvolt = <1550000>;
+			};
+
+			vdda_wlan: vccsd {
+				regulator-min-microvolt = <2850000>;
+				regulator-max-microvolt = <3300000>;
+				regulator-always-on;
+				regulator-boot-on;
+				regulator-state-mem {
+					regulator-off-in-suspend;
+				};
+			};
+
+			vdd_high_in: v33 {
+				regulator-min-microvolt = <2850000>;
+				regulator-max-microvolt = <3300000>;
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			ldo3_int: vldo3 {
+				regulator-min-microvolt = <1800000>;
+				regulator-max-microvolt = <3300000>;
+			};
+
+			ldo4_ext: vldo4 {
+				regulator-min-microvolt = <1800000>;
+				regulator-max-microvolt = <3300000>;
+			};
+
+			vcoin_chg: vcoin {
+				regulator-min-microvolt = <2500000>;
+				regulator-max-microvolt = <3300000>;
+			};
+		};
+	};
+};
+
+&iomuxc {
+	imx6ul-ccimx6ul {
+		pinctrl_gpmi_nand: gpmigrp {
+			fsl,pins = <
+				MX6UL_PAD_NAND_CE0_B__RAWNAND_CE0_B	0xb0b1
+				MX6UL_PAD_NAND_RE_B__RAWNAND_RE_B	0xb0b1
+				MX6UL_PAD_NAND_WE_B__RAWNAND_WE_B	0xb0b1
+				MX6UL_PAD_NAND_WP_B__RAWNAND_WP_B	0xb0b1
+				MX6UL_PAD_NAND_ALE__RAWNAND_ALE		0xb0b1
+				MX6UL_PAD_NAND_CLE__RAWNAND_CLE		0xb0b1
+				MX6UL_PAD_NAND_DATA00__RAWNAND_DATA00	0xb0b1
+				MX6UL_PAD_NAND_DATA01__RAWNAND_DATA01	0xb0b1
+				MX6UL_PAD_NAND_DATA02__RAWNAND_DATA02	0xb0b1
+				MX6UL_PAD_NAND_DATA03__RAWNAND_DATA03	0xb0b1
+				MX6UL_PAD_NAND_DATA04__RAWNAND_DATA04	0xb0b1
+				MX6UL_PAD_NAND_DATA05__RAWNAND_DATA05	0xb0b1
+				MX6UL_PAD_NAND_DATA06__RAWNAND_DATA06	0xb0b1
+				MX6UL_PAD_NAND_DATA07__RAWNAND_DATA07	0xb0b1
+				MX6UL_PAD_NAND_READY_B__RAWNAND_READY_B	0xb0b1
+			>;
+		};
+
+		pinctrl_i2c1: i2c1grp {
+			fsl,pins = <
+				MX6UL_PAD_UART4_TX_DATA__I2C1_SCL 0x4001b8b0
+				MX6UL_PAD_UART4_RX_DATA__I2C1_SDA 0x4001b8b0
+			>;
+		};
+
+		pinctrl_mca_cc6ul: mcagrp {
+			fsl,pins = <
+				/* MCA_nINT */
+				MX6UL_PAD_SNVS_TAMPER4__GPIO5_IO04	0xb0b1
+				/* MCA_FW_UPDATE */
+				MX6UL_PAD_NAND_CE1_B__GPIO4_IO14	0x30
+			>;
+		};
+	};
+};
+
+&reg_arm {
+	vin-supply = <&vdd_arm_soc_in>;
+	regulator-allow-bypass;
+};
+
+&reg_soc {
+	vin-supply = <&vdd_arm_soc_in>;
+	regulator-allow-bypass;
+};
+
+&snvs_poweroff  {
+	/*
+	 * On the CC6UL the power off support is implemented in the MCA.
+	 * That is why the i.MX6UL power off functionality has to be disabled.
+	 */
+	status = "disabled";
+};
+
+&snvs_rtc  {
+	/*
+	 * On the CC6UL the RTC is implemented in the MCA. Therefore we disable
+	 * the internal one.
+	 */
+	status = "disabled";
+};
+
+&snvs_pwrkey  {
+	/*
+	 * On the CC6UL the powerkey is implemented in the MCA. Therefore we disable
+	 * the i.MX6UL builtin support.
+	 */
+	status = "disabled";
+};
+
+/* Disable the CPU watchdog. We use the MCA watchdog */
+&wdog1 {
+	status = "disabled";
+};
