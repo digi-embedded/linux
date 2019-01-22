@@ -1,0 +1,37 @@
+Freescale imx8qxp ADC bindings
+
+The devicetree bindings are for the ADC driver written for imx8qxp SoC.
+
+Required properties:
+- compatible: Should contain "fsl,imx8qxp-adc"
+- reg: Offset and length of the register set for the ADC device
+- interrupt-parent : Core interrupt controller
+- interrupts: The interrupt number for the ADC device
+- clocks : phandle + clock specifier pairs, one for each entry in clock-names
+- clock-names : Should contain: "ipg" - the ADC peripheral register accessing
+  clock source, if "per" clock missing, the "ipg" clock also is the ADC module
+  clock.
+- vref-supply: The regulator supply ADC reference voltage.
+- digi,max-channel: Value of the highest adc channel number that is valid in
+                    'digi,adc-ch-list' (0 - max-channel). This value is platform
+                    specific.
+- digi,adc-ch-list: List of channels that will be enabled.
+
+Recommended properties:
+- clock-names : "per" - the ADC module clock.
+
+Example:
+adc0: adc@5a880000 {
+	compatible = "fsl,imx8qxp-adc";
+	reg = <0x0 0x5a880000 0x0 0x10000>;
+	interrupts = <GIC_SPI 240 IRQ_TYPE_LEVEL_HIGH>;
+	interrupt-parent = <&gic>;
+	clocks = <&clk IMX8QXP_ADC0_CLK>,
+		 <&clk IMX8QXP_ADC0_IPG_CLK>;
+	clock-names = "per", "ipg";
+	assigned-clocks = <&clk IMX8QXP_ADC0_CLK>;
+	assigned-clock-rates = <24000000>;
+	power-domains = <&pd_dma_adc0>;
+	digi,max-channel = <5>;
+	digi,adc-ch-list = <0 2 4 5>;
+};
