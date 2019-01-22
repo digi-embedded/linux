@@ -892,8 +892,8 @@ static int vf610_adc_probe(struct platform_device *pdev)
 
 	ret = of_property_read_u32(pdev->dev.of_node,
 				   "max-channel", &max_channel);
-	if (ret || max_channel > ARRAY_SIZE(vf610_adc_iio_channels))
-		max_channel = ARRAY_SIZE(vf610_adc_iio_channels);
+	if (ret || max_channel >= ARRAY_SIZE(vf610_adc_iio_channels))
+		max_channel = ARRAY_SIZE(vf610_adc_iio_channels) - 1;
 
 	/* Get the list of channels enabled */
 	of_property_for_each_u32(np, "adc-ch-list", prop, cur, ch) {
