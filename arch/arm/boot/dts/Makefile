@@ -566,7 +566,18 @@ dtb-$(CONFIG_SOC_IMX6UL) += \
 	imx6ul-9x9-evk-csi.dtb \
 	imx6ul-9x9-evk-btwifi.dtb \
 	imx6ul-9x9-evk-btwifi-oob.dtb \
-	imx6ul-9x9-evk-ldo.dtb
+	imx6ul-9x9-evk-ldo.dtb \
+	imx6ul-ccimx6ul-mfg.dtb \
+	imx6ul-ccimx6ul-mfg-rf.dtb \
+	imx6ul-ccimx6ulsbc.dtb \
+	imx6ul-ccimx6ulsbc-id135.dtb \
+	imx6ul-ccimx6ulsbc-id136.dtb \
+	imx6ul-ccimx6ulsbc-wb.dtb \
+	imx6ul-ccimx6ulsbc-wb-mfg.dtb \
+	imx6ul-ccimx6ulstarter.dtb \
+	imx6ul-ccimx6ulstarter-id129.dtb \
+	imx6ul-ccimx6ulstarter-wb.dtb \
+	imx6ul-ccimx6ulstarter-wb-mfg.dtb
 dtb-$(CONFIG_SOC_IMX6ULL) += \
 	imx6ull-14x14-ddr3-arm2.dtb \
 	imx6ull-14x14-ddr3-arm2-adc.dtb \
