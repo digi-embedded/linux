@@ -54,6 +54,7 @@
 
 &adc0 {
 	vref-supply = <&reg_1v8_adc_vref>;
+	digi,max-channel = <5>;
 };
 
 /* I2C0 connected to MCA and crypto chip */
