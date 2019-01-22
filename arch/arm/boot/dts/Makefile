@@ -635,6 +635,17 @@ dtb-$(CONFIG_SOC_IMX6UL) += \
 	imx6ul-tx6ul-0010.dtb \
 	imx6ul-tx6ul-0011.dtb \
 	imx6ul-tx6ul-mainboard.dtb \
+	imx6ul-ccimx6ul-mfg.dtb \
+	imx6ul-ccimx6ul-mfg-rf.dtb \
+	imx6ul-ccimx6ulsbc.dtb \
+	imx6ul-ccimx6ulsbc-id135.dtb \
+	imx6ul-ccimx6ulsbc-id136.dtb \
+	imx6ul-ccimx6ulsbc-wb.dtb \
+	imx6ul-ccimx6ulsbc-wb-mfg.dtb \
+	imx6ul-ccimx6ulstarter.dtb \
+	imx6ul-ccimx6ulstarter-id129.dtb \
+	imx6ul-ccimx6ulstarter-wb.dtb \
+	imx6ul-ccimx6ulstarter-wb-mfg.dtb \
 	imx6ull-14x14-evk.dtb \
 	imx6ull-14x14-evk-emmc.dtb \
 	imx6ull-14x14-evk-btwifi.dtb \
