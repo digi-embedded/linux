@@ -26,13 +26,15 @@
  * Uncomment to enable i.MX8X ADC channels on Raspberry Pi Expansion connector:
  *  - ADC_IN0 (channel 0)
  *  - ADC_IN1 (channel 1)
- * Edit pinctrl_adc0 to include the ADC channels that you want to enable.
- * Notice that some pads may already be configured with another use in
- * pinctrl_expansion. Remove them to ensure they are only configured as ADCs.
+ * Include in digi,adc-ch-list the ADC channels (from 0 to 5) that you want to
+ * enable. Note that the iomux has to be configured accordingly in pinctrl_adc0
+ * to configure the pads for ADC operation. Make sure to remove them from
+ * pinctrl_expansion where they may already be configured with another use.
  */
 //&adc0 {
 //	pinctrl-names = "default";
 //	pinctrl-0 = <&pinctrl_adc0>;
+//	digi,adc-ch-list = <0 1>;
 //	status = "okay";
 //};
 
