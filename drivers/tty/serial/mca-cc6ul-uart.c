@@ -53,7 +53,7 @@ enum {
 };
 
 struct mca_uart {
-	struct mca_cc6ul *mca;
+	struct mca_drv *mca;
 	struct device *dev;
 	struct uart_driver uart;
 	struct uart_port port;
@@ -725,7 +725,7 @@ static struct attribute_group uart_port_extra_attr = {
 
 static int mca_uart_probe(struct platform_device *pdev)
 {
-	struct mca_cc6ul *mca = dev_get_drvdata(pdev->dev.parent);
+	struct mca_drv *mca = dev_get_drvdata(pdev->dev.parent);
 	struct regmap *regmap = mca->regmap;
 	struct mca_uart *mca_uart;
 	struct device_node *np;
@@ -827,7 +827,7 @@ static int mca_uart_probe(struct platform_device *pdev)
 	mca_uart->port.line = 0;
 	mca_uart->port.dev = &pdev->dev;
 	mca_uart->port.irq = platform_get_irq_byname(pdev,
-						     MCA_CC6UL_IRQ_UART_NAME);
+						     MCA_IRQ_UART_NAME);
 	mca_uart->port.type = PORT_LPUART;
 	mca_uart->port.fifosize = max(MCA_UART_TX_FIFO_SIZE,
 				      MCA_UART_RX_FIFO_SIZE);
@@ -854,7 +854,7 @@ static int mca_uart_probe(struct platform_device *pdev)
 					mca_uart->port.irq,
 					NULL, mca_uart_irq_handler,
 					IRQF_ONESHOT,
-					MCA_CC6UL_IRQ_UART_NAME,
+					MCA_IRQ_UART_NAME,
 					mca_uart);
 	if (ret) {
 		dev_err(mca_uart->dev, "Failed to register IRQ\n");

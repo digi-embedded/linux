@@ -168,7 +168,7 @@ static struct resource mca_cc8x_pwrkey_resources[] = {
 
 static struct resource mca_cc8x_adc_resources[] = {
 	{
-		.name   = MCA_CC8X_IRQ_ADC_NAME,
+		.name   = MCA_IRQ_ADC_NAME,
 		.start  = MCA_CC8X_IRQ_ADC,
 		.end    = MCA_CC8X_IRQ_ADC,
 		.flags  = IORESOURCE_IRQ,
@@ -177,25 +177,25 @@ static struct resource mca_cc8x_adc_resources[] = {
 
 static struct resource mca_cc8x_tamper_resources[] = {
 	{
-		.name   = MCA_CC8X_IRQ_TAMPER0_NAME,
+		.name   = MCA_IRQ_TAMPER0_NAME,
 		.start  = MCA_CC8X_IRQ_TAMPER0,
 		.end    = MCA_CC8X_IRQ_TAMPER0,
 		.flags  = IORESOURCE_IRQ,
 	},
 	{
-		.name   = MCA_CC8X_IRQ_TAMPER1_NAME,
+		.name   = MCA_IRQ_TAMPER1_NAME,
 		.start  = MCA_CC8X_IRQ_TAMPER1,
 		.end    = MCA_CC8X_IRQ_TAMPER1,
 		.flags  = IORESOURCE_IRQ,
 	},
 	{
-		.name   = MCA_CC8X_IRQ_TAMPER2_NAME,
+		.name   = MCA_IRQ_TAMPER2_NAME,
 		.start  = MCA_CC8X_IRQ_TAMPER2,
 		.end    = MCA_CC8X_IRQ_TAMPER2,
 		.flags  = IORESOURCE_IRQ,
 	},
 	{
-		.name   = MCA_CC8X_IRQ_TAMPER3_NAME,
+		.name   = MCA_IRQ_TAMPER3_NAME,
 		.start  = MCA_CC8X_IRQ_TAMPER3,
 		.end    = MCA_CC8X_IRQ_TAMPER3,
 		.flags  = IORESOURCE_IRQ,
@@ -225,7 +225,7 @@ static struct resource mca_cc8x_gpios_resources[] = {
 
 static struct resource mca_cc8x_uart_resources[] = {
 	{
-		.name   = MCA_CC8X_IRQ_UART_NAME,
+		.name   = MCA_IRQ_UART_NAME,
 		.start  = MCA_CC8X_IRQ_UART,
 		.end    = MCA_CC8X_IRQ_UART,
 		.flags  = IORESOURCE_IRQ,
