@@ -28,7 +28,7 @@ static const struct of_device_id mca_cc6ul_gpio_dt_ids[] = {
 
 static int mca_cc6ul_gpio_probe(struct platform_device *pdev)
 {
-	struct mca_cc6ul *mca = dev_get_drvdata(pdev->dev.parent);
+	struct mca_drv *mca = dev_get_drvdata(pdev->dev.parent);
 	struct device *mca_dev = mca->dev;
 	struct regmap *regmap = mca->regmap;
 	int *p_gpio_base = &mca->gpio_base;
@@ -40,7 +40,7 @@ static int mca_cc6ul_gpio_probe(struct platform_device *pdev)
 static int mca_cc6ul_gpio_remove(struct platform_device *pdev)
 {
 	struct mca_gpio *gpio = platform_get_drvdata(pdev);
-	struct mca_cc6ul *mca = (struct mca_cc6ul *)gpio->parent; /* TODO */
+	struct mca_drv *mca = (struct mca_drv *)gpio->parent; /* TODO */
 
 	mca->gpio_base = -1;
 	gpiochip_remove(&gpio->gc);

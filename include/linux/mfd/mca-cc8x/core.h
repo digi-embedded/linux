@@ -49,15 +49,6 @@ enum mca_cc8x_irqs {
 	MCA_CC8X_NUM_IRQS,
 };
 
-#define MCA_CC8X_IRQ_TAMPER0_NAME		"TAMPER0"
-#define MCA_CC8X_IRQ_TAMPER1_NAME		"TAMPER1"
-#define MCA_CC8X_IRQ_TAMPER2_NAME		"TAMPER2"
-#define MCA_CC8X_IRQ_TAMPER3_NAME		"TAMPER3"
-#define MCA_CC8X_IRQ_ADC_NAME			"ADC"
-#define MCA_CC8X_IRQ_UART_NAME			"UART"
-
-
-
 int mca_cc8x_device_init(struct mca_drv *mca, u32 irq);
 int mca_cc8x_irq_init(struct mca_drv *mca);
 void mca_cc8x_device_exit(struct mca_drv *mca);

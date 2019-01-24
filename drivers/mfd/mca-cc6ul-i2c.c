@@ -27,17 +27,17 @@ static const struct regmap_range mca_cc6ul_readable_ranges[] = {
 
 static const struct regmap_range mca_cc6ul_writeable_ranges[] = {
 	regmap_reg_range(MCA_CC6UL_HWVER_SOM, MCA_CC6UL_HWVER_SOM),
-	regmap_reg_range(MCA_CC6UL_IRQ_STATUS_0, MCA_CC6UL_IRQ_MASK_3),
-	regmap_reg_range(MCA_CC6UL_PWR_CTRL_0, MCA_CC6UL_PWR_KEY_GUARD),
+	regmap_reg_range(MCA_IRQ_STATUS_0, MCA_CC6UL_IRQ_MASK_3),
+	regmap_reg_range(MCA_PWR_CTRL_0, MCA_PWR_KEY_GUARD),
 	regmap_reg_range(MCA_CC6UL_CTRL_UNLOCK_0, MCA_CC6UL_CTRL_UNLOCK_3),
 	regmap_reg_range(MCA_CC6UL_CTRL_0, MCA_CC6UL_CTRL_0),
-	regmap_reg_range(MCA_CC6UL_TAMPER0_CFG0, MCA_CC6UL_TAMPER0_EVENT),
-	regmap_reg_range(MCA_CC6UL_TAMPER1_CFG0, MCA_CC6UL_TAMPER1_EVENT),
-	regmap_reg_range(MCA_CC6UL_TAMPER2_CFG0, MCA_CC6UL_TAMPER2_THRESH_HI_H),
-	regmap_reg_range(MCA_CC6UL_TAMPER3_CFG0, MCA_CC6UL_TAMPER3_THRESH_HI_H),
-	regmap_reg_range(MCA_CC6UL_RTC_CONTROL, MCA_CC6UL_RTC_CONTROL),
-	regmap_reg_range(MCA_CC6UL_RTC_COUNT_YEAR_L, MCA_CC6UL_RTC_ALARM_SEC),
-	regmap_reg_range(MCA_CC6UL_WDT_CONTROL, MCA_CC6UL_WDT_REFRESH_3),
+	regmap_reg_range(MCA_TAMPER0_CFG0, MCA_TAMPER0_EVENT),
+	regmap_reg_range(MCA_TAMPER1_CFG0, MCA_TAMPER1_EVENT),
+	regmap_reg_range(MCA_TAMPER2_CFG0, MCA_TAMPER2_THRESH_HI_H),
+	regmap_reg_range(MCA_TAMPER3_CFG0, MCA_TAMPER3_THRESH_HI_H),
+	regmap_reg_range(MCA_RTC_CONTROL, MCA_RTC_CONTROL),
+	regmap_reg_range(MCA_RTC_COUNT_YEAR_L, MCA_RTC_ALARM_SEC),
+	regmap_reg_range(MCA_WDT_CONTROL, MCA_WDT_REFRESH_3),
 	regmap_reg_range(MCA_GPIO_DIR_0, MCA_GPIO_IRQ_CFG_63),
 	regmap_reg_range(MCA_REG_ADC_CFG0_0, MCA_REG_ADC_CFG0_7),
 	regmap_reg_range(MCA_REG_ADC_CFG1_0, MCA_REG_ADC_CFG1_7),
@@ -55,20 +55,20 @@ static const struct regmap_range mca_cc6ul_writeable_ranges[] = {
 
 static const struct regmap_range mca_cc6ul_volatile_ranges[] = {
 	/* Real volatile registers */
-	regmap_reg_range(MCA_CC6UL_IRQ_STATUS_0, MCA_CC6UL_IRQ_STATUS_3),
-	regmap_reg_range(MCA_CC6UL_TAMPER0_DATE_START, MCA_CC6UL_TAMPER0_EVENT),
-	regmap_reg_range(MCA_CC6UL_TAMPER1_DATE_START, MCA_CC6UL_TAMPER1_EVENT),
-	regmap_reg_range(MCA_CC6UL_TAMPER2_DATE_START, MCA_CC6UL_TAMPER2_EVENT),
-	regmap_reg_range(MCA_CC6UL_TAMPER3_DATE_START, MCA_CC6UL_TAMPER3_EVENT),
+	regmap_reg_range(MCA_IRQ_STATUS_0, MCA_IRQ_STATUS_3),
+	regmap_reg_range(MCA_TAMPER0_DATE_START, MCA_TAMPER0_EVENT),
+	regmap_reg_range(MCA_TAMPER1_DATE_START, MCA_TAMPER1_EVENT),
+	regmap_reg_range(MCA_TAMPER2_DATE_START, MCA_TAMPER2_EVENT),
+	regmap_reg_range(MCA_TAMPER3_DATE_START, MCA_TAMPER3_EVENT),
 	regmap_reg_range(MCA_CC6UL_TIMER_TICK_0, MCA_CC6UL_TIMER_TICK_3),
 	regmap_reg_range(MCA_CC6UL_LAST_MCA_RESET_0, MCA_CC6UL_LAST_MCA_RESET_3),
 	regmap_reg_range(MCA_CC6UL_LAST_MPU_RESET_0, MCA_CC6UL_LAST_MPU_RESET_3),
 	regmap_reg_range(MCA_CC6UL_LAST_WAKEUP_REASON_0, MCA_CC6UL_LAST_WAKEUP_REASON_3),
 	regmap_reg_range(MCA_CC6UL_MPU_NVRAM_START, MCA_CC6UL_MPU_NVRAM_END),
-	regmap_reg_range(MCA_CC6UL_RTC_COUNT_YEAR_L, MCA_CC6UL_RTC_COUNT_SEC),
+	regmap_reg_range(MCA_RTC_COUNT_YEAR_L, MCA_RTC_COUNT_SEC),
 	regmap_reg_range(MCA_GPIO_DATA_0, MCA_GPIO_DATA_7),
 	regmap_reg_range(MCA_GPIO_IRQ_STATUS_0, MCA_GPIO_IRQ_STATUS_7),
-	regmap_reg_range(MCA_CC6UL_PWR_CTRL_0, MCA_CC6UL_PWR_STATUS_0),
+	regmap_reg_range(MCA_PWR_CTRL_0, MCA_PWR_STATUS_0),
 	regmap_reg_range(MCA_REG_ADC_VAL_L_0, MCA_REG_ADC_VAL_H_7),
 
 	/*
@@ -85,15 +85,15 @@ static const struct regmap_range mca_cc6ul_volatile_ranges[] = {
 	regmap_reg_range(MCA_CC6UL_HWVER_SOM, MCA_CC6UL_HWVER_SOM),
 	regmap_reg_range(MCA_CC6UL_DEVICE_ID, MCA_CC6UL_UID_9),
 	regmap_reg_range(MCA_CC6UL_IRQ_MASK_0, MCA_CC6UL_IRQ_MASK_3),
-	regmap_reg_range(MCA_CC6UL_PWR_KEY_DEBOUNCE, MCA_CC6UL_PWR_KEY_GUARD),
+	regmap_reg_range(MCA_PWR_KEY_DEBOUNCE, MCA_PWR_KEY_GUARD),
 	regmap_reg_range(MCA_CC6UL_CTRL_0, MCA_CC6UL_CTRL_0),
-	regmap_reg_range(MCA_CC6UL_TAMPER0_CFG0, MCA_CC6UL_TAMPER0_DELAY_PWROFF),
-	regmap_reg_range(MCA_CC6UL_TAMPER1_CFG0, MCA_CC6UL_TAMPER1_DELAY_PWROFF),
-	regmap_reg_range(MCA_CC6UL_TAMPER2_CFG0, MCA_CC6UL_TAMPER2_THRESH_HI_H),
-	regmap_reg_range(MCA_CC6UL_TAMPER3_CFG0, MCA_CC6UL_TAMPER3_THRESH_HI_H),
-	regmap_reg_range(MCA_CC6UL_RTC_CONTROL, MCA_CC6UL_RTC_CONTROL),
-	regmap_reg_range(MCA_CC6UL_RTC_ALARM_YEAR_L, MCA_CC6UL_RTC_ALARM_SEC),
-	regmap_reg_range(MCA_CC6UL_WDT_CONTROL, MCA_CC6UL_WDT_TIMEOUT),
+	regmap_reg_range(MCA_TAMPER0_CFG0, MCA_TAMPER0_DELAY_PWROFF),
+	regmap_reg_range(MCA_TAMPER1_CFG0, MCA_TAMPER1_DELAY_PWROFF),
+	regmap_reg_range(MCA_TAMPER2_CFG0, MCA_TAMPER2_THRESH_HI_H),
+	regmap_reg_range(MCA_TAMPER3_CFG0, MCA_TAMPER3_THRESH_HI_H),
+	regmap_reg_range(MCA_RTC_CONTROL, MCA_RTC_CONTROL),
+	regmap_reg_range(MCA_RTC_ALARM_YEAR_L, MCA_RTC_ALARM_SEC),
+	regmap_reg_range(MCA_WDT_CONTROL, MCA_WDT_TIMEOUT),
 	regmap_reg_range(MCA_GPIO_NUM, MCA_GPIO_DIR_7),
 	regmap_reg_range(MCA_GPIO_IRQ_CFG_0, MCA_GPIO_IRQ_CFG_63),
 	regmap_reg_range(MCA_REG_ADC_NUM_CH, MCA_REG_ADC_NUM_BYTES),
@@ -146,10 +146,10 @@ MODULE_DEVICE_TABLE(of, mca_cc6ul_dt_ids);
 static int mca_cc6ul_i2c_probe(struct i2c_client *i2c,
 			       const struct i2c_device_id *id)
 {
-	struct mca_cc6ul *mca;
+	struct mca_drv *mca;
 	int ret;
 
-	mca = devm_kzalloc(&i2c->dev, sizeof(struct mca_cc6ul), GFP_KERNEL);
+	mca = devm_kzalloc(&i2c->dev, sizeof(struct mca_drv), GFP_KERNEL);
 	if (mca == NULL)
 		return -ENOMEM;
 
@@ -169,7 +169,7 @@ static int mca_cc6ul_i2c_probe(struct i2c_client *i2c,
 
 static int mca_cc6ul_i2c_remove(struct i2c_client *i2c)
 {
-	struct mca_cc6ul *mca = i2c_get_clientdata(i2c);
+	struct mca_drv *mca = i2c_get_clientdata(i2c);
 
 	mca_cc6ul_device_exit(mca);
 
