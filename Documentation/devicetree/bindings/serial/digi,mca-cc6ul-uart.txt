@@ -1,0 +1,22 @@
+* Digi MCA UART for ConnectCore 6UL device tree bindings
+
+The MCA UART driver exposes an extra TTY device through the Micro Controller
+Assistant. This UART can be used to wake up the system from low power modes.
+Notice the MCA UART has limited capabilities compared to CPU's UARTs. Check the
+documentation for a list of capabilities.
+
+Required properties:
+- compatible: must be "digi,mca-cc6ul-uart".
+
+Optional properties:
+- rts-pin: MCA IO line to be used as RTS when using hardware flow control.
+- cts-pin: MCA IO line to be used as CTS when using hardware flow control.
+
+Example:
+
+	&mca_uart {
+		compatible = "digi,mca-cc6ul-uart";
+		status = "okay";
+		rts-pin = <3>;
+		cts-pin = <5>;
+	};
