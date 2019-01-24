@@ -77,14 +77,14 @@ static const struct regmap_irq_chip mca_cc6ul_irq_chip = {
 	.name = "mca-cc6ul-irq",
 	.irqs = mca_cc6ul_irqs,
 	.num_irqs = ARRAY_SIZE(mca_cc6ul_irqs),
-	.num_regs = MCA_CC6UL_NUM_IRQ_REGS,
-	.status_base = MCA_CC6UL_IRQ_STATUS_0,
+	.num_regs = MCA_NUM_IRQ_REGS,
+	.status_base = MCA_IRQ_STATUS_0,
 	.mask_base = MCA_CC6UL_IRQ_MASK_0,
-	.ack_base = MCA_CC6UL_IRQ_STATUS_0,
+	.ack_base = MCA_IRQ_STATUS_0,
 	.init_ack_masked = true,
 };
 
-int mca_cc6ul_irq_init(struct mca_cc6ul *mca)
+int mca_cc6ul_irq_init(struct mca_drv *mca)
 {
 	int ret;
 
@@ -107,7 +107,7 @@ int mca_cc6ul_irq_init(struct mca_cc6ul *mca)
 	return 0;
 }
 
-void mca_cc6ul_irq_exit(struct mca_cc6ul *mca)
+void mca_cc6ul_irq_exit(struct mca_drv *mca)
 {
         regmap_del_irq_chip(mca->chip_irq, mca->regmap_irq);
 }

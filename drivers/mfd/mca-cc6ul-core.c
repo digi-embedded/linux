@@ -84,20 +84,20 @@ static const struct mca_reason last_wakeup[] = {
 	{MCA_CC6UL_LAST_WAKEUP_CPU,	"CPU"},
 };
 
-static struct mca_cc6ul *pmca;
+static struct mca_drv *pmca;
 
 static const char _enabled[] = "enabled";
 static const char _disabled[] = "disabled";
 
 static struct resource mca_cc6ul_rtc_resources[] = {
 	{
-		.name   = MCA_CC6UL_IRQ_RTC_ALARM_NAME,
+		.name   = MCA_IRQ_RTC_ALARM_NAME,
 		.start  = MCA_CC6UL_IRQ_RTC_ALARM,
 		.end    = MCA_CC6UL_IRQ_RTC_ALARM,
 		.flags  = IORESOURCE_IRQ,
 	},
 	{
-		.name   = MCA_CC6UL_IRQ_RTC_1HZ_NAME,
+		.name   = MCA_IRQ_RTC_1HZ_NAME,
 		.start  = MCA_CC6UL_IRQ_RTC_1HZ,
 		.end    = MCA_CC6UL_IRQ_RTC_1HZ,
 		.flags  = IORESOURCE_IRQ,
@@ -106,7 +106,7 @@ static struct resource mca_cc6ul_rtc_resources[] = {
 
 static struct resource mca_cc6ul_watchdog_resources[] = {
 	{
-		.name   = MCA_CC6UL_IRQ_WATCHDOG_NAME,
+		.name   = MCA_IRQ_WATCHDOG_NAME,
 		.start  = MCA_CC6UL_IRQ_WATCHDOG,
 		.end    = MCA_CC6UL_IRQ_WATCHDOG,
 		.flags  = IORESOURCE_IRQ,
@@ -115,13 +115,13 @@ static struct resource mca_cc6ul_watchdog_resources[] = {
 
 static struct resource mca_cc6ul_pwrkey_resources[] = {
 	{
-		.name   = MCA_CC6UL_IRQ_PWR_SLEEP_NAME,
+		.name   = MCA_IRQ_PWR_SLEEP_NAME,
 		.start  = MCA_CC6UL_IRQ_PWR_SLEEP,
 		.end    = MCA_CC6UL_IRQ_PWR_SLEEP,
 		.flags  = IORESOURCE_IRQ,
 	},
 	{
-		.name   = MCA_CC6UL_IRQ_PWR_OFF_NAME,
+		.name   = MCA_IRQ_PWR_OFF_NAME,
 		.start  = MCA_CC6UL_IRQ_PWR_OFF,
 		.end    = MCA_CC6UL_IRQ_PWR_OFF,
 		.flags  = IORESOURCE_IRQ,
@@ -130,7 +130,7 @@ static struct resource mca_cc6ul_pwrkey_resources[] = {
 
 static struct resource mca_cc6ul_adc_resources[] = {
 	{
-		.name   = MCA_CC6UL_IRQ_ADC_NAME,
+		.name   = MCA_IRQ_ADC_NAME,
 		.start  = MCA_CC6UL_IRQ_ADC,
 		.end    = MCA_CC6UL_IRQ_ADC,
 		.flags  = IORESOURCE_IRQ,
@@ -139,25 +139,25 @@ static struct resource mca_cc6ul_adc_resources[] = {
 
 static struct resource mca_cc6ul_tamper_resources[] = {
 	{
-		.name   = MCA_CC6UL_IRQ_TAMPER0_NAME,
+		.name   = MCA_IRQ_TAMPER0_NAME,
 		.start  = MCA_CC6UL_IRQ_TAMPER0,
 		.end    = MCA_CC6UL_IRQ_TAMPER0,
 		.flags  = IORESOURCE_IRQ,
 	},
 	{
-		.name   = MCA_CC6UL_IRQ_TAMPER1_NAME,
+		.name   = MCA_IRQ_TAMPER1_NAME,
 		.start  = MCA_CC6UL_IRQ_TAMPER1,
 		.end    = MCA_CC6UL_IRQ_TAMPER1,
 		.flags  = IORESOURCE_IRQ,
 	},
 	{
-		.name   = MCA_CC6UL_IRQ_TAMPER2_NAME,
+		.name   = MCA_IRQ_TAMPER2_NAME,
 		.start  = MCA_CC6UL_IRQ_TAMPER2,
 		.end    = MCA_CC6UL_IRQ_TAMPER2,
 		.flags  = IORESOURCE_IRQ,
 	},
 	{
-		.name   = MCA_CC6UL_IRQ_TAMPER3_NAME,
+		.name   = MCA_IRQ_TAMPER3_NAME,
 		.start  = MCA_CC6UL_IRQ_TAMPER3,
 		.end    = MCA_CC6UL_IRQ_TAMPER3,
 		.flags  = IORESOURCE_IRQ,
@@ -175,7 +175,7 @@ static struct resource mca_cc6ul_gpios_resources[] = {
 
 static struct resource mca_cc6ul_uart_resources[] = {
 	{
-		.name   = MCA_CC6UL_IRQ_UART_NAME,
+		.name   = MCA_IRQ_UART_NAME,
 		.start  = MCA_CC6UL_IRQ_UART,
 		.end    = MCA_CC6UL_IRQ_UART,
 		.flags  = IORESOURCE_IRQ,
@@ -228,7 +228,7 @@ static const struct mfd_cell mca_cc6ul_devs[] = {
 };
 
 /* Read a block of registers */
-int mca_cc6ul_read_block(struct mca_cc6ul *mca, u16 addr, u8 *data,
+int mca_cc6ul_read_block(struct mca_drv *mca, u16 addr, u8 *data,
 			 size_t nregs)
 {
 	int ret;
@@ -245,7 +245,7 @@ int mca_cc6ul_read_block(struct mca_cc6ul *mca, u16 addr, u8 *data,
 EXPORT_SYMBOL_GPL(mca_cc6ul_read_block);
 
 /* Write a block of data into MCA registers */
-int mca_cc6ul_write_block(struct mca_cc6ul *mca , u16 addr, u8 *data,
+int mca_cc6ul_write_block(struct mca_drv *mca , u16 addr, u8 *data,
 			  size_t nregs)
 {
 	u8 *frame;	/* register address + payload */
@@ -269,7 +269,7 @@ int mca_cc6ul_write_block(struct mca_cc6ul *mca , u16 addr, u8 *data,
 }
 EXPORT_SYMBOL_GPL(mca_cc6ul_write_block);
 
-static int mca_cc6ul_unlock_ctrl(struct mca_cc6ul *mca)
+static int mca_cc6ul_unlock_ctrl(struct mca_drv *mca)
 {
 	int ret;
 	const uint8_t unlock_pattern[] = {'C', 'T', 'R', 'U'};
@@ -283,7 +283,7 @@ static int mca_cc6ul_unlock_ctrl(struct mca_cc6ul *mca)
 	return ret;
 }
 
-static int mca_cc6ul_get_tick_cnt(struct mca_cc6ul *mca, u32 *tick)
+static int mca_cc6ul_get_tick_cnt(struct mca_drv *mca, u32 *tick)
 {
 	return regmap_bulk_read(mca->regmap, MCA_CC6UL_TIMER_TICK_0,
 				tick, sizeof(*tick));
@@ -293,7 +293,7 @@ static int mca_cc6ul_get_tick_cnt(struct mca_cc6ul *mca, u32 *tick)
 static ssize_t ext_32khz_show(struct device *dev, struct device_attribute *attr,
 			      char *buf)
 {
-	struct mca_cc6ul *mca = dev_get_drvdata(dev);
+	struct mca_drv *mca = dev_get_drvdata(dev);
 	unsigned int val;
 	int ret;
 
@@ -311,7 +311,7 @@ static ssize_t ext_32khz_show(struct device *dev, struct device_attribute *attr,
 static ssize_t ext_32khz_store(struct device *dev, struct device_attribute *attr,
 			       const char *buf, size_t count)
 {
-	struct mca_cc6ul *mca = dev_get_drvdata(dev);
+	struct mca_drv *mca = dev_get_drvdata(dev);
 	bool enable;
 	int ret;
 
@@ -341,7 +341,7 @@ static DEVICE_ATTR(ext_32khz, 0600, ext_32khz_show, ext_32khz_store);
 static ssize_t vref_show(struct device *dev, struct device_attribute *attr,
 			 char *buf)
 {
-	struct mca_cc6ul *mca = dev_get_drvdata(dev);
+	struct mca_drv *mca = dev_get_drvdata(dev);
 	unsigned int val;
 	int ret;
 
@@ -359,7 +359,7 @@ static ssize_t vref_show(struct device *dev, struct device_attribute *attr,
 static ssize_t vref_store(struct device *dev, struct device_attribute *attr,
 			  const char *buf, size_t count)
 {
-	struct mca_cc6ul *mca = dev_get_drvdata(dev);
+	struct mca_drv *mca = dev_get_drvdata(dev);
 	bool enable;
 	int ret;
 
@@ -389,7 +389,7 @@ static DEVICE_ATTR(vref, 0600, vref_show, vref_store);
 static ssize_t hwver_show(struct device *dev, struct device_attribute *attr,
 			  char *buf)
 {
-	struct mca_cc6ul *mca = dev_get_drvdata(dev);
+	struct mca_drv *mca = dev_get_drvdata(dev);
 
 	return sprintf(buf, "%d\n", mca->hw_version);
 }
@@ -398,7 +398,7 @@ static DEVICE_ATTR(hw_version, S_IRUGO, hwver_show, NULL);
 static ssize_t fwver_show(struct device *dev, struct device_attribute *attr,
 			  char *buf)
 {
-	struct mca_cc6ul *mca = dev_get_drvdata(dev);
+	struct mca_drv *mca = dev_get_drvdata(dev);
 
 	return sprintf(buf, "%d.%02d %s\n", MCA_FW_VER_MAJOR(mca->fw_version),
 		       MCA_FW_VER_MINOR(mca->fw_version),
@@ -409,7 +409,7 @@ static DEVICE_ATTR(fw_version, S_IRUGO, fwver_show, NULL);
 static ssize_t tick_cnt_show(struct device *dev, struct device_attribute *attr,
 			     char *buf)
 {
-	struct mca_cc6ul *mca = dev_get_drvdata(dev);
+	struct mca_drv *mca = dev_get_drvdata(dev);
 	u32 tick_cnt;
 	int ret;
 
@@ -426,7 +426,7 @@ static DEVICE_ATTR(tick_cnt, S_IRUGO, tick_cnt_show, NULL);
 static ssize_t fw_update_show(struct device *dev, struct device_attribute *attr,
 			      char *buf)
 {
-	struct mca_cc6ul *mca = dev_get_drvdata(dev);
+	struct mca_drv *mca = dev_get_drvdata(dev);
 
 	if (!gpio_is_valid(mca->fw_update_gpio))
 		return -EINVAL;
@@ -439,7 +439,7 @@ static ssize_t fw_update_store(struct device *dev,
 			       struct device_attribute *attr,
 			       const char *buf, size_t count)
 {
-	struct mca_cc6ul *mca = dev_get_drvdata(dev);
+	struct mca_drv *mca = dev_get_drvdata(dev);
 	ssize_t status;
 	long value;
 
@@ -460,7 +460,7 @@ static ssize_t last_wakeup_reason_show(struct device *dev,
 				       struct device_attribute *attr,
 				       char *buf)
 {
-	struct mca_cc6ul *mca = dev_get_drvdata(dev);
+	struct mca_drv *mca = dev_get_drvdata(dev);
 	bool comma = false;
 	u32 last_wakeup_val;
 	int ret, i;
@@ -495,7 +495,7 @@ static DEVICE_ATTR(last_wakeup_reason, S_IRUGO, last_wakeup_reason_show, NULL);
 static ssize_t last_mca_reset_show(struct device *dev,
 				   struct device_attribute *attr, char *buf)
 {
-	struct mca_cc6ul *mca = dev_get_drvdata(dev);
+	struct mca_drv *mca = dev_get_drvdata(dev);
 	bool comma = false;
 	int i;
 
@@ -520,7 +520,7 @@ static DEVICE_ATTR(last_mca_reset, S_IRUGO, last_mca_reset_show, NULL);
 static ssize_t last_mpu_reset_show(struct device *dev,
 				   struct device_attribute *attr, char *buf)
 {
-	struct mca_cc6ul *mca = dev_get_drvdata(dev);
+	struct mca_drv *mca = dev_get_drvdata(dev);
 	bool comma = false;
 	int i;
 
@@ -547,7 +547,7 @@ static ssize_t nvram_read(struct file *filp, struct kobject *kobj,
 			  size_t count)
 {
 	struct device *dev = kobj_to_dev(kobj);
-	struct mca_cc6ul *mca;
+	struct mca_drv *mca;
 	int ret;
 
 	if (!dev || (mca = dev_get_drvdata(dev)) == NULL)
@@ -573,7 +573,7 @@ static ssize_t nvram_write(struct file *filp, struct kobject *kobj,
 			   size_t count)
 {
 	struct device *dev = kobj_to_dev(kobj);
-	struct mca_cc6ul *mca;
+	struct mca_drv *mca;
 	int ret;
 
 	if (!dev || (mca = dev_get_drvdata(dev)) == NULL)
@@ -634,7 +634,7 @@ static struct dyn_attribute mca_cc6ul_sysfs_dyn_entries[] = {
 
 int mca_cc6ul_suspend(struct device *dev)
 {
-	struct mca_cc6ul *mca = dev_get_drvdata(dev);
+	struct mca_drv *mca = dev_get_drvdata(dev);
 
 	if (!mca) {
 		dev_err(dev, " mca was null in %s\n", __func__);
@@ -642,15 +642,15 @@ int mca_cc6ul_suspend(struct device *dev)
 	}
 
 	/* Set the suspend bit in PWR_CTRL_0 */
-	return regmap_update_bits(pmca->regmap, MCA_CC6UL_PWR_CTRL_0,
-				  MCA_CC6UL_PWR_GO_SUSPEND,
-				  MCA_CC6UL_PWR_GO_SUSPEND);
+	return regmap_update_bits(pmca->regmap, MCA_PWR_CTRL_0,
+				  MCA_PWR_GO_SUSPEND,
+				  MCA_PWR_GO_SUSPEND);
 }
 
 #define MCA_MAX_RESUME_RD_RETRIES 10
 int mca_cc6ul_resume(struct device *dev)
 {
-	struct mca_cc6ul *mca = dev_get_drvdata(dev);
+	struct mca_drv *mca = dev_get_drvdata(dev);
 	unsigned int val;
 	int ret, retries = 0;
 
@@ -676,8 +676,8 @@ int mca_cc6ul_resume(struct device *dev)
 	}
 
 	/* Reset the suspend bit in PWR_CTRL_0 */
-	return regmap_update_bits(pmca->regmap, MCA_CC6UL_PWR_CTRL_0,
-				  MCA_CC6UL_PWR_GO_SUSPEND,
+	return regmap_update_bits(pmca->regmap, MCA_PWR_CTRL_0,
+				  MCA_PWR_GO_SUSPEND,
 				  0);
 }
 
@@ -695,9 +695,9 @@ static void mca_cc6ul_power_off(void)
 
 	do {
 		/* Set power off bit in PWR_CTRL_0 register to shutdown */
-		ret = regmap_update_bits(pmca->regmap, MCA_CC6UL_PWR_CTRL_0,
-					 MCA_CC6UL_PWR_GO_OFF,
-					 MCA_CC6UL_PWR_GO_OFF);
+		ret = regmap_update_bits(pmca->regmap, MCA_PWR_CTRL_0,
+					 MCA_PWR_GO_OFF,
+					 MCA_PWR_GO_OFF);
 		if (ret)
 			printk(KERN_ERR "ERROR: accesing PWR_CTRL_0 register "
 			       "[%s:%d/%s()]!\n", __FILE__, __LINE__, __func__);
@@ -720,7 +720,7 @@ static int mca_cc6ul_restart_handler(struct notifier_block *nb,
 {
 	int ret;
 	int try = 0;
-	struct mca_cc6ul *mca = container_of(nb, struct mca_cc6ul,
+	struct mca_drv *mca = container_of(nb, struct mca_drv,
 					     restart_handler);
 	const uint8_t unlock_pattern[] = {'C', 'T', 'R', 'U'};
 
@@ -752,7 +752,7 @@ reset_retry:
 	return NOTIFY_DONE;
 }
 
-static int mca_cc6ul_add_dyn_sysfs_entries(struct mca_cc6ul *mca,
+static int mca_cc6ul_add_dyn_sysfs_entries(struct mca_drv *mca,
 					   const struct dyn_attribute *dattr,
 					   int num_entries,
 					   const struct attribute_group *grp)
@@ -781,7 +781,7 @@ static int mca_cc6ul_add_dyn_sysfs_entries(struct mca_cc6ul *mca,
 	return 0;
 }
 
-int mca_cc6ul_device_init(struct mca_cc6ul *mca, u32 irq)
+int mca_cc6ul_device_init(struct mca_drv *mca, u32 irq)
 {
 	int ret;
 	unsigned int val;
@@ -973,7 +973,7 @@ out_irq:
 	return ret;
 }
 
-void mca_cc6ul_device_exit(struct mca_cc6ul *mca)
+void mca_cc6ul_device_exit(struct mca_drv *mca)
 {
 	unregister_restart_handler(&mca->restart_handler);
 	pm_power_off = NULL;
