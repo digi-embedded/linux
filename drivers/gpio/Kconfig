@@ -339,6 +339,14 @@ config GPIO_MCA_CC8X
 	  If you say yes here you will get support for the GPIOs in the
 	  Micro Controller Assist of Digi ConnectCore 8X system-on-module.
 
+config GPIO_MCA_CC6UL
+	tristate "Digi ConnectCore 6UL Micro Controller Assist GPIO support"
+	select MFD_MCA_CC6UL
+	select GPIOLIB_IRQCHIP
+	help
+	  If you say yes here you will get support for the GPIOs in the
+	  Micro Controller Assist of Digi ConnectCore 6UL system-on-module.
+
 config GPIO_MENZ127
 	tristate "MEN 16Z127 GPIO support"
 	depends on MCB

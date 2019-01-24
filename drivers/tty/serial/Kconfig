@@ -749,6 +749,16 @@ config SERIAL_CORE_CONSOLE
 config CONSOLE_POLL
 	bool
 
+config SERIAL_MCA_CC6UL
+	tristate "Digi ConnectCore 6UL Micro Controller Assist UART"
+	select MFD_MCA_CC6UL
+	help
+	  If you say Y here you will get support for the UART in the Micro
+	  Controller Assist of Digi ConnectCore 6UL system-on-module.
+
+	  This driver can also be built as a module, if so, the module
+	  will be called "mca-cc6ul-uart".
+
 config SERIAL_MCF
 	bool "Coldfire serial support"
 	depends on COLDFIRE
