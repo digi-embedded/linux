@@ -331,21 +331,14 @@ config GPIO_MB86S7X
 	help
 	  Say yes here to support the GPIO controller in Fujitsu MB86S70 SoCs.
 
-config GPIO_MCA_CC8X
-	tristate "Digi ConnectCore 8X Micro Controller Assist GPIO support"
-	select MFD_MCA_CC8X
+config GPIO_MCA
+	tristate "Digi ConnectCore SOMs Micro Controller Assist GPIO support"
+	select MFD_MCA_CC6UL if SOC_IMX6UL
+	select MFD_MCA_CC8X if ARCH_FSL_IMX8QXP
 	select GPIOLIB_IRQCHIP
 	help
 	  If you say yes here you will get support for the GPIOs in the
-	  Micro Controller Assist of Digi ConnectCore 8X system-on-module.
-
-config GPIO_MCA_CC6UL
-	tristate "Digi ConnectCore 6UL Micro Controller Assist GPIO support"
-	select MFD_MCA_CC6UL
-	select GPIOLIB_IRQCHIP
-	help
-	  If you say yes here you will get support for the GPIOs in the
-	  Micro Controller Assist of Digi ConnectCore 6UL system-on-module.
+	  Micro Controller Assist of Digi ConnectCore system-on-modules.
 
 config GPIO_MENZ127
 	tristate "MEN 16Z127 GPIO support"
