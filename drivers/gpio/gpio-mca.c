@@ -1,6 +1,6 @@
-/* gpio-mca-common.c - GPIO driver for MCA devices.
+/* gpio-mca.c - GPIO driver for MCA devices.
  *
- * Copyright (C) 2017  Digi International Inc
+ * Copyright (C) 2017 - 2019  Digi International Inc
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -28,6 +28,8 @@
 #include <linux/mfd/mca-common/core.h>
 #include <linux/mfd/mca-common/registers.h>
 
+#define MCA_DRVNAME_GPIO	"mca-gpio"
+
 /*
  * The following macros return the register address to read/write for a given
  * gpio number.
@@ -44,6 +46,29 @@
 #define GPIO_BYTE(i)		((i) / 8)
 #define BYTE_OFFSET(i)		((i) % 8)
 #define BIT_OFFSET(i)		((i) % 8)
+
+#ifdef CONFIG_OF
+enum mca_gpio_type {
+	CC6UL_MCA_GPIO,
+	CC8X_MCA_GPIO,
+	IOEXP_MCA_GPIO,
+};
+
+struct mca_gpio_data {
+	enum mca_gpio_type devtype;
+};
+#endif
+
+struct mca_gpio {
+	void * parent;
+	struct regmap *regmap;
+	struct device *dev;
+	struct gpio_chip gc;
+	struct mutex irq_lock;
+	uint8_t irq_cfg[MCA_MAX_IOS];
+	uint8_t irq_capable[MCA_MAX_IO_BYTES];
+	int irq[MCA_MAX_GPIO_IRQ_BANKS];
+};
 
 static char const *const irq_gpio_bank_name[] = {
 	MCA_IRQ_GPIO_BANK_0_NAME,
@@ -345,9 +370,12 @@ static struct gpio_chip reference_gc = {
 	.base			= -1,
 };
 
-int mca_gpio_probe(struct platform_device *pdev, struct device *mca_dev,
-		   struct regmap *regmap, int *gpio_base, char const *dt_compat)
+static int mca_gpio_probe(struct platform_device *pdev)
 {
+	struct mca_drv *mca = dev_get_drvdata(pdev->dev.parent);
+	struct device *mca_dev = mca->dev;
+	struct regmap *regmap = mca->regmap;
+	int *gpio_base = &mca->gpio_base;
 	struct mca_gpio *gpio;
 	struct device_node *np;
 	unsigned int val;
@@ -376,8 +404,13 @@ int mca_gpio_probe(struct platform_device *pdev, struct device *mca_dev,
 
 	/* Find entry in device-tree */
 	if (mca_dev->of_node) {
+		const struct mca_gpio_data *devdata =
+				    of_device_get_match_data(&pdev->dev);
+		const char * compatible = pdev->dev.driver->
+				    of_match_table[devdata->devtype].compatible;
+
 		/* Return if node does not exist or if it is disabled */
-		np = of_find_compatible_node(mca_dev->of_node, NULL, dt_compat);
+		np = of_find_compatible_node(mca_dev->of_node, NULL, compatible);
 		if (!np) {
 			ret = -ENODEV;
 			goto err;
@@ -424,3 +457,70 @@ err:
 	gpio = NULL;
 	return ret;
 }
+
+static int mca_gpio_remove(struct platform_device *pdev)
+{
+	struct mca_gpio *gpio = platform_get_drvdata(pdev);
+	struct mca_drv *mca = (struct mca_drv *)gpio->parent; /* TODO */
+
+	mca->gpio_base = -1;
+	gpiochip_remove(&gpio->gc);
+
+	return 0;
+}
+
+#ifdef CONFIG_OF
+static struct mca_gpio_data mca_gpio_devdata[] = {
+	[CC6UL_MCA_GPIO] = {
+		.devtype = CC6UL_MCA_GPIO,
+	},
+	[CC8X_MCA_GPIO] = {
+		.devtype = CC8X_MCA_GPIO,
+	},
+	[IOEXP_MCA_GPIO] = {
+		.devtype = IOEXP_MCA_GPIO,
+	},
+};
+
+static const struct of_device_id mca_gpio_dt_ids[] = {
+	{ .compatible = "digi,mca-cc6ul-gpio",
+	  .data = &mca_gpio_devdata[CC6UL_MCA_GPIO]},
+	{ .compatible = "digi,mca-cc8x-gpio",
+	  .data = &mca_gpio_devdata[CC8X_MCA_GPIO]},
+	{ .compatible = "digi,mca-ioexp-gpio",
+	  .data = &mca_gpio_devdata[IOEXP_MCA_GPIO]},
+	{ /* sentinel */ }
+};
+MODULE_DEVICE_TABLE(of, mca_gpio_dt_ids);
+#endif
+
+static struct platform_driver mca_gpio_driver = {
+	.probe		= mca_gpio_probe,
+	.remove		= mca_gpio_remove,
+	.driver		= {
+		.name	= MCA_DRVNAME_GPIO,
+		.owner	= THIS_MODULE,
+#ifdef CONFIG_OF
+		.of_match_table = mca_gpio_dt_ids,
+#endif
+	},
+};
+
+static int __init mca_gpio_init(void)
+{
+	return platform_driver_register(&mca_gpio_driver);
+}
+module_init(mca_gpio_init);
+
+static void __exit mca_gpio_exit(void)
+{
+	platform_driver_unregister(&mca_gpio_driver);
+}
+module_exit(mca_gpio_exit);
+
+/* Module information */
+MODULE_AUTHOR("Digi International Inc.");
+MODULE_DESCRIPTION("GPIO device driver for MCA of ConnectCore Modules");
+MODULE_LICENSE("GPL v2");
+MODULE_ALIAS("platform:" MCA_DRVNAME_GPIO);
+
