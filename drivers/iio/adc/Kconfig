@@ -564,25 +564,16 @@ config MAX1363
 	  To compile this driver as a module, choose M here: the module will be
 	  called max1363.
 
-config MCA_CC6UL_ADC
-	tristate "Digi ConnectCore 6UL Micro Controller Assist ADC"
-	select MFD_MCA_CC6UL
+config MCA_ADC
+	tristate "Digi ConnectCore SOMs Micro Controller Assist ADC"
+	select MFD_MCA_CC6UL if SOC_IMX6UL
+	select MFD_MCA_CC8X if ARCH_FSL_IMX8QXP
 	help
 	  If you say Y here you will get support for the ADCs in the Micro
-	  Controller Assist of Digi ConnectCore 6UL system-on-module.
+	  Controller Assist of Digi ConnectCore system-on-modules.
 
 	  This driver can also be built as a module, if so, the module
-	  will be called "mca-cc6ul-adc".
-
-config MCA_CC8X_ADC
-	tristate "Digi ConnectCore 8X Micro Controller Assist ADC"
-	select MFD_MCA_CC8X
-	help
-	  If you say Y here you will get support for the ADCs in the Micro
-	  Controller Assist of Digi ConnectCore 8X system-on-module.
-
-	  This driver can also be built as a module, if so, the module
-	  will be called "mca-cc8x-adc".
+	  will be called "mca-adc".
 
 config	MAX9611
 	tristate "Maxim max9611/max9612 ADC driver"

@@ -68,15 +68,4 @@ struct mca_drv {
 	struct device *i2c_adapter_dev;
 };
 
-struct mca_adc {
-	struct device *dev;
-	struct regmap *regmap;
-	u32 vref;
-	int irq;
-};
-
-int mca_adc_probe(struct platform_device *pdev, struct device *mca_dev,
-		  struct regmap *regmap, int gpio_base, char const *dt_compat);
-int mca_adc_remove(struct platform_device *pdev, int gpio_base);
-
 #endif /* MFD_MCA_COMMON_CORE_H_ */

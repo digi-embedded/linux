@@ -1,6 +1,6 @@
-/* mca-common-adc.c - ADC driver for MCA devices.
+/* mca-adc.c - ADC driver for MCA devices.
  *
- * Copyright (C) 2017  Digi International Inc
+ * Copyright (C) 2017 - 2019  Digi International Inc
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -22,7 +22,7 @@
 #include <linux/iio/events.h>
 #include <linux/iio/iio.h>
 #include <linux/module.h>
-#include <linux/of.h>
+#include <linux/of_device.h>
 #include <linux/platform_device.h>
 #include <linux/regmap.h>
 #include <linux/mfd/mca-common/registers.h>
@@ -33,6 +33,27 @@
 #define MCA_ADC_MAX_VREF	MCA_VREF_uV(3.3)
 #define MCA_ADC_INT_VREF	MCA_VREF_uV(1.2)
 #define MCA_ADC_DEF_VREF	MCA_VREF_uV(3)
+
+#define MCA_DRVNAME_ADC		"mca-adc"
+
+#ifdef CONFIG_OF
+enum mca_adc_type {
+	CC6UL_MCA_ADC,
+	CC8X_MCA_ADC,
+	IOEXP_MCA_ADC,
+};
+
+struct mca_adc_data {
+	enum mca_adc_type devtype;
+};
+#endif
+
+struct mca_adc {
+	struct device *dev;
+	struct regmap *regmap;
+	u32 vref;
+	int irq;
+};
 
 int mca_adc_read_raw(struct iio_dev *indio_dev,
 		     struct iio_chan_spec const *channel, int *value,
@@ -673,9 +694,12 @@ static u32 get_vref(struct device *mca_dev, struct regmap *regmap,
 	return vref;
 }
 
-int mca_adc_probe(struct platform_device *pdev, struct device *mca_dev,
-		  struct regmap *regmap, int gpio_base, char const *dt_compat)
+static int mca_adc_probe(struct platform_device *pdev)
 {
+	struct mca_drv *mca = dev_get_drvdata(pdev->dev.parent);
+	struct device *mca_dev = mca->dev;
+	int gpio_base = mca->gpio_base;
+	struct regmap *regmap = mca->regmap;
 	struct mca_adc *mca_adc;
 	struct iio_dev *indio_dev;
 	struct device_node *np;
@@ -704,8 +728,13 @@ int mca_adc_probe(struct platform_device *pdev, struct device *mca_dev,
 
 	/* Find entry in device-tree */
 	if (mca_dev->of_node) {
+		const struct mca_adc_data *devdata =
+				    of_device_get_match_data(&pdev->dev);
+		const char * compatible = pdev->dev.driver->
+				    of_match_table[devdata->devtype].compatible;
+
 		/* Return if mca_adc node does not exist or if it is disabled */
-		np = of_find_compatible_node(mca_dev->of_node, NULL, dt_compat);
+		np = of_find_compatible_node(mca_dev->of_node, NULL, compatible);
 		if (!np || !of_device_is_available(np))
 			return -ENODEV;
 
@@ -841,19 +870,25 @@ error_dev_free:
 	return ret;
 }
 
-int mca_adc_remove(struct platform_device *pdev, int gpio_base)
+static int mca_adc_remove(struct platform_device *pdev)
 {
+	struct mca_drv *mca = dev_get_drvdata(pdev->dev.parent);
 	struct iio_dev *indio_dev = platform_get_drvdata(pdev);
 	struct iio_chan_spec *chan;
 	int i;
 	struct mca_adc *adc = iio_priv(indio_dev);
 
+	if (!mca) {
+		dev_err(&pdev->dev, "Received a NULL pointer in mca\n");
+		return -EINVAL;
+	}
+
 	/* Release allocated resources */
-	if (gpio_base >= 0) {
+	if (mca->gpio_base >= 0) {
 		for (i = 0, chan = (struct iio_chan_spec *)indio_dev->channels;
 		     i < indio_dev->num_channels;
 		     i++) {
-			devm_gpio_free(&pdev->dev, gpio_base + chan->channel);
+			devm_gpio_free(&pdev->dev, mca->gpio_base + chan->channel);
 		}
 	}
 
@@ -866,3 +901,58 @@ int mca_adc_remove(struct platform_device *pdev, int gpio_base)
 
 	return 0;
 }
+
+#ifdef CONFIG_OF
+static struct mca_adc_data mca_adc_devdata[] = {
+	[CC6UL_MCA_ADC] = {
+		.devtype = CC6UL_MCA_ADC,
+	},
+	[CC8X_MCA_ADC] = {
+		.devtype = CC8X_MCA_ADC,
+	},
+	[IOEXP_MCA_ADC] = {
+		.devtype = IOEXP_MCA_ADC,
+	},
+};
+
+static const struct of_device_id mca_adc_dt_ids[] = {
+	{ .compatible = "digi,mca-cc6ul-adc",
+	  .data = &mca_adc_devdata[CC6UL_MCA_ADC]},
+	{ .compatible = "digi,mca-cc8x-adc",
+	  .data = &mca_adc_devdata[CC8X_MCA_ADC]},
+	{ .compatible = "digi,mca-ioexp-adc",
+	  .data = &mca_adc_devdata[IOEXP_MCA_ADC]},
+	{ /* sentinel */ }
+};
+MODULE_DEVICE_TABLE(of, mca_adc_dt_ids);
+#endif
+
+static struct platform_driver mca_adc_driver = {
+	.probe		= mca_adc_probe,
+	.remove		= mca_adc_remove,
+	.driver		= {
+		.name	= MCA_DRVNAME_ADC,
+		.owner	= THIS_MODULE,
+#ifdef CONFIG_OF
+		.of_match_table = mca_adc_dt_ids,
+#endif
+	},
+};
+
+static int __init mca_adc_init(void)
+{
+	return platform_driver_register(&mca_adc_driver);
+}
+module_init(mca_adc_init);
+
+static void __exit mca_adc_exit(void)
+{
+	platform_driver_unregister(&mca_adc_driver);
+}
+module_exit(mca_adc_exit);
+
+/* Module information */
+MODULE_AUTHOR("Digi International Inc.");
+MODULE_DESCRIPTION("ADC device driver for MCA of ConnectCore Modules");
+MODULE_LICENSE("GPL v2");
+MODULE_ALIAS("platform:" MCA_DRVNAME_ADC);
