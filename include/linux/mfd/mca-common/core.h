@@ -75,21 +75,8 @@ struct mca_adc {
 	int irq;
 };
 
-struct mca_gpio {
-	void * parent;
-	struct regmap *regmap;
-	struct device *dev;
-	struct gpio_chip gc;
-	struct mutex irq_lock;
-	uint8_t irq_cfg[MCA_MAX_IOS];
-	uint8_t irq_capable[MCA_MAX_IO_BYTES];
-	int irq[MCA_MAX_GPIO_IRQ_BANKS];
-};
-
 int mca_adc_probe(struct platform_device *pdev, struct device *mca_dev,
 		  struct regmap *regmap, int gpio_base, char const *dt_compat);
 int mca_adc_remove(struct platform_device *pdev, int gpio_base);
-int mca_gpio_probe(struct platform_device *pdev, struct device *mca_dev,
-		   struct regmap *regmap, int *gpio_base, char const *dt_compat);
 
 #endif /* MFD_MCA_COMMON_CORE_H_ */
