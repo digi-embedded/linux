@@ -458,6 +458,16 @@ config MFD_MCA_CC8X
 	  Additional drivers must be enabled in order to use the functionality
 	  of the device (RTC, watchdog, ...).
 
+config MFD_MCA_IOEXP
+	bool "Digi IO Expander"
+	select MFD_CORE
+	select REGMAP_I2C
+	select REGMAP_IRQ
+	depends on I2C=y
+	help
+	  Select this option to enable support for the Digi IO Expander.
+	  This includes the GPIO and ADC drivers.
+
 config MFD_MXS_LRADC
 	tristate "Freescale i.MX23/i.MX28 LRADC"
 	depends on ARCH_MXS || COMPILE_TEST
