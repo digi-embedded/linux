@@ -1,5 +1,5 @@
 /*
- *  Copyright 2016, 2017 Digi International Inc
+ *  Copyright 2016 - 2019 Digi International Inc
  *
  *  This program is free software; you can redistribute  it and/or modify it
  *  under  the terms of  the GNU General  Public License as published by the
@@ -26,11 +26,11 @@ static const struct regmap_range mca_cc6ul_readable_ranges[] = {
 };
 
 static const struct regmap_range mca_cc6ul_writeable_ranges[] = {
-	regmap_reg_range(MCA_CC6UL_HWVER_SOM, MCA_CC6UL_HWVER_SOM),
-	regmap_reg_range(MCA_IRQ_STATUS_0, MCA_CC6UL_IRQ_MASK_3),
+	regmap_reg_range(MCA_HWVER_SOM, MCA_HWVER_SOM),
+	regmap_reg_range(MCA_IRQ_STATUS_0, MCA_IRQ_MASK_3),
 	regmap_reg_range(MCA_PWR_CTRL_0, MCA_PWR_KEY_GUARD),
-	regmap_reg_range(MCA_CC6UL_CTRL_UNLOCK_0, MCA_CC6UL_CTRL_UNLOCK_3),
-	regmap_reg_range(MCA_CC6UL_CTRL_0, MCA_CC6UL_CTRL_0),
+	regmap_reg_range(MCA_CTRL_UNLOCK_0, MCA_CTRL_UNLOCK_3),
+	regmap_reg_range(MCA_CTRL_0, MCA_CTRL_0),
 	regmap_reg_range(MCA_TAMPER0_CFG0, MCA_TAMPER0_EVENT),
 	regmap_reg_range(MCA_TAMPER1_CFG0, MCA_TAMPER1_EVENT),
 	regmap_reg_range(MCA_TAMPER2_CFG0, MCA_TAMPER2_THRESH_HI_H),
@@ -60,10 +60,10 @@ static const struct regmap_range mca_cc6ul_volatile_ranges[] = {
 	regmap_reg_range(MCA_TAMPER1_DATE_START, MCA_TAMPER1_EVENT),
 	regmap_reg_range(MCA_TAMPER2_DATE_START, MCA_TAMPER2_EVENT),
 	regmap_reg_range(MCA_TAMPER3_DATE_START, MCA_TAMPER3_EVENT),
-	regmap_reg_range(MCA_CC6UL_TIMER_TICK_0, MCA_CC6UL_TIMER_TICK_3),
-	regmap_reg_range(MCA_CC6UL_LAST_MCA_RESET_0, MCA_CC6UL_LAST_MCA_RESET_3),
-	regmap_reg_range(MCA_CC6UL_LAST_MPU_RESET_0, MCA_CC6UL_LAST_MPU_RESET_3),
-	regmap_reg_range(MCA_CC6UL_LAST_WAKEUP_REASON_0, MCA_CC6UL_LAST_WAKEUP_REASON_3),
+	regmap_reg_range(MCA_TIMER_TICK_0, MCA_TIMER_TICK_3),
+	regmap_reg_range(MCA_LAST_MCA_RESET_0, MCA_LAST_MCA_RESET_3),
+	regmap_reg_range(MCA_LAST_MPU_RESET_0, MCA_LAST_MPU_RESET_3),
+	regmap_reg_range(MCA_LAST_WAKEUP_REASON_0, MCA_LAST_WAKEUP_REASON_3),
 	regmap_reg_range(MCA_CC6UL_MPU_NVRAM_START, MCA_CC6UL_MPU_NVRAM_END),
 	regmap_reg_range(MCA_RTC_COUNT_YEAR_L, MCA_RTC_COUNT_SEC),
 	regmap_reg_range(MCA_GPIO_DATA_0, MCA_GPIO_DATA_7),
@@ -82,11 +82,11 @@ static const struct regmap_range mca_cc6ul_volatile_ranges[] = {
 	 *
 	 * For this reasons we will consider all registers volatile.
 	 */
-	regmap_reg_range(MCA_CC6UL_HWVER_SOM, MCA_CC6UL_HWVER_SOM),
-	regmap_reg_range(MCA_CC6UL_DEVICE_ID, MCA_CC6UL_UID_9),
-	regmap_reg_range(MCA_CC6UL_IRQ_MASK_0, MCA_CC6UL_IRQ_MASK_3),
+	regmap_reg_range(MCA_HWVER_SOM, MCA_HWVER_SOM),
+	regmap_reg_range(MCA_DEVICE_ID, MCA_UID_9),
+	regmap_reg_range(MCA_IRQ_MASK_0, MCA_IRQ_MASK_3),
 	regmap_reg_range(MCA_PWR_KEY_DEBOUNCE, MCA_PWR_KEY_GUARD),
-	regmap_reg_range(MCA_CC6UL_CTRL_0, MCA_CC6UL_CTRL_0),
+	regmap_reg_range(MCA_CTRL_0, MCA_CTRL_0),
 	regmap_reg_range(MCA_TAMPER0_CFG0, MCA_TAMPER0_DELAY_PWROFF),
 	regmap_reg_range(MCA_TAMPER1_CFG0, MCA_TAMPER1_DELAY_PWROFF),
 	regmap_reg_range(MCA_TAMPER2_CFG0, MCA_TAMPER2_THRESH_HI_H),
