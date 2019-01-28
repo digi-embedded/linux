@@ -1,5 +1,5 @@
 /*
- *  Copyright 2017 Digi International Inc
+ *  Copyright 2017 - 2019 Digi International Inc
  *
  *  This program is free software; you can redistribute  it and/or modify it
  *  under  the terms of  the GNU General  Public License as published by the
@@ -53,9 +53,9 @@ static const struct regmap_irq_chip mca_ioexp_irq_chip = {
 	.irqs = mca_ioexp_irqs,
 	.num_irqs = ARRAY_SIZE(mca_ioexp_irqs),
 	.num_regs = MCA_IOEXP_NUM_IRQ_REGS,
-	.status_base = MCA_IOEXP_IRQ_STATUS_0,
-	.mask_base = MCA_IOEXP_IRQ_MASK_0,
-	.ack_base = MCA_IOEXP_IRQ_STATUS_0,
+	.status_base = MCA_IRQ_STATUS_0,
+	.mask_base = MCA_IRQ_MASK_0,
+	.ack_base = MCA_IRQ_STATUS_0,
 	.init_ack_masked = true,
 };
 
