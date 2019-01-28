@@ -1,5 +1,5 @@
 /*
- *  Copyright 2017 Digi International Inc
+ *  Copyright 2017 - 2019 Digi International Inc
  *
  *  This program is free software; you can redistribute  it and/or modify it
  *  under  the terms of  the GNU General  Public License as published by the
@@ -24,7 +24,7 @@ static const struct regmap_range mca_ioexp_readable_ranges[] = {
 };
 
 static const struct regmap_range mca_ioexp_writeable_ranges[] = {
-	regmap_reg_range(MCA_IOEXP_IRQ_STATUS_0, MCA_IOEXP_IRQ_MASK_3),
+	regmap_reg_range(MCA_IRQ_STATUS_0, MCA_IRQ_MASK_3),
 	regmap_reg_range(MCA_GPIO_DIR_0, MCA_GPIO_IRQ_CFG_63),
 	regmap_reg_range(MCA_REG_ADC_CFG0_0, MCA_REG_ADC_CFG0_31),
 	regmap_reg_range(MCA_REG_ADC_CFG1_0, MCA_REG_ADC_CFG1_31),
@@ -33,7 +33,7 @@ static const struct regmap_range mca_ioexp_writeable_ranges[] = {
 
 static const struct regmap_range mca_ioexp_volatile_ranges[] = {
 	/* Real volatile registers */
-	regmap_reg_range(MCA_IOEXP_IRQ_STATUS_0, MCA_IOEXP_IRQ_STATUS_3),
+	regmap_reg_range(MCA_IRQ_STATUS_0, MCA_IRQ_STATUS_3),
 	regmap_reg_range(MCA_GPIO_DATA_0, MCA_GPIO_DATA_7),
 	regmap_reg_range(MCA_GPIO_IRQ_STATUS_0, MCA_GPIO_IRQ_STATUS_7),
 	regmap_reg_range(MCA_REG_ADC_VAL_L_0, MCA_REG_ADC_VAL_H_31),
@@ -49,8 +49,8 @@ static const struct regmap_range mca_ioexp_volatile_ranges[] = {
 	 *
 	 * For this reasons we will consider all registers volatile.
 	 */
-	regmap_reg_range(MCA_IOEXP_DEVICE_ID, MCA_IOEXP_UID_9),
-	regmap_reg_range(MCA_IOEXP_IRQ_MASK_0, MCA_IOEXP_IRQ_MASK_3),
+	regmap_reg_range(MCA_DEVICE_ID, MCA_UID_9),
+	regmap_reg_range(MCA_IRQ_MASK_0, MCA_IRQ_MASK_3),
 	regmap_reg_range(MCA_GPIO_NUM, MCA_GPIO_DIR_7),
 	regmap_reg_range(MCA_GPIO_IRQ_CFG_0, MCA_GPIO_IRQ_CFG_63),
 	regmap_reg_range(MCA_REG_ADC_NUM_CH, MCA_REG_ADC_NUM_BYTES),

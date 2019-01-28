@@ -1,5 +1,5 @@
 /*
- *  Copyright 2017 Digi International Inc
+ *  Copyright 2017 - 2019 Digi International Inc
  *
  *  This program is free software; you can redistribute  it and/or modify it
  *  under  the terms of  the GNU General  Public License as published by the
@@ -173,12 +173,12 @@ int mca_ioexp_suspend(struct device *dev)
 		goto exit;
 	}
 
-	error = read_reg_group(ioexp, MCA_IOEXP_IRQ_MASK_0,
+	error = read_reg_group(ioexp, MCA_IRQ_MASK_0,
 			       ioexp->preserved_regs->irq_mask.cnt,
 			       ioexp->preserved_regs->irq_mask.values);
 	if (error) {
 		dev_err(ioexp->dev,
-			"Failed to preserve MCA_IOEXP_IRQ_MASK registers.\n");
+			"Failed to preserve MCA_IRQ_MASK registers.\n");
 		goto exit;
 	}
 
@@ -259,12 +259,12 @@ int mca_ioexp_resume(struct device *dev)
 		dev_err(ioexp->dev,
 			"Failed to restore MCA_GPIO_IRQ_CFG registers.\n");
 
-	error = write_reg_group(ioexp, MCA_IOEXP_IRQ_MASK_0,
+	error = write_reg_group(ioexp, MCA_IRQ_MASK_0,
 				ioexp->preserved_regs->irq_mask.cnt,
 				ioexp->preserved_regs->irq_mask.values);
 	if (error)
 		dev_err(ioexp->dev,
-			"Failed to restore MCA_IOEXP_IRQ_MASK registers.\n");
+			"Failed to restore MCA_IRQ_MASK registers.\n");
 
 	error = write_reg_group(ioexp, MCA_REG_ADC_CFG0_0,
 				ioexp->preserved_regs->adc_cfg.cnt,
@@ -282,7 +282,7 @@ int mca_ioexp_device_init(struct mca_ioexp *ioexp, u32 irq)
 	int ret;
 	unsigned int val;
 
-	ret = regmap_read(ioexp->regmap, MCA_IOEXP_DEVICE_ID, &val);
+	ret = regmap_read(ioexp->regmap, MCA_DEVICE_ID, &val);
 	if (ret) {
 		dev_err(ioexp->dev,
 			"Cannot read MCA IO Expander Device ID (%d)\n",
@@ -297,7 +297,7 @@ int mca_ioexp_device_init(struct mca_ioexp *ioexp, u32 irq)
 		return -ENODEV;
 	}
 
-	ret = regmap_read(ioexp->regmap, MCA_IOEXP_HW_VER, &val);
+	ret = regmap_read(ioexp->regmap, MCA_HW_VER, &val);
 	if (ret) {
 		dev_err(ioexp->dev, "Cannot read MCA Hardware Version (%d)\n",
 			ret);
@@ -305,7 +305,7 @@ int mca_ioexp_device_init(struct mca_ioexp *ioexp, u32 irq)
 	}
 	ioexp->hw_version = (u8)val;
 
-	ret = regmap_bulk_read(ioexp->regmap, MCA_IOEXP_FW_VER_L, &val, 2);
+	ret = regmap_bulk_read(ioexp->regmap, MCA_FW_VER_L, &val, 2);
 	if (ret) {
 		dev_err(ioexp->dev,
 			"Cannot read MCA IO Expander Firmware Version (%d)\n",
