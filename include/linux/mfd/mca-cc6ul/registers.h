@@ -1,5 +1,5 @@
 /*
- *  Copyright 2017 Digi International Inc
+ *  Copyright 2017 - 2019 Digi International Inc
  *
  *  This program is free software; you can redistribute  it and/or modify it
  *  under  the terms of  the GNU General  Public License as published by the
@@ -13,75 +13,12 @@
 #include <linux/bitops.h>
 
 /* EP0: Control and status */
-#define MCA_CC6UL_DEVICE_ID		0x0001
-#define MCA_CC6UL_HW_VER		0x0002
-#define MCA_CC6UL_FW_VER_L		0x0003
-#define MCA_CC6UL_FW_VER_H		0x0004
-#define MCA_CC6UL_UID_0			0x0005
-#define MCA_CC6UL_UID_1			0x0006
-#define MCA_CC6UL_UID_2			0x0007
-#define MCA_CC6UL_UID_3			0x0008
-#define MCA_CC6UL_UID_4			0x0009
-#define MCA_CC6UL_UID_5			0x000A
-#define MCA_CC6UL_UID_6			0x000B
-#define MCA_CC6UL_UID_7			0x000C
-#define MCA_CC6UL_UID_8			0x000D
-#define MCA_CC6UL_UID_9			0x000E
-#define MCA_CC6UL_HWVER_SOM		0x000F
-
-#define MCA_CC6UL_IRQ_MASK_0		0x0024
-#define MCA_CC6UL_IRQ_MASK_1		0x0025
-#define MCA_CC6UL_IRQ_MASK_2		0x0026
-#define MCA_CC6UL_IRQ_MASK_3		0x0027
-
-#define MCA_CC6UL_CTRL_UNLOCK_0		0x002d
-#define MCA_CC6UL_CTRL_UNLOCK_1		0x002e
-#define MCA_CC6UL_CTRL_UNLOCK_2		0x002f
-#define MCA_CC6UL_CTRL_UNLOCK_3		0x0030
-
-#define MCA_CC6UL_CTRL_0		0x0031
-#define MCA_CC6UL_CTRL_1		0x0032
-
-#define MCA_CC6UL_TIMER_TICK_0		0x0057
-#define MCA_CC6UL_TIMER_TICK_1		0x0058
-#define MCA_CC6UL_TIMER_TICK_2		0x0059
-#define MCA_CC6UL_TIMER_TICK_3		0x005a
-
-#define MCA_CC6UL_LAST_MCA_RESET_0		0x0098
-#define MCA_CC6UL_LAST_MCA_RESET_3		0x009b
-#define MCA_CC6UL_LAST_MPU_RESET_0		0x009c
-#define MCA_CC6UL_LAST_MPU_RESET_3		0x009f
-#define MCA_CC6UL_LAST_WAKEUP_REASON_0		0x00a0
-#define MCA_CC6UL_LAST_WAKEUP_REASON_3		0x00a3
 #define MCA_CC6UL_MPU_NVRAM_START	0x00b0
 #define MCA_CC6UL_MPU_NVRAM_END		0x00b7
 
 /*
  * MCA registers bitfields
  */
-
-/* MCA_CC6UL_IRQ_MASK_0 (addr=0x0024) */
-#define MCA_CC6UL_M_RTC_ALARM	BIT(0)
-#define MCA_CC6UL_M_RTC_1HZ		BIT(1)
-#define MCA_CC6UL_M_WATCHDOG	BIT(2)
-#define MCA_CC6UL_M_PWR_SLEEP	BIT(3)
-#define MCA_CC6UL_M_PWR_OFF		BIT(4)
-#define MCA_CC6UL_M_TAMPER0		BIT(5)
-#define MCA_CC6UL_M_TAMPER1		BIT(6)
-#define MCA_CC6UL_M_ADC			BIT(7)
-
-/* MCA_CC6UL_IRQ_MASK_2 */
-#define MCA_CC6UL_M_TAMPER2		BIT(0)
-#define MCA_CC6UL_M_TAMPER3		BIT(1)
-#define MCA_CC6UL_M_UART		BIT(2)
-
-
-/* MCA_CC6UL_CTRL_0 (addr=0x0031) */
-#define MCA_CC6UL_RESET			BIT(0)
-#define MCA_CC6UL_EXT32K_EN		BIT(1)
-#define MCA_CC6UL_JMP_BL		BIT(2)
-#define MCA_CC6UL_VREF_EN		BIT(5)
-
 
 /* MCA_CC6UL_LAST_MCA_RESET_n (addr=0x0098 & 0x009b) */
 #define MCA_CC6UL_LAST_MCA_RST_LLW	BIT(0)

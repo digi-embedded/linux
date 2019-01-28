@@ -1,5 +1,5 @@
 /*
- *  Copyright 2016, 2017, 2018 Digi International Inc
+ *  Copyright 2016 - 2019 Digi International Inc
  *
  *  This program is free software; you can redistribute  it and/or modify it
  *  under  the terms of  the GNU General  Public License as published by the
@@ -274,7 +274,7 @@ static int mca_cc6ul_unlock_ctrl(struct mca_drv *mca)
 	int ret;
 	const uint8_t unlock_pattern[] = {'C', 'T', 'R', 'U'};
 
-	ret = regmap_bulk_write(mca->regmap, MCA_CC6UL_CTRL_UNLOCK_0,
+	ret = regmap_bulk_write(mca->regmap, MCA_CTRL_UNLOCK_0,
 				unlock_pattern, sizeof(unlock_pattern));
 	if (ret)
 		dev_warn(mca->dev, "failed to unlock CTRL registers (%d)\n",
@@ -285,7 +285,7 @@ static int mca_cc6ul_unlock_ctrl(struct mca_drv *mca)
 
 static int mca_cc6ul_get_tick_cnt(struct mca_drv *mca, u32 *tick)
 {
-	return regmap_bulk_read(mca->regmap, MCA_CC6UL_TIMER_TICK_0,
+	return regmap_bulk_read(mca->regmap, MCA_TIMER_TICK_0,
 				tick, sizeof(*tick));
 }
 
@@ -297,14 +297,14 @@ static ssize_t ext_32khz_show(struct device *dev, struct device_attribute *attr,
 	unsigned int val;
 	int ret;
 
-	ret = regmap_read(mca->regmap, MCA_CC6UL_CTRL_0, &val);
+	ret = regmap_read(mca->regmap, MCA_CTRL_0, &val);
 	if (ret) {
 		dev_err(mca->dev, "Cannot read MCA CTRL_0 register(%d)\n",
 			ret);
 		return 0;
 	}
 
-	return sprintf(buf, "%s\n", val & MCA_CC6UL_EXT32K_EN ?
+	return sprintf(buf, "%s\n", val & MCA_EXT32K_EN ?
 		       _enabled : _disabled);
 }
 
@@ -326,9 +326,9 @@ static ssize_t ext_32khz_store(struct device *dev, struct device_attribute *attr
 	if (ret)
 		return ret;
 
-	ret = regmap_update_bits(mca->regmap, MCA_CC6UL_CTRL_0,
-				 MCA_CC6UL_EXT32K_EN,
-				 enable ? MCA_CC6UL_EXT32K_EN : 0);
+	ret = regmap_update_bits(mca->regmap, MCA_CTRL_0,
+				 MCA_EXT32K_EN,
+				 enable ? MCA_EXT32K_EN : 0);
 	if (ret) {
 		dev_err(mca->dev, "Cannot update MCA CTRL_0 register (%d)\n", ret);
 		return ret;
@@ -345,14 +345,14 @@ static ssize_t vref_show(struct device *dev, struct device_attribute *attr,
 	unsigned int val;
 	int ret;
 
-	ret = regmap_read(mca->regmap, MCA_CC6UL_CTRL_0, &val);
+	ret = regmap_read(mca->regmap, MCA_CTRL_0, &val);
 	if (ret) {
 		dev_err(mca->dev, "Cannot read MCA CTRL_0 register(%d)\n",
 			ret);
 		return 0;
 	}
 
-	return sprintf(buf, "%s\n", val & MCA_CC6UL_VREF_EN ?
+	return sprintf(buf, "%s\n", val & MCA_VREF_EN ?
 	_enabled : _disabled);
 }
 
@@ -374,9 +374,9 @@ static ssize_t vref_store(struct device *dev, struct device_attribute *attr,
 	if (ret)
 		return ret;
 
-	ret = regmap_update_bits(mca->regmap, MCA_CC6UL_CTRL_0,
-				 MCA_CC6UL_VREF_EN,
-				 enable ? MCA_CC6UL_VREF_EN : 0);
+	ret = regmap_update_bits(mca->regmap, MCA_CTRL_0,
+				 MCA_VREF_EN,
+				 enable ? MCA_VREF_EN : 0);
 	if (ret) {
 		dev_err(mca->dev, "Cannot update MCA CTRL_0 register (%d)\n", ret);
 		return ret;
@@ -465,7 +465,7 @@ static ssize_t last_wakeup_reason_show(struct device *dev,
 	u32 last_wakeup_val;
 	int ret, i;
 
-	ret = regmap_bulk_read(mca->regmap, MCA_CC6UL_LAST_WAKEUP_REASON_0,
+	ret = regmap_bulk_read(mca->regmap, MCA_LAST_WAKEUP_REASON_0,
 			       &last_wakeup_val, sizeof(last_wakeup_val));
 	if (ret) {
 		dev_err(mca->dev,
@@ -664,7 +664,7 @@ int mca_cc6ul_resume(struct device *dev)
 	 * low power
 	 */
 	do {
-		ret = regmap_read(mca->regmap, MCA_CC6UL_DEVICE_ID, &val);
+		ret = regmap_read(mca->regmap, MCA_DEVICE_ID, &val);
 		if (!ret && mca->dev_id == (u8)val)
 			break;
 		udelay(50);
@@ -725,7 +725,7 @@ static int mca_cc6ul_restart_handler(struct notifier_block *nb,
 	const uint8_t unlock_pattern[] = {'C', 'T', 'R', 'U'};
 
 	do {
-		ret = regmap_bulk_write(mca->regmap, MCA_CC6UL_CTRL_UNLOCK_0,
+		ret = regmap_bulk_write(mca->regmap, MCA_CTRL_UNLOCK_0,
 					unlock_pattern, sizeof(unlock_pattern));
 		if (ret) {
 			dev_err(mca->dev, "failed to unlock ctrl regs (%d)\n",
@@ -733,8 +733,8 @@ static int mca_cc6ul_restart_handler(struct notifier_block *nb,
 			goto reset_retry;
 		}
 
-		ret = regmap_write(pmca->regmap, MCA_CC6UL_CTRL_0,
-				   MCA_CC6UL_RESET);
+		ret = regmap_write(pmca->regmap, MCA_CTRL_0,
+				   MCA_RESET);
 		if (ret)
 			dev_err(mca->dev, "failed to reset (%d)\n", ret);
 
@@ -786,7 +786,7 @@ int mca_cc6ul_device_init(struct mca_drv *mca, u32 irq)
 	int ret;
 	unsigned int val;
 
-	ret = regmap_read(mca->regmap, MCA_CC6UL_DEVICE_ID, &val);
+	ret = regmap_read(mca->regmap, MCA_DEVICE_ID, &val);
 	if (ret != 0) {
 		dev_err(mca->dev, "Cannot read MCA Device ID (%d)\n", ret);
 		return ret;
@@ -798,7 +798,7 @@ int mca_cc6ul_device_init(struct mca_drv *mca, u32 irq)
 		return -ENODEV;
 	}
 
-	ret = regmap_read(mca->regmap, MCA_CC6UL_HW_VER, &val);
+	ret = regmap_read(mca->regmap, MCA_HW_VER, &val);
 	if (ret != 0) {
 		dev_err(mca->dev, "Cannot read MCA Hardware Version (%d)\n",
 			ret);
@@ -806,7 +806,7 @@ int mca_cc6ul_device_init(struct mca_drv *mca, u32 irq)
 	}
 	mca->hw_version = (u8)val;
 
-	ret = regmap_bulk_read(mca->regmap, MCA_CC6UL_FW_VER_L, &val, 2);
+	ret = regmap_bulk_read(mca->regmap, MCA_FW_VER_L, &val, 2);
 	if (ret != 0) {
 		dev_err(mca->dev, "Cannot read MCA Firmware Version (%d)\n",
 			ret);
@@ -816,7 +816,7 @@ int mca_cc6ul_device_init(struct mca_drv *mca, u32 irq)
 	mca->fw_is_alpha = val & MCA_FW_VER_ALPHA_MASK ? true : false;
 
 	if (mca->fw_version >= MCA_MAKE_FW_VER(1, 2)) {
-		ret = regmap_bulk_read(mca->regmap, MCA_CC6UL_LAST_MCA_RESET_0,
+		ret = regmap_bulk_read(mca->regmap, MCA_LAST_MCA_RESET_0,
 				       &mca->last_mca_reset,
 				       sizeof(mca->last_mca_reset));
 		if (ret) {
@@ -825,7 +825,7 @@ int mca_cc6ul_device_init(struct mca_drv *mca, u32 irq)
 			return ret;
 		}
 
-		ret = regmap_bulk_read(mca->regmap, MCA_CC6UL_LAST_MPU_RESET_0,
+		ret = regmap_bulk_read(mca->regmap, MCA_LAST_MPU_RESET_0,
 				       &mca->last_mpu_reset,
 				       sizeof(mca->last_mpu_reset));
 		if (ret) {
@@ -838,7 +838,7 @@ int mca_cc6ul_device_init(struct mca_drv *mca, u32 irq)
 	/* Write the SOM hardware version to MCA register */
 	mca->som_hv = digi_get_som_hv();
 	if (mca->som_hv > 0) {
-		ret = regmap_write(mca->regmap, MCA_CC6UL_HWVER_SOM,
+		ret = regmap_write(mca->regmap, MCA_HWVER_SOM,
 				   mca->som_hv);
 		if (ret != 0)
 			dev_warn(mca->dev,
