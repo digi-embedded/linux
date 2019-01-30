@@ -729,20 +729,19 @@ static void lpuart32_start_tx(struct uart_port *port)
 	struct circ_buf *xmit = &sport->port.state->xmit;
 	unsigned long temp;
 
-	if (sport->port.rs485.flags & SER_RS485_ENABLED) {
-		if (gpio_is_valid(sport->rts_gpio))
-			gpio_set_value(sport->rts_gpio, sport->rts_act_low ? 0 : 1);
-
-		temp = lpuart32_read(port, UARTCTRL);
-		temp |= UARTCTRL_TCIE;
-		lpuart32_write(port, temp, UARTCTRL);
-	}
-
 	if (sport->lpuart_dma_tx_use) {
 		if (!uart_circ_empty(xmit) && !uart_tx_stopped(port))
 			lpuart_dma_tx(sport);
 	} else {
 		temp = lpuart32_read(port, UARTCTRL);
+
+		if (sport->port.rs485.flags & SER_RS485_ENABLED) {
+			if (gpio_is_valid(sport->rts_gpio))
+				gpio_set_value(sport->rts_gpio, sport->rts_act_low ? 0 : 1);
+
+			temp |= UARTCTRL_TCIE;
+		}
+
 		lpuart32_write(port, temp | UARTCTRL_TIE, UARTCTRL);
 		if (lpuart32_read(&sport->port, UARTSTAT) & UARTSTAT_TDRE)
 			lpuart32_transmit_buffer(sport);
