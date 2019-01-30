@@ -328,11 +328,11 @@ static int mca_gpio_irq_setup(struct mca_gpio *gpio)
 		}
 	}
 
-	ret = gpiochip_irqchip_add(&gpio->gc,
-				   &mca_gpio_irq_chip,
-				   0,
-				   handle_edge_irq,
-				   IRQ_TYPE_NONE);
+	ret = gpiochip_irqchip_add_nested(&gpio->gc,
+					  &mca_gpio_irq_chip,
+					  0,
+					  handle_edge_irq,
+					  IRQ_TYPE_NONE);
 	if (ret) {
 		dev_err(gpio->dev,
 			"Failed to connect irqchip to gpiochip (%d)\n", ret);
@@ -340,7 +340,7 @@ static int mca_gpio_irq_setup(struct mca_gpio *gpio)
 	}
 
 	/*
-	 * gpiochip_irqchip_add() sets .to_irq with its own implementation but
+	 * gpiochip_irqchip_add_nested() sets .to_irq with its own implementation but
 	 * we have to use our own version because not all GPIOs are irq capable.
 	 * Therefore, we overwrite it.
 	 */
@@ -349,10 +349,9 @@ static int mca_gpio_irq_setup(struct mca_gpio *gpio)
 	for (i = 0; i < MCA_MAX_GPIO_IRQ_BANKS; i++) {
 		if (gpio->irq[i] < 0)
 			continue;
-		gpiochip_set_chained_irqchip(&gpio->gc,
-					     &mca_gpio_irq_chip,
-					     gpio->irq[i],
-					     NULL);
+		gpiochip_set_nested_irqchip(&gpio->gc,
+					    &mca_gpio_irq_chip,
+					    gpio->irq[i]);
 	}
 
 	return 0;
