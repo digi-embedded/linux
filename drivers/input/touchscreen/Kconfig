@@ -385,6 +385,16 @@ config TOUCHSCREEN_FUJITSU
 	  To compile this driver as a module, choose M here: the
 	  module will be called fujitsu-ts.
 
+config TOUCHSCREEN_FUSION_7_10
+	tristate "Fusion touchscreen panel support"
+	depends on I2C
+	help
+	  Say Y here to enable support for the Fusion I2C touch
+	  driver.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called fusion.
+
 config TOUCHSCREEN_GOODIX
 	tristate "Goodix I2C touchscreen"
 	depends on I2C
