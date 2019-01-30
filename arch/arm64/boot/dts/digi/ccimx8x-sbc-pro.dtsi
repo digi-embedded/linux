@@ -605,7 +605,7 @@
 
 /* PCIE (Mini Card) */
 &pcieb {
-	epdev_on-supply = <&reg_3v3_pcie>;
+	vpcie-supply = <&reg_3v3_pcie>;
 };
 
 &pixel_combiner {
