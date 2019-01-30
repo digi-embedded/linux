@@ -591,10 +591,8 @@
 	pinctrl-0 = <&pinctrl_lpuart3>,
 		    <&pinctrl_flexcan3_lpuart3_gpios>;
 	pinctrl-assert-gpios = <&gpio3 23 GPIO_ACTIVE_LOW>;
+	/* Enable RS485 mode */
 	linux,rs485-enabled-at-boot-time;
-	/* Disable DMA on this port to let 'digi,rts-gpio' functionality work */
-	/delete-property/dmas;
-	/delete-property/dma-names;
 	digi,rts-gpio = <&gpio3 24 GPIO_ACTIVE_HIGH>;
 	status = "disabled";
 };
