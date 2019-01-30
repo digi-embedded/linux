@@ -74,7 +74,146 @@ static void lt8912_init(struct lt8912 *lt)
 	dev_info(lt->dev, "LT8912 ID: %02x, %02x\n",
 		 version[0], version[1]);
 
+#if 1
+//settings from lontium(lt8912(3).c
+//http://redmine.toradex.int/issues/40893
 	/* DigitalClockEn */
+	regmap_write(lt->regmap[0], 0x08, 0xff);
+	regmap_write(lt->regmap[0], 0x09, 0xff);
+	regmap_write(lt->regmap[0], 0x0a, 0xff);
+	regmap_write(lt->regmap[0], 0x0b, 0x7c);
+	regmap_write(lt->regmap[0], 0x0c, 0xff);
+
+	/* TxAnalog */
+	regmap_write(lt->regmap[0], 0x31, 0xa1);
+	regmap_write(lt->regmap[0], 0x32, 0xa1);
+	regmap_write(lt->regmap[0], 0x33, 0x03);
+	regmap_write(lt->regmap[0], 0x37, 0x00);
+	regmap_write(lt->regmap[0], 0x38, 0x22);
+	regmap_write(lt->regmap[0], 0x60, 0x82);
+
+	/* CbusAnalog */
+	regmap_write(lt->regmap[0], 0x39, 0x45);
+	regmap_write(lt->regmap[0], 0x3a, 0x00);
+	regmap_write(lt->regmap[0], 0x3b, 0x00);
+
+	/* HDMIPllAnalog */
+	regmap_write(lt->regmap[0], 0x44, 0x31);
+	regmap_write(lt->regmap[0], 0x55, 0x44);
+	regmap_write(lt->regmap[0], 0x57, 0x01);
+	regmap_write(lt->regmap[0], 0x5a, 0x02);
+
+	/* MIPIAnalog */
+	regmap_write(lt->regmap[0], 0x3e, 0xce);
+	regmap_write(lt->regmap[0], 0x3f, 0xd4);
+	regmap_write(lt->regmap[0], 0x41, 0x3c);
+
+	/* MipiBasicSet */
+	regmap_write(lt->regmap[1], 0x12, 0x04);
+	regmap_write(lt->regmap[1], 0x13, lanes % 4);
+	regmap_write(lt->regmap[1], 0x14, 0x00);
+
+	regmap_write(lt->regmap[1], 0x15, 0x00);
+	regmap_write(lt->regmap[1], 0x1a, 0x03);
+	regmap_write(lt->regmap[1], 0x1b, 0x03);
+
+	/* MIPIDig */
+	regmap_write(lt->regmap[1], 0x10, 0x01);
+	regmap_write(lt->regmap[1], 0x11, 0x0a);
+	regmap_write(lt->regmap[1], 0x18, hsync);
+	regmap_write(lt->regmap[1], 0x19, vsync);
+	regmap_write(lt->regmap[1], 0x1c, hactive);
+	regmap_write(lt->regmap[1], 0x1d, hactive >> 8);
+
+	regmap_write(lt->regmap[1], 0x2f, 0x0c);
+
+	regmap_write(lt->regmap[1], 0x34, htotal);
+	regmap_write(lt->regmap[1], 0x35, htotal >> 8);
+	regmap_write(lt->regmap[1], 0x36, vtotal);
+	regmap_write(lt->regmap[1], 0x37, vtotal >> 8);
+	regmap_write(lt->regmap[1], 0x38, vbp);
+	regmap_write(lt->regmap[1], 0x39, vbp >> 8);
+	regmap_write(lt->regmap[1], 0x3a, vfp);
+	regmap_write(lt->regmap[1], 0x3b, vfp >> 8);
+	regmap_write(lt->regmap[1], 0x3c, hbp);
+	regmap_write(lt->regmap[1], 0x3d, hbp >> 8);
+	regmap_write(lt->regmap[1], 0x3e, hfp);
+	regmap_write(lt->regmap[1], 0x3f, hfp >> 8);
+
+	/* DDSConfig */
+	regmap_write(lt->regmap[1], 0x4e, 0x6a);
+	regmap_write(lt->regmap[1], 0x4f, 0xad);
+	regmap_write(lt->regmap[1], 0x50, 0xf3);
+	regmap_write(lt->regmap[1], 0x51, 0x80);
+
+	regmap_write(lt->regmap[1], 0x1f, 0x5e);
+	regmap_write(lt->regmap[1], 0x20, 0x01);
+	regmap_write(lt->regmap[1], 0x21, 0x2c);
+	regmap_write(lt->regmap[1], 0x22, 0x01);
+	regmap_write(lt->regmap[1], 0x23, 0xfa);
+	regmap_write(lt->regmap[1], 0x24, 0x00);
+	regmap_write(lt->regmap[1], 0x25, 0xc8);
+	regmap_write(lt->regmap[1], 0x26, 0x00);
+	regmap_write(lt->regmap[1], 0x27, 0x5e);
+	regmap_write(lt->regmap[1], 0x28, 0x01);
+	regmap_write(lt->regmap[1], 0x29, 0x2c);
+	regmap_write(lt->regmap[1], 0x2a, 0x01);
+	regmap_write(lt->regmap[1], 0x2b, 0xfa);
+	regmap_write(lt->regmap[1], 0x2c, 0x00);
+	regmap_write(lt->regmap[1], 0x2d, 0xc8);
+	regmap_write(lt->regmap[1], 0x2e, 0x00);
+	regmap_write(lt->regmap[1], 0x42, 0x64);
+	regmap_write(lt->regmap[1], 0x43, 0x00);
+	regmap_write(lt->regmap[1], 0x44, 0x04);
+	regmap_write(lt->regmap[1], 0x45, 0x00);
+	regmap_write(lt->regmap[1], 0x46, 0x59);
+	regmap_write(lt->regmap[1], 0x47, 0x00);
+	regmap_write(lt->regmap[1], 0x48, 0xf2);
+	regmap_write(lt->regmap[1], 0x49, 0x06);
+	regmap_write(lt->regmap[1], 0x4a, 0x00);
+	regmap_write(lt->regmap[1], 0x4b, 0x72);
+	regmap_write(lt->regmap[1], 0x4c, 0x45);
+	regmap_write(lt->regmap[1], 0x4d, 0x00);
+	regmap_write(lt->regmap[1], 0x52, 0x08);
+	regmap_write(lt->regmap[1], 0x53, 0x00);
+	regmap_write(lt->regmap[1], 0x54, 0xb2);
+	regmap_write(lt->regmap[1], 0x55, 0x00);
+	regmap_write(lt->regmap[1], 0x56, 0xe4);
+	regmap_write(lt->regmap[1], 0x57, 0x0d);
+	regmap_write(lt->regmap[1], 0x58, 0x00);
+	regmap_write(lt->regmap[1], 0x59, 0xe4);
+	regmap_write(lt->regmap[1], 0x5a, 0x8a);
+	regmap_write(lt->regmap[1], 0x5b, 0x00);
+	regmap_write(lt->regmap[1], 0x5c, 0x34);
+	regmap_write(lt->regmap[1], 0x1e, 0x4f);
+	regmap_write(lt->regmap[1], 0x51, 0x00);
+
+	/* mipi rx soft reset */
+	regmap_write(lt->regmap[0], 0x03, 0x7f);
+	usleep_range(100000, 110000);
+	regmap_write(lt->regmap[0], 0x03, 0xff);
+
+	regmap_write(lt->regmap[0], 0xb2, 0x01);
+
+	/* Audio Disable */
+	regmap_write(lt->regmap[2], 0x06, 0x00);
+	regmap_write(lt->regmap[2], 0x07, 0x00);
+
+	regmap_write(lt->regmap[2], 0x34, 0xd2);
+
+	regmap_write(lt->regmap[2], 0x3c, 0x41);
+
+	/* MIPIRxLogicRes */
+	regmap_write(lt->regmap[0], 0x03, 0x7f);
+	usleep_range(10000, 20000);
+	regmap_write(lt->regmap[0], 0x03, 0xff);
+
+	regmap_write(lt->regmap[1], 0x51, 0x80);
+	usleep_range(10000, 20000);
+	regmap_write(lt->regmap[1], 0x51, 0x00);
+#else
+//settings from rockchip
+/* DigitalClockEn */
 	regmap_write(lt->regmap[0], 0x08, 0xff);
 	regmap_write(lt->regmap[0], 0x09, 0x81);
 	regmap_write(lt->regmap[0], 0x0a, 0xff);
@@ -207,6 +346,7 @@ static void lt8912_init(struct lt8912 *lt)
 	regmap_write(lt->regmap[1], 0x51, 0x80);
 	usleep_range(10000, 20000);
 	regmap_write(lt->regmap[1], 0x51, 0x00);
+#endif
 }
 
 static void lt8912_exit(struct lt8912 *lt)
