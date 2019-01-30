@@ -277,7 +277,7 @@ static int mca_gpio_to_irq(struct gpio_chip *gc, u32 offset)
 	if (!mca_gpio_is_irq_capable(gpio, offset))
 		return -EINVAL;
 
-	return irq_find_mapping(gc->irqdomain, offset);
+	return irq_create_mapping(gc->irqdomain, offset);
 }
 
 static struct irq_chip mca_gpio_irq_chip = {
