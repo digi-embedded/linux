@@ -1520,15 +1520,15 @@ static int lpuart32_config_rs485(struct uart_port *port,
 			rs485->flags &= ~SER_RS485_RTS_AFTER_SEND;
 
 		/*
-		 * The hardware defaults to RTS logic HIGH while transfer.
-		 * Switch polarity in case RTS shall be logic HIGH
+		 * The hardware defaults to RTS logic LOW while transfer.
+		 * Switch polarity in case RTS shall be logic LOW
 		 * after transfer.
 		 * Note: UART is assumed to be active high.
 		 */
 		if (rs485->flags & SER_RS485_RTS_ON_SEND)
-			modem &= ~UARTMODIR_TXRTSPOL;
-		else if (rs485->flags & SER_RS485_RTS_AFTER_SEND)
 			modem |= UARTMODIR_TXRTSPOL;
+		else if (rs485->flags & SER_RS485_RTS_AFTER_SEND)
+			modem &= ~UARTMODIR_TXRTSPOL;
 
 		/* Store the new configuration */
 		port->rs485 = *rs485;
@@ -2243,9 +2243,9 @@ lpuart32_set_termios(struct uart_port *port, struct ktermios *termios,
 		modem |= UARTMODIR_TXRTSE;
 
 		if (sport->port.rs485.flags & SER_RS485_RTS_ON_SEND)
-			modem &= ~UARTMODIR_TXRTSPOL;
-		else if (sport->port.rs485.flags & SER_RS485_RTS_AFTER_SEND)
 			modem |= UARTMODIR_TXRTSPOL;
+		else if (sport->port.rs485.flags & SER_RS485_RTS_AFTER_SEND)
+			modem &= ~UARTMODIR_TXRTSPOL;
 	}
 
 	if (termios->c_cflag & CRTSCTS) {
