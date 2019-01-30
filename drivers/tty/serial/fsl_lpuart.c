@@ -2608,15 +2608,16 @@ static int lpuart_probe(struct platform_device *pdev)
 		else
 			gpio_set_value(sport->rts_gpio, sport->rts_act_low ? 1 : 0);
 	}
+	else {
+		/* Enable DMA only when RS-485 rts-gpio is not defined */
+		sport->dma_tx_chan = dma_request_slave_channel(sport->port.dev, "tx");
+		if (!sport->dma_tx_chan)
+			dev_info(sport->port.dev, "NO DMA tx channel, run at cpu mode\n");
 
-	sport->dma_tx_chan = dma_request_slave_channel(sport->port.dev, "tx");
-	if (!sport->dma_tx_chan)
-		dev_info(sport->port.dev, "NO DMA tx channel, run at cpu mode\n");
-
-	sport->dma_rx_chan = dma_request_slave_channel(sport->port.dev, "rx");
-	if (!sport->dma_rx_chan)
-		dev_info(sport->port.dev, "NO DMA rx channel, run at cpu mode\n");
-
+		sport->dma_rx_chan = dma_request_slave_channel(sport->port.dev, "rx");
+		if (!sport->dma_rx_chan)
+			dev_info(sport->port.dev, "NO DMA rx channel, run at cpu mode\n");
+	}
 	return 0;
 
 failed_attach_port:
