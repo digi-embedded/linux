@@ -540,8 +540,8 @@ static inline void ov5640_reset(struct ov5640 *sensor)
 	}
 
 	if (gpio_is_valid(sensor->pwn_gpio)) {
-		udelay(1000);
 		gpio_set_value_cansleep(sensor->pwn_gpio, 0);
+		udelay(1000);
 	}
 
 	if (gpio_is_valid(sensor->rst_gpio)) {
