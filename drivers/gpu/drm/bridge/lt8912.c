@@ -122,22 +122,22 @@ static void lt8912_init(struct lt8912 *lt)
 	regmap_write(lt->regmap[1], 0x11, 0x0a);
 	regmap_write(lt->regmap[1], 0x18, hsync);
 	regmap_write(lt->regmap[1], 0x19, vsync);
-	regmap_write(lt->regmap[1], 0x1c, hactive);
+	regmap_write(lt->regmap[1], 0x1c, hactive % 0x100);
 	regmap_write(lt->regmap[1], 0x1d, hactive >> 8);
 
 	regmap_write(lt->regmap[1], 0x2f, 0x0c);
 
-	regmap_write(lt->regmap[1], 0x34, htotal);
+	regmap_write(lt->regmap[1], 0x34, htotal % 0x100);
 	regmap_write(lt->regmap[1], 0x35, htotal >> 8);
-	regmap_write(lt->regmap[1], 0x36, vtotal);
+	regmap_write(lt->regmap[1], 0x36, vtotal % 0x100);
 	regmap_write(lt->regmap[1], 0x37, vtotal >> 8);
-	regmap_write(lt->regmap[1], 0x38, vbp);
+	regmap_write(lt->regmap[1], 0x38, vbp % 0x100);
 	regmap_write(lt->regmap[1], 0x39, vbp >> 8);
-	regmap_write(lt->regmap[1], 0x3a, vfp);
+	regmap_write(lt->regmap[1], 0x3a, vfp % 0x100);
 	regmap_write(lt->regmap[1], 0x3b, vfp >> 8);
-	regmap_write(lt->regmap[1], 0x3c, hbp);
+	regmap_write(lt->regmap[1], 0x3c, hbp % 0x100);
 	regmap_write(lt->regmap[1], 0x3d, hbp >> 8);
-	regmap_write(lt->regmap[1], 0x3e, hfp);
+	regmap_write(lt->regmap[1], 0x3e, hfp % 0x100);
 	regmap_write(lt->regmap[1], 0x3f, hfp >> 8);
 
 	/* DDSConfig */
@@ -255,23 +255,23 @@ static void lt8912_init(struct lt8912 *lt)
 	/* MIPIDig */
 	regmap_write(lt->regmap[1], 0x18, hsync);
 	regmap_write(lt->regmap[1], 0x19, vsync);
-	regmap_write(lt->regmap[1], 0x1c, hactive);
+	regmap_write(lt->regmap[1], 0x1c, hactive % 0x100);
 	regmap_write(lt->regmap[1], 0x1d, hactive >> 8);
 
 	regmap_write(lt->regmap[1], 0x1e, 0x67);
 	regmap_write(lt->regmap[1], 0x2f, 0x0c);
 
-	regmap_write(lt->regmap[1], 0x34, htotal);
+	regmap_write(lt->regmap[1], 0x34, htotal % 0x100);
 	regmap_write(lt->regmap[1], 0x35, htotal >> 8);
-	regmap_write(lt->regmap[1], 0x36, vtotal);
+	regmap_write(lt->regmap[1], 0x36, vtotal % 0x100);
 	regmap_write(lt->regmap[1], 0x37, vtotal >> 8);
-	regmap_write(lt->regmap[1], 0x38, vbp);
+	regmap_write(lt->regmap[1], 0x38, vbp % 0x100);
 	regmap_write(lt->regmap[1], 0x39, vbp >> 8);
-	regmap_write(lt->regmap[1], 0x3a, vfp);
+	regmap_write(lt->regmap[1], 0x3a, vfp % 0x100);
 	regmap_write(lt->regmap[1], 0x3b, vfp >> 8);
-	regmap_write(lt->regmap[1], 0x3c, hbp);
+	regmap_write(lt->regmap[1], 0x3c, hbp % 0x100);
 	regmap_write(lt->regmap[1], 0x3d, hbp >> 8);
-	regmap_write(lt->regmap[1], 0x3e, hfp);
+	regmap_write(lt->regmap[1], 0x3e, hfp % 0x100);
 	regmap_write(lt->regmap[1], 0x3f, hfp >> 8);
 
 	/* DDSConfig */
