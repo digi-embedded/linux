@@ -494,7 +494,6 @@ static int imx_pcie_abort_handler(unsigned long addr,
 
 static void imx_pcie_assert_core_reset(struct imx_pcie *imx_pcie)
 {
-	struct device *dev = imx_pcie->pci->dev;
 	u32 val;
 	int i;
 
