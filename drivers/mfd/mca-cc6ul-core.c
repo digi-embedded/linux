@@ -18,6 +18,7 @@
 #include <linux/module.h>
 #include <linux/regmap.h>
 #include <linux/suspend.h>
+#include <linux/pm_runtime.h>
 #include <linux/proc_fs.h>
 #include <linux/kthread.h>
 #include <linux/uaccess.h>
@@ -938,6 +939,16 @@ int mca_cc6ul_device_init(struct mca_cc6ul *mca, u32 irq)
 	imx6_board_pm_end = mca_cc6ul_suspend_end;
 
 	/*
+	 * To avoid error messages when resuming from suspend, increase the I2C
+	 * bus' usage counter so the linux pm_runtime framework wakes it from
+	 * suspend before trying to read the MCA's IRQ status. This indicates that
+	 * the bus is in use when the system is going to suspend, making linux wake
+	 * it up as soon as possible so any operations that were halted continue
+	 * without issues after resuming.
+	 */
+	pm_runtime_get_noresume(mca->dev->parent->parent);
+
+	/*
 	 * Register the MCA restart handler with high priority to ensure it is
 	 * called first
 	 */
@@ -1001,6 +1012,7 @@ void mca_cc6ul_device_exit(struct mca_cc6ul *mca)
 	imx6_board_pm_end = NULL;
 	pm_power_off = NULL;
 	pmca = NULL;
+	pm_runtime_put_noidle(mca->dev->parent->parent);
 	sysfs_remove_group(&mca->dev->kobj, &mca_cc6ul_attr_group);
 	mfd_remove_devices(mca->dev);
 	mca_cc6ul_irq_exit(mca);
