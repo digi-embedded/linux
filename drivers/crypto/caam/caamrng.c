@@ -341,6 +341,7 @@ static struct hwrng caam_rng = {
 	.name		= "rng-caam",
 	.cleanup	= caam_cleanup,
 	.read		= caam_read,
+	.quality	= 999,
 };
 
 void caam_rng_exit(void)
