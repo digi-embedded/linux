@@ -1,0 +1,41 @@
+* Omnivision OV5642 CSI sensor
+
+Required Properties:
+- compatible: should be "ov564x"
+- clocks: reference to the xclk input clock.
+- clock-names: should be "xclk".
+- DOVDD-supply: Digital I/O voltage supply, 1.8 volts
+- AVDD-supply: Analog voltage supply, 2.8 volts
+- DVDD-supply: Digital core voltage supply, 1.5 volts
+- csi_id: csi id for v4l2 capture device
+
+Optional Properties:
+- pwn-gpios: set according to the board.
+- rst-gpios: set according to the board.
+
+The device node must contain one 'port' child node for its digital output
+video port, in accordance with the video interface bindings defined in
+Documentation/devicetree/bindings/media/video-interfaces.txt.
+
+Example:
+
+&i2c1 {
+	ov5642: ov5642@3c {
+		compatible = "ov564x";
+		reg = <0x3c>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_csi>;
+		clocks = <&clks IMX6UL_CLK_CSI>;
+		clock-names = "csi_mclk";
+		csi_id = <0>;
+		mclk = <24000000>;
+		mclk_source = <0>;
+		status = "disabled";
+		digi,defer-probe;
+		port {
+			ov5642_ep: endpoint {
+				remote-endpoint = <&csi_ep>;
+			};
+		};
+	};
+};
