@@ -198,6 +198,7 @@
 		mclk = <24000000>;
 		mclk_source = <0>;
 		status = "disabled";
+		digi,defer-probe;
 		port {
 			ov5642_ep: endpoint {
 				remote-endpoint = <&csi_ep>;
