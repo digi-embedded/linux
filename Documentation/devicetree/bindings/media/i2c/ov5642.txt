@@ -12,6 +12,10 @@ Required Properties:
 Optional Properties:
 - pwn-gpios: set according to the board.
 - rst-gpios: set according to the board.
+- digi,defer-probe: Voluntarily defer probe to give other camera sensors
+  the chance to probe first and if using digi,alt-pwn-gpios place this one
+  in power down so that they can reconfigure its i2c slave address (in case
+  of i2c slave address clash)
 
 The device node must contain one 'port' child node for its digital output
 video port, in accordance with the video interface bindings defined in
