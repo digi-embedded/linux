@@ -39,6 +39,8 @@
 #define GPIO_TOGGLE_REG(x)	(MCA_GPIO_TOGGLE_0 + ((x) / 8))
 #define GPIO_IRQ_STATUS_REG(x)	(MCA_GPIO_IRQ_STATUS_0 + (x))
 #define GPIO_IRQ_CFG_REG(x)	(MCA_GPIO_IRQ_CFG_0 + (x))
+#define GPIO_DEB_CFG_REG(x)	(MCA_GPIO_DEB_CFG_0 + ((x) / 8))
+#define GPIO_DEB_CNT_REG(x)	(MCA_GPIO_DEB_CNT_0 + (x))
 
 #define GPIO_CFG_UPDATE		BIT(6)
 #define GPIO_BYTE(i)		((i) / 8)
@@ -110,6 +112,45 @@ static int mca_gpio_direction_output(struct gpio_chip *gc, unsigned num,
 		return ret;
 
 	return 0;
+}
+
+#define MCA_GPIO_MAX_DEB_VAL_TIMER_50MS		(50 * 1000 * 255)
+#define MCA_GPIO_MAX_DEB_VAL_TIMER_1MS		(255 *  1000)
+
+static int mca_gpio_set_debounce(struct gpio_chip *gc, unsigned int num,
+				 unsigned int debounce)
+{
+	struct mca_gpio *gpio = to_mca_gpio(gc);
+	u8 deb_cnt;
+	int ret;
+
+	if (debounce > MCA_GPIO_MAX_DEB_VAL_TIMER_50MS) {
+		dev_err(gpio->dev, "Illegal value %u\n", debounce);
+		return -EINVAL;
+	} else if (debounce > MCA_GPIO_MAX_DEB_VAL_TIMER_1MS) {
+		/* Set timer cfg period to 50ms */
+		gpio->deb_timer_cfg[GPIO_BYTE(num)] |= 1 << BIT_OFFSET(num);
+		deb_cnt = (debounce + 49999) / 50000;
+	} else {
+		/* Set timer cfg period to 1ms */
+		gpio->deb_timer_cfg[GPIO_BYTE(num)] &= ~(1 << BIT_OFFSET(num));
+		deb_cnt = (debounce + 999) / 1000;
+	}
+
+	ret = regmap_write(gpio->regmap, GPIO_DEB_CFG_REG(num),
+			   gpio->deb_timer_cfg[GPIO_BYTE(num)]);
+	if (ret)
+		dev_err(gpio->dev, "Failed to write GPIO_DEB_CFG_REG(%d) (%d)\n",
+			num, ret);
+	else {
+		ret = regmap_write(gpio->regmap, GPIO_DEB_CNT_REG(num), deb_cnt);
+		if (ret)
+			dev_err(gpio->dev,
+				"Failed to write GPIO_DEB_CNT_REG(%d) (%d)\n",
+				num, ret);
+	}
+
+	return ret;
 }
 
 static irqreturn_t mca_gpio_irq_handler(int irq, void *data)
@@ -340,6 +381,7 @@ static struct gpio_chip reference_gc = {
 	.set			= mca_gpio_set,
 	.direction_input	= mca_gpio_direction_input,
 	.direction_output	= mca_gpio_direction_output,
+	.set_debounce		= mca_gpio_set_debounce,
 	.to_irq			= mca_gpio_to_irq,
 	.can_sleep		= 1,
 	.base			= -1,
