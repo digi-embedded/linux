@@ -117,37 +117,37 @@ static int mca_gpio_direction_output(struct gpio_chip *gc, unsigned num,
 #define MCA_GPIO_MAX_DEB_VAL_TIMER_50MS		(50 * 1000 * 255)
 #define MCA_GPIO_MAX_DEB_VAL_TIMER_1MS		(255 *  1000)
 
-static int mca_gpio_set_debounce(struct gpio_chip *gc, unsigned int num,
+static int mca_gpio_set_debounce(struct gpio_chip *gc, unsigned int gpio,
 				 unsigned int debounce)
 {
-	struct mca_gpio *gpio = to_mca_gpio(gc);
+	struct mca_gpio *mca_gc = to_mca_gpio(gc);
 	u8 deb_cnt;
 	int ret;
 
 	if (debounce > MCA_GPIO_MAX_DEB_VAL_TIMER_50MS) {
-		dev_err(gpio->dev, "Illegal value %u\n", debounce);
+		dev_err(mca_gc->dev, "Illegal value %u\n", debounce);
 		return -EINVAL;
 	} else if (debounce > MCA_GPIO_MAX_DEB_VAL_TIMER_1MS) {
 		/* Set timer cfg period to 50ms */
-		gpio->deb_timer_cfg[GPIO_BYTE(num)] |= 1 << BIT_OFFSET(num);
+		mca_gc->deb_timer_cfg[GPIO_BYTE(gpio)] |= 1 << BIT_OFFSET(gpio);
 		deb_cnt = (debounce + 49999) / 50000;
 	} else {
 		/* Set timer cfg period to 1ms */
-		gpio->deb_timer_cfg[GPIO_BYTE(num)] &= ~(1 << BIT_OFFSET(num));
+		mca_gc->deb_timer_cfg[GPIO_BYTE(gpio)] &= ~(1 << BIT_OFFSET(gpio));
 		deb_cnt = (debounce + 999) / 1000;
 	}
 
-	ret = regmap_write(gpio->regmap, GPIO_DEB_CFG_REG(num),
-			   gpio->deb_timer_cfg[GPIO_BYTE(num)]);
-	if (ret)
-		dev_err(gpio->dev, "Failed to write GPIO_DEB_CFG_REG(%d) (%d)\n",
-			num, ret);
-	else {
-		ret = regmap_write(gpio->regmap, GPIO_DEB_CNT_REG(num), deb_cnt);
+	ret = regmap_write(mca_gc->regmap, GPIO_DEB_CFG_REG(gpio),
+			   mca_gc->deb_timer_cfg[GPIO_BYTE(gpio)]);
+	if (ret) {
+		dev_err(mca_gc->dev, "Failed to write GPIO_DEB_CFG_REG(%d) (%d)\n",
+			gpio, ret);
+	} else {
+		ret = regmap_write(mca_gc->regmap, GPIO_DEB_CNT_REG(gpio), deb_cnt);
 		if (ret)
-			dev_err(gpio->dev,
+			dev_err(mca_gc->dev,
 				"Failed to write GPIO_DEB_CNT_REG(%d) (%d)\n",
-				num, ret);
+				gpio, ret);
 	}
 
 	return ret;
