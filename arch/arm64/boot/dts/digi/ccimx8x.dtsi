@@ -14,6 +14,29 @@
  */
 
 / {
+	firmware {
+		android {
+			compatible = "android,firmware";
+			fstab {
+				compatible = "android,fstab";
+				vendor {
+					compatible = "android,vendor";
+					dev = "/dev/block/platform/5b010000.usdhc/by-name/vendor";
+					/* SD card node which used if androidboot.storage_type=sd */
+					dev_sd = "/dev/block/platform/5b020000.usdhc/by-name/vendor";
+					/* EMMC node which used if androidboot.storage_type=emmc */
+					dev_emmc = "/dev/block/platform/5b010000.usdhc/by-name/vendor";
+					type = "ext4";
+					mnt_flags = "ro,barrier=1,inode_readahead_blks=8";
+					fsmgr_flags = "wait";
+					status = "okay";
+				};
+			};
+		};
+	};
+};
+
+/ {
 	aliases {
 		i2c0 = &i2c0;
 		i2c1 = &i2c1;
