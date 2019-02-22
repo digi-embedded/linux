@@ -69,7 +69,7 @@
 
 	port {
 		csi_ep: endpoint {
-			remote-endpoint = <&ov5642_ep>;
+			remote-endpoint = <&ov5640_ep>;
 		};
 	};
 };
@@ -201,6 +201,27 @@
 		digi,defer-probe;
 		port {
 			ov5642_ep: endpoint {
+				remote-endpoint = <&csi_ep>;
+			};
+		};
+	};
+
+	ov5640: ov5640@3c {
+		compatible = "ov5640";
+		reg = <0x3c>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_csi>;
+		clocks = <&clks IMX6UL_CLK_CSI>;
+		clock-names = "csi_mclk";
+		pwn-gpios = <&mca_ioexp_gpio 31 GPIO_ACTIVE_LOW>;
+		rst-gpios = <&mca_ioexp_gpio 22 GPIO_ACTIVE_HIGH>;
+		csi_id = <0>;
+		mclk = <24000000>;
+		mclk_source = <0>;
+		status = "disabled";
+		digi,defer-probe;
+		port {
+			ov5640_ep: endpoint {
 				remote-endpoint = <&csi_ep>;
 			};
 		};
