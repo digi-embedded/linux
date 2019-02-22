@@ -135,7 +135,7 @@ typedef enum _gceGOVERN_MODE
 gceGOVERN_MODE;
 #endif
 
-static int initgpu3DMinClock = 1;
+static int initgpu3DMinClock;
 module_param(initgpu3DMinClock, int, 0644);
 
 struct platform_device *pdevice;
@@ -1566,4 +1566,3 @@ int soc_platform_terminate(struct soc_platform *platform)
     free_priv();
     return 0;
 }
-
