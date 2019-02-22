@@ -161,7 +161,7 @@
  * Before enabling the camera you need to disable
  * usdhc2 node.
  */
-//&ov5642 {
+//&ov5640 {
 //	status = "okay";
 //};
 
