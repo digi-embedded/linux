@@ -54,6 +54,7 @@
 
 
 #include <linux/device.h>
+#include <linux/of.h>
 #include <linux/slab.h>
 #include <linux/miscdevice.h>
 #include <linux/uaccess.h>
@@ -214,7 +215,7 @@ static uint type = 0;
 module_param(type, uint, 0664);
 MODULE_PARM_DESC(type, "0 - Char Driver (Default), 1 - Misc Driver");
 
-static int gpu3DMinClock = 1;
+static int gpu3DMinClock;
 
 static int contiguousRequested = 0;
 
@@ -984,6 +985,17 @@ static int gpu_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 
         /* Update module param because drv_init() uses them directly. */
         _UpdateModuleParam(&moduleParam);
+    }
+
+    /* If undefined, set Freescale recommended value. Else use the min freq. */
+    if (gpu3DMinClock == 0) {
+        if (of_machine_is_compatible("fsl,imx6dl"))
+            gpu3DMinClock = 8;
+        else if (of_machine_is_compatible("fsl,imx6q") ||
+                 of_machine_is_compatible("fsl,imx6qp"))
+            gpu3DMinClock = 3;
+        else
+            gpu3DMinClock = 1;
     }
 
     ret = drv_init();
