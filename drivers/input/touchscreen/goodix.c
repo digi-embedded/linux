@@ -39,9 +39,7 @@
 #define GOODIX_CONFIG_967_LENGTH	228
 #define GOODIX_CONFIG_GT9X_LENGTH	240
 
-#define GOODIX_BUFFER_STATUS_READY	BIT(7)
-#define GOODIX_HAVE_KEY			BIT(4)
-#define GOODIX_BUFFER_STATUS_TIMEOUT	20
+#define GOODIX_HAVE_KEY                        BIT(4)
 
 #define RESOLUTION_LOC		1
 #define MAX_CONTACTS_LOC	5
@@ -228,59 +226,35 @@ static const struct goodix_chip_data *goodix_get_chip_data(const char *id)
 
 static int goodix_ts_read_input_report(struct goodix_ts_data *ts, u8 *data)
 {
-	unsigned long max_timeout;
 	int touch_num;
 	int error;
-	u16 addr = GOODIX_READ_COOR_ADDR;
-	/*
-	 * We are going to read 1-byte header,
-	 * ts->contact_size * max(1, touch_num) bytes of coordinates
-	 * and 1-byte footer which contains the touch-key code.
-	 */
-	const int header_contact_keycode_size = 1 + ts->contact_size + 1;
 
-	/*
-	 * The 'buffer status' bit, which indicates that the data is valid, is
-	 * not set as soon as the interrupt is raised, but slightly after.
-	 * This takes around 10 ms to happen, so we poll for 20 ms.
-	 */
-	max_timeout = jiffies + msecs_to_jiffies(GOODIX_BUFFER_STATUS_TIMEOUT);
-	do {
-		error = goodix_i2c_read(ts->client, addr, data,
-					header_contact_keycode_size);
-		if (error) {
-			dev_err(&ts->client->dev, "I2C transfer error: %d\n",
-					error);
+	error = goodix_i2c_read(ts->client, GOODIX_READ_COOR_ADDR, data,
+				GOODIX_CONTACT_SIZE + 1);
+	if (error) {
+		dev_err(&ts->client->dev, "I2C transfer error: %d\n", error);
+		return error;
+	}
+
+	if (!(data[0] & 0x80))
+		return -EAGAIN;
+
+	touch_num = data[0] & 0x0f;
+	if (touch_num > ts->max_touch_num)
+		return -EPROTO;
+
+	if (touch_num > 1) {
+		data += 1 + GOODIX_CONTACT_SIZE;
+		error = goodix_i2c_read(ts->client,
+					GOODIX_READ_COOR_ADDR +
+						1 + GOODIX_CONTACT_SIZE,
+					data,
+					GOODIX_CONTACT_SIZE * (touch_num - 1));
+		if (error)
 			return error;
-		}
+	}
 
-		if (data[0] & GOODIX_BUFFER_STATUS_READY) {
-			touch_num = data[0] & 0x0f;
-			if (touch_num > ts->max_touch_num)
-				return -EPROTO;
-
-			if (touch_num > 1) {
-				addr += header_contact_keycode_size;
-				data += header_contact_keycode_size;
-				error = goodix_i2c_read(ts->client,
-						addr, data,
-						ts->contact_size *
-							(touch_num - 1));
-				if (error)
-					return error;
-			}
-
-			return touch_num;
-		}
-
-		usleep_range(1000, 2000); /* Poll every 1 - 2 ms */
-	} while (time_before(jiffies, max_timeout));
-
-	/*
-	 * The Goodix panel will send spurious interrupts after a
-	 * 'finger up' event, which will always cause a timeout.
-	 */
-	return -ENOMSG;
+	return touch_num;
 }
 
 static void goodix_ts_report_touch_8b(struct goodix_ts_data *ts, u8 *coor_data)
