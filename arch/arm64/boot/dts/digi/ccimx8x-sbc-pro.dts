@@ -215,10 +215,20 @@
 //
 //&lvds1_goodix_touch1 {
 //	status = "okay";
+//	/*
+//	 * Uncomment if LVDS0 is also enabled so that the LVDS1 touch works in
+//	 * extended desktop configuration
+//	 */
+//	extends-desktop = <&lvds0>;
 //};
 //
 //&lvds1_goodix_touch2 {
 //	status = "okay";
+//	/*
+//	 * Uncomment if LVDS0 is also enabled so that the LVDS1 touch works in
+//	 * extended desktop configuration
+//	 */
+//	extends-desktop = <&lvds0>;
 //};
 
 
