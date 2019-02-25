@@ -56,6 +56,7 @@ struct goodix_ts_data {
 	unsigned int contact_size;
 	bool reload_fw_on_resume;
 	struct firmware cfg;
+	unsigned int extended_desktop_offset;
 };
 
 #define GOODIX_GPIO_INT_NAME		"irq"
@@ -312,6 +313,8 @@ static void goodix_ts_report_touch_9b(struct goodix_ts_data *ts, u8 *coor_data)
 	int input_x = get_unaligned_le16(&coor_data[3]);
 	int input_y = get_unaligned_le16(&coor_data[5]);
 	int input_w = get_unaligned_le16(&coor_data[7]);
+
+	input_x += ts->extended_desktop_offset;
 
 	input_mt_slot(ts->input_dev, id);
 	input_mt_report_slot_state(ts->input_dev, MT_TOOL_FINGER, true);
@@ -833,6 +836,7 @@ static int goodix_ts_probe(struct i2c_client *client,
 			   const struct i2c_device_id *id)
 {
 	struct goodix_ts_data *ts;
+	struct device_node *extends_desktop, *display_timings, *native_mode;
 	int error;
 
 	dev_dbg(&client->dev, "I2C Address: 0x%02x\n", client->addr);
@@ -880,6 +884,37 @@ static int goodix_ts_probe(struct i2c_client *client,
 
 	ts->reload_fw_on_resume = device_property_read_bool(&client->dev,
 						    "reload-fw-on-resume");
+
+	/* By default, the extended desktop offset is 0 */
+	ts->extended_desktop_offset = 0;
+	extends_desktop = of_parse_phandle(client->dev.of_node,
+	                                   "extends-desktop",
+	                                   0);
+
+	/* If the property exists, find the display's width (hactive value) */
+	if (extends_desktop) {
+		display_timings = of_get_child_by_name(extends_desktop,
+		                                       "display-timings");
+		if (!display_timings) {
+			dev_warn(&client->dev,
+			         "Display timings for extended desktop not found, using default 0 offset.\n");
+		} else {
+			native_mode = of_parse_phandle(display_timings,
+			                               "native-mode",
+			                               0);
+			if (!native_mode) {
+				dev_warn(&client->dev,
+				         "Native mode for extended desktop not found, using default 0 offset.\n");
+			} else {
+				error = of_property_read_u32(native_mode,
+				                             "hactive",
+				                             &ts->extended_desktop_offset);
+				if (error)
+					dev_warn(&client->dev,
+					         "hactive property for extended desktop not found, using default 0 offset.\n");
+			}
+		}
+	}
 
 	if (ts->gpiod_int) {
 		/* reset the controller */
