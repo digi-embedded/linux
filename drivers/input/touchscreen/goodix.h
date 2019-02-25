@@ -65,6 +65,7 @@ struct goodix_ts_data {
 	unsigned short keymap[GOODIX_MAX_KEYS];
 	bool reload_fw_on_resume;
 	struct firmware cfg;
+	unsigned int extended_desktop_offset;
 };
 
 int goodix_i2c_read(struct i2c_client *client, u16 reg, u8 *buf, int len);
