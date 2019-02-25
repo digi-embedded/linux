@@ -32,6 +32,11 @@ Optional properties:
 			  powering off the device during low power modes.
  - skip-firmware-request: Do not load the touch config through the kernel firm-
                           ware framework. Use the on chip configuration.
+ - extends-desktop	: used when the touch controller is on the secondary
+			  display of an extended desktop setup. In this case,
+			  the property is the phandle of the primary display.
+			  The driver will then parse the width of the display
+			  and add it as an offset to the X axis.
 
 Example:
 
