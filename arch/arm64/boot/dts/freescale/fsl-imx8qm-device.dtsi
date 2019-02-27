@@ -192,7 +192,7 @@
 
 		pd_lsio: PD_LSIO {
 			compatible = "nxp,imx8-pd";
-			reg = <SC_R_LAST>;
+			reg = <SC_R_NONE>;
 			#power-domain-cells = <0>;
 			#address-cells = <1>;
 			#size-cells = <0>;
@@ -331,7 +331,7 @@
 
 		pd_conn: PD_CONN {
 			compatible = "nxp,imx8-pd";
-			reg = <SC_R_LAST>;
+			reg = <SC_R_NONE>;
 			#power-domain-cells = <0>;
 			#address-cells = <1>;
 			#size-cells = <0>;
@@ -438,7 +438,7 @@
 
 		pd_hsio: PD_HSIO {
 			compatible = "nxp,imx8-pd";
-			reg = <SC_R_LAST>;
+			reg = <SC_R_NONE>;
 			#power-domain-cells = <0>;
 			#address-cells = <1>;
 			#size-cells = <0>;
@@ -492,7 +492,7 @@
 
 		pd_audio: PD_AUDIO {
 			compatible = "nxp,imx8-pd";
-			reg = <SC_R_LAST>;
+			reg = <SC_R_NONE>;
 			#power-domain-cells = <0>;
 			#address-cells = <1>;
 			#size-cells = <0>;
@@ -935,7 +935,7 @@
 
 		pd_dma: PD_DMA {
 			compatible = "nxp,imx8-pd";
-			reg = <SC_R_LAST>;
+			reg = <SC_R_NONE>;
 			#power-domain-cells = <0>;
 			#address-cells = <1>;
 			#size-cells = <0>;
@@ -1146,7 +1146,7 @@
 		};
 		pd_gpu: PD_GPU {
 			compatible = "nxp,imx8-pd";
-			reg = <SC_R_LAST>;
+			reg = <SC_R_NONE>;
 			#power-domain-cells = <0>;
 			#address-cells = <1>;
 			#size-cells = <0>;
@@ -1364,7 +1364,7 @@
 
 		pd_cm40: PD_CM40 {
 			compatible = "nxp,imx8-pd";
-			reg = <SC_R_LAST>;
+			reg = <SC_R_NONE>;
 			#power-domain-cells = <0>;
 			#address-cells = <1>;
 			#size-cells = <0>;
@@ -1384,7 +1384,7 @@
 
 		pd_cm41: PD_CM41 {
 			compatible = "nxp,imx8-pd";
-			reg = <SC_R_LAST>;
+			reg = <SC_R_NONE>;
 			#power-domain-cells = <0>;
 			#address-cells = <1>;
 			#size-cells = <0>;
@@ -1407,7 +1407,7 @@
 
 		pd_caam: PD_CAAM {
 			compatible = "nxp,imx8-pd";
-			reg = <SC_R_LAST>;
+			reg = <SC_R_NONE>;
 			#power-domain-cells = <0>;
 			#address-cells = <1>;
 			#size-cells = <0>;
