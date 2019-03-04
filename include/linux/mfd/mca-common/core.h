@@ -51,6 +51,7 @@ struct mca_gpio {
 	uint8_t irq_cfg[MCA_MAX_IOS];
 	uint8_t irq_capable[MCA_MAX_IO_BYTES];
 	uint8_t deb_timer_cfg[MCA_MAX_IO_BYTES];
+	uint8_t pwroff_wakeup_dis[MCA_MAX_IO_BYTES];
 	int irq[MCA_MAX_GPIO_IRQ_BANKS];
 };
 

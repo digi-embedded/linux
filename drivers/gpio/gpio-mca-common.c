@@ -56,6 +56,22 @@ static char const *const irq_gpio_bank_name[] = {
 	MCA_IRQ_GPIO_BANK_5_NAME,
 };
 
+static void mca_gpio_pwroff_wakeup_enable(struct mca_gpio *gpio, unsigned num,
+					  int enable)
+{
+	if (enable)
+		gpio->pwroff_wakeup_dis[GPIO_BYTE(num)] &=
+					~(1 << BIT_OFFSET(num));
+	else
+		gpio->pwroff_wakeup_dis[GPIO_BYTE(num)] |= 1 << BIT_OFFSET(num);
+}
+
+static bool mca_gpio_is_pwroff_wakeup_enabled(struct mca_gpio *gpio,
+					      unsigned num)
+{
+	return !(gpio->pwroff_wakeup_dis[GPIO_BYTE(num)] & (1 << BIT_OFFSET(num)));
+}
+
 static inline struct mca_gpio *to_mca_gpio(struct gpio_chip *chip)
 {
 	return gpiochip_get_data(chip);
@@ -282,6 +298,25 @@ static int mca_gpio_irq_set_type(struct irq_data *d, unsigned int type)
 	return 0;
 }
 
+static int mca_gpio_irq_set_wake(struct irq_data *d, unsigned int enable)
+{
+	struct gpio_chip *gc = irq_data_get_irq_chip_data(d);
+	struct mca_gpio *gpio = to_mca_gpio(gc);
+	u32 gpio_idx = d->hwirq;
+
+	/*
+	 * Update the wake up disable flag and set CFG_UPDATE to note that
+	 * the register was modified and has to be written back to the MCA in
+	 * mca_gpio_irq_bus_sync_unlock().
+	 */
+	if (enable)
+		gpio->irq_cfg[gpio_idx] &= ~MCA_GPIO_IRQ_S_WAKE_DIS;
+	else
+		gpio->irq_cfg[gpio_idx] |= MCA_GPIO_IRQ_S_WAKE_DIS;
+
+	return 0;
+}
+
 static int mca_gpio_to_irq(struct gpio_chip *gc, u32 offset)
 {
 	struct mca_gpio *gpio = to_mca_gpio(gc);
@@ -303,6 +338,7 @@ static struct irq_chip mca_gpio_irq_chip = {
 	.irq_bus_lock		= mca_gpio_irq_bus_lock,
 	.irq_bus_sync_unlock	= mca_gpio_irq_bus_sync_unlock,
 	.irq_set_type		= mca_gpio_irq_set_type,
+	.irq_set_wake		= mca_gpio_irq_set_wake,
 };
 
 static int mca_gpio_irq_setup(struct mca_gpio *gpio)
@@ -314,6 +350,9 @@ static int mca_gpio_irq_setup(struct mca_gpio *gpio)
 
 	for (i = 0; i < gpio->gc.ngpio; i++) {
 		gpio->irq_cfg[i] = 0;
+
+		if (!mca_gpio_is_pwroff_wakeup_enabled(gpio, i))
+			gpio->irq_cfg[i] |= MCA_GPIO_IRQ_O_WAKE_DIS;
 
 		ret = regmap_read(gpio->regmap, GPIO_IRQ_CFG_REG(i), &val);
 		if (ret) {
@@ -390,6 +429,8 @@ static struct gpio_chip reference_gc = {
 int mca_gpio_probe(struct platform_device *pdev, struct device *mca_dev,
 		   struct regmap *regmap, int *gpio_base, char const *dt_compat)
 {
+	struct property *prop;
+	const __be32 *p;
 	struct mca_gpio *gpio;
 	struct device_node *np;
 	unsigned int val;
@@ -427,6 +468,21 @@ int mca_gpio_probe(struct platform_device *pdev, struct device *mca_dev,
 		if (!of_device_is_available(np)) {
 			ret = -ENODEV;
 			goto err;
+		}
+
+		/* Get the list of IOs that can wake up from power off */
+		if (of_find_property(np, "pwroff-wakeup-capable-ios", NULL)) {
+			/* Disable all and enable those specified in the DT */
+			for (i = 0; i < MCA_MAX_GPIO_IRQ_BANKS; i++)
+				gpio->pwroff_wakeup_dis[i] = 0xff;
+
+			of_property_for_each_u32(np,
+						 "pwroff-wakeup-capable-ios",
+						 prop, p, val) {
+				if (val < MCA_MAX_IOS)
+					mca_gpio_pwroff_wakeup_enable(gpio, val,
+								      1);
+			}
 		}
 	}
 
