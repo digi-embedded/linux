@@ -98,6 +98,26 @@ static ssize_t direction_store(struct device *dev,
 }
 static DEVICE_ATTR_RW(direction);
 
+static ssize_t debounce_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	struct gpiod_data *data = dev_get_drvdata(dev);
+	struct gpio_desc *desc = data->desc;
+	ssize_t status;
+	unsigned int value;
+
+	mutex_lock(&data->mutex);
+
+	status = kstrtouint(buf, 0, &value);
+	if (status == 0)
+		status = gpiod_set_debounce(desc, value);
+
+	mutex_unlock(&data->mutex);
+
+	return status ? : size;
+}
+static DEVICE_ATTR_WO(debounce);
+
 static ssize_t value_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
@@ -386,6 +406,7 @@ static umode_t gpio_is_visible(struct kobject *kobj, struct attribute *attr,
 
 static struct attribute *gpio_attrs[] = {
 	&dev_attr_direction.attr,
+	&dev_attr_debounce.attr,
 	&dev_attr_edge.attr,
 	&dev_attr_value.attr,
 	&dev_attr_active_low.attr,
