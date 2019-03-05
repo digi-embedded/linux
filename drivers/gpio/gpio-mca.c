@@ -41,6 +41,8 @@
 #define GPIO_TOGGLE_REG(x)	(MCA_GPIO_TOGGLE_0 + ((x) / 8))
 #define GPIO_IRQ_STATUS_REG(x)	(MCA_GPIO_IRQ_STATUS_0 + (x))
 #define GPIO_IRQ_CFG_REG(x)	(MCA_GPIO_IRQ_CFG_0 + (x))
+#define GPIO_DEB_CFG_REG(x)	(MCA_GPIO_DEB_CFG_0 + ((x) / 8))
+#define GPIO_DEB_CNT_REG(x)	(MCA_GPIO_DEB_CNT_0 + (x))
 
 #define GPIO_CFG_UPDATE		BIT(6)
 #define GPIO_BYTE(i)		((i) / 8)
@@ -68,6 +70,7 @@ struct mca_gpio {
 	uint8_t irq_cfg[MCA_MAX_IOS];
 	uint8_t irq_capable[MCA_MAX_IO_BYTES];
 	int irq[MCA_MAX_GPIO_IRQ_BANKS];
+	uint8_t deb_timer_cfg[MCA_MAX_GPIO_IRQ_BANKS];
 };
 
 static char const *const irq_gpio_bank_name[] = {
@@ -135,6 +138,60 @@ static int mca_gpio_direction_output(struct gpio_chip *gc, unsigned num,
 		return ret;
 
 	return 0;
+}
+
+#define MCA_GPIO_MAX_DEB_VAL_TIMER_50MS		(50 * 1000 * 255)
+#define MCA_GPIO_MAX_DEB_VAL_TIMER_1MS		(255 * 1000)
+
+static int mca_gpio_set_debounce(struct gpio_chip *gc, unsigned int usecs,
+				 unsigned int debounce)
+{
+	struct mca_gpio *mca_gc = to_mca_gpio(gc);
+	u8 deb_cnt;
+	int ret;
+
+	if (debounce > MCA_GPIO_MAX_DEB_VAL_TIMER_50MS) {
+		dev_warn(mca_gc->dev, "Value out of range %u, setting %u instead\n",
+			debounce, MCA_GPIO_MAX_DEB_VAL_TIMER_50MS);
+			debounce = MCA_GPIO_MAX_DEB_VAL_TIMER_50MS;
+	}
+
+	if (debounce > MCA_GPIO_MAX_DEB_VAL_TIMER_1MS) {
+		/* Set timer cfg period to 50ms */
+		mca_gc->deb_timer_cfg[GPIO_BYTE(usecs)] |= 1 << BIT_OFFSET(usecs);
+		deb_cnt = (debounce + 49999) / 50000;
+	} else {
+		/* Set timer cfg period to 1ms */
+		mca_gc->deb_timer_cfg[GPIO_BYTE(usecs)] &= ~(1 << BIT_OFFSET(usecs));
+		deb_cnt = (debounce + 999) / 1000;
+	}
+
+	ret = regmap_write(mca_gc->regmap, GPIO_DEB_CFG_REG(usecs),
+			   mca_gc->deb_timer_cfg[GPIO_BYTE(usecs)]);
+	if (ret) {
+		dev_err(mca_gc->dev, "Failed to write GPIO_DEB_CFG_REG(%d) (%d)\n",
+			usecs, ret);
+	} else {
+		ret = regmap_write(mca_gc->regmap, GPIO_DEB_CNT_REG(usecs), deb_cnt);
+		if (ret)
+			dev_err(mca_gc->dev,
+				"Failed to write GPIO_DEB_CNT_REG(%d) (%d)\n",
+				usecs, ret);
+	}
+
+	return ret;
+}
+
+static int mca_gpio_set_config(struct gpio_chip *gc, unsigned int num,
+			       unsigned long config)
+{
+	enum pin_config_param param = pinconf_to_config_param(config);
+	u32 arg = pinconf_to_config_argument(config);
+
+	if (param != PIN_CONFIG_INPUT_DEBOUNCE)
+		return -ENOTSUPP;
+
+	return mca_gpio_set_debounce(gc, num, arg);
 }
 
 static irqreturn_t mca_gpio_irq_handler(int irq, void *data)
@@ -365,6 +422,7 @@ static struct gpio_chip reference_gc = {
 	.direction_input	= mca_gpio_direction_input,
 	.direction_output	= mca_gpio_direction_output,
 	.to_irq			= mca_gpio_to_irq,
+	.set_config		= mca_gpio_set_config,
 	.can_sleep		= 1,
 	.base			= -1,
 };
