@@ -94,6 +94,7 @@ struct pfuze_regulator {
 	struct regulator_desc desc;
 	unsigned char mode_on;
 	unsigned char mode_susp;
+	unsigned char mode_susp_current;
 	unsigned char mode_mask;
 	unsigned char stby_reg;
 	unsigned char stby_mask;
@@ -283,7 +284,7 @@ static int pfuze3000_buckreg_do_enable(struct regulator_dev *rdev, bool en)
 
 	mode_val = pfuze3000_get_mode_val(en ? pfuze_reg->mode_on :
 					  PFUZE_BUCK_REG_MODE_OFF,
-					  pfuze_reg->mode_susp);
+					  pfuze_reg->mode_susp_current);
 
 	return regmap_update_bits(pfuze->regmap,
 				  rdev->desc->vsel_reg + PFUZE100_MODE_OFFSET,
@@ -331,9 +332,10 @@ static int pfuze3000_buckreg_suspend_do_enable(struct regulator_dev *rdev, bool 
 	if (!pfuze_reg)
 		return -ENODEV;
 
+	pfuze_reg->mode_susp_current = en ? pfuze_reg->mode_susp :
+				       PFUZE_BUCK_REG_MODE_OFF;
 	mode_val = pfuze3000_get_mode_val(pfuze_reg->mode_on,
-					  en ? pfuze_reg->mode_susp :
-					  PFUZE_BUCK_REG_MODE_OFF);
+					  pfuze_reg->mode_susp_current);
 
 	return regmap_update_bits(pfuze->regmap,
 				  rdev->desc->vsel_reg + PFUZE100_MODE_OFFSET,
