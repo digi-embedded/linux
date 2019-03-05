@@ -25,6 +25,12 @@
 		/* U-Boot will fill in the MAC address here */
 	};
 
+	bt_rfkill {
+		compatible = "fsl,mxc_bt_rfkill";
+		bt-power-gpios = <&gpio3 10 GPIO_ACTIVE_HIGH>;
+		status ="okay";
+	};
+
 	regulators {
 		epdev_on: 3v3_rf_on {
 			compatible = "regulator-fixed";
