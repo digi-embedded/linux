@@ -218,7 +218,15 @@
 #define MCA_GPIO_IRQ_CFG_6		0x0338
 #define MCA_GPIO_IRQ_CFG_7		0x0339
 /* ... */
-#define MCA_GPIO_IRQ_CFG_63		0x0369
+#define MCA_GPIO_IRQ_CFG_63		0x0371
+
+#define MCA_GPIO_DEB_CFG_0		0x0372
+/* ... */
+#define MCA_GPIO_DEB_CFG_7		0x0379
+
+#define MCA_GPIO_DEB_CNT_0		0x037a
+/* ... */
+#define MCA_GPIO_DEB_CNT_63		0x03b9
 
 /* EP4, ADCs Configuration (0 - 31) */
 #define MCA_REG_ADC_NUM_CH		0x0401

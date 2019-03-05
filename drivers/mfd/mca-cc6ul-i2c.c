@@ -38,7 +38,7 @@ static const struct regmap_range mca_cc6ul_writeable_ranges[] = {
 	regmap_reg_range(MCA_RTC_CONTROL, MCA_RTC_CONTROL),
 	regmap_reg_range(MCA_RTC_COUNT_YEAR_L, MCA_RTC_ALARM_SEC),
 	regmap_reg_range(MCA_WDT_CONTROL, MCA_WDT_REFRESH_3),
-	regmap_reg_range(MCA_GPIO_DIR_0, MCA_GPIO_IRQ_CFG_63),
+	regmap_reg_range(MCA_GPIO_DIR_0, MCA_GPIO_DEB_CNT_63),
 	regmap_reg_range(MCA_REG_ADC_CFG0_0, MCA_REG_ADC_CFG0_7),
 	regmap_reg_range(MCA_REG_ADC_CFG1_0, MCA_REG_ADC_CFG1_7),
 	regmap_reg_range(MCA_REG_ADC_CFG2_0, MCA_REG_ADC_CFG2_7),
