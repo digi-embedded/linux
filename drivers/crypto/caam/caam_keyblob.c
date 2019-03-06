@@ -555,8 +555,8 @@ static long kb_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		goto err;
 	}
 
-	printk(KERN_INFO"%s:rawkey_len %d, keyblob_len %d\n",
-			__func__, kb_data.rawkey_len, kb_data.keyblob_len);
+	pr_info("%s:rawkey_len %zd, keyblob_len %zd\n", __func__,
+		kb_data.rawkey_len, kb_data.keyblob_len);
 
 	switch (cmd) {
 	case CAAM_KB_ENCRYPT:
