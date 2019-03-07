@@ -618,7 +618,6 @@ static int mtdcrypt_set_key(struct mtd_info *mtd)
 	char *keyblob_str = NULL;
 #if defined(CONFIG_CRYPTO_DEV_FSL_CAAM)
 	char *keymod = NULL;
-	bool using_default_keyblob_loc = false;
 #endif
 	int ret = 0;
 
@@ -674,9 +673,6 @@ static int mtdcrypt_set_key(struct mtd_info *mtd)
 		if (ret)
 			goto out_err1;
 	} else {
-#if defined(CONFIG_CRYPTO_DEV_FSL_CAAM)
-		using_default_keyblob_loc = true;
-#endif
 		/* Default values since dey-2.2-r2 */
 		keyblob_size = DEFAULT_KEY_BYTES + BLOB_OVERHEAD;
 		/* Safe partition in default mtdparts */
@@ -715,29 +711,6 @@ static int mtdcrypt_set_key(struct mtd_info *mtd)
 	ret = mtdcrypt_decrypt_key(crypt_info->jr_dev, keyblob_str,
 				keyblob_size, keymod,
 				crypt_info->key);
-	if (ret && using_default_keyblob_loc) {
-		/* Default values up to dey-2.2-r1 */
-		keyblob_size = DEFAULT_KEY_BYTES + BLOB_OVERHEAD;
-		/* environment partition in default mtdparts */
-		keyblob_part = 1;
-		/*
-		 * On the third erase block, after two erase blocks used
-		 * for the redundant U-Boot environments.
-		 */
-		keyblob_offset = mtd->crypt_info->erase_size * 2;
-
-		ret = mtdcrypt_get_key_from_part(keyblob_part, keyblob_size,
-						 keyblob_offset, keyblob_str);
-		if (ret) {
-			pr_err("mtdcrypt: reading default keyblob failed.\n");
-			ret = -EINVAL;
-			goto out_err2;
-		}
-
-		ret = mtdcrypt_decrypt_key(crypt_info->jr_dev, keyblob_str,
-					   keyblob_size, keymod,
-					   crypt_info->key);
-	}
 
 	if (ret) {
 		pr_err("mtdcrypt: Key decryption error.\n");
