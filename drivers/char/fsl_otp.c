@@ -3,6 +3,7 @@
  *
  * Copyright (C) 2010-2016 Freescale Semiconductor, Inc. All Rights Reserved.
  * Copyright 2017 NXP
+ * Copyright 2014-2019 Digi International Inc., All Rights Reserved
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -10,6 +11,7 @@
  */
 
 #include <linux/clk.h>
+#include <linux/clk-provider.h>
 #include <linux/delay.h>
 #include <linux/err.h>
 #include <linux/init.h>
@@ -25,6 +27,7 @@
 
 #define HW_OCOTP_CTRL			0x00000000
 #define HW_OCOTP_CTRL_SET		0x00000004
+#define HW_OCOTP_CTRL_CLR		0x00000008
 #define BP_OCOTP_CTRL_WR_UNLOCK		16
 #define BM_OCOTP_CTRL_WR_UNLOCK		0xFFFF0000
 #define BM_OCOTP_CTRL_RELOAD_SHADOWS	0x00000400
@@ -69,6 +72,8 @@
 #define BM_OUT_STATUS_DED_ULP		(1 << 10)
 
 #define HW_OCOTP_CUST_N(n)	(0x00000400 + (n) * 0x10)
+#define HW_OCTP_IDX_MAC0	0x22
+#define HW_OCTP_IDX_MAC1	0x23
 #define BF(value, field)	(((value) << BP_##field) & BM_##field)
 
 #define DEF_RELAX		20	/* > 16.5ns */
@@ -409,12 +414,76 @@ static int otp_wait_busy(u32 flags)
 		c = __raw_readl(otp_base + HW_OCOTP_CTRL);
 		if (!(c & (BM_OCOTP_CTRL_BUSY | BM_OCOTP_CTRL_ERROR | flags)))
 			break;
+		/* Clear error before attempting further OTP accesses */
+		if (c & (BM_OCOTP_CTRL_ERROR | flags))
+			__raw_writel(BM_OCOTP_CTRL_ERROR,
+				     otp_base + HW_OCOTP_CTRL_CLR);
 		cpu_relax();
 	}
 
 	if (count < 0)
 		return -ETIMEDOUT;
 
+	return 0;
+}
+
+static u32 fsl_otp_read(int index, u32 *value)
+{
+	int ret;
+
+	if (!fsl_otp)
+		return -ENODEV;
+
+	if (!__clk_is_enabled(otp_clk)) {
+	ret = clk_prepare_enable(otp_clk);
+	if (ret)
+		return -ENODEV;
+	}
+
+	mutex_lock(&otp_mutex);
+
+	fsl_otp->set_otp_timing();
+	ret = otp_wait_busy(0);
+	if (ret){
+		*value = 0;
+		goto out;
+	}
+
+	if (fsl_otp->devtype == FSL_OTP_MX7ULP) {
+		*value = __raw_readl(otp_base + HW_OCOTP_OUT_STATUS_ULP);
+		if (*value & BM_OUT_STATUS_DED_ULP) {
+			__raw_writel(BM_OUT_STATUS_DED_ULP, otp_base + HW_OCOTP_OUT_STATUS_CLR_ULP);
+			goto out;
+		}
+	}
+
+	*value = __raw_readl(otp_base + HW_OCOTP_CUST_N(index));
+
+	if (fsl_otp->devtype == FSL_OTP_MX7ULP) {
+		__raw_writel(1, otp_base + HW_OCOTP_PDN_ULP);
+	}
+
+out:
+	mutex_unlock(&otp_mutex);
+	/*
+	 * i.MX6UL hangs when the OTP clock is disabled during kernel boot.
+	 * The consumption for having the clock permanently active is
+	 * considered to be minimal.
+	 */
+// 	clk_disable_unprepare(otp_clk);
+	return ret;
+}
+
+int fsl_otp_get_hwid(unsigned int *hwid)
+{
+	unsigned int phy_index;
+	int i, j;
+
+	for (i = HW_OCTP_IDX_MAC0, j = 0; i <= HW_OCTP_IDX_MAC1; i++, j++) {
+		phy_index = fsl_otp_word_physical(fsl_otp, i);
+		if (fsl_otp_read(phy_index, &hwid[j]))
+			return -EPERM;
+	}
 	return 0;
 }
 
@@ -426,41 +495,12 @@ static ssize_t fsl_otp_show(struct kobject *kobj, struct kobj_attribute *attr,
 	u32 value = 0;
 	int ret;
 
-	if (!fsl_otp)
-		return -ENODEV;
-
-	ret = clk_prepare_enable(otp_clk);
-	if (ret)
-		return -ENODEV;
-
-	mutex_lock(&otp_mutex);
-
 	phy_index = fsl_otp_word_physical(fsl_otp, index);
-	fsl_otp->set_otp_timing();
-	ret = otp_wait_busy(0);
-	if (ret)
-		goto out;
-
-	if (fsl_otp->devtype == FSL_OTP_MX7ULP) {
-		value = __raw_readl(otp_base + HW_OCOTP_OUT_STATUS_ULP);
-		if (value & BM_OUT_STATUS_DED_ULP) {
-			__raw_writel(BM_OUT_STATUS_DED_ULP, otp_base + HW_OCOTP_OUT_STATUS_CLR_ULP);
-			goto out;
-		}
-	}
-
-	value = __raw_readl(otp_base + HW_OCOTP_CUST_N(phy_index));
-
-	if (fsl_otp->devtype == FSL_OTP_MX7ULP) {
-		__raw_writel(1, otp_base + HW_OCOTP_PDN_ULP);
-	}
-
-out:
-	mutex_unlock(&otp_mutex);
-	clk_disable_unprepare(otp_clk);
+	ret = fsl_otp_read(phy_index,&value);
 	return ret ? 0 : sprintf(buf, "0x%x\n", value);
 }
 
+#ifdef CONFIG_FSL_OTP_WRITE
 static int imx6_otp_write_bits(int addr, u32 data, u32 magic)
 {
 	u32 c; /* for control register */
@@ -565,9 +605,11 @@ static ssize_t fsl_otp_store(struct kobject *kobj, struct kobj_attribute *attr,
 	if (ret < 0)
 		return -EINVAL;
 
-	ret = clk_prepare_enable(otp_clk);
-	if (ret)
-		return -ENODEV;
+	if (!__clk_is_enabled(otp_clk)) {
+		ret = clk_prepare_enable(otp_clk);
+		if (ret)
+			return -ENODEV;
+	}
 
 	mutex_lock(&otp_mutex);
 
@@ -626,9 +668,15 @@ static ssize_t fsl_otp_store(struct kobject *kobj, struct kobj_attribute *attr,
 
 out:
 	mutex_unlock(&otp_mutex);
-	clk_disable_unprepare(otp_clk);
+	/*
+	 * i.MX6UL hangs when the OTP clock is disabled during kernel boot.
+	 * The consumption for having the clock permanently active is
+	 * considered to be minimal.
+	 */
+// 	clk_disable_unprepare(otp_clk);
 	return ret ? ret : count;
 }
+#endif /* CONFIG_FSL_OTP_WRITE */
 
 static const struct of_device_id fsl_otp_dt_ids[] = {
 	{ .compatible = "fsl,imx6q-ocotp", .data = (void *)&imx6q_data, },
@@ -642,6 +690,162 @@ static const struct of_device_id fsl_otp_dt_ids[] = {
 };
 MODULE_DEVICE_TABLE(of, fsl_otp_dt_ids);
 
+static int fsl_register_hwid(void) {
+	struct device_node *np = NULL;
+	u32 mac0, mac1;
+	char str[20];
+	struct property *hwidprop;
+	const char *hwidpropname;
+	int i;
+	const char *propnames[] = {
+		"digi,hwid,location",
+		"digi,hwid,variant",
+		"digi,hwid,hv",
+		"digi,hwid,cert",
+		"digi,hwid,year",
+		"digi,hwid,week",
+		"digi,hwid,genid",
+		"digi,hwid,sn",
+		"digi,hwid,wid",
+	};
+	const char *compat_machines[] = {
+		"digi,ccimx6",
+		"digi,ccimx6ul",
+	};
+
+	for (i = 0; i < ARRAY_SIZE(compat_machines); i++) {
+		np = of_find_compatible_node(NULL, NULL, compat_machines[i]);
+		if (np)
+			break;
+	}
+	if (!np)
+		return -EPERM;
+
+	/* Retrieve HWID from OTP bits */
+	if (fsl_otp_read(HW_OCTP_IDX_MAC0, &mac0) ||
+	    fsl_otp_read(HW_OCTP_IDX_MAC1, &mac1))
+		return -EPERM;
+
+	/*
+	 * Try to read the HWID fields from DT. If not found, create those
+	 * properties from the information on the OTP bits:
+	 *
+	 *                      MAC1 (Bank 4 Word 3)
+	 *
+	 *       | 31..26 | 25..20 | 19..16 |  15..8  | 7..4 | 3..0 |
+	 *       +--------+--------+--------+---------+------+------+
+	 * HWID: |  Year  |  Week  |  WID   | Variant |  HV  | Cert |
+	 *       +--------+--------+--------+---------+------+------+
+	 *
+	 *                      MAC0 (Bank 4 Word 2)
+	 *
+	 *       |  31..27  | 26..20 |         19..0           |
+	 *       +----------+--------+-------------------------+
+	 * HWID: | Location |  GenID |      Serial number      |
+	 *       +----------+--------+-------------------------+
+	 */
+	for (i = 0; i < ARRAY_SIZE(propnames); i++) {
+		if (of_property_read_string(np, propnames[i], &hwidpropname)) {
+			/* Convert HWID fields to strings */
+			if (!strcmp("digi,hwid,location", propnames[i]))
+				sprintf(str, "0x%02x", (mac0 >> 27) & 0x1f);
+			else if (!strcmp("digi,hwid,genid", propnames[i]))
+				sprintf(str, "%02d", (mac0 >> 20) & 0x7f);
+			else if (!strcmp("digi,hwid,sn", propnames[i]))
+				sprintf(str, "%d", mac0 & 0xfffff);
+			else if (!strcmp("digi,hwid,year", propnames[i]))
+				sprintf(str, "20%02d", (mac1 >> 26) & 0x3f);
+			else if (!strcmp("digi,hwid,week", propnames[i]))
+				sprintf(str, "%02d", (mac1 >> 20) & 0x3f);
+			else if (!strcmp("digi,hwid,variant", propnames[i]))
+				sprintf(str, "0x%02x", (mac1 >> 8) & 0xff);
+			else if (!strcmp("digi,hwid,hv", propnames[i]))
+				sprintf(str, "0x%x", (mac1 >> 4) & 0xf);
+			else if (!strcmp("digi,hwid,cert", propnames[i]))
+				sprintf(str, "0x%x", mac1 & 0xf);
+			else if (!strcmp("digi,hwid,wid", propnames[i]))
+				sprintf(str, "0x%x", (mac1 >> 16) & 0xf);
+			else
+				continue;
+
+			hwidprop = kzalloc(sizeof(*hwidprop) + strlen(str),
+				           GFP_KERNEL);
+			if (!hwidprop)
+				return -ENOMEM;
+
+			hwidprop->value = hwidprop + 1;
+			hwidprop->length = strlen(str);
+			hwidprop->name = kstrdup(propnames[i], GFP_KERNEL);
+			if (!hwidprop->name) {
+				kfree(hwidprop);
+				return -ENOMEM;
+			}
+			strncpy(hwidprop->value, str, strlen(str));
+			of_update_property(np, hwidprop);
+		}
+	}
+
+	return 0;
+}
+
+#define CONFIG_CARRIERBOARD_VERSION_BANK	4
+#define CONFIG_CARRIERBOARD_VERSION_WORD	6
+#define CONFIG_CARRIERBOARD_VERSION_MASK	0xf	/* 4 OTP bits */
+#define CONFIG_CARRIERBOARD_VERSION_OFFSET	0	/* lower 4 OTP bits */
+
+static int fsl_register_carrierboard(void) {
+	struct device_node *np = NULL;
+	const char *boardver_str;
+	int i;
+	const char *compat_machines[] = {
+		"digi,ccimx6sbc",
+		"digi,ccimx6ulstarter",
+		"digi,ccimx6ulsbc",
+	};
+
+	for (i = 0; i < ARRAY_SIZE(compat_machines); i++) {
+		np = of_find_compatible_node(NULL, NULL, compat_machines[i]);
+		if (np)
+			break;
+	}
+	if (!np)
+		return -EPERM;
+
+	if (of_property_read_string(np, "digi,carrierboard,version",
+				    &boardver_str)) {
+		int index;
+		u32 reg;
+		char str[20];
+		struct property *hwidprop;
+
+		/* Read OTP word containing the carrier board version */
+		index = (8 * CONFIG_CARRIERBOARD_VERSION_BANK) +
+			CONFIG_CARRIERBOARD_VERSION_WORD;
+		if (fsl_otp_read(index, &reg))
+			return -EPERM;
+
+		/* Convert carrier board field to string */
+		sprintf(str, "%d", (reg >> CONFIG_CARRIERBOARD_VERSION_OFFSET) &
+			CONFIG_CARRIERBOARD_VERSION_MASK);
+
+		hwidprop = kzalloc(sizeof(*hwidprop) + strlen(str), GFP_KERNEL);
+		if (!hwidprop)
+			return -ENOMEM;
+
+		hwidprop->value = hwidprop + 1;
+		hwidprop->length = strlen(str);
+		hwidprop->name = kstrdup("digi,carrierboard,version",
+					 GFP_KERNEL);
+		if (!hwidprop->name) {
+			kfree(hwidprop);
+			return -ENOMEM;
+		}
+		strncpy(hwidprop->value, str, strlen(str));
+		of_update_property(np, hwidprop);
+	}
+
+	return 0;
+}
 static int fsl_otp_probe(struct platform_device *pdev)
 {
 	struct resource *res;
@@ -689,9 +893,14 @@ static int fsl_otp_probe(struct platform_device *pdev)
 	for (i = 0; i < num; i++) {
 		sysfs_attr_init(&otp_kattr[i].attr);
 		otp_kattr[i].attr.name = desc[i];
+#ifdef CONFIG_FSL_OTP_WRITE
 		otp_kattr[i].attr.mode = 0600;
-		otp_kattr[i].show = fsl_otp_show;
 		otp_kattr[i].store = fsl_otp_store;
+#else
+		otp_kattr[i].attr.mode = 0400;
+		otp_kattr[i].store = NULL;
+#endif
+		otp_kattr[i].show = fsl_otp_show;
 		attrs[i] = &otp_kattr[i].attr;
 	}
 	otp_attr_group->attrs = attrs;
@@ -710,6 +919,15 @@ static int fsl_otp_probe(struct platform_device *pdev)
 	}
 
 	mutex_init(&otp_mutex);
+	/* Read the HWID from OTP bits and register it to DT if not already
+	 * there, to be exposed to the filesystem via procfs.
+	 */
+	fsl_register_hwid();
+
+	/* Read the carrier board from OTP bits and register it to DT if not
+	 * already there, to be exposed to the filesytem via procfs.
+	 */
+	fsl_register_carrierboard();
 
 	return 0;
 }
