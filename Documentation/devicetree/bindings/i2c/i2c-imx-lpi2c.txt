@@ -10,6 +10,10 @@ Required properties:
 
 Optional properties:
 - digi,hold-time-ns : Forces start, repeated start and stop i2c hold time
+- scl-gpios: specify the SCL pad GPIO related to SCL pin (required if using a "gpio" pinctrl)
+- sda-gpios: specify the SDA pad GPIO related to SDA pin (required if using a "gpio" pinctrl)
+- pinctrl: A pinctrl state named "gpio" may be defined to set pins as GPIOs
+  (for bit-banging recovery)
 
 Examples:
 
@@ -19,4 +23,20 @@ lpi2c7: lpi2c7@40a50000 {
 	interrupt-parent = <&intc>;
 	interrupts = <GIC_SPI 37 IRQ_TYPE_LEVEL_HIGH>;
 	clocks = <&clks IMX7ULP_CLK_LPI2C7>;
+};
+
+&i2c0 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	clocks = <&clk IMX8QXP_I2C0_CLK>,
+		 <&clk IMX8QXP_I2C0_IPG_CLK>;
+	clock-names = "per", "ipg";
+	assigned-clock-rates = <48000000>;
+	clock-frequency = <1000000>;
+	pinctrl-names = "default", "gpio";
+	digi,hold-time-ns = <8000>;
+	pinctrl-0 = <&pinctrl_lpi2c0>;
+	pinctrl-1 = <&pinctrl_lpi2c0_gpio>;
+	scl-gpios = <&gpio3 8 GPIO_ACTIVE_HIGH>;
+	sda-gpios = <&gpio3 7 GPIO_ACTIVE_HIGH>;
 };

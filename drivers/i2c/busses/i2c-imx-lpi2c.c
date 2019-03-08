@@ -622,6 +622,7 @@ static int lpi2c_imx_init_recovery_info(struct lpi2c_imx_struct *lpi2c_imx,
 			PINCTRL_STATE_DEFAULT);
 	lpi2c_imx->pinctrl_pins_gpio = pinctrl_lookup_state(lpi2c_imx->pinctrl,
 			"gpio");
+
 	rinfo->sda_gpiod = devm_gpiod_get(&pdev->dev, "sda", GPIOD_IN);
 	rinfo->scl_gpiod = devm_gpiod_get(&pdev->dev, "scl", GPIOD_OUT_HIGH_OPEN_DRAIN);
 
@@ -713,6 +714,12 @@ static int lpi2c_imx_probe(struct platform_device *pdev)
 	if (ret)
 		lpi2c_imx->hold_time = 0;
 
+	/* Init optional bus recovery function */
+	ret = lpi2c_imx_init_recovery_info(lpi2c_imx, pdev);
+	/* Give it another chance if pinctrl used is not ready yet */
+	if (ret == -EPROBE_DEFER)
+		goto rpm_disable;
+
 	i2c_set_adapdata(&lpi2c_imx->adapter, lpi2c_imx);
 	platform_set_drvdata(pdev, lpi2c_imx);
 
@@ -726,12 +733,6 @@ static int lpi2c_imx_probe(struct platform_device *pdev)
 	lpi2c_imx->rxfifosize = 1 << ((temp >> 8) & 0x0f);
 
 	pm_runtime_put(&pdev->dev);
-
-	/* Init optional bus recovery function */
-	ret = lpi2c_imx_init_recovery_info(lpi2c_imx, pdev);
-	/* Give it another chance if pinctrl used is not ready yet */
-	if (ret == -EPROBE_DEFER)
-		goto rpm_disable;
 
 	ret = i2c_add_adapter(&lpi2c_imx->adapter);
 	if (ret)
