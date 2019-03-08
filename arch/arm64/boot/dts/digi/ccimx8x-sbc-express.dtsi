@@ -131,8 +131,11 @@
 		 <&clk IMX8QXP_I2C2_IPG_CLK>;
 	clock-names = "per", "ipg";
 	clock-frequency = <100000>;
-	pinctrl-names = "default";
+	pinctrl-names = "default", "gpio";
 	pinctrl-0 = <&pinctrl_lpi2c2>;
+	pinctrl-1 = <&pinctrl_lpi2c2_gpio>;
+	scl-gpios = <&gpio1 31 GPIO_ACTIVE_HIGH>;
+	sda-gpios = <&gpio2 0 GPIO_ACTIVE_HIGH>;
 	status = "disabled";
 };
 
@@ -150,8 +153,11 @@
 &i2c0_mipi_lvds0 {
 	#address-cells = <1>;
 	#size-cells = <0>;
-	pinctrl-names = "default";
+	pinctrl-names = "default", "gpio";
 	pinctrl-0 = <&pinctrl_i2c0_mipi_lvds0>;
+	pinctrl-1 = <&pinctrl_i2c0_lvds0_gpio>;
+	scl-gpios = <&gpio1 25 GPIO_ACTIVE_HIGH>;
+	sda-gpios = <&gpio1 26 GPIO_ACTIVE_HIGH>;
 	clock-frequency = <100000>;
 	status = "disabled";
 
@@ -506,10 +512,24 @@
 		>;
 	};
 
+	pinctrl_i2c0_lvds0_gpio: lvds0_i2c0_gpio_grp {
+		fsl,pins = <
+			SC_P_MIPI_DSI0_I2C0_SCL_LSIO_GPIO1_IO25 0xc6000020
+			SC_P_MIPI_DSI0_I2C0_SDA_LSIO_GPIO1_IO26 0xc6000020
+		>;
+	};
+
 	pinctrl_lpi2c2: lpi2c2grp {
 		fsl,pins = <
-			SC_P_MIPI_DSI1_GPIO0_00_ADMA_I2C2_SCL	0x06000020
-			SC_P_MIPI_DSI1_GPIO0_01_ADMA_I2C2_SDA	0x06000020
+			SC_P_MIPI_DSI1_GPIO0_00_ADMA_I2C2_SCL	0xc6000020
+			SC_P_MIPI_DSI1_GPIO0_01_ADMA_I2C2_SDA	0xc6000020
+		>;
+	};
+
+	pinctrl_lpi2c2_gpio: lpi2c2gpiogrp {
+		fsl,pins = <
+			SC_P_MIPI_DSI1_GPIO0_00_LSIO_GPIO1_IO31	0xc6000020
+			SC_P_MIPI_DSI1_GPIO0_01_LSIO_GPIO2_IO00	0xc6000020
 		>;
 	};
 

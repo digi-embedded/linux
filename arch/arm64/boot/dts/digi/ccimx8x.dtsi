@@ -66,9 +66,12 @@
 	clock-names = "per", "ipg";
 	assigned-clock-rates = <48000000>;
 	clock-frequency = <1000000>;
-	pinctrl-names = "default";
+	pinctrl-names = "default", "gpio";
 	digi,hold-time-ns = <8000>;
 	pinctrl-0 = <&pinctrl_lpi2c0>;
+	pinctrl-1 = <&pinctrl_lpi2c0_gpio>;
+	scl-gpios = <&gpio3 8 GPIO_ACTIVE_HIGH>;
+	sda-gpios = <&gpio3 7 GPIO_ACTIVE_HIGH>;
 	status = "okay";
 
 	mca_cc8x: mca@63 {
@@ -190,8 +193,15 @@
 	/* Internal I2C (MCA, Crypto chip) */
 	pinctrl_lpi2c0: lpi2c0grp {
 		fsl,pins = <
-			SC_P_MIPI_CSI0_GPIO0_00_ADMA_I2C0_SCL	0x06000066
-			SC_P_MIPI_CSI0_GPIO0_01_ADMA_I2C0_SDA	0x06000066
+			SC_P_MIPI_CSI0_GPIO0_00_ADMA_I2C0_SCL	0xc6000066
+			SC_P_MIPI_CSI0_GPIO0_01_ADMA_I2C0_SDA	0xc6000066
+		>;
+	};
+
+	pinctrl_lpi2c0_gpio: lpi2c0gpiogrp {
+		fsl,pins = <
+			SC_P_MIPI_CSI0_GPIO0_00_LSIO_GPIO3_IO08	0xc6000066
+			SC_P_MIPI_CSI0_GPIO0_01_LSIO_GPIO3_IO07	0xc6000066
 		>;
 	};
 
