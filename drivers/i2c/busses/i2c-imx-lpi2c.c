@@ -28,6 +28,7 @@
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/of_device.h>
+#include <linux/of_gpio.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
@@ -112,22 +113,26 @@ enum lpi2c_imx_pincfg {
 };
 
 struct lpi2c_imx_struct {
-	struct i2c_adapter	adapter;
-	int			irq;
-	struct clk		*clk_per;
-	struct clk		*clk_ipg;
-	void __iomem		*base;
-	__u8			*rx_buf;
-	__u8			*tx_buf;
-	struct completion	complete;
-	unsigned int		msglen;
-	unsigned int		delivered;
-	unsigned int		block_data;
-	unsigned int		bitrate;
-	unsigned int		txfifosize;
-	unsigned int		rxfifosize;
-	enum lpi2c_imx_mode	mode;
-	unsigned int		hold_time;
+	struct i2c_adapter		adapter;
+	int				irq;
+	struct clk			*clk_per;
+	struct clk			*clk_ipg;
+	void __iomem			*base;
+	__u8				*rx_buf;
+	__u8				*tx_buf;
+	struct completion		complete;
+	unsigned int			msglen;
+	unsigned int			delivered;
+	unsigned int			block_data;
+	unsigned int			bitrate;
+	unsigned int			txfifosize;
+	unsigned int			rxfifosize;
+	enum lpi2c_imx_mode		mode;
+	unsigned int			hold_time;
+	struct i2c_bus_recovery_info 	rinfo;
+	struct pinctrl 			*pinctrl;
+	struct pinctrl_state 		*pinctrl_pins_default;
+	struct pinctrl_state 		*pinctrl_pins_gpio;
 };
 
 static void lpi2c_imx_intctrl(struct lpi2c_imx_struct *lpi2c_imx,
@@ -580,6 +585,69 @@ ret:
 	return IRQ_HANDLED;
 }
 
+static void lpi2c_imx_prepare_recovery(struct i2c_adapter *adap)
+{
+	struct lpi2c_imx_struct *lpi2c_imx;
+
+	lpi2c_imx = container_of(adap, struct lpi2c_imx_struct, adapter);
+	pinctrl_select_state(lpi2c_imx->pinctrl, lpi2c_imx->pinctrl_pins_gpio);
+}
+
+static void lpi2c_imx_unprepare_recovery(struct i2c_adapter *adap)
+{
+	struct lpi2c_imx_struct *lpi2c_imx;
+
+	lpi2c_imx = container_of(adap, struct lpi2c_imx_struct, adapter);
+	pinctrl_select_state(lpi2c_imx->pinctrl, lpi2c_imx->pinctrl_pins_default);
+}
+
+/*
+ * We switch SCL and SDA to their GPIO function and do some bitbanging
+ * for bus recovery. These alternative pinmux settings can be
+ * described in the device tree by a separate pinctrl state "gpio". If
+ * this is missing this is not a big problem, the only implication is
+ * that we can't do bus recovery.
+ */
+static int lpi2c_imx_init_recovery_info(struct lpi2c_imx_struct *lpi2c_imx,
+					struct platform_device *pdev)
+{
+	struct i2c_bus_recovery_info *rinfo = &lpi2c_imx->rinfo;
+
+	lpi2c_imx->pinctrl = devm_pinctrl_get(&pdev->dev);
+	if (!lpi2c_imx->pinctrl || IS_ERR(lpi2c_imx->pinctrl)) {
+		dev_info(&pdev->dev, "can't get pinctrl, bus recovery not supported\n");
+		return PTR_ERR(lpi2c_imx->pinctrl);
+	}
+
+	lpi2c_imx->pinctrl_pins_default = pinctrl_lookup_state(lpi2c_imx->pinctrl,
+			PINCTRL_STATE_DEFAULT);
+	lpi2c_imx->pinctrl_pins_gpio = pinctrl_lookup_state(lpi2c_imx->pinctrl,
+			"gpio");
+	rinfo->sda_gpio = of_get_named_gpio(pdev->dev.of_node, "sda-gpios", 0);
+	rinfo->scl_gpio = of_get_named_gpio(pdev->dev.of_node, "scl-gpios", 0);
+
+	if (rinfo->sda_gpio == -EPROBE_DEFER ||
+	    rinfo->scl_gpio == -EPROBE_DEFER) {
+		return -EPROBE_DEFER;
+	} else if (!gpio_is_valid(rinfo->sda_gpio) ||
+		   !gpio_is_valid(rinfo->scl_gpio) ||
+		   IS_ERR(lpi2c_imx->pinctrl_pins_default) ||
+		   IS_ERR(lpi2c_imx->pinctrl_pins_gpio)) {
+		dev_warn(&pdev->dev, "recovery information incomplete\n");
+		return 0;
+	}
+
+	dev_dbg(&pdev->dev, "using scl-gpio %d and sda-gpio %d for recovery\n",
+		rinfo->scl_gpio, rinfo->sda_gpio);
+
+	rinfo->prepare_recovery = lpi2c_imx_prepare_recovery;
+	rinfo->unprepare_recovery = lpi2c_imx_unprepare_recovery;
+	rinfo->recover_bus = i2c_generic_gpio_recovery;
+	lpi2c_imx->adapter.bus_recovery_info = rinfo;
+
+	return 0;
+}
+
 static u32 lpi2c_imx_func(struct i2c_adapter *adapter)
 {
 	return I2C_FUNC_I2C | I2C_FUNC_SMBUS_EMUL |
@@ -648,6 +716,12 @@ static int lpi2c_imx_probe(struct platform_device *pdev)
 				   "digi,hold-time-ns", &lpi2c_imx->hold_time);
 	if (ret)
 		lpi2c_imx->hold_time = 0;
+
+	/* Init optional bus recovery function */
+	ret = lpi2c_imx_init_recovery_info(lpi2c_imx, pdev);
+	/* Give it another chance if pinctrl used is not ready yet */
+	if (ret == -EPROBE_DEFER)
+		goto rpm_disable;
 
 	i2c_set_adapdata(&lpi2c_imx->adapter, lpi2c_imx);
 	platform_set_drvdata(pdev, lpi2c_imx);
