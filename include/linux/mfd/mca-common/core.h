@@ -36,7 +36,9 @@
 #define MCA_IRQ_TAMPER2_NAME		"TAMPER2"
 #define MCA_IRQ_TAMPER3_NAME		"TAMPER3"
 #define MCA_IRQ_ADC_NAME		"ADC"
-#define MCA_IRQ_UART_NAME		"UART"
+#define MCA_IRQ_UART0_NAME		"UART0"
+#define MCA_IRQ_UART1_NAME		"UART1"
+#define MCA_IRQ_UART2_NAME		"UART2"
 
 /* Number of interrupt registers */
 #define MCA_NUM_IRQ_REGS		4

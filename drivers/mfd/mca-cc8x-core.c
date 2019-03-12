@@ -225,9 +225,21 @@ static struct resource mca_cc8x_gpios_resources[] = {
 
 static struct resource mca_cc8x_uart_resources[] = {
 	{
-		.name   = MCA_IRQ_UART_NAME,
-		.start  = MCA_CC8X_IRQ_UART,
-		.end    = MCA_CC8X_IRQ_UART,
+		.name   = MCA_IRQ_UART0_NAME,
+		.start  = MCA_CC8X_IRQ_UART0,
+		.end    = MCA_CC8X_IRQ_UART0,
+		.flags  = IORESOURCE_IRQ,
+	},
+	{
+		.name   = MCA_IRQ_UART1_NAME,
+		.start  = MCA_CC8X_IRQ_UART1,
+		.end    = MCA_CC8X_IRQ_UART1,
+		.flags  = IORESOURCE_IRQ,
+	},
+	{
+		.name   = MCA_IRQ_UART2_NAME,
+		.start  = MCA_CC8X_IRQ_UART2,
+		.end    = MCA_CC8X_IRQ_UART2,
 		.flags  = IORESOURCE_IRQ,
 	},
 };
