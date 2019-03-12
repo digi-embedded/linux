@@ -322,6 +322,28 @@
 //	digi,tamper-if-list = <0 1 2 3>;
 //};
 
+&mca_uart {
+	status = "okay";
+
+	/* Uncomment to enable MCA UART0. Provide the IO pins to use for it */
+//	mca_uart0: serial@0x900 {
+//		iopins-names = "rx", "tx";
+//		iopins = <9 10>;
+//	};
+
+	/* Uncomment to enable MCA UART1. Provide the IO pins to use for it */
+//	mca_uart1: serial@0x920 {
+//		iopins-names = "rx", "tx";
+//		iopins = <11 16>;
+//	};
+
+	/* UART connected to XBee socket */
+	mca_uart2: serial@940 {
+		iopins-names = "rx", "tx";
+		iopins = <2 1>;
+	};
+};
+
 /*
  * Enable only if the parallel camera is physically connected.
  * If not, the MIPI camera may not work.

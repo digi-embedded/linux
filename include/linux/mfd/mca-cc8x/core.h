@@ -26,6 +26,8 @@
 #define MCA_CC8X_DRVNAME_UART		"mca-cc8x-uart"
 #define MCA_CC8X_DRVNAME_PWM		"mca-pwm"
 
+#define MCA_CC8X_UART_MIN_FW		MCA_MAKE_FW_VER(0, 13)
+
 #define MCA_CC8X_DEVICE_ID_VAL		0x4A
 
 /* Interrupts */
@@ -43,7 +45,9 @@ enum mca_cc8x_irqs {
 	MCA_CC8X_IRQ_GPIO_BANK_2,
 	MCA_CC8X_IRQ_TAMPER2,
 	MCA_CC8X_IRQ_TAMPER3,
-	MCA_CC8X_IRQ_UART,
+	MCA_CC8X_IRQ_UART0,
+	MCA_CC8X_IRQ_UART1,
+	MCA_CC8X_IRQ_UART2,
 	/* ... */
 
 	MCA_CC8X_NUM_IRQS,
