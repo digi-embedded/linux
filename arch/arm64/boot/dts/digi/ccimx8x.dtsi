@@ -145,6 +145,27 @@
 		mca_tamper: tamper {
 			compatible = "digi,mca-cc8x-tamper";
 		};
+
+		mca_uart: uart {
+			compatible = "digi,mca-cc8x-uart";
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			mca_uart0: serial@0x900 {
+				reg = <0x900>;
+				index = <0>;
+			};
+
+			mca_uart1: serial@0x920 {
+				reg = <0x920>;
+				index = <1>;
+			};
+
+			mca_uart2: serial@940 {
+				reg = <0x940>;
+				index = <2>;
+			};
+		};
 	};
 };
 
