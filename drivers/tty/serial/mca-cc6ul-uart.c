@@ -827,7 +827,7 @@ static int mca_uart_probe(struct platform_device *pdev)
 	mca_uart->port.line = 0;
 	mca_uart->port.dev = &pdev->dev;
 	mca_uart->port.irq = platform_get_irq_byname(pdev,
-						     MCA_IRQ_UART_NAME);
+						     MCA_IRQ_UART0_NAME);
 	mca_uart->port.type = PORT_LPUART;
 	mca_uart->port.fifosize = max(MCA_UART_TX_FIFO_SIZE,
 				      MCA_UART_RX_FIFO_SIZE);
@@ -854,7 +854,7 @@ static int mca_uart_probe(struct platform_device *pdev)
 					mca_uart->port.irq,
 					NULL, mca_uart_irq_handler,
 					IRQF_ONESHOT,
-					MCA_IRQ_UART_NAME,
+					MCA_IRQ_UART0_NAME,
 					mca_uart);
 	if (ret) {
 		dev_err(mca_uart->dev, "Failed to register IRQ\n");
