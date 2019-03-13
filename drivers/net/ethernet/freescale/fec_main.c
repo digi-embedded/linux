@@ -4146,6 +4146,8 @@ static int __maybe_unused fec_resume(struct device *dev)
 			fep->wol_flag &= ~FEC_WOL_FLAG_SLEEP_ON;
 		} else {
 			pinctrl_pm_select_default_state(&fep->pdev->dev);
+			if (fep->phy_reset_in_suspend)
+				gpio_set_value_cansleep(fep->phy_reset_gpio, 1);
 		}
 		fec_restart(ndev);
 		netif_tx_lock_bh(ndev);
