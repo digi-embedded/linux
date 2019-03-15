@@ -37,8 +37,11 @@
 #define DEFAULT_PWR_KEY_DELAY		4	/* 4 seconds */
 #define DEFAULT_PWR_KEY_GUARD		25	/* 25 seconds */
 #define MAX_PWR_KEY_DEBOUNCE		255
+#define MAX_PWR_KEY_DEBOUNCE_TB_50MS	(255 * 50)
 #define MAX_PWR_KEY_DELAY		255
 #define MAX_PWR_KEY_GUARD		255
+
+#define MCA_SUPPORTS_DEB_TB_50MS	MCA_MAKE_FW_VER(1, 7)
 
 struct mca_cc6ul_pwrkey {
 	struct mca_cc6ul *mca;
@@ -51,6 +54,7 @@ struct mca_cc6ul_pwrkey {
 	uint32_t debounce_ms;
 	uint32_t pwroff_delay_sec;
 	uint32_t pwroff_guard_sec;
+	bool supports_deb_tb_50ms;
 };
 
 #ifdef CONFIG_PM_SLEEP
@@ -89,13 +93,22 @@ static int mca_cc6ul_pwrkey_initialize(struct mca_cc6ul_pwrkey *pwrkey)
 {
 	int ret;
 	uint8_t pwrctrl0 = 0;
+	uint8_t debounce_ms;
+
+	if (pwrkey->debounce_ms > 255) {
+		/* Set timebase period to 50ms */
+		pwrctrl0 |= MCA_CC6UL_KEY_DEB_TB_50MS;
+		debounce_ms = (uint8_t)((pwrkey->debounce_ms + 49) / 50);
+	} else {
+		debounce_ms = (uint8_t)pwrkey->debounce_ms;
+	}
 
 	ret = regmap_write(pwrkey->mca->regmap, MCA_CC6UL_PWR_KEY_DEBOUNCE,
-			   (uint8_t)pwrkey->debounce_ms);
+			   debounce_ms);
 	if (ret < 0) {
 		dev_err(pwrkey->mca->dev,
 			"Failed to set debounce time 0x%02x, %d\n",
-			(uint8_t)pwrkey->debounce_ms, ret);
+			debounce_ms, ret);
 		return ret;
 	}
 
@@ -140,7 +153,7 @@ static int mca_cc6ul_pwrkey_initialize(struct mca_cc6ul_pwrkey *pwrkey)
 static int of_mca_cc6ul_pwrkey_read_settings(struct device_node *np,
 					     struct mca_cc6ul_pwrkey *pwrkey)
 {
-	uint32_t val;
+	uint32_t val, max_key_deb;
 
 	/* Get driver configuration data from device tree */
 	pwrkey->debounce_ms = DEFAULT_PWR_KEY_DEBOUNCE;
@@ -150,8 +163,11 @@ static int of_mca_cc6ul_pwrkey_read_settings(struct device_node *np,
 	pwrkey->key_power = of_property_read_bool(np, "digi,key-power");
 	pwrkey->key_sleep = of_property_read_bool(np, "digi,key-sleep");
 
+	max_key_deb = pwrkey->supports_deb_tb_50ms ?
+		      MAX_PWR_KEY_DEBOUNCE_TB_50MS : MAX_PWR_KEY_DEBOUNCE;
+
 	if (!of_property_read_u32(np, "digi,debounce-ms", &val)) {
-		if (val <= MAX_PWR_KEY_DEBOUNCE)
+		if (val <= max_key_deb)
 			pwrkey->debounce_ms = val;
 		else
 			dev_warn(pwrkey->mca->dev,
@@ -256,6 +272,9 @@ static int mca_cc6ul_pwrkey_probe(struct platform_device *pdev)
 		ret = -ENOMEM;
 		goto err_free;
 	}
+
+	if (mca->fw_version >= MCA_SUPPORTS_DEB_TB_50MS)
+		pwrkey->supports_deb_tb_50ms = true;
 
 	platform_set_drvdata(pdev, pwrkey);
 	pwrkey->mca = mca;
