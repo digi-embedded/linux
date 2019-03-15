@@ -740,14 +740,13 @@
 	 * Declaring a consumer for reg_3v3_usb_sw regulator will enable it and
 	 * will power the USB3 switch, causing problems with the detection of
 	 * usb devices connected to the TypeC connector.
-	 * By keeping the switch unpowered at least we ensure that the USB 2.0
+	 * By powering down the switch we ensure that at least the USB 2.0
 	 * interface available on the TypeC connector will work.
 	 *
-	 * Uncomment the following line only on hardware where this problem has
-	 * been corrected.
+	 * Comment the following line only for SBCPro version 2 boards.
 	 */
 
-	 /* vcc-supply = <&reg_3v3_usb_sw>; */
+	 vcc-supply = <&reg_3v3_usb_sw>;
 };
 
 /* Micro SD card */
