@@ -1,5 +1,5 @@
 /*
- * Copyright 2018, Digi International Inc.
+ * Copyright 2018, 2019, Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -116,35 +116,13 @@
 	status = "okay";
 };
 
-/* MIPI-DSI0 I2C available on LVDS0 connector */
-&i2c0_mipi_lvds0 {
-	status = "okay";
-};
-
-/*
- * Enable only if the parallel camera is physically connected.
- * If not, the MIPI camera may not work.
- * Similarly, if the MIPI camera is not physically connected you need to
- * disable the MIPI (mipi_csi_0) so that the parallel camera works.
- */
-// &parallel_csi {
-//        status = "okay";
-// };
-
-&ov5640 {
-       status = "okay";
-};
-
-&ov5640_mipi {
-	status = "okay";
-};
-
-&mipi_csi_0 {
-	status = "okay";
-};
-
 /* MIPI-CSI0 I2C available on MIPI Camera connector */
 &i2c0_csi0 {
+	status = "okay";
+};
+
+/* MIPI-DSI0 I2C available on LVDS0 connector */
+&i2c0_mipi_lvds0 {
 	status = "okay";
 };
 
@@ -263,8 +241,8 @@
 	 */
 	spidev@0 {
 		compatible = "spidev";
-		spi-max-frequency = <4000000>;
 		reg = <0>;
+		spi-max-frequency = <4000000>;
 	};
 };
 
@@ -333,6 +311,29 @@
 //&mca_tamper {
 //	digi,tamper-if-list = <0 1 2 3>;
 //};
+
+/*
+ * Enable only if the parallel camera is physically connected.
+ * If not, the MIPI camera may not work.
+ * Similarly, if the MIPI camera is not physically connected you need to
+ * disable the MIPI (mipi_csi_0) so that the parallel camera works.
+ */
+//&parallel_csi {
+//       status = "okay";
+//};
+
+//&ov5640 {
+//	status = "okay";
+//};
+
+/* MIPI camera */
+&mipi_csi_0 {
+	status = "okay";
+};
+
+&ov5640_mipi {
+	status = "okay";
+};
 
 /* USB_OTG1 connected to the usb hub */
 &usbotg1 {
