@@ -1,5 +1,5 @@
 /*
- * Copyright 2018, Digi International Inc.
+ * Copyright 2018, 2019, Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -231,7 +231,6 @@
 //	extends-desktop = <&lvds0>;
 //};
 
-
 /* LPSPI0 on expansion header */
 &lpspi0 {
 	status = "okay";
@@ -242,8 +241,8 @@
 	 */
 	spidev@0 {
 		compatible = "spidev";
-		spi-max-frequency = <4000000>;
 		reg = <0>;
+		spi-max-frequency = <4000000>;
 	};
 };
 
@@ -329,14 +328,15 @@
  * Similarly, if the MIPI camera is not physically connected you need to
  * disable the MIPI (mipi_csi_0) so that the parallel camera works.
  */
-// &parallel_csi {
-//        status = "okay";
-// };
+//&parallel_csi {
+//       status = "okay";
+//};
 
-&ov5640 {
-       status = "okay";
-};
+//&ov5640 {
+//	status = "okay";
+//};
 
+/* MIPI camera */
 &mipi_csi_0 {
 	status = "okay";
 };
