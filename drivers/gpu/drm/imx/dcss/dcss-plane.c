@@ -286,23 +286,6 @@ static int dcss_plane_atomic_check(struct drm_plane *plane,
 	return 0;
 }
 
-static struct drm_gem_object *dcss_plane_gem_import(struct drm_device *dev,
-						    struct dma_buf *dma_buf)
-{
-	struct drm_gem_object *obj;
-
-	if (IS_ERR(dma_buf))
-		return ERR_CAST(dma_buf);
-
-	mutex_lock(&dev->object_name_lock);
-
-	obj = dev->driver->gem_prime_import(dev, dma_buf);
-
-	mutex_unlock(&dev->object_name_lock);
-
-	return obj;
-}
-
 static void dcss_plane_atomic_set_base(struct dcss_plane *dcss_plane)
 {
 	int mod_idx;
