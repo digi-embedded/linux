@@ -147,6 +147,69 @@
 	status = "okay";
 };
 
+/* MIPI display support */
+&mipi_dsi_phy1 {
+	status = "okay";
+};
+
+&mipi_dsi1 {
+	status = "okay";
+};
+
+&mipi_dsi_bridge1 {
+	status = "okay";
+
+	panel@0 {
+		compatible = "raydium,rm67191";
+		reg = <0>;
+		dsi-lanes = <4>;
+		panel-width-mm = <68>;
+		panel-height-mm = <121>;
+		port {
+			panel1_in: endpoint {
+				remote-endpoint = <&mipi_bridge1_out>;
+			};
+		};
+	};
+
+	port@2 {
+		mipi_bridge1_out: endpoint {
+			remote-endpoint = <&panel1_in>;
+		};
+	};
+};
+
+&mipi_dsi_phy2 {
+	status = "okay";
+};
+
+&mipi_dsi2 {
+	status = "okay";
+};
+
+&mipi_dsi_bridge2 {
+	status = "okay";
+
+	panel@0 {
+		compatible = "raydium,rm67191";
+		reg = <0>;
+		dsi-lanes = <4>;
+		panel-width-mm = <68>;
+		panel-height-mm = <121>;
+		port {
+			panel2_in: endpoint {
+				remote-endpoint = <&mipi_bridge2_out>;
+			};
+		};
+	};
+
+	port@2 {
+		mipi_bridge2_out: endpoint {
+			remote-endpoint = <&panel2_in>;
+		};
+	};
+};
+
 &pixel_combiner {
 	status = "okay";
 };
