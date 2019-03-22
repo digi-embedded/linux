@@ -44,14 +44,6 @@
 		i2c3 = &i2c3;
 	};
 
-	/* Limit cma-reserved to 320 MiB to avoid slowdowns on 1 GiB RAM variants */
-	reserved-memory {
-		linux,cma {
-			size = <0 0x14000000>;
-			alloc-ranges = <0 0x96000000 0 0x14000000>;
-		};
-	};
-
 	regulators {
 		compatible = "simple-bus";
 		#address-cells = <1>;
