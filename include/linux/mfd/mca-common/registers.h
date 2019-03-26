@@ -1265,6 +1265,7 @@
 #define MCA_PWR_GUARD_EN	BIT(2)
 #define MCA_PWR_GO_OFF		BIT(3)
 #define MCA_PWR_GO_SUSPEND	BIT(4)
+#define MCA_PWR_OFF_CANCEL	BIT(5)
 
 /* MCA_CTRL_0 (addr=0x0031) */
 #define MCA_RESET		BIT(0)
