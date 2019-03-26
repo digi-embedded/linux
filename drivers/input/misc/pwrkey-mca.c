@@ -191,6 +191,52 @@ static int of_mca_pwrkey_read_settings(struct device_node *np,
 	return 0;
 }
 
+static ssize_t mca_cancel_pwroff_show(struct device *dev,
+				      struct device_attribute *attr, char *buf)
+{
+	static const char _enabled[] = "enabled";
+
+	/*
+	 * Right now, the feature that allows to cancel an on-going power off
+	 * sequence is always enabled but in future we could make it
+	 * configurable through a devicetree property.
+	 */
+	return sprintf(buf, "%s\n", _enabled);
+}
+
+static ssize_t mca_cancel_pwroff_store(struct device *dev,
+				       struct device_attribute *attr,
+				       const char *buf, size_t count)
+{
+	struct mca_pwrkey *pwrkey = dev_get_drvdata(dev);
+	static const char cancel_pwroff_str[] = "CANCEL PWROFF";
+	int ret;
+
+	if (strncmp(buf, cancel_pwroff_str, sizeof(cancel_pwroff_str) - 1))
+		return -EINVAL;
+
+	ret = regmap_update_bits(pwrkey->mca->regmap, MCA_PWR_CTRL_0,
+				 MCA_PWR_OFF_CANCEL,
+				 MCA_PWR_OFF_CANCEL);
+	if (ret < 0) {
+		dev_err(pwrkey->mca->dev,
+			"Failed to cancel power off sequence (%d)\n", ret);
+		return ret;
+	}
+
+	return count;
+}
+static DEVICE_ATTR(mca_cancel_pwroff, 0644, mca_cancel_pwroff_show,
+					    mca_cancel_pwroff_store);
+static struct attribute *mca_pwrkey_attrs[] = {
+	&dev_attr_mca_cancel_pwroff.attr,
+	NULL
+};
+
+static struct attribute_group mca_pwrkey_attr_group = {
+	.attrs = mca_pwrkey_attrs,
+};
+
 static int mca_pwrkey_probe(struct platform_device *pdev)
 {
 	struct mca_drv *mca = dev_get_drvdata(pdev->dev.parent);
@@ -288,8 +334,17 @@ static int mca_pwrkey_probe(struct platform_device *pdev)
 		goto err_irq2;
 	}
 
+	ret = sysfs_create_group(&pdev->dev.kobj, &mca_pwrkey_attr_group);
+	if (ret) {
+		dev_err(&pdev->dev, "Failed to create sysfs entries (%d).\n",
+			ret);
+		goto err_unreg_dev;
+	}
+
 	return 0;
 
+err_unreg_dev:
+	input_unregister_device(pwrkey->input);
 err_irq2:
 	if (pwrkey->key_sleep)
 		free_irq(pwrkey->mca->irq_base + pwrkey->irq_sleep, pwrkey);
