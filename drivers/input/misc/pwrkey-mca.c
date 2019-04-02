@@ -80,6 +80,8 @@ static irqreturn_t mca_pwrkey_power_off_irq_handler(int irq, void *data)
 
 	dev_notice(&pwrkey->input->dev, "Power Button - KEY_POWER\n");
 
+	/* Clear before set to ensure the event is generated */
+	input_report_key(pwrkey->input, KEY_POWER, 0);
 	input_report_key(pwrkey->input, KEY_POWER, 1);
 	input_sync(pwrkey->input);
 
