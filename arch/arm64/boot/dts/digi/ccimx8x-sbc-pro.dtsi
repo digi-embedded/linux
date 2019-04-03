@@ -77,6 +77,10 @@
 			gpio = <&gpio3 13 GPIO_ACTIVE_HIGH>;
 			enable-active-high;
 			startup-delay-us = <1000>;
+			regulator-always-on;
+			regulator-state-mem {
+				regulator-off-in-suspend;
+			};
 		};
 
 		reg_5v_display: regulator@2 {
