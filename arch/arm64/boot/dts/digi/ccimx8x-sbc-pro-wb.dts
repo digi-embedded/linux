@@ -23,24 +23,17 @@
 #include "ccimx8x-sbc-pro.dtsi"
 
 /*
- * Uncomment to enable i.MX8X ADC channels on Expansion connector:
- *  - ADC_IN0 (channel 0)
- *  - ADC_IN1 (channel 1)
- *  - ADC_IN2 (channel 2)
- *  - ADC_IN3 (channel 3)
- *  - ADC_IN4 (channel 4)
- *  - ADC_IN5 (channel 5)
  * Include in digi,adc-ch-list the ADC channels (from 0 to 5) that you want to
  * enable. Note that the iomux has to be configured accordingly in pinctrl_adc0
  * to configure the pads for ADC operation. Make sure to remove them from
  * pinctrl_expansion where they may already be configured with another use.
  */
-//&adc0 {
-//	pinctrl-names = "default";
-//	pinctrl-0 = <&pinctrl_adc0>;
-//	digi,adc-ch-list = <0 1 2 3 4 5>;
-//	status = "okay";
-//};
+&adc0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_adc0>;
+	digi,adc-ch-list = <4 5>;
+	status = "okay";
+};
 
 &dpr1_channel1 {
 	status = "okay";
@@ -295,18 +288,12 @@
 //};
 
 /*
- * Uncomment to enable MCA ADC channels on Expansion connector:
- *  - MCA_IO5 (channel 5)
- *  - MCA_IO6 (channel 6)
- *  - MCA_IO7 (channel 7)
- *  - MCA_IO8 (channel 8)
- *  - MCA_IO14 (channel 14)
  * Edit adc-ch-list to include the ADC channels that you want to enable.
  */
-// &mca_adc {
-//	digi,adc-ch-list = <5 6 7 8 14>;
-//	digi,adc-vref = <3000000>;
-// };
+&mca_adc {
+	digi,adc-ch-list = <6 7>;
+	digi,adc-vref = <3000000>;
+};
 
 /*
  * Uncomment to Enable Tamper detection. There are 2 digital (0 and 1) and 2
@@ -373,9 +360,9 @@
 			/* M40_UART_TX */
 			SC_P_ADC_IN3_LSIO_GPIO1_IO11			0x06000020
 			/* ADC_IN4 */
-			SC_P_ADC_IN4_LSIO_GPIO1_IO14			0x06000020
+			//SC_P_ADC_IN4_LSIO_GPIO1_IO14			0x06000020
 			/* ADC_IN5 */
-			SC_P_ADC_IN5_LSIO_GPIO1_IO13			0x06000020
+			//SC_P_ADC_IN5_LSIO_GPIO1_IO13			0x06000020
 		>;
 	};
 
@@ -390,10 +377,10 @@
 	//		SC_P_ADC_IN2_ADMA_ADC_IN2		0xc0000060
 	//		/* M40_UART_TX */
 	//		SC_P_ADC_IN3_ADMA_ADC_IN3		0xc0000060
-	//		/* ADC_IN4 */
-	//		SC_P_ADC_IN4_ADMA_ADC_IN4		0xc0000060
-	//		/* ADC_IN5 */
-	//		SC_P_ADC_IN5_ADMA_ADC_IN5		0xc0000060
+			/* ADC_IN4 */
+			SC_P_ADC_IN4_ADMA_ADC_IN4		0xc0000060
+			/* ADC_IN5 */
+			SC_P_ADC_IN5_ADMA_ADC_IN5		0xc0000060
 		>;
 	};
 };
