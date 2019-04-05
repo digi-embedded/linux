@@ -26,6 +26,10 @@
 	status = "okay";
 };
 
+&reg_5v_display {
+	regulator-always-on;
+};
+
 &dpr1_channel2 {
 	status = "okay";
 };
