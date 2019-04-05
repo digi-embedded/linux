@@ -69,13 +69,8 @@ static int imx_hifi_hw_params(struct snd_pcm_substream *substream,
 	/* Codec always slave, master is not supported */
 	fmt = SND_SOC_DAIFMT_I2S | SND_SOC_DAIFMT_CBS_CFS;
 
-	/*
-	 * Set cpu DAI configuration. The DAI driver and the codec interprets
-	 * differently what is the active level for the frame sync signal,
-	 * therefore, we invert it for one (for the cpu because it seems to be
-	 * the erroneous one
-	 */
-	ret = snd_soc_dai_set_fmt(cpu_dai, fmt | SND_SOC_DAIFMT_NB_IF);
+	/* Set cpu DAI configuration */
+	ret = snd_soc_dai_set_fmt(cpu_dai, fmt);
 	if (ret) {
 		dev_err(dev, "failed to set cpu dai fmt: %d\n", ret);
 		return ret;
