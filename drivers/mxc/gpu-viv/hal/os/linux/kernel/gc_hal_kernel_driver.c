@@ -1118,7 +1118,7 @@ static ssize_t gpu_mult_store(struct device *dev,
 
     return count;
 }
-static DEVICE_ATTR(gpu_mult, S_IRWXU, gpu_mult_show, gpu_mult_store);
+static DEVICE_ATTR(gpu_mult, 0600, gpu_mult_show, gpu_mult_store);
 
 static struct attribute *gpu_sysfs_entries[] = {
     &dev_attr_gpu_mult.attr,
