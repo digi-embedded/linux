@@ -381,6 +381,19 @@ static void mca_uart_unthrottle(struct uart_port *port)
 		dev_err(port->dev, "Failed to write MCA_REG_UART_CFG1\n");
 }
 
+static void mca_uart_flush_buffer(struct uart_port *port)
+{
+	struct mca_uart *mca_uart = to_mca_uart(port, port);
+	struct regmap *regmap = mca_uart->mca->regmap;
+	int ret;
+
+	ret = regmap_update_bits(regmap, mca_uart->baddr + MCA_REG_UART_CFG0,
+				 MCA_REG_UART_CFG0_CTX | MCA_REG_UART_CFG0_CRX,
+				 MCA_REG_UART_CFG0_CTX | MCA_REG_UART_CFG0_CRX);
+	if (ret)
+		dev_err(port->dev, "Failed to read MCA_REG_UART_CFG0\n");
+}
+
 static const struct uart_ops mca_uart_ops = {
 	.tx_empty	= mca_uart_tx_empty,
 	.set_mctrl	= mca_uart_set_mctrl,
@@ -399,6 +412,7 @@ static const struct uart_ops mca_uart_ops = {
 	.verify_port	= mca_uart_verify_port,
 	.throttle	= mca_uart_throttle,
 	.unthrottle	= mca_uart_unthrottle,
+	.flush_buffer	= mca_uart_flush_buffer,
 	.pm		= NULL,
 };
 
