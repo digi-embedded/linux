@@ -125,6 +125,7 @@ struct lpi2c_imx_struct {
 	struct pinctrl_state *pinctrl_pins_default;
 	struct pinctrl_state *pinctrl_pins_gpio;
 	unsigned int		hold_time;
+	unsigned int		buf_time;
 };
 
 static void lpi2c_imx_intctrl(struct lpi2c_imx_struct *lpi2c_imx,
@@ -541,6 +542,9 @@ static int lpi2c_imx_xfer(struct i2c_adapter *adapter,
 			if (result)
 				goto stop;
 		}
+
+		if (lpi2c_imx->buf_time)
+			udelay(lpi2c_imx->buf_time);
 	}
 
 stop:
@@ -713,6 +717,11 @@ static int lpi2c_imx_probe(struct platform_device *pdev)
 				   "digi,hold-time-ns", &lpi2c_imx->hold_time);
 	if (ret)
 		lpi2c_imx->hold_time = 0;
+
+	ret = of_property_read_u32(pdev->dev.of_node,
+				   "digi,buffer-time-us", &lpi2c_imx->buf_time);
+	if (ret)
+		lpi2c_imx->buf_time = 0;
 
 	/* Init optional bus recovery function */
 	ret = lpi2c_imx_init_recovery_info(lpi2c_imx, pdev);
