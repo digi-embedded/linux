@@ -274,7 +274,7 @@ static void mca_uart_set_termios(struct uart_port *port,
 	}
 
 	/* Wait a bit until the uart is reconfigued with the new settings */
-	mdelay(10);
+	msleep(10);
 }
 
 static int mca_uart_startup(struct uart_port *port)
