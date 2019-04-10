@@ -41,6 +41,9 @@
 #define MCA_UART_CLK			24000000
 #define MCA_UART_MAX_TX_FRAME_LEN	32
 
+#define MCA_REG_UART_FLUSH_BUF_MSK	(MCA_REG_UART_CFG0_CTX | \
+					 MCA_REG_UART_CFG0_CRX)
+
 #define MCA_UART_HAS_RTS		BIT(0)
 #define MCA_UART_HAS_CTS		BIT(1)
 
@@ -54,6 +57,10 @@ bool required[] = {1, 1, 0, 0};
 enum mca_uart_type {
 	CC6UL_MCA_UART,
 	CC8X_MCA_UART,
+};
+
+enum {
+	WORK_FLUSH_BUF	= BIT(0),
 };
 
 struct mca_uart_data {
@@ -71,6 +78,8 @@ struct mca_uart {
 	struct mutex		mutex;
 	unsigned int		baddr;
 	struct work_struct	tx_work;
+	struct work_struct	dc_work;
+	unsigned int		pending_dc_work;
 	unsigned int		has_rtscts;
 	u8			pins[MCA_UART_IOS];
 	u8			npins;
@@ -304,9 +313,6 @@ static void mca_uart_shutdown(struct uart_port *port)
 	int ret;
 	unsigned int cfg_mask;
 
-	/* Cancel works */
-	cancel_work_sync(&mca_uart->tx_work);
-
 	/* Reset RX and TX FIFOs and disable TX and RX */
 	cfg_mask = MCA_REG_UART_CFG0_CTX | MCA_REG_UART_CFG0_CRX |
 		   MCA_REG_UART_CFG0_TXEN | MCA_REG_UART_CFG0_RXEN;
@@ -384,14 +390,12 @@ static void mca_uart_unthrottle(struct uart_port *port)
 static void mca_uart_flush_buffer(struct uart_port *port)
 {
 	struct mca_uart *mca_uart = to_mca_uart(port, port);
-	struct regmap *regmap = mca_uart->mca->regmap;
-	int ret;
 
-	ret = regmap_update_bits(regmap, mca_uart->baddr + MCA_REG_UART_CFG0,
-				 MCA_REG_UART_CFG0_CTX | MCA_REG_UART_CFG0_CRX,
-				 MCA_REG_UART_CFG0_CTX | MCA_REG_UART_CFG0_CRX);
-	if (ret)
-		dev_err(port->dev, "Failed to read MCA_REG_UART_CFG0\n");
+	mutex_lock(&mca_uart->mutex);
+	mca_uart->pending_dc_work |= WORK_FLUSH_BUF;
+	mutex_unlock(&mca_uart->mutex);
+
+	schedule_work(&mca_uart->dc_work);
 }
 
 static const struct uart_ops mca_uart_ops = {
@@ -629,6 +633,29 @@ ret:
 	return IRQ_HANDLED;
 }
 
+static void mca_uart_dc_work_proc(struct work_struct *ws)
+{
+	struct mca_uart *mca_uart = to_mca_uart(ws, dc_work);
+	struct regmap *regmap = mca_uart->mca->regmap;
+	int ret;
+
+	mutex_lock(&mca_uart->mutex);
+
+	if (mca_uart->pending_dc_work & WORK_FLUSH_BUF) {
+		ret = regmap_update_bits(regmap,
+					 mca_uart->baddr + MCA_REG_UART_CFG0,
+					 MCA_REG_UART_FLUSH_BUF_MSK,
+					 MCA_REG_UART_FLUSH_BUF_MSK);
+		if (ret)
+			dev_err(mca_uart->port.dev,
+				"Failed to read MCA_REG_UART_CFG0\n");
+	}
+
+	mca_uart->pending_dc_work = 0;
+
+	mutex_unlock(&mca_uart->mutex);
+}
+
 static void mca_uart_tx_work_proc(struct work_struct *ws)
 {
 	struct mca_uart *mca_uart = to_mca_uart(ws, tx_work);
@@ -840,6 +867,8 @@ static int mca_uart_release_port_resources(struct mca_uart *mca_uart)
 	int i;
 
 	cancel_work_sync(&mca_uart->tx_work);
+	cancel_work_sync(&mca_uart->dc_work);
+
 	mutex_destroy(&mca_uart->mutex);
 	uart_remove_one_port(&uart_drv->uart, &mca_uart->port);
 
@@ -958,6 +987,9 @@ static int mca_uart_probe(struct platform_device *pdev)
 
 		/* Initialize queue for start TX */
 		INIT_WORK(&mca_uart->tx_work, mca_uart_tx_work_proc);
+
+		/* Initialize queue for delayed configurations */
+		INIT_WORK(&mca_uart->dc_work, mca_uart_dc_work_proc);
 
 		/* Register port */
 		ret = uart_add_one_port(&uart_drv->uart, &mca_uart->port);
