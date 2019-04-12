@@ -1034,6 +1034,18 @@
 		>;
 	};
 
+	/* PCIE (Mini Card) */
+	pinctrl_pcieb_mini_card: pcieagrp_mini_card {
+		fsl,pins = <
+			/* PCIE_RESET_N */
+			SC_P_QSPI0A_SCLK_LSIO_GPIO3_IO16	0x06000021
+			/* PCIE_DIS_N */
+			SC_P_SAI1_RXC_LSIO_GPIO0_IO30		0x06000061
+			/* PCIE_WAKE_N */
+			SC_P_SAI1_RXD_LSIO_GPIO0_IO29		0x04000021
+		>;
+	};
+
 	pinctrl_pwm_adma: pwm_adma_grp {
 		fsl,pins = <
 			/* PWM on Expansion connector */
