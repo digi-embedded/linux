@@ -271,7 +271,7 @@
 /* PCIE (Mini Card) */
 &pcieb {
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_pcieb>;
+	pinctrl-0 = <&pinctrl_pcieb_mini_card>;
 	ext_osc = <1>;
 	reset-gpio = <&gpio3 16 GPIO_ACTIVE_LOW>; /* PCIE_RESET_N */
 	disable-gpio = <&gpio0 30 GPIO_ACTIVE_HIGH>; /* PCIE_DIS_N */
@@ -445,18 +445,6 @@
 	//		SC_P_ADC_IN4_ADMA_ADC_IN4		0xc0000060
 	//		/* ADC_IN5 */
 	//		SC_P_ADC_IN5_ADMA_ADC_IN5		0xc0000060
-		>;
-	};
-
-	/* PCIE (Mini Card) */
-	pinctrl_pcieb: pcieagrp {
-		fsl,pins = <
-			/* PCIE_RESET_N */
-			SC_P_QSPI0A_SCLK_LSIO_GPIO3_IO16	0x06000021
-			/* PCIE_DIS_N */
-			SC_P_SAI1_RXC_LSIO_GPIO0_IO30		0x06000021
-			/* PCIE_WAKE_N */
-			SC_P_SAI1_RXD_LSIO_GPIO0_IO29		0x04000021
 		>;
 	};
 };
