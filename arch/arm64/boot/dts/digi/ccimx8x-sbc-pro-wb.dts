@@ -23,7 +23,7 @@
 #include "ccimx8x-sbc-pro.dtsi"
 
 /*
- * Uncomment to enable i.MX8X ADC channels on Expansion connector:
+ * i.MX8X ADC channels on Expansion connector:
  *  - ADC_IN0 (channel 0)
  *  - ADC_IN1 (channel 1)
  *  - ADC_IN2 (channel 2)
@@ -35,12 +35,12 @@
  * to configure the pads for ADC operation. Make sure to remove them from
  * pinctrl_expansion where they may already be configured with another use.
  */
-//&adc0 {
-//	pinctrl-names = "default";
-//	pinctrl-0 = <&pinctrl_adc0>;
-//	digi,adc-ch-list = <0 1 2 3 4 5>;
-//	status = "okay";
-//};
+&adc0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_adc0>;
+	digi,adc-ch-list = <0>;
+	status = "okay";
+};
 
 &dpr1_channel1 {
 	status = "okay";
@@ -411,7 +411,7 @@
 
 			/* Remove the pads you wish to use as ADCs */
 			/* ADC_IN0 */
-			SC_P_ADC_IN0_LSIO_GPIO1_IO10			0x06000020
+	//		SC_P_ADC_IN0_LSIO_GPIO1_IO10			0x06000020
 			/* ADC_IN1 */
 			SC_P_ADC_IN1_LSIO_GPIO1_IO09			0x06000020
 			/* M40_UART_RX */
@@ -428,8 +428,8 @@
 	/* Uncomment the pads you wish to use as ADCs */
 	pinctrl_adc0: adc0grp {
 		fsl,pins = <
-	//		/* ADC_IN0 */
-	//		SC_P_ADC_IN0_ADMA_ADC_IN0		0xc0000060
+			/* ADC_IN0 */
+			SC_P_ADC_IN0_ADMA_ADC_IN0		0xc0000060
 	//		/* ADC_IN1 */
 	//		SC_P_ADC_IN1_ADMA_ADC_IN1		0xc0000060
 	//		/* M40_UART_RX */
