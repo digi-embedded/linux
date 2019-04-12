@@ -1147,9 +1147,9 @@ static int ubifs_symlink(struct inode *dir, struct dentry *dentry,
 	struct ubifs_inode *ui;
 	struct ubifs_inode *dir_ui = ubifs_inode(dir);
 	struct ubifs_info *c = dir->i_sb->s_fs_info;
-	int err, len = strlen(symname);
-	int sz_change = CALC_DENT_SIZE(len);
-	struct fscrypt_str disk_link;
+	int err, sz_change, len = strlen(symname);
+	struct fscrypt_str disk_link = FSTR_INIT((char *)symname, len + 1);
+	struct fscrypt_symlink_data *sd = NULL;
 	struct ubifs_budget_req req = { .new_ino = 1, .new_dent = 1,
 					.new_ino_d = ALIGN(len, 8),
 					.dirtied_ino = 1 };
@@ -1174,6 +1174,8 @@ static int ubifs_symlink(struct inode *dir, struct dentry *dentry,
 	err = fscrypt_setup_filename(dir, &dentry->d_name, 0, &nm);
 	if (err)
 		goto out_budg;
+
+	sz_change = CALC_DENT_SIZE(fname_len(&nm));
 
 	inode = ubifs_new_inode(c, dir, S_IFLNK | S_IRWXUGO);
 	if (IS_ERR(inode)) {

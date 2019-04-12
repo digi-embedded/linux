@@ -759,7 +759,7 @@ static bool is_valid_rd(const struct ieee80211_regdomain *rd)
  * definitions (the "2.4 GHz band", the "5 GHz band" and the "60GHz band"),
  * however it is safe for now to assume that a frequency rule should not be
  * part of a frequency's band if the start freq or end freq are off by more
- * than 2 GHz for the 2.4 and 5 GHz bands, and by more than 10 GHz for the
+ * than 2 GHz for the 2.4 and 5 GHz bands, and by more than 20 GHz for the
  * 60 GHz band.
  * This resolution can be lowered and should be considered as we add
  * regulatory rule support for other "bands".
@@ -774,7 +774,7 @@ static bool freq_in_rule_band(const struct ieee80211_freq_range *freq_range,
 	 * with the Channel starting frequency above 45 GHz.
 	 */
 	u32 limit = freq_khz > 45 * ONE_GHZ_IN_KHZ ?
-			10 * ONE_GHZ_IN_KHZ : 2 * ONE_GHZ_IN_KHZ;
+			20 * ONE_GHZ_IN_KHZ : 2 * ONE_GHZ_IN_KHZ;
 	if (abs(freq_khz - freq_range->start_freq_khz) <= limit)
 		return true;
 	if (abs(freq_khz - freq_range->end_freq_khz) <= limit)
@@ -2170,11 +2170,12 @@ static void reg_process_hint(struct regulatory_request *reg_request)
 {
 	struct wiphy *wiphy = NULL;
 	enum reg_request_treatment treatment;
+	enum nl80211_reg_initiator initiator = reg_request->initiator;
 
 	if (reg_request->wiphy_idx != WIPHY_IDX_INVALID)
 		wiphy = wiphy_idx_to_wiphy(reg_request->wiphy_idx);
 
-	switch (reg_request->initiator) {
+	switch (initiator) {
 	case NL80211_REGDOM_SET_BY_CORE:
 		treatment = reg_process_hint_core(reg_request);
 		break;
@@ -2192,7 +2193,7 @@ static void reg_process_hint(struct regulatory_request *reg_request)
 		treatment = reg_process_hint_country_ie(wiphy, reg_request);
 		break;
 	default:
-		WARN(1, "invalid initiator %d\n", reg_request->initiator);
+		WARN(1, "invalid initiator %d\n", initiator);
 		goto out_free;
 	}
 
@@ -2207,7 +2208,7 @@ static void reg_process_hint(struct regulatory_request *reg_request)
 	 */
 	if (treatment == REG_REQ_ALREADY_SET && wiphy &&
 	    wiphy->regulatory_flags & REGULATORY_STRICT_REG) {
-		wiphy_update_regulatory(wiphy, reg_request->initiator);
+		wiphy_update_regulatory(wiphy, initiator);
 		wiphy_all_share_dfs_chan_state(wiphy);
 		reg_check_channels();
 	}
@@ -2384,6 +2385,7 @@ static int regulatory_hint_core(const char *alpha2)
 	request->alpha2[0] = alpha2[0];
 	request->alpha2[1] = alpha2[1];
 	request->initiator = NL80211_REGDOM_SET_BY_CORE;
+	request->wiphy_idx = WIPHY_IDX_INVALID;
 
 	queue_regulatory_request(request);
 

@@ -281,7 +281,7 @@ struct sk_buff *__skb_try_recv_datagram(struct sock *sk, unsigned int flags,
 			break;
 
 		sk_busy_loop(sk, flags & MSG_DONTWAIT);
-	} while (!skb_queue_empty(&sk->sk_receive_queue));
+	} while (sk->sk_receive_queue.prev != *last);
 
 	error = -EAGAIN;
 
@@ -810,8 +810,9 @@ int skb_copy_and_csum_datagram_msg(struct sk_buff *skb,
 			return -EINVAL;
 		}
 
-		if (unlikely(skb->ip_summed == CHECKSUM_COMPLETE))
-			netdev_rx_csum_fault(skb->dev);
+		if (unlikely(skb->ip_summed == CHECKSUM_COMPLETE) &&
+		    !skb->csum_complete_sw)
+			netdev_rx_csum_fault(NULL);
 	}
 	return 0;
 fault:

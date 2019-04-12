@@ -61,6 +61,7 @@ static void swap_inode_data(struct inode *inode1, struct inode *inode2)
 	loff_t isize;
 	struct ext4_inode_info *ei1;
 	struct ext4_inode_info *ei2;
+	unsigned long tmp;
 
 	ei1 = EXT4_I(inode1);
 	ei2 = EXT4_I(inode2);
@@ -73,7 +74,10 @@ static void swap_inode_data(struct inode *inode1, struct inode *inode2)
 	swap(inode1->i_mtime, inode2->i_mtime);
 
 	memswap(ei1->i_data, ei2->i_data, sizeof(ei1->i_data));
-	swap(ei1->i_flags, ei2->i_flags);
+	tmp = ei1->i_flags & EXT4_FL_SHOULD_SWAP;
+	ei1->i_flags = (ei2->i_flags & EXT4_FL_SHOULD_SWAP) |
+		(ei1->i_flags & ~EXT4_FL_SHOULD_SWAP);
+	ei2->i_flags = tmp | (ei2->i_flags & ~EXT4_FL_SHOULD_SWAP);
 	swap(ei1->i_disksize, ei2->i_disksize);
 	ext4_es_remove_extent(inode1, 0, EXT_MAX_BLOCKS);
 	ext4_es_remove_extent(inode2, 0, EXT_MAX_BLOCKS);
@@ -344,19 +348,14 @@ static int ext4_ioctl_setproject(struct file *filp, __u32 projid)
 	if (projid_eq(kprojid, EXT4_I(inode)->i_projid))
 		return 0;
 
-	err = mnt_want_write_file(filp);
-	if (err)
-		return err;
-
 	err = -EPERM;
-	inode_lock(inode);
 	/* Is it quota file? Do not allow user to mess with it */
 	if (ext4_is_quota_file(inode))
-		goto out_unlock;
+		return err;
 
 	err = ext4_get_inode_loc(inode, &iloc);
 	if (err)
-		goto out_unlock;
+		return err;
 
 	raw_inode = ext4_raw_inode(&iloc);
 	if (!EXT4_FITS_IN_INODE(raw_inode, ei, i_projid)) {
@@ -364,20 +363,20 @@ static int ext4_ioctl_setproject(struct file *filp, __u32 projid)
 					      EXT4_SB(sb)->s_want_extra_isize,
 					      &iloc);
 		if (err)
-			goto out_unlock;
+			return err;
 	} else {
 		brelse(iloc.bh);
 	}
 
-	dquot_initialize(inode);
+	err = dquot_initialize(inode);
+	if (err)
+		return err;
 
 	handle = ext4_journal_start(inode, EXT4_HT_QUOTA,
 		EXT4_QUOTA_INIT_BLOCKS(sb) +
 		EXT4_QUOTA_DEL_BLOCKS(sb) + 3);
-	if (IS_ERR(handle)) {
-		err = PTR_ERR(handle);
-		goto out_unlock;
-	}
+	if (IS_ERR(handle))
+		return PTR_ERR(handle);
 
 	err = ext4_reserve_inode_write(handle, inode, &iloc);
 	if (err)
@@ -405,9 +404,6 @@ out_dirty:
 		err = rc;
 out_stop:
 	ext4_journal_stop(handle);
-out_unlock:
-	inode_unlock(inode);
-	mnt_drop_write_file(filp);
 	return err;
 }
 #else
@@ -588,6 +584,30 @@ static int ext4_ioc_getfsmap(struct super_block *sb,
 	head.fmh_oflags = xhead.fmh_oflags;
 	if (copy_to_user(arg, &head, sizeof(struct fsmap_head)))
 		return -EFAULT;
+
+	return 0;
+}
+
+static int ext4_ioctl_check_project(struct inode *inode, struct fsxattr *fa)
+{
+	/*
+	 * Project Quota ID state is only allowed to change from within the init
+	 * namespace. Enforce that restriction only if we are trying to change
+	 * the quota ID state. Everything else is allowed in user namespaces.
+	 */
+	if (current_user_ns() == &init_user_ns)
+		return 0;
+
+	if (__kprojid_val(EXT4_I(inode)->i_projid) != fa->fsx_projid)
+		return -EINVAL;
+
+	if (ext4_test_inode_flag(inode, EXT4_INODE_PROJINHERIT)) {
+		if (!(fa->fsx_xflags & FS_XFLAG_PROJINHERIT))
+			return -EINVAL;
+	} else {
+		if (fa->fsx_xflags & FS_XFLAG_PROJINHERIT)
+			return -EINVAL;
+	}
 
 	return 0;
 }
@@ -1029,19 +1049,19 @@ resizefs_out:
 			return err;
 
 		inode_lock(inode);
+		err = ext4_ioctl_check_project(inode, &fa);
+		if (err)
+			goto out;
 		flags = (ei->i_flags & ~EXT4_FL_XFLAG_VISIBLE) |
 			 (flags & EXT4_FL_XFLAG_VISIBLE);
 		err = ext4_ioctl_setflags(inode, flags);
+		if (err)
+			goto out;
+		err = ext4_ioctl_setproject(filp, fa.fsx_projid);
+out:
 		inode_unlock(inode);
 		mnt_drop_write_file(filp);
-		if (err)
-			return err;
-
-		err = ext4_ioctl_setproject(filp, fa.fsx_projid);
-		if (err)
-			return err;
-
-		return 0;
+		return err;
 	}
 	case EXT4_IOC_SHUTDOWN:
 		return ext4_shutdown(sb, arg);

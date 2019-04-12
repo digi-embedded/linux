@@ -556,6 +556,11 @@ static int fsl_esai_set_dai_fmt(struct snd_soc_dai *dai, unsigned int fmt)
 	regmap_update_bits(esai_priv->regmap, REG_ESAI_TCR, mask, xcr);
 	regmap_update_bits(esai_priv->regmap, REG_ESAI_RCR, mask, xcr);
 
+	mask = ESAI_xCCR_xCKP | ESAI_xCCR_xHCKP | ESAI_xCCR_xFSP |
+		ESAI_xCCR_xFSD | ESAI_xCCR_xCKD;
+	regmap_update_bits(esai_priv->regmap, REG_ESAI_TCCR, mask, xccr);
+	regmap_update_bits(esai_priv->regmap, REG_ESAI_RCCR, mask, xccr);
+
 	return 0;
 }
 
