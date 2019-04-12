@@ -268,6 +268,11 @@
 	status = "disabled";
 };
 
+/* PCIE (Wireless) and PCIe (Mini Card) */
+&pcieb {
+	pinctrl-0 = <&pinctrl_pcieb>, <&pinctrl_pcieb_gpio>, <&pinctrl_pcieb_mini_card>;
+};
+
 /* Audio support */
 &asrc0 {
 	status = "okay";
