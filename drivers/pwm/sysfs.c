@@ -276,8 +276,6 @@ static int pwm_export_child(struct device *parent, struct pwm_device *pwm)
 		return ret;
 	}
 
-	kobject_uevent_env(&parent->kobj, KOBJ_CHANGE, NULL);
-
 	return 0;
 }
 
@@ -296,8 +294,6 @@ static int pwm_unexport_child(struct device *parent, struct pwm_device *pwm)
 	child = device_find_child(parent, pwm, pwm_unexport_match);
 	if (!child)
 		return -ENODEV;
-
-	kobject_uevent_env(&parent->kobj, KOBJ_CHANGE, NULL);
 
 	/* for device_find_child() */
 	put_device(child);
