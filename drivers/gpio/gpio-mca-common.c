@@ -476,12 +476,14 @@ int mca_gpio_probe(struct platform_device *pdev, struct device *mca_dev,
 			for (i = 0; i < MCA_MAX_GPIO_IRQ_BANKS; i++)
 				gpio->pwroff_wakeup_dis[i] = 0xff;
 
-			of_property_for_each_u32(np,
-						 "pwroff-wakeup-capable-ios",
-						 prop, p, val) {
-				if (val < MCA_MAX_IOS)
-					mca_gpio_pwroff_wakeup_enable(gpio, val,
-								      1);
+			ret = of_property_count_u32_elems(np,
+						"pwroff-wakeup-capable-ios");
+			if (ret > 0) {
+				of_property_for_each_u32(np, "pwroff-wakeup-capable-ios",
+							 prop, p, val) {
+					if (val < MCA_MAX_IOS)
+						mca_gpio_pwroff_wakeup_enable(gpio, val, 1);
+				}
 			}
 		}
 	}
