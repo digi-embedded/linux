@@ -198,6 +198,11 @@
 	};
 };
 
+/* Disable CPU RTC */
+&rtc {
+	status = "disabled";
+};
+
 /* Disable CPU watchdog */
 &wdog {
 	status = "disabled";
