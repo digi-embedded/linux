@@ -7799,6 +7799,8 @@ struct cfg80211_fils_resp_params {
  * @links.status: per-link status code, to report a status code that's not
  *	%WLAN_STATUS_SUCCESS for a given link, it must also be in the
  *	@valid_links bitmap and may have a BSS pointer (which is then released)
+ * @authorized: Indicates whether the connection is ready to transport
+ *	data packets.
  */
 struct cfg80211_connect_resp_params {
 	int status;
@@ -7808,7 +7810,6 @@ struct cfg80211_connect_resp_params {
 	size_t resp_ie_len;
 	struct cfg80211_fils_resp_params fils;
 	enum nl80211_timeout_reason timeout_reason;
-
 	const u8 *ap_mld_addr;
 	u16 valid_links;
 	struct {
@@ -7817,6 +7818,7 @@ struct cfg80211_connect_resp_params {
 		struct cfg80211_bss *bss;
 		u16 status;
 	} links[IEEE80211_MLD_MAX_NUM_LINKS];
+	bool authorized;
 };
 
 /**
