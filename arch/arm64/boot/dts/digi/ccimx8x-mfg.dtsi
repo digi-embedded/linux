@@ -52,6 +52,35 @@
 	status = "okay";
 };
 
+&fec1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_fec_gpio>,
+		    <&pinctrl_fec>;
+	clocks = <&clk IMX8QXP_ENET0_IPG_CLK>,
+		 <&clk IMX8QXP_ENET0_AHB_CLK>,
+		 <&clk IMX8QXP_ENET0_REF_50MHZ_CLK>,
+		 <&clk IMX8QXP_ENET0_PTP_CLK>,
+		 <&clk IMX8QXP_ENET0_TX_CLK>;
+	phy-mode = "rgmii-id";
+	phy-handle = <&ethphy0>;
+	phy-reset-gpios = <&gpio3 18 GPIO_ACTIVE_LOW>;
+	phy-reset-duration = <1>;
+	fsl,magic-packet;
+	status = "okay";
+
+	mdio {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		ethphy0: ethernet-phy@0 {
+			compatible = "ethernet-phy-ieee802.3-c22";
+			reg = <0>;
+			at803x,eee-disabled;
+			at803x,vddio-1p8v;
+		};
+	};
+};
+
 &i2c3 {
 	#address-cells = <1>;
 	#size-cells = <0>;
@@ -61,83 +90,66 @@
 	status = "okay";
 };
 
-&ldb1 {
-	pinctrl-names = "default";
-	status = "okay";
-
-	lvds-channel@0 {
-		fsl,data-mapping = "jeida";
-		fsl,data-width = <24>;
-		status = "okay";
-
-		display-timings {
-			native-mode = <&g101evn010_1>;
-
-			/* AUO G101EVN01.0 */
-			g101evn010_1: timing@0 {
-				clock-frequency = <68930000>;
-				hactive = <1280>;
-				vactive = <800>;
-				hfront-porch = <120>;
-				hback-porch = <0>;
-				hsync-len = <8>;
-				vback-porch = <10>;
-				vfront-porch = <0>;
-				vsync-len = <6>;
-				hsync-active = <1>;
-				vsync-active = <1>;
-				de-active = <1>;
-				pixelclk-active = <0>;
-			};
-		};
-	};
-};
-
-&ldb1_phy {
-	status = "okay";
-};
-
-&ldb2 {
-	pinctrl-names = "default";
-	status = "okay";
-
-	lvds-channel@0 {
-		fsl,data-mapping = "jeida";
-		fsl,data-width = <24>;
-		status = "okay";
-
-		display-timings {
-			native-mode = <&g101evn010_2>;
-
-			/* AUO G101EVN01.0 */
-			g101evn010_2: timing@0 {
-				clock-frequency = <68930000>;
-				hactive = <1280>;
-				vactive = <800>;
-				hfront-porch = <120>;
-				hback-porch = <0>;
-				hsync-len = <8>;
-				vback-porch = <10>;
-				vfront-porch = <0>;
-				vsync-len = <6>;
-				hsync-active = <1>;
-				vsync-active = <1>;
-				de-active = <1>;
-				pixelclk-active = <0>;
-			};
-		};
-	};
-};
-
-&ldb2_phy {
-	status = "okay";
-};
-
 /* Console */
 &lpuart2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lpuart2>;
 	status = "okay";
+};
+
+/* MIPI-CSI0 I2C available on MIPI Camera connector */
+&i2c0_csi0 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	pinctrl-names = "default", "gpio";
+	pinctrl-0 = <&pinctrl_csi0_lpi2c0>;
+	pinctrl-1 = <&pinctrl_csi0_lpi2c0_gpio>;
+	scl-gpios = <&gpio3 6 GPIO_ACTIVE_HIGH>;
+	sda-gpios = <&gpio3 5 GPIO_ACTIVE_HIGH>;
+	clock-frequency = <100000>;
+	status = "okay";
+
+	/* MIPI-CSI2 camera */
+	ov5640_mipi: ov5640_mipi@3c {
+		compatible = "ovti,ov5640_mipi_v3";
+		reg = <0x3c>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_mipi>;
+		clocks = <&clk IMX8QXP_CLK_DUMMY>;
+		clock-names = "csi_mclk";
+		csi_id = <0>;
+		rst-gpios = <&gpio3 21 GPIO_ACTIVE_HIGH>;
+		mclk = <24000000>;
+		mclk_source = <0>;
+		mipi_csi;
+		status = "okay";
+
+		port {
+			ov5640_mipi_ep: endpoint {
+				remote-endpoint = <&mipi_csi0_ep>;
+			};
+		};
+	};
+};
+
+&isi_0 {
+	interface = <2 0 2>;	/* INPUT: 2-MIPI CSI0 */
+	status = "okay";
+};
+
+&mipi_csi_0 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	status = "okay";
+
+	/* Camera 0  MIPI CSI-2 (CSIS0) */
+	port@0 {
+		reg = <0>;
+		mipi_csi0_ep: endpoint {
+			remote-endpoint = <&ov5640_mipi_ep>;
+			data-lanes = <1 2>;
+		};
+	};
 };
 
 /* MIPI display support */
@@ -243,6 +255,12 @@
 	status = "okay";
 };
 
+&usbotg1 {
+	dr_mode = "otg";
+	disable-over-current;
+	status = "okay";
+};
+
 &usbotg3 {
 	dr_mode = "host";
 	disable-over-current;
@@ -256,18 +274,6 @@
 
 	pinctrl_hog: hoggrp {
 		fsl,pins = <
-			/*
-			 * The SCFW of B0 defaults ENET0/1 domains to 2.5V:
-			 * - VDD_ENET0_1P8_2P5_3P3
-			 * - VDD_ENET0_VSELECT_1P8_2P5_3P3
-			 * - VDD_ESAI_SPDIF_1P8_2P5_3P3
-			 * Turn the domains back to 1.8/3.3V detector
-			 */
-			SC_P_COMP_CTL_GPIO_1V8_3V3_ENET_ENETB0_PAD	0x000014a0
-			SC_P_COMP_CTL_GPIO_1V8_3V3_ENET_ENETB1_PAD	0x000014a0
-			SC_P_COMP_CTL_GPIO_1V8_3V3_GPIORHB_PAD		0x000514a0
-
-
 			/* Castellated pads */
 			SC_P_USDHC1_RESET_B_LSIO_GPIO4_IO19		0x06000020
 			SC_P_USDHC1_VSELECT_LSIO_GPIO4_IO20		0x06000020
@@ -284,7 +290,6 @@
 			SC_P_MIPI_DSI0_I2C0_SCL_LSIO_GPIO1_IO25		0x06000020
 			SC_P_MIPI_DSI0_I2C0_SDA_LSIO_GPIO1_IO26		0x06000020
 			SC_P_MIPI_DSI0_GPIO0_00_LSIO_GPIO1_IO27		0x06000020
-			SC_P_MIPI_DSI0_GPIO0_01_LSIO_GPIO1_IO28		0x06000020
 			SC_P_MIPI_DSI1_I2C0_SCL_LSIO_GPIO1_IO29		0x06000020
 			SC_P_MIPI_DSI1_I2C0_SDA_LSIO_GPIO1_IO30		0x06000020
 			SC_P_MIPI_DSI1_GPIO0_00_LSIO_GPIO1_IO31		0x06000020
@@ -307,21 +312,7 @@
 			SC_P_SPI3_SDO_LSIO_GPIO0_IO14			0x06000020
 			SC_P_SPI3_SDI_LSIO_GPIO0_IO15			0x06000020
 			SC_P_SPI3_CS0_LSIO_GPIO0_IO16			0x06000020
-			SC_P_ENET0_RGMII_TXC_LSIO_GPIO4_IO29		0x06000020
-			SC_P_ENET0_RGMII_TX_CTL_LSIO_GPIO4_IO30		0x06000020
-			SC_P_ENET0_RGMII_TXD0_LSIO_GPIO4_IO31		0x06000020
-			SC_P_ENET0_RGMII_TXD1_LSIO_GPIO5_IO00		0x06000020
-			SC_P_ENET0_RGMII_TXD2_LSIO_GPIO5_IO01		0x06000020
-			SC_P_ENET0_RGMII_TXD3_LSIO_GPIO5_IO02		0x06000020
-			SC_P_ENET0_RGMII_RXC_LSIO_GPIO5_IO03		0x06000020
-			SC_P_ENET0_RGMII_RX_CTL_LSIO_GPIO5_IO04		0x06000020
-			SC_P_ENET0_RGMII_RXD0_LSIO_GPIO5_IO05		0x06000020
-			SC_P_ENET0_RGMII_RXD1_LSIO_GPIO5_IO06		0x06000020
-			SC_P_ENET0_RGMII_RXD2_LSIO_GPIO5_IO07		0x06000020
-			SC_P_ENET0_RGMII_RXD3_LSIO_GPIO5_IO08		0x06000020
 			SC_P_ENET0_REFCLK_125M_25M_LSIO_GPIO5_IO09	0x06000020
-			SC_P_ENET0_MDIO_LSIO_GPIO5_IO10			0x06000020
-			SC_P_ENET0_MDC_LSIO_GPIO5_IO11			0x06000020
 			/* LGA pads */
 			SC_P_ESAI0_SCKR_LSIO_GPIO0_IO02			0x06000020
 			SC_P_ESAI0_SCKT_LSIO_GPIO0_IO03			0x06000020
@@ -355,10 +346,8 @@
 			SC_P_SAI1_RXC_LSIO_GPIO0_IO30			0x06000020
 			SC_P_SAI1_RXFS_LSIO_GPIO0_IO31			0x06000020
 			SC_P_SPI0_CS1_LSIO_GPIO1_IO07			0x06000020
-			SC_P_QSPI0B_DATA3_LSIO_GPIO3_IO21		0x06000020
 			SC_P_QSPI0B_DATA1_LSIO_GPIO3_IO19		0x06000020
 			SC_P_QSPI0B_SS1_B_LSIO_GPIO3_IO24		0x06000020
-			SC_P_QSPI0B_DATA0_LSIO_GPIO3_IO18		0x06000020
 			SC_P_QSPI0B_DQS_LSIO_GPIO3_IO22			0x06000020
 			SC_P_QSPI0B_SS0_B_LSIO_GPIO3_IO23		0x06000020
 			SC_P_QSPI0B_DATA2_LSIO_GPIO3_IO20		0x06000020
@@ -367,14 +356,65 @@
 			SC_P_ADC_IN3_LSIO_GPIO1_IO11			0x06000020
 			SC_P_ADC_IN2_LSIO_GPIO1_IO12			0x06000020
 			SC_P_ADC_IN5_LSIO_GPIO1_IO13			0x06000020
-			SC_P_CSI_PCLK_LSIO_GPIO3_IO00			0x06000020
-			SC_P_CSI_MCLK_LSIO_GPIO3_IO01			0x06000020
-			SC_P_MIPI_CSI0_I2C0_SDA_LSIO_GPIO3_IO06		0x06000020
-			SC_P_MIPI_CSI0_I2C0_SCL_LSIO_GPIO3_IO05		0x06000020
-			SC_P_CSI_RESET_LSIO_GPIO3_IO03			0x06000020
-			SC_P_CSI_EN_LSIO_GPIO3_IO02			0x06000020
 			SC_P_MIPI_CSI0_MCLK_OUT_LSIO_GPIO3_IO04		0x06000020
-			SC_P_SCU_GPIO0_00_LSIO_GPIO2_IO03		0x06000020
+		>;
+	};
+
+	pinctrl_csi0_lpi2c0: csi0lpi2c0grp {
+		fsl,pins = <
+			SC_P_MIPI_CSI0_I2C0_SCL_MIPI_CSI0_I2C0_SCL	0xc2000020
+			SC_P_MIPI_CSI0_I2C0_SDA_MIPI_CSI0_I2C0_SDA	0xc2000020
+		>;
+	};
+
+	pinctrl_csi0_lpi2c0_gpio: csi0lpi2c0gpiogrp {
+		fsl,pins = <
+			SC_P_MIPI_CSI0_I2C0_SCL_LSIO_GPIO3_IO05	0xc2000020
+			SC_P_MIPI_CSI0_I2C0_SDA_LSIO_GPIO3_IO06	0xc2000020
+		>;
+	};
+
+	pinctrl_fec: fecgrp {
+		fsl,pins = <
+			/*
+			 * The SCFW of B0 defaults ENET0/1 domains to 2.5V:
+			 * - VDD_ENET0_1P8_2P5_3P3
+			 * - VDD_ENET0_VSELECT_1P8_2P5_3P3
+			 * - VDD_ESAI_SPDIF_1P8_2P5_3P3
+			 * Turn the domains back to 1.8/3.3V detector
+			 */
+			SC_P_COMP_CTL_GPIO_1V8_3V3_ENET_ENETB0_PAD	0x000014a0
+			SC_P_COMP_CTL_GPIO_1V8_3V3_ENET_ENETB1_PAD	0x000014a0
+			SC_P_COMP_CTL_GPIO_1V8_3V3_GPIORHB_PAD		0x000514a0
+
+			SC_P_ENET0_RGMII_TX_CTL_CONN_ENET0_RGMII_TX_CTL	0x00000061
+			SC_P_ENET0_RGMII_TXC_CONN_ENET0_RGMII_TXC	0x00000061
+			SC_P_ENET0_RGMII_TXD0_CONN_ENET0_RGMII_TXD0	0x00000061
+			SC_P_ENET0_RGMII_TXD1_CONN_ENET0_RGMII_TXD1	0x00000061
+			SC_P_ENET0_RGMII_TXD2_CONN_ENET0_RGMII_TXD2	0x00000061
+			SC_P_ENET0_RGMII_TXD3_CONN_ENET0_RGMII_TXD3	0x00000061
+			SC_P_ENET0_RGMII_RXC_CONN_ENET0_RGMII_RXC	0x00000061
+			SC_P_ENET0_RGMII_RX_CTL_CONN_ENET0_RGMII_RX_CTL	0x00000061
+			SC_P_ENET0_RGMII_RXD0_CONN_ENET0_RGMII_RXD0	0x00000061
+			SC_P_ENET0_RGMII_RXD1_CONN_ENET0_RGMII_RXD1	0x00000061
+			SC_P_ENET0_RGMII_RXD2_CONN_ENET0_RGMII_RXD2	0x00000061
+			SC_P_ENET0_RGMII_RXD3_CONN_ENET0_RGMII_RXD3	0x00000061
+		>;
+	};
+
+	pinctrl_fec_gpio: fecgpiogrp {
+		fsl,pins = <
+			/* PHY reset */
+			SC_P_QSPI0B_DATA0_LSIO_GPIO3_IO18	0x06000021
+			/* PHY interrupt */
+			SC_P_MIPI_DSI0_GPIO0_01_LSIO_GPIO1_IO28	0x06000021
+		>;
+	};
+
+	pinctrl_fec_mdio: fecmdiogrp {
+		fsl,pins = <
+			SC_P_ENET0_MDC_CONN_ENET0_MDC		0x06000020
+			SC_P_ENET0_MDIO_CONN_ENET0_MDIO		0x06000020
 		>;
 	};
 
@@ -389,6 +429,12 @@
 		fsl,pins = <
 			SC_P_UART2_TX_ADMA_UART2_TX	0x06000020
 			SC_P_UART2_RX_ADMA_UART2_RX	0x06000020
+		>;
+	};
+
+	pinctrl_mipi: mipi {
+		fsl,pins = <
+			SC_P_QSPI0B_DATA3_LSIO_GPIO3_IO21 0xC0000020
 		>;
 	};
 };
