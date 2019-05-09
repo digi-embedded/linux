@@ -234,7 +234,6 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan1>;
 	xceiver-supply = <&reg_5v_display>;
-	disable-fd-mode;
 	status = "disabled";
 };
 
@@ -244,7 +243,6 @@
 	pinctrl-0 = <&pinctrl_flexcan2>;
 	xceiver-supply = <&reg_5v_display>;
 	stby-gpios = <&gpio1 0 GPIO_ACTIVE_HIGH>;
-	disable-fd-mode;
 	status = "disabled";
 };
 
@@ -260,7 +258,6 @@
 	xceiver-supply = <&reg_5v_display>;
 	stby-gpios = <&gpio1 2 GPIO_ACTIVE_HIGH>;
 	pinctrl-assert-gpios = <&gpio3 23 GPIO_ACTIVE_HIGH>;
-	disable-fd-mode;
 	status = "disabled";
 };
 

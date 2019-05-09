@@ -105,7 +105,6 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan1>;
 	xceiver-supply = <&reg_3v3_ext>;
-	disable-fd-mode;
 	status = "disabled";
 };
 
@@ -114,7 +113,6 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan2>;
 	xceiver-supply = <&reg_3v3_ext>;
-	disable-fd-mode;
 	status = "disabled";
 };
 
@@ -123,7 +121,6 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan3>;
 	xceiver-supply = <&reg_3v3_ext>;
-	disable-fd-mode;
 	status = "disabled";
 };
 
