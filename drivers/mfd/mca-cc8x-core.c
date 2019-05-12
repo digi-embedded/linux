@@ -22,8 +22,8 @@
 #include <linux/proc_fs.h>
 #include <linux/kthread.h>
 #include <linux/uaccess.h>
-#include <linux/reboot.h>
 #include <linux/i2c.h>
+#include <linux/syscore_ops.h>
 
 #include <linux/mfd/mca-common/core.h>
 #include <linux/mfd/mca-cc8x/core.h>
@@ -785,28 +785,32 @@ static void mca_cc8x_power_off(void)
 }
 
 #define MCA_MAX_RESET_TRIES 5
-static int mca_cc8x_restart_handler(struct notifier_block *nb,
-				     unsigned long mode, void *cmd)
+static void mca_cc8x_shutdown(void)
 {
-	int ret;
-	int try = 0;
-	struct mca_drv *mca = container_of(nb, struct mca_drv,
-					     restart_handler);
 	const uint8_t unlock_pattern[] = {'C', 'T', 'R', 'U'};
+	int ret, try = 0;
+
+	if (system_state != SYSTEM_RESTART)
+		return;
+
+	if (!pmca) {
+		printk(KERN_ERR "ERROR: unable to shutdown [%s:%d/%s()]!\n",
+		       __FILE__, __LINE__, __func__);
+		return;
+	}
 
 	do {
-		ret = regmap_bulk_write(mca->regmap, MCA_CTRL_UNLOCK_0,
+		ret = regmap_bulk_write(pmca->regmap, MCA_CTRL_UNLOCK_0,
 					unlock_pattern, sizeof(unlock_pattern));
 		if (ret) {
-			dev_err(mca->dev, "failed to unlock ctrl regs (%d)\n",
+			dev_err(pmca->dev, "failed to unlock ctrl regs (%d)\n",
 				ret);
 			goto reset_retry;
 		}
 
-		ret = regmap_write(pmca->regmap, MCA_CTRL_0,
-				   MCA_RESET);
+		ret = regmap_write(pmca->regmap, MCA_CTRL_0, MCA_RESET);
 		if (ret)
-			dev_err(mca->dev, "failed to reset (%d)\n", ret);
+			dev_err(pmca->dev, "failed to reset (%d)\n", ret);
 
 		/*
 		 * The MCA will reset the cpu, so the retry should not happen...
@@ -817,9 +821,7 @@ reset_retry:
 		mdelay(10);
 	} while (++try < MCA_MAX_RESET_TRIES);
 
-	dev_err(mca->dev, "failed to reboot!\n");
-
-	return NOTIFY_DONE;
+	dev_err(pmca->dev, "failed to reboot!\n");
 }
 
 static int mca_cc8x_add_dyn_sysfs_entries(struct mca_drv *mca,
@@ -982,17 +984,12 @@ int mca_cc8x_device_init(struct mca_drv *mca, u32 irq)
 	pm_runtime_get_noresume(mca->dev->parent->parent);
 
 	/*
-	 * Register the MCA restart handler with high priority to ensure it is
-	 * called first
+	 * Register the MCA restart/shutdown callback as a syscore operation. It
+	 * can not be a reset_handler because that callback is executed in
+	 * atomic context.
 	 */
-	mca->restart_handler.notifier_call = mca_cc8x_restart_handler;
-	mca->restart_handler.priority = 200;
-	ret = register_restart_handler(&mca->restart_handler);
-	if (ret) {
-		dev_err(mca->dev,
-			"failed to register restart handler (%d)\n", ret);
-		goto out_pwr_off;
-	}
+	mca->syscore.shutdown = mca_cc8x_shutdown;
+	register_syscore_ops(&mca->syscore);
 
 	if (mca->fw_version >= MCA_MAKE_FW_VER(0, 8)) {
 		mca->nvram = devm_kzalloc(mca->dev, sizeof(struct bin_attribute),
@@ -1037,7 +1034,7 @@ out_irq:
 
 void mca_cc8x_device_exit(struct mca_drv *mca)
 {
-	unregister_restart_handler(&mca->restart_handler);
+	unregister_syscore_ops(&mca->syscore);
 	pm_power_off = NULL;
 	pmca = NULL;
 	pm_runtime_put_noidle(mca->dev->parent->parent);
