@@ -12,6 +12,7 @@
 
 #include <linux/interrupt.h>
 #include <linux/platform_device.h>
+#include <linux/syscore_ops.h>
 #include <linux/mfd/mca-common/registers.h>
 #include <linux/gpio.h>
 
@@ -58,7 +59,6 @@ struct mca_drv {
 	u32 flags;
 	struct regmap *regmap;
 	struct regmap_irq_chip_data *regmap_irq;
-	struct notifier_block restart_handler;
 	int chip_irq;
 	u32 irq_base;
 	int gpio_base;
@@ -68,6 +68,7 @@ struct mca_drv {
 	u32 last_mpu_reset;
 	struct bin_attribute *nvram;
 	struct device *i2c_adapter_dev;
+	struct syscore_ops syscore;
 };
 
 #endif /* MFD_MCA_COMMON_CORE_H_ */
