@@ -687,15 +687,6 @@
 	status = "disabled";
 };
 
-&rpmsg{
-	/*
-	 * 64K for one rpmsg instance:
-	 */
-	vdev-nums = <1>;
-	reg = <0x0 0x90000000 0x0 0x10000>;
-	status = "okay";
-};
-
 &sai0 {
 	assigned-clocks = <&clk IMX8QXP_AUD_PLL0_DIV>,
 			  <&clk IMX8QXP_AUD_ACM_AUD_PLL_CLK0_DIV>,
