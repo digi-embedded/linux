@@ -240,6 +240,19 @@
 	status = "okay";
 };
 
+&vpu {
+	status = "disabled";
+};
+
+&vpu_decoder {
+	core_type = <1>;
+	status = "disabled";
+};
+
+&vpu_encoder {
+	status = "disabled";
+};
+
 /* IOMUX */
 &iomuxc {
 	/* Internal I2C (MCA, Crypto chip) */

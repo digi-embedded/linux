@@ -777,19 +777,6 @@
 	status = "disabled";
 };
 
-&vpu {
-	status = "disabled";
-};
-
-&vpu_decoder {
-	core_type = <1>;
-	status = "disabled";
-};
-
-&vpu_encoder {
-	status = "disabled";
-};
-
 /* IOMUX */
 &iomuxc {
 	pinctrl-names = "default";
