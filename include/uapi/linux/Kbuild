@@ -104,6 +104,7 @@ header-y += dlm_device.h
 header-y += dlm.h
 header-y += dlm_netlink.h
 header-y += dlm_plock.h
+header-y += dma-buf.h
 header-y += dm-ioctl.h
 header-y += dm-log-userspace.h
 header-y += dn.h
