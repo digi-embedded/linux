@@ -389,10 +389,10 @@ static const struct dma_buf_ops dma_buf_ops = {
 	.detach = ion_dma_buf_detatch,
 	.begin_cpu_access = ion_dma_buf_begin_cpu_access,
 	.end_cpu_access = ion_dma_buf_end_cpu_access,
-	.map_atomic = ion_dma_buf_kmap,
-	.unmap_atomic = ion_dma_buf_kunmap,
-	.map = ion_dma_buf_kmap,
-	.unmap = ion_dma_buf_kunmap,
+	.kmap_atomic = ion_dma_buf_kmap,
+	.kunmap_atomic = ion_dma_buf_kunmap,
+	.kmap = ion_dma_buf_kmap,
+	.kunmap = ion_dma_buf_kunmap,
 };
 
 int ion_alloc(size_t len, unsigned int heap_id_mask, unsigned int flags)
