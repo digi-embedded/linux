@@ -36,7 +36,7 @@
 #include <linux/debugfs.h>
 #include <linux/dma-buf.h>
 #include <linux/idr.h>
-#include <linux/sched/task.h>
+#include <linux/sched.h>
 
 #include "ion.h"
 

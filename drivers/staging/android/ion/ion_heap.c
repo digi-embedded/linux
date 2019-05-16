@@ -20,7 +20,6 @@
 #include <linux/mm.h>
 #include <linux/rtmutex.h>
 #include <linux/sched.h>
-#include <uapi/linux/sched/types.h>
 #include <linux/scatterlist.h>
 #include <linux/vmalloc.h>
 #include "ion.h"
