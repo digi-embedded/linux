@@ -40,6 +40,7 @@
 #define MCA_UART_TX_FIFO_SIZE		128
 #define MCA_UART_CLK			24000000
 #define MCA_UART_MAX_TX_FRAME_LEN	32
+#define MCA_UART_MAX_RS485_DELAY_MS	250
 
 #define MCA_REG_UART_FLUSH_BUF_MSK	(MCA_REG_UART_CFG0_CTX | \
 					 MCA_REG_UART_CFG0_CRX)
@@ -61,6 +62,7 @@ enum mca_uart_type {
 
 enum {
 	WORK_FLUSH_BUF	= BIT(0),
+	WORK_RS485_CFG	= BIT(1),
 };
 
 struct mca_uart_data {
@@ -398,6 +400,26 @@ static void mca_uart_flush_buffer(struct uart_port *port)
 	schedule_work(&mca_uart->dc_work);
 }
 
+static int mca_uart_rs485_config(struct uart_port *port,
+				 struct serial_rs485 *rs485conf)
+{
+	struct mca_uart *mca_uart = to_mca_uart(port, port);
+
+	if ((rs485conf->delay_rts_before_send > MCA_UART_MAX_RS485_DELAY_MS) ||
+	    (rs485conf->delay_rts_after_send > MCA_UART_MAX_RS485_DELAY_MS))
+		return -ERANGE;
+
+	port->rs485 = *rs485conf;
+
+	mutex_lock(&mca_uart->mutex);
+	mca_uart->pending_dc_work |= WORK_RS485_CFG;
+	mutex_unlock(&mca_uart->mutex);
+
+	schedule_work(&mca_uart->dc_work);
+
+	return 0;
+}
+
 static const struct uart_ops mca_uart_ops = {
 	.tx_empty	= mca_uart_tx_empty,
 	.set_mctrl	= mca_uart_set_mctrl,
@@ -633,6 +655,51 @@ ret:
 	return IRQ_HANDLED;
 }
 
+static int mca_uart_reconf_rs485(struct mca_uart *mca_uart)
+{
+	struct regmap *regmap = mca_uart->mca->regmap;
+	struct serial_rs485 *rs485conf = &mca_uart->port.rs485;
+	unsigned int cfg2_reg = 0;
+	int ret;
+
+	if (rs485conf->flags & SER_RS485_ENABLED)
+		cfg2_reg |= MCA_REG_UART_CFG2_RS485_EN;
+
+	if (!(rs485conf->flags & SER_RS485_RTS_ON_SEND) &&
+	    (rs485conf->flags & SER_RS485_RTS_AFTER_SEND))
+		cfg2_reg |= MCA_REG_UART_CFG2_RTS_INV;
+
+	ret = regmap_update_bits(regmap, mca_uart->baddr + MCA_REG_UART_CFG2,
+				 MCA_REG_UART_CFG2_RS485_EN |
+				 MCA_REG_UART_CFG2_RTS_INV,
+				 cfg2_reg);
+	if (ret < 0) {
+		dev_err(mca_uart->port.dev,
+			"Failed writing MCA_REG_UART_CFG2 (%d)\n", ret);
+		return ret;
+	}
+
+	ret = regmap_write(regmap,
+			   mca_uart->baddr + MCA_REG_UART_RS485_PRE_DEL,
+			   rs485conf->delay_rts_before_send);
+	if (ret) {
+		dev_err(mca_uart->port.dev,
+			"Failed writing MCA_REG_UART_RS485_PRE_DEL (%d)\n",
+			ret);
+		return ret;
+	}
+
+	ret = regmap_write(regmap,
+			   mca_uart->baddr + MCA_REG_UART_RS485_POST_DEL,
+			   rs485conf->delay_rts_after_send);
+	if (ret)
+		dev_err(mca_uart->port.dev,
+			"Failed writing MCA_UART_RS485_POST_DEL reg (%d)\n",
+			ret);
+
+	return ret;
+}
+
 static void mca_uart_dc_work_proc(struct work_struct *ws)
 {
 	struct mca_uart *mca_uart = to_mca_uart(ws, dc_work);
@@ -650,6 +717,9 @@ static void mca_uart_dc_work_proc(struct work_struct *ws)
 			dev_err(mca_uart->port.dev,
 				"Failed to read MCA_REG_UART_CFG0\n");
 	}
+
+	if (mca_uart->pending_dc_work & WORK_RS485_CFG)
+		(void)mca_uart_reconf_rs485(mca_uart);
 
 	mca_uart->pending_dc_work = 0;
 
@@ -732,6 +802,45 @@ static inline struct mca_uart_data *mca_uart_get_driver_data(struct platform_dev
 	return (struct mca_uart_data *)platform_get_device_id(pdev)->driver_data;
 }
 
+static int mca_uart_get_rs485_config_of(struct mca_uart *mca_uart, struct device_node *np)
+{
+	struct uart_port *port = &mca_uart->port;
+	struct serial_rs485 *rs485conf = &port->rs485;
+	u32 rs485_delay[2];
+	int i;
+
+	rs485conf->flags = SER_RS485_RTS_ON_SEND;
+
+	if (!of_property_read_u32_array(np, "rs485-rts-delay", rs485_delay, 2)) {
+		for (i = 0; i < 2; i++) {
+			if (rs485_delay[i] > MCA_UART_MAX_RS485_DELAY_MS) {
+				dev_warn(port->dev,
+					"RS485 rts-%s-send (%u) limit exceeded,"
+					" set to %d ms\n",
+					i ? "after" : "before", rs485_delay[i],
+					MCA_UART_MAX_RS485_DELAY_MS);
+				rs485_delay[i] = MCA_UART_MAX_RS485_DELAY_MS;
+			}
+		}
+
+		rs485conf->delay_rts_before_send = rs485_delay[0];
+		rs485conf->delay_rts_after_send = rs485_delay[1];
+	}
+
+	if (of_property_read_bool(np, "rs485-rts-active-low")) {
+		rs485conf->flags &= ~SER_RS485_RTS_ON_SEND;
+		rs485conf->flags |= SER_RS485_RTS_AFTER_SEND;
+	}
+
+	if (of_property_read_bool(np, "linux,rs485-enabled-at-boot-time"))
+		rs485conf->flags |= SER_RS485_ENABLED;
+
+	if (of_property_read_bool(np, "rs485-rx-during-tx"))
+		rs485conf->flags |= SER_RS485_RX_DURING_TX;
+
+	return 0;
+}
+
 static int mca_uart_get_pins(struct mca_uart_drv *uart_drv,
 			     struct mca_uart *mca_uart, struct device_node *np)
 {
@@ -796,6 +905,9 @@ static int mca_uart_get_config_of(struct mca_uart_drv *uart_drv, int num_uarts)
 		mca_uart->line = val;
 
 		if (mca_uart_get_pins(uart_drv, mca_uart, node))
+			continue;
+
+		if (mca_uart_get_rs485_config_of(mca_uart, node))
 			continue;
 
 		uart_drv->num_uarts++;
@@ -982,6 +1094,7 @@ static int mca_uart_probe(struct platform_device *pdev)
 		mca_uart->port.iotype = UPIO_PORT;
 		mca_uart->port.uartclk = MCA_UART_CLK;
 		mca_uart->port.ops = &mca_uart_ops;
+		mca_uart->port.rs485_config = mca_uart_rs485_config;
 		mca_uart->port.attr_group = &uart_port_extra_attr;
 		mutex_init(&mca_uart->mutex);
 
@@ -1008,6 +1121,11 @@ static int mca_uart_probe(struct platform_device *pdev)
 			i--;
 			goto error_port;
 		}
+
+		/* Apply initial settings for rs485 */
+		ret = mca_uart_reconf_rs485(mca_uart);
+		if (ret)
+			goto error_port;
 
 		/* Enable UART */
 		ret = regmap_write(regmap, mca_uart->baddr + MCA_REG_UART_CFG0,
