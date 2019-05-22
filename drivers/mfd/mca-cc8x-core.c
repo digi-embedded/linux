@@ -793,14 +793,7 @@ static int mca_cc8x_restart_handler(struct notifier_block *nb,
 	struct mca_drv *mca = container_of(nb, struct mca_drv,
 					     restart_handler);
 	const uint8_t unlock_pattern[] = {'C', 'T', 'R', 'U'};
-	const int loglevel_save = console_loglevel;
-	
-	/*
-	 * Reduce loglevel to work around the WARN_ON() thrown by i2c transfers
-	 * during reboot.
-	 */
-	console_loglevel = CONSOLE_LOGLEVEL_SILENT;
-	
+
 	do {
 		ret = regmap_bulk_write(mca->regmap, MCA_CTRL_UNLOCK_0,
 					unlock_pattern, sizeof(unlock_pattern));
@@ -824,8 +817,6 @@ reset_retry:
 		mdelay(10);
 	} while (++try < MCA_MAX_RESET_TRIES);
 
-	console_loglevel = loglevel_save;
-	
 	dev_err(mca->dev, "failed to reboot!\n");
 
 	return NOTIFY_DONE;
