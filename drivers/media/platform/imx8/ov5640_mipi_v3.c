@@ -43,6 +43,11 @@
 #define OV5640_SENS_PAD_SOURCE	0
 #define OV5640_SENS_PADS_NUM	1
 
+/*
+ * PLL multiplier (any integer 4-127, only even integers in 128-252)
+ */
+#define OV5640_SC_PLL_CONTRL2 		0x3036
+
 enum ov5640_mode {
 	ov5640_mode_MIN = 0,
 	ov5640_mode_1080P_1920_1080 = 0,
@@ -681,6 +686,26 @@ static int ov5640_download_firmware(struct ov5640 *sensor,
 		RegAddr = pModeSetting->u16RegAddr;
 		Val = pModeSetting->u8Val;
 		Mask = pModeSetting->u8Mask;
+
+		/*
+		 * Workaround: use the OV5640 internal PLL to compensate for
+		 * an incorrect reference clock. This fixes all 30fps currently
+		 * supported modes, except for 1920x1080@30fps which cannot
+		 * work on B0 revision (see errata document).
+		 *
+		 * This needs to be revisited on C0 sillicon or once the
+		 * reference clock is correctly provided to the sensor.
+		 */
+		if (RegAddr == OV5640_SC_PLL_CONTRL2) {
+			int new_val = 2 * Val + Val / 2;
+			if (new_val > 252)
+				new_val = 252;
+			else if (new_val >= 128)
+				new_val &= 0xEF;
+
+			pr_debug("adjusting PLL multiplier: %d --> %d\n", Val, new_val);
+			Val = (u8) new_val;
+		}
 
 		if (Mask) {
 			retval = ov5640_read_reg(sensor, RegAddr, &RegVal);
