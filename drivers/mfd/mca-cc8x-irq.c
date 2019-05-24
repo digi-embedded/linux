@@ -89,6 +89,10 @@ static const struct regmap_irq mca_cc8x_irqs[] = {
 		.reg_offset = MCA_IRQ_2_OFFSET,
 		.mask = MCA_M_UART2,
 	},
+	[MCA_CC8X_IRQ_RTC_PERIODIC_IRQ] = {
+		.reg_offset = MCA_IRQ_2_OFFSET,
+		.mask = MCA_M_RTC_PERIODIC_IRQ,
+	},
 };
 
 /*
