@@ -148,6 +148,8 @@
 #define MCA_RTC_ALARM_MIN		0x010F
 #define MCA_RTC_ALARM_SEC		0x0110
 
+#define MCA_RTC_PERIODIC_IRQ_FREQ	0x0120
+
 
 /* EP2: Watchdog */
 #define MCA_WDT_CONTROL			0x0201
@@ -1271,6 +1273,7 @@
 #define MCA_M_UART0		BIT(2)
 #define MCA_M_UART1		BIT(3)
 #define MCA_M_UART2		BIT(4)
+#define MCA_M_RTC_PERIODIC_IRQ	BIT(5)
 
 /* MCA_PWR_CTRL_0 (addr=0x0028) */
 #define MCA_PWR_KEY_SLEEP_EN	BIT(0)
@@ -1351,7 +1354,7 @@
 #define MCA_RTC_EN		BIT(0)
 #define MCA_RTC_ALARM_EN	BIT(1)
 #define MCA_RTC_1HZ_EN		BIT(2)
-#define MCA_RTC_32KHZ_OUT_EN	BIT(3)
+#define MCA_RTC_PERIODIC_EN	BIT(3)
 
 /* MCA_RTC_COUNT_YEAR_L (addr=0x0103) */
 /* MCA_RTC_ALARM_YEAR_L (addr=0x010A) */
