@@ -149,6 +149,7 @@
 #define MCA_RTC_ALARM_SEC		0x0110
 
 #define MCA_RTC_PERIODIC_IRQ_FREQ	0x0120
+#define MCA_RTC_IRQ_PIN			0x0122
 
 
 /* EP2: Watchdog */
@@ -1355,6 +1356,7 @@
 #define MCA_RTC_ALARM_EN	BIT(1)
 #define MCA_RTC_1HZ_EN		BIT(2)
 #define MCA_RTC_PERIODIC_EN	BIT(3)
+#define MCA_RTC_IRQ_PIN_EN	BIT(4)
 
 /* MCA_RTC_COUNT_YEAR_L (addr=0x0103) */
 /* MCA_RTC_ALARM_YEAR_L (addr=0x010A) */
