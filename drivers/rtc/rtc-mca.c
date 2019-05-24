@@ -32,6 +32,15 @@
 
 #define MCA_DRVNAME_RTC		"mca-rtc"
 
+// Digi RTC IOCTLs custom implementation using MCA
+#define RTC_IOCTL_DIGI 0x100
+#define RTC_MCA_UIE_ON 		(RTC_IOCTL_DIGI + RTC_UIE_ON)
+#define RTC_MCA_UIE_OFF 	(RTC_IOCTL_DIGI + RTC_UIE_OFF)
+#define RTC_MCA_PIE_ON 		(RTC_IOCTL_DIGI + RTC_PIE_ON)
+#define RTC_MCA_PIE_OFF 	(RTC_IOCTL_DIGI + RTC_PIE_OFF)
+#define RTC_MCA_IRQP_READ	(RTC_IOCTL_DIGI + RTC_IRQP_READ)
+#define RTC_MCA_IRQP_SET 	(RTC_IOCTL_DIGI + RTC_IRQP_SET)
+
 #define CLOCK_DATA_LEN	(MCA_RTC_COUNT_SEC - MCA_RTC_COUNT_YEAR_L + 1)
 #define ALARM_DATA_LEN	(MCA_RTC_ALARM_SEC - MCA_RTC_ALARM_YEAR_L + 1)
 
@@ -50,6 +59,8 @@ struct mca_rtc {
 	struct rtc_device *rtc_dev;
 	struct mca_drv *mca;
 	int irq_alarm;
+	int irq_1HZ;
+	int irq_periodic;
 	bool alarm_enabled;
 };
 
@@ -119,6 +130,70 @@ static int mca_rtc_start_alarm(struct device *dev)
 	return regmap_update_bits(rtc->mca->regmap, MCA_RTC_CONTROL,
 				  MCA_RTC_ALARM_EN,
 				  MCA_RTC_ALARM_EN);
+}
+
+static int mca_rtc_ioctl(struct device *dev, unsigned int cmd, unsigned long arg)
+{
+	struct mca_rtc *rtc = dev_get_drvdata(dev);
+	void __user *uarg = (void __user *) arg;
+	int ret;
+	bool enable;
+	unsigned long value_long;	// ioctl with the user uses an unsigned long
+	unsigned short value_short;	// i2c bus with the MCA uses an unsigned short
+
+	switch (cmd) {
+		case RTC_MCA_UIE_ON:
+		case RTC_MCA_UIE_OFF:
+			enable = cmd == RTC_MCA_UIE_ON;
+
+			ret = regmap_update_bits(rtc->mca->regmap, MCA_RTC_CONTROL,
+						 MCA_RTC_1HZ_EN,
+						 enable ? MCA_RTC_1HZ_EN : 0);
+			if (ret) {
+				dev_err(rtc->mca->dev, "Cannot update MCA_RTC_CONTROL register (%d)\n", ret);
+				return -EFAULT;
+			}
+			break;
+		case RTC_MCA_PIE_ON:
+		case RTC_MCA_PIE_OFF:
+			enable = cmd == RTC_MCA_PIE_ON;
+
+			ret = regmap_update_bits(rtc->mca->regmap, MCA_RTC_CONTROL,
+						 MCA_RTC_PERIODIC_EN,
+						 enable ? MCA_RTC_PERIODIC_EN : 0);
+			if (ret) {
+				dev_err(rtc->mca->dev, "Cannot update MCA_RTC_CONTROL register (%d)\n", ret);
+				return -EFAULT;
+			}
+			break;
+		case RTC_MCA_IRQP_READ:
+			ret = regmap_bulk_read(rtc->mca->regmap, MCA_RTC_PERIODIC_IRQ_FREQ,
+					       &value_short, sizeof(unsigned short));
+			if (ret < 0) {
+				dev_err(dev, "Failed to get RTC periodic irq freq: %d\n", ret);
+				return -EFAULT;
+			}
+			value_long = 1024 / value_short;	// Convert from ticks to HZs
+
+			put_user(value_long, (unsigned long __user *)uarg);
+			break;
+		case RTC_MCA_IRQP_SET:
+			value_long = *(unsigned long*)&arg;
+
+			value_short = 1024 / value_long;	// Convert from HZs to ticks
+
+			ret = regmap_bulk_write(rtc->mca->regmap, MCA_RTC_PERIODIC_IRQ_FREQ,
+						&value_short, sizeof(unsigned short));
+			if (ret < 0) {
+				dev_err(dev, "Failed to set RTC periodic irq freq: %d\n", ret);
+				return -EFAULT;
+			}
+			break;
+		default:
+			return -ENOIOCTLCMD;
+	}
+
+	return 0;
 }
 
 static int mca_rtc_read_time(struct device *dev, struct rtc_time *tm)
@@ -253,7 +328,26 @@ static irqreturn_t mca_alarm_event(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
+static irqreturn_t mca_1HZ_event(int irq, void *data)
+{
+	struct mca_rtc *rtc = data;
+
+	rtc_handle_legacy_irq(rtc->rtc_dev, 1, RTC_UF);
+
+	return IRQ_HANDLED;
+}
+
+static irqreturn_t mca_periodic_irq_event(int irq, void *data)
+{
+	struct mca_rtc *rtc = data;
+
+	rtc_handle_legacy_irq(rtc->rtc_dev, 1, RTC_PF);
+
+	return IRQ_HANDLED;
+}
+
 static const struct rtc_class_ops mca_rtc_ops = {
+	.ioctl = mca_rtc_ioctl,
 	.read_time = mca_rtc_read_time,
 	.set_time = mca_rtc_set_time,
 	.read_alarm = mca_rtc_read_alarm,
@@ -333,6 +427,30 @@ static int mca_rtc_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "Failed to request %s IRQ. (%d)\n",
 			MCA_IRQ_RTC_ALARM_NAME, rtc->irq_alarm);
 		rtc->irq_alarm = -ENXIO;
+	}
+
+	rtc->irq_1HZ = platform_get_irq_byname(pdev,
+					       MCA_IRQ_RTC_1HZ_NAME);
+	ret = devm_request_threaded_irq(&pdev->dev, rtc->irq_1HZ, NULL,
+					mca_1HZ_event,
+					IRQF_TRIGGER_LOW | IRQF_ONESHOT,
+					MCA_IRQ_RTC_1HZ_NAME, rtc);
+	if (ret) {
+		dev_err(&pdev->dev, "Failed to request %s IRQ. (%d)\n",
+			MCA_IRQ_RTC_1HZ_NAME, rtc->irq_1HZ);
+		rtc->irq_1HZ = -ENXIO;
+	}
+
+	rtc->irq_periodic = platform_get_irq_byname(pdev,
+							MCA_IRQ_RTC_PERIODIC_IRQ_NAME);
+	ret = devm_request_threaded_irq(&pdev->dev, rtc->irq_periodic,
+					NULL, mca_periodic_irq_event,
+					IRQF_TRIGGER_LOW | IRQF_ONESHOT,
+					MCA_IRQ_RTC_PERIODIC_IRQ_NAME, rtc);
+	if (ret) {
+		dev_err(&pdev->dev, "Failed to request %s IRQ. (%d)\n",
+			MCA_IRQ_RTC_PERIODIC_IRQ_NAME, rtc->irq_periodic);
+		rtc->irq_periodic = -ENXIO;
 	}
 
 	return 0;

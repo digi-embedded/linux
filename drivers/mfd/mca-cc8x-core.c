@@ -140,6 +140,12 @@ static struct resource mca_cc8x_rtc_resources[] = {
 		.end    = MCA_CC8X_IRQ_RTC_1HZ,
 		.flags  = IORESOURCE_IRQ,
 	},
+	{
+		.name   = MCA_IRQ_RTC_PERIODIC_IRQ_NAME,
+		.start  = MCA_CC8X_IRQ_RTC_PERIODIC_IRQ,
+		.end    = MCA_CC8X_IRQ_RTC_PERIODIC_IRQ,
+		.flags  = IORESOURCE_IRQ,
+	},
 };
 
 static struct resource mca_cc8x_watchdog_resources[] = {
