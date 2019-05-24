@@ -355,6 +355,89 @@ static const struct rtc_class_ops mca_rtc_ops = {
 	.alarm_irq_enable = mca_rtc_alarm_irq_enable,
 };
 
+static const char _enabled[] = "enabled";
+static const char _disabled[] = "disabled";
+
+static ssize_t rtc_irq_pin_enable_show(struct device *dev,
+				       struct device_attribute *attr, char *buf)
+{
+	struct mca_rtc *rtc = dev_get_drvdata(dev);
+	unsigned int val;
+	int ret;
+
+	ret = regmap_read(rtc->mca->regmap, MCA_RTC_CONTROL, &val);
+	if (ret) {
+		dev_err(rtc->mca->dev, "Cannot read MCA MCA_RTC_CONTROL register(%d)\n",
+			ret);
+		return 0;
+	}
+
+	return sprintf(buf, "%s\n", val & MCA_RTC_IRQ_PIN_EN ?
+		       _enabled : _disabled);
+}
+
+static ssize_t rtc_irq_pin_enable_store(struct device *dev, struct device_attribute *attr,
+					const char *buf, size_t count)
+{
+	struct mca_rtc *rtc = dev_get_drvdata(dev);
+	bool enable;
+	int ret;
+
+	if (!strncmp(buf, _enabled, sizeof(_enabled) - 1))
+		enable = true;
+	else if (!strncmp(buf, _disabled, sizeof(_disabled) - 1))
+		enable = false;
+	else
+		return -EINVAL;
+
+	ret = regmap_update_bits(rtc->mca->regmap, MCA_RTC_CONTROL,
+				 MCA_RTC_IRQ_PIN_EN,
+				 enable ? MCA_RTC_IRQ_PIN_EN : 0);
+	if (ret) {
+		dev_err(rtc->mca->dev, "Cannot update MCA_RTC_CONTROL register (%d)\n", ret);
+		return ret;
+	}
+
+	return count;
+}
+static DEVICE_ATTR(rtc_irq_pin_enable, 0644, rtc_irq_pin_enable_show,
+		   rtc_irq_pin_enable_store);
+
+static ssize_t rtc_irq_pin_store(struct device *dev, struct device_attribute *attr,
+				 const char *buf, size_t size)
+{
+	struct mca_rtc *rtc = dev_get_drvdata(dev);
+	ssize_t status;
+	int ret;
+	unsigned int value;
+
+	status = kstrtouint(buf, 0, &value);
+	if (status) {
+		dev_err(rtc->mca->dev, "Invalid RTC irq pin\n");
+		return -EINVAL;
+	}
+
+	ret = regmap_bulk_write(rtc->mca->regmap, MCA_RTC_IRQ_PIN,
+				&value, sizeof(uint8_t));
+	if (ret < 0) {
+		dev_err(rtc->mca->dev, "Cannot set RTC irq pin (%d)\n", ret);
+		return ret;
+	}
+
+	return size;
+}
+static DEVICE_ATTR_WO(rtc_irq_pin);
+
+static struct attribute *mca_rtc_attrs[] = {
+	&dev_attr_rtc_irq_pin_enable.attr,
+	&dev_attr_rtc_irq_pin.attr,
+	NULL
+};
+
+static struct attribute_group mca_rtc_attr_group = {
+	.attrs = mca_rtc_attrs,
+};
+
 static int mca_rtc_probe(struct platform_device *pdev)
 {
 	struct mca_drv *mca = dev_get_drvdata(pdev->dev.parent);
@@ -451,6 +534,13 @@ static int mca_rtc_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "Failed to request %s IRQ. (%d)\n",
 			MCA_IRQ_RTC_PERIODIC_IRQ_NAME, rtc->irq_periodic);
 		rtc->irq_periodic = -ENXIO;
+	}
+
+	ret = sysfs_create_group(&pdev->dev.kobj, &mca_rtc_attr_group);
+	if (ret) {
+		dev_err(&pdev->dev, "Failed to create sysfs entries (%d).\n",
+			ret);
+		goto err;
 	}
 
 	return 0;
