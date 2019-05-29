@@ -1155,7 +1155,7 @@
 
 	pinctrl_mipi: mipi {
 		fsl,pins = <
-			SC_P_QSPI0B_DATA3_LSIO_GPIO3_IO21 0xC0000020
+			SC_P_QSPI0B_DATA3_LSIO_GPIO3_IO21 0xC0000041
 		>;
 	};
 };
