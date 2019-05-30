@@ -25,8 +25,8 @@
 /* UART1 (Bluetooth) */
 &uart1 {
 	pinctrl-names = "default", "dte_noflow";
-	pinctrl-0 = <&pinctrl_uart1>;
-	pinctrl-1 = <&pinctrl_uart1_dte_noflow>;
+	pinctrl-0 = <&pinctrl_uart1 &pinctrl_uart1_gpio>;
+	pinctrl-1 = <&pinctrl_uart1_dte_noflow &pinctrl_uart1_gpio>;
 	uart-has-rtscts;
 	/*
 	 * NOTE: The default configuration for CC6UL SOM hardware vesion 4
@@ -46,8 +46,8 @@
 /* USDHC1 (Wireless) */
 &usdhc1 {
 	pinctrl-names = "default", "sleep";
-	pinctrl-0 = <&pinctrl_usdhc1 &pinctrl_wifibt_ctrl>;
-	pinctrl-1 = <&pinctrl_usdhc1_sleep &pinctrl_wifibt_ctrl_sleep>;
+	pinctrl-0 = <&pinctrl_usdhc1 &pinctrl_wifi_gpio>;
+	pinctrl-1 = <&pinctrl_usdhc1_sleep &pinctrl_wifi_gpio_sleep>;
 	non-removable;
 	no-1-8-v;
 	bus-width = <4>;
@@ -75,6 +75,13 @@
 			>;
 		};
 
+		pinctrl_uart1_gpio: uart1grp_gpio {
+			fsl,pins = <
+				/* BT_EN. Configure as open-drain */
+				MX6UL_PAD_SNVS_TAMPER9__GPIO5_IO09	0x08a0
+			>;
+		};
+
 		pinctrl_usdhc1: usdhc1grp {
 			fsl,pins = <
 				MX6UL_PAD_SD1_CMD__USDHC1_CMD		0x17059
@@ -86,11 +93,10 @@
 			>;
 		};
 
-		pinctrl_wifibt_ctrl: wifibt_ctrl_grp {
+		pinctrl_wifi_gpio: wifibt_ctrl_grp {
 			fsl,pins = <
-				/* Configure as open-drain */
+				/* WL_EN. Configure as open-drain */
 				MX6UL_PAD_SNVS_TAMPER0__GPIO5_IO00	0x08a0
-				MX6UL_PAD_SNVS_TAMPER9__GPIO5_IO09	0x08a0
 			>;
 		};
 
@@ -105,10 +111,9 @@
 			>;
 		};
 
-		pinctrl_wifibt_ctrl_sleep: wifibt_ctrl_grp_sleep {
+		pinctrl_wifi_gpio_sleep: wifibt_ctrl_grp_sleep {
 			fsl,pins = <
 				MX6UL_PAD_SNVS_TAMPER0__GPIO5_IO00	0x3000
-				MX6UL_PAD_SNVS_TAMPER9__GPIO5_IO09	0x3000
 			>;
 		};
 	};
