@@ -726,20 +726,12 @@
 /* usbotg3 phy */
 &usbphynop1 {
 	/*
-	 * On the SBCPro version 2, the USB 3.0 interface does not work properly
-	 * due to a hardware issue.
-	 *
-	 * Declaring a consumer for reg_3v3_usb_sw regulator will enable it and
-	 * will power the USB3 switch, causing problems with the detection of
-	 * usb devices connected to the TypeC connector.
-	 * By keeping the switch unpowered at least we ensure that the USB 2.0
-	 * interface available on the TypeC connector will work.
-	 *
-	 * Uncomment the following line only on hardware where this problem has
-	 * been corrected.
+	 * USB 3.0 on TypeC connector only works on SBC Pro versions >= 3.
+	 * If using an earlier version of the SBC Pro, comment this line
+	 * to have the port work as USB 2.0 on the TypeC connector.
 	 */
 
-	 /* vcc-supply = <&reg_3v3_usb_sw>; */
+	 vcc-supply = <&reg_3v3_usb_sw>;
 };
 
 /* Micro SD card */
