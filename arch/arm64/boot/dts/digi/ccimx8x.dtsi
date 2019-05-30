@@ -188,7 +188,7 @@
 				index = <1>;
 			};
 
-			mca_uart2: serial@940 {
+			mca_uart2: serial@0x940 {
 				reg = <0x940>;
 				index = <2>;
 			};

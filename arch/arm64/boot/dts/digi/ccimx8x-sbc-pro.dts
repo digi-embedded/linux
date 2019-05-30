@@ -315,7 +315,7 @@
 //	};
 
 	/* UART connected to XBee socket */
-	mca_uart2: serial@940 {
+	mca_uart2: serial@0x940 {
 		iopins-names = "rx", "tx", "cts", "rts";
 		iopins = <2 1 3 4>;
 	};
