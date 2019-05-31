@@ -24,9 +24,10 @@
 
 /* UART1 (Bluetooth) */
 &uart1 {
-	pinctrl-names = "default", "dte_noflow";
+	pinctrl-names = "default", "dte_noflow", "sleep";
 	pinctrl-0 = <&pinctrl_uart1 &pinctrl_uart1_gpio>;
 	pinctrl-1 = <&pinctrl_uart1_dte_noflow &pinctrl_uart1_gpio>;
+	pinctrl-2 = <&pinctrl_uart1 &pinctrl_uart1_gpio_sleep>;
 	uart-has-rtscts;
 	/*
 	 * NOTE: The default configuration for CC6UL SOM hardware vesion 4
@@ -79,6 +80,22 @@
 			fsl,pins = <
 				/* BT_EN. Configure as open-drain */
 				MX6UL_PAD_SNVS_TAMPER9__GPIO5_IO09	0x08a0
+			>;
+		};
+
+		pinctrl_uart1_sleep: uart1grp_sleep {
+			fsl,pins = <
+				MX6UL_PAD_UART1_TX_DATA__GPIO1_IO16	0x3000
+				MX6UL_PAD_UART1_RX_DATA__GPIO1_IO17	0x3000
+				MX6UL_PAD_UART1_RTS_B__GPIO1_IO19	0x3000
+				MX6UL_PAD_UART1_CTS_B__GPIO1_IO18	0x3000
+			>;
+		};
+
+		pinctrl_uart1_gpio_sleep: uart1grp_gpio_sleep {
+			fsl,pins = <
+				/* BT_EN */
+				MX6UL_PAD_SNVS_TAMPER9__GPIO5_IO09	0x3000
 			>;
 		};
 
