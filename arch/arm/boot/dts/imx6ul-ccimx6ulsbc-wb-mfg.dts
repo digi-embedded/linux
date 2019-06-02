@@ -19,10 +19,6 @@
 /* ConnectCore 6UL SBC */
 #include "imx6ul-ccimx6ulsbc.dtsi"
 
-&caam_keyblob {
-	status = "okay";
-};
-
 /* ENET1 */
 &fec1 {
 	status = "okay";
