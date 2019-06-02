@@ -55,6 +55,10 @@
 		i2c3 = &i2c3;
 	};
 
+	caam_keyblob: caam-keyblob {
+		compatible = "fsl,sec-v4.0-keyblob";
+	};
+
 	regulators {
 		compatible = "simple-bus";
 		#address-cells = <1>;
