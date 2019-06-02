@@ -31,10 +31,6 @@
 	status = "okay";
 };
 
-&caam_keyblob {
-	status = "okay";
-};
-
 /* ECSPI3 (as master - Raspberry PI Expansion header) */
 &ecspi3 {
 	status = "okay";

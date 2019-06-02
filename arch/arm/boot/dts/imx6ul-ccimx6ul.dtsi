@@ -29,7 +29,6 @@
 
 	caam_keyblob: caam-keyblob {
 		compatible = "fsl,sec-v4.0-keyblob";
-		status = "disabled";
 	};
 };
 

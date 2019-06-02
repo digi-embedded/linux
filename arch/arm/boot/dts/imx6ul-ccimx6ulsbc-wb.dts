@@ -35,10 +35,6 @@
 	status = "okay";
 };
 
-&caam_keyblob {
-	status = "okay";
-};
-
 /*
  * CSI camera conflicts with microSD/eMMC.
  * Before enabling the camera you need to disable
