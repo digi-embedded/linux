@@ -1487,8 +1487,10 @@ static int flexcan_open(struct net_device *dev)
 	int err;
 
 	err = pm_runtime_get_sync(priv->dev);
-	if (err)
+	if (err < 0) {
+		netdev_err(dev, "pm_runtime_get_sync failed(%d)\n", err);
 		return err;
+	}
 
 	err = open_candev(dev);
 	if (err)
