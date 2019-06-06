@@ -110,7 +110,7 @@
 			>;
 		};
 
-		pinctrl_wifi_gpio: wifibt_ctrl_grp {
+		pinctrl_wifi_gpio: wifigrp_gpio {
 			fsl,pins = <
 				/* WL_EN. Configure as open-drain */
 				MX6UL_PAD_SNVS_TAMPER0__GPIO5_IO00	0x08a0
@@ -128,8 +128,9 @@
 			>;
 		};
 
-		pinctrl_wifi_gpio_sleep: wifibt_ctrl_grp_sleep {
+		pinctrl_wifi_gpio_sleep: wifigrp_gpio_sleep {
 			fsl,pins = <
+				/* WL_EN */
 				MX6UL_PAD_SNVS_TAMPER0__GPIO5_IO00	0x3000
 			>;
 		};
