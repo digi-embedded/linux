@@ -534,7 +534,7 @@ static int lt8912_i2c_init(struct lt8912 *lt,
 
 	for (i = 0; i < ARRAY_SIZE(info); i++) {
 		if (i > 0 ) {
-			client = i2c_new_device(client->adapter, &info[i]);
+			client = i2c_new_dummy(client->adapter, info[i].addr);
 			if (!client)
 				return -ENODEV;
 		}
