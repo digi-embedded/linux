@@ -169,11 +169,16 @@ static void sm_key_job_done(struct device *dev, u32 *desc,
  */
 
 static int blob_encap_jobdesc(u32 **desc, dma_addr_t keymod,
-			      void *secretbuf, dma_addr_t outbuf,
+			      uintptr_t secretbuf, dma_addr_t outbuf,
 			      u16 secretsz, u8 keycolor, u8 blobtype, u8 auth)
 {
 	u32 *tdesc, tmpdesc[INITIAL_DESCSZ];
 	u16 dsize, idx;
+
+	if (secretbuf > (uint32_t) -1) {
+		pr_err("%s: can't use high memory address for secretbuf\n", __func__);
+		return -E2BIG;
+	}
 
 	memset(tmpdesc, 0, INITIAL_DESCSZ * sizeof(u32));
 	idx = 1;
@@ -294,11 +299,16 @@ static int blob_encap_jobdesc(u32 **desc, dma_addr_t keymod,
  */
 
 int blob_decap_jobdesc(u32 **desc, dma_addr_t keymod, dma_addr_t blobbuf,
-		       u8 *outbuf, u16 secretsz, u8 keycolor,
+		       uintptr_t outbuf, u16 secretsz, u8 keycolor,
 		       u8 blobtype, u8 auth)
 {
 	u32 *tdesc, tmpdesc[INITIAL_DESCSZ];
 	u16 dsize, idx;
+
+	if (outbuf > (uint32_t) -1) {
+		pr_err("%s: can't use high memory address for outbuf\n", __func__);
+		return -E2BIG;
+	}
 
 	memset(tmpdesc, 0, INITIAL_DESCSZ * sizeof(u32));
 	idx = 1;
@@ -395,7 +405,7 @@ static int gen_mem_encap(struct device *jr_dev, void __user *secretbuf,
 	}
 	outbuf_dma = dma_map_single(jr_dev, loutbuf, keylen + BLOB_OVERHEAD,
 				    DMA_FROM_DEVICE);
-	retval = blob_encap_jobdesc(&encapdesc, keymod_dma, (void *)secret_dma, outbuf_dma,
+	retval = blob_encap_jobdesc(&encapdesc, keymod_dma, secret_dma, outbuf_dma,
 			keylen, RED_KEY, SM_GENMEM, KEY_COVER_ECB);
 	if (retval < 0) {
 		dev_err(jr_dev, "blob_encap_jobsec failed: %d\n", retval);
@@ -487,8 +497,8 @@ static int gen_mem_decap(struct device *jr_dev, void __user *keyblobbuf,
 				    DMA_FROM_DEVICE);
 
 	/* Build the encapsulation job descriptor */
-	retval = blob_decap_jobdesc(&decapdesc, keymod_dma, keyblob_dma, (u8 *)outbuf_dma,
-				   keylen, RED_KEY, SM_GENMEM, KEY_COVER_ECB);
+	retval = blob_decap_jobdesc(&decapdesc, keymod_dma, keyblob_dma, outbuf_dma,
+				    keylen, RED_KEY, SM_GENMEM, KEY_COVER_ECB);
 	if (retval < 0) {
 		dev_err(jr_dev, "blob_decap_jobdesc failed: %d\n", retval);
 		goto out;
