@@ -43,7 +43,7 @@ struct caam_kb_data {
 #endif
 
 int blob_decap_jobdesc(u32 **desc, dma_addr_t keymod, dma_addr_t blobbuf,
-		       u8 *outbuf, u16 secretsz, u8 keycolor,
+		       uintptr_t outbuf, u16 secretsz, u8 keycolor,
 		       u8 blobtype, u8 auth);
 
 #endif /* CAAM_KEYBLOB_H */
