@@ -468,6 +468,7 @@
 	lvds0: lvds-channel@0 {
 		fsl,data-mapping = "jeida";
 		fsl,data-width = <24>;
+		digi,bits-per-pixel = <16>;
 		status = "disabled";
 
 		display-timings {
@@ -562,6 +563,7 @@
 	lvds1: lvds-channel@0 {
 		fsl,data-mapping = "jeida";
 		fsl,data-width = <24>;
+		digi,bits-per-pixel = <16>;
 		status = "disabled";
 
 		display-timings {
