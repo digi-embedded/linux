@@ -98,6 +98,8 @@ Optional properties (required if display-timings are used):
                       serialized LVDS signal.
  - fsl,data-width : should be <18> or <24>
                     Additionally, <30> for i.MX8qm.
+ - digi,bits-per-pixel : should be <16> or <32>
+                         This describes the pixel depth for the LVDS display.
 
 example:
 

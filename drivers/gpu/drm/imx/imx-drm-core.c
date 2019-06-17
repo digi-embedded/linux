@@ -156,6 +156,11 @@ static int compare_of(struct device *dev, void *data)
 
 	/* Special case for LDB, one device for two channels */
 	if (of_node_cmp(np->name, "lvds-channel") == 0) {
+#if IS_ENABLED(CONFIG_DRM_FBDEV_EMULATION)
+		/* Overwrite the pixel depth for LDB */
+		if (of_property_read_u32(np, "digi,bits-per-pixel", &legacyfb_depth))
+			dev_info(dev,"Set pixel depth to %d bpp\n",legacyfb_depth);
+#endif
 		np = of_get_parent(np);
 		of_node_put(np);
 	}
