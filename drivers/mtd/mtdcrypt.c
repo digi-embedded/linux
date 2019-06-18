@@ -522,9 +522,9 @@ static int mtdcrypt_decrypt_key(struct device *jr_dev, void *keyblobbuf,
 	dsize = blob_decap_jobdesc(&decapdesc, keymod_dma, keyblob_dma,
 			(u8 *)outbuf_dma,  keylen, RED_KEY, SM_GENMEM,
 			KEY_COVER_ECB);
-	if (!dsize) {
-		dev_err(jr_dev, "mtdcrypt: can't alloc a decapsulation descriptor\n");
-		retval = -ENOMEM;
+	if (dsize < 0) {
+		dev_err(jr_dev, "mtdcrypt: blob_decap_jobdesc failed: %d\n", dsize);
+		retval = dsize;
 		goto out;
 	}
 
