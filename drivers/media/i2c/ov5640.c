@@ -1040,6 +1040,8 @@ static int ov5640_set_dvp_pclk(struct ov5640_dev *sensor, unsigned long rate)
 {
 	const struct ov5640_mode_info *mode = sensor->current_mode;
 	u8 prediv, mult, sysdiv, pll_rdiv, bit_div, pclk_div;
+	struct i2c_client *client = sensor->i2c_client;
+	unsigned int pclk_freq, max_pclk_freq;
 	u8 dvp_pclk_divider;
 	int ret;
 
@@ -1058,6 +1060,15 @@ static int ov5640_set_dvp_pclk(struct ov5640_dev *sensor, unsigned long rate)
 			       dvp_pclk_divider);
 	if (ret)
 		return ret;
+	pclk_freq = rate / dvp_pclk_divider;
+	max_pclk_freq = sensor->ep.bus.parallel.pclk_max_frequency;
+
+	/* clip rate according to optional maximum pixel clock limit */
+	if (max_pclk_freq && (pclk_freq > max_pclk_freq)) {
+		rate = max_pclk_freq * dvp_pclk_divider;
+		dev_dbg(&client->dev, "DVP pixel clock too high (%d > %d Hz), reducing rate...\n",
+			pclk_freq, max_pclk_freq);
+	}
 
 	ov5640_calc_pclk(sensor, rate, &prediv, &mult, &sysdiv, &pll_rdiv,
 			 &bit_div, &pclk_div);
