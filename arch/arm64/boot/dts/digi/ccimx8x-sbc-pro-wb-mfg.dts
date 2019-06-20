@@ -251,7 +251,8 @@
 
 /* IOMUX */
 &iomuxc {
-	pinctrl-0 = <&pinctrl_hog>, <&pinctrl_expansion>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_expansion>;
 
 	/* Expansion, MIPI and Parallel Camera Connectors */
 	pinctrl_expansion: expansiongrp {
