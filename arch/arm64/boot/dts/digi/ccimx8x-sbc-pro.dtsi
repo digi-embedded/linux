@@ -774,14 +774,6 @@
 
 /* IOMUX */
 &iomuxc {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_hog>;
-
-	pinctrl_hog: hoggrp {
-		fsl,pins = <
-		>;
-	};
-
 	pinctrl_lpspi0: lpspi0grp {
 		fsl,pins = <
 			SC_P_SPI0_SCK_ADMA_SPI0_SCK	0x0600004c

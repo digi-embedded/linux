@@ -365,7 +365,8 @@
 
 /* IOMUX */
 &iomuxc {
-	pinctrl-0 = <&pinctrl_hog>, <&pinctrl_expansion>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_expansion>;
 
 	/* Expansion Connector */
 	pinctrl_expansion: expansiongrp {
