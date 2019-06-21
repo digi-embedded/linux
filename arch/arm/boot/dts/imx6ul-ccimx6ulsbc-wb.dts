@@ -248,16 +248,39 @@
 
 /* Pin mux configuration */
 &iomuxc {
+	pinctrl-0 = <&pinctrl_hog>, <&pinctrl_gpio>;
+
 	imx6ul-ccimx6ul {
 		/* Uncomment specific pins of the ADC channels enabled in 'adc-ch-list' */
 		pinctrl_adc1: adc1grp {
 			fsl,pins = <
-		//		/* EXP_GPIO_1 -> GPIO1_5/ADC1_IN5 */
-		//		MX6UL_PAD_GPIO1_IO05__GPIO1_IO05        0xb0
-		//		/* EXP_GPIO_2 -> GPIO1_3/ADC1_IN3 */
+				/*
+				 * EXP_GPIO_1 -> GPIO1_5/ADC1_IN5, it also
+				 * requires disabling 'pwm4'
+				 */
+		//		MX6UL_PAD_GPIO1_IO05__GPIO1_IO05	0x1b0b0
+				/* EXP_GPIO_2 -> GPIO1_3/ADC1_IN3 */
 		//		MX6UL_PAD_GPIO1_IO03__GPIO1_IO03        0xb0
 				/* EXP_GPIO_3 -> GPIO1_2/ADC1_IN2 */
 				MX6UL_PAD_GPIO1_IO02__GPIO1_IO02        0xb0
+			>;
+		};
+
+		/* GPIO connector */
+		pinctrl_gpio: gpiogrp {
+			fsl,pins = <
+				/*
+				 * Comment the pads you wish to use on any
+				 * device driver, and uncomment the ones you
+				 * want to use as GPIO (requires disabling the
+				 * driver that manages them).
+				 */
+				/* EXP_GPIO_1, configured on 'pinctrl_pwm4' */
+		//		MX6UL_PAD_GPIO1_IO05__GPIO1_IO05	0x1b0b0
+				/* EXP_GPIO_2 */
+				MX6UL_PAD_GPIO1_IO03__GPIO1_IO03	0x1b0b0
+				/* EXP_GPIO_3, configured on 'pinctrl_adc1' */
+		//		MX6UL_PAD_GPIO1_IO02__GPIO1_IO02	0x1b0b0
 			>;
 		};
 	};

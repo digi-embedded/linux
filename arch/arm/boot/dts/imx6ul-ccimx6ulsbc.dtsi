@@ -85,7 +85,7 @@
 
 &fec1 {
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_enet1>;
+	pinctrl-0 = <&pinctrl_enet1>, <&pinctrl_enet1_gpio>;
 	phy-mode = "rmii";
 	phy-handle = <&ethphy0>;
 	phy-reset-gpios = <&mca_gpio 7 GPIO_ACTIVE_LOW>;
@@ -237,6 +237,7 @@
 		interrupt-controller;
 		#interrupt-cells = <2>;
 		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_ioexp>;
 
 		mca_ioexp_gpio: gpio {
 			compatible = "digi,mca-ioexp-gpio";
@@ -474,6 +475,8 @@
 				MX6UL_PAD_LCD_DATA22__ECSPI1_MOSI	0x10b0
 				MX6UL_PAD_LCD_DATA23__ECSPI1_MISO	0x10b0
 				MX6UL_PAD_LCD_DATA21__GPIO3_IO26	0x10b0 /* Chip Select */
+				/* SPI1_IRQ_N */
+				MX6UL_PAD_SNVS_TAMPER8__GPIO5_IO08	0x1b0b0
 			>;
 		};
 
@@ -483,6 +486,8 @@
 				MX6UL_PAD_LCD_DATA22__ECSPI1_MOSI	0x10b0
 				MX6UL_PAD_LCD_DATA23__ECSPI1_MISO	0x10b0
 				MX6UL_PAD_LCD_DATA21__ECSPI1_SS0	0x10b0 /* Chip Select */
+				/* SPI1_IRQ_N */
+				MX6UL_PAD_SNVS_TAMPER8__GPIO5_IO08	0x1b0b0
 			>;
 		};
 
@@ -533,10 +538,19 @@
 			>;
 		};
 
+		pinctrl_enet1_gpio: enet1gpiogrp {
+			fsl,pins = <
+				/* ENET1_INT */
+				MX6UL_PAD_GPIO1_IO08__GPIO1_IO08	0x1b0b0
+			>;
+		};
+
 		pinctrl_enet2_gpio: enet2gpiogrp {
 			fsl,pins = <
 				/* PHY reset */
 				MX6UL_PAD_SNVS_TAMPER6__GPIO5_IO06	0x0b0b0
+				/* ENET2_INT */
+				MX6UL_PAD_GPIO1_IO09__GPIO1_IO09	0x1b0b0
 			>;
 		};
 
@@ -563,6 +577,13 @@
 		pinctrl_goodix_touch: goodixgrp{
 			fsl,pins = <
 				MX6UL_PAD_SNVS_TAMPER2__GPIO5_IO02	0x1b0b0
+			>;
+		};
+
+		pinctrl_ioexp: ioexpgrp {
+			fsl,pins = <
+				/* IOEXP_INT_IMX */
+				MX6UL_PAD_SNVS_TAMPER3__GPIO5_IO03	0x1b0b0
 			>;
 		};
 
@@ -734,6 +755,10 @@
 
 		/* General purpose pinctrl */
 		pinctrl_hog: hoggrp {
+			fsl,pins = <
+				/* EXP_I2C_IRQ_N */
+				MX6UL_PAD_SNVS_TAMPER5__GPIO5_IO05	0x1b0b0
+			>;
 		};
 	};
 };
