@@ -21,7 +21,7 @@
 		/* U-Boot will fill in the MAC address here */
 	};
 
-	bluetooth {
+	bluetooth: bluetooth {
 		/* U-Boot will fill in the MAC address here */
 		compatible = "digi,bluetooth-cc8x";
 		status = "okay";
