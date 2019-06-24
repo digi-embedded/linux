@@ -103,11 +103,55 @@
 
 /* Pin mux configuration */
 &iomuxc {
+	pinctrl-0 =  <&pinctrl_hog>, <&pinctrl_expansion>;
+
 	imx6ul-ccimx6ul {
 		pinctrl_adc1: adc1grp {
 			fsl,pins = <
 				/* GPIO1_4/ADC1_IN4 (pin 7 of the expansion header) */
 				MX6UL_PAD_GPIO1_IO04__GPIO1_IO04        0xb0
+			>;
+		};
+
+		/* Expansion Connector */
+		pinctrl_expansion: expansiongrp {
+			fsl,pins = <
+				/*
+				 * Comment the pads you wish to use on any
+				 * device driver, and uncomment the ones you
+				 * want to use as GPIO (requires disabling the
+				 * driver that manages them).
+				 */
+				/* GPIO3_4 */
+				MX6UL_PAD_LCD_RESET__GPIO3_IO04		0xf030
+				/* JTAG_TDI/GPIO1_13 */
+				MX6UL_PAD_JTAG_TDI__GPIO1_IO13		0x1b0b0
+				/* GPIO3_10_PROT */
+				MX6UL_PAD_LCD_DATA05__GPIO3_IO10	0x1b0b0
+				/* JTAG_MOD/GPIO1_10 */
+				MX6UL_PAD_JTAG_MOD__GPIO1_IO10		0x1b0b0
+				/* JTAG_TMS/GPIO1_11 */
+				MX6UL_PAD_JTAG_TMS__GPIO1_IO11		0x1b0b0
+				/* GPIO3_12_PROT */
+				MX6UL_PAD_LCD_DATA07__GPIO3_IO12	0x1b0b0
+				/* PWM2/I2C3_SCL_PROT */
+				MX6UL_PAD_LCD_DATA01__GPIO3_IO06	0x1b0b0
+				/* RASPBERRY_29/GPIO5 */
+				MX6UL_PAD_GPIO1_IO05__GPIO1_IO05	0x1b0b0
+				/* PWM4_PROT */
+				MX6UL_PAD_LCD_DATA03__GPIO3_IO08	0x1b0b0
+				/* GPIO3_7/PWM3_PROT */
+				MX6UL_PAD_LCD_DATA02__GPIO3_IO07	0x1b0b0
+				/* JTAG_TDO/GPIO1_12 */
+				MX6UL_PAD_JTAG_TDO__GPIO1_IO12		0x1b0b0
+				/* RASPBERRY_36/CSI_MCLK */
+				MX6UL_PAD_CSI_MCLK__GPIO4_IO17		0x1b0b0
+				/* RASPBERRY_37/CSI_PIXCLK */
+				MX6UL_PAD_CSI_PIXCLK__GPIO4_IO18	0x1b0b0
+				/* JTAG_nTRST/GPIO1_15 */
+				MX6UL_PAD_JTAG_TRST_B__GPIO1_IO15	0x1b0b0
+				/* JTAG_TCK/GPIO1_14 */
+				MX6UL_PAD_JTAG_TCK__GPIO1_IO14		0x1b0b0
 			>;
 		};
 	};
