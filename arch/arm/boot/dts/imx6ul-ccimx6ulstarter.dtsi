@@ -26,7 +26,7 @@
 
 &fec1 {
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_enet1>;
+	pinctrl-0 = <&pinctrl_enet1>, <&pinctrl_enet1_gpio>;
 	phy-mode = "rmii";
 	phy-handle = <&ethphy0>;
 	phy-reset-gpios = <&mca_gpio 7 GPIO_ACTIVE_LOW>;
@@ -172,6 +172,15 @@
 			>;
 		};
 
+		pinctrl_enet1_gpio: enet1gpiogrp {
+			fsl,pins = <
+				/* ENET1_PWR */
+				MX6UL_PAD_LCD_HSYNC__GPIO3_IO02		0x1b0b0
+				/* ENET1_INT */
+				MX6UL_PAD_LCD_DATA04__GPIO3_IO09	0x1b0b0
+			>;
+		};
+
 		pinctrl_flexcan1: flexcan1grp{
 			fsl,pins = <
 				MX6UL_PAD_LCD_DATA08__FLEXCAN1_TX	0x1b020
@@ -227,8 +236,10 @@
 		/* General purpose pinctrl */
 		pinctrl_hog: hoggrp {
 			fsl,pins = <
-				/* GPIOs BANK 3 */
-				MX6UL_PAD_LCD_RESET__GPIO3_IO04		0xf030
+				/* USER_LED */
+				MX6UL_PAD_LCD_DATA06__GPIO3_IO11	0x1b0b0
+				/* USER_BUTTON */
+				MX6UL_PAD_LCD_VSYNC__GPIO3_IO03		0x1b0b0
 			>;
 		};
 
