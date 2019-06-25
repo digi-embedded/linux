@@ -371,6 +371,12 @@
 	/* Expansion Connector */
 	pinctrl_expansion: expansiongrp {
 		fsl,pins = <
+			/*
+			 * Comment the pads you wish to use on any
+			 * device driver, and uncomment the ones you
+			 * want to use as GPIO (requires disabling the
+			 * driver that manages them).
+			 */
 			/* GPIO4_20 */
 			SC_P_USDHC1_VSELECT_LSIO_GPIO4_IO20		0x06000020
 			/* GPIO4_21 */

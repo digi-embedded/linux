@@ -282,6 +282,12 @@
 	/* Raspberry Pi Expansion Connector */
 	pinctrl_expansion: expansiongrp {
 		fsl,pins = <
+			/*
+			 * Comment the pads you wish to use on any
+			 * device driver, and uncomment the ones you
+			 * want to use as GPIO (requires disabling the
+			 * driver that manages them).
+			 */
 			SC_P_MIPI_DSI0_GPIO0_01_LSIO_GPIO1_IO28	0x06000020
 			SC_P_USDHC1_WP_LSIO_GPIO4_IO21		0x06000020
 			SC_P_USDHC1_CD_B_LSIO_GPIO4_IO22	0x06000020
