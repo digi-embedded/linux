@@ -13,5 +13,5 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* Digi ConnectCore 8X WiFi-Bluetooth SBC Pro */
-#include "ccimx8x-sbc-pro-wb.dts"
+/* Digi ConnectCore 8QXP WiFi-Bluetooth SBC Express */
+#include "ccimx8qxp-sbc-express-wb.dts"
