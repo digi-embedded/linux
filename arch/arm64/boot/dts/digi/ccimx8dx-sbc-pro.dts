@@ -1,0 +1,457 @@
+/*
+ * Copyright 2018, 2019, Digi International Inc.
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+/dts-v1/;
+
+/* i.MX8DX CPU */
+#include "../freescale/fsl-imx8dx.dtsi"
+/* Digi ConnectCore 8X (non-WiFi variant) */
+#include "ccimx8x.dtsi"
+/* Digi ConnectCore 8X SBC Pro */
+#include "ccimx8x-sbc-pro.dtsi"
+
+/*
+ * i.MX8X ADC channels on Expansion connector:
+ *  - ADC_IN0 (channel 0)
+ *  - ADC_IN1 (channel 1)
+ *  - ADC_IN2 (channel 2)
+ *  - ADC_IN3 (channel 3)
+ *  - ADC_IN4 (channel 4)
+ *  - ADC_IN5 (channel 5)
+ * Include in digi,adc-ch-list the ADC channels (from 0 to 5) that you want to
+ * enable. Note that the iomux has to be configured accordingly in pinctrl_adc0
+ * to configure the pads for ADC operation. Make sure to remove them from
+ * pinctrl_expansion where they may already be configured with another use.
+ */
+&adc0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_adc0>;
+	digi,adc-ch-list = <0>;
+	status = "okay";
+};
+
+&dpr1_channel1 {
+	status = "okay";
+};
+
+&dpr1_channel2 {
+	status = "okay";
+};
+
+&dpr1_channel3 {
+	status = "okay";
+};
+
+&dpr2_channel1 {
+	status = "okay";
+};
+
+&dpr2_channel2 {
+	status = "okay";
+};
+
+&dpr2_channel3 {
+	status = "okay";
+};
+
+&dpu1 {
+	status = "okay";
+};
+
+&fec1 {
+	status = "okay";
+};
+
+&fec2 {
+	status = "okay";
+};
+
+/*
+ * CAN0
+ * Conflicts with LPUART0 RTS/CTS lines.
+ * Before enabling the port you need to configure
+ * lpuart0 node as 2 wires.
+ */
+&flexcan1 {
+	status = "disabled";
+};
+
+/* CAN1 on expansion header */
+&flexcan2 {
+	status = "okay";
+};
+
+/*
+ * CAN2 on expansion header.
+ * Conflicts with LPUART3 RX/TX lines.
+ */
+&flexcan3 {
+	status = "okay";
+};
+
+&gpu_3d0 {
+	status = "okay";
+};
+
+/*
+ * I2C3 connected to Audio codec and USB 3.0 PD PHY.
+ * Also available on:
+ * - Expansion header
+ * - PCIe connector
+ * - Parallel Camera connector
+ */
+&i2c3 {
+	status = "okay";
+};
+
+/* MIPI-CSI0 I2C available on MIPI Camera connector */
+&i2c0_csi0 {
+	status = "okay";
+};
+
+/* MIPI-DSI0 I2C available on LVDS0 connector */
+&i2c0_mipi_lvds0 {
+	status = "okay";
+};
+
+&imx8_gpu_ss {
+	status = "okay";
+};
+
+&intmux_cm40 {
+	status = "okay";
+};
+
+&isi_0 {
+	status = "okay";
+};
+
+&isi_1 {
+	status = "okay";
+};
+
+&isi_2 {
+	status = "okay";
+};
+
+&isi_3 {
+	status = "okay";
+};
+
+&ldb1 {
+	status = "okay";
+};
+
+&ldb1_phy {
+	status = "okay";
+};
+
+&lvds0 {
+	status = "okay";
+};
+
+&lvds_backlight0 {
+	status = "okay";
+};
+
+&pwm_mipi_lvds0 {
+	status = "okay";
+};
+
+/*
+ * On the CC8X SBC, an inconsistent reset sequence makes
+ * the Goodix display's touch controller respond to two I2C
+ * addresses: 0x14 and 0x5D. To make sure the touchscreen
+ * works every time, the touch controller's description must
+ * be duplicated for both addresses.
+ */
+&lvds0_goodix_touch1 {
+	status = "okay";
+};
+
+&lvds0_goodix_touch2 {
+	status = "okay";
+};
+
+/*
+ * Uncomment to enable display support on the 2nd video interface.
+ */
+/* MIPI-DSI1 I2C available on LVDS1 connector */
+//&i2c0_mipi_lvds1 {
+//	status = "okay";
+//};
+//
+//&ldb2 {
+//	status = "okay";
+//};
+//
+//&ldb2_phy {
+//	status = "okay";
+//};
+//
+//&lvds1 {
+//	status = "okay";
+//};
+//
+//&lvds_backlight1 {
+//	status = "okay";
+//};
+//
+//&pwm_mipi_lvds1 {
+//	status = "okay";
+//};
+//
+//&lvds1_goodix_touch1 {
+//	status = "okay";
+//	/*
+//	 * Uncomment if LVDS0 is also enabled so that the LVDS1 touch works in
+//	 * extended desktop configuration
+//	 */
+//	extends-desktop = <&lvds0>;
+//};
+//
+//&lvds1_goodix_touch2 {
+//	status = "okay";
+//	/*
+//	 * Uncomment if LVDS0 is also enabled so that the LVDS1 touch works in
+//	 * extended desktop configuration
+//	 */
+//	extends-desktop = <&lvds0>;
+//};
+
+/* LPSPI0 on expansion header */
+&lpspi0 {
+	status = "okay";
+
+	/*
+	 * Add your slave devices here. Next is an example of spidev.
+	 * Expect a harmless kernel warning if you enable spidev as slave.
+	 */
+	spidev@0 {
+		compatible = "spidev";
+		reg = <0>;
+		spi-max-frequency = <4000000>;
+	};
+};
+
+/* LPUART0 on expansion header */
+&lpuart0 {
+	/* RTS/CTS lines multiplexed with CAN0 */
+	pinctrl-0 = <&pinctrl_lpuart0_4wires>;
+	/* Comment the line above and uncomment the next one to use 2-wires */
+	//pinctrl-0 = <&pinctrl_lpuart0_2wires>;
+	status = "okay";
+};
+
+/* Console */
+&lpuart2 {
+	status = "okay";
+};
+
+/*
+ * LPUART3 on expansion header.
+ * Conflicts with CAN2.
+ */
+&lpuart3 {
+	status = "disabled";
+};
+
+/* PCIE (Mini Card) */
+&pcieb {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pcieb_mini_card>;
+	ext_osc = <1>;
+	reset-gpio = <&gpio3 16 GPIO_ACTIVE_LOW>; /* PCIE_RESET_N */
+	disable-gpio = <&gpio0 30 GPIO_ACTIVE_HIGH>; /* PCIE_DIS_N */
+	status = "okay";
+};
+
+/* Audio support */
+&asrc0 {
+	status = "okay";
+};
+
+&sai0 {
+	status = "okay";
+};
+
+&max98089 {
+	status = "okay";
+};
+
+&sound_max98089 {
+	status = "okay";
+};
+
+/* PWM signal on Expansion connector: SPI0_CS1 (conflicts with SPI0 CS1) */
+//&pwm_adma_lcdif {
+//	status = "okay";
+//};
+
+/*
+ * Uncomment to enable MCA ADC channels on Expansion connector:
+ *  - MCA_IO5 (channel 5)
+ *  - MCA_IO6 (channel 6)
+ *  - MCA_IO7 (channel 7)
+ *  - MCA_IO8 (channel 8)
+ *  - MCA_IO14 (channel 14)
+ * Edit adc-ch-list to include the ADC channels that you want to enable.
+ */
+// &mca_adc {
+//	digi,adc-ch-list = <5 6 7 8 14>;
+//	digi,adc-vref = <3000000>;
+// };
+
+/*
+ * Uncomment to Enable Tamper detection. There are 2 digital (0 and 1) and 2
+ * analog (2 and 3) tamper interfaces.
+ */
+//&mca_tamper {
+//	digi,tamper-if-list = <0 1 2 3>;
+//};
+
+&mca_uart {
+	status = "okay";
+
+	/* Uncomment to enable MCA UART0. Assign the IO pins (see bindings) */
+//	mca_uart0: serial@0x900 {
+//		iopins-names = "rx", "tx";
+//		iopins = <9 10>;
+//	};
+
+	/* Uncomment to enable MCA UART1. Assign the IO pins (see bindings) */
+//	mca_uart1: serial@0x920 {
+//		iopins-names = "rx", "tx";
+//		iopins = <11 16>;
+//	};
+
+	/* UART connected to XBee socket */
+	mca_uart2: serial@0x940 {
+		iopins-names = "rx", "tx", "cts", "rts";
+		iopins = <2 1 3 4>;
+	};
+};
+
+/*
+ * Enable only if the parallel camera is physically connected.
+ * If not, the MIPI camera may not work.
+ * Similarly, if the MIPI camera is not physically connected you need to
+ * disable the MIPI (mipi_csi_0) so that the parallel camera works.
+ */
+//&parallel_csi {
+//       status = "okay";
+//};
+
+//&ov5640 {
+//	status = "okay";
+//};
+
+/* MIPI camera */
+&mipi_csi_0 {
+	status = "okay";
+};
+
+&ov5640_mipi {
+	status = "okay";
+};
+
+/* USB_OTG1 connected to the usb hub */
+&usbotg1 {
+	status = "okay";
+};
+
+/* USB_OTG2/USB_SS3 */
+&usbotg3 {
+	status = "okay";
+};
+
+/* Micro SD card */
+&usdhc2 {
+	status = "okay";
+};
+
+&vpu_decoder {
+	status = "okay";
+};
+
+&vpu_encoder {
+	status = "okay";
+};
+
+/* IOMUX */
+&iomuxc {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_expansion>;
+
+	/* Expansion Connector */
+	pinctrl_expansion: expansiongrp {
+		fsl,pins = <
+			/*
+			 * Comment the pads you wish to use on any
+			 * device driver, and uncomment the ones you
+			 * want to use as GPIO (requires disabling the
+			 * driver that manages them).
+			 */
+			/* GPIO4_20 */
+			SC_P_USDHC1_VSELECT_LSIO_GPIO4_IO20		0x06000020
+			/* GPIO4_21 */
+			SC_P_USDHC1_WP_LSIO_GPIO4_IO21			0x06000020
+			/* SPI0_IRQ_N */
+			SC_P_SPI2_SDO_LSIO_GPIO1_IO01			0x06000020
+			/* EXP_I2C_IRQ_N */
+			SC_P_QSPI0A_SS1_B_LSIO_GPIO3_IO15		0x06000020
+			/* EXP_I2C_GPIO */
+			SC_P_QSPI0A_SS0_B_LSIO_GPIO3_IO14		0x06000020
+			/* GPIO4_19 */
+			SC_P_USDHC1_RESET_B_LSIO_GPIO4_IO19		0x06000020
+			/* GPIO0_12 */
+			SC_P_SPDIF0_EXT_CLK_LSIO_GPIO0_IO12		0x06000020
+			/* GPIO5_09 */
+			SC_P_ENET0_REFCLK_125M_25M_LSIO_GPIO5_IO09	0x06000020
+
+			/* Remove the pads you wish to use as ADCs */
+			/* ADC_IN0 */
+	//		SC_P_ADC_IN0_LSIO_GPIO1_IO10			0x06000020
+			/* ADC_IN1 */
+			SC_P_ADC_IN1_LSIO_GPIO1_IO09			0x06000020
+			/* M40_UART_RX */
+			SC_P_ADC_IN2_LSIO_GPIO1_IO12			0x06000020
+			/* M40_UART_TX */
+			SC_P_ADC_IN3_LSIO_GPIO1_IO11			0x06000020
+			/* ADC_IN4 */
+			SC_P_ADC_IN4_LSIO_GPIO1_IO14			0x06000020
+			/* ADC_IN5 */
+			SC_P_ADC_IN5_LSIO_GPIO1_IO13			0x06000020
+		>;
+	};
+
+	/* Uncomment the pads you wish to use as ADCs */
+	pinctrl_adc0: adc0grp {
+		fsl,pins = <
+			/* ADC_IN0 */
+			SC_P_ADC_IN0_ADMA_ADC_IN0		0xc0000060
+	//		/* ADC_IN1 */
+	//		SC_P_ADC_IN1_ADMA_ADC_IN1		0xc0000060
+	//		/* M40_UART_RX */
+	//		SC_P_ADC_IN2_ADMA_ADC_IN2		0xc0000060
+	//		/* M40_UART_TX */
+	//		SC_P_ADC_IN3_ADMA_ADC_IN3		0xc0000060
+	//		/* ADC_IN4 */
+	//		SC_P_ADC_IN4_ADMA_ADC_IN4		0xc0000060
+	//		/* ADC_IN5 */
+	//		SC_P_ADC_IN5_ADMA_ADC_IN5		0xc0000060
+		>;
+	};
+};

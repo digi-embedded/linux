@@ -1,4 +1,9 @@
-dtb-$(CONFIG_ARCH_FSL_IMX8QXP) += ccimx8qxp-mfg.dtb \
+dtb-$(CONFIG_ARCH_FSL_IMX8QXP) += ccimx8dx-mfg.dtb \
+				  ccimx8dx-mfg-wb.dtb \
+				  ccimx8dx-sbc-pro-wb.dtb \
+				  ccimx8dx-sbc-pro-wb-mfg.dtb \
+				  ccimx8dx-sbc-pro.dtb \
+				  ccimx8qxp-mfg.dtb \
 				  ccimx8qxp-mfg-wb.dtb \
 				  ccimx8qxp-sbc-express-id129.dtb \
 				  ccimx8qxp-sbc-express-wb.dtb \
