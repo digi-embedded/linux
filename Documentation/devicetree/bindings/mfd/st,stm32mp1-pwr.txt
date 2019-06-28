@@ -1,0 +1,57 @@
+STMicroelectronics STM32MP1 Power Management Controller
+=======================================================
+
+The PWR IP is responsible for handling the power related resources such as
+clocks, power supplies and resets. It provides 6 wake-up pins that are handled
+by an interrupt-controller. Wake-up pin can be used to wake-up from STANDBY SoC state.
+
+Required properties:
+- compatible should be: "st,stm32mp1-pwr"
+- reg: should be register base and length as documented in the
+  datasheet
+- interrupts: contains the reference to the gic wake-up pin interrupt
+- interrupt-controller; Enable interrupt controller for wake-up pins.
+- #interrupt-cells = <3>
+- st,wakeup-pins: contains a list of GPIO spec describing each wake-up pin.
+
+Optional Properties:
+- pwr-supply: main soc power supply
+
+Interrupt consumers have to specify 3 cells:
+  - cell 1: wake-up pin id from 0 to 5
+  - cell 2: IRQ_TYPE_EDGE_FALLING or IRQ_TYPE_EDGE_RISING
+  - cell 3: Pull config: 0 = No Pull, 1=Pull Up, 2=Pull Down
+
+
+Example:
+
+	pwr: pwr@50001000 {
+		compatible = "st,stm32mp1-pwr", "simple-mfd";
+		reg = <0x50001000 0x400>;
+		interrupts = <GIC_SPI 149 IRQ_TYPE_NONE>;
+		interrupt-controller;
+		#interrupt-cells = <3>;
+
+		st,wakeup-pins = <&gpioa 0 0>, <&gpioa 2 0>,
+				 <&gpioc 13 0>, <&gpioi 8 0>,
+				 <&gpioi 11 0>, <&gpioc 1 0>;
+
+		pwr-supply = <&vdd>;
+	};
+
+
+Example of interrupt user:
+gpio_keys {
+	compatible = "gpio-keys";
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	button@4 {
+		label = "WakeUp4";
+		linux,code = <BTN_4>;
+		interrupt-parent = <&pwr>;
+		interrupts = <3 IRQ_TYPE_EDGE_FALLING 1>;
+		wakeup-source;
+	};
+};
+
