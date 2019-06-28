@@ -70,7 +70,14 @@
 #define DMA_THRESHOLD	16
 #define DMA_TIMEOUT	1000
 
-#define NO_DMA_TIMEOUT	1000
+#define NO_DMA_TIMEOUT	100
+
+/*
+ * First recovery transfer after bus recovery proccess fails because the slave
+ * is out of sequence. A second recovery transfer is required so data is written
+ * correctly.
+ */
+#define RECOVERY_TRANSFERS 2
 
 /* IMX I2C registers:
  * the I2C register offset is different between SoCs,
@@ -975,6 +982,7 @@ static int i2c_imx_xfer(struct i2c_adapter *adapter,
 	bool is_lastmsg = false;
 	bool enable_runtime_pm = false;
 	struct imx_i2c_struct *i2c_imx = i2c_get_adapdata(adapter);
+	int recovery_transfer = 0, recovery_retry = 5;
 
 	dev_dbg(&i2c_imx->adapter.dev, "<%s>\n", __func__);
 
@@ -988,6 +996,7 @@ static int i2c_imx_xfer(struct i2c_adapter *adapter,
 	if (result < 0)
 		goto out;
 
+init:
 	/* Start I2C transfer */
 	result = i2c_imx_start(i2c_imx);
 	if (result) {
@@ -1040,8 +1049,15 @@ static int i2c_imx_xfer(struct i2c_adapter *adapter,
 		else {
 			if (i2c_imx->dma && msgs[i].len >= DMA_THRESHOLD)
 				result = i2c_imx_dma_write(i2c_imx, &msgs[i]);
-			else
+			else {
 				result = i2c_imx_write(i2c_imx, &msgs[i]);
+				if (result == -ETIMEDOUT) {
+					dev_dbg(&i2c_imx->adapter.dev,
+						"<%s> i2c_imx_write error %d\n",
+						__func__, result);
+					recovery_transfer = RECOVERY_TRANSFERS;
+				}
+			}
 		}
 		if (result)
 			goto fail0;
@@ -1050,6 +1066,16 @@ static int i2c_imx_xfer(struct i2c_adapter *adapter,
 fail0:
 	/* Stop I2C transfer */
 	i2c_imx_stop(i2c_imx);
+
+	if (recovery_transfer-- && recovery_retry--) {
+		if (i2c_imx->adapter.bus_recovery_info) {
+			i2c_recover_bus(&i2c_imx->adapter);
+			dev_dbg(&i2c_imx->adapter.dev,
+				"<%s> i2c_recover_bus. transfer=%d, retry=%d\n",
+				__func__, recovery_transfer, recovery_retry);
+			goto init;
+		}
+	}
 
 	pm_runtime_mark_last_busy(i2c_imx->adapter.dev.parent);
 	pm_runtime_put_autosuspend(i2c_imx->adapter.dev.parent);
