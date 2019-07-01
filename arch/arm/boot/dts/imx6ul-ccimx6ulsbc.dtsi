@@ -254,13 +254,6 @@
 			digi,adc-vref = <3300000>;
 		};
 	};
-
-	mca_cc6ul: mca@7e {
-		mca_gpio: gpio {
-			/* Disable all mca GPIOs as power off wake up sources */
-			pwroff-wakeup-capable-ios = <>;
-		};
-	};
 };
 
 /* Parallel LCD */

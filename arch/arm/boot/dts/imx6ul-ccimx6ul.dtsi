@@ -98,6 +98,9 @@
 			interrupt-parent = <&mca_cc6ul>;
 			interrupt-controller;
 			#interrupt-cells = <2>;
+
+			/* Disable all mca GPIOs as power off wake up sources */
+			pwroff-wakeup-capable-ios = <>;
 		};
 
 		rtc {
