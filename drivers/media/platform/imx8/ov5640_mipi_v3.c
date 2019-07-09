@@ -527,8 +527,7 @@ static inline void ov5640_power_down(struct ov5640 *sensor, int enable)
 
 static inline void ov5640_reset(struct ov5640 *sensor)
 {
-	if (!gpio_is_valid(sensor->pwn_gpio) &&
-	    !gpio_is_valid(sensor->rst_gpio))
+	if (sensor->pwn_gpio < 0 || sensor->rst_gpio < 0)
 		return;
 
 	if (gpio_is_valid(sensor->pwn_gpio))
@@ -721,6 +720,7 @@ static int ov5640_config_init(struct ov5640 *sensor)
 static void ov5640_start(struct ov5640 *sensor)
 {
 	ov5640_write_reg(sensor, 0x4800, 0x04);
+	ov5640_write_reg(sensor, 0x3008, 0x02);
 	ov5640_write_reg(sensor, 0x4202, 0x00);
 
 	/* Color bar control */
@@ -762,6 +762,7 @@ static int ov5640_change_mode(struct ov5640 *sensor)
 static void ov5640_stop(struct ov5640 *sensor)
 {
 	ov5640_write_reg(sensor, 0x4202, 0x0f);
+	ov5640_write_reg(sensor, 0x3008, 0x42);
 	ov5640_write_reg(sensor, 0x4800, 0x24);
 }
 
@@ -1036,7 +1037,6 @@ static int ov5640_set_fmt(struct v4l2_subdev *sd,
 	if (format->which == V4L2_SUBDEV_FORMAT_TRY)
 		return 0;
 
-	init_device(sensor);
 	ret = ov5640_change_mode(sensor);
 	sensor->fmt = fmt;
 
@@ -1295,7 +1295,7 @@ static int ov5640_probe(struct i2c_client *client,
 
 	ov5640_regulator_enable(&client->dev);
 
-	ov5640_reset(sensor);
+	ov5640_power_down(sensor, 0);
 
 	retval = ov5640_read_reg(sensor, OV5640_CHIP_ID_HIGH_BYTE,
 				&chip_id_high);
