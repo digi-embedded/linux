@@ -14,9 +14,9 @@
  */
 
 / {
-	model = "Digi International ConnectCore 8X SOM Manufacturing Setup.";
+	model = "Digi International ConnectCore 8X Manufacturing Functional Board.";
 	compatible = "digi,ccimx8x", "fsl,imx8qxp";
-	digi,machine,name = "ccimx8x-som";
+	digi,machine,name = "ccimx8x-mfg-functional";
 
 	chosen {
 		bootargs = "console=ttyLP2,115200 earlycon=lpuart32,0x5a080000,115200";
