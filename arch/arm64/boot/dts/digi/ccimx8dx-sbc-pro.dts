@@ -171,6 +171,15 @@
 };
 
 /*
+ * The max98089 sound codec uses the same I2C address than the fusion touch
+ * controller, so when unconmmenting this node you need to also comment the
+ * max98089 node.
+ */
+//&lvds0_fusion_touch {
+//	status = "okay";
+//};
+
+/*
  * On the CC8X SBC, an inconsistent reset sequence makes
  * the Goodix display's touch controller respond to two I2C
  * addresses: 0x14 and 0x5D. To make sure the touchscreen
