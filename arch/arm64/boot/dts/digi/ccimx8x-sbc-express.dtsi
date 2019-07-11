@@ -227,6 +227,19 @@
 				de-active = <1>;
 				pixelclk-active = <0>;
 			};
+
+			/* Fusion 10" F10A-0102 */
+			hsd101pfw2_1: timing@1 {
+				clock-frequency = <45000000>;
+				hactive = <1024>;
+				vactive = <600>;
+				hfront-porch = <0>;
+				hback-porch = <0>;
+				hsync-len = <176>;
+				vback-porch = <0>;
+				vfront-porch = <2>;
+				vsync-len = <23>;
+			};
 		};
 	};
 };
