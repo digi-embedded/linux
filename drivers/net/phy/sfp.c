@@ -168,6 +168,7 @@ static int sfp__i2c_read(struct i2c_adapter *i2c, u8 bus_addr, u8 dev_addr,
 	void *buf, size_t len)
 {
 	struct i2c_msg msgs[2];
+	size_t this_len;
 	int ret;
 
 	msgs[0].addr = bus_addr;
@@ -179,11 +180,26 @@ static int sfp__i2c_read(struct i2c_adapter *i2c, u8 bus_addr, u8 dev_addr,
 	msgs[1].len = len;
 	msgs[1].buf = buf;
 
-	ret = i2c_transfer(i2c, msgs, ARRAY_SIZE(msgs));
-	if (ret < 0)
-		return ret;
+	while (len) {
+		this_len = len;
+		if (this_len > 16)
+			this_len = 16;
 
-	return ret == ARRAY_SIZE(msgs) ? len : 0;
+		msgs[1].len = this_len;
+
+		ret = i2c_transfer(i2c, msgs, ARRAY_SIZE(msgs));
+		if (ret < 0)
+			return ret;
+
+		if (ret != ARRAY_SIZE(msgs))
+			break;
+
+		msgs[1].buf += this_len;
+		dev_addr += this_len;
+		len -= this_len;
+	}
+
+	return msgs[1].buf - (u8 *)buf;
 }
 
 static int sfp_i2c_read(struct sfp *sfp, bool a2, u8 addr, void *buf,
@@ -878,6 +894,10 @@ static int sfp_probe(struct platform_device *pdev)
 	if (poll)
 		mod_delayed_work(system_wq, &sfp->poll, poll_jiffies);
 
+	sfp->sfp_bus = sfp_register_socket(sfp->dev, sfp, &sfp_module_ops);
+	if (!sfp->sfp_bus)
+		return -ENOMEM;
+
 	return 0;
 }
 
@@ -886,10 +906,6 @@ static int sfp_remove(struct platform_device *pdev)
 	struct sfp *sfp = platform_get_drvdata(pdev);
 
 	sfp_unregister_socket(sfp->sfp_bus);
-
-	sfp->sfp_bus = sfp_register_socket(sfp->dev, sfp, &sfp_module_ops);
-	if (!sfp->sfp_bus)
-		return -ENOMEM;
 
 	return 0;
 }

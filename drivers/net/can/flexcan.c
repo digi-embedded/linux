@@ -216,7 +216,7 @@
 
 #define FLEXCAN_FDCTRL_FDRATE		BIT(31)
 
-#define FLEXCAN_TIMEOUT_US		(50)
+#define FLEXCAN_TIMEOUT_US		(250)
 
 /* FLEXCAN hardware feature flags
  *
