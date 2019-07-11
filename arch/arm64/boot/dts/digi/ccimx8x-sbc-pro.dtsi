@@ -367,6 +367,17 @@
 	clock-frequency = <100000>;
 	status = "disabled";
 
+	fusion_touch: fusion@10 {
+		compatible = "touchrev,fusion-touch";
+		reg = <0x10>;
+		interrupt-parent = <&gpio3>;
+		/* LVDS0 interrupt */
+		interrupts = <20 IRQ_TYPE_EDGE_FALLING>;
+		/* LVDS1 interrupt */
+		//interrupts = <19 IRQ_TYPE_EDGE_FALLING>;
+		status = "disabled";
+	};
+
 	/*
 	 * On the CC8X SBC, an inconsistent reset sequence makes
 	 * the Goodix display's touch controller respond to two I2C
