@@ -79,7 +79,11 @@
 // 	status = "okay";
 // };
 
-/* Uncomment to enable fusion touch */
+/*
+ * The max98089 sound codec uses the same I2C address than the fusion touch
+ * controller, so when unconmmenting this node you need to also comment the
+ * max98089 node.
+ */
 //&fusion_touch {
 //	status = "okay";
 //};
