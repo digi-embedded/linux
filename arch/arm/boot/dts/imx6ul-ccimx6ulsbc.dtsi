@@ -147,15 +147,9 @@
 };
 
 &i2c1 {
-	/*
-	 * Fusion display touch controller has I2C address 0x10
-	 * but since the audio chip on the SBC also has this address
-	 * an I2C address translator on the Video Adapter Board moves
-	 * the touch controller to address 0x14.
-	 */
-	fusion_touch: fusion@14 {
+	fusion_touch: fusion@10 {
 		compatible = "touchrev,fusion-touch";
-		reg = <0x14>;
+		reg = <0x10>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_fusion_touch>;
 		interrupt-parent = <&gpio5>;
