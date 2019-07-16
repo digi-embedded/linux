@@ -284,7 +284,7 @@
 		};
 	};
 
-	f10a0102: display@1 {
+	hsd101pfw2: display@1 {
 		bits-per-pixel = <16>;
 		bus-width = <18>;
 
