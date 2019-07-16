@@ -54,7 +54,7 @@
 		     &pinctrl_lcdif_clken
 		     &pinctrl_lcdif_hvsync>;
 	lcd-supply = <&ldo4_ext>;       /* BU90T82 LVDS bridge power */
-	display = <&f10a0102>;
+	display = <&hsd101pfw2>;
 	status = "okay";
 };
 
