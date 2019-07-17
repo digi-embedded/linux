@@ -56,10 +56,6 @@
 			gpio = <&gpio5 8 GPIO_ACTIVE_HIGH>;
 			enable-active-high;
 			startup-delay-us = <25000>;
-			regulator-always-on;
-			regulator-state-mem {
-				regulator-off-in-suspend;
-			};
 		};
 	};
 };
