@@ -107,7 +107,7 @@
 
 /* MIPI-CSI0 I2C available on MIPI Camera connector */
 &i2c0_csi0 {
-	status = "disabled";
+	status = "okay";
 };
 
 &imx8_gpu_ss {
@@ -229,6 +229,32 @@
 	status = "okay";
 };
 
+&isi_0 {
+	status = "okay";
+};
+
+&isi_1 {
+	status = "okay";
+};
+
+/* Parallel camera */
+&parallel_csi {
+	status = "okay";
+};
+
+&ov5640 {
+	status = "okay";
+};
+
+/* MIPI camera */
+&mipi_csi_0 {
+	status = "okay";
+};
+
+&ov5640_mipi {
+	status = "okay";
+};
+
 /* USB_OTG1 */
 &usbotg1 {
 	/*
@@ -307,26 +333,6 @@
 			SC_P_SPDIF0_EXT_CLK_LSIO_GPIO0_IO12	0x06000020
 			/* GPIO5_09 (J27 PIN37) */
 			SC_P_ENET0_REFCLK_125M_25M_LSIO_GPIO5_IO09	0x06000020
-
-			/* MIPI Camera connector */
-			/* J15 connector */
-			/* MIPI_CSI0_I2C0_SDA (J15 PIN2) */
-			SC_P_MIPI_CSI0_I2C0_SDA_LSIO_GPIO3_IO06	0x06000020
-			/* MIPI_CSI0_I2C0_SCL (J15 PIN3) */
-			SC_P_MIPI_CSI0_I2C0_SCL_LSIO_GPIO3_IO05	0x06000020
-			/* MIPI_CSI0_RESET_N (J15 PIN5) */
-			SC_P_QSPI0B_DATA3_LSIO_GPIO3_IO21	0x06000020
-
-			/* Parallel Camera connector */
-			/* J17 connector */
-			/* CSI_MCLK (J17 PIN11) */
-			SC_P_CSI_MCLK_LSIO_GPIO3_IO01		0x06000020
-			/* CSI_PCLK (J17 PIN12) */
-			SC_P_CSI_PCLK_LSIO_GPIO3_IO00		0x06000020
-			/* CSI_EN (J17 PIN15) */
-			SC_P_CSI_EN_LSIO_GPIO3_IO02		0x06000020
-			/* CSI_RESET (J17 PIN16) */
-			SC_P_CSI_RESET_LSIO_GPIO3_IO03		0x06000020
 		>;
 	};
 };
