@@ -69,6 +69,9 @@
 		#size-cells = <0>;
 
 		reg_3v3_eth0: regulator@1 {
+			pinctrl-names = "default", "sleep";
+			pinctrl-0 = <&pinctrl_reg_3v3_eth0>;
+			pinctrl-1 = <&pinctrl_reg_3v3_eth0_sleep>;
 			compatible = "regulator-fixed";
 			reg = <1>;
 			regulator-name = "3v3_eth0";
@@ -171,7 +174,6 @@
 &fec1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_fec_mdio>,
-		    <&pinctrl_fec_gpio>,
 		    <&pinctrl_fec1_gpio>,
 		    <&pinctrl_fec1>;
 	clocks = <&clk IMX8QXP_ENET0_IPG_CLK>,
@@ -813,19 +815,26 @@
 		>;
 	};
 
+	/* Ethernet PHYs regulator */
+	pinctrl_reg_3v3_eth0: pinctrl_reg_3v3_eth0grp {
+		fsl,pins = <
+			/* PHY power */
+			SC_P_QSPI0A_DQS_LSIO_GPIO3_IO13		0x06000021
+		>;
+	};
+
+	pinctrl_reg_3v3_eth0_sleep: pinctrl_reg_3v3_eth0grp_sleep {
+		fsl,pins = <
+			/* PHY power (lp_config=LATCH) */
+			SC_P_QSPI0A_DQS_LSIO_GPIO3_IO13		0x07800021
+		>;
+	};
+
 	/* FEC shared MDIO bus */
 	pinctrl_fec_mdio: fecmdiogrp {
 		fsl,pins = <
 			SC_P_ENET0_MDC_CONN_ENET0_MDC		0x06000020
 			SC_P_ENET0_MDIO_CONN_ENET0_MDIO		0x06000020
-		>;
-	};
-
-	/* Shared GPIOs */
-	pinctrl_fec_gpio: fecgpiogrp {
-		fsl,pins = <
-			/* PHY power */
-			SC_P_QSPI0A_DQS_LSIO_GPIO3_IO13		0x06000021
 		>;
 	};
 
