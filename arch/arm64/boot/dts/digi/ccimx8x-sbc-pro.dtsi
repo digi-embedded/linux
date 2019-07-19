@@ -825,7 +825,7 @@
 	pinctrl_fec_gpio: fecgpiogrp {
 		fsl,pins = <
 			/* PHY power */
-			SC_P_QSPI0A_DQS_LSIO_GPIO3_IO13		0x06000041
+			SC_P_QSPI0A_DQS_LSIO_GPIO3_IO13		0x06000021
 		>;
 	};
 
