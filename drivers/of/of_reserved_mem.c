@@ -122,22 +122,60 @@ static int __init __reserved_mem_alloc_size(unsigned long node,
 	const char *uname, phys_addr_t *res_base, phys_addr_t *res_size)
 {
 	int t_len = (dt_root_addr_cells + dt_root_size_cells) * sizeof(__be32);
-	phys_addr_t start = 0, end = 0;
-	phys_addr_t base = 0, align = 0, size;
+	phys_addr_t start = 0, end = 0, percent_size = 0;
+	phys_addr_t base = 0, align = 0, size = 0;
 	int len;
 	const __be32 *prop;
 	int nomap;
 	int ret;
+	unsigned long percent;
 
 	prop = of_get_flat_dt_prop(node, "size", &len);
-	if (!prop)
+	if (prop) {
+		if (len != dt_root_size_cells * sizeof(__be32)) {
+			pr_err("invalid size property in '%s' node.\n", uname);
+			return -EINVAL;
+		}
+		size = dt_mem_next_cell(dt_root_size_cells, &prop);
+	}
+
+	prop = of_get_flat_dt_prop(node, "digi,size-percentage", &len);
+
+	/* If there's no size or percentage available, return an error */
+	if (size == 0 && !prop)
 		return -EINVAL;
 
-	if (len != dt_root_size_cells * sizeof(__be32)) {
-		pr_err("invalid size property in '%s' node.\n", uname);
-		return -EINVAL;
+	if (prop) {
+		struct memblock_region *reg;
+		unsigned long total_pages = 0;
+
+		if (len != dt_root_size_cells * sizeof(__be32)) {
+			pr_err("invalid digi,size-percentage property in '%s' node.\n", uname);
+			return -EINVAL;
+		}
+		percent = dt_mem_next_cell(dt_root_size_cells, &prop);
+
+		if (percent < 1 || percent > 50) {
+			pr_err("invalid digi,size-percentage value in '%s' node.\n", uname);
+			return -EINVAL;
+		}
+
+		/*
+		 * Once the percentage value has been parsed, calculate the
+		 * actual size it represents
+		 */
+		for_each_memblock(memory, reg)
+			total_pages += memblock_region_memory_end_pfn(reg) -
+				       memblock_region_memory_base_pfn(reg);
+
+		percent_size = (total_pages * percent / 100) << PAGE_SHIFT;
 	}
-	size = dt_mem_next_cell(dt_root_size_cells, &prop);
+
+	/* Choose the smaller of the two sizes, so long as they aren't 0 */
+	if (size == 0)
+		size = percent_size;
+	else if (percent_size > 0)
+		size = min(size, percent_size);
 
 	nomap = of_get_flat_dt_prop(node, "no-map", NULL) != NULL;
 
@@ -160,6 +198,21 @@ static int __init __reserved_mem_alloc_size(unsigned long node,
 			max_t(unsigned long, MAX_ORDER - 1, pageblock_order);
 
 		align = max(align, (phys_addr_t)PAGE_SIZE << order);
+	}
+
+	/*
+	 * If we're using a size calculated from a percentage,
+	 * align it to the alignment size
+	 */
+	if (size == percent_size && align > 0 && size & (align - 1)) {
+		phys_addr_t old_size = size;
+
+		size &= ~(align - 1);
+		pr_info("calculated size of %ld MiB for '%s' node is unaligned, "
+		        "rounding down to %ld MiB.\n",
+		        (unsigned long) old_size / SZ_1M,
+		        uname,
+		        (unsigned long) size / SZ_1M);
 	}
 
 	prop = of_get_flat_dt_prop(node, "alloc-ranges", &len);
