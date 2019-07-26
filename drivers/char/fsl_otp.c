@@ -766,7 +766,7 @@ static int fsl_register_hwid(void) {
 			else
 				continue;
 
-			hwidprop = kzalloc(sizeof(*hwidprop) + strlen(str),
+			hwidprop = kzalloc(sizeof(*hwidprop) + strlen(str) + 1,
 				           GFP_KERNEL);
 			if (!hwidprop)
 				return -ENOMEM;
@@ -778,7 +778,7 @@ static int fsl_register_hwid(void) {
 				kfree(hwidprop);
 				return -ENOMEM;
 			}
-			strncpy(hwidprop->value, str, strlen(str));
+			strcpy(hwidprop->value, str);
 			of_update_property(np, hwidprop);
 		}
 	}
@@ -826,7 +826,7 @@ static int fsl_register_carrierboard(void) {
 		sprintf(str, "%d", (reg >> CONFIG_CARRIERBOARD_VERSION_OFFSET) &
 			CONFIG_CARRIERBOARD_VERSION_MASK);
 
-		hwidprop = kzalloc(sizeof(*hwidprop) + strlen(str), GFP_KERNEL);
+		hwidprop = kzalloc(sizeof(*hwidprop) + strlen(str) + 1, GFP_KERNEL);
 		if (!hwidprop)
 			return -ENOMEM;
 
@@ -838,7 +838,7 @@ static int fsl_register_carrierboard(void) {
 			kfree(hwidprop);
 			return -ENOMEM;
 		}
-		strncpy(hwidprop->value, str, strlen(str));
+		strcpy(hwidprop->value, str);
 		of_update_property(np, hwidprop);
 	}
 
