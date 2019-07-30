@@ -157,6 +157,9 @@ properties:
           - const: seeed,stm32mp157c-odyssey-som
           - const: st,stm32mp157
 
+      - items:
+          - const: st,stm32mp257
+
 additionalProperties: true
 
 ...
