@@ -926,14 +926,9 @@ static int stm32_hash_final(struct ahash_request *req)
 static int stm32_hash_finup(struct ahash_request *req)
 {
 	struct stm32_hash_request_ctx *rctx = ahash_request_ctx(req);
-	struct stm32_hash_ctx *ctx = crypto_ahash_ctx(crypto_ahash_reqtfm(req));
-	struct stm32_hash_dev *hdev = stm32_hash_find_dev(ctx);
 	int err1, err2;
 
 	rctx->flags |= HASH_FLAGS_FINUP;
-
-	if (hdev->dma_lch && stm32_hash_dma_aligned_data(req))
-		rctx->flags &= ~HASH_FLAGS_CPU;
 
 	err1 = stm32_hash_update(req);
 
@@ -951,7 +946,19 @@ static int stm32_hash_finup(struct ahash_request *req)
 
 static int stm32_hash_digest(struct ahash_request *req)
 {
-	return stm32_hash_init(req) ?: stm32_hash_finup(req);
+	int ret;
+	struct stm32_hash_request_ctx *rctx = ahash_request_ctx(req);
+	struct stm32_hash_ctx *ctx = crypto_ahash_ctx(crypto_ahash_reqtfm(req));
+	struct stm32_hash_dev *hdev = stm32_hash_find_dev(ctx);
+
+	ret = stm32_hash_init(req);
+	if (ret)
+		return ret;
+
+	if (hdev->dma_lch && stm32_hash_dma_aligned_data(req))
+		rctx->flags &= ~HASH_FLAGS_CPU;
+
+	return stm32_hash_finup(req);
 }
 
 static int stm32_hash_export(struct ahash_request *req, void *out)
