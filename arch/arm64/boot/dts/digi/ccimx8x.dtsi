@@ -213,6 +213,23 @@
 	status = "disabled";
 };
 
+&imx8_gpu_ss {
+	/*
+	 * Use a table to set a fixed amount of contiguous memory used by the GPU
+	 * per memory configuration. This way we leave plenty of room for the
+	 * other system features when the memory is limited. The table's rows must
+	 * be in increasing RAM order. The GPU CMA should always be smaller than the
+	 * total CMA (see the table in the "reserved-memory" node to see the total CMA
+	 * values per memory configuration).
+	 */
+	digi,contiguous-size-table = <
+		/* RAM     CMA*/
+		0x20000000 0x2000000	/* 512 MB variants -> 32 MB of GPU CMA */
+		0x40000000 0x8000000	/* 1 GB variants   -> 128 MB of GPU CMA */
+		0x80000000 0x10000000	/* 2 GB variants   -> 256 MB of GPU CMA */
+	>;
+};
+
 &mu {
 	/*
 	 * Skip the registration of the SC interrupt handler on the MU ipc code.
