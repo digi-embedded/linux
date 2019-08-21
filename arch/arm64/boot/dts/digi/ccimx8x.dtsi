@@ -25,11 +25,14 @@
 		compatible = "fsl,sec-v4.0-keyblob";
 	};
 
-	/* Limit cma-reserved to 320 MiB to avoid slowdowns on 1 GiB RAM variants */
 	reserved-memory {
 		linux,cma {
-			size = <0 0x14000000>;
-			alloc-ranges = <0 0x96000000 0 0x14000000>;
+			digi,size-table = <
+				/* RAM         CMA*/
+				0 0x20000000 0 0x6000000	/* 512 MB variants -> 96 MB of CMA */
+				0 0x40000000 0 0x14000000	/* 1 GB variants   -> 320 MB of CMA */
+				0 0x80000000 0 0x28000000	/* 2 GB variants   -> 640 MB of CMA */
+			>;
 		};
 	};
 
