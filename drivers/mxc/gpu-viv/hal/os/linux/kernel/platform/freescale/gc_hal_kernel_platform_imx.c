@@ -80,6 +80,10 @@
 #  include <linux/component.h>
 #endif
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,1,0)
+#  include <linux/memblock.h>
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,5,0)
 #  include <mach/viv_gpu.h>
 #elif defined (CONFIG_PM)
@@ -960,6 +964,10 @@ static int patch_param(struct platform_device *pdev,
     struct viv_gpu_platform_data *pdata;
 #endif
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,1,0)
+	struct property *contiguous_table;
+#endif
+
     pdevice = pdev;
 
 #ifdef IMX_GPU_SUBSYSTEM
@@ -998,6 +1006,35 @@ static int patch_param(struct platform_device *pdev,
         if  (args->contiguousSize == ~0U)
             args->contiguousSize = res->end - res->start + 1;
     }
+
+	contiguous_table = of_find_property(pdev->dev.of_node, "digi,contiguous-size-table", NULL);
+
+	if (contiguous_table && contiguous_table->value) {
+		unsigned long entries = contiguous_table->length / sizeof(u32);
+		__be32 *val = contiguous_table->value;
+
+		/* Only iterate through table if it has an even number of entries */
+		if (entries % 2 == 0) {
+			unsigned long system_memory = memblock_phys_mem_size();
+			int i;
+
+			/*
+			 * Iterate through each row, assuming the rows are ordered by
+			 * mem_threshold.
+			 */
+			for (i = 0; i < entries / 2; i++) {
+				unsigned long mem_threshold = be32_to_cpup(val++);
+				args->contiguousSize = be32_to_cpup(val++);
+
+				if (system_memory <= mem_threshold)
+					break;
+			}
+		}
+		else {
+			printk("galcore: contiguous size table has odd number of entries, "
+			       "using contiguous_mem range instead\n");
+		}
+	}
 
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
     args->contiguousBase = 0;
