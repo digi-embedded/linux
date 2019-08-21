@@ -123,21 +123,58 @@ static int __init __reserved_mem_alloc_size(unsigned long node,
 {
 	int t_len = (dt_root_addr_cells + dt_root_size_cells) * sizeof(__be32);
 	phys_addr_t start = 0, end = 0;
-	phys_addr_t base = 0, align = 0, size;
+	phys_addr_t base = 0, align = 0, size = 0;
 	int len;
 	const __be32 *prop;
 	int nomap;
 	int ret;
 
 	prop = of_get_flat_dt_prop(node, "size", &len);
-	if (!prop)
-		return -EINVAL;
-
-	if (len != dt_root_size_cells * sizeof(__be32)) {
-		pr_err("invalid size property in '%s' node.\n", uname);
-		return -EINVAL;
+	if (prop) {
+		if (len != dt_root_size_cells * sizeof(__be32)) {
+			pr_err("invalid size property in '%s' node.\n", uname);
+			return -EINVAL;
+		}
+		size = dt_mem_next_cell(dt_root_size_cells, &prop);
 	}
-	size = dt_mem_next_cell(dt_root_size_cells, &prop);
+
+	prop = of_get_flat_dt_prop(node, "digi,size-table", &len);
+
+	if (prop) {
+		struct memblock_region *reg;
+		unsigned long total_pages = 0, system_memory;
+		unsigned long mem_threshold;
+
+		/* Calculate the amount of available memory in the system */
+		for_each_memblock(memory, reg)
+			total_pages += memblock_region_memory_end_pfn(reg) -
+				       memblock_region_memory_base_pfn(reg);
+
+		system_memory = total_pages << PAGE_SHIFT;
+
+		if (len % t_len != 0) {
+			pr_err("invalid digi,size-table property in '%s' node.\n", uname);
+			return -EINVAL;
+		}
+
+		/*
+		 * It's assumed that the tuples in the size table are in
+		 * increasing mem_threshold order.
+		 */
+		while (len > 0) {
+			mem_threshold = dt_mem_next_cell(dt_root_addr_cells, &prop);
+			size = dt_mem_next_cell(dt_root_size_cells, &prop);
+
+			if (system_memory <= mem_threshold)
+				break;
+
+			len -= t_len;
+		}
+	}
+
+	/* If we don't have a non-zero size by now, return an error */
+	if (size == 0)
+		return -EINVAL;
 
 	nomap = of_get_flat_dt_prop(node, "no-map", NULL) != NULL;
 
