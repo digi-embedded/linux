@@ -2,7 +2,6 @@ dtb-$(CONFIG_ARCH_FSL_IMX8QXP) += ccimx8dx-mfg-interim.dtb \
 				  ccimx8dx-mfg-functional.dtb \
 				  ccimx8dx-mfg-functional-wb.dtb \
 				  ccimx8dx-sbc-pro-wb.dtb \
-				  ccimx8dx-sbc-pro-wb-mfg.dtb \
 				  ccimx8dx-sbc-pro.dtb \
 				  ccimx8qxp-mfg-interim.dtb \
 				  ccimx8qxp-mfg-functional.dtb \
