@@ -37,6 +37,7 @@
 #include <linux/pm_runtime.h>
 #include <linux/mx8_mu.h>
 #include <linux/uaccess.h>
+#include <linux/version.h>
 
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-device.h>
@@ -1302,50 +1303,75 @@ static int vpu_enc_v4l2_ioctl_try_fmt(struct file *file,
 	return 0;
 }
 
-static int vpu_enc_v4l2_ioctl_g_crop(struct file *file, void *fh,
-				struct v4l2_crop *cr)
+static int vpu_enc_v4l2_ioctl_g_selection(struct file *file, void *fh,
+					struct v4l2_selection *s)
 {
 	struct vpu_ctx *ctx = v4l2_fh_to_ctx(fh);
 	struct queue_data *src = &ctx->q_data[V4L2_SRC];
 
-	if (!cr)
-		return -EINVAL;
-
-	if (get_queue_by_v4l2_type(ctx, cr->type) != src)
+	if (s->target != V4L2_SEL_TGT_CROP && s->target != V4L2_SEL_TGT_COMPOSE)
 		return -EINVAL;
 
 	vpu_log_func();
-	cr->c.left = src->rect.left;
-	cr->c.top = src->rect.top;
-	cr->c.width = src->rect.width;
-	cr->c.height = src->rect.height;
+	s->r = src->rect;
 
 	return 0;
 }
 
-static int vpu_enc_v4l2_ioctl_s_crop(struct file *file, void *fh,
-				const struct v4l2_crop *cr)
+static int vpu_enc_v4l2_ioctl_s_selection(struct file *file, void *fh,
+					struct v4l2_selection *s)
 {
 	struct vpu_ctx *ctx = v4l2_fh_to_ctx(fh);
 	struct queue_data *src = &ctx->q_data[V4L2_SRC];
 	struct vpu_dev *dev = ctx->dev;
 
-	if (!cr)
-		return -EINVAL;
-	if (!dev)
-		return -EINVAL;
-
-	if (get_queue_by_v4l2_type(ctx, cr->type) != src)
+	if (s->target != V4L2_SEL_TGT_CROP && s->target != V4L2_SEL_TGT_COMPOSE)
 		return -EINVAL;
 
 	vpu_log_func();
-	src->rect.left = ALIGN(cr->c.left, dev->supported_size.step_width);
-	src->rect.top = ALIGN(cr->c.top, dev->supported_size.step_height);
-	src->rect.width = ALIGN(cr->c.width, dev->supported_size.step_width);
-	src->rect.height = ALIGN(cr->c.height, dev->supported_size.step_height);
+	src->rect.left = ALIGN(s->r.left, dev->supported_size.step_width);
+	src->rect.top = ALIGN(s->r.top, dev->supported_size.step_height);
+	src->rect.width = ALIGN(s->r.width, dev->supported_size.step_width);
+	src->rect.height = ALIGN(s->r.height, dev->supported_size.step_height);
 	valid_crop_info(src, &src->rect);
 
 	return 0;
+}
+
+static int vpu_enc_v4l2_ioctl_g_crop(struct file *file, void *fh,
+				struct v4l2_crop *cr)
+{
+	struct v4l2_selection s;
+	int ret;
+
+	if (!cr)
+		return -EINVAL;
+
+	s.type = cr->type;
+	s.target = V4L2_SEL_TGT_CROP;
+
+	vpu_log_func();
+	ret = vpu_enc_v4l2_ioctl_g_selection(file, fh, &s);
+	if (!ret)
+		cr->c = s.r;
+
+	return ret;
+}
+
+static int vpu_enc_v4l2_ioctl_s_crop(struct file *file, void *fh,
+				const struct v4l2_crop *cr)
+{
+	struct v4l2_selection s;
+
+	if (!cr)
+		return -EINVAL;
+
+	s.type = cr->type;
+	s.target = V4L2_SEL_TGT_CROP;
+	s.r = cr->c;
+
+	vpu_log_func();
+	return vpu_enc_v4l2_ioctl_s_selection(file, fh, &s);
 }
 
 static int response_stop_stream(struct vpu_ctx *ctx)
@@ -1569,6 +1595,8 @@ static const struct v4l2_ioctl_ops vpu_enc_v4l2_ioctl_ops = {
 	.vidioc_expbuf                  = vpu_enc_v4l2_ioctl_expbuf,
 	.vidioc_g_crop                  = vpu_enc_v4l2_ioctl_g_crop,
 	.vidioc_s_crop			= vpu_enc_v4l2_ioctl_s_crop,
+	.vidioc_g_selection		= vpu_enc_v4l2_ioctl_g_selection,
+	.vidioc_s_selection		= vpu_enc_v4l2_ioctl_s_selection,
 	.vidioc_encoder_cmd             = vpu_enc_v4l2_ioctl_encoder_cmd,
 	.vidioc_subscribe_event         = vpu_enc_v4l2_ioctl_subscribe_event,
 	.vidioc_unsubscribe_event       = v4l2_event_unsubscribe,
@@ -2021,7 +2049,7 @@ static void get_kmp_next(const u8 *p, int *next, int size)
 	}
 }
 
-static int kmp_serach(u8 *s, int s_len, const u8 *p, int p_len, int *next)
+static int kmp_search(u8 *s, int s_len, const u8 *p, int p_len, int *next)
 {
 	int i = 0;
 	int j = 0;
@@ -2050,7 +2078,7 @@ static int get_stuff_data_size(u8 *data, int size)
 		return 0;
 
 	get_kmp_next(pattern, next, ARRAY_SIZE(pattern));
-	index =  kmp_serach(data, size, pattern, ARRAY_SIZE(pattern), next);
+	index =  kmp_search(data, size, pattern, ARRAY_SIZE(pattern), next);
 	if (index < 0)
 		return 0;
 	vpu_dbg(LVL_DEBUG, "find end_of_stream nal\n");
@@ -2235,7 +2263,7 @@ static int find_nal_begin(u8 *data, u32 size)
 
 	len = ARRAY_SIZE(pattern);
 	get_kmp_next(pattern, next, len);
-	index = kmp_serach(data, size, pattern, len, next);
+	index = kmp_search(data, size, pattern, len, next);
 	if (index > 0 && data[index - 1] == 0)
 		index--;
 
@@ -3797,7 +3825,7 @@ static int show_cmd_event_infos(struct vpu_statistic *statistic,
 
 	num += scnprintf(buf + num, size - num, "command/event:\n");
 
-	count = max(GTB_ENC_CMD_RESERVED, VID_API_ENC_EVENT_RESERVED);
+	count = max_t(int, GTB_ENC_CMD_RESERVED, VID_API_ENC_EVENT_RESERVED);
 	for (i = 0; i <= count; i++)
 		num += show_cmd_event(statistic, i, buf + num, size - num);
 
@@ -4582,7 +4610,7 @@ static unsigned int vpu_enc_v4l2_poll(struct file *filp, poll_table *wait)
 	unsigned int rc = 0;
 
 	vpu_dbg(LVL_FUNC, "%s(), event: 0x%lx\n", __func__,
-			poll_requested_events(wait));
+			(unsigned long)poll_requested_events(wait));
 
 	poll_wait(filp, &ctx->fh.wait, wait);
 

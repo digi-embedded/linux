@@ -1,7 +1,7 @@
 /**
  * core.c - Cadence USB3 DRD Controller Core file
  *
- * Copyright 2017 NXP
+ * Copyright 2017-2019 NXP
  *
  * Authors: Peter Chen <peter.chen@nxp.com>
  *
@@ -35,6 +35,39 @@
 #include "core.h"
 #include "host-export.h"
 #include "gadget-export.h"
+
+/**
+ * cdns3_handshake - spin reading  until handshake completes or fails
+ * @ptr: address of device controller register to be read
+ * @mask: bits to look at in result of read
+ * @done: value of those bits when handshake succeeds
+ * @usec: timeout in microseconds
+ *
+ * Returns negative errno, or zero on success
+ *
+ * Success happens when the "mask" bits have the specified value (hardware
+ * handshake done). There are two failure modes: "usec" have passed (major
+ * hardware flakeout), or the register reads as all-ones (hardware removed).
+ */
+int cdns3_handshake(void __iomem *ptr, u32 mask, u32 done, int usec)
+{
+	u32 result;
+
+	do {
+		result = readl(ptr);
+		if (result == ~(u32)0)  /* card removed */
+			return -ENODEV;
+
+		result &= mask;
+		if (result == done)
+			return 0;
+
+		udelay(1);
+		usec--;
+	} while (usec > 0);
+
+	return -ETIMEDOUT;
+}
 
 static void cdns3_usb_phy_init(void __iomem *regs)
 {
@@ -311,6 +344,18 @@ static irqreturn_t cdns3_irq(int irq, void *data)
 	return ret;
 }
 
+static irqreturn_t cdns3_thread_irq(int irq, void *data)
+{
+	struct cdns3 *cdns = data;
+	irqreturn_t ret = IRQ_NONE;
+
+	/* Handle device/host interrupt */
+	if (cdns->role != CDNS3_ROLE_END && cdns3_role(cdns)->thread_irq)
+		ret = cdns3_role(cdns)->thread_irq(cdns);
+
+	return ret;
+}
+
 static int cdns3_get_clks(struct device *dev)
 {
 	struct cdns3 *cdns = dev_get_drvdata(dev);
@@ -388,7 +433,7 @@ static void cdns3_disable_unprepare_clks(struct device *dev)
 
 static void cdns3_remove_roles(struct cdns3 *cdns)
 {
-	cdns3_gadget_remove(cdns);
+	cdns3_gadget_exit(cdns);
 	cdns3_host_remove(cdns);
 }
 
@@ -499,6 +544,54 @@ static int cdns3_register_extcon(struct cdns3 *cdns)
 	return 0;
 }
 
+static ssize_t cdns3_role_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct cdns3 *cdns = dev_get_drvdata(dev);
+
+	if (cdns->role != CDNS3_ROLE_END)
+		return sprintf(buf, "%s\n", cdns3_role(cdns)->name);
+	else
+		return sprintf(buf, "%s\n", "none");
+}
+
+static ssize_t cdns3_role_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t n)
+{
+	struct cdns3 *cdns = dev_get_drvdata(dev);
+	enum cdns3_roles role;
+	int ret;
+
+	if (!(cdns->roles[CDNS3_ROLE_HOST] && cdns->roles[CDNS3_ROLE_GADGET])) {
+		dev_warn(dev, "Current configuration is not dual-role, quit\n");
+		return -EPERM;
+	}
+
+	for (role = CDNS3_ROLE_HOST; role <= CDNS3_ROLE_GADGET; role++)
+		if (!strncmp(buf, cdns->roles[role]->name,
+			     strlen(cdns->roles[role]->name)))
+			break;
+
+	if (role == cdns->role)
+		return -EINVAL;
+
+	disable_irq(cdns->irq);
+	ret = cdns3_do_role_switch(cdns, role);
+	enable_irq(cdns->irq);
+
+	return (ret == 0) ? n : ret;
+}
+static DEVICE_ATTR(role, 0644, cdns3_role_show, cdns3_role_store);
+
+static struct attribute *cdns3_attrs[] = {
+	&dev_attr_role.attr,
+	NULL,
+};
+
+static const struct attribute_group cdns3_attr_group = {
+	.attrs = cdns3_attrs,
+};
+
 /**
  * cdns3_probe - probe for cdns3 core device
  * @pdev: Pointer to cdns3 core platform device
@@ -608,8 +701,12 @@ static int cdns3_probe(struct platform_device *pdev)
 		goto err3;
 	}
 
-	ret = devm_request_irq(dev, cdns->irq, cdns3_irq, IRQF_SHARED,
-			dev_name(dev), cdns);
+	ret = devm_request_threaded_irq(dev, cdns->irq, cdns3_irq,
+			cdns3_thread_irq, IRQF_SHARED, dev_name(dev), cdns);
+	if (ret)
+		goto err4;
+
+	ret = sysfs_create_group(&dev->kobj, &cdns3_attr_group);
 	if (ret)
 		goto err4;
 
@@ -648,13 +745,15 @@ err1:
 static int cdns3_remove(struct platform_device *pdev)
 {
 	struct cdns3 *cdns = platform_get_drvdata(pdev);
+	struct device *dev = &pdev->dev;
 
-	pm_runtime_get_sync(&pdev->dev);
-	pm_runtime_disable(&pdev->dev);
-	pm_runtime_put_noidle(&pdev->dev);
+	pm_runtime_get_sync(dev);
+	pm_runtime_disable(dev);
+	pm_runtime_put_noidle(dev);
+	sysfs_remove_group(&dev->kobj, &cdns3_attr_group);
 	cdns3_remove_roles(cdns);
 	usb_phy_shutdown(cdns->usbphy);
-	cdns3_disable_unprepare_clks(&pdev->dev);
+	cdns3_disable_unprepare_clks(dev);
 
 	return 0;
 }

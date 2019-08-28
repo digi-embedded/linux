@@ -183,7 +183,8 @@ static void ion_buffer_kmap_put(struct ion_buffer *buffer)
 	}
 }
 
-static struct sg_table *dup_sg_table(struct sg_table *table)
+static struct sg_table *dup_sg_table(struct sg_table *table,
+				     bool preserve_dma_address)
 {
 	struct sg_table *new_table;
 	int ret, i;
@@ -202,7 +203,9 @@ static struct sg_table *dup_sg_table(struct sg_table *table)
 	new_sg = new_table->sgl;
 	for_each_sg(table->sgl, sg, table->nents, i) {
 		memcpy(new_sg, sg, sizeof(*sg));
-		sg->dma_address = 0;
+		if (!preserve_dma_address)
+			new_sg->dma_address = 0;
+
 		new_sg = sg_next(new_sg);
 	}
 
@@ -219,6 +222,7 @@ struct ion_dma_buf_attachment {
 	struct device *dev;
 	struct sg_table *table;
 	struct list_head list;
+	bool no_map;
 };
 
 static int ion_dma_buf_attach(struct dma_buf *dmabuf, struct device *dev,
@@ -232,7 +236,10 @@ static int ion_dma_buf_attach(struct dma_buf *dmabuf, struct device *dev,
 	if (!a)
 		return -ENOMEM;
 
-	table = dup_sg_table(buffer->sg_table);
+	if (buffer->heap->type == ION_HEAP_TYPE_UNMAPPED)
+		a->no_map = true;
+
+	table = dup_sg_table(buffer->sg_table, a->no_map);
 	if (IS_ERR(table)) {
 		kfree(a);
 		return -ENOMEM;
@@ -273,6 +280,9 @@ static struct sg_table *ion_map_dma_buf(struct dma_buf_attachment *attachment,
 
 	table = a->table;
 
+	if (a->no_map)
+		return table;
+
 	if (!dma_map_sg(attachment->dev, table->sgl, table->nents,
 			direction))
 		return ERR_PTR(-ENOMEM);
@@ -284,6 +294,11 @@ static void ion_unmap_dma_buf(struct dma_buf_attachment *attachment,
 			      struct sg_table *table,
 			      enum dma_data_direction direction)
 {
+	struct ion_dma_buf_attachment *a = attachment->priv;
+
+	if (a->no_map)
+		return;
+
 	dma_unmap_sg(attachment->dev, table->sgl, table->nents, direction);
 }
 

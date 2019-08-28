@@ -22,6 +22,7 @@
 #include <linux/log2.h>
 #include <linux/module.h>
 #include <linux/of_graph.h>
+#include <linux/pm_runtime.h>
 #include <drm/bridge/sec_mipi_dsim.h>
 #include <drm/drmP.h>
 #include <drm/drm_atomic_helper.h>
@@ -1142,7 +1143,7 @@ static void sec_mipi_dsim_set_standby(struct sec_mipi_dsim *dsim,
 struct dsim_pll_pms *sec_mipi_dsim_calc_pmsk(struct sec_mipi_dsim *dsim)
 {
 	uint32_t p, m, s;
-	uint32_t best_p, best_m, best_s;
+	uint32_t best_p = 0, best_m = 0, best_s = 0;
 	uint32_t fin, fout;
 	uint32_t s_pow_2, raw_s;
 	uint64_t mfin, pfvco, pfout, psfout;
@@ -1186,10 +1187,10 @@ struct dsim_pll_pms *sec_mipi_dsim_calc_pmsk(struct sec_mipi_dsim *dsim)
 	 * Fvco: [1050MHz ~ 2100MHz] (Fvco = ((m + k / 65536) * Fin) / p)
 	 * So, m = Fvco * p / Fin and Fvco > Fin;
 	 */
-	pfvco = fvco_range->min * prange->min;
+	pfvco = (uint64_t)fvco_range->min * prange->min;
 	mrange->min = max_t(uint32_t, mrange->min,
 			    DIV_ROUND_UP_ULL(pfvco, fin));
-	pfvco = fvco_range->max * prange->max;
+	pfvco = (uint64_t)fvco_range->max * prange->max;
 	mrange->max = min_t(uint32_t, mrange->max,
 			    DIV_ROUND_UP_ULL(pfvco, fin));
 
@@ -1202,7 +1203,7 @@ struct dsim_pll_pms *sec_mipi_dsim_calc_pmsk(struct sec_mipi_dsim *dsim)
 	/* first determine 'm', then can determine 'p', last determine 's' */
 	for (m = mrange->min; m <= mrange->max; m++) {
 		/* p = m * Fin / Fvco */
-		mfin = m * fin;
+		mfin = (uint64_t)m * fin;
 		pr_new.min = max_t(uint32_t, prange->min,
 				   DIV_ROUND_UP_ULL(mfin, fvco_range->max));
 		pr_new.max = min_t(uint32_t, prange->max,
@@ -1213,7 +1214,7 @@ struct dsim_pll_pms *sec_mipi_dsim_calc_pmsk(struct sec_mipi_dsim *dsim)
 
 		for (p = pr_new.min; p <= pr_new.max; p++) {
 			/* s = order_pow_of_two((m * Fin) / (p * Fout)) */
-			pfout = p * fout;
+			pfout = (uint64_t)p * fout;
 			raw_s = DIV_ROUND_CLOSEST_ULL(mfin, pfout);
 
 			s_pow_2 = rounddown_pow_of_two(raw_s);
@@ -1241,8 +1242,10 @@ struct dsim_pll_pms *sec_mipi_dsim_calc_pmsk(struct sec_mipi_dsim *dsim)
 		}
 	}
 
-	if (best_delta == ~0U)
+	if (best_delta == ~0U) {
+		devm_kfree(dev, pll_pms);
 		return ERR_PTR(-EINVAL);
+	}
 
 	pll_pms->p = best_p;
 	pll_pms->m = best_m;
@@ -1293,6 +1296,11 @@ int sec_mipi_dsim_check_pll_out(void *driver_private,
 	dsim->pms = PLLCTRL_SET_P(pmsk->p) |
 		    PLLCTRL_SET_M(pmsk->m) |
 		    PLLCTRL_SET_S(pmsk->s);
+
+	/* free 'dsim_pll_pms' structure data which is
+	 * allocated in 'sec_mipi_dsim_calc_pmsk()'.
+	 */
+	devm_kfree(dsim->dev, (void *)pmsk);
 
 	if (dsim->mode_flags & MIPI_DSI_MODE_VIDEO_SYNC_PULSE) {
 		hpar = sec_mipi_dsim_get_hblank_par(mode->name,
@@ -1840,10 +1848,12 @@ int sec_mipi_dsim_bind(struct device *dev, struct device *master, void *data,
 		return ret;
 	}
 
-	clk_prepare_enable(dsim->clk_cfg);
+	dev_set_drvdata(dev, dsim);
+
+	pm_runtime_get_sync(dev);
 	version = dsim_read(dsim, DSIM_VERSION);
 	WARN_ON(version != pdata->version);
-	clk_disable_unprepare(dsim->clk_cfg);
+	pm_runtime_put_sync(dev);
 
 	dev_info(dev, "version number is %#x\n", version);
 
@@ -1897,8 +1907,6 @@ int sec_mipi_dsim_bind(struct device *dev, struct device *master, void *data,
 	bridge->of_node = dev->of_node;
 	bridge->encoder = encoder;
 	encoder->bridge = bridge;
-
-	dev_set_drvdata(dev, dsim);
 
 	/* attach sec dsim bridge and its next bridge if exists */
 	ret = drm_bridge_attach(encoder, bridge, NULL);

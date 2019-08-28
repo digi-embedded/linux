@@ -213,7 +213,7 @@ dpu_atomic_assign_plane_source_per_crtc(struct drm_plane_state **states,
 	dpu_block_id_t blend;
 	unsigned int sid, src_sid;
 	unsigned int num_planes;
-	int i, j, k, l, m;
+	int i, j, k, l, m = -1;
 	int total_asrc_num;
 	int s0_layer_cnt = 0, s1_layer_cnt = 0;
 	int s0_n = 0, s1_n = 0;
@@ -275,6 +275,8 @@ again:
 		mutex_lock(&grp->mutex);
 		for (k = 0; k < total_asrc_num; k++) {
 			m = ffs(src_a_mask) - 1;
+			if (m < 0)
+				return -EINVAL;
 
 			fu = source_to_fu(&grp->res, sources[m]);
 			if (!fu)
@@ -364,7 +366,7 @@ next:
 		}
 		mutex_unlock(&grp->mutex);
 
-		if (k == total_asrc_num)
+		if (k == total_asrc_num || m < 0)
 			return -EINVAL;
 
 		if (alloc_aux_source)
@@ -603,6 +605,9 @@ static int dpu_drm_atomic_check(struct drm_device *dev,
 
 		drm_for_each_plane_mask(plane, dev, crtc_state->plane_mask) {
 			plane_state = drm_atomic_get_plane_state(state, plane);
+			if (IS_ERR(plane_state))
+				return PTR_ERR(plane_state);
+
 			dpstate = to_dpu_plane_state(plane_state);
 			fb = plane_state->fb;
 			dpu_plane = to_dpu_plane(plane);

@@ -87,6 +87,7 @@ dtb-$(CONFIG_ARCH_FSL_IMX8QXP) += fsl-imx8qxp-lpddr4-arm2.dtb \
 				  fsl-imx8qxp-lpddr4-arm2-dsp.dtb \
 				  fsl-imx8qxp-lpddr4-arm2-dsi-rm67191.dtb \
 				  fsl-imx8qxp-lpddr4-arm2-a0.dtb \
+				  fsl-imx8qxp-lpddr4-arm2-hyperbus.dtb \
 				  fsl-imx8qxp-17x17-val.dtb \
 				  fsl-imx8qxp-ddr3l-val.dtb \
 				  fsl-imx8dx-17x17-val.dtb \
@@ -117,6 +118,7 @@ dtb-$(CONFIG_ARCH_FSL_IMX8MQ) += fsl-imx8mq-ddr3l-arm2.dtb \
 				 fsl-imx8mq-evk-dp.dtb \
 				 fsl-imx8mq-evk-edp.dtb
 dtb-$(CONFIG_ARCH_FSL_IMX8MM) += fsl-imx8mm-evk.dtb \
+				 fsl-imx8mm-evk-drm.dtb \
 				 fsl-imx8mm-evk-ak4497.dtb \
 				 fsl-imx8mm-evk-m4.dtb \
 				 fsl-imx8mm-evk-ak5558.dtb \
@@ -131,6 +133,13 @@ dtb-$(CONFIG_ARCH_FSL_IMX8MM) += fsl-imx8mm-evk.dtb \
 				 fsl-imx8mm-evk-revb-rm67191.dtb \
 				 fsl-imx8mm-ddr4-evk-rm67191.dtb \
 				 fsl-imx8mm-ddr4-qca9377-evk.dtb
+dtb-$(CONFIG_ARCH_FSL_IMX8MN) += fsl-imx8mn-ddr4-evk.dtb \
+				 fsl-imx8mn-ddr4-evk-rpmsg.dtb \
+				 fsl-imx8mn-ddr4-evk-rm67191.dtb \
+				 fsl-imx8mn-ddr4-evk-ak5558.dtb \
+				 fsl-imx8mn-ddr4-evk-root.dtb \
+				 fsl-imx8mn-ddr4-evk-inmate.dtb
+
 always		:= $(dtb-y)
 subdir-y	:= $(dts-dirs)
 clean-files	:= *.dtb
