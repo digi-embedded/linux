@@ -218,7 +218,7 @@
 		panel-height-mm = <121>;
 		display-timings {
 			timing {
-				clock-frequency = <13500000>;
+				clock-frequency = <31500000>;
 				hactive = <640>;
 				vactive = <480>;
 				hback-porch = <4>;
@@ -267,7 +267,7 @@
 		panel-height-mm = <121>;
 		display-timings {
 			timing {
-				clock-frequency = <13500000>;
+				clock-frequency = <31500000>;
 				hactive = <640>;
 				vactive = <480>;
 				hback-porch = <4>;
