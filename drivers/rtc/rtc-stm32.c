@@ -129,7 +129,6 @@ struct stm32_rtc_data {
 	void (*clear_events)(struct stm32_rtc *rtc, unsigned int flags);
 	bool has_pclk;
 	bool need_dbp;
-	bool has_wakeirq;
 	bool has_lsco;
 };
 
@@ -143,7 +142,6 @@ struct stm32_rtc {
 	struct clk *rtc_ck;
 	const struct stm32_rtc_data *data;
 	int irq_alarm;
-	int wakeirq_alarm;
 	int lsco;
 	struct clk *clk_lsco;
 };
@@ -642,7 +640,6 @@ static void stm32_rtc_clear_events(struct stm32_rtc *rtc,
 static const struct stm32_rtc_data stm32_rtc_data = {
 	.has_pclk = false,
 	.need_dbp = true,
-	.has_wakeirq = false,
 	.has_lsco = false,
 	.regs = {
 		.tr = 0x00,
@@ -666,7 +663,6 @@ static const struct stm32_rtc_data stm32_rtc_data = {
 static const struct stm32_rtc_data stm32h7_rtc_data = {
 	.has_pclk = true,
 	.need_dbp = true,
-	.has_wakeirq = false,
 	.has_lsco = false,
 	.regs = {
 		.tr = 0x00,
@@ -699,7 +695,6 @@ static void stm32mp1_rtc_clear_events(struct stm32_rtc *rtc,
 static const struct stm32_rtc_data stm32mp1_data = {
 	.has_pclk = true,
 	.need_dbp = false,
-	.has_wakeirq = true,
 	.has_lsco = true,
 	.regs = {
 		.tr = 0x00,
@@ -880,19 +875,12 @@ static int stm32_rtc_probe(struct platform_device *pdev)
 	}
 
 	ret = device_init_wakeup(&pdev->dev, true);
-	if (rtc->data->has_wakeirq) {
-		rtc->wakeirq_alarm = platform_get_irq(pdev, 1);
-		if (rtc->wakeirq_alarm > 0) {
-			ret = dev_pm_set_dedicated_wake_irq(&pdev->dev,
-							    rtc->wakeirq_alarm);
-		} else {
-			ret = rtc->wakeirq_alarm;
-			if (rtc->wakeirq_alarm == -EPROBE_DEFER)
-				goto err;
-		}
-	}
 	if (ret)
-		dev_warn(&pdev->dev, "alarm can't wake up the system: %d", ret);
+		goto err;
+
+	ret = dev_pm_set_wake_irq(&pdev->dev, rtc->irq_alarm);
+	if (ret)
+		goto err;
 
 	platform_set_drvdata(pdev, rtc);
 
@@ -1000,9 +988,6 @@ static int stm32_rtc_suspend(struct device *dev)
 	if (rtc->data->has_pclk)
 		clk_disable_unprepare(rtc->pclk);
 
-	if (device_may_wakeup(dev))
-		return enable_irq_wake(rtc->irq_alarm);
-
 	return 0;
 }
 
@@ -1023,9 +1008,6 @@ static int stm32_rtc_resume(struct device *dev)
 			clk_disable_unprepare(rtc->pclk);
 		return ret;
 	}
-
-	if (device_may_wakeup(dev))
-		return disable_irq_wake(rtc->irq_alarm);
 
 	return ret;
 }
