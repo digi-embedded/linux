@@ -199,15 +199,15 @@
 
 /* MIPI display support */
 &mipi_dsi_phy1 {
-	status = "okay";
+	status = "disabled";
 };
 
 &mipi_dsi1 {
-	status = "okay";
+	status = "disabled";
 };
 
 &mipi_dsi_bridge1 {
-	status = "okay";
+	status = "disabled";
 
 	panel@0 {
 		compatible = "raydium,rm67191";
@@ -248,15 +248,15 @@
 };
 
 &mipi_dsi_phy2 {
-	status = "okay";
+	status = "disabled";
 };
 
 &mipi_dsi2 {
-	status = "okay";
+	status = "disabled";
 };
 
 &mipi_dsi_bridge2 {
-	status = "okay";
+	status = "disabled";
 
 	panel@0 {
 		compatible = "raydium,rm67191";
