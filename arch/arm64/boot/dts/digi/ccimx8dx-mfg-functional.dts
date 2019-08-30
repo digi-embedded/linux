@@ -38,6 +38,19 @@
 	status = "okay";
 };
 
+/* MIPI display support */
+&mipi_dsi_phy1 {
+	status = "okay";
+};
+
+&mipi_dsi1 {
+	status = "okay";
+};
+
+&mipi_dsi_bridge1 {
+	status = "okay";
+};
+
 /* IOMUX */
 &iomuxc {
 	/* UART1 loopback (4 wires) */
