@@ -21,3 +21,16 @@
 #include "ccimx8x-wb.dtsi"
 /* Digi ConnectCore 8X Functional test board */
 #include "ccimx8x-mfg-functional.dtsi"
+
+/* MIPI display support */
+&mipi_dsi_phy1 {
+	status = "okay";
+};
+
+&mipi_dsi1 {
+	status = "okay";
+};
+
+&mipi_dsi_bridge1 {
+	status = "okay";
+};

@@ -21,3 +21,16 @@
 #include "ccimx8x.dtsi"
 /* Digi ConnectCore 8X Interim test board */
 #include "ccimx8x-mfg-interim.dtsi"
+
+/* LVDS display support */
+&ldb1 {
+	status = "okay";
+};
+
+&lvds0 {
+	status = "okay";
+};
+
+&ldb1_phy {
+	status = "okay";
+};
