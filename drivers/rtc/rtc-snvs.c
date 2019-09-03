@@ -73,7 +73,7 @@ static u32 rtc_read_lp_counter(struct snvs_rtc_data *data)
 	do {
 		read2 = read1;
 		read1 = rtc_read_lpsrt(data);
-	} while ((read1 >> CNTR_TO_SECS_SH) != (read2 >> CNTR_TO_SECS_SH) && --timeout);
+	} while (read1 != read2 && --timeout);
 	if (!timeout)
 		dev_err(&data->rtc->dev, "Timeout trying to get valid LPSRT Counter read\n");
 

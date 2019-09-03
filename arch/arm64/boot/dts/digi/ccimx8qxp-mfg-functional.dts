@@ -1,0 +1,85 @@
+/*
+ * Copyright 2019, Digi International Inc.
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+/dts-v1/;
+
+/* i.MX8QXP CPU */
+#include "../freescale/fsl-imx8qxp.dtsi"
+/* Digi ConnectCore 8X (non-WiFi variant) */
+#include "ccimx8x.dtsi"
+/* Digi ConnectCore 8X Functional test board */
+#include "ccimx8x-mfg-functional.dtsi"
+
+/* UART1 loopback */
+&lpuart1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lpuart1_4wires>;
+	status = "okay";
+};
+
+/* PCIE (Mini Card) */
+&pcieb {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pcieb_mini_card>;
+	ext_osc = <1>;
+	reset-gpio = <&gpio4 0 GPIO_ACTIVE_LOW>;
+	status = "okay";
+};
+
+/* MIPI display support */
+&mipi_dsi_phy1 {
+	status = "okay";
+};
+
+&mipi_dsi1 {
+	status = "okay";
+};
+
+&mipi_dsi_bridge1 {
+	status = "okay";
+};
+
+&mipi_dsi_phy2 {
+	status = "okay";
+};
+
+&mipi_dsi2 {
+	status = "okay";
+};
+
+&mipi_dsi_bridge2 {
+	status = "okay";
+};
+
+/* IOMUX */
+&iomuxc {
+	/* UART1 loopback (4 wires) */
+	pinctrl_lpuart1_4wires: lpuart1grp_4wires {
+		fsl,pins = <
+			SC_P_UART1_TX_ADMA_UART1_TX		0x06000020
+			SC_P_UART1_RX_ADMA_UART1_RX		0x06000020
+			SC_P_UART1_RTS_B_ADMA_UART1_RTS_B	0x06000020
+			SC_P_UART1_CTS_B_ADMA_UART1_CTS_B	0x06000020
+		>;
+	};
+
+	/* PCIE (Mini Card) */
+	pinctrl_pcieb_mini_card: pcieagrp_mini_card {
+		fsl,pins = <
+			SC_P_PCIE_CTRL0_PERST_B_LSIO_GPIO4_IO00		0x06000021
+			SC_P_PCIE_CTRL0_WAKE_B_LSIO_GPIO4_IO02		0x04000021
+		>;
+	};
+};

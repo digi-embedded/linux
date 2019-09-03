@@ -4503,6 +4503,7 @@ static void drm_add_display_info(struct drm_connector *connector,
 {
 	struct drm_display_info *info = &connector->display_info;
 
+	memset(info, 0, sizeof(struct drm_display_info));
 	info->width_mm = edid->width_cm * 10;
 	info->height_mm = edid->height_cm * 10;
 
@@ -4953,6 +4954,14 @@ drm_hdmi_avi_infoframe_from_display_mode(struct hdmi_avi_infoframe *frame,
 	}
 
 	frame->picture_aspect = HDMI_PICTURE_ASPECT_NONE;
+
+	/*
+	 * As some drivers don't support atomic, we can't use connector state.
+	 * So just initialize the frame with default values, just the same way
+	 * as it's done with other properties here.
+	 */
+	frame->content_type = HDMI_CONTENT_TYPE_GRAPHICS;
+	frame->itc = 0;
 
 	/*
 	 * Populate picture aspect ratio from either

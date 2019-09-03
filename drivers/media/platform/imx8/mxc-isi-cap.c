@@ -165,7 +165,8 @@ struct mxc_isi_fmt *mxc_isi_get_src_fmt(struct v4l2_subdev_format *sd_fmt)
 	if (sd_fmt->format.code == MEDIA_BUS_FMT_YUYV8_1X16 ||
 		sd_fmt->format.code == MEDIA_BUS_FMT_YVYU8_2X8 ||
 		sd_fmt->format.code == MEDIA_BUS_FMT_AYUV8_1X32 ||
-		sd_fmt->format.code == MEDIA_BUS_FMT_UYVY8_2X8)
+		sd_fmt->format.code == MEDIA_BUS_FMT_UYVY8_2X8 ||
+		sd_fmt->format.code == MEDIA_BUS_FMT_YUYV8_2X8)
 		index = 1;
 	else
 		index = 0;
@@ -787,9 +788,6 @@ static int mxc_isi_cap_enum_fmt_mplane(struct file *file, void *priv,
 		return -EINVAL;
 
 	fmt = &mxc_isi_out_formats[f->index];
-	if (!fmt)
-		return -EINVAL;
-
 	strncpy(f->description, fmt->name, sizeof(f->description) - 1);
 
 	f->pixelformat = fmt->fourcc;
@@ -1022,6 +1020,8 @@ static int mxc_isi_cap_streamon(struct file *file, void *priv,
 	mxc_isi_channel_enable(mxc_isi);
 	mxc_isi_pipeline_enable(mxc_isi, 1);
 
+	mxc_isi->is_streaming = 1;
+
 	return ret;
 }
 
@@ -1036,6 +1036,8 @@ static int mxc_isi_cap_streamoff(struct file *file, void *priv,
 	mxc_isi_pipeline_enable(mxc_isi, 0);
 	mxc_isi_channel_disable(mxc_isi);
 	ret = vb2_ioctl_streamoff(file, priv, type);
+
+	mxc_isi->is_streaming = 0;
 
 	return ret;
 }
@@ -1220,6 +1222,7 @@ static int mxc_isi_cap_enum_framesizes(struct file *file, void *priv,
 					 struct v4l2_frmsizeenum *fsize)
 {
 	struct mxc_isi_dev *mxc_isi = video_drvdata(file);
+	struct device_node *node = mxc_isi->pdev->dev.of_node;
 	struct v4l2_subdev *sd;
 	struct mxc_isi_fmt *fmt;
 	struct media_pad *source_pad;
@@ -1256,6 +1259,11 @@ static int mxc_isi_cap_enum_framesizes(struct file *file, void *priv,
 	if (ret)
 		return ret;
 
+	if (of_device_is_compatible(node, "fsl,imx8mn-isi") &&
+	   (fse.max_width > 2048 || fse.min_width > 2048))
+		return -EINVAL;
+
+
 	if (fse.min_width == fse.max_width &&
 	    fse.min_height == fse.max_height) {
 		fsize->type = V4L2_FRMSIZE_TYPE_DISCRETE;
@@ -1279,6 +1287,7 @@ static int mxc_isi_cap_enum_frameintervals(struct file *file, void *fh,
 					  struct v4l2_frmivalenum *interval)
 {
 	struct mxc_isi_dev *mxc_isi = video_drvdata(file);
+	struct device_node *node = mxc_isi->pdev->dev.of_node;
 	struct v4l2_subdev *sd;
 	struct mxc_isi_fmt *fmt;
 	struct media_pad *source_pad;
@@ -1311,6 +1320,9 @@ static int mxc_isi_cap_enum_frameintervals(struct file *file, void *fh,
 	ret = v4l2_subdev_call(sd, pad, enum_frame_interval, NULL, &fie);
 	if (ret)
 		return ret;
+
+	if (of_device_is_compatible(node, "fsl,imx8mn-isi") && fie.width > 2048)
+		return -EINVAL;
 
 	interval->type = V4L2_FRMIVAL_TYPE_DISCRETE;
 	interval->discrete = fie.interval;
@@ -1465,6 +1477,7 @@ static int mxc_isi_subdev_set_fmt(struct v4l2_subdev *sd,
 			       struct v4l2_subdev_format *fmt)
 {
 	struct mxc_isi_dev *mxc_isi = v4l2_get_subdevdata(sd);
+	struct device_node *node = mxc_isi->pdev->dev.of_node;
 	struct v4l2_mbus_framefmt *mf = &fmt->format;
 	struct mxc_isi_frame *dst_f = &mxc_isi->isi_cap.dst_f;
 	struct mxc_isi_fmt *out_fmt;
@@ -1483,6 +1496,9 @@ static int mxc_isi_subdev_set_fmt(struct v4l2_subdev *sd,
 		v4l2_err(mxc_isi->v4l2_dev, "%s, format is not support!\n", __func__);
 		return -EINVAL;
 	}
+
+	if (of_device_is_compatible(node, "fsl,imx8mn-isi") && mf->width > 2048)
+		return -EINVAL;
 
 	mutex_lock(&mxc_isi->lock);
 	/* update out put frame size and formate */
@@ -1723,7 +1739,7 @@ static void mxc_isi_subdev_unregistered(struct v4l2_subdev *sd)
 	dev_dbg(&mxc_isi->pdev->dev, "%s\n", __func__);
 	mutex_lock(&mxc_isi->lock);
 
-	if (mxc_isi->id == 0)
+	if (mxc_isi->id == 0 && mxc_isi->skip_m2m == 0)
 		mxc_isi_unregister_m2m_device(mxc_isi);
 
 	vdev = &mxc_isi->isi_cap.vdev;

@@ -56,10 +56,6 @@
 			gpio = <&gpio5 8 GPIO_ACTIVE_HIGH>;
 			enable-active-high;
 			startup-delay-us = <25000>;
-			regulator-always-on;
-			regulator-state-mem {
-				regulator-off-in-suspend;
-			};
 		};
 	};
 };
@@ -105,7 +101,6 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan1>;
 	xceiver-supply = <&reg_3v3_ext>;
-	disable-fd-mode;
 	status = "disabled";
 };
 
@@ -114,7 +109,6 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan2>;
 	xceiver-supply = <&reg_3v3_ext>;
-	disable-fd-mode;
 	status = "disabled";
 };
 
@@ -123,7 +117,6 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan3>;
 	xceiver-supply = <&reg_3v3_ext>;
-	disable-fd-mode;
 	status = "disabled";
 };
 
@@ -205,6 +198,7 @@
 	lvds0: lvds-channel@0 {
 		fsl,data-mapping = "jeida";
 		fsl,data-width = <24>;
+		digi,bits-per-pixel = <16>;
 		status = "disabled";
 
 		display-timings {
@@ -225,6 +219,19 @@
 				vsync-active = <1>;
 				de-active = <1>;
 				pixelclk-active = <0>;
+			};
+
+			/* Fusion 10" F10A-0102 */
+			hsd101pfw2_1: timing@1 {
+				clock-frequency = <45000000>;
+				hactive = <1024>;
+				vactive = <600>;
+				hfront-porch = <0>;
+				hback-porch = <0>;
+				hsync-len = <176>;
+				vback-porch = <0>;
+				vfront-porch = <2>;
+				vsync-len = <23>;
 			};
 		};
 	};
@@ -309,45 +316,6 @@
 	status = "okay";
 };
 
-&rpmsg{
-	/*
-	 * 64K for one rpmsg instance:
-	 */
-	vdev-nums = <1>;
-	reg = <0x0 0x90000000 0x0 0x10000>;
-	status = "okay";
-};
-
-&tsens {
-	tsens-num = <3>;
-};
-
-&thermal_zones {
-	pmic-thermal0 {
-		polling-delay-passive = <250>;
-		polling-delay = <2000>;
-		thermal-sensors = <&tsens 2>;
-		trips {
-			pmic_alert0: trip0 {
-				temperature = <80000>;
-				hysteresis = <2000>;
-				type = "passive";
-			};
-			pmic_crit0: trip1 {
-				temperature = <125000>;
-				hysteresis = <2000>;
-				type = "critical";
-			};
-		};
-		cooling-maps {
-			map0 {
-				trip = <&pmic_alert0>;
-				cooling-device = <&A35_0 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
-			};
-		};
-	};
-};
-
 /* USB_OTG1 */
 &usbotg1 {
 	/*
@@ -375,18 +343,6 @@
 	bus-width = <4>;
 	no-1-8-v;
 	cd-gpios = <&gpio5 9 GPIO_ACTIVE_HIGH>;
-	status = "disabled";
-};
-
-&vpu {
-	status = "disabled";
-};
-
-&vpu_decoder {
-	status = "disabled";
-};
-
-&vpu_encoder {
 	status = "disabled";
 };
 

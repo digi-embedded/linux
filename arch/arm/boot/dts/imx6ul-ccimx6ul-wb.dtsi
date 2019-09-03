@@ -17,16 +17,17 @@
 		/* U-Boot will fill in the MAC address here */
 	};
 
-	bluetooth {
+	bluetooth: bluetooth {
 		/* U-Boot will fill in the MAC address here */
 	};
 };
 
 /* UART1 (Bluetooth) */
 &uart1 {
-	pinctrl-names = "default", "dte_noflow";
-	pinctrl-0 = <&pinctrl_uart1>;
-	pinctrl-1 = <&pinctrl_uart1_dte_noflow>;
+	pinctrl-names = "default", "dte_noflow", "sleep";
+	pinctrl-0 = <&pinctrl_uart1 &pinctrl_uart1_gpio>;
+	pinctrl-1 = <&pinctrl_uart1_dte_noflow &pinctrl_uart1_gpio>;
+	pinctrl-2 = <&pinctrl_uart1 &pinctrl_uart1_gpio_sleep>;
 	uart-has-rtscts;
 	/*
 	 * NOTE: The default configuration for CC6UL SOM hardware vesion 4
@@ -46,8 +47,8 @@
 /* USDHC1 (Wireless) */
 &usdhc1 {
 	pinctrl-names = "default", "sleep";
-	pinctrl-0 = <&pinctrl_usdhc1 &pinctrl_wifibt_ctrl>;
-	pinctrl-1 = <&pinctrl_usdhc1_sleep &pinctrl_wifibt_ctrl_sleep>;
+	pinctrl-0 = <&pinctrl_usdhc1 &pinctrl_wifi_gpio>;
+	pinctrl-1 = <&pinctrl_usdhc1_sleep &pinctrl_wifi_gpio_sleep>;
 	non-removable;
 	no-1-8-v;
 	bus-width = <4>;
@@ -75,6 +76,29 @@
 			>;
 		};
 
+		pinctrl_uart1_gpio: uart1grp_gpio {
+			fsl,pins = <
+				/* BT_EN. Configure as open-drain */
+				MX6UL_PAD_SNVS_TAMPER9__GPIO5_IO09	0x08a0
+			>;
+		};
+
+		pinctrl_uart1_sleep: uart1grp_sleep {
+			fsl,pins = <
+				MX6UL_PAD_UART1_TX_DATA__GPIO1_IO16	0x3000
+				MX6UL_PAD_UART1_RX_DATA__GPIO1_IO17	0x3000
+				MX6UL_PAD_UART1_RTS_B__GPIO1_IO19	0x3000
+				MX6UL_PAD_UART1_CTS_B__GPIO1_IO18	0x3000
+			>;
+		};
+
+		pinctrl_uart1_gpio_sleep: uart1grp_gpio_sleep {
+			fsl,pins = <
+				/* BT_EN */
+				MX6UL_PAD_SNVS_TAMPER9__GPIO5_IO09	0x3000
+			>;
+		};
+
 		pinctrl_usdhc1: usdhc1grp {
 			fsl,pins = <
 				MX6UL_PAD_SD1_CMD__USDHC1_CMD		0x17059
@@ -86,11 +110,10 @@
 			>;
 		};
 
-		pinctrl_wifibt_ctrl: wifibt_ctrl_grp {
+		pinctrl_wifi_gpio: wifigrp_gpio {
 			fsl,pins = <
-				/* Configure as open-drain */
+				/* WL_EN. Configure as open-drain */
 				MX6UL_PAD_SNVS_TAMPER0__GPIO5_IO00	0x08a0
-				MX6UL_PAD_SNVS_TAMPER9__GPIO5_IO09	0x08a0
 			>;
 		};
 
@@ -105,10 +128,10 @@
 			>;
 		};
 
-		pinctrl_wifibt_ctrl_sleep: wifibt_ctrl_grp_sleep {
+		pinctrl_wifi_gpio_sleep: wifigrp_gpio_sleep {
 			fsl,pins = <
+				/* WL_EN */
 				MX6UL_PAD_SNVS_TAMPER0__GPIO5_IO00	0x3000
-				MX6UL_PAD_SNVS_TAMPER9__GPIO5_IO09	0x3000
 			>;
 		};
 	};

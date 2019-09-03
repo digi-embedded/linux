@@ -24,6 +24,8 @@
 
 #include "imx-hdp.h"
 #include "imx-hdmi.h"
+#include "imx-hdcp.h"
+#include "imx-hdcp-private.h"
 #include "imx-dp.h"
 #include "../imx-drm.h"
 
@@ -700,7 +702,7 @@ void imx8qm_ipg_clock_set_rate(struct hdp_clks *clks)
 	if (hdp->is_digpll_dp_pclock)
 		desired_rate = PLL_1188MHZ;
 	else
-		desired_rate = PLL_675MHZ;
+		desired_rate = PLL_800MHZ;
 
 	/* hdmi/dp ipg/core clock */
 	clk_rate = clk_get_rate(clks->dig_pll);
@@ -718,7 +720,7 @@ void imx8qm_ipg_clock_set_rate(struct hdp_clks *clks)
 		clk_set_rate(clks->av_pll, 24000000);
 	} else {
 		clk_set_rate(clks->dig_pll,  desired_rate);
-		clk_set_rate(clks->clk_core, desired_rate/5);
+		clk_set_rate(clks->clk_core, desired_rate/4);
 		clk_set_rate(clks->clk_ipg,  desired_rate/8);
 	}
 }
@@ -749,8 +751,9 @@ static void imx_hdp_mode_setup(struct imx_hdp *hdp,
 	imx_hdp_call(hdp, pixel_link_mux, &hdp->state, mode);
 
 	hdp->link_rate = imx_hdp_link_rate(mode);
-	if (hdp->link_rate > hdp->dp_link_rate) {
-		DRM_WARN("Link rate is too high - forcing link to lower rate\n");
+	if (hdp->is_dp && hdp->link_rate > hdp->dp_link_rate) {
+		DRM_DEBUG("Lowering DP link rate from %d to %d\n",
+			  hdp->link_rate, hdp->dp_link_rate);
 		hdp->link_rate = hdp->dp_link_rate;
 	}
 
@@ -956,7 +959,6 @@ static void imx_hdp_connector_force(struct drm_connector *connector)
 {
 	struct imx_hdp *hdp = container_of(connector, struct imx_hdp,
 					     connector);
-
 	mutex_lock(&hdp->mutex);
 	hdp->force = connector->force;
 	mutex_unlock(&hdp->mutex);
@@ -992,6 +994,34 @@ static int imx_hdp_set_property(struct drm_connector *connector,
 	return 0;
 }
 
+static int imx_hdp_connector_atomic_check(struct drm_connector *conn,
+					  struct drm_connector_state *new_state)
+{
+	struct drm_connector_state *old_state =
+		drm_atomic_get_old_connector_state(new_state->state, conn);
+	struct drm_crtc_state *crtc_state;
+
+	imx_hdcp_atomic_check(conn, old_state, new_state);
+
+	if (!new_state->crtc)
+		return 0;
+
+	crtc_state = drm_atomic_get_new_crtc_state(new_state->state,
+						   new_state->crtc);
+
+	/*
+	 * These properties are handled by fastset, and might not end up in a
+	 * modeset.
+	 */
+	if (new_state->picture_aspect_ratio !=
+	    old_state->picture_aspect_ratio ||
+	    new_state->content_type != old_state->content_type ||
+	    new_state->scaling_mode != old_state->scaling_mode)
+		crtc_state->mode_changed = true;
+
+	return 0;
+}
+
 static const struct drm_connector_funcs imx_hdp_connector_funcs = {
 	.fill_modes = drm_helper_probe_single_connector_modes,
 	.detect = imx_hdp_connector_detect,
@@ -1007,6 +1037,8 @@ static const struct drm_connector_helper_funcs
 imx_hdp_connector_helper_funcs = {
 	.get_modes = imx_hdp_connector_get_modes,
 	.mode_valid = imx_hdp_connector_mode_valid,
+	.atomic_check = imx_hdp_connector_atomic_check,
+
 };
 
 static const struct drm_bridge_funcs imx_hdp_bridge_funcs = {
@@ -1020,6 +1052,8 @@ static void imx_hdp_imx_encoder_disable(struct drm_encoder *encoder)
 {
 	struct imx_hdp *hdp = container_of(encoder, struct imx_hdp, encoder);
 
+	imx_hdcp_disable(hdp);
+
 	imx_hdp_call(hdp, pixel_link_sync_ctrl_disable, &hdp->state);
 	imx_hdp_call(hdp, pixel_link_invalidate, &hdp->state);
 }
@@ -1031,6 +1065,10 @@ static void imx_hdp_imx_encoder_enable(struct drm_encoder *encoder)
 	struct hdr_static_metadata *hdr_metadata;
 	struct drm_connector_state *conn_state = hdp->connector.state;
 	int ret = 0;
+
+	if (conn_state->content_protection ==
+	    DRM_MODE_CONTENT_PROTECTION_DESIRED)
+		imx_hdcp_enable(hdp);
 
 	if (!hdp->ops->write_hdr_metadata)
 		goto out;
@@ -1408,6 +1446,7 @@ static int imx_hdp_imx_bind(struct device *dev, struct device *master,
 		return -ENOMEM;
 
 	hdp->dev = &pdev->dev;
+	hdp->drm_dev = drm;
 	encoder = &hdp->encoder;
 	bridge = &hdp->bridge;
 	connector = &hdp->connector;
@@ -1501,7 +1540,6 @@ static int imx_hdp_imx_bind(struct device *dev, struct device *master,
 	imx_hdp_state_init(hdp);
 
 	hdp->dual_mode = false;
-
 	ret = imx_hdp_call(hdp, clock_init, &hdp->clks);
 	if (ret < 0) {
 		DRM_ERROR("Failed to initialize clock\n");
@@ -1515,6 +1553,10 @@ static int imx_hdp_imx_bind(struct device *dev, struct device *master,
 		DRM_ERROR("Failed to initialize IPG clock\n");
 		return ret;
 	}
+
+	/* Set default video mode */
+	memcpy(&hdp->video.cur_mode, &edid_cea_modes[g_default_mode],
+			sizeof(hdp->video.cur_mode));
 
 	imx_hdp_call(hdp, pixel_clock_set_rate, &hdp->clks);
 
@@ -1534,7 +1576,7 @@ static int imx_hdp_imx_bind(struct device *dev, struct device *master,
 	/* bpp (bits per subpixel) - 8 24bpp, 10 30bpp, 12 36bpp, 16 48bpp */
 	/* default set hdmi to 1080p60 mode */
 	ret = imx_hdp_call(hdp, phy_init, &hdp->state,
-			   &edid_cea_modes[g_default_mode],
+			   &hdp->video.cur_mode,
 			   hdp->format, hdp->bpc);
 	if (ret < 0) {
 		DRM_ERROR("Failed to initialise HDP PHY\n");
@@ -1589,6 +1631,10 @@ static int imx_hdp_imx_bind(struct device *dev, struct device *master,
 	if (hdp->is_dp) {
 		dp_aux_init(&hdp->state, dev);
 	}
+
+	ret = imx_hdcp_init(hdp, pdev->dev.of_node);
+	if (ret < 0)
+		DRM_WARN("Failed to initialize HDCP\n");
 
 	INIT_DELAYED_WORK(&hdp->hotplug_work, hotplug_work_func);
 

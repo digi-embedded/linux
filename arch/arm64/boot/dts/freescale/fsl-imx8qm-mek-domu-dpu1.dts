@@ -109,19 +109,23 @@
 			no-map;
 			reg = <0 0x90000000 0 0x400000>;
 		};
-
-		decoder_rpc: decoder_rpc@0x90400000 {
+		rpmsg_dma_reserved:rpmsg_dma@0x90400000 {
+			compatible = "shared-dma-pool";
 			no-map;
-			reg = <0 0x90400000 0 0x1000000>;
+			reg = <0 0x90400000 0 0x1C00000>;
 		};
-		encoder_rpc: encoder_rpc@0x91400000 {
+		decoder_rpc: decoder_rpc@0x92000000 {
 			no-map;
-			reg = <0 0x91400000 0 0x200000>;
+			reg = <0 0x92000000 0 0x200000>;
+		};
+		encoder_rpc: encoder_rpc@0x92200000 {
+			no-map;
+			reg = <0 0x92200000 0 0x200000>;
 		};
 
-		decoder_str: str@0x94400000 {
+		encoder_reserved: encoder_reserved@0x94400000 {
 			no-map;
-			reg = <0 0x94400000 0 0x1800000>;
+			reg = <0 0x94400000 0 0x800000>;
 		};
 
 		/* global autoconfigured region for contiguous allocations */
@@ -222,7 +226,6 @@
 			compatible = "nxp,imx8qm-b0-vpudec", "nxp,imx8qxp-b0-vpudec";
 			boot-region = <&decoder_boot>;
 			rpc-region = <&decoder_rpc>;
-			str-region = <&decoder_str>;
 			reg = <0x0 0x2c000000 0x0 0x1000000>;
 			reg-names = "vpu_regs";
 			reg-csr = <0x2d080000>;
@@ -231,19 +234,43 @@
 		};
 
 		vpu_encoder: vpu_encoder@2d000000 {
-			compatible = "nxp,imx8qm-b0-vpuenc", "nxp,imx8qxp-b0-vpuenc";
+			compatible = "nxp,imx8qm-b0-vpuenc";
+			#address-cells = <1>;
+			#size-cells = <1>;
+
 			boot-region = <&encoder_boot>;
 			rpc-region = <&encoder_rpc>;
-			fw-buf-size = <0x200000 0x200000>;
-			rpc-buf-size = <0x80000 0x80000>;
-			print-buf-size = <0x80000 0x80000>;
-			reg = <0x0 0x2d000000 0x0 0x1000000>;
+			reserved-region = <&encoder_reserved>;
+			reg = <0x0 0x2d000000 0x0 0x1000000>,	/*VPU Encoder*/
+				<0x0 0x2c000000 0x0 0x2000000>; /*VPU*/
 			reg-names = "vpu_regs";
 			power-domains = <&pd_vpu_enc>;
-			reg-fw-base = <0x90000 0xa0000>;
-			resolution-max = <1920 1080>;
+			reg-rpc-system = <0x40000000>;
+
+			resolution-max = <1920 1920>;
 			fps-max = <120>;
 			status = "disabled";
+
+			core0@1020000 {
+				compatible = "fsl,imx8-mu1-vpu-m0";
+				reg = <0x1020000 0x20000>;
+				reg-csr = <0x1090000 0x10000>;
+				interrupts = <GIC_SPI 473 IRQ_TYPE_LEVEL_HIGH>;
+				fsl,vpu_ap_mu_id = <17>;
+				fw-buf-size = <0x200000>;
+				rpc-buf-size = <0x80000>;
+				print-buf-size = <0x80000>;
+			};
+			core1@1040000 {
+				compatible = "fsl,imx8-mu2-vpu-m0";
+				reg = <0x1040000 0x20000>;
+				reg-csr = <0x10a0000 0x10000>;
+				interrupts = <GIC_SPI 474 IRQ_TYPE_LEVEL_HIGH>;
+				fsl,vpu_ap_mu_id = <18>;
+				fw-buf-size = <0x200000>;
+				rpc-buf-size = <0x80000>;
+				print-buf-size = <0x80000>;
+			};
 		};
 
 		clk: clk {
@@ -511,6 +538,7 @@
 /delete-node/ &irqsteer_csi1;
 /delete-node/ &i2c0_mipi_csi1;
 /delete-node/ &lpspi0;
+/delete-node/ &lpspi3;
 /delete-node/ &lpuart0;
 
 &lpuart1 {
@@ -833,7 +861,6 @@
 };
 
 &vpu_encoder {
-	core_type = <2>;
 	status = "okay";
 };
 

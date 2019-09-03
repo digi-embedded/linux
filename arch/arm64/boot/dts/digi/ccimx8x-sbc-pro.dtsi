@@ -69,6 +69,9 @@
 		#size-cells = <0>;
 
 		reg_3v3_eth0: regulator@1 {
+			pinctrl-names = "default", "sleep";
+			pinctrl-0 = <&pinctrl_reg_3v3_eth0>;
+			pinctrl-1 = <&pinctrl_reg_3v3_eth0_sleep>;
 			compatible = "regulator-fixed";
 			reg = <1>;
 			regulator-name = "3v3_eth0";
@@ -77,10 +80,6 @@
 			gpio = <&gpio3 13 GPIO_ACTIVE_HIGH>;
 			enable-active-high;
 			startup-delay-us = <1000>;
-			regulator-always-on;
-			regulator-state-mem {
-				regulator-off-in-suspend;
-			};
 		};
 
 		reg_5v_display: regulator@2 {
@@ -175,7 +174,6 @@
 &fec1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_fec_mdio>,
-		    <&pinctrl_fec_gpio>,
 		    <&pinctrl_fec1_gpio>,
 		    <&pinctrl_fec1>;
 	clocks = <&clk IMX8QXP_ENET0_IPG_CLK>,
@@ -234,7 +232,6 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan1>;
 	xceiver-supply = <&reg_5v_display>;
-	disable-fd-mode;
 	status = "disabled";
 };
 
@@ -244,7 +241,6 @@
 	pinctrl-0 = <&pinctrl_flexcan2>;
 	xceiver-supply = <&reg_5v_display>;
 	stby-gpios = <&gpio1 0 GPIO_ACTIVE_HIGH>;
-	disable-fd-mode;
 	status = "disabled";
 };
 
@@ -260,7 +256,6 @@
 	xceiver-supply = <&reg_5v_display>;
 	stby-gpios = <&gpio1 2 GPIO_ACTIVE_HIGH>;
 	pinctrl-assert-gpios = <&gpio3 23 GPIO_ACTIVE_HIGH>;
-	disable-fd-mode;
 	status = "disabled";
 };
 
@@ -370,6 +365,17 @@
 	clock-frequency = <100000>;
 	status = "disabled";
 
+	fusion_touch: fusion@10 {
+		compatible = "touchrev,fusion-touch";
+		reg = <0x10>;
+		interrupt-parent = <&gpio3>;
+		/* LVDS0 interrupt */
+		interrupts = <20 IRQ_TYPE_EDGE_FALLING>;
+		/* LVDS1 interrupt */
+		//interrupts = <19 IRQ_TYPE_EDGE_FALLING>;
+		status = "disabled";
+	};
+
 	/*
 	 * On the CC8X SBC, an inconsistent reset sequence makes
 	 * the Goodix display's touch controller respond to two I2C
@@ -420,7 +426,7 @@
 		reg = <0x3c>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_mipi>;
-		clocks = <&clk IMX8QXP_CLK_DUMMY>;
+		clocks = <&clk IMX8QXP_24MHZ>;
 		clock-names = "csi_mclk";
 		csi_id = <0>;
 		rst-gpios = <&gpio3 21 GPIO_ACTIVE_HIGH>;
@@ -460,6 +466,7 @@
 	lvds0: lvds-channel@0 {
 		fsl,data-mapping = "jeida";
 		fsl,data-width = <24>;
+		digi,bits-per-pixel = <16>;
 		status = "disabled";
 
 		display-timings {
@@ -480,6 +487,19 @@
 				vsync-active = <1>;
 				de-active = <1>;
 				pixelclk-active = <0>;
+			};
+
+			/* Fusion 10" F10A-0102 */
+			lvds0_hsd101pfw2_1: timing@1 {
+				clock-frequency = <45000000>;
+				hactive = <1024>;
+				vactive = <600>;
+				hfront-porch = <0>;
+				hback-porch = <0>;
+				hsync-len = <176>;
+				vback-porch = <0>;
+				vfront-porch = <2>;
+				vsync-len = <23>;
 			};
 		};
 	};
@@ -541,6 +561,7 @@
 	lvds1: lvds-channel@0 {
 		fsl,data-mapping = "jeida";
 		fsl,data-width = <24>;
+		digi,bits-per-pixel = <16>;
 		status = "disabled";
 
 		display-timings {
@@ -561,6 +582,19 @@
 				vsync-active = <1>;
 				de-active = <1>;
 				pixelclk-active = <0>;
+			};
+
+			/* Fusion 10" F10A-0102 */
+			lvds1_hsd101pfw2_1: timing@1 {
+				clock-frequency = <45000000>;
+				hactive = <1024>;
+				vactive = <600>;
+				hfront-porch = <0>;
+				hback-porch = <0>;
+				hsync-len = <176>;
+				vback-porch = <0>;
+				vfront-porch = <2>;
+				vsync-len = <23>;
 			};
 		};
 	};
@@ -666,15 +700,6 @@
 	status = "disabled";
 };
 
-&rpmsg{
-	/*
-	 * 64K for one rpmsg instance:
-	 */
-	vdev-nums = <1>;
-	reg = <0x0 0x90000000 0x0 0x10000>;
-	status = "okay";
-};
-
 &sai0 {
 	assigned-clocks = <&clk IMX8QXP_AUD_PLL0_DIV>,
 			  <&clk IMX8QXP_AUD_ACM_AUD_PLL_CLK0_DIV>,
@@ -684,36 +709,6 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_sai0>;
 	status = "disabled";
-};
-
-&tsens {
-	tsens-num = <3>;
-};
-
-&thermal_zones {
-	pmic-thermal0 {
-		polling-delay-passive = <250>;
-		polling-delay = <2000>;
-		thermal-sensors = <&tsens 2>;
-		trips {
-			pmic_alert0: trip0 {
-				temperature = <80000>;
-				hysteresis = <2000>;
-				type = "passive";
-			};
-			pmic_crit0: trip1 {
-				temperature = <125000>;
-				hysteresis = <2000>;
-				type = "critical";
-			};
-		};
-		cooling-maps {
-			map0 {
-				trip = <&pmic_alert0>;
-				cooling-device = <&A35_0 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
-			};
-		};
-	};
 };
 
 /* USB_OTG1 connected to usb hub */
@@ -738,20 +733,12 @@
 /* usbotg3 phy */
 &usbphynop1 {
 	/*
-	 * On the SBCPro version 2, the USB 3.0 interface does not work properly
-	 * due to a hardware issue.
-	 *
-	 * Declaring a consumer for reg_3v3_usb_sw regulator will enable it and
-	 * will power the USB3 switch, causing problems with the detection of
-	 * usb devices connected to the TypeC connector.
-	 * By keeping the switch unpowered at least we ensure that the USB 2.0
-	 * interface available on the TypeC connector will work.
-	 *
-	 * Uncomment the following line only on hardware where this problem has
-	 * been corrected.
+	 * USB 3.0 on TypeC connector only works on SBC Pro versions >= 3.
+	 * If using an earlier version of the SBC Pro, comment this line
+	 * to have the port work as USB 2.0 on the TypeC connector.
 	 */
 
-	 /* vcc-supply = <&reg_3v3_usb_sw>; */
+	 vcc-supply = <&reg_3v3_usb_sw>;
 };
 
 /* Micro SD card */
@@ -766,30 +753,8 @@
 	status = "disabled";
 };
 
-&vpu {
-	status = "disabled";
-};
-
-&vpu_decoder {
-	core_type = <1>;
-	status = "disabled";
-};
-
-&vpu_encoder {
-	core_type = <1>;
-	status = "disabled";
-};
-
 /* IOMUX */
 &iomuxc {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_hog>;
-
-	pinctrl_hog: hoggrp {
-		fsl,pins = <
-		>;
-	};
-
 	pinctrl_lpspi0: lpspi0grp {
 		fsl,pins = <
 			SC_P_SPI0_SCK_ADMA_SPI0_SCK	0x0600004c
@@ -850,19 +815,26 @@
 		>;
 	};
 
+	/* Ethernet PHYs regulator */
+	pinctrl_reg_3v3_eth0: pinctrl_reg_3v3_eth0grp {
+		fsl,pins = <
+			/* PHY power */
+			SC_P_QSPI0A_DQS_LSIO_GPIO3_IO13		0x06000021
+		>;
+	};
+
+	pinctrl_reg_3v3_eth0_sleep: pinctrl_reg_3v3_eth0grp_sleep {
+		fsl,pins = <
+			/* PHY power (lp_config=LATCH) */
+			SC_P_QSPI0A_DQS_LSIO_GPIO3_IO13		0x07800021
+		>;
+	};
+
 	/* FEC shared MDIO bus */
 	pinctrl_fec_mdio: fecmdiogrp {
 		fsl,pins = <
 			SC_P_ENET0_MDC_CONN_ENET0_MDC		0x06000020
 			SC_P_ENET0_MDIO_CONN_ENET0_MDIO		0x06000020
-		>;
-	};
-
-	/* Shared GPIOs */
-	pinctrl_fec_gpio: fecgpiogrp {
-		fsl,pins = <
-			/* PHY power */
-			SC_P_QSPI0A_DQS_LSIO_GPIO3_IO13		0x06000021
 		>;
 	};
 
@@ -1158,7 +1130,7 @@
 
 	pinctrl_mipi: mipi {
 		fsl,pins = <
-			SC_P_QSPI0B_DATA3_LSIO_GPIO3_IO21 0xC0000020
+			SC_P_QSPI0B_DATA3_LSIO_GPIO3_IO21 0xC0000041
 		>;
 	};
 };

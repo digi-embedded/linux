@@ -18,6 +18,10 @@ typedef void (*memset_func) (void *s, int c, size_t n);
 /* ...maximal number of IPC clients per proxy */
 #define XF_CFG_MAX_IPC_CLIENTS          (1 << 4)
 
+enum {
+	DSP_IMX8QXP_TYPE = 0,
+	DSP_IMX8QM_TYPE,
+};
 
 /* ...proxy client data */
 struct xf_client {
@@ -85,7 +89,7 @@ struct fsl_dsp {
 	void				*dsp_config_virt;
 	dma_addr_t			 dsp_config_phys;
 	int				 dsp_config_size;
-
+	int				 dsp_board_type;
 	unsigned int			fixup_offset;
 
 	/* ...proxy data structures */
@@ -98,6 +102,12 @@ struct fsl_dsp {
 
 	/* ...global clients pool (item[0] serves as list terminator) */
 	union xf_client_link xf_client_map[XF_CFG_MAX_IPC_CLIENTS];
+
+	struct clk *esai_ipg_clk;
+	struct clk *esai_mclk;
+	struct clk *asrc_mem_clk;
+	struct clk *asrc_ipg_clk;
+	struct clk *asrck_clk[4];
 };
 
 #define IRAM_OFFSET		0x10000

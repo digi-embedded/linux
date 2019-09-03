@@ -21,11 +21,18 @@
 		i2c3 = &i2c3;
 	};
 
-	/* Limit cma-reserved to 320 MiB to avoid slowdowns on 1 GiB RAM variants */
+	caam_keyblob: caam-keyblob {
+		compatible = "fsl,sec-v4.0-keyblob";
+	};
+
 	reserved-memory {
 		linux,cma {
-			size = <0 0x14000000>;
-			alloc-ranges = <0 0x96000000 0 0x14000000>;
+			digi,size-table = <
+				/* RAM         CMA*/
+				0 0x20000000 0 0x6000000	/* 512 MB variants -> 96 MB of CMA */
+				0 0x40000000 0 0x14000000	/* 1 GB variants   -> 320 MB of CMA */
+				0 0x80000000 0 0x28000000	/* 2 GB variants   -> 640 MB of CMA */
+			>;
 		};
 	};
 
@@ -99,6 +106,9 @@
 			interrupt-parent = <&mca_cc8x>;
 			interrupt-controller;
 			#interrupt-cells = <2>;
+
+			/* Disable all mca GPIOs as power off wake up sources */
+			pwroff-wakeup-capable-ios = <>;
 		};
 
 		pwrkey {
@@ -162,7 +172,7 @@
 				index = <1>;
 			};
 
-			mca_uart2: serial@940 {
+			mca_uart2: serial@0x940 {
 				reg = <0x940>;
 				index = <2>;
 			};
@@ -170,9 +180,31 @@
 	};
 };
 
+/* Disable CPU RTC */
+&rtc {
+	status = "disabled";
+};
+
 /* Disable CPU watchdog */
 &wdog {
 	status = "disabled";
+};
+
+&imx8_gpu_ss {
+	/*
+	 * Use a table to set a fixed amount of contiguous memory used by the GPU
+	 * per memory configuration. This way we leave plenty of room for the
+	 * other system features when the memory is limited. The table's rows must
+	 * be in increasing RAM order. The GPU CMA should always be smaller than the
+	 * total CMA (see the table in the "reserved-memory" node to see the total CMA
+	 * values per memory configuration).
+	 */
+	digi,contiguous-size-table = <
+		/* RAM     CMA*/
+		0x20000000 0x2000000	/* 512 MB variants -> 32 MB of GPU CMA */
+		0x40000000 0x8000000	/* 1 GB variants   -> 128 MB of GPU CMA */
+		0x80000000 0x10000000	/* 2 GB variants   -> 256 MB of GPU CMA */
+	>;
 };
 
 &mu {
@@ -187,11 +219,40 @@
 &rpmsg{
 	/*
 	 * 64K for one rpmsg instance:
-	 * --0xb8000000~0xb800ffff: pingpong
 	 */
-	vdev-nums = <1>;
-	reg = <0x0 0xb8000000 0x0 0x10000>;
+	vdev-nums = <2>;
+	reg = <0x0 0x90000000 0x0 0x20000>;
 	status = "okay";
+};
+
+&tsens {
+	tsens-num = <3>;
+};
+
+&thermal_zones {
+	pmic-thermal0 {
+		polling-delay-passive = <250>;
+		polling-delay = <2000>;
+		thermal-sensors = <&tsens 2>;
+		trips {
+			pmic_alert0: trip0 {
+				temperature = <80000>;
+				hysteresis = <2000>;
+				type = "passive";
+			};
+			pmic_crit0: trip1 {
+				temperature = <125000>;
+				hysteresis = <2000>;
+				type = "critical";
+			};
+		};
+		cooling-maps {
+			map0 {
+				trip = <&pmic_alert0>;
+				cooling-device = <&A35_0 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
+			};
+		};
+	};
 };
 
 /* eMMC */
@@ -208,6 +269,19 @@
 	 */
 	no-1-8-v;
 	status = "okay";
+};
+
+&vpu {
+	status = "disabled";
+};
+
+&vpu_decoder {
+	core_type = <1>;
+	status = "disabled";
+};
+
+&vpu_encoder {
+	status = "disabled";
 };
 
 /* IOMUX */

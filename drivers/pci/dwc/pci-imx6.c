@@ -124,6 +124,8 @@ struct imx_pcie {
 
 #define PCIE_PHY_DEBUG_R0 (PL_OFFSET + 0x28)
 #define PCIE_PHY_DEBUG_R1 (PL_OFFSET + 0x2c)
+#define PCIE_PHY_DEBUG_R1_XMLH_LINK_IN_TRAINING	(1 << 29)
+#define PCIE_PHY_DEBUG_R1_XMLH_LINK_UP		(1 << 4)
 
 #define PCIE_PHY_CTRL (PL_OFFSET + 0x114)
 #define PCIE_PHY_CTRL_DATA_LOC 0
@@ -744,9 +746,6 @@ static int imx_pcie_deassert_core_reset(struct imx_pcie *imx_pcie)
 	struct device *dev = pci->dev;
 	int ret, i;
 	u32 val, tmp;
-
-	if (gpio_is_valid(imx_pcie->power_on_gpio))
-		gpio_set_value_cansleep(imx_pcie->power_on_gpio, 1);
 
 	ret = clk_prepare_enable(imx_pcie->pcie);
 	if (ret) {
@@ -1616,6 +1615,9 @@ static int imx_pcie_host_init(struct pcie_port *pp)
 	/* enable disp_mix power domain */
 	pm_runtime_get_sync(pci->dev);
 
+	if (gpio_is_valid(imx_pcie->power_on_gpio))
+		gpio_set_value_cansleep(imx_pcie->power_on_gpio, 1);
+
 	imx_pcie_assert_core_reset(imx_pcie);
 	imx_pcie_init_phy(imx_pcie);
 	ret = imx_pcie_deassert_core_reset(imx_pcie);
@@ -1633,6 +1635,12 @@ static int imx_pcie_host_init(struct pcie_port *pp)
 	}
 
 	return 0;
+}
+
+static int imx_pcie_link_up(struct dw_pcie *pci)
+{
+	return dw_pcie_readl_dbi(pci, PCIE_PHY_DEBUG_R1) &
+			PCIE_PHY_DEBUG_R1_XMLH_LINK_UP;
 }
 
 static const struct dw_pcie_host_ops imx_pcie_host_ops = {
@@ -1677,7 +1685,7 @@ static int imx_add_pcie_port(struct imx_pcie *imx_pcie,
 }
 
 static const struct dw_pcie_ops dw_pcie_ops = {
-	/* No special ops needed, but pcie-designware still expects this struct */
+	.link_up = imx_pcie_link_up,
 };
 
 static ssize_t imx_pcie_bar0_addr_info(struct device *dev,

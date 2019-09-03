@@ -156,6 +156,11 @@ static int compare_of(struct device *dev, void *data)
 
 	/* Special case for LDB, one device for two channels */
 	if (of_node_cmp(np->name, "lvds-channel") == 0) {
+#if IS_ENABLED(CONFIG_DRM_FBDEV_EMULATION)
+		/* Overwrite the pixel depth for LDB */
+		if (of_property_read_u32(np, "digi,bits-per-pixel", &legacyfb_depth))
+			dev_info(dev,"Set pixel depth to %d bpp\n",legacyfb_depth);
+#endif
 		np = of_get_parent(np);
 		of_node_put(np);
 	}
@@ -285,10 +290,23 @@ static int imx_drm_bind(struct device *dev)
 	imxdrm->drm = drm;
 	drm->dev_private = imxdrm;
 
-	imxdrm->wq = alloc_ordered_workqueue("imxdrm", 0);
-	if (!imxdrm->wq) {
-		ret = -ENOMEM;
-		goto err_unref;
+	if (has_dpu(dev)) {
+		imxdrm->dpu_nonblock_commit_wq =
+				alloc_workqueue("dpu_nonblock_commit_wq",
+						WQ_UNBOUND | WQ_FREEZABLE, 0);
+		if (!imxdrm->dpu_nonblock_commit_wq) {
+			ret = -ENOMEM;
+			goto err_wq;
+		}
+	}
+
+	if (has_dcss(dev)) {
+		imxdrm->dcss_nonblock_commit_wq =
+			alloc_ordered_workqueue("dcss_nonblock_commit_wq", 0);
+		if (!imxdrm->dcss_nonblock_commit_wq) {
+			ret = -ENOMEM;
+			goto err_wq;
+		}
 	}
 
 	init_waitqueue_head(&imxdrm->commit.wait);
@@ -375,7 +393,11 @@ err_unbind:
 err_kms:
 	dev_set_drvdata(dev, NULL);
 	drm_mode_config_cleanup(drm);
-	destroy_workqueue(imxdrm->wq);
+err_wq:
+	if (imxdrm->dcss_nonblock_commit_wq)
+		destroy_workqueue(imxdrm->dcss_nonblock_commit_wq);
+	if (imxdrm->dpu_nonblock_commit_wq)
+		destroy_workqueue(imxdrm->dpu_nonblock_commit_wq);
 err_unref:
 	drm_dev_unref(drm);
 
@@ -387,10 +409,13 @@ static void imx_drm_unbind(struct device *dev)
 	struct drm_device *drm = dev_get_drvdata(dev);
 	struct imx_drm_device *imxdrm = drm->dev_private;
 
-	if (has_dpu(dev))
+	if (has_dpu(dev)) {
 		imx_drm_driver.driver_features &= ~DRIVER_RENDER;
+		flush_workqueue(imxdrm->dpu_nonblock_commit_wq);
+	}
 
-	flush_workqueue(imxdrm->wq);
+	if (has_dcss(dev))
+		flush_workqueue(imxdrm->dcss_nonblock_commit_wq);
 
 	drm_dev_unregister(drm);
 
@@ -404,7 +429,11 @@ static void imx_drm_unbind(struct device *dev)
 	component_unbind_all(drm->dev, drm);
 	dev_set_drvdata(dev, NULL);
 
-	destroy_workqueue(imxdrm->wq);
+	if (has_dpu(dev))
+		destroy_workqueue(imxdrm->dpu_nonblock_commit_wq);
+
+	if (has_dcss(dev))
+		destroy_workqueue(imxdrm->dcss_nonblock_commit_wq);
 
 	drm_dev_unref(drm);
 }

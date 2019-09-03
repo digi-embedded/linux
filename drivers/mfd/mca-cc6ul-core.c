@@ -102,6 +102,12 @@ static struct resource mca_cc6ul_rtc_resources[] = {
 		.end    = MCA_CC6UL_IRQ_RTC_1HZ,
 		.flags  = IORESOURCE_IRQ,
 	},
+	{
+		.name   = MCA_IRQ_RTC_PERIODIC_IRQ_NAME,
+		.start  = MCA_CC6UL_IRQ_RTC_PERIODIC_IRQ,
+		.end    = MCA_CC6UL_IRQ_RTC_PERIODIC_IRQ,
+		.flags  = IORESOURCE_IRQ,
+	},
 };
 
 static struct resource mca_cc6ul_watchdog_resources[] = {
