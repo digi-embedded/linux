@@ -2402,8 +2402,6 @@ static int sdma_probe(struct platform_device *pdev)
 		}
 		of_node_put(spba_bus);
 	}
-	/* There maybe multi sdma devices such as i.mx8mscale */
-	sdma->idx = sdma_dev_idx++;
 
 	/*
 	 * Kick off firmware loading as the very last step:
@@ -2415,6 +2413,7 @@ static int sdma_probe(struct platform_device *pdev)
 		ret = sdma_get_firmware(sdma, pdata->fw_name);
 		if (ret)
 			dev_warn(&pdev->dev, "failed to get firmware from platform data\n");
+		sdma->fw_name = pdata->fw_name;
 	} else {
 		/*
 		 * Because that device tree does not encode ROM script address,
@@ -2430,7 +2429,11 @@ static int sdma_probe(struct platform_device *pdev)
 			if (ret)
 				dev_warn(&pdev->dev, "failed to get firmware from device tree\n");
 		}
+		sdma->fw_name = fw_name;
 	}
+
+	/* There maybe multi sdma devices such as i.mx8mscale */
+	sdma->idx = sdma_dev_idx++;
 
 	return 0;
 
