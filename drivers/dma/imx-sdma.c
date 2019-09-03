@@ -2320,6 +2320,7 @@ static int sdma_probe(struct platform_device *pdev)
 		ret = sdma_get_firmware(sdma, pdata->fw_name);
 		if (ret)
 			dev_warn(&pdev->dev, "failed to get firmware from platform data\n");
+		sdma->fw_name = pdata->fw_name;
 	} else {
 		/*
 		 * Because that device tree does not encode ROM script address,
@@ -2335,8 +2336,8 @@ static int sdma_probe(struct platform_device *pdev)
 			if (ret)
 				dev_warn(&pdev->dev, "failed to get firmware from device tree\n");
 		}
+		sdma->fw_name = fw_name;
 	}
-	sdma->fw_name = fw_name;
 
 	return 0;
 
