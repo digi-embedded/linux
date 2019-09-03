@@ -482,6 +482,7 @@ struct sdma_engine {
 	struct gen_pool			*iram_pool;
 	bool				fw_loaded;
 	u32				fw_fail;
+	int				idx;
 	unsigned short			ram_code_start;
 };
 
@@ -693,6 +694,8 @@ static const struct of_device_id sdma_dt_ids[] = {
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, sdma_dt_ids);
+
+static int sdma_dev_idx;
 
 #define SDMA_H_CONFIG_DSPDMA	BIT(12) /* indicates if the DSPDMA is used */
 #define SDMA_H_CONFIG_RTD_PINS	BIT(11) /* indicates if Real-Time Debug pins are enabled */
@@ -2208,6 +2211,7 @@ static struct dma_chan *sdma_xlate(struct of_phandle_args *dma_spec,
 	if (dma_spec->args[2] & BIT(31))
 		data.done_sel = dma_spec->args[2];
 	data.priority = dma_spec->args[2] & 0xff;
+	data.idx = sdma->idx;
 	/*
 	 * init dma_request2 to zero, which is not used by the dts.
 	 * For P2P, dma_request2 is init from dma_request_channel(),
@@ -2399,6 +2403,7 @@ static int sdma_probe(struct platform_device *pdev)
 		ret = sdma_get_firmware(sdma, pdata->fw_name);
 		if (ret)
 			dev_warn(&pdev->dev, "failed to get firmware from platform data\n");
+		sdma->fw_name = pdata->fw_name;
 	} else {
 		/*
 		 * Because that device tree does not encode ROM script address,
@@ -2414,9 +2419,13 @@ static int sdma_probe(struct platform_device *pdev)
 			if (ret)
 				dev_warn(&pdev->dev, "failed to get firmware from device tree\n");
 		}
+		sdma->fw_name = fw_name;
 	}
 
 	sdma->fw_name = fw_name;
+
+	/* There maybe multi sdma devices such as i.mx8mscale */
+	sdma->idx = sdma_dev_idx++;
 
 	return 0;
 
