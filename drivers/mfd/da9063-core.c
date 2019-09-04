@@ -274,7 +274,7 @@ int da9063_dump(struct da9063 *da9063)
 	for (i = DA9063_REG_PAGE_CON; i <= DA9063_REG_CHIP_CONFIG_ID; i++) {
 		/* Check for invalid registers */
 		if ((i > reg_second_d && i < (DA9063_REG_SEQ - 1)) ||
-		    (i > DA9063_REG_AUTO3_LOW && i < (DA9063_REG_OPT_COUNT - 1)) ||
+		    (i > DA9063_REG_AUTO3_LOW && i < (DA9063_REG_OTP_CONT - 1)) ||
 		    (i > reg_gp_id_19 && i < (DA9063_REG_CHIP_ID - 1))) {
 			invalid = 1;
 		}

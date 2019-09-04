@@ -64,17 +64,18 @@ ENTRY(cpu_do_suspend)
 	mrs	x2, tpidr_el0
 	mrs	x3, tpidrro_el0
 	mrs	x4, contextidr_el1
-	mrs	x5, cpacr_el1
-	mrs	x6, tcr_el1
-	mrs	x7, vbar_el1
-	mrs	x8, mdscr_el1
-	mrs	x9, oslsr_el1
-	mrs	x10, sctlr_el1
+	mrs	x5, osdlr_el1
+	mrs	x6, cpacr_el1
+	mrs	x7, tcr_el1
+	mrs	x8, vbar_el1
+	mrs	x9, mdscr_el1
+	mrs	x10, oslsr_el1
+	mrs	x11, sctlr_el1
 	stp	x2, x3, [x0]
-	stp	x4, xzr, [x0, #16]
-	stp	x5, x6, [x0, #32]
-	stp	x7, x8, [x0, #48]
-	stp	x9, x10, [x0, #64]
+	stp	x4, x5, [x0, #16]
+	stp	x6, x7, [x0, #32]
+	stp	x8, x9, [x0, #48]
+	stp	x10, x11, [x0, #64]
 	ret
 ENDPROC(cpu_do_suspend)
 
@@ -96,8 +97,8 @@ ENTRY(cpu_do_resume)
 	msr	cpacr_el1, x6
 
 	/* Don't change t0sz here, mask those bits when restoring */
-	mrs	x5, tcr_el1
-	bfi	x8, x5, TCR_T0SZ_OFFSET, TCR_TxSZ_WIDTH
+	mrs	x7, tcr_el1
+	bfi	x8, x7, TCR_T0SZ_OFFSET, TCR_TxSZ_WIDTH
 
 	msr	tcr_el1, x8
 	msr	vbar_el1, x9
@@ -115,6 +116,7 @@ ENTRY(cpu_do_resume)
 	/*
 	 * Restore oslsr_el1 by writing oslar_el1
 	 */
+	msr	osdlr_el1, x5
 	ubfx	x11, x11, #1, #1
 	msr	oslar_el1, x11
 	reset_pmuserenr_el0 x0			// Disable PMU access from EL0
@@ -181,7 +183,8 @@ ENDPROC(idmap_cpu_replace_ttbr1)
 	dc	cvac, cur_\()\type\()p		// Ensure any existing dirty
 	dmb	sy				// lines are written back before
 	ldr	\type, [cur_\()\type\()p]	// loading the entry
-	tbz	\type, #0, next_\()\type	// Skip invalid entries
+	tbz	\type, #0, skip_\()\type	// Skip invalid and
+	tbnz	\type, #11, skip_\()\type	// non-global entries
 	.endm
 
 	.macro __idmap_kpti_put_pgtable_ent_ng, type
@@ -241,8 +244,9 @@ ENTRY(idmap_kpti_install_ng_mappings)
 	add	end_pgdp, cur_pgdp, #(PTRS_PER_PGD * 8)
 do_pgd:	__idmap_kpti_get_pgtable_ent	pgd
 	tbnz	pgd, #1, walk_puds
-	__idmap_kpti_put_pgtable_ent_ng	pgd
 next_pgd:
+	__idmap_kpti_put_pgtable_ent_ng	pgd
+skip_pgd:
 	add	cur_pgdp, cur_pgdp, #8
 	cmp	cur_pgdp, end_pgdp
 	b.ne	do_pgd
@@ -270,8 +274,9 @@ walk_puds:
 	add	end_pudp, cur_pudp, #(PTRS_PER_PUD * 8)
 do_pud:	__idmap_kpti_get_pgtable_ent	pud
 	tbnz	pud, #1, walk_pmds
-	__idmap_kpti_put_pgtable_ent_ng	pud
 next_pud:
+	__idmap_kpti_put_pgtable_ent_ng	pud
+skip_pud:
 	add	cur_pudp, cur_pudp, 8
 	cmp	cur_pudp, end_pudp
 	b.ne	do_pud
@@ -290,8 +295,9 @@ walk_pmds:
 	add	end_pmdp, cur_pmdp, #(PTRS_PER_PMD * 8)
 do_pmd:	__idmap_kpti_get_pgtable_ent	pmd
 	tbnz	pmd, #1, walk_ptes
-	__idmap_kpti_put_pgtable_ent_ng	pmd
 next_pmd:
+	__idmap_kpti_put_pgtable_ent_ng	pmd
+skip_pmd:
 	add	cur_pmdp, cur_pmdp, #8
 	cmp	cur_pmdp, end_pmdp
 	b.ne	do_pmd
@@ -309,7 +315,7 @@ walk_ptes:
 	add	end_ptep, cur_ptep, #(PTRS_PER_PTE * 8)
 do_pte:	__idmap_kpti_get_pgtable_ent	pte
 	__idmap_kpti_put_pgtable_ent_ng	pte
-next_pte:
+skip_pte:
 	add	cur_ptep, cur_ptep, #8
 	cmp	cur_ptep, end_ptep
 	b.ne	do_pte

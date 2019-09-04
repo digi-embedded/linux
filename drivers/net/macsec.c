@@ -744,6 +744,7 @@ static struct sk_buff *macsec_encrypt(struct sk_buff *skb,
 	sg_init_table(sg, ret);
 	ret = skb_to_sgvec(skb, sg, 0, skb->len);
 	if (unlikely(ret < 0)) {
+		aead_request_free(req);
 		macsec_txsa_put(tx_sa);
 		kfree_skb(skb);
 		return ERR_PTR(ret);
@@ -866,6 +867,7 @@ static void macsec_reset_skb(struct sk_buff *skb, struct net_device *dev)
 
 static void macsec_finalize_skb(struct sk_buff *skb, u8 icv_len, u8 hdr_len)
 {
+	skb->ip_summed = CHECKSUM_NONE;
 	memmove(skb->data + hdr_len, skb->data, 2 * ETH_ALEN);
 	skb_pull(skb, hdr_len);
 	pskb_trim_unique(skb, skb->len - icv_len);
@@ -956,6 +958,7 @@ static struct sk_buff *macsec_decrypt(struct sk_buff *skb,
 	sg_init_table(sg, ret);
 	ret = skb_to_sgvec(skb, sg, 0, skb->len);
 	if (unlikely(ret < 0)) {
+		aead_request_free(req);
 		kfree_skb(skb);
 		return ERR_PTR(ret);
 	}
@@ -1103,10 +1106,9 @@ static rx_handler_result_t macsec_handle_frame(struct sk_buff **pskb)
 	}
 
 	skb = skb_unshare(skb, GFP_ATOMIC);
-	if (!skb) {
-		*pskb = NULL;
+	*pskb = skb;
+	if (!skb)
 		return RX_HANDLER_CONSUMED;
-	}
 
 	pulled_sci = pskb_may_pull(skb, macsec_extra_len(true));
 	if (!pulled_sci) {
