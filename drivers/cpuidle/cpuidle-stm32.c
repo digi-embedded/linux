@@ -247,7 +247,7 @@ static int stm32_cpuidle_probe(struct platform_device *pdev)
 	return 0;
 }
 
-int stm32_cpuidle_remove(struct platform_device *pdev)
+static int stm32_cpuidle_remove(struct platform_device *pdev)
 {
 	cpuidle_unregister(&stm32_idle_driver);
 	return 0;
