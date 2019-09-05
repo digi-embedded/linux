@@ -1104,6 +1104,7 @@ static int ov5640_set_dvp_pclk(struct ov5640_dev *sensor, unsigned long rate)
 			      (ilog2(pclk_div) << 4));
 }
 
+#if 0
 /* set JPEG framing sizes */
 static int ov5640_set_jpeg_timings(struct ov5640_dev *sensor,
 				   const struct ov5640_mode_info *mode)
@@ -1127,19 +1128,20 @@ static int ov5640_set_jpeg_timings(struct ov5640_dev *sensor,
 
 	return ov5640_write_reg16(sensor, OV5640_REG_VFIFO_VSIZE, mode->vact);
 }
+#endif
 
 /* download ov5640 settings to sensor through i2c */
 static int ov5640_set_timings(struct ov5640_dev *sensor,
 			      const struct ov5640_mode_info *mode)
 {
 	int ret;
-
+#if 0
 	if (sensor->fmt.code == MEDIA_BUS_FMT_JPEG_1X8) {
 		ret = ov5640_set_jpeg_timings(sensor, mode);
 		if (ret < 0)
 			return ret;
 	}
-
+#endif
 	ret = ov5640_write_reg16(sensor, OV5640_REG_TIMING_DVPHO, mode->hact);
 	if (ret < 0)
 		return ret;
