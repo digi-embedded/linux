@@ -205,14 +205,6 @@ static int stm32_pwr_irq_request_resources(struct irq_data *d)
 	return 0;
 }
 
-static void stm32_pwr_irq_release_resources(struct irq_data *d)
-{
-	struct stm32_pwr_data *priv = d->domain->host_data;
-
-	dev_dbg(priv->dev, "irq:%lu\n", d->hwirq);
-	devm_gpio_free(priv->dev, priv->gpio[d->hwirq]);
-}
-
 static struct irq_chip stm32_pwr_irq_chip = {
 	.name = "stm32-pwr-irq",
 	.irq_ack = stm32_pwr_irq_ack,
@@ -221,7 +213,6 @@ static struct irq_chip stm32_pwr_irq_chip = {
 	.irq_set_type = stm32_pwr_irq_set_type,
 	.irq_set_wake = stm32_pwr_irq_set_wake,
 	.irq_request_resources = stm32_pwr_irq_request_resources,
-	.irq_release_resources = stm32_pwr_irq_release_resources,
 #ifdef CONFIG_SMP
 	.irq_set_affinity = stm32_pwr_set_affinity_parent,
 #endif
