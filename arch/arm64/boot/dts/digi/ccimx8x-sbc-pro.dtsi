@@ -172,10 +172,11 @@
 };
 
 &fec1 {
-	pinctrl-names = "default";
+	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&pinctrl_fec_mdio>,
 		    <&pinctrl_fec1_gpio>,
 		    <&pinctrl_fec1>;
+	pinctrl-1 = <&pinctrl_fec1_gpio_sleep>;
 	clocks = <&clk IMX8QXP_ENET0_IPG_CLK>,
 		 <&clk IMX8QXP_ENET0_AHB_CLK>,
 		 <&clk IMX8QXP_ENET0_REF_50MHZ_CLK>,
@@ -210,9 +211,10 @@
 };
 
 &fec2 {
-	pinctrl-names = "default";
+	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&pinctrl_fec2_gpio>,
 		    <&pinctrl_fec2>;
+	pinctrl-1 = <&pinctrl_fec2_gpio_sleep>;
 	phy-mode = "rgmii-id";
 	phy-handle = <&ethphy0>;
 	phy-supply = <&reg_3v3_eth0>;
@@ -847,6 +849,13 @@
 		>;
 	};
 
+	pinctrl_fec1_gpio_sleep: fec1gpiosleepgrp {
+		fsl,pins = <
+			/* PHY reset (lp_config=LATCH) */
+			SC_P_QSPI0B_DATA0_LSIO_GPIO3_IO18	0x07800021
+		>;
+	};
+
 	pinctrl_fec1: fec1grp {
 		fsl,pins = <
 			/*
@@ -879,6 +888,13 @@
 			SC_P_QSPI0B_DQS_LSIO_GPIO3_IO22		0x06000021
 			/* PHY interrupt */
 			SC_P_MIPI_DSI1_GPIO0_01_LSIO_GPIO2_IO00	0x06000021
+		>;
+	};
+
+	pinctrl_fec2_gpio_sleep: fec2gpiosleepgrp {
+		fsl,pins = <
+			/* PHY reset (lp_config=LATCH) */
+			SC_P_QSPI0B_DQS_LSIO_GPIO3_IO22		0x07800021
 		>;
 	};
 
