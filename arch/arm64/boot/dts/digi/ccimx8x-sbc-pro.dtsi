@@ -79,7 +79,7 @@
 			regulator-max-microvolt = <3300000>;
 			gpio = <&gpio3 13 GPIO_ACTIVE_HIGH>;
 			enable-active-high;
-			startup-delay-us = <1000>;
+			startup-delay-us = <10000>;
 		};
 
 		reg_5v_display: regulator@2 {
