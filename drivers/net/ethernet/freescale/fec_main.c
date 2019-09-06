@@ -3953,10 +3953,10 @@ static int __maybe_unused fec_suspend(struct device *dev)
 		fec_stop(ndev);
 		if (!(fep->wol_flag & FEC_WOL_FLAG_ENABLE)) {
 			fec_irqs_disable(ndev);
-			pinctrl_pm_select_sleep_state(&fep->pdev->dev);
 			if (fep->phy_reset_in_suspend)
 				gpio_set_value_cansleep(fep->phy_reset_gpio,
 							fep->phy_reset_active_high);
+			pinctrl_pm_select_sleep_state(&fep->pdev->dev);
 		} else {
 			disable_irq(fep->wake_irq);
 			enable_irq_wake(fep->wake_irq);
@@ -3968,10 +3968,10 @@ static int __maybe_unused fec_suspend(struct device *dev)
 		if (ret < 0)
 			return ret;
 	} else if (fep->mii_bus_share && !ndev->phydev) {
-		pinctrl_pm_select_sleep_state(&fep->pdev->dev);
 		if (fep->phy_reset_in_suspend)
 			gpio_set_value_cansleep(fep->phy_reset_gpio,
 						fep->phy_reset_active_high);
+		pinctrl_pm_select_sleep_state(&fep->pdev->dev);
 	}
 	rtnl_unlock();
 
