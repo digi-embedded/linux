@@ -4073,7 +4073,8 @@ static int __maybe_unused fec_suspend(struct device *dev)
 			fec_irqs_disable(ndev);
 			pinctrl_pm_select_sleep_state(&fep->pdev->dev);
 			if (fep->phy_reset_in_suspend)
-				gpio_set_value_cansleep(fep->phy_reset_gpio, 0);
+				gpio_set_value_cansleep(fep->phy_reset_gpio,
+							fep->phy_reset_active_high);
 		} else {
 			fec_enet_enter_stop_mode(fep);
 			disable_irq(fep->wake_irq);
@@ -4097,7 +4098,8 @@ static int __maybe_unused fec_suspend(struct device *dev)
 	} else if (fep->mii_bus_share && !ndev->phydev) {
 		pinctrl_pm_select_sleep_state(&fep->pdev->dev);
 		if (fep->phy_reset_in_suspend)
-			gpio_set_value_cansleep(fep->phy_reset_gpio, 0);
+			gpio_set_value_cansleep(fep->phy_reset_gpio,
+						fep->phy_reset_active_high);
 	}
 	rtnl_unlock();
 
@@ -4147,7 +4149,8 @@ static int __maybe_unused fec_resume(struct device *dev)
 		} else {
 			pinctrl_pm_select_default_state(&fep->pdev->dev);
 			if (fep->phy_reset_in_suspend)
-				gpio_set_value_cansleep(fep->phy_reset_gpio, 1);
+				gpio_set_value_cansleep(fep->phy_reset_gpio,
+							!fep->phy_reset_active_high);
 		}
 		fec_restart(ndev);
 		netif_tx_lock_bh(ndev);
@@ -4158,7 +4161,8 @@ static int __maybe_unused fec_resume(struct device *dev)
 	} else if (fep->mii_bus_share && !ndev->phydev) {
 		pinctrl_pm_select_default_state(&fep->pdev->dev);
 		if (fep->phy_reset_in_suspend)
-			gpio_set_value_cansleep(fep->phy_reset_gpio, 1);
+			gpio_set_value_cansleep(fep->phy_reset_gpio,
+						!fep->phy_reset_active_high);
 		/* And then recovery mii bus */
 		ret = fec_restore_mii_bus(ndev);
 	}
