@@ -98,7 +98,7 @@
 	clock-frequency = <400000>;
 	pinctrl-names = "default", "gpio";
 	digi,hold-time-ns = <8000>;
-	digi,buffer-time-us = <35>;
+	digi,buffer-time-us = <75>;
 	pinctrl-0 = <&pinctrl_lpi2c0>;
 	pinctrl-1 = <&pinctrl_lpi2c0_gpio>;
 	scl-gpios = <&gpio3 8 GPIO_ACTIVE_HIGH>;
