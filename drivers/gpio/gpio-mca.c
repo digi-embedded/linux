@@ -211,38 +211,55 @@ static int mca_gpio_set_config(struct gpio_chip *gc, unsigned int num,
 	return mca_gpio_set_debounce(gc, num, arg);
 }
 
+static inline int mca_gpio_get_bank_from_irq(int irq, struct mca_gpio *mca_gc)
+{
+	int bank;
+
+	for (bank = 0; bank < (mca_gc->gc.ngpio + 7) / 8; bank++) {
+		if (mca_gc->irq[bank] == irq)
+			return bank;
+	}
+
+	return -1;
+}
+
 static irqreturn_t mca_gpio_irq_handler(int irq, void *data)
 {
 	struct mca_gpio *gpio = data;
 	unsigned int pending_irqs, mask, this_irq;
-	int ret, i, j;
+	int ret, i, bank;
 
-	for (i = 0; i < (gpio->gc.ngpio + 7) / 8; i++) {
-		ret = regmap_read(gpio->regmap, GPIO_IRQ_STATUS_REG(i), &pending_irqs);
-		if (ret < 0) {
-			dev_err(gpio->dev,
-				"IRQ %d: Failed to read GPIO_IRQ_STATUS_REG (%d)\n",
-				irq, ret);
-			continue;
-		}
+	bank = mca_gpio_get_bank_from_irq(irq, gpio);
+	if (bank < 0) {
+		dev_warn(gpio->dev, "IRQ %d: Failed to find bank\n", irq);
+		return IRQ_HANDLED;
+	}
 
-		for (j = 0; j < 8; j++) {
-			mask = 1 << j;
-			if (pending_irqs & mask) {
-				/* Ack the irq and call the handler */
-				this_irq = irq_find_mapping(gpio->gc.irqdomain, j + i * 8);
-				ret = regmap_write(gpio->regmap,
-						   GPIO_IRQ_STATUS_REG(i),
-						   mask);
-				if (ret) {
-					dev_err(gpio->dev,
-						"Failed to ack IRQ %d (%d)\n",
-						this_irq, ret);
-					continue;
-				}
+	/* Read the pending irqs in this bank */
+	ret = regmap_read(gpio->regmap, GPIO_IRQ_STATUS_REG(bank), &pending_irqs);
+	if (ret < 0) {
+		dev_warn(gpio->dev,
+			 "IRQ %d: Failed to read GPIO_IRQ_STATUS_REG (%d)\n",
+			 irq, ret);
+		return IRQ_HANDLED;
+	}
 
-				handle_nested_irq(this_irq);
+	for (i = 0; i < 8; i++) {
+		mask = 1 << i;
+		if (pending_irqs & mask) {
+			/* Ack the irq and call the handler */
+			this_irq = irq_find_mapping(gpio->gc.irqdomain, i + bank * 8);
+			ret = regmap_write(gpio->regmap,
+					   GPIO_IRQ_STATUS_REG(bank),
+					   mask);
+			if (ret) {
+				dev_warn(gpio->dev,
+					 "Failed to ack IRQ %d (%d)\n",
+					 this_irq, ret);
+				continue;
 			}
+
+			handle_nested_irq(this_irq);
 		}
 	}
 
