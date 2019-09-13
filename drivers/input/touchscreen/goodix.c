@@ -16,6 +16,7 @@
 #include <linux/firmware.h>
 #include <linux/module.h>
 #include <linux/delay.h>
+#include <drm/drm_mipi_dsi.h>
 #include <linux/irq.h>
 #include <linux/interrupt.h>
 #include <linux/platform_data/x86/soc.h>
@@ -1295,6 +1296,8 @@ static int goodix_ts_probe(struct i2c_client *client,
 {
 	struct goodix_ts_data *ts;
 	const char *cfg_name;
+	struct mipi_dsi_device *panel;
+	struct device_node *np;
 	int error;
 
 	dev_dbg(&client->dev, "I2C Address: 0x%02x\n", client->addr);
@@ -1397,6 +1400,17 @@ reset:
 		error = goodix_configure_dev(ts);
 		if (error)
 			return error;
+	}
+
+	np = of_parse_phandle(client->dev.of_node, "panel", 0);
+	if (np) {
+		panel = of_find_mipi_dsi_device_by_node(np);
+		of_node_put(np);
+		if (!panel)
+			return -ENOENT;
+		device_link_add(&client->dev, &panel->dev, DL_FLAG_STATELESS |
+				DL_FLAG_AUTOREMOVE_SUPPLIER);
+		put_device(&panel->dev);
 	}
 
 	return 0;
