@@ -259,12 +259,12 @@
 		thermal-sensors = <&tsens 2>;
 		trips {
 			pmic_alert0: trip0 {
-				temperature = <80000>;
+				temperature = <85000>;
 				hysteresis = <2000>;
 				type = "passive";
 			};
 			pmic_crit0: trip1 {
-				temperature = <125000>;
+				temperature = <105000>;
 				hysteresis = <2000>;
 				type = "critical";
 			};
