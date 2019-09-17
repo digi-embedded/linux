@@ -1390,7 +1390,7 @@ static int ov5640_set_fmt(struct v4l2_subdev *sd,
 	const struct ov5640_datafmt *fmt = ov5640_find_datafmt(mf->code);
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	struct ov5640 *sensor = to_ov5640(client);
-	int ret;
+	int ret, retries = 3;
 
 	if (format->pad)
 		return -EINVAL;
@@ -1406,8 +1406,18 @@ static int ov5640_set_fmt(struct v4l2_subdev *sd,
 	if (format->which == V4L2_SUBDEV_FORMAT_TRY)
 		return 0;
 
-	init_device();
-	ret = ov5640_change_mode(sensor);
+	do {
+		ret = init_device();
+		ret |= ov5640_change_mode(sensor);
+		/*
+		 * Reset the capture device and retry in case the I2C bus is
+		 * being held down due to an I2C issue during initialization or
+		 * configuration.
+		 */
+		if (ret)
+			ov5640_reset();
+	} while (ret < 0 && retries--);
+
 	sensor->fmt = fmt;
 
 	return ret;
@@ -1567,7 +1577,7 @@ static int ov5640_probe(struct i2c_client *client,
 	struct pinctrl *pinctrl;
 	struct device *dev = &client->dev;
 	struct v4l2_subdev *sd;
-	int retval;
+	int retval, retries = 3;
 	u8 chip_id_high, chip_id_low;
 
 	/* ov5640 pinctrl */
@@ -1671,7 +1681,17 @@ static int ov5640_probe(struct i2c_client *client,
 		return -ENODEV;
 	}
 
-	retval = init_device();
+	do {
+		retval = init_device();
+		/*
+		 * Reset the capture device and retry in case the I2C bus is
+		 * being held down due to an I2C issue during initialization or
+		 * configuration.
+		 */
+		if (retval)
+			ov5640_reset();
+	} while (retval < 0 && retries--);
+
 	if (retval < 0) {
 		clk_disable_unprepare(ov5640_data.sensor_clk);
 		pr_warning("camera ov5640 init fail\n");
