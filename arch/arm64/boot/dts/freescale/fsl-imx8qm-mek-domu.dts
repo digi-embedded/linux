@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 NXP
+ * Copyright 2018-2019 NXP
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -52,6 +52,7 @@
 		isi2 = &isi_2;
 		isi3 = &isi_3;
 		csi0 = &mipi_csi_0;
+		i2c1 = &i2c_rpbus_1;
 	};
 
 	cpus {
@@ -70,6 +71,20 @@
 			compatible = "arm,armv8";
 			enable-method = "psci";
 			reg = <0x0 0x1>;
+		};
+
+		cpu@2 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			enable-method = "psci";
+			reg = <0x0 0x2>;
+		};
+
+		cpu@3 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			enable-method = "psci";
+			reg = <0x0 0x3>;
 		};
 	};
 
@@ -119,24 +134,26 @@
 			no-map;
 			reg = <0 0x90000000 0 0x400000>;
 		};
-
-		decoder_rpc: decoder_rpc@0x90400000 {
+		rpmsg_dma_reserved:rpmsg_dma@0x90400000 {
+			compatible = "shared-dma-pool";
 			no-map;
-			reg = <0 0x90400000 0 0x1000000>;
+			reg = <0 0x90400000 0 0x1C00000>;
 		};
-		encoder_rpc: encoder_rpc@0x91400000 {
+		decoder_rpc: decoder_rpc@0x92000000 {
 			no-map;
-			reg = <0 0x91400000 0 0x200000>;
+			reg = <0 0x92000000 0 0x200000>;
 		};
-
+		encoder_rpc: encoder_rpc@0x92200000 {
+			no-map;
+			reg = <0 0x92200000 0 0x200000>;
+		};
 		dsp_reserved: dsp@0x92400000 {
 			no-map;
 			reg = <0 0x92400000 0 0x2000000>;
 		};
-
-		decoder_str: str@0x94400000 {
+		encoder_reserved: encoder_reserved@0x94400000 {
 			no-map;
-			reg = <0 0x94400000 0 0x1800000>;
+			reg = <0 0x94400000 0 0x800000>;
 		};
 
 		/* global autoconfigured region for contiguous allocations */
@@ -200,29 +217,29 @@
 		clock-names = "apb_pclk";
 	};
 
+	lvds_backlight1: lvds_backlight@1 {
+		compatible = "pwm-backlight";
+		pwms = <&lvds1_pwm 0 100000 0>;
+
+		brightness-levels = < 0  1  2  3  4  5  6  7  8  9
+				     10 11 12 13 14 15 16 17 18 19
+				     20 21 22 23 24 25 26 27 28 29
+				     30 31 32 33 34 35 36 37 38 39
+				     40 41 42 43 44 45 46 47 48 49
+				     50 51 52 53 54 55 56 57 58 59
+				     60 61 62 63 64 65 66 67 68 69
+				     70 71 72 73 74 75 76 77 78 79
+				     80 81 82 83 84 85 86 87 88 89
+				     90 91 92 93 94 95 96 97 98 99
+				    100>;
+		default-brightness-level = <80>;
+	};
+
 	passthrough {
 		compatible = "simple-bus";
 		ranges;
 		#address-cells = <2>;
 		#size-cells = <2>;
-
-		/* Android Auto Kernel will use this */
-		vehicle_rpmsg: vehicle_rpmsg {
-			compatible = "nxp,imx-vehicle";
-			power-domains = <&pd_dc1>;
-			/*
-			 * fsl,resources is used to open the power of these resources.
-			 * m4 will power down these resources when M4 core give out the control of camera/display.
-			 * rpmsg_can driver will power on these reources once A core take over the control of camera/display.
-			 */
-			fsl,resources = <SC_R_LVDS_1 SC_R_LVDS_1_I2C_0
-					 SC_R_DC_1 SC_R_DC_1_PLL_1
-					 SC_R_CSI_0_I2C_0 SC_R_ISI_CH0
-					 SC_R_ISI_CH1 SC_R_ISI_CH2
-					 SC_R_ISI_CH3 SC_R_CSI_0>;
-			fsl,resources-num = <10>;
-			status = "disabled";
-		};
 
 		firmware {
 			android {
@@ -284,7 +301,6 @@
 			compatible = "nxp,imx8qm-b0-vpudec", "nxp,imx8qxp-b0-vpudec";
 			boot-region = <&decoder_boot>;
 			rpc-region = <&decoder_rpc>;
-			str-region = <&decoder_str>;
 			reg = <0x0 0x2c000000 0x0 0x1000000>;
 			reg-names = "vpu_regs";
 			reg-csr = <0x2d080000>;
@@ -293,19 +309,43 @@
 		};
 
 		vpu_encoder: vpu_encoder@2d000000 {
-			compatible = "nxp,imx8qm-b0-vpuenc", "nxp,imx8qxp-b0-vpuenc";
+			compatible = "nxp,imx8qm-b0-vpuenc";
+			#address-cells = <1>;
+			#size-cells = <1>;
+
 			boot-region = <&encoder_boot>;
 			rpc-region = <&encoder_rpc>;
-			fw-buf-size = <0x200000 0x200000>;
-			rpc-buf-size = <0x80000 0x80000>;
-			print-buf-size = <0x80000 0x80000>;
-			reg = <0x0 0x2d000000 0x0 0x1000000>;
+			reserved-region = <&encoder_reserved>;
+			reg = <0x0 0x2d000000 0x0 0x1000000>,	/*VPU Encoder*/
+				<0x0 0x2c000000 0x0 0x2000000>; /*VPU*/
 			reg-names = "vpu_regs";
 			power-domains = <&pd_vpu_enc>;
-			reg-fw-base = <0x90000 0xa0000>;
-			resolution-max = <1920 1080>;
+			reg-rpc-system = <0x40000000>;
+
+			resolution-max = <1920 1920>;
 			fps-max = <120>;
 			status = "disabled";
+
+			core0@1020000 {
+				compatible = "fsl,imx8-mu1-vpu-m0";
+				reg = <0x1020000 0x20000>;
+				reg-csr = <0x1090000 0x10000>;
+				interrupts = <GIC_SPI 473 IRQ_TYPE_LEVEL_HIGH>;
+				fsl,vpu_ap_mu_id = <17>;
+				fw-buf-size = <0x200000>;
+				rpc-buf-size = <0x80000>;
+				print-buf-size = <0x80000>;
+			};
+			core1@1040000 {
+				compatible = "fsl,imx8-mu2-vpu-m0";
+				reg = <0x1040000 0x20000>;
+				reg-csr = <0x10a0000 0x10000>;
+				interrupts = <GIC_SPI 474 IRQ_TYPE_LEVEL_HIGH>;
+				fsl,vpu_ap_mu_id = <18>;
+				fw-buf-size = <0x200000>;
+				rpc-buf-size = <0x80000>;
+				print-buf-size = <0x80000>;
+			};
 		};
 
 		clk: clk {
@@ -440,6 +480,22 @@
 			be-adapter = "3b230000.i2c";
 			status = "okay";
 		};
+	};
+
+	/*
+	 * vehicle core driver device node which open power domain dc by default
+	 */
+	vehicle_core: vehicle_core {
+		compatible = "nxp,imx-vehicle";
+		status = "disabled";
+	};
+
+	/*
+	 * vehicle M4 driver which can get info from MCU.
+	 */
+	vehicle_rpmsg_m4: vehicle_rpmsg_m4 {
+		compatible = "nxp,imx-vehicle-m4";
+		status = "disabled";
 	};
 };
 
@@ -627,7 +683,6 @@
 /delete-node/ &lvds_region1;
 /delete-node/ &ldb1_phy;
 /delete-node/ &ldb1;
-/delete-node/ &lvds1_pwm;
 /*/delete-node/ &camera;*/
 /delete-node/ &adc0;
 /delete-node/ &adc1;
@@ -664,6 +719,7 @@
 /delete-node/ &irqsteer_csi1;
 /delete-node/ &i2c0_mipi_csi1;
 /delete-node/ &lpspi0;
+/delete-node/ &lpspi3;
 /delete-node/ &lpuart0;
 
 &lpuart1 {
@@ -736,8 +792,8 @@
 
 &imx8_gpu_ss {
 	/* xen guests have 2GB of low RAM @ 2GB */
-	reg = <0x0 0x80000000 0x0 0x80000000>;
-	reg-names = "phys_baseaddr";
+	reg = <0x0 0x80000000 0x0 0x80000000>, <0x0 0x0 0x0 0x10000000>;
+	reg-names = "phys_baseaddr", "contiguous_mem";
 	cores = <&gpu_3d1>;
 	status = "okay";
 };
@@ -944,6 +1000,12 @@
 			>;
 		};
 
+		pinctrl_lvds1_pwm0: lvds1pwm0grp {
+			fsl,pins = <
+				SC_P_LVDS1_GPIO00_LVDS1_PWM0_OUT	0x00000020
+			>;
+		};
+
 		pinctrl_lpuart1: lpuart1grp {
 			fsl,pins = <
 				SC_P_UART1_RX_DMA_UART1_RX		0x06000020
@@ -1045,7 +1107,6 @@
 };
 
 &vpu_encoder {
-	core_type = <2>;
 	status = "okay";
 };
 
@@ -1199,4 +1260,10 @@
 			};
 		};
 	};
+};
+
+&lvds1_pwm {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lvds1_pwm0>;
+	status = "okay";
 };

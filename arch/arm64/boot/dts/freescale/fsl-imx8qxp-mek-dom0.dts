@@ -63,16 +63,19 @@
 		reg = <0x0 0x90000000 0x0 0x400000>;
 	};
 
-	decoder_rpc_mem: decoder_rpc_mem@0x90400000 {
-		reg = <0 0x90400000 0 0x200000>;
+	decoder_rpc_mem: decoder_rpc_mem@0x92000000 {
+		reg = <0 0x92000000 0 0x200000>;
 	};
 
-	encoder_rpc_mem: encoder_rpc_mem@0x90600000 {
-		reg = <0 0x90600000 0 0x200000>;
+	encoder_rpc_mem: encoder_rpc_mem@0x92200000 {
+		reg = <0 0x92200000 0 0x200000>;
 	};
 
 	dsp_reserved_mem: dsp_reserved_mem@0x92400000 {
 		reg = <0 0x92400000 0 0x2000000>;
+	};
+	encoder_reserved_mem: encoder_reserved_mem@0x94400000 {
+		reg = <0 0x94400000 0 0x800000>;
 	};
 
 	rtc0: rtc@23000000 {

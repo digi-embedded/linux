@@ -5,6 +5,7 @@ config FB_MXC
 	select FB_CFB_COPYAREA
 	select FB_CFB_IMAGEBLIT
 	select FB_MODE_HELPERS
+	select FB_FENCE
 	default y
 	help
 	  This is a framebuffer device for the MXC LCD Controller.
@@ -65,6 +66,16 @@ config FB_MXC_TRULY_PANEL_TFT3P5581E
 	tristate "TRULY Panel TFT3P5581E"
 	depends on FB_MXC_DISP_FRAMEWORK || FB_MXC_SYNC_PANEL
 	depends on FB_MXC_MIPI_DSI_SAMSUNG || FB_MXC_MIPI_DSI_NORTHWEST
+
+config FB_MXC_RK_PANEL_RK055AHD042
+	tristate "ROCKTECH Panel RK055AHD042"
+	depends on FB_MXC_DISP_FRAMEWORK || FB_MXC_SYNC_PANEL
+	depends on FB_MXC_MIPI_DSI_NORTHWEST
+
+config FB_MXC_RK_PANEL_RK055IQH042
+	tristate "ROCKTECH Panel RK055IQH042"
+	depends on FB_MXC_DISP_FRAMEWORK || FB_MXC_SYNC_PANEL
+	depends on FB_MXC_MIPI_DSI_NORTHWEST
 
 config FB_MXC_LDB
 	tristate "MXC LDB"
@@ -134,3 +145,11 @@ config FB_DCSS
 	help
 	  Framebuffer support the DCSS controller in imx8mq platform.
 	  DCSS support 3 layer compsition.
+
+config FB_FENCE
+	tristate "FB driver fence support"
+	default y
+	help
+	  This is in out fence function for the MXC FB driver.
+	  If you plan to use fence function with your MXC system, say
+	  Y here.

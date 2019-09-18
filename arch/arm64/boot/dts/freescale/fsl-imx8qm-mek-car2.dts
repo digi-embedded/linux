@@ -12,15 +12,25 @@
  * GNU General Public License for more details.
  */
 
-#include "fsl-imx8qm-mek.dts"
+#include "fsl-imx8qm-mek-rpmsg.dts"
 / {
 	trusty {
 		compatible = "android,trusty-smc-v1";
 		ranges;
 		#address-cells = <2>;
 		#size-cells = <2>;
+		use-gicv3-workaround;
+		trusty-irq {
+			use-gicv3-workaround;
+			compatible = "android,trusty-irq-v1";
+			interrupt-templates = <&trusty_ipi 0>;
+			interrupt-ranges = < 0 15 0>;
+		};
 		trusty-virtio {
 			compatible = "android,trusty-virtio-v1";
+		};
+		trusty-log {
+			compatible = "android,trusty-log-v1";
 		};
 	};
 	trusty_ipi: interrupt-controller@0 {
@@ -54,12 +64,12 @@
 	clock-frequency = <1000000>;
 };
 
-&i2c0_cm41 {
-	clock-frequency = <400000>;
+&i2c0_mipi_dsi1 {
+	status = "disabled";
 };
 
-&i2c0_mipi_dsi1 {
-	clock-frequency = <1000000>;
+&wm8960 {
+	quick-probe;
 };
 
 &i2c0_hdmi {
@@ -67,18 +77,10 @@
 };
 
 &i2c1_lvds0 {
-	status = "disabled";
+	clock-frequency = <400000>;
 };
 
 &lvds0_pwm {
-	status = "disabled";
-};
-
-&ldb1_phy {
-	status = "disabled";
-};
-
-&ldb1 {
 	status = "disabled";
 };
 
@@ -94,6 +96,18 @@
 	status = "disabled";
 };
 
+&mipi_dsi_phy2 {
+   status = "disabled";
+};
+
+&mipi_dsi2 {
+   status = "disabled";
+};
+
+&mipi_dsi_bridge2 {
+   status = "disabled";
+};
+
 &usdhc2 {
 	status = "disabled";
 };
@@ -103,10 +117,6 @@
 };
 
 &asrc0 {
-	status = "disabled";
-};
-
-&flexspi0 {
 	status = "disabled";
 };
 
@@ -124,4 +134,8 @@
 
 &jpegenc {
 	status = "disabled";
+};
+
+&vehicle_core {
+	status = "okay";
 };

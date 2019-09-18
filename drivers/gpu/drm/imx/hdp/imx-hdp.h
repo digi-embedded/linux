@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 NXP
+ * Copyright 2017-2019 NXP
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -28,6 +28,7 @@
 #include <drm/drm_dp_helper.h>
 #include "../../../../mxc/hdp/all.h"
 #include "../../../../mxc/hdp-cec/imx-hdp-cec.h"
+#include "imx-hdcp-private.h"
 
 #define HDP_DUAL_MODE_MIN_PCLK_RATE	300000	/* KHz */
 #define HDP_SINGLE_MODE_MAX_WIDTH	1920
@@ -35,7 +36,7 @@
 /* For testing hdp firmware define DEBUG_FW_LOAD */
 #undef DEBUG_FW_LOAD
 #define PLL_1188MHZ (1188000000)
-#define PLL_675MHZ (675000000)
+#define PLL_800MHZ (800000000)
 
 #define HDP_TX_SS_LIS_BASE   0x0000
 #define HDP_TX_SS_CSR_BASE   0x1000
@@ -209,11 +210,13 @@ struct imx_hdp {
 	struct drm_connector connector;
 	struct drm_encoder encoder;
 	struct drm_bridge bridge;
+	struct drm_device *drm_dev;
 
 	struct edid *edid;
 	char cable_state;
 
 	struct hdp_mem mem;
+	struct imx_hdcp hdcp;
 
 	u8 is_cec;
 	u8 is_edp;
@@ -221,9 +224,13 @@ struct imx_hdp {
 	u8 is_digpll_dp_pclock;
 	u8 no_edid;
 	u8 audio_type;
+	u8 is_hdcp;
 	u32 dp_lane_mapping;
 	u32 dp_link_rate;
 	u32 dp_num_lanes;
+
+	u32 character_freq_khz;  /* character clock for hdmi */
+	u32 hdmi_type;
 
 	struct mutex mutex;		/* for state below and previous_mode */
 	enum drm_connector_force force;	/* mutex-protected force state */
@@ -260,5 +267,6 @@ void imx_hdp_register_audio_driver(struct device *dev);
 void imx_arc_power_up(state_struct *state);
 void imx_arc_calibrate(state_struct *state);
 void imx_arc_config(state_struct *state);
+int imx_hdcp_check_link(struct imx_hdp *hdp);
 
 #endif

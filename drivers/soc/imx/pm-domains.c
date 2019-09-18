@@ -31,6 +31,7 @@
 #include <linux/pm_clock.h>
 #include <linux/slab.h>
 #include <linux/syscore_ops.h>
+#include <linux/suspend.h>
 
 #include <soc/imx/fsl_sip.h>
 #include <soc/imx8/sc/sci.h>
@@ -38,15 +39,12 @@
 #include "pm-domain-imx8.h"
 
 static sc_ipc_t pm_ipc_handle;
-static sc_rsrc_t early_power_on_rsrc[] = {
-	SC_R_LAST, SC_R_LAST, SC_R_LAST, SC_R_LAST, SC_R_LAST,
-	SC_R_LAST, SC_R_LAST, SC_R_LAST, SC_R_LAST, SC_R_LAST,
-};
 static sc_rsrc_t rsrc_debug_console;
 
 #define IMX8_WU_MAX_IRQS	(((SC_R_LAST + 31) / 32 ) * 32 )
 static sc_rsrc_t irq2rsrc[IMX8_WU_MAX_IRQS];
 static sc_rsrc_t wakeup_rsrc_id[IMX8_WU_MAX_IRQS / 32];
+static bool check_subdomain_wakeup;
 static DEFINE_SPINLOCK(imx8_wu_lock);
 static DEFINE_MUTEX(rsrc_pm_list_lock);
 
@@ -61,6 +59,27 @@ struct clk_stat {
 	unsigned long rate;
 };
 
+static bool is_resume_needed(struct generic_pm_domain *domain)
+{
+	struct gpd_link *link;
+	struct imx8_pm_domain *pd;
+	int ret;
+
+	pd = container_of(domain, struct imx8_pm_domain, pd);
+
+	/* keep resource power on if it is a wakeup source */
+	if ((1 << pd->rsrc_id % 32) & wakeup_rsrc_id[pd->rsrc_id / 32])
+		return true;
+
+	list_for_each_entry(link, &domain->master_links, master_node) {
+		ret = is_resume_needed(link->slave);
+		if (ret)
+			return ret;
+	}
+
+	return false;
+}
+
 static int imx8_pd_power(struct generic_pm_domain *domain, bool power_on)
 {
 	struct imx8_pm_domain *pd;
@@ -68,7 +87,7 @@ static int imx8_pd_power(struct generic_pm_domain *domain, bool power_on)
 
 	pd = container_of(domain, struct imx8_pm_domain, pd);
 
-	if (pd->rsrc_id == SC_R_LAST)
+	if (pd->rsrc_id == SC_R_NONE)
 		return 0;
 
 	/* keep uart console power on for no_console_suspend */
@@ -76,10 +95,9 @@ static int imx8_pd_power(struct generic_pm_domain *domain, bool power_on)
 		!console_suspend_enabled && !power_on)
 		return 0;
 
-	/* keep resource power on if it is a wakeup source */
-	if (!power_on && ((1 << pd->rsrc_id % 32) &
-		wakeup_rsrc_id[pd->rsrc_id / 32]))
-		return 0;
+	if (!power_on && check_subdomain_wakeup)
+		if (is_resume_needed(domain))
+			return 0;
 
 	sci_err = sc_pm_set_resource_power_mode(pm_ipc_handle, pd->rsrc_id,
 		(power_on) ? SC_PM_PW_MODE_ON :
@@ -201,8 +219,10 @@ static int imx8_pd_power_off(struct generic_pm_domain *domain)
 		 * that may be lost.
 		 */
 		list_for_each_entry(imx8_rsrc_clk, &pd->clks, node) {
-			imx8_rsrc_clk->parent = clk_get_parent(imx8_rsrc_clk->clk);
-			imx8_rsrc_clk->rate = clk_hw_get_rate(__clk_get_hw(imx8_rsrc_clk->clk));
+			if (imx8_rsrc_clk->clk != NULL) {
+				imx8_rsrc_clk->parent = clk_get_parent(imx8_rsrc_clk->clk);
+				imx8_rsrc_clk->rate = clk_hw_get_rate(__clk_get_hw(imx8_rsrc_clk->clk));
+			}
 		}
 		pd->clk_state_saved = true;
 		pd->clk_state_may_lost = false;
@@ -300,26 +320,23 @@ static int imx8_pm_domains_suspend(void)
 	return 0;
 }
 
-static void imx8_pm_domains_resume(void)
-{
-	sc_err_t sci_err = SC_ERR_NONE;
-	int i;
-
-	for (i = 0; i < (sizeof(early_power_on_rsrc) /
-		sizeof(sc_rsrc_t)); i++) {
-		if (early_power_on_rsrc[i] != SC_R_LAST) {
-			sci_err = sc_pm_set_resource_power_mode(pm_ipc_handle,
-				early_power_on_rsrc[i], SC_PM_PW_MODE_ON);
-			if (sci_err != SC_ERR_NONE)
-				pr_err("fail to power on resource %d\n",
-					early_power_on_rsrc[i]);
-		}
-	}
-}
-
 struct syscore_ops imx8_pm_domains_syscore_ops = {
 	.suspend = imx8_pm_domains_suspend,
-	.resume = imx8_pm_domains_resume,
+};
+
+static int imx8_power_domain_pm_notify(struct notifier_block *nb, unsigned long event,
+	void *dummy)
+{
+	if (event == PM_SUSPEND_PREPARE)
+		check_subdomain_wakeup = true;
+	else if (event == PM_POST_SUSPEND)
+		check_subdomain_wakeup = false;
+
+	return NOTIFY_OK;
+}
+
+static struct notifier_block imx8_power_domain_pm_notifier = {
+	.notifier_call = imx8_power_domain_pm_notify,
 };
 
 static void imx8_pd_setup(struct imx8_pm_domain *pd)
@@ -344,7 +361,6 @@ static int __init imx8_add_pm_domains(struct device_node *parent,
 					struct generic_pm_domain *genpd_parent)
 {
 	struct device_node *np;
-	static int index;
 
 	for_each_child_of_node(parent, np) {
 		struct imx8_pm_domain *imx8_pd;
@@ -364,14 +380,8 @@ static int __init imx8_add_pm_domains(struct device_node *parent,
 		if (!of_property_read_u32(np, "reg", &rsrc_id))
 			imx8_pd->rsrc_id = rsrc_id;
 
-		if (imx8_pd->rsrc_id != SC_R_LAST) {
+		if (imx8_pd->rsrc_id != SC_R_NONE) {
 			imx8_pd_setup(imx8_pd);
-
-			if (of_property_read_bool(np, "early_power_on")
-				&& index < (sizeof(early_power_on_rsrc) /
-				sizeof(sc_rsrc_t))) {
-				early_power_on_rsrc[index++] = imx8_pd->rsrc_id;
-			}
 			if (of_property_read_bool(np, "debug_console"))
 				rsrc_debug_console = imx8_pd->rsrc_id;
 			if (!of_property_read_u32(np, "wakeup-irq",
@@ -422,7 +432,7 @@ static int __init imx8_init_pm_domains(void)
 		if (!of_property_read_u32(np, "reg", &rsrc_id))
 			imx8_pd->rsrc_id = rsrc_id;
 
-		if (imx8_pd->rsrc_id != SC_R_LAST)
+		if (imx8_pd->rsrc_id != SC_R_NONE)
 			imx8_pd_setup(imx8_pd);
 
 		INIT_LIST_HEAD(&imx8_pd->clks);
@@ -440,6 +450,7 @@ static int __init imx8_init_pm_domains(void)
 
 	sci_err = sc_ipc_open(&pm_ipc_handle, mu_id);
 	register_syscore_ops(&imx8_pm_domains_syscore_ops);
+	register_pm_notifier(&imx8_power_domain_pm_notifier);
 
 	return 0;
 }

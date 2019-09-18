@@ -148,6 +148,11 @@ static DEFINE_RAW_SPINLOCK(l2x0_lock);
 #define l2x0_spin_unlock(lock, flags) raw_spin_unlock_irqrestore(lock, flags)
 
 #define l2x0_spin_lock_init(lock)
+static int l2c_set_mutex(void *mutex)
+{
+	return -EINVAL;
+}
+
 #endif
 
 /*

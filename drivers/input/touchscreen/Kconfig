@@ -47,17 +47,17 @@ config TOUCHSCREEN_ADS7846
 	  module will be called ads7846.
 
 config TOUCHSCREEN_CT36X_WLD
-	default y
-	tristate "CT36X based touchscreens for WLD"
-	help
-	  Say Y here if you have a touchscreen interface using the
-	  CT36X controller, i2c touchscreen
-	  controller.
+        default y
+        tristate "CT36X based touchscreens for WLD"
+        help
+          Say Y here if you have a touchscreen interface using the
+          CT36X controller, i2c touchscreen
+          controller.
 
-	  If unsure, say N (but it's safe to say "Y").
+          If unsure, say N (but it's safe to say "Y").
 
-	  To compile this driver as a module, choose M here: the
-	  module will be called vtl_ts.
+          To compile this driver as a module, choose M here: the
+          module will be called vtl_ts.
 
 config TOUCHSCREEN_AD7877
 	tristate "AD7877 based touchscreens"
@@ -599,7 +599,7 @@ config TOUCHSCREEN_HP600
 	depends on SH_HP6XX && SH_ADC
 	help
 	  Say Y here if you have a HP Jornada 620/660/680/690 and want to
-	  support the built-in touchscreen.
+          support the built-in touchscreen.
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called hp680_ts_input.

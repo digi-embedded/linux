@@ -18,6 +18,7 @@
 #include <media/v4l2-ctrls.h>
 #include <media/videobuf2-core.h>
 #include <media/videobuf2-dma-contig.h>
+#include <linux/reset.h>
 
 #define MXC_ISI_DRIVER_NAME	"mxc-isi"
 #define MXC_ISI_MAX_DEVS	8
@@ -173,6 +174,8 @@ struct mxc_isi_ctrls {
 	struct v4l2_ctrl *hflip;
 	struct v4l2_ctrl *vflip;
 	struct v4l2_ctrl *alpha;
+	struct v4l2_ctrl *num_cap_buf;
+	struct v4l2_ctrl *num_out_buf;
 	bool ready;
 };
 
@@ -241,7 +244,6 @@ struct mxc_isi_m2m_dev {
 	unsigned int	alphaen:1;
 
 	unsigned int aborting;
-	unsigned int read_done;
 	unsigned int frame_count;
 
 	struct list_head		out_active;
@@ -268,28 +270,48 @@ struct mxc_isi_cap_dev {
 
 	struct mxc_isi_frame	src_f;
 	struct mxc_isi_frame	dst_f;
-	u32						frame_count;
+	u32			frame_count;
 
 	u32 buf_index;
 };
 
+struct mxc_isi_dev_ops {
+	int (*clk_get)(struct mxc_isi_dev *mxc_isi);
+	int (*clk_enable)(struct mxc_isi_dev *mxc_isi);
+	void (*clk_disable)(struct mxc_isi_dev *mxc_isi);
+};
+
 struct mxc_isi_dev {
-	spinlock_t				slock;
+	spinlock_t			slock;
 	struct mutex			lock;
+	struct mutex			m2m_lock;
 	wait_queue_head_t		irq_queue;
 
-	int						id;
+	int				id;
 	void __iomem			*regs;
 	unsigned long			state;
 
 	struct platform_device		*pdev;
-	struct v4l2_device			*v4l2_dev;
+	struct v4l2_device		*v4l2_dev;
 	struct mxc_isi_m2m_dev		m2m;
 	struct mxc_isi_cap_dev		isi_cap;
-	struct clk		*clk;
+
+	struct clk	*clk;
+	struct clk	*clk_disp_axi;
+	struct clk	*clk_disp_apb;
+	struct clk	*clk_root_disp_axi;
+	struct clk	*clk_root_disp_apb;
+
+	const struct mxc_isi_dev_ops *ops;
+
+	struct reset_control *soft_resetn;
+	struct reset_control *clk_enable;
 
 	u32 interface[MAX_PORTS];
 	u32 flags;
+	u32 skip_m2m;
+	u32 req_cap_buf_num;
+	u32 req_out_buf_num;
 	u8 chain_buf;
 
 	atomic_t open_count;

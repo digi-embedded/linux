@@ -3122,6 +3122,18 @@ static int rt5645_jack_detect(struct snd_soc_codec *codec, int jack_insert)
 	if (jack_insert) {
 		regmap_write(rt5645->regmap, RT5645_CHARGE_PUMP, 0x0e06);
 
+		/* If the DT says we need low voltage, we need to raise
+		   the HP amp detection threshold for the headphone
+		   charge pump to prevent misdetects because the GPIO
+		   used for the interrupt is most-likely wired directly
+		   off of HPO_L. Failing to do this causes the HPO_L
+		   line to hover at 2V, which is enough to cause
+		   mis-reads of the GPIO value. */
+		if (rt5645->pdata.jd_low_volt_enable) {
+			regmap_update_bits(rt5645->regmap, RT5645_CHARGE_PUMP,
+					   3 << 11, 3 << 11);
+		}
+
 		/* for jack type detect */
 		snd_soc_dapm_force_enable_pin(dapm, "LDO2");
 		snd_soc_dapm_force_enable_pin(dapm, "Mic Det Power");
@@ -3142,7 +3154,12 @@ static int rt5645_jack_detect(struct snd_soc_codec *codec, int jack_insert)
 		regmap_update_bits(rt5645->regmap, RT5645_IN1_CTRL2,
 			RT5645_CBJ_MN_JD, RT5645_CBJ_MN_JD);
 		regmap_update_bits(rt5645->regmap, RT5645_IN1_CTRL1,
-			RT5645_CBJ_BST1_EN, RT5645_CBJ_BST1_EN);
+			RT5645_CBJ_BST1_EN, 0);
+
+		/* Toggle reserved bit to do... something? */
+		regmap_update_bits(rt5645->regmap, RT5645_IN1_CTRL2,
+				   1 << 11, 0);
+
 		msleep(100);
 		regmap_update_bits(rt5645->regmap, RT5645_IN1_CTRL2,
 			RT5645_CBJ_MN_JD, 0);
@@ -3220,6 +3237,24 @@ int rt5645_set_jack_detect(struct snd_soc_codec *codec,
 				RT5645_GP1_PIN_IRQ, RT5645_GP1_PIN_IRQ);
 		regmap_update_bits(rt5645->regmap, RT5645_GEN_CTRL1,
 				RT5645_DIG_GATE_CTRL, RT5645_DIG_GATE_CTRL);
+	} else if (rt5645->codec_type == CODEC_TYPE_RT5645) {
+		regmap_update_bits(rt5645->regmap, RT5645_IN1_CTRL2,
+				   RT5645_CBJ_DET_MODE, RT5645_CBJ_DET_MODE);
+		regmap_update_bits(rt5645->regmap, RT5645_GEN_CTRL2,
+				   0x1 << 4, 0x1 << 4);
+
+		/* Turn on combo jack input buffer power */
+		regmap_update_bits(rt5645->regmap, RT5645_GEN_CTRL3,
+				   RT5645_EN_IBUF_BST1,
+				   RT5645_EN_IBUF_BST1);
+
+		/* Turn on MIC input from RING2 */
+		regmap_update_bits(rt5645->regmap, RT5645_IN1_CTRL1,
+				   RT5645_CBJ_MIC_SEL_L, RT5645_CBJ_MIC_SEL_L);
+
+		/* Disable IN1P Tie Ground */
+		regmap_update_bits(rt5645->regmap, RT5645_IN1_CTRL3,
+				   RT5645_CBJ_TIE_G_L, 0);
 	}
 	rt5645_irq(0, rt5645);
 
@@ -3240,8 +3275,6 @@ static void rt5645_jack_detect_work(struct work_struct *work)
 	case 0: /* Not using rt5645 JD */
 		if (rt5645->gpiod_hp_det) {
 			gpio_state = gpiod_get_value(rt5645->gpiod_hp_det);
-			dev_dbg(rt5645->codec->dev, "gpio_state = %d\n",
-				gpio_state);
 			report = rt5645_jack_detect(rt5645->codec, gpio_state);
 		}
 		snd_soc_jack_report(rt5645->hp_jack,
@@ -3673,9 +3706,10 @@ static struct dmi_system_id dmi_platform_minix_z83_4[] = {
 static bool rt5645_check_dp(struct device *dev)
 {
 	if (device_property_present(dev, "realtek,in2-differential") ||
-		device_property_present(dev, "realtek,dmic1-data-pin") ||
-		device_property_present(dev, "realtek,dmic2-data-pin") ||
-		device_property_present(dev, "realtek,jd-mode"))
+	    device_property_present(dev, "realtek,dmic1-data-pin") ||
+	    device_property_present(dev, "realtek,dmic2-data-pin") ||
+	    device_property_present(dev, "realtek,jd-mode") ||
+	    device_property_present(dev, "realtek,jd-low-volt-enable"))
 		return true;
 
 	return false;
@@ -3691,6 +3725,13 @@ static int rt5645_parse_dt(struct rt5645_priv *rt5645, struct device *dev)
 		"realtek,dmic2-data-pin", &rt5645->pdata.dmic2_data_pin);
 	device_property_read_u32(dev,
 		"realtek,jd-mode", &rt5645->pdata.jd_mode);
+	rt5645->pdata.jd_low_volt_enable =
+		device_property_read_bool(dev, "realtek,jd-low-volt-enable");
+
+	if (rt5645->pdata.jd_low_volt_enable) {
+		printk("rt5645: Raising HP charge pump threshold to prevent jack event "
+		       "mis-detects.\n");
+	}
 
 	return 0;
 }
@@ -3929,6 +3970,13 @@ static int rt5645_i2c_probe(struct i2c_client *i2c,
 
 	regmap_update_bits(rt5645->regmap, RT5645_ADDA_CLK1,
 		RT5645_I2S_PD1_MASK, RT5645_I2S_PD1_2);
+
+	/* Add wind filter */
+	regmap_update_bits(rt5645->regmap, RT5645_ADJ_HPF1,
+                       RT5645_2ND_HPF_MASK, RT5645_2ND_HPF_DIS);
+	regmap_write(rt5645->regmap, RT5645_ADJ_HPF2, 0x0606);
+	regmap_update_bits(rt5645->regmap, RT5645_ADJ_HPF1,
+                       RT5645_2ND_HPF_MASK, RT5645_2ND_HPF_EN);
 
 	if (rt5645->pdata.level_trigger_irq) {
 		regmap_update_bits(rt5645->regmap, RT5645_IRQ_CTRL2,

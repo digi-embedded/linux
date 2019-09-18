@@ -83,6 +83,16 @@ config SND_SOC_FSL_MICFIL
 	  Say Y if you want to add Pulse Density Modulation microphone
 	  interface (MICFIL) support for NXP.
 
+config SND_SOC_FSL_EASRC
+	tristate "Enhanced ASRC module support"
+	select REGMAP_MMIO
+	select SND_SOC_GENERIC_DMAENGINE_PCM
+	help
+	  Say Y if you want to add Enhanced ASRC support for NXP. The ASRC is
+	  a digital module that converts audio from a source sample rate to a
+	  destination sample rate. It is a new design module compare with the
+	  old ASRC.
+
 config SND_SOC_FSL_RPMSG_I2S
 	tristate "I2S base on the RPMSG support"
 	depends on RPMSG
@@ -515,7 +525,7 @@ config SND_SOC_FSL_ASOC_CARD
 	help
 	 ALSA SoC Audio support with ASRC feature for Freescale SoCs that have
 	 ESAI/SAI/SSI and connect with external CODECs such as WM8962, CS42888,
-	 CS4271, CS4272, and SGTL5000.
+	 CS4271, CS4272, SGTL5000, and ALC5645.
 	 Say Y if you want to add support for Freescale Generic ASoC Sound Card.
 
 config SND_SOC_IMX_SI476X

@@ -119,36 +119,19 @@ static int can_rx_offload_compare(struct sk_buff *a, struct sk_buff *b)
 static struct sk_buff *can_rx_offload_offload_one(struct can_rx_offload *offload, unsigned int n)
 {
 	struct sk_buff *skb = NULL;
-	struct can_rx_offload_cb *cb;
-	struct canfd_frame *cf;
-	int ret;
+	u32 timestamp;
 
 	/* If queue is full or skb not available, read to discard mailbox */
-	if (likely(skb_queue_len(&offload->skb_queue) <=
-		   offload->skb_queue_len_max)) {
-		if (offload->is_canfd)
-			skb = alloc_canfd_skb(offload->dev, &cf);
-		else
-			skb = alloc_can_skb(offload->dev, (struct can_frame **)&cf);
-	}
+	bool drop = unlikely(skb_queue_len(&offload->skb_queue) >
+					   offload->skb_queue_len_max);
 
-	if (!skb) {
-		struct canfd_frame cf_overflow;
-		u32 timestamp;
+	if (offload->mailbox_read(offload, drop, &skb, &timestamp, n) && !skb)
+		offload->dev->stats.rx_dropped++;
 
-		ret = offload->mailbox_read(offload, &cf_overflow,
-					    &timestamp, n);
-		if (ret)
-			offload->dev->stats.rx_dropped++;
+	if (skb) {
+		struct can_rx_offload_cb *cb = can_rx_offload_get_cb(skb);
 
-		return NULL;
-	}
-
-	cb = can_rx_offload_get_cb(skb);
-	ret = offload->mailbox_read(offload, cf, &cb->timestamp, n);
-	if (!ret) {
-		kfree_skb(skb);
-		return NULL;
+		cb->timestamp = timestamp;
 	}
 
 	return skb;
@@ -213,7 +196,54 @@ int can_rx_offload_irq_offload_fifo(struct can_rx_offload *offload)
 }
 EXPORT_SYMBOL_GPL(can_rx_offload_irq_offload_fifo);
 
-int can_rx_offload_irq_queue_err_skb(struct can_rx_offload *offload, struct sk_buff *skb)
+int can_rx_offload_queue_sorted(struct can_rx_offload *offload,
+				struct sk_buff *skb, u32 timestamp)
+{
+	struct can_rx_offload_cb *cb;
+	unsigned long flags;
+
+	if (skb_queue_len(&offload->skb_queue) >
+	    offload->skb_queue_len_max)
+		return -ENOMEM;
+
+	cb = can_rx_offload_get_cb(skb);
+	cb->timestamp = timestamp;
+
+	spin_lock_irqsave(&offload->skb_queue.lock, flags);
+	__skb_queue_add_sort(&offload->skb_queue, skb, can_rx_offload_compare);
+	spin_unlock_irqrestore(&offload->skb_queue.lock, flags);
+
+	can_rx_offload_schedule(offload);
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(can_rx_offload_queue_sorted);
+
+unsigned int can_rx_offload_get_echo_skb(struct can_rx_offload *offload,
+					 unsigned int idx, u32 timestamp)
+{
+	struct net_device *dev = offload->dev;
+	struct net_device_stats *stats = &dev->stats;
+	struct sk_buff *skb;
+	u8 len;
+	int err;
+
+	skb = __can_get_echo_skb(dev, idx, &len);
+	if (!skb)
+		return 0;
+
+	err = can_rx_offload_queue_sorted(offload, skb, timestamp);
+	if (err) {
+		stats->rx_errors++;
+		stats->tx_fifo_errors++;
+	}
+
+	return len;
+}
+EXPORT_SYMBOL_GPL(can_rx_offload_get_echo_skb);
+
+int can_rx_offload_queue_tail(struct can_rx_offload *offload,
+			      struct sk_buff *skb)
 {
 	if (skb_queue_len(&offload->skb_queue) >
 	    offload->skb_queue_len_max)
@@ -224,7 +254,7 @@ int can_rx_offload_irq_queue_err_skb(struct can_rx_offload *offload, struct sk_b
 
 	return 0;
 }
-EXPORT_SYMBOL_GPL(can_rx_offload_irq_queue_err_skb);
+EXPORT_SYMBOL_GPL(can_rx_offload_queue_tail);
 
 static int can_rx_offload_init_queue(struct net_device *dev, struct can_rx_offload *offload, unsigned int weight)
 {

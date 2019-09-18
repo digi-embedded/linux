@@ -7,6 +7,7 @@
 
 /* Includes */
 #include <linux/arm-smccc.h>
+#include <linux/completion.h>
 #include <linux/err.h>
 #include <linux/kernel.h>
 #include <linux/of.h>
@@ -18,6 +19,7 @@
 #include <linux/irq.h>
 #include <linux/mx8_mu.h>
 #include <linux/syscore_ops.h>
+#include <linux/suspend.h>
 
 #include <soc/imx/fsl_hvc.h>
 #include <soc/imx8/sc/svc/irq/api.h>
@@ -39,7 +41,9 @@ static sc_ipc_t mu_ipcHandle;
 
 /* Local variables */
 static uint32_t gIPCport;
+static sc_rpc_msg_t *rx_msg;
 static bool scu_mu_init;
+struct completion rx_completion;
 
 DEFINE_MUTEX(scu_mu_mutex);
 
@@ -57,6 +61,7 @@ EXPORT_SYMBOL(sc_pm_set_clock_rate);
 void sc_call_rpc(sc_ipc_t handle, sc_rpc_msg_t *msg, sc_bool_t no_resp)
 {
 	struct arm_smccc_res res;
+	unsigned long timeout;
 
 	if (in_interrupt()) {
 		pr_warn("Cannot make SC IPC calls from an interrupt context\n");
@@ -65,6 +70,8 @@ void sc_call_rpc(sc_ipc_t handle, sc_rpc_msg_t *msg, sc_bool_t no_resp)
 	}
 	mutex_lock(&scu_mu_mutex);
 
+	reinit_completion(&rx_completion);
+	rx_msg = msg;
 	if (xen_initial_domain()) {
 		arm_smccc_hvc(FSL_HVC_SC, (uint64_t)msg, no_resp, 0, 0, 0, 0,
 			      0, &res);
@@ -72,8 +79,14 @@ void sc_call_rpc(sc_ipc_t handle, sc_rpc_msg_t *msg, sc_bool_t no_resp)
 			printk("Error FSL_HVC_SC %ld\n", res.a0);
 	} else {
 		sc_ipc_write(handle, msg);
-		if (!no_resp)
-			sc_ipc_read(handle, msg);
+		if (!no_resp) {
+			timeout = wait_for_completion_timeout(&rx_completion, HZ / 10);
+			if (!timeout) {
+				pr_err("Timeout for IPC response!\n");
+				mutex_unlock(&scu_mu_mutex);
+				return;
+			}
+		}
 	}
 
 	mutex_unlock(&scu_mu_mutex);
@@ -285,12 +298,19 @@ irqreturn_t imx8_scu_mu_isr(int irq, void *param)
 {
 	u32 irqs;
 
+	irqs = (readl_relaxed(mu_base_virtaddr + 0x20) & (0xf << 24));
+	if (irqs) {
+		sc_ipc_read(mu_ipcHandle, rx_msg);
+		complete(&rx_completion);
+	}
+
 	irqs = (readl_relaxed(mu_base_virtaddr + 0x20) & (0xf << 28));
 	if (irqs) {
 		/* Clear the General Interrupt */
 		writel_relaxed(irqs, mu_base_virtaddr + 0x20);
 		/* Setup a bottom-half to handle the irq work. */
 		schedule_delayed_work(&scu_mu_work, 0);
+		pm_system_wakeup();
 	}
 	return IRQ_HANDLED;
 }
@@ -359,6 +379,7 @@ static void imx8_mu_resume(void)
 	int i;
 
 	MU_Init(mu_base_virtaddr);
+	MU_EnableRxFullInt(mu_base_virtaddr, 0);
 	for (i = 0; i < MU_RR_COUNT; i++)
 		MU_EnableGeneralInt(mu_base_virtaddr, i);
 }
@@ -421,6 +442,7 @@ int __init imx8_mu_init(void)
 
 		/* Init MU */
 		MU_Init(mu_base_virtaddr);
+		MU_EnableRxFullInt(mu_base_virtaddr, 0);
 
 #if 1
 		/* Enable all RX interrupts */
@@ -429,6 +451,7 @@ int __init imx8_mu_init(void)
 #endif
 		gIPCport = scu_mu_id;
 		scu_mu_init = true;
+		init_completion(&rx_completion);
 	}
 
 	sciErr = sc_ipc_open(&mu_ipcHandle, scu_mu_id);

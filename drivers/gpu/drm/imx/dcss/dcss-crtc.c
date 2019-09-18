@@ -44,7 +44,8 @@ struct dcss_crtc {
 	struct drm_property *use_global;
 	struct drm_property *dtrc_table_ofs;
 
-	struct completion en_dis_completion;
+	struct completion en_completion;
+	struct completion dis_completion;
 
 	enum dcss_hdr10_nonlinearity opipe_nl;
 	enum dcss_hdr10_gamut opipe_g;
@@ -202,7 +203,7 @@ void dcss_crtc_setup_opipe(struct drm_crtc *crtc, struct drm_connector *conn,
 	else
 		dcss_crtc->opipe_g = G_REC709;
 
-	if ((eotf & (1 << 2)) && dcss_crtc->opipe_g == G_REC2020)
+	if (dcss_crtc->opipe_g == G_REC2020)
 		dcss_crtc->opipe_nl = NL_REC2084;
 	else if (dcss_crtc->opipe_g == G_ADOBE_ARGB)
 		dcss_crtc->opipe_nl = NL_SRGB;
@@ -270,8 +271,8 @@ static void dcss_crtc_atomic_enable(struct drm_crtc *crtc,
 	dcss_dtg_enable(dcss, true, NULL);
 	dcss_ctxld_enable(dcss);
 
-	reinit_completion(&dcss_crtc->en_dis_completion);
-	wait_for_completion_timeout(&dcss_crtc->en_dis_completion,
+	reinit_completion(&dcss_crtc->en_completion);
+	wait_for_completion_timeout(&dcss_crtc->en_completion,
 				    msecs_to_jiffies(500));
 
 	crtc->enabled = true;
@@ -296,13 +297,13 @@ static void dcss_crtc_atomic_disable(struct drm_crtc *crtc,
 	dcss_dtg_ctxld_kick_irq_enable(dcss, true);
 
 	dcss_ss_enable(dcss, false);
-	dcss_dtg_enable(dcss, false, &dcss_crtc->en_dis_completion);
+	dcss_dtg_enable(dcss, false, &dcss_crtc->dis_completion);
 	dcss_ctxld_enable(dcss);
 
 	crtc->enabled = false;
 
-	reinit_completion(&dcss_crtc->en_dis_completion);
-	wait_for_completion_timeout(&dcss_crtc->en_dis_completion,
+	reinit_completion(&dcss_crtc->dis_completion);
+	wait_for_completion_timeout(&dcss_crtc->dis_completion,
 				    msecs_to_jiffies(100));
 
 	drm_crtc_vblank_off(crtc);
@@ -312,12 +313,47 @@ static void dcss_crtc_atomic_disable(struct drm_crtc *crtc,
 	pm_runtime_put_sync(dcss_crtc->dev->parent);
 }
 
+static enum drm_mode_status dcss_crtc_mode_valid(struct drm_crtc *crtc,
+		      const struct drm_display_mode *mode)
+{
+	struct dcss_crtc *dcss_crtc = container_of(crtc, struct dcss_crtc,
+						   base);
+	struct dcss_soc *dcss = dev_get_drvdata(dcss_crtc->dev->parent);
+
+	DRM_DEV_DEBUG_DRIVER(crtc->dev->dev, "Validating mode:\n");
+	drm_mode_debug_printmodeline(mode);
+	if (!dcss_dtg_mode_valid(dcss, mode->clock, mode->crtc_clock))
+		return MODE_OK;
+
+	return MODE_NOCLOCK;
+}
+
+
+static bool dcss_crtc_mode_fixup(struct drm_crtc *crtc,
+			   const struct drm_display_mode *mode,
+			   struct drm_display_mode *adjusted)
+{
+	struct dcss_crtc *dcss_crtc = container_of(crtc, struct dcss_crtc,
+						   base);
+	struct dcss_soc *dcss = dev_get_drvdata(dcss_crtc->dev->parent);
+	int clock = adjusted->clock, crtc_clock = adjusted->crtc_clock;
+
+	DRM_DEV_DEBUG_DRIVER(crtc->dev->dev, "Fixup mode:\n");
+	DRM_DEV_DEBUG_DRIVER(crtc->dev->dev, "clock=%d, crtc_clock=%d\n",
+			clock, crtc_clock);
+	drm_mode_debug_printmodeline(adjusted);
+
+	return !dcss_dtg_mode_fixup(dcss, clock);
+}
+
 static const struct drm_crtc_helper_funcs dcss_helper_funcs = {
 	.atomic_check = dcss_crtc_atomic_check,
 	.atomic_begin = dcss_crtc_atomic_begin,
 	.atomic_flush = dcss_crtc_atomic_flush,
 	.atomic_enable = dcss_crtc_atomic_enable,
 	.atomic_disable = dcss_crtc_atomic_disable,
+	.mode_valid = dcss_crtc_mode_valid,
+	.mode_fixup = dcss_crtc_mode_fixup,
 };
 
 static irqreturn_t dcss_crtc_irq_handler(int irq, void *dev_id)
@@ -327,7 +363,10 @@ static irqreturn_t dcss_crtc_irq_handler(int irq, void *dev_id)
 
 	dcss_trace_module(TRACE_DRM_CRTC, TRACE_VBLANK);
 
-	complete(&dcss_crtc->en_dis_completion);
+	if (!dcss_dtg_vblank_irq_valid(dcss))
+		return IRQ_HANDLED;
+
+	complete(&dcss_crtc->en_completion);
 
 	if (dcss_ctxld_is_flushed(dcss)) {
 		drm_crtc_handle_vblank(&dcss_crtc->base);
@@ -415,7 +454,8 @@ static int dcss_crtc_init(struct dcss_crtc *crtc,
 		return crtc->irq;
 	}
 
-	init_completion(&crtc->en_dis_completion);
+	init_completion(&crtc->en_completion);
+	init_completion(&crtc->dis_completion);
 
 	ret = devm_request_irq(crtc->dev, crtc->irq, dcss_crtc_irq_handler,
 			       IRQF_TRIGGER_RISING, "dcss_drm", crtc);

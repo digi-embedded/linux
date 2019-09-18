@@ -26,6 +26,8 @@
 					dev_sd = "/dev/block/platform/5b020000.usdhc/by-name/vendor";
 					/* emmc node which used if androidboot.storage_type=emmc */
 					dev_emmc = "/dev/block/platform/5b010000.usdhc/by-name/vendor";
+					/* default emmc node used for GSI */
+					dev = "/dev/block/platform/5b010000.usdhc/by-name/vendor";
 					type = "ext4";
 					mnt_flags = "ro,barrier=1,inode_readahead_blks=8";
 					fsmgr_flags = "wait,slotselect,avb";
@@ -54,6 +56,14 @@
 		compatible = "fsl,mxc_bt_rfkill";
 		bt-power-gpios = <&gpio4 22 GPIO_ACTIVE_LOW>;
 		status ="okay";
+	};
+
+	brcmfmac: brcmfmac {
+		compatible = "cypress,brcmfmac";
+		pinctrl-names = "init", "idle", "default";
+		pinctrl-0 = <&pinctrl_wifi_init>;
+		pinctrl-1 = <&pinctrl_wifi_init>;
+		pinctrl-2 = <&pinctrl_wifi>;
 	};
 
 	regulators {
@@ -360,22 +370,22 @@
 
 		pinctrl_flexspi0: flexspi0grp {
 			fsl,pins = <
-				SC_P_QSPI0A_DATA0_LSIO_QSPI0A_DATA0	0x0600004c
-				SC_P_QSPI0A_DATA1_LSIO_QSPI0A_DATA1	0x0600004c
-				SC_P_QSPI0A_DATA2_LSIO_QSPI0A_DATA2	0x0600004c
-				SC_P_QSPI0A_DATA3_LSIO_QSPI0A_DATA3	0x0600004c
-				SC_P_QSPI0A_DQS_LSIO_QSPI0A_DQS		0x0600004c
-				SC_P_QSPI0A_SS0_B_LSIO_QSPI0A_SS0_B	0x0600004c
-				SC_P_QSPI0A_SS1_B_LSIO_QSPI0A_SS1_B	0x0600004c
-				SC_P_QSPI0A_SCLK_LSIO_QSPI0A_SCLK	0x0600004c
-				SC_P_QSPI0B_SCLK_LSIO_QSPI0B_SCLK	0x0600004c
-				SC_P_QSPI0B_DATA0_LSIO_QSPI0B_DATA0	0x0600004c
-				SC_P_QSPI0B_DATA1_LSIO_QSPI0B_DATA1	0x0600004c
-				SC_P_QSPI0B_DATA2_LSIO_QSPI0B_DATA2	0x0600004c
-				SC_P_QSPI0B_DATA3_LSIO_QSPI0B_DATA3	0x0600004c
-				SC_P_QSPI0B_DQS_LSIO_QSPI0B_DQS		0x0600004c
-				SC_P_QSPI0B_SS0_B_LSIO_QSPI0B_SS0_B	0x0600004c
-				SC_P_QSPI0B_SS1_B_LSIO_QSPI0B_SS1_B	0x0600004c
+				SC_P_QSPI0A_DATA0_LSIO_QSPI0A_DATA0	0x06000021
+				SC_P_QSPI0A_DATA1_LSIO_QSPI0A_DATA1	0x06000021
+				SC_P_QSPI0A_DATA2_LSIO_QSPI0A_DATA2	0x06000021
+				SC_P_QSPI0A_DATA3_LSIO_QSPI0A_DATA3	0x06000021
+				SC_P_QSPI0A_DQS_LSIO_QSPI0A_DQS		0x06000021
+				SC_P_QSPI0A_SS0_B_LSIO_QSPI0A_SS0_B	0x06000021
+				SC_P_QSPI0A_SS1_B_LSIO_QSPI0A_SS1_B	0x06000021
+				SC_P_QSPI0A_SCLK_LSIO_QSPI0A_SCLK	0x06000021
+				SC_P_QSPI0B_SCLK_LSIO_QSPI0B_SCLK	0x06000021
+				SC_P_QSPI0B_DATA0_LSIO_QSPI0B_DATA0	0x06000021
+				SC_P_QSPI0B_DATA1_LSIO_QSPI0B_DATA1	0x06000021
+				SC_P_QSPI0B_DATA2_LSIO_QSPI0B_DATA2	0x06000021
+				SC_P_QSPI0B_DATA3_LSIO_QSPI0B_DATA3	0x06000021
+				SC_P_QSPI0B_DQS_LSIO_QSPI0B_DQS		0x06000021
+				SC_P_QSPI0B_SS0_B_LSIO_QSPI0B_SS0_B	0x06000021
+				SC_P_QSPI0B_SS1_B_LSIO_QSPI0B_SS1_B	0x06000021
 			>;
 		};
 
@@ -665,6 +675,12 @@
 			>;
 		};
 
+		pinctrl_wifi_init: wifi_initgrp{
+			fsl,pins = <
+				/* reserve pin init/idle_state to support multiple wlan cards */
+			>;
+		};
+
 		pinctrl_wlreg_on: wlregongrp{
 			fsl,pins = <
 				SC_P_LVDS1_I2C0_SDA_LSIO_GPIO1_IO13		0x06000000
@@ -799,7 +815,6 @@
 			reg = <1>;
 			at803x,eee-disabled;
 			at803x,vddio-1p8v;
-			status = "disabled";
 		};
 	};
 };
@@ -814,7 +829,7 @@
 		#address-cells = <1>;
 		#size-cells = <1>;
 		compatible = "micron,mt35xu512aba";
-		spi-max-frequency = <29000000>;
+		spi-max-frequency = <133000000>;
 		spi-nor,ddr-quad-read-dummy = <8>;
 	};
 };
@@ -1157,37 +1172,11 @@
 	status = "okay";
 };
 
-&pd_cm40_intmux {
-	early_power_on;
-};
-
 &intmux_cm40 {
 	status = "okay";
 };
 
-&rpmsg{
-	/*
-	 * 64K for one rpmsg instance:
-	 */
-	vdev-nums = <2>;
-	reg = <0x0 0x90000000 0x0 0x20000>;
-	status = "okay";
-};
-
-&pd_cm41_intmux {
-	early_power_on;
-};
-
 &intmux_cm41 {
-	status = "okay";
-};
-
-&rpmsg1{
-	/*
-	 * 64K for one rpmsg instance:
-	 */
-	vdev-nums = <2>;
-	reg = <0x0 0x90100000 0x0 0x20000>;
 	status = "okay";
 };
 
@@ -1211,7 +1200,7 @@
 	#address-cells = <1>;
 	#size-cells = <0>;
 	virtual-channel;
-	status = "disabled";
+	status = "okay";
 
 	/* Camera 0 MIPI CSI-2 (CSIS1) */
 	port@1 {
@@ -1262,7 +1251,7 @@
 	#address-cells = <1>;
 	#size-cells = <0>;
 	clock-frequency = <100000>;
-	status = "disabled";
+	status = "okay";
 
 	max9286_mipi@6A	 {
 		compatible = "maxim,max9286_mipi";
@@ -1297,6 +1286,22 @@
 };
 
 &isi_3 {
+	status = "okay";
+};
+
+&isi_4 {
+	status = "okay";
+};
+
+&isi_5 {
+	status = "okay";
+};
+
+&isi_6 {
+	status = "okay";
+};
+
+&isi_7 {
 	status = "okay";
 };
 
@@ -1540,7 +1545,6 @@
 };
 
 &vpu_encoder {
-	core_type = <2>;
 	status = "okay";
 };
 

@@ -1253,8 +1253,16 @@ static int drm_atomic_connector_set_property(struct drm_connector *connector,
 		}
 	} else if (property == config->aspect_ratio_property) {
 		state->picture_aspect_ratio = val;
+	} else if (property == config->content_type_property) {
+		state->content_type = val;
 	} else if (property == connector->scaling_mode_property) {
 		state->scaling_mode = val;
+	} else if (property == connector->content_protection_property) {
+		if (val == DRM_MODE_CONTENT_PROTECTION_ENABLED) {
+			DRM_DEBUG_KMS("only drivers can set CP Enabled\n");
+			return -EINVAL;
+		}
+		state->content_protection = val;
 	} else if (connector->funcs->atomic_set_property) {
 		return connector->funcs->atomic_set_property(connector,
 				state, property, val);
@@ -1332,11 +1340,15 @@ drm_atomic_connector_get_property(struct drm_connector *connector,
 		*val = state->link_status;
 	} else if (property == config->aspect_ratio_property) {
 		*val = state->picture_aspect_ratio;
+	} else if (property == config->content_type_property) {
+		*val = state->content_type;
 	} else if (property == connector->scaling_mode_property) {
 		*val = state->scaling_mode;
 	} else if (property == config->hdr_source_metadata_property) {
 		*val = (state->hdr_source_metadata_blob_ptr) ?
 			state->hdr_source_metadata_blob_ptr->base.id : 0;
+	} else if (property == connector->content_protection_property) {
+		*val = state->content_protection;
 	} else if (connector->funcs->atomic_get_property) {
 		return connector->funcs->atomic_get_property(connector,
 				state, property, val);
@@ -2097,7 +2109,6 @@ EXPORT_SYMBOL(drm_atomic_clean_old_fb);
 
 struct drm_out_fence_state {
 	s32 __user *out_fence_ptr;
-	s32 __user *android_out_fence_ptr;
 	struct sync_file *sync_file;
 	int fd;
 };
@@ -2111,12 +2122,6 @@ static int setup_out_fence(struct drm_out_fence_state *fence_state,
 
 	if (fence_state->out_fence_ptr) {
 		if (put_user(fence_state->fd, fence_state->out_fence_ptr))
-			return -EFAULT;
-	}
-
-	if (fence_state->android_out_fence_ptr) {
-		if (put_user(fence_state->fd,
-				fence_state->android_out_fence_ptr))
 			return -EFAULT;
 	}
 
@@ -2178,6 +2183,7 @@ static int prepare_crtc_signaling(struct drm_device *dev,
 			struct dma_fence *fence;
 			struct drm_out_fence_state *f;
 			struct drm_fence_event *e;
+			int num = 1;
 
 			if (android_fence_ptr) {
 				e = kzalloc(sizeof (*e), GFP_KERNEL);
@@ -2187,34 +2193,46 @@ static int prepare_crtc_signaling(struct drm_device *dev,
 				crtc_state->fence = e;
 			}
 
+			if (android_fence_ptr && fence_ptr) {
+				num = 2;
+			}
+
 			f = krealloc(*fence_state, sizeof(**fence_state) *
-				     (*num_fences + 1), GFP_KERNEL);
+				     (*num_fences + num), GFP_KERNEL);
 			if (!f)
 				return -ENOMEM;
 
-			memset(&f[*num_fences], 0, sizeof(*f));
-
-			if (fence_ptr)
-				f[*num_fences].out_fence_ptr = fence_ptr;
-			if (android_fence_ptr)
-				f[*num_fences].android_out_fence_ptr =
-						android_fence_ptr;
+			memset(&f[*num_fences], 0, sizeof(*f) * num);
 			*fence_state = f;
 
-			fence = drm_crtc_create_fence(crtc);
-			if (!fence)
-				return -ENOMEM;
+			if (fence_ptr) {
+				f[*num_fences].out_fence_ptr = fence_ptr;
 
-			ret = setup_out_fence(&f[(*num_fences)++], fence);
-			if (ret) {
-				dma_fence_put(fence);
-				return ret;
-			}
+				fence = drm_crtc_create_fence(crtc);
+				if (!fence)
+					return -ENOMEM;
 
-			if (fence_ptr)
+				ret = setup_out_fence(&f[(*num_fences)++], fence);
+				if (ret) {
+					dma_fence_put(fence);
+					return ret;
+				}
 				crtc_state->event->base.fence = fence;
-			if (android_fence_ptr)
+			}
+			if (android_fence_ptr) {
+				f[*num_fences].out_fence_ptr = android_fence_ptr;
+
+				fence = drm_crtc_create_fence(crtc);
+				if (!fence)
+					return -ENOMEM;
+
+				ret = setup_out_fence(&f[(*num_fences)++], fence);
+				if (ret) {
+					dma_fence_put(fence);
+					return ret;
+				}
 				crtc_state->fence->fence = fence;
+			}
 		}
 
 		c++;
@@ -2281,10 +2299,6 @@ static void complete_crtc_signaling(struct drm_device *dev,
 		if (fence_state[i].out_fence_ptr &&
 		    put_user(-1, fence_state[i].out_fence_ptr))
 			DRM_DEBUG_ATOMIC("Couldn't clear out_fence_ptr\n");
-		if (fence_state[i].android_out_fence_ptr &&
-		    put_user(-1, fence_state[i].android_out_fence_ptr))
-			DRM_DEBUG_ATOMIC(
-				"Couldn't clear android_out_fence_ptr\n");
 	}
 
 	kfree(fence_state);
