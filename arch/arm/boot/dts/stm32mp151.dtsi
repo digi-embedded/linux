@@ -1944,6 +1944,19 @@
 		tamp: tamp@5c00a000 {
 			compatible = "st,stm32-tamp", "syscon", "simple-mfd";
 			reg = <0x5c00a000 0x400>;
+
+			reboot-mode {
+				compatible = "syscon-reboot-mode";
+				offset = <0x150>; /* reg20 */
+				mask = <0xff>;
+				mode-normal = <0>;
+				mode-fastboot = <0x1>;
+				mode-recovery = <0x2>;
+				mode-stm32cubeprogrammer = <0x3>;
+				mode-ums_mmc0 = <0x10>;
+				mode-ums_mmc1 = <0x11>;
+				mode-ums_mmc2 = <0x12>;
+			};
 		};
 
 		/*
