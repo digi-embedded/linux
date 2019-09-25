@@ -496,6 +496,18 @@ static void __init imx6ul_clocks_init(struct device_node *ccm_node)
 	if (clk_on_imx6ull())
 		clk_prepare_enable(clks[IMX6UL_CLK_AIPSTZ3]);
 
+	/*
+	 * It has been observed that the target could hang during boot if these
+	 * clocks are disabled during LCD driver initialization.
+	 *
+	 * U-Boot disables these clocks when authenticating images, so ensure
+	 * they are enabled to avoid this problem.
+	 */
+	clk_prepare_enable(clks[IMX6UL_CLK_CAAM_MEM]);
+	clk_prepare_enable(clks[IMX6UL_CLK_CAAM_ACLK]);
+	clk_prepare_enable(clks[IMX6UL_CLK_CAAM_IPG]);
+	clk_prepare_enable(clks[IMX6UL_CLK_EIM]);
+
 	if (IS_ENABLED(CONFIG_USB_MXS_PHY)) {
 		clk_prepare_enable(clks[IMX6UL_CLK_USBPHY1_GATE]);
 		clk_prepare_enable(clks[IMX6UL_CLK_USBPHY2_GATE]);
