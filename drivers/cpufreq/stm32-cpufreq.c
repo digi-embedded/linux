@@ -14,7 +14,7 @@
 #include <linux/pm_opp.h>
 
 struct stm32_cpufreq_priv {
-	struct opp_table *opps;
+	int token;
 	struct platform_device *cpufreq_dt_pdev;
 };
 
@@ -51,9 +51,9 @@ static int stm32_cpufreq_probe(struct platform_device *pdev)
 	if (!priv)
 		return -ENOMEM;
 
-	priv->opps = dev_pm_opp_set_supported_hw(cpu_dev, &supported_hw, 1);
-	if (IS_ERR(priv->opps)) {
-		ret = PTR_ERR(priv->opps);
+	priv->token = dev_pm_opp_set_supported_hw(cpu_dev, &supported_hw, 1);
+	if (priv->token < 0) {
+		ret = priv->token;
 		if (ret != -EPROBE_DEFER)
 			dev_err(&pdev->dev, "Failed to set supported opp: %d\n",
 				ret);
@@ -74,7 +74,7 @@ static int stm32_cpufreq_remove(struct platform_device *pdev)
 	struct stm32_cpufreq_priv *priv	= platform_get_drvdata(pdev);
 
 	platform_device_unregister(priv->cpufreq_dt_pdev);
-	dev_pm_opp_put_supported_hw(priv->opps);
+	dev_pm_opp_put_supported_hw(priv->token);
 
 	return 0;
 }
