@@ -23,9 +23,6 @@
 
 	bluetooth: bluetooth {
 		/* U-Boot will fill in the MAC address here */
-		compatible = "digi,bluetooth-cc8x";
-		status = "okay";
-		vin-supply = <&reg_rf_bt_en>;
 	};
 
 	bt_rfkill {
@@ -35,45 +32,14 @@
 	};
 
 	regulators {
-		reg_3v3_rf: regulator-som@3 {
+		epdev_on: 3v3_rf_on {
 			compatible = "regulator-fixed";
-			reg = <3>;
-			pinctrl-names = "default";
-			pinctrl-0 = <&pinctrl_reg_3v3_rf>;
-			regulator-name = "3v3_rf";
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
-			gpio = <&gpio3 12 GPIO_ACTIVE_HIGH>; /* 3V3_RF_EN */
-			enable-active-high;
+			regulator-name = "epdev_on";
 			startup-delay-us = <100000>;
-		};
-
-		reg_rf_wl_en: regulator-som@4 {
-			compatible = "regulator-fixed";
-			reg = <4>;
-			pinctrl-names = "default";
-			pinctrl-0 = <&pinctrl_reg_rf_wl_en>;
-			regulator-name = "rf_wl_en";
-			regulator-min-microvolt = <3300000>;
-			regulator-max-microvolt = <3300000>;
-			gpio = <&gpio3 11 GPIO_ACTIVE_HIGH>; /* WL_EN */
+			gpio = <&gpio3 12 GPIO_ACTIVE_HIGH>;
 			enable-active-high;
-			startup-delay-us = <100>;
-			vin-supply = <&reg_3v3_rf>;
-		};
-
-		reg_rf_bt_en: regulator-som@5 {
-			compatible = "regulator-fixed";
-			reg = <5>;
-			pinctrl-names = "default";
-			pinctrl-0 = <&pinctrl_reg_rf_bt_en>;
-			regulator-name = "rf_bt_en";
-			regulator-min-microvolt = <3300000>;
-			regulator-max-microvolt = <3300000>;
-			gpio = <&gpio3 10 GPIO_ACTIVE_HIGH>; /* BT_EN */
-			enable-active-high;
-			startup-delay-us = <100>;
-			vin-supply = <&reg_3v3_rf>;
 		};
 	};
 };
@@ -81,18 +47,19 @@
 /* UART1 (Bluetooth) */
 &lpuart1 {
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_lpuart1_4wires>;
+	pinctrl-0 = <&pinctrl_lpuart1_4wires>, <&pinctrl_lpuart1_gpio>;
 	status = "okay";
 };
 
 /* PCIE (Wireless) */
 &pcieb{
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_pcieb>;
+	pinctrl-0 = <&pinctrl_pcieb>, <&pinctrl_pcieb_gpio>;
 	ext_osc = <1>;
 	clkreq-gpio = <&gpio4 1 GPIO_ACTIVE_LOW>;
 	reset-gpio = <&gpio4 0 GPIO_ACTIVE_LOW>;
-	epdev_on-supply = <&reg_rf_wl_en>;
+	disable-gpio = <&gpio3 11 GPIO_ACTIVE_HIGH>;
+	epdev_on-supply = <&epdev_on>;
 	status = "okay";
 };
 
@@ -116,6 +83,13 @@
 		>;
 	};
 
+	pinctrl_lpuart1_gpio: lpuart1grp_gpio {
+		fsl,pins = <
+			/* Bluetooth enable (BT_EN) */
+			SC_P_QSPI0A_DATA1_LSIO_GPIO3_IO10	0x06000021
+		>;
+	};
+
 	/* PCI Wireless */
 	pinctrl_pcieb: pcieagrp {
 		fsl,pins = <
@@ -124,25 +98,12 @@
 			SC_P_PCIE_CTRL0_WAKE_B_LSIO_GPIO4_IO02		0x06000021
 		>;
 	};
-
-	pinctrl_reg_3v3_rf: reg_3v3_rf_grp {
-		fsl,pins = <
-			/* Voltage for RF domain (3V3_RF_EN) */
-			SC_P_QSPI0A_DATA3_LSIO_GPIO3_IO12		0x06000021
-		>;
-	};
-
-	pinctrl_reg_rf_bt_en: reg_rf_bt_en_grp {
-		fsl,pins = <
-			/* Bluetooth enable (BT_EN) */
-			SC_P_QSPI0A_DATA1_LSIO_GPIO3_IO10		0x06000021
-		>;
-	};
-
-	pinctrl_reg_rf_wl_en: reg_rf_wl_en_grp {
+	pinctrl_pcieb_gpio: pcieagrp_gpio {
 		fsl,pins = <
 			/* Wireless enable (WL_EN) */
 			SC_P_QSPI0A_DATA2_LSIO_GPIO3_IO11		0x06000021
+			/* Voltage for RF domain (3V3_RF_EN) */
+			SC_P_QSPI0A_DATA3_LSIO_GPIO3_IO12		0x06000021
 		>;
 	};
 };
