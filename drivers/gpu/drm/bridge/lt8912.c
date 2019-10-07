@@ -11,6 +11,7 @@
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/of_irq.h>
+#include <linux/of_gpio.h>
 #include <linux/of_graph.h>
 #include <linux/regmap.h>
 #include <video/of_display_timing.h>
@@ -35,6 +36,7 @@ struct lt8912 {
 	struct i2c_client *i2c;
 	struct regmap *regmap[3];
 	struct gpio_desc *reset_n;
+	int reset_gpio;
 };
 
 static int lt8912_attach_dsi(struct lt8912 *lt);
@@ -248,6 +250,26 @@ static void lt8912_exit(struct lt8912 *lt)
 	regmap_write(lt->regmap[0], 0x36, 0x00);
 	regmap_write(lt->regmap[0], 0x37, 0x00);
 	regmap_write(lt->regmap[0], 0x38, 0x00);
+}
+
+int lt8912_parse_dt(struct device_node *np, struct lt8912 *lt)
+{
+	struct device *dev = &lt->i2c->dev;
+	u32 num_lanes = 0;
+
+	of_property_read_u32(np, "digi,dsi-lanes", &num_lanes);
+
+	if (num_lanes < 1 || num_lanes > 4) {
+		dev_err(dev, "Invalid dsi-lanes: %d\n", num_lanes);
+		return -EINVAL;
+	}
+
+	lt->num_dsi_lanes = num_lanes;
+	lt->reset_gpio = of_get_named_gpio(np, "digi,dsi-reset", 0);
+	if (lt->reset_gpio < 0)
+		return lt->reset_gpio;
+
+	return 0;
 }
 
 static void lt8912_power_on(struct lt8912 *lt)
@@ -476,7 +498,7 @@ static int lt8912_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 	struct device *dev = &i2c->dev;
 	struct lt8912 *lt;
 	struct device_node *endpoint;
-	int ret;
+	int ret = 0;
 
 	static int initialize_it = 1;
 
@@ -501,10 +523,31 @@ static int lt8912_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 	ret = lt8912_i2c_init(lt, i2c);
 	if (ret)
 		return ret;
+	/* get DT configuration */
+	lt8912_parse_dt(dev->of_node, lt);
+
+	/* configure Lontium RST line and reset bridge */
+	if (gpio_is_valid(lt->reset_gpio)) {
+		ret = gpio_request(lt->reset_gpio, "lt8912_reset_gpio");
+		if (ret) {
+			dev_err(dev, "reset gpio request failed");
+			return ret;
+		}
+
+		ret = gpio_direction_output(lt->reset_gpio, 0);
+		if (ret) {
+			dev_err(dev,
+				"set_direction for reset gpio failed\n");
+			gpio_free(lt->reset_gpio);
+			return ret;
+		}
+
+		msleep(20);
+		gpio_set_value_cansleep(lt->reset_gpio, 1);
+	}
 
 	/* TODO: interrupt handing */
 
-	lt->num_dsi_lanes = 4;
 	lt->channel_id = 1;
 
 	endpoint = of_graph_get_next_endpoint(dev->of_node, NULL);
