@@ -37,6 +37,8 @@ struct lt8912 {
 	struct regmap *regmap[3];
 	struct gpio_desc *reset_n;
 	int reset_gpio;
+	struct gpio_desc *gpiod_int;
+	int hpd_irq;
 };
 
 static int lt8912_attach_dsi(struct lt8912 *lt);
@@ -284,11 +286,30 @@ static void lt8912_power_off(struct lt8912 *lt)
 	gpiod_direction_output(lt->reset_n, 1);
 }
 
+static irqreturn_t lt8912_hpd_threaded_handler(int unused, void *data)
+{
+	struct lt8912 *lt = data;
+
+	drm_helper_hpd_irq_event(lt->connector.dev);
+
+	return IRQ_HANDLED;
+}
+
 static enum drm_connector_status
 lt8912_connector_detect(struct drm_connector *connector, bool force)
 {
+	struct lt8912 *lt = connector_to_lt8912(connector);
+	int i = 0;
+
 	/* TODO: HPD handing (reg[0xc1] - bit[7]) */
-	return connector_status_connected;
+	do {
+		if (gpiod_get_value(lt->gpiod_int))
+			return connector_status_connected;
+		if (force)
+			usleep_range(5000, 10000);
+	} while (i++ < 100 && force);
+
+	return connector_status_disconnected;
 }
 
 static const struct drm_connector_funcs lt8912_connector_funcs = {
@@ -372,6 +393,8 @@ static int lt8912_bridge_attach(struct drm_bridge *bridge)
 	struct lt8912 *lt = bridge_to_lt8912(bridge);
 	struct drm_connector *connector = &lt->connector;
 	int ret;
+
+	lt->connector.polled = DRM_CONNECTOR_POLL_HPD;
 
 	ret = drm_connector_init(bridge->dev, connector,
 				 &lt8912_connector_funcs,
@@ -520,9 +543,32 @@ static int lt8912_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 		return ret;
 	}
 
-	ret = lt8912_i2c_init(lt, i2c);
-	if (ret)
+	/* interrupt handling */
+	lt->gpiod_int = devm_gpiod_get_optional(dev, "irq", GPIOD_IN);
+	if (IS_ERR(lt->gpiod_int)) {
+		ret = PTR_ERR(lt->gpiod_int);
+		if (ret != -EPROBE_DEFER)
+			dev_dbg(dev, "Failed to get %s GPIO: %d\n",
+				"irq", ret);
 		return ret;
+	}
+
+	lt->hpd_irq = gpiod_to_irq(lt->gpiod_int);
+	if (lt->hpd_irq < 0) {
+		dev_err(dev, "Failed to get HPD IRQ: %d\n", lt->hpd_irq);
+		return -ENODEV;
+	}
+
+	ret = devm_request_threaded_irq(dev, lt->hpd_irq, NULL,
+					lt8912_hpd_threaded_handler,
+					IRQF_TRIGGER_RISING | IRQF_ONESHOT,
+					"lt8912-irq", lt);
+	if (ret) {
+		dev_err(dev, "Failed to request CABLE_DET threaded IRQ: %d\n",
+			  ret);
+		return ret;
+	}
+
 	/* get DT configuration */
 	lt8912_parse_dt(dev->of_node, lt);
 
@@ -546,7 +592,10 @@ static int lt8912_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 		gpio_set_value_cansleep(lt->reset_gpio, 1);
 	}
 
-	/* TODO: interrupt handing */
+	lt->i2c = i2c;
+	ret = lt8912_i2c_init(lt, lt->i2c);
+	if (ret)
+		return ret;
 
 	lt->channel_id = 1;
 
