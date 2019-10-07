@@ -236,20 +236,11 @@ static void lt8912_exit(struct lt8912 *lt)
 	regmap_write(lt->regmap[0], 0x0b, 0x20);
 	regmap_write(lt->regmap[0], 0x0c, 0x00);
 
-	regmap_write(lt->regmap[0], 0x54, 0x1d);
-	regmap_write(lt->regmap[0], 0x51, 0x15);
-
-	regmap_write(lt->regmap[0], 0x44, 0x31);
 	regmap_write(lt->regmap[0], 0x41, 0xbd);
-	regmap_write(lt->regmap[0], 0x5c, 0x11);
 
-	regmap_write(lt->regmap[0], 0x30, 0x08);
 	regmap_write(lt->regmap[0], 0x31, 0x00);
 	regmap_write(lt->regmap[0], 0x32, 0x00);
 	regmap_write(lt->regmap[0], 0x33, 0x00);
-	regmap_write(lt->regmap[0], 0x34, 0x00);
-	regmap_write(lt->regmap[0], 0x35, 0x00);
-	regmap_write(lt->regmap[0], 0x36, 0x00);
 	regmap_write(lt->regmap[0], 0x37, 0x00);
 	regmap_write(lt->regmap[0], 0x38, 0x00);
 }
