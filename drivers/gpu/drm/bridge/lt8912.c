@@ -32,6 +32,7 @@ struct lt8912 {
 	struct device_node *host_node;
 	u8 num_dsi_lanes;
 	u8 channel_id;
+	struct i2c_client *i2c;
 	struct regmap *regmap[3];
 	struct gpio_desc *reset_n;
 };
@@ -288,29 +289,18 @@ lt8912_connector_best_encoder(struct drm_connector *connector)
 static int lt8912_connector_get_modes(struct drm_connector *connector)
 {
 	struct lt8912 *lt = connector_to_lt8912(connector);
-	struct drm_display_mode *mode;
-	u32 bus_flags = 0;
-	int ret;
+	int num = 0;
+	struct edid *edid = drm_get_edid(connector, lt->i2c->adapter);
 
-	/* TODO: EDID handing */
-
-	mode = drm_mode_create(connector->dev);
-	if (!mode)
-		return -EINVAL;
-
-	ret = of_get_drm_display_mode(lt->dev->of_node, mode,
-				      &bus_flags, OF_USE_NATIVE_MODE);
-	if (ret) {
-		dev_err(lt->dev, "failed to get display timings\n");
-		drm_mode_destroy(connector->dev, mode);
-		return 0;
+	/* EDID handling */
+	if (edid) {
+		drm_mode_connector_update_edid_property(connector, edid);
+		num = drm_add_edid_modes(connector, edid);
+	} else {
+		dev_err(lt->dev, "failed to get display EDID data\n");
 	}
 
-	mode->type |= DRM_MODE_TYPE_PREFERRED;
-	drm_mode_set_name(mode);
-	drm_mode_probed_add(connector, mode);
-
-	return 1;
+	return num;
 }
 
 static const struct drm_connector_helper_funcs lt8912_connector_helper_funcs = {
