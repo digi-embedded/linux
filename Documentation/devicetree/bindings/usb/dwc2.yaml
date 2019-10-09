@@ -145,6 +145,10 @@ properties:
       property is used.
     $ref: /schemas/graph.yaml#/properties/port
 
+  wakeup-source:
+    $ref: /schemas/types.yaml#/definitions/flag
+    description: If present indicates this device has wakeup capabilities
+
 dependencies:
   port: [ usb-role-switch ]
   role-switch-default-mode: [ usb-role-switch ]
