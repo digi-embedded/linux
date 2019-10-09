@@ -110,8 +110,6 @@
 		reg_3v3_pcie: regulator@4 {
 			compatible = "regulator-fixed";
 			reg = <4>;
-			pinctrl-names = "default";
-			pinctrl-0 = <&pinctrl_reg_3v3_pcie>;
 			regulator-name = "vcc";
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
@@ -1061,6 +1059,13 @@
 		fsl,pins = <
 			/* Voltage for PCIe domain (PCIE_VCC_EN) */
 			SC_P_SAI1_RXFS_LSIO_GPIO0_IO31		0x06000021
+		>;
+	};
+
+	pinctrl_reg_3v3_pcie_sleep: reg_3v3_pcie_sleep_grp {
+		fsl,pins = <
+			/* PCIE_VCC_EN (lp_config=LATCH) */
+			SC_P_SAI1_RXFS_LSIO_GPIO0_IO31          0x07800021
 		>;
 	};
 
