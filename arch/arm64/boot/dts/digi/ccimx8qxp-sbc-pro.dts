@@ -254,8 +254,9 @@
 
 /* PCIE (Mini Card) */
 &pcieb {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_pcieb_mini_card>;
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&pinctrl_reg_3v3_pcie>, <&pinctrl_pcieb_mini_card>;
+	pinctrl-1 = <&pinctrl_reg_3v3_pcie_sleep>;
 	ext_osc = <1>;
 	reset-gpio = <&gpio3 16 GPIO_ACTIVE_LOW>; /* PCIE_RESET_N */
 	disable-gpio = <&gpio0 30 GPIO_ACTIVE_HIGH>; /* PCIE_DIS_N */
