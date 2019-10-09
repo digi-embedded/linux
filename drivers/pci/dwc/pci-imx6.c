@@ -2082,6 +2082,10 @@ static int pci_imx_suspend_noirq(struct device *dev)
 			regulator_disable(imx_pcie->pcie_phy_regulator);
 		if (imx_pcie->pcie_bus_regulator != NULL)
 			regulator_disable(imx_pcie->pcie_bus_regulator);
+		if (imx_pcie->vpcie != NULL) {
+			regulator_disable(imx_pcie->vpcie);
+			pinctrl_pm_select_sleep_state(dev);
+		}
 	}
 
 	return 0;
@@ -2142,6 +2146,12 @@ static int pci_imx_resume_noirq(struct device *dev)
 		regmap_update_bits(imx_pcie->iomuxc_gpr, IOMUXC_GPR1,
 				IMX6Q_GPR1_PCIE_TEST_PD, 0);
 	} else {
+		if (imx_pcie->vpcie != NULL) {
+			pinctrl_pm_select_default_state(dev);
+			ret = regulator_enable(imx_pcie->vpcie);
+			if (ret)
+				dev_err(dev, "failed to enable the vpcie regulator\n");
+		}
 		pci_imx_ltssm_disable(dev);
 		imx_pcie_assert_core_reset(imx_pcie);
 		imx_pcie_init_phy(imx_pcie);
