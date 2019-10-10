@@ -513,11 +513,12 @@ static int lpi2c_imx_xfer(struct i2c_adapter *adapter,
 	struct lpi2c_imx_struct *lpi2c_imx = i2c_get_adapdata(adapter);
 	unsigned int temp;
 	int i, result;
+	int recovery_retry = 5;
 
 	result = lpi2c_imx_master_enable(lpi2c_imx);
 	if (result)
 		return result;
-
+init:
 	for (i = 0; i < num; i++) {
 		result = lpi2c_imx_start(lpi2c_imx, &msgs[i]);
 		if (result)
@@ -552,6 +553,16 @@ static int lpi2c_imx_xfer(struct i2c_adapter *adapter,
 
 stop:
 	lpi2c_imx_stop(lpi2c_imx);
+
+	if ((result == -ETIMEDOUT) && recovery_retry--) {
+		if (lpi2c_imx->adapter.bus_recovery_info) {
+			i2c_recover_bus(&lpi2c_imx->adapter);
+			dev_dbg(&lpi2c_imx->adapter.dev,
+				"<%s> i2c_recover_bus. retry=%d\n",
+				__func__, recovery_retry);
+			goto init;
+		}
+	}
 
 	temp = readl(lpi2c_imx->base + LPI2C_MSR);
 	if ((temp & MSR_NDF) && !result)
