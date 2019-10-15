@@ -1054,18 +1054,6 @@ err:
 	return retval;
 }
 
-static void ov5640_soft_reset(void)
-{
-	/* sysclk from pad */
-	ov5640_write_reg(0x3103, 0x11);
-
-	/* software reset */
-	ov5640_write_reg(0x3008, 0x82);
-
-	/* delay at least 5ms */
-	msleep(10);
-}
-
 static int ov5640_config_init(void)
 {
 	struct reg_value *pModeSetting = NULL;
@@ -1128,24 +1116,23 @@ static int ov5640_change_mode(struct ov5640 *sensor)
 	return retval;
 }
 
-static int init_device(void)
-{
-	int retval;
-
-	ov5640_soft_reset();
-	retval = ov5640_config_init();
-	if (retval < 0)
-		return retval;
-
-	ov5640_start();
-
-	return 0;
-}
-
 static void ov5640_stop(void)
 {
 	ov5640_write_reg(0x3008, 0x42);
 	msleep(1);
+}
+
+static int init_device(void)
+{
+	int retval;
+
+	retval = ov5640_config_init();
+	if (retval < 0)
+		return retval;
+
+	ov5640_stop();
+
+	return 0;
 }
 
 /*!
