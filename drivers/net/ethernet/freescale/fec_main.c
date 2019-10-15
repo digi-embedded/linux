@@ -3967,7 +3967,7 @@ static int __maybe_unused fec_suspend(struct device *dev)
 			ret = pm_runtime_force_suspend(dev);
 		if (ret < 0)
 			return ret;
-	} else if (fep->mii_bus_share && !ndev->phydev) {
+	} else if (!ndev->phydev) {
 		if (fep->phy_reset_in_suspend)
 			gpio_set_value_cansleep(fep->phy_reset_gpio,
 						fep->phy_reset_active_high);
@@ -4030,13 +4030,15 @@ static int __maybe_unused fec_resume(struct device *dev)
 		netif_tx_unlock_bh(ndev);
 		napi_enable(&fep->napi);
 		phy_start(ndev->phydev);
-	} else if (fep->mii_bus_share && !ndev->phydev) {
+	} else if (!ndev->phydev) {
 		pinctrl_pm_select_default_state(&fep->pdev->dev);
 		if (fep->phy_reset_in_suspend)
 			gpio_set_value_cansleep(fep->phy_reset_gpio,
 						!fep->phy_reset_active_high);
-		/* And then recovery mii bus */
-		ret = fec_restore_mii_bus(ndev);
+		if (fep->mii_bus_share) {
+			/* And then recovery mii bus */
+			ret = fec_restore_mii_bus(ndev);
+		}
 	}
 	rtnl_unlock();
 
