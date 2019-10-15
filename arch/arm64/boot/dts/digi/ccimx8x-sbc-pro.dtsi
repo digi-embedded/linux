@@ -851,8 +851,8 @@
 
 	pinctrl_fec1_gpio_sleep: fec1gpiosleepgrp {
 		fsl,pins = <
-			/* PHY reset (lp_config=LATCH) */
-			SC_P_QSPI0B_DATA0_LSIO_GPIO3_IO18	0x07800021
+			/* PHY reset */
+			SC_P_QSPI0B_DATA0_LSIO_GPIO3_IO18	0x06000041
 		>;
 	};
 
@@ -893,8 +893,8 @@
 
 	pinctrl_fec2_gpio_sleep: fec2gpiosleepgrp {
 		fsl,pins = <
-			/* PHY reset (lp_config=LATCH) */
-			SC_P_QSPI0B_DQS_LSIO_GPIO3_IO22		0x07800021
+			/* PHY reset */
+			SC_P_QSPI0B_DQS_LSIO_GPIO3_IO22		0x06000041
 		>;
 	};
 
