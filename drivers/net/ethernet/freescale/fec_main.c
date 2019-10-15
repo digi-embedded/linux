@@ -3897,7 +3897,24 @@ fec_probe(struct platform_device *pdev)
 	if (ret)
 		goto failed_clk_ahb;
 
-	fep->reg_phy = devm_regulator_get_optional(&pdev->dev, "phy");
+	fep->reg_mdio = devm_regulator_get(&pdev->dev, "digi,mdio-lt");
+	if (!IS_ERR(fep->reg_mdio)) {
+		ret = regulator_enable(fep->reg_mdio);
+		if (ret) {
+			dev_err(&pdev->dev,
+				"Failed to enable mdio regulator: %d\n", ret);
+			goto failed_regulator;
+		}
+	} else {
+		if (PTR_ERR(fep->reg_mdio) == -EPROBE_DEFER) {
+			ret = -EPROBE_DEFER;
+			goto failed_regulator;
+		}
+		fep->reg_mdio = NULL;
+	}
+
+	fep->reg_phy = devm_regulator_get(&pdev->dev, "phy");
+
 	if (!IS_ERR(fep->reg_phy)) {
 		ret = regulator_enable(fep->reg_phy);
 		if (ret) {
@@ -4082,15 +4099,13 @@ static int __maybe_unused fec_suspend(struct device *dev)
 		}
 		fec_enet_clk_enable(ndev, false);
 
+		fep->active_in_suspend = !pm_runtime_status_suspended(dev);
+
+		if (fep->phy_reset_in_suspend)
+			gpio_set_value_cansleep(fep->phy_reset_gpio, 0);
+
 		fep->rpm_active = !pm_runtime_status_suspended(dev);
 		if (fep->rpm_active) {
-			ret = pm_runtime_force_suspend(dev);
-			if (ret < 0)
-				return ret;
-		}
-
-		fep->active_in_suspend = !pm_runtime_status_suspended(dev);
-		if (fep->active_in_suspend)
 			ret = pm_runtime_force_suspend(dev);
 			if (ret < 0)
 				return ret;
@@ -4158,13 +4173,15 @@ static int __maybe_unused fec_resume(struct device *dev)
 		netif_tx_unlock_bh(ndev);
 		napi_enable(&fep->napi);
 		phy_start(ndev->phydev);
-	} else if (fep->mii_bus_share && !ndev->phydev) {
+	} else if (!ndev->phydev) {
 		pinctrl_pm_select_default_state(&fep->pdev->dev);
 		if (fep->phy_reset_in_suspend)
 			gpio_set_value_cansleep(fep->phy_reset_gpio,
 						!fep->phy_reset_active_high);
-		/* And then recovery mii bus */
-		ret = fec_restore_mii_bus(ndev);
+		if (fep->mii_bus_share) {
+			/* And then recovery mii bus */
+			ret = fec_restore_mii_bus(ndev);
+		}
 	}
 	rtnl_unlock();
 
