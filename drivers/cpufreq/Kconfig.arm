@@ -311,6 +311,13 @@ config ARM_STI_CPUFREQ
 	  this config option if you wish to add CPUFreq support for STi based
 	  SoCs.
 
+config ARM_STM32_CPUFREQ
+	tristate "STM32 CPUFreq support"
+	depends on MACH_STM32MP157
+	default y
+	help
+	  This adds the CPUFreq driver support for STM32 MPU SOCs.
+
 config ARM_TEGRA20_CPUFREQ
 	tristate "Tegra20/30 CPUFreq support"
 	depends on ARCH_TEGRA && CPUFREQ_DT
