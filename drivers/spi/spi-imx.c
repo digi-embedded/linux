@@ -79,6 +79,7 @@ struct spi_imx_devtype_data {
 	void (*trigger)(struct spi_imx_data *);
 	int (*rx_available)(struct spi_imx_data *);
 	void (*reset)(struct spi_imx_data *);
+	int (*wait_on_transaction)(struct spi_imx_data *);
 	enum spi_imx_devtype devtype;
 };
 
@@ -448,6 +449,20 @@ static void mx51_ecspi_reset(struct spi_imx_data *spi_imx)
 		readl(spi_imx->base + MXC_CSPIRXDATA);
 }
 
+static int mx51_wait_on_transaction(struct spi_imx_data *spi_imx)
+{
+	int i;
+
+	for(i = 0; i < 10000; i++) {
+		if(!(readl(spi_imx->base + MX51_ECSPI_CTRL)
+		     & MX51_ECSPI_CTRL_XCH)) {
+			return 0;
+		}
+		udelay(2);
+	}
+	return -ETIMEDOUT;
+}
+
 #define MX31_INTREG_TEEN	(1 << 0)
 #define MX31_INTREG_RREN	(1 << 3)
 
@@ -685,6 +700,7 @@ static struct spi_imx_devtype_data imx1_cspi_devtype_data = {
 	.trigger = mx1_trigger,
 	.rx_available = mx1_rx_available,
 	.reset = mx1_reset,
+	.wait_on_transaction = NULL,
 	.devtype = IMX1_CSPI,
 };
 
@@ -694,6 +710,7 @@ static struct spi_imx_devtype_data imx21_cspi_devtype_data = {
 	.trigger = mx21_trigger,
 	.rx_available = mx21_rx_available,
 	.reset = mx21_reset,
+	.wait_on_transaction = NULL,
 	.devtype = IMX21_CSPI,
 };
 
@@ -704,6 +721,7 @@ static struct spi_imx_devtype_data imx27_cspi_devtype_data = {
 	.trigger = mx21_trigger,
 	.rx_available = mx21_rx_available,
 	.reset = mx21_reset,
+	.wait_on_transaction = NULL,
 	.devtype = IMX27_CSPI,
 };
 
@@ -713,6 +731,7 @@ static struct spi_imx_devtype_data imx31_cspi_devtype_data = {
 	.trigger = mx31_trigger,
 	.rx_available = mx31_rx_available,
 	.reset = mx31_reset,
+	.wait_on_transaction = NULL,
 	.devtype = IMX31_CSPI,
 };
 
@@ -723,6 +742,7 @@ static struct spi_imx_devtype_data imx35_cspi_devtype_data = {
 	.trigger = mx31_trigger,
 	.rx_available = mx31_rx_available,
 	.reset = mx31_reset,
+	.wait_on_transaction = NULL,
 	.devtype = IMX35_CSPI,
 };
 
@@ -732,6 +752,7 @@ static struct spi_imx_devtype_data imx51_ecspi_devtype_data = {
 	.trigger = mx51_ecspi_trigger,
 	.rx_available = mx51_ecspi_rx_available,
 	.reset = mx51_ecspi_reset,
+	.wait_on_transaction = mx51_wait_on_transaction,
 	.devtype = IMX51_ECSPI,
 };
 
@@ -741,6 +762,7 @@ static struct spi_imx_devtype_data imx6ul_ecspi_devtype_data = {
 	.trigger = mx51_ecspi_trigger,
 	.rx_available = mx51_ecspi_rx_available,
 	.reset = mx51_ecspi_reset,
+	.wait_on_transaction = mx51_wait_on_transaction,
 	.devtype = IMX6UL_ECSPI,
 };
 
@@ -1084,26 +1106,57 @@ static int spi_imx_pio_transfer(struct spi_device *spi,
 	struct spi_imx_data *spi_imx = spi_master_get_devdata(spi->master);
 	unsigned long transfer_timeout;
 	unsigned long timeout;
+	int timedout;
 
 	spi_imx->tx_buf = transfer->tx_buf;
 	spi_imx->rx_buf = transfer->rx_buf;
 	spi_imx->count = transfer->len;
 	spi_imx->txfifo = 0;
 
-	reinit_completion(&spi_imx->xfer_done);
+	if(spi_imx->devtype_data->wait_on_transaction) {
+		spi_imx_push(spi_imx);
+		timedout = spi_imx->devtype_data->wait_on_transaction(spi_imx);
+		if (timedout != 0) {
+			dev_err(&spi->dev, "I/O Error in PIO\n");
+			spi_imx->devtype_data->reset(spi_imx);
+			return -ETIMEDOUT;
+		}
 
-	spi_imx_push(spi_imx);
+		while(spi_imx->txfifo) {
+			while (spi_imx->devtype_data->rx_available(spi_imx)) {
+				spi_imx->rx(spi_imx);
+				spi_imx->txfifo--;
+			}
 
-	spi_imx->devtype_data->intctrl(spi_imx, MXC_INT_TE);
+			if (spi_imx->count) {
+				spi_imx_push(spi_imx);
+				timedout = spi_imx->devtype_data->wait_on_transaction(spi_imx);
+				if (timedout != 0) {
+					dev_err(&spi->dev, "I/O Error in PIO\n");
+					spi_imx->devtype_data->reset(spi_imx);
+					return -ETIMEDOUT;
+				}
+			}
+		}
 
-	transfer_timeout = spi_imx_calculate_timeout(spi_imx, transfer->len);
+	} else {
 
-	timeout = wait_for_completion_timeout(&spi_imx->xfer_done,
-					      transfer_timeout);
-	if (!timeout) {
-		dev_err(&spi->dev, "I/O Error in PIO\n");
-		spi_imx->devtype_data->reset(spi_imx);
-		return -ETIMEDOUT;
+		reinit_completion(&spi_imx->xfer_done);
+
+		spi_imx_push(spi_imx);
+
+		spi_imx->devtype_data->intctrl(spi_imx, MXC_INT_TE);
+
+		transfer_timeout = spi_imx_calculate_timeout(spi_imx,
+							     transfer->len);
+
+		timeout = wait_for_completion_timeout(&spi_imx->xfer_done,
+						      transfer_timeout);
+		if (!timeout) {
+			dev_err(&spi->dev, "I/O Error in PIO\n");
+			spi_imx->devtype_data->reset(spi_imx);
+			return -ETIMEDOUT;
+		}
 	}
 
 	return transfer->len;
