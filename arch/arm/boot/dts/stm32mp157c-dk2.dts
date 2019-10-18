@@ -76,6 +76,8 @@
 		interrupt-controller;
 		touchscreen-size-x = <480>;
 		touchscreen-size-y = <800>;
+		vcc-supply = <&v3v3>;
+		iovcc-supply = <&v3v3>;
 		status = "okay";
 	};
 };
