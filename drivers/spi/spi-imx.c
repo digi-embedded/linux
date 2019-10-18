@@ -1187,17 +1187,16 @@ static int spi_imx_transfer_one_message(struct spi_master *master,
 	bool keep_cs = false;
 	int ret = 0;
 
+	ret = spi_imx_setupxfer(msg->spi, NULL);
+	if (ret < 0) {
+		dev_err(&msg->spi->dev,
+			"Transfer setup failed: %d\n", ret);
+		goto out;
+	}
 
 	spi_imx_set_cs(msg->spi, true);
 
 	list_for_each_entry(xfer, &msg->transfers, transfer_list) {
-		ret = spi_imx_setupxfer(msg->spi, xfer);
-		if (ret < 0) {
-			dev_err(&msg->spi->dev,
-				"Transfer setup failed: %d\n", ret);
-			goto out;
-		}
-
 		if (xfer->tx_buf || xfer->rx_buf) {
 			ret = spi_imx_transfer(msg->spi, xfer);
 			if (ret < 0) {
