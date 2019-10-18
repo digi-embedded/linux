@@ -285,7 +285,7 @@
 	ext_osc = <1>;
 	reset-gpio = <&gpio3 16 GPIO_ACTIVE_LOW>; /* PCIE_RESET_N */
 	disable-gpio = <&gpio0 30 GPIO_ACTIVE_HIGH>; /* PCIE_DIS_N */
-	status = "okay";
+	status = "disabled";
 };
 
 /* Audio support */
