@@ -1,0 +1,58 @@
+Remoteproc System Resource Manager
+----------------------------------
+
+The remoteproc SRM (System Resource Manager) handles resources allocated
+to remote processors.
+This makes it possible for remote proc to reserve and initialize system
+resources for a peripheral assigned to a coprocessor.
+
+The devices are grouped in a core node
+
+Core
+====
+Required properties:
+- compatible: should be "rproc-srm-core"
+
+Dev
+===
+Required properties:
+- compatible: should be "rproc-srm-dev"
+
+Optional properties:
+- reg: register base address and length
+- clocks: clocks required by the coprocessor
+- clock-names: see clock-bindings.txt
+- pinctrl-0: pins configurations required by the coprocessor
+	The SRM reserves the pins for the coprocessor, which prevents the local
+	processor to use them.
+- pinctrl-names: must be "default".
+- x-supply: power supplies required by the coprocessor
+- interrupts: external interrupts configurations required by the coprocessor.
+	This is optional since the configuration is done by the coprocessor.
+	When defined, the SRM (over)writes the configuration which allows the
+	interrupt controller to check for configuration conflicts.
+- interrupt-parent: see interrupts.txt
+- interrupt-names: see interrupts.txt
+
+Example:
+	system_resources {
+		compatible = "rproc-srm-core";
+
+		mmc0: sdhci@09060000 {
+			compatible = "rproc-srm-dev";
+			reg = <0x09060000 0x100>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&m4_pinctrl_mmc0>;
+			clock-names = "mmc", "icn";
+			clocks = <&clk_s_c0_flexgen CLK_MMC_0>,
+				 <&clk_s_c0_flexgen CLK_RX_ICN_HVA>;
+			vdda-supply = <&vdda>;
+		};
+
+		button {
+			compatible = "rproc-srm-dev";
+			interrupt-parent = <&gpioa>;
+			interrupts = <5 1>;
+			interrupt-names = "gpio_key";
+		};
+	};
