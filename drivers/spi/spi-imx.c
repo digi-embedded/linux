@@ -1225,7 +1225,6 @@ static int spi_imx_transfer_one_message(struct spi_master *master,
 				keep_cs = true;
 			} else {
 				spi_imx_set_cs(msg->spi, false);
-				udelay(10);
 				spi_imx_set_cs(msg->spi, true);
 			}
 		}
