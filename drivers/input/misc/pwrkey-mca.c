@@ -53,6 +53,7 @@ struct mca_pwrkey_data {
 	enum mca_pwrkey_type devtype;
 	char drv_name_phys[40];
 	uint16_t version_supports_debtb50ms;
+	uint16_t version_supports_pwrkey_up;
 };
 #endif
 
@@ -62,6 +63,7 @@ struct mca_pwrkey {
 	int irq_power;
 	int irq_sleep;
 	bool key_power;
+	bool key_power_up;
 	bool key_sleep;
 	bool suspended;
 	uint32_t debounce_ms;
@@ -74,10 +76,8 @@ struct mca_pwrkey {
 static DEFINE_SPINLOCK(lock);
 #endif
 
-static irqreturn_t mca_pwrkey_power_off_irq_handler(int irq, void *data)
+static irqreturn_t mca_pwrkey_power_off_legacy_irq(struct mca_pwrkey *pwrkey)
 {
-	struct mca_pwrkey *pwrkey = data;
-
 	dev_notice(&pwrkey->input->dev, "Power Button - KEY_POWER\n");
 
 	/* Clear before set to ensure the event is generated */
@@ -86,6 +86,48 @@ static irqreturn_t mca_pwrkey_power_off_irq_handler(int irq, void *data)
 	input_sync(pwrkey->input);
 
 	return IRQ_HANDLED;
+}
+
+static irqreturn_t mca_pwrkey_power_off_irq(struct mca_pwrkey *pwrkey,
+					    unsigned int pwr_status)
+{
+	dev_notice(&pwrkey->input->dev, "Power Button - KEY_POWER %s\n",
+		   pwr_status ? "DOWN" : "UP");
+
+	input_report_key(pwrkey->input, KEY_POWER, pwr_status);
+	input_sync(pwrkey->input);
+
+	return IRQ_HANDLED;
+}
+
+static irqreturn_t mca_pwrkey_power_off_irq_handler(int irq, void *data)
+{
+	struct mca_pwrkey *pwrkey = data;
+	static unsigned int pwr_status_last = 0;	/* Init to UP */
+	unsigned int pwr_status;
+
+	if (pwrkey->key_power_up) {
+		/*
+		 * Read the power status register to check if button is up or
+		 * down.
+		 */
+		if (regmap_read(pwrkey->mca->regmap, MCA_PWR_STATUS_0,
+		    &pwr_status) >= 0) {
+			pwr_status &= MCA_PWR_BUT_OFF_UPDOWN_BIT;
+
+			/*
+			 * If UP event is signaled whithout a previous DOWN event,
+			 * signal the legacy handler to be on the safe side.
+			 */
+			if (pwr_status || pwr_status_last) {
+				pwr_status_last = pwr_status;
+				return mca_pwrkey_power_off_irq(pwrkey,
+								pwr_status);
+			}
+		}
+	}
+
+	return mca_pwrkey_power_off_legacy_irq(pwrkey);
 }
 
 static irqreturn_t mca_pwrkey_sleep_irq_handler(int irq, void *data)
@@ -148,6 +190,9 @@ static int mca_pwrkey_initialize(struct mca_pwrkey *pwrkey)
 	if (pwrkey->key_power)
 		pwrctrl0 |= MCA_PWR_KEY_OFF_EN;
 
+	if (pwrkey->key_power_up)
+		pwrctrl0 |= MCA_PWR_KEY_OFF_UP_EN;
+
 	if (pwrkey->key_sleep)
 		pwrctrl0 |= MCA_PWR_KEY_SLEEP_EN;
 
@@ -166,7 +211,8 @@ static int mca_pwrkey_initialize(struct mca_pwrkey *pwrkey)
 }
 
 static int of_mca_pwrkey_read_settings(struct device_node *np,
-					     struct mca_pwrkey *pwrkey)
+				       struct mca_pwrkey *pwrkey,
+				       const struct mca_pwrkey_data *devdata)
 {
 	uint32_t val, max_key_deb;
 
@@ -176,6 +222,18 @@ static int of_mca_pwrkey_read_settings(struct device_node *np,
 	pwrkey->pwroff_guard_sec = DEFAULT_PWR_KEY_GUARD;
 
 	pwrkey->key_power = of_property_read_bool(np, "digi,key-power");
+	pwrkey->key_power_up = of_property_read_bool(np, "digi,key-power-up");
+	if (pwrkey->key_power_up) {
+		const uint16_t min_version = devdata->version_supports_pwrkey_up;
+		if (pwrkey->mca->fw_version < min_version) {
+			dev_warn(pwrkey->mca->dev,
+				 "Invalid MCA firmware version for key-power-up."
+				 " Required MCAv%d.%d or above\n",
+				 MCA_FW_VER_MAJOR(min_version),
+				 MCA_FW_VER_MINOR(min_version));
+			pwrkey->key_power_up = false;
+		}
+	}
 	pwrkey->key_sleep = of_property_read_bool(np, "digi,key-sleep");
 
 	max_key_deb = pwrkey->supports_debtb50ms ?
@@ -309,7 +367,7 @@ static int mca_pwrkey_probe(struct platform_device *pdev)
 	input_set_capability(pwrkey->input, EV_KEY, KEY_SLEEP);
 
 	/* Initialize driver settings from device tree */
-	ret = of_mca_pwrkey_read_settings(np, pwrkey);
+	ret = of_mca_pwrkey_read_settings(np, pwrkey, devdata);
 	if (ret) {
 		dev_err(&pdev->dev, "Failed to get %s dtb settings\n",
 			dev_name(&pdev->dev));
@@ -428,12 +486,14 @@ static struct mca_pwrkey_data mca_pwrkey_devdata[] = {
 	[CC6UL_MCA_PWRKEY] = {
 		.devtype = CC6UL_MCA_PWRKEY,
 		.drv_name_phys= "mca-cc6ul-pwrkey/input0",
-		.version_supports_debtb50ms= MCA_MAKE_FW_VER(1, 7)
+		.version_supports_debtb50ms= MCA_MAKE_FW_VER(1, 7),
+		.version_supports_pwrkey_up= MCA_MAKE_FW_VER(1, 14)
 	},
 	[CC8X_MCA_PWRKEY] = {
 		.devtype = CC8X_MCA_PWRKEY,
 		.drv_name_phys= "mca-cc8x-pwrkey/input0",
-		.version_supports_debtb50ms= MCA_MAKE_FW_VER(0, 13)
+		.version_supports_debtb50ms= MCA_MAKE_FW_VER(0, 13),
+		.version_supports_pwrkey_up= MCA_MAKE_FW_VER(0, 17)
 	},
 };
 
