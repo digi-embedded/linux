@@ -457,7 +457,6 @@ static int mx51_wait_on_transaction(struct spi_imx_data *spi_imx)
 		     & MX51_ECSPI_CTRL_XCH)) {
 			return 0;
 		}
-		udelay(2);
 	}
 	return -ETIMEDOUT;
 }
