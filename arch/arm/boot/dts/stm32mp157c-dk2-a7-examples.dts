@@ -1,0 +1,14 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause)
+/*
+ * Copyright (C) STMicroelectronics 2017 - All Rights Reserved
+ * Author: Alexandre Torgue <alexandre.torgue@st.com> for STMicroelectronics.
+ */
+
+/dts-v1/;
+
+#include "stm32mp157c-dk2.dts"
+
+/ {
+	model = "STMicroelectronics STM32MP157C-DK2 configured to run Linux A7 examples";
+	compatible = "st,stm32mp157c-dk2-a7-examples", "st,stm32mp157c-dk2", "st,stm32mp157";
+};
