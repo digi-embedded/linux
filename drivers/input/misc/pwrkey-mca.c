@@ -142,6 +142,19 @@ static irqreturn_t mca_pwrkey_sleep_irq_handler(int irq, void *data)
 		input_report_key(pwrkey->input, KEY_SLEEP, 0);
 		input_sync(pwrkey->input);
 	}
+#ifdef CONFIG_ANDROID
+	else {
+		/*
+		 * Android requires a KEY_POWER event when the device is
+		 * suspended in order to perform a full wake up.
+		 */
+		dev_notice(&pwrkey->input->dev, "Power button - KEY_POWER\n");
+
+		input_report_key(pwrkey->input, KEY_POWER, 1);
+		input_report_key(pwrkey->input, KEY_POWER, 0);
+		input_sync(pwrkey->input);
+	}
+#endif
 
 	return IRQ_HANDLED;
 }
