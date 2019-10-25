@@ -351,8 +351,6 @@
 &pwm4 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_pwm4>;
-	clocks = <&clks IMX6UL_CLK_PWM4>,
-		<&clks IMX6UL_CLK_PWM4>;
 	status = "disabled";
 };
 
@@ -360,8 +358,6 @@
 &pwm5 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_pwm5>;
-	clocks = <&clks IMX6UL_CLK_PWM5>,
-		 <&clks IMX6UL_CLK_PWM5>;
 	status = "disabled";
 };
 
