@@ -29,9 +29,9 @@
 	};
 
 	regulators {
-		reg_3v3_rf: regulator-som@3 {
+		reg_3v3_rf: regulator-som@4 {
 			compatible = "regulator-fixed";
-			reg = <3>;
+			reg = <4>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&pinctrl_reg_3v3_rf>;
 			regulator-name = "3v3_rf";
@@ -40,11 +40,12 @@
 			gpio = <&gpio3 12 GPIO_ACTIVE_HIGH>; /* 3V3_RF_EN */
 			enable-active-high;
 			startup-delay-us = <100000>;
+			vin-supply = <&reg_3v3>;
 		};
 
-		reg_rf_wl_en: regulator-som@4 {
+		reg_rf_wl_en: regulator-som@5 {
 			compatible = "regulator-fixed";
-			reg = <4>;
+			reg = <5>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&pinctrl_reg_rf_wl_en>;
 			regulator-name = "rf_wl_en";
@@ -56,9 +57,9 @@
 			vin-supply = <&reg_3v3_rf>;
 		};
 
-		reg_rf_bt_en: regulator-som@5 {
+		reg_rf_bt_en: regulator-som@6 {
 			compatible = "regulator-fixed";
-			reg = <5>;
+			reg = <6>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&pinctrl_reg_rf_bt_en>;
 			regulator-name = "rf_bt_en";
