@@ -720,6 +720,12 @@
 	status = "okay";
 };
 
+/*
+ * Remove MCA PWM node that uses MCA_IO5 and MCA_IO6 pads, since these lines
+ * are being used as GPIOs for enabling voltage regulators on SBC Pro board.
+ */
+/delete-node/ &{/i2c@5a800000/mca@63/pwms/pwm@1};
+
 /* PWM signal on Expansion connector: SPI0_CS1 (conflicts with SPI0 CS1) */
 &pwm_adma_lcdif {
 	pinctrl-names = "default";
