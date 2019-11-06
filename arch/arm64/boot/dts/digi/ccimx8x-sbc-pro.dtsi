@@ -39,7 +39,7 @@
 				     90 91 92 93 94 95 96 97 98 99
 				    100>;
 		default-brightness-level = <80>;
-		power-supply = <&reg_5v_display>;
+		power-supply = <&reg_5v_sbc>;
 		status = "disabled";
 	};
 
@@ -59,7 +59,7 @@
 				     90 91 92 93 94 95 96 97 98 99
 				    100>;
 		default-brightness-level = <80>;
-		power-supply = <&reg_5v_display>;
+		power-supply = <&reg_5v_sbc>;
 		status = "disabled";
 	};
 
@@ -105,11 +105,11 @@
 			vin-supply = <&reg_3v3_ext>;
 		};
 
-		reg_5v_display: regulator@4 {
+		reg_5v_sbc: regulator@4 {
 			compatible = "regulator-fixed";
 			reg = <4>;
 			pinctrl-names = "default";
-			pinctrl-0 = <&pinctrl_reg_5v_display>;
+			pinctrl-0 = <&pinctrl_reg_5v_sbc>;
 			regulator-name = "5v_display";
 			regulator-min-microvolt = <5000000>;
 			regulator-max-microvolt = <5000000>;
@@ -258,7 +258,7 @@
 &flexcan1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan1>;
-	xceiver-supply = <&reg_5v_display>;
+	xceiver-supply = <&reg_5v_sbc>;
 	status = "disabled";
 };
 
@@ -266,7 +266,7 @@
 &flexcan2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan2>;
-	xceiver-supply = <&reg_5v_display>;
+	xceiver-supply = <&reg_5v_sbc>;
 	stby-gpios = <&gpio1 0 GPIO_ACTIVE_HIGH>;
 	status = "disabled";
 };
@@ -280,7 +280,7 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan3>,
 		    <&pinctrl_flexcan3_lpuart3_gpios>;
-	xceiver-supply = <&reg_5v_display>;
+	xceiver-supply = <&reg_5v_sbc>;
 	stby-gpios = <&gpio1 2 GPIO_ACTIVE_HIGH>;
 	pinctrl-assert-gpios = <&gpio3 23 GPIO_ACTIVE_HIGH>;
 	status = "disabled";
@@ -1079,7 +1079,7 @@
 		>;
 	};
 
-	pinctrl_reg_5v_display: reg_5v_display_grp {
+	pinctrl_reg_5v_sbc: reg_5v_sbc_grp {
 		fsl,pins = <
 			/* 5V regulator power enable */
 			SC_P_SPI3_SCK_LSIO_GPIO0_IO13		0x06000020

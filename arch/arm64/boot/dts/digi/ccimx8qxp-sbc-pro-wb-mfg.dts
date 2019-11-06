@@ -26,7 +26,7 @@
 	status = "okay";
 };
 
-&reg_5v_display {
+&reg_5v_sbc {
 	regulator-always-on;
 };
 
