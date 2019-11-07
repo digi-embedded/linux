@@ -775,8 +775,8 @@ static void mca_cc8x_power_off(void)
 					 MCA_PWR_GO_OFF,
 					 MCA_PWR_GO_OFF);
 		if (ret)
-			printk(KERN_ERR "ERROR: accesing PWR_CTRL_0 register "
-			       "[%s:%d/%s()]!\n", __FILE__, __LINE__, __func__);
+			printk(KERN_ERR "ERROR: accesing PWR_CTRL_0 register (%d) "
+			       "[%s:%d/%s()]!\n", ret, __FILE__, __LINE__, __func__);
 
 		/*
 		 * Even if the regmap update returned with success, retry...
