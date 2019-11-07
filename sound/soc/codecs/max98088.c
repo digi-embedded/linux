@@ -40,6 +40,7 @@ struct max98088_cdata {
 struct max98088_priv {
 	struct regmap *regmap;
 	struct regulator *vcc;
+	struct regulator *dvdd;
 	enum max98088_type devtype;
 	struct max98088_pdata *pdata;
 	struct clk *mclk;
@@ -1760,10 +1761,18 @@ static int max98088_i2c_suspend(struct device *dev)
 			dev_err(dev, "Failed to disable vcc (%d)\n", ret);
 			return ret;
 		}
-
-		regcache_mark_dirty(max98088->regmap);
-		regcache_cache_only(max98088->regmap, true);
 	}
+
+	if (max98088->dvdd) {
+		ret = regulator_disable(max98088->dvdd);
+		if (ret) {
+			dev_err(dev, "Failed to disable dvdd (%d)\n", ret);
+			return ret;
+		}
+	}
+
+	regcache_mark_dirty(max98088->regmap);
+	regcache_cache_only(max98088->regmap, true);
 
 	return 0;
 }
@@ -1772,6 +1781,14 @@ static int max98088_i2c_resume(struct device *dev)
 {
 	struct max98088_priv *max98088 = dev_get_drvdata(dev);
 	int ret;
+
+	if (max98088->dvdd) {
+		ret = regulator_enable(max98088->dvdd);
+		if (ret) {
+			dev_err(dev, "Failed to enable dvdd (%d)\n", ret);
+			return ret;
+		}
+	}
 
 	if (max98088->vcc) {
 		ret = regulator_enable(max98088->vcc);
@@ -1821,6 +1838,24 @@ static int max98088_i2c_probe(struct i2c_client *i2c,
 		ret = regulator_enable(max98088->vcc);
 		if (ret) {
 			dev_err(&i2c->dev, "Failed to enable vcc regulator\n");
+			goto free_mem;
+		}
+	}
+
+	max98088->dvdd = devm_regulator_get_optional(&i2c->dev, "dvdd");
+	if (IS_ERR(max98088->dvdd)) {
+		if (PTR_ERR(max98088->dvdd) == -EPROBE_DEFER) {
+			return -EPROBE_DEFER;
+		}
+
+		max98088->dvdd = NULL;
+		dev_dbg(&i2c->dev, "No dvdd codec regulator\n");
+	}
+
+	if (max98088->dvdd) {
+		ret = regulator_enable(max98088->dvdd);
+		if (ret) {
+			dev_err(&i2c->dev, "Failed to enable dvdd regulator\n");
 			goto free_mem;
 		}
 	}
