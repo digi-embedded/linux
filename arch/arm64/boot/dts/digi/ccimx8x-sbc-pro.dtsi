@@ -308,6 +308,7 @@
 		clock-names = "mclk";
 		power-domains = <&pd_mclk_out1>;
 		vcc-supply = <&reg_3v3_audio>;
+		dvdd-supply = <&reg_1v8_ext>;
 		assigned-clocks = <&clk IMX8QXP_AUD_PLL0_DIV>,
 				  <&clk IMX8QXP_AUD_ACM_AUD_PLL_CLK0_DIV>,
 				  <&clk IMX8QXP_AUD_ACM_AUD_REC_CLK0_DIV>,
