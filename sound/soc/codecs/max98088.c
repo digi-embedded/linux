@@ -1810,8 +1810,7 @@ static int max98088_i2c_probe(struct i2c_client *i2c,
 	max98088->vcc = devm_regulator_get_optional(&i2c->dev, "vcc");
 	if (IS_ERR(max98088->vcc)) {
 		if (PTR_ERR(max98088->vcc) == -EPROBE_DEFER) {
-			ret = -EPROBE_DEFER;
-			goto free_mem;
+			return -EPROBE_DEFER;
 		}
 
 		max98088->vcc = NULL;
