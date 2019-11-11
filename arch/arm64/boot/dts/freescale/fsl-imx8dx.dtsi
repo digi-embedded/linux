@@ -2698,6 +2698,8 @@
 		assigned-clocks = <&clk IMX8QXP_SPI1_CLK>;
 		assigned-clock-rates = <20000000>;
 		power-domains = <&pd_dma_lpspi1>;
+		dma-names = "tx","rx";
+		dmas = <&edma2 3 0 0>, <&edma2 2 0 1>;
 		status = "disabled";
 	};
 
@@ -2728,6 +2730,8 @@
 		assigned-clocks = <&clk IMX8QXP_SPI3_CLK>;
 		assigned-clock-rates = <20000000>;
 		power-domains = <&pd_dma_lpspi3>;
+		dma-names = "tx","rx";
+		dmas = <&edma2 7 0 0>, <&edma2 6 0 1>;
 		status = "disabled";
 	};
 
