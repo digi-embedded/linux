@@ -592,6 +592,9 @@ static void erspan_fb_xmit(struct sk_buff *skb, struct net_device *dev,
 		truncate = true;
 	}
 
+	if (tun_info->options_len < sizeof(*md))
+		goto err_free_rt;
+
 	md = ip_tunnel_info_opts(tun_info);
 	if (!md)
 		goto err_free_rt;
@@ -1424,6 +1427,7 @@ nla_put_failure:
 static void erspan_setup(struct net_device *dev)
 {
 	ether_setup(dev);
+	dev->max_mtu = 0;
 	dev->netdev_ops = &erspan_netdev_ops;
 	dev->priv_flags &= ~IFF_TX_SKB_SHARING;
 	dev->priv_flags |= IFF_LIVE_ADDR_CHANGE;
