@@ -106,18 +106,20 @@ static void lt8912_init(struct lt8912 *lt)
 	regmap_write(lt->regmap[0], 0x5a, 0x02);
 
 	/* MIPIAnalog */
-	regmap_write(lt->regmap[0], 0x3e, 0xf6);
+	regmap_write(lt->regmap[0], 0x3e, 0xce);
 	regmap_write(lt->regmap[0], 0x3f, 0xd4);
 	regmap_write(lt->regmap[0], 0x41, 0x3c);
 
-	regmap_write(lt->regmap[1], 0x10, 0x01);
-	regmap_write(lt->regmap[1], 0x11, 0x08);
+	regmap_write(lt->regmap[1], 0x12, 0x04);
 	regmap_write(lt->regmap[1], 0x13, lanes % 4);
 	regmap_write(lt->regmap[1], 0x14, 0x00);
-	regmap_write(lt->regmap[1], 0x15, 0xa8);
+	regmap_write(lt->regmap[1], 0x15, 0x00);
 	regmap_write(lt->regmap[1], 0x1a, 0x03);
 	regmap_write(lt->regmap[1], 0x1b, 0x03);
 
+	/* MIPIDig */
+	regmap_write(lt->regmap[1], 0x10, 0x01);
+	regmap_write(lt->regmap[1], 0x11, 0x0a);
 	regmap_write(lt->regmap[1], 0x18, hsync);
 	regmap_write(lt->regmap[1], 0x19, vsync);
 	regmap_write(lt->regmap[1], 0x1c, hactive % 0x100);
@@ -138,18 +140,12 @@ static void lt8912_init(struct lt8912 *lt)
 	regmap_write(lt->regmap[1], 0x3e, hfp % 0x100);
 	regmap_write(lt->regmap[1], 0x3f, hfp >> 8);
 
-	/* mipi rx soft reset */
-	regmap_write(lt->regmap[0], 0x03, 0x7f);
-	usleep_range(100000, 110000);
-	regmap_write(lt->regmap[0], 0x03, 0xff);
-
 	/* DDSConfig */
-	regmap_write(lt->regmap[1], 0x4e, 0x88);
-	regmap_write(lt->regmap[1], 0x4f, 0x88);
-	regmap_write(lt->regmap[1], 0x50, 0x48);
+	regmap_write(lt->regmap[1], 0x4e, 0x6a);
+	regmap_write(lt->regmap[1], 0x4f, 0xad);
+	regmap_write(lt->regmap[1], 0x50, 0xf3);
 	regmap_write(lt->regmap[1], 0x51, 0x80);
 
-	regmap_write(lt->regmap[1], 0x1e, 0x4f);
 	regmap_write(lt->regmap[1], 0x1f, 0x5e);
 	regmap_write(lt->regmap[1], 0x20, 0x01);
 	regmap_write(lt->regmap[1], 0x21, 0x2c);
@@ -189,42 +185,32 @@ static void lt8912_init(struct lt8912 *lt)
 	regmap_write(lt->regmap[1], 0x5a, 0x8a);
 	regmap_write(lt->regmap[1], 0x5b, 0x00);
 	regmap_write(lt->regmap[1], 0x5c, 0x34);
+	regmap_write(lt->regmap[1], 0x1e, 0x4f);
 	regmap_write(lt->regmap[1], 0x51, 0x00);
-
-	regmap_write(lt->regmap[0], 0xb2, 0x01);
-
-	/* Audio Disable */
-	regmap_write(lt->regmap[2], 0x06, 0x08);
-	regmap_write(lt->regmap[2], 0x07, 0xf0);
-
-	regmap_write(lt->regmap[2], 0x34, 0xd2);
 
 	/* mipi rx soft reset */
 	regmap_write(lt->regmap[0], 0x03, 0x7f);
 	usleep_range(100000, 110000);
 	regmap_write(lt->regmap[0], 0x03, 0xff);
 
-	regmap_write(lt->regmap[0], 0x44, 0x30);
-	regmap_write(lt->regmap[0], 0x51, 0x05);
-	regmap_write(lt->regmap[0], 0x50, 0x24);
-	regmap_write(lt->regmap[0], 0x51, 0x2d);
-	regmap_write(lt->regmap[0], 0x52, 0x04);
-	regmap_write(lt->regmap[0], 0x69, 0x0e);
-	usleep_range(100000, 110000);
-	regmap_write(lt->regmap[0], 0x69, 0x8e);
-	regmap_write(lt->regmap[0], 0x6a, 0x00);
-	regmap_write(lt->regmap[0], 0x6c, 0xb8);
-	regmap_write(lt->regmap[0], 0x6b, 0x51);
+	regmap_write(lt->regmap[0], 0xb2, 0x01);
 
-	regmap_write(lt->regmap[0], 0x04, 0xfb);
-	usleep_range(100000, 110000);
-	regmap_write(lt->regmap[0], 0x04, 0xff);
-	regmap_write(lt->regmap[0], 0x7F, 0x00);
-	regmap_write(lt->regmap[0], 0xa8, 0x13);
-	regmap_write(lt->regmap[0], 0x02, 0xff);
-	regmap_write(lt->regmap[0], 0x03, 0xcf);
-	usleep_range(100000, 110000);
+	/* Audio Disable */
+	regmap_write(lt->regmap[2], 0x06, 0x00);
+	regmap_write(lt->regmap[2], 0x07, 0x00);
+
+	regmap_write(lt->regmap[2], 0x34, 0xd2);
+
+	regmap_write(lt->regmap[2], 0x3c, 0x41);
+
+	/* MIPIRxLogicRes */
+	regmap_write(lt->regmap[0], 0x03, 0x7f);
+	usleep_range(10000, 20000);
 	regmap_write(lt->regmap[0], 0x03, 0xff);
+
+	regmap_write(lt->regmap[1], 0x51, 0x80);
+	usleep_range(10000, 20000);
+	regmap_write(lt->regmap[1], 0x51, 0x00);
 
 }
 
