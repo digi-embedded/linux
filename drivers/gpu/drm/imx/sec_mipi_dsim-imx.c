@@ -1,7 +1,7 @@
 /*
  * Samsung MIPI DSI Host Controller on IMX
  *
- * Copyright 2018 NXP
+ * Copyright 2018-2019 NXP
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,7 +24,7 @@
 #include <linux/mfd/syscon.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
-#include <linux/regmap.h>
+#include <linux/reset.h>
 #include <drm/bridge/sec_mipi_dsim.h>
 #include <drm/drm_bridge.h>
 #include <drm/drm_encoder.h>
@@ -32,24 +32,17 @@
 
 #include "imx-drm.h"
 #include "sec_mipi_dphy_ln14lpp.h"
+#include "sec_mipi_pll_1432x.h"
 
 #define DRIVER_NAME "imx_sec_dsim_drv"
-
-/* Dispmix Control & GPR Registers */
-#define DISPLAY_MIX_SFT_RSTN_CSR		0X00
-   #define MIPI_DSI_I_PRESETn_SFT_EN		BIT(5)
-#define DISPLAY_MIX_CLK_EN_CSR			0x04
-   #define MIPI_DSI_PCLK_SFT_EN			BIT(8)
-   #define MIPI_DSI_CLKREF_SFT_EN		BIT(9)
-#define GPR_MIPI_RESET_DIV			0x08
-   /* Clock & Data lanes reset: Active Low */
-   #define GPR_MIPI_S_RESETN			BIT(16)
-   #define GPR_MIPI_M_RESETN			BIT(17)
 
 struct imx_sec_dsim_device {
 	struct device *dev;
 	struct drm_encoder encoder;
-	struct regmap *gpr;
+
+	struct reset_control *soft_resetn;
+	struct reset_control *clk_enable;
+	struct reset_control *mipi_reset;
 
 	atomic_t rpm_suspended;
 };
@@ -72,59 +65,39 @@ static int imx_sec_dsim_runtime_resume(struct device *dev)
 }
 #endif
 
-static void disp_mix_dsim_soft_reset_release(struct regmap *gpr, bool release)
+static int sec_dsim_rstc_reset(struct reset_control *rstc, bool assert)
 {
-	if (release)
-		/* release dsi blk reset */
-		regmap_update_bits(gpr, DISPLAY_MIX_SFT_RSTN_CSR,
-				   MIPI_DSI_I_PRESETn_SFT_EN,
-				   MIPI_DSI_I_PRESETn_SFT_EN);
-	else
-		regmap_update_bits(gpr, DISPLAY_MIX_SFT_RSTN_CSR,
-				   MIPI_DSI_I_PRESETn_SFT_EN,
-				   0x0);
-}
+	int ret;
 
-static void disp_mix_dsim_clks_enable(struct regmap *gpr, bool enable)
-{
-	if (enable)
-		regmap_update_bits(gpr, DISPLAY_MIX_CLK_EN_CSR,
-				   MIPI_DSI_PCLK_SFT_EN | MIPI_DSI_CLKREF_SFT_EN,
-				   MIPI_DSI_PCLK_SFT_EN | MIPI_DSI_CLKREF_SFT_EN);
-	else
-		regmap_update_bits(gpr, DISPLAY_MIX_CLK_EN_CSR,
-				   MIPI_DSI_PCLK_SFT_EN | MIPI_DSI_CLKREF_SFT_EN,
-				   0x0);
-}
+	if (!rstc)
+		return 0;
 
-static void imx_sec_dsim_lanes_reset(struct regmap *gpr, bool reset)
-{
-	if (!reset)
-		/* release lanes reset */
-		regmap_update_bits(gpr, GPR_MIPI_RESET_DIV,
-				   GPR_MIPI_M_RESETN,
-				   GPR_MIPI_M_RESETN);
-	else
-		/* reset lanes */
-		regmap_update_bits(gpr, GPR_MIPI_RESET_DIV,
-				   GPR_MIPI_M_RESETN,
-				   0x0);
+	ret = assert ? reset_control_assert(rstc)	:
+		       reset_control_deassert(rstc);
+
+	return ret;
 }
 
 static void imx_sec_dsim_encoder_helper_enable(struct drm_encoder *encoder)
 {
+	int ret;
 	struct imx_sec_dsim_device *dsim_dev = enc_to_dsim(encoder);
 
 	pm_runtime_get_sync(dsim_dev->dev);
 
-	imx_sec_dsim_lanes_reset(dsim_dev->gpr, false);
+	ret = sec_dsim_rstc_reset(dsim_dev->mipi_reset, false);
+	if (ret)
+		dev_err(dsim_dev->dev, "deassert mipi_reset failed\n");
 }
 
 static void imx_sec_dsim_encoder_helper_disable(struct drm_encoder *encoder)
 {
+	int ret;
 	struct imx_sec_dsim_device *dsim_dev = enc_to_dsim(encoder);
 
-	imx_sec_dsim_lanes_reset(dsim_dev->gpr, true);
+	ret = sec_dsim_rstc_reset(dsim_dev->mipi_reset, true);
+	if (ret)
+		dev_err(dsim_dev->dev, "deassert mipi_reset failed\n");
 
 	pm_runtime_put_sync(dsim_dev->dev);
 }
@@ -197,6 +170,7 @@ static const struct sec_mipi_dsim_plat_data imx8mm_mipi_dsim_plat_data = {
 	.version	= 0x1060200,
 	.max_data_lanes = 4,
 	.max_data_rate  = 1500000000ULL,
+	.dphy_pll	= &pll_1432x,
 	.dphy_timing	= dphy_timing_ln14lpp_v1p2,
 	.num_dphy_timing = ARRAY_SIZE(dphy_timing_ln14lpp_v1p2),
 	.dphy_timing_cmp = dphy_timing_default_cmp,
@@ -208,9 +182,61 @@ static const struct of_device_id imx_sec_dsim_dt_ids[] = {
 		.compatible = "fsl,imx8mm-mipi-dsim",
 		.data = &imx8mm_mipi_dsim_plat_data,
 	},
+	{
+		.compatible = "fsl,imx8mn-mipi-dsim",
+		.data = &imx8mm_mipi_dsim_plat_data,
+	},
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, imx_sec_dsim_dt_ids);
+
+static int sec_dsim_of_parse_resets(struct imx_sec_dsim_device *dsim)
+{
+	int ret;
+	struct device *dev = dsim->dev;
+	struct device_node *np = dev->of_node;
+	struct device_node *parent, *child;
+	struct of_phandle_args args;
+	struct reset_control *rstc;
+	const char *compat;
+	uint32_t len, rstc_num = 0;
+
+	ret = of_parse_phandle_with_args(np, "resets", "#reset-cells",
+					 0, &args);
+	if (ret)
+		return ret;
+
+	parent = args.np;
+	for_each_child_of_node(parent, child) {
+		compat = of_get_property(child, "compatible", NULL);
+		if (!compat)
+			continue;
+
+		rstc = of_reset_control_array_get(child, false, false);
+		if (IS_ERR(rstc))
+			continue;
+
+		len = strlen(compat);
+		if (!of_compat_cmp("dsi,soft-resetn", compat, len)) {
+			dsim->soft_resetn = rstc;
+			rstc_num++;
+		} else if (!of_compat_cmp("dsi,clk-enable", compat, len)) {
+			dsim->clk_enable = rstc;
+			rstc_num++;
+		} else if (!of_compat_cmp("dsi,mipi-reset", compat, len)) {
+			dsim->mipi_reset = rstc;
+			rstc_num++;
+		} else
+			dev_warn(dev, "invalid dsim reset node: %s\n", compat);
+	}
+
+	if (!rstc_num) {
+		dev_err(dev, "no invalid reset control exists\n");
+		return -EINVAL;
+	}
+
+	return 0;
+}
 
 static int imx_sec_dsim_bind(struct device *dev, struct device *master,
 			     void *data)
@@ -242,9 +268,9 @@ static int imx_sec_dsim_bind(struct device *dev, struct device *master,
 	if (irq < 0)
 		return -ENODEV;
 
-	dsim_dev->gpr = syscon_regmap_lookup_by_phandle(np, "dsi-gpr");
-	if (IS_ERR(dsim_dev->gpr))
-		return PTR_ERR(dsim_dev->gpr);
+	ret = sec_dsim_of_parse_resets(dsim_dev);
+	if (ret)
+		return ret;
 
 	encoder = &dsim_dev->encoder;
 	ret = imx_drm_encoder_parse_of(drm_dev, encoder, np);
@@ -259,17 +285,18 @@ static int imx_sec_dsim_bind(struct device *dev, struct device *master,
 	if (ret)
 		return ret;
 
+	atomic_set(&dsim_dev->rpm_suspended, 0);
+	pm_runtime_enable(dev);
+	atomic_inc(&dsim_dev->rpm_suspended);
+
 	/* bind sec dsim bridge */
 	ret = sec_mipi_dsim_bind(dev, master, data, encoder, res, irq, pdata);
 	if (ret) {
 		dev_err(dev, "failed to bind sec dsim bridge: %d\n", ret);
+		pm_runtime_disable(dev);
 		drm_encoder_cleanup(encoder);
 		return ret;
 	}
-
-	atomic_set(&dsim_dev->rpm_suspended, 0);
-	pm_runtime_enable(dev);
-	atomic_inc(&dsim_dev->rpm_suspended);
 
 	dev_dbg(dev, "%s: dsim bind end\n", __func__);
 
@@ -341,6 +368,8 @@ static int imx_sec_dsim_runtime_suspend(struct device *dev)
 
 static int imx_sec_dsim_runtime_resume(struct device *dev)
 {
+	int ret;
+
 	if (unlikely(!atomic_read(&dsim_dev->rpm_suspended))) {
 		dev_warn(dsim_dev->dev,
 			 "Unbalanced %s!\n", __func__);
@@ -352,10 +381,23 @@ static int imx_sec_dsim_runtime_resume(struct device *dev)
 
 	request_bus_freq(BUS_FREQ_HIGH);
 
-	/* Pull dsim out of reset */
-	disp_mix_dsim_soft_reset_release(dsim_dev->gpr, true);
-	disp_mix_dsim_clks_enable(dsim_dev->gpr, true);
-	imx_sec_dsim_lanes_reset(dsim_dev->gpr, false);
+	ret = sec_dsim_rstc_reset(dsim_dev->soft_resetn, false);
+	if (ret) {
+		dev_err(dev, "deassert soft_resetn failed\n");
+		return ret;
+	}
+
+	ret = sec_dsim_rstc_reset(dsim_dev->clk_enable, true);
+	if (ret) {
+		dev_err(dev, "assert clk_enable failed\n");
+		return ret;
+	}
+
+	ret = sec_dsim_rstc_reset(dsim_dev->mipi_reset, false);
+	if (ret) {
+		dev_err(dev, "deassert mipi_reset failed\n");
+		return ret;
+	}
 
 	sec_mipi_dsim_resume(dev);
 

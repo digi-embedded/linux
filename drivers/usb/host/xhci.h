@@ -1840,6 +1840,8 @@ struct xhci_hcd {
 #define XHCI_CDNS_HOST		BIT_ULL(31)
 #define XHCI_RESET_PLL_ON_DISCONNECT	BIT_ULL(34)
 #define XHCI_SNPS_BROKEN_SUSPEND    BIT_ULL(35)
+#define XHCI_SKIP_ACCESS_RESERVED_REG	(1 << 29)
+#define XHCI_CDNS_HOST		(1 << 31)
 
 	unsigned int		num_active_eps;
 	unsigned int		limit_active_eps;

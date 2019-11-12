@@ -722,6 +722,14 @@
        xen,passthrough;
 };
 
+&{/vpu_encoder@2d000000/core0@1020000} {
+	xen,passthrough;
+};
+
+&{/vpu_encoder@2d000000/core1@1040000} {
+	xen,passthrough;
+};
+
 &crypto {
 	xen,passthrough;
 	iommus = <&smmu>;

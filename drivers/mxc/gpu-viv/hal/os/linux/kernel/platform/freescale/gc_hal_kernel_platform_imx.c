@@ -3,6 +3,7 @@
 *    The MIT License (MIT)
 *
 *    Copyright (c) 2014 - 2018 Vivante Corporation
+*    Copyright 2019 NXP
 *
 *    Permission is hereby granted, free of charge, to any person obtaining a
 *    copy of this software and associated documentation files (the "Software"),
@@ -27,6 +28,7 @@
 *    The GPL License (GPL)
 *
 *    Copyright (C) 2014 - 2018 Vivante Corporation
+*    Copyright 2019 NXP
 *
 *    This program is free software; you can redistribute it and/or
 *    modify it under the terms of the GNU General Public License
@@ -76,6 +78,10 @@
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4,9,0)) || defined(IMX8_SCU_CONTROL)
 #  define IMX_GPU_SUBSYSTEM   1
 #  include <linux/component.h>
+#endif
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,1,0)
+#  include <linux/memblock.h>
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,5,0)
@@ -265,9 +271,12 @@ static int thermal_hot_pm_notify(struct notifier_block *nb, unsigned long event,
        void *dummy)
 {
     static gctUINT orgFscale, minFscale, maxFscale;
-    static gctBOOL bAlreadyTooHot = gcvFALSE;
+    static unsigned long prev_event = 0xffffffff;
     gckHARDWARE hardware;
     gckGALDEVICE galDevice;
+
+    if (event == prev_event)
+        return NOTIFY_OK;
 
     galDevice = platform_get_drvdata(pdevice);
     if (!galDevice)
@@ -288,15 +297,26 @@ static int thermal_hot_pm_notify(struct notifier_block *nb, unsigned long event,
         return NOTIFY_OK;
     }
 
-    if (event && !bAlreadyTooHot) {
+    if (prev_event == 0xffffffff) /* get initial value of Fscale */
         gckHARDWARE_GetFscaleValue(hardware,&orgFscale,&minFscale, &maxFscale);
-        gckHARDWARE_SetFscaleValue(hardware, minFscale);
-        bAlreadyTooHot = gcvTRUE;
-        printk("System is too hot. GPU3D will work at %d/64 clock.\n", minFscale);
-    } else if (!event && bAlreadyTooHot) {
-        gckHARDWARE_SetFscaleValue(hardware, orgFscale);
-        printk("Hot alarm is canceled. GPU3D clock will return to %d/64\n", orgFscale);
-        bAlreadyTooHot = gcvFALSE;
+    prev_event = event;
+
+    switch (event) {
+        case 0:
+            gckHARDWARE_SetFscaleValue(hardware, orgFscale);
+            printk("Hot alarm is canceled. GPU3D clock will return to %d/64\n", orgFscale);
+            break;
+        case 1:
+            gckHARDWARE_SetFscaleValue(hardware, maxFscale >> 1); /* switch to 1/2 of max frequency */
+            printk("System is a little hot. GPU3D clock will work at %d/64\n", maxFscale >> 1);
+            break;
+        case 2:
+            gckHARDWARE_SetFscaleValue(hardware, minFscale);
+            printk("System is too hot. GPU3D will work at %d/64 clock.\n", minFscale);
+            break;
+        default:
+            printk("System don't support such event: %ld.\n", event);
+            break;
     }
     return NOTIFY_OK;
 }
@@ -308,7 +328,7 @@ static struct notifier_block thermal_hot_pm_notifier =
 
 static ssize_t gpu3DMinClock_show(struct device_driver *dev, char *buf)
 {
-    gctUINT currentf,minf,maxf;
+    gctUINT currentf = 0, minf = 0, maxf = 0;
     gckGALDEVICE galDevice;
 
     galDevice = platform_get_drvdata(pdevice);
@@ -345,8 +365,11 @@ static ssize_t gpu3DMinClock_store(struct device_driver *dev, const char *buf, s
 
     return count;
 }
-
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,11,0)
 static DRIVER_ATTR_RW(gpu3DMinClock);
+#else
+static DRIVER_ATTR(gpu3DMinClock, S_IRUGO | S_IWUSR, gpu3DMinClock_show, gpu3DMinClock_store);
+#endif
 #endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0)
@@ -500,9 +523,11 @@ static ssize_t gpu_govern_store(struct device_driver *dev, const char *buf, size
 
     return count;
 }
-
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,11,0)
 static DRIVER_ATTR_RW(gpu_govern);
-
+#else
+static DRIVER_ATTR(gpu_govern, S_IRUGO | S_IWUSR, gpu_govern_show, gpu_govern_store);
+#endif
 
 int init_gpu_opp_table(struct device *dev)
 {
@@ -939,6 +964,10 @@ static int patch_param(struct platform_device *pdev,
     struct viv_gpu_platform_data *pdata;
 #endif
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,1,0)
+	struct property *contiguous_table;
+#endif
+
     pdevice = pdev;
 
 #ifdef IMX_GPU_SUBSYSTEM
@@ -948,6 +977,18 @@ static int patch_param(struct platform_device *pdev,
 #endif
         patch_param_imx6(pdev, args);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0)
+    if(args->compression == -1)
+    {
+        const u32 *property;
+        args->compression = gcvCOMPRESSION_OPTION_DEFAULT;
+        property = of_get_property(pdev->dev.of_node, "depth-compression", NULL);
+        if (property && *property == 0)
+        {
+            args->compression &= ~gcvCOMPRESSION_OPTION_DEPTH;
+        }
+    }
+#endif
     res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "phys_baseaddr");
 
     if (res && !args->baseAddress && !args->physSize) {
@@ -965,6 +1006,35 @@ static int patch_param(struct platform_device *pdev,
         if  (args->contiguousSize == ~0U)
             args->contiguousSize = res->end - res->start + 1;
     }
+
+	contiguous_table = of_find_property(pdev->dev.of_node, "digi,contiguous-size-table", NULL);
+
+	if (contiguous_table && contiguous_table->value) {
+		unsigned long entries = contiguous_table->length / sizeof(u32);
+		__be32 *val = contiguous_table->value;
+
+		/* Only iterate through table if it has an even number of entries */
+		if (entries % 2 == 0) {
+			unsigned long system_memory = memblock_phys_mem_size();
+			int i;
+
+			/*
+			 * Iterate through each row, assuming the rows are ordered by
+			 * mem_threshold.
+			 */
+			for (i = 0; i < entries / 2; i++) {
+				unsigned long mem_threshold = be32_to_cpup(val++);
+				args->contiguousSize = be32_to_cpup(val++);
+
+				if (system_memory <= mem_threshold)
+					break;
+			}
+		}
+		else {
+			printk("galcore: contiguous size table has odd number of entries, "
+			       "using contiguous_mem range instead\n");
+		}
+	}
 
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
     args->contiguousBase = 0;
@@ -1493,9 +1563,17 @@ _AdjustParam(
 {
     patch_param(Platform->device, Args);
 
-    if (of_find_compatible_node(NULL, NULL, "fsl,imx8mq-gpu") && ((Args->baseAddress + totalram_pages * PAGE_SIZE) > 0x100000000))
-        Platform->flagBits = gcvPLATFORM_FLAG_LIMIT_4G_ADDRESS;
+    if ((of_find_compatible_node(NULL, NULL, "fsl,imx8mq-gpu") ||
+        of_find_compatible_node(NULL, NULL, "fsl,imx8mm-gpu")) &&
+        ((Args->baseAddress + totalram_pages * PAGE_SIZE) > 0x100000000))
+    {
+        Platform->flagBits |= gcvPLATFORM_FLAG_LIMIT_4G_ADDRESS;
+    }
 
+    if (of_find_compatible_node(NULL, NULL, "fsl,imx8mm-gpu"))
+    {
+        Platform->flagBits |= gcvPLATFORM_FLAG_IMX_MM;
+    }
     return gcvSTATUS_OK;
 }
 
@@ -1587,11 +1665,11 @@ int soc_platform_init(struct platform_driver *pdrv,
 #ifdef IMX_GPU_SUBSYSTEM
     if (of_find_compatible_node(NULL, NULL, "fsl,imx8-gpu-ss")) {
         use_imx_gpu_subsystem = 1;
-    }
 
-    if (of_find_compatible_node(NULL, NULL, "fsl,imx8x-gpu")) {
-        printk(KERN_ERR "Incorrect device-tree, please update dtb.");
-        return -EINVAL;
+        if (!of_find_compatible_node(NULL, NULL, "fsl,imx8-gpu")) {
+            printk(KERN_ERR "Incorrect device-tree, please update dtb.");
+            return -EINVAL;
+        }
     }
 #endif
 

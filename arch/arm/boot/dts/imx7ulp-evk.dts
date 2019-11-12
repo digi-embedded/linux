@@ -242,9 +242,9 @@
 };
 
 &rsvd_mem {
-	ramoops@0x9bf00000 {
+	ramoops@0x99b00000 {
 		compatible = "ramoops";
-		reg = <0x9bf00000 0x00100000>;
+		reg = <0x99b00000 0x00100000>;
 		record-size	= <0x00020000>;
 		console-size	= <0x00020000>;
 		ftrace-size	= <0x00020000>;
@@ -365,7 +365,7 @@
 			>;
 		};
 
-		pinctrl_focaltech: focaltechgrp {
+		pinctrl_touch_io: touchiogrp {
 			fsl,pins = <
 				IMX7ULP_PAD_PTF0__PTF0		0x10043
 				IMX7ULP_PAD_PTF1__PTF1		0x20043
@@ -436,8 +436,8 @@
 	#address-cells = <1>;
 	#size-cells = <0>;
 	pinctrl-names = "default",  "sleep";
-	pinctrl-0 = <&pinctrl_lpi2c7 &pinctrl_focaltech>;
-	pinctrl-1 = <&pinctrl_lpi2c7 &pinctrl_focaltech>;
+	pinctrl-0 = <&pinctrl_lpi2c7 &pinctrl_touch_io>;
+	pinctrl-1 = <&pinctrl_lpi2c7 &pinctrl_touch_io>;
 	status = "okay";
 
 	focaltech@38 {
@@ -487,6 +487,7 @@
 &lpspi3 {
 	#address-cells = <1>;
 	#size-cells = <0>;
+	fsl,spi-num-chipselects = <1>;
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&pinctrl_lpspi3>;
 	pinctrl-1 = <&pinctrl_lpspi3>;
@@ -580,6 +581,7 @@
 	pinctrl-1 = <&pinctrl_usdhc0>;
 	pinctrl-2 = <&pinctrl_usdhc0>;
 	pinctrl-3 = <&pinctrl_usdhc0>;
+	fsl,delay-line = <15>;
 	cd-gpios = <&gpio_ptc 10 GPIO_ACTIVE_LOW>;
 	vmmc-supply = <&reg_vsd_3v3>;
 	vqmmc-supply = <&vldo2_reg>;

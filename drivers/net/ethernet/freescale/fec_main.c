@@ -1768,10 +1768,10 @@ static void fec_get_mac(struct net_device *ndev)
 	 */
 	if (!is_valid_ether_addr(iap)) {
 		/* Report it and use a random ethernet address instead */
-		netdev_err(ndev, "Invalid MAC address: %pM\n", iap);
+		dev_err(&fep->pdev->dev, "Invalid MAC address: %pM\n", iap);
 		eth_hw_addr_random(ndev);
-		netdev_info(ndev, "Using random MAC address: %pM\n",
-			    ndev->dev_addr);
+		dev_info(&fep->pdev->dev, "Using random MAC address: %pM\n",
+			 ndev->dev_addr);
 		return;
 	}
 
@@ -3955,6 +3955,9 @@ static int __maybe_unused fec_suspend(struct device *dev)
 		fec_stop(ndev);
 		if (!(fep->wol_flag & FEC_WOL_FLAG_ENABLE)) {
 			fec_irqs_disable(ndev);
+			if (fep->phy_reset_in_suspend)
+				gpio_set_value_cansleep(fep->phy_reset_gpio,
+							fep->phy_reset_active_high);
 			pinctrl_pm_select_sleep_state(&fep->pdev->dev);
 		} else {
 			disable_irq(fep->wake_irq);
@@ -3962,16 +3965,15 @@ static int __maybe_unused fec_suspend(struct device *dev)
 		}
 		fec_enet_clk_enable(ndev, false);
 		fep->active_in_suspend = !pm_runtime_status_suspended(dev);
-		if (fep->phy_reset_in_suspend)
-			gpio_set_value_cansleep(fep->phy_reset_gpio, 0);
 		if (fep->active_in_suspend)
 			ret = pm_runtime_force_suspend(dev);
 		if (ret < 0)
 			return ret;
-	} else if (fep->mii_bus_share && !ndev->phydev) {
-		pinctrl_pm_select_sleep_state(&fep->pdev->dev);
+	} else if (!ndev->phydev) {
 		if (fep->phy_reset_in_suspend)
-			gpio_set_value_cansleep(fep->phy_reset_gpio, 1);
+			gpio_set_value_cansleep(fep->phy_reset_gpio,
+						fep->phy_reset_active_high);
+		pinctrl_pm_select_sleep_state(&fep->pdev->dev);
 	}
 	rtnl_unlock();
 
@@ -4021,7 +4023,8 @@ static int __maybe_unused fec_resume(struct device *dev)
 		} else {
 			pinctrl_pm_select_default_state(&fep->pdev->dev);
 			if (fep->phy_reset_in_suspend)
-				gpio_set_value_cansleep(fep->phy_reset_gpio, 1);
+				gpio_set_value_cansleep(fep->phy_reset_gpio,
+							!fep->phy_reset_active_high);
 		}
 		fec_restart(ndev);
 		netif_tx_lock_bh(ndev);
@@ -4029,12 +4032,15 @@ static int __maybe_unused fec_resume(struct device *dev)
 		netif_tx_unlock_bh(ndev);
 		napi_enable(&fep->napi);
 		phy_start(ndev->phydev);
-	} else if (fep->mii_bus_share && !ndev->phydev) {
+	} else if (!ndev->phydev) {
 		pinctrl_pm_select_default_state(&fep->pdev->dev);
 		if (fep->phy_reset_in_suspend)
-			gpio_set_value_cansleep(fep->phy_reset_gpio, 1);
-		/* And then recovery mii bus */
-		ret = fec_restore_mii_bus(ndev);
+			gpio_set_value_cansleep(fep->phy_reset_gpio,
+						!fep->phy_reset_active_high);
+		if (fep->mii_bus_share) {
+			/* And then recovery mii bus */
+			ret = fec_restore_mii_bus(ndev);
+		}
 	}
 	rtnl_unlock();
 

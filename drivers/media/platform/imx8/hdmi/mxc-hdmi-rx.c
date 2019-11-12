@@ -28,9 +28,7 @@
 
 #define imx_sd_to_hdmi(sd) container_of(sd, struct mxc_hdmi_rx_dev, sd)
 
-#ifdef CONFIG_IMX_HDP_CEC
 static void mxc_hdmi_cec_init(struct mxc_hdmi_rx_dev *hdmi_rx);
-#endif
 
 static const struct v4l2_dv_timings_cap mxc_hdmi_timings_cap = {
 	.type = V4L2_DV_BT_656_1120,
@@ -403,7 +401,7 @@ static int mxc_hdmi_enum_frame_interval(struct v4l2_subdev *sd,
 {
 	struct mxc_hdmi_rx_dev *hdmi_rx = imx_sd_to_hdmi(sd);
 
-	if (fie->index < 0 || fie->index > 8)
+	if (fie->index > 8)
 		return -EINVAL;
 
 	if (fie->width == 0 || fie->height == 0 ||
@@ -750,14 +748,16 @@ static void hpd5v_work_func(struct work_struct *work)
 		if (hdmi_rx->is_cec) {
 			mxc_hdmi_cec_init(hdmi_rx);
 			imx_cec_register(&hdmi_rx->cec);
+			hdmi_rx->cec_running = true;
 		}
 #endif
 	} else if (hpd == 0){
 		pr_info("HDMI RX Cable Plug Out\n");
 		hdmirx_stop(&hdmi_rx->state);
 #ifdef CONFIG_IMX_HDP_CEC
-		if (hdmi_rx->is_cec) {
+		if (hdmi_rx->is_cec && hdmi_rx->cec_running) {
 			imx_cec_unregister(&hdmi_rx->cec);
+			hdmi_rx->cec_running = false;
 		}
 #endif
 		hdmirx_phy_pix_engine_reset(&hdmi_rx->state);

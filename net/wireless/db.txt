@@ -316,7 +316,7 @@ country CR: DFS-FCC
 	(5735 - 5835 @ 20), (30)
 
 # Source:
-# http://www.mincom.gob.cu/?q=marcoregulatorio
+# https://www.mincom.gob.cu/es/marco-legal
 # - Redes Informáticas
 # Resolución 127- 2011 Reglamento de Banda de frecuencias de 2,4 GHz.
 country CU: DFS-FCC
@@ -432,7 +432,7 @@ country EG: DFS-ETSI
 
 # Source:
 # Cuadro nacional de atribución de frecuencias (CNAF)
-# http://www.mincotur.gob.es/telecomunicaciones/espectro/paginas/cnaf.aspx
+# https://avancedigital.gob.es/espectro/Paginas/cnaf.aspx
 country ES: DFS-ETSI
 	(2400 - 2483.5 @ 40), (100 mW)
 	(5150 - 5250 @ 80), (200 mW), NO-OUTDOOR, AUTO-BW, wmmrule=ETSI
@@ -658,13 +658,12 @@ country JP: DFS-JP
 	(2402 - 2482 @ 40), (20)
 	(2474 - 2494 @ 20), (20), NO-OFDM
 	(4910 - 4990 @ 40), (23)
-	(5030 - 5090 @ 40), (23)
 	(5170 - 5250 @ 80), (20), AUTO-BW
 	(5250 - 5330 @ 80), (20), DFS, AUTO-BW
 	(5490 - 5710 @ 160), (23), DFS
 	# 60 GHz band channels 2-4 at 10mW,
 	# ref: http://www.arib.or.jp/english/html/overview/doc/1-STD-T74v1_1.pdf
-	(59000 - 66000 @ 2160), (10 mW)
+	(57000 - 66000 @ 2160), (10 mW)
 
 country KE: DFS-JP
 	(2402 - 2482 @ 40), (20)
@@ -695,11 +694,12 @@ country KP: DFS-JP
 	(5735 - 5815 @ 20), (30)
 
 country KR: DFS-JP
-	(2402 - 2482 @ 40), (13)
-	(5170 - 5250 @ 80), (20), AUTO-BW
-	(5250 - 5330 @ 80), (20), DFS, AUTO-BW
-	(5490 - 5710 @ 160), (30), DFS
-	(5735 - 5835 @ 80), (30)
+	# ref: https://www.rra.go.kr
+	(2400 - 2483.5 @ 40), (23)
+	(5150 - 5250 @ 80), (23), AUTO-BW
+	(5250 - 5350 @ 80), (20), DFS, AUTO-BW
+	(5470 - 5725 @ 160), (20), DFS
+	(5725 - 5835 @ 80), (23)
 	# 60 GHz band channels 1-4,
 	# ref: http://www.law.go.kr/%ED%96%89%EC%A0%95%EA%B7%9C%EC%B9%99/%EB%AC%B4%EC%84%A0%EC%84%A4%EB%B9%84%EA%B7%9C%EC%B9%99
 	(57000 - 66000 @ 2160), (43)

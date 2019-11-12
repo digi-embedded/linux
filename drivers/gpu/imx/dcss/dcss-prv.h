@@ -21,6 +21,8 @@
 #define CLR 0x08
 #define TGL 0x0C
 
+#define MAX_CLK_SRC 3
+
 #define dcss_writel(v, c)   writel((v), (c))
 #define dcss_readl(c)	    readl(c)
 #define dcss_set(v, c)	    writel((v), (c) + SET)
@@ -65,10 +67,12 @@ struct dcss_soc {
 
 	struct clk *apb_clk;
 	struct clk *axi_clk;
-	struct clk *pdiv_clk;
-	struct clk *pout_clk;
+	struct clk *pix_clk;
 	struct clk *rtrm_clk;
 	struct clk *dtrc_clk;
+	struct clk *sel_clk;
+	struct clk *pll_clk;
+	struct clk *src_clk[MAX_CLK_SRC];
 
 	void (*dcss_disable_callback)(void *data);
 
@@ -191,13 +195,5 @@ void dcss_ctxld_dump_regs(struct seq_file *s, void *data);
 void dcss_hdr10_dump_regs(struct seq_file *s, void *data);
 void dcss_wrscl_dump_regs(struct seq_file *s, void *data);
 void dcss_rdsrc_dump_regs(struct seq_file *s, void *data);
-
-/* DCSS PLL */
-int dcss_pll_init(struct dcss_soc *dcss, unsigned long pll_base);
-void dcss_pll_exit(struct dcss_soc *dcss);
-int dcss_pll_set_rate(struct dcss_soc *dcss, u32 freq, u32 ref_clk,
-		      u32 *actual_freq);
-int dcss_pll_enable(struct dcss_soc *dcss);
-int dcss_pll_disable(struct dcss_soc *dcss);
 
 #endif /* __DCSS_PRV_H__ */

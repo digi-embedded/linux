@@ -223,7 +223,7 @@ static int blob_encap_jobdesc(u32 **desc, dma_addr_t keymod,
 
 	tdesc = kmalloc(dsize, GFP_KERNEL | GFP_DMA);
 	if (tdesc == NULL)
-		return 0;
+		return -ENOMEM;
 
 	memcpy(tdesc, tmpdesc, dsize);
 	*desc = tdesc;
@@ -339,7 +339,7 @@ static int blob_decap_jobdesc(u32 **desc, dma_addr_t keymod, dma_addr_t blobbuf,
 
 	tdesc = kmalloc(dsize, GFP_KERNEL | GFP_DMA);
 	if (tdesc == NULL)
-		return 0;
+		return -ENOMEM;
 
 	memcpy(tdesc, tmpdesc, dsize);
 	*desc = tdesc;
@@ -352,7 +352,6 @@ static int gen_mem_encap(struct device *jr_dev, void __user *secretbuf,
 		int keylen, void __user *kmodbuf, void __user *outbuf)
 {
 	int retval = 0;
-	u32 dsize;
     u32 __iomem *encapdesc = NULL;
 	dma_addr_t secret_dma = 0, keymod_dma = 0, outbuf_dma = 0;
 	u8 __iomem *lsecret = NULL, *lkeymod = NULL, *loutbuf = NULL;
@@ -396,11 +395,10 @@ static int gen_mem_encap(struct device *jr_dev, void __user *secretbuf,
 	}
 	outbuf_dma = dma_map_single(jr_dev, loutbuf, keylen + BLOB_OVERHEAD,
 				    DMA_FROM_DEVICE);
-	dsize = blob_encap_jobdesc(&encapdesc, keymod_dma, (void *)secret_dma, outbuf_dma,
+	retval = blob_encap_jobdesc(&encapdesc, keymod_dma, (void *)secret_dma, outbuf_dma,
 			keylen, RED_KEY, SM_GENMEM, KEY_COVER_ECB);
-	if (!dsize) {
-		dev_err(jr_dev, "can't alloc an encapsulation descriptor\n");
-		retval = -ENOMEM;
+	if (retval < 0) {
+		dev_err(jr_dev, "blob_encap_jobsec failed: %d\n", retval);
 		goto out;
 	}
 	init_completion(&testres.completion);
@@ -444,7 +442,6 @@ static int gen_mem_decap(struct device *jr_dev, void __user *keyblobbuf,
 {
 	int retval = 0;
     int keylen = bloblen - BLOB_OVERHEAD;
-	u32 dsize;
 	dma_addr_t keyblob_dma = 0, keymod_dma = 0, outbuf_dma = 0;
 	u8 __iomem *lkeyblob = NULL, *lkeymod = NULL, *loutbuf = NULL;
 	struct sm_key_job_result testres;
@@ -490,11 +487,10 @@ static int gen_mem_decap(struct device *jr_dev, void __user *keyblobbuf,
 				    DMA_FROM_DEVICE);
 
 	/* Build the encapsulation job descriptor */
-	dsize = blob_decap_jobdesc(&decapdesc, keymod_dma, keyblob_dma, (u8 *)outbuf_dma,
+	retval = blob_decap_jobdesc(&decapdesc, keymod_dma, keyblob_dma, (u8 *)outbuf_dma,
 				   keylen, RED_KEY, SM_GENMEM, KEY_COVER_ECB);
-	if (!dsize) {
-		dev_err(jr_dev, "can't alloc a decapsulation descriptor\n");
-		retval = -ENOMEM;
+	if (retval < 0) {
+		dev_err(jr_dev, "blob_decap_jobdesc failed: %d\n", retval);
 		goto out;
 	}
 

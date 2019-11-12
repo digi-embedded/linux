@@ -32,8 +32,20 @@
 
 #define MCA_DRVNAME_RTC		"mca-rtc"
 
+// Digi RTC IOCTLs custom implementation using MCA
+#define RTC_IOCTL_DIGI 0x100
+#define RTC_MCA_UIE_ON 		(RTC_IOCTL_DIGI + RTC_UIE_ON)
+#define RTC_MCA_UIE_OFF 	(RTC_IOCTL_DIGI + RTC_UIE_OFF)
+#define RTC_MCA_PIE_ON 		(RTC_IOCTL_DIGI + RTC_PIE_ON)
+#define RTC_MCA_PIE_OFF 	(RTC_IOCTL_DIGI + RTC_PIE_OFF)
+#define RTC_MCA_IRQP_READ	(RTC_IOCTL_DIGI + RTC_IRQP_READ)
+#define RTC_MCA_IRQP_SET 	(RTC_IOCTL_DIGI + RTC_IRQP_SET)
+
 #define CLOCK_DATA_LEN	(MCA_RTC_COUNT_SEC - MCA_RTC_COUNT_YEAR_L + 1)
 #define ALARM_DATA_LEN	(MCA_RTC_ALARM_SEC - MCA_RTC_ALARM_YEAR_L + 1)
+
+#define READ_RTC_RETRIES  3
+#define WRITE_RTC_RETRIES 3
 
 #ifdef CONFIG_OF
 enum mca_rtc_type {
@@ -50,6 +62,8 @@ struct mca_rtc {
 	struct rtc_device *rtc_dev;
 	struct mca_drv *mca;
 	int irq_alarm;
+	int irq_1HZ;
+	int irq_periodic;
 	bool alarm_enabled;
 };
 
@@ -121,37 +135,193 @@ static int mca_rtc_start_alarm(struct device *dev)
 				  MCA_RTC_ALARM_EN);
 }
 
+static int mca_rtc_ioctl(struct device *dev, unsigned int cmd, unsigned long arg)
+{
+	struct mca_rtc *rtc = dev_get_drvdata(dev);
+	void __user *uarg = (void __user *) arg;
+	int ret;
+	bool enable;
+	unsigned long value_long;	// ioctl with the user uses an unsigned long
+	unsigned short value_short;	// i2c bus with the MCA uses an unsigned short
+
+	switch (cmd) {
+		case RTC_MCA_UIE_ON:
+		case RTC_MCA_UIE_OFF:
+			enable = cmd == RTC_MCA_UIE_ON;
+
+			ret = regmap_update_bits(rtc->mca->regmap, MCA_RTC_CONTROL,
+						 MCA_RTC_1HZ_EN,
+						 enable ? MCA_RTC_1HZ_EN : 0);
+			if (ret) {
+				dev_err(rtc->mca->dev, "Cannot update MCA_RTC_CONTROL register (%d)\n", ret);
+				return -EFAULT;
+			}
+			break;
+		case RTC_MCA_PIE_ON:
+		case RTC_MCA_PIE_OFF:
+			enable = cmd == RTC_MCA_PIE_ON;
+
+			ret = regmap_update_bits(rtc->mca->regmap, MCA_RTC_CONTROL,
+						 MCA_RTC_PERIODIC_EN,
+						 enable ? MCA_RTC_PERIODIC_EN : 0);
+			if (ret) {
+				dev_err(rtc->mca->dev, "Cannot update MCA_RTC_CONTROL register (%d)\n", ret);
+				return -EFAULT;
+			}
+			break;
+		case RTC_MCA_IRQP_READ:
+			ret = regmap_bulk_read(rtc->mca->regmap, MCA_RTC_PERIODIC_IRQ_FREQ,
+					       &value_short, sizeof(unsigned short));
+			if (ret < 0) {
+				dev_err(dev, "Failed to get RTC periodic irq freq: %d\n", ret);
+				return -EFAULT;
+			}
+			value_long = 1024 / value_short;	// Convert from ticks to HZs
+
+			put_user(value_long, (unsigned long __user *)uarg);
+			break;
+		case RTC_MCA_IRQP_SET:
+			value_long = *(unsigned long*)&arg;
+
+			value_short = 1024 / value_long;	// Convert from HZs to ticks
+
+			ret = regmap_bulk_write(rtc->mca->regmap, MCA_RTC_PERIODIC_IRQ_FREQ,
+						&value_short, sizeof(unsigned short));
+			if (ret < 0) {
+				dev_err(dev, "Failed to set RTC periodic irq freq: %d\n", ret);
+				return -EFAULT;
+			}
+			break;
+		default:
+			return -ENOIOCTLCMD;
+	}
+
+	return 0;
+}
+
 static int mca_rtc_read_time(struct device *dev, struct rtc_time *tm)
 {
 	struct mca_rtc *rtc = dev_get_drvdata(dev);
-	u8 data[CLOCK_DATA_LEN] = { [0 ... (CLOCK_DATA_LEN - 1)] = 0 };
+	u8 data[2][CLOCK_DATA_LEN] = { 0 };
+	u8 index = 0;
+	u8 retry_cnt = 0;
+	bool matched = false;
 	int ret;
 
 	ret = regmap_bulk_read(rtc->mca->regmap, MCA_RTC_COUNT_YEAR_L,
-			       data, CLOCK_DATA_LEN);
+			       data[index], CLOCK_DATA_LEN);
 	if (ret < 0) {
 		dev_err(dev, "Failed to read RTC time data: %d\n", ret);
 		return ret;
 	}
 
-	mca_data_to_tm(data, tm);
-	return rtc_valid_tm(tm);
+	do {
+		index = index ? 0 : 1;
+
+		ret = regmap_bulk_read(rtc->mca->regmap, MCA_RTC_COUNT_YEAR_L,
+				       data[index], CLOCK_DATA_LEN);
+		if (ret < 0) {
+			dev_err(dev, "Failed to read RTC time. Rty=%d ret=%d\n",
+				retry_cnt, ret);
+			return ret;
+		}
+
+		mca_data_to_tm(data[index], tm);
+
+		if (memcmp(data[0], data[1], CLOCK_DATA_LEN)) {
+			struct rtc_time tm_old = { 0 };
+			time64_t seconds_diff;
+
+			/* Mismatch */
+
+			mca_data_to_tm(data[index ? 0 : 1], &tm_old);
+
+			seconds_diff = rtc_tm_sub(tm, &tm_old);
+
+			/* We'll accept new sample one second newer than old */
+			if (seconds_diff != 1) {
+				u8 *data_old = data[index ? 0 : 1];
+				u8 *data_new = data[index];
+
+				dev_err(dev, "Mismatch reading RTC time (rty: %d):\n",
+					retry_cnt);
+				dev_err(dev, "old: %x, %x, %x, %x, %x, %x, %x\n",
+					data_old[0], data_old[1], data_old[2],
+					data_old[3], data_old[4], data_old[5],
+					data_old[6]);
+				dev_err(dev, "new: %x, %x, %x, %x, %x, %x, %x\n",
+					data_new[0], data_new[1], data_new[2],
+					data_new[3], data_new[4], data_new[5],
+					data_new[6]);
+			} else {
+				matched = true;
+			}
+		} else {
+			matched = true;
+		}
+	} while (!matched && retry_cnt++ < READ_RTC_RETRIES);
+
+	if (matched)
+		ret = rtc_valid_tm(tm);
+	else
+		ret = -EINVAL;
+
+	return ret;
 }
 
 static int mca_rtc_set_time(struct device *dev, struct rtc_time *tm)
 {
 	struct mca_rtc *rtc = dev_get_drvdata(dev);
-	u8 data[CLOCK_DATA_LEN] = { [0 ... (CLOCK_DATA_LEN - 1)] = 0 };
+	u8 data[CLOCK_DATA_LEN] = { 0 };
+	u8 retry_cnt = 0;
+	bool matched = false;
 	int ret;
 
 	mca_tm_to_data(tm, data);
 
-	ret = regmap_bulk_write(rtc->mca->regmap, MCA_RTC_COUNT_YEAR_L,
-				data, CLOCK_DATA_LEN);
-	if (ret < 0) {
-		dev_err(dev, "Failed to set RTC time data: %d\n", ret);
-		return ret;
-	}
+	do {
+		struct rtc_time tm_check = { 0 };
+		time64_t seconds_diff;
+
+		ret = regmap_bulk_write(rtc->mca->regmap, MCA_RTC_COUNT_YEAR_L,
+					data, CLOCK_DATA_LEN);
+		if (ret < 0) {
+			dev_err(dev, "Failed to set RTC time. Rty=%d ret=%d\n",
+				retry_cnt, ret);
+			return ret;
+		}
+
+		ret = mca_rtc_read_time(dev, &tm_check);
+		if (ret < 0) {
+			dev_err(dev, "Failed to verify set RTC time. Rty=%d ret=%d\n",
+				retry_cnt, ret);
+			return ret;
+		}
+
+		seconds_diff = rtc_tm_sub(&tm_check, tm);
+
+		/* We'll accept a read time one second newer than the write time */
+		if (seconds_diff !=0 && seconds_diff != 1) {
+			u8 data_check[CLOCK_DATA_LEN] = { 0 };
+
+			mca_tm_to_data(&tm_check, data_check);
+
+			dev_err(dev, "Mismatch writing RTC time (rty: %d):\n",
+				retry_cnt);
+			dev_err(dev, "write: %x, %x, %x, %x, %x, %x, %x\n",
+				data[0], data[1], data[2], data[3],
+				data[4], data[5], data[6]);
+			dev_err(dev, "read: %x, %x, %x, %x, %x, %x, %x\n",
+				data_check[0], data_check[1], data_check[2],
+				data_check[3], data_check[4], data_check[5],
+				data_check[6]);
+		} else {
+			matched = true;
+		}
+	} while (!matched && retry_cnt++ < WRITE_RTC_RETRIES);
+
+	if (!matched)
+		ret = -EINVAL;
 
 	return ret;
 }
@@ -175,16 +345,51 @@ static void mca_rtc_adjust_alarm_time(struct rtc_wkalrm *alrm, bool inc)
 static int mca_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 {
 	struct mca_rtc *rtc = dev_get_drvdata(dev);
-	u8 data[CLOCK_DATA_LEN] = { [0 ... (CLOCK_DATA_LEN - 1)] = 0 };
-	int ret;
+	u8 data[2][CLOCK_DATA_LEN] = { 0 };
+	u8 index = 0;
+	u8 retry_cnt = 0;
+	bool matched = false;
 	unsigned int val;
+	int ret;
 
 	ret = regmap_bulk_read(rtc->mca->regmap, MCA_RTC_ALARM_YEAR_L,
-			       data, ALARM_DATA_LEN);
-	if (ret < 0)
+			       data[index], ALARM_DATA_LEN);
+	if (ret < 0) {
+		dev_err(dev, "Failed to read RTC alarm data: %d\n", ret);
 		return ret;
+	}
 
-	mca_data_to_tm(data, &alrm->time);
+	do {
+		index = index ? 0 : 1;
+
+		ret = regmap_bulk_read(rtc->mca->regmap, MCA_RTC_ALARM_YEAR_L,
+				       data[index], ALARM_DATA_LEN);
+		if (ret < 0) {
+			dev_err(dev, "Failed to read RTC alarm data: %d\n", ret);
+			return ret;
+		}
+
+		if (memcmp(data[0], data[1], CLOCK_DATA_LEN)) {
+			u8 *data_old = data[index ? 0 : 1];
+			u8 *data_new = data[index];
+
+			dev_err(dev, "Mismatch reading RTC alarm (rty: %d):\n",
+				retry_cnt);
+			dev_err(dev, "old: %x, %x, %x, %x, %x, %x, %x\n",
+				data_old[0], data_old[1], data_old[2], data_old[3],
+				data_old[4], data_old[5], data_old[6]);
+			dev_err(dev, "new: %x, %x, %x, %x, %x, %x, %x\n",
+				data_new[0], data_new[1], data_new[2], data_new[3],
+				data_new[4], data_new[5], data_new[6]);
+		} else {
+			matched = true;
+		}
+	} while (!matched && retry_cnt++ < READ_RTC_RETRIES);
+
+	if (!matched)
+		return -EINVAL;
+
+	mca_data_to_tm(data[index], &alrm->time);
 	mca_rtc_adjust_alarm_time(alrm, true);
 
 	/* Enable status */
@@ -230,16 +435,53 @@ exit_alarm_irq:
 static int mca_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 {
 	struct mca_rtc *rtc = dev_get_drvdata(dev);
-	u8 data[CLOCK_DATA_LEN] = { [0 ... (CLOCK_DATA_LEN - 1)] = 0 };
+	u8 data[CLOCK_DATA_LEN] = { 0 };
+	u8 retry_cnt = 0;
+	bool matched = false;
 	int ret;
 
 	mca_rtc_adjust_alarm_time(alrm, false);
 	mca_tm_to_data(&alrm->time, data);
 
-	ret = regmap_bulk_write(rtc->mca->regmap, MCA_RTC_ALARM_YEAR_L,
-				data, ALARM_DATA_LEN);
-	if (ret < 0)
-		return ret;
+	do {
+		struct rtc_wkalrm alrm_check = { 0 };
+		u8 data_check[CLOCK_DATA_LEN] = { 0 };
+
+		ret = regmap_bulk_write(rtc->mca->regmap, MCA_RTC_ALARM_YEAR_L,
+					data, ALARM_DATA_LEN);
+		if (ret < 0) {
+			dev_err(dev, "Failed to set RTC alarm. Rty=%d ret=%d\n",
+				retry_cnt, ret);
+			return ret;
+		}
+
+		ret = mca_rtc_read_alarm(dev, &alrm_check);
+		if (ret < 0) {
+			dev_err(dev, "Failed to verify set RTC alarm. Rty=%d ret=%d\n",
+				retry_cnt, ret);
+			return ret;
+		}
+
+		mca_rtc_adjust_alarm_time(&alrm_check, false);
+		mca_tm_to_data(&alrm_check.time, data_check);
+
+		if (memcmp(data, data_check, CLOCK_DATA_LEN)) {
+			dev_err(dev, "Mismatch writing RTC alarm (rty: %d):\n",
+				retry_cnt);
+			dev_err(dev, "write: %x, %x, %x, %x, %x, %x, %x\n",
+				data[0], data[1], data[2], data[3],
+				data[4], data[5], data[6]);
+			dev_err(dev, "read: %x, %x, %x, %x, %x, %x, %x\n",
+				data_check[0], data_check[1], data_check[2],
+				data_check[3], data_check[4], data_check[5],
+				data_check[6]);
+		} else {
+			matched = true;
+		}
+	} while (!matched && retry_cnt++ < WRITE_RTC_RETRIES);
+
+	if (!matched)
+		return -EINVAL;
 
 	return mca_rtc_alarm_irq_enable(dev, alrm->enabled);
 }
@@ -253,12 +495,114 @@ static irqreturn_t mca_alarm_event(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
+static irqreturn_t mca_1HZ_event(int irq, void *data)
+{
+	struct mca_rtc *rtc = data;
+
+	rtc_handle_legacy_irq(rtc->rtc_dev, 1, RTC_UF);
+
+	return IRQ_HANDLED;
+}
+
+static irqreturn_t mca_periodic_irq_event(int irq, void *data)
+{
+	struct mca_rtc *rtc = data;
+
+	rtc_handle_legacy_irq(rtc->rtc_dev, 1, RTC_PF);
+
+	return IRQ_HANDLED;
+}
+
 static const struct rtc_class_ops mca_rtc_ops = {
+	.ioctl = mca_rtc_ioctl,
 	.read_time = mca_rtc_read_time,
 	.set_time = mca_rtc_set_time,
 	.read_alarm = mca_rtc_read_alarm,
 	.set_alarm = mca_rtc_set_alarm,
 	.alarm_irq_enable = mca_rtc_alarm_irq_enable,
+};
+
+static const char _enabled[] = "enabled";
+static const char _disabled[] = "disabled";
+
+static ssize_t rtc_irq_pin_enable_show(struct device *dev,
+				       struct device_attribute *attr, char *buf)
+{
+	struct mca_rtc *rtc = dev_get_drvdata(dev);
+	unsigned int val;
+	int ret;
+
+	ret = regmap_read(rtc->mca->regmap, MCA_RTC_CONTROL, &val);
+	if (ret) {
+		dev_err(rtc->mca->dev, "Cannot read MCA MCA_RTC_CONTROL register(%d)\n",
+			ret);
+		return 0;
+	}
+
+	return sprintf(buf, "%s\n", val & MCA_RTC_IRQ_PIN_EN ?
+		       _enabled : _disabled);
+}
+
+static ssize_t rtc_irq_pin_enable_store(struct device *dev, struct device_attribute *attr,
+					const char *buf, size_t count)
+{
+	struct mca_rtc *rtc = dev_get_drvdata(dev);
+	bool enable;
+	int ret;
+
+	if (!strncmp(buf, _enabled, sizeof(_enabled) - 1))
+		enable = true;
+	else if (!strncmp(buf, _disabled, sizeof(_disabled) - 1))
+		enable = false;
+	else
+		return -EINVAL;
+
+	ret = regmap_update_bits(rtc->mca->regmap, MCA_RTC_CONTROL,
+				 MCA_RTC_IRQ_PIN_EN,
+				 enable ? MCA_RTC_IRQ_PIN_EN : 0);
+	if (ret) {
+		dev_err(rtc->mca->dev, "Cannot update MCA_RTC_CONTROL register (%d)\n", ret);
+		return ret;
+	}
+
+	return count;
+}
+static DEVICE_ATTR(rtc_irq_pin_enable, 0644, rtc_irq_pin_enable_show,
+		   rtc_irq_pin_enable_store);
+
+static ssize_t rtc_irq_pin_store(struct device *dev, struct device_attribute *attr,
+				 const char *buf, size_t size)
+{
+	struct mca_rtc *rtc = dev_get_drvdata(dev);
+	ssize_t status;
+	int ret;
+	unsigned int value;
+
+	status = kstrtouint(buf, 0, &value);
+	if (status) {
+		dev_err(rtc->mca->dev, "Invalid RTC irq pin\n");
+		return -EINVAL;
+	}
+
+	ret = regmap_bulk_write(rtc->mca->regmap, MCA_RTC_IRQ_PIN,
+				&value, sizeof(uint8_t));
+	if (ret < 0) {
+		dev_err(rtc->mca->dev, "Cannot set RTC irq pin (%d)\n", ret);
+		return ret;
+	}
+
+	return size;
+}
+static DEVICE_ATTR_WO(rtc_irq_pin);
+
+static struct attribute *mca_rtc_attrs[] = {
+	&dev_attr_rtc_irq_pin_enable.attr,
+	&dev_attr_rtc_irq_pin.attr,
+	NULL
+};
+
+static struct attribute_group mca_rtc_attr_group = {
+	.attrs = mca_rtc_attrs,
 };
 
 static int mca_rtc_probe(struct platform_device *pdev)
@@ -333,6 +677,37 @@ static int mca_rtc_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "Failed to request %s IRQ. (%d)\n",
 			MCA_IRQ_RTC_ALARM_NAME, rtc->irq_alarm);
 		rtc->irq_alarm = -ENXIO;
+	}
+
+	rtc->irq_1HZ = platform_get_irq_byname(pdev,
+					       MCA_IRQ_RTC_1HZ_NAME);
+	ret = devm_request_threaded_irq(&pdev->dev, rtc->irq_1HZ, NULL,
+					mca_1HZ_event,
+					IRQF_TRIGGER_LOW | IRQF_ONESHOT,
+					MCA_IRQ_RTC_1HZ_NAME, rtc);
+	if (ret) {
+		dev_err(&pdev->dev, "Failed to request %s IRQ. (%d)\n",
+			MCA_IRQ_RTC_1HZ_NAME, rtc->irq_1HZ);
+		rtc->irq_1HZ = -ENXIO;
+	}
+
+	rtc->irq_periodic = platform_get_irq_byname(pdev,
+							MCA_IRQ_RTC_PERIODIC_IRQ_NAME);
+	ret = devm_request_threaded_irq(&pdev->dev, rtc->irq_periodic,
+					NULL, mca_periodic_irq_event,
+					IRQF_TRIGGER_LOW | IRQF_ONESHOT,
+					MCA_IRQ_RTC_PERIODIC_IRQ_NAME, rtc);
+	if (ret) {
+		dev_err(&pdev->dev, "Failed to request %s IRQ. (%d)\n",
+			MCA_IRQ_RTC_PERIODIC_IRQ_NAME, rtc->irq_periodic);
+		rtc->irq_periodic = -ENXIO;
+	}
+
+	ret = sysfs_create_group(&pdev->dev.kobj, &mca_rtc_attr_group);
+	if (ret) {
+		dev_err(&pdev->dev, "Failed to create sysfs entries (%d).\n",
+			ret);
+		goto err;
 	}
 
 	return 0;

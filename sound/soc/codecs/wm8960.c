@@ -137,6 +137,7 @@ struct wm8960_priv {
 	int freq_in;
 	bool is_stream_in_use[2];
 	struct wm8960_data pdata;
+	bool quick_probe;
 };
 
 #define wm8960_reset(c)	regmap_write(c, WM8960_RESET, 0)
@@ -931,7 +932,8 @@ static int wm8960_set_bias_level_out3(struct snd_soc_codec *codec,
 
 			/* Enable & ramp VMID at 2x50k */
 			snd_soc_update_bits(codec, WM8960_POWER1, 0x80, 0x80);
-			msleep(100);
+			if(wm8960->quick_probe == false)
+				msleep(100);
 
 			/* Enable VREF */
 			snd_soc_update_bits(codec, WM8960_POWER1, WM8960_VREF,
@@ -1373,6 +1375,7 @@ static int wm8960_i2c_probe(struct i2c_client *i2c,
 	struct wm8960_priv *wm8960;
 	int ret;
 	int repeat_reset = 10;
+	struct device_node *np = i2c->dev.of_node;
 
 	wm8960 = devm_kzalloc(&i2c->dev, sizeof(struct wm8960_priv),
 			      GFP_KERNEL);
@@ -1393,6 +1396,11 @@ static int wm8960_i2c_probe(struct i2c_client *i2c,
 		memcpy(&wm8960->pdata, pdata, sizeof(struct wm8960_data));
 	else if (i2c->dev.of_node)
 		wm8960_set_pdata_from_of(i2c, &wm8960->pdata);
+
+	if (of_property_read_bool(np, "quick-probe"))
+		wm8960->quick_probe = true;
+
+	dev_info(&i2c->dev, "%s(), quick probe %d\n", __func__, wm8960->quick_probe);
 
 	do {
 		ret = wm8960_reset(wm8960->regmap);
@@ -1442,35 +1450,6 @@ static int wm8960_i2c_remove(struct i2c_client *client)
 	return 0;
 }
 
-#ifdef CONFIG_PM
-static int wm8960_runtime_resume(struct device *dev)
-{
-	struct wm8960_priv *wm8960 = dev_get_drvdata(dev);
-	int ret;
-
-	ret = clk_prepare_enable(wm8960->mclk);
-	if (ret) {
-		dev_err(dev, "Failed to enable MCLK: %d\n", ret);
-		return ret;
-	}
-	return 0;
-}
-
-static int wm8960_runtime_suspend(struct device *dev)
-{
-	struct wm8960_priv *wm8960 = dev_get_drvdata(dev);
-
-	clk_disable_unprepare(wm8960->mclk);
-
-	return 0;
-}
-#endif
-
-static const struct dev_pm_ops wm8960_pm = {
-	SET_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend, pm_runtime_force_resume)
-	SET_RUNTIME_PM_OPS(wm8960_runtime_suspend, wm8960_runtime_resume, NULL)
-};
-
 static const struct i2c_device_id wm8960_i2c_id[] = {
 	{ "wm8960", 0 },
 	{ }
@@ -1487,7 +1466,6 @@ static struct i2c_driver wm8960_i2c_driver = {
 	.driver = {
 		.name = "wm8960",
 		.of_match_table = wm8960_of_match,
-		.pm = &wm8960_pm,
 	},
 	.probe =    wm8960_i2c_probe,
 	.remove =   wm8960_i2c_remove,

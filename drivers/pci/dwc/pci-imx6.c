@@ -124,6 +124,8 @@ struct imx_pcie {
 
 #define PCIE_PHY_DEBUG_R0 (PL_OFFSET + 0x28)
 #define PCIE_PHY_DEBUG_R1 (PL_OFFSET + 0x2c)
+#define PCIE_PHY_DEBUG_R1_XMLH_LINK_IN_TRAINING	(1 << 29)
+#define PCIE_PHY_DEBUG_R1_XMLH_LINK_UP		(1 << 4)
 
 #define PCIE_PHY_CTRL (PL_OFFSET + 0x114)
 #define PCIE_PHY_CTRL_DATA_LOC 0
@@ -492,6 +494,7 @@ static int imx_pcie_abort_handler(unsigned long addr,
 
 static void imx_pcie_assert_core_reset(struct imx_pcie *imx_pcie)
 {
+	struct device *dev = imx_pcie->pci->dev;
 	u32 val;
 	int i;
 
@@ -571,6 +574,13 @@ static void imx_pcie_assert_core_reset(struct imx_pcie *imx_pcie)
 				IMX8MQ_PCIEPHY_DOMAIN_EN);
 	}
 
+	if (imx_pcie->vpcie && regulator_is_enabled(imx_pcie->vpcie) > 0) {
+		int ret = regulator_disable(imx_pcie->vpcie);
+
+		if (ret)
+			dev_err(dev, "failed to disable vpcie regulator: %d\n",
+				ret);
+	}
 }
 
 static int imx_pcie_enable_ref_clk(struct imx_pcie *imx_pcie)
@@ -745,8 +755,14 @@ static int imx_pcie_deassert_core_reset(struct imx_pcie *imx_pcie)
 	int ret, i;
 	u32 val, tmp;
 
-	if (gpio_is_valid(imx_pcie->power_on_gpio))
-		gpio_set_value_cansleep(imx_pcie->power_on_gpio, 1);
+	if (imx_pcie->vpcie && !regulator_is_enabled(imx_pcie->vpcie)) {
+		ret = regulator_enable(imx_pcie->vpcie);
+		if (ret) {
+			dev_err(dev, "failed to enable vpcie regulator: %d\n",
+				ret);
+			return ret;
+		}
+	}
 
 	ret = clk_prepare_enable(imx_pcie->pcie);
 	if (ret) {
@@ -955,7 +971,12 @@ err_pcie_phy:
 err_pcie_bus:
 	clk_disable_unprepare(imx_pcie->pcie);
 err_pcie:
-
+	if (imx_pcie->vpcie && regulator_is_enabled(imx_pcie->vpcie) > 0) {
+		ret = regulator_disable(imx_pcie->vpcie);
+		if (ret)
+			dev_err(dev, "failed to disable vpcie regulator: %d\n",
+				ret);
+	}
 	return ret;
 }
 
@@ -1616,6 +1637,9 @@ static int imx_pcie_host_init(struct pcie_port *pp)
 	/* enable disp_mix power domain */
 	pm_runtime_get_sync(pci->dev);
 
+	if (gpio_is_valid(imx_pcie->power_on_gpio))
+		gpio_set_value_cansleep(imx_pcie->power_on_gpio, 1);
+
 	imx_pcie_assert_core_reset(imx_pcie);
 	imx_pcie_init_phy(imx_pcie);
 	ret = imx_pcie_deassert_core_reset(imx_pcie);
@@ -1633,6 +1657,12 @@ static int imx_pcie_host_init(struct pcie_port *pp)
 	}
 
 	return 0;
+}
+
+static int imx_pcie_link_up(struct dw_pcie *pci)
+{
+	return dw_pcie_readl_dbi(pci, PCIE_PHY_DEBUG_R1) &
+			PCIE_PHY_DEBUG_R1_XMLH_LINK_UP;
 }
 
 static const struct dw_pcie_host_ops imx_pcie_host_ops = {
@@ -1677,7 +1707,7 @@ static int imx_add_pcie_port(struct imx_pcie *imx_pcie,
 }
 
 static const struct dw_pcie_ops dw_pcie_ops = {
-	/* No special ops needed, but pcie-designware still expects this struct */
+	.link_up = imx_pcie_link_up,
 };
 
 static ssize_t imx_pcie_bar0_addr_info(struct device *dev,
@@ -2052,6 +2082,10 @@ static int pci_imx_suspend_noirq(struct device *dev)
 			regulator_disable(imx_pcie->pcie_phy_regulator);
 		if (imx_pcie->pcie_bus_regulator != NULL)
 			regulator_disable(imx_pcie->pcie_bus_regulator);
+		if (imx_pcie->vpcie != NULL) {
+			regulator_disable(imx_pcie->vpcie);
+			pinctrl_pm_select_sleep_state(dev);
+		}
 	}
 
 	return 0;
@@ -2112,6 +2146,12 @@ static int pci_imx_resume_noirq(struct device *dev)
 		regmap_update_bits(imx_pcie->iomuxc_gpr, IOMUXC_GPR1,
 				IMX6Q_GPR1_PCIE_TEST_PD, 0);
 	} else {
+		if (imx_pcie->vpcie != NULL) {
+			pinctrl_pm_select_default_state(dev);
+			ret = regulator_enable(imx_pcie->vpcie);
+			if (ret)
+				dev_err(dev, "failed to enable the vpcie regulator\n");
+		}
 		pci_imx_ltssm_disable(dev);
 		imx_pcie_assert_core_reset(imx_pcie);
 		imx_pcie_init_phy(imx_pcie);
@@ -2529,10 +2569,6 @@ static int imx_pcie_probe(struct platform_device *pdev)
 		if (PTR_ERR(imx_pcie->vpcie) == -EPROBE_DEFER)
 			return -EPROBE_DEFER;
 		imx_pcie->vpcie = NULL;
-	} else {
-		ret = regulator_enable(imx_pcie->vpcie);
-		if (ret)
-			dev_err(dev, "failed to enable the vpcie regulator\n");
 	}
 
 	platform_set_drvdata(pdev, imx_pcie);

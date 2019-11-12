@@ -140,6 +140,12 @@ static struct resource mca_cc8x_rtc_resources[] = {
 		.end    = MCA_CC8X_IRQ_RTC_1HZ,
 		.flags  = IORESOURCE_IRQ,
 	},
+	{
+		.name   = MCA_IRQ_RTC_PERIODIC_IRQ_NAME,
+		.start  = MCA_CC8X_IRQ_RTC_PERIODIC_IRQ,
+		.end    = MCA_CC8X_IRQ_RTC_PERIODIC_IRQ,
+		.flags  = IORESOURCE_IRQ,
+	},
 };
 
 static struct resource mca_cc8x_watchdog_resources[] = {
@@ -769,8 +775,8 @@ static void mca_cc8x_power_off(void)
 					 MCA_PWR_GO_OFF,
 					 MCA_PWR_GO_OFF);
 		if (ret)
-			printk(KERN_ERR "ERROR: accesing PWR_CTRL_0 register "
-			       "[%s:%d/%s()]!\n", __FILE__, __LINE__, __func__);
+			printk(KERN_ERR "ERROR: accesing PWR_CTRL_0 register (%d) "
+			       "[%s:%d/%s()]!\n", ret, __FILE__, __LINE__, __func__);
 
 		/*
 		 * Even if the regmap update returned with success, retry...

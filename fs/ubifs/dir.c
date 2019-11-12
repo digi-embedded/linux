@@ -1148,8 +1148,7 @@ static int ubifs_symlink(struct inode *dir, struct dentry *dentry,
 	struct ubifs_inode *dir_ui = ubifs_inode(dir);
 	struct ubifs_info *c = dir->i_sb->s_fs_info;
 	int err, sz_change, len = strlen(symname);
-	struct fscrypt_str disk_link = FSTR_INIT((char *)symname, len + 1);
-	struct fscrypt_symlink_data *sd = NULL;
+	struct fscrypt_str disk_link;
 	struct ubifs_budget_req req = { .new_ino = 1, .new_dent = 1,
 					.new_ino_d = ALIGN(len, 8),
 					.dirtied_ino = 1 };

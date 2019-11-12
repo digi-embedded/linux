@@ -59,6 +59,8 @@ void dump_isi_regs(struct mxc_isi_dev *mxc_isi)
 	dev_dbg(dev, "CHNL_OUT_BUF2_ADDR_Y   0x8Ch = 0x%8x\n", readl(mxc_isi->regs + 0x8C));
 	dev_dbg(dev, "CHNL_OUT_BUF2_ADDR_U   0x90h = 0x%8x\n", readl(mxc_isi->regs + 0x90));
 	dev_dbg(dev, "CHNL_OUT_BUF2_ADDR_V   0x94h = 0x%8x\n", readl(mxc_isi->regs + 0x94));
+	dev_dbg(dev, "CHNL_SCL_IMG_CFG       0x98h = 0x%8x\n", readl(mxc_isi->regs + 0x98));
+	dev_dbg(dev, "CHNL_FLOW_CTRL         0x9Ch = 0x%8x\n", readl(mxc_isi->regs + 0x9C));
 }
 #else
 void dump_isi_regs(struct mxc_isi_dev *mxc_isi)
@@ -89,6 +91,7 @@ static bool is_rgb(u32 pix_fmt)
 		(pix_fmt == V4L2_PIX_FMT_XRGB32) ||
 		(pix_fmt == V4L2_PIX_FMT_XBGR32) ||
 		(pix_fmt == V4L2_PIX_FMT_BGR24) ||
+		(pix_fmt == V4L2_PIX_FMT_RGBA) ||
 		(pix_fmt == V4L2_PIX_FMT_ABGR32) ||
 	    (pix_fmt == V4L2_PIX_FMT_ARGB32)) {
 		return true;
@@ -600,6 +603,7 @@ void mxc_isi_clean_registers(struct mxc_isi_dev *mxc_isi)
 void mxc_isi_channel_enable(struct mxc_isi_dev *mxc_isi)
 {
 	u32 val;
+	struct mxc_isi_frame *dst_f = &mxc_isi->isi_cap.dst_f;
 
 	val = readl(mxc_isi->regs + CHNL_CTRL);
 	val |= (CHNL_CTRL_CHNL_EN_ENABLE << CHNL_CTRL_CHNL_EN_OFFSET);
@@ -608,7 +612,12 @@ void mxc_isi_channel_enable(struct mxc_isi_dev *mxc_isi)
 
 	mxc_isi_clean_registers(mxc_isi);
 	mxc_isi_enable_irq(mxc_isi);
-	msleep(700);
+
+	if ((dst_f->width > 1920) || (dst_f->height > 1080))
+		msleep(400);
+	else
+		msleep(300);
+
 	dump_isi_regs(mxc_isi);
 }
 
@@ -643,9 +652,6 @@ void  mxc_isi_enable_irq(struct mxc_isi_dev *mxc_isi)
 			CHNL_IER_OFLW_PANIC_Y_BUF_EN_MASK |
 			CHNL_IER_EXCS_OFLW_Y_BUF_EN_MASK |
 			CHNL_IER_OFLW_Y_BUF_EN_MASK;
-	if (mxc_isi->is_m2m)
-		val |= CHNL_IER_MEM_RD_DONE_EN_MASK;
-
 	writel(val, mxc_isi->regs + CHNL_IER);
 }
 
@@ -760,7 +766,7 @@ void mxc_isi_m2m_config_src(struct mxc_isi_dev *mxc_isi)
 	/* source format */
 	val = readl(mxc_isi->regs + CHNL_MEM_RD_CTRL);
 	val &= ~CHNL_MEM_RD_CTRL_IMG_TYPE_MASK;
-	val = src_f->fmt->color << CHNL_MEM_RD_CTRL_IMG_TYPE_OFFSET;
+	val |= src_f->fmt->color << CHNL_MEM_RD_CTRL_IMG_TYPE_OFFSET;
 	writel(val, mxc_isi->regs + CHNL_MEM_RD_CTRL);
 
 	/* source image width and height */

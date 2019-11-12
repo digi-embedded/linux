@@ -32,6 +32,9 @@ struct trusty_work {
 	struct work_struct work;
 };
 
+typedef ulong (trusty_invoke_fn)(unsigned long, unsigned long, unsigned long,
+				unsigned long);
+
 struct trusty_state {
 	struct mutex smc_lock;
 	struct atomic_notifier_head notifier;
@@ -43,6 +46,8 @@ struct trusty_state {
 	struct trusty_work __percpu *nop_works;
 	struct list_head nop_queue;
 	spinlock_t nop_lock; /* protects nop_queue */
+	bool gicv3_workaround;
+	trusty_invoke_fn *invoke_fn;
 };
 
 #ifdef CONFIG_ARM64
@@ -86,6 +91,30 @@ static inline ulong smc(ulong r0, ulong r1, ulong r2, ulong r3)
 	return _r0;
 }
 
+static inline ulong hvc(ulong r0, ulong r1, ulong r2, ulong r3)
+{
+	register ulong _r0 asm(SMC_ARG0) = r0;
+	register ulong _r1 asm(SMC_ARG1) = r1;
+	register ulong _r2 asm(SMC_ARG2) = r2;
+	register ulong _r3 asm(SMC_ARG3) = r3;
+
+	asm volatile(
+		__asmeq("%0", SMC_ARG0)
+		__asmeq("%1", SMC_ARG1)
+		__asmeq("%2", SMC_ARG2)
+		__asmeq("%3", SMC_ARG3)
+		__asmeq("%4", SMC_ARG0)
+		__asmeq("%5", SMC_ARG1)
+		__asmeq("%6", SMC_ARG2)
+		__asmeq("%7", SMC_ARG3)
+		SMC_ARCH_EXTENSION
+		"hvc	#0"	/* switch to secure world */
+		: "=r" (_r0), "=r" (_r1), "=r" (_r2), "=r" (_r3)
+		: "r" (_r0), "r" (_r1), "r" (_r2), "r" (_r3)
+		: SMC_REGISTERS_TRASHED);
+	return _r0;
+}
+
 s32 trusty_fast_call32(struct device *dev, u32 smcnr, u32 a0, u32 a1, u32 a2)
 {
 	struct trusty_state *s = platform_get_drvdata(to_platform_device(dev));
@@ -94,7 +123,7 @@ s32 trusty_fast_call32(struct device *dev, u32 smcnr, u32 a0, u32 a1, u32 a2)
 	BUG_ON(!SMC_IS_FASTCALL(smcnr));
 	BUG_ON(SMC_IS_SMC64(smcnr));
 
-	return smc(smcnr, a0, a1, a2);
+	return s->invoke_fn(smcnr, a0, a1, a2);
 }
 EXPORT_SYMBOL(trusty_fast_call32);
 
@@ -107,7 +136,7 @@ s64 trusty_fast_call64(struct device *dev, u64 smcnr, u64 a0, u64 a1, u64 a2)
 	BUG_ON(!SMC_IS_FASTCALL(smcnr));
 	BUG_ON(!SMC_IS_SMC64(smcnr));
 
-	return smc(smcnr, a0, a1, a2);
+	return s->invoke_fn(smcnr, a0, a1, a2);
 }
 #endif
 
@@ -116,13 +145,14 @@ static ulong trusty_std_call_inner(struct device *dev, ulong smcnr,
 {
 	ulong ret;
 	int retry = 5;
+	struct trusty_state *s = platform_get_drvdata(to_platform_device(dev));
 
 	dev_dbg(dev, "%s(0x%lx 0x%lx 0x%lx 0x%lx)\n",
 		__func__, smcnr, a0, a1, a2);
 	while (true) {
-		ret = smc(smcnr, a0, a1, a2);
+		ret = s->invoke_fn(smcnr, a0, a1, a2);
 		while ((s32)ret == SM_ERR_FIQ_INTERRUPTED)
-			ret = smc(SMC_SC_RESTART_FIQ, 0, 0, 0);
+			ret = s->invoke_fn(SMC_SC_RESTART_FIQ, 0, 0, 0);
 		if ((int)ret != SM_ERR_BUSY || !retry)
 			break;
 
@@ -142,13 +172,20 @@ static ulong trusty_std_call_helper(struct device *dev, ulong smcnr,
 	struct trusty_state *s = platform_get_drvdata(to_platform_device(dev));
 
 	while (true) {
-		local_irq_disable();
+		/*
+		 * In GICv3, we don't use non-secure world generated interrupt
+		 * so no need disable IRQ here. Or the non-secure IRQ will never
+		 * be handle before the SMC process exited.
+		 */
+		if (!s->gicv3_workaround)
+			local_irq_disable();
 		atomic_notifier_call_chain(&s->notifier, TRUSTY_CALL_PREPARE,
 					   NULL);
 		ret = trusty_std_call_inner(dev, smcnr, a0, a1, a2);
 		atomic_notifier_call_chain(&s->notifier, TRUSTY_CALL_RETURNED,
 					   NULL);
-		local_irq_enable();
+		if (!s->gicv3_workaround)
+			local_irq_enable();
 
 		if ((int)ret != SM_ERR_BUSY)
 			break;
@@ -433,12 +470,19 @@ void trusty_dequeue_nop(struct device *dev, struct trusty_nop *nop)
 }
 EXPORT_SYMBOL(trusty_dequeue_nop);
 
+static const struct of_device_id trusty_of_match[] = {
+	{ .compatible = "android,trusty-smc-v1", .data = smc, },
+	{ .compatible = "android,trusty-hvc-v1", .data = hvc, },
+	{},
+};
+
 static int trusty_probe(struct platform_device *pdev)
 {
 	int ret;
 	unsigned int cpu;
 	work_func_t work_func;
 	struct trusty_state *s;
+	const struct of_device_id *id;
 	struct device_node *node = pdev->dev.of_node;
 
 	if (!node) {
@@ -446,11 +490,17 @@ static int trusty_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
+	id = of_match_node(trusty_of_match, node);
+	if (!id)
+		return -ENODEV;
+
 	s = kzalloc(sizeof(*s), GFP_KERNEL);
 	if (!s) {
 		ret = -ENOMEM;
 		goto err_allocate_state;
 	}
+
+	s->invoke_fn = id->data;
 
 	s->dev = &pdev->dev;
 	spin_lock_init(&s->nop_lock);
@@ -498,6 +548,11 @@ static int trusty_probe(struct platform_device *pdev)
 		goto err_add_children;
 	}
 
+	if (of_find_property(s->dev->of_node, "use-gicv3-workaround", NULL)) {
+		s->gicv3_workaround = true;
+	} else {
+		s->gicv3_workaround = false;
+	}
 	return 0;
 
 err_add_children:
@@ -545,11 +600,6 @@ static int trusty_remove(struct platform_device *pdev)
 	kfree(s);
 	return 0;
 }
-
-static const struct of_device_id trusty_of_match[] = {
-	{ .compatible = "android,trusty-smc-v1", },
-	{},
-};
 
 static struct platform_driver trusty_driver = {
 	.probe = trusty_probe,

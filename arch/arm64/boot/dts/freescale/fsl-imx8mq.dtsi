@@ -407,7 +407,7 @@
 		#thermal-sensor-cells =  <0>;
 	};
 
-	thermal-zones {
+	thermal_zones: thermal-zones {
 		/* cpu thermal */
 		cpu-thermal {
 			polling-delay-passive = <250>;
@@ -544,16 +544,20 @@
 		clocks = <&clk IMX8MQ_CLK_DISP_APB_ROOT>,
 			 <&clk IMX8MQ_CLK_DISP_AXI_ROOT>,
 			 <&clk IMX8MQ_CLK_DISP_RTRM_ROOT>,
-			 <&clk IMX8MQ_CLK_DUMMY>,
-			 <&clk IMX8MQ_CLK_DUMMY>,
-			 <&clk IMX8MQ_CLK_DISP_DTRC>;
-		clock-names = "apb", "axi", "rtrm", "pix_div", "pix_out", "dtrc";
+			 <&clk IMX8MQ_VIDEO2_PLL_OUT>,
+			 <&clk IMX8MQ_CLK_DISP_DTRC>,
+			 <&clk IMX8MQ_VIDEO2_PLL1_REF_SEL>,
+			 <&clk IMX8MQ_CLK_PHY_27MHZ>;
+		clock-names = "apb", "axi", "rtrm", "pix",
+			"dtrc", "pll", "pll_src1";
 		assigned-clocks = <&clk IMX8MQ_CLK_DC_PIXEL>,
 				  <&clk IMX8MQ_CLK_DISP_AXI>,
-				  <&clk IMX8MQ_CLK_DISP_RTRM>;
+				  <&clk IMX8MQ_CLK_DISP_RTRM>,
+				  <&clk IMX8MQ_VIDEO2_PLL1_REF_SEL>;
 		assigned-clock-parents = <&clk IMX8MQ_VIDEO_PLL1_OUT>,
 					 <&clk IMX8MQ_SYS1_PLL_800M>,
-					 <&clk IMX8MQ_SYS1_PLL_800M>;
+					 <&clk IMX8MQ_SYS1_PLL_800M>,
+					 <&clk IMX8MQ_CLK_27M>;
 		assigned-clock-rates = <594000000>,
 				       <800000000>,
 				       <400000000>;
@@ -592,8 +596,11 @@
 	lcdif: lcdif@30320000 {
 		compatible = "fsl,imx8mq-lcdif", "fsl,imx28-lcdif";
 		reg = <0x0 0x30320000 0x0 0x10000>;
-		clocks = <&clk IMX8MQ_CLK_LCDIF_PIXEL>;
-		clock-names = "pix";
+		clocks = <&clk IMX8MQ_CLK_LCDIF_PIXEL>,
+			 <&clk IMX8MQ_VIDEO_PLL1>,
+			 <&clk IMX8MQ_CLK_27M>,
+			 <&clk IMX8MQ_CLK_25M>;
+		clock-names = "pix", "video_pll", "osc_27", "osc_25";
 		assigned-clocks = <&clk IMX8MQ_CLK_LCDIF_PIXEL>;
 		assigned-clock-parents = <&clk IMX8MQ_VIDEO_PLL1_OUT>;
 		assigned-clock-rate = <594000000>;
@@ -1176,7 +1183,6 @@
 		assigned-clock-parents = <&clk IMX8MQ_GPU_PLL_OUT>, <&clk IMX8MQ_GPU_PLL_OUT>, <&clk IMX8MQ_GPU_PLL_OUT>, <&clk IMX8MQ_GPU_PLL_OUT>;
 		assigned-clock-rates = <800000000>, <800000000>, <800000000>, <800000000>;
 		power-domains = <&gpu_pd>;
-		depth-compression = <0>;
 		status = "disabled";
 	};
 
@@ -1356,7 +1362,7 @@
 		ranges;
 
 		rpmsg: rpmsg{
-			compatible = "fsl,imx8qm-rpmsg";
+			compatible = "fsl,imx8mq-rpmsg";
 			status = "disabled";
 		};
 	};

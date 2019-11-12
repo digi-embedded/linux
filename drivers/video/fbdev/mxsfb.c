@@ -1,10 +1,11 @@
 /*
  * Copyright (C) 2010 Juergen Beisert, Pengutronix
+ * Copyright 2019 NXP
  *
  * This code is based on:
  * Author: Vitaly Wool <vital@embeddedalley.com>
  *
- * Copyright 2017 NXP
+ * Copyright 2017-2019 NXP
  * Copyright 2008-2015 Freescale Semiconductor, Inc. All Rights Reserved.
  * Copyright 2008 Embedded Alley Solutions, Inc All Rights Reserved.
  *
@@ -271,6 +272,10 @@ struct mxsfb_info {
 
 #ifdef CONFIG_FB_MXC_OVERLAY
 	struct mxsfb_layer overlay;
+#endif
+
+#ifdef CONFIG_FB_FENCE
+	struct fb_fence_context context;
 #endif
 };
 
@@ -631,6 +636,9 @@ static irqreturn_t mxsfb_irq_handler(int irq, void *dev_id)
 		writel(CTRL1_CUR_FRAME_DONE_IRQ_EN,
 			     host->base + LCDC_CTRL1 + REG_CLR);
 		complete(&host->flip_complete);
+#ifdef CONFIG_FB_FENCE
+		fb_handle_fence(&host->context);
+#endif
 	}
 
 	if (acked_status & CTRL1_UNDERFLOW_IRQ)
@@ -1080,7 +1088,7 @@ static int mxsfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
 	return ret;
 }
 
-#ifdef CONFIG_ANDROID
+#if defined(CONFIG_ANDROID) || defined(CONFIG_FB_FENCE)
 static int mxsfb_update_screen(struct mxsfb_info *host, struct mxcfb_buffer *buffer)
 {
 	struct fb_info *fb_info = host->fb_info;
@@ -1131,6 +1139,21 @@ static int mxsfb_update_screen(struct mxsfb_info *host, struct mxcfb_buffer *buf
 }
 #endif
 
+#ifdef CONFIG_FB_FENCE
+static int mxsfb_update_data(int64_t dma_address, struct fb_var_screeninfo *var, struct fb_info *fb_info)
+{
+	struct mxcfb_buffer buffer;
+	struct mxsfb_info *host = fb_info->par;
+
+	buffer.phys = dma_address;
+	buffer.xoffset = var->xoffset;
+	buffer.yoffset = var->yoffset;
+	buffer.stride = fb_info->fix.line_length;
+
+	return mxsfb_update_screen(host, &buffer);
+}
+#endif
+
 static int mxsfb_wait_for_vsync(struct fb_info *fb_info)
 {
 	struct mxsfb_info *host = fb_info->par;
@@ -1176,6 +1199,30 @@ static int mxsfb_ioctl(struct fb_info *fb_info, unsigned int cmd,
 				break;
 			}
 			ret = mxsfb_update_screen(host, &buffer);
+		}
+		break;
+#endif
+#ifdef CONFIG_FB_FENCE
+	case MXCFB_UPDATE_OVERLAY:
+		{
+			struct mxcfb_datainfo buffer;
+			struct mxsfb_info *host = fb_info->par;
+			if (copy_from_user(&buffer, (void *)arg, sizeof(buffer))) {
+				ret = -EFAULT;
+				break;
+			}
+			ret = fb_update_overlay(&host->context, &buffer);
+		}
+		break;
+	case MXCFB_PRESENT_SCREEN:
+		{
+			struct mxcfb_datainfo buffer;
+			struct mxsfb_info *host = fb_info->par;
+			if (copy_from_user(&buffer, (void *)arg, sizeof(buffer))) {
+				ret = -EFAULT;
+				break;
+			}
+			ret = fb_present_screen(&host->context, &buffer);
 		}
 		break;
 #endif
@@ -1381,7 +1428,9 @@ static int mxsfb_restore_mode(struct mxsfb_info *host)
 
 	fb_info->var.bits_per_pixel = bits_per_pixel;
 
-	vmode.pixclock = KHZ2PICOS(clk_get_rate(host->clk_pix) / 1000U);
+	vmode.pixclock = clk_get_rate(host->clk_pix) / 1000U;
+	if (vmode.pixclock)
+		vmode.pixclock = KHZ2PICOS(vmode.pixclock);
 	vmode.hsync_len = get_hsync_pulse_width(host, vdctrl2);
 	vmode.left_margin = GET_HOR_WAIT_CNT(vdctrl3) - vmode.hsync_len;
 	vmode.right_margin = VDCTRL2_GET_HSYNC_PERIOD(vdctrl2) - vmode.hsync_len -
@@ -1638,7 +1687,7 @@ static int mxsfb_dispdrv_init(struct platform_device *pdev,
 	disp_dev[strlen(host->disp_dev)] = '\0';
 
 	/* Use videomode name from dtb, if any given */
-	if (host->disp_videomode) {
+	if (host->disp_videomode[0]) {
 		setting.dft_mode_str = kmalloc(NAME_LEN, GFP_KERNEL);
 		if (setting.dft_mode_str) {
 			memset(setting.dft_mode_str, 0x0, NAME_LEN);
@@ -2322,6 +2371,9 @@ static void mxsfb_overlay_resume(struct mxsfb_info *fbi)
 		clk_enable_disp_axi(fbi);
 	}
 
+	/* Pull LCDIF out of reset */
+	writel(0xc0000000, fbi->base + LCDC_CTRL + REG_CLR);
+
 	writel(saved_as_ctrl, fbi->base + LCDC_AS_CTRL);
 	writel(saved_as_next_buf, fbi->base + LCDC_AS_NEXT_BUF);
 
@@ -2493,6 +2545,10 @@ static int mxsfb_probe(struct platform_device *pdev)
 		pm_runtime_get_sync(&host->pdev->dev);
 	}
 
+#ifdef CONFIG_FB_FENCE
+	fb_init_fence_context(&host->context, "lcdif", fb_info, mxsfb_update_data);
+#endif
+
 	ret = register_framebuffer(fb_info);
 	if (ret != 0) {
 		dev_err(&pdev->dev, "Failed to register framebuffer\n");
@@ -2640,9 +2696,9 @@ static int mxsfb_resume(struct device *pdev)
 	pinctrl_pm_select_default_state(pdev);
 
 	console_lock();
+	mxsfb_overlay_resume(host);
 	mxsfb_blank(host->restore_blank, fb_info);
 	fb_set_suspend(fb_info, 0);
-	mxsfb_overlay_resume(host);
 	console_unlock();
 
 	return 0;

@@ -147,26 +147,19 @@ static void __aer_print_error(struct pci_dev *dev,
 		if (!(status & (1 << i)))
 			continue;
 
-		if (info->severity == AER_CORRECTABLE) {
+		if (info->severity == AER_CORRECTABLE)
 			errmsg = i < ARRAY_SIZE(aer_correctable_error_string) ?
 				aer_correctable_error_string[i] : NULL;
-			if (errmsg)
-				dev_notice(&dev->dev, "   [%2d] %-22s%s\n", i, errmsg,
-					   info->first_error == i ? " (First)" : "");
-			else
-				dev_notice(&dev->dev, "   [%2d] Unknown Error Bit%s\n",
-					   i, info->first_error == i ? " (First)" : "");
-		}
-		else {
+		else
 			errmsg = i < ARRAY_SIZE(aer_uncorrectable_error_string) ?
 				aer_uncorrectable_error_string[i] : NULL;
-			if (errmsg)
-				dev_err(&dev->dev, "   [%2d] %-22s%s\n", i, errmsg,
-					info->first_error == i ? " (First)" : "");
-			else
-				dev_err(&dev->dev, "   [%2d] Unknown Error Bit%s\n",
-					i, info->first_error == i ? " (First)" : "");
-		}
+
+		if (errmsg)
+			dev_err(&dev->dev, "   [%2d] %-22s%s\n", i, errmsg,
+				info->first_error == i ? " (First)" : "");
+		else
+			dev_err(&dev->dev, "   [%2d] Unknown Error Bit%s\n",
+				i, info->first_error == i ? " (First)" : "");
 	}
 }
 
@@ -184,24 +177,13 @@ void aer_print_error(struct pci_dev *dev, struct aer_err_info *info)
 	layer = AER_GET_LAYER_ERROR(info->severity, info->status);
 	agent = AER_GET_AGENT(info->severity, info->status);
 
-	if (info->severity == AER_CORRECTABLE) {
-		dev_notice(&dev->dev, "PCIe Bus Error: severity=%s, type=%s, id=%04x(%s)\n",
-			   aer_error_severity_string[info->severity],
-			   aer_error_layer[layer], id, aer_agent_string[agent]);
+	dev_err(&dev->dev, "PCIe Bus Error: severity=%s, type=%s, id=%04x(%s)\n",
+		aer_error_severity_string[info->severity],
+		aer_error_layer[layer], id, aer_agent_string[agent]);
 
-		dev_notice(&dev->dev, "  device [%04x:%04x] error status/mask=%08x/%08x\n",
-			   dev->vendor, dev->device,
-			   info->status, info->mask);
-	}
-	else {
-		dev_err(&dev->dev, "PCIe Bus Error: severity=%s, type=%s, id=%04x(%s)\n",
-			aer_error_severity_string[info->severity],
-			aer_error_layer[layer], id, aer_agent_string[agent]);
-
-		dev_err(&dev->dev, "  device [%04x:%04x] error status/mask=%08x/%08x\n",
-			dev->vendor, dev->device,
-			info->status, info->mask);
-	}
+	dev_err(&dev->dev, "  device [%04x:%04x] error status/mask=%08x/%08x\n",
+		dev->vendor, dev->device,
+		info->status, info->mask);
 
 	__aer_print_error(dev, info);
 

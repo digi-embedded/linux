@@ -208,6 +208,20 @@ static bool dcss_plane_can_rotate(u32 pixel_format, bool mod_present,
 	return !!(rotation & supported_rotation);
 }
 
+static bool dcss_plane_is_source_size_allowed(u16 src_w, u16 src_h, u32 pix_fmt)
+{
+	if (src_w < 64 &&
+	    (pix_fmt == DRM_FORMAT_NV12 || pix_fmt == DRM_FORMAT_NV21 ||
+	     pix_fmt == DRM_FORMAT_P010))
+		return false;
+	else if (src_w < 32 &&
+		 (pix_fmt == DRM_FORMAT_UYVY || pix_fmt == DRM_FORMAT_VYUY ||
+		  pix_fmt == DRM_FORMAT_YUYV || pix_fmt == DRM_FORMAT_YVYU))
+		return false;
+
+	return src_w >= 16 && src_h >= 8;
+}
+
 static int dcss_plane_atomic_check(struct drm_plane *plane,
 				   struct drm_plane_state *state)
 {
@@ -239,6 +253,13 @@ static int dcss_plane_atomic_check(struct drm_plane *plane,
 	disp_rect.y1 = 0;
 	disp_rect.x2 = hdisplay;
 	disp_rect.y2 = vdisplay;
+
+	if (!dcss_plane_is_source_size_allowed(state->src_w >> 16,
+					       state->src_h >> 16,
+					       fb->format->format)) {
+		DRM_DEBUG_KMS("Source plane size is not allowed!\n");
+		return -EINVAL;
+	}
 
 	/* make sure the crtc is visible */
 	if (!drm_rect_intersect(&crtc_rect, &disp_rect)) {
@@ -284,6 +305,23 @@ static int dcss_plane_atomic_check(struct drm_plane *plane,
 	}
 
 	return 0;
+}
+
+static struct drm_gem_object *dcss_plane_gem_import(struct drm_device *dev,
+						    struct dma_buf *dma_buf)
+{
+	struct drm_gem_object *obj;
+
+	if (IS_ERR(dma_buf))
+		return ERR_CAST(dma_buf);
+
+	mutex_lock(&dev->object_name_lock);
+
+	obj = dev->driver->gem_prime_import(dev, dma_buf);
+
+	mutex_unlock(&dev->object_name_lock);
+
+	return obj;
 }
 
 static void dcss_plane_atomic_set_base(struct dcss_plane *dcss_plane)

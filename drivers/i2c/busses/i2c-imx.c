@@ -59,6 +59,7 @@
 
 /* Default value */
 #define IMX_I2C_BIT_RATE	100000	/* 100kHz */
+#define IMX_I2C_MAX_E_BIT_RATE	384000	/* 384kHz from e7805 errata*/
 
 /*
  * Enable DMA if transfer byte size is bigger than this threshold.
@@ -69,7 +70,14 @@
 #define DMA_THRESHOLD	16
 #define DMA_TIMEOUT	1000
 
-#define NO_DMA_TIMEOUT	1000
+#define NO_DMA_TIMEOUT	100
+
+/*
+ * First recovery transfer after bus recovery proccess fails because the slave
+ * is out of sequence. A second recovery transfer is required so data is written
+ * correctly.
+ */
+#define RECOVERY_TRANSFERS 2
 
 /* IMX I2C registers:
  * the I2C register offset is different between SoCs,
@@ -171,6 +179,7 @@ enum imx_i2c_type {
 	IMX1_I2C,
 	IMX21_I2C,
 	VF610_I2C,
+	IMX7D_I2C,
 };
 
 struct imx_i2c_hwdata {
@@ -244,6 +253,16 @@ static struct imx_i2c_hwdata vf610_i2c_hwdata = {
 
 };
 
+static const struct imx_i2c_hwdata imx7d_i2c_hwdata = {
+	.devtype		= IMX7D_I2C,
+	.regshift		= IMX_I2C_REGSHIFT,
+	.clk_div		= imx_i2c_clk_div,
+	.ndivs			= ARRAY_SIZE(imx_i2c_clk_div),
+	.i2sr_clr_opcode	= I2SR_CLR_OPCODE_W0C,
+	.i2cr_ien_opcode	= I2CR_IEN_OPCODE_1,
+
+};
+
 static const struct platform_device_id imx_i2c_devtype[] = {
 	{
 		.name = "imx1-i2c",
@@ -261,6 +280,7 @@ static const struct of_device_id i2c_imx_dt_ids[] = {
 	{ .compatible = "fsl,imx1-i2c", .data = &imx1_i2c_hwdata, },
 	{ .compatible = "fsl,imx21-i2c", .data = &imx21_i2c_hwdata, },
 	{ .compatible = "fsl,vf610-i2c", .data = &vf610_i2c_hwdata, },
+	{ .compatible = "fsl,imx7d-i2c", .data = &imx7d_i2c_hwdata, },
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, i2c_imx_dt_ids);
@@ -268,6 +288,11 @@ MODULE_DEVICE_TABLE(of, i2c_imx_dt_ids);
 static inline int is_imx1_i2c(struct imx_i2c_struct *i2c_imx)
 {
 	return i2c_imx->hwdata->devtype == IMX1_I2C;
+}
+
+static inline int is_imx7d_i2c(struct imx_i2c_struct *i2c_imx)
+{
+	return i2c_imx->hwdata->devtype == IMX7D_I2C;
 }
 
 static inline void imx_i2c_write_reg(unsigned int val,
@@ -470,7 +495,7 @@ static int i2c_imx_acked(struct imx_i2c_struct *i2c_imx)
 	return 0;
 }
 
-static void i2c_imx_set_clk(struct imx_i2c_struct *i2c_imx)
+static int i2c_imx_set_clk(struct imx_i2c_struct *i2c_imx)
 {
 	struct imx_i2c_clk_pair *i2c_clk_div = i2c_imx->hwdata->clk_div;
 	unsigned int i2c_clk_rate;
@@ -479,8 +504,15 @@ static void i2c_imx_set_clk(struct imx_i2c_struct *i2c_imx)
 
 	/* Divider value calculation */
 	i2c_clk_rate = clk_get_rate(i2c_imx->clk);
+	/*
+	 * Keep the denominator of the following program
+	 * always NOT equal to 0.
+	 */
+	if (!(i2c_clk_rate / 2))
+		return -EINVAL;
+
 	if (i2c_imx->cur_clk == i2c_clk_rate)
-		return;
+		return 0;
 
 	i2c_imx->cur_clk = i2c_clk_rate;
 
@@ -511,6 +543,8 @@ static void i2c_imx_set_clk(struct imx_i2c_struct *i2c_imx)
 	dev_dbg(&i2c_imx->adapter.dev, "IFDR[IC]=0x%x, REAL DIV=%d\n",
 		i2c_clk_div[i].val, i2c_clk_div[i].div);
 #endif
+
+	return 0;
 }
 
 static int i2c_imx_start(struct imx_i2c_struct *i2c_imx)
@@ -520,7 +554,9 @@ static int i2c_imx_start(struct imx_i2c_struct *i2c_imx)
 
 	dev_dbg(&i2c_imx->adapter.dev, "<%s>\n", __func__);
 
-	i2c_imx_set_clk(i2c_imx);
+	result = i2c_imx_set_clk(i2c_imx);
+	if (result)
+		return result;
 
 	imx_i2c_write_reg(i2c_imx->ifdr, i2c_imx, IMX_I2C_IFDR);
 	/* Enable I2C controller */
@@ -946,6 +982,7 @@ static int i2c_imx_xfer(struct i2c_adapter *adapter,
 	bool is_lastmsg = false;
 	bool enable_runtime_pm = false;
 	struct imx_i2c_struct *i2c_imx = i2c_get_adapdata(adapter);
+	int recovery_transfer = 0, recovery_retry = 5;
 
 	dev_dbg(&i2c_imx->adapter.dev, "<%s>\n", __func__);
 
@@ -959,6 +996,7 @@ static int i2c_imx_xfer(struct i2c_adapter *adapter,
 	if (result < 0)
 		goto out;
 
+init:
 	/* Start I2C transfer */
 	result = i2c_imx_start(i2c_imx);
 	if (result) {
@@ -1011,8 +1049,15 @@ static int i2c_imx_xfer(struct i2c_adapter *adapter,
 		else {
 			if (i2c_imx->dma && msgs[i].len >= DMA_THRESHOLD)
 				result = i2c_imx_dma_write(i2c_imx, &msgs[i]);
-			else
+			else {
 				result = i2c_imx_write(i2c_imx, &msgs[i]);
+				if (result == -ETIMEDOUT) {
+					dev_dbg(&i2c_imx->adapter.dev,
+						"<%s> i2c_imx_write error %d\n",
+						__func__, result);
+					recovery_transfer = RECOVERY_TRANSFERS;
+				}
+			}
 		}
 		if (result)
 			goto fail0;
@@ -1021,6 +1066,16 @@ static int i2c_imx_xfer(struct i2c_adapter *adapter,
 fail0:
 	/* Stop I2C transfer */
 	i2c_imx_stop(i2c_imx);
+
+	if (recovery_transfer-- && recovery_retry--) {
+		if (i2c_imx->adapter.bus_recovery_info) {
+			i2c_recover_bus(&i2c_imx->adapter);
+			dev_dbg(&i2c_imx->adapter.dev,
+				"<%s> i2c_recover_bus. transfer=%d, retry=%d\n",
+				__func__, recovery_transfer, recovery_retry);
+			goto init;
+		}
+	}
 
 	pm_runtime_mark_last_busy(i2c_imx->adapter.dev.parent);
 	pm_runtime_put_autosuspend(i2c_imx->adapter.dev.parent);
@@ -1201,6 +1256,14 @@ static int i2c_imx_probe(struct platform_device *pdev)
 				   "clock-frequency", &i2c_imx->bitrate);
 	if (ret < 0 && pdata && pdata->bitrate)
 		i2c_imx->bitrate = pdata->bitrate;
+
+	/*
+	 * This limit caused by an i.MX7D hardware issue(e7805 in Errata).
+	 * If there is no limit, when the bitrate set up to 400KHz, it will
+	 * cause the SCK low level period less than 1.3us.
+	 */
+	if (is_imx7d_i2c(i2c_imx) && i2c_imx->bitrate > IMX_I2C_MAX_E_BIT_RATE)
+		i2c_imx->bitrate = IMX_I2C_MAX_E_BIT_RATE;
 
 	/* Set up chip registers to defaults */
 	imx_i2c_write_reg(i2c_imx->hwdata->i2cr_ien_opcode ^ I2CR_IEN,
