@@ -103,18 +103,6 @@
 			gpio = <&gpio3 19 GPIO_ACTIVE_HIGH>;
 			enable-active-high;
 		};
-
-		reg_1v8_lvds: regulator@6 {
-			compatible = "regulator-fixed";
-			reg = <6>;
-			pinctrl-names = "default";
-			pinctrl-0 = <&pinctrl_reg_1v8_lvds>;
-			regulator-name = "1v8_lvds";
-			regulator-min-microvolt = <1800000>;
-			regulator-max-microvolt = <1800000>;
-			gpio = <&gpio3 0 GPIO_ACTIVE_HIGH>;
-			enable-active-high;
-		};
 	};
 
 	sound_max98089: sound-max98089 {
@@ -300,6 +288,64 @@
 	sda-gpios = <&gpio5 19 GPIO_ACTIVE_HIGH>;
 	status = "okay";
 
+	dsi_lvds_bridge: sn65dsi84@2c {
+		compatible = "ti,sn65dsi83";
+		reg = <0x2c>;
+		ti,dsi-lanes = <4>;
+		ti,lvds-format = <1>;
+		ti,lvds-bpp = <24>;
+		ti,width-mm = <217>;
+		ti,height-mm = <136>;
+		enable-gpios = <&gpio3 0 GPIO_ACTIVE_HIGH>;
+		interrupt-parent = <&gpio3>;
+		interrupts = <6 IRQ_TYPE_LEVEL_HIGH>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_lvds>;
+		status = "okay";
+
+		display-timings {
+			/* AUO G101EVN01.0 */
+			lvds0_g101evn010: timing@0 {
+				clock-frequency = <69000000>;
+				hactive = <1280>;
+				vactive = <800>;
+				hfront-porch = <120>;
+				hback-porch = <1>;
+				hsync-len = <8>;
+				vback-porch = <10>;
+				vfront-porch = <1>;
+				vsync-len = <6>;
+				hsync-active = <1>;
+				vsync-active = <1>;
+				de-active = <1>;
+				pixelclk-active = <0>;
+			};
+/* To use the Fusion 10" display, comment the block above */
+			/* Fusion 10" F10A-0102 */
+			lvds0_hsd101pfw2: timing@1 {
+				clock-frequency = <45000000>;
+				hactive = <1024>;
+				vactive = <600>;
+				hfront-porch = <120>;
+				hback-porch = <1>;
+				hsync-len = <8>;
+				vback-porch = <10>;
+				vfront-porch = <1>;
+				vsync-len = <6>;
+				hsync-active = <1>;
+				vsync-active = <1>;
+				de-active = <1>;
+				pixelclk-active = <0>;
+			};
+		};
+
+		port {
+			dsi_lvds_bridge_in: endpoint {
+				remote-endpoint = <&mipi_dsi_lvds_out>;
+			};
+		};
+	};
+
 	lt_bridge: lt8912@48 {
 		compatible = "lontium,lt8912";
 		reg = <0x48>;
@@ -313,7 +359,7 @@
 		port {
 			lt8912_1_in: endpoint {
 				/* add lanes */
-				remote-endpoint = <&mipi_dsi_out>;
+				remote-endpoint = <&mipi_dsi_hdmi_out>;
 			};
 		};
 	};
@@ -396,8 +442,14 @@
 	status = "okay";
 
 	port@1 {
-		mipi_dsi_out: endpoint {
+		mipi_dsi_hdmi_out: endpoint {
 			remote-endpoint = <&lt8912_1_in>;
+		};
+	};
+
+	port@2 {
+		mipi_dsi_lvds_out: endpoint {
+			remote-endpoint = <&dsi_lvds_bridge_in>;
 		};
 	};
 };
@@ -601,6 +653,15 @@
 		>;
 	};
 
+	pinctrl_lvds: lvdsgrp {
+		fsl,pins = <
+			/* SN65DSI83 enable */
+			MX8MN_IOMUXC_NAND_ALE_GPIO3_IO0		0x19
+			/* SN65DSI83 interrupt */
+			MX8MN_IOMUXC_NAND_DATA00_GPIO3_IO6	0x19
+		>;
+	};
+
 	pinctrl_mcp2517fd: mcp2517fdgrp {
 		fsl,pins = <
 			MX8MN_IOMUXC_GPIO1_IO00_GPIO1_IO0 0x19
@@ -647,13 +708,6 @@
 		fsl,pins = <
 			/* GPIO3_19 board regulator enable */
 			MX8MN_IOMUXC_SAI5_RXFS_GPIO3_IO19		0x41
-		>;
-	};
-
-	pinctrl_reg_1v8_lvds: pinctrl_reg_1v8_lvdsgrp {
-		fsl,pins = <
-			/* SN65DSI83 enable */
-			MX8MN_IOMUXC_NAND_ALE_GPIO3_IO0		0x41
 		>;
 	};
 
