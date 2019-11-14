@@ -44,6 +44,10 @@
 #define OV5640_VOLTAGE_DIGITAL_CORE         1500000
 #define OV5640_VOLTAGE_DIGITAL_IO           1800000
 
+/*
+ * PLL multiplier (any integer 4-127, only even integers in 128-252)
+ */
+#define OV5640_SC_PLL_CONTRL2 		0x3036
 #define MIN_FPS 15
 #define MAX_FPS 30
 #define DEFAULT_FPS 30
@@ -1202,6 +1206,22 @@ static int ov5640_download_firmware(struct reg_value *pModeSetting, s32 ArySize)
 		RegAddr = pModeSetting->u16RegAddr;
 		Val = pModeSetting->u8Val;
 		Mask = pModeSetting->u8Mask;
+
+		/*
+		 * Workaround: use the OV5640 internal PLL to compensate for
+		 * a different reference clock (included in OV5640 board).
+		 */
+		if (RegAddr == OV5640_SC_PLL_CONTRL2) {
+			int new_val = Val * 2 + Val / 2;
+
+			if (new_val > 252)
+				new_val = 252;
+			else if (new_val >= 128)
+				new_val &= ~1;
+
+			pr_debug("adjusting PLL multiplier: %d --> %d\n", Val, new_val);
+			Val = (u8) new_val;
+		}
 
 		if (Mask) {
 			retval = ov5640_read_reg(RegAddr, &RegVal);
