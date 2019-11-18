@@ -570,6 +570,7 @@ dtb-$(CONFIG_SOC_IMX6UL) += \
 	imx6ul-ccimx6ul-mfg.dtb \
 	imx6ul-ccimx6ul-mfg-rf.dtb \
 	imx6ul-ccimx6ulsbc.dtb \
+	imx6ul-ccimx6ulsbc-id1.dtb \
 	imx6ul-ccimx6ulsbc-id135.dtb \
 	imx6ul-ccimx6ulsbc-id136.dtb \
 	imx6ul-ccimx6ulsbc-wb.dtb \
