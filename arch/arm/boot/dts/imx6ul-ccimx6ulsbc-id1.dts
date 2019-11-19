@@ -1,0 +1,170 @@
+/*
+ * Device tree generated automatically by Digi ConnectCore Smart IOmux.
+ *
+ * This file is provided "AS IS" without any warranties and support, it is
+ * just a guideline that requires additional customization.
+ *
+ * Please verify the calculated pin assignments with the hardware reference
+ * manual for your platform, review the commented lines, and add the
+ * specific values for your hardware.
+ */
+
+/dts-v1/;
+
+/* i.MX6 UltraLite CPU */
+#include "imx6ul.dtsi"
+/* ConnectCore 6UL (wireless/bluetooth variant) */
+#include "imx6ul-ccimx6ul-wb.dtsi"
+
+/ {
+	model = "Digi International ConnectCore 6UL VIVID Handet Edition.";
+	compatible = "digi,ccimx6ulsbc", "digi,ccimx6ul", "fsl,imx6ul";
+	digi,machine,name = "ccimx6ulsbc";
+};
+
+/*
+ * CSI camera conflicts with microSD/eMMC.
+ * Before enabling the camera you need to disable
+ * usdhc2 node.
+ */
+&csi {
+     status = "okay";
+
+     port {
+	csi_ep: endpoint {
+		remote-endpoint = <&ar0134_ep>;
+	};
+     };
+};
+
+&i2c1 {
+	ar0134: ar0134@10 {
+		compatible = "ar0134";
+                #address-cells = <1>;
+                #size-cells = <0>;
+                reg = <0x10>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_csi>;
+		clocks = <&clks IMX6UL_CLK_CSI>;
+		clock-names = "csi_mclk";
+		csi_id = <0>;
+		mclk = <24000000>;
+		mclk_source = <0>;
+		status = "okay";
+		port {
+			ar0134_ep: endpoint {
+				remote-endpoint = <&csi_ep>;
+			};
+		};
+	};
+};
+
+&mca_adc {
+	digi,adc-ch-list = <0 1 3 4>;
+
+	/*
+	 * ADC reference voltage. Use:
+	 *   - digi,adc-vref: Value in uV that corresponds with the VCC_MCA voltage.
+	 *   - digi,internal-vref: If present, the internal 1.2 V reference is used.
+	 *     This forces MCA_IO2/EXT_VREF to be configured as a 1.2 V output, and a
+	 *     100 nF capacitor must be placed between this line and GND.
+	 *     If this property is set, the value in 'digi,adc-vref' is ignored.
+	 */
+	//digi,adc-vref = <3000000>;
+	digi,internal-vref;
+};
+
+&pwm1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pwm1>;
+	status = "okay";
+};
+
+&uart2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_uart2>;
+
+	status = "okay";
+};
+
+&uart5 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_console>;
+	status = "okay";
+};
+
+&iomuxc {
+	pinctrl-0 = <&pinctrl_hog>;
+
+	imx6ul-ccimx6ul {
+		pinctrl_console: uart5grp {
+			fsl,pins = <
+				MX6UL_PAD_UART5_RX_DATA__UART5_DCE_RX		0x1b0b1
+				MX6UL_PAD_UART5_TX_DATA__UART5_DCE_TX		0x1b0b1
+			>;
+		};
+
+		pinctrl_csi: csigrp {
+			fsl,pins = <
+				MX6UL_PAD_CSI_HSYNC__CSI_HSYNC		0x1b088
+				MX6UL_PAD_CSI_VSYNC__CSI_VSYNC		0x1b088
+				MX6UL_PAD_CSI_PIXCLK__CSI_PIXCLK		0x1b088
+				MX6UL_PAD_CSI_MCLK__CSI_MCLK		0x10071
+				MX6UL_PAD_CSI_DATA00__CSI_DATA02		0x1b088
+				MX6UL_PAD_CSI_DATA01__CSI_DATA03		0x1b088
+				MX6UL_PAD_CSI_DATA02__CSI_DATA04		0x1b088
+				MX6UL_PAD_CSI_DATA03__CSI_DATA05		0x1b088
+				MX6UL_PAD_CSI_DATA04__CSI_DATA06		0x1b088
+				MX6UL_PAD_CSI_DATA05__CSI_DATA07		0x1b088
+				MX6UL_PAD_CSI_DATA06__CSI_DATA08		0x1b088
+				MX6UL_PAD_CSI_DATA07__CSI_DATA09		0x1b088
+			>;
+		};
+
+		pinctrl_hog: hoggrp {
+			fsl,pins = <
+				/* CHG_nEN */
+				MX6UL_PAD_GPIO1_IO00__GPIO1_IO00		0x10b0
+				/* CHG_nPGOOD */
+				MX6UL_PAD_GPIO1_IO01__GPIO1_IO01		0x10b0
+				/* SOL_STATUS */
+				MX6UL_PAD_GPIO1_IO02__GPIO1_IO02		0x10b0
+				/* BOOST_EN */
+				MX6UL_PAD_GPIO1_IO03__GPIO1_IO03		0x10b0
+				/* LED2 */
+				MX6UL_PAD_GPIO1_IO04__GPIO1_IO04		0x10b0
+				/* SOL_EN */
+				MX6UL_PAD_GPIO1_IO05__GPIO1_IO05		0x10b0
+				/* SW_UP */
+				MX6UL_PAD_GPIO1_IO06__GPIO1_IO06		0x10b0
+				/* SW_TRIGGER */
+				MX6UL_PAD_GPIO1_IO07__GPIO1_IO07		0x10b0
+				/* LED3 */
+				MX6UL_PAD_GPIO1_IO09__GPIO1_IO09		0x10b0
+				/* CHG_STATUS */
+				MX6UL_PAD_SNVS_TAMPER1__GPIO5_IO01		0x10b0
+				/* CAM_TRIGGER */
+				MX6UL_PAD_SNVS_TAMPER2__GPIO5_IO02		0x10b0
+				/* RING_EN */
+				MX6UL_PAD_SNVS_TAMPER5__GPIO5_IO05		0x10b0
+				/* SW_DOWN */
+				MX6UL_PAD_SNVS_TAMPER6__GPIO5_IO06		0x10b0
+				/* SW_SELECT */
+				MX6UL_PAD_SNVS_TAMPER7__GPIO5_IO07		0x10b0
+			>;
+		};
+
+		pinctrl_pwm1: pwm1grp {
+			fsl,pins = <
+				MX6UL_PAD_GPIO1_IO08__PWM1_OUT		0x110b0
+			>;
+		};
+
+		pinctrl_uart2: uart2grp {
+			fsl,pins = <
+				MX6UL_PAD_UART2_RX_DATA__UART2_DCE_RX		0x1b0b1
+				MX6UL_PAD_UART2_TX_DATA__UART2_DCE_TX		0x1b0b1
+			>;
+		};
+	};
+};
