@@ -107,7 +107,7 @@ struct ov5640_mode_info {
  * Maintains the information on the current state of the sesor.
  */
 static struct sensor_data ov5640_data;
-static int pwn_gpio, rst_gpio;
+static int pwn_gpio, rst_gpio, pwr_on_state;
 
 static struct reg_value ov5640_init_setting_30fps_VGA[] = {
 
@@ -729,9 +729,9 @@ static void ov5640_standby(s32 enable)
 		return;
 
 	if (enable)
-		gpio_set_value_cansleep(pwn_gpio, 1);
+		gpio_set_value_cansleep(pwn_gpio, pwr_on_state);
 	else
-		gpio_set_value_cansleep(pwn_gpio, 0);
+		gpio_set_value_cansleep(pwn_gpio, !pwr_on_state);
 
 	msleep(100);
 }
@@ -747,9 +747,9 @@ static void ov5640_reset(void)
 		gpio_set_value_cansleep(rst_gpio, 1);
 
 	if (gpio_is_valid(pwn_gpio)) {
-		gpio_set_value_cansleep(pwn_gpio, 1);
+		gpio_set_value_cansleep(pwn_gpio, pwr_on_state);
 		msleep(5);
-		gpio_set_value_cansleep(pwn_gpio, 0);
+		gpio_set_value_cansleep(pwn_gpio, !pwr_on_state);
 		msleep(5);
 	}
 
@@ -764,7 +764,7 @@ static void ov5640_reset(void)
 	mxc_camera_common_unlock();
 
 	if (gpio_is_valid(pwn_gpio))
-		gpio_set_value_cansleep(pwn_gpio, 1);
+		gpio_set_value_cansleep(pwn_gpio, pwr_on_state);
 }
 
 static int ov5640_power_on(struct device *dev)
@@ -2070,6 +2070,8 @@ static int ov5640_probe(struct i2c_client *client,
 	u8 chip_id_high, chip_id_low;
 	struct regmap *gpr;
 	int *alt_pwn_gpios = NULL;
+	enum of_gpio_flags pwn_flags;
+
 	pinctrl = devm_pinctrl_get_select_default(dev);
 	if (IS_ERR(pinctrl)) {
 		dev_err(dev, "mipi setup pinctrl failed!");
@@ -2077,12 +2079,14 @@ static int ov5640_probe(struct i2c_client *client,
 	}
 
 	/* request power down pin */
-	pwn_gpio = of_get_named_gpio(dev->of_node, "pwn-gpios", 0);
+	pwn_gpio = of_get_named_gpio_flags(dev->of_node, "pwn-gpios", 0, &pwn_flags);
+	pwr_on_state = !(pwn_flags & OF_GPIO_ACTIVE_LOW);
 	if (!gpio_is_valid(pwn_gpio)) {
 		dev_warn(dev, "no sensor pwdn pin available");
 	} else {
 		retval = devm_gpio_request_one(dev, pwn_gpio,
-			GPIOF_OUT_INIT_HIGH, "ov5640_mipi_pwdn");
+			pwr_on_state ? GPIOF_OUT_INIT_HIGH : GPIOF_OUT_INIT_LOW,
+			 "ov5640_mipi_pwdn");
 		if (retval < 0)
 			return retval;
 	}
