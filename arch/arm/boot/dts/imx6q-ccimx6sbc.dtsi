@@ -63,7 +63,7 @@
 };
 
 &i2c3 {
-        ov5640_mipi: ov5640_mipi@4c {
+        ov5640_mipi: ov5640_mipi@3c {
                 ipu_id = <1>;
                 csi_id = <0>;
         };
