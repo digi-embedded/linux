@@ -8,6 +8,7 @@
 #include <linux/of.h>
 #include <linux/of_device.h>
 #include <linux/of_graph.h>
+#include <linux/platform_device.h>
 #include <linux/slab.h>
 
 #include <drm/drmP.h>
@@ -206,10 +207,12 @@ static int sn65dsi83_parse_dt(struct device_node *np,
     struct sn65dsi83 *sn65dsi83)
 {
     struct device *dev = &sn65dsi83->brg->client->dev;
+    struct platform_device *pdev = to_platform_device(dev);
     u32 num_lanes = 2, bpp = 24, format = 2, width = 149, height = 93;
     u8 burst_mode = 0;
     u8 de_neg_polarity = 0;
     struct device_node *endpoint;
+    int ret;
 
     endpoint = of_graph_get_next_endpoint(np, NULL);
     if (!endpoint)
@@ -241,6 +244,21 @@ static int sn65dsi83_parse_dt(struct device_node *np,
     if (IS_ERR(sn65dsi83->brg->gpio_enable)) {
         dev_err(dev, "failed to parse enable gpio");
         return PTR_ERR(sn65dsi83->brg->gpio_enable);
+    }
+
+    sn65dsi83->brg->irq = platform_get_irq(pdev, 0);
+    if (sn65dsi83->brg->irq < 0) {
+        dev_err(dev, "failed to get IRQ");
+        return sn65dsi83->brg->irq;
+    }
+
+    ret = devm_request_threaded_irq(dev, sn65dsi83->brg->irq, NULL,
+                                    sn65dsi83_irq_handler,
+                                    IRQF_TRIGGER_RISING | IRQF_ONESHOT,
+                                    "sn65dsi83", sn65dsi83->brg);
+    if (ret) {
+        dev_err(dev, "failed to request IRQ handler: %d\n", ret);
+        return ret;
     }
 
     sn65dsi83->brg->gpio_panel_enable = devm_gpiod_get(dev, "enable-panel", GPIOD_OUT_LOW);

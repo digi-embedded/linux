@@ -19,6 +19,7 @@ struct sn65dsi83_brg {
     struct i2c_client *client;
     struct gpio_desc *gpio_enable;
     struct gpio_desc *gpio_panel_enable;
+    int irq;
     /* Bridge Panel Parameters */
     struct videomode vm;
     u32 width_mm;
@@ -32,6 +33,8 @@ struct sn65dsi83_brg {
     struct sn65dsi83_brg_funcs *funcs;
 };
 struct sn65dsi83_brg *sn65dsi83_brg_get(void);
+
+irqreturn_t sn65dsi83_irq_handler(int unused, void *data);
 
 #define I2C_DEVICE(A) &(A)->client->dev
 #define I2C_CLIENT(A) (A)->client
