@@ -89,7 +89,16 @@
 #define SN65DSI83_CHB_HORZ_FRONTPORCH 0x39
 #define SN65DSI83_CHA_VERT_FRONTPORCH 0x3A
 #define SN65DSI83_CHB_VERT_FRONTPORCH 0x3B
+#define SN65DSI83_CHA_IRQ_EN          0xE0
+#define SN65DSI83_CHA_IRQ_MASK        0xE1
 #define SN65DSI83_CHA_ERR             0xE5
+    #define CHA_SYNCH_ERR_SHIFT   7
+    #define CHA_CRC_ERR_SHIFT     6
+    #define CHA_UNC_ECC_ERR_SHIFT 5
+    #define CHA_COR_ECC_ERR_SHIFT 4
+    #define CHA_LLP_ERR_SHIFT     3
+    #define CHA_SOT_BIT_ERR_SHIFT 2
+    #define PLL_UNLOCK_SHIFT      0
 #define SN65DSI83_TEST_PATTERN        0x3C
 #define SN65DSI83_REG_3D              0x3D
 #define SN65DSI83_REG_3E              0x3E
@@ -147,6 +156,43 @@ static int sn65dsi83_read(struct i2c_client *client, u8 reg)
     return ret;
 }
 #define SN65DSI83_READ(reg) sn65dsi83_read(client, (reg))
+
+irqreturn_t sn65dsi83_irq_handler(int unused, void *data)
+{
+    struct sn65dsi83_brg *brg = data;
+    struct i2c_client *client = I2C_CLIENT(brg);
+    struct device *dev = I2C_DEVICE(brg);
+    int regval;
+
+    /*
+     * The IRQs are only useful to obtain internal chip errors. Simply read the
+     * error register, print which flags are raised and write to the register
+     * to acknowledge them.
+     */
+    regval = SN65DSI83_READ(SN65DSI83_CHA_ERR);
+
+    /* Only parse the flags if the register has been read correctly */
+    if (regval >= 0) {
+        if (regval & (1 << CHA_SYNCH_ERR_SHIFT))
+            dev_warn(dev, "detected unexpected sync packet");
+        if (regval & (1 << CHA_CRC_ERR_SHIFT))
+            dev_warn(dev, "detected data stream CRC error");
+        if (regval & (1 << CHA_UNC_ECC_ERR_SHIFT))
+            dev_warn(dev, "detected uncorrectable ECC error");
+        if (regval & (1 << CHA_COR_ECC_ERR_SHIFT))
+             dev_warn(dev, "detected correctable ECC error");
+        if (regval & (1 << CHA_LLP_ERR_SHIFT))
+            dev_warn(dev, "detected low level protocol error");
+        if (regval & (1 << CHA_SOT_BIT_ERR_SHIFT))
+            dev_warn(dev, "detected SoT leader sequence bit error");
+        if (regval & (1 << PLL_UNLOCK_SHIFT))
+            dev_warn(dev, "PLL has been unlocked");
+
+        SN65DSI83_WRITE(SN65DSI83_CHA_ERR,regval);
+    }
+
+    return IRQ_HANDLED;
+}
 
 static int sn65dsi83_brg_start_stream(struct sn65dsi83_brg *brg)
 {
@@ -331,6 +377,11 @@ static int sn65dsi83_brg_configure(struct sn65dsi83_brg *brg)
 
     SN65DSI83_WRITE(SN65DSI83_CHA_HORZ_FRONTPORCH,LOW(HFP));
     SN65DSI83_WRITE(SN65DSI83_CHA_VERT_FRONTPORCH,LOW(VFP));
+
+    /* Enable IRQs */
+    SN65DSI83_WRITE(SN65DSI83_CHA_IRQ_EN,0x01);
+    /* Unmask every IRQ source flag (bits 7, 6, 5, 4, 3, 2 and 0) */
+    SN65DSI83_WRITE(SN65DSI83_CHA_IRQ_MASK,0xFD);
 
     SN65DSI83_WRITE(SN65DSI83_TEST_PATTERN,0x00);
     SN65DSI83_WRITE(SN65DSI83_REG_3D,0x00);
