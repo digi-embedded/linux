@@ -264,8 +264,9 @@ static int sn65dsi83_parse_dt(struct device_node *np,
     if (!IS_ERR(sn65dsi83->brg->gpio_panel_enable)) {
         gpiod_set_value_cansleep(sn65dsi83->brg->gpio_panel_enable, 0);
         msleep(200);
-    } else
-        dev_warn(dev, "failed to parse enable panel gpio");
+    } else {
+        dev_dbg(dev, "failed to parse enable panel gpio");
+    }
 
     sn65dsi83->brg->format = format;
     sn65dsi83->brg->bpp = bpp;

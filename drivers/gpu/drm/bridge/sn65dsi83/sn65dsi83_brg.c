@@ -299,7 +299,7 @@ static int sn65dsi83_brg_configure(struct sn65dsi83_brg *brg)
     u32 dsi_clk = (((PIXCLK * BPP(brg)) / DSI_LANES(brg)) >> 1);
 
     dev_info(&client->dev, "DSI clock [ %u ] Hz\n",dsi_clk);
-    dev_info(&client->dev, "Resolution [ %d x %d ] Hz\n",HACTIVE,VACTIVE);
+    dev_info(&client->dev, "Resolution [ %d x %d ] pixels\n",HACTIVE,VACTIVE);
 
     /* Reset PLL_EN and SOFT_RESET registers */
     SN65DSI83_WRITE(SN65DSI83_SOFT_RESET,0x00);
