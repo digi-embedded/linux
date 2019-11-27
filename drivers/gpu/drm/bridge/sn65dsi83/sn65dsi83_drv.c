@@ -28,7 +28,6 @@
 struct sn65dsi83 {
     u8 channel_id;
     enum drm_connector_status status;
-    bool powered;
     struct drm_display_mode curr_mode;
     struct drm_bridge bridge;
     struct drm_connector connector;
@@ -303,7 +302,6 @@ static int sn65dsi83_probe(struct i2c_client *i2c,
     sn65dsi83->brg = sn65dsi83_brg_get();
     sn65dsi83->brg->client = i2c;
 
-    sn65dsi83->powered = false;
     sn65dsi83->status = connector_status_disconnected;
 
     i2c_set_clientdata(i2c, sn65dsi83);

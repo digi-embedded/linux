@@ -110,13 +110,22 @@ static int sn65dsi83_brg_power_on(struct sn65dsi83_brg *brg)
     /* Wait for 1ms for the internal voltage regulator to stabilize */
     msleep(1);
 
+    brg->is_powered = 1;
+
     return 0;
 }
 
 static void sn65dsi83_brg_power_off(struct sn65dsi83_brg *brg)
 {
     dev_dbg(&brg->client->dev,"%s\n",__func__);
+
+    /*
+     * Toggle the is_powered flag ASAP to avoid having the IRQ handler running
+     * while this function is sleeping.
+     */
+    brg->is_powered = 0;
     gpiod_set_value_cansleep(brg->gpio_enable, 0);
+
     /*
      * The EN pin must be held low for at least 10 ms
      * before being asserted high
@@ -165,30 +174,40 @@ irqreturn_t sn65dsi83_irq_handler(int unused, void *data)
     int regval;
 
     /*
-     * The IRQs are only useful to obtain internal chip errors. Simply read the
-     * error register, print which flags are raised and write to the register
-     * to acknowledge them.
+     * There's a possibility that interrupts trigger when powering off the
+     * chip. Make sure to read the error register only when the chip is
+     * powered on.
      */
-    regval = SN65DSI83_READ(SN65DSI83_CHA_ERR);
+    if (brg->is_powered) {
+        /*
+         * The IRQs are only useful to obtain internal chip errors. Simply read
+         * the error register, print which flags are raised and write to the
+         * register to acknowledge them.
+         */
+        regval = SN65DSI83_READ(SN65DSI83_CHA_ERR);
 
-    /* Only parse the flags if the register has been read correctly */
-    if (regval >= 0) {
-        if (regval & (1 << CHA_SYNCH_ERR_SHIFT))
-            dev_warn(dev, "detected unexpected sync packet");
-        if (regval & (1 << CHA_CRC_ERR_SHIFT))
-            dev_warn(dev, "detected data stream CRC error");
-        if (regval & (1 << CHA_UNC_ECC_ERR_SHIFT))
-            dev_warn(dev, "detected uncorrectable ECC error");
-        if (regval & (1 << CHA_COR_ECC_ERR_SHIFT))
-             dev_warn(dev, "detected correctable ECC error");
-        if (regval & (1 << CHA_LLP_ERR_SHIFT))
-            dev_warn(dev, "detected low level protocol error");
-        if (regval & (1 << CHA_SOT_BIT_ERR_SHIFT))
-            dev_warn(dev, "detected SoT leader sequence bit error");
-        if (regval & (1 << PLL_UNLOCK_SHIFT))
-            dev_warn(dev, "PLL has been unlocked");
+        /* Only parse the flags if the register has been read correctly */
+        if (regval >= 0) {
+            if (regval & (1 << CHA_SYNCH_ERR_SHIFT))
+                dev_warn(dev, "detected unexpected sync packet");
+            if (regval & (1 << CHA_CRC_ERR_SHIFT))
+                dev_warn(dev, "detected data stream CRC error");
+            if (regval & (1 << CHA_UNC_ECC_ERR_SHIFT))
+                dev_warn(dev, "detected uncorrectable ECC error");
+            if (regval & (1 << CHA_COR_ECC_ERR_SHIFT))
+                 dev_warn(dev, "detected correctable ECC error");
+            if (regval & (1 << CHA_LLP_ERR_SHIFT))
+                dev_warn(dev, "detected low level protocol error");
+            if (regval & (1 << CHA_SOT_BIT_ERR_SHIFT))
+                dev_warn(dev, "detected SoT leader sequence bit error");
+            if (regval & (1 << PLL_UNLOCK_SHIFT))
+                dev_warn(dev, "PLL has been unlocked");
 
-        SN65DSI83_WRITE(SN65DSI83_CHA_ERR,regval);
+            SN65DSI83_WRITE(SN65DSI83_CHA_ERR,regval);
+        }
+    }
+    else {
+        dev_dbg(dev, "Received IRQ in power off state");
     }
 
     return IRQ_HANDLED;
@@ -437,6 +456,7 @@ static struct sn65dsi83_brg_funcs brg_func = {
 };
 
 static struct sn65dsi83_brg brg = {
+    .is_powered = 0,
     .funcs = &brg_func,
 };
 

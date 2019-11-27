@@ -20,6 +20,7 @@ struct sn65dsi83_brg {
     struct gpio_desc *gpio_enable;
     struct gpio_desc *gpio_panel_enable;
     int irq;
+    u8 is_powered;
     /* Bridge Panel Parameters */
     struct videomode vm;
     u32 width_mm;
