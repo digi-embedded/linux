@@ -95,6 +95,9 @@ enum state {
 #define MIN_HEIGHT	16U
 #define MAX_HEIGHT	2592U
 
+/* DMA can sustain YUV 720p@15fps max */
+#define MAX_DMA_BANDWIDTH	(1280 * 720 * 2 * 15)
+
 #define TIMEOUT_MS	1000
 
 #define OVERRUN_ERROR_THRESHOLD	3
@@ -796,8 +799,31 @@ static int dcmi_start_streaming(struct vb2_queue *vq, unsigned int count)
 		dcmi_set_crop(dcmi);
 
 	/* Enable jpeg capture */
-	if (dcmi->sd_format->fourcc == V4L2_PIX_FMT_JPEG)
-		reg_set(dcmi->regs, DCMI_CR, CR_CM);/* Snapshot mode */
+	if (dcmi->sd_format->fourcc == V4L2_PIX_FMT_JPEG) {
+		unsigned int rate;
+		struct v4l2_streamparm p = {
+			.type = V4L2_BUF_TYPE_VIDEO_CAPTURE
+		};
+		struct v4l2_fract frame_interval = {1, 30};
+
+		ret = v4l2_g_parm_cap(dcmi->vdev, dcmi->source, &p);
+		if (!ret)
+			frame_interval = p.parm.capture.timeperframe;
+
+		rate = dcmi->fmt.fmt.pix.sizeimage *
+		       frame_interval.denominator / frame_interval.numerator;
+
+		/*
+		 * If rate exceed DMA capabilities, switch to snapshot mode
+		 * to ensure that current DMA transfer is elapsed before
+		 * capturing a new JPEG.
+		 */
+		if (rate > MAX_DMA_BANDWIDTH) {
+			reg_set(dcmi->regs, DCMI_CR, CR_CM);/* Snapshot mode */
+			dev_dbg(dcmi->dev, "Capture rate is too high for continuous mode (%d > %d bytes/s), switch to snapshot mode\n",
+				rate, MAX_DMA_BANDWIDTH);
+		}
+	}
 
 	/* Enable dcmi */
 	reg_set(dcmi->regs, DCMI_CR, CR_ENABLE);
