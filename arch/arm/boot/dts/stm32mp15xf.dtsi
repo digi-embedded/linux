@@ -4,7 +4,7 @@
  * Author: Alexandre Torgue <alexandre.torgue@st.com> for STMicroelectronics.
  */
 
-#include "stm32mp15xa.dtsi"
+#include "stm32mp15xd.dtsi"
 
 / {
 	soc {
