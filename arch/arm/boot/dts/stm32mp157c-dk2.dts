@@ -34,7 +34,6 @@
 
 &dsi {
 	status = "okay";
-	phy-dsi-supply = <&reg18>;
 
 	ports {
 		port@0 {
