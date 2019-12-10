@@ -49,7 +49,7 @@
 		disp_id = <0>;
 		default_ifmt = "RGB666";
 		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_ipu1_di0>;
+		pinctrl-0 = <&pinctrl_ipu1_di0>, <&pinctrl_disp0_gpios>;
 		status = "disabled";
 	};
 
@@ -532,6 +532,16 @@
 			>;
 		};
 
+		/* Parallel display GPIOs */
+		pinctrl_disp0_gpios: dispgpiogrp {
+			fsl,pins = <
+				/* Display IRQ */
+				MX6QDL_PAD_NANDF_D1__GPIO2_IO01            0x80000000
+				/* Display contrast */
+				MX6QDL_PAD_DI0_PIN4__GPIO4_IO20            0x80000000
+			>;
+		};
+
 		/* Parallel display */
 		pinctrl_ipu1_di0: ipu1grp-2 {
 			fsl,pins = <
@@ -794,8 +804,6 @@
 				MX6QDL_PAD_GPIO_16__GPIO7_IO11	 0x80000000
 				/* LVDS1_PEN_IRQ_N */
 				MX6QDL_PAD_EIM_D23__GPIO3_IO23 0x80000000
-				/* LCD IRQ */
-				MX6QDL_PAD_NANDF_D1__GPIO2_IO01	0x80000000
 				/* AUD_CLK / CSI0_MCLK / CSI1_MCLK */
 				MX6QDL_PAD_GPIO_0__CCM_CLKO1    0x130b0
 				/* DSI_RESET */
