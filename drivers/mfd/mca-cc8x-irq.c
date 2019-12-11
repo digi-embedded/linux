@@ -15,6 +15,7 @@
 #include <linux/regmap.h>
 #include <linux/mfd/mca-common/core.h>
 #include <linux/mfd/mca-cc8x/core.h>
+#include <soc/imx8/soc.h>
 
 #include <soc/imx8/sc/svc/irq/api.h>
 
@@ -106,7 +107,7 @@ static int mca_cc8x_pre_irq(void *irq_drv_data)
 	return imx8_scu_mu_isr(0, NULL);
 }
 
-static const struct regmap_irq_chip mca_cc8x_irq_chip = {
+static struct regmap_irq_chip mca_cc8x_irq_chip = {
 	.name		= "mca-cc8x-irq",
 	.irqs		= mca_cc8x_irqs,
 	.num_irqs	= ARRAY_SIZE(mca_cc8x_irqs),
@@ -114,22 +115,27 @@ static const struct regmap_irq_chip mca_cc8x_irq_chip = {
 	.status_base	= MCA_IRQ_STATUS_0,
 	.mask_base	= MCA_IRQ_MASK_0,
 	.ack_base	= MCA_IRQ_STATUS_0,
-	.handle_pre_irq	= mca_cc8x_pre_irq,
 	.init_ack_masked = true,
 };
 
 int mca_cc8x_irq_init(struct mca_drv *mca)
 {
-	int ret;
+	int ret, flags;
 
 	if (!mca->chip_irq) {
 		dev_err(mca->dev, "No IRQ configured\n");
 		return -EINVAL;
 	}
 
+	if (cpu_is_imx8qxp()) {
+		mca_cc8x_irq_chip.handle_pre_irq = mca_cc8x_pre_irq;
+		flags = IRQF_ONESHOT | IRQF_SHARED;
+	} else {
+		flags = IRQF_TRIGGER_LOW | IRQF_ONESHOT | IRQF_SHARED;
+	}
+
 	mca->irq_base = -1;
-	ret = regmap_add_irq_chip(mca->regmap, mca->chip_irq,
-				  IRQF_ONESHOT | IRQF_SHARED,
+	ret = regmap_add_irq_chip(mca->regmap, mca->chip_irq, flags,
 				  mca->irq_base, &mca_cc8x_irq_chip,
 				  &mca->regmap_irq);
 	if (ret) {
@@ -138,13 +144,15 @@ int mca_cc8x_irq_init(struct mca_drv *mca)
 		return ret;
 	}
 
-	ret = imx8_mu_enable_sc_irqs(SC_IRQ_TEMP_MCA | SC_IRQ_TEMP_PMIC0_HIGH | \
-				     SC_IRQ_TEMP_PMIC1_HIGH,
-				     SC_IRQ_RTC,
-				     SC_IRQ_BUTTON,
-				     SC_IRQ_WDOG);
-	if (ret)
-		dev_err(mca->dev, "Failed to reguest SC MU IRQs (%d)\n", ret);
+	if (cpu_is_imx8qxp()) {
+		ret = imx8_mu_enable_sc_irqs(SC_IRQ_TEMP_MCA | SC_IRQ_TEMP_PMIC0_HIGH | \
+					SC_IRQ_TEMP_PMIC1_HIGH,
+					SC_IRQ_RTC,
+					SC_IRQ_BUTTON,
+					SC_IRQ_WDOG);
+		if (ret)
+			dev_err(mca->dev, "Failed to reguest SC MU IRQs (%d)\n", ret);
+	}
 
 	return ret;
 }
