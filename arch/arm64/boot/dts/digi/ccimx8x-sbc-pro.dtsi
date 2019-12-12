@@ -207,6 +207,7 @@
 		 <&clk IMX8QXP_ENET0_TX_CLK>;
 	phy-mode = "rgmii-id";
 	phy-handle = <&ethphy1>;
+	digi,mdio-lt-supply = <&reg_1v8_ext>;
 	phy-supply = <&reg_3v3_eth0>;
 	phy-reset-gpios = <&gpio3 18 GPIO_ACTIVE_LOW>;
 	phy-reset-duration = <1>;
@@ -241,6 +242,7 @@
 	pinctrl-1 = <&pinctrl_fec2_gpio_sleep>;
 	phy-mode = "rgmii-id";
 	phy-handle = <&ethphy0>;
+	digi,mdio-lt-supply = <&reg_1v8_ext>;
 	phy-supply = <&reg_3v3_eth0>;
 	phy-reset-gpios = <&gpio3 22 GPIO_ACTIVE_LOW>;
 	phy-reset-duration = <1>;
