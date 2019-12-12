@@ -200,11 +200,6 @@
 		    <&pinctrl_fec1_gpio>,
 		    <&pinctrl_fec1>;
 	pinctrl-1 = <&pinctrl_fec1_gpio_sleep>;
-	clocks = <&clk IMX8QXP_ENET0_IPG_CLK>,
-		 <&clk IMX8QXP_ENET0_AHB_CLK>,
-		 <&clk IMX8QXP_ENET0_REF_50MHZ_CLK>,
-		 <&clk IMX8QXP_ENET0_PTP_CLK>,
-		 <&clk IMX8QXP_ENET0_TX_CLK>;
 	phy-mode = "rgmii-id";
 	phy-handle = <&ethphy1>;
 	digi,mdio-lt-supply = <&reg_1v8_ext>;

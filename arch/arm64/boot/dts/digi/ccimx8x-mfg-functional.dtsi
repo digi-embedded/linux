@@ -56,11 +56,6 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_fec_gpio>,
 		    <&pinctrl_fec>;
-	clocks = <&clk IMX8QXP_ENET0_IPG_CLK>,
-		 <&clk IMX8QXP_ENET0_AHB_CLK>,
-		 <&clk IMX8QXP_ENET0_REF_50MHZ_CLK>,
-		 <&clk IMX8QXP_ENET0_PTP_CLK>,
-		 <&clk IMX8QXP_ENET0_TX_CLK>;
 	phy-mode = "rgmii-id";
 	phy-handle = <&ethphy0>;
 	phy-reset-gpios = <&gpio3 18 GPIO_ACTIVE_LOW>;
