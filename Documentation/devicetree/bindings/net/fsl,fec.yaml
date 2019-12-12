@@ -144,6 +144,10 @@ properties:
     description:
       Regulator that powers the Ethernet PHY.
 
+  digi,mdio-lt-supply:
+    description:
+      Regulator that powers the MDIO level translator.
+
   power-domains:
     maxItems: 1
 

@@ -659,6 +659,7 @@ struct fec_enet_private {
 	int hwts_rx_en;
 	int hwts_tx_en;
 	struct delayed_work time_keep;
+	struct regulator *reg_mdio;
 	struct regulator *reg_phy;
 	struct fec_stop_mode_gpr stop_gpr;
 	struct pm_qos_request pm_qos_req;
