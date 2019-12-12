@@ -26,6 +26,7 @@ Optional properties:
   a delay of phy-reset-post-delay milliseconds will be observed after the
   phy-reset-gpios has been toggled. Can be omitted thus no delay is
   observed. Delay is in range of 1ms to 1000ms. Other delays are invalid.
+- digi,mdio-lt-supply: regulator that powers the MDIO level translator.
 - phy-supply : regulator that powers the Ethernet PHY.
 - phy-handle : phandle to the PHY device connected to this device.
 - fixed-link : Assume a fixed link. See fixed-link.txt in the same directory.

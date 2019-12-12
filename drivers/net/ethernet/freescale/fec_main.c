@@ -3790,6 +3790,22 @@ fec_probe(struct platform_device *pdev)
 	if (ret)
 		goto failed_clk_ahb;
 
+	fep->reg_mdio = devm_regulator_get(&pdev->dev, "digi,mdio-lt");
+	if (!IS_ERR(fep->reg_mdio)) {
+		ret = regulator_enable(fep->reg_mdio);
+		if (ret) {
+			dev_err(&pdev->dev,
+				"Failed to enable mdio regulator: %d\n", ret);
+			goto failed_regulator;
+		}
+	} else {
+		if (PTR_ERR(fep->reg_mdio) == -EPROBE_DEFER) {
+			ret = -EPROBE_DEFER;
+			goto failed_regulator;
+		}
+		fep->reg_mdio = NULL;
+	}
+
 	fep->reg_phy = devm_regulator_get(&pdev->dev, "phy");
 	if (!IS_ERR(fep->reg_phy)) {
 		ret = regulator_enable(fep->reg_phy);
@@ -3892,6 +3908,8 @@ failed_init:
 	fec_ptp_stop(pdev);
 	if (fep->reg_phy)
 		regulator_disable(fep->reg_phy);
+	if (fep->reg_mdio)
+		regulator_disable(fep->reg_mdio);
 failed_reset:
 	pm_runtime_disable(&pdev->dev);
 failed_regulator:
@@ -3925,6 +3943,8 @@ fec_drv_remove(struct platform_device *pdev)
 	fec_enet_mii_remove(fep);
 	if (fep->reg_phy)
 		regulator_disable(fep->reg_phy);
+	if (fep->reg_mdio)
+		regulator_disable(fep->reg_mdio);
 	pm_runtime_put(&pdev->dev);
 	pm_runtime_disable(&pdev->dev);
 	if (of_phy_is_fixed_link(np))
@@ -3977,6 +3997,8 @@ static int __maybe_unused fec_suspend(struct device *dev)
 
 	if (fep->reg_phy && !(fep->wol_flag & FEC_WOL_FLAG_ENABLE))
 		regulator_disable(fep->reg_phy);
+	if (fep->reg_mdio && !(fep->wol_flag & FEC_WOL_FLAG_ENABLE))
+		regulator_disable(fep->reg_mdio);
 
 	/* SOC supply clock to phy, when clock is disabled, phy link down
 	 * SOC control phy regulator, when regulator is disabled, phy link down
@@ -3993,6 +4015,12 @@ static int __maybe_unused fec_resume(struct device *dev)
 	struct fec_enet_private *fep = netdev_priv(ndev);
 	int ret = 0;
 	int val;
+
+	if (fep->reg_mdio && !(fep->wol_flag & FEC_WOL_FLAG_ENABLE)) {
+		ret = regulator_enable(fep->reg_mdio);
+		if (ret)
+			return ret;
+	}
 
 	if (fep->reg_phy && !(fep->wol_flag & FEC_WOL_FLAG_ENABLE)) {
 		ret = regulator_enable(fep->reg_phy);
@@ -4047,6 +4075,8 @@ static int __maybe_unused fec_resume(struct device *dev)
 failed_clk:
 	if (fep->reg_phy)
 		regulator_disable(fep->reg_phy);
+	if (fep->reg_mdio)
+		regulator_disable(fep->reg_mdio);
 	return ret;
 }
 
