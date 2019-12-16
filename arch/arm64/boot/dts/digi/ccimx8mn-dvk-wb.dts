@@ -152,6 +152,11 @@
 	status = "okay";
 };
 
+&clk {
+	assigned-clocks = <&clk IMX8MN_AUDIO_PLL1>, <&clk IMX8MN_AUDIO_PLL2>;
+	assigned-clock-rates = <393216000>, <361267200>;
+};
+
 &easrc {
 	fsl,asrc-rate  = <48000>;
 	status = "okay";
@@ -178,7 +183,6 @@
 		vdd-supply = <&buck6_reg>;
 		xceiver-supply = <&reg_5v_board>;
 	};
-        
 };
 
 &fec1 {
@@ -262,15 +266,9 @@
 	max98089: codec@10 {
 		compatible = "maxim,max98089";
 		reg = <0x10>;
-		clocks = <&clk IMX8MN_CLK_SAI2>;
+		clocks = <&clk IMX8MN_CLK_SAI2_ROOT>;
 		clock-names = "mclk";
-		//power-domains = <&pd_mclk_out1>;
 		vcc-supply = <&reg_3v3_audio>;
-		assigned-clocks = /*<&clk IMX8QXP_AUD_PLL0_DIV>,
-				  <&clk IMX8QXP_AUD_ACM_AUD_PLL_CLK0_DIV>,
-				  <&clk IMX8QXP_AUD_ACM_AUD_REC_CLK0_DIV>,*/
-				  <&clk IMX8MN_CLK_SAI2>;
-		assigned-clock-rates = <786432000>, <49152000>, <12288000>, <12288000>;
 	};
 
 	/* MIPI-CSI camera */
@@ -477,13 +475,11 @@
 };
 
 &sai2 {
-	assigned-clocks = /*<&clk IMX8QXP_AUD_PLL0_DIV>,
-			  <&clk IMX8QXP_AUD_ACM_AUD_PLL_CLK0_DIV>,
-			  <&clk IMX8QXP_AUD_ACM_AUD_REC_CLK0_DIV>,*/
-			  <&clk IMX8MN_CLK_SAI2_ROOT>;
-	assigned-clock-rates = <786432000>, <49152000>, <12288000>, <49152000>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_sai2>;
+	assigned-clocks = <&clk IMX8MN_CLK_SAI2>;
+	assigned-clock-parents = <&clk IMX8MN_AUDIO_PLL1_OUT>;
+	assigned-clock-rates = <12288000>;
 	status = "okay";
 };
 
