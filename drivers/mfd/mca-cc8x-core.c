@@ -27,6 +27,7 @@
 
 #include <linux/mfd/mca-common/core.h>
 #include <linux/mfd/mca-cc8x/core.h>
+#include <soc/imx8/soc.h>
 
 #include <asm/unaligned.h>
 
@@ -514,13 +515,16 @@ static ssize_t fw_update_store(struct device *dev,
 	struct mca_drv *mca = dev_get_drvdata(dev);
 	ssize_t status;
 	long value;
-	struct lpi2c_imx_struct *lpi2c_imx = dev_get_drvdata(mca->i2c_adapter_dev);
 
 	if (!gpio_is_valid(mca->fw_update_gpio))
 		return -EINVAL;
 
-	/* Set i2c bus speed to 100kbps during firmware update */
-	lpi2c_imx->bitrate = 100000;
+	if (cpu_is_imx8qxp()) {
+		struct lpi2c_imx_struct *lpi2c_imx = dev_get_drvdata(mca->i2c_adapter_dev);
+
+		/* Set i2c bus speed to 100kbps during firmware update */
+		lpi2c_imx->bitrate = 100000;
+	}
 
 	status = kstrtol(buf, 0, &value);
 	if (status == 0) {
