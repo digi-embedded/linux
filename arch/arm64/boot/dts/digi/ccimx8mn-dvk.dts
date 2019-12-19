@@ -486,14 +486,14 @@
 	status = "okay";
 };
 
-/* XBee 2 UART */
+/* XBee 2 UART shared with the Cortex M7 */
 &uart4 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_uart4>, <&pinctrl_xbee2_gpios>;
 	assigned-clocks = <&clk IMX8MN_CLK_UART4>;
 	assigned-clock-parents = <&clk IMX8MN_SYS_PLL1_80M>;
 	fsl,uart-has-rtscts;
-	status = "okay";
+	status = "disabled";
 };
 
 /* USB_OTG1 connected to usb hub */
