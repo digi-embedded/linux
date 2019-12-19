@@ -164,7 +164,8 @@ static int is_stm32_soc_secured(struct platform_device *pdev, int *val)
 
 	syscon = syscon_regmap_lookup_by_phandle(np, "st,tzcr");
 	if (IS_ERR(syscon)) {
-		dev_err(&pdev->dev, "tzcr syscon required !\n");
+		if (PTR_ERR(syscon) != -EPROBE_DEFER)
+			dev_err(&pdev->dev, "tzcr syscon required\n");
 		return PTR_ERR(syscon);
 	}
 
