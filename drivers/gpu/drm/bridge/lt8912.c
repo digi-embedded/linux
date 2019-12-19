@@ -309,7 +309,8 @@ lt8912_connector_best_encoder(struct drm_connector *connector)
 static int lt8912_connector_get_modes(struct drm_connector *connector)
 {
 	struct lt8912 *lt = connector_to_lt8912(connector);
-	int num = 0;
+	int ret, num = 0;
+	u32 bus_format = MEDIA_BUS_FMT_RGB888_1X24;
 	struct edid *edid = drm_get_edid(connector, lt->i2c->adapter);
 
 	/* EDID handling */
@@ -319,6 +320,11 @@ static int lt8912_connector_get_modes(struct drm_connector *connector)
 	} else {
 		dev_err(lt->dev, "failed to get display EDID data\n");
 	}
+
+	ret = drm_display_info_set_bus_formats(&connector->display_info,
+					       &bus_format, 1);
+	if (ret)
+		return ret;
 
 	return num;
 }
