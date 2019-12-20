@@ -82,6 +82,7 @@
 		pwrkey {
 			compatible = "digi,mca-cc8x-pwrkey";
 			digi,key-power;
+			digi,key-power-up;
 			digi,key-sleep;
 			digi,debounce-ms = <100>;
 			digi,pwroff-delay-sec = <6>;
