@@ -31,6 +31,8 @@
 #include <linux/uaccess.h>
 
 #include <asm/unaligned.h>
+#include <linux/of_device.h>
+#include <drm/drm_mipi_dsi.h>
 
 #define WORK_REGISTER_THRESHOLD		0x00
 #define WORK_REGISTER_REPORT_RATE	0x08
@@ -1137,6 +1139,8 @@ static int edt_ft5x06_ts_probe(struct i2c_client *client,
 	const struct edt_i2c_chip_data *chip_data;
 	struct edt_ft5x06_ts_data *tsdata;
 	u8 buf[2] = { 0xfc, 0x00 };
+	struct mipi_dsi_device *panel;
+	struct device_node *np;
 	struct input_dev *input;
 	unsigned long irq_flags;
 	int error;
@@ -1342,6 +1346,18 @@ static int edt_ft5x06_ts_probe(struct i2c_client *client,
 		client->irq,
 		tsdata->wake_gpio ? desc_to_gpio(tsdata->wake_gpio) : -1,
 		tsdata->reset_gpio ? desc_to_gpio(tsdata->reset_gpio) : -1);
+
+	np = of_parse_phandle(client->dev.of_node, "panel", 0);
+	if (np) {
+		panel = of_find_mipi_dsi_device_by_node(np);
+		of_node_put(np);
+		if (!panel)
+			return -ENOENT;
+
+		device_link_add(&client->dev, &panel->dev, DL_FLAG_STATELESS |
+				DL_FLAG_AUTOREMOVE_SUPPLIER);
+		put_device(&panel->dev);
+	}
 
 	return 0;
 }
