@@ -372,7 +372,7 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_lt8912>;
 		digi,dsi-reset = <&gpio3 7 GPIO_ACTIVE_LOW>;
-		irq-gpios = <&gpio3 9 GPIO_ACTIVE_HIGH>;
+		hpd-gpios = <&gpio3 9 GPIO_ACTIVE_HIGH>;
 		digi,dsi-lanes = <4>;
 		status = "okay";
 
