@@ -527,12 +527,11 @@ static int lt8912_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 	}
 
 	/* interrupt handling */
-	lt->gpiod_int = devm_gpiod_get_optional(dev, "irq", GPIOD_IN);
+	lt->gpiod_int = devm_gpiod_get_optional(dev, "hpd", GPIOD_IN);
 	if (IS_ERR(lt->gpiod_int)) {
 		ret = PTR_ERR(lt->gpiod_int);
 		if (ret != -EPROBE_DEFER)
-			dev_dbg(dev, "Failed to get %s GPIO: %d\n",
-				"irq", ret);
+			dev_err(dev, "Failed to get hpd GPIO: %d\n", ret);
 		return ret;
 	}
 
