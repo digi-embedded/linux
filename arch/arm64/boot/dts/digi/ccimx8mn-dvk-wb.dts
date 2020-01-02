@@ -50,11 +50,11 @@
 		status = "okay";
 	};
 
-	/* fixed crystal dedicated to mpc2517fd */
+	/* fixed crystal dedicated to mcp2517fd */
 	mcp2517fd_osc: mcp2517fd_osc {
 		compatible = "fixed-clock";
 		#clock-cells = <0>;
-		clock-frequency = <400000>;
+		clock-frequency = <40000000>;
 	};
 
 	regulators {
@@ -180,7 +180,6 @@
 		interrupt-parent = <&gpio1>;
 		interrupts = <0 IRQ_TYPE_LEVEL_LOW>;
 		clocks = <&mcp2517fd_osc>;
-		vdd-supply = <&buck6_reg>;
 		xceiver-supply = <&reg_5v_board>;
 	};
 };
