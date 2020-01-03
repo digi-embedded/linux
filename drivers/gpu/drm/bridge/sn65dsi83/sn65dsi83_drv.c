@@ -19,6 +19,7 @@
 #include <drm/drm_connector.h>
 #include <drm/drm_crtc_helper.h>
 #include <video/mipi_display.h>
+#include <video/of_display_timing.h>
 #include <video/of_videomode.h>
 #include <video/videomode.h>
 
@@ -275,7 +276,7 @@ static int sn65dsi83_parse_dt(struct device_node *np,
     sn65dsi83->brg->height_mm = height;
 
     /* Read default timing if there is not device tree node for */
-    if ((of_get_videomode(np, &sn65dsi83->brg->vm, 0)) < 0)
+    if ((of_get_videomode(np, &sn65dsi83->brg->vm, OF_USE_NATIVE_MODE)) < 0)
         videomode_from_timing(&panel_default_timing, &sn65dsi83->brg->vm);
 
     of_node_put(endpoint);
