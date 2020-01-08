@@ -199,9 +199,6 @@
 	pmic: bd71837@4b {
 		reg = <0x4b>;
 		compatible = "rohm,bd71837";
-		/* PMIC BD71837 PMIC_nINT GPIO3_IO8 */
-		/* pinctrl configured by pinctrl_mca_cc8x */
-		gpio_intr = <&gpio3 8 GPIO_ACTIVE_LOW>;
 
 		gpo {
 			rohm,drv = <0x0C>;	/* 0b0000_1100 all gpos with cmos output mode */
