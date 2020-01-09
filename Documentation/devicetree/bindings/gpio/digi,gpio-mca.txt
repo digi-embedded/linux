@@ -5,6 +5,7 @@ Required properties:
     - "digi,mca-cc6ul-gpio"
     - "digi,mca-ioexp-gpio"
     - "digi,mca-cc8x-gpio"
+    - "digi,mca-cc8m-gpio"
 
 - #gpio-cells : Should be two.
   - first cell is the pin number
@@ -40,6 +41,18 @@ Example:
 			#gpio-cells = <2>;
 
 			interrupt-parent = <&mca_cc8x>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
+		};
+	};
+
+	mca_cc8m: mca@63 {
+		mca_gpio: gpio {
+			compatible = "digi,mca-cc8m-gpio";
+			gpio-controller;
+			#gpio-cells = <2>;
+
+			interrupt-parent = <&mca_cc8m>;
 			interrupt-controller;
 			#interrupt-cells = <2>;
 		};

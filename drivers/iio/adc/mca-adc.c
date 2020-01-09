@@ -40,6 +40,7 @@
 enum mca_adc_type {
 	CC6UL_MCA_ADC,
 	CC8X_MCA_ADC,
+	CC8M_MCA_ADC,
 	IOEXP_MCA_ADC,
 };
 
@@ -910,6 +911,9 @@ static struct mca_adc_data mca_adc_devdata[] = {
 	[CC8X_MCA_ADC] = {
 		.devtype = CC8X_MCA_ADC,
 	},
+	[CC8M_MCA_ADC] = {
+		.devtype = CC8M_MCA_ADC,
+	},
 	[IOEXP_MCA_ADC] = {
 		.devtype = IOEXP_MCA_ADC,
 	},
@@ -920,6 +924,8 @@ static const struct of_device_id mca_adc_dt_ids[] = {
 	  .data = &mca_adc_devdata[CC6UL_MCA_ADC]},
 	{ .compatible = "digi,mca-cc8x-adc",
 	  .data = &mca_adc_devdata[CC8X_MCA_ADC]},
+	{ .compatible = "digi,mca-cc8m-adc",
+	  .data = &mca_adc_devdata[CC8M_MCA_ADC]},
 	{ .compatible = "digi,mca-ioexp-adc",
 	  .data = &mca_adc_devdata[IOEXP_MCA_ADC]},
 	{ /* sentinel */ }

@@ -4,6 +4,7 @@ Required properties:
 - compatible: must be one of
   "digi,mca-cc6ul-wdt"
   "digi,mca-cc8x-wdt"
+  "digi,mca-cc8m-wdt"
 
 Optional properties:
 - digi,timeout-sec: contains the watchdog timeout in seconds.
@@ -19,7 +20,7 @@ Example:
 		watchdog {
 			compatible = "digi,mca-cc6ul-wdt";
 			digi,timeout-sec = <15>;
-			digi,irq-no-reset;
+			digi,full-reset;
 		};
 	};
 
@@ -27,6 +28,14 @@ Example:
 		watchdog {
 			compatible = "digi,mca-cc8x-wdt";
 			digi,timeout-sec = <15>;
-			digi,irq-no-reset;
+			digi,full-reset;
+		};
+	};
+
+	mca_cc8m: mca-@63 {
+		watchdog {
+			compatible = "digi,mca-cc8m-wdt";
+			digi,timeout-sec = <15>;
+			digi,full-reset;
 		};
 	};

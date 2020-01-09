@@ -51,6 +51,7 @@
 enum mca_rtc_type {
 	CC6UL_MCA_RTC,
 	CC8X_MCA_RTC,
+	CC8M_MCA_RTC,
 };
 
 struct mca_rtc_data {
@@ -776,6 +777,9 @@ static struct mca_rtc_data mca_rtc_devdata[] = {
 	[CC8X_MCA_RTC] = {
 		.devtype = CC8X_MCA_RTC,
 	},
+	[CC8M_MCA_RTC] = {
+		.devtype = CC8M_MCA_RTC,
+	},
 };
 
 static const struct of_device_id mca_rtc_dt_ids[] = {
@@ -783,6 +787,8 @@ static const struct of_device_id mca_rtc_dt_ids[] = {
 	  .data = &mca_rtc_devdata[CC6UL_MCA_RTC]},
 	{ .compatible = "digi,mca-cc8x-rtc",
 	  .data = &mca_rtc_devdata[CC8X_MCA_RTC]},
+	{ .compatible = "digi,mca-cc8m-rtc",
+	  .data = &mca_rtc_devdata[CC8M_MCA_RTC]},
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, mca_rtc_dt_ids);

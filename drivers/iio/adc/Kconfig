@@ -480,7 +480,7 @@ config MAX1363
 config MCA_ADC
 	tristate "Digi ConnectCore SOMs Micro Controller Assist ADC"
 	select MFD_MCA_CC6UL if SOC_IMX6UL
-	select MFD_MCA_CC8X if ARCH_FSL_IMX8QXP
+	select MFD_MCA_CC8 if (ARCH_FSL_IMX8QXP || ARCH_FSL_IMX8MM || ARCH_FSL_IMX8MN)
 	help
 	  If you say Y here you will get support for the ADCs in the Micro
 	  Controller Assist of Digi ConnectCore system-on-modules.

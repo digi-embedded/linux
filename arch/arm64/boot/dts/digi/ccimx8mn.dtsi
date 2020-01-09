@@ -50,8 +50,8 @@
 	sda-gpios = <&gpio5 15 GPIO_ACTIVE_HIGH>;
 	status = "okay";
 
-	mca_cc8x: mca@63 {
-		compatible = "digi,mca_cc8x";
+	mca_cc8m: mca@63 {
+		compatible = "digi,mca_cc8m";
 		reg = <0x63>;
 		interrupt-parent = <&gpio3>;
 		interrupts = <8 IRQ_TYPE_LEVEL_HIGH>;
@@ -59,19 +59,19 @@
 		#interrupt-cells = <2>;
 		fw-update-gpio = <&gpio1 4 GPIO_ACTIVE_LOW>;
 		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_mca_cc8x>;
+		pinctrl-0 = <&pinctrl_mca_cc8m>;
 
 		mca_adc: adc {
-			compatible = "digi,mca-cc8x-adc";
+			compatible = "digi,mca-cc8m-adc";
 			digi,adc-vref = <3000000>;
 		};
 
 		mca_gpio: gpio {
-			compatible = "digi,mca-cc8x-gpio";
+			compatible = "digi,mca-cc8m-gpio";
 			gpio-controller;
 			#gpio-cells = <2>;
 
-			interrupt-parent = <&mca_cc8x>;
+			interrupt-parent = <&mca_cc8m>;
 			interrupt-controller;
 			#interrupt-cells = <2>;
 
@@ -80,7 +80,7 @@
 		};
 
 		pwrkey {
-			compatible = "digi,mca-cc8x-pwrkey";
+			compatible = "digi,mca-cc8m-pwrkey";
 			digi,key-power;
 			digi,key-power-up;
 			digi,key-sleep;
@@ -90,11 +90,11 @@
 		};
 
 		rtc {
-			compatible = "digi,mca-cc8x-rtc";
+			compatible = "digi,mca-cc8m-rtc";
 		};
 
 		wdt {
-			compatible = "digi,mca-cc8mn-wdt";
+			compatible = "digi,mca-cc8m-wdt";
 			digi,full-reset;
 		};
 
@@ -123,11 +123,11 @@
 		};
 
 		mca_tamper: tamper {
-			compatible = "digi,mca-cc8x-tamper";
+			compatible = "digi,mca-cc8m-tamper";
 		};
 
 		mca_uart: uart {
-			compatible = "digi,mca-cc8x-uart";
+			compatible = "digi,mca-cc8m-uart";
 			#address-cells = <1>;
 			#size-cells = <0>;
 
@@ -332,7 +332,7 @@
 		>;
 	};
 
-	pinctrl_mca_cc8x: mcagrp {
+	pinctrl_mca_cc8m: mcagrp {
 		fsl,pins = <
 			/* MCA_nINT */
 			MX8MN_IOMUXC_NAND_DATA02_GPIO3_IO8	0x56
