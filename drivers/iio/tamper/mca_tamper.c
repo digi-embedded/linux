@@ -41,6 +41,7 @@
 enum mca_tamper_type {
 	CC6UL_MCA_TAMPER,
 	CC8X_MCA_TAMPER,
+	CC8M_MCA_TAMPER,
 };
 
 struct mca_tamper_data {
@@ -763,6 +764,11 @@ static struct mca_tamper_data mca_tamper_devdata[] = {
 		.num_tamper_ifaces = 4,
 		.digital_tamper_cnt = 2
 	},
+	[CC8M_MCA_TAMPER] = {
+		.devtype = CC8M_MCA_TAMPER,
+		.num_tamper_ifaces = 4,
+		.digital_tamper_cnt = 2
+	},
 };
 
 static const struct of_device_id mca_tamper_ids[] = {
@@ -770,6 +776,8 @@ static const struct of_device_id mca_tamper_ids[] = {
           .data = &mca_tamper_devdata[CC6UL_MCA_TAMPER]},
         { .compatible = "digi,mca-cc8x-tamper",
           .data = &mca_tamper_devdata[CC8X_MCA_TAMPER]},
+        { .compatible = "digi,mca-cc8m-tamper",
+          .data = &mca_tamper_devdata[CC8M_MCA_TAMPER]},
         { /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, mca_tamper_ids);

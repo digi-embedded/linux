@@ -27,7 +27,7 @@
 #include <linux/mfd/mca-common/registers.h>
 #include <linux/mfd/mca-common/core.h>
 #include <linux/mfd/mca-cc6ul/core.h>
-#include <linux/mfd/mca-cc8x/core.h>
+#include <linux/mfd/mca-cc8/core.h>
 #include <linux/delay.h>
 
 #define MCA_DRVNAME_UART		"mca-uart"
@@ -58,6 +58,7 @@ bool required[] = {1, 1, 0, 0};
 enum mca_uart_type {
 	CC6UL_MCA_UART,
 	CC8X_MCA_UART,
+	CC8M_MCA_UART,
 };
 
 enum {
@@ -1184,7 +1185,7 @@ static int mca_uart_remove(struct platform_device *pdev)
  * The code snippet below was grabbed from drivers/tty/serial/serial_core.c
  * It is used for retrieving the TTY layer struct device. This struct is used to
  * check the value of /sys/class/tty/ttyMCAx/power/wakeup which is more standard
- * than the one at /sys/bus/i2c/devices/0-0063/mca-cc8x-uart/power/wakeup.
+ * than the one at /sys/bus/i2c/devices/0-0063/mca-cc8-uart/power/wakeup.
  */
 struct uart_match {
 	struct uart_port *port;
@@ -1248,7 +1249,12 @@ static struct mca_uart_data mca_uart_devdata[] = {
 	},
 	[CC8X_MCA_UART] = {
 		.devtype	= CC8X_MCA_UART,
-		.since		= MCA_CC8X_UART_MIN_FW,
+		.since		= MCA_CC8_UART_MIN_FW,
+		.nuarts		= 3,
+	},
+	[CC8M_MCA_UART] = {
+		.devtype	= CC8M_MCA_UART,
+		.since		= MCA_CC8_UART_MIN_FW,
 		.nuarts		= 3,
 	},
 };
@@ -1260,6 +1266,9 @@ static const struct platform_device_id mca_uart_devtype[] = {
 	}, {
 		.name = "mca-cc8x-uart",
 		.driver_data = (kernel_ulong_t)&mca_uart_devdata[CC8X_MCA_UART],
+	}, {
+		.name = "mca-cc8m-uart",
+		.driver_data = (kernel_ulong_t)&mca_uart_devdata[CC8M_MCA_UART],
 	}, {
 		/* sentinel */
 	}
@@ -1274,6 +1283,9 @@ static const struct of_device_id mca_uart_ids[] = {
 	}, {
 		.compatible = "digi,mca-cc8x-uart",
 		.data = &mca_uart_devdata[CC8X_MCA_UART]
+	}, {
+		.compatible = "digi,mca-cc8m-uart",
+		.data = &mca_uart_devdata[CC8M_MCA_UART]
 	}, {
 		/* sentinel */
 	}

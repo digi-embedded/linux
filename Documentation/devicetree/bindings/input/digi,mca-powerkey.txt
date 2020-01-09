@@ -34,6 +34,7 @@ Required properties:
 - compatible: must be one of
   "digi,mca-cc6ul-pwrkey"
   "digi,mca-cc8x-pwrkey"
+  "digi,mca-cc8m-pwrkey"
 
 Optional properties:
 - key-power: enable the KEY_POWER event (KEY_POWER DOWN)
@@ -67,6 +68,19 @@ Example:
 		pwrkey {
 			compatible = "digi,mca-cc8x-pwrkey";
 			digi,key-power;
+			digi,key-power-up;
+			digi,key-sleep;
+			digi,debounce-ms = <100>;
+			digi,pwroff-delay-sec = <6>;
+			digi,pwroff-guard-sec = <30>;
+		};
+	};
+
+	mca_cc8m: mca@63 {
+		pwrkey {
+			compatible = "digi,mca-cc8m-pwrkey";
+			digi,key-power;
+			digi,key-power-up;
 			digi,key-sleep;
 			digi,debounce-ms = <100>;
 			digi,pwroff-delay-sec = <6>;
