@@ -4,6 +4,7 @@ Required properties:
 - compatible: must be one of
   "digi,mca-cc6ul-rtc".
   "digi,mca-cc8x-rtc".
+  "digi,mca-cc8m-rtc".
 
 Example:
 	mca_cc6ul: mca@7e {
@@ -15,5 +16,11 @@ Example:
 	mca_cc8x: mca@63 {
 		rtc {
 			compatible = "digi,mca-cc8x-rtc";
+		};
+	};
+
+	mca_cc8m: mca@63 {
+		rtc {
+			compatible = "digi,mca-cc8m-rtc";
 		};
 	};
