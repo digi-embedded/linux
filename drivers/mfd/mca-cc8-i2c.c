@@ -17,15 +17,15 @@
 
 #include <linux/mfd/core.h>
 #include <linux/mfd/mca-common/core.h>
-#include <linux/mfd/mca-cc8x/core.h>
+#include <linux/mfd/mca-cc8/core.h>
 
 #include <linux/of.h>
 #include <linux/regulator/of_regulator.h>
 
-static const struct regmap_range mca_cc8x_readable_ranges[] = {
+static const struct regmap_range mca_cc8_readable_ranges[] = {
 };
 
-static const struct regmap_range mca_cc8x_writeable_ranges[] = {
+static const struct regmap_range mca_cc8_writeable_ranges[] = {
 	regmap_reg_range(MCA_HWVER_SOM, MCA_HWVER_SOM),
 	regmap_reg_range(MCA_IRQ_STATUS_0, MCA_IRQ_MASK_3),
 	regmap_reg_range(MCA_PWR_CTRL_0, MCA_PWR_KEY_GUARD),
@@ -50,11 +50,11 @@ static const struct regmap_range mca_cc8x_writeable_ranges[] = {
 	regmap_reg_range(MCA_REG_ADC_CFG_0, MCA_REG_ADC_CFG_2),
 	regmap_reg_range(MCA_REG_ADC_BUFF_CH, MCA_REG_ADC_BUFF_SAMPLE_21),
 	regmap_reg_range(MCA_REG_UART_THR, MCA_REG_UART_RTSPIN),
-	regmap_reg_range(MCA_CC8X_MPU_NVRAM_START, MCA_CC8X_MPU_NVRAM_END),
+	regmap_reg_range(MCA_CC8_MPU_NVRAM_START, MCA_CC8_MPU_NVRAM_END),
 	regmap_reg_range(MCA_REG_TPM0_CFG0, MCA_REG_TPM2_CH7_CNT1),
 };
 
-static const struct regmap_range mca_cc8x_volatile_ranges[] = {
+static const struct regmap_range mca_cc8_volatile_ranges[] = {
 	/* Real volatile registers */
 	regmap_reg_range(MCA_IRQ_STATUS_0, MCA_IRQ_STATUS_3),
 	regmap_reg_range(MCA_TAMPER0_DATE_START, MCA_TAMPER0_EVENT),
@@ -65,7 +65,7 @@ static const struct regmap_range mca_cc8x_volatile_ranges[] = {
 	regmap_reg_range(MCA_LAST_MCA_RESET_0, MCA_LAST_MCA_RESET_3),
 	regmap_reg_range(MCA_LAST_MPU_RESET_0, MCA_LAST_MPU_RESET_3),
 	regmap_reg_range(MCA_LAST_WAKEUP_REASON_0, MCA_LAST_WAKEUP_REASON_3),
-	regmap_reg_range(MCA_CC8X_MPU_NVRAM_START, MCA_CC8X_MPU_NVRAM_END),
+	regmap_reg_range(MCA_CC8_MPU_NVRAM_START, MCA_CC8_MPU_NVRAM_END),
 	regmap_reg_range(MCA_RTC_COUNT_YEAR_L, MCA_RTC_COUNT_SEC),
 	regmap_reg_range(MCA_GPIO_DATA_0, MCA_GPIO_DATA_7),
 	regmap_reg_range(MCA_GPIO_IRQ_STATUS_0, MCA_GPIO_IRQ_STATUS_7),
@@ -112,40 +112,41 @@ static const struct regmap_range mca_cc8x_volatile_ranges[] = {
 	regmap_reg_range(MCA_REG_TPM0_CFG0, MCA_REG_TPM2_CH7_CNT1),
 };
 
-static const struct regmap_access_table mca_cc8x_readable_table = {
-	.yes_ranges = mca_cc8x_readable_ranges,
-	.n_yes_ranges = ARRAY_SIZE(mca_cc8x_readable_ranges),
+static const struct regmap_access_table mca_cc8_readable_table = {
+	.yes_ranges = mca_cc8_readable_ranges,
+	.n_yes_ranges = ARRAY_SIZE(mca_cc8_readable_ranges),
 };
 
-static const struct regmap_access_table mca_cc8x_writeable_table = {
-	.yes_ranges = mca_cc8x_writeable_ranges,
-	.n_yes_ranges = ARRAY_SIZE(mca_cc8x_writeable_ranges),
+static const struct regmap_access_table mca_cc8_writeable_table = {
+	.yes_ranges = mca_cc8_writeable_ranges,
+	.n_yes_ranges = ARRAY_SIZE(mca_cc8_writeable_ranges),
 };
 
-static const struct regmap_access_table mca_cc8x_volatile_table = {
-	.yes_ranges = mca_cc8x_volatile_ranges,
-	.n_yes_ranges = ARRAY_SIZE(mca_cc8x_volatile_ranges),
+static const struct regmap_access_table mca_cc8_volatile_table = {
+	.yes_ranges = mca_cc8_volatile_ranges,
+	.n_yes_ranges = ARRAY_SIZE(mca_cc8_volatile_ranges),
 };
 
-static struct regmap_config mca_cc8x_regmap_config = {
+static struct regmap_config mca_cc8_regmap_config = {
 	.reg_bits = 16,
 	.val_bits = 8,
 	.max_register = 0xFFFF,
 
-	.rd_table = &mca_cc8x_readable_table,
-	.wr_table = &mca_cc8x_writeable_table,
-	.volatile_table = &mca_cc8x_volatile_table,
+	.rd_table = &mca_cc8_readable_table,
+	.wr_table = &mca_cc8_writeable_table,
+	.volatile_table = &mca_cc8_volatile_table,
 
 	.cache_type = REGCACHE_NONE,
 };
 
-static const struct of_device_id mca_cc8x_dt_ids[] = {
+static const struct of_device_id mca_cc8_dt_ids[] = {
 	{ .compatible = "digi,mca_cc8x", },
+	{ .compatible = "digi,mca_cc8m", },
 	{ }
 };
-MODULE_DEVICE_TABLE(of, mca_cc8x_dt_ids);
+MODULE_DEVICE_TABLE(of, mca_cc8_dt_ids);
 
-static int mca_cc8x_i2c_probe(struct i2c_client *i2c,
+static int mca_cc8_i2c_probe(struct i2c_client *i2c,
 			       const struct i2c_device_id *id)
 {
 	struct mca_drv *mca;
@@ -160,34 +161,34 @@ static int mca_cc8x_i2c_probe(struct i2c_client *i2c,
 	mca->chip_irq = i2c->irq;
 	mca->i2c_adapter_dev = &i2c->adapter->dev;
 
-	mca->regmap = devm_regmap_init_i2c(i2c, &mca_cc8x_regmap_config);
+	mca->regmap = devm_regmap_init_i2c(i2c, &mca_cc8_regmap_config);
 	if (IS_ERR(mca->regmap)) {
 		ret = PTR_ERR(mca->regmap);
 		dev_err(mca->dev, "Failed to allocate register map: %d\n", ret);
 		return ret;
 	}
 
-	return mca_cc8x_device_init(mca, i2c->irq);
+	return mca_cc8_device_init(mca, i2c->irq);
 }
 
-static int mca_cc8x_i2c_remove(struct i2c_client *i2c)
+static int mca_cc8_i2c_remove(struct i2c_client *i2c)
 {
 	struct mca_drv *mca = i2c_get_clientdata(i2c);
 
-	mca_cc8x_device_exit(mca);
+	mca_cc8_device_exit(mca);
 
 	return 0;
 }
 
 #ifdef CONFIG_PM
-static int mca_cc8x_i2c_suspend(struct device *dev)
+static int mca_cc8_i2c_suspend(struct device *dev)
 {
-	return mca_cc8x_suspend(dev);
+	return mca_cc8_suspend(dev);
 }
 
-static int mca_cc8x_i2c_resume(struct device *dev)
+static int mca_cc8_i2c_resume(struct device *dev)
 {
-	return mca_cc8x_resume(dev);
+	return mca_cc8_resume(dev);
 }
 
 /*
@@ -195,28 +196,28 @@ static int mca_cc8x_i2c_resume(struct device *dev)
  * during the regular suspend/resume callbacks of other drivers, just in case
  * they use any functionality of the mca.
  */
-static const struct dev_pm_ops mca_cc8x_i2c_pm_ops = {
-	SET_LATE_SYSTEM_SLEEP_PM_OPS(mca_cc8x_i2c_suspend, mca_cc8x_i2c_resume)
+static const struct dev_pm_ops mca_cc8_i2c_pm_ops = {
+	SET_LATE_SYSTEM_SLEEP_PM_OPS(mca_cc8_i2c_suspend, mca_cc8_i2c_resume)
 };
 #endif
 
-static const struct i2c_device_id mca_cc8x_i2c_id[] = {
-        {"mca_cc8x", 0},
+static const struct i2c_device_id mca_cc8_i2c_id[] = {
+        {"mca_cc8", 0},
         {},
 };
-MODULE_DEVICE_TABLE(i2c, mca_cc8x_i2c_id);
+MODULE_DEVICE_TABLE(i2c, mca_cc8_i2c_id);
 
-static struct i2c_driver mca_cc8x_i2c_driver = {
+static struct i2c_driver mca_cc8_i2c_driver = {
 	.driver = {
-		.name = "mca_cc8x",
-		.of_match_table = of_match_ptr(mca_cc8x_dt_ids),
+		.name = "mca_cc8",
+		.of_match_table = of_match_ptr(mca_cc8_dt_ids),
 #ifdef CONFIG_PM
-		.pm = &mca_cc8x_i2c_pm_ops,
+		.pm = &mca_cc8_i2c_pm_ops,
 #endif
 	},
-	.probe    = mca_cc8x_i2c_probe,
-	.remove   = mca_cc8x_i2c_remove,
-	.id_table = mca_cc8x_i2c_id,
+	.probe    = mca_cc8_i2c_probe,
+	.remove   = mca_cc8_i2c_remove,
+	.id_table = mca_cc8_i2c_id,
 };
 
-module_i2c_driver(mca_cc8x_i2c_driver);
+module_i2c_driver(mca_cc8_i2c_driver);

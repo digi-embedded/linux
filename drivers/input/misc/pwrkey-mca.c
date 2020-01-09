@@ -47,6 +47,7 @@
 enum mca_pwrkey_type {
 	CC6UL_MCA_PWRKEY,
 	CC8X_MCA_PWRKEY,
+	CC8M_MCA_PWRKEY,
 };
 
 struct mca_pwrkey_data {
@@ -508,6 +509,12 @@ static struct mca_pwrkey_data mca_pwrkey_devdata[] = {
 		.version_supports_debtb50ms= MCA_MAKE_FW_VER(0, 13),
 		.version_supports_pwrkey_up= MCA_MAKE_FW_VER(0, 17)
 	},
+	[CC8M_MCA_PWRKEY] = {
+		.devtype = CC8M_MCA_PWRKEY,
+		.drv_name_phys= "mca-cc8m-pwrkey/input0",
+		.version_supports_debtb50ms= MCA_MAKE_FW_VER(0, 13),
+		.version_supports_pwrkey_up= MCA_MAKE_FW_VER(0, 17)
+	},
 };
 
 static const struct of_device_id mca_pwrkey_ids[] = {
@@ -515,6 +522,8 @@ static const struct of_device_id mca_pwrkey_ids[] = {
 	  .data = &mca_pwrkey_devdata[CC6UL_MCA_PWRKEY]},
         { .compatible = "digi,mca-cc8x-pwrkey",
 	  .data = &mca_pwrkey_devdata[CC8X_MCA_PWRKEY]},
+        { .compatible = "digi,mca-cc8m-pwrkey",
+	  .data = &mca_pwrkey_devdata[CC8M_MCA_PWRKEY]},
         { /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, mca_pwrkey_ids);

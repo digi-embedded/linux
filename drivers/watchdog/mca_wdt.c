@@ -35,6 +35,7 @@
 enum mca_wdt_type {
 	CC6UL_MCA_WDT,
 	CC8X_MCA_WDT,
+	CC8M_MCA_WDT,
 };
 
 struct mca_wdt_data {
@@ -311,6 +312,9 @@ static struct mca_wdt_data mca_wdt_devdata[] = {
 	[CC8X_MCA_WDT] = {
 		.devtype = CC8X_MCA_WDT,
 	},
+	[CC8M_MCA_WDT] = {
+		.devtype = CC8M_MCA_WDT,
+	},
 };
 
 static const struct platform_device_id mca_wdt_devtype[] = {
@@ -320,6 +324,9 @@ static const struct platform_device_id mca_wdt_devtype[] = {
 	}, {
 		.name = "mca-cc8x-watchdog",
 		.driver_data = (kernel_ulong_t)&mca_wdt_devdata[CC8X_MCA_WDT],
+	}, {
+		.name = "mca-cc8m-watchdog",
+		.driver_data = (kernel_ulong_t)&mca_wdt_devdata[CC8M_MCA_WDT],
 	}, {
 		/* sentinel */	
 	}
@@ -331,6 +338,8 @@ static const struct of_device_id mca_wdt_match[] = {
           .data = &mca_wdt_devdata[CC6UL_MCA_WDT]},
         { .compatible = "digi,mca-cc8x-wdt",
           .data = &mca_wdt_devdata[CC8X_MCA_WDT]},
+        { .compatible = "digi,mca-cc8m-wdt",
+          .data = &mca_wdt_devdata[CC8M_MCA_WDT]},
         { /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, mca_wdt_match);
