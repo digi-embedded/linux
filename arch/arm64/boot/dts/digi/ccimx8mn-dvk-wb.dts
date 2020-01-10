@@ -511,7 +511,7 @@
 	assigned-clocks = <&clk IMX8MN_CLK_UART4>;
 	assigned-clock-parents = <&clk IMX8MN_SYS_PLL1_80M>;
 	fsl,uart-has-rtscts;
-	status = "disabled";
+	status = "okay";
 };
 
 /* USB_OTG1 connected to usb hub */
