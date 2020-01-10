@@ -199,7 +199,8 @@ static int mca_wdt_probe(struct platform_device *pdev)
 {
 	struct mca_drv *mca = dev_get_drvdata(pdev->dev.parent);
 	struct mca_wdt *wdt;
-	const struct mca_wdt_data *devdata = (struct mca_wdt_data *)pdev->id_entry->driver_data;
+	const struct mca_wdt_data *devdata =
+				   of_device_get_match_data(&pdev->dev);
 	struct device_node *np;
 	int ret;
 
@@ -319,13 +320,13 @@ static struct mca_wdt_data mca_wdt_devdata[] = {
 
 static const struct platform_device_id mca_wdt_devtype[] = {
 	{
-		.name = "mca-cc6ul-watchdog",
+		.name = "mca-cc6ul-wdt",
 		.driver_data = (kernel_ulong_t)&mca_wdt_devdata[CC6UL_MCA_WDT],
 	}, {
-		.name = "mca-cc8x-watchdog",
+		.name = "mca-cc8x-wdt",
 		.driver_data = (kernel_ulong_t)&mca_wdt_devdata[CC8X_MCA_WDT],
 	}, {
-		.name = "mca-cc8m-watchdog",
+		.name = "mca-cc8m-wdt",
 		.driver_data = (kernel_ulong_t)&mca_wdt_devdata[CC8M_MCA_WDT],
 	}, {
 		/* sentinel */	
