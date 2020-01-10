@@ -22,7 +22,7 @@
 
 / {
 	model = "Digi International ConnectCore 8M Nano DVK.";
-	compatible = "digi,ccimx8mn-dvk", "digi,ccimx8mn", "fsl,imx8mn";
+	compatible = "digi,ccimx8mn-dvk", "digi,ccimx8mn", "digi,ccimx8m", "fsl,imx8mn";
 	digi,machine,name = "ccimx8mn-dvk";
 
 	chosen {
