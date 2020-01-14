@@ -404,12 +404,19 @@
 };
 
 /*
- * Uncomment to enable MCA ADC channels on Expansion connector:
- *  - MCA_IO14 (channel 14)
+ * Uncomment to enable MCA ADC channels on the XBee Cellular socket:
+ *  - MCA_IO1 (channel 1) at XBEE1_UART_TX
+ *  - MCA_IO2 (channel 2) at XBEE1_UART_RX
+ *  - MCA_IO3 (channel 3) at XBEE1_UART_CTS
+ *  - MCA_IO4 (channel 4) at XBEE1_UART_RTS
+ *
+ * These pins are used alse by mca_uart2 below.
+ * mca_uart2 must be disabled to be able to use these pins as ADCs.
+ *
  * Edit adc-ch-list to include the ADC channels that you want to enable.
  */
 // &mca_adc {
-//	digi,adc-ch-list = <14>;
+//	digi,adc-ch-list = <1 2 3 4>;
 //	digi,adc-vref = <3000000>;
 // };
 
