@@ -539,8 +539,9 @@
 	pinctrl-1 = <&pinctrl_usdhc2_100mhz>, <&pinctrl_usdhc2_gpio>;
 	pinctrl-2 = <&pinctrl_usdhc2_200mhz>, <&pinctrl_usdhc2_gpio>;
 	bus-width = <4>;
-	no-1-8-v;
 	cd-gpios = <&gpio2 12 GPIO_ACTIVE_HIGH>;
+	/* Assert GPIO5_IO1 low for 3V3 (default) or high for 1.8V */
+	pinctrl-assert-gpios = <&gpio5 1 GPIO_ACTIVE_LOW>;
 	status = "okay";
 };
 
@@ -792,7 +793,7 @@
 			/* Card detect */
 			MX8MN_IOMUXC_SD2_CD_B_GPIO2_IO12	0x1c4
 			/* MUX_VSELECT */
-			MX8MN_IOMUXC_SAI3_TXD_GPIO5_IO1		0x1c4
+			MX8MN_IOMUXC_SAI3_TXD_GPIO5_IO1		0x84
 		>;
 	};
 
