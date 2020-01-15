@@ -138,7 +138,7 @@ static struct regmap_config mca_cc6ul_regmap_config = {
 };
 
 static const struct of_device_id mca_cc6ul_dt_ids[] = {
-	{ .compatible = "digi,mca_cc6ul_dt_ids", },
+	{ .compatible = "digi,mca-cc6ul", },
 	{ }
 };
 MODULE_DEVICE_TABLE(of, mca_cc6ul_dt_ids);

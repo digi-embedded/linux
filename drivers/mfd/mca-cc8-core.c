@@ -995,10 +995,10 @@ int mca_cc8_device_init(struct mca_drv *mca, u32 irq)
 		return ret;
 	}
 
-	if (of_device_is_compatible(mca->dev->of_node, "digi,mca_cc8x")) {
+	if (of_device_is_compatible(mca->dev->of_node, "digi,mca-cc8x")) {
 		mca_cc8_devs = mca_cc8x_devs;
 		n_devs = ARRAY_SIZE(mca_cc8x_devs);
-	} else if (of_device_is_compatible(mca->dev->of_node, "digi,mca_cc8m")) {
+	} else if (of_device_is_compatible(mca->dev->of_node, "digi,mca-cc8m")) {
 		mca_cc8_devs = mca_cc8m_devs;
 		n_devs = ARRAY_SIZE(mca_cc8m_devs);
 	} else {
