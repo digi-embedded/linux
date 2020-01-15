@@ -51,7 +51,7 @@
 	status = "okay";
 
 	mca_cc8m: mca@63 {
-		compatible = "digi,mca_cc8m";
+		compatible = "digi,mca-cc8m";
 		reg = <0x63>;
 		interrupt-parent = <&gpio3>;
 		interrupts = <8 IRQ_TYPE_LEVEL_HIGH>;
