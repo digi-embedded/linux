@@ -91,7 +91,7 @@
 	status = "okay";
 
 	mca_cc8x: mca@63 {
-		compatible = "digi,mca_cc8x";
+		compatible = "digi,mca-cc8x";
 		reg = <0x63>;
 		interrupt-parent = <&gic>;
 		interrupts = <GIC_SPI 177 IRQ_TYPE_LEVEL_HIGH>;
