@@ -282,7 +282,7 @@
 		assigned-clock-parents = <&clk IMX8MN_CLK_24M>;
 		assigned-clock-rates = <24000000>;
 		csi_id = <0>;
-		rst-gpios = <&gpio1 12 GPIO_ACTIVE_HIGH>;
+		rst-gpios = <&gpio1 12 GPIO_ACTIVE_LOW>;
 		mclk = <24000000>;
 		mclk_source = <0>;
 		mipi_csi;
