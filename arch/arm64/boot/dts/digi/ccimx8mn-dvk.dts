@@ -278,6 +278,9 @@
 		pinctrl-0 = <&pinctrl_mipi>;
 		clocks = <&clk IMX8MN_CLK_CLKO1>;
 		clock-names = "csi_mclk";
+		assigned-clocks = <&clk IMX8MN_CLK_CLKO1>;
+		assigned-clock-parents = <&clk IMX8MN_CLK_24M>;
+		assigned-clock-rates = <24000000>;
 		csi_id = <0>;
 		rst-gpios = <&gpio1 12 GPIO_ACTIVE_HIGH>;
 		mclk = <24000000>;
@@ -460,6 +463,9 @@
 		mipi_csi0_ep: endpoint {
 			remote-endpoint = <&ov5640_mipi_ep>;
 			data-lanes = <2>;
+			csis-hs-settle = <13>;
+			csis-clk-settle = <2>;
+			csis-wclk;
 		};
 	};
 };
