@@ -459,7 +459,7 @@
 		reg = <0>;
 		mipi_csi0_ep: endpoint {
 			remote-endpoint = <&ov5640_mipi_ep>;
-			data-lanes = <1 2>;
+			data-lanes = <2>;
 		};
 	};
 };
