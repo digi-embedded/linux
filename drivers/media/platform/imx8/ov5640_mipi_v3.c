@@ -136,6 +136,7 @@ struct ov5640 {
 
 	void (*io_init)(struct ov5640 *);
 	int pwn_gpio, rst_gpio;
+	enum of_gpio_flags pwn_active_low, rst_active_low;
 };
 
 static struct reg_value ov5640_init_setting_30fps_VGA[] = {
@@ -532,20 +533,27 @@ static inline void ov5640_reset(struct ov5640 *sensor)
 	if (sensor->pwn_gpio < 0 || sensor->rst_gpio < 0)
 		return;
 
+	/* Assert power-down and reset lines */
 	if (gpio_is_valid(sensor->pwn_gpio))
-		gpio_set_value_cansleep(sensor->pwn_gpio, 1);
+		gpio_set_value_cansleep(sensor->pwn_gpio,
+					!sensor->pwn_active_low);
 	if (gpio_is_valid(sensor->rst_gpio)) {
-		gpio_set_value_cansleep(sensor->rst_gpio, 0);
+		gpio_set_value_cansleep(sensor->rst_gpio,
+					!sensor->rst_active_low);
 		udelay(5000);
 	}
 
+	/* Power up (de-assert power-down) */
 	if (gpio_is_valid(sensor->pwn_gpio)) {
-		gpio_set_value_cansleep(sensor->pwn_gpio, 0);
+		gpio_set_value_cansleep(sensor->pwn_gpio,
+					sensor->pwn_active_low);
 		udelay(1000);
 	}
 
+	/* De-assert reset */
 	if (gpio_is_valid(sensor->rst_gpio)) {
-		gpio_set_value_cansleep(sensor->rst_gpio, 1);
+		gpio_set_value_cansleep(sensor->rst_gpio,
+					sensor->rst_active_low);
 		msleep(20);
 	}
 }
@@ -1208,6 +1216,7 @@ static int ov5640_probe(struct i2c_client *client,
 	int retval;
 	u8 chip_id_high, chip_id_low;
 	struct ov5640 *sensor;
+	enum of_gpio_flags of_flags;
 
 	sensor = devm_kmalloc(dev, sizeof(*sensor), GFP_KERNEL);
 	if (!sensor)
@@ -1223,12 +1232,16 @@ static int ov5640_probe(struct i2c_client *client,
 	}
 
 	/* request power down pin */
-	sensor->pwn_gpio = of_get_named_gpio(dev->of_node, "pwn-gpios", 0);
+	sensor->pwn_gpio = of_get_named_gpio_flags(dev->of_node, "pwn-gpios", 0,
+						   &of_flags);
+	sensor->pwn_active_low = of_flags & OF_GPIO_ACTIVE_LOW;
 	if (!gpio_is_valid(sensor->pwn_gpio))
 		dev_warn(dev, "No sensor pwdn pin available");
 	else {
 		retval = devm_gpio_request_one(dev, sensor->pwn_gpio,
-				GPIOF_OUT_INIT_HIGH, "ov5640_mipi_pwdn");
+				sensor->pwn_active_low ?
+				GPIOF_OUT_INIT_HIGH : GPIOF_OUT_INIT_LOW,
+				"ov5640_mipi_pwdn");
 		if (retval < 0) {
 			dev_warn(dev, "Failed to set power pin\n");
 			dev_warn(dev, "retval=%d\n", retval);
@@ -1237,12 +1250,16 @@ static int ov5640_probe(struct i2c_client *client,
 	}
 
 	/* request reset pin */
-	sensor->rst_gpio = of_get_named_gpio(dev->of_node, "rst-gpios", 0);
+	sensor->rst_gpio = of_get_named_gpio_flags(dev->of_node, "rst-gpios", 0,
+						   &of_flags);
+	sensor->rst_active_low = of_flags & OF_GPIO_ACTIVE_LOW;
 	if (!gpio_is_valid(sensor->rst_gpio))
 		dev_warn(dev, "No sensor reset pin available");
 	else {
 		retval = devm_gpio_request_one(dev, sensor->rst_gpio,
-				GPIOF_OUT_INIT_HIGH, "ov5640_mipi_reset");
+				sensor->rst_active_low ?
+				GPIOF_OUT_INIT_HIGH : GPIOF_OUT_INIT_LOW,
+				"ov5640_mipi_reset");
 		if (retval < 0) {
 			dev_warn(dev, "Failed to set reset pin\n");
 			return retval;
