@@ -63,6 +63,7 @@ struct goodix_ts_data {
 	unsigned short keymap[GOODIX_MAX_KEYS];
 	bool reload_fw_on_resume;
 	struct firmware cfg;
+	struct regulator *reg;
 	unsigned int extended_desktop_offset;
 };
 
