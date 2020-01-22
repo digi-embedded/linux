@@ -413,7 +413,7 @@
  *  - MCA_IO3 (channel 3) at XBEE1_UART_CTS
  *  - MCA_IO4 (channel 4) at XBEE1_UART_RTS
  *
- * These pins are used alse by mca_uart2 below.
+ * These pins are used also by mca_uart2 below.
  * mca_uart2 must be disabled to be able to use these pins as ADCs.
  *
  * Edit adc-ch-list to include the ADC channels that you want to enable.
@@ -766,6 +766,11 @@
 			MX8MN_IOMUXC_ECSPI1_MOSI_UART3_DCE_TX		0x140
 			MX8MN_IOMUXC_ECSPI1_SS0_UART3_DCE_RTS_B		0x140
 			MX8MN_IOMUXC_ECSPI1_MISO_UART3_DCE_CTS_B	0x140
+			/*
+			 * Configure RS485 RE#/DE line as pull-up to disable
+			 * RS485 transceiver.
+			 */
+			MX8MN_IOMUXC_GPIO1_IO03_GPIO1_IO3		0x140
 		>;
 	};
 
