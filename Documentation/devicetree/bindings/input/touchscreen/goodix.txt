@@ -33,6 +33,7 @@ Optional properties:
 			  the property is the phandle of the primary display.
 			  The driver will then parse the width of the display
 			  and add it as an offset to the X axis.
+ - vin-supply		: Regulator that powers the touch controller.
 
 Example:
 
