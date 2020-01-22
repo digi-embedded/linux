@@ -249,9 +249,9 @@
 		status = "disabled";
 	};
 
-	goodix_touch: gt9271@5D {
+	goodix_touch: gt9271@14 {
 		compatible = "goodix,gt9271";
-		reg = <0x5D>;
+		reg = <0x14>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_touch>;
 		/* LVDS interrupt */
@@ -260,6 +260,7 @@
 		irq-gpios = <&gpio4 28 GPIO_ACTIVE_LOW>;
 		reload-fw-on-resume;
 		skip-firmware-request;
+		vin-supply = <&reg_5v_board>;
 	};
 
 	max98089: codec@10 {
