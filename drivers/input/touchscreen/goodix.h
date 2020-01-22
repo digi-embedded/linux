@@ -88,7 +88,7 @@ struct goodix_ts_data {
 	int gpio_int_idx;
 	enum gpiod_flags gpiod_rst_flags;
 	char id[GOODIX_ID_MAX_LEN + 1];
-	char cfg_name[64];
+	const char *cfg_name;
 	u16 version;
 	bool reset_controller_at_probe;
 	bool load_cfg_from_disk;
@@ -104,6 +104,7 @@ struct goodix_ts_data {
 	u8 *bak_ref;
 	bool reload_fw_on_resume;
 	struct firmware cfg;
+	struct regulator *reg;
 	unsigned int extended_desktop_offset;
 };
 

@@ -22,6 +22,7 @@
 #include <linux/slab.h>
 #include <linux/acpi.h>
 #include <linux/of.h>
+#include <linux/regulator/consumer.h>
 #include <asm/unaligned.h>
 #include "goodix.h"
 
@@ -1257,9 +1258,8 @@ static int goodix_ts_probe(struct i2c_client *client,
 			   const struct i2c_device_id *id)
 {
 	struct goodix_ts_data *ts;
-	const char *cfg_name;
 	struct device_node *extends_desktop, *display_timings, *native_mode;
-	int error;
+	int error, reg_error;
 
 	dev_dbg(&client->dev, "I2C Address: 0x%02x\n", client->addr);
 
@@ -1277,9 +1277,21 @@ static int goodix_ts_probe(struct i2c_client *client,
 	init_completion(&ts->firmware_loading_complete);
 	ts->contact_size = GOODIX_CONTACT_SIZE;
 
+	ts->reg = devm_regulator_get_optional(&client->dev, "vin");
+	if (!IS_ERR(ts->reg)) {
+		error = regulator_enable(ts->reg);
+		if (error) {
+			dev_err(&client->dev, "enable regulator failed\n");
+			return error;
+		}
+	} else {
+		ts->reg = NULL;
+		dev_info(&client->dev, "No vin supply\n");
+	}
+
 	error = goodix_get_gpio_config(ts);
 	if (error)
-		return error;
+		goto disable_regulator;
 
 	ts->reload_fw_on_resume = device_property_read_bool(&client->dev,
 						    "reload-fw-on-resume");
@@ -1320,9 +1332,13 @@ reset:
 		/* reset the controller */
 		error = goodix_reset(ts);
 		if (error)
-			return error;
+			goto disable_regulator;
 	} else {
 		goodix_int_sync(ts);
+		if (error) {
+			dev_err(&client->dev, "Controller reset failed.\n");
+			goto disable_regulator;
+		}
 	}
 
 	error = goodix_i2c_test(client);
@@ -1334,31 +1350,24 @@ reset:
 			goto reset;
 		}
 		dev_err(&client->dev, "I2C communication failure: %d\n", error);
-		return error;
+		goto disable_regulator;
 	}
 
-	error = goodix_firmware_check(ts);
-	if (error)
-		return error;
-
 	error = goodix_read_version(ts);
-	if (error)
-		return error;
+	if (error) {
+		dev_err(&client->dev, "Read version failed.\n");
+		goto disable_regulator;
+	}
 
 	ts->chip = goodix_get_chip_data(ts->id);
 
 	if (ts->load_cfg_from_disk &&
 	    !device_property_read_bool(&client->dev, "skip-firmware-request")) {
 		/* update device config */
-		error = device_property_read_string(&client->dev,
-						    "goodix,config-name",
-						    &cfg_name);
-		if (!error)
-			snprintf(ts->cfg_name, sizeof(ts->cfg_name),
-				 "goodix/%s", cfg_name);
-		else
-			snprintf(ts->cfg_name, sizeof(ts->cfg_name),
-				 "goodix_%s_cfg.bin", ts->id);
+		ts->cfg_name = devm_kasprintf(&client->dev, GFP_KERNEL,
+					      "goodix_%s_cfg.bin", ts->id);
+		if (!ts->cfg_name)
+			goto disable_regulator;
 
 		error = request_firmware_nowait(THIS_MODULE, true, ts->cfg_name,
 						&client->dev, GFP_KERNEL, ts,
@@ -1367,7 +1376,7 @@ reset:
 			dev_err(&client->dev,
 				"Failed to invoke firmware loader: %d\n",
 				error);
-			return error;
+			goto disable_regulator;
 		}
 
 		return 0;
@@ -1376,20 +1385,41 @@ reset:
 
 		error = goodix_configure_dev(ts);
 		if (error)
-			return error;
+			goto disable_regulator;
 	}
 
 	return 0;
+
+disable_regulator:
+	if (ts->reg) {
+		reg_error = regulator_disable(ts->reg);
+		if (reg_error) {
+			dev_err(&client->dev, "disable regulator failed\n");
+			return reg_error;
+		}
+	}
+	return error;
 }
 
 static void goodix_ts_remove(struct i2c_client *client)
 {
 	struct goodix_ts_data *ts = i2c_get_clientdata(client);
+	int error;
 
 	if (ts->load_cfg_from_disk)
 		wait_for_completion(&ts->firmware_loading_complete);
 
 	kfree(ts->cfg.data);
+
+	if (ts->reg) {
+		error = regulator_disable(ts->reg);
+		if (error) {
+			dev_err(&client->dev, "disable regulator failed\n");
+			return;
+		}
+	}
+
+	return;
 }
 
 static int __maybe_unused goodix_suspend(struct device *dev)
@@ -1450,6 +1480,14 @@ static int __maybe_unused goodix_suspend(struct device *dev)
 		gpiod_direction_input(ts->gpiod_int);
 	}
 
+	if (ts->reg) {
+		error = regulator_disable(ts->reg);
+		if (error) {
+			dev_err(&client->dev, "disable regulator failed\n");
+			return error;
+		}
+	}
+
 	return 0;
 }
 
@@ -1460,7 +1498,15 @@ static int __maybe_unused goodix_resume(struct device *dev)
 	u8 config_ver;
 	int error;
 
-	if (ts->irq_pin_access_method == IRQ_PIN_ACCESS_NONE) {
+	if (ts->reg) {
+		error = regulator_enable(ts->reg);
+		if (error) {
+			dev_err(&client->dev, "enable regulator failed\n");
+			return error;
+		}
+	}
+
+	if (!ts->gpiod_int) {
 		enable_irq(client->irq);
 		return 0;
 	}
