@@ -507,14 +507,14 @@
 /* Expansion port/RS485 UART */
 &uart3 {
 	pinctrl-names = "default";
-	/* Comment these lines when using this UART in RS485 mode */
-	pinctrl-0 = <&pinctrl_uart3>;
-	fsl,uart-has-rtscts;
-	/* Uncomment these lines to use this UART in RS485 mode */
-	//pinctrl-0 = <&pinctrl_uart3_rs485>;
-	//linux,rs485-enabled-at-boot-time;
 	assigned-clocks = <&clk IMX8MN_CLK_UART3>;
 	assigned-clock-parents = <&clk IMX8MN_SYS_PLL1_80M>;
+	/* Comment these lines to use this UART in RS232 mode */
+	pinctrl-0 = <&pinctrl_uart3_rs485>;
+	linux,rs485-enabled-at-boot-time;
+	/* Uncomment these lines to use this UART in RS232 mode */
+	//pinctrl-0 = <&pinctrl_uart3>;
+	//fsl,uart-has-rtscts;
 	status = "okay";
 };
 
