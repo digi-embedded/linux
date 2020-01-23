@@ -498,8 +498,9 @@
 
 /* Console */
 &uart1 {
-	pinctrl-names = "default";
+	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&pinctrl_uart1>;
+	pinctrl-1 = <&pinctrl_uart1_sleep>;
 	status = "okay";
 };
 
@@ -758,6 +759,13 @@
 		fsl,pins = <
 			MX8MN_IOMUXC_SAI2_RXC_UART1_DCE_RX	0x140
 			MX8MN_IOMUXC_SAI2_RXFS_UART1_DCE_TX	0x140
+		>;
+	};
+
+	pinctrl_uart1_sleep: uart1sleepgrp {
+		fsl,pins = <
+			MX8MN_IOMUXC_SAI2_RXC_GPIO4_IO22	0x100
+			MX8MN_IOMUXC_SAI2_RXFS_GPIO4_IO21	0x100
 		>;
 	};
 
