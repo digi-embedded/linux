@@ -1808,9 +1808,8 @@ static int max98088_i2c_resume(struct device *dev)
 	return 0;
 }
 
-static const struct dev_pm_ops max98088_pm_ops = {
-	SET_RUNTIME_PM_OPS(max98088_i2c_suspend, max98088_i2c_resume, NULL)
-};
+static SIMPLE_DEV_PM_OPS(max98088_pm_ops, max98088_i2c_suspend,
+			 max98088_i2c_resume);
 #endif
 
 static int max98088_i2c_probe(struct i2c_client *i2c,
