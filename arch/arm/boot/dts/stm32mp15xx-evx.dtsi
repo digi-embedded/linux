@@ -456,6 +456,11 @@
 			#interrupt-cells = <2>;
 			gpio-ranges = <&stmfx_pinctrl 0 0 24>;
 
+			goodix_pins: goodix {
+				pins = "gpio14";
+				bias-pull-down;
+			};
+
 			joystick_pins: joystick-pins {
 				pins = "gpio0", "gpio1", "gpio2", "gpio3", "gpio4";
 				bias-pull-down;
