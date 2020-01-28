@@ -8,7 +8,6 @@ Required properties:
  - display-timings : Refer to binding doc display-timing.txt for details
  - digi,dsi-lanes: number of DSI lanes used by the bridge, a whole number
                    between 1 and 4 (both inclusive)
- - digi,dsi-reset: a GPIO spec for the bridge reset pin
 
 Example:
 
