@@ -36,7 +36,6 @@ struct lt8912 {
 	struct i2c_client *i2c;
 	struct regmap *regmap[3];
 	struct gpio_desc *reset_n;
-	int reset_gpio;
 	struct gpio_desc *gpiod_int;
 	int hpd_irq;
 };
@@ -244,9 +243,6 @@ int lt8912_parse_dt(struct device_node *np, struct lt8912 *lt)
 	}
 
 	lt->num_dsi_lanes = num_lanes;
-	lt->reset_gpio = of_get_named_gpio(np, "digi,dsi-reset", 0);
-	if (lt->reset_gpio < 0)
-		return lt->reset_gpio;
 
 	return 0;
 }
@@ -553,26 +549,6 @@ static int lt8912_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 
 	/* get DT configuration */
 	lt8912_parse_dt(dev->of_node, lt);
-
-	/* configure Lontium RST line and reset bridge */
-	if (gpio_is_valid(lt->reset_gpio)) {
-		ret = gpio_request(lt->reset_gpio, "lt8912_reset_gpio");
-		if (ret) {
-			dev_err(dev, "reset gpio request failed");
-			return ret;
-		}
-
-		ret = gpio_direction_output(lt->reset_gpio, 0);
-		if (ret) {
-			dev_err(dev,
-				"set_direction for reset gpio failed\n");
-			gpio_free(lt->reset_gpio);
-			return ret;
-		}
-
-		msleep(20);
-		gpio_set_value_cansleep(lt->reset_gpio, 1);
-	}
 
 	lt->i2c = i2c;
 	ret = lt8912_i2c_init(lt, lt->i2c);
