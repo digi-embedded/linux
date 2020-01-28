@@ -488,8 +488,9 @@
 };
 
 &sai2 {
-	pinctrl-names = "default";
+	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&pinctrl_sai2>;
+	pinctrl-1 = <&pinctrl_sai2_sleep>;
 	assigned-clocks = <&clk IMX8MN_CLK_SAI2>;
 	assigned-clock-parents = <&clk IMX8MN_AUDIO_PLL1_OUT>;
 	assigned-clock-rates = <12288000>;
@@ -747,6 +748,16 @@
 			MX8MN_IOMUXC_SAI2_TXFS_SAI2_TX_SYNC		0xd6
 			MX8MN_IOMUXC_SAI2_TXC_SAI2_TX_BCLK		0xd6
 			MX8MN_IOMUXC_SAI2_MCLK_SAI2_MCLK		0xd6
+		>;
+	};
+
+	pinctrl_sai2_sleep: sai2sleepgrp {
+		fsl,pins = <
+			MX8MN_IOMUXC_SAI2_RXD0_GPIO4_IO23		0x100
+			MX8MN_IOMUXC_SAI2_TXD0_GPIO4_IO26		0x100
+			MX8MN_IOMUXC_SAI2_TXFS_GPIO4_IO24		0x100
+			MX8MN_IOMUXC_SAI2_TXC_GPIO4_IO25		0x100
+			MX8MN_IOMUXC_SAI2_MCLK_GPIO4_IO27		0x100
 		>;
 	};
 
