@@ -550,6 +550,7 @@
 	pinctrl-1 = <&pinctrl_usdhc2_100mhz>, <&pinctrl_usdhc2_gpio>;
 	pinctrl-2 = <&pinctrl_usdhc2_200mhz>, <&pinctrl_usdhc2_gpio>;
 	bus-width = <4>;
+	no-1-8-v;
 	cd-gpios = <&gpio2 12 GPIO_ACTIVE_HIGH>;
 	/* Assert GPIO5_IO1 low for 3V3 (default) or high for 1.8V */
 	pinctrl-assert-gpios = <&gpio5 1 GPIO_ACTIVE_LOW>;
