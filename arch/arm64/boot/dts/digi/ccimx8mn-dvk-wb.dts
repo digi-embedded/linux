@@ -62,9 +62,31 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 
-		reg_3v3_eth0: regulator@1 {
+		reg_3v3_ext: regulator@1 {
 			compatible = "regulator-fixed";
 			reg = <1>;
+			regulator-name = "3v3_ext";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			gpio = <&mca_gpio 9 GPIO_ACTIVE_HIGH>;
+			enable-active-high;
+			regulator-always-on;
+		};
+
+		reg_1v8_ext: regulator@2 {
+			compatible = "regulator-fixed";
+			reg = <2>;
+			regulator-name = "1v8_ext";
+			regulator-min-microvolt = <1800000>;
+			regulator-max-microvolt = <1800000>;
+			gpio = <&mca_gpio 14 GPIO_ACTIVE_HIGH>;
+			enable-active-high;
+			regulator-always-on;
+		};
+
+		reg_3v3_eth0: regulator@3 {
+			compatible = "regulator-fixed";
+			reg = <3>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&pinctrl_reg_3v3_eth0>;
 			regulator-name = "3v3_eth0";
@@ -73,11 +95,12 @@
 			gpio = <&gpio5 4 GPIO_ACTIVE_HIGH>;
 			enable-active-high;
 			startup-delay-us = <10000>;
+			vin-supply = <&reg_3v3_ext>;
 		};
 
-		reg_5v_board: regulator@2 {
+		reg_5v_board: regulator@4 {
 			compatible = "regulator-fixed";
-			reg = <2>;
+			reg = <4>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&pinctrl_reg_5v_board>;
 			regulator-name = "5v_board";
@@ -87,9 +110,9 @@
 			enable-active-high;
 		};
 
-		reg_3v3_audio: regulator@3 {
+		reg_3v3_audio: regulator@5 {
 			compatible = "regulator-fixed";
-			reg = <3>;
+			reg = <5>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&pinctrl_reg_3v3_aud>;
 			regulator-name = "3v3_audio";
@@ -98,11 +121,12 @@
 			gpio = <&gpio3 24 GPIO_ACTIVE_HIGH>;
 			enable-active-high;
 			startup-delay-us = <1000>;
+			vin-supply = <&reg_3v3_ext>;
 		};
 
-		reg_3v3_usb_hub: regulator@4 {
+		reg_3v3_usb_hub: regulator@6 {
 			compatible = "regulator-fixed";
-			reg = <4>;
+			reg = <6>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&pinctrl_reg_3v3_usb_hub>;
 			regulator-name = "3v3_usb_hub";
@@ -110,11 +134,12 @@
 			regulator-max-microvolt = <3300000>;
 			gpio = <&gpio3 25 GPIO_ACTIVE_HIGH>;
 			enable-active-high;
+			vin-supply = <&reg_3v3_ext>;
 		};
 
-		reg_3v3_board: regulator@5 {
+		reg_3v3_board: regulator@7 {
 			compatible = "regulator-fixed";
-			reg = <5>;
+			reg = <7>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&pinctrl_reg_3v3_board>;
 			regulator-name = "3v3_board";
