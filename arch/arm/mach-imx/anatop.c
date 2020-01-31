@@ -232,13 +232,22 @@ void __init imx_init_revision_from_anatop(void)
 			revision = IMX_CHIP_REVISION_1_0;
 		break;
 	case 1:
-		revision = IMX_CHIP_REVISION_1_1;
+		if (digprog >> 8 & 0x01)
+			revision = IMX_CHIP_REVISION_2_1;
+		else
+			revision = IMX_CHIP_REVISION_1_1;
 		break;
 	case 2:
-		revision = IMX_CHIP_REVISION_1_2;
+		if (digprog >> 8 & 0x01)
+			revision = IMX_CHIP_REVISION_2_2;
+		else
+			revision = IMX_CHIP_REVISION_1_2;
 		break;
 	case 3:
-		revision = IMX_CHIP_REVISION_1_3;
+		if (digprog >> 8 & 0x01)
+			revision = IMX_CHIP_REVISION_2_3;
+		else
+			revision = IMX_CHIP_REVISION_1_3;
 		break;
 	case 4:
 		revision = IMX_CHIP_REVISION_1_4;
