@@ -727,7 +727,8 @@ static ssize_t gpu_mult_store(struct device *dev,
             dev_err(dev, "gpu clock multiplier must be between 2 and 64\n");
             return NOTIFY_OK;
         }
-    } else if (of_machine_is_compatible("fsl,imx8qxp")) {
+    } else if (of_machine_is_compatible("fsl,imx8qxp") ||
+              (of_machine_is_compatible("fsl,imx8mn"))) {
         if (gpu_clk_mult < 1 || gpu_clk_mult > 64) {
             dev_err(dev, "gpu clock multiplier must be between 1 and 64\n");
             return NOTIFY_OK;
