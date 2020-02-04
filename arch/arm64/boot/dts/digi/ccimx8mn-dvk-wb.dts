@@ -71,6 +71,7 @@
 			gpio = <&mca_gpio 9 GPIO_ACTIVE_HIGH>;
 			enable-active-high;
 			regulator-always-on;
+			regulator-boot-on;
 		};
 
 		reg_1v8_ext: regulator@2 {
@@ -82,6 +83,7 @@
 			gpio = <&mca_gpio 14 GPIO_ACTIVE_HIGH>;
 			enable-active-high;
 			regulator-always-on;
+			regulator-boot-on;
 		};
 
 		reg_3v3_eth0: regulator@3 {
