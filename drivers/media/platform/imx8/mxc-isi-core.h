@@ -19,6 +19,7 @@
 #include <media/videobuf2-core.h>
 #include <media/videobuf2-dma-contig.h>
 #include <linux/reset.h>
+#include <linux/sys_soc.h>
 
 #define MXC_ISI_DRIVER_NAME	"mxc-isi"
 #define MXC_ISI_MAX_DEVS	8
@@ -156,6 +157,11 @@ enum mxc_isi_m2m_in_fmt {
 	MXC_ISI_M2M_IN_FMT_YUV422_1P10P,
 };
 
+enum mxc_isi_buf_id {
+	MXC_ISI_BUF1	= 0x0,
+	MXC_ISI_BUF2,
+};
+
 struct mxc_isi_fmt {
 	char	*name;
 	u32 mbus_code;
@@ -228,6 +234,7 @@ struct mxc_isi_buffer {
 	struct vb2_v4l2_buffer v4l2_buf;
 	struct list_head	list;
 	struct frame_addr	paddr;
+	enum mxc_isi_buf_id	id;
 	bool discard;
 };
 
@@ -312,7 +319,9 @@ struct mxc_isi_dev {
 	u32 skip_m2m;
 	u32 req_cap_buf_num;
 	u32 req_out_buf_num;
+	u32 status;
 	u8 chain_buf;
+	bool buf_active_reverse;
 
 	atomic_t open_count;
 

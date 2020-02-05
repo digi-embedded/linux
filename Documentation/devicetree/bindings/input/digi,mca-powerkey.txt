@@ -34,9 +34,12 @@ Required properties:
 - compatible: must be one of
   "digi,mca-cc6ul-pwrkey"
   "digi,mca-cc8x-pwrkey"
+  "digi,mca-cc8m-pwrkey"
 
 Optional properties:
-- key-power: enable the KEY_POWER events
+- key-power: enable the KEY_POWER event (KEY_POWER DOWN)
+- key-power-up: enable an additional KEY_POWER UP  event when the power button is
+                released after KEY_POWER DOWN.
 - key-sleep: enable the KEY_SLEEP events
 - debounce-ms: debounce filter in ms. Number of ms that the input/Key must be
                stable (low level) in order to be considered valid. The upper
@@ -53,6 +56,7 @@ Example:
 		pwrkey {
 			compatible = "digi,mca-cc6ul-pwrkey";
 			digi,key-power;
+			digi,key-power-up;
 			digi,key-sleep;
 			digi,debounce-ms = <100>;
 			digi,pwroff-delay-sec = <6>;
@@ -64,6 +68,19 @@ Example:
 		pwrkey {
 			compatible = "digi,mca-cc8x-pwrkey";
 			digi,key-power;
+			digi,key-power-up;
+			digi,key-sleep;
+			digi,debounce-ms = <100>;
+			digi,pwroff-delay-sec = <6>;
+			digi,pwroff-guard-sec = <30>;
+		};
+	};
+
+	mca_cc8m: mca@63 {
+		pwrkey {
+			compatible = "digi,mca-cc8m-pwrkey";
+			digi,key-power;
+			digi,key-power-up;
 			digi,key-sleep;
 			digi,debounce-ms = <100>;
 			digi,pwroff-delay-sec = <6>;

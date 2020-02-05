@@ -16,6 +16,9 @@ Optional properties:
 
 - clock-names: Should be "mclk"
 
+- vcc-supply: regulator spec, providing 3.3V
+- dvdd-supply: regulator spec, providing 1.8V
+
 Pins on the device (for linking into audio routes):
 
   * MIC1
@@ -39,4 +42,6 @@ audio-codec@10 {
 	reg = <0x10>;
 	interrupt-parent = <&gpio>;
 	interrupts = <TEGRA_GPIO(H, 4) GPIO_ACTIVE_HIGH>;
+	vcc-supply = <&reg_3v3_audio>;
+	dvdd-supply = <&reg_1v8_ext>;
 };

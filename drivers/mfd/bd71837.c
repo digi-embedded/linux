@@ -172,10 +172,8 @@ static struct bd71837_board *bd71837_parse_dt(struct i2c_client *client,
 	}
 
 	board_info->gpio_intr = of_get_named_gpio(np, "gpio_intr", 0);
-	if (!gpio_is_valid(board_info->gpio_intr)) {
-		dev_err(&client->dev, "no pmic intr pin available\n");
-		goto err_intr;
-	}
+	if (!gpio_is_valid(board_info->gpio_intr))
+		dev_info(&client->dev, "no pmic intr pin available\n");
 
 	r = of_property_read_u32(np, "irq_base", &prop);
 	if (!r) {
@@ -185,10 +183,6 @@ static struct bd71837_board *bd71837_parse_dt(struct i2c_client *client,
 	}
 
 	return board_info;
-
-err_intr:
-	devm_kfree(&client->dev, board_info);
-	return NULL;
 }
 #endif
 
@@ -242,7 +236,8 @@ static int bd71837_i2c_probe(struct i2c_client *i2c,
 	}
 	dev_info(bd71837->dev, "Device ID=0x%X\n", ret);
 
-	bd71837_irq_init(bd71837, of_pmic_plat_data);
+	if (gpio_is_valid(of_pmic_plat_data->gpio_intr))
+		bd71837_irq_init(bd71837, of_pmic_plat_data);
 
 	ret = mfd_add_devices(bd71837->dev, -1,
 			      bd71837_mfd_cells, ARRAY_SIZE(bd71837_mfd_cells),

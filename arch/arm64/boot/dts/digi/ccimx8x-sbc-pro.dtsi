@@ -39,7 +39,7 @@
 				     90 91 92 93 94 95 96 97 98 99
 				    100>;
 		default-brightness-level = <80>;
-		power-supply = <&reg_5v_display>;
+		power-supply = <&reg_5v_sbc>;
 		status = "disabled";
 	};
 
@@ -59,7 +59,7 @@
 				     90 91 92 93 94 95 96 97 98 99
 				    100>;
 		default-brightness-level = <80>;
-		power-supply = <&reg_5v_display>;
+		power-supply = <&reg_5v_sbc>;
 		status = "disabled";
 	};
 
@@ -68,25 +68,48 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 
-		reg_3v3_eth0: regulator@1 {
+		reg_3v3_ext: regulator@1 {
+			compatible = "regulator-fixed";
+			reg = <1>;
+			regulator-name = "3v3_ext";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			gpio = <&mca_gpio 5 GPIO_ACTIVE_HIGH>;
+			enable-active-high;
+			vin-supply = <&reg_3v3>;
+		};
+
+		reg_1v8_ext: regulator@2 {
+			compatible = "regulator-fixed";
+			reg = <2>;
+			regulator-name = "1v8_ext";
+			regulator-min-microvolt = <1800000>;
+			regulator-max-microvolt = <1800000>;
+			gpio = <&mca_gpio 6 GPIO_ACTIVE_HIGH>;
+			enable-active-high;
+			vin-supply = <&reg_1v8>;
+		};
+
+		reg_3v3_eth0: regulator@3 {
 			pinctrl-names = "default", "sleep";
 			pinctrl-0 = <&pinctrl_reg_3v3_eth0>;
 			pinctrl-1 = <&pinctrl_reg_3v3_eth0_sleep>;
 			compatible = "regulator-fixed";
-			reg = <1>;
+			reg = <3>;
 			regulator-name = "3v3_eth0";
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
 			gpio = <&gpio3 13 GPIO_ACTIVE_HIGH>;
 			enable-active-high;
 			startup-delay-us = <10000>;
+			vin-supply = <&reg_3v3_ext>;
 		};
 
-		reg_5v_display: regulator@2 {
+		reg_5v_sbc: regulator@4 {
 			compatible = "regulator-fixed";
-			reg = <2>;
+			reg = <4>;
 			pinctrl-names = "default";
-			pinctrl-0 = <&pinctrl_reg_5v_display>;
+			pinctrl-0 = <&pinctrl_reg_5v_sbc>;
 			regulator-name = "5v_display";
 			regulator-min-microvolt = <5000000>;
 			regulator-max-microvolt = <5000000>;
@@ -94,9 +117,9 @@
 			enable-active-high;
 		};
 
-		reg_3v3_audio: regulator@3 {
+		reg_3v3_audio: regulator@5 {
 			compatible = "regulator-fixed";
-			reg = <3>;
+			reg = <5>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&pinctrl_reg_3v3_aud>;
 			regulator-name = "3v3_audio";
@@ -105,13 +128,12 @@
 			gpio = <&gpio0 14 GPIO_ACTIVE_HIGH>;
 			enable-active-high;
 			startup-delay-us = <1000>;
+			vin-supply = <&reg_3v3_ext>;
 		};
 
-		reg_3v3_pcie: regulator@4 {
+		reg_3v3_pcie: regulator@6 {
 			compatible = "regulator-fixed";
-			reg = <4>;
-			pinctrl-names = "default";
-			pinctrl-0 = <&pinctrl_reg_3v3_pcie>;
+			reg = <6>;
 			regulator-name = "vcc";
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
@@ -120,9 +142,9 @@
 			startup-delay-us = <100000>;
 		};
 
-		reg_3v3_usb_hub: regulator@5 {
+		reg_3v3_usb_hub: regulator@7 {
 			compatible = "regulator-fixed";
-			reg = <5>;
+			reg = <7>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&pinctrl_reg_3v3_usb_hub>;
 			regulator-name = "3v3_usb_hub";
@@ -130,11 +152,12 @@
 			regulator-max-microvolt = <3300000>;
 			gpio = <&gpio0 15 GPIO_ACTIVE_HIGH>;
 			enable-active-high;
+			vin-supply = <&reg_3v3_ext>;
 		};
 
-		reg_3v3_usb_sw: regulator@6 {
+		reg_3v3_usb_sw: regulator@8 {
 			compatible = "regulator-fixed";
-			reg = <6>;
+			reg = <8>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&pinctrl_reg_3v3_usb_sw>;
 			regulator-name = "3v3_usb_sw";
@@ -177,13 +200,9 @@
 		    <&pinctrl_fec1_gpio>,
 		    <&pinctrl_fec1>;
 	pinctrl-1 = <&pinctrl_fec1_gpio_sleep>;
-	clocks = <&clk IMX8QXP_ENET0_IPG_CLK>,
-		 <&clk IMX8QXP_ENET0_AHB_CLK>,
-		 <&clk IMX8QXP_ENET0_REF_50MHZ_CLK>,
-		 <&clk IMX8QXP_ENET0_PTP_CLK>,
-		 <&clk IMX8QXP_ENET0_TX_CLK>;
 	phy-mode = "rgmii-id";
 	phy-handle = <&ethphy1>;
+	digi,mdio-lt-supply = <&reg_1v8_ext>;
 	phy-supply = <&reg_3v3_eth0>;
 	phy-reset-gpios = <&gpio3 18 GPIO_ACTIVE_LOW>;
 	phy-reset-duration = <1>;
@@ -218,6 +237,7 @@
 	pinctrl-1 = <&pinctrl_fec2_gpio_sleep>;
 	phy-mode = "rgmii-id";
 	phy-handle = <&ethphy0>;
+	digi,mdio-lt-supply = <&reg_1v8_ext>;
 	phy-supply = <&reg_3v3_eth0>;
 	phy-reset-gpios = <&gpio3 22 GPIO_ACTIVE_LOW>;
 	phy-reset-duration = <1>;
@@ -235,7 +255,7 @@
 &flexcan1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan1>;
-	xceiver-supply = <&reg_5v_display>;
+	xceiver-supply = <&reg_5v_sbc>;
 	status = "disabled";
 };
 
@@ -243,7 +263,7 @@
 &flexcan2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan2>;
-	xceiver-supply = <&reg_5v_display>;
+	xceiver-supply = <&reg_5v_sbc>;
 	stby-gpios = <&gpio1 0 GPIO_ACTIVE_HIGH>;
 	status = "disabled";
 };
@@ -257,7 +277,7 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan3>,
 		    <&pinctrl_flexcan3_lpuart3_gpios>;
-	xceiver-supply = <&reg_5v_display>;
+	xceiver-supply = <&reg_5v_sbc>;
 	stby-gpios = <&gpio1 2 GPIO_ACTIVE_HIGH>;
 	pinctrl-assert-gpios = <&gpio3 23 GPIO_ACTIVE_HIGH>;
 	status = "disabled";
@@ -285,6 +305,7 @@
 		clock-names = "mclk";
 		power-domains = <&pd_mclk_out1>;
 		vcc-supply = <&reg_3v3_audio>;
+		dvdd-supply = <&reg_1v8_ext>;
 		assigned-clocks = <&clk IMX8QXP_AUD_PLL0_DIV>,
 				  <&clk IMX8QXP_AUD_ACM_AUD_PLL_CLK0_DIV>,
 				  <&clk IMX8QXP_AUD_ACM_AUD_REC_CLK0_DIV>,
@@ -697,6 +718,12 @@
 	status = "okay";
 };
 
+/*
+ * Remove MCA PWM node that uses MCA_IO5 and MCA_IO6 pads, since these lines
+ * are being used as GPIOs for enabling voltage regulators on SBC Pro board.
+ */
+/delete-node/ &{/i2c@5a800000/mca@63/pwms/pwm@1};
+
 /* PWM signal on Expansion connector: SPI0_CS1 (conflicts with SPI0 CS1) */
 &pwm_adma_lcdif {
 	pinctrl-names = "default";
@@ -853,8 +880,8 @@
 
 	pinctrl_fec1_gpio_sleep: fec1gpiosleepgrp {
 		fsl,pins = <
-			/* PHY reset (lp_config=LATCH) */
-			SC_P_QSPI0B_DATA0_LSIO_GPIO3_IO18	0x07800021
+			/* PHY reset */
+			SC_P_QSPI0B_DATA0_LSIO_GPIO3_IO18	0x06000041
 		>;
 	};
 
@@ -895,8 +922,8 @@
 
 	pinctrl_fec2_gpio_sleep: fec2gpiosleepgrp {
 		fsl,pins = <
-			/* PHY reset (lp_config=LATCH) */
-			SC_P_QSPI0B_DQS_LSIO_GPIO3_IO22		0x07800021
+			/* PHY reset */
+			SC_P_QSPI0B_DQS_LSIO_GPIO3_IO22		0x06000041
 		>;
 	};
 
@@ -1050,7 +1077,7 @@
 		>;
 	};
 
-	pinctrl_reg_5v_display: reg_5v_display_grp {
+	pinctrl_reg_5v_sbc: reg_5v_sbc_grp {
 		fsl,pins = <
 			/* 5V regulator power enable */
 			SC_P_SPI3_SCK_LSIO_GPIO0_IO13		0x06000020
@@ -1061,6 +1088,13 @@
 		fsl,pins = <
 			/* Voltage for PCIe domain (PCIE_VCC_EN) */
 			SC_P_SAI1_RXFS_LSIO_GPIO0_IO31		0x06000021
+		>;
+	};
+
+	pinctrl_reg_3v3_pcie_sleep: reg_3v3_pcie_sleep_grp {
+		fsl,pins = <
+			/* PCIE_VCC_EN (lp_config=LATCH) */
+			SC_P_SAI1_RXFS_LSIO_GPIO0_IO31          0x07800021
 		>;
 	};
 

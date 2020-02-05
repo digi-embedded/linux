@@ -80,7 +80,7 @@
 	status = "okay";
 
 	mca_cc6ul: mca@7e {
-		compatible = "digi,mca_cc6ul_dt_ids";
+		compatible = "digi,mca-cc6ul";
 		reg = <0x7e>;
 		interrupt-parent = <&gpio5>;
 		interrupts = <4 IRQ_TYPE_EDGE_FALLING>;
@@ -115,6 +115,7 @@
 		pwrkey {
 			compatible = "digi,mca-cc6ul-pwrkey";
 			digi,key-power;
+			digi,key-power-up;
 			digi,key-sleep;
 			digi,debounce-ms = <100>;
 			digi,pwroff-delay-sec = <6>;

@@ -1213,8 +1213,7 @@ static void sdhci_esdhc_imx_hwinit(struct sdhci_host *host)
 			host->ioaddr + SDHCI_HOST_CONTROL);
 
 		/*
-		 * erratum ESDHC_FLAG_ERR004536 fix for MX6Q TO1.2 and MX6DL
-		 * TO1.1, it's harmless for MX6SL
+		 * enable the new IC fix for ERR004536
 		 */
 		writel(readl(host->ioaddr + 0x6c) & ~BIT(7),
 			host->ioaddr + 0x6c);

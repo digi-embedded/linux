@@ -361,38 +361,38 @@ static int cdns3_get_clks(struct device *dev)
 	struct cdns3 *cdns = dev_get_drvdata(dev);
 	int ret = 0;
 
-	cdns->cdns3_clks[0] = devm_clk_get(dev, "usb3_lpm_clk");
+	cdns->cdns3_clks[0] = devm_clk_get(dev, "usb3_ipg_clk");
 	if (IS_ERR(cdns->cdns3_clks[0])) {
 		ret = PTR_ERR(cdns->cdns3_clks[0]);
-		dev_err(dev, "Failed to get usb3_lpm_clk, err=%d\n", ret);
-		return ret;
-	}
-
-	cdns->cdns3_clks[1] = devm_clk_get(dev, "usb3_bus_clk");
-	if (IS_ERR(cdns->cdns3_clks[1])) {
-		ret = PTR_ERR(cdns->cdns3_clks[1]);
-		dev_err(dev, "Failed to get usb3_bus_clk, err=%d\n", ret);
-		return ret;
-	}
-
-	cdns->cdns3_clks[2] = devm_clk_get(dev, "usb3_aclk");
-	if (IS_ERR(cdns->cdns3_clks[2])) {
-		ret = PTR_ERR(cdns->cdns3_clks[2]);
-		dev_err(dev, "Failed to get usb3_aclk, err=%d\n", ret);
-		return ret;
-	}
-
-	cdns->cdns3_clks[3] = devm_clk_get(dev, "usb3_ipg_clk");
-	if (IS_ERR(cdns->cdns3_clks[3])) {
-		ret = PTR_ERR(cdns->cdns3_clks[3]);
 		dev_err(dev, "Failed to get usb3_ipg_clk, err=%d\n", ret);
 		return ret;
 	}
 
-	cdns->cdns3_clks[4] = devm_clk_get(dev, "usb3_core_pclk");
+	cdns->cdns3_clks[1] = devm_clk_get(dev, "usb3_core_pclk");
+	if (IS_ERR(cdns->cdns3_clks[1])) {
+		ret = PTR_ERR(cdns->cdns3_clks[1]);
+		dev_err(dev, "Failed to get usb3_core_pclk, err=%d\n", ret);
+		return ret;
+	}
+
+	cdns->cdns3_clks[2] = devm_clk_get(dev, "usb3_lpm_clk");
+	if (IS_ERR(cdns->cdns3_clks[2])) {
+		ret = PTR_ERR(cdns->cdns3_clks[2]);
+		dev_err(dev, "Failed to get usb3_lpm_clk, err=%d\n", ret);
+		return ret;
+	}
+
+	cdns->cdns3_clks[3] = devm_clk_get(dev, "usb3_bus_clk");
+	if (IS_ERR(cdns->cdns3_clks[3])) {
+		ret = PTR_ERR(cdns->cdns3_clks[3]);
+		dev_err(dev, "Failed to get usb3_bus_clk, err=%d\n", ret);
+		return ret;
+	}
+
+	cdns->cdns3_clks[4] = devm_clk_get(dev, "usb3_aclk");
 	if (IS_ERR(cdns->cdns3_clks[4])) {
 		ret = PTR_ERR(cdns->cdns3_clks[4]);
-		dev_err(dev, "Failed to get usb3_core_pclk, err=%d\n", ret);
+		dev_err(dev, "Failed to get usb3_aclk, err=%d\n", ret);
 		return ret;
 	}
 
@@ -403,13 +403,48 @@ static int cdns3_prepare_enable_clks(struct device *dev)
 {
 	struct cdns3 *cdns = dev_get_drvdata(dev);
 	int i, j, ret = 0;
+	/* clock rate for: usb3_lpm_clk, usb3_bus_clk, and usb3_aclk */
+	unsigned long cdns3_clk_rate_b0[3] = {12000000, 500000000, 125000000};
+	unsigned long cdns3_clk_rate_c0[3] = {12000000, 250000000, 125000000};
+	unsigned long clk_rate;
+	bool c0_chip;
+	u32 val;
 
-	for (i = 0; i < CDNS3_NUM_OF_CLKS; i++) {
+	for (i = 0; i < 2; i++) {
 		ret = clk_prepare_enable(cdns->cdns3_clks[i]);
 		if (ret) {
 			dev_err(dev,
 				"Failed to prepare/enable cdns3 clk, err=%d\n",
 				ret);
+			goto err;
+		}
+	}
+
+	val = readl(cdns->none_core_regs + USB2_PHY_CTRL2);
+	if ((val & IMX8QXP_C0_FLAG) == IMX8QXP_C0_FLAG)
+		c0_chip = true;
+	else
+		c0_chip = false;
+
+	for (; i <= CDNS3_NUM_OF_CLKS - 1; i++) {
+		if (c0_chip)
+			clk_rate = cdns3_clk_rate_c0[i - 2];
+		else
+			clk_rate = cdns3_clk_rate_b0[i - 2];
+
+		ret = clk_set_rate(cdns->cdns3_clks[i], clk_rate);
+		if (ret) {
+			dev_err(dev,
+				"Failed to set rate, err=%d, i=%d\n",
+				ret, i);
+			goto err;
+		}
+
+		ret = clk_prepare_enable(cdns->cdns3_clks[i]);
+		if (ret) {
+			dev_err(dev,
+				"Failed to set clock enable, err=%d, i=%d\n",
+				ret, i);
 			goto err;
 		}
 	}
@@ -795,13 +830,14 @@ static void cdns3_set_wakeup(void *none_core_regs, bool enable)
 	}
 }
 
-static void cdns3_enter_suspend(struct cdns3 *cdns, bool suspend, bool wakeup)
+static int cdns3_enter_suspend(struct cdns3 *cdns, bool suspend, bool wakeup)
 {
 	void __iomem *otg_regs = cdns->otg_regs;
 	void __iomem *xhci_regs = cdns->xhci_regs;
 	void __iomem *none_core_regs = cdns->none_core_regs;
 	u32 value;
 	int timeout_us = 100000;
+	int ret = 0;
 
 	if (cdns->role == CDNS3_ROLE_GADGET) {
 		if (suspend) {
@@ -810,14 +846,17 @@ static void cdns3_enter_suspend(struct cdns3 *cdns, bool suspend, bool wakeup)
 			value |= ALL_SW_RESET;
 			writel(value, cdns->none_core_regs + USB3_CORE_CTRL1);
 		}
-		return;
+		return 0;
 	} else if (cdns->role == CDNS3_ROLE_END) {
-		return;
+		return 0;
 	}
 
 	if (suspend) {
 		if (cdns3_role(cdns)->suspend)
-			cdns3_role(cdns)->suspend(cdns, wakeup);
+			ret = cdns3_role(cdns)->suspend(cdns, wakeup);
+
+		if (ret)
+			return ret;
 
 		/* SW request low power when all usb ports allow to it ??? */
 		value = readl(xhci_regs + XECP_PM_PMCSR);
@@ -867,7 +906,6 @@ static void cdns3_enter_suspend(struct cdns3 *cdns, bool suspend, bool wakeup)
 			dev_err(cdns->dev, "wait phy_refclk_req timeout\n");
 
 		dev_dbg(cdns->dev, "phy_refclk_req cleared\n");
-
 		cdns3_set_wakeup(none_core_regs, true);
 	} else {
 		value = readl(none_core_regs + USB3_INT_REG);
@@ -930,15 +968,25 @@ static void cdns3_enter_suspend(struct cdns3 *cdns, bool suspend, bool wakeup)
 		if (timeout_us <= 0)
 			dev_err(cdns->dev, "wait xhci_power_on_ready timeout\n");
 	}
+
+	return ret;
 }
 
-static void cdns3_controller_suspend(struct cdns3 *cdns, bool wakeup)
+static int cdns3_controller_suspend(struct cdns3 *cdns, bool wakeup)
 {
+	int ret = 0;
+
 	disable_irq(cdns->irq);
-	cdns3_enter_suspend(cdns, true, wakeup);
+	ret = cdns3_enter_suspend(cdns, true, wakeup);
+	if (ret) {
+		enable_irq(cdns->irq);
+		return ret;
+	}
+
 	usb_phy_set_suspend(cdns->usbphy, 1);
 	cdns->in_lpm = true;
 	enable_irq(cdns->irq);
+	return ret;
 }
 
 #ifdef CONFIG_PM_SLEEP
@@ -946,18 +994,22 @@ static int cdns3_suspend(struct device *dev)
 {
 	struct cdns3 *cdns = dev_get_drvdata(dev);
 	bool wakeup = device_may_wakeup(dev);
+	int ret;
 
 	dev_dbg(dev, "at %s\n", __func__);
 
 	if (pm_runtime_status_suspended(dev))
 		pm_runtime_resume(dev);
 
-	cdns3_controller_suspend(cdns, wakeup);
+	ret = cdns3_controller_suspend(cdns, wakeup);
+	if (ret)
+		return ret;
+
 	cdns3_disable_unprepare_clks(dev);
 	if (wakeup)
 		enable_irq_wake(cdns->irq);
 
-	return 0;
+	return ret;
 }
 
 static int cdns3_resume(struct device *dev)
@@ -991,6 +1043,7 @@ static int cdns3_resume(struct device *dev)
 			cdns3_role(cdns)->resume(cdns, true);
 		}
 	} else {
+		/* At resume path, never return error */
 		cdns3_enter_suspend(cdns, false, false);
 		if (cdns->wakeup_int) {
 			cdns->wakeup_int = false;
@@ -1025,6 +1078,7 @@ static int cdns3_resume(struct device *dev)
 static int cdns3_runtime_suspend(struct device *dev)
 {
 	struct cdns3 *cdns = dev_get_drvdata(dev);
+	int ret;
 
 	dev_dbg(dev, "at the begin of %s\n", __func__);
 	if (cdns->in_lpm) {
@@ -1032,12 +1086,15 @@ static int cdns3_runtime_suspend(struct device *dev)
 		return 0;
 	}
 
-	cdns3_controller_suspend(cdns, true);
+	ret = cdns3_controller_suspend(cdns, true);
+	if (ret)
+		return ret;
+
 	cdns3_disable_unprepare_clks(dev);
 
 	dev_dbg(dev, "at the end of %s\n", __func__);
 
-	return 0;
+	return ret;
 }
 
 static int cdns3_runtime_resume(struct device *dev)
@@ -1055,6 +1112,7 @@ static int cdns3_runtime_resume(struct device *dev)
 		return ret;
 
 	usb_phy_set_suspend(cdns->usbphy, 0);
+	/* At resume path, never return error */
 	cdns3_enter_suspend(cdns, false, false);
 	cdns->in_lpm = 0;
 

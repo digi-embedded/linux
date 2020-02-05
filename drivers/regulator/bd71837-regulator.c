@@ -913,23 +913,27 @@ static int bd71837_probe(struct platform_device *pdev)
 
 	/* Add Interrupt */
 	irq  = platform_get_irq(pdev, 0); // get irq number
-	if (irq <= 0) {
+	if (irq < 0) {
 		dev_warn(&pdev->dev, "platform irq error # %d\n", irq);
 		return -ENXIO;
 	}
-	ret = devm_request_threaded_irq(&pdev->dev, irq, NULL,
-			bd71837_pmic_interrupt, IRQF_TRIGGER_LOW | IRQF_EARLY_RESUME,
-		dev_name(&pdev->dev), &pdev->dev);
-	if (ret < 0) {
-		dev_err(&pdev->dev, "IRQ %d is not free.\n", irq);
-	}
+	else if (irq > 0) {
+		ret = devm_request_threaded_irq(&pdev->dev, irq, NULL,
+						bd71837_pmic_interrupt,
+						IRQF_TRIGGER_LOW | IRQF_EARLY_RESUME,
+						dev_name(&pdev->dev), &pdev->dev);
+		if (ret < 0) {
+			dev_err(&pdev->dev, "IRQ %d is not free.\n", irq);
+			goto err;
+		}
 
-	/* Un-mask IRQ Interrupt */
-	ret = bd71837_reg_write(bd71837, BD71837_REG_MIRQ, 0);
-	if (ret < 0) {
-		dev_err(&pdev->dev, "Write Un-mask 'BD71837_REG_MIRQ': failed!\n");
-		ret = -EIO;
-		goto err;
+		/* Un-mask IRQ Interrupt */
+		ret = bd71837_reg_write(bd71837, BD71837_REG_MIRQ, 0);
+		if (ret < 0) {
+			dev_err(&pdev->dev, "Write Un-mask 'BD71837_REG_MIRQ': failed!\n");
+			ret = -EIO;
+			goto err;
+		}
 	}
 
 	return 0;

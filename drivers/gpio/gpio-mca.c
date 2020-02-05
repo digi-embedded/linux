@@ -53,6 +53,7 @@
 enum mca_gpio_type {
 	CC6UL_MCA_GPIO,
 	CC8X_MCA_GPIO,
+	CC8M_MCA_GPIO,
 	IOEXP_MCA_GPIO,
 };
 
@@ -609,6 +610,9 @@ static struct mca_gpio_data mca_gpio_devdata[] = {
 	[CC8X_MCA_GPIO] = {
 		.devtype = CC8X_MCA_GPIO,
 	},
+	[CC8M_MCA_GPIO] = {
+		.devtype = CC8M_MCA_GPIO,
+	},
 	[IOEXP_MCA_GPIO] = {
 		.devtype = IOEXP_MCA_GPIO,
 	},
@@ -619,6 +623,8 @@ static const struct of_device_id mca_gpio_dt_ids[] = {
 	  .data = &mca_gpio_devdata[CC6UL_MCA_GPIO]},
 	{ .compatible = "digi,mca-cc8x-gpio",
 	  .data = &mca_gpio_devdata[CC8X_MCA_GPIO]},
+	{ .compatible = "digi,mca-cc8m-gpio",
+	  .data = &mca_gpio_devdata[CC8M_MCA_GPIO]},
 	{ .compatible = "digi,mca-ioexp-gpio",
 	  .data = &mca_gpio_devdata[IOEXP_MCA_GPIO]},
 	{ /* sentinel */ }

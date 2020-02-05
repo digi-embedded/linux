@@ -41,10 +41,10 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 
-		reg_3v3_ext: regulator-som@1 {
+		reg_3v3: regulator-som@1 {
 			compatible = "regulator-fixed";
 			reg = <1>;
-			regulator-name = "3v3_ext";
+			regulator-name = "3v3";
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
 		};
@@ -53,6 +53,14 @@
 			compatible = "regulator-fixed";
 			reg = <2>;
 			regulator-name = "1v8_adc_vref";
+			regulator-min-microvolt = <1800000>;
+			regulator-max-microvolt = <1800000>;
+		};
+
+		reg_1v8: regulator-som@3 {
+			compatible = "regulator-fixed";
+			reg = <3>;
+			regulator-name = "1v8";
 			regulator-min-microvolt = <1800000>;
 			regulator-max-microvolt = <1800000>;
 		};
@@ -75,7 +83,7 @@
 	clock-frequency = <400000>;
 	pinctrl-names = "default", "gpio";
 	digi,hold-time-ns = <8000>;
-	digi,buffer-time-us = <75>;
+	digi,buffer-time-us = <35>;
 	pinctrl-0 = <&pinctrl_lpi2c0>;
 	pinctrl-1 = <&pinctrl_lpi2c0_gpio>;
 	scl-gpios = <&gpio3 8 GPIO_ACTIVE_HIGH>;
@@ -83,7 +91,7 @@
 	status = "okay";
 
 	mca_cc8x: mca@63 {
-		compatible = "digi,mca_cc8x";
+		compatible = "digi,mca-cc8x";
 		reg = <0x63>;
 		interrupt-parent = <&gic>;
 		interrupts = <GIC_SPI 177 IRQ_TYPE_LEVEL_HIGH>;
@@ -114,6 +122,7 @@
 		pwrkey {
 			compatible = "digi,mca-cc8x-pwrkey";
 			digi,key-power;
+			digi,key-power-up;
 			digi,key-sleep;
 			digi,debounce-ms = <100>;
 			digi,pwroff-delay-sec = <6>;

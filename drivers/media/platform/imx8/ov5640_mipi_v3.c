@@ -29,6 +29,10 @@
 #define OV5640_VOLTAGE_ANALOG               2800000
 #define OV5640_VOLTAGE_DIGITAL_CORE         1500000
 #define OV5640_VOLTAGE_DIGITAL_IO           1800000
+/*
+ * PLL multiplier (any integer 4-127, only even integers in 128-252)
+ */
+#define OV5640_SC_PLL_CONTRL2		0x3036
 
 #define MIN_FPS 15
 #define MAX_FPS 30
@@ -39,6 +43,9 @@
 
 #define OV5640_CHIP_ID_HIGH_BYTE        0x300A
 #define OV5640_CHIP_ID_LOW_BYTE         0x300B
+
+#define OV5640_MIPI_CONTROLL_00		0x300E
+#define MIPI_CONTROLL00_MIPI_MODE	BIT(2)
 
 #define OV5640_SENS_PAD_SOURCE	0
 #define OV5640_SENS_PADS_NUM	1
@@ -133,10 +140,10 @@ struct ov5640 {
 
 	void (*io_init)(struct ov5640 *);
 	int pwn_gpio, rst_gpio;
+	enum of_gpio_flags pwn_active_low, rst_active_low;
 };
 
 static struct reg_value ov5640_init_setting_30fps_VGA[] = {
-
 	{0x3103, 0x11, 0, 0}, {0x3008, 0x82, 0, 5}, {0x3008, 0x42, 0, 0},
 	{0x3103, 0x03, 0, 0}, {0x3017, 0x00, 0, 0}, {0x3018, 0x00, 0, 0},
 	{0x3034, 0x18, 0, 0}, {0x3035, 0x14, 0, 0}, {0x3036, 0x38, 0, 0},
@@ -171,7 +178,7 @@ static struct reg_value ov5640_init_setting_30fps_VGA[] = {
 	{0x300e, 0x45, 0, 0}, {0x302e, 0x08, 0, 0}, {0x4300, 0x3F, 0, 0},
 	{0x501f, 0x00, 0, 0}, {0x4713, 0x03, 0, 0}, {0x4407, 0x04, 0, 0},
 	{0x440e, 0x00, 0, 0}, {0x460b, 0x35, 0, 0}, {0x460c, 0x22, 0, 0},
-	{0x4837, 0x0a, 0, 0}, {0x4800, 0x04, 0, 0}, {0x3824, 0x02, 0, 0},
+	{0x4837, 0x0a, 0, 0}, {0x4800, 0x24, 0, 0}, {0x3824, 0x02, 0, 0},
 	{0x5000, 0xa7, 0, 0}, {0x5001, 0xa3, 0, 0}, {0x5180, 0xff, 0, 0},
 	{0x5181, 0xf2, 0, 0}, {0x5182, 0x00, 0, 0}, {0x5183, 0x14, 0, 0},
 	{0x5184, 0x25, 0, 0}, {0x5185, 0x24, 0, 0}, {0x5186, 0x09, 0, 0},
@@ -221,7 +228,7 @@ static struct reg_value ov5640_init_setting_30fps_VGA[] = {
 	{0x583b, 0x28, 0, 0}, {0x583c, 0x42, 0, 0}, {0x583d, 0xce, 0, 0},
 	{0x5025, 0x00, 0, 0}, {0x3a0f, 0x30, 0, 0}, {0x3a10, 0x28, 0, 0},
 	{0x3a1b, 0x30, 0, 0}, {0x3a1e, 0x26, 0, 0}, {0x3a11, 0x60, 0, 0},
-	{0x3a1f, 0x14, 0, 0}, {0x3008, 0x42, 0, 0}, {0x3c00, 0x04, 0, 300},
+	{0x3a1f, 0x14, 0, 0}, {0x3008, 0x42, 0, 10}, {0x3c00, 0x04, 0, 300},
 };
 
 static struct reg_value ov5640_setting_30fps_VGA_640_480[] = {
@@ -244,7 +251,7 @@ static struct reg_value ov5640_setting_30fps_VGA_640_480[] = {
 	{0x4001, 0x02, 0, 0}, {0x4004, 0x02, 0, 0}, {0x4713, 0x03, 0, 0},
 	{0x4407, 0x04, 0, 0}, {0x460b, 0x35, 0, 0}, {0x460c, 0x22, 0, 0},
 	{0x3824, 0x02, 0, 0}, {0x5001, 0xa3, 0, 0},
-	{0x4005, 0x1a, 0, 0}, {0x3008, 0x02, 0, 0}, {0x3503, 0x00, 0, 0},
+	{0x4005, 0x1a, 0, 0}, {0x3008, 0x02, 0, 10}, {0x3503, 0x00, 0, 0},
 };
 
 static struct reg_value ov5640_setting_30fps_QVGA_320_240[] = {
@@ -267,7 +274,7 @@ static struct reg_value ov5640_setting_30fps_QVGA_320_240[] = {
 	{0x4001, 0x02, 0, 0}, {0x4004, 0x02, 0, 0}, {0x4713, 0x03, 0, 0},
 	{0x4407, 0x04, 0, 0}, {0x460b, 0x35, 0, 0}, {0x460c, 0x22, 0, 0},
 	{0x3824, 0x02, 0, 0}, {0x5001, 0xa3, 0, 0},
-	{0x4005, 0x1a, 0, 0}, {0x3008, 0x02, 0, 0}, {0x3503, 0x00, 0, 0},
+	{0x4005, 0x1a, 0, 0}, {0x3008, 0x02, 0, 10}, {0x3503, 0x00, 0, 0},
 };
 
 static struct reg_value ov5640_setting_30fps_NTSC_720_480[] = {
@@ -290,7 +297,7 @@ static struct reg_value ov5640_setting_30fps_NTSC_720_480[] = {
 	{0x4001, 0x02, 0, 0}, {0x4004, 0x02, 0, 0}, {0x4713, 0x03, 0, 0},
 	{0x4407, 0x04, 0, 0}, {0x460b, 0x35, 0, 0}, {0x460c, 0x22, 0, 0},
 	{0x3824, 0x02, 0, 0}, {0x5001, 0xa3, 0, 0},
-	{0x4005, 0x1a, 0, 0}, {0x3008, 0x02, 0, 0}, {0x3503, 0, 0, 0},
+	{0x4005, 0x1a, 0, 0}, {0x3008, 0x02, 0, 10}, {0x3503, 0, 0, 0},
 };
 
 static struct reg_value ov5640_setting_30fps_720P_1280_720[] = {
@@ -313,7 +320,7 @@ static struct reg_value ov5640_setting_30fps_720P_1280_720[] = {
 	{0x4001, 0x02, 0, 0}, {0x4004, 0x02, 0, 0}, {0x4713, 0x02, 0, 0},
 	{0x4407, 0x04, 0, 0}, {0x460b, 0x37, 0, 0}, {0x460c, 0x20, 0, 0},
 	{0x3824, 0x04, 0, 0}, {0x5001, 0x83, 0, 0}, {0x4005, 0x1a, 0, 0},
-	{0x3008, 0x02, 0, 0}, {0x3503, 0,    0, 0},
+	{0x3008, 0x02, 0, 15}, {0x3503, 0,    0, 0},
 };
 
 static struct reg_value ov5640_setting_30fps_1080P_1920_1080[] = {
@@ -349,7 +356,7 @@ static struct reg_value ov5640_setting_30fps_1080P_1920_1080[] = {
 	{0x3a0e, 0x03, 0, 0}, {0x3a0d, 0x04, 0, 0}, {0x3a14, 0x04, 0, 0},
 	{0x3a15, 0x60, 0, 0}, {0x4713, 0x02, 0, 0}, {0x4407, 0x04, 0, 0},
 	{0x460b, 0x37, 0, 0}, {0x460c, 0x20, 0, 0}, {0x3824, 0x04, 0, 0},
-	{0x4005, 0x1a, 0, 0}, {0x3008, 0x02, 0, 0},
+	{0x4005, 0x1a, 0, 0}, {0x3008, 0x02, 0, 20},
 	{0x3503, 0, 0, 0},
 };
 
@@ -373,7 +380,7 @@ static struct reg_value ov5640_setting_15fps_QSXGA_2592_1944[] = {
 	{0x3a0d, 0x04, 0, 0}, {0x3a14, 0x03, 0, 0}, {0x3a15, 0xd8, 0, 0},
 	{0x4001, 0x02, 0, 0}, {0x4004, 0x06, 0, 0}, {0x4713, 0x03, 0, 0},
 	{0x4407, 0x04, 0, 0}, {0x460b, 0x35, 0, 0}, {0x460c, 0x22, 0, 0},
-	{0x3824, 0x02, 0, 0}, {0x5001, 0x83, 0, 70}, {0x3008, 0x02, 0, 0},
+	{0x3824, 0x02, 0, 0}, {0x5001, 0x83, 0, 70}, {0x3008, 0x02, 0, 267},
 };
 
 static struct ov5640_mode_info ov5640_mode_info_data[2][ov5640_mode_MAX + 1] = {
@@ -527,24 +534,30 @@ static inline void ov5640_power_down(struct ov5640 *sensor, int enable)
 
 static inline void ov5640_reset(struct ov5640 *sensor)
 {
-	if (!gpio_is_valid(sensor->pwn_gpio) &&
-	    !gpio_is_valid(sensor->rst_gpio))
+	if (sensor->pwn_gpio < 0 || sensor->rst_gpio < 0)
 		return;
 
+	/* Assert power-down and reset lines */
 	if (gpio_is_valid(sensor->pwn_gpio))
-		gpio_set_value_cansleep(sensor->pwn_gpio, 1);
+		gpio_set_value_cansleep(sensor->pwn_gpio,
+					!sensor->pwn_active_low);
 	if (gpio_is_valid(sensor->rst_gpio)) {
-		gpio_set_value_cansleep(sensor->rst_gpio, 0);
+		gpio_set_value_cansleep(sensor->rst_gpio,
+					!sensor->rst_active_low);
 		udelay(5000);
 	}
 
+	/* Power up (de-assert power-down) */
 	if (gpio_is_valid(sensor->pwn_gpio)) {
-		gpio_set_value_cansleep(sensor->pwn_gpio, 0);
+		gpio_set_value_cansleep(sensor->pwn_gpio,
+					sensor->pwn_active_low);
 		udelay(1000);
 	}
 
+	/* De-assert reset */
 	if (gpio_is_valid(sensor->rst_gpio)) {
-		gpio_set_value_cansleep(sensor->rst_gpio, 1);
+		gpio_set_value_cansleep(sensor->rst_gpio,
+					sensor->rst_active_low);
 		msleep(20);
 	}
 }
@@ -681,6 +694,23 @@ static int ov5640_download_firmware(struct ov5640 *sensor,
 		Val = pModeSetting->u8Val;
 		Mask = pModeSetting->u8Mask;
 
+		/*
+		 * Workaround: use the OV5640 internal PLL to compensate for
+		 * a different reference clock (included in OV5640 board).
+		 */
+		if (RegAddr == OV5640_SC_PLL_CONTRL2) {
+			int new_val = Val * 2 + Val / 2;
+
+			if (new_val > 252)
+				new_val = 252;
+			else if (new_val >= 128)
+				new_val &= ~1;
+
+			pr_debug("adjusting PLL multiplier: %d --> %d\n", Val,
+				 new_val);
+			Val = (u8) new_val;
+		}
+
 		if (Mask) {
 			retval = ov5640_read_reg(sensor, RegAddr, &RegVal);
 			if (retval < 0)
@@ -720,11 +750,14 @@ static int ov5640_config_init(struct ov5640 *sensor)
 
 static void ov5640_start(struct ov5640 *sensor)
 {
-	ov5640_write_reg(sensor, 0x4800, 0x04);
+	ov5640_write_reg(sensor, 0x3008, 0x02);
 	ov5640_write_reg(sensor, 0x4202, 0x00);
 
 	/* Color bar control */
 	/*ov5640_write_reg(sensor, 0x503d, 0x80);*/
+
+	/* skip the first three frame for 30fps */
+	msleep(100);
 }
 
 static int ov5640_change_mode(struct ov5640 *sensor)
@@ -754,7 +787,6 @@ static int ov5640_change_mode(struct ov5640 *sensor)
 	}
 
 	retval = ov5640_download_firmware(sensor, pModeSetting, ArySize);
-	ov5640_stop(sensor);
 
 	return retval;
 }
@@ -762,6 +794,7 @@ static int ov5640_change_mode(struct ov5640 *sensor)
 static void ov5640_stop(struct ov5640 *sensor)
 {
 	ov5640_write_reg(sensor, 0x4202, 0x0f);
+	ov5640_write_reg(sensor, 0x3008, 0x42);
 	ov5640_write_reg(sensor, 0x4800, 0x24);
 }
 
@@ -772,8 +805,6 @@ static int init_device(struct ov5640 *sensor)
 	retval = ov5640_config_init(sensor);
 	if (retval < 0)
 		return retval;
-
-	ov5640_stop(sensor);
 
 	return 0;
 }
@@ -1021,6 +1052,7 @@ static int ov5640_set_fmt(struct v4l2_subdev *sd,
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	struct ov5640 *sensor = to_ov5640(client);
 	int ret;
+	u8 val;
 
 	if (format->pad)
 		return -EINVAL;
@@ -1036,7 +1068,11 @@ static int ov5640_set_fmt(struct v4l2_subdev *sd,
 	if (format->which == V4L2_SUBDEV_FORMAT_TRY)
 		return 0;
 
-	init_device(sensor);
+	/* Need to reinitialize sensor after system suspend/resume */
+	ov5640_read_reg(sensor, OV5640_MIPI_CONTROLL_00, &val);
+	if (!(val & MIPI_CONTROLL00_MIPI_MODE))
+		init_device(sensor);
+
 	ret = ov5640_change_mode(sensor);
 	sensor->fmt = fmt;
 
@@ -1201,6 +1237,7 @@ static int ov5640_probe(struct i2c_client *client,
 	int retval;
 	u8 chip_id_high, chip_id_low;
 	struct ov5640 *sensor;
+	enum of_gpio_flags of_flags;
 
 	sensor = devm_kmalloc(dev, sizeof(*sensor), GFP_KERNEL);
 	if (!sensor)
@@ -1216,12 +1253,16 @@ static int ov5640_probe(struct i2c_client *client,
 	}
 
 	/* request power down pin */
-	sensor->pwn_gpio = of_get_named_gpio(dev->of_node, "pwn-gpios", 0);
+	sensor->pwn_gpio = of_get_named_gpio_flags(dev->of_node, "pwn-gpios", 0,
+						   &of_flags);
+	sensor->pwn_active_low = of_flags & OF_GPIO_ACTIVE_LOW;
 	if (!gpio_is_valid(sensor->pwn_gpio))
 		dev_warn(dev, "No sensor pwdn pin available");
 	else {
 		retval = devm_gpio_request_one(dev, sensor->pwn_gpio,
-				GPIOF_OUT_INIT_HIGH, "ov5640_mipi_pwdn");
+				sensor->pwn_active_low ?
+				GPIOF_OUT_INIT_HIGH : GPIOF_OUT_INIT_LOW,
+				"ov5640_mipi_pwdn");
 		if (retval < 0) {
 			dev_warn(dev, "Failed to set power pin\n");
 			dev_warn(dev, "retval=%d\n", retval);
@@ -1230,12 +1271,16 @@ static int ov5640_probe(struct i2c_client *client,
 	}
 
 	/* request reset pin */
-	sensor->rst_gpio = of_get_named_gpio(dev->of_node, "rst-gpios", 0);
+	sensor->rst_gpio = of_get_named_gpio_flags(dev->of_node, "rst-gpios", 0,
+						   &of_flags);
+	sensor->rst_active_low = of_flags & OF_GPIO_ACTIVE_LOW;
 	if (!gpio_is_valid(sensor->rst_gpio))
 		dev_warn(dev, "No sensor reset pin available");
 	else {
 		retval = devm_gpio_request_one(dev, sensor->rst_gpio,
-				GPIOF_OUT_INIT_HIGH, "ov5640_mipi_reset");
+				sensor->rst_active_low ?
+				GPIOF_OUT_INIT_HIGH : GPIOF_OUT_INIT_LOW,
+				"ov5640_mipi_reset");
 		if (retval < 0) {
 			dev_warn(dev, "Failed to set reset pin\n");
 			return retval;
@@ -1295,7 +1340,7 @@ static int ov5640_probe(struct i2c_client *client,
 
 	ov5640_regulator_enable(&client->dev);
 
-	ov5640_reset(sensor);
+	ov5640_power_down(sensor, 0);
 
 	retval = ov5640_read_reg(sensor, OV5640_CHIP_ID_HIGH_BYTE,
 				&chip_id_high);

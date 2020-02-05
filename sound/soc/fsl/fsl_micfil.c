@@ -45,6 +45,7 @@ struct fsl_micfil {
 	bool slave_mode;
 	int channel_gain[8];
 	int clk_src_id;
+	int dc_remover;
 	int vad_sound_gain;
 	int vad_noise_gain;
 	int vad_input_gain;
@@ -60,6 +61,8 @@ struct fsl_micfil {
 	int vad_rate_index;
 	atomic_t recording_state;
 	atomic_t hwvad_state;
+	/* spinlock to control HWVAD enable/disable */
+	spinlock_t hwvad_lock;
 };
 
 struct fsl_micfil_soc_data {
@@ -140,6 +143,17 @@ static const char * const micfil_clk_src_texts[] = {
 	"Auto", "AudioPLL1", "AudioPLL2", "ExtClk3",
 };
 
+/* DC Remover Control
+ * Filter Bypassed	1 1
+ * Cut-off @21Hz	0 0
+ * Cut-off @83Hz	0 1
+ * Cut-off @152HZ	1 0
+ */
+static const char * const micfil_dc_remover_texts[] = {
+	"Cut-off @21Hz", "Cut-off @83Hz",
+	"Cut-off @152Hz", "Bypass",
+};
+
 static const struct soc_enum fsl_micfil_quality_enum =
 	SOC_ENUM_SINGLE(REG_MICFIL_CTRL2,
 			MICFIL_CTRL2_QSEL_SHIFT,
@@ -168,6 +182,9 @@ static const struct soc_enum fsl_micfil_hwvad_rate_enum =
 static const struct soc_enum fsl_micfil_clk_src_enum =
 	SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(micfil_clk_src_texts),
 			    micfil_clk_src_texts);
+static const struct soc_enum fsl_micfil_dc_remover_enum =
+	SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(micfil_dc_remover_texts),
+			    micfil_dc_remover_texts);
 
 static int micfil_put_clk_src(struct snd_kcontrol *kcontrol,
 			      struct snd_ctl_elem_value *ucontrol)
@@ -190,6 +207,46 @@ static int micfil_get_clk_src(struct snd_kcontrol *kcontrol,
 	struct fsl_micfil *micfil = snd_soc_component_get_drvdata(comp);
 
 	ucontrol->value.enumerated.item[0] = micfil->clk_src_id;
+
+	return 0;
+}
+
+static int micfil_put_dc_remover_state(struct snd_kcontrol *kcontrol,
+				       struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_component *comp = snd_kcontrol_chip(kcontrol);
+	struct soc_enum *e = (struct soc_enum *)kcontrol->private_value;
+	struct fsl_micfil *micfil = snd_soc_component_get_drvdata(comp);
+	unsigned int *item = ucontrol->value.enumerated.item;
+	int val = snd_soc_enum_item_to_val(e, item[0]);
+	int i = 0, ret = 0;
+	u32 reg_val = 0;
+
+	if (val < 0 || val > 3)
+		return -EINVAL;
+
+	micfil->dc_remover = val;
+
+	/* Calculate total value for all channels */
+	for (i = 0; i < 8; i++)
+		reg_val |= MICFIL_DC_MODE(val, i);
+
+	/* Update DC Remover mode for all channels */
+	ret = snd_soc_component_update_bits(comp, REG_MICFIL_DC_CTRL,
+					    MICFIL_DC_CTRL_MASK, reg_val);
+	if (ret < 0)
+		return ret;
+
+	return 0;
+}
+
+static int micfil_get_dc_remover_state(struct snd_kcontrol *kcontrol,
+				       struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_component *comp = snd_kcontrol_chip(kcontrol);
+	struct fsl_micfil *micfil = snd_soc_component_get_drvdata(comp);
+
+	ucontrol->value.enumerated.item[0] = micfil->dc_remover;
 
 	return 0;
 }
@@ -676,6 +733,8 @@ static const struct snd_kcontrol_new fsl_micfil_snd_controls[] = {
 	SOC_ENUM_EXT("Clock Source",
 		     fsl_micfil_clk_src_enum,
 		     micfil_get_clk_src, micfil_put_clk_src),
+	SOC_ENUM_EXT("MICFIL DC Remover Control", fsl_micfil_dc_remover_enum,
+		     micfil_get_dc_remover_state, micfil_put_dc_remover_state),
 	{
 		.iface = SNDRV_CTL_ELEM_IFACE_MIXER,
 		.name = "HWVAD Input Gain",
@@ -842,6 +901,9 @@ static int fsl_micfil_reset(struct device *dev)
 		return ret;
 	}
 
+	/* w1c */
+	regmap_write_bits(micfil->regmap, REG_MICFIL_STAT, 0xFF, 0xFF);
+
 	return 0;
 }
 
@@ -898,7 +960,7 @@ static int init_hwvad_internal_filters(struct device *dev)
 	/* sleep for 100ms - it should be enough for bit to stay
 	 * pulsed for more than 2 cycles
 	 */
-	usleep_range(MICFIL_SLEEP_MIN, MICFIL_SLEEP_MAX);
+	mdelay(MICFIL_SLEEP);
 
 	/* Voice Activity Detector Enabled */
 	ret = regmap_update_bits(micfil->regmap, REG_MICFIL_VAD0_CTRL1,
@@ -1013,7 +1075,7 @@ static int init_hwvad_energy_mode(struct device *dev)
 	/* it would be a good idea to wait some time before VADEN
 	 * is set
 	 */
-	usleep_range(5 * MICFIL_SLEEP_MIN, 5 * MICFIL_SLEEP_MAX);
+	mdelay(5 * MICFIL_SLEEP);
 
 	/* Enable Interrupts */
 	ret = configure_hwvad_interrupts(dev, 1);
@@ -1045,7 +1107,7 @@ static int init_hwvad_energy_mode(struct device *dev)
 		if (flag == 0)
 			break;
 
-		usleep_range(MICFIL_SLEEP_MIN, MICFIL_SLEEP_MAX);
+		mdelay(MICFIL_SLEEP);
 	}
 
 	if (i == MICFIL_MAX_RETRY) {
@@ -1179,7 +1241,7 @@ static int init_hwvad_envelope_mode(struct device *dev)
 	/* it would be a good idea to wait some time before VADEN
 	 * is set
 	 */
-	usleep_range(3 * MICFIL_SLEEP_MIN, 3 * MICFIL_SLEEP_MAX);
+	mdelay(3 * MICFIL_SLEEP);
 
 	/* Wait for INITF to be asserted */
 	for (i = 0; i < MICFIL_MAX_RETRY; i++) {
@@ -1194,7 +1256,7 @@ static int init_hwvad_envelope_mode(struct device *dev)
 		if (flag == 0)
 			break;
 
-		usleep_range(MICFIL_SLEEP_MIN, MICFIL_SLEEP_MAX);
+		mdelay(MICFIL_SLEEP);
 	}
 
 	if (i == MICFIL_MAX_RETRY) {
@@ -1673,19 +1735,32 @@ static int fsl_micfil_dai_probe(struct snd_soc_dai *cpu_dai)
 	int ret;
 	int i;
 
-	/* set qsel to medium */
+	/* set qsel to very low quality 0 */
 	ret = regmap_update_bits(micfil->regmap, REG_MICFIL_CTRL2,
-				 MICFIL_CTRL2_QSEL_MASK, MICFIL_MEDIUM_QUALITY);
+				 MICFIL_CTRL2_QSEL_MASK, MICFIL_VLOW0_QUALITY);
 	if (ret) {
 		dev_err(dev, "failed to set quality mode bits, reg 0x%X\n",
 			REG_MICFIL_CTRL2);
 		return ret;
 	}
 
-	/* set default gain to max_gain */
-	regmap_write(micfil->regmap, REG_MICFIL_OUT_CTRL, 0x77777777);
-	for (i = 0; i < 8; i++)
-		micfil->channel_gain[i] = 0xF;
+	/* set default gain to 2 */
+	regmap_write(micfil->regmap, REG_MICFIL_OUT_CTRL, 0x22222222);
+	for (i = 0; i < MICFIL_OUTPUT_CHANNELS; i++)
+		micfil->channel_gain[i] = 0xA;
+
+	/* set DC Remover in bypass mode*/
+	val = 0;
+	for (i = 0; i < MICFIL_OUTPUT_CHANNELS; i++)
+		val |= MICFIL_DC_MODE(MICFIL_DC_BYPASS, i);
+	ret = regmap_update_bits(micfil->regmap, REG_MICFIL_DC_CTRL,
+				MICFIL_DC_CTRL_MASK, val);
+	if (ret) {
+		dev_err(dev, "failed to set DC Remover mode bits, reg 0x%X\n",
+			REG_MICFIL_DC_CTRL);
+		return ret;
+	}
+	micfil->dc_remover = MICFIL_DC_BYPASS;
 
 	snd_soc_dai_init_dma_data(cpu_dai, NULL,
 				  &micfil->dma_params_rx);
@@ -1856,9 +1931,12 @@ static irqreturn_t voice_detected_fn(int irq, void *devid)
 	int ret;
 
 	/* disable hwvad */
+	spin_lock(&micfil->hwvad_lock);
 	ret = disable_hwvad(dev, true);
+	spin_unlock(&micfil->hwvad_lock);
+
 	if (ret)
-		dev_err(dev, "Failed to disable HWVAD module\n");
+		dev_err(dev, "Failed to disable HWVAD module: %d\n", ret);
 
 	/* notify userspace that voice was detected */
 	kobject_uevent_env(&dev->kobj, KOBJ_CHANGE, envp);
@@ -2027,17 +2105,21 @@ static int enable_hwvad(struct device *dev, bool sync)
 
 	ret = fsl_set_clock_params(dev, rate);
 	if (ret)
-		return ret;
+		goto enable_error;
 
 	ret = fsl_micfil_reset(dev);
 	if (ret)
-		return ret;
+		goto enable_error;
 
 	/* Initialize Hardware Voice Activity */
 	ret = init_hwvad(dev);
+	if (ret == 0)
+		return 0;
 
-	return ret;
 enable_error:
+	if (state == MICFIL_HWVAD_OFF)
+		atomic_cmpxchg(&micfil->hwvad_state,
+			       MICFIL_HWVAD_ON, MICFIL_HWVAD_OFF);
 	if (sync)
 		pm_runtime_put_sync(dev);
 	return ret;
@@ -2137,24 +2219,28 @@ static ssize_t micfil_hwvad_handler(struct kobject *kobj,
 	struct kobject *nand_kobj = kobj->parent;
 	struct device *dev = container_of(nand_kobj, struct device, kobj);
 	struct fsl_micfil *micfil = dev_get_drvdata(dev);
-	unsigned long vad_channel;
+	unsigned long vad_channel, flags;
 	int ret;
 
 	ret = kstrtoul(buf, 16, &vad_channel);
 	if (ret < 0)
 		return -EINVAL;
 
+	spin_lock_irqsave(&micfil->hwvad_lock, flags);
 	if (vad_channel <= 7) {
 		micfil->vad_channel = vad_channel;
 		ret = enable_hwvad(dev, true);
-		if (ret)
-			dev_err(dev, "Failed to enable hwvad");
 	} else {
 		micfil->vad_channel = -1;
 		ret = disable_hwvad(dev, true);
 	}
-	if (ret)
+	spin_unlock_irqrestore(&micfil->hwvad_lock, flags);
+
+	if (ret) {
+		dev_err(dev, "Failed to %s hwvad: %d\n",
+			vad_channel <= 7 ? "enable" : "disable", ret);
 		return ret;
+	}
 
 	return count;
 }
@@ -2305,6 +2391,8 @@ static int fsl_micfil_probe(struct platform_device *pdev)
 
 	/* set default rate to first value in available vad rates */
 	micfil->vad_rate_index = 0;
+	/* init HWVAD enable/disable spinlock */
+	spin_lock_init(&micfil->hwvad_lock);
 
 	platform_set_drvdata(pdev, micfil);
 

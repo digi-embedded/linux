@@ -155,6 +155,7 @@ static const struct of_device_id fsl_rpmsg_i2s_ids[] = {
 	{ .compatible = "fsl,imx8mq-rpmsg-i2s"},
 	{ .compatible = "fsl,imx8qxp-rpmsg-i2s"},
 	{ .compatible = "fsl,imx8qm-rpmsg-i2s"},
+	{ .compatible = "fsl,imx8mn-rpmsg-i2s"},
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, fsl_rpmsg_i2s_ids);
@@ -164,14 +165,21 @@ static void rpmsg_i2s_work(struct work_struct *work)
 	struct work_of_rpmsg *work_of_rpmsg;
 	struct i2s_info *i2s_info;
 	bool is_period_done = false;
+	unsigned long flags;
+	struct i2s_rpmsg msg;
 
 	work_of_rpmsg = container_of(work, struct work_of_rpmsg, work);
 	i2s_info = work_of_rpmsg->i2s_info;
 
+	spin_lock_irqsave(&i2s_info->lock[0], flags);
 	if (i2s_info->period_done_msg_enabled[0]) {
-		i2s_send_message(&i2s_info->period_done_msg[0], i2s_info);
+		memcpy(&msg, &i2s_info->period_done_msg[0], sizeof(struct i2s_rpmsg_s));
 		i2s_info->period_done_msg_enabled[0] = false;
-	}
+		spin_unlock_irqrestore(&i2s_info->lock[0], flags);
+
+		i2s_send_message(&msg, i2s_info);
+	} else
+		spin_unlock_irqrestore(&i2s_info->lock[0], flags);
 
 	if (i2s_info->period_done_msg_enabled[1]) {
 		i2s_send_message(&i2s_info->period_done_msg[1], i2s_info);
@@ -186,8 +194,10 @@ static void rpmsg_i2s_work(struct work_struct *work)
 	if (!is_period_done)
 		i2s_send_message(&work_of_rpmsg->msg, i2s_info);
 
+	spin_lock_irqsave(&i2s_info->wq_lock, flags);
 	i2s_info->work_read_index++;
 	i2s_info->work_read_index %= WORK_MAX_NUM;
+	spin_unlock_irqrestore(&i2s_info->wq_lock, flags);
 }
 
 static int fsl_rpmsg_i2s_probe(struct platform_device *pdev)
@@ -212,7 +222,7 @@ static int fsl_rpmsg_i2s_probe(struct platform_device *pdev)
 		audioindex = 0;
 
 	/* Setup work queue */
-	i2s_info->rpmsg_wq = create_singlethread_workqueue("rpmsg_i2s");
+	i2s_info->rpmsg_wq = alloc_ordered_workqueue("rpmsg_i2s", WQ_HIGHPRI | WQ_UNBOUND | WQ_FREEZABLE);
 	if (i2s_info->rpmsg_wq == NULL) {
 		dev_err(&pdev->dev, "workqueue create failed\n");
 		return -ENOMEM;
@@ -238,6 +248,7 @@ static int fsl_rpmsg_i2s_probe(struct platform_device *pdev)
 	mutex_init(&i2s_info->i2c_lock);
 	spin_lock_init(&i2s_info->lock[0]);
 	spin_lock_init(&i2s_info->lock[1]);
+	spin_lock_init(&i2s_info->wq_lock);
 
 	if (of_device_is_compatible(pdev->dev.of_node,
 				    "fsl,imx7ulp-rpmsg-i2s")) {
@@ -279,6 +290,24 @@ static int fsl_rpmsg_i2s_probe(struct platform_device *pdev)
 					SNDRV_PCM_FMTBIT_DSD_U8 |
 					SNDRV_PCM_FMTBIT_DSD_U16_LE |
 					SNDRV_PCM_FMTBIT_DSD_U32_LE;
+
+		fsl_rpmsg_i2s_dai.playback.rates = rpmsg_i2s->rates;
+		fsl_rpmsg_i2s_dai.playback.formats = rpmsg_i2s->formats;
+		fsl_rpmsg_i2s_dai.capture.rates = rpmsg_i2s->rates;
+		fsl_rpmsg_i2s_dai.capture.formats = rpmsg_i2s->formats;
+	}
+
+	if (of_device_is_compatible(pdev->dev.of_node,
+				    "fsl,imx8mn-rpmsg-i2s")) {
+		rpmsg_i2s->codec_dummy = 1;
+		rpmsg_i2s->version = 2;
+		rpmsg_i2s->rates = SNDRV_PCM_RATE_32000 | SNDRV_PCM_RATE_44100 |
+				   SNDRV_PCM_RATE_48000 | SNDRV_PCM_RATE_88200 |
+				   SNDRV_PCM_RATE_96000 | SNDRV_PCM_RATE_176400 |
+				   SNDRV_PCM_RATE_192000;
+		rpmsg_i2s->formats = SNDRV_PCM_FMTBIT_S16_LE |
+					SNDRV_PCM_FMTBIT_S24_LE |
+					SNDRV_PCM_FMTBIT_S32_LE;
 
 		fsl_rpmsg_i2s_dai.playback.rates = rpmsg_i2s->rates;
 		fsl_rpmsg_i2s_dai.playback.formats = rpmsg_i2s->formats;
@@ -341,7 +370,6 @@ static int fsl_rpmsg_i2s_suspend(struct device *dev)
 	struct i2s_rpmsg *rpmsg_tx;
 	struct i2s_rpmsg *rpmsg_rx;
 
-	flush_workqueue(i2s_info->rpmsg_wq);
 	rpmsg_tx = &i2s_info->rpmsg[I2S_TX_SUSPEND];
 	rpmsg_rx = &i2s_info->rpmsg[I2S_RX_SUSPEND];
 

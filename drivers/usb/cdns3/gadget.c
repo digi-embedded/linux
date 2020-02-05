@@ -643,14 +643,27 @@ int cdns3_ep_run_transfer(struct cdns3_endpoint *priv_ep,
 	/* set incorrect Cycle Bit for first trb*/
 	control = priv_ep->pcs ? 0 : TRB_CYCLE;
 	do {
+		u32 length;
+		u8 td_size = 0;
+
 		/* fill TRB */
 		control |= TRB_TYPE(TRB_NORMAL);
 		trb->buffer = TRB_BUFFER(request->num_sgs == 0
 				? trb_dma : request->sg[sg_iter].dma_address);
+		if (likely(!request->num_sgs))
+			length = request->length;
+		else
+			length = request->sg[sg_iter].length;
 
-		trb->length = TRB_BURST_LEN(16/*priv_ep->trb_burst_size*/) |
-		    TRB_LEN(request->num_sgs == 0 ?
-				request->length : request->sg[sg_iter].length);
+		if (priv_dev->dev_ver == DEV_VER_V2)
+			td_size = DIV_ROUND_UP(length,
+					       priv_ep->endpoint.maxpacket);
+
+		trb->length = TRB_BURST_LEN(16) | TRB_LEN(length);
+		if (priv_dev->gadget.speed == USB_SPEED_SUPER)
+			trb->length |= TRB_TDL_SS_SIZE(td_size);
+		else
+			control |= TRB_TDL_HS_SIZE(td_size);
 
 		pcs = priv_ep->pcs ? TRB_CYCLE : 0;
 
@@ -1039,7 +1052,9 @@ static void cdns3_check_usb_interrupt_proceed(struct cdns3_device *priv_dev,
 	/* Disconnection detected */
 	if (usb_ists & (USB_ISTS_DIS2I | USB_ISTS_DISI)) {
 		if (priv_dev->gadget_driver &&
-		    priv_dev->gadget_driver->disconnect) {
+		    priv_dev->gadget_driver->disconnect &&
+			priv_dev->gadget.state ==
+				USB_STATE_CONFIGURED) {
 			spin_unlock(&priv_dev->lock);
 			priv_dev->gadget_driver->disconnect(&priv_dev->gadget);
 			spin_lock(&priv_dev->lock);
@@ -1053,7 +1068,9 @@ static void cdns3_check_usb_interrupt_proceed(struct cdns3_device *priv_dev,
 	/* reset*/
 	if (usb_ists & (USB_ISTS_UWRESI | USB_ISTS_UHRESI | USB_ISTS_U2RESI)) {
 		if (priv_dev->gadget_driver &&
-		    priv_dev->gadget_driver->reset) {
+		    priv_dev->gadget_driver->reset &&
+			priv_dev->gadget.state ==
+				USB_STATE_CONFIGURED) {
 			spin_unlock(&priv_dev->lock);
 			priv_dev->gadget_driver->reset(&priv_dev->gadget);
 			spin_lock(&priv_dev->lock);
@@ -1087,11 +1104,18 @@ static irqreturn_t cdns3_device_irq_handler(struct cdns3 *cdns)
 
 	/* check USB device interrupt */
 	reg = readl(&priv_dev->regs->usb_ists);
-	writel(reg, &priv_dev->regs->usb_ists);
-
 	if (reg) {
-		cdns3_check_usb_interrupt_proceed(priv_dev, reg);
-		ret = IRQ_HANDLED;
+		/* After masking interrupts the new interrupts won't be
+		 * reported in usb_ists/ep_ists. In order to not lose some
+		 * of them driver disables only detected interrupts.
+		 * They will be enabled ASAP after clearing source of
+		 * interrupt. This an unusual behavior only applies to
+		 * usb_ists register.
+		 */
+		reg = ~reg & readl(&priv_dev->regs->usb_ien);
+		/* mask deferred interrupt. */
+		writel(reg, &priv_dev->regs->usb_ien);
+		ret = IRQ_WAKE_THREAD;
 	}
 
 	/* check endpoint interrupt */
@@ -1129,6 +1153,14 @@ static irqreturn_t cdns3_device_thread_irq_handler(struct cdns3 *cdns)
 
 	priv_dev = cdns->gadget_dev;
 	spin_lock_irqsave(&priv_dev->lock, flags);
+
+	reg = readl(&priv_dev->regs->usb_ists);
+	if (reg) {
+		writel(reg, &priv_dev->regs->usb_ists);
+		writel(USB_IEN_INIT, &priv_dev->regs->usb_ien);
+		cdns3_check_usb_interrupt_proceed(priv_dev, reg);
+		ret = IRQ_HANDLED;
+	}
 
 	reg = readl(&priv_dev->regs->ep_ists);
 
@@ -1237,10 +1269,11 @@ void cdns3_ep_config(struct cdns3_endpoint *priv_ep)
 
 	switch (priv_ep->type) {
 	case USB_ENDPOINT_XFER_INT:
-		ep_cfg = EP_CFG_EPTYPE(USB_ENDPOINT_XFER_INT);
-		break;
 	case USB_ENDPOINT_XFER_BULK:
-		ep_cfg = EP_CFG_EPTYPE(USB_ENDPOINT_XFER_BULK);
+		ep_cfg = EP_CFG_EPTYPE(priv_ep->type);
+		if (priv_dev->dev_ver == DEV_VER_V2 && !priv_ep->dir)
+			ep_cfg |= EP_CFG_TDL_CHK;
+
 		break;
 	default:
 		ep_cfg = EP_CFG_EPTYPE(USB_ENDPOINT_XFER_ISOC);
@@ -1419,6 +1452,7 @@ void cdns3_gadget_ep_free_request(struct usb_ep *ep,
 		priv_req->aligned_buf->in_use = 0;
 
 	trace_cdns3_free_request(priv_req);
+	request = NULL;
 	kfree(priv_req);
 }
 
@@ -1495,7 +1529,7 @@ static int cdns3_gadget_ep_enable(struct usb_ep *ep,
 	 * buffer for unblocking on-chip FIFO buffer. This flag will be cleared
 	 * if before first DESCMISS interrupt the DMA will be armed.
 	 */
-	if (quirk_internal_buffer) {
+	if (quirk_internal_buffer && (priv_dev->dev_ver < DEV_VER_V2)) {
 		if (!priv_ep->dir && priv_ep->type != USB_ENDPOINT_XFER_ISOC) {
 			priv_ep->flags |= EP_QUIRK_EXTRA_BUF_DET;
 			reg |= EP_STS_EN_DESCMISEN;
@@ -1507,8 +1541,6 @@ static int cdns3_gadget_ep_enable(struct usb_ep *ep,
 	cdns3_set_register_bit(&priv_dev->regs->ep_cfg, EP_CFG_ENABLE);
 
 	ep->desc = desc;
-	priv_ep->flags &= ~(EP_PENDING_REQUEST | EP_STALL |
-			    EP_QUIRK_EXTRA_BUF_EN);
 	priv_ep->flags |= EP_ENABLED | EP_UPDATE_EP_TRBADDR;
 	priv_ep->wa1_set = 0;
 	priv_ep->enqueue = 0;
@@ -1548,8 +1580,7 @@ static int cdns3_gadget_ep_disable(struct usb_ep *ep)
 	priv_ep = ep_to_cdns3_ep(ep);
 	priv_dev = priv_ep->cdns3_dev;
 
-	if (dev_WARN_ONCE(priv_dev->dev, !(priv_ep->flags & EP_ENABLED),
-			  "%s is already disabled\n", priv_ep->name))
+	if (!(priv_ep->flags & EP_ENABLED) || (priv_ep->endpoint.desc == NULL))
 		return 0;
 
 	pm_runtime_get_sync(priv_dev->dev);
@@ -1576,11 +1607,10 @@ static int cdns3_gadget_ep_disable(struct usb_ep *ep)
 
 	while (!list_empty(&priv_ep->descmiss_req_list)) {
 		priv_req = cdns3_next_priv_request(&priv_ep->descmiss_req_list);
-
 		kfree(priv_req->request.buf);
+		list_del_init(&priv_req->list);
 		cdns3_gadget_ep_free_request(&priv_ep->endpoint,
 					     &priv_req->request);
-		list_del_init(&priv_req->list);
 	}
 
 	while (!list_empty(&priv_ep->deferred_req_list)) {
@@ -1592,8 +1622,9 @@ static int cdns3_gadget_ep_disable(struct usb_ep *ep)
 
 	priv_ep->descmis_req = NULL;
 
-	ep->desc = NULL;
-	priv_ep->flags &= ~EP_ENABLED;
+	priv_ep->endpoint.desc = NULL;
+	priv_ep->flags = 0;
+	priv_ep->flags |= EP_CLAIMED;
 
 	spin_unlock_irqrestore(&priv_dev->lock, flags);
 	pm_runtime_put_sync(priv_dev->dev);
@@ -1713,6 +1744,9 @@ static int cdns3_gadget_ep_queue(struct usb_ep *ep, struct usb_request *request,
 	priv_ep = ep_to_cdns3_ep(ep);
 	priv_dev = priv_ep->cdns3_dev;
 
+	if (!priv_ep->endpoint.desc)
+		return -EINVAL;
+
 	spin_lock_irqsave(&priv_dev->lock, flags);
 
 	ret = __cdns3_gadget_ep_queue(ep, request, gfp_flags);
@@ -1804,6 +1838,9 @@ found:
 
 not_found:
 	spin_unlock_irqrestore(&priv_dev->lock, flags);
+	if (ep == priv_dev->gadget.ep0)
+		flush_work(&priv_dev->pending_status_wq);
+
 	return ret;
 }
 
@@ -1828,6 +1865,11 @@ int cdns3_gadget_ep_set_halt(struct usb_ep *ep, int value)
 
 	cdns3_select_ep(priv_dev, ep->desc->bEndpointAddress);
 	if (value) {
+		if (!list_empty(&priv_ep->pending_req_list)) {
+			ret = -EAGAIN;
+			goto finish;
+		}
+
 		cdns3_ep_stall_flush(priv_ep);
 	} else {
 		priv_ep->flags &= ~EP_WEDGE;
@@ -1924,12 +1966,14 @@ static void cdns3_gadget_config(struct cdns3_device *priv_dev)
 
 	/* enable interrupts for endpoint 0 (in and out) */
 	writel(EP_IEN_EP_OUT0 | EP_IEN_EP_IN0, &regs->ep_ien);
+	priv_dev->dev_ver = readl(&priv_dev->regs->usb_cap6);
+	priv_dev->dev_ver = GET_DEV_BASE_VERSION(priv_dev->dev_ver);
 
 	/*
-	 *Driver need modify LFPS minimal U1 Exit time for 0x00024505 revision
-	 * of controller
+	 * Driver needs to modify LFPS minimal U1 Exit time for DEV_VER_TI_V1
+	 * revision of controller.
 	 */
-	if (priv_dev->dev_ver == 0x00024505) {
+	if (priv_dev->dev_ver == DEV_VER_TI_V1) {
 		u32 reg = readl(&regs->dbg_link1);
 
 		reg &= ~DBG_LINK1_LFPS_MIN_GEN_U1_EXIT_MASK;
@@ -1942,6 +1986,9 @@ static void cdns3_gadget_config(struct cdns3_device *priv_dev)
 	writel(USB_IEN_INIT, &regs->usb_ien);
 	writel(USB_CONF_CLK2OFFDS | USB_CONF_L1DS, &regs->usb_conf);
 	writel(USB_CONF_DMULT, &regs->usb_conf);
+	if (priv_dev->dev_ver == DEV_VER_V2)
+		writel(USB_CONF2_EN_TDL_TRB, &regs->usb_conf2);
+
 	cdns3_gadget_pullup(&priv_dev->gadget, 1);
 }
 
@@ -1981,25 +2028,37 @@ static int cdns3_gadget_udc_stop(struct usb_gadget *gadget)
 {
 	struct cdns3_device *priv_dev = gadget_to_cdns3_device(gadget);
 	struct cdns3_endpoint *priv_ep;
-	u32 bEndpointAddress;
 	struct usb_ep *ep;
+	unsigned long flags;
 	int ret = 0;
+	struct usb_request *request;
 
+	spin_lock_irqsave(&priv_dev->lock, flags);
 	priv_dev->gadget_driver = NULL;
 
+	priv_dev->status_completion_no_call = 0;
 	priv_dev->onchip_mem_allocated_size = 0;
 	priv_dev->out_mem_is_allocated = 0;
 	priv_dev->gadget.speed = USB_SPEED_UNKNOWN;
+	list_for_each_entry(ep, &priv_dev->gadget.ep_list, ep_list) {
+		priv_ep = ep_to_cdns3_ep(ep);
+		priv_ep->flags &= ~EP_CLAIMED;
+	}
+
+	spin_unlock_irqrestore(&priv_dev->lock, flags);
+	if (!priv_dev->start_gadget)
+		return ret;
 
 	list_for_each_entry(ep, &priv_dev->gadget.ep_list, ep_list) {
 		priv_ep = ep_to_cdns3_ep(ep);
-		bEndpointAddress = priv_ep->num | priv_ep->dir;
-		cdns3_select_ep(priv_dev, bEndpointAddress);
-		writel(EP_CMD_EPRST, &priv_dev->regs->ep_cmd);
-		ret = cdns3_handshake(&priv_dev->regs->ep_cmd,
-				      EP_CMD_EPRST, 0, 100);
+		usb_ep_disable(ep);
 		cdns3_free_trb_pool(priv_ep);
 	}
+
+	priv_ep = priv_dev->eps[0];
+	request = cdns3_next_request(&priv_ep->pending_req_list);
+	if (request)
+		list_del_init(&request->list);
 
 	/* disable interrupt for device */
 	writel(0, &priv_dev->regs->usb_ien);

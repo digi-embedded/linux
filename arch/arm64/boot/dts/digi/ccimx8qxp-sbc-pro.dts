@@ -279,12 +279,13 @@
 
 /* PCIE (Mini Card) */
 &pcieb {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_pcieb_mini_card>;
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&pinctrl_reg_3v3_pcie>, <&pinctrl_pcieb_mini_card>;
+	pinctrl-1 = <&pinctrl_reg_3v3_pcie_sleep>;
 	ext_osc = <1>;
 	reset-gpio = <&gpio3 16 GPIO_ACTIVE_LOW>; /* PCIE_RESET_N */
 	disable-gpio = <&gpio0 30 GPIO_ACTIVE_HIGH>; /* PCIE_DIS_N */
-	status = "okay";
+	status = "disabled";
 };
 
 /* Audio support */
@@ -311,15 +312,13 @@
 
 /*
  * Uncomment to enable MCA ADC channels on Expansion connector:
- *  - MCA_IO5 (channel 5)
- *  - MCA_IO6 (channel 6)
  *  - MCA_IO7 (channel 7)
  *  - MCA_IO8 (channel 8)
  *  - MCA_IO14 (channel 14)
  * Edit adc-ch-list to include the ADC channels that you want to enable.
  */
 // &mca_adc {
-//	digi,adc-ch-list = <5 6 7 8 14>;
+//	digi,adc-ch-list = <7 8 14>;
 //	digi,adc-vref = <3000000>;
 // };
 

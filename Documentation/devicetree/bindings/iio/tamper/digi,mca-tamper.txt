@@ -6,6 +6,7 @@ Required properties:
 - compatible: must be one of
   "digi,mca-cc6ul-tamper".
   "digi,mca-cc8x-tamper".
+  "digi,mca-cc8m-tamper".
 
 Optional properties:
 - tamper-if-list: list of enabled tamper interfaces. Interfaces 0 and 1 are for
@@ -15,6 +16,23 @@ Optional properties:
 
 Example:
 
-	&mca_tamper {
-		digi,tamper-if-list = <0 1 2 3>;
+	mca_cc6ul: mca@7e {
+		mca_tamper: tamper {
+			compatible = "digi,mca-cc6ul-tamper";
+			digi,tamper-if-list = <0 1 2 3>;
+		};
+	};
+
+	mca_cc8x: mca@63 {
+		mca_tamper: tamper {
+			compatible = "digi,mca-cc8x-tamper";
+			digi,tamper-if-list = <0 1 2 3>;
+		};
+	};
+
+	mca_cc8m: mca@63 {
+		mca_tamper: tamper {
+			compatible = "digi,mca-cc8m-tamper";
+			digi,tamper-if-list = <0 1 2 3>;
+		};
 	};
