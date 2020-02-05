@@ -575,7 +575,7 @@ static void dma_tx_work(struct work_struct *w)
 			dev_err(dev, "DMA mapping error for TX.\n");
 			goto err_out;
 		}
-		desc = dmaengine_prep_slave_sg(chan, sgl, sport->dma_tx_nents,
+		desc = dmaengine_prep_slave_sg(chan, sgl, ret,
 						DMA_MEM_TO_DEV, DMA_PREP_INTERRUPT);
 		if (!desc) {
 			dev_err(dev, "We cannot prepare for the TX slave dma!\n");
@@ -1973,7 +1973,7 @@ imx_console_setup(struct console *co, char *options)
 
 	retval = clk_prepare(sport->clk_per);
 	if (retval)
-		clk_disable_unprepare(sport->clk_ipg);
+		clk_unprepare(sport->clk_ipg);
 
 error_console:
 	return retval;
