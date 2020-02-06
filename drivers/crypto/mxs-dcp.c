@@ -33,7 +33,6 @@
 
 #define DCP_ALIGNMENT	64
 
-
 /*
  * Null hashes to align with hw behavior on imx6sl and ull
  * these are flipped for consistency with hw output

@@ -382,6 +382,10 @@ static int genpd_power_off(struct generic_pm_domain *genpd, bool one_dev_on,
 		genpd->state_idx = 0;
 	}
 
+	/* Default to shallowest state. */
+	if (!genpd->gov)
+		genpd->state_idx = 0;
+
 	if (genpd->power_off) {
 		int ret;
 
@@ -1633,6 +1637,8 @@ int pm_genpd_init(struct generic_pm_domain *genpd,
 		ret = genpd_set_default_power_state(genpd);
 		if (ret)
 			return ret;
+	} else if (!gov) {
+		pr_warn("%s : no governor for states\n", genpd->name);
 	}
 
 	mutex_lock(&gpd_list_lock);
