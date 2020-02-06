@@ -111,7 +111,7 @@ config FSL_OTP
 
 config FSL_OTP_WRITE
 	bool "Writing support for Freescale On-Chip OTP Memory"
-	depends on FSL_OTP
+	depends on FSL_OTP && !ARCH_FSL_IMX8MN
 	help
 	  If you say Y here, you will enable write support for Freescale
 	  On-Chip OTP Memory Support.
@@ -616,4 +616,3 @@ source "drivers/char/xillybus/Kconfig"
 
 source "drivers/char/imx_amp/Kconfig"
 endmenu
-
