@@ -1,5 +1,5 @@
 /*
- * Copyright 2016, 2017 Digi International, Inc.
+ * Copyright 2016-2020 Digi International, Inc.
  *
  * The code contained herein is licensed under the GNU General Public
  * License. You may obtain a copy of the GNU General Public License
@@ -9,106 +9,5 @@
  * http://www.gnu.org/copyleft/gpl.html
  */
 
-/dts-v1/;
-#include <dt-bindings/input/input.h>
-#include <dt-bindings/interrupt-controller/irq.h>
-/* i.MX6 UltraLite CPU */
-#include "imx6ul.dtsi"
-/* ConnectCore 6UL (wireless/bluetooth variant) */
-#include "imx6ul-ccimx6ul-wb.dtsi"
-/* ConnectCore 6UL StarterBoard */
-#include "imx6ul-ccimx6ulstarter.dtsi"
-
-/*
- * Include in adc-ch-list the ADC channels (from 0 to 9) that you want to
- * enable. Note that the iomux has to be configured accordingly in pinctrl_adc1
- * to configure the pad for ADC operation
- */
-&adc1 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_adc1>;
-	adc-ch-list = <4>;
-	status = "okay";
-};
-
-/* ECSPI3 (as master - Raspberry PI Expansion header) */
-&ecspi3 {
-	status = "okay";
-
-	/*
-	 * Add your slave devices here. Next is an example of spidev.
-	 * Expect a harmless kernel warning if you enable spidev as slave.
-	 */
-	spidev@0 {
-		reg = <0>;
-		compatible = "spidev";
-		spi-max-frequency = <1000000>;
-	};
-};
-
-&fec1 {
-	status = "okay";
-};
-
-/* CAN1 (Raspberry PI Expansion header) */
-&can1 {
-	status = "okay";
-};
-
-/* I2C2 (Raspberry PI Expansion header and Grove connector) */
-&i2c2 {
-	status = "okay";
-};
-
-/* MCA IO0 connected to Grove ADC connector */
-&mca_adc {
-	digi,adc-ch-list = <0>;
-	digi,adc-vref = <3000000>;
-};
-
-/* Uncomment to Enable Tamper detection. There are 2 digital (0 and 1) and 2
- * analog (2 and 3) tamper interfaces.
- */
-//&mca_tamper {
-//	digi,tamper-if-list = <0 1 2 3>;
-//};
-
-/* PWM1 (Raspberry PI Expansion header) */
-&pwm1 {
-	status = "okay";
-};
-
-/* UART4 (Raspberry PI Expansion header) */
-&uart4 {
-	status = "okay";
-};
-
-/* UART5 (Console) */
-&uart5 {
-	status = "okay";
-};
-
-&usbotg1 {
-	status = "okay";
-};
-
-&usbotg2 {
-	status = "okay";
-};
-
-/* USDHC2 (microSD) */
-&usdhc2 {
-	status = "okay";
-};
-
-/* Pin mux configuration */
-&iomuxc {
-	imx6ul-ccimx6ul {
-		pinctrl_adc1: adc1grp {
-			fsl,pins = <
-				/* GPIO1_4/ADC1_IN4 (pin 7 of the expansion header) */
-				MX6UL_PAD_GPIO1_IO04__GPIO1_IO04        0xb0
-			>;
-		};
-	};
-};
+ /* Digi ConnectCore 6UL WiFi-Bluetooth SBC Express */
+ #include "imx6ul-ccimx6ulstarter-wb.dts"
