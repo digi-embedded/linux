@@ -1934,6 +1934,7 @@ static void clk_reparent(struct clk_core *core, struct clk_core *new_parent)
 	core->parent = new_parent;
 }
 
+static const struct clk_ops clk_nodrv_ops;
 static struct clk_core *__clk_set_parent_before(struct clk_core *core,
 					   struct clk_core *parent)
 {
@@ -1962,7 +1963,8 @@ static struct clk_core *__clk_set_parent_before(struct clk_core *core,
 
 	/* enable old_parent & parent if CLK_OPS_PARENT_ENABLE is set */
 	if (core->flags & CLK_OPS_PARENT_ENABLE) {
-		clk_core_prepare_enable(old_parent);
+		if (old_parent && old_parent->ops != &clk_nodrv_ops)
+			clk_core_prepare_enable(old_parent);
 		clk_core_prepare_enable(parent);
 	}
 
@@ -1996,7 +1998,8 @@ static void __clk_set_parent_after(struct clk_core *core,
 	/* re-balance ref counting if CLK_OPS_PARENT_ENABLE is set */
 	if (core->flags & CLK_OPS_PARENT_ENABLE) {
 		clk_core_disable_unprepare(parent);
-		clk_core_disable_unprepare(old_parent);
+		if (old_parent && old_parent->ops != &clk_nodrv_ops)
+			clk_core_disable_unprepare(old_parent);
 	}
 }
 
