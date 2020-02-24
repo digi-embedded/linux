@@ -454,7 +454,7 @@
 		clocks = <&clk IMX8QXP_24MHZ>;
 		clock-names = "csi_mclk";
 		csi_id = <0>;
-		rst-gpios = <&gpio3 21 GPIO_ACTIVE_HIGH>;
+		rst-gpios = <&gpio3 21 GPIO_ACTIVE_LOW>;
 		mclk = <24000000>;
 		mclk_source = <0>;
 		mipi_csi;
