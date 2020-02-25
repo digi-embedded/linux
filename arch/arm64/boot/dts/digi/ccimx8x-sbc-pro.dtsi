@@ -77,6 +77,7 @@
 			gpio = <&mca_gpio 5 GPIO_ACTIVE_HIGH>;
 			enable-active-high;
 			vin-supply = <&reg_3v3>;
+			regulator-boot-on;
 		};
 
 		reg_1v8_ext: regulator@2 {
@@ -88,6 +89,7 @@
 			gpio = <&mca_gpio 6 GPIO_ACTIVE_HIGH>;
 			enable-active-high;
 			vin-supply = <&reg_1v8>;
+			regulator-boot-on;
 		};
 
 		reg_3v3_eth0: regulator@3 {
