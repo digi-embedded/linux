@@ -437,6 +437,7 @@ static int mxc_gpio_probe(struct platform_device *pdev)
 	struct resource *iores;
 	int irq_base;
 	int err;
+	char portname[10];
 
 	mxc_gpio_get_hw(pdev);
 
@@ -492,6 +493,8 @@ static int mxc_gpio_probe(struct platform_device *pdev)
 	port->gc.to_irq = mxc_gpio_to_irq;
 	port->gc.base = (pdev->id < 0) ? of_alias_get_id(np, "gpio") * 32 :
 					     pdev->id * 32;
+	sprintf(portname, "gpio%d", of_alias_get_id(np, "gpio") + 1);
+	port->gc.label = portname;
 
 	err = devm_gpiochip_add_data(&pdev->dev, &port->gc, port);
 	if (err)
