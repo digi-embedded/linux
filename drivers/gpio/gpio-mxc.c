@@ -590,6 +590,7 @@ static int mxc_gpio_probe(struct platform_device *pdev)
 	int irq_count;
 	int irq_base = 0;
 	int err;
+	char portname[10];
 #ifdef CONFIG_GPIO_MXC_PAD_WAKEUP
 	int i;
 #endif
@@ -713,6 +714,8 @@ static int mxc_gpio_probe(struct platform_device *pdev)
 	port->gc.free = mxc_gpio_free;
 	port->gc.parent = &pdev->dev;
 	port->gc.to_irq = mxc_gpio_to_irq;
+	sprintf(portname, "gpio%d", of_alias_get_id(np, "gpio") + 1);
+	port->gc.label = portname;
 	port->gc.base = (pdev->id < 0) ? of_alias_get_id(np, "gpio") * 32 :
 					     pdev->id * 32;
 
