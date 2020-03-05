@@ -267,6 +267,11 @@ DTC_FLAGS += -Wnode_name_chars_strict \
 	-Wproperty_name_chars_strict
 endif
 
+# This flag adds additional symbols to device tree blobs, making it possible to
+# apply overlays to existing blobs. As a side effect, the overall size of all
+# device tree blobs is slightly larger.
+DTC_FLAGS += -@
+
 DTC_FLAGS += $(DTC_FLAGS_$(basetarget))
 
 # Generate an assembly file to wrap the output of the device tree compiler
