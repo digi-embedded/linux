@@ -59,6 +59,7 @@ enum mca_gpio_type {
 
 struct mca_gpio_data {
 	enum mca_gpio_type devtype;
+	char label[16];
 };
 #endif
 
@@ -473,7 +474,6 @@ static int mca_gpio_irq_setup(struct mca_gpio *gpio)
 }
 
 static struct gpio_chip reference_gc = {
-	.label			= "mca-gpio",
 	.owner			= THIS_MODULE,
 	.get			= mca_gpio_get,
 	.set			= mca_gpio_set,
@@ -536,6 +536,9 @@ static int mca_gpio_probe(struct platform_device *pdev)
 			ret = -ENODEV;
 			goto err;
 		}
+
+		/* Set controller label */
+		gpio->gc.label = devdata->label;
 		/* Get the list of IOs that can wake up from power off */
 		if (of_find_property(np, "pwroff-wakeup-capable-ios", NULL)) {
 			/* Disable all and enable those specified in the DT */
@@ -606,15 +609,19 @@ static int mca_gpio_remove(struct platform_device *pdev)
 static struct mca_gpio_data mca_gpio_devdata[] = {
 	[CC6UL_MCA_GPIO] = {
 		.devtype = CC6UL_MCA_GPIO,
+		.label = "mca-gpio"
 	},
 	[CC8X_MCA_GPIO] = {
 		.devtype = CC8X_MCA_GPIO,
+		.label = "mca-gpio"
 	},
 	[CC8M_MCA_GPIO] = {
 		.devtype = CC8M_MCA_GPIO,
+		.label = "mca-gpio"
 	},
 	[IOEXP_MCA_GPIO] = {
 		.devtype = IOEXP_MCA_GPIO,
+		.label = "ioexp-gpio"
 	},
 };
 
@@ -661,4 +668,3 @@ MODULE_AUTHOR("Digi International Inc.");
 MODULE_DESCRIPTION("GPIO device driver for MCA of ConnectCore Modules");
 MODULE_LICENSE("GPL v2");
 MODULE_ALIAS("platform:" MCA_DRVNAME_GPIO);
-
