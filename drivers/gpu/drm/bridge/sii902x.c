@@ -176,6 +176,7 @@ struct sii902x {
 	struct gpio_desc *reset_gpio;
 	struct i2c_mux_core *i2cmux;
 	struct regulator_bulk_data supplies[2];
+	struct edid *edid;
 	/*
 	 * Mutex protects audio and video functions from interfering
 	 * each other, by keeping their i2c command sequences atomic.
@@ -286,6 +287,8 @@ static int sii902x_get_modes(struct drm_connector *connector)
 
 	mutex_lock(&sii902x->mutex);
 
+	kfree(sii902x->edid);
+	sii902x->edid = NULL;
 	edid = drm_get_edid(connector, sii902x->i2cmux->adapter[0]);
 	drm_connector_update_edid_property(connector, edid);
 	if (edid) {
@@ -293,7 +296,7 @@ static int sii902x_get_modes(struct drm_connector *connector)
 			output_mode = SII902X_SYS_CTRL_OUTPUT_HDMI;
 
 		num = drm_add_edid_modes(connector, edid);
-		kfree(edid);
+		sii902x->edid = edid;
 	}
 
 	ret = drm_display_info_set_bus_formats(&connector->display_info,
@@ -343,6 +346,7 @@ static void sii902x_bridge_disable(struct drm_bridge *bridge)
 static void sii902x_bridge_enable(struct drm_bridge *bridge)
 {
 	struct sii902x *sii902x = bridge_to_sii902x(bridge);
+	u8 output_mode = SII902X_SYS_CTRL_OUTPUT_DVI;
 
 	mutex_lock(&sii902x->mutex);
 
@@ -351,6 +355,14 @@ static void sii902x_bridge_enable(struct drm_bridge *bridge)
 			   SII902X_AVI_POWER_STATE_D(0));
 	regmap_update_bits(sii902x->regmap, SII902X_SYS_CTRL_DATA,
 			   SII902X_SYS_CTRL_PWR_DWN, 0);
+
+	if (sii902x->edid) {
+		if (drm_detect_hdmi_monitor(sii902x->edid))
+			output_mode = SII902X_SYS_CTRL_OUTPUT_HDMI;
+	}
+
+	regmap_update_bits(sii902x->regmap, SII902X_SYS_CTRL_DATA,
+			   SII902X_SYS_CTRL_OUTPUT_MODE, output_mode);
 
 	mutex_unlock(&sii902x->mutex);
 }
