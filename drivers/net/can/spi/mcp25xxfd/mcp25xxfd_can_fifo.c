@@ -142,8 +142,8 @@ static int mcp25xxfd_can_fifo_setup_rxfilter(struct mcp25xxfd_can_priv *cpriv)
 	for (c = 0, f = cpriv->fifos.rx.start; c < cpriv->fifos.rx.count;
 	     c++, f++) {
 		/* set up filter config - we can use the mask of filter 0 */
-		filter_con[c] = MCP25XXFD_CAN_FIFOCON_FLTEN(0) |
-			(f << MCP25XXFD_CAN_FILCON_SHIFT(0));
+		filter_con[c] = MCP25XXFD_CAN_FLTCON_FLTEN(0) |
+			(f << MCP25XXFD_CAN_FLTCON_SHIFT(0));
 	}
 
 	/* and set up filter control */
