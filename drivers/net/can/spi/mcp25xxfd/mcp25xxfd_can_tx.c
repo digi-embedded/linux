@@ -357,72 +357,13 @@ mcp25xxfd_can_tx_handle_int_tefif_conservative(struct mcp25xxfd_can_priv *cpriv)
 	return 0;
 }
 
-static int
-mcp25xxfd_can_tx_handle_int_tefif_optimized(struct mcp25xxfd_can_priv *cpriv,
-					    u32 finished)
-{
-	int i, fifo, count, ret;
-
-	/* count the number of fifos that have terminated */
-	for (i = 0, fifo = cpriv->fifos.tx.start, count = 0;
-	     i < cpriv->fifos.tx.count; i++, fifo++)
-		if (finished & BIT(fifo))
-			count++;
-
-	/* read them in one go if possible
-	 * we also assume that we have count(TEF) >= count(TX-FIFOS)
-	 * this may require 2 reads when we wrap arround
-	 * (that is unless count(TEF) == count(TX-FIFOS))
-	 */
-	ret = mcp25xxfd_can_tx_tef_read(cpriv, cpriv->fifos.tef.index, count);
-	if (ret)
-		return ret;
-
-	/* update stats */
-	MCP25XXFD_DEBUGFS_STATS_INCR(cpriv, tef_optimized_reads);
-	i = min_t(int, MCP25XXFD_CAN_TEF_READ_BINS - 1, count - 1);
-	MCP25XXFD_DEBUGFS_STATS_INCR(cpriv, tef_optimized_read_sizes[i]);
-
-	/* now iterate those */
-	for (i = 0, fifo = cpriv->fifos.tx.start; i < cpriv->fifos.tx.count;
-	     i++, fifo++) {
-		if (finished & BIT(fifo)) {
-			ret = mcp25xxfd_can_tx_handle_int_tefif_fifo(cpriv,
-								     false);
-			if (ret)
-				return ret;
-		}
-	}
-
-	return 0;
-}
-
 int mcp25xxfd_can_tx_handle_int_tefif(struct mcp25xxfd_can_priv *cpriv)
 {
-	unsigned long flags;
-	u32 finished;
-
 	if (!(cpriv->status.intf & MCP25XXFD_CAN_INT_TEFIF))
 		return 0;
 
 	MCP25XXFD_DEBUGFS_STATS_INCR(cpriv, int_tef_count);
 
-	spin_lock_irqsave(&cpriv->fifos.tx_queue->lock, flags);
-
-	/* compute finished fifos and clear them immediately */
-	finished = (cpriv->fifos.tx_queue->in_can_transfer ^
-		    cpriv->status.txreq) &
-		cpriv->fifos.tx_queue->in_can_transfer;
-
-	spin_unlock_irqrestore(&cpriv->fifos.tx_queue->lock, flags);
-
-	/* run in optimized mode if possible */
-	if (finished)
-		return mcp25xxfd_can_tx_handle_int_tefif_optimized(cpriv,
-								   finished);
-	/* otherwise play it safe */
-	netdev_warn(cpriv->can.dev,
-		    "Something is wrong - we got a TEF interrupt but we were not able to detect a finished fifo\n");
 	return mcp25xxfd_can_tx_handle_int_tefif_conservative(cpriv);
 }
 
