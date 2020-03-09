@@ -21,6 +21,8 @@ static const char *const stm32_compat[] __initconst = {
 	"st,stm32mp131",
 	"st,stm32mp133",
 	"st,stm32mp135",
+	"st,stm32mp151",
+	"st,stm32mp153",
 	"st,stm32mp157",
 	NULL
 };
