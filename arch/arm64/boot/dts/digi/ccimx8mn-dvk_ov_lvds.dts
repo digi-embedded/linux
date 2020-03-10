@@ -1,0 +1,20 @@
+/dts-v1/;
+/plugin/;
+
+/ {
+	/* Enable the LVDS bridge */
+	fragment@0 {
+		target = <&dsi_lvds_bridge>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+
+	/* Disable the HDMI bridge */
+	fragment@1 {
+		target = <&lt_bridge>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+};
