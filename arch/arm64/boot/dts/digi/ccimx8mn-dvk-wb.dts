@@ -352,7 +352,7 @@
 		interrupts = <6 IRQ_TYPE_LEVEL_HIGH>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_lvds>;
-		status = "okay";
+		status = "disabled";
 
 		display-timings {
 			native-mode = <&lvds0_g101evn010>;
