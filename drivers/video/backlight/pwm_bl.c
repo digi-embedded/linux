@@ -431,31 +431,6 @@ static bool pwm_backlight_is_linear(struct platform_pwm_backlight_data *data)
 
 static int pwm_backlight_initial_power_state(const struct pwm_bl_data *pb)
 {
-	struct device_node *node = pb->dev->of_node;
-
-	/* Not booted with device tree or no phandle link to the node */
-	if (!node || !node->phandle)
-		return FB_BLANK_UNBLANK;
-
-	/*
-	 * If the driver is probed from the device tree and there is a
-	 * phandle link pointing to the backlight node, it is safe to
-	 * assume that another driver will enable the backlight at the
-	 * appropriate time. Therefore, if it is disabled, keep it so.
-	 */
-
-	/* if the enable GPIO is disabled, do not enable the backlight */
-	if (pb->enable_gpio && gpiod_get_value_cansleep(pb->enable_gpio) == 0)
-		return FB_BLANK_POWERDOWN;
-
-	/* The regulator is disabled, do not enable the backlight */
-	if (!regulator_is_enabled(pb->power_supply))
-		return FB_BLANK_POWERDOWN;
-
-	/* The PWM is disabled, keep it like this */
-	if (!pwm_is_enabled(pb->pwm))
-		return FB_BLANK_POWERDOWN;
-
 	return FB_BLANK_UNBLANK;
 }
 
