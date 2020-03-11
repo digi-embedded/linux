@@ -17,6 +17,7 @@ dtb-$(CONFIG_ARCH_FSL_IMX8QXP) += ccimx8dx-mfg-interim.dtb \
 
 dtb-$(CONFIG_ARCH_FSL_IMX8MN) += ccimx8mn-dvk.dtb \
 				  ccimx8mn-dvk-wb.dtb \
+				  ccimx8mn-mfg-dvk-wb.dtb \
 
 always		:= $(dtb-y)
 subdir-y	:= $(dts-dirs)
