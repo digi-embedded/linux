@@ -355,39 +355,22 @@
 		status = "okay";
 
 		display-timings {
-			native-mode = <&lvds0_g101evn010>;
+			native-mode = <&mipi_analyzer>;
 
-			/* AUO G101EVN01.0 */
-			lvds0_g101evn010: timing@0 {
-				clock-frequency = <69000000>;
-				hactive = <1280>;
-				vactive = <800>;
-				hfront-porch = <120>;
-				hback-porch = <1>;
-				hsync-len = <8>;
-				vback-porch = <10>;
-				vfront-porch = <1>;
-				vsync-len = <6>;
-				hsync-active = <1>;
-				vsync-active = <1>;
-				de-active = <1>;
-				pixelclk-active = <0>;
-			};
-
-			/* Fusion 10" F10A-0102 */
-			lvds0_hsd101pfw2: timing@1 {
-				clock-frequency = <45000000>;
-				hactive = <1024>;
-				vactive = <600>;
-				hfront-porch = <120>;
-				hback-porch = <1>;
-				hsync-len = <8>;
-				vback-porch = <10>;
-				vfront-porch = <1>;
-				vsync-len = <6>;
-				hsync-active = <1>;
-				vsync-active = <1>;
-				de-active = <1>;
+			/* MIPI Analyzer */
+			mipi_analyzer: timing@0 {
+				clock-frequency = <31500000>;
+				hactive = <640>;
+				vactive = <480>;
+				hback-porch = <4>;
+				hfront-porch = <10>;
+				vback-porch = <34>;
+				vfront-porch = <20>;
+				hsync-len = <2>;
+				vsync-len = <2>;
+				hsync-active = <0>;
+				vsync-active = <0>;
+				de-active = <0>;
 				pixelclk-active = <0>;
 			};
 		};
@@ -395,24 +378,6 @@
 		port {
 			dsi_lvds_bridge_in: endpoint {
 				remote-endpoint = <&mipi_dsi_lvds_out>;
-			};
-		};
-	};
-
-	lt_bridge: lt8912@48 {
-		compatible = "lontium,lt8912";
-		reg = <0x48>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_lt8912>;
-		reset-gpios = <&gpio3 7 GPIO_ACTIVE_LOW>;
-		hpd-gpios = <&gpio3 9 GPIO_ACTIVE_HIGH>;
-		digi,dsi-lanes = <4>;
-		status = "okay";
-
-		port {
-			lt8912_1_in: endpoint {
-				/* add lanes */
-				remote-endpoint = <&mipi_dsi_hdmi_out>;
 			};
 		};
 	};
