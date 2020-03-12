@@ -17,7 +17,7 @@
 
 /* i.MX8MN CPU */
 #include "../freescale/imx8mn.dtsi"
-/* Digi ConnectCore 8M Nano (non-WiFi variant) */
+/* Digi ConnectCore 8M Nano */
 #include "ccimx8mn.dtsi"
 
 / {
