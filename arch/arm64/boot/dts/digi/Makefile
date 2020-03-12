@@ -16,6 +16,7 @@ dtb-$(CONFIG_ARCH_MXC) += ccimx8dx-mfg-interim.dtb \
 				  ccimx8qxp-sbc-pro.dtb \
 
 dtb-$(CONFIG_ARCH_MXC) += ccimx8mn-dvk.dtb \
-				  ccimx8mn-dvk-wb.dtb \
-				  ccimx8mn-mfg-dvk-wb.dtb \
+				  ccimx8mn-mfg-dvk.dtb \
 				  ccimx8mn-dvk_ov_lvds.dtbo \
+				  ccimx8mn_ov_wifi.dtbo \
+				  ccimx8mn_ov_bt.dtbo \

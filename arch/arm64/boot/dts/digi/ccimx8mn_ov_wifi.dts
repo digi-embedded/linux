@@ -1,0 +1,53 @@
+/*
+ * Copyright 2020 Digi International Inc.
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+/dts-v1/;
+/plugin/;
+
+/ {
+	/* Add the "wireless" node so the wifi driver gets loaded */
+	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			wireless {
+				/* U-Boot will fill in the MAC address here */
+			};
+		};
+	};
+
+	/* Enable the RF regulator */
+	fragment@1 {
+		target = <&reg_3v3_rf>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+
+	/* Enable the WL regulator */
+	fragment@2 {
+		target = <&reg_rf_wl_en>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+
+	/* Enable USDHC1 (Wireless) */
+	fragment@3 {
+		target = <&usdhc1>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+};
