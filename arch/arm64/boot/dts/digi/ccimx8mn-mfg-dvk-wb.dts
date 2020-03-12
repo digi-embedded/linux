@@ -470,12 +470,6 @@
 	status = "okay";
 
 	port@1 {
-		mipi_dsi_hdmi_out: endpoint {
-			remote-endpoint = <&lt8912_1_in>;
-		};
-	};
-
-	port@2 {
 		mipi_dsi_lvds_out: endpoint {
 			remote-endpoint = <&dsi_lvds_bridge_in>;
 		};
