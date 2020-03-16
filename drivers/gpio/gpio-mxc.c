@@ -591,6 +591,7 @@ static int mxc_gpio_probe(struct platform_device *pdev)
 	int irq_base = 0;
 	int err;
 	char portname[10];
+	int index;
 #ifdef CONFIG_GPIO_MXC_PAD_WAKEUP
 	int i;
 #endif
@@ -714,8 +715,16 @@ static int mxc_gpio_probe(struct platform_device *pdev)
 	port->gc.free = mxc_gpio_free;
 	port->gc.parent = &pdev->dev;
 	port->gc.to_irq = mxc_gpio_to_irq;
-	sprintf(portname, "gpio%d", of_alias_get_id(np, "gpio") + 1);
-	port->gc.label = portname;
+	index = of_alias_get_id(np, "gpio");
+	if (index >= 0) {
+		if (!of_machine_is_compatible("fsl,imx8qxp") &&
+		    !of_machine_is_compatible("fsl,imx8dxp")) {
+			/* On CPUs other than i.MX8X port index starts at 1 */
+			index++;
+		}
+		sprintf(portname, "gpio%d", index);
+		port->gc.label = portname;
+	}
 	port->gc.base = (pdev->id < 0) ? of_alias_get_id(np, "gpio") * 32 :
 					     pdev->id * 32;
 
