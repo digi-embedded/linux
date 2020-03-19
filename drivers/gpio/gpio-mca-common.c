@@ -454,6 +454,8 @@ int mca_gpio_probe(struct platform_device *pdev, struct device *mca_dev,
 	}
 	gpio->gc = reference_gc;
 	gpio->gc.of_node = pdev->dev.of_node;
+	if (!strcmp(dt_compat, "digi,mca-ioexp-gpio"))
+		gpio->gc.label = "ioexp-gpio";
 	gpio->gc.parent = &pdev->dev;
 	platform_set_drvdata(pdev, gpio);
 
