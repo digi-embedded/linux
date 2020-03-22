@@ -44,9 +44,6 @@
 #define CLOCK_DATA_LEN	(MCA_RTC_COUNT_SEC - MCA_RTC_COUNT_YEAR_L + 1)
 #define ALARM_DATA_LEN	(MCA_RTC_ALARM_SEC - MCA_RTC_ALARM_YEAR_L + 1)
 
-#define READ_RTC_RETRIES  3
-#define WRITE_RTC_RETRIES 3
-
 #ifdef CONFIG_OF
 enum mca_rtc_type {
 	CC6UL_MCA_RTC,
@@ -203,126 +200,34 @@ static int mca_rtc_ioctl(struct device *dev, unsigned int cmd, unsigned long arg
 static int mca_rtc_read_time(struct device *dev, struct rtc_time *tm)
 {
 	struct mca_rtc *rtc = dev_get_drvdata(dev);
-	u8 data[2][CLOCK_DATA_LEN] = { 0 };
-	u8 index = 0;
-	u8 retry_cnt = 0;
-	bool matched = false;
+	u8 data[CLOCK_DATA_LEN] = { [0 ... (CLOCK_DATA_LEN - 1)] = 0 };
 	int ret;
 
 	ret = regmap_bulk_read(rtc->mca->regmap, MCA_RTC_COUNT_YEAR_L,
-			       data[index], CLOCK_DATA_LEN);
+			       data, CLOCK_DATA_LEN);
 	if (ret < 0) {
 		dev_err(dev, "Failed to read RTC time data: %d\n", ret);
 		return ret;
 	}
 
-	do {
-		index = index ? 0 : 1;
-
-		ret = regmap_bulk_read(rtc->mca->regmap, MCA_RTC_COUNT_YEAR_L,
-				       data[index], CLOCK_DATA_LEN);
-		if (ret < 0) {
-			dev_err(dev, "Failed to read RTC time. Rty=%d ret=%d\n",
-				retry_cnt, ret);
-			return ret;
-		}
-
-		mca_data_to_tm(data[index], tm);
-
-		if (memcmp(data[0], data[1], CLOCK_DATA_LEN)) {
-			struct rtc_time tm_old = { 0 };
-			time64_t seconds_diff;
-
-			/* Mismatch */
-
-			mca_data_to_tm(data[index ? 0 : 1], &tm_old);
-
-			seconds_diff = rtc_tm_sub(tm, &tm_old);
-
-			/* We'll accept new sample one second newer than old */
-			if (seconds_diff != 1) {
-				u8 *data_old = data[index ? 0 : 1];
-				u8 *data_new = data[index];
-
-				dev_err(dev, "Mismatch reading RTC time (rty: %d):\n",
-					retry_cnt);
-				dev_err(dev, "old: %x, %x, %x, %x, %x, %x, %x\n",
-					data_old[0], data_old[1], data_old[2],
-					data_old[3], data_old[4], data_old[5],
-					data_old[6]);
-				dev_err(dev, "new: %x, %x, %x, %x, %x, %x, %x\n",
-					data_new[0], data_new[1], data_new[2],
-					data_new[3], data_new[4], data_new[5],
-					data_new[6]);
-			} else {
-				matched = true;
-			}
-		} else {
-			matched = true;
-		}
-	} while (!matched && retry_cnt++ < READ_RTC_RETRIES);
-
-	if (matched)
-		ret = rtc_valid_tm(tm);
-	else
-		ret = -EINVAL;
-
-	return ret;
+	mca_data_to_tm(data, tm);
+	return rtc_valid_tm(tm);
 }
 
 static int mca_rtc_set_time(struct device *dev, struct rtc_time *tm)
 {
 	struct mca_rtc *rtc = dev_get_drvdata(dev);
-	u8 data[CLOCK_DATA_LEN] = { 0 };
-	u8 retry_cnt = 0;
-	bool matched = false;
+	u8 data[CLOCK_DATA_LEN] = { [0 ... (CLOCK_DATA_LEN - 1)] = 0 };
 	int ret;
 
 	mca_tm_to_data(tm, data);
 
-	do {
-		struct rtc_time tm_check = { 0 };
-		time64_t seconds_diff;
-
-		ret = regmap_bulk_write(rtc->mca->regmap, MCA_RTC_COUNT_YEAR_L,
-					data, CLOCK_DATA_LEN);
-		if (ret < 0) {
-			dev_err(dev, "Failed to set RTC time. Rty=%d ret=%d\n",
-				retry_cnt, ret);
-			return ret;
-		}
-
-		ret = mca_rtc_read_time(dev, &tm_check);
-		if (ret < 0) {
-			dev_err(dev, "Failed to verify set RTC time. Rty=%d ret=%d\n",
-				retry_cnt, ret);
-			return ret;
-		}
-
-		seconds_diff = rtc_tm_sub(&tm_check, tm);
-
-		/* We'll accept a read time one second newer than the write time */
-		if (seconds_diff !=0 && seconds_diff != 1) {
-			u8 data_check[CLOCK_DATA_LEN] = { 0 };
-
-			mca_tm_to_data(&tm_check, data_check);
-
-			dev_err(dev, "Mismatch writing RTC time (rty: %d):\n",
-				retry_cnt);
-			dev_err(dev, "write: %x, %x, %x, %x, %x, %x, %x\n",
-				data[0], data[1], data[2], data[3],
-				data[4], data[5], data[6]);
-			dev_err(dev, "read: %x, %x, %x, %x, %x, %x, %x\n",
-				data_check[0], data_check[1], data_check[2],
-				data_check[3], data_check[4], data_check[5],
-				data_check[6]);
-		} else {
-			matched = true;
-		}
-	} while (!matched && retry_cnt++ < WRITE_RTC_RETRIES);
-
-	if (!matched)
-		ret = -EINVAL;
+	ret = regmap_bulk_write(rtc->mca->regmap, MCA_RTC_COUNT_YEAR_L,
+				data, CLOCK_DATA_LEN);
+	if (ret < 0) {
+		dev_err(dev, "Failed to set RTC time data: %d\n", ret);
+		return ret;
+	}
 
 	return ret;
 }
@@ -346,51 +251,16 @@ static void mca_rtc_adjust_alarm_time(struct rtc_wkalrm *alrm, bool inc)
 static int mca_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 {
 	struct mca_rtc *rtc = dev_get_drvdata(dev);
-	u8 data[2][CLOCK_DATA_LEN] = { 0 };
-	u8 index = 0;
-	u8 retry_cnt = 0;
-	bool matched = false;
-	unsigned int val;
+	u8 data[CLOCK_DATA_LEN] = { [0 ... (CLOCK_DATA_LEN - 1)] = 0 };
 	int ret;
+	unsigned int val;
 
 	ret = regmap_bulk_read(rtc->mca->regmap, MCA_RTC_ALARM_YEAR_L,
-			       data[index], ALARM_DATA_LEN);
-	if (ret < 0) {
-		dev_err(dev, "Failed to read RTC alarm data: %d\n", ret);
+			       data, ALARM_DATA_LEN);
+	if (ret < 0)
 		return ret;
-	}
 
-	do {
-		index = index ? 0 : 1;
-
-		ret = regmap_bulk_read(rtc->mca->regmap, MCA_RTC_ALARM_YEAR_L,
-				       data[index], ALARM_DATA_LEN);
-		if (ret < 0) {
-			dev_err(dev, "Failed to read RTC alarm data: %d\n", ret);
-			return ret;
-		}
-
-		if (memcmp(data[0], data[1], CLOCK_DATA_LEN)) {
-			u8 *data_old = data[index ? 0 : 1];
-			u8 *data_new = data[index];
-
-			dev_err(dev, "Mismatch reading RTC alarm (rty: %d):\n",
-				retry_cnt);
-			dev_err(dev, "old: %x, %x, %x, %x, %x, %x, %x\n",
-				data_old[0], data_old[1], data_old[2], data_old[3],
-				data_old[4], data_old[5], data_old[6]);
-			dev_err(dev, "new: %x, %x, %x, %x, %x, %x, %x\n",
-				data_new[0], data_new[1], data_new[2], data_new[3],
-				data_new[4], data_new[5], data_new[6]);
-		} else {
-			matched = true;
-		}
-	} while (!matched && retry_cnt++ < READ_RTC_RETRIES);
-
-	if (!matched)
-		return -EINVAL;
-
-	mca_data_to_tm(data[index], &alrm->time);
+	mca_data_to_tm(data, &alrm->time);
 	mca_rtc_adjust_alarm_time(alrm, true);
 
 	/* Enable status */
@@ -436,53 +306,16 @@ exit_alarm_irq:
 static int mca_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 {
 	struct mca_rtc *rtc = dev_get_drvdata(dev);
-	u8 data[CLOCK_DATA_LEN] = { 0 };
-	u8 retry_cnt = 0;
-	bool matched = false;
+	u8 data[CLOCK_DATA_LEN] = { [0 ... (CLOCK_DATA_LEN - 1)] = 0 };
 	int ret;
 
 	mca_rtc_adjust_alarm_time(alrm, false);
 	mca_tm_to_data(&alrm->time, data);
 
-	do {
-		struct rtc_wkalrm alrm_check = { 0 };
-		u8 data_check[CLOCK_DATA_LEN] = { 0 };
-
-		ret = regmap_bulk_write(rtc->mca->regmap, MCA_RTC_ALARM_YEAR_L,
-					data, ALARM_DATA_LEN);
-		if (ret < 0) {
-			dev_err(dev, "Failed to set RTC alarm. Rty=%d ret=%d\n",
-				retry_cnt, ret);
-			return ret;
-		}
-
-		ret = mca_rtc_read_alarm(dev, &alrm_check);
-		if (ret < 0) {
-			dev_err(dev, "Failed to verify set RTC alarm. Rty=%d ret=%d\n",
-				retry_cnt, ret);
-			return ret;
-		}
-
-		mca_rtc_adjust_alarm_time(&alrm_check, false);
-		mca_tm_to_data(&alrm_check.time, data_check);
-
-		if (memcmp(data, data_check, CLOCK_DATA_LEN)) {
-			dev_err(dev, "Mismatch writing RTC alarm (rty: %d):\n",
-				retry_cnt);
-			dev_err(dev, "write: %x, %x, %x, %x, %x, %x, %x\n",
-				data[0], data[1], data[2], data[3],
-				data[4], data[5], data[6]);
-			dev_err(dev, "read: %x, %x, %x, %x, %x, %x, %x\n",
-				data_check[0], data_check[1], data_check[2],
-				data_check[3], data_check[4], data_check[5],
-				data_check[6]);
-		} else {
-			matched = true;
-		}
-	} while (!matched && retry_cnt++ < WRITE_RTC_RETRIES);
-
-	if (!matched)
-		return -EINVAL;
+	ret = regmap_bulk_write(rtc->mca->regmap, MCA_RTC_ALARM_YEAR_L,
+				data, ALARM_DATA_LEN);
+	if (ret < 0)
+		return ret;
 
 	return mca_rtc_alarm_irq_enable(dev, alrm->enabled);
 }
