@@ -173,6 +173,14 @@ static const struct of_device_id scfg_device_ids[] = {
 	{ .compatible = "fsl,ls1046a-scfg", },
 	{}
 };
+
+#define ATECC508A_MAX_DELAY 		1500    /* uS */
+#define ATECC508A_DEFAULT_ADDRESS 	0x60    /* 7 bit addr */
+#define ATECC508A_WATCHDOG_DURATION 	1700  /* Max datasheet value in ms */
+#define ATECC508A_COMMAND_WAKE  	0x00
+#define ATECC508A_COMMAND_SLEEP 	0x01
+#define ATECC508A_COMMAND_IDLE  	0x02
+
 /*
  * sorted list of clock divider, register value pairs
  * taken from table 26-5, p.26-9, Freescale i.MX
@@ -221,6 +229,13 @@ static struct imx_i2c_clk_pair vf610_i2c_clk_div[] = {
 	{ 3840, 0x3F }, { 4096, 0x7B }, { 5120, 0x7D }, { 6144, 0x7E },
 };
 
+enum atecc508a_wa_state {
+	ATECC508A_SLEEPING,
+	ATECC508A_AWAKE,
+	ATECC508A_IDLE,
+	ATECC508A_SLEEP_CMD,
+};
+
 enum imx_i2c_type {
 	IMX1_I2C,
 	IMX21_I2C,
@@ -260,6 +275,11 @@ struct imx_i2c_struct {
 	unsigned int		ifdr; /* IMX_I2C_IFDR */
 	unsigned int		cur_clk;
 	unsigned int		bitrate;
+	enum atecc508a_wa_state	atecc508a_state;
+	unsigned long		atecc508a_timer;
+	unsigned int		atecc508a_awake_delay;
+	unsigned int		atecc508a_sleep_delay;
+	unsigned int		atecc508a_address;
 	const struct imx_i2c_hwdata	*hwdata;
 	struct i2c_bus_recovery_info rinfo;
 
@@ -1280,6 +1300,128 @@ out:
 	return (result < 0) ? result : num;
 }
 
+static int i2c_imx_atecc508a_send_cmd(struct i2c_adapter *adapter, u16 addr,
+				      u8 cmd)
+{
+	struct i2c_msg msg = {
+		.flags	= 0,
+		.len	= 1,
+		.addr	= addr,
+		.buf	= &cmd,
+	};
+
+	return i2c_imx_xfer(adapter, &msg, 1);
+}
+
+static int i2c_imx_xfer_atecc508a_workaround(struct i2c_adapter *adapter,
+					      struct i2c_msg *msgs, int num)
+{
+	int result, result_atecc508a;
+	struct imx_i2c_struct *i2c_imx = i2c_get_adapdata(adapter);
+	int i;
+	struct timespec start = { 0 };
+
+	/* Check inhibition timer and clean it if expired */
+	if (i2c_imx->atecc508a_state == ATECC508A_AWAKE &&
+	    time_after(jiffies, i2c_imx->atecc508a_timer))
+		i2c_imx->atecc508a_state = ATECC508A_SLEEPING;
+
+#define I2C_FLAGS_WRITE (!(msgs[i].flags & I2C_M_RD))
+
+#define WAKE_REQUEST  (msgs[i].addr == 0x00 && \
+		       I2C_FLAGS_WRITE && \
+		       msgs[i].len == 1 && \
+		       msgs[i].buf[0] == ATECC508A_COMMAND_WAKE)
+
+#define SLEEP_REQUEST (msgs[i].addr == i2c_imx->atecc508a_address && \
+		       I2C_FLAGS_WRITE && \
+		       msgs[i].len == 1 && \
+		       msgs[i].buf[0] == ATECC508A_COMMAND_SLEEP)
+
+#define IDLE_REQUEST  (msgs[i].addr == i2c_imx->atecc508a_address && \
+		       I2C_FLAGS_WRITE && \
+		       msgs[i].len == 1 && \
+		       msgs[i].buf[0] == ATECC508A_COMMAND_IDLE)
+
+	/* Check requests done to the cryptochip */
+	for (i = 0; i < num; i++) {
+		if (WAKE_REQUEST) {
+			/* Disable workarround for the cryptochip watchdog time */
+			i2c_imx->atecc508a_timer = jiffies +
+				     msecs_to_jiffies(ATECC508A_WATCHDOG_DURATION);
+			i2c_imx->atecc508a_state = ATECC508A_AWAKE;
+		} else if (SLEEP_REQUEST) {
+			/* Enable the workarround after sending current command */
+			i2c_imx->atecc508a_state = ATECC508A_SLEEP_CMD;
+		} else if (IDLE_REQUEST) {
+			/* Disable indefinitely until next wake command */
+			i2c_imx->atecc508a_state = ATECC508A_IDLE;
+		}
+	}
+
+	if (i2c_imx->atecc508a_state == ATECC508A_SLEEPING) {
+		/*
+		 * Wake the cryptochip device before communication with the other
+		 * devices on the system bus.
+		 * Wake is achieved by writing a 0x00 to address 0x00 (so SDA line
+		 * is hold low longer than 60uS)
+		 */
+		result_atecc508a = i2c_imx_atecc508a_send_cmd(adapter, 0, 0);
+		if (result_atecc508a != -ENXIO) {
+			dev_warn(&i2c_imx->adapter.dev,
+				 "<%s> Could not awake atecc508a. err %d\n",
+				 __func__, result_atecc508a);
+		} else {
+			/* If configured, start measuring sleep delay */
+			if (i2c_imx->atecc508a_sleep_delay)
+				getnstimeofday(&start);
+			/* If configured, perform awake delay */
+			if (i2c_imx->atecc508a_awake_delay)
+				udelay(i2c_imx->atecc508a_awake_delay);
+		}
+	}
+
+	/* Perform user transfer */
+	result = i2c_imx_xfer(adapter, msgs, num);
+
+	if (i2c_imx->atecc508a_state == ATECC508A_SLEEPING) {
+		/* If configured, perform sleep delay */
+		if (i2c_imx->atecc508a_sleep_delay) {
+			struct timespec end, elapsed, cfg_delay, remaining;
+
+			/* Calculate elapsed time */
+			getnstimeofday(&end);
+			elapsed = timespec_sub(end, start);
+
+			/* Calculate remaining time */
+			cfg_delay.tv_sec = 0;
+			cfg_delay.tv_nsec = i2c_imx->atecc508a_sleep_delay * 1000;
+			remaining = timespec_sub(cfg_delay, elapsed);
+
+			/* If remaining time to sleep, do it here */
+			if (remaining.tv_sec >= 0)
+				udelay(remaining.tv_nsec / 1000);
+		}
+		/*
+		 * Upon completion of communication with the other device a
+		 * cryptochip Sleep command should be issued. (This is to put
+		 * the device into a known state if it did actually wake up).
+		 */
+		result_atecc508a = i2c_imx_atecc508a_send_cmd(adapter,
+						 i2c_imx->atecc508a_address, ATECC508A_COMMAND_SLEEP);
+		if (result_atecc508a != 1) {
+			dev_warn(&i2c_imx->adapter.dev,
+				 "<%s> Could not sleep atecc508a. err %d\n",
+				 __func__, result_atecc508a);
+		}
+	}
+
+	if (i2c_imx->atecc508a_state == ATECC508A_SLEEP_CMD)
+		i2c_imx->atecc508a_state = ATECC508A_SLEEPING;
+
+	return result;
+}
+
 static void i2c_imx_prepare_recovery(struct i2c_adapter *adap)
 {
 	struct imx_i2c_struct *i2c_imx;
@@ -1527,15 +1669,6 @@ static int i2c_imx_unreg_slave(struct i2c_client *client)
 }
 #endif
 
-static const struct i2c_algorithm i2c_imx_algo = {
-	.master_xfer	= i2c_imx_xfer,
-	.functionality	= i2c_imx_func,
-#if IS_ENABLED(CONFIG_I2C_SLAVE)
-	.reg_slave	= i2c_imx_reg_slave,
-	.unreg_slave	= i2c_imx_unreg_slave,
-#endif
-};
-
 static irqreturn_t i2c_imx_isr(int irq, void *dev_id)
 {
 	struct imx_i2c_struct *i2c_imx = dev_id;
@@ -1558,6 +1691,7 @@ static irqreturn_t i2c_imx_isr(int irq, void *dev_id)
 static int i2c_imx_probe(struct platform_device *pdev)
 {
 	struct imx_i2c_struct *i2c_imx;
+	struct i2c_algorithm *i2c_imx_algo;
 	struct resource *res;
 	struct imxi2c_platform_data *pdata = dev_get_platdata(&pdev->dev);
 	void __iomem *base;
@@ -1583,6 +1717,17 @@ static int i2c_imx_probe(struct platform_device *pdev)
 	if (!i2c_imx)
 		return -ENOMEM;
 
+	i2c_imx_algo = devm_kzalloc(&pdev->dev, sizeof(*i2c_imx_algo), GFP_KERNEL);
+	if (!i2c_imx_algo)
+		return -ENOMEM;
+
+	i2c_imx_algo->master_xfer = i2c_imx_xfer;
+	i2c_imx_algo->functionality = i2c_imx_func;
+#if IS_ENABLED(CONFIG_I2C_SLAVE)
+	i2c_imx_algo->reg_slave	= i2c_imx_reg_slave;
+	i2c_imx_algo->unreg_slave = i2c_imx_unreg_slave;
+#endif
+
 	match = device_get_match_data(&pdev->dev);
 	if (match)
 		i2c_imx->hwdata = match;
@@ -1593,12 +1738,16 @@ static int i2c_imx_probe(struct platform_device *pdev)
 	/* Setup i2c_imx driver structure */
 	strlcpy(i2c_imx->adapter.name, pdev->name, sizeof(i2c_imx->adapter.name));
 	i2c_imx->adapter.owner		= THIS_MODULE;
-	i2c_imx->adapter.algo		= &i2c_imx_algo;
+	i2c_imx->adapter.algo		= i2c_imx_algo;
 	i2c_imx->adapter.dev.parent	= &pdev->dev;
 	i2c_imx->adapter.nr		= pdev->id;
 	i2c_imx->adapter.dev.of_node	= pdev->dev.of_node;
 	i2c_imx->base			= base;
 	ACPI_COMPANION_SET(&i2c_imx->adapter.dev, ACPI_COMPANION(&pdev->dev));
+
+	i2c_imx->atecc508a_awake_delay	= 0;
+	i2c_imx->atecc508a_sleep_delay	= 0;
+	i2c_imx->atecc508a_address	= ATECC508A_DEFAULT_ADDRESS;
 
 	/* Get I2C clock */
 	i2c_imx->clk = devm_clk_get(&pdev->dev, NULL);
@@ -1670,6 +1819,44 @@ static int i2c_imx_probe(struct platform_device *pdev)
 		ret = i2c_imx_init_recovery_for_layerscape(i2c_imx, pdev);
 	else
 		ret = i2c_imx_init_recovery_info(i2c_imx, pdev);
+
+	if (of_property_read_bool(pdev->dev.of_node, "digi,atecc508a-workaround")) {
+		i2c_imx_algo->master_xfer = i2c_imx_xfer_atecc508a_workaround;
+
+		i2c_imx->atecc508a_state = ATECC508A_SLEEPING;
+
+		ret = of_property_read_u32(pdev->dev.of_node,
+					   "digi,atecc508a-address",
+					   &i2c_imx->atecc508a_address);
+
+		ret = of_property_read_u32(pdev->dev.of_node,
+					   "digi,atecc508a-awake-delay-uS",
+					   &i2c_imx->atecc508a_awake_delay);
+		if (i2c_imx->atecc508a_awake_delay > ATECC508A_MAX_DELAY)
+			i2c_imx->atecc508a_awake_delay = ATECC508A_MAX_DELAY;
+
+		ret = of_property_read_u32(pdev->dev.of_node,
+					   "digi,atecc508a-sleep-delay-uS",
+					   &i2c_imx->atecc508a_sleep_delay);
+		if (i2c_imx->atecc508a_sleep_delay > ATECC508A_MAX_DELAY)
+			i2c_imx->atecc508a_sleep_delay = ATECC508A_MAX_DELAY;
+
+		dev_info(&pdev->dev, "enabled atecc508a_workaround\n");
+		if (i2c_imx->atecc508a_address != ATECC508A_DEFAULT_ADDRESS)
+			dev_info(&pdev->dev, "atecc508a_address=0x%02X\n",
+				 i2c_imx->atecc508a_address);
+		if (i2c_imx->atecc508a_awake_delay)
+			dev_info(&pdev->dev, "atecc508a_awake_delay=%duS\n",
+				 i2c_imx->atecc508a_awake_delay);
+		if (i2c_imx->atecc508a_sleep_delay)
+			dev_info(&pdev->dev, "atecc508a_sleep_delay=%duS\n",
+				 i2c_imx->atecc508a_sleep_delay);
+	}
+
+	/* Set up chip registers to defaults */
+	imx_i2c_write_reg(i2c_imx->hwdata->i2cr_ien_opcode ^ I2CR_IEN,
+			i2c_imx, IMX_I2C_I2CR);
+	imx_i2c_write_reg(i2c_imx->hwdata->i2sr_clr_opcode, i2c_imx, IMX_I2C_I2SR);
 
 	/* Give it another chance if pinctrl used is not ready yet */
 	if (ret == -EPROBE_DEFER)
