@@ -1102,6 +1102,18 @@ static long gpio_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		if (copy_to_user(ip, &lineinfo, sizeof(lineinfo)))
 			return -EFAULT;
 		return 0;
+	} else if (cmd == GPIO_SET_DEBOUNCE_IOCTL) {
+		struct gpioline_debounce linedebounce;
+		struct gpio_desc *desc;
+
+		if (copy_from_user(&linedebounce, ip, sizeof(linedebounce)))
+			return -EFAULT;
+		if (linedebounce.line_offset >= gdev->ngpio)
+			return -EINVAL;
+
+		desc = &gdev->descs[linedebounce.line_offset];
+
+		return gpiod_set_debounce(desc, linedebounce.debounce_usec);
 	} else if (cmd == GPIO_GET_LINEHANDLE_IOCTL) {
 		return linehandle_create(gdev, ip);
 	} else if (cmd == GPIO_GET_LINEEVENT_IOCTL) {
