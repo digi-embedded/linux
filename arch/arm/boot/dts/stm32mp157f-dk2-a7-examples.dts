@@ -12,3 +12,11 @@
 	model = "STMicroelectronics STM32MP157F-DK2 configured to run Linux A7 examples";
 	compatible = "st,stm32mp157f-dk2-a7-examples", "st,stm32mp157f-dk2", "st,stm32mp157";
 };
+
+&uart7 {
+	status = "okay";
+};
+
+&usart3 {
+	status = "okay";
+};
