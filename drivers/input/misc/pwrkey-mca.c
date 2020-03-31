@@ -192,15 +192,6 @@ static int mca_pwrkey_initialize(struct mca_pwrkey *pwrkey)
 		return ret;
 	}
 
-	ret = regmap_write(pwrkey->mca->regmap, MCA_PWR_KEY_GUARD,
-			   (uint8_t)pwrkey->pwroff_guard_sec);
-	if (ret < 0) {
-		dev_err(pwrkey->mca->dev,
-			"Failed to set guard time 0x%02x, %d\n",
-			(uint8_t)pwrkey->pwroff_guard_sec, ret);
-		return ret;
-	}
-
 	if (pwrkey->key_power)
 		pwrctrl0 |= MCA_PWR_KEY_OFF_EN;
 
@@ -210,8 +201,18 @@ static int mca_pwrkey_initialize(struct mca_pwrkey *pwrkey)
 	if (pwrkey->key_sleep)
 		pwrctrl0 |= MCA_PWR_KEY_SLEEP_EN;
 
-	if (pwrkey->pwroff_guard_sec != 0)
+	if (pwrkey->pwroff_guard_sec != 0) {
 		pwrctrl0 |= MCA_PWR_GUARD_EN;
+
+		ret = regmap_write(pwrkey->mca->regmap, MCA_PWR_KEY_GUARD,
+				   (uint8_t)pwrkey->pwroff_guard_sec);
+		if (ret < 0) {
+			dev_err(pwrkey->mca->dev,
+				"Failed to set guard time 0x%02x, %d\n",
+				(uint8_t)pwrkey->pwroff_guard_sec, ret);
+			return ret;
+		}
+	}
 
 	ret = regmap_write(pwrkey->mca->regmap, MCA_PWR_CTRL_0, pwrctrl0);
 	if (ret < 0) {
@@ -233,7 +234,7 @@ static int of_mca_pwrkey_read_settings(struct device_node *np,
 	/* Get driver configuration data from device tree */
 	pwrkey->debounce_ms = DEFAULT_PWR_KEY_DEBOUNCE;
 	pwrkey->pwroff_delay_sec = DEFAULT_PWR_KEY_DEBOUNCE;
-	pwrkey->pwroff_guard_sec = DEFAULT_PWR_KEY_GUARD;
+	pwrkey->pwroff_guard_sec = 0;
 
 	pwrkey->key_power = of_property_read_bool(np, "digi,key-power");
 	pwrkey->key_power_up = of_property_read_bool(np, "digi,key-power-up");
@@ -270,11 +271,13 @@ static int of_mca_pwrkey_read_settings(struct device_node *np,
 	}
 
 	if (!of_property_read_u32(np, "digi,pwroff-guard-sec", &val)) {
-		if (val <= MAX_PWR_KEY_GUARD)
+		if (val <= MAX_PWR_KEY_GUARD) {
 			pwrkey->pwroff_guard_sec = val;
-		else
+		} else {
 			dev_warn(pwrkey->mca->dev,
 			    "Invalid pwroff-guard-sec value. Using default.\n");
+			pwrkey->pwroff_guard_sec = DEFAULT_PWR_KEY_GUARD;
+		}
 	}
 
 	return 0;
