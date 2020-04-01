@@ -92,7 +92,6 @@ int mca_adc_read_raw(struct iio_dev *indio_dev,
 
 static const struct iio_info mca_adc_info = {
 	.read_raw = mca_adc_read_raw,
-	.driver_module = THIS_MODULE,
 };
 
 static u64 generate_comparator_event(struct mca_adc *adc, int ch)
