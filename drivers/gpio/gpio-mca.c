@@ -250,7 +250,7 @@ static irqreturn_t mca_gpio_irq_handler(int irq, void *data)
 		mask = 1 << i;
 		if (pending_irqs & mask) {
 			/* Ack the irq and call the handler */
-			this_irq = irq_find_mapping(gpio->gc.irqdomain, i + bank * 8);
+			this_irq = irq_find_mapping(gpio->gc.irq.domain, i + bank * 8);
 			ret = regmap_write(gpio->regmap,
 					   GPIO_IRQ_STATUS_REG(bank),
 					   mask);
@@ -389,7 +389,7 @@ static int mca_gpio_to_irq(struct gpio_chip *gc, u32 offset)
 	if (!mca_gpio_is_irq_capable(gpio, offset))
 		return -EINVAL;
 
-	return irq_create_mapping(gc->irqdomain, offset);
+	return irq_create_mapping(gc->irq.domain, offset);
 }
 
 static struct irq_chip mca_gpio_irq_chip = {
