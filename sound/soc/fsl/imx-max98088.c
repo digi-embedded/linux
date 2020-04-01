@@ -201,34 +201,47 @@ static int be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
 	return 0;
 }
 
+SND_SOC_DAILINK_DEFS(hifi,
+	DAILINK_COMP_ARRAY(COMP_EMPTY()),
+	DAILINK_COMP_ARRAY(COMP_CODEC(NULL, "HiFi")),
+	DAILINK_COMP_ARRAY(COMP_EMPTY()));
+
+SND_SOC_DAILINK_DEFS(hifi_fe,
+	DAILINK_COMP_ARRAY(COMP_EMPTY()),
+	DAILINK_COMP_ARRAY(COMP_DUMMY()),
+	DAILINK_COMP_ARRAY(COMP_EMPTY()));
+
+SND_SOC_DAILINK_DEFS(hifi_be,
+	DAILINK_COMP_ARRAY(COMP_EMPTY()),
+	DAILINK_COMP_ARRAY(COMP_CODEC(NULL, "HiFi")),
+	DAILINK_COMP_ARRAY(COMP_DUMMY()));
+
 static struct snd_soc_dai_link imx_max98088_dai[] = {
 	{
 		.name			= "HiFi",
 		.stream_name		= "HiFi",
-		.codec_dai_name		= "HiFi",
 		.ops			= &imx_hifi_ops,
+		SND_SOC_DAILINK_REG(hifi),
 	},
 	{
 		.name			= "HiFi-ASRC-FE",
 		.stream_name		= "HiFi-ASRC-FE",
-		.codec_name		= "snd-soc-dummy",
-		.codec_dai_name		= "snd-soc-dummy-dai",
 		.dynamic		= 1,
 		.ignore_pmdown_time	= 1,
 		.dpcm_playback		= 1,
 		.dpcm_capture		= 1,
+		SND_SOC_DAILINK_REG(hifi_fe),
 	},
 	{
 		.name			= "HiFi-ASRC-BE",
 		.stream_name		= "HiFi-ASRC-BE",
-		.codec_dai_name		= "HiFi",
-		.platform_name		= "snd-soc-dummy",
 		.no_pcm			= 1,
 		.ignore_pmdown_time	= 1,
 		.dpcm_playback		= 1,
 		.dpcm_capture		= 1,
 		.ops			= &imx_hifi_ops,
 		.be_hw_params_fixup	= be_hw_params_fixup,
+		SND_SOC_DAILINK_REG(hifi_be),
 	},
 };
 
@@ -309,17 +322,17 @@ static int imx_max98088_probe(struct platform_device *pdev)
 
 	data->card.dai_link = imx_max98088_dai;
 
-	imx_max98088_dai[0].codec_of_node = codec_np;
-	imx_max98088_dai[0].cpu_dai_name = dev_name(&cpu_pdev->dev);
-	imx_max98088_dai[0].platform_of_node = cpu_np;
+	imx_max98088_dai[0].codecs->of_node = codec_np;
+	imx_max98088_dai[0].cpus->dai_name = dev_name(&cpu_pdev->dev);
+	imx_max98088_dai[0].platforms->of_node = cpu_np;
 
 	if (!asrc_pdev) {
 		data->card.num_links = 1;
 	} else {
-		imx_max98088_dai[1].cpu_of_node = asrc_np;
-		imx_max98088_dai[1].platform_of_node = asrc_np;
-		imx_max98088_dai[2].codec_of_node = codec_np;
-		imx_max98088_dai[2].cpu_dai_name = dev_name(&cpu_pdev->dev);
+		imx_max98088_dai[1].cpus->of_node = asrc_np;
+		imx_max98088_dai[1].platforms->of_node = asrc_np;
+		imx_max98088_dai[2].codecs->of_node = codec_np;
+		imx_max98088_dai[2].cpus->dai_name = dev_name(&cpu_pdev->dev);
 		data->card.num_links = 3;
 
 		ret = of_property_read_u32(asrc_np, "fsl,asrc-rate",
