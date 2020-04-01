@@ -1013,7 +1013,7 @@ static int max98088_dai1_hw_params(struct snd_pcm_substream *substream,
 
 		do_div(ni, (unsigned long long int)(max98088->sysclk /
 		       max98088->prescaler));
-               snd_soc_write(codec, M98088_REG_12_DAI1_CLKCFG_HI,
+               snd_soc_component_write(component, M98088_REG_12_DAI1_CLKCFG_HI,
                        (ni >> 8) & 0x7F);
                snd_soc_component_write(component, M98088_REG_13_DAI1_CLKCFG_LO,
                        ni & 0xFF);
@@ -1082,7 +1082,7 @@ static int max98088_dai2_hw_params(struct snd_pcm_substream *substream,
 
 		do_div(ni, (unsigned long long int)(max98088->sysclk /
 		       max98088->prescaler));
-               snd_soc_write(codec, M98088_REG_1A_DAI2_CLKCFG_HI,
+               snd_soc_component_write(component, M98088_REG_1A_DAI2_CLKCFG_HI,
                        (ni >> 8) & 0x7F);
                snd_soc_component_write(component, M98088_REG_1B_DAI2_CLKCFG_LO,
                        ni & 0xFF);
@@ -1125,7 +1125,7 @@ static int max98088_dai_set_sysclk(struct snd_soc_dai *dai,
 	 */
 	if ((freq >= 10000000) && (freq < 20000000)) {
 		snd_soc_component_write(component, M98088_REG_10_SYS_CLK, 0x10);
-		prescaler = 1
+		prescaler = 1;
 	} else if ((freq >= 20000000) && (freq < 30000000)) {
 		snd_soc_component_write(component, M98088_REG_10_SYS_CLK, 0x20);
 		prescaler = 2;
