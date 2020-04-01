@@ -61,6 +61,7 @@
 #include "gc_hal_kernel_linux.h"
 #include "gc_hal_driver.h"
 
+#include <linux/of.h>
 #include <linux/platform_device.h>
 
 /* Zone used for header/footer. */
@@ -1026,7 +1027,7 @@ static ssize_t gpu_mult_store(struct device *dev,
         return NOTIFY_OK;
     }
 
-    gckHARDWARE_SetFscaleValue(hardware, (gctUINT)gpu_clk_mult);
+    gckHARDWARE_SetFscaleValue(hardware, (gctUINT)gpu_clk_mult, ~0U);
 
     dev_dbg(dev, "gpu clock multiplier set to %d\n", (gctUINT)gpu_clk_mult);
 
