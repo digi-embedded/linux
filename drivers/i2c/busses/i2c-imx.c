@@ -1319,7 +1319,7 @@ static int i2c_imx_xfer_atecc508a_workaround(struct i2c_adapter *adapter,
 	int result, result_atecc508a;
 	struct imx_i2c_struct *i2c_imx = i2c_get_adapdata(adapter);
 	int i;
-	struct timespec start = { 0 };
+	struct timespec64 start = { 0 };
 
 	/* Check inhibition timer and clean it if expired */
 	if (i2c_imx->atecc508a_state == ATECC508A_AWAKE &&
@@ -1374,7 +1374,7 @@ static int i2c_imx_xfer_atecc508a_workaround(struct i2c_adapter *adapter,
 		} else {
 			/* If configured, start measuring sleep delay */
 			if (i2c_imx->atecc508a_sleep_delay)
-				getnstimeofday(&start);
+				ktime_get_real_ts64(&start);
 			/* If configured, perform awake delay */
 			if (i2c_imx->atecc508a_awake_delay)
 				udelay(i2c_imx->atecc508a_awake_delay);
@@ -1387,16 +1387,16 @@ static int i2c_imx_xfer_atecc508a_workaround(struct i2c_adapter *adapter,
 	if (i2c_imx->atecc508a_state == ATECC508A_SLEEPING) {
 		/* If configured, perform sleep delay */
 		if (i2c_imx->atecc508a_sleep_delay) {
-			struct timespec end, elapsed, cfg_delay, remaining;
+			struct timespec64 end, elapsed, cfg_delay, remaining;
 
 			/* Calculate elapsed time */
-			getnstimeofday(&end);
-			elapsed = timespec_sub(end, start);
+			ktime_get_real_ts64(&end);
+			elapsed = timespec64_sub(end, start);
 
 			/* Calculate remaining time */
 			cfg_delay.tv_sec = 0;
 			cfg_delay.tv_nsec = i2c_imx->atecc508a_sleep_delay * 1000;
-			remaining = timespec_sub(cfg_delay, elapsed);
+			remaining = timespec64_sub(cfg_delay, elapsed);
 
 			/* If remaining time to sleep, do it here */
 			if (remaining.tv_sec >= 0)
