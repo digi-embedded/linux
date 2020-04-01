@@ -395,7 +395,6 @@ static const struct attribute_group mca_tamper_analog_attribute_group = {
 };
 
 static const struct iio_info mca_tamper_analog_info = {
-	.driver_module		= THIS_MODULE,
 	.attrs			= &mca_tamper_analog_attribute_group,
 	.read_raw		= &mca_tamper_read_raw,
 };
@@ -414,7 +413,6 @@ static const struct attribute_group mca_tamper_attribute_group = {
 };
 
 static const struct iio_info mca_tamper_info = {
-	.driver_module		= THIS_MODULE,
 	.attrs			= &mca_tamper_attribute_group,
 	.read_raw		= &mca_tamper_read_raw,
 };
