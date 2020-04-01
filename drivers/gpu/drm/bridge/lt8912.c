@@ -23,6 +23,7 @@
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_panel.h>
 #include <drm/drm_mipi_dsi.h>
+#include <drm/drm_probe_helper.h>
 
 struct lt8912 {
 	struct drm_bridge bridge;
@@ -311,7 +312,7 @@ static int lt8912_connector_get_modes(struct drm_connector *connector)
 
 	/* EDID handling */
 	if (edid) {
-		drm_mode_connector_update_edid_property(connector, edid);
+		drm_connector_update_edid_property(connector, edid);
 		num = drm_add_edid_modes(connector, edid);
 	} else {
 		dev_err(lt->dev, "failed to get display EDID data\n");
@@ -359,8 +360,8 @@ static void lt8912_bridge_pre_enable(struct drm_bridge *bridge)
 }
 
 static void lt8912_bridge_mode_set(struct drm_bridge *bridge,
-				   struct drm_display_mode *mode,
-				   struct drm_display_mode *adj)
+				   const struct drm_display_mode *mode,
+				   const struct drm_display_mode *adj)
 {
 	struct lt8912 *lt = bridge_to_lt8912(bridge);
 
@@ -384,7 +385,7 @@ static int lt8912_bridge_attach(struct drm_bridge *bridge)
 	}
 
 	drm_connector_helper_add(connector, &lt8912_connector_helper_funcs);
-	drm_mode_connector_attach_encoder(connector, bridge->encoder);
+	drm_connector_attach_encoder(connector, bridge->encoder);
 
 	ret = lt8912_attach_dsi(lt);
 	return ret;
@@ -574,11 +575,7 @@ static int lt8912_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 
 	lt->bridge.funcs = &lt8912_bridge_funcs;
 	lt->bridge.of_node = dev->of_node;
-	ret = drm_bridge_add(&lt->bridge);
-	if (ret) {
-		dev_err(dev, "failed to add bridge: %d\n", ret);
-		return ret;
-	}
+	drm_bridge_add(&lt->bridge);
 
 	return 0;
 }
