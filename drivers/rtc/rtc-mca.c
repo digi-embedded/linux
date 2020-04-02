@@ -488,7 +488,7 @@ static int mca_rtc_probe(struct platform_device *pdev)
 	}
 
 	/* Register RTC device */
-	rtc->rtc_dev = rtc_device_register(dev_name(&pdev->dev), &pdev->dev,
+	rtc->rtc_dev = devm_rtc_device_register(&pdev->dev, MCA_DRVNAME_RTC,
 					   &mca_rtc_ops, THIS_MODULE);
 	if (IS_ERR(rtc->rtc_dev)) {
 		dev_err(&pdev->dev, "Failed to register RTC device: %ld\n",
@@ -558,7 +558,6 @@ static int mca_rtc_remove(struct platform_device *pdev)
 	if (rtc->irq_alarm >= 0)
 		devm_free_irq(&pdev->dev, rtc->irq_alarm, rtc);
 
-	rtc_device_unregister(rtc->rtc_dev);
 	return 0;
 }
 
