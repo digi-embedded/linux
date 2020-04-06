@@ -11,6 +11,7 @@
 
 / {
 	aliases {
+		ethernet0 = &ethernet0;
 		serial0 = &uart4;
 		serial1 = &usart3;
 		serial2 = &uart7;
@@ -173,6 +174,8 @@
 	phy-mode = "rgmii-id";
 	max-speed = <1000>;
 	phy-handle = <&phy0>;
+	nvmem-cells = <&ethernet_mac_address>;
+	nvmem-cell-names = "mac-address";
 
 	mdio0 {
 		#address-cells = <1>;
