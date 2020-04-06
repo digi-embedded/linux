@@ -605,8 +605,21 @@ static int i2c_imx_set_clk(struct imx_i2c_struct *i2c_imx,
 			    unsigned int i2c_clk_rate)
 {
 	struct imx_i2c_clk_pair *i2c_clk_div = i2c_imx->hwdata->clk_div;
+	struct imxi2c_platform_data *pdata = dev_get_platdata(&i2c_imx->adapter.dev);
 	unsigned int div;
 	int i;
+
+	if (pdata != NULL) {
+		if (pdata->bitrate && pdata->bitrate != i2c_imx->bitrate) {
+			dev_warn(&i2c_imx->adapter.dev,
+				 "<%s> Changing bitrate to %d\n",
+				__func__, pdata->bitrate);
+			i2c_imx->bitrate = pdata->bitrate;
+
+			/* Invalidate previous cur_clk so new divisors are calculated */
+			i2c_imx->cur_clk = 0;
+		}
+	}
 
 	if (i2c_imx->cur_clk == i2c_clk_rate)
 		return 0;

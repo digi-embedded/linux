@@ -24,6 +24,7 @@
 #include <linux/uaccess.h>
 #include <linux/i2c.h>
 #include <linux/syscore_ops.h>
+#include <linux/platform_data/i2c-imx.h>
 
 #include <linux/mfd/mca-common/core.h>
 #include <linux/mfd/mca-cc8/core.h>
@@ -49,23 +50,6 @@ enum lpi2c_imx_mode {
 	FAST_PLUS,	/* 1.0+Mbps */
 	HS,		/* 3.4+Mbps */
 	ULTRA_FAST,	/* 5.0+Mbps */
-};
-
-struct lpi2c_imx_struct {
-	struct i2c_adapter	adapter;
-	int			irq;
-	struct clk		*clk_per;
-	struct clk		*clk_ipg;
-	void __iomem		*base;
-	__u8			*rx_buf;
-	__u8			*tx_buf;
-	struct completion	complete;
-	unsigned int		msglen;
-	unsigned int		delivered;
-	unsigned int		block_data;
-	unsigned int		bitrate;
-	enum lpi2c_imx_mode	mode;
-	unsigned int		hold_time;
 };
 
 static const struct mca_reason last_mca_reset[] = {
@@ -557,22 +541,27 @@ static ssize_t fw_update_show(struct device *dev, struct device_attribute *attr,
 		       gpio_get_value_cansleep(mca->fw_update_gpio));
 }
 
+static struct imxi2c_platform_data i2c_data_mca = { 0 };
+
 static ssize_t fw_update_store(struct device *dev,
 			       struct device_attribute *attr,
 			       const char *buf, size_t count)
 {
 	struct mca_drv *mca = dev_get_drvdata(dev);
+	struct i2c_adapter *i2c_adapter = (struct i2c_adapter *)
+					  dev_get_drvdata(mca->i2c_adapter_dev);
+	struct imxi2c_platform_data *i2c_data = dev_get_platdata(&i2c_adapter->dev);
 	ssize_t status;
 	long value;
 
 	if (!gpio_is_valid(mca->fw_update_gpio))
 		return -EINVAL;
 
-	if (cpu_is_imx8qxp()) {
-		struct lpi2c_imx_struct *lpi2c_imx = dev_get_drvdata(mca->i2c_adapter_dev);
-
-		/* Set i2c bus speed to 100kbps during firmware update */
-		lpi2c_imx->bitrate = 100000;
+	if (i2c_data == NULL) {
+		i2c_data_mca.bitrate = 100000;
+		i2c_adapter->dev.platform_data = &i2c_data_mca;
+	} else {
+		i2c_data->bitrate = 100000;
 	}
 
 	status = kstrtol(buf, 0, &value);
