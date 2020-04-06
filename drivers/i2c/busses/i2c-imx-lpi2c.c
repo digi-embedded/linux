@@ -20,6 +20,7 @@
 #include <linux/of_device.h>
 #include <linux/of_gpio.h>
 #include <linux/pinctrl/consumer.h>
+#include <linux/platform_data/i2c-imx.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <linux/sched.h>
@@ -228,6 +229,16 @@ static int lpi2c_imx_config(struct lpi2c_imx_struct *lpi2c_imx)
 	enum lpi2c_imx_pincfg pincfg;
 	unsigned int temp;
 	unsigned int min_prescaler = 0;
+	struct imxi2c_platform_data *pdata = dev_get_platdata(&lpi2c_imx->adapter.dev);
+
+	if (pdata != NULL) {
+		if (pdata->bitrate && pdata->bitrate != lpi2c_imx->bitrate) {
+			dev_warn(&lpi2c_imx->adapter.dev,
+				 "<%s> Changing bitrate to %d\n",
+				__func__, pdata->bitrate);
+			lpi2c_imx->bitrate = pdata->bitrate;
+		}
+	}
 
 	lpi2c_imx_set_mode(lpi2c_imx);
 
