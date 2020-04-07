@@ -1281,6 +1281,7 @@ static int ov5640_probe(struct i2c_client *client,
 				sensor->rst_active_low ?
 				GPIOF_OUT_INIT_HIGH : GPIOF_OUT_INIT_LOW,
 				"ov5640_mipi_reset");
+		mdelay(20);
 		if (retval < 0) {
 			dev_warn(dev, "Failed to set reset pin\n");
 			return retval;
