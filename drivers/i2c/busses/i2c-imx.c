@@ -275,6 +275,7 @@ struct imx_i2c_struct {
 	unsigned int		ifdr; /* IMX_I2C_IFDR */
 	unsigned int		cur_clk;
 	unsigned int		bitrate;
+	unsigned int		buf_time;
 	enum atecc508a_wa_state	atecc508a_state;
 	unsigned long		atecc508a_timer;
 	unsigned int		atecc508a_awake_delay;
@@ -1284,6 +1285,9 @@ init:
 		}
 		if (result)
 			goto fail0;
+
+		if (i2c_imx->buf_time)
+			udelay(i2c_imx->buf_time);
 	}
 
 fail0:
@@ -1832,6 +1836,11 @@ static int i2c_imx_probe(struct platform_device *pdev)
 		ret = i2c_imx_init_recovery_for_layerscape(i2c_imx, pdev);
 	else
 		ret = i2c_imx_init_recovery_info(i2c_imx, pdev);
+
+	ret = of_property_read_u32(pdev->dev.of_node,
+				   "digi,buffer-time-us", &i2c_imx->buf_time);
+	if (ret)
+		i2c_imx->buf_time = 0;
 
 	if (of_property_read_bool(pdev->dev.of_node, "digi,atecc508a-workaround")) {
 		i2c_imx_algo->master_xfer = i2c_imx_xfer_atecc508a_workaround;
