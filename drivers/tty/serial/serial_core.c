@@ -3411,6 +3411,16 @@ int uart_get_rs485_mode(struct uart_port *port)
 	u32 rs485_delay[2];
 	int ret;
 
+	ret = device_property_read_u32_array(dev, "rs485-rts-delay-ns",
+					     rs485_delay, 2);
+	if (!ret) {
+		rs485conf->delay_rts_before_send_ns = rs485_delay[0];
+		rs485conf->delay_rts_after_send_ns = rs485_delay[1];
+	} else {
+		rs485conf->delay_rts_before_send_ns = 0;
+		rs485conf->delay_rts_after_send_ns = 0;
+	}
+
 	ret = device_property_read_u32_array(dev, "rs485-rts-delay",
 					     rs485_delay, 2);
 	if (!ret) {
