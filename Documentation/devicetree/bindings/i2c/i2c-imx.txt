@@ -34,6 +34,9 @@ Optional properties:
 - digi,atecc508a-sleep-delay-uS : Delay in micro seconds since awake command until
   sleep command. This delay is used to assure the cryptochip is awake when the
   sleep command is sent. If not present, no delay is done.
+- digi,buffer-time-us : Sets the buffer time in microseconds. This is the bus free
+                        time between stop and start conditions. Some peripherals
+                        may require this time to operate properly.
 
 Examples:
 
