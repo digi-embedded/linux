@@ -3464,10 +3464,10 @@ EXPORT_SYMBOL_GPL(uart_get_rs485_mode);
 
 /* Compile-time assertions for serial_rs485 layout */
 static_assert(offsetof(struct serial_rs485, padding) ==
-              (offsetof(struct serial_rs485, delay_rts_after_send) + sizeof(__u32)));
+	      (offsetof(struct serial_rs485, delay_rts_after_send_ns) + sizeof(__u32)));
 static_assert(offsetof(struct serial_rs485, padding1) ==
 	      offsetof(struct serial_rs485, padding[1]));
-static_assert((offsetof(struct serial_rs485, padding[4]) + sizeof(__u32)) ==
+static_assert((offsetof(struct serial_rs485, padding[2]) + sizeof(__u32)) ==
 	      sizeof(struct serial_rs485));
 
 MODULE_DESCRIPTION("Serial driver core");
