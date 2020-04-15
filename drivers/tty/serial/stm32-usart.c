@@ -61,13 +61,37 @@ static void stm32_usart_clr_bits(struct uart_port *port, u32 reg, u32 bits)
 	writel_relaxed(val, port->membase + reg);
 }
 
+static u32 stm32_usart_config_delay_rs485(u32 *cr1, u32 delay, u32 baud,
+					  bool over8, u32 rs485_deat_dedt_max,
+					  struct serial_rs485 *rs485conf)
+{
+	u64 tmp;
+
+	/*
+	 * Compute (de)assertion time by using the delay (in ns), the baud rate
+	 * (in bits/s) and the oversampling (in 1/8 or 1/16 bit)
+	 */
+	tmp = (u64)delay * (u64)baud * 8ULL;
+
+	/* Handle oversampling 16 */
+	if (!over8)
+		tmp = tmp * 2ULL;
+
+	tmp = DIV_ROUND_CLOSEST_ULL(tmp, NSEC_PER_SEC);
+
+	/* Set delay to max value if result is higher than max value */
+	tmp = tmp > rs485_deat_dedt_max ? rs485_deat_dedt_max : tmp;
+
+	return tmp;
+}
+
 static void stm32_usart_config_reg_rs485(u32 *cr1, u32 *cr3,  u32 baud,
 					 struct serial_rs485 *rs485conf)
 {
-	u64 rs485_deat_dedt;
-	u32 delay_ADE, delay_DDE;
+	u32 delay_ADE, delay_DDE, rs485_deat_dedt;
 	u32 rs485_deat_dedt_max = (USART_CR1_DEAT_MASK >> USART_CR1_DEAT_SHIFT);
 	bool over8;
+	u32 tmp;
 
 	/*
 	 * Assertion and deassertion delays (in ns) are computed by the
@@ -86,28 +110,16 @@ static void stm32_usart_config_reg_rs485(u32 *cr1, u32 *cr3,  u32 baud,
 	*cr3 |= USART_CR3_DEM;
 	over8 = *cr1 & USART_CR1_OVER8;
 
-	if (over8)
-		rs485_deat_dedt = (u64)delay_ADE * (u64)baud * 8ULL;
-	else
-		rs485_deat_dedt = (u64)delay_ADE * (u64)baud * 16ULL;
-
-	rs485_deat_dedt = DIV_ROUND_CLOSEST_ULL(rs485_deat_dedt, 1000000000);
-	rs485_deat_dedt = rs485_deat_dedt > rs485_deat_dedt_max ?
-			  rs485_deat_dedt_max : rs485_deat_dedt;
-	rs485_deat_dedt = (rs485_deat_dedt << USART_CR1_DEAT_SHIFT) &
-			   USART_CR1_DEAT_MASK;
+	/* Assertion time */
+	tmp = stm32_usart_config_delay_rs485(cr1, delay_ADE, baud, over8,
+					     rs485_deat_dedt_max, rs485conf);
+	rs485_deat_dedt = (tmp << USART_CR1_DEAT_SHIFT) & USART_CR1_DEAT_MASK;
 	*cr1 |= rs485_deat_dedt;
 
-	if (over8)
-		rs485_deat_dedt = (u64)delay_DDE * (u64)baud * 8ULL;
-	else
-		rs485_deat_dedt = (u64)delay_DDE * (u64)baud * 16ULL;
-
-	rs485_deat_dedt = DIV_ROUND_CLOSEST_ULL(rs485_deat_dedt, 1000000000);
-	rs485_deat_dedt = rs485_deat_dedt > rs485_deat_dedt_max ?
-			  rs485_deat_dedt_max : rs485_deat_dedt;
-	rs485_deat_dedt = (rs485_deat_dedt << USART_CR1_DEDT_SHIFT) &
-			   USART_CR1_DEDT_MASK;
+	/* Deassertion time */
+	tmp = stm32_usart_config_delay_rs485(cr1, delay_DDE, baud, over8,
+					     rs485_deat_dedt_max, rs485conf);
+	rs485_deat_dedt = (tmp << USART_CR1_DEDT_SHIFT) & USART_CR1_DEDT_MASK;
 	*cr1 |= rs485_deat_dedt;
 }
 
