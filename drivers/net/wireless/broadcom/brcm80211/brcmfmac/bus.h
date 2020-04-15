@@ -145,6 +145,19 @@ struct brcmf_bus_stats {
 };
 
 /**
+ * struct brcmf_bt_dev - bt shared SDIO device.
+ *
+ * @ bt_data: bt internal structure data
+ * @ bt_sdio_int_cb: bt registered interrupt callback function
+ * @ bt_use_count: Counter that tracks whether BT is using the bus
+ */
+struct brcmf_bt_dev {
+	void	*bt_data;
+	void	(*bt_sdio_int_cb)(void *data);
+	u32	use_count; /* Counter for tracking if BT is using the bus */
+};
+
+/**
  * struct brcmf_bus - interface structure between common and bus layer
  *
  * @bus_priv: pointer to private bus device.
@@ -162,6 +175,7 @@ struct brcmf_bus_stats {
  * @ops: callbacks for this bus instance.
  * @msgbuf: msgbuf protocol parameters provided by bus layer.
  * @list: member used to add this bus instance to linked list.
+ * @bt_dev: bt shared SDIO device
  */
 struct brcmf_bus {
 	union {
@@ -188,6 +202,9 @@ struct brcmf_bus {
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 16, 0))
 	bool allow_skborphan;
 #endif
+#ifdef CONFIG_BRCMFMAC_BT_SHARED_SDIO
+	struct brcmf_bt_dev *bt_dev;
+#endif /* CONFIG_BRCMFMAC_BT_SHARED_SDIO */
 };
 
 /*

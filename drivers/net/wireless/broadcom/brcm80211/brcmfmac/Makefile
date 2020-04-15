@@ -50,6 +50,8 @@ brcmfmac-$(CONFIG_DMI) += \
 		dmi.o
 brcmfmac-$(CONFIG_ACPI) += \
 		acpi.o
+brcmfmac-${CONFIG_BRCMFMAC_BT_SHARED_SDIO} += \
+		bt_shared_sdio.o
 
 ifeq ($(CONFIG_BRCMFMAC),m)
 obj-m += wcc/
