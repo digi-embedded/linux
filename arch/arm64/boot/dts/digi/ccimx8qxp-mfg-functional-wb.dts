@@ -16,13 +16,13 @@
 /dts-v1/;
 
 /* i.MX8QXP CPU */
-#include "../freescale/fsl-imx8qxp.dtsi"
+#include "../freescale/imx8qxp.dtsi"
 /* Digi ConnectCore 8X (WiFi/bluetooth variant) */
 #include "ccimx8x-wb.dtsi"
 /* Digi ConnectCore 8X Functional test board */
 #include "ccimx8x-mfg-functional.dtsi"
 
-/* MIPI display support */
+/* MIPI display support 
 &mipi_dsi_phy1 {
 	status = "okay";
 };
@@ -45,4 +45,4 @@
 
 &mipi_dsi_bridge2 {
 	status = "okay";
-};
+};*/

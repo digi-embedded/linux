@@ -15,8 +15,9 @@
 
 /dts-v1/;
 
+#include <dt-bindings/usb/pd.h>
 /* i.MX8MN CPU */
-#include "../freescale/fsl-imx8mn.dtsi"
+#include "../freescale/imx8mn.dtsi"
 /* Digi ConnectCore 8M Nano (WiFi/bluetooth variant) */
 #include "ccimx8mn-wb.dtsi"
 
@@ -26,7 +27,6 @@
 	digi,machine,name = "ccimx8mn-dvk";
 
 	chosen {
-		bootargs = "console=ttymxc0,115200 earlycon=ec_imx6q,0x30860000,115200";
 		stdout-path = &uart1;
 	};
 
