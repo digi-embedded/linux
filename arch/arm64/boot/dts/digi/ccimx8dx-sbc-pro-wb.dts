@@ -16,7 +16,7 @@
 /dts-v1/;
 
 /* i.MX8DX CPU */
-#include "../freescale/fsl-imx8dx.dtsi"
+#include "../freescale/imx8dx.dtsi"
 /* Digi ConnectCore 8X (WiFi/bluetooth variant) */
 #include "ccimx8x-wb.dtsi"
 /* Digi ConnectCore 8X SBC Pro */
@@ -42,27 +42,27 @@
 	status = "okay";
 };
 
-&dpr1_channel1 {
+&dc0_dpr1_channel1 {
 	status = "okay";
 };
 
-&dpr1_channel2 {
+&dc0_dpr1_channel2 {
 	status = "okay";
 };
 
-&dpr1_channel3 {
+&dc0_dpr1_channel3 {
 	status = "okay";
 };
 
-&dpr2_channel1 {
+&dc0_dpr2_channel1 {
 	status = "okay";
 };
 
-&dpr2_channel2 {
+&dc0_dpr2_channel2 {
 	status = "okay";
 };
 
-&dpr2_channel3 {
+&dc0_dpr2_channel3 {
 	status = "okay";
 };
 
@@ -117,7 +117,7 @@
 };
 
 /* MIPI-CSI0 I2C available on MIPI Camera connector */
-&i2c0_csi0 {
+&i2c_mipi_csi0 {
 	status = "okay";
 };
 
@@ -130,7 +130,7 @@
 	status = "okay";
 };
 
-&intmux_cm40 {
+&cm40_intmux {
 	status = "okay";
 };
 
@@ -408,35 +408,35 @@
 			 * driver that manages them).
 			 */
 			/* GPIO4_20 */
-			SC_P_USDHC1_VSELECT_LSIO_GPIO4_IO20		0x06000020
+			IMX8QXP_USDHC1_VSELECT_LSIO_GPIO4_IO20		0x06000020
 			/* GPIO4_21 */
-			SC_P_USDHC1_WP_LSIO_GPIO4_IO21			0x06000020
+			IMX8QXP_USDHC1_WP_LSIO_GPIO4_IO21			0x06000020
 			/* SPI0_IRQ_N */
-			SC_P_SPI2_SDO_LSIO_GPIO1_IO01			0x06000020
+			IMX8QXP_SPI2_SDO_LSIO_GPIO1_IO01			0x06000020
 			/* EXP_I2C_IRQ_N */
-			SC_P_QSPI0A_SS1_B_LSIO_GPIO3_IO15		0x06000020
+			IMX8QXP_QSPI0A_SS1_B_LSIO_GPIO3_IO15		0x06000020
 			/* EXP_I2C_GPIO */
-			SC_P_QSPI0A_SS0_B_LSIO_GPIO3_IO14		0x06000020
+			IMX8QXP_QSPI0A_SS0_B_LSIO_GPIO3_IO14		0x06000020
 			/* GPIO4_19 */
-			SC_P_USDHC1_RESET_B_LSIO_GPIO4_IO19		0x06000020
+			IMX8QXP_USDHC1_RESET_B_LSIO_GPIO4_IO19		0x06000020
 			/* GPIO0_12 */
-			SC_P_SPDIF0_EXT_CLK_LSIO_GPIO0_IO12		0x06000020
+			IMX8QXP_SPDIF0_EXT_CLK_LSIO_GPIO0_IO12		0x06000020
 			/* GPIO5_09 */
-			SC_P_ENET0_REFCLK_125M_25M_LSIO_GPIO5_IO09	0x06000020
+			IMX8QXP_ENET0_REFCLK_125M_25M_LSIO_GPIO5_IO09	0x06000020
 
 			/* Remove the pads you wish to use as ADCs */
 			/* ADC_IN0 */
-	//		SC_P_ADC_IN0_LSIO_GPIO1_IO10			0x06000020
+	//		IMX8QXP_ADC_IN0_LSIO_GPIO1_IO10			0x06000020
 			/* ADC_IN1 */
-			SC_P_ADC_IN1_LSIO_GPIO1_IO09			0x06000020
+			IMX8QXP_ADC_IN1_LSIO_GPIO1_IO09			0x06000020
 			/* M40_UART_RX */
-			SC_P_ADC_IN2_LSIO_GPIO1_IO12			0x06000020
+			IMX8QXP_ADC_IN2_LSIO_GPIO1_IO12			0x06000020
 			/* M40_UART_TX */
-			SC_P_ADC_IN3_LSIO_GPIO1_IO11			0x06000020
+			IMX8QXP_ADC_IN3_LSIO_GPIO1_IO11			0x06000020
 			/* ADC_IN4 */
-			SC_P_ADC_IN4_LSIO_GPIO1_IO14			0x06000020
+			IMX8QXP_ADC_IN4_LSIO_GPIO1_IO14			0x06000020
 			/* ADC_IN5 */
-			SC_P_ADC_IN5_LSIO_GPIO1_IO13			0x06000020
+			IMX8QXP_ADC_IN5_LSIO_GPIO1_IO13			0x06000020
 		>;
 	};
 
@@ -444,17 +444,17 @@
 	pinctrl_adc0: adc0grp {
 		fsl,pins = <
 			/* ADC_IN0 */
-			SC_P_ADC_IN0_ADMA_ADC_IN0		0xc0000060
+			IMX8QXP_ADC_IN0_ADMA_ADC_IN0		0xc0000060
 	//		/* ADC_IN1 */
-	//		SC_P_ADC_IN1_ADMA_ADC_IN1		0xc0000060
+	//		IMX8QXP_ADC_IN1_ADMA_ADC_IN1		0xc0000060
 	//		/* M40_UART_RX */
-	//		SC_P_ADC_IN2_ADMA_ADC_IN2		0xc0000060
+	//		IMX8QXP_ADC_IN2_ADMA_ADC_IN2		0xc0000060
 	//		/* M40_UART_TX */
-	//		SC_P_ADC_IN3_ADMA_ADC_IN3		0xc0000060
+	//		IMX8QXP_ADC_IN3_ADMA_ADC_IN3		0xc0000060
 	//		/* ADC_IN4 */
-	//		SC_P_ADC_IN4_ADMA_ADC_IN4		0xc0000060
+	//		IMX8QXP_ADC_IN4_ADMA_ADC_IN4		0xc0000060
 	//		/* ADC_IN5 */
-	//		SC_P_ADC_IN5_ADMA_ADC_IN5		0xc0000060
+	//		IMX8QXP_ADC_IN5_ADMA_ADC_IN5		0xc0000060
 		>;
 	};
 };

@@ -16,7 +16,7 @@
 /dts-v1/;
 
 /* i.MX8MN CPU */
-#include "../freescale/fsl-imx8mn.dtsi"
+#include "../freescale/imx8mn.dtsi"
 /* Digi ConnectCore 8M Nano (WiFi/bluetooth variant) */
 #include "ccimx8mn-wb.dtsi"
 
