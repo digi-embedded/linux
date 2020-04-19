@@ -16,7 +16,7 @@
 /dts-v1/;
 
 /* i.MX8QXP CPU */
-#include "../freescale/fsl-imx8qxp.dtsi"
+#include "../freescale/imx8qxp.dtsi"
 /* Digi ConnectCore 8X (non-WiFi variant) */
 #include "ccimx8x.dtsi"
 /* Digi ConnectCore 8X Functional test board */
@@ -34,11 +34,11 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_pcieb_mini_card>;
 	ext_osc = <1>;
-	reset-gpio = <&gpio4 0 GPIO_ACTIVE_LOW>;
+	reset-gpio = <&lsio_gpio4 0 GPIO_ACTIVE_LOW>;
 	status = "okay";
 };
 
-/* MIPI display support */
+/* MIPI display support
 &mipi_dsi_phy1 {
 	status = "okay";
 };
@@ -61,25 +61,25 @@
 
 &mipi_dsi_bridge2 {
 	status = "okay";
-};
+};*/
 
 /* IOMUX */
 &iomuxc {
 	/* UART1 loopback (4 wires) */
 	pinctrl_lpuart1_4wires: lpuart1grp_4wires {
 		fsl,pins = <
-			SC_P_UART1_TX_ADMA_UART1_TX		0x06000020
-			SC_P_UART1_RX_ADMA_UART1_RX		0x06000020
-			SC_P_UART1_RTS_B_ADMA_UART1_RTS_B	0x06000020
-			SC_P_UART1_CTS_B_ADMA_UART1_CTS_B	0x06000020
+			IMX8QXP_UART1_TX_ADMA_UART1_TX		0x06000020
+			IMX8QXP_UART1_RX_ADMA_UART1_RX		0x06000020
+			IMX8QXP_UART1_RTS_B_ADMA_UART1_RTS_B	0x06000020
+			IMX8QXP_UART1_CTS_B_ADMA_UART1_CTS_B	0x06000020
 		>;
 	};
 
 	/* PCIE (Mini Card) */
 	pinctrl_pcieb_mini_card: pcieagrp_mini_card {
 		fsl,pins = <
-			SC_P_PCIE_CTRL0_PERST_B_LSIO_GPIO4_IO00		0x06000021
-			SC_P_PCIE_CTRL0_WAKE_B_LSIO_GPIO4_IO02		0x04000021
+			IMX8QXP_PCIE_CTRL0_PERST_B_LSIO_GPIO4_IO00		0x06000021
+			IMX8QXP_PCIE_CTRL0_WAKE_B_LSIO_GPIO4_IO02		0x04000021
 		>;
 	};
 };

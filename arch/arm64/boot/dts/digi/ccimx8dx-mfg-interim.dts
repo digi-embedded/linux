@@ -16,7 +16,7 @@
 /dts-v1/;
 
 /* i.MX8DX CPU */
-#include "../freescale/fsl-imx8dx.dtsi"
+#include "../freescale/imx8dx.dtsi"
 /* Digi ConnectCore 8X (non-WiFi variant) */
 #include "ccimx8x.dtsi"
 /* Digi ConnectCore 8X Interim test board */

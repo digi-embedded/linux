@@ -1,4 +1,4 @@
-dtb-$(CONFIG_ARCH_FSL_IMX8QXP) += ccimx8dx-mfg-interim.dtb \
+dtb-$(CONFIG_ARCH_MXC) += ccimx8dx-mfg-interim.dtb \
 				  ccimx8dx-mfg-functional.dtb \
 				  ccimx8dx-mfg-functional-wb.dtb \
 				  ccimx8dx-sbc-pro-wb.dtb \
@@ -15,10 +15,6 @@ dtb-$(CONFIG_ARCH_FSL_IMX8QXP) += ccimx8dx-mfg-interim.dtb \
 				  ccimx8qxp-sbc-pro-wb-mfg.dtb \
 				  ccimx8qxp-sbc-pro.dtb \
 
-dtb-$(CONFIG_ARCH_FSL_IMX8MN) += ccimx8mn-dvk.dtb \
+dtb-$(CONFIG_ARCH_MXC) += ccimx8mn-dvk.dtb \
 				  ccimx8mn-dvk-wb.dtb \
-				  ccimx8mn-mfg-dvk-wb.dtb \
-
-always		:= $(dtb-y)
-subdir-y	:= $(dts-dirs)
-clean-files	:= *.dtb
+				  ccimx8mn-mfg-dvk-wb.dtb

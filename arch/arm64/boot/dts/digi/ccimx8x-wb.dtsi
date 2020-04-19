@@ -37,7 +37,7 @@
 			regulator-name = "3v3_rf";
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
-			gpio = <&gpio3 12 GPIO_ACTIVE_HIGH>; /* 3V3_RF_EN */
+			gpio = <&lsio_gpio3 12 GPIO_ACTIVE_HIGH>; /* 3V3_RF_EN */
 			enable-active-high;
 			startup-delay-us = <100000>;
 			vin-supply = <&reg_3v3>;
@@ -51,7 +51,7 @@
 			regulator-name = "rf_wl_en";
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
-			gpio = <&gpio3 11 GPIO_ACTIVE_HIGH>; /* WL_EN */
+			gpio = <&lsio_gpio3 11 GPIO_ACTIVE_HIGH>; /* WL_EN */
 			enable-active-high;
 			startup-delay-us = <100>;
 			vin-supply = <&reg_3v3_rf>;
@@ -65,7 +65,7 @@
 			regulator-name = "rf_bt_en";
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
-			gpio = <&gpio3 10 GPIO_ACTIVE_HIGH>; /* BT_EN */
+			gpio = <&lsio_gpio3 10 GPIO_ACTIVE_HIGH>; /* BT_EN */
 			enable-active-high;
 			startup-delay-us = <100>;
 			vin-supply = <&reg_3v3_rf>;
@@ -85,8 +85,8 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_pcieb>;
 	ext_osc = <1>;
-	clkreq-gpio = <&gpio4 1 GPIO_ACTIVE_LOW>;
-	reset-gpio = <&gpio4 0 GPIO_ACTIVE_LOW>;
+	clkreq-gpio = <&lsio_gpio4 1 GPIO_ACTIVE_LOW>;
+	reset-gpio = <&lsio_gpio4 0 GPIO_ACTIVE_LOW>;
 	epdev_on-supply = <&reg_rf_wl_en>;
 	status = "okay";
 };
@@ -96,48 +96,48 @@
 	/* UART1 Bluetooth (2 wires) */
 	pinctrl_lpuart1_2wires: lpuart1grp_2wires {
 		fsl,pins = <
-			SC_P_UART1_TX_ADMA_UART1_TX		0x06000020
-			SC_P_UART1_RX_ADMA_UART1_RX		0x06000020
+			IMX8QXP_UART1_TX_ADMA_UART1_TX		0x06000020
+			IMX8QXP_UART1_RX_ADMA_UART1_RX		0x06000020
 		>;
 	};
 
 	/* UART1 Bluetooth (4 wires) */
 	pinctrl_lpuart1_4wires: lpuart1grp_4wires {
 		fsl,pins = <
-			SC_P_UART1_TX_ADMA_UART1_TX		0x06000020
-			SC_P_UART1_RX_ADMA_UART1_RX		0x06000020
-			SC_P_UART1_RTS_B_ADMA_UART1_RTS_B	0x06000020
-			SC_P_UART1_CTS_B_ADMA_UART1_CTS_B	0x06000020
+			IMX8QXP_UART1_TX_ADMA_UART1_TX		0x06000020
+			IMX8QXP_UART1_RX_ADMA_UART1_RX		0x06000020
+			IMX8QXP_UART1_RTS_B_ADMA_UART1_RTS_B	0x06000020
+			IMX8QXP_UART1_CTS_B_ADMA_UART1_CTS_B	0x06000020
 		>;
 	};
 
 	/* PCI Wireless */
 	pinctrl_pcieb: pcieagrp {
 		fsl,pins = <
-			SC_P_PCIE_CTRL0_PERST_B_LSIO_GPIO4_IO00		0x06000021
-			SC_P_PCIE_CTRL0_CLKREQ_B_LSIO_GPIO4_IO01	0x06000021
-			SC_P_PCIE_CTRL0_WAKE_B_LSIO_GPIO4_IO02		0x06000021
+			IMX8QXP_PCIE_CTRL0_PERST_B_LSIO_GPIO4_IO00		0x06000021
+			IMX8QXP_PCIE_CTRL0_CLKREQ_B_LSIO_GPIO4_IO01	0x06000021
+			IMX8QXP_PCIE_CTRL0_WAKE_B_LSIO_GPIO4_IO02		0x06000021
 		>;
 	};
 
 	pinctrl_reg_3v3_rf: reg_3v3_rf_grp {
 		fsl,pins = <
 			/* Voltage for RF domain (3V3_RF_EN) */
-			SC_P_QSPI0A_DATA3_LSIO_GPIO3_IO12		0x06000021
+			IMX8QXP_QSPI0A_DATA3_LSIO_GPIO3_IO12		0x06000021
 		>;
 	};
 
 	pinctrl_reg_rf_bt_en: reg_rf_bt_en_grp {
 		fsl,pins = <
 			/* Bluetooth enable (BT_EN) */
-			SC_P_QSPI0A_DATA1_LSIO_GPIO3_IO10		0x06000021
+			IMX8QXP_QSPI0A_DATA1_LSIO_GPIO3_IO10		0x06000021
 		>;
 	};
 
 	pinctrl_reg_rf_wl_en: reg_rf_wl_en_grp {
 		fsl,pins = <
 			/* Wireless enable (WL_EN) */
-			SC_P_QSPI0A_DATA2_LSIO_GPIO3_IO11		0x06000021
+			IMX8QXP_QSPI0A_DATA2_LSIO_GPIO3_IO11		0x06000021
 		>;
 	};
 };

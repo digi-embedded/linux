@@ -16,7 +16,7 @@
 /dts-v1/;
 
 /* i.MX8QXP CPU */
-#include "../freescale/fsl-imx8qxp.dtsi"
+#include "../freescale/imx8qxp.dtsi"
 /* Digi ConnectCore 8X (non-WiFi variant) */
 #include "ccimx8x.dtsi"
 /* Digi ConnectCore 8X SBC Express */
@@ -38,27 +38,27 @@
 	status = "okay";
 };
 
-&dpr1_channel1 {
+&dc0_dpr1_channel1 {
 	status = "okay";
 };
 
-&dpr1_channel2 {
+&dc0_dpr1_channel2 {
 	status = "okay";
 };
 
-&dpr1_channel3 {
+&dc0_dpr1_channel3 {
 	status = "okay";
 };
 
-&dpr2_channel1 {
+&dc0_dpr2_channel1 {
 	status = "okay";
 };
 
-&dpr2_channel2 {
+&dc0_dpr2_channel2 {
 	status = "okay";
 };
 
-&dpr2_channel3 {
+&dc0_dpr2_channel3 {
 	status = "okay";
 };
 
@@ -82,8 +82,8 @@
 /*
  * CAN1 port's pins are configured as GPIO by
  * default. Before enabling the port, you must remove
- * the SC_P_FLEXCAN1_RX_LSIO_GPIO1_IO17 and
- * SC_P_FLEXCAN1_TX_LSIO_GPIO1_IO18 entries from
+ * the IMX8QXP_FLEXCAN1_RX_LSIO_GPIO1_IO17 and
+ * IMX8QXP_FLEXCAN1_TX_LSIO_GPIO1_IO18 entries from
  * the pinctrl_expansion node.
  */
 &flexcan2 {
@@ -93,8 +93,8 @@
 /*
  * CAN2 port's pins are configured as GPIO by
  * default. Before enabling the port, you must remove
- * the SC_P_FLEXCAN2_RX_LSIO_GPIO1_IO19 and
- * SC_P_FLEXCAN2_TX_LSIO_GPIO1_IO20 entries from
+ * the IMX8QXP_FLEXCAN2_RX_LSIO_GPIO1_IO19 and
+ * IMX8QXP_FLEXCAN2_TX_LSIO_GPIO1_IO20 entries from
  * the pinctrl_expansion node.
  */
 &flexcan3 {
@@ -139,7 +139,7 @@
 	status = "okay";
 };
 
-&intmux_cm40 {
+&cm40_intmux {
 	status = "okay";
 };
 
@@ -296,22 +296,22 @@
 			 * want to use as GPIO (requires disabling the
 			 * driver that manages them).
 			 */
-			SC_P_MIPI_DSI0_GPIO0_01_LSIO_GPIO1_IO28	0x06000020
-			SC_P_USDHC1_WP_LSIO_GPIO4_IO21		0x06000020
-			SC_P_USDHC1_CD_B_LSIO_GPIO4_IO22	0x06000020
-			SC_P_MIPI_DSI1_I2C0_SCL_LSIO_GPIO1_IO29	0x06000020
-			SC_P_MIPI_DSI1_I2C0_SDA_LSIO_GPIO1_IO30	0x06000020
-			SC_P_QSPI0A_SS1_B_LSIO_GPIO3_IO15	0x06000020
-			SC_P_USDHC1_VSELECT_LSIO_GPIO4_IO20	0x06000020
-			SC_P_ENET0_RGMII_RXC_LSIO_GPIO5_IO03	0x06000020
+			IMX8QXP_MIPI_DSI0_GPIO0_01_LSIO_GPIO1_IO28	0x06000020
+			IMX8QXP_USDHC1_WP_LSIO_GPIO4_IO21		0x06000020
+			IMX8QXP_USDHC1_CD_B_LSIO_GPIO4_IO22	0x06000020
+			IMX8QXP_MIPI_DSI1_I2C0_SCL_LSIO_GPIO1_IO29	0x06000020
+			IMX8QXP_MIPI_DSI1_I2C0_SDA_LSIO_GPIO1_IO30	0x06000020
+			IMX8QXP_QSPI0A_SS1_B_LSIO_GPIO3_IO15	0x06000020
+			IMX8QXP_USDHC1_VSELECT_LSIO_GPIO4_IO20	0x06000020
+			IMX8QXP_ENET0_RGMII_RXC_LSIO_GPIO5_IO03	0x06000020
 
 			/* Remove these if you wish to use the flexcan2 interface */
-			SC_P_FLEXCAN1_RX_LSIO_GPIO1_IO17	0x06000020
-			SC_P_FLEXCAN1_TX_LSIO_GPIO1_IO18	0x06000020
+			IMX8QXP_FLEXCAN1_RX_LSIO_GPIO1_IO17	0x06000020
+			IMX8QXP_FLEXCAN1_TX_LSIO_GPIO1_IO18	0x06000020
 
 			/* Remove these if you wish to use the flexcan3 interface */
-			SC_P_FLEXCAN2_RX_LSIO_GPIO1_IO19	0x06000020
-			SC_P_FLEXCAN2_TX_LSIO_GPIO1_IO20	0x06000020
+			IMX8QXP_FLEXCAN2_RX_LSIO_GPIO1_IO19	0x06000020
+			IMX8QXP_FLEXCAN2_TX_LSIO_GPIO1_IO20	0x06000020
 		>;
 	};
 
@@ -319,9 +319,9 @@
 	pinctrl_adc0: adc0grp {
 		fsl,pins = <
 			/* ADC_IN0 */
-			SC_P_ADC_IN0_ADMA_ADC_IN0		0xc0000060
+			IMX8QXP_ADC_IN0_ADMA_ADC_IN0		0xc0000060
 	//		/* ADC_IN1 */
-	//		SC_P_ADC_IN1_ADMA_ADC_IN1		0xc0000060
+	//		IMX8QXP_ADC_IN1_ADMA_ADC_IN1		0xc0000060
 		>;
 	};
 };
