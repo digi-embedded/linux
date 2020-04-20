@@ -720,23 +720,24 @@ static int pca9450_probe(struct platform_device *pdev)
 
 	/* Add Interrupt */
 	irq  = platform_get_irq(pdev, 0);
-	if (irq <= 0) {
+	if (irq < 0) {
 		dev_warn(&pdev->dev, "platform irq error # %d\n", irq);
 		return -ENXIO;
-	}
-	ret = devm_request_threaded_irq(&pdev->dev, irq, NULL,
-					pca9450_pmic_interrupt,
-					IRQF_TRIGGER_LOW | IRQF_EARLY_RESUME,
-					dev_name(&pdev->dev), &pdev->dev);
-	if (ret < 0)
-		dev_err(&pdev->dev, "IRQ %d is not free.\n", irq);
+	} else if (irq > 0) {
+		ret = devm_request_threaded_irq(&pdev->dev, irq, NULL,
+						pca9450_pmic_interrupt,
+						IRQF_TRIGGER_LOW | IRQF_EARLY_RESUME,
+						dev_name(&pdev->dev), &pdev->dev);
+		if (ret < 0)
+			dev_err(&pdev->dev, "IRQ %d is not free.\n", irq);
 
-	/* Un-mask IRQ Interrupt */
-	ret = pca9450_reg_write(pca9450, PCA9450_INT1_MSK, 0);
-	if (ret < 0) {
-		dev_err(&pdev->dev, "Write 'PCA9450_REG_MIRQ': failed!\n");
-		ret = -EIO;
-		goto err;
+		/* Un-mask IRQ Interrupt */
+		ret = pca9450_reg_write(pca9450, PCA9450_INT1_MSK, 0);
+		if (ret < 0) {
+			dev_err(&pdev->dev, "Write 'PCA9450_REG_MIRQ': failed!\n");
+			ret = -EIO;
+			goto err;
+		}
 	}
 
 	return 0;
