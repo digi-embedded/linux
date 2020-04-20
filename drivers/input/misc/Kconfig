@@ -932,7 +932,7 @@ config INPUT_ISL29023
 config INPUT_MCA_PWRKEY
 	tristate "Digi ConnectCore SOMs Micro Controller Assist Power key"
 	select MFD_MCA_CC6UL if SOC_IMX6UL
-	select MFD_MCA_CC8 if (ARCH_FSL_IMX8QXP || ARCH_FSL_IMX8MM || ARCH_FSL_IMX8MN)
+	select MFD_MCA_CC8 if ARCH_FSL_MXC
 	help
 	  If you say Y here you will get support for the Power Key in the
 	  Micro Controller Assist of Digi ConnectCore system-on-modules,
