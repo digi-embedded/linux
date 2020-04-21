@@ -136,7 +136,7 @@ void mx6_lpddr2_freq_change(u32 freq, int bus_freq_mode) {}
 void imx6sll_lpddr2_freq_change(u32 freq, int bus_freq_mode) {}
 #endif
 
-#if !defined(CONFIG_SOC_IMX6SX) && !defined(CONFIG_SOC_IMX6UL)
+#if !defined(CONFIG_SOC_IMX6SX)
 u32 imx6_up_ddr3_freq_change_start, imx6_up_ddr3_freq_change_end;
 struct imx6_busfreq_info {
 } __aligned(8);
