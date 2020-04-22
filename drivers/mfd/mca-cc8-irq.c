@@ -15,9 +15,7 @@
 #include <linux/regmap.h>
 #include <linux/mfd/mca-common/core.h>
 #include <linux/mfd/mca-cc8/core.h>
-#include <soc/imx8/soc.h>
-
-#include <soc/imx8/sc/svc/irq/api.h>
+#include <soc/imx/soc.h>
 
 #define MCA_IRQ_0_OFFSET		0
 #define MCA_IRQ_1_OFFSET		1
@@ -104,7 +102,7 @@ static const struct regmap_irq mca_cc8_irqs[] = {
  */
 static int mca_cc8x_pre_irq(void *irq_drv_data)
 {
-	return imx8_scu_mu_isr(0, NULL);
+	return (0); //imx_mu_isr(0, NULL);
 }
 
 static struct regmap_irq_chip mca_cc8_irq_chip = {
@@ -127,10 +125,10 @@ int mca_cc8_irq_init(struct mca_drv *mca)
 		return -EINVAL;
 	}
 
-	if (cpu_is_imx8qxp()) {
+	/* +ME if (cpu_is_imx8qxp()) {
 		mca_cc8_irq_chip.handle_pre_irq = mca_cc8x_pre_irq;
 		flags = IRQF_ONESHOT | IRQF_SHARED;
-	} else {
+	} else */{
 		flags = IRQF_TRIGGER_LOW | IRQF_ONESHOT | IRQF_SHARED;
 	}
 
@@ -141,10 +139,10 @@ int mca_cc8_irq_init(struct mca_drv *mca)
 	if (ret) {
 		dev_err(mca->dev, "Failed to reguest IRQ %d: %d\n",
 			mca->chip_irq, ret);
-		return ret;
+		// +ME return ret;
 	}
 
-	if (cpu_is_imx8qxp()) {
+	/*if (cpu_is_imx8qxp()) {
 		ret = imx8_mu_enable_sc_irqs(SC_IRQ_TEMP_MCA | SC_IRQ_TEMP_PMIC0_HIGH | \
 					SC_IRQ_TEMP_PMIC1_HIGH,
 					SC_IRQ_RTC,
@@ -152,9 +150,9 @@ int mca_cc8_irq_init(struct mca_drv *mca)
 					SC_IRQ_WDOG);
 		if (ret)
 			dev_err(mca->dev, "Failed to reguest SC MU IRQs (%d)\n", ret);
-	}
+	}*/
 
-	return ret;
+	return 0; //ret;
 }
 
 void mca_cc8_irq_exit(struct mca_drv *mca)
