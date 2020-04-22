@@ -28,7 +28,7 @@
 
 #include <linux/mfd/mca-common/core.h>
 #include <linux/mfd/mca-cc8/core.h>
-#include <soc/imx8/soc.h>
+#include <soc/imx/soc.h>
 
 #include <asm/unaligned.h>
 
