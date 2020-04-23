@@ -50,7 +50,7 @@
 			regulator-name = "3v3_rf";
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
-			gpio = <&gpio3 14 GPIO_ACTIVE_HIGH>; /* 3V3_RF_EN */
+			gpio = <&gpio2 6 GPIO_ACTIVE_HIGH>; /* 3V3_RF_EN */
 			enable-active-high;
 			startup-delay-us = <100000>;
 			status = "disabled";
@@ -99,7 +99,7 @@
 };
 
 &A53_0 {
-	arm-supply = <&buck2_reg>;
+	arm-supply = <&buck2_reg_pca9450>;
 };
 
 /* I2C1 connected to MCA, PMIC and crypto chip */
@@ -117,11 +117,11 @@
 	mca_cc8m: mca@63 {
 		compatible = "digi,mca-cc8m";
 		reg = <0x63>;
-		interrupt-parent = <&gpio3>;
-		interrupts = <8 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-parent = <&gpio2>;
+		interrupts = <10 IRQ_TYPE_LEVEL_HIGH>;
 		interrupt-controller;
 		#interrupt-cells = <2>;
-		fw-update-gpio = <&gpio1 4 GPIO_ACTIVE_LOW>;
+		fw-update-gpio = <&gpio1 5 GPIO_ACTIVE_LOW>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_mca_cc8m>;
 
@@ -200,9 +200,126 @@
 		};
 	};
 
-	pmic: bd71837@4b {
+	/* NXP PCA9450 PMIC mounted on SOMv2 and higher */
+	pmic_pca9450: pca9450@25 {
+		reg = <0x25>;
+		compatible = "nxp,pca9450";
+		status = "okay";
+
+		regulators {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			pca9450,pmic-buck2-uses-i2c-dvs;
+			/* Run/Standby voltage */
+			pca9450,pmic-buck2-dvs-voltage = <950000>, <850000>;
+
+			buck1_reg_pca9450: regulator@0 {
+				reg = <0>;
+				regulator-compatible = "buck1";
+				regulator-min-microvolt = <600000>;
+				regulator-max-microvolt = <2187500>;
+				regulator-boot-on;
+				regulator-always-on;
+				regulator-ramp-delay = <3125>;
+			};
+
+			buck2_reg_pca9450: regulator@1 {
+				reg = <1>;
+				regulator-compatible = "buck2";
+				regulator-min-microvolt = <600000>;
+				regulator-max-microvolt = <2187500>;
+				regulator-boot-on;
+				regulator-always-on;
+				regulator-ramp-delay = <3125>;
+			};
+
+			buck3_reg_pca9450: regulator@2 {
+				reg = <2>;
+				regulator-compatible = "buck3";
+				regulator-min-microvolt = <600000>;
+				regulator-max-microvolt = <2187500>;
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			buck4_reg_pca9450: regulator@3 {
+				reg = <3>;
+				regulator-compatible = "buck4";
+				regulator-min-microvolt = <600000>;
+				regulator-max-microvolt = <3400000>;
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			buck5_reg_pca9450: regulator@4 {
+				reg = <4>;
+				regulator-compatible = "buck5";
+				regulator-min-microvolt = <600000>;
+				regulator-max-microvolt = <3400000>;
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			buck6_reg_pca9450: regulator@5 {
+				reg = <5>;
+				regulator-compatible = "buck6";
+				regulator-min-microvolt = <600000>;
+				regulator-max-microvolt = <3400000>;
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			ldo1_reg_pca9450: regulator@6 {
+				reg = <6>;
+				regulator-compatible = "ldo1";
+				regulator-min-microvolt = <1600000>;
+				regulator-max-microvolt = <3300000>;
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			ldo2_reg_pca9450: regulator@7 {
+				reg = <7>;
+				regulator-compatible = "ldo2";
+				regulator-min-microvolt = <800000>;
+				regulator-max-microvolt = <1150000>;
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			ldo3_reg_pca9450: regulator@8 {
+				reg = <8>;
+				regulator-compatible = "ldo3";
+				regulator-min-microvolt = <800000>;
+				regulator-max-microvolt = <3300000>;
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			ldo4_reg_pca9450: regulator@9 {
+				reg = <9>;
+				regulator-compatible = "ldo4";
+				regulator-min-microvolt = <800000>;
+				regulator-max-microvolt = <3300000>;
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			ldo5_reg_pca9450: regulator@10 {
+				reg = <10>;
+				regulator-compatible = "ldo5";
+				regulator-min-microvolt = <1800000>;
+				regulator-max-microvolt = <3300000>;
+			};
+		};
+	};
+
+	/* ROHM BD71837 PMIC mounted on SOMv1 */
+	pmic_bd71837: bd71837@4b {
 		reg = <0x4b>;
 		compatible = "rohm,bd71837";
+		status = "disabled";
 
 		gpo {
 			rohm,drv = <0x0C>;	/* 0b0000_1100 all gpos with cmos output mode */
@@ -215,7 +332,7 @@
 			bd71837,pmic-buck2-uses-i2c-dvs;
 			bd71837,pmic-buck2-dvs-voltage = <1000000>, <900000>, <0>; /* VDD_ARM: Run-Idle */
 
-			buck1_reg: regulator@0 {
+			buck1_reg_bd71837: regulator@0 {
 				reg = <0>;
 				regulator-compatible = "buck1";
 				regulator-min-microvolt = <700000>;
@@ -225,7 +342,7 @@
 				regulator-ramp-delay = <1250>;
 			};
 
-			buck2_reg: regulator@1 {
+			buck2_reg_bd71837: regulator@1 {
 				reg = <1>;
 				regulator-compatible = "buck2";
 				regulator-min-microvolt = <700000>;
@@ -235,28 +352,28 @@
 				regulator-ramp-delay = <1250>;
 			};
 
-			buck3_reg: regulator@2 {
+			buck3_reg_bd71837: regulator@2 {
 				reg = <2>;
 				regulator-compatible = "buck3";
 				regulator-min-microvolt = <700000>;
 				regulator-max-microvolt = <1300000>;
 			};
 
-			buck4_reg: regulator@3 {
+			buck4_reg_bd71837: regulator@3 {
 				reg = <3>;
 				regulator-compatible = "buck4";
 				regulator-min-microvolt = <700000>;
 				regulator-max-microvolt = <1300000>;
 			};
 
-			buck5_reg: regulator@4 {
+			buck5_reg_bd71837: regulator@4 {
 				reg = <4>;
 				regulator-compatible = "buck5";
 				regulator-min-microvolt = <700000>;
 				regulator-max-microvolt = <1350000>;
 			};
 
-			buck6_reg: regulator@5 {
+			buck6_reg_bd71837: regulator@5 {
 				reg = <5>;
 				regulator-compatible = "buck6";
 				regulator-min-microvolt = <3000000>;
@@ -265,7 +382,7 @@
 				regulator-always-on;
 			};
 
-			buck7_reg: regulator@6 {
+			buck7_reg_bd71837: regulator@6 {
 				reg = <6>;
 				regulator-compatible = "buck7";
 				regulator-min-microvolt = <1605000>;
@@ -274,7 +391,7 @@
 				regulator-always-on;
 			};
 
-			buck8_reg: regulator@7 {
+			buck8_reg_bd71837: regulator@7 {
 				reg = <7>;
 				regulator-compatible = "buck8";
 				regulator-min-microvolt = <800000>;
@@ -283,7 +400,7 @@
 				regulator-always-on;
 			};
 
-			ldo1_reg: regulator@8 {
+			ldo1_reg_bd71837: regulator@8 {
 				reg = <8>;
 				regulator-compatible = "ldo1";
 				regulator-min-microvolt = <3000000>;
@@ -292,7 +409,7 @@
 				regulator-always-on;
 			};
 
-			ldo2_reg: regulator@9 {
+			ldo2_reg_bd71837: regulator@9 {
 				reg = <9>;
 				regulator-compatible = "ldo2";
 				regulator-min-microvolt = <900000>;
@@ -301,7 +418,7 @@
 				regulator-always-on;
 			};
 
-			ldo3_reg: regulator@10 {
+			ldo3_reg_bd71837: regulator@10 {
 				reg = <10>;
 				regulator-compatible = "ldo3";
 				regulator-min-microvolt = <1800000>;
@@ -310,21 +427,21 @@
 				regulator-always-on;
 			};
 
-			ldo4_reg: regulator@11 {
+			ldo4_reg_bd71837: regulator@11 {
 				reg = <11>;
 				regulator-compatible = "ldo4";
 				regulator-min-microvolt = <900000>;
 				regulator-max-microvolt = <1800000>;
 			};
 
-			ldo5_reg: regulator@12 {
+			ldo5_reg_bd71837: regulator@12 {
 				reg = <12>;
 				regulator-compatible = "ldo5";
 				regulator-min-microvolt = <1800000>;
 				regulator-max-microvolt = <3300000>;
 			};
 
-			ldo6_reg: regulator@13 {
+			ldo6_reg_bd71837: regulator@13 {
 				reg = <13>;
 				regulator-compatible = "ldo6";
 				regulator-min-microvolt = <900000>;
@@ -405,7 +522,18 @@
 		>;
 	};
 
+	/* MCA pinctrl for SOMv2 or higher */
 	pinctrl_mca_cc8m: mcagrp {
+		fsl,pins = <
+			/* MCA_nINT */
+			MX8MN_IOMUXC_SD1_RESET_B_GPIO2_IO10	0x56
+			/* MCA_FW_UPDATE */
+			MX8MN_IOMUXC_GPIO1_IO05_GPIO1_IO5	0x16
+		>;
+	};
+
+	/* MCA pinctrl for SOMv1 */
+	pinctrl_mca_cc8m_somv1: mcagrp_somv1 {
 		fsl,pins = <
 			/* MCA_nINT */
 			MX8MN_IOMUXC_NAND_DATA02_GPIO3_IO8	0x56
@@ -414,7 +542,16 @@
 		>;
 	};
 
+	/* 3V3_RF regulator pinctrl for SOMv2 and higher */
 	pinctrl_reg_3v3_rf: reg_3v3_rf_grp {
+		fsl,pins = <
+			/* Voltage for RF domain (3V3_RF_EN) */
+			MX8MN_IOMUXC_SD1_DATA4_GPIO2_IO6		0x41
+		>;
+	};
+
+	/* 3V3_RF regulator pinctrl for SOMv1 */
+	pinctrl_reg_3v3_rf_somv1: reg_3v3_rf_grp_somv1 {
 		fsl,pins = <
 			/* Voltage for RF domain (3V3_RF_EN) */
 			MX8MN_IOMUXC_NAND_DQS_GPIO3_IO14		0x41
