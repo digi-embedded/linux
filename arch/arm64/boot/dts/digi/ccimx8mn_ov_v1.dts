@@ -1,0 +1,76 @@
+/*
+ * Copyright 2019, 2020 Digi International Inc.
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/interrupt-controller/arm-gic.h>
+
+/dts-v1/;
+/plugin/;
+
+/*
+ * Overlay to support SOMv1 on ccimx8mn device trees.
+ *
+ * The main changes for SOMv1 are:
+ * - Disable PCA9450 PMIC and enable BD71837 PMIC instead.
+ * - Select BD71837 PMIC regulators where required.
+ * - 3V3_RF_EN signal is controlled by NAND_DQS pad (GPIO3_IO14).
+ * - MCA_FW_UPDATE signal is controlled by GPIO1_IO04 pad.
+ * - MCA_nINT signal is managed by NAND_DATA02 pad (GPIO3_IO8).
+ */
+/ {
+	/* Update 3V3_RF regulator GPIO */
+	fragment@0 {
+		target = <&reg_3v3_rf>;
+		__overlay__ {
+			pinctrl-0 = <&pinctrl_reg_3v3_rf_somv1>;
+			gpio = <&gpio3 14 GPIO_ACTIVE_HIGH>; /* 3V3_RF_EN */
+		};
+	};
+
+	/* Update MCA GPIOs */
+	fragment@1 {
+		target = <&mca_cc8m>;
+		__overlay__ {
+			interrupt-parent = <&gpio3>;
+			interrupts = <8 IRQ_TYPE_LEVEL_HIGH>;
+			fw-update-gpio = <&gpio1 4 GPIO_ACTIVE_LOW>;
+			pinctrl-0 = <&pinctrl_mca_cc8m_somv1>;
+		};
+	};
+
+	/* Disable NXP PCA9450 PMIC */
+	fragment@2 {
+		target = <&pmic_pca9450>;
+		__overlay__ {
+			/* This PMIC was introduced in SOMv2 */
+			status = "disabled";
+		};
+	};
+
+	/* Enable ROHM BD71837 PMIC */
+	fragment@3 {
+		target = <&A53_0>;
+		__overlay__ {
+			arm-supply = <&buck2_reg_bd71837>;
+		};
+	};
+
+	fragment@4 {
+		target = <&pmic_bd71837>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+};
