@@ -472,6 +472,7 @@
 	port@1 {
 		mipi_dsi_lvds_out: endpoint {
 			remote-endpoint = <&dsi_lvds_bridge_in>;
+			attach-bridge;
 		};
 	};
 };
