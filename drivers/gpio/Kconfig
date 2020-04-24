@@ -334,7 +334,7 @@ config GPIO_MB86S7X
 config GPIO_MCA
 	tristate "Digi ConnectCore SOMs Micro Controller Assist GPIO support"
 	select MFD_MCA_CC6UL if SOC_IMX6UL
-	select MFD_MCA_CC8 if (ARCH_FSL_MXC)
+	select MFD_MCA_CC8 if (ARCH_MXC)
 	select GPIOLIB_IRQCHIP
 	help
 	  If you say yes here you will get support for the GPIOs in the
