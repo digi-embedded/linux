@@ -82,6 +82,7 @@
 
 /* PCIE (Wireless) */
 &pcieb{
+	compatible = "fsl,imx8qxp-pcie", "snps,dw-pcie";
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_pcieb>;
 	ext_osc = <1>;
