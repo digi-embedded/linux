@@ -7,7 +7,7 @@ menu "Tamper devices"
 config TAMPER_MCA
 	tristate "Tamper support for MCA on Digi ConnectCore SOMs"
 	select MFD_MCA_CC6UL if SOC_IMX6UL
-	select MFD_MCA_CC8 if ARCH_FSL_MXC
+	select MFD_MCA_CC8 if ARCH_MXC
 
 	help
 	  Say Y here to build the tamper driver on the MCA of the
