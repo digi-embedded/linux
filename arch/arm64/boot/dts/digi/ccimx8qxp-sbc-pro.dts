@@ -279,6 +279,7 @@
 
 /* PCIE (Mini Card) */
 &pcieb {
+	compatible = "fsl,imx8qxp-pcie", "snps,dw-pcie";
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&pinctrl_reg_3v3_pcie>, <&pinctrl_pcieb_mini_card>;
 	pinctrl-1 = <&pinctrl_reg_3v3_pcie_sleep>;
