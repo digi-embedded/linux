@@ -22,6 +22,20 @@
 		stdout-path = &lpuart2;
 	};
 
+	cbtl04gp {
+		compatible = "nxp,cbtl04gp";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_typec_mux>;
+		switch-gpios = <&lsio_gpio4 6 GPIO_ACTIVE_LOW>;
+		orientation-switch;
+
+		port {
+			usb3_data_ss: endpoint {
+				remote-endpoint = <&typec_con_ss>;
+			};
+		};
+	};
+
 	lvds_backlight0: lvds_backlight@0 {
 		compatible = "pwm-backlight";
 		pwms = <&pwm_mipi_lvds0 0 100000 0>;
@@ -338,18 +352,33 @@
 	};
 
 	typec_ptn5110: typec@52 {
-		compatible = "usb,tcpci";
+		compatible = "nxp,ptn5110";
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_typec>;
 		reg = <0x52>;
 		interrupt-parent = <&lsio_gpio4>;
 		interrupts = <4 IRQ_TYPE_LEVEL_LOW>;
-		ss-sel-gpios = <&lsio_gpio4 6 GPIO_ACTIVE_LOW>;
-		src-pdos = <0x380190c8 0x3803c0c8>;
-		port-type = "drp";
-		sink-disable;
-		default-role = "source";
 		status = "okay";
+
+		usb_con1: connector {
+			compatible = "usb-c-connector";
+			label = "USB-C";
+			power-role = "source";
+			data-role = "dual";
+			source-pdos = <PDO_FIXED(5000, 3000, PDO_FIXED_USB_COMM)>;
+
+			ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				port@1 {
+					reg = <1>;
+					typec_con_ss: endpoint {
+						remote-endpoint = <&usb3_data_ss>;
+					};
+				};
+			};
+		};
 	};
 };
 
@@ -1130,10 +1159,15 @@
 		>;
 	};
 
-	pinctrl_typec: typecgrp {
+	pinctrl_typec_mux: typecmuxgrp {
 		fsl,pins = <
 			/* USB3 switch bus selector (SEL) */
 			IMX8QXP_USB_SS3_TC3_LSIO_GPIO4_IO06	0x06000021
+		>;
+	};
+
+	pinctrl_typec: typecgrp {
+		fsl,pins = <
 			/* PTN5110 irq line (ALERT) */
 			IMX8QXP_USB_SS3_TC1_LSIO_GPIO4_IO04	0x06000021
 			/* PTN5110 debug irq (DBG_ACC) */
