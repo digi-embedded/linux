@@ -402,7 +402,7 @@ static struct irq_chip mca_gpio_irq_chip = {
 	.irq_set_wake		= mca_gpio_irq_set_wake,
 };
 
-static int mca_gpio_irq_setup(struct mca_gpio *gpio)
+static int mca_gpio_irq_setup(struct mca_gpio *gpio, int nbank)
 {
 	unsigned int val;
 	int ret, i;
@@ -429,7 +429,7 @@ static int mca_gpio_irq_setup(struct mca_gpio *gpio)
 			gpio->irq_capable[GPIO_BYTE(i)] &= ~(1 << BYTE_OFFSET(i));
 	}
 
-	for (i = 0; i < MCA_MAX_GPIO_IRQ_BANKS; i++) {
+	for (i = 0; i < nbank; i++) {
 		if (gpio->irq[i] < 0)
 			continue;
 		ret = devm_request_threaded_irq(gpio->dev, gpio->irq[i],
@@ -496,7 +496,7 @@ static int mca_gpio_probe(struct platform_device *pdev)
 	struct property *prop;
 	const __be32 *p;
 	unsigned int val;
-	int ret, i;
+	int ret, i, ngpio, nbank;
 
 	gpio = devm_kzalloc(&pdev->dev, sizeof(*gpio), GFP_KERNEL);
 	if (!gpio) {
@@ -510,7 +510,23 @@ static int mca_gpio_probe(struct platform_device *pdev)
 	gpio->dev = mca_dev;
 	gpio->regmap = regmap;
 
-	for (i = 0; i < MCA_MAX_GPIO_IRQ_BANKS; i++) {
+	/* Get number of GPIOs from MCA firmware */
+	if (regmap_read(regmap, MCA_GPIO_NUM, &val)) {
+		ret = -EINVAL;
+		dev_err(mca_dev, "Could not read number of gpios.\n");
+		goto err;
+	}
+	ngpio = val & MCA_GPIO_NUM_MASK;
+	if (ngpio < 1 || ngpio > MCA_MAX_IOS) {
+		ret = -EINVAL;
+		dev_err(mca_dev, "Read invalid number of gpios (%d). "
+			"Valid range is 1..%d.\n", ngpio, MCA_MAX_IOS);
+		goto err;
+	}
+
+	nbank = (ngpio + 7) / 8;
+
+	for (i = 0; i < nbank; i++) {
 		gpio->irq[i] = platform_get_irq_byname(pdev,
 						       irq_gpio_bank_name[i]);
 	}
@@ -557,20 +573,7 @@ static int mca_gpio_probe(struct platform_device *pdev)
 		}
 	}
 
-	/* Get number of GPIOs from MCA firmware */
-	if (regmap_read(regmap, MCA_GPIO_NUM, &val)) {
-		ret = -EINVAL;
-		dev_err(mca_dev, "Could not read number of gpios.\n");
-		goto err;
-	}
-	gpio->gc.ngpio = val & MCA_GPIO_NUM_MASK;
-	if (gpio->gc.ngpio < 1 || gpio->gc.ngpio > MCA_MAX_IOS) {
-		ret = -EINVAL;
-		dev_err(mca_dev, "Read invalid number of gpios (%d). "
-			"Valid range is 1..%d.\n", gpio->gc.ngpio,
-			MCA_MAX_IOS);
-		goto err;
-	}
+	gpio->gc.ngpio = ngpio;
 
 	ret = gpiochip_add_data(&gpio->gc, gpio);
 	if (ret < 0) {
@@ -578,7 +581,7 @@ static int mca_gpio_probe(struct platform_device *pdev)
 		goto err;
 	}
 
-	ret = mca_gpio_irq_setup(gpio);
+	ret = mca_gpio_irq_setup(gpio, nbank);
 	if (ret) {
 		gpiochip_remove(&gpio->gc);
 		goto err;
