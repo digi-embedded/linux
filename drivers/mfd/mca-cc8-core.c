@@ -996,6 +996,11 @@ int mca_cc8_device_init(struct mca_drv *mca, u32 irq)
 		goto out_not_compatible;
 	}
 
+	/*
+	 * Initialize dma_mask pointer to avoid warning.
+	 */
+	mca->dev->dma_mask = &mca->dev->coherent_dma_mask;
+
 	ret = mfd_add_devices(mca->dev, -1, mca_cc8_devs,
 			      n_devs, NULL, mca->irq_base,
 			      regmap_irq_get_domain(mca->regmap_irq));
