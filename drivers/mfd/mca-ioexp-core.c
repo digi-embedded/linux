@@ -367,6 +367,11 @@ int mca_ioexp_device_init(struct mca_ioexp *ioexp, u32 irq)
 		return ret;
 	}
 
+	/*
+	 * Initialize dma_mask pointer to avoid warning.
+	 */
+	ioexp->dev->dma_mask = &ioexp->dev->coherent_dma_mask;
+
 	ret = mfd_add_devices(ioexp->dev, -1, mca_ioexp_devs,
 			      ARRAY_SIZE(mca_ioexp_devs), NULL, ioexp->irq_base,
 			      regmap_irq_get_domain(ioexp->regmap_irq));
