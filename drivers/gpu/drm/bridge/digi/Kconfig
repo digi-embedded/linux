@@ -1,0 +1,7 @@
+config DRM_DIGI_DUMMY_DSI_BRIDGE
+	bool "Digi dummy MIPI DSI bridge"
+	depends on OF
+	select DRM_MIPI_DSI
+	help
+	  Digi dummy MIPI DSI bridge driver.
+	  Select this driver to activate and configure MIPI DSI output.

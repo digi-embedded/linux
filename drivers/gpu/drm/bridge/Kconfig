@@ -202,4 +202,6 @@ config DRM_ITE_IT6263
 
 source "drivers/gpu/drm/bridge/sn65dsi83/Kconfig"
 
+source "drivers/gpu/drm/bridge/digi/Kconfig"
+
 endmenu

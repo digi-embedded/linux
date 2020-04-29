@@ -1,0 +1,57 @@
+Digi dummy MIPI-DSI bridge bindings
+
+The MIPI-DSI host controller drives the video signals from
+display controller to video peripherals using DSI protocol.
+This is an un-managed DSI bridge. In order to use this bridge, an encoder
+or bridge must be implemented to manage the platform specific initializations.
+
+Required properties:
+- compatible: 		"digi,dummy_dsi_bridge"
+- port: 		input port node with endpoint definition as
+			defined in Documentation/devicetree/bindings/graph.txt;
+			the input port should be connected to a MIPI-DSI device
+			driver
+
+Optional properties:
+- dsi-lanes:		number of DSI lanes to be used. Must be <1> to <4>.
+			Default value is <4>.
+- video-mode		video data transfer mode. Must be <0> or <1> as follows:
+			    <0>: Video burst mode
+			    <1>: Video pulse mode
+			Default value is <1>.
+- display-timings:	timings for the connected panel according to [1]
+
+[1]: Documentation/devicetree/bindings/display/display-timing.txt
+
+Example:
+	dummy_dsi_bridge {
+		compatible = "digi,dummy_dsi_bridge";
+		dsi-lanes = <4>;
+		video-mode = <1>;
+		status = "okay";
+
+		display-timings {
+			native-mode = <&display>;
+
+			display: timing@0 {
+				clock-frequency = <31500000>;
+				hactive = <640>;
+				vactive = <480>;
+				hback-porch = <4>;
+				hfront-porch = <10>;
+				vback-porch = <34>;
+				vfront-porch = <20>;
+				hsync-len = <2>;
+				vsync-len = <2>;
+				hsync-active = <0>;
+				vsync-active = <0>;
+				de-active = <0>;
+				pixelclk-active = <0>;
+			};
+		};
+		port {
+			dummy_dsi_bridge_in: endpoint {
+				remote-endpoint = <&mipi_dsi_out>;
+			};
+		};
+	};
