@@ -94,17 +94,6 @@ static const struct regmap_irq mca_cc8_irqs[] = {
 	},
 };
 
-/*
- * This hook is used to call the SCU MU interrupt handler to manage the SC
- * interrupts that could have been signaled by the SCU.
- * This is needed because the MCA ISR replaces the original SCU MU ISR because
- * both can not be registered as shared irq handlers.
- */
-static int mca_cc8x_pre_irq(void *irq_drv_data)
-{
-	return (0); //imx_mu_isr(0, NULL);
-}
-
 static struct regmap_irq_chip mca_cc8_irq_chip = {
 	.name		= "mca-cc8-irq",
 	.irqs		= mca_cc8_irqs,
@@ -118,44 +107,41 @@ static struct regmap_irq_chip mca_cc8_irq_chip = {
 
 int mca_cc8_irq_init(struct mca_drv *mca)
 {
-	int ret, flags;
+	int ret;
 
 	if (!mca->chip_irq) {
 		dev_err(mca->dev, "No IRQ configured\n");
 		return -EINVAL;
 	}
 
-	/* +ME if (cpu_is_imx8qxp()) {
-		mca_cc8_irq_chip.handle_pre_irq = mca_cc8x_pre_irq;
-		flags = IRQF_ONESHOT | IRQF_SHARED;
-	} else */{
-		flags = IRQF_TRIGGER_LOW | IRQF_ONESHOT | IRQF_SHARED;
+	mca->irq_base = -1;
+
+	if (of_machine_is_compatible("digi,ccimx8x")) {
+		ret = mca_cc8x_add_irq_chip(mca->regmap, mca->chip_irq,
+					    mca->irq_base, &mca_cc8_irq_chip,
+					    &mca->regmap_irq);
+	} else {
+		ret = regmap_add_irq_chip(mca->regmap, mca->chip_irq,
+					  IRQF_TRIGGER_LOW | IRQF_ONESHOT | IRQF_SHARED,
+ 					  mca->irq_base, &mca_cc8_irq_chip,
+					  &mca->regmap_irq);
 	}
 
-	mca->irq_base = -1;
-	ret = regmap_add_irq_chip(mca->regmap, mca->chip_irq, flags,
-				  mca->irq_base, &mca_cc8_irq_chip,
-				  &mca->regmap_irq);
 	if (ret) {
 		dev_err(mca->dev, "Failed to reguest IRQ %d: %d\n",
 			mca->chip_irq, ret);
-		// +ME return ret;
 	}
 
-	/*if (cpu_is_imx8qxp()) {
-		ret = imx8_mu_enable_sc_irqs(SC_IRQ_TEMP_MCA | SC_IRQ_TEMP_PMIC0_HIGH | \
-					SC_IRQ_TEMP_PMIC1_HIGH,
-					SC_IRQ_RTC,
-					SC_IRQ_BUTTON,
-					SC_IRQ_WDOG);
-		if (ret)
-			dev_err(mca->dev, "Failed to reguest SC MU IRQs (%d)\n", ret);
-	}*/
-
-	return 0; //ret;
+	return ret;
 }
 
 void mca_cc8_irq_exit(struct mca_drv *mca)
 {
-        regmap_del_irq_chip(mca->chip_irq, mca->regmap_irq);
+	if (!mca->chip_irq) {
+		if (of_machine_is_compatible("fsl,imx8qxp") ||
+		    of_machine_is_compatible("fsl,imx8dxp"))
+			mca_cc8x_del_irq_chip(mca->regmap_irq);
+		else
+			regmap_del_irq_chip(mca->chip_irq, mca->regmap_irq);
+	}
 }
