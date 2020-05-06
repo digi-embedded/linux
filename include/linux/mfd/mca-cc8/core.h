@@ -73,5 +73,9 @@ void mca_cc8_device_exit(struct mca_drv *mca);
 void mca_cc8_irq_exit(struct mca_drv *mca);
 int mca_cc8_suspend(struct device *dev);
 int mca_cc8_resume(struct device *dev);
+int mca_cc8x_add_irq_chip(struct regmap *map, int irq, int irq_base,
+			  const struct regmap_irq_chip *chip,
+			  struct regmap_irq_chip_data **data);
+void mca_cc8x_del_irq_chip(struct regmap_irq_chip_data *d);
 
 #endif /* MFD_MCA_CC8_CORE_H_ */
