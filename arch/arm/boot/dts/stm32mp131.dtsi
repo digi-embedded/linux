@@ -203,6 +203,15 @@
 			#dma-cells = <4>;
 			st,mem2mem;
 			dma-requests = <8>;
+			dmas = <&mdma 0 0x3 0x1200000a 0x48000008 0x00000020 1>,
+			       <&mdma 1 0x3 0x1200000a 0x48000008 0x00000800 1>,
+			       <&mdma 2 0x3 0x1200000a 0x48000008 0x00200000 1>,
+			       <&mdma 3 0x3 0x1200000a 0x48000008 0x08000000 1>,
+			       <&mdma 4 0x3 0x1200000a 0x4800000C 0x00000020 1>,
+			       <&mdma 5 0x3 0x1200000a 0x4800000C 0x00000800 1>,
+			       <&mdma 6 0x3 0x1200000a 0x4800000C 0x00200000 1>,
+			       <&mdma 7 0x3 0x1200000a 0x4800000C 0x08000000 1>;
+			dma-names = "ch0", "ch1", "ch2", "ch3", "ch4", "ch5", "ch6", "ch7";
 		};
 
 		dma2: dma-controller@48001000 {
@@ -221,6 +230,15 @@
 			#dma-cells = <4>;
 			st,mem2mem;
 			dma-requests = <8>;
+			dmas = <&mdma 8 0x3 0x1200000a 0x48001008 0x00000020 1>,
+			       <&mdma 9 0x3 0x1200000a 0x48001008 0x00000800 1>,
+			       <&mdma 10 0x3 0x1200000a 0x48001008 0x00200000 1>,
+			       <&mdma 11 0x3 0x1200000a 0x48001008 0x08000000 1>,
+			       <&mdma 12 0x3 0x1200000a 0x4800100C 0x00000020 1>,
+			       <&mdma 13 0x3 0x1200000a 0x4800100C 0x00000800 1>,
+			       <&mdma 14 0x3 0x1200000a 0x4800100C 0x00200000 1>,
+			       <&mdma 15 0x3 0x1200000a 0x4800100C 0x08000000 1>;
+			dma-names = "ch0", "ch1", "ch2", "ch3", "ch4", "ch5", "ch6", "ch7";
 		};
 
 		dmamux1: dma-router@48002000 {
@@ -252,7 +270,7 @@
 			reg = <0x58000000 0x1000>;
 			interrupts = <GIC_SPI 107 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&rcc MDMA>;
-			#dma-cells = <5>;
+			#dma-cells = <6>;
 			dma-channels = <32>;
 			dma-requests = <48>;
 		};
