@@ -23,8 +23,8 @@
  * Overlay to support SOMv1 on ccimx8mn device trees.
  *
  * The main changes for SOMv1 are:
- * - Disable PCA9450 PMIC and enable BD71837 PMIC instead.
- * - Select BD71837 PMIC regulators where required.
+ * - Disable PCA9450 PMIC and enable BD71850 PMIC instead.
+ * - Select BD71850 PMIC regulators where required.
  * - 3V3_RF_EN signal is controlled by NAND_DQS pad (GPIO3_IO14).
  * - MCA_FW_UPDATE signal is controlled by GPIO1_IO04 pad.
  * - MCA_nINT signal is managed by NAND_DATA02 pad (GPIO3_IO8).
@@ -59,16 +59,16 @@
 		};
 	};
 
-	/* Enable ROHM BD71837 PMIC */
+	/* Enable ROHM BD71850 PMIC */
 	fragment@3 {
 		target = <&A53_0>;
 		__overlay__ {
-			arm-supply = <&buck2_reg_bd71837>;
+			arm-supply = <&buck2_reg_bd71850>;
 		};
 	};
 
 	fragment@4 {
-		target = <&pmic_bd71837>;
+		target = <&pmic_bd71850>;
 		__overlay__ {
 			status = "okay";
 		};
