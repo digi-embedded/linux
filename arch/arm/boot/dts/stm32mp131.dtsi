@@ -155,6 +155,14 @@
 		interrupt-parent = <&intc>;
 		ranges;
 
+		sram: sram@30000000 {
+			compatible = "mmio-sram";
+			reg = <0x30000000 0x8000>;
+			#address-cells = <1>;
+			#size-cells = <1>;
+			ranges = <0 0x30000000 0x8000>;
+		};
+
 		uart4: serial@40010000 {
 			compatible = "st,stm32h7-uart";
 			reg = <0x40010000 0x400>;
