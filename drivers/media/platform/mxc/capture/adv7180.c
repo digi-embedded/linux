@@ -1,5 +1,5 @@
 /*
- * Copyright 2005-2014 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright 2005-2013 Freescale Semiconductor, Inc. All Rights Reserved.
  */
 
 /*
@@ -43,7 +43,7 @@ static struct regulator *dvdd_regulator;
 static struct regulator *avdd_regulator;
 static struct regulator *pvdd_regulator;
 static int pwn_gpio;
-
+static int rst_gpio;
 static int adv7180_probe(struct i2c_client *adapter,
 			 const struct i2c_device_id *id);
 static int adv7180_detach(struct i2c_client *client);
@@ -94,7 +94,6 @@ typedef struct {
 	u16 raw_height;		/*!< Raw height. */
 	u16 active_width;	/*!< Active width. */
 	u16 active_height;	/*!< Active height. */
-	int frame_rate;		/*!< Frame rate. */
 } video_fmt_t;
 
 /*! Description of video formats supported.
@@ -110,7 +109,6 @@ static video_fmt_t video_fmts[] = {
 	 .raw_height = 525,	/* SENS_FRM_HEIGHT */
 	 .active_width = 720,	/* ACT_FRM_WIDTH plus 1 */
 	 .active_height = 480,	/* ACT_FRM_WIDTH plus 1 */
-	 .frame_rate = 30,
 	 },
 	{			/*! (B, G, H, I, N) PAL */
 	 .v4l2_id = V4L2_STD_PAL,
@@ -119,7 +117,6 @@ static video_fmt_t video_fmts[] = {
 	 .raw_height = 625,
 	 .active_width = 720,
 	 .active_height = 576,
-	 .frame_rate = 25,
 	 },
 	{			/*! Unlocked standard */
 	 .v4l2_id = V4L2_STD_ALL,
@@ -128,7 +125,6 @@ static video_fmt_t video_fmts[] = {
 	 .raw_height = 625,
 	 .active_width = 720,
 	 .active_height = 576,
-	 .frame_rate = 0,
 	 },
 };
 
@@ -181,7 +177,7 @@ static struct v4l2_queryctrl adv7180_qctrl[] = {
 
 static inline void adv7180_power_down(int enable)
 {
-	gpio_set_value_cansleep(pwn_gpio, !enable);
+	//gpio_set_value_cansleep(pwn_gpio, !enable);
 	msleep(2);
 }
 
@@ -315,26 +311,28 @@ static int adv7180_write_reg(u8 reg, u8 val)
  */
 static void adv7180_get_std(v4l2_std_id *std)
 {
-	int status_1, standard, idx;
-	bool locked;
+	int tmp;
+	int idx;
 
 	dev_dbg(&adv7180_data.sen.i2c_client->dev, "In adv7180_get_std\n");
 
-	status_1 = adv7180_read(ADV7180_STATUS_1);
-	locked = status_1 & 0x1;
-	standard = status_1 & 0x70;
+	/* Read the AD_RESULT to get the detect output video standard */
+	tmp = adv7180_read(ADV7180_STATUS_1) & 0x70;
 
 	mutex_lock(&mutex);
-	*std = V4L2_STD_ALL;
-	idx = ADV7180_NOT_LOCKED;
-	if (locked) {
-		if (standard == 0x40) {
-			*std = V4L2_STD_PAL;
-			idx = ADV7180_PAL;
-		} else if (standard == 0) {
-			*std = V4L2_STD_NTSC;
-			idx = ADV7180_NTSC;
-		}
+	if (tmp == 0x40) {
+		/* PAL */
+		*std = V4L2_STD_PAL;
+		idx = ADV7180_PAL;
+	} else if (tmp == 0) {
+		/*NTSC*/
+		*std = V4L2_STD_NTSC;
+		idx = ADV7180_NTSC;
+	} else {
+		*std = V4L2_STD_ALL;
+		idx = ADV7180_NOT_LOCKED;
+		dev_dbg(&adv7180_data.sen.i2c_client->dev,
+			"Got invalid video standard!\n");
 	}
 	mutex_unlock(&mutex);
 
@@ -767,37 +765,6 @@ static int ioctl_enum_framesizes(struct v4l2_int_device *s,
 }
 
 /*!
- * ioctl_enum_frameintervals - V4L2 sensor interface handler for
- *			       VIDIOC_ENUM_FRAMEINTERVALS ioctl
- * @s: pointer to standard V4L2 device structure
- * @fival: standard V4L2 VIDIOC_ENUM_FRAMEINTERVALS ioctl structure
- *
- * Return 0 if successful, otherwise -EINVAL.
- */
-static int ioctl_enum_frameintervals(struct v4l2_int_device *s,
-					 struct v4l2_frmivalenum *fival)
-{
-	video_fmt_t fmt;
-	int i;
-
-	if (fival->index != 0)
-		return -EINVAL;
-
-	for (i = 0; i < ARRAY_SIZE(video_fmts) - 1; i++) {
-		fmt = video_fmts[i];
-		if (fival->width  == fmt.active_width &&
-		    fival->height == fmt.active_height) {
-			fival->type = V4L2_FRMIVAL_TYPE_DISCRETE;
-			fival->discrete.numerator = 1;
-			fival->discrete.denominator = fmt.frame_rate;
-			return 0;
-		}
-	}
-
-	return -EINVAL;
-}
-
-/*!
  * ioctl_g_chip_ident - V4L2 sensor interface handler for
  *			VIDIOC_DBG_G_CHIP_IDENT ioctl
  * @s: pointer to standard V4L2 device structure
@@ -887,10 +854,7 @@ static struct v4l2_int_ioctl_desc adv7180_ioctl_desc[] = {
 	{vidioc_int_g_ctrl_num, (v4l2_int_ioctl_func*)ioctl_g_ctrl},
 	{vidioc_int_s_ctrl_num, (v4l2_int_ioctl_func*)ioctl_s_ctrl},
 	{vidioc_int_enum_framesizes_num,
-				(v4l2_int_ioctl_func *)ioctl_enum_framesizes},
-	{vidioc_int_enum_frameintervals_num,
-				(v4l2_int_ioctl_func *)
-				ioctl_enum_frameintervals},
+				(v4l2_int_ioctl_func *) ioctl_enum_framesizes},
 	{vidioc_int_g_chip_ident_num,
 				(v4l2_int_ioctl_func *)ioctl_g_chip_ident},
 };
@@ -922,6 +886,13 @@ static void adv7180_hard_reset(bool cvbs)
 {
 	dev_dbg(&adv7180_data.sen.i2c_client->dev,
 		"In adv7180:adv7180_hard_reset\n");
+
+	        /* camera reset */
+        gpio_set_value(rst_gpio, 1);
+        msleep(5);
+        gpio_set_value(rst_gpio, 0);
+        msleep(5);
+        gpio_set_value(rst_gpio, 1);
 
 	if (cvbs) {
 		/* Set CVBS input on AIN1 */
@@ -1210,7 +1181,7 @@ static int adv7180_probe(struct i2c_client *client,
 	}
 
 	/* request power down pin */
-	pwn_gpio = of_get_named_gpio(dev->of_node, "pwn-gpios", 0);
+	/*pwn_gpio = of_get_named_gpio(dev->of_node, "pwn-gpios", 0);
 	if (!gpio_is_valid(pwn_gpio)) {
 		dev_err(dev, "no sensor pwdn pin available\n");
 		return -ENODEV;
@@ -1220,7 +1191,7 @@ static int adv7180_probe(struct i2c_client *client,
 	if (ret < 0) {
 		dev_err(dev, "no power pin available!\n");
 		return ret;
-	}
+	}*/
 
 	adv7180_regulator_enable(dev);
 
@@ -1247,12 +1218,12 @@ static int adv7180_probe(struct i2c_client *client,
 		return PTR_ERR(adv7180_data.sen.sensor_clk);
 	}
 
-	ret = of_property_read_u32(dev->of_node, "mclk",
+	/*ret = of_property_read_u32(dev->of_node, "mclk",
 					&adv7180_data.sen.mclk);
 	if (ret) {
 		dev_err(dev, "mclk frequency is invalid\n");
 		return ret;
-	}
+	}*/
 
 	ret = of_property_read_u32(
 		dev->of_node, "mclk_source",
@@ -1277,7 +1248,7 @@ static int adv7180_probe(struct i2c_client *client,
 
 	/*! Read the revision ID of the tvin chip */
 	rev_id = adv7180_read(ADV7180_IDENT);
-	dev_dbg(dev,
+	dev_info(dev,
 		"%s:Analog Device adv7%2X0 detected!\n", __func__,
 		rev_id);
 
@@ -1286,6 +1257,15 @@ static int adv7180_probe(struct i2c_client *client,
 		dev_err(dev, "cvbs setting is not found\n");
 		cvbs = true;
 	}
+
+        rst_gpio = of_get_named_gpio(dev->of_node, "gpio-reset", 0);
+        if (!gpio_is_valid(rst_gpio)) {
+                dev_err(dev, "failed to parse reset gpio\n");
+        }
+        ret = devm_gpio_request_one(dev, rst_gpio, GPIOF_OUT_INIT_HIGH, "gpio-reset");
+        if (ret) {
+                dev_err(dev, "failed to request gpio %d: %d\n", rst_gpio, ret);
+        }
 
 	/*! ADV7180 initialization. */
 	adv7180_hard_reset(cvbs);

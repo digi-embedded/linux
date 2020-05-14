@@ -19,6 +19,10 @@
 /* ConnectCore 6UL SBC */
 #include "imx6ul-ccimx6ulsbc.dtsi"
 
+&caam_keyblob {
+	status = "okay";
+};
+
 /* ENET1 */
 &fec1 {
 	status = "okay";
@@ -39,14 +43,10 @@
 	status = "okay";
 };
 
-/*
- * The max98089 sound codec uses the same I2C address than the fusion touch
- * controller, so when unconmmenting this node you need to also comment the
- * max98089 node.
- */
-//&fusion_touch {
-//	status = "okay";
-//};
+/* Fusion touch */
+&fusion_touch {
+	status = "okay";
+};
 
 /* Parallel LCD */
 &lcdif {
@@ -54,7 +54,7 @@
 		     &pinctrl_lcdif_clken
 		     &pinctrl_lcdif_hvsync>;
 	lcd-supply = <&ldo4_ext>;       /* BU90T82 LVDS bridge power */
-	display = <&hsd101pfw2>;
+	display = <&f10a0102>;
 	status = "okay";
 };
 
