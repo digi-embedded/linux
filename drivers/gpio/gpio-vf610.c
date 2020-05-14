@@ -332,7 +332,7 @@ static int vf610_gpio_probe(struct platform_device *pdev)
 	 * can still enable wakeup through /sys entry.
 	 */
 	if (of_machine_is_compatible("fsl,imx7ulp"))
-		ic.flags = IRQCHIP_MASK_ON_SUSPEND;
+		ic->flags = IRQCHIP_MASK_ON_SUSPEND;
 
 	ret = gpiochip_irqchip_add(gc, ic, 0, handle_edge_irq, IRQ_TYPE_NONE);
 	if (ret) {
