@@ -283,6 +283,9 @@ config SND_SOC_AD1836
 config SND_SOC_AD193X
 	tristate
 
+config SND_SOC_I2S
+	tristate "I2S Codec"
+
 config SND_SOC_AD193X_SPI
 	tristate
 	select SND_SOC_AD193X

@@ -60,7 +60,7 @@
 	};
 
 	xbee {
-		digi,reset-gpio = <&mca_ioexp_gpio 7 GPIO_ACTIVE_LOW>;
+		digi,reset-gpio = <&mca_ioexp_gpio 7 GPIO_ACTIVE_HIGH>;
 	};
 };
 
@@ -69,7 +69,7 @@
 
 	port {
 		csi_ep: endpoint {
-			remote-endpoint = <&ov5640_ep>;
+			remote-endpoint = <&ov5642_ep>;
 		};
 	};
 };
@@ -85,7 +85,7 @@
 
 &fec1 {
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_enet1>, <&pinctrl_enet1_gpio>;
+	pinctrl-0 = <&pinctrl_enet1>;
 	phy-mode = "rmii";
 	phy-handle = <&ethphy0>;
 	phy-reset-gpios = <&mca_gpio 7 GPIO_ACTIVE_LOW>;
@@ -96,9 +96,7 @@
 
 &fec2 {
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_enet2>,
-		    <&pinctrl_enet2_mdio>,
-		    <&pinctrl_enet2_gpio>;
+	pinctrl-0 = <&pinctrl_enet2 &pinctrl_enet2_mdio>;
 	phy-mode = "rmii";
 	phy-handle = <&ethphy1>;
 	phy-reset-gpios = <&gpio5 6 GPIO_ACTIVE_LOW>;
@@ -147,9 +145,15 @@
 };
 
 &i2c1 {
-	fusion_touch: fusion@10 {
+	/*
+	 * Fusion display touch controller has I2C address 0x10
+	 * but since the audio chip on the SBC also has this address
+	 * an I2C address translator on the Video Adapter Board moves
+	 * the touch controller to address 0x14.
+	 */
+	fusion_touch: fusion@14 {
 		compatible = "touchrev,fusion-touch";
-		reg = <0x10>;
+		reg = <0x14>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_fusion_touch>;
 		interrupt-parent = <&gpio5>;
@@ -157,7 +161,14 @@
 		status = "disabled";
 	};
 
-	goodix_touch: gt911@14 {
+	/*
+	 * On the CC6UL SBC, an inconsistent reset sequence makes the
+	 * Goodix display's touch controller respond to two I2C
+	 * addresses: 0x14 and 0x5D. To make sure the touchscreen
+	 * works every time, the touch controller's description must
+	 * be duplicated for both addresses.
+	 */
+	goodix_touch1: gt911@14 {
 		compatible = "goodix,gt9271";
 		reg = <0x14>;
 		pinctrl-names = "default";
@@ -165,7 +176,19 @@
 		interrupt-parent = <&gpio5>;
 		interrupts = <2 IRQ_TYPE_EDGE_RISING>;
 		irq-gpios = <&gpio5 2 GPIO_ACTIVE_HIGH>;
-		reset-gpios = <&mca_ioexp_gpio 29 GPIO_ACTIVE_HIGH>;
+		skip-firmware-request;
+		reload-fw-on-resume;
+		status = "disabled";
+	};
+
+	goodix_touch2: gt911@5D {
+		compatible = "goodix,gt9271";
+		reg = <0x5D>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_goodix_touch>;
+		interrupt-parent = <&gpio5>;
+		interrupts = <2 IRQ_TYPE_EDGE_RISING>;
+		irq-gpios = <&gpio5 2 GPIO_ACTIVE_HIGH>;
 		skip-firmware-request;
 		reload-fw-on-resume;
 		status = "disabled";
@@ -192,30 +215,8 @@
 		mclk = <24000000>;
 		mclk_source = <0>;
 		status = "disabled";
-		digi,defer-probe;
 		port {
 			ov5642_ep: endpoint {
-				remote-endpoint = <&csi_ep>;
-			};
-		};
-	};
-
-	ov5640: ov5640@3c {
-		compatible = "ov5640";
-		reg = <0x3c>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_csi>;
-		clocks = <&clks IMX6UL_CLK_CSI>;
-		clock-names = "csi_mclk";
-		pwn-gpios = <&mca_ioexp_gpio 31 GPIO_ACTIVE_LOW>;
-		rst-gpios = <&mca_ioexp_gpio 22 GPIO_ACTIVE_HIGH>;
-		csi_id = <0>;
-		mclk = <24000000>;
-		mclk_source = <0>;
-		status = "disabled";
-		digi,defer-probe;
-		port {
-			ov5640_ep: endpoint {
 				remote-endpoint = <&csi_ep>;
 			};
 		};
@@ -231,7 +232,6 @@
 		interrupt-controller;
 		#interrupt-cells = <2>;
 		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_ioexp>;
 
 		mca_ioexp_gpio: gpio {
 			compatible = "digi,mca-ioexp-gpio";
@@ -284,7 +284,7 @@
 		};
 	};
 
-	hsd101pfw2: display@1 {
+	f10a0102: display@1 {
 		bits-per-pixel = <16>;
 		bus-width = <18>;
 
@@ -351,6 +351,8 @@
 &pwm4 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_pwm4>;
+	clocks = <&clks IMX6UL_CLK_PWM4>,
+		<&clks IMX6UL_CLK_PWM4>;
 	status = "disabled";
 };
 
@@ -358,6 +360,8 @@
 &pwm5 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_pwm5>;
+	clocks = <&clks IMX6UL_CLK_PWM5>,
+		 <&clks IMX6UL_CLK_PWM5>;
 	status = "disabled";
 };
 
@@ -458,8 +462,6 @@
 				MX6UL_PAD_LCD_DATA22__ECSPI1_MOSI	0x10b0
 				MX6UL_PAD_LCD_DATA23__ECSPI1_MISO	0x10b0
 				MX6UL_PAD_LCD_DATA21__GPIO3_IO26	0x10b0 /* Chip Select */
-				/* SPI1_IRQ_N */
-				MX6UL_PAD_SNVS_TAMPER8__GPIO5_IO08	0x1b0b0
 			>;
 		};
 
@@ -469,8 +471,6 @@
 				MX6UL_PAD_LCD_DATA22__ECSPI1_MOSI	0x10b0
 				MX6UL_PAD_LCD_DATA23__ECSPI1_MISO	0x10b0
 				MX6UL_PAD_LCD_DATA21__ECSPI1_SS0	0x10b0 /* Chip Select */
-				/* SPI1_IRQ_N */
-				MX6UL_PAD_SNVS_TAMPER8__GPIO5_IO08	0x1b0b0
 			>;
 		};
 
@@ -483,7 +483,7 @@
 				MX6UL_PAD_ENET1_TX_EN__ENET1_TX_EN	0x1b0b0
 				MX6UL_PAD_ENET1_TX_DATA0__ENET1_TDATA00	0x1b0b0
 				MX6UL_PAD_ENET1_TX_DATA1__ENET1_TDATA01	0x1b0b0
-				MX6UL_PAD_ENET1_TX_CLK__ENET1_REF_CLK1	0x4001b031
+				MX6UL_PAD_ENET1_TX_CLK__ENET1_REF_CLK1	0x40017051
 			>;
 		};
 
@@ -496,7 +496,7 @@
 				MX6UL_PAD_ENET2_TX_EN__ENET2_TX_EN	0x1b0b0
 				MX6UL_PAD_ENET2_TX_DATA0__ENET2_TDATA00	0x1b0b0
 				MX6UL_PAD_ENET2_TX_DATA1__ENET2_TDATA01	0x1b0b0
-				MX6UL_PAD_ENET2_TX_CLK__ENET2_REF_CLK2	0x4001b031
+				MX6UL_PAD_ENET2_TX_CLK__ENET2_REF_CLK2	0x40017051
 			>;
 		};
 
@@ -518,22 +518,6 @@
 			fsl,pins = <
 				MX6UL_PAD_GPIO1_IO07__ENET2_MDC		0x1b0b0
 				MX6UL_PAD_GPIO1_IO06__ENET2_MDIO	0x1b0b0
-			>;
-		};
-
-		pinctrl_enet1_gpio: enet1gpiogrp {
-			fsl,pins = <
-				/* ENET1_INT */
-				MX6UL_PAD_GPIO1_IO08__GPIO1_IO08	0x1b0b0
-			>;
-		};
-
-		pinctrl_enet2_gpio: enet2gpiogrp {
-			fsl,pins = <
-				/* PHY reset */
-				MX6UL_PAD_SNVS_TAMPER6__GPIO5_IO06	0x0b0b0
-				/* ENET2_INT */
-				MX6UL_PAD_GPIO1_IO09__GPIO1_IO09	0x1b0b0
 			>;
 		};
 
@@ -559,14 +543,7 @@
 
 		pinctrl_goodix_touch: goodixgrp{
 			fsl,pins = <
-				MX6UL_PAD_SNVS_TAMPER2__GPIO5_IO02	0x1b0b0
-			>;
-		};
-
-		pinctrl_ioexp: ioexpgrp {
-			fsl,pins = <
-				/* IOEXP_INT_IMX */
-				MX6UL_PAD_SNVS_TAMPER3__GPIO5_IO03	0x1b0b0
+				MX6UL_PAD_SNVS_TAMPER2__GPIO5_IO02	0x1020
 			>;
 		};
 
@@ -738,10 +715,6 @@
 
 		/* General purpose pinctrl */
 		pinctrl_hog: hoggrp {
-			fsl,pins = <
-				/* EXP_I2C_IRQ_N */
-				MX6UL_PAD_SNVS_TAMPER5__GPIO5_IO05	0x1b0b0
-			>;
 		};
 	};
 };

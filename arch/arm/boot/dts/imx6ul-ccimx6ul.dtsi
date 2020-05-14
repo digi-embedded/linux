@@ -29,6 +29,7 @@
 
 	caam_keyblob: caam-keyblob {
 		compatible = "fsl,sec-v4.0-keyblob";
+		status = "disabled";
 	};
 };
 
@@ -72,15 +73,12 @@
 
 &i2c1 {
 	clock-frequency = <100000>;
-	pinctrl-names = "default", "gpio";
+	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_i2c1>;
-	pinctrl-1 = <&pinctrl_i2c1_gpio>;
-	scl-gpios = <&gpio1 28 GPIO_ACTIVE_HIGH>;
-	sda-gpios = <&gpio1 29 GPIO_ACTIVE_HIGH>;
 	status = "okay";
 
 	mca_cc6ul: mca@7e {
-		compatible = "digi,mca-cc6ul";
+		compatible = "digi,mca_cc6ul_dt_ids";
 		reg = <0x7e>;
 		interrupt-parent = <&gpio5>;
 		interrupts = <4 IRQ_TYPE_EDGE_FALLING>;
@@ -98,9 +96,6 @@
 			interrupt-parent = <&mca_cc6ul>;
 			interrupt-controller;
 			#interrupt-cells = <2>;
-
-			/* Disable all mca GPIOs as power off wake up sources */
-			pwroff-wakeup-capable-ios = <>;
 		};
 
 		rtc {
@@ -115,7 +110,6 @@
 		pwrkey {
 			compatible = "digi,mca-cc6ul-pwrkey";
 			digi,key-power;
-			digi,key-power-up;
 			digi,key-sleep;
 			digi,debounce-ms = <100>;
 			digi,pwroff-delay-sec = <6>;
@@ -282,13 +276,6 @@
 			fsl,pins = <
 				MX6UL_PAD_UART4_TX_DATA__I2C1_SCL 0x4001b8b0
 				MX6UL_PAD_UART4_RX_DATA__I2C1_SDA 0x4001b8b0
-			>;
-		};
-
-		pinctrl_i2c1_gpio: i2c1gpiogrp {
-			fsl,pins = <
-				MX6UL_PAD_UART4_TX_DATA__GPIO1_IO28 0x1b0b0
-				MX6UL_PAD_UART4_RX_DATA__GPIO1_IO29 0x1b0b0
 			>;
 		};
 
