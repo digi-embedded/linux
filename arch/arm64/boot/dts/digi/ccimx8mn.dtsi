@@ -59,8 +59,9 @@
 		reg_rf_wl_en: regulator-som@2 {
 			compatible = "regulator-fixed";
 			reg = <2>;
-			pinctrl-names = "default";
+			pinctrl-names = "default", "sleep";
 			pinctrl-0 = <&pinctrl_reg_rf_wl_en>;
+			pinctrl-1 = <&pinctrl_reg_rf_wl_en_sleep>;
 			regulator-name = "rf_wl_en";
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
@@ -74,8 +75,9 @@
 		reg_rf_bt_en: regulator-som@3 {
 			compatible = "regulator-fixed";
 			reg = <3>;
-			pinctrl-names = "default";
+			pinctrl-names = "default", "sleep";
 			pinctrl-0 = <&pinctrl_reg_rf_bt_en>;
+			pinctrl-1 = <&pinctrl_reg_rf_bt_en_sleep>;
 			regulator-name = "rf_bt_en";
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
@@ -443,8 +445,9 @@
 
 /* UART2 (Bluetooth), disabled by default */
 &uart2 {
-	pinctrl-names = "default";
+	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&pinctrl_uart2>;
+	pinctrl-1 = <&pinctrl_uart2_sleep>;
 	assigned-clocks = <&clk IMX8MN_CLK_UART2>;
 	assigned-clock-parents = <&clk IMX8MN_SYS_PLL1_80M>;
 	fsl,uart-has-rtscts;
@@ -455,6 +458,7 @@
 &usdhc1 {
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&pinctrl_usdhc1>;
+	pinctrl-1 = <&pinctrl_usdhc1_sleep>;
 	non-removable;
 	no-1-8-v;
 	bus-width = <4>;
@@ -533,10 +537,24 @@
 		>;
 	};
 
+	pinctrl_reg_rf_wl_en_sleep: reg_rf_wl_en_grp_sleep {
+		fsl,pins = <
+			/* Wireless enable (WL_EN) Open drain */
+			MX8MN_IOMUXC_SD1_DATA7_GPIO2_IO9		0x21
+		>;
+	};
+
 	pinctrl_reg_rf_bt_en: reg_rf_bt_en_grp {
 		fsl,pins = <
 			/* Bluetooth enable (BT_EN) */
 			MX8MN_IOMUXC_SD1_DATA6_GPIO2_IO8		0x41
+		>;
+	};
+
+	pinctrl_reg_rf_bt_en_sleep: reg_rf_bt_en_grp_sleep {
+		fsl,pins = <
+			/* Bluetooth enable (BT_EN) Open drain */
+			MX8MN_IOMUXC_SD1_DATA6_GPIO2_IO8		0x21
 		>;
 	};
 
@@ -550,6 +568,15 @@
 		>;
 	};
 
+	pinctrl_uart2_sleep: uart2grp_sleep {
+		fsl,pins = <
+			MX8MN_IOMUXC_SAI3_TXC_GPIO5_IO0		0x020
+			MX8MN_IOMUXC_SAI3_TXFS_GPIO4_IO31		0x020
+			MX8MN_IOMUXC_SAI3_RXD_GPIO4_IO30	0x020
+			MX8MN_IOMUXC_SAI3_RXC_GPIO4_IO29	0x020
+		>;
+	};
+
 	/* USDHC1 (Wireless) */
 	pinctrl_usdhc1: usdhc1grp {
 		fsl,pins = <
@@ -559,6 +586,17 @@
 			MX8MN_IOMUXC_SD1_DATA1_USDHC1_DATA1	0x1d0
 			MX8MN_IOMUXC_SD1_DATA2_USDHC1_DATA2	0x1d0
 			MX8MN_IOMUXC_SD1_DATA3_USDHC1_DATA3	0x1d0
+		>;
+	};
+
+	pinctrl_usdhc1_sleep: usdhc1grp_sleep {
+		fsl,pins = <
+			MX8MN_IOMUXC_SD1_CLK_GPIO2_IO0		0x020
+			MX8MN_IOMUXC_SD1_CMD_GPIO2_IO1		0x020
+			MX8MN_IOMUXC_SD1_DATA0_GPIO2_IO2	0x020
+			MX8MN_IOMUXC_SD1_DATA1_GPIO2_IO3	0x020
+			MX8MN_IOMUXC_SD1_DATA2_GPIO2_IO4	0x020
+			MX8MN_IOMUXC_SD1_DATA3_GPIO2_IO5	0x020
 		>;
 	};
 
