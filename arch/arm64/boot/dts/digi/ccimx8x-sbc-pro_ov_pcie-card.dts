@@ -19,42 +19,29 @@
 /plugin/;
 
 / {
-	/* Add the "wireless" node so the wifi driver gets loaded */
+	/* Enable the PCIe regulator */
 	fragment@0 {
-		target-path = "/";
-		__overlay__ {
-			wireless {
-				/* U-Boot will fill in the MAC address here */
-			};
-		};
-	};
-
-	/* Enable the RF regulator */
-	fragment@1 {
-		target = <&reg_3v3_rf>;
-		__overlay__ {
-			status = "okay";
-		};
-	};
-
-	/* Enable the WL regulator */
-	fragment@2 {
-		target = <&reg_rf_wl_en>;
+		target = <&reg_3v3_pcie>;
 		__overlay__ {
 			status = "okay";
 		};
 	};
 
 	/*
-	 * Enable PCIe (Wireless):
-	 * - Add clkreq GPIO
-	 * - Add the WL regulator as a supply
+	 * Enable PCIe (mini card):
+	 * - Add the 3V3 PCIe regulator as a supply
+	 * - Use the regulator and mini card pinctrls
+	 * - Change the reset GPIO and add the disable GPIO
 	 */
-	fragment@3 {
+	fragment@1 {
 		target = <&pcieb>;
 		__overlay__ {
-			clkreq-gpio = <&lsio_gpio4 1 GPIO_ACTIVE_LOW>;
-			epdev_on-supply = <&reg_rf_wl_en>;
+			pinctrl-names = "default", "sleep";
+			pinctrl-0 = <&pinctrl_reg_3v3_pcie>, <&pinctrl_pcieb_mini_card>;
+			pinctrl-1 = <&pinctrl_reg_3v3_pcie_sleep>;
+			reset-gpio = <&lsio_gpio3 16 GPIO_ACTIVE_LOW>; /* PCIE_RESET_N */
+			disable-gpio = <&lsio_gpio0 30 GPIO_ACTIVE_HIGH>; /* PCIE_DIS_N */
+			vpcie-supply = <&reg_3v3_pcie>;
 			status = "okay";
 		};
 	};
