@@ -1,5 +1,5 @@
 /*
- * Copyright 2018, 2019, Digi International Inc.
+ * Copyright 2018-2020 Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -17,7 +17,7 @@
 
 /* i.MX8DX CPU */
 #include "../freescale/imx8dx.dtsi"
-/* Digi ConnectCore 8X (non-WiFi variant) */
+/* Digi ConnectCore 8X */
 #include "ccimx8x.dtsi"
 /* Digi ConnectCore 8X SBC Pro */
 #include "ccimx8x-sbc-pro.dtsi"
@@ -274,17 +274,6 @@
  * Conflicts with CAN2.
  */
 &lpuart3 {
-	status = "disabled";
-};
-
-/* PCIE (Mini Card) */
-&pcieb {
-	pinctrl-names = "default", "sleep";
-	pinctrl-0 = <&pinctrl_reg_3v3_pcie>, <&pinctrl_pcieb_mini_card>;
-	pinctrl-1 = <&pinctrl_reg_3v3_pcie_sleep>;
-	ext_osc = <1>;
-	reset-gpio = <&lsio_gpio3 16 GPIO_ACTIVE_LOW>; /* PCIE_RESET_N */
-	disable-gpio = <&lsio_gpio0 30 GPIO_ACTIVE_HIGH>; /* PCIE_DIS_N */
 	status = "disabled";
 };
 

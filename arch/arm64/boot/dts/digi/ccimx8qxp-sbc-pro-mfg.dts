@@ -1,5 +1,5 @@
 /*
- * Copyright 2018, Digi International Inc.
+ * Copyright 2018-2020 Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -17,8 +17,8 @@
 
 /* i.MX8QXP CPU */
 #include "../freescale/imx8qxp.dtsi"
-/* Digi ConnectCore 8X (WiFi/bluetooth variant) */
-#include "ccimx8x-wb.dtsi"
+/* Digi ConnectCore 8X */
+#include "ccimx8x.dtsi"
 /* Digi ConnectCore 8X SBC Pro */
 #include "ccimx8x-sbc-pro.dtsi"
 
@@ -210,13 +210,6 @@
  */
 &lpuart3 {
 	status = "disabled";
-};
-
-/* PCIE (Wireless) and PCIe (Mini Card) */
-&pcieb {
-	pinctrl-names = "default", "sleep";
-	pinctrl-0 = <&pinctrl_reg_3v3_pcie>, <&pinctrl_pcieb>, <&pinctrl_pcieb_mini_card>;
-	pinctrl-1 = <&pinctrl_reg_3v3_pcie_sleep>;
 };
 
 /* Audio support */

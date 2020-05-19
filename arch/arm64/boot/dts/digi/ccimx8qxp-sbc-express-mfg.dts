@@ -1,5 +1,5 @@
 /*
- * Copyright 2018, Digi International Inc.
+ * Copyright 2018-2020 Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -17,8 +17,8 @@
 
 /* i.MX8QXP CPU */
 #include "../freescale/imx8qxp.dtsi"
-/* Digi ConnectCore 8X (WiFi/bluetooth variant) */
-#include "ccimx8x-wb.dtsi"
+/* Digi ConnectCore 8X */
+#include "ccimx8x.dtsi"
 /* Digi ConnectCore 8X SBC Express */
 #include "ccimx8x-sbc-express.dtsi"
 
