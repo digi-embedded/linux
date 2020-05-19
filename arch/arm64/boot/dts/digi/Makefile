@@ -9,6 +9,7 @@ dtb-$(CONFIG_ARCH_MXC) += ccimx8dx-mfg-interim.dtb \
 			  ccimx8qxp-sbc-pro.dtb \
 			  ccimx8x_ov_wifi.dtbo \
 			  ccimx8x_ov_bt.dtbo \
+			  ccimx8x-mfg-functional_ov_non-wb.dtbo \
 			  ccimx8x-sbc-pro_ov_pcie-card.dtbo \
 
 dtb-$(CONFIG_ARCH_MXC) += ccimx8mn-dvk.dtb \
