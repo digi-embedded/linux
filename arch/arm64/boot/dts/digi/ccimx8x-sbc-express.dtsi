@@ -1,5 +1,5 @@
 /*
- * Copyright 2018, Digi International Inc.
+ * Copyright 2018-2020 Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -492,14 +492,6 @@
 		fsl,pins = <
 			IMX8QXP_SPI3_CS1_ADMA_I2C3_SCL	0x06000020
 			IMX8QXP_MCLK_IN1_ADMA_I2C3_SDA	0x06000020
-		>;
-	};
-
-	pinctrl_pcieb: pcieagrp{
-		fsl,pins = <
-			IMX8QXP_PCIE_CTRL0_PERST_B_LSIO_GPIO4_IO00		0x06000021
-			IMX8QXP_PCIE_CTRL0_CLKREQ_B_LSIO_GPIO4_IO01	0x06000021
-			IMX8QXP_PCIE_CTRL0_WAKE_B_LSIO_GPIO4_IO02		0x04000021
 		>;
 	};
 

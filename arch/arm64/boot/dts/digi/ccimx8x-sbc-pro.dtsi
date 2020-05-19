@@ -1,5 +1,5 @@
 /*
- * Copyright 2018, Digi International Inc.
+ * Copyright 2018-2020 Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -146,6 +146,7 @@
 			vin-supply = <&reg_3v3_ext>;
 		};
 
+		/* PCIe mini card regulator, disabled by default */
 		reg_3v3_pcie: regulator@6 {
 			compatible = "regulator-fixed";
 			reg = <6>;
@@ -155,6 +156,7 @@
 			gpio = <&lsio_gpio0 31 GPIO_ACTIVE_HIGH>; /* PCIE_VCC_EN */
 			enable-active-high;
 			startup-delay-us = <100000>;
+			status = "disabled";
 		};
 
 		reg_3v3_usb_hub: regulator@7 {
@@ -702,11 +704,6 @@
 /*&pd_dma_lpuart2 {
 	debug_console;
 };*/
-
-/* PCIE (Mini Card) */
-&pcieb {
-	vpcie-supply = <&reg_3v3_pcie>;
-};
 
 &dc0_pc {
 	status = "okay";
