@@ -1,5 +1,5 @@
 /*
- * Copyright 2018, Digi International Inc.
+ * Copyright 2018-2020 Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -20,6 +20,14 @@
 		i2c1 = &i2c1;
 		i2c2 = &i2c2;
 		i2c3 = &i2c3;
+	};
+
+	/* Bluetooth, disabled by default */
+	bluetooth: bluetooth {
+		/* U-Boot will fill in the MAC address here */
+		compatible = "digi,bluetooth-cc8x";
+		vin-supply = <&reg_rf_bt_en>;
+		status = "disabled";
 	};
 
 	caam_keyblob: caam-keyblob {
@@ -89,6 +97,52 @@
 			regulator-name = "1v8";
 			regulator-min-microvolt = <1800000>;
 			regulator-max-microvolt = <1800000>;
+		};
+
+		/* Wifi/Bluetooth regulators, disabled by default */
+		reg_3v3_rf: regulator-som@4 {
+			compatible = "regulator-fixed";
+			reg = <4>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_reg_3v3_rf>;
+			regulator-name = "3v3_rf";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			gpio = <&lsio_gpio3 12 GPIO_ACTIVE_HIGH>; /* 3V3_RF_EN */
+			enable-active-high;
+			startup-delay-us = <100000>;
+			vin-supply = <&reg_3v3>;
+			status = "disabled";
+		};
+
+		reg_rf_wl_en: regulator-som@5 {
+			compatible = "regulator-fixed";
+			reg = <5>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_reg_rf_wl_en>;
+			regulator-name = "rf_wl_en";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			gpio = <&lsio_gpio3 11 GPIO_ACTIVE_HIGH>; /* WL_EN */
+			enable-active-high;
+			startup-delay-us = <100>;
+			vin-supply = <&reg_3v3_rf>;
+			status = "disabled";
+		};
+
+		reg_rf_bt_en: regulator-som@6 {
+			compatible = "regulator-fixed";
+			reg = <6>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_reg_rf_bt_en>;
+			regulator-name = "rf_bt_en";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			gpio = <&lsio_gpio3 10 GPIO_ACTIVE_HIGH>; /* BT_EN */
+			enable-active-high;
+			startup-delay-us = <100>;
+			vin-supply = <&reg_3v3_rf>;
+			status = "disabled";
 		};
 	};
 };
@@ -238,6 +292,25 @@
 	>;
 };
 
+/* UART1 (Bluetooth), disabled by default */
+&lpuart1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lpuart1_4wires>;
+	status = "disabled";
+};
+
+/* PCIe (Wireless), disabled by default */
+&pcieb{
+	compatible = "fsl,imx8qxp-pcie", "snps,dw-pcie";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pcieb>;
+	ext_osc = <1>;
+	clkreq-gpio = <&lsio_gpio4 1 GPIO_ACTIVE_LOW>;
+	reset-gpio = <&lsio_gpio4 0 GPIO_ACTIVE_LOW>;
+	epdev_on-supply = <&reg_rf_wl_en>;
+	status = "disabled";
+};
+
 &rpmsg{
 	/*
 	 * 64K for one rpmsg instance:
@@ -342,6 +415,16 @@
 		>;
 	};
 
+	/* UART1 Bluetooth (4 wires) */
+	pinctrl_lpuart1_4wires: lpuart1grp_4wires {
+		fsl,pins = <
+			IMX8QXP_UART1_TX_ADMA_UART1_TX		0x06000020
+			IMX8QXP_UART1_RX_ADMA_UART1_RX		0x06000020
+			IMX8QXP_UART1_RTS_B_ADMA_UART1_RTS_B	0x06000020
+			IMX8QXP_UART1_CTS_B_ADMA_UART1_CTS_B	0x06000020
+		>;
+	};
+
 	pinctrl_mca_cc8x: mcagrp {
 		fsl,pins = <
 			/*
@@ -355,6 +438,36 @@
 
 			/* MCA_FW_UPDATE */
 			IMX8QXP_QSPI0A_DATA0_LSIO_GPIO3_IO09	0x06000021
+		>;
+	};
+
+	/* PCI Wireless */
+	pinctrl_pcieb: pcieagrp {
+		fsl,pins = <
+			IMX8QXP_PCIE_CTRL0_PERST_B_LSIO_GPIO4_IO00		0x06000021
+			IMX8QXP_PCIE_CTRL0_CLKREQ_B_LSIO_GPIO4_IO01	0x06000021
+			IMX8QXP_PCIE_CTRL0_WAKE_B_LSIO_GPIO4_IO02		0x06000021
+		>;
+	};
+
+	pinctrl_reg_3v3_rf: reg_3v3_rf_grp {
+		fsl,pins = <
+			/* Voltage for RF domain (3V3_RF_EN) */
+			IMX8QXP_QSPI0A_DATA3_LSIO_GPIO3_IO12		0x06000021
+		>;
+	};
+
+	pinctrl_reg_rf_bt_en: reg_rf_bt_en_grp {
+		fsl,pins = <
+			/* Bluetooth enable (BT_EN) */
+			IMX8QXP_QSPI0A_DATA1_LSIO_GPIO3_IO10		0x06000021
+		>;
+	};
+
+	pinctrl_reg_rf_wl_en: reg_rf_wl_en_grp {
+		fsl,pins = <
+			/* Wireless enable (WL_EN) */
+			IMX8QXP_QSPI0A_DATA2_LSIO_GPIO3_IO11		0x06000021
 		>;
 	};
 

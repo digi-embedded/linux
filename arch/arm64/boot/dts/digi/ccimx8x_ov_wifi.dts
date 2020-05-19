@@ -1,5 +1,5 @@
 /*
- * Copyright 2019, Digi International Inc.
+ * Copyright 2020 Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,23 +14,40 @@
  */
 
 /dts-v1/;
+/plugin/;
 
-/* i.MX8DX CPU */
-#include "../freescale/imx8dx.dtsi"
-/* Digi ConnectCore 8X (WiFi/bluetooth variant) */
-#include "ccimx8x-wb.dtsi"
-/* Digi ConnectCore 8X Functional test board */
-#include "ccimx8x-mfg-functional.dtsi"
+/ {
+	/* Add the "wireless" node so the wifi driver gets loaded */
+	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			wireless {
+				/* U-Boot will fill in the MAC address here */
+			};
+		};
+	};
 
-/* MIPI display support 
-&mipi_dsi_phy1 {
-	status = "okay";
+	/* Enable the RF regulator */
+	fragment@1 {
+		target = <&reg_3v3_rf>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+
+	/* Enable the WL regulator */
+	fragment@2 {
+		target = <&reg_rf_wl_en>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+
+	/* Enable PCIe (Wireless) */
+	fragment@3 {
+		target = <&pcieb>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
 };
-
-&mipi_dsi1 {
-	status = "okay";
-};
-
-&mipi_dsi_bridge1 {
-	status = "okay";
-};*/
