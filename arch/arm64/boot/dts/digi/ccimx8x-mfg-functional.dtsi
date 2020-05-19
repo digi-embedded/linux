@@ -546,4 +546,12 @@
 			IMX8QXP_SPI2_SDI_LSIO_GPIO1_IO02	0x06000020
 		>;
 	};
+
+	/* PCIE (Mini Card) */
+	pinctrl_pcieb_mini_card: pcieagrp_mini_card {
+		fsl,pins = <
+			IMX8QXP_PCIE_CTRL0_PERST_B_LSIO_GPIO4_IO00		0x06000021
+			IMX8QXP_PCIE_CTRL0_WAKE_B_LSIO_GPIO4_IO02		0x04000021
+		>;
+	};
 };
