@@ -70,6 +70,7 @@ struct mca_drv {
 	struct bin_attribute *nvram;
 	struct device *i2c_adapter_dev;
 	struct syscore_ops syscore;
+	bool suspended;
 };
 
 #endif /* MFD_MCA_COMMON_CORE_H_ */
