@@ -238,15 +238,6 @@
 	>;
 };
 
-/*&mu {
-	/*
-	 * Skip the registration of the SC interrupt handler on the MU ipc code.
-	 * The MCA will register its own interrupt handler and will call the
-	 * MU isr acordingly.
-	 
-	digi,skip-irq-req;
-};*/
-
 &rpmsg{
 	/*
 	 * 64K for one rpmsg instance:
@@ -301,10 +292,6 @@
 	no-1-8-v;
 	status = "okay";
 };
-
-/*&vpu {
-	status = "disabled";
-};*/
 
 &vpu_decoder {
 	boot-region = <&decoder_boot>;
