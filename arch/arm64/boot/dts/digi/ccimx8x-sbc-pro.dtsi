@@ -333,14 +333,16 @@
 
 	/* CSI Parallel Camera */
 	ov5640: ov5640@3c {
-		compatible = "ovti,ov5640_v3";
+		compatible = "ovti,ov5640";
 		reg = <0x3c>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_parallel_csi>;
-		//clocks = <&clk IMX8QXP_PARALLEL_CSI_MISC0_CLK>;
-		clock-names = "csi_mclk";
-		pwn-gpios = <&lsio_gpio3 2 GPIO_ACTIVE_LOW>;
-		rst-gpios = <&lsio_gpio3 3 GPIO_ACTIVE_HIGH>;
+		clocks = <&pi0_misc_lpcg 0>;
+		assigned-clocks = <&pi0_misc_lpcg 0>;
+		assigned-clock-rates = <24000000>;
+		clock-names = "xclk";
+		powerdown = <&lsio_gpio3 2 GPIO_ACTIVE_LOW>;
+		reset = <&lsio_gpio3 3 GPIO_ACTIVE_HIGH>;
 		csi_id = <0>;
 		mclk = <24000000>;
 		mclk_source = <0>;
@@ -349,6 +351,11 @@
 		port {
 			ov5640_ep: endpoint {
 				remote-endpoint = <&parallel_csi_ep>;
+				bus-type = <5>; /* V4L2_FWNODE_BUS_TYPE_PARALLEL */
+				bus-width = <8>;
+				vsync-active = <0>;
+				hsync-active = <1>;
+				pclk-sample = <1>;
 			};
 		};
 	};
@@ -404,10 +411,34 @@
 &isi_0 {
 	interface = <6 0 2>;	/* INPUT: 6-PARALLEL CSI */
 	parallel_csi;
+	cap_device {
+		status = "okay";
+	};
 };
 
 &isi_1 {
 	interface = <2 0 2>;	/* INPUT: 2-MIPI CSI0 */
+	cap_device {
+		status = "okay";
+	};
+	m2m_device{
+		compatible = "imx-isi-m2m";
+		status = "okay";
+	};
+};
+
+&isi_2 {
+	interface = <2 0 2>;
+	cap_device {
+		status = "okay";
+	};
+};
+
+&isi_3 {
+	interface = <2 0 2>;
+	cap_device {
+		status = "okay";
+	};
 };
 
 /* MIPI-DSI0 I2C available on LVDS0 connector */
@@ -483,7 +514,7 @@
 		reg = <0x3c>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_mipi>;
-		clocks = <&clk_dummy>;
+		clocks = <&xtal24m>;
 		clock-names = "csi_mclk";
 		csi_id = <0>;
 		rst-gpios = <&lsio_gpio3 21 GPIO_ACTIVE_LOW>;
@@ -495,6 +526,7 @@
 		port {
 			ov5640_mipi_ep: endpoint {
 				remote-endpoint = <&mipi_csi0_ep>;
+				data-lanes = <1 2>;
 			};
 		};
 	};
@@ -503,6 +535,7 @@
 &mipi_csi_0 {
 	#address-cells = <1>;
 	#size-cells = <0>;
+	/delete-property/virtual-channel;
 	status = "disabled";
 
 	/* Camera 0  MIPI CSI-2 (CSIS0) */

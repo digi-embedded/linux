@@ -61,6 +61,10 @@
 	status = "okay";
 };
 
+&irqsteer_csi0 {
+	status = "okay";
+};
+
 &ldb1 {
 	pinctrl-names = "default";
 	status = "disabled";
