@@ -351,6 +351,10 @@
 	};
 };
 
+&irqsteer_csi0 {
+	status = "okay";
+};
+
 /*
  * Enable only if the parallel camera is physically connected.
  * If not, the MIPI camera may not work.
