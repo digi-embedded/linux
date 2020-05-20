@@ -165,6 +165,14 @@
 	status = "okay";
 };
 
+&jpegdec {
+	status = "okay";
+};
+
+&jpegenc {
+	status = "okay";
+};
+
 &ldb1 {
 	status = "okay";
 };
