@@ -58,6 +58,14 @@ struct regmap_irq_chip_data {
 
 static struct regmap_irq_chip_data *_irq_chip_data;
 
+static inline bool mca_cc8x_irq_asserted(unsigned long event, void *group)
+{
+	if ((event & SC_IRQ_TEMP_MCA) && (*(u8 *)group == SC_IRQ_GROUP_TEMP))
+		return true;
+
+	return false;
+}
+
 static inline const
 struct regmap_irq *irq_to_regmap_irq(struct regmap_irq_chip_data *data,
 				     int irq)
@@ -349,8 +357,12 @@ static int imx_sc_mca_irq_notify(struct notifier_block *nb, unsigned long event,
 				 void *group)
 {
 	struct regmap_irq_chip_data *data = _irq_chip_data;
+	struct mca_drv *mca = dev_get_drvdata(data->map->dev);
 
-	if ((event & SC_IRQ_TEMP_MCA) && (*(u8 *)group == SC_IRQ_GROUP_TEMP))
+	if (mca->suspended)
+		/* Give the system time to awake the i2c interface */
+		usleep_range(1000, 2000);
+	else if (mca_cc8x_irq_asserted(event, group))
 		mca_cc8x_irq_thread(data);
 
 	return 0;

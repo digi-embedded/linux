@@ -759,6 +759,8 @@ int mca_cc8_suspend(struct device *dev)
 		return -ENODEV;
 	}
 
+	mca->suspended = true;
+
 	/* Set the suspend bit in PWR_CTRL_0 */
 	return regmap_update_bits(pmca->regmap, MCA_PWR_CTRL_0,
 				  MCA_PWR_GO_SUSPEND,
@@ -776,6 +778,8 @@ int mca_cc8_resume(struct device *dev)
 		dev_err(dev, " mca was null in %s\n", __func__);
 		return -ENODEV;
 	}
+
+	mca->suspended = false;
 
 	/*
 	 * Generate traffic on the i2c bus to wakeup the MCA, in case it was in
