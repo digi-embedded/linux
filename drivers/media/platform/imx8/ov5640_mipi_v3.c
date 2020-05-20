@@ -48,7 +48,7 @@
 #define MIPI_CONTROLL00_MIPI_MODE	BIT(2)
 
 #define OV5640_SENS_PAD_SOURCE	0
-#define OV5640_SENS_PADS_NUM	1
+#define OV5640_SENS_PADS_NUM	5
 
 enum ov5640_mode {
 	ov5640_mode_MIN = 0,
