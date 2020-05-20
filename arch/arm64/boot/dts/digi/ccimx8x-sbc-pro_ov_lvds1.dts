@@ -1,0 +1,85 @@
+/*
+ * Copyright 2020 Digi International Inc.
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+/dts-v1/;
+/plugin/;
+
+/ {
+	/* Enable i2c0_mipi_lvds1 */
+	fragment@0 {
+		target = <&i2c0_mipi_lvds1>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+
+	/* Enable ldb2 */
+	fragment@1 {
+		target = <&ldb2>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+
+	/* Enable ldb2_phy */
+	fragment@2 {
+		target = <&ldb2_phy>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+
+	/* Enable lvds1 */
+	fragment@3 {
+		target = <&lvds1>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+
+	/* Enable lvds_backlight1 */
+	fragment@4 {
+		target = <&lvds_backlight1>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+
+	/* Enable pwm_mipi_lvds1 */
+	fragment@5 {
+		target = <&pwm_mipi_lvds1>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+
+	/* Enable lvds1_goodix_touch1 with extended desktop */
+	fragment@6 {
+		target = <&lvds1_goodix_touch1>;
+		__overlay__ {
+			extends-desktop = <&lvds0>;
+			status = "okay";
+		};
+	};
+
+	/* Enable lvds1_goodix_touch2 with extended desktop */
+	fragment@7 {
+		target = <&lvds1_goodix_touch2>;
+		__overlay__ {
+			extends-desktop = <&lvds0>;
+			status = "okay";
+		};
+	};
+};
