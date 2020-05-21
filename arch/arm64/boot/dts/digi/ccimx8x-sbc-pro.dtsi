@@ -751,13 +751,6 @@
  
 /delete-node/ &{/i2c@5a800000/mca@63/pwms/pwm@1};*/
 
-/* PWM signal on Expansion connector: SPI0_CS1 (conflicts with SPI0 CS1) 
-&pwm_adma_lcdif {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_pwm_adma>;
-	status = "disabled";
-};*/
-
 &sai0 {
 	/*assigned-clocks = <&clk IMX8QXP_AUD_PLL0_DIV>,
 			  <&clk IMX8QXP_AUD_ACM_AUD_PLL_CLK0_DIV>,
@@ -1087,13 +1080,6 @@
 			IMX8QXP_SAI1_RXC_LSIO_GPIO0_IO30		0x06000061
 			/* PCIE_WAKE_N */
 			IMX8QXP_SAI1_RXD_LSIO_GPIO0_IO29		0x04000021
-		>;
-	};
-
-	pinctrl_pwm_adma: pwm_adma_grp {
-		fsl,pins = <
-			/* PWM on Expansion connector */
-			IMX8QXP_SPI0_CS1_ADMA_LCD_PWM0_OUT		0x00000060
 		>;
 	};
 
