@@ -38,6 +38,7 @@ struct lt8912 {
 	struct gpio_desc *reset_n;
 	struct gpio_desc *gpiod_int;
 	int hpd_irq;
+	bool no_hpd;
 };
 
 static int lt8912_attach_dsi(struct lt8912 *lt);
@@ -235,6 +236,8 @@ int lt8912_parse_dt(struct device_node *np, struct lt8912 *lt)
 	struct device *dev = &lt->i2c->dev;
 	u32 num_lanes = 0;
 
+	lt->no_hpd = of_property_read_bool(np, "no-hpd");
+
 	of_property_read_u32(np, "digi,dsi-lanes", &num_lanes);
 
 	if (num_lanes < 1 || num_lanes > 4) {
@@ -274,15 +277,19 @@ lt8912_connector_detect(struct drm_connector *connector, bool force)
 	struct lt8912 *lt = connector_to_lt8912(connector);
 	int i = 0;
 
-	/* TODO: HPD handing (reg[0xc1] - bit[7]) */
-	do {
-		if (gpiod_get_value(lt->gpiod_int))
-			return connector_status_connected;
-		if (force)
-			usleep_range(5000, 10000);
-	} while (i++ < 100 && force);
+	if (lt->no_hpd) {
+		return connector_status_connected;
+	} else {
+		/* TODO: HPD handing (reg[0xc1] - bit[7]) */
+		do {
+			if (gpiod_get_value(lt->gpiod_int))
+				return connector_status_connected;
+			if (force)
+				usleep_range(5000, 10000);
+		} while (i++ < 100 && force);
 
-	return connector_status_disconnected;
+		return connector_status_disconnected;
+	}
 }
 
 static const struct drm_connector_funcs lt8912_connector_funcs = {
@@ -515,6 +522,9 @@ static int lt8912_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 
 	lt->dev = dev;
 
+	/* get DT configuration */
+	lt8912_parse_dt(dev->of_node, lt);
+
 	lt->reset_n = devm_gpiod_get_optional(dev, "reset", GPIOD_ASIS);
 	if (IS_ERR(lt->reset_n)) {
 		ret = PTR_ERR(lt->reset_n);
@@ -522,33 +532,33 @@ static int lt8912_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 		return ret;
 	}
 
-	/* interrupt handling */
-	lt->gpiod_int = devm_gpiod_get_optional(dev, "hpd", GPIOD_IN);
-	if (IS_ERR(lt->gpiod_int)) {
-		ret = PTR_ERR(lt->gpiod_int);
-		if (ret != -EPROBE_DEFER)
-			dev_err(dev, "Failed to get hpd GPIO: %d\n", ret);
-		return ret;
-	}
+	if (!lt->no_hpd) {
+		lt->gpiod_int = devm_gpiod_get_optional(dev, "hpd", GPIOD_IN);
+		if (IS_ERR(lt->gpiod_int)) {
+			ret = PTR_ERR(lt->gpiod_int);
+			if (ret != -EPROBE_DEFER)
+				dev_err(dev, "Failed to get hpd GPIO: %d\n",
+					ret);
+			return ret;
+		}
 
-	lt->hpd_irq = gpiod_to_irq(lt->gpiod_int);
-	if (lt->hpd_irq < 0) {
-		dev_err(dev, "Failed to get HPD IRQ: %d\n", lt->hpd_irq);
-		return -ENODEV;
-	}
+		lt->hpd_irq = gpiod_to_irq(lt->gpiod_int);
+		if (lt->hpd_irq < 0) {
+			dev_err(dev, "Failed to get HPD IRQ: %d\n", lt->hpd_irq);
+			return -ENODEV;
+		}
 
-	ret = devm_request_threaded_irq(dev, lt->hpd_irq, NULL,
-					lt8912_hpd_threaded_handler,
-					IRQF_TRIGGER_RISING | IRQF_ONESHOT,
-					"lt8912-irq", lt);
-	if (ret) {
-		dev_err(dev, "Failed to request CABLE_DET threaded IRQ: %d\n",
-			  ret);
-		return ret;
+		ret = devm_request_threaded_irq(dev, lt->hpd_irq, NULL,
+						lt8912_hpd_threaded_handler,
+						IRQF_TRIGGER_RISING | IRQF_ONESHOT,
+						"lt8912-irq", lt);
+		if (ret) {
+			dev_err(dev,
+				"Failed to request CABLE_DET threaded IRQ: %d\n",
+				ret);
+			return ret;
+		}
 	}
-
-	/* get DT configuration */
-	lt8912_parse_dt(dev->of_node, lt);
 
 	lt->i2c = i2c;
 	ret = lt8912_i2c_init(lt, lt->i2c);
