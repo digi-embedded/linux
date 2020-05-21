@@ -93,6 +93,7 @@ Additional required properties for imx8 pcie:
 		hsio-cfg = <PCIEAX2PCIEBX1>;
 		hsio = <&hsio>;
 		local-addr = <0x80000000>;
+- digi,disable_pci_msi: Disables the PCI MSI support.
 
 Example:
 

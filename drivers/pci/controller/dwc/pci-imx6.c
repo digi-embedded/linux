@@ -2628,6 +2628,10 @@ static int imx6_pcie_probe(struct platform_device *pdev)
 				 &imx6_pcie->tx_swing_low))
 		imx6_pcie->tx_swing_low = 127;
 
+	/* Disable PCI MSI support when property is present */
+	if (of_property_read_bool(node, "digi,disable_pci_msi"))
+		pci_no_msi();
+
 	/* Limit link speed */
 	ret = of_property_read_u32(node, "fsl,max-link-speed",
 				   &imx6_pcie->link_gen);
