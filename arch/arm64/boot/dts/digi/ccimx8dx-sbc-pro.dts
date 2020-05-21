@@ -294,11 +294,6 @@
 	status = "okay";
 };
 
-/* PWM signal on Expansion connector: SPI0_CS1 (conflicts with SPI0 CS1) */
-//&pwm_adma_lcdif {
-//	status = "okay";
-//};
-
 /*
  * Uncomment to enable MCA ADC channels on Expansion connector:
  *  - MCA_IO7 (channel 7)
