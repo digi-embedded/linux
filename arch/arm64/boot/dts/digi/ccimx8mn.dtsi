@@ -208,13 +208,13 @@
 		compatible = "nxp,pca9450";
 		status = "okay";
 
+		pca9450,pmic-buck2-uses-i2c-dvs;
+		/* Run/Standby voltage */
+		pca9450,pmic-buck2-dvs-voltage = <950000>, <850000>;
+
 		regulators {
 			#address-cells = <1>;
 			#size-cells = <0>;
-
-			pca9450,pmic-buck2-uses-i2c-dvs;
-			/* Run/Standby voltage */
-			pca9450,pmic-buck2-dvs-voltage = <950000>, <850000>;
 
 			buck1_reg_pca9450: regulator@0 {
 				reg = <0>;
