@@ -1,12 +1,10 @@
-dtb-$(CONFIG_ARCH_MXC) += ccimx8dx-mfg-interim.dtb \
-			  ccimx8dx-mfg-functional.dtb \
-			  ccimx8dx-sbc-pro.dtb \
-			  ccimx8qxp-mfg-interim.dtb \
-			  ccimx8qxp-mfg-functional.dtb \
-			  ccimx8qxp-sbc-express-mfg.dtb \
-			  ccimx8qxp-sbc-express.dtb \
-			  ccimx8qxp-sbc-pro-mfg.dtb \
-			  ccimx8qxp-sbc-pro.dtb \
+dtb-$(CONFIG_ARCH_MXC) += ccimx8x-mfg-interim.dtb \
+			  ccimx8x-mfg-functional.dtb \
+			  ccimx8x-sbc-express-mfg.dtb \
+			  ccimx8x-sbc-express.dtb \
+			  ccimx8x-sbc-pro-mfg.dtb \
+			  ccimx8x-sbc-pro.dtb \
+			  ccimx8x_ov_qxp.dtbo \
 			  ccimx8x_ov_wifi.dtbo \
 			  ccimx8x_ov_bt.dtbo \
 			  ccimx8x-mfg-functional_ov_non-wb.dtbo \
