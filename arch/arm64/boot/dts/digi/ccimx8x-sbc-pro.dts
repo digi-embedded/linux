@@ -15,8 +15,23 @@
 
 /dts-v1/;
 
-/* i.MX8QXP CPU */
-#include "../freescale/imx8qxp.dtsi"
+/*
+ * The device tree for the ConnectCore 8X SBC Pro is made out of different
+ * device tree include files that contain the common hardware of all variants.
+ *
+ * A U-Boot boot script applies additional overlays for variant-specific
+ * hardware, including:
+ *  - Overlay for ConnectCore 8X variants with a quad-core CPU
+ *  - Overlay for ConnectCore 8X variants with Wi-Fi
+ *  - Overlay for ConnectCore 8X variants with Bluetooth
+ *
+ * If you are not going to use Digi's boot script, you can:
+ *  - Manually add the overlays to U-Boot's "overlays" environment variable
+ *  - Apply the overlay fragments manually to this device tree, if you don't
+ *    use Digi U-Boot's "dboot" command
+ */
+/* i.MX8DX CPU */
+#include "../freescale/imx8dx.dtsi"
 /* Digi ConnectCore 8X */
 #include "ccimx8x.dtsi"
 /* Digi ConnectCore 8X SBC Pro */

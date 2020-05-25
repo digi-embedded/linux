@@ -15,8 +15,8 @@
 
 /dts-v1/;
 
-/* i.MX8QXP CPU */
-#include "../freescale/imx8qxp.dtsi"
+/* i.MX8DX CPU */
+#include "../freescale/imx8dx.dtsi"
 /* Digi ConnectCore 8X */
 #include "ccimx8x.dtsi"
 /* Digi ConnectCore 8X SBC Express */
