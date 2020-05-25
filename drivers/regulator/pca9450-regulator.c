@@ -535,6 +535,7 @@ static int pca9450_buck123_dvs_init(struct pca9450_pmic *pmic)
 	struct pca9450 *pca9450 = pmic->mfd;
 	struct pca9450_buck_dvs *buck_dvs = &pmic->buck_dvs[0];
 	int i, ret, val, selector = 0;
+	u8 reg_ctrl;
 	u8 reg_dvs0, reg_dvs1;
 	u8 reg_dvs0_msk, reg_dvs1_msk;
 
@@ -542,18 +543,21 @@ static int pca9450_buck123_dvs_init(struct pca9450_pmic *pmic)
 		switch (i) {
 		case 0:
 		default:
+			reg_ctrl = PCA9450_BUCK1CTRL;
 			reg_dvs0 = PCA9450_BUCK1OUT_DVS0;
 			reg_dvs0_msk = BUCK1OUT_DVS0_MASK;
 			reg_dvs1 = PCA9450_BUCK1OUT_DVS1;
 			reg_dvs1_msk = BUCK1OUT_DVS1_MASK;
 			break;
 		case 1:
+			reg_ctrl = PCA9450_BUCK2CTRL;
 			reg_dvs0 = PCA9450_BUCK2OUT_DVS0;
 			reg_dvs0_msk = BUCK2OUT_DVS0_MASK;
 			reg_dvs1 = PCA9450_BUCK2OUT_DVS1;
 			reg_dvs1_msk = BUCK2OUT_DVS1_MASK;
 			break;
 		case 2:
+			reg_ctrl = PCA9450_BUCK3CTRL;
 			reg_dvs0 = PCA9450_BUCK3OUT_DVS0;
 			reg_dvs0_msk = BUCK3OUT_DVS0_MASK;
 			reg_dvs1 = PCA9450_BUCK3OUT_DVS1;
@@ -574,8 +578,11 @@ static int pca9450_buck123_dvs_init(struct pca9450_pmic *pmic)
 			} else {
 				val = (selector & reg_dvs0_msk);
 				ret = pca9450_reg_write(pca9450, reg_dvs0, val);
-				if (ret < 0)
-					return ret;
+				if (ret < 0) {
+					dev_err(pmic->dev,
+						 "couln't write selector for DVS0\n");
+					continue;
+				}
 			}
 		}
 		if (reg_dvs1 > 0) {
@@ -586,11 +593,39 @@ static int pca9450_buck123_dvs_init(struct pca9450_pmic *pmic)
 				dev_dbg(pmic->dev,
 					"not found selector for DVS1 [%d]\n",
 					buck_dvs->voltage[1]);
-			} else {
-				val = (selector & reg_dvs1_msk);
-				ret = pca9450_reg_write(pca9450, reg_dvs1, val);
-				if (ret < 0)
-					return ret;
+				continue;
+			}
+
+			val = (selector & reg_dvs1_msk);
+			ret = pca9450_reg_write(pca9450, reg_dvs1, val);
+			if (ret < 0) {
+				dev_err(pmic->dev,
+					 "couln't write selector for DVS1\n");
+				continue;
+			}
+
+			/*
+			 * Update buck control register so dvs1 voltage is applied
+			 * in standby by:
+			 */
+			val = pca9450_reg_read(pca9450, reg_ctrl);
+
+			/*
+			 * 1- Set DVS_CTRL to 1: DVS ctrl through PMIC_STBY_REQ
+			 */
+			val |= BUCK1_DVS_CTRL;
+
+			/*
+			 * 2- Set Bx_ENMODE to 0b01: ON by PMIC_ON_REQ. Default
+			 * config may lead the regulator be disabled in standby.
+			 */
+			val = (val & ~BUCK1_ENMODE_MASK) | BUCK_ENMODE_ONREQ;
+
+			ret = pca9450_reg_write(pca9450, reg_ctrl, val);
+			if (ret < 0) {
+				dev_err(pmic->dev,
+					 "Couln't update BUCK%dCTRL\n", i+1);
+				continue;
 			}
 		}
 	}
