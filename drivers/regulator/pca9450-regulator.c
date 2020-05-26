@@ -83,6 +83,58 @@ static int pca9450_buck123_set_ramp_delay(struct regulator_dev *rdev,
 			BUCK1_RAMP_MASK, ramp_value << 6);
 }
 
+static int pca9450_ldo_suspend_do_enable(struct regulator_dev *rdev, bool en)
+{
+	struct pca9450_pmic *pmic = rdev_get_drvdata(rdev);
+	struct pca9450 *mfd = pmic->mfd;
+	int id = rdev->desc->id - PCA9450_LDO1;
+	unsigned int ldoctrl[5] = {PCA9450_LDO1CTRL, PCA9450_LDO2CTRL,
+				   PCA9450_LDO3CTRL, PCA9450_LDO4CTRL,
+				   PCA9450_LDO5CTRL_L};
+
+	dev_dbg(pmic->dev, "LDO[%d] suspend state=%s\n", id + 1, en ? "on" : "off");
+
+	return regmap_update_bits(mfd->regmap, ldoctrl[id], LDO1_EN_MASK,
+				  en ? LDO_ENMODE_ONREQ  :
+				  LDO_ENMODE_ONREQ_STBYREQ);
+}
+
+static int pca9450_ldo_suspend_enable(struct regulator_dev *rdev)
+{
+	return pca9450_ldo_suspend_do_enable(rdev, true);
+}
+
+static int pca9450_ldo_suspend_disable(struct regulator_dev *rdev)
+{
+	return pca9450_ldo_suspend_do_enable(rdev, false);
+}
+
+static int pca9450_buck_suspend_do_enable(struct regulator_dev *rdev, bool en)
+{
+	struct pca9450_pmic *pmic = rdev_get_drvdata(rdev);
+	struct pca9450 *mfd = pmic->mfd;
+	int id = rdev->desc->id;
+	unsigned int buckctrl[6] = {PCA9450_BUCK1CTRL, PCA9450_BUCK2CTRL,
+				    PCA9450_BUCK3CTRL, PCA9450_BUCK4CTRL,
+				    PCA9450_BUCK5CTRL, PCA9450_BUCK6CTRL};
+
+	dev_dbg(pmic->dev, "Buck[%d] suspend state=%s\n", id + 1, en ? "on" : "off");
+
+	return regmap_update_bits(mfd->regmap, buckctrl[id], BUCK1_ENMODE_MASK,
+				  en ? BUCK_ENMODE_ONREQ :
+				  BUCK_ENMODE_ONREQ_STBYREQ);
+}
+
+static int pca9450_buck_suspend_enable(struct regulator_dev *rdev)
+{
+	return pca9450_buck_suspend_do_enable(rdev, true);
+}
+
+static int pca9450_buck_suspend_disable(struct regulator_dev *rdev)
+{
+	return pca9450_buck_suspend_do_enable(rdev, false);
+}
+
 static struct regulator_ops pca9450_ldo_regulator_ops = {
 	.enable = regulator_enable_regmap,
 	.disable = regulator_disable_regmap,
@@ -90,6 +142,8 @@ static struct regulator_ops pca9450_ldo_regulator_ops = {
 	.list_voltage = regulator_list_voltage_linear_range,
 	.set_voltage_sel = regulator_set_voltage_sel_regmap,
 	.get_voltage_sel = regulator_get_voltage_sel_regmap,
+	.set_suspend_enable = pca9450_ldo_suspend_enable,
+	.set_suspend_disable = pca9450_ldo_suspend_disable,
 };
 
 static struct regulator_ops pca9450_fixed_regulator_ops = {
@@ -97,6 +151,8 @@ static struct regulator_ops pca9450_fixed_regulator_ops = {
 	.disable = regulator_disable_regmap,
 	.is_enabled = regulator_is_enabled_regmap,
 	.list_voltage = regulator_list_voltage_linear,
+	.set_suspend_enable = pca9450_ldo_suspend_enable,
+	.set_suspend_disable = pca9450_ldo_suspend_disable,
 };
 
 static struct regulator_ops pca9450_buck_regulator_ops = {
@@ -105,6 +161,8 @@ static struct regulator_ops pca9450_buck_regulator_ops = {
 	.set_voltage_sel = regulator_set_voltage_sel_regmap,
 	.get_voltage_sel = regulator_get_voltage_sel_regmap,
 	.set_voltage_time_sel = regulator_set_voltage_time_sel,
+	.set_suspend_enable = pca9450_buck_suspend_enable,
+	.set_suspend_disable = pca9450_buck_suspend_disable,
 };
 
 static struct regulator_ops pca9450_buck123_regulator_ops = {
@@ -114,6 +172,8 @@ static struct regulator_ops pca9450_buck123_regulator_ops = {
 	.get_voltage_sel = regulator_get_voltage_sel_regmap,
 	.set_voltage_time_sel = regulator_set_voltage_time_sel,
 	.set_ramp_delay = pca9450_buck123_set_ramp_delay,
+	.set_suspend_enable = pca9450_buck_suspend_enable,
+	.set_suspend_disable = pca9450_buck_suspend_disable,
 };
 
 /*
