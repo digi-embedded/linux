@@ -223,6 +223,12 @@ enum {
 #define LDO5H_EN_MASK			0xC0
 #define LDO5HOUT_MASK			0x0F
 
+/* PCA9450 LDO ENMODE bits */
+#define LDO_ENMODE_OFF			0x00
+#define LDO_ENMODE_ONREQ		0x40
+#define LDO_ENMODE_ONREQ_STBYREQ	0x80
+#define LDO_ENMODE_ON			0xC0
+
 /*
  * @brief Board platform data may be used to initialize regulators.
  */
