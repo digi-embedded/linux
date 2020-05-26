@@ -15,6 +15,25 @@
 
 /dts-v1/;
 
+/*
+ * The device tree for the ConnectCore 8M Nano DVK is made out of different
+ * device tree include files that contain the common hardware of all variants.
+ *
+ * A U-Boot boot script applies additional overlays for variant-specific
+ * hardware, including:
+ *  - Overlay for ConnectCore 8M Nano variants with Wi-Fi
+ *  - Overlay for ConnectCore 8M Nano variants with Bluetooth
+ *
+ * The boot script also applies a special overlay when running on
+ * ConnectCore 8M Nano SOMs with hardware revision 1. This overlay changes
+ * important interface configurations that are required to boot the system
+ * properly on said hardware revision.
+ *
+ * If you are not going to use Digi's boot script, you can:
+ *  - Manually add the overlays to U-Boot's "overlays" environment variable
+ *  - Apply the overlay fragments manually to this device tree, if you don't
+ *    use Digi U-Boot's "dboot" command
+ */
 /* i.MX8MN CPU */
 #include "../freescale/imx8mn.dtsi"
 /* Digi ConnectCore 8M Nano */
