@@ -897,7 +897,7 @@
 		status = "disabled";
 	};
 
-	sdma1: dma-controller@30bd0000 {
+	sdma1: sdma@30bd0000 {
 		compatible = "fsl,imx8mm-sdma", "fsl,imx8mq-sdma", "fsl,imx7d-sdma";
 		reg = <0x0 0x30bd0000 0x0 0x10000>;
 		interrupts = <GIC_SPI 2 IRQ_TYPE_LEVEL_HIGH>;
@@ -909,7 +909,7 @@
 		status = "okay";
 	};
 
-	sdma2: dma-controller@302c0000 {
+	sdma2: sdma@302c0000 {
 		compatible = "fsl,imx8mm-sdma", "fsl,imx8mq-sdma", "fsl,imx7d-sdma";
 		reg = <0x0 0x302c0000 0x0 0x10000>;
 		interrupts = <GIC_SPI 103 IRQ_TYPE_LEVEL_HIGH>;
@@ -922,7 +922,7 @@
 		status = "okay";
 	};
 
-	sdma3: dma-controller@302b0000 {
+	sdma3: sdma@302b0000 {
 		compatible = "fsl,imx8mm-sdma", "fsl,imx8mq-sdma", "fsl,imx7d-sdma";
 		reg = <0x0 0x302b0000 0x0 0x10000>;
 		interrupts = <GIC_SPI 34 IRQ_TYPE_LEVEL_HIGH>;
@@ -1262,7 +1262,7 @@
 			          <&clk IMX8MM_GPU_PLL_OUT>;
 		assigned-clock-parents = <&clk IMX8MM_GPU_PLL_OUT>, <&clk IMX8MM_GPU_PLL_OUT>,
 				         <&clk IMX8MM_SYS_PLL1_800M>, <&clk IMX8MM_SYS_PLL1_800M>;
-		assigned-clock-rates = <0>, <0>, <400000000>, <0>, <1000000000>;
+		assigned-clock-rates = <0>, <0>, <0>, <400000000>, <1000000000>;
 
 		power-domains = <&gpumix_pd>;
 

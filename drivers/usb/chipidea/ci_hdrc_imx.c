@@ -80,7 +80,8 @@ static const struct ci_hdrc_imx_platform_flag imx6ul_usb_data = {
 };
 
 static const struct ci_hdrc_imx_platform_flag imx7d_usb_data = {
-	.flags = CI_HDRC_SUPPORTS_RUNTIME_PM,
+	.flags = CI_HDRC_SUPPORTS_RUNTIME_PM |
+		CI_HDRC_HOST_SUSP_PHY_LPM,
 };
 
 static const struct ci_hdrc_imx_platform_flag imx7ulp_usb_data = {
@@ -90,6 +91,10 @@ static const struct ci_hdrc_imx_platform_flag imx7ulp_usb_data = {
 };
 
 static const struct ci_hdrc_imx_platform_flag imx8qm_usb_data = {
+	.flags = CI_HDRC_SUPPORTS_RUNTIME_PM,
+};
+
+static const struct ci_hdrc_imx_platform_flag imx8mm_usb_data = {
 	.flags = CI_HDRC_SUPPORTS_RUNTIME_PM,
 };
 
@@ -104,6 +109,7 @@ static const struct of_device_id ci_hdrc_imx_dt_ids[] = {
 	{ .compatible = "fsl,imx7d-usb", .data = &imx7d_usb_data},
 	{ .compatible = "fsl,imx7ulp-usb", .data = &imx7ulp_usb_data},
 	{ .compatible = "fsl,imx8qm-usb", .data = &imx8qm_usb_data},
+	{ .compatible = "fsl,imx8mm-usb", .data = &imx8mm_usb_data},
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, ci_hdrc_imx_dt_ids);
@@ -591,6 +597,14 @@ static int imx_controller_suspend(struct device *dev)
 				"usbmisc hsic_set_clk failed, ret=%d\n", ret);
 			return ret;
 		}
+
+	}
+
+	ret = imx_usbmisc_vbus_comparator_on(data->usbmisc_data, false);
+	if (ret) {
+		dev_err(dev,
+			"vbus comparator off failed, ret=%d\n", ret);
+		return ret;
 	}
 
 	imx_disable_unprepare_clks(dev);
@@ -638,6 +652,13 @@ static int imx_controller_resume(struct device *dev)
 		goto clk_disable;
 	}
 
+	ret = imx_usbmisc_vbus_comparator_on(data->usbmisc_data, true);
+	if (ret) {
+		dev_err(dev,
+			"vbus comparator on failed, ret=%d\n", ret);
+		goto vbus_comparator_off;
+	}
+
 	ret = imx_usbmisc_hsic_set_clk(data->usbmisc_data, true);
 	if (ret) {
 		dev_err(dev, "usbmisc hsic_set_clk failed, ret=%d\n", ret);
@@ -647,6 +668,8 @@ static int imx_controller_resume(struct device *dev)
 	return 0;
 
 hsic_set_clk_fail:
+	imx_usbmisc_vbus_comparator_on(data->usbmisc_data, false);
+vbus_comparator_off:
 	imx_usbmisc_set_wakeup(data->usbmisc_data, true);
 clk_disable:
 	imx_disable_unprepare_clks(dev);

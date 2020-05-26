@@ -43,18 +43,18 @@ extern struct snd_soc_platform_driver fsl_easrc_platform;
 				 SNDRV_PCM_FMTBIT_U32_LE | \
 				 SNDRV_PCM_FMTBIT_S20_3LE | \
 				 SNDRV_PCM_FMTBIT_U20_3LE | \
-				 SNDRV_PCM_FMTBIT_IEC958_SUBFRAME_LE)
+				 SNDRV_PCM_FMTBIT_FLOAT_LE)
 
 static int fsl_easrc_iec958_put_bits(struct snd_kcontrol *kcontrol,
 				     struct snd_ctl_elem_value *ucontrol)
 {
 	struct snd_soc_component *comp = snd_kcontrol_chip(kcontrol);
-	struct soc_enum *e = (struct soc_enum *)kcontrol->private_value;
-	unsigned int *item = ucontrol->value.enumerated.item;
 	struct fsl_easrc *easrc = snd_soc_component_get_drvdata(comp);
-	int val = snd_soc_enum_item_to_val(e, item[0]);
+	struct soc_mreg_control *mc =
+		(struct soc_mreg_control *)kcontrol->private_value;
+	unsigned int regval = ucontrol->value.integer.value[0];
 
-	easrc->bps_iec958 = val;
+	easrc->bps_iec958[mc->regbase] = regval;
 
 	return 0;
 }
@@ -64,19 +64,65 @@ static int fsl_easrc_iec958_get_bits(struct snd_kcontrol *kcontrol,
 {
 	struct snd_soc_component *comp = snd_kcontrol_chip(kcontrol);
 	struct fsl_easrc *easrc = snd_soc_component_get_drvdata(comp);
+	struct soc_mreg_control *mc =
+		(struct soc_mreg_control *)kcontrol->private_value;
 
-	ucontrol->value.enumerated.item[0] = easrc->bps_iec958;
+	ucontrol->value.enumerated.item[0] = easrc->bps_iec958[mc->regbase];
 
 	return 0;
 }
 
-static const char * const fsl_easrc_iec958_bits[] = {
-	"16bit", "20bit", "24bit"
-};
+int fsl_easrc_get_reg(struct snd_kcontrol *kcontrol,
+		    struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_component *component = snd_kcontrol_chip(kcontrol);
+	struct soc_mreg_control *mc =
+		(struct soc_mreg_control *)kcontrol->private_value;
+	unsigned int regval;
+	int ret;
 
-static const struct soc_enum fsl_easrc_iec958_bits_enum =
-	SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(fsl_easrc_iec958_bits),
-			    fsl_easrc_iec958_bits);
+	ret = snd_soc_component_read(component, mc->regbase, &regval);
+	if (ret < 0)
+		return ret;
+
+	ucontrol->value.integer.value[0] = regval;
+
+	return 0;
+}
+
+int fsl_easrc_set_reg(struct snd_kcontrol *kcontrol,
+		    struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_component *component = snd_kcontrol_chip(kcontrol);
+	struct soc_mreg_control *mc =
+		(struct soc_mreg_control *)kcontrol->private_value;
+	unsigned int regval = ucontrol->value.integer.value[0];
+	int ret;
+
+	ret = snd_soc_component_write(component, mc->regbase, regval);
+	if (ret < 0)
+		return ret;
+
+	return 0;
+}
+
+#define SOC_SINGLE_REG_RW(xname, xreg) \
+{	.iface = SNDRV_CTL_ELEM_IFACE_PCM, .name = (xname), \
+	.access = SNDRV_CTL_ELEM_ACCESS_READWRITE, \
+	.info = snd_soc_info_xr_sx, .get = fsl_easrc_get_reg, \
+	.put = fsl_easrc_set_reg, \
+	.private_value = (unsigned long)&(struct soc_mreg_control) \
+		{ .regbase = xreg, .regcount = 1, .nbits = 32, \
+		  .invert = 0, .min = 0, .max = 0xffffffff, } }
+
+#define SOC_SINGLE_VAL_RW(xname, xreg) \
+{	.iface = SNDRV_CTL_ELEM_IFACE_PCM, .name = (xname), \
+	.access = SNDRV_CTL_ELEM_ACCESS_READWRITE, \
+	.info = snd_soc_info_xr_sx, .get = fsl_easrc_iec958_get_bits, \
+	.put = fsl_easrc_iec958_put_bits, \
+	.private_value = (unsigned long)&(struct soc_mreg_control) \
+		{ .regbase = xreg, .regcount = 1, .nbits = 32, \
+		  .invert = 0, .min = 0, .max = 2, } }
 
 static const struct snd_kcontrol_new fsl_easrc_snd_controls[] = {
 	SOC_SINGLE("Context 0 Dither Switch", REG_EASRC_COC(0), 0, 1, 0),
@@ -88,10 +134,36 @@ static const struct snd_kcontrol_new fsl_easrc_snd_controls[] = {
 	SOC_SINGLE("Context 1 IEC958 Validity", REG_EASRC_COC(1), 2, 1, 0),
 	SOC_SINGLE("Context 2 IEC958 Validity", REG_EASRC_COC(2), 2, 1, 0),
 	SOC_SINGLE("Context 3 IEC958 Validity", REG_EASRC_COC(3), 2, 1, 0),
-	SOC_ENUM_EXT("IEC958 Bits Per Sample",
-		     fsl_easrc_iec958_bits_enum,
-		     fsl_easrc_iec958_get_bits,
-		     fsl_easrc_iec958_put_bits),
+
+	SOC_SINGLE_VAL_RW("Context 0 IEC958 Bits Per Sample", 0),
+	SOC_SINGLE_VAL_RW("Context 1 IEC958 Bits Per Sample", 1),
+	SOC_SINGLE_VAL_RW("Context 2 IEC958 Bits Per Sample", 2),
+	SOC_SINGLE_VAL_RW("Context 3 IEC958 Bits Per Sample", 3),
+
+	SOC_SINGLE_REG_RW("Context 0 IEC958 CS0", REG_EASRC_CS0(0)),
+	SOC_SINGLE_REG_RW("Context 1 IEC958 CS0", REG_EASRC_CS0(1)),
+	SOC_SINGLE_REG_RW("Context 2 IEC958 CS0", REG_EASRC_CS0(2)),
+	SOC_SINGLE_REG_RW("Context 3 IEC958 CS0", REG_EASRC_CS0(3)),
+	SOC_SINGLE_REG_RW("Context 0 IEC958 CS1", REG_EASRC_CS1(0)),
+	SOC_SINGLE_REG_RW("Context 1 IEC958 CS1", REG_EASRC_CS1(1)),
+	SOC_SINGLE_REG_RW("Context 2 IEC958 CS1", REG_EASRC_CS1(2)),
+	SOC_SINGLE_REG_RW("Context 3 IEC958 CS1", REG_EASRC_CS1(3)),
+	SOC_SINGLE_REG_RW("Context 0 IEC958 CS2", REG_EASRC_CS2(0)),
+	SOC_SINGLE_REG_RW("Context 1 IEC958 CS2", REG_EASRC_CS2(1)),
+	SOC_SINGLE_REG_RW("Context 2 IEC958 CS2", REG_EASRC_CS2(2)),
+	SOC_SINGLE_REG_RW("Context 3 IEC958 CS2", REG_EASRC_CS2(3)),
+	SOC_SINGLE_REG_RW("Context 0 IEC958 CS3", REG_EASRC_CS3(0)),
+	SOC_SINGLE_REG_RW("Context 1 IEC958 CS3", REG_EASRC_CS3(1)),
+	SOC_SINGLE_REG_RW("Context 2 IEC958 CS3", REG_EASRC_CS3(2)),
+	SOC_SINGLE_REG_RW("Context 3 IEC958 CS3", REG_EASRC_CS3(3)),
+	SOC_SINGLE_REG_RW("Context 0 IEC958 CS4", REG_EASRC_CS4(0)),
+	SOC_SINGLE_REG_RW("Context 1 IEC958 CS4", REG_EASRC_CS4(1)),
+	SOC_SINGLE_REG_RW("Context 2 IEC958 CS4", REG_EASRC_CS4(2)),
+	SOC_SINGLE_REG_RW("Context 3 IEC958 CS4", REG_EASRC_CS4(3)),
+	SOC_SINGLE_REG_RW("Context 0 IEC958 CS5", REG_EASRC_CS5(0)),
+	SOC_SINGLE_REG_RW("Context 1 IEC958 CS5", REG_EASRC_CS5(1)),
+	SOC_SINGLE_REG_RW("Context 2 IEC958 CS5", REG_EASRC_CS5(2)),
+	SOC_SINGLE_REG_RW("Context 3 IEC958 CS5", REG_EASRC_CS5(3)),
 };
 
 /* set_rs_ratio
@@ -321,14 +393,62 @@ static int fsl_easrc_resampler_config(struct fsl_easrc *easrc)
 	return 0;
 }
 
+/*****************************************************************************
+ *  Scale filter coefficients (64 bits float)
+ *  For input float32 normalized range (1.0,-1.0) -> output int[16,24,32]:
+ *      scale it by multiplying filter coefficients by 2^31
+ *  For input int[16, 24, 32] -> output float32
+ *      scale it by multiplying filter coefficients by 2^-15, 2^-23, 2^-31
+ *  input:
+ *      easrc:  Structure pointer of fsl_easrc
+ *      filterIn : Pointer to non-scaled input filter
+ *      shift:  The multiply factor
+ *  output:
+ *      filterOut: scaled filter
+ *****************************************************************************/
+static int NormalizedFilterForFloat32InIntOut(struct fsl_easrc *easrc,
+					      uint64_t *filterIn,
+					      uint64_t *filterOut,
+					      int shift)
+{
+	struct device *dev = &easrc->pdev->dev;
+	uint64_t coef = *filterIn;
+	int64_t exp  = (coef & 0x7ff0000000000000ll) >> 52;
+	uint64_t coefOut;
+
+	/*
+	 * If exponent is zero (value == 0), or 7ff (value == NaNs)
+	 * dont touch the content
+	 */
+	if (((coef & 0x7ff0000000000000ll) == 0) ||
+	    ((coef & 0x7ff0000000000000ll) == ((uint64_t)0x7ff << 52))) {
+		*filterOut = coef;
+	} else {
+		if ((shift > 0 && (shift + exp) >= 2047) ||
+		    (shift < 0 && (exp + shift) <= 0)) {
+			dev_err(dev, "coef error\n");
+			return -EINVAL;
+		}
+
+		/* coefficient * 2^shift ==>  coefficient_exp + shift */
+		exp += shift;
+		coefOut = (uint64_t)(coef & 0x800FFFFFFFFFFFFFll) +
+					((uint64_t)exp << 52);
+		*filterOut = coefOut;
+	}
+
+	return 0;
+}
+
 static int write_pf_coeff_mem(struct fsl_easrc *easrc, int ctx_id,
-			      u64 *arr, int n_taps)
+			      u64 *arr, int n_taps, int shift)
 {
 	struct device *dev = &easrc->pdev->dev;
 	int ret = 0;
 	int i;
 	u32 *r;
 	u32 r0, r1;
+	u64 tmp;
 
 	/* If STx_NUM_TAPS is set to 0x0 then return */
 	if (!n_taps)
@@ -347,7 +467,15 @@ static int write_pf_coeff_mem(struct fsl_easrc *easrc, int ctx_id,
 		return ret;
 
 	for (i = 0; i < (n_taps + 1) / 2; i++) {
-		r = (uint32_t *)&arr[i];
+		ret = NormalizedFilterForFloat32InIntOut(easrc,
+						   &arr[i],
+						   &tmp,
+						   shift);
+		if (ret)
+			return ret;
+
+		r = (uint32_t *)&tmp;
+
 		r0 = r[0] & EASRC_32b_MASK;
 		r1 = r[1] & EASRC_32b_MASK;
 
@@ -412,24 +540,6 @@ static int fsl_easrc_prefilter_config(struct fsl_easrc *easrc,
 	 * When out_rate >= in_rate, pf will be in bypass mode
 	 */
 	if (ctx->out_params.sample_rate >= ctx->in_params.sample_rate) {
-		/* set pf in bypass mode */
-		ret = regmap_update_bits(easrc->regmap,
-					 REG_EASRC_CCE1(ctx_id),
-					 EASRC_CCE1_PF_BYPASS_MASK,
-					 EASRC_CCE1_PF_BYPASS);
-		if (ret)
-			return ret;
-
-		/* PF_EXPANSION_FACTOR must be set to 0x0 when
-		 * operating in bypass mode
-		 */
-		ret = regmap_update_bits(easrc->regmap,
-					 REG_EASRC_CCE1(ctx_id),
-					 EASRC_CCE1_PF_EXP_MASK,
-					 EASRC_CCE1_PF_EXP(0));
-		if (ret)
-			return ret;
-
 		if (ctx->out_params.sample_rate == ctx->in_params.sample_rate) {
 			ret = regmap_update_bits(easrc->regmap,
 						 REG_EASRC_CCE1(ctx_id),
@@ -439,48 +549,81 @@ static int fsl_easrc_prefilter_config(struct fsl_easrc *easrc,
 				return ret;
 		}
 
-		return 0;
-	}
+		if (ctx->in_params.sample_format == SNDRV_PCM_FORMAT_FLOAT_LE &&
+		    ctx->out_params.sample_format != SNDRV_PCM_FORMAT_FLOAT_LE) {
+			ctx->st1_num_taps = 1;
+			ctx->st1_coeff    = &easrc->const_coeff;
+			ctx->st1_num_exp  = 1;
+			ctx->st2_num_taps = 0;
+			ctx->st1_addexp = 31;
+		} else if (ctx->in_params.sample_format != SNDRV_PCM_FORMAT_FLOAT_LE &&
+			   ctx->out_params.sample_format == SNDRV_PCM_FORMAT_FLOAT_LE) {
+			ctx->st1_num_taps = 1;
+			ctx->st1_coeff    = &easrc->const_coeff;
+			ctx->st1_num_exp  = 1;
+			ctx->st2_num_taps = 0;
+			ctx->st1_addexp -= ctx->in_params.fmt.addexp;
+		} else {
+			ctx->st1_num_taps = 1;
+			ctx->st1_coeff    = &easrc->const_coeff;
+			ctx->st1_num_exp  = 1;
+			ctx->st2_num_taps = 0;
+		}
+	} else {
+		inrate = ctx->in_params.norm_rate;
+		outrate = ctx->out_params.norm_rate;
 
-	inrate = ctx->in_params.norm_rate;
-	outrate = ctx->out_params.norm_rate;
+		hdr = easrc->firmware_hdr;
+		prefil = easrc->prefil;
 
-	hdr = easrc->firmware_hdr;
-	prefil = easrc->prefil;
+		for (i = 0; i < hdr->prefil_scen; i++) {
+			if (inrate == prefil[i].insr && outrate == prefil[i].outsr) {
+				selected_prefil = &prefil[i];
+				dev_dbg(dev, "Selected prefilter: %u insr, %u outsr, %u st1_taps, %u st2_taps\n",
+					selected_prefil->insr,
+					selected_prefil->outsr,
+					selected_prefil->st1_taps,
+					selected_prefil->st2_taps);
+				break;
+			}
+		}
 
-	for (i = 0; i < hdr->prefil_scen; i++) {
-		if (inrate == prefil[i].insr && outrate == prefil[i].outsr) {
-			selected_prefil = &prefil[i];
-			dev_dbg(dev, "Selected prefilter: %u insr, %u outsr, %u st1_taps, %u st2_taps\n",
-				selected_prefil->insr,
-				selected_prefil->outsr,
-				selected_prefil->st1_taps,
-				selected_prefil->st2_taps);
-			break;
+		if (!selected_prefil) {
+			dev_err(dev, "Conversion from in ratio %u(%u) to out ratio %u(%u) is not supported\n",
+				ctx->in_params.sample_rate,
+				inrate,
+				ctx->out_params.sample_rate, outrate);
+			return -EINVAL;
+		}
+
+		/* in prefilter coeff array, first st1_num_taps represent the
+		 * stage1 prefilter coefficients followed by next st2_num_taps
+		 * representing stage 2 coefficients
+		 */
+		ctx->st1_num_taps = selected_prefil->st1_taps;
+		ctx->st1_coeff    = selected_prefil->coeff;
+		ctx->st1_num_exp  = selected_prefil->st1_exp;
+
+		offset = ((selected_prefil->st1_taps + 1) / 2) *
+				sizeof(selected_prefil->coeff[0]);
+		ctx->st2_num_taps = selected_prefil->st2_taps;
+		ctx->st2_coeff    = (uint64_t *)((uint64_t)selected_prefil->coeff + offset);
+
+		if (ctx->in_params.sample_format == SNDRV_PCM_FORMAT_FLOAT_LE &&
+		    ctx->out_params.sample_format != SNDRV_PCM_FORMAT_FLOAT_LE) {
+			/* only change stage2 coefficient for 2 stage case */
+			if (ctx->st2_num_taps > 0)
+				ctx->st2_addexp = 31;
+			else
+				ctx->st1_addexp = 31;
+		} else if (ctx->in_params.sample_format != SNDRV_PCM_FORMAT_FLOAT_LE &&
+			   ctx->out_params.sample_format == SNDRV_PCM_FORMAT_FLOAT_LE) {
+			if (ctx->st2_num_taps > 0)
+				ctx->st2_addexp -= ctx->in_params.fmt.addexp;
+			else
+				ctx->st1_addexp -= ctx->in_params.fmt.addexp;
 		}
 	}
-
-	if (!selected_prefil) {
-		dev_err(dev, "Conversion from in ratio %u(%u) to out ratio %u(%u) is not supported\n",
-			ctx->in_params.sample_rate,
-			inrate,
-			ctx->out_params.sample_rate, outrate);
-		return -EINVAL;
-	}
-
-	/* in prefilter coeff array, first st1_num_taps represent the
-	 * stage1 prefilter coefficients followed by next st2_num_taps
-	 * representing stage 2 coefficients
-	 */
-	ctx->st1_num_taps = selected_prefil->st1_taps;
-	ctx->st1_coeff    = selected_prefil->coeff;
-	ctx->st1_num_exp  = selected_prefil->st1_exp;
-
-	offset = ((selected_prefil->st1_taps + 1) / 2) *
-			sizeof(selected_prefil->coeff[0]);
-	ctx->st2_num_taps = selected_prefil->st2_taps;
-	ctx->st2_coeff    = (uint64_t *)((uint64_t)selected_prefil->coeff +
-								offset);
 
 	ctx->in_filled_sample += (ctx->st1_num_taps / 2) * ctx->st1_num_exp +
 				  ctx->st2_num_taps / 2;
@@ -525,7 +668,9 @@ static int fsl_easrc_prefilter_config(struct fsl_easrc *easrc,
 		goto ctx_error;
 
 	ret = write_pf_coeff_mem(easrc, ctx_id,
-				 ctx->st1_coeff, ctx->st1_num_taps);
+				 ctx->st1_coeff,
+				 ctx->st1_num_taps,
+				 ctx->st1_addexp);
 	if (ret)
 		goto ctx_error;
 
@@ -541,6 +686,16 @@ static int fsl_easrc_prefilter_config(struct fsl_easrc *easrc,
 					 REG_EASRC_CCE1(ctx_id),
 					 EASRC_CCE1_PF_TSEN_MASK,
 					 EASRC_CCE1_PF_TSEN);
+		if (ret)
+			goto ctx_error;
+		/*
+		 * Enable prefilter stage1 writeback floating point
+		 * which is used for FLOAT_LE case
+		 */
+		ret = regmap_update_bits(easrc->regmap,
+					 REG_EASRC_CCE1(ctx_id),
+					 EASRC_CCE1_PF_ST1_WBFP_MASK,
+					 EASRC_CCE1_PF_ST1_WBFP);
 		if (ret)
 			goto ctx_error;
 
@@ -568,7 +723,9 @@ static int fsl_easrc_prefilter_config(struct fsl_easrc *easrc,
 			goto ctx_error;
 
 		ret = write_pf_coeff_mem(easrc, ctx_id,
-					 ctx->st2_coeff, ctx->st2_num_taps);
+					 ctx->st2_coeff,
+					 ctx->st2_num_taps,
+					 ctx->st2_addexp);
 		if (ret)
 			goto ctx_error;
 	}
@@ -577,6 +734,171 @@ static int fsl_easrc_prefilter_config(struct fsl_easrc *easrc,
 
 ctx_error:
 	return ret;
+}
+
+static int fsl_easrc_max_ch_for_slot(struct fsl_easrc_context *ctx,
+				     struct fsl_easrc_slot *slot)
+{
+	int st1_mem_alloc = 0, st2_mem_alloc = 0;
+	int pf_mem_alloc = 0;
+	int max_channels = 8 - slot->num_channel;
+	int channels = 0;
+
+	if (ctx->st1_num_taps > 0) {
+		if (ctx->st2_num_taps > 0)
+			st1_mem_alloc =
+				(ctx->st1_num_taps - 1) * ctx->st1_num_exp + 1;
+		else
+			st1_mem_alloc = ctx->st1_num_taps;
+	}
+
+	if (ctx->st2_num_taps > 0)
+		st2_mem_alloc = ctx->st2_num_taps;
+
+	pf_mem_alloc = st1_mem_alloc + st2_mem_alloc;
+
+	if (pf_mem_alloc != 0)
+		channels = (6144 - slot->pf_mem_used) / pf_mem_alloc;
+	else
+		channels = 8;
+
+	if (channels < max_channels)
+		max_channels = channels;
+
+	return max_channels;
+}
+
+static int fsl_easrc_config_one_slot(struct fsl_easrc_context *ctx,
+				     struct fsl_easrc_slot *slot,
+				     unsigned int slot_idx,
+				     unsigned int reg0,
+				     unsigned int reg1,
+				     unsigned int reg2,
+				     unsigned int reg3,
+				     unsigned int *req_channels,
+				     unsigned int *start_channel,
+				     unsigned int *avail_channel)
+{
+	struct fsl_easrc *easrc = ctx->easrc;
+	int st1_chanxexp, st1_mem_alloc = 0, st2_mem_alloc = 0;
+	unsigned int addr;
+	int ret;
+
+	if (*req_channels <= *avail_channel) {
+		slot->num_channel = *req_channels;
+		slot->min_channel = *start_channel;
+		slot->max_channel = *start_channel + *req_channels - 1;
+		slot->ctx_index = ctx->index;
+		slot->busy = true;
+		*start_channel += *req_channels;
+		*req_channels = 0;
+	} else {
+		slot->num_channel = *avail_channel;
+		slot->min_channel = *start_channel;
+		slot->max_channel = *start_channel + *avail_channel - 1;
+		slot->ctx_index = ctx->index;
+		slot->busy = true;
+		*start_channel += *avail_channel;
+		*req_channels -= *avail_channel;
+	}
+
+	ret = regmap_update_bits(easrc->regmap,
+				 reg0,
+				 EASRC_DPCS0R0_MAXCH_MASK,
+				 EASRC_DPCS0R0_MAXCH(slot->max_channel));
+	if (ret)
+		return ret;
+
+	ret = regmap_update_bits(easrc->regmap,
+				 reg0,
+				 EASRC_DPCS0R0_MINCH_MASK,
+				 EASRC_DPCS0R0_MINCH(slot->min_channel));
+	if (ret)
+		return ret;
+
+	ret = regmap_update_bits(easrc->regmap,
+				 reg0,
+				 EASRC_DPCS0R0_NUMCH_MASK,
+				 EASRC_DPCS0R0_NUMCH(slot->num_channel - 1));
+	if (ret)
+		return ret;
+
+	ret = regmap_update_bits(easrc->regmap,
+				 reg0,
+				 EASRC_DPCS0R0_CTXNUM_MASK,
+				 EASRC_DPCS0R0_CTXNUM(slot->ctx_index));
+	if (ret)
+		return ret;
+
+	if (ctx->st1_num_taps > 0) {
+		if (ctx->st2_num_taps > 0)
+			st1_mem_alloc =
+				(ctx->st1_num_taps - 1) * slot->num_channel *
+				ctx->st1_num_exp + slot->num_channel;
+		else
+			st1_mem_alloc = ctx->st1_num_taps * slot->num_channel;
+
+		slot->pf_mem_used = st1_mem_alloc;
+		ret = regmap_update_bits(easrc->regmap,
+					 reg2,
+					 EASRC_DPCS0R2_ST1_MA_MASK,
+					 EASRC_DPCS0R2_ST1_MA(st1_mem_alloc));
+		if (ret)
+			return ret;
+
+		if (slot_idx == 1)
+			addr = 0x1800 - st1_mem_alloc;
+		else
+			addr = 0;
+
+		ret = regmap_update_bits(easrc->regmap,
+					 reg2,
+					 EASRC_DPCS0R2_ST1_SA_MASK,
+					 EASRC_DPCS0R2_ST1_SA(addr));
+		if (ret)
+			return ret;
+	}
+
+	if (ctx->st2_num_taps > 0) {
+		st1_chanxexp = slot->num_channel * (ctx->st1_num_exp - 1);
+
+		ret = regmap_update_bits(easrc->regmap,
+					 reg1,
+					 EASRC_DPCS0R1_ST1_EXP_MASK,
+					 EASRC_DPCS0R1_ST1_EXP(st1_chanxexp));
+		if (ret)
+			return ret;
+
+		st2_mem_alloc = slot->num_channel * ctx->st2_num_taps;
+		slot->pf_mem_used += st2_mem_alloc;
+		ret = regmap_update_bits(easrc->regmap,
+					 reg3,
+					 EASRC_DPCS0R3_ST2_MA_MASK,
+					 EASRC_DPCS0R3_ST2_MA(st2_mem_alloc));
+		if (ret)
+			return ret;
+
+		if (slot_idx == 1)
+			addr = 0x1800 - st1_mem_alloc - st2_mem_alloc;
+		else
+			addr = st1_mem_alloc;
+
+		ret = regmap_update_bits(easrc->regmap,
+					 reg3,
+					 EASRC_DPCS0R3_ST2_SA_MASK,
+					 EASRC_DPCS0R3_ST2_SA(addr));
+		if (ret)
+			return ret;
+	}
+
+	ret = regmap_update_bits(easrc->regmap,
+				 reg0,
+				 EASRC_DPCS0R0_EN_MASK,
+				 EASRC_DPCS0R0_EN);
+	if (ret)
+		return ret;
+
+	return 0;
 }
 
 /* fsl_easrc_config_slot
@@ -594,8 +916,6 @@ static int fsl_easrc_config_slot(struct fsl_easrc *easrc, unsigned int ctx_id)
 	struct fsl_easrc_context *ctx = easrc->ctx[ctx_id];
 	int req_channels = ctx->channels;
 	int start_channel = 0, avail_channel;
-	int st1_chanxexp, st1_mem_alloc = 0, st2_mem_alloc = 0;
-	bool continue_loop = false;
 	struct fsl_easrc_slot *slot0, *slot1;
 	int i, ret;
 
@@ -609,119 +929,27 @@ static int fsl_easrc_config_slot(struct fsl_easrc *easrc, unsigned int ctx_id)
 		if (slot0->busy && slot1->busy)
 			continue;
 
-		if (!slot0->busy && !slot1->busy) {
-			if (req_channels <= 8) {
-				slot0->num_channel = req_channels;
-				slot0->min_channel = start_channel;
-				slot0->max_channel =
-					start_channel + req_channels - 1;
-				slot0->ctx_index = ctx->index;
-				slot0->busy = true;
-				start_channel += req_channels;
-				req_channels = 0;
-				continue_loop = false;
-			} else {
-				slot0->num_channel = 8;
-				slot0->min_channel = start_channel;
-				slot0->max_channel = start_channel + 7;
-				slot0->ctx_index = ctx->index;
-				slot0->busy = true;
-				start_channel += 8;
-				req_channels -= 8;
-				continue_loop = true;
-			}
+		if (!slot0->busy) {
+			if (slot1->busy && slot1->ctx_index == ctx->index)
+				continue;
 
-			ret = regmap_update_bits(easrc->regmap,
-						 REG_EASRC_DPCS0R0(i),
-						 EASRC_DPCS0R0_MAXCH_MASK,
-						 EASRC_DPCS0R0_MAXCH(slot0->max_channel));
+			avail_channel = fsl_easrc_max_ch_for_slot(ctx, slot1);
+			if (avail_channel <= 0)
+				continue;
+
+			ret = fsl_easrc_config_one_slot(ctx,
+							slot0, 0,
+							REG_EASRC_DPCS0R0(i),
+							REG_EASRC_DPCS0R1(i),
+							REG_EASRC_DPCS0R2(i),
+							REG_EASRC_DPCS0R3(i),
+							&req_channels,
+							&start_channel,
+							&avail_channel);
 			if (ret)
 				return ret;
 
-			ret = regmap_update_bits(easrc->regmap,
-						 REG_EASRC_DPCS0R0(i),
-						 EASRC_DPCS0R0_MINCH_MASK,
-						 EASRC_DPCS0R0_MINCH(slot0->min_channel));
-			if (ret)
-				return ret;
-
-			ret = regmap_update_bits(easrc->regmap,
-						 REG_EASRC_DPCS0R0(i),
-						 EASRC_DPCS0R0_NUMCH_MASK,
-						 EASRC_DPCS0R0_NUMCH(slot0->num_channel - 1));
-			if (ret)
-				return ret;
-
-			ret = regmap_update_bits(easrc->regmap,
-						 REG_EASRC_DPCS0R0(i),
-						 EASRC_DPCS0R0_CTXNUM_MASK,
-						 EASRC_DPCS0R0_CTXNUM(slot0->ctx_index));
-			if (ret)
-				return ret;
-
-			if (ctx->st1_num_taps > 0) {
-				if (ctx->st2_num_taps > 0)
-					st1_mem_alloc =
-						(ctx->st1_num_taps - 1) *
-						slot0->num_channel *
-						ctx->st1_num_exp +
-						slot0->num_channel;
-				else
-					st1_mem_alloc = ctx->st1_num_taps *
-						slot0->num_channel;
-
-				ret = regmap_update_bits(easrc->regmap,
-							 REG_EASRC_DPCS0R2(i),
-							 EASRC_DPCS0R2_ST1_MA_MASK,
-							 EASRC_DPCS0R2_ST1_MA(st1_mem_alloc));
-				if (ret)
-					return ret;
-
-				ret = regmap_update_bits(easrc->regmap,
-							 REG_EASRC_DPCS0R2(i),
-							 EASRC_DPCS0R2_ST1_SA_MASK,
-							 EASRC_DPCS0R2_ST1_SA(0));
-				if (ret)
-					return ret;
-			}
-
-			if (ctx->st2_num_taps > 0) {
-				st1_chanxexp = slot0->num_channel *
-						(ctx->st1_num_exp - 1);
-
-				ret = regmap_update_bits(easrc->regmap,
-							 REG_EASRC_DPCS0R1(i),
-							 EASRC_DPCS0R1_ST1_EXP_MASK,
-							 EASRC_DPCS0R1_ST1_EXP(st1_chanxexp));
-				if (ret)
-					return ret;
-
-				st2_mem_alloc = slot0->num_channel *
-							ctx->st2_num_taps;
-
-				ret = regmap_update_bits(easrc->regmap,
-							 REG_EASRC_DPCS0R3(i),
-							 EASRC_DPCS0R3_ST2_MA_MASK,
-							 EASRC_DPCS0R3_ST2_MA(st2_mem_alloc));
-				if (ret)
-					return ret;
-
-				ret = regmap_update_bits(easrc->regmap,
-							 REG_EASRC_DPCS0R3(i),
-							 EASRC_DPCS0R3_ST2_SA_MASK,
-							 EASRC_DPCS0R3_ST2_SA(st1_mem_alloc));
-				if (ret)
-					return ret;
-			}
-
-			ret = regmap_update_bits(easrc->regmap,
-						 REG_EASRC_DPCS0R0(i),
-						 EASRC_DPCS0R0_EN_MASK,
-						 EASRC_DPCS0R0_EN);
-			if (ret)
-				return ret;
-
-			if (continue_loop)
+			if (req_channels > 0)
 				continue;
 			else
 				break;
@@ -731,254 +959,23 @@ static int fsl_easrc_config_slot(struct fsl_easrc *easrc, unsigned int ctx_id)
 			if (slot0->ctx_index == ctx->index)
 				continue;
 
-			avail_channel = 8 - slot0->num_channel;
-
+			avail_channel = fsl_easrc_max_ch_for_slot(ctx, slot0);
 			if (avail_channel <= 0)
 				continue;
 
-			if (req_channels <= avail_channel) {
-				slot1->num_channel = req_channels;
-				slot1->min_channel = start_channel;
-				slot1->max_channel =
-					start_channel + req_channels - 1;
-				slot1->ctx_index = ctx->index;
-				slot1->busy = true;
-				start_channel += req_channels;
-				req_channels = 0;
-				continue_loop = false;
-			} else {
-				slot1->num_channel = avail_channel;
-				slot1->min_channel = start_channel;
-				slot1->max_channel =
-					start_channel + avail_channel - 1;
-				slot1->ctx_index = ctx->index;
-				slot1->busy = true;
-				start_channel += avail_channel;
-				req_channels -= avail_channel;
-				continue_loop = true;
-			}
-
-			ret = regmap_update_bits(easrc->regmap,
-						 REG_EASRC_DPCS1R0(i),
-						 EASRC_DPCS0R0_MAXCH_MASK,
-						 EASRC_DPCS0R0_MAXCH(slot1->max_channel));
+			ret = fsl_easrc_config_one_slot(ctx,
+							slot1, 1,
+							REG_EASRC_DPCS1R0(i),
+							REG_EASRC_DPCS1R1(i),
+							REG_EASRC_DPCS1R2(i),
+							REG_EASRC_DPCS1R3(i),
+							&req_channels,
+							&start_channel,
+							&avail_channel);
 			if (ret)
 				return ret;
 
-			ret = regmap_update_bits(easrc->regmap,
-						 REG_EASRC_DPCS1R0(i),
-						 EASRC_DPCS0R0_MINCH_MASK,
-						 EASRC_DPCS0R0_MINCH(slot1->min_channel));
-			if (ret)
-				return ret;
-
-			ret = regmap_update_bits(easrc->regmap,
-						 REG_EASRC_DPCS1R0(i),
-						 EASRC_DPCS0R0_NUMCH_MASK,
-						 EASRC_DPCS0R0_NUMCH(slot1->num_channel - 1));
-			if (ret)
-				return ret;
-
-			ret = regmap_update_bits(easrc->regmap,
-						 REG_EASRC_DPCS1R0(i),
-						 EASRC_DPCS0R0_CTXNUM_MASK,
-						 EASRC_DPCS0R0_CTXNUM(slot1->ctx_index));
-			if (ret)
-				return ret;
-
-			if (ctx->st1_num_taps > 0) {
-				if (ctx->st2_num_taps > 0)
-					st1_mem_alloc =
-						(ctx->st1_num_taps - 1) *
-						slot1->num_channel *
-						ctx->st1_num_exp +
-						slot1->num_channel;
-				else
-					st1_mem_alloc = ctx->st1_num_taps  *
-						slot1->num_channel;
-
-				ret = regmap_update_bits(easrc->regmap,
-							 REG_EASRC_DPCS1R2(i),
-							 EASRC_DPCS0R2_ST1_MA_MASK,
-							 EASRC_DPCS0R2_ST1_MA(st1_mem_alloc));
-				if (ret)
-					return ret;
-
-				ret = regmap_update_bits(easrc->regmap,
-							 REG_EASRC_DPCS1R2(i),
-							 EASRC_DPCS0R2_ST1_SA_MASK,
-							 EASRC_DPCS0R2_ST1_SA(0x1800 -
-							 st1_mem_alloc));
-				if (ret)
-					return ret;
-			}
-
-			if (ctx->st2_num_taps > 0) {
-				st1_chanxexp = slot1->num_channel *
-						(ctx->st1_num_exp - 1);
-
-				ret = regmap_update_bits(easrc->regmap,
-							 REG_EASRC_DPCS1R1(i),
-							 EASRC_DPCS0R1_ST1_EXP_MASK,
-							 EASRC_DPCS0R1_ST1_EXP(st1_chanxexp));
-				if (ret)
-					return ret;
-
-				st2_mem_alloc = slot1->num_channel *
-						ctx->st2_num_taps;
-
-				ret = regmap_update_bits(easrc->regmap,
-							 REG_EASRC_DPCS1R3(i),
-							 EASRC_DPCS0R3_ST2_MA_MASK,
-							 EASRC_DPCS0R3_ST2_MA(st2_mem_alloc));
-				if (ret)
-					return ret;
-
-				ret = regmap_update_bits(easrc->regmap,
-							 REG_EASRC_DPCS1R3(i),
-							 EASRC_DPCS0R3_ST2_SA_MASK,
-							 EASRC_DPCS0R3_ST2_SA(0x1800 -
-								st1_mem_alloc -
-								st2_mem_alloc));
-				if (ret)
-					return ret;
-			}
-
-			ret = regmap_update_bits(easrc->regmap,
-						 REG_EASRC_DPCS1R0(i),
-						 EASRC_DPCS0R0_EN_MASK,
-						 EASRC_DPCS0R0_EN);
-			if (ret)
-				return ret;
-
-			if (continue_loop)
-				continue;
-			else
-				break;
-		}
-
-		if (!slot0->busy && slot1->busy) {
-			if (slot1->ctx_index == ctx->index)
-				continue;
-
-			avail_channel = 8 - slot1->num_channel;
-
-			if (avail_channel <= 0)
-				continue;
-
-			if (req_channels <= avail_channel) {
-				slot0->num_channel = req_channels;
-				slot0->min_channel = start_channel;
-				slot0->max_channel =
-					start_channel + req_channels - 1;
-				slot0->ctx_index = ctx->index;
-				slot0->busy = true;
-				start_channel += req_channels;
-				req_channels = 0;
-				continue_loop = false;
-			} else {
-				slot0->num_channel = avail_channel;
-				slot0->min_channel = start_channel;
-				slot0->max_channel =
-					start_channel + avail_channel - 1;
-				slot0->ctx_index = ctx->index;
-				slot0->busy = true;
-				start_channel += avail_channel;
-				req_channels -= avail_channel;
-				continue_loop = true;
-			}
-
-			ret = regmap_update_bits(easrc->regmap,
-						 REG_EASRC_DPCS0R0(i),
-						 EASRC_DPCS0R0_MAXCH_MASK,
-						 EASRC_DPCS0R0_MAXCH(slot0->max_channel));
-			if (ret)
-				return ret;
-
-			ret = regmap_update_bits(easrc->regmap,
-						 REG_EASRC_DPCS0R0(i),
-						 EASRC_DPCS0R0_MINCH_MASK,
-						 EASRC_DPCS0R0_MINCH(slot0->min_channel));
-			if (ret)
-				return ret;
-
-			ret = regmap_update_bits(easrc->regmap,
-						 REG_EASRC_DPCS0R0(i),
-						 EASRC_DPCS0R0_NUMCH_MASK,
-						 EASRC_DPCS0R0_NUMCH(slot0->num_channel - 1));
-			if (ret)
-				return ret;
-
-			ret = regmap_update_bits(easrc->regmap,
-						 REG_EASRC_DPCS0R0(i),
-						 EASRC_DPCS0R0_CTXNUM_MASK,
-						 EASRC_DPCS0R0_CTXNUM(slot0->ctx_index));
-			if (ret)
-				return ret;
-
-			if (ctx->st1_num_taps > 0) {
-				if (ctx->st2_num_taps > 0)
-					st1_mem_alloc =
-						(ctx->st1_num_taps - 1) *
-						slot0->num_channel *
-						ctx->st1_num_exp +
-						slot0->num_channel;
-				else
-					st1_mem_alloc =  ctx->st1_num_taps *
-						slot0->num_channel;
-
-				ret = regmap_update_bits(easrc->regmap,
-							 REG_EASRC_DPCS0R2(i),
-							 EASRC_DPCS0R2_ST1_MA_MASK,
-							 EASRC_DPCS0R2_ST1_MA(st1_mem_alloc));
-				if (ret)
-					return ret;
-
-				ret = regmap_update_bits(easrc->regmap,
-							 REG_EASRC_DPCS0R2(i),
-							 EASRC_DPCS0R2_ST1_SA_MASK,
-							 EASRC_DPCS0R2_ST1_SA(0));
-				if (ret)
-					return ret;
-			}
-
-			if (ctx->st2_num_taps > 0) {
-				st1_chanxexp = slot0->num_channel *
-						(ctx->st1_num_exp - 1);
-
-				ret = regmap_update_bits(easrc->regmap,
-							 REG_EASRC_DPCS0R1(i),
-							 EASRC_DPCS0R1_ST1_EXP_MASK,
-							 EASRC_DPCS0R1_ST1_EXP(st1_chanxexp));
-				if (ret)
-					return ret;
-
-				st2_mem_alloc = slot0->num_channel *
-						ctx->st2_num_taps;
-
-				ret = regmap_update_bits(easrc->regmap,
-							 REG_EASRC_DPCS0R3(i),
-							 EASRC_DPCS0R3_ST2_MA_MASK,
-							 EASRC_DPCS0R3_ST2_MA(st2_mem_alloc));
-				if (ret)
-					return ret;
-
-				ret = regmap_update_bits(easrc->regmap,
-							 REG_EASRC_DPCS0R3(i),
-							 EASRC_DPCS0R3_ST2_SA_MASK,
-							 EASRC_DPCS0R3_ST2_SA(st1_mem_alloc));
-				if (ret)
-					return ret;
-			}
-
-			ret = regmap_update_bits(easrc->regmap,
-						 REG_EASRC_DPCS0R0(i),
-						 EASRC_DPCS0R0_EN_MASK,
-						 EASRC_DPCS0R0_EN);
-			if (ret)
-				return ret;
-
-			if (continue_loop)
+			if (req_channels > 0)
 				continue;
 			else
 				break;
@@ -986,7 +983,7 @@ static int fsl_easrc_config_slot(struct fsl_easrc *easrc, unsigned int ctx_id)
 	}
 
 	if (req_channels > 0) {
-		dev_err(&easrc->pdev->dev, "no avail slot, should not happen\n");
+		dev_err(&easrc->pdev->dev, "no avail slot.\n");
 		return -EINVAL;
 	}
 
@@ -1006,6 +1003,8 @@ static int fsl_easrc_release_slot(struct fsl_easrc *easrc, unsigned int ctx_id)
 		if (easrc->slot[i][0].busy &&
 		    easrc->slot[i][0].ctx_index == ctx->index) {
 			easrc->slot[i][0].busy = false;
+			easrc->slot[i][0].num_channel = 0;
+			easrc->slot[i][0].pf_mem_used = 0;
 			/* set registers */
 			ret = regmap_write(easrc->regmap,
 					   REG_EASRC_DPCS0R0(i), 0);
@@ -1031,6 +1030,8 @@ static int fsl_easrc_release_slot(struct fsl_easrc *easrc, unsigned int ctx_id)
 		if (easrc->slot[i][1].busy &&
 		    easrc->slot[i][1].ctx_index == ctx->index) {
 			easrc->slot[i][1].busy = false;
+			easrc->slot[i][1].num_channel = 0;
+			easrc->slot[i][1].pf_mem_used = 0;
 			/* set registers */
 			ret = regmap_write(easrc->regmap,
 					   REG_EASRC_DPCS1R0(i), 0);
@@ -1145,10 +1146,11 @@ int fsl_easrc_config_context(struct fsl_easrc *easrc, unsigned int ctx_id)
 	return ret;
 }
 
-static int fsl_easrc_process_format(struct fsl_easrc *easrc,
+static int fsl_easrc_process_format(struct fsl_easrc_context *ctx,
 			      struct fsl_easrc_data_fmt *fmt,
 			      snd_pcm_format_t raw_fmt)
 {
+	struct fsl_easrc *easrc = ctx->easrc;
 	int ret;
 
 	if (!fmt)
@@ -1166,15 +1168,19 @@ static int fsl_easrc_process_format(struct fsl_easrc *easrc,
 	switch (snd_pcm_format_width(raw_fmt)) {
 	case 16:
 		fmt->width = EASRC_WIDTH_16_BIT;
+		fmt->addexp = 15;
 		break;
 	case 20:
 		fmt->width = EASRC_WIDTH_20_BIT;
+		fmt->addexp = 19;
 		break;
 	case 24:
 		fmt->width = EASRC_WIDTH_24_BIT;
+		fmt->addexp = 23;
 		break;
 	case 32:
 		fmt->width = EASRC_WIDTH_32_BIT;
+		fmt->addexp = 31;
 		break;
 	default:
 		return -EINVAL;
@@ -1182,15 +1188,19 @@ static int fsl_easrc_process_format(struct fsl_easrc *easrc,
 
 	switch (raw_fmt) {
 	case SNDRV_PCM_FORMAT_IEC958_SUBFRAME_LE:
-		fmt->width = easrc->bps_iec958;
+		fmt->width = easrc->bps_iec958[ctx->index];
 		fmt->iec958 = 1;
 		fmt->floating_point = 0;
-		if (fmt->width == EASRC_WIDTH_16_BIT)
+		if (fmt->width == EASRC_WIDTH_16_BIT) {
 			fmt->sample_pos = 12;
-		else if (fmt->width == EASRC_WIDTH_20_BIT)
+			fmt->addexp = 15;
+		} else if (fmt->width == EASRC_WIDTH_20_BIT) {
 			fmt->sample_pos = 8;
-		else if (fmt->width == EASRC_WIDTH_24_BIT)
+			fmt->addexp = 19;
+		} else if (fmt->width == EASRC_WIDTH_24_BIT) {
 			fmt->sample_pos = 4;
+			fmt->addexp = 23;
+		}
 		break;
 	default:
 		break;
@@ -1209,11 +1219,7 @@ static int fsl_easrc_process_format(struct fsl_easrc *easrc,
 	 * 0b - Signed Format
 	 * 1b - Unsigned Format
 	 */
-	ret = snd_pcm_format_unsigned(raw_fmt) > 0 ? 1 : 0;
-	if (ret < 0)
-		return ret;
-
-	fmt->unsign = ret;
+	fmt->unsign = snd_pcm_format_unsigned(raw_fmt) > 0 ? 1 : 0;
 
 	return 0;
 }
@@ -1229,7 +1235,7 @@ int fsl_easrc_set_ctx_format(struct fsl_easrc_context *ctx,
 
 	/* get the bitfield values for input data format */
 	if (in_raw_format && out_raw_format) {
-		ret = fsl_easrc_process_format(easrc, in_fmt, *in_raw_format);
+		ret = fsl_easrc_process_format(ctx, in_fmt, *in_raw_format);
 		if (ret)
 			return ret;
 	}
@@ -1270,7 +1276,7 @@ int fsl_easrc_set_ctx_format(struct fsl_easrc_context *ctx,
 
 	/* get the bitfield values for input data format */
 	if (in_raw_format && out_raw_format) {
-		ret = fsl_easrc_process_format(easrc, out_fmt, *out_raw_format);
+		ret = fsl_easrc_process_format(ctx, out_fmt, *out_raw_format);
 		if (ret)
 			return ret;
 	}
@@ -1498,11 +1504,47 @@ int fsl_easrc_start_context(struct fsl_easrc_context *ctx)
 int fsl_easrc_stop_context(struct fsl_easrc_context *ctx)
 {
 	struct fsl_easrc *easrc = ctx->easrc;
-	int ret;
+	int ret, val, i;
+	int size = 0;
+	int retry = 200;
+
+	regmap_read(easrc->regmap, REG_EASRC_CC(ctx->index), &val);
+
+	if (val & EASRC_CC_EN_MASK) {
+		ret = regmap_update_bits(easrc->regmap,
+					 REG_EASRC_CC(ctx->index),
+					 EASRC_CC_STOP_MASK, EASRC_CC_STOP);
+		if (ret)
+			return ret;
+
+		do {
+			regmap_read(easrc->regmap, REG_EASRC_SFS(ctx->index), &val);
+			val &= EASRC_SFS_NSGO_MASK;
+			size = val >> EASRC_SFS_NSGO_SHIFT;
+
+			/* Read FIFO, drop the data */
+			for (i = 0; i < size * ctx->channels; i++)
+				regmap_read(easrc->regmap, REG_EASRC_RDFIFO(ctx->index), &val);
+			/* Check RUN_STOP_DONE */
+			regmap_read(easrc->regmap, REG_EASRC_IRQF, &val);
+			if (val & EASRC_IRQF_RSD(1 << ctx->index)) {
+				/*Clear RUN_STOP_DONE*/
+				regmap_write_bits(easrc->regmap,
+						   REG_EASRC_IRQF,
+						   EASRC_IRQF_RSD(1 << ctx->index),
+						   EASRC_IRQF_RSD(1 << ctx->index));
+				break;
+			}
+			udelay(100);
+		} while (--retry);
+
+		if (retry == 0)
+			dev_err(&easrc->pdev->dev, "RUN STOP fail\n");
+	}
 
 	ret = regmap_update_bits(easrc->regmap,
 				 REG_EASRC_CC(ctx->index),
-				 EASRC_CC_EN_MASK, 0);
+				 EASRC_CC_EN_MASK | EASRC_CC_STOP_MASK, 0);
 	if (ret)
 		return ret;
 
@@ -1625,12 +1667,6 @@ static int fsl_easrc_hw_params(struct snd_pcm_substream *substream,
 	ctx->in_params.fifo_wtmk  = 0x20;
 	ctx->out_params.fifo_wtmk = 0x20;
 
-	ret = fsl_easrc_config_context(easrc, ctx->index);
-	if (ret) {
-		dev_err(dev, "failed to config context\n");
-		return ret;
-	}
-
 	/* do only rate conversion and keep the same format for input
 	 * and output data
 	 */
@@ -1639,6 +1675,12 @@ static int fsl_easrc_hw_params(struct snd_pcm_substream *substream,
 				       &ctx->out_params.sample_format);
 	if (ret) {
 		dev_err(dev, "failed to set format %d", ret);
+		return ret;
+	}
+
+	ret = fsl_easrc_config_context(easrc, ctx->index);
+	if (ret) {
+		dev_err(dev, "failed to config context\n");
 		return ret;
 	}
 
@@ -1710,7 +1752,8 @@ static struct snd_soc_dai_driver fsl_easrc_dai = {
 		.rate_min = 8000,
 		.rate_max = 768000,
 		.rates = SNDRV_PCM_RATE_KNOT,
-		.formats = FSL_EASRC_FORMATS,
+		.formats = FSL_EASRC_FORMATS |
+			   SNDRV_PCM_FMTBIT_IEC958_SUBFRAME_LE,
 	},
 	.ops = &fsl_easrc_dai_ops,
 };
@@ -2099,30 +2142,7 @@ static bool fsl_easrc_volatile_reg(struct device *dev, unsigned int reg)
 	case REG_EASRC_SFS(1):
 	case REG_EASRC_SFS(2):
 	case REG_EASRC_SFS(3):
-	case REG_EASRC_CS0(0):
-	case REG_EASRC_CS0(1):
-	case REG_EASRC_CS0(2):
-	case REG_EASRC_CS0(3):
-	case REG_EASRC_CS1(0):
-	case REG_EASRC_CS1(1):
-	case REG_EASRC_CS1(2):
-	case REG_EASRC_CS1(3):
-	case REG_EASRC_CS2(0):
-	case REG_EASRC_CS2(1):
-	case REG_EASRC_CS2(2):
-	case REG_EASRC_CS2(3):
-	case REG_EASRC_CS3(0):
-	case REG_EASRC_CS3(1):
-	case REG_EASRC_CS3(2):
-	case REG_EASRC_CS3(3):
-	case REG_EASRC_CS4(0):
-	case REG_EASRC_CS4(1):
-	case REG_EASRC_CS4(2):
-	case REG_EASRC_CS4(3):
-	case REG_EASRC_CS5(0):
-	case REG_EASRC_CS5(1):
-	case REG_EASRC_CS5(2):
-	case REG_EASRC_CS5(3): /* fallthrough */
+	case REG_EASRC_IRQF:
 	case REG_EASRC_DBGS:
 		return true;
 	default:
@@ -2297,7 +2317,7 @@ static int fsl_easrc_probe(struct platform_device *pdev)
 	/*Set default value*/
 	easrc->chn_avail = 32;
 	easrc->rs_num_taps = EASRC_RS_128_TAPS;
-	easrc->bps_iec958 = EASRC_WIDTH_16_BIT;
+	easrc->const_coeff = 0x3FF0000000000000;
 
 	ret = of_property_read_u32(np, "fsl,asrc-rate",
 				   &easrc->easrc_rate);
@@ -2313,15 +2333,17 @@ static int fsl_easrc_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	if (width != 16 && width != 24) {
+	if (width != 16 && width != 24 && width != 32 && width != 20) {
 		dev_warn(&pdev->dev, "unsupported width, switching to 24bit\n");
 		width = 24;
 	}
 
 	if (width == 24)
 		easrc->easrc_format = SNDRV_PCM_FORMAT_S24_LE;
-	else
+	else if (width == 16)
 		easrc->easrc_format = SNDRV_PCM_FORMAT_S16_LE;
+	else
+		easrc->easrc_format = SNDRV_PCM_FORMAT_S32_LE;
 
 	platform_set_drvdata(pdev, easrc);
 	pm_runtime_enable(&pdev->dev);
@@ -2435,13 +2457,17 @@ static int fsl_easrc_runtime_resume(struct device *dev)
 					% ctx->in_params.sample_rate != 0)
 				ctx->out_missed_sample += 1;
 
-			ret = write_pf_coeff_mem(easrc, i, ctx->st1_coeff,
-						 ctx->st1_num_taps);
+			ret = write_pf_coeff_mem(easrc, i,
+						 ctx->st1_coeff,
+						 ctx->st1_num_taps,
+						 ctx->st1_addexp);
 			if (ret)
 				goto disable_mem_clk;
 
-			ret = write_pf_coeff_mem(easrc, i, ctx->st2_coeff,
-						 ctx->st2_num_taps);
+			ret = write_pf_coeff_mem(easrc, i,
+						 ctx->st2_coeff,
+						 ctx->st2_num_taps,
+						 ctx->st2_addexp);
 			if (ret)
 				goto disable_mem_clk;
 		}

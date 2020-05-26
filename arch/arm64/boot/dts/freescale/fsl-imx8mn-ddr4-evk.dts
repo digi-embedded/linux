@@ -63,7 +63,7 @@
 			gpio = <&gpio2 19 GPIO_ACTIVE_HIGH>;
 			enable-active-high;
 			startup-delay-us = <100>;
-			off-on-delay-us = <12000>;
+			off-on-delay = <12000>;
 		};
 
 		reg_audio_board: regulator-audio-board {
@@ -120,7 +120,7 @@
 
 &clk {
 	assigned-clocks = <&clk IMX8MN_AUDIO_PLL1>, <&clk IMX8MN_AUDIO_PLL2>;
-	assigned-clock-rates = <786432000>, <722534400>;
+	assigned-clock-rates = <393216000>, <361267200>;
 };
 
 &easrc {
@@ -611,8 +611,8 @@
 			ldo1_reg: regulator@8 {
 				reg = <8>;
 				regulator-compatible = "ldo1";
-				regulator-min-microvolt = <3000000>;
-				regulator-max-microvolt = <3300000>;
+				regulator-min-microvolt = <1600000>;
+				regulator-max-microvolt = <1900000>;
 				regulator-boot-on;
 				regulator-always-on;
 			};
@@ -620,7 +620,7 @@
 			ldo2_reg: regulator@9 {
 				reg = <9>;
 				regulator-compatible = "ldo2";
-				regulator-min-microvolt = <900000>;
+				regulator-min-microvolt = <800000>;
 				regulator-max-microvolt = <900000>;
 				regulator-boot-on;
 				regulator-always-on;
@@ -745,6 +745,7 @@
 		reg = <0x10>;
 		AVDD-supply = <&reg_audio_board>;
 		DVDD-supply = <&reg_audio_board>;
+		status = "disabled";
 	};
 
 	ak4458_2: ak4458@12 {
@@ -752,6 +753,7 @@
 		reg = <0x12>;
 		AVDD-supply = <&reg_audio_board>;
 		DVDD-supply = <&reg_audio_board>;
+		status = "disabled";
 	};
 
 	ak5558: ak5558@13 {
@@ -760,6 +762,7 @@
 		ak5558,pdn-gpio = <&pca6416 3 GPIO_ACTIVE_HIGH>;
 		AVDD-supply = <&reg_audio_board>;
 		DVDD-supply = <&reg_audio_board>;
+		status = "disabled";
 	};
 
 	ak4497: ak4497@11 {
@@ -768,6 +771,7 @@
 		ak4497,pdn-gpio = <&pca6416 5 GPIO_ACTIVE_HIGH>;
 		AVDD-supply = <&reg_audio_board>;
 		DVDD-supply = <&reg_audio_board>;
+		status = "disabled";
 	};
 
 	ov5640: ov5640_mipi@3c {
