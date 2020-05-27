@@ -17,8 +17,15 @@
 /plugin/;
 
 / {
-	/* Enable parallel_csi */
 	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			overlay-description = "Parallel camera";
+		};
+	};
+
+	/* Enable parallel_csi */
+	fragment@1 {
 		target = <&parallel_csi>;
 		__overlay__ {
 			status = "okay";
@@ -26,7 +33,7 @@
 	};
 
 	/* Enable ov5640 */
-	fragment@1 {
+	fragment@2 {
 		target = <&ov5640>;
 		__overlay__ {
 			status = "okay";
@@ -34,7 +41,7 @@
 	};
 
 	/* Disable mipi_csi_0 */
-	fragment@2 {
+	fragment@3 {
 		target = <&mipi_csi_0>;
 		__overlay__ {
 			status = "disabled";
@@ -42,7 +49,7 @@
 	};
 
 	/* Disable ov5640_mipi */
-	fragment@3 {
+	fragment@4 {
 		target = <&ov5640_mipi>;
 		__overlay__ {
 			status = "disabled";

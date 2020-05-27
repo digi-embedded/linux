@@ -30,8 +30,15 @@
  * - MCA_nINT signal is managed by NAND_DATA02 pad (GPIO3_IO8).
  */
 / {
-	/* Update 3V3_RF regulator GPIO */
 	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			overlay-description = "SOM: version 1";
+		};
+	};
+
+	/* Update 3V3_RF regulator GPIO */
+	fragment@1 {
 		target = <&reg_3v3_rf>;
 		__overlay__ {
 			pinctrl-0 = <&pinctrl_reg_3v3_rf_somv1>;
@@ -40,7 +47,7 @@
 	};
 
 	/* Update MCA GPIOs */
-	fragment@1 {
+	fragment@2 {
 		target = <&mca_cc8m>;
 		__overlay__ {
 			interrupt-parent = <&gpio3>;
@@ -51,7 +58,7 @@
 	};
 
 	/* Disable NXP PCA9450 PMIC */
-	fragment@2 {
+	fragment@3 {
 		target = <&pmic_pca9450>;
 		__overlay__ {
 			/* This PMIC was introduced in SOMv2 */
@@ -60,14 +67,14 @@
 	};
 
 	/* Enable ROHM BD71850 PMIC */
-	fragment@3 {
+	fragment@4 {
 		target = <&A53_0>;
 		__overlay__ {
 			arm-supply = <&buck2_reg_bd71850>;
 		};
 	};
 
-	fragment@4 {
+	fragment@5 {
 		target = <&pmic_bd71850>;
 		__overlay__ {
 			status = "okay";

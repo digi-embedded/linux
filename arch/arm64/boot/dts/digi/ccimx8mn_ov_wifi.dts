@@ -21,6 +21,7 @@
 	fragment@0 {
 		target-path = "/";
 		__overlay__ {
+			overlay-description = "SOM: Wi-Fi";
 			wireless {
 				/* U-Boot will fill in the MAC address here */
 			};
