@@ -17,8 +17,15 @@
 /plugin/;
 
 / {
-	/* Enable lpuart3 */
 	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			overlay-description = "SBC: LPUART3";
+		};
+	};
+
+	/* Enable lpuart3 */
+	fragment@1 {
 		target = <&lpuart3>;
 		__overlay__ {
 			status = "okay";
@@ -26,7 +33,7 @@
 	};
 
 	/* Disable flexcan3 */
-	fragment@1 {
+	fragment@2 {
 		target = <&flexcan3>;
 		__overlay__ {
 			status = "disabled";

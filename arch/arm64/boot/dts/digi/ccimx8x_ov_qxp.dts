@@ -20,8 +20,15 @@
 /plugin/;
 
 / {
-	/* Add the 2 additional Cortex-A35 cores */
 	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			overlay-description = "SOM: quad-core CPU";
+		};
+	};
+
+	/* Add the 2 additional Cortex-A35 cores */
+	fragment@1 {
 		target = <&cpus>;
 		__overlay__ {
 			#address-cells = <2>;
@@ -52,7 +59,7 @@
 	};
 
 	/* Increase gpu_3d0's assigned clock rates */
-	fragment@1 {
+	fragment@2 {
 		target = <&gpu_3d0>;
 		__overlay__ {
 			assigned-clock-rates = <700000000>, <850000000>;
@@ -60,7 +67,7 @@
 	};
 
 	/* Add the 2 additional Cortex-A35 cores to the cooling map */
-	fragment@2 {
+	fragment@3 {
 		target = <&thermal_zones>;
 		__overlay__ {
 			cpu-thermal0 {

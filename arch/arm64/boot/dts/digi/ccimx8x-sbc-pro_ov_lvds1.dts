@@ -17,8 +17,15 @@
 /plugin/;
 
 / {
-	/* Enable i2c0_mipi_lvds1 */
 	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			overlay-description = "LVDS display";
+		};
+	};
+
+	/* Enable i2c0_mipi_lvds1 */
+	fragment@1 {
 		target = <&i2c0_mipi_lvds1>;
 		__overlay__ {
 			status = "okay";
@@ -26,7 +33,7 @@
 	};
 
 	/* Enable ldb2 */
-	fragment@1 {
+	fragment@2 {
 		target = <&ldb2>;
 		__overlay__ {
 			status = "okay";
@@ -34,7 +41,7 @@
 	};
 
 	/* Enable ldb2_phy */
-	fragment@2 {
+	fragment@3 {
 		target = <&ldb2_phy>;
 		__overlay__ {
 			status = "okay";
@@ -42,7 +49,7 @@
 	};
 
 	/* Enable lvds1 */
-	fragment@3 {
+	fragment@4 {
 		target = <&lvds1>;
 		__overlay__ {
 			status = "okay";
@@ -50,7 +57,7 @@
 	};
 
 	/* Enable lvds_backlight1 */
-	fragment@4 {
+	fragment@5 {
 		target = <&lvds_backlight1>;
 		__overlay__ {
 			status = "okay";
@@ -58,7 +65,7 @@
 	};
 
 	/* Enable pwm_mipi_lvds1 */
-	fragment@5 {
+	fragment@6 {
 		target = <&pwm_mipi_lvds1>;
 		__overlay__ {
 			status = "okay";
@@ -66,7 +73,7 @@
 	};
 
 	/* Enable lvds1_goodix_touch1 with extended desktop */
-	fragment@6 {
+	fragment@7 {
 		target = <&lvds1_goodix_touch1>;
 		__overlay__ {
 			extends-desktop = <&lvds0>;
@@ -75,7 +82,7 @@
 	};
 
 	/* Enable lvds1_goodix_touch2 with extended desktop */
-	fragment@7 {
+	fragment@8 {
 		target = <&lvds1_goodix_touch2>;
 		__overlay__ {
 			extends-desktop = <&lvds0>;

@@ -17,8 +17,15 @@
 /plugin/;
 
 / {
-	/* Enable flexcan1*/
 	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			overlay-description = "SBC: FlexCAN1";
+		};
+	};
+
+	/* Enable flexcan1*/
+	fragment@1 {
 		target = <&flexcan1>;
 		__overlay__ {
 			status = "okay";
@@ -26,7 +33,7 @@
 	};
 
 	/* Change lpuart0's pinctrl to use 2 wires */
-	fragment@1 {
+	fragment@2 {
 		target = <&lpuart0>;
 		__overlay__ {
 			pinctrl-0 = <&pinctrl_lpuart0_2wires>;
