@@ -17,8 +17,15 @@
 /plugin/;
 
 / {
-	/* Enable the Bluetooth interface */
 	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			overlay-description = "SOM: Bluetooth";
+		};
+	};
+
+	/* Enable the Bluetooth interface */
+	fragment@1 {
 		target = <&bluetooth>;
 		__overlay__ {
 			status = "okay";
@@ -26,7 +33,7 @@
 	};
 
 	/* Enable the RF regulator */
-	fragment@1 {
+	fragment@2 {
 		target = <&reg_3v3_rf>;
 		__overlay__ {
 			status = "okay";
@@ -34,7 +41,7 @@
 	};
 
 	/* Enable the BT regulator */
-	fragment@2 {
+	fragment@3 {
 		target = <&reg_rf_bt_en>;
 		__overlay__ {
 			status = "okay";
@@ -42,7 +49,7 @@
 	};
 
 	/* Enable UART2 (Bluetooth) */
-	fragment@3 {
+	fragment@4 {
 		target = <&uart2>;
 		__overlay__ {
 			status = "okay";

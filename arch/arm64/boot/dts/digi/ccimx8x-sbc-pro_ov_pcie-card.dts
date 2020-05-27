@@ -19,8 +19,15 @@
 /plugin/;
 
 / {
-	/* Enable the PCIe regulator */
 	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			overlay-description = "PCIe (mini card)";
+		};
+	};
+
+	/* Enable the PCIe regulator */
+	fragment@1 {
 		target = <&reg_3v3_pcie>;
 		__overlay__ {
 			status = "okay";
@@ -33,7 +40,7 @@
 	 * - Use the regulator and mini card pinctrls
 	 * - Change the reset GPIO and add the disable GPIO
 	 */
-	fragment@1 {
+	fragment@2 {
 		target = <&pcieb>;
 		__overlay__ {
 			pinctrl-names = "default", "sleep";
