@@ -96,6 +96,16 @@ dtb-$(CONFIG_ARCH_FSL_IMX8QXP) += fsl-imx8qxp-lpddr4-arm2.dtb \
 				  fsl-imx8qxp-ddr3l-val.dtb \
 				  fsl-imx8dx-17x17-val.dtb \
 				  fsl-imx8dx-lpddr4-arm2.dtb \
+				  fsl-imx8dx-mek.dtb \
+				  fsl-imx8dx-mek-rpmsg.dtb \
+				  fsl-imx8dx-mek-dsp.dtb \
+				  fsl-imx8dx-mek-enet2-tja1100.dtb \
+				  fsl-imx8dx-mek-ov5640.dtb \
+				  fsl-imx8dx-mek-dsi-rm67191.dtb \
+				  fsl-imx8dx-mek-it6263-lvds0-dual-channel.dtb \
+				  fsl-imx8dx-mek-it6263-lvds1-dual-channel.dtb \
+				  fsl-imx8dx-mek-jdi-wuxga-lvds0-panel.dtb \
+				  fsl-imx8dx-mek-jdi-wuxga-lvds1-panel.dtb \
 				  fsl-imx8dxp-lpddr4-arm2.dtb
 dtb-$(CONFIG_ARCH_FSL_IMX8MQ) += fsl-imx8mq-ddr3l-arm2.dtb \
 				 fsl-imx8mq-ddr4-arm2.dtb \
@@ -141,6 +151,8 @@ dtb-$(CONFIG_ARCH_FSL_IMX8MM) += fsl-imx8mm-evk.dtb \
 				 fsl-imx8mm-ddr4-qca9377-evk.dtb
 dtb-$(CONFIG_ARCH_FSL_IMX8MN) += fsl-imx8mn-ddr4-evk.dtb \
 				 fsl-imx8mn-ddr4-evk-trusty.dtb \
+				 fsl-imx8mn-evk.dtb \
+				 fsl-imx8mn-evk-rpmsg.dtb \
 				 fsl-imx8mn-ddr4-evk-rpmsg.dtb \
 				 fsl-imx8mn-ddr4-evk-rm67191.dtb \
 				 fsl-imx8mn-ddr4-evk-ak5558.dtb \

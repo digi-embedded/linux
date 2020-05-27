@@ -107,15 +107,6 @@
 		#size-cells = <2>;
 		ranges;
 
-		/* global autoconfigured region for contiguous allocations */
-		linux,cma {
-			compatible = "shared-dma-pool";
-			reusable;
-			size = <0 0x28000000>;
-			alloc-ranges = <0 0x40000000 0 0x60000000>;
-			linux,cma-default;
-		};
-
 		rpmsg_reserved: rpmsg@0xb8000000 {
 			no-map;
 			reg = <0 0xb8000000 0 0x400000>;
@@ -527,7 +518,7 @@
 		status = "disabled";
 	};
 
-	sdma2: dma-controller@302c0000 {
+	sdma2: sdma@302c0000 {
 		compatible = "fsl,imx8mm-sdma", "fsl,imx8mq-sdma", "fsl,imx7d-sdma";
 		reg = <0x0 0x302c0000 0x0 0x10000>;
 		interrupts = <GIC_SPI 103 IRQ_TYPE_LEVEL_HIGH>;
@@ -540,7 +531,7 @@
 		status = "okay";
 	};
 
-	sdma3: dma-controller@302b0000 {
+	sdma3: sdma@302b0000 {
 		compatible = "fsl,imx8mm-sdma", "fsl,imx8mq-sdma", "fsl,imx7d-sdma";
 		reg = <0x0 0x302b0000 0x0 0x10000>;
 		interrupts = <GIC_SPI 34 IRQ_TYPE_LEVEL_HIGH>;
@@ -929,7 +920,7 @@
 		status = "disabled";
 	};
 
-	sdma1: dma-controller@30bd0000 {
+	sdma1: sdma@30bd0000 {
 		compatible = "fsl,imx8mm-sdma", "fsl,imx8mq-sdma", "fsl,imx7d-sdma";
 		reg = <0x0 0x30bd0000 0x0 0x10000>;
 		interrupts = <GIC_SPI 2 IRQ_TYPE_LEVEL_HIGH>;
@@ -1281,8 +1272,8 @@
 					<&clk IMX8MN_GPU_PLL_OUT>,
 					<&clk IMX8MN_SYS_PLL1_800M>,
 					<&clk IMX8MN_SYS_PLL1_800M>;
-		assigned-clock-rates = <0>, <0>, <800000000>, <400000000>, <1000000000>,
-					<500000000>, <500000000>;
+		assigned-clock-rates = <0>, <0>, <800000000>, <400000000>, <1200000000>,
+					<600000000>, <600000000>;
 		depth-compression = <0>;
 		power-domains = <&gpumix_pd>;
 		status = "disabled";

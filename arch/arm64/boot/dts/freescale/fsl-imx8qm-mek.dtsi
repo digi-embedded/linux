@@ -214,6 +214,8 @@
 		compatible = "fsl,imx-audio-xtor";
 		model = "xtor-audio";
 		cpu-dai = <&sai0>;
+		tx-codec-slave = <1>;
+		rx-codec-slave = <1>;
 		status = "okay";
 	};
 
@@ -498,11 +500,11 @@
 
 		pinctrl_sim0: sim0grp {
 			fsl,pins = <
-				SC_P_SIM0_CLK_DMA_SIM0_CLK		0x21
-				SC_P_SIM0_IO_DMA_SIM0_IO		0x21
-				SC_P_SIM0_PD_DMA_SIM0_PD		0x21
-				SC_P_SIM0_POWER_EN_DMA_SIM0_POWER_EN	0x21
-				SC_P_SIM0_RST_DMA_SIM0_RST		0x21
+				SC_P_SIM0_CLK_DMA_SIM0_CLK		0xc0000021
+				SC_P_SIM0_IO_DMA_SIM0_IO		0xc2000021
+				SC_P_SIM0_PD_DMA_SIM0_PD		0xc0000021
+				SC_P_SIM0_POWER_EN_DMA_SIM0_POWER_EN	0xc0000021
+				SC_P_SIM0_RST_DMA_SIM0_RST		0xc0000021
 			>;
 		};
 
@@ -1556,7 +1558,7 @@
 
 	    carveout_region: imx_ion@0 {
 		    compatible = "imx-ion-pool";
-		    reg = <0x0 0xf8000000 0 0x8000000>;
+		    reg = <0x0 0xf6000000 0 0x8000000>;
 	    };
     };
 };

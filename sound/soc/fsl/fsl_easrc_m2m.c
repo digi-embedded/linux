@@ -212,7 +212,6 @@ static long fsl_easrc_prepare_io_buffer(struct fsl_easrc_m2m *m2m,
 	unsigned int buf_len, bits;
 	u32 fifo_addr;
 	void __user *buf_vaddr;
-	int ret;
 
 	if (dir == IN) {
 		buf_vaddr = (void __user *)buf->input_buffer_vaddr;
@@ -226,13 +225,15 @@ static long fsl_easrc_prepare_io_buffer(struct fsl_easrc_m2m *m2m,
 		fifo_addr = easrc->paddr + REG_EASRC_RDFIFO(index);
 	}
 
-	if (dir == IN) {
-		ret = copy_from_user(dma_vaddr, buf_vaddr, buf_len);
-		if (ret) {
-			dev_err(dev, "failed to copy input buffer %d\n", ret);
-			return ret;
-		}
+	if (buf_len > EASRC_DMA_BUFFER_SIZE ||
+	    (dir == IN && (buf_len % (bits / 8)))) {
+		dev_err(dev, "%sput buffer size is error: [%d]\n",
+			DIR_STR(dir), buf_len);
+		return -EINVAL;
 	}
+
+	if (dir == IN && copy_from_user(dma_vaddr, buf_vaddr, buf_len))
+		return -EFAULT;
 
 	*dma_len = buf_len;
 
@@ -309,13 +310,16 @@ static void fsl_easrc_read_last_FIFO(struct fsl_easrc_m2m *m2m)
 	u32 i, reg, size, t_size = 0, width;
 	u32 *reg32 = NULL;
 	u16 *reg16 = NULL;
+	u8  *reg24 = NULL;
 
 	width = snd_pcm_format_physical_width(ctx->out_params.sample_format);
 
 	if (width == 32)
 		reg32 = output->dma_vaddr + output->length;
-	else
+	else if (width == 16)
 		reg16 = output->dma_vaddr + output->length;
+	else
+		reg24 = output->dma_vaddr + output->length;
 retry:
 	size = fsl_easrc_get_output_FIFO_size(m2m);
 	for (i = 0; i < size * ctx->channels; i++) {
@@ -324,9 +328,13 @@ retry:
 		if (reg32) {
 			*(reg32) = reg;
 			reg32++;
-		} else {
+		} else if (reg16) {
 			*(reg16) = (u16)reg;
 			reg16++;
+		} else {
+			*reg24++ = (u8)reg;
+			*reg24++ = (u8)(reg >> 8);
+			*reg24++ = (u8)(reg >> 16);
 		}
 	}
 	t_size += size;
@@ -336,8 +344,10 @@ retry:
 
 	if (reg32)
 		output->length += t_size * ctx->channels * 4;
-	else
+	else if (reg16)
 		output->length += t_size * ctx->channels * 2;
+	else
+		output->length += t_size * ctx->channels * 3;
 }
 
 static long fsl_easrc_process_buffer(struct fsl_easrc_m2m *m2m,
@@ -431,7 +441,8 @@ static long fsl_easrc_ioctl_req_context(struct fsl_easrc_m2m *m2m,
 	m2m->ctx_hold = 1;
 	req.index = m2m->ctx->index;
 	req.supported_in_format = FSL_EASRC_FORMATS;
-	req.supported_out_format = FSL_EASRC_FORMATS;
+	req.supported_out_format = FSL_EASRC_FORMATS |
+				   SNDRV_PCM_FMTBIT_IEC958_SUBFRAME_LE;
 	spin_unlock_irqrestore(&m2m->lock, lock_flags);
 
 	ret = copy_to_user(user, &req, sizeof(req));
@@ -474,36 +485,17 @@ static long fsl_easrc_ioctl_config_context(struct fsl_easrc_m2m *m2m,
 	ctx->rs_init_mode = 0x2;
 	ctx->pf_init_mode = 0x2;
 
+	ret = fsl_easrc_set_ctx_format(ctx,
+				       &ctx->in_params.sample_format,
+				       &ctx->out_params.sample_format);
+	if (ret)
+		return ret;
+
 	ret = fsl_easrc_config_context(easrc, index);
 	if (ret) {
 		dev_err(dev, "failed to config context %d\n", ret);
 		return ret;
 	}
-
-	ret = fsl_easrc_process_format(easrc, &ctx->in_params.fmt,
-				 config.input_format);
-	if (ret) {
-		dev_err(dev, "input format error %d\n", ret);
-		return ret;
-	}
-
-	ret = fsl_easrc_process_format(easrc, &ctx->out_params.fmt,
-				 config.output_format);
-	if (ret) {
-		dev_err(dev, "output format error %d\n", ret);
-		return ret;
-	}
-
-	/* FIXME - fix sample position?
-	 * if the input sample is 16-bits wide and left-justified on a
-	 * 32-bit boundary, then this register should be set to 16. If
-	 * the input sample is 16-bits wide and right-
-	 * justified on a 32-bit boundary, then this register should be
-	 * set to 0
-	 */
-	ret = fsl_easrc_set_ctx_format(ctx, NULL, NULL);
-	if (ret)
-		return ret;
 
 	ctx->in_params.iterations = 1;
 	ctx->in_params.group_len = ctx->channels;
@@ -796,9 +788,10 @@ static int fsl_easrc_open(struct inode *inode, struct file *file)
 
 	/* set the pointer to easrc private data */
 	m2m = kzalloc(sizeof(*m2m), GFP_KERNEL);
-	if (!m2m)
-		return -ENOMEM;
-
+	if (!m2m) {
+		ret = -ENOMEM;
+		goto out;
+	}
 	/* just save the pointer to easrc private data */
 	m2m->easrc = easrc;
 	m2m->ctx = ctx;
@@ -813,6 +806,9 @@ static int fsl_easrc_open(struct inode *inode, struct file *file)
 	pm_runtime_get_sync(dev);
 
 	return 0;
+out:
+	kfree(ctx);
+	return ret;
 }
 
 static int fsl_easrc_close(struct inode *inode, struct file *file)
@@ -929,6 +925,7 @@ static int fsl_easrc_m2m_init(struct fsl_easrc *easrc)
 	return ret;
 }
 
+#ifdef CONFIG_PM_SLEEP
 static void fsl_easrc_m2m_suspend(struct fsl_easrc *easrc)
 {
 	struct fsl_easrc_context *ctx;
@@ -966,3 +963,4 @@ static void fsl_easrc_m2m_resume(struct fsl_easrc *easrc)
 {
 	/* null */
 }
+#endif
