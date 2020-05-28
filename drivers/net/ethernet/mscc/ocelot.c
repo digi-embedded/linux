@@ -2156,12 +2156,6 @@ static struct ptp_clock_info ocelot_ptp_clock_info = {
 	.adjfine	= ocelot_ptp_adjfine,
 };
 
-static void ocelot_deinit_timestamp(struct ocelot *ocelot)
-{
-	if (ocelot->ptp_clock)
-		ptp_clock_unregister(ocelot->ptp_clock);
-}
-
 static int ocelot_init_timestamp(struct ocelot *ocelot)
 {
 	struct ptp_clock *ptp_clock;
@@ -2544,7 +2538,8 @@ void ocelot_deinit(struct ocelot *ocelot)
 	if (ocelot->ptp)
 		ocelot_ace_rule_offload_del(&ptp_rule);
 	ocelot_ace_deinit();
-	ocelot_deinit_timestamp(ocelot);
+	if (ocelot->ptp_clock)
+		ptp_clock_unregister(ocelot->ptp_clock);
 
 	for (i = 0; i < ocelot->num_phys_ports; i++) {
 		port = ocelot->ports[i];
