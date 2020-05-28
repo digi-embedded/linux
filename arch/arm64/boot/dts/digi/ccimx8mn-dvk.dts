@@ -217,6 +217,8 @@
 	pinctrl-0 = <&pinctrl_ecspi3 &pinctrl_ecspi3_cs>;
 	cs-gpios = <&gpio5 25 GPIO_ACTIVE_LOW>;
 	status = "okay";
+	/delete-property/dmas;
+	/delete-property/dma-names;
 
 	mcp2517fd: mcp2517fd@0 {
 		reg = <0>;
