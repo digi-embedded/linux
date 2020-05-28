@@ -212,9 +212,9 @@
 		compatible = "nxp,pca9450";
 		status = "okay";
 
-		pca9450,pmic-buck2-uses-i2c-dvs;
+		pca9450,pmic-buck1-uses-i2c-dvs;
 		/* Run/Standby voltage */
-		pca9450,pmic-buck2-dvs-voltage = <950000>, <850000>;
+		pca9450,pmic-buck1-dvs-voltage = <950000>, <850000>;
 
 		regulators {
 			#address-cells = <1>;
@@ -238,6 +238,9 @@
 				regulator-boot-on;
 				regulator-always-on;
 				regulator-ramp-delay = <3125>;
+				regulator-state-mem {
+					regulator-off-in-suspend;
+				};
 			};
 
 			buck3_reg_pca9450: regulator@2 {
@@ -247,6 +250,9 @@
 				regulator-max-microvolt = <2187500>;
 				regulator-boot-on;
 				regulator-always-on;
+				regulator-state-mem {
+					regulator-off-in-suspend;
+				};
 			};
 
 			buck4_reg_pca9450: regulator@3 {
@@ -301,6 +307,9 @@
 				regulator-max-microvolt = <3300000>;
 				regulator-boot-on;
 				regulator-always-on;
+				regulator-state-mem {
+					regulator-off-in-suspend;
+				};
 			};
 
 			ldo4_reg_pca9450: regulator@9 {
@@ -310,6 +319,9 @@
 				regulator-max-microvolt = <3300000>;
 				regulator-boot-on;
 				regulator-always-on;
+				regulator-state-mem {
+					regulator-off-in-suspend;
+				};
 			};
 
 			ldo5_reg_pca9450: regulator@10 {
