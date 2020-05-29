@@ -3897,7 +3897,7 @@ fec_probe(struct platform_device *pdev)
 	if (ret)
 		goto failed_clk_ahb;
 
-	fep->reg_mdio = devm_regulator_get(&pdev->dev, "digi,mdio-lt");
+	fep->reg_mdio = devm_regulator_get_optional(&pdev->dev, "digi,mdio-lt");
 	if (!IS_ERR(fep->reg_mdio)) {
 		ret = regulator_enable(fep->reg_mdio);
 		if (ret) {
