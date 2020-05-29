@@ -891,6 +891,9 @@ static int mca_uart_get_config_of(struct mca_uart_drv *uart_drv, int num_uarts)
 			&uart_drv->ports[uart_drv->num_uarts];
 		u32 val;
 
+		if (!of_device_is_available(node))
+			continue;
+
 		if (of_property_read_u32(node, "reg", &val)) {
 			dev_err(uart_drv->dev,
 				"invalid/missing reg entry in devicetree\n");
@@ -1002,6 +1005,7 @@ static int mca_uart_probe(struct platform_device *pdev)
 	struct mca_drv *mca = dev_get_drvdata(pdev->dev.parent);
 	struct regmap *regmap = mca->regmap;
 	struct mca_uart_drv *uart_drv;
+	struct device_node *np;
 	u32 num_uarts;
 	int ret, i, pin;
 	char msg[256];
@@ -1012,6 +1016,13 @@ static int mca_uart_probe(struct platform_device *pdev)
 	/* Find entry in device-tree */
 	if (!mca->dev->of_node)
 		return -ENODEV;
+
+	/* Return if not enabled in the device-tree */
+	np = of_find_matching_node(NULL, mca_uart_ids);
+	if (!np || !of_device_is_available(np)) {
+		of_node_put(np);
+		return -ENODEV;
+	}
 
 	uart_drv = devm_kzalloc(&pdev->dev, sizeof(*uart_drv), GFP_KERNEL);
 	if (!uart_drv) {
