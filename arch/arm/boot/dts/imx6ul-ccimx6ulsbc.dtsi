@@ -68,8 +68,12 @@
 	status = "disabled";
 
 	port {
-		csi_ep: endpoint {
+		csi_ep0: endpoint@0 {
 			remote-endpoint = <&ov5640_ep>;
+		};
+
+		csi_ep1: endpoint@1 {
+			remote-endpoint = <&ov5642_ep>;
 		};
 	};
 };
@@ -195,7 +199,7 @@
 		digi,defer-probe;
 		port {
 			ov5642_ep: endpoint {
-				remote-endpoint = <&csi_ep>;
+				remote-endpoint = <&csi_ep1>;
 			};
 		};
 	};
@@ -216,7 +220,7 @@
 		digi,defer-probe;
 		port {
 			ov5640_ep: endpoint {
-				remote-endpoint = <&csi_ep>;
+				remote-endpoint = <&csi_ep0>;
 			};
 		};
 	};
