@@ -184,20 +184,24 @@
 			compatible = "digi,mca-cc8m-uart";
 			#address-cells = <1>;
 			#size-cells = <0>;
+			status = "disabled";
 
 			mca_uart0: serial@0x900 {
 				reg = <0x900>;
 				index = <0>;
+				status = "disabled";
 			};
 
 			mca_uart1: serial@0x920 {
 				reg = <0x920>;
 				index = <1>;
+				status = "disabled";
 			};
 
 			mca_uart2: serial@0x940 {
 				reg = <0x940>;
 				index = <2>;
+				status = "disabled";
 			};
 		};
 	};
