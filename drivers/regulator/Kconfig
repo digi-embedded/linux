@@ -662,6 +662,14 @@ config REGULATOR_PF1550_RPMSG
 	  side via RPMSG.The regulators include three switch and three
 	  ldo.
 
+config REGULATOR_PF8X00_SC
+	tristate "Freescale PF8100/PF8200 regulator driver via SCU"
+	depends on ARCH_FSL_IMX8QXP
+	help
+	  This driver controls a PF8100/PF8200 regulator connected to the
+	  SCU. The regulator controls seven buck converters and four linear
+	  regulators.
+
 config REGULATOR_PWM
 	tristate "PWM voltage regulator"
 	depends on PWM
