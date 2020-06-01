@@ -4106,18 +4106,13 @@ static int __maybe_unused fec_suspend(struct device *dev)
 		}
 		fec_enet_clk_enable(ndev, false);
 
-		fep->active_in_suspend = !pm_runtime_status_suspended(dev);
-
-		if (fep->phy_reset_in_suspend)
-			gpio_set_value_cansleep(fep->phy_reset_gpio, 0);
-
 		fep->rpm_active = !pm_runtime_status_suspended(dev);
 		if (fep->rpm_active) {
 			ret = pm_runtime_force_suspend(dev);
 			if (ret < 0)
 				return ret;
 		}
-	} else if (fep->mii_bus_share && !ndev->phydev) {
+	} else if (!ndev->phydev) {
 		if (fep->phy_reset_in_suspend)
 			gpio_set_value_cansleep(fep->phy_reset_gpio,
 						fep->phy_reset_active_high);
