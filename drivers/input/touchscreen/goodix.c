@@ -802,30 +802,6 @@ static int goodix_get_gpio_config(struct goodix_ts_data *ts)
 		return -EINVAL;
 	dev = &ts->client->dev;
 
-	/*
-	 * By default we request the reset pin as input, leaving it in
-	 * high-impedance when not resetting the controller to save power.
-	 */
-	ts->gpiod_rst_flags = GPIOD_IN;
-
-	ts->avdd28 = devm_regulator_get(dev, "AVDD28");
-	if (IS_ERR(ts->avdd28)) {
-		error = PTR_ERR(ts->avdd28);
-		if (error != -EPROBE_DEFER)
-			dev_err(dev,
-				"Failed to get AVDD28 regulator: %d\n", error);
-		return error;
-	}
-
-	ts->vddio = devm_regulator_get(dev, "VDDIO");
-	if (IS_ERR(ts->vddio)) {
-		error = PTR_ERR(ts->vddio);
-		if (error != -EPROBE_DEFER)
-			dev_err(dev,
-				"Failed to get VDDIO regulator: %d\n", error);
-		return error;
-	}
-
 retry_get_irq_gpio:
 	/* Get the interrupt GPIO pin number */
 	gpiod = devm_gpiod_get_optional(dev, GOODIX_GPIO_INT_NAME, GPIOD_IN);
@@ -1120,14 +1096,6 @@ err_release_cfg:
 	complete_all(&ts->firmware_loading_complete);
 }
 
-static void goodix_disable_regulators(void *arg)
-{
-	struct goodix_ts_data *ts = arg;
-
-	regulator_disable(ts->vddio);
-	regulator_disable(ts->avdd28);
-}
-
 static int goodix_ts_probe(struct i2c_client *client,
 			   const struct i2c_device_id *id)
 {
@@ -1152,29 +1120,6 @@ static int goodix_ts_probe(struct i2c_client *client,
 	ts->contact_size = GOODIX_CONTACT_SIZE;
 
 	error = goodix_get_gpio_config(ts);
-	if (error)
-		return error;
-
-	/* power up the controller */
-	error = regulator_enable(ts->avdd28);
-	if (error) {
-		dev_err(&client->dev,
-			"Failed to enable AVDD28 regulator: %d\n",
-			error);
-		return error;
-	}
-
-	error = regulator_enable(ts->vddio);
-	if (error) {
-		dev_err(&client->dev,
-			"Failed to enable VDDIO regulator: %d\n",
-			error);
-		regulator_disable(ts->avdd28);
-		return error;
-	}
-
-	error = devm_add_action_or_reset(&client->dev,
-					 goodix_disable_regulators, ts);
 	if (error)
 		return error;
 
