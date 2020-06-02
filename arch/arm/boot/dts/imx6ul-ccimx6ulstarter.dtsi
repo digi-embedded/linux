@@ -17,7 +17,7 @@
 
 /* ECSPI3 (Raspberry PI Expansion header) */
 &ecspi3 {
-	fsl,spi-num-chipselects = <1>;
+	num-cs = <1>;
 	cs-gpios = <&gpio1 20 GPIO_ACTIVE_LOW>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_ecspi3_master>;
