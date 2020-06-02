@@ -48,10 +48,10 @@ enum imx_misc_func {
 
 #if IS_ENABLED(CONFIG_IMX_SCU)
 int imx_sc_misc_set_control(struct imx_sc_ipc *ipc, u32 resource,
-			    u8 ctrl, u32 val);
+			    u32 ctrl, u32 val);
 
 int imx_sc_misc_get_control(struct imx_sc_ipc *ipc, u32 resource,
-			    u8 ctrl, u32 *val);
+			    u32 ctrl, u32 *val);
 #else
 static inline int
 imx_sc_misc_set_control(struct imx_sc_ipc *ipc, u32 resource,

@@ -49,7 +49,7 @@ struct imx_sc_msg_resp_misc_get_ctrl {
  */
 
 int imx_sc_misc_set_control(struct imx_sc_ipc *ipc, u32 resource,
-			    u8 ctrl, u32 val)
+			    u32 ctrl, u32 val)
 {
 	struct imx_sc_msg_req_misc_set_ctrl msg;
 	struct imx_sc_rpc_msg *hdr = &msg.hdr;
@@ -79,7 +79,7 @@ EXPORT_SYMBOL(imx_sc_misc_set_control);
  */
 
 int imx_sc_misc_get_control(struct imx_sc_ipc *ipc, u32 resource,
-			    u8 ctrl, u32 *val)
+			    u32 ctrl, u32 *val)
 {
 	struct imx_sc_msg_req_misc_get_ctrl msg;
 	struct imx_sc_msg_resp_misc_get_ctrl *resp;
