@@ -145,6 +145,107 @@
 			status = "disabled";
 		};
 	};
+
+	pf8x00-sc {
+		compatible = "digi,pf8x00-sc";
+
+		vcc_main1_reg: SW1 {
+			regulator-min-microvolt = <1000000>;
+			regulator-max-microvolt = <1000000>;
+			regulator-boot-on;
+			regulator-always-on;
+			regulator-state-mem {
+				regulator-on-in-suspend;
+				regulator-suspend-microvolt = <800000>;
+			};
+		};
+
+		vcc_main2_reg: SW2 {
+			regulator-min-microvolt = <1000000>;
+			regulator-max-microvolt = <1000000>;
+			regulator-boot-on;
+			regulator-always-on;
+			regulator-state-mem {
+				regulator-on-in-suspend;
+				regulator-suspend-microvolt = <800000>;
+			};
+		};
+
+		vcc_gpu_reg: SW3 {
+			regulator-min-microvolt = <1100000>;
+			regulator-max-microvolt = <1100000>;
+			regulator-boot-on;
+			regulator-always-on;
+			regulator-state-mem {
+				regulator-off-in-suspend;
+			};
+		};
+
+		vcc_cpu_reg: SW4 {
+			regulator-min-microvolt = <1100000>;
+			regulator-max-microvolt = <1100000>;
+			regulator-boot-on;
+			regulator-always-on;
+			regulator-state-mem {
+				regulator-off-in-suspend;
+			};
+		};
+
+		vcc_ddr_io_reg: SW5 {
+			regulator-min-microvolt = <1100000>;
+			regulator-max-microvolt = <1100000>;
+			regulator-boot-on;
+			regulator-always-on;
+			regulator-state-mem {
+				regulator-on-in-suspend;
+				regulator-suspend-microvolt = <1068750>;
+			};
+		};
+
+		vcc_1v8_reg: SW6 {
+			regulator-min-microvolt = <1800000>;
+			regulator-max-microvolt = <1800000>;
+			regulator-boot-on;
+			regulator-always-on;
+		};
+
+		vcc_3v3_reg: SW7 {
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			regulator-boot-on;
+			regulator-always-on;
+			regulator-state-mem {
+				regulator-off-in-suspend;
+			};
+		};
+
+		vcc_scu_1v8_reg: LDO1 {
+			regulator-min-microvolt = <1800000>;
+			regulator-max-microvolt = <1800000>;
+			regulator-boot-on;
+			regulator-always-on;
+		};
+
+		vdd_emmc_reg: LDO2 {
+			regulator-min-microvolt = <1500000>;
+			regulator-max-microvolt = <5000000>;
+			regulator-boot-on;
+			regulator-always-on;
+			regulator-state-mem {
+				regulator-off-in-suspend;
+			};
+		};
+
+		ldo3_reg: LDO3 {
+			regulator-min-microvolt = <1500000>;
+			regulator-max-microvolt = <5000000>;
+		};
+
+		ld4_reg: LDO4 {
+			regulator-min-microvolt = <1500000>;
+			regulator-max-microvolt = <5000000>;
+		};
+	};
 };
 
 &adc0 {
