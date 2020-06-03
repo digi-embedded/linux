@@ -227,8 +227,8 @@
 		};
 
 		vdd_emmc_reg: LDO2 {
-			regulator-min-microvolt = <1500000>;
-			regulator-max-microvolt = <5000000>;
+			regulator-min-microvolt = <1800000>;
+			regulator-max-microvolt = <1800000>;
 			regulator-boot-on;
 			regulator-always-on;
 			regulator-state-mem {
@@ -457,15 +457,12 @@
 &usdhc1 {
 	pinctrl-names = "default", "state_100mhz", "state_200mhz";
 	pinctrl-0 = <&pinctrl_usdhc1>;
-	pinctrl-1 = <&pinctrl_usdhc1_100mhz>;
-	pinctrl-2 = <&pinctrl_usdhc1_200mhz>;
+	pinctrl-1 = <&pinctrl_usdhc1>;
+	pinctrl-2 = <&pinctrl_usdhc1>;
 	bus-width = <8>;
+	no-sd;
+	no-sdio;
 	non-removable;
-	/*
-	 * This property should be removed once the eMMC voltage is configured
-	 * to 1.8V.
-	 */
-	no-1-8-v;
 	status = "okay";
 };
 
@@ -576,38 +573,6 @@
 
 	/* eMMC */
 	pinctrl_usdhc1: usdhc1grp {
-		fsl,pins = <
-			IMX8QXP_EMMC0_CLK_CONN_EMMC0_CLK		0x06000041
-			IMX8QXP_EMMC0_CMD_CONN_EMMC0_CMD		0x00000021
-			IMX8QXP_EMMC0_DATA0_CONN_EMMC0_DATA0	0x00000021
-			IMX8QXP_EMMC0_DATA1_CONN_EMMC0_DATA1	0x00000021
-			IMX8QXP_EMMC0_DATA2_CONN_EMMC0_DATA2	0x00000021
-			IMX8QXP_EMMC0_DATA3_CONN_EMMC0_DATA3	0x00000021
-			IMX8QXP_EMMC0_DATA4_CONN_EMMC0_DATA4	0x00000021
-			IMX8QXP_EMMC0_DATA5_CONN_EMMC0_DATA5	0x00000021
-			IMX8QXP_EMMC0_DATA6_CONN_EMMC0_DATA6	0x00000021
-			IMX8QXP_EMMC0_DATA7_CONN_EMMC0_DATA7	0x00000021
-			IMX8QXP_EMMC0_STROBE_CONN_EMMC0_STROBE	0x00000041
-		>;
-	};
-
-	pinctrl_usdhc1_100mhz: usdhc1grp100mhz {
-		fsl,pins = <
-			IMX8QXP_EMMC0_CLK_CONN_EMMC0_CLK		0x06000041
-			IMX8QXP_EMMC0_CMD_CONN_EMMC0_CMD		0x00000021
-			IMX8QXP_EMMC0_DATA0_CONN_EMMC0_DATA0	0x00000021
-			IMX8QXP_EMMC0_DATA1_CONN_EMMC0_DATA1	0x00000021
-			IMX8QXP_EMMC0_DATA2_CONN_EMMC0_DATA2	0x00000021
-			IMX8QXP_EMMC0_DATA3_CONN_EMMC0_DATA3	0x00000021
-			IMX8QXP_EMMC0_DATA4_CONN_EMMC0_DATA4	0x00000021
-			IMX8QXP_EMMC0_DATA5_CONN_EMMC0_DATA5	0x00000021
-			IMX8QXP_EMMC0_DATA6_CONN_EMMC0_DATA6	0x00000021
-			IMX8QXP_EMMC0_DATA7_CONN_EMMC0_DATA7	0x00000021
-			IMX8QXP_EMMC0_STROBE_CONN_EMMC0_STROBE	0x00000041
-		>;
-	};
-
-	pinctrl_usdhc1_200mhz: usdhc1grp200mhz {
 		fsl,pins = <
 			IMX8QXP_EMMC0_CLK_CONN_EMMC0_CLK		0x06000041
 			IMX8QXP_EMMC0_CMD_CONN_EMMC0_CMD		0x00000021
