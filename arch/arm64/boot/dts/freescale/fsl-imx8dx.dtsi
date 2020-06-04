@@ -2806,7 +2806,7 @@
 		clock-names = "per", "ipg";
 		assigned-clocks = <&clk IMX8QXP_UART0_CLK>;
 		assigned-clock-rates = <80000000>;
-		power-domains = <&pd_dma2_chan9>;
+		power-domains = <&pd_dma_lpuart0>;
 		dma-names = "tx","rx";
 		dmas = <&edma2 9 0 0>,
 			<&edma2 8 0 1>;
