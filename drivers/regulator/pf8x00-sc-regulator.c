@@ -37,6 +37,12 @@
 #define PF8X00_NUM_REGS			(PF8X00_NUM_SW_REGS + \
 					 PF8X00_NUM_LDO_REGS)
 
+/* PMIC ids */
+#define PF8X00_DEVICE_ID		0x00
+#define PF8X00_REV_ID			0x01
+#define PF8X00_EMREV			0x02
+#define PF8X00_PROG_ID			0x03
+
 /* Regulators base addresses */
 #define PF8X00_SW1_BASE			0x4d
 #define PF8X00_SW2_BASE			0x55
@@ -122,6 +128,10 @@ struct pf8x00_sc_pmic {
 	struct pf8x00_sc_regulator regulators[PF8X00_NUM_REGS];
 	struct regulator_dev *rdev[PF8X00_NUM_REGS];
 	struct mutex lock;
+	u8 devid;
+	u8 revid;
+	u8 emrev;
+	u8 progid;
 };
 
 static struct pf8x00_sc_regulator *
@@ -684,6 +694,25 @@ static int pf8x00_sc_parse_dt_reg_data(struct platform_device *pdev,
 }
 #endif
 
+static int pf8x00_sc_read_ids(struct pf8x00_sc_pmic *pmic)
+{
+	int ret;
+
+	ret = pf8x00_sc_read_reg(pmic, PF8X00_DEVICE_ID, &pmic->devid);
+	if (ret < 0)
+		return ret;
+
+	ret = pf8x00_sc_read_reg(pmic, PF8X00_REV_ID, &pmic->revid);
+	if (ret < 0)
+		return ret;
+
+	ret = pf8x00_sc_read_reg(pmic, PF8X00_EMREV, &pmic->emrev);
+	if (ret < 0)
+		return ret;
+
+	return pf8x00_sc_read_reg(pmic, PF8X00_PROG_ID, &pmic->progid);
+}
+
 static int pf8x00_sc_regulator_probe(struct platform_device *pdev)
 {
 	struct device_node *np = pdev->dev.of_node;
@@ -710,6 +739,19 @@ static int pf8x00_sc_regulator_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, pmic);
 	config.dev = &pdev->dev;
 	config.driver_data = pmic;
+
+	/* Get the pmic revision ids and check communication with the SCU */
+	ret = pf8x00_sc_read_ids(pmic);
+	if (ret) {
+		dev_err(&pdev->dev,
+			"fail to communicate with pmic - update the SCU fw\n");
+		/*
+		 * The SCU firmware may not support the functionality required
+		 * by this driver. Return 0 to avoid further problems.
+		 */
+		ret = 0;
+		goto err_free_mem;
+	}
 
 	pf8x00_sc_parse_dt_reg_data(pdev, &matches);
 	if (matches == NULL) {
@@ -749,7 +791,9 @@ static int pf8x00_sc_regulator_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, pmic);
 
-	dev_info(&pdev->dev, "PF8X00 pmic driver loaded\n");
+	dev_info(&pdev->dev,
+		 "PF8X00 pmic driver loaded (%02x|%02x|%02x|%02x)\n", 
+		 pmic->devid, pmic->revid, pmic->emrev, pmic->progid);
 
 	return 0;
 
