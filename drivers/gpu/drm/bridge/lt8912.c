@@ -14,6 +14,7 @@
 #include <linux/of_gpio.h>
 #include <linux/of_graph.h>
 #include <linux/regmap.h>
+#include <linux/regulator/consumer.h>
 #include <video/of_display_timing.h>
 
 #include <drm/drmP.h>
@@ -38,6 +39,8 @@ struct lt8912 {
 	struct regmap *regmap[3];
 	struct gpio_desc *reset_n;
 	struct gpio_desc *gpiod_int;
+	struct regulator *vdd1;
+	struct regulator *vdd2;
 	int hpd_irq;
 	bool no_hpd;
 	bool no_edid;
@@ -255,6 +258,24 @@ int lt8912_parse_dt(struct device_node *np, struct lt8912 *lt)
 
 static void lt8912_power_on(struct lt8912 *lt)
 {
+	int ret;
+
+	if (lt->vdd1) {
+		ret = regulator_enable(lt->vdd1);
+		if (ret)
+			dev_err(lt->dev,
+				"failed to enable regulator vdd1 (%d)\n",
+				ret);
+	}
+
+	if (lt->vdd2) {
+		ret = regulator_enable(lt->vdd2);
+		if (ret)
+			dev_err(lt->dev,
+				"failed to enable regulator vdd2 (%d)\n",
+				ret);
+	}
+
 	gpiod_direction_output(lt->reset_n, 1);
 	msleep(120);
 	gpiod_direction_output(lt->reset_n, 0);
@@ -263,6 +284,12 @@ static void lt8912_power_on(struct lt8912 *lt)
 static void lt8912_power_off(struct lt8912 *lt)
 {
 	gpiod_direction_output(lt->reset_n, 1);
+
+	if (lt->vdd2)
+		regulator_disable(lt->vdd2);
+
+	if (lt->vdd1)
+		regulator_disable(lt->vdd1);
 }
 
 static irqreturn_t lt8912_hpd_threaded_handler(int unused, void *data)
@@ -554,6 +581,24 @@ static int lt8912_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 		ret = PTR_ERR(lt->reset_n);
 		dev_err(dev, "failed to request reset GPIO: %d\n", ret);
 		return ret;
+	}
+
+	lt->vdd1 = devm_regulator_get_optional(dev, "vdd1");
+	if (IS_ERR(lt->vdd1)) {
+		ret = PTR_ERR(lt->vdd1);
+		if (ret == -EPROBE_DEFER)
+			return -EPROBE_DEFER;
+		lt->vdd1 = NULL;
+		dev_dbg(dev, "No vdd1 regulator found (%d)\n", ret);
+	}
+
+	lt->vdd2 = devm_regulator_get_optional(dev, "vdd2");
+	if (IS_ERR(lt->vdd2)) {
+		ret = PTR_ERR(lt->vdd2);
+		if (ret == -EPROBE_DEFER)
+			return -EPROBE_DEFER;
+		lt->vdd2 = NULL;
+		dev_dbg(dev, "No vdd2 regulator found (%d)\n", ret);
 	}
 
 	if (!lt->no_hpd) {

@@ -11,6 +11,10 @@ Required properties:
  - no-hpd: disable hot-plug detection, assumes display always connected
  - no-edid: do not use EDID modes, use the display-timings provided in the dt
 
+Optional properties:
+ - vdd1-supply: Power supply for the lt8912 chip
+ - vdd2-supply: Power supply for the lt8912 chip
+
 Example:
 
 &dsi {
