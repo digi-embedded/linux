@@ -256,20 +256,20 @@
 /* Configure MCA UARTs. */
 &mca_uart {
 	status = "okay";
+};
 
-	/* Assign the IO pins (see bindings) and change status to okay */
-	mca_uart0 {
-		iopins-names = "rx", "tx";
-		iopins = <9 10>;
-		status = "disabled";
-	};
+/* Assign the IO pins (see bindings) and change status to okay */
+&mca_uart0 {
+	iopins-names = "rx", "tx";
+	iopins = <9 10>;
+	status = "disabled";
+};
 
-	/* Assign the IO pins (see bindings) and change status to okay */
-	mca_uart2 {
-		iopins-names = "rx", "tx";
-		iopins = <2 1>;
-		status = "disabled";
-	};
+/* Assign the IO pins (see bindings) and change status to okay */
+&mca_uart2 {
+	iopins-names = "rx", "tx";
+	iopins = <2 1>;
+	status = "disabled";
 };
 
 /* USB_OTG1 */
