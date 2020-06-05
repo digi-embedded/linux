@@ -11,6 +11,7 @@ dtb-$(CONFIG_ARCH_MXC) += ccimx8x-mfg-interim.dtb \
 			  ccimx8x-sbc-pro_ov_flexcan1.dtbo \
 			  ccimx8x-sbc-pro_ov_lpuart3.dtbo \
 			  ccimx8x-sbc-pro_ov_lvds1.dtbo \
+			  ccimx8x-sbc-pro_ov_lt9812-hdmi-dsi0.dtbo \
 			  ccimx8x-sbc-pro_ov_parallel-camera.dtbo \
 			  ccimx8x-sbc-pro_ov_pcie-card.dtbo \
 
