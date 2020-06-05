@@ -429,28 +429,29 @@
 
 &mca_uart {
 	status = "okay";
-
-	/* Assign the IO pins (see bindings) and change status to okay */
-	mca_uart0 {
-		iopins-names = "rx", "tx";
-		iopins = <9 10>;
-		status = "disabled";
-	};
-
-	/* Assign the IO pins (see bindings) and change status to okay */
-	mca_uart1 {
-		iopins-names = "rx", "tx";
-		iopins = <11 16>;
-		status = "disabled";
-	};
-
-	/* UART connected to XBee Cellular socket */
-	mca_uart2 {
-		iopins-names = "rx", "tx", "cts", "rts";
-		iopins = <2 1 3 4>;
-		status = "okay";
-	};
 };
+
+/* Assign the IO pins (see bindings) and change status to okay */
+&mca_uart0 {
+	iopins-names = "rx", "tx";
+	iopins = <9 10>;
+	status = "disabled";
+};
+
+/* Assign the IO pins (see bindings) and change status to okay */
+&mca_uart1 {
+	iopins-names = "rx", "tx";
+	iopins = <11 16>;
+	status = "disabled";
+};
+
+/* UART connected to XBee Cellular socket */
+&mca_uart2 {
+	iopins-names = "rx", "tx", "cts", "rts";
+	iopins = <2 1 3 4>;
+	status = "okay";
+};
+
 &mipi_csi_1 {
 	#address-cells = <1>;
 	#size-cells = <0>;
