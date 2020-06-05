@@ -494,6 +494,64 @@
 		skip-firmware-request;
 		status = "disabled";
 	};
+
+	/* HDMI adapter board */
+	lt_bridge: lt8912@48 {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_lt8912>;
+		compatible = "lontium,lt8912";
+		reg = <0x48>;
+		digi,dsi-lanes = <4>;
+		vdd1-supply = <&reg_5v_display>;
+		no-hpd;
+		no-edid;
+		status = "disabled";
+
+		port@0 {
+			reg = <0>;
+			lt8912_0_in: endpoint {
+				remote-endpoint = <&mipi0_dsi_out>;
+			};
+		};
+
+		display-timings {
+			native-mode = <&timing1>;
+
+			timing0: timing0 {
+				clock-frequency = <74250000>;
+				hactive = <1280>;
+				vactive = <720>;
+				hfront-porch = <110>;
+				hsync-len = <40>;
+				hback-porch = <220>;
+				vfront-porch = <5>;
+				vsync-len = <5>;
+				vback-porch = <20>;
+				hsync-active = <0>;
+				vsync-active = <0>;
+				de-active = <0>;
+				pixelclk-active = <0>;
+			};
+
+			timing1: timing1 {
+				clock-frequency = <148500000>;
+				hactive = <1920>;
+				vactive = <1080>;
+				hfront-porch = <88>;
+				hsync-len = <44>;
+				hback-porch = <148>;
+				vfront-porch = <36>;
+				vsync-len = <5>;
+				vback-porch = <4>;
+				hsync-active = <0>;
+				vsync-active = <0>;
+				de-active = <0>;
+				pixelclk-active = <0>;
+			};
+		};
+	};
 };
 
 /* MIPI-CSI0 I2C available on MIPI Camera connector */
@@ -597,6 +655,19 @@
 
 &ldb1_phy {
 	status = "disabled";
+};
+
+&mipi0_dsi_host {
+	status = "disabled";
+
+	ports {
+		port@1 {
+			reg = <1>;
+			mipi0_dsi_out: endpoint {
+				remote-endpoint = <&lt8912_0_in>;
+			};
+		};
+	};
 };
 
 /* MIPI-DSI1 I2C available on LVDS1 connector */
@@ -1079,6 +1150,15 @@
 		fsl,pins = <
 			IMX8QXP_SPI3_CS1_ADMA_I2C3_SCL	0x06000020
 			IMX8QXP_MCLK_IN1_ADMA_I2C3_SDA	0x06000020
+		>;
+	};
+
+	pinctrl_lt8912: lt8912grp {
+		fsl,pins = <
+			/* HDMI/HDP interrupt */
+			IMX8QXP_QSPI0B_DATA2_LSIO_GPIO3_IO20		0x06000020
+			/* HDMI reset */
+			IMX8QXP_MIPI_DSI0_GPIO0_00_LSIO_GPIO1_IO27	0x06000020
 		>;
 	};
 
