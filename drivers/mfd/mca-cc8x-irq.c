@@ -360,8 +360,8 @@ static int imx_sc_mca_irq_notify(struct notifier_block *nb, unsigned long event,
 	struct mca_drv *mca = dev_get_drvdata(data->map->dev);
 
 	if (mca->suspended)
-		/* Give the system time to awake the i2c interface */
-		usleep_range(1000, 2000);
+		/* Give the system some time to awake */
+		usleep_range(10000, 12000);
 	else if (mca_cc8x_irq_asserted(event, group))
 		mca_cc8x_irq_thread(data);
 
