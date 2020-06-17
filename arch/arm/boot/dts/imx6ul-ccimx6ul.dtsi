@@ -79,6 +79,7 @@
 	sda-gpios = <&gpio1 29 GPIO_ACTIVE_HIGH>;
 	digi,atecc508a-workaround;
 	digi,atecc508a-sleep-delay-uS = <1000>;
+	digi,atecc508a-awake-delay-uS = <250>;
 	status = "okay";
 
 	mca_cc6ul: mca@7e {
