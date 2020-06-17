@@ -368,12 +368,13 @@ static int lt8912_connector_get_modes(struct drm_connector *connector)
 		num = 1;
 	} else {
 		edid = drm_get_edid(connector, lt->i2c->adapter);
-		if (!edid)
-			return 0;
+		if (edid) {
+			drm_connector_update_edid_property(connector, edid);
+			num = drm_add_edid_modes(connector, edid);
+		} else {
+			dev_err(lt->dev, "failed to get display EDID data\n");
+		}
 
-		drm_connector_update_edid_property(connector, edid);
-		num = drm_add_edid_modes(connector, edid);
-		kfree(edid);
 		ret = drm_display_info_set_bus_formats(&connector->display_info,
 						       &bus_format, 1);
 		if (ret)
