@@ -265,6 +265,7 @@
 
 /* LPSPI0 on expansion header */
 &lpspi0 {
+	assigned-clock-rates = <60000000>;
 	status = "okay";
 
 	/*
