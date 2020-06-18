@@ -29,7 +29,7 @@
 struct lt8912 {
 	struct drm_bridge bridge;
 	struct drm_connector connector;
-	struct drm_display_mode *mode;
+	const struct drm_display_mode *mode;
 	struct device *dev;
 	struct mipi_dsi_device *dsi;
 	struct device_node *host_node;
