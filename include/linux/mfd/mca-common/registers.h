@@ -1218,6 +1218,23 @@
 #define MCA_PWM_TPM_LEN			(MCA_REG_TPM1_CFG0 - MCA_REG_TPM0_CFG0)
 #define MCA_PWM_CH_LEN			(MCA_REG_TPM0_CH1_CFG - MCA_REG_TPM0_CH0_CFG)
 
+/* EP11, KEYPAD */
+/* Reserved 4 bytes */
+#define MCA_REG_KP_CTRL0		0x0b04
+#define MCA_REG_KP_CTRL1		0x0b05
+#define MCA_REG_KP_NCOLS		0x0b06
+#define MCA_REG_KP_NROWS		0x0b07
+#define MCA_REG_KP_DEBOUNCE		0x0b08
+
+#define MCA_REG_KP_FIFO			0x0b10
+
+#define MCA_REG_KP_COL0_IO		0x0b20
+/* ... */
+#define MCA_REG_KP_COL15_IO		0x0b2f
+#define MCA_REG_KP_ROW0_IO		0x0b30
+/* ... */
+#define MCA_REG_KP_ROW15_IO		0x0b3f
+
 /*
  * MCA registers bitfields
  */
@@ -1282,6 +1299,7 @@
 #define MCA_M_UART1		BIT(3)
 #define MCA_M_UART2		BIT(4)
 #define MCA_M_RTC_PERIODIC_IRQ	BIT(5)
+#define MCA_M_KEYPAD_IRQ	BIT(6)
 
 /* MCA_PWR_CTRL_0 (addr=0x0028) */
 #define MCA_PWR_KEY_SLEEP_EN	BIT(0)
@@ -1400,5 +1418,16 @@
 /* MCA_REG_TPMx_CH0_CFG	(addr=0x0a10...) */
 #define MCA_TPM_CH_EN			BIT(0)
 #define MCA_TPM_CH_POL_HIGH		BIT(1)
+
+/* MCA_REG_KP_CTRL0	(addr=0x0b04) */
+#define MCA_KP_EN			BIT(0)
+#define MCA_KP_SLEEP_WAKE_EN		BIT(1)
+#define MCA_KP_PWROFF_WAKE_EN		BIT(2)
+#define MCA_KP_KEY_REL_EN		BIT(3)
+
+/* MCA_REG_KP_FIFO	(addr=0x0b10) */
+#define MCA_KP_FIFO_EV_KPRESS		BIT(6)
+#define MCA_KP_FIFO_EV_KREP		BIT(7)
+#define MCA_KP_FIFO_SC_MASK		0x3f
 
 #endif /* MCA_COMMON_REGISTERS_H_ */

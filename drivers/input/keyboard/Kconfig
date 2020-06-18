@@ -487,6 +487,15 @@ config KEYBOARD_IMX
 	  To compile this driver as a module, choose M here: the
 	  module will be called imx_keypad.
 
+  config KEYBOARD_MCA
+	tristate "MCA keypad support"
+	select INPUT_MATRIXKMAP
+	help
+	  Enable support for MCA keypad port.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called mca-keypad.
+
 config KEYBOARD_NEWTON
 	tristate "Newton keyboard"
 	select SERIO
