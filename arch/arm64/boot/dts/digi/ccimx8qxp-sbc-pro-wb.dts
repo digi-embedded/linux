@@ -156,6 +156,93 @@
 };
 
 /*
+ * To enable the MIPI-DSI to HDMI adapter:
+ *   - remove: &ldb1, &ldb1_phy, &lvds0, &lvds_backlight0 and &pwm_mipi_lvds0 above
+ *   - uncomment the nodes noted below
+ */
+//&i2c0_mipi_lvds0 {
+//	lt_bridge: lt8912@48 {
+//		pinctrl-names = "default";
+//		pinctrl-0 = <&pinctrl_lt8912>;
+//
+//		compatible = "lontium,lt8912";
+//		reg = <0x48>;
+//
+//		digi,dsi-lanes = <4>;
+//		reset-gpios = <&gpio1 27 GPIO_ACTIVE_LOW>;
+//		no-hpd;
+//		no-edid;
+//		status = "okay";
+//
+//		port {
+//			lt8912_1_in: endpoint {
+//				/* add lanes */
+//				remote-endpoint = <&mipi_dsi_bridge1_out>;
+//			};
+//		};
+//
+//		display-timings {
+//			native-mode = <&timing1>;
+//
+//			timing0: timing0 {
+//				clock-frequency = <74250000>;
+//				hactive = <1280>;
+//				vactive = <720>;
+//				hfront-porch = <110>;
+//				hsync-len = <40>;
+//				hback-porch = <220>;
+//				vfront-porch = <5>;
+//				vsync-len = <5>;
+//				vback-porch = <20>;
+//				hsync-active = <0>;
+//				vsync-active = <0>;
+//				de-active = <0>;
+//				pixelclk-active = <0>;
+//			};
+//
+//			timing1: timing1 {
+//				clock-frequency = <148500000>;
+//				hactive = <1920>;
+//				vactive = <1080>;
+//				hfront-porch = <88>;
+//				hsync-len = <44>;
+//				hback-porch = <148>;
+//				vfront-porch = <36>;
+//				vsync-len = <5>;
+//				vback-porch = <4>;
+//				hsync-active = <0>;
+//				vsync-active = <0>;
+//				de-active = <0>;
+//				pixelclk-active = <0>;
+//			};
+//		};
+//	};
+//};
+//
+//&mipi_dsi_bridge1 {
+//	status = "okay";
+//
+//	port@1 {
+//		mipi_dsi_bridge1_out: endpoint {
+//			remote-endpoint = <&lt8912_1_in>;
+//		};
+//	};
+//};
+//
+//&mipi_dsi_phy1 {
+//	status = "okay";
+//};
+//
+//&mipi_dsi1 {
+//	pwr-delay = <10>;
+//	status = "okay";
+//};
+//
+//&reg_5v_display {
+//	regulator-always-on;
+//};
+
+/*
  * The max98089 sound codec uses the same I2C address than the fusion touch
  * controller, so when unconmmenting this node you need to also comment the
  * max98089 node.
@@ -427,6 +514,16 @@
 			SC_P_ADC_IN4_ADMA_ADC_IN4		0xc0000060
 			/* ADC_IN5 */
 			SC_P_ADC_IN5_ADMA_ADC_IN5		0xc0000060
+		>;
+	};
+
+	/* Mipi-DSI to HDMI adapter board */
+	pinctrl_lt8912: lt8912grp {
+		fsl,pins = <
+			/* HDMI/HDP interrupt */
+			SC_P_QSPI0B_DATA2_LSIO_GPIO3_IO20		0x06000020
+			/* HDMI reset */
+			SC_P_MIPI_DSI0_GPIO0_00_LSIO_GPIO1_IO27		0x06000020
 		>;
 	};
 };
