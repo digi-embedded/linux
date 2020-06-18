@@ -92,6 +92,10 @@ static const struct regmap_irq mca_cc8_irqs[] = {
 		.reg_offset = MCA_IRQ_2_OFFSET,
 		.mask = MCA_M_RTC_PERIODIC_IRQ,
 	},
+	[MCA_CC8_IRQ_KEYPAD] = {
+		.reg_offset = MCA_IRQ_2_OFFSET,
+		.mask = MCA_M_KEYPAD_IRQ,
+	},
 };
 
 static struct regmap_irq_chip mca_cc8_irq_chip = {

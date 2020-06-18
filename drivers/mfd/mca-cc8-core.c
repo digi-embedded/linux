@@ -235,6 +235,15 @@ static struct resource mca_cc8_uart_resources[] = {
 	},
 };
 
+static struct resource mca_cc8_keypad_resources[] = {
+	{
+		.name   = MCA_IRQ_KEYPAD_NAME,
+		.start  = MCA_CC8_IRQ_KEYPAD,
+		.end    = MCA_CC8_IRQ_KEYPAD,
+		.flags  = IORESOURCE_IRQ,
+	},
+};
+
 static const struct mfd_cell mca_cc8x_devs[] = {
 	{
 		.name           = MCA_CC8X_DRVNAME_RTC,
@@ -281,6 +290,12 @@ static const struct mfd_cell mca_cc8x_devs[] = {
 	{
 		.name           = MCA_CC8_DRVNAME_PWM,
 		.of_compatible	= "digi,mca-pwm",
+	},
+	{
+		.name           = MCA_CC8X_DRVNAME_KEYPAD,
+		.of_compatible	= "digi,mca-keypad",
+		.num_resources  = ARRAY_SIZE(mca_cc8_keypad_resources),
+		.resources      = mca_cc8_keypad_resources,
 	},
 };
 
@@ -330,6 +345,12 @@ static const struct mfd_cell mca_cc8m_devs[] = {
 	{
 		.name           = MCA_CC8_DRVNAME_PWM,
 		.of_compatible	= "digi,mca-pwm",
+	},
+	{
+		.name           = MCA_CC8M_DRVNAME_KEYPAD,
+		.of_compatible	= "digi,mca-keypad",
+		.num_resources  = ARRAY_SIZE(mca_cc8_keypad_resources),
+		.resources      = mca_cc8_keypad_resources,
 	},
 };
 

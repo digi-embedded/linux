@@ -41,6 +41,7 @@
 #define MCA_IRQ_UART0_NAME		"UART0"
 #define MCA_IRQ_UART1_NAME		"UART1"
 #define MCA_IRQ_UART2_NAME		"UART2"
+#define MCA_IRQ_KEYPAD_NAME		"KEYPAD"
 
 /* Number of interrupt registers */
 #define MCA_NUM_IRQ_REGS		4
