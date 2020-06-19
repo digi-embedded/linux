@@ -815,6 +815,14 @@ static void mca_cc8_power_off(void)
 		return;
 	}
 
+	/*
+	 * Following line prints the 'Power down' message which confirms the
+	 * device is in power off.
+	 * That message used to be printed by pm_power_off() function that is
+	 * being deprecated here by the syscore approach.
+	 */
+	pr_emerg("Power down through syscore\n");
+
 	do {
 		/* Set power off bit in PWR_CTRL_0 register to shutdown */
 		ret = regmap_update_bits(pmca->regmap, MCA_PWR_CTRL_0,
@@ -837,13 +845,10 @@ static void mca_cc8_power_off(void)
 }
 
 #define MCA_MAX_RESET_TRIES 5
-static void mca_cc8_shutdown(void)
+static void mca_cc8_reset(void)
 {
 	const uint8_t unlock_pattern[] = {'C', 'T', 'R', 'U'};
 	int ret, try = 0;
-
-	if (system_state != SYSTEM_RESTART)
-		return;
 
 	if (!pmca) {
 		printk(KERN_ERR "ERROR: unable to shutdown [%s:%d/%s()]!\n",
@@ -874,6 +879,22 @@ reset_retry:
 	} while (++try < MCA_MAX_RESET_TRIES);
 
 	dev_err(pmca->dev, "failed to reboot!\n");
+}
+
+static void mca_cc8_shutdown(void)
+{
+	switch (system_state) {
+	case SYSTEM_HALT:
+		/* fall through on purpose */
+	case SYSTEM_POWER_OFF:
+		mca_cc8_power_off();
+		break;
+	case SYSTEM_RESTART:
+		mca_cc8_reset();
+		break;
+	default:
+		break;
+	}
 }
 
 static int mca_cc8_add_dyn_sysfs_entries(struct mca_drv *mca,
@@ -1034,12 +1055,6 @@ int mca_cc8_device_init(struct mca_drv *mca, u32 irq)
 
 	pmca = mca;
 
-	if (pm_power_off != NULL) {
-		dev_warn(mca->dev, "pm_power_off function already registered. "
-			 "Will be override by MCA function.\n");
-	}
-	pm_power_off = mca_cc8_power_off;
-
 	/*
 	 * To avoid error messages when resuming from suspend, increase the I2C
 	 * bus' usage counter so the linux pm_runtime framework wakes it from
@@ -1091,7 +1106,6 @@ int mca_cc8_device_init(struct mca_drv *mca, u32 irq)
 out_nvram:
 	kfree(mca->nvram);
 out_pwr_off:
-	pm_power_off = NULL;
 out_sysfs_remove:
 	pmca = NULL;
 	sysfs_remove_group(&mca->dev->kobj, &mca_cc8_attr_group);
@@ -1107,7 +1121,6 @@ out_not_compatible:
 void mca_cc8_device_exit(struct mca_drv *mca)
 {
 	unregister_syscore_ops(&mca->syscore);
-	pm_power_off = NULL;
 	pmca = NULL;
 	pm_runtime_put_noidle(mca->dev->parent->parent);
 	sysfs_remove_group(&mca->dev->kobj, &mca_cc8_attr_group);
