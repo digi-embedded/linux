@@ -2628,6 +2628,8 @@ static int __init cpufreq_core_init(void)
 	cpufreq_global_kobject = kobject_create_and_add("cpufreq", &cpu_subsys.dev_root->kobj);
 	BUG_ON(!cpufreq_global_kobject);
 
+	cpufreq_global_kobject->kset = cpufreq_kset;
+
 	return 0;
 }
 module_param(off, int, 0444);
