@@ -415,7 +415,7 @@ static int gen_mem_encap(struct device *jr_dev, void __user *secretbuf,
 
 	retval = caam_jr_enqueue(jr_dev, encapdesc, sm_key_job_done,
 			&testres);
-	if (!retval) {
+	if (retval == -EINPROGRESS) {
 		wait_for_completion_interruptible(&testres.completion);
 		dev_info(jr_dev, "job ring return %d\n", testres.error);
 		if (!testres.error) {
@@ -508,7 +508,7 @@ static int gen_mem_decap(struct device *jr_dev, void __user *keyblobbuf,
 
 	retval = caam_jr_enqueue(jr_dev, decapdesc, sm_key_job_done,
 			      &testres);
-	if (!retval) {
+	if (retval == -EINPROGRESS) {
 		wait_for_completion_interruptible(&testres.completion);
 		dev_info(jr_dev, "job ring return %d\n", testres.error);
 		if (!testres.error) {
