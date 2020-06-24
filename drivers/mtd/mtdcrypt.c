@@ -827,7 +827,7 @@ int mtdcrypt_init_crypt_info(struct mtd_info *mtd)
 	}
 
 	crypto_skcipher_set_flags(mtd->crypt_info->skcipher,
-			CRYPTO_TFM_REQ_WEAK_KEY);
+			CRYPTO_TFM_REQ_FORBID_WEAK_KEYS);
 	rc = crypto_skcipher_setkey(mtd->crypt_info->skcipher,
 			mtd->crypt_info->key, mtd->crypt_info->key_size);
 	if (rc) {
