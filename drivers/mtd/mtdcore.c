@@ -1195,7 +1195,10 @@ int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 		return -ENOMEM;
 
 	/* Block aligned read */
-	ret = mtd->_read(mtd, afrom, len, retlen, tmpbuf);
+	ops.len = len;
+	ops.datbuf = tmpbuf;
+	ret = mtd_read_oob(mtd, afrom, &ops);
+	*retlen = ops.retlen;
 	if (unlikely(ret < 0)) {
 		kfree(tmpbuf);
 		return ret;
@@ -1214,9 +1217,7 @@ int mtd_read(struct mtd_info *mtd, loff_t from, size_t len, size_t *retlen,
 	*retlen = olen;
 	kfree(tmpbuf);
 
-	if (mtd->ecc_strength == 0)
-		return 0;	/* device lacks ecc */
-	return ret >= mtd->bitflip_threshold ? -EUCLEAN : 0;
+	return ret;
 }
 EXPORT_SYMBOL_GPL(mtd_read);
 
@@ -1274,7 +1275,10 @@ int mtd_write(struct mtd_info *mtd, loff_t to, size_t len, size_t *retlen,
 		goto out;
 
 	/* Block aligned write */
-	ret = mtd->_write(mtd, ato, len, retlen, dstbuf);
+	ops.len = len;
+	ops.datbuf = dstbuf;
+	ret = mtd_write_oob(mtd, ato, &ops);
+	*retlen = ops.retlen;
 	if (olen != *retlen)
 		*retlen = olen;
 out:
