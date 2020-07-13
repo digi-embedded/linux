@@ -424,14 +424,14 @@
 };
 
 &tsens {
-	tsens-num = <3>;
+	tsens-num = <2>;
 };
 
 &thermal_zones {
 	pmic-thermal0 {
 		polling-delay-passive = <250>;
 		polling-delay = <2000>;
-		thermal-sensors = <&tsens 2>;
+		thermal-sensors = <&tsens 497>;
 		trips {
 			pmic_alert0: trip0 {
 				temperature = <85000>;
@@ -447,7 +447,9 @@
 		cooling-maps {
 			map0 {
 				trip = <&pmic_alert0>;
-				cooling-device = <&A35_0 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
+				cooling-device =
+					<&A35_0 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+					<&A35_1 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
 			};
 		};
 	};
