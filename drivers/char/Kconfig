@@ -52,32 +52,6 @@ config TTY_PRINTK_LEVEL
 	help
 	  Printk log level to use for ttyprintk messages.
 
-config FSL_OTP
-	tristate "Freescale On-Chip OTP Memory Support"
-	depends on HAS_IOMEM && OF
-	help
-	  If you say Y here, you will get read-only support for a
-	  character device interface into the One Time Programmable memory
-	  pages that are stored on the some Freescale i.MX processors.
-	  This will not get you access to the secure memory pages however.
-	  You will need to write your own secure code and reader for that.
-
-	  To compile this driver as a module, choose M here: the module
-	  will be called fsl_otp.
-
-	  If unsure, it is safe to say Y.
-
-config FSL_OTP_WRITE
-	bool "Writing support for Freescale On-Chip OTP Memory"
-	depends on FSL_OTP && !ARCH_FSL_IMX8MN
-	help
-	  If you say Y here, you will enable write support for Freescale
-	  On-Chip OTP Memory Support.
-	  WARNING: writing the OTP bits is a non-reversible operation that
-	  may brick your system.
-
-	  If unsure, say N.
-
 config PRINTER
 	tristate "Parallel printer support"
 	depends on PARPORT
