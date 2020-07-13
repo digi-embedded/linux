@@ -15,6 +15,8 @@
  */
 #include <crypto/hash.h>
 #include <crypto/skcipher.h>
+#include <linux/cpu.h>
+#include <linux/nvmem-consumer.h>
 #include <linux/scatterlist.h>
 #include <linux/random.h>
 #include <linux/mtd/mtd.h>
@@ -461,8 +463,31 @@ static int mtdcrypt_compute_keymod(struct mtd_crypt_info *crypt_info,
 {
 	unsigned int hwid[2] = {0};
 	int ret = 0;
+	static struct device *cpu_dev;
+	struct device_node *np;
 
-	ret = fsl_otp_get_hwid(hwid);
+	cpu_dev = get_cpu_device(0);
+	if (!cpu_dev) {
+		pr_err("failed to get cpu0 device\n");
+		return -ENODEV;
+	}
+
+	np = of_node_get(cpu_dev->of_node);
+	if (!np) {
+		dev_err(cpu_dev, "failed to find cpu0 node\n");
+		return -ENOENT;
+	}
+
+	if (of_find_property(np, "nvmem-cells", NULL)) {
+		ret = nvmem_cell_read_u32(cpu_dev, "mac0", &hwid[0]);
+		if (ret)
+			return ret;
+
+		ret = nvmem_cell_read_u32(cpu_dev, "mac1", &hwid[1]);
+		if (ret)
+			return ret;
+	}
+
 	if (!ret) {
 		if (debug) {
 			printk("mtdcrypt: hwid dump: ");
