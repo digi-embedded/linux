@@ -306,6 +306,22 @@
 	};
 };
 
+&cpu0 {
+	nvmem-cells = <&cpu_speed_grade>, <&mac0>, <&mac1>;
+	nvmem-cell-names = "speed_grade", "mac0", "mac1";
+};
+
+&ocotp {
+	/* These words contain the HWID */
+	mac0: mac0@88 {
+		reg = <0x88 4>;
+	};
+
+	mac1: mac1@8c {
+		reg = <0x8c 4>;
+	};
+};
+
 &reg_arm {
 	vin-supply = <&vdd_arm_soc_in>;
 	regulator-allow-bypass;
