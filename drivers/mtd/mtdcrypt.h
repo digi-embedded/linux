@@ -19,6 +19,5 @@
 int mtdcrypt_crypt(struct mtd_crypt_info *crypt_info, const u_char *buf,
 		u_char *dstbuf, size_t len, loff_t block_offset, int op);
 
-extern int fsl_otp_get_hwid(unsigned int *hwid);
 #endif /* __MTD_CRYPT_H__ */
 
