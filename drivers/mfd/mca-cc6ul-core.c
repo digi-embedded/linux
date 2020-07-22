@@ -22,7 +22,9 @@
 #include <linux/proc_fs.h>
 #include <linux/kthread.h>
 #include <linux/uaccess.h>
+#include <linux/i2c.h>
 #include <linux/syscore_ops.h>
+#include <linux/platform_data/i2c-imx.h>
 
 #include <linux/mfd/mca-common/core.h>
 #include <linux/mfd/mca-cc6ul/core.h>
@@ -441,16 +443,28 @@ static ssize_t fw_update_show(struct device *dev, struct device_attribute *attr,
 		       gpio_get_value_cansleep(mca->fw_update_gpio));
 }
 
+static struct imxi2c_platform_data i2c_data_mca = { 0 };
+
 static ssize_t fw_update_store(struct device *dev,
 			       struct device_attribute *attr,
 			       const char *buf, size_t count)
 {
 	struct mca_drv *mca = dev_get_drvdata(dev);
+	struct i2c_adapter *i2c_adapter = (struct i2c_adapter *)
+					  dev_get_drvdata(mca->i2c_adapter_dev);
+	struct imxi2c_platform_data *i2c_data = dev_get_platdata(&i2c_adapter->dev);
 	ssize_t status;
 	long value;
 
 	if (!gpio_is_valid(mca->fw_update_gpio))
 		return -EINVAL;
+
+	if (i2c_data == NULL) {
+		i2c_data_mca.bitrate = 100000;
+		i2c_adapter->dev.platform_data = &i2c_data_mca;
+	} else {
+		i2c_data->bitrate = 100000;
+	}
 
 	status = kstrtol(buf, 0, &value);
 	if (status == 0) {
