@@ -156,6 +156,7 @@ static int mca_cc6ul_i2c_probe(struct i2c_client *i2c,
 	i2c_set_clientdata(i2c, mca);
 	mca->dev = &i2c->dev;
 	mca->chip_irq = i2c->irq;
+	mca->i2c_adapter_dev = &i2c->adapter->dev;
 
 	mca->regmap = devm_regmap_init_i2c(i2c, &mca_cc6ul_regmap_config);
 	if (IS_ERR(mca->regmap)) {
