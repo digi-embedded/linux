@@ -75,6 +75,12 @@ enum {
 	DATA_SEC,
 };
 
+enum {
+	MCA_RTC_ACQUIRE_IDLE,
+	MCA_RTC_ACQUIRE_REQUESTED,
+	MCA_RTC_ACQUIRE_READY,
+};
+
 static void mca_data_to_tm(u8 *data, struct rtc_time *tm)
 {
 	/* conversion from MCA RTC to struct time is month-1 and year-1900 */
@@ -202,6 +208,12 @@ static int mca_rtc_read_time(struct device *dev, struct rtc_time *tm)
 	struct mca_rtc *rtc = dev_get_drvdata(dev);
 	u8 data[CLOCK_DATA_LEN] = { [0 ... (CLOCK_DATA_LEN - 1)] = 0 };
 	int ret;
+	unsigned int rtc_adquire_datetime = MCA_RTC_ACQUIRE_REQUESTED;
+
+	ret = regmap_write(rtc->mca->regmap, MCA_RTC_PREPARE_DATETIME,
+			   rtc_adquire_datetime);
+	if (ret)
+		dev_warn(dev, "failed to write PREPARE_DATETIME (%d)\n", ret);
 
 	ret = regmap_bulk_read(rtc->mca->regmap, MCA_RTC_COUNT_YEAR_L,
 			       data, CLOCK_DATA_LEN);
@@ -254,6 +266,12 @@ static int mca_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 	u8 data[CLOCK_DATA_LEN] = { [0 ... (CLOCK_DATA_LEN - 1)] = 0 };
 	int ret;
 	unsigned int val;
+	unsigned int rtc_adquire_alarm = MCA_RTC_ACQUIRE_REQUESTED;
+
+	ret = regmap_write(rtc->mca->regmap, MCA_RTC_PREPARE_ALARM,
+			   rtc_adquire_alarm);
+	if (ret)
+		dev_warn(dev, "failed to write PREPARE_ALARM (%d)\n", ret);
 
 	ret = regmap_bulk_read(rtc->mca->regmap, MCA_RTC_ALARM_YEAR_L,
 			       data, ALARM_DATA_LEN);
