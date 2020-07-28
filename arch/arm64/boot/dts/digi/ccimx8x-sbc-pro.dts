@@ -189,6 +189,10 @@
 	status = "okay";
 };
 
+&lvds0_panel {
+	status = "okay";
+};
+
 &pwm_mipi_lvds0 {
 	status = "okay";
 };
