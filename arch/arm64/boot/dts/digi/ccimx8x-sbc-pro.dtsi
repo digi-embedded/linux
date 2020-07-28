@@ -76,6 +76,68 @@
 		status = "disabled";
 	};
 
+	lvds0_panel: lvds0_panel@0 {
+		compatible = "panel-lvds";
+		backlight = <&lvds_backlight0>;
+		power-supply = <&reg_5v_display>;
+		width-mm = <216>;
+		height-mm = <135>;
+		data-mapping = "jeida-18";
+		status = "disabled";
+
+		port {
+			panel_lvds0_in: endpoint {
+				remote-endpoint = <&lvds0_out>;
+			};
+		};
+
+		/* AUO G101EVN01.0 */
+		panel-timing {
+			clock-frequency = <68930000>;
+			hactive = <1280>;
+			vactive = <800>;
+			hfront-porch = <120>;
+			hback-porch = <0>;
+			hsync-len = <8>;
+			vback-porch = <10>;
+			vfront-porch = <0>;
+			vsync-len = <6>;
+			hsync-active = <1>;
+			vsync-active = <1>;
+		};
+	};
+
+	lvds1_panel: lvds1_panel@1 {
+		compatible = "panel-lvds";
+		backlight = <&lvds_backlight0>;
+		power-supply = <&reg_5v_display>;
+		width-mm = <216>;
+		height-mm = <135>;
+		data-mapping = "jeida-18";
+		status = "disabled";
+
+		port {
+			panel_lvds1_in: endpoint {
+				remote-endpoint = <&lvds1_out>;
+			};
+		};
+
+		/* AUO G101EVN01.0 */
+		panel-timing {
+			clock-frequency = <68930000>;
+			hactive = <1280>;
+			vactive = <800>;
+			hfront-porch = <120>;
+			hback-porch = <0>;
+			hsync-len = <8>;
+			vback-porch = <10>;
+			vfront-porch = <0>;
+			vsync-len = <6>;
+			hsync-active = <1>;
+			vsync-active = <1>;
+		};
+	};
+
 	regulators {
 		compatible = "simple-bus";
 		#address-cells = <1>;
@@ -617,37 +679,11 @@
 		digi,bits-per-pixel = <16>;
 		status = "disabled";
 
-		display-timings {
-			native-mode = <&lvds0_g101evn010_1>;
+		port@1 {
+			reg = <1>;
 
-			/* AUO G101EVN01.0 */
-			lvds0_g101evn010_1: timing@0 {
-				clock-frequency = <68930000>;
-				hactive = <1280>;
-				vactive = <800>;
-				hfront-porch = <120>;
-				hback-porch = <0>;
-				hsync-len = <8>;
-				vback-porch = <10>;
-				vfront-porch = <0>;
-				vsync-len = <6>;
-				hsync-active = <1>;
-				vsync-active = <1>;
-				de-active = <1>;
-				pixelclk-active = <0>;
-			};
-
-			/* Fusion 10" F10A-0102 */
-			lvds0_hsd101pfw2_1: timing@1 {
-				clock-frequency = <45000000>;
-				hactive = <1024>;
-				vactive = <600>;
-				hfront-porch = <0>;
-				hback-porch = <0>;
-				hsync-len = <176>;
-				vback-porch = <0>;
-				vfront-porch = <2>;
-				vsync-len = <23>;
+			lvds0_out: endpoint {
+				remote-endpoint = <&panel_lvds0_in>;
 			};
 		};
 	};
@@ -725,37 +761,11 @@
 		digi,bits-per-pixel = <16>;
 		status = "disabled";
 
-		display-timings {
-			native-mode = <&lvds1_g101evn010_1>;
+		port@1 {
+			reg = <1>;
 
-			/* AUO G101EVN01.0 */
-			lvds1_g101evn010_1: timing@0 {
-				clock-frequency = <68930000>;
-				hactive = <1280>;
-				vactive = <800>;
-				hfront-porch = <120>;
-				hback-porch = <0>;
-				hsync-len = <8>;
-				vback-porch = <10>;
-				vfront-porch = <0>;
-				vsync-len = <6>;
-				hsync-active = <1>;
-				vsync-active = <1>;
-				de-active = <1>;
-				pixelclk-active = <0>;
-			};
-
-			/* Fusion 10" F10A-0102 */
-			lvds1_hsd101pfw2_1: timing@1 {
-				clock-frequency = <45000000>;
-				hactive = <1024>;
-				vactive = <600>;
-				hfront-porch = <0>;
-				hback-porch = <0>;
-				hsync-len = <176>;
-				vback-porch = <0>;
-				vfront-porch = <2>;
-				vsync-len = <23>;
+	                lvds1_out: endpoint {
+				remote-endpoint = <&panel_lvds1_in>;
 			};
 		};
 	};
