@@ -53,7 +53,7 @@ enum brcmf_pcie_state {
 BRCMF_FW_DEF(43602, "brcmfmac43602-pcie");
 BRCMF_FW_DEF(4350, "brcmfmac4350-pcie");
 BRCMF_FW_DEF(4350C, "brcmfmac4350c2-pcie");
-CY_FW_DEF(4355, "cyfmac89459-pcie");
+CY_FW_DEF(4355, "cyfmac54591-pcie");
 BRCMF_FW_CLM_DEF(4355C1, "brcmfmac4355c1-pcie");
 CY_FW_DEF(4356, "cyfmac4356-pcie");
 CY_FW_DEF(43570, "cyfmac43570-pcie");
@@ -71,8 +71,6 @@ BRCMF_FW_CLM_DEF(4377B3, "brcmfmac4377b3-pcie");
 BRCMF_FW_CLM_DEF(4378B1, "brcmfmac4378b1-pcie");
 BRCMF_FW_CLM_DEF(4378B3, "brcmfmac4378b3-pcie");
 BRCMF_FW_CLM_DEF(4387C2, "brcmfmac4387c2-pcie");
-CY_FW_DEF(54591, "brcmfmac54591-pcie");
-
 
 /* firmware config files */
 MODULE_FIRMWARE(BRCMF_FW_DEFAULT_PATH "brcmfmac*-pcie.txt");
@@ -111,7 +109,7 @@ static const struct brcmf_firmware_mapping brcmf_pcie_fwnames[] = {
 	BRCMF_FW_ENTRY(BRCM_CC_4378_CHIP_ID, 0x0000000F, 4378B1), /* revision ID 3 */
 	BRCMF_FW_ENTRY(BRCM_CC_4378_CHIP_ID, 0xFFFFFFE0, 4378B3), /* revision ID 5 */
 	BRCMF_FW_ENTRY(BRCM_CC_4387_CHIP_ID, 0xFFFFFFFF, 4387C2), /* revision ID 7 */
-	BRCMF_FW_ENTRY(CY_CC_54591_CHIP_ID, 0xFFFFFFFF, 54591),
+	BRCMF_FW_ENTRY(CY_CC_54591_CHIP_ID, 0xFFFFFFFF, 4355),
 };
 
 #define BRCMF_PCIE_FW_UP_TIMEOUT		5000 /* msec */
@@ -2516,11 +2514,7 @@ brcmf_pcie_prepare_fw_request(struct brcmf_pciedev_info *devinfo)
 	};
 	u32 chip;
 
-	if (devinfo->ci->chip == CY_CC_54591_CHIP_ID &&
-	    devinfo->pdev->device == CY_PCIE_54591_DEVICE_ID)
-		chip = CY_CC_54591_CHIP_ID;
-	else
-		chip = devinfo->ci->chip;
+	chip = devinfo->ci->chip;
 	fwreq = brcmf_fw_alloc_request(chip, devinfo->ci->chiprev,
 				       brcmf_pcie_fwnames,
 				       ARRAY_SIZE(brcmf_pcie_fwnames),
