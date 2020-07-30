@@ -445,26 +445,33 @@ static ssize_t fw_update_show(struct device *dev, struct device_attribute *attr,
 
 static struct imxi2c_platform_data i2c_data_mca = { 0 };
 
+static void set_i2c_speed(struct mca_drv *mca, u32 bitrate)
+{
+	struct i2c_adapter *i2c_adapter = (struct i2c_adapter *)
+					  dev_get_drvdata(mca->i2c_adapter_dev);
+	struct imxi2c_platform_data *i2c_data = dev_get_platdata(&i2c_adapter->dev);
+
+	if (i2c_data == NULL) {
+		i2c_data_mca.bitrate = bitrate;
+		i2c_adapter->dev.platform_data = &i2c_data_mca;
+	} else {
+		i2c_data->bitrate = bitrate;
+	}
+}
+
 static ssize_t fw_update_store(struct device *dev,
 			       struct device_attribute *attr,
 			       const char *buf, size_t count)
 {
 	struct mca_drv *mca = dev_get_drvdata(dev);
-	struct i2c_adapter *i2c_adapter = (struct i2c_adapter *)
-					  dev_get_drvdata(mca->i2c_adapter_dev);
-	struct imxi2c_platform_data *i2c_data = dev_get_platdata(&i2c_adapter->dev);
 	ssize_t status;
 	long value;
 
 	if (!gpio_is_valid(mca->fw_update_gpio))
 		return -EINVAL;
 
-	if (i2c_data == NULL) {
-		i2c_data_mca.bitrate = 100000;
-		i2c_adapter->dev.platform_data = &i2c_data_mca;
-	} else {
-		i2c_data->bitrate = 100000;
-	}
+	/* set i2c bus speed to 100kbps during firmware update */
+	set_i2c_speed(mca, 100000);
 
 	status = kstrtol(buf, 0, &value);
 	if (status == 0) {
@@ -836,6 +843,11 @@ int mca_cc6ul_device_init(struct mca_drv *mca, u32 irq)
 	}
 	mca->fw_version = (u16)(val & ~MCA_FW_VER_ALPHA_MASK);
 	mca->fw_is_alpha = val & MCA_FW_VER_ALPHA_MASK ? true : false;
+
+	/* Operate at 100KHz for older MCA versions than 1.19 */
+	if (mca->fw_version < MCA_MAKE_FW_VER(1, 19)) {
+		set_i2c_speed(mca, 100000);
+	}
 
 	if (mca->fw_version >= MCA_MAKE_FW_VER(1, 2)) {
 		ret = regmap_bulk_read(mca->regmap, MCA_LAST_MCA_RESET_0,
