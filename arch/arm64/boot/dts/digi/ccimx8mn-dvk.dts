@@ -546,6 +546,24 @@
 	};
 };
 
+&pwm2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pwm2>;
+	status = "okay";
+};
+
+&pwm3 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pwm3>;
+	status = "okay";
+};
+
+&pwm4 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pwm4>;
+	status = "okay";
+};
+
 &sai2 {
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&pinctrl_sai2>;
@@ -633,12 +651,6 @@
 			MX8MN_IOMUXC_GPIO1_IO10_GPIO1_IO10	0x16
 			/* GPIO1_IO11 on expansion connector */
 			MX8MN_IOMUXC_GPIO1_IO11_GPIO1_IO11	0x16
-			/* GPIO1_IO13 on expansion connector */
-			MX8MN_IOMUXC_GPIO1_IO13_GPIO1_IO13	0x16
-			/* GPIO1_IO14 on expansion connector */
-			MX8MN_IOMUXC_GPIO1_IO14_GPIO1_IO14	0x16
-			/* GPIO1_IO15 on expansion connector */
-			MX8MN_IOMUXC_GPIO1_IO15_GPIO1_IO15	0x16
 			/* User LED 3 */
 			MX8MN_IOMUXC_SD2_RESET_B_GPIO2_IO19	0x16
 			/* User button 2 */
@@ -770,6 +782,24 @@
 		fsl,pins = <
 			/* MIPI_CSI_RESET_N */
 			MX8MN_IOMUXC_GPIO1_IO12_GPIO1_IO12 0x19
+		>;
+	};
+
+	pinctrl_pwm2: pwm2grp {
+		fsl,pins = <
+			MX8MN_IOMUXC_GPIO1_IO13_PWM2_OUT        0x16
+		>;
+	};
+
+	pinctrl_pwm3: pwm3grp {
+		fsl,pins = <
+			MX8MN_IOMUXC_GPIO1_IO14_PWM3_OUT        0x16
+		>;
+	};
+
+	pinctrl_pwm4: pwm4grp {
+		fsl,pins = <
+			MX8MN_IOMUXC_GPIO1_IO15_PWM4_OUT        0x16
 		>;
 	};
 
