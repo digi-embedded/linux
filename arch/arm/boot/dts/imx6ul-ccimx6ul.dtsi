@@ -310,6 +310,9 @@
 };
 
 &ocotp {
+	/* By default, make the OTP bits read-only */
+	read-only;
+
 	/* These words contain the HWID */
 	mac0: mac0@88 {
 		reg = <0x88 4>;

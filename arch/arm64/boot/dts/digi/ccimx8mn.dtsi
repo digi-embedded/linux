@@ -439,6 +439,11 @@
 	};
 };
 
+&ocotp {
+	/* By default, make the OTP bits read-only */
+	read-only;
+};
+
 &rpmsg{
 	/*
 	 * 64K for one rpmsg instance:
