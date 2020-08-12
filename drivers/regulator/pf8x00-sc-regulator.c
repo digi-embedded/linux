@@ -429,7 +429,7 @@ static int pf8x00_sc_sw_set_suspend_enable(struct regulator_dev *rdev)
 
 static int pf8x00_sc_sw_set_suspend_disable(struct regulator_dev *rdev)
 {
-	return pf8x00_sc_sw_do_suspend_enable(rdev, true);
+	return pf8x00_sc_sw_do_suspend_enable(rdev, false);
 }
 
 static int pf8x00_sc_sw_set_suspend_voltage(struct regulator_dev *rdev, int uV)
