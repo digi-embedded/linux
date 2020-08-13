@@ -135,6 +135,13 @@
 		mca_uart: uart {
 			compatible = "digi,mca-cc6ul-uart";
 			status = "disabled";
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			mca_uart0: serial@0x900 {
+				reg = <0x900>;
+				index = <0>;
+			};
 		};
 	};
 

@@ -5,8 +5,13 @@ Assistant. This UART can be used to wake up the system from low power modes.
 Notice the MCA UART has limited capabilities compared to CPU's UARTs. Check the
 documentation for a list of capabilities.
 
+WARNING!
+This driver is legacy.
+For MCA version 1.19 and higher use "digi,mca-uart".
+
 Required properties:
 - compatible: must be "digi,mca-cc6ul-uart".
+              Only valid up to MCA version 1.18.
 
 Optional properties:
 - rts-pin: MCA IO line to be used as RTS when using hardware flow control.

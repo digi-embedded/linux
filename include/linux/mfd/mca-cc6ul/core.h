@@ -25,7 +25,7 @@
 #define MCA_CC6UL_DRVNAME_COMPARATOR	"mca-cc6ul-comparator"
 #define MCA_CC6UL_DRVNAME_UART		"mca-cc6ul-uart"
 
-#define MCA_CC6UL_UART_MIN_FW		MCA_MAKE_FW_VER(1, 1)
+#define MCA_CC6UL_UART_MIN_FW		MCA_MAKE_FW_VER(1, 19)
 
 #define MCA_CC6UL_DEVICE_ID_VAL		0x61
 

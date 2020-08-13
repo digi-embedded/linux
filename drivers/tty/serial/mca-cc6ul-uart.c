@@ -39,6 +39,7 @@
 #define MCA_UART_TX_FIFO_SIZE		128
 #define MCA_UART_CLK			24000000
 #define MCA_UART_MIN_FW_VERSION		MCA_MAKE_FW_VER(1, 1)
+#define MCA_UART_MAX_FW_VERSION		MCA_MAKE_FW_VER(1, 18)
 
 #define MCA_UART_HAS_RTS		BIT(0)
 #define MCA_UART_HAS_CTS		BIT(1)
@@ -767,6 +768,13 @@ static int mca_uart_probe(struct platform_device *pdev)
 			MCA_FW_VER_MINOR(mca->fw_version));
 		return -ENODEV;
 	}
+	if (mca->fw_version > MCA_UART_MAX_FW_VERSION) {
+		dev_err(&pdev->dev,
+			"Legacy driver doesn't support MCA firmware v%d.%02d.\n",
+			MCA_FW_VER_MAJOR(mca->fw_version),
+			MCA_FW_VER_MINOR(mca->fw_version));
+		return -ENODEV;
+	}
 
 	mca_uart = devm_kzalloc(&pdev->dev, sizeof(*mca_uart), GFP_KERNEL);
 	if (!mca_uart)
@@ -885,7 +893,9 @@ static int mca_uart_probe(struct platform_device *pdev)
 		goto error;
 	}
 
-	dev_info(mca_uart->dev, "Registered successfully\n");
+	dev_info(mca_uart->dev, "Registered successfully with rts %s and cts %s\n",
+		 mca_uart->has_rtscts & MCA_UART_HAS_RTS ? "enabled" : "disabled",
+		 mca_uart->has_rtscts & MCA_UART_HAS_CTS ? "enabled" : "disabled");
 	return 0;
 error:
 	mutex_destroy(&mca_uart->mutex);
