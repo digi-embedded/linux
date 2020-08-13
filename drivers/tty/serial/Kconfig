@@ -755,6 +755,8 @@ config SERIAL_MCA_CC6UL
 	help
 	  If you say Y here you will get support for the UART in the Micro
 	  Controller Assist of Digi ConnectCore 6UL system-on-module.
+	  Only valid up to MCA version 1.18.
+	  Higher MCA versions require SERIAL_MCA driver
 
 	  This driver can also be built as a module, if so, the module
 	  will be called "mca-cc6ul-uart".
@@ -766,6 +768,8 @@ config SERIAL_MCA
 	help
 	  If you say Y here you will get support for the UART(s) in the Micro
 	  Controller Assist of Digi ConnectCore system-on-module.
+	  CC6UL requires MCA version 1.19 or higher.
+	  Older MCA versions require SERIAL_MCA_CC6UL driver.
 
 	  This driver can also be built as a module, if so, the module
 	  will be called "mca-uart".
