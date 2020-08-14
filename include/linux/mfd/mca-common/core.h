@@ -26,6 +26,10 @@
 #define MCA_IRQ_GPIO_BANK_4_NAME	"GPIO_BANK4"
 #define MCA_IRQ_GPIO_BANK_5_NAME	"GPIO_BANK5"
 
+#define MCA_IRQ_UART0_NAME		"UART0"
+#define MCA_IRQ_UART1_NAME		"UART1"
+#define MCA_IRQ_UART2_NAME		"UART2"
+
 /* Number of interrupt registers */
 #define MCA_NUM_IRQ_REGS		4
 /* Max number of IOs */

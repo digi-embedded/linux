@@ -177,9 +177,9 @@ static struct resource mca_cc6ul_gpios_resources[] = {
 
 static struct resource mca_cc6ul_uart_resources[] = {
 	{
-		.name   = MCA_CC6UL_IRQ_UART_NAME,
-		.start  = MCA_CC6UL_IRQ_UART,
-		.end    = MCA_CC6UL_IRQ_UART,
+		.name   = MCA_IRQ_UART0_NAME,
+		.start  = MCA_CC6UL_IRQ_UART0,
+		.end    = MCA_CC6UL_IRQ_UART0,
 		.flags  = IORESOURCE_IRQ,
 	},
 };

@@ -49,7 +49,8 @@ static const struct regmap_range mca_cc6ul_writeable_ranges[] = {
 	regmap_reg_range(MCA_REG_ADC_IRQ_0, MCA_REG_ADC_IRQ_7),
 	regmap_reg_range(MCA_REG_ADC_CFG_0, MCA_REG_ADC_CFG_2),
 	regmap_reg_range(MCA_REG_ADC_BUFF_CH, MCA_REG_ADC_BUFF_SAMPLE_7),
-	regmap_reg_range(MCA_REG_UART_THR, MCA_REG_UART_RTSPIN),
+	regmap_reg_range(MCA_UART0_OFFSET,
+			 MCA_UART0_OFFSET + MCA_REG_UART_LEN),
 	regmap_reg_range(MCA_CC6UL_MPU_NVRAM_START, MCA_CC6UL_MPU_NVRAM_END),
 };
 
@@ -107,7 +108,8 @@ static const struct regmap_range mca_cc6ul_volatile_ranges[] = {
 	regmap_reg_range(MCA_REG_ADC_IRQ_0, MCA_REG_ADC_IRQ_7),
 	regmap_reg_range(MCA_REG_ADC_CFG_0, MCA_REG_ADC_CFG_2),
 	regmap_reg_range(MCA_REG_ADC_BUFF_CH, MCA_REG_ADC_BUFF_SAMPLE_7),
-	regmap_reg_range(MCA_REG_UART_RHR, MCA_REG_UART_RTSPIN),
+	regmap_reg_range(MCA_UART0_OFFSET,
+			 MCA_UART0_OFFSET + MCA_REG_UART_LEN),
 };
 
 static const struct regmap_access_table mca_cc6ul_readable_table = {

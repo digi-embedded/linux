@@ -24,6 +24,8 @@
 #define MCA_CC6UL_DRVNAME_COMPARATOR	"mca-cc6ul-comparator"
 #define MCA_CC6UL_DRVNAME_UART		"mca-cc6ul-uart"
 
+#define MCA_CC6UL_UART_MIN_FW		MCA_MAKE_FW_VER(1, 19)
+
 /* Uncomment to add CRC to frames */
 //#define MCA_CC6UL_CRC
 
@@ -54,7 +56,7 @@ enum mca_cc6ul_irqs {
 	MCA_CC6UL_IRQ_GPIO_BANK_0,
 	MCA_CC6UL_IRQ_TAMPER2,
 	MCA_CC6UL_IRQ_TAMPER3,
-	MCA_CC6UL_IRQ_UART,
+	MCA_CC6UL_IRQ_UART0,
 	/* ... */
 
 	MCA_CC6UL_NUM_IRQS,

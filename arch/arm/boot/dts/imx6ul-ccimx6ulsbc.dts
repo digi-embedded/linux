@@ -120,9 +120,10 @@
 // };
 
 /*
- * Uncomment to enable MCA UART:
+ * Uncomment to enable legacy MCA UART:
  *  - MCA_IO1 (TX)
  *  - MCA_IO2 (RX)
+ * This driver is only valid up to MCA version 1.18
  */
 //&mca_uart {
 //	status = "okay";
@@ -131,6 +132,24 @@
 //	//rts-pin = <3>;
 //	//cts-pin = <5>;
 //};
+
+/*
+ * Uncomment to enable new MCA UART driver:
+ * This driver requires MCA version 1.19 or higher.
+ */
+&mca_uart {
+     status = "okay";
+     mca_uart0: serial@0x900 {
+             iopins-names = "rx", "tx";
+             iopins = <2 1>;
+             /*
+              * If you uncomment these lines, CTS and RTS will be enabled in
+              * MCA_IO5 and MCA_IO3 lines.
+              */
+             //iopins-names = "rx", "tx", "cts", "rts";
+             //iopins = <2 1 5 3>;
+     };
+};
 
 &mca_ioexp {
 	status = "okay";
