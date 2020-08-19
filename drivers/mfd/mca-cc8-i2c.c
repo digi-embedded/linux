@@ -49,7 +49,12 @@ static const struct regmap_range mca_cc8_writeable_ranges[] = {
 	regmap_reg_range(MCA_REG_ADC_IRQ_0, MCA_REG_ADC_IRQ_7),
 	regmap_reg_range(MCA_REG_ADC_CFG_0, MCA_REG_ADC_CFG_2),
 	regmap_reg_range(MCA_REG_ADC_BUFF_CH, MCA_REG_ADC_BUFF_SAMPLE_21),
-	regmap_reg_range(MCA_REG_UART_THR, MCA_REG_UART_RTSPIN),
+	regmap_reg_range(MCA_UART0_OFFSET,
+			 MCA_UART0_OFFSET + MCA_REG_UART_LEN),
+	regmap_reg_range(MCA_UART1_OFFSET,
+			 MCA_UART1_OFFSET + MCA_REG_UART_LEN),
+	regmap_reg_range(MCA_UART2_OFFSET,
+			 MCA_UART2_OFFSET + MCA_REG_UART_LEN),
 	regmap_reg_range(MCA_CC8_MPU_NVRAM_START, MCA_CC8_MPU_NVRAM_END),
 	regmap_reg_range(MCA_REG_TPM0_CFG0, MCA_REG_TPM2_CH7_CNT1),
 };
@@ -108,7 +113,12 @@ static const struct regmap_range mca_cc8_volatile_ranges[] = {
 	regmap_reg_range(MCA_REG_ADC_IRQ_0, MCA_REG_ADC_IRQ_7),
 	regmap_reg_range(MCA_REG_ADC_CFG_0, MCA_REG_ADC_CFG_2),
 	regmap_reg_range(MCA_REG_ADC_BUFF_CH, MCA_REG_ADC_BUFF_SAMPLE_21),
-	regmap_reg_range(MCA_REG_UART_RHR, MCA_REG_UART_RTSPIN),
+	regmap_reg_range(MCA_UART0_OFFSET,
+			 MCA_UART0_OFFSET + MCA_REG_UART_LEN),
+	regmap_reg_range(MCA_UART1_OFFSET,
+			 MCA_UART1_OFFSET + MCA_REG_UART_LEN),
+	regmap_reg_range(MCA_UART2_OFFSET,
+			 MCA_UART2_OFFSET + MCA_REG_UART_LEN),
 	regmap_reg_range(MCA_REG_TPM0_CFG0, MCA_REG_TPM2_CH7_CNT1),
 };
 
