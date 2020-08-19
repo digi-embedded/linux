@@ -58,6 +58,7 @@ struct mca_uart {
 	struct uart_driver uart;
 	struct uart_port port;
 	struct mutex mutex;
+	unsigned int baddr;
 	unsigned int pending_work;
 	struct work_struct tx_work;
 	struct work_struct delayed_work;
@@ -110,7 +111,8 @@ static unsigned int mca_uart_tx_empty(struct uart_port *port)
 
 	dev_dbg(mca_uart->dev, "<%s>\n", __func__);
 
-	ret = regmap_read(regmap, MCA_REG_UART_TXLVL, &txlvl);
+	ret = regmap_read(regmap, mca_uart->baddr + MCA_REG_UART_TXLVL,
+			  &txlvl);
 	if (ret) {
 		dev_err(mca_uart->dev, "Failed to read MCA_REG_UART_TXLVL\n");
 		/* This is the behavior if not implemented */
@@ -198,7 +200,7 @@ static void mca_uart_set_termios(struct uart_port *port,
 		port->status &= ~(UPSTAT_AUTOCTS | UPSTAT_AUTORTS);
 	}
 
-	ret = regmap_write(regmap, MCA_REG_UART_CFG1, cfg1);
+	ret = regmap_write(regmap, mca_uart->baddr + MCA_REG_UART_CFG1, cfg1);
 	if (ret) {
 		dev_err(mca_uart->dev, "Failed to write MCA_REG_UART_CFG1\n");
 		return;
@@ -244,7 +246,8 @@ static void mca_uart_set_termios(struct uart_port *port,
 		break;
 	}
 
-	ret = regmap_write(regmap, MCA_REG_UART_BAUD, baud_reg_val);
+	ret = regmap_write(regmap, mca_uart->baddr + MCA_REG_UART_BAUD,
+			   baud_reg_val);
 	if (ret) {
 		dev_err(mca_uart->dev, "Failed to write MCA_REG_UART_BAUD\n");
 		return;
@@ -265,7 +268,8 @@ static int mca_uart_startup(struct uart_port *port)
 	cfg_mask = MCA_REG_UART_CFG0_CTX | MCA_REG_UART_CFG0_CRX |
 		   MCA_REG_UART_CFG0_TXEN | MCA_REG_UART_CFG0_RXEN;
 
-	ret = regmap_update_bits(regmap, MCA_REG_UART_CFG0, cfg_mask, cfg_mask);
+	ret = regmap_update_bits(regmap, mca_uart->baddr + MCA_REG_UART_CFG0,
+				 cfg_mask, cfg_mask);
 	if (ret) {
 		dev_err(mca_uart->dev, "Failed to read MCA_REG_UART_CFG0\n");
 		return ret;
@@ -273,7 +277,8 @@ static int mca_uart_startup(struct uart_port *port)
 
 	ier_mask = MCA_REG_UART_IER_THR | MCA_REG_UART_IER_RHR |
 		   MCA_REG_UART_IER_RLSE;
-	ret = regmap_update_bits(regmap, MCA_REG_UART_IER, ier_mask, ier_mask);
+	ret = regmap_update_bits(regmap, mca_uart->baddr + MCA_REG_UART_IER,
+				 ier_mask, ier_mask);
 	if (ret)
 		dev_err(mca_uart->dev, "Failed to read MCA_REG_UART_IER\n");
 
@@ -293,13 +298,14 @@ static void mca_uart_shutdown(struct uart_port *port)
 	cfg_mask = MCA_REG_UART_CFG0_CTX | MCA_REG_UART_CFG0_CRX |
 		   MCA_REG_UART_CFG0_TXEN | MCA_REG_UART_CFG0_RXEN;
 
-	ret = regmap_update_bits(regmap, MCA_REG_UART_CFG0, cfg_mask,
+	ret = regmap_update_bits(regmap, mca_uart->baddr + MCA_REG_UART_CFG0,
+				 cfg_mask,
 				 MCA_REG_UART_CFG0_CTX | MCA_REG_UART_CFG0_CRX);
 	if (ret)
 		dev_err(mca_uart->dev, "Failed to read MCA_REG_UART_CFG0\n");
 
 	/* Disable all IRQs */
-	ret = regmap_write(regmap, MCA_REG_UART_IER, 0);
+	ret = regmap_write(regmap, mca_uart->baddr + MCA_REG_UART_IER, 0);
 	if (ret)
 		dev_err(mca_uart->dev, "Failed to write MCA_REG_UART_IER\n");
 	cancel_work_sync(&mca_uart->tx_work);
@@ -364,7 +370,7 @@ static void mca_uart_throttle(struct uart_port *port)
 
 	dev_dbg(mca_uart->dev, "<%s>\n", __func__);
 	mutex_lock(&mca_uart->mutex);
-	ret = regmap_update_bits(regmap, MCA_REG_UART_CFG1,
+	ret = regmap_update_bits(regmap, mca_uart->baddr + MCA_REG_UART_CFG1,
 				 MCA_REG_UART_CFG1_THROTTLE,
 				 MCA_REG_UART_CFG1_THROTTLE);
 	if (ret)
@@ -380,7 +386,7 @@ static void mca_uart_unthrottle(struct uart_port *port)
 
 	dev_dbg(mca_uart->dev, "<%s>\n", __func__);
 	mutex_lock(&mca_uart->mutex);
-	ret = regmap_update_bits(regmap, MCA_REG_UART_CFG1,
+	ret = regmap_update_bits(regmap, mca_uart->baddr + MCA_REG_UART_CFG1,
 				 MCA_REG_UART_CFG1_THROTTLE, 0);
 	if (ret)
 		dev_err(mca_uart->dev, "Failed to write MCA_REG_UART_CFG1\n");
@@ -433,7 +439,8 @@ static void mca_uart_handle_tx(struct uart_port *port)
 		int ret;
 
 		/* Limit to size of TX FIFO */
-		ret = regmap_read(regmap, MCA_REG_UART_TXLVL, &txlen);
+		ret = regmap_read(regmap, mca_uart->baddr + MCA_REG_UART_TXLVL,
+				  &txlen);
 		if (ret) {
 			dev_err(mca_uart->dev,
 				"Failed to read MCA_REG_UART_TXLVL\n");
@@ -465,8 +472,8 @@ static void mca_uart_handle_tx(struct uart_port *port)
 			xmit->tail = (xmit->tail + 1) & (UART_XMIT_SIZE - 1);
 		}
 
-		ret = regmap_bulk_write(regmap, MCA_REG_UART_THR, tx_buf,
-					to_send);
+		ret = regmap_bulk_write(regmap, mca_uart->baddr + MCA_REG_UART_THR,
+					tx_buf, to_send);
 		if (ret)
 			dev_err(mca_uart->dev,
 				"Failed to write MCA_REG_UART_THR\n");
@@ -490,7 +497,7 @@ static void mca_uart_handle_rx(struct mca_uart *mca_uart, bool has_errors)
 
 	dev_dbg(mca_uart->dev, "<%s>\n", __func__);
 
-	ret = regmap_read(regmap, MCA_REG_UART_RXLVL, &rxlen);
+	ret = regmap_read(regmap, mca_uart->baddr + MCA_REG_UART_RXLVL, &rxlen);
 	if (ret) {
 		dev_err(mca_uart->dev, "Failed to read MCA_REG_UART_RXLVL\n");
 		return;
@@ -500,14 +507,16 @@ static void mca_uart_handle_rx(struct mca_uart *mca_uart, bool has_errors)
 		return;
 
 	if (unlikely(has_errors)) {
-		ret = regmap_read(regmap, MCA_REG_UART_LSR, &lsr);
+		ret = regmap_read(regmap, mca_uart->baddr + MCA_REG_UART_LSR,
+				  &lsr);
 		if (ret) {
 			dev_err(mca_uart->dev,
 				"Failed to read MCA_REG_UART_LSR\n");
 			return;
 		}
 		if (likely(lsr)) {
-			ret = regmap_bulk_read(regmap, MCA_REG_UART_RX_ERRORS,
+			ret = regmap_bulk_read(regmap,
+					       mca_uart->baddr + MCA_REG_UART_RX_ERRORS,
 					       error_buf, rxlen);
 			if (ret) {
 				dev_err(mca_uart->dev,
@@ -520,11 +529,13 @@ static void mca_uart_handle_rx(struct mca_uart *mca_uart, bool has_errors)
 		}
 	}
 
-	ret = regmap_bulk_read(regmap, MCA_REG_UART_RHR, rx_buf, rxlen);
+	ret = regmap_bulk_read(regmap, mca_uart->baddr + MCA_REG_UART_RHR,
+			       rx_buf, rxlen);
 	if (ret) {
 		dev_warn(mca_uart->dev,
 			"Failed to read MCA_REG_UART_RHR %d, retrying\n", ret);
-		ret = regmap_bulk_read(regmap, MCA_REG_UART_RHR, rx_buf, rxlen);
+		ret = regmap_bulk_read(regmap, mca_uart->baddr + MCA_REG_UART_RHR,
+				       rx_buf, rxlen);
 		if (ret) {
 			dev_err(mca_uart->dev,
 				"Failed to read MCA_REG_UART_RHR %d\n", ret);
@@ -587,7 +598,7 @@ static irqreturn_t mca_uart_irq_handler(int irq, void *private)
 	dev_dbg(mca_uart->dev, "<%s>\n", __func__);
 	mutex_lock(&mca_uart->mutex);
 
-	ret = regmap_read(regmap, MCA_REG_UART_IIR, &iir);
+	ret = regmap_read(regmap, mca_uart->baddr + MCA_REG_UART_IIR, &iir);
 	if (ret) {
 		dev_err(mca_uart->dev, "Failed to read MCA_REG_UART_IIR\n");
 		return IRQ_HANDLED;
@@ -631,11 +642,13 @@ static void mca_uart_delayed_work_proc(struct work_struct *ws)
 		cfg0_mask |= MCA_REG_UART_CFG0_CTX;
 	}
 
-	ret = regmap_update_bits(regmap, MCA_REG_UART_IER, ier_mask, 0);
+	ret = regmap_update_bits(regmap, mca_uart->baddr + MCA_REG_UART_IER,
+				 ier_mask, 0);
 	if (ret)
 		dev_err(mca_uart->dev, "Failed to write MCA_REG_UART_IER\n");
 
-	ret = regmap_update_bits(regmap, MCA_REG_UART_CFG0, cfg0_mask,
+	ret = regmap_update_bits(regmap, mca_uart->baddr + MCA_REG_UART_CFG0,
+				 cfg0_mask,
 				 MCA_REG_UART_CFG0_CRX | MCA_REG_UART_CFG0_CRX);
 	if (ret)
 		dev_err(mca_uart->dev, "Failed to write MCA_REG_UART_CFG0\n");
@@ -644,7 +657,8 @@ static void mca_uart_delayed_work_proc(struct work_struct *ws)
 	    (mca_uart->pending_work & WORK_CLEAR_RTS)) {
 		uint8_t msr_mask = mca_uart->pending_work & WORK_SET_RTS ?
 						MCA_REG_UART_MSR_RTS : 0;
-		ret = regmap_update_bits(regmap, MCA_REG_UART_MSR,
+		ret = regmap_update_bits(regmap,
+					 mca_uart->baddr + MCA_REG_UART_MSR,
 					 MCA_REG_UART_MSR_RTS, msr_mask);
 		if (ret)
 			dev_err(mca_uart->dev,
@@ -703,7 +717,7 @@ static ssize_t power_on_rx_store(struct device *dev,
 	else
 		return -EINVAL;
 
-	ret = regmap_update_bits(regmap, MCA_REG_UART_CFG0,
+	ret = regmap_update_bits(regmap, mca_uart->baddr + MCA_REG_UART_CFG0,
 				 MCA_REG_UART_CFG0_PWR_ON,
 				 mca_uart->enable_power_on ?
 						MCA_REG_UART_CFG0_PWR_ON : 0);
@@ -759,6 +773,7 @@ static int mca_uart_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	mca_uart->mca = mca;
+	mca_uart->baddr = MCA_UART0_OFFSET;
 	mca_uart->dev = &pdev->dev;
 	platform_set_drvdata(pdev, mca_uart);
 
@@ -778,8 +793,9 @@ static int mca_uart_probe(struct platform_device *pdev)
 			dev_err(&pdev->dev,
 				"Failed to allocate RTS pin\n");
 		} else {
-			ret = regmap_write(regmap, MCA_REG_UART_RTSPIN,
-						mca_uart->rts_pin);
+			ret = regmap_write(regmap,
+					   mca_uart->baddr + MCA_REG_UART_RTSPIN,
+					   mca_uart->rts_pin);
 			if (ret)
 				dev_err(mca_uart->dev,
 					"Failed to write MCA_REG_UART_RTSPIN\n");
@@ -801,8 +817,9 @@ static int mca_uart_probe(struct platform_device *pdev)
 			dev_err(&pdev->dev,
 				"Failed to allocate CTS pin\n");
 		} else {
-			ret = regmap_write(regmap, MCA_REG_UART_CTSPIN,
-					mca_uart->cts_pin);
+			ret = regmap_write(regmap,
+					   mca_uart->baddr + MCA_REG_UART_CTSPIN,
+					   mca_uart->cts_pin);
 			if (ret)
 				dev_err(mca_uart->dev,
 					"Failed to write MCA_REG_UART_CTSPIN\n");
@@ -861,7 +878,8 @@ static int mca_uart_probe(struct platform_device *pdev)
 		goto error;
 	}
 
-	ret = regmap_write(regmap, MCA_REG_UART_CFG0, MCA_REG_UART_CFG0_ENABLE);
+	ret = regmap_write(regmap, mca_uart->baddr + MCA_REG_UART_CFG0,
+			   MCA_REG_UART_CFG0_ENABLE);
 	if (ret) {
 		dev_err(mca_uart->dev, "Failed to write MCA_REG_UART_CFG0\n");
 		goto error;
@@ -931,7 +949,8 @@ static int mca_cc6ul_uart_suspend(struct device *d)
 	if (tty_dev && device_may_wakeup(tty_dev))
 		new_value |= MCA_REG_UART_CFG0_WAKEUP;
 
-	ret = regmap_update_bits(regmap, MCA_REG_UART_CFG0, mask, new_value);
+	ret = regmap_update_bits(regmap, mca_uart->baddr + MCA_REG_UART_CFG0,
+				 mask, new_value);
 	if (ret < 0)
 		dev_err(mca_uart->dev, "Failed to write MCA_REG_UART_CFG0\n");
 
