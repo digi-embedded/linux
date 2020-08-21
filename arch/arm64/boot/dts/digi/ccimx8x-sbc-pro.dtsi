@@ -473,6 +473,8 @@
 	 */
 	lvds0_goodix_touch1: gt9271@14 {
 		compatible = "goodix,gt9271";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_goodix_lvds0>;
 		reg = <0x14>;
 		/* Interrupt for LVDS0 */
 		interrupt-parent = <&lsio_gpio3>;
@@ -691,6 +693,8 @@
 	 */
 	lvds1_goodix_touch1: gt9271@14 {
 		compatible = "goodix,gt9271";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_goodix_lvds1>;
 		reg = <0x14>;
 		/* Interrupt for LVDS1 */
 		interrupt-parent = <&lsio_gpio3>;
@@ -954,8 +958,6 @@
 
 	pinctrl_lvds0: lvds0grp {
 		fsl,pins = <
-			/* LVDS0 touch interrupt */
-			IMX8QXP_QSPI0B_DATA2_LSIO_GPIO3_IO20	0x06000020
 			/* LVDS0 PWM backlight */
 			IMX8QXP_MIPI_DSI0_GPIO0_00_MIPI_DSI0_PWM0_OUT	0x00000020
 		>;
@@ -963,8 +965,6 @@
 
 	pinctrl_lvds1: lvds1grp {
 		fsl,pins = <
-			/* LVDS1 touch interrupt */
-			IMX8QXP_QSPI0B_DATA1_LSIO_GPIO3_IO19       0x06000020
 			/* LVDS1 PWM backlight */
 			IMX8QXP_MIPI_DSI1_GPIO0_00_MIPI_DSI1_PWM0_OUT 0x00000020
 		>;
@@ -1314,6 +1314,20 @@
 	pinctrl_mipi: mipi {
 		fsl,pins = <
 			IMX8QXP_QSPI0B_DATA3_LSIO_GPIO3_IO21 0xC0000041
+		>;
+	};
+
+	pinctrl_goodix_lvds0: goodixgrplvds0 {
+		fsl,pins = <
+			/* LVDS0 touch interrupt */
+			IMX8QXP_QSPI0B_DATA2_LSIO_GPIO3_IO20	0x06000060
+		>;
+	};
+
+	pinctrl_goodix_lvds1: goodixgrplvds1 {
+		fsl,pins = <
+			/* LVDS1 touch interrupt */
+			IMX8QXP_QSPI0B_DATA1_LSIO_GPIO3_IO19	0x06000060
 		>;
 	};
 };
