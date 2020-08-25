@@ -1540,9 +1540,15 @@ static int __maybe_unused goodix_resume(struct device *dev)
 		}
 	} else {
 		/*
-		 * Exit sleep mode by outputting HIGH level to INT pin
-		 * for 2ms~5ms.
+		 * Wait a bit before toggling the int gpio, just in case the
+		 * touch controller has been power cycled. Otherwise, it might
+		 * fail to reinitialize.
 		 */
+		msleep(60);
+		/*
+		* Exit sleep mode by outputting HIGH level to INT pin
+		* for 2ms~5ms.
+		*/
 		error = goodix_irq_direction_output(ts, 1);
 		if (error)
 			return error;
