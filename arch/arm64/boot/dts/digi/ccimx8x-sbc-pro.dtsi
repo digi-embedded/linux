@@ -123,8 +123,9 @@
 		reg_5v_display: regulator@4 {
 			compatible = "regulator-fixed";
 			reg = <4>;
-			pinctrl-names = "default";
+			pinctrl-names = "default", "sleep";
 			pinctrl-0 = <&pinctrl_reg_5v_display>;
+			pinctrl-1 = <&pinctrl_reg_5v_display_sleep>;
 			regulator-name = "5v_display";
 			regulator-min-microvolt = <5000000>;
 			regulator-max-microvolt = <5000000>;
@@ -1207,6 +1208,13 @@
 		fsl,pins = <
 			/* 5V regulator power enable */
 			IMX8QXP_SPI3_SCK_LSIO_GPIO0_IO13		0x06000020
+		>;
+	};
+
+	pinctrl_reg_5v_display_sleep: reg_5v_display_grp_sleep {
+		fsl,pins = <
+			/* 5V regulator power enable, latch */
+			IMX8QXP_SPI3_SCK_LSIO_GPIO0_IO13		0x07800020
 		>;
 	};
 
