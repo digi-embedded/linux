@@ -1,0 +1,215 @@
+/*
+ * Copyright 2016 Digi International, Inc.
+ *
+ * The code contained herein is licensed under the GNU General Public
+ * License. You may obtain a copy of the GNU General Public License
+ * Version 2 or later at the following locations:
+ *
+ * http://www.opensource.org/licenses/gpl-license.html
+ * http://www.gnu.org/copyleft/gpl.html
+ */
+
+/dts-v1/;
+#include <dt-bindings/gpio/gpio.h>
+/* i.MX6 Quad/Dual CPU */
+#include "imx6q.dtsi"
+/* ConnectCore 6 (Quad wireless/bluetooth variant) */
+#include "imx6q-ccimx6-wb.dtsi"
+/* ConnectCore 6 Quad/Dual SBC carrier board */
+#include "imx6q-ccimx6sbc.dtsi"
+
+&fec {
+	status = "okay";
+};
+
+&hdmi_core {
+	status = "okay";
+};
+
+&hdmi_video {
+	status = "okay";
+};
+
+&hdmi_audio {
+	status = "okay";
+};
+
+&sound_hdmi {
+	status = "okay";
+};
+
+&sound_sgtl5000 {
+	status = "okay";
+};
+
+&codec_power {
+	status = "okay";
+};
+
+&caam_keyblob {
+	status = "okay";
+};
+
+&ldb {
+	status = "okay";
+
+	lvds-channel@0 {
+		status = "okay";
+	};
+};
+
+&mxcfb1 {
+	status = "okay";
+};
+
+&mxcfb2 {
+	status = "okay";
+};
+
+&mxcfb3 {
+	status = "okay";
+};
+
+&mxcfb4 {
+	status = "okay";
+};
+
+&audmux {
+	status = "okay";
+};
+
+&ecspi1 {
+	status = "okay";
+
+	/*
+	 * Add your slave devices here. Next is an example of spidev.
+	 * Expect a harmless kernel warning if you enable spidev as slave.
+	 */
+	spidev@0 {
+		reg = <0>;
+		compatible = "spidev";
+		spi-max-frequency = <4000000>;
+	};
+};
+
+&i2c3 {
+	status = "okay";
+
+	/*
+	 * Fusion touch controller has I2C address 0x10. If using the latest Video Adapter Board,
+	 * an I2C-address translator moves it to address 0x14. This device tree has two 'fusion'
+	 * entries (one at 0x10 and another at 0x14), so that the touch works out of the box in old
+	 * and new displays, although this will make the kernel complain for the entry where the touch
+	 * does not respond. You can remove the 'fusion' node that doesn't match your display
+	 * to avoid this error message.
+	 */
+	/* Uncomment to enable the fusion touch, used with hsd101pfw2 */
+	//fusion@10 {
+	//	status = "okay";
+	//};
+
+	//fusion@14 {
+	//	status = "okay";
+	//};
+
+	goodix_touch: gt911@14 {
+		status = "okay";
+	};
+
+	edid@50 {
+		status = "okay";
+	};
+
+	sgtl5000: codec@0a {
+		status = "okay";
+	};
+
+	/* MIPI-CSI2 camera */
+	ov5640_mipi: ov5640_mipi@3c {
+		status = "okay";
+	};
+
+	/* Parallel camera CSI1 */
+	ov5642_2: ov5642_2@6c {
+		status = "okay";
+	};
+};
+
+&mipi_csi {
+	status = "okay";
+};
+
+&mipi_dsi {
+	status = "okay";
+};
+
+&mipi_dsi_reset {
+	status = "okay";
+};
+
+&pcie {
+	status = "okay";
+};
+
+/* PWM1 on pin 10 of LCD connector */
+&pwm1 {
+	status = "okay";
+};
+
+&ssi2 {
+	status = "okay";
+};
+
+&uart1 {
+	status = "okay";
+};
+
+&uart2 {
+	status = "okay";
+};
+
+&uart3 {
+	status = "okay";
+};
+
+&uart4 {
+	status = "okay";
+};
+
+&uart5 {
+	status = "okay";
+};
+
+&usbh1 {
+	status = "okay";
+};
+
+&usbotg {
+	status = "okay";
+};
+
+&usdhc2 {
+	status = "okay";
+};
+
+&can1 {
+	status = "okay";
+};
+
+&can2 {
+	status = "okay";
+};
+
+&v4l2_cap_0 {
+	status = "okay";
+};
+
+&v4l2_cap_1 {
+	ipu_id = <1>;
+	csi_id = <1>;
+	status = "okay";
+};
+
+&v4l2_out {
+	status = "okay";
+};

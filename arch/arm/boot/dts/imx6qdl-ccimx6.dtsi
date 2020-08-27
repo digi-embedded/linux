@@ -1,0 +1,245 @@
+/*
+ * Copyright 2014-2017 Digi International, Inc.
+ *
+ * The code contained herein is licensed under the GNU General Public
+ * License. You may obtain a copy of the GNU General Public License
+ * Version 2 or later at the following locations:
+ *
+ * http://www.opensource.org/licenses/gpl-license.html
+ * http://www.gnu.org/copyleft/gpl.html
+ */
+
+/ {
+	/*
+	 * Some tools (like fw_printenv) rely on fixed mmcblk device indexes
+	 * but these are not guaranteed by the kernel.
+	 * The use of aliases allows to reorder the mmcblk indexes of every
+	 * mmc device. Notice that using aliases requires that ALL mmc devices
+	 * have one.
+	 */
+	aliases {
+		mmc0 = &usdhc4;
+		mmc1 = &usdhc2;
+		mmc2 = &usdhc3;
+		mmc3 = &usdhc1;
+	};
+
+	caam_keyblob: caam-keyblob {
+		compatible = "fsl,sec-v4.0-keyblob";
+		status = "disabled";
+	};
+
+	memory: memory {
+		/* U-boot to fill memory details here */
+	};
+};
+
+&cpu0 {
+	operating-points = <
+		/* kHz    uV */
+		1200000 1300000
+		996000  1250000
+		852000  1250000
+		792000  1175000
+		396000  975000
+	>;
+	fsl,soc-operating-points = <
+		/* ARM kHz  SOC-PU uV */
+		1200000 1300000
+		996000	1250000
+		852000	1250000
+		792000	1175000
+		396000	1175000
+	>;
+
+	arm-supply = <&reg_arm>;
+	soc-supply = <&reg_soc>;
+	pu-supply = <&reg_pu>;
+};
+
+&i2c2 {
+	clock-frequency = <100000>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_i2c2>;
+	status = "okay";
+
+	pmic_dialog: dialog@58 {
+		compatible = "dlg,da9063";
+		reg = <0x58>;
+		interrupt-parent = <&gpio7>;
+		interrupts = <12 2>;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_pmic_dialog>;
+
+		rtc {
+			compatible = "dlg,da9063-rtc";
+		};
+
+		onkey {
+			compatible = "dlg,da9063-onkey";
+			dlg,key-power;
+		};
+
+		hwmon {
+			compatible = "dlg,da9063-hwmon";
+			dlg,tjunc-offset = <(-5)>;
+		};
+
+		gpio_extender: gpio {
+			compatible = "dlg,da9063-gpio";
+			gpio-controller;
+			#gpio-cells = <2>;
+		};
+
+		regulators {
+			compatible = "dlg,da9063-regulator";
+
+			bcore1: bcore1 {
+				regulator-name = "DA9063_BCORE1";
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			bcore2: bcore2 {
+				regulator-name = "DA9063_BCORE2";
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			bpro: bpro {
+				regulator-name = "DA9063_BPRO";
+				regulator-boot-on;
+				regulator-state-mem {
+					regulator-off-in-suspend;
+				};
+				regulator-state-disk {
+					regulator-off-in-suspend;
+				};
+			};
+
+			bmem: bmem {
+				regulator-name = "DA9063_BMEM";
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			bio: bio {
+				regulator-name = "DA9063_BIO";
+				regulator-boot-on;
+			};
+
+			bperi: bperi {
+				regulator-name = "DA9063_BPERI";
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			ldo2: ldo2 {
+				regulator-name = "DA9063_LDO2";
+				regulator-boot-on;
+			};
+
+			ldo3: ldo3 {
+				regulator-name = "DA9063_LDO3";
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			ldo4: ldo4 {
+				regulator-name = "DA9063_LDO4";
+				regulator-min-microvolt = <2500000>;
+				regulator-max-microvolt = <2500000>;
+				regulator-state-mem {
+					regulator-off-in-suspend;
+				};
+				regulator-state-disk {
+					regulator-off-in-suspend;
+				};
+			};
+
+			ldo5: ldo5 {
+				regulator-name = "DA9063_LDO5";
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			ldo6: ldo6 {
+				regulator-name = "DA9063_LDO6";
+				regulator-min-microvolt = <900000>;
+				regulator-max-microvolt = <3600000>;
+				regulator-state-mem {
+					regulator-off-in-suspend;
+				};
+				regulator-state-disk {
+					regulator-off-in-suspend;
+				};
+			};
+
+			ldo7: ldo7 {
+				regulator-name = "DA9063_LDO7";
+				regulator-min-microvolt = <900000>;
+				regulator-max-microvolt = <3600000>;
+				regulator-state-mem {
+					regulator-off-in-suspend;
+				};
+				regulator-state-disk {
+					regulator-off-in-suspend;
+				};
+			};
+
+			ldo8: ldo8 {
+				regulator-name = "DA9063_LDO8";
+				regulator-min-microvolt = <900000>;
+				regulator-max-microvolt = <3600000>;
+				regulator-state-mem {
+					regulator-off-in-suspend;
+				};
+				regulator-state-disk {
+					regulator-off-in-suspend;
+				};
+			};
+
+			ldo11: ldo11 {
+				regulator-name = "DA9063_LDO11";
+				regulator-boot-on;
+				regulator-always-on;
+			};
+		};
+	};
+};
+
+&gpu {
+	contiguous-size-percentage = <12>;
+};
+
+&iomuxc {
+	pmic_dialog {
+		pinctrl_pmic_dialog: pmic_dialoggrp {
+			fsl,pins = <
+				MX6QDL_PAD_GPIO_17__GPIO7_IO12 0x1b0b0
+			>;
+		};
+	};
+};
+
+&usdhc1 {
+	pinctrl-names = "default", "state_100mhz", "state_200mhz";
+	pinctrl-0 = <&pinctrl_usdhc1>;
+	pinctrl-1 = <&pinctrl_usdhc1_100mhz>;
+	pinctrl-2 = <&pinctrl_usdhc1_200mhz>;
+	no-1-8-v;
+	status = "okay";
+};
+
+&usdhc4 {
+	pinctrl-names = "default", "state_100mhz", "state_200mhz";
+	pinctrl-0 = <&pinctrl_usdhc4>;
+	pinctrl-1 = <&pinctrl_usdhc4_100mhz>;
+	pinctrl-2 = <&pinctrl_usdhc4_200mhz>;
+	bus-width = <8>;
+	non-removable;
+	no-1-8-v;
+	status = "okay";
+};
