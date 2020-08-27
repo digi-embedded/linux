@@ -1,0 +1,37 @@
+/*
+ * Copyright 2015 Digi International, Inc.
+ *
+ * The code contained herein is licensed under the GNU General Public
+ * License. You may obtain a copy of the GNU General Public License
+ * Version 2 or later at the following locations:
+ *
+ * http://www.opensource.org/licenses/gpl-license.html
+ * http://www.gnu.org/copyleft/gpl.html
+ */
+
+/* ConnectCore 6 (common) */
+#include "imx6qdl-ccimx6.dtsi"
+
+/ {
+	wireless {
+		compatible = "atheros,ath6kl";
+		ath6kl-p2p-enable;
+		ath6kl-softmac-enable;
+		digi,pwrdown-gpios = <&gpio_extender 3 0>;
+		/* U-Boot will fill in the MAC address here */
+	};
+};
+
+&i2c2 {
+	pmic_dialog: dialog@58 {
+		regulators {
+			bio {
+				regulator-always-on;
+			};
+
+			ldo2 {
+				regulator-always-on;
+			};
+		};
+	};
+};
