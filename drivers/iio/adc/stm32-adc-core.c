@@ -9,6 +9,7 @@
  *
  */
 
+#include <linux/bitfield.h>
 #include <linux/clk.h>
 #include <linux/interrupt.h>
 #include <linux/irqchip/chained_irq.h>
@@ -62,6 +63,7 @@ struct stm32_adc_priv;
  * @regs:	common registers for all instances
  * @clk_sel:	clock selection routine
  * @max_clk_rate_hz: maximum analog clock rate (Hz, from datasheet)
+ * @ipid:	adc identification number
  * @has_syscfg: SYSCFG capability flags
  * @num_irqs:	number of interrupt lines
  */
@@ -69,6 +71,7 @@ struct stm32_adc_priv_cfg {
 	const struct stm32_adc_common_regs *regs;
 	int (*clk_sel)(struct platform_device *, struct stm32_adc_priv *);
 	u32 max_clk_rate_hz;
+	u32 ipid;
 	unsigned int has_syscfg;
 	unsigned int num_irqs;
 };
@@ -650,6 +653,48 @@ static int stm32_adc_core_switches_probe(struct device *dev,
 	return 0;
 }
 
+static int stm32_adc_sanity_check(struct platform_device *pdev,
+				  struct stm32_adc_priv *priv)
+{
+	struct device_node *np = pdev->dev.of_node;
+	struct device_node *child;
+	const char *compat;
+	int ret, count = 0;
+	u32 id, val;
+
+	if (!priv->cfg->ipid)
+		return 0;
+
+	id = FIELD_GET(STM32MP13_IPIDR_MASK,
+		       readl_relaxed(priv->common.base + STM32MP13_ADC_IPDR));
+	if (id != priv->cfg->ipid) {
+		dev_err(&pdev->dev, "Unexpected IP version: 0x%x", id);
+		return -EINVAL;
+	}
+
+	for_each_child_of_node(np, child) {
+		ret = of_property_read_string(child, "compatible", &compat);
+		if (ret)
+			continue;
+		/* Count child nodes with stm32 adc compatible */
+		if (strstr(compat, "st,stm32") && strstr(compat, "adc"))
+			count++;
+	}
+
+	val = readl_relaxed(priv->common.base + STM32MP13_ADC_HWCFGR0);
+	if (count > FIELD_GET(STM32MP13_ADCNUM_MASK, val)) {
+		dev_err(&pdev->dev, "Unexpected child number: %d", count);
+		return -EINVAL;
+	}
+
+	val = readl_relaxed(priv->common.base + STM32MP13_ADC_VERR);
+	dev_dbg(&pdev->dev, "ADC version: %lu.%lu\n",
+		FIELD_GET(STM32MP13_MAJREV_MASK, val),
+		FIELD_GET(STM32MP13_MINREV_MASK, val));
+
+	return 0;
+}
+
 static int stm32_adc_probe(struct platform_device *pdev)
 {
 	struct stm32_adc_priv *priv;
@@ -710,6 +755,10 @@ static int stm32_adc_probe(struct platform_device *pdev)
 	ret = stm32_adc_core_hw_start(dev);
 	if (ret)
 		goto err_pm_stop;
+
+	ret = stm32_adc_sanity_check(pdev, priv);
+	if (ret < 0)
+		goto err_hw_stop;
 
 	ret = regulator_get_voltage(priv->vref);
 	if (ret < 0) {
@@ -822,6 +871,7 @@ static const struct stm32_adc_priv_cfg stm32mp1_adc_priv_cfg = {
 	.clk_sel = stm32h7_adc_clk_sel,
 	.max_clk_rate_hz = 40000000,
 	.has_syscfg = HAS_VBOOSTER | HAS_ANASWVDD,
+	.ipid = STM32MP15_IPIDR_NUMBER,
 	.num_irqs = 2,
 };
 
@@ -829,6 +879,7 @@ static const struct stm32_adc_priv_cfg stm32mp13_adc_priv_cfg = {
 	.regs = &stm32mp13_adc_common_regs,
 	.clk_sel = stm32h7_adc_clk_sel,
 	.max_clk_rate_hz = 36000000,
+	.ipid = STM32MP13_IPIDR_NUMBER,
 	.num_irqs = 1,
 };
 
