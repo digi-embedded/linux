@@ -86,6 +86,7 @@ struct da9063 {
 	int		chip_irq;
 	unsigned int	irq_base;
 	struct regmap_irq_chip_data *regmap_irq;
+	struct irq_domain	*irq_domain;
 };
 
 int da9063_device_init(struct da9063 *da9063, unsigned int irq);
