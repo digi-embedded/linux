@@ -1073,6 +1073,17 @@ config GPIO_DA9055
 
 	  If driver is built as a module it will be called gpio-da9055.
 
+config GPIO_DA9063
+	tristate "Dialog Semiconductor DA9063 GPIO"
+	depends on MFD_DA9063
+	help
+	  Say yes here to enable the GPIO driver for the DA9063 chip.
+
+	  The Dialog DA9063 PMIC chip has 16 GPIO pins that can be
+	  be controller by this driver.
+
+	  If driver is built as a module it will be called gpio-da9063.
+
 config GPIO_DLN2
 	tristate "Diolan DLN2 GPIO support"
 	depends on MFD_DLN2

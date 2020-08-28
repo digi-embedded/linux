@@ -1,0 +1,19 @@
+Dialog DA9063 PMIC GPIO extender
+
+Required properties:
+- compatible : Should be
+    - "dlg,da9063-gpio"
+
+- #gpio-cells : Should be two.
+  - first cell is the pin number
+  - second cell is used to specify flags. Flags are currently unused.
+
+- gpio-controller : Marks the device node as a GPIO controller.
+
+Example:
+
+gpio_extender: gpio {
+	compatible = "dlg,da9063-gpio";
+	gpio-controller;
+	#gpio-cells = <2>;
+	};
