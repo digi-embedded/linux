@@ -1991,8 +1991,9 @@
 			reg = <0x10000000 0x40000>,
 			      <0x30000000 0x40000>,
 			      <0x38000000 0x10000>;
-			resets = <&scmi0_reset RST_SCMI0_MCU>;
-			st,syscfg-holdboot = <&rcc 0x10C 0x1>;
+			resets = <&scmi0_reset RST_SCMI0_MCU>,
+				 <&scmi0_reset RST_SCMI0_MCU_HOLD_BOOT>;
+			reset-names = "mcu_rst", "hold_boot";
 			st,syscfg-tz = <&rcc 0x000 0x1>;
 			st,syscfg-pdds = <&pwr_mcu 0x0 0x1>;
 			st,syscfg-rsc-tbl = <&tamp 0x144 0xFFFFFFFF>;
