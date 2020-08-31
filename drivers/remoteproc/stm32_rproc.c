@@ -78,6 +78,7 @@ struct stm32_mbox {
 
 struct stm32_rproc {
 	struct reset_control *rst;
+	struct reset_control *hold_boot_rst;
 	struct stm32_syscon hold_boot;
 	struct stm32_syscon pdds;
 	struct stm32_syscon m4_state;
@@ -398,6 +399,14 @@ static int stm32_rproc_set_hold_boot(struct rproc *rproc, bool hold)
 	struct stm32_syscon hold_boot = ddata->hold_boot;
 	int val, err;
 
+	if (ddata->hold_boot_rst) {
+		/* Use the SCMI reset controller */
+		if (!hold)
+			return reset_control_deassert(ddata->hold_boot_rst);
+		else
+			return reset_control_assert(ddata->hold_boot_rst);
+	}
+
 	val = hold ? HOLD_BOOT : RELEASE_BOOT;
 
 	err = regmap_update_bits(hold_boot.map, hold_boot.reg,
@@ -693,16 +702,26 @@ static int stm32_rproc_parse_dt(struct platform_device *pdev,
 		dev_info(dev, "wdg irq registered\n");
 	}
 
-	ddata->rst = devm_reset_control_get_by_index(dev, 0);
+	ddata->rst = devm_reset_control_get(dev, "mcu_rst");
 	if (IS_ERR(ddata->rst))
 		return dev_err_probe(dev, PTR_ERR(ddata->rst),
 				     "failed to get mcu_reset\n");
 
-	err = stm32_rproc_get_syscon(np, "st,syscfg-holdboot",
-				     &ddata->hold_boot);
-	if (err) {
-		dev_err(dev, "failed to get hold boot\n");
-		return err;
+	ddata->hold_boot_rst = devm_reset_control_get(dev, "hold_boot");
+	if (PTR_ERR(ddata->hold_boot_rst) == -EPROBE_DEFER)
+		return PTR_ERR(ddata->hold_boot_rst);
+
+	if (!ddata->hold_boot_rst) {
+		/*
+		 * If the hold boot is not managed by the SCMI reset controller,
+		 * manage it through the syscon controller
+		 */
+		err = stm32_rproc_get_syscon(np, "st,syscfg-holdboot",
+					     &ddata->hold_boot);
+		if (err) {
+			dev_err(dev, "failed to get hold boot\n");
+			return err;
+		}
 	}
 
 	err = stm32_rproc_get_syscon(np, "st,syscfg-pdds", &ddata->pdds);
