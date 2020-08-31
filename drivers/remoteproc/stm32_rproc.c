@@ -24,9 +24,6 @@
 
 #include "remoteproc_internal.h"
 
-#define HOLD_BOOT		0
-#define RELEASE_BOOT		1
-
 #define MBOX_NB_VQ		2
 #define MBOX_NB_MBX		4
 
@@ -79,7 +76,7 @@ struct stm32_mbox {
 
 struct stm32_rproc {
 	struct reset_control *rst;
-	struct stm32_syscon hold_boot;
+	struct reset_control *hold_boot;
 	struct stm32_syscon pdds;
 	struct stm32_syscon m4_state;
 	struct stm32_syscon rsctbl;
@@ -394,30 +391,6 @@ err_probe:
 	return -EPROBE_DEFER;
 }
 
-static int stm32_rproc_set_hold_boot(struct rproc *rproc, bool hold)
-{
-	struct stm32_rproc *ddata = rproc->priv;
-	struct stm32_syscon hold_boot = ddata->hold_boot;
-	struct arm_smccc_res smc_res;
-	int val, err;
-
-	val = hold ? HOLD_BOOT : RELEASE_BOOT;
-
-	if (IS_ENABLED(CONFIG_HAVE_ARM_SMCCC) && ddata->secured_soc) {
-		arm_smccc_smc(STM32_SMC_RCC, STM32_SMC_REG_WRITE,
-			      hold_boot.reg, val, 0, 0, 0, 0, &smc_res);
-		err = smc_res.a0;
-	} else {
-		err = regmap_update_bits(hold_boot.map, hold_boot.reg,
-					 hold_boot.mask, val);
-	}
-
-	if (err)
-		dev_err(&rproc->dev, "failed to set hold boot\n");
-
-	return err;
-}
-
 static void stm32_rproc_add_coredump_trace(struct rproc *rproc)
 {
 	struct rproc_debug_trace *trace;
@@ -457,18 +430,20 @@ static int stm32_rproc_start(struct rproc *rproc)
 		}
 	}
 
-	err = stm32_rproc_set_hold_boot(rproc, false);
+	err = reset_control_deassert(ddata->hold_boot);
 	if (err)
 		return err;
 
-	return stm32_rproc_set_hold_boot(rproc, true);
+	return reset_control_assert(ddata->hold_boot);
 }
 
 static int stm32_rproc_attach(struct rproc *rproc)
 {
+	struct stm32_rproc *ddata = rproc->priv;
+
 	stm32_rproc_add_coredump_trace(rproc);
 
-	return stm32_rproc_set_hold_boot(rproc, true);
+	return reset_control_assert(ddata->hold_boot);
 }
 
 static int stm32_rproc_detach(struct rproc *rproc)
@@ -485,7 +460,7 @@ static int stm32_rproc_detach(struct rproc *rproc)
 	}
 
 	/* Allow remote processor to auto-reboot */
-	return stm32_rproc_set_hold_boot(rproc, false);
+	return reset_control_deassert(ddata->hold_boot);
 }
 
 static int stm32_rproc_stop(struct rproc *rproc)
@@ -503,9 +478,11 @@ static int stm32_rproc_stop(struct rproc *rproc)
 		}
 	}
 
-	err = stm32_rproc_set_hold_boot(rproc, true);
-	if (err)
+	err = reset_control_assert(ddata->hold_boot);
+	if (err) {
+		dev_err(&rproc->dev, "failed to assert the hold boot\n");
 		return err;
+	}
 
 	err = reset_control_assert(ddata->rst);
 	if (err) {
@@ -705,10 +682,15 @@ static int stm32_rproc_parse_dt(struct platform_device *pdev,
 		dev_info(dev, "wdg irq registered\n");
 	}
 
-	ddata->rst = devm_reset_control_get_by_index(dev, 0);
+	ddata->rst = devm_reset_control_get(dev, "mcu_rst");
 	if (IS_ERR(ddata->rst))
 		return dev_err_probe(dev, PTR_ERR(ddata->rst),
 				     "failed to get mcu_reset\n");
+
+	ddata->hold_boot = devm_reset_control_get(dev, "hold_boot");
+	if (IS_ERR(ddata->hold_boot))
+		return dev_err_probe(dev, PTR_ERR(ddata->hold_boot),
+				      "failed to get mcu reset\n");
 
 	/*
 	 * if platform is secured the hold boot bit must be written by
@@ -727,13 +709,6 @@ static int stm32_rproc_parse_dt(struct platform_device *pdev,
 		return err;
 	}
 	ddata->secured_soc = tzen & tz.mask;
-
-	err = stm32_rproc_get_syscon(np, "st,syscfg-holdboot",
-				     &ddata->hold_boot);
-	if (err) {
-		dev_err(dev, "failed to get hold boot\n");
-		return err;
-	}
 
 	err = stm32_rproc_get_syscon(np, "st,syscfg-pdds", &ddata->pdds);
 	if (err)
