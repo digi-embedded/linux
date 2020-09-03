@@ -10,8 +10,8 @@ description: |
   The STM32 MDMA is a general-purpose direct memory access controller capable of
   supporting 64 independent DMA channels with 256 HW requests.
   DMA clients connected to the STM32 MDMA controller must use the format
-  described in the dma.txt file, using a five-cell specifier for each channel:
-  a phandle to the MDMA controller plus the following five integer cells:
+  described in the dma.txt file, using a six-cell specifier for each channel:
+  a phandle to the MDMA controller plus the following six integer cells:
     1. The request line number
     2. The priority level
       0x0: Low
@@ -48,6 +48,10 @@ description: |
        if no HW ack signal is used by the MDMA client
     5. A 32bit mask specifying the value to be written to acknowledge the request
        if no HW ack signal is used by the MDMA client
+    6. A bitfield value specifying if the MDMA client wants to generate M2M transfer
+       with HW trigger (1) or not (0). This bitfield should be only enabled for
+       M2M transfer triggered by STM32 DMA client. The memory devices involved in this
+       kind of transfer are SRAM and DDR.
 
 maintainers:
   - Amelie Delaunay <amelie.delaunay@st.com>
@@ -57,7 +61,7 @@ allOf:
 
 properties:
   "#dma-cells":
-    const: 5
+    const: 6
 
   compatible:
     const: st,stm32h7-mdma
@@ -97,7 +101,7 @@ examples:
       interrupts = <122>;
       clocks = <&timer_clk>;
       resets = <&rcc 992>;
-      #dma-cells = <5>;
+      #dma-cells = <6>;
       dma-channels = <16>;
       dma-requests = <32>;
       st,ahb-addr-masks = <0x20000000>, <0x00000000>;
