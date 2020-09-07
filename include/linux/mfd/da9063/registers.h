@@ -294,6 +294,8 @@
 /* Chip ID and variant */
 #define	DA9063_REG_CHIP_ID		0x181
 #define	DA9063_REG_CHIP_VARIANT		0x182
+#define	DA9063_REG_CHIP_CUSTOMER_ID	0x183
+#define	DA9063_REG_CHIP_CONFIG_ID	0x184
 
 /*
  * PMIC registers bits
@@ -349,6 +351,7 @@
 #define	DA9063_KEY_RESET			0x20
 #define	DA9063_NSHUTDOWN			0x40
 #define	DA9063_WAIT_SHUT			0x80
+#define DA9063_REG_FAULT_LOG_VAL_MASK		0xFF
 
 /* DA9063_REG_EVENT_A (addr=0x06) */
 #define	DA9063_E_NONKEY				0x01

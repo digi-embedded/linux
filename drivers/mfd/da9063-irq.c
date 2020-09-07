@@ -168,6 +168,35 @@ static const struct regmap_irq_chip da9063l_irq_chip = {
 	.init_ack_masked = true,
 };
 
+static int da9063_fault_log_init(struct da9063 *da9063)
+{
+	int ret = -EINVAL;
+	int val = 0;
+
+	regmap_read(da9063->regmap, DA9063_REG_FAULT_LOG, &val);
+	if (val & DA9063_WAIT_SHUT)
+		dev_info(da9063->dev, "Power down by timeout of ID_WAIT.\n");
+	if (val & DA9063_NSHUTDOWN)
+		dev_info(da9063->dev, "Power down by nOFF/nShutdown.\n");
+	if (val & DA9063_KEY_RESET)
+		dev_info(da9063->dev, "Power down from nONKEY.\n");
+	if (val & DA9063_TEMP_CRIT)
+		dev_info(da9063->dev, "Junction over temperature.\n");
+	if (val & DA9063_VDD_START)
+		dev_info(da9063->dev, "Power down by VSYS fault before ACTIVE.\n");
+	if (val & DA9063_VDD_FAULT)
+		dev_info(da9063->dev, "Power down by VSYS fault.\n");
+	if (val & DA9063_POR)
+		dev_info(da9063->dev, "Start up from no power or RTC/Delivery.\n");
+	if (val & DA9063_TWD_ERROR)
+		dev_info(da9063->dev, "Watchdog time violation.\n");
+	ret = regmap_update_bits(da9063->regmap, DA9063_REG_FAULT_LOG,
+			DA9063_REG_FAULT_LOG_VAL_MASK, val);
+	if (ret < 0)
+		dev_err(da9063->dev, "Failed to clear fault log.\n");
+	return ret;
+}
+
 int da9063_irq_init(struct da9063 *da9063)
 {
 	const struct regmap_irq_chip *irq_chip;
@@ -183,6 +212,10 @@ int da9063_irq_init(struct da9063 *da9063)
 	else
 		irq_chip = &da9063l_irq_chip;
 
+	/* Report and clear fault events */
+	da9063_fault_log_init(da9063);
+
+	da9063->irq_base = -1;
 	ret = devm_regmap_add_irq_chip(da9063->dev, da9063->regmap,
 			da9063->chip_irq,
 			IRQF_TRIGGER_LOW | IRQF_ONESHOT | IRQF_SHARED,
@@ -194,4 +227,9 @@ int da9063_irq_init(struct da9063 *da9063)
 	}
 
 	return 0;
+}
+
+void da9063_irq_exit(struct da9063 *da9063)
+{
+	regmap_del_irq_chip(da9063->chip_irq, da9063->regmap_irq);
 }

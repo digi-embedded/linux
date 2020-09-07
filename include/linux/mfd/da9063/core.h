@@ -23,6 +23,7 @@
 #define DA9063_DRVNAME_ONKEY		"da9063-onkey"
 #define DA9063_DRVNAME_RTC		"da9063-rtc"
 #define DA9063_DRVNAME_VIBRATION	"da9063-vibration"
+#define DA9063_DRVNAME_GPIO		"da9063-gpio"
 
 #define PMIC_CHIP_ID_DA9063		0x61
 
@@ -75,6 +76,7 @@ struct da9063 {
 	struct device	*dev;
 	enum da9063_type type;
 	unsigned char	variant_code;
+	unsigned int	t_offset;
 	unsigned int	flags;
 
 	/* Control interface */
@@ -88,5 +90,8 @@ struct da9063 {
 
 int da9063_device_init(struct da9063 *da9063, unsigned int irq);
 int da9063_irq_init(struct da9063 *da9063);
+
+void da9063_device_exit(struct da9063 *da9063);
+void da9063_irq_exit(struct da9063 *da9063);
 
 #endif /* __MFD_DA9063_CORE_H__ */
