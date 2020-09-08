@@ -303,6 +303,17 @@ static int micron_nand_init(struct nand_chip *chip)
 	return 0;
 }
 
+static void micron_nand_decode_id(struct nand_chip *chip)
+{
+	nand_decode_ext_id(chip);
+
+	if (chip->id.data[1] == 0xda) {
+		chip->ecc_strength_ds = 4;
+		chip->ecc_step_ds = 512;
+	}
+}
+
 const struct nand_manufacturer_ops micron_nand_manuf_ops = {
+	.detect = micron_nand_decode_id,
 	.init = micron_nand_init,
 };
