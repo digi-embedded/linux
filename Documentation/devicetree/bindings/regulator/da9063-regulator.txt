@@ -1,0 +1,105 @@
+Dialog's DA9063 PMIC Voltage regulators
+
+Required properties:
+- compatible: Must be "dlg,da9063-regulator"
+- interrupts: Local DA9063 interrupt line.
+- interrupts-name: Local DA9063 interrupt line name. See the da9063-irq.c
+  file for details.
+- interrupt-parent: phandle for the interrupt controller.
+
+Optional properties:
+- dlg,bcores_merged: Indicates Buck Core 1 and 2 are in merged mode.
+- dlg,bmem_bio_merged: Indicates Buck Mem and IO and in merged mode.
+
+Example:
+	/* For DA9063 revision AD */
+	regulators {
+		compatible = "dlg,da9063-regulator";
+		/*dlg,bcores_merged;*/
+		/*dlg,bmem_bio_merged;*/
+		interrupts = <8>;
+		interrupts-names = "LDO_LIM";
+		interrupt-parent = <&pmic_dialog>;
+
+		bcore1: DA9063_BCORE1 {
+			regulator-name = "DA9063_BCORE1";
+		};
+
+		bcore2: DA9063_BCORE2 {
+			regulator-name = "DA9063_BCORE2";
+		};
+
+		bpro: DA9063_BPRO {
+			regulator-name = "DA9063_BPRO";
+		};
+
+		bmem: DA9063_BMEM {
+			regulator-name = "DA9063_BMEM";
+		};
+
+		bio: DA9063_BIO {
+			regulator-name = "DA9063_BIO";
+		};
+
+		bperi: DA9063_BPERI {
+			regulator-name = "DA9063_BPERI";
+		};
+
+		/*
+		bcores_merged: DA9063_BCORES_MERGED {
+			regulator-name = "DA9063_BCORES_MERGED";
+		};
+
+		bmem_bio_merged: DA9063_BMEM_BIO_MERGED {
+			regulator-name = "DA9063_BMEM_BIO_MERGED";
+		};
+		*/
+
+		ldo1: DA9063_LDO1 {
+			regulator-name = "DA9063_LDO1";
+		};
+
+		ldo2: DA9063_LDO2 {
+			regulator-name = "DA9063_LDO2";
+		};
+
+		ldo3: DA9063_LDO3 {
+			regulator-name = "DA9063_LDO3";
+		};
+
+		ldo4: DA9063_LDO4 {
+			regulator-name = "DA9063_LDO4";
+		};
+
+		ldo5: DA9063_LDO5 {
+			regulator-name = "DA9063_LDO5";
+		};
+
+		ldo6: DA9063_LDO6 {
+			regulator-name = "DA9063_LDO6";
+		};
+
+		ldo7: DA9063_LDO7 {
+			regulator-name = "DA9063_LDO7";
+		};
+
+		ldo8: DA9063_LDO8 {
+			regulator-name = "DA9063_LDO8";
+		};
+
+		ldo9: DA9063_LDO9 {
+			regulator-name = "DA9063_LDO9";
+		};
+
+		ldo10: DA9063_LDO10 {
+			regulator-name = "DA9063_LDO10";
+		};
+
+		ldo11: DA9063_LDO11 {
+			regulator-name = "DA9063_LDO11";
+		};
+
+		out_32k: DA9063_32K_OUT {
+			regulator-name = "DA9063_32K_OUT";
+		};
+}
