@@ -1,19 +1,14 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 /*
  * GPIO Driver for Dialog DA9063 PMICs.
  *
  * Copyright(c) 2012 Dialog Semiconductor Ltd.
  *
  * Author: David Dajun Chen <dchen@diasemi.com>
- *
- *  This program is free software; you can redistribute  it and/or modify it
- *  under  the terms of  the GNU General  Public License as published by the
- *  Free Software Foundation;  either version 2 of the  License, or (at your
- *  option) any later version.
- *
  */
 #include <linux/module.h>
 #include <linux/of_device.h>
-#include <linux/gpio.h>
+#include <linux/gpio/driver.h>
 #include <linux/irqdomain.h>
 #include <linux/regulator/consumer.h>
 
@@ -146,7 +141,7 @@ static int da9063_gpio_to_irq(struct gpio_chip *gc, u32 offset)
 				  DA9063_IRQ_GPI0 + offset);
 }
 
-static struct gpio_chip reference_gp = {
+static const struct gpio_chip reference_gp = {
 	.label = "da9063-gpio",
 	.owner = THIS_MODULE,
 	.get = da9063_gpio_get,
@@ -154,7 +149,7 @@ static struct gpio_chip reference_gp = {
 	.direction_input = da9063_gpio_direction_input,
 	.direction_output = da9063_gpio_direction_output,
 	.to_irq = da9063_gpio_to_irq,
-	.can_sleep = 1,
+	.can_sleep = true,
 	.ngpio = 16,
 	.base = 240,
 };
@@ -184,7 +179,7 @@ static int da9063_gpio_probe(struct platform_device *pdev)
 	int ret;
 
 	gpio = devm_kzalloc(&pdev->dev, sizeof(*gpio), GFP_KERNEL);
-	if (gpio == NULL)
+	if (!gpio)
 		return -ENOMEM;
 
 	gpio->da9063 = dev_get_drvdata(pdev->dev.parent);
@@ -194,10 +189,10 @@ static int da9063_gpio_probe(struct platform_device *pdev)
 	gpio->gp = reference_gp;
 
 	gpio->gp.of_node = pdev->dev.of_node;
-	ret = gpiochip_add(&gpio->gp);
+	ret = devm_gpiochip_add_data(&pdev->dev, &gpio->gp, gpio);
 	if (ret < 0) {
 		dev_err(&pdev->dev, "Could not register gpiochip, %d\n", ret);
-		goto err_mem;
+		return ret;
 	}
 
 	platform_set_drvdata(pdev, gpio);
@@ -209,9 +204,6 @@ static int da9063_gpio_probe(struct platform_device *pdev)
 		gpio->reg = NULL;
 
 	return 0;
-
-err_mem:
-	return ret;
 }
 
 static int da9063_gpio_remove(struct platform_device *pdev)
