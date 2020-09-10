@@ -45,6 +45,19 @@ static inline struct imx_hdmi *enc_to_imx_hdmi(struct drm_encoder *e)
 	return container_of(e, struct imx_hdmi, encoder);
 }
 
+struct clk_bulk_data imx8mp_clocks[] = {
+	{ .id = "pix_clk"  },
+	{ .id = "phy_int"  },
+	{ .id = "prep_clk" },
+	{ .id = "skp_clk"  },
+	{ .id = "sfr_clk"  },
+	{ .id = "cec_clk"  },
+	{ .id = "apb_clk"  },
+	{ .id = "hpi_clk"  },
+	{ .id = "fdcc_ref" },
+	{ .id = "pipe_clk" },
+};
+
 static const struct dw_hdmi_mpll_config imx_mpll_cfg[] = {
 	{
 		45250000, {
@@ -197,6 +210,16 @@ imx6dl_hdmi_mode_valid(struct drm_connector *con,
 	return MODE_OK;
 }
 
+static bool imx8mp_hdmi_check_clk_rate(int rate_khz)
+{
+	int rate = rate_khz * 1000;
+
+	/* Check hdmi phy pixel clock support rate */
+	if (rate != clk_round_rate(imx8mp_clocks[0].clk, rate))
+		return  false;
+	return true;
+}
+
 static enum drm_mode_status
 imx8mp_hdmi_mode_valid(struct drm_connector *con,
 		       const struct drm_display_mode *mode)
@@ -205,6 +228,9 @@ imx8mp_hdmi_mode_valid(struct drm_connector *con,
 		return MODE_CLOCK_LOW;
 	if (mode->clock > 297000)
 		return MODE_CLOCK_HIGH;
+
+	if (!imx8mp_hdmi_check_clk_rate(mode->clock))
+		return MODE_CLOCK_RANGE;
 
 	/* We don't support double-clocked and Interlaced modes */
 	if (mode->flags & DRM_MODE_FLAG_DBLCLK ||
@@ -247,12 +273,14 @@ static int imx8mp_hdmi_phy_init(struct dw_hdmi *dw_hdmi, void *data,
 	dw_hdmi_phy_reset(dw_hdmi);
 
 	/* enable PVI */
-	imx8mp_hdmi_pvi_powerup();
+	imx8mp_hdmi_pavi_powerup();
 	imx8mp_hdmi_pvi_enable(mode);
 
 	/* HDMI PHY power up */
 	regmap_read(hdmi->regmap, 0x200, &val);
 	val &= ~0x8;
+	/* Enable CEC */
+	val |= 0x2;
 	regmap_write(hdmi->regmap, 0x200, val);
 
 	if (!hdmi->phy)
@@ -274,10 +302,13 @@ static void imx8mp_hdmi_phy_disable(struct dw_hdmi *dw_hdmi, void *data)
 
 	/* disable PVI */
 	imx8mp_hdmi_pvi_disable();
-	imx8mp_hdmi_pvi_powerdown();
+	imx8mp_hdmi_pavi_powerdown();
 
-	/* TODO Power down HDMI PHY */
+	/* TODO */
 	regmap_read(hdmi->regmap, 0x200, &val);
+	/* Disable CEC */
+	val &= ~0x2;
+	/* Power down HDMI PHY */
 	val |= 0x8;
     regmap_write(hdmi->regmap, 0x200, val);
 }
@@ -285,19 +316,6 @@ static void imx8mp_hdmi_phy_disable(struct dw_hdmi *dw_hdmi, void *data)
 static int imx8mp_hdmimix_setup(struct imx_hdmi *hdmi)
 {
 	int ret;
-
-	struct clk_bulk_data clocks[] = {
-		{ .id = "phy_int"  },
-		{ .id = "prep_clk" },
-		{ .id = "skp_clk"  },
-		{ .id = "sfr_clk"  },
-		{ .id = "pix_clk"  },
-		{ .id = "cec_clk"  },
-		{ .id = "apb_clk"  },
-		{ .id = "hpi_clk"  },
-		{ .id = "fdcc_ref" },
-		{ .id = "pipe_clk" },
-	};
 
 	if (NULL == imx8mp_hdmi_pavi_init()) {
 		dev_err(hdmi->dev, "No pavi info found\n");
@@ -308,25 +326,23 @@ static int imx8mp_hdmimix_setup(struct imx_hdmi *hdmi)
 	if (ret == -EPROBE_DEFER)
 		return ret;
 
-	ret = devm_clk_bulk_get(hdmi->dev, ARRAY_SIZE(clocks), clocks);
+	ret = devm_clk_bulk_get(hdmi->dev, ARRAY_SIZE(imx8mp_clocks), imx8mp_clocks);
 	if (ret < 0) {
 		dev_err(hdmi->dev, "No hdmimix bulk clk got\n");
 		return -EPROBE_DEFER;
 	}
 
-	return clk_bulk_prepare_enable(ARRAY_SIZE(clocks), clocks);
+	return clk_bulk_prepare_enable(ARRAY_SIZE(imx8mp_clocks), imx8mp_clocks);
 }
 
 void imx8mp_hdmi_enable_audio(struct dw_hdmi *dw_hdmi, void *data, int channel)
 {
-	imx8mp_hdmi_pai_powerup();
 	imx8mp_hdmi_pai_enable(channel);
 }
 
 void imx8mp_hdmi_disable_audio(struct dw_hdmi *dw_hdmi, void *data)
 {
 	imx8mp_hdmi_pai_disable();
-	imx8mp_hdmi_pai_powerdown();
 }
 
 static const struct dw_hdmi_phy_ops imx8mp_hdmi_phy_ops = {
@@ -459,11 +475,25 @@ static int dw_hdmi_imx_remove(struct platform_device *pdev)
 	return 0;
 }
 
+static int __maybe_unused dw_hdmi_imx_resume(struct device *dev)
+{
+	struct imx_hdmi *hdmi = dev_get_drvdata(dev);
+
+	dw_hdmi_resume(hdmi->hdmi);
+
+	return 0;
+}
+
+static const struct dev_pm_ops dw_hdmi_imx_pm = {
+	SET_SYSTEM_SLEEP_PM_OPS(NULL, dw_hdmi_imx_resume)
+};
+
 static struct platform_driver dw_hdmi_imx_platform_driver = {
 	.probe  = dw_hdmi_imx_probe,
 	.remove = dw_hdmi_imx_remove,
 	.driver = {
 		.name = "dwhdmi-imx",
+		.pm = &dw_hdmi_imx_pm,
 		.of_match_table = dw_hdmi_imx_dt_ids,
 	},
 };

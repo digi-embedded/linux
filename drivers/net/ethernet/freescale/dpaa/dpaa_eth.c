@@ -1679,6 +1679,13 @@ static struct sk_buff *dpaa_cleanup_tx_fd(const struct dpaa_priv *priv,
 			dma_unmap_page(dev, qm_sg_addr(&sgt[i]),
 				       qm_sg_entry_get_len(&sgt[i]), dma_dir);
 		}
+#ifndef CONFIG_PPC
+		if (dpaa_errata_a010022)
+			put_page(virt_to_page(sgt));
+		else
+#endif
+			/* Free the page frag that we allocated on Tx */
+			skb_free_frag(skbh);
 	} else {
 		dma_unmap_single(dev, addr,
 				 skb_tail_pointer(skb) - (u8 *)skbh, dma_dir);
@@ -1699,13 +1706,8 @@ static struct sk_buff *dpaa_cleanup_tx_fd(const struct dpaa_priv *priv,
 	}
 
 	if (qm_fd_get_format(fd) == qm_fd_sg)
-#ifndef CONFIG_PPC
-		if (dpaa_errata_a010022)
-			put_page(virt_to_page(sgt));
-		else
-#endif
-			/* Free the page frag that we allocated on Tx */
-			skb_free_frag(skbh);
+		/* Free the page frag that we allocated on Tx */
+		skb_free_frag(phys_to_virt(addr));
 
 	return skb;
 }

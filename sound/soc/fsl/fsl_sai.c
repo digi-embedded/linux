@@ -1277,6 +1277,14 @@ static bool fsl_sai_volatile_reg(struct device *dev, unsigned int reg)
 	case FSL_SAI_RDR5:
 	case FSL_SAI_RDR6:
 	case FSL_SAI_RDR7:
+	case FSL_SAI_TTCTN:
+	case FSL_SAI_TTCTL:
+	case FSL_SAI_TBCTN:
+	case FSL_SAI_TTCAP:
+	case FSL_SAI_RTCTN:
+	case FSL_SAI_RTCTL:
+	case FSL_SAI_RBCTN:
+	case FSL_SAI_RTCAP:
 		return true;
 	default:
 		return false;
@@ -1596,6 +1604,9 @@ static int fsl_sai_probe(struct platform_device *pdev)
 	}
 
 	platform_set_drvdata(pdev, sai);
+	pm_runtime_enable(&pdev->dev);
+	pm_runtime_get_sync(&pdev->dev);
+
 	ret = fsl_sai_check_ver(&pdev->dev);
 	if (ret < 0)
 		dev_warn(&pdev->dev, "Error reading SAI version: %d\n", ret);
@@ -1621,6 +1632,27 @@ static int fsl_sai_probe(struct platform_device *pdev)
 		regmap_update_bits(sai->regmap, FSL_SAI_MCTL,
 				   FSL_SAI_MCTL_MCLK_EN, FSL_SAI_MCTL_MCLK_EN);
 	}
+
+	if (sai->verid.timestamp_en) {
+		if (of_find_property(np, "fsl,sai-monitor-spdif", NULL) &&
+		    of_device_is_compatible(np, "fsl,imx8mm-sai")) {
+			sai->regmap_gpr = syscon_regmap_lookup_by_compatible("fsl,imx8mm-iomuxc-gpr");
+			if (IS_ERR(sai->regmap_gpr))
+				dev_warn(&pdev->dev, "cannot find iomuxc registers\n");
+
+			sai->gpr_idx = of_alias_get_id(np, "sai");
+			if (sai->gpr_idx < 0)
+				dev_warn(&pdev->dev, "cannot find sai alias id\n");
+
+			if (sai->gpr_idx > 0 && !IS_ERR(sai->regmap_gpr))
+				sai->monitor_spdif = true;
+		}
+
+		if (sysfs_create_group(&pdev->dev.kobj, fsl_sai_get_dev_attribute_group(sai->monitor_spdif)))
+			dev_err(&pdev->dev, "fail to create sys group\n");
+	}
+
+	pm_runtime_put_sync(&pdev->dev);
 
 	sai->dma_params_rx.chan_name = "rx";
 	sai->dma_params_tx.chan_name = "tx";
@@ -1660,7 +1692,12 @@ err_pm_disable:
 
 static int fsl_sai_remove(struct platform_device *pdev)
 {
+	struct fsl_sai *sai = dev_get_drvdata(&pdev->dev);
+
 	pm_runtime_disable(&pdev->dev);
+
+	if (sai->verid.timestamp_en)
+		sysfs_remove_group(&pdev->dev.kobj,  fsl_sai_get_dev_attribute_group(sai->monitor_spdif));
 
 	return 0;
 }

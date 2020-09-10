@@ -10,6 +10,7 @@ struct fsl_easrc_m2m {
 	unsigned int easrc_active;
 	unsigned int first_convert;
 	unsigned int sg_nodes[2];
+	unsigned int in_filled_len;
 	struct scatterlist sg[2][9];
 	struct dma_async_tx_descriptor *desc[2];
 	spinlock_t lock;  /* protect mem resource */
@@ -181,17 +182,15 @@ static long fsl_easrc_calc_outbuf_len(struct fsl_easrc_m2m *m2m,
 	in_width = snd_pcm_format_physical_width(ctx->in_params.sample_format) / 8;
 	out_width = snd_pcm_format_physical_width(ctx->out_params.sample_format) / 8;
 
-	in_samples = pbuf->input_buffer_length / (in_width * channels);
-	out_samples = ctx->out_params.sample_rate * in_samples /
-				ctx->in_params.sample_rate;
-	out_length = out_samples * out_width * channels;
-
-	if (out_samples <= ctx->out_missed_sample) {
+	m2m->in_filled_len += pbuf->input_buffer_length;
+	if (m2m->in_filled_len <= ctx->in_filled_sample * in_width * channels) {
 		out_length = 0;
-		ctx->out_missed_sample -= out_samples;
 	} else {
-		out_length -= ctx->out_missed_sample * out_width * channels;
-		ctx->out_missed_sample = 0;
+		in_samples = m2m->in_filled_len / (in_width * channels) - ctx->in_filled_sample;
+		out_samples = ctx->out_params.sample_rate * in_samples /
+				ctx->in_params.sample_rate;
+		out_length = out_samples * out_width * channels;
+		m2m->in_filled_len = ctx->in_filled_sample * in_width * channels;
 	}
 
 	return out_length;
@@ -243,7 +242,9 @@ static long fsl_easrc_prepare_io_buffer(struct fsl_easrc_m2m *m2m,
 	if (*dma_len <= 0)
 		return 0;
 
-	*sg_nodes = *dma_len / m2m->dma_block[dir].max_buf_size + 1;
+	*sg_nodes = *dma_len / m2m->dma_block[dir].max_buf_size;
+	if (*dma_len % m2m->dma_block[dir].max_buf_size)
+		*sg_nodes += 1;
 
 	return fsl_easrc_dmaconfig(m2m, dma_chan, fifo_addr, dma_vaddr,
 				*dma_len, dir, bits);
@@ -625,8 +626,8 @@ static long fsl_easrc_ioctl_convert(struct fsl_easrc_m2m *m2m,
 		return ret;
 	}
 
-	init_completion(&m2m->complete[IN]);
-	init_completion(&m2m->complete[OUT]);
+	reinit_completion(&m2m->complete[IN]);
+	reinit_completion(&m2m->complete[OUT]);
 
 	fsl_easrc_submit_dma(m2m);
 
@@ -799,6 +800,8 @@ static int fsl_easrc_open(struct inode *inode, struct file *file)
 	ctx->private_data = m2m;
 
 	spin_lock_init(&m2m->lock);
+	init_completion(&m2m->complete[IN]);
+	init_completion(&m2m->complete[OUT]);
 
 	/* context structs are already allocated in fsl_easrc->ctx[i] */
 	file->private_data = m2m;
@@ -954,6 +957,7 @@ static void fsl_easrc_m2m_suspend(struct fsl_easrc *easrc)
 		}
 
 		m2m->first_convert = 1;
+		m2m->in_filled_len = 0;
 		fsl_easrc_stop_context(ctx);
 		spin_unlock_irqrestore(&easrc->lock, lock_flags);
 	}

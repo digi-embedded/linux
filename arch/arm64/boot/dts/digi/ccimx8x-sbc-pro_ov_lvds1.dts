@@ -89,4 +89,12 @@
 			status = "okay";
 		};
 	};
+
+	/* Enable lvds1_panel */
+	fragment@9 {
+		target = <&lvds1_panel>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
 };

@@ -652,6 +652,19 @@ static void fsl_dsp_start(struct fsl_dsp *dsp_priv)
 	}
 }
 
+static bool fsl_dsp_is_reset(struct fsl_dsp *dsp_priv)
+{
+	switch (dsp_priv->dsp_board_type) {
+	case DSP_IMX8QM_TYPE:
+	case DSP_IMX8QXP_TYPE:
+		return true;
+	case DSP_IMX8MP_TYPE:
+		return imx_audiomix_dsp_reset(dsp_priv->audiomix);
+	default:
+		return true;
+	}
+}
+
 static void dsp_load_firmware(const struct firmware *fw, void *context)
 {
 	struct fsl_dsp *dsp_priv = context;
@@ -877,6 +890,76 @@ int fsl_dsp_configure(struct fsl_dsp *dsp_priv)
 	}
 }
 
+/**
+ * fsl_dsp_attach_pm_domains
+ */
+static int fsl_dsp_attach_pm_domains(struct device *dev,
+				     struct fsl_dsp *dsp)
+{
+	int ret;
+	int i;
+
+	if (dsp->num_domains <= 1)
+		return 0;
+
+	dsp->pd_dev = devm_kmalloc_array(dev, dsp->num_domains,
+					 sizeof(*dsp->pd_dev),
+					 GFP_KERNEL);
+	if (!dsp->pd_dev)
+		return -ENOMEM;
+
+	dsp->pd_dev_link = devm_kmalloc_array(dev,
+					      dsp->num_domains,
+					      sizeof(*dsp->pd_dev_link),
+					      GFP_KERNEL);
+	if (!dsp->pd_dev_link)
+		return -ENOMEM;
+
+	for (i = 0; i < dsp->num_domains; i++) {
+		dsp->pd_dev[i] = dev_pm_domain_attach_by_id(dev, i);
+		if (IS_ERR(dsp->pd_dev[i]))
+			return PTR_ERR(dsp->pd_dev[i]);
+
+		dsp->pd_dev_link[i] = device_link_add(dev,
+						      dsp->pd_dev[i],
+						      DL_FLAG_STATELESS |
+						      DL_FLAG_PM_RUNTIME |
+						      DL_FLAG_RPM_ACTIVE);
+		if (IS_ERR(dsp->pd_dev_link[i])) {
+			dev_pm_domain_detach(dsp->pd_dev[i], false);
+			ret = PTR_ERR(dsp->pd_dev_link[i]);
+			goto detach_pm;
+		}
+	}
+	return 0;
+
+detach_pm:
+	while (--i >= 0) {
+		device_link_del(dsp->pd_dev_link[i]);
+		dev_pm_domain_detach(dsp->pd_dev[i], false);
+	}
+	return ret;
+}
+
+/**
+ * fsl_dsp_detach_pm_domains
+ */
+static int fsl_dsp_detach_pm_domains(struct device *dev,
+				     struct fsl_dsp *dsp)
+{
+	int i;
+
+	if (dsp->num_domains <= 1)
+		return 0;
+
+	for (i = 0; i < dsp->num_domains; i++) {
+		device_link_del(dsp->pd_dev_link[i]);
+		dev_pm_domain_detach(dsp->pd_dev[i], false);
+	}
+
+	return 0;
+}
+
 static int fsl_dsp_probe(struct platform_device *pdev)
 {
 	struct device_node *np = pdev->dev.of_node;
@@ -884,13 +967,13 @@ static int fsl_dsp_probe(struct platform_device *pdev)
 	struct resource reserved_res;
 	struct fsl_dsp *dsp_priv;
 	const char *fw_name;
+	const char *audio_iface;
 	struct resource *res;
 	void __iomem *regs;
 	void *buf_virt;
 	dma_addr_t buf_phys;
 	int size, offset, i;
 	int ret;
-	int num_domains = 0;
 	char tmp[16];
 
 	dsp_priv = devm_kzalloc(&pdev->dev, sizeof(*dsp_priv), GFP_KERNEL);
@@ -920,59 +1003,61 @@ static int fsl_dsp_probe(struct platform_device *pdev)
 	dsp_priv->iram  = dsp_priv->paddr + IRAM_OFFSET;
 	dsp_priv->sram  = dsp_priv->paddr + SYSRAM_OFFSET;
 
-	num_domains = of_count_phandle_with_args(np, "power-domains",
-						 "#power-domain-cells");
-	if (num_domains > 1) {
-		for (i = 0; i < num_domains; i++) {
-			struct device *pd_dev;
-			struct device_link *link;
-
-			pd_dev = dev_pm_domain_attach_by_id(&pdev->dev, i);
-			if (IS_ERR(pd_dev))
-				return PTR_ERR(pd_dev);
-
-			link = device_link_add(&pdev->dev, pd_dev,
-				DL_FLAG_STATELESS |
-				DL_FLAG_PM_RUNTIME |
-				DL_FLAG_RPM_ACTIVE);
-			if (IS_ERR(link))
-				return PTR_ERR(link);
-		}
-	}
-
-	ret = fsl_dsp_configure(dsp_priv);
-	if (ret < 0)
-		return ret;
-
-	ret = dsp_mu_init(dsp_priv);
+	dsp_priv->num_domains = of_count_phandle_with_args(np, "power-domains",
+							   "#power-domain-cells");
+	ret = fsl_dsp_attach_pm_domains(&pdev->dev, dsp_priv);
 	if (ret)
 		return ret;
+
+	platform_set_drvdata(pdev, dsp_priv);
+	pm_runtime_enable(&pdev->dev);
+	dsp_priv->dsp_mu_init = 1;
+	dsp_priv->proxy.is_ready = 1;
+	pm_runtime_get_sync(&pdev->dev);
+
+	ret = fsl_dsp_configure(dsp_priv);
+	if (ret < 0) {
+		pm_runtime_put_sync(&pdev->dev);
+		goto configure_fail;
+	}
+
+	ret = dsp_mu_init(dsp_priv);
+	if (ret) {
+		pm_runtime_put_sync(&pdev->dev);
+		goto mu_init_fail;
+	}
+
+	pm_runtime_put_sync(&pdev->dev);
+	dsp_priv->dsp_mu_init = 0;
+	dsp_priv->proxy.is_ready = 0;
 
 	ret = of_property_read_string(np, "fsl,dsp-firmware", &fw_name);
 	dsp_priv->fw_name = fw_name;
 
-	ret = of_property_read_u32(np, "fixup-offset", &dsp_priv->fixup_offset);
+	ret = of_property_read_string(np, "audio-interface", &audio_iface);
+	dsp_priv->audio_iface = audio_iface;
 
-	platform_set_drvdata(pdev, dsp_priv);
-	pm_runtime_enable(&pdev->dev);
+	ret = of_property_read_u32(np, "fixup-offset", &dsp_priv->fixup_offset);
 
 	dsp_miscdev.fops = &dsp_fops,
 	dsp_miscdev.parent = &pdev->dev,
 	ret = misc_register(&dsp_miscdev);
 	if (ret) {
 		dev_err(&pdev->dev, "failed to register misc device %d\n", ret);
-		return ret;
+		goto misc_register_fail;
 	}
 
 	reserved_node = of_parse_phandle(np, "memory-region", 0);
 	if (!reserved_node) {
 		dev_err(&pdev->dev, "failed to get reserved region node\n");
-		return -ENODEV;
+		ret = -ENODEV;
+		goto reserved_node_fail;
 	}
 
 	if (of_address_to_resource(reserved_node, 0, &reserved_res)) {
 		dev_err(&pdev->dev, "failed to get reserved region address\n");
-		return -EINVAL;
+		ret = -EINVAL;
+		goto reserved_node_fail;
 	}
 
 	dsp_priv->sdram_phys_addr = reserved_res.start;
@@ -980,14 +1065,16 @@ static int fsl_dsp_probe(struct platform_device *pdev)
 									+ 1;
 	if (dsp_priv->sdram_reserved_size <= 0) {
 		dev_err(&pdev->dev, "invalid value of reserved region size\n");
-		return -EINVAL;
+		ret = -EINVAL;
+		goto reserved_node_fail;
 	}
 
 	dsp_priv->sdram_vir_addr = ioremap_wc(dsp_priv->sdram_phys_addr,
 						dsp_priv->sdram_reserved_size);
 	if (!dsp_priv->sdram_vir_addr) {
 		dev_err(&pdev->dev, "failed to remap sdram space for dsp firmware\n");
-		return -ENXIO;
+		ret = -ENXIO;
+		goto reserved_node_fail;
 	}
 	memset_io(dsp_priv->sdram_vir_addr, 0, dsp_priv->sdram_reserved_size);
 
@@ -996,7 +1083,8 @@ static int fsl_dsp_probe(struct platform_device *pdev)
 	buf_virt = dma_alloc_coherent(&pdev->dev, size, &buf_phys, GFP_KERNEL);
 	if (!buf_virt) {
 		dev_err(&pdev->dev, "failed alloc memory.\n");
-		return -ENOMEM;
+		ret = -ENOMEM;
+		goto alloc_coherent_fail;
 	}
 
 	/* msg ring buffer memory */
@@ -1041,7 +1129,7 @@ static int fsl_dsp_probe(struct platform_device *pdev)
 	ret = devm_snd_soc_register_component(&pdev->dev, &dsp_soc_platform_drv, NULL, 0);
 	if (ret) {
 		dev_err(&pdev->dev, "registering soc platform failed\n");
-		return ret;
+		goto register_component_fail;
 	}
 
 	dsp_priv->esai_ipg_clk = devm_clk_get(&pdev->dev, "esai_ipg");
@@ -1083,7 +1171,44 @@ static int fsl_dsp_probe(struct platform_device *pdev)
 	if (IS_ERR(dsp_priv->mu2_clk))
 		dsp_priv->mu2_clk = NULL;
 
+	dsp_priv->sdma_root_clk = devm_clk_get(&pdev->dev, "sdma_root");
+	if (IS_ERR(dsp_priv->sdma_root_clk))
+		dsp_priv->sdma_root_clk = NULL;
+	dsp_priv->sai_ipg_clk = devm_clk_get(&pdev->dev, "sai_ipg");
+	if (IS_ERR(dsp_priv->sai_ipg_clk))
+		dsp_priv->sai_ipg_clk = NULL;
+	dsp_priv->sai_mclk = devm_clk_get(&pdev->dev, "sai_mclk");
+	if (IS_ERR(dsp_priv->sai_mclk))
+		dsp_priv->sai_mclk = NULL;
+	dsp_priv->pll8k_clk = devm_clk_get(&pdev->dev, "pll8k");
+	if (IS_ERR(dsp_priv->pll8k_clk))
+		dsp_priv->pll8k_clk = NULL;
+	dsp_priv->pll11k_clk = devm_clk_get(&pdev->dev, "pll11k");
+	if (IS_ERR(dsp_priv->pll11k_clk))
+		dsp_priv->pll11k_clk = NULL;
+	dsp_priv->uart_ipg_clk = devm_clk_get(&pdev->dev, "uart_ipg");
+	if (IS_ERR(dsp_priv->uart_ipg_clk))
+		dsp_priv->uart_ipg_clk = NULL;
+	dsp_priv->uart_per_clk = devm_clk_get(&pdev->dev, "uart_per");
+	if (IS_ERR(dsp_priv->uart_per_clk))
+		dsp_priv->uart_per_clk = NULL;
+
 	return 0;
+
+register_component_fail:
+	dma_free_coherent(&pdev->dev, size, dsp_priv->msg_buf_virt,
+				dsp_priv->msg_buf_phys);
+alloc_coherent_fail:
+	if (dsp_priv->sdram_vir_addr)
+		iounmap(dsp_priv->sdram_vir_addr);
+reserved_node_fail:
+	misc_deregister(&dsp_miscdev);
+misc_register_fail:
+mu_init_fail:
+configure_fail:
+	pm_runtime_disable(&pdev->dev);
+	fsl_dsp_detach_pm_domains(&pdev->dev, dsp_priv);
+	return ret;
 }
 
 static int fsl_dsp_remove(struct platform_device *pdev)
@@ -1098,6 +1223,9 @@ static int fsl_dsp_remove(struct platform_device *pdev)
 				dsp_priv->msg_buf_phys);
 	if (dsp_priv->sdram_vir_addr)
 		iounmap(dsp_priv->sdram_vir_addr);
+
+	pm_runtime_disable(&pdev->dev);
+	fsl_dsp_detach_pm_domains(&pdev->dev, dsp_priv);
 
 	return 0;
 }
@@ -1166,6 +1294,54 @@ static int fsl_dsp_runtime_resume(struct device *dev)
 		goto mu2_clk;
 	}
 
+	ret = clk_prepare_enable(dsp_priv->sdma_root_clk);
+	if (ret < 0) {
+		dev_err(dev, "Failed to enable sdma_root _clk ret = %d\n", ret);
+		return ret;
+	}
+	ret = clk_prepare_enable(dsp_priv->sai_ipg_clk);
+	if (ret < 0) {
+		dev_err(dev, "Failed to enable sai_ipg_clk ret = %d\n", ret);
+		return ret;
+	}
+	ret = clk_prepare_enable(dsp_priv->sai_mclk);
+	if (ret < 0) {
+		dev_err(dev, "Failed to enable sai_mclk ret = %d\n", ret);
+		return ret;
+	}
+	ret = clk_prepare_enable(dsp_priv->pll8k_clk);
+	if (ret < 0) {
+		dev_err(dev, "Failed to enable pll8k_clk ret = %d\n", ret);
+		return ret;
+	}
+	ret = clk_prepare_enable(dsp_priv->pll11k_clk);
+	if (ret < 0) {
+		dev_err(dev, "Failed to enable pll11k_clk ret = %d\n", ret);
+		return ret;
+	}
+	ret = clk_prepare_enable(dsp_priv->uart_ipg_clk);
+	if (ret < 0) {
+		dev_err(dev, "Failed to enable uart_ipg_clk ret = %d\n", ret);
+		return ret;
+	}
+	ret = clk_prepare_enable(dsp_priv->uart_per_clk);
+	if (ret < 0) {
+		dev_err(dev, "Failed to enable uart_per_clk ret = %d\n", ret);
+		return ret;
+	}
+
+	if (!dsp_priv->dsp_mu_init && !proxy->is_ready && !fsl_dsp_is_reset(dsp_priv)) {
+		dsp_priv->dsp_mu_init = 1;
+		proxy->is_ready = 1;
+	}
+
+	/*
+	 * Use PID for checking the audiomix is reset or not.
+	 * After resetting, the PID should be 0, then we set the PID=1 in resume.
+	 */
+	if (!dsp_priv->dsp_mu_init && !proxy->is_ready && dsp_priv->dsp_board_type == DSP_IMX8MP_TYPE)
+		imx_audiomix_dsp_pid_set(dsp_priv->audiomix, 0x1);
+
 	if (!dsp_priv->dsp_mu_init) {
 		MU_Init(dsp_priv->mu_base_virtaddr);
 		MU_EnableRxFullInt(dsp_priv->mu_base_virtaddr, 0);
@@ -1221,16 +1397,8 @@ static int fsl_dsp_runtime_suspend(struct device *dev)
 	struct xf_proxy *proxy = &dsp_priv->proxy;
 	int i;
 
-	/*
-	 * FIXME:
-	 * DSP in i.MX865 don't have dedicate power control
-	 * which bind with audiomix. if the audiomix power
-	 * on, we can't reload the firmware.
-	 */
-	if (dsp_priv->dsp_board_type != DSP_IMX8MP_TYPE) {
-		dsp_priv->dsp_mu_init = 0;
-		proxy->is_ready = 0;
-	}
+	dsp_priv->dsp_mu_init = 0;
+	proxy->is_ready = 0;
 
 	for (i = 0; i < 4; i++)
 		clk_disable_unprepare(dsp_priv->asrck_clk[i]);
@@ -1245,6 +1413,13 @@ static int fsl_dsp_runtime_suspend(struct device *dev)
 	clk_disable_unprepare(dsp_priv->dsp_root_clk);
 	clk_disable_unprepare(dsp_priv->debug_clk);
 	clk_disable_unprepare(dsp_priv->mu2_clk);
+	clk_disable_unprepare(dsp_priv->sdma_root_clk);
+	clk_disable_unprepare(dsp_priv->sai_ipg_clk);
+	clk_disable_unprepare(dsp_priv->sai_mclk);
+	clk_disable_unprepare(dsp_priv->pll8k_clk);
+	clk_disable_unprepare(dsp_priv->pll11k_clk);
+	clk_disable_unprepare(dsp_priv->uart_ipg_clk);
+	clk_disable_unprepare(dsp_priv->uart_per_clk);
 
 	return 0;
 }

@@ -500,5 +500,4 @@ config IMX_INTMUX
 	select IRQ_DOMAIN
 	help
 	 Enables the IRQ MUX for NXP IMX platforms
-
 endmenu

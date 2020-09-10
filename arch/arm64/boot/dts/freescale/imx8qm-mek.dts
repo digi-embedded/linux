@@ -117,12 +117,7 @@
 		};
 		rpmsg_reserved: rpmsg@0x90000000 {
 			no-map;
-			reg = <0 0x90000000 0 0x400000>;
-		};
-		rpmsg_dma_reserved:rpmsg_dma@0x90400000 {
-			compatible = "shared-dma-pool";
-			no-map;
-			reg = <0 0x90400000 0 0x100000>;
+			reg = <0 0x90200000 0 0x200000>;
 		};
 		decoder_rpc: decoder_rpc@0x92000000 {
 			no-map;
@@ -139,6 +134,10 @@
 		encoder_reserved: encoder_reserved@0x94400000 {
 			no-map;
 			reg = <0 0x94400000 0 0x800000>;
+		};
+		ts_boot: ts_boot@0x95000000 {
+			no-map;
+			reg = <0 0x95000000 0 0x400000>;
 		};
 
 		/* global autoconfigured region for contiguous allocations */
@@ -278,6 +277,100 @@
 			"Playback", "CPU-Playback",
 			"CPU-Capture", "Capture";
 	};
+
+	imx8qm_cm40: imx8qm_cm4@0 {
+		compatible = "fsl,imx8qm-cm4";
+		rsc-da = <0x90000000>;
+		mbox-names = "tx", "rx", "rxdb";
+		mboxes = <&lsio_mu5 0 1
+			  &lsio_mu5 1 1
+			  &lsio_mu5 3 1>;
+		mub-partition = <3>;
+		memory-region = <&vdev0vring0>, <&vdev0vring1>, <&vdevbuffer>,
+				<&vdev1vring0>, <&vdev1vring1>;
+		core-index = <0>;
+		core-id = <IMX_SC_R_M4_0_PID0>;
+		status = "okay";
+		power-domains = <&pd IMX_SC_R_M4_0_PID0>,
+				<&pd IMX_SC_R_M4_0_MU_1A>;
+	};
+
+	imx8qm_cm41: imx8x_cm4@1 {
+		compatible = "fsl,imx8qm-cm4";
+		rsc-da = <0x90100000>;
+		mbox-names = "tx", "rx", "rxdb";
+		mboxes = <&lsio_mu6 0 1
+			  &lsio_mu6 1 1
+			  &lsio_mu6 3 1>;
+		mub-partition = <4>;
+		memory-region = <&vdev2vring0>, <&vdev2vring1>, <&vdevbuffer>,
+				<&vdev3vring0>, <&vdev3vring1>;
+		core-index = <1>;
+		core-id = <IMX_SC_R_M4_1_PID0>;
+		status = "okay";
+		power-domains = <&pd IMX_SC_R_M4_1_PID0>,
+				<&pd IMX_SC_R_M4_1_MU_1A>;
+	};
+
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		vdev0vring0: vdev0vring0@90000000 {
+                        compatible = "shared-dma-pool";
+			reg = <0 0x90000000 0 0x8000>;
+			no-map;
+		};
+
+		vdev0vring1: vdev0vring1@90008000 {
+                        compatible = "shared-dma-pool";
+			reg = <0 0x90008000 0 0x8000>;
+			no-map;
+		};
+
+		vdev1vring0: vdev1vring0@90010000 {
+                        compatible = "shared-dma-pool";
+			reg = <0 0x90010000 0 0x8000>;
+			no-map;
+		};
+
+		vdev1vring1: vdev1vring1@90018000 {
+                        compatible = "shared-dma-pool";
+			reg = <0 0x90018000 0 0x8000>;
+			no-map;
+		};
+
+		vdevbuffer: vdevbuffer {
+                        compatible = "shared-dma-pool";
+			reg = <0 0x90400000 0 0x100000>;
+			no-map;
+		};
+
+		vdev2vring0: vdev0vring0@90100000 {
+                        compatible = "shared-dma-pool";
+			reg = <0 0x90100000 0 0x8000>;
+			no-map;
+		};
+
+		vdev2vring1: vdev0vring1@90108000 {
+                        compatible = "shared-dma-pool";
+			reg = <0 0x90108000 0 0x8000>;
+			no-map;
+		};
+
+		vdev3vring0: vdev1vring0@90110000 {
+                        compatible = "shared-dma-pool";
+			reg = <0 0x90110000 0 0x8000>;
+			no-map;
+		};
+
+		vdev3vring1: vdev1vring1@90118000 {
+                        compatible = "shared-dma-pool";
+			reg = <0 0x90118000 0 0x8000>;
+			no-map;
+		};
+	};
 };
 
 &adc0 {
@@ -312,16 +405,6 @@
 		VLS-supply = <&reg_audio>;
 		VLC-supply = <&reg_audio>;
 		reset-gpio = <&lsio_gpio4 25 GPIO_ACTIVE_LOW>;
-		power-domains = <&pd IMX_SC_R_MCLK_OUT_0>,
-				<&pd IMX_SC_R_AUDIO_CLK_0>,
-				<&pd IMX_SC_R_AUDIO_CLK_1>,
-				<&pd IMX_SC_R_AUDIO_PLL_0>,
-				<&pd IMX_SC_R_AUDIO_PLL_1>;
-		power-domain-names = "pd_mclk_out_0",
-					"pd_audio_clk_0",
-					"pd_audio_clk_1",
-					"pd_audio_clk_0",
-					"pd_audio_clk_1";
 		assigned-clocks = <&clk IMX_SC_R_AUDIO_PLL_0 IMX_SC_PM_CLK_PLL>,
 				<&clk IMX_SC_R_AUDIO_PLL_0 IMX_SC_PM_CLK_SLV_BUS>,
 				<&clk IMX_SC_R_AUDIO_PLL_0 IMX_SC_PM_CLK_MST_BUS>,
@@ -868,14 +951,22 @@
 	status = "okay";
 };
 
+&pcieb{
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pcieb>;
+	reset-gpio = <&lsio_gpio5 0 GPIO_ACTIVE_LOW>;
+	ext_osc = <1>;
+	status = "okay";
+};
+
 &rpmsg0{
 	/*
 	 * 64K for one rpmsg instance:
 	 */
 	vdev-nums = <2>;
 	reg = <0x0 0x90000000 0x0 0x20000>;
-	memory-region = <&rpmsg_dma_reserved>;
-	status = "okay";
+	memory-region = <&vdevbuffer>;
+	status = "disabled";
 };
 
 &rpmsg1{
@@ -884,13 +975,13 @@
 	 */
 	vdev-nums = <2>;
 	reg = <0x0 0x90100000 0x0 0x20000>;
-	memory-region = <&rpmsg_dma_reserved>;
-	status = "okay";
+	memory-region = <&vdevbuffer>;
+	status = "disabled";
 };
 
 &sata {
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_pcieb>;
+	pinctrl-0 = <&pinctrl_sata>;
 	clkreq-gpio = <&lsio_gpio4 30 GPIO_ACTIVE_LOW>;
 	ext_osc = <1>;
 	status = "okay";
@@ -1036,7 +1127,6 @@
 		clocks = <&mclkout0_lpcg 0>;
 		clock-names = "mclk";
 		wlf,shared-lrclk;
-		power-domains = <&pd IMX_SC_R_MCLK_OUT_0>;
 		assigned-clocks = <&clk IMX_SC_R_AUDIO_PLL_0 IMX_SC_PM_CLK_PLL>,
 				<&clk IMX_SC_R_AUDIO_PLL_0 IMX_SC_PM_CLK_SLV_BUS>,
 				<&clk IMX_SC_R_AUDIO_PLL_0 IMX_SC_PM_CLK_MST_BUS>,
@@ -1449,13 +1539,19 @@
 	pinctrl_pciea: pcieagrp{
 		fsl,pins = <
 			IMX8QM_PCIE_CTRL0_WAKE_B_LSIO_GPIO4_IO28		0x04000021
-			IMX8QM_PCIE_CTRL0_CLKREQ_B_LSIO_GPIO4_IO27		0x06000021
 			IMX8QM_PCIE_CTRL0_PERST_B_LSIO_GPIO4_IO29		0x06000021
 			IMX8QM_USDHC2_RESET_B_LSIO_GPIO4_IO09			0x06000021
 		>;
 	};
 
 	pinctrl_pcieb: pciebgrp{
+		fsl,pins = <
+			IMX8QM_PCIE_CTRL1_WAKE_B_LSIO_GPIO4_IO31		0x04000021
+			IMX8QM_PCIE_CTRL1_PERST_B_LSIO_GPIO5_IO00		0x06000021
+		>;
+	};
+
+	pinctrl_sata: satagrp{
 		fsl,pins = <
 			IMX8QM_PCIE_CTRL1_CLKREQ_B_LSIO_GPIO4_IO30		0x06000021
 		>;
@@ -1669,6 +1765,11 @@
 	status = "okay";
 };
 
+&mu3_m0{
+	interrupts = <GIC_SPI 475 IRQ_TYPE_LEVEL_HIGH>;
+	status = "okay";
+};
+
 &vpu_decoder {
 	compatible = "nxp,imx8qm-b0-vpudec";
 	boot-region = <&decoder_boot>;
@@ -1678,13 +1779,20 @@
 	status = "okay";
 };
 
+&vpu_ts {
+	compatible = "nxp,imx8qm-b0-vpu-ts";
+	boot-region = <&ts_boot>;
+	reg-csr = <0x2d0b0000>;
+	status = "okay";
+};
+
 &vpu_encoder {
 	compatible = "nxp,imx8qm-b0-vpuenc";
 	boot-region = <&encoder_boot>;
 	rpc-region = <&encoder_rpc>;
 	reserved-region = <&encoder_reserved>;
 	reg-rpc-system = <0x40000000>;
-	resolution-max = <1920 1080>;
+	resolution-max = <1920 1920>;
 	power-domains = <&pd IMX_SC_R_VPU_ENC_0>, <&pd IMX_SC_R_VPU_ENC_1>,
 			<&pd IMX_SC_R_VPU>;
 	power-domain-names = "vpuenc1", "vpuenc2", "vpu";
@@ -1698,7 +1806,7 @@
 		  &mu2_m0 1 0>;
 	status = "okay";
 
-	core0@1020000 {
+	vpu_enc_core0: core0@1020000 {
 		compatible = "fsl,imx8-mu1-vpu-m0";
 		reg = <0x1020000 0x20000>;
 		reg-csr = <0x1090000 0x10000>;
@@ -1709,7 +1817,7 @@
 		print-buf-size = <0x80000>;
 	};
 
-	core1@1040000 {
+	vpu_enc_core1: core1@1040000 {
 		compatible = "fsl,imx8-mu2-vpu-m0";
 		reg = <0x1040000 0x20000>;
 		reg-csr = <0x10A0000 0x10000>;

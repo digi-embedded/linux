@@ -71,15 +71,13 @@
 };
 
 &i2c1 {
-	clock-frequency = <100000>;
+	clock-frequency = <400000>;
+	digi,buffer-time-us = <35>;
 	pinctrl-names = "default", "gpio";
 	pinctrl-0 = <&pinctrl_i2c1>;
 	pinctrl-1 = <&pinctrl_i2c1_gpio>;
 	scl-gpios = <&gpio1 28 GPIO_ACTIVE_HIGH>;
 	sda-gpios = <&gpio1 29 GPIO_ACTIVE_HIGH>;
-	digi,atecc508a-workaround;
-	digi,atecc508a-sleep-delay-uS = <1000>;
-	digi,atecc508a-awake-delay-uS = <250>;
 	status = "okay";
 
 	mca_cc6ul: mca@7e {
@@ -137,6 +135,13 @@
 		mca_uart: uart {
 			compatible = "digi,mca-cc6ul-uart";
 			status = "disabled";
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			mca_uart0: serial@0x900 {
+				reg = <0x900>;
+				index = <0>;
+			};
 		};
 	};
 
@@ -312,6 +317,9 @@
 };
 
 &ocotp {
+	/* By default, make the OTP bits read-only */
+	read-only;
+
 	/* These words contain the HWID */
 	mac0: mac0@88 {
 		reg = <0x88 4>;

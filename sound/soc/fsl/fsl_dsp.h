@@ -70,6 +70,7 @@ union xf_client_link {
 struct fsl_dsp {
 	struct device			*dev;
 	const char			*fw_name;
+	const char			*audio_iface;
 	void __iomem			*regs;
 	void __iomem			*mu_base_virtaddr;
 	struct imx_sc_ipc		*dsp_ipcHandle;
@@ -117,6 +118,17 @@ struct fsl_dsp {
 	struct clk *dsp_root_clk;
 	struct clk *debug_clk;
 	struct clk *mu2_clk;
+	struct clk *sdma_root_clk;
+	struct clk *sai_ipg_clk;
+	struct clk *sai_mclk;
+	struct clk *pll8k_clk;
+	struct clk *pll11k_clk;
+	struct clk *uart_ipg_clk;
+	struct clk *uart_per_clk;
+
+	struct device **pd_dev;
+	struct device_link **pd_dev_link;
+	int    num_domains;
 };
 
 #define IRAM_OFFSET		0x10000
@@ -137,7 +149,7 @@ struct fsl_dsp {
 #define MSG_BUF_SIZE		8192
 #define INPUT_BUF_SIZE		4096
 #define OUTPUT_BUF_SIZE		16384
-#define DSP_CONFIG_SIZE    4096
+#define DSP_CONFIG_SIZE		8192
 
 void *memcpy_dsp(void *dest, const void *src, size_t count);
 void *memset_dsp(void *dest, int c, size_t count);

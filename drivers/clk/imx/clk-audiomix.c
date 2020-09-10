@@ -22,13 +22,23 @@ static struct clk_onecell_data clk_data;
 static uint32_t audiomix_clk_saved_regs[14];
 static struct clk *clk_audio_root;
 
+/* descending order */
 static const struct imx_pll14xx_rate_table imx_audiomix_sai_pll_tbl[] = {
-	PLL_1443X_RATE(650000000U, 325, 3, 2, 0),
+	PLL_1443X_RATE(245760000U, 328, 4, 3, 0xae15),
+	PLL_1443X_RATE(225792000U, 226, 3, 3, 0xcac1),
+	PLL_1443X_RATE(122880000U, 328, 4, 4, 0xae15),
+	PLL_1443X_RATE(112896000U, 226,	3, 4, 0xcac1),
+	PLL_1443X_RATE(61440000U, 328, 4, 5, 0xae15),
+	PLL_1443X_RATE(56448000U, 226, 3, 5, 0xcac1),
+	PLL_1443X_RATE(49152000U, 393, 3, 6, 0x374c),
+	PLL_1443X_RATE(45158400U, 241, 2, 6, 0xd845),
+	PLL_1443X_RATE(40960000U, 109, 1, 6, 0x3a07),
 };
 
 static const struct imx_pll14xx_clk imx_audiomix_sai_pll = {
 	.type = PLL_1443X,
 	.rate_table = imx_audiomix_sai_pll_tbl,
+	.rate_count = ARRAY_SIZE(imx_audiomix_sai_pll_tbl),
 };
 
 static const char *imx_sai_mclk2_sels[] = {"sai1", "sai2", "sai3", "dummy",
@@ -45,7 +55,7 @@ static const char *imx_pdm_sels[] = {"pdm", "sai_pll_div2", "dummy", "dummy" };
 static const char *imx_sai_pll_ref_sels[] = {"osc_24m", "dummy", "dummy", "dummy", };
 static const char *imx_sai_pll_bypass_sels[] = {"sai_pll", "sai_pll_ref_sel", };
 
-static int imx_audiomix_clk_suspend(struct device *dev)
+static int imx_audiomix_clk_runtime_suspend(struct device *dev)
 {
 	void __iomem *base;
 
@@ -69,21 +79,25 @@ static int imx_audiomix_clk_suspend(struct device *dev)
 	audiomix_clk_saved_regs[13] = readl(base + 0x410);
 
 	clk_disable_unprepare(clk_audio_root);
-	pm_runtime_put(dev);
 
 	return 0;
 }
 
-static int imx_audiomix_clk_resume(struct device *dev)
+static int imx_audiomix_clk_runtime_resume(struct device *dev)
 {
 	void __iomem *base;
 
 	base = dev_get_drvdata(dev->parent);
 
-	pm_runtime_get(dev);
 	clk_prepare_enable(clk_audio_root);
 
-	writel(audiomix_clk_saved_regs[0], base);
+	/*
+	 * Ignore bit26, which are clock gate for sdma clock root.
+	 * We need to keep it on as reset state for hardware issue
+	 * that sdma3' event logic depends on sdma2's clock gate.
+	 * keep it enabled can workaround the issue.
+	 */
+	writel(audiomix_clk_saved_regs[0] | 0x4000000, base);
 	writel(audiomix_clk_saved_regs[1], base + 0x4);
 
 	writel(audiomix_clk_saved_regs[2], base + 0x300);
@@ -119,6 +133,7 @@ static int imx_audiomix_clk_probe(struct platform_device *pdev)
 		return PTR_ERR(base);
 
 	pm_runtime_enable(dev);
+	pm_runtime_get_sync(dev);
 
 	clks[IMX8MP_CLK_AUDIOMIX_SAI_PLL_REF_SEL] = imx_dev_clk_mux(dev, "sai_pll_ref_sel", base + 0x400, 0, 2, imx_sai_pll_ref_sels, ARRAY_SIZE(imx_sai_pll_ref_sels));
 	clks[IMX8MP_CLK_AUDIOMIX_SAI_PLL] = imx_dev_clk_pll14xx(dev, "sai_pll", "sai_pll_ref_sel", base + 0x400, &imx_audiomix_sai_pll);
@@ -168,7 +183,6 @@ static int imx_audiomix_clk_probe(struct platform_device *pdev)
 	clks[IMX8MP_CLK_AUDIOMIX_PDM_IPG]     = imx_dev_clk_gate_shared(dev, "pdm_ipg_clk", "ipg_audio_root", base, 25, &shared_count_pdm);
 	clks[IMX8MP_CLK_AUDIOMIX_PDM_ROOT]    = imx_dev_clk_gate_shared(dev, "pdm_root_clk", "pdm", base, 25, &shared_count_pdm);
 
-	clks[IMX8MP_CLK_AUDIOMIX_SDMA2_ROOT]  = imx_dev_clk_gate(dev, "sdma2_root_clk", "ipg_audio_root", base, 26);
 	clks[IMX8MP_CLK_AUDIOMIX_SDMA3_ROOT]  = imx_dev_clk_gate(dev, "sdma3_root_clk", "ipg_audio_root", base, 27);
 	clks[IMX8MP_CLK_AUDIOMIX_SPBA2_ROOT]  = imx_dev_clk_gate(dev, "spba2_root_clk", "ipg_audio_root", base, 28);
 	clks[IMX8MP_CLK_AUDIOMIX_DSP_ROOT]    = imx_dev_clk_gate(dev, "dsp_root_clk",   "ipg_audio_root", base, 29);
@@ -181,7 +195,7 @@ static int imx_audiomix_clk_probe(struct platform_device *pdev)
 	clks[IMX8MP_CLK_AUDIOMIX_AUDPLL_ROOT] = imx_dev_clk_gate(dev, "aud_pll_clk",  "ipg_audio_root", base + 4, 3);
 	clks[IMX8MP_CLK_AUDIOMIX_MU2_ROOT]    = imx_dev_clk_gate(dev, "mu2_root_clk", "ipg_audio_root", base + 4, 4);
 	clks[IMX8MP_CLK_AUDIOMIX_MU3_ROOT]    = imx_dev_clk_gate(dev, "mu3_root_clk", "ipg_audio_root", base + 4, 5);
-	clks[IMX8MP_CLK_AUDIOMIX_EARC_PHY]    = imx_dev_clk_gate(dev, "earc_phy_clk", "ipg_audio_root", base + 4, 6);
+	clks[IMX8MP_CLK_AUDIOMIX_EARC_PHY]    = imx_dev_clk_gate(dev, "earc_phy_clk", "sai_pll_out", base + 4, 6);
 
 	clks[IMX8MP_CLK_AUDIOMIX_PDM_SEL] = imx_dev_clk_mux(dev, "pdm_sel", base + 0x318, 1, 4, imx_pdm_sels, ARRAY_SIZE(imx_pdm_sels));
 
@@ -198,11 +212,17 @@ static int imx_audiomix_clk_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
+	pm_runtime_put_sync(dev);
+
 	return 0;
 }
 
-UNIVERSAL_DEV_PM_OPS(imx_audiomix_clk_pm_ops, imx_audiomix_clk_suspend,
-			imx_audiomix_clk_resume, imx_audiomix_clk_resume);
+static const struct dev_pm_ops imx_audiomix_clk_pm_ops = {
+	SET_RUNTIME_PM_OPS(imx_audiomix_clk_runtime_suspend,
+			   imx_audiomix_clk_runtime_resume, NULL)
+	SET_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend,
+				pm_runtime_force_resume)
+};
 
 static const struct of_device_id imx_audiomix_clk_of_match[] = {
 	{ .compatible = "fsl,imx8mp-audiomix-clk" },

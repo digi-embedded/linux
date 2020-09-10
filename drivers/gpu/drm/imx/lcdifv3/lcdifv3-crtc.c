@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Copyright 2019 NXP
+ * Copyright 2019,2020 NXP
  */
 
 #include <linux/component.h>
@@ -133,7 +133,11 @@ static void lcdifv3_crtc_atomic_begin(struct drm_crtc *crtc,
 static void lcdifv3_crtc_atomic_flush(struct drm_crtc *crtc,
 				    struct drm_crtc_state *old_crtc_state)
 {
-	/* LCDIFV3 doesn't have command buffer */
+	struct lcdifv3_crtc *lcdifv3_crtc = to_lcdifv3_crtc(crtc);
+	struct lcdifv3_soc *lcdifv3 = dev_get_drvdata(lcdifv3_crtc->dev->parent);
+
+	/* kick shadow load for plane config */
+	lcdifv3_en_shadow_load(lcdifv3);
 }
 
 static void lcdifv3_crtc_atomic_enable(struct drm_crtc *crtc,
@@ -164,10 +168,8 @@ static void lcdifv3_crtc_atomic_enable(struct drm_crtc *crtc,
 	/* config LCDIF output bus format */
 	lcdifv3_set_bus_fmt(lcdifv3, imx_crtc_state->bus_format);
 
-	/* defer the lcdifv3 controller enable to plane update,
-	 * since until then the lcdifv3 config is complete to
-	 * enable the controller to run actually.
-	 */
+	/* run LCDIFv3 */
+	lcdifv3_enable_controller(lcdifv3);
 }
 
 static void lcdifv3_crtc_atomic_disable(struct drm_crtc *crtc,
@@ -268,7 +270,7 @@ static int lcdifv3_crtc_init(struct lcdifv3_crtc *lcdifv3_crtc,
 			&lcdifv3_crtc_funcs, NULL);
 	if (ret) {
 		dev_err(lcdifv3_crtc->dev, "failed to init crtc\n");
-		goto primary_plane_deinit;
+		return ret;
 	}
 
 	lcdifv3_crtc->vbl_irq = lcdifv3_vblank_irq_get(lcdifv3);
@@ -280,17 +282,12 @@ static int lcdifv3_crtc_init(struct lcdifv3_crtc *lcdifv3_crtc,
 	if (ret) {
 		dev_err(lcdifv3_crtc->dev,
 			"vblank irq request failed: %d\n", ret);
-		goto primary_plane_deinit;
+		return ret;
 	}
 
 	disable_irq(lcdifv3_crtc->vbl_irq);
 
 	return 0;
-
-primary_plane_deinit:
-	lcdifv3_plane_deinit(drm, primary);
-
-	return ret;
 }
 
 static int lcdifv3_crtc_bind(struct device *dev, struct device *master,
@@ -298,16 +295,10 @@ static int lcdifv3_crtc_bind(struct device *dev, struct device *master,
 {
 	int ret;
 	struct drm_device *drm = data;
-	struct lcdifv3_crtc *lcdifv3_crtc;
+	struct lcdifv3_crtc *lcdifv3_crtc = dev_get_drvdata(dev);
 	struct lcdifv3_client_platformdata *pdata = dev->platform_data;
 
 	dev_dbg(dev, "%s: lcdifv3 crtc bind begin\n", __func__);
-
-	lcdifv3_crtc = devm_kzalloc(dev, sizeof(*lcdifv3_crtc), GFP_KERNEL);
-	if (!lcdifv3_crtc)
-		return -ENOMEM;
-
-	lcdifv3_crtc->dev = dev;
 
 	ret = lcdifv3_crtc_init(lcdifv3_crtc, pdata, drm);
 	if (ret)
@@ -323,8 +314,6 @@ static int lcdifv3_crtc_bind(struct device *dev, struct device *master,
 	drm->mode_config.max_width  = 4096;
 	drm->mode_config.max_height = 4096;
 
-	dev_set_drvdata(dev, lcdifv3_crtc);
-
 	dev_dbg(dev, "%s: lcdifv3 crtc bind end\n", __func__);
 
 	return 0;
@@ -333,10 +322,7 @@ static int lcdifv3_crtc_bind(struct device *dev, struct device *master,
 static void lcdifv3_crtc_unbind(struct device *dev, struct device *master,
 			      void *data)
 {
-	struct drm_device *drm = data;
-	struct lcdifv3_crtc *lcdifv3_crtc = dev_get_drvdata(dev);
-
-	lcdifv3_plane_deinit(drm, lcdifv3_crtc->plane[0]);
+	/* No special to be done */
 }
 
 static const struct component_ops lcdifv3_crtc_ops = {
@@ -347,6 +333,7 @@ static const struct component_ops lcdifv3_crtc_ops = {
 static int lcdifv3_crtc_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
+	struct lcdifv3_crtc *lcdifv3_crtc;
 
 	dev_dbg(&pdev->dev, "%s: lcdifv3 crtc probe begin\n", __func__);
 
@@ -354,6 +341,13 @@ static int lcdifv3_crtc_probe(struct platform_device *pdev)
 		dev_err(dev, "no platform data\n");
 		return -EINVAL;
 	}
+
+	lcdifv3_crtc = devm_kzalloc(dev, sizeof(*lcdifv3_crtc), GFP_KERNEL);
+	if (!lcdifv3_crtc)
+		return -ENOMEM;
+
+	lcdifv3_crtc->dev = dev;
+	dev_set_drvdata(dev, lcdifv3_crtc);
 
 	return component_add(dev, &lcdifv3_crtc_ops);
 }

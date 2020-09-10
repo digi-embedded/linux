@@ -13,13 +13,16 @@
 #include <linux/platform_device.h>
 #include <linux/slab.h>
 #include <linux/pm_domain.h>
+#include <linux/pm_runtime.h>
 
 #include "clk.h"
 #include "clk-scu.h"
+#include "clk-imx-acm-utils.h"
 
 #include <dt-bindings/clock/imx8-clock.h>
 
 struct imx8qm_acm_priv {
+	struct clk_imx_acm_pm_domains dev_pm;
 	void __iomem *reg;
 	u32 regs[32];
 };
@@ -105,7 +108,7 @@ static int imx8qm_acm_clk_probe(struct platform_device *pdev)
 	struct resource *res;
 	struct clk **clks;
 	void __iomem *base;
-	int num_domains;
+	int ret;
 	int i;
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
@@ -121,11 +124,11 @@ static int imx8qm_acm_clk_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, priv);
 
-	clk_data = kzalloc(sizeof(*clk_data), GFP_KERNEL);
+	clk_data = devm_kzalloc(&pdev->dev, sizeof(*clk_data), GFP_KERNEL);
 	if (!clk_data)
 		return -ENOMEM;
 
-	clk_data->clks = kcalloc(IMX_ADMA_ACM_CLK_END,
+	clk_data->clks = devm_kcalloc(&pdev->dev, IMX_ADMA_ACM_CLK_END,
 					sizeof(*clk_data->clks), GFP_KERNEL);
 	if (!clk_data->clks)
 		return -ENOMEM;
@@ -134,23 +137,12 @@ static int imx8qm_acm_clk_probe(struct platform_device *pdev)
 
 	clks = clk_data->clks;
 
-	num_domains = of_count_phandle_with_args(dev->of_node, "power-domains",
-						 "#power-domain-cells");
-	for (i = 0; i < num_domains; i++) {
-		struct device *pd_dev;
-		struct device_link *link;
+	ret = clk_imx_acm_attach_pm_domains(&pdev->dev, &priv->dev_pm);
+	if (ret)
+		return ret;
 
-		pd_dev = dev_pm_domain_attach_by_id(&pdev->dev, i);
-		if (IS_ERR(pd_dev))
-			return PTR_ERR(pd_dev);
-
-		link = device_link_add(&pdev->dev, pd_dev,
-			DL_FLAG_STATELESS |
-			DL_FLAG_PM_RUNTIME |
-			DL_FLAG_RPM_ACTIVE);
-		if (IS_ERR(link))
-			return PTR_ERR(link);
-	}
+	pm_runtime_enable(&pdev->dev);
+	pm_runtime_get_sync(&pdev->dev);
 
 	clks[IMX_ADMA_EXT_AUD_MCLK0]     = imx_clk_fixed("ext_aud_mclk0", 0);
 	clks[IMX_ADMA_EXT_AUD_MCLK1]     = imx_clk_fixed("ext_aud_mclk1", 0);
@@ -177,28 +169,28 @@ static int imx8qm_acm_clk_probe(struct platform_device *pdev)
 	clks[IMX_ADMA_MLB_CLK]           = imx_clk_fixed("mlb_clk", 0);
 
 
-	clks[IMX_ADMA_ACM_AUD_CLK0_SEL] = imx_clk_mux("acm_aud_clk0_sel", base+0x000000, 0, 5, aud_clk_sels, ARRAY_SIZE(aud_clk_sels));
-	clks[IMX_ADMA_ACM_AUD_CLK1_CLK]	= imx_clk_mux("acm_aud_clk1_sel", base+0x010000, 0, 5, aud_clk_sels, ARRAY_SIZE(aud_clk_sels));
+	clks[IMX_ADMA_ACM_AUD_CLK0_SEL] = imx_dev_clk_mux(dev, "acm_aud_clk0_sel", base+0x000000, 0, 5, aud_clk_sels, ARRAY_SIZE(aud_clk_sels));
+	clks[IMX_ADMA_ACM_AUD_CLK1_CLK]	= imx_dev_clk_mux(dev, "acm_aud_clk1_sel", base+0x010000, 0, 5, aud_clk_sels, ARRAY_SIZE(aud_clk_sels));
 
-	clks[IMX_ADMA_ACM_MCLKOUT0_SEL]	= imx_clk_mux("acm_mclkout0_sel", base+0x020000, 0, 3, mclk_out_sels, ARRAY_SIZE(mclk_out_sels));
-	clks[IMX_ADMA_ACM_MCLKOUT1_SEL]	= imx_clk_mux("acm_mclkout1_sel", base+0x030000, 0, 3, mclk_out_sels, ARRAY_SIZE(mclk_out_sels));
+	clks[IMX_ADMA_ACM_MCLKOUT0_SEL]	= imx_dev_clk_mux(dev, "acm_mclkout0_sel", base+0x020000, 0, 3, mclk_out_sels, ARRAY_SIZE(mclk_out_sels));
+	clks[IMX_ADMA_ACM_MCLKOUT1_SEL]	= imx_dev_clk_mux(dev, "acm_mclkout1_sel", base+0x030000, 0, 3, mclk_out_sels, ARRAY_SIZE(mclk_out_sels));
 
-	clks[IMX_ADMA_ACM_ASRC0_MUX_CLK_SEL] = imx_clk_mux("acm_asrc0_mclk_sel", base+0x040000, 0, 2, asrc_mux_clk_sels, ARRAY_SIZE(asrc_mux_clk_sels));
+	clks[IMX_ADMA_ACM_ASRC0_MUX_CLK_SEL] = imx_dev_clk_mux(dev, "acm_asrc0_mclk_sel", base+0x040000, 0, 2, asrc_mux_clk_sels, ARRAY_SIZE(asrc_mux_clk_sels));
 
-	clks[IMX_ADMA_ACM_ESAI0_MCLK_SEL] = imx_clk_mux("acm_esai0_mclk_sel", base+0x060000, 0, 2, esai_mclk_sels, ARRAY_SIZE(esai_mclk_sels));
-	clks[IMX_ADMA_ACM_ESAI1_MCLK_SEL] = imx_clk_mux("acm_esai1_mclk_sel", base+0x070000, 0, 2, esai_mclk_sels, ARRAY_SIZE(esai_mclk_sels));
-	clks[IMX_ADMA_ACM_SAI0_MCLK_SEL] = imx_clk_mux("acm_sai0_mclk_sel", base+0x0E0000, 0, 2, sai_mclk_sels, ARRAY_SIZE(sai_mclk_sels));
-	clks[IMX_ADMA_ACM_SAI1_MCLK_SEL] = imx_clk_mux("acm_sai1_mclk_sel", base+0x0F0000, 0, 2, sai_mclk_sels, ARRAY_SIZE(sai_mclk_sels));
-	clks[IMX_ADMA_ACM_SAI2_MCLK_SEL] = imx_clk_mux("acm_sai2_mclk_sel", base+0x100000, 0, 2, sai_mclk_sels, ARRAY_SIZE(sai_mclk_sels));
-	clks[IMX_ADMA_ACM_SAI3_MCLK_SEL] = imx_clk_mux("acm_sai3_mclk_sel", base+0x110000, 0, 2, sai_mclk_sels, ARRAY_SIZE(sai_mclk_sels));
-	clks[IMX_ADMA_ACM_SAI4_MCLK_SEL] = imx_clk_mux("acm_sai4_mclk_sel", base+0x120000, 0, 2, sai_mclk_sels, ARRAY_SIZE(sai_mclk_sels));
-	clks[IMX_ADMA_ACM_SAI5_MCLK_SEL] = imx_clk_mux("acm_sai5_mclk_sel", base+0x130000, 0, 2, sai_mclk_sels, ARRAY_SIZE(sai_mclk_sels));
-	clks[IMX_ADMA_ACM_SAI6_MCLK_SEL] = imx_clk_mux("acm_sai6_mclk_sel", base+0x140000, 0, 2, sai_mclk_sels, ARRAY_SIZE(sai_mclk_sels));
-	clks[IMX_ADMA_ACM_SAI7_MCLK_SEL] = imx_clk_mux("acm_sai7_mclk_sel", base+0x150000, 0, 2, sai_mclk_sels, ARRAY_SIZE(sai_mclk_sels));
+	clks[IMX_ADMA_ACM_ESAI0_MCLK_SEL] = imx_dev_clk_mux(dev, "acm_esai0_mclk_sel", base+0x060000, 0, 2, esai_mclk_sels, ARRAY_SIZE(esai_mclk_sels));
+	clks[IMX_ADMA_ACM_ESAI1_MCLK_SEL] = imx_dev_clk_mux(dev, "acm_esai1_mclk_sel", base+0x070000, 0, 2, esai_mclk_sels, ARRAY_SIZE(esai_mclk_sels));
+	clks[IMX_ADMA_ACM_SAI0_MCLK_SEL] = imx_dev_clk_mux(dev, "acm_sai0_mclk_sel", base+0x0E0000, 0, 2, sai_mclk_sels, ARRAY_SIZE(sai_mclk_sels));
+	clks[IMX_ADMA_ACM_SAI1_MCLK_SEL] = imx_dev_clk_mux(dev, "acm_sai1_mclk_sel", base+0x0F0000, 0, 2, sai_mclk_sels, ARRAY_SIZE(sai_mclk_sels));
+	clks[IMX_ADMA_ACM_SAI2_MCLK_SEL] = imx_dev_clk_mux(dev, "acm_sai2_mclk_sel", base+0x100000, 0, 2, sai_mclk_sels, ARRAY_SIZE(sai_mclk_sels));
+	clks[IMX_ADMA_ACM_SAI3_MCLK_SEL] = imx_dev_clk_mux(dev, "acm_sai3_mclk_sel", base+0x110000, 0, 2, sai_mclk_sels, ARRAY_SIZE(sai_mclk_sels));
+	clks[IMX_ADMA_ACM_SAI4_MCLK_SEL] = imx_dev_clk_mux(dev, "acm_sai4_mclk_sel", base+0x120000, 0, 2, sai_mclk_sels, ARRAY_SIZE(sai_mclk_sels));
+	clks[IMX_ADMA_ACM_SAI5_MCLK_SEL] = imx_dev_clk_mux(dev, "acm_sai5_mclk_sel", base+0x130000, 0, 2, sai_mclk_sels, ARRAY_SIZE(sai_mclk_sels));
+	clks[IMX_ADMA_ACM_SAI6_MCLK_SEL] = imx_dev_clk_mux(dev, "acm_sai6_mclk_sel", base+0x140000, 0, 2, sai_mclk_sels, ARRAY_SIZE(sai_mclk_sels));
+	clks[IMX_ADMA_ACM_SAI7_MCLK_SEL] = imx_dev_clk_mux(dev, "acm_sai7_mclk_sel", base+0x150000, 0, 2, sai_mclk_sels, ARRAY_SIZE(sai_mclk_sels));
 
-	clks[IMX_ADMA_ACM_SPDIF0_TX_CLK_SEL] = imx_clk_mux("acm_spdif0_mclk_sel", base+0x1A0000, 0, 2, spdif_mclk_sels, ARRAY_SIZE(spdif_mclk_sels));
-	clks[IMX_ADMA_ACM_SPDIF1_TX_CLK_SEL] = imx_clk_mux("acm_spdif1_mclk_sel", base+0x1B0000, 0, 2, spdif_mclk_sels, ARRAY_SIZE(spdif_mclk_sels));
-	clks[IMX_ADMA_ACM_MQS_TX_CLK_SEL] = imx_clk_mux("acm_mqs_mclk_sel", base+0x1C0000, 0, 2, mqs_mclk_sels, ARRAY_SIZE(mqs_mclk_sels));
+	clks[IMX_ADMA_ACM_SPDIF0_TX_CLK_SEL] = imx_dev_clk_mux(dev, "acm_spdif0_mclk_sel", base+0x1A0000, 0, 2, spdif_mclk_sels, ARRAY_SIZE(spdif_mclk_sels));
+	clks[IMX_ADMA_ACM_SPDIF1_TX_CLK_SEL] = imx_dev_clk_mux(dev, "acm_spdif1_mclk_sel", base+0x1B0000, 0, 2, spdif_mclk_sels, ARRAY_SIZE(spdif_mclk_sels));
+	clks[IMX_ADMA_ACM_MQS_TX_CLK_SEL] = imx_dev_clk_mux(dev, "acm_mqs_mclk_sel", base+0x1C0000, 0, 2, mqs_mclk_sels, ARRAY_SIZE(mqs_mclk_sels));
 
 	for (i = 0; i < clk_data->clk_num; i++) {
 		if (IS_ERR(clks[i]))
@@ -206,7 +198,22 @@ static int imx8qm_acm_clk_probe(struct platform_device *pdev)
 				i, PTR_ERR(clks[i]));
 	}
 
-	return of_clk_add_provider(np, of_clk_src_onecell_get, clk_data);
+	ret = of_clk_add_provider(np, of_clk_src_onecell_get, clk_data);
+
+	pm_runtime_put_sync(&pdev->dev);
+
+	return ret;
+}
+
+static int imx8qm_acm_clk_remove(struct platform_device *pdev)
+{
+	struct imx8qm_acm_priv *priv = dev_get_drvdata(&pdev->dev);
+
+	pm_runtime_disable(&pdev->dev);
+
+	clk_imx_acm_detach_pm_domains(&pdev->dev, &priv->dev_pm);
+
+	return 0;
 }
 
 static const struct of_device_id imx8qm_acm_match[] = {
@@ -214,7 +221,7 @@ static const struct of_device_id imx8qm_acm_match[] = {
 	{ /* sentinel */ }
 };
 
-static int __maybe_unused imx8qm_acm_suspend(struct device *dev)
+static int __maybe_unused imx8qm_acm_runtime_suspend(struct device *dev)
 {
 	struct imx8qm_acm_priv *priv = dev_get_drvdata(dev);
 
@@ -240,7 +247,7 @@ static int __maybe_unused imx8qm_acm_suspend(struct device *dev)
 	return 0;
 }
 
-static int __maybe_unused imx8qm_acm_resume(struct device *dev)
+static int __maybe_unused imx8qm_acm_runtime_resume(struct device *dev)
 {
 	struct imx8qm_acm_priv *priv = dev_get_drvdata(dev);
 
@@ -267,8 +274,10 @@ static int __maybe_unused imx8qm_acm_resume(struct device *dev)
 }
 
 static const struct dev_pm_ops imx8qm_acm_pm_ops = {
-	SET_NOIRQ_SYSTEM_SLEEP_PM_OPS(imx8qm_acm_suspend,
-				      imx8qm_acm_resume)
+	SET_RUNTIME_PM_OPS(imx8qm_acm_runtime_suspend,
+			   imx8qm_acm_runtime_resume, NULL)
+	SET_NOIRQ_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend,
+				      pm_runtime_force_resume)
 };
 
 static struct platform_driver imx8qm_acm_clk_driver = {
@@ -279,6 +288,7 @@ static struct platform_driver imx8qm_acm_clk_driver = {
 		.suppress_bind_attrs = true,
 	},
 	.probe = imx8qm_acm_clk_probe,
+	.remove = imx8qm_acm_clk_remove,
 };
 
 static int __init imx8qm_acm_init(void)

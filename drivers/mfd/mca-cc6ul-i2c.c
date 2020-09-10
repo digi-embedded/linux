@@ -36,7 +36,7 @@ static const struct regmap_range mca_cc6ul_writeable_ranges[] = {
 	regmap_reg_range(MCA_TAMPER2_CFG0, MCA_TAMPER2_THRESH_HI_H),
 	regmap_reg_range(MCA_TAMPER3_CFG0, MCA_TAMPER3_THRESH_HI_H),
 	regmap_reg_range(MCA_RTC_CONTROL, MCA_RTC_CONTROL),
-	regmap_reg_range(MCA_RTC_COUNT_YEAR_L, MCA_RTC_ALARM_SEC),
+	regmap_reg_range(MCA_RTC_COUNT_YEAR_L, MCA_RTC_PREPARE_ALARM),
 	regmap_reg_range(MCA_WDT_CONTROL, MCA_WDT_REFRESH_3),
 	regmap_reg_range(MCA_GPIO_DIR_0, MCA_GPIO_DEB_CNT_63),
 	regmap_reg_range(MCA_REG_ADC_CFG0_0, MCA_REG_ADC_CFG0_7),
@@ -49,7 +49,8 @@ static const struct regmap_range mca_cc6ul_writeable_ranges[] = {
 	regmap_reg_range(MCA_REG_ADC_IRQ_0, MCA_REG_ADC_IRQ_7),
 	regmap_reg_range(MCA_REG_ADC_CFG_0, MCA_REG_ADC_CFG_2),
 	regmap_reg_range(MCA_REG_ADC_BUFF_CH, MCA_REG_ADC_BUFF_SAMPLE_7),
-	regmap_reg_range(MCA_REG_UART_THR, MCA_REG_UART_RTSPIN),
+	regmap_reg_range(MCA_UART0_OFFSET,
+			 MCA_UART0_OFFSET + MCA_REG_UART_LEN),
 	regmap_reg_range(MCA_CC6UL_MPU_NVRAM_START, MCA_CC6UL_MPU_NVRAM_END),
 };
 
@@ -92,7 +93,7 @@ static const struct regmap_range mca_cc6ul_volatile_ranges[] = {
 	regmap_reg_range(MCA_TAMPER2_CFG0, MCA_TAMPER2_THRESH_HI_H),
 	regmap_reg_range(MCA_TAMPER3_CFG0, MCA_TAMPER3_THRESH_HI_H),
 	regmap_reg_range(MCA_RTC_CONTROL, MCA_RTC_CONTROL),
-	regmap_reg_range(MCA_RTC_ALARM_YEAR_L, MCA_RTC_ALARM_SEC),
+	regmap_reg_range(MCA_RTC_ALARM_YEAR_L, MCA_RTC_PREPARE_ALARM),
 	regmap_reg_range(MCA_WDT_CONTROL, MCA_WDT_TIMEOUT),
 	regmap_reg_range(MCA_GPIO_NUM, MCA_GPIO_DIR_7),
 	regmap_reg_range(MCA_GPIO_IRQ_CFG_0, MCA_GPIO_IRQ_CFG_63),
@@ -107,7 +108,8 @@ static const struct regmap_range mca_cc6ul_volatile_ranges[] = {
 	regmap_reg_range(MCA_REG_ADC_IRQ_0, MCA_REG_ADC_IRQ_7),
 	regmap_reg_range(MCA_REG_ADC_CFG_0, MCA_REG_ADC_CFG_2),
 	regmap_reg_range(MCA_REG_ADC_BUFF_CH, MCA_REG_ADC_BUFF_SAMPLE_7),
-	regmap_reg_range(MCA_REG_UART_RHR, MCA_REG_UART_RTSPIN),
+	regmap_reg_range(MCA_UART0_OFFSET,
+			 MCA_UART0_OFFSET + MCA_REG_UART_LEN),
 };
 
 static const struct regmap_access_table mca_cc6ul_readable_table = {
@@ -156,6 +158,7 @@ static int mca_cc6ul_i2c_probe(struct i2c_client *i2c,
 	i2c_set_clientdata(i2c, mca);
 	mca->dev = &i2c->dev;
 	mca->chip_irq = i2c->irq;
+	mca->i2c_adapter_dev = &i2c->adapter->dev;
 
 	mca->regmap = devm_regmap_init_i2c(i2c, &mca_cc6ul_regmap_config);
 	if (IS_ERR(mca->regmap)) {

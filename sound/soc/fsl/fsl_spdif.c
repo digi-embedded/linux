@@ -18,7 +18,6 @@
 #include <linux/of_irq.h>
 #include <linux/regmap.h>
 #include <linux/pm_runtime.h>
-#include <linux/pm_domain.h>
 #include <linux/busfreq-imx.h>
 
 #include <sound/asoundef.h>
@@ -163,7 +162,8 @@ static struct fsl_spdif_soc_data fsl_spdif_imx8mm = {
 	.rx_burst = FSL_SPDIF_RXFIFO_WML,
 	.interrupts = 1,
 	.tx_formats = FSL_SPDIF_FORMATS_PLAYBACK,
-	.rx_rates = (FSL_SPDIF_RATES_CAPTURE | SNDRV_PCM_RATE_192000),
+	.rx_rates = (FSL_SPDIF_RATES_CAPTURE | SNDRV_PCM_RATE_88200 |
+		     SNDRV_PCM_RATE_176400 | SNDRV_PCM_RATE_192000),
 	.constrain_period_size = false,
 };
 
@@ -449,9 +449,17 @@ static int spdif_set_sample_rate(struct snd_pcm_substream *substream,
 		rate = SPDIF_TXRATE_48000;
 		csfs = IEC958_AES3_CON_FS_48000;
 		break;
+	case 88200:
+		rate = SPDIF_TXRATE_88200;
+		csfs = IEC958_AES3_CON_FS_88200;
+		break;
 	case 96000:
 		rate = SPDIF_TXRATE_96000;
 		csfs = IEC958_AES3_CON_FS_96000;
+		break;
+	case 176400:
+		rate = SPDIF_TXRATE_176400;
+		csfs = IEC958_AES3_CON_FS_176400;
 		break;
 	case 192000:
 		rate = SPDIF_TXRATE_192000;
@@ -644,7 +652,8 @@ static u32 fsl_spdif_txclk_caldiv(struct fsl_spdif_priv *spdif_priv,
 				struct clk *clk, u64 savesub,
 				enum spdif_txrate index, bool round)
 {
-	static const u32 rate[] = { 32000, 44100, 48000, 96000, 192000 };
+	static const u32 rate[] = { 32000, 44100, 48000, 88200, 96000, 176400,
+				    192000, };
 	bool is_sysclk = clk_is_match(clk, spdif_priv->sysclk);
 	u64 rate_actual, sub;
 	u32 arate;
@@ -701,7 +710,8 @@ out:
 static int fsl_spdif_probe_txclk(struct fsl_spdif_priv *spdif_priv,
 				enum spdif_txrate index)
 {
-	static const u32 rate[] = { 32000, 44100, 48000, 96000, 192000 };
+	static const u32 rate[] = { 32000, 44100, 48000, 88200, 96000, 176400,
+				    192000, };
 	struct platform_device *pdev = spdif_priv->pdev;
 	struct device *dev = &pdev->dev;
 	u64 savesub = 100000, ret;
@@ -1362,7 +1372,6 @@ static int fsl_spdif_probe(struct platform_device *pdev)
 	void __iomem *regs;
 	int irq, ret, i;
 	char tmp[16];
-	int num_domains = 0;
 
 	if (!np)
 		return -ENODEV;
@@ -1394,7 +1403,7 @@ static int fsl_spdif_probe(struct platform_device *pdev)
 		return PTR_ERR(regs);
 
 	spdif_priv->regmap = devm_regmap_init_mmio_clk(&pdev->dev,
-			"core", regs, &fsl_spdif_regmap_config);
+			NULL, regs, &fsl_spdif_regmap_config);
 	if (IS_ERR(spdif_priv->regmap)) {
 		dev_err(&pdev->dev, "regmap init failed\n");
 		return PTR_ERR(spdif_priv->regmap);
@@ -1426,24 +1435,6 @@ static int fsl_spdif_probe(struct platform_device *pdev)
 			dev_err(&pdev->dev, "could not claim irq %u\n", irq);
 			return ret;
 		}
-	}
-
-	num_domains = of_count_phandle_with_args(np, "power-domains",
-						 "#power-domain-cells");
-	for (i = 0; i < num_domains; i++) {
-		struct device *pd_dev;
-		struct device_link *link;
-
-		pd_dev = dev_pm_domain_attach_by_id(&pdev->dev, i);
-		if (IS_ERR(pd_dev))
-			return PTR_ERR(pd_dev);
-
-		link = device_link_add(&pdev->dev, pd_dev,
-			DL_FLAG_STATELESS |
-			DL_FLAG_PM_RUNTIME |
-			DL_FLAG_RPM_ACTIVE);
-		if (IS_ERR(link))
-			return PTR_ERR(link);
 	}
 
 	for (i = 0; i < STC_TXCLK_SRC_MAX; i++) {
@@ -1514,11 +1505,18 @@ static int fsl_spdif_probe(struct platform_device *pdev)
 	spdif_priv->dma_params_tx.addr = res->start + REG_SPDIF_STL;
 	spdif_priv->dma_params_rx.addr = res->start + REG_SPDIF_SRL;
 
-	/*Clear the val bit for Tx*/
+	ret = clk_prepare_enable(spdif_priv->coreclk);
+	if (ret)
+		return ret;
+
+	/*Cleer the val bit for Tx*/
 	regmap_update_bits(spdif_priv->regmap, REG_SPDIF_SCR,
 					SCR_VAL_MASK, 1 << SCR_VAL_OFFSET);
 
+	clk_disable_unprepare(spdif_priv->coreclk);
+
 	pm_runtime_enable(&pdev->dev);
+	regcache_cache_only(spdif_priv->regmap, true);
 
 	/* Register with ASoC */
 	dev_set_drvdata(&pdev->dev, spdif_priv);

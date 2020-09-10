@@ -889,20 +889,20 @@ static int esdhc_signal_voltage_switch(struct mmc_host *mmc,
 }
 
 static struct soc_device_attribute soc_tuning_erratum_type1[] = {
-	{ .family = "QorIQ T1023", },
-	{ .family = "QorIQ T1040", },
-	{ .family = "QorIQ T2080", },
-	{ .family = "QorIQ LS1021A", },
+	{ .family = "QorIQ T1023", .revision = "1.0", },
+	{ .family = "QorIQ T1040", .revision = "1.0", },
+	{ .family = "QorIQ T2080", .revision = "1.0", },
+	{ .family = "QorIQ LS1021A", .revision = "1.0", },
 	{ },
 };
 
 static struct soc_device_attribute soc_tuning_erratum_type2[] = {
-	{ .family = "QorIQ LS1012A", },
-	{ .family = "QorIQ LS1043A", },
-	{ .family = "QorIQ LS1046A", },
-	{ .family = "QorIQ LS1080A", },
-	{ .family = "QorIQ LS2080A", },
-	{ .family = "QorIQ LA1575A", },
+	{ .family = "QorIQ LS1012A", .revision = "1.0", },
+	{ .family = "QorIQ LS1043A", .revision = "1.*", },
+	{ .family = "QorIQ LS1046A", .revision = "1.0", },
+	{ .family = "QorIQ LS1080A", .revision = "1.0", },
+	{ .family = "QorIQ LS2080A", .revision = "1.0", },
+	{ .family = "QorIQ LA1575A", .revision = "1.0", },
 	{ },
 };
 

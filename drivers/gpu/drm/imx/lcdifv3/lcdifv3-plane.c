@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Copyright 2019 NXP
+ * Copyright 2019,2020 NXP
  */
 
 #include <linux/module.h>
@@ -124,8 +124,6 @@ static void lcdifv3_plane_atomic_update(struct drm_plane *plane,
 		crop  = src_w != stride ? true : false;
 		lcdifv3_set_fb_hcrop(lcdifv3, src_w, fb->pitches[0], crop);
 	}
-
-	lcdifv3_enable_controller(lcdifv3);
 }
 
 static void lcdifv3_plane_atomic_disable(struct drm_plane *plane,
@@ -201,15 +199,4 @@ struct lcdifv3_plane *lcdifv3_plane_init(struct drm_device *dev,
 	}
 
 	return lcdifv3_plane;
-}
-
-void lcdifv3_plane_deinit(struct drm_device *dev,
-			struct lcdifv3_plane *lcdifv3_plane)
-{
-	struct drm_plane *plane = &lcdifv3_plane->base;
-
-	if (plane->zpos_property)
-		drm_property_destroy(dev, plane->zpos_property);
-
-	lcdifv3_plane_destroy(plane);
 }

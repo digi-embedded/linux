@@ -338,6 +338,7 @@ static inline struct mxc_mipi_csi2_dev *sd_to_mxc_mipi_csi2_dev(struct v4l2_subd
  * UI = 1000 / mipi csi phy clock
  * THS-SETTLE_mim = 85ns + 6 * UI
  * THS-SETTLE_max = 145ns +10 * UI
+ * THS-SETTLE = (THS-SETTLE_mim + THS-SETTLE_max) / 2
  * PRG_RXHS_SETTLE =  THS-SETTLE / (Tperiod of RxClk_ESC) + 1
  ****************************************/
 static int calc_hs_settle(struct mxc_mipi_csi2_dev *csi2dev, u32 dphy_clk)
@@ -345,9 +346,13 @@ static int calc_hs_settle(struct mxc_mipi_csi2_dev *csi2dev, u32 dphy_clk)
 	u32 esc_rate;
 	u32 hs_settle;
 	u32 rxhs_settle;
+	u32 hs_settle_min;
+	u32 hs_settle_max;
 
 	esc_rate = clk_get_rate(csi2dev->clk_esc) / 1000000;
-	hs_settle = 140 + 8 * 1000 / dphy_clk;
+	hs_settle_min = 85 + 6 * 1000 / dphy_clk;
+	hs_settle_max = 145 + 10 * 1000 / dphy_clk;
+	hs_settle = (hs_settle_min + hs_settle_max) >> 1;
 	rxhs_settle = hs_settle / (1000 / esc_rate) - 1;
 	return rxhs_settle;
 }
@@ -628,6 +633,7 @@ static int mxc_csi2_get_sensor_fmt(struct mxc_mipi_csi2_dev *csi2dev)
 	if (!sen_sd)
 		return -EINVAL;
 
+	memset(&src_fmt, 0, sizeof(src_fmt));
 	src_fmt.pad = source_pad->index;
 	src_fmt.which = V4L2_SUBDEV_FORMAT_ACTIVE;
 	ret = v4l2_subdev_call(sen_sd, pad, get_fmt, NULL, &src_fmt);
@@ -699,8 +705,7 @@ static int mipi_csi2_attach_pd(struct mxc_mipi_csi2_dev *csi2dev)
 	}
 	link = device_link_add(dev, csi2dev->pd_csi,
 			       DL_FLAG_STATELESS |
-			       DL_FLAG_PM_RUNTIME |
-			       DL_FLAG_RPM_ACTIVE);
+			       DL_FLAG_PM_RUNTIME);
 	if (IS_ERR(link))
 		return PTR_ERR(link);
 
@@ -715,8 +720,7 @@ static int mipi_csi2_attach_pd(struct mxc_mipi_csi2_dev *csi2dev)
 	}
 	link = device_link_add(dev, csi2dev->pd_isi,
 			       DL_FLAG_STATELESS |
-			       DL_FLAG_PM_RUNTIME |
-			       DL_FLAG_RPM_ACTIVE);
+			       DL_FLAG_PM_RUNTIME);
 	if (IS_ERR(link))
 		return PTR_ERR(link);
 

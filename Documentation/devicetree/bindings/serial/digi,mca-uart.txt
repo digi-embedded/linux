@@ -9,6 +9,8 @@ Required properties:
 - compatible: must be one of
   "digi,mca-cc8x-uart".
   "digi,mca-cc8m-uart".
+  "digi,mca-cc6ul-uart".
+	      cc6ul requires MCA version 1.19 or higher.
 - #address-cells: must be 1
 - #size-cells: must be 0
 
@@ -49,5 +51,18 @@ mca_uart: uart {
 		index = <2>;
 		iopins-names = "rx", "tx", "cts", "rts";
 		iopins = <2 1 3 4>;
+	};
+};
+
+mca_uart: uart {
+	compatible = "digi,mca-cc6ul-uart";
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	mca_uart0: serial@0x900 {
+		reg = <0x900>;
+		index = <0>;
+		iopins-names = "rx", "tx";
+		iopins = <2 1>;
 	};
 };

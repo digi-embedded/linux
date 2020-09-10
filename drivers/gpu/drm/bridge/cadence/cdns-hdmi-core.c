@@ -358,6 +358,7 @@ cdns_hdmi_bridge_mode_valid(struct drm_bridge *bridge,
 {
 	struct cdns_mhdp_device *mhdp = bridge->driver_private;
 	enum drm_mode_status mode_status = MODE_OK;
+	u32 vic;
 	int ret;
 
 	/* We don't support double-clocked and Interlaced modes */
@@ -372,6 +373,10 @@ cdns_hdmi_bridge_mode_valid(struct drm_bridge *bridge,
 	/* 4096x2160 is not supported */
 	if (mode->hdisplay > 3840 || mode->vdisplay > 2160)
 		return MODE_BAD_HVALUE;
+
+	vic = drm_match_cea_mode(mode);
+	if (vic == 0)
+		return MODE_BAD;
 
 	mhdp->valid_mode = mode;
 	ret = cdns_mhdp_plat_call(mhdp, phy_video_valid);
@@ -473,13 +478,12 @@ static void hotplug_work_func(struct work_struct *work)
 
 	if (connector->status == connector_status_connected) {
 		DRM_INFO("HDMI Cable Plug In\n");
+		/* force mode set to recovery weston HDMI2.0 video modes */
 		mhdp->force_mode_set = true;
 		enable_irq(mhdp->irq[IRQ_OUT]);
 	} else if (connector->status == connector_status_disconnected) {
 		/* Cable Disconnedted  */
 		DRM_INFO("HDMI Cable Plug Out\n");
-		/* force mode set for cable replugin to recovery HDMI2.0 video modes */
-		mhdp->force_mode_set = true;
 		enable_irq(mhdp->irq[IRQ_IN]);
 	}
 }

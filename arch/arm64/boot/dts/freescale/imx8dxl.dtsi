@@ -17,6 +17,8 @@
 	#size-cells = <2>;
 
 	aliases {
+		ethernet0 = &fec1;
+		ethernet1 = &eqos;
 		gpio0 = &lsio_gpio0;
 		gpio1 = &lsio_gpio1;
 		gpio2 = &lsio_gpio2;
@@ -35,6 +37,8 @@
 		can0 = &flexcan1;
 		can1 = &flexcan2;
 		can2 = &flexcan3;
+		mmc0 = &usdhc1;
+		mmc1 = &usdhc2;
 	};
 
 	cpus: cpus {
@@ -50,6 +54,7 @@
 			next-level-cache = <&A35_L2>;
 			clocks = <&clk IMX_SC_R_A35 IMX_SC_PM_CLK_CPU>;
 			#cooling-cells = <2>;
+			operating-points-v2 = <&a35_opp_table>;
 		};
 
 		A35_1: cpu@1 {
@@ -60,6 +65,7 @@
 			next-level-cache = <&A35_L2>;
 			clocks = <&clk IMX_SC_R_A35 IMX_SC_PM_CLK_CPU>;
 			#cooling-cells = <2>;
+			operating-points-v2 = <&a35_opp_table>;
 		};
 
 		A35_L2: l2-cache0 {
@@ -130,6 +136,22 @@
 		status = "disabled";
 	};
 
+	imx8dxl_cm4: imx8dxl_cm4@0 {
+		compatible = "fsl,imx8qxp-cm4";
+		rsc-da = <0x90000000>;
+		mbox-names = "tx", "rx", "rxdb";
+		mboxes = <&lsio_mu5 0 1
+			  &lsio_mu5 1 1
+			  &lsio_mu5 3 1>;
+		mub-partition = <3>;
+		core-index = <0>;
+		core-id = <IMX_SC_R_M4_0_PID0>;
+		status = "disabled";
+		power-domains = <&pd IMX_SC_R_M4_0_PID0>,
+				<&pd IMX_SC_R_M4_0_MU_1A>;
+	};
+
+
 	scu {
 		compatible = "fsl,imx-scu";
 		mbox-names = "tx0", "tx1", "tx2", "tx3",
@@ -148,7 +170,8 @@
 		pd: imx8dxl-pd {
 			compatible = "fsl,imx8dxl-scu-pd", "fsl,scu-pd";
 			#power-domain-cells = <1>;
-			wakeup-irq = <235 236 237 258 262 228 229 230 231>;
+			wakeup-irq = <160 163 235 236 237 228 229 230 231 238
+				     239 240 166 169>;
 		};
 
 		clk: clock-controller {
@@ -265,6 +288,7 @@
 	};
 
 	/* sorted in register address */
+	#include "imx8-ss-v2x.dtsi"
 	#include "imx8-ss-security.dtsi"
 	#include "imx8-ss-cm40.dtsi"
 	#include "imx8-ss-adma.dtsi"
