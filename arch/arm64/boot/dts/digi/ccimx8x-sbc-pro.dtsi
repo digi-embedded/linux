@@ -547,6 +547,8 @@
 
 	lvds0_goodix_touch2: gt9271@5d {
 		compatible = "goodix,gt9271";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_goodix_lvds0>;
 		reg = <0x5D>;
 		/* Interrupt for LVDS0 */
 		interrupt-parent = <&lsio_gpio3>;
@@ -739,6 +741,8 @@
 
 	lvds1_goodix_touch2: gt9271@5d {
 		compatible = "goodix,gt9271";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_goodix_lvds1>;
 		reg = <0x5D>;
 		/* Interrupt for LVDS1 */
 		interrupt-parent = <&lsio_gpio3>;
@@ -862,7 +866,7 @@
 /*
  * Remove MCA PWM node that uses MCA_IO5 and MCA_IO6 pads, since these lines
  * are being used as GPIOs for enabling voltage regulators on SBC Pro board.
- 
+
 /delete-node/ &{/i2c@5a800000/mca@63/pwms/pwm@1};*/
 
 &sai0 {
