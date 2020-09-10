@@ -1899,6 +1899,29 @@ static int fec_enet_mdio_read(struct mii_bus *bus, int mii_id, int regnum)
 
 	reinit_completion(&fep->mdio_done);
 
+	/*
+	 * Add a really small delay for a specific corner case, which happens
+	 * when the PHY attempts to negotiate the link speed after resuming
+	 * from suspend-to-ram on the ccimx6sbc and ccimx6qpsbc platforms.
+	 *
+	 * Before any PHY autonegotiation, the phy_device driver will sanitize
+	 * the negotiation parameters, which implies reading and slightly
+	 * modifying the MII_ADVERTISE register's contents. In some cases, when
+	 * reading the register right after resuming from suspend, its contents
+	 * will be 0xffff (an invalid value). Even if the register changes back
+	 * to its original value shortly after, the kernel will overwrite it
+	 * with a modified version of the erroneous value. When this happens,
+	 * the autonegotiation will never complete and the ethernet interface
+	 * will stop working.
+	 *
+	 * To avoid this situation, delay the MII_ADVERTISE read operation just
+	 * enough to let the register's contents stabilize before reading them.
+	 */
+	if (regnum == MII_ADVERTISE &&
+	    (of_machine_is_compatible("digi,ccimx6qpsbc") ||
+	     of_machine_is_compatible("digi,ccimx6sbc")))
+		usleep_range(1, 2);
+
 	if (is_c45) {
 		frame_start = FEC_MMFR_ST_C45;
 
