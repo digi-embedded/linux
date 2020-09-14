@@ -20,7 +20,7 @@
 	fragment@0 {
 		target-path = "/";
 		__overlay__ {
-			overlay-description = "Fusion 10'' F10A-0102 Display";
+			overlay-description = "SBC: Fusion 10'' F10A-0102 Display";
 		};
 	};
 

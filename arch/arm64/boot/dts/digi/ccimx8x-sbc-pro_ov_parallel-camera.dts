@@ -20,7 +20,7 @@
 	fragment@0 {
 		target-path = "/";
 		__overlay__ {
-			overlay-description = "Parallel camera";
+			overlay-description = "SBC: Parallel camera";
 		};
 	};
 

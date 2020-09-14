@@ -20,7 +20,7 @@
 	fragment@0 {
 		target-path = "/";
 		__overlay__ {
-			overlay-description = "LT8912 MIPI-to-HDMI adapter board on DSI0";
+			overlay-description = "SBC: LT8912 MIPI-to-HDMI adapter board on DSI0";
 		};
 	};
 
