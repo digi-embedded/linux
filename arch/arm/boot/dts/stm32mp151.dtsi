@@ -1254,6 +1254,7 @@
 			interrupt-controller;
 			#interrupt-cells = <2>;
 			reg = <0x5000d000 0x400>;
+			hwlocks = <&hsem 1 1>;
 		};
 
 		syscfg: syscon@50020000 {
