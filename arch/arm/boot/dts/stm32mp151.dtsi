@@ -5,6 +5,7 @@
  */
 #include <dt-bindings/interrupt-controller/arm-gic.h>
 #include <dt-bindings/clock/stm32mp1-clks.h>
+#include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/reset/stm32mp1-resets.h>
 
 / {
@@ -1204,6 +1205,21 @@
 		pwr_mcu: pwr_mcu@50001014 {
 			compatible = "st,stm32mp151-pwr-mcu", "syscon";
 			reg = <0x50001014 0x4>;
+		};
+
+		pwr_irq: pwr@50001020 {
+			compatible = "st,stm32mp1-pwr";
+			reg = <0x50001020 0x100>;
+			interrupts = <GIC_SPI 149 IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-controller;
+			#interrupt-cells = <3>;
+
+			st,wakeup-pins = <&gpioa 0 GPIO_ACTIVE_HIGH>,
+					 <&gpioa 2 GPIO_ACTIVE_HIGH>,
+					 <&gpioc 13 GPIO_ACTIVE_HIGH>,
+					 <&gpioi 8 GPIO_ACTIVE_HIGH>,
+					 <&gpioi 11 GPIO_ACTIVE_HIGH>,
+					 <&gpioc 1 GPIO_ACTIVE_HIGH>;
 		};
 
 		exti: interrupt-controller@5000d000 {
