@@ -12,7 +12,7 @@ maintainers:
 
 properties:
   "#hwlock-cells":
-    const: 1
+    const: 2
 
   compatible:
     const: st,stm32-hwspinlock
@@ -41,7 +41,7 @@ examples:
     #include <dt-bindings/clock/stm32mp1-clks.h>
     hwspinlock@4c000000 {
         compatible = "st,stm32-hwspinlock";
-        #hwlock-cells = <1>;
+        #hwlock-cells = <2>;
         reg = <0x4c000000 0x400>;
         clocks = <&rcc HSEM>;
         clock-names = "hsem";
