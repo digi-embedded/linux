@@ -51,6 +51,7 @@
 #include "verbs.h"
 #include <rdma/qedr-abi.h>
 #include "qedr_roce_cm.h"
+#include "qedr_iw_cm.h"
 
 #define QEDR_SRQ_WQE_ELEM_SIZE	sizeof(union rdma_srq_elm)
 #define	RDMA_MAX_SGE_PER_SRQ	(4)
@@ -1193,7 +1194,10 @@ static void qedr_set_common_qp_params(struct qedr_dev *dev,
 				      struct ib_qp_init_attr *attrs)
 {
 	spin_lock_init(&qp->q_lock);
-	atomic_set(&qp->refcnt, 1);
+	if (rdma_protocol_iwarp(&dev->ibdev, 1)) {
+		kref_init(&qp->refcnt);
+		init_completion(&qp->iwarp_cm_comp);
+	}
 	qp->pd = pd;
 	qp->qp_type = attrs->qp_type;
 	qp->max_inline_data = attrs->cap.max_inline_data;
@@ -1600,6 +1604,7 @@ static int qedr_create_user_qp(struct qedr_dev *dev,
 	int alloc_and_init = rdma_protocol_roce(&dev->ibdev, 1);
 	int rc = -EINVAL;
 
+	qp->create_type = QEDR_QP_CREATE_USER;
 	memset(&ureq, 0, sizeof(ureq));
 	rc = ib_copy_from_udata(&ureq, udata, sizeof(ureq));
 	if (rc) {
@@ -1813,6 +1818,7 @@ static int qedr_create_kernel_qp(struct qedr_dev *dev,
 	u32 n_sq_entries;
 
 	memset(&in_params, 0, sizeof(in_params));
+	qp->create_type = QEDR_QP_CREATE_KERNEL;
 
 	/* A single work request may take up to QEDR_MAX_SQ_WQE_SIZE elements in
 	 * the ring. The ring should allow at least a single WR, even if the
@@ -1926,7 +1932,7 @@ struct ib_qp *qedr_create_qp(struct ib_pd *ibpd,
 	qp->ibqp.qp_num = qp->qp_id;
 
 	if (rdma_protocol_iwarp(&dev->ibdev, 1)) {
-		rc = xa_insert_irq(&dev->qps, qp->qp_id, qp, GFP_KERNEL);
+		rc = xa_insert(&dev->qps, qp->qp_id, qp, GFP_KERNEL);
 		if (rc)
 			goto err;
 	}
@@ -2445,7 +2451,7 @@ static int qedr_free_qp_resources(struct qedr_dev *dev, struct qedr_qp *qp,
 			return rc;
 	}
 
-	if (udata)
+	if (qp->create_type == QEDR_QP_CREATE_USER)
 		qedr_cleanup_user(dev, qp);
 	else
 		qedr_cleanup_kernel(dev, qp);
@@ -2475,34 +2481,44 @@ int qedr_destroy_qp(struct ib_qp *ibqp, struct ib_udata *udata)
 			qedr_modify_qp(ibqp, &attr, attr_mask, NULL);
 		}
 	} else {
-		/* Wait for the connect/accept to complete */
-		if (qp->ep) {
-			int wait_count = 1;
+		/* If connection establishment started the WAIT_FOR_CONNECT
+		 * bit will be on and we need to Wait for the establishment
+		 * to complete before destroying the qp.
+		 */
+		if (test_and_set_bit(QEDR_IWARP_CM_WAIT_FOR_CONNECT,
+				     &qp->iwarp_cm_flags))
+			wait_for_completion(&qp->iwarp_cm_comp);
 
-			while (qp->ep->during_connect) {
-				DP_DEBUG(dev, QEDR_MSG_QP,
-					 "Still in during connect/accept\n");
-
-				msleep(100);
-				if (wait_count++ > 200) {
-					DP_NOTICE(dev,
-						  "during connect timeout\n");
-					break;
-				}
-			}
-		}
+		/* If graceful disconnect started, the WAIT_FOR_DISCONNECT
+		 * bit will be on, and we need to wait for the disconnect to
+		 * complete before continuing. We can use the same completion,
+		 * iwarp_cm_comp, since this is the only place that waits for
+		 * this completion and it is sequential. In addition,
+		 * disconnect can't occur before the connection is fully
+		 * established, therefore if WAIT_FOR_DISCONNECT is on it
+		 * means WAIT_FOR_CONNECT is also on and the completion for
+		 * CONNECT already occurred.
+		 */
+		if (test_and_set_bit(QEDR_IWARP_CM_WAIT_FOR_DISCONNECT,
+				     &qp->iwarp_cm_flags))
+			wait_for_completion(&qp->iwarp_cm_comp);
 	}
 
 	if (qp->qp_type == IB_QPT_GSI)
 		qedr_destroy_gsi_qp(dev);
 
+	/* We need to remove the entry from the xarray before we release the
+	 * qp_id to avoid a race of the qp_id being reallocated and failing
+	 * on xa_insert
+	 */
+	if (rdma_protocol_iwarp(&dev->ibdev, 1))
+		xa_erase(&dev->qps, qp->qp_id);
+
 	qedr_free_qp_resources(dev, qp, udata);
 
-	if (atomic_dec_and_test(&qp->refcnt) &&
-	    rdma_protocol_iwarp(&dev->ibdev, 1)) {
-		xa_erase_irq(&dev->qps, qp->qp_id);
-		kfree(qp);
-	}
+	if (rdma_protocol_iwarp(&dev->ibdev, 1))
+		qedr_iw_qp_rem_ref(&qp->ibqp);
+
 	return 0;
 }
 
@@ -3444,7 +3460,7 @@ static u32 qedr_srq_elem_left(struct qedr_srq_hwq_info *hw_srq)
 	 * count and consumer count and subtract it from max
 	 * work request supported so that we get elements left.
 	 */
-	used = hw_srq->wr_prod_cnt - hw_srq->wr_cons_cnt;
+	used = hw_srq->wr_prod_cnt - (u32)atomic_read(&hw_srq->wr_cons_cnt);
 
 	return hw_srq->max_wr - used;
 }
@@ -3459,7 +3475,6 @@ int qedr_post_srq_recv(struct ib_srq *ibsrq, const struct ib_recv_wr *wr,
 	unsigned long flags;
 	int status = 0;
 	u32 num_sge;
-	u32 offset;
 
 	spin_lock_irqsave(&srq->lock, flags);
 
@@ -3472,7 +3487,8 @@ int qedr_post_srq_recv(struct ib_srq *ibsrq, const struct ib_recv_wr *wr,
 		if (!qedr_srq_elem_left(hw_srq) ||
 		    wr->num_sge > srq->hw_srq.max_sges) {
 			DP_ERR(dev, "Can't post WR  (%d,%d) || (%d > %d)\n",
-			       hw_srq->wr_prod_cnt, hw_srq->wr_cons_cnt,
+			       hw_srq->wr_prod_cnt,
+			       atomic_read(&hw_srq->wr_cons_cnt),
 			       wr->num_sge, srq->hw_srq.max_sges);
 			status = -ENOMEM;
 			*bad_wr = wr;
@@ -3506,22 +3522,20 @@ int qedr_post_srq_recv(struct ib_srq *ibsrq, const struct ib_recv_wr *wr,
 			hw_srq->sge_prod++;
 		}
 
-		/* Flush WQE and SGE information before
+		/* Update WQE and SGE information before
 		 * updating producer.
 		 */
-		wmb();
+		dma_wmb();
 
 		/* SRQ producer is 8 bytes. Need to update SGE producer index
 		 * in first 4 bytes and need to update WQE producer in
 		 * next 4 bytes.
 		 */
-		*srq->hw_srq.virt_prod_pair_addr = hw_srq->sge_prod;
-		offset = offsetof(struct rdma_srq_producers, wqe_prod);
-		*((u8 *)srq->hw_srq.virt_prod_pair_addr + offset) =
-			hw_srq->wqe_prod;
+		srq->hw_srq.virt_prod_pair_addr->sge_prod = hw_srq->sge_prod;
+		/* Make sure sge producer is updated first */
+		dma_wmb();
+		srq->hw_srq.virt_prod_pair_addr->wqe_prod = hw_srq->wqe_prod;
 
-		/* Flush producer after updating it. */
-		wmb();
 		wr = wr->next;
 	}
 
@@ -3940,7 +3954,7 @@ static int process_resp_one_srq(struct qedr_dev *dev, struct qedr_qp *qp,
 	} else {
 		__process_resp_one(dev, qp, cq, wc, resp, wr_id);
 	}
-	srq->hw_srq.wr_cons_cnt++;
+	atomic_inc(&srq->hw_srq.wr_cons_cnt);
 
 	return 1;
 }

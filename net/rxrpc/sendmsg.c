@@ -66,15 +66,14 @@ static int rxrpc_wait_for_tx_window_waitall(struct rxrpc_sock *rx,
 					    struct rxrpc_call *call)
 {
 	rxrpc_seq_t tx_start, tx_win;
-	signed long rtt2, timeout;
-	u64 rtt;
+	signed long rtt, timeout;
 
-	rtt = READ_ONCE(call->peer->rtt);
-	rtt2 = nsecs_to_jiffies64(rtt) * 2;
-	if (rtt2 < 2)
-		rtt2 = 2;
+	rtt = READ_ONCE(call->peer->srtt_us) >> 3;
+	rtt = usecs_to_jiffies(rtt) * 2;
+	if (rtt < 2)
+		rtt = 2;
 
-	timeout = rtt2;
+	timeout = rtt;
 	tx_start = READ_ONCE(call->tx_hard_ack);
 
 	for (;;) {
@@ -92,7 +91,7 @@ static int rxrpc_wait_for_tx_window_waitall(struct rxrpc_sock *rx,
 			return -EINTR;
 
 		if (tx_win != tx_start) {
-			timeout = rtt2;
+			timeout = rtt;
 			tx_start = tx_win;
 		}
 
@@ -271,16 +270,9 @@ static int rxrpc_queue_packet(struct rxrpc_sock *rx, struct rxrpc_call *call,
 		_debug("need instant resend %d", ret);
 		rxrpc_instant_resend(call, ix);
 	} else {
-		unsigned long now = jiffies, resend_at;
+		unsigned long now = jiffies;
+		unsigned long resend_at = now + call->peer->rto_j;
 
-		if (call->peer->rtt_usage > 1)
-			resend_at = nsecs_to_jiffies(call->peer->rtt * 3 / 2);
-		else
-			resend_at = rxrpc_resend_timeout;
-		if (resend_at < 1)
-			resend_at = 1;
-
-		resend_at += now;
 		WRITE_ONCE(call->resend_at, resend_at);
 		rxrpc_reduce_call_timer(call, resend_at, now,
 					rxrpc_timer_set_for_send);
@@ -314,7 +306,7 @@ static int rxrpc_send_data(struct rxrpc_sock *rx,
 	/* this should be in poll */
 	sk_clear_bit(SOCKWQ_ASYNC_NOSPACE, sk);
 
-	if (sk->sk_err || (sk->sk_shutdown & SEND_SHUTDOWN))
+	if (sk->sk_shutdown & SEND_SHUTDOWN)
 		return -EPIPE;
 
 	more = msg->msg_flags & MSG_MORE;
@@ -691,6 +683,9 @@ int rxrpc_do_sendmsg(struct rxrpc_sock *rx, struct msghdr *msg, size_t len)
 		if (IS_ERR(call))
 			return PTR_ERR(call);
 		/* ... and we have the call lock. */
+		ret = 0;
+		if (READ_ONCE(call->state) == RXRPC_CALL_COMPLETE)
+			goto out_put_unlock;
 	} else {
 		switch (READ_ONCE(call->state)) {
 		case RXRPC_CALL_UNINITIALISED:

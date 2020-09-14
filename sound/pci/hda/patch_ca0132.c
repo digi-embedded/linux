@@ -1182,6 +1182,7 @@ static const struct snd_pci_quirk ca0132_quirks[] = {
 	SND_PCI_QUIRK(0x1458, 0xA036, "Gigabyte GA-Z170X-Gaming 7", QUIRK_R3DI),
 	SND_PCI_QUIRK(0x3842, 0x1038, "EVGA X99 Classified", QUIRK_R3DI),
 	SND_PCI_QUIRK(0x1102, 0x0013, "Recon3D", QUIRK_R3D),
+	SND_PCI_QUIRK(0x1102, 0x0018, "Recon3D", QUIRK_R3D),
 	SND_PCI_QUIRK(0x1102, 0x0051, "Sound Blaster AE-5", QUIRK_AE5),
 	{}
 };
@@ -4670,7 +4671,7 @@ static int ca0132_alt_select_in(struct hda_codec *codec)
 			tmp = FLOAT_ONE;
 			break;
 		case QUIRK_AE5:
-			ca0113_mmio_command_set(codec, 0x48, 0x28, 0x00);
+			ca0113_mmio_command_set(codec, 0x30, 0x28, 0x00);
 			tmp = FLOAT_THREE;
 			break;
 		default:
@@ -4716,7 +4717,7 @@ static int ca0132_alt_select_in(struct hda_codec *codec)
 			r3di_gpio_mic_set(codec, R3DI_REAR_MIC);
 			break;
 		case QUIRK_AE5:
-			ca0113_mmio_command_set(codec, 0x48, 0x28, 0x00);
+			ca0113_mmio_command_set(codec, 0x30, 0x28, 0x00);
 			break;
 		default:
 			break;
@@ -4755,7 +4756,7 @@ static int ca0132_alt_select_in(struct hda_codec *codec)
 			tmp = FLOAT_ONE;
 			break;
 		case QUIRK_AE5:
-			ca0113_mmio_command_set(codec, 0x48, 0x28, 0x3f);
+			ca0113_mmio_command_set(codec, 0x30, 0x28, 0x3f);
 			tmp = FLOAT_THREE;
 			break;
 		default:
@@ -5744,6 +5745,11 @@ static int ca0132_switch_get(struct snd_kcontrol *kcontrol,
 	/* mic boost */
 	if (nid == spec->input_pins[0]) {
 		*valp = spec->cur_mic_boost;
+		return 0;
+	}
+
+	if (nid == ZXR_HEADPHONE_GAIN) {
+		*valp = spec->zxr_gain_set;
 		return 0;
 	}
 
@@ -7803,23 +7809,23 @@ static void sbz_region2_exit(struct hda_codec *codec)
 
 static void sbz_set_pin_ctl_default(struct hda_codec *codec)
 {
-	hda_nid_t pins[5] = {0x0B, 0x0C, 0x0E, 0x12, 0x13};
+	static const hda_nid_t pins[] = {0x0B, 0x0C, 0x0E, 0x12, 0x13};
 	unsigned int i;
 
 	snd_hda_codec_write(codec, 0x11, 0,
 			AC_VERB_SET_PIN_WIDGET_CONTROL, 0x40);
 
-	for (i = 0; i < 5; i++)
+	for (i = 0; i < ARRAY_SIZE(pins); i++)
 		snd_hda_codec_write(codec, pins[i], 0,
 				AC_VERB_SET_PIN_WIDGET_CONTROL, 0x00);
 }
 
 static void ca0132_clear_unsolicited(struct hda_codec *codec)
 {
-	hda_nid_t pins[7] = {0x0B, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13};
+	static const hda_nid_t pins[] = {0x0B, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13};
 	unsigned int i;
 
-	for (i = 0; i < 7; i++) {
+	for (i = 0; i < ARRAY_SIZE(pins); i++) {
 		snd_hda_codec_write(codec, pins[i], 0,
 				AC_VERB_SET_UNSOLICITED_ENABLE, 0x00);
 	}
@@ -7843,10 +7849,10 @@ static void sbz_gpio_shutdown_commands(struct hda_codec *codec, int dir,
 
 static void zxr_dbpro_power_state_shutdown(struct hda_codec *codec)
 {
-	hda_nid_t pins[7] = {0x05, 0x0c, 0x09, 0x0e, 0x08, 0x11, 0x01};
+	static const hda_nid_t pins[] = {0x05, 0x0c, 0x09, 0x0e, 0x08, 0x11, 0x01};
 	unsigned int i;
 
-	for (i = 0; i < 7; i++)
+	for (i = 0; i < ARRAY_SIZE(pins); i++)
 		snd_hda_codec_write(codec, pins[i], 0,
 				AC_VERB_SET_POWER_STATE, 0x03);
 }
