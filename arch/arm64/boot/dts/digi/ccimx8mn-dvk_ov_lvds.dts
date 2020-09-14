@@ -4,6 +4,13 @@
 / {
 	/* Enable the LVDS bridge */
 	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			overlay-description = "DVK: LVDS display";
+		};
+	};
+
+	fragment@1 {
 		target = <&dsi_lvds_bridge>;
 		__overlay__ {
 			status = "okay";
@@ -11,7 +18,7 @@
 	};
 
 	/* Disable the HDMI bridge */
-	fragment@1 {
+	fragment@2 {
 		target = <&lt_bridge>;
 		__overlay__ {
 			status = "disabled";
