@@ -54,9 +54,11 @@ Should be called from a process context (might sleep).
   struct hwspinlock *hwspin_lock_request_specific(unsigned int id);
 
 Assign a specific hwspinlock id and return its address, or NULL
-if that hwspinlock is already in use. Usually board code will
-be calling this function in order to reserve specific hwspinlock
-ids for predefined purposes.
+if that hwspinlock is already in use and not shared. If that specific
+hwspinlock is declared as shared, it can be requested and used by
+several users.
+Usually board code will be calling this function in order to reserve
+specific hwspinlock ids for predefined purposes.
 
 Should be called from a process context (might sleep).
 
@@ -449,11 +451,13 @@ of which represents a single hardware lock::
 	* struct hwspinlock - this struct represents a single hwspinlock instance
 	* @bank: the hwspinlock_device structure which owns this lock
 	* @lock: initialized and used by hwspinlock core
+	* @refcount: number of users (when shared)
 	* @priv: private data, owned by the underlying platform-specific hwspinlock drv
 	*/
 	struct hwspinlock {
 		struct hwspinlock_device *bank;
 		spinlock_t lock;
+		unsigned int refcount;
 		void *priv;
 	};
 

@@ -29,6 +29,8 @@
 
 /* radix tree tags */
 #define HWSPINLOCK_UNUSED	(0) /* tags an hwspinlock as unused */
+#define HWSPINLOCK_EXCLUSIVE	(1) /* tags an hwspinlock as exclusive */
+#define HWSPINLOCK_SHARED	(2) /* tags an hwspinlock as shared */
 
 /*
  * A radix tree is used to maintain the available hwspinlock instances.
@@ -308,7 +310,7 @@ EXPORT_SYMBOL_GPL(__hwspin_unlock);
  * @hwlock_spec: hwlock specifier as found in the device tree
  *
  * This is a simple translation function, suitable for hwspinlock platform
- * drivers that only has a lock specifier length of 1.
+ * drivers that only has a lock specifier length of 1 or 2.
  *
  * Returns a relative index of the lock within a specified bank on success,
  * or -EINVAL on invalid specifier cell count.
@@ -316,7 +318,8 @@ EXPORT_SYMBOL_GPL(__hwspin_unlock);
 static inline int
 of_hwspin_lock_simple_xlate(const struct of_phandle_args *hwlock_spec)
 {
-	if (WARN_ON(hwlock_spec->args_count != 1))
+	if (WARN_ON(hwlock_spec->args_count != 1 &&
+		    hwlock_spec->args_count != 2))
 		return -EINVAL;
 
 	return hwlock_spec->args[0];
@@ -339,11 +342,12 @@ of_hwspin_lock_simple_xlate(const struct of_phandle_args *hwlock_spec)
 int of_hwspin_lock_get_id(struct device_node *np, int index)
 {
 	struct of_phandle_args args;
-	struct hwspinlock *hwlock;
+	struct hwspinlock *hwlock, *tmp;
 	struct radix_tree_iter iter;
 	void **slot;
 	int id;
 	int ret;
+	unsigned int tag;
 
 	ret = of_parse_phandle_with_args(np, "hwlocks", "#hwlock-cells", index,
 					 &args);
@@ -382,6 +386,37 @@ int of_hwspin_lock_get_id(struct device_node *np, int index)
 		goto out;
 	}
 	id += hwlock->bank->base_id;
+
+	/* Set the EXCLUSIVE / SHARED tag */
+	if (args.args_count == 2 && args.args[1]) {
+		/* Tag SHARED unless already tagged EXCLUSIVE */
+		if (radix_tree_tag_get(&hwspinlock_tree, id,
+				       HWSPINLOCK_EXCLUSIVE)) {
+			ret = -EINVAL;
+			goto out;
+		}
+		tag = HWSPINLOCK_SHARED;
+	} else {
+		/* Tag EXCLUSIVE unless already tagged SHARED */
+		if (radix_tree_tag_get(&hwspinlock_tree, id,
+				       HWSPINLOCK_SHARED)) {
+			ret = -EINVAL;
+			goto out;
+		}
+		tag = HWSPINLOCK_EXCLUSIVE;
+	}
+
+	/* mark this hwspinlock */
+	hwlock = radix_tree_lookup(&hwspinlock_tree, id);
+	if (!hwlock) {
+		ret = -EINVAL;
+		goto out;
+	}
+
+	tmp = radix_tree_tag_set(&hwspinlock_tree, id, tag);
+
+	/* self-sanity check which should never fail */
+	WARN_ON(tmp != hwlock);
 
 out:
 	of_node_put(args.np);
@@ -505,6 +540,7 @@ int hwspin_lock_register(struct hwspinlock_device *bank, struct device *dev,
 
 		spin_lock_init(&hwlock->lock);
 		hwlock->bank = bank;
+		hwlock->refcount = 0;
 
 		ret = hwspin_lock_register_single(hwlock, base_id + i);
 		if (ret)
@@ -647,7 +683,7 @@ static int __hwspin_lock_request(struct hwspinlock *hwlock)
 {
 	struct device *dev = hwlock->bank->dev;
 	struct hwspinlock *tmp;
-	int ret;
+	int ret, id;
 
 	/* prevent underlying implementation from being removed */
 	if (!try_module_get(dev->driver->owner)) {
@@ -666,13 +702,18 @@ static int __hwspin_lock_request(struct hwspinlock *hwlock)
 
 	ret = 0;
 
+	/* update shareable refcount */
+	id = hwlock_to_id(hwlock);
+	if (radix_tree_tag_get(&hwspinlock_tree, id, HWSPINLOCK_SHARED) &&
+	    hwlock->refcount++)
+		goto out;
+
 	/* mark hwspinlock as used, should not fail */
-	tmp = radix_tree_tag_clear(&hwspinlock_tree, hwlock_to_id(hwlock),
-							HWSPINLOCK_UNUSED);
+	tmp = radix_tree_tag_clear(&hwspinlock_tree, id, HWSPINLOCK_UNUSED);
 
 	/* self-sanity check that should never fail */
 	WARN_ON(tmp != hwlock);
-
+out:
 	return ret;
 }
 
@@ -766,9 +807,9 @@ struct hwspinlock *hwspin_lock_request_specific(unsigned int id)
 	/* sanity check (this shouldn't happen) */
 	WARN_ON(hwlock_to_id(hwlock) != id);
 
-	/* make sure this hwspinlock is unused */
-	ret = radix_tree_tag_get(&hwspinlock_tree, id, HWSPINLOCK_UNUSED);
-	if (ret == 0) {
+	/* make sure this hwspinlock is unused or shareable */
+	if (!radix_tree_tag_get(&hwspinlock_tree, id, HWSPINLOCK_SHARED) &&
+	    !radix_tree_tag_get(&hwspinlock_tree, id, HWSPINLOCK_UNUSED)) {
 		pr_warn("hwspinlock %u is already in use\n", id);
 		hwlock = NULL;
 		goto out;
@@ -801,7 +842,7 @@ int hwspin_lock_free(struct hwspinlock *hwlock)
 {
 	struct device *dev;
 	struct hwspinlock *tmp;
-	int ret;
+	int ret, id;
 
 	if (!hwlock) {
 		pr_err("invalid hwlock\n");
@@ -812,28 +853,33 @@ int hwspin_lock_free(struct hwspinlock *hwlock)
 	mutex_lock(&hwspinlock_tree_lock);
 
 	/* make sure the hwspinlock is used */
-	ret = radix_tree_tag_get(&hwspinlock_tree, hwlock_to_id(hwlock),
-							HWSPINLOCK_UNUSED);
+	id = hwlock_to_id(hwlock);
+	ret = radix_tree_tag_get(&hwspinlock_tree, id, HWSPINLOCK_UNUSED);
 	if (ret == 1) {
 		dev_err(dev, "%s: hwlock is already free\n", __func__);
 		dump_stack();
 		ret = -EINVAL;
-		goto out;
+		goto unlock;
 	}
 
 	/* notify the underlying device that power is not needed */
 	pm_runtime_put(dev);
 
+	/* update shareable refcount */
+	if (radix_tree_tag_get(&hwspinlock_tree, id, HWSPINLOCK_SHARED) &&
+	    --hwlock->refcount)
+		goto put;
+
 	/* mark this hwspinlock as available */
-	tmp = radix_tree_tag_set(&hwspinlock_tree, hwlock_to_id(hwlock),
-							HWSPINLOCK_UNUSED);
+	tmp = radix_tree_tag_set(&hwspinlock_tree, id, HWSPINLOCK_UNUSED);
 
 	/* sanity check (this shouldn't happen) */
 	WARN_ON(tmp != hwlock);
 
+put:
 	module_put(dev->driver->owner);
 
-out:
+unlock:
 	mutex_unlock(&hwspinlock_tree_lock);
 	return ret;
 }
