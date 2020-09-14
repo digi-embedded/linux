@@ -3156,6 +3156,21 @@ static int ov5642_power_on(struct device *dev)
 	return ret;
 }
 
+static void ov5642_regulator_disable(void)
+{
+	if (gpo_regulator)
+		regulator_disable(gpo_regulator);
+
+	if (analog_regulator)
+		regulator_disable(analog_regulator);
+
+	if (core_regulator)
+		regulator_disable(core_regulator);
+
+	if (io_regulator)
+		regulator_disable(io_regulator);
+}
+
 static s32 ov5642_write_reg(u16 reg, u8 val)
 {
 	int ret;
@@ -4239,12 +4254,15 @@ static int ov5642_probe(struct i2c_client *client,
 	if (retval < 0 || chip_id_high != 0x56) {
 		pr_warning("camera ov5642 is not found\n");
 		clk_disable_unprepare(ov5642_data.sensor_clk);
+		ov5642_regulator_disable();
 		return -ENODEV;
 	}
+
 	retval = ov5642_read_reg(OV5642_CHIP_ID_LOW_BYTE, &chip_id_low);
 	if (retval < 0 || chip_id_low != 0x42) {
 		pr_warning("camera ov5642 is not found\n");
 		clk_disable_unprepare(ov5642_data.sensor_clk);
+		ov5642_regulator_disable();
 		return -ENODEV;
 	}
 
@@ -4295,17 +4313,7 @@ static int ov5642_remove(struct i2c_client *client)
 {
 	v4l2_int_device_unregister(&ov5642_int_device);
 
-	if (gpo_regulator)
-		regulator_disable(gpo_regulator);
-
-	if (analog_regulator)
-		regulator_disable(analog_regulator);
-
-	if (core_regulator)
-		regulator_disable(core_regulator);
-
-	if (io_regulator)
-		regulator_disable(io_regulator);
+	ov5642_regulator_disable();
 
 	return 0;
 }
