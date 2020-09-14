@@ -20,7 +20,7 @@
 	fragment@0 {
 		target-path = "/";
 		__overlay__ {
-			overlay-description = "LVDS display";
+			overlay-description = "SBC: LVDS display";
 		};
 	};
 

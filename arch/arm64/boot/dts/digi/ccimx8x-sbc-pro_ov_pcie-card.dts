@@ -22,7 +22,7 @@
 	fragment@0 {
 		target-path = "/";
 		__overlay__ {
-			overlay-description = "PCIe (mini card)";
+			overlay-description = "SBC: PCIe (mini card)";
 		};
 	};
 
