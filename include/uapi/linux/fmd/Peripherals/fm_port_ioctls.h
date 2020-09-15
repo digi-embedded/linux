@@ -589,9 +589,7 @@ typedef struct ioc_fm_port_pcd_fqids_params_t {
 
  @Return        0 on success; error code otherwise.
 *//***************************************************************************/
-#if defined(CONFIG_COMPAT)
 #define FM_PORT_IOC_SET_PCD_COMPAT _IOW(FM_IOC_TYPE_BASE, FM_PORT_IOC_NUM(20), ioc_compat_fm_port_pcd_params_t)
-#endif
 #define FM_PORT_IOC_SET_PCD _IOW(FM_IOC_TYPE_BASE, FM_PORT_IOC_NUM(20), ioc_fm_port_pcd_params_t)
 
 /**************************************************************************//**
@@ -674,9 +672,7 @@ typedef struct ioc_fm_port_pcd_fqids_params_t {
 
  @Return        0 on success; error code otherwise.
 *//***************************************************************************/
-#if defined(CONFIG_COMPAT)
 #define FM_PORT_IOC_PCD_KG_MODIFY_INITIAL_SCHEME_COMPAT _IOW(FM_IOC_TYPE_BASE, FM_PORT_IOC_NUM(26), ioc_compat_fm_pcd_kg_scheme_select_t)
-#endif
 #define FM_PORT_IOC_PCD_KG_MODIFY_INITIAL_SCHEME _IOW(FM_IOC_TYPE_BASE, FM_PORT_IOC_NUM(26), ioc_fm_pcd_kg_scheme_select_t)
 
 /**************************************************************************//**
@@ -691,9 +687,7 @@ typedef struct ioc_fm_port_pcd_fqids_params_t {
 
  @Return        0 on success; error code otherwise.
 *//***************************************************************************/
-#if defined(CONFIG_COMPAT)
 #define FM_PORT_IOC_PCD_PLCR_MODIFY_INITIAL_PROFILE_COMPAT _IOW(FM_IOC_TYPE_BASE, FM_PORT_IOC_NUM(27), ioc_compat_fm_obj_t)
-#endif
 #define FM_PORT_IOC_PCD_PLCR_MODIFY_INITIAL_PROFILE _IOW(FM_IOC_TYPE_BASE, FM_PORT_IOC_NUM(27), ioc_fm_obj_t)
 
 /**************************************************************************//**
@@ -708,9 +702,7 @@ typedef struct ioc_fm_port_pcd_fqids_params_t {
 
  @Cautions      Allowed only following FM_PORT_SetPCD() and FM_PORT_DetachPCD()
 *//***************************************************************************/
-#if defined(CONFIG_COMPAT)
 #define FM_PORT_IOC_PCD_CC_MODIFY_TREE_COMPAT _IOW(FM_IOC_TYPE_BASE, FM_PORT_IOC_NUM(28), ioc_compat_fm_obj_t)
-#endif
 #define FM_PORT_IOC_PCD_CC_MODIFY_TREE _IOW(FM_IOC_TYPE_BASE, FM_PORT_IOC_NUM(28), ioc_fm_obj_t)
 
 /**************************************************************************//**
@@ -726,9 +718,8 @@ typedef struct ioc_fm_port_pcd_fqids_params_t {
 
  @Cautions      Allowed only following FM_PORT_SetPCD().
 *//***************************************************************************/
-#if defined(CONFIG_COMPAT)
+
 #define FM_PORT_IOC_PCD_KG_BIND_SCHEMES_COMPAT _IOW(FM_IOC_TYPE_BASE, FM_PORT_IOC_NUM(30), ioc_compat_fm_pcd_port_schemes_params_t)
-#endif
 #define FM_PORT_IOC_PCD_KG_BIND_SCHEMES _IOW(FM_IOC_TYPE_BASE, FM_PORT_IOC_NUM(30), ioc_fm_pcd_port_schemes_params_t)
 
 /**************************************************************************//**
@@ -744,9 +735,7 @@ typedef struct ioc_fm_port_pcd_fqids_params_t {
 
  @Cautions      Allowed only following FM_PORT_SetPCD().
 *//***************************************************************************/
-#if defined(CONFIG_COMPAT)
 #define FM_PORT_IOC_PCD_KG_UNBIND_SCHEMES_COMPAT _IOW(FM_IOC_TYPE_BASE, FM_PORT_IOC_NUM(31), ioc_compat_fm_pcd_port_schemes_params_t)
-#endif
 #define FM_PORT_IOC_PCD_KG_UNBIND_SCHEMES _IOW(FM_IOC_TYPE_BASE, FM_PORT_IOC_NUM(31), ioc_fm_pcd_port_schemes_params_t)
 
 typedef struct ioc_fm_port_mac_addr_params_t {
@@ -917,9 +906,7 @@ typedef struct ioc_fm_port_vsp_alloc_params_t {
  @Cautions      Allowed only following FM_PORT_Init(), and before FM_PORT_SetPCD()
                 and also before FM_PORT_Enable() (i.e. the port should be disabled).
 *//***************************************************************************/
-#if defined(CONFIG_COMPAT)
 #define FM_PORT_IOC_VSP_ALLOC_COMPAT _IOW(FM_IOC_TYPE_BASE, FM_PORT_IOC_NUM(38), ioc_compat_fm_port_vsp_alloc_params_t)
-#endif
 #define FM_PORT_IOC_VSP_ALLOC _IOW(FM_IOC_TYPE_BASE, FM_PORT_IOC_NUM(38), ioc_fm_port_vsp_alloc_params_t)
 #endif /* (DPAA_VERSION >= 11) */
 
