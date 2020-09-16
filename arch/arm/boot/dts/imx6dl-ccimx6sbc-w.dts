@@ -121,7 +121,7 @@
 		status = "okay";
 	};
 
-	sgtl5000: codec@0a {
+	sgtl5000: codec@a {
 		status = "okay";
 	};
 
