@@ -458,7 +458,7 @@
 		status = "disabled";
 	};
 
-	sgtl5000: codec@0a {
+	sgtl5000: codec@a {
 		compatible = "fsl,sgtl5000";
 		reg = <0x0a>;
 		clock-frequency = <24000000>;
