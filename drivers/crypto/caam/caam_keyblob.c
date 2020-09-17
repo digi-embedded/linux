@@ -66,7 +66,7 @@ static int kb_open(struct inode *inode, struct file *file)
 			pr_err("Job Ring Device allocation for transform failed\n");
 			return -ENOMEM;
 		}
-		pr_info("Allocate a job ring device\n");
+		pr_debug("Allocate a job ring device\n");
 		dev->jr_dev = jr_dev;
     }
 	else {
@@ -84,7 +84,7 @@ static int kb_release(struct inode *inode, struct file *file)
 
     if (dev && dev->jr_dev) {
 	    caam_jr_free(dev->jr_dev);
-		pr_info("Free a job ring device\n");
+		pr_debug("Free a job ring device\n");
 		dev->jr_dev = NULL;
     }
 	return 0;
@@ -417,7 +417,7 @@ static int gen_mem_encap(struct device *jr_dev, void __user *secretbuf,
 			&testres);
 	if (retval == -EINPROGRESS) {
 		wait_for_completion_interruptible(&testres.completion);
-		dev_info(jr_dev, "job ring return %d\n", testres.error);
+		dev_dbg(jr_dev, "job ring return %d\n", testres.error);
 		if (!testres.error) {
 			dma_sync_single_for_cpu(jr_dev, outbuf_dma, keylen + BLOB_OVERHEAD,
 				DMA_FROM_DEVICE);
@@ -510,7 +510,7 @@ static int gen_mem_decap(struct device *jr_dev, void __user *keyblobbuf,
 			      &testres);
 	if (retval == -EINPROGRESS) {
 		wait_for_completion_interruptible(&testres.completion);
-		dev_info(jr_dev, "job ring return %d\n", testres.error);
+		dev_dbg(jr_dev, "job ring return %d\n", testres.error);
 		if (!testres.error) {
 			dma_sync_single_for_cpu(jr_dev, outbuf_dma, keylen,
 				DMA_FROM_DEVICE);
@@ -561,7 +561,7 @@ static long kb_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		goto err;
 	}
 
-	pr_info("%s:rawkey_len %zd, keyblob_len %zd\n", __func__,
+	pr_debug("%s:rawkey_len %zd, keyblob_len %zd\n", __func__,
 		kb_data.rawkey_len, kb_data.keyblob_len);
 
 	switch (cmd) {
