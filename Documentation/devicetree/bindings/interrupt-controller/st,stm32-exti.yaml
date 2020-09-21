@@ -41,6 +41,25 @@ properties:
     description:
       Interrupts references to primary interrupt controller
 
+patternProperties:
+  '^exti[0-9a-f]*$':
+    type: object
+    properties:
+      interrupt-controller: true
+      "#interrupt-cells":
+        const: 2
+
+      st,irq-number:
+        description:
+          Interrupt number mapped on the parent.
+        $ref: "/schemas/types.yaml#/definitions/uint32"
+
+    required:
+      - "#interrupt-cells"
+      - interrupt-controller
+      - st,irq-number
+      - interrupt-parent
+
 required:
   - "#interrupt-cells"
   - compatible
