@@ -1664,7 +1664,7 @@
 			clocks = <&scmi0_clk CK_SCMI0_RTCAPB>,
 				 <&scmi0_clk CK_SCMI0_RTC>;
 			clock-names = "pclk", "rtc_ck";
-			interrupts = <GIC_SPI 3 IRQ_TYPE_LEVEL_HIGH>;
+			interrupts-extended = <&exti 19 IRQ_TYPE_LEVEL_HIGH>;
 			status = "disabled";
 		};
 
