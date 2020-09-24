@@ -367,6 +367,11 @@
 				status = "disabled";
 			};
 		};
+
+		mca_keypad: keypad {
+			compatible = "digi,mca-keypad";
+			status = "disabled";
+		};
 	};
 };
 
