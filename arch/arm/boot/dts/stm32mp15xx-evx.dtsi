@@ -5,6 +5,7 @@
  */
 
 #include <dt-bindings/input/input.h>
+#include <dt-bindings/soc/stm32-hdp.h>
 
 / {
 	clocks {
@@ -155,6 +156,17 @@
 			#size-cells = <1>;
 		};
 	};
+};
+
+&hdp {
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&hdp0_pins_a &hdp6_pins_a &hdp7_pins_a>;
+	pinctrl-1 = <&hdp0_pins_sleep_a &hdp6_pins_sleep_a &hdp7_pins_sleep_a>;
+	status = "disabled";
+
+	muxing-hdp = <(STM32_HDP(0, HDP0_GPOVAL_0) |
+		       STM32_HDP(6, HDP6_GPOVAL_6) |
+		       STM32_HDP(7, HDP7_GPOVAL_7))>;
 };
 
 &i2c2 {
