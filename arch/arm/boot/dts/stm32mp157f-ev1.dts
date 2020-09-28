@@ -23,3 +23,17 @@
 		ethernet0 = &ethernet0;
 	};
 };
+
+&i2c2 {
+	gt9147: goodix_ts@5d {
+		compatible = "goodix,gt9147";
+		reg = <0x5d>;
+		panel = <&panel_dsi>;
+		pinctrl-0 = <&goodix_pins>;
+		pinctrl-names = "default";
+		status = "okay";
+
+		interrupts = <14 IRQ_TYPE_EDGE_RISING>;
+		interrupt-parent = <&stmfx_pinctrl>;
+	};
+};
