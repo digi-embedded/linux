@@ -1,4 +1,36 @@
 # SPDX-License-Identifier: GPL-2.0
+
+# board-specific dtc flags
+DTC_FLAGS_stm32mp157c-dk2 += -@
+DTC_FLAGS_stm32f429-disco += -@
+DTC_FLAGS_stm32f469-disco += -@
+DTC_FLAGS_stm32f746-disco += -@
+DTC_FLAGS_stm32f769-disco += -@
+DTC_FLAGS_stm32429i-eval += -@
+DTC_FLAGS_stm32746g-eval += -@
+DTC_FLAGS_stm32h743i-eval += -@
+DTC_FLAGS_stm32h743i-disco += -@
+DTC_FLAGS_stm32mp157a-dk1 += -@
+DTC_FLAGS_stm32mp157d-dk1 += -@
+DTC_FLAGS_stm32mp157c-dk2 += -@
+DTC_FLAGS_stm32mp157f-dk2 += -@
+DTC_FLAGS_stm32mp157c-dk2-a7-examples += -@
+DTC_FLAGS_stm32mp157c-dk2-m4-examples += -@
+DTC_FLAGS_stm32mp157f-dk2-a7-examples += -@
+DTC_FLAGS_stm32mp157f-dk2-m4-examples += -@
+DTC_FLAGS_stm32mp157a-ed1 += -@
+DTC_FLAGS_stm32mp157c-ed1 += -@
+DTC_FLAGS_stm32mp157d-ed1 += -@
+DTC_FLAGS_stm32mp157f-ed1 += -@
+DTC_FLAGS_stm32mp157a-ev1 += -@
+DTC_FLAGS_stm32mp157c-ev1 += -@
+DTC_FLAGS_stm32mp157d-ev1 += -@
+DTC_FLAGS_stm32mp157f-ev1 += -@
+DTC_FLAGS_stm32mp157c-ev1-a7-examples += -@
+DTC_FLAGS_stm32mp157c-ev1-m4-examples += -@
+DTC_FLAGS_stm32mp157f-ev1-a7-examples += -@
+DTC_FLAGS_stm32mp157f-ev1-m4-examples += -@
+
 dtb-$(CONFIG_ARCH_ALPINE) += \
 	alpine-db.dtb
 dtb-$(CONFIG_MACH_ARTPEC6) += \
