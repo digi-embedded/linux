@@ -2181,7 +2181,8 @@ static int ov5640_probe(struct i2c_client *client,
 
 	gpr = syscon_regmap_lookup_by_compatible("fsl,imx6q-iomuxc-gpr");
 	if (!IS_ERR(gpr)) {
-		if (of_machine_is_compatible("fsl,imx6q")) {
+		if (of_machine_is_compatible("fsl,imx6q") ||
+		    of_machine_is_compatible("fsl,imx6qp")) {
 			int mask = ov5640_data.ipu_id ? (1 << 20) : (1 << 19);
 			/* Set the CSI0/MIPI mux to MIPI */
 			if (ov5640_data.csi == 0)
@@ -2191,6 +2192,9 @@ static int ov5640_probe(struct i2c_client *client,
 			int val =  ov5640_data.csi ? (1 << 3) : (0 << 0);
 
 			regmap_update_bits(gpr, IOMUXC_GPR13, mask, val);
+		} else {
+			pr_err("%s: unable to set IPU muxing: unknown machine\n",
+			__func__);
 		}
 	} else {
 		pr_err("%s: failed to find fsl,imx6q-iomux-gpr regmap\n",
