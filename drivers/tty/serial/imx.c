@@ -2175,7 +2175,6 @@ imx_console_early_setup(struct earlycon_device *dev, const char *opt)
 
 	return 0;
 }
-OF_EARLYCON_DECLARE(ec_imx6q, "fsl,imx6q-uart", imx_console_early_setup);
 OF_EARLYCON_DECLARE(ec_imx21, "fsl,imx21-uart", imx_console_early_setup);
 #endif
 
