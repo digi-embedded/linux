@@ -234,10 +234,9 @@ static int mca_kp_parse_dt(struct mca_kp *kp)
 			kp->debounce = MCA_KP_MAX_DEB;
 	}
 
-	dev_info(dev,
-		"rows: %d cols: %d, pwroff wakeup: %s, debounce: %d ms\n",
-		kp->n_rows, kp->n_cols, kp->pwroff_wakeup ? "enabled" : "disabled",
-		kp->debounce);
+	dev_info(dev, "%d rows, %d cols, %d ms debounce%s\n", kp->n_rows,
+		 kp->n_cols, kp->debounce,
+		 kp->pwroff_wakeup ? ", pwroff_wakeup" : "");
 
 	return 0;
 }
