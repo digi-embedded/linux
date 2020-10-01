@@ -224,6 +224,11 @@
 	};
 };
 
+&ocotp {
+	/* By default, make the OTP bits read-only */
+	read-only;
+};
+
 &usdhc1 {
 	pinctrl-names = "default", "state_100mhz", "state_200mhz";
 	pinctrl-0 = <&pinctrl_usdhc1>;

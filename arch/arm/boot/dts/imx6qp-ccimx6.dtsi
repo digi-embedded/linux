@@ -217,6 +217,11 @@
 	};
 };
 
+&ocotp {
+	/* By default, make the OTP bits read-only */
+	read-only;
+};
+
 /* Connected to wireless chip */
 &usdhc1 {
 	pinctrl-names = "default", "state_100mhz", "state_200mhz";
