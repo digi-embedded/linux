@@ -1202,6 +1202,7 @@
 			interrupt-names = "rx", "tx";
 			clocks = <&rcc IPCC>;
 			wakeup-source;
+			power-domains = <&pd_core>;
 			status = "disabled";
 		};
 
