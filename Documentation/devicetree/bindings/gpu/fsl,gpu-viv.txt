@@ -1,0 +1,31 @@
+Vivante GPU2d/3d on Freescale i.MX6
+
+ Required properties:
+  - compatible: "fsl,imx6sl-gpu", "fsl,imx6q-gpu"
+  - reg: Physical base address and length of the controller's registers.
+  - interrupts: The interrupt outputs from the controller.
+  - clocks : the clock sources that it depends on.
+  - resets : IPU reset specifier.  See reset.txt and fsl,imx-src.txt in
+             Documentation/devicetree/bindings/reset/ for details.
+
+ Optional properties:
+  - contiguous-size-percentage: Percentage of total system memory to allocate as
+    contiguous memory area. This needs to be less than the configured CMA size.
+
+ Example:
+
+	gpu: gpu@02200000 {
+		compatible = "fsl,imx6sl-gpu", "fsl,imx6q-gpu";
+		reg = <0x02200000 0x4000>, <0x02204000 0x4000>, <0x80000000 0x0>;
+		reg-names = "iobase_2d", "iobase_vg", "phys_baseaddr";
+		interrupts = <0 10 0x04>, <0 11 0x04>;
+		interrupt-names = "irq_2d", "irq_vg";
+		clocks = <&clks IMX6SL_CLK_MMDC_ROOT>,
+			 <&clks IMX6SL_CLK_MMDC_ROOT>,
+			 <&clks IMX6SL_CLK_GPU2D_OVG>;
+		clock-names = "gpu2d_axi_clk", "openvg_axi_clk", "gpu2d_clk";
+		resets = <&src 3>, <&src 3>;
+		reset-names = "gpu2d", "gpuvg";
+		contiguous-size-percentage = <12>;
+	}
+
