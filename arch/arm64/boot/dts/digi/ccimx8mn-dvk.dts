@@ -49,6 +49,17 @@
 		stdout-path = &uart1;
 	};
 
+	leds {
+		compatible = "gpio-leds";
+
+		power {
+			label = "power:green:power";
+			default-state = "on";
+			linux,default-trigger = "default-on";
+			gpios = <&mca_gpio 13 GPIO_ACTIVE_HIGH>;
+		};
+	};
+
 	lvds_backlight: lvds_backlight {
 		compatible = "pwm-backlight";
 		pwms = <&mca_pwm0 4 100000 0>;
