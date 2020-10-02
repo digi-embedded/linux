@@ -372,7 +372,8 @@ static int rm68200_probe(struct mipi_dsi_device *dsi)
 	ctx->reset_gpio = devm_gpiod_get_optional(dev, "reset", GPIOD_OUT_LOW);
 	if (IS_ERR(ctx->reset_gpio)) {
 		ret = PTR_ERR(ctx->reset_gpio);
-		dev_err(dev, "cannot get reset GPIO: %d\n", ret);
+		if (ret != -EPROBE_DEFER)
+			dev_err(dev, "cannot get reset GPIO: %d\n", ret);
 		return ret;
 	}
 
