@@ -33,6 +33,15 @@ config PHY_STIH407_USB
 	  Enable this support to enable the picoPHY device used by USB2
 	  and USB3 controllers on STMicroelectronics STiH407 SoC families.
 
+config PHY_STM32_COMBOPHY
+	tristate "STMicroelectronics ComboPHY driver for STM32 MP25"
+	depends on RESET_CONTROLLER
+	depends on ARCH_STM32 || COMPILE_TEST
+	select GENERIC_PHY
+	help
+	  Enable this to support the ComboPHY device used by USB3 or PCIe
+	  controllers on STMicroelectronics STM32MP25 SoC.
+
 config PHY_STM32_USBPHYC
 	tristate "STMicroelectronics STM32 USB HS PHY Controller driver"
 	depends on ARCH_STM32 || COMPILE_TEST
