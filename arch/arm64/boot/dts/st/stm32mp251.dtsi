@@ -142,6 +142,12 @@
 			feature-domains = <&rifsc 156>;
 		};
 
+		syscfg: syscon@44230000 {
+			compatible = "st,stm32mp25-syscfg", "syscon";
+			reg = <0x44230000 0x10000>;
+			clocks = <&scmi_clk CK_SCMI_SYSCPU1>;
+		};
+
 		/* Break node order to solve dependency probe issue between pinctrl and exti. */
 
 		pinctrl: pinctrl@44240000 {
