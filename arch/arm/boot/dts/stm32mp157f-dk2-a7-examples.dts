@@ -50,3 +50,11 @@
 &timers12 {
 	status = "okay";
 };
+
+&uart7 {
+	status = "okay";
+};
+
+&usart3 {
+	status = "okay";
+};
