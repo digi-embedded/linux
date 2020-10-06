@@ -380,10 +380,10 @@
 	status = "disabled";
 };
 
-/* Disable CPU watchdog 
+/* Disable CPU watchdog */
 &watchdog {
 	status = "disabled";
-};*/
+};
 
 &imx8_gpu_ss {
 	/*
