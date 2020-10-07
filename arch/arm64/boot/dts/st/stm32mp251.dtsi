@@ -55,6 +55,25 @@
 		};
 	};
 
+	firmware {
+		scmi: scmi {
+			compatible = "linaro,scmi-optee";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			linaro,optee-channel-id = <0>;
+
+			scmi_clk: protocol@14 {
+				reg = <0x14>;
+				#clock-cells = <1>;
+			};
+
+			scmi_reset: protocol@16 {
+				reg = <0x16>;
+				#reset-cells = <1>;
+			};
+		};
+	};
+
 	intc: interrupt-controller@4ac00000 {
 		compatible = "arm,cortex-a7-gic";
 		#interrupt-cells = <3>;
