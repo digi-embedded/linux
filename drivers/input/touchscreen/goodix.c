@@ -1502,6 +1502,7 @@ static int __maybe_unused goodix_suspend(struct device *dev)
 		 * sooner, delay 58ms here.
 		 */
 		msleep(58);
+		gpiod_direction_input(ts->gpiod_int);
 	}
 
 	return 0;
@@ -1545,6 +1546,7 @@ static int __maybe_unused goodix_resume(struct device *dev)
 		 * fail to reinitialize.
 		 */
 		msleep(60);
+
 		/*
 		* Exit sleep mode by outputting HIGH level to INT pin
 		* for 2ms~5ms.
