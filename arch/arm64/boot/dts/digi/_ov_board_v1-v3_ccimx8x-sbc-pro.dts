@@ -1,0 +1,57 @@
+/*
+ * Copyright 2020 Digi International Inc.
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+ #include <dt-bindings/gpio/gpio.h>
+
+/dts-v1/;
+/plugin/;
+
+/ {
+	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			overlay-description = "SBC: version <= 3";
+		};
+	};
+
+	/* Change the active level of the interrupt GPIO of all Goodix nodes */
+	fragment@1 {
+		target = <&lvds0_goodix_touch1>;
+		__overlay__ {
+			irq-gpios = <&lsio_gpio3 20 GPIO_ACTIVE_LOW>;
+		};
+	};
+
+	fragment@2 {
+		target = <&lvds0_goodix_touch2>;
+		__overlay__ {
+			irq-gpios = <&lsio_gpio3 20 GPIO_ACTIVE_LOW>;
+		};
+	};
+
+	fragment@3 {
+		target = <&lvds1_goodix_touch1>;
+		__overlay__ {
+			irq-gpios = <&lsio_gpio3 19 GPIO_ACTIVE_LOW>;
+		};
+	};
+
+	fragment@4 {
+		target = <&lvds1_goodix_touch2>;
+		__overlay__ {
+			irq-gpios = <&lsio_gpio3 19 GPIO_ACTIVE_LOW>;
+		};
+	};
+};
