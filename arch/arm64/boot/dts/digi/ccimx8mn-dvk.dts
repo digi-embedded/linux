@@ -640,14 +640,15 @@
 /* Micro SD card */
 &usdhc2 {
 	pinctrl-names = "default", "state_100mhz", "state_200mhz";
-	pinctrl-0 = <&pinctrl_usdhc2>, <&pinctrl_usdhc2_gpio>;
-	pinctrl-1 = <&pinctrl_usdhc2_100mhz>, <&pinctrl_usdhc2_gpio>;
-	pinctrl-2 = <&pinctrl_usdhc2_200mhz>, <&pinctrl_usdhc2_gpio>;
+	pinctrl-0 = <&pinctrl_usdhc2>, <&pinctrl_usdhc2_gpio>,
+		    <&pinctrl_usdhc2_vsel>;
+	pinctrl-1 = <&pinctrl_usdhc2_100mhz>, <&pinctrl_usdhc2_gpio>,
+		    <&pinctrl_usdhc2_vsel>;
+	pinctrl-2 = <&pinctrl_usdhc2_200mhz>, <&pinctrl_usdhc2_gpio>,
+		    <&pinctrl_usdhc2_vsel>;
 	bus-width = <4>;
 	no-1-8-v;
 	cd-gpios = <&gpio2 12 GPIO_ACTIVE_HIGH>;
-	/* Assert GPIO5_IO1 low for 3V3 (default) or high for 1.8V */
-	pinctrl-assert-gpios = <&gpio5 1 GPIO_ACTIVE_LOW>;
 	status = "okay";
 };
 
@@ -934,8 +935,18 @@
 		fsl,pins = <
 			/* Card detect */
 			MX8MN_IOMUXC_SD2_CD_B_GPIO2_IO12	0x1c4
-			/* MUX_VSELECT */
-			MX8MN_IOMUXC_SAI3_TXD_GPIO5_IO1		0x84
+		>;
+	};
+
+	pinctrl_usdhc2_vsel: usdhc2grp_vsel {
+		fsl,pins = <
+			MX8MN_IOMUXC_GPIO1_IO04_USDHC2_VSELECT	0x1d0
+		>;
+	};
+
+	pinctrl_usdhc2_vsel_somv1_dvkv1: usdhc2grp_vsel_somv1_dvkv1 {
+		fsl,pins = <
+			MX8MN_IOMUXC_SAI3_TXD_GPIO5_IO1         0x84
 		>;
 	};
 
