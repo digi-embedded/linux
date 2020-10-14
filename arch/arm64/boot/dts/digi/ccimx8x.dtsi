@@ -444,7 +444,7 @@
 				type = "passive";
 			};
 			pmic_crit0: trip1 {
-				temperature = <105000>;
+				temperature = <100000>;
 				hysteresis = <2000>;
 				type = "critical";
 			};
