@@ -13,8 +13,9 @@ dtb-$(CONFIG_ARCH_MXC) += _ov_board_flexcan1_ccimx8x-sbc-pro.dtbo \
 			  _ov_board_lpuart3_ccimx8x-sbc-pro.dtbo \
 			  _ov_board_lt9812-hdmi-dsi0_ccimx8x-sbc-pro.dtbo \
 			  _ov_board_lvds1_ccimx8x-sbc-pro.dtbo \
-			  _ov_board_v1-v3_ccimx8x-sbc-pro.dtbo \
 			  _ov_board_lvds_ccimx8mn-dvk.dtbo \
+			  _ov_board_v1-v2_ccimx8mn-dvk.dtbo \
+			  _ov_board_v1-v3_ccimx8x-sbc-pro.dtbo \
 			  _ov_board_parallel-camera_ccimx8x-sbc-pro.dtbo \
 			  _ov_board_pcie-card_ccimx8x-sbc-pro.dtbo \
 			  _ov_som_bt_ccimx8mn.dtbo \
