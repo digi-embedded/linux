@@ -389,9 +389,25 @@ static int lt8912_connector_get_modes(struct drm_connector *connector)
 	return num;
 }
 
+static enum drm_mode_status lt8912_connector_mode_valid(struct drm_connector *connector,
+			     struct drm_display_mode *mode)
+{
+	if (mode->clock > 150000)
+		return MODE_CLOCK_HIGH;
+
+	if (mode->hdisplay > 1920)
+		return MODE_BAD_HVALUE;
+
+	if (mode->vdisplay > 1080)
+		return MODE_BAD_VVALUE;
+
+	return MODE_OK;
+}
+
 static const struct drm_connector_helper_funcs lt8912_connector_helper_funcs = {
 	.get_modes = lt8912_connector_get_modes,
 	.best_encoder = lt8912_connector_best_encoder,
+	.mode_valid = lt8912_connector_mode_valid,
 };
 
 static void lt8912_bridge_post_disable(struct drm_bridge *bridge)
