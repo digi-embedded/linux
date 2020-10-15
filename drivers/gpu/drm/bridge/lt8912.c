@@ -20,7 +20,6 @@
 #include <drm/drmP.h>
 #include <drm/drm_of.h>
 #include <drm/drm_atomic.h>
-#include <drm/drm_crtc_helper.h>
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_panel.h>
 #include <drm/drm_mipi_dsi.h>
@@ -29,7 +28,7 @@
 struct lt8912 {
 	struct drm_bridge bridge;
 	struct drm_connector connector;
-	const struct drm_display_mode *mode;
+	struct drm_display_mode mode;
 	struct device *dev;
 	struct mipi_dsi_device *dsi;
 	struct device_node *host_node;
@@ -62,7 +61,7 @@ static inline struct lt8912 *connector_to_lt8912(struct drm_connector *c)
 static void lt8912_init(struct lt8912 *lt)
 {
 	u8 lanes = lt->dsi->lanes;
-	const struct drm_display_mode *mode = lt->mode;
+	const struct drm_display_mode *mode = &lt->mode;
 	u32 hactive, hfp, hsync, hbp, vfp, vsync, vbp, htotal, vtotal;
 	unsigned int version[2];
 
@@ -115,9 +114,11 @@ static void lt8912_init(struct lt8912 *lt)
 	regmap_write(lt->regmap[0], 0x3f, 0xd4);
 	regmap_write(lt->regmap[0], 0x41, 0x3c);
 
+	/* MipiBasicSet */
 	regmap_write(lt->regmap[1], 0x12, 0x04);
 	regmap_write(lt->regmap[1], 0x13, lanes % 4);
 	regmap_write(lt->regmap[1], 0x14, 0x00);
+
 	regmap_write(lt->regmap[1], 0x15, 0x00);
 	regmap_write(lt->regmap[1], 0x1a, 0x03);
 	regmap_write(lt->regmap[1], 0x1b, 0x03);
@@ -295,8 +296,9 @@ static void lt8912_power_off(struct lt8912 *lt)
 static irqreturn_t lt8912_hpd_threaded_handler(int unused, void *data)
 {
 	struct lt8912 *lt = data;
+	struct drm_connector *connector = &lt->connector;
 
-	drm_helper_hpd_irq_event(lt->connector.dev);
+	drm_helper_hpd_irq_event(connector->dev);
 
 	return IRQ_HANDLED;
 }
@@ -406,7 +408,6 @@ static void lt8912_bridge_disable(struct drm_bridge *bridge)
 static void lt8912_bridge_enable(struct drm_bridge *bridge)
 {
 	struct lt8912 *lt = bridge_to_lt8912(bridge);
-
 	lt8912_init(lt);
 }
 
@@ -423,7 +424,7 @@ static void lt8912_bridge_mode_set(struct drm_bridge *bridge,
 {
 	struct lt8912 *lt = bridge_to_lt8912(bridge);
 
-	lt->mode = mode;
+	drm_mode_copy(&lt->mode, adj);
 }
 
 static int lt8912_bridge_attach(struct drm_bridge *bridge)
@@ -432,7 +433,7 @@ static int lt8912_bridge_attach(struct drm_bridge *bridge)
 	struct drm_connector *connector = &lt->connector;
 	int ret;
 
-	lt->connector.polled = DRM_CONNECTOR_POLL_HPD;
+	connector->polled = DRM_CONNECTOR_POLL_HPD;
 
 	ret = drm_connector_init(bridge->dev, connector,
 				 &lt8912_connector_funcs,
@@ -527,9 +528,6 @@ int lt8912_attach_dsi(struct lt8912 *lt)
 
 	dsi->lanes = lt->num_dsi_lanes;
 	dsi->format = MIPI_DSI_FMT_RGB888;
-/* adv7533	dsi->mode_flags = MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_VIDEO_SYNC_PULSE |
-			  MIPI_DSI_MODE_EOT_PACKET | MIPI_DSI_MODE_VIDEO_HSE;
-*/
 	dsi->mode_flags = MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_VIDEO_BURST |
 			  MIPI_DSI_MODE_LPM | MIPI_DSI_MODE_EOT_PACKET;
 
@@ -649,8 +647,6 @@ static int lt8912_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 
 	of_node_put(endpoint);
 	of_node_put(lt->host_node);
-
-//	mipi_dsi_set_drvdata(lt->dsi, lt);
 
 	lt->bridge.funcs = &lt8912_bridge_funcs;
 	lt->bridge.of_node = dev->of_node;
