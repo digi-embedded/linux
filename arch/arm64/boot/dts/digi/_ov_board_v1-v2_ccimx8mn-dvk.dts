@@ -36,4 +36,20 @@
 			no-hpd;
 		};
 	};
+
+	fragment@2 {
+		target = <&uart3>;
+		__overlay__ {
+			/*
+			 * On the DVK version <=2 a different gpio is used to
+			 * control the RS485 RE#/DE line.
+			 *
+			 * RS-485 mode (comment these lines to use this UART in
+			 * RS232 mode)
+			 */
+			pinctrl-0 = <&pinctrl_uart3_rs485>,
+				    <&pinctrl_uart3_rs485_re_v1_v2>;
+			rts-gpios = <&gpio1 3 GPIO_ACTIVE_HIGH>;
+		};
+	};
 };
