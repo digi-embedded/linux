@@ -639,17 +639,23 @@
 	assigned-clock-parents = <&clk IMX8MN_SYS_PLL1_80M>;
 
 	/* RS-485 mode (comment these lines to use this UART in RS232 mode) */
-	pinctrl-0 = <&pinctrl_uart3_rs485>;
+	pinctrl-0 = <&pinctrl_uart3_rs485>, <&pinctrl_uart3_rs485_re>;
 	linux,rs485-enabled-at-boot-time;
 	rs485-rts-active-high;
-	rts-gpios = <&gpio1 3 GPIO_ACTIVE_HIGH>;
+	rts-gpios = <&gpio5 8 GPIO_ACTIVE_HIGH>;
 	/* Disable DMA on this port when using rs485 */
 	/delete-property/dmas;
 	/delete-property/dma-names;
 
-	/* RS-232 mode (uncomment these lines to use this UART in RS232 mode) */
-	//pinctrl-0 = <&pinctrl_uart3>;
+	/*
+	 * RS-232 mode (uncomment these lines to use this UART in RS232 mode).
+	 * Choose the ones that match your DVK version.
+	 */
 	//fsl,uart-has-rtscts;
+	//For DVK: version >= 3
+	//pinctrl-0 = <&pinctrl_uart3>, <&pinctrl_uart3_re_disable>;
+	//For DVK: version <= 2
+	//pinctrl-0 = <&pinctrl_uart3>, <&pinctrl_uart3_re_disable_v1_v2>;
 
 	status = "okay";
 };
@@ -939,6 +945,21 @@
 			MX8MN_IOMUXC_ECSPI1_MOSI_UART3_DCE_TX		0x140
 			MX8MN_IOMUXC_ECSPI1_SS0_UART3_DCE_RTS_B		0x140
 			MX8MN_IOMUXC_ECSPI1_MISO_UART3_DCE_CTS_B	0x140
+		>;
+	};
+
+	pinctrl_uart3_re_disable: uart3grp_re_disable {
+		fsl,pins = <
+			/*
+			 * Configure RS485 RE#/DE line as pull-up to disable
+			 * RS485 transceiver.
+			 */
+			MX8MN_IOMUXC_ECSPI1_MISO_GPIO5_IO8		0x140
+		>;
+	};
+
+	pinctrl_uart3_re_disable_v1_v2: uart3grp_re_disable_v1_v2 {
+		fsl,pins = <
 			/*
 			 * Configure RS485 RE#/DE line as pull-up to disable
 			 * RS485 transceiver.
@@ -951,6 +972,18 @@
 		fsl,pins = <
 			MX8MN_IOMUXC_ECSPI1_SCLK_UART3_DCE_RX		0x140
 			MX8MN_IOMUXC_ECSPI1_MOSI_UART3_DCE_TX		0x140
+		>;
+	};
+
+	pinctrl_uart3_rs485_re: uart3_rs485grp_re {
+		fsl,pins = <
+			/* RS485 RE#/DE line */
+			MX8MN_IOMUXC_ECSPI1_MISO_GPIO5_IO8		0x16
+		>;
+	};
+
+	pinctrl_uart3_rs485_re_v1_v2: uart3_rs485grp_re_v1_v2 {
+		fsl,pins = <
 			/* RS485 RE#/DE line */
 			MX8MN_IOMUXC_GPIO1_IO03_GPIO1_IO3		0x16
 		>;
