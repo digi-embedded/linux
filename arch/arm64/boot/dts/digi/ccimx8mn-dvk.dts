@@ -292,11 +292,6 @@
 	sda-gpios = <&gpio5 17 GPIO_ACTIVE_HIGH>;
 	status = "okay";
 
-	/*
-	 * The max98089 sound codec uses the same I2C address than the fusion touch
-	 * controller, so when enabling this node, you need to also disable the
-	 * max98089 node.
-	 */
 	fusion_touch: fusion@10 {
 		compatible = "touchrev,fusion-touch";
 		reg = <0x10>;
@@ -320,15 +315,6 @@
 		reload-fw-on-resume;
 		skip-firmware-request;
 		vin-supply = <&reg_5v_board>;
-	};
-
-	max98089: codec@10 {
-		compatible = "maxim,max98089";
-		reg = <0x10>;
-		clocks = <&clk IMX8MN_CLK_SAI2_ROOT>;
-		clock-names = "mclk";
-		vcc-supply = <&reg_3v3_audio>;
-		dvdd-supply = <&reg_1v8_ext>;
 	};
 
 	/* MIPI-CSI camera */
@@ -484,6 +470,15 @@
 				pixelclk-active = <0>;
 			};
 		};
+	};
+
+	max98089: codec@10 {
+		compatible = "maxim,max98089";
+		reg = <0x10>;
+		clocks = <&clk IMX8MN_CLK_SAI2_ROOT>;
+		clock-names = "mclk";
+		vcc-supply = <&reg_3v3_audio>;
+		dvdd-supply = <&reg_1v8_ext>;
 	};
 };
 
