@@ -14,6 +14,7 @@
  */
 
  #include <dt-bindings/gpio/gpio.h>
+ #include <dt-bindings/clock/imx8mn-clock.h>
 
 /dts-v1/;
 /plugin/;
@@ -50,6 +51,47 @@
 			pinctrl-0 = <&pinctrl_uart3_rs485>,
 				    <&pinctrl_uart3_rs485_re_v1_v2>;
 			rts-gpios = <&gpio1 3 GPIO_ACTIVE_HIGH>;
+		};
+	};
+
+	/* Audio codec on DVK v1 and v2 was connected to I2C2 */
+	fragment@3 {
+		target = <&i2c2>;
+		__overlay__ {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			max98089_v1v2: codec@10 {
+				compatible = "maxim,max98089";
+				reg = <0x10>;
+				clocks = <&clk IMX8MN_CLK_SAI2_ROOT>;
+				clock-names = "mclk";
+				vcc-supply = <&reg_3v3_audio>;
+				dvdd-supply = <&reg_1v8_ext>;
+				/*
+				 * NOTE: The max98089 sound codec uses the same
+				 * I2C address than the fusion touch controller
+				 * If using the Fusion on a DVK v1 or v2,
+				 * disable this node by uncommenting the
+				 * following line:
+				 */
+				 //status = "disabled";
+			};
+		};
+	};
+
+	fragment@4 {
+		target = <&sound_max98089>;
+		__overlay__ {
+			audio-codec = <&max98089_v1v2>;
+		};
+	};
+
+	/* Disable the audio codec on I2C3 (default on DVK >= v3) */
+	fragment@5 {
+		target = <&max98089>;
+		__overlay__ {
+			status = "disabled";
 		};
 	};
 };
