@@ -385,6 +385,22 @@
 	status = "disabled";
 };
 
+/*
+ * Disable mipi1 lpcg nodes by default, not supported on the DualXZ variants.
+ * An overlay re-enables these nodes if supported by the corresponding variant.
+ */
+&mipi1_lis_lpcg {
+	status = "disabled";
+};
+
+&mipi1_pwm_lpcg {
+	status = "disabled";
+};
+
+&mipi1_i2c0_lpcg {
+	status = "disabled";
+};
+
 &imx8_gpu_ss {
 	/*
 	 * Use a table to set a fixed amount of contiguous memory used by the GPU
