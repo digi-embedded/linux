@@ -95,4 +95,29 @@
 			};
 		};
 	};
+
+	/*
+	 * Enable mipi1 lpcg nodes for the QuadXPlus variants (not available on
+	 * DualXZ ones).
+	 */
+	fragment@4 {
+		target = <&mipi1_lis_lpcg>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+
+	fragment@5 {
+		target = <&mipi1_pwm_lpcg>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+
+	fragment@6 {
+		target = <&mipi1_i2c0_lpcg>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
 };
