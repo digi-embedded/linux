@@ -419,7 +419,7 @@
 		compatible = "lontium,lt8912";
 		reg = <0x48>;
 		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_lt8912>;
+		pinctrl-0 = <&pinctrl_lt8912>, <&pinctrl_lt8912_hpd>;
 		reset-gpios = <&gpio3 7 GPIO_ACTIVE_LOW>;
 		hpd-gpios = <&gpio3 8 GPIO_ACTIVE_HIGH>;
 		digi,dsi-lanes = <4>;
@@ -810,10 +810,15 @@
 		fsl,pins = <
 			/* Reset */
 			MX8MN_IOMUXC_NAND_DATA01_GPIO3_IO7	0x19
-			/* Hotplug detect */
-			MX8MN_IOMUXC_NAND_DATA02_GPIO3_IO8	0x19
 			/* Interrupt */
 			MX8MN_IOMUXC_NAND_DATA03_GPIO3_IO9	0x19
+		>;
+	};
+
+	pinctrl_lt8912_hpd: lt8912-hpd {
+		fsl,pins = <
+			/* Hotplug detect */
+			MX8MN_IOMUXC_NAND_DATA02_GPIO3_IO8	0x19
 		>;
 	};
 

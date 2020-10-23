@@ -34,6 +34,7 @@
 			 * A hardware design issue on the DVK version <=2 makes the
 			 * hotplug detect line not usable.
 			 */
+			pinctrl-0 = <&pinctrl_lt8912>;
 			no-hpd;
 		};
 	};
