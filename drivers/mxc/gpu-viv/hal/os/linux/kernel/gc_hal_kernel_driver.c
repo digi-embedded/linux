@@ -1258,11 +1258,11 @@ static int drv_init(void)
         irqLine, contiguousSize, registerMemBase
         );
 
-    ret = sysfs_create_group(&device->platform->device->dev.kobj,
+    result = sysfs_create_group(&device->platform->device->dev.kobj,
                              &gpu_attr_group);
-    if (ret) {
+    if (result) {
         dev_err(&device->platform->device->dev,
-                "Cannot create sysfs entries for gpu (%d)\n", ret);
+                "Cannot create sysfs entries for gpu (%d)\n", result);
         goto OnError;
     }
 
