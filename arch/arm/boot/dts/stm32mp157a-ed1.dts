@@ -77,6 +77,16 @@
 		};
 	};
 
+	led {
+		compatible = "gpio-leds";
+		led-blue {
+			label = "heartbeat";
+			gpios = <&gpiod 9 GPIO_ACTIVE_HIGH>;
+			linux,default-trigger = "heartbeat";
+			default-state = "off";
+		};
+	};
+
 	sd_switch: regulator-sd-switch {
 		compatible = "regulator-gpio";
 		regulator-name = "sd_switch";
