@@ -147,6 +147,18 @@ static const struct ov5640_pixfmt ov5640_formats[] = {
 	{ MEDIA_BUS_FMT_SRGGB8_1X8, V4L2_COLORSPACE_SRGB, },
 };
 
+static const s64 ov5640_link_freqs[] = {
+	42002400,
+	55969920,
+	61430400,
+	84004800,
+	111939840,
+	122860800,
+	168000000,
+	335819520,
+};
+#define OV5640_LINK_FREQS_NUM	ARRAY_SIZE(ov5640_link_freqs)
+
 /*
  * FIXME: remove this when a subdev API becomes available
  * to set the MIPI CSI-2 virtual channel.
@@ -222,6 +234,7 @@ struct ov5640_ctrls {
 	struct v4l2_ctrl *test_pattern;
 	struct v4l2_ctrl *hflip;
 	struct v4l2_ctrl *vflip;
+	struct v4l2_ctrl *link_freq;
 };
 
 struct ov5640_dev {
@@ -938,13 +951,11 @@ out:
 /*
  * ov5640_set_mipi_pclk() - Calculate the clock tree configuration values
  *			    for the MIPI CSI-2 output.
- * @rate: The requested bitrate in bits per second.
  *
  * FIXME: this have been tested with 16bpp and 2 lanes setup only.
  * above formula for setups with 1 lane or image formats with different bpp.
  */
-static int ov5640_set_mipi_pclk(struct ov5640_dev *sensor,
-				unsigned long rate)
+static int ov5640_set_mipi_pclk(struct ov5640_dev *sensor)
 {
 	u8 bit_div, mipi_div, pclk_div, sclk_div, sclk2x_div, root_div;
 	u8 prediv, mult, sysdiv;
@@ -953,13 +964,8 @@ static int ov5640_set_mipi_pclk(struct ov5640_dev *sensor,
 	u8 pclk_period;
 	int ret;
 
-	/*
-	 * The 'rate' parameter is the bitrate = VTOT * HTOT * FPS * BPP
-	 *
-	 * Adjust it to represent the CSI-2 link frequency and use it to
-	 * update the associated control.
-	 */
-	link_freq = rate / sensor->ep.bus.mipi_csi2.num_data_lanes / 2;
+	/* Get current link frequency */
+	link_freq = ov5640_link_freqs[sensor->ctrls.link_freq->val];
 
 	/*
 	 * - mipi_div - Assumptions not supported by documentation
@@ -1061,14 +1067,42 @@ static unsigned long ov5640_calc_pclk(struct ov5640_dev *sensor,
 	return _rate / *pll_rdiv / *bit_div / *pclk_div;
 }
 
-static int ov5640_set_dvp_pclk(struct ov5640_dev *sensor, unsigned long rate)
+static u64 ov5640_calc_pixel_rate(struct ov5640_dev *sensor)
+{
+	u64 rate;
+
+	rate = sensor->current_mode->vtot * sensor->current_mode->htot;
+	rate *= ov5640_framerates[sensor->current_fr];
+
+	return rate;
+}
+
+static int ov5640_set_dvp_pclk(struct ov5640_dev *sensor)
 {
 	const struct ov5640_mode_info *mode = sensor->current_mode;
 	u8 prediv, mult, sysdiv, pll_rdiv, bit_div, pclk_div;
 	struct i2c_client *client = sensor->i2c_client;
 	unsigned int pclk_freq, max_pclk_freq;
 	u8 dvp_pclk_divider;
+	unsigned long rate;
 	int ret;
+
+	/* Get pixel rate */
+	rate = ov5640_calc_pixel_rate(sensor);
+
+	dev_dbg(&client->dev, "pixel_rate=%lu selected (%dx%d@%d)(%dx%d)\n",
+		rate,
+		sensor->current_mode->hact,
+		sensor->current_mode->vact,
+		ov5640_framerates[sensor->current_fr],
+		sensor->current_mode->htot,
+		sensor->current_mode->vtot);
+
+	/*
+	 * All the formats we support have 16 bits per pixel, seems to require
+	 * the same rate than YUV, so we can just use 16 bpp all the time.
+	 */
+	rate = rate * 16 / sensor->ep.bus.parallel.bus_width;
 
 	/*
 	 * 1280x720 and 1024x768 are reported to use 'SUBSAMPLING' only,
@@ -1621,16 +1655,6 @@ ov5640_find_mode(struct ov5640_dev *sensor, enum ov5640_frame_rate fr,
 	return mode;
 }
 
-static u64 ov5640_calc_pixel_rate(struct ov5640_dev *sensor)
-{
-	u64 rate;
-
-	rate = sensor->current_mode->vtot * sensor->current_mode->htot;
-	rate *= ov5640_framerates[sensor->current_fr];
-
-	return rate;
-}
-
 /*
  * sensor changes between scaling and subsampling, go through
  * exposure calculation
@@ -1812,7 +1836,6 @@ static int ov5640_set_mode(struct ov5640_dev *sensor)
 	enum ov5640_downsize_mode dn_mode, orig_dn_mode;
 	bool auto_gain = sensor->ctrls.auto_gain->val == 1;
 	bool auto_exp =  sensor->ctrls.auto_exp->val == V4L2_EXPOSURE_AUTO;
-	unsigned long rate;
 	int ret;
 
 	dn_mode = mode->dn_mode;
@@ -1831,16 +1854,10 @@ static int ov5640_set_mode(struct ov5640_dev *sensor)
 			goto restore_auto_gain;
 	}
 
-	/*
-	 * All the formats we support have 16 bits per pixel, seems to require
-	 * the same rate than YUV, so we can just use 16 bpp all the time.
-	 */
-	rate = ov5640_calc_pixel_rate(sensor) * 16;
 	if (sensor->ep.bus_type == V4L2_MBUS_CSI2_DPHY) {
-		ret = ov5640_set_mipi_pclk(sensor, rate);
+		ret = ov5640_set_mipi_pclk(sensor);
 	} else {
-		rate = rate / sensor->ep.bus.parallel.bus_width;
-		ret = ov5640_set_dvp_pclk(sensor, rate);
+		ret = ov5640_set_dvp_pclk(sensor);
 	}
 
 	if (ret < 0)
@@ -2335,6 +2352,70 @@ static int ov5640_try_fmt_internal(struct v4l2_subdev *sd,
 	return 0;
 }
 
+static int ov5640_set_link_freq_ctrl(struct ov5640_dev *sensor,
+				     unsigned long rate)
+{
+	u8 mipi_div;
+	unsigned int i;
+	unsigned int ret;
+	unsigned long link_freq;
+	unsigned int freq_index;
+	struct i2c_client *client = sensor->i2c_client;
+
+	if (sensor->ep.bus_type != V4L2_MBUS_CSI2_DPHY)
+		return 0;
+
+	/*
+	 * - mipi_div - Assumptions not supported by documentation
+	 *
+	 *   The MIPI clock generation differs for modes that use the scaler and
+	 *   modes that do not.
+	 */
+	if (sensor->current_mode->dn_mode == SCALING)
+		mipi_div = 1;
+	else
+		mipi_div = 2;
+
+	/*
+	 * All the formats we support have 16 bits per pixel, seems to require
+	 * the same rate than YUV, so we can just use 16 bpp all the time.
+	 */
+	rate = rate * 16;
+
+	/*
+	 * The 'rate' parameter is the bitrate = VTOT * HTOT * FPS * BPP
+	 *
+	 * Adjust it to represent the CSI-2 link frequency and use it to
+	 * update the associated control.
+	 */
+	link_freq = rate / sensor->ep.bus.mipi_csi2.num_data_lanes /
+		    2 / mipi_div;
+
+	freq_index = OV5640_LINK_FREQS_NUM - 1;
+	for (i = 0; i < OV5640_LINK_FREQS_NUM; ++i) {
+		if (ov5640_link_freqs[i] == link_freq) {
+			freq_index = i;
+			break;
+		}
+	}
+	WARN_ONCE(i == OV5640_LINK_FREQS_NUM,
+		  "Link frequency %ld not supported", link_freq);
+
+	ret = __v4l2_ctrl_s_ctrl(sensor->ctrls.link_freq, freq_index);
+	if (ret < 0)
+		return ret;
+
+	dev_dbg(&client->dev, "link_freq[%d]=%lld selected (%dx%d@%d)(%dx%d)\n",
+		freq_index, ov5640_link_freqs[freq_index],
+		sensor->current_mode->hact,
+		sensor->current_mode->vact,
+		ov5640_framerates[sensor->current_fr],
+		sensor->current_mode->htot,
+		sensor->current_mode->vtot);
+
+	return ret;
+}
+
 static int ov5640_set_fmt(struct v4l2_subdev *sd,
 			  struct v4l2_subdev_state *sd_state,
 			  struct v4l2_subdev_format *format)
@@ -2374,8 +2455,14 @@ static int ov5640_set_fmt(struct v4l2_subdev *sd,
 	if (mbus_fmt->code != sensor->fmt.code)
 		sensor->pending_fmt_change = true;
 
-	__v4l2_ctrl_s_ctrl_int64(sensor->ctrls.pixel_rate,
-				 ov5640_calc_pixel_rate(sensor));
+	if (sensor->pending_mode_change || sensor->pending_fmt_change) {
+		unsigned long rate = ov5640_calc_pixel_rate(sensor);
+
+		__v4l2_ctrl_s_ctrl_int64(sensor->ctrls.pixel_rate, rate);
+
+		ret = ov5640_set_link_freq_ctrl(sensor, rate);
+	}
+
 out:
 	mutex_unlock(&sensor->lock);
 	return ret;
@@ -2795,6 +2882,7 @@ static int ov5640_init_controls(struct ov5640_dev *sensor)
 	const struct v4l2_ctrl_ops *ops = &ov5640_ctrl_ops;
 	struct ov5640_ctrls *ctrls = &sensor->ctrls;
 	struct v4l2_ctrl_handler *hdl = &ctrls->handler;
+	unsigned long rate;
 	int ret;
 
 	v4l2_ctrl_handler_init(hdl, 32);
@@ -2803,9 +2891,20 @@ static int ov5640_init_controls(struct ov5640_dev *sensor)
 	hdl->lock = &sensor->lock;
 
 	/* Clock related controls */
+	rate = ov5640_calc_pixel_rate(sensor);
 	ctrls->pixel_rate = v4l2_ctrl_new_std(hdl, ops, V4L2_CID_PIXEL_RATE,
 					      0, INT_MAX, 1,
-					      ov5640_calc_pixel_rate(sensor));
+					      rate);
+
+	ctrls->link_freq = v4l2_ctrl_new_int_menu(hdl, ops, V4L2_CID_LINK_FREQ,
+						  OV5640_LINK_FREQS_NUM - 1,
+						  0, ov5640_link_freqs);
+	if (ctrls->link_freq)
+		ctrls->link_freq->flags |= V4L2_CTRL_FLAG_READ_ONLY;
+
+	ret = ov5640_set_link_freq_ctrl(sensor, rate);
+	if (ret)
+		goto free_ctrls;
 
 	/* Auto/manual white balance */
 	ctrls->auto_wb = v4l2_ctrl_new_std(hdl, ops,
@@ -2963,13 +3062,16 @@ static int ov5640_s_frame_interval(struct v4l2_subdev *sd,
 
 	if (mode != sensor->current_mode ||
 	    frame_rate != sensor->current_fr) {
+		unsigned long rate;
+
 		sensor->current_fr = frame_rate;
 		sensor->frame_interval = fi->interval;
 		sensor->current_mode = mode;
 		sensor->pending_mode_change = true;
 
-		__v4l2_ctrl_s_ctrl_int64(sensor->ctrls.pixel_rate,
-					 ov5640_calc_pixel_rate(sensor));
+		rate = ov5640_calc_pixel_rate(sensor);
+		__v4l2_ctrl_s_ctrl_int64(sensor->ctrls.pixel_rate, rate);
+		ret = ov5640_set_link_freq_ctrl(sensor, rate);
 	}
 out:
 	mutex_unlock(&sensor->lock);
