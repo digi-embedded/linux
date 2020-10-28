@@ -113,6 +113,8 @@ enum ov5640_mode_id {
 	OV5640_NUM_MODES,
 };
 
+#define OV5640_DEFAULT_MODE OV5640_MODE_VGA_640_480
+
 enum ov5640_frame_rate {
 	OV5640_15_FPS = 0,
 	OV5640_30_FPS,
@@ -148,14 +150,15 @@ static const struct ov5640_pixfmt ov5640_formats[] = {
 };
 
 static const s64 ov5640_link_freqs[] = {
-	42002400,
-	55969920,
-	61430400,
-	84004800,
-	111939840,
-	122860800,
-	168000000,
-	335819520,
+	 63136800, /* 1280x720@15 */
+	 83954880, /* 176x144@15, 320x240@15, 720x480@15 */
+	 92145600, /* 640x480@15, 1024x768@15 */
+	126273600, /* 1280x720@30 */
+	167909760, /* 176x144@30, 320x240@30, 720x480@30 */
+	184291200, /* 640x480@30, 1024x768@30 */
+	191116800, /* 1920x1080@15 */
+	335819520, /* 2592x1944@15 */
+	382233600, /* 1920x1080@30 */
 };
 #define OV5640_LINK_FREQS_NUM	ARRAY_SIZE(ov5640_link_freqs)
 
@@ -570,15 +573,26 @@ static const struct reg_value ov5640_setting_QSXGA_2592_1944[] = {
 };
 
 /* power-on sensor init reg table */
-static const struct ov5640_mode_info ov5640_mode_init_data = {
+static const struct ov5640_mode_info *ov5640_mode_init_data;
+
+static const struct ov5640_mode_info ov5640_mode_init_data_dvp = {
 	0, SUBSAMPLING, 640, 1896, 480, 984,
 	ov5640_init_setting_30fps_VGA,
 	ARRAY_SIZE(ov5640_init_setting_30fps_VGA),
 	OV5640_30_FPS,
 };
 
+static const struct ov5640_mode_info ov5640_mode_init_data_csi2 = {
+	0, SUBSAMPLING, 640, 2844, 480, 984,
+	ov5640_init_setting_30fps_VGA,
+	ARRAY_SIZE(ov5640_init_setting_30fps_VGA),
+	OV5640_30_FPS,
+};
+
+static const struct ov5640_mode_info *ov5640_mode_data;
+
 static const struct ov5640_mode_info
-ov5640_mode_data[OV5640_NUM_MODES] = {
+ov5640_mode_data_dvp[OV5640_NUM_MODES] = {
 	{OV5640_MODE_QQVGA_160_120, SUBSAMPLING,
 	 160, 1896, 120, 984,
 	 ov5640_setting_QQVGA_160_120,
@@ -621,6 +635,65 @@ ov5640_mode_data[OV5640_NUM_MODES] = {
 	 OV5640_30_FPS},
 	{OV5640_MODE_1080P_1920_1080, SCALING,
 	 1920, 2500, 1080, 1120,
+	 ov5640_setting_1080P_1920_1080,
+	 ARRAY_SIZE(ov5640_setting_1080P_1920_1080),
+	 OV5640_30_FPS},
+	{OV5640_MODE_QSXGA_2592_1944, SCALING,
+	 2592, 2844, 1944, 1968,
+	 ov5640_setting_QSXGA_2592_1944,
+	 ARRAY_SIZE(ov5640_setting_QSXGA_2592_1944),
+	 OV5640_15_FPS},
+};
+
+/*
+ * When using CSI-2 interface, adjusting htot to 2844
+ * gives better result in term of framerate, 720p support
+ * and overall stability with CSI-2 receiver
+ */
+static const struct ov5640_mode_info
+ov5640_mode_data_csi2[OV5640_NUM_MODES] = {
+	{OV5640_MODE_QQVGA_160_120, SUBSAMPLING,
+	 160, 2844, 120, 984,
+	 ov5640_setting_QQVGA_160_120,
+	 ARRAY_SIZE(ov5640_setting_QQVGA_160_120),
+	 OV5640_30_FPS},
+	{OV5640_MODE_QCIF_176_144, SUBSAMPLING,
+	 176, 2844, 144, 984,
+	 ov5640_setting_QCIF_176_144,
+	 ARRAY_SIZE(ov5640_setting_QCIF_176_144),
+	 OV5640_30_FPS},
+	{OV5640_MODE_QVGA_320_240, SUBSAMPLING,
+	 320, 2844, 240, 984,
+	 ov5640_setting_QVGA_320_240,
+	 ARRAY_SIZE(ov5640_setting_QVGA_320_240),
+	 OV5640_30_FPS},
+	{OV5640_MODE_VGA_640_480, SUBSAMPLING,
+	 640, 2844, 480, 1080,
+	 ov5640_setting_VGA_640_480,
+	 ARRAY_SIZE(ov5640_setting_VGA_640_480),
+	 OV5640_30_FPS},
+	{OV5640_MODE_NTSC_720_480, SUBSAMPLING,
+	 720, 2844, 480, 984,
+	 ov5640_setting_NTSC_720_480,
+	 ARRAY_SIZE(ov5640_setting_NTSC_720_480),
+	OV5640_30_FPS},
+	{OV5640_MODE_PAL_720_576, SUBSAMPLING,
+	 720, 2844, 576, 984,
+	 ov5640_setting_PAL_720_576,
+	 ARRAY_SIZE(ov5640_setting_PAL_720_576),
+	 OV5640_30_FPS},
+	{OV5640_MODE_XGA_1024_768, SUBSAMPLING,
+	 1024, 2844, 768, 1080,
+	 ov5640_setting_XGA_1024_768,
+	 ARRAY_SIZE(ov5640_setting_XGA_1024_768),
+	 OV5640_30_FPS},
+	{OV5640_MODE_720P_1280_720, SUBSAMPLING,
+	 1280, 2844, 720, 740,
+	 ov5640_setting_720P_1280_720,
+	 ARRAY_SIZE(ov5640_setting_720P_1280_720),
+	 OV5640_30_FPS},
+	{OV5640_MODE_1080P_1920_1080, SCALING,
+	 1920, 2844, 1080, 1120,
 	 ov5640_setting_1080P_1920_1080,
 	 ARRAY_SIZE(ov5640_setting_1080P_1920_1080),
 	 OV5640_30_FPS},
@@ -1640,7 +1713,7 @@ ov5640_find_mode(struct ov5640_dev *sensor, enum ov5640_frame_rate fr,
 	const struct ov5640_mode_info *mode;
 
 	mode = v4l2_find_nearest_size(ov5640_mode_data,
-				      ARRAY_SIZE(ov5640_mode_data),
+				      OV5640_NUM_MODES,
 				      hact, vact,
 				      width, height);
 
@@ -1926,10 +1999,10 @@ static int ov5640_restore_mode(struct ov5640_dev *sensor)
 	int ret;
 
 	/* first load the initial register values */
-	ret = ov5640_load_regs(sensor, &ov5640_mode_init_data);
+	ret = ov5640_load_regs(sensor, ov5640_mode_init_data);
 	if (ret < 0)
 		return ret;
-	sensor->last_mode = &ov5640_mode_init_data;
+	sensor->last_mode = ov5640_mode_init_data;
 
 	ret = ov5640_mod_reg(sensor, OV5640_REG_SYS_ROOT_DIVIDER, 0x3f,
 			     (ilog2(OV5640_SCLK2X_ROOT_DIV) << 2) |
@@ -3217,15 +3290,10 @@ static int ov5640_probe(struct i2c_client *client)
 	fmt->ycbcr_enc = V4L2_MAP_YCBCR_ENC_DEFAULT(fmt->colorspace);
 	fmt->quantization = V4L2_QUANTIZATION_FULL_RANGE;
 	fmt->xfer_func = V4L2_MAP_XFER_FUNC_DEFAULT(fmt->colorspace);
-	fmt->width = 640;
-	fmt->height = 480;
 	fmt->field = V4L2_FIELD_NONE;
 	sensor->frame_interval.numerator = 1;
 	sensor->frame_interval.denominator = ov5640_framerates[OV5640_30_FPS];
 	sensor->current_fr = OV5640_30_FPS;
-	sensor->current_mode =
-		&ov5640_mode_data[OV5640_MODE_VGA_640_480];
-	sensor->last_mode = sensor->current_mode;
 
 	sensor->ae_target = 52;
 
@@ -3265,6 +3333,20 @@ static int ov5640_probe(struct i2c_client *client)
 		dev_err(dev, "Unsupported bus type %d\n", sensor->ep.bus_type);
 		return -EINVAL;
 	}
+
+	if (sensor->ep.bus_type == V4L2_MBUS_CSI2_DPHY) {
+		ov5640_mode_data = ov5640_mode_data_csi2;
+		ov5640_mode_init_data = &ov5640_mode_init_data_csi2;
+	} else {
+		ov5640_mode_data = ov5640_mode_data_dvp;
+		ov5640_mode_init_data = &ov5640_mode_init_data_dvp;
+	}
+
+	fmt->width = ov5640_mode_data[OV5640_DEFAULT_MODE].hact;
+	fmt->height = ov5640_mode_data[OV5640_DEFAULT_MODE].vact;
+	sensor->current_mode =
+		&ov5640_mode_data[OV5640_DEFAULT_MODE];
+	sensor->last_mode = sensor->current_mode;
 
 	/* get system clock (xclk) */
 	sensor->xclk = devm_clk_get(dev, "xclk");
