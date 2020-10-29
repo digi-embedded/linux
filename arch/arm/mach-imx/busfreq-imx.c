@@ -739,6 +739,12 @@ static int set_low_bus_freq(void)
 	if (!bus_freq_scaling_initialized || !bus_freq_scaling_is_active)
 		return 0;
 
+	if (of_machine_is_compatible("digi,ccimx6ul")) {
+		dev_info(busfreq_dev, "Skip setting low bus freq\n");
+		cancel_low_bus_freq_handler();
+		return 0;
+	}
+
 	cancel_reduce_bus_freq = false;
 
 	/*
