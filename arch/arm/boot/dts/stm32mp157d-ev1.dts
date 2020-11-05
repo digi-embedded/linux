@@ -5,12 +5,12 @@
  */
 /dts-v1/;
 
-#include "stm32mp157c-ed1.dts"
+#include "stm32mp157d-ed1.dts"
 #include "stm32mp15xx-evx.dtsi"
 
 / {
-	model = "STMicroelectronics STM32MP157C eval daughter on eval mother";
-	compatible = "st,stm32mp157c-ev1", "st,stm32mp157c-ed1", "st,stm32mp157";
+	model = "STMicroelectronics STM32MP157D eval daughter on eval mother";
+	compatible = "st,stm32mp157d-ev1", "st,stm32mp157d-ed1", "st,stm32mp157";
 
 	chosen {
 		stdout-path = "serial0:115200n8";

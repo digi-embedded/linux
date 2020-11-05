@@ -1132,7 +1132,10 @@ dtb-$(CONFIG_ARCH_STM32) += \
 	stm32mp157c-ed1.dtb \
 	stm32mp157d-ed1.dtb \
 	stm32mp157f-ed1.dtb \
+	stm32mp157a-ev1.dtb \
 	stm32mp157c-ev1.dtb \
+	stm32mp157d-ev1.dtb \
+	stm32mp157f-ev1.dtb \
 	stm32mp157c-lxa-mc1.dtb \
 	stm32mp157c-odyssey.dtb
 dtb-$(CONFIG_MACH_SUN4I) += \
