@@ -25,15 +25,13 @@ properties:
     maxItems: 3
 
   resets:
-    maxItems: 1
+    maxItems: 2
 
-  st,syscfg-holdboot:
-    description: remote processor reset hold boot
-      - Phandle of syscon block.
-      - The offset of the hold boot setting register.
-      - The field mask of the hold boot.
-    $ref: "/schemas/types.yaml#/definitions/phandle-array"
-    maxItems: 1
+  reset-names:
+    items:
+      - const: mcu_rst
+      - const: hold_boot
+    maxItems: 2
 
   st,syscfg-tz:
     description:
@@ -131,7 +129,9 @@ examples:
       reg = <0x10000000 0x40000>,
             <0x30000000 0x40000>,
             <0x38000000 0x10000>;
-      resets = <&rcc MCU_R>;
+      resets = <&scmi_reset RST_SCMI0_MCU>,
+               <&scmi_reset RST_SCMI0_MCU_HOLD_BOOT>;
+      reset-names = "mcu_rst", "hold_boot";
       st,syscfg-holdboot = <&rcc 0x10C 0x1>;
       st,syscfg-tz = <&rcc 0x000 0x1>;
       st,syscfg-rsc-tbl = <&tamp 0x144 0xFFFFFFFF>;
