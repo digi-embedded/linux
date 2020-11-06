@@ -25,7 +25,14 @@ properties:
     maxItems: 3
 
   resets:
-    maxItems: 1
+    minItems: 1
+    maxItems: 2
+
+  reset-names:
+    items:
+      - const: mcu_rst
+      - const: hold_boot
+    minItems: 1
 
   st,syscfg-holdboot:
     description: remote processor reset hold boot
@@ -35,16 +42,6 @@ properties:
           - description: Phandle of syscon block
           - description: The offset of the hold boot setting register
           - description: The field mask of the hold boot
-
-  st,syscfg-tz:
-    description:
-      Reference to the system configuration which holds the RCC trust zone mode
-    $ref: "/schemas/types.yaml#/definitions/phandle-array"
-    items:
-      - items:
-          - description: Phandle of syscon block
-          - description: The offset of the trust zone setting register
-          - description: The field mask of the trust zone state
 
   interrupts:
     description: Should contain the WWDG1 watchdog reset interrupt
@@ -135,12 +132,13 @@ required:
   - compatible
   - reg
   - resets
-  - st,syscfg-holdboot
-  - st,syscfg-tz
 
 additionalProperties: false
 
 examples:
+#--------------------
+# Without SCMI server
+#--------------------
   - |
     #include <dt-bindings/reset/stm32mp1-resets.h>
     m4_rproc: m4@10000000 {
@@ -150,9 +148,24 @@ examples:
             <0x38000000 0x10000>;
       resets = <&rcc MCU_R>;
       st,syscfg-holdboot = <&rcc 0x10C 0x1>;
-      st,syscfg-tz = <&rcc 0x000 0x1>;
       st,syscfg-rsc-tbl = <&tamp 0x144 0xFFFFFFFF>;
       st,syscfg-m4-state = <&tamp 0x148 0xFFFFFFFF>;
     };
 
+#--------------------
+# With SCMI server
+#--------------------
+  - |
+    #include <dt-bindings/reset/stm32mp1-resets.h>
+    m4_rproc_w_scmi: m4@10000000 {
+      compatible = "st,stm32mp1-m4";
+      reg = <0x10000000 0x40000>,
+            <0x30000000 0x40000>,
+            <0x38000000 0x10000>;
+      resets = <&scmi_reset RST_SCMI_MCU>,
+               <&scmi_reset RST_SCMI_MCU_HOLD_BOOT>;
+      reset-names = "mcu_rst", "hold_boot";
+      st,syscfg-rsc-tbl = <&tamp 0x144 0xFFFFFFFF>;
+      st,syscfg-m4-state = <&tamp 0x148 0xFFFFFFFF>;
+    };
 ...
