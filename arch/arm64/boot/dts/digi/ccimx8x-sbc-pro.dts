@@ -394,6 +394,13 @@
 	status = "okay";
 };
 
+/* Enabled for PCIe-USB modems not for PCIe bus lines.
+ * Use the PCIe overlay to enable the full functionality of the bus.
+ */
+&pcieb {
+	status = "okay";
+};
+
 /* USB_OTG1 connected to the usb hub */
 &usbotg1 {
 	status = "okay";
