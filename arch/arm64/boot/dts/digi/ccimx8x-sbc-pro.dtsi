@@ -22,6 +22,16 @@
 		stdout-path = &lpuart2;
 	};
 
+	/* Adjust reset-delay-us depending on your modem, this seems to work
+	 * with most of Telit modems.
+	 */
+	pcie_modem_reset: modem_reset {
+		compatible = "gpio-reset";
+		reset-gpios = <&lsio_gpio3 16 GPIO_ACTIVE_LOW>;
+		reset-delay-us = <21000>;
+		#reset-cells = <0>;
+	};
+
 	cbtl04gp {
 		compatible = "nxp,cbtl04gp";
 		pinctrl-names = "default";
@@ -220,7 +230,7 @@
 			vin-supply = <&reg_3v3_ext>;
 		};
 
-		/* PCIe mini card regulator, disabled by default */
+		/* PCIe mini card regulator */
 		reg_3v3_pcie: regulator@6 {
 			compatible = "regulator-fixed";
 			reg = <6>;
@@ -230,7 +240,6 @@
 			gpio = <&lsio_gpio0 31 GPIO_ACTIVE_HIGH>; /* PCIE_VCC_EN */
 			enable-active-high;
 			startup-delay-us = <100000>;
-			status = "disabled";
 		};
 
 		reg_3v3_usb_hub: regulator@7 {
@@ -873,6 +882,16 @@
 
 &dc0_prg9 {
 	status = "okay";
+};
+
+/*
+ * Define regulator, reset, and disable lines, used by USB modems on the PCIe
+ * connector.
+ */
+&pcieb {
+	disable-gpio = <&lsio_gpio0 30 GPIO_ACTIVE_HIGH>; /* PCIE_DIS_N */
+	resets = <&pcie_modem_reset>;
+	vpcie-supply = <&reg_3v3_pcie>;
 };
 
 /*
