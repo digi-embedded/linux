@@ -128,6 +128,14 @@
 	status = "okay";
 };
 
+&dma1 {
+	sram = <&dma_pool>;
+};
+
+&dma2 {
+	sram = <&dma_pool>;
+};
+
 &dts {
 	status = "okay";
 };
@@ -558,6 +566,13 @@
 	bus-width = <4>;
 	vmmc-supply = <&v3v3>;
 	status = "disabled";
+};
+
+&sram {
+	dma_pool: dma_pool@0 {
+		reg = <0x50000 0x10000>;
+		pool;
+	};
 };
 
 &timers1 {
