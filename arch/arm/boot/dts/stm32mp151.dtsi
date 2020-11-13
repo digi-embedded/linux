@@ -1994,7 +1994,6 @@
 			resets = <&scmi0_reset RST_SCMI0_MCU>,
 				 <&scmi0_reset RST_SCMI0_MCU_HOLD_BOOT>;
 			reset-names = "mcu_rst", "hold_boot";
-			st,syscfg-tz = <&rcc 0x000 0x1>;
 			st,syscfg-pdds = <&pwr_mcu 0x0 0x1>;
 			st,syscfg-rsc-tbl = <&tamp 0x144 0xFFFFFFFF>;
 			st,syscfg-m4-state = <&tamp 0x148 0xFFFFFFFF>;
