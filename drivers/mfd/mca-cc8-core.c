@@ -297,6 +297,10 @@ static const struct mfd_cell mca_cc8x_devs[] = {
 		.num_resources  = ARRAY_SIZE(mca_cc8_keypad_resources),
 		.resources      = mca_cc8_keypad_resources,
 	},
+	{
+		.name           = MCA_CC8X_DRVNAME_LED,
+		.of_compatible	= "digi,mca-led",
+	},
 };
 
 static const struct mfd_cell mca_cc8m_devs[] = {
@@ -351,6 +355,10 @@ static const struct mfd_cell mca_cc8m_devs[] = {
 		.of_compatible	= "digi,mca-keypad",
 		.num_resources  = ARRAY_SIZE(mca_cc8_keypad_resources),
 		.resources      = mca_cc8_keypad_resources,
+	},
+	{
+		.name           = MCA_CC8M_DRVNAME_LED,
+		.of_compatible	= "digi,mca-led",
 	},
 };
 
