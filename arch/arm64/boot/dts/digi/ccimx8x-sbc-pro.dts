@@ -378,6 +378,7 @@
 		label = "power:green";
 		io = <13>;
 		linux,default-trigger = "default-on";
+		retain-state-suspended;
 	};
 };
 

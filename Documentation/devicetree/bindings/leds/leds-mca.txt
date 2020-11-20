@@ -16,8 +16,8 @@ LED sub-node optional properties:
   - active-low:		    Boolean, makes LED active low.
   - linux,default-trigger:  see Documentation/devicetree/bindings/leds/common.txt
   - led-pattern:	    see Documentation/devicetree/bindings/leds/common.txt
-  - retain-state-suspended: The suspend state can be retained.
-			    Such as charge-led gpio.
+  - retain-state-suspended: The LED retains configured functionality during suspend.
+			    Only applies to some triggers like default-on, timer.
   - retain-state-shutdown:  Retain the state of the LED on shutdown.
   - panic-indicator: 	    see Documentation/devicetree/bindings/leds/common.txt
 
