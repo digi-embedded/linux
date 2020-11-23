@@ -315,6 +315,16 @@ static const struct stm32_adc_common_regs stm32h7_adc_common_regs = {
 	.eocie_msk = STM32H7_EOCIE,
 };
 
+/* STM32MP13 common registers definitions */
+static const struct stm32_adc_common_regs stm32mp13_adc_common_regs = {
+	.csr = STM32H7_ADC_CSR,
+	.ccr = STM32H7_ADC_CCR,
+	.eoc_msk = { STM32H7_EOC_MST},
+	.ovr_msk = { STM32H7_OVR_MST},
+	.ier = STM32H7_ADC_IER,
+	.eocie_msk = STM32H7_EOCIE,
+};
+
 static const unsigned int stm32_adc_offset[STM32_ADC_MAX_ADCS] = {
 	0, STM32_ADC_OFFSET, STM32_ADC_OFFSET * 2,
 };
@@ -815,6 +825,13 @@ static const struct stm32_adc_priv_cfg stm32mp1_adc_priv_cfg = {
 	.num_irqs = 2,
 };
 
+static const struct stm32_adc_priv_cfg stm32mp13_adc_priv_cfg = {
+	.regs = &stm32mp13_adc_common_regs,
+	.clk_sel = stm32h7_adc_clk_sel,
+	.max_clk_rate_hz = 36000000,
+	.num_irqs = 1,
+};
+
 static const struct of_device_id stm32_adc_of_match[] = {
 	{
 		.compatible = "st,stm32f4-adc-core",
@@ -825,6 +842,9 @@ static const struct of_device_id stm32_adc_of_match[] = {
 	}, {
 		.compatible = "st,stm32mp1-adc-core",
 		.data = (void *)&stm32mp1_adc_priv_cfg
+	}, {
+		.compatible = "st,stm32mp13-adc-core",
+		.data = (void *)&stm32mp13_adc_priv_cfg
 	}, {
 	},
 };

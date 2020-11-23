@@ -160,6 +160,9 @@ struct stm32_adc_vrefint {
  * @exten:		trigger control register & bitfield
  * @extsel:		trigger selection register & bitfield
  * @res:		resolution selection register & bitfield
+ * @difsel:		differential mode selection register & bitfield
+ * @calfact_s:		single-ended calibration factors register & bitfield
+ * @calfact_d:		differential calibration factors register & bitfield
  * @smpr:		smpr1 & smpr2 registers offset array
  * @smp_bits:		smpr1 & smpr2 index and bitfields
  * @or_vdd:		option register & vddcore bitfield
@@ -176,6 +179,9 @@ struct stm32_adc_regspec {
 	const struct stm32_adc_regs exten;
 	const struct stm32_adc_regs extsel;
 	const struct stm32_adc_regs res;
+	const struct stm32_adc_regs difsel;
+	const struct stm32_adc_regs calfact_s;
+	const struct stm32_adc_regs calfact_d;
 	const u32 smpr[2];
 	const struct stm32_adc_regs *smp_bits;
 	const struct stm32_adc_regs or_vdd;
@@ -192,6 +198,9 @@ struct stm32_adc;
  * @trigs:		external trigger sources
  * @clk_required:	clock is required
  * @has_vregready:	vregready status flag presence
+ * @has_boostmode:	boost mode support flag
+ * @has_linearcal:	linear calibration support flag
+ * @has_presel:		channel preselection support flag
  * @prepare:		optional prepare routine (power-up, enable)
  * @start_conv:		routine to start conversions
  * @stop_conv:		routine to stop conversions
@@ -206,6 +215,9 @@ struct stm32_adc_cfg {
 	struct stm32_adc_trig_info	*trigs;
 	bool clk_required;
 	bool has_vregready;
+	bool has_boostmode;
+	bool has_linearcal;
+	bool has_presel;
 	int (*prepare)(struct iio_dev *);
 	void (*start_conv)(struct iio_dev *, bool dma);
 	void (*stop_conv)(struct iio_dev *);
@@ -308,6 +320,13 @@ static const struct stm32_adc_info stm32h7_adc_info = {
 	.max_channels = STM32_ADC_CH_MAX,
 	.resolutions = stm32h7_adc_resolutions,
 	.num_res = ARRAY_SIZE(stm32h7_adc_resolutions),
+};
+
+/* stm32mp13 can have up to 19 channels */
+static const struct stm32_adc_info stm32mp13_adc_info = {
+	.max_channels = 19,
+	.resolutions = stm32f4_adc_resolutions,
+	.num_res = ARRAY_SIZE(stm32f4_adc_resolutions),
 };
 
 /*
@@ -495,6 +514,36 @@ static const struct stm32_adc_regspec stm32h7_adc_regspec = {
 	.extsel = { STM32H7_ADC_CFGR, STM32H7_EXTSEL_MASK,
 		    STM32H7_EXTSEL_SHIFT },
 	.res = { STM32H7_ADC_CFGR, STM32H7_RES_MASK, STM32H7_RES_SHIFT },
+	.difsel = { STM32H7_ADC_DIFSEL, STM32H7_DIFSEL_MASK},
+	.calfact_s = { STM32H7_ADC_CALFACT, STM32H7_CALFACT_S_MASK,
+		       STM32H7_CALFACT_S_SHIFT },
+	.calfact_d = { STM32H7_ADC_CALFACT, STM32H7_CALFACT_D_MASK,
+		       STM32H7_CALFACT_D_SHIFT },
+	.smpr = { STM32H7_ADC_SMPR1, STM32H7_ADC_SMPR2 },
+	.smp_bits = stm32h7_smp_bits,
+};
+
+/* STM32MP13 programmable sampling time (ADC clock cycles, rounded down) */
+static const unsigned int stm32mp13_adc_smp_cycles[STM32_ADC_MAX_SMP + 1] = {
+	2, 6, 12, 24, 47, 92, 247, 640,
+};
+
+static const struct stm32_adc_regspec stm32mp13_adc_regspec = {
+	.dr = STM32H7_ADC_DR,
+	.ier_eoc = { STM32H7_ADC_IER, STM32H7_EOCIE },
+	.ier_ovr = { STM32H7_ADC_IER, STM32H7_OVRIE },
+	.isr_eoc = { STM32H7_ADC_ISR, STM32H7_EOC },
+	.isr_ovr = { STM32H7_ADC_ISR, STM32H7_OVR },
+	.sqr = stm32h7_sq,
+	.exten = { STM32H7_ADC_CFGR, STM32H7_EXTEN_MASK, STM32H7_EXTEN_SHIFT },
+	.extsel = { STM32H7_ADC_CFGR, STM32H7_EXTSEL_MASK,
+		    STM32H7_EXTSEL_SHIFT },
+	.res = { STM32H7_ADC_CFGR, STM32MP13_RES_MASK, STM32MP13_RES_SHIFT },
+	.difsel = { STM32MP13_ADC_DIFSEL, STM32MP13_DIFSEL_MASK},
+	.calfact_s = { STM32MP13_ADC_CALFACT, STM32MP13_CALFACT_S_MASK,
+		       STM32MP13_CALFACT_S_SHIFT },
+	.calfact_d = { STM32MP13_ADC_CALFACT, STM32MP13_CALFACT_D_MASK,
+		       STM32MP13_CALFACT_D_SHIFT },
 	.smpr = { STM32H7_ADC_SMPR1, STM32H7_ADC_SMPR2 },
 	.smp_bits = stm32h7_smp_bits,
 };
@@ -510,6 +559,11 @@ static const struct stm32_adc_regspec stm32mp1_adc_regspec = {
 	.extsel = { STM32H7_ADC_CFGR, STM32H7_EXTSEL_MASK,
 		    STM32H7_EXTSEL_SHIFT },
 	.res = { STM32H7_ADC_CFGR, STM32H7_RES_MASK, STM32H7_RES_SHIFT },
+	.difsel = { STM32H7_ADC_DIFSEL, STM32H7_DIFSEL_MASK},
+	.calfact_s = { STM32H7_ADC_CALFACT, STM32H7_CALFACT_S_MASK,
+		       STM32H7_CALFACT_S_SHIFT },
+	.calfact_d = { STM32H7_ADC_CALFACT, STM32H7_CALFACT_D_MASK,
+		       STM32H7_CALFACT_D_SHIFT },
 	.smpr = { STM32H7_ADC_SMPR1, STM32H7_ADC_SMPR2 },
 	.smp_bits = stm32h7_smp_bits,
 	.or_vdd = { STM32MP1_ADC2_OR, STM32MP1_VDDCOREEN },
@@ -799,6 +853,7 @@ static void stm32h7_adc_stop_conv(struct iio_dev *indio_dev)
 	if (ret)
 		dev_warn(&indio_dev->dev, "stop failed\n");
 
+	/* STM32H7_DMNGT_MASK covers STM32MP13_DMAEN & STM32MP13_DMACFG */
 	stm32_adc_clr_bits(adc, STM32H7_ADC_CFGR, STM32H7_DMNGT_MASK);
 }
 
@@ -807,6 +862,17 @@ static void stm32h7_adc_irq_clear(struct iio_dev *indio_dev, u32 msk)
 	struct stm32_adc *adc = iio_priv(indio_dev);
 	/* On STM32H7 IRQs are cleared by writing 1 into ISR register */
 	stm32_adc_set_bits(adc, adc->cfg->regs->isr_eoc.reg, msk);
+}
+
+static void stm32mp13_adc_start_conv(struct iio_dev *indio_dev, bool dma)
+{
+	struct stm32_adc *adc = iio_priv(indio_dev);
+
+	if (dma)
+		stm32_adc_set_bits(adc, STM32H7_ADC_CFGR,
+				   STM32MP13_DMAEN | STM32MP13_DMACFG);
+
+	stm32_adc_set_bits(adc, STM32H7_ADC_CR, STM32H7_ADSTART);
 }
 
 static int stm32h7_adc_exit_pwr_down(struct iio_dev *indio_dev)
@@ -819,7 +885,8 @@ static int stm32h7_adc_exit_pwr_down(struct iio_dev *indio_dev)
 	stm32_adc_clr_bits(adc, STM32H7_ADC_CR, STM32H7_DEEPPWD);
 	stm32_adc_set_bits(adc, STM32H7_ADC_CR, STM32H7_ADVREGEN);
 
-	if (adc->common->rate > STM32H7_BOOST_CLKRATE)
+	if (adc->cfg->has_boostmode &&
+	    adc->common->rate > STM32H7_BOOST_CLKRATE)
 		stm32_adc_set_bits(adc, STM32H7_ADC_CR, STM32H7_BOOST);
 
 	/* Wait for startup time */
@@ -841,7 +908,8 @@ static int stm32h7_adc_exit_pwr_down(struct iio_dev *indio_dev)
 
 static void stm32h7_adc_enter_pwr_down(struct stm32_adc *adc)
 {
-	stm32_adc_clr_bits(adc, STM32H7_ADC_CR, STM32H7_BOOST);
+	if (adc->cfg->has_boostmode)
+		stm32_adc_clr_bits(adc, STM32H7_ADC_CR, STM32H7_BOOST);
 
 	/* Setting DEEPPWD disables ADC vreg and clears ADVREGEN */
 	stm32_adc_set_bits(adc, STM32H7_ADC_CR, STM32H7_DEEPPWD);
@@ -896,6 +964,9 @@ static int stm32h7_adc_read_selfcalib(struct iio_dev *indio_dev)
 	int i, ret;
 	u32 lincalrdyw_mask, val;
 
+	if (!adc->cfg->has_linearcal)
+		goto skip_linearcal;
+
 	/* Read linearity calibration */
 	lincalrdyw_mask = STM32H7_LINCALRDYW6;
 	for (i = STM32H7_LINCALFACT_NUM - 1; i >= 0; i--) {
@@ -918,12 +989,13 @@ static int stm32h7_adc_read_selfcalib(struct iio_dev *indio_dev)
 		lincalrdyw_mask >>= 1;
 	}
 
+skip_linearcal:
 	/* Read offset calibration */
-	val = stm32_adc_readl(adc, STM32H7_ADC_CALFACT);
-	adc->cal.calfact_s = (val & STM32H7_CALFACT_S_MASK);
-	adc->cal.calfact_s >>= STM32H7_CALFACT_S_SHIFT;
-	adc->cal.calfact_d = (val & STM32H7_CALFACT_D_MASK);
-	adc->cal.calfact_d >>= STM32H7_CALFACT_D_SHIFT;
+	val = stm32_adc_readl(adc, adc->cfg->regs->calfact_s.reg);
+	adc->cal.calfact_s = (val & adc->cfg->regs->calfact_s.mask);
+	adc->cal.calfact_s >>= adc->cfg->regs->calfact_s.shift;
+	adc->cal.calfact_d = (val & adc->cfg->regs->calfact_d.mask);
+	adc->cal.calfact_d >>= adc->cfg->regs->calfact_d.shift;
 	adc->cal.calibrated = true;
 
 	return 0;
@@ -940,9 +1012,12 @@ static int stm32h7_adc_restore_selfcalib(struct iio_dev *indio_dev)
 	int i, ret;
 	u32 lincalrdyw_mask, val;
 
-	val = (adc->cal.calfact_s << STM32H7_CALFACT_S_SHIFT) |
-		(adc->cal.calfact_d << STM32H7_CALFACT_D_SHIFT);
-	stm32_adc_writel(adc, STM32H7_ADC_CALFACT, val);
+	val = (adc->cal.calfact_s << adc->cfg->regs->calfact_s.shift) |
+		(adc->cal.calfact_d << adc->cfg->regs->calfact_d.shift);
+	stm32_adc_writel(adc, adc->cfg->regs->calfact_s.reg, val);
+
+	if (!adc->cfg->has_linearcal)
+		return 0;
 
 	lincalrdyw_mask = STM32H7_LINCALRDYW6;
 	for (i = STM32H7_LINCALFACT_NUM - 1; i >= 0; i--) {
@@ -1011,18 +1086,20 @@ static int stm32h7_adc_selfcalib(struct iio_dev *indio_dev)
 {
 	struct stm32_adc *adc = iio_priv(indio_dev);
 	int ret;
-	u32 val;
+	u32 val, msk = STM32H7_ADCALDIF;
 
 	if (adc->cal.calibrated)
 		return true;
+
+	if (adc->cfg->has_linearcal)
+		msk |= STM32H7_ADCALLIN;
 
 	/*
 	 * Select calibration mode:
 	 * - Offset calibration for single ended inputs
 	 * - No linearity calibration (do it later, before reading it)
 	 */
-	stm32_adc_clr_bits(adc, STM32H7_ADC_CR, STM32H7_ADCALDIF);
-	stm32_adc_clr_bits(adc, STM32H7_ADC_CR, STM32H7_ADCALLIN);
+	stm32_adc_clr_bits(adc, STM32H7_ADC_CR, msk);
 
 	/* Start calibration, then wait for completion */
 	stm32_adc_set_bits(adc, STM32H7_ADC_CR, STM32H7_ADCAL);
@@ -1040,8 +1117,7 @@ static int stm32h7_adc_selfcalib(struct iio_dev *indio_dev)
 	 * - Linearity calibration (needs to be done only once for single/diff)
 	 *   will run simultaneously with offset calibration.
 	 */
-	stm32_adc_set_bits(adc, STM32H7_ADC_CR,
-			   STM32H7_ADCALDIF | STM32H7_ADCALLIN);
+	stm32_adc_set_bits(adc, STM32H7_ADC_CR, msk);
 	stm32_adc_set_bits(adc, STM32H7_ADC_CR, STM32H7_ADCAL);
 	ret = stm32_adc_readl_poll_timeout(STM32H7_ADC_CR, val,
 					   !(val & STM32H7_ADCAL), 100,
@@ -1052,8 +1128,7 @@ static int stm32h7_adc_selfcalib(struct iio_dev *indio_dev)
 	}
 
 out:
-	stm32_adc_clr_bits(adc, STM32H7_ADC_CR,
-			   STM32H7_ADCALDIF | STM32H7_ADCALLIN);
+	stm32_adc_clr_bits(adc, STM32H7_ADC_CR, msk);
 
 	return ret;
 }
@@ -1085,7 +1160,7 @@ static int stm32h7_adc_prepare(struct iio_dev *indio_dev)
 
 	stm32_adc_int_ch_enable(indio_dev);
 
-	stm32_adc_writel(adc, STM32H7_ADC_DIFSEL, adc->difsel);
+	stm32_adc_writel(adc, adc->cfg->regs->difsel.reg, adc->difsel);
 
 	ret = stm32h7_adc_enable(indio_dev);
 	if (ret)
@@ -1099,7 +1174,8 @@ static int stm32h7_adc_prepare(struct iio_dev *indio_dev)
 	if (ret)
 		goto disable;
 
-	stm32_adc_writel(adc, STM32H7_ADC_PCSEL, adc->pcsel);
+	if (adc->cfg->has_presel)
+		stm32_adc_writel(adc, STM32H7_ADC_PCSEL, adc->pcsel);
 
 	return 0;
 
@@ -1117,7 +1193,8 @@ static void stm32h7_adc_unprepare(struct iio_dev *indio_dev)
 {
 	struct stm32_adc *adc = iio_priv(indio_dev);
 
-	stm32_adc_writel(adc, STM32H7_ADC_PCSEL, 0);
+	if (adc->cfg->has_presel)
+		stm32_adc_writel(adc, STM32H7_ADC_PCSEL, 0);
 	stm32h7_adc_disable(indio_dev);
 	stm32_adc_int_ch_disable(adc);
 	stm32h7_adc_enter_pwr_down(adc);
@@ -1859,7 +1936,7 @@ static void stm32_adc_chan_init_one(struct iio_dev *indio_dev,
 	adc->pcsel |= BIT(chan->channel);
 	if (differential) {
 		/* pre-build diff channels mask */
-		adc->difsel |= BIT(chan->channel);
+		adc->difsel |= BIT(chan->channel) & adc->cfg->regs->difsel.mask;
 		/* Also add negative input to pre-selected channels */
 		adc->pcsel |= BIT(chan->channel2);
 	}
@@ -2416,6 +2493,9 @@ static const struct stm32_adc_cfg stm32h7_adc_cfg = {
 	.regs = &stm32h7_adc_regspec,
 	.adc_info = &stm32h7_adc_info,
 	.trigs = stm32h7_adc_trigs,
+	.has_boostmode = true,
+	.has_linearcal = true,
+	.has_presel = true,
 	.start_conv = stm32h7_adc_start_conv,
 	.stop_conv = stm32h7_adc_stop_conv,
 	.prepare = stm32h7_adc_prepare,
@@ -2429,6 +2509,9 @@ static const struct stm32_adc_cfg stm32mp1_adc_cfg = {
 	.adc_info = &stm32h7_adc_info,
 	.trigs = stm32h7_adc_trigs,
 	.has_vregready = true,
+	.has_boostmode = true,
+	.has_linearcal = true,
+	.has_presel = true,
 	.start_conv = stm32h7_adc_start_conv,
 	.stop_conv = stm32h7_adc_stop_conv,
 	.prepare = stm32h7_adc_prepare,
@@ -2438,10 +2521,24 @@ static const struct stm32_adc_cfg stm32mp1_adc_cfg = {
 	.ts_vrefint_ns = 4300,
 };
 
+static const struct stm32_adc_cfg stm32mp13_adc_cfg = {
+	.regs = &stm32mp13_adc_regspec,
+	.adc_info = &stm32mp13_adc_info,
+	.trigs = stm32h7_adc_trigs,
+	.start_conv = stm32mp13_adc_start_conv,
+	.stop_conv = stm32h7_adc_stop_conv,
+	.prepare = stm32h7_adc_prepare,
+	.unprepare = stm32h7_adc_unprepare,
+	.smp_cycles = stm32mp13_adc_smp_cycles,
+	.irq_clear = stm32h7_adc_irq_clear,
+};
+
 static const struct of_device_id stm32_adc_of_match[] = {
 	{ .compatible = "st,stm32f4-adc", .data = (void *)&stm32f4_adc_cfg },
 	{ .compatible = "st,stm32h7-adc", .data = (void *)&stm32h7_adc_cfg },
 	{ .compatible = "st,stm32mp1-adc", .data = (void *)&stm32mp1_adc_cfg },
+	{ .compatible = "st,stm32mp13-adc",
+	  .data = (void *)&stm32mp13_adc_cfg },
 	{},
 };
 MODULE_DEVICE_TABLE(of, stm32_adc_of_match);

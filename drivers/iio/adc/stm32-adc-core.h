@@ -154,6 +154,10 @@ enum stm32h7_adc_dmngt {
 	STM32H7_DMNGT_DMA_CIRC,		/* DMA circular mode */
 };
 
+/* STM32H7_ADC_DIFSEL - bit fields */
+#define STM32H7_DIFSEL_SHIFT		0
+#define STM32H7_DIFSEL_MASK		GENMASK(19, 0)
+
 /* STM32H7_ADC_CALFACT - bit fields */
 #define STM32H7_CALFACT_D_SHIFT		16
 #define STM32H7_CALFACT_D_MASK		GENMASK(26, 16)
@@ -180,6 +184,27 @@ enum stm32h7_adc_dmngt {
 
 /* STM32MP1_ADC2_OR - bit fields */
 #define STM32MP1_VDDCOREEN		BIT(0)
+
+/* STM32MP13 - Registers for each ADC instance */
+#define STM32MP13_ADC_DIFSEL		0xB0
+#define STM32MP13_ADC_CALFACT		0xB4
+
+/* STM32MP13_ADC_CFGR specific bit fields */
+#define STM32MP13_DMAEN			BIT(0)
+#define STM32MP13_DMACFG		BIT(1)
+#define STM32MP13_DFSDMCFG		BIT(2)
+#define STM32MP13_RES_SHIFT		3
+#define STM32MP13_RES_MASK		GENMASK(4, 3)
+
+/* STM32MP13_ADC_DIFSEL - bit fields */
+#define STM32MP13_DIFSEL_SHIFT		0
+#define STM32MP13_DIFSEL_MASK		GENMASK(18, 0)
+
+/* STM32MP13_ADC_CALFACT - bit fields */
+#define STM32MP13_CALFACT_D_SHIFT	16
+#define STM32MP13_CALFACT_D_MASK	GENMASK(22, 16)
+#define STM32MP13_CALFACT_S_SHIFT	0
+#define STM32MP13_CALFACT_S_MASK	GENMASK(6, 0)
 
 /**
  * struct stm32_adc_common - stm32 ADC driver common data (for all instances)
