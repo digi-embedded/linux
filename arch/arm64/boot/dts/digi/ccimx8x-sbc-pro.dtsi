@@ -245,6 +245,16 @@
 			regulator-max-microvolt = <3300000>;
 			gpio = <&lsio_gpio4 5 GPIO_ACTIVE_LOW>;
 		};
+
+		/* Dummy regulator to keep PMIC powered via asserted MCA_IO9 */
+		pmic_pwrdn: regulator@9 {
+			compatible = "regulator-fixed";
+			reg = <9>;
+			regulator-name = "pmic-pwrdn";
+			gpio = <&mca_gpio 9 GPIO_ACTIVE_HIGH>;
+			enable-active-high;
+			regulator-always-on;
+		};
 	};
 
 	sound_max98089: sound-max98089 {
