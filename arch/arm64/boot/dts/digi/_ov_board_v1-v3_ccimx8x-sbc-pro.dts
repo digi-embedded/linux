@@ -54,4 +54,12 @@
 			irq-gpios = <&lsio_gpio3 19 GPIO_ACTIVE_LOW>;
 		};
 	};
+
+	/* Disable dummy pmic_pwrdn regulator to free MCA_IO9 */
+	fragment@5 {
+		target = <&pmic_pwrdn>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
 };
