@@ -367,6 +367,21 @@
 	status = "okay";
 };
 
+/* Power LED on MCA_IO13 */
+&mca_led {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	status = "okay";
+
+	led@0 {
+		reg = <0>;
+		label = "power:green";
+		io = <13>;
+		linux,default-trigger = "default-on";
+		retain-state-suspended;
+	};
+};
+
 &irqsteer_csi0 {
 	status = "okay";
 };

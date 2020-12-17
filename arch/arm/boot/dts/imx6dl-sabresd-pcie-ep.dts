@@ -5,8 +5,12 @@
 
 /dts-v1/;
 
-#include "imx8dxl-evk.dts"
+#include "imx6dl-sabresd.dts"
 
-&pcieb {
+&pcie{
+	status = "disabled";
+};
+
+&pcie_ep{
 	status = "okay";
 };

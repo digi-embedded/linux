@@ -46,6 +46,13 @@
 		#reset-cells = <0>;
 	};
 
+	ir_recv: ir-receiver {
+		compatible = "gpio-ir-receiver";
+		gpios = <&gpio1 13 GPIO_ACTIVE_LOW>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_ir_recv>;
+	};
+
 	usdhc1_pwrseq: usdhc1_pwrseq {
 		compatible = "mmc-pwrseq-simple";
 		pinctrl-names = "default";
@@ -86,6 +93,30 @@
 		clocks = <&clk IMX8MN_CLK_SAI3_ROOT>;
 		clock-names = "mclk";
 		wlf,mute-gpios = <&gpio5 21 GPIO_ACTIVE_LOW>;
+	};
+
+	bt_sco_codec: bt_sco_codec {
+		#sound-dai-cells = <1>;
+		compatible = "linux,bt-sco";
+	};
+
+	sound-bt-sco {
+		compatible = "simple-audio-card";
+		simple-audio-card,name = "bt-sco-audio";
+		simple-audio-card,format = "dsp_a";
+		simple-audio-card,bitclock-inversion;
+		simple-audio-card,frame-master = <&btcpu>;
+		simple-audio-card,bitclock-master = <&btcpu>;
+
+		btcpu: simple-audio-card,cpu {
+			sound-dai = <&sai2>;
+			dai-tdm-slot-num = <2>;
+			dai-tdm-slot-width = <16>;
+		};
+
+		simple-audio-card,codec {
+			sound-dai = <&bt_sco_codec 1>;
+		};
 	};
 
 	sound-wm8524 {
@@ -144,6 +175,12 @@
 		pinctrl_hog_1: hoggrp-1 {
 			fsl,pins = <
 				MX8MN_IOMUXC_GPIO1_IO08_GPIO1_IO8		0x16
+			>;
+		};
+
+		pinctrl_ir_recv: ir-recv {
+			fsl,pins = <
+				MX8MN_IOMUXC_GPIO1_IO13_GPIO1_IO13		0x4f
 			>;
 		};
 
@@ -256,6 +293,15 @@
 		pinctrl_pmic: pmicirq {
 			fsl,pins = <
 				MX8MN_IOMUXC_GPIO1_IO03_GPIO1_IO3	0x41
+			>;
+		};
+
+		pinctrl_sai2: sai2grp {
+			fsl,pins = <
+				MX8MN_IOMUXC_SAI2_TXC_SAI2_TX_BCLK      0xd6
+				MX8MN_IOMUXC_SAI2_TXFS_SAI2_TX_SYNC     0xd6
+				MX8MN_IOMUXC_SAI2_TXD0_SAI2_TX_DATA0    0xd6
+				MX8MN_IOMUXC_SAI2_RXD0_SAI2_RX_DATA0    0xd6
 			>;
 		};
 
@@ -838,6 +884,16 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_sai3>;
 	assigned-clocks = <&clk IMX8MN_CLK_SAI3>;
+	assigned-clock-parents = <&clk IMX8MN_AUDIO_PLL1_OUT>;
+	assigned-clock-rates = <24576000>;
+	status = "okay";
+};
+
+&sai2 {
+	#sound-dai-cells = <0>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_sai2>;
+	assigned-clocks = <&clk IMX8MN_CLK_SAI2>;
 	assigned-clock-parents = <&clk IMX8MN_AUDIO_PLL1_OUT>;
 	assigned-clock-rates = <24576000>;
 	status = "okay";

@@ -45,35 +45,30 @@ mlan_status wlan_ret_11n_delba(mlan_private *priv, HostCmd_DS_COMMAND *resp);
 mlan_status wlan_ret_11n_addba_req(mlan_private *priv,
 				   HostCmd_DS_COMMAND *resp);
 /** Handle the command response of 11ncfg command */
-mlan_status wlan_ret_11n_cfg(IN pmlan_private pmpriv,
-			     IN HostCmd_DS_COMMAND *resp,
-			     IN mlan_ioctl_req *pioctl_buf);
+mlan_status wlan_ret_11n_cfg(pmlan_private pmpriv, HostCmd_DS_COMMAND *resp,
+			     mlan_ioctl_req *pioctl_buf);
 /** Prepare 11ncfg command */
-mlan_status wlan_cmd_11n_cfg(IN pmlan_private pmpriv,
-			     IN HostCmd_DS_COMMAND *cmd, IN t_u16 cmd_action,
-			     IN t_void *pdata_buf);
+mlan_status wlan_cmd_11n_cfg(pmlan_private pmpriv, HostCmd_DS_COMMAND *cmd,
+			     t_u16 cmd_action, t_void *pdata_buf);
 /** Prepare reject addba requst command */
-mlan_status wlan_cmd_reject_addba_req(IN pmlan_private pmpriv,
-				      IN HostCmd_DS_COMMAND *cmd,
-				      IN t_u16 cmd_action,
-				      IN t_void *pdata_buf);
+mlan_status wlan_cmd_reject_addba_req(pmlan_private pmpriv,
+				      HostCmd_DS_COMMAND *cmd, t_u16 cmd_action,
+				      t_void *pdata_buf);
 /** Handle the command response of rejecting addba request */
-mlan_status wlan_ret_reject_addba_req(IN pmlan_private pmpriv,
-				      IN HostCmd_DS_COMMAND *resp,
-				      IN mlan_ioctl_req *pioctl_buf);
+mlan_status wlan_ret_reject_addba_req(pmlan_private pmpriv,
+				      HostCmd_DS_COMMAND *resp,
+				      mlan_ioctl_req *pioctl_buf);
 /** Prepare TX BF configuration command */
-mlan_status wlan_cmd_tx_bf_cfg(IN pmlan_private pmpriv,
-			       IN HostCmd_DS_COMMAND *cmd,
-			       IN t_u16 cmd_action, IN t_void *pdata_buf);
+mlan_status wlan_cmd_tx_bf_cfg(pmlan_private pmpriv, HostCmd_DS_COMMAND *cmd,
+			       t_u16 cmd_action, t_void *pdata_buf);
 /** Handle the command response TX BF configuration */
-mlan_status wlan_ret_tx_bf_cfg(IN pmlan_private pmpriv,
-			       IN HostCmd_DS_COMMAND *resp,
-			       IN mlan_ioctl_req *pioctl_buf);
+mlan_status wlan_ret_tx_bf_cfg(pmlan_private pmpriv, HostCmd_DS_COMMAND *resp,
+			       mlan_ioctl_req *pioctl_buf);
 #ifdef STA_SUPPORT
 t_u8 wlan_11n_bandconfig_allowed(mlan_private *pmpriv, t_u8 bss_band);
 /** Append the 802_11N tlv */
-int wlan_cmd_append_11n_tlv(IN mlan_private *pmpriv,
-			    IN BSSDescriptor_t *pbss_desc, OUT t_u8 **ppbuffer);
+int wlan_cmd_append_11n_tlv(mlan_private *pmpriv, BSSDescriptor_t *pbss_desc,
+			    t_u8 **ppbuffer);
 /** wlan fill HT cap tlv */
 void wlan_fill_ht_cap_tlv(mlan_private *priv, MrvlIETypes_HTCap_t *pht_cap,
 			  t_u16 band, t_u8 fill);
@@ -82,8 +77,8 @@ void wlan_fill_ht_cap_ie(mlan_private *priv, IEEEtypes_HTCap_t *pht_cap,
 			 t_u16 bands);
 #endif /* STA_SUPPORT */
 /** Miscellaneous configuration handler */
-mlan_status wlan_11n_cfg_ioctl(IN pmlan_adapter pmadapter,
-			       IN pmlan_ioctl_req pioctl_req);
+mlan_status wlan_11n_cfg_ioctl(pmlan_adapter pmadapter,
+			       pmlan_ioctl_req pioctl_req);
 /** Delete Tx BA stream table entry */
 void wlan_11n_delete_txbastream_tbl_entry(mlan_private *priv,
 					  TxBAStreamTbl *ptx_tbl);
@@ -118,16 +113,15 @@ mlan_status wlan_ret_amsdu_aggr_ctrl(pmlan_private pmpriv,
 				     mlan_ioctl_req *pioctl_buf);
 void wlan_set_tx_pause_flag(mlan_private *priv, t_u8 flag);
 /** reconfigure tx buf size */
-mlan_status wlan_cmd_recfg_tx_buf(mlan_private *priv,
-				  HostCmd_DS_COMMAND *cmd,
+mlan_status wlan_cmd_recfg_tx_buf(mlan_private *priv, HostCmd_DS_COMMAND *cmd,
 				  int cmd_action, void *pdata_buf);
 /** AMSDU aggr control cmd */
 mlan_status wlan_cmd_amsdu_aggr_ctrl(mlan_private *priv,
-				     HostCmd_DS_COMMAND *cmd,
-				     int cmd_action, void *pdata_buf);
+				     HostCmd_DS_COMMAND *cmd, int cmd_action,
+				     void *pdata_buf);
 
-t_u8 wlan_validate_chan_offset(IN mlan_private *pmpriv,
-			       IN t_u16 band, IN t_u32 chan, IN t_u8 chan_bw);
+t_u8 wlan_validate_chan_offset(mlan_private *pmpriv, t_u16 band, t_u32 chan,
+			       t_u8 chan_bw);
 /** get channel offset */
 t_u8 wlan_get_second_channel_offset(int chan);
 
@@ -142,8 +136,7 @@ void wlan_11n_cleanup_txbastream_tbl(mlan_private *priv, t_u8 *ra);
  *  @param mac      station mac address
  *  @return         MTRUE or MFALSE
  */
-static INLINE t_u8
-is_station_11n_enabled(mlan_private *priv, t_u8 *mac)
+static INLINE t_u8 is_station_11n_enabled(mlan_private *priv, t_u8 *mac)
 {
 	sta_node *sta_ptr = MNULL;
 	sta_ptr = wlan_get_station_entry(priv, mac);
@@ -159,8 +152,7 @@ is_station_11n_enabled(mlan_private *priv, t_u8 *mac)
  *  @param mac      station mac address
  *  @return         max amsdu size statio supported
  */
-static INLINE t_u16
-get_station_max_amsdu_size(mlan_private *priv, t_u8 *mac)
+static INLINE t_u16 get_station_max_amsdu_size(mlan_private *priv, t_u8 *mac)
 {
 	sta_node *sta_ptr = MNULL;
 	sta_ptr = wlan_get_station_entry(priv, mac);
@@ -177,8 +169,8 @@ get_station_max_amsdu_size(mlan_private *priv, t_u8 *mac)
  *  @param tid      TID value for ptr
  *  @return         MTRUE or MFALSE
  */
-static INLINE t_u8
-is_station_ampdu_allowed(mlan_private *priv, raListTbl *ptr, int tid)
+static INLINE t_u8 is_station_ampdu_allowed(mlan_private *priv, raListTbl *ptr,
+					    int tid)
 {
 	sta_node *sta_ptr = MNULL;
 	sta_ptr = wlan_get_station_entry(priv, ptr->ra);
@@ -188,8 +180,9 @@ is_station_ampdu_allowed(mlan_private *priv, raListTbl *ptr, int tid)
 			    !sta_ptr->wapi_key_on)
 				return MFALSE;
 		}
-		return (sta_ptr->ampdu_sta[tid] != BA_STREAM_NOT_ALLOWED)
-			? MTRUE : MFALSE;
+		return (sta_ptr->ampdu_sta[tid] != BA_STREAM_NOT_ALLOWED) ?
+			       MTRUE :
+			       MFALSE;
 	}
 	return MFALSE;
 }
@@ -202,8 +195,7 @@ is_station_ampdu_allowed(mlan_private *priv, raListTbl *ptr, int tid)
  *  @param ra      station mac address
  *  @return        N/A
  */
-static INLINE void
-disable_station_ampdu(mlan_private *priv, t_u8 tid, t_u8 *ra)
+static INLINE void disable_station_ampdu(mlan_private *priv, t_u8 tid, t_u8 *ra)
 {
 	sta_node *sta_ptr = MNULL;
 	sta_ptr = wlan_get_station_entry(priv, ra);
@@ -220,8 +212,7 @@ disable_station_ampdu(mlan_private *priv, t_u8 tid, t_u8 *ra)
  *  @param ra      station mac address
  *  @return        N/A
  */
-static INLINE void
-reset_station_ampdu(mlan_private *priv, t_u8 tid, t_u8 *ra)
+static INLINE void reset_station_ampdu(mlan_private *priv, t_u8 tid, t_u8 *ra)
 {
 	sta_node *sta_ptr = MNULL;
 	sta_ptr = wlan_get_station_entry(priv, ra);
@@ -240,10 +231,9 @@ reset_station_ampdu(mlan_private *priv, t_u8 tid, t_u8 *ra)
  *
  *  @return         MTRUE or MFALSE
  */
-static INLINE t_u8
-wlan_is_ampdu_allowed(mlan_private *priv, raListTbl *ptr, int tid)
+static INLINE t_u8 wlan_is_ampdu_allowed(mlan_private *priv, raListTbl *ptr,
+					 int tid)
 {
-
 	if ((!priv->is_data_rate_auto) && IS_BG_RATE)
 		return MFALSE;
 #ifdef UAP_SUPPORT
@@ -252,14 +242,15 @@ wlan_is_ampdu_allowed(mlan_private *priv, raListTbl *ptr, int tid)
 #endif /* UAP_SUPPORT */
 	if (priv->sec_info.wapi_enabled && !priv->sec_info.wapi_key_on)
 		return MFALSE;
-	return (priv->aggr_prio_tbl[tid].ampdu_ap != BA_STREAM_NOT_ALLOWED)
-		? MTRUE : MFALSE;
+	return (priv->aggr_prio_tbl[tid].ampdu_ap != BA_STREAM_NOT_ALLOWED) ?
+		       MTRUE :
+		       MFALSE;
 }
 
-#define BA_RSSI_HIGH_THRESHOLD  -70
+#define BA_RSSI_HIGH_THRESHOLD -70
 
-static INLINE void
-wlan_update_station_del_ba_count(mlan_private *priv, raListTbl *ptr)
+static INLINE void wlan_update_station_del_ba_count(mlan_private *priv,
+						    raListTbl *ptr)
 {
 	sta_node *sta_ptr = MNULL;
 	t_s8 rssi;
@@ -272,8 +263,7 @@ wlan_update_station_del_ba_count(mlan_private *priv, raListTbl *ptr)
 	return;
 }
 
-static INLINE void
-wlan_update_del_ba_count(mlan_private *priv, raListTbl *ptr)
+static INLINE void wlan_update_del_ba_count(mlan_private *priv, raListTbl *ptr)
 {
 	t_s8 rssi;
 #ifdef UAP_802_11N
@@ -296,8 +286,8 @@ wlan_update_del_ba_count(mlan_private *priv, raListTbl *ptr)
  *
  *  @return         MTRUE or MFALSE
  */
-static INLINE t_u8
-wlan_is_amsdu_allowed(mlan_private *priv, raListTbl *ptr, int tid)
+static INLINE t_u8 wlan_is_amsdu_allowed(mlan_private *priv, raListTbl *ptr,
+					 int tid)
 {
 #ifdef UAP_SUPPORT
 	sta_node *sta_ptr = MNULL;
@@ -315,11 +305,12 @@ wlan_is_amsdu_allowed(mlan_private *priv, raListTbl *ptr, int tid)
 	}
 #endif /* UAP_SUPPORT */
 #define TXRATE_BITMAP_INDEX_MCS0_7 2
-	return ((priv->aggr_prio_tbl[tid].amsdu != BA_STREAM_NOT_ALLOWED)
-		&&((priv->is_data_rate_auto)
-		   ||
-		   !(((priv->bitmap_rates[TXRATE_BITMAP_INDEX_MCS0_7]) & 0x03)
-		     || IS_BG_RATE))) ? MTRUE : MFALSE;
+	return ((priv->aggr_prio_tbl[tid].amsdu != BA_STREAM_NOT_ALLOWED) &&
+		((priv->is_data_rate_auto) ||
+		 !(((priv->bitmap_rates[TXRATE_BITMAP_INDEX_MCS0_7]) & 0x03) ||
+		   IS_BG_RATE))) ?
+		       MTRUE :
+		       MFALSE;
 }
 
 /**
@@ -329,8 +320,7 @@ wlan_is_amsdu_allowed(mlan_private *priv, raListTbl *ptr, int tid)
  *
  *  @return         MTRUE or MFALSE
  */
-static INLINE t_u8
-wlan_is_bastream_avail(mlan_private *priv)
+static INLINE t_u8 wlan_is_bastream_avail(mlan_private *priv)
 {
 	mlan_private *pmpriv = MNULL;
 	t_u8 i = 0;
@@ -339,9 +329,8 @@ wlan_is_bastream_avail(mlan_private *priv)
 	for (i = 0; i < priv->adapter->priv_num; i++) {
 		pmpriv = priv->adapter->priv[i];
 		if (pmpriv)
-			bastream_num +=
-				wlan_wmm_list_len((pmlan_list_head)&pmpriv->
-						  tx_ba_stream_tbl_ptr);
+			bastream_num += wlan_wmm_list_len(
+				(pmlan_list_head)&pmpriv->tx_ba_stream_tbl_ptr);
 	}
 	bastream_max = ISSUPP_GETTXBASTREAM(priv->adapter->hw_dot_11n_dev_cap);
 	if (bastream_max == 0)
@@ -360,9 +349,9 @@ wlan_is_bastream_avail(mlan_private *priv)
  *
  *  @return         MTRUE or MFALSE
  */
-static INLINE t_u8
-wlan_find_stream_to_delete(mlan_private *priv,
-			   raListTbl *ptr, int ptr_tid, int *ptid, t_u8 *ra)
+static INLINE t_u8 wlan_find_stream_to_delete(mlan_private *priv,
+					      raListTbl *ptr, int ptr_tid,
+					      int *ptid, t_u8 *ra)
 {
 	int tid;
 	t_u8 ret = MFALSE;
@@ -403,8 +392,7 @@ wlan_find_stream_to_delete(mlan_private *priv,
  *
  *  @return         MTRUE or MFALSE
  */
-static INLINE int
-wlan_is_11n_enabled(mlan_private *priv, t_u8 *ra)
+static INLINE int wlan_is_11n_enabled(mlan_private *priv, t_u8 *ra)
 {
 	int ret = MFALSE;
 	ENTER();

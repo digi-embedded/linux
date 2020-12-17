@@ -3,7 +3,7 @@
 // DSP driver compress implementation
 //
 // Copyright (c) 2012-2013 by Tensilica Inc. ALL RIGHTS RESERVED.
-// Copyright 2018 NXP
+// Copyright 2018-2020 NXP
 
 #include <linux/pm_runtime.h>
 #include <sound/soc.h>
@@ -14,7 +14,7 @@
 #include "fsl_dsp_platform.h"
 #include "fsl_dsp_xaf_api.h"
 
-#define NUM_CODEC 2
+#define NUM_CODEC 3
 #define MIN_FRAGMENT 1
 #define MAX_FRAGMENT 1
 #define MIN_FRAGMENT_SIZE (4 * 1024)
@@ -33,6 +33,7 @@ void dsp_platform_process(struct work_struct *w)
 			return;
 		if (rmsg->opcode == XF_EMPTY_THIS_BUFFER) {
 			client->consume_bytes += rmsg->length;
+			atomic_inc(&client->buffer_cnt);
 			snd_compr_fragment_elapsed(client->cstream);
 
 			if (rmsg->buffer == NULL && rmsg->length == 0)
@@ -80,11 +81,24 @@ static int dsp_platform_compr_free(struct snd_compr_stream *cstream)
 	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
 	struct fsl_dsp  *dsp_priv = snd_soc_component_get_drvdata(component);
 	struct dsp_data *drv = &dsp_priv->dsp_data;
+	struct xf_proxy *p_proxy = &dsp_priv->proxy;
 	int ret;
 
 	if (cstream->runtime->state != SNDRV_PCM_STATE_PAUSED &&
-		cstream->runtime->state != SNDRV_PCM_STATE_RUNNING &&
 		cstream->runtime->state != SNDRV_PCM_STATE_DRAINING) {
+		if (dsp_priv->dsp_is_lpa) {
+			ret = xaf_comp_flush(drv->client, &drv->component[0]);
+			if (ret) {
+				dev_err(component->dev, "Fail to flush component, err = %d\n", ret);
+				return ret;
+			}
+
+			ret = xaf_comp_flush(drv->client, &drv->component[1]);
+			if (ret) {
+				dev_err(component->dev, "Fail to flush component, err = %d\n", ret);
+				return ret;
+			}
+		}
 
 		ret = xaf_comp_delete(drv->client, &drv->component[1]);
 		if (ret) {
@@ -97,6 +111,7 @@ static int dsp_platform_compr_free(struct snd_compr_stream *cstream)
 			dev_err(component->dev, "Fail to delete component, err = %d\n", ret);
 			return ret;
 		}
+		xf_pool_free(drv->client, p_proxy->aux);
 	}
 
 	cpu_dai->driver->ops->shutdown(NULL, cpu_dai);
@@ -123,6 +138,10 @@ static int dsp_platform_compr_set_params(struct snd_compr_stream *cstream,
 	int ret;
 
 	switch (params->codec.id) {
+	case SND_AUDIOCODEC_PCM:
+		drv->codec_type = CODEC_PCM_DEC;
+		atomic_set(&drv->client->buffer_cnt, 2);
+		break;
 	case SND_AUDIOCODEC_MP3:
 		drv->codec_type = CODEC_MP3_DEC;
 		break;
@@ -194,6 +213,23 @@ static int dsp_platform_compr_set_params(struct snd_compr_stream *cstream,
 
 	drv->client->input_bytes = 0;
 	drv->client->consume_bytes = 0;
+	drv->client->offset = 0;
+	drv->client->ping_pong_offset = 0;
+
+	if (drv->codec_type == CODEC_PCM_DEC) {
+		s_param.id = XA_PCM_CONFIG_PARAM_IN_PCM_WIDTH;
+		if (params->codec.format == SNDRV_PCM_FORMAT_S32_LE)
+			s_param.mixData.value = 32;
+		else
+			s_param.mixData.value = 16;
+		ret = xaf_comp_set_config(drv->client, &drv->component[0], 1, &s_param);
+		if (ret) {
+			dev_err(component->dev,
+				"set param[cmd:0x%x|val:0x%x] error, err = %d\n",
+				s_param.id, s_param.mixData.value, ret);
+			goto err_comp1_create;
+		}
+	}
 
 	s_param.id = XA_RENDERER_CONFIG_PARAM_SAMPLE_RATE;
 	s_param.mixData.value = params->codec.sample_rate;
@@ -245,23 +281,25 @@ static int dsp_platform_compr_trigger_start(struct snd_compr_stream *cstream)
 	struct xaf_comp *p_comp = &drv->component[0];
 	int ret;
 
-	ret = xaf_comp_process(drv->client,
+	if (!dsp_priv->dsp_is_lpa) {
+		ret = xaf_comp_process(drv->client,
 				p_comp,
 				p_comp->inptr,
 				drv->client->input_bytes,
 				XF_EMPTY_THIS_BUFFER);
 
-	ret = xaf_connect(drv->client,
+		ret = xaf_connect(drv->client,
 				&drv->component[0],
 				&drv->component[1],
 				1,
 				OUTBUF_SIZE);
-	if (ret) {
-		dev_err(component->dev, "Failed to connect component, err = %d\n", ret);
-		return ret;
-	}
+		if (ret) {
+			dev_err(component->dev, "Failed to connect component, err = %d\n", ret);
+			return ret;
+		}
 
-	schedule_work(&drv->client->work);
+		schedule_work(&drv->client->work);
+	}
 
 	return 0;
 }
@@ -285,17 +323,23 @@ static int dsp_platform_compr_trigger_stop(struct snd_compr_stream *cstream)
 		dev_err(component->dev, "Fail to flush component, err = %d\n", ret);
 		return ret;
 	}
+	drv->client->input_bytes = 0;
+	drv->client->consume_bytes = 0;
+	drv->client->offset = 0;
+	drv->client->ping_pong_offset = 0;
 
-	ret = xaf_comp_delete(drv->client, &drv->component[0]);
-	if (ret) {
-		dev_err(component->dev, "Fail to delete component, err = %d\n", ret);
-		return ret;
-	}
+	if (!dsp_priv->dsp_is_lpa) {
+		ret = xaf_comp_delete(drv->client, &drv->component[0]);
+		if (ret) {
+			dev_err(component->dev, "Fail to delete component, err = %d\n", ret);
+			return ret;
+		}
 
-	ret = xaf_comp_delete(drv->client, &drv->component[1]);
-	if (ret) {
-		dev_err(component->dev, "Fail to delete component, err = %d\n", ret);
-		return ret;
+		ret = xaf_comp_delete(drv->client, &drv->component[1]);
+		if (ret) {
+			dev_err(component->dev, "Fail to delete component, err = %d\n", ret);
+			return ret;
+		}
 	}
 
 	return 0;
@@ -317,6 +361,39 @@ static int dsp_platform_compr_trigger_drain(struct snd_compr_stream *cstream)
 	return 0;
 }
 
+static int dsp_platform_compr_trigger_pause(struct snd_compr_stream *cstream)
+{
+	struct snd_soc_pcm_runtime *rtd = cstream->private_data;
+	struct snd_soc_component *component = snd_soc_rtdcom_lookup(rtd, FSL_DSP_COMP_NAME);
+	struct fsl_dsp *dsp_priv = snd_soc_component_get_drvdata(component);
+	struct xf_proxy  *proxy  = &dsp_priv->proxy;
+	int ret;
+
+	ret = xf_cmd_send_pause(proxy);
+	if (ret) {
+		dev_err(component->dev, "trigger pause err = %d\n", ret);
+		return ret;
+	}
+	return 0;
+}
+
+static int dsp_platform_compr_trigger_pause_release(struct snd_compr_stream *cstream)
+{
+	struct snd_soc_pcm_runtime *rtd = cstream->private_data;
+	struct snd_soc_component *component = snd_soc_rtdcom_lookup(rtd, FSL_DSP_COMP_NAME);
+	struct fsl_dsp *dsp_priv = snd_soc_component_get_drvdata(component);
+	struct xf_proxy  *proxy  = &dsp_priv->proxy;
+	int ret;
+
+	ret = xf_cmd_send_pause_release(proxy);
+	if (ret) {
+		dev_err(component->dev, "trigger pause release err = %d\n", ret);
+		return ret;
+	}
+
+	return 0;
+}
+
 static int dsp_platform_compr_trigger(struct snd_compr_stream *cstream, int cmd)
 {
 	int ret = 0;
@@ -334,8 +411,10 @@ static int dsp_platform_compr_trigger(struct snd_compr_stream *cstream, int cmd)
 	case SND_COMPR_TRIGGER_PARTIAL_DRAIN:
 		break;
 	case SNDRV_PCM_TRIGGER_PAUSE_PUSH:
+		ret = dsp_platform_compr_trigger_pause(cstream);
 		break;
 	case SNDRV_PCM_TRIGGER_PAUSE_RELEASE:
+		ret = dsp_platform_compr_trigger_pause_release(cstream);
 		break;
 	}
 
@@ -363,7 +442,11 @@ static int dsp_platform_compr_pointer(struct snd_compr_stream *cstream,
 		goto out;
 	}
 
-	tstamp->copied_total = drv->client->input_bytes;
+	if ((drv->codec_type != CODEC_PCM_DEC && drv->client->input_bytes != drv->client->consume_bytes)
+			|| (drv->codec_type == CODEC_PCM_DEC && atomic_read(&drv->client->buffer_cnt) <= 0))
+		tstamp->copied_total = drv->client->input_bytes+drv->client->offset-4096;
+	else
+		tstamp->copied_total = drv->client->input_bytes+drv->client->offset;
 	tstamp->byte_offset = drv->client->input_bytes;
 	tstamp->pcm_frames = 0x900;
 	tstamp->pcm_io_frames = g_param[1].mixData.value;
@@ -414,6 +497,140 @@ static int dsp_platform_compr_copy(struct snd_compr_stream *cstream,
 	return copied;
 }
 
+static int dsp_platform_compr_lpa_pcm_copy(struct snd_compr_stream *cstream,
+					char __user *buf,
+					size_t count)
+{
+	struct snd_soc_pcm_runtime *rtd = cstream->private_data;
+	struct snd_soc_component *component = snd_soc_rtdcom_lookup(rtd, FSL_DSP_COMP_NAME);
+	struct fsl_dsp *dsp_priv = snd_soc_component_get_drvdata(component);
+	struct dsp_data *drv = &dsp_priv->dsp_data;
+	struct xaf_comp *p_comp = &drv->component[0];
+	int copied = 0;
+	int ret;
+
+	if (atomic_read(&drv->client->buffer_cnt) > 0) {
+		if (drv->client->offset+count >= (INBUF_SIZE_LPA_PCM>>1)-4096 || !buf) {
+			/* buf == NULL and count == 1 is for drain and */
+			/* suspend as tinycompress drain is blocking call */
+			copied = count;
+			if (!buf)
+				copied = 0;
+			if (buf) {
+				ret = copy_from_user(p_comp->inptr+drv->client->ping_pong_offset+drv->client->offset, buf, copied);
+				if (ret) {
+					dev_err(component->dev, "failed to get message from user space\n");
+					return -EFAULT;
+				}
+			}
+
+			if (cstream->runtime->state == SNDRV_PCM_STATE_RUNNING) {
+				ret = xaf_comp_process(drv->client, p_comp,
+						p_comp->inptr+drv->client->ping_pong_offset, drv->client->offset+copied,
+						XF_EMPTY_THIS_BUFFER);
+				if (!drv->client->input_bytes) {
+					ret = xaf_connect(drv->client,
+							&drv->component[0],
+							&drv->component[1],
+							1,
+							OUTBUF_SIZE);
+					if (ret) {
+						dev_err(component->dev, "Failed to connect component, err = %d\n", ret);
+						return ret;
+					}
+				}
+
+				schedule_work(&drv->client->work);
+				drv->client->input_bytes += drv->client->offset+copied;
+				drv->client->offset = 0;
+				atomic_dec(&drv->client->buffer_cnt);
+				if (drv->client->ping_pong_offset)
+					drv->client->ping_pong_offset = 0;
+				else
+					drv->client->ping_pong_offset = INBUF_SIZE_LPA_PCM>>1;
+			}
+			if (!buf)
+				copied = count;
+		} else {
+			ret = copy_from_user(p_comp->inptr+drv->client->ping_pong_offset+drv->client->offset, buf, count);
+			if (ret) {
+				dev_err(component->dev, "failed to get message from user space\n");
+				return -EFAULT;
+			}
+			copied = count;
+			drv->client->offset += copied;
+		}
+	}
+
+	return copied;
+}
+
+static int dsp_platform_compr_lpa_copy(struct snd_compr_stream *cstream,
+					char __user *buf,
+					size_t count)
+{
+	struct snd_soc_pcm_runtime *rtd = cstream->private_data;
+	struct snd_soc_component *component = snd_soc_rtdcom_lookup(rtd, FSL_DSP_COMP_NAME);
+	struct fsl_dsp *dsp_priv = snd_soc_component_get_drvdata(component);
+	struct dsp_data *drv = &dsp_priv->dsp_data;
+	struct xaf_comp *p_comp = &drv->component[0];
+	int copied = 0;
+	int ret;
+
+	if (drv->codec_type == CODEC_PCM_DEC)
+		return dsp_platform_compr_lpa_pcm_copy(cstream, buf, count);
+
+	if (drv->client->input_bytes == drv->client->consume_bytes) {
+		if (drv->client->offset+count >= INBUF_SIZE_LPA-4096 || !buf) {
+			/* buf == NULL and count == 1 is for drain and */
+			/* suspend as tinycompress drain is blocking call */
+			copied = count;
+			if (!buf)
+				copied = 0;
+			if (buf) {
+				ret = copy_from_user(p_comp->inptr+drv->client->offset, buf, copied);
+				if (ret) {
+					dev_err(component->dev, "failed to get message from user space\n");
+					return -EFAULT;
+				}
+			}
+
+			if (cstream->runtime->state == SNDRV_PCM_STATE_RUNNING) {
+				ret = xaf_comp_process(drv->client, p_comp,
+						p_comp->inptr, drv->client->offset+copied,
+						XF_EMPTY_THIS_BUFFER);
+				if (!drv->client->input_bytes) {
+					ret = xaf_connect(drv->client,
+							&drv->component[0],
+							&drv->component[1],
+							1,
+							OUTBUF_SIZE);
+					if (ret) {
+						dev_err(component->dev, "Failed to connect component, err = %d\n", ret);
+						return ret;
+					}
+				}
+
+				schedule_work(&drv->client->work);
+				drv->client->input_bytes += drv->client->offset+copied;
+				drv->client->offset = 0;
+			}
+			if (!buf)
+				copied = count;
+		} else {
+			ret = copy_from_user(p_comp->inptr+drv->client->offset, buf, count);
+			if (ret) {
+				dev_err(component->dev, "failed to get message from user space\n");
+				return -EFAULT;
+			}
+			copied = count;
+			drv->client->offset += copied;
+		}
+	}
+
+	return copied;
+}
+
 static int dsp_platform_compr_get_caps(struct snd_compr_stream *cstream,
 					struct snd_compr_caps *caps)
 {
@@ -424,9 +641,31 @@ static int dsp_platform_compr_get_caps(struct snd_compr_stream *cstream,
 	caps->max_fragments = MAX_FRAGMENT;
 	caps->codecs[0] = SND_AUDIOCODEC_MP3;
 	caps->codecs[1] = SND_AUDIOCODEC_AAC;
+	caps->codecs[2] = SND_AUDIOCODEC_PCM;
 
 	return 0;
 }
+
+static struct snd_compr_codec_caps caps_pcm = {
+	.num_descriptors = 1,
+	.descriptor[0].max_ch = 2,
+	.descriptor[0].sample_rates[0] = 192000,
+	.descriptor[0].sample_rates[1] = 176400,
+	.descriptor[0].sample_rates[2] = 96000,
+	.descriptor[0].sample_rates[3] = 88200,
+	.descriptor[0].sample_rates[4] = 48000,
+	.descriptor[0].sample_rates[5] = 44100,
+	.descriptor[0].sample_rates[6] = 32000,
+	.descriptor[0].sample_rates[7] = 16000,
+	.descriptor[0].sample_rates[8] = 8000,
+	.descriptor[0].num_sample_rates = 9,
+	.descriptor[0].bit_rate[0] = 320,
+	.descriptor[0].bit_rate[1] = 192,
+	.descriptor[0].num_bitrates = 2,
+	.descriptor[0].profiles = SND_AUDIOPROFILE_PCM,
+	.descriptor[0].modes = 0,
+	.descriptor[0].formats = SNDRV_PCM_FMTBIT_S16_LE | SNDRV_PCM_FMTBIT_S32_LE,
+};
 
 static struct snd_compr_codec_caps caps_mp3 = {
 	.num_descriptors = 1,
@@ -471,6 +710,8 @@ static int dsp_platform_compr_get_codec_caps(struct snd_compr_stream *cstream,
 		*codec = caps_mp3;
 	else if (codec->codec == SND_AUDIOCODEC_AAC)
 		*codec = caps_aac;
+	else if (codec->codec == SND_AUDIOCODEC_PCM)
+		*codec = caps_pcm;
 	else
 		return -EINVAL;
 
@@ -491,6 +732,18 @@ const struct snd_compr_ops dsp_platform_compr_ops = {
 	.trigger = dsp_platform_compr_trigger,
 	.pointer = dsp_platform_compr_pointer,
 	.copy = dsp_platform_compr_copy,
+	.get_caps = dsp_platform_compr_get_caps,
+	.get_codec_caps = dsp_platform_compr_get_codec_caps,
+};
+
+const struct snd_compr_ops dsp_platform_compr_lpa_ops = {
+	.open = dsp_platform_compr_open,
+	.free = dsp_platform_compr_free,
+	.set_params = dsp_platform_compr_set_params,
+	.set_metadata = dsp_platform_compr_set_metadata,
+	.trigger = dsp_platform_compr_trigger,
+	.pointer = dsp_platform_compr_pointer,
+	.copy = dsp_platform_compr_lpa_copy,
 	.get_caps = dsp_platform_compr_get_caps,
 	.get_codec_caps = dsp_platform_compr_get_codec_caps,
 };

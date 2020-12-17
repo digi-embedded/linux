@@ -36,17 +36,6 @@
 		};
 	};
 
-	leds {
-		compatible = "gpio-leds";
-
-		power {
-			label = "power:green:power";
-			default-state = "on";
-			linux,default-trigger = "default-on";
-			gpios = <&mca_gpio 13 GPIO_ACTIVE_HIGH>;
-		};
-	};
-
 	lvds_backlight0: lvds_backlight@0 {
 		compatible = "pwm-backlight";
 		pwms = <&pwm_mipi_lvds0 0 100000 0>;

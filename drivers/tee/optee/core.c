@@ -215,6 +215,8 @@ static void optee_get_version(struct tee_device *teedev,
 
 	if (optee->sec_caps & OPTEE_SMC_SEC_CAP_DYNAMIC_SHM)
 		v.gen_caps |= TEE_GEN_CAP_REG_MEM;
+	if (optee->sec_caps & OPTEE_SMC_SEC_CAP_MEMREF_NULL)
+		v.gen_caps |= TEE_GEN_CAP_MEMREF_NULL;
 	*vers = v;
 }
 
@@ -245,6 +247,11 @@ static int optee_open(struct tee_context *ctx)
 
 	mutex_init(&ctxdata->mutex);
 	INIT_LIST_HEAD(&ctxdata->sess_list);
+
+	if (optee->sec_caps & OPTEE_SMC_SEC_CAP_MEMREF_NULL)
+		ctx->cap_memref_null  = true;
+	else
+		ctx->cap_memref_null = false;
 
 	ctx->data = ctxdata;
 	return 0;
@@ -606,6 +613,10 @@ static struct optee *optee_probe(struct device_node *np)
 		goto err;
 	}
 
+#if defined(CONFIG_HAVE_IMX_BUSFREQ)
+	if (of_find_compatible_node(NULL, NULL, "fsl,imx_busfreq"))
+		sec_caps |= OPTEE_SMC_SEC_CAP_IMX_BUSFREQ;
+#endif
 	optee->invoke_fn = invoke_fn;
 	optee->sec_caps = sec_caps;
 

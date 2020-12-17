@@ -384,6 +384,11 @@
 			compatible = "digi,mca-keypad";
 			status = "disabled";
 		};
+
+		mca_led: led {
+			compatible = "digi,mca-led";
+			status = "disabled";
+		};
 	};
 };
 

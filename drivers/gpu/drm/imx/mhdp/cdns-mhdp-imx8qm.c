@@ -10,7 +10,8 @@
 #include <linux/firmware.h>
 #include <linux/pm_domain.h>
 #include <linux/clk.h>
-#include <drm/drmP.h>
+#include <drm/drm_vblank.h>
+#include <drm/drm_print.h>
 
 #include "cdns-mhdp-imx.h"
 
@@ -21,7 +22,7 @@
 #define PLL_800MHZ (800000000)
 
 #define HDP_DUAL_MODE_MIN_PCLK_RATE	300000	/* KHz */
-#define HDP_SINGLE_MODE_MAX_WIDTH	1920
+#define HDP_SINGLE_MODE_MAX_WIDTH	2560
 
 #define CSR_PIXEL_LINK_MUX_CTL		0x00
 #define CSR_PIXEL_LINK_MUX_VCP_OFFSET		5
@@ -166,7 +167,7 @@ int imx8qm_clocks_init(struct imx_mhdp_device *imx_mhdp)
 	}
 
 	clks->clk_pxl_link = devm_clk_get(dev, "clk_pxl_link");
-	if (IS_ERR(clks->clk_pxl_mux)) {
+	if (IS_ERR(clks->clk_pxl_link)) {
 		dev_warn(dev, "failed to get pxl link clk\n");
 		return PTR_ERR(clks->clk_pxl_link);
 	}

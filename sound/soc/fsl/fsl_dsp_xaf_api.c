@@ -178,8 +178,9 @@ int xaf_comp_create(struct xf_client *client, struct xf_proxy *proxy,
 	char   lib_wrap_path[200];
 	struct xf_handle *p_handle;
 	struct xf_buffer *buf;
-	int    ret = 0;
+	int    ret = 0, size;
 	bool   loadlib = true;
+	bool   request_inbuf = true;
 
 	memset((void *)p_comp, 0, sizeof(struct xaf_comp));
 
@@ -190,8 +191,13 @@ int xaf_comp_create(struct xf_client *client, struct xf_proxy *proxy,
 
 	p_comp->comp_type = comp_type;
 
-	if (comp_type == RENDER_ESAI || comp_type == RENDER_SAI)
+	/* No need to load library for PCM */
+	if (comp_type == RENDER_ESAI || comp_type == RENDER_SAI || comp_type == CODEC_PCM_DEC)
 		loadlib = false;
+
+	/* Need to allocate in buffer for PCM */
+	if (comp_type == RENDER_ESAI || comp_type == RENDER_SAI)
+		request_inbuf = false;
 
 	if (loadlib) {
 		p_comp->codec_lib.filename      = lib_path;
@@ -199,10 +205,18 @@ int xaf_comp_create(struct xf_client *client, struct xf_proxy *proxy,
 		p_comp->codec_lib.lib_type      = DSP_CODEC_LIB;
 	}
 
+	size = INBUF_SIZE;
 	switch (comp_type) {
+	case CODEC_PCM_DEC:
+		p_comp->dec_id = "audio-decoder/pcm";
+		if (dsp_priv->dsp_is_lpa)
+			size = INBUF_SIZE_LPA_PCM;
+		break;
 	case CODEC_MP3_DEC:
 		p_comp->dec_id = "audio-decoder/mp3";
 		strcat(lib_path, "lib_dsp_mp3_dec.so");
+		if (dsp_priv->dsp_is_lpa)
+			size = INBUF_SIZE_LPA;
 		break;
 	case CODEC_AAC_DEC:
 		p_comp->dec_id = "audio-decoder/aac";
@@ -245,9 +259,11 @@ int xaf_comp_create(struct xf_client *client, struct xf_proxy *proxy,
 			dev_err(dsp_priv->dev, "load codec lib error\n");
 			goto err_codec_load;
 		}
+	}
 
+	if (request_inbuf) {
 		/* ...allocate input buffer */
-		ret = xf_pool_alloc(client, proxy, 1, INBUF_SIZE,
+		ret = xf_pool_alloc(client, proxy, 1, size,
 				    XF_POOL_INPUT, &p_comp->inpool);
 		if (ret) {
 			dev_err(dsp_priv->dev, "alloc input buf error\n");

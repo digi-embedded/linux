@@ -51,6 +51,8 @@ Optional properties:
 - fsl,phy-pcs-tx-swing-full: This property sets the launch amplitude of the
 			     transmitter, default value is 120 (7b'1111000)
 			     on imx8mp.
+- vbus-power-supply: A phandle to the vbus power supply provider, used to
+		     to detect the possible BC charger type of it.
 Example:
 	usb3_phy0: phy@381f0040 {
 		compatible = "fsl,imx8mq-usb-phy";

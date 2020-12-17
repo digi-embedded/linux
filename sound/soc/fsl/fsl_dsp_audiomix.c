@@ -21,10 +21,20 @@ void imx_audiomix_dsp_start(struct imx_audiomix_dsp_data *data)
 	u32 val;
 
 	val = readl(data->base + AudioDSP_REG2);
-	val &= ~(1 << 5);
+	val &= ~AudioDSP_REG2_RUNSTALL;
 	writel(val, data->base + AudioDSP_REG2);
 }
 EXPORT_SYMBOL(imx_audiomix_dsp_start);
+
+void imx_audiomix_dsp_stall(struct imx_audiomix_dsp_data *data)
+{
+	u32 val;
+
+	val = readl(data->base + AudioDSP_REG2);
+	val |= AudioDSP_REG2_RUNSTALL;
+	writel(val, data->base + AudioDSP_REG2);
+}
+EXPORT_SYMBOL(imx_audiomix_dsp_stall);
 
 void imx_audiomix_dsp_pid_set(struct imx_audiomix_dsp_data *data, u32 val)
 {
@@ -43,6 +53,18 @@ bool imx_audiomix_dsp_reset(struct imx_audiomix_dsp_data *data)
 		return false;
 }
 EXPORT_SYMBOL(imx_audiomix_dsp_reset);
+
+bool imx_audiomix_dsp_pwaitmode(struct imx_audiomix_dsp_data *data)
+{
+	u32 val;
+
+	val = readl(data->base + AudioDSP_REG2);
+	if (val & AudioDSP_REG2_PWAITMODE)
+		return true;
+	else
+		return false;
+}
+EXPORT_SYMBOL(imx_audiomix_dsp_pwaitmode);
 
 static int imx_audiomix_dsp_probe(struct platform_device *pdev)
 {

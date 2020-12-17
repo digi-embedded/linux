@@ -49,17 +49,6 @@
 		stdout-path = &uart1;
 	};
 
-	leds {
-		compatible = "gpio-leds";
-
-		power {
-			label = "power:green:power";
-			default-state = "on";
-			linux,default-trigger = "default-on";
-			gpios = <&mca_gpio 13 GPIO_ACTIVE_HIGH>;
-		};
-	};
-
 	lvds_backlight: lvds_backlight {
 		compatible = "pwm-backlight";
 		pwms = <&mca_pwm0 4 100000 0>;
@@ -553,6 +542,21 @@
 	iopins-names = "rx", "tx", "cts", "rts";
 	iopins = <2 1 3 4>;
 	status = "okay";
+};
+
+/* Power LED on MCA_IO13 */
+&mca_led {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	status = "okay";
+
+	led@0 {
+		reg = <0>;
+		label = "power:green";
+		io = <13>;
+		linux,default-trigger = "default-on";
+		retain-state-suspended;
+	};
 };
 
 &mipi_csi_1 {
