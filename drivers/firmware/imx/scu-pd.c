@@ -158,8 +158,9 @@ static const struct imx_sc_pd_range imx8qxp_scu_pd_ranges[] = {
 	{ "lpi2c", IMX_SC_R_I2C_0, 4, true, 0 },
 	{ "adc", IMX_SC_R_ADC_0, 1, true, 0 },
 	{ "lcd", IMX_SC_R_LCD_0, 1, true, 0 },
+	{ "lcd-pll", IMX_SC_R_ELCDIF_PLL, 1, true, 0 },
 	{ "lcd0-pwm", IMX_SC_R_LCD_0_PWM_0, 1, true, 0 },
-	{ "lpuart", IMX_SC_R_UART_0, 4, true, 0 },
+	{ "lpuart", IMX_SC_R_UART_0, 5, true, 0 },
 	{ "sim", IMX_SC_R_EMVSIM_0, 2, true, 0 },
 	{ "lpspi", IMX_SC_R_SPI_0, 4, true, 0 },
 	{ "irqstr_dsp", IMX_SC_R_IRQSTR_DSP, 1, false, 0 },
@@ -226,12 +227,14 @@ static const struct imx_sc_pd_range imx8qxp_scu_pd_ranges[] = {
 	{ "cm40_intmux", IMX_SC_R_M4_0_INTMUX, 1, false, 0 },
 	{ "cm40_pid", IMX_SC_R_M4_0_PID0, 5, true, 0},
 	{ "cm40_mu1a", IMX_SC_R_M4_0_MU_1A, 1, false, 0},
+	{ "cm40_lpuart", IMX_SC_R_M4_0_UART, 1, false, 0},
 
 	/* CM41 SS */
 	{ "cm41_i2c", IMX_SC_R_M4_1_I2C, 1, false, 0 },
 	{ "cm41_intmux", IMX_SC_R_M4_1_INTMUX, 1, false, 0 },
 	{ "cm41_pid", IMX_SC_R_M4_1_PID0, 5, true, 0},
 	{ "cm41_mu1a", IMX_SC_R_M4_1_MU_1A, 1, false, 0},
+	{ "cm41_lpuart", IMX_SC_R_M4_1_UART, 1, false, 0},
 
 	/* IMAGE SS */
 	{ "img-pdma", IMX_SC_R_ISI_CH0, 8, true, 0 },

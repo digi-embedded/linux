@@ -19,6 +19,8 @@ dtb-$(CONFIG_ARCH_MXC) += _ov_board_flexcan1_ccimx8x-sbc-pro.dtbo \
 			  _ov_board_parallel-camera_ccimx8x-sbc-pro.dtbo \
 			  _ov_board_pcie-card_ccimx8x-sbc-pro.dtbo \
 			  _ov_board_pcie-modem_ccimx8x-sbc-pro.dtbo \
+			  _ov_board_user-leds_ccimx8mn-dvk.dtbo \
+			  _ov_board_user-leds_ccimx8x-sbc-pro.dtbo \
 			  _ov_som_bt_ccimx8mn.dtbo \
 			  _ov_som_bt_ccimx8x.dtbo \
 			  _ov_som_mca-keypad_ccimx8x.dtbo \

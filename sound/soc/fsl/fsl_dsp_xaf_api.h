@@ -18,6 +18,11 @@
 
 /* ...number of max input buffers */
 #define INBUF_SIZE	4096
+/* ...buffer size of the buffer shared between A core and DSP. Use large */
+/* ...to let A core suspend longer time to save power.*/
+#define INBUF_SIZE_LPA	(128*1024)
+/* ...ping-pong buffer locate in DRAM for PCM LPA. */
+#define INBUF_SIZE_LPA_PCM	(8*1024*1024)
 #define OUTBUF_SIZE	16384
 
 struct xaf_pipeline;
@@ -156,6 +161,18 @@ enum xa_config_param_renderer {
 	XA_RENDERER_CONFIG_PARAM_FRAME_SIZE     = 5,
 	XA_RENDERER_CONFIG_PARAM_CONSUMED       = 6,
 	XA_RENDERER_CONFIG_PARAM_NUM            = 7,
+};
+
+/* pcm codec configuration parameters */
+enum xa_config_param_pcm {
+	XA_PCM_CONFIG_PARAM_SAMPLE_RATE         = 0, /* not supported */
+	XA_PCM_CONFIG_PARAM_IN_PCM_WIDTH        = 1,
+	XA_PCM_CONFIG_PARAM_IN_CHANNELS         = 2, /* not supported */
+	XA_PCM_CONFIG_PARAM_OUT_PCM_WIDTH       = 3, /* not supported */
+	XA_PCM_CONFIG_PARAM_OUT_CHANNELS        = 4, /* not supported */
+	XA_PCM_CONFIG_PARAM_CHANROUTING         = 5, /* not supported */
+	XA_PCM_CONFIG_PARAM_FUNC_PRINT          = 13, /* not supported */
+	XA_PCM_CONFIG_PARAM_NUM                 = 14, /* not supported */
 };
 
 #endif /* FSL_DSP_XAF_API_H */

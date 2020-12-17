@@ -237,6 +237,11 @@
 			compatible = "digi,mca-keypad";
 			status = "disabled";
 		};
+
+		mca_led: led {
+			compatible = "digi,mca-led";
+			status = "disabled";
+		};
 	};
 
 	/* NXP PCA9450 PMIC mounted on SOMv2 and higher */

@@ -352,6 +352,20 @@
 			status = "disabled";
 		};
 
+		pcie_ep: pcie_ep@1ffc000 {
+			compatible = "fsl,imx6q-pcie-ep";
+			reg = <0x01ffc000 0x04000>, <0x01000000 0xf00000>;
+			reg-names = "regs", "addr_space";
+			num-lanes = <1>;
+			clocks = <&clks IMX6QDL_CLK_PCIE_AXI>,
+				 <&clks IMX6QDL_CLK_LVDS1_GATE>,
+				 <&clks IMX6QDL_CLK_PCIE_REF_125M>;
+			clock-names = "pcie", "pcie_bus", "pcie_phy";
+			num-ib-windows = <4>;
+			num-ob-windows = <4>;
+			status = "disabled";
+		};
+
 		aips-bus@2000000 { /* AIPS1 */
 			compatible = "fsl,aips-bus", "simple-bus";
 			#address-cells = <1>;
@@ -1142,8 +1156,9 @@
 				compatible = "fsl,imx6q-fec";
 				reg = <0x02188000 0x4000>;
 				interrupt-names = "int0", "pps";
-				interrupts = <0 118 IRQ_TYPE_LEVEL_HIGH>,
-					     <0 119 IRQ_TYPE_LEVEL_HIGH>;
+				interrupts-extended =
+					<&gpc 0 118 IRQ_TYPE_LEVEL_HIGH>,
+					<&gpc 0 119 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&clks IMX6QDL_CLK_ENET>,
 					 <&clks IMX6QDL_CLK_ENET>,
 					 <&clks IMX6QDL_CLK_ENET_REF>;

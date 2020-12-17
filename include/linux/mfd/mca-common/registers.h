@@ -1235,6 +1235,33 @@
 /* ... */
 #define MCA_REG_KP_ROW15_IO		0x0b3f
 
+/* EP12, LEDs */
+/* Reserved 16 bytes for future use */
+#define MCA_REG_LED0_CFG0		0x0c10
+#define MCA_REG_LED0_IO			0x0c11
+#define MCA_REG_LED0_BRIGHTNESS		0x0c12
+#define MCA_REG_LED0_BLK_MS_ON_L	0x0c14
+#define MCA_REG_LED0_BLK_MS_ON_H	0x0c15
+#define MCA_REG_LED0_BLK_MS_OFF_L	0x0c16
+#define MCA_REG_LED0_BLK_MS_OFF_H	0x0c17
+
+#define MCA_REG_LED1_CFG0		0x0c20
+#define MCA_REG_LED1_IO			0x0c21
+#define MCA_REG_LED1_BRIGHTNESS		0x0c22
+#define MCA_REG_LED1_BLK_MS_ON_L	0x0c24
+#define MCA_REG_LED1_BLK_MS_ON_H	0x0c25
+#define MCA_REG_LED1_BLK_MS_OFF_L	0x0c26
+#define MCA_REG_LED1_BLK_MS_OFF_H	0x0c27
+
+/* ... */
+#define MCA_REG_LED8_CFG0		0x0c90
+#define MCA_REG_LED8_IO			0x0c91
+#define MCA_REG_LED8_BRIGHTNESS		0x0c92
+#define MCA_REG_LED8_BLK_MS_ON_L	0x0c94
+#define MCA_REG_LED8_BLK_MS_ON_H	0x0c95
+#define MCA_REG_LED8_BLK_MS_OFF_L	0x0c96
+#define MCA_REG_LED8_BLK_MS_OFF_H	0x0c97
+
 /*
  * MCA registers bitfields
  */
@@ -1429,5 +1456,10 @@
 #define MCA_KP_FIFO_EV_KPRESS		BIT(6)
 #define MCA_KP_FIFO_EV_KREP		BIT(7)
 #define MCA_KP_FIFO_SC_MASK		0x3f
+
+/* MCA_REG_LED_CFG0 (addr=0x0c10...) */
+#define MCA_LED_CFG0_EN			BIT(0)
+#define MCA_LED_CFG0_ACT_HIGH		BIT(1)
+#define MCA_LED_CFG0_BLK_EN		BIT(2)
 
 #endif /* MCA_COMMON_REGISTERS_H_ */

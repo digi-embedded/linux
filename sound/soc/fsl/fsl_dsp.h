@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: (GPL-2.0+ OR MIT)*/
 /*
  * Copyright (C) 2017 Cadence Design Systems, Inc.
- * Copyright 2018 NXP
+ * Copyright 2018-2020 NXP
  *
  */
 
@@ -57,6 +57,9 @@ struct xf_client {
 
 	int input_bytes;
 	int consume_bytes;
+	int offset;
+	atomic_t buffer_cnt;
+	int ping_pong_offset;
 };
 
 union xf_client_link {
@@ -77,6 +80,7 @@ struct fsl_dsp {
 	struct imx_audiomix_dsp_data 	*audiomix;
 	unsigned int			dsp_mu_id;
 	int				dsp_mu_init;
+	int				dsp_is_lpa;
 	atomic_long_t			refcnt;
 	unsigned long			paddr;
 	unsigned long			dram0;
@@ -86,6 +90,15 @@ struct fsl_dsp {
 	void			        *sdram_vir_addr;
 	unsigned long			sdram_phys_addr;
 	int				sdram_reserved_size;
+	void			        *dram_reserved_vir_addr;
+	unsigned long			dram_reserved_phys_addr;
+	int				dram_reserved_size;
+	void			        *ocram_vir_addr;
+	unsigned long			ocram_phys_addr;
+	int				ocram_reserved_size;
+	void			        *ocram_e_vir_addr;
+	unsigned long			ocram_e_phys_addr;
+	int				ocram_e_reserved_size;
 	void				*msg_buf_virt;
 	dma_addr_t			 msg_buf_phys;
 	int				 msg_buf_size;
@@ -116,6 +129,8 @@ struct fsl_dsp {
 	struct clk *asrck_clk[4];
 	struct clk *dsp_ocrama_clk;
 	struct clk *dsp_root_clk;
+	struct clk *audio_root_clk;
+	struct clk *audio_axi_clk;
 	struct clk *debug_clk;
 	struct clk *mu2_clk;
 	struct clk *sdma_root_clk;

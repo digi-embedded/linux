@@ -148,9 +148,9 @@
 };
 
 &i2c1 {
-	fusion_touch: fusion@10 {
+	fusion_touch: fusion@14 {
 		compatible = "touchrev,fusion-touch";
-		reg = <0x10>;
+		reg = <0x14>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_fusion_touch>;
 		interrupt-parent = <&gpio5>;

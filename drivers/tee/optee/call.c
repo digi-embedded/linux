@@ -14,6 +14,10 @@
 #include "optee_private.h"
 #include "optee_smc.h"
 
+#if defined(CONFIG_HAVE_IMX_BUSFREQ)
+#include <linux/busfreq-imx.h>
+#endif
+
 struct optee_call_waiter {
 	struct list_head list_node;
 	struct completion c;
@@ -132,8 +136,19 @@ u32 optee_do_call_with_arg(struct tee_context *ctx, phys_addr_t parg)
 
 	param.a0 = OPTEE_SMC_CALL_WITH_ARG;
 	reg_pair_from_64(&param.a1, &param.a2, parg);
+
 	/* Initialize waiter */
 	optee_cq_wait_init(&optee->call_queue, &w);
+
+#if defined(CONFIG_HAVE_IMX_BUSFREQ)
+	/*
+	 * Request Busfreq to HIGH to prevent DDR self-refresh while
+	 * executing Secure stuff
+	 */
+	if (optee->sec_caps & OPTEE_SMC_SEC_CAP_IMX_BUSFREQ)
+		request_bus_freq(BUS_FREQ_HIGH);
+#endif
+
 	while (true) {
 		struct arm_smccc_res res;
 
@@ -161,6 +176,15 @@ u32 optee_do_call_with_arg(struct tee_context *ctx, phys_addr_t parg)
 	}
 
 	optee_rpc_finalize_call(&call_ctx);
+
+#if defined(CONFIG_HAVE_IMX_BUSFREQ)
+	/*
+	 * Release Busfreq from HIGH
+	 */
+	if (optee->sec_caps & OPTEE_SMC_SEC_CAP_IMX_BUSFREQ)
+		release_bus_freq(BUS_FREQ_HIGH);
+#endif
+
 	/*
 	 * We're done with our thread in secure world, if there's any
 	 * thread waiters wake up one.
@@ -233,8 +257,12 @@ int optee_open_session(struct tee_context *ctx,
 	msg_arg->params[1].attr = OPTEE_MSG_ATTR_TYPE_VALUE_INPUT |
 				  OPTEE_MSG_ATTR_META;
 	memcpy(&msg_arg->params[0].u.value, arg->uuid, sizeof(arg->uuid));
-	memcpy(&msg_arg->params[1].u.value, arg->uuid, sizeof(arg->clnt_uuid));
 	msg_arg->params[1].u.value.c = arg->clnt_login;
+
+	rc = tee_session_calc_client_uuid((uuid_t *)&msg_arg->params[1].u.value,
+					  arg->clnt_login, arg->clnt_uuid);
+	if (rc)
+		goto out;
 
 	rc = optee_to_msg_param(msg_arg->params + 2, arg->num_params, param);
 	if (rc)

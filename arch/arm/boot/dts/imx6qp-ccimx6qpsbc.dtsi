@@ -351,29 +351,6 @@
 		status = "disabled";
 	};
 
-	fusion@10 {
-		compatible = "touchrev,fusion-touch";
-		reg = <0x10>;
-		/* Interrupt for LVDS0 */
-		interrupt-parent = <&gpio7>;
-		interrupts = <11 1>;
-		/* Interrupt for LVDS1 */
-		//interrupt-parent = <&gpio3>;
-		//interrupts = <23 1>;
-		/* Interrupt for parallel LCD */
-		//interrupt-parent = <&gpio2>;
-		//interrupts = <1 1>;
-		status = "disabled";
-	};
-
-	/*
-	 * Fusion touch controller has I2C address 0x10. If using the latest Video Adapter Board,
-	 * an I2C-address translator moves it to address 0x14. This device tree has two 'fusion'
-	 * entries (one at 0x10 and another at 0x14), so that the touch works out of the box in old
-	 * and new displays, although this will make the kernel complain for the entry where the touch
-	 * does not respond. You can remove the 'fusion' node that doesn't match your display
-	 * to avoid this error message.
-	 */
 	fusion@14 {
 		compatible = "touchrev,fusion-touch";
 		reg = <0x14>;

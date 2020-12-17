@@ -95,6 +95,7 @@ static void vpu_dec_event_decode_error(struct vpu_ctx *ctx);
 static void vpu_calculate_performance(struct vpu_ctx *ctx, u_int32 uEvent, const char *str);
 static void vpu_dec_cancel_work(struct vpu_dev *vpudev);
 static void vpu_dec_alloc_mbi_dcp(struct vpu_ctx *ctx);
+static bool is_vpu_poweroff(struct vpu_dev *vpudev);
 
 #define CHECK_BIT(var, pos) (((var) >> (pos)) & 1)
 
@@ -669,9 +670,7 @@ static int v4l2_ioctl_querycap(struct file *file,
 	strlcpy(cap->driver, "vpu B0", sizeof(cap->driver));
 	strlcpy(cap->card, "vpu B0", sizeof(cap->card));
 	strlcpy(cap->bus_info, "platform:", sizeof(cap->bus_info));
-	cap->version = KERNEL_VERSION(0, 0, 1);
-	cap->device_caps = V4L2_CAP_VIDEO_M2M_MPLANE | V4L2_CAP_STREAMING;
-	cap->capabilities = cap->device_caps | V4L2_CAP_DEVICE_CAPS;
+
 	return 0;
 }
 
@@ -817,6 +816,76 @@ static void calculate_frame_size(struct vpu_ctx *ctx)
 		q_data->field = V4L2_FIELD_INTERLACED;
 }
 
+static const u8 colorprimaries[] = {
+	0,
+	V4L2_COLORSPACE_REC709,        /*Rec. ITU-R BT.709-6*/
+	0,
+	0,
+	V4L2_COLORSPACE_470_SYSTEM_M, /*Rec. ITU-R BT.470-6 System M*/
+	V4L2_COLORSPACE_470_SYSTEM_BG,/*Rec. ITU-R BT.470-6 System B, G*/
+	V4L2_COLORSPACE_SMPTE170M,    /*SMPTE170M*/
+	V4L2_COLORSPACE_SMPTE240M,    /*SMPTE240M*/
+	V4L2_COLORSPACE_GENERIC_FILM, /*Generic film*/
+	V4L2_COLORSPACE_BT2020,       /*Rec. ITU-R BT.2020-2*/
+	V4L2_COLORSPACE_ST428         /*SMPTE ST 428-1*/
+};
+
+static const u8 colortransfers[] = {
+	0,
+	V4L2_XFER_FUNC_709,      /*Rec. ITU-R BT.709-6*/
+	0,
+	0,
+	V4L2_XFER_FUNC_GAMMA22,  /*Rec. ITU-R BT.470-6 System M*/
+	V4L2_XFER_FUNC_GAMMA28,  /*Rec. ITU-R BT.470-6 System B, G*/
+	V4L2_XFER_FUNC_709,      /*SMPTE170M*/
+	V4L2_XFER_FUNC_SMPTE240M,/*SMPTE240M*/
+	V4L2_XFER_FUNC_LINEAR,   /*Linear transfer characteristics*/
+	0,
+	0,
+	V4L2_XFER_FUNC_XVYCC,    /*IEC 61966-2-4*/
+	V4L2_XFER_FUNC_BT1361,   /*Rec. ITU-R BT.1361-0 extended colour gamut*/
+	V4L2_XFER_FUNC_SRGB,     /*IEC 61966-2-1 sRGB or sYCC*/
+	V4L2_XFER_FUNC_709,      /*Rec. ITU-R BT.2020-2 (10 bit system)*/
+	V4L2_XFER_FUNC_709,      /*Rec. ITU-R BT.2020-2 (12 bit system)*/
+	V4L2_XFER_FUNC_SMPTE2084,/*SMPTE ST 2084*/
+	V4L2_XFER_FUNC_ST428,    /*SMPTE ST 428-1*/
+	V4L2_XFER_FUNC_HLG       /*Rec. ITU-R BT.2100-0 hybrid log-gamma (HLG)*/
+};
+
+static const u8 colormatrixcoefs[] = {
+	0,
+	V4L2_YCBCR_ENC_709,             /*Rec. ITU-R BT.709-6*/
+	0,
+	0,
+	V4L2_YCBCR_ENC_BT470_6M,        /*Title 47 Code of Federal Regulations*/
+	V4L2_YCBCR_ENC_601,             /*Rec. ITU-R BT.601-7 625*/
+	V4L2_YCBCR_ENC_601,             /*Rec. ITU-R BT.601-7 525*/
+	V4L2_YCBCR_ENC_SMPTE240M,       /*SMPTE240M*/
+	0,
+	V4L2_YCBCR_ENC_BT2020,          /*Rec. ITU-R BT.2020-2*/
+	V4L2_YCBCR_ENC_BT2020_CONST_LUM /*Rec. ITU-R BT.2020-2 constant*/
+};
+
+static int vpu_dec_convert_color_iso_aspect_to_v4l2_aspect(struct vpu_ctx *ctx,
+		u32 primaries, u32 transfer, u32 coeffs, u32 fullrange)
+{
+	if (primaries < ARRAY_SIZE(colorprimaries))
+		ctx->colorspace = colorprimaries[primaries];
+
+	if (transfer < ARRAY_SIZE(colortransfers))
+		ctx->xfer_func = colortransfers[transfer];
+
+	if (coeffs < ARRAY_SIZE(colormatrixcoefs))
+		ctx->ycbcr_enc = colormatrixcoefs[coeffs];
+
+	if (fullrange)
+		ctx->quantization = V4L2_QUANTIZATION_FULL_RANGE;
+	else
+		ctx->quantization = V4L2_QUANTIZATION_LIM_RANGE;
+
+	return 0;
+}
+
 static int v4l2_ioctl_g_fmt(struct file *file,
 		void *fh,
 		struct v4l2_format *f
@@ -841,7 +910,6 @@ static int v4l2_ioctl_g_fmt(struct file *file,
 		pix_mp->height = q_data->height;
 		pix_mp->field = q_data->field;
 		pix_mp->num_planes = 2;
-		pix_mp->colorspace = V4L2_COLORSPACE_REC709;
 		for (i = 0; i < pix_mp->num_planes; i++) {
 			pix_mp->plane_fmt[i].bytesperline = q_data->stride;
 			pix_mp->plane_fmt[i].sizeimage = q_data->sizeimage[i];
@@ -864,6 +932,12 @@ static int v4l2_ioctl_g_fmt(struct file *file,
 		up(&q_data->drv_q_lock);
 	} else
 		return -EINVAL;
+
+	pix_mp->colorspace = ctx->colorspace;
+	pix_mp->xfer_func = ctx->xfer_func;
+	pix_mp->ycbcr_enc = ctx->ycbcr_enc;
+	pix_mp->quantization = ctx->quantization;
+
 	vpu_dbg(LVL_BIT_FLOW, "%s g_fmt : %c%c%c%c %d x %d\n",
 		V4L2_TYPE_IS_OUTPUT(f->type) ? "OUTPUT" : "CAPTURE",
 		pix_mp->pixelformat & 0xff,
@@ -930,7 +1004,6 @@ static int v4l2_ioctl_s_fmt(struct file *file,
 		q_data = &ctx->q_data[V4L2_DST];
 		if (!set_video_standard(ctx, q_data, f, formats_yuv_dec, ARRAY_SIZE(formats_yuv_dec)))
 			return -EINVAL;
-		pix_mp->colorspace = V4L2_COLORSPACE_REC709;
 	} else if (f->type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE) {
 		q_data = &ctx->q_data[V4L2_SRC];
 		if (!set_video_standard(ctx, q_data, f, formats_compressed_dec, ARRAY_SIZE(formats_compressed_dec)))
@@ -938,6 +1011,10 @@ static int v4l2_ioctl_s_fmt(struct file *file,
 	} else
 		return -EINVAL;
 
+	pix_mp->colorspace = ctx->colorspace;
+	pix_mp->xfer_func = ctx->xfer_func;
+	pix_mp->ycbcr_enc = ctx->ycbcr_enc;
+	pix_mp->quantization = ctx->quantization;
 	pix_mp->num_planes = q_data->num_planes;
 
 	down(&q_data->drv_q_lock);
@@ -1668,6 +1745,7 @@ static int v4l2_ioctl_try_fmt(struct file *file,
 		struct v4l2_format *f
 		)
 {
+	struct vpu_ctx *ctx = v4l2_fh_to_ctx(fh);
 	unsigned int table_size;
 
 	if (f->type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE) {
@@ -1680,6 +1758,11 @@ static int v4l2_ioctl_try_fmt(struct file *file,
 			return -EINVAL;
 	} else
 		return -EINVAL;
+
+	f->fmt.pix_mp.colorspace = ctx->colorspace;
+	f->fmt.pix_mp.xfer_func = ctx->xfer_func;
+	f->fmt.pix_mp.ycbcr_enc = ctx->ycbcr_enc;
+	f->fmt.pix_mp.quantization = ctx->quantization;
 
 	return 0;
 }
@@ -2688,6 +2771,18 @@ TB_API_DEC_FMT vpu_format_remap(uint32_t vdec_std)
 	return malone_format;
 }
 
+static void vpu_dec_send_cmd(struct vpu_dev *dev, u32 idx, u32 cmdid,
+				u32 cmdnum, u32 *local_cmddata)
+{
+	WARN_ON(!dev || idx >= VPU_MAX_NUM_STREAMS);
+
+	mutex_lock(&dev->cmd_mutex);
+	rpc_send_cmd_buf(&dev->shared_mem, idx, cmdid, cmdnum, local_cmddata);
+	mb();
+	vpu_mu_send_msg(dev, COMMAND, 0xffff);
+	mutex_unlock(&dev->cmd_mutex);
+}
+
 static void do_send_cmd_to_firmware(struct vpu_ctx *ctx,
 				uint32_t idx, uint32_t cmdid,
 				uint32_t cmdnum, uint32_t *local_cmddata)
@@ -2696,12 +2791,7 @@ static void do_send_cmd_to_firmware(struct vpu_ctx *ctx,
 	count_cmd(&ctx->statistic, cmdid);
 	record_log_info(ctx, LOG_COMMAND, cmdid, 0);
 
-	mutex_lock(&ctx->dev->cmd_mutex);
-	rpc_send_cmd_buf(&ctx->dev->shared_mem, idx, cmdid, cmdnum,
-			 local_cmddata);
-	mb();
-	vpu_mu_send_msg(ctx->dev, COMMAND, 0xffff);
-	mutex_unlock(&ctx->dev->cmd_mutex);
+	vpu_dec_send_cmd(ctx->dev, idx, cmdid, cmdnum, local_cmddata);
 }
 
 static struct vpu_dec_cmd_request vpu_dec_cmds[] = {
@@ -2869,8 +2959,6 @@ static void v4l2_vpu_send_cmd(struct vpu_ctx *ctx,
 static void dump_input_data_to_local(struct vpu_ctx *ctx, void *src, u_int32 len)
 {
 	struct file *fp;
-	mm_segment_t fs;
-	loff_t pos;
 	char input_file[64];
 
 	if (!vpu_datadump_ena)
@@ -2889,12 +2977,8 @@ static void dump_input_data_to_local(struct vpu_ctx *ctx, void *src, u_int32 len
 		vpu_dbg(LVL_WARN, "warning: open file(%s) fail\n", input_file);
 		return;
 	}
-	fs = get_fs();
-	set_fs(KERNEL_DS);
-	pos = fp->f_pos;
-	vfs_write(fp, src, len, &pos);
-	fp->f_pos = pos;
-	set_fs(fs);
+
+	kernel_write(fp, src, len, &(fp->f_pos));
 	filp_close(fp, NULL);
 }
 
@@ -3163,46 +3247,17 @@ static void vpu_dec_event_decode_error(struct vpu_ctx *ctx)
 
 static int update_stream_addr(struct vpu_ctx *ctx, void *input_buffer, uint32_t buffer_size, uint32_t uStrBufIdx)
 {
-	pSTREAM_BUFFER_DESCRIPTOR_TYPE pStrBufDesc;
 	struct queue_data *q_data = &ctx->q_data[V4L2_SRC];
-	u_int8 payload_header[256] = {0};
-	uint32_t nfreespace = 0;
-	uint32_t wptr;
-	uint32_t rptr;
-	uint32_t start;
-	uint32_t end;
-	uint32_t header_length = 0;
 	uint32_t copy_length = 0;
 	uint32_t input_offset = 0;
 	struct VPU_FMT_INFO_ARV *arv_frame;
 	uint32_t i;
 
-	vpu_dbg(LVL_BIT_FUNC, "enter %s\n", __func__);
-
-	// changed to virtual address and back
-	pStrBufDesc = get_str_buffer_desc(ctx);
-	vpu_dbg(LVL_BIT_BUFFER_DESC,
-		"%s wptr(%x) rptr(%x) start(%x) end(%x) uStrBufIdx(%d)\n",
-		__func__,
-		pStrBufDesc->wptr,
-		pStrBufDesc->rptr,
-		pStrBufDesc->start,
-		pStrBufDesc->end,
-		uStrBufIdx);
-	wptr = pStrBufDesc->wptr;
-	rptr = pStrBufDesc->rptr;
-	start = pStrBufDesc->start;
-	end = pStrBufDesc->end;
-
-	nfreespace = got_free_space(wptr, rptr, start, end);
-	header_length = insert_scode_4_pic(ctx, payload_header, input_buffer, q_data->vdec_std, buffer_size);
 	if (q_data->vdec_std != VPU_VIDEO_RV) {
-		if (nfreespace < (buffer_size + header_length + MIN_SPACE)) {
-			vpu_dbg(LVL_INFO, "buffer_full: the circular buffer freespace < buffer_size\n");
+		if (!check_free_size_pic(ctx, buffer_size))
 			return 0;
-		}
 
-		copy_length += copy_buffer_to_stream(ctx, payload_header, header_length);
+		copy_length += insert_scode(ctx, SCODE_NEW_PICTURE, buffer_size, input_buffer);
 		copy_length += copy_buffer_to_stream(ctx, input_buffer, buffer_size);
 	} else {
 		arv_frame = get_arv_info(ctx, input_buffer, buffer_size);
@@ -3210,8 +3265,7 @@ static int update_stream_addr(struct vpu_ctx *ctx, void *input_buffer, uint32_t 
 			vpu_dbg(LVL_WARN, "warning: %s() get arv frame info failed\n", __func__);
 			return -1;
 		}
-		if (nfreespace < (buffer_size + header_length + arv_frame->slice_num * 16 + MIN_SPACE)) {
-			vpu_dbg(LVL_INFO, "buffer_full: the circular buffer freespace < buffer_size\n");
+		if (!check_free_size_pic(ctx, buffer_size + arv_frame->slice_num * 16)) {
 			put_arv_info(arv_frame);
 			arv_frame = NULL;
 			return 0;
@@ -3225,7 +3279,7 @@ static int update_stream_addr(struct vpu_ctx *ctx, void *input_buffer, uint32_t 
 			return -1;
 		}
 
-		copy_length += copy_buffer_to_stream(ctx, payload_header, header_length);
+		copy_length += insert_scode(ctx, SCODE_NEW_PICTURE, buffer_size, input_buffer);
 		copy_length += copy_buffer_to_stream(ctx, input_buffer + input_offset, arv_frame->packlen);
 		input_offset += arv_frame->packlen;
 		for (i = 0; i < arv_frame->slice_num; i++) {
@@ -3233,8 +3287,7 @@ static int update_stream_addr(struct vpu_ctx *ctx, void *input_buffer, uint32_t 
 				arv_frame->packlen = arv_frame->data_len - arv_frame->slice_offset[i];
 			else
 				arv_frame->packlen = arv_frame->slice_offset[i+1] - arv_frame->slice_offset[i];
-			header_length = insert_scode_4_arv_slice(ctx, payload_header, arv_frame, arv_frame->packlen + 12);
-			copy_length += copy_buffer_to_stream(ctx, payload_header, header_length);
+			copy_length += insert_scode(ctx, SCODE_NEW_SLICE, arv_frame->packlen, input_buffer + input_offset);
 			copy_length += copy_buffer_to_stream(ctx, input_buffer + input_offset, arv_frame->packlen);
 			input_offset += arv_frame->packlen;
 		}
@@ -3453,7 +3506,7 @@ static void enqueue_stream_data(struct vpu_ctx *ctx, uint32_t uStrBufIdx)
 		if (ctx->start_code_bypass)
 			frame_bytes = update_stream_addr_bypass(ctx, input_buffer, buffer_size);
 		else if (ctx->first_data_flag || is_codec_config_data(vb))
-			frame_bytes = insert_scode_4_seq(ctx, input_buffer, buffer_size);
+			frame_bytes = insert_scode(ctx, SCODE_NEW_SEQUENCE, buffer_size, input_buffer);
 		else
 			frame_bytes = update_stream_addr_vpu(ctx, input_buffer, buffer_size, uStrBufIdx);
 
@@ -4393,6 +4446,12 @@ static void vpu_api_event_handler(struct vpu_ctx *ctx, u_int32 uStrIdx, u_int32 
 			ctx->seqinfo.uMatrixCoeffs,
 			ctx->seqinfo.uVideoFullRangeFlag,
 			ctx->seqinfo.uVUIPresent);
+		vpu_dec_convert_color_iso_aspect_to_v4l2_aspect(ctx,
+				ctx->seqinfo.uColorDesc,
+				ctx->seqinfo.uTransferChars,
+				ctx->seqinfo.uMatrixCoeffs,
+				ctx->seqinfo.uVideoFullRangeFlag);
+
 		down(&ctx->q_data[V4L2_DST].drv_q_lock);
 		calculate_frame_size(ctx);
 		ctx->dcp_size = get_dcp_size(ctx);
@@ -4814,14 +4873,6 @@ static void vpu_receive_msg_event(struct vpu_dev *dev)
 static void vpu_handle_msg_data(struct vpu_dev *dev, u32 data)
 {
 	if (data == 0xaa) {
-		rpc_init_shared_memory(&dev->shared_mem,
-				vpu_dec_cpu_phy_to_mu(dev, dev->m0_rpc_phy),
-				dev->m0_rpc_virt,
-				dev->m0_rpc_size);
-		dev->print_buf = dev->m0_rpc_virt + M0_PRINT_OFFSET;
-		rpc_set_system_cfg_value(dev->shared_mem.pSharedInterface,
-					VPU_REG_BASE);
-
 		mutex_lock(&dev->cmd_mutex);
 		vpu_mu_send_msg(dev, RPC_BUF_OFFSET,
 				vpu_dec_cpu_phy_to_mu(dev, dev->m0_rpc_phy));
@@ -6102,6 +6153,10 @@ static int v4l2_open(struct file *filp)
 	ctx->stream_input_mode = FRAME_LVL;
 	ctx->hang_status = false;
 	ctx->first_dump_data_flag = true;
+	ctx->colorspace = V4L2_COLORSPACE_REC709;
+	ctx->xfer_func = V4L2_XFER_FUNC_709;
+	ctx->ycbcr_enc = V4L2_YCBCR_ENC_709;
+	ctx->quantization = V4L2_QUANTIZATION_LIM_RANGE;
 	INIT_LIST_HEAD(&ctx->cmd_q);
 	INIT_LIST_HEAD(&ctx->perf_q);
 	ctx->tsm = createTSManager(tsm_buffer_size);
@@ -6142,9 +6197,9 @@ static int v4l2_open(struct file *filp)
 			}
 		}
 		dev->fw_is_ready = true;
-		create_fwlog_file(ctx->dev);
-		create_dbglog_file(ctx->dev);
 	}
+	create_fwlog_file(ctx->dev);
+	create_dbglog_file(ctx->dev);
 	mutex_unlock(&dev->dev_mutex);
 	rpc_set_stream_cfg_value(dev->shared_mem.pSharedInterface, ctx->str_index, vpu_dbe_num);
 	init_vpu_buffer(ctx);
@@ -6376,13 +6431,6 @@ static void vpu_setup(struct vpu_dev *This)
 	vpu_dbg(LVL_INFO, "%s read_data=%x\n", __func__, read_data);
 }
 
-static void vpu_reset(struct vpu_dev *This)
-{
-	vpu_dbg(LVL_BIT_FUNC, "enter %s\n", __func__);
-	writel(0x7, This->regs_base + SCB_XREG_SLV_BASE + SCB_SCB_BLK_CTRL + SCB_BLK_CTRL_CACHE_RESET_CLR);
-	writel(0xffffffff, This->regs_base + DEC_MFD_XREG_SLV_BASE + MFD_BLK_CTRL + MFD_BLK_CTRL_MFD_SYS_RESET_CLR);
-}
-
 static int vpu_enable_hw(struct vpu_dev *This)
 {
 	vpu_dbg(LVL_BIT_FUNC, "%s()\n", __func__);
@@ -6391,24 +6439,21 @@ static int vpu_enable_hw(struct vpu_dev *This)
 }
 static void vpu_disable_hw(struct vpu_dev *This)
 {
-	vpu_reset(This);
 }
 
 static int swreset_vpu_firmware(struct vpu_dev *dev, u_int32 idx)
 {
 	int ret = 0;
-	struct vpu_ctx *ctx;
 
-	if (!dev || !dev->ctx[idx])
+	if (!dev)
 		return 0;
 
-	ctx = dev->ctx[idx];
 	vpu_dbg(LVL_WARN, "SWRESET: swreset_vpu_firmware\n");
 	dev->firmware_started = false;
 	kfifo_reset(&dev->mu_msg_fifo);
 
 	reinit_completion(&dev->start_cmp);
-	do_send_cmd_to_firmware(ctx, 0, VID_API_CMD_FIRM_RESET, 0, NULL);
+	vpu_dec_send_cmd(dev, 0, VID_API_CMD_FIRM_RESET, 0, NULL);
 	if (!wait_for_completion_timeout(&dev->start_cmp, msecs_to_jiffies(10000))) {
 		vpu_err("error: %s() fail\n", __func__);
 		return -1;
@@ -6524,8 +6569,6 @@ static int init_vpudev_parameters(struct vpu_dev *dev)
 	dev->hang_mask = 0;
 	dev->instance_mask = 0;
 
-	dev->fw_is_ready = false;
-
 	//firmware space for M0
 	dev->m0_p_fw_space_vir = ioremap_wc(dev->m0_p_fw_space_phy,
 			dev->m0_boot_size
@@ -6535,8 +6578,6 @@ static int init_vpudev_parameters(struct vpu_dev *dev)
 		return -ENOMEM;
 	}
 
-	cleanup_firmware_memory(dev);
-
 	dev->m0_rpc_virt = ioremap_wc(dev->m0_rpc_phy,
 			dev->m0_rpc_size
 			);
@@ -6545,9 +6586,32 @@ static int init_vpudev_parameters(struct vpu_dev *dev)
 		return -ENOMEM;
 	}
 
-	memset_io(dev->m0_rpc_virt, 0, dev->m0_rpc_size);
-
 	return 0;
+}
+
+static void vpu_dec_init_rpc(struct vpu_dev *dev)
+{
+	cleanup_firmware_memory(dev);
+	memset_io(dev->m0_rpc_virt, 0, dev->m0_rpc_size);
+	rpc_init_shared_memory(&dev->shared_mem,
+				vpu_dec_cpu_phy_to_mu(dev, dev->m0_rpc_phy),
+				dev->m0_rpc_virt,
+				dev->m0_rpc_size);
+	dev->print_buf = dev->m0_rpc_virt + M0_PRINT_OFFSET;
+	rpc_set_system_cfg_value(dev->shared_mem.pSharedInterface,
+					VPU_REG_BASE);
+	dev->fw_is_ready = false;
+}
+
+static void vpu_dec_restore_rpc(struct vpu_dev *dev)
+{
+	vpu_dbg(LVL_WARN, "restore vpu decoder\n");
+	rpc_restore_shared_memory(&dev->shared_mem,
+				vpu_dec_cpu_phy_to_mu(dev, dev->m0_rpc_phy),
+				dev->m0_rpc_virt);
+	dev->print_buf = dev->m0_rpc_virt + M0_PRINT_OFFSET;
+	swreset_vpu_firmware(dev, 0);
+	dev->fw_is_ready = true;
 }
 
 static void vpu_dec_init_ctx_work(struct vpu_dev *dev)
@@ -6576,6 +6640,7 @@ static int vpu_probe(struct platform_device *pdev)
 	if (!dev)
 		return -ENOMEM;
 
+	dev->generic_dev = get_device(&pdev->dev);
 	dev->plat_dev = pdev;
 	ret = vpu_attach_pm_domains(dev);
 	if (ret)
@@ -6595,23 +6660,11 @@ static int vpu_probe(struct platform_device *pdev)
 		goto err_dev_iounmap;
 	}
 
-	ret = v4l2_device_register(&pdev->dev, &dev->v4l2_dev);
-	if (ret) {
-		vpu_err("error: %s unable to register v4l2 dev\n", __func__);
-		goto err_dev_iounmap;
-	}
-
 	platform_set_drvdata(pdev, dev);
-
-	ret = create_vpu_video_device(dev);
-	if (ret) {
-		vpu_err("error: %s create vpu video device fail\n", __func__);
-		goto err_unreg_v4l2;
-	}
 
 	ret = vpu_sc_check_fuse(dev, formats_compressed_dec, ARRAY_SIZE(formats_compressed_dec));
 	if (ret)
-		goto err_rm_vdev;
+		goto err_dev_iounmap;
 
 	dev->mu_msg_buffer_size =
 		sizeof(u_int32) * VPU_MAX_NUM_STREAMS * VID_API_MESSAGE_LIMIT;
@@ -6620,7 +6673,7 @@ static int vpu_probe(struct platform_device *pdev)
 	dev->mu_msg_buffer = vzalloc(dev->mu_msg_buffer_size);
 	if (!dev->mu_msg_buffer) {
 		vpu_err("error: fail to alloc mu msg fifo\n");
-		goto err_rm_vdev;
+		goto err_dev_iounmap;
 	}
 	ret = kfifo_init(&dev->mu_msg_fifo,
 			dev->mu_msg_buffer, dev->mu_msg_buffer_size);
@@ -6640,11 +6693,13 @@ static int vpu_probe(struct platform_device *pdev)
 	INIT_DELAYED_WORK(&dev->delayed_msg_work, vpu_msg_run_delayed_work);
 
 	pm_runtime_enable(&pdev->dev);
-	pm_runtime_get_sync(&pdev->dev);
-
-	vpu_enable_hw(dev);
-
-	dev->generic_dev = get_device(&pdev->dev);
+	ret = pm_runtime_get_sync(&pdev->dev);
+	if (ret < 0) {
+		vpu_err("failed to request mailbox, ret = %d\n", ret);
+		pm_runtime_put_noidle(&pdev->dev);
+		pm_runtime_set_suspended(&pdev->dev);
+		goto err_pm_runtime_get_sync;
+	}
 
 	ret = init_vpudev_parameters(dev);
 	if (ret) {
@@ -6652,31 +6707,42 @@ static int vpu_probe(struct platform_device *pdev)
 		goto err_poweroff;
 	}
 
+	vpu_enable_hw(dev);
+	if (is_vpu_poweroff(dev))
+		vpu_dec_init_rpc(dev);
+	else
+		vpu_dec_restore_rpc(dev);
+
 	pm_runtime_put_sync(&pdev->dev);
 	device_create_file(&pdev->dev, &dev_attr_precheck_pattern);
 	vpu_dec_init_ctx_work(dev);
 
+	ret = v4l2_device_register(&pdev->dev, &dev->v4l2_dev);
+	if (ret) {
+		vpu_err("error: %s unable to register v4l2 dev\n", __func__);
+		goto err_poweroff;
+	}
+	ret = create_vpu_video_device(dev);
+	if (ret) {
+		vpu_err("error: %s create vpu video device fail\n", __func__);
+		goto err_unreg_v4l2;
+	}
+
 	return 0;
 
+err_unreg_v4l2:
+	v4l2_device_unregister(&dev->v4l2_dev);
 err_poweroff:
 	destroy_workqueue(dev->workqueue);
 	vpu_disable_hw(dev);
 	pm_runtime_put_sync(&pdev->dev);
+err_pm_runtime_get_sync:
 	pm_runtime_disable(&pdev->dev);
 err_free_fifo:
 	vfree(dev->mu_msg_buffer);
 	dev->mu_msg_buffer = NULL;
 	dev->mu_msg_buffer_size = 0;
-err_rm_vdev:
-	if (dev->pvpu_decoder_dev) {
-		video_unregister_device(dev->pvpu_decoder_dev);
-		dev->pvpu_decoder_dev = NULL;
-	}
-err_unreg_v4l2:
-	v4l2_device_unregister(&dev->v4l2_dev);
 err_dev_iounmap:
-	if (dev->regs_base)
-		iounmap(dev->regs_base);
 err_det_pm:
 	vpu_detach_pm_domains(dev);
 err_put_dev:
@@ -6684,8 +6750,6 @@ err_put_dev:
 		put_device(dev->generic_dev);
 		dev->generic_dev = NULL;
 	}
-
-	devm_kfree(&pdev->dev, dev);
 
 	return ret;
 }
@@ -6732,7 +6796,6 @@ static int vpu_remove(struct platform_device *pdev)
 		put_device(dev->generic_dev);
 		dev->generic_dev = NULL;
 	}
-	devm_kfree(&pdev->dev, dev);
 
 	return 0;
 }
