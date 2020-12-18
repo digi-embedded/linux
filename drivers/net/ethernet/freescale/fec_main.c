@@ -2038,13 +2038,63 @@ out:
 	return ret;
 }
 
+#ifdef CONFIG_OF
+static void fec_reset_phy(struct platform_device *pdev)
+{
+	struct net_device *ndev = platform_get_drvdata(pdev);
+	struct fec_enet_private *fep = netdev_priv(ndev);
+	u32 msec = fep->phy_reset_duration;
+
+	if (fep->phy_reset_gpio < 0)
+		return;
+
+	gpio_set_value_cansleep(fep->phy_reset_gpio,
+				fep->phy_reset_active_high);
+	if (msec > 20)
+		msleep(msec);
+	else
+		usleep_range(msec * 1000, msec * 1000 + 1000);
+
+	gpio_set_value_cansleep(fep->phy_reset_gpio,
+				!fep->phy_reset_active_high);
+
+	if (!fep->phy_post_delay)
+		return;
+
+	if (fep->phy_post_delay > 20)
+		msleep(fep->phy_post_delay);
+	else
+		usleep_range(fep->phy_post_delay * 1000,
+			     fep->phy_post_delay * 1000 + 1000);
+
+	return;
+}
+
+#else /* CONFIG_OF */
+static int fec_reset_phy(struct platform_device *pdev)
+{
+	/*
+	 * In case of platform probe, the reset has been done
+	 * by machine code.
+	 */
+	return 0;
+}
+#endif /* CONFIG_OF */
+
 static void fec_enet_phy_reset_after_clk_enable(struct net_device *ndev)
 {
 	struct fec_enet_private *fep = netdev_priv(ndev);
 	struct phy_device *phy_dev = ndev->phydev;
 
 	if (phy_dev) {
-		phy_reset_after_clk_enable(phy_dev);
+		if (!gpio_is_valid(fep->phy_reset_gpio)) {
+			phy_reset_after_clk_enable(phy_dev);
+		} else {
+			if (phy_dev && phy_dev->drv &&
+			    phy_dev->drv->flags & PHY_RST_AFTER_CLK_EN) {
+				fec_reset_phy(fep->pdev);
+			}
+		}
 	} else if (fep->phy_node) {
 		/*
 		 * If the PHY still is not bound to the MAC, but there is
@@ -2054,7 +2104,14 @@ static void fec_enet_phy_reset_after_clk_enable(struct net_device *ndev)
 		 * the PHY reset.
 		 */
 		phy_dev = of_phy_find_device(fep->phy_node);
-		phy_reset_after_clk_enable(phy_dev);
+		if (!gpio_is_valid(fep->phy_reset_gpio)) {
+			phy_reset_after_clk_enable(phy_dev);
+		} else {
+			if (phy_dev && phy_dev->drv &&
+			    phy_dev->drv->flags & PHY_RST_AFTER_CLK_EN) {
+				fec_reset_phy(fep->pdev);
+			}
+		}
 		put_device(&phy_dev->mdio.dev);
 	}
 }
@@ -3665,47 +3722,6 @@ static int fec_reset_phy_init(struct platform_device *pdev)
 						     "digi,phy-reset-in-suspend",
 						     NULL);
 
-	return 0;
-}
-
-static void fec_reset_phy(struct platform_device *pdev)
-{
-	struct net_device *ndev = platform_get_drvdata(pdev);
-	struct fec_enet_private *fep = netdev_priv(ndev);
-	u32 msec = fep->phy_reset_duration;
-
-	if (fep->phy_reset_gpio < 0)
-		return;
-
-	gpio_set_value_cansleep(fep->phy_reset_gpio,
-				fep->phy_reset_active_high);
-	if (msec > 20)
-		msleep(msec);
-	else
-		usleep_range(msec * 1000, msec * 1000 + 1000);
-
-	gpio_set_value_cansleep(fep->phy_reset_gpio,
-				!fep->phy_reset_active_high);
-
-	if (!fep->phy_post_delay)
-		return;
-
-	if (fep->phy_post_delay > 20)
-		msleep(fep->phy_post_delay);
-	else
-		usleep_range(fep->phy_post_delay * 1000,
-			     fep->phy_post_delay * 1000 + 1000);
-
-	return;
-}
-
-#else /* CONFIG_OF */
-static int fec_reset_phy(struct platform_device *pdev)
-{
-	/*
-	 * In case of platform probe, the reset has been done
-	 * by machine code.
-	 */
 	return 0;
 }
 #endif /* CONFIG_OF */
