@@ -710,7 +710,7 @@
 			/* User LED 3 */
 			MX8MN_IOMUXC_SD2_RESET_B_GPIO2_IO19	0x16
 			/* User button 2 */
-			MX8MN_IOMUXC_SD2_WP_GPIO2_IO20	0x16
+			MX8MN_IOMUXC_SD2_WP_GPIO2_IO20	0x156
 			/*
 			 * Expansion I2C port IRQ.
 			 * Remove if you plan on using this line for a device
