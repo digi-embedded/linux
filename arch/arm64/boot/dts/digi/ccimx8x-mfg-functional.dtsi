@@ -136,14 +136,14 @@
 
 	/* MIPI-CSI2 camera */
 	ov5640_mipi: ov5640_mipi@3c {
-		compatible = "ovti,ov5640_mipi_v3";
+		compatible = "ovti,ov5640";
 		reg = <0x3c>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_mipi>;
 		clocks = <&xtal24m>;
-		clock-names = "csi_mclk";
+		clock-names = "xclk";
 		csi_id = <0>;
-		rst-gpios = <&lsio_gpio3 21 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&lsio_gpio3 21 GPIO_ACTIVE_HIGH>;
 		mclk = <24000000>;
 		mclk_source = <0>;
 		mipi_csi;
@@ -153,6 +153,7 @@
 			ov5640_mipi_ep: endpoint {
 				remote-endpoint = <&mipi_csi0_ep>;
 				data-lanes = <1 2>;
+				clocks-lanes = <0>;
 			};
 		};
 	};

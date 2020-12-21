@@ -303,17 +303,17 @@
 
 	/* MIPI-CSI camera */
 	ov5640_mipi: ov5640_mipi@3c {
-		compatible = "ovti,ov5640_mipi_v3";
+		compatible = "ovti,ov5640";
 		reg = <0x3c>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_mipi>;
 		clocks = <&clk IMX8MN_CLK_CLKO1>;
-		clock-names = "csi_mclk";
+		clock-names = "xclk";
 		assigned-clocks = <&clk IMX8MN_CLK_CLKO1>;
 		assigned-clock-parents = <&clk IMX8MN_CLK_24M>;
 		assigned-clock-rates = <24000000>;
 		csi_id = <0>;
-		rst-gpios = <&gpio1 12 GPIO_ACTIVE_LOW>;
+		reset-gpios = <&gpio1 12 GPIO_ACTIVE_LOW>;
 		mclk = <24000000>;
 		mclk_source = <0>;
 		mipi_csi;
@@ -321,6 +321,8 @@
 		port {
 			ov5640_mipi_ep: endpoint {
 				remote-endpoint = <&mipi_csi0_ep>;
+				data-lanes = <1 2>;
+				clocks-lanes = <0>;
 			};
 		};
 	};
