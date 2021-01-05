@@ -109,7 +109,7 @@
 
 	lvds1_panel: lvds1_panel@1 {
 		compatible = "panel-lvds";
-		backlight = <&lvds_backlight0>;
+		backlight = <&lvds_backlight1>;
 		power-supply = <&reg_5v_display>;
 		width-mm = <216>;
 		height-mm = <135>;
