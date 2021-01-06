@@ -714,7 +714,7 @@ static void stm32_dma_issue_pending(struct dma_chan *c)
 static int stm32_dma_set_xfer_param(struct stm32_dma_chan *chan,
 				    enum dma_transfer_direction direction,
 				    enum dma_slave_buswidth *buswidth,
-				    u32 buf_len, dma_addr_t buf_addr)
+				    u32 buf_len, u64 buf_addr)
 {
 	enum dma_slave_buswidth src_addr_width, dst_addr_width;
 	int src_bus_width, dst_bus_width;
@@ -746,7 +746,7 @@ static int stm32_dma_set_xfer_param(struct stm32_dma_chan *chan,
 			return dst_burst_size;
 
 		/* Set memory data size */
-		src_addr_width = stm32_dma_get_max_width(buf_len, (u64)buf_addr,
+		src_addr_width = stm32_dma_get_max_width(buf_len, buf_addr,
 							 fifoth);
 		chan->mem_width = src_addr_width;
 		src_bus_width = stm32_dma_get_width(chan, src_addr_width);
@@ -802,7 +802,7 @@ static int stm32_dma_set_xfer_param(struct stm32_dma_chan *chan,
 			return src_burst_size;
 
 		/* Set memory data size */
-		dst_addr_width = stm32_dma_get_max_width(buf_len, (u64)buf_addr,
+		dst_addr_width = stm32_dma_get_max_width(buf_len, buf_addr,
 							 fifoth);
 		chan->mem_width = dst_addr_width;
 		dst_bus_width = stm32_dma_get_width(chan, dst_addr_width);
@@ -966,8 +966,7 @@ static struct dma_async_tx_descriptor *stm32_dma_prep_dma_cyclic(
 		return NULL;
 	}
 
-	ret = stm32_dma_set_xfer_param(chan, direction, &buswidth, period_len,
-				       buf_addr);
+	ret = stm32_dma_set_xfer_param(chan, direction, &buswidth, period_len, (u64)buf_addr);
 	if (ret < 0)
 		return NULL;
 
