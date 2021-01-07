@@ -761,7 +761,6 @@ static int cdns3_gadget_ep0_queue(struct usb_ep *ep,
 	cdns3_dbg(priv_ep->cdns3_dev, "Queue to Ep0%s L: %d\n",
 		  priv_dev->ep0_data_dir ? "IN" : "OUT",
 		  request->length);
-	spin_lock_irqsave(&priv_dev->lock, flags);
 
 	spin_lock_irqsave(&priv_dev->lock, flags);
 
