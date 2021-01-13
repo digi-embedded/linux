@@ -13,6 +13,10 @@
 	compatible = "st,stm32mp135f-dk-a7-examples", "st,stm32mp135f-dk", "st,stm32mp135";
 };
 
+&adc_1 {
+	status = "okay";
+};
+
 &timers4 {
 	status = "okay";
 };
