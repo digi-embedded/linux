@@ -31,8 +31,8 @@
 		target = <&mca_keypad>;
 		__overlay__ {
 			status = "okay";
-			rows-io-list = <7 9>;
-			cols-io-list = <17 8>;
+			rows-io-list = <7 17>;
+			cols-io-list = <8 14>;
 			pwr-off-wakeup;
 			debounce-ms = <10>;
 			autorepeat;
