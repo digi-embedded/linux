@@ -640,6 +640,23 @@ static int ov5640_write_reg(struct ov5640_dev *sensor, u16 reg, u8 val)
 	u8 buf[3];
 	int ret;
 
+	/*
+	 * Workaround: use the OV5640 internal PLL to compensate for
+	 * a different reference clock (included in OV5640 board).
+	 */
+	if (reg == OV5640_REG_SC_PLL_CTRL2) {
+		int new_val = val * 2 + val / 2;
+
+		if (new_val > 252)
+			new_val = 252;
+		else if (new_val >= 128)
+			new_val &= ~1;
+
+		pr_debug("adjusting PLL multiplier: %d --> %d\n", val,
+			 new_val);
+		val = (u8) new_val;
+	}
+
 	buf[0] = reg >> 8;
 	buf[1] = reg & 0xff;
 	buf[2] = val;
