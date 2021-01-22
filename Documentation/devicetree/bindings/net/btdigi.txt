@@ -1,0 +1,21 @@
+* Bluetooth of Digi SOMs (btdigi driver)
+
+Required properties:
+
+- compatible :  should comply with the format "digi,bluetooth-<platform>"
+		where <platform> identifies the Digi platform device,
+		see the following list:
+			- digi,bluetooth-cc8x
+
+Optional properties:
+
+- vin-supply : Regulator for supplying voltage to Bluetooth chip
+
+Example:
+
+bluetooth {
+	/* U-Boot will fill in the MAC address here */
+	compatible = "digi,bluetooth-cc8x";
+	vin-supply = <&reg_rf_bt_en>;
+	status = "okay";
+};

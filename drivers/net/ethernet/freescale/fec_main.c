@@ -1899,6 +1899,29 @@ static int fec_enet_mdio_read(struct mii_bus *bus, int mii_id, int regnum)
 
 	reinit_completion(&fep->mdio_done);
 
+	/*
+	 * Add a really small delay for a specific corner case, which happens
+	 * when the PHY attempts to negotiate the link speed after resuming
+	 * from suspend-to-ram on the ccimx6sbc and ccimx6qpsbc platforms.
+	 *
+	 * Before any PHY autonegotiation, the phy_device driver will sanitize
+	 * the negotiation parameters, which implies reading and slightly
+	 * modifying the MII_ADVERTISE register's contents. In some cases, when
+	 * reading the register right after resuming from suspend, its contents
+	 * will be 0xffff (an invalid value). Even if the register changes back
+	 * to its original value shortly after, the kernel will overwrite it
+	 * with a modified version of the erroneous value. When this happens,
+	 * the autonegotiation will never complete and the ethernet interface
+	 * will stop working.
+	 *
+	 * To avoid this situation, delay the MII_ADVERTISE read operation just
+	 * enough to let the register's contents stabilize before reading them.
+	 */
+	if (regnum == MII_ADVERTISE &&
+	    (of_machine_is_compatible("digi,ccimx6qpsbc") ||
+	     of_machine_is_compatible("digi,ccimx6sbc")))
+		usleep_range(1, 2);
+
 	if (is_c45) {
 		frame_start = FEC_MMFR_ST_C45;
 
@@ -3577,60 +3600,84 @@ free_queue_mem:
 }
 
 #ifdef CONFIG_OF
-static int fec_reset_phy(struct platform_device *pdev)
+static int fec_reset_phy_init(struct platform_device *pdev)
 {
-	int err, phy_reset;
-	bool active_high = false;
-	int msec = 1, phy_post_delay = 0;
 	struct device_node *np = pdev->dev.of_node;
+	struct net_device *ndev = platform_get_drvdata(pdev);
+	struct fec_enet_private *fep = netdev_priv(ndev);
+	int err;
 
 	if (!np)
 		return 0;
 
-	err = of_property_read_u32(np, "phy-reset-duration", &msec);
+	err = of_property_read_u32(np, "phy-reset-duration",
+				   &fep->phy_reset_duration);
 	/* A sane reset duration should not be longer than 1s */
-	if (!err && msec > 1000)
-		msec = 1;
+	if (err || fep->phy_reset_duration > 1000)
+		fep->phy_reset_duration = 1;
 
-	phy_reset = of_get_named_gpio(np, "phy-reset-gpios", 0);
-	if (phy_reset == -EPROBE_DEFER)
-		return phy_reset;
-	else if (!gpio_is_valid(phy_reset))
+	fep->phy_reset_gpio = of_get_named_gpio(np, "phy-reset-gpios", 0);
+	if (fep->phy_reset_gpio == -EPROBE_DEFER)
+		return fep->phy_reset_gpio;
+	else if (!gpio_is_valid(fep->phy_reset_gpio))
 		return 0;
 
-	err = of_property_read_u32(np, "phy-reset-post-delay", &phy_post_delay);
+	err = of_property_read_u32(np, "phy-reset-post-delay",
+				   &fep->phy_post_delay);
 	/* valid reset duration should be less than 1s */
-	if (!err && phy_post_delay > 1000)
+	if (!err && fep->phy_post_delay > 1000)
 		return -EINVAL;
 
-	active_high = of_property_read_bool(np, "phy-reset-active-high");
+	fep->phy_reset_active_high = of_property_read_bool(np,
+						"phy-reset-active-high");
 
-	err = devm_gpio_request_one(&pdev->dev, phy_reset,
-			active_high ? GPIOF_OUT_INIT_HIGH : GPIOF_OUT_INIT_LOW,
-			"phy-reset");
+	err = devm_gpio_request_one(&pdev->dev, fep->phy_reset_gpio,
+				    fep->phy_reset_active_high ?
+					GPIOF_OUT_INIT_LOW :
+					GPIOF_OUT_INIT_HIGH,
+				    "phy-reset");
 	if (err) {
 		dev_err(&pdev->dev, "failed to get phy-reset-gpios: %d\n", err);
 		return err;
 	}
+	fep->phy_reset_in_suspend = of_find_property(np,
+						     "digi,phy-reset-in-suspend",
+						     NULL);
 
+	return 0;
+}
+
+static void fec_reset_phy(struct platform_device *pdev)
+{
+	struct net_device *ndev = platform_get_drvdata(pdev);
+	struct fec_enet_private *fep = netdev_priv(ndev);
+	u32 msec = fep->phy_reset_duration;
+
+	if (fep->phy_reset_gpio < 0)
+		return;
+
+	gpio_set_value_cansleep(fep->phy_reset_gpio,
+				fep->phy_reset_active_high);
 	if (msec > 20)
 		msleep(msec);
 	else
 		usleep_range(msec * 1000, msec * 1000 + 1000);
 
-	gpio_set_value_cansleep(phy_reset, !active_high);
+	gpio_set_value_cansleep(fep->phy_reset_gpio,
+				!fep->phy_reset_active_high);
 
-	if (!phy_post_delay)
-		return 0;
+	if (!fep->phy_post_delay)
+		return;
 
-	if (phy_post_delay > 20)
-		msleep(phy_post_delay);
+	if (fep->phy_post_delay > 20)
+		msleep(fep->phy_post_delay);
 	else
-		usleep_range(phy_post_delay * 1000,
-			     phy_post_delay * 1000 + 1000);
+		usleep_range(fep->phy_post_delay * 1000,
+			     fep->phy_post_delay * 1000 + 1000);
 
-	return 0;
+	return;
 }
+
 #else /* CONFIG_OF */
 static int fec_reset_phy(struct platform_device *pdev)
 {
@@ -3873,7 +3920,24 @@ fec_probe(struct platform_device *pdev)
 	if (ret)
 		goto failed_clk_ahb;
 
+	fep->reg_mdio = devm_regulator_get_optional(&pdev->dev, "digi,mdio-lt");
+	if (!IS_ERR(fep->reg_mdio)) {
+		ret = regulator_enable(fep->reg_mdio);
+		if (ret) {
+			dev_err(&pdev->dev,
+				"Failed to enable mdio regulator: %d\n", ret);
+			goto failed_regulator;
+		}
+	} else {
+		if (PTR_ERR(fep->reg_mdio) == -EPROBE_DEFER) {
+			ret = -EPROBE_DEFER;
+			goto failed_regulator;
+		}
+		fep->reg_mdio = NULL;
+	}
+
 	fep->reg_phy = devm_regulator_get_optional(&pdev->dev, "phy");
+
 	if (!IS_ERR(fep->reg_phy)) {
 		ret = regulator_enable(fep->reg_phy);
 		if (ret) {
@@ -3895,11 +3959,14 @@ fec_probe(struct platform_device *pdev)
 	pm_runtime_set_active(&pdev->dev);
 	pm_runtime_enable(&pdev->dev);
 
-	ret = fec_reset_phy(pdev);
+	ret = fec_reset_phy_init(pdev);
 	if (ret)
 		goto failed_reset;
 
 	irq_cnt = fec_enet_get_irq_cnt(pdev);
+
+	fec_reset_phy(pdev);
+
 	if (fep->bufdesc_ex)
 		fec_ptp_init(pdev, irq_cnt);
 
@@ -3970,6 +4037,8 @@ failed_init:
 	fec_ptp_stop(pdev);
 	if (fep->reg_phy)
 		regulator_disable(fep->reg_phy);
+	if (fep->reg_mdio)
+		regulator_disable(fep->reg_mdio);
 failed_reset:
 	pm_runtime_put_noidle(&pdev->dev);
 	pm_runtime_disable(&pdev->dev);
@@ -4012,6 +4081,11 @@ fec_drv_remove(struct platform_device *pdev)
 	if (fep->reg_phy)
 		regulator_disable(fep->reg_phy);
 
+	if (fep->reg_mdio)
+		regulator_disable(fep->reg_mdio);
+	pm_runtime_put(&pdev->dev);
+	pm_runtime_disable(&pdev->dev);
+
 	if (of_phy_is_fixed_link(np))
 		of_phy_deregister_fixed_link(np);
 	of_node_put(fep->phy_node);
@@ -4044,6 +4118,9 @@ static int __maybe_unused fec_suspend(struct device *dev)
 		fec_stop(ndev);
 		if (!(fep->wol_flag & FEC_WOL_FLAG_ENABLE)) {
 			fec_irqs_disable(ndev);
+			if (fep->phy_reset_in_suspend)
+				gpio_set_value_cansleep(fep->phy_reset_gpio,
+							fep->phy_reset_active_high);
 			pinctrl_pm_select_sleep_state(&fep->pdev->dev);
 		} else {
 			fec_enet_enter_stop_mode(fep);
@@ -4058,13 +4135,18 @@ static int __maybe_unused fec_suspend(struct device *dev)
 			if (ret < 0)
 				return ret;
 		}
-	} else if (fep->mii_bus_share && !ndev->phydev) {
+	} else if (!ndev->phydev) {
+		if (fep->phy_reset_in_suspend)
+			gpio_set_value_cansleep(fep->phy_reset_gpio,
+						fep->phy_reset_active_high);
 		pinctrl_pm_select_sleep_state(&fep->pdev->dev);
 	}
 	rtnl_unlock();
 
 	if (fep->reg_phy && !(fep->wol_flag & FEC_WOL_FLAG_ENABLE))
 		regulator_disable(fep->reg_phy);
+	if (fep->reg_mdio && !(fep->wol_flag & FEC_WOL_FLAG_ENABLE))
+		regulator_disable(fep->reg_mdio);
 
 	/* SOC supply clock to phy, when clock is disabled, phy link down
 	 * SOC control phy regulator, when regulator is disabled, phy link down
@@ -4081,6 +4163,12 @@ static int __maybe_unused fec_resume(struct device *dev)
 	struct fec_enet_private *fep = netdev_priv(ndev);
 	int ret = 0;
 	int val;
+
+	if (fep->reg_mdio && !(fep->wol_flag & FEC_WOL_FLAG_ENABLE)) {
+		ret = regulator_enable(fep->reg_mdio);
+		if (ret)
+			return ret;
+	}
 
 	if (fep->reg_phy && !(fep->wol_flag & FEC_WOL_FLAG_ENABLE)) {
 		ret = regulator_enable(fep->reg_phy);
@@ -4108,6 +4196,9 @@ static int __maybe_unused fec_resume(struct device *dev)
 			fep->wol_flag &= ~FEC_WOL_FLAG_SLEEP_ON;
 		} else {
 			pinctrl_pm_select_default_state(&fep->pdev->dev);
+			if (fep->phy_reset_in_suspend)
+				gpio_set_value_cansleep(fep->phy_reset_gpio,
+							!fep->phy_reset_active_high);
 		}
 		fec_restart(ndev);
 		netif_tx_lock_bh(ndev);
@@ -4115,10 +4206,15 @@ static int __maybe_unused fec_resume(struct device *dev)
 		netif_tx_unlock_bh(ndev);
 		napi_enable(&fep->napi);
 		phy_start(ndev->phydev);
-	} else if (fep->mii_bus_share && !ndev->phydev) {
+	} else if (!ndev->phydev) {
 		pinctrl_pm_select_default_state(&fep->pdev->dev);
-		/* And then recovery mii bus */
-		ret = fec_restore_mii_bus(ndev);
+		if (fep->phy_reset_in_suspend)
+			gpio_set_value_cansleep(fep->phy_reset_gpio,
+						!fep->phy_reset_active_high);
+		if (fep->mii_bus_share) {
+			/* And then recovery mii bus */
+			ret = fec_restore_mii_bus(ndev);
+		}
 	}
 	rtnl_unlock();
 
@@ -4127,6 +4223,8 @@ static int __maybe_unused fec_resume(struct device *dev)
 failed_clk:
 	if (fep->reg_phy)
 		regulator_disable(fep->reg_phy);
+	if (fep->reg_mdio)
+		regulator_disable(fep->reg_mdio);
 	return ret;
 }
 

@@ -21,7 +21,7 @@
 #include "ipu_prp_sw.h"
 
 #ifdef CAMERA_DBG
-	#define CAMERA_TRACE(x) (printk)x
+	#define CAMERA_TRACE(x) printk(x)
 #else
 	#define CAMERA_TRACE(x)
 #endif
@@ -69,7 +69,7 @@ static int csi_enc_setup(cam_data *cam)
 	int csi_id;
 #endif
 
-	CAMERA_TRACE("In csi_enc_setup\n");
+	CAMERA_TRACE("In csi_enc_setup ");
 	if (!cam) {
 		printk(KERN_ERR "cam private is NULL\n");
 		return -ENXIO;

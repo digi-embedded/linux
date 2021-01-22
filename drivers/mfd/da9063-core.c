@@ -4,6 +4,7 @@
  *
  * Copyright 2012 Dialog Semiconductors Ltd.
  * Copyright 2013 Philipp Zabel, Pengutronix
+ * Copyright 2013-2020  Digi International Inc.
  *
  * Author: Krystian Garbaciak, Dialog Semiconductor
  * Author: Michal Hajduk, Dialog Semiconductor
@@ -17,17 +18,21 @@
 #include <linux/device.h>
 #include <linux/delay.h>
 #include <linux/interrupt.h>
+#include <linux/tick.h>
 #include <linux/mutex.h>
 #include <linux/mfd/core.h>
 #include <linux/regmap.h>
 
 #include <linux/mfd/da9063/core.h>
+#include <linux/mfd/da9063/pdata.h>
 #include <linux/mfd/da9063/registers.h>
 
 #include <linux/proc_fs.h>
 #include <linux/kthread.h>
 #include <linux/uaccess.h>
+#include <linux/of.h>
 
+static struct da9063 * da9063_data;
 
 static struct resource da9063_regulators_resources[] = {
 	{
@@ -70,15 +75,99 @@ static struct resource da9063_hwmon_resources[] = {
 	},
 };
 
+static struct resource da9063_gpio_resources[] = {
+	{
+		.start	= DA9063_IRQ_GPI0,
+		.end	= DA9063_IRQ_GPI0,
+		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.start	= DA9063_IRQ_GPI1,
+		.end	= DA9063_IRQ_GPI1,
+		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.start	= DA9063_IRQ_GPI2,
+		.end	= DA9063_IRQ_GPI2,
+		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.start	= DA9063_IRQ_GPI3,
+		.end	= DA9063_IRQ_GPI3,
+		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.start	= DA9063_IRQ_GPI4,
+		.end	= DA9063_IRQ_GPI4,
+		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.start	= DA9063_IRQ_GPI5,
+		.end	= DA9063_IRQ_GPI5,
+		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.start	= DA9063_IRQ_GPI6,
+		.end	= DA9063_IRQ_GPI6,
+		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.start	= DA9063_IRQ_GPI7,
+		.end	= DA9063_IRQ_GPI7,
+		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.start	= DA9063_IRQ_GPI8,
+		.end	= DA9063_IRQ_GPI8,
+		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.start	= DA9063_IRQ_GPI9,
+		.end	= DA9063_IRQ_GPI9,
+		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.start	= DA9063_IRQ_GPI10,
+		.end	= DA9063_IRQ_GPI10,
+		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.start	= DA9063_IRQ_GPI11,
+		.end	= DA9063_IRQ_GPI11,
+		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.start	= DA9063_IRQ_GPI12,
+		.end	= DA9063_IRQ_GPI12,
+		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.start	= DA9063_IRQ_GPI13,
+		.end	= DA9063_IRQ_GPI13,
+		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.start	= DA9063_IRQ_GPI14,
+		.end	= DA9063_IRQ_GPI14,
+		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.start	= DA9063_IRQ_GPI15,
+		.end	= DA9063_IRQ_GPI15,
+		.flags	= IORESOURCE_IRQ,
+	},
+};
 
 static const struct mfd_cell da9063_common_devs[] = {
 	{
 		.name		= DA9063_DRVNAME_REGULATORS,
 		.num_resources	= ARRAY_SIZE(da9063_regulators_resources),
 		.resources	= da9063_regulators_resources,
+		.of_compatible  = "dlg,da9063-regulators",
 	},
 	{
 		.name		= DA9063_DRVNAME_LEDS,
+		.of_compatible  = "dlg,da9063-leds",
 	},
 	{
 		.name		= DA9063_DRVNAME_WATCHDOG,
@@ -88,15 +177,23 @@ static const struct mfd_cell da9063_common_devs[] = {
 		.name		= DA9063_DRVNAME_HWMON,
 		.num_resources	= ARRAY_SIZE(da9063_hwmon_resources),
 		.resources	= da9063_hwmon_resources,
+		.of_compatible  = "dlg,da9063-hwmon",
 	},
 	{
 		.name		= DA9063_DRVNAME_ONKEY,
 		.num_resources	= ARRAY_SIZE(da9063_onkey_resources),
 		.resources	= da9063_onkey_resources,
-		.of_compatible = "dlg,da9063-onkey",
+		.of_compatible	= "dlg,da9063-onkey",
 	},
 	{
 		.name		= DA9063_DRVNAME_VIBRATION,
+		.of_compatible  = "dlg,da9063-vibration",
+	},
+	{
+		.name		= DA9063_DRVNAME_GPIO,
+		.num_resources	= ARRAY_SIZE(da9063_gpio_resources),
+		.resources	= da9063_gpio_resources,
+		.of_compatible  = "dlg,da9063-gpio",
 	},
 };
 
@@ -158,9 +255,87 @@ static int da9063_clear_fault_log(struct da9063 *da9063)
 	return ret;
 }
 
+int da9063_dump(struct da9063 *da9063)
+{
+	int j = 0;
+	int i, ret;
+	unsigned int val;
+	unsigned int invalid = 0;
+	unsigned int reg_second_d = (da9063->variant_code ==  PMIC_DA9063_AD) ?
+			DA9063_AD_REG_SECOND_D : DA9063_BB_REG_SECOND_D;
+	unsigned int reg_gp_id_19 = (da9063->variant_code ==  PMIC_DA9063_AD) ?
+			DA9063_AD_REG_GP_ID_19 : DA9063_BB_REG_GP_ID_19;
+
+	if (!da9063)
+		return -EINVAL;
+
+	printk(KERN_DEBUG"PMIC\t00 01 02 03 04 05 06 07     08 09 0a 0b 0c 0d 0e 0f\n"
+		 "    \t---------------------------------------------------\n");
+	for (i = DA9063_REG_PAGE_CON; i <= DA9063_REG_CHIP_CONFIG_ID; i++) {
+		/* Check for invalid registers */
+		if ((i > reg_second_d && i < (DA9063_REG_SEQ - 1)) ||
+		    (i > DA9063_REG_AUTO3_LOW && i < (DA9063_REG_OTP_CONT - 1)) ||
+		    (i > reg_gp_id_19 && i < (DA9063_REG_CHIP_ID - 1))) {
+			invalid = 1;
+		}
+
+		if (j == 0)
+			printk("0x%04x:\t", i);
+
+		if (!invalid) {
+			ret = regmap_read(da9063->regmap, i, &val);
+			if (val < 0)
+				printk("?? ");
+			else
+				printk("%02x ", (unsigned char)val);
+		} else {
+			printk("-- ");
+			invalid = 0;
+		}
+
+		if (j == 7)
+			printk("    ");
+		if (j == 15) {
+			printk("\n");
+			j = 0;
+		} else {
+			j++;
+		}
+	}
+
+	return 0;
+}
+
+void da9063_power_off ( void ) {
+	BUG_ON(!da9063_data);
+
+	/* Disable timer events */
+	clockevents_suspend();
+
+	/* Configure LDO11, BIO and BPERI not to follow sequencer */
+	regmap_update_bits(da9063_data->regmap, DA9063_REG_BPERI_CONT,
+			   DA9063_BUCK_CONF, 0);
+	regmap_update_bits(da9063_data->regmap, DA9063_REG_LDO11_CONT,
+			   DA9063_LDO_CONF, 0);
+	regmap_update_bits(da9063_data->regmap, DA9063_REG_BIO_CONT,
+			   DA9063_BUCK_CONF, 0);
+
+	/* Configure to read OTP settings after power down */
+	regmap_update_bits(da9063_data->regmap, DA9063_REG_CONTROL_C,
+			   DA9063_OTPREAD_EN, DA9063_OTPREAD_EN);
+
+	/* Power down */
+	regmap_update_bits(da9063_data->regmap, DA9063_REG_CONTROL_F,
+			   DA9063_SHUTDOWN, DA9063_SHUTDOWN);
+
+	// Do not unlock mutex to avoid further accesses
+	// Do not return
+	while(1);
+}
+
 int da9063_device_init(struct da9063 *da9063, unsigned int irq)
 {
-	int model, variant_id, variant_code;
+	int model, variant_id, variant_code, t_offset;
 	int ret;
 
 	ret = da9063_clear_fault_log(da9063);
@@ -199,7 +374,18 @@ int da9063_device_init(struct da9063 *da9063, unsigned int irq)
 		return -ENODEV;
 	}
 
+	ret = regmap_read(da9063->regmap, DA9063_REG_T_OFFSET, &t_offset);
+	if (ret < 0) {
+		dev_err(da9063->dev, "Cannot read chip temperature offset.\n");
+		return -EIO;
+	}
+
 	da9063->variant_code = variant_code;
+	da9063->t_offset = t_offset;
+
+	dev_info(da9063->dev,
+		 "Device detected (model-ID: 0x%02X  rev-ID: 0x%02X t_offset: 0x%02X)\n",
+		 model, variant_code, t_offset);
 
 	ret = da9063_irq_init(da9063);
 	if (ret) {
@@ -228,7 +414,17 @@ int da9063_device_init(struct da9063 *da9063, unsigned int irq)
 		}
 	}
 
+	da9063_data = da9063;
+
+	pm_power_off = da9063_power_off;
+
 	return ret;
+}
+
+void da9063_device_exit(struct da9063 *da9063)
+{
+	mfd_remove_devices(da9063->dev);
+	da9063_irq_exit(da9063);
 }
 
 MODULE_DESCRIPTION("PMIC driver for Dialog DA9063");

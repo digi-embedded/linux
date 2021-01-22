@@ -1,0 +1,23 @@
+* Dialog's onkey device tree bindings
+
+The da9063 onkey driver allow for the user space handling of power events
+like suspend to RAM or poweroff.
+
+Required properties:
+
+- compatible: Must be "dlg,da9063-onkey".
+- interrupts: Local Da9063 interrupt line.
+- interrupt-name: Local DA9063 interrupt line name.
+
+Optional properties:
+- dlg,key-power: Indicates the power key is enabled in OTP.
+
+Example:
+
+	onkey {
+		compatible = "dlg,da9063-onkey";
+		interrupts = <0>;
+		interrupts-names = "ONKEY";
+		interrupt-parent = <&pmic_dialog>;
+		dlg,key-power;
+	};

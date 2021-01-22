@@ -20,6 +20,7 @@
 #include <linux/of_device.h>
 #include <linux/of_gpio.h>
 #include <linux/pinctrl/consumer.h>
+#include <linux/platform_data/i2c-imx.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <linux/sched.h>
@@ -73,7 +74,11 @@
 #define MCFGR1_IGNACK	BIT(9)
 #define MRDR_RXEMPTY	BIT(14)
 
+#define MCCRx_SETHOLF_MASK     0x3F
+#define MCFGR1_PRESCALE_MASK   0x07
+
 #define I2C_CLK_RATIO	24 / 59
+
 #define CHUNK_DATA	256
 
 #define STARDARD_MAX_BITRATE	100000
@@ -120,6 +125,8 @@ struct lpi2c_imx_struct {
 	struct pinctrl *pinctrl;
 	struct pinctrl_state *pinctrl_pins_default;
 	struct pinctrl_state *pinctrl_pins_gpio;
+	unsigned int		hold_time;
+	unsigned int		buf_time;
 };
 
 static void lpi2c_imx_intctrl(struct lpi2c_imx_struct *lpi2c_imx,
@@ -219,10 +226,21 @@ static void lpi2c_imx_stop(struct lpi2c_imx_struct *lpi2c_imx)
    CLKHI = I2C_CLK_RATIO * clk_cycle */
 static int lpi2c_imx_config(struct lpi2c_imx_struct *lpi2c_imx)
 {
-	u8 prescale, filt, sethold, datavd;
+	u16 prescale, filt, sethold = 0, datavd;
 	unsigned int clk_rate, clk_cycle, clkhi, clklo;
 	enum lpi2c_imx_pincfg pincfg;
 	unsigned int temp;
+	unsigned int min_prescaler = 0;
+	struct imxi2c_platform_data *pdata = dev_get_platdata(&lpi2c_imx->adapter.dev);
+
+	if (pdata != NULL) {
+		if (pdata->bitrate && pdata->bitrate != lpi2c_imx->bitrate) {
+			dev_warn(&lpi2c_imx->adapter.dev,
+				 "<%s> Changing bitrate to %d\n",
+				__func__, pdata->bitrate);
+			lpi2c_imx->bitrate = pdata->bitrate;
+		}
+	}
 
 	lpi2c_imx_set_mode(lpi2c_imx);
 
@@ -237,7 +255,23 @@ static int lpi2c_imx_config(struct lpi2c_imx_struct *lpi2c_imx)
 	else
 		filt = 2;
 
-	for (prescale = 0; prescale <= 7; prescale++) {
+	if (lpi2c_imx->hold_time) {
+		unsigned long hold_time_ns;
+
+		for (min_prescaler = 0; min_prescaler <= MCFGR1_PRESCALE_MASK;
+		     min_prescaler++) {
+			hold_time_ns = (MCCRx_SETHOLF_MASK + 1) * (1 << min_prescaler) *
+				       1000 / (clk_rate / 1000 / 1000);
+			if (hold_time_ns >= lpi2c_imx->hold_time)
+				break;
+		}
+
+		sethold = lpi2c_imx->hold_time / (1 << min_prescaler) *
+				 (clk_rate / 1000 / 1000) / 1000 - 1;
+		sethold &= MCCRx_SETHOLF_MASK;
+	}
+
+	for (prescale = min_prescaler; prescale <= MCFGR1_PRESCALE_MASK; prescale++) {
 		clk_cycle = clk_rate / ((1 << prescale) * lpi2c_imx->bitrate)
 			    - (2 + filt) / (1 << prescale);
 		clkhi = clk_cycle * I2C_CLK_RATIO;
@@ -246,7 +280,7 @@ static int lpi2c_imx_config(struct lpi2c_imx_struct *lpi2c_imx)
 			break;
 	}
 
-	if (prescale > 7)
+	if (prescale > MCFGR1_PRESCALE_MASK)
 		return -EINVAL;
 
 	/* set MCFGR1: PINCFG, PRESCALE, IGNACK */
@@ -266,8 +300,21 @@ static int lpi2c_imx_config(struct lpi2c_imx_struct *lpi2c_imx)
 	writel(temp, lpi2c_imx->base + LPI2C_MCFGR2);
 
 	/* set MCCR: DATAVD, SETHOLD, CLKHI, CLKLO */
-	sethold = clkhi;
+	if (!lpi2c_imx->hold_time)
+		sethold = clkhi;
+
 	datavd = clkhi >> 1;
+
+	/* Some timing parameter restrictions established by the manufacturer */
+	if (clkhi < 1)
+		clkhi = 1;
+	if (clklo < 3)
+		clklo = 3;
+	if (sethold < 2)
+		sethold = 2;
+	if (datavd < clkhi)
+		datavd = clkhi;
+
 	temp = datavd << 24 | sethold << 16 | clkhi << 8 | clklo;
 
 	if (lpi2c_imx->mode == HS)
@@ -285,7 +332,7 @@ static int lpi2c_imx_master_enable(struct lpi2c_imx_struct *lpi2c_imx)
 
 	ret = pm_runtime_get_sync(lpi2c_imx->adapter.dev.parent);
 	if (ret < 0)
-		return ret;
+		goto rpm_put;
 
 	temp = MCR_RST;
 	writel(temp, lpi2c_imx->base + LPI2C_MCR);
@@ -506,6 +553,9 @@ static int lpi2c_imx_xfer(struct i2c_adapter *adapter,
 			if (result)
 				goto stop;
 		}
+
+		if (lpi2c_imx->buf_time)
+			udelay(lpi2c_imx->buf_time);
 	}
 
 stop:
@@ -587,6 +637,7 @@ static int lpi2c_imx_init_recovery_info(struct lpi2c_imx_struct *lpi2c_imx,
 			PINCTRL_STATE_DEFAULT);
 	lpi2c_imx->pinctrl_pins_gpio = pinctrl_lookup_state(lpi2c_imx->pinctrl,
 			"gpio");
+
 	rinfo->sda_gpiod = devm_gpiod_get(&pdev->dev, "sda", GPIOD_IN);
 	rinfo->scl_gpiod = devm_gpiod_get(&pdev->dev, "scl", GPIOD_OUT_HIGH_OPEN_DRAIN);
 
@@ -673,6 +724,22 @@ static int lpi2c_imx_probe(struct platform_device *pdev)
 	if (ret)
 		lpi2c_imx->bitrate = STARDARD_MAX_BITRATE;
 
+	ret = of_property_read_u32(pdev->dev.of_node,
+				   "digi,hold-time-ns", &lpi2c_imx->hold_time);
+	if (ret)
+		lpi2c_imx->hold_time = 0;
+
+	ret = of_property_read_u32(pdev->dev.of_node,
+				   "digi,buffer-time-us", &lpi2c_imx->buf_time);
+	if (ret)
+		lpi2c_imx->buf_time = 0;
+
+	/* Init optional bus recovery function */
+	ret = lpi2c_imx_init_recovery_info(lpi2c_imx, pdev);
+	/* Give it another chance if pinctrl used is not ready yet */
+	if (ret == -EPROBE_DEFER)
+		goto rpm_disable;
+
 	i2c_set_adapdata(&lpi2c_imx->adapter, lpi2c_imx);
 	platform_set_drvdata(pdev, lpi2c_imx);
 
@@ -686,12 +753,6 @@ static int lpi2c_imx_probe(struct platform_device *pdev)
 	lpi2c_imx->rxfifosize = 1 << ((temp >> 8) & 0x0f);
 
 	pm_runtime_put(&pdev->dev);
-
-	/* Init optional bus recovery function */
-	ret = lpi2c_imx_init_recovery_info(lpi2c_imx, pdev);
-	/* Give it another chance if pinctrl used is not ready yet */
-	if (ret == -EPROBE_DEFER)
-		goto rpm_disable;
 
 	ret = i2c_add_adapter(&lpi2c_imx->adapter);
 	if (ret)

@@ -83,6 +83,58 @@ static int pca9450_buck123_set_ramp_delay(struct regulator_dev *rdev,
 			BUCK1_RAMP_MASK, ramp_value << 6);
 }
 
+static int pca9450_ldo_suspend_do_enable(struct regulator_dev *rdev, bool en)
+{
+	struct pca9450_pmic *pmic = rdev_get_drvdata(rdev);
+	struct pca9450 *mfd = pmic->mfd;
+	int id = rdev->desc->id - PCA9450_LDO1;
+	unsigned int ldoctrl[5] = {PCA9450_LDO1CTRL, PCA9450_LDO2CTRL,
+				   PCA9450_LDO3CTRL, PCA9450_LDO4CTRL,
+				   PCA9450_LDO5CTRL_L};
+
+	dev_dbg(pmic->dev, "LDO[%d] suspend state=%s\n", id + 1, en ? "on" : "off");
+
+	return regmap_update_bits(mfd->regmap, ldoctrl[id], LDO1_EN_MASK,
+				  en ? LDO_ENMODE_ONREQ  :
+				  LDO_ENMODE_ONREQ_STBYREQ);
+}
+
+static int pca9450_ldo_suspend_enable(struct regulator_dev *rdev)
+{
+	return pca9450_ldo_suspend_do_enable(rdev, true);
+}
+
+static int pca9450_ldo_suspend_disable(struct regulator_dev *rdev)
+{
+	return pca9450_ldo_suspend_do_enable(rdev, false);
+}
+
+static int pca9450_buck_suspend_do_enable(struct regulator_dev *rdev, bool en)
+{
+	struct pca9450_pmic *pmic = rdev_get_drvdata(rdev);
+	struct pca9450 *mfd = pmic->mfd;
+	int id = rdev->desc->id;
+	unsigned int buckctrl[6] = {PCA9450_BUCK1CTRL, PCA9450_BUCK2CTRL,
+				    PCA9450_BUCK3CTRL, PCA9450_BUCK4CTRL,
+				    PCA9450_BUCK5CTRL, PCA9450_BUCK6CTRL};
+
+	dev_dbg(pmic->dev, "Buck[%d] suspend state=%s\n", id + 1, en ? "on" : "off");
+
+	return regmap_update_bits(mfd->regmap, buckctrl[id], BUCK1_ENMODE_MASK,
+				  en ? BUCK_ENMODE_ONREQ :
+				  BUCK_ENMODE_ONREQ_STBYREQ);
+}
+
+static int pca9450_buck_suspend_enable(struct regulator_dev *rdev)
+{
+	return pca9450_buck_suspend_do_enable(rdev, true);
+}
+
+static int pca9450_buck_suspend_disable(struct regulator_dev *rdev)
+{
+	return pca9450_buck_suspend_do_enable(rdev, false);
+}
+
 static struct regulator_ops pca9450_ldo_regulator_ops = {
 	.enable = regulator_enable_regmap,
 	.disable = regulator_disable_regmap,
@@ -90,6 +142,8 @@ static struct regulator_ops pca9450_ldo_regulator_ops = {
 	.list_voltage = regulator_list_voltage_linear_range,
 	.set_voltage_sel = regulator_set_voltage_sel_regmap,
 	.get_voltage_sel = regulator_get_voltage_sel_regmap,
+	.set_suspend_enable = pca9450_ldo_suspend_enable,
+	.set_suspend_disable = pca9450_ldo_suspend_disable,
 };
 
 static struct regulator_ops pca9450_fixed_regulator_ops = {
@@ -97,6 +151,8 @@ static struct regulator_ops pca9450_fixed_regulator_ops = {
 	.disable = regulator_disable_regmap,
 	.is_enabled = regulator_is_enabled_regmap,
 	.list_voltage = regulator_list_voltage_linear,
+	.set_suspend_enable = pca9450_ldo_suspend_enable,
+	.set_suspend_disable = pca9450_ldo_suspend_disable,
 };
 
 static struct regulator_ops pca9450_buck_regulator_ops = {
@@ -105,6 +161,8 @@ static struct regulator_ops pca9450_buck_regulator_ops = {
 	.set_voltage_sel = regulator_set_voltage_sel_regmap,
 	.get_voltage_sel = regulator_get_voltage_sel_regmap,
 	.set_voltage_time_sel = regulator_set_voltage_time_sel,
+	.set_suspend_enable = pca9450_buck_suspend_enable,
+	.set_suspend_disable = pca9450_buck_suspend_disable,
 };
 
 static struct regulator_ops pca9450_buck123_regulator_ops = {
@@ -114,6 +172,8 @@ static struct regulator_ops pca9450_buck123_regulator_ops = {
 	.get_voltage_sel = regulator_get_voltage_sel_regmap,
 	.set_voltage_time_sel = regulator_set_voltage_time_sel,
 	.set_ramp_delay = pca9450_buck123_set_ramp_delay,
+	.set_suspend_enable = pca9450_buck_suspend_enable,
+	.set_suspend_disable = pca9450_buck_suspend_disable,
 };
 
 /*
@@ -535,6 +595,7 @@ static int pca9450_buck123_dvs_init(struct pca9450_pmic *pmic)
 	struct pca9450 *pca9450 = pmic->mfd;
 	struct pca9450_buck_dvs *buck_dvs = &pmic->buck_dvs[0];
 	int i, ret, val, selector = 0;
+	u8 reg_ctrl;
 	u8 reg_dvs0, reg_dvs1;
 	u8 reg_dvs0_msk, reg_dvs1_msk;
 
@@ -542,18 +603,21 @@ static int pca9450_buck123_dvs_init(struct pca9450_pmic *pmic)
 		switch (i) {
 		case 0:
 		default:
+			reg_ctrl = PCA9450_BUCK1CTRL;
 			reg_dvs0 = PCA9450_BUCK1OUT_DVS0;
 			reg_dvs0_msk = BUCK1OUT_DVS0_MASK;
 			reg_dvs1 = PCA9450_BUCK1OUT_DVS1;
 			reg_dvs1_msk = BUCK1OUT_DVS1_MASK;
 			break;
 		case 1:
+			reg_ctrl = PCA9450_BUCK2CTRL;
 			reg_dvs0 = PCA9450_BUCK2OUT_DVS0;
 			reg_dvs0_msk = BUCK2OUT_DVS0_MASK;
 			reg_dvs1 = PCA9450_BUCK2OUT_DVS1;
 			reg_dvs1_msk = BUCK2OUT_DVS1_MASK;
 			break;
 		case 2:
+			reg_ctrl = PCA9450_BUCK3CTRL;
 			reg_dvs0 = PCA9450_BUCK3OUT_DVS0;
 			reg_dvs0_msk = BUCK3OUT_DVS0_MASK;
 			reg_dvs1 = PCA9450_BUCK3OUT_DVS1;
@@ -574,8 +638,11 @@ static int pca9450_buck123_dvs_init(struct pca9450_pmic *pmic)
 			} else {
 				val = (selector & reg_dvs0_msk);
 				ret = pca9450_reg_write(pca9450, reg_dvs0, val);
-				if (ret < 0)
-					return ret;
+				if (ret < 0) {
+					dev_err(pmic->dev,
+						 "couln't write selector for DVS0\n");
+					continue;
+				}
 			}
 		}
 		if (reg_dvs1 > 0) {
@@ -586,11 +653,39 @@ static int pca9450_buck123_dvs_init(struct pca9450_pmic *pmic)
 				dev_dbg(pmic->dev,
 					"not found selector for DVS1 [%d]\n",
 					buck_dvs->voltage[1]);
-			} else {
-				val = (selector & reg_dvs1_msk);
-				ret = pca9450_reg_write(pca9450, reg_dvs1, val);
-				if (ret < 0)
-					return ret;
+				continue;
+			}
+
+			val = (selector & reg_dvs1_msk);
+			ret = pca9450_reg_write(pca9450, reg_dvs1, val);
+			if (ret < 0) {
+				dev_err(pmic->dev,
+					 "couln't write selector for DVS1\n");
+				continue;
+			}
+
+			/*
+			 * Update buck control register so dvs1 voltage is applied
+			 * in standby by:
+			 */
+			val = pca9450_reg_read(pca9450, reg_ctrl);
+
+			/*
+			 * 1- Set DVS_CTRL to 1: DVS ctrl through PMIC_STBY_REQ
+			 */
+			val |= BUCK1_DVS_CTRL;
+
+			/*
+			 * 2- Set Bx_ENMODE to 0b01: ON by PMIC_ON_REQ. Default
+			 * config may lead the regulator be disabled in standby.
+			 */
+			val = (val & ~BUCK1_ENMODE_MASK) | BUCK_ENMODE_ONREQ;
+
+			ret = pca9450_reg_write(pca9450, reg_ctrl, val);
+			if (ret < 0) {
+				dev_err(pmic->dev,
+					 "Couln't update BUCK%dCTRL\n", i+1);
+				continue;
 			}
 		}
 	}
@@ -720,23 +815,24 @@ static int pca9450_probe(struct platform_device *pdev)
 
 	/* Add Interrupt */
 	irq  = platform_get_irq(pdev, 0);
-	if (irq <= 0) {
+	if (irq < 0) {
 		dev_warn(&pdev->dev, "platform irq error # %d\n", irq);
 		return -ENXIO;
-	}
-	ret = devm_request_threaded_irq(&pdev->dev, irq, NULL,
-					pca9450_pmic_interrupt,
-					IRQF_TRIGGER_LOW | IRQF_EARLY_RESUME,
-					dev_name(&pdev->dev), &pdev->dev);
-	if (ret < 0)
-		dev_err(&pdev->dev, "IRQ %d is not free.\n", irq);
+	} else if (irq > 0) {
+		ret = devm_request_threaded_irq(&pdev->dev, irq, NULL,
+						pca9450_pmic_interrupt,
+						IRQF_TRIGGER_LOW | IRQF_EARLY_RESUME,
+						dev_name(&pdev->dev), &pdev->dev);
+		if (ret < 0)
+			dev_err(&pdev->dev, "IRQ %d is not free.\n", irq);
 
-	/* Un-mask IRQ Interrupt */
-	ret = pca9450_reg_write(pca9450, PCA9450_INT1_MSK, 0);
-	if (ret < 0) {
-		dev_err(&pdev->dev, "Write 'PCA9450_REG_MIRQ': failed!\n");
-		ret = -EIO;
-		goto err;
+		/* Un-mask IRQ Interrupt */
+		ret = pca9450_reg_write(pca9450, PCA9450_INT1_MSK, 0);
+		if (ret < 0) {
+			dev_err(&pdev->dev, "Write 'PCA9450_REG_MIRQ': failed!\n");
+			ret = -EIO;
+			goto err;
+		}
 	}
 
 	return 0;

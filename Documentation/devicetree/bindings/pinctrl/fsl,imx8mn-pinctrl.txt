@@ -16,6 +16,18 @@ Required properties in sub-nodes:
   the pad setting value like pull-up on this pin. Please refer to i.MX8M Nano
   Reference Manual for detailed CONFIG settings.
 
+CONFIG bits definition:
+PAD_CTL_PE                      (1 << 8)
+PAD_CTL_HYS                     (1 << 7)
+PAD_CTL_PUE                     (1 << 6)
+PAD_CTL_ODE                     (1 << 5)
+PAD_CTL_SRE_SLOW                (0 << 4)
+PAD_CTL_SRE_FAST                (1 << 4)
+PAD_CTL_DSE_X1                  (0 << 1)
+PAD_CTL_DSE_X4                  (1 << 1)
+PAD_CTL_DSE_X2                  (2 << 1)
+PAD_CTL_DSE_X6                  (3 << 1)
+
 Examples:
 
 &uart1 {

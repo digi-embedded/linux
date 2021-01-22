@@ -1,0 +1,44 @@
+Binding for Dialog's DA9063 PMIC led driver.
+
+Required properties:
+- compatible: "dlg,da9063-leds".
+
+Each LED is represented as a sub-node of the leds device.
+
+Required sub-node properties:
+
+- dlg,led-gpio-reg: The register offset for the GPIO configuration register,.
+and the mask to access the GPIO configuration register (each register
+configures two GPIO pins)
+- dlg,dlg,led-reg: The register offset for the LED configuration register.
+
+Optional properties:
+
+- dlg,inverse-polarity: Invert the brightness pin polarity.
+
+Example:
+
+leds {
+	compatible = "dlg,da9063-leds";
+	#address-cells = <1>;
+	#size-cells = <1>;
+
+	led@0xc6 {
+		dlg,led-gpio-reg = <0x1a 0x0f>;
+		dlg,led-reg = <0xc6>;
+		dlg,inverse-polarity;
+		linux,default-trigger = "backlight";
+	};
+
+	led@0xc7 {
+		dlg,led-gpio-reg = <0x1c 0x0f>;
+		dlg,led-reg = <0xc7>;
+		linux,default-trigger = "heartbeat";
+	};
+
+	led@0xc8 {
+		dlg,led-gpio-reg = <0x1c 0xf0>;
+		dlg,led-reg = <0xc8>;
+		linux,default-trigger = "heartbeat";
+	};
+};

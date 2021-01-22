@@ -70,6 +70,7 @@ static const char *cko_sels[] = { "cko1", "cko2", };
 
 static struct clk_hw **hws;
 static struct clk_hw_onecell_data *clk_hw_data;
+static struct clk *clks[IMX6UL_CLK_END];
 
 static const struct clk_div_table clk_enet_ref_table[] = {
 	{ .val = 0, .div = 20, },
@@ -503,6 +504,18 @@ static void __init imx6ul_clocks_init(struct device_node *ccm_node)
 
 	if (clk_on_imx6ull())
 		clk_prepare_enable(hws[IMX6UL_CLK_AIPSTZ3]->clk);
+
+	/*
+	 * It has been observed that the target could hang during boot if these
+	 * clocks are disabled during LCD driver initialization.
+	 *
+	 * U-Boot disables these clocks when authenticating images, so ensure
+	 * they are enabled to avoid this problem.
+	 */
+	clk_prepare_enable(clks[IMX6UL_CLK_CAAM_MEM]);
+	clk_prepare_enable(clks[IMX6UL_CLK_CAAM_ACLK]);
+	clk_prepare_enable(clks[IMX6UL_CLK_CAAM_IPG]);
+	clk_prepare_enable(clks[IMX6UL_CLK_EIM]);
 
 	if (IS_ENABLED(CONFIG_USB_MXS_PHY)) {
 		clk_prepare_enable(hws[IMX6UL_CLK_USBPHY1_GATE]->clk);

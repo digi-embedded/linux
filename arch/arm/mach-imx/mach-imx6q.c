@@ -9,12 +9,14 @@
 #include <linux/cpu.h>
 #include <linux/delay.h>
 #include <linux/export.h>
+#include <linux/gpio.h>
 #include <linux/init.h>
 #include <linux/io.h>
 #include <linux/irq.h>
 #include <linux/irqchip.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
+#include <linux/of_gpio.h>
 #include <linux/of_irq.h>
 #include <linux/of_platform.h>
 #include <linux/pm_opp.h>
@@ -32,6 +34,8 @@
 #include "common.h"
 #include "cpuidle.h"
 #include "hardware.h"
+
+extern int digi_get_board_version(void);
 
 /* For imx6q sabrelite board: set KSZ9021RN RGMII pad skew */
 static int ksz9021rn_phy_fixup(struct phy_device *phydev)
@@ -319,6 +323,48 @@ static void __init imx6q_axi_init(void)
 		pr_warn("failed to find fsl,imx6q-iomuxc-gpr regmap\n");
 	}
 }
+
+static void imx6q_wifi_init (void)
+{
+	struct device_node *np;
+	unsigned int pwrdown_gpio, pwrdown_delay;
+	enum of_gpio_flags flags;
+
+	np = of_find_node_by_path("/wireless");
+	if (!np)
+		return;
+
+	if (of_property_read_u32(np, "digi,pwrdown_delay",
+			&pwrdown_delay) < 0)
+		pwrdown_delay = 5;
+
+	/* Read the power down gpio */
+	pwrdown_gpio = of_get_named_gpio_flags(np, "digi,pwrdown-gpios", 0, &flags);
+	if (gpio_is_valid(pwrdown_gpio)) {
+		if (!gpio_request_one(pwrdown_gpio, GPIOF_DIR_OUT,
+			"wifi_chip_pwd_l")) {
+			/* Start with Power pin low, then set high to power Wifi */
+			gpio_set_value_cansleep(pwrdown_gpio, 0);
+			mdelay(pwrdown_delay);
+			gpio_set_value_cansleep(pwrdown_gpio, 1);
+			mdelay(pwrdown_delay);
+			/*
+			 * Free the Wifi chip PWD pin to allow controlling
+			 * it from user space
+			 */
+			gpio_free(pwrdown_gpio);
+		}
+	}
+	of_node_put(np);
+}
+
+static int __init imx6q_som_init (void)
+{
+	imx6q_wifi_init();
+
+	return 0;
+}
+device_initcall(imx6q_som_init);
 
 static void __init imx6q_init_machine(void)
 {

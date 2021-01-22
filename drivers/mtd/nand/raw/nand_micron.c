@@ -542,7 +542,18 @@ static void micron_fixup_onfi_param_page(struct nand_chip *chip,
 		p->revision = cpu_to_le16(ONFI_VERSION_1_0);
 }
 
+static void micron_nand_decode_id(struct nand_chip *chip)
+{
+	nand_decode_ext_id(chip);
+
+	if (chip->id.data[1] == 0xda) {
+		chip->base.eccreq.strength = 4;
+		chip->base.eccreq.step_size = 512;
+	}
+}
+
 const struct nand_manufacturer_ops micron_nand_manuf_ops = {
+	.detect = micron_nand_decode_id,
 	.init = micron_nand_init,
 	.cleanup = micron_nand_cleanup,
 	.fixup_onfi_param_page = micron_fixup_onfi_param_page,

@@ -1,0 +1,77 @@
+/*
+ * Copyright 2016 Digi International, Inc.
+ *
+ * The code contained herein is licensed under the GNU General Public
+ * License. You may obtain a copy of the GNU General Public License
+ * Version 2 or later at the following locations:
+ *
+ * http://www.opensource.org/licenses/gpl-license.html
+ * http://www.gnu.org/copyleft/gpl.html
+ */
+
+/dts-v1/;
+#include <dt-bindings/input/input.h>
+#include <dt-bindings/interrupt-controller/irq.h>
+/* i.MX6 UltraLite CPU */
+#include "imx6ul.dtsi"
+/* ConnectCore 6UL (wireless/bluetooth variant) */
+#include "imx6ul-ccimx6ul-wb.dtsi"
+/* ConnectCore 6UL StarterBoard */
+#include "imx6ul-ccimx6ulstarter.dtsi"
+
+&fec1 {
+	status = "okay";
+};
+
+/* UART5 (Console) */
+&uart5 {
+	status = "okay";
+};
+
+&usbotg1 {
+	status = "okay";
+};
+
+&usbotg2 {
+	status = "okay";
+};
+
+/* USDHC2 (microSD) */
+&usdhc2 {
+	status = "okay";
+};
+
+/* Configure all unused pins as GPIO */
+&iomuxc {
+	pinctrl-0 = <&pinctrl_hog>;
+	imx6ul-ccimx6ul {
+		pinctrl_hog: hoggrp {
+			fsl,pins = <
+				/* GPIOs BANK 1 */
+				MX6UL_PAD_GPIO1_IO00__GPIO1_IO00	0xf030
+				MX6UL_PAD_GPIO1_IO01__GPIO1_IO01	0xf030
+				MX6UL_PAD_GPIO1_IO04__GPIO1_IO04	0xf030
+				MX6UL_PAD_GPIO1_IO05__GPIO1_IO05	0xf030
+				MX6UL_PAD_JTAG_MOD__GPIO1_IO10		0x3030
+				MX6UL_PAD_JTAG_TMS__GPIO1_IO11		0xf030
+				MX6UL_PAD_JTAG_TDO__GPIO1_IO12		0xf030
+				MX6UL_PAD_JTAG_TDI__GPIO1_IO13		0xf030
+				MX6UL_PAD_JTAG_TCK__GPIO1_IO14		0xf030
+				MX6UL_PAD_UART2_TX_DATA__GPIO1_IO20	0x3030
+				MX6UL_PAD_UART2_RX_DATA__GPIO1_IO21	0x3030
+				MX6UL_PAD_UART2_CTS_B__GPIO1_IO22	0x3030
+				MX6UL_PAD_UART2_RTS_B__GPIO1_IO23	0x3030
+				/* GPIOs BANK 3 */
+				MX6UL_PAD_LCD_CLK__GPIO3_IO00		0xf030
+				MX6UL_PAD_LCD_ENABLE__GPIO3_IO01	0xf030
+				MX6UL_PAD_LCD_RESET__GPIO3_IO04		0xf030
+				MX6UL_PAD_LCD_DATA03__GPIO3_IO08	0x3030
+				MX6UL_PAD_LCD_DATA07__GPIO3_IO12	0xf030
+				MX6UL_PAD_LCD_DATA08__GPIO3_IO13	0xf030
+				/* GPIOs BANK 4 */
+				MX6UL_PAD_CSI_MCLK__GPIO4_IO17		0xf030
+				MX6UL_PAD_CSI_PIXCLK__GPIO4_IO18	0x3030
+			>;
+		};
+	};
+};

@@ -221,7 +221,7 @@
 			nvmem = <&ocotp>;
 		};
 
-		watchdog {
+		watchdog: watchdog {
 			compatible = "fsl,imx8qxp-sc-wdt", "fsl,imx-sc-wdt";
 			timeout-sec = <60>;
 		};

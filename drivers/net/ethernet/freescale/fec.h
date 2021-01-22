@@ -580,6 +580,12 @@ struct fec_enet_private {
 	int	wol_flag;
 	int	wake_irq;
 	u32	quirks;
+	bool	phy_reset_in_suspend;
+	int	phy_reset_gpio;
+	u32	phy_reset_duration;
+	bool	phy_reset_active_high;
+	int     phy_post_delay;
+	u32	fixups;
 
 	struct	napi_struct napi;
 	int	csum_flags;
@@ -598,6 +604,7 @@ struct fec_enet_private {
 	int hwts_rx_en;
 	int hwts_tx_en;
 	struct delayed_work time_keep;
+	struct regulator *reg_mdio;
 	struct regulator *reg_phy;
 	struct pm_qos_request pm_qos_req;
 

@@ -20,16 +20,22 @@ Optional properties:
  - irq-gpios		: GPIO pin used for IRQ. The driver uses the
 			  interrupt gpio pin as output to reset the device.
  - reset-gpios		: GPIO pin used for reset
- - AVDD28-supply	: Analog power supply regulator on AVDD28 pin
- - VDDIO-supply		: GPIO power supply regulator on VDDIO pin
  - touchscreen-inverted-x
  - touchscreen-inverted-y
  - touchscreen-size-x
  - touchscreen-size-y
  - touchscreen-swapped-x-y
-
-The touchscreen-* properties are documented in touchscreen.txt in this
-directory.
+ - reload-fw-on-resume  : Reload the touch controller configuration when re-
+			  suming from suspend. This is required to allow
+			  powering off the device during low power modes.
+ - skip-firmware-request: Do not load the touch config through the kernel firm-
+                          ware framework. Use the on chip configuration.
+ - extends-desktop	: used when the touch controller is on the secondary
+			  display of an extended desktop setup. In this case,
+			  the property is the phandle of the primary display.
+			  The driver will then parse the width of the display
+			  and add it as an offset to the X axis.
+ - vin-supply		: Regulator that powers the touch controller.
 
 Example:
 

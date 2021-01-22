@@ -707,6 +707,14 @@ config REGULATOR_PFUZE100
 	  Say y here to support the regulators found on the Freescale
 	  PFUZE100/200/3000/3001 PMIC.
 
+config REGULATOR_PF8X00_SC
+	tristate "Freescale PF8100/PF8200 regulator driver via SCU"
+	depends on IMX_SCU
+	help
+	  This driver controls a PF8100/PF8200 regulator connected to the
+	  SCU. The regulator controls seven buck converters and four linear
+	  regulators.
+
 config REGULATOR_PV88060
 	tristate "Powerventure Semiconductor PV88060 regulator"
 	depends on I2C

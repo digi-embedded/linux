@@ -165,10 +165,8 @@ static struct pca9450_board *pca9450_parse_dt(struct i2c_client *client,
 		return NULL;
 
 	board_info->gpio_intr = of_get_named_gpio(np, "gpio_intr", 0);
-	if (!gpio_is_valid(board_info->gpio_intr)) {
-		dev_err(&client->dev, "no pmic intr pin available\n");
-		goto err_intr;
-	}
+	if (!gpio_is_valid(board_info->gpio_intr))
+		dev_info(&client->dev, "no pmic intr pin available\n");
 
 	r = of_property_read_u32(np, "irq_base", &prop);
 	if (!r)
@@ -177,10 +175,6 @@ static struct pca9450_board *pca9450_parse_dt(struct i2c_client *client,
 		board_info->irq_base = -1;
 
 	return board_info;
-
-err_intr:
-	devm_kfree(&client->dev, board_info);
-	return NULL;
 }
 #endif
 
@@ -236,7 +230,8 @@ static int pca9450_i2c_probe(struct i2c_client *i2c,
 	}
 	dev_info(pca9450->dev, "Device ID=0x%X\n", ret);
 
-	pca9450_irq_init(pca9450, of_pmic_plat_data);
+	if (gpio_is_valid(of_pmic_plat_data->gpio_intr))
+		pca9450_irq_init(pca9450, of_pmic_plat_data);
 
 	ret = mfd_add_devices(pca9450->dev, -1,
 			      pca9450_mfd_cells, ARRAY_SIZE(pca9450_mfd_cells),
