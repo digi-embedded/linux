@@ -1191,14 +1191,17 @@ static int stm32mp13_check_security(void __iomem *base,
 	return secured;
 }
 
-static const struct stm32_clock_match_data stm32mp13_data = {
+#define RCC_CLR		0x4
+
+static const struct stm32_rcc_match_data stm32mp13_data = {
 	.tab_clocks	= stm32mp13_clock_cfg,
 	.num_clocks	= ARRAY_SIZE(stm32mp13_clock_cfg),
 	.gates		= stm32mp13_gates,
 	.muxes		= stm32mp13_muxes,
 	.dividers	= stm32mp13_dividers,
 	.check_security = &stm32mp13_check_security,
-	.maxbinding	= STM32MP1_LAST_CLK
+	.maxbinding	= STM32MP1_LAST_CLK,
+	.clear_offset	= RCC_CLR,
 };
 
 static const struct of_device_id stm32mp13_match_data[] = {

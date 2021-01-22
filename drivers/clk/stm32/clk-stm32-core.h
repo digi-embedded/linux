@@ -6,7 +6,7 @@
 
 #include <linux/clk-provider.h>
 
-struct stm32_clock_match_data;
+struct stm32_rcc_match_data;
 
 struct stm32_mux_cfg {
 	const char * const *parent_names;
@@ -48,13 +48,13 @@ struct clock_config {
 	void		*clock_cfg;
 
 	struct clk_hw *(*func)(struct device *dev,
-			       const struct stm32_clock_match_data *data,
+			       const struct stm32_rcc_match_data *data,
 			       void __iomem *base,
 			       spinlock_t *lock,
 			       const struct clock_config *cfg);
 };
 
-struct stm32_clock_match_data {
+struct stm32_rcc_match_data {
 	unsigned int			num_clocks;
 	const struct clock_config	*tab_clocks;
 	unsigned int			maxbinding;
@@ -64,6 +64,7 @@ struct stm32_clock_match_data {
 
 	int (*check_security)(void __iomem *base,
 			      const struct clock_config *cfg);
+	u32 clear_offset;
 };
 
 int stm32_rcc_init(struct device *dev, const struct of_device_id *match_data,
@@ -101,13 +102,13 @@ clk_stm32_register_composite(struct device *dev,
 
 struct clk_hw *
 _clk_hw_register_gate(struct device *dev,
-		      const struct stm32_clock_match_data *data,
+		      const struct stm32_rcc_match_data *data,
 		      void __iomem *base, spinlock_t *lock,
 		      const struct clock_config *cfg);
 
 struct clk_hw *
 _clk_stm32_gate_register(struct device *dev,
-			 const struct stm32_clock_match_data *data,
+			 const struct stm32_rcc_match_data *data,
 			 void __iomem *base, spinlock_t *lock,
 			 const struct clock_config *cfg);
 struct clk_hw *
@@ -118,7 +119,7 @@ _clk_stm32_mux_register(struct device *dev,
 
 struct clk_hw *
 _clk_stm32_register_composite(struct device *dev,
-			      const struct stm32_clock_match_data *data,
+			      const struct stm32_rcc_match_data *data,
 			      void __iomem *base, spinlock_t *lock,
 			      const struct clock_config *cfg);
 

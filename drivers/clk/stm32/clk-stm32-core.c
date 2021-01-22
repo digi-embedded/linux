@@ -15,25 +15,17 @@
 #include <linux/spinlock.h>
 
 #include "clk-stm32-core.h"
+#include "reset-stm32.h"
 
 static DEFINE_SPINLOCK(rlock);
 
-int stm32_rcc_init(struct device *dev, const struct of_device_id *match_data,
-		   void __iomem *base)
+static int stm32_rcc_clock_init(struct device *dev, const struct of_device_id *match,
+				void __iomem *base)
 {
+	const struct stm32_rcc_match_data *data = match->data;
 	struct clk_hw_onecell_data *clk_data;
 	struct clk_hw **hws;
-	const struct of_device_id *match;
-	const struct stm32_clock_match_data *data;
 	int n, max_binding;
-
-	match = of_match_node(match_data, dev_of_node(dev));
-	if (!match) {
-		dev_err(dev, "match data not found\n");
-		return -ENODEV;
-	}
-
-	data = match->data;
 
 	max_binding =  data->maxbinding;
 
@@ -73,6 +65,35 @@ int stm32_rcc_init(struct device *dev, const struct of_device_id *match_data,
 
 	return of_clk_add_hw_provider(dev_of_node(dev), of_clk_hw_onecell_get,
 				      clk_data);
+}
+
+int stm32_rcc_init(struct device *dev, const struct of_device_id *match_data,
+		   void __iomem *base)
+{
+	const struct of_device_id *match;
+	int err;
+
+	match = of_match_node(match_data, dev_of_node(dev));
+	if (!match) {
+		dev_err(dev, "match data not found\n");
+		return -ENODEV;
+	}
+
+	/* RCC Reset Configuration */
+	err = stm32_rcc_reset_init(dev, match, base);
+	if (err) {
+		pr_err("stm32mp1 reset failed to initialize\n");
+		return err;
+	}
+
+	/* RCC Clock Configuration */
+	err = stm32_rcc_clock_init(dev, match, base);
+	if (err) {
+		pr_err("stm32mp1 clock failed to initialize\n");
+		return err;
+	}
+
+	return 0;
 }
 
 /* MP1: Gate clock with set & clear registers */
@@ -170,7 +191,7 @@ struct clk_hw *clk_stm32_gate_register(struct device *dev,
 
 struct clk_hw *
 _clk_hw_register_gate(struct device *dev,
-		      const struct stm32_clock_match_data *data,
+		      const struct stm32_rcc_match_data *data,
 		      void __iomem *base, spinlock_t *lock,
 		      const struct clock_config *cfg)
 {
@@ -188,7 +209,7 @@ _clk_hw_register_gate(struct device *dev,
 
 struct clk_hw *
 _clk_stm32_gate_register(struct device *dev,
-			 const struct stm32_clock_match_data *data,
+			 const struct stm32_rcc_match_data *data,
 			 void __iomem *base, spinlock_t *lock,
 			 const struct clock_config *cfg)
 {
