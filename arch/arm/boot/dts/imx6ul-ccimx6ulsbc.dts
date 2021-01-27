@@ -93,6 +93,10 @@
 	status = "okay";
 };
 
+&goodix_touch2 {
+	status = "okay";
+};
+
 /* Parallel LCD */
 &lcdif {
 	status = "okay";

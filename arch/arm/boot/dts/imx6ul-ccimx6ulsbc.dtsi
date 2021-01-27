@@ -188,6 +188,19 @@
 		status = "disabled";
 	};
 
+	goodix_touch2: gt911@5d {
+		compatible = "goodix,gt9271";
+		reg = <0x5d>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_goodix_touch>;
+		interrupt-parent = <&gpio5>;
+		interrupts = <2 IRQ_TYPE_EDGE_RISING>;
+		irq-gpios = <&gpio5 2 GPIO_ACTIVE_HIGH>;
+		skip-firmware-request;
+		reload-fw-on-resume;
+		status = "disabled";
+	};
+
 	max98089: codec@10 {
 		compatible = "maxim,max98089";
 		reg = <0x10>;
