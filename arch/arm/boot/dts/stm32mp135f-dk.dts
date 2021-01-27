@@ -490,6 +490,15 @@
 	status = "okay";
 };
 
+&usbotg_hs {
+	phys = <&usbphyc_port1 0>;
+	phy-names = "usb2-phy";
+	dr_mode = "peripheral";
+	usb-role-switch;
+	role-switch-default-mode = "peripheral";
+	status = "okay";
+};
+
 &usbphyc {
 	status = "okay";
 };
