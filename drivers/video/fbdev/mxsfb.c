@@ -2303,10 +2303,18 @@ static int mxsfb_probe(struct platform_device *pdev)
 	}
 
 	host->reg_lcd = devm_regulator_get(&pdev->dev, "lcd");
+	if (PTR_ERR(host->reg_lcd) == -EPROBE_DEFER) {
+		ret = -EPROBE_DEFER;
+		goto fb_release;
+	}
 	if (IS_ERR(host->reg_lcd))
 		host->reg_lcd = NULL;
 
 	host->reg_aux = devm_regulator_get(&pdev->dev, "aux");
+	if (PTR_ERR(host->reg_lcd) == -EPROBE_DEFER) {
+		ret = -EPROBE_DEFER;
+		goto fb_release;
+	}
 	if (IS_ERR(host->reg_aux))
 		host->reg_aux = NULL;
 
