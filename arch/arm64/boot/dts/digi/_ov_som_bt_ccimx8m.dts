@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Digi International Inc.
+ * Copyright 2020-2021 Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -16,38 +16,43 @@
 /dts-v1/;
 /plugin/;
 
-#include "dt-bindings/input/input.h"
-
 / {
 	fragment@0 {
 		target-path = "/";
 		__overlay__ {
-			overlay-description = "SOM: MCA keypad";
+			overlay-description = "SOM: Bluetooth";
 		};
 	};
 
-	/* Disable the XBee cellular of the DVK to use those pins for the MCA keypad */
+	/* Enable the Bluetooth interface */
 	fragment@1 {
-		target = <&mca_uart2>;
-		__overlay__ {
-			status = "disabled";
-		};
-	};
-
-	/* Configure MCA keypad controller */
-	fragment@2 {
-		target = <&mca_keypad>;
+		target = <&bluetooth>;
 		__overlay__ {
 			status = "okay";
-			rows-io-list = <1 2>;
-			cols-io-list = <3 4>;
-			pwr-off-wakeup;
-			debounce-ms = <10>;
-			autorepeat;
-			linux,keymap = <MATRIX_KEY(0, 0, KEY_UP)
-					MATRIX_KEY(0, 1, KEY_DOWN)
-					MATRIX_KEY(1, 0, KEY_RIGHT)
-					MATRIX_KEY(1, 1, KEY_LEFT)>;
+		};
+	};
+
+	/* Enable the RF regulator */
+	fragment@2 {
+		target = <&reg_3v3_rf>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+
+	/* Enable the BT regulator */
+	fragment@3 {
+		target = <&reg_rf_bt_en>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+
+	/* Enable UART2 (Bluetooth) */
+	fragment@4 {
+		target = <&uart2>;
+		__overlay__ {
+			status = "okay";
 		};
 	};
 };
