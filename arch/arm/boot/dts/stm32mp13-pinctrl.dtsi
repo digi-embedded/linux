@@ -86,6 +86,12 @@
 		};
 	};
 
+	rtc_out2_rmp_pins_a: rtc-out2-rmp-pins-0 {
+		pins {
+			pinmux = <STM32_PINMUX('I', 1, ANALOG)>; /* RTC_OUT2_RMP */
+		};
+	};
+
 	sai1_pins_a: sai1-0 {
 		pins {
 			pinmux = <STM32_PINMUX('A', 4, AF12)>, /* SAI1_SCK_A */
