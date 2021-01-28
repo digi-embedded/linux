@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Digi International Inc.
+ * Copyright 2020-2021 Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -13,6 +13,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <dt-bindings/thermal/thermal.h>
+
 /dts-v1/;
 /plugin/;
 
@@ -20,39 +22,18 @@
 	fragment@0 {
 		target-path = "/";
 		__overlay__ {
-			overlay-description = "SOM: Bluetooth";
+			overlay-description = "SOM: quad-core CPU";
 		};
 	};
 
-	/* Enable the Bluetooth interface */
 	fragment@1 {
-		target = <&bluetooth>;
+		target-path = "/thermal-zones/cpu-thermal/cooling-maps/map0";
 		__overlay__ {
-			status = "okay";
-		};
-	};
-
-	/* Enable the RF regulator */
-	fragment@2 {
-		target = <&reg_3v3_rf>;
-		__overlay__ {
-			status = "okay";
-		};
-	};
-
-	/* Enable the BT regulator */
-	fragment@3 {
-		target = <&reg_rf_bt_en>;
-		__overlay__ {
-			status = "okay";
-		};
-	};
-
-	/* Enable UART2 (Bluetooth) */
-	fragment@4 {
-		target = <&uart2>;
-		__overlay__ {
-			status = "okay";
+			cooling-device =
+				<&A53_0 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+				<&A53_1 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+				<&A53_2 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+				<&A53_3 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
 		};
 	};
 };
