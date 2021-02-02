@@ -1517,34 +1517,44 @@ enum wmi_phy_cap {
 };
 
 /* Connect Event */
+union wmi_connect_event_common {
+	struct {
+		__le16 ch;
+		u8 bssid[ETH_ALEN];
+		__le16 listen_intvl;
+		__le16 beacon_intvl;
+		__le32 nw_type;
+	} sta;
+	struct {
+		u8 aid;
+		u8 phymode;
+		u8 mac_addr[ETH_ALEN];
+		u8 auth;
+		u8 keymgmt;
+		__le16 cipher;
+		u8 apsd_info;
+		u8 unused[3];
+	} ap_sta;
+	struct {
+		__le16 ch;
+		u8 bssid[ETH_ALEN];
+		u8 unused[8];
+	} ap_bss;
+} __packed;
+
 struct wmi_connect_event {
-	union {
-		struct {
-			__le16 ch;
-			u8 bssid[ETH_ALEN];
-			__le16 listen_intvl;
-			__le16 beacon_intvl;
-			__le32 nw_type;
-		} sta;
-		struct {
-			u8 aid;
-			u8 phymode;
-			u8 mac_addr[ETH_ALEN];
-			u8 auth;
-			u8 keymgmt;
-			__le16 cipher;
-			u8 apsd_info;
-			u8 unused[3];
-		} ap_sta;
-		struct {
-			__le16 ch;
-			u8 bssid[ETH_ALEN];
-			u8 unused[8];
-		} ap_bss;
-	} u;
+	union wmi_connect_event_common u;
 	u8 beacon_ie_len;
 	u8 assoc_req_len;
 	u8 assoc_resp_len;
+	u8 assoc_info[1];
+} __packed;
+
+struct wmi_connect_event_large_ie {
+	union wmi_connect_event_common u;
+	u16 beacon_ie_len;
+	u16 assoc_req_len;
+	u16 assoc_resp_len;
 	u8 assoc_info[1];
 } __packed;
 

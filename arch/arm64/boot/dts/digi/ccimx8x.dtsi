@@ -1,0 +1,630 @@
+/*
+ * Copyright 2018-2020 Digi International Inc.
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+#include <dt-bindings/usb/pd.h>
+/ {
+	aliases {
+		i2c0 = &i2c0;
+		i2c1 = &i2c1;
+		i2c2 = &i2c2;
+		i2c3 = &i2c3;
+	};
+
+	/* Bluetooth, disabled by default */
+	bluetooth: bluetooth {
+		/* U-Boot will fill in the MAC address here */
+		compatible = "digi,bluetooth-cc8x";
+		vin-supply = <&reg_rf_bt_en>;
+		status = "disabled";
+	};
+
+	caam_keyblob: caam-keyblob {
+		compatible = "fsl,sec-v4.0-keyblob";
+	};
+
+	reserved-memory {
+		linux,cma {
+			compatible = "shared-dma-pool";
+			reusable;
+			/*
+			 * The Linux code expects to find the "size" property
+			 * in legacy reserved memory nodes. Since this property
+			 * can co-exist with digi,size-table, include it with a
+			 * default value of 96 MB in case the size table can't
+			 * be parsed for whatever reason.
+			 */
+			size = <0 0x6000000>;
+			alloc-ranges = <0 0x96000000 0 0x28000000>;
+			linux,cma-default;
+			digi,size-table = <
+				/* RAM         CMA*/
+				0 0x20000000 0 0x6000000	/* 512 MB variants -> 96 MB of CMA */
+				0 0x40000000 0 0x14000000	/* 1 GB variants   -> 320 MB of CMA */
+				0 0x80000000 0 0x28000000	/* 2 GB variants   -> 640 MB of CMA */
+			>;
+		};
+
+		decoder_boot: decoder-boot@84000000 {
+			reg = <0 0x84000000 0 0x2000000>;
+			no-map;
+		};
+
+		decoder_rpc: decoder-rpc@0x92000000 {
+			reg = <0 0x92000000 0 0x200000>;
+			no-map;
+		};
+
+		encoder_boot: encoder-boot@86000000 {
+			reg = <0 0x86000000 0 0x200000>;
+			no-map;
+		};
+
+		encoder_rpc: encoder-rpc@0x92200000 {
+			reg = <0 0x92200000 0 0x200000>;
+			no-map;
+		};
+
+		encoder_reserved: encoder_reserved@94400000 {
+			no-map;
+			reg = <0 0x94400000 0 0x800000>;
+		};
+	};
+
+	regulators {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		reg_3v3: regulator-som@1 {
+			compatible = "regulator-fixed";
+			reg = <1>;
+			regulator-name = "3v3";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+		};
+
+		reg_1v8_adc_vref: regulator-som@2 {
+			compatible = "regulator-fixed";
+			reg = <2>;
+			regulator-name = "1v8_adc_vref";
+			regulator-min-microvolt = <1800000>;
+			regulator-max-microvolt = <1800000>;
+		};
+
+		reg_1v8: regulator-som@3 {
+			compatible = "regulator-fixed";
+			reg = <3>;
+			regulator-name = "1v8";
+			regulator-min-microvolt = <1800000>;
+			regulator-max-microvolt = <1800000>;
+		};
+
+		/* Wifi/Bluetooth regulators, disabled by default */
+		reg_3v3_rf: regulator-som@4 {
+			compatible = "regulator-fixed";
+			reg = <4>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_reg_3v3_rf>;
+			regulator-name = "3v3_rf";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			gpio = <&lsio_gpio3 12 GPIO_ACTIVE_HIGH>; /* 3V3_RF_EN */
+			enable-active-high;
+			startup-delay-us = <100000>;
+			vin-supply = <&reg_3v3>;
+			status = "disabled";
+		};
+
+		reg_rf_wl_en: regulator-som@5 {
+			compatible = "regulator-fixed";
+			reg = <5>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_reg_rf_wl_en>;
+			regulator-name = "rf_wl_en";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			gpio = <&lsio_gpio3 11 GPIO_ACTIVE_HIGH>; /* WL_EN */
+			enable-active-high;
+			startup-delay-us = <100>;
+			vin-supply = <&reg_3v3_rf>;
+			status = "disabled";
+		};
+
+		reg_rf_bt_en: regulator-som@6 {
+			compatible = "regulator-fixed";
+			reg = <6>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_reg_rf_bt_en>;
+			regulator-name = "rf_bt_en";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			gpio = <&lsio_gpio3 10 GPIO_ACTIVE_HIGH>; /* BT_EN */
+			enable-active-high;
+			startup-delay-us = <100>;
+			vin-supply = <&reg_3v3_rf>;
+			status = "disabled";
+		};
+	};
+
+	pf8x00-sc {
+		compatible = "digi,pf8x00-sc";
+
+		vcc_main1_reg: SW1 {
+			regulator-min-microvolt = <1000000>;
+			regulator-max-microvolt = <1000000>;
+			regulator-boot-on;
+			regulator-always-on;
+			regulator-state-mem {
+				regulator-on-in-suspend;
+				regulator-suspend-microvolt = <800000>;
+			};
+		};
+
+		vcc_main2_reg: SW2 {
+			regulator-min-microvolt = <1000000>;
+			regulator-max-microvolt = <1000000>;
+			regulator-boot-on;
+			regulator-always-on;
+			regulator-state-mem {
+				regulator-on-in-suspend;
+				regulator-suspend-microvolt = <800000>;
+			};
+		};
+
+		vcc_gpu_reg: SW3 {
+			regulator-min-microvolt = <1100000>;
+			regulator-max-microvolt = <1100000>;
+			regulator-boot-on;
+			regulator-always-on;
+			regulator-state-mem {
+				regulator-off-in-suspend;
+			};
+		};
+
+		vcc_cpu_reg: SW4 {
+			regulator-min-microvolt = <1100000>;
+			regulator-max-microvolt = <1100000>;
+			regulator-boot-on;
+			regulator-always-on;
+			regulator-state-mem {
+				regulator-off-in-suspend;
+			};
+		};
+
+		vcc_ddr_io_reg: SW5 {
+			regulator-min-microvolt = <1100000>;
+			regulator-max-microvolt = <1100000>;
+			regulator-boot-on;
+			regulator-always-on;
+			regulator-state-mem {
+				regulator-on-in-suspend;
+				regulator-suspend-microvolt = <1068750>;
+			};
+		};
+
+		vcc_1v8_reg: SW6 {
+			regulator-min-microvolt = <1800000>;
+			regulator-max-microvolt = <1800000>;
+			regulator-boot-on;
+			regulator-always-on;
+		};
+
+		vcc_3v3_reg: SW7 {
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			regulator-boot-on;
+			regulator-always-on;
+			regulator-state-mem {
+				regulator-off-in-suspend;
+			};
+		};
+
+		vcc_scu_1v8_reg: LDO1 {
+			regulator-min-microvolt = <1800000>;
+			regulator-max-microvolt = <1800000>;
+			regulator-boot-on;
+			regulator-always-on;
+		};
+
+		vdd_emmc_reg: LDO2 {
+			regulator-min-microvolt = <1800000>;
+			regulator-max-microvolt = <1800000>;
+			regulator-boot-on;
+			regulator-always-on;
+			regulator-state-mem {
+				regulator-off-in-suspend;
+			};
+		};
+
+		ldo3_reg: LDO3 {
+			regulator-min-microvolt = <1500000>;
+			regulator-max-microvolt = <5000000>;
+		};
+
+		ld4_reg: LDO4 {
+			regulator-min-microvolt = <1500000>;
+			regulator-max-microvolt = <5000000>;
+		};
+	};
+};
+
+&adc0 {
+	vref-supply = <&reg_1v8_adc_vref>;
+	digi,max-channel = <5>;
+};
+
+/* I2C0 connected to MCA and crypto chip */
+&i2c0 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	clock-frequency = <400000>;
+	pinctrl-names = "default", "gpio";
+	digi,hold-time-ns = <8000>;
+	digi,buffer-time-us = <35>;
+	pinctrl-0 = <&pinctrl_lpi2c0>;
+	pinctrl-1 = <&pinctrl_lpi2c0_gpio>;
+	scl-gpios = <&lsio_gpio3 8 GPIO_ACTIVE_HIGH>;
+	sda-gpios = <&lsio_gpio3 7 GPIO_ACTIVE_HIGH>;
+	status = "okay";
+
+	mca_cc8x: mca@63 {
+		compatible = "digi,mca-cc8x";
+		reg = <0x63>;
+		interrupt-parent = <&gic>;
+		interrupts = <GIC_SPI 177 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+		fw-update-gpio = <&lsio_gpio3 9 GPIO_ACTIVE_LOW>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_mca_cc8x>;
+
+		mca_adc: adc {
+			compatible = "digi,mca-cc8x-adc";
+			digi,adc-vref = <3000000>;
+		};
+
+		mca_gpio: gpio {
+			compatible = "digi,mca-cc8x-gpio";
+			gpio-controller;
+			#gpio-cells = <2>;
+
+			interrupt-parent = <&mca_cc8x>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
+
+			/* Disable all mca GPIOs as power off wake up sources */
+			pwroff-wakeup-capable-ios = <>;
+		};
+
+		pwrkey {
+			compatible = "digi,mca-cc8x-pwrkey";
+			digi,key-power;
+			digi,key-power-up;
+			digi,key-sleep;
+			digi,debounce-ms = <100>;
+			digi,pwroff-delay-sec = <6>;
+			digi,pwroff-guard-sec = <30>;
+		};
+
+		rtc {
+			compatible = "digi,mca-cc8x-rtc";
+		};
+
+		wdt {
+			compatible = "digi,mca-cc8x-wdt";
+			digi,full-reset;
+		};
+
+		pwms {
+			compatible = "digi,mca-pwm";
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			mca_pwm0: pwm@0 {
+				reg = <0>;
+				pwm-channels = <6>;
+				#pwm-cells = <3>;
+			};
+
+			mca_pwm1: pwm@1 {
+				reg = <1>;
+				pwm-channels = <2>;
+				#pwm-cells = <3>;
+			};
+
+			mca_pwm2: pwm@2 {
+				reg = <2>;
+				pwm-channels = <2>;
+				#pwm-cells = <3>;
+			};
+		};
+
+		mca_tamper: tamper {
+			compatible = "digi,mca-cc8x-tamper";
+		};
+
+		mca_uart: uart {
+			compatible = "digi,mca-cc8x-uart";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "disabled";
+
+			mca_uart0: serial@0x900 {
+				reg = <0x900>;
+				index = <0>;
+				status = "disabled";
+			};
+
+			mca_uart1: serial@0x920 {
+				reg = <0x920>;
+				index = <1>;
+				status = "disabled";
+			};
+
+			mca_uart2: serial@0x940 {
+				reg = <0x940>;
+				index = <2>;
+				status = "disabled";
+			};
+		};
+
+		mca_keypad: keypad {
+			compatible = "digi,mca-keypad";
+			status = "disabled";
+		};
+
+		mca_led: led {
+			compatible = "digi,mca-led";
+			status = "disabled";
+		};
+	};
+};
+
+/* Disable CPU RTC */
+&rtc {
+	status = "disabled";
+};
+
+/* Disable CPU watchdog */
+&watchdog {
+	status = "disabled";
+};
+
+/*
+ * Disable mipi1 lpcg nodes by default, not supported on the DualXZ variants.
+ * An overlay re-enables these nodes if supported by the corresponding variant.
+ */
+&mipi1_lis_lpcg {
+	status = "disabled";
+};
+
+&mipi1_pwm_lpcg {
+	status = "disabled";
+};
+
+&mipi1_i2c0_lpcg {
+	status = "disabled";
+};
+
+&imx8_gpu_ss {
+	/*
+	 * Use a table to set a fixed amount of contiguous memory used by the GPU
+	 * per memory configuration. This way we leave plenty of room for the
+	 * other system features when the memory is limited. The table's rows must
+	 * be in increasing RAM order. The GPU CMA should always be smaller than the
+	 * total CMA (see the table in the "reserved-memory" node to see the total CMA
+	 * values per memory configuration).
+	 */
+	digi,contiguous-size-table = <
+		/* RAM     CMA*/
+		0x20000000 0x2000000	/* 512 MB variants -> 32 MB of GPU CMA */
+		0x40000000 0x8000000	/* 1 GB variants   -> 128 MB of GPU CMA */
+		0x80000000 0x10000000	/* 2 GB variants   -> 256 MB of GPU CMA */
+	>;
+};
+
+/* UART1 (Bluetooth), disabled by default */
+&lpuart1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lpuart1_4wires>;
+	status = "disabled";
+};
+
+/* PCIe (Wireless), disabled by default */
+&pcieb{
+	compatible = "fsl,imx8qxp-pcie", "snps,dw-pcie";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pcieb>;
+	ext_osc = <1>;
+	reset-gpio = <&lsio_gpio4 0 GPIO_ACTIVE_LOW>;
+	status = "disabled";
+};
+
+&rpmsg{
+	/*
+	 * 64K for one rpmsg instance:
+	 */
+	vdev-nums = <2>;
+	reg = <0x0 0x90000000 0x0 0x20000>;
+	status = "okay";
+};
+
+&tsens {
+	tsens-num = <2>;
+};
+
+&thermal_zones {
+	pmic-thermal0 {
+		polling-delay-passive = <250>;
+		polling-delay = <2000>;
+		thermal-sensors = <&tsens 497>;
+		trips {
+			pmic_alert0: trip0 {
+				temperature = <85000>;
+				hysteresis = <2000>;
+				type = "passive";
+			};
+			pmic_crit0: trip1 {
+				temperature = <100000>;
+				hysteresis = <2000>;
+				type = "critical";
+			};
+		};
+		cooling-maps {
+			map0 {
+				trip = <&pmic_alert0>;
+				cooling-device =
+					<&A35_0 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+					<&A35_1 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
+			};
+		};
+	};
+};
+
+/* eMMC */
+&usdhc1 {
+	pinctrl-names = "default", "state_100mhz", "state_200mhz";
+	pinctrl-0 = <&pinctrl_usdhc1>;
+	pinctrl-1 = <&pinctrl_usdhc1>;
+	pinctrl-2 = <&pinctrl_usdhc1>;
+	bus-width = <8>;
+	no-sd;
+	no-sdio;
+	non-removable;
+	status = "okay";
+};
+
+&vpu_decoder {
+	boot-region = <&decoder_boot>;
+	rpc-region = <&decoder_rpc>;
+	reg-csr = <0x2d040000>;
+	core_type = <1>;
+	status = "disabled";
+};
+
+&vpu_encoder {
+	boot-region = <&encoder_boot>;
+	rpc-region = <&encoder_rpc>;
+	reserved-region = <&encoder_reserved>;
+	reg-rpc-system = <0x40000000>;
+	resolution-max = <1920 1080>;
+	mbox-names = "enc1_tx0", "enc1_tx1", "enc1_rx";
+	mboxes = <&mu1_m0 0 0
+		  &mu1_m0 0 1
+		  &mu1_m0 1 0>;
+	status = "disabled";
+
+	core0@1020000 {
+		compatible = "fsl,imx8-mu1-vpu-m0";
+		reg = <0x1020000 0x20000>;
+		reg-csr = <0x1050000 0x10000>;
+		interrupts = <GIC_SPI 470 IRQ_TYPE_LEVEL_HIGH>;
+		fsl,vpu_ap_mu_id = <17>;
+		fw-buf-size = <0x200000>;
+		rpc-buf-size = <0x80000>;
+		print-buf-size = <0x80000>;
+	};
+};
+
+/* IOMUX */
+&iomuxc {
+	/* Internal I2C (MCA, Crypto chip) */
+	pinctrl_lpi2c0: lpi2c0grp {
+		fsl,pins = <
+			IMX8QXP_MIPI_CSI0_GPIO0_00_ADMA_I2C0_SCL	0xc6000066
+			IMX8QXP_MIPI_CSI0_GPIO0_01_ADMA_I2C0_SDA	0xc6000066
+		>;
+	};
+
+	pinctrl_lpi2c0_gpio: lpi2c0gpiogrp {
+		fsl,pins = <
+			IMX8QXP_MIPI_CSI0_GPIO0_00_LSIO_GPIO3_IO08	0xc6000066
+			IMX8QXP_MIPI_CSI0_GPIO0_01_LSIO_GPIO3_IO07	0xc6000066
+		>;
+	};
+
+	/* UART1 Bluetooth (4 wires) */
+	pinctrl_lpuart1_4wires: lpuart1grp_4wires {
+		fsl,pins = <
+			IMX8QXP_UART1_TX_ADMA_UART1_TX		0x06000020
+			IMX8QXP_UART1_RX_ADMA_UART1_RX		0x06000020
+			IMX8QXP_UART1_RTS_B_ADMA_UART1_RTS_B	0x06000020
+			IMX8QXP_UART1_CTS_B_ADMA_UART1_CTS_B	0x06000020
+		>;
+	};
+
+	pinctrl_mca_cc8x: mcagrp {
+		fsl,pins = <
+			/*
+			 * MCA_nINT
+			 *
+			 * Currently, the MCA interrupt request line is
+			 * configured by the SCU
+			 *
+			 * IMX8QXP_PMIC_INT_B_SCU_DSC_PMIC_INT_B	0xb0b1
+			 */
+
+			/* MCA_FW_UPDATE */
+			IMX8QXP_QSPI0A_DATA0_LSIO_GPIO3_IO09	0x06000021
+		>;
+	};
+
+	/* PCI Wireless */
+	pinctrl_pcieb: pcieagrp {
+		fsl,pins = <
+			IMX8QXP_PCIE_CTRL0_PERST_B_LSIO_GPIO4_IO00		0x06000021
+			IMX8QXP_PCIE_CTRL0_CLKREQ_B_LSIO_GPIO4_IO01	0x06000021
+			IMX8QXP_PCIE_CTRL0_WAKE_B_LSIO_GPIO4_IO02		0x06000021
+		>;
+	};
+
+	pinctrl_reg_3v3_rf: reg_3v3_rf_grp {
+		fsl,pins = <
+			/* Voltage for RF domain (3V3_RF_EN) */
+			IMX8QXP_QSPI0A_DATA3_LSIO_GPIO3_IO12		0x06000021
+		>;
+	};
+
+	pinctrl_reg_rf_bt_en: reg_rf_bt_en_grp {
+		fsl,pins = <
+			/* Bluetooth enable (BT_EN) */
+			IMX8QXP_QSPI0A_DATA1_LSIO_GPIO3_IO10		0x06000021
+		>;
+	};
+
+	pinctrl_reg_rf_wl_en: reg_rf_wl_en_grp {
+		fsl,pins = <
+			/* Wireless enable (WL_EN) */
+			IMX8QXP_QSPI0A_DATA2_LSIO_GPIO3_IO11		0x06000021
+		>;
+	};
+
+	/* eMMC */
+	pinctrl_usdhc1: usdhc1grp {
+		fsl,pins = <
+			IMX8QXP_EMMC0_CLK_CONN_EMMC0_CLK		0x06000041
+			IMX8QXP_EMMC0_CMD_CONN_EMMC0_CMD		0x00000021
+			IMX8QXP_EMMC0_DATA0_CONN_EMMC0_DATA0	0x00000021
+			IMX8QXP_EMMC0_DATA1_CONN_EMMC0_DATA1	0x00000021
+			IMX8QXP_EMMC0_DATA2_CONN_EMMC0_DATA2	0x00000021
+			IMX8QXP_EMMC0_DATA3_CONN_EMMC0_DATA3	0x00000021
+			IMX8QXP_EMMC0_DATA4_CONN_EMMC0_DATA4	0x00000021
+			IMX8QXP_EMMC0_DATA5_CONN_EMMC0_DATA5	0x00000021
+			IMX8QXP_EMMC0_DATA6_CONN_EMMC0_DATA6	0x00000021
+			IMX8QXP_EMMC0_DATA7_CONN_EMMC0_DATA7	0x00000021
+			IMX8QXP_EMMC0_STROBE_CONN_EMMC0_STROBE	0x00000041
+		>;
+	};
+};

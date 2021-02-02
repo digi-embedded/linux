@@ -513,8 +513,15 @@ static int imx8qxp_adc_probe(struct platform_device *pdev)
 	struct imx8qxp_adc *adc;
 	struct iio_dev *indio_dev;
 	struct resource *mem;
+	struct iio_chan_spec *chan;
+	struct property *prop;
 	int irq;
 	int ret;
+	u32 channels = 0;
+	u32 adc_ch_list[ARRAY_SIZE(imx8qxp_adc_iio_channels)];
+	u32 ch, max_channel;
+	const __be32 *cur;
+	bool ch_list = true;
 
 	indio_dev = devm_iio_device_alloc(&pdev->dev, sizeof(*adc));
 	if (!indio_dev) {
@@ -574,12 +581,43 @@ static int imx8qxp_adc_probe(struct platform_device *pdev)
 
 	init_completion(&adc->completion);
 
+	ret = of_property_read_u32(pdev->dev.of_node,
+				   "digi,max-channel", &max_channel);
+	if (ret || max_channel >= ARRAY_SIZE(imx8qxp_adc_iio_channels))
+		max_channel = ARRAY_SIZE(imx8qxp_adc_iio_channels) - 1;
+
+	/* Get the list of channels enabled */
+	of_property_for_each_u32(pdev->dev.of_node, "digi,adc-ch-list", prop, cur, ch) {
+		if (ch > max_channel) {
+			dev_warn(&pdev->dev,
+				 "invalid adc channel %d (must be between 0-%d)\n",
+				 ch, max_channel);
+			continue;
+		}
+		adc_ch_list[channels++] = ch;
+	}
+
+	if (!channels) {
+		/* No 'ach-ch-list', set maximum number of channels */
+		ch_list = false;
+		channels = ARRAY_SIZE(imx8qxp_adc_iio_channels);
+	}
+
 	indio_dev->name = dev_name(&pdev->dev);
 	indio_dev->dev.parent = &pdev->dev;
 	indio_dev->info = &imx8qxp_adc_iio_info;
 	indio_dev->modes = INDIO_DIRECT_MODE;
 	indio_dev->channels = imx8qxp_adc_iio_channels;
-	indio_dev->num_channels = ARRAY_SIZE(imx8qxp_adc_iio_channels);
+	indio_dev->num_channels = (int)channels;
+
+	/* Re-set the channel number according to the channel list */
+	if (ch_list) {
+		for (ch = 0, chan = (struct iio_chan_spec *)indio_dev->channels;
+		     ch < indio_dev->num_channels;
+		     ch++, chan++) {
+			chan->channel = adc_ch_list[ch];
+		}
+	}
 
 	ret = clk_prepare_enable(adc->clk);
 	if (ret) {

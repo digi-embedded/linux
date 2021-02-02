@@ -200,6 +200,13 @@ config LEDS_LOCOMO
 	  This option enables support for the LEDs on Sharp Locomo.
 	  Zaurus models SL-5500 and SL-5600.
 
+config LEDS_MCA
+	tristate "LED support for the MCA on the ConnectCore SoMs"
+	depends on LEDS_CLASS
+	help
+	  This option enables support for the LEDs on the MCA of the
+	  ConnectCore modules.
+
 config LEDS_MIKROTIK_RB532
 	tristate "LED Support for Mikrotik Routerboard 532"
 	depends on LEDS_CLASS
@@ -501,6 +508,14 @@ config LEDS_DA9052
 	help
 	  This option enables support for on-chip LED drivers found
 	  on Dialog Semiconductor DA9052-BC and DA9053-AA/Bx PMICs.
+
+config LEDS_DA9063
+	tristate "Dialog DA9063 LEDS"
+	depends on LEDS_CLASS
+	depends on MFD_DA9063
+	help
+	  This option enables support for on-chip PWM LED driver found
+	  on Dialog Semiconductor DA9063 PMIC.
 
 config LEDS_DAC124S085
 	tristate "LED Support for DAC124S085 SPI DAC"

@@ -621,7 +621,19 @@ static struct platform_driver imx_ocotp_driver = {
 		.of_match_table = imx_ocotp_dt_ids,
 	},
 };
-module_platform_driver(imx_ocotp_driver);
+
+static int __init imx_ocotp_init(void)
+{
+	return platform_driver_register(&imx_ocotp_driver);
+}
+
+static void __exit imx_ocotp_exit(void)
+{
+	platform_driver_unregister(&imx_ocotp_driver);
+}
+
+subsys_initcall(imx_ocotp_init);
+module_exit(imx_ocotp_exit);
 
 MODULE_AUTHOR("Philipp Zabel <p.zabel@pengutronix.de>");
 MODULE_DESCRIPTION("i.MX6/i.MX7 OCOTP fuse box driver");

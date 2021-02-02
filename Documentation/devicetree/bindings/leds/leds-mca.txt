@@ -1,0 +1,56 @@
+Digi ConnectCore SOMs Micro Controller Assist LEDs controller
+
+Required properties:
+  - compatible: 	must be "digi,mca-led"
+  - #address-cells:	must be 1.
+  - #size-cells:	must be 0.
+
+Each LED is represented as a sub-node of the mca_led device.
+
+LED sub-node required properties:
+  - reg:	index of the MCA LED controller.
+  - io:		MCA IO the LED is connected to.
+
+LED sub-node optional properties:
+  - label:		    see Documentation/devicetree/bindings/leds/common.txt
+  - active-low:		    Boolean, makes LED active low.
+  - linux,default-trigger:  see Documentation/devicetree/bindings/leds/common.txt
+  - led-pattern:	    see Documentation/devicetree/bindings/leds/common.txt
+  - retain-state-suspended: The LED retains configured functionality during suspend.
+			    Only applies to some triggers like default-on, timer.
+  - retain-state-shutdown:  Retain the state of the LED on shutdown.
+  - panic-indicator: 	    see Documentation/devicetree/bindings/leds/common.txt
+
+Examples:
+mca_led: led {
+	compatible = "digi,mca-led";
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	led0: led@0 {
+		reg = <0>;
+		label = "power:green";
+		io = <13>;
+		linux,default-trigger = "default-on";
+	};
+
+	led1: led@1 {
+		reg = <1>;
+		label = "USER_LED1:green";
+		io = <12>;
+		/* Configure it to blink at boot as an example */
+		linux,default-trigger = "timer";
+		led-pattern = <100>, <1000>;
+		retain-state-suspended;
+	};
+
+	led2: led@2 {
+		reg = <2>;
+		label = "USER_LED2:orange";
+		io = <18>;
+		/* Configure it to blink at boot as an example */
+		linux,default-trigger = "timer";
+		led-pattern = <5000>, <5000>;
+		retain-state-suspended;
+	};
+};

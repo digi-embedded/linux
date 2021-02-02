@@ -488,7 +488,7 @@ struct sdma_engine {
 	bool				clk_ratio;
 	struct gen_pool			*iram_pool;
 	bool				fw_loaded;
-	u32				fw_fail;
+	int				idx;
 	unsigned short			ram_code_start;
 };
 
@@ -706,6 +706,8 @@ static const struct of_device_id sdma_dt_ids[] = {
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, sdma_dt_ids);
+
+static int sdma_dev_idx;
 
 #define SDMA_H_CONFIG_DSPDMA	BIT(12) /* indicates if the DSPDMA is used */
 #define SDMA_H_CONFIG_RTD_PINS	BIT(11) /* indicates if Real-Time Debug pins are enabled */
@@ -2045,17 +2047,8 @@ static void sdma_load_firmware(const struct firmware *fw, void *context)
 	unsigned short *ram_code;
 
 	if (!fw) {
-		/* Load firmware once more time if timeout */
-		if (sdma->fw_fail)
-			dev_info(sdma->dev, "external firmware not found, using ROM firmware\n");
-		else {
-			request_firmware_nowait(THIS_MODULE,
-					FW_ACTION_HOTPLUG, sdma->fw_name,
-					sdma->dev, GFP_KERNEL, sdma,
-					sdma_load_firmware);
-			sdma->fw_fail++;
-		}
-
+		dev_info(sdma->dev, "external firmware not found, using ROM firmware\n");
+		/* In this case we just use the ROM firmware. */
 		return;
 	}
 
@@ -2264,6 +2257,7 @@ static struct dma_chan *sdma_xlate(struct of_phandle_args *dma_spec,
 	if (dma_spec->args[2] & BIT(31))
 		data.done_sel = dma_spec->args[2];
 	data.priority = dma_spec->args[2] & 0xff;
+	data.idx = sdma->idx;
 	/*
 	 * init dma_request2 to zero, which is not used by the dts.
 	 * For P2P, dma_request2 is init from dma_request_channel(),
@@ -2465,6 +2459,9 @@ static int sdma_probe(struct platform_device *pdev)
 	pm_runtime_enable(&pdev->dev);
 	if (!sdma->drvdata->pm_runtime)
 		pm_runtime_get_sync(&pdev->dev);
+
+	/* There maybe multi sdma devices such as i.mx8mscale */
+	sdma->idx = sdma_dev_idx++;
 
 	return 0;
 

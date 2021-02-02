@@ -91,6 +91,7 @@ obj-$(CONFIG_REGULATOR_PALMAS) += palmas-regulator.o
 obj-$(CONFIG_REGULATOR_PCA9450) += pca9450-regulator.o
 obj-$(CONFIG_REGULATOR_PF1550_RPMSG) += pf1550-regulator-rpmsg.o
 obj-$(CONFIG_REGULATOR_PFUZE100) += pfuze100-regulator.o
+obj-$(CONFIG_REGULATOR_PF8X00_SC) += pf8x00-sc-regulator.o
 obj-$(CONFIG_REGULATOR_PV88060) += pv88060-regulator.o
 obj-$(CONFIG_REGULATOR_PV88080) += pv88080-regulator.o
 obj-$(CONFIG_REGULATOR_PV88090) += pv88090-regulator.o

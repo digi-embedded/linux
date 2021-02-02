@@ -24,14 +24,12 @@ hsio_subsys: bus@5f000000 {
 		compatible = "gpio-gate-clock";
 		clocks = <&xtal100m>;
 		#clock-cells = <0>;
-		enable-gpios = <&lsio_gpio4 27 GPIO_ACTIVE_LOW>;
 	};
 
 	hsio_refb_clk: clock-hsio-refb {
 		compatible = "gpio-gate-clock";
 		clocks = <&xtal100m>;
 		#clock-cells = <0>;
-		enable-gpios = <&lsio_gpio4 1 GPIO_ACTIVE_LOW>;
 	};
 
 	hsio_axi_clk: clock-hsio-axi {

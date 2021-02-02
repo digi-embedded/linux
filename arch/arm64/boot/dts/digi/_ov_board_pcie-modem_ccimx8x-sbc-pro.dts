@@ -1,0 +1,67 @@
+/*
+ * Copyright 2020 Digi International Inc.
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+#include <dt-bindings/gpio/gpio.h>
+
+/dts-v1/;
+/plugin/;
+
+/ {
+	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			overlay-description = "SBC: PCIe Modems";
+		};
+	};
+
+
+	/* Adjust reset-delay-us depending on your modem, this seems to work
+	 * with most of Telit modems.
+	 */
+	fragment@1 {
+		target-path = "/";
+		__overlay__ {
+			pcie_modem_reset: modem_reset {
+				compatible = "gpio-reset";
+				reset-gpios = <&lsio_gpio3 16 GPIO_ACTIVE_LOW>;
+				reset-delay-us = <21000>;
+				#reset-cells = <0>;
+			};
+		};
+	};
+
+	/*
+	 * Define regulator, reset, and disable lines, used by USB modems on the PCIe
+	 * connector.
+	 */
+	fragment@2 {
+		target = <&pcieb>;
+		__overlay__ {
+			resets = <&pcie_modem_reset>;
+			disable-gpio = <&lsio_gpio0 30 GPIO_ACTIVE_HIGH>;
+			vpcie-supply = <&reg_3v3_pcie>;
+			status = "okay";
+		};
+	};
+
+
+	/* Enable the pcie regulator */
+	fragment@3 {
+		target = <&reg_3v3_pcie>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+};

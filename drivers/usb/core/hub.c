@@ -2810,16 +2810,13 @@ static int hub_port_wait_reset(struct usb_hub *hub, int port1,
 	if (!(portstatus & USB_PORT_STAT_CONNECTION))
 		return -ENOTCONN;
 
-	/* Retry if connect change is set but status is still connected.
-	 * A USB 3.0 connection may bounce if multiple warm resets were issued,
+	/* bomb out completely if the connection bounced.  A USB 3.0
+	 * connection may bounce if multiple warm resets were issued,
 	 * but the device may have successfully re-connected. Ignore it.
 	 */
 	if (!hub_is_superspeed(hub->hdev) &&
-	    (portchange & USB_PORT_STAT_C_CONNECTION)) {
-		usb_clear_port_feature(hub->hdev, port1,
-				       USB_PORT_FEAT_C_CONNECTION);
-		return -EAGAIN;
-	}
+			(portchange & USB_PORT_STAT_C_CONNECTION))
+		return -ENOTCONN;
 
 	if (!(portstatus & USB_PORT_STAT_ENABLE))
 		return -EBUSY;

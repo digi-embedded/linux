@@ -654,6 +654,43 @@ static struct device_link *pwm_device_link_add(struct device *dev,
 	return dl;
 }
 
+static struct pwm_chip *of_subnode_to_pwmchip(const struct of_phandle_args *args)
+{
+	struct pwm_chip *chip;
+	struct device_node *node;
+	struct pwm_device *pwm_dev;
+
+	mutex_lock(&pwm_lock);
+
+	list_for_each_entry(chip, &pwm_chips, list) {
+		if (chip->dev && chip->dev->of_node && chip->of_xlate) {
+			for_each_child_of_node(chip->dev->of_node, node) {
+				/*
+				 * Check if the phandle matches with any of the
+				 * subnodes. If that is the case, use of_xlate
+				 * function to verify if the chip matches what
+				 * the phandle points to. Note that this
+				 * requires a proper implemention of the
+				 * function.
+				 */
+				if (node == args->np) {
+					mutex_unlock(&pwm_lock);
+					pwm_dev = chip->of_xlate(chip, args);
+					if (pwm_dev) {
+						pwm_free(pwm_dev);
+						return chip;
+					}
+					mutex_lock(&pwm_lock);
+				}
+			}
+		}
+	}
+
+	mutex_unlock(&pwm_lock);
+
+	return ERR_PTR(-EPROBE_DEFER);
+}
+
 /**
  * of_pwm_get() - request a PWM via the PWM framework
  * @dev: device for PWM consumer
@@ -699,11 +736,17 @@ struct pwm_device *of_pwm_get(struct device *dev, struct device_node *np,
 
 	pc = of_node_to_pwmchip(args.np);
 	if (IS_ERR(pc)) {
-		if (PTR_ERR(pc) != -EPROBE_DEFER)
-			pr_err("%s(): PWM chip not found\n", __func__);
-
-		pwm = ERR_CAST(pc);
-		goto put;
+		/*
+		 * Check the subnodes of the device before returning with error,
+		 * just in case it is a device with multiple pwmchips defined as
+		 * subnodes.
+		 */
+		pc = of_subnode_to_pwmchip(&args);
+		if (IS_ERR(pc)) {
+			pr_debug("%s(): PWM chip not found\n", __func__);
+			pwm = ERR_CAST(pc);
+			goto put;
+		}
 	}
 
 	pwm = pc->of_xlate(pc, &args);

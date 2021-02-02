@@ -827,6 +827,8 @@ static int sgtl5000_set_dai_fmt(struct snd_soc_dai *codec_dai, unsigned int fmt)
 		break;
 	case SND_SOC_DAIFMT_I2S:
 		i2sctl |= SGTL5000_I2S_MODE_I2S_LJ << SGTL5000_I2S_MODE_SHIFT;
+		if (of_machine_is_compatible("digi,ccimx6sbc"))
+			i2sctl |= SGTL5000_I2S_LRPOL;
 		break;
 	case SND_SOC_DAIFMT_RIGHT_J:
 		i2sctl |= SGTL5000_I2S_MODE_RJ << SGTL5000_I2S_MODE_SHIFT;
@@ -1050,7 +1052,6 @@ static int sgtl5000_pcm_hw_params(struct snd_pcm_substream *substream,
 {
 	struct snd_soc_component *component = dai->component;
 	struct sgtl5000_priv *sgtl5000 = snd_soc_component_get_drvdata(component);
-	int channels = params_channels(params);
 	int i2s_ctl = 0;
 	int stereo;
 	int ret;
@@ -1066,9 +1067,9 @@ static int sgtl5000_pcm_hw_params(struct snd_pcm_substream *substream,
 	else
 		stereo = SGTL5000_ADC_STEREO;
 
-	/* set mono to save power */
+	/* set stereo regardless of channels */
 	snd_soc_component_update_bits(component, SGTL5000_CHIP_ANA_POWER, stereo,
-			channels == 1 ? 0 : stereo);
+	                              stereo);
 
 	/* set codec clock base on lrclk */
 	ret = sgtl5000_set_clock(component, params_rate(params));
@@ -1514,8 +1515,24 @@ err:
 	return ret;
 }
 
+#ifdef CONFIG_PM
+static int sgtl5000_resume(struct snd_soc_component *component)
+{
+	/* Bring the codec back up to standby to enable the reference bias */
+	sgtl5000_set_bias_level(component, SND_SOC_BIAS_STANDBY);
+
+	/* Force to sync registers cached in memory with the hardware */
+	snd_soc_component_cache_sync(component);
+
+	return 0;
+}
+#else
+#define sgtl5000_resume NULL
+#endif
+
 static const struct snd_soc_component_driver sgtl5000_driver = {
 	.probe			= sgtl5000_probe,
+	.resume			= sgtl5000_resume,
 	.set_bias_level		= sgtl5000_set_bias_level,
 	.controls		= sgtl5000_snd_controls,
 	.num_controls		= ARRAY_SIZE(sgtl5000_snd_controls),
