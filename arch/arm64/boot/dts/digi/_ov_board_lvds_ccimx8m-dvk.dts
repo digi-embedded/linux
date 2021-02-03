@@ -47,4 +47,20 @@
 			status = "okay";
 		};
 	};
+
+	/* Enable goodix_touch2 */
+	fragment@4 {
+		target = <&goodix_touch>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+
+	/* Enable goodix_touch2 */
+	fragment@5 {
+		target = <&goodix_touch2>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
 };

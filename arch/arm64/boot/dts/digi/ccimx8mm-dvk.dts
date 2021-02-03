@@ -306,6 +306,7 @@
 		reload-fw-on-resume;
 		skip-firmware-request;
 		vin-supply = <&reg_5v_board>;
+		status = "disabled";
 	};
 
 	goodix_touch2: gt9271@5d {
@@ -320,6 +321,7 @@
 		reload-fw-on-resume;
 		skip-firmware-request;
 		vin-supply = <&reg_5v_board>;
+		status = "disabled";
 	};
 
 	/* MIPI-CSI camera */
