@@ -61,7 +61,7 @@
 				    100>;
 		default-brightness-level = <80>;
 		power-supply = <&reg_5v_board>;
-		status = "okay";
+		status = "disabled";
 	};
 
 	/* fixed crystal dedicated to mcp2517fd */
