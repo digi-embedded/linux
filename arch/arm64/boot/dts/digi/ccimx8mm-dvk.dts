@@ -432,6 +432,7 @@
 		reset-gpios = <&gpio3 7 GPIO_ACTIVE_LOW>;
 		hpd-gpios = <&gpio3 8 GPIO_ACTIVE_HIGH>;
 		digi,dsi-lanes = <4>;
+		vdd1-supply = <&reg_5v_board>;
 		no-edid;
 		status = "okay";
 
