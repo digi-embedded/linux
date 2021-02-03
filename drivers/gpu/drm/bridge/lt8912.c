@@ -42,6 +42,7 @@ struct lt8912 {
 	struct regulator *vdd1;
 	struct regulator *vdd2;
 	int hpd_irq;
+	bool is_suspended;
 	bool no_hpd;
 	bool no_edid;
 };
@@ -248,7 +249,7 @@ static void lt8912_wakeup(struct lt8912 *lt)
 {
 	int ret;
 
-	if (lt->vdd1) {
+	if (lt->vdd1 && lt->is_suspended) {
 		ret = regulator_enable(lt->vdd1);
 		if (ret)
 			dev_err(lt->dev,
@@ -256,7 +257,7 @@ static void lt8912_wakeup(struct lt8912 *lt)
 				ret);
 	}
 
-	if (lt->vdd2) {
+	if (lt->vdd2 && lt->is_suspended) {
 		ret = regulator_enable(lt->vdd2);
 		if (ret)
 			dev_err(lt->dev,
@@ -277,10 +278,14 @@ static void lt8912_wakeup(struct lt8912 *lt)
 	regmap_write(lt->regmap[0], 0x03,0xff);
 	regmap_write(lt->regmap[0], 0x32,0xa1);
 	regmap_write(lt->regmap[0], 0x33,0x03);
+
+	lt->is_suspended = false;
 }
 
 static void lt8912_sleep(struct lt8912 *lt)
 {
+	int ret;
+
 	regmap_write(lt->regmap[0], 0x32,0xa0);
 	regmap_write(lt->regmap[0], 0x33,0x00); /* Disable HDMI output. */
 	regmap_write(lt->regmap[0], 0x41,0x3d); /* MIPI Rx Power Down. */
@@ -288,11 +293,23 @@ static void lt8912_sleep(struct lt8912 *lt)
 
 	gpiod_direction_output(lt->reset_n, 1);
 
-	if (lt->vdd2)
-		regulator_disable(lt->vdd2);
+	if (lt->vdd2 && !lt->is_suspended) {
+		ret = regulator_disable(lt->vdd2);
+		if (ret)
+			dev_err(lt->dev,
+				"failed to disable regulator vdd2 (%d)\n",
+				ret);
+	}
 
-	if (lt->vdd1)
-		regulator_disable(lt->vdd1);
+	if (lt->vdd1 && !lt->is_suspended) {
+		ret = regulator_disable(lt->vdd1);
+		if (ret)
+			dev_err(lt->dev,
+				"failed to disable regulator vdd1 (%d)\n",
+				ret);
+	}
+
+	lt->is_suspended = true;
 }
 
 static irqreturn_t lt8912_hpd_threaded_handler(int unused, void *data)
@@ -583,6 +600,7 @@ static int lt8912_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 		return -ENOMEM;
 
 	lt->dev = dev;
+	lt->is_suspended = false;
 
 	/* get DT configuration */
 	lt8912_parse_dt(dev->of_node, lt);
@@ -603,6 +621,14 @@ static int lt8912_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 		dev_dbg(dev, "No vdd1 regulator found (%d)\n", ret);
 	}
 
+	if (lt->vdd1) {
+		ret = regulator_enable(lt->vdd1);
+		if (ret) {
+			dev_err(dev, "Failed to enable vdd1 regulator\n");
+			return ret;
+		}
+	}
+
 	lt->vdd2 = devm_regulator_get_optional(dev, "vdd2");
 	if (IS_ERR(lt->vdd2)) {
 		ret = PTR_ERR(lt->vdd2);
@@ -610,6 +636,14 @@ static int lt8912_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 			return -EPROBE_DEFER;
 		lt->vdd2 = NULL;
 		dev_dbg(dev, "No vdd2 regulator found (%d)\n", ret);
+	}
+
+	if (lt->vdd2) {
+		ret = regulator_enable(lt->vdd2);
+		if (ret) {
+			dev_err(dev, "Failed to enable vdd2 regulator\n");
+			return ret;
+		}
 	}
 
 	if (!lt->no_hpd) {
