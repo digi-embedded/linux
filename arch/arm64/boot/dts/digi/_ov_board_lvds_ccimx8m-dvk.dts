@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Digi International Inc.
+ * Copyright 2020-2021 Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -16,30 +16,27 @@
 /dts-v1/;
 /plugin/;
 
-#include "dt-bindings/input/input.h"
-
 / {
+	/* Enable the LVDS bridge */
 	fragment@0 {
 		target-path = "/";
 		__overlay__ {
-			overlay-description = "SOM: MCA keypad";
+			overlay-description = "DVK: LVDS display";
 		};
 	};
 
-	/* Configure MCA keypad controller */
 	fragment@1 {
-		target = <&mca_keypad>;
+		target = <&dsi_lvds_bridge>;
 		__overlay__ {
 			status = "okay";
-			rows-io-list = <7 17>;
-			cols-io-list = <8 14>;
-			pwr-off-wakeup;
-			debounce-ms = <10>;
-			autorepeat;
-			linux,keymap = <MATRIX_KEY(0, 0, KEY_UP)
-					MATRIX_KEY(0, 1, KEY_DOWN)
-					MATRIX_KEY(1, 0, KEY_RIGHT)
-					MATRIX_KEY(1, 1, KEY_LEFT)>;
+		};
+	};
+
+	/* Disable the HDMI bridge */
+	fragment@2 {
+		target = <&lt_bridge>;
+		__overlay__ {
+			status = "disabled";
 		};
 	};
 };
