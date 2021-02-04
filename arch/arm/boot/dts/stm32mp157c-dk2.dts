@@ -83,6 +83,8 @@
 		touchscreen-size-x = <480>;
 		touchscreen-size-y = <800>;
 		panel = <&panel_otm8009a>;
+		vcc-supply = <&v3v3>;
+		iovcc-supply = <&v3v3>;
 		status = "okay";
 	};
 	touchscreen@38 {
@@ -94,6 +96,8 @@
 		touchscreen-size-x = <480>;
 		touchscreen-size-y = <800>;
 		panel = <&panel_otm8009a>;
+		vcc-supply = <&v3v3>;
+		iovcc-supply = <&v3v3>;
 		status = "okay";
 	};
 };
