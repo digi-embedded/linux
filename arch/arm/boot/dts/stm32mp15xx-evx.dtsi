@@ -8,6 +8,10 @@
 #include <dt-bindings/soc/stm32-hdp.h>
 
 / {
+	aliases {
+		serial1 = &usart3;
+	};
+
 	clocks {
 		clk_ext_camera: clk-ext-camera {
 			#clock-cells = <0>;

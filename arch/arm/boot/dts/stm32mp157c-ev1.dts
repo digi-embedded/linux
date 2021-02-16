@@ -25,11 +25,6 @@
 		};
 	};
 
-	aliases {
-		serial0 = &uart4;
-		serial1 = &usart3;
-	};
-
 	panel_backlight: panel-backlight {
 		compatible = "gpio-backlight";
 		gpios = <&gpiod 13 GPIO_ACTIVE_LOW>;
