@@ -16,12 +16,6 @@
 	model = "STMicroelectronics STM32MP157A-DK1 Discovery Board";
 	compatible = "st,stm32mp157a-dk1", "st,stm32mp157";
 
-	aliases {
-		serial0 = &uart4;
-		serial1 = &usart3;
-		serial2 = &uart7;
-	};
-
 	chosen {
 		stdout-path = "serial0:115200n8";
 	};
