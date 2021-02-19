@@ -414,8 +414,8 @@
 		assigned-clocks = <&pi0_misc_lpcg 0>;
 		assigned-clock-rates = <24000000>;
 		clock-names = "xclk";
-		powerdown = <&lsio_gpio3 2 GPIO_ACTIVE_LOW>;
-		reset = <&lsio_gpio3 3 GPIO_ACTIVE_HIGH>;
+		powerdown-gpios = <&lsio_gpio3 2 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&lsio_gpio3 3 GPIO_ACTIVE_LOW>;
 		csi_id = <0>;
 		mclk = <24000000>;
 		mclk_source = <0>;
