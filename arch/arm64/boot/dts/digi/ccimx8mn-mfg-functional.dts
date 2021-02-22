@@ -1,0 +1,378 @@
+/*
+ * Copyright 2021, Digi International Inc.
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+/dts-v1/;
+
+/* i.MX8MN CPU */
+#include "../freescale/imx8mn.dtsi"
+/* Digi ConnectCore 8M Nano */
+#include "ccimx8mn.dtsi"
+
+/ {
+	model = "Digi International ConnectCore 8M Nano FCT.";
+	compatible = "digi,ccimx8mn-dvk", "digi,ccimx8mn", "digi,ccimx8m", "fsl,imx8mn";
+	digi,machine,name = "ccimx8mn-dvk";
+
+	chosen {
+		bootargs = "console=ttymxc0,115200 earlycon=ec_imx6q,0x30860000,115200";
+		stdout-path = &uart1;
+	};
+
+	/* DUMMY MIPI DSI BRIDGE */
+	dummy_dsi_bridge {
+		compatible = "digi,dummy_dsi_bridge";
+		dsi-lanes = <4>;
+		video-mode = <1>;
+		status = "okay";
+
+		display-timings {
+			native-mode = <&mipi_analyzer>;
+
+			/* MIPI Analyzer */
+			mipi_analyzer: timing@0 {
+				clock-frequency = <31500000>;
+				hactive = <640>;
+				vactive = <480>;
+				hback-porch = <4>;
+				hfront-porch = <10>;
+				vback-porch = <34>;
+				vfront-porch = <20>;
+				hsync-len = <2>;
+				vsync-len = <2>;
+				hsync-active = <0>;
+				vsync-active = <0>;
+				de-active = <0>;
+				pixelclk-active = <0>;
+			};
+		};
+		port {
+			dummy_dsi_bridge_in: endpoint {
+				remote-endpoint = <&mipi_dsi_out>;
+			};
+		};
+	};
+
+	regulators {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <0>;
+	};
+};
+
+&cameradev {
+	status = "okay";
+};
+
+&fec1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_fec1_gpio>,
+		    <&pinctrl_fec1>;
+	phy-mode = "rgmii-id";
+	phy-handle = <&ethphy0>;
+	phy-reset-gpios = <&gpio1 8 GPIO_ACTIVE_LOW>;
+	phy-reset-duration = <1>;
+	fsl,magic-packet;
+	status = "okay";
+
+	mdio {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		ethphy0: ethernet-phy@0 {
+			compatible = "ethernet-phy-ieee802.3-c22";
+			reg = <1>;
+			at803x,eee-disabled;
+			at803x,vddio-1p8v;
+		};
+	};
+};
+
+/*
+ * I2C2 connected to I2C Temperature Sensor.
+ * Also available on:
+ * - Parallel Camera connector
+ */
+&i2c2 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	clock-frequency = <100000>;
+	pinctrl-names = "default", "gpio";
+	pinctrl-0 = <&pinctrl_i2c2>;
+	pinctrl-1 = <&pinctrl_i2c2_gpio>;
+	scl-gpios = <&gpio5 16 GPIO_ACTIVE_HIGH>;
+	sda-gpios = <&gpio5 17 GPIO_ACTIVE_HIGH>;
+	status = "okay";
+};
+
+
+/* I2C3 connected to MIPI Camera connector */
+&i2c3 {
+	clock-frequency = <100000>;
+	pinctrl-names = "default", "gpio";
+	pinctrl-0 = <&pinctrl_i2c3>;
+	pinctrl-1 = <&pinctrl_i2c3_gpio>;
+	scl-gpios = <&gpio5 18 GPIO_ACTIVE_HIGH>;
+	sda-gpios = <&gpio5 19 GPIO_ACTIVE_HIGH>;
+	status = "okay";
+
+	/* MIPI-CSI camera */
+	ov5640_mipi: ov5640_mipi@3c {
+		compatible = "ovti,ov5640";
+		reg = <0x3c>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_mipi>;
+		clocks = <&clk IMX8MN_CLK_CLKO1>;
+		clock-names = "xclk";
+		assigned-clocks = <&clk IMX8MN_CLK_CLKO1>;
+		assigned-clock-parents = <&clk IMX8MN_CLK_24M>;
+		assigned-clock-rates = <24000000>;
+		csi_id = <0>;
+		reset-gpios = <&gpio3 22 GPIO_ACTIVE_LOW>;
+		mclk = <24000000>;
+		mclk_source = <0>;
+		mipi_csi;
+
+		port {
+			ov5640_mipi_ep: endpoint {
+				remote-endpoint = <&mipi_csi0_ep>;
+				data-lanes = <1 2>;
+				clocks-lanes = <0>;
+			};
+		};
+	};
+};
+
+&isi_0 {
+	status = "okay";
+
+	cap_device {
+		status = "okay";
+	};
+};
+
+&lcdif {
+	status = "okay";
+};
+
+&mipi_csi_1 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	status = "okay";
+
+	/* Camera 0  MIPI CSI-2 (CSIS0) */
+	port@0 {
+		reg = <0>;
+		mipi_csi0_ep: endpoint {
+			remote-endpoint = <&ov5640_mipi_ep>;
+			data-lanes = <2>;
+			csis-hs-settle = <13>;
+			csis-clk-settle = <2>;
+			csis-wclk;
+		};
+	};
+};
+
+&mipi_dsi {
+	status = "okay";
+
+	port@1 {
+		mipi_dsi_out: endpoint {
+			remote-endpoint = <&dummy_dsi_bridge_in>;
+			attach-bridge;
+		};
+	};
+};
+
+/* Console */
+&uart1 {
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&pinctrl_uart1>;
+	pinctrl-1 = <&pinctrl_uart1_sleep>;
+	status = "okay";
+};
+
+/* UART2 (Bluetooth/Loopback) */
+&uart2 {
+	status = "okay";
+};
+
+/* IOMUX */
+&iomuxc {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_hog_common>, <&pinctrl_hog_non_wb>;
+
+	pinctrl_hog_common: hoggrpcommon {
+		fsl,pins = <
+			/* COMMON PAIRS */
+			MX8MN_IOMUXC_SAI2_MCLK_GPIO4_IO27	0x140
+			MX8MN_IOMUXC_UART2_RXD_GPIO5_IO24	0x140
+			MX8MN_IOMUXC_GPIO1_IO14_GPIO1_IO14	0x140
+			MX8MN_IOMUXC_UART2_TXD_GPIO5_IO25	0x140
+			MX8MN_IOMUXC_GPIO1_IO12_GPIO1_IO12	0x140
+			MX8MN_IOMUXC_SAI2_TXFS_GPIO4_IO24	0x140
+			MX8MN_IOMUXC_GPIO1_IO13_GPIO1_IO13	0x140
+			MX8MN_IOMUXC_SAI5_MCLK_GPIO3_IO25	0x140
+			MX8MN_IOMUXC_GPIO1_IO15_GPIO1_IO15	0x140
+			MX8MN_IOMUXC_ECSPI2_SCLK_GPIO5_IO10	0x140
+			MX8MN_IOMUXC_SAI5_RXD2_GPIO3_IO23	0x140
+			MX8MN_IOMUXC_UART1_TXD_GPIO5_IO23	0x140
+			MX8MN_IOMUXC_SD2_RESET_B_GPIO2_IO19	0x140
+			MX8MN_IOMUXC_SAI5_RXD0_GPIO3_IO21	0x140
+			MX8MN_IOMUXC_SAI5_RXD3_GPIO3_IO24	0x140
+			MX8MN_IOMUXC_ECSPI2_MOSI_GPIO5_IO11	0x140
+			MX8MN_IOMUXC_SAI3_RXFS_GPIO4_IO28	0x140
+			MX8MN_IOMUXC_ECSPI2_SS0_GPIO5_IO13	0x140
+			MX8MN_IOMUXC_SD2_CMD_GPIO2_IO14		0x140
+			MX8MN_IOMUXC_UART1_RXD_GPIO5_IO22	0x140
+			MX8MN_IOMUXC_SD2_WP_GPIO2_IO20		0x140
+			MX8MN_IOMUXC_ECSPI2_MISO_GPIO5_IO12	0x140
+			MX8MN_IOMUXC_SAI3_TXD_GPIO5_IO1		0x140
+			MX8MN_IOMUXC_GPIO1_IO06_GPIO1_IO6	0x140
+			MX8MN_IOMUXC_SD2_DATA0_GPIO2_IO15	0x140
+			MX8MN_IOMUXC_SAI2_TXD0_GPIO4_IO26	0x140
+			MX8MN_IOMUXC_SD2_CD_B_GPIO2_IO12	0x140
+			MX8MN_IOMUXC_SAI2_RXD0_GPIO4_IO23	0x140
+			MX8MN_IOMUXC_SAI3_MCLK_GPIO5_IO2	0x140
+			MX8MN_IOMUXC_SAI2_TXC_GPIO4_IO25	0x140
+			MX8MN_IOMUXC_SD2_DATA1_GPIO2_IO16	0x140
+			MX8MN_IOMUXC_SAI5_RXFS_GPIO3_IO19	0x140
+			MX8MN_IOMUXC_SD2_DATA2_GPIO2_IO17	0x140
+			MX8MN_IOMUXC_SAI5_RXC_GPIO3_IO20	0x140
+			MX8MN_IOMUXC_SD2_DATA3_GPIO2_IO18	0x140
+			MX8MN_IOMUXC_UART4_RXD_GPIO5_IO28	0x140
+			MX8MN_IOMUXC_SD2_CLK_GPIO2_IO13		0x140
+			MX8MN_IOMUXC_UART4_TXD_GPIO5_IO29	0x140
+			MX8MN_IOMUXC_ECSPI1_SS0_GPIO5_IO9	0x140
+			MX8MN_IOMUXC_ECSPI1_MISO_GPIO5_IO8	0x140
+			MX8MN_IOMUXC_ECSPI1_SCLK_GPIO5_IO6	0x140
+			MX8MN_IOMUXC_GPIO1_IO07_GPIO1_IO7	0x140
+			MX8MN_IOMUXC_SPDIF_RX_GPIO5_IO4		0x140
+			MX8MN_IOMUXC_GPIO1_IO09_GPIO1_IO9	0x140
+			MX8MN_IOMUXC_SPDIF_EXT_CLK_GPIO5_IO5	0x140
+			MX8MN_IOMUXC_GPIO1_IO11_GPIO1_IO11	0x140
+			MX8MN_IOMUXC_SPDIF_TX_GPIO5_IO3		0x140
+			MX8MN_IOMUXC_GPIO1_IO03_GPIO1_IO3	0x140
+			MX8MN_IOMUXC_GPIO1_IO01_GPIO1_IO1	0x140
+			MX8MN_IOMUXC_GPIO1_IO10_GPIO1_IO10	0x140
+			MX8MN_IOMUXC_ECSPI1_MOSI_GPIO5_IO7	0x100
+			MX8MN_IOMUXC_GPIO1_IO04_GPIO1_IO4	0x140
+			MX8MN_IOMUXC_NAND_DATA00_GPIO3_IO6	0x140
+			MX8MN_IOMUXC_NAND_ALE_GPIO3_IO0		0x140
+			MX8MN_IOMUXC_NAND_DATA01_GPIO3_IO7	0x140
+			MX8MN_IOMUXC_NAND_CE0_B_GPIO3_IO1	0x140
+			MX8MN_IOMUXC_NAND_DQS_GPIO3_IO14	0x140
+			MX8MN_IOMUXC_UART3_RXD_GPIO5_IO26	0x140
+			MX8MN_IOMUXC_UART3_TXD_GPIO5_IO27	0x140
+			MX8MN_IOMUXC_NAND_DATA03_GPIO3_IO9	0x140
+			MX8MN_IOMUXC_NAND_DATA02_GPIO3_IO8	0x140
+			MX8MN_IOMUXC_I2C4_SCL_GPIO5_IO20	0x140
+			MX8MN_IOMUXC_I2C4_SDA_GPIO5_IO21	0x140
+		>;
+	};
+
+	pinctrl_hog_non_wb: hoggrpnonwb {
+		fsl,pins = <
+			/* COMMON NON-WIRELESS PAIRS */
+			MX8MN_IOMUXC_SD1_DATA7_GPIO2_IO9	0x140
+			MX8MN_IOMUXC_SD1_DATA6_GPIO2_IO8	0x140
+			/* CC8MN NON-WIRELESS PAIRS */
+			MX8MN_IOMUXC_SD1_CLK_GPIO2_IO0		0x140
+			MX8MN_IOMUXC_SD1_DATA2_GPIO2_IO4	0x140
+			MX8MN_IOMUXC_SD1_CMD_GPIO2_IO1		0x140
+			MX8MN_IOMUXC_SD1_DATA3_GPIO2_IO5	0x140
+			MX8MN_IOMUXC_SD1_DATA0_GPIO2_IO2	0x140
+			MX8MN_IOMUXC_SD1_DATA4_GPIO2_IO6	0x140
+			MX8MN_IOMUXC_SD1_DATA1_GPIO2_IO3	0x140
+			MX8MN_IOMUXC_SD1_DATA5_GPIO2_IO7	0x140
+		>;
+	};
+
+	pinctrl_fec1_gpio: fec1gpiogrp {
+		fsl,pins = <
+			/* PHY reset */
+			MX8MN_IOMUXC_GPIO1_IO08_GPIO1_IO8	0x19
+			/* PHY interrupt */
+			MX8MN_IOMUXC_GPIO1_IO00_GPIO1_IO0	0x19
+		>;
+	};
+
+	pinctrl_fec1: fec1grp {
+		fsl,pins = <
+			MX8MN_IOMUXC_ENET_MDC_ENET1_MDC		0x3
+			MX8MN_IOMUXC_ENET_MDIO_ENET1_MDIO	0x3
+			MX8MN_IOMUXC_ENET_TD3_ENET1_RGMII_TD3	0x1f
+			MX8MN_IOMUXC_ENET_TD2_ENET1_RGMII_TD2	0x1f
+			MX8MN_IOMUXC_ENET_TD1_ENET1_RGMII_TD1	0x1f
+			MX8MN_IOMUXC_ENET_TD0_ENET1_RGMII_TD0	0x1f
+			MX8MN_IOMUXC_ENET_RD3_ENET1_RGMII_RD3	0x91
+			MX8MN_IOMUXC_ENET_RD2_ENET1_RGMII_RD2	0x91
+			MX8MN_IOMUXC_ENET_RD1_ENET1_RGMII_RD1	0x91
+			MX8MN_IOMUXC_ENET_RD0_ENET1_RGMII_RD0	0x91
+			MX8MN_IOMUXC_ENET_TXC_ENET1_RGMII_TXC	0x1f
+			MX8MN_IOMUXC_ENET_RXC_ENET1_RGMII_RXC	0x91
+			MX8MN_IOMUXC_ENET_RX_CTL_ENET1_RGMII_RX_CTL	0x91
+			MX8MN_IOMUXC_ENET_TX_CTL_ENET1_RGMII_TX_CTL	0x1f
+		>;
+	};
+
+	pinctrl_i2c2: i2c2grp {
+		fsl,pins = <
+			MX8MN_IOMUXC_I2C2_SCL_I2C2_SCL			0x400001c3
+			MX8MN_IOMUXC_I2C2_SDA_I2C2_SDA			0x400001c3
+		>;
+	};
+
+	pinctrl_i2c2_gpio: i2c2grp-gpio {
+		fsl,pins = <
+			MX8MN_IOMUXC_I2C2_SCL_GPIO5_IO16		0x1c3
+			MX8MN_IOMUXC_I2C2_SDA_GPIO5_IO17		0x1c3
+		>;
+	};
+
+	pinctrl_i2c3: i2c3grp {
+		fsl,pins = <
+			MX8MN_IOMUXC_I2C3_SCL_I2C3_SCL			0x400001c3
+			MX8MN_IOMUXC_I2C3_SDA_I2C3_SDA			0x400001c3
+		>;
+	};
+
+	pinctrl_i2c3_gpio: i2c3grp-gpio {
+		fsl,pins = <
+			MX8MN_IOMUXC_I2C3_SCL_GPIO5_IO18		0x1c3
+			MX8MN_IOMUXC_I2C3_SDA_GPIO5_IO19		0x1c3
+		>;
+	};
+
+	pinctrl_mipi: mipi {
+		fsl,pins = <
+			/* MIPI_CSI0_RESET_N */
+			MX8MN_IOMUXC_SAI5_RXD1_GPIO3_IO22 	0x19
+		>;
+	};
+
+	pinctrl_uart1: uart1grp {
+		fsl,pins = <
+			MX8MN_IOMUXC_SAI2_RXC_UART1_DCE_RX	0x140
+			MX8MN_IOMUXC_SAI2_RXFS_UART1_DCE_TX	0x140
+		>;
+	};
+
+	pinctrl_uart1_sleep: uart1sleepgrp {
+		fsl,pins = <
+			MX8MN_IOMUXC_SAI2_RXC_GPIO4_IO22	0x100
+			MX8MN_IOMUXC_SAI2_RXFS_GPIO4_IO21	0x100
+		>;
+	};
+};
