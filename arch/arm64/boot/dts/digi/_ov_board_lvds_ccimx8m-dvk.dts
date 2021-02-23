@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Digi International Inc.
+ * Copyright 2020-2021 Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -17,40 +17,48 @@
 /plugin/;
 
 / {
+	/* Enable the LVDS bridge */
 	fragment@0 {
 		target-path = "/";
 		__overlay__ {
-			overlay-description = "SOM: Bluetooth";
+			overlay-description = "DVK: LVDS display";
 		};
 	};
 
-	/* Enable the Bluetooth interface */
 	fragment@1 {
-		target = <&bluetooth>;
+		target = <&dsi_lvds_bridge>;
 		__overlay__ {
 			status = "okay";
 		};
 	};
 
-	/* Enable the RF regulator */
+	/* Disable the HDMI bridge */
 	fragment@2 {
-		target = <&reg_3v3_rf>;
+		target = <&lt_bridge>;
 		__overlay__ {
-			status = "okay";
+			status = "disabled";
 		};
 	};
 
-	/* Enable the BT regulator */
+	/* Enable lvds_backlight */
 	fragment@3 {
-		target = <&reg_rf_bt_en>;
+		target = <&lvds_backlight>;
 		__overlay__ {
 			status = "okay";
 		};
 	};
 
-	/* Enable UART2 (Bluetooth) */
+	/* Enable goodix_touch2 */
 	fragment@4 {
-		target = <&uart2>;
+		target = <&goodix_touch>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+
+	/* Enable goodix_touch2 */
+	fragment@5 {
+		target = <&goodix_touch2>;
 		__overlay__ {
 			status = "okay";
 		};

@@ -27,7 +27,8 @@ static struct jr_driver_data driver_data;
 static DEFINE_MUTEX(algs_lock);
 static unsigned int active_devs;
 
-static void register_algs(struct device *dev)
+static void register_algs(struct caam_drv_private_jr *jrpriv,
+			  struct device *dev)
 {
 	mutex_lock(&algs_lock);
 
@@ -38,7 +39,7 @@ static void register_algs(struct device *dev)
 	caam_algapi_init(dev);
 	caam_algapi_hash_init(dev);
 	caam_pkc_init(dev);
-	caam_rng_init(dev);
+	jrpriv->hwrng = !caam_rng_init(dev);
 	caam_qi_algapi_init(dev);
 	caam_keygen_init();
 
@@ -56,7 +57,6 @@ static void unregister_algs(struct device *dev)
 	caam_keygen_exit();
 	caam_qi_algapi_exit();
 
-	caam_rng_exit();
 	caam_pkc_exit();
 	caam_algapi_hash_exit();
 	caam_algapi_exit();
@@ -202,6 +202,9 @@ static int caam_jr_remove(struct platform_device *pdev)
 
 	jrdev = &pdev->dev;
 	jrpriv = dev_get_drvdata(jrdev);
+
+	if (jrpriv->hwrng)
+		caam_rng_exit(jrdev->parent);
 
 	/*
 	 * Return EBUSY if job ring already allocated.
@@ -688,7 +691,7 @@ static int caam_jr_probe(struct platform_device *pdev)
 	int error;
 
 	jrdev = &pdev->dev;
-	jrpriv = devm_kmalloc(jrdev, sizeof(*jrpriv), GFP_KERNEL);
+	jrpriv = devm_kzalloc(jrdev, sizeof(*jrpriv), GFP_KERNEL);
 	if (!jrpriv)
 		return -ENOMEM;
 
@@ -767,7 +770,7 @@ static int caam_jr_probe(struct platform_device *pdev)
 	device_init_wakeup(&pdev->dev, 1);
 	device_set_wakeup_enable(&pdev->dev, false);
 
-	register_algs(jrdev->parent);
+	register_algs(jrpriv, jrdev->parent);
 	jr_driver_probed++;
 
 	return 0;
@@ -791,6 +794,14 @@ static int caam_jr_suspend(struct device *dev)
 		.dev = dev,
 		.enable_itr = 0,
 	};
+
+	/* Remove the node from Physical JobR list maintained by driver */
+	spin_lock(&driver_data.jr_alloc_lock);
+	list_del(&jrpriv->list_node);
+	spin_unlock(&driver_data.jr_alloc_lock);
+
+	if (jrpriv->hwrng)
+		caam_rng_exit(dev->parent);
 
 	if (ctrlpriv->caam_off_during_pm) {
 		int err;
@@ -850,7 +861,7 @@ static int caam_jr_resume(struct device *dev)
 				clrsetbits_32(&jrpriv->rregs->rconfig_lo,
 					      JRCFG_IMSK, 0);
 
-				return 0;
+				goto add_jr;
 			} else if (ctrlpriv->optee_en) {
 				/* JR has been used by OPTEE, reset it */
 				err = caam_reset_hw_jr(dev);
@@ -872,6 +883,14 @@ static int caam_jr_resume(struct device *dev)
 	} else if (device_may_wakeup(&pdev->dev)) {
 		disable_irq_wake(jrpriv->irq);
 	}
+
+add_jr:
+	spin_lock(&driver_data.jr_alloc_lock);
+	list_add_tail(&jrpriv->list_node, &driver_data.jr_list);
+	spin_unlock(&driver_data.jr_alloc_lock);
+
+	if (jrpriv->hwrng)
+		jrpriv->hwrng = !caam_rng_init(dev->parent);
 
 	return 0;
 }

@@ -621,6 +621,9 @@
 
 &lcdif3 {
 	status = "okay";
+
+	thres-low  = <1 2>;             /* (FIFO * 1 / 2) */
+	thres-high = <3 4>;             /* (FIFO * 3 / 4) */
 };
 
 &ldb {
@@ -685,7 +688,6 @@
 			  <&clk IMX8MP_CLK_PCIE_AUX>;
 	assigned-clock-parents = <&clk IMX8MP_SYS_PLL2_500M>,
 				 <&clk IMX8MP_SYS_PLL2_50M>;
-	reserved-region = <&rpmsg_reserved>;
 	status = "okay";
 };
 
@@ -770,6 +772,12 @@
 
 &usb3_phy0 {
 	vbus-power-supply = <&ptn5110>;
+	fsl,phy-tx-vref-tune = <6>;
+	fsl,phy-tx-rise-tune = <0>;
+	fsl,phy-tx-preemp-amp-tune = <3>;
+	fsl,phy-comp-dis-tune = <7>;
+	fsl,pcs-tx-deemph-3p5db = <0x21>;
+	fsl,phy-pcs-tx-swing-full = <0x7f>;
 	status = "okay";
 };
 
@@ -793,6 +801,7 @@
 };
 
 &usb3_phy1 {
+	fsl,phy-tx-preemp-amp-tune = <2>;
 	status = "okay";
 };
 

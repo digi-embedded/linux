@@ -57,6 +57,8 @@ static int dsp_platform_compr_open(struct snd_compr_stream *cstream)
 	struct fsl_dsp  *dsp_priv = snd_soc_component_get_drvdata(component);
 	struct dsp_data *drv = &dsp_priv->dsp_data;
 
+	if (drv->client)
+		return -EBUSY;
 	drv->client = xf_client_alloc(dsp_priv);
 	if (IS_ERR(drv->client))
 		return PTR_ERR(drv->client);
@@ -85,7 +87,8 @@ static int dsp_platform_compr_free(struct snd_compr_stream *cstream)
 	int ret;
 
 	if (cstream->runtime->state != SNDRV_PCM_STATE_PAUSED &&
-		cstream->runtime->state != SNDRV_PCM_STATE_DRAINING) {
+		cstream->runtime->state != SNDRV_PCM_STATE_DRAINING &&
+		cstream->runtime->state > SNDRV_PCM_STATE_OPEN) {
 		if (dsp_priv->dsp_is_lpa) {
 			ret = xaf_comp_flush(drv->client, &drv->component[0]);
 			if (ret) {
@@ -121,6 +124,7 @@ static int dsp_platform_compr_free(struct snd_compr_stream *cstream)
 	cancel_work_sync(&drv->client->work);
 
 	fsl_dsp_close_func(drv->client);
+	drv->client = NULL;
 
 	return 0;
 }
@@ -194,6 +198,35 @@ static int dsp_platform_compr_set_params(struct snd_compr_stream *cstream,
 		goto err_comp0_create;
 	}
 
+	if (drv->codec_type == CODEC_AAC_DEC) {
+		s_param.id = XA_STREAM_TYPE;
+		if (params->codec.format == SND_AUDIOSTREAMFORMAT_MP4ADTS || params->codec.format == SND_AUDIOSTREAMFORMAT_MP2ADTS)
+			s_param.mixData.value = XA_STREAM_ADTS;
+		else if (params->codec.format == SND_AUDIOSTREAMFORMAT_ADIF)
+			s_param.mixData.value = XA_STREAM_ADIF;
+		else
+			s_param.mixData.value = XA_STREAM_RAW;
+		ret = xaf_comp_set_config(drv->client, &drv->component[0], 1, &s_param);
+		if (ret) {
+			dev_err(component->dev,
+				"set param[cmd:0x%x|val:0x%x] error, err = %d\n",
+				s_param.id, s_param.mixData.value, ret);
+			goto err_comp0_create;
+		}
+
+		/* ...set depth before init codec */
+		s_param.id = XA_DEPTH;
+		s_param.mixData.value = 16;
+		ret = xaf_comp_set_config(drv->client, &drv->component[0], 1, &s_param);
+		if (ret) {
+			dev_err(component->dev,
+			"set param[cmd:0x%x|val:0x%x] error, err = %d\n",
+			s_param.id, s_param.mixData.value, ret);
+			goto err_comp0_create;
+		}
+	}
+
+
 	/* ...add component into pipeline */
 	ret = xaf_comp_add(&drv->pipeline, &drv->component[0]);
 	if (ret) {
@@ -208,6 +241,16 @@ static int dsp_platform_compr_set_params(struct snd_compr_stream *cstream,
 		dev_err(component->dev,
 			"add component failed, type = %d, err = %d\n",
 			drv->renderer_type, ret);
+		goto err_comp1_create;
+	}
+
+	ret = xaf_connect(drv->client,
+			&drv->component[0],
+			&drv->component[1],
+			1,
+			OUTBUF_SIZE);
+	if (ret) {
+		dev_err(component->dev, "Failed to connect component, err = %d\n", ret);
 		goto err_comp1_create;
 	}
 
@@ -288,16 +331,6 @@ static int dsp_platform_compr_trigger_start(struct snd_compr_stream *cstream)
 				drv->client->input_bytes,
 				XF_EMPTY_THIS_BUFFER);
 
-		ret = xaf_connect(drv->client,
-				&drv->component[0],
-				&drv->component[1],
-				1,
-				OUTBUF_SIZE);
-		if (ret) {
-			dev_err(component->dev, "Failed to connect component, err = %d\n", ret);
-			return ret;
-		}
-
 		schedule_work(&drv->client->work);
 	}
 
@@ -327,20 +360,6 @@ static int dsp_platform_compr_trigger_stop(struct snd_compr_stream *cstream)
 	drv->client->consume_bytes = 0;
 	drv->client->offset = 0;
 	drv->client->ping_pong_offset = 0;
-
-	if (!dsp_priv->dsp_is_lpa) {
-		ret = xaf_comp_delete(drv->client, &drv->component[0]);
-		if (ret) {
-			dev_err(component->dev, "Fail to delete component, err = %d\n", ret);
-			return ret;
-		}
-
-		ret = xaf_comp_delete(drv->client, &drv->component[1]);
-		if (ret) {
-			dev_err(component->dev, "Fail to delete component, err = %d\n", ret);
-			return ret;
-		}
-	}
 
 	return 0;
 }
@@ -486,7 +505,7 @@ static int dsp_platform_compr_copy(struct snd_compr_stream *cstream,
 		}
 		drv->client->input_bytes += copied;
 
-		if (cstream->runtime->state == SNDRV_PCM_STATE_RUNNING) {
+		if (cstream->runtime->state == SNDRV_PCM_STATE_RUNNING && copied) {
 		        ret = xaf_comp_process(drv->client, p_comp,
 					       p_comp->inptr, copied,
 					       XF_EMPTY_THIS_BUFFER);
@@ -528,17 +547,6 @@ static int dsp_platform_compr_lpa_pcm_copy(struct snd_compr_stream *cstream,
 				ret = xaf_comp_process(drv->client, p_comp,
 						p_comp->inptr+drv->client->ping_pong_offset, drv->client->offset+copied,
 						XF_EMPTY_THIS_BUFFER);
-				if (!drv->client->input_bytes) {
-					ret = xaf_connect(drv->client,
-							&drv->component[0],
-							&drv->component[1],
-							1,
-							OUTBUF_SIZE);
-					if (ret) {
-						dev_err(component->dev, "Failed to connect component, err = %d\n", ret);
-						return ret;
-					}
-				}
 
 				schedule_work(&drv->client->work);
 				drv->client->input_bytes += drv->client->offset+copied;
@@ -599,17 +607,6 @@ static int dsp_platform_compr_lpa_copy(struct snd_compr_stream *cstream,
 				ret = xaf_comp_process(drv->client, p_comp,
 						p_comp->inptr, drv->client->offset+copied,
 						XF_EMPTY_THIS_BUFFER);
-				if (!drv->client->input_bytes) {
-					ret = xaf_connect(drv->client,
-							&drv->component[0],
-							&drv->component[1],
-							1,
-							OUTBUF_SIZE);
-					if (ret) {
-						dev_err(component->dev, "Failed to connect component, err = %d\n", ret);
-						return ret;
-					}
-				}
 
 				schedule_work(&drv->client->work);
 				drv->client->input_bytes += drv->client->offset+copied;
@@ -699,8 +696,8 @@ static struct snd_compr_codec_caps caps_aac = {
 	.descriptor[1].profiles = 0,
 	.descriptor[1].modes = 0,
 	.descriptor[1].formats =
-			(SND_AUDIOSTREAMFORMAT_MP4ADTS |
-				SND_AUDIOSTREAMFORMAT_RAW),
+			(SND_AUDIOSTREAMFORMAT_MP4ADTS | SND_AUDIOSTREAMFORMAT_MP2ADTS |
+				SND_AUDIOSTREAMFORMAT_ADIF | SND_AUDIOSTREAMFORMAT_RAW),
 };
 
 static int dsp_platform_compr_get_codec_caps(struct snd_compr_stream *cstream,

@@ -14,6 +14,7 @@
 #include <linux/dma-mapping.h>
 #include <drm/bridge/dw_hdmi.h>
 #include <drm/drm_edid.h>
+#include <drm/drm_connector.h>
 
 #include <sound/hdmi-codec.h>
 #include <sound/asoundef.h>
@@ -88,6 +89,10 @@ static int audio_hw_params(struct device *dev,  void *data,
 	dw_hdmi_set_channel_count(dw->data.hdmi, params->channels);
 	dw_hdmi_set_channel_allocation(dw->data.hdmi, ca);
 
+	dw_hdmi_set_sample_non_pcm(dw->data.hdmi,
+				   params->iec.status[0] & IEC958_AES0_NONAUDIO);
+	dw_hdmi_set_sample_width(dw->data.hdmi, params->sample_width);
+
 	return ret;
 }
 
@@ -114,9 +119,18 @@ static int audio_get_eld(struct device *dev, void *data,
 {
 	struct snd_dw_hdmi *dw = dev_get_drvdata(dev);
 
-	memcpy(buf, dw->data.eld, min(sizeof(dw->data.eld), len));
+	memcpy(buf, dw->data.eld, min_t(size_t, MAX_ELD_BYTES, len));
 
 	return 0;
+}
+
+static int audio_hook_plugged_cb(struct device *dev, void *data,
+				 hdmi_codec_plugged_cb fn,
+				 struct device *codec_dev)
+{
+	struct snd_dw_hdmi *dw = dev_get_drvdata(dev);
+
+	return dw_hdmi_set_plugged_cb(dw->data.hdmi, fn, codec_dev);
 }
 
 static const struct hdmi_codec_ops audio_codec_ops = {
@@ -124,6 +138,7 @@ static const struct hdmi_codec_ops audio_codec_ops = {
 	.audio_shutdown = audio_shutdown,
 	.digital_mute = audio_digital_mute,
 	.get_eld = audio_get_eld,
+	.hook_plugged_cb = audio_hook_plugged_cb,
 };
 
 static int snd_dw_hdmi_probe(struct platform_device *pdev)

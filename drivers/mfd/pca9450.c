@@ -202,7 +202,7 @@ static int pca9450_i2c_probe(struct i2c_client *i2c,
 	}
 
 	if (!pmic_plat_data)
-		return -EINVAL;
+		return -EPROBE_DEFER;
 
 	pca9450 = kzalloc(sizeof(struct pca9450), GFP_KERNEL);
 	if (pca9450 == NULL)

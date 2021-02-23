@@ -16,20 +16,21 @@ snd-soc-fsl-audmix-objs := fsl_audmix.o
 snd-soc-fsl-dsp-audiomix-objs := fsl_dsp_audiomix.o
 snd-soc-fsl-asrc-objs := fsl_asrc.o fsl_asrc_dma.o
 snd-soc-fsl-dsp-objs := fsl_dsp.o fsl_dsp_proxy.o fsl_dsp_pool.o \
-	fsl_dsp_library_load.o fsl_dsp_xaf_api.o fsl_dsp_cpu.o \
+	fsl_dsp_library_load.o fsl_dsp_xaf_api.o \
 	fsl_dsp_platform_compress.o
+snd-soc-fsl-dsp-cpu-objs := fsl_dsp_cpu.o
 snd-soc-fsl-sai-objs := fsl_sai.o fsl_sai_sysfs.o
 snd-soc-fsl-ssi-y := fsl_ssi.o
 snd-soc-fsl-ssi-$(CONFIG_DEBUG_FS) += fsl_ssi_dbg.o
 snd-soc-fsl-spdif-objs := fsl_spdif.o
-snd-soc-fsl-esai-objs := fsl_esai.o
-snd-soc-fsl-dai-objs := fsl_dai.o
+snd-soc-fsl-esai-objs := fsl_esai.o fsl_esai_mix.o
 snd-soc-fsl-micfil-objs := fsl_micfil.o
 snd-soc-fsl-utils-objs := fsl_utils.o
 snd-soc-fsl-dma-objs := fsl_dma.o
 snd-soc-fsl-easrc-objs := fsl_easrc.o fsl_easrc_dma.o
 snd-soc-fsl-aud2htx-objs := fsl_aud2htx.o
-snd-soc-fsl-xcvr-objs := fsl_xcvr.o
+snd-soc-fsl-xcvr-objs := fsl_xcvr.o fsl_xcvr_sysfs.o
+snd-soc-fsl-esai-client-objs := fsl_esai_client.o
 
 obj-$(CONFIG_SND_SOC_FSL_AUDMIX) += snd-soc-fsl-audmix.o
 snd-soc-fsl-asoc-card-objs := fsl-asoc-card.o
@@ -38,12 +39,12 @@ obj-$(CONFIG_SND_SOC_FSL_ASOC_CARD) += snd-soc-fsl-asoc-card.o
 snd-soc-fsl-hdmi-objs := fsl_hdmi.o
 obj-$(CONFIG_SND_SOC_FSL_ASRC) += snd-soc-fsl-asrc.o
 obj-$(CONFIG_SND_SOC_FSL_DSP) += snd-soc-fsl-dsp.o
+obj-$(CONFIG_SND_SOC_FSL_DSP_CPU) += snd-soc-fsl-dsp-cpu.o
 obj-$(CONFIG_SND_SOC_FSL_DSP_AUDIOMIX) += snd-soc-fsl-dsp-audiomix.o
 obj-$(CONFIG_SND_SOC_FSL_SAI) += snd-soc-fsl-sai.o
 obj-$(CONFIG_SND_SOC_FSL_SSI) += snd-soc-fsl-ssi.o
 obj-$(CONFIG_SND_SOC_FSL_SPDIF) += snd-soc-fsl-spdif.o
 obj-$(CONFIG_SND_SOC_FSL_ESAI) += snd-soc-fsl-esai.o
-obj-$(CONFIG_SND_SOC_FSL_DAI) += snd-soc-fsl-dai.o
 obj-$(CONFIG_SND_SOC_FSL_MICFIL) += snd-soc-fsl-micfil.o
 obj-$(CONFIG_SND_SOC_FSL_UTILS) += snd-soc-fsl-utils.o
 obj-$(CONFIG_SND_SOC_FSL_HDMI) += snd-soc-fsl-hdmi.o
@@ -53,6 +54,7 @@ obj-$(CONFIG_SND_SOC_FSL_ASOC_CARD) += snd-soc-fsl-asoc-card.o
 obj-$(CONFIG_SND_SOC_FSL_RPMSG_I2S) += snd-soc-fsl-rpmsg-i2s.o
 obj-$(CONFIG_SND_SOC_FSL_AUD2HTX) += snd-soc-fsl-aud2htx.o
 obj-$(CONFIG_SND_SOC_FSL_XCVR) += snd-soc-fsl-xcvr.o
+obj-$(CONFIG_SND_SOC_FSL_ESAI_CLIENT) += snd-soc-fsl-esai-client.o
 
 # MPC5200 Platform Support
 obj-$(CONFIG_SND_MPC52xx_DMA) += mpc5200_dma.o
@@ -74,6 +76,7 @@ obj-$(CONFIG_SND_SOC_IMX_PCM_DMA) += imx-pcm-dma.o imx-pcm-dma-v2.o
 obj-$(CONFIG_SND_SOC_IMX_PCM_DMA) += imx-pcm-dma.o
 obj-$(CONFIG_SND_SOC_IMX_HDMI_DMA) += imx-hdmi-dma.o hdmi_pcm.o
 obj-$(CONFIG_SND_SOC_IMX_PCM_RPMSG) += imx-pcm-rpmsg.o
+obj-$(CONFIG_SND_SOC_IMX_I2S_RPMSG) += imx-i2s-rpmsg.o
 
 # i.MX Machine Support
 snd-soc-eukrea-tlv320-objs := eukrea-tlv320.o
@@ -104,6 +107,7 @@ snd-soc-imx-hdmi-objs := imx-hdmi.o
 snd-soc-imx-cdnhdmi-objs := imx-cdnhdmi.o
 snd-soc-imx-rpmsg-objs := imx-rpmsg.o
 snd-soc-imx-xcvr-objs := imx-xcvr.o
+snd-soc-imx-pcm512x-objs := imx-pcm512x.o
 
 obj-$(CONFIG_SND_SOC_EUKREA_TLV320) += snd-soc-eukrea-tlv320.o
 obj-$(CONFIG_SND_SOC_PHYCORE_AC97) += snd-soc-phycore-ac97.o
@@ -133,5 +137,6 @@ obj-$(CONFIG_SND_SOC_IMX_SI476X) += snd-soc-imx-si476x.o
 obj-$(CONFIG_SND_SOC_IMX_HDMI) += snd-soc-imx-hdmi.o
 obj-$(CONFIG_SND_SOC_IMX_CDNHDMI) += snd-soc-imx-cdnhdmi.o
 obj-$(CONFIG_SND_SOC_IMX_XCVR) += snd-soc-imx-xcvr.o
+obj-$(CONFIG_SND_SOC_IMX_PCM512X) += snd-soc-imx-pcm512x.o
 
 AFLAGS_hdmi_pcm.o := -march=armv7-a -mtune=cortex-a9 -mfpu=neon -mfloat-abi=softfp

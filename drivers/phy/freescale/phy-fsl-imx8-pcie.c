@@ -15,8 +15,6 @@
 
 #define IMX8MP_PCIE_PHY_CMN_REG020	0x80
 #define  PLL_ANA_LPF_R_SEL_FINE_0_4	0x04
-#define IMX8MP_PCIE_PHY_CMN_REG036	0xD8
-#define  PLL_PMS_SDIV_8_4		0x32
 #define IMX8MP_PCIE_PHY_CMN_REG061	0x184
 #define  ANA_PLL_CLK_OUT_TO_EXT_IO_EN	BIT(0)
 #define IMX8MP_PCIE_PHY_CMN_REG062	0x188
@@ -36,15 +34,33 @@
 #define  LANE_TX_DATA_CLK_MUX_SEL	0x00
 
 #define IMX8MP_PCIE_PHY_TRSV_REG001	0x404
-#define  LN0_OVRD_TX_DRV_LVL		0x2D
-#define IMX8MP_PCIE_PHY_TRSV_REG020	0x480
-#define  LN0_RX_CDR_REFDIV_1_2		1
-#define IMX8MP_PCIE_PHY_TRSV_REG022	0x488
-#define  LN0_RX_CDR_REFDIV_1_1		0
-#define IMX8MP_PCIE_PHY_TRSV_REG0BB	0x6EC
-#define  LN0_TXD_DESKEW_BYPASS		BIT(2)
-#define IMX8MP_PCIE_PHY_TRSV_REG0CF	0x73C
-#define  LN0_MISC_TX_CLK_SRC		BIT(2)
+#define  LN0_OVRD_TX_DRV_LVL		0x3F
+#define IMX8MP_PCIE_PHY_TRSV_REG005	0x414
+#define  LN0_OVRD_TX_DRV_PST_LVL_G1	0x2B
+#define IMX8MP_PCIE_PHY_TRSV_REG006	0x418
+#define  LN0_OVRD_TX_DRV_PST_LVL_G2	0x3
+#define IMX8MP_PCIE_PHY_TRSV_REG007	0x41C
+#define  LN0_OVRD_TX_DRV_PST_LVL_G3	0xA
+#define IMX8MP_PCIE_PHY_TRSV_REG009	0x424
+#define  LN0_OVRD_TX_DRV_PRE_LVL_G1	0x10
+#define IMX8MP_PCIE_PHY_TRSV_REG059	0x4EC
+#define  LN0_OVRD_RX_CTLE_RS1_G1	0x13
+#define IMX8MP_PCIE_PHY_TRSV_REG060	0x4F0
+#define  LN0_OVRD_RX_CTLE_RS1_G2_G3	0x25
+#define IMX8MP_PCIE_PHY_TRSV_REG069	0x514
+#define  LN0_ANA_RX_CTLE_IBLEED		0x7
+#define IMX8MP_PCIE_PHY_TRSV_REG107	0x5AC
+#define  LN0_OVRD_RX_RTERM_VCM_EN	0xB8
+#define IMX8MP_PCIE_PHY_TRSV_REG109	0x5B4
+#define  LN0_ANA_OVRD_RX_SQHS_DIFN_OC	0xD4
+#define IMX8MP_PCIE_PHY_TRSV_REG110	0x5B8
+#define  LN0_ANA_OVRD_RX_SQHS_DIFP_OC	0x6A
+#define IMX8MP_PCIE_PHY_TRSV_REG158	0x678
+#define  LN0_RX_CDR_FBB_FINE_G1_G2	0x55
+#define IMX8MP_PCIE_PHY_TRSV_REG159	0x67C
+#define  LN0_RX_CDR_FBB_FINE_G3_G4	0x53
+#define IMX8MP_PCIE_PHY_TRSV_REG206	0x738
+#define  LN0_TG_RX_SIGVAL_LBF_DELAY	0x4
 
 struct imx8_pcie_phy {
 	struct phy *phy;
@@ -115,9 +131,38 @@ static int imx8_pcie_phy_cal(struct phy *phy)
 		       imx8_phy->base + IMX8MP_PCIE_PHY_CMN_REG065);
 	}
 
-	/* Configure TX drive level */
+	/*
+	 * Fine tune the parameters of the PHY, let PCIe link up to GEN3
+	 * between two EVK boards in the EP/RC validation system.
+	 */
 	writel(LN0_OVRD_TX_DRV_LVL,
 	       imx8_phy->base + IMX8MP_PCIE_PHY_TRSV_REG001);
+	writel(LN0_OVRD_TX_DRV_PST_LVL_G1,
+	       imx8_phy->base + IMX8MP_PCIE_PHY_TRSV_REG005);
+	writel(LN0_OVRD_TX_DRV_PST_LVL_G2,
+	       imx8_phy->base + IMX8MP_PCIE_PHY_TRSV_REG006);
+	writel(LN0_OVRD_TX_DRV_PST_LVL_G3,
+	       imx8_phy->base + IMX8MP_PCIE_PHY_TRSV_REG007);
+	writel(LN0_OVRD_TX_DRV_PRE_LVL_G1,
+	       imx8_phy->base + IMX8MP_PCIE_PHY_TRSV_REG009);
+	writel(LN0_OVRD_RX_CTLE_RS1_G1,
+	       imx8_phy->base + IMX8MP_PCIE_PHY_TRSV_REG059);
+	writel(LN0_OVRD_RX_CTLE_RS1_G2_G3,
+	       imx8_phy->base + IMX8MP_PCIE_PHY_TRSV_REG060);
+	writel(LN0_ANA_RX_CTLE_IBLEED,
+	       imx8_phy->base + IMX8MP_PCIE_PHY_TRSV_REG069);
+	writel(LN0_OVRD_RX_RTERM_VCM_EN,
+	       imx8_phy->base + IMX8MP_PCIE_PHY_TRSV_REG107);
+	writel(LN0_ANA_OVRD_RX_SQHS_DIFN_OC,
+	       imx8_phy->base + IMX8MP_PCIE_PHY_TRSV_REG109);
+	writel(LN0_ANA_OVRD_RX_SQHS_DIFP_OC,
+	       imx8_phy->base + IMX8MP_PCIE_PHY_TRSV_REG110);
+	writel(LN0_RX_CDR_FBB_FINE_G1_G2,
+	       imx8_phy->base + IMX8MP_PCIE_PHY_TRSV_REG158);
+	writel(LN0_RX_CDR_FBB_FINE_G3_G4,
+	       imx8_phy->base + IMX8MP_PCIE_PHY_TRSV_REG159);
+	writel(LN0_TG_RX_SIGVAL_LBF_DELAY,
+	       imx8_phy->base + IMX8MP_PCIE_PHY_TRSV_REG206);
 
 	writel(PLL_ANA_LPF_R_SEL_FINE_0_4,
 	       imx8_phy->base + IMX8MP_PCIE_PHY_CMN_REG020);
@@ -125,23 +170,6 @@ static int imx8_pcie_phy_cal(struct phy *phy)
 	       imx8_phy->base + IMX8MP_PCIE_PHY_CMN_REG076);
 	writel(LANE_TX_DATA_CLK_MUX_SEL,
 	       imx8_phy->base + IMX8MP_PCIE_PHY_CMN_REG078);
-
-	/* setup_deskew_fifo_bypass to workaround ERR050442 */
-	udelay(1);
-	writel(PLL_PMS_SDIV_8_4,
-	       imx8_phy->base + IMX8MP_PCIE_PHY_CMN_REG036);
-	writel(LN0_RX_CDR_REFDIV_1_2,
-	       imx8_phy->base + IMX8MP_PCIE_PHY_TRSV_REG020);
-	writel(LN0_RX_CDR_REFDIV_1_1,
-	       imx8_phy->base + IMX8MP_PCIE_PHY_TRSV_REG022);
-	writel(LN0_MISC_TX_CLK_SRC,
-	       imx8_phy->base + IMX8MP_PCIE_PHY_TRSV_REG0CF);
-	writel(LN0_TXD_DESKEW_BYPASS,
-	       imx8_phy->base + IMX8MP_PCIE_PHY_TRSV_REG0BB);
-	udelay(1);
-
-	/* Configure TX drive level  */
-	writel(0x2d, imx8_phy->base + 0x404);
 
 	return 0;
 }

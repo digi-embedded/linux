@@ -92,10 +92,15 @@
 		};
 	};
 
-	reserved-memory {
+	resmem: reserved-memory {
 		#address-cells = <2>;
 		#size-cells = <2>;
 		ranges;
+
+		gpu_reserved: gpu_reserved@0x8800000000 {
+			no-map;
+			reg = <0x8 0x80000000 0 0x10000000>;
+		};
 
 		decoder_boot: decoder_boot@0x84000000 {
 			no-map;
@@ -365,6 +370,11 @@
 			no-map;
 		};
 
+		rsc-table@0 {
+			reg = <0 0x900ff000 0 0x1000>;
+			no-map;
+		};
+
 		vdevbuffer: vdevbuffer {
                         compatible = "shared-dma-pool";
 			reg = <0 0x90400000 0 0x100000>;
@@ -392,6 +402,11 @@
 		vdev3vring1: vdev1vring1@90118000 {
                         compatible = "shared-dma-pool";
 			reg = <0 0x90118000 0 0x8000>;
+			no-map;
+		};
+
+		rsc-table@1 {
+			reg = <0 0x901ff000 0 0x1000>;
 			no-map;
 		};
 	};
@@ -983,7 +998,6 @@
 	disable-gpio = <&lsio_gpio4 9 GPIO_ACTIVE_LOW>;
 	ext_osc = <1>;
 	epdev_on-supply = <&epdev_on>;
-	reserved-region = <&rpmsg_reserved>;
 	status = "okay";
 };
 
@@ -1792,6 +1806,7 @@
 };
 
 &imx8_gpu_ss {
+	memory-region=<&gpu_reserved>;
 	status = "okay";
 };
 

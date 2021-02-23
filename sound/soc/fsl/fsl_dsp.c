@@ -664,8 +664,10 @@ static void fsl_dsp_start(struct fsl_dsp *dsp_priv)
 	switch (dsp_priv->dsp_board_type){
 	case DSP_IMX8QM_TYPE:
 	case DSP_IMX8QXP_TYPE:
+#if defined(CONFIG_IMX_SCU)
 		imx_sc_pm_cpu_start(dsp_priv->dsp_ipcHandle,
 				    IMX_SC_R_DSP, true, dsp_priv->iram);
+#endif
 		break;
 	case DSP_IMX8MP_TYPE:
 		imx_audiomix_dsp_start(dsp_priv->audiomix);
@@ -740,7 +742,10 @@ static void dsp_load_firmware(const struct firmware *fw, void *context)
 			if ((!strcmp(&strtab[shdr->sh_name], ".rodata")) ||
 				(!strcmp(&strtab[shdr->sh_name], ".text"))   ||
 				(!strcmp(&strtab[shdr->sh_name], ".data"))   ||
-				(!strcmp(&strtab[shdr->sh_name], ".bss"))
+				(!strcmp(&strtab[shdr->sh_name], ".bss"))           ||
+				(!strcmp(&strtab[shdr->sh_name], ".rtos.rodata"))   ||
+				(!strcmp(&strtab[shdr->sh_name], ".clib.data"))     ||
+				(!strcmp(&strtab[shdr->sh_name], ".rtos.percpu.data"))
 			) {
 				memcpy_dsp((void *)(dsp_priv->sdram_vir_addr
 				  + (sh_addr - dsp_priv->sdram_phys_addr)),
@@ -1004,7 +1009,7 @@ static int fsl_dsp_mem_setup_lpa(struct fsl_dsp *dsp_priv)
 	struct device_node *np = dsp_priv->dev->of_node;
 	struct device_node *reserved_node;
 	struct resource reserved_res;
-	int offset;
+	int offset, size;
 
 	reserved_node = of_parse_phandle(np, "ocram", 0);
 	if (!reserved_node) {
@@ -1033,47 +1038,22 @@ static int fsl_dsp_mem_setup_lpa(struct fsl_dsp *dsp_priv)
 	}
 	memset_io(dsp_priv->ocram_vir_addr, 0, dsp_priv->ocram_reserved_size);
 
-	reserved_node = of_parse_phandle(np, "ocram-e", 0);
-	if (!reserved_node) {
-		dev_err(dsp_priv->dev, "failed to get reserved region node\n");
-		return -ENODEV;
-	}
-
-	if (of_address_to_resource(reserved_node, 0, &reserved_res)) {
-		dev_err(dsp_priv->dev, "failed to get reserved region address\n");
-		return -EINVAL;
-	}
-
-	dsp_priv->ocram_e_phys_addr = reserved_res.start;
-	dsp_priv->ocram_e_reserved_size = (reserved_res.end - reserved_res.start)
-		+ 1;
-	if (dsp_priv->ocram_e_reserved_size <= 0) {
-		dev_err(dsp_priv->dev, "invalid value of reserved region size\n");
-		return -EINVAL;
-	}
-
-	dsp_priv->ocram_e_vir_addr = ioremap_wc(dsp_priv->ocram_e_phys_addr,
-			dsp_priv->ocram_e_reserved_size);
-	if (!dsp_priv->ocram_e_vir_addr) {
-		dev_err(dsp_priv->dev, "failed to remap ocram_e space for dsp firmware\n");
-		return -ENXIO;
-	}
-	memset_io(dsp_priv->ocram_e_vir_addr, 0, dsp_priv->ocram_e_reserved_size);
+	size = MSG_BUF_SIZE + DSP_CONFIG_SIZE;
 
 	/* msg ring buffer memory */
-	dsp_priv->msg_buf_virt = dsp_priv->ocram_e_vir_addr;
-	dsp_priv->msg_buf_phys = dsp_priv->ocram_e_phys_addr;
+	dsp_priv->msg_buf_virt = dsp_priv->ocram_vir_addr + dsp_priv->ocram_reserved_size - size;
+	dsp_priv->msg_buf_phys = dsp_priv->ocram_phys_addr + dsp_priv->ocram_reserved_size - size;
 	dsp_priv->msg_buf_size = MSG_BUF_SIZE;
 	offset = MSG_BUF_SIZE;
 
 	/* keep dsp framework's global data when suspend/resume */
-	dsp_priv->dsp_config_virt = dsp_priv->ocram_e_vir_addr + offset;
-	dsp_priv->dsp_config_phys = dsp_priv->ocram_e_phys_addr + offset;
+	dsp_priv->dsp_config_virt = dsp_priv->ocram_vir_addr + dsp_priv->ocram_reserved_size - size + offset;
+	dsp_priv->dsp_config_phys = dsp_priv->ocram_phys_addr + dsp_priv->ocram_reserved_size - size + offset;
 	dsp_priv->dsp_config_size = DSP_CONFIG_SIZE;
 
 	dsp_priv->scratch_buf_virt = dsp_priv->ocram_vir_addr;
 	dsp_priv->scratch_buf_phys = dsp_priv->ocram_phys_addr;
-	dsp_priv->scratch_buf_size = dsp_priv->ocram_reserved_size;
+	dsp_priv->scratch_buf_size = dsp_priv->ocram_reserved_size - size;
 	dsp_priv->dram_reserved_vir_addr = dsp_priv->sdram_vir_addr;
 	dsp_priv->dram_reserved_phys_addr = dsp_priv->sdram_phys_addr;
 	dsp_priv->dram_reserved_size = dsp_priv->sdram_reserved_size;
@@ -1348,12 +1328,6 @@ static int fsl_dsp_probe(struct platform_device *pdev)
 	dsp_priv->sai_mclk = devm_clk_get(&pdev->dev, "sai_mclk");
 	if (IS_ERR(dsp_priv->sai_mclk))
 		dsp_priv->sai_mclk = NULL;
-	dsp_priv->pll8k_clk = devm_clk_get(&pdev->dev, "pll8k");
-	if (IS_ERR(dsp_priv->pll8k_clk))
-		dsp_priv->pll8k_clk = NULL;
-	dsp_priv->pll11k_clk = devm_clk_get(&pdev->dev, "pll11k");
-	if (IS_ERR(dsp_priv->pll11k_clk))
-		dsp_priv->pll11k_clk = NULL;
 	dsp_priv->uart_ipg_clk = devm_clk_get(&pdev->dev, "uart_ipg");
 	if (IS_ERR(dsp_priv->uart_ipg_clk))
 		dsp_priv->uart_ipg_clk = NULL;
@@ -1371,8 +1345,6 @@ alloc_coherent_fail:
 		iounmap(dsp_priv->sdram_vir_addr);
 	if (dsp_priv->ocram_vir_addr)
 		iounmap(dsp_priv->ocram_vir_addr);
-	if (dsp_priv->ocram_e_vir_addr)
-		iounmap(dsp_priv->ocram_e_vir_addr);
 
 reserved_node_fail:
 	if (!dsp_priv->dsp_is_lpa)
@@ -1400,8 +1372,6 @@ static int fsl_dsp_remove(struct platform_device *pdev)
 		iounmap(dsp_priv->sdram_vir_addr);
 	if (dsp_priv->ocram_vir_addr)
 		iounmap(dsp_priv->ocram_vir_addr);
-	if (dsp_priv->ocram_e_vir_addr)
-		iounmap(dsp_priv->ocram_e_vir_addr);
 
 	pm_runtime_disable(&pdev->dev);
 	fsl_dsp_detach_pm_domains(&pdev->dev, dsp_priv);
@@ -1498,16 +1468,6 @@ static int fsl_dsp_runtime_resume(struct device *dev)
 	ret = clk_prepare_enable(dsp_priv->sai_mclk);
 	if (ret < 0) {
 		dev_err(dev, "Failed to enable sai_mclk ret = %d\n", ret);
-		return ret;
-	}
-	ret = clk_prepare_enable(dsp_priv->pll8k_clk);
-	if (ret < 0) {
-		dev_err(dev, "Failed to enable pll8k_clk ret = %d\n", ret);
-		return ret;
-	}
-	ret = clk_prepare_enable(dsp_priv->pll11k_clk);
-	if (ret < 0) {
-		dev_err(dev, "Failed to enable pll11k_clk ret = %d\n", ret);
 		return ret;
 	}
 	ret = clk_prepare_enable(dsp_priv->uart_ipg_clk);
@@ -1613,8 +1573,6 @@ static int fsl_dsp_runtime_suspend(struct device *dev)
 	clk_disable_unprepare(dsp_priv->sdma_root_clk);
 	clk_disable_unprepare(dsp_priv->sai_ipg_clk);
 	clk_disable_unprepare(dsp_priv->sai_mclk);
-	clk_disable_unprepare(dsp_priv->pll8k_clk);
-	clk_disable_unprepare(dsp_priv->pll11k_clk);
 	clk_disable_unprepare(dsp_priv->uart_ipg_clk);
 	clk_disable_unprepare(dsp_priv->uart_per_clk);
 

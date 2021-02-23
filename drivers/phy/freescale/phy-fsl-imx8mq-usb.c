@@ -66,6 +66,8 @@
 #define PHY_STS0_FSVPLUS		BIT(3)
 #define PHY_STS0_FSVMINUS		BIT(2)
 
+#define PHY_TUNE_DEFAULT		0xffffffff
+
 struct imx8mq_usb_phy {
 	struct phy *phy;
 	struct clk *clk;

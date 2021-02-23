@@ -2024,9 +2024,7 @@ static int mxcfb_ioctl(struct fb_info *fbi, unsigned int cmd, unsigned long arg)
 			console_lock();
 			retval = fb_set_var(fbi, &fmt.var);
 			if (!retval)
-				fbcon_update_vcs(fbi,
-						 fmt.var.activate &
-						 FB_ACTIVATE_ALL);
+				fbcon_update_vcs(fbi, fbi->var.activate & FB_ACTIVATE_ALL);
 			console_unlock();
 			break;
 		}
@@ -3201,8 +3199,7 @@ static int mxcfb_register(struct fb_info *fbi)
 		console_lock();
 		ret = fb_set_var(fbi, &fbi->var);
 		if (!ret)
-			fbcon_update_vcs(fbi,
-					 fbi->var.activate & FB_ACTIVATE_ALL);
+			fbcon_update_vcs(fbi, fbi->var.activate & FB_ACTIVATE_ALL);
 		console_unlock();
 		if (ret < 0) {
 			dev_err(fbi->device, "Error fb_set_var ret:%d\n", ret);

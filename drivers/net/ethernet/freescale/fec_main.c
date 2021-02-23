@@ -2038,6 +2038,84 @@ out:
 	return ret;
 }
 
+#ifdef CONFIG_OF
+static void fec_reset_phy(struct platform_device *pdev)
+{
+	struct net_device *ndev = platform_get_drvdata(pdev);
+	struct fec_enet_private *fep = netdev_priv(ndev);
+	u32 msec = fep->phy_reset_duration;
+
+	if (fep->phy_reset_gpio < 0)
+		return;
+
+	gpio_set_value_cansleep(fep->phy_reset_gpio,
+				fep->phy_reset_active_high);
+	if (msec > 20)
+		msleep(msec);
+	else
+		usleep_range(msec * 1000, msec * 1000 + 1000);
+
+	gpio_set_value_cansleep(fep->phy_reset_gpio,
+				!fep->phy_reset_active_high);
+
+	if (!fep->phy_post_delay)
+		return;
+
+	if (fep->phy_post_delay > 20)
+		msleep(fep->phy_post_delay);
+	else
+		usleep_range(fep->phy_post_delay * 1000,
+			     fep->phy_post_delay * 1000 + 1000);
+
+	return;
+}
+
+#else /* CONFIG_OF */
+static int fec_reset_phy(struct platform_device *pdev)
+{
+	/*
+	 * In case of platform probe, the reset has been done
+	 * by machine code.
+	 */
+	return 0;
+}
+#endif /* CONFIG_OF */
+
+static void fec_enet_phy_reset_after_clk_enable(struct net_device *ndev)
+{
+	struct fec_enet_private *fep = netdev_priv(ndev);
+	struct phy_device *phy_dev = ndev->phydev;
+
+	if (phy_dev) {
+		if (!gpio_is_valid(fep->phy_reset_gpio)) {
+			phy_reset_after_clk_enable(phy_dev);
+		} else {
+			if (phy_dev && phy_dev->drv &&
+			    phy_dev->drv->flags & PHY_RST_AFTER_CLK_EN) {
+				fec_reset_phy(fep->pdev);
+			}
+		}
+	} else if (fep->phy_node) {
+		/*
+		 * If the PHY still is not bound to the MAC, but there is
+		 * OF PHY node and a matching PHY device instance already,
+		 * use the OF PHY node to obtain the PHY device instance,
+		 * and then use that PHY device instance when triggering
+		 * the PHY reset.
+		 */
+		phy_dev = of_phy_find_device(fep->phy_node);
+		if (!gpio_is_valid(fep->phy_reset_gpio)) {
+			phy_reset_after_clk_enable(phy_dev);
+		} else {
+			if (phy_dev && phy_dev->drv &&
+			    phy_dev->drv->flags & PHY_RST_AFTER_CLK_EN) {
+				fec_reset_phy(fep->pdev);
+			}
+		}
+		put_device(&phy_dev->mdio.dev);
+	}
+}
+
 static int fec_enet_clk_enable(struct net_device *ndev, bool enable)
 {
 	struct fec_enet_private *fep = netdev_priv(ndev);
@@ -2068,7 +2146,7 @@ static int fec_enet_clk_enable(struct net_device *ndev, bool enable)
 		if (ret)
 			goto failed_clk_2x_txclk;
 
-		phy_reset_after_clk_enable(ndev->phydev);
+		fec_enet_phy_reset_after_clk_enable(ndev);
 	} else {
 		clk_disable_unprepare(fep->clk_enet_out);
 		if (fep->clk_ptp) {
@@ -3189,16 +3267,16 @@ fec_enet_open(struct net_device *ndev)
 	/* Init MAC prior to mii bus probe */
 	fec_restart(ndev);
 
-	/* Probe and connect to PHY when open the interface */
-	ret = fec_enet_mii_probe(ndev);
-	if (ret)
-		goto err_enet_mii_probe;
-
 	/* Call phy_reset_after_clk_enable() again if it failed during
 	 * phy_reset_after_clk_enable() before because the PHY wasn't probed.
 	 */
 	if (reset_again)
-		phy_reset_after_clk_enable(ndev->phydev);
+		fec_enet_phy_reset_after_clk_enable(ndev);
+
+	/* Probe and connect to PHY when open the interface */
+	ret = fec_enet_mii_probe(ndev);
+	if (ret)
+		goto err_enet_mii_probe;
 
 	if (fep->quirks & FEC_QUIRK_ERR006687)
 		imx6q_cpuidle_fec_irqs_used();
@@ -3644,47 +3722,6 @@ static int fec_reset_phy_init(struct platform_device *pdev)
 						     "digi,phy-reset-in-suspend",
 						     NULL);
 
-	return 0;
-}
-
-static void fec_reset_phy(struct platform_device *pdev)
-{
-	struct net_device *ndev = platform_get_drvdata(pdev);
-	struct fec_enet_private *fep = netdev_priv(ndev);
-	u32 msec = fep->phy_reset_duration;
-
-	if (fep->phy_reset_gpio < 0)
-		return;
-
-	gpio_set_value_cansleep(fep->phy_reset_gpio,
-				fep->phy_reset_active_high);
-	if (msec > 20)
-		msleep(msec);
-	else
-		usleep_range(msec * 1000, msec * 1000 + 1000);
-
-	gpio_set_value_cansleep(fep->phy_reset_gpio,
-				!fep->phy_reset_active_high);
-
-	if (!fep->phy_post_delay)
-		return;
-
-	if (fep->phy_post_delay > 20)
-		msleep(fep->phy_post_delay);
-	else
-		usleep_range(fep->phy_post_delay * 1000,
-			     fep->phy_post_delay * 1000 + 1000);
-
-	return;
-}
-
-#else /* CONFIG_OF */
-static int fec_reset_phy(struct platform_device *pdev)
-{
-	/*
-	 * In case of platform probe, the reset has been done
-	 * by machine code.
-	 */
 	return 0;
 }
 #endif /* CONFIG_OF */

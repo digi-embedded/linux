@@ -1870,7 +1870,7 @@ static int config_disp_output(struct mxc_vout_output *vout)
 	 * This procedure applies to non-overlay fbs as well.
 	 */
 	console_lock();
-	ret = fb_blank(fbi, FB_BLANK_POWERDOWN);
+	fb_blank(fbi, FB_BLANK_POWERDOWN);
 	console_unlock();
 
 	pos.x = 0;
@@ -1951,8 +1951,6 @@ static int config_disp_output(struct mxc_vout_output *vout)
 	}
 	console_lock();
 	ret = fb_blank(fbi, FB_BLANK_UNBLANK);
-	if (!ret)
-		fbcon_update_vcs(fbi, fbi->var.activate & FB_ACTIVATE_ALL);
 	console_unlock();
 	vout->release = false;
 
@@ -2001,8 +1999,7 @@ static void release_disp_output(struct mxc_vout_output *vout)
 	if (get_ipu_channel(fbi) == MEM_BG_SYNC) {
 		console_lock();
 		fbi->fix.smem_start = vout->disp_bufs[0];
-		if (!fb_blank(fbi, FB_BLANK_UNBLANK))
-			fbcon_update_vcs(fbi, fbi->var.activate & FB_ACTIVATE_ALL);
+		fb_blank(fbi, FB_BLANK_UNBLANK);
 		console_unlock();
 
 	}
