@@ -8,6 +8,14 @@ config STM32_HDP
 	  The Hardware Debug Port allows the observation of internal signals. By using multiplexers,
 	  up to 16 signals for each of 8-bit output can be observed.
 
+config STM32_HSLV
+	tristate "STMicroelectronics STM32 HSLV driver"
+	depends on OF && MACH_STM32MP13
+	default MACH_STM32MP13
+	help
+	  This driver supports internal high speed low voltage configuration
+	  in the STMicroelectronics STM32 chips.
+
 config STM32_PM_DOMAINS
 	bool "STM32 PM domains"
 	depends on MACH_STM32MP157
