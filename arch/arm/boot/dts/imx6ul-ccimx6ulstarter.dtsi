@@ -13,27 +13,44 @@
 	model = "Digi International ConnectCore 6UL Starter Board.";
 	compatible = "digi,ccimx6ulstarter", "digi,ccimx6ul", "fsl,imx6ul";
 	digi,machine,name = "ccimx6ulstarter";
+	/* Modulo Backlight */
+	lcd_backlight: backlight {
+		compatible = "pwm-backlight";
+		pwms = <&pwm8 0 50000>;
+		brightness-levels = <0 4 8 16 32 64 128 255>;
+		default-brightness-level = <6>;
+		status = "disabled";
+	};
 };
 
-/* ECSPI3 (Raspberry PI Expansion header) */
+/* ECSPI3 */
 &ecspi3 {
-	num-cs = <1>;
-	cs-gpios = <&gpio1 20 GPIO_ACTIVE_LOW>;
+	fsl,spi-num-chipselects = <3>;
+	cs-gpios = <&gpio1 10 GPIO_ACTIVE_LOW>, <&gpio1 12 GPIO_ACTIVE_LOW>, <&gpio1 20 GPIO_ACTIVE_LOW>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_ecspi3_master>;
 	status = "disabled";
 };
 
+/* ECSPI1 */
+&ecspi1 {
+	fsl,spi-num-chipselects = <1>;
+	cs-gpios = <&gpio1 13 GPIO_ACTIVE_LOW>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_ecspi1_master>;
+	status = "disabled";
+};
+
+/* Ethernet */
 &fec1 {
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_enet1>, <&pinctrl_enet1_gpio>;
+	pinctrl-0 = <&pinctrl_enet1>;
 	phy-mode = "rmii";
 	phy-handle = <&ethphy0>;
 	phy-reset-gpios = <&mca_gpio 7 GPIO_ACTIVE_LOW>;
-	phy-reset-duration = <26>;
+	phy-reset-duration = <1>;
 	digi,phy-reset-in-suspend;
 	status = "disabled";
-
 	mdio {
 		#address-cells = <1>;
 		#size-cells = <0>;
@@ -46,7 +63,7 @@
 	};
 };
 
-/* CAN1 (Raspberry PI Expansion header) */
+/* CAN1 */
 &can1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan1>;
@@ -54,53 +71,50 @@
 	status = "disabled";
 };
 
+/* I2C */
 &i2c2 {
-	pinctrl-names = "default", "gpio";
+	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_i2c2>;
-	pinctrl-1 = <&pinctrl_i2c2_gpio>;
-	scl-gpios = <&gpio1 0 GPIO_ACTIVE_HIGH>;
-	sda-gpios = <&gpio1 1 GPIO_ACTIVE_HIGH>;
 	status = "disabled";
+
+	goodix_touch1: gt911@14 {
+		compatible = "goodix,gt911";
+		reg = <0x14>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_goodix_touch>;
+		interrupt-parent = <&gpio1>;
+		interrupts = <3 IRQ_TYPE_EDGE_RISING>;
+		irq-gpios = <&gpio1 3 GPIO_ACTIVE_HIGH>;
+		skip-firmware-request;
+		reload-fw-on-resume;
+		status = "disabled";
+	};
+
+	goodix_touch2: gt911@5D {
+		compatible = "goodix,gt911";
+		reg = <0x5D>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_goodix_touch>;
+		interrupt-parent = <&gpio1>;
+		interrupts = <3 IRQ_TYPE_EDGE_RISING>;
+		irq-gpios = <&gpio1 3 GPIO_ACTIVE_HIGH>;
+		skip-firmware-request;
+		reload-fw-on-resume;
+		status = "disabled";
+	};
 };
 
-&pwm1 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_pwm1>;
-	status = "disabled";
-};
-
-&pwm2 {
-	status = "disabled";
-};
-
+/* PWM Bakclight */
 &pwm3 {
-	status = "disabled";
+    pinctrl-names = "default";
+    pinctrl-0 = <&pinctrl_pwm3>;
+    status = "disabled";
 };
 
-&pwm4 {
-	status = "disabled";
-};
-
-&pwm5 {
-	status = "disabled";
-};
-
-&pwm6 {
-	status = "disabled";
-};
-
-&pwm7 {
-	status = "disabled";
-};
-
+/* PWM Sin uso */
 &pwm8 {
-	status = "disabled";
-};
-
-/* UART4 (Raspberry PI Expansion header) */
-&uart4 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_uart4>;
+    pinctrl-names = "default";
+    pinctrl-0 = <&pinctrl_pwm8>;
 	status = "disabled";
 };
 
@@ -111,6 +125,28 @@
 	status = "disabled";
 };
 
+/* UART6 */
+&uart6 {                                                                           
+	pinctrl-names = "default";                                                 
+	pinctrl-0 = <&pinctrl_uart6>;                                       
+	status = "disabled";                                                       
+};
+
+/* UART7 */
+&uart7 {                                                                           
+	pinctrl-names = "default";                                                 
+	pinctrl-0 = <&pinctrl_uart7>;                                       
+	status = "disabled";                                                       
+};
+
+/* UART8 */
+&uart8 {                                                                           
+	pinctrl-names = "default";                                                 
+	pinctrl-0 = <&pinctrl_uart8>;                                       
+	status = "disabled";                                                       
+};
+
+/* USB1 */
 &usbotg1 {
 	dr_mode = "host";
 	digi,power-line-active-high;
@@ -118,6 +154,7 @@
 	status = "disabled";
 };
 
+/* USB2 */
 &usbotg2 {
 	dr_mode = "host";
 	digi,power-line-active-high;
@@ -125,123 +162,181 @@
 	status = "disabled";
 };
 
-/* USDHC2 (microSD) */
+/* USDHC2 */
 &usdhc2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_usdhc2>;
-	broken-cd;      /* no carrier detect line (use polling) */
+	broken-cd;
 	no-1-8-v;
+	status = "disabled";
+};
+
+/* SmartCard */
+&sim2 {
+    pinctrl-names = "default";
+    pinctrl-0 = <&pinctrl_sim2_1>;
+    assigned-clocks = <&clks IMX6UL_CLK_SIM_SEL>;
+    assigned-clock-parents = <&clks IMX6UL_CLK_SIM_PODF>;
+    assigned-clock-rates = <240000000>;
+    pinctrl-assert-gpios = <&gpio1 24 GPIO_ACTIVE_LOW>;
+    port = <0>;
+    sven_low_active;
 	status = "disabled";
 };
 
 &iomuxc {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_hog>;
-
 	imx6ul-ccimx6ul {
+
 		pinctrl_ecspi3_master: ecspi3grp1 {
 			fsl,pins = <
-				MX6UL_PAD_UART2_RX_DATA__ECSPI3_SCLK	0x10b0
-				MX6UL_PAD_UART2_CTS_B__ECSPI3_MOSI	0x10b0
-				MX6UL_PAD_UART2_RTS_B__ECSPI3_MISO	0x10b0
-				MX6UL_PAD_UART2_TX_DATA__GPIO1_IO20	0x10b0 /* Chip Select */
+				MX6UL_PAD_UART2_CTS_B__ECSPI3_MOSI			0x10b0
+				MX6UL_PAD_UART2_RTS_B__ECSPI3_MISO			0x10b0
+				MX6UL_PAD_UART2_RX_DATA__ECSPI3_SCLK		0x10b0 
+				MX6UL_PAD_UART2_TX_DATA__GPIO1_IO20			0x10b0 /* CS_SPI */
+				MX6UL_PAD_JTAG_TDO__GPIO1_IO12				0x10b0 /* CS_MEM1 */
+				MX6UL_PAD_JTAG_MOD__GPIO1_IO10				0x10b0 /* CS_MEM2 */
 			>;
 		};
 
-		pinctrl_ecspi3_slave: ecspi3grp2 {
+		pinctrl_ecspi1_master: ecspi1grp1 {
 			fsl,pins = <
-				MX6UL_PAD_UART2_RX_DATA__ECSPI3_SCLK	0x10b0
-				MX6UL_PAD_UART2_CTS_B__ECSPI3_MOSI	0x10b0
-				MX6UL_PAD_UART2_RTS_B__ECSPI3_MISO	0x10b0
-				MX6UL_PAD_UART2_TX_DATA__ECSPI3_SS0	0x10b0 /* Chip Select */
+				MX6UL_PAD_LCD_DATA22__ECSPI1_MOSI			0x10b0
+				MX6UL_PAD_LCD_DATA23__ECSPI1_MISO			0x10b0
+				MX6UL_PAD_CSI_DATA04__ECSPI1_SCLK			0x10b0
+				MX6UL_PAD_JTAG_TDI__GPIO1_IO13				0x10b0 /* CS_PCBConectores*/
 			>;
 		};
 
 		pinctrl_enet1: enet1grp {
 			fsl,pins = <
-				MX6UL_PAD_GPIO1_IO07__ENET1_MDC		0x1b0b0
-				MX6UL_PAD_GPIO1_IO06__ENET1_MDIO	0x1b0b0
-				MX6UL_PAD_ENET1_RX_EN__ENET1_RX_EN	0x1b0b0
-				MX6UL_PAD_ENET1_RX_ER__ENET1_RX_ER	0x1b0b0
-				MX6UL_PAD_ENET1_RX_DATA0__ENET1_RDATA00	0x1b0b0
-				MX6UL_PAD_ENET1_RX_DATA1__ENET1_RDATA01	0x1b0b0
-				MX6UL_PAD_ENET1_TX_EN__ENET1_TX_EN	0x1b0b0
-				MX6UL_PAD_ENET1_TX_DATA0__ENET1_TDATA00	0x1b0b0
-				MX6UL_PAD_ENET1_TX_DATA1__ENET1_TDATA01	0x1b0b0
-				MX6UL_PAD_ENET1_TX_CLK__ENET1_REF_CLK1	0x40017051
-			>;
-		};
-
-		pinctrl_enet1_gpio: enet1gpiogrp {
-			fsl,pins = <
-				/* ENET1_PWR */
-				MX6UL_PAD_LCD_HSYNC__GPIO3_IO02		0x1b0b0
-				/* ENET1_INT */
-				MX6UL_PAD_LCD_DATA04__GPIO3_IO09	0x1b0b0
+				MX6UL_PAD_GPIO1_IO07__ENET1_MDC				0x1b0b0
+				MX6UL_PAD_GPIO1_IO06__ENET1_MDIO			0x1b0b0
+				MX6UL_PAD_ENET1_RX_EN__ENET1_RX_EN			0x1b0b0
+				MX6UL_PAD_ENET1_RX_ER__ENET1_RX_ER			0x1b0b0
+				MX6UL_PAD_ENET1_RX_DATA0__ENET1_RDATA00		0x1b0b0
+				MX6UL_PAD_ENET1_RX_DATA1__ENET1_RDATA01		0x1b0b0
+				MX6UL_PAD_ENET1_TX_EN__ENET1_TX_EN			0x1b0b0
+				MX6UL_PAD_ENET1_TX_DATA0__ENET1_TDATA00		0x1b0b0
+				MX6UL_PAD_ENET1_TX_DATA1__ENET1_TDATA01		0x1b0b0
+				MX6UL_PAD_ENET1_TX_CLK__ENET1_REF_CLK1		0x40017051
 			>;
 		};
 
 		pinctrl_flexcan1: flexcan1grp{
 			fsl,pins = <
-				MX6UL_PAD_LCD_DATA08__FLEXCAN1_TX	0x1b020
-				MX6UL_PAD_LCD_DATA09__FLEXCAN1_RX	0x1b020
+				MX6UL_PAD_UART3_RTS_B__FLEXCAN1_RX			0x1b020
+				MX6UL_PAD_UART3_CTS_B__FLEXCAN1_TX			0x1b020
 			>;
 		};
 
 		pinctrl_i2c2: i2c2grp {
 			fsl,pins = <
-				MX6UL_PAD_GPIO1_IO00__I2C2_SCL 0x4001b8b0
-				MX6UL_PAD_GPIO1_IO01__I2C2_SDA 0x4001b8b0
-			>;
-		};
-
-		pinctrl_i2c2_gpio: i2c2gpiogrp {
-			fsl,pins = <
-				MX6UL_PAD_GPIO1_IO00__GPIO1_IO00 0x1b0b0
-				MX6UL_PAD_GPIO1_IO01__GPIO1_IO01 0x1b0b0
-			>;
-		};
-
-		pinctrl_pwm1: pwm1grp {
-			fsl,pins = <
-				MX6UL_PAD_LCD_DATA00__PWM1_OUT		0x10b0
-			>;
-		};
-
-		pinctrl_uart4: uart4grp {
-			fsl,pins = <
-				MX6UL_PAD_LCD_CLK__UART4_DCE_TX		0x1b0b1
-				MX6UL_PAD_LCD_ENABLE__UART4_DCE_RX	0x1b0b1
+				MX6UL_PAD_GPIO1_IO00__I2C2_SCL				0x4001b8b0
+				MX6UL_PAD_GPIO1_IO01__I2C2_SDA				0x4001b8b0
 			>;
 		};
 
 		pinctrl_uart5: uart5grp {
 			fsl,pins = <
-				MX6UL_PAD_UART5_TX_DATA__UART5_DCE_TX	0x1b0b1
-				MX6UL_PAD_UART5_RX_DATA__UART5_DCE_RX	0x1b0b1
+				MX6UL_PAD_UART5_TX_DATA__UART5_DCE_TX		0x1b0b1
+				MX6UL_PAD_UART5_RX_DATA__UART5_DCE_RX		0x1b0b1
+			>;
+		};
+
+		pinctrl_uart6: uart6grp {
+			fsl,pins = <
+				MX6UL_PAD_CSI_MCLK__UART6_DCE_TX			0x1b0b1
+				MX6UL_PAD_CSI_PIXCLK__UART6_DCE_RX			0x1b0b1
+			>;
+		};
+
+		pinctrl_uart7: uart7grp {
+			fsl,pins = <
+				MX6UL_PAD_ENET2_RX_EN__UART7_DCE_TX			0x1b0b1
+				MX6UL_PAD_ENET2_TX_DATA0__UART7_DCE_RX		0x1b0b1
+			>;
+		};
+
+		pinctrl_uart8: uart8grp {
+			fsl,pins = <
+				MX6UL_PAD_LCD_DATA21__UART8_DCE_RX			0x1b0b1
+				MX6UL_PAD_LCD_DATA20__UART8_DCE_TX			0x1b0b1
+			>;
+		};
+		
+		pinctrl_pwm3: pwm3grp {
+			fsl,pins = <
+			MX6UL_PAD_GPIO1_IO04__PWM3_OUT					0x110b0
+			>;
+		};
+
+		pinctrl_pwm8: pwm8grp {
+			fsl,pins = <
+			MX6UL_PAD_JTAG_TRST_B__PWM8_OUT					0x110b0
 			>;
 		};
 
 		pinctrl_usdhc2: usdhc2grp {
 			fsl,pins = <
-				MX6UL_PAD_CSI_HSYNC__USDHC2_CMD		0x17059
-				MX6UL_PAD_CSI_VSYNC__USDHC2_CLK		0x10071
-				MX6UL_PAD_CSI_DATA00__USDHC2_DATA0	0x17059
-				MX6UL_PAD_CSI_DATA01__USDHC2_DATA1	0x17059
-				MX6UL_PAD_CSI_DATA02__USDHC2_DATA2	0x17059
-				MX6UL_PAD_CSI_DATA03__USDHC2_DATA3	0x17059
+				MX6UL_PAD_CSI_HSYNC__USDHC2_CMD				0x17059
+				MX6UL_PAD_CSI_VSYNC__USDHC2_CLK				0x10071
+				MX6UL_PAD_CSI_DATA00__USDHC2_DATA0			0x17059
+				MX6UL_PAD_CSI_DATA01__USDHC2_DATA1			0x17059
+				MX6UL_PAD_CSI_DATA02__USDHC2_DATA2			0x17059
+				MX6UL_PAD_CSI_DATA03__USDHC2_DATA3			0x17059
 			>;
 		};
 
-		/* General purpose pinctrl */
-		pinctrl_hog: hoggrp {
+		pinctrl_goodix_touch: goodixgrp {
 			fsl,pins = <
-				/* USER_LED */
-				MX6UL_PAD_LCD_DATA06__GPIO3_IO11	0x1b0b0
-				/* USER_BUTTON */
-				MX6UL_PAD_LCD_VSYNC__GPIO3_IO03		0x1b0b0
+				MX6UL_PAD_GPIO1_IO03__GPIO1_IO03			0x1020
 			>;
 		};
 
+		pinctrl_sim2_1: sim2grp {
+			fsl,pins = <
+				MX6UL_PAD_UART3_RX_DATA__SIM2_PORT0_PD		0xb808
+				MX6UL_PAD_ENET2_TX_EN__SIM2_PORT0_CLK		0x31
+				MX6UL_PAD_ENET2_TX_CLK__SIM2_PORT0_RST_B	0xb808
+				MX6UL_PAD_ENET2_RX_ER__SIM2_PORT0_SVEN		0xb808
+				MX6UL_PAD_ENET2_TX_DATA1__SIM2_PORT0_TRXD	0xb809
+				MX6UL_PAD_UART3_TX_DATA__GPIO1_IO24			0x3008
+			>;
+		};
+
+		pinctrl_hog: hoggrp {
+			fsl,pins = <         
+				MX6UL_PAD_LCD_DATA19__GPIO3_IO24			0x10b0 /* EC25_SIM */        
+				MX6UL_PAD_LCD_DATA17__GPIO3_IO22			0x10b0 /* EC25_RESET */                 
+				MX6UL_PAD_LCD_DATA18__GPIO3_IO23			0x10b0 /* EC25_PWR */
+				MX6UL_PAD_GPIO1_IO02__GPIO1_IO02			0x10b0 /* RESET_TOUCH */
+				MX6UL_PAD_LCD_DATA16__GPIO3_IO21			0x10b0 /* CTRL_SAM */
+				MX6UL_PAD_GPIO1_IO09__GPIO1_IO09			0x10b0 /* BUZZER */
+				/* GPIO para uso futuro de pantalla TFT, comunicación paralela */
+				MX6UL_PAD_LCD_DATA00__GPIO3_IO05			0x10b0
+				MX6UL_PAD_LCD_DATA01__GPIO3_IO06			0x10b0
+				MX6UL_PAD_LCD_DATA02__GPIO3_IO07			0x10b0
+				MX6UL_PAD_LCD_DATA03__GPIO3_IO08			0x10b0
+				MX6UL_PAD_LCD_DATA04__GPIO3_IO09			0x10b0
+				MX6UL_PAD_LCD_DATA05__GPIO3_IO10			0x10b0
+				MX6UL_PAD_LCD_DATA06__GPIO3_IO11			0x10b0
+				MX6UL_PAD_LCD_DATA07__GPIO3_IO12			0x10b0
+				MX6UL_PAD_LCD_DATA08__GPIO3_IO13			0x10b0
+				MX6UL_PAD_LCD_DATA09__GPIO3_IO14			0x10b0
+				MX6UL_PAD_LCD_DATA10__GPIO3_IO15			0x10b0
+				MX6UL_PAD_LCD_DATA11__GPIO3_IO16			0x10b0
+				MX6UL_PAD_LCD_DATA12__GPIO3_IO17			0x10b0
+				MX6UL_PAD_LCD_DATA13__GPIO3_IO18			0x10b0
+				MX6UL_PAD_LCD_DATA14__GPIO3_IO19			0x10b0
+				MX6UL_PAD_LCD_DATA15__GPIO3_IO20			0x10b0
+				MX6UL_PAD_LCD_HSYNC__GPIO3_IO02				0x10b0
+				MX6UL_PAD_LCD_CLK__GPIO3_IO00				0x10b0
+				MX6UL_PAD_LCD_VSYNC__GPIO3_IO03				0x10b0
+				MX6UL_PAD_LCD_ENABLE__GPIO3_IO01			0x10b0
+				MX6UL_PAD_LCD_RESET__GPIO3_IO04				0x10b0
+			>;
+		};
 	};
 };
