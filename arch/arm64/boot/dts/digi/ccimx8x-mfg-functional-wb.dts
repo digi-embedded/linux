@@ -1,0 +1,51 @@
+/*
+ * Copyright 2018-2021, Digi International Inc.
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+/* Digi ConnectCore 8X WiFi-Bluetooth FCT */
+#include "ccimx8x-mfg-functional.dts"
+
+/ {
+	wireless {
+		/* U-Boot will fill in the MAC address here */
+	};
+};
+
+&bluetooth {
+	status = "okay";
+};
+
+/* RF regulators */
+&reg_3v3_rf {
+	status = "okay";
+};
+
+&reg_rf_bt_en {
+	status = "okay";
+};
+
+&reg_rf_wl_en {
+	status = "okay";
+};
+
+&pcieb {
+	clkreq-gpio = <&lsio_gpio4 1 GPIO_ACTIVE_LOW>;
+	epdev_on-supply = <&reg_rf_wl_en>;
+	digi,disable_pci_msi;
+};
+
+/* IOMUX */
+&iomuxc {
+	pinctrl-0 = <&pinctrl_hog_common>;
+};
