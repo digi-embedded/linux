@@ -29,6 +29,75 @@
 		bootargs = "console=ttyLP2,115200 earlycon=lpuart32,0x5a080000,115200";
 		stdout-path = &lpuart2;
 	};
+
+	/* DUMMY MIPI DSI BRIDGE */
+	dummy_dsi_bridge@0 {
+		compatible = "digi,dummy_dsi_bridge";
+		dsi-lanes = <4>;
+		video-mode = <1>;
+		status = "okay";
+
+		display-timings {
+			native-mode = <&mipi0_analyzer>;
+
+			/* MIPI Analyzer */
+			mipi0_analyzer: timing@0 {
+				clock-frequency = <31500000>;
+				hactive = <640>;
+				vactive = <480>;
+				hback-porch = <4>;
+				hfront-porch = <10>;
+				vback-porch = <34>;
+				vfront-porch = <20>;
+				hsync-len = <2>;
+				vsync-len = <2>;
+				hsync-active = <0>;
+				vsync-active = <0>;
+				de-active = <0>;
+				pixelclk-active = <0>;
+			};
+		};
+
+		port@0 {
+			dummy_dsi0_bridge_in: endpoint {
+				remote-endpoint = <&mipi_dsi0_out>;
+			};
+		};
+	};
+	/* DUMMY MIPI DSI BRIDGE */
+	dummy_dsi_bridge@1 {
+		compatible = "digi,dummy_dsi_bridge";
+		dsi-lanes = <4>;
+		video-mode = <1>;
+		status = "okay";
+
+		display-timings {
+			native-mode = <&mipi1_analyzer>;
+
+			/* MIPI Analyzer */
+			mipi1_analyzer: timing@0 {
+				clock-frequency = <31500000>;
+				hactive = <640>;
+				vactive = <480>;
+				hback-porch = <4>;
+				hfront-porch = <10>;
+				vback-porch = <34>;
+				vfront-porch = <20>;
+				hsync-len = <2>;
+				vsync-len = <2>;
+				hsync-active = <0>;
+				vsync-active = <0>;
+				de-active = <0>;
+				pixelclk-active = <0>;
+			};
+		};
+
+		port@0 {
+			dummy_dsi1_bridge_in: endpoint {
+				remote-endpoint = <&mipi_dsi1_out>;
+			};
+		};
+	};
 };
 
 &dc0_dpr1_channel1 {
@@ -82,6 +151,38 @@
 			at803x,vddio-1p8v;
 		};
 	};
+};
+
+/*&gpu_3d0 {
+	status = "okay";
+};
+
+&imx8_gpu_ss {
+	status = "okay";
+};
+
+&cm40_intmux {
+	status = "okay";
+};
+
+&jpegdec {
+	status = "okay";
+};
+
+&jpegenc {
+	status = "okay";
+};
+
+&vpu_decoder {
+	status = "okay";
+};
+
+&vpu_encoder {
+	status = "okay";
+};*/
+
+&irqsteer_csi0 {
+	status = "okay";
 };
 
 &i2c3 {
@@ -204,6 +305,11 @@
 	};
 };
 
+/* UART1 (Bluetooth/Loopback) */
+&lpuart1 {
+	status = "okay";
+};
+
 &mipi_csi_0 {
 	#address-cells = <1>;
 	#size-cells = <0>;
@@ -227,49 +333,12 @@
 
 &mipi0_dsi_host {
 	status = "okay";
-	fsl,clock-drop-level = <2>;
-
-	panel@0 {
-		#address-cells = <1>;
-		#size-cells = <0>;
-
-		compatible = "raydium,rm67191";
-		reg = <0>;
-		dsi-lanes = <4>;
-		video-mode = <0>;
-		width-mm = <68>;
-		height-mm = <121>;
-		display-timings {
-			timing {
-				clock-frequency = <31500000>;
-				hactive = <640>;
-				vactive = <480>;
-				hback-porch = <4>;
-				hfront-porch = <10>;
-				vback-porch = <34>;
-				vfront-porch = <20>;
-				hsync-len = <2>;
-				vsync-len = <2>;
-				hsync-active = <0>;
-				vsync-active = <0>;
-				de-active = <0>;
-				pixelclk-active = <0>;
-			};
-		};
-
-		port@0 {
-			reg = <0>;
-			panel0_in: endpoint {
-				remote-endpoint = <&mipi0_panel_out>;
-			};
-		};
-	};
 
 	ports {
 		port@1 {
 			reg = <1>;
-			mipi0_panel_out: endpoint {
-				remote-endpoint = <&panel0_in>;
+			mipi_dsi0_out: endpoint {
+				remote-endpoint = <&dummy_dsi0_bridge_in>;
 			};
 		};
 	};
@@ -281,51 +350,32 @@
 
 &mipi1_dsi_host {
 	status = "okay";
-	fsl,clock-drop-level = <2>;
-
-	panel@0 {
-		#address-cells = <1>;
-		#size-cells = <0>;
-
-		compatible = "raydium,rm67191";
-		reg = <0>;
-		dsi-lanes = <4>;
-		video-mode = <0>;
-		width-mm = <68>;
-		height-mm = <121>;
-		display-timings {
-			timing {
-				clock-frequency = <31500000>;
-				hactive = <640>;
-				vactive = <480>;
-				hback-porch = <4>;
-				hfront-porch = <10>;
-				vback-porch = <34>;
-				vfront-porch = <20>;
-				hsync-len = <2>;
-				vsync-len = <2>;
-				hsync-active = <0>;
-				vsync-active = <0>;
-				de-active = <0>;
-				pixelclk-active = <0>;
-			};
-		};
-		port@0 {
-			reg = <0>;
-			panel1_in: endpoint {
-				remote-endpoint = <&mipi1_panel_out>;
-			};
-		};
-	};
 
 	ports {
 		port@1 {
 			reg = <1>;
-			mipi1_panel_out: endpoint {
-				remote-endpoint = <&panel1_in>;
+			mipi_dsi1_out: endpoint {
+				remote-endpoint = <&dummy_dsi1_bridge_in>;
 			};
 		};
 	};
+};
+
+&mipi1_lis_lpcg {
+	status = "okay";
+};
+
+&mipi1_pwm_lpcg {
+	status = "okay";
+};
+
+&mipi1_i2c0_lpcg {
+	status = "okay";
+};
+
+/* PCIe (Wireless/Card) */
+&pcieb {
+	status = "okay";
 };
 
 &dc0_pc {
@@ -374,6 +424,10 @@
 	status = "okay";
 };
 
+&usb3phynop1 {
+	status = "okay";
+};
+
 &usbotg3 {
 	dr_mode = "host";
 	disable-over-current;
@@ -383,9 +437,9 @@
 /* IOMUX */
 &iomuxc {
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_hog>;
+	pinctrl-0 = <&pinctrl_hog_common>, <&pinctrl_hog_non_wb>;
 
-	pinctrl_hog: hoggrp {
+	pinctrl_hog_common: hoggrpcommon {
 		fsl,pins = <
 			/* Castellated pads */
 			IMX8QXP_USDHC1_RESET_B_LSIO_GPIO4_IO19		0x06000020
@@ -463,6 +517,14 @@
 			IMX8QXP_ADC_IN2_LSIO_GPIO1_IO12			0x06000020
 			IMX8QXP_ADC_IN5_LSIO_GPIO1_IO13			0x06000020
 			IMX8QXP_MIPI_CSI0_MCLK_OUT_LSIO_GPIO3_IO04		0x06000020
+		>;
+	};
+
+	pinctrl_hog_non_wb: hoggrpnonwb {
+		fsl,pins = <
+			/* COMMON NON-WIRELESS PAIRS */
+			IMX8QXP_QSPI0A_DATA1_LSIO_GPIO3_IO10	0x06000021
+			IMX8QXP_QSPI0A_DATA2_LSIO_GPIO3_IO11	0x06000021
 		>;
 	};
 
