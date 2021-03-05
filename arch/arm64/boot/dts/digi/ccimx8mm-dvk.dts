@@ -696,9 +696,10 @@
 
 	/*
 	 * RS-232 mode (uncomment these lines to use this UART in RS232 mode).
+	 * (R291, R292 and R359 on the DVK must be removed).
 	 */
 	//fsl,uart-has-rtscts;
-	//pinctrl-0 = <&pinctrl_uart3>, <&pinctrl_uart3_re_disable>;
+	//pinctrl-0 = <&pinctrl_uart3>;
 	status = "okay";
 };
 
@@ -1022,16 +1023,6 @@
 			MX8MM_IOMUXC_ECSPI1_MOSI_UART3_DCE_TX		0x140
 			MX8MM_IOMUXC_ECSPI1_SS0_UART3_DCE_RTS_B		0x140
 			MX8MM_IOMUXC_ECSPI1_MISO_UART3_DCE_CTS_B	0x140
-		>;
-	};
-
-	pinctrl_uart3_re_disable: uart3grp_re_disable {
-		fsl,pins = <
-			/*
-			 * Configure RS485 RE#/DE line as pull-up to disable
-			 * RS485 transceiver.
-			 */
-			MX8MM_IOMUXC_ECSPI1_MISO_GPIO5_IO8		0x140
 		>;
 	};
 
