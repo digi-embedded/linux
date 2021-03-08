@@ -1203,10 +1203,18 @@ static const struct stm32_fmc2_ebi_data stm32_fmc2_ebi_mp1_data = {
 	.rnb_for_nand = false,
 };
 
+static const struct stm32_fmc2_ebi_data stm32_fmc2_ebi_mp25_data = {
+	.rnb_for_nand = true,
+};
+
 static const struct of_device_id stm32_fmc2_ebi_match[] = {
 	{
 		.compatible = "st,stm32mp1-fmc2-ebi",
 		.data = &stm32_fmc2_ebi_mp1_data,
+	},
+	{
+		.compatible = "st,stm32mp25-fmc2-ebi",
+		.data = &stm32_fmc2_ebi_mp25_data,
 	},
 	{}
 };
