@@ -1878,11 +1878,14 @@ static int stm32_fmc2_nfc_set_cdev(struct stm32_fmc2_nfc *nfc)
 	struct device *dev = nfc->dev;
 	bool ebi_found = false;
 
-	if (dev->parent && of_device_is_compatible(dev->parent->of_node,
-						   "st,stm32mp1-fmc2-ebi"))
+	if (dev->parent && (of_device_is_compatible(dev->parent->of_node,
+						    "st,stm32mp1-fmc2-ebi") ||
+			    of_device_is_compatible(dev->parent->of_node,
+						    "st,stm32mp25-fmc2-ebi")))
 		ebi_found = true;
 
-	if (of_device_is_compatible(dev->of_node, "st,stm32mp1-fmc2-nfc")) {
+	if (of_device_is_compatible(dev->of_node, "st,stm32mp1-fmc2-nfc") ||
+	    of_device_is_compatible(dev->of_node, "st,stm32mp25-fmc2-nfc")) {
 		if (ebi_found) {
 			nfc->cdev = dev->parent;
 
@@ -2130,6 +2133,10 @@ static const struct stm32_fmc2_nfc_data stm32_fmc2_nfc_mp1_data = {
 	.max_ncs = 2,
 };
 
+static const struct stm32_fmc2_nfc_data stm32_fmc2_nfc_mp25_data = {
+	.max_ncs = 4,
+};
+
 static const struct of_device_id stm32_fmc2_nfc_match[] = {
 	{
 		.compatible = "st,stm32mp15-fmc2",
@@ -2138,6 +2145,14 @@ static const struct of_device_id stm32_fmc2_nfc_match[] = {
 	{
 		.compatible = "st,stm32mp1-fmc2-nfc",
 		.data = &stm32_fmc2_nfc_mp1_data,
+	},
+	{
+		.compatible = "st,stm32mp25-fmc2",
+		.data = &stm32_fmc2_nfc_mp25_data,
+	},
+	{
+		.compatible = "st,stm32mp25-fmc2-nfc",
+		.data = &stm32_fmc2_nfc_mp25_data,
 	},
 	{}
 };
