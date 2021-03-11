@@ -291,6 +291,10 @@
 	status = "okay";
 };
 
+&usb3phynop1 {
+	status = "okay";
+};
+
 /* Micro SD card */
 &usdhc2 {
 	status = "okay";
