@@ -110,6 +110,10 @@
 	status = "okay";
 };
 
+&rtc {
+	status = "okay";
+};
+
 &sdmmc1 {
 	pinctrl-names = "default", "opendrain";
 	pinctrl-0 = <&sdmmc1_b4_pins_a>;
