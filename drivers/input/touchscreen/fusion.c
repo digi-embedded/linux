@@ -280,6 +280,7 @@ static int fusion_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 	u8 ver_product, ver_id;
 	struct device_node *np = i2c->dev.of_node;
 	u32 version;
+	static int retries = 3;
 
 	if (!np)
                 return -ENODEV;
@@ -316,6 +317,8 @@ static int fusion_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 	ret = fusion_read_u8(FUSION_VIESION_INFO_LO);
 	if (ret < 0) {
 		dev_err(&i2c->dev, "query failed: %d\n", ret);
+		if (retries--)
+			return -EPROBE_DEFER;
 		goto bail1;
 	}
 	ver_product = (((u8)ret) & 0xc0) >> 6;
@@ -323,8 +326,10 @@ static int fusion_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 	version += (((u32)ret)&0xf) * 1000;
 	/* Read out a lot of registers */
 	ret = fusion_read_u8(FUSION_VIESION_INFO);
-		if (ret < 0) {
+	if (ret < 0) {
 		dev_err(&i2c->dev, "query failed: %d\n", ret);
+		if (retries--)
+			return -EPROBE_DEFER;
 		goto bail1;
 	}
 	ver_id = ((u8)(ret) & 0x6) >> 1;
