@@ -282,17 +282,6 @@
 	sda-gpios = <&gpio5 17 GPIO_ACTIVE_HIGH>;
 	status = "okay";
 
-	fusion_touch: fusion@14 {
-		compatible = "touchrev,fusion-touch";
-		reg = <0x14>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_touch>;
-		/* LVDS interrupt */
-		interrupt-parent = <&gpio4>;
-		interrupts = <28 IRQ_TYPE_EDGE_FALLING>;
-		status = "disabled";
-	};
-
 	/*
 	 * An inconsistent reset sequence makes
 	 * the Goodix display's touch controller respond on one of two I2C
@@ -327,6 +316,18 @@
 		reload-fw-on-resume;
 		skip-firmware-request;
 		vin-supply = <&reg_5v_board>;
+		status = "disabled";
+	};
+
+	/* Touch on Fusion 10" display */
+	fusion_touch: fusion@14 {
+		compatible = "touchrev,fusion-touch";
+		reg = <0x14>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_touch>;
+		/* LVDS interrupt */
+		interrupt-parent = <&gpio4>;
+		interrupts = <28 IRQ_TYPE_EDGE_FALLING>;
 		status = "disabled";
 	};
 

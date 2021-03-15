@@ -526,17 +526,6 @@
 	clock-frequency = <100000>;
 	status = "disabled";
 
-	fusion_touch: fusion@14 {
-		compatible = "touchrev,fusion-touch";
-		reg = <0x14>;
-		interrupt-parent = <&lsio_gpio3>;
-		/* LVDS0 interrupt */
-		interrupts = <20 IRQ_TYPE_EDGE_FALLING>;
-		/* LVDS1 interrupt */
-		//interrupts = <19 IRQ_TYPE_EDGE_FALLING>;
-		status = "disabled";
-	};
-
 	/*
 	 * On the CC8X SBC, an inconsistent reset sequence makes
 	 * the Goodix display's touch controller respond to two I2C
@@ -547,7 +536,7 @@
 	lvds0_goodix_touch1: gt9271@14 {
 		compatible = "goodix,gt9271";
 		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_goodix_lvds0>;
+		pinctrl-0 = <&pinctrl_touch_lvds0>;
 		reg = <0x14>;
 		/* Interrupt for LVDS0 */
 		interrupt-parent = <&lsio_gpio3>;
@@ -560,13 +549,25 @@
 	lvds0_goodix_touch2: gt9271@5d {
 		compatible = "goodix,gt9271";
 		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_goodix_lvds0>;
+		pinctrl-0 = <&pinctrl_touch_lvds0>;
 		reg = <0x5D>;
 		/* Interrupt for LVDS0 */
 		interrupt-parent = <&lsio_gpio3>;
 		interrupts = <20 IRQ_TYPE_EDGE_FALLING>;
 		irq-gpios = <&lsio_gpio3 20 GPIO_ACTIVE_HIGH>;
 		skip-firmware-request;
+		status = "disabled";
+	};
+
+	/* Touch on Fusion 10" display */
+	fusion_touch: fusion@14 {
+		compatible = "touchrev,fusion-touch";
+		reg = <0x14>;
+		interrupt-parent = <&lsio_gpio3>;
+		/* LVDS0 interrupt */
+		interrupts = <20 IRQ_TYPE_EDGE_FALLING>;
+		/* LVDS1 interrupt */
+		//interrupts = <19 IRQ_TYPE_EDGE_FALLING>;
 		status = "disabled";
 	};
 
@@ -742,7 +743,7 @@
 	lvds1_goodix_touch1: gt9271@14 {
 		compatible = "goodix,gt9271";
 		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_goodix_lvds1>;
+		pinctrl-0 = <&pinctrl_touch_lvds1>;
 		reg = <0x14>;
 		/* Interrupt for LVDS1 */
 		interrupt-parent = <&lsio_gpio3>;
@@ -755,7 +756,7 @@
 	lvds1_goodix_touch2: gt9271@5d {
 		compatible = "goodix,gt9271";
 		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_goodix_lvds1>;
+		pinctrl-0 = <&pinctrl_touch_lvds1>;
 		reg = <0x5D>;
 		/* Interrupt for LVDS1 */
 		interrupt-parent = <&lsio_gpio3>;
@@ -780,7 +781,7 @@
 		port@1 {
 			reg = <1>;
 
-	                lvds1_out: endpoint {
+			lvds1_out: endpoint {
 				remote-endpoint = <&panel_lvds1_in>;
 			};
 		};
@@ -1346,14 +1347,14 @@
 		>;
 	};
 
-	pinctrl_goodix_lvds0: goodixgrplvds0 {
+	pinctrl_touch_lvds0: touchgrplvds0 {
 		fsl,pins = <
 			/* LVDS0 touch interrupt */
 			IMX8QXP_QSPI0B_DATA2_LSIO_GPIO3_IO20	0x06000060
 		>;
 	};
 
-	pinctrl_goodix_lvds1: goodixgrplvds1 {
+	pinctrl_touch_lvds1: touchgrplvds1 {
 		fsl,pins = <
 			/* LVDS1 touch interrupt */
 			IMX8QXP_QSPI0B_DATA1_LSIO_GPIO3_IO19	0x06000060

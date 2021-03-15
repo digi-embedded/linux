@@ -17,14 +17,14 @@
 /plugin/;
 
 / {
-	/* Enable the LVDS bridge */
 	fragment@0 {
 		target-path = "/";
 		__overlay__ {
-			overlay-description = "DVK: LVDS display";
+			overlay-description = "DVK: AUO 10.1\" LVDS display";
 		};
 	};
 
+	/* Enable the LVDS bridge and target the AUO 10" display */
 	fragment@1 {
 		target = <&dsi_lvds_bridge>;
 		__overlay__ {
