@@ -65,4 +65,27 @@
 			};
 		};
 	};
+
+	/* Enable Fusion touch */
+	fragment@3 {
+		target = <&fusion_touch>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+
+	/* Disable Goodix touch */
+	fragment@4 {
+		target = <&lvds0_goodix_touch1>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	fragment@5 {
+		target = <&lvds0_goodix_touch2>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
 };
