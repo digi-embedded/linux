@@ -526,9 +526,9 @@
 	clock-frequency = <100000>;
 	status = "disabled";
 
-	fusion_touch: fusion@10 {
+	fusion_touch: fusion@14 {
 		compatible = "touchrev,fusion-touch";
-		reg = <0x10>;
+		reg = <0x14>;
 		interrupt-parent = <&lsio_gpio3>;
 		/* LVDS0 interrupt */
 		interrupts = <20 IRQ_TYPE_EDGE_FALLING>;
