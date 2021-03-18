@@ -149,10 +149,40 @@ err:
 static int mca_wdt_stop(struct watchdog_device *wdd)
 {
 	struct mca_wdt *wdt = watchdog_get_drvdata(wdd);
+	unsigned int val;
+	int ret;
 
 	/* Disable watchdog */
-	return regmap_update_bits(wdt->mca->regmap, MCA_WDT_CONTROL,
-				  MCA_WDT_ENABLE, 0);
+	ret = regmap_update_bits(wdt->mca->regmap, MCA_WDT_CONTROL,
+				 MCA_WDT_ENABLE, 0);
+	if (ret) {
+		dev_err(wdt->mca->dev, "Could not stop watchdog (%d)\n", ret);
+		goto err;
+	}
+
+	/*
+	 * Read back again to check if watchdog could be stopped.
+	 * If it was enabled using no-way-out flag it will return
+	 * an error.
+	 */
+	ret = regmap_read(wdt->mca->regmap, MCA_WDT_CONTROL, &val);
+	if (ret != 0) {
+		dev_err(wdt->mca->dev,
+			"Could not check watchdog status (%d)\n", ret);
+		goto err;
+	}
+
+	if (val & (MCA_WDT_ENABLE | MCA_WDT_NOWAYOUT)) {
+		dev_warn(wdt->mca->dev,
+			"Watchdog did not stop! It's configured as no-way-out\n");
+		ret = -EPERM;
+	} else if (val & MCA_WDT_ENABLE) {
+		dev_err(wdt->mca->dev,
+			"Watchdog did not stop! Unknown error\n");
+		ret = -EIO;
+	}
+err:
+	return ret;
 }
 
 static irqreturn_t mca_wdt_timeout_event(int irq, void *data)
