@@ -38,6 +38,12 @@ struct mxc_lcdif_data {
 
 static struct fb_videomode lcdif_modedb[] = {
 	{
+	/* 800x480 @ 50 Hz , pixel clk @ 33MHz */
+	"FUSION7", 50, 800, 480, 33260, 50, 0, 25, 10, 128, 10,
+	FB_SYNC_CLK_LAT_FALL,
+	FB_VMODE_NONINTERLACED,
+	0,},
+	{
 	/* 800x480 @ 57 Hz , pixel clk @ 27MHz */
 	"CLAA-WVGA", 57, 800, 480, 37037, 40, 60, 10, 10, 20, 10,
 	FB_SYNC_CLK_LAT_FALL,
