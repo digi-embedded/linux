@@ -65,6 +65,10 @@ properties:
   linux,rs485-enabled-at-boot-time: true
   rs485-rx-during-tx: true
 
+  power-domains:
+    $ref: ../power/power-domain.yaml
+    maxItems: 1
+
   rx-threshold:
     description:
       If value is set to 1, RX FIFO threshold is disabled.
