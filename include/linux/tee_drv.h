@@ -364,6 +364,12 @@ static inline bool tee_shm_is_registered(struct tee_shm *shm)
 void tee_shm_free(struct tee_shm *shm);
 
 /**
+ * tee_shm_get() - Increase reference count on a shared memory handle
+ * @shm:	Shared memory handle
+ */
+void tee_shm_get(struct tee_shm *shm);
+
+/**
  * tee_shm_put() - Decrease reference count on a shared memory handle
  * @shm:	Shared memory handle
  */
