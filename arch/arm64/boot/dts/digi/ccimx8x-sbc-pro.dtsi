@@ -539,6 +539,14 @@
 	};
 };
 
+&hsio_refa_clk {
+	status="disabled";
+};
+
+&hsio_refb_clk {
+	status="disabled";
+};
+
 &isi_0 {
 	interface = <6 0 2>;	/* INPUT: 6-PARALLEL CSI */
 	parallel_csi;
