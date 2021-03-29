@@ -23,6 +23,15 @@ properties:
     description: enable the backlight at boot.
     type: boolean
 
+  default-brightness-level:
+    description:
+      The default brightness level (index into the array defined by the
+      "brightness-levels" property).
+    $ref: /schemas/types.yaml#/definitions/uint32
+
+dependencies:
+  default-brightness-level: [brightness-levels]
+
 required:
   - compatible
   - gpios
