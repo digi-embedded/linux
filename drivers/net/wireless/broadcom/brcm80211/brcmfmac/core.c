@@ -1367,6 +1367,7 @@ int brcmf_attach(struct device *dev, bool start_bus)
 		goto fail;
 	}
 
+	drvr->req_mpc = 1;
 	/* Attach and link in the protocol */
 	ret = brcmf_proto_attach(drvr);
 	if (ret != 0) {
