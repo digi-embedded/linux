@@ -107,6 +107,11 @@ static int stm32_rproc_pa_to_da(struct rproc *rproc, phys_addr_t pa, u64 *da)
 	struct stm32_rproc *ddata = rproc->priv;
 	struct stm32_rproc_mem *p_mem;
 
+	if (!ddata->rmems) {
+		*da = pa;
+		return 0;
+	}
+
 	for (i = 0; i < ddata->nb_rmems; i++) {
 		p_mem = &ddata->rmems[i];
 
@@ -164,9 +169,17 @@ static int stm32_rproc_of_memory_translations(struct platform_device *pdev,
 
 	cnt = of_property_count_elems_of_size(np, "dma-ranges",
 					      sizeof(*mem_range));
-	if (cnt <= 0) {
+	if (cnt < 0) {
 		dev_err(dev, "%s: dma-ranges property not defined\n", __func__);
 		return -EINVAL;
+	}
+
+	if (!cnt) {
+		/*  If dma-ranges is empty no memory translation requested. */
+		dev_dbg(dev, "no memory translation\n");
+		ddata->rmems = NULL;
+		ddata->nb_rmems = 0;
+		return 0;
 	}
 
 	p_mems = devm_kcalloc(dev, cnt, sizeof(*p_mems), GFP_KERNEL);
@@ -695,6 +708,12 @@ static int stm32_rproc_da_to_pa(struct rproc *rproc,
 	struct device *dev = rproc->dev.parent;
 	struct stm32_rproc_mem *p_mem;
 	unsigned int i;
+
+
+	if (!ddata->rmems) {
+		*pa = da;
+		return 0;
+	}
 
 	for (i = 0; i < ddata->nb_rmems; i++) {
 		p_mem = &ddata->rmems[i];
