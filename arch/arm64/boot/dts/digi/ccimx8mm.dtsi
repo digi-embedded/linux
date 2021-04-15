@@ -95,6 +95,7 @@
 				/* RAM         CMA*/
 				0 0x20000000 0 0x6000000	/* 512 MB variants -> 96 MB of CMA */
 				0 0x40000000 0 0x14000000	/* 1 GB variants   -> 320 MB of CMA */
+				0 0x80000000 0 0x28000000	/* 2 GB variants   -> 640 MB of CMA */
 			>;
 		};
 	};
