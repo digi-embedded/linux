@@ -22,6 +22,8 @@
 			reg = <0>;
 			clocks = <&scmi0_perf 0>;
 			clock-names = "cpu";
+			nvmem-cells = <&part_number_otp>;
+			nvmem-cell-names = "part_number";
 		};
 	};
 
@@ -1261,6 +1263,12 @@
 			};
 			ts_cal2: calib@5e {
 				reg = <0x5e 0x2>;
+			};
+			ethernet_mac1_address: mac1@e4 {
+				reg = <0xe4 0x6>;
+			};
+			ethernet_mac2_address: mac2@ea {
+				reg = <0xea 0x6>;
 			};
 		};
 
