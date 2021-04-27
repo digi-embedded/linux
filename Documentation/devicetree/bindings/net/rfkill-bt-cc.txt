@@ -1,0 +1,14 @@
+* RFKILL of Digi ConnectCore Devices (rfkill-bt-cc driver)
+
+Required properties:
+
+- compatible : Should comply with the format "rfkill-bt-cc"
+- vin-supply : Regulator for supplying voltage to Bluetooth chip
+
+Example:
+
+bluetooth {
+	compatible = "digi,rfkill-bt-cc";
+	vin-supply = <&reg_rf_bt_en>;
+	status = "okay";
+};
