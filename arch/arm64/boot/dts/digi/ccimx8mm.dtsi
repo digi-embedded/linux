@@ -180,8 +180,8 @@
 			digi,key-power-up;
 			digi,key-sleep;
 			digi,debounce-ms = <100>;
-			digi,pwroff-delay-sec = <6>;
-			digi,pwroff-guard-sec = <30>;
+			digi,pwroff-delay-sec = <3>;
+			digi,pwroff-guard-sec = <7>;
 		};
 
 		rtc {
