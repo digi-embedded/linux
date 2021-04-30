@@ -15,7 +15,9 @@ maintainers:
 
 properties:
   compatible:
-    const: st,stm32-rng
+    oneOf:
+            - const: st,stm32-rng
+            - const: st,stm32mp13-rng
 
   reg:
     maxItems: 1
