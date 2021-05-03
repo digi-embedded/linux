@@ -28,6 +28,7 @@
  * - 3V3_RF_EN signal is controlled by NAND_DQS pad (GPIO3_IO14).
  * - MCA_FW_UPDATE signal is controlled by GPIO1_IO04 pad.
  * - MCA_nINT signal is managed by NAND_DATA02 pad (GPIO3_IO8).
+ * - Wireless interface SDHC1 is supplied at 3V3 instead of 1V8.
  */
 / {
 	fragment@0 {
@@ -96,6 +97,14 @@
 			pinctrl-2 = <&pinctrl_usdhc2_200mhz>,
 				    <&pinctrl_usdhc2_gpio>,
 				    <&pinctrl_usdhc2_vsel_somv1_dvkv1>;
+		};
+	};
+
+	/* Wireless interface is supplied to 3V3 in somv1 */
+	fragment@7 {
+		target = <&usdhc1>;
+		__overlay__ {
+			no-1-8-v;
 		};
 	};
 };
