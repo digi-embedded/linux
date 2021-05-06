@@ -808,7 +808,8 @@ static const struct rproc_ops st_rproc_tee_ops = {
 };
 
 static const struct of_device_id stm32_rproc_match[] = {
-	{.compatible = "st,stm32mp1-m4",},
+	{.compatible = "st,stm32mp1-m4"},
+	{.compatible = "st,stm32mp2-m33"},
 	{},
 };
 MODULE_DEVICE_TABLE(of, stm32_rproc_match);
