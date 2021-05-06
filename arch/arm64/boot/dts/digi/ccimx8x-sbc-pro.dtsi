@@ -77,6 +77,7 @@
 	digi,machine,name = "ccimx8x-sbc-pro";
 
 	chosen {
+		bootargs = "console=ttyLP2,115200 earlycon";
 		stdout-path = &lpuart2;
 	};
 
