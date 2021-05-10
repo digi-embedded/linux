@@ -1238,6 +1238,9 @@ static int stm32_dfsdm_read_raw(struct iio_dev *indio_dev,
 	u32 max = flo->max << (flo->lshift - chan->scan_type.shift);
 	int ret, idx = chan->scan_index;
 
+	if (flo->lshift < chan->scan_type.shift)
+		max = flo->max >> (chan->scan_type.shift - flo->lshift);
+
 	switch (mask) {
 	case IIO_CHAN_INFO_RAW:
 		ret = iio_device_claim_direct_mode(indio_dev);
