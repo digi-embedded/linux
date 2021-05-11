@@ -40,10 +40,10 @@
 			compatible = "android,firmware";
 			/* default emmc node used for GSI */
 			boot_devices = "soc@0/soc@0:bus@30800000/30b60000.mmc";
-			/* EMMC card node which used if androidboot.boot_device_root=mmcblk1 */
-			boot_devices_mmcblk1 = "soc@0/soc@0:bus@30800000/30b60000.mmc";
-			/* SD node which used if androidboot.boot_device_root=mmcblk2 */
-			boot_devices_mmcblk2 = "soc@0/soc@0:bus@30800000/30b50000.mmc";
+			/* EMMC card node which used if androidboot.boot_device_root=mmcblk0 */
+			boot_devices_mmcblk0 = "soc@0/soc@0:bus@30800000/30b60000.mmc";
+			/* SD node which used if androidboot.boot_device_root=mmcblk1 */
+			boot_devices_mmcblk1 = "soc@0/soc@0:bus@30800000/30b50000.mmc";
 			fstab {
 				compatible = "android,fstab";
 				system {
