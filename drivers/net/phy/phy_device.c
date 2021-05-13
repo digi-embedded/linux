@@ -256,7 +256,7 @@ static bool mdio_bus_phy_may_suspend(struct phy_device *phydev)
 	 * So, in here, it shouldn't set phy to suspend by calling mdio bus.
  	 */
 	if (!netdev)
-		goto out;
+		return false;
 
 	if (netdev->wol_enabled)
 		return false;
@@ -276,7 +276,6 @@ static bool mdio_bus_phy_may_suspend(struct phy_device *phydev)
 	if (device_may_wakeup(&netdev->dev))
 		return false;
 
-out:
 	return !phydev->suspended;
 }
 
