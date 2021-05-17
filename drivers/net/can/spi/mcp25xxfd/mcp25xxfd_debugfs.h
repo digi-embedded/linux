@@ -19,7 +19,6 @@ void mcp25xxfd_debugfs_remove(struct mcp25xxfd_priv *priv);
 
 static inline void mcp25xxfd_debugfs_setup(struct mcp25xxfd_priv *priv)
 {
-	return 0;
 }
 
 static inline void mcp25xxfd_debugfs_remove(struct mcp25xxfd_priv *priv)

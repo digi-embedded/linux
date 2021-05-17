@@ -98,9 +98,11 @@ int mcp25xxfd_can_rx_submit_frame(struct mcp25xxfd_can_priv *cpriv, int fifo)
 	/* update stats */
 	net->stats.rx_packets++;
 	net->stats.rx_bytes += len;
+#ifdef CONFIG_DEBUG_FS
 	cpriv->fifos.rx.dlc_usage[dlc]++;
 	if (rx->flags & MCP25XXFD_CAN_OBJ_FLAGS_FDF)
 		MCP25XXFD_DEBUGFS_INCR(cpriv->fifos.rx.fd_count);
+#endif
 
 	/* add to rx_history */
 	cpriv->rx_history.dlc[cpriv->rx_history.index] = dlc;
@@ -149,7 +151,9 @@ static int mcp25xxfd_can_rx_read_frame(struct mcp25xxfd_can_priv *cpriv,
 
 	/* we read the header plus prefetch_bytes */
 	if (read) {
+#ifdef CONFIG_DEBUG_FS
 		cpriv->stats.rx_single_reads++;
+#endif
 		ret = mcp25xxfd_cmd_readn(spi, MCP25XXFD_SRAM_ADDR(addr),
 					  rx, sizeof(*rx) + prefetch_bytes);
 		if (ret)
@@ -184,8 +188,10 @@ static int mcp25xxfd_can_rx_read_frame(struct mcp25xxfd_can_priv *cpriv,
 			return ret;
 	}
 
+#ifdef CONFIG_DEBUG_FS
 	/* update stats */
 	cpriv->stats.rx_reads++;
+#endif
 	if (len < prefetch_bytes) {
 		MCP25XXFD_DEBUGFS_STATS_INCR(cpriv,
 					     rx_reads_prefetched_too_many);
@@ -220,12 +226,16 @@ static int mcp25xxfd_can_read_rx_frame_bulk(struct mcp25xxfd_can_priv *cpriv,
 	struct mcp25xxfd_can_obj_rx *rx =
 		(struct mcp25xxfd_can_obj_rx *)(cpriv->sram + addr);
 	int len = (sizeof(*rx) + ((net->mtu == CANFD_MTU) ? 64 : 8)) * count;
-	int fifo, i, ret;
+	int fifo, ret;
+
+#ifdef CONFIG_DEBUG_FS
+	int i;
 
 	/* update stats */
 	MCP25XXFD_DEBUGFS_STATS_INCR(cpriv, rx_bulk_reads);
 	i = min_t(int, MCP25XXFD_CAN_RX_BULK_READ_BINS - 1, count - 1);
 	MCP25XXFD_DEBUGFS_STATS_INCR(cpriv, rx_bulk_read_sizes[i]);
+#endif
 
 	/* we read the header plus read_min data bytes */
 	ret = mcp25xxfd_cmd_readn(cpriv->priv->spi, MCP25XXFD_SRAM_ADDR(addr),

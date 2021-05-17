@@ -8,10 +8,11 @@
 #ifndef __MCP25XXFD_CAN_DEBUGFS_H
 #define __MCP25XXFD_CAN_DEBUGFS_H
 
+#include "mcp25xxfd_can_priv.h"
+
 #ifdef CONFIG_DEBUG_FS
 
 #include <linux/debugfs.h>
-#include "mcp25xxfd_can_priv.h"
 
 #define MCP25XXFD_DEBUGFS_INCR(counter) ((counter)++)
 #define MCP25XXFD_DEBUGFS_ADD(counter, val) ((counter) += (val))
