@@ -122,6 +122,21 @@
 #define HLCR_WZL		BIT(1)
 #define HLCR_TACC_MASK		GENMASK(15, 8)
 
+#define SYSCFG_DLYBOS_CR		0
+#define DLYBOS_CR_EN			BIT(0)
+#define DLYBOS_CR_RXTAPSEL_SHIFT	1
+#define DLYBOS_CR_RXTAPSEL_MASK		GENMASK(6, 1)
+#define DLYBOS_CR_TXTAPSEL_SHIFT	7
+#define DLYBOS_CR_TXTAPSEL_MASK		GENMASK(12, 7)
+#define DLYBOS_TAPSEL_NB		33
+#define DLYBOS_BYP_EN			BIT(16)
+#define DLYBOS_BYP_CMD_MASK		GENMASK(21, 17)
+
+#define SYSCFG_DLYBOS_SR	4
+#define DLYBOS_SR_LOCK		BIT(0)
+#define DLYBOS_SR_RXTAPSEL_ACK	BIT(1)
+#define DLYBOS_SR_TXTAPSEL_ACK	BIT(2)
+
 #define STM32_OMI_MAX_MMAP_SZ	SZ_256M
 #define STM32_OMI_MAX_NORCHIP	2
 
@@ -129,6 +144,9 @@
 #define STM32_ABT_TIMEOUT_US		100000
 #define STM32_COMP_TIMEOUT_MS		5000
 #define STM32_BUSY_TIMEOUT_US		100000
+#define STM32_DLYB_FREQ_THRESHOLD	50000000
+#define STM32_DLYBOS_TIMEOUT_MS		1000
+#define STM32_DLYBOS_DELAY_NB		24
 
 struct stm32_omi {
 	struct device *dev;
@@ -150,10 +168,25 @@ struct stm32_omi {
 	resource_size_t mm_size;
 	u32 clk_rate;
 	u32 fmode;
+	u32 dlyb_base;
 	int irq;
+	bool calibration;
+
+	int (*check_transfer)(struct stm32_omi *omi);
+};
+
+struct stm32_tap_window {
+	u8 end;
+	u8 length;
 };
 
 int stm32_omi_abort(struct stm32_omi *omi);
+int stm32_omi_dlyb_init(struct stm32_omi *omi, bool bypass_mode,
+			u16 period_ps);
+int stm32_omi_dlyb_find_tap(struct stm32_omi *omi, bool rx_only);
+int stm32_omi_dlyb_restore(struct stm32_omi *omi, u32 dlyb_cr);
+void stm32_omi_dlyb_save(struct stm32_omi *omi, u32 *dlyb_cr);
+void stm32_omi_dlyb_stop(struct stm32_omi *omi);
 void stm32_omi_dma_callback(void *arg);
 void stm32_omi_dma_free(struct stm32_omi *omi);
 int stm32_omi_dma_setup(struct stm32_omi *omi, struct device *dev,
