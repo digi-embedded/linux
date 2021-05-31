@@ -2,15 +2,17 @@
 /*
  * STM32 Factory-programmed memory read access driver
  *
- * Copyright (C) 2017, STMicroelectronics - All Rights Reserved
+ * Copyright (C) 2017-2021, STMicroelectronics - All Rights Reserved
  * Author: Fabrice Gasnier <fabrice.gasnier@st.com> for STMicroelectronics.
  */
 
 #include <linux/arm-smccc.h>
+#include <linux/clk.h>
 #include <linux/io.h>
 #include <linux/module.h>
 #include <linux/nvmem-provider.h>
 #include <linux/of_device.h>
+#include <linux/pm_runtime.h>
 
 /* BSEC secure service access from non-secure */
 #define STM32_SMC_BSEC			0x82001003
@@ -25,6 +27,8 @@
 /* 32 (x 32-bits) lower shadow registers */
 #define STM32MP15_BSEC_NUM_LOWER	32
 
+#define STM32_ROMEM_AUTOSUSPEND_DELAY_MS	50
+
 struct stm32_romem_cfg {
 	int size;
 };
@@ -32,17 +36,26 @@ struct stm32_romem_cfg {
 struct stm32_romem_priv {
 	void __iomem *base;
 	struct nvmem_config cfg;
+	struct clk *clk;
 };
 
 static int stm32_romem_read(void *context, unsigned int offset, void *buf,
 			    size_t bytes)
 {
 	struct stm32_romem_priv *priv = context;
+	struct device *dev = priv->cfg.dev;
 	u8 *buf8 = buf;
-	int i;
+	int i, ret;
+
+	ret = pm_runtime_resume_and_get(dev);
+	if (ret < 0)
+		return ret;
 
 	for (i = offset; i < offset + bytes; i++)
 		*buf8++ = readb_relaxed(priv->base + i);
+
+	pm_runtime_mark_last_busy(dev);
+	pm_runtime_put_autosuspend(dev);
 
 	return 0;
 }
@@ -74,13 +87,19 @@ static int stm32_bsec_read(void *context, unsigned int offset, void *buf,
 	u8 *buf8 = buf, *val8 = (u8 *)&val;
 	int i, j = 0, ret, skip_bytes, size;
 
+	ret = pm_runtime_resume_and_get(dev);
+	if (ret < 0)
+		return ret;
+
 	/* Round unaligned access to 32-bits */
 	roffset = rounddown(offset, 4);
 	skip_bytes = offset & 0x3;
 	rbytes = roundup(bytes + skip_bytes, 4);
 
-	if (roffset + rbytes > priv->cfg.size)
-		return -EINVAL;
+	if (roffset + rbytes > priv->cfg.size) {
+		ret = -EINVAL;
+		goto end_read;
+	}
 
 	for (i = roffset; (i < roffset + rbytes); i += 4) {
 		u32 otp = i >> 2;
@@ -95,7 +114,7 @@ static int stm32_bsec_read(void *context, unsigned int offset, void *buf,
 			if (ret) {
 				dev_err(dev, "Can't read data%d (%d)\n", otp,
 					ret);
-				return ret;
+				goto end_read;
 			}
 		}
 		/* skip first bytes in case of unaligned read */
@@ -109,7 +128,11 @@ static int stm32_bsec_read(void *context, unsigned int offset, void *buf,
 		skip_bytes = 0;
 	}
 
-	return 0;
+end_read:
+	pm_runtime_mark_last_busy(dev);
+	pm_runtime_put_autosuspend(dev);
+
+	return ret;
 }
 
 static int stm32_bsec_write(void *context, unsigned int offset, void *buf,
@@ -120,20 +143,30 @@ static int stm32_bsec_write(void *context, unsigned int offset, void *buf,
 	u32 *buf32 = buf;
 	int ret, i;
 
+	ret = pm_runtime_resume_and_get(dev);
+	if (ret < 0)
+		return ret;
+
 	/* Allow only writing complete 32-bits aligned words */
-	if ((bytes % 4) || (offset % 4))
-		return -EINVAL;
+	if ((bytes % 4) || (offset % 4)) {
+		ret = -EINVAL;
+		goto end_write;
+	}
 
 	for (i = offset; i < offset + bytes; i += 4) {
 		ret = stm32_bsec_smc(STM32_SMC_PROG_OTP, i >> 2, *buf32++,
 				     NULL);
 		if (ret) {
 			dev_err(dev, "Can't write data%d (%d)\n", i >> 2, ret);
-			return ret;
+			goto end_write;
 		}
 	}
 
-	return 0;
+end_write:
+	pm_runtime_mark_last_busy(dev);
+	pm_runtime_put_autosuspend(dev);
+
+	return ret;
 }
 
 static int stm32_romem_probe(struct platform_device *pdev)
@@ -142,6 +175,8 @@ static int stm32_romem_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct stm32_romem_priv *priv;
 	struct resource *res;
+	struct nvmem_device *nvmem;
+	int ret;
 
 	priv = devm_kzalloc(dev, sizeof(*priv), GFP_KERNEL);
 	if (!priv)
@@ -159,6 +194,27 @@ static int stm32_romem_probe(struct platform_device *pdev)
 	priv->cfg.priv = priv;
 	priv->cfg.owner = THIS_MODULE;
 
+	priv->clk = devm_clk_get_optional(&pdev->dev, NULL);
+	if (IS_ERR(priv->clk))
+		return dev_err_probe(dev, PTR_ERR(priv->clk),
+				     "failed to get clock\n");
+
+	if (priv->clk) {
+		ret = clk_prepare_enable(priv->clk);
+		if (ret) {
+			dev_err(dev, "failed to enable clock (%d)\n", ret);
+			return ret;
+		}
+	}
+
+	pm_runtime_set_autosuspend_delay(dev,
+					 STM32_ROMEM_AUTOSUSPEND_DELAY_MS);
+	pm_runtime_use_autosuspend(dev);
+
+	pm_runtime_get_noresume(dev);
+	pm_runtime_set_active(dev);
+	pm_runtime_enable(dev);
+
 	cfg = (const struct stm32_romem_cfg *)
 		of_match_device(dev->driver->of_match_table, dev)->data;
 	if (!cfg) {
@@ -171,8 +227,94 @@ static int stm32_romem_probe(struct platform_device *pdev)
 		priv->cfg.reg_write = stm32_bsec_write;
 	}
 
-	return PTR_ERR_OR_ZERO(devm_nvmem_register(dev, &priv->cfg));
+	platform_set_drvdata(pdev, priv);
+
+	nvmem = nvmem_register(&priv->cfg);
+	if (IS_ERR(nvmem))
+		goto err_pm_stop;
+
+	pm_runtime_mark_last_busy(dev);
+	pm_runtime_put_autosuspend(dev);
+
+	return 0;
+
+err_pm_stop:
+	pm_runtime_disable(dev);
+	pm_runtime_set_suspended(dev);
+	pm_runtime_put_noidle(dev);
+
+	if (priv->clk)
+		clk_disable_unprepare(priv->clk);
+
+	return PTR_ERR(nvmem);
 }
+
+static int stm32_romem_remove(struct platform_device *pdev)
+{
+	struct stm32_romem_priv *priv;
+	int ret;
+
+	priv = dev_get_drvdata(&pdev->dev);
+	if (!priv)
+		return -ENODEV;
+
+	ret = pm_runtime_get_sync(&pdev->dev);
+	if (ret < 0)
+		return ret;
+
+	nvmem_unregister((struct nvmem_device *)&priv->cfg);
+
+	pm_runtime_disable(&pdev->dev);
+	pm_runtime_set_suspended(&pdev->dev);
+	pm_runtime_put_noidle(&pdev->dev);
+
+	if (priv->clk)
+		clk_disable_unprepare(priv->clk);
+
+	return 0;
+}
+
+static int __maybe_unused stm32_romem_runtime_suspend(struct device *dev)
+{
+	struct stm32_romem_priv *priv;
+
+	priv = dev_get_drvdata(dev);
+	if (!priv)
+		return -ENODEV;
+
+	if (priv->clk)
+		clk_disable_unprepare(priv->clk);
+
+	return 0;
+}
+
+static int __maybe_unused stm32_romem_runtime_resume(struct device *dev)
+{
+	struct stm32_romem_priv *priv;
+	int ret;
+
+	priv = dev_get_drvdata(dev);
+	if (!priv)
+		return -ENODEV;
+
+	if (priv->clk) {
+		ret = clk_prepare_enable(priv->clk);
+		if (ret) {
+			dev_err(priv->cfg.dev,
+				"Failed to prepare_enable clock (%d)\n", ret);
+			return ret;
+		}
+	}
+
+	return 0;
+}
+
+static const struct dev_pm_ops stm32_romem_pm_ops = {
+	SET_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend,
+				pm_runtime_force_resume)
+	SET_RUNTIME_PM_OPS(stm32_romem_runtime_suspend,
+			   stm32_romem_runtime_resume, NULL)
+};
 
 static const struct stm32_romem_cfg stm32mp15_bsec_cfg = {
 	.size = 384, /* 96 x 32-bits data words */
@@ -189,8 +331,10 @@ MODULE_DEVICE_TABLE(of, stm32_romem_of_match);
 
 static struct platform_driver stm32_romem_driver = {
 	.probe = stm32_romem_probe,
+	.remove = stm32_romem_remove,
 	.driver = {
 		.name = "stm32-romem",
+		.pm = &stm32_romem_pm_ops,
 		.of_match_table = of_match_ptr(stm32_romem_of_match),
 	},
 };
