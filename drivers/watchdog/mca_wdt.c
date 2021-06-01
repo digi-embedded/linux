@@ -187,6 +187,10 @@ err:
 
 static irqreturn_t mca_wdt_timeout_event(int irq, void *data)
 {
+	struct mca_wdt *wdt = (struct mca_wdt *)data;
+
+	dev_info(wdt->mca->dev, "mca_wdt_timeout_event (%d)\n", irq);
+
 	return IRQ_HANDLED;
 }
 
@@ -294,7 +298,8 @@ static int mca_wdt_probe(struct platform_device *pdev)
 							   MCA_IRQ_WATCHDOG_NAME);
 		ret = devm_request_threaded_irq(&pdev->dev, wdt->irq_timeout,
 						NULL, mca_wdt_timeout_event,
-						IRQF_TRIGGER_LOW | IRQF_ONESHOT,
+						IRQF_TRIGGER_LOW | IRQF_ONESHOT |
+						IRQF_SHARED,
 						MCA_IRQ_WATCHDOG_NAME, wdt);
 		if (ret) {
 			dev_err(&pdev->dev,
