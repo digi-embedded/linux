@@ -164,6 +164,27 @@
 			digi,full-reset;
 		};
 
+		gpio_wdt: gpio-wdt {
+			compatible = "digi,mca-cc8m-gpio-wdt";
+			status = "disabled";
+
+			gpio_wdt0: gpio-wdt@0x210 {
+				status = "disabled";
+			};
+
+			gpio_wdt1: gpio-wdt@0x220 {
+				status = "disabled";
+			};
+
+			gpio_wdt2: gpio-wdt@0x230 {
+				status = "disabled";
+			};
+
+			gpio_wdt3: gpio-wdt@0x240 {
+				status = "disabled";
+			};
+		};
+
 		pwms {
 			compatible = "digi,mca-pwm";
 			#address-cells = <1>;

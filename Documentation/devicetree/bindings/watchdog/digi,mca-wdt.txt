@@ -1,4 +1,4 @@
-* Digi Watchdog Timer for MCA of ConnectCore SOMs
+* Digi MCA Watchdog timer (software-refreshed) for ConnectCore SOMs
 
 Required properties:
 - compatible: must be one of

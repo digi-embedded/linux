@@ -254,12 +254,20 @@ config MENZ069_WATCHDOG
 	  will be called menz069_wdt.
 
 config MCA_WATCHDOG
-	tristate "Digi ConnectCore SOMs Micro Controller Assist Watchdog"
+	tristate "Digi ConnectCore SOMs Micro Controller Assist software-refreshed Watchdog"
 	select WATCHDOG_CORE
 	select MFD_MCA_CC6UL if SOC_IMX6UL
 	select MFD_MCA_CC8 if (ARCH_MXC && ARM64)
 	help
-	  If you say yes here you will get support for the watchdog in the Micro Controller Assist of Digi ConnectCore system-on-modules.
+	  If you say yes here you will get support for the software-refreshed watchdog in the Micro Controller Assist of Digi ConnectCore system-on-modules.
+
+config MCA_GPIO_WATCHDOG
+	tristate "Digi ConnectCore SOMs Micro Controller Assist GPIO-refreshed Watchdog"
+	select WATCHDOG_CORE
+	select MFD_MCA_CC6UL if SOC_IMX6UL
+	select MFD_MCA_CC8 if (ARCH_MXC && ARM64)
+	help
+	  If you say yes here you will get support for the GPIO-refreshed watchdog in the Micro Controller Assist of Digi ConnectCore system-on-modules.
 
 config TANGOX_WATCHDOG
 	tristate "Sigma Designs SMP86xx/SMP87xx watchdog"
