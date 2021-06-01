@@ -258,6 +258,12 @@ static const struct mfd_cell mca_cc8x_devs[] = {
 		.of_compatible  = "digi,mca-cc8x-wdt",
 	},
 	{
+		.name           = MCA_CC8X_DRVNAME_GPIO_WATCHDOG,
+		.num_resources	= ARRAY_SIZE(mca_cc8_watchdog_resources),
+		.resources	= mca_cc8_watchdog_resources,
+		.of_compatible  = "digi,mca-cc8x-gpio-wdt",
+	},
+	{
 		.name           = MCA_CC8X_DRVNAME_GPIO,
 		.num_resources	= ARRAY_SIZE(mca_cc8_gpios_resources),
 		.resources	= mca_cc8_gpios_resources,
@@ -315,6 +321,12 @@ static const struct mfd_cell mca_cc8m_devs[] = {
 		.num_resources	= ARRAY_SIZE(mca_cc8_watchdog_resources),
 		.resources	= mca_cc8_watchdog_resources,
 		.of_compatible  = "digi,mca-cc8m-wdt",
+	},
+	{
+		.name           = MCA_CC8M_DRVNAME_GPIO_WATCHDOG,
+		.num_resources	= ARRAY_SIZE(mca_cc8_watchdog_resources),
+		.resources	= mca_cc8_watchdog_resources,
+		.of_compatible  = "digi,mca-cc8m-gpio-wdt",
 	},
 	{
 		.name           = MCA_CC8M_DRVNAME_GPIO,
