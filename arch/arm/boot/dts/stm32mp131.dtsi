@@ -1415,11 +1415,13 @@
 			clock-names = "stmmaceth",
 				      "mac-clk-tx",
 				      "mac-clk-rx",
-				      "ethstp";
+				      "ethstp",
+				      "eth-ck";
 			clocks = <&rcc ETH1MAC>,
 				 <&rcc ETH1TX>,
 				 <&rcc ETH1RX>,
-				 <&rcc ETH1STP>;
+				 <&rcc ETH1STP>,
+				 <&rcc ETH1CK_K>;
 			st,syscon = <&syscfg 0x4 0xff0000>;
 			snps,mixed-burst;
 			snps,pbl = <2>;
