@@ -571,6 +571,32 @@
 	status = "okay";
 };
 
+&gpio_wdt {
+	status = "okay";
+};
+
+/* Configure properties and change status to okay */
+&gpio_wdt0 {
+	full-reset;
+	no-way-out;
+	/* mode; one of: toggle, level-high, level-low */
+	mode = "level-high";
+	mca-io-number = <10>;
+	timeout-sec = <2>;
+	status = "disabled";
+};
+
+/* Configure properties and change status to okay */
+&gpio_wdt1 {
+	full-reset;
+	no-way-out;
+	/* mode; one of: toggle, level-high, level-low */
+	mode = "toggle";
+	mca-io-number = <16>;
+	timeout-sec = <1>;
+	status = "disabled";
+};
+
 /* Power LED on MCA_IO13 */
 &mca_led {
 	#address-cells = <1>;
