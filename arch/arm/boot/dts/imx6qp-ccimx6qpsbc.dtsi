@@ -119,6 +119,20 @@
 		status = "disabled";
 	};
 
+	reg_3v3_pcie: fixedregulator@1 {
+		compatible = "regulator-fixed";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_pcie_reg>;
+		regulator-name = "PCIe_VCC";
+		regulator-always-on;
+		startup-delay-us = <100000>;
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		gpio = <&gpio6 10 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		status = "okay";
+	};
+
 	sound_sgtl5000: sound-sgtl5000 {
 		compatible = "fsl,imx-audio-sgtl5000";
 		model = "sgtl5000-audio";
@@ -687,13 +701,18 @@
 		};
 	};
 
+	pinctrl_pcie_reg: pciereggrp {
+		fsl,pins = <
+			MX6QDL_PAD_NANDF_RB0__GPIO6_IO10 0x80000000
+		>;
+	};
+
 	pcie {
 		pinctrl_pcie: pcie {
 			fsl,pins = <
 				MX6QDL_PAD_SD3_DAT3__GPIO7_IO07 0x80000000
 				MX6QDL_PAD_GPIO_4__GPIO1_IO04   0x80000000
 				MX6QDL_PAD_SD3_RST__GPIO7_IO08 0x80000000
-				MX6QDL_PAD_NANDF_RB0__GPIO6_IO10 0x80000000
 			>;
 		};
 	};
@@ -960,9 +979,8 @@
 	reset-gpio = <&gpio7 8 GPIO_ACTIVE_HIGH>;
 	wake-up-gpio = <&gpio7 7 GPIO_ACTIVE_HIGH>;
 	disable-gpio = <&gpio1 4 GPIO_ACTIVE_HIGH>;
-	power-on-gpio = <&gpio6 10 GPIO_ACTIVE_HIGH>;
-	power-on-delay-ms = <10>;
-	vin-supply = <&ldo6>;
+	vpcie-supply = <&reg_3v3_pcie>;
+	status = "okay";
 };
 
 &pwm1 {
