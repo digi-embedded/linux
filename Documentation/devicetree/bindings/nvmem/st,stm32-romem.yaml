@@ -24,6 +24,12 @@ properties:
       - st,stm32f4-otp
       - st,stm32mp15-bsec
 
+  clocks:
+    maxItems: 1
+    description: |
+      - It's not present on stm32f4.
+      - It's optional on stm32mp15.
+
 patternProperties:
   "^.*@[0-9a-f]+$":
     type: object
