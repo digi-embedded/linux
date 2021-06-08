@@ -20,7 +20,7 @@
 	fragment@0 {
 		target-path = "/";
 		__overlay__ {
-			overlay-description = "DVK: MCA GPIO Watchdog";
+			overlay-description = "SBC: MCA GPIO Watchdog";
 		};
 	};
 
