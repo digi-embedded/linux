@@ -30,14 +30,18 @@
  */
 #define GASKET_SYSFS_MAX_NODES 196
 
+/* End markers for sysfs struct arrays. */
+#define GASKET_ARRAY_END_TOKEN GASKET_RESERVED_ARRAY_END
+#define GASKET_ARRAY_END_MARKER __stringify(GASKET_ARRAY_END_TOKEN)
+
 /*
  * Terminator struct for a gasket_sysfs_attr array. Must be at the end of
  * all gasket_sysfs_attribute arrays.
  */
 #define GASKET_END_OF_ATTR_ARRAY                                               \
 	{                                                                      \
-		.attr = __ATTR_NULL,				\
-		.data.attr_type = 0,				\
+		.attr = __ATTR(GASKET_ARRAY_END_TOKEN, S_IRUGO, NULL, NULL),   \
+		.data.attr_type = 0,                                           \
 	}
 
 /*
@@ -72,6 +76,13 @@ struct gasket_sysfs_attribute {
 #define GASKET_SYSFS_RO(_name, _show_function, _attr_type)                     \
 	{                                                                      \
 		.attr = __ATTR(_name, S_IRUGO, _show_function, NULL),          \
+		.data.attr_type = _attr_type                                   \
+	}
+
+#define GASKET_SYSFS_RW(_name, _show_function, _store_function, _attr_type)    \
+	{                                                                      \
+		.attr = __ATTR(_name, S_IWUSR | S_IWGRP | S_IRUGO,             \
+				_show_function, _store_function),              \
 		.data.attr_type = _attr_type                                   \
 	}
 
