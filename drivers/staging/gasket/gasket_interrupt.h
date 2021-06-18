@@ -46,6 +46,19 @@ void gasket_interrupt_cleanup(struct gasket_dev *gasket_dev);
 int gasket_interrupt_reinit(struct gasket_dev *gasket_dev);
 
 /*
+ * Clean up the MSI-x subsystem.
+ * @interrupt_data: The interrupt data structure for this device.
+ *
+ * Performs a teardown of the MSI-x subsystem. Does not free the underlying data structures.
+ */
+void gasket_interrupt_msix_cleanup(struct gasket_interrupt_data *interrupt_data);
+
+/* Handle gasket interrupt processing, called from an external handler. */
+void
+gasket_handle_interrupt(struct gasket_interrupt_data *interrupt_data,
+			int interrupt_index);
+
+/*
  * Reset the counts stored in the interrupt subsystem.
  * @gasket_dev: The Gasket information structure for this device.
  *
