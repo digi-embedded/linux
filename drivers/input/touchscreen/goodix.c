@@ -1213,6 +1213,23 @@ reset:
 			dev_err(&client->dev, "Controller reset failed.\n");
 			return error;
 		}
+	} else {
+		/* reset the controller */
+		if (ts->gpiod_rst) {
+			error = gpiod_direction_output(ts->gpiod_rst, 1);
+			if (error) {
+				dev_err(&client->dev, "Gpio reset failed.\n");
+				return error;
+			}
+
+			msleep(20);
+
+			error = gpiod_direction_output(ts->gpiod_rst, 0);
+			if (error) {
+				dev_err(&client->dev, "Gpio unreset failed.\n");
+				return error;
+			}
+		}
 	}
 
 	error = goodix_i2c_test(client);
