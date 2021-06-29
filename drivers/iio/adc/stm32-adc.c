@@ -546,6 +546,9 @@ static const struct stm32_adc_regspec stm32mp13_adc_regspec = {
 		       STM32MP13_CALFACT_D_SHIFT },
 	.smpr = { STM32H7_ADC_SMPR1, STM32H7_ADC_SMPR2 },
 	.smp_bits = stm32h7_smp_bits,
+	.or_vdd = { STM32MP13_ADC2_OR, STM32MP13_VDDCOREEN },
+	.ccr_vbat = { STM32H7_ADC_CCR, STM32H7_VBATEN },
+	.ccr_vref = { STM32H7_ADC_CCR, STM32H7_VREFEN },
 };
 
 static const struct stm32_adc_regspec stm32mp1_adc_regspec = {

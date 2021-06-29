@@ -105,6 +105,9 @@
 /* STM32MP1 - ADC2 instance option register */
 #define STM32MP1_ADC2_OR		0xD0
 
+/* STM32MP13 - ADC2 instance option register */
+#define STM32MP13_ADC2_OR		0xC8
+
 /* STM32H7 - common registers for all ADC instances */
 #define STM32H7_ADC_CSR			(STM32_ADCX_COMN_OFFSET + 0x00)
 #define STM32H7_ADC_CCR			(STM32_ADCX_COMN_OFFSET + 0x08)
@@ -209,6 +212,9 @@ enum stm32h7_adc_dmngt {
 #define STM32MP13_CALFACT_D_MASK	GENMASK(22, 16)
 #define STM32MP13_CALFACT_S_SHIFT	0
 #define STM32MP13_CALFACT_S_MASK	GENMASK(6, 0)
+
+/* STM32MP13_ADC2_OR - bit fields */
+#define STM32MP13_VDDCOREEN		BIT(0)
 
 /* STM32MP13_ADC_HWCFGR0 - bit fields */
 #define STM32MP13_ADCNUM_SHIFT		0
