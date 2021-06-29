@@ -1050,6 +1050,25 @@ static int __maybe_unused goodix_suspend(struct device *dev)
 		}
 	}
 
+
+	/*
+	 * The Goodix touch controller sets its I2C address based on the level of
+	 * the INT and RESET signals when the chip is powered. The RESET line is
+	 * not present on the Digi LVDS connector so the touch sometimes probes
+	 * at address 0x14 and sometimes at 0x5d. When resuming from suspend, INT
+	 * line is always high, so the chip probes at address 0x14.
+	 * This is problematic if the chip probed at 0x5d during power-up.
+	 * To work around the problem, set the INT line high or low before
+	 * suspending, according to the current address.
+	 */
+	if (client->addr == 0x5D)
+		error = gpiod_direction_output(ts->gpiod_int, 0);
+	else
+		error = gpiod_direction_output(ts->gpiod_int, 1);
+
+	if (error)
+		return error;
+
 	return 0;
 }
 
