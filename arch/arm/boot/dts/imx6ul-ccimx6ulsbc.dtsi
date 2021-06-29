@@ -27,30 +27,13 @@
 		status = "disabled";
 	};
 
-	regulators {
-		compatible = "simple-bus";
-		#address-cells = <1>;
-		#size-cells = <0>;
-
-		reg_display_5v: reg_display@0 {
-			reg = <0>;
-			compatible = "regulator-fixed";
-			regulator-name = "display_5v";
-			regulator-min-microvolt = <5000000>;
-			regulator-max-microvolt = <5000000>;
-			gpio = <&mca_ioexp_gpio 29 GPIO_ACTIVE_HIGH>;
-			enable-active-high;
-		};
-
-		reg_usb_otg1_vbus: reg_usb_otg1@1 {
-			reg = <1>;
-			compatible = "regulator-fixed";
-			regulator-name = "usb_otg1_vbus";
-			regulator-min-microvolt = <5000000>;
-			regulator-max-microvolt = <5000000>;
-			gpio = <&gpio1 4 GPIO_ACTIVE_HIGH>;
-			enable-active-high;
-		};
+	reg_usb_otg1_vbus: reg_usb_otg1@0 {
+		compatible = "regulator-fixed";
+		regulator-name = "usb_otg1_vbus";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		gpio = <&gpio1 4 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
 	};
 
 	sound_max98089: sound-max98089 {
@@ -190,6 +173,7 @@
 		interrupt-parent = <&gpio5>;
 		interrupts = <2 IRQ_TYPE_EDGE_RISING>;
 		irq-gpios = <&gpio5 2 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&mca_ioexp_gpio 29 GPIO_ACTIVE_HIGH>;
 		skip-firmware-request;
 		reload-fw-on-resume;
 		status = "disabled";
@@ -274,8 +258,7 @@
 	pinctrl-0 = <&pinctrl_lcdif_dat0_17
 		     &pinctrl_lcdif_clken
 		     &pinctrl_lcdif_hvsync>;
-	lcd-supply = <&reg_display_5v>;
-	aux-supply = <&ldo4_ext>;       /* BU90T82 LVDS bridge power */
+	lcd-supply = <&ldo4_ext>;       /* BU90T82 LVDS bridge power */
 	display = <&g101evn010>;
 	status = "disabled";
 
