@@ -12,6 +12,7 @@
 #include <linux/iopoll.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/of_irq.h>
 #include <linux/of_platform.h>
 #include <linux/phy/phy.h>
 #include <linux/reset.h>
@@ -136,6 +137,7 @@ struct stm32_usbphyc_phy {
 	struct phy *phy;
 	struct stm32_usbphyc *usbphyc;
 	struct regulator *vbus;
+	int wakeirq;
 	u32 index;
 	bool active;
 	u32 tune;
@@ -376,6 +378,12 @@ static int stm32_usbphyc_phy_exit(struct phy *phy)
 static int stm32_usbphyc_phy_power_on(struct phy *phy)
 {
 	struct stm32_usbphyc_phy *usbphyc_phy = phy_get_drvdata(phy);
+	struct stm32_usbphyc *usbphyc = usbphyc_phy->usbphyc;
+
+	if (usbphyc_phy->wakeirq > 0)
+		if (enable_irq_wake(usbphyc_phy->wakeirq))
+			dev_warn(usbphyc->dev,
+				 "Wake irq for phy%d not enabled\n", usbphyc_phy->index);
 
 	if (usbphyc_phy->vbus)
 		return regulator_enable(usbphyc_phy->vbus);
@@ -386,6 +394,12 @@ static int stm32_usbphyc_phy_power_on(struct phy *phy)
 static int stm32_usbphyc_phy_power_off(struct phy *phy)
 {
 	struct stm32_usbphyc_phy *usbphyc_phy = phy_get_drvdata(phy);
+	struct stm32_usbphyc *usbphyc = usbphyc_phy->usbphyc;
+
+	if (usbphyc_phy->wakeirq > 0)
+		if (disable_irq_wake(usbphyc_phy->wakeirq))
+			dev_warn(usbphyc->dev,
+				 "Wake irq for phy%d not disabled\n", usbphyc_phy->index);
 
 	if (usbphyc_phy->vbus)
 		return regulator_disable(usbphyc_phy->vbus);
@@ -731,6 +745,12 @@ static int stm32_usbphyc_probe(struct platform_device *pdev)
 				goto put_child;
 			usbphyc->phys[port]->vbus = NULL;
 		}
+
+		/* Get optional wakeup interrupt */
+		ret = of_irq_get(child, 0);
+		if (ret == -EPROBE_DEFER)
+			goto put_child;
+		usbphyc->phys[port]->wakeirq = ret;
 
 		/* Configure phy tuning */
 		stm32_usbphyc_phy_tuning(usbphyc, child, index);
