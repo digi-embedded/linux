@@ -506,6 +506,15 @@
 	st,enable-hs-rx-gain-eq;
 	st,no-hs-ftime-ctrl;
 	st,no-lsfs-sc;
+
+	/*
+	 * Hack to keep hub active if wakeup source is enabled
+	 * otherwise the hub will wakeup the port0 as soon as the v3v3_sw is disabled
+	 */
+	connector {
+		compatible = "usb-a-connector";
+		vbus-supply = <&scmi_v3v3_sw>;
+	};
 };
 
 &usbphyc_port1 {
