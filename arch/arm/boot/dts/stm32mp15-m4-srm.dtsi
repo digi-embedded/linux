@@ -177,7 +177,7 @@
 			reg = <0x40016000 0x400>;
 			interrupt-parent = <&exti>;
 			interrupts = <69 1>;
-			clocks = <&rcc CEC_K>, <&scmi0_clk CK_SCMI0_LSE>;
+			clocks = <&rcc CEC_K>, <&rcc CEC>;
 			clock-names = "cec", "hdmi-cec";
 			status = "disabled";
 		};
