@@ -742,7 +742,7 @@ static void mca_cc6ul_power_off(void)
 }
 
 #define MCA_MAX_RESET_TRIES 5
-static void mca_cc6ul_shutdown(void)
+static void mca_cc6ul_reset(void)
 {
 	const uint8_t unlock_pattern[] = {'C', 'T', 'R', 'U'};
 	int ret, try = 0;
@@ -779,6 +779,22 @@ reset_retry:
 	} while (++try < MCA_MAX_RESET_TRIES);
 
 	dev_err(pmca->dev, "failed to reboot!\n");
+}
+
+static void mca_cc6ul_shutdown(void)
+{
+	switch (system_state) {
+	case SYSTEM_HALT:
+		/* fall through on purpose */
+	case SYSTEM_POWER_OFF:
+		mca_cc6ul_power_off();
+		break;
+	case SYSTEM_RESTART:
+		mca_cc6ul_reset();
+		break;
+	default:
+		break;
+	}
 }
 
 static int mca_cc6ul_add_dyn_sysfs_entries(struct mca_drv *mca,
