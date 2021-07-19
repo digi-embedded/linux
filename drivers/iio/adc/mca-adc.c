@@ -69,8 +69,12 @@ int mca_adc_read_raw(struct iio_dev *indio_dev,
 	case IIO_CHAN_INFO_RAW:
 		ret = regmap_bulk_read(adc->regmap, val_reg, &val, sizeof(val));
 		if (ret < 0) {
-			dev_err(adc->dev, "Error reading ADC%d value (%d)\n",
-				channel->channel, ret);
+			if (ret == -EAGAIN)
+				dev_warn(adc->dev, "EAGAIN reading ADC%d value\n",
+					channel->channel);
+			else
+				dev_err(adc->dev, "Error reading ADC%d value (%d)\n",
+					channel->channel, ret);
 			return ret;
 		}
 
