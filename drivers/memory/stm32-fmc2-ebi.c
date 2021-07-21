@@ -19,8 +19,14 @@
 #define FMC2_BTR(x)			((x) * 0x8 + FMC2_BTR1)
 #define FMC2_PCSCNTR			0x20
 #define FMC2_CFGR			0x20
+#define FMC2_SR				0x84
 #define FMC2_BWTR1			0x104
 #define FMC2_BWTR(x)			((x) * 0x8 + FMC2_BWTR1)
+#define FMC2_SECCFGR			0x300
+#define FMC2_CIDCFGR0			0x30c
+#define FMC2_CIDCFGR(x)			((x) * 0x8 + FMC2_CIDCFGR0)
+#define FMC2_SEMCR0			0x310
+#define FMC2_SEMCR(x)			((x) * 0x8 + FMC2_SEMCR0)
 #define FMC2_VERR			0x3f4
 
 /* Register: FMC2_BCR1 */
@@ -64,12 +70,27 @@
 #define FMC2_CFGR_CCLKEN		BIT(20)
 #define FMC2_CFGR_FMC2EN		BIT(31)
 
+/* Register: FMC2_SR */
+#define FMC2_SR_ISOST			GENMASK(1, 0)
+
+/* Register: FMC2_CIDCFGR */
+#define FMC2_CIDCFGR_CFEN		BIT(0)
+#define FMC2_CIDCFGR_SEMEN		BIT(1)
+#define FMC2_CIDCFGR_SCID		GENMASK(6, 4)
+#define FMC2_CIDCFGR_SEMWLC1		BIT(17)
+
+/* Register: FMC2_SEMCR */
+#define FMC2_SEMCR_SEM_MUTEX		BIT(0)
+#define FMC2_SEMCR_SEMCID		GENMASK(7, 5)
+
 /* Register: FMC2_VERR */
 #define FMC2_VERR_MAJREV		GENMASK(7, 4)
 #define FMC2_VERR_MAJREV_2		2
 
 #define FMC2_MAX_EBI_CE			4
 #define FMC2_MAX_BANKS			5
+#define FMC2_MAX_RESOURCES		6
+#define FMC2_CID1			1
 
 #define FMC2_BCR_CPSIZE_0		0x0
 #define FMC2_BCR_CPSIZE_128		0x1
@@ -165,7 +186,9 @@ struct stm32_fmc2_ebi {
 	struct regmap *regmap;
 	const struct stm32_fmc2_ebi_data *data;
 	u8 bank_assigned;
+	u8 sem_taken;
 	u8 majrev;
+	bool access_granted;
 
 	u32 bcr[FMC2_MAX_EBI_CE];
 	u32 btr[FMC2_MAX_EBI_CE];
@@ -731,6 +754,11 @@ static int stm32_fmc2_ebi_set_clk_period(struct stm32_fmc2_ebi *ebi,
 	u32 reg = FMC2_BTR(cs);
 	u32 mask = FMC2_BTR_CLKDIV;
 
+	if (!ebi->access_granted) {
+		dev_err(ebi->dev, "CFGR access forbidden\n");
+		return -EACCES;
+	}
+
 	if (ebi->majrev >= FMC2_VERR_MAJREV_2) {
 		u32 cfgr;
 
@@ -819,6 +847,11 @@ static int stm32_fmc2_ebi_set_cclk(struct stm32_fmc2_ebi *ebi,
 	u32 reg = ebi->majrev < FMC2_VERR_MAJREV_2 ? FMC2_BCR1 : FMC2_CFGR;
 	u32 mask = ebi->majrev < FMC2_VERR_MAJREV_2 ? FMC2_BCR1_CCLKEN :
 						      FMC2_CFGR_CCLKEN;
+
+	if (!ebi->access_granted) {
+		dev_err(ebi->dev, "CFGR access forbidden\n");
+		return -EACCES;
+	}
 
 	regmap_update_bits(ebi->regmap, reg, mask, setup ? mask : 0);
 
@@ -988,6 +1021,107 @@ static const struct stm32_fmc2_prop stm32_fmc2_child_props[] = {
 	},
 };
 
+static int stm32_fmc2_ebi_check_rif(struct stm32_fmc2_ebi *ebi, u32 resource)
+{
+	u32 seccfgr, cidcfgr, semcr;
+	int cid;
+
+	if (ebi->majrev < FMC2_VERR_MAJREV_2)
+		return 0;
+
+	if (resource >= FMC2_MAX_RESOURCES)
+		return -EINVAL;
+
+	regmap_read(ebi->regmap, FMC2_SECCFGR, &seccfgr);
+	if (seccfgr & BIT(resource)) {
+		if (resource)
+			dev_err(ebi->dev, "resource %d is configured as secure\n",
+				resource);
+
+		return -EACCES;
+	}
+
+	regmap_read(ebi->regmap, FMC2_CIDCFGR(resource), &cidcfgr);
+	if (!(cidcfgr & FMC2_CIDCFGR_CFEN))
+		/* CID filtering is turned off: access granted */
+		return 0;
+
+	if (!(cidcfgr & FMC2_CIDCFGR_SEMEN)) {
+		/* Static CID mode */
+		cid = FIELD_GET(FMC2_CIDCFGR_SCID, cidcfgr);
+		if (cid != FMC2_CID1) {
+			if (resource)
+				dev_err(ebi->dev, "static CID%d set for resource %d\n",
+					cid, resource);
+
+			return -EACCES;
+		}
+
+		return 0;
+	}
+
+	/* Pass-list with semaphore mode */
+	if (!(cidcfgr & FMC2_CIDCFGR_SEMWLC1)) {
+		if (resource)
+			dev_err(ebi->dev, "CID1 is block-listed for resource %d\n",
+				resource);
+
+		return -EACCES;
+	}
+
+	regmap_read(ebi->regmap, FMC2_SEMCR(resource), &semcr);
+	if (!(semcr & FMC2_SEMCR_SEM_MUTEX)) {
+		regmap_update_bits(ebi->regmap, FMC2_SEMCR(resource),
+				   FMC2_SEMCR_SEM_MUTEX, FMC2_SEMCR_SEM_MUTEX);
+		regmap_read(ebi->regmap, FMC2_SEMCR(resource), &semcr);
+	}
+
+	cid = FIELD_GET(FMC2_SEMCR_SEMCID, semcr);
+	if (cid != FMC2_CID1) {
+		if (resource)
+			dev_err(ebi->dev, "resource %d is already used by CID%d\n",
+				resource, cid);
+
+		return -EACCES;
+	}
+
+	ebi->sem_taken |= BIT(resource);
+
+	return 0;
+}
+
+static void stm32_fmc2_ebi_put_sems(struct stm32_fmc2_ebi *ebi)
+{
+	unsigned int resource;
+
+	if (ebi->majrev < FMC2_VERR_MAJREV_2)
+		return;
+
+	for (resource = 0; resource < FMC2_MAX_RESOURCES; resource++) {
+		if (!(ebi->sem_taken & BIT(resource)))
+			continue;
+
+		regmap_update_bits(ebi->regmap, FMC2_SEMCR(resource),
+				   FMC2_SEMCR_SEM_MUTEX, 0);
+	}
+}
+
+static void stm32_fmc2_ebi_get_sems(struct stm32_fmc2_ebi *ebi)
+{
+	unsigned int resource;
+
+	if (ebi->majrev < FMC2_VERR_MAJREV_2)
+		return;
+
+	for (resource = 0; resource < FMC2_MAX_RESOURCES; resource++) {
+		if (!(ebi->sem_taken & BIT(resource)))
+			continue;
+
+		regmap_update_bits(ebi->regmap, FMC2_SEMCR(resource),
+				   FMC2_SEMCR_SEM_MUTEX, FMC2_SEMCR_SEM_MUTEX);
+	}
+}
+
 static int stm32_fmc2_ebi_parse_prop(struct stm32_fmc2_ebi *ebi,
 				     struct device_node *dev_node,
 				     const struct stm32_fmc2_prop *prop,
@@ -1055,6 +1189,9 @@ static void stm32_fmc2_ebi_save_setup(struct stm32_fmc2_ebi *ebi)
 	unsigned int cs;
 
 	for (cs = 0; cs < FMC2_MAX_EBI_CE; cs++) {
+		if (!(ebi->bank_assigned & BIT(cs)))
+			continue;
+
 		regmap_read(ebi->regmap, FMC2_BCR(cs), &ebi->bcr[cs]);
 		regmap_read(ebi->regmap, FMC2_BTR(cs), &ebi->btr[cs]);
 		regmap_read(ebi->regmap, FMC2_BWTR(cs), &ebi->bwtr[cs]);
@@ -1062,7 +1199,7 @@ static void stm32_fmc2_ebi_save_setup(struct stm32_fmc2_ebi *ebi)
 
 	if (ebi->majrev < FMC2_VERR_MAJREV_2)
 		regmap_read(ebi->regmap, FMC2_PCSCNTR, &ebi->pcscntr);
-	else
+	else if (ebi->access_granted)
 		regmap_read(ebi->regmap, FMC2_CFGR, &ebi->cfgr);
 }
 
@@ -1071,6 +1208,9 @@ static void stm32_fmc2_ebi_set_setup(struct stm32_fmc2_ebi *ebi)
 	unsigned int cs;
 
 	for (cs = 0; cs < FMC2_MAX_EBI_CE; cs++) {
+		if (!(ebi->bank_assigned & BIT(cs)))
+			continue;
+
 		regmap_write(ebi->regmap, FMC2_BCR(cs), ebi->bcr[cs]);
 		regmap_write(ebi->regmap, FMC2_BTR(cs), ebi->btr[cs]);
 		regmap_write(ebi->regmap, FMC2_BWTR(cs), ebi->bwtr[cs]);
@@ -1078,7 +1218,7 @@ static void stm32_fmc2_ebi_set_setup(struct stm32_fmc2_ebi *ebi)
 
 	if (ebi->majrev < FMC2_VERR_MAJREV_2)
 		regmap_write(ebi->regmap, FMC2_PCSCNTR, ebi->pcscntr);
-	else
+	else if (ebi->access_granted)
 		regmap_write(ebi->regmap, FMC2_CFGR, ebi->cfgr);
 }
 
@@ -1122,7 +1262,8 @@ static void stm32_fmc2_ebi_enable(struct stm32_fmc2_ebi *ebi)
 	u32 mask = ebi->majrev < FMC2_VERR_MAJREV_2 ? FMC2_BCR1_FMC2EN :
 						      FMC2_CFGR_FMC2EN;
 
-	regmap_update_bits(ebi->regmap, reg, mask, mask);
+	if (ebi->access_granted)
+		regmap_update_bits(ebi->regmap, reg, mask, mask);
 }
 
 static void stm32_fmc2_ebi_disable(struct stm32_fmc2_ebi *ebi)
@@ -1131,7 +1272,8 @@ static void stm32_fmc2_ebi_disable(struct stm32_fmc2_ebi *ebi)
 	u32 mask = ebi->majrev < FMC2_VERR_MAJREV_2 ? FMC2_BCR1_FMC2EN :
 						      FMC2_CFGR_FMC2EN;
 
-	regmap_update_bits(ebi->regmap, reg, mask, 0);
+	if (ebi->access_granted)
+		regmap_update_bits(ebi->regmap, reg, mask, 0);
 }
 
 static int stm32_fmc2_ebi_setup_cs(struct stm32_fmc2_ebi *ebi,
@@ -1186,6 +1328,13 @@ static int stm32_fmc2_ebi_parse_dt(struct stm32_fmc2_ebi *ebi)
 			dev_err(dev, "bank already assigned: %d\n", bank);
 			of_node_put(child);
 			return -EINVAL;
+		}
+
+		ret = stm32_fmc2_ebi_check_rif(ebi, bank + 1);
+		if (ret) {
+			dev_err(dev, "bank access failed: %d\n", bank);
+			of_node_put(child);
+			return ret;
 		}
 
 		if (bank < FMC2_MAX_EBI_CE) {
@@ -1259,6 +1408,23 @@ static int stm32_fmc2_ebi_probe(struct platform_device *pdev)
 	regmap_read(ebi->regmap, FMC2_VERR, &verr);
 	ebi->majrev = FIELD_GET(FMC2_VERR_MAJREV, verr);
 
+	/* Check if CFGR register can be modified */
+	ret = stm32_fmc2_ebi_check_rif(ebi, 0);
+	if (!ret)
+		ebi->access_granted = true;
+
+	/* In case of CFGR is secure, just check that the FMC2 is enabled */
+	if (!ebi->access_granted) {
+		u32 sr;
+
+		regmap_read(ebi->regmap, FMC2_SR, &sr);
+		if (sr & FMC2_SR_ISOST) {
+			dev_err(dev, "FMC2 is not ready to be used.\n");
+			ret = -EACCES;
+			goto err_release;
+		}
+	}
+
 	ret = stm32_fmc2_ebi_parse_dt(ebi);
 	if (ret)
 		goto err_release;
@@ -1271,6 +1437,7 @@ static int stm32_fmc2_ebi_probe(struct platform_device *pdev)
 err_release:
 	stm32_fmc2_ebi_disable_banks(ebi);
 	stm32_fmc2_ebi_disable(ebi);
+	stm32_fmc2_ebi_put_sems(ebi);
 	clk_disable_unprepare(ebi->clk);
 
 	return ret;
@@ -1283,6 +1450,7 @@ static int stm32_fmc2_ebi_remove(struct platform_device *pdev)
 	of_platform_depopulate(&pdev->dev);
 	stm32_fmc2_ebi_disable_banks(ebi);
 	stm32_fmc2_ebi_disable(ebi);
+	stm32_fmc2_ebi_put_sems(ebi);
 	clk_disable_unprepare(ebi->clk);
 
 	return 0;
@@ -1293,6 +1461,7 @@ static int __maybe_unused stm32_fmc2_ebi_suspend(struct device *dev)
 	struct stm32_fmc2_ebi *ebi = dev_get_drvdata(dev);
 
 	stm32_fmc2_ebi_disable(ebi);
+	stm32_fmc2_ebi_put_sems(ebi);
 	clk_disable_unprepare(ebi->clk);
 	pinctrl_pm_select_sleep_state(dev);
 
@@ -1310,6 +1479,7 @@ static int __maybe_unused stm32_fmc2_ebi_resume(struct device *dev)
 	if (ret)
 		return ret;
 
+	stm32_fmc2_ebi_get_sems(ebi);
 	stm32_fmc2_ebi_set_setup(ebi);
 	stm32_fmc2_ebi_enable(ebi);
 
