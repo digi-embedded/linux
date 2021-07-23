@@ -660,9 +660,14 @@
 	st,tune-hs-rx-offset = <2>;
 	st,no-lsfs-sc;
 
+	/*
+	 * Hack to keep hub active until all connected devices are suspended
+	 * otherwise the hub will be powered off as soon as the v3v3 is disabled
+	 * and it can disturb connected devices.
+	 */
 	connector {
 		compatible = "usb-a-connector";
-		vbus-supply = <&vbus_sw>;
+		vbus-supply = <&v3v3>;
 	};
 };
 
