@@ -743,6 +743,10 @@
 	pinctrl-2 = <&pinctrl_usdhc2_200mhz>, <&pinctrl_usdhc2_gpio>,
 		    <&pinctrl_usdhc2_vsel>;
 	bus-width = <4>;
+	/*
+	 * UHS-I mode (remove the no-1.8-v line to use this uSD in UHS-I mode).
+	 * Check schematics for additional hardware changes needed.
+	 */
 	no-1-8-v;
 	cd-gpios = <&gpio2 12 GPIO_ACTIVE_HIGH>;
 	status = "okay";
