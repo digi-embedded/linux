@@ -742,11 +742,16 @@ static int stm32_rtc_init(struct platform_device *pdev,
 	pred_a_max = STM32_RTC_PRER_PRED_A >> STM32_RTC_PRER_PRED_A_SHIFT;
 	pred_s_max = STM32_RTC_PRER_PRED_S >> STM32_RTC_PRER_PRED_S_SHIFT;
 
+	if (rate > (pred_a_max + 1) * (pred_s_max + 1)) {
+		dev_err(&pdev->dev, "rtc_ck rate is too high: %dHz\n", rate);
+		return -EINVAL;
+	}
+
 	if (rtc->data->need_accuracy) {
 		for (pred_a = 0; pred_a <= pred_a_max; pred_a++) {
 			pred_s = (rate / (pred_a + 1)) - 1;
 
-			if (((pred_s + 1) * (pred_a + 1)) == rate)
+			if (pred_s <= pred_s_max && ((pred_s + 1) * (pred_a + 1)) == rate)
 				break;
 		}
 	} else {
