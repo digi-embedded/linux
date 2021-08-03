@@ -1896,7 +1896,8 @@ static struct dma_chan *stm32_dma3_of_xlate(struct of_phandle_args *dma_spec, st
 		return NULL;
 	}
 
-	c = __dma_request_channel(&mask, stm32_dma3_filter_fn, &conf, ofdma->of_node);
+	/* Find a channel among all registered dma controllers, rely on find_candidate() */
+	c = dma_request_channel(mask, stm32_dma3_filter_fn, &conf);
 	if (!c) {
 		dev_err(ddata->dma_dev.dev, "No suitable channel found\n");
 		return NULL;
