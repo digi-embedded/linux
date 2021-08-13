@@ -317,7 +317,8 @@ static irqreturn_t lt8912_hpd_threaded_handler(int unused, void *data)
 	struct lt8912 *lt = data;
 	struct drm_connector *connector = &lt->connector;
 
-	drm_helper_hpd_irq_event(connector->dev);
+	if (connector->dev)
+		drm_helper_hpd_irq_event(connector->dev);
 
 	return IRQ_HANDLED;
 }
