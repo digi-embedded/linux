@@ -2884,17 +2884,6 @@ static int lpuart_probe(struct platform_device *pdev)
 	    sport->port.rs485.delay_rts_after_send)
 		dev_err(&pdev->dev, "driver doesn't support RTS delays\n");
 
-	lpuart_config_rs485(&sport->port, &sport->port.rs485);
-
-	uart_get_rs485_mode(&pdev->dev, &sport->port.rs485);
-
-	if (sport->port.rs485.flags & SER_RS485_RX_DURING_TX)
-		dev_err(&pdev->dev, "driver doesn't support RX during TX\n");
-
-	if (sport->port.rs485.delay_rts_before_send ||
-	    sport->port.rs485.delay_rts_after_send)
-		dev_err(&pdev->dev, "driver doesn't support RTS delays\n");
-
 	sport->port.rs485_config(&sport->port, &sport->port.rs485);
 
 	sport->rts_gpio = of_get_named_gpio_flags(np, "digi,rts-gpio", 0 , &flags);
