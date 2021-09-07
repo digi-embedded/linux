@@ -16,6 +16,7 @@ enum scmi_clock_protocol_cmd {
 	CLOCK_RATE_SET = 0x5,
 	CLOCK_RATE_GET = 0x6,
 	CLOCK_CONFIG_SET = 0x7,
+	CLOCK_DUTY_CYCLE_GET = 0x8,
 };
 
 struct scmi_msg_resp_clock_protocol_attributes {
@@ -54,6 +55,11 @@ struct scmi_msg_resp_clock_describe_rates {
 	typeof(X) x = (X);	\
 	le32_to_cpu((x).value_low) | (u64)le32_to_cpu((x).value_high) << 32; \
 })
+};
+
+struct scmi_msg_resp_get_duty_cyle {
+	__le32 num;
+	__le32 den;
 };
 
 struct scmi_clock_set_rate {
@@ -215,6 +221,34 @@ err:
 }
 
 static int
+scmi_clock_get_duty_cycle(const struct scmi_protocol_handle *ph,
+			  u32 clk_id, int *num, int *den)
+{
+	int ret;
+	struct scmi_xfer *t;
+	struct scmi_msg_resp_get_duty_cyle *resp;
+
+	ret = ph->xops->xfer_get_init(ph, CLOCK_DUTY_CYCLE_GET,
+				      sizeof(__le32), sizeof(u64), &t);
+	if (ret)
+		return ret;
+
+	resp = t->rx.buf;
+
+	put_unaligned_le32(clk_id, t->tx.buf);
+
+	ret = ph->xops->do_xfer(ph, t);
+	if (!ret) {
+		*num = resp->num;
+		*den = resp->den;
+	}
+
+	ph->xops->xfer_put(ph, t);
+
+	return ret;
+}
+
+static int
 scmi_clock_rate_get(const struct scmi_protocol_handle *ph,
 		    u32 clk_id, u64 *value)
 {
@@ -330,6 +364,7 @@ static const struct scmi_clk_proto_ops clk_proto_ops = {
 	.rate_set = scmi_clock_rate_set,
 	.enable = scmi_clock_enable,
 	.disable = scmi_clock_disable,
+	.get_duty_cycle = scmi_clock_get_duty_cycle,
 };
 
 static int scmi_clock_protocol_init(const struct scmi_protocol_handle *ph)
