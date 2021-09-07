@@ -37,6 +37,22 @@ static unsigned long scmi_clk_recalc_rate(struct clk_hw *hw,
 	return rate;
 }
 
+static int scmi_clk_get_duty_cycle(struct clk_hw *hw, struct clk_duty *duty)
+{
+	struct scmi_clk *clk = to_scmi_clk(hw);
+	int ret;
+
+	ret = scmi_proto_clk_ops->get_duty_cycle(clk->ph, clk->id,
+						 &duty->num, &duty->den);
+	if (ret) {
+		/* Assume a default value of 50% */
+		duty->num = 1;
+		duty->den = 2;
+	}
+
+	return 0;
+}
+
 static long scmi_clk_round_rate(struct clk_hw *hw, unsigned long rate,
 				unsigned long *parent_rate)
 {
@@ -121,6 +137,7 @@ static const struct clk_ops scmi_clk_ops = {
 	.set_rate = scmi_clk_set_rate,
 	.prepare = scmi_clk_enable,
 	.unprepare = scmi_clk_disable,
+	.get_duty_cycle = scmi_clk_get_duty_cycle,
 };
 
 static const struct clk_ops scmi_atomic_clk_ops = {
@@ -129,6 +146,7 @@ static const struct clk_ops scmi_atomic_clk_ops = {
 	.set_rate = scmi_clk_set_rate,
 	.enable = scmi_clk_atomic_enable,
 	.disable = scmi_clk_atomic_disable,
+	.get_duty_cycle = scmi_clk_get_duty_cycle,
 };
 
 static int scmi_clk_ops_init(struct device *dev, struct scmi_clk *sclk,
