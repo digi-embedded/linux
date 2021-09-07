@@ -21,6 +21,7 @@ enum scmi_clock_protocol_cmd {
 	CLOCK_NAME_GET = 0x8,
 	CLOCK_RATE_NOTIFY = 0x9,
 	CLOCK_RATE_CHANGE_REQUESTED_NOTIFY = 0xA,
+	CLOCK_DUTY_CYCLE_GET = 0xB,
 };
 
 struct scmi_msg_resp_clock_protocol_attributes {
@@ -63,6 +64,11 @@ struct scmi_msg_resp_clock_describe_rates {
 	typeof(X) x = (X);	\
 	le32_to_cpu((x).value_low) | (u64)le32_to_cpu((x).value_high) << 32; \
 })
+};
+
+struct scmi_msg_resp_get_duty_cyle {
+	__le32 num;
+	__le32 den;
 };
 
 struct scmi_clock_set_rate {
@@ -325,6 +331,34 @@ scmi_clock_describe_rates_get(const struct scmi_protocol_handle *ph, u32 clk_id,
 }
 
 static int
+scmi_clock_get_duty_cycle(const struct scmi_protocol_handle *ph,
+			  u32 clk_id, int *num, int *den)
+{
+	int ret;
+	struct scmi_xfer *t;
+	struct scmi_msg_resp_get_duty_cyle *resp;
+
+	ret = ph->xops->xfer_get_init(ph, CLOCK_DUTY_CYCLE_GET,
+				      sizeof(__le32), sizeof(u64), &t);
+	if (ret)
+		return ret;
+
+	resp = t->rx.buf;
+
+	put_unaligned_le32(clk_id, t->tx.buf);
+
+	ret = ph->xops->do_xfer(ph, t);
+	if (!ret) {
+		*num = resp->num;
+		*den = resp->den;
+	}
+
+	ph->xops->xfer_put(ph, t);
+
+	return ret;
+}
+
+static int
 scmi_clock_rate_get(const struct scmi_protocol_handle *ph,
 		    u32 clk_id, u64 *value)
 {
@@ -472,6 +506,7 @@ static const struct scmi_clk_proto_ops clk_proto_ops = {
 	.disable = scmi_clock_disable,
 	.enable_atomic = scmi_clock_enable_atomic,
 	.disable_atomic = scmi_clock_disable_atomic,
+	.get_duty_cycle = scmi_clock_get_duty_cycle,
 };
 
 static int scmi_clk_rate_notify(const struct scmi_protocol_handle *ph,
