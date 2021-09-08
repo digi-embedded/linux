@@ -374,6 +374,23 @@
 };
 
 /*
+ * FlexSPI port distributed among various interfaces.
+ * Conflicts with:
+ * - PCIE connector
+ * - FEC1
+ * - FEC2
+ * - RS485
+ * - CAN2
+ * - MIPI camera
+ * - HDMI display
+ * - LVDS0 display touch controller
+ * - LVDS1 display touch controller
+ */
+&flexspi0 {
+	status = "disabled";
+};
+
+/*
  * I2C3 connected to Audio codec and USB 3.0 PD PHY.
  * Also available on:
  * - Expansion header
@@ -1132,6 +1149,19 @@
 	pinctrl_flexcan3_lpuart3_gpios: flexcan2lpuart3gpios-grp {
 		fsl,pins = <
 			IMX8QXP_QSPI0B_SS0_B_LSIO_GPIO3_IO23 0x06000060
+		>;
+	};
+
+	pinctrl_flexspi0: flexspi0grp {
+		fsl,pins = <
+			IMX8QXP_QSPI0B_SCLK_LSIO_QSPI0B_SCLK       0x06000021
+			IMX8QXP_QSPI0B_DATA0_LSIO_QSPI0B_DATA0     0x06000021
+			IMX8QXP_QSPI0B_DATA1_LSIO_QSPI0B_DATA1     0x06000021
+			IMX8QXP_QSPI0B_DATA2_LSIO_QSPI0B_DATA2     0x06000021
+			IMX8QXP_QSPI0B_DATA3_LSIO_QSPI0B_DATA3     0x06000021
+			IMX8QXP_QSPI0B_DQS_LSIO_QSPI0B_DQS         0x06000021
+			IMX8QXP_QSPI0B_SS0_B_LSIO_QSPI0B_SS0_B     0x06000021
+			IMX8QXP_QSPI0B_SS1_B_LSIO_QSPI0B_SS1_B     0x06000021
 		>;
 	};
 
