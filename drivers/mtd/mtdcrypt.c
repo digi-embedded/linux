@@ -69,7 +69,7 @@ static void dump_hex(unsigned char *buf, int len)
 	for (i = 0; i < len; i++) {
 		if ((i % 16) == 0)
 			printk("%s%08x: ", i ? "\n" : "",
-					(unsigned int)&buf[i]);
+					((unsigned int *)&buf[i])[0]);
 		printk("%02x ", buf[i]);
 	}
 	printk("\n");
@@ -614,7 +614,7 @@ static int mtdcrypt_get_key_from_part(int keyblob_part, int keyblob_size,
 				      int keyblob_offset, char *keyblob_str)
 {
 	struct mtd_info *mtd_part;
-	int retlen;
+	size_t retlen;
 
 	if (keyblob_size > MAX_KEYBLOB_BYTES) {
 		pr_err("mtdcrypt: Missing valid key blob size\n");
@@ -753,7 +753,7 @@ static int mtdcrypt_set_key(struct mtd_info *mtd)
 	}
 #endif
 	if (debug) {
-		printk("Session key (size %d)n",
+		printk("Session key (size %zd)n",
 				crypt_info->key_size);
 		dump_hex(crypt_info->key, crypt_info->key_size);
 	}
