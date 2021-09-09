@@ -281,6 +281,13 @@
 		reg = <0>;
 		spi-max-frequency = <4000000>;
 	};
+
+/*  Uncomment to add a second SPI slave device controlled by CS 1 */
+//	spidev@1 {
+//		compatible = "spidev";
+//		reg = <1>;
+//		spi-max-frequency = <4000000>;
+//	};
 };
 
 /* LPUART0 on expansion header */
