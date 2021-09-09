@@ -802,6 +802,8 @@
 &lpspi0 {
 	#address-cells = <1>;
 	#size-cells = <0>;
+	num-cs = <2>;
+	cs-gpios = <&lsio_gpio1 8 GPIO_ACTIVE_LOW>, <&lsio_gpio1 7 GPIO_ACTIVE_LOW>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lpspi0>;
 	status = "disabled";
@@ -948,8 +950,8 @@
 			IMX8QXP_SPI0_SCK_ADMA_SPI0_SCK	0x0600004c
 			IMX8QXP_SPI0_SDO_ADMA_SPI0_SDO	0x0600004c
 			IMX8QXP_SPI0_SDI_ADMA_SPI0_SDI	0x0600004c
-			IMX8QXP_SPI0_CS0_ADMA_SPI0_CS0	0x0600004c
-			IMX8QXP_SPI0_CS1_ADMA_SPI0_CS1	0x0600004c
+			IMX8QXP_SPI0_CS0_LSIO_GPIO1_IO08	0x06000020
+			IMX8QXP_SPI0_CS1_LSIO_GPIO1_IO07	0x06000020
 		>;
 	};
 
