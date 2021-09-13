@@ -97,6 +97,8 @@ struct scmi_clk_proto_ops {
 			      u32 clk_id);
 	int (*get_duty_cycle)(const struct scmi_protocol_handle *ph,
 			      u32 clk_id, int *num, int *den);
+	int (*round_rate_get)(const struct scmi_protocol_handle *ph,
+			      u32 clk_id, u64 *rate);
 };
 
 /**
