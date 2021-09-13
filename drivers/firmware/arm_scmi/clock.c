@@ -17,6 +17,7 @@ enum scmi_clock_protocol_cmd {
 	CLOCK_RATE_GET = 0x6,
 	CLOCK_CONFIG_SET = 0x7,
 	CLOCK_DUTY_CYCLE_GET = 0x8,
+	CLOCK_ROUND_RATE_GET = 0x9,
 };
 
 struct scmi_msg_resp_clock_protocol_attributes {
@@ -306,6 +307,47 @@ static int scmi_clock_rate_set(const struct scmi_protocol_handle *ph,
 }
 
 static int
+scmi_clock_round_rate_get(const struct scmi_protocol_handle *ph,
+			  u32 clk_id, u64 *value)
+{
+	int ret;
+	struct scmi_xfer *t;
+	struct scmi_clock_set_rate *cfg;
+	struct clock_info *ci = ph->get_priv(ph);
+	u32 flags = 0;
+
+	ret = ph->xops->xfer_get_init(ph, CLOCK_ROUND_RATE_GET,
+				      sizeof(*cfg), 0, &t);
+	if (ret)
+		return ret;
+
+	if (ci->max_async_req &&
+	    atomic_inc_return(&ci->cur_async_req) < ci->max_async_req)
+		flags |= CLOCK_SET_ASYNC;
+
+	cfg = t->tx.buf;
+	cfg->flags = cpu_to_le32(flags);
+	cfg->id = cpu_to_le32(clk_id);
+	cfg->value_low = cpu_to_le32(*value & 0xffffffff);
+	cfg->value_high = cpu_to_le32(*value >> 32);
+
+	if (flags & CLOCK_SET_ASYNC)
+		ret = ph->xops->do_xfer_with_response(ph, t);
+	else
+		ret = ph->xops->do_xfer(ph, t);
+
+	if (ci->max_async_req)
+		atomic_dec(&ci->cur_async_req);
+
+	if (!ret)
+		*value = get_unaligned_le64(t->rx.buf);
+
+	ph->xops->xfer_put(ph, t);
+
+	return ret;
+}
+
+static int
 scmi_clock_config_set(const struct scmi_protocol_handle *ph, u32 clk_id,
 		      u32 config)
 {
@@ -365,6 +407,7 @@ static const struct scmi_clk_proto_ops clk_proto_ops = {
 	.enable = scmi_clock_enable,
 	.disable = scmi_clock_disable,
 	.get_duty_cycle = scmi_clock_get_duty_cycle,
+	.round_rate_get = scmi_clock_round_rate_get,
 };
 
 static int scmi_clock_protocol_init(const struct scmi_protocol_handle *ph)
