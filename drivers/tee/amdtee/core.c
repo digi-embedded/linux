@@ -230,7 +230,9 @@ static void destroy_session(struct kref *ref)
 
 int amdtee_open_session(struct tee_context *ctx,
 			struct tee_ioctl_open_session_arg *arg,
-			struct tee_param *param)
+			struct tee_param *normal_param,
+			u32 num_normal_params,
+			struct tee_param *ocall_param)
 {
 	struct amdtee_context_data *ctxdata = ctx->data;
 	struct amdtee_session *sess = NULL;
@@ -238,6 +240,11 @@ int amdtee_open_session(struct tee_context *ctx,
 	size_t ta_size;
 	int rc, i;
 	void *ta;
+
+	if (ocall_param) {
+		pr_err("OCALLs not supported\n");
+		return -EOPNOTSUPP;
+	}
 
 	if (arg->clnt_login != TEE_IOCTL_LOGIN_PUBLIC) {
 		pr_err("unsupported client login method\n");
@@ -283,7 +290,7 @@ int amdtee_open_session(struct tee_context *ctx,
 	}
 
 	/* Open session with loaded TA */
-	handle_open_session(arg, &session_info, param);
+	handle_open_session(arg, &session_info, normal_param);
 	if (arg->ret != TEEC_SUCCESS) {
 		pr_err("open_session failed %d\n", arg->ret);
 		spin_lock(&sess->lock);
@@ -405,11 +412,18 @@ void amdtee_unmap_shmem(struct tee_shm *shm)
 
 int amdtee_invoke_func(struct tee_context *ctx,
 		       struct tee_ioctl_invoke_arg *arg,
-		       struct tee_param *param)
+		       struct tee_param *normal_param,
+		       u32 num_normal_params,
+		       struct tee_param *ocall_param)
 {
 	struct amdtee_context_data *ctxdata = ctx->data;
 	struct amdtee_session *sess;
 	u32 i, session_info;
+
+	if (ocall_param) {
+		pr_err("OCALLs not supported\n");
+		return -EOPNOTSUPP;
+	}
 
 	/* Check that the session is valid */
 	mutex_lock(&session_list_mutex);
@@ -423,7 +437,7 @@ int amdtee_invoke_func(struct tee_context *ctx,
 	if (!sess)
 		return -EINVAL;
 
-	handle_invoke_cmd(arg, session_info, param);
+	handle_invoke_cmd(arg, session_info, normal_param);
 
 	return 0;
 }

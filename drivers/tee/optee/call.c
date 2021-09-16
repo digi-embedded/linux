@@ -127,7 +127,9 @@ out:
 
 int optee_open_session(struct tee_context *ctx,
 		       struct tee_ioctl_open_session_arg *arg,
-		       struct tee_param *param)
+		       struct tee_param *normal_param,
+		       u32 num_normal_params,
+		       struct tee_param *ocall_param)
 {
 	struct optee_context_data *ctxdata = ctx->data;
 	int rc;
@@ -136,6 +138,11 @@ int optee_open_session(struct tee_context *ctx,
 	phys_addr_t msg_parg;
 	struct optee_session *sess = NULL;
 	uuid_t client_uuid;
+
+	if (ocall_param) {
+		pr_err("OCALLs not supported\n");
+		return -EOPNOTSUPP;
+	}
 
 	/* +2 for the meta parameters added below */
 	shm = get_msg_arg(ctx, arg->num_params + 2, &msg_arg, &msg_parg);
@@ -162,7 +169,8 @@ int optee_open_session(struct tee_context *ctx,
 		goto out;
 	export_uuid(msg_arg->params[1].u.octets, &client_uuid);
 
-	rc = optee_to_msg_param(msg_arg->params + 2, arg->num_params, param);
+	rc = optee_to_msg_param(msg_arg->params + 2, arg->num_params,
+				normal_param);
 	if (rc)
 		goto out;
 
@@ -187,7 +195,8 @@ int optee_open_session(struct tee_context *ctx,
 		kfree(sess);
 	}
 
-	if (optee_from_msg_param(param, arg->num_params, msg_arg->params + 2)) {
+	if (optee_from_msg_param(normal_param, arg->num_params,
+				 msg_arg->params + 2)) {
 		arg->ret = TEEC_ERROR_COMMUNICATION;
 		arg->ret_origin = TEEC_ORIGIN_COMMS;
 		/* Close session again to avoid leakage */
@@ -234,7 +243,8 @@ int optee_close_session(struct tee_context *ctx, u32 session)
 }
 
 int optee_invoke_func(struct tee_context *ctx, struct tee_ioctl_invoke_arg *arg,
-		      struct tee_param *param)
+		      struct tee_param *normal_param, u32 num_normal_params,
+		      struct tee_param *ocall_param)
 {
 	struct optee_context_data *ctxdata = ctx->data;
 	struct tee_shm *shm;
@@ -242,6 +252,11 @@ int optee_invoke_func(struct tee_context *ctx, struct tee_ioctl_invoke_arg *arg,
 	phys_addr_t msg_parg;
 	struct optee_session *sess;
 	int rc;
+
+	if (ocall_param) {
+		pr_err("OCALLs not supported\n");
+		return -EOPNOTSUPP;
+	}
 
 	/* Check that the session is valid */
 	mutex_lock(&ctxdata->mutex);
@@ -258,7 +273,7 @@ int optee_invoke_func(struct tee_context *ctx, struct tee_ioctl_invoke_arg *arg,
 	msg_arg->session = arg->session;
 	msg_arg->cancel_id = arg->cancel_id;
 
-	rc = optee_to_msg_param(msg_arg->params, arg->num_params, param);
+	rc = optee_to_msg_param(msg_arg->params, arg->num_params, normal_param);
 	if (rc)
 		goto out;
 
@@ -267,7 +282,8 @@ int optee_invoke_func(struct tee_context *ctx, struct tee_ioctl_invoke_arg *arg,
 		msg_arg->ret_origin = TEEC_ORIGIN_COMMS;
 	}
 
-	if (optee_from_msg_param(param, arg->num_params, msg_arg->params)) {
+	if (optee_from_msg_param(normal_param, arg->num_params,
+				 msg_arg->params)) {
 		msg_arg->ret = TEEC_ERROR_COMMUNICATION;
 		msg_arg->ret_origin = TEEC_ORIGIN_COMMS;
 	}

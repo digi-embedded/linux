@@ -52,6 +52,7 @@
 #define TEE_GEN_CAP_PRIVILEGED	(1 << 1)/* Privileged device (for supplicant) */
 #define TEE_GEN_CAP_REG_MEM	(1 << 2)/* Supports registering shared memory */
 #define TEE_GEN_CAP_MEMREF_NULL	(1 << 3)/* NULL MemRef support */
+#define TEE_GEN_CAP_OCALL	(1 << 4)/* Supports calls from TA to CA */
 
 #define TEE_MEMREF_NULL		(__u64)(-1) /* NULL MemRef Buffer */
 
@@ -162,9 +163,14 @@ struct tee_ioctl_buf_data {
 /* Meta parameter carrying extra information about the message. */
 #define TEE_IOCTL_PARAM_ATTR_META		0x100
 
+/* Parameter carrying information about an OCALL reply or request. */
+#define TEE_IOCTL_PARAM_ATTR_OCALL		0x200
+
 /* Mask of all known attr bits */
 #define TEE_IOCTL_PARAM_ATTR_MASK \
-	(TEE_IOCTL_PARAM_ATTR_TYPE_MASK | TEE_IOCTL_PARAM_ATTR_META)
+	(TEE_IOCTL_PARAM_ATTR_TYPE_MASK | \
+	 TEE_IOCTL_PARAM_ATTR_META      | \
+	 TEE_IOCTL_PARAM_ATTR_OCALL)
 
 /*
  * Matches TEEC_LOGIN_* in GP TEE Client API
@@ -256,6 +262,34 @@ struct tee_ioctl_open_session_arg {
  */
 #define TEE_IOC_OPEN_SESSION	_IOR(TEE_IOC_MAGIC, TEE_IOC_BASE + 2, \
 				     struct tee_ioctl_buf_data)
+
+/*
+ * Command sent to the CA to execute an OCALL by Id.
+ *
+ * [any] param[0..3].u.*		carry OCALL parameters
+ */
+#define TEE_IOCTL_OCALL_CMD_INVOKE	3
+
+/*
+ * Join the Id of the function that the TEE Client API must execute on behalf of
+ * the CA with the Id of the command that the CA must execute
+ *
+ * As an example, TEE_IOCTL_OCALL_MAKE_PAIR(TEE_IOCTL_OCALL_CMD_INVOKE, 10)
+ * means that the Client API must forward a function invocation to a CA-provided
+ * handler, and the handler must execute command Id '10', whose meaning is up to
+ * the user-defined contract between the CA & TA.
+ */
+#define TEE_IOCTL_OCALL_MAKE_PAIR(func, cmd)	\
+	(((__u64)(func) << 32) | (__u32)(cmd))
+
+/*
+ * Get the Id of the function that the TEE Client API must execute on behalf of
+ * the CA
+ */
+#define TEE_IOCTL_OCALL_GET_FUNC(x)		((__u32)((x) >> 32))
+
+/* Get the Id of the command that the CA must execute */
+#define TEE_IOCTL_OCALL_GET_CMD(x)		((__u32)(x))
 
 /**
  * struct tee_ioctl_invoke_func_arg - Invokes a function in a Trusted

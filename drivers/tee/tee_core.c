@@ -352,6 +352,14 @@ tee_ioctl_shm_register(struct tee_context *ctx,
 	return ret;
 }
 
+static bool param_is_ocall(struct tee_param *param)
+{
+	u64 type = param->attr & TEE_IOCTL_PARAM_ATTR_TYPE_MASK;
+
+	return param->attr & TEE_IOCTL_PARAM_ATTR_OCALL &&
+	       type == TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INOUT;
+}
+
 static int params_from_user(struct tee_context *ctx, struct tee_param *params,
 			    size_t num_params,
 			    struct tee_ioctl_param __user *uparams)
@@ -460,6 +468,33 @@ static int params_to_user(struct tee_ioctl_param __user *uparams,
 	return 0;
 }
 
+static inline int find_ocall_param(struct tee_param *params, u32 num_params,
+				   struct tee_param **normal_params,
+				   u32 *num_normal_params,
+				   struct tee_param **ocall_param)
+{
+	size_t n;
+
+	for (n = 0; n < num_params; n++) {
+		if (param_is_ocall(params + n)) {
+			if (n == 0) {
+				*normal_params = params + 1;
+				*num_normal_params = num_params - 1;
+				*ocall_param = params;
+				return 0;
+			} else {
+				return -EINVAL;
+			}
+		}
+	}
+
+	*normal_params = params;
+	*num_normal_params = num_params;
+	*ocall_param = NULL;
+
+	return 0;
+}
+
 static int tee_ioctl_open_session(struct tee_context *ctx,
 				  struct tee_ioctl_buf_data __user *ubuf)
 {
@@ -507,7 +542,9 @@ static int tee_ioctl_open_session(struct tee_context *ctx,
 		goto out;
 	}
 
-	rc = ctx->teedev->desc->ops->open_session(ctx, &arg, params);
+	rc = ctx->teedev->desc->ops->open_session(ctx, &arg, params,
+						  arg.num_params,
+						  NULL /*ocall_param*/);
 	if (rc)
 		goto out;
 	have_session = true;
@@ -578,7 +615,9 @@ static int tee_ioctl_invoke(struct tee_context *ctx,
 			goto out;
 	}
 
-	rc = ctx->teedev->desc->ops->invoke_func(ctx, &arg, params);
+	rc = ctx->teedev->desc->ops->invoke_func(ctx, &arg, params,
+						 arg.num_params,
+						 NULL /*ocall_param*/);
 	if (rc)
 		goto out;
 
@@ -1155,9 +1194,22 @@ int tee_client_open_session(struct tee_context *ctx,
 			    struct tee_ioctl_open_session_arg *arg,
 			    struct tee_param *param)
 {
+	struct tee_param *ocall_param = NULL;
+	struct tee_param *normal_params = NULL;
+	u32 num_normal_params = 0;
+	int rc;
+
 	if (!ctx->teedev->desc->ops->open_session)
 		return -EINVAL;
-	return ctx->teedev->desc->ops->open_session(ctx, arg, param);
+
+	rc = find_ocall_param(param, arg->num_params, &normal_params,
+			      &num_normal_params, &ocall_param);
+	if (rc)
+		return rc;
+
+	return ctx->teedev->desc->ops->open_session(ctx, arg, normal_params,
+						    num_normal_params,
+						    ocall_param);
 }
 EXPORT_SYMBOL_GPL(tee_client_open_session);
 
@@ -1173,9 +1225,22 @@ int tee_client_invoke_func(struct tee_context *ctx,
 			   struct tee_ioctl_invoke_arg *arg,
 			   struct tee_param *param)
 {
+	struct tee_param *ocall_param = NULL;
+	struct tee_param *normal_params = NULL;
+	u32 num_normal_params = 0;
+	int rc;
+
 	if (!ctx->teedev->desc->ops->invoke_func)
 		return -EINVAL;
-	return ctx->teedev->desc->ops->invoke_func(ctx, arg, param);
+
+	rc = find_ocall_param(param, arg->num_params, &normal_params,
+			      &num_normal_params, &ocall_param);
+	if (rc)
+		return rc;
+
+	return ctx->teedev->desc->ops->invoke_func(ctx, arg, normal_params,
+						   num_normal_params,
+						   ocall_param);
 }
 EXPORT_SYMBOL_GPL(tee_client_invoke_func);
 

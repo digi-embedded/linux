@@ -156,10 +156,12 @@ int optee_supp_send(struct tee_context *ctx, u32 ret, u32 num_params,
 u32 optee_do_call_with_arg(struct tee_context *ctx, phys_addr_t parg);
 int optee_open_session(struct tee_context *ctx,
 		       struct tee_ioctl_open_session_arg *arg,
-		       struct tee_param *param);
+		       struct tee_param *normal_param, u32 num_normal_params,
+		       struct tee_param *ocall_param);
 int optee_close_session(struct tee_context *ctx, u32 session);
 int optee_invoke_func(struct tee_context *ctx, struct tee_ioctl_invoke_arg *arg,
-		      struct tee_param *param);
+		      struct tee_param *normal_param, u32 num_normal_params,
+		      struct tee_param *ocall_param);
 int optee_cancel_req(struct tee_context *ctx, u32 cancel_id, u32 session);
 
 void optee_enable_shm_cache(struct optee *optee);
