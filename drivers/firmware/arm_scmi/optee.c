@@ -21,6 +21,11 @@
 
 #define DRIVER_NAME "optee-scmi-agent"
 
+/* IDs defined in GPD TEE specification OP-TEE is based on */
+#define TEEC_SUCCESS			0
+#define TEEC_ERROR_GENERIC		0xffff0000
+#define TEEC_ERROR_NOT_SUPPORTED	0xffff000a
+
 /*
  * PTA_SCMI_CMD_CAPABILITIES - Get channel capabilities
  *
@@ -68,11 +73,47 @@
 #define PTA_SCMI_CMD_GET_CHANNEL_HANDLE		3
 
 /*
+ * PTA_SCMI_CMD_OCALL_THREAD - Allocate a threaded path using OCALL
+ *
+ * [in]   value[0].a: channel handle
+ *
+ * Use Ocall support to create a provisioned OP-TEE thread context for
+ * the channel. Successful creation of the thread makes this command to
+ * return with Ocall command PTA_SCMI_OCALL_CMD_THREAD_READY.
+ */
+#define PTA_SCMI_CMD_OCALL_THREAD		4
+
+/*
  * Channel capabilities
  */
 
 /* Channel supports shared memory using the SMT header protocol */
 #define PTA_SCMI_CAPS_SMT_HEADER			BIT(0)
+
+/*
+ * Channel can use command PTA_SCMI_CMD_OCALL_THREAD to provision a
+ * TEE thread for SCMI message passing.
+ */
+#define PTA_SCMI_CAPS_OCALL_THREAD			BIT(1)
+
+enum optee_scmi_ocall_cmd {
+	PTA_SCMI_OCALL_CMD_THREAD_READY = 0,
+};
+
+enum optee_scmi_ocall_reply {
+	PTA_SCMI_OCALL_ERROR = 0,
+	PTA_SCMI_OCALL_CLOSE_THREAD = 1,
+	PTA_SCMI_OCALL_PROCESS_SMT_CHANNEL = 2,
+};
+
+/* 4 should be enough but current Ocall implementation mandates > 4 */
+#define OCALL_CTX_PARAMS_COUNT		5
+
+struct ocall_ctx {
+	/* REE context exposed to TEE interface param[] must follow args */
+	struct tee_ioctl_invoke_arg args;
+	struct tee_param param[OCALL_CTX_PARAMS_COUNT];
+};
 
 struct optee_scmi_channel {
 	/* OP-TEE channel ID used in transoprt */
@@ -83,6 +124,7 @@ struct optee_scmi_channel {
 	u32 tee_session;
 	struct optee_scmi_agent *agent;
 	struct scmi_chan_info *cinfo;
+	struct ocall_ctx *ocall_ctx;
 	struct scmi_shared_mem __iomem *shmem;
 	/* Channel capabilities */
 	u32 caps;
@@ -190,6 +232,8 @@ static int get_channel(struct optee_scmi_channel *channel)
 	unsigned int caps;
 
 	caps = PTA_SCMI_CAPS_SMT_HEADER;
+	if (channel->agent->caps & PTA_SCMI_CAPS_OCALL_THREAD)
+		caps |= PTA_SCMI_CAPS_OCALL_THREAD;
 
 	memset(&inv_arg, 0, sizeof(inv_arg));
 	memset(&param, 0, sizeof(param));
@@ -204,6 +248,26 @@ static int get_channel(struct optee_scmi_channel *channel)
 
 	ret = tee_client_invoke_func(channel->agent->tee_ctx, &inv_arg, param);
 
+	if (!ret && (caps & PTA_SCMI_CAPS_OCALL_THREAD) &&
+	    inv_arg.ret == TEEC_ERROR_NOT_SUPPORTED) {
+		dev_info(dev, "Ocall not supported, fallback to non-Ocall\n");
+
+		caps &= ~PTA_SCMI_CAPS_OCALL_THREAD;
+
+		memset(&inv_arg, 0, sizeof(inv_arg));
+		memset(&param, 0, sizeof(param));
+
+		inv_arg.func = PTA_SCMI_CMD_GET_CHANNEL_HANDLE;
+		inv_arg.session = channel->tee_session;
+		inv_arg.num_params = 1;
+
+		param[0].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INOUT;
+		param[0].u.value.a = channel->channel_id;
+		param[0].u.value.b = caps;
+
+		ret = tee_client_invoke_func(channel->agent->tee_ctx, &inv_arg, param);
+	}
+
 	if (ret || inv_arg.ret) {
 		dev_err(dev, "Can't get channel with caps %#x: ret=%d, tee-res=%#x\n",
 			caps, ret, inv_arg.ret);
@@ -216,6 +280,223 @@ static int get_channel(struct optee_scmi_channel *channel)
 	channel->caps = caps;
 
 	return 0;
+}
+
+/*
+ * The below creates an Ocall thread context for SCMI agent to invoke by
+ * returning from an Ocall instead of invoking a command. This provisioned
+ * a secure thread for SCMI system communication.
+ */
+static int invoke_optee(struct optee_scmi_channel *channel)
+{
+	struct tee_ioctl_invoke_arg *args = &channel->ocall_ctx->args;
+	struct tee_param *params = channel->ocall_ctx->param;
+
+	return tee_client_invoke_func(channel->agent->tee_ctx, args, params);
+}
+
+static bool return_is_ocall(struct ocall_ctx *ocall_ctx)
+{
+	/* Non-null OCall function means an OCall context invoked by OP-TEE */
+	return TEE_IOCTL_OCALL_GET_FUNC(ocall_ctx->param[0].u.value.a);
+}
+
+static int alloc_ocall_ctx(struct optee_scmi_channel *channel)
+{
+	if (WARN_ON(channel->ocall_ctx))
+		return -EINVAL;
+
+	channel->ocall_ctx = devm_kzalloc(channel->agent->dev,
+					  sizeof(*channel->ocall_ctx),
+					  GFP_KERNEL);
+	if (!channel->ocall_ctx)
+		return -ENOMEM;
+
+	return 0;
+}
+
+static void free_ocall_ctx(struct optee_scmi_channel *channel)
+{
+	devm_kfree(channel->agent->dev, channel->ocall_ctx);
+	channel->ocall_ctx = NULL;
+}
+
+static void abort_ocall(struct optee_scmi_channel *channel)
+{
+	struct ocall_ctx *ocall_ctx = channel->ocall_ctx;
+	int ret;
+
+	ocall_ctx->param[0].u.value.b = TEEC_ERROR_GENERIC;
+	ocall_ctx->param[0].u.value.c = 1; /* Origin is client */
+
+	ret = invoke_optee(channel);
+
+	WARN_ONCE(ret || return_is_ocall(ocall_ctx), "Unexpected error\n");
+}
+
+/*
+ * ocall_thread_is_ready() - Called on return from invoke_optee()
+ *
+ * At this point, if we're invoked from SCMI PTA Ocall thread, the parameters
+ * in OCall context should be:
+ * param[0].value.a = TEE_IOCTL_OCALL_CMD_INVOKE | Ocall command ID
+ * param[0].value.b = Invoked OCall service UUID (64b LSB)
+ * param[0].value.c = Invoked OCall service UUID (64b MSB)
+ * param[1..4] are 4 parameters passed by OP-TEE SCMI PTA through the OCall
+ */
+static bool ocall_thread_is_ready(struct optee_scmi_channel *channel)
+{
+	struct ocall_ctx *ocall_ctx = channel->ocall_ctx;
+	unsigned int ocall_func = 0;
+	unsigned int ocall_cmd = 0;
+	uint64_t *ocall_uuid = NULL;
+	struct device *dev = channel->agent->dev;
+	struct tee_client_device *scmi_pta = to_tee_client_device(dev);
+
+	if (!return_is_ocall(ocall_ctx)) {
+		dev_err(dev, "Ocall expected\n");
+		return false;
+	}
+
+	/* TODO: we could skip this part (PTA could not set Ocall UUID) */
+	ocall_uuid = &ocall_ctx->param[0].u.value.b;
+	if (memcmp(ocall_uuid, scmi_pta->id.uuid.b, TEE_IOCTL_UUID_LEN)) {
+		dev_err(dev, "Ocall from unexpected TA %pUb\n",
+			&ocall_ctx->param[1].u.value.a);
+		return false;
+	}
+
+	ocall_func = TEE_IOCTL_OCALL_GET_FUNC(ocall_ctx->param[0].u.value.a);
+	ocall_cmd = TEE_IOCTL_OCALL_GET_CMD(ocall_ctx->param[0].u.value.a);
+	if (ocall_func != TEE_IOCTL_OCALL_CMD_INVOKE ||
+	    ocall_cmd != PTA_SCMI_OCALL_CMD_THREAD_READY) {
+		dev_err(dev, "Unexpected Ocall function %#x, command %#x\n",
+			ocall_func, ocall_cmd);
+		return false;
+	}
+
+	return true;
+}
+
+static int open_ocall_thread(struct optee_scmi_channel *channel)
+{
+	struct device *dev = channel->agent->dev;
+	int ret;
+
+	if (WARN_ONCE(channel->ocall_ctx, "Unexpected error\n"))
+		return -EINVAL;
+
+	ret = alloc_ocall_ctx(channel);
+	if (ret)
+		return ret;
+
+	/*
+	 * Setup parameters for initial TEE invocation with an Ocall
+	 * context to return from tee_client_invoke_func() with
+	 * a provisioned OP-TEE thread.
+	 */
+	*channel->ocall_ctx = (struct ocall_ctx){
+		.args.func = PTA_SCMI_CMD_OCALL_THREAD,
+		.args.session = channel->tee_session,
+		.args.num_params = OCALL_CTX_PARAMS_COUNT,
+		.param[0] = {
+			.attr = TEE_IOCTL_PARAM_ATTR_OCALL |
+				TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INOUT,
+		},
+		.param[1] = {
+			.attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT,
+			.u.value.a = channel->channel_id,
+		},
+	};
+
+	ret = -EAGAIN;
+	while (ret == -EAGAIN)
+		ret = invoke_optee(channel);
+
+	if (ret)
+		goto err;
+
+	if (ocall_thread_is_ready(channel))
+		return 0;
+
+	ret = -EPROTO;
+
+	if (!return_is_ocall(channel->ocall_ctx)) {
+		struct ocall_ctx *ocall_ctx = channel->ocall_ctx;
+
+		switch (ocall_ctx->args.ret) {
+		case TEEC_SUCCESS:
+			dev_dbg(dev, "unexpected successfull invocation\n");
+			break;
+		case TEEC_ERROR_NOT_SUPPORTED:
+			ret = -EOPNOTSUPP;
+			break;
+		default:
+			dev_dbg(dev, "invoke error %#x\n", ocall_ctx->args.ret);
+			break;
+		}
+	} else {
+		dev_dbg(dev, "Unexpected ocall context\n");
+	}
+
+err:
+	if (return_is_ocall(channel->ocall_ctx))
+		abort_ocall(channel);
+
+	free_ocall_ctx(channel);
+
+	return ret;
+}
+
+static int close_ocall_thread(struct optee_scmi_channel *channel)
+{
+	struct ocall_ctx *ocall_ctx = channel->ocall_ctx;
+	int ret;
+
+	if(!ocall_ctx)
+		return 0;
+
+	ocall_ctx->param[0].u.value.b = TEEC_SUCCESS;
+	ocall_ctx->param[1].u.value.a = PTA_SCMI_OCALL_CLOSE_THREAD;
+
+	ret = invoke_optee(channel);
+
+	if (ret) {
+		dev_dbg(channel->agent->dev, "can't invoke OP-TEE: %d\n", ret);
+	} else {
+		if (return_is_ocall(channel->ocall_ctx)) {
+			ret = -EPROTO;
+			abort_ocall(channel);
+		}
+	}
+
+	free_ocall_ctx(channel);
+
+	return ret;
+}
+
+static int invoke_ocall_thread(struct optee_scmi_channel *channel)
+{
+	struct ocall_ctx *ocall_ctx = channel->ocall_ctx;
+	int ret = -EPROTO;
+
+	if (!ocall_ctx)
+		return -EINVAL;
+
+	ocall_ctx->param[0].u.value.b = TEEC_SUCCESS;
+	ocall_ctx->param[1].u.value.a = PTA_SCMI_OCALL_PROCESS_SMT_CHANNEL;
+
+	ret = invoke_optee(channel);
+
+	if (!ret && ocall_thread_is_ready(channel))
+		return 0;
+
+	if (return_is_ocall(channel->ocall_ctx))
+		abort_ocall(channel);
+
+	free_ocall_ctx(channel);
+
+	return -EPROTO;
 }
 
 /* Invocation of the PTA through a regular command invoke */
@@ -339,6 +620,16 @@ static int optee_chan_setup(struct scmi_chan_info *cinfo, struct device *dev,
 	if (ret)
 		goto err;
 
+	if (channel->caps & PTA_SCMI_CAPS_OCALL_THREAD) {
+		ret = open_ocall_thread(channel);
+		if (ret) {
+			if (ret != -EOPNOTSUPP)
+				goto err;
+
+			dev_warn(dev, "Ocall failed: fallback to non-Ocall\n");
+		}
+	}
+
 	mutex_init(&channel->mu);
 
 	mutex_lock(&list_mutex);
@@ -356,8 +647,13 @@ err:
 
 static int optee_chan_free(int id, void *p, void *data)
 {
+	int ret;
 	struct scmi_chan_info *cinfo = p;
 	struct optee_scmi_channel *channel = cinfo->transport_info;
+
+	ret = close_ocall_thread(channel);
+	if (ret)
+		return ret;
 
 	mutex_lock(&list_mutex);
 	list_del(&channel->link);
@@ -366,6 +662,7 @@ static int optee_chan_free(int id, void *p, void *data)
 	cinfo->transport_info = NULL;
 	channel->cinfo = NULL;
 
+	devm_kfree(channel->agent->dev, channel);
 	scmi_free_channel(cinfo, data, id);
 
 	return 0;
@@ -395,7 +692,10 @@ static int optee_send_message(struct scmi_chan_info *cinfo,
 	mutex_lock(&channel->mu);
 	shmem_tx_prepare(shmem, xfer);
 
-	ret = invoke_process_smt_channel(channel);
+	if (channel->ocall_ctx)
+		ret = invoke_ocall_thread(channel);
+	else
+		ret = invoke_process_smt_channel(channel);
 
 	scmi_rx_callback(cinfo, shmem_read_header(shmem), NULL);
 	mutex_unlock(&channel->mu);
@@ -492,6 +792,7 @@ static int optee_scmi_remove(struct device *dev)
 	mutex_lock(&list_mutex);
 	list_for_each_safe(elt, n, &agent_private->channel_list) {
 		channel = list_entry(elt, struct optee_scmi_channel, link);
+		close_ocall_thread(channel);
 		list_del(&channel->link);
 	}
 	mutex_unlock(&list_mutex);
