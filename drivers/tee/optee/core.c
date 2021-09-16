@@ -19,6 +19,7 @@
 #include <linux/types.h>
 #include <linux/uaccess.h>
 #include <linux/workqueue.h>
+#include <linux/xarray.h>
 #include "optee_private.h"
 #include "optee_smc.h"
 #include "shm_pool.h"
@@ -209,6 +210,8 @@ static void optee_get_version(struct tee_device *teedev,
 		v.gen_caps |= TEE_GEN_CAP_REG_MEM;
 	if (optee->sec_caps & OPTEE_SMC_SEC_CAP_MEMREF_NULL)
 		v.gen_caps |= TEE_GEN_CAP_MEMREF_NULL;
+	if (optee->sec_caps & OPTEE_SMC_SEC_CAP_OCALL)
+		v.gen_caps |= TEE_GEN_CAP_OCALL;
 	*vers = v;
 }
 
@@ -254,11 +257,10 @@ static int optee_open(struct tee_context *ctx)
 	}
 	mutex_init(&ctxdata->mutex);
 	INIT_LIST_HEAD(&ctxdata->sess_list);
+	idr_init(&ctxdata->tmp_sess_list);
 
-	if (optee->sec_caps & OPTEE_SMC_SEC_CAP_MEMREF_NULL)
-		ctx->cap_memref_null  = true;
-	else
-		ctx->cap_memref_null = false;
+	ctx->cap_memref_null = optee->sec_caps & OPTEE_SMC_SEC_CAP_MEMREF_NULL;
+	ctx->cap_ocall = optee->sec_caps & OPTEE_SMC_SEC_CAP_OCALL;
 
 	ctx->data = ctxdata;
 	return 0;
@@ -304,6 +306,7 @@ static void optee_release(struct tee_context *ctx)
 		}
 		kfree(sess);
 	}
+	idr_destroy(&ctxdata->tmp_sess_list);
 	kfree(ctxdata);
 
 	if (!IS_ERR(shm))
