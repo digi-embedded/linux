@@ -184,13 +184,7 @@ int goodix_i2c_read(struct i2c_client *client, u16 reg, u8 *buf, int len)
 	msgs[1].buf   = buf;
 
 	ret = i2c_transfer(client->adapter, msgs, 2);
-	if (ret >= 0)
-		ret = (ret == ARRAY_SIZE(msgs) ? 0 : -EIO);
-
-	if (ret)
-		dev_err(&client->dev, "Error reading %d bytes from 0x%04x: %d\n",
-			len, reg, ret);
-	return ret;
+	return ret < 0 ? ret : (ret != ARRAY_SIZE(msgs) ? -EIO : 0);
 }
 
 /**
@@ -221,15 +215,8 @@ int goodix_i2c_write(struct i2c_client *client, u16 reg, const u8 *buf, int len)
 	msg.len = len + 2;
 
 	ret = i2c_transfer(client->adapter, &msg, 1);
-	if (ret >= 0)
-		ret = (ret == 1 ? 0 : -EIO);
-
 	kfree(addr_buf);
-
-	if (ret)
-		dev_err(&client->dev, "Error writing %d bytes to 0x%04x: %d\n",
-			len, reg, ret);
-	return ret;
+	return ret < 0 ? ret : (ret != 1 ? -EIO : 0);
 }
 
 int goodix_i2c_write_u8(struct i2c_client *client, u16 reg, u8 value)
@@ -271,8 +258,11 @@ static int goodix_ts_read_input_report(struct goodix_ts_data *ts, u8 *data)
 	do {
 		error = goodix_i2c_read(ts->client, addr, data,
 					header_contact_keycode_size);
-		if (error)
+		if (error) {
+			dev_err(&ts->client->dev, "I2C transfer error: %d\n",
+					error);
 			return error;
+		}
 
 		if (data[0] & GOODIX_BUFFER_STATUS_READY) {
 			touch_num = data[0] & 0x0f;
@@ -509,7 +499,9 @@ static irqreturn_t goodix_ts_irq_handler(int irq, void *dev_id)
 	struct goodix_ts_data *ts = dev_id;
 
 	goodix_process_events(ts);
-	goodix_i2c_write_u8(ts->client, GOODIX_READ_COOR_ADDR, 0);
+
+	if (goodix_i2c_write_u8(ts->client, GOODIX_READ_COOR_ADDR, 0) < 0)
+		dev_err(&ts->client->dev, "I2C write end_cmd error\n");
 
 	return IRQ_HANDLED;
 }
@@ -634,9 +626,11 @@ int goodix_send_cfg(struct goodix_ts_data *ts, const u8 *cfg, int len)
 		return error;
 
 	error = goodix_i2c_write(ts->client, ts->chip->config_addr, cfg, len);
-	if (error)
+	if (error) {
+		dev_err(&ts->client->dev, "Failed to write config data: %d",
+			error);
 		return error;
-
+	}
 	dev_dbg(&ts->client->dev, "Config sent successfully.");
 
 	/* Let the firmware reconfigure itself, so sleep for 10ms */
@@ -1079,8 +1073,10 @@ static int goodix_read_version(struct goodix_ts_data *ts)
 	char id_str[GOODIX_ID_MAX_LEN + 1];
 
 	error = goodix_i2c_read(ts->client, GOODIX_REG_ID, buf, sizeof(buf));
-	if (error)
+	if (error) {
+		dev_err(&ts->client->dev, "read version failed: %d\n", error);
 		return error;
+	}
 
 	memcpy(id_str, buf, GOODIX_ID_MAX_LEN);
 	id_str[GOODIX_ID_MAX_LEN] = 0;
@@ -1106,10 +1102,13 @@ static int goodix_i2c_test(struct i2c_client *client)
 	u8 test;
 
 	while (retry++ < 2) {
-		error = goodix_i2c_read(client, GOODIX_REG_ID, &test, 1);
+		error = goodix_i2c_read(client, GOODIX_REG_ID,
+					&test, 1);
 		if (!error)
 			return 0;
 
+		dev_err(&client->dev, "i2c test failed attempt %d: %d\n",
+			retry, error);
 		msleep(20);
 	}
 
@@ -1411,8 +1410,10 @@ reset:
 		return error;
 
 	error = goodix_read_version(ts);
-	if (error)
+	if (error) {
+		dev_err(&client->dev, "Read version failed.\n");
 		return error;
+	}
 
 	ts->chip = goodix_get_chip_data(ts->id);
 
@@ -1489,6 +1490,7 @@ static int __maybe_unused goodix_suspend(struct device *dev)
 	error = goodix_i2c_write_u8(ts->client, GOODIX_REG_COMMAND,
 				    GOODIX_CMD_SCREEN_OFF);
 	if (error) {
+		dev_err(&ts->client->dev, "Screen off command failed\n");
 		goodix_irq_direction_input(ts);
 		goodix_request_irq(ts);
 		return -EAGAIN;
@@ -1531,7 +1533,10 @@ static int __maybe_unused goodix_resume(struct device *dev)
 
 	error = goodix_i2c_read(ts->client, ts->chip->config_addr,
 				&config_ver, 1);
-	if (!error && config_ver != ts->config[0])
+	if (error)
+		dev_warn(dev, "Error reading config version: %d, resetting controller\n",
+			 error);
+	else if (config_ver != ts->config[0])
 		dev_info(dev, "Config version mismatch %d != %d, resetting controller\n",
 			 config_ver, ts->config[0]);
 
