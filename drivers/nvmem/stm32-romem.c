@@ -24,7 +24,13 @@
 /* shadow registers offest */
 #define STM32MP15_BSEC_DATA0		0x200
 
-/* 32 (x 32-bits) lower shadow registers */
+/*
+ * BSEC OTP regions: 4096 OTP bits (with 3072 effective bits)
+ * - Lower: 1K bits, 2:1 redundancy, incremental bit programming
+ *   => 32 (x 32-bits) lower shadow registers = words 0 to 31
+ * - Upper: 2K bits, ECC protection, word programming only
+ *   => 64 (x 32-bits) = words 32 to 95
+ */
 #define STM32MP15_BSEC_NUM_LOWER	32
 
 #define STM32_ROMEM_AUTOSUSPEND_DELAY_MS	50
@@ -161,6 +167,9 @@ static int stm32_bsec_write(void *context, unsigned int offset, void *buf,
 			goto end_write;
 		}
 	}
+
+	if (offset + bytes >= STM32MP15_BSEC_NUM_LOWER * 4)
+		dev_warn(dev, "Update of upper OTPs with ECC protection (word programming, only once)\n");
 
 end_write:
 	pm_runtime_mark_last_busy(dev);
