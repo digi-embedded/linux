@@ -410,6 +410,16 @@ static void stm32_dma_set_fifo_config(struct stm32_dma_chan *chan,
 	}
 }
 
+static void stm32_dma_slave_caps(struct dma_chan *c, struct dma_slave_caps *caps)
+{
+	struct stm32_dma_chan *chan = to_stm32_dma_chan(c);
+
+	if (chan->use_mdma)
+		caps->max_sg_burst = 0; /* unlimited */
+	else
+		caps->max_sg_burst = STM32_DMA_ALIGNED_MAX_DATA_ITEMS;
+}
+
 static int stm32_dma_slave_config(struct dma_chan *c,
 				  struct dma_slave_config *config)
 {
@@ -2218,6 +2228,7 @@ static int stm32_dma_probe(struct platform_device *pdev)
 	dd->device_issue_pending = stm32_dma_issue_pending;
 	dd->device_prep_slave_sg = stm32_dma_prep_slave_sg;
 	dd->device_prep_dma_cyclic = stm32_dma_prep_dma_cyclic;
+	dd->device_caps = stm32_dma_slave_caps;
 	dd->device_config = stm32_dma_slave_config;
 	dd->device_pause = stm32_dma_pause;
 	dd->device_resume = stm32_dma_resume;
