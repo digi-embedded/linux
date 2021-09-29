@@ -1350,6 +1350,21 @@
 			status = "disabled";
 		};
 
+		sdmmc2: mmc@58007000 {
+			compatible = "arm,pl18x", "arm,primecell";
+			arm,primecell-periphid = <0x20253180>;
+			reg = <0x58007000 0x1000>, <0x58008000 0x1000>;
+			interrupts = <GIC_SPI 108 IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-names = "cmd_irq";
+			clocks = <&rcc SDMMC2_K>;
+			clock-names = "apb_pclk";
+			resets = <&rcc SDMMC2_R>;
+			cap-sd-highspeed;
+			cap-mmc-highspeed;
+			max-frequency = <130000000>;
+			status = "disabled";
+		};
+
 		stmmac_axi_config_0: stmmac-axi-config {
 			snps,wr_osr_lmt = <0x7>;
 			snps,rd_osr_lmt = <0x7>;
