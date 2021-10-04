@@ -34,6 +34,9 @@ properties:
       Should contain the name of the default firmware image
       file located on the firmware search path
 
+  wakeup-source: true
+  power-domains: true
+
 required:
   - compatible
   - reg
