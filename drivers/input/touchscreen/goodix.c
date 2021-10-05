@@ -1388,6 +1388,9 @@ reset:
 				dev_err(&client->dev, "Gpio unreset failed.\n");
 				return error;
 			}
+
+			/* need a delay after reset to test I2C */
+			msleep(100);
 		}
 	}
 
