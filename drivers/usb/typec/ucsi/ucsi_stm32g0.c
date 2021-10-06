@@ -66,6 +66,8 @@ struct ucsi_stm32g0 {
 	unsigned long flags;
 	const char *fw_name;
 	struct ucsi *ucsi;
+	bool suspended;
+	bool wakeup_event;
 };
 
 /*
@@ -416,6 +418,9 @@ static irqreturn_t ucsi_stm32g0_irq_handler(int irq, void *data)
 	u32 cci;
 	int ret;
 
+	if (g0->suspended)
+		g0->wakeup_event = true;
+
 	ret = ucsi_stm32g0_read(g0->ucsi, UCSI_CCI, &cci, sizeof(cci));
 	if (ret)
 		return IRQ_NONE;
@@ -689,6 +694,52 @@ static int ucsi_stm32g0_remove(struct i2c_client *client)
 	return 0;
 }
 
+static int __maybe_unused ucsi_stm32g0_suspend(struct device *dev)
+{
+	struct ucsi_stm32g0 *g0 = dev_get_drvdata(dev);
+	struct i2c_client *client = g0->client;
+
+	if (g0->in_bootloader)
+		return 0;
+
+	/* Keep the interrupt disabled until the i2c bus has been resumed */
+	disable_irq(client->irq);
+
+	g0->suspended = true;
+	g0->wakeup_event = false;
+
+	if (device_may_wakeup(dev) || device_wakeup_path(dev))
+		enable_irq_wake(client->irq);
+
+	return 0;
+}
+
+static int __maybe_unused ucsi_stm32g0_resume(struct device *dev)
+{
+	struct ucsi_stm32g0 *g0 = dev_get_drvdata(dev);
+	struct i2c_client *client = g0->client;
+
+	if (g0->in_bootloader)
+		return 0;
+
+	if (device_may_wakeup(dev) || device_wakeup_path(dev))
+		disable_irq_wake(client->irq);
+
+	enable_irq(client->irq);
+
+	/* Enforce any pending handler gets called to signal a wakeup_event */
+	synchronize_irq(client->irq);
+
+	if (g0->wakeup_event)
+		pm_wakeup_event(g0->dev, 0);
+
+	g0->suspended = false;
+
+	return 0;
+}
+
+static SIMPLE_DEV_PM_OPS(ucsi_stm32g0_pm_ops, ucsi_stm32g0_suspend, ucsi_stm32g0_resume);
+
 static const struct of_device_id __maybe_unused ucsi_stm32g0_typec_of_match[] = {
 	{ .compatible = "st,stm32g0-typec" },
 	{},
@@ -705,6 +756,7 @@ static struct i2c_driver ucsi_stm32g0_i2c_driver = {
 	.driver = {
 		.name = "ucsi-stm32g0-i2c",
 		.of_match_table = of_match_ptr(ucsi_stm32g0_typec_of_match),
+		.pm = &ucsi_stm32g0_pm_ops,
 	},
 	.probe = ucsi_stm32g0_probe,
 	.remove = ucsi_stm32g0_remove,
