@@ -2346,9 +2346,45 @@ static int stm32f7_i2c_remove(struct platform_device *pdev)
 	return 0;
 }
 
+static void __maybe_unused stm32f7_i2c_regs_backup(struct stm32f7_i2c_dev *i2c_dev)
+{
+	struct stm32f7_i2c_regs *backup_regs = &i2c_dev->backup_regs;
+
+	backup_regs->cr1 = readl_relaxed(i2c_dev->base + STM32F7_I2C_CR1);
+	backup_regs->cr2 = readl_relaxed(i2c_dev->base + STM32F7_I2C_CR2);
+	backup_regs->oar1 = readl_relaxed(i2c_dev->base + STM32F7_I2C_OAR1);
+	backup_regs->oar2 = readl_relaxed(i2c_dev->base + STM32F7_I2C_OAR2);
+	backup_regs->tmgr = readl_relaxed(i2c_dev->base + STM32F7_I2C_TIMINGR);
+	stm32f7_i2c_write_fm_plus_bits(i2c_dev, false);
+}
+
+static void __maybe_unused stm32f7_i2c_regs_restore(struct stm32f7_i2c_dev *i2c_dev)
+{
+	u32 cr1;
+	struct stm32f7_i2c_regs *backup_regs = &i2c_dev->backup_regs;
+
+	cr1 = readl_relaxed(i2c_dev->base + STM32F7_I2C_CR1);
+	if (cr1 & STM32F7_I2C_CR1_PE)
+		stm32f7_i2c_clr_bits(i2c_dev->base + STM32F7_I2C_CR1,
+				     STM32F7_I2C_CR1_PE);
+
+	writel_relaxed(backup_regs->tmgr, i2c_dev->base + STM32F7_I2C_TIMINGR);
+	writel_relaxed(backup_regs->cr1 & ~STM32F7_I2C_CR1_PE,
+		       i2c_dev->base + STM32F7_I2C_CR1);
+	if (backup_regs->cr1 & STM32F7_I2C_CR1_PE)
+		stm32f7_i2c_set_bits(i2c_dev->base + STM32F7_I2C_CR1,
+				     STM32F7_I2C_CR1_PE);
+	writel_relaxed(backup_regs->cr2, i2c_dev->base + STM32F7_I2C_CR2);
+	writel_relaxed(backup_regs->oar1, i2c_dev->base + STM32F7_I2C_OAR1);
+	writel_relaxed(backup_regs->oar2, i2c_dev->base + STM32F7_I2C_OAR2);
+	stm32f7_i2c_write_fm_plus_bits(i2c_dev, true);
+}
+
 static int __maybe_unused stm32f7_i2c_runtime_suspend(struct device *dev)
 {
 	struct stm32f7_i2c_dev *i2c_dev = dev_get_drvdata(dev);
+
+	stm32f7_i2c_regs_backup(i2c_dev);
 
 	if (!stm32f7_i2c_is_slave_registered(i2c_dev))
 		clk_disable_unprepare(i2c_dev->clk);
@@ -2369,78 +2405,21 @@ static int __maybe_unused stm32f7_i2c_runtime_resume(struct device *dev)
 		}
 	}
 
+	stm32f7_i2c_regs_restore(i2c_dev);
+
 	return 0;
-}
-
-static int __maybe_unused stm32f7_i2c_regs_backup(struct stm32f7_i2c_dev *i2c_dev)
-{
-	int ret;
-	struct stm32f7_i2c_regs *backup_regs = &i2c_dev->backup_regs;
-
-	ret = pm_runtime_resume_and_get(i2c_dev->dev);
-	if (ret < 0)
-		return ret;
-
-	backup_regs->cr1 = readl_relaxed(i2c_dev->base + STM32F7_I2C_CR1);
-	backup_regs->cr2 = readl_relaxed(i2c_dev->base + STM32F7_I2C_CR2);
-	backup_regs->oar1 = readl_relaxed(i2c_dev->base + STM32F7_I2C_OAR1);
-	backup_regs->oar2 = readl_relaxed(i2c_dev->base + STM32F7_I2C_OAR2);
-	backup_regs->tmgr = readl_relaxed(i2c_dev->base + STM32F7_I2C_TIMINGR);
-	stm32f7_i2c_write_fm_plus_bits(i2c_dev, false);
-
-	pm_runtime_put_sync(i2c_dev->dev);
-
-	return ret;
-}
-
-static int __maybe_unused stm32f7_i2c_regs_restore(struct stm32f7_i2c_dev *i2c_dev)
-{
-	u32 cr1;
-	int ret;
-	struct stm32f7_i2c_regs *backup_regs = &i2c_dev->backup_regs;
-
-	ret = pm_runtime_resume_and_get(i2c_dev->dev);
-	if (ret < 0)
-		return ret;
-
-	cr1 = readl_relaxed(i2c_dev->base + STM32F7_I2C_CR1);
-	if (cr1 & STM32F7_I2C_CR1_PE)
-		stm32f7_i2c_clr_bits(i2c_dev->base + STM32F7_I2C_CR1,
-				     STM32F7_I2C_CR1_PE);
-
-	writel_relaxed(backup_regs->tmgr, i2c_dev->base + STM32F7_I2C_TIMINGR);
-	writel_relaxed(backup_regs->cr1 & ~STM32F7_I2C_CR1_PE,
-		       i2c_dev->base + STM32F7_I2C_CR1);
-	if (backup_regs->cr1 & STM32F7_I2C_CR1_PE)
-		stm32f7_i2c_set_bits(i2c_dev->base + STM32F7_I2C_CR1,
-				     STM32F7_I2C_CR1_PE);
-	writel_relaxed(backup_regs->cr2, i2c_dev->base + STM32F7_I2C_CR2);
-	writel_relaxed(backup_regs->oar1, i2c_dev->base + STM32F7_I2C_OAR1);
-	writel_relaxed(backup_regs->oar2, i2c_dev->base + STM32F7_I2C_OAR2);
-	stm32f7_i2c_write_fm_plus_bits(i2c_dev, true);
-
-	pm_runtime_put_sync(i2c_dev->dev);
-
-	return ret;
 }
 
 static int __maybe_unused stm32f7_i2c_suspend(struct device *dev)
 {
 	struct stm32f7_i2c_dev *i2c_dev = dev_get_drvdata(dev);
-	int ret;
 
 	i2c_mark_adapter_suspended(&i2c_dev->adap);
 
-	if (!device_may_wakeup(dev) && !device_wakeup_path(dev)) {
-		ret = stm32f7_i2c_regs_backup(i2c_dev);
-		if (ret < 0) {
-			i2c_mark_adapter_resumed(&i2c_dev->adap);
-			return ret;
-		}
-
+	if (!device_may_wakeup(dev) && !device_wakeup_path(dev))
 		pinctrl_pm_select_sleep_state(dev);
-		pm_runtime_force_suspend(dev);
-	}
+
+	pm_runtime_force_suspend(dev);
 
 	return 0;
 }
@@ -2450,16 +2429,12 @@ static int __maybe_unused stm32f7_i2c_resume(struct device *dev)
 	struct stm32f7_i2c_dev *i2c_dev = dev_get_drvdata(dev);
 	int ret;
 
-	if (!device_may_wakeup(dev) && !device_wakeup_path(dev)) {
-		ret = pm_runtime_force_resume(dev);
-		if (ret < 0)
-			return ret;
-		pinctrl_pm_select_default_state(dev);
+	ret = pm_runtime_force_resume(dev);
+	if (ret < 0)
+		return ret;
 
-		ret = stm32f7_i2c_regs_restore(i2c_dev);
-		if (ret < 0)
-			return ret;
-	}
+	if (!device_may_wakeup(dev) && !device_wakeup_path(dev))
+		pinctrl_pm_select_default_state(dev);
 
 	i2c_mark_adapter_resumed(&i2c_dev->adap);
 
