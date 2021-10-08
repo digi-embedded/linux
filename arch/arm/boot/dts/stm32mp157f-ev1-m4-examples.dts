@@ -12,3 +12,7 @@
 	model = "STMicroelectronics STM32MP157F-EV1 configured to run M4 examples";
 	compatible = "st,stm32mp157f-ev1-m4-examples", "st,stm32mp157f-ev1", "st,stm32mp157f-ed1", "st,stm32mp157";
 };
+
+&i2c5 {
+	status = "disabled";
+};
