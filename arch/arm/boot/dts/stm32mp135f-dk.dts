@@ -32,6 +32,14 @@
 	};
 };
 
+&dma1 {
+	sram = <&dma_pool>;
+};
+
+&dma2 {
+	sram = <&dma_pool>;
+};
+
 &iwdg2 {
 	timeout-sec = <32>;
 	status = "okay";
@@ -47,6 +55,13 @@
 	bus-width = <4>;
 	vmmc-supply = <&vdd_sd>;
 	status = "okay";
+};
+
+&sram {
+	dma_pool: dma-sram@0 {
+		reg = <0x0 0x4000>;
+		pool;
+	};
 };
 
 &uart4 {
