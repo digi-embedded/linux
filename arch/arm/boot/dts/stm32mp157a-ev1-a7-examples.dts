@@ -12,6 +12,22 @@
 / {
 	model = "STMicroelectronics STM32MP157A-EV1 configured to run Linux A7 examples";
 	compatible = "st,stm32mp157a-ev1-a7-examples", "st,stm32mp157a-ev1", "st,stm32mp157a-ed1", "st,stm32mp157";
+
+	test_keys {
+		compatible = "gpio-keys";
+		autorepeat;
+		status = "okay";
+		/* gpio needs vdd core in retention for wakeup */
+		power-domains = <&pd_core_ret>;
+
+		button-1 {
+				label = "PA13";
+				linux,code = <BTN_1>;
+				gpios = <&gpioa 13 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+				status = "okay";
+				wakeup-source;
+		};
+	};
 };
 
 &usart3 {
