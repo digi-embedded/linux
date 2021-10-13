@@ -165,6 +165,13 @@
 	status = "okay";
 };
 
+&spi5 {
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&spi5_pins_a>;
+	pinctrl-1 = <&spi5_sleep_pins_a>;
+	status = "disabled";
+};
+
 &sram {
 	dma_pool: dma-sram@0 {
 		reg = <0x0 0x4000>;
