@@ -566,6 +566,20 @@
 	status = "disabled";
 };
 
+&spi4 {
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&spi4_pins_b>;
+	pinctrl-1 = <&spi4_sleep_pins_b>;
+	status = "disabled";
+};
+
+&spi5 {
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&spi5_pins_a>;
+	pinctrl-1 = <&spi5_sleep_pins_a>;
+	status = "disabled";
+};
+
 &sram {
 	dma_pool: dma_pool@0 {
 		reg = <0x50000 0x10000>;
