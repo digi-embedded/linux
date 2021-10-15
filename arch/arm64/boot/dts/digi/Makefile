@@ -29,6 +29,7 @@ dtb-$(CONFIG_ARCH_MXC) += _ov_board_flexcan1_ccimx8x-sbc-pro.dtbo \
 			  _ov_som_mfg-functional_ccimx8x.dtbo \
 			  _ov_som_quad_ccimx8m.dtbo \
 			  _ov_som_quad_ccimx8x.dtbo \
+			  _ov_som_trusty_ccimx8m.dtbo \
 			  _ov_som_v1_ccimx8mn.dtbo \
 			  _ov_som_wifi_ccimx8m.dtbo \
 			  _ov_som_wifi_ccimx8x.dtbo \
