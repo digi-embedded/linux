@@ -98,9 +98,29 @@ static ssize_t fwver_show(struct device *dev, struct device_attribute *attr,
 }
 static DEVICE_ATTR(fw_version, S_IRUGO, fwver_show, NULL);
 
+static ssize_t uid_show(struct device *dev,
+			struct device_attribute *attr, char *buf)
+
+{
+	struct mca_ioexp *ioexp = dev_get_drvdata(dev);
+	int ret, i, count;
+
+	for (i = 0, ret = 0; i < MCA_UID_SIZE; i++) {
+		count = sprintf(buf, i ? ":%02x" : "%02x", ioexp->uid[i]);
+		if (count < 0)
+			return count;
+		ret += count;
+		buf += count;
+	}
+
+	return ret;
+}
+static DEVICE_ATTR(uid, S_IRUGO, uid_show, NULL);
+
 static struct attribute *mca_ioexp_sysfs_entries[] = {
 	&dev_attr_hw_version.attr,
 	&dev_attr_fw_version.attr,
+	&dev_attr_uid.attr,
 	NULL,
 };
 
@@ -299,11 +319,18 @@ int mca_ioexp_device_init(struct mca_ioexp *ioexp, u32 irq)
 
 	ret = regmap_read(ioexp->regmap, MCA_HW_VER, &val);
 	if (ret) {
-		dev_err(ioexp->dev, "Cannot read MCA Hardware Version (%d)\n",
+		dev_err(ioexp->dev, "Cannot read MCA IO Expander Hardware Version (%d)\n",
 			ret);
 		return ret;
 	}
 	ioexp->hw_version = (u8)val;
+
+	ret = regmap_bulk_read(ioexp->regmap,
+			       MCA_UID_0, ioexp->uid, MCA_UID_SIZE);
+	if (ret != 0) {
+		dev_err(ioexp->dev, "Cannot read MCA IO Expander UID (%d)\n", ret);
+		return ret;
+	}
 
 	ret = regmap_bulk_read(ioexp->regmap, MCA_FW_VER_L, &val, 2);
 	if (ret) {

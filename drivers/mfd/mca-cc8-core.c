@@ -755,11 +755,31 @@ static ssize_t nvram_write(struct file *filp, struct kobject *kobj,
 	return count;
 }
 
+static ssize_t uid_show(struct device *dev,
+			struct device_attribute *attr, char *buf)
+
+{
+	struct mca_drv *mca = dev_get_drvdata(dev);
+	int ret, i, count;
+
+	for (i = 0, ret = 0; i < MCA_UID_SIZE; i++) {
+		count = sprintf(buf, i ? ":%02x" : "%02x", mca->uid[i]);
+		if (count < 0)
+			return count;
+		ret += count;
+		buf += count;
+	}
+
+	return ret;
+}
+static DEVICE_ATTR(uid, S_IRUGO, uid_show, NULL);
+
 static struct attribute *mca_cc8_sysfs_entries[] = {
 	&dev_attr_ext_32khz.attr,
 	&dev_attr_hw_version.attr,
 	&dev_attr_fw_version.attr,
 	&dev_attr_fw_update.attr,
+	&dev_attr_uid.attr,
 	NULL,
 };
 
@@ -993,6 +1013,13 @@ int mca_cc8_device_init(struct mca_drv *mca, u32 irq)
 		return ret;
 	}
 	mca->hw_version = (u8)val;
+
+	ret = regmap_bulk_read(mca->regmap,
+			       MCA_UID_0, mca->uid, MCA_UID_SIZE);
+	if (ret != 0) {
+		dev_err(mca->dev, "Cannot read MCA UID (%d)\n", ret);
+		return ret;
+	}
 
 	ret = regmap_bulk_read(mca->regmap, MCA_FW_VER_L, &val, 2);
 	if (ret != 0) {
