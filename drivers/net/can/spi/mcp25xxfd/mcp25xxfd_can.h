@@ -31,7 +31,7 @@ void mcp25xxfd_can_queue_frame(struct mcp25xxfd_can_priv *cpriv,
 	cpriv->fifos.submit_queue[idx].ts = ts;
 	cpriv->fifos.submit_queue[idx].is_rx = is_rx;
 
-	MCP25XXFD_DEBUGFS_INCR(cpriv->fifos.submit_queue_count);
+	cpriv->fifos.submit_queue_count++;
 }
 
 /* get the current controller mode */
