@@ -236,6 +236,8 @@ struct stm32_dma_chan {
 	u32 use_mdma;
 	u32 sram_size;
 	u32 residue_after_drain;
+	struct workqueue_struct *mdma_wq;
+	struct work_struct mdma_work;
 };
 
 struct stm32_dma_device {
@@ -581,6 +583,8 @@ static int stm32_dma_mdma_drain(struct stm32_dma_chan *chan)
 	int ret;
 	unsigned long flags;
 
+	flush_workqueue(chan->mdma_wq);
+
 	/* DMA/MDMA chain: drain remaining data in SRAM */
 
 	/* Get the residue on MDMA side */
@@ -813,28 +817,46 @@ static int stm32_dma_mdma_flush_remaining(struct stm32_dma_chan *chan)
 
 static void stm32_dma_start_transfer(struct stm32_dma_chan *chan);
 
-static void stm32_mdma_chan_complete(void *param, const struct dmaengine_result *result)
+static void stm32_mdma_chan_complete_worker(struct work_struct *work)
 {
-	struct stm32_dma_chan *chan = param;
+	struct stm32_dma_chan *chan = container_of(work, struct stm32_dma_chan, mdma_work);
+	unsigned long flags;
 	int ret;
 
 	chan->busy = false;
 	chan->status = DMA_COMPLETE;
-	if (result->result == DMA_TRANS_NOERROR) {
-		ret = stm32_dma_mdma_flush_remaining(chan);
-		if (ret) {
-			dev_err(chan2dev(chan), "Can't flush DMA: %d\n", ret);
-			return;
-		}
+	ret = stm32_dma_mdma_flush_remaining(chan);
+	if (ret) {
+		dev_err(chan2dev(chan), "Can't flush DMA: %d\n", ret);
+		return;
+	}
 
-		if (chan->next_sg == chan->desc->num_sgs) {
-			vchan_cookie_complete(&chan->desc->vdesc);
-			chan->desc = NULL;
+	spin_lock_irqsave(&chan->vchan.lock, flags);
+
+	if (chan->next_sg == chan->desc->num_sgs) {
+		vchan_cookie_complete(&chan->desc->vdesc);
+		chan->desc = NULL;
+	}
+
+	stm32_dma_start_transfer(chan);
+
+	spin_unlock_irqrestore(&chan->vchan.lock, flags);
+}
+
+static void stm32_mdma_chan_complete(void *param, const struct dmaengine_result *result)
+{
+	struct stm32_dma_chan *chan = param;
+
+	if (result->result == DMA_TRANS_NOERROR) {
+		if (!queue_work(chan->mdma_wq, &chan->mdma_work)) {
+			chan->busy = false;
+			chan->status = DMA_COMPLETE;
+			dev_warn(chan2dev(chan), "Work already queued\n");
 		}
-		stm32_dma_start_transfer(chan);
 	} else {
-		dev_err(chan2dev(chan), "MDMA transfer error: %d\n",
-			result->result);
+		chan->busy = false;
+		chan->status = DMA_COMPLETE;
+		dev_err(chan2dev(chan), "MDMA transfer error: %d\n", result->result);
 	}
 }
 
@@ -1535,6 +1557,7 @@ static int stm32_dma_mdma_prep_slave_sg(struct stm32_dma_chan *chan,
 		if (mchan->dir != DMA_MEM_TO_DEV) {
 			m_desc->desc->callback_result = stm32_mdma_chan_complete;
 			m_desc->desc->callback_param = chan;
+			INIT_WORK(&chan->mdma_work, stm32_mdma_chan_complete_worker);
 		}
 	}
 
@@ -2300,6 +2323,20 @@ static int stm32_dma_probe(struct platform_device *pdev)
 					goto err_dma;
 
 				dev_info(&pdev->dev, "can't request MDMA chan for %s\n", name);
+			} else {
+				/*
+				 * Allocate workqueue per channel in case of MDMA/DMA chaining, to
+				 * avoid deadlock with MDMA callback stm32_mdma_chan_complete() when
+				 * MDMA interrupt handler is executed in a thread (which is the
+				 * case in Linux-RT kernel or if force_irqthreads is set).
+				 */
+				chan->mdma_wq = alloc_ordered_workqueue("dma_work-%s", 0, name);
+				if (!chan->mdma_wq) {
+					dma_release_channel(mchan->chan);
+					mchan->chan = NULL;
+					dev_warn(&pdev->dev,
+						 "can't alloc MDMA workqueue for %s\n", name);
+				}
 			}
 		}
 	}
