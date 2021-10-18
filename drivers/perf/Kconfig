@@ -106,6 +106,13 @@ config QCOM_L3_PMU
 	   Adds the L3 cache PMU into the perf events subsystem for
 	   monitoring L3 cache events.
 
+config STM32_DDR_PMU
+	tristate "STM32 DDR PMU"
+	depends on MACH_STM32MP157
+	default m
+	help
+	  Support for STM32 DDR performance monitor (DDRPERFM).
+
 config THUNDERX2_PMU
 	tristate "Cavium ThunderX2 SoC PMU UNCORE"
 	depends on ARCH_THUNDER2 && ARM64 && ACPI && NUMA
