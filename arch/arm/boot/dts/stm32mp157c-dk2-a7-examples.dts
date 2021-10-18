@@ -16,3 +16,37 @@
 &i2c5 {
 	status = "okay";
 };
+
+&adc {
+	status = "okay";
+
+	adc2: adc@100 {
+		/* Set IRQ mode as example. DMA is the preferred mode, yet. */
+		/delete-property/dmas;
+		/delete-property/dma-names;
+	};
+};
+
+&timers1 {
+	status = "okay";
+};
+
+&timers3 {
+	status = "okay";
+};
+
+&timers4 {
+	status = "okay";
+};
+
+&timers5 {
+	status = "okay";
+};
+
+&timers6 {
+	status = "okay";
+};
+
+&timers12 {
+	status = "okay";
+};
