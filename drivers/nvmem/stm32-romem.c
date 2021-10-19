@@ -73,6 +73,17 @@ static int stm32_bsec_smc(u8 op, u32 otp, u32 data, u32 *result)
 #endif
 }
 
+static bool stm32_bsec_check(void)
+{
+	u32 val;
+	int ret;
+
+	/* check that the OP-TEE support the BSEC SMC (legacy mode) */
+	ret = stm32_bsec_smc(STM32_SMC_READ_SHADOW, 0, 0, &val);
+
+	return !ret;
+}
+
 static int stm32_bsec_read(void *context, unsigned int offset, void *buf,
 			   size_t bytes)
 {
@@ -147,6 +158,20 @@ static int stm32_bsec_write(void *context, unsigned int offset, void *buf,
 	return 0;
 }
 
+static bool optee_presence_check(void)
+{
+	struct device_node *np;
+	bool tee_detected = false;
+
+	/* check that the OP-TEE node is present and available. */
+	np = of_find_node_by_path("/firmware/optee");
+	if (np && of_device_is_available(np))
+		tee_detected = true;
+	of_node_put(np);
+
+	return tee_detected;
+}
+
 static int stm32_romem_probe(struct platform_device *pdev)
 {
 	const struct stm32_romem_cfg *cfg;
@@ -182,12 +207,16 @@ static int stm32_romem_probe(struct platform_device *pdev)
 	} else {
 		priv->cfg.size = cfg->size;
 		priv->lower = cfg->lower;
-		if (cfg->ta) {
+		if (cfg->ta || optee_presence_check()) {
 			priv->ta = stm32_bsec_pta_find(dev);
 			/* wait for OP-TEE client driver to be up and ready */
-			if (!priv->ta)
-				return -EPROBE_DEFER;
-
+			if (!priv->ta) {
+				/* BSEC PTA is required or SMC not ready */
+				if (cfg->ta || !stm32_bsec_check())
+					return -EPROBE_DEFER;
+			}
+		}
+		if (priv->ta) {
 			priv->cfg.reg_read = stm32_bsec_pta_read;
 			priv->cfg.reg_write = stm32_bsec_pta_write;
 		} else {
