@@ -104,7 +104,8 @@
 
 			ldo2: ldo2 {
 				regulator-name = "DA9063_LDO2";
-				regulator-boot-on;
+				regulator-suspend-mem-disabled;
+				regulator-suspend-standby-disabled;
 			};
 
 			ldo3: ldo3 {
@@ -127,6 +128,22 @@
 
 			ldo6: ldo6 {
 				regulator-name = "DA9063_LDO6";
+				regulator-min-microvolt = <900000>;
+				regulator-max-microvolt = <3600000>;
+				regulator-suspend-mem-disabled;
+				regulator-suspend-standby-disabled;
+			};
+
+			ldo9: ldo9 {
+				regulator-name = "DA9063_LDO9";
+				regulator-min-microvolt = <950000>;
+				regulator-max-microvolt = <3600000>;
+				regulator-suspend-mem-disabled;
+				regulator-suspend-standby-disabled;
+			};
+
+			ldo10: ldo10 {
+				regulator-name = "DA9063_LDO10";
 				regulator-min-microvolt = <900000>;
 				regulator-max-microvolt = <3600000>;
 				regulator-suspend-mem-disabled;
@@ -163,6 +180,7 @@
 	pinctrl-2 = <&pinctrl_usdhc1_200mhz>;
 	no-1-8-v;
 	status = "okay";
+	vqmmc-supply = <&ldo10>;
 };
 
 &usdhc4 {
