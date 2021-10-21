@@ -923,4 +923,5 @@
 	no-1-8-v;
 	keep-power-in-suspend;
 	enable-sdio-wakeup;
+	vqmmc-supply = <&ldo9>;
 };
