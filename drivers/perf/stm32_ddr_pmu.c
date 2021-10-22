@@ -87,7 +87,7 @@ static void stm32_ddr_pmu_event_configure(struct perf_event *event)
 	}
 }
 
-static void stm32_ddr_pmu_event_read(struct perf_event *event)
+static void stm32_ddr_pmu_event_update(struct perf_event *event)
 {
 	struct stm32_ddr_pmu *stm32_ddr_pmu = pmu_to_stm32_ddr_pmu(event->pmu);
 	unsigned long config_base = event->hw.config_base;
@@ -118,6 +118,16 @@ static void stm32_ddr_pmu_event_read(struct perf_event *event)
 
 	mask = GENMASK_ULL(31, 0);
 	local64_add(val & mask, &event->count);
+}
+
+static void stm32_ddr_pmu_event_read(struct perf_event *event)
+{
+	struct stm32_ddr_pmu *stm32_ddr_pmu = pmu_to_stm32_ddr_pmu(event->pmu);
+
+	hrtimer_start(&stm32_ddr_pmu->hrtimer, stm32_ddr_pmu->poll_period,
+		      HRTIMER_MODE_REL_PINNED);
+
+	stm32_ddr_pmu_event_update(event);
 }
 
 static void stm32_ddr_pmu_event_start(struct perf_event *event, int flags)
@@ -165,7 +175,7 @@ static void stm32_ddr_pmu_event_stop(struct perf_event *event, int flags)
 	hw->state |= PERF_HES_STOPPED;
 
 	if (flags & PERF_EF_UPDATE) {
-		stm32_ddr_pmu_event_read(event);
+		stm32_ddr_pmu_event_update(event);
 		hw->state |= PERF_HES_UPTODATE;
 	}
 }
@@ -260,7 +270,7 @@ static enum hrtimer_restart stm32_ddr_pmu_poll(struct hrtimer *hrtimer)
 
 	for (i = 0; i < PMU_NR_COUNTERS; i++)
 		if (stm32_ddr_pmu->events[i])
-			stm32_ddr_pmu_event_read(stm32_ddr_pmu->events[i]);
+			stm32_ddr_pmu_event_update(stm32_ddr_pmu->events[i]);
 
 	hrtimer_forward_now(hrtimer, stm32_ddr_pmu->poll_period);
 
@@ -362,6 +372,7 @@ static int stm32_ddr_pmu_device_probe(struct platform_device *pdev)
 		.stop = stm32_ddr_pmu_event_stop,
 		.add = stm32_ddr_pmu_event_add,
 		.del = stm32_ddr_pmu_event_del,
+		.read = stm32_ddr_pmu_event_read,
 		.event_init = stm32_ddr_pmu_event_init,
 		.attr_groups = stm32_ddr_pmu_attr_groups,
 	};
