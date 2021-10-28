@@ -1271,6 +1271,17 @@
 			#interrupt-cells = <2>;
 			reg = <0x5000d000 0x400>;
 			hwlocks = <&hsem 1 1>;
+
+			/* exti_pwr is an extra interrupt controller used for
+			 * EXTI 55 to 60. It's mapped on pwr interrupt
+			 * controller.
+			 */
+			exti_pwr: exti-pwr {
+				interrupt-controller;
+				#interrupt-cells = <2>;
+				interrupt-parent = <&pwr_irq>;
+				st,irq-number = <6>;
+			};
 		};
 
 		syscfg: syscon@50020000 {
