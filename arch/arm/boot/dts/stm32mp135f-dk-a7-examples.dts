@@ -11,6 +11,103 @@
 / {
 	model = "STMicroelectronics STM32MP135F-DK configured to run Linux A7 examples";
 	compatible = "st,stm32mp135f-dk-a7-examples", "st,stm32mp135f-dk", "st,stm32mp135";
+
+	dmic0: dmic-0 {
+		compatible = "dmic-codec";
+		#sound-dai-cells = <1>;
+		sound-name-prefix = "dmic0";
+		status = "disabled";
+
+		port {
+			dmic0_endpoint: endpoint {
+				remote-endpoint = <&dfsdm_endpoint0>;
+			};
+		};
+	};
+
+	dmic1: dmic-1 {
+		compatible = "dmic-codec";
+		#sound-dai-cells = <1>;
+		sound-name-prefix = "dmic1";
+		status = "disabled";
+
+		port {
+			dmic1_endpoint: endpoint {
+				remote-endpoint = <&dfsdm_endpoint1>;
+			};
+		};
+	};
+
+/*
+ * Sound card to support external digital microphones connected
+ * on the expansion connector.
+ */
+	sound {
+		compatible = "audio-graph-card";
+		label = "STM32MP13-DK";
+		dais = <&dfsdm0_port &dfsdm1_port>;
+		status = "disabled";
+	};
+};
+
+&dfsdm {
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&dfsdm_clkout_pins_a
+		     &dfsdm_datin1_pins_a &dfsdm_datin3_pins_a>;
+	pinctrl-1 = <&dfsdm_clkout_sleep_pins_a
+		     &dfsdm_datin1_sleep_pins_a &dfsdm_datin3_sleep_pins_a>;
+	spi-max-frequency = <2048000>;
+
+	clocks = <&rcc DFSDM_K>, <&rcc ADFSDM_K>;
+	clock-names = "dfsdm", "audio";
+	status = "disabled";
+
+	dfsdm0: filter@0 {
+		compatible = "st,stm32-dfsdm-dmic";
+		st,adc-channels = <3>;
+		st,adc-channel-names = "dmic0";
+		st,adc-channel-types = "SPI_R";
+		st,adc-channel-clk-src = "CLKOUT";
+		st,filter-order = <3>;
+		status = "okay";
+
+		asoc_pdm0: dfsdm-dai {
+			compatible = "st,stm32h7-dfsdm-dai";
+			#sound-dai-cells = <0>;
+			io-channels = <&dfsdm0 0>;
+			status = "okay";
+
+			dfsdm0_port: port {
+				dfsdm_endpoint0: endpoint {
+					remote-endpoint = <&dmic0_endpoint>;
+				};
+			};
+		};
+	};
+
+	dfsdm1: filter@1 {
+		compatible = "st,stm32-dfsdm-dmic";
+		st,adc-channels = <0>;
+		st,adc-channel-names = "dmic1";
+		st,adc-channel-types = "SPI_F";
+		st,adc-channel-clk-src = "CLKOUT";
+		st,filter-order = <3>;
+		st,adc-alt-channel = <1>;
+		status = "okay";
+
+		asoc_pdm1: dfsdm-dai {
+			compatible = "st,stm32h7-dfsdm-dai";
+			#sound-dai-cells = <0>;
+			io-channels = <&dfsdm1 0>;
+			status = "okay";
+
+			dfsdm1_port: port {
+				dfsdm_endpoint1: endpoint {
+					remote-endpoint = <&dmic1_endpoint>;
+				};
+			};
+		};
+	};
 };
 
 &timers4 {
