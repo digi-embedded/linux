@@ -552,6 +552,16 @@ static void stm32_exti_h_unmask(struct irq_data *d)
 		irq_chip_unmask_parent(d);
 }
 
+static int stm32_exti_h_request_resources(struct irq_data *data)
+{
+	data = data->parent_data;
+
+	if (data->chip->irq_request_resources)
+		return data->chip->irq_request_resources(data);
+
+	return 0;
+}
+
 static int stm32_exti_h_set_type(struct irq_data *d, unsigned int type)
 {
 	struct stm32_exti_chip_data *chip_data = irq_data_get_irq_chip_data(d);
@@ -692,6 +702,8 @@ static struct irq_chip stm32_exti_h_chip = {
 	.irq_ack		= stm32_exti_h_ack,
 	.irq_mask		= stm32_exti_h_mask,
 	.irq_unmask		= stm32_exti_h_unmask,
+	.irq_request_resources	= stm32_exti_h_request_resources,
+	.irq_release_resources	= irq_chip_release_resources_parent,
 	.irq_retrigger		= stm32_exti_h_retrigger,
 	.irq_set_type		= stm32_exti_h_set_type,
 	.irq_set_wake		= stm32_exti_h_set_wake,
@@ -705,6 +717,8 @@ static struct irq_chip stm32_exti_h_chip_direct = {
 	.irq_ack		= irq_chip_ack_parent,
 	.irq_mask		= stm32_exti_h_mask,
 	.irq_unmask		= stm32_exti_h_unmask,
+	.irq_request_resources	= stm32_exti_h_request_resources,
+	.irq_release_resources	= irq_chip_release_resources_parent,
 	.irq_retrigger		= irq_chip_retrigger_hierarchy,
 	.irq_set_type		= irq_chip_set_type_parent,
 	.irq_set_wake		= stm32_exti_h_set_wake,
