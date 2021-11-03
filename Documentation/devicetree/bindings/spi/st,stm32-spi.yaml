@@ -27,6 +27,7 @@ allOf:
     then:
       properties:
         st,spi-midi-ns: false
+        spi-slave: false
 
 properties:
   "#address-cells": true
@@ -61,6 +62,17 @@ properties:
     items:
       - const: rx
       - const: tx
+
+  spi-slave:
+    description:
+      The SPI controller acts as a slave, instead of a master.
+
+  cs-gpios:
+    description:
+      In case of spi-slave not defined, cs-gpios behave as defined in
+      spi-controller.yaml.
+      In case of spi-slave defined, if <0>, indicate that SS should be
+      detected via the dedicated HW pin
 
 patternProperties:
   "^[a-zA-Z][a-zA-Z0-9,+\\-._]{0,63}@[0-9a-f]+$":
