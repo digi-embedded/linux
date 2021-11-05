@@ -57,7 +57,7 @@
 			compatible = "linaro,scmi-optee";
 			#address-cells = <1>;
 			#size-cells = <0>;
-			linaro,channel-id = <0>;
+			linaro,optee-channel-id = <0>;
 			shmem = <&scmi0_shm>;
 
 			scmi0_perf: protocol@13 {
@@ -99,7 +99,7 @@
 			compatible = "linaro,scmi-optee";
 			#address-cells = <1>;
 			#size-cells = <0>;
-			linaro,channel-id = <1>;
+			linaro,optee-channel-id = <1>;
 			shmem = <&scmi1_shm>;
 			status = "disabled";
 

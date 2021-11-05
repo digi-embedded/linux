@@ -61,10 +61,10 @@
 
 	firmware {
 		scmi0: scmi0 {
-			compatible = "arm,scmi-smc";
+			compatible = "linaro,scmi-optee";
 			#address-cells = <1>;
 			#size-cells = <0>;
-			arm,smc-id = <0x82002000>;
+			linaro,optee-channel-id = <0>;
 			shmem = <&scmi0_shm>;
 
 			scmi0_clk: protocol@14 {
@@ -79,10 +79,10 @@
 		};
 
 		scmi1: scmi1 {
-			compatible = "arm,scmi-smc";
+			compatible = "linaro,scmi-optee";
 			#address-cells = <1>;
 			#size-cells = <0>;
-			arm,smc-id = <0x82002001>;
+			linaro,optee-channel-id = <1>;
 			shmem = <&scmi1_shm>;
 			status = "disabled";
 
