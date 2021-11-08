@@ -246,6 +246,28 @@
 		#interrupt-cells = <2>;
 		microchip,irq-mirror;
 	};
+
+	stm32g0@53 {
+		compatible = "st,stm32g0-typec";
+		reg = <0x53>;
+		/* Alert pin on PI2 */
+		interrupts = <2 IRQ_TYPE_EDGE_FALLING>;
+		interrupt-parent = <&gpioi>;
+		/* Internal pull-up on PI2 */
+		pinctrl-names = "default";
+		pinctrl-0 = <&stm32g0_intn_pins_a>;
+		firmware-name = "stm32g0-ucsi.mp135f-dk.fw";
+		connector {
+			compatible = "usb-c-connector";
+			label = "USB-C";
+
+			port {
+				con_usb_c_g0_ep: endpoint {
+					remote-endpoint = <&usbotg_hs_ep>;
+				};
+			};
+		};
+	};
 };
 
 &i2c5 {
@@ -493,10 +515,13 @@
 &usbotg_hs {
 	phys = <&usbphyc_port1 0>;
 	phy-names = "usb2-phy";
-	dr_mode = "peripheral";
 	usb-role-switch;
-	role-switch-default-mode = "peripheral";
 	status = "okay";
+	port {
+		usbotg_hs_ep: endpoint {
+			remote-endpoint = <&con_usb_c_g0_ep>;
+		};
+	};
 };
 
 &usbphyc {
