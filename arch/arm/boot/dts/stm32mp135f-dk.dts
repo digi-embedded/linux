@@ -257,6 +257,8 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&stm32g0_intn_pins_a>;
 		firmware-name = "stm32g0-ucsi.mp135f-dk.fw";
+		power-domains = <&pd_core>;
+		wakeup-source;
 		connector {
 			compatible = "usb-c-connector";
 			label = "USB-C";
