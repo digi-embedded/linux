@@ -70,6 +70,43 @@
 		regulator-max-microvolt = <3300000>;
 		regulator-always-on;
 	};
+
+	panel_backlight: panel-backlight {
+		compatible = "gpio-backlight";
+		gpios = <&gpioe 12 GPIO_ACTIVE_HIGH>;
+		default-on;
+		default-brightness-level = <0>;
+		status = "okay";
+	};
+
+	panel_rgb: panel-rgb {
+		compatible = "rocktech,rk043fn48h", "panel-dpi";
+		enable-gpios = <&gpioi 7 GPIO_ACTIVE_HIGH>;
+		backlight = <&panel_backlight>;
+		power-supply = <&scmi_v3v3_sw>;
+		status = "okay";
+
+		width-mm = <105>;
+		height-mm = <67>;
+
+		port {
+			panel_in_rgb: endpoint {
+				remote-endpoint = <&ltdc_out_rgb>;
+			};
+		};
+
+		panel-timing {
+			clock-frequency = <10000000>;
+			hactive = <480>;
+			vactive = <272>;
+			hsync-len = <52>;
+			hfront-porch = <10>;
+			hback-porch = <10>;
+			vsync-len = <10>;
+			vfront-porch = <10>;
+			vback-porch = <10>;
+		};
+	};
 };
 
 &dcmipp {
@@ -199,6 +236,23 @@
 &iwdg2 {
 	timeout-sec = <32>;
 	status = "okay";
+};
+
+&ltdc {
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&ltdc_pins_a>;
+	pinctrl-1 = <&ltdc_sleep_pins_a>;
+	status = "okay";
+
+	port {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		ltdc_out_rgb: endpoint@0 {
+			reg = <0>;
+			remote-endpoint = <&panel_in_rgb>;
+		};
+	};
 };
 
 &rtc {
