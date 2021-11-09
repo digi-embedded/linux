@@ -231,10 +231,14 @@ static void imx_set_panic_temp(struct imx_thermal_data *data,
 
 	critical_value = (data->c2 - panic_temp) / data->c1;
 
+	/* Don't set the PANIC_ALARM_VALUE so the critical trip point
+	   is handled by software instead of directly resetting the
+	   device.
 	regmap_write(map, soc_data->panic_alarm_ctrl + REG_CLR,
 		     soc_data->panic_alarm_mask);
 	regmap_write(map, soc_data->panic_alarm_ctrl + REG_SET,
 		     critical_value << soc_data->panic_alarm_shift);
+	*/
 }
 
 static void imx_set_alarm_temp(struct imx_thermal_data *data,
