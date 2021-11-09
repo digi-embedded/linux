@@ -1057,12 +1057,8 @@ static int ucsi_register_port(struct ucsi *ucsi, int index)
 		ucsi_port_psy_changed(con);
 	}
 
-	con->usb_role_sw = fwnode_usb_role_switch_get(cap->fwnode);
-	if (IS_ERR(con->usb_role_sw)) {
-		dev_err(ucsi->dev, "con%d: failed to get usb role switch\n",
-			con->num);
-		con->usb_role_sw = NULL;
-	}
+	if (index < ucsi->usb_role_sw_count)
+		con->usb_role_sw = ucsi->usb_role_sw[index];
 
 	/* Only notify USB controller if partner supports USB data */
 	if (!(UCSI_CONSTAT_PARTNER_FLAGS(con->status.flags) & UCSI_CONSTAT_PARTNER_FLAG_USB))
@@ -1246,7 +1242,9 @@ EXPORT_SYMBOL_GPL(ucsi_destroy);
  */
 int ucsi_register(struct ucsi *ucsi)
 {
-	int ret;
+	struct fwnode_handle *fwnode;
+	int i = 0, ret;
+	struct usb_role_switch **usb_role_sw;
 
 	ret = ucsi->ops->read(ucsi, UCSI_VERSION, &ucsi->version,
 			      sizeof(ucsi->version));
@@ -1255,6 +1253,33 @@ int ucsi_register(struct ucsi *ucsi)
 
 	if (!ucsi->version)
 		return -ENODEV;
+
+	ucsi->usb_role_sw_count = device_get_child_node_count(ucsi->dev);
+	if (ucsi->usb_role_sw_count) {
+
+		usb_role_sw = kcalloc(ucsi->usb_role_sw_count, sizeof(struct usb_role_switch *),
+				      GFP_KERNEL);
+		if (!usb_role_sw)
+			return -ENOMEM;
+
+		device_for_each_child_node(ucsi->dev, fwnode) {
+			fw_devlink_purge_absent_suppliers(fwnode);
+			usb_role_sw[i] = fwnode_usb_role_switch_get(fwnode);
+			fwnode_handle_put(fwnode);
+			if (IS_ERR(usb_role_sw[i])) {
+				ret = PTR_ERR(usb_role_sw[i]);
+				dev_err_probe(ucsi->dev, ret,
+					      "con%d: failed to get usb role switch\n", i);
+				if (ret == -EPROBE_DEFER)
+					return -EPROBE_DEFER;
+				else
+					usb_role_sw[i] = NULL;
+			}
+			i++;
+		}
+
+		ucsi->usb_role_sw = usb_role_sw;
+	}
 
 	queue_work(system_long_wq, &ucsi->work);
 
@@ -1289,6 +1314,9 @@ void ucsi_unregister(struct ucsi *ucsi)
 	}
 
 	kfree(ucsi->connector);
+
+	if (ucsi->usb_role_sw_count)
+		kfree(ucsi->usb_role_sw);
 }
 EXPORT_SYMBOL_GPL(ucsi_unregister);
 

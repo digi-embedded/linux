@@ -286,6 +286,8 @@ struct ucsi {
 
 	struct ucsi_capability cap;
 	struct ucsi_connector *connector;
+	struct usb_role_switch **usb_role_sw;
+	int usb_role_sw_count;
 
 	struct work_struct work;
 
