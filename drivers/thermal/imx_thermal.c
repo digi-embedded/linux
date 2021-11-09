@@ -231,14 +231,10 @@ static void imx_set_panic_temp(struct imx_thermal_data *data,
 
 	critical_value = (data->c2 - panic_temp) / data->c1;
 
-	/* Don't set the PANIC_ALARM_VALUE so the critical trip point
-	   is handled by software instead of directly resetting the
-	   device.
 	regmap_write(map, soc_data->panic_alarm_ctrl + REG_CLR,
 		     soc_data->panic_alarm_mask);
 	regmap_write(map, soc_data->panic_alarm_ctrl + REG_SET,
 		     critical_value << soc_data->panic_alarm_shift);
-	*/
 }
 
 static void imx_set_alarm_temp(struct imx_thermal_data *data,
@@ -433,7 +429,8 @@ static int imx_set_trip_temp(struct thermal_zone_device *tz, int trip,
 
 	if (trip == IMX_TRIP_CRITICAL) {
 		data->temp_critical = temp;
-		if (data->socdata->version == TEMPMON_IMX6SX)
+		if (data->socdata->version == TEMPMON_IMX6SX &&
+		    !of_machine_is_compatible("digi,ccimx6ul"))
 			imx_set_panic_temp(data, temp);
 	}
 
@@ -873,7 +870,8 @@ static int imx_thermal_probe(struct platform_device *pdev)
 		     measure_freq << data->socdata->measure_freq_shift);
 	imx_set_alarm_temp(data, data->temp_passive);
 
-	if (data->socdata->version == TEMPMON_IMX6SX)
+	if (data->socdata->version == TEMPMON_IMX6SX &&
+	    !of_machine_is_compatible("digi,ccimx6ul"))
 		imx_set_panic_temp(data, data->temp_critical);
 
 	regmap_write(map, data->socdata->sensor_ctrl + REG_CLR,
