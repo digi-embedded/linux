@@ -44,6 +44,9 @@ properties:
 
   wakeup-source: true
 
+  power-domains:
+    maxItems: 1
+
   pwm:
     type: object
     additionalProperties: false
