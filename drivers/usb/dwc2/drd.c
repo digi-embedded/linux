@@ -109,6 +109,14 @@ static int dwc2_drd_role_sw_set(struct usb_role_switch *sw, enum usb_role role)
 
 	spin_lock_irqsave(&hsotg->lock, flags);
 
+	if (role == USB_ROLE_NONE) {
+		/* default operation mode when usb role is USB_ROLE_NONE */
+		if (hsotg->role_sw_default_mode == USB_DR_MODE_HOST)
+			role = USB_ROLE_HOST;
+		else if (hsotg->role_sw_default_mode == USB_DR_MODE_PERIPHERAL)
+			role = USB_ROLE_DEVICE;
+	}
+
 	if (role == USB_ROLE_HOST) {
 		already = dwc2_ovr_avalid(hsotg, true);
 	} else if (role == USB_ROLE_DEVICE) {
