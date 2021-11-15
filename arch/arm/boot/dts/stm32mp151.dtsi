@@ -1208,7 +1208,7 @@
 			resets = <&rcc CAMITF_R>;
 			clocks = <&rcc DCMI>;
 			clock-names = "mclk";
-			dmas = <&dmamux1 75 0x400 0x01>;
+			dmas = <&dmamux1 75 0x400 0xe0000001>;
 			dma-names = "tx";
 			status = "disabled";
 		};
