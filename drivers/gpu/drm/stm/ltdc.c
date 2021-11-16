@@ -776,10 +776,17 @@ static void ltdc_crtc_atomic_enable(struct drm_crtc *crtc,
 {
 	struct ltdc_device *ldev = crtc_to_ltdc(crtc);
 	struct drm_device *ddev = crtc->dev;
+	int ret;
 
 	DRM_DEBUG_DRIVER("\n");
 
-	pm_runtime_get_sync(ddev->dev);
+	if (!pm_runtime_active(ddev->dev)) {
+		ret = pm_runtime_get_sync(ddev->dev);
+		if (ret) {
+			DRM_ERROR("Failed to set mode, cannot get sync\n");
+			return;
+		}
+	}
 
 	/* Sets the background color value */
 	regmap_write(ldev->regmap, LTDC_BCCR, BCCR_BCBLACK);
@@ -817,7 +824,7 @@ static void ltdc_crtc_atomic_disable(struct drm_crtc *crtc,
 	if (!ldev->caps.plane_reg_shadow)
 		regmap_set_bits(ldev->regmap, LTDC_SRCR, SRCR_IMR);
 
-	pm_runtime_put_sync(ddev->dev);
+	pm_runtime_put_sync_suspend(ddev->dev);
 
 	/*  clear interrupt error counters */
 	mutex_lock(&ldev->err_lock);
@@ -1263,6 +1270,7 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 				     struct drm_atomic_state *state)
 {
 	struct ltdc_device *ldev = plane_to_ltdc(plane);
+	struct drm_device *ddev = plane->dev;
 	struct drm_plane_state *newstate = drm_atomic_get_new_plane_state(state,
 									  plane);
 	struct drm_framebuffer *fb = newstate->fb;
@@ -1292,6 +1300,9 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 			 src_w, src_h, src_x, src_y,
 			 newstate->crtc_w, newstate->crtc_h,
 			 newstate->crtc_x, newstate->crtc_y);
+
+	if (!pm_runtime_active(ddev->dev))
+		return;
 
 	regmap_read(ldev->regmap, LTDC_BPCR, &bpcr);
 
@@ -1511,7 +1522,11 @@ static void ltdc_plane_atomic_disable(struct drm_plane *plane,
 	struct drm_plane_state *oldstate = drm_atomic_get_old_plane_state(state,
 									  plane);
 	struct ltdc_device *ldev = plane_to_ltdc(plane);
+	struct drm_device *ddev = plane->dev;
 	u32 lofs = plane->index * LAY_OFS;
+
+	if (!pm_runtime_active(ddev->dev))
+		return;
 
 	/* Disable layer */
 	regmap_write_bits(ldev->regmap, LTDC_L1CR + lofs, LXCR_LEN | LXCR_CLUTEN |  LXCR_HMEN, 0);
