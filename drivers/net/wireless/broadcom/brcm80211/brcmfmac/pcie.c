@@ -64,6 +64,7 @@ BRCMF_FW_DEF(4366C, "brcmfmac4366c-pcie");
 BRCMF_FW_DEF(4371, "brcmfmac4371-pcie");
 CY_FW_DEF(4355, "cyfmac54591-pcie");
 CY_FW_TRXSE_DEF(55560, "cyfmac55560-pcie");
+CY_FW_DEF(4373, "cyfmac4373-pcie");
 
 static const struct brcmf_firmware_mapping brcmf_pcie_fwnames[] = {
 	BRCMF_FW_ENTRY(BRCM_CC_43602_CHIP_ID, 0xFFFFFFFF, 43602),
@@ -87,6 +88,7 @@ static const struct brcmf_firmware_mapping brcmf_pcie_fwnames[] = {
 	BRCMF_FW_ENTRY(BRCM_CC_4371_CHIP_ID, 0xFFFFFFFF, 4371),
 	BRCMF_FW_ENTRY(CY_CC_89459_CHIP_ID, 0xFFFFFFFF, 4355),
 	BRCMF_FW_ENTRY(CY_CC_55560_CHIP_ID, 0xFFFFFFFF, 55560),
+	BRCMF_FW_ENTRY(CY_CC_4373_CHIP_ID, 0xFFFFFFFF, 4373),
 };
 
 #define BRCMF_PCIE_REV_GE64(dev)	(brcmf_chip_get_core((dev)->ci, \
@@ -2854,6 +2856,10 @@ static const struct pci_device_id brcmf_pcie_devid_table[] = {
 	BRCMF_PCIE_DEVICE(CY_PCIE_54590_DEVICE_ID),
 	BRCMF_PCIE_DEVICE(CY_PCIE_54594_DEVICE_ID),
 	BRCMF_PCIE_DEVICE_CY(CY_PCIE_55560_DEVICE_ID),
+	BRCMF_PCIE_DEVICE(CY_PCIE_4373_RAW_DEVICE_ID),
+	BRCMF_PCIE_DEVICE(CY_PCIE_4373_DUAL_DEVICE_ID),
+	BRCMF_PCIE_DEVICE(CY_PCIE_4373_2G_DEVICE_ID),
+	BRCMF_PCIE_DEVICE(CY_PCIE_4373_5G_DEVICE_ID),
 	{ /* end: all zeroes */ }
 };
 
