@@ -259,7 +259,7 @@ static int goodix_ts_read_input_report(struct goodix_ts_data *ts, u8 *data)
 		error = goodix_i2c_read(ts->client, addr, data,
 					header_contact_keycode_size);
 		if (error) {
-			dev_err(&ts->client->dev, "I2C transfer error: %d\n",
+			dev_dbg(&ts->client->dev, "I2C transfer error: %d\n",
 					error);
 			return error;
 		}
@@ -501,7 +501,7 @@ static irqreturn_t goodix_ts_irq_handler(int irq, void *dev_id)
 	goodix_process_events(ts);
 
 	if (goodix_i2c_write_u8(ts->client, GOODIX_READ_COOR_ADDR, 0) < 0)
-		dev_err(&ts->client->dev, "I2C write end_cmd error\n");
+		dev_dbg(&ts->client->dev, "I2C write end_cmd error\n");
 
 	return IRQ_HANDLED;
 }
