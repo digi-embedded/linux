@@ -447,9 +447,9 @@ static void stm32_cryp_write_ccm_first_header(struct stm32_cryp *cryp)
 		/* Build the two first u32 of B1 */
 		b8[0] = 0xFF;
 		b8[1] = 0xFE;
-		b8[2] = alen & 0xFF000000 >> 24;
-		b8[3] = alen & 0x00FF0000 >> 16;
-		b8[4] = alen & 0x0000FF00 >> 8;
+		b8[2] = (alen & 0xFF000000) >> 24;
+		b8[3] = (alen & 0x00FF0000) >> 16;
+		b8[4] = (alen & 0x0000FF00) >> 8;
 		b8[5] = alen & 0x000000FF;
 		len = 6;
 	}
