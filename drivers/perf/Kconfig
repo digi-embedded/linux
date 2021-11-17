@@ -139,7 +139,7 @@ config QCOM_L3_PMU
 
 config STM32_DDR_PMU
 	tristate "STM32 DDR PMU"
-	depends on MACH_STM32MP157
+	depends on ARCH_STM32
 	default m
 	help
 	  Support for STM32 DDR performance monitor (DDRPERFM).
