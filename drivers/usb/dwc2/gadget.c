@@ -5671,7 +5671,6 @@ void dwc2_gadget_exit_clock_gating(struct dwc2_hsotg *hsotg, int rem_wakeup)
 	}
 
 	/* Change to L0 state */
-	call_gadget(hsotg, resume);
 	hsotg->lx_state = DWC2_L0;
 	hsotg->bus_suspended = false;
 }
