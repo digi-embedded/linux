@@ -532,6 +532,7 @@
 			interrupts-extended = <&exti 30 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&rcc UART4_K>;
 			wakeup-source;
+			power-domains = <&pd_core>;
 			status = "disabled";
 		};
 
