@@ -9,6 +9,8 @@
 #include <linux/regmap.h>
 #include <linux/regulator/consumer.h>
 
+#define MAX_HS_VOLTAGE 2700000
+
 struct stm32_hslv_data {
 	struct device *dev;
 	struct regmap *regmap;
@@ -18,18 +20,12 @@ struct stm32_hslv_data {
 	struct notifier_block hslv_nb;
 };
 
-static int hslv_set_speed(struct stm32_hslv_data *priv)
+static int hslv_set_speed(struct stm32_hslv_data *priv, int uV)
 {
 	int ret;
 	unsigned int val;
 
-	ret = regulator_get_voltage(priv->regu);
-	if (ret < 0) {
-		dev_err(priv->dev, "get voltage failed\n");
-		return ret;
-	}
-
-	if (ret < 2700000) {
+	if (uV < MAX_HS_VOLTAGE) {
 		dev_info(priv->dev, "HSLV high speed\n");
 		ret = regmap_write(priv->regmap, priv->reg, priv->mask);
 		if (ret) {
@@ -66,8 +62,11 @@ static int hslv_event(struct notifier_block *nb, unsigned long event,
 		}
 	}
 
-	if (event & REGULATOR_EVENT_VOLTAGE_CHANGE) {
-		ret = hslv_set_speed(priv);
+	if ((event & REGULATOR_EVENT_VOLTAGE_CHANGE) ||
+	    (event & REGULATOR_EVENT_ABORT_VOLTAGE_CHANGE)) {
+		int uV = (unsigned long)data;
+
+		ret = hslv_set_speed(priv, uV);
 		if (ret)
 			return ret;
 	}
@@ -79,7 +78,7 @@ static int stm32_hslv_probe(struct platform_device *pdev)
 {
 	struct device_node *np = pdev->dev.of_node;
 	struct stm32_hslv_data *priv;
-	int ret = 0;
+	int ret, uV;
 
 	priv = devm_kzalloc(&pdev->dev, sizeof(struct stm32_hslv_data),
 			    GFP_KERNEL);
@@ -115,8 +114,14 @@ static int stm32_hslv_probe(struct platform_device *pdev)
 		return ret;
 	}
 
+	uV = regulator_get_voltage(priv->regu);
+	if (uV < 0) {
+		dev_err(priv->dev, "get voltage failed\n");
+		return ret;
+	}
+
 	/* Set initial state */
-	ret = hslv_set_speed(priv);
+	ret = hslv_set_speed(priv, uV);
 	if (ret)
 		return ret;
 
