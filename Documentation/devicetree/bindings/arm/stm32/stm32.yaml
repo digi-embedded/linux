@@ -158,6 +158,8 @@ properties:
           - const: st,stm32mp157
 
       - items:
+          - enum:
+              - st,stm32mp257f-ev
           - const: st,stm32mp257
 
 additionalProperties: true
