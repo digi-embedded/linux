@@ -4398,6 +4398,7 @@ static int _dwc2_hcd_suspend(struct usb_hcd *hcd)
 		clear_bit(HCD_FLAG_HW_ACCESSIBLE, &hcd->flags);
 		break;
 	case DWC2_POWER_DOWN_PARAM_NONE:
+		dwc2_disable_global_interrupts(hsotg);
 		/*
 		 * If not hibernation nor partial power down are supported,
 		 * clock gating is used to save power.
@@ -4494,7 +4495,6 @@ static int _dwc2_hcd_resume(struct usb_hcd *hcd)
 		 * the global interrupts are disabled.
 		 */
 		dwc2_core_init(hsotg, false);
-		dwc2_enable_global_interrupts(hsotg);
 		dwc2_hcd_reinit(hsotg);
 		spin_lock_irqsave(&hsotg->lock, flags);
 
@@ -4503,6 +4503,8 @@ static int _dwc2_hcd_resume(struct usb_hcd *hcd)
 		 * since an interrupt may rise.
 		 */
 		set_bit(HCD_FLAG_HW_ACCESSIBLE, &hcd->flags);
+		dwc2_enable_global_interrupts(hsotg);
+
 		break;
 	default:
 		hsotg->lx_state = DWC2_L0;
