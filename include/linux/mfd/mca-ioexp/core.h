@@ -12,6 +12,7 @@
 
 #include <linux/interrupt.h>
 #include <linux/mfd/mca-ioexp/registers.h>
+#include <linux/mfd/mca-common/registers.h>
 
 #define MCA_IOEXP_DRVNAME_ADC		"mca-ioexp-adc"
 #define MCA_IOEXP_DRVNAME_GPIO		"mca-ioexp-gpio"
@@ -36,9 +37,12 @@ enum mca_ioexp_irqs {
 /* Number of interrupt registers */
 #define MCA_IOEXP_NUM_IRQ_REGS		4
 
+#define MCA_UID_SIZE        (MCA_HWVER_SOM - MCA_UID_0)
+
 struct mca_ioexp {
 	struct device *dev;
 	u8 dev_id;
+	u8 uid[MCA_UID_SIZE];
 	u8 hw_version;
 	bool fw_is_alpha;
 	u16 fw_version;

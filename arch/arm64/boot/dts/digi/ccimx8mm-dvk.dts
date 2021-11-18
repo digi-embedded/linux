@@ -317,6 +317,16 @@
 	};
 };
 
+/*
+ * FlexSPI port distributed among various interfaces.
+ * Conflicts with:
+ * - MIPI to HDMI bridge
+ * - MIPI to LVDS bridge
+ */
+&flexspi {
+	status = "disabled";
+};
+
 &gpu {
 	status = "okay";
 };
@@ -339,17 +349,6 @@
 	scl-gpios = <&gpio5 16 GPIO_ACTIVE_HIGH>;
 	sda-gpios = <&gpio5 17 GPIO_ACTIVE_HIGH>;
 	status = "okay";
-
-	fusion_touch: fusion@10 {
-		compatible = "touchrev,fusion-touch";
-		reg = <0x10>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_touch>;
-		/* LVDS interrupt */
-		interrupt-parent = <&gpio4>;
-		interrupts = <28 IRQ_TYPE_EDGE_FALLING>;
-		status = "disabled";
-	};
 
 	/*
 	 * An inconsistent reset sequence makes
@@ -385,6 +384,18 @@
 		reload-fw-on-resume;
 		skip-firmware-request;
 		vin-supply = <&reg_5v_board>;
+		status = "disabled";
+	};
+
+	/* Touch on Fusion 10" display */
+	fusion_touch: fusion@14 {
+		compatible = "touchrev,fusion-touch";
+		reg = <0x14>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_touch>;
+		/* LVDS interrupt */
+		interrupt-parent = <&gpio4>;
+		interrupts = <28 IRQ_TYPE_EDGE_FALLING>;
 		status = "disabled";
 	};
 
@@ -755,9 +766,10 @@
 
 	/*
 	 * RS-232 mode (uncomment these lines to use this UART in RS232 mode).
+	 * (R291, R292 and R359 on the DVK must be removed).
 	 */
 	//fsl,uart-has-rtscts;
-	//pinctrl-0 = <&pinctrl_uart3>, <&pinctrl_uart3_re_disable>;
+	//pinctrl-0 = <&pinctrl_uart3>;
 	status = "okay";
 };
 
@@ -800,6 +812,10 @@
 	pinctrl-2 = <&pinctrl_usdhc2_200mhz>, <&pinctrl_usdhc2_gpio>,
 		    <&pinctrl_usdhc2_vsel>;
 	bus-width = <4>;
+	/*
+	 * UHS-I mode (remove the no-1.8-v line to use this uSD in UHS-I mode).
+	 * Check schematics for additional hardware changes needed.
+	 */
 	no-1-8-v;
 	cd-gpios = <&gpio2 12 GPIO_ACTIVE_HIGH>;
 	status = "okay";
@@ -886,6 +902,17 @@
 			MX8MM_IOMUXC_ENET_RXC_ENET1_RGMII_RXC	0x91
 			MX8MM_IOMUXC_ENET_RX_CTL_ENET1_RGMII_RX_CTL	0x91
 			MX8MM_IOMUXC_ENET_TX_CTL_ENET1_RGMII_TX_CTL	0x1f
+		>;
+	};
+
+	pinctrl_flexspi: flexspigrp {
+		fsl,pins = <
+			MX8MM_IOMUXC_NAND_ALE_QSPI_A_SCLK	0x1c2
+			MX8MM_IOMUXC_NAND_CE0_B_QSPI_A_SS0_B	0x82
+			MX8MM_IOMUXC_NAND_DATA00_QSPI_A_DATA0	0x82
+			MX8MM_IOMUXC_NAND_DATA01_QSPI_A_DATA1	0x82
+			MX8MM_IOMUXC_NAND_DATA02_QSPI_A_DATA2	0x82
+			MX8MM_IOMUXC_NAND_DATA03_QSPI_A_DATA3	0x82
 		>;
 	};
 
@@ -1081,16 +1108,6 @@
 			MX8MM_IOMUXC_ECSPI1_MOSI_UART3_DCE_TX		0x140
 			MX8MM_IOMUXC_ECSPI1_SS0_UART3_DCE_RTS_B		0x140
 			MX8MM_IOMUXC_ECSPI1_MISO_UART3_DCE_CTS_B	0x140
-		>;
-	};
-
-	pinctrl_uart3_re_disable: uart3grp_re_disable {
-		fsl,pins = <
-			/*
-			 * Configure RS485 RE#/DE line as pull-up to disable
-			 * RS485 transceiver.
-			 */
-			MX8MM_IOMUXC_ECSPI1_MISO_GPIO5_IO8		0x140
 		>;
 	};
 

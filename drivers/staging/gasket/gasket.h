@@ -38,6 +38,31 @@ struct gasket_page_table_ioctl {
 };
 
 /*
+ * Structure for ioctl mapping buffers with flags when using the Gasket
+ * page_table module.
+ */
+struct gasket_page_table_ioctl_flags {
+	struct gasket_page_table_ioctl base;
+	/*
+	 * Flags indicating status and attribute requests from the host.
+	 * NOTE: STATUS bit does not need to be set in this request.
+	 *       Set RESERVED bits to 0 to ensure backwards compatibility.
+	 *
+	 * Bitfields:
+	 *   [0]     - STATUS: indicates if this entry/slot is free
+	 *                0 = PTE_FREE
+	 *                1 = PTE_INUSE
+	 *   [2:1]   - DMA_DIRECTION: dma_data_direction requested by host
+	 *               00 = DMA_BIDIRECTIONAL
+	 *               01 = DMA_TO_DEVICE
+	 *               10 = DMA_FROM_DEVICE
+	 *               11 = DMA_NONE
+	 *   [31:3]  - RESERVED
+	 */
+	u32 flags;
+};
+
+/*
  * Common structure for ioctls mapping and unmapping buffers when using the
  * Gasket page_table module.
  * dma_address: phys addr start of coherent memory, allocated by kernel
@@ -47,6 +72,21 @@ struct gasket_coherent_alloc_config_ioctl {
 	u64 enable;
 	u64 size;
 	u64 dma_address;
+};
+
+/*
+ * Common structure for ioctls mapping and unmapping dma-bufs when using the
+ * Gasket page_table module.
+ * map: boolean, non-zero to map, 0 to unmap.
+ * flags: see gasket_page_table_ioctl_flags.flags.
+ */
+struct gasket_page_table_ioctl_dmabuf {
+	u64 page_table_index;
+	u64 device_address;
+	int dmabuf_fd;
+	u32 num_pages;
+	u32 map;
+	u32 flags;
 };
 
 /* Base number for all Gasket-common IOCTLs */
@@ -118,5 +158,20 @@ struct gasket_coherent_alloc_config_ioctl {
 /* Enable/Disable and configure the coherent allocator. */
 #define GASKET_IOCTL_CONFIG_COHERENT_ALLOCATOR                                 \
 	_IOWR(GASKET_IOCTL_BASE, 11, struct gasket_coherent_alloc_config_ioctl)
+
+/*
+ * Tells the kernel to map size bytes at host_address to device_address in
+ * page_table_index page table. Passes flags to indicate additional attribute
+ * requests for the mapped memory.
+ */
+#define GASKET_IOCTL_MAP_BUFFER_FLAGS                                          \
+	_IOW(GASKET_IOCTL_BASE, 12, struct gasket_page_table_ioctl_flags)
+
+/*
+ * Tells the kernel to map/unmap dma-buf with fd to device_address in
+ * page_table_index page table.
+ */
+#define GASKET_IOCTL_MAP_DMABUF                                                \
+	_IOW(GASKET_IOCTL_BASE, 13, struct gasket_page_table_ioctl_dmabuf)
 
 #endif /* __GASKET_H__ */

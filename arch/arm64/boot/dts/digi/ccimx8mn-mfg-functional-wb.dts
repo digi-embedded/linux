@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2021 Digi International Inc.
+ * Copyright 2021, Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -13,27 +13,38 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <dt-bindings/thermal/thermal.h>
-
-/dts-v1/;
-/plugin/;
+/* Digi ConnectCore 8M Nano WiFi-Bluetooth FCT */
+#include "ccimx8mn-mfg-functional.dts"
 
 / {
-	fragment@0 {
-		target-path = "/";
-		__overlay__ {
-			overlay-description = "SOM: quad-core CPU";
-		};
+	wireless {
+		/* U-Boot will fill in the MAC address here */
 	};
+};
 
-	fragment@1 {
-		target-path = "/thermal-zones/cpu-thermal/cooling-maps/map0";
-		__overlay__ {
-			cooling-device =
-				<&A53_0 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
-				<&A53_1 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
-				<&A53_2 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
-				<&A53_3 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
-		};
-	};
+&bluetooth {
+	status = "okay";
+};
+
+/* RF regulators */
+&reg_3v3_rf {
+	status = "okay";
+};
+
+&reg_rf_bt_en {
+	status = "okay";
+};
+
+&reg_rf_wl_en {
+	status = "okay";
+};
+
+/* USDHC1 (Wireless) */
+&usdhc1 {
+	status = "okay";
+};
+
+/* IOMUX */
+&iomuxc {
+	pinctrl-0 = <&pinctrl_hog_common>;
 };

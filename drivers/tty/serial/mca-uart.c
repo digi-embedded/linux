@@ -151,7 +151,7 @@ static unsigned int mca_uart_get_mctrl(struct uart_port *port)
 	 * from atomic context, so reading the status of the lines here is not
 	 * possible.
 	 */
-	return TIOCM_DSR | TIOCM_CAR;
+	return TIOCM_DSR | TIOCM_CAR | TIOCM_CTS;
 }
 
 static void mca_uart_set_mctrl(struct uart_port *port, unsigned int mctrl)

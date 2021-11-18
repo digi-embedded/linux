@@ -1526,8 +1526,8 @@ union wmi_connect_event_common {
 		__le32 nw_type;
 	} sta;
 	struct {
-		u8 aid;
 		u8 phymode;
+		u8 aid;
 		u8 mac_addr[ETH_ALEN];
 		u8 auth;
 		u8 keymgmt;

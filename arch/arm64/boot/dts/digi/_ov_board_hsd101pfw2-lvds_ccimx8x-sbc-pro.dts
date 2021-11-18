@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Digi International Inc.
+ * Copyright 2020-2021 Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -20,17 +20,17 @@
 	fragment@0 {
 		target-path = "/";
 		__overlay__ {
-			overlay-description = "SBC: Fusion 10'' F10A-0102 Display";
+			overlay-description = "SBC: Fusion 10\" F10A-0102 Display";
 		};
 	};
 
+	/* Fusion 10" F10A-0102 on LVDS0 */
 	fragment@1 {
 		target = <&lvds0_panel>;
 		__overlay__ {
 			width-mm = <235>;
 			height-mm = <143>;
 
-			/* Fusion 10" F10A-0102 */
 			panel-timing {
 				clock-frequency = <45000000>;
 				hactive = <1024>;
@@ -45,13 +45,13 @@
 		};
 	};
 
+	/* Fusion 10" F10A-0102 on LVDS1 */
 	fragment@2 {
 		target = <&lvds1_panel>;
 		__overlay__ {
 			width-mm = <235>;
 			height-mm = <143>;
 
-			/* Fusion 10" F10A-0102 */
 			panel-timing {
 				clock-frequency = <45000000>;
 				hactive = <1024>;
@@ -63,6 +63,29 @@
 				vfront-porch = <2>;
 				vsync-len = <23>;
 			};
+		};
+	};
+
+	/* Enable Fusion touch */
+	fragment@3 {
+		target = <&fusion_touch>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+
+	/* Disable Goodix touch */
+	fragment@4 {
+		target = <&lvds0_goodix_touch1>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	fragment@5 {
+		target = <&lvds0_goodix_touch2>;
+		__overlay__ {
+			status = "disabled";
 		};
 	};
 };
