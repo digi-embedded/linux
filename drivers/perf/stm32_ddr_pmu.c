@@ -281,11 +281,10 @@ static ssize_t stm32_ddr_pmu_sysfs_show(struct device *dev,
 					struct device_attribute *attr,
 					char *buf)
 {
-	struct dev_ext_attribute *eattr;
+	struct dev_ext_attribute *eattr = container_of(attr, struct dev_ext_attribute, attr);
+	unsigned long cnt_id = (unsigned long)eattr->var;
 
-	eattr = container_of(attr, struct dev_ext_attribute, attr);
-
-	return sprintf(buf, "config=0x%lx\n", (unsigned long)eattr->var);
+	return sprintf(buf, "config=%ld\n", cnt_id);
 }
 
 #define STM32_DDR_PMU_ATTR(_name, _func, _config)			\
