@@ -15,6 +15,7 @@
 #include <linux/platform_device.h>
 #include <linux/vmalloc.h>
 #include <linux/v4l2-mediabus.h>
+#include <media/mipi-csi2.h>
 #include <media/v4l2-rect.h>
 #include <media/v4l2-subdev.h>
 
@@ -25,6 +26,13 @@
 #define DCMIPP_FMT_WIDTH_DEFAULT  640
 #define DCMIPP_FMT_HEIGHT_DEFAULT 480
 
+#define DCMIPP_P0FSCR (0x404)
+#define DCMIPP_P0FSCR_DTMODE_MASK GENMASK(17, 16)
+#define DCMIPP_P0FSCR_DTMODE_SHIFT 16
+#define DCMIPP_P0FSCR_DTMODE_DTIDA	0x00
+#define DCMIPP_P0FSCR_DTMODE_ALLDT	0x03
+#define DCMIPP_P0FSCR_DTIDA_MASK GENMASK(5, 0)
+#define DCMIPP_P0FSCR_DTIDA_SHIFT 0
 #define DCMIPP_P0FCTCR (0x500)
 #define DCMIPP_P0FCTCR_FRATE_MASK GENMASK(1, 0)
 #define DCMIPP_P0SCSTR (0x504)
@@ -52,25 +60,27 @@
 struct dcmipp_byteproc_pix_map {
 	unsigned int code;
 	unsigned int bpp;
+	unsigned int dt;
 };
 
-#define PIXMAP_MBUS_BPP(mbus, byteperpixel)	\
+#define PIXMAP_MBUS_BPP(mbus, byteperpixel, data_type)	\
 		{						\
 			.code = MEDIA_BUS_FMT_##mbus,		\
 			.bpp = byteperpixel,	\
+			.dt = data_type,	\
 		}
 static const struct dcmipp_byteproc_pix_map dcmipp_byteproc_pix_map_list[] = {
-	PIXMAP_MBUS_BPP(RGB565_2X8_LE, 2),
-	PIXMAP_MBUS_BPP(YUYV8_2X8, 2),
-	PIXMAP_MBUS_BPP(YVYU8_2X8, 2),
-	PIXMAP_MBUS_BPP(UYVY8_2X8, 2),
-	PIXMAP_MBUS_BPP(VYUY8_2X8, 2),
-	PIXMAP_MBUS_BPP(Y8_1X8, 1),
-	PIXMAP_MBUS_BPP(SBGGR8_1X8, 1),
-	PIXMAP_MBUS_BPP(SGBRG8_1X8, 1),
-	PIXMAP_MBUS_BPP(SGRBG8_1X8, 1),
-	PIXMAP_MBUS_BPP(SRGGB8_1X8, 1),
-	PIXMAP_MBUS_BPP(JPEG_1X8, 1),
+	PIXMAP_MBUS_BPP(RGB565_2X8_LE, 2, MIPI_CSI2_DT_RGB565),
+	PIXMAP_MBUS_BPP(YUYV8_2X8, 2, MIPI_CSI2_DT_YUV422_8B),
+	PIXMAP_MBUS_BPP(YVYU8_2X8, 2, MIPI_CSI2_DT_YUV422_8B),
+	PIXMAP_MBUS_BPP(UYVY8_2X8, 2, MIPI_CSI2_DT_YUV422_8B),
+	PIXMAP_MBUS_BPP(VYUY8_2X8, 2, MIPI_CSI2_DT_YUV422_8B),
+	PIXMAP_MBUS_BPP(Y8_1X8, 1, 0x00), /* TODO - DT value to be fixed */
+	PIXMAP_MBUS_BPP(SBGGR8_1X8, 1, MIPI_CSI2_DT_RAW8),
+	PIXMAP_MBUS_BPP(SGBRG8_1X8, 1, MIPI_CSI2_DT_RAW8),
+	PIXMAP_MBUS_BPP(SGRBG8_1X8, 1, MIPI_CSI2_DT_RAW8),
+	PIXMAP_MBUS_BPP(SRGGB8_1X8, 1, MIPI_CSI2_DT_RAW8),
+	PIXMAP_MBUS_BPP(JPEG_1X8, 1, 0x00), /* TODO - DT value to be fixed */
 };
 
 static const struct dcmipp_byteproc_pix_map *dcmipp_byteproc_pix_map_by_index(unsigned int i)
@@ -642,14 +652,33 @@ static int dcmipp_byteproc_s_stream(struct v4l2_subdev *sd, int enable)
 
 	mutex_lock(&byteproc->lock);
 	if (enable) {
+		const struct dcmipp_byteproc_pix_map *vpix;
+
+		/*
+		 * find output format datatype - this call will always succeed since
+		 * format code has been sanitized at the set_fmt stage
+		 */
+		vpix = dcmipp_byteproc_pix_map_by_code(byteproc->sink_fmt.code);
+
+		/*
+		 * TODO - this should only be done with HW supporting CSI and
+		 * only when the source is CSI
+		 */
+		reg_clear(byteproc, DCMIPP_P0FSCR,
+			  DCMIPP_P0FSCR_DTMODE_MASK | DCMIPP_P0FSCR_DTIDA_MASK);
+
+		if (byteproc->sink_fmt.code == MEDIA_BUS_FMT_JPEG_1X8)
+			reg_set(byteproc, DCMIPP_P0FSCR,
+				DCMIPP_P0FSCR_DTMODE_ALLDT << DCMIPP_P0FSCR_DTMODE_SHIFT);
+		else
+			reg_set(byteproc, DCMIPP_P0FSCR,
+				vpix->dt << DCMIPP_P0FSCR_DTIDA_SHIFT |
+				DCMIPP_P0FSCR_DTMODE_DTIDA);
+
 		dcmipp_byteproc_configure_framerate(byteproc);
 
 		ret = dcmipp_byteproc_configure_scale_crop(byteproc);
-		if (ret)
-			goto err;
 	}
-
-err:
 	mutex_unlock(&byteproc->lock);
 
 	return ret;
