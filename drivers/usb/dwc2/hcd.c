@@ -4481,9 +4481,6 @@ static int _dwc2_hcd_resume(struct usb_hcd *hcd)
 		goto unlock;
 	}
 
-	/* Change Root port status, as port status change occurred after resume.*/
-	hsotg->flags.b.port_suspend_change = 1;
-
 	/*
 	 * Enable power if not already done.
 	 * This must not be spinlocked since duration
