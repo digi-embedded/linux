@@ -433,6 +433,23 @@
 };
 
 /*
+ * FlexSPI port distributed among various interfaces.
+ * Conflicts with:
+ * - PCIE connector
+ * - FEC1
+ * - FEC2
+ * - RS485
+ * - CAN2
+ * - MIPI camera
+ * - HDMI display
+ * - LVDS0 display touch controller
+ * - LVDS1 display touch controller
+ */
+&flexspi0 {
+	status = "disabled";
+};
+
+/*
  * I2C3 connected to Audio codec and USB 3.0 PD PHY.
  * Also available on:
  * - Expansion header
@@ -473,8 +490,8 @@
 		assigned-clocks = <&pi0_misc_lpcg 0>;
 		assigned-clock-rates = <24000000>;
 		clock-names = "xclk";
-		powerdown = <&lsio_gpio3 2 GPIO_ACTIVE_LOW>;
-		reset = <&lsio_gpio3 3 GPIO_ACTIVE_HIGH>;
+		powerdown-gpios = <&lsio_gpio3 2 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&lsio_gpio3 3 GPIO_ACTIVE_LOW>;
 		csi_id = <0>;
 		mclk = <24000000>;
 		mclk_source = <0>;
@@ -554,6 +571,9 @@
 	cap_device {
 		status = "okay";
 	};
+	m2m_device {
+		status = "okay";
+	};
 };
 
 &isi_1 {
@@ -593,17 +613,6 @@
 	clock-frequency = <100000>;
 	status = "disabled";
 
-	fusion_touch: fusion@10 {
-		compatible = "touchrev,fusion-touch";
-		reg = <0x10>;
-		interrupt-parent = <&lsio_gpio3>;
-		/* LVDS0 interrupt */
-		interrupts = <20 IRQ_TYPE_EDGE_FALLING>;
-		/* LVDS1 interrupt */
-		//interrupts = <19 IRQ_TYPE_EDGE_FALLING>;
-		status = "disabled";
-	};
-
 	/*
 	 * On the CC8X SBC, an inconsistent reset sequence makes
 	 * the Goodix display's touch controller respond to two I2C
@@ -614,7 +623,7 @@
 	lvds0_goodix_touch1: gt9271@14 {
 		compatible = "goodix,gt9271";
 		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_goodix_lvds0>;
+		pinctrl-0 = <&pinctrl_touch_lvds0>;
 		reg = <0x14>;
 		/* Interrupt for LVDS0 */
 		interrupt-parent = <&lsio_gpio3>;
@@ -627,13 +636,28 @@
 	lvds0_goodix_touch2: gt9271@5d {
 		compatible = "goodix,gt9271";
 		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_goodix_lvds0>;
+		pinctrl-0 = <&pinctrl_touch_lvds0>;
 		reg = <0x5D>;
 		/* Interrupt for LVDS0 */
 		interrupt-parent = <&lsio_gpio3>;
 		interrupts = <20 IRQ_TYPE_EDGE_FALLING>;
 		irq-gpios = <&lsio_gpio3 20 GPIO_ACTIVE_HIGH>;
 		skip-firmware-request;
+		status = "disabled";
+	};
+
+	/* Touch on Fusion 10" display */
+	fusion_touch: fusion@14 {
+		compatible = "touchrev,fusion-touch";
+		reg = <0x14>;
+		pinctrl-names = "default";
+		interrupt-parent = <&lsio_gpio3>;
+		/* LVDS0 interrupt */
+		pinctrl-0 = <&pinctrl_touch_lvds0>;
+		interrupts = <20 IRQ_TYPE_EDGE_FALLING>;
+		/* LVDS1 interrupt */
+		//pinctrl-0 = <&pinctrl_touch_lvds1>;
+		//interrupts = <19 IRQ_TYPE_EDGE_FALLING>;
 		status = "disabled";
 	};
 
@@ -809,7 +833,7 @@
 	lvds1_goodix_touch1: gt9271@14 {
 		compatible = "goodix,gt9271";
 		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_goodix_lvds1>;
+		pinctrl-0 = <&pinctrl_touch_lvds1>;
 		reg = <0x14>;
 		/* Interrupt for LVDS1 */
 		interrupt-parent = <&lsio_gpio3>;
@@ -822,7 +846,7 @@
 	lvds1_goodix_touch2: gt9271@5d {
 		compatible = "goodix,gt9271";
 		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_goodix_lvds1>;
+		pinctrl-0 = <&pinctrl_touch_lvds1>;
 		reg = <0x5D>;
 		/* Interrupt for LVDS1 */
 		interrupt-parent = <&lsio_gpio3>;
@@ -847,7 +871,7 @@
 		port@1 {
 			reg = <1>;
 
-	                lvds1_out: endpoint {
+			lvds1_out: endpoint {
 				remote-endpoint = <&panel_lvds1_in>;
 			};
 		};
@@ -862,6 +886,8 @@
 &lpspi0 {
 	#address-cells = <1>;
 	#size-cells = <0>;
+	num-cs = <2>;
+	cs-gpios = <&lsio_gpio1 8 GPIO_ACTIVE_LOW>, <&lsio_gpio1 7 GPIO_ACTIVE_LOW>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lpspi0>;
 	status = "disabled";
@@ -1008,8 +1034,8 @@
 			IMX8QXP_SPI0_SCK_ADMA_SPI0_SCK	0x0600004c
 			IMX8QXP_SPI0_SDO_ADMA_SPI0_SDO	0x0600004c
 			IMX8QXP_SPI0_SDI_ADMA_SPI0_SDI	0x0600004c
-			IMX8QXP_SPI0_CS0_ADMA_SPI0_CS0	0x0600004c
-			IMX8QXP_SPI0_CS1_ADMA_SPI0_CS1	0x0600004c
+			IMX8QXP_SPI0_CS0_LSIO_GPIO1_IO08	0x06000020
+			IMX8QXP_SPI0_CS1_LSIO_GPIO1_IO07	0x06000020
 		>;
 	};
 
@@ -1190,6 +1216,19 @@
 	pinctrl_flexcan3_lpuart3_gpios: flexcan2lpuart3gpios-grp {
 		fsl,pins = <
 			IMX8QXP_QSPI0B_SS0_B_LSIO_GPIO3_IO23 0x06000060
+		>;
+	};
+
+	pinctrl_flexspi0: flexspi0grp {
+		fsl,pins = <
+			IMX8QXP_QSPI0B_SCLK_LSIO_QSPI0B_SCLK       0x06000021
+			IMX8QXP_QSPI0B_DATA0_LSIO_QSPI0B_DATA0     0x06000021
+			IMX8QXP_QSPI0B_DATA1_LSIO_QSPI0B_DATA1     0x06000021
+			IMX8QXP_QSPI0B_DATA2_LSIO_QSPI0B_DATA2     0x06000021
+			IMX8QXP_QSPI0B_DATA3_LSIO_QSPI0B_DATA3     0x06000021
+			IMX8QXP_QSPI0B_DQS_LSIO_QSPI0B_DQS         0x06000021
+			IMX8QXP_QSPI0B_SS0_B_LSIO_QSPI0B_SS0_B     0x06000021
+			IMX8QXP_QSPI0B_SS1_B_LSIO_QSPI0B_SS1_B     0x06000021
 		>;
 	};
 
@@ -1413,14 +1452,14 @@
 		>;
 	};
 
-	pinctrl_goodix_lvds0: goodixgrplvds0 {
+	pinctrl_touch_lvds0: touchgrplvds0 {
 		fsl,pins = <
 			/* LVDS0 touch interrupt */
 			IMX8QXP_QSPI0B_DATA2_LSIO_GPIO3_IO20	0x06000060
 		>;
 	};
 
-	pinctrl_goodix_lvds1: goodixgrplvds1 {
+	pinctrl_touch_lvds1: touchgrplvds1 {
 		fsl,pins = <
 			/* LVDS1 touch interrupt */
 			IMX8QXP_QSPI0B_DATA1_LSIO_GPIO3_IO19	0x06000060

@@ -429,7 +429,8 @@ static int imx_set_trip_temp(struct thermal_zone_device *tz, int trip,
 
 	if (trip == IMX_TRIP_CRITICAL) {
 		data->temp_critical = temp;
-		if (data->socdata->version == TEMPMON_IMX6SX)
+		if (data->socdata->version == TEMPMON_IMX6SX &&
+		    !of_machine_is_compatible("digi,ccimx6ul"))
 			imx_set_panic_temp(data, temp);
 	}
 
@@ -869,7 +870,8 @@ static int imx_thermal_probe(struct platform_device *pdev)
 		     measure_freq << data->socdata->measure_freq_shift);
 	imx_set_alarm_temp(data, data->temp_passive);
 
-	if (data->socdata->version == TEMPMON_IMX6SX)
+	if (data->socdata->version == TEMPMON_IMX6SX &&
+	    !of_machine_is_compatible("digi,ccimx6ul"))
 		imx_set_panic_temp(data, data->temp_critical);
 
 	regmap_write(map, data->socdata->sensor_ctrl + REG_CLR,

@@ -190,6 +190,10 @@
 	status = "okay";
 };
 
+&lvds0_panel {
+	status = "okay";
+};
+
 &pwm_mipi_lvds0 {
 	status = "okay";
 };
@@ -284,6 +288,14 @@
 
 /* USB_OTG2 */
 &usbotg3 {
+	status = "okay";
+};
+
+&usbphy1 {
+	status = "okay";
+};
+
+&usb3phynop1 {
 	status = "okay";
 };
 

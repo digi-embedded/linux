@@ -52,9 +52,12 @@
 
 #define MCA_MAX_IO_BYTES		((MCA_MAX_IOS + 7) / 8)
 
+#define MCA_UID_SIZE	(MCA_HWVER_SOM - MCA_UID_0)
+
 struct mca_drv {
 	struct device *dev;
 	u8 dev_id;
+	u8 uid[MCA_UID_SIZE];
 	u8 hw_version;
 	bool fw_is_alpha;
 	u16 fw_version;

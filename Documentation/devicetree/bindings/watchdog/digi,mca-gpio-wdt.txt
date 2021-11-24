@@ -1,0 +1,64 @@
+* Digi MCA Watchdog timer (GPIO-refreshed) for ConnectCore SOMs
+
+Features:
+       - Allow to configure up to 4 GPIOs to kick the watchdog timer.
+       - Configurable hw_algo: toggle, level_high and level_low.
+       - Configurable timeout value (1-255 seconds).
+       - way-out, no-way-out configuration option.
+
+Required properties:
+- compatible: must be one of
+  "digi,mca-cc8x-gpio-wdt"
+  "digi,mca-cc8m-gpio-wdt"
+
+Subcomponents:
+
+Required properties:
+- mode: one of: toggle, level-high, level-low
+- mca-io-number: MCA GPIO to kick the watchdog timer
+- timeout-sec: contains the watchdog timeout in seconds.
+
+Optional properties:
+- irq-no-reset: if present, the watchdog will generate an interrupt instead
+	of a system reset.
+- full-reset: if present, the watchdog will perform a full system reset,
+        including the MCA. Otherwise, only the microprocessor is reset. Note
+        that this option requires the system to be configured to generate a
+        reset and not an interrupt.
+- no-way-out: if present, the watchdog can't be stopped once started.
+
+Example:
+	mca_cc8x: mca-@63 {
+		gpio_wdt: gpio-wdt {
+			compatible = "digi,mca-cc8x-gpio-wdt";
+			status = "okay";
+
+			gpio_wdt0: gpio-wdt@0x210 {
+				full-reset;
+				no-way-out;
+				/* mode; one of: toggle, level-high, level-low */
+				mode = "level-high";
+				mca-io-number = <10>;
+				timeout-sec = <2>;
+				status = "okay";
+			};
+
+			gpio_wdt1: gpio-wdt@0x220 {
+				full-reset;
+				no-way-out;
+				/* mode; one of: toggle, level-high, level-low */
+				mode = "toggle";
+				mca-io-number = <16>;
+				timeout-sec = <1>;
+				status = "okay";
+			};
+
+			gpio_wdt2: gpio-wdt@0x230 {
+				status = "disabled";
+			};
+
+			gpio_wdt3: gpio-wdt@0x240 {
+				status = "disabled";
+			};
+		};
+	};

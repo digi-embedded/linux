@@ -18,6 +18,8 @@ Optional properties:
 - max-memory-bandwidth: maximum bandwidth in bytes per second that the
 	controller can handle; if not present, the memory
 	interface is fast enough to handle all possible video modes
+- lcd-supply: main regulator to supply the LCD.
+- aux-supply: auxiliar regulator to supply the LCD.
 
 Required sub-nodes:
   - port: The connection to an encoder chip.

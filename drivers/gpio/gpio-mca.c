@@ -68,6 +68,7 @@ struct mca_gpio {
 	struct regmap *regmap;
 	struct device *dev;
 	struct gpio_chip gc;
+	struct irq_chip irqchip;
 	struct mutex irq_lock;
 	uint8_t irq_cfg[MCA_MAX_IOS];
 	uint8_t irq_capable[MCA_MAX_IO_BYTES];
@@ -392,16 +393,6 @@ static int mca_gpio_to_irq(struct gpio_chip *gc, u32 offset)
 	return irq_create_mapping(gc->irq.domain, offset);
 }
 
-static struct irq_chip mca_gpio_irq_chip = {
-	.name			= "mca-gpio-irq",
-	.irq_disable		= mca_gpio_irq_disable,
-	.irq_enable		= mca_gpio_irq_enable,
-	.irq_bus_lock		= mca_gpio_irq_bus_lock,
-	.irq_bus_sync_unlock	= mca_gpio_irq_bus_sync_unlock,
-	.irq_set_type		= mca_gpio_irq_set_type,
-	.irq_set_wake		= mca_gpio_irq_set_wake,
-};
-
 static int mca_gpio_irq_setup(struct mca_gpio *gpio, int nbank)
 {
 	unsigned int val;
@@ -429,13 +420,21 @@ static int mca_gpio_irq_setup(struct mca_gpio *gpio, int nbank)
 			gpio->irq_capable[GPIO_BYTE(i)] &= ~(1 << BYTE_OFFSET(i));
 	}
 
+	gpio->irqchip.name = gpio->gc.label;
+	gpio->irqchip.irq_enable = mca_gpio_irq_enable;
+	gpio->irqchip.irq_disable = mca_gpio_irq_disable;
+	gpio->irqchip.irq_set_wake = mca_gpio_irq_set_wake;
+	gpio->irqchip.irq_bus_lock = mca_gpio_irq_bus_lock;
+	gpio->irqchip.irq_bus_sync_unlock = mca_gpio_irq_bus_sync_unlock;
+	gpio->irqchip.irq_set_type = mca_gpio_irq_set_type;
+
 	for (i = 0; i < nbank; i++) {
 		if (gpio->irq[i] < 0)
 			continue;
 		ret = devm_request_threaded_irq(gpio->dev, gpio->irq[i],
 						NULL, mca_gpio_irq_handler,
 						IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
-						mca_gpio_irq_chip.name,
+						gpio->irqchip.name,
 						gpio);
 		if (ret) {
 			dev_err(gpio->dev, "Failed to request %s IRQ (%d)\n",
@@ -445,7 +444,7 @@ static int mca_gpio_irq_setup(struct mca_gpio *gpio, int nbank)
 	}
 
 	ret = gpiochip_irqchip_add_nested(&gpio->gc,
-					  &mca_gpio_irq_chip,
+					  &gpio->irqchip,
 					  0,
 					  handle_edge_irq,
 					  IRQ_TYPE_NONE);
@@ -466,7 +465,7 @@ static int mca_gpio_irq_setup(struct mca_gpio *gpio, int nbank)
 		if (gpio->irq[i] < 0)
 			continue;
 		gpiochip_set_nested_irqchip(&gpio->gc,
-					    &mca_gpio_irq_chip,
+					    &gpio->irqchip,
 					    gpio->irq[i]);
 	}
 

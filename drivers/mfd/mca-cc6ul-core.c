@@ -623,11 +623,31 @@ static ssize_t nvram_write(struct file *filp, struct kobject *kobj,
 	return count;
 }
 
+static ssize_t uid_show(struct device *dev,
+			struct device_attribute *attr, char *buf)
+
+{
+	struct mca_drv *mca = dev_get_drvdata(dev);
+	int ret, i, count;
+
+	for (i = 0, ret = 0; i < MCA_UID_SIZE; i++) {
+		count = sprintf(buf, i ? ":%02x" : "%02x", mca->uid[i]);
+		if (count < 0)
+			return count;
+		ret += count;
+		buf += count;
+	}
+
+	return ret;
+}
+static DEVICE_ATTR(uid, S_IRUGO, uid_show, NULL);
+
 static struct attribute *mca_cc6ul_sysfs_entries[] = {
 	&dev_attr_ext_32khz.attr,
 	&dev_attr_hw_version.attr,
 	&dev_attr_fw_version.attr,
 	&dev_attr_fw_update.attr,
+	&dev_attr_uid.attr,
 	NULL,
 };
 
@@ -742,7 +762,7 @@ static void mca_cc6ul_power_off(void)
 }
 
 #define MCA_MAX_RESET_TRIES 5
-static void mca_cc6ul_shutdown(void)
+static void mca_cc6ul_reset(void)
 {
 	const uint8_t unlock_pattern[] = {'C', 'T', 'R', 'U'};
 	int ret, try = 0;
@@ -779,6 +799,22 @@ reset_retry:
 	} while (++try < MCA_MAX_RESET_TRIES);
 
 	dev_err(pmca->dev, "failed to reboot!\n");
+}
+
+static void mca_cc6ul_shutdown(void)
+{
+	switch (system_state) {
+	case SYSTEM_HALT:
+		/* fall through on purpose */
+	case SYSTEM_POWER_OFF:
+		mca_cc6ul_power_off();
+		break;
+	case SYSTEM_RESTART:
+		mca_cc6ul_reset();
+		break;
+	default:
+		break;
+	}
 }
 
 static int mca_cc6ul_add_dyn_sysfs_entries(struct mca_drv *mca,
@@ -834,6 +870,13 @@ int mca_cc6ul_device_init(struct mca_drv *mca, u32 irq)
 		return ret;
 	}
 	mca->hw_version = (u8)val;
+
+	ret = regmap_bulk_read(mca->regmap,
+			       MCA_UID_0, mca->uid, MCA_UID_SIZE);
+	if (ret != 0) {
+		dev_err(mca->dev, "Cannot read MCA UID (%d)\n", ret);
+		return ret;
+	}
 
 	ret = regmap_bulk_read(mca->regmap, MCA_FW_VER_L, &val, 2);
 	if (ret != 0) {

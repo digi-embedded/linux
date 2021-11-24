@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2021 Digi International Inc.
+ * Copyright 2021 Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -20,47 +20,29 @@
 	fragment@0 {
 		target-path = "/";
 		__overlay__ {
-			overlay-description = "DVK: AUO 10.1\" LVDS display";
+			overlay-description = "DVK: MCA GPIO Watchdog";
 		};
 	};
 
-	/* Enable the LVDS bridge and target the AUO 10" display */
+	/* Enable mca gpio-wdt */
 	fragment@1 {
-		target = <&dsi_lvds_bridge>;
+		target = <&gpio_wdt>;
 		__overlay__ {
 			status = "okay";
 		};
 	};
 
-	/* Disable the HDMI bridge */
+	/* Configure USER1 button to reset the board if not at level-high for 2s */
 	fragment@2 {
-		target = <&lt_bridge>;
-		__overlay__ {
-			status = "disabled";
-		};
-	};
-
-	/* Enable lvds_backlight */
-	fragment@3 {
-		target = <&lvds_backlight>;
+		target = <&gpio_wdt0>;
 		__overlay__ {
 			status = "okay";
-		};
-	};
-
-	/* Enable goodix_touch2 */
-	fragment@4 {
-		target = <&goodix_touch>;
-		__overlay__ {
-			status = "okay";
-		};
-	};
-
-	/* Enable goodix_touch2 */
-	fragment@5 {
-		target = <&goodix_touch2>;
-		__overlay__ {
-			status = "okay";
+			full-reset;
+			no-way-out;
+			/* mode; one of: toggle, level-high, level-low */
+			mode = "level-high";
+			mca-io-number = <10>;
+			timeout-sec = <2>;
 		};
 	};
 };

@@ -20,15 +20,18 @@
 	fragment@0 {
 		target-path = "/";
 		__overlay__ {
-			overlay-description = "DVK: AUO 10.1\" LVDS display";
+			overlay-description = "DVK: Fusion 10\" LVDS display";
 		};
 	};
 
-	/* Enable the LVDS bridge and target the AUO 10" display */
+	/* Enable the LVDS bridge and target the Fusion 10" display */
 	fragment@1 {
 		target = <&dsi_lvds_bridge>;
 		__overlay__ {
 			status = "okay";
+			display-timings {
+				native-mode = <&lvds0_hsd101pfw2>;
+			};
 		};
 	};
 
@@ -48,19 +51,26 @@
 		};
 	};
 
-	/* Enable goodix_touch2 */
+	/* Enable Fusion touch */
 	fragment@4 {
-		target = <&goodix_touch>;
+		target = <&fusion_touch>;
 		__overlay__ {
 			status = "okay";
 		};
 	};
 
-	/* Enable goodix_touch2 */
+	/* Disable Goodix touch */
 	fragment@5 {
+		target = <&goodix_touch>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	fragment@6 {
 		target = <&goodix_touch2>;
 		__overlay__ {
-			status = "okay";
+			status = "disabled";
 		};
 	};
 };

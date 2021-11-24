@@ -255,6 +255,7 @@ struct mxsfb_info {
 	unsigned dotclk_delay;
 	const struct mxsfb_devdata *devdata;
 	struct regulator *reg_lcd;
+	struct regulator *reg_aux;
 	bool wait4vsync;
 	struct completion vsync_complete;
 	ktime_t vsync_nf_timestamp;
@@ -760,6 +761,15 @@ static void mxsfb_enable_controller(struct fb_info *fb_info)
 		}
 	}
 
+	if (host->reg_aux) {
+		ret = regulator_enable(host->reg_aux);
+		if (ret) {
+			dev_err(&host->pdev->dev,
+				"lcd aux regulator enable failed: %d\n", ret);
+			return;
+		}
+	}
+
 	if (host->dispdrv && host->dispdrv->drv->enable) {
 		ret = host->dispdrv->drv->enable(host->dispdrv, fb_info);
 		if (ret < 0)
@@ -786,6 +796,13 @@ static void mxsfb_enable_controller(struct fb_info *fb_info)
 				if (ret)
 					dev_err(&host->pdev->dev,
 						"lcd regulator disable failed: %d\n",
+						ret);
+			}
+			if (host->reg_aux) {
+				ret = regulator_disable(host->reg_aux);
+				if (ret)
+					dev_err(&host->pdev->dev,
+						"lcd aux regulator disable failed: %d\n",
 						ret);
 			}
 			return;
@@ -859,6 +876,12 @@ static void mxsfb_disable_controller(struct fb_info *fb_info)
 		if (ret)
 			dev_err(&host->pdev->dev,
 				"lcd regulator disable failed: %d\n", ret);
+	}
+	if (host->reg_aux) {
+		ret = regulator_disable(host->reg_aux);
+		if (ret)
+			dev_err(&host->pdev->dev,
+				"lcd aux regulator disable failed: %d\n", ret);
 	}
 }
 
@@ -2492,8 +2515,20 @@ static int mxsfb_probe(struct platform_device *pdev)
 	}
 
 	host->reg_lcd = devm_regulator_get(&pdev->dev, "lcd");
+	if (PTR_ERR(host->reg_lcd) == -EPROBE_DEFER) {
+		ret = -EPROBE_DEFER;
+		goto fb_release;
+	}
 	if (IS_ERR(host->reg_lcd))
 		host->reg_lcd = NULL;
+
+	host->reg_aux = devm_regulator_get(&pdev->dev, "aux");
+	if (PTR_ERR(host->reg_lcd) == -EPROBE_DEFER) {
+		ret = -EPROBE_DEFER;
+		goto fb_release;
+	}
+	if (IS_ERR(host->reg_aux))
+		host->reg_aux = NULL;
 
 	fb_info->pseudo_palette = devm_kcalloc(&pdev->dev, 16, sizeof(u32),
 					       GFP_KERNEL);

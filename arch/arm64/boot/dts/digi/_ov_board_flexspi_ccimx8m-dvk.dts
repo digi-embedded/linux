@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2021 Digi International Inc.
+ * Copyright 2021 Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -20,19 +20,37 @@
 	fragment@0 {
 		target-path = "/";
 		__overlay__ {
-			overlay-description = "DVK: AUO 10.1\" LVDS display";
+			overlay-description = "DVK: FlexSPI";
 		};
 	};
 
-	/* Enable the LVDS bridge and target the AUO 10" display */
+	/* Enable flexspi */
 	fragment@1 {
-		target = <&dsi_lvds_bridge>;
+		target = <&flexspi>;
 		__overlay__ {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_flexspi>;
 			status = "okay";
+
+			flash0: mt25qu256aba@0 {
+				reg = <0>;
+				#address-cells = <1>;
+				#size-cells = <1>;
+				compatible = "jedec,spi-nor";
+				spi-max-frequency = <80000000>;
+				spi-tx-bus-width = <4>;
+				spi-rx-bus-width = <4>;
+			};
 		};
 	};
 
-	/* Disable the HDMI bridge */
+	/*
+	 * The following DVK interfaces need to be disabled due to conflicts
+	 * with the QSPI lines.
+	 */
+	/* Disable lt_bridge */
 	fragment@2 {
 		target = <&lt_bridge>;
 		__overlay__ {
@@ -40,27 +58,11 @@
 		};
 	};
 
-	/* Enable lvds_backlight */
+	/* Disable dsi_lvds_bridge */
 	fragment@3 {
-		target = <&lvds_backlight>;
+		target = <&dsi_lvds_bridge>;
 		__overlay__ {
-			status = "okay";
-		};
-	};
-
-	/* Enable goodix_touch2 */
-	fragment@4 {
-		target = <&goodix_touch>;
-		__overlay__ {
-			status = "okay";
-		};
-	};
-
-	/* Enable goodix_touch2 */
-	fragment@5 {
-		target = <&goodix_touch2>;
-		__overlay__ {
-			status = "okay";
+			status = "disabled";
 		};
 	};
 };

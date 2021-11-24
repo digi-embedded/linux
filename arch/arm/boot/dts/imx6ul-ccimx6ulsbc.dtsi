@@ -158,6 +158,13 @@
 		status = "disabled";
 	};
 
+	/*
+	 * An inconsistent reset sequence makes
+	 * the Goodix display's touch controller respond on one of two I2C
+	 * addresses: 0x14 and 0x5D. To make sure the touchscreen
+	 * works every time, the touch controller's description must
+	 * be duplicated for both addresses.
+	 */
 	goodix_touch: gt911@14 {
 		compatible = "goodix,gt9271";
 		reg = <0x14>;
@@ -167,6 +174,19 @@
 		interrupts = <2 IRQ_TYPE_EDGE_RISING>;
 		irq-gpios = <&gpio5 2 GPIO_ACTIVE_HIGH>;
 		reset-gpios = <&mca_ioexp_gpio 29 GPIO_ACTIVE_HIGH>;
+		skip-firmware-request;
+		reload-fw-on-resume;
+		status = "disabled";
+	};
+
+	goodix_touch2: gt911@5d {
+		compatible = "goodix,gt9271";
+		reg = <0x5d>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_goodix_touch>;
+		interrupt-parent = <&gpio5>;
+		interrupts = <2 IRQ_TYPE_EDGE_RISING>;
+		irq-gpios = <&gpio5 2 GPIO_ACTIVE_HIGH>;
 		skip-firmware-request;
 		reload-fw-on-resume;
 		status = "disabled";
