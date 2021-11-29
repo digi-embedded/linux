@@ -19,6 +19,7 @@ allOf:
               - st,stm32f7-i2c
               - st,stm32mp13-i2c
               - st,stm32mp15-i2c
+              - st,stm32mp25-i2c
     then:
       properties:
         i2c-scl-rising-time-ns:
@@ -41,6 +42,33 @@ allOf:
         clock-frequency:
           enum: [100000, 400000]
 
+  - if:
+      properties:
+        compatible:
+          contains:
+            enum:
+              - st,stm32f7-i2c
+              - st,stm32mp13-i2c
+              - st,stm32mp15-i2c
+    then:
+      properties:
+        interrupts:
+          items:
+            - description: interrupt ID for I2C event
+            - description: interrupt ID for I2C error
+
+  - if:
+      properties:
+        compatible:
+          contains:
+            enum:
+              - st,stm32mp25-i2c
+    then:
+      properties:
+        interrupts:
+          items:
+            - description: common interrupt for events and errors
+
 properties:
   compatible:
     enum:
@@ -48,14 +76,11 @@ properties:
       - st,stm32f7-i2c
       - st,stm32mp13-i2c
       - st,stm32mp15-i2c
+      - st,stm32mp25-i2c
 
   reg:
     maxItems: 1
 
-  interrupts:
-    items:
-      - description: interrupt ID for I2C event
-      - description: interrupt ID for I2C error
 
   interrupt-names:
     items:
