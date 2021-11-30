@@ -28,5 +28,11 @@
 			resets = <&scmi_reset RST_SCMI_LTDC>;
 			status = "disabled";
 		};
+
+		framebuffer {
+			compatible = "simple-framebuffer";
+			clocks = <&rcc LTDC_PX>;
+			status = "disabled";
+		};
 	};
 };
