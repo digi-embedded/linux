@@ -2,4 +2,4 @@
 stm32-dcmipp-y := dcmipp-core.o dcmipp-common.o
 
 obj-$(CONFIG_VIDEO_STM32_DCMIPP) += stm32-dcmipp.o
-obj-$(CONFIG_VIDEO_STM32_DCMIPP) += dcmipp-parallel.o dcmipp-byteproc.o dcmipp-bytecap.o
+obj-$(CONFIG_VIDEO_STM32_DCMIPP) += dcmipp-parallel.o dcmipp-byteproc.o dcmipp-bytecap.o dcmipp-isp.o dcmipp-colorconv.o dcmipp-pixelproc.o dcmipp-pixelcap.o

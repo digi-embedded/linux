@@ -7,7 +7,6 @@
  *          Alain Volmat <alain.volmat@foss.st.com>
  *          for STMicroelectronics.
  */
-
 #include <linux/clk.h>
 #include <linux/component.h>
 #include <linux/delay.h>
@@ -37,6 +36,8 @@
 }
 
 #define DCMIPP_CMHWCFGR (0x200)
+#define DCMIPP_CMCR (0x204)
+#define DCMIPP_CMCR_INSEL BIT(0)
 #define DCMIPP_P0HWCFGR (0x400)
 #define DCMIPP_VERR (0xFF4)
 
@@ -48,6 +49,7 @@ struct dcmipp_device {
 	/* Hardware resources */
 	struct reset_control		*rstc;
 	void __iomem			*regs;
+	struct clk			*mclk;
 	struct clk			*kclk;
 
 	/* The pipeline configuration */
@@ -128,6 +130,68 @@ static const struct dcmipp_pipeline_config stm32mp13_pipe_cfg = {
 	.num_ents	= ARRAY_SIZE(stm32mp13_ent_config),
 	.links		= stm32mp13_ent_links,
 	.num_links	= ARRAY_SIZE(stm32mp13_ent_links)
+};
+
+#define	ID_MAIN_ISP 3
+#define	ID_MAIN_POSTPROC 4
+#define	ID_MAIN_CAPTURE	5
+#define	ID_AUX_POSTPROC 6
+#define	ID_AUX_CAPTURE 7
+static const struct dcmipp_ent_config stm32mp25_ent_config[] = {
+	{
+		.name = "dcmipp_parallel",
+		.drv = "dcmipp-parallel",
+	},
+	{
+		.name = "dcmipp_dump_postproc",
+		.drv = "dcmipp-byteproc",
+	},
+	{
+		.name = "dcmipp_dump_capture",
+		.drv = "dcmipp-bytecap",
+	},
+	{
+		.name = "dcmipp_main_isp",
+		.drv = "dcmipp-isp",
+	},
+	{
+		.name = "dcmipp_main_postproc",
+		.drv = "dcmipp-pixelproc",
+	},
+	{
+		.name = "dcmipp_main_capture",
+		.drv = "dcmipp-pixelcap",
+	},
+	{
+		.name = "dcmipp_aux_postproc",
+		.drv = "dcmipp-pixelproc",
+	},
+	{
+		.name = "dcmipp_aux_capture",
+		.drv = "dcmipp-pixelcap",
+	},
+};
+
+static const struct dcmipp_ent_link stm32mp25_ent_links[] = {
+	DCMIPP_ENT_LINK(ID_PARALLEL,      1, ID_DUMP_BYTEPROC, 0, 0),
+	DCMIPP_ENT_LINK(ID_DUMP_BYTEPROC, 1, ID_DUMP_CAPTURE,  0,
+			MEDIA_LNK_FL_ENABLED | MEDIA_LNK_FL_IMMUTABLE),
+	DCMIPP_ENT_LINK(ID_PARALLEL,	1, ID_MAIN_ISP,  0, 0),
+	DCMIPP_ENT_LINK(ID_MAIN_ISP,	1, ID_MAIN_POSTPROC,  0,
+			MEDIA_LNK_FL_ENABLED | MEDIA_LNK_FL_IMMUTABLE),
+	DCMIPP_ENT_LINK(ID_MAIN_ISP,	2, ID_AUX_POSTPROC,  0, 0),
+	DCMIPP_ENT_LINK(ID_MAIN_POSTPROC,	1, ID_MAIN_CAPTURE,  0,
+			MEDIA_LNK_FL_ENABLED | MEDIA_LNK_FL_IMMUTABLE),
+	DCMIPP_ENT_LINK(ID_PARALLEL,	1, ID_AUX_POSTPROC,  0, 0),
+	DCMIPP_ENT_LINK(ID_AUX_POSTPROC,	1, ID_AUX_CAPTURE,  0,
+			MEDIA_LNK_FL_ENABLED | MEDIA_LNK_FL_IMMUTABLE),
+};
+
+static const struct dcmipp_pipeline_config stm32mp25_pipe_cfg = {
+	.ents		= stm32mp25_ent_config,
+	.num_ents	= ARRAY_SIZE(stm32mp25_ent_config),
+	.links		= stm32mp25_ent_links,
+	.num_links	= ARRAY_SIZE(stm32mp25_ent_links)
 };
 
 /* -------------------------------------------------------------------------- */
@@ -290,6 +354,7 @@ static const struct component_master_ops dcmipp_comp_ops = {
 
 static const struct of_device_id dcmipp_of_match[] = {
 	{ .compatible = "st,stm32mp13-dcmipp", .data = &stm32mp13_pipe_cfg},
+	{ .compatible = "st,stm32mp25-dcmipp", .data = &stm32mp25_pipe_cfg},
 	{ /* end node */ },
 };
 MODULE_DEVICE_TABLE(of, dcmipp_of_match);
@@ -380,6 +445,9 @@ static int dcmipp_graph_notify_bound(struct v4l2_async_notifier *notifier,
 	struct dcmipp_ent_device *sink;
 	struct device_node *np = dcmipp->dev->of_node;
 	struct v4l2_fwnode_endpoint ep = { .bus_type = 0 };
+	struct device_node *_np = dcmipp->dev->of_node;//FIXME _np/_ep...
+	struct device_node *_ep;
+	u32 flags = MEDIA_LNK_FL_ENABLED;
 
 	dev_dbg(dcmipp->dev, "Subdev \"%s\" bound\n", subdev->name);
 
@@ -438,8 +506,52 @@ static int dcmipp_graph_notify_bound(struct v4l2_async_notifier *notifier,
 			dev_dbg(dcmipp->dev, "DCMIPP is now linked to \"%s\"\n",
 				subdev->name);
 
+		/* Use the parallel interface */
+		reg_write(dcmipp, DCMIPP_CMCR, 0);
+
 		return 0;
 	}
+
+	/*
+	 * CSI-2 receiver
+	 * Connect all of its channels to the DCMIPP pipes
+	 */
+	for_each_endpoint_of_node(_np, _ep) {
+		struct of_endpoint endpoint;
+		unsigned int sink_ids[3] = {ID_DUMP_BYTEPROC, ID_MAIN_ISP, ID_AUX_POSTPROC};
+		unsigned int i;
+
+		of_graph_parse_endpoint(_ep, &endpoint);
+		dev_info(dcmipp->dev, "endpoint.port=%d\n", endpoint.port);
+//FIXME check	if ((src_pad + endpoint.port) > subdev->entity.num_pads)
+
+		for (i = 0; i < ARRAY_SIZE(sink_ids); i++) {
+			sink = platform_get_drvdata(dcmipp->subdevs[sink_ids[i]]);
+			ret = media_create_pad_link(&subdev->entity, src_pad + endpoint.port,
+						    sink->ent, 0,
+						    flags);
+			if (ret)
+				dev_err(dcmipp->dev, "Failed to create link \"%s\":%d -> %d:\"%s\" [%s]\n",
+					subdev->name, src_pad + endpoint.port,
+					0, sink->ent->name,
+					LINK_FLAG_TO_STR(flags));
+			else
+				dev_dbg(dcmipp->dev, "Create link \"%s\":%d -> %d:\"%s\" [%s]\n",
+					subdev->name, src_pad + endpoint.port,
+					0, sink->ent->name,
+					LINK_FLAG_TO_STR(flags));
+		}
+
+		/*
+		 * Enable media link of first port connection by default,
+		 * Let the other connections disabled, they could be enabled
+		 * later on using MC
+		 */
+		flags = 0;
+	}
+
+	/* Use the CSI interface */
+	reg_write(dcmipp, DCMIPP_CMCR, DCMIPP_CMCR_INSEL);
 
 	return ret;
 }
@@ -492,7 +604,7 @@ static int dcmipp_probe(struct platform_device *pdev)
 	struct dcmipp_device *dcmipp;
 	struct component_match *comp_match = NULL;
 	struct resource *res;
-	struct clk *kclk;
+	struct clk *kclk, *mclk;
 	const struct dcmipp_pipeline_config *pipe_cfg;
 	int irq;
 	int ret;
@@ -566,6 +678,14 @@ static int dcmipp_probe(struct platform_device *pdev)
 				     "Unable to get kclk\n");
 	dcmipp->kclk = kclk;
 
+	if (!of_device_is_compatible(pdev->dev.of_node, "st,stm32mp13-dcmipp")) {
+		mclk = devm_clk_get(&pdev->dev, "mclk");
+		if (IS_ERR(mclk))
+			return dev_err_probe(&pdev->dev, PTR_ERR(mclk),
+					     "Unable to get mclk\n");
+		dcmipp->mclk = mclk;
+	}
+
 	/* Create platform_device for each entity in the topology */
 	dcmipp->subdevs = devm_kcalloc(&pdev->dev, dcmipp->pipe_cfg->num_ents,
 				       sizeof(*dcmipp->subdevs), GFP_KERNEL);
@@ -620,6 +740,7 @@ static __maybe_unused int dcmipp_runtime_suspend(struct device *dev)
 	struct dcmipp_device *dcmipp = dev_get_drvdata(dev);
 
 	clk_disable_unprepare(dcmipp->kclk);
+	clk_disable_unprepare(dcmipp->mclk);
 
 	return 0;
 }
@@ -628,6 +749,10 @@ static __maybe_unused int dcmipp_runtime_resume(struct device *dev)
 {
 	struct dcmipp_device *dcmipp = dev_get_drvdata(dev);
 	int ret;
+
+	ret = clk_prepare_enable(dcmipp->mclk);
+	if (ret)
+		dev_err(dev, "%s: Failed to prepare_enable clock\n", __func__);
 
 	ret = clk_prepare_enable(dcmipp->kclk);
 	if (ret)
