@@ -200,7 +200,6 @@ struct stm32_dma_mdma {
 	enum dma_transfer_direction dir;
 	dma_addr_t sram_buf;
 	u32 sram_period;
-	u32 num_sgs;
 };
 
 struct stm32_dma_sg_req {
@@ -1524,7 +1523,6 @@ static int stm32_dma_mdma_prep_slave_sg(struct stm32_dma_chan *chan,
 
 	chan->mchan.sram_buf = desc->dma_buf;
 	chan->mchan.sram_period = sram_period;
-	chan->mchan.num_sgs = num_sgs;
 
 	return 0;
 
