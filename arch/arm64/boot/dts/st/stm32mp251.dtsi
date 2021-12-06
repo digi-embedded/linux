@@ -404,6 +404,37 @@
 				feature-domains = <&rifsc STM32MP25_RIFSC_SDMMC1_ID>;
 				status = "disabled";
 			};
+
+			usb2h: usb@482e0000 {
+				compatible = "st,stm32mp25-usb2h";
+				st,syscfg = <&syscfg 0x2420>;
+				#address-cells = <1>;
+				#size-cells = <1>;
+				ranges = <0x482e0000 0x482e0000 0x20000>;
+				feature-domains = <&rifsc STM32MP25_RIFSC_USBH_ID>;
+				status = "disabled";
+
+				usb2h_ohci: usb@482e0000 {
+					compatible = "generic-ohci";
+					reg = <0x482e0000 0x1000>;
+					clocks = <&rcc CK_BUS_USB2OHCI>;
+					resets = <&rcc USB2_R>;
+					interrupts = <GIC_SPI 140 IRQ_TYPE_LEVEL_HIGH>;
+					phys = <&usb2_phy1>;
+					phy-names = "usb";
+				};
+
+				usb2h_ehci: usb@482f0000 {
+					compatible = "generic-ehci";
+					reg = <0x482f0000 0x1000>;
+					clocks = <&rcc CK_BUS_USB2EHCI>;
+					resets = <&rcc USB2_R>;
+					interrupts = <GIC_SPI 139 IRQ_TYPE_LEVEL_HIGH>;
+					companion = <&usb2h_ohci>;
+					phys = <&usb2_phy1>;
+					phy-names = "usb";
+				};
+			};
 		};
 
 		rcc: rcc@44200000 {
