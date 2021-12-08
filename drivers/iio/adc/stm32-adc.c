@@ -1097,6 +1097,9 @@ static int stm32h7_adc_selfcalib(struct iio_dev *indio_dev)
 	if (adc->cfg->has_linearcal)
 		msk |= STM32H7_ADCALLIN;
 
+	/* ADC must be disabled for calibration */
+	stm32h7_adc_disable(indio_dev);
+
 	/*
 	 * Select calibration mode:
 	 * - Offset calibration for single ended inputs
