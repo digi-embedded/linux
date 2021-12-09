@@ -447,6 +447,7 @@ static int dcmipp_graph_notify_bound(struct v4l2_async_notifier *notifier,
 	struct v4l2_fwnode_endpoint ep = { .bus_type = 0 };
 	struct device_node *_np = dcmipp->dev->of_node;//FIXME _np/_ep...
 	struct device_node *_ep;
+	struct media_link *link;
 	u32 flags = MEDIA_LNK_FL_ENABLED;
 
 	dev_dbg(dcmipp->dev, "Subdev \"%s\" bound\n", subdev->name);
@@ -505,6 +506,17 @@ static int dcmipp_graph_notify_bound(struct v4l2_async_notifier *notifier,
 		else
 			dev_dbg(dcmipp->dev, "DCMIPP is now linked to \"%s\"\n",
 				subdev->name);
+
+		/* Enable all links from the parallel subdev */
+		list_for_each_entry(link, &sink->ent->links, list) {
+			/* Only enable link starting from the parallel subdev */
+			if (link->source->entity == sink->ent &&
+			    !(link->flags & MEDIA_LNK_FL_IMMUTABLE)) {
+				ret = media_entity_setup_link(link, MEDIA_LNK_FL_ENABLED);
+				if (ret)
+					dev_err(dcmipp->dev, "Failed to setup link (%d)\n", ret);
+			}
+		}
 
 		/* Use the parallel interface */
 		reg_write(dcmipp, DCMIPP_CMCR, 0);
