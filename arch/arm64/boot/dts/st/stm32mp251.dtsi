@@ -263,6 +263,36 @@
 			feature-domain-controller;
 			#feature-domain-cells = <1>;
 
+			spi2: spi@400b0000 {
+				#address-cells = <1>;
+				#size-cells = <0>;
+				compatible = "st,stm32mp25-spi";
+				reg = <0x400b0000 0x400>;
+				interrupts = <GIC_SPI 113 IRQ_TYPE_LEVEL_HIGH>;
+				clocks = <&rcc CK_KER_SPI2>;
+				resets = <&rcc SPI2_R>;
+				dmas = <&hpdma 51 0x20 0x00003012 0>,
+				       <&hpdma 52 0x20 0x00003021 0>;
+				dma-names = "rx", "tx";
+				feature-domains = <&rifsc STM32MP25_RIFSC_SPI2_ID>;
+				status = "disabled";
+			};
+
+			spi3: spi@400c0000 {
+				#address-cells = <1>;
+				#size-cells = <0>;
+				compatible = "st,stm32mp25-spi";
+				reg = <0x400c0000 0x400>;
+				interrupts = <GIC_SPI 125 IRQ_TYPE_LEVEL_HIGH>;
+				clocks = <&rcc CK_KER_SPI3>;
+				resets = <&rcc SPI3_R>;
+				dmas = <&hpdma 53 0x20 0x00003012 0>,
+				       <&hpdma 54 0x20 0x00003021 0>;
+				dma-names = "rx", "tx";
+				feature-domains = <&rifsc STM32MP25_RIFSC_SPI3_ID>;
+				status = "disabled";
+			};
+
 			usart2: serial@400e0000 {
 				compatible = "st,stm32h7-uart";
 				reg = <0x400e0000 0x400>;
@@ -381,6 +411,96 @@
 				       <&hpdma 46 0x20 0x00003021 0>;
 				dma-names = "rx", "tx";
 				feature-domains = <&rifsc STM32MP25_RIFSC_I2C7_ID>;
+				status = "disabled";
+			};
+
+			spi1: spi@40230000 {
+				#address-cells = <1>;
+				#size-cells = <0>;
+				compatible = "st,stm32mp25-spi";
+				reg = <0x40230000 0x400>;
+				interrupts = <GIC_SPI 112 IRQ_TYPE_LEVEL_HIGH>;
+				clocks = <&rcc CK_KER_SPI1>;
+				resets = <&rcc SPI1_R>;
+				dmas = <&hpdma 49 0x20 0x00003012 0>,
+				       <&hpdma 50 0x20 0x00003021 0>;
+				dma-names = "rx", "tx";
+				feature-domains = <&rifsc STM32MP25_RIFSC_SPI1_ID>;
+				status = "disabled";
+			};
+
+			spi4: spi@40240000 {
+				#address-cells = <1>;
+				#size-cells = <0>;
+				compatible = "st,stm32mp25-spi";
+				reg = <0x40240000 0x400>;
+				interrupts = <GIC_SPI 152 IRQ_TYPE_LEVEL_HIGH>;
+				clocks = <&rcc CK_KER_SPI4>;
+				resets = <&rcc SPI4_R>;
+				dmas = <&hpdma 55 0x20 0x00003012 0>,
+				       <&hpdma 56 0x20 0x00003021 0>;
+				dma-names = "rx", "tx";
+				feature-domains = <&rifsc STM32MP25_RIFSC_SPI4_ID>;
+				status = "disabled";
+			};
+
+			spi5: spi@40280000 {
+				#address-cells = <1>;
+				#size-cells = <0>;
+				compatible = "st,stm32mp25-spi";
+				reg = <0x40280000 0x400>;
+				interrupts = <GIC_SPI 153 IRQ_TYPE_LEVEL_HIGH>;
+				clocks = <&rcc CK_KER_SPI5>;
+				resets = <&rcc SPI5_R>;
+				dmas = <&hpdma 57 0x20 0x00003012 0>,
+				       <&hpdma 58 0x20 0x00003021 0>;
+				dma-names = "rx", "tx";
+				feature-domains = <&rifsc STM32MP25_RIFSC_SPI5_ID>;
+				status = "disabled";
+			};
+
+			spi6: spi@40350000 {
+				#address-cells = <1>;
+				#size-cells = <0>;
+				compatible = "st,stm32mp25-spi";
+				reg = <0x40350000 0x400>;
+				interrupts = <GIC_SPI 154 IRQ_TYPE_LEVEL_HIGH>;
+				clocks = <&rcc CK_KER_SPI6>;
+				resets = <&rcc SPI6_R>;
+				dmas = <&hpdma 59 0x20 0x00003012 0>,
+				       <&hpdma 60 0x20 0x00003021 0>;
+				dma-names = "rx", "tx";
+				feature-domains = <&rifsc STM32MP25_RIFSC_SPI6_ID>;
+				status = "disabled";
+			};
+
+			spi7: spi@40360000 {
+				#address-cells = <1>;
+				#size-cells = <0>;
+				compatible = "st,stm32mp25-spi";
+				reg = <0x40360000 0x400>;
+				interrupts = <GIC_SPI 155 IRQ_TYPE_LEVEL_HIGH>;
+				clocks = <&rcc CK_KER_SPI7>;
+				resets = <&rcc SPI7_R>;
+				dmas = <&hpdma 61 0x20 0x00003012 0>,
+				       <&hpdma 62 0x20 0x00003021 0>;
+				dma-names = "rx", "tx";
+				feature-domains = <&rifsc STM32MP25_RIFSC_SPI7_ID>;
+				status = "disabled";
+			};
+
+			spi8: spi@46020000 {
+				#address-cells = <1>;
+				#size-cells = <0>;
+				compatible = "st,stm32mp25-spi";
+				reg = <0x46020000 0x400>;
+				interrupts = <GIC_SPI 156 IRQ_TYPE_LEVEL_HIGH>;
+				clocks = <&rcc CK_KER_SPI8>;
+				resets = <&rcc SPI8_R>;
+				dmas = <&hpdma 171 0x20 0x00003012 0>,
+				       <&hpdma 172 0x20 0x00003021 0>;
+				dma-names = "rx", "tx";
+				feature-domains = <&rifsc STM32MP25_RIFSC_SPI8_ID>;
 				status = "disabled";
 			};
 
