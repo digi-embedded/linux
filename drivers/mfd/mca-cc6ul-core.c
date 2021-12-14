@@ -740,14 +740,22 @@ static void mca_cc6ul_power_off(void)
 		return;
 	}
 
+	/*
+	 * Following line prints the 'Power down' message which confirms the
+	 * device is in power off.
+	 * That message used to be printed by pm_power_off() function that is
+	 * being deprecated here by the syscore approach.
+	 */
+	pr_emerg("Power down through syscore\n");
+
 	do {
 		/* Set power off bit in PWR_CTRL_0 register to shutdown */
 		ret = regmap_update_bits(pmca->regmap, MCA_PWR_CTRL_0,
 					 MCA_PWR_GO_OFF,
 					 MCA_PWR_GO_OFF);
 		if (ret)
-			printk(KERN_ERR "ERROR: accesing PWR_CTRL_0 register "
-			       "[%s:%d/%s()]!\n", __FILE__, __LINE__, __func__);
+			printk(KERN_ERR "ERROR: accesing PWR_CTRL_0 register (%d) "
+			       "[%s:%d/%s()]!\n", ret, __FILE__, __LINE__, __func__);
 
 		/*
 		 * Even if the regmap update returned with success, retry...
@@ -766,9 +774,6 @@ static void mca_cc6ul_reset(void)
 {
 	const uint8_t unlock_pattern[] = {'C', 'T', 'R', 'U'};
 	int ret, try = 0;
-
-	if (system_state != SYSTEM_RESTART)
-		return;
 
 	if (!pmca) {
 		printk(KERN_ERR "ERROR: unable to shutdown [%s:%d/%s()]!\n",
@@ -981,12 +986,6 @@ int mca_cc6ul_device_init(struct mca_drv *mca, u32 irq)
 
 	pmca = mca;
 
-	if (pm_power_off != NULL) {
-		dev_warn(mca->dev, "pm_power_off function already registered. "
-			 "Will be override by MCA function.\n");
-	}
-	pm_power_off = mca_cc6ul_power_off;
-
 	/*
 	 * To avoid error messages when resuming from suspend, increase the I2C
 	 * bus' usage counter so the linux pm_runtime framework wakes it from
@@ -1038,7 +1037,6 @@ int mca_cc6ul_device_init(struct mca_drv *mca, u32 irq)
 out_nvram:
 	kfree(mca->nvram);
 out_pwr_off:
-	pm_power_off = NULL;
 out_sysfs_remove:
 	pmca = NULL;
 	sysfs_remove_group(&mca->dev->kobj, &mca_cc6ul_attr_group);
@@ -1053,7 +1051,6 @@ out_irq:
 void mca_cc6ul_device_exit(struct mca_drv *mca)
 {
 	unregister_syscore_ops(&mca->syscore);
-	pm_power_off = NULL;
 	pmca = NULL;
 	sysfs_remove_group(&mca->dev->kobj, &mca_cc6ul_attr_group);
 	mfd_remove_devices(mca->dev);
