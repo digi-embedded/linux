@@ -540,7 +540,7 @@ static bool optee_chan_available(struct device *dev, int idx)
 
 	of_node_put(np);
 
-	return !of_property_read_u32_index(dev->of_node, "linaro,channel-id",
+	return !of_property_read_u32_index(dev->of_node, "linaro,optee-channel-id",
 					   idx, &channel_id);
 }
 
@@ -596,9 +596,9 @@ static int optee_chan_setup(struct scmi_chan_info *cinfo, struct device *dev,
 	if (!channel)
 		return -ENOMEM;
 
-	ret = of_property_read_u32_index(cdev->of_node, "linaro,channel-id",
+	ret = of_property_read_u32_index(cdev->of_node, "linaro,optee-channel-id",
 					 idx, &channel_id);
-	/* Allow channel-id to be optional? (case only 1 SCMI agent in Linux) */
+	/* Allow optee-channel-id to be optional? (case only 1 SCMI agent in Linux) */
 	if (ret == -ENOENT)
 		channel_id = 0;
 	else if (ret)
