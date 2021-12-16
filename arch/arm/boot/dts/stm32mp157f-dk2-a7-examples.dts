@@ -18,12 +18,19 @@
 };
 
 &adc {
-	status = "okay";
+	pinctrl-0 = <&adc12_ain_pins_a>, <&adc12_usb_cc_pins_a>;
+
+	adc1: adc@0 {
+		st,min-sample-time-nsecs = <5000>;
+		st,adc-channels = <0 1 6 13 18 19>;
+	};
 
 	adc2: adc@100 {
 		/* Set IRQ mode as example. DMA is the preferred mode, yet. */
 		/delete-property/dmas;
 		/delete-property/dma-names;
+		st,min-sample-time-nsecs = <5000>;
+		st,adc-channels = <0 1 6 13 18 19>;
 	};
 };
 
