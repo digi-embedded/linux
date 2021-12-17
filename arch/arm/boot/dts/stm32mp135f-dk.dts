@@ -132,7 +132,7 @@
 	pinctrl-0 = <&adc1_usb_cc_pins_a>;
 	vdda-supply = <&scmi_vdd_adc>;
 	vref-supply = <&scmi_vdd_adc>;
-	status = "disabled";
+	status = "okay";
 	adc1: adc@0 {
 		/*
 		 * Type-C USB_PWR_CC1 & USB_PWR_CC2 on in6 & in12.
