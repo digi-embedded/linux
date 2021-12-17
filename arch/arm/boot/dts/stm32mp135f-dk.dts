@@ -172,16 +172,21 @@
 	vref-supply = <&scmi_vdd_adc>;
 	status = "okay";
 	adc1: adc@0 {
+		status = "okay";
 		/*
 		 * Type-C USB_PWR_CC1 & USB_PWR_CC2 on in6 & in12.
 		 * Use at least 5 * RC time, e.g. 5 * (Rp + Rd) * C:
 		 * 5 * (5.1 + 47kOhms) * 5pF => 1.3us.
 		 * Use arbitrary margin here (e.g. 5us).
 		 */
-		st,min-sample-time-nsecs = <5000>;
-		/* USB Type-C CC1 & CC2 */
-		st,adc-channels = <6 12>;
-		status = "okay";
+		channel@6 {
+			reg = <6>;
+			st,min-sample-time-ns = <5000>;
+		};
+		channel@12 {
+			reg = <12>;
+			st,min-sample-time-ns = <5000>;
+		};
 	};
 };
 
