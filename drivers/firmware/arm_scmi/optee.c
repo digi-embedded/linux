@@ -804,6 +804,11 @@ static int optee_scmi_remove(struct device *dev)
 	return 0;
 }
 
+static void optee_scmi_shutdown(struct device *dev)
+{
+	optee_scmi_remove(dev);
+}
+
 static const struct tee_client_device_id optee_scmi_id_table[] = {
 	{
 		UUID_INIT(0xa8cfe406, 0xd4f5, 0x4a2e,
@@ -821,6 +826,7 @@ static struct tee_client_driver optee_scmi_driver = {
 		.bus = &tee_bus_type,
 		.probe = optee_scmi_probe,
 		.remove = optee_scmi_remove,
+		.shutdown = optee_scmi_shutdown,
 	},
 };
 
