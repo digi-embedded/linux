@@ -220,7 +220,7 @@ static void stm32_rproc_request_shutdown(struct rproc *rproc)
 	int err, dummy_data, idx;
 
 	/* Request shutdown of the remote processor */
-	if (rproc->state != RPROC_OFFLINE) {
+	if (rproc->state != RPROC_OFFLINE && rproc->state != RPROC_CRASHED) {
 		idx = stm32_rproc_mbox_idx(rproc, STM32_MBX_SHUTDOWN);
 		if (idx >= 0 && ddata->mb[idx].chan) {
 			/* A dummy data is sent to allow to block on transmit. */
