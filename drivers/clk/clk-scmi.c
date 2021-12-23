@@ -9,6 +9,7 @@
 #include <linux/device.h>
 #include <linux/err.h>
 #include <linux/of.h>
+#include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/scmi_protocol.h>
 #include <asm/div64.h>
@@ -35,6 +36,21 @@ static unsigned long scmi_clk_recalc_rate(struct clk_hw *hw,
 	if (ret)
 		return 0;
 	return rate;
+}
+
+static unsigned long scmi_clk_round_rate_get(struct clk_hw *hw,
+					     unsigned long rate,
+					     unsigned long *parent_rate)
+{
+	int ret;
+	u64 round_rate = rate;
+	struct scmi_clk *clk = to_scmi_clk(hw);
+
+	ret = scmi_proto_clk_ops->round_rate_get(clk->ph, clk->id, &round_rate);
+	if (ret)
+		return 0;
+
+	return round_rate;
 }
 
 static int scmi_clk_get_duty_cycle(struct clk_hw *hw, struct clk_duty *duty)
@@ -74,6 +90,9 @@ static long scmi_clk_round_rate(struct clk_hw *hw, unsigned long rate,
 		return fmin;
 	else if (rate >= fmax)
 		return fmax;
+
+	if (clk->info->range.step_size == 0)
+		return scmi_clk_round_rate_get(hw, rate, parent_rate);
 
 	ftmp = rate - fmin;
 	ftmp += clk->info->range.step_size - 1; /* to round up */
