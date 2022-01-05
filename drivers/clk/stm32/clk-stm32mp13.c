@@ -1140,6 +1140,7 @@ static const struct stm32_rcc_match_data stm32mp13_data = {
 	.check_security = &stm32mp13_check_security,
 	.maxbinding	= STM32MP1_LAST_CLK,
 	.clear_offset	= RCC_CLR,
+	.reset_us	= 2,
 #ifdef CONFIG_DEBUG_FS
 	.clock_summary	= &clock_summary_mp13,
 #endif
