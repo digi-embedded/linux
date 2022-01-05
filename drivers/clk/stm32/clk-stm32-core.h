@@ -99,6 +99,7 @@ struct stm32_rcc_match_data {
 	int (*multi_mux)(void __iomem *base, const struct clock_config *cfg);
 	int (*check_security)(void __iomem *base, const struct clock_config *cfg);
 	u32 clear_offset;
+	u32				reset_us;
 
 	struct clock_summary		*clock_summary;
 };
