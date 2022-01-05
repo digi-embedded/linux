@@ -1518,6 +1518,7 @@ static const struct stm32_rcc_match_data stm32mp13_data = {
 	.check_security = &stm32mp13_clock_is_provided_by_secure,
 	.maxbinding	= STM32MP1_LAST_CLK,
 	.clear_offset	= RCC_CLR_OFFSET,
+	.reset_us	= 2,
 };
 
 static const struct of_device_id stm32mp13_match_data[] = {
