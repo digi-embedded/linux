@@ -18,6 +18,7 @@
 #include <linux/mfd/syscon.h>
 #include <linux/module.h>
 #include <linux/of_device.h>
+#include <linux/of_irq.h>
 #include <linux/pm_runtime.h>
 #include <linux/regmap.h>
 #include <linux/regulator/consumer.h>
@@ -78,7 +79,10 @@ struct stm32_adc_priv_cfg {
 
 /**
  * struct stm32_adc_priv - stm32 ADC core private data
+ * @dev:		pointer to adc device
  * @irq:		irq(s) for ADC block
+ * @irq_map:		mapping between children and parents irqs
+ * @nb_adc_max:		actual maximum number of instance per ADC block
  * @domain:		irq domain reference
  * @aclk:		clock reference for the analog circuitry
  * @bclk:		bus clock common for all ADCs, depends on part used
@@ -95,7 +99,10 @@ struct stm32_adc_priv_cfg {
  * @syscfg:		reference to syscon, system control registers
  */
 struct stm32_adc_priv {
+	struct device			*dev;
 	int				irq[STM32_ADC_MAX_ADCS];
+	int				irq_map[STM32_ADC_MAX_ADCS];
+	unsigned int			nb_adc_max;
 	struct irq_domain		*domain;
 	struct clk			*aclk;
 	struct clk			*bclk;
@@ -365,34 +372,94 @@ static void stm32_adc_irq_handler(struct irq_desc *desc)
 	 * before invoking the interrupt handler (e.g. call ISR only for
 	 * IRQ-enabled ADCs).
 	 */
-	for (i = 0; i < STM32_ADC_MAX_ADCS; i++) {
+	for (i = 0; i < priv->nb_adc_max; i++) {
 		if ((status & priv->cfg->regs->eoc_msk[i] &&
 		     stm32_adc_eoc_enabled(priv, i)) ||
 		     (status & priv->cfg->regs->ovr_msk[i]))
-			generic_handle_irq(irq_find_mapping(priv->domain, i));
+			generic_handle_domain_irq(priv->domain, i);
 	}
 
 	chained_irq_exit(chip, desc);
 };
 
-static int stm32_adc_domain_map(struct irq_domain *d, unsigned int irq,
-				irq_hw_number_t hwirq)
+static void stm32_adc_core_mask(struct irq_data *d)
 {
-	irq_set_chip_data(irq, d->host_data);
-	irq_set_chip_and_handler(irq, &dummy_irq_chip, handle_level_irq);
-
-	return 0;
+	if (d->parent_data->chip)
+		irq_chip_mask_parent(d);
 }
 
-static void stm32_adc_domain_unmap(struct irq_domain *d, unsigned int irq)
+static void stm32_adc_core_unmask(struct irq_data *d)
 {
-	irq_set_chip_and_handler(irq, NULL, NULL);
-	irq_set_chip_data(irq, NULL);
+	if (d->parent_data->chip)
+		irq_chip_unmask_parent(d);
+}
+
+struct irq_chip stm32_irq_chip = {
+	.name		= "stm32_adc_core",
+	.irq_mask	= stm32_adc_core_mask,
+	.irq_unmask	= stm32_adc_core_unmask,
+	.flags		= IRQCHIP_SKIP_SET_WAKE,
+};
+
+static int stm32_adc_core_domain_alloc(struct irq_domain *dm, unsigned int virq,
+				       unsigned int nr_irqs, void *data)
+{
+	irq_hw_number_t hwirq;
+	struct stm32_adc_priv *priv = dm->host_data;
+	struct irq_fwspec *fwspec = data;
+	struct irq_data *irq_data, *irq_data_p;
+	u32 irq_parent;
+	int ret, virq_p;
+
+	if (!dm->parent) {
+		dev_err(priv->dev, "parent domain missing\n");
+		return -EINVAL;
+	}
+
+	hwirq = fwspec->param[0];
+	dev_dbg(priv->dev, "adc child hw irq %lu virt irq %u\n", hwirq, virq);
+
+	ret = irq_domain_set_hwirq_and_chip(dm, virq, hwirq, &stm32_irq_chip, NULL);
+	if (ret < 0)
+		return ret;
+
+	irq_set_chip_data(virq, dm->host_data);
+	irq_set_chip_and_handler(virq, &stm32_irq_chip, handle_level_irq);
+
+	irq_parent = priv->irq_map[hwirq];
+
+	virq_p = irq_find_mapping(dm->parent, irq_parent);
+	dev_dbg(priv->dev, "adc core hw irq %d, virt irq %d\n", irq_parent, virq_p);
+
+	irq_data = irq_get_irq_data(virq);
+	irq_data_p = irq_get_irq_data(virq_p);
+
+	if (!irq_data || !irq_data_p)
+		return -EINVAL;
+
+	irq_data->parent_data = irq_data_p;
+
+	return 0;
+};
+
+static void stm32_adc_core_domain_free(struct irq_domain *domain, unsigned int virq,
+				       unsigned int nr_irqs)
+{
+	struct irq_data *irq_data;
+
+	irq_set_chip_and_handler(virq, NULL, NULL);
+	irq_set_chip_data(virq, NULL);
+
+	irq_data = irq_get_irq_data(virq);
+	if (!irq_data)
+		return;
+
+	irq_data->parent_data = NULL;
 }
 
 static const struct irq_domain_ops stm32_adc_domain_ops = {
-	.map = stm32_adc_domain_map,
-	.unmap  = stm32_adc_domain_unmap,
+	.alloc	= stm32_adc_core_domain_alloc,
+	.free = stm32_adc_core_domain_free,
 	.xlate = irq_domain_xlate_onecell,
 };
 
@@ -400,22 +467,49 @@ static int stm32_adc_irq_probe(struct platform_device *pdev,
 			       struct stm32_adc_priv *priv)
 {
 	struct device_node *np = pdev->dev.of_node;
-	unsigned int i;
+	struct irq_domain *parent_domain;
+	struct irq_data *irqd;
+	int i;
 
 	/*
 	 * Interrupt(s) must be provided, depending on the compatible:
 	 * - stm32f4/h7 shares a common interrupt line.
 	 * - stm32mp1, has one line per ADC
+	 *
+	 * Assume that children hw irqs are numbered from 0 to nb_adc_max-1
+	 * By default hw parent and children irqs are mapped by pair
+	 * If the ADC shares a common irq, all children irqs are mapped on the
+	 * same parent, yet.
 	 */
 	for (i = 0; i < priv->cfg->num_irqs; i++) {
 		priv->irq[i] = platform_get_irq(pdev, i);
 		if (priv->irq[i] < 0)
 			return priv->irq[i];
+		irqd = irq_get_irq_data(priv->irq[i]);
+		if (!irqd)
+			return -EINVAL;
+		priv->irq_map[i] = irqd->hwirq;
 	}
 
-	priv->domain = irq_domain_add_simple(np, STM32_ADC_MAX_ADCS, 0,
-					     &stm32_adc_domain_ops,
-					     priv);
+	if (priv->cfg->num_irqs != priv->nb_adc_max) {
+		if (priv->cfg->num_irqs == 1) {
+			for (i = 1; i < priv->nb_adc_max; i++)
+				priv->irq_map[i] = priv->irq_map[0];
+		} else {
+			dev_err(&pdev->dev, "Could not map child irqs on parent irqs\n");
+			return -EINVAL;
+		}
+	}
+
+	parent_domain = irq_find_host(of_irq_find_parent(np));
+	if (!parent_domain) {
+		dev_err(&pdev->dev, "GIC interrupt-parent not found\n");
+		return -EINVAL;
+	}
+
+	priv->domain = irq_domain_add_hierarchy(parent_domain, 0, priv->nb_adc_max,
+						np, &stm32_adc_domain_ops, priv);
+
 	if (!priv->domain) {
 		dev_err(&pdev->dev, "Failed to add irq domain\n");
 		return -ENOMEM;
@@ -435,12 +529,14 @@ static void stm32_adc_irq_remove(struct platform_device *pdev,
 	int hwirq;
 	unsigned int i;
 
-	for (hwirq = 0; hwirq < STM32_ADC_MAX_ADCS; hwirq++)
+	for (hwirq = 0; hwirq < priv->nb_adc_max; hwirq++)
 		irq_dispose_mapping(irq_find_mapping(priv->domain, hwirq));
 	irq_domain_remove(priv->domain);
 
-	for (i = 0; i < priv->cfg->num_irqs; i++)
+	for (i = 0; i < priv->cfg->num_irqs; i++) {
 		irq_set_chained_handler(priv->irq[i], NULL);
+		irq_dispose_mapping(priv->irq[i]);
+	}
 }
 
 static int stm32_adc_core_switches_supply_en(struct stm32_adc_priv *priv,
@@ -682,7 +778,8 @@ static int stm32_adc_sanity_check(struct platform_device *pdev,
 	}
 
 	val = readl_relaxed(priv->common.base + STM32MP13_ADC_HWCFGR0);
-	if (count > FIELD_GET(STM32MP13_ADCNUM_MASK, val)) {
+	priv->nb_adc_max = FIELD_GET(STM32MP13_ADCNUM_MASK, val);
+	if (count > priv->nb_adc_max) {
 		dev_err(&pdev->dev, "Unexpected child number: %d", count);
 		return -EINVAL;
 	}
@@ -712,6 +809,8 @@ static int stm32_adc_probe(struct platform_device *pdev)
 		return -ENOMEM;
 	platform_set_drvdata(pdev, &priv->common);
 
+	priv->dev = dev;
+	priv->nb_adc_max = STM32_ADC_MAX_ADCS;
 	priv->cfg = (const struct stm32_adc_priv_cfg *)
 		of_match_device(dev->driver->of_match_table, dev)->data;
 	spin_lock_init(&priv->common.lock);

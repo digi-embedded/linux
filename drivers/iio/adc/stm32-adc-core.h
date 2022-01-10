@@ -24,6 +24,7 @@
  * | 0x300  |         Master & Slave common regs          |
  * --------------------------------------------------------
  */
+/* Maximum ADC instances number per ADC block for all supported SoCs */
 #define STM32_ADC_MAX_ADCS		3
 #define STM32_ADC_OFFSET		0x100
 #define STM32_ADCX_COMN_OFFSET		0x300
