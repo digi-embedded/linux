@@ -210,6 +210,20 @@ static bool optee_presence_check(void)
 	return tee_detected;
 }
 
+static void stm32_romem_disable_clk(void *data)
+{
+	struct stm32_romem_priv *priv = dev_get_drvdata(data);
+
+	pm_runtime_dont_use_autosuspend(data);
+	pm_runtime_get_sync(data);
+	pm_runtime_disable(data);
+	pm_runtime_set_suspended(data);
+	pm_runtime_put_noidle(data);
+
+	if (priv->clk)
+		clk_disable_unprepare(priv->clk);
+}
+
 static int stm32_romem_probe(struct platform_device *pdev)
 {
 	const struct stm32_romem_cfg *cfg;
@@ -236,27 +250,6 @@ static int stm32_romem_probe(struct platform_device *pdev)
 	priv->cfg.owner = THIS_MODULE;
 	priv->cfg.type = NVMEM_TYPE_OTP;
 
-	priv->clk = devm_clk_get_optional(&pdev->dev, NULL);
-	if (IS_ERR(priv->clk))
-		return dev_err_probe(dev, PTR_ERR(priv->clk),
-				     "failed to get clock\n");
-
-	if (priv->clk) {
-		ret = clk_prepare_enable(priv->clk);
-		if (ret) {
-			dev_err(dev, "failed to enable clock (%d)\n", ret);
-			return ret;
-		}
-	}
-
-	pm_runtime_set_autosuspend_delay(dev,
-					 STM32_ROMEM_AUTOSUSPEND_DELAY_MS);
-	pm_runtime_use_autosuspend(dev);
-
-	pm_runtime_get_noresume(dev);
-	pm_runtime_set_active(dev);
-	pm_runtime_enable(dev);
-
 	cfg = (const struct stm32_romem_cfg *)
 		of_match_device(dev->driver->of_match_table, dev)->data;
 	if (!cfg) {
@@ -271,8 +264,7 @@ static int stm32_romem_probe(struct platform_device *pdev)
 			if (!priv->ta) {
 				/* BSEC PTA is required or SMC not ready */
 				if (cfg->ta || !stm32_bsec_check()) {
-					ret = -EPROBE_DEFER;
-					goto err_pm_stop;
+					return -EPROBE_DEFER;
 				}
 			}
 		}
@@ -287,51 +279,46 @@ static int stm32_romem_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, priv);
 
-	nvmem = nvmem_register(&priv->cfg);
-	if (IS_ERR(nvmem)) {
-		ret = PTR_ERR(nvmem);
-		goto err_pm_stop;
+	/* the clock / pm is required only without TA support, for direct BSEC access */
+	if (!priv->ta) {
+		priv->clk = devm_clk_get_optional(&pdev->dev, NULL);
+		if (IS_ERR(priv->clk))
+			return dev_err_probe(dev, PTR_ERR(priv->clk),
+					     "failed to get clock\n");
+
+		if (priv->clk) {
+			ret = clk_prepare_enable(priv->clk);
+			if (ret)
+				return dev_err_probe(dev, ret,"failed to enable clock\n");
+		}
+
+		pm_runtime_set_autosuspend_delay(dev, STM32_ROMEM_AUTOSUSPEND_DELAY_MS);
+		pm_runtime_use_autosuspend(dev);
+		pm_runtime_get_noresume(dev);
+		pm_runtime_set_active(dev);
+		pm_runtime_enable(dev);
+		pm_runtime_put(dev);
+
+		ret = devm_add_action_or_reset(dev, stm32_romem_disable_clk, dev);
+		if (ret)
+			return dev_err_probe(dev, ret,
+					     "unable to register cleanup action\n");
 	}
 
-	pm_runtime_mark_last_busy(dev);
-	pm_runtime_put_autosuspend(dev);
+	nvmem = devm_nvmem_register(dev, &priv->cfg);
 
-	return 0;
-
-err_pm_stop:
-	pm_runtime_disable(dev);
-	pm_runtime_set_suspended(dev);
-	pm_runtime_put_noidle(dev);
-
-	if (priv->clk)
-		clk_disable_unprepare(priv->clk);
-
-	return ret;
+	return PTR_ERR_OR_ZERO(nvmem);
 }
 
 static int stm32_romem_remove(struct platform_device *pdev)
 {
 	struct stm32_romem_priv *priv;
-	int ret;
 
 	priv = dev_get_drvdata(&pdev->dev);
 	if (!priv)
 		return -ENODEV;
 
-	ret = pm_runtime_get_sync(&pdev->dev);
-	if (ret < 0)
-		return ret;
-
-	nvmem_unregister((struct nvmem_device *)&priv->cfg);
-
 	put_device(priv->ta);
-
-	pm_runtime_disable(&pdev->dev);
-	pm_runtime_set_suspended(&pdev->dev);
-	pm_runtime_put_noidle(&pdev->dev);
-
-	if (priv->clk)
-		clk_disable_unprepare(priv->clk);
 
 	return 0;
 }
