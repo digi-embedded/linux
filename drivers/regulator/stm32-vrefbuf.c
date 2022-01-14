@@ -38,6 +38,11 @@ static const unsigned int stm32_vrefbuf_voltages[] = {
 	2500000, 2048000, 1800000, 1500000,
 };
 
+static const unsigned int stm32mp13_vrefbuf_voltages[] = {
+	/* Matches resp. VRS = 000b, 001b, 010b, 011b */
+	2500000, 2048000, 1800000, 1650000,
+};
+
 static int stm32_vrefbuf_enable(struct regulator_dev *rdev)
 {
 	struct stm32_vrefbuf *priv = rdev_get_drvdata(rdev);
@@ -180,11 +185,24 @@ static const struct regulator_desc stm32_vrefbuf_regu = {
 	.owner = THIS_MODULE,
 };
 
+static const struct regulator_desc stm32mp13_vrefbuf_regu = {
+	.name = "vref",
+	.supply_name = "vdda",
+	.volt_table = stm32mp13_vrefbuf_voltages,
+	.n_voltages = ARRAY_SIZE(stm32mp13_vrefbuf_voltages),
+	.ops = &stm32_vrefbuf_volt_ops,
+	.off_on_delay = 1000,
+	.type = REGULATOR_VOLTAGE,
+	.owner = THIS_MODULE,
+};
+
 static int stm32_vrefbuf_probe(struct platform_device *pdev)
 {
+	struct device *dev = &pdev->dev;
 	struct stm32_vrefbuf *priv;
 	struct regulator_config config = { };
 	struct regulator_dev *rdev;
+	const struct regulator_desc *desc;
 	int ret;
 
 	priv = devm_kzalloc(&pdev->dev, sizeof(*priv), GFP_KERNEL);
@@ -213,14 +231,19 @@ static int stm32_vrefbuf_probe(struct platform_device *pdev)
 		goto err_pm_stop;
 	}
 
+	desc = (const struct regulator_desc *)
+		of_match_device(dev->driver->of_match_table, dev)->data;
+	if (!desc)
+		return -EINVAL;
+
 	config.dev = &pdev->dev;
 	config.driver_data = priv;
 	config.of_node = pdev->dev.of_node;
 	config.init_data = of_get_regulator_init_data(&pdev->dev,
 						      pdev->dev.of_node,
-						      &stm32_vrefbuf_regu);
+						      desc);
 
-	rdev = regulator_register(&stm32_vrefbuf_regu, &config);
+	rdev = regulator_register(desc, &config);
 	if (IS_ERR(rdev)) {
 		ret = PTR_ERR(rdev);
 		dev_err(&pdev->dev, "register failed with error %d\n", ret);
@@ -285,7 +308,8 @@ static const struct dev_pm_ops stm32_vrefbuf_pm_ops = {
 };
 
 static const struct of_device_id __maybe_unused stm32_vrefbuf_of_match[] = {
-	{ .compatible = "st,stm32-vrefbuf", },
+	{ .compatible = "st,stm32-vrefbuf", .data = (void *)&stm32_vrefbuf_regu },
+	{ .compatible = "st,stm32mp13-vrefbuf", .data = (void *)&stm32mp13_vrefbuf_regu },
 	{},
 };
 MODULE_DEVICE_TABLE(of, stm32_vrefbuf_of_match);
