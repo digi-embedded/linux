@@ -289,6 +289,9 @@ int optee_from_msg_param(struct tee_param *params, size_t num_params,
 			 const struct optee_msg_param *msg_params);
 int optee_to_msg_param(struct optee_msg_param *msg_params, size_t num_params,
 		       const struct tee_param *params);
+struct tee_shm *optee_get_msg_arg(struct tee_context *ctx, size_t num_params,
+				  struct optee_msg_arg **msg_arg,
+				  phys_addr_t *msg_parg);
 
 /*
  * RPC memory
