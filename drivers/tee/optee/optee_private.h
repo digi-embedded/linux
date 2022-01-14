@@ -46,6 +46,7 @@ struct optee_call_queue {
 
 struct optee_notif {
 	u_int max_key;
+	struct tee_context *ctx;
 	/* Serializes access to the elements below in this struct */
 	spinlock_t lock;
 	struct list_head db;
@@ -106,6 +107,7 @@ struct optee {
 	bool   scan_bus_done;
 	struct workqueue_struct *scan_bus_wq;
 	struct work_struct scan_bus_work;
+	unsigned int notif_irq;
 };
 
 struct optee_call_waiter {
