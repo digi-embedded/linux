@@ -591,6 +591,8 @@ static int optee_remove(struct platform_device *pdev)
 	/* Unregister OP-TEE specific client devices on TEE bus */
 	optee_unregister_devices();
 
+	optee_notif_uninit(optee);
+
 	/*
 	 * Ask OP-TEE to free all cached shared memory objects to decrease
 	 * reference counters and also avoid wild pointers in secure world
@@ -608,7 +610,6 @@ static int optee_remove(struct platform_device *pdev)
 	tee_shm_pool_free(optee->pool);
 	if (optee->memremaped_shm)
 		memunmap(optee->memremaped_shm);
-	optee_wait_queue_exit(&optee->wait_queue);
 	optee_supp_uninit(&optee->supp);
 	mutex_destroy(&optee->call_queue.mutex);
 
@@ -718,10 +719,16 @@ static int optee_probe(struct platform_device *pdev)
 
 	mutex_init(&optee->call_queue.mutex);
 	INIT_LIST_HEAD(&optee->call_queue.waiters);
-	optee_wait_queue_init(&optee->wait_queue);
 	optee_supp_init(&optee->supp);
 	optee->memremaped_shm = memremaped_shm;
 	optee->pool = pool;
+
+	platform_set_drvdata(pdev, optee);
+	rc = optee_notif_init(optee, OPTEE_DEFAULT_MAX_NOTIF_VALUE);
+	if (rc) {
+		optee_remove(pdev);
+		return rc;
+	}
 
 	/*
 	 * Ensure that there are no pre-existing shm objects before enabling
@@ -736,8 +743,6 @@ static int optee_probe(struct platform_device *pdev)
 
 	if (optee->sec_caps & OPTEE_SMC_SEC_CAP_DYNAMIC_SHM)
 		pr_info("dynamic shared memory is enabled\n");
-
-	platform_set_drvdata(pdev, optee);
 
 	rc = optee_enumerate_devices(PTA_CMD_GET_DEVICES);
 	if (rc) {
