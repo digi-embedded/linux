@@ -252,6 +252,7 @@ struct stm32_spi;
  * @has_fifo: boolean to know if fifo is used for driver
  * @set_slave_udr: routine to configure registers to desired slave underrun
  * behavior (if driver has this functionality)
+ * @flags: compatible specific SPI controller flags used at registration time
  */
 struct stm32_spi_cfg {
 	const struct stm32_spi_regspec *regs;
@@ -273,6 +274,7 @@ struct stm32_spi_cfg {
 	unsigned int baud_rate_div_max;
 	bool has_fifo;
 	void (*set_slave_udr)(struct stm32_spi *spi);
+	u16 flags;
 };
 
 /**
@@ -1830,6 +1832,7 @@ static const struct stm32_spi_cfg stm32f4_spi_cfg = {
 	.baud_rate_div_min = STM32F4_SPI_BR_DIV_MIN,
 	.baud_rate_div_max = STM32F4_SPI_BR_DIV_MAX,
 	.has_fifo = false,
+	.flags = SPI_MASTER_MUST_TX,
 };
 
 static const struct stm32_spi_cfg stm32h7_spi_cfg = {
@@ -2006,7 +2009,7 @@ static int stm32_spi_probe(struct platform_device *pdev)
 	ctrl->prepare_message = stm32_spi_prepare_msg;
 	ctrl->transfer_one = stm32_spi_transfer_one;
 	ctrl->unprepare_message = stm32_spi_unprepare_msg;
-	ctrl->flags = SPI_MASTER_MUST_TX;
+	ctrl->flags = spi->cfg->flags;
 	if (STM32_SPI_SLAVE_MODE(spi))
 		ctrl->slave_abort = stm32h7_spi_slave_abort;
 
