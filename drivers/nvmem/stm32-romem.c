@@ -48,7 +48,7 @@ struct stm32_romem_priv {
 	struct device *ta;
 };
 
-struct device *stm32_bsec_pta_find(void);
+struct device *stm32_bsec_pta_find(struct device *dev);
 static int stm32_bsec_pta_read(void *context, unsigned int offset, void *buf,
 			       size_t bytes);
 
@@ -259,7 +259,7 @@ static int stm32_romem_probe(struct platform_device *pdev)
 	} else {
 		priv->cfg.size = cfg->size;
 		if (cfg->ta || optee_presence_check()) {
-			priv->ta = stm32_bsec_pta_find();
+			priv->ta = stm32_bsec_pta_find(dev);
 			/* wait for OP-TEE client driver to be up and ready */
 			if (!priv->ta) {
 				/* BSEC PTA is required or SMC not ready */
@@ -308,19 +308,6 @@ static int stm32_romem_probe(struct platform_device *pdev)
 	nvmem = devm_nvmem_register(dev, &priv->cfg);
 
 	return PTR_ERR_OR_ZERO(nvmem);
-}
-
-static int stm32_romem_remove(struct platform_device *pdev)
-{
-	struct stm32_romem_priv *priv;
-
-	priv = dev_get_drvdata(&pdev->dev);
-	if (!priv)
-		return -ENODEV;
-
-	put_device(priv->ta);
-
-	return 0;
 }
 
 static int __maybe_unused stm32_romem_runtime_suspend(struct device *dev)
@@ -388,7 +375,6 @@ MODULE_DEVICE_TABLE(of, stm32_romem_of_match);
 
 static struct platform_driver stm32_romem_driver = {
 	.probe = stm32_romem_probe,
-	.remove = stm32_romem_remove,
 	.driver = {
 		.name = "stm32-romem",
 		.pm = &stm32_romem_pm_ops,
@@ -616,9 +602,24 @@ static struct tee_client_driver stm32_bsec_pta_driver = {
 	},
 };
 
-struct device *stm32_bsec_pta_find(void)
+static void stm32_bsec_put_device(void *data)
 {
-	return driver_find_next_device(&stm32_bsec_pta_driver.driver, NULL);
+	put_device(data);
+}
+
+struct device *stm32_bsec_pta_find(struct device *dev)
+{
+	struct device *pta_dev;
+
+	pta_dev = driver_find_next_device(&stm32_bsec_pta_driver.driver, NULL);
+
+	if (pta_dev && devm_add_action_or_reset(dev, stm32_bsec_put_device, pta_dev)) {
+		dev_err(dev, "unable to register cleanup action\n");
+
+		return NULL;
+	}
+
+	return pta_dev;
 }
 
 #else
@@ -629,7 +630,7 @@ static int stm32_bsec_pta_read(void *context, unsigned int offset, void *buf,
 
 	return -ENXIO;
 }
-struct device *stm32_bsec_pta_find(void)
+struct device *stm32_bsec_pta_find(struct device *dev)
 {
 	pr_debug("%s: TA BSEC request without OPTEE support\n", __func__);
 
