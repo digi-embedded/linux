@@ -301,14 +301,14 @@
 		m4_m_can1: can@4400e000 {
 			compatible = "rproc-srm-dev";
 			reg = <0x4400e000 0x400>, <0x44011000 0x2800>;
-			clocks = <&scmi0_clk CK_SCMI0_HSE>, <&rcc FDCAN_K>;
+			clocks = <&scmi_clk CK_SCMI_HSE>, <&rcc FDCAN_K>;
 			clock-names = "hclk", "cclk";
 			status = "disabled";
 		};
 		m4_m_can2: can@4400f000 {
 			compatible = "rproc-srm-dev";
 			reg = <0x4400f000 0x400>, <0x44011000 0x2800>;
-			clocks = <&scmi0_clk CK_SCMI0_HSE>, <&rcc FDCAN_K>;
+			clocks = <&scmi_clk CK_SCMI_HSE>, <&rcc FDCAN_K>;
 			clock-names = "hclk", "cclk";
 			status = "disabled";
 		};

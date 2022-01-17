@@ -20,7 +20,7 @@
 			compatible = "arm,cortex-a7";
 			device_type = "cpu";
 			reg = <0>;
-			clocks = <&scmi0_perf 0>;
+			clocks = <&scmi_perf 0>;
 			clock-names = "cpu";
 			nvmem-cells = <&part_number_otp>;
 			nvmem-cell-names = "part_number";
@@ -41,39 +41,39 @@
 		#size-cells = <1>;
 		ranges = <0 0x2ffff000 0x1000>;
 
-		scmi0_shm: scmi_shm@0 {
+		scmi_shm: scmi_shm@0 {
 			compatible = "arm,scmi-shmem";
 			reg = <0 0x80>;
 		};
 	};
 
 	firmware {
-		scmi0: scmi0 {
+		scmi: scmi {
 			compatible = "linaro,scmi-optee";
 			#address-cells = <1>;
 			#size-cells = <0>;
 			linaro,optee-channel-id = <0>;
-			shmem = <&scmi0_shm>;
+			shmem = <&scmi_shm>;
 
-			scmi0_perf: protocol@13 {
+			scmi_perf: protocol@13 {
 				reg = <0x13>;
 				#clock-cells = <1>;
 			};
 
-			scmi0_clk: protocol@14 {
+			scmi_clk: protocol@14 {
 				reg = <0x14>;
 				#clock-cells = <1>;
 			};
 
-			scmi0_reset: protocol@16 {
+			scmi_reset: protocol@16 {
 				reg = <0x16>;
 				#reset-cells = <1>;
 			};
 
-			scmi0_voltd: protocol@17 {
+			scmi_voltd: protocol@17 {
 				reg = <0x17>;
 
-				scmi0_regu: regulators {
+				scmi_regu: regulators {
 					scmi_reg11: voltd-reg11 {
 						voltd-name = "reg11";
 						regulator-name = "reg11";
@@ -1125,11 +1125,11 @@
 			interrupts = <GIC_SPI 5 IRQ_TYPE_LEVEL_HIGH>;
 
 			clock-names = "hse", "hsi", "csi", "lse", "lsi";
-			clocks = <&scmi0_clk CK_SCMI0_HSE>,
-				 <&scmi0_clk CK_SCMI0_HSI>,
-				 <&scmi0_clk CK_SCMI0_CSI>,
-				 <&scmi0_clk CK_SCMI0_LSE>,
-				 <&scmi0_clk CK_SCMI0_LSI>;
+			clocks = <&scmi_clk CK_SCMI_HSE>,
+				 <&scmi_clk CK_SCMI_HSI>,
+				 <&scmi_clk CK_SCMI_CSI>,
+				 <&scmi_clk CK_SCMI_LSE>,
+				 <&scmi_clk CK_SCMI_LSI>;
 		};
 
 		exti: interrupt-controller@5000d000 {
@@ -1439,7 +1439,7 @@
 		iwdg2: watchdog@5a002000 {
 			compatible = "st,stm32mp1-iwdg";
 			reg = <0x5a002000 0x400>;
-			clocks = <&rcc IWDG2>, <&scmi0_clk CK_SCMI0_LSI>;
+			clocks = <&rcc IWDG2>, <&scmi_clk CK_SCMI_LSI>;
 			clock-names = "pclk", "lsi";
 			status = "disabled";
 		};
@@ -1480,8 +1480,8 @@
 		rtc: rtc@5c004000 {
 			compatible = "st,stm32mp1-rtc";
 			reg = <0x5c004000 0x400>;
-			clocks = <&scmi0_clk CK_SCMI0_RTCAPB>,
-				 <&scmi0_clk CK_SCMI0_RTC>;
+			clocks = <&scmi_clk CK_SCMI_RTCAPB>,
+				 <&scmi_clk CK_SCMI_RTC>;
 			clock-names = "pclk", "rtc_ck";
 			interrupts-extended = <&exti 19 IRQ_TYPE_LEVEL_HIGH>;
 			status = "disabled";

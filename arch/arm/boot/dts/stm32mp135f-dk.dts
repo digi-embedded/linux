@@ -390,7 +390,7 @@
 	status = "okay";
 };
 
-&scmi0_regu {
+&scmi_regu {
 	scmi_vddcpu: voltd-vddcpu {
 		voltd-name = "vddcpu";
 		regulator-name = "vddcpu";
