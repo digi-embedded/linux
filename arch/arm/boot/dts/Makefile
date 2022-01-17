@@ -34,6 +34,8 @@ DTC_FLAGS_stm32mp157c-ev1-a7-examples += -@
 DTC_FLAGS_stm32mp157c-ev1-m4-examples += -@
 DTC_FLAGS_stm32mp157f-ev1-a7-examples += -@
 DTC_FLAGS_stm32mp157f-ev1-m4-examples += -@
+DTC_FLAGS_ccmp151-dvk += -@
+DTC_FLAGS_ccmp157-dvk += -@
 
 dtb-$(CONFIG_ARCH_ALPINE) += \
 	alpine-db.dtb
@@ -1141,6 +1143,8 @@ dtb-$(CONFIG_ARCH_STI) += \
 	stih418-b2199.dtb \
 	stih418-b2264.dtb
 dtb-$(CONFIG_ARCH_STM32) += \
+	ccmp151-dvk.dtb \
+	ccmp157-dvk.dtb \
 	stm32f429-disco.dtb \
 	stm32f469-disco.dtb \
 	stm32f746-disco.dtb \
