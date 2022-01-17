@@ -45,11 +45,6 @@
 			compatible = "arm,scmi-shmem";
 			reg = <0 0x80>;
 		};
-
-		scmi1_shm: scmi_shm@200 {
-			compatible = "arm,scmi-shmem";
-			reg = <0x200 0x80>;
-		};
 	};
 
 	firmware {
@@ -92,20 +87,6 @@
 						regulator-name = "usb33";
 					};
 				};
-			};
-		};
-
-		scmi1: scmi1 {
-			compatible = "linaro,scmi-optee";
-			#address-cells = <1>;
-			#size-cells = <0>;
-			linaro,optee-channel-id = <1>;
-			shmem = <&scmi1_shm>;
-			status = "disabled";
-
-			scmi1_clk: protocol@14 {
-				reg = <0x14>;
-				#clock-cells = <1>;
 			};
 		};
 	};
