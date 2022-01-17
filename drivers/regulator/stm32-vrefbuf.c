@@ -31,6 +31,7 @@ struct stm32_vrefbuf {
 	void __iomem *base;
 	struct clk *clk;
 	struct device *dev;
+	u32 backup_val;
 };
 
 static const unsigned int stm32_vrefbuf_voltages[] = {
@@ -299,9 +300,43 @@ static int __maybe_unused stm32_vrefbuf_runtime_resume(struct device *dev)
 	return clk_prepare_enable(priv->clk);
 }
 
+#if defined(CONFIG_PM_SLEEP)
+static int stm32_vrefbuf_suspend(struct device *dev)
+{
+	struct regulator_dev *rdev = dev_get_drvdata(dev);
+	struct stm32_vrefbuf *priv = rdev_get_drvdata(rdev);
+	int ret;
+
+	ret = pm_runtime_get_sync(priv->dev);
+	if (ret < 0) {
+		pm_runtime_put_noidle(priv->dev);
+		return ret;
+	}
+
+	priv->backup_val = readl_relaxed(priv->base + STM32_VREFBUF_CSR);
+
+	return pm_runtime_force_suspend(dev);
+}
+
+static int stm32_vrefbuf_resume(struct device *dev)
+{
+	struct regulator_dev *rdev = dev_get_drvdata(dev);
+	struct stm32_vrefbuf *priv = rdev_get_drvdata(rdev);
+	int ret;
+
+	ret = pm_runtime_force_resume(dev);
+	if (ret < 0)
+		return ret;
+
+	writel_relaxed(priv->backup_val, priv->base + STM32_VREFBUF_CSR);
+
+	return 0;
+}
+#endif
+
 static const struct dev_pm_ops stm32_vrefbuf_pm_ops = {
-	SET_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend,
-				pm_runtime_force_resume)
+	SET_SYSTEM_SLEEP_PM_OPS(stm32_vrefbuf_suspend,
+				stm32_vrefbuf_resume)
 	SET_RUNTIME_PM_OPS(stm32_vrefbuf_runtime_suspend,
 			   stm32_vrefbuf_runtime_resume,
 			   NULL)
