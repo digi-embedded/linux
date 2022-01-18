@@ -8,6 +8,25 @@
 / {
 	soc@0 {
 		rifsc: rifsc@42080000 {
+			switch0: ttt-sw@4c000000 {
+				#address-cells  = <1>;
+				#size-cells     = <1>;
+				compatible = "st,stm32-deip";
+				clock-names = "ethsw-bus-clk", "ethsw-clk";
+				clocks = <&rcc CK_BUS_ETHSW>,
+					 <&rcc CK_KER_ETHSW>;
+
+				st,syscon = <&syscfg 0x3800>;
+				ranges = <0x4c000000 0x4c000000 0x2000000>;
+				feature-domains = <&rifsc STM32MP25_RIFSC_ETHSW_DEIP_ID>;
+				status = "disabled";
+
+				deip_sw0: deip-sw@4c000000 {
+					compatible =  "ttt,deip-sw";
+					reg = <0x4c000000 0x2000000>;
+					interrupts = <GIC_SPI 250 IRQ_TYPE_LEVEL_HIGH>;
+				};
+			};
 		};
 	};
 };
