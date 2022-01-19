@@ -778,6 +778,33 @@ static int dcmi_start_streaming(struct vb2_queue *vq, unsigned int count)
 	if (ret)
 		goto err_media_pipeline_stop;
 
+	/* Check if snapshop mode is necessary for jpeg capture */
+	if (dcmi->sd_format->fourcc == V4L2_PIX_FMT_JPEG) {
+		unsigned int rate;
+		struct v4l2_streamparm p = {
+			.type = V4L2_BUF_TYPE_VIDEO_CAPTURE
+		};
+		struct v4l2_fract frame_interval = {1, 30};
+
+		ret = v4l2_g_parm_cap(dcmi->vdev, dcmi->source, &p);
+		if (!ret)
+			frame_interval = p.parm.capture.timeperframe;
+
+		rate = dcmi->fmt.fmt.pix.sizeimage *
+		       frame_interval.denominator / frame_interval.numerator;
+
+		/*
+		 * If rate exceed DMA capabilities, switch to snapshot mode
+		 * to ensure that current DMA transfer is elapsed before
+		 * capturing a new JPEG.
+		 */
+		if (rate > MAX_DMA_BANDWIDTH) {
+			val |= CR_CM;
+			dev_dbg(dcmi->dev, "Capture rate is too high for continuous mode (%d > %d bytes/s), switch to snapshot mode\n",
+				rate, MAX_DMA_BANDWIDTH);
+		}
+	}
+
 	spin_lock_irq(&dcmi->irqlock);
 
 	/* Set bus width */
@@ -830,33 +857,6 @@ static int dcmi_start_streaming(struct vb2_queue *vq, unsigned int count)
 	/* Set crop */
 	if (dcmi->do_crop)
 		dcmi_set_crop(dcmi);
-
-	/* Enable jpeg capture */
-	if (dcmi->sd_format->fourcc == V4L2_PIX_FMT_JPEG) {
-		unsigned int rate;
-		struct v4l2_streamparm p = {
-			.type = V4L2_BUF_TYPE_VIDEO_CAPTURE
-		};
-		struct v4l2_fract frame_interval = {1, 30};
-
-		ret = v4l2_g_parm_cap(dcmi->vdev, dcmi->source, &p);
-		if (!ret)
-			frame_interval = p.parm.capture.timeperframe;
-
-		rate = dcmi->fmt.fmt.pix.sizeimage *
-		       frame_interval.denominator / frame_interval.numerator;
-
-		/*
-		 * If rate exceed DMA capabilities, switch to snapshot mode
-		 * to ensure that current DMA transfer is elapsed before
-		 * capturing a new JPEG.
-		 */
-		if (rate > MAX_DMA_BANDWIDTH) {
-			reg_set(dcmi->regs, DCMI_CR, CR_CM);/* Snapshot mode */
-			dev_dbg(dcmi->dev, "Capture rate is too high for continuous mode (%d > %d bytes/s), switch to snapshot mode\n",
-				rate, MAX_DMA_BANDWIDTH);
-		}
-	}
 
 	/* Enable dcmi */
 	reg_set(dcmi->regs, DCMI_CR, CR_ENABLE);
