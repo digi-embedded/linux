@@ -44,8 +44,21 @@
 		};
 	};
 
-	/* Enable USDHC1 (Wireless) */
+	/*
+	 * Enable the BT regulator. If the Bluetooth overlay is
+	 * not applied, the lack of consumers will make the kernel
+	 * turn the regulator off by asserting BT_EN low. If not handled,
+	 * BT_EN may remain tri-stated which affects the Wi-Fi power-off.
+	 */
 	fragment@3 {
+		target = <&reg_rf_bt_en>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+
+	/* Enable USDHC1 (Wireless) */
+	fragment@4 {
 		target = <&usdhc1>;
 		__overlay__ {
 			status = "okay";
