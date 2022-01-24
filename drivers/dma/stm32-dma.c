@@ -1772,10 +1772,12 @@ static struct dma_async_tx_descriptor *stm32_dma_prep_dma_cyclic(
 	}
 
 	/*  Enable Circular mode or double buffer mode */
-	if (buf_len == period_len)
+	if (buf_len == period_len) {
 		chan->chan_reg.dma_scr |= STM32_DMA_SCR_CIRC;
-	else
+	} else {
 		chan->chan_reg.dma_scr |= STM32_DMA_SCR_DBM;
+		chan->chan_reg.dma_scr &= ~STM32_DMA_SCR_CT;
+	}
 
 	/* Clear periph ctrl if client set it */
 	chan->chan_reg.dma_scr &= ~STM32_DMA_SCR_PFCTRL;
