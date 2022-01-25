@@ -93,6 +93,9 @@ struct optee_supp {
  * @scan_bus_done	flag if device registation was already done.
  * @scan_bus_wq		workqueue to scan optee bus and register optee drivers
  * @scan_bus_work	workq to scan optee bus and register optee drivers
+ * @optee_pcpu		per_cpu optee instance
+ * @notif_pcpu_wq	workqueue for per cpu aynchronous notification
+ * @notif_pcpu_work	work for per cpu asynchronous notification
  */
 struct optee {
 	struct tee_device *supp_teedev;
@@ -108,11 +111,19 @@ struct optee {
 	struct workqueue_struct *scan_bus_wq;
 	struct work_struct scan_bus_work;
 	unsigned int notif_irq;
+	unsigned int notif_pcpu_irq;
+	struct optee_pcpu __percpu *optee_pcpu;
+	struct workqueue_struct *notif_pcpu_wq;
+	struct work_struct notif_pcpu_work;
 };
 
 struct optee_call_waiter {
 	struct list_head list_node;
 	struct completion c;
+};
+
+struct optee_pcpu {
+	struct optee *optee;
 };
 
 /**
