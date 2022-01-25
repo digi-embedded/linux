@@ -438,8 +438,7 @@ EXPORT_SYMBOL_GPL(tee_shm_get_from_id);
  */
 void tee_shm_get(struct tee_shm *shm)
 {
-	if (shm->flags & TEE_SHM_DMA_BUF)
-		get_dma_buf(shm->dmabuf);
+	refcount_inc(&shm->refcount);
 }
 EXPORT_SYMBOL_GPL(tee_shm_get);
 
