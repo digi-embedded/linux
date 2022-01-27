@@ -17,7 +17,10 @@
 #include <linux/regulator/consumer.h>
 #include <video/of_display_timing.h>
 
-#include <drm/drmP.h>
+#include <drm/drm_drv.h>
+#include <drm/drm_file.h>
+#include <drm/drm_ioctl.h>
+
 #include <drm/drm_of.h>
 #include <drm/drm_atomic.h>
 #include <drm/drm_atomic_helper.h>
@@ -455,7 +458,8 @@ static void lt8912_bridge_mode_set(struct drm_bridge *bridge,
 	drm_mode_copy(&lt->mode, adj);
 }
 
-static int lt8912_bridge_attach(struct drm_bridge *bridge)
+static int lt8912_bridge_attach(struct drm_bridge *bridge,
+				enum drm_bridge_attach_flags flags)
 {
 	struct lt8912 *lt = bridge_to_lt8912(bridge);
 	struct drm_connector *connector = &lt->connector;
@@ -512,7 +516,7 @@ static int lt8912_i2c_init(struct lt8912 *lt,
 
 	for (i = 0; i < ARRAY_SIZE(info); i++) {
 		if (i > 0 ) {
-			client = i2c_new_dummy(client->adapter, info[i].addr);
+			client = i2c_new_client_device(client->adapter, &info[i]);
 			if (!client)
 				return -ENODEV;
 		}
