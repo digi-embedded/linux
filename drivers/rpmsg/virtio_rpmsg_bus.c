@@ -708,6 +708,7 @@ static ssize_t virtio_rpmsg_get_mtu(struct rpmsg_endpoint *ept)
 static int rpmsg_recv_single(struct virtproc_info *vrp, struct device *dev,
 			     struct rpmsg_hdr *msg, unsigned int len)
 {
+	struct rpmsg_device *rpdev;
 	struct rpmsg_endpoint *ept;
 	struct scatterlist sg;
 	bool little_endian = virtio_is_little_endian(vrp->vdev);
@@ -740,12 +741,22 @@ static int rpmsg_recv_single(struct virtproc_info *vrp, struct device *dev,
 	ept = idr_find(&vrp->endpoints, __rpmsg32_to_cpu(little_endian, msg->dst));
 
 	/* let's make sure no one deallocates ept while we use it */
-	if (ept)
+	if (ept) {
 		kref_get(&ept->refcount);
+		rpdev = ept->rpdev;
+	}
 
 	mutex_unlock(&vrp->endpoints_lock);
 
 	if (ept) {
+		if (rpdev->ept == ept && rpdev->dst == RPMSG_ADDR_ANY) {
+			/*
+			 * First message received from the remote side,
+			 * update channel destination address.
+			 */
+			rpdev->dst = msg->src;
+		}
+
 		/* make sure ept->cb doesn't go away while we use it */
 		mutex_lock(&ept->cb_lock);
 
