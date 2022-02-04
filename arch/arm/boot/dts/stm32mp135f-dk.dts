@@ -324,6 +324,26 @@
 	/delete-property/dmas;
 	/delete-property/dma-names;
 
+	gc2145: gc2145@3c {
+		compatible = "galaxycore,gc2145";
+		reg = <0x3c>;
+		clocks = <&clk_ext_camera>;
+		IOVDD-supply = <&scmi_v3v3_sw>;
+		AVDD-supply = <&scmi_v3v3_sw>;
+		DVDD-supply = <&scmi_v3v3_sw>;
+		powerdown-gpios = <&mcp23017 3 (GPIO_ACTIVE_LOW | GPIO_PUSH_PULL)>;
+		reset-gpios = <&mcp23017 4 (GPIO_ACTIVE_LOW | GPIO_PUSH_PULL)>;
+		status = "okay";
+
+		port {
+			gc2145_ep: endpoint {
+				remote-endpoint = <&mipid02_0>;
+				clock-lanes = <0>;
+				data-lanes = <1 2>;
+			};
+		};
+	};
+
 	goodix: goodix_ts@5d {
 		compatible = "goodix,gt911";
 		reg = <0x5d>;
@@ -345,13 +365,12 @@
 		clocks = <&clk_ext_camera>;
 		clock-names = "xclk";
 		DOVDD-supply = <&scmi_v3v3_sw>;
-		status = "okay";
+		status = "disabled";
 		powerdown-gpios = <&mcp23017 3 (GPIO_ACTIVE_LOW | GPIO_PUSH_PULL)>;
 		reset-gpios = <&mcp23017 4 (GPIO_ACTIVE_LOW | GPIO_PUSH_PULL)>;
 
 		port {
 			ov5640_0: endpoint {
-				remote-endpoint = <&mipid02_0>;
 				clock-lanes = <0>;
 				data-lanes = <1 2>;
 			};
@@ -377,7 +396,7 @@
 				mipid02_0: endpoint {
 					data-lanes = <1 2>;
 					lane-polarities = <0 0 0>;
-					remote-endpoint = <&ov5640_0>;
+					remote-endpoint = <&gc2145_ep>;
 				};
 			};
 			port@2 {
