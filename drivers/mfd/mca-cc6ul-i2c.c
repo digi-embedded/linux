@@ -52,6 +52,7 @@ static const struct regmap_range mca_cc6ul_writeable_ranges[] = {
 	regmap_reg_range(MCA_UART0_OFFSET,
 			 MCA_UART0_OFFSET + MCA_REG_UART_LEN),
 	regmap_reg_range(MCA_CC6UL_MPU_NVRAM_START, MCA_CC6UL_MPU_NVRAM_END),
+	regmap_reg_range(MCA_RESET_SAFE_TIMEOUT, MCA_PWROFF_SAFE_TIMEOUT),
 };
 
 static const struct regmap_range mca_cc6ul_volatile_ranges[] = {
