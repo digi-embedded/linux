@@ -181,6 +181,10 @@
 	};
 };
 
+&crc1 {
+	status = "okay";
+};
+
 &dcmipp {
 	status = "okay";
 	pinctrl-names = "default", "sleep";
