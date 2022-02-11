@@ -1,5 +1,5 @@
 /*
- *  Copyright 2018 - 2019 Digi International Inc
+ *  Copyright 2018 - 2022 Digi International Inc
  *
  *  This program is free software; you can redistribute  it and/or modify it
  *  under  the terms of  the GNU General  Public License as published by the
@@ -55,7 +55,7 @@ static const struct regmap_range mca_cc8_writeable_ranges[] = {
 			 MCA_UART1_OFFSET + MCA_REG_UART_LEN),
 	regmap_reg_range(MCA_UART2_OFFSET,
 			 MCA_UART2_OFFSET + MCA_REG_UART_LEN),
-	regmap_reg_range(MCA_CC8_MPU_NVRAM_START, MCA_CC8_MPU_NVRAM_END),
+	regmap_reg_range(MCA_MPU_NVRAM_START, MCA_MPU_NVRAM_END),
 	regmap_reg_range(MCA_REG_TPM0_CFG0, MCA_REG_TPM2_CH7_CNT1),
 	regmap_reg_range(MCA_REG_KP_CTRL0, MCA_REG_KP_ROW15_IO),
 	regmap_reg_range(MCA_REG_LED0_CFG0, MCA_REG_LED8_BLK_MS_OFF_H),
@@ -73,7 +73,7 @@ static const struct regmap_range mca_cc8_volatile_ranges[] = {
 	regmap_reg_range(MCA_LAST_MCA_RESET_0, MCA_LAST_MCA_RESET_3),
 	regmap_reg_range(MCA_LAST_MPU_RESET_0, MCA_LAST_MPU_RESET_3),
 	regmap_reg_range(MCA_LAST_WAKEUP_REASON_0, MCA_LAST_WAKEUP_REASON_3),
-	regmap_reg_range(MCA_CC8_MPU_NVRAM_START, MCA_CC8_MPU_NVRAM_END),
+	regmap_reg_range(MCA_MPU_NVRAM_START, MCA_MPU_NVRAM_END),
 	regmap_reg_range(MCA_RTC_COUNT_YEAR_L, MCA_RTC_COUNT_SEC),
 	regmap_reg_range(MCA_GPIO_DATA_0, MCA_GPIO_DATA_7),
 	regmap_reg_range(MCA_GPIO_IRQ_STATUS_0, MCA_GPIO_IRQ_STATUS_7),

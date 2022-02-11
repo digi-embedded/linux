@@ -1,7 +1,7 @@
 /* mca-cc6ul-uart.c - UART driver for MCA devices.
  * Based on sc16is7xx.c, by Jon Ringle <jringle@gridpoint.com>
  *
- * Copyright (C) 2017  Digi International Inc
+ * Copyright (C) 2017 - 2022  Digi International Inc
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -24,10 +24,7 @@
 #include <linux/regmap.h>
 #include <linux/serial_core.h>
 #include <linux/tty_flip.h>
-#include <linux/mfd/mca-common/registers.h>
-#include <linux/mfd/mca-common/core.h>
 #include <linux/mfd/mca-cc6ul/core.h>
-#include <linux/mfd/mca-cc6ul/registers.h>
 #include <linux/delay.h>
 
 #define MCA_UART_DEV_NAME		"ttyMCA"

@@ -1,5 +1,5 @@
 /*
- *  Copyright 2016 - 2019 Digi International Inc
+ *  Copyright 2016 - 2022 Digi International Inc
  *
  *  This program is free software; you can redistribute  it and/or modify it
  *  under  the terms of  the GNU General  Public License as published by the
@@ -31,7 +31,7 @@
 
 #include <asm/unaligned.h>
 
-#define MCA_CC6UL_NVRAM_SIZE	(MCA_CC6UL_MPU_NVRAM_END - MCA_CC6UL_MPU_NVRAM_START + 1)
+#define MCA_CC6UL_NVRAM_SIZE	(MCA_MPU_NVRAM_END - MCA_MPU_NVRAM_START + 1)
 
 extern int digi_get_som_hv(void);
 
@@ -46,44 +46,44 @@ struct mca_reason {
 };
 
 static const struct mca_reason last_mca_reset[] = {
-	{MCA_CC6UL_LAST_MCA_RST_LLW,	"LL Wakeup"},
-	{MCA_CC6UL_LAST_MCA_RST_LVD,	"Low Voltage"},
-	{MCA_CC6UL_LAST_MCA_RST_WD,	"Watchdog"},
-	{MCA_CC6UL_LAST_MCA_RST_PIN,	"Reset Pin"},
-	{MCA_CC6UL_LAST_MCA_RST_PWRON,	"Power On"},
-	{MCA_CC6UL_LAST_MCA_RST_LOCKUP,	"Core Lockup"},
-	{MCA_CC6UL_LAST_MCA_RST_SW,	"Software"},
-	{MCA_CC6UL_LAST_MCA_RST_MDMAPP,	"MDM-APP debuger"},
-	{MCA_CC6UL_LAST_MCA_RST_SMAE, 	"Stop Mode Ack Error"},
+	{MCA_LAST_MCA_RST_LLW,	"LL Wakeup"},
+	{MCA_LAST_MCA_RST_LVD,	"Low Voltage"},
+	{MCA_LAST_MCA_RST_WD,	"Watchdog"},
+	{MCA_LAST_MCA_RST_PIN,	"Reset Pin"},
+	{MCA_LAST_MCA_RST_PWRON,	"Power On"},
+	{MCA_LAST_MCA_RST_LOCKUP,	"Core Lockup"},
+	{MCA_LAST_MCA_RST_SW,	"Software"},
+	{MCA_LAST_MCA_RST_MDMAPP,	"MDM-APP debuger"},
+	{MCA_LAST_MCA_RST_SMAE, 	"Stop Mode Ack Error"},
 };
 
 static const struct mca_reason last_mpu_reset[] = {
-	{MCA_CC6UL_LAST_MPU_RST_PWRON,	"Power On"},
-	{MCA_CC6UL_LAST_MPU_RST_SYSR,	"System Reset"},
-	{MCA_CC6UL_LAST_MPU_RST_WD,	"Watchdog"},
-	{MCA_CC6UL_LAST_MPU_RST_OFFWAKE,"Off wakeup"},
-	{MCA_CC6UL_LAST_MPU_RST_MCARST,	"MCA reset"},
+	{MCA_LAST_MPU_RST_PWRON,	"Power On"},
+	{MCA_LAST_MPU_RST_SYSR,	"System Reset"},
+	{MCA_LAST_MPU_RST_WD,	"Watchdog"},
+	{MCA_LAST_MPU_RST_OFFWAKE,"Off wakeup"},
+	{MCA_LAST_MPU_RST_MCARST,	"MCA reset"},
 };
 
 static const struct mca_reason last_wakeup[] = {
-	{MCA_CC6UL_LAST_WAKEUP_PWRIO,	"Power IO"},
-	{MCA_CC6UL_LAST_WAKEUP_TIMER,	"Timer"},
-	{MCA_CC6UL_LAST_WAKEUP_RTC,	"RTC"},
-	{MCA_CC6UL_LAST_WAKEUP_LPUART,	"LP UART"},
-	{MCA_CC6UL_LAST_WAKEUP_TAMPER0,	"Tamper0"},
-	{MCA_CC6UL_LAST_WAKEUP_TAMPER1,	"Tamper1"},
-	{MCA_CC6UL_LAST_WAKEUP_TAMPER2,	"Tamper2"},
-	{MCA_CC6UL_LAST_WAKEUP_TAMPER3,	"Tamper3"},
-	{MCA_CC6UL_LAST_WAKEUP_IO0,	"IO0"},
-	{MCA_CC6UL_LAST_WAKEUP_IO1,	"IO1"},
-	{MCA_CC6UL_LAST_WAKEUP_IO2,	"IO2"},
-	{MCA_CC6UL_LAST_WAKEUP_IO3,	"IO3"},
-	{MCA_CC6UL_LAST_WAKEUP_IO4,	"IO4"},
-	{MCA_CC6UL_LAST_WAKEUP_IO5,	"IO5"},
-	{MCA_CC6UL_LAST_WAKEUP_IO6,	"IO6"},
-	{MCA_CC6UL_LAST_WAKEUP_IO7,	"IO7"},
-	{MCA_CC6UL_LAST_WAKEUP_VCC,	"Vcc"},
-	{MCA_CC6UL_LAST_WAKEUP_CPU,	"CPU"},
+	{MCA_LAST_WAKEUP_PWRIO,	"Power IO"},
+	{MCA_LAST_WAKEUP_TIMER,	"Timer"},
+	{MCA_LAST_WAKEUP_RTC,	"RTC"},
+	{MCA_LAST_WAKEUP_LPUART,	"LP UART"},
+	{MCA_LAST_WAKEUP_TAMPER0,	"Tamper0"},
+	{MCA_LAST_WAKEUP_TAMPER1,	"Tamper1"},
+	{MCA_LAST_WAKEUP_TAMPER2,	"Tamper2"},
+	{MCA_LAST_WAKEUP_TAMPER3,	"Tamper3"},
+	{MCA_LAST_WAKEUP_IO0,	"IO0"},
+	{MCA_LAST_WAKEUP_IO1,	"IO1"},
+	{MCA_LAST_WAKEUP_IO2,	"IO2"},
+	{MCA_LAST_WAKEUP_IO3,	"IO3"},
+	{MCA_LAST_WAKEUP_IO4,	"IO4"},
+	{MCA_LAST_WAKEUP_IO5,	"IO5"},
+	{MCA_LAST_WAKEUP_IO6,	"IO6"},
+	{MCA_LAST_WAKEUP_IO7,	"IO7"},
+	{MCA_LAST_WAKEUP_VCC,	"Vcc"},
+	{MCA_LAST_WAKEUP_CPU,	"CPU"},
 };
 
 static struct mca_drv *pmca;
@@ -587,7 +587,7 @@ static ssize_t nvram_read(struct file *filp, struct kobject *kobj,
 		count = MCA_CC6UL_NVRAM_SIZE - off;
 
 	ret = regmap_bulk_read(mca->regmap,
-			       MCA_CC6UL_MPU_NVRAM_START + off, buf, count);
+			       MCA_MPU_NVRAM_START + off, buf, count);
 	if (ret) {
 		dev_err(mca->dev, "%s error (%d)\n", __func__, ret);
 		return ret;
@@ -615,7 +615,7 @@ static ssize_t nvram_write(struct file *filp, struct kobject *kobj,
 		return count;
 
 	ret = regmap_bulk_write(mca->regmap,
-				MCA_CC6UL_MPU_NVRAM_START + off, buf, count);
+				MCA_MPU_NVRAM_START + off, buf, count);
 	if (ret) {
 		dev_err(mca->dev, "%s error (%d)\n", __func__, ret);
 		return ret;

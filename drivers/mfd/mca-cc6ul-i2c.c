@@ -1,5 +1,5 @@
 /*
- *  Copyright 2016 - 2019 Digi International Inc
+ *  Copyright 2016 - 2022 Digi International Inc
  *
  *  This program is free software; you can redistribute  it and/or modify it
  *  under  the terms of  the GNU General  Public License as published by the
@@ -52,6 +52,7 @@ static const struct regmap_range mca_cc6ul_writeable_ranges[] = {
 	regmap_reg_range(MCA_UART0_OFFSET,
 			 MCA_UART0_OFFSET + MCA_REG_UART_LEN),
 	regmap_reg_range(MCA_CC6UL_MPU_NVRAM_START, MCA_CC6UL_MPU_NVRAM_END),
+	regmap_reg_range(MCA_MPU_NVRAM_START, MCA_MPU_NVRAM_END),
 	regmap_reg_range(MCA_RESET_SAFE_TIMEOUT, MCA_PWROFF_SAFE_TIMEOUT),
 };
 
@@ -66,7 +67,7 @@ static const struct regmap_range mca_cc6ul_volatile_ranges[] = {
 	regmap_reg_range(MCA_LAST_MCA_RESET_0, MCA_LAST_MCA_RESET_3),
 	regmap_reg_range(MCA_LAST_MPU_RESET_0, MCA_LAST_MPU_RESET_3),
 	regmap_reg_range(MCA_LAST_WAKEUP_REASON_0, MCA_LAST_WAKEUP_REASON_3),
-	regmap_reg_range(MCA_CC6UL_MPU_NVRAM_START, MCA_CC6UL_MPU_NVRAM_END),
+	regmap_reg_range(MCA_MPU_NVRAM_START, MCA_MPU_NVRAM_END),
 	regmap_reg_range(MCA_RTC_COUNT_YEAR_L, MCA_RTC_COUNT_SEC),
 	regmap_reg_range(MCA_GPIO_DATA_0, MCA_GPIO_DATA_7),
 	regmap_reg_range(MCA_GPIO_IRQ_STATUS_0, MCA_GPIO_IRQ_STATUS_7),

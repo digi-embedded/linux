@@ -1,5 +1,5 @@
 /*
- *  Copyright 2016 - 2019 Digi International Inc
+ *  Copyright 2016 - 2022 Digi International Inc
  *
  *  This program is free software; you can redistribute  it and/or modify it
  *  under  the terms of  the GNU General  Public License as published by the
@@ -12,7 +12,6 @@
 
 #include <linux/interrupt.h>
 #include <linux/mfd/mca-common/core.h>
-#include <linux/mfd/mca-cc6ul/registers.h>
 
 /* MCA CC6UL modules */
 #define MCA_CC6UL_DRVNAME_CORE		"mca-cc6ul-core"
