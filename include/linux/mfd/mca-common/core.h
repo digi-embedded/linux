@@ -1,5 +1,5 @@
 /*
- *  Copyright 2017 - 2019 Digi International Inc
+ *  Copyright 2017 - 2022 Digi International Inc
  *
  *  This program is free software; you can redistribute  it and/or modify it
  *  under  the terms of  the GNU General  Public License as published by the
@@ -15,6 +15,8 @@
 #include <linux/syscore_ops.h>
 #include <linux/mfd/mca-common/registers.h>
 #include <linux/gpio.h>
+#include <linux/regmap.h>
+#include <soc/imx/soc.h>
 
 #define MCA_MAKE_FW_VER(a,b)		(u16)(((a) << 8) | ((b) & 0xff))
 #define MCA_FW_VER_MAJOR(v)		(((v) >> 8) & 0xff)
@@ -76,5 +78,74 @@ struct mca_drv {
 	struct syscore_ops syscore;
 	bool suspended;
 };
+
+/* Platform-dependent values */
+#if defined(CONFIG_MFD_MCA_CC6UL)
+	#define MCA_UART_MIN_FW		MCA_MAKE_FW_VER(1, 19)
+	#define MCA_DEVICE_ID_VAL	0x61
+#elif defined(CONFIG_MFD_MCA_CC8)
+	#define MCA_UART_MIN_FW		MCA_MAKE_FW_VER(0, 13)
+	#define MCA_DEVICE_ID_VAL	0x4A
+#endif
+
+/* MCA modules */
+#define MCA_DRVNAME_CORE	"mca-core"
+#define MCA_DRVNAME_RTC		"mca-som-rtc"
+#define MCA_DRVNAME_WATCHDOG	"mca-som-watchdog"
+#define MCA_DRVNAME_GPIO	"mca-som-gpio"
+#define MCA_DRVNAME_PWRKEY	"mca-som-pwrkey"
+#define MCA_DRVNAME_ADC		"mca-som-adc"
+#define MCA_DRVNAME_TAMPER	"mca-som-tamper"
+#define MCA_DRVNAME_COMPARATOR	"mca-som-comparator"
+#define MCA_DRVNAME_UART	"mca-som-uart"
+
+/* Values exclusive to the CC8 family */
+#define MCA_CC8_DRVNAME_GPIO_WATCHDOG	"mca-som-gpio-watchdog"
+#define MCA_CC8_DRVNAME_KEYPAD		"mca-som-keypad"
+#define MCA_CC8_DRVNAME_LED		"mca-som-led"
+#define MCA_CC8_DRVNAME_PWM		"mca-som-pwm"
+#define MCA_CC8_LEDS_MIN_FW		MCA_MAKE_FW_VER(1, 1)
+
+/* Interrupts */
+enum mca_irqs {
+	MCA_IRQ_RTC_ALARM,
+	MCA_IRQ_RTC_1HZ,
+	MCA_IRQ_RTC_PERIODIC_IRQ,
+	MCA_IRQ_WATCHDOG,
+	MCA_IRQ_PWR_SLEEP,
+	MCA_IRQ_PWR_OFF,
+	MCA_IRQ_TAMPER0,
+	MCA_IRQ_TAMPER1,
+	MCA_IRQ_ADC,
+	MCA_IRQ_GPIO_BANK_0,
+	MCA_IRQ_TAMPER2,
+	MCA_IRQ_TAMPER3,
+	MCA_IRQ_UART0,
+	/* Values exclusive to the CC8 family */
+	MCA_CC8_IRQ_GPIO_BANK_1,
+	MCA_CC8_IRQ_GPIO_BANK_2,
+	MCA_CC8_IRQ_UART1,
+	MCA_CC8_IRQ_UART2,
+	MCA_CC8_IRQ_KEYPAD,
+	/* ... */
+
+	MCA_NUM_IRQS,
+};
+
+int mca_device_init(struct mca_drv *mca, u32 irq);
+int mca_irq_init(struct mca_drv *mca);
+void mca_device_exit(struct mca_drv *mca);
+void mca_irq_exit(struct mca_drv *mca);
+int mca_suspend(struct device *dev);
+int mca_resume(struct device *dev);
+
+
+#if defined(CONFIG_MFD_MCA_CC8)
+/* Functions specific to the cc8x */
+int mca_cc8x_add_irq_chip(struct regmap *map, int irq, int irq_base,
+			  const struct regmap_irq_chip *chip,
+			  struct regmap_irq_chip_data **data);
+void mca_cc8x_del_irq_chip(struct regmap_irq_chip_data *d);
+#endif
 
 #endif /* MFD_MCA_COMMON_CORE_H_ */

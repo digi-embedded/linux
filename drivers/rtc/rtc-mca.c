@@ -1,5 +1,5 @@
 /* rtc-mca.c - Real time clock device driver for MCA on ConnectCore modules
- * Copyright (C) 2016 - 2018  Digi International
+ * Copyright (C) 2016 - 2022  Digi International
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -30,7 +30,7 @@
 #include <linux/of_irq.h>
 #include <linux/regmap.h>
 
-#define MCA_DRVNAME_RTC		"mca-rtc"
+#define MCA_BASE_DRVNAME_RTC		"mca-rtc"
 
 // Digi RTC IOCTLs custom implementation using MCA
 #define RTC_IOCTL_DIGI 0x100
@@ -47,8 +47,7 @@
 #ifdef CONFIG_OF
 enum mca_rtc_type {
 	CC6UL_MCA_RTC,
-	CC8X_MCA_RTC,
-	CC8M_MCA_RTC,
+	CC8_MCA_RTC,
 };
 
 struct mca_rtc_data {
@@ -506,7 +505,7 @@ static int mca_rtc_probe(struct platform_device *pdev)
 	}
 
 	/* Register RTC device */
-	rtc->rtc_dev = devm_rtc_device_register(&pdev->dev, MCA_DRVNAME_RTC,
+	rtc->rtc_dev = devm_rtc_device_register(&pdev->dev, MCA_BASE_DRVNAME_RTC,
 					   &mca_rtc_ops, THIS_MODULE);
 	if (IS_ERR(rtc->rtc_dev)) {
 		dev_err(&pdev->dev, "Failed to register RTC device: %ld\n",
@@ -624,21 +623,16 @@ static struct mca_rtc_data mca_rtc_devdata[] = {
 	[CC6UL_MCA_RTC] = {
 		.devtype = CC6UL_MCA_RTC,
 	},
-	[CC8X_MCA_RTC] = {
-		.devtype = CC8X_MCA_RTC,
-	},
-	[CC8M_MCA_RTC] = {
-		.devtype = CC8M_MCA_RTC,
+	[CC8_MCA_RTC] = {
+		.devtype = CC8_MCA_RTC,
 	},
 };
 
 static const struct of_device_id mca_rtc_dt_ids[] = {
 	{ .compatible = "digi,mca-cc6ul-rtc",
 	  .data = &mca_rtc_devdata[CC6UL_MCA_RTC]},
-	{ .compatible = "digi,mca-cc8x-rtc",
-	  .data = &mca_rtc_devdata[CC8X_MCA_RTC]},
-	{ .compatible = "digi,mca-cc8m-rtc",
-	  .data = &mca_rtc_devdata[CC8M_MCA_RTC]},
+	{ .compatible = "digi,mca-cc8-rtc",
+	  .data = &mca_rtc_devdata[CC8_MCA_RTC]},
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, mca_rtc_dt_ids);
@@ -648,7 +642,7 @@ static struct platform_driver mca_rtc_driver = {
 	.probe		= mca_rtc_probe,
 	.remove		= mca_rtc_remove,
 	.driver		= {
-		.name	= MCA_DRVNAME_RTC,
+		.name	= MCA_BASE_DRVNAME_RTC,
 		.owner	= THIS_MODULE,
 #ifdef CONFIG_PM
 		.pm	= &mca_rtc_pm_ops,
@@ -675,4 +669,4 @@ module_exit(mca_rtc_exit);
 MODULE_AUTHOR("Digi International Inc.");
 MODULE_DESCRIPTION("Real time clock device driver for MCA of ConnectCore Modules");
 MODULE_LICENSE("GPL v2");
-MODULE_ALIAS("platform:" MCA_DRVNAME_RTC);
+MODULE_ALIAS("platform:" MCA_BASE_DRVNAME_RTC);

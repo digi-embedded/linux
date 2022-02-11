@@ -24,9 +24,10 @@
 #include <linux/regmap.h>
 #include <linux/serial_core.h>
 #include <linux/tty_flip.h>
-#include <linux/mfd/mca-cc6ul/core.h>
+#include <linux/mfd/mca-common/core.h>
 #include <linux/delay.h>
 
+#define MCA_BASE_DRVNAME_UART		"mca-cc6ul-uart"
 #define MCA_UART_DEV_NAME		"ttyMCA"
 #define MCA_UART_DEFAULT_BRATE		9600
 #define MCA_UART_DEFAULT_BAUD_REG	MCA_REG_UART_BAUD_9600
@@ -983,7 +984,7 @@ static struct platform_driver mca_uart_driver = {
 	.probe	= mca_uart_probe,
 	.remove	= mca_uart_remove,
 	.driver	= {
-		.name	= MCA_CC6UL_DRVNAME_UART,
+		.name	= MCA_BASE_DRVNAME_UART,
 		.of_match_table = of_match_ptr(mca_uart_ids),
 #ifdef CONFIG_PM
 		.pm	= &mca_cc6ul_uart_pm_ops,
@@ -1006,4 +1007,4 @@ module_exit(mca_uart_exit);
 MODULE_AUTHOR("Digi International Inc");
 MODULE_DESCRIPTION("UART for MCA of ConnectCore 6UL");
 MODULE_LICENSE("GPL v2");
-MODULE_ALIAS("platform:" MCA_CC6UL_DRVNAME_UART);
+MODULE_ALIAS("platform:" MCA_BASE_DRVNAME_UART);

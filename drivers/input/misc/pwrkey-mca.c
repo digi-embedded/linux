@@ -1,5 +1,5 @@
 /* pwrkey-mca.c - Power Key device driver for MCA on ConnectCore modules
- * Copyright (C) 2016 - 2018  Digi International Inc
+ * Copyright (C) 2016 - 2022  Digi International Inc
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -33,7 +33,7 @@
 #include <linux/of_irq.h>
 #include <linux/regmap.h>
 
-#define MCA_DRVNAME_PWRKEY        "mca-pwrkey"
+#define MCA_BASE_DRVNAME_PWRKEY	"mca-pwrkey"
 
 #define DEFAULT_PWR_KEY_DEBOUNCE	150	/* 150 ms */
 #define DEFAULT_PWR_KEY_DELAY		4	/* 4 seconds */
@@ -46,8 +46,7 @@
 #ifdef CONFIG_OF
 enum mca_pwrkey_type {
 	CC6UL_MCA_PWRKEY,
-	CC8X_MCA_PWRKEY,
-	CC8M_MCA_PWRKEY,
+	CC8_MCA_PWRKEY,
 };
 
 struct mca_pwrkey_data {
@@ -506,15 +505,9 @@ static struct mca_pwrkey_data mca_pwrkey_devdata[] = {
 		.version_supports_debtb50ms= MCA_MAKE_FW_VER(1, 7),
 		.version_supports_pwrkey_up= MCA_MAKE_FW_VER(1, 14)
 	},
-	[CC8X_MCA_PWRKEY] = {
-		.devtype = CC8X_MCA_PWRKEY,
-		.drv_name_phys= "mca-cc8x-pwrkey/input0",
-		.version_supports_debtb50ms= MCA_MAKE_FW_VER(0, 13),
-		.version_supports_pwrkey_up= MCA_MAKE_FW_VER(0, 17)
-	},
-	[CC8M_MCA_PWRKEY] = {
-		.devtype = CC8M_MCA_PWRKEY,
-		.drv_name_phys= "mca-cc8m-pwrkey/input0",
+	[CC8_MCA_PWRKEY] = {
+		.devtype = CC8_MCA_PWRKEY,
+		.drv_name_phys= "mca-cc8-pwrkey/input0",
 		.version_supports_debtb50ms= MCA_MAKE_FW_VER(0, 13),
 		.version_supports_pwrkey_up= MCA_MAKE_FW_VER(0, 17)
 	},
@@ -523,10 +516,8 @@ static struct mca_pwrkey_data mca_pwrkey_devdata[] = {
 static const struct of_device_id mca_pwrkey_ids[] = {
         { .compatible = "digi,mca-cc6ul-pwrkey",
 	  .data = &mca_pwrkey_devdata[CC6UL_MCA_PWRKEY]},
-        { .compatible = "digi,mca-cc8x-pwrkey",
-	  .data = &mca_pwrkey_devdata[CC8X_MCA_PWRKEY]},
-        { .compatible = "digi,mca-cc8m-pwrkey",
-	  .data = &mca_pwrkey_devdata[CC8M_MCA_PWRKEY]},
+        { .compatible = "digi,mca-cc8-pwrkey",
+	  .data = &mca_pwrkey_devdata[CC8_MCA_PWRKEY]},
         { /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, mca_pwrkey_ids);
@@ -536,7 +527,7 @@ static struct platform_driver mca_pwrkey_driver = {
 	.probe	= mca_pwrkey_probe,
 	.remove	= mca_pwrkey_remove,
 	.driver	= {
-		.name	= MCA_DRVNAME_PWRKEY,
+		.name	= MCA_BASE_DRVNAME_PWRKEY,
 		.owner	= THIS_MODULE,
 		.of_match_table = of_match_ptr(mca_pwrkey_ids),
 #ifdef CONFIG_PM_SLEEP
@@ -560,4 +551,4 @@ module_exit(mca_pwrkey_exit);
 MODULE_AUTHOR("Digi International Inc");
 MODULE_DESCRIPTION("pwrkey device driver for MCA of ConnectCore Modules");
 MODULE_LICENSE("GPL v2");
-MODULE_ALIAS("platform:" MCA_DRVNAME_PWRKEY);
+MODULE_ALIAS("platform:" MCA_BASE_DRVNAME_PWRKEY);

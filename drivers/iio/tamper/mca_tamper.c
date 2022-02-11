@@ -1,6 +1,6 @@
 /* mca_tamper.c - Tamper driver for MCA on ConnectCore modules
  *
- * Copyright (C) 2016 - 2018  Digi International Inc
+ * Copyright (C) 2016 - 2022  Digi International Inc
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -35,13 +35,12 @@
 #include <linux/rtc.h>
 #include <linux/slab.h>
 
-#define MCA_DRVNAME_TAMPER	"mca-tamper"
+#define MCA_BASE_DRVNAME_TAMPER	"mca-tamper"
 
 #ifdef CONFIG_OF
 enum mca_tamper_type {
 	CC6UL_MCA_TAMPER,
-	CC8X_MCA_TAMPER,
-	CC8M_MCA_TAMPER,
+	CC8_MCA_TAMPER,
 };
 
 struct mca_tamper_data {
@@ -757,13 +756,8 @@ static struct mca_tamper_data mca_tamper_devdata[] = {
 		.num_tamper_ifaces = 4,
 		.digital_tamper_cnt = 2
 	},
-	[CC8X_MCA_TAMPER] = {
-		.devtype = CC8X_MCA_TAMPER,
-		.num_tamper_ifaces = 4,
-		.digital_tamper_cnt = 2
-	},
-	[CC8M_MCA_TAMPER] = {
-		.devtype = CC8M_MCA_TAMPER,
+	[CC8_MCA_TAMPER] = {
+		.devtype = CC8_MCA_TAMPER,
 		.num_tamper_ifaces = 4,
 		.digital_tamper_cnt = 2
 	},
@@ -772,10 +766,8 @@ static struct mca_tamper_data mca_tamper_devdata[] = {
 static const struct of_device_id mca_tamper_ids[] = {
         { .compatible = "digi,mca-cc6ul-tamper",
           .data = &mca_tamper_devdata[CC6UL_MCA_TAMPER]},
-        { .compatible = "digi,mca-cc8x-tamper",
-          .data = &mca_tamper_devdata[CC8X_MCA_TAMPER]},
-        { .compatible = "digi,mca-cc8m-tamper",
-          .data = &mca_tamper_devdata[CC8M_MCA_TAMPER]},
+        { .compatible = "digi,mca-cc8-tamper",
+          .data = &mca_tamper_devdata[CC8_MCA_TAMPER]},
         { /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, mca_tamper_ids);
@@ -785,7 +777,7 @@ static struct platform_driver mca_tamper_driver = {
 	.probe	= mca_tamper_probe,
 	.remove	= mca_tamper_remove,
 	.driver	= {
-		.name	= MCA_DRVNAME_TAMPER,
+		.name	= MCA_BASE_DRVNAME_TAMPER,
 		.owner	= THIS_MODULE,
 		.of_match_table = of_match_ptr(mca_tamper_ids),
 	},
@@ -806,4 +798,4 @@ module_exit(mca_tamper_exit);
 MODULE_AUTHOR("Digi International Inc");
 MODULE_DESCRIPTION("Tamper driver for MCA of ConnectCore Modules");
 MODULE_LICENSE("GPL v2");
-MODULE_ALIAS("platform:" MCA_DRVNAME_TAMPER);
+MODULE_ALIAS("platform:" MCA_BASE_DRVNAME_TAMPER);

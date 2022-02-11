@@ -1,5 +1,5 @@
 /*
- *  Copyright 2018 - 2019 Digi International Inc
+ *  Copyright 2018 - 2022 Digi International Inc
  *
  *  This program is free software; you can redistribute  it and/or modify it
  *  under  the terms of  the GNU General  Public License as published by the
@@ -14,8 +14,6 @@
 #include <linux/interrupt.h>
 #include <linux/regmap.h>
 #include <linux/mfd/mca-common/core.h>
-#include <linux/mfd/mca-cc8/core.h>
-#include <soc/imx/soc.h>
 
 #define MCA_IRQ_0_OFFSET		0
 #define MCA_IRQ_1_OFFSET		1
@@ -24,39 +22,39 @@
 
 static const struct regmap_irq mca_cc8_irqs[] = {
 	/* MCA irqs A register */
-	[MCA_CC8_IRQ_RTC_ALARM] = {
+	[MCA_IRQ_RTC_ALARM] = {
                 .reg_offset = MCA_IRQ_0_OFFSET,
                 .mask = MCA_M_RTC_ALARM,
         },
-	[MCA_CC8_IRQ_RTC_1HZ] = {
+	[MCA_IRQ_RTC_1HZ] = {
                 .reg_offset = MCA_IRQ_0_OFFSET,
                 .mask = MCA_M_RTC_1HZ,
         },
-	[MCA_CC8_IRQ_WATCHDOG] = {
+	[MCA_IRQ_WATCHDOG] = {
                 .reg_offset = MCA_IRQ_0_OFFSET,
                 .mask = MCA_M_WATCHDOG,
         },
-	[MCA_CC8_IRQ_PWR_SLEEP] = {
+	[MCA_IRQ_PWR_SLEEP] = {
                 .reg_offset = MCA_IRQ_0_OFFSET,
                 .mask = MCA_M_PWR_SLEEP,
         },
-	[MCA_CC8_IRQ_PWR_OFF] = {
+	[MCA_IRQ_PWR_OFF] = {
                 .reg_offset = MCA_IRQ_0_OFFSET,
                 .mask = MCA_M_PWR_OFF,
         },
-	[MCA_CC8_IRQ_TAMPER0] = {
+	[MCA_IRQ_TAMPER0] = {
 		.reg_offset = MCA_IRQ_0_OFFSET,
 		.mask = MCA_M_TAMPER0,
 	},
-	[MCA_CC8_IRQ_TAMPER1] = {
+	[MCA_IRQ_TAMPER1] = {
 		.reg_offset = MCA_IRQ_0_OFFSET,
 		.mask = MCA_M_TAMPER1,
 	},
-	[MCA_CC8_IRQ_ADC] = {
+	[MCA_IRQ_ADC] = {
 		.reg_offset = MCA_IRQ_0_OFFSET,
 		.mask = MCA_M_ADC,
 	},
-	[MCA_CC8_IRQ_GPIO_BANK_0] = {
+	[MCA_IRQ_GPIO_BANK_0] = {
 		.reg_offset = MCA_IRQ_1_OFFSET,
 		.mask = MCA_GPIO_BANK_0,
 	},
@@ -68,15 +66,15 @@ static const struct regmap_irq mca_cc8_irqs[] = {
 		.reg_offset = MCA_IRQ_1_OFFSET,
 		.mask = MCA_GPIO_BANK_2,
 	},
-	[MCA_CC8_IRQ_TAMPER2] = {
+	[MCA_IRQ_TAMPER2] = {
 		.reg_offset = MCA_IRQ_2_OFFSET,
 		.mask = MCA_M_TAMPER2,
 	},
-	[MCA_CC8_IRQ_TAMPER3] = {
+	[MCA_IRQ_TAMPER3] = {
 		.reg_offset = MCA_IRQ_2_OFFSET,
 		.mask = MCA_M_TAMPER3,
 	},
-	[MCA_CC8_IRQ_UART0] = {
+	[MCA_IRQ_UART0] = {
 		.reg_offset = MCA_IRQ_2_OFFSET,
 		.mask = MCA_M_UART0,
 	},
@@ -88,7 +86,7 @@ static const struct regmap_irq mca_cc8_irqs[] = {
 		.reg_offset = MCA_IRQ_2_OFFSET,
 		.mask = MCA_M_UART2,
 	},
-	[MCA_CC8_IRQ_RTC_PERIODIC_IRQ] = {
+	[MCA_IRQ_RTC_PERIODIC_IRQ] = {
 		.reg_offset = MCA_IRQ_2_OFFSET,
 		.mask = MCA_M_RTC_PERIODIC_IRQ,
 	},
@@ -109,7 +107,7 @@ static struct regmap_irq_chip mca_cc8_irq_chip = {
 	.init_ack_masked = true,
 };
 
-int mca_cc8_irq_init(struct mca_drv *mca)
+int mca_irq_init(struct mca_drv *mca)
 {
 	int ret;
 
@@ -139,7 +137,7 @@ int mca_cc8_irq_init(struct mca_drv *mca)
 	return ret;
 }
 
-void mca_cc8_irq_exit(struct mca_drv *mca)
+void mca_irq_exit(struct mca_drv *mca)
 {
 	if (!mca->chip_irq) {
 		if (of_machine_is_compatible("fsl,imx8qxp") ||

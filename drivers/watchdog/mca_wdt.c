@@ -1,7 +1,7 @@
 /*
  * Watchdog driver for MCA on ConnectCore modules
  *
- * Copyright(c) 2016 - 2018 Digi International Inc.
+ * Copyright(c) 2016 - 2022 Digi International Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,7 +23,7 @@
 
 #include <linux/mfd/mca-common/core.h>
 
-#define MCA_DRVNAME_WATCHDOG	"mca-watchdog"
+#define MCA_BASE_DRVNAME_WATCHDOG	"mca-watchdog"
 
 #define WDT_REFRESH_LEN		(MCA_WDT_REFRESH_3 - \
 				 MCA_WDT_REFRESH_0 + 1)
@@ -34,8 +34,7 @@
 #ifdef CONFIG_OF
 enum mca_wdt_type {
 	CC6UL_MCA_WDT,
-	CC8X_MCA_WDT,
-	CC8M_MCA_WDT,
+	CC8_MCA_WDT,
 };
 
 struct mca_wdt_data {
@@ -345,11 +344,8 @@ static struct mca_wdt_data mca_wdt_devdata[] = {
 	[CC6UL_MCA_WDT] = {
 		.devtype = CC6UL_MCA_WDT,
 	},
-	[CC8X_MCA_WDT] = {
-		.devtype = CC8X_MCA_WDT,
-	},
-	[CC8M_MCA_WDT] = {
-		.devtype = CC8M_MCA_WDT,
+	[CC8_MCA_WDT] = {
+		.devtype = CC8_MCA_WDT,
 	},
 };
 
@@ -358,11 +354,8 @@ static const struct platform_device_id mca_wdt_devtype[] = {
 		.name = "mca-cc6ul-wdt",
 		.driver_data = (kernel_ulong_t)&mca_wdt_devdata[CC6UL_MCA_WDT],
 	}, {
-		.name = "mca-cc8x-wdt",
-		.driver_data = (kernel_ulong_t)&mca_wdt_devdata[CC8X_MCA_WDT],
-	}, {
-		.name = "mca-cc8m-wdt",
-		.driver_data = (kernel_ulong_t)&mca_wdt_devdata[CC8M_MCA_WDT],
+		.name = "mca-cc8-wdt",
+		.driver_data = (kernel_ulong_t)&mca_wdt_devdata[CC8_MCA_WDT],
 	}, {
 		/* sentinel */	
 	}
@@ -372,10 +365,8 @@ MODULE_DEVICE_TABLE(platform, mca_wdt_devtype);
 static const struct of_device_id mca_wdt_match[] = {
         { .compatible = "digi,mca-cc6ul-wdt",
           .data = &mca_wdt_devdata[CC6UL_MCA_WDT]},
-        { .compatible = "digi,mca-cc8x-wdt",
-          .data = &mca_wdt_devdata[CC8X_MCA_WDT]},
-        { .compatible = "digi,mca-cc8m-wdt",
-          .data = &mca_wdt_devdata[CC8M_MCA_WDT]},
+        { .compatible = "digi,mca-cc8-wdt",
+          .data = &mca_wdt_devdata[CC8_MCA_WDT]},
         { /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, mca_wdt_match);
@@ -386,7 +377,7 @@ static struct platform_driver mca_wdt_driver = {
 	.remove = mca_wdt_remove,
 	.id_table = mca_wdt_devtype,
 	.driver = {
-		.name	= MCA_DRVNAME_WATCHDOG,
+		.name	= MCA_BASE_DRVNAME_WATCHDOG,
 		.of_match_table = of_match_ptr(mca_wdt_match),
 	},
 };
@@ -396,4 +387,4 @@ module_platform_driver(mca_wdt_driver);
 MODULE_AUTHOR("Digi International Inc.");
 MODULE_DESCRIPTION("Watchdog device driver for MCA of ConnectCore Modules");
 MODULE_LICENSE("GPL v2");
-MODULE_ALIAS("platform:" MCA_DRVNAME_WATCHDOG);
+MODULE_ALIAS("platform:" MCA_BASE_DRVNAME_WATCHDOG);

@@ -1,5 +1,5 @@
 /*
- *  Copyright 2020 Digi International Inc
+ *  Copyright 2020-2022 Digi International Inc
  *
  * The code contained herein is licensed under the GNU General Public
  * License. You may obtain a copy of the GNU General Public License
@@ -17,8 +17,6 @@
 #include <linux/slab.h>
 
 #include <linux/mfd/mca-common/core.h>
-#include <linux/mfd/mca-cc8/core.h>
-#include <linux/mfd/mca-common/registers.h>
 
 #define MCA_DRVNAME_LED		"mca-led"
 

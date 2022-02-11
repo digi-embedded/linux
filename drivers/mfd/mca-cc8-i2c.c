@@ -17,7 +17,6 @@
 
 #include <linux/mfd/core.h>
 #include <linux/mfd/mca-common/core.h>
-#include <linux/mfd/mca-cc8/core.h>
 
 #include <linux/of.h>
 #include <linux/regulator/of_regulator.h>
@@ -155,8 +154,7 @@ static struct regmap_config mca_cc8_regmap_config = {
 };
 
 static const struct of_device_id mca_cc8_dt_ids[] = {
-	{ .compatible = "digi,mca-cc8x", },
-	{ .compatible = "digi,mca-cc8m", },
+	{ .compatible = "digi,mca-cc8", },
 	{ }
 };
 MODULE_DEVICE_TABLE(of, mca_cc8_dt_ids);
@@ -183,14 +181,14 @@ static int mca_cc8_i2c_probe(struct i2c_client *i2c,
 		return ret;
 	}
 
-	return mca_cc8_device_init(mca, i2c->irq);
+	return mca_device_init(mca, i2c->irq);
 }
 
 static int mca_cc8_i2c_remove(struct i2c_client *i2c)
 {
 	struct mca_drv *mca = i2c_get_clientdata(i2c);
 
-	mca_cc8_device_exit(mca);
+	mca_device_exit(mca);
 
 	return 0;
 }
@@ -198,12 +196,12 @@ static int mca_cc8_i2c_remove(struct i2c_client *i2c)
 #ifdef CONFIG_PM
 static int mca_cc8_i2c_suspend(struct device *dev)
 {
-	return mca_cc8_suspend(dev);
+	return mca_suspend(dev);
 }
 
 static int mca_cc8_i2c_resume(struct device *dev)
 {
-	return mca_cc8_resume(dev);
+	return mca_resume(dev);
 }
 
 /*

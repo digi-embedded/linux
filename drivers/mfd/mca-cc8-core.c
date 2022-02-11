@@ -27,8 +27,6 @@
 #include <linux/platform_data/i2c-imx.h>
 
 #include <linux/mfd/mca-common/core.h>
-#include <linux/mfd/mca-cc8/core.h>
-#include <soc/imx/soc.h>
 
 #include <asm/unaligned.h>
 
@@ -116,20 +114,20 @@ static const char _unlock_pattern[] = "CTRU";
 static struct resource mca_cc8_rtc_resources[] = {
 	{
 		.name   = MCA_IRQ_RTC_ALARM_NAME,
-		.start  = MCA_CC8_IRQ_RTC_ALARM,
-		.end    = MCA_CC8_IRQ_RTC_ALARM,
+		.start  = MCA_IRQ_RTC_ALARM,
+		.end    = MCA_IRQ_RTC_ALARM,
 		.flags  = IORESOURCE_IRQ,
 	},
 	{
 		.name   = MCA_IRQ_RTC_1HZ_NAME,
-		.start  = MCA_CC8_IRQ_RTC_1HZ,
-		.end    = MCA_CC8_IRQ_RTC_1HZ,
+		.start  = MCA_IRQ_RTC_1HZ,
+		.end    = MCA_IRQ_RTC_1HZ,
 		.flags  = IORESOURCE_IRQ,
 	},
 	{
 		.name   = MCA_IRQ_RTC_PERIODIC_IRQ_NAME,
-		.start  = MCA_CC8_IRQ_RTC_PERIODIC_IRQ,
-		.end    = MCA_CC8_IRQ_RTC_PERIODIC_IRQ,
+		.start  = MCA_IRQ_RTC_PERIODIC_IRQ,
+		.end    = MCA_IRQ_RTC_PERIODIC_IRQ,
 		.flags  = IORESOURCE_IRQ,
 	},
 };
@@ -137,8 +135,8 @@ static struct resource mca_cc8_rtc_resources[] = {
 static struct resource mca_cc8_watchdog_resources[] = {
 	{
 		.name   = MCA_IRQ_WATCHDOG_NAME,
-		.start  = MCA_CC8_IRQ_WATCHDOG,
-		.end    = MCA_CC8_IRQ_WATCHDOG,
+		.start  = MCA_IRQ_WATCHDOG,
+		.end    = MCA_IRQ_WATCHDOG,
 		.flags  = IORESOURCE_IRQ,
 	},
 };
@@ -146,14 +144,14 @@ static struct resource mca_cc8_watchdog_resources[] = {
 static struct resource mca_cc8_pwrkey_resources[] = {
 	{
 		.name   = MCA_IRQ_PWR_SLEEP_NAME,
-		.start  = MCA_CC8_IRQ_PWR_SLEEP,
-		.end    = MCA_CC8_IRQ_PWR_SLEEP,
+		.start  = MCA_IRQ_PWR_SLEEP,
+		.end    = MCA_IRQ_PWR_SLEEP,
 		.flags  = IORESOURCE_IRQ,
 	},
 	{
 		.name   = MCA_IRQ_PWR_OFF_NAME,
-		.start  = MCA_CC8_IRQ_PWR_OFF,
-		.end    = MCA_CC8_IRQ_PWR_OFF,
+		.start  = MCA_IRQ_PWR_OFF,
+		.end    = MCA_IRQ_PWR_OFF,
 		.flags  = IORESOURCE_IRQ,
 	},
 };
@@ -161,8 +159,8 @@ static struct resource mca_cc8_pwrkey_resources[] = {
 static struct resource mca_cc8_adc_resources[] = {
 	{
 		.name   = MCA_IRQ_ADC_NAME,
-		.start  = MCA_CC8_IRQ_ADC,
-		.end    = MCA_CC8_IRQ_ADC,
+		.start  = MCA_IRQ_ADC,
+		.end    = MCA_IRQ_ADC,
 		.flags  = IORESOURCE_IRQ,
 	},
 };
@@ -170,26 +168,26 @@ static struct resource mca_cc8_adc_resources[] = {
 static struct resource mca_cc8_tamper_resources[] = {
 	{
 		.name   = MCA_IRQ_TAMPER0_NAME,
-		.start  = MCA_CC8_IRQ_TAMPER0,
-		.end    = MCA_CC8_IRQ_TAMPER0,
+		.start  = MCA_IRQ_TAMPER0,
+		.end    = MCA_IRQ_TAMPER0,
 		.flags  = IORESOURCE_IRQ,
 	},
 	{
 		.name   = MCA_IRQ_TAMPER1_NAME,
-		.start  = MCA_CC8_IRQ_TAMPER1,
-		.end    = MCA_CC8_IRQ_TAMPER1,
+		.start  = MCA_IRQ_TAMPER1,
+		.end    = MCA_IRQ_TAMPER1,
 		.flags  = IORESOURCE_IRQ,
 	},
 	{
 		.name   = MCA_IRQ_TAMPER2_NAME,
-		.start  = MCA_CC8_IRQ_TAMPER2,
-		.end    = MCA_CC8_IRQ_TAMPER2,
+		.start  = MCA_IRQ_TAMPER2,
+		.end    = MCA_IRQ_TAMPER2,
 		.flags  = IORESOURCE_IRQ,
 	},
 	{
 		.name   = MCA_IRQ_TAMPER3_NAME,
-		.start  = MCA_CC8_IRQ_TAMPER3,
-		.end    = MCA_CC8_IRQ_TAMPER3,
+		.start  = MCA_IRQ_TAMPER3,
+		.end    = MCA_IRQ_TAMPER3,
 		.flags  = IORESOURCE_IRQ,
 	},
 };
@@ -197,8 +195,8 @@ static struct resource mca_cc8_tamper_resources[] = {
 static struct resource mca_cc8_gpios_resources[] = {
 	{
 		.name   = MCA_IRQ_GPIO_BANK_0_NAME,
-		.start  = MCA_CC8_IRQ_GPIO_BANK_0,
-		.end    = MCA_CC8_IRQ_GPIO_BANK_0,
+		.start  = MCA_IRQ_GPIO_BANK_0,
+		.end    = MCA_IRQ_GPIO_BANK_0,
 		.flags  = IORESOURCE_IRQ,
 	},
 	{
@@ -218,8 +216,8 @@ static struct resource mca_cc8_gpios_resources[] = {
 static struct resource mca_cc8_uart_resources[] = {
 	{
 		.name   = MCA_IRQ_UART0_NAME,
-		.start  = MCA_CC8_IRQ_UART0,
-		.end    = MCA_CC8_IRQ_UART0,
+		.start  = MCA_IRQ_UART0,
+		.end    = MCA_IRQ_UART0,
 		.flags  = IORESOURCE_IRQ,
 	},
 	{
@@ -245,132 +243,67 @@ static struct resource mca_cc8_keypad_resources[] = {
 	},
 };
 
-static const struct mfd_cell mca_cc8x_devs[] = {
+static const struct mfd_cell mca_cc8_devs[] = {
 	{
-		.name           = MCA_CC8X_DRVNAME_RTC,
+		.name           = MCA_DRVNAME_RTC,
 		.num_resources  = ARRAY_SIZE(mca_cc8_rtc_resources),
 		.resources      = mca_cc8_rtc_resources,
-		.of_compatible  = "digi,mca-cc8x-rtc",
+		.of_compatible  = "digi,mca-cc8-rtc",
 	},
 	{
-		.name           = MCA_CC8X_DRVNAME_WATCHDOG,
+		.name           = MCA_DRVNAME_WATCHDOG,
 		.num_resources	= ARRAY_SIZE(mca_cc8_watchdog_resources),
 		.resources	= mca_cc8_watchdog_resources,
-		.of_compatible  = "digi,mca-cc8x-wdt",
+		.of_compatible  = "digi,mca-cc8-wdt",
 	},
 	{
-		.name           = MCA_CC8X_DRVNAME_GPIO_WATCHDOG,
+		.name           = MCA_CC8_DRVNAME_GPIO_WATCHDOG,
 		.num_resources	= ARRAY_SIZE(mca_cc8_watchdog_resources),
 		.resources	= mca_cc8_watchdog_resources,
-		.of_compatible  = "digi,mca-cc8x-gpio-wdt",
+		.of_compatible  = "digi,mca-cc8-gpio-wdt",
 	},
 	{
-		.name           = MCA_CC8X_DRVNAME_GPIO,
+		.name           = MCA_DRVNAME_GPIO,
 		.num_resources	= ARRAY_SIZE(mca_cc8_gpios_resources),
 		.resources	= mca_cc8_gpios_resources,
-		.of_compatible = "digi,mca-cc8x-gpio",
+		.of_compatible = "digi,mca-cc8-gpio",
 	},
 	{
-		.name           = MCA_CC8X_DRVNAME_PWRKEY,
+		.name           = MCA_DRVNAME_PWRKEY,
 		.num_resources  = ARRAY_SIZE(mca_cc8_pwrkey_resources),
 		.resources      = mca_cc8_pwrkey_resources,
-		.of_compatible = "digi,mca-cc8x-pwrkey",
+		.of_compatible = "digi,mca-cc8-pwrkey",
 	},
 	{
-		.name           = MCA_CC8X_DRVNAME_ADC,
-		.of_compatible = "digi,mca-cc8x-adc",
+		.name           = MCA_DRVNAME_ADC,
+		.of_compatible = "digi,mca-cc8-adc",
 		.num_resources  = ARRAY_SIZE(mca_cc8_adc_resources),
 		.resources      = mca_cc8_adc_resources,
 	},
 	{
-		.name           = MCA_CC8X_DRVNAME_TAMPER,
+		.name           = MCA_DRVNAME_TAMPER,
 		.num_resources  = ARRAY_SIZE(mca_cc8_tamper_resources),
 		.resources      = mca_cc8_tamper_resources,
-		.of_compatible = "digi,mca-cc8x-tamper",
+		.of_compatible = "digi,mca-cc8-tamper",
 	},
 	{
-		.name           = MCA_CC8X_DRVNAME_UART,
+		.name           = MCA_DRVNAME_UART,
 		.num_resources  = ARRAY_SIZE(mca_cc8_uart_resources),
 		.resources      = mca_cc8_uart_resources,
-		.of_compatible = "digi,mca-cc8x-uart",
+		.of_compatible = "digi,mca-cc8-uart",
 	},
 	{
 		.name           = MCA_CC8_DRVNAME_PWM,
 		.of_compatible	= "digi,mca-pwm",
 	},
 	{
-		.name           = MCA_CC8X_DRVNAME_KEYPAD,
+		.name           = MCA_CC8_DRVNAME_KEYPAD,
 		.of_compatible	= "digi,mca-keypad",
 		.num_resources  = ARRAY_SIZE(mca_cc8_keypad_resources),
 		.resources      = mca_cc8_keypad_resources,
 	},
 	{
-		.name           = MCA_CC8X_DRVNAME_LED,
-		.of_compatible	= "digi,mca-led",
-	},
-};
-
-static const struct mfd_cell mca_cc8m_devs[] = {
-	{
-		.name           = MCA_CC8M_DRVNAME_RTC,
-		.num_resources  = ARRAY_SIZE(mca_cc8_rtc_resources),
-		.resources      = mca_cc8_rtc_resources,
-		.of_compatible  = "digi,mca-cc8m-rtc",
-	},
-	{
-		.name           = MCA_CC8M_DRVNAME_WATCHDOG,
-		.num_resources	= ARRAY_SIZE(mca_cc8_watchdog_resources),
-		.resources	= mca_cc8_watchdog_resources,
-		.of_compatible  = "digi,mca-cc8m-wdt",
-	},
-	{
-		.name           = MCA_CC8M_DRVNAME_GPIO_WATCHDOG,
-		.num_resources	= ARRAY_SIZE(mca_cc8_watchdog_resources),
-		.resources	= mca_cc8_watchdog_resources,
-		.of_compatible  = "digi,mca-cc8m-gpio-wdt",
-	},
-	{
-		.name           = MCA_CC8M_DRVNAME_GPIO,
-		.num_resources	= ARRAY_SIZE(mca_cc8_gpios_resources),
-		.resources	= mca_cc8_gpios_resources,
-		.of_compatible = "digi,mca-cc8m-gpio",
-	},
-	{
-		.name           = MCA_CC8M_DRVNAME_PWRKEY,
-		.num_resources  = ARRAY_SIZE(mca_cc8_pwrkey_resources),
-		.resources      = mca_cc8_pwrkey_resources,
-		.of_compatible = "digi,mca-cc8m-pwrkey",
-	},
-	{
-		.name           = MCA_CC8M_DRVNAME_ADC,
-		.of_compatible = "digi,mca-cc8m-adc",
-		.num_resources  = ARRAY_SIZE(mca_cc8_adc_resources),
-		.resources      = mca_cc8_adc_resources,
-	},
-	{
-		.name           = MCA_CC8M_DRVNAME_TAMPER,
-		.num_resources  = ARRAY_SIZE(mca_cc8_tamper_resources),
-		.resources      = mca_cc8_tamper_resources,
-		.of_compatible = "digi,mca-cc8m-tamper",
-	},
-	{
-		.name           = MCA_CC8M_DRVNAME_UART,
-		.num_resources  = ARRAY_SIZE(mca_cc8_uart_resources),
-		.resources      = mca_cc8_uart_resources,
-		.of_compatible = "digi,mca-cc8m-uart",
-	},
-	{
-		.name           = MCA_CC8_DRVNAME_PWM,
-		.of_compatible	= "digi,mca-pwm",
-	},
-	{
-		.name           = MCA_CC8M_DRVNAME_KEYPAD,
-		.of_compatible	= "digi,mca-keypad",
-		.num_resources  = ARRAY_SIZE(mca_cc8_keypad_resources),
-		.resources      = mca_cc8_keypad_resources,
-	},
-	{
-		.name           = MCA_CC8M_DRVNAME_LED,
+		.name           = MCA_CC8_DRVNAME_LED,
 		.of_compatible	= "digi,mca-led",
 	},
 };
@@ -912,7 +845,7 @@ static struct dyn_attribute mca_cc8_sysfs_dyn_entries[] = {
 	},
 };
 
-int mca_cc8_suspend(struct device *dev)
+int mca_suspend(struct device *dev)
 {
 	struct mca_drv *mca = dev_get_drvdata(dev);
 
@@ -930,7 +863,7 @@ int mca_cc8_suspend(struct device *dev)
 }
 
 #define MCA_MAX_RESUME_RD_RETRIES 10
-int mca_cc8_resume(struct device *dev)
+int mca_resume(struct device *dev)
 {
 	struct mca_drv *mca = dev_get_drvdata(dev);
 	unsigned int val;
@@ -1088,12 +1021,10 @@ static int mca_cc8_add_dyn_sysfs_entries(struct mca_drv *mca,
 	return 0;
 }
 
-int mca_cc8_device_init(struct mca_drv *mca, u32 irq)
+int mca_device_init(struct mca_drv *mca, u32 irq)
 {
 	int ret;
 	unsigned int val;
-	const struct mfd_cell *mca_cc8_devs = NULL;
-	int n_devs = 0;
 
 	ret = regmap_read(mca->regmap, MCA_DEVICE_ID, &val);
 	if (ret != 0) {
@@ -1102,7 +1033,7 @@ int mca_cc8_device_init(struct mca_drv *mca, u32 irq)
 	}
 	mca->dev_id = (u8)val;
 
-	if (mca->dev_id != MCA_CC8_DEVICE_ID_VAL) {
+	if (mca->dev_id != MCA_DEVICE_ID_VAL) {
 		dev_err(mca->dev, "Invalid MCA Device ID (%x)\n", mca->dev_id);
 		return -ENODEV;
 	}
@@ -1172,22 +1103,10 @@ int mca_cc8_device_init(struct mca_drv *mca, u32 irq)
 	mca->chip_irq = irq;
 	mca->gpio_base = -1;
 
-	ret = mca_cc8_irq_init(mca);
+	ret = mca_irq_init(mca);
 	if (ret != 0) {
 		dev_err(mca->dev, "Cannot initialize interrupts (%d)\n", ret);
 		return ret;
-	}
-
-	if (of_device_is_compatible(mca->dev->of_node, "digi,mca-cc8x")) {
-		mca_cc8_devs = mca_cc8x_devs;
-		n_devs = ARRAY_SIZE(mca_cc8x_devs);
-	} else if (of_device_is_compatible(mca->dev->of_node, "digi,mca-cc8m")) {
-		mca_cc8_devs = mca_cc8m_devs;
-		n_devs = ARRAY_SIZE(mca_cc8m_devs);
-	} else {
-		dev_err(mca->dev, "Not compatible device)\n");
-		ret = -EINVAL;
-		goto out_not_compatible;
 	}
 
 	/*
@@ -1196,7 +1115,7 @@ int mca_cc8_device_init(struct mca_drv *mca, u32 irq)
 	mca->dev->dma_mask = &mca->dev->coherent_dma_mask;
 
 	ret = mfd_add_devices(mca->dev, -1, mca_cc8_devs,
-			      n_devs, NULL, mca->irq_base,
+			      ARRAY_SIZE(mca_cc8_devs), NULL, mca->irq_base,
 			      regmap_irq_get_domain(mca->regmap_irq));
 	if (ret) {
 		dev_err(mca->dev, "Cannot add MFD cells (%d)\n", ret);
@@ -1281,20 +1200,19 @@ out_sysfs_remove:
 out_dev:
 	mfd_remove_devices(mca->dev);
 out_irq:
-	mca_cc8_irq_exit(mca);
-out_not_compatible:
+	mca_irq_exit(mca);
 
 	return ret;
 }
 
-void mca_cc8_device_exit(struct mca_drv *mca)
+void mca_device_exit(struct mca_drv *mca)
 {
 	unregister_syscore_ops(&mca->syscore);
 	pmca = NULL;
 	pm_runtime_put_noidle(mca->dev->parent->parent);
 	sysfs_remove_group(&mca->dev->kobj, &mca_cc8_attr_group);
 	mfd_remove_devices(mca->dev);
-	mca_cc8_irq_exit(mca);
+	mca_irq_exit(mca);
 	kfree(mca->nvram);
 }
 

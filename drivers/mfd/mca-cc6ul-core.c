@@ -27,7 +27,6 @@
 #include <linux/platform_data/i2c-imx.h>
 
 #include <linux/mfd/mca-common/core.h>
-#include <linux/mfd/mca-cc6ul/core.h>
 
 #include <asm/unaligned.h>
 
@@ -95,20 +94,20 @@ static const char _unlock_pattern[] = "CTRU";
 static struct resource mca_cc6ul_rtc_resources[] = {
 	{
 		.name   = MCA_IRQ_RTC_ALARM_NAME,
-		.start  = MCA_CC6UL_IRQ_RTC_ALARM,
-		.end    = MCA_CC6UL_IRQ_RTC_ALARM,
+		.start  = MCA_IRQ_RTC_ALARM,
+		.end    = MCA_IRQ_RTC_ALARM,
 		.flags  = IORESOURCE_IRQ,
 	},
 	{
 		.name   = MCA_IRQ_RTC_1HZ_NAME,
-		.start  = MCA_CC6UL_IRQ_RTC_1HZ,
-		.end    = MCA_CC6UL_IRQ_RTC_1HZ,
+		.start  = MCA_IRQ_RTC_1HZ,
+		.end    = MCA_IRQ_RTC_1HZ,
 		.flags  = IORESOURCE_IRQ,
 	},
 	{
 		.name   = MCA_IRQ_RTC_PERIODIC_IRQ_NAME,
-		.start  = MCA_CC6UL_IRQ_RTC_PERIODIC_IRQ,
-		.end    = MCA_CC6UL_IRQ_RTC_PERIODIC_IRQ,
+		.start  = MCA_IRQ_RTC_PERIODIC_IRQ,
+		.end    = MCA_IRQ_RTC_PERIODIC_IRQ,
 		.flags  = IORESOURCE_IRQ,
 	},
 };
@@ -116,8 +115,8 @@ static struct resource mca_cc6ul_rtc_resources[] = {
 static struct resource mca_cc6ul_watchdog_resources[] = {
 	{
 		.name   = MCA_IRQ_WATCHDOG_NAME,
-		.start  = MCA_CC6UL_IRQ_WATCHDOG,
-		.end    = MCA_CC6UL_IRQ_WATCHDOG,
+		.start  = MCA_IRQ_WATCHDOG,
+		.end    = MCA_IRQ_WATCHDOG,
 		.flags  = IORESOURCE_IRQ,
 	},
 };
@@ -125,14 +124,14 @@ static struct resource mca_cc6ul_watchdog_resources[] = {
 static struct resource mca_cc6ul_pwrkey_resources[] = {
 	{
 		.name   = MCA_IRQ_PWR_SLEEP_NAME,
-		.start  = MCA_CC6UL_IRQ_PWR_SLEEP,
-		.end    = MCA_CC6UL_IRQ_PWR_SLEEP,
+		.start  = MCA_IRQ_PWR_SLEEP,
+		.end    = MCA_IRQ_PWR_SLEEP,
 		.flags  = IORESOURCE_IRQ,
 	},
 	{
 		.name   = MCA_IRQ_PWR_OFF_NAME,
-		.start  = MCA_CC6UL_IRQ_PWR_OFF,
-		.end    = MCA_CC6UL_IRQ_PWR_OFF,
+		.start  = MCA_IRQ_PWR_OFF,
+		.end    = MCA_IRQ_PWR_OFF,
 		.flags  = IORESOURCE_IRQ,
 	},
 };
@@ -140,8 +139,8 @@ static struct resource mca_cc6ul_pwrkey_resources[] = {
 static struct resource mca_cc6ul_adc_resources[] = {
 	{
 		.name   = MCA_IRQ_ADC_NAME,
-		.start  = MCA_CC6UL_IRQ_ADC,
-		.end    = MCA_CC6UL_IRQ_ADC,
+		.start  = MCA_IRQ_ADC,
+		.end    = MCA_IRQ_ADC,
 		.flags  = IORESOURCE_IRQ,
 	},
 };
@@ -149,26 +148,26 @@ static struct resource mca_cc6ul_adc_resources[] = {
 static struct resource mca_cc6ul_tamper_resources[] = {
 	{
 		.name   = MCA_IRQ_TAMPER0_NAME,
-		.start  = MCA_CC6UL_IRQ_TAMPER0,
-		.end    = MCA_CC6UL_IRQ_TAMPER0,
+		.start  = MCA_IRQ_TAMPER0,
+		.end    = MCA_IRQ_TAMPER0,
 		.flags  = IORESOURCE_IRQ,
 	},
 	{
 		.name   = MCA_IRQ_TAMPER1_NAME,
-		.start  = MCA_CC6UL_IRQ_TAMPER1,
-		.end    = MCA_CC6UL_IRQ_TAMPER1,
+		.start  = MCA_IRQ_TAMPER1,
+		.end    = MCA_IRQ_TAMPER1,
 		.flags  = IORESOURCE_IRQ,
 	},
 	{
 		.name   = MCA_IRQ_TAMPER2_NAME,
-		.start  = MCA_CC6UL_IRQ_TAMPER2,
-		.end    = MCA_CC6UL_IRQ_TAMPER2,
+		.start  = MCA_IRQ_TAMPER2,
+		.end    = MCA_IRQ_TAMPER2,
 		.flags  = IORESOURCE_IRQ,
 	},
 	{
 		.name   = MCA_IRQ_TAMPER3_NAME,
-		.start  = MCA_CC6UL_IRQ_TAMPER3,
-		.end    = MCA_CC6UL_IRQ_TAMPER3,
+		.start  = MCA_IRQ_TAMPER3,
+		.end    = MCA_IRQ_TAMPER3,
 		.flags  = IORESOURCE_IRQ,
 	},
 };
@@ -176,8 +175,8 @@ static struct resource mca_cc6ul_tamper_resources[] = {
 static struct resource mca_cc6ul_gpios_resources[] = {
 	{
 		.name   = MCA_IRQ_GPIO_BANK_0_NAME,
-		.start  = MCA_CC6UL_IRQ_GPIO_BANK_0,
-		.end    = MCA_CC6UL_IRQ_GPIO_BANK_0,
+		.start  = MCA_IRQ_GPIO_BANK_0,
+		.end    = MCA_IRQ_GPIO_BANK_0,
 		.flags  = IORESOURCE_IRQ,
 	},
 };
@@ -185,51 +184,51 @@ static struct resource mca_cc6ul_gpios_resources[] = {
 static struct resource mca_cc6ul_uart_resources[] = {
 	{
 		.name   = MCA_IRQ_UART0_NAME,
-		.start  = MCA_CC6UL_IRQ_UART0,
-		.end    = MCA_CC6UL_IRQ_UART0,
+		.start  = MCA_IRQ_UART0,
+		.end    = MCA_IRQ_UART0,
 		.flags  = IORESOURCE_IRQ,
 	},
 };
 
 static const struct mfd_cell mca_cc6ul_devs[] = {
 	{
-		.name           = MCA_CC6UL_DRVNAME_RTC,
+		.name           = MCA_DRVNAME_RTC,
 		.num_resources  = ARRAY_SIZE(mca_cc6ul_rtc_resources),
 		.resources      = mca_cc6ul_rtc_resources,
 		.of_compatible  = "digi,mca-cc6ul-rtc",
 	},
 	{
-		.name           = MCA_CC6UL_DRVNAME_WATCHDOG,
+		.name           = MCA_DRVNAME_WATCHDOG,
 		.num_resources	= ARRAY_SIZE(mca_cc6ul_watchdog_resources),
 		.resources	= mca_cc6ul_watchdog_resources,
 		.of_compatible  = "digi,mca-cc6ul-wdt",
 	},
 	{
-		.name           = MCA_CC6UL_DRVNAME_GPIO,
+		.name           = MCA_DRVNAME_GPIO,
 		.num_resources	= ARRAY_SIZE(mca_cc6ul_gpios_resources),
 		.resources	= mca_cc6ul_gpios_resources,
 		.of_compatible = "digi,mca-cc6ul-gpio",
 	},
 	{
-		.name           = MCA_CC6UL_DRVNAME_PWRKEY,
+		.name           = MCA_DRVNAME_PWRKEY,
 		.num_resources  = ARRAY_SIZE(mca_cc6ul_pwrkey_resources),
 		.resources      = mca_cc6ul_pwrkey_resources,
 		.of_compatible = "digi,mca-cc6ul-pwrkey",
 	},
 	{
-		.name           = MCA_CC6UL_DRVNAME_ADC,
+		.name           = MCA_DRVNAME_ADC,
 		.of_compatible = "digi,mca-cc6ul-adc",
 		.num_resources  = ARRAY_SIZE(mca_cc6ul_adc_resources),
 		.resources      = mca_cc6ul_adc_resources,
 	},
 	{
-		.name           = MCA_CC6UL_DRVNAME_TAMPER,
+		.name           = MCA_DRVNAME_TAMPER,
 		.num_resources  = ARRAY_SIZE(mca_cc6ul_tamper_resources),
 		.resources      = mca_cc6ul_tamper_resources,
 		.of_compatible = "digi,mca-cc6ul-tamper",
 	},
 	{
-		.name           = MCA_CC6UL_DRVNAME_UART,
+		.name           = MCA_DRVNAME_UART,
 		.num_resources  = ARRAY_SIZE(mca_cc6ul_uart_resources),
 		.resources      = mca_cc6ul_uart_resources,
 		.of_compatible = "digi,mca-cc6ul-uart",
@@ -781,7 +780,7 @@ static struct dyn_attribute mca_cc6ul_sysfs_dyn_entries[] = {
 	},
 };
 
-int mca_cc6ul_suspend(struct device *dev)
+int mca_suspend(struct device *dev)
 {
 	struct mca_drv *mca = dev_get_drvdata(dev);
 
@@ -797,7 +796,7 @@ int mca_cc6ul_suspend(struct device *dev)
 }
 
 #define MCA_MAX_RESUME_RD_RETRIES 10
-int mca_cc6ul_resume(struct device *dev)
+int mca_resume(struct device *dev)
 {
 	struct mca_drv *mca = dev_get_drvdata(dev);
 	unsigned int val;
@@ -953,7 +952,7 @@ static int mca_cc6ul_add_dyn_sysfs_entries(struct mca_drv *mca,
 	return 0;
 }
 
-int mca_cc6ul_device_init(struct mca_drv *mca, u32 irq)
+int mca_device_init(struct mca_drv *mca, u32 irq)
 {
 	int ret;
 	unsigned int val;
@@ -965,7 +964,7 @@ int mca_cc6ul_device_init(struct mca_drv *mca, u32 irq)
 	}
 	mca->dev_id = (u8)val;
 
-	if (mca->dev_id != MCA_CC6UL_DEVICE_ID_VAL) {
+	if (mca->dev_id != MCA_DEVICE_ID_VAL) {
 		dev_err(mca->dev, "Invalid MCA Device ID (%x)\n", mca->dev_id);
 		return -ENODEV;
 	}
@@ -1048,7 +1047,7 @@ int mca_cc6ul_device_init(struct mca_drv *mca, u32 irq)
 	mca->chip_irq = irq;
 	mca->gpio_base = -1;
 
-	ret = mca_cc6ul_irq_init(mca);
+	ret = mca_irq_init(mca);
 	if (ret != 0) {
 		dev_err(mca->dev, "Cannot initialize interrupts (%d)\n", ret);
 		return ret;
@@ -1145,18 +1144,18 @@ out_sysfs_remove:
 out_dev:
 	mfd_remove_devices(mca->dev);
 out_irq:
-	mca_cc6ul_irq_exit(mca);
+	mca_irq_exit(mca);
 
 	return ret;
 }
 
-void mca_cc6ul_device_exit(struct mca_drv *mca)
+void mca_device_exit(struct mca_drv *mca)
 {
 	unregister_syscore_ops(&mca->syscore);
 	pmca = NULL;
 	sysfs_remove_group(&mca->dev->kobj, &mca_cc6ul_attr_group);
 	mfd_remove_devices(mca->dev);
-	mca_cc6ul_irq_exit(mca);
+	mca_irq_exit(mca);
 	kfree(mca->nvram);
 }
 

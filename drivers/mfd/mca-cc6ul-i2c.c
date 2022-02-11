@@ -17,7 +17,6 @@
 
 #include <linux/mfd/core.h>
 #include <linux/mfd/mca-common/core.h>
-#include <linux/mfd/mca-cc6ul/core.h>
 
 #include <linux/of.h>
 #include <linux/regulator/of_regulator.h>
@@ -169,14 +168,14 @@ static int mca_cc6ul_i2c_probe(struct i2c_client *i2c,
 		return ret;
 	}
 
-	return mca_cc6ul_device_init(mca, i2c->irq);
+	return mca_device_init(mca, i2c->irq);
 }
 
 static int mca_cc6ul_i2c_remove(struct i2c_client *i2c)
 {
 	struct mca_drv *mca = i2c_get_clientdata(i2c);
 
-	mca_cc6ul_device_exit(mca);
+	mca_device_exit(mca);
 
 	return 0;
 }
@@ -184,12 +183,12 @@ static int mca_cc6ul_i2c_remove(struct i2c_client *i2c)
 #ifdef CONFIG_PM
 static int mca_cc6ul_i2c_suspend(struct device *dev)
 {
-	return mca_cc6ul_suspend(dev);
+	return mca_suspend(dev);
 }
 
 static int mca_cc6ul_i2c_resume(struct device *dev)
 {
-	return mca_cc6ul_resume(dev);
+	return mca_resume(dev);
 }
 
 /*

@@ -1,5 +1,5 @@
 /*
- *  Copyright 2020 Digi International Inc
+ *  Copyright 2020 - 2022 Digi International Inc
  *
  *  This program is free software; you can redistribute  it and/or modify it
  *  under  the terms of  the GNU General  Public License as published by the
@@ -14,12 +14,10 @@
 #include <linux/interrupt.h>
 #include <linux/regmap.h>
 #include <linux/mfd/mca-common/core.h>
-#include <linux/mfd/mca-cc8/core.h>
 #include <linux/irqdomain.h>
 #include <linux/pm_runtime.h>
 #include <linux/firmware/imx/sci.h>
 #include "../base/regmap/internal.h"
-#include <soc/imx/soc.h>
 
 #define SC_IRQ_GROUP_TEMP	0U		/*!< Temp interrupts */
 #define SC_IRQ_TEMP_MCA		(1UL << 31U)	/*!< MCA interrupt on CC8X */
