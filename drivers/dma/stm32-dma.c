@@ -1006,12 +1006,13 @@ static void stm32_dma_configure_next_sg(struct stm32_dma_chan *chan)
 static void stm32_dma_handle_chan_paused(struct stm32_dma_chan *chan)
 {
 	struct stm32_dma_device *dmadev = stm32_dma_get_dev(chan);
+	u32 dma_scr;
 
 	/*
 	 * Read and store current remaining data items and peripheral/memory addresses to be
 	 * updated on resume
 	 */
-	chan->chan_reg.dma_scr = stm32_dma_read(dmadev, STM32_DMA_SCR(chan->id));
+	dma_scr = stm32_dma_read(dmadev, STM32_DMA_SCR(chan->id));
 	/*
 	 * Transfer can be paused while between a previous resume and reconfiguration on transfer
 	 * complete. If transfer is cyclic and CIRC and DBM have been deactivated for resume, need
@@ -1019,10 +1020,21 @@ static void stm32_dma_handle_chan_paused(struct stm32_dma_chan *chan)
 	 */
 	if (chan->desc && chan->desc->cyclic) {
 		if (chan->desc->num_sgs == 1)
-			chan->chan_reg.dma_scr |= STM32_DMA_SCR_CIRC;
+			dma_scr |= STM32_DMA_SCR_CIRC;
 		else
-			chan->chan_reg.dma_scr |= STM32_DMA_SCR_DBM;
+			dma_scr |= STM32_DMA_SCR_DBM;
 	}
+	chan->chan_reg.dma_scr = dma_scr;
+
+	/*
+	 * Need to temporarily deactivate CIRC/DBM until next Transfer Complete interrupt, otherwise
+	 * on resume NDTR autoreload value will be wrong (lower than the initial period length)
+	 */
+	if (chan->desc && chan->desc->cyclic) {
+		dma_scr &= ~(STM32_DMA_SCR_DBM | STM32_DMA_SCR_CIRC);
+		stm32_dma_write(dmadev, STM32_DMA_SCR(chan->id), dma_scr);
+	}
+
 	chan->chan_reg.dma_sndtr = stm32_dma_read(dmadev, STM32_DMA_SNDTR(chan->id));
 
 	dev_dbg(chan2dev(chan), "vchan %pK: paused\n", &chan->vchan);
@@ -1141,7 +1153,7 @@ static irqreturn_t stm32_dma_chan_irq(int irq, void *devid)
 	if (status & STM32_DMA_TCI) {
 		stm32_dma_irq_clear(chan, STM32_DMA_TCI);
 		if (scr & STM32_DMA_SCR_TCIE) {
-			if (chan->status == DMA_PAUSED)
+			if (chan->status == DMA_PAUSED && !(scr & STM32_DMA_SCR_EN))
 				stm32_dma_handle_chan_paused(chan);
 			else
 				stm32_dma_handle_chan_done(chan, scr);
@@ -1263,12 +1275,13 @@ static int stm32_dma_resume(struct dma_chan *c)
 
 	/*
 	 * Need to temporarily deactivate CIRC/DBM until next Transfer Complete interrupt,
-	 * otherwise NDTR autoreload value will be wrong (lower than the initial period length
+	 * otherwise NDTR autoreload value will be wrong (lower than the initial period length)
 	 */
-	if (chan_reg.dma_scr & (STM32_DMA_SCR_CIRC | STM32_DMA_SCR_DBM)) {
+	if (chan_reg.dma_scr & (STM32_DMA_SCR_CIRC | STM32_DMA_SCR_DBM))
 		chan_reg.dma_scr &= ~(STM32_DMA_SCR_CIRC | STM32_DMA_SCR_DBM);
-		stm32_dma_write(dmadev, STM32_DMA_SCR(id), chan_reg.dma_scr);
-	}
+
+	if (chan_reg.dma_scr & STM32_DMA_SCR_DBM)
+		stm32_dma_configure_next_sg(chan);
 
 	stm32_dma_dump_reg(chan);
 
