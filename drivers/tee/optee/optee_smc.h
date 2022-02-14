@@ -220,7 +220,7 @@ struct optee_smc_get_shm_config_result {
 #define OPTEE_SMC_SEC_CAP_MEMREF_NULL		BIT(4)
 
 /* Secure world is built with OCALL support */
-#define OPTEE_SMC_SEC_CAP_OCALL			BIT(5)
+#define OPTEE_SMC_SEC_CAP_OCALL			BIT(31)
 
 #define OPTEE_SMC_FUNCID_EXCHANGE_CAPABILITIES	9
 #define OPTEE_SMC_EXCHANGE_CAPABILITIES \
