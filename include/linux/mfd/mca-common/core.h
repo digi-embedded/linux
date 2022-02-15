@@ -81,11 +81,23 @@ struct mca_drv {
 
 /* Platform-dependent values */
 #if defined(CONFIG_MFD_MCA_CC6UL)
-	#define MCA_UART_MIN_FW		MCA_MAKE_FW_VER(1, 19)
 	#define MCA_DEVICE_ID_VAL	0x61
+
+	#define MCA_UART_MIN_FW		MCA_MAKE_FW_VER(1, 19)
+	#define TICK_COUNT_FW_VER	MCA_MAKE_FW_VER(0,15)
+	#define VREF_FW_VER	MCA_MAKE_FW_VER(0,15)
+	#define LAST_WAKEUP_FW_VER	MCA_MAKE_FW_VER(1,2)
+	#define NVRAM_FW_VER	MCA_MAKE_FW_VER(1,2)
+	#define REBOOT_SAFE_FW_VER	MCA_MAKE_FW_VER(1,2)
 #elif defined(CONFIG_MFD_MCA_CC8)
-	#define MCA_UART_MIN_FW		MCA_MAKE_FW_VER(0, 13)
 	#define MCA_DEVICE_ID_VAL	0x4A
+
+	#define MCA_UART_MIN_FW		MCA_MAKE_FW_VER(0, 13)
+	#define TICK_COUNT_FW_VER	MCA_MAKE_FW_VER(0,0)
+	#define VREF_FW_VER	MCA_MAKE_FW_VER(0,11)
+	#define LAST_WAKEUP_FW_VER	MCA_MAKE_FW_VER(0,4)
+	#define NVRAM_FW_VER	MCA_MAKE_FW_VER(0,8)
+	#define REBOOT_SAFE_FW_VER	MCA_MAKE_FW_VER(1,03)
 #endif
 
 /* MCA modules */

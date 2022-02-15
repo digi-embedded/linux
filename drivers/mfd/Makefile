@@ -250,9 +250,9 @@ obj-$(CONFIG_MFD_ALTERA_SYSMGR) += altera-sysmgr.o
 obj-$(CONFIG_MFD_STPMIC1)	+= stpmic1.o
 obj-$(CONFIG_MFD_SUN4I_GPADC)	+= sun4i-gpadc.o
 
-mca-cc6ul-objs			:= mca-cc6ul-core.o mca-irq.o mca-i2c.o
+mca-cc6ul-objs			:= mca-core.o mca-irq.o mca-i2c.o
 obj-$(CONFIG_MFD_MCA_CC6UL)	+= mca-cc6ul.o
-mca-cc8-objs			:= mca-cc8-core.o mca-irq.o mca-i2c.o
+mca-cc8-objs			:= mca-core.o mca-irq.o mca-i2c.o
 mca-cc8-objs			+= mca-cc8x-irq.o
 obj-$(CONFIG_MFD_MCA_CC8)	+= mca-cc8.o
 mca-ioexp-objs			:= mca-ioexp-core.o mca-ioexp-irq.o mca-ioexp-i2c.o
