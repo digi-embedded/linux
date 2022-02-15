@@ -135,7 +135,7 @@
 	status = "okay";
 
 	mca_cc8m: mca@63 {
-		compatible = "digi,mca-cc8m";
+		compatible = "digi,mca-cc8";
 		reg = <0x63>;
 		interrupt-parent = <&gpio2>;
 		interrupts = <10 IRQ_TYPE_LEVEL_HIGH>;
@@ -146,12 +146,12 @@
 		pinctrl-0 = <&pinctrl_mca_cc8m>;
 
 		mca_adc: adc {
-			compatible = "digi,mca-cc8m-adc";
+			compatible = "digi,mca-adc";
 			digi,adc-vref = <3000000>;
 		};
 
 		mca_gpio: gpio {
-			compatible = "digi,mca-cc8m-gpio";
+			compatible = "digi,mca-gpio";
 			gpio-controller;
 			#gpio-cells = <2>;
 
@@ -164,7 +164,7 @@
 		};
 
 		pwrkey {
-			compatible = "digi,mca-cc8m-pwrkey";
+			compatible = "digi,mca-pwrkey";
 			digi,key-power;
 			digi,key-power-up;
 			digi,key-sleep;
@@ -174,16 +174,16 @@
 		};
 
 		rtc {
-			compatible = "digi,mca-cc8m-rtc";
+			compatible = "digi,mca-rtc";
 		};
 
 		wdt {
-			compatible = "digi,mca-cc8m-wdt";
+			compatible = "digi,mca-wdt";
 			digi,full-reset;
 		};
 
 		gpio_wdt: gpio-wdt {
-			compatible = "digi,mca-cc8m-gpio-wdt";
+			compatible = "digi,mca-gpio-wdt";
 			status = "disabled";
 
 			gpio_wdt0: gpio-wdt@0x210 {
@@ -216,11 +216,11 @@
 		};
 
 		mca_tamper: tamper {
-			compatible = "digi,mca-cc8m-tamper";
+			compatible = "digi,mca-tamper";
 		};
 
 		mca_uart: uart {
-			compatible = "digi,mca-cc8m-uart";
+			compatible = "digi,mca-uart";
 			#address-cells = <1>;
 			#size-cells = <0>;
 			status = "disabled";
