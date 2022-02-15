@@ -1,10 +1,7 @@
 * Digi MCA Watchdog timer (software-refreshed) for ConnectCore SOMs
 
 Required properties:
-- compatible: must be one of
-  "digi,mca-cc6ul-wdt"
-  "digi,mca-cc8x-wdt"
-  "digi,mca-cc8m-wdt"
+- compatible: must be "digi,mca-wdt"
 
 Optional properties:
 - digi,timeout-sec: contains the watchdog timeout in seconds.
@@ -18,7 +15,7 @@ Optional properties:
 Example:
 	mca_cc6ul: mca-@7e {
 		watchdog {
-			compatible = "digi,mca-cc6ul-wdt";
+			compatible = "digi,mca-wdt";
 			digi,timeout-sec = <15>;
 			digi,full-reset;
 		};
@@ -26,7 +23,7 @@ Example:
 
 	mca_cc8x: mca-@63 {
 		watchdog {
-			compatible = "digi,mca-cc8x-wdt";
+			compatible = "digi,mca-wdt";
 			digi,timeout-sec = <15>;
 			digi,full-reset;
 		};
@@ -34,7 +31,7 @@ Example:
 
 	mca_cc8m: mca-@63 {
 		watchdog {
-			compatible = "digi,mca-cc8m-wdt";
+			compatible = "digi,mca-wdt";
 			digi,timeout-sec = <15>;
 			digi,full-reset;
 		};

@@ -64,12 +64,12 @@ Example:
 		pinctrl-0 = <&pinctrl_mca_cc6ul>;
 
 		mca_adc: adc {
-			compatible = "digi,mca-cc6ul-adc";
+			compatible = "digi,mca-adc";
 			digi,adc-ch-list = <4>;
 		};
 
 		pwrkey {
-			compatible = "digi,mca-cc6ul-pwrkey";
+			compatible = "digi,mca-pwrkey";
 			digi,key-power;
 			digi,key-power-up;
 			digi,key-sleep;
@@ -79,7 +79,7 @@ Example:
 		};
 
 		mca_gpio: gpio {
-			compatible = "digi,mca-cc6ul-gpio";
+			compatible = "digi,mca-gpio";
 			gpio-controller;
 			#gpio-cells = <2>;
 
@@ -92,14 +92,14 @@ Example:
 		};
 
 		rtc {
-			compatible = "digi,mca-cc6ul-rtc";
+			compatible = "digi,mca-rtc";
 		};
 
 		wdt {
-			compatible = "digi,mca-cc6ul-wdt";
+			compatible = "digi,mca-wdt";
 		};
 
 		mca_tamper: tamper {
-			compatible = "digi,mca-cc6ul-tamper";
+			compatible = "digi,mca-tamper";
 		};
 	};

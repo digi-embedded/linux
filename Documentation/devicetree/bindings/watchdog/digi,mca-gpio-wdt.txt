@@ -7,9 +7,7 @@ Features:
        - way-out, no-way-out configuration option.
 
 Required properties:
-- compatible: must be one of
-  "digi,mca-cc8x-gpio-wdt"
-  "digi,mca-cc8m-gpio-wdt"
+- compatible: must be "digi,mca-gpio-wdt"
 
 Subcomponents:
 
@@ -30,7 +28,7 @@ Optional properties:
 Example:
 	mca_cc8x: mca-@63 {
 		gpio_wdt: gpio-wdt {
-			compatible = "digi,mca-cc8x-gpio-wdt";
+			compatible = "digi,mca-gpio-wdt";
 			status = "okay";
 
 			gpio_wdt0: gpio-wdt@0x210 {

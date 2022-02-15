@@ -11,10 +11,8 @@ information on this feature.
 
 Required properties:
 - compatible : must be one of
-    - "digi,mca-cc6ul-adc", for the ConnectCore 6UL internal MCA
+    - "digi,mca-adc", for the ConnectCore internal MCA
     - "digi,mca-ioexp-adc", for the ConnectCore 6UL SBC Pro I/O Expander chip
-    - "digi,mca-cc8x-adc", for the ConnectCore 8X internal MCA
-    - "digi,mca-cc8m-adc", for the ConnectCore 8M internal MCA
 
 Optional properties:
 - digi,adc-ch-list: list of MCA IOs to be enabled as ADCs
@@ -35,7 +33,7 @@ Example:
 
 	mca_cc6ul: mca@7e {
 		mca_adc: adc {
-			compatible = "digi,mca-cc6ul-adc";
+			compatible = "digi,mca-adc";
 			digi,adc-ch-list = <0 4>;
 			digi,comparator-ch-list = <3>;
 			digi,adc-vref = <3000000>;
@@ -44,7 +42,7 @@ Example:
 
 	mca_cc8x: mca@63 {
 		mca_adc: adc {
-			compatible = "digi,mca-cc8x-adc";
+			compatible = "digi,mca-adc";
 			digi,adc-ch-list = <0 4>;
 			digi,comparator-ch-list = <3>;
 			digi,adc-vref = <3000000>;
@@ -53,7 +51,7 @@ Example:
 
 	mca_cc8m: mca@63 {
 		mca_adc: adc {
-			compatible = "digi,mca-cc8m-adc";
+			compatible = "digi,mca-adc";
 			digi,adc-ch-list = <0 4>;
 			digi,comparator-ch-list = <3>;
 			digi,adc-vref = <3000000>;

@@ -14,9 +14,7 @@ watchdog                 Watchdog
 
 Required properties:
 
-- compatible: must be one of
-  "digi,mca-cc8x".
-  "digi,mca-cc8m".
+- compatible: must be "digi,mca-cc8".
 - reg : Specifies the I2C slave address (this defaults to 0x63 but it can be
   modified to match the chip's OTP settings).
 - interrupt-parent : Specifies the reference to the interrupt controller for
@@ -55,7 +53,7 @@ Sub-nodes:
 Example:
 
 	mca_cc8x: mca@63 {
-		compatible = "digi,mca-cc8x";
+		compatible = "digi,mca-cc8";
 		reg = <0x63>;
 		interrupt-parent = <&wu>;
 		interrupts = <GIC_SPI 177 IRQ_TYPE_EDGE_HIGH>;
@@ -66,12 +64,12 @@ Example:
 		pinctrl-0 = <&pinctrl_mca_cc8x>;
 
 		mca_adc: adc {
-			compatible = "digi,mca-cc8x-adc";
+			compatible = "digi,mca-adc";
 			digi,adc-ch-list = <4>;
 		};
 
 		pwrkey {
-			compatible = "digi,mca-cc8x-pwrkey";
+			compatible = "digi,mca-pwrkey";
 			digi,key-power;
 			digi,key-power-up;
 			digi,key-sleep;
@@ -81,7 +79,7 @@ Example:
 		};
 
 		mca_gpio: gpio {
-			compatible = "digi,mca-cc8x-gpio";
+			compatible = "digi,mca-gpio";
 			gpio-controller;
 			#gpio-cells = <2>;
 
@@ -94,11 +92,11 @@ Example:
 		};
 
 		rtc {
-			compatible = "digi,mca-cc8x-rtc";
+			compatible = "digi,mca-rtc";
 		};
 
 		wdt {
-			compatible = "digi,mca-cc8x-wdt";
+			compatible = "digi,mca-wdt";
 		};
 
 		pwms {
@@ -126,11 +124,11 @@ Example:
 		};
 
 		mca_tamper: tamper {
-			compatible = "digi,mca-cc8x-tamper";
+			compatible = "digi,mca-tamper";
 		};
 
 		mca_uart: uart {
-			compatible = "digi,mca-cc8x-uart";
+			compatible = "digi,mca-uart";
 			#address-cells = <1>;
 			#size-cells = <0>;
 
@@ -152,7 +150,7 @@ Example:
 	};
 
 	mca_cc8m: mca@63 {
-		compatible = "digi,mca-cc8m";
+		compatible = "digi,mca-cc8";
 		reg = <0x63>;
 		interrupt-parent = <&gpio3>;
 		interrupts = <8 IRQ_TYPE_LEVEL_HIGH>;
@@ -163,12 +161,12 @@ Example:
 		pinctrl-0 = <&pinctrl_mca_cc8m>;
 
 		mca_adc: adc {
-			compatible = "digi,mca-cc8m-adc";
+			compatible = "digi,mca-adc";
 			digi,adc-ch-list = <4>;
 		};
 
 		pwrkey {
-			compatible = "digi,mca-cc8m-pwrkey";
+			compatible = "digi,mca-pwrkey";
 			digi,key-power;
 			digi,key-power-up;
 			digi,key-sleep;
@@ -178,7 +176,7 @@ Example:
 		};
 
 		mca_gpio: gpio {
-			compatible = "digi,mca-cc8m-gpio";
+			compatible = "digi,mca-gpio";
 			gpio-controller;
 			#gpio-cells = <2>;
 
@@ -191,11 +189,11 @@ Example:
 		};
 
 		rtc {
-			compatible = "digi,mca-cc8m-rtc";
+			compatible = "digi,mca-rtc";
 		};
 
 		wdt {
-			compatible = "digi,mca-cc8m-wdt";
+			compatible = "digi,mca-wdt";
 		};
 
 		pwms {
@@ -211,11 +209,11 @@ Example:
 		};
 
 		mca_tamper: tamper {
-			compatible = "digi,mca-cc8m-tamper";
+			compatible = "digi,mca-tamper";
 		};
 
 		mca_uart: uart {
-			compatible = "digi,mca-cc8m-uart";
+			compatible = "digi,mca-uart";
 			#address-cells = <1>;
 			#size-cells = <0>;
 

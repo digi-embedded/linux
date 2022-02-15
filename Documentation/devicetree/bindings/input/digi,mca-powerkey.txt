@@ -31,10 +31,7 @@ When the system is in suspend state or in Power OFF, pressing the Power Key will
 wakeup the system.
 
 Required properties:
-- compatible: must be one of
-  "digi,mca-cc6ul-pwrkey"
-  "digi,mca-cc8x-pwrkey"
-  "digi,mca-cc8m-pwrkey"
+- compatible: must be "digi,mca-pwrkey"
 
 Optional properties:
 - key-power: enable the KEY_POWER event (KEY_POWER DOWN)
@@ -54,7 +51,7 @@ Optional properties:
 Example:
 	mca_cc6ul: mca@7e {
 		pwrkey {
-			compatible = "digi,mca-cc6ul-pwrkey";
+			compatible = "digi,mca-pwrkey";
 			digi,key-power;
 			digi,key-power-up;
 			digi,key-sleep;
@@ -66,7 +63,7 @@ Example:
 
 	mca_cc8x: mca@63 {
 		pwrkey {
-			compatible = "digi,mca-cc8x-pwrkey";
+			compatible = "digi,mca-pwrkey";
 			digi,key-power;
 			digi,key-power-up;
 			digi,key-sleep;
@@ -78,7 +75,7 @@ Example:
 
 	mca_cc8m: mca@63 {
 		pwrkey {
-			compatible = "digi,mca-cc8m-pwrkey";
+			compatible = "digi,mca-pwrkey";
 			digi,key-power;
 			digi,key-power-up;
 			digi,key-sleep;

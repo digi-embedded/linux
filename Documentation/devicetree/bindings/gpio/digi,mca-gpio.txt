@@ -2,10 +2,8 @@
 
 Required properties:
 - compatible : must be one of
-    - "digi,mca-cc6ul-gpio"
+    - "digi,mca-gpio"
     - "digi,mca-ioexp-gpio"
-    - "digi,mca-cc8x-gpio"
-    - "digi,mca-cc8m-gpio"
 
 - #gpio-cells : Should be two.
   - first cell is the pin number
@@ -33,7 +31,7 @@ Examples:
 
 	mca_cc6ul: mca@7e {
 		mca_gpio: gpio {
-			compatible = "digi,mca-cc6ul-gpio";
+			compatible = "digi,mca-gpio";
 			gpio-controller;
 			#gpio-cells = <2>;
 
@@ -45,7 +43,7 @@ Examples:
 
 	mca_cc8x: mca@63 {
 		mca_gpio: gpio {
-			compatible = "digi,mca-cc8x-gpio";
+			compatible = "digi,mca-gpio";
 			gpio-controller;
 			#gpio-cells = <2>;
 
@@ -57,7 +55,7 @@ Examples:
 
 	mca_cc8m: mca@63 {
 		mca_gpio: gpio {
-			compatible = "digi,mca-cc8m-gpio";
+			compatible = "digi,mca-gpio";
 			gpio-controller;
 			#gpio-cells = <2>;
 

@@ -6,10 +6,7 @@ Notice the MCA UART has limited capabilities compared to CPU's UARTs.
 Check the documentation for a list of capabilities.
 
 Required properties:
-- compatible: must be one of
-  "digi,mca-cc8x-uart".
-  "digi,mca-cc8m-uart".
-  "digi,mca-cc6ul-uart".
+- compatible: must be "digi,mca-uart".
 	      cc6ul requires MCA version 1.19 or higher.
 - #address-cells: must be 1
 - #size-cells: must be 0
@@ -28,7 +25,7 @@ Required properties:
 Example:
 
 mca_uart: uart {
-	compatible = "digi,mca-cc8x-uart";
+	compatible = "digi,mca-uart";
 	#address-cells = <1>;
 	#size-cells = <0>;
 
@@ -55,7 +52,7 @@ mca_uart: uart {
 };
 
 mca_uart: uart {
-	compatible = "digi,mca-cc6ul-uart";
+	compatible = "digi,mca-uart";
 	#address-cells = <1>;
 	#size-cells = <0>;
 
