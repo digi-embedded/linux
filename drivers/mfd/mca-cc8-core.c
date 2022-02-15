@@ -111,6 +111,7 @@ static struct mca_drv *pmca;
 
 static const char _enabled[] = "enabled";
 static const char _disabled[] = "disabled";
+static const char _unlock_pattern[] = "CTRU";
 
 static struct resource mca_cc8_rtc_resources[] = {
 	{
@@ -774,6 +775,98 @@ static ssize_t uid_show(struct device *dev,
 }
 static DEVICE_ATTR(uid, S_IRUGO, uid_show, NULL);
 
+static ssize_t reboot_safe_store(struct device *dev,
+				 struct device_attribute *attr,
+				 const char *buf, size_t count)
+{
+	struct mca_drv *mca = dev_get_drvdata(dev);
+	u8 value;
+	int ret;
+
+	if (count < sizeof(_unlock_pattern))
+		return -ENODATA ;
+
+	if (strncmp(buf, _unlock_pattern, sizeof(_unlock_pattern) - 1))
+		return -EINVAL;
+
+	/* Timeout value must be provided */
+	ret = kstrtou8(&buf[4], 0, &value);
+	if (ret) {
+		dev_err(pmca->dev,
+			"failed to parse timeout value, range is 0-255 (%d)\n",
+			ret);
+		return ret;
+	}
+
+	ret = mca_cc8_unlock_ctrl(mca);
+	if (ret)
+		return ret;
+
+	ret = regmap_write(pmca->regmap, MCA_RESET_SAFE_TIMEOUT, value);
+	if (ret) {
+		dev_err(pmca->dev,
+			"failed to write MCA_RESET_SAFE_TIMEOUT (%d)\n",
+			ret);
+		return ret;
+	}
+
+	ret = regmap_write(pmca->regmap, MCA_CTRL_0, MCA_RESET_SAFE);
+	if (ret) {
+		dev_err(mca->dev, "Cannot update MCA CTRL_0 register (%d)\n",
+			ret);
+		return ret;
+	}
+
+	return count;
+}
+static DEVICE_ATTR(reboot_safe, 0200, NULL, reboot_safe_store);
+
+static ssize_t pwroff_safe_store(struct device *dev,
+				 struct device_attribute *attr,
+				 const char *buf, size_t count)
+{
+	struct mca_drv *mca = dev_get_drvdata(dev);
+	u8 value;
+	int ret;
+
+	/* Timeout value must be provided */
+	if (count < sizeof(_unlock_pattern))
+		return -ENODATA ;
+
+	if (strncmp(buf, _unlock_pattern, sizeof(_unlock_pattern) - 1))
+		return -EINVAL;
+
+	ret = kstrtou8(&buf[4], 0, &value);
+	if (ret) {
+		dev_err(pmca->dev,
+			"failed to parse timeout value, range is 0-255 (%d)\n",
+			ret);
+		return ret;
+	}
+
+	ret = mca_cc8_unlock_ctrl(mca);
+	if (ret)
+		return ret;
+
+	ret = regmap_write(pmca->regmap, MCA_PWROFF_SAFE_TIMEOUT, value);
+	if (ret) {
+		dev_err(pmca->dev,
+			"failed to write MCA_PWROFF_SAFE_TTIMEOUT (%d)\n",
+			ret);
+		return ret;
+	}
+
+	ret = regmap_write(pmca->regmap, MCA_CTRL_0, MCA_PWROFF_SAFE);
+	if (ret) {
+		dev_err(mca->dev, "Cannot update MCA CTRL_0 register (%d)\n",
+			ret);
+		return ret;
+	}
+
+	return count;
+}
+static DEVICE_ATTR(pwroff_safe, 0200, NULL, pwroff_safe_store);
+
 static struct attribute *mca_cc8_sysfs_entries[] = {
 	&dev_attr_ext_32khz.attr,
 	&dev_attr_hw_version.attr,
@@ -808,6 +901,14 @@ static struct dyn_attribute mca_cc8_sysfs_dyn_entries[] = {
 	{
 		.since =	MCA_MAKE_FW_VER(0,4),
 		.attr =		&dev_attr_last_mpu_reset.attr,
+	},
+	{
+		.since =	MCA_MAKE_FW_VER(1,03),
+		.attr =		&dev_attr_reboot_safe.attr,
+	},
+	{
+		.since =	MCA_MAKE_FW_VER(1,03),
+		.attr =		&dev_attr_pwroff_safe.attr,
 	},
 };
 
