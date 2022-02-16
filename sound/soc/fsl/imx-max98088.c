@@ -26,17 +26,20 @@
 #include "../codecs/max98088.h"
 #include "fsl_sai.h"
 
-struct imx_max98088_data {
-	struct snd_soc_card card;
-	struct clk *codec_clk;
-	bool is_codec_master;
-	bool is_stream_in_use[2];
-	bool is_stream_opened[2];
-	struct regmap *gpr;
-	struct platform_device *asrc_pdev;
-	u32 asrc_rate;
-	u32 asrc_format;
+struct imx_priv {
+	struct snd_soc_component *component;
+	struct platform_device *pdev;
 };
+
+struct imx_max98088_data {
+	struct snd_soc_dai_link dai;
+	struct snd_soc_card card;
+	struct clk *mclk;
+	bool is_codec_master;
+	struct regmap *gpr;
+};
+
+static struct imx_priv card_priv;
 
 static const struct snd_soc_dapm_widget imx_max98088_dapm_widgets[] = {
 	SND_SOC_DAPM_HP("Headphone Jack", NULL),
@@ -52,19 +55,13 @@ static int imx_hifi_hw_params(struct snd_pcm_substream *substream,
 				     struct snd_pcm_hw_params *params)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct snd_soc_dai *codec_dai = rtd->codec_dai;
-	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
+	struct snd_soc_dai *codec_dai = asoc_rtd_to_codec(rtd, 0);
+	struct snd_soc_dai *cpu_dai = asoc_rtd_to_cpu(rtd, 0);
 	struct snd_soc_card *card = rtd->card;
 	struct imx_max98088_data *data = snd_soc_card_get_drvdata(card);
-	bool tx = substream->stream == SNDRV_PCM_STREAM_PLAYBACK;
 	struct device *dev = card->dev;
 	unsigned int fmt;
 	int ret = 0;
-
-	data->is_stream_in_use[tx] = true;
-
-	if (data->is_stream_in_use[!tx])
-		return 0;
 
 	/* Codec always slave, master is not supported */
 	fmt = SND_SOC_DAIFMT_I2S | SND_SOC_DAIFMT_CBS_CFS;
@@ -98,7 +95,7 @@ static int imx_hifi_hw_params(struct snd_pcm_substream *substream,
 
 	/* Set the default MCLK rate for the codec */
 	ret = snd_soc_dai_set_sysclk(codec_dai, 0,
-				     clk_get_rate(data->codec_clk),
+				     clk_get_rate(data->mclk),
 				     SND_SOC_CLOCK_IN);
 	if (ret) {
 		dev_err(dev, "failed to set codec sysclock: %d\n", ret);
@@ -106,18 +103,6 @@ static int imx_hifi_hw_params(struct snd_pcm_substream *substream,
 	}
 
 	return ret;
-}
-
-static int imx_hifi_hw_free(struct snd_pcm_substream *substream)
-{
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct snd_soc_card *card = rtd->card;
-	struct imx_max98088_data *data = snd_soc_card_get_drvdata(card);
-	bool tx = substream->stream == SNDRV_PCM_STREAM_PLAYBACK;
-
-	data->is_stream_in_use[tx] = false;
-
-	return 0;
 }
 
 /* Exact audio frequencies for the selected master clock */
@@ -132,19 +117,9 @@ static struct snd_pcm_hw_constraint_list imx_max98088_rate_constraints = {
 static int imx_hifi_startup(struct snd_pcm_substream *substream)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
 	struct snd_soc_card *card = rtd->card;
 	struct imx_max98088_data *data = snd_soc_card_get_drvdata(card);
-	bool tx = substream->stream == SNDRV_PCM_STREAM_PLAYBACK;
-	struct fsl_sai *sai = dev_get_drvdata(cpu_dai->dev);
 	int ret = 0;
-
-	data->is_stream_opened[tx] = true;
-	if (data->is_stream_opened[tx] != sai->is_stream_opened[tx] ||
-	    data->is_stream_opened[!tx] != sai->is_stream_opened[!tx]) {
-		data->is_stream_opened[tx] = false;
-		return -EBUSY;
-	}
 
 	ret = snd_pcm_hw_constraint_list(substream->runtime, 0,
 					 SNDRV_PCM_HW_PARAM_RATE,
@@ -152,7 +127,7 @@ static int imx_hifi_startup(struct snd_pcm_substream *substream)
 	if (ret)
 		return ret;
 
-	ret = clk_prepare_enable(data->codec_clk);
+	ret = clk_prepare_enable(data->mclk);
 	if (ret) {
 		dev_err(card->dev, "Failed to enable MCLK: %d\n", ret);
 		return ret;
@@ -166,83 +141,14 @@ static void imx_hifi_shutdown(struct snd_pcm_substream *substream)
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_card *card = rtd->card;
 	struct imx_max98088_data *data = snd_soc_card_get_drvdata(card);
-	bool tx = substream->stream == SNDRV_PCM_STREAM_PLAYBACK;
 
-	clk_disable_unprepare(data->codec_clk);
-
-	data->is_stream_opened[tx] = false;
+	clk_disable_unprepare(data->mclk);
 }
 
 static struct snd_soc_ops imx_hifi_ops = {
 	.hw_params = imx_hifi_hw_params,
-	.hw_free = imx_hifi_hw_free,
 	.startup   = imx_hifi_startup,
 	.shutdown  = imx_hifi_shutdown,
-};
-
-static int be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
-			struct snd_pcm_hw_params *params)
-{
-	struct snd_soc_card *card = rtd->card;
-	struct imx_max98088_data *data = snd_soc_card_get_drvdata(card);
-	struct snd_interval *rate;
-	struct snd_mask *mask;
-
-	if (!data->asrc_pdev)
-		return -EINVAL;
-
-	rate = hw_param_interval(params, SNDRV_PCM_HW_PARAM_RATE);
-	rate->max = rate->min = data->asrc_rate;
-
-	mask = hw_param_mask(params, SNDRV_PCM_HW_PARAM_FORMAT);
-	snd_mask_none(mask);
-	snd_mask_set(mask, data->asrc_format);
-
-	return 0;
-}
-
-SND_SOC_DAILINK_DEFS(hifi,
-	DAILINK_COMP_ARRAY(COMP_EMPTY()),
-	DAILINK_COMP_ARRAY(COMP_CODEC(NULL, "HiFi")),
-	DAILINK_COMP_ARRAY(COMP_EMPTY()));
-
-SND_SOC_DAILINK_DEFS(hifi_fe,
-	DAILINK_COMP_ARRAY(COMP_EMPTY()),
-	DAILINK_COMP_ARRAY(COMP_DUMMY()),
-	DAILINK_COMP_ARRAY(COMP_EMPTY()));
-
-SND_SOC_DAILINK_DEFS(hifi_be,
-	DAILINK_COMP_ARRAY(COMP_EMPTY()),
-	DAILINK_COMP_ARRAY(COMP_CODEC(NULL, "HiFi")),
-	DAILINK_COMP_ARRAY(COMP_DUMMY()));
-
-static struct snd_soc_dai_link imx_max98088_dai[] = {
-	{
-		.name			= "HiFi",
-		.stream_name		= "HiFi",
-		.ops			= &imx_hifi_ops,
-		SND_SOC_DAILINK_REG(hifi),
-	},
-	{
-		.name			= "HiFi-ASRC-FE",
-		.stream_name		= "HiFi-ASRC-FE",
-		.dynamic		= 1,
-		.ignore_pmdown_time	= 1,
-		.dpcm_playback		= 1,
-		.dpcm_capture		= 1,
-		SND_SOC_DAILINK_REG(hifi_fe),
-	},
-	{
-		.name			= "HiFi-ASRC-BE",
-		.stream_name		= "HiFi-ASRC-BE",
-		.no_pcm			= 1,
-		.ignore_pmdown_time	= 1,
-		.dpcm_playback		= 1,
-		.dpcm_capture		= 1,
-		.ops			= &imx_hifi_ops,
-		.be_hw_params_fixup	= be_hw_params_fixup,
-		SND_SOC_DAILINK_REG(hifi_be),
-	},
 };
 
 static int imx_max98088_probe(struct platform_device *pdev)
@@ -250,12 +156,17 @@ static int imx_max98088_probe(struct platform_device *pdev)
 	struct device_node *cpu_np, *codec_np = NULL;
 	struct device_node *gpr_np;
 	struct platform_device *cpu_pdev;
+	struct imx_priv *priv = &card_priv;
 	struct i2c_client *codec_dev;
 	struct imx_max98088_data *data;
-	struct platform_device *asrc_pdev = NULL;
-	struct device_node *asrc_np;
-	u32 width;
+	struct snd_soc_dai_link_component *dlc;
 	int ret;
+
+	priv->pdev = pdev;
+
+	dlc = devm_kzalloc(&pdev->dev, 3 * sizeof(*dlc), GFP_KERNEL);
+	if (!dlc)
+		return -ENOMEM;
 
 	cpu_np = of_parse_phandle(pdev->dev.of_node, "cpu-dai", 0);
 	if (!cpu_np) {
@@ -294,9 +205,9 @@ static int imx_max98088_probe(struct platform_device *pdev)
 	/* Only SAI as master is supported */
 	data->is_codec_master = false;
 
-	data->codec_clk = devm_clk_get(&codec_dev->dev, "mclk");
-	if (IS_ERR(data->codec_clk)) {
-		ret = PTR_ERR(data->codec_clk);
+	data->mclk = devm_clk_get(&codec_dev->dev, "mclk");
+	if (IS_ERR(data->mclk)) {
+		ret = PTR_ERR(data->mclk);
 		dev_err(&pdev->dev, "failed to get codec clk: %d\n", ret);
 		goto fail;
 	}
@@ -314,55 +225,35 @@ static int imx_max98088_probe(struct platform_device *pdev)
 		regmap_update_bits(data->gpr, 4, 1 << 20, 1 << 20);
 	}
 
-	asrc_np = of_parse_phandle(pdev->dev.of_node, "asrc-controller", 0);
-	if (asrc_np) {
-		asrc_pdev = of_find_device_by_node(asrc_np);
-		data->asrc_pdev = asrc_pdev;
-	}
+	data->dai.cpus = &dlc[0];
+	data->dai.num_cpus = 1;
+	data->dai.platforms = &dlc[1];
+	data->dai.num_platforms = 1;
+	data->dai.codecs = &dlc[2];
+	data->dai.num_codecs = 1;
 
-	data->card.dai_link = imx_max98088_dai;
-
-	imx_max98088_dai[0].codecs->of_node = codec_np;
-	imx_max98088_dai[0].cpus->dai_name = dev_name(&cpu_pdev->dev);
-	imx_max98088_dai[0].platforms->of_node = cpu_np;
-
-	if (!asrc_pdev) {
-		data->card.num_links = 1;
-	} else {
-		imx_max98088_dai[1].cpus->of_node = asrc_np;
-		imx_max98088_dai[1].platforms->of_node = asrc_np;
-		imx_max98088_dai[2].codecs->of_node = codec_np;
-		imx_max98088_dai[2].cpus->dai_name = dev_name(&cpu_pdev->dev);
-		data->card.num_links = 3;
-
-		ret = of_property_read_u32(asrc_np, "fsl,asrc-rate",
-					   &data->asrc_rate);
-		if (ret) {
-			dev_err(&pdev->dev, "failed to get output rate\n");
-			ret = -EINVAL;
-			goto fail;
-		}
-
-		ret = of_property_read_u32(asrc_np, "fsl,asrc-width", &width);
-		if (ret) {
-			dev_err(&pdev->dev, "failed to get output rate\n");
-			ret = -EINVAL;
-			goto fail;
-		}
-
-		if (width == 24)
-			data->asrc_format = SNDRV_PCM_FORMAT_S24_LE;
-		else
-			data->asrc_format = SNDRV_PCM_FORMAT_S16_LE;
-	}
+	data->dai.name = "HiFi";
+	data->dai.stream_name = "HiFi";
+	data->dai.codecs->dai_name = "HiFi";
+	data->dai.codecs->of_node = codec_np;
+	data->dai.cpus->dai_name = dev_name(&cpu_pdev->dev);
+	data->dai.platforms->of_node = cpu_np;
+	data->dai.ops = &imx_hifi_ops;
+	data->dai.dai_fmt |= SND_SOC_DAIFMT_I2S | SND_SOC_DAIFMT_CBS_CFS;
+	data->card.owner = THIS_MODULE;
 
 	data->card.dev = &pdev->dev;
-	data->card.owner = THIS_MODULE;
 	ret = snd_soc_of_parse_card_name(&data->card, "model");
 	if (ret)
 		goto fail;
+
+	data->card.num_links = 1;
+	data->card.dai_link = &data->dai;
 	data->card.dapm_widgets = imx_max98088_dapm_widgets;
 	data->card.num_dapm_widgets = ARRAY_SIZE(imx_max98088_dapm_widgets);
+
+	platform_set_drvdata(pdev, &data->card);
+	snd_soc_card_set_drvdata(&data->card, data);
 
 	ret = snd_soc_of_parse_audio_routing(&data->card, "audio-routing");
 	if (ret)
@@ -372,7 +263,8 @@ static int imx_max98088_probe(struct platform_device *pdev)
 	snd_soc_card_set_drvdata(&data->card, data);
 	ret = devm_snd_soc_register_card(&pdev->dev, &data->card);
 	if (ret) {
-		dev_err(&pdev->dev, "snd_soc_register_card failed (%d)\n", ret);
+		if (ret != -EPROBE_DEFER)
+			dev_err(&pdev->dev, "snd_soc_register_card failed (%d)\n", ret);
 		goto fail;
 	}
 
@@ -391,7 +283,7 @@ static int imx_max98088_remove(struct platform_device *pdev)
 	struct imx_max98088_data *data = snd_soc_card_get_drvdata(card);
 
 	snd_soc_unregister_card(card);
-	clk_put(data->codec_clk);
+	clk_put(data->mclk);
 	kfree(data);
 
 	return 0;
