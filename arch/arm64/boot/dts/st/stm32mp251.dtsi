@@ -56,6 +56,11 @@
 	};
 
 	firmware {
+		optee {
+			compatible = "linaro,optee-tz";
+			method = "smc";
+		};
+
 		scmi: scmi {
 			compatible = "linaro,scmi-optee";
 			#address-cells = <1>;
