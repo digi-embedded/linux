@@ -36,7 +36,7 @@
 
 / {
 	model = "Digi International ConnectCore 8M Mini DVK.";
-	compatible = "digi,ccimx8mm-dvk", "digi,ccimx8mm", "digi,ccimx8m", "fsl,imx8mm";
+	compatible = "digi,ccimx8mm-dvk", "digi,ccimx8mm", "digi,ccimx8m", "digi,ccimx8", "fsl,imx8mm";
 	digi,machine,name = "ccimx8mm-dvk";
 
 	chosen {

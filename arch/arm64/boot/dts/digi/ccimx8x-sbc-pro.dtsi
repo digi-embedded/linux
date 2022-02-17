@@ -15,7 +15,7 @@
 
 / {
 	model = "Digi International ConnectCore 8X SBC Pro.";
-	compatible = "digi,ccimx8x-sbc-pro", "digi,ccimx8x", "fsl,imx8qxp";
+	compatible = "digi,ccimx8x-sbc-pro", "digi,ccimx8x", "digi,ccimx8", "fsl,imx8qxp";
 	digi,machine,name = "ccimx8x-sbc-pro";
 
 	chosen {

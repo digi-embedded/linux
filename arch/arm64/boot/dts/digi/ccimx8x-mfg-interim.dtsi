@@ -15,7 +15,7 @@
 
 / {
 	model = "Digi International ConnectCore 8X Manufacturing Interim Board.";
-	compatible = "digi,ccimx8x", "fsl,imx8qxp";
+	compatible = "digi,ccimx8x", "digi,ccimx8", "fsl,imx8qxp";
 	digi,machine,name = "ccimx8x-mfg-interim";
 
 	chosen {
