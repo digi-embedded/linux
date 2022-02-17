@@ -50,8 +50,7 @@
 
 #ifdef CONFIG_OF
 enum mca_gpio_type {
-	CC6UL_MCA_GPIO,
-	CC8_MCA_GPIO,
+	CC_MCA_GPIO,
 	IOEXP_MCA_GPIO,
 };
 
@@ -607,12 +606,8 @@ static int mca_gpio_remove(struct platform_device *pdev)
 
 #ifdef CONFIG_OF
 static struct mca_gpio_data mca_gpio_devdata[] = {
-	[CC6UL_MCA_GPIO] = {
-		.devtype = CC6UL_MCA_GPIO,
-		.label = "mca-gpio"
-	},
-	[CC8_MCA_GPIO] = {
-		.devtype = CC8_MCA_GPIO,
+	[CC_MCA_GPIO] = {
+		.devtype = CC_MCA_GPIO,
 		.label = "mca-gpio"
 	},
 	[IOEXP_MCA_GPIO] = {
@@ -622,10 +617,8 @@ static struct mca_gpio_data mca_gpio_devdata[] = {
 };
 
 static const struct of_device_id mca_gpio_dt_ids[] = {
-	{ .compatible = "digi,mca-cc6ul-gpio",
-	  .data = &mca_gpio_devdata[CC6UL_MCA_GPIO]},
-	{ .compatible = "digi,mca-cc8-gpio",
-	  .data = &mca_gpio_devdata[CC8_MCA_GPIO]},
+	{ .compatible = "digi,mca-gpio",
+	  .data = &mca_gpio_devdata[CC_MCA_GPIO]},
 	{ .compatible = "digi,mca-ioexp-gpio",
 	  .data = &mca_gpio_devdata[IOEXP_MCA_GPIO]},
 	{ /* sentinel */ }

@@ -44,17 +44,6 @@
 #define CLOCK_DATA_LEN	(MCA_RTC_COUNT_SEC - MCA_RTC_COUNT_YEAR_L + 1)
 #define ALARM_DATA_LEN	(MCA_RTC_ALARM_SEC - MCA_RTC_ALARM_YEAR_L + 1)
 
-#ifdef CONFIG_OF
-enum mca_rtc_type {
-	CC6UL_MCA_RTC,
-	CC8_MCA_RTC,
-};
-
-struct mca_rtc_data {
-	enum mca_rtc_type devtype;
-};
-#endif
-
 struct mca_rtc {
 	struct rtc_device *rtc_dev;
 	struct mca_drv *mca;
@@ -460,8 +449,6 @@ static int mca_rtc_probe(struct platform_device *pdev)
 {
 	struct mca_drv *mca = dev_get_drvdata(pdev->dev.parent);
 	struct mca_rtc *rtc;
-	const struct mca_rtc_data *devdata =
-				   of_device_get_match_data(&pdev->dev);
 	struct device_node *np = NULL;
 	int ret = 0;
 
@@ -479,7 +466,7 @@ static int mca_rtc_probe(struct platform_device *pdev)
 	/* Find entry in device-tree */
 	if (mca->dev->of_node) {
 		const char * compatible = pdev->dev.driver->
-				    of_match_table[devdata->devtype].compatible;
+				    of_match_table[0].compatible;
 
 		/*
 		 * Return silently if RTC node does not exist
@@ -619,20 +606,8 @@ static const struct dev_pm_ops mca_rtc_pm_ops = {
 #endif
 
 #ifdef CONFIG_OF
-static struct mca_rtc_data mca_rtc_devdata[] = {
-	[CC6UL_MCA_RTC] = {
-		.devtype = CC6UL_MCA_RTC,
-	},
-	[CC8_MCA_RTC] = {
-		.devtype = CC8_MCA_RTC,
-	},
-};
-
 static const struct of_device_id mca_rtc_dt_ids[] = {
-	{ .compatible = "digi,mca-cc6ul-rtc",
-	  .data = &mca_rtc_devdata[CC6UL_MCA_RTC]},
-	{ .compatible = "digi,mca-cc8-rtc",
-	  .data = &mca_rtc_devdata[CC8_MCA_RTC]},
+	{ .compatible = "digi,mca-rtc",},
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, mca_rtc_dt_ids);

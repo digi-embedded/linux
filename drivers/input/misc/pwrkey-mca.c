@@ -44,13 +44,7 @@
 #define MAX_PWR_KEY_GUARD		255
 
 #ifdef CONFIG_OF
-enum mca_pwrkey_type {
-	CC6UL_MCA_PWRKEY,
-	CC8_MCA_PWRKEY,
-};
-
 struct mca_pwrkey_data {
-	enum mca_pwrkey_type devtype;
 	char drv_name_phys[40];
 	uint16_t version_supports_debtb50ms;
 	uint16_t version_supports_pwrkey_up;
@@ -344,7 +338,7 @@ static int mca_pwrkey_probe(struct platform_device *pdev)
 	/* Find entry in device-tree */
 	if (mca->dev->of_node) {
 		const char * compatible = pdev->dev.driver->
-				    of_match_table[devdata->devtype].compatible;
+				    of_match_table[0].compatible;
 
 		/* Return if pwrkey node does not exist or if it is disabled */
 		np = of_find_compatible_node(mca->dev->of_node, NULL, compatible);
@@ -498,26 +492,15 @@ SIMPLE_DEV_PM_OPS(mca_pwrkey_pm_ops, mca_pwrkey_suspend, mca_pwrkey_resume);
 #endif /* CONFIG_PM_SLEEP */
 
 #ifdef CONFIG_OF
-static struct mca_pwrkey_data mca_pwrkey_devdata[] = {
-	[CC6UL_MCA_PWRKEY] = {
-		.devtype = CC6UL_MCA_PWRKEY,
-		.drv_name_phys= "mca-cc6ul-pwrkey/input0",
-		.version_supports_debtb50ms= MCA_MAKE_FW_VER(1, 7),
-		.version_supports_pwrkey_up= MCA_MAKE_FW_VER(1, 14)
-	},
-	[CC8_MCA_PWRKEY] = {
-		.devtype = CC8_MCA_PWRKEY,
-		.drv_name_phys= "mca-cc8-pwrkey/input0",
-		.version_supports_debtb50ms= MCA_MAKE_FW_VER(0, 13),
-		.version_supports_pwrkey_up= MCA_MAKE_FW_VER(0, 17)
-	},
+static struct mca_pwrkey_data mca_pwrkey_devdata = {
+	.drv_name_phys= "mca-pwrkey/input0",
+	.version_supports_debtb50ms= DEBTB50M_FW_VER,
+	.version_supports_pwrkey_up= PWRKEY_UP_FW_VER
 };
 
 static const struct of_device_id mca_pwrkey_ids[] = {
-        { .compatible = "digi,mca-cc6ul-pwrkey",
-	  .data = &mca_pwrkey_devdata[CC6UL_MCA_PWRKEY]},
-        { .compatible = "digi,mca-cc8-pwrkey",
-	  .data = &mca_pwrkey_devdata[CC8_MCA_PWRKEY]},
+        { .compatible = "digi,mca-pwrkey",
+	  .data = &mca_pwrkey_devdata},
         { /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, mca_pwrkey_ids);

@@ -38,13 +38,7 @@
 #define MCA_BASE_DRVNAME_TAMPER	"mca-tamper"
 
 #ifdef CONFIG_OF
-enum mca_tamper_type {
-	CC6UL_MCA_TAMPER,
-	CC8_MCA_TAMPER,
-};
-
 struct mca_tamper_data {
-	enum mca_tamper_type devtype;
 	u16 num_tamper_ifaces;
 	u16 digital_tamper_cnt;
 };
@@ -608,7 +602,7 @@ static int mca_tamper_probe(struct platform_device *pdev)
 	/* Return silently if RTC node does not exist or if it is disabled */
 	{
 		const char * compatible = pdev->dev.driver->
-				  of_match_table[devdata->devtype].compatible;
+				  of_match_table[0].compatible;
 		np = of_find_compatible_node(mca->dev->of_node, NULL, compatible);
 	}
 	if (!np || !of_device_is_available(np)) {
@@ -750,24 +744,14 @@ static int mca_tamper_remove(struct platform_device *pdev)
 }
 
 #ifdef CONFIG_OF
-static struct mca_tamper_data mca_tamper_devdata[] = {
-	[CC6UL_MCA_TAMPER] = {
-		.devtype = CC6UL_MCA_TAMPER,
-		.num_tamper_ifaces = 4,
-		.digital_tamper_cnt = 2
-	},
-	[CC8_MCA_TAMPER] = {
-		.devtype = CC8_MCA_TAMPER,
-		.num_tamper_ifaces = 4,
-		.digital_tamper_cnt = 2
-	},
+static struct mca_tamper_data mca_tamper_devdata = {
+	.num_tamper_ifaces = 4,
+	.digital_tamper_cnt = 2
 };
 
 static const struct of_device_id mca_tamper_ids[] = {
-        { .compatible = "digi,mca-cc6ul-tamper",
-          .data = &mca_tamper_devdata[CC6UL_MCA_TAMPER]},
-        { .compatible = "digi,mca-cc8-tamper",
-          .data = &mca_tamper_devdata[CC8_MCA_TAMPER]},
+        { .compatible = "digi,mca-tamper",
+          .data = &mca_tamper_devdata},
         { /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, mca_tamper_ids);

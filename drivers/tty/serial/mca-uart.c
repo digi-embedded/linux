@@ -52,23 +52,16 @@ bool required[] = {1, 1, 0, 0};
 
 #define MCA_REG_UART_PIN(p)		(MCA_REG_UART_RXPIN + (p))
 
-enum mca_uart_type {
-	CC6UL_MCA_UART,
-	CC8_MCA_UART,
-};
-
 enum {
 	WORK_FLUSH_BUF	= BIT(0),
 	WORK_RS485_CFG	= BIT(1),
 };
 
 struct mca_uart_data {
-	enum mca_uart_type	devtype;
 	u16			since;
-	int			nuarts;
 };
 
-static struct mca_uart_data mca_uart_devdata[];
+static struct mca_uart_data mca_uart_devdata;
 
 struct mca_uart {
 	u32			line;
@@ -1192,7 +1185,7 @@ static int mca_uart_remove(struct platform_device *pdev)
  * The code snippet below was grabbed from drivers/tty/serial/serial_core.c
  * It is used for retrieving the TTY layer struct device. This struct is used to
  * check the value of /sys/class/tty/ttyMCAx/power/wakeup which is more standard
- * than the one at /sys/bus/i2c/devices/0-0063/mca-cc8-uart/power/wakeup.
+ * than the one at /sys/bus/i2c/devices/0-0063/mca-uart/power/wakeup.
  */
 struct uart_match {
 	struct uart_port *port;
@@ -1248,26 +1241,14 @@ static const struct dev_pm_ops mca_uart_pm_ops = {
 };
 #endif
 
-static struct mca_uart_data mca_uart_devdata[] = {
-	[CC6UL_MCA_UART] = {
-		.devtype	= CC6UL_MCA_UART,
-		.since		= MCA_UART_MIN_FW,
-		.nuarts		= 1,
-	},
-	[CC8_MCA_UART] = {
-		.devtype	= CC8_MCA_UART,
-		.since		= MCA_UART_MIN_FW,
-		.nuarts		= 3,
-	},
+static struct mca_uart_data mca_uart_devdata = {
+	.since		= MCA_UART_MIN_FW,
 };
 
 static const struct platform_device_id mca_uart_devtype[] = {
 	{
-		.name = "mca-cc6ul-uart",
-		.driver_data = (kernel_ulong_t)&mca_uart_devdata[CC6UL_MCA_UART],
-	}, {
-		.name = "mca-cc8-uart",
-		.driver_data = (kernel_ulong_t)&mca_uart_devdata[CC8_MCA_UART],
+		.name = MCA_BASE_DRVNAME_UART,
+		.driver_data = (kernel_ulong_t)&mca_uart_devdata,
 	}, {
 		/* sentinel */
 	}
@@ -1277,11 +1258,8 @@ MODULE_DEVICE_TABLE(platform, mca_uart_devtype);
 #ifdef CONFIG_OF
 static const struct of_device_id mca_uart_ids[] = {
 	{
-		.compatible = "digi,mca-cc6ul-uart",
-		.data = &mca_uart_devdata[CC6UL_MCA_UART]
-	}, {
-		.compatible = "digi,mca-cc8-uart",
-		.data = &mca_uart_devdata[CC8_MCA_UART]
+		.compatible = "digi,mca-uart",
+		.data = &mca_uart_devdata
 	}, {
 		/* sentinel */
 	}

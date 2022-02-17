@@ -28,16 +28,6 @@
 #define MCA_GPIO_WDG_MIN_TOUT_SEC	1
 #define MCA_GPIO_WDG_MAX_TOUT_SEC	255
 
-#ifdef CONFIG_OF
-enum mca_wdt_type {
-	CC8_MCA_WDT,
-};
-
-struct mca_wdt_data {
-	enum mca_wdt_type devtype;
-};
-#endif
-
 typedef enum mca_wdg_gpio_mode {
 	MCA_GPIO_WD_TOGGLE,
 	MCA_GPIO_WD_LEVEL_HIGH,
@@ -200,8 +190,6 @@ static int mca_wdt_probe(struct platform_device *pdev)
 {
 	struct mca_drv *mca = dev_get_drvdata(pdev->dev.parent);
 	struct mca_wdt *wdt;
-	const struct mca_wdt_data *devdata =
-				   of_device_get_match_data(&pdev->dev);
 	struct device_node *np;
 	int ret, i;
 
@@ -219,7 +207,7 @@ static int mca_wdt_probe(struct platform_device *pdev)
 	/* Find entry in device-tree */
         if (mca->dev->of_node) {
 		const char * compatible = pdev->dev.driver->
-				    of_match_table[devdata->devtype].compatible;
+				    of_match_table[0].compatible;
 		/*
 		 * Return silently if watchdog node does not exist
 		 * or if it is disabled
@@ -303,16 +291,9 @@ static int mca_wdt_remove(struct platform_device *pdev)
 }
 
 #ifdef CONFIG_OF
-static struct mca_wdt_data mca_wdt_devdata[] = {
-	[CC8_MCA_WDT] = {
-		.devtype = CC8_MCA_WDT,
-	},
-};
-
 static const struct platform_device_id mca_wdt_devtype[] = {
 	{
-		.name = "mca-cc8-gpio-wdt",
-		.driver_data = (kernel_ulong_t)&mca_wdt_devdata[CC8_MCA_WDT],
+		.name = "mca-gpio-wdt",
 	}, {
 		/* sentinel */
 	}
@@ -320,8 +301,7 @@ static const struct platform_device_id mca_wdt_devtype[] = {
 MODULE_DEVICE_TABLE(platform, mca_wdt_devtype);
 
 static const struct of_device_id mca_wdt_match[] = {
-        { .compatible = "digi,mca-cc8-gpio-wdt",
-          .data = &mca_wdt_devdata[CC8_MCA_WDT]},
+        { .compatible = "digi,mca-gpio-wdt",},
         { /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, mca_wdt_match);

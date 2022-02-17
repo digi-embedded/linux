@@ -89,6 +89,8 @@ struct mca_drv {
 	#define LAST_WAKEUP_FW_VER	MCA_MAKE_FW_VER(1,2)
 	#define NVRAM_FW_VER	MCA_MAKE_FW_VER(1,2)
 	#define REBOOT_SAFE_FW_VER	MCA_MAKE_FW_VER(1,2)
+	#define DEBTB50M_FW_VER	MCA_MAKE_FW_VER(1, 7)
+	#define PWRKEY_UP_FW_VER	MCA_MAKE_FW_VER(1, 14)
 #elif defined(CONFIG_MFD_MCA_CC8)
 	#define MCA_DEVICE_ID_VAL	0x4A
 
@@ -98,6 +100,8 @@ struct mca_drv {
 	#define LAST_WAKEUP_FW_VER	MCA_MAKE_FW_VER(0,4)
 	#define NVRAM_FW_VER	MCA_MAKE_FW_VER(0,8)
 	#define REBOOT_SAFE_FW_VER	MCA_MAKE_FW_VER(1,03)
+	#define DEBTB50M_FW_VER	MCA_MAKE_FW_VER(0, 13)
+	#define PWRKEY_UP_FW_VER	MCA_MAKE_FW_VER(0, 17)
 #endif
 
 /* MCA modules */

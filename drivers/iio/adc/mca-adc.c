@@ -37,8 +37,7 @@
 
 #ifdef CONFIG_OF
 enum mca_adc_type {
-	CC6UL_MCA_ADC,
-	CC8_MCA_ADC,
+	CC_MCA_ADC,
 	IOEXP_MCA_ADC,
 };
 
@@ -906,11 +905,8 @@ static int mca_adc_remove(struct platform_device *pdev)
 
 #ifdef CONFIG_OF
 static struct mca_adc_data mca_adc_devdata[] = {
-	[CC6UL_MCA_ADC] = {
-		.devtype = CC6UL_MCA_ADC,
-	},
-	[CC8_MCA_ADC] = {
-		.devtype = CC8_MCA_ADC,
+	[CC_MCA_ADC] = {
+		.devtype = CC_MCA_ADC,
 	},
 	[IOEXP_MCA_ADC] = {
 		.devtype = IOEXP_MCA_ADC,
@@ -918,10 +914,8 @@ static struct mca_adc_data mca_adc_devdata[] = {
 };
 
 static const struct of_device_id mca_adc_dt_ids[] = {
-	{ .compatible = "digi,mca-cc6ul-adc",
-	  .data = &mca_adc_devdata[CC6UL_MCA_ADC]},
-	{ .compatible = "digi,mca-cc8-adc",
-	  .data = &mca_adc_devdata[CC8_MCA_ADC]},
+	{ .compatible = "digi,mca-adc",
+	  .data = &mca_adc_devdata[CC_MCA_ADC]},
 	{ .compatible = "digi,mca-ioexp-adc",
 	  .data = &mca_adc_devdata[IOEXP_MCA_ADC]},
 	{ /* sentinel */ }
