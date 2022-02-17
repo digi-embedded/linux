@@ -1389,7 +1389,7 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 	/* Enable layer and CLUT if needed */
 	val = fb->format->format == DRM_FORMAT_C8 ? LXCR_CLUTEN : 0;
 	val |= LXCR_LEN;
-	regmap_write_bits(ldev->regmap, LTDC_L1CR + lofs, val, val);
+	regmap_write_bits(ldev->regmap, LTDC_L1CR + lofs, LXCR_CLUTEN | LXCR_LEN, val);
 
 	/* Commit shadow registers = update plane at next vblank */
 	if (ldev->caps.plane_reg_shadow)
@@ -1422,7 +1422,7 @@ static void ltdc_plane_atomic_disable(struct drm_plane *plane,
 		return;
 
 	/* disable layer */
-	regmap_write_bits(ldev->regmap, LTDC_L1CR + lofs, LXCR_LEN, 0);
+	regmap_write_bits(ldev->regmap, LTDC_L1CR + lofs, LXCR_CLUTEN | LXCR_LEN, 0);
 
 	/* Commit shadow registers = update plane at next vblank */
 	if (ldev->caps.plane_reg_shadow)
