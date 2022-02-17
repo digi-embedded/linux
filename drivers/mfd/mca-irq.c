@@ -124,7 +124,7 @@ int mca_irq_init(struct mca_drv *mca)
 	mca->irq_base = -1;
 
 	/* Use full IRQ array if a CC8 module is detected */
-	if (of_machine_is_compatible("digi,ccimx8"))
+	if (mca->dev_id == MCA_KL17_DEVICE_ID)
 		mca_irq_chip.num_irqs += MCA_NUM_CC8_IRQS;
 
 #if defined(CONFIG_MFD_MCA_CC8)

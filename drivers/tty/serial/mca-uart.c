@@ -57,12 +57,6 @@ enum {
 	WORK_RS485_CFG	= BIT(1),
 };
 
-struct mca_uart_data {
-	u16			since;
-};
-
-static struct mca_uart_data mca_uart_devdata;
-
 struct mca_uart {
 	u32			line;
 	struct mca_drv		*mca;
@@ -1055,7 +1049,9 @@ static int mca_uart_probe(struct platform_device *pdev)
 		ret = -ENODEV;
 		goto err_free2;
 	}
-	if (mca->fw_version < uart_drv->uart_data->since) {
+
+	if (!MCA_FEATURE_IS_SUPPORTED(mca, MCA_UART_KL03_MIN_FW,
+	                              MCA_UART_KL17_MIN_FW)) {
 		dev_err(&pdev->dev,
 			"UART is not supported in MCA firmware v%d.%02d.\n",
 			MCA_FW_VER_MAJOR(mca->fw_version),
@@ -1241,14 +1237,9 @@ static const struct dev_pm_ops mca_uart_pm_ops = {
 };
 #endif
 
-static struct mca_uart_data mca_uart_devdata = {
-	.since		= MCA_UART_MIN_FW,
-};
-
 static const struct platform_device_id mca_uart_devtype[] = {
 	{
 		.name = MCA_BASE_DRVNAME_UART,
-		.driver_data = (kernel_ulong_t)&mca_uart_devdata,
 	}, {
 		/* sentinel */
 	}
@@ -1259,7 +1250,6 @@ MODULE_DEVICE_TABLE(platform, mca_uart_devtype);
 static const struct of_device_id mca_uart_ids[] = {
 	{
 		.compatible = "digi,mca-uart",
-		.data = &mca_uart_devdata
 	}, {
 		/* sentinel */
 	}

@@ -35,7 +35,8 @@
 extern int digi_get_som_hv(void);
 
 struct dyn_attribute {
-	u16			since;	/* Minimum firmware version required */
+	u16			since_kl03;	/* Minimum firmware version required for KL03 */
+	u16			since_kl17;	/* Minimum firmware version required for KL17 */
 	struct attribute	*attr;
 };
 
@@ -624,7 +625,7 @@ static ssize_t last_wakeup_reason_show(struct device *dev,
 	int ret, i;
 
 	/* Use full reason array if a CC8 module is detected */
-	if (of_machine_is_compatible("digi,ccimx8"))
+	if (mca->dev_id == MCA_KL17_DEVICE_ID)
 		n_reasons = ARRAY_SIZE(last_wakeup);
 
 	ret = regmap_bulk_read(mca->regmap, MCA_LAST_WAKEUP_REASON_0,
@@ -885,31 +886,38 @@ static struct attribute_group mca_attr_group = {
 
 static struct dyn_attribute mca_sysfs_dyn_entries[] = {
 	{
-		.since =	TICK_COUNT_FW_VER,
+		.since_kl03 =	TICK_COUNT_KL03_FW_VER,
+		.since_kl17 =	TICK_COUNT_KL17_FW_VER,
 		.attr =		&dev_attr_tick_cnt.attr,
 	},
 	{
-		.since =	VREF_FW_VER,
+		.since_kl03 =	VREF_KL03_FW_VER,
+		.since_kl17 =	VREF_KL17_FW_VER,
 		.attr =		&dev_attr_vref.attr,
 	},
 	{
-		.since =	LAST_WAKEUP_FW_VER,
+		.since_kl03 =	LAST_WAKEUP_KL03_FW_VER,
+		.since_kl17 =	LAST_WAKEUP_KL17_FW_VER,
 		.attr =		&dev_attr_last_wakeup_reason.attr,
 	},
 	{
-		.since =	LAST_WAKEUP_FW_VER,
+		.since_kl03 =	LAST_WAKEUP_KL03_FW_VER,
+		.since_kl17 =	LAST_WAKEUP_KL17_FW_VER,
 		.attr =		&dev_attr_last_mca_reset.attr,
 	},
 	{
-		.since =	LAST_WAKEUP_FW_VER,
+		.since_kl03 =	LAST_WAKEUP_KL03_FW_VER,
+		.since_kl17 =	LAST_WAKEUP_KL17_FW_VER,
 		.attr =		&dev_attr_last_mpu_reset.attr,
 	},
 	{
-		.since =	REBOOT_SAFE_FW_VER,
+		.since_kl03 =	REBOOT_SAFE_KL03_FW_VER,
+		.since_kl17 =	REBOOT_SAFE_KL17_FW_VER,
 		.attr =		&dev_attr_reboot_safe.attr,
 	},
 	{
-		.since =	REBOOT_SAFE_FW_VER,
+		.since_kl03 =	REBOOT_SAFE_KL03_FW_VER,
+		.since_kl17 =	REBOOT_SAFE_KL17_FW_VER,
 		.attr =		&dev_attr_pwroff_safe.attr,
 	},
 };
@@ -1075,8 +1083,9 @@ static int mca_add_dyn_sysfs_entries(struct mca_drv *mca,
 		if (!dattr->attr)
 			continue;
 
-		/* Create the sysfs files if the MCA fw supports the feature*/
-		if (mca->fw_version >= dattr->since) {
+		/* Create the sysfs files if the MCA fw supports the feature */
+		if (MCA_FEATURE_IS_SUPPORTED(mca, dattr->since_kl03,
+		                             dattr->since_kl17)) {
 			ret = sysfs_add_file_to_group(&mca->dev->kobj,
 						      dattr->attr,
 						      grp->name);
@@ -1104,8 +1113,20 @@ int mca_device_init(struct mca_drv *mca, u32 irq)
 	}
 	mca->dev_id = (u8)val;
 
-	if (mca->dev_id != MCA_DEVICE_ID_VAL) {
+	if (mca->dev_id != MCA_KL03_DEVICE_ID &&
+	    mca->dev_id != MCA_KL17_DEVICE_ID) {
 		dev_err(mca->dev, "Invalid MCA Device ID (%x)\n", mca->dev_id);
+		return -ENODEV;
+	}
+
+	/* Check for mismatches between MCA model and SOM */
+	if ((mca->dev_id == MCA_KL03_DEVICE_ID &&
+	    !of_machine_is_compatible("digi,ccimx6ul")) ||
+	    (mca->dev_id == MCA_KL17_DEVICE_ID &&
+	    !of_machine_is_compatible("digi,ccimx8")))
+	{
+		dev_err(mca->dev, "MCA Device ID (%x) doesn't match the SOM\n",
+			mca->dev_id);
 		return -ENODEV;
 	}
 
@@ -1134,12 +1155,13 @@ int mca_device_init(struct mca_drv *mca, u32 irq)
 	mca->fw_is_alpha = val & MCA_FW_VER_ALPHA_MASK ? true : false;
 
 	/* Operate at 100KHz for CC6UL MCA versions older than 1.19 */
-	if (of_machine_is_compatible("digi,ccimx6ul") &&
+	if (mca->dev_id == MCA_KL03_DEVICE_ID &&
 	    mca->fw_version < MCA_MAKE_FW_VER(1, 19)) {
 		set_i2c_speed(mca, 100000);
 	}
 
-	if (mca->fw_version >= LAST_WAKEUP_FW_VER) {
+	if (MCA_FEATURE_IS_SUPPORTED(mca, LAST_WAKEUP_KL03_FW_VER,
+	                             LAST_WAKEUP_KL17_FW_VER)) {
 		ret = regmap_bulk_read(mca->regmap, MCA_LAST_MCA_RESET_0,
 				       &mca->last_mca_reset,
 				       sizeof(mca->last_mca_reset));
@@ -1160,7 +1182,7 @@ int mca_device_init(struct mca_drv *mca, u32 irq)
 	}
 
 	/* CC6UL handles SOM version and fw update gpio differently */
-	if (of_machine_is_compatible("digi,ccimx6ul")) {
+	if (mca->dev_id == MCA_KL03_DEVICE_ID) {
 		/* Write the SOM hardware version to MCA register */
 		mca->som_hv = digi_get_som_hv();
 		if (mca->som_hv > 0) {
@@ -1173,7 +1195,8 @@ int mca_device_init(struct mca_drv *mca, u32 irq)
 
 		mca->fw_update_gpio = of_get_named_gpio(mca->dev->of_node,
 						"fw-update-gpio", 0);
-		if (gpio_is_valid(mca->fw_update_gpio) && mca->som_hv >= 4) {
+		if (of_machine_is_compatible("digi,ccimx6ul") &&
+		    gpio_is_valid(mca->fw_update_gpio) && mca->som_hv >= 4) {
 			/*
 			 * On the CC6UL HV >= 4 this GPIO must be driven low
 			 * so that the CPU resets together with the reset button.
@@ -1221,7 +1244,7 @@ int mca_device_init(struct mca_drv *mca, u32 irq)
 	mca->dev->dma_mask = &mca->dev->coherent_dma_mask;
 
 	/* Use CC8 devs array if a CC8 module is detected */
-	if (of_machine_is_compatible("digi,ccimx8")) {
+	if (mca->dev_id == MCA_KL17_DEVICE_ID) {
 		mca_devs = mca_cc8_devs;
 		n_devs = ARRAY_SIZE(mca_cc8_devs);
 	}
@@ -1277,7 +1300,8 @@ int mca_device_init(struct mca_drv *mca, u32 irq)
 	mca->syscore.shutdown = mca_shutdown;
 	register_syscore_ops(&mca->syscore);
 
-	if (mca->fw_version >= NVRAM_FW_VER) {
+	if (MCA_FEATURE_IS_SUPPORTED(mca, NVRAM_KL03_FW_VER,
+	                             NVRAM_KL17_FW_VER)) {
 		mca->nvram = devm_kzalloc(mca->dev, sizeof(struct bin_attribute),
 					  GFP_KERNEL);
 		if (!mca->nvram) {

@@ -46,8 +46,6 @@
 #ifdef CONFIG_OF
 struct mca_pwrkey_data {
 	char drv_name_phys[40];
-	uint16_t version_supports_debtb50ms;
-	uint16_t version_supports_pwrkey_up;
 };
 #endif
 
@@ -232,8 +230,11 @@ static int of_mca_pwrkey_read_settings(struct device_node *np,
 	pwrkey->key_power = of_property_read_bool(np, "digi,key-power");
 	pwrkey->key_power_up = of_property_read_bool(np, "digi,key-power-up");
 	if (pwrkey->key_power_up) {
-		const uint16_t min_version = devdata->version_supports_pwrkey_up;
-		if (pwrkey->mca->fw_version < min_version) {
+		if (!MCA_FEATURE_IS_SUPPORTED(pwrkey->mca, PWRKEY_UP_KL03_FW_VER,
+		                              PWRKEY_UP_KL17_FW_VER)) {
+			uint16_t min_version = pwrkey->mca->dev_id == MCA_KL03_DEVICE_ID ?
+			                                              PWRKEY_UP_KL03_FW_VER :
+			                                              PWRKEY_UP_KL17_FW_VER;
 			dev_warn(pwrkey->mca->dev,
 				 "Invalid MCA firmware version for key-power-up."
 				 " Required MCAv%d.%d or above\n",
@@ -360,7 +361,8 @@ static int mca_pwrkey_probe(struct platform_device *pdev)
 		goto err_free;
 	}
 
-	if (mca->fw_version >= devdata->version_supports_debtb50ms)
+	if (MCA_FEATURE_IS_SUPPORTED(mca, DEBTB50M_KL03_FW_VER,
+	                             DEBTB50M_KL17_FW_VER))
 		pwrkey->supports_debtb50ms = true;
 
 	platform_set_drvdata(pdev, pwrkey);
@@ -493,9 +495,7 @@ SIMPLE_DEV_PM_OPS(mca_pwrkey_pm_ops, mca_pwrkey_suspend, mca_pwrkey_resume);
 
 #ifdef CONFIG_OF
 static struct mca_pwrkey_data mca_pwrkey_devdata = {
-	.drv_name_phys= "mca-pwrkey/input0",
-	.version_supports_debtb50ms= DEBTB50M_FW_VER,
-	.version_supports_pwrkey_up= PWRKEY_UP_FW_VER
+	.drv_name_phys= "mca-pwrkey/input0"
 };
 
 static const struct of_device_id mca_pwrkey_ids[] = {
