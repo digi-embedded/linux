@@ -87,6 +87,7 @@
 
 /* STM32_RTC_CFGR bit fields */
 #define STM32_RTC_CFGR_OUT2_RMP		BIT(0)
+#define STM32_RTC_CFGR_LSCOEN		GENMASK(2, 1)
 #define STM32_RTC_CFGR_LSCOEN_OUT1	1
 #define STM32_RTC_CFGR_LSCOEN_OUT2_RMP	2
 
@@ -241,6 +242,15 @@ static void stm32_rtc_wpr_lock(struct stm32_rtc *rtc)
 	const struct stm32_rtc_registers *regs = &rtc->data->regs;
 
 	writel_relaxed(RTC_WPR_WRONG_KEY, rtc->base + regs->wpr);
+}
+
+static void stm32_rtc_clk_lsco_disable(struct platform_device *pdev)
+{
+	struct stm32_rtc *rtc = platform_get_drvdata(pdev);
+	struct stm32_rtc_registers regs = rtc->data->regs;
+	unsigned int cfgr = readl_relaxed(rtc->base + regs.cfgr);
+
+	writel_relaxed(cfgr &= ~STM32_RTC_CFGR_LSCOEN, rtc->base + regs.cfgr);
 }
 
 static int stm32_rtc_enter_init_mode(struct stm32_rtc *rtc)
@@ -949,6 +959,7 @@ static int stm32_rtc_probe(struct platform_device *pdev)
 					 "LSCO clock registration failed: %d\n",
 					 ret);
 		} else {
+			stm32_rtc_clk_lsco_disable(pdev);
 			rtc->lsco = ret;
 			dev_dbg(&pdev->dev, "No LSCO clock: %d\n", ret);
 		}
