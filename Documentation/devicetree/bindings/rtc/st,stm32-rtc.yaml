@@ -59,6 +59,13 @@ properties:
       Refer to <include/dt-bindings/rtc/rtc-stm32.h> for the supported values.
       Pinctrl state named "default" may be defined to reserve pin for RTC output.
 
+  st,alarm:
+    $ref: "/schemas/types.yaml#/definitions/uint32"
+    description: |
+      To select and enable RTC Alarm A output.
+      Refer to <include/dt-bindings/rtc/rtc-stm32.h> for the supported values.
+      Pinctrl state named "default" may be defined to reserve pin for RTC output.
+
 allOf:
   - if:
       properties:
@@ -73,6 +80,9 @@ allOf:
           maxItems: 1
 
         st,lsco:
+          maxItems: 0
+
+        st,alarm:
           maxItems: 0
 
         clock-names: false
@@ -95,6 +105,9 @@ allOf:
         st,lsco:
           maxItems: 0
 
+        st,alarm:
+          maxItems: 0
+
       required:
         - clock-names
         - st,syscfg
@@ -115,6 +128,9 @@ allOf:
         assigned-clock-parents: false
 
         st,lsco:
+          maxItems: 1
+
+        st,alarm:
           maxItems: 1
 
       required:
@@ -153,8 +169,9 @@ examples:
       clocks = <&rcc RTCAPB>, <&rcc RTC>;
       clock-names = "pclk", "rtc_ck";
       interrupts = <GIC_SPI 3 IRQ_TYPE_LEVEL_HIGH>;
+      st,alarm = <RTC_OUT1>;
       st,lsco = <RTC_OUT2_RMP>;
-      pinctrl-0 = <&rtc_out2_rmp_pins_a>;
+      pinctrl-0 = <&rtc_out1_pins_a &rtc_out2_rmp_pins_a>;
       pinctrl-names = "default";
     };
 
