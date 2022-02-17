@@ -5,6 +5,7 @@
  */
 
 #include <linux/bcd.h>
+#include <linux/bitfield.h>
 #include <linux/clk.h>
 #include <linux/clk-provider.h>
 #include <linux/errno.h>
@@ -44,10 +45,11 @@
 #define STM32_RTC_CR_ALRAE		BIT(8)
 #define STM32_RTC_CR_ALRAIE		BIT(12)
 #define STM32_RTC_CR_COSEL		BIT(19)
-#define STM32_RTC_CR_OSEL_SHIFT		21
 #define STM32_RTC_CR_OSEL		GENMASK(22, 21)
+#define STM32_RTC_CR_OSEL_ALARM_A	FIELD_PREP(STM32_RTC_CR_OSEL, 0x01)
 #define STM32_RTC_CR_COE		BIT(23)
 #define STM32_RTC_CR_TAMPOE		BIT(26)
+#define STM32_RTC_CR_TAMPALRM_TYPE	BIT(30)
 #define STM32_RTC_CR_OUT2EN		BIT(31)
 
 /* STM32_RTC_ISR/STM32_RTC_ICSR bit fields */
@@ -135,6 +137,7 @@ struct stm32_rtc_data {
 	bool has_pclk;
 	bool need_dbp;
 	bool has_lsco;
+	bool has_alarm_out;
 	bool need_accuracy;
 };
 
@@ -150,6 +153,7 @@ struct stm32_rtc {
 	int irq_alarm;
 	int lsco;
 	struct clk *clk_lsco;
+	int out_alarm;
 };
 
 /*
@@ -251,6 +255,64 @@ static void stm32_rtc_clk_lsco_disable(struct platform_device *pdev)
 	unsigned int cfgr = readl_relaxed(rtc->base + regs.cfgr);
 
 	writel_relaxed(cfgr &= ~STM32_RTC_CFGR_LSCOEN, rtc->base + regs.cfgr);
+}
+
+static int stm32_rtc_out_alarm_config(struct platform_device *pdev)
+{
+	struct stm32_rtc *rtc = platform_get_drvdata(pdev);
+	struct stm32_rtc_registers regs = rtc->data->regs;
+	unsigned int cr = readl_relaxed(rtc->base + regs.cr);
+	unsigned int cfgr = readl_relaxed(rtc->base + regs.cfgr);
+
+	cr &= ~STM32_RTC_CR_OSEL;
+	cr |= STM32_RTC_CR_OSEL_ALARM_A;
+	cr &= ~STM32_RTC_CR_TAMPOE;
+	cr &= ~STM32_RTC_CR_COE;
+	cr &= ~STM32_RTC_CR_TAMPALRM_TYPE;
+
+	switch (rtc->out_alarm) {
+	case RTC_OUT1:
+		cr &= ~STM32_RTC_CR_OUT2EN;
+		cfgr &= ~STM32_RTC_CFGR_OUT2_RMP;
+		break;
+	case RTC_OUT2:
+		cr |= STM32_RTC_CR_OUT2EN;
+		cfgr &= ~STM32_RTC_CFGR_OUT2_RMP;
+		break;
+	case RTC_OUT2_RMP:
+		cr |= STM32_RTC_CR_OUT2EN;
+		cfgr |= STM32_RTC_CFGR_OUT2_RMP;
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	stm32_rtc_wpr_unlock(rtc);
+	writel_relaxed(cr, rtc->base + regs.cr);
+	writel_relaxed(cfgr, rtc->base + regs.cfgr);
+	stm32_rtc_wpr_lock(rtc);
+
+	return 0;
+}
+
+static void stm32_rtc_out_alarm_disable(struct platform_device *pdev)
+{
+	struct stm32_rtc *rtc = platform_get_drvdata(pdev);
+	struct stm32_rtc_registers regs = rtc->data->regs;
+	unsigned int cr = readl_relaxed(rtc->base + regs.cr);
+	unsigned int cfgr = readl_relaxed(rtc->base + regs.cfgr);
+
+	cr &= ~STM32_RTC_CR_OSEL;
+	cr &= ~STM32_RTC_CR_TAMPOE;
+	cr &= ~STM32_RTC_CR_COE;
+	cr &= ~STM32_RTC_CR_TAMPALRM_TYPE;
+	cr &= ~STM32_RTC_CR_OUT2EN;
+	cfgr &= ~STM32_RTC_CFGR_OUT2_RMP;
+
+	stm32_rtc_wpr_unlock(rtc);
+	writel_relaxed(cr, rtc->base + regs.cr);
+	writel_relaxed(cfgr, rtc->base + regs.cfgr);
+	stm32_rtc_wpr_lock(rtc);
 }
 
 static int stm32_rtc_enter_init_mode(struct stm32_rtc *rtc)
@@ -657,6 +719,7 @@ static const struct stm32_rtc_data stm32_rtc_data = {
 	.has_pclk = false,
 	.need_dbp = true,
 	.has_lsco = false,
+	.has_alarm_out = false,
 	.need_accuracy = false,
 	.regs = {
 		.tr = 0x00,
@@ -681,6 +744,7 @@ static const struct stm32_rtc_data stm32h7_rtc_data = {
 	.has_pclk = true,
 	.need_dbp = true,
 	.has_lsco = false,
+	.has_alarm_out = false,
 	.need_accuracy = false,
 	.regs = {
 		.tr = 0x00,
@@ -714,6 +778,7 @@ static const struct stm32_rtc_data stm32mp1_data = {
 	.has_pclk = true,
 	.need_dbp = false,
 	.has_lsco = true,
+	.has_alarm_out = true,
 	.need_accuracy = true,
 	.regs = {
 		.tr = 0x00,
@@ -947,6 +1012,17 @@ static int stm32_rtc_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "IRQ%d (alarm interrupt) already claimed\n",
 			rtc->irq_alarm);
 		goto err;
+	}
+
+	if (rtc->data->has_alarm_out) {
+		ret = of_property_read_s32(pdev->dev.of_node, "st,alarm", &rtc->out_alarm);
+		if (!ret) {
+			ret = stm32_rtc_out_alarm_config(pdev);
+		} else {
+			stm32_rtc_out_alarm_disable(pdev);
+			rtc->out_alarm = ret;
+			dev_dbg(&pdev->dev, "No alarm out: %d\n", ret);
+		}
 	}
 
 	if (rtc->data->has_lsco) {
