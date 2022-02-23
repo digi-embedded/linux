@@ -19,7 +19,6 @@
 	compatible = "st,stm32mp157f-dk2", "st,stm32mp157";
 
 	aliases {
-		ethernet0 = &ethernet0;
 		serial3 = &usart2;
 	};
 
