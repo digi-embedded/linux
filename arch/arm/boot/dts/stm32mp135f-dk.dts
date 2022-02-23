@@ -118,6 +118,7 @@
 		enable-gpios = <&gpioi 7 GPIO_ACTIVE_HIGH>;
 		backlight = <&panel_backlight>;
 		power-supply = <&scmi_v3v3_sw>;
+		data-mapping = "bgr666";
 		status = "okay";
 
 		width-mm = <105>;
@@ -139,6 +140,10 @@
 			vsync-len = <10>;
 			vfront-porch = <10>;
 			vback-porch = <10>;
+			hsync-active = <0>;
+			vsync-active = <0>;
+			de-active = <1>;
+			pixelclk-active = <1>;
 		};
 	};
 
