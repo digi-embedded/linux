@@ -185,6 +185,10 @@
 	status = "okay";
 };
 
+&cryp {
+	status = "okay";
+};
+
 &dcmipp {
 	status = "okay";
 	pinctrl-names = "default", "sleep";
