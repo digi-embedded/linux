@@ -7,7 +7,6 @@
 
 #include "stm32mp157f-ed1.dts"
 #include "stm32mp15xx-evx.dtsi"
-#include <dt-bindings/input/input.h>
 
 / {
 	model = "STMicroelectronics STM32MP157F eval daughter on eval mother";
