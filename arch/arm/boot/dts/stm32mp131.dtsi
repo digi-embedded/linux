@@ -1520,6 +1520,9 @@
 			part_number_otp: part_number_otp@4 {
 				reg = <0x4 0x2>;
 			};
+			vrefint: vrefin_cal@52 {
+				reg = <0x52 0x2>;
+			};
 			ts_cal1: calib@5c {
 				reg = <0x5c 0x2>;
 			};
