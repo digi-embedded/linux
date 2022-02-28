@@ -652,6 +652,9 @@ static void stm32_dma_synchronize(struct dma_chan *c)
 		if (stm32_dma_mdma_drain(chan))
 			dev_err(chan2dev(chan), "%s: can't drain DMA\n", __func__);
 
+	if (chan->use_mdma)
+		dmaengine_synchronize(mchan->chan);
+
 	vchan_synchronize(&chan->vchan);
 }
 
