@@ -230,6 +230,7 @@
 			compatible = "ethernet-phy-id0007.c131";
 			reset-gpios =  <&mcp23017 9 GPIO_ACTIVE_LOW>;
 			reg = <0>;
+			wakeup-source;
 		};
 	};
 };
