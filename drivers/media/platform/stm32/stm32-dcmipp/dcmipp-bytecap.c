@@ -172,7 +172,9 @@ static inline int frame_size(u32 width, u32 height, u32 format)
 		return (width * height);
 	case V4L2_PIX_FMT_RGB565:
 	case V4L2_PIX_FMT_YUYV:
+	case V4L2_PIX_FMT_YVYU:
 	case V4L2_PIX_FMT_UYVY:
+	case V4L2_PIX_FMT_VYUY:
 		return (width * height * 2);
 	case V4L2_PIX_FMT_JPEG:
 		return (width * height);
@@ -193,7 +195,9 @@ static inline int frame_stride(u32 width, u32 format)
 		return width;
 	case V4L2_PIX_FMT_RGB565:
 	case V4L2_PIX_FMT_YUYV:
+	case V4L2_PIX_FMT_YVYU:
 	case V4L2_PIX_FMT_UYVY:
+	case V4L2_PIX_FMT_VYUY:
 		return (width * 2);
 	default:
 		return 0;
@@ -213,7 +217,9 @@ static inline int hdw_pixel_alignment(u32 format)
 		return 4;/* 2^4 = 16 pixels = 16 bytes */
 	case V4L2_PIX_FMT_RGB565:
 	case V4L2_PIX_FMT_YUYV:
+	case V4L2_PIX_FMT_YVYU:
 	case V4L2_PIX_FMT_UYVY:
+	case V4L2_PIX_FMT_VYUY:
 		return 3;/* 2^3  = 8 pixels = 16 bytes */
 	default:
 		return 0;
