@@ -47,6 +47,18 @@ config VIDEO_AR0521
 	  To compile this driver as a module, choose M here: the
 	  module will be called ar0521.
 
+config VIDEO_GC2145
+	tristate "GalaxyCore GC2145 sensor support"
+	depends on I2C && VIDEO_DEV
+	select VIDEO_V4L2_SUBDEV_API
+	select V4L2_FWNODE
+	help
+	  This is a V4L2 sensor-level driver for GalaxyCore GC2145
+	  2 Mpixel camera.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called gc2145.
+
 config VIDEO_HI556
 	tristate "Hynix Hi-556 sensor support"
 	depends on I2C && VIDEO_DEV
@@ -76,6 +88,7 @@ config VIDEO_HI846
 config VIDEO_HI847
         tristate "Hynix Hi-847 sensor support"
         depends on I2C && VIDEO_DEV
+
         select MEDIA_CONTROLLER
         select VIDEO_V4L2_SUBDEV_API
         select V4L2_FWNODE
