@@ -35,6 +35,9 @@
  */
 #define OPTEE_DEFAULT_MAX_NOTIF_VALUE	255
 
+/* This value should be larger than max interrupt ID notified by secure world */
+#define OPTEE_MAX_IT 32
+
 typedef void (optee_invoke_fn)(unsigned long, unsigned long, unsigned long,
 				unsigned long, unsigned long, unsigned long,
 				unsigned long, unsigned long,
@@ -112,6 +115,7 @@ struct optee_pcpu {
  * @optee_pcpu		per_cpu optee instance for per cpu work or NULL
  * @notif_pcpu_wq	workqueue for per cpu aynchronous notification or NULL
  * @notif_pcpu_work	work for per cpu asynchronous notification
+ * @domain		interrupt domain registered by OP-TEE driver
  */
 struct optee_smc {
 	optee_invoke_fn *invoke_fn;
@@ -121,6 +125,7 @@ struct optee_smc {
 	struct optee_pcpu __percpu *optee_pcpu;
 	struct workqueue_struct *notif_pcpu_wq;
 	struct work_struct notif_pcpu_work;
+	struct irq_domain *domain;
 };
 
 /**

@@ -977,6 +977,117 @@ static int optee_smc_stop_async_notif(struct tee_context *ctx)
  * 5. Asynchronous notification
  */
 
+static u32 get_it_value(optee_invoke_fn *invoke_fn, bool *value_valid,
+			bool *value_pending)
+{
+	struct arm_smccc_res res;
+
+	invoke_fn(OPTEE_SMC_GET_IT_NOTIF_VALUE, 0, 0, 0, 0, 0, 0, 0, &res);
+
+	if (res.a0)
+		return 0;
+
+	*value_valid = res.a2 & OPTEE_SMC_IT_NOTIF_VALUE_VALID;
+	*value_pending = res.a2 & OPTEE_SMC_IT_NOTIF_VALUE_PENDING;
+	return res.a1;
+}
+
+static u32 set_it_mask(optee_invoke_fn *invoke_fn, u32 it_value, bool mask)
+{
+	struct arm_smccc_res res;
+
+	invoke_fn(OPTEE_SMC_SET_IT_NOTIF_MASK, it_value, mask, 0, 0, 0, 0, 0, &res);
+
+	if (res.a0)
+		return 0;
+
+	return res.a1;
+}
+
+static int handle_optee_it(struct optee *optee)
+{
+	bool value_valid;
+	bool value_pending;
+	u32 it;
+
+	do {
+		struct irq_desc *desc;
+
+		it = get_it_value(optee->smc.invoke_fn, &value_valid, &value_pending);
+		if (!value_valid)
+			break;
+
+		desc = irq_to_desc(irq_find_mapping(optee->smc.domain, it));
+		if (!desc) {
+			pr_err("no desc for optee IT:%d\n", it);
+			return -EIO;
+		}
+
+		handle_simple_irq(desc);
+
+	} while (value_pending);
+
+	return 0;
+}
+
+static void optee_it_irq_mask(struct irq_data *d)
+{
+	struct optee *optee = d->domain->host_data;
+
+	set_it_mask(optee->smc.invoke_fn, d->hwirq, true);
+}
+
+static void optee_it_irq_unmask(struct irq_data *d)
+{
+	struct optee *optee = d->domain->host_data;
+
+	set_it_mask(optee->smc.invoke_fn, d->hwirq, false);
+}
+
+static struct irq_chip optee_it_irq_chip = {
+	.name = "optee-it",
+	.irq_disable = optee_it_irq_mask,
+	.irq_enable = optee_it_irq_unmask,
+};
+
+static int optee_it_alloc(struct irq_domain *d, unsigned int virq,
+			  unsigned int nr_irqs, void *data)
+{
+	struct irq_fwspec *fwspec = data;
+	irq_hw_number_t hwirq;
+
+	hwirq = fwspec->param[0];
+
+	irq_domain_set_hwirq_and_chip(d, virq, hwirq, &optee_it_irq_chip, d->host_data);
+
+	return 0;
+}
+
+static const struct irq_domain_ops optee_it_irq_domain_ops = {
+	.alloc = optee_it_alloc,
+	.free = irq_domain_free_irqs_common,
+};
+
+static int optee_irq_domain_init(struct platform_device *pdev, struct optee *optee)
+{
+	struct device *dev = &pdev->dev;
+	struct device_node *np = dev->of_node;
+
+	optee->smc.domain = irq_domain_add_linear(np, OPTEE_MAX_IT,
+						  &optee_it_irq_domain_ops, optee);
+	if (!optee->smc.domain) {
+		dev_err(dev, "Unable to add irq domain\n");
+		return -ENOMEM;
+	}
+
+	return 0;
+}
+
+static void optee_irq_domain_uninit(struct optee *optee)
+{
+	irq_domain_remove(optee->smc.domain);
+}
+
 static u32 get_async_notif_value(optee_invoke_fn *invoke_fn, bool *value_valid,
 				 bool *value_pending)
 {
@@ -1008,13 +1119,14 @@ static irqreturn_t notif_irq_handler(int irq, void *dev_id)
 	}
 
 	do {
-		value = get_async_notif_value(optee->smc.invoke_fn,
-					      &value_valid, &value_pending);
+		value = get_async_notif_value(optee->smc.invoke_fn, &value_valid, &value_pending);
 		if (!value_valid)
 			break;
 
 		if (value == OPTEE_SMC_ASYNC_NOTIF_VALUE_DO_BOTTOM_HALF)
 			do_bottom_half = true;
+		else if (value == OPTEE_SMC_ASYNC_NOTIF_VALUE_DO_IT)
+			handle_optee_it(optee);
 		else
 			optee_notif_send(optee, value);
 	} while (value_pending);
@@ -1042,8 +1154,7 @@ static int init_irq(struct optee *optee, u_int irq)
 {
 	int rc;
 
-	rc = request_threaded_irq(irq, notif_irq_handler,
-				  notif_irq_thread_fn,
+	rc = request_threaded_irq(irq, notif_irq_handler, notif_irq_thread_fn,
 				  0, "optee_notification", optee);
 	if (rc)
 		return rc;
@@ -1426,6 +1537,8 @@ static int optee_smc_remove(struct platform_device *pdev)
 
 	optee_smc_notif_uninit_irq(optee);
 
+	optee_irq_domain_uninit(optee);
+
 	optee_remove_common(optee);
 
 	if (optee->smc.memremaped_shm)
@@ -1603,6 +1716,18 @@ static int optee_probe(struct platform_device *pdev)
 			irq_dispose_mapping(irq);
 			goto err_notif_uninit;
 		}
+
+		rc = optee_irq_domain_init(pdev, optee);
+		if (rc) {
+			if (irq_is_percpu_devid(optee->smc.notif_irq))
+				uninit_pcpu_irq(optee);
+			else
+				free_irq(optee->smc.notif_irq, optee);
+
+			irq_dispose_mapping(irq);
+			goto err_notif_uninit;
+		}
+
 		enable_async_notif(optee->smc.invoke_fn);
 		pr_info("Asynchronous notifications enabled\n");
 	}
