@@ -25,10 +25,6 @@
 		};
 	};
 
-	aliases {
-		ethernet0 = &ethernet0;
-	};
-
 	panel_backlight: panel-backlight {
 		compatible = "gpio-backlight";
 		gpios = <&gpiod 13 GPIO_ACTIVE_LOW>;

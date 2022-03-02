@@ -9,6 +9,7 @@
 
 / {
 	aliases {
+		ethernet0 = &ethernet0;
 		serial1 = &usart3;
 	};
 
