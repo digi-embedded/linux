@@ -379,6 +379,118 @@ static int simple_call_with_arg(struct tee_context *ctx, u32 cmd)
 	return 0;
 }
 
+static u32 get_it_value(optee_invoke_fn *invoke_fn, bool *value_valid,
+			bool *value_pending)
+{
+	struct arm_smccc_res res;
+
+	invoke_fn(OPTEE_SMC_GET_IT_NOTIF_VALUE, 0, 0, 0, 0, 0, 0, 0, &res);
+
+	if (res.a0)
+		return 0;
+	*value_valid = (res.a2 & OPTEE_SMC_IT_NOTIF_VALUE_VALID);
+	*value_pending = (res.a2 & OPTEE_SMC_IT_NOTIF_VALUE_PENDING);
+	return res.a1;
+}
+
+static u32 set_it_mask(optee_invoke_fn *invoke_fn, u32 it_value, bool mask)
+{
+	struct arm_smccc_res res;
+
+	invoke_fn(OPTEE_SMC_SET_IT_NOTIF_MASK, it_value, mask, 0, 0, 0, 0, 0, &res);
+
+	if (res.a0)
+		return 0;
+
+	return res.a1;
+}
+
+static int handle_optee_it(struct optee *optee)
+{
+	bool value_valid;
+	bool value_pending;
+	u32 it;
+
+	do {
+		struct irq_desc *desc;
+
+		it = get_it_value(optee->invoke_fn, &value_valid,
+				  &value_pending);
+		if (!value_valid)
+			break;
+
+		desc = irq_to_desc(irq_find_mapping(optee->domain, it));
+		if (!desc) {
+			pr_err("no desc for optee IT:%d\n", it);
+			return -EIO;
+		}
+
+		handle_simple_irq(desc);
+
+	} while (value_pending);
+
+	return 0;
+}
+
+static void optee_it_irq_mask(struct irq_data *d)
+{
+	struct optee *optee = d->domain->host_data;
+
+	set_it_mask(optee->invoke_fn, d->hwirq, true);
+}
+
+static void optee_it_irq_unmask(struct irq_data *d)
+{
+	struct optee *optee = d->domain->host_data;
+
+	set_it_mask(optee->invoke_fn, d->hwirq, false);
+}
+
+static struct irq_chip optee_it_irq_chip = {
+	.name = "optee-it",
+	.irq_disable = optee_it_irq_mask,
+	.irq_enable = optee_it_irq_unmask,
+};
+
+static int optee_it_alloc(struct irq_domain *d, unsigned int virq,
+			  unsigned int nr_irqs, void *data)
+{
+	struct irq_fwspec *fwspec = data;
+	irq_hw_number_t hwirq;
+
+	hwirq = fwspec->param[0];
+
+	irq_domain_set_hwirq_and_chip(d, virq, hwirq, &optee_it_irq_chip, d->host_data);
+
+	return 0;
+}
+
+static const struct irq_domain_ops optee_it_irq_domain_ops = {
+	.alloc = optee_it_alloc,
+	.free = irq_domain_free_irqs_common,
+};
+
+static int optee_irq_domain_init(struct platform_device *pdev, struct optee *optee)
+{
+	struct device *dev = &pdev->dev;
+	struct device_node *np = dev->of_node;
+
+	optee->domain = irq_domain_add_linear(np, OPTEE_MAX_IT,
+					      &optee_it_irq_domain_ops,
+					      optee);
+	if (!optee->domain) {
+		pr_err("Unable to add irq domain!\n");
+		return -ENOMEM;
+	}
+
+	return 0;
+}
+
+static void optee_irq_domain_uninit(struct optee *optee)
+{
+	irq_domain_remove(optee->domain);
+}
+
 static int optee_smc_do_bottom_half(struct tee_context *ctx)
 {
 	return simple_call_with_arg(ctx, OPTEE_MSG_CMD_DO_BOTTOM_HALF);
@@ -427,6 +539,8 @@ static irqreturn_t notif_irq_handler(int irq, void *dev_id)
 
 		if (value == OPTEE_SMC_ASYNC_NOTIF_VALUE_DO_BOTTOM_HALF)
 			do_bottom_half = true;
+		else if (value == OPTEE_SMC_ASYNC_NOTIF_VALUE_DO_IT)
+			handle_optee_it(optee);
 		else
 			optee_notif_send(optee, value);
 	} while (value_pending);
@@ -833,6 +947,8 @@ static int optee_remove(struct platform_device *pdev)
 	 */
 	optee_disable_shm_cache(optee);
 
+	optee_irq_domain_uninit(optee);
+
 	optee_smc_notif_uninit_irq(optee);
 
 	/*
@@ -992,6 +1108,13 @@ static int optee_probe(struct platform_device *pdev)
 			irq_dispose_mapping(irq);
 			goto err_notif_uninit;
 		}
+
+		rc = optee_irq_domain_init(pdev, optee);
+		if (rc) {
+			irq_dispose_mapping(irq);
+			goto err_notif_uninit;
+		}
+
 		enable_async_notif(optee->invoke_fn);
 		pr_info("Asynchronous notifications enabled\n");
 	}
@@ -1021,6 +1144,7 @@ err_disable_shm_cache:
 	optee_disable_shm_cache(optee);
 	optee_smc_notif_uninit_irq(optee);
 	optee_unregister_devices();
+	optee_irq_domain_uninit(optee);
 err_notif_uninit:
 	optee_notif_uninit(optee);
 err_close_ctx:

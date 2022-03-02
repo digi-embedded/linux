@@ -33,6 +33,8 @@
  */
 #define OPTEE_DEFAULT_MAX_NOTIF_VALUE	255
 
+#define OPTEE_MAX_IT 32
+
 typedef void (optee_invoke_fn)(unsigned long, unsigned long, unsigned long,
 				unsigned long, unsigned long, unsigned long,
 				unsigned long, unsigned long,
@@ -117,6 +119,7 @@ struct optee {
 	struct optee_pcpu __percpu *optee_pcpu;
 	struct workqueue_struct *notif_pcpu_wq;
 	struct work_struct notif_pcpu_work;
+	struct irq_domain *domain;
 };
 
 struct optee_call_waiter {
