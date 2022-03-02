@@ -472,6 +472,8 @@ patternProperties:
     description: Fujitsu Ltd.
   "^fxtec,.*":
     description: FX Technology Ltd.
+  "^galaxycore,.*":
+    description: Galaxy Core Inc.
   "^gardena,.*":
     description: GARDENA GmbH
   "^gateworks,.*":
