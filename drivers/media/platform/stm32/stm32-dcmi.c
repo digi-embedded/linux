@@ -473,16 +473,11 @@ static irqreturn_t dcmi_irq_thread(int irq, void *arg)
 static irqreturn_t dcmi_irq_callback(int irq, void *arg)
 {
 	struct stm32_dcmi *dcmi = arg;
-	unsigned long flags;
-
-	spin_lock_irqsave(&dcmi->irqlock, flags);
 
 	dcmi->misr = reg_read(dcmi->regs, DCMI_MIS);
 
 	/* Clear interrupt */
 	reg_set(dcmi->regs, DCMI_ICR, IT_FRAME | IT_OVR | IT_ERR);
-
-	spin_unlock_irqrestore(&dcmi->irqlock, flags);
 
 	return IRQ_WAKE_THREAD;
 }
