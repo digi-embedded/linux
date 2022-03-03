@@ -79,19 +79,6 @@
 };
 
 &i2c1 {
-	touchscreen@2a {
-		compatible = "focaltech,ft6236";
-		reg = <0x2a>;
-		interrupts = <2 2>;
-		interrupt-parent = <&gpiof>;
-		interrupt-controller;
-		touchscreen-size-x = <480>;
-		touchscreen-size-y = <800>;
-		panel = <&panel_otm8009a>;
-		vcc-supply = <&v3v3>;
-		iovcc-supply = <&v3v3>;
-		status = "okay";
-	};
 	touchscreen@38 {
 		compatible = "focaltech,ft6236";
 		reg = <0x38>;
