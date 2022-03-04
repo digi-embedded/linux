@@ -40,7 +40,7 @@
 #define STM32_MBX_SHUTDOWN	"shutdown"
 #define STM32_MBX_DETACH	"detach"
 
-#define RSC_TBL_SIZE		1024
+#define RSC_TBL_SIZE		1024UL
 
 #define M4_STATE_OFF		0
 #define M4_STATE_INI		1
@@ -127,10 +127,10 @@ static int stm32_rproc_mem_alloc(struct rproc *rproc,
 	struct device *dev = rproc->dev.parent;
 	void *va;
 
-	dev_dbg(dev, "map memory: %pa+%x\n", &mem->dma, mem->len);
+	dev_dbg(dev, "map memory: %pa+%zu\n", &mem->dma, mem->len);
 	va = ioremap_wc(mem->dma, mem->len);
 	if (IS_ERR_OR_NULL(va)) {
-		dev_err(dev, "Unable to map memory region: %pa+%x\n",
+		dev_err(dev, "Unable to map memory region: %pa+%zu\n",
 			&mem->dma, mem->len);
 		return -ENOMEM;
 	}
