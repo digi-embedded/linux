@@ -2293,4 +2293,25 @@
 			};
 		};
 	};
+
+	mlahb: ahb {
+		compatible = "st,mlahb", "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+		dma-ranges;
+
+		m33_rproc: m33@a040000 {
+			compatible = "st,stm32mp2-m33";
+			reg = <0x0a040000 0x60000>;
+			resets = <&scmi_reset RST_SCMI_C2_R>,
+				 <&scmi_reset RST_SCMI_C2_HOLDBOOT_R>;
+			reset-names = "mcu_rst", "hold_boot";
+			interrupt-parent = <&intc>;
+			interrupts = <GIC_SPI 4 IRQ_TYPE_LEVEL_HIGH>;
+
+			status = "disabled";
+		};
+	};
+
 };
