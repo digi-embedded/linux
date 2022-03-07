@@ -23,6 +23,8 @@
 			adc1: adc@0 {
 				compatible = "st,stm32mp13-adc";
 				#io-channel-cells = <1>;
+				#address-cells = <1>;
+				#size-cells = <0>;
 				reg = <0x0>;
 				interrupt-parent = <&adc_1>;
 				interrupts = <0>;
@@ -31,6 +33,11 @@
 				nvmem-cells = <&vrefint>;
 				nvmem-cell-names = "vrefint";
 				status = "disabled";
+
+				channel@18 {
+					reg = <18>;
+					label = "vrefint";
+				};
 			};
 		};
 
