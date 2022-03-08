@@ -934,8 +934,6 @@ static irqreturn_t dcmipp_bytecap_irq_callback(int irq, void *arg)
 	struct dcmipp_bytecap_device *vcap =
 			container_of(arg, struct dcmipp_bytecap_device, ved);
 
-	spin_lock_irq(&vcap->irqlock);
-
 	vcap->cmsr2 = reg_read(vcap, DCMIPP_CMSR2);
 	vcap->cmsr2 = vcap->cmsr2 & vcap->cmier;
 
@@ -944,7 +942,6 @@ static irqreturn_t dcmipp_bytecap_irq_callback(int irq, void *arg)
 	/* Clear interrupt */
 	reg_write(vcap, DCMIPP_CMFCR, vcap->cmsr2);
 
-	spin_unlock_irq(&vcap->irqlock);
 	return IRQ_WAKE_THREAD;
 }
 
