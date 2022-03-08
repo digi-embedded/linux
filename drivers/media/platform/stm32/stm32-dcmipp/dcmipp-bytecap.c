@@ -607,8 +607,6 @@ static void dcmipp_bytecap_stop_streaming(struct vb2_queue *vq)
 	/* Stop the media pipeline */
 	media_pipeline_stop(&vcap->vdev.entity);
 
-	spin_lock_irq(&vcap->irqlock);
-
 	/* Disable interruptions */
 	reg_clear(vcap, DCMIPP_CMIER, vcap->cmier);
 
@@ -625,6 +623,8 @@ static void dcmipp_bytecap_stop_streaming(struct vb2_queue *vq)
 
 	/* Disable pipe */
 	reg_clear(vcap, DCMIPP_P0FSCR, DCMIPP_P0FSCR_PIPEN);
+
+	spin_lock_irq(&vcap->irqlock);
 
 	/* Return all queued buffers to vb2 in ERROR state */
 	list_for_each_entry_safe(buf, node, &vcap->buffers, list) {
