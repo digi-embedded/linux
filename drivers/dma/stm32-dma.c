@@ -1133,10 +1133,10 @@ static void stm32_dma_handle_chan_done(struct stm32_dma_chan *chan, u32 scr)
 		else if (scr & STM32_DMA_SCR_DBM)
 			stm32_dma_configure_next_sg(chan);
 	} else {
+		if (chan->use_mdma && chan->mchan.dir != DMA_MEM_TO_DEV)
+			return; /* wait for callback */
 		chan->busy = false;
 		chan->status = DMA_COMPLETE;
-		if (chan->use_mdma && chan->mchan.dir != DMA_MEM_TO_DEV)
-			return;
 		if (chan->next_sg == chan->desc->num_sgs) {
 			vchan_cookie_complete(&chan->desc->vdesc);
 			chan->desc = NULL;
