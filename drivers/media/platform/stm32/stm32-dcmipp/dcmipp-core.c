@@ -64,10 +64,6 @@ struct dcmipp_device {
 	struct platform_device		**subdevs;
 
 	struct v4l2_async_notifier	notifier;
-
-	/* Protects the access of variables shared within the interrupt */
-	spinlock_t			irqlock;
-
 };
 
 static inline struct dcmipp_device *notifier_to_dcmipp(struct v4l2_async_notifier *n)
@@ -342,8 +338,6 @@ static irqreturn_t dcmipp_irq_thread(int irq, void *arg)
 	struct dcmipp_ent_device *ved;
 	unsigned int i;
 
-	spin_lock_irq(&dcmipp->irqlock);
-
 	/* Call irq thread of each entities of pipeline */
 	for (i = 0; i < dcmipp->pipe_cfg->num_ents; i++) {
 		ved = platform_get_drvdata(dcmipp->subdevs[i]);
@@ -351,7 +345,6 @@ static irqreturn_t dcmipp_irq_thread(int irq, void *arg)
 			ved->thread_fn(irq, ved);
 	}
 
-	spin_unlock_irq(&dcmipp->irqlock);
 	return IRQ_HANDLED;
 }
 
@@ -360,10 +353,7 @@ static irqreturn_t dcmipp_irq_callback(int irq, void *arg)
 	struct dcmipp_device *dcmipp = arg;
 	struct dcmipp_ent_device *ved;
 	irqreturn_t ret = IRQ_HANDLED;
-	unsigned long flags;
 	unsigned int i;
-
-	spin_lock_irqsave(&dcmipp->irqlock, flags);
 
 	/* Call irq handler of each entities of pipeline */
 	for (i = 0; i < dcmipp->pipe_cfg->num_ents; i++) {
@@ -377,8 +367,6 @@ static irqreturn_t dcmipp_irq_callback(int irq, void *arg)
 		if (ved->handler_ret != IRQ_HANDLED)
 			ret = ved->handler_ret;
 	}
-
-	spin_unlock_irqrestore(&dcmipp->irqlock, flags);
 
 	return ret;
 }
@@ -578,8 +566,6 @@ static int dcmipp_probe(struct platform_device *pdev)
 		return dev_err_probe(&pdev->dev, PTR_ERR(kclk),
 				     "Unable to get kclk\n");
 	dcmipp->kclk = kclk;
-
-	spin_lock_init(&dcmipp->irqlock);
 
 	/* Create platform_device for each entity in the topology */
 	dcmipp->subdevs = devm_kcalloc(&pdev->dev, dcmipp->pipe_cfg->num_ents,
