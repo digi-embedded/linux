@@ -609,6 +609,9 @@ static int dcmipp_byteproc_comp_bind(struct device *comp, struct device *master,
 
 	byteproc->regs = bind_data->regs;
 
+	/* Initialize the lock */
+	mutex_init(&byteproc->lock);
+
 	/* Initialize ved and sd */
 	ret = dcmipp_ent_sd_register(&byteproc->ved, &byteproc->sd,
 				     bind_data->v4l2_dev,
