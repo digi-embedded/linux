@@ -227,8 +227,6 @@
 #define MMCI_STM32_IDMALLIEN	BIT(1)
 
 #define MMCI_STM32_IDMABSIZER		0x054
-#define MMCI_STM32_IDMABNDT_SHIFT	5
-#define MMCI_STM32_IDMABNDT_MASK	GENMASK(12, 5)
 
 #define MMCI_STM32_IDMABASE0R	0x058
 
@@ -363,6 +361,7 @@ struct variant_data {
 	u8			dma_lli:1;
 	u8			use_sdio_irq:1;
 	u32			stm32_idmabsize_mask;
+	u32			stm32_idmabsize_align;
 	void (*init)(struct mmci_host *host);
 };
 
