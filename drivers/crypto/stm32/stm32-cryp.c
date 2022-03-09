@@ -5,6 +5,7 @@
  */
 
 #include <linux/clk.h>
+#include <linux/debugfs.h>
 #include <linux/delay.h>
 #include <linux/interrupt.h>
 #include <linux/iopoll.h>
@@ -61,6 +62,21 @@
 #define CRYP_IV1RR              0x0000004C
 #define CRYP_CSGCMCCM0R         0x00000050
 #define CRYP_CSGCM0R            0x00000070
+
+static const struct debugfs_reg32 stm32_cryp_regs[] = {
+	{
+		.name = "cr",
+		.offset = CRYP_CR
+	},
+	{
+		.name = "sr",
+		.offset = CRYP_SR
+	},
+	{
+		.name = "dmacr",
+		.offset = CRYP_DMACR
+	}
+};
 
 /* Registers values */
 #define CR_DEC_NOT_ENC          0x00000004
@@ -132,6 +148,7 @@ struct stm32_cryp {
 	u32                     irq_status;
 	const struct stm32_cryp_caps *caps;
 	struct stm32_cryp_ctx   *ctx;
+	struct dentry           *dbgdir;
 
 	struct crypto_engine    *engine;
 
@@ -1739,6 +1756,25 @@ static const struct of_device_id stm32_dt_ids[] = {
 };
 MODULE_DEVICE_TABLE(of, stm32_dt_ids);
 
+static void cryp_debugfs(struct stm32_cryp *cryp)
+{
+	struct debugfs_regset32 *regset;
+
+	cryp->dbgdir = debugfs_create_dir("stm32_cryp", NULL);
+	if (IS_ERR_OR_NULL(cryp->dbgdir))
+		return;
+
+	regset = devm_kzalloc(cryp->dev, sizeof(*regset), GFP_KERNEL);
+	if (!regset)
+		return;
+
+	regset->regs = stm32_cryp_regs;
+	regset->nregs = ARRAY_SIZE(stm32_cryp_regs);
+	regset->base = cryp->regs;
+
+	debugfs_create_regset32("regset", 0444, cryp->dbgdir, regset);
+}
+
 static int stm32_cryp_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -1833,6 +1869,7 @@ static int stm32_cryp_probe(struct platform_device *pdev)
 	if (ret)
 		goto err_aead_algs;
 
+	cryp_debugfs(cryp);
 	dev_info(dev, "Initialized\n");
 
 	pm_runtime_put_sync(dev);
@@ -1868,6 +1905,9 @@ static int stm32_cryp_remove(struct platform_device *pdev)
 	ret = pm_runtime_resume_and_get(cryp->dev);
 	if (ret < 0)
 		return ret;
+
+	debugfs_remove_recursive(cryp->dbgdir);
+	cryp->dbgdir = NULL;
 
 	crypto_unregister_aeads(aead_algs, ARRAY_SIZE(aead_algs));
 	crypto_unregister_skciphers(crypto_algs, ARRAY_SIZE(crypto_algs));
