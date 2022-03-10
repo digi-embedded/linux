@@ -2143,7 +2143,7 @@ static struct skcipher_alg crypto_algs[] = {
 {
 	.base.cra_name		= "ecb(aes)",
 	.base.cra_driver_name	= "stm32-ecb-aes",
-	.base.cra_priority	= 200,
+	.base.cra_priority	= 1200,
 	.base.cra_flags		= CRYPTO_ALG_ASYNC,
 	.base.cra_blocksize	= AES_BLOCK_SIZE,
 	.base.cra_ctxsize	= sizeof(struct stm32_cryp_ctx),
@@ -2160,7 +2160,7 @@ static struct skcipher_alg crypto_algs[] = {
 {
 	.base.cra_name		= "cbc(aes)",
 	.base.cra_driver_name	= "stm32-cbc-aes",
-	.base.cra_priority	= 200,
+	.base.cra_priority	= 1200,
 	.base.cra_flags		= CRYPTO_ALG_ASYNC,
 	.base.cra_blocksize	= AES_BLOCK_SIZE,
 	.base.cra_ctxsize	= sizeof(struct stm32_cryp_ctx),
@@ -2178,7 +2178,7 @@ static struct skcipher_alg crypto_algs[] = {
 {
 	.base.cra_name		= "ctr(aes)",
 	.base.cra_driver_name	= "stm32-ctr-aes",
-	.base.cra_priority	= 200,
+	.base.cra_priority	= 1200,
 	.base.cra_flags		= CRYPTO_ALG_ASYNC,
 	.base.cra_blocksize	= 1,
 	.base.cra_ctxsize	= sizeof(struct stm32_cryp_ctx),
@@ -2196,7 +2196,7 @@ static struct skcipher_alg crypto_algs[] = {
 {
 	.base.cra_name		= "ecb(des)",
 	.base.cra_driver_name	= "stm32-ecb-des",
-	.base.cra_priority	= 200,
+	.base.cra_priority	= 1200,
 	.base.cra_flags		= CRYPTO_ALG_ASYNC,
 	.base.cra_blocksize	= DES_BLOCK_SIZE,
 	.base.cra_ctxsize	= sizeof(struct stm32_cryp_ctx),
@@ -2213,7 +2213,7 @@ static struct skcipher_alg crypto_algs[] = {
 {
 	.base.cra_name		= "cbc(des)",
 	.base.cra_driver_name	= "stm32-cbc-des",
-	.base.cra_priority	= 200,
+	.base.cra_priority	= 1200,
 	.base.cra_flags		= CRYPTO_ALG_ASYNC,
 	.base.cra_blocksize	= DES_BLOCK_SIZE,
 	.base.cra_ctxsize	= sizeof(struct stm32_cryp_ctx),
@@ -2231,7 +2231,7 @@ static struct skcipher_alg crypto_algs[] = {
 {
 	.base.cra_name		= "ecb(des3_ede)",
 	.base.cra_driver_name	= "stm32-ecb-des3",
-	.base.cra_priority	= 200,
+	.base.cra_priority	= 1200,
 	.base.cra_flags		= CRYPTO_ALG_ASYNC,
 	.base.cra_blocksize	= DES_BLOCK_SIZE,
 	.base.cra_ctxsize	= sizeof(struct stm32_cryp_ctx),
@@ -2248,7 +2248,7 @@ static struct skcipher_alg crypto_algs[] = {
 {
 	.base.cra_name		= "cbc(des3_ede)",
 	.base.cra_driver_name	= "stm32-cbc-des3",
-	.base.cra_priority	= 200,
+	.base.cra_priority	= 1200,
 	.base.cra_flags		= CRYPTO_ALG_ASYNC,
 	.base.cra_blocksize	= DES_BLOCK_SIZE,
 	.base.cra_ctxsize	= sizeof(struct stm32_cryp_ctx),
