@@ -2975,7 +2975,9 @@ static int ov5640_init_controls(struct ov5640_dev *sensor)
 	if (ctrls->link_freq)
 		ctrls->link_freq->flags |= V4L2_CTRL_FLAG_READ_ONLY;
 
+	mutex_lock(&sensor->lock);
 	ret = ov5640_set_link_freq_ctrl(sensor, rate);
+	mutex_unlock(&sensor->lock);
 	if (ret)
 		goto free_ctrls;
 
