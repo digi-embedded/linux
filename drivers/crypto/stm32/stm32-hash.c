@@ -831,7 +831,7 @@ static void stm32_hash_finish_req(struct ahash_request *req, int err)
 
 static int stm32_hash_hw_init(struct stm32_hash_dev *hdev)
 {
-	pm_runtime_resume_and_get(hdev->dev);
+	pm_runtime_get_sync(hdev->dev);
 
 	if (!(HASH_FLAGS_INIT & hdev->flags)) {
 		stm32_hash_write(hdev, HASH_CR, HASH_CR_INIT);
@@ -1015,7 +1015,7 @@ static int stm32_hash_export(struct ahash_request *req, void *out)
 	unsigned int i;
 	int swap_reg;
 
-	pm_runtime_resume_and_get(hdev->dev);
+	pm_runtime_get_sync(hdev->dev);
 
 	while ((stm32_hash_read(hdev, HASH_SR) & HASH_SR_BUSY))
 		cpu_relax();
@@ -1055,7 +1055,7 @@ static int stm32_hash_import(struct ahash_request *req, const void *in)
 	hdev = rctx->hdev;
 	preg = rctx->hw_context;
 
-	pm_runtime_resume_and_get(hdev->dev);
+	pm_runtime_get_sync(hdev->dev);
 
 	stm32_hash_write(hdev, HASH_IMR, *preg++);
 	stm32_hash_write(hdev, HASH_STR, *preg++);
