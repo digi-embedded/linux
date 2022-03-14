@@ -7,6 +7,7 @@
 #include <dt-bindings/clock/stm32mp25-clks.h>
 #include <dt-bindings/interrupt-controller/arm-gic.h>
 #include <dt-bindings/regulator/st,stm32mp25-regulator.h>
+#include <dt-bindings/phy/phy.h>
 #include <dt-bindings/reset/stm32mp25-resets.h>
 
 / {
@@ -387,6 +388,19 @@
 				       <&hpdma 169 0x20 0x00003021 0>;
 				dma-names = "rx", "tx";
 				feature-domains = <&rifsc STM32MP25_RIFSC_I2C8_ID>;
+				status = "disabled";
+			};
+
+			combophy: phy@480c0000 {
+				compatible = "st,stm32mp25-combophy";
+				reg = <0x480c0000 0x1000>;
+				#phy-cells = <1>;
+				clocks = <&rcc CK_BUS_USB3PCIEPHY>, <&rcc CK_KER_USB3PCIEPHY>;
+				clock-names = "apb-clk", "ker-clk";
+				resets = <&rcc USB3PCIEPHY_R>;
+				reset-names = "phy-rst";
+				st,syscfg = <&syscfg>;
+				feature-domains = <&rifsc STM32MP25_RIFSC_COMBOPHY_ID>;
 				status = "disabled";
 			};
 
