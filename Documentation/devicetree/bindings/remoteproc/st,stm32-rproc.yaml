@@ -16,9 +16,7 @@ maintainers:
 
 properties:
   compatible:
-    enum:
-      - st,stm32mp1-m4
-      - st,stm32mp1-m4_optee
+    const: st,stm32mp1-m4
 
   reg:
     description:
