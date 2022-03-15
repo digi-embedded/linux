@@ -118,7 +118,6 @@ struct stm32_pinctrl {
 	u32 pkg;
 	u16 irqmux_map;
 	spinlock_t irqmux_lock;
-	u32 pin_base_shift;
 };
 
 static inline int stm32_gpio_pin(int gpio)
@@ -1583,7 +1582,6 @@ int stm32_pctl_probe(struct platform_device *pdev)
 	pctl->pctl_desc.pctlops = &stm32_pctrl_ops;
 	pctl->pctl_desc.pmxops = &stm32_pmx_ops;
 	pctl->dev = &pdev->dev;
-	pctl->pin_base_shift = pctl->match_data->pin_base_shift;
 
 	pctl->pctl_dev = devm_pinctrl_register(&pdev->dev, &pctl->pctl_desc,
 					       pctl);
