@@ -109,6 +109,7 @@ struct dcmipp_byteproc_device {
 	void __iomem *regs;
 
 	struct v4l2_fract sink_interval;
+	struct v4l2_fract src_interval;
 	unsigned int frate;
 	u32 src_code;
 	struct v4l2_rect crop;
@@ -530,14 +531,10 @@ static int dcmipp_byteproc_g_frame_interval(struct v4l2_subdev *sd,
 {
 	struct dcmipp_byteproc_device *byteproc = v4l2_get_subdevdata(sd);
 
-	if (IS_SINK(fi->pad)) {
+	if (IS_SINK(fi->pad))
 		fi->interval = byteproc->sink_interval;
-	} else {
-		fi->interval.numerator = byteproc->sink_interval.numerator;
-		fi->interval.denominator =
-			byteproc->sink_interval.denominator /
-			(1 << byteproc->frate);
-	}
+	else
+		fi->interval = byteproc->src_interval;
 
 	return 0;
 }
@@ -556,21 +553,28 @@ static int dcmipp_byteproc_s_frame_interval(struct v4l2_subdev *sd,
 
 	if (IS_SINK(fi->pad)) {
 		byteproc->sink_interval = fi->interval;
+		/*
+		 * Setting sink frame interval resets frame skipping.
+		 * Sink frame interval is propagated to src.
+		 */
+		byteproc->frate = 0;
+		byteproc->src_interval = byteproc->sink_interval;
 	} else {
-		if (fi->interval.denominator >=
-		    byteproc->sink_interval.denominator) {
-			byteproc->frate = 0;
-		} else {
-			if (fi->interval.denominator <=
-			   (byteproc->sink_interval.denominator / 8))
-				byteproc->frate = 3;
-			else if (fi->interval.denominator <=
-			   (byteproc->sink_interval.denominator / 4))
-				byteproc->frate = 2;
-			else if (fi->interval.denominator <=
-			   (byteproc->sink_interval.denominator / 2))
-				byteproc->frate = 1;
-		}
+		unsigned int ratio;
+		/* Normalize ratio */
+		ratio = (byteproc->sink_interval.denominator * fi->interval.numerator) /
+			(byteproc->sink_interval.numerator * fi->interval.denominator);
+
+		/* Hardware can skip 1 frame over 2, 4 or 8 */
+		byteproc->frate = ratio >= 8 ? 3 :
+				  ratio >= 4 ? 2 :
+				  ratio >= 2 ? 1 : 0;
+
+		/* Adjust src frame interval to what hardware can really do */
+		byteproc->src_interval.numerator = 1;
+		byteproc->src_interval.denominator =
+			(byteproc->sink_interval.denominator / byteproc->sink_interval.numerator) /
+			(1 << byteproc->frate);
 	}
 
 	mutex_unlock(&byteproc->lock);
@@ -646,6 +650,10 @@ static int dcmipp_byteproc_comp_bind(struct device *comp, struct device *master,
 		.width = DCMIPP_FMT_WIDTH_DEFAULT,
 		.height = DCMIPP_FMT_HEIGHT_DEFAULT,
 	};
+	struct v4l2_fract interval = {
+		.numerator = 1,
+		.denominator = 30,
+	};
 	int ret;
 
 	/* Allocate the byteproc struct */
@@ -681,6 +689,7 @@ static int dcmipp_byteproc_comp_bind(struct device *comp, struct device *master,
 	/* Initialize the frame format */
 	byteproc->sink_fmt = fmt_default;
 	byteproc->compose = byteproc->crop = r;
+	byteproc->sink_interval = byteproc->src_interval = interval;
 
 	return 0;
 }
