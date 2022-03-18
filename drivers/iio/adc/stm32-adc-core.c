@@ -977,7 +977,7 @@ static const struct stm32_adc_priv_cfg stm32mp1_adc_priv_cfg = {
 static const struct stm32_adc_priv_cfg stm32mp13_adc_priv_cfg = {
 	.regs = &stm32mp13_adc_common_regs,
 	.clk_sel = stm32h7_adc_clk_sel,
-	.max_clk_rate_hz = 36000000,
+	.max_clk_rate_hz = 75000000,
 	.ipid = STM32MP13_IPIDR_NUMBER,
 	.num_irqs = 1,
 };
