@@ -29,11 +29,9 @@
 #define DCMIPP_CMIER (0x3F0)
 #define DCMIPP_CMIER_P0FRAMEIE BIT(9)
 #define DCMIPP_CMIER_P0VSYNCIE BIT(10)
-#define DCMIPP_CMIER_P0LIMITIE BIT(14)
 #define DCMIPP_CMIER_P0OVRIE BIT(15)
 #define DCMIPP_CMIER_P0ALL (DCMIPP_CMIER_P0VSYNCIE |\
 			    DCMIPP_CMIER_P0FRAMEIE |\
-			    DCMIPP_CMIER_P0LIMITIE |\
 			    DCMIPP_CMIER_P0OVRIE)
 #define DCMIPP_CMSR1 (0x3F4)
 #define DCMIPP_CMSR2 (0x3F8)
@@ -875,6 +873,7 @@ static void dcmipp_bytecap_process_frame(struct dcmipp_bytecap_device *vcap,
 			bytesused, buf->size);
 		/* Clip to buffer size and return buffer to V4L2 in error */
 		bytesused = buf->size;
+		vcap->limit_count++;
 		err = -EOVERFLOW;
 	}
 
