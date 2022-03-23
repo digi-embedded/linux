@@ -42,7 +42,6 @@
 #define DCMIPP_P0FSCR (0x404)
 #define DCMIPP_P0FSCR_PIPEN BIT(31)
 #define DCMIPP_P0FCTCR (0x500)
-#define DCMIPP_P0FCTCR_CPTMODE BIT(2)
 #define DCMIPP_P0FCTCR_CPTREQ BIT(3)
 #define DCMIPP_P0DCCNTR (0x5B0)
 #define DCMIPP_P0DCLMTR (0x5B4)
@@ -134,7 +133,13 @@ struct dcmipp_bytecap_device {
 
 	enum state state;
 
-	struct dcmipp_buf *active;
+	/*
+	 * DCMIPP driver is handling 2 buffers
+	 * active: buffer into which DCMIPP is currently writing into
+	 * next: buffer given to the DCMIPP and which will become
+	 *       automatically active on next VSYNC
+	 */
+	struct dcmipp_buf *active, *next;
 
 	void __iomem *regs;
 	struct reset_control *rstc;
@@ -149,6 +154,8 @@ struct dcmipp_bytecap_device {
 	int vsync_count;
 	int frame_count;
 	int it_count;
+	int underrun_count;
+	int nactive_count;
 };
 
 static const struct v4l2_pix_format fmt_default = {
@@ -476,11 +483,9 @@ static int dcmipp_pipeline_s_stream(struct dcmipp_bytecap_device *vcap,
 static void dcmipp_start_capture(struct dcmipp_bytecap_device *vcap,
 				 struct dcmipp_buf *buf)
 {
-	/*
-	 * Set buffer address
-	 * This register is taken into account immediately
-	 */
+	/* Set buffer address */
 	reg_write(vcap, DCMIPP_P0PPM0AR1, buf->paddr);
+	dev_dbg(vcap->dev, "Write [%d] %p phy=%pad\n", buf->vb.vb2_buf.index, buf, &buf->paddr);
 
 	/* Set buffer size */
 	reg_write(vcap, DCMIPP_P0DCLMTR, DCMIPP_P0DCLMTR_ENABLE |
@@ -506,6 +511,8 @@ static int dcmipp_bytecap_start_streaming(struct vb2_queue *vq,
 	vcap->vsync_count = 0;
 	vcap->frame_count = 0;
 	vcap->it_count = 0;
+	vcap->underrun_count = 0;
+	vcap->nactive_count = 0;
 
 	ret = pm_runtime_get_sync(vcap->cdev);
 	if (ret < 0) {
@@ -529,13 +536,6 @@ static int dcmipp_bytecap_start_streaming(struct vb2_queue *vq,
 
 	spin_lock_irq(&vcap->irqlock);
 
-	/* Enable interruptions */
-	vcap->cmier |= DCMIPP_CMIER_P0ALL;
-	reg_set(vcap, DCMIPP_CMIER, vcap->cmier);
-
-	/* Snapshot mode */
-	reg_set(vcap, DCMIPP_P0FCTCR, DCMIPP_P0FCTCR_CPTMODE);
-
 	/* Enable pipe at the end of programming */
 	reg_set(vcap, DCMIPP_P0FSCR, DCMIPP_P0FSCR_PIPEN);
 
@@ -546,21 +546,25 @@ static int dcmipp_bytecap_start_streaming(struct vb2_queue *vq,
 	buf = list_first_entry_or_null(&vcap->buffers, typeof(*buf), list);
 	if (!buf) {
 		dev_dbg(vcap->dev, "Start streaming is deferred to next buffer queueing\n");
-		vcap->active = NULL;
+		vcap->next = NULL;
 		vcap->state = WAIT_FOR_BUFFER;
 		spin_unlock_irq(&vcap->irqlock);
 		return 0;
 	}
-	vcap->active = buf;
-	dev_dbg(vcap->dev, "Start active [%d] %p phy=%pad\n",
+	vcap->next = buf;
+	dev_dbg(vcap->dev, "Start with next [%d] %p phy=%pad\n",
 		buf->vb.vb2_buf.index, buf, &buf->paddr);
+
+	/* Start capture */
+	dcmipp_start_capture(vcap, buf);
+
+	/* Enable interruptions */
+	vcap->cmier |= DCMIPP_CMIER_P0ALL;
+	reg_set(vcap, DCMIPP_CMIER, vcap->cmier);
 
 	vcap->state = RUNNING;
 
 	spin_unlock_irq(&vcap->irqlock);
-
-	/* Start capture */
-	dcmipp_start_capture(vcap, buf);
 
 	return 0;
 
@@ -658,14 +662,13 @@ static void dcmipp_bytecap_stop_streaming(struct vb2_queue *vq)
 	}
 
 	if (vcap->errors_count)
-		dev_warn(vcap->dev, "Some errors found while streaming: errors=%d (overrun=%d, limit=%d), buffers=%d\n",
-			 vcap->errors_count, vcap->overrun_count,
-			 vcap->limit_count, vcap->buffers_count);
-	dev_dbg(vcap->dev, "Stop streaming, errors=%d (overrun=%d, limit=%d), vsync=%d, frame=%d, buffers=%d, it=%d\n",
-		vcap->errors_count, vcap->overrun_count,
-		vcap->limit_count, vcap->vsync_count,
-		vcap->frame_count, vcap->buffers_count,
-		vcap->it_count);
+		dev_warn(vcap->dev, "Some errors found while streaming: errors=%d (overrun=%d, limit=%d, nactive=%d), underrun=%d, buffers=%d\n",
+			 vcap->errors_count, vcap->overrun_count, vcap->limit_count,
+			 vcap->nactive_count, vcap->underrun_count, vcap->buffers_count);
+	dev_dbg(vcap->dev, "Stop streaming, errors=%d (overrun=%d, limit=%d, nactive=%d), underrun=%d, vsync=%d, frame=%d, buffers=%d, it=%d\n",
+		vcap->errors_count, vcap->overrun_count, vcap->limit_count,
+		vcap->nactive_count, vcap->underrun_count, vcap->vsync_count,
+		vcap->frame_count, vcap->buffers_count, vcap->it_count);
 }
 
 static int dcmipp_bytecap_buf_prepare(struct vb2_buffer *vb)
@@ -694,7 +697,7 @@ static int dcmipp_bytecap_buf_prepare(struct vb2_buffer *vb)
 
 		vb2_set_plane_payload(&buf->vb.vb2_buf, 0, buf->size);
 
-		dev_dbg(vcap->dev, "buffer[%d] phy=%pad size=%zu\n",
+		dev_dbg(vcap->dev, "Setup [%d] phy=%pad size=%zu\n",
 			vb->index, &buf->paddr, buf->size);
 	}
 
@@ -711,18 +714,18 @@ static void dcmipp_bytecap_buf_queue(struct vb2_buffer *vb2_buf)
 	spin_lock_irq(&vcap->irqlock);
 	list_add_tail(&buf->list, &vcap->buffers);
 
+	dev_dbg(vcap->dev, "Queue [%d] %p phy=%pad\n", buf->vb.vb2_buf.index, buf, &buf->paddr);
+
 	if (vcap->state == WAIT_FOR_BUFFER) {
-		vcap->active = buf;
-		dev_dbg(vcap->dev, "Start active [%d] %p phy=%pad\n",
+		vcap->next = buf;
+		dev_dbg(vcap->dev, "Restart with next [%d] %p phy=%pad\n",
 			buf->vb.vb2_buf.index, buf, &buf->paddr);
+
+		dcmipp_start_capture(vcap, buf);
 
 		vcap->state = RUNNING;
 
-		dev_dbg(vcap->dev, "Starting capture on buffer[%d] queued\n",
-			buf->vb.vb2_buf.index);
-
 		spin_unlock_irq(&vcap->irqlock);
-		dcmipp_start_capture(vcap, buf);
 
 		return;
 	}
@@ -811,9 +814,6 @@ static void dcmipp_buffer_done(struct dcmipp_bytecap_device *vcap,
 {
 	struct vb2_v4l2_buffer *vbuf;
 
-	if (!buf)
-		return;
-
 	list_del_init(&buf->list);
 
 	vbuf = &buf->vb;
@@ -824,36 +824,39 @@ static void dcmipp_buffer_done(struct dcmipp_bytecap_device *vcap,
 	vb2_set_plane_payload(&vbuf->vb2_buf, 0, bytesused);
 	vb2_buffer_done(&vbuf->vb2_buf,
 			err ? VB2_BUF_STATE_ERROR : VB2_BUF_STATE_DONE);
-
+	dev_dbg(vcap->dev, "Done  [%d] %p phy=%pad\n", buf->vb.vb2_buf.index, buf, &buf->paddr);
 	vcap->buffers_count++;
-	vcap->active = NULL;
 }
 
 /* irqlock must be held */
-static void dcmipp_bytecap_prepare_next_frame
-		(struct dcmipp_bytecap_device *vcap)
+static void dcmipp_bytecap_set_next_frame_or_stop(struct dcmipp_bytecap_device *vcap)
 {
-	struct dcmipp_buf *buf;
+	if (!vcap->next && list_is_singular(&vcap->buffers)) {
+		/*
+		 * If there is no available buffer (none or a single one in the list while two
+		 * are expected), stop the capture (effective for next frame). On-going frame
+		 * capture will continue till FRAME END but no further capture will be done.
+		 */
+		reg_clear(vcap, DCMIPP_P0FCTCR, DCMIPP_P0FCTCR_CPTREQ);
 
-	/* Configure address register with next buffer */
-	buf = list_first_entry_or_null(&vcap->buffers, typeof(*buf), list);
-	if (!buf) {
 		dev_dbg(vcap->dev, "Capture restart is deferred to next buffer queueing\n");
-		vcap->active = NULL;
+		vcap->next = NULL;
 		vcap->state = WAIT_FOR_BUFFER;
 		return;
 	}
-	vcap->active = buf;
+
+	/* If we don't have buffer yet, pick the one after active */
+	if (!vcap->next)
+		vcap->next = list_next_entry(vcap->active, list);
 
 	/*
 	 * Set buffer address
 	 * This register is shadowed and will be taken into
 	 * account on next VSYNC (start of next frame)
 	 */
-	reg_write(vcap, DCMIPP_P0PPM0AR1, buf->paddr);
-
-	/* Capture request */
-	reg_set(vcap, DCMIPP_P0FCTCR, DCMIPP_P0FCTCR_CPTREQ);
+	reg_write(vcap, DCMIPP_P0PPM0AR1, vcap->next->paddr);
+	dev_dbg(vcap->dev, "Write [%d] %p phy=%pad\n",
+		vcap->next->vb.vb2_buf.index, vcap->next, &vcap->next->paddr);
 }
 
 /* irqlock must be held */
@@ -864,7 +867,8 @@ static void dcmipp_bytecap_process_frame(struct dcmipp_bytecap_device *vcap,
 	struct dcmipp_buf *buf = vcap->active;
 
 	if (!buf) {
-		dev_dbg(vcap->dev, "skip NULL active frame\n");
+		vcap->nactive_count++;
+		vcap->errors_count++;
 		return;
 	}
 
@@ -874,52 +878,35 @@ static void dcmipp_bytecap_process_frame(struct dcmipp_bytecap_device *vcap,
 		/* Clip to buffer size and return buffer to V4L2 in error */
 		bytesused = buf->size;
 		vcap->limit_count++;
+		vcap->errors_count++;
 		err = -EOVERFLOW;
 	}
 
 	dcmipp_buffer_done(vcap, buf, bytesused, err);
-
-	dcmipp_bytecap_prepare_next_frame(vcap);
+	vcap->active = NULL;
 }
 
 static irqreturn_t dcmipp_bytecap_irq_thread(int irq, void *arg)
 {
 	struct dcmipp_bytecap_device *vcap =
 			container_of(arg, struct dcmipp_bytecap_device, ved);
-	u32 cmsr2_pxframef;
-	u32 cmsr2_pxvsyncf;
-	u32 cmsr2_pxovrf;
 	size_t bytesused = 0;
+	u32 cmsr2;
 
 	spin_lock_irq(&vcap->irqlock);
 
-	cmsr2_pxovrf = DCMIPP_CMSR2_P0OVRF;
-	cmsr2_pxvsyncf = DCMIPP_CMSR2_P0VSYNCF;
-	cmsr2_pxframef = DCMIPP_CMSR2_P0FRAMEF;
+	cmsr2 = vcap->cmsr2 & vcap->cmier;
 
-	if (vcap->cmsr2 & cmsr2_pxovrf) {
-		vcap->overrun_count++;
-		spin_unlock_irq(&vcap->irqlock);
-
-		/* Restart capture */
-		reg_set(vcap, DCMIPP_P0FCTCR, DCMIPP_P0FCTCR_CPTREQ);
-		return IRQ_HANDLED;
-	}
-
-	if (vcap->cmsr2 & cmsr2_pxframef &&
-	    vcap->cmsr2 & cmsr2_pxvsyncf) {
-		/* If both IT FRAME and VSYNC are received together
-		 * buffers will be corrupted, skip this frame
-		 */
+	/*
+	 * If we have an overrun, a frame-end will probably not be generated, in that
+	 * case the active buffer will be recycled as next buffer by the VSYNC handler
+	 */
+	if (cmsr2 & DCMIPP_CMSR2_P0OVRF) {
 		vcap->errors_count++;
-		spin_unlock_irq(&vcap->irqlock);
-
-		/* Restart capture */
-		reg_set(vcap, DCMIPP_P0FCTCR, DCMIPP_P0FCTCR_CPTREQ);
-		return IRQ_HANDLED;
+		vcap->overrun_count++;
 	}
 
-	if (vcap->cmsr2 & cmsr2_pxframef) {
+	if (cmsr2 & DCMIPP_CMSR2_P0FRAMEF) {
 		vcap->frame_count++;
 
 		/* Read captured buffer size */
@@ -927,9 +914,26 @@ static irqreturn_t dcmipp_bytecap_irq_thread(int irq, void *arg)
 		dcmipp_bytecap_process_frame(vcap, bytesused);
 	}
 
-	if (vcap->cmsr2 & cmsr2_pxvsyncf)
+	if (cmsr2 & DCMIPP_CMSR2_P0VSYNCF) {
 		vcap->vsync_count++;
+		if (vcap->state == WAIT_FOR_BUFFER) {
+			vcap->underrun_count++;
+			goto out;
+		}
 
+		/*
+		 * On VSYNC, the previously set next buffer is going to become active thanks to
+		 * the shadowing mechanism of the DCMIPP. In most of the cases, since a FRAMEEND
+		 * has already come, pointer next is NULL since active is reset during the
+		 * FRAMEEND handling. However, in case of framerate adjustment, there are more
+		 * VSYNC than FRAMEEND. Thus we recycle the active (but not used) buffer and put it
+		 * back into next.
+		 */
+		swap(vcap->active, vcap->next);
+		dcmipp_bytecap_set_next_frame_or_stop(vcap);
+	}
+
+out:
 	spin_unlock_irq(&vcap->irqlock);
 	return IRQ_HANDLED;
 }
@@ -939,9 +943,8 @@ static irqreturn_t dcmipp_bytecap_irq_callback(int irq, void *arg)
 	struct dcmipp_bytecap_device *vcap =
 			container_of(arg, struct dcmipp_bytecap_device, ved);
 
+	/* Store interrupt status register */
 	vcap->cmsr2 = reg_read(vcap, DCMIPP_CMSR2);
-	vcap->cmsr2 = vcap->cmsr2 & vcap->cmier;
-
 	vcap->it_count++;
 
 	/* Clear interrupt */
