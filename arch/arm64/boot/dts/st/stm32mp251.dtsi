@@ -298,7 +298,46 @@
 				reg = <0x400e0000 0x400>;
 				interrupts = <GIC_SPI 115 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_KER_USART2>;
+				dmas = <&hpdma 11 0x20 0x12 0x0>,
+				       <&hpdma 12 0x20 0x3021 0x0>;
+				dma-names = "rx", "tx";
 				feature-domains = <&rifsc STM32MP25_RIFSC_USART2_ID>;
+				status = "disabled";
+			};
+
+			usart3: serial@400f0000 {
+				compatible = "st,stm32h7-uart";
+				reg = <0x400f0000 0x400>;
+				interrupts = <GIC_SPI 116 IRQ_TYPE_LEVEL_HIGH>;
+				clocks = <&rcc CK_KER_USART3>;
+				dmas = <&hpdma 13 0x20 0x12 0x0>,
+				       <&hpdma 14 0x20 0x3021 0x0>;
+				dma-names = "rx", "tx";
+				feature-domains = <&rifsc STM32MP25_RIFSC_USART3_ID>;
+				status = "disabled";
+			};
+
+			uart4: serial@40100000 {
+				compatible = "st,stm32h7-uart";
+				reg = <0x40100000 0x400>;
+				interrupts = <GIC_SPI 126 IRQ_TYPE_LEVEL_HIGH>;
+				clocks = <&rcc CK_KER_UART4>;
+				dmas = <&hpdma 15 0x20 0x12 0x0>,
+				       <&hpdma 16 0x20 0x3021 0x0>;
+				dma-names = "rx", "tx";
+				feature-domains = <&rifsc STM32MP25_RIFSC_UART4_ID>;
+				status = "disabled";
+			};
+
+			uart5: serial@40110000 {
+				compatible = "st,stm32h7-uart";
+				reg = <0x40110000 0x400>;
+				interrupts = <GIC_SPI 127 IRQ_TYPE_LEVEL_HIGH>;
+				clocks = <&rcc CK_KER_UART5>;
+				dmas = <&hpdma 17 0x20 0x12 0x0>,
+				       <&hpdma 18 0x20 0x3021 0x0>;
+				dma-names = "rx", "tx";
+				feature-domains = <&rifsc STM32MP25_RIFSC_UART5_ID>;
 				status = "disabled";
 			};
 
@@ -414,6 +453,18 @@
 				status = "disabled";
 			};
 
+			usart6: serial@40220000 {
+				compatible = "st,stm32h7-uart";
+				reg = <0x40220000 0x400>;
+				interrupts = <GIC_SPI 136 IRQ_TYPE_LEVEL_HIGH>;
+				clocks = <&rcc CK_KER_USART6>;
+				dmas = <&hpdma 19 0x20 0x12 0x0>,
+				       <&hpdma 20 0x20 0x3021 0x0>;
+				dma-names = "rx", "tx";
+				feature-domains = <&rifsc STM32MP25_RIFSC_USART6_ID>;
+				status = "disabled";
+			};
+
 			spi1: spi@40230000 {
 				#address-cells = <1>;
 				#size-cells = <0>;
@@ -459,6 +510,30 @@
 				status = "disabled";
 			};
 
+			uart9: serial@402c0000 {
+				compatible = "st,stm32h7-uart";
+				reg = <0x402c0000 0x400>;
+				interrupts = <GIC_SPI 150 IRQ_TYPE_LEVEL_HIGH>;
+				clocks = <&rcc CK_KER_UART9>;
+				dmas = <&hpdma 25 0x20 0x12 0x0>,
+				       <&hpdma 26 0x20 0x3021 0x0>;
+				dma-names = "rx", "tx";
+				feature-domains = <&rifsc STM32MP25_RIFSC_UART9_ID>;
+				status = "disabled";
+			};
+
+			usart1: serial@40330000 {
+				compatible = "st,stm32h7-uart";
+				reg = <0x40330000 0x400>;
+				interrupts = <GIC_SPI 114 IRQ_TYPE_LEVEL_HIGH>;
+				clocks = <&rcc CK_KER_USART1>;
+				dmas = <&hpdma 9 0x20 0x12 0x0>,
+				       <&hpdma 10 0x20 0x3021 0x0>;
+				dma-names = "rx", "tx";
+				feature-domains = <&rifsc STM32MP25_RIFSC_USART1_ID>;
+				status = "disabled";
+			};
+
 			spi6: spi@40350000 {
 				#address-cells = <1>;
 				#size-cells = <0>;
@@ -486,6 +561,30 @@
 				       <&hpdma 62 0x20 0x00003021 0>;
 				dma-names = "rx", "tx";
 				feature-domains = <&rifsc STM32MP25_RIFSC_SPI7_ID>;
+				status = "disabled";
+			};
+
+			uart7: serial@40370000 {
+				compatible = "st,stm32h7-uart";
+				reg = <0x40370000 0x400>;
+				interrupts = <GIC_SPI 148 IRQ_TYPE_LEVEL_HIGH>;
+				clocks = <&rcc CK_KER_UART7>;
+				dmas = <&hpdma 21 0x20 0x12 0x0>,
+				       <&hpdma 22 0x20 0x3021 0x0>;
+				dma-names = "rx", "tx";
+				feature-domains = <&rifsc STM32MP25_RIFSC_UART7_ID>;
+				status = "disabled";
+			};
+
+			uart8: serial@40380000 {
+				compatible = "st,stm32h7-uart";
+				reg = <0x40380000 0x400>;
+				interrupts = <GIC_SPI 149 IRQ_TYPE_LEVEL_HIGH>;
+				clocks = <&rcc CK_KER_UART8>;
+				dmas = <&hpdma 23 0x20 0x12 0x0>,
+				       <&hpdma 24 0x20 0x3021 0x0>;
+				dma-names = "rx", "tx";
+				feature-domains = <&rifsc STM32MP25_RIFSC_UART8_ID>;
 				status = "disabled";
 			};
 
