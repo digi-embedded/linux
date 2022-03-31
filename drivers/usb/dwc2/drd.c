@@ -147,9 +147,18 @@ static int dwc2_drd_role_sw_set(struct usb_role_switch *sw, enum usb_role role)
 
 	spin_unlock_irqrestore(&hsotg->lock, flags);
 
-	if (!already && hsotg->dr_mode == USB_DR_MODE_OTG)
+	if (!already && hsotg->dr_mode == USB_DR_MODE_OTG) {
+		/*
+		 * The bus may have been suspended (typically in hcd), need to resume as the HW
+		 * may not be HW accessible. Schedule work to call dwc2_conn_id_status_change
+		 * to handle the port resume before switching mode.
+		 */
+		if (hsotg->bus_suspended && hsotg->wq_otg)
+			queue_work(hsotg->wq_otg, &hsotg->wf_otg);
+
 		/* This will raise a Connector ID Status Change Interrupt */
 		dwc2_force_mode(hsotg, role == USB_ROLE_HOST);
+	}
 
 	if (!hsotg->ll_hw_enabled && hsotg->clk)
 		clk_disable_unprepare(hsotg->clk);
