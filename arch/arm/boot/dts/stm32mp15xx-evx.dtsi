@@ -81,7 +81,7 @@
 		};
 	};
 
-	sound {
+	sound: sound {
 		compatible = "audio-graph-card";
 		label = "STM32MP15-EV";
 		routing =
