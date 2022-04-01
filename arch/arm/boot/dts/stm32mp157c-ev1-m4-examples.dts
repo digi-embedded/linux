@@ -141,6 +141,10 @@
 	status = "disabled";
 };
 
+&sound {
+	status = "disabled";
+};
+
 &timers2 {
 	status = "disabled";
 };
