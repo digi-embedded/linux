@@ -1023,6 +1023,9 @@ static int stm32_exti_probe(struct platform_device *pdev)
 		return ret;
 
 	for_each_child_of_node(np, child) {
+		if (!of_property_read_bool(child, "interrupt-controller"))
+			continue;
+
 		parent_domain = irq_find_host(of_irq_find_parent(child));
 		if (!parent_domain) {
 			dev_err(dev, "child interrupt-parent not found\n");
