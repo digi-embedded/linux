@@ -834,7 +834,7 @@ static void stm32_mdma_chan_complete_worker(struct work_struct *work)
 		return;
 	}
 
-	spin_lock_irqsave(&chan->vchan.lock, flags);
+	spin_lock_irqsave_nested(&chan->vchan.lock, flags, SINGLE_DEPTH_NESTING);
 
 	if (chan->next_sg == chan->desc->num_sgs) {
 		vchan_cookie_complete(&chan->desc->vdesc);
