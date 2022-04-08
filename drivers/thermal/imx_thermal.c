@@ -423,11 +423,9 @@ static int imx_set_trip_temp(struct thermal_zone_device *tz, int trip,
 {
 	struct imx_thermal_data *data = tz->devdata;
 
-	/* do not allow passive to be set higher than critical */
-	if (temp < 0 || temp > data->temp_critical)
-		return -EINVAL;
-
 	if (trip == IMX_TRIP_CRITICAL) {
+		if (temp > data->temp_max)
+			return -EINVAL;
 		data->temp_critical = temp;
 		if (data->socdata->version == TEMPMON_IMX6SX &&
 		    !of_machine_is_compatible("digi,ccimx6ul"))
@@ -435,7 +433,8 @@ static int imx_set_trip_temp(struct thermal_zone_device *tz, int trip,
 	}
 
 	if (trip == IMX_TRIP_PASSIVE) {
-		if (temp > (data->temp_max - (1000 * 10)))
+		/* do not allow passive to be set higher than critical */
+		if (temp > data->temp_critical)
 			return -EINVAL;
 		data->temp_passive = temp;
 		imx_set_alarm_temp(data, temp);
