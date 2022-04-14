@@ -142,6 +142,88 @@
 			feature-domains = <&rifsc 156>;
 		};
 
+		exti1: interrupt-controller@44220000 {
+			compatible = "st,stm32mp1-exti", "syscon";
+			interrupt-controller;
+			#interrupt-cells = <2>;
+			#address-cells = <0>;
+			reg = <0x44220000 0x400>;
+
+			exti-interrupt-map {
+				#address-cells = <0>;
+				#interrupt-cells = <2>;
+				interrupt-map-mask = <0xffffffff 0>;
+				interrupt-map =
+					<0  0 &intc 0 GIC_SPI 268 IRQ_TYPE_LEVEL_HIGH>,
+					<1  0 &intc 0 GIC_SPI 269 IRQ_TYPE_LEVEL_HIGH>,
+					<2  0 &intc 0 GIC_SPI 270 IRQ_TYPE_LEVEL_HIGH>,
+					<3  0 &intc 0 GIC_SPI 271 IRQ_TYPE_LEVEL_HIGH>,
+					<4  0 &intc 0 GIC_SPI 272 IRQ_TYPE_LEVEL_HIGH>,
+					<5  0 &intc 0 GIC_SPI 273 IRQ_TYPE_LEVEL_HIGH>,
+					<6  0 &intc 0 GIC_SPI 274 IRQ_TYPE_LEVEL_HIGH>,
+					<7  0 &intc 0 GIC_SPI 275 IRQ_TYPE_LEVEL_HIGH>,
+					<8  0 &intc 0 GIC_SPI 276 IRQ_TYPE_LEVEL_HIGH>,
+					<9  0 &intc 0 GIC_SPI 277 IRQ_TYPE_LEVEL_HIGH>,
+					<10 0 &intc 0 GIC_SPI 278 IRQ_TYPE_LEVEL_HIGH>,
+					<11 0 &intc 0 GIC_SPI 279 IRQ_TYPE_LEVEL_HIGH>,
+					<12 0 &intc 0 GIC_SPI 280 IRQ_TYPE_LEVEL_HIGH>,
+					<13 0 &intc 0 GIC_SPI 281 IRQ_TYPE_LEVEL_HIGH>,
+					<14 0 &intc 0 GIC_SPI 282 IRQ_TYPE_LEVEL_HIGH>,
+					<15 0 &intc 0 GIC_SPI 283 IRQ_TYPE_LEVEL_HIGH>,
+					<16 0 &intc 0 GIC_SPI 0   IRQ_TYPE_LEVEL_HIGH>,
+					<17 0 &intc 0 GIC_SPI 1   IRQ_TYPE_LEVEL_HIGH>,
+					<18 0 &intc 0 GIC_SPI 260 IRQ_TYPE_LEVEL_HIGH>,
+					<19 0 &intc 0 GIC_SPI 259 IRQ_TYPE_LEVEL_HIGH>,
+					<21 0 &intc 0 GIC_SPI 108 IRQ_TYPE_LEVEL_HIGH>,
+					<22 0 &intc 0 GIC_SPI 110 IRQ_TYPE_LEVEL_HIGH>,
+					<23 0 &intc 0 GIC_SPI 137 IRQ_TYPE_LEVEL_HIGH>,
+					<24 0 &intc 0 GIC_SPI 168 IRQ_TYPE_LEVEL_HIGH>,
+					<25 0 &intc 0 GIC_SPI 181 IRQ_TYPE_LEVEL_HIGH>,
+					<26 0 &intc 0 GIC_SPI 114 IRQ_TYPE_LEVEL_HIGH>,
+					<27 0 &intc 0 GIC_SPI 115 IRQ_TYPE_LEVEL_HIGH>,
+					<28 0 &intc 0 GIC_SPI 116 IRQ_TYPE_LEVEL_HIGH>,
+					<29 0 &intc 0 GIC_SPI 136 IRQ_TYPE_LEVEL_HIGH>,
+					<30 0 &intc 0 GIC_SPI 126 IRQ_TYPE_LEVEL_HIGH>,
+					<31 0 &intc 0 GIC_SPI 127 IRQ_TYPE_LEVEL_HIGH>,
+					<32 0 &intc 0 GIC_SPI 148 IRQ_TYPE_LEVEL_HIGH>,
+					<33 0 &intc 0 GIC_SPI 149 IRQ_TYPE_LEVEL_HIGH>,
+					<34 0 &intc 0 GIC_SPI 150 IRQ_TYPE_LEVEL_HIGH>,
+					<36 0 &intc 0 GIC_SPI 112 IRQ_TYPE_LEVEL_HIGH>,
+					<37 0 &intc 0 GIC_SPI 113 IRQ_TYPE_LEVEL_HIGH>,
+					<38 0 &intc 0 GIC_SPI 125 IRQ_TYPE_LEVEL_HIGH>,
+					<39 0 &intc 0 GIC_SPI 152 IRQ_TYPE_LEVEL_HIGH>,
+					<40 0 &intc 0 GIC_SPI 153 IRQ_TYPE_LEVEL_HIGH>,
+					<41 0 &intc 0 GIC_SPI 154 IRQ_TYPE_LEVEL_HIGH>,
+					<42 0 &intc 0 GIC_SPI 155 IRQ_TYPE_LEVEL_HIGH>,
+					<43 0 &intc 0 GIC_SPI 169 IRQ_TYPE_LEVEL_HIGH>,
+					<44 0 &intc 0 GIC_SPI 182 IRQ_TYPE_LEVEL_HIGH>,
+					<45 0 &intc 0 GIC_SPI 209 IRQ_TYPE_LEVEL_HIGH>,
+					<46 0 &intc 0 GIC_SPI 229 IRQ_TYPE_LEVEL_HIGH>,
+					<47 0 &intc 0 GIC_SPI 166 IRQ_TYPE_LEVEL_HIGH>,
+					<48 0 &intc 0 GIC_SPI 215 IRQ_TYPE_LEVEL_HIGH>,
+					<49 0 &intc 0 GIC_SPI 208 IRQ_TYPE_LEVEL_HIGH>,
+					<50 0 &intc 0 GIC_SPI 210 IRQ_TYPE_LEVEL_HIGH>,
+					<59 0 &intc 0 GIC_SPI 171 IRQ_TYPE_LEVEL_HIGH>,
+					//	<59 0 &intc 0 GIC_SPI 172 IRQ_TYPE_LEVEL_HIGH>,
+					<61 0 &intc 0 GIC_SPI 173 IRQ_TYPE_LEVEL_HIGH>,
+					//	<61 0 &intc 0 GIC_SPI 174 IRQ_TYPE_LEVEL_HIGH>,
+					<64 0 &intc 0 GIC_SPI 220 IRQ_TYPE_LEVEL_HIGH>,
+					<67 0 &intc 0 GIC_SPI 10  IRQ_TYPE_LEVEL_HIGH>,
+					<68 0 &intc 0 GIC_SPI 131 IRQ_TYPE_LEVEL_HIGH>,
+					<70 0 &intc 0 GIC_SPI 134 IRQ_TYPE_LEVEL_HIGH>,
+					<72 0 &intc 0 GIC_SPI 224 IRQ_TYPE_LEVEL_HIGH>,
+					<73 0 &intc 0 GIC_SPI 202 IRQ_TYPE_LEVEL_HIGH>,
+					<74 0 &intc 0 GIC_SPI 109 IRQ_TYPE_LEVEL_HIGH>,
+					<75 0 &intc 0 GIC_SPI 111 IRQ_TYPE_LEVEL_HIGH>,
+					<76 0 &intc 0 GIC_SPI 138 IRQ_TYPE_LEVEL_HIGH>,
+					<77 0 &intc 0 GIC_SPI 253 IRQ_TYPE_LEVEL_HIGH>,
+					<78 0 &intc 0 GIC_SPI 254 IRQ_TYPE_LEVEL_HIGH>,
+					<79 0 &intc 0 GIC_SPI 255 IRQ_TYPE_LEVEL_HIGH>,
+					<83 0 &intc 0 GIC_SPI 257 IRQ_TYPE_LEVEL_HIGH>,
+					<84 0 &intc 0 GIC_SPI 258 IRQ_TYPE_LEVEL_HIGH>;
+			};
+		};
+
 		syscfg: syscon@44230000 {
 			compatible = "st,stm32mp25-syscfg", "syscon";
 			reg = <0x44230000 0x10000>;
