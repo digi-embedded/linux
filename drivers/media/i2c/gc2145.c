@@ -27,7 +27,12 @@
 #define GC2145_REG_CHIP_ID	0xf0
 #define GC2145_REG_PAGE_SELECT	0xfe
 /* Page 3 */
+#define GC2145_REG_FIFO_FULL_LVL_LOW	0x04
+#define GC2145_REG_FIFO_FULL_LVL_HIGH	0x05
 #define GC2145_REG_MIPI_DT	0x11
+#define GC2145_REG_LWC_LOW	0x12
+#define GC2145_REG_LWC_HIGH	0x13
+#define GC2145_REG_FIFO_GATE_MODE	0x17
 
 #define GC2145_CHIP_ID		0x2145
 
@@ -299,12 +304,11 @@ static const struct gc2145_reg mode_640_480_regs[] = {
 	{0xf2, 0x00},
 	/* Mipi */
 	{0xfe, 0x03},
-	{0x02, 0x22}, {0x03, 0x10}, {0x04, 0x10}, {0x05, 0x00},
+	{0x02, 0x22}, {0x03, 0x10},
 	{0x06, 0x88}, {0x01, 0x87}, {0x10, 0x95}, {0x11, 0x1e},
-	{0x12, 0x80}, {0x13, 0x0c}, {0x15, 0x10}, {0x22, 0x04},
+	{0x15, 0x10}, {0x22, 0x04},
 	{0x23, 0x10}, {0x24, 0x10}, {0x25, 0x10}, {0x26, 0x05},
 	{0x21, 0x10}, {0x29, 0x03}, {0x2a, 0x0a}, {0x2b, 0x06},
-	{0x17, 0xf0},
 	{0xfe, 0x00},
 	{0xfe, 0x00},
 	{0xfd, 0x01}, {0xfa, 0x00},
@@ -327,10 +331,6 @@ static const struct gc2145_reg mode_640_480_regs[] = {
 	{0x0a, 0x82},
 	{0xfe, 0x01},
 	{0x21, 0x04},
-	/* MIPI */
-	{0xfe, 0x03},
-	{0x12, 0x00}, {0x13, 0x05}, {0x04, 0x90}, {0x05, 0x01},
-	{0xfe, 0x00},
 };
 
 #define GC2145_1280_720_PIXELRATE	(96 * HZ_PER_MHZ)
@@ -571,12 +571,12 @@ static const struct gc2145_reg mode_1280_720_regs[] = {
 	{0xf2, 0x00},
 	/* Mipi */
 	{0xfe, 0x03},
-	{0x01, 0x87}, {0x02, 0x22}, {0x03, 0x10}, {0x04, 0x10},
-	{0x05, 0x00}, {0x06, 0x88}, {0x10, 0x95}, {0x11, 0x1e},
-	{0x12, 0x00}, {0x13, 0x0a}, {0x15, 0x12}, {0x22, 0x04},
+	{0x01, 0x87}, {0x02, 0x22}, {0x03, 0x10},
+	{0x06, 0x88}, {0x10, 0x95}, {0x11, 0x1e},
+	{0x15, 0x12}, {0x22, 0x04},
 	{0x23, 0x10}, {0x24, 0x10}, {0x25, 0x10}, {0x26, 0x05},
 	{0x21, 0x10}, {0x29, 0x03}, {0x2a, 0x0a}, {0x2b, 0x06},
-	{0x17, 0xf0}, {0x42, 0x00}, {0x43, 0x05},
+	{0x42, 0x00}, {0x43, 0x05},
 	{0xfe, 0x00},
 };
 
@@ -819,12 +819,11 @@ static const struct gc2145_reg mode_1600_1200_regs[] = {
 	{0xf2, 0x00},
 	/* Mipi */
 	{0xfe, 0x03},
-	{0x01, 0x87}, {0x02, 0x22}, {0x03, 0x10}, {0x04, 0x10},
-	{0x05, 0x00}, {0x06, 0x88}, {0x10, 0x95}, {0x11, 0x1e},
-	{0x12, 0x80}, {0x13, 0x0c}, {0x15, 0x10}, {0x22, 0x04},
+	{0x01, 0x87}, {0x02, 0x22}, {0x03, 0x10},
+	{0x06, 0x88}, {0x10, 0x95}, {0x11, 0x1e},
+	{0x15, 0x10}, {0x22, 0x04},
 	{0x23, 0x10}, {0x24, 0x10}, {0x25, 0x10}, {0x26, 0x05},
 	{0x21, 0x10}, {0x29, 0x03}, {0x2a, 0x0a}, {0x2b, 0x06},
-	{0x17, 0xf0},
 	{0xfe, 0x00},
 };
 
@@ -838,6 +837,9 @@ static const char * const gc2145_supply_name[] = {
 #define GC2145_NUM_SUPPLIES ARRAY_SIZE(gc2145_supply_name)
 
 /* Mode configs */
+#define GC2145_MODE_640X480	0
+#define GC2145_MODE_1280X720	1
+#define GC2145_MODE_1600X1200	2
 static const struct gc2145_mode supported_modes[] = {
 	{
 		/* 640x480 30fps mode */
@@ -929,6 +931,12 @@ static const struct gc2145_format supported_formats[] = {
 		.colorspace	= V4L2_COLORSPACE_SRGB,
 		.datatype	= MIPI_CSI2_DT_RGB565,
 		.output_fmt	= 0x06,
+	},
+	{
+		.code           = MEDIA_BUS_FMT_SRGGB8_1X8,
+		.colorspace     = V4L2_COLORSPACE_RAW,
+		.datatype       = MIPI_CSI2_DT_RAW8,
+		.output_fmt     = 0x19, /* Image is taken out of the Lens correction */
 	},
 };
 
@@ -1056,8 +1064,8 @@ static void gc2145_set_default_format(struct gc2145 *gc2145)
 	fmt->ycbcr_enc = V4L2_MAP_YCBCR_ENC_DEFAULT(fmt->colorspace);
 	fmt->quantization = V4L2_MAP_QUANTIZATION_DEFAULT(true, fmt->colorspace, fmt->ycbcr_enc);
 	fmt->xfer_func = V4L2_MAP_XFER_FUNC_DEFAULT(fmt->colorspace);
-	fmt->width = supported_modes[0].width;
-	fmt->height = supported_modes[0].height;
+	fmt->width = supported_modes[GC2145_MODE_640X480].width;
+	fmt->height = supported_modes[GC2145_MODE_640X480].height;
 	fmt->field = V4L2_FIELD_NONE;
 }
 
@@ -1069,8 +1077,8 @@ static int gc2145_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 	mutex_lock(&gc2145->mutex);
 
 	/* Initialize try_fmt */
-	try_fmt->width = supported_modes[0].width;
-	try_fmt->height = supported_modes[0].height;
+	try_fmt->width = supported_modes[GC2145_MODE_640X480].width;
+	try_fmt->height = supported_modes[GC2145_MODE_640X480].height;
 	try_fmt->code = GC2145_DEFAULT_MBUS_FORMAT;
 	try_fmt->field = V4L2_FIELD_NONE;
 
@@ -1182,6 +1190,12 @@ static int gc2145_set_pad_format(struct v4l2_subdev *sd, struct v4l2_subdev_stat
 
 	mode = v4l2_find_nearest_size(supported_modes, ARRAY_SIZE(supported_modes), width, height,
 				      fmt->format.width, fmt->format.height);
+
+	/* In RAW mode, VGA is not possible so use 720p instead */
+	if ((gc2145_fmt->colorspace == V4L2_COLORSPACE_RAW) &&
+	    (mode == &supported_modes[GC2145_MODE_640X480]))
+		mode = &supported_modes[GC2145_MODE_1280X720];
+
 	gc2145_update_pad_format(gc2145, mode, fmt);
 	if (fmt->which == V4L2_SUBDEV_FORMAT_TRY) {
 		framefmt = v4l2_subdev_get_try_format(sd, sd_state, fmt->pad);
@@ -1203,6 +1217,7 @@ static int gc2145_start_streaming(struct gc2145 *gc2145)
 	struct i2c_client *client = v4l2_get_subdevdata(&gc2145->sd);
 	const struct gc2145_reg_list *reg_list;
 	const struct gc2145_format *gc2145_format;
+	uint16_t lwc, fifo_full_lvl, fifo_gate_mode;
 	int ret;
 
 	ret = pm_runtime_resume_and_get(&client->dev);
@@ -1235,11 +1250,66 @@ static int gc2145_start_streaming(struct gc2145 *gc2145)
 	if (ret)
 		return ret;
 
-	/* Set the MIPI data type */
+	/* Set 3rd page access */
 	ret = gc2145_write_reg(gc2145, GC2145_REG_PAGE_SELECT, 0x03);
 	if (ret)
 		return ret;
 
+	/*
+	 * Adjust the MIPI buffer settings.
+	 * For YUV/RGB, LWC = image width * 2
+	 * For RAW8, LWC = image width
+	 * For RAW10, LWC = image width * 1.25
+	 */
+	if (gc2145_format->colorspace != V4L2_COLORSPACE_RAW)
+		lwc = gc2145->mode->width * 2;
+	else if (gc2145_format->code == MEDIA_BUS_FMT_SRGGB8_1X8)
+		lwc = gc2145->mode->width * 1;
+	else
+		lwc = gc2145->mode->width + (gc2145->mode->width / 4);
+
+	ret = gc2145_write_reg(gc2145, GC2145_REG_LWC_HIGH, lwc >> 8);
+	if (ret)
+		return ret;
+	ret = gc2145_write_reg(gc2145, GC2145_REG_LWC_LOW, (lwc & 0xff));
+	if (ret)
+		return ret;
+
+	/*
+	 * Adjust the MIPI Fifo Full Level
+	 * TODO - would need to understand better the constraints
+	 * 640x480 RGB: 0x0190
+	 * 1280x720 / 1600x1200 (aka no scaler) non RAW: 0x0010
+	 * 1600x1200 RAW: 0x0190
+	 */
+	if (gc2145_format->colorspace != V4L2_COLORSPACE_RAW) {
+		if ((gc2145->mode->width == 720) || (gc2145->mode->width == 1200))
+			fifo_full_lvl = 0x0010;
+		else
+			fifo_full_lvl = 0x0190;
+	} else
+		fifo_full_lvl = 0x0190;
+
+	ret = gc2145_write_reg(gc2145, GC2145_REG_FIFO_FULL_LVL_HIGH,
+			       fifo_full_lvl >> 8);
+	if (ret)
+		return ret;
+	ret = gc2145_write_reg(gc2145, GC2145_REG_FIFO_FULL_LVL_LOW,
+			       fifo_full_lvl & 0xff);
+	if (ret)
+		return ret;
+
+	/* Set the fifo gate mode / MIPI wdiv set */
+	if (gc2145_format->colorspace == V4L2_COLORSPACE_RAW)
+		fifo_gate_mode = 0xf1;
+	else
+		fifo_gate_mode = 0xf0;
+	ret = gc2145_write_reg(gc2145, GC2145_REG_FIFO_GATE_MODE,
+			       fifo_gate_mode);
+	if (ret)
+		return ret;
+
+	/* Set the MIPI data type */
 	ret = gc2145_write_reg(gc2145, GC2145_REG_MIPI_DT, gc2145_format->datatype);
 	if (ret)
 		return ret;
@@ -1591,7 +1661,7 @@ static int gc2145_probe(struct i2c_client *client)
 		goto error_power_off;
 
 	/* Set default mode to max resolution */
-	gc2145->mode = &supported_modes[0];
+	gc2145->mode = &supported_modes[GC2145_MODE_1600X1200];
 
 	ret = gc2145_init_controls(gc2145);
 	if (ret)
