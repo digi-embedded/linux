@@ -1780,7 +1780,6 @@
 			reg = <0x5c000000 0x400>;
 			interrupts-extended = <&exti 26 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&scmi_clk CK_SCMI_USART1>;
-			resets = <&scmi_reset RST_SCMI_USART1>;
 			wakeup-source;
 			power-domains = <&pd_core>;
 			status = "disabled";
