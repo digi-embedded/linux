@@ -145,6 +145,26 @@
 		always-on;
 	};
 
+	usb2_phy1: usb2-phy1 {
+		compatible      = "st,stm32mp25-usb2phy";
+		#phy-cells      = <0>;
+		st,syscfg       = <&syscfg 0x2400>;
+		clocks          = <&rcc CK_KER_USB2PHY1>;
+		resets          = <&rcc USB2PHY1_R>;
+		vdd33-supply    = <&scmi_vdd33usb>;
+		status          = "disabled";
+	};
+
+	usb2_phy2: usb2-phy2 {
+		compatible      = "st,stm32mp25-usb2phy";
+		#phy-cells      = <0>;
+		st,syscfg       = <&syscfg 0x2800>;
+		clocks          = <&rcc CK_KER_USB2PHY2EN>;
+		resets          = <&rcc USB2PHY2_R>;
+		vdd33-supply    = <&scmi_vdd33usb>;
+		status          = "disabled";
+	};
+
 	soc@0 {
 		compatible = "simple-bus";
 		#address-cells = <1>;
