@@ -2293,8 +2293,9 @@ static void brcmf_pcie_buscore_activate(void *ctx, struct brcmf_chip *chip,
 }
 
 
-static int brcmf_pcie_buscore_blhs_attach(void *ctx, struct brcmf_blhs **blhs,
-					  u32 flag, uint timeout, uint interval)
+static int
+brcmf_pcie_buscore_sec_attach(void *ctx, struct brcmf_blhs **blhs, struct brcmf_ccsec **ccsec,
+			      u32 flag, uint timeout, uint interval)
 {
 	struct brcmf_pciedev_info *devinfo = (struct brcmf_pciedev_info *)ctx;
 	struct brcmf_bus *bus = dev_get_drvdata(&devinfo->pdev->dev);
@@ -2349,7 +2350,7 @@ static const struct brcmf_buscore_ops brcmf_pcie_buscore_ops = {
 	.activate = brcmf_pcie_buscore_activate,
 	.read32 = brcmf_pcie_buscore_read32,
 	.write32 = brcmf_pcie_buscore_write32,
-	.blhs_attach = brcmf_pcie_buscore_blhs_attach,
+	.sec_attach = brcmf_pcie_buscore_sec_attach,
 };
 
 #define BRCMF_PCIE_FW_CODE	0
