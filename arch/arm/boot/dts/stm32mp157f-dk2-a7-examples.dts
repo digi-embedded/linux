@@ -13,10 +13,6 @@
 	compatible = "st,stm32mp157f-dk2-a7-examples", "st,stm32mp157f-dk2", "st,stm32mp157";
 };
 
-&i2c5 {
-	status = "okay";
-};
-
 &adc {
 	pinctrl-0 = <&adc12_ain_pins_a>, <&adc12_usb_cc_pins_a>;
 
@@ -32,6 +28,10 @@
 		st,min-sample-time-nsecs = <5000>;
 		st,adc-channels = <0 1 2 6 18 19>;
 	};
+};
+
+&i2c5 {
+	status = "okay";
 };
 
 &timers1 {
