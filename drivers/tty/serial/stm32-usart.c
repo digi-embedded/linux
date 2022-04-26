@@ -1921,7 +1921,7 @@ static int __maybe_unused stm32_usart_serial_en_wakeup(struct uart_port *port,
 	const struct stm32_usart_offsets *ofs = &stm32_port->info->ofs;
 	struct tty_port *tport = &port->state->port;
 	int ret;
-	unsigned int size;
+	unsigned int size = 0;
 	unsigned long flags;
 
 	if (!stm32_port->wakeup_src || !tty_port_initialized(tport))
@@ -1945,7 +1945,7 @@ static int __maybe_unused stm32_usart_serial_en_wakeup(struct uart_port *port,
 			spin_lock_irqsave(&port->lock, flags);
 			/* Poll data from DMA RX buffer if any */
 			if (!stm32_usart_rx_dma_pause(stm32_port))
-				stm32_usart_receive_chars(port, true);
+				size += stm32_usart_receive_chars(port, true);
 			stm32_usart_rx_dma_terminate(stm32_port);
 			uart_unlock_and_check_sysrq_irqrestore(port, flags);
 			if (size)
