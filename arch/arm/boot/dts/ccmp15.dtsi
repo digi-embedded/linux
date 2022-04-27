@@ -89,23 +89,18 @@
 		reg_3v3_rf: regulator-som@1 {
 			compatible = "regulator-fixed";
 			reg = <1>;
-			pinctrl-names = "default";
-			pinctrl-0 = <&pinctrl_reg_3v3_rf>;
 			regulator-name = "3v3_rf";
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
-			gpio = <&gpioc 15 GPIO_ACTIVE_HIGH>; /* 3V3_RF_EN */
+			gpio = <&gpiog 0 GPIO_ACTIVE_HIGH>; /* 3V3_RF_EN */
 			enable-active-high;
 			startup-delay-us = <100000>;
-			status = "disabled";
+			status = "okay";
 		};
 
 		reg_rf_wl_en: regulator-som@2 {
 			compatible = "regulator-fixed";
 			reg = <2>;
-			pinctrl-names = "default", "sleep";
-			pinctrl-0 = <&pinctrl_reg_rf_wl_en>;
-			pinctrl-1 = <&pinctrl_reg_rf_wl_en_sleep>;
 			regulator-name = "rf_wl_en";
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
@@ -113,7 +108,7 @@
 			enable-active-high;
 			startup-delay-us = <100>;
 			vin-supply = <&reg_3v3_rf>;
-			status = "disabled";
+			status = "okay";
 		};
 
 		reg_rf_bt_en: regulator-som@3 {
@@ -147,9 +142,9 @@
 	};
 
 	wireless {
-                /* U-Boot will fill in the MAC address here */
-	        status = "disabled";
-        };
+		/* U-Boot will fill in the MAC address here */
+		status = "okay";
+	};
 };
 
 &cpu0{
@@ -227,13 +222,27 @@
 
 /* USDHC3 (Wireless) */
 &sdmmc3 {
-        pinctrl-names = "default", "sleep";
-        pinctrl-0 = <&sdmmc3_b4_pins_a>;
-        pinctrl-1 = <&sdmmc3_b4_sleep_pins_a>;
-        non-removable;
-        no-1-8-v;
-        bus-width = <4>;
+	pinctrl-names = "default", "opendrain", "sleep";
+	pinctrl-0 = <&sdmmc3_b4_pins_a>;
+	pinctrl-1 = <&sdmmc3_b4_od_pins_a>;
+	pinctrl-2 = <&sdmmc3_b4_sleep_pins_a>;
+	non-removable;
+	no-1-8-v;
+	st,neg-edge;
+	bus-width = <4>;
+	vmmc-supply = <&reg_rf_wl_en>;
 	status = "okay";
+
+	#address-cells = <1>;
+	#size-cells = <0>;
+	brcmf: bcrmf@1 {
+		reg = <1>;
+		compatible = "brcm,bcm4329-fmac";
+
+		brcm,broken_sg_support;
+		brcm,sd_head_align = /bits/  16 <8>;
+		brcm,sd_sgentry_align = /bits/ 16 <32>;
+	};
 };
 
 /*&m4_rproc {
@@ -495,25 +504,6 @@
 };
 
 &pinctrl {
-	/* 3V3_RF regulator pinctrl for SOMv2 and higher */
-        pinctrl_reg_3v3_rf: reg_3v3_rf_grp {
-		pins {
-                        pinmux = <STM32_PINMUX('C', 15, AF15)>; /* SYS EVENTOUT */
-                };
-        };
-
-        pinctrl_reg_rf_wl_en: reg_rf_wl_en_grp {
-                pins {
-                        pinmux = <STM32_PINMUX('D', 13, AF15)>; /* SYS EVENTOUT */
-                };
-        };
-
-	pinctrl_reg_rf_wl_en_sleep: reg_rf_wl_en_grp_sleep {
-                pins {
-                        pinmux = <STM32_PINMUX('D', 13, AF15)>; /* SYS EVENTOUT */
-                };
-        };
-
 	pinctrl_reg_rf_bt_en: reg_rf_bt_en_grp {
                 pins {
                         pinmux = <STM32_PINMUX('Z', 6, AF15)>; /* SYS EVENTOUT */
