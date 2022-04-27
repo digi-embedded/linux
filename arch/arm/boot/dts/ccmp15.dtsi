@@ -18,8 +18,8 @@
 	aliases {
 		ethernet0 = &ethernet0;
 		serial0 = &uart4;
-		serial1 = &usart3;
-		serial2 = &usart1;
+		serial1 = &usart1;
+		serial2 = &usart3;
 	};
 
 	memory@c0000000 {
@@ -110,22 +110,6 @@
 			vin-supply = <&reg_3v3_rf>;
 			status = "okay";
 		};
-
-		reg_rf_bt_en: regulator-som@3 {
-			compatible = "regulator-fixed";
-			reg = <3>;
-			pinctrl-names = "default", "sleep";
-			pinctrl-0 = <&pinctrl_reg_rf_bt_en>;
-			pinctrl-1 = <&pinctrl_reg_rf_bt_en_sleep>;
-			regulator-name = "rf_bt_en";
-			regulator-min-microvolt = <3300000>;
-			regulator-max-microvolt = <3300000>;
-			gpio = <&gpioz 6  GPIO_ACTIVE_HIGH>; /* BT_EN */
-			enable-active-high;
-			startup-delay-us = <100>;
-			vin-supply = <&reg_3v3_rf>;
-			status = "disabled";
-		};
 	};
 
 	vin: vin {
@@ -134,11 +118,6 @@
 		regulator-min-microvolt = <5000000>;
 		regulator-max-microvolt = <5000000>;
 		regulator-always-on;
-	};
-
-	bluetooth: bluetooth {
-                /* U-Boot will fill in the MAC address here */
-                status = "disabled";
 	};
 
 	wireless {
@@ -207,16 +186,16 @@
 &usart1 {
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&ccmp15_usart1_pins_c>, <&ccmp15_usart1_pins_z>;
-	pinctrl-1 = <&ccmp15_usart1_pins_c>, <&ccmp15_usart1_sleep_pins_z>;
+	pinctrl-1 = <&ccmp15_usart1_sleep_pins_c>, <&ccmp15_usart1_sleep_pins_z>;
 	uart-has-rtscts;
-	status = "disabled";
+	status = "okay";
 
 	bluetooth {
 		shutdown-gpios = <&gpioz 6 GPIO_ACTIVE_HIGH>;
 		compatible = "brcm,bcm43438-bt";
 		max-speed = <3000000>;
 		vbat-supply = <&v3v3>;
-		vddio-supply = <&v3v3>;
+		vddio-supply = <&reg_3v3_rf>;
 	};
 };
 
@@ -504,19 +483,7 @@
 };
 
 &pinctrl {
-	pinctrl_reg_rf_bt_en: reg_rf_bt_en_grp {
-                pins {
-                        pinmux = <STM32_PINMUX('Z', 6, AF15)>; /* SYS EVENTOUT */
-                };
-        };
-
-        pinctrl_reg_rf_bt_en_sleep: reg_rf_bt_en_grp_sleep {
-                pins {
-                        pinmux = <STM32_PINMUX('Z', 6, AF15)>; /* SYS EVENTOUT */
-                };
-        };
-
-        ccmp15_usart1_pins_c: usart1-2 {
+	ccmp15_usart1_pins_c: usart1-2 {
 		pins1 {
 			pinmux = <STM32_PINMUX('A', 12, AF7)>; /* USART1_RTS */
 			bias-disable;
@@ -529,32 +496,32 @@
 		};
 	};
 
-        ccmp15_usart1_sleep_pins_c: usart1-sleep-2 {
-                pins {
-                        pinmux = <STM32_PINMUX('A', 12, ANALOG)>, /* USART1_RTS */
+	ccmp15_usart1_sleep_pins_c: usart1-sleep-2 {
+		pins {
+			pinmux = <STM32_PINMUX('A', 12, ANALOG)>, /* USART1_RTS */
 				 <STM32_PINMUX('A', 11, ANALOG)>; /* USART1_CTS_NSS */
-                };
-        };
+		};
+	};
 };
 
 &pinctrl_z {
 	ccmp15_usart1_pins_z: usart1-2 {
-                pins1 {
-                        pinmux = <STM32_PINMUX('Z', 7, AF7)>; /* USART1_TX */
-                        bias-disable;
-                        drive-push-pull;
-                        slew-rate = <0>;
-                };
-                pins2 {
-                        pinmux = <STM32_PINMUX('Z', 1, AF7)>; /* USART1_RX */
-                        bias-pull-up;
-                };
-        };
+		pins1 {
+			pinmux = <STM32_PINMUX('Z', 7, AF7)>; /* USART1_TX */
+			bias-disable;
+			drive-push-pull;
+			slew-rate = <0>;
+		};
+		pins2 {
+			pinmux = <STM32_PINMUX('Z', 1, AF7)>; /* USART1_RX */
+			bias-pull-up;
+		};
+	};
 
 	ccmp15_usart1_sleep_pins_z: usart1-sleep-2 {
-                pins {
-                        pinmux = <STM32_PINMUX('Z', 7, ANALOG)>, /* USART1_TX */
-                                 <STM32_PINMUX('Z', 1, ANALOG)>; /* USART1_RX */
-                };
-        };
+		pins {
+			pinmux = <STM32_PINMUX('Z', 7, ANALOG)>, /* USART1_TX */
+				 <STM32_PINMUX('Z', 1, ANALOG)>; /* USART1_RX */
+		};
+	};
 };
