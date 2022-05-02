@@ -44,17 +44,6 @@
 		};
 	};*/
 
-	sound {
-		compatible = "audio-graph-card";
-		label = "CCMMP15DKV";
-		routing =
-			"Playback" , "MCLK",
-			"Capture" , "MCLK",
-			"MICL" , "Mic Bias";
-		dais = <&sai2a_port &sai2b_port &i2s2_port>;
-		status = "okay";
-	};
-
 	usb_phy_tuning: usb-phy-tuning {
 		st,hs-dc-level = <2>;
 		st,fs-rftime-tuning;
@@ -64,6 +53,27 @@
 		st,squelch-level = <3>;
 		st,hs-rx-offset = <2>;
 		st,no-lsfs-sc;
+	};
+
+	sound_max98089: sound-max98089 {
+		compatible = "st,stm-audio-max98088";
+		model = "stm32_max98088";
+		cpu-dai = <&i2s2>;
+		audio-codec = <&max98089>;
+		audio-routing =
+			"Headphone Jack", "HPL",
+			"Headphone Jack", "HPR",
+			"Ext Spk", "SPKL",
+			"Ext Spk", "SPKR",
+			"LineOut", "RECL",
+			"LineOut", "RECR",
+			"Mic1", "MIC1",
+			"Mic2", "MIC2",
+			"LineInA", "INA1",
+			"LineInA", "INA2",
+			"LineInB", "INB1",
+			"LineInB", "INB2";
+		status = "okay";
 	};
 };
 
@@ -163,14 +173,7 @@
 	pinctrl-0 = <&ccmp15_i2s2_pins_a>;
 	pinctrl-1 = <&ccmp15_i2s2_sleep_pins_a>;
 	status = "okay";
-
-	i2s2_port: port {
-		i2s2_endpoint: endpoint {
-			// audio codec remote-endpoint = <&sii9022_tx_endpoint>;
-			format = "i2s";
-			mclk-fs = <256>;
-		};
-	};
+	#clock-cells = <0>;
 };
 
 &ltdc {
@@ -265,6 +268,18 @@
 				remote-endpoint = <&mipi_dsi_hdmi_out>; */
 			};
 		};
+	};
+
+	max98089: codec@10 {
+		compatible = "maxim,max98089";
+		reg = <0x10>;
+		clocks = <&i2s2>;
+		clock-names = "mclk";
+		interrupt-parent = <&gpioc>;
+		interrupts = <7 IRQ_TYPE_EDGE_FALLING>;
+		#sound-dai-cells = <0>;
+		#clock-cells = <0>;
+		status = "okay";
 	};
 };
 
@@ -443,25 +458,27 @@
 	};
 
 	ccmp15_i2s2_pins_a: i2s2-0 {
-		pins {
-			pinmux = <STM32_PINMUX('I', 3, AF5)>, /* I2S2_SDO */
-				 <STM32_PINMUX('I', 2, AF5)>, /* I2S2_SDI */
-				 <STM32_PINMUX('I', 0, AF5)>, /* I2S2_WS */
-				 <STM32_PINMUX('I', 1, AF5)>; /* I2S2_CK */
-			slew-rate = <1>;
-			drive-push-pull;
-			bias-disable;
-		};
-	};
+                pins {
+                        pinmux = <STM32_PINMUX('I', 3, AF5)>, /* I2S2_SDO */
+                                 <STM32_PINMUX('I', 2, AF5)>, /* I2S2_SDI */
+                                 <STM32_PINMUX('I', 0, AF5)>, /* I2S2_WS */
+                                 <STM32_PINMUX('C', 6, AF5)>, /* I2S2_MCK */
+                                 <STM32_PINMUX('I', 1, AF5)>; /* I2S2_CK */
+                        slew-rate = <1>;
+                        drive-push-pull;
+                        bias-disable;
+                };
+        };
 
-	ccmp15_i2s2_sleep_pins_a: i2s2-sleep-0 {
-		pins {
-			pinmux = <STM32_PINMUX('I', 3, ANALOG)>, /* I2S2_SDO */
-				 <STM32_PINMUX('I', 2, ANALOG)>, /* I2S2_SDI */
-				 <STM32_PINMUX('I', 0, ANALOG)>, /* I2S2_WS */
-				 <STM32_PINMUX('I', 2, ANALOG)>; /* I2S2_CK */
-		};
-	};
+        ccmp15_i2s2_sleep_pins_a: i2s2-sleep-0 {
+                pins {
+                        pinmux = <STM32_PINMUX('I', 3, ANALOG)>, /* I2S2_SDO */
+                                 <STM32_PINMUX('I', 2, ANALOG)>, /* I2S2_SDI */
+                                 <STM32_PINMUX('I', 0, ANALOG)>, /* I2S2_WS */
+                                 <STM32_PINMUX('C', 6, ANALOG)>, /* I2S2_MCK */
+                                 <STM32_PINMUX('I', 1, ANALOG)>; /* I2S2_CK */
+                };
+        };
 
 	ccmp15_dcmi_pins_a: dcmi-0 {
 		pins {

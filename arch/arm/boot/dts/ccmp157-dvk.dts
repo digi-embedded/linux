@@ -83,6 +83,27 @@
 		st,hs-rx-offset = <2>;
 		st,no-lsfs-sc;
 	};
+
+	sound_max98089: sound-max98089 {
+		compatible = "st,stm-audio-max98088";
+		model = "stm32_max98088";
+		cpu-dai = <&i2s2>;
+		audio-codec = <&max98089>;
+		audio-routing =
+			"Headphone Jack", "HPL",
+			"Headphone Jack", "HPR",
+			"Ext Spk", "SPKL",
+			"Ext Spk", "SPKR",
+			"LineOut", "RECL",
+			"LineOut", "RECR",
+			"Mic1", "MIC1",
+			"Mic2", "MIC2",
+			"LineInA", "INA1",
+			"LineInA", "INA2",
+			"LineInB", "INB1",
+			"LineInB", "INB2";
+		status = "okay";
+	};
 };
 
 /* Console */
@@ -202,20 +223,13 @@
 };
 
 &i2s2 {
+	#clock-cells = <0>;
 	clocks = <&rcc SPI2>, <&rcc SPI2_K>, <&rcc PLL3_Q>, <&rcc PLL3_R>;
 	clock-names = "pclk", "i2sclk", "x8k", "x11k";
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&ccmp15_i2s2_pins_a>;
 	pinctrl-1 = <&ccmp15_i2s2_sleep_pins_a>;
-	status = "disabled";
-
-	i2s2_port: port {
-		i2s2_endpoint: endpoint {
-			// audio codec remote-endpoint = <&sii9022_tx_endpoint>;
-			format = "i2s";
-			mclk-fs = <256>;
-		};
-	};
+	status = "okay";
 };
 
 /* Display Controller for LVDS */
@@ -332,6 +346,18 @@
                 irq-gpios = <&gpioc 8 GPIO_ACTIVE_HIGH>;
                 status = "okay";
         };
+
+	max98089: codec@10 {
+		compatible = "maxim,max98089";
+		reg = <0x10>;
+		clocks = <&i2s2>;
+		clock-names = "mclk";
+		interrupt-parent = <&gpiof>;
+		interrupts = <2 IRQ_TYPE_EDGE_FALLING>;
+		#sound-dai-cells = <0>;
+		#clock-cells = <0>;
+	        status = "okay";
+	};
 };
 
 &i2c6 {

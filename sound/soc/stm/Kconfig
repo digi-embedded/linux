@@ -44,4 +44,15 @@ config SND_SOC_STM32_DFSDM
 	  Select this option to enable the STM32 Digital Filter
 	  for Sigma Delta Modulators (DFSDM) driver used
 	  in various STM32 series for digital microphone capture.
+
+config SND_SOC_STM32_MAX98088
+	tristate "SoC Audio support for STM32 boards with max98088/max98089"
+	depends on OF && I2C
+	select SND_SOC_MAX98088
+	select SND_SOC_STM32_I2S
+	select SND_SOC_STM32_SAI
+	help
+	  Say Y if you want to add support for SoC audio on an STM32 board with
+	  a max98088/max98089 codec.
+
 endmenu

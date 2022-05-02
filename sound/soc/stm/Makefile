@@ -16,3 +16,6 @@ obj-$(CONFIG_SND_SOC_STM32_SPDIFRX) += snd-soc-stm32-spdifrx.o
 
 #DFSDM
 obj-$(CONFIG_SND_SOC_STM32_DFSDM) += stm32_adfsdm.o
+
+snd-soc-stm32-max98088-objs := stm32_max98088.o
+obj-$(CONFIG_SND_SOC_STM32_MAX98088) += snd-soc-stm32-max98088.o
