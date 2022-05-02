@@ -230,8 +230,6 @@
 			compatible = "ethernet-phy-id0007.c131";
 			reset-gpios =  <&mcp23017 9 GPIO_ACTIVE_LOW>;
 			reg = <0>;
-			interrupt-parent = <&gpioi>;
-			interrupts = <3 IRQ_TYPE_EDGE_RISING>;
 		};
 	};
 };
