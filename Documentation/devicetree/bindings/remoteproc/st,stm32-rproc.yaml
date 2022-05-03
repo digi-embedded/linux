@@ -32,7 +32,6 @@ properties:
     items:
       - const: mcu_rst
       - const: hold_boot
-    minItems: 1
 
   st,syscfg-holdboot:
     description: remote processor reset hold boot
@@ -146,7 +145,9 @@ examples:
       reg = <0x10000000 0x40000>,
             <0x30000000 0x40000>,
             <0x38000000 0x10000>;
-      resets = <&rcc MCU_R>;
+      resets = <&scmi_reset RST_SCMI_MCU>,
+               <&scmi_reset RST_SCMI_MCU_HOLD_BOOT>;
+      reset-names = "mcu_rst", "hold_boot";
       st,syscfg-holdboot = <&rcc 0x10C 0x1>;
       st,syscfg-rsc-tbl = <&tamp 0x144 0xFFFFFFFF>;
       st,syscfg-m4-state = <&tamp 0x148 0xFFFFFFFF>;
