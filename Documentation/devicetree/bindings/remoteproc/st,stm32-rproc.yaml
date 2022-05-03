@@ -31,7 +31,6 @@ properties:
     items:
       - const: mcu_rst
       - const: hold_boot
-    maxItems: 2
 
   interrupts:
     description: Should contain the WWDG1 watchdog reset interrupt
@@ -122,8 +121,8 @@ examples:
       reg = <0x10000000 0x40000>,
             <0x30000000 0x40000>,
             <0x38000000 0x10000>;
-      resets = <&scmi_reset RST_SCMI0_MCU>,
-               <&scmi_reset RST_SCMI0_MCU_HOLD_BOOT>;
+      resets = <&scmi_reset RST_SCMI_MCU>,
+               <&scmi_reset RST_SCMI_MCU_HOLD_BOOT>;
       reset-names = "mcu_rst", "hold_boot";
       st,syscfg-holdboot = <&rcc 0x10C 0x1>;
       st,syscfg-rsc-tbl = <&tamp 0x144 0xFFFFFFFF>;
