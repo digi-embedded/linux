@@ -435,6 +435,28 @@
 					phy-names = "usb";
 				};
 			};
+
+			usb3dr: usb@48300000 {
+				compatible = "st,stm32mp25-dwc3";
+				st,syscfg = <&syscfg 0x4800>;
+				#address-cells = <1>;
+				#size-cells = <1>;
+				ranges = <0x48300000 0x48300000 0x100000>;
+				feature-domains = <&rifsc STM32MP25_RIFSC_USB3DR_ID>;
+				status = "disabled";
+
+				dwc3: usb@48300000 {
+					compatible = "snps,dwc3";
+					reg = <0x48300000 0x100000>;
+					interrupts = <GIC_SPI 228 IRQ_TYPE_LEVEL_HIGH>;
+					clock-names = "ref", "bus_early", "suspend";
+					clocks = <&rcc CK_KER_USB2PHY2>, <&rcc CK_BUS_USB3DR>,
+						 <&rcc CK_KER_USB2PHY2>;
+					resets = <&rcc USB3DR_R>;
+					phys = <&usb2_phy2>;
+					phy-names = "usb2-phy";
+				};
+			};
 		};
 
 		rcc: rcc@44200000 {
