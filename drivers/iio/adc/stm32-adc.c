@@ -86,6 +86,8 @@ enum stm32_adc_extsel {
 enum stm32_adc_int_ch {
 	STM32_ADC_INT_CH_NONE = -1,
 	STM32_ADC_INT_CH_VDDCORE,
+	STM32_ADC_INT_CH_VDDCPU,
+	STM32_ADC_INT_CH_VDDQ_DDR,
 	STM32_ADC_INT_CH_VREFINT,
 	STM32_ADC_INT_CH_VBAT,
 	STM32_ADC_INT_CH_NB,
@@ -103,6 +105,8 @@ struct stm32_adc_ic {
 
 static const struct stm32_adc_ic stm32_adc_ic[STM32_ADC_INT_CH_NB] = {
 	{ "vddcore", STM32_ADC_INT_CH_VDDCORE },
+	{ "vddcpu", STM32_ADC_INT_CH_VDDCPU },
+	{ "vddq_ddr", STM32_ADC_INT_CH_VDDQ_DDR },
 	{ "vrefint", STM32_ADC_INT_CH_VREFINT },
 	{ "vbat", STM32_ADC_INT_CH_VBAT },
 };
@@ -163,7 +167,9 @@ struct stm32_adc_vrefint {
  * @difsel:		differential mode selection register & bitfield
  * @smpr:		smpr1 & smpr2 registers offset array
  * @smp_bits:		smpr1 & smpr2 index and bitfields
- * @or_vdd:		option register & vddcore bitfield
+ * @or_vddcore:		option register & vddcore bitfield
+ * @or_vddcpu:		option register & vddcpu bitfield
+ * @or_vddq_ddr:	option register & vddq_ddr bitfield
  * @ccr_vbat:		common register & vbat bitfield
  * @ccr_vref:		common register & vrefint bitfield
  */
@@ -180,7 +186,9 @@ struct stm32_adc_regspec {
 	const struct stm32_adc_regs difsel;
 	const u32 smpr[2];
 	const struct stm32_adc_regs *smp_bits;
-	const struct stm32_adc_regs or_vdd;
+	const struct stm32_adc_regs or_vddcore;
+	const struct stm32_adc_regs or_vddcpu;
+	const struct stm32_adc_regs or_vddq_ddr;
 	const struct stm32_adc_regs ccr_vbat;
 	const struct stm32_adc_regs ccr_vref;
 };
@@ -556,7 +564,9 @@ static const struct stm32_adc_regspec stm32mp13_adc_regspec = {
 	.difsel = { STM32MP13_ADC_DIFSEL, STM32MP13_DIFSEL_MASK},
 	.smpr = { STM32H7_ADC_SMPR1, STM32H7_ADC_SMPR2 },
 	.smp_bits = stm32h7_smp_bits,
-	.or_vdd = { STM32MP13_ADC2_OR, STM32MP13_VDDCOREEN },
+	.or_vddcore = { STM32MP13_ADC2_OR, STM32MP13_OP0 },
+	.or_vddcpu = { STM32MP13_ADC2_OR, STM32MP13_OP1 },
+	.or_vddq_ddr = { STM32MP13_ADC2_OR, STM32MP13_OP2 },
 	.ccr_vbat = { STM32H7_ADC_CCR, STM32H7_VBATEN },
 	.ccr_vref = { STM32H7_ADC_CCR, STM32H7_VREFEN },
 };
@@ -575,7 +585,7 @@ static const struct stm32_adc_regspec stm32mp1_adc_regspec = {
 	.difsel = { STM32H7_ADC_DIFSEL, STM32H7_DIFSEL_MASK},
 	.smpr = { STM32H7_ADC_SMPR1, STM32H7_ADC_SMPR2 },
 	.smp_bits = stm32h7_smp_bits,
-	.or_vdd = { STM32MP1_ADC2_OR, STM32MP1_VDDCOREEN },
+	.or_vddcore = { STM32MP1_ADC2_OR, STM32MP1_VDDCOREEN },
 	.ccr_vbat = { STM32H7_ADC_CCR, STM32H7_VBATEN },
 	.ccr_vref = { STM32H7_ADC_CCR, STM32H7_VREFEN },
 };
@@ -736,8 +746,18 @@ static void stm32_adc_int_ch_enable(struct iio_dev *indio_dev)
 		switch (i) {
 		case STM32_ADC_INT_CH_VDDCORE:
 			dev_dbg(&indio_dev->dev, "Enable VDDCore\n");
-			stm32_adc_set_bits(adc, adc->cfg->regs->or_vdd.reg,
-					   adc->cfg->regs->or_vdd.mask);
+			stm32_adc_set_bits(adc, adc->cfg->regs->or_vddcore.reg,
+					   adc->cfg->regs->or_vddcore.mask);
+			break;
+		case STM32_ADC_INT_CH_VDDCPU:
+			dev_dbg(&indio_dev->dev, "Enable VDDCPU\n");
+			stm32_adc_set_bits(adc, adc->cfg->regs->or_vddcpu.reg,
+					   adc->cfg->regs->or_vddcpu.mask);
+			break;
+		case STM32_ADC_INT_CH_VDDQ_DDR:
+			dev_dbg(&indio_dev->dev, "Enable VDDQ_DDR\n");
+			stm32_adc_set_bits(adc, adc->cfg->regs->or_vddq_ddr.reg,
+					   adc->cfg->regs->or_vddq_ddr.mask);
 			break;
 		case STM32_ADC_INT_CH_VREFINT:
 			dev_dbg(&indio_dev->dev, "Enable VREFInt\n");
@@ -763,8 +783,16 @@ static void stm32_adc_int_ch_disable(struct stm32_adc *adc)
 
 		switch (i) {
 		case STM32_ADC_INT_CH_VDDCORE:
-			stm32_adc_clr_bits(adc, adc->cfg->regs->or_vdd.reg,
-					   adc->cfg->regs->or_vdd.mask);
+			stm32_adc_clr_bits(adc, adc->cfg->regs->or_vddcore.reg,
+					   adc->cfg->regs->or_vddcore.mask);
+			break;
+		case STM32_ADC_INT_CH_VDDCPU:
+			stm32_adc_clr_bits(adc, adc->cfg->regs->or_vddcpu.reg,
+					   adc->cfg->regs->or_vddcpu.mask);
+			break;
+		case STM32_ADC_INT_CH_VDDQ_DDR:
+			stm32_adc_clr_bits(adc, adc->cfg->regs->or_vddq_ddr.reg,
+					   adc->cfg->regs->or_vddq_ddr.mask);
 			break;
 		case STM32_ADC_INT_CH_VREFINT:
 			stm32_adc_clr_bits_common(adc, adc->cfg->regs->ccr_vref.reg,
@@ -2208,6 +2236,35 @@ static int stm32_adc_populate_int_ch(struct iio_dev *indio_dev, const char *ch_n
 
 	for (i = 0; i < STM32_ADC_INT_CH_NB; i++) {
 		if (!strncmp(stm32_adc_ic[i].name, ch_name, STM32_ADC_CH_SZ)) {
+			/* Check internal channel availability */
+			switch (i) {
+			case STM32_ADC_INT_CH_VDDCORE:
+				if (!adc->cfg->regs->or_vddcore.reg)
+					dev_warn(&indio_dev->dev,
+						 "%s channel not available\n", ch_name);
+				break;
+			case STM32_ADC_INT_CH_VDDCPU:
+				if (!adc->cfg->regs->or_vddcpu.reg)
+					dev_warn(&indio_dev->dev,
+						 "%s channel not available\n", ch_name);
+				break;
+			case STM32_ADC_INT_CH_VDDQ_DDR:
+				if (!adc->cfg->regs->or_vddq_ddr.reg)
+					dev_warn(&indio_dev->dev,
+						 "%s channel not available\n", ch_name);
+				break;
+			case STM32_ADC_INT_CH_VREFINT:
+				if (!adc->cfg->regs->ccr_vref.reg)
+					dev_warn(&indio_dev->dev,
+						 "%s channel not available\n", ch_name);
+				break;
+			case STM32_ADC_INT_CH_VBAT:
+				if (!adc->cfg->regs->ccr_vbat.reg)
+					dev_warn(&indio_dev->dev,
+						 "%s channel not available\n", ch_name);
+				break;
+			}
+
 			if (stm32_adc_ic[i].idx != STM32_ADC_INT_CH_VREFINT) {
 				adc->int_ch[i] = chan;
 				break;

@@ -232,7 +232,9 @@ enum stm32h7_adc_dmngt {
 #define STM32MP13_CALFACT_S_MASK	GENMASK(6, 0)
 
 /* STM32MP13_ADC2_OR - bit fields */
-#define STM32MP13_VDDCOREEN		BIT(0)
+#define STM32MP13_OP2			BIT(2)
+#define STM32MP13_OP1			BIT(1)
+#define STM32MP13_OP0			BIT(0)
 
 /* STM32MP13_ADC_HWCFGR0 - bit fields */
 #define STM32MP13_ADCNUM_SHIFT		0
