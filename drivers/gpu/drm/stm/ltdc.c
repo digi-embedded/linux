@@ -217,6 +217,7 @@
 
 #define LXRCR_IMR	BIT(0)		/* IMmediate Reload */
 #define LXRCR_VBR	BIT(1)		/* Vertical Blanking Reload */
+#define LXRCR_GRMSK	BIT(2)		/* Global (centralized) Reload MaSKed */
 
 #define CLUT_SIZE	256
 
@@ -1400,11 +1401,12 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 	/* Enable layer and CLUT if needed */
 	val = fb->format->format == DRM_FORMAT_C8 ? LXCR_CLUTEN : 0;
 	val |= LXCR_LEN;
-	regmap_write_bits(ldev->regmap, LTDC_L1CR + lofs, LXCR_CLUTEN | LXCR_LEN, val);
+	regmap_write_bits(ldev->regmap, LTDC_L1CR + lofs, LXCR_LEN | LXCR_CLUTEN, val);
 
 	/* Commit shadow registers = update plane at next vblank */
 	if (ldev->caps.plane_reg_shadow)
-		regmap_write_bits(ldev->regmap, LTDC_L1RCR + lofs, LXRCR_VBR, LXRCR_VBR);
+		regmap_write_bits(ldev->regmap, LTDC_L1RCR + lofs,
+				  LXRCR_IMR | LXRCR_VBR | LXRCR_GRMSK, LXRCR_VBR);
 
 	ldev->plane_fpsi[plane->index].counter++;
 
@@ -1433,11 +1435,12 @@ static void ltdc_plane_atomic_disable(struct drm_plane *plane,
 		return;
 
 	/* disable layer */
-	regmap_write_bits(ldev->regmap, LTDC_L1CR + lofs, LXCR_CLUTEN | LXCR_LEN, 0);
+	regmap_write_bits(ldev->regmap, LTDC_L1CR + lofs, LXCR_LEN, 0);
 
 	/* Commit shadow registers = update plane at next vblank */
 	if (ldev->caps.plane_reg_shadow)
-		regmap_write_bits(ldev->regmap, LTDC_L1RCR + lofs, LXRCR_VBR, LXRCR_VBR);
+		regmap_write_bits(ldev->regmap, LTDC_L1RCR + lofs,
+				  LXRCR_IMR | LXRCR_VBR | LXRCR_GRMSK, LXRCR_VBR);
 
 	DRM_DEBUG_DRIVER("CRTC:%d plane:%d\n",
 			 oldstate->crtc->base.id, plane->base.id);
