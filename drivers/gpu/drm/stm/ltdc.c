@@ -609,31 +609,31 @@ static inline void ltdc_set_ycbcr_config(struct drm_plane *plane, u32 drm_pix_fm
 	u32 val;
 
 	switch (drm_pix_fmt) {
-		case DRM_FORMAT_YUYV:
-			val = (YCM_I << 4) | LxPCR_YF | LxPCR_CBF;
-			break;
-		case DRM_FORMAT_YVYU:
-			val = (YCM_I << 4) | LxPCR_YF;
-			break;
-		case DRM_FORMAT_UYVY:
-			val = (YCM_I << 4) | LxPCR_CBF;
-			break;
-		case DRM_FORMAT_VYUY:
-			val = (YCM_I << 4);
-			break;
-		case DRM_FORMAT_NV12:
-			val = (YCM_SP << 4) | LxPCR_CBF;
-			break;
-		case DRM_FORMAT_NV21:
-			val = (YCM_SP << 4);
-			break;
-		case DRM_FORMAT_YUV420:
-		case DRM_FORMAT_YVU420:
-			val = (YCM_FP << 4);
-			break;
-		default:
-			/* RGB or not a YCbCr supported format */
-			break;
+	case DRM_FORMAT_YUYV:
+		val = (YCM_I << 4) | LxPCR_YF | LxPCR_CBF;
+		break;
+	case DRM_FORMAT_YVYU:
+		val = (YCM_I << 4) | LxPCR_YF;
+		break;
+	case DRM_FORMAT_UYVY:
+		val = (YCM_I << 4) | LxPCR_CBF;
+		break;
+	case DRM_FORMAT_VYUY:
+		val = (YCM_I << 4);
+		break;
+	case DRM_FORMAT_NV12:
+		val = (YCM_SP << 4) | LxPCR_CBF;
+		break;
+	case DRM_FORMAT_NV21:
+		val = (YCM_SP << 4);
+		break;
+	case DRM_FORMAT_YUV420:
+	case DRM_FORMAT_YVU420:
+		val = (YCM_FP << 4);
+		break;
+	default:
+		/* RGB or not a YCbCr supported format */
+		break;
 	}
 
 	/* Enable limited range */
@@ -1509,8 +1509,10 @@ static struct drm_plane *ltdc_plane_create(struct drm_device *ddev,
 	int ret;
 
 	/* Allocate the biggest size according to supported color formats */
-	formats = devm_kzalloc(dev, (ldev->caps.pix_fmt_nb + ARRAY_SIZE(ltdc_drm_fmt_ycbcr_cp) +
-			       ARRAY_SIZE(ltdc_drm_fmt_ycbcr_sp) + ARRAY_SIZE(ltdc_drm_fmt_ycbcr_fp)) *
+	formats = devm_kzalloc(dev, (ldev->caps.pix_fmt_nb +
+			       ARRAY_SIZE(ltdc_drm_fmt_ycbcr_cp) +
+			       ARRAY_SIZE(ltdc_drm_fmt_ycbcr_sp) +
+			       ARRAY_SIZE(ltdc_drm_fmt_ycbcr_fp)) *
 			       sizeof(*formats), GFP_KERNEL);
 
 	for (i = 0; i < ldev->caps.pix_fmt_nb; i++) {
