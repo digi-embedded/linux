@@ -30,7 +30,7 @@
 		/delete-property/dmas;
 		/delete-property/dma-names;
 		st,min-sample-time-nsecs = <5000>;
-		st,adc-channels = <0 1 6 13 18 19>;
+		st,adc-channels = <0 1 2 6 18 19>;
 	};
 };
 
