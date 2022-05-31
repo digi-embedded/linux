@@ -23,6 +23,7 @@
 
 /* Chip ID */
 /* Page 0 */
+#define GC2145_REG_ANALOG_MODE1	0x17
 #define GC2145_REG_OUTPUT_FMT	0x84
 #define GC2145_REG_DEBUG_MODE2	0x8c
 #define GC2145_REG_DEBUG_MODE3	0x8d
@@ -946,6 +947,8 @@ struct gc2145_ctrls {
 	struct v4l2_ctrl_handler handler;
 	struct v4l2_ctrl *pixel_rate;
 	struct v4l2_ctrl *test_pattern;
+	struct v4l2_ctrl *hflip;
+	struct v4l2_ctrl *vflip;
 };
 
 struct gc2145 {
@@ -1037,6 +1040,22 @@ static int gc2145_write_reg(struct gc2145 *gc2145, u8 addr, u8 data)
 	}
 
 	return 0;
+}
+
+static int gc2145_mod_reg(struct gc2145 *gc2145, u16 reg, u8 mask, u8 val)
+{
+	u8 readval;
+	int ret;
+
+	ret = gc2145_read_reg(gc2145, reg, &readval, 1);
+	if (ret)
+		return ret;
+
+	readval &= ~mask;
+	val &= mask;
+	val |= readval;
+
+	return gc2145_write_reg(gc2145, reg, val);
 }
 
 /* Write a list of registers */
@@ -1612,6 +1631,18 @@ static int gc2145_set_ctrl_test_pattern(struct gc2145 *gc2145, int value)
 				test_pattern_val[value]);
 }
 
+static int gc2145_set_ctrl_hflip(struct gc2145 *gc2145, int value)
+{
+	return gc2145_mod_reg(gc2145, GC2145_REG_ANALOG_MODE1,
+			      BIT(0), (value ? BIT(0) : 0));
+}
+
+static int gc2145_set_ctrl_vflip(struct gc2145 *gc2145, int value)
+{
+	return gc2145_mod_reg(gc2145, GC2145_REG_ANALOG_MODE1,
+			      BIT(1), (value ? BIT(1) : 0));
+}
+
 static int gc2145_s_ctrl(struct v4l2_ctrl *ctrl)
 {
 	struct v4l2_subdev *sd = ctrl_to_sd(ctrl);
@@ -1628,6 +1659,12 @@ static int gc2145_s_ctrl(struct v4l2_ctrl *ctrl)
 	switch (ctrl->id) {
 	case V4L2_CID_TEST_PATTERN:
 		ret = gc2145_set_ctrl_test_pattern(gc2145, ctrl->val);
+		break;
+	case V4L2_CID_HFLIP:
+		ret = gc2145_set_ctrl_hflip(gc2145, ctrl->val);
+		break;
+	case V4L2_CID_VFLIP:
+		ret = gc2145_set_ctrl_vflip(gc2145, ctrl->val);
 		break;
 	default:
 		ret = -EINVAL;
@@ -1667,6 +1704,10 @@ static int gc2145_init_controls(struct gc2145 *gc2145)
 		v4l2_ctrl_new_std_menu_items(hdl, ops, V4L2_CID_TEST_PATTERN,
 					     ARRAY_SIZE(test_pattern_menu) - 1,
 					     0, 0, test_pattern_menu);
+	ctrls->hflip = v4l2_ctrl_new_std(hdl, ops, V4L2_CID_HFLIP,
+					 0, 1, 1, 0);
+	ctrls->vflip = v4l2_ctrl_new_std(hdl, ops, V4L2_CID_VFLIP,
+					 0, 1, 1, 0);
 
 	if (hdl->error) {
 		ret = hdl->error;
