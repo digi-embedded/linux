@@ -303,7 +303,14 @@
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&spi4_pins_b>;
 	pinctrl-1 = <&spi4_sleep_pins_b>;
-	status = "disabled";
+	cs-gpios = <&gpioe 11 0>;
+	status = "okay";
+
+	spidev@0{
+		compatible = "rohm,dh2228fv";
+		reg = <0>;
+		spi-max-frequency = <4000000>;
+	};
 };
 
 &timers12 {
