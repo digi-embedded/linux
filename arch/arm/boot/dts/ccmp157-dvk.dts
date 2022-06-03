@@ -528,7 +528,7 @@
 		pins2 {
 			pinmux = <STM32_PINMUX('B', 12, AF8)>, /* USART3_RX */
 				 <STM32_PINMUX('B', 13, AF7)>; /* USART3_CTS_NSS */
-			bias-pull-up;
+			bias-disable;
 		};
 	};
 
@@ -545,7 +545,7 @@
 		};
 		pins3 {
 			pinmux = <STM32_PINMUX('B', 12, AF8)>; /* USART3_RX */
-			bias-pull-up;
+			bias-disable;
 		};
 	};
 
