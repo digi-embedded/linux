@@ -236,8 +236,8 @@
 };*/
 
 &vrefbuf {
-        regulator-min-microvolt = <2500000>;
-        regulator-max-microvolt = <2500000>;
+        regulator-min-microvolt = <1500000>;
+        regulator-max-microvolt = <1500000>;
         vdda-supply = <&vdd>;
         status = "okay";
 };
@@ -399,8 +399,8 @@
 				regulator-initial-mode = <0>;
 			};
 
-			v1v8_audio: ldo1 {
-				regulator-name = "v1v8_audio";
+			vdda: ldo1 {
+				regulator-name = "vdda";
 				regulator-min-microvolt = <1800000>;
 				regulator-max-microvolt = <1800000>;
 				regulator-always-on;

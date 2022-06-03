@@ -109,8 +109,8 @@
 &adc {
 	/* ANA0, ANA1 are dedicated pins and don't need pinctrl */
 	vdd-supply = <&vdd>;
-	vdda-supply = <&vdd_sd>;
-	vref-supply = <&vdd_sd>;
+	vdda-supply = <&vdda>;
+	vref-supply = <&vdda>;
 	status = "okay";
 
 	adc1: adc@0 {
