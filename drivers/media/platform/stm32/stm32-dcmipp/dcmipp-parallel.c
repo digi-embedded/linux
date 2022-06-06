@@ -152,7 +152,10 @@ static const struct v4l2_mbus_framefmt fmt_default = {
 	.height = DCMIPP_FMT_HEIGHT_DEFAULT,
 	.code = PAR_MEDIA_BUS_FMT_DEFAULT,
 	.field = V4L2_FIELD_NONE,
-	.colorspace = V4L2_COLORSPACE_DEFAULT,
+	.colorspace = DCMIPP_COLORSPACE_DEFAULT,
+	.ycbcr_enc = DCMIPP_YCBCR_ENC_DEFAULT,
+	.quantization = DCMIPP_QUANTIZATION_DEFAULT,
+	.xfer_func = DCMIPP_XFER_FUNC_DEFAULT,
 };
 
 static int dcmipp_par_init_cfg(struct v4l2_subdev *sd,
