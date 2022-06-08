@@ -1,3 +1,5 @@
+.. SPDX-License-Identifier: GPL-2.0
+
 
 .. The Linux Kernel documentation master file, created by
    sphinx-quickstart on Fri Feb 12 13:51:46 2016.
@@ -46,6 +48,7 @@ platform firmwares.
    :maxdepth: 2
 
    firmware-guide/index
+   devicetree/index
 
 Application-developer documentation
 -----------------------------------
@@ -57,7 +60,6 @@ the kernel interface as seen by application developers.
    :maxdepth: 2
 
    userspace-api/index
-   ioctl/index
 
 
 Introduction to kernel development
@@ -100,6 +102,7 @@ needed).
    accounting/index
    block/index
    cdrom/index
+   cpu-freq/index
    ide/index
    fb/index
    fpga/index
@@ -109,7 +112,6 @@ needed).
    isdn/index
    infiniband/index
    leds/index
-   media/index
    netlabel/index
    networking/index
    pcmcia/index
@@ -131,45 +133,41 @@ needed).
    bpf/index
    usb/index
    PCI/index
+   scsi/index
    misc-devices/index
-   mic/index
    scheduler/index
+   mhi/index
+
+Architecture-agnostic documentation
+-----------------------------------
+
+.. toctree::
+   :maxdepth: 2
+
+   asm-annotations
 
 Architecture-specific documentation
 -----------------------------------
 
-These books provide programming details about architecture-specific
-implementation.
+.. toctree::
+   :maxdepth: 2
+
+   arch
+
+
+Other documentation
+-------------------
+
+There are several unsorted documents that don't seem to fit on other parts
+of the documentation body, or may require some adjustments and/or conversion
+to ReStructured Text format, or are simply too old.
 
 .. toctree::
    :maxdepth: 2
 
-   arm/index
-   arm64/index
-   ia64/index
-   m68k/index
-   mips/index
-   nios2/nios2
-   openrisc/index
-   parisc/index
-   powerpc/index
-   riscv/index
-   s390/index
-   sh/index
-   sparc/index
-   x86/index
-   xtensa/index
+   staging/index
+   watch_queue
 
-Filesystem Documentation
-------------------------
-
-The documentation in this section are provided by specific filesystem
-subprojects.
-
-.. toctree::
-   :maxdepth: 2
-
-   filesystems/ext4/index
 
 Translations
 ------------

@@ -1,66 +1,9 @@
-/******************************************************************************
- *
- * This file is provided under a dual BSD/GPLv2 license.  When using or
- * redistributing this file, you may do so under either license.
- *
- * GPL LICENSE SUMMARY
- *
- * Copyright(c) 2012 - 2015 Intel Corporation. All rights reserved.
- * Copyright(c) 2013 - 2015 Intel Mobile Communications GmbH
- * Copyright(c) 2016 - 2017 Intel Deutschland GmbH
- * Copyright(c) 2018 - 2019 Intel Corporation
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of version 2 of the GNU General Public License as
- * published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
- *
- * The full GNU General Public License is included in this distribution
- * in the file called COPYING.
- *
- * Contact Information:
- *  Intel Linux Wireless <linuxwifi@intel.com>
- * Intel Corporation, 5200 N.E. Elam Young Parkway, Hillsboro, OR 97124-6497
- *
- * BSD LICENSE
- *
- * Copyright(c) 2012 - 2015 Intel Corporation. All rights reserved.
- * Copyright(c) 2013 - 2015 Intel Mobile Communications GmbH
- * Copyright(c) 2016 - 2017 Intel Deutschland GmbH
- * Copyright(c) 2018 - 2019 Intel Corporation
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *  * Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- *  * Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in
- *    the documentation and/or other materials provided with the
- *    distribution.
- *  * Neither the name Intel Corporation nor the names of its
- *    contributors may be used to endorse or promote products derived
- *    from this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- *****************************************************************************/
+// SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
+/*
+ * Copyright (C) 2012-2015, 2018-2021 Intel Corporation
+ * Copyright (C) 2013-2015 Intel Mobile Communications GmbH
+ * Copyright (C) 2016-2017 Intel Deutschland GmbH
+ */
 #include <net/mac80211.h>
 
 #include "mvm.h"
@@ -87,7 +30,7 @@ static int iwl_mvm_find_free_sta_id(struct iwl_mvm *mvm,
 	int sta_id;
 	u32 reserved_ids = 0;
 
-	BUILD_BUG_ON(IWL_MVM_STATION_COUNT > 32);
+	BUILD_BUG_ON(IWL_MVM_STATION_COUNT_MAX > 32);
 	WARN_ON_ONCE(test_bit(IWL_MVM_STATUS_IN_HW_RESTART, &mvm->status));
 
 	lockdep_assert_held(&mvm->mutex);
@@ -97,7 +40,7 @@ static int iwl_mvm_find_free_sta_id(struct iwl_mvm *mvm,
 		reserved_ids = BIT(0);
 
 	/* Don't take rcu_read_lock() since we are protected by mvm->mutex */
-	for (sta_id = 0; sta_id < ARRAY_SIZE(mvm->fw_id_to_mac_id); sta_id++) {
+	for (sta_id = 0; sta_id < mvm->fw->ucode_capa.num_stations; sta_id++) {
 		if (BIT(sta_id) & reserved_ids)
 			continue;
 
@@ -146,13 +89,13 @@ int iwl_mvm_sta_send_to_fw(struct iwl_mvm *mvm, struct ieee80211_sta *sta,
 	switch (sta->bandwidth) {
 	case IEEE80211_STA_RX_BW_160:
 		add_sta_cmd.station_flags |= cpu_to_le32(STA_FLG_FAT_EN_160MHZ);
-		/* fall through */
+		fallthrough;
 	case IEEE80211_STA_RX_BW_80:
 		add_sta_cmd.station_flags |= cpu_to_le32(STA_FLG_FAT_EN_80MHZ);
-		/* fall through */
+		fallthrough;
 	case IEEE80211_STA_RX_BW_40:
 		add_sta_cmd.station_flags |= cpu_to_le32(STA_FLG_FAT_EN_40MHZ);
-		/* fall through */
+		fallthrough;
 	case IEEE80211_STA_RX_BW_20:
 		if (sta->ht_cap.ht_supported)
 			add_sta_cmd.station_flags |=
@@ -198,6 +141,16 @@ int iwl_mvm_sta_send_to_fw(struct iwl_mvm *mvm, struct ieee80211_sta *sta,
 		mpdu_dens = sta->ht_cap.ampdu_density;
 	}
 
+	if (mvm_sta->vif->bss_conf.chandef.chan->band == NL80211_BAND_6GHZ) {
+		add_sta_cmd.station_flags_msk |=
+			cpu_to_le32(STA_FLG_MAX_AGG_SIZE_MSK |
+				    STA_FLG_AGG_MPDU_DENS_MSK);
+
+		mpdu_dens = le16_get_bits(sta->he_6ghz_capa.capa,
+					  IEEE80211_HE_6GHZ_CAP_MIN_MPDU_START);
+		agg_size = le16_get_bits(sta->he_6ghz_capa.capa,
+				IEEE80211_HE_6GHZ_CAP_MAX_AMPDU_LEN_EXP);
+	} else
 	if (sta->vht_cap.vht_supported) {
 		agg_size = sta->vht_cap.cap &
 			IEEE80211_VHT_CAP_MAX_A_MPDU_LENGTH_EXPONENT_MASK;
@@ -206,6 +159,23 @@ int iwl_mvm_sta_send_to_fw(struct iwl_mvm *mvm, struct ieee80211_sta *sta,
 	} else if (sta->ht_cap.ht_supported) {
 		agg_size = sta->ht_cap.ampdu_factor;
 	}
+
+	/* D6.0 10.12.2 A-MPDU length limit rules
+	 * A STA indicates the maximum length of the A-MPDU preEOF padding
+	 * that it can receive in an HE PPDU in the Maximum A-MPDU Length
+	 * Exponent field in its HT Capabilities, VHT Capabilities,
+	 * and HE 6 GHz Band Capabilities elements (if present) and the
+	 * Maximum AMPDU Length Exponent Extension field in its HE
+	 * Capabilities element
+	 */
+	if (sta->he_cap.has_he)
+		agg_size += u8_get_bits(sta->he_cap.he_cap_elem.mac_cap_info[3],
+					IEEE80211_HE_MAC_CAP3_MAX_AMPDU_LEN_EXP_MASK);
+
+	/* Limit to max A-MPDU supported by FW */
+	if (agg_size > (STA_FLG_MAX_AGG_SIZE_4M >> STA_FLG_MAX_AGG_SIZE_SHIFT))
+		agg_size = (STA_FLG_MAX_AGG_SIZE_4M >>
+			    STA_FLG_MAX_AGG_SIZE_SHIFT);
 
 	add_sta_cmd.station_flags |=
 		cpu_to_le32(agg_size << STA_FLG_MAX_AGG_SIZE_SHIFT);
@@ -346,8 +316,9 @@ static int iwl_mvm_invalidate_sta_queue(struct iwl_mvm *mvm, int queue,
 }
 
 static int iwl_mvm_disable_txq(struct iwl_mvm *mvm, struct ieee80211_sta *sta,
-			       int queue, u8 tid, u8 flags)
+			       u16 *queueptr, u8 tid, u8 flags)
 {
+	int queue = *queueptr;
 	struct iwl_scd_txq_cfg_cmd cmd = {
 		.scd_queue = queue,
 		.action = SCD_CFG_DISABLE_QUEUE,
@@ -356,6 +327,7 @@ static int iwl_mvm_disable_txq(struct iwl_mvm *mvm, struct ieee80211_sta *sta,
 
 	if (iwl_mvm_has_new_tx_api(mvm)) {
 		iwl_trans_txq_free(mvm->trans, queue);
+		*queueptr = IWL_MVM_INVALID_QUEUE;
 
 		return 0;
 	}
@@ -517,6 +489,7 @@ static int iwl_mvm_free_inactive_queue(struct iwl_mvm *mvm, int queue,
 	u8 sta_id, tid;
 	unsigned long disable_agg_tids = 0;
 	bool same_sta;
+	u16 queue_tmp = queue;
 	int ret;
 
 	lockdep_assert_held(&mvm->mutex);
@@ -539,7 +512,7 @@ static int iwl_mvm_free_inactive_queue(struct iwl_mvm *mvm, int queue,
 		iwl_mvm_invalidate_sta_queue(mvm, queue,
 					     disable_agg_tids, false);
 
-	ret = iwl_mvm_disable_txq(mvm, old_sta, queue, tid, 0);
+	ret = iwl_mvm_disable_txq(mvm, old_sta, &queue_tmp, tid, 0);
 	if (ret) {
 		IWL_ERR(mvm,
 			"Failed to free inactive queue %d (ret=%d)\n",
@@ -751,21 +724,26 @@ static int iwl_mvm_tvqm_enable_txq(struct iwl_mvm *mvm,
 		size = max_t(u32, IWL_MGMT_QUEUE_SIZE,
 			     mvm->trans->cfg->min_txq_size);
 	}
-	queue = iwl_trans_txq_alloc(mvm->trans,
-				    cpu_to_le16(TX_QUEUE_CFG_ENABLE_QUEUE),
-				    sta_id, tid, SCD_QUEUE_CFG, size, timeout);
 
-	if (queue < 0) {
-		IWL_DEBUG_TX_QUEUES(mvm,
-				    "Failed allocating TXQ for sta %d tid %d, ret: %d\n",
-				    sta_id, tid, queue);
+	do {
+		__le16 enable = cpu_to_le16(TX_QUEUE_CFG_ENABLE_QUEUE);
+
+		queue = iwl_trans_txq_alloc(mvm->trans, enable,
+					    sta_id, tid, SCD_QUEUE_CFG,
+					    size, timeout);
+
+		if (queue < 0)
+			IWL_DEBUG_TX_QUEUES(mvm,
+					    "Failed allocating TXQ of size %d for sta %d tid %d, ret: %d\n",
+					    size, sta_id, tid, queue);
+		size /= 2;
+	} while (queue < 0 && size >= 16);
+
+	if (queue < 0)
 		return queue;
-	}
 
 	IWL_DEBUG_TX_QUEUES(mvm, "Enabling TXQ #%d for sta %d tid %d\n",
 			    queue, sta_id, tid);
-
-	IWL_DEBUG_TX_QUEUES(mvm, "Enabling TXQ #%d\n", queue);
 
 	return queue;
 }
@@ -1209,6 +1187,7 @@ static int iwl_mvm_sta_alloc_queue(struct iwl_mvm *mvm,
 	unsigned int wdg_timeout =
 		iwl_mvm_get_wd_timeout(mvm, mvmsta->vif, false, false);
 	int queue = -1;
+	u16 queue_tmp;
 	unsigned long disable_agg_tids = 0;
 	enum iwl_mvm_agg_state queue_state;
 	bool shared_queue = false, inc_ssn;
@@ -1357,17 +1336,10 @@ static int iwl_mvm_sta_alloc_queue(struct iwl_mvm *mvm,
 	return 0;
 
 out_err:
-	iwl_mvm_disable_txq(mvm, sta, queue, tid, 0);
+	queue_tmp = queue;
+	iwl_mvm_disable_txq(mvm, sta, &queue_tmp, tid, 0);
 
 	return ret;
-}
-
-static inline u8 iwl_mvm_tid_to_ac_queue(int tid)
-{
-	if (tid == IWL_MAX_TID_COUNT)
-		return IEEE80211_AC_VO; /* MGMT */
-
-	return tid_to_mac80211_ac[tid];
 }
 
 void iwl_mvm_add_new_dqa_stream_wk(struct work_struct *wk)
@@ -1393,7 +1365,17 @@ void iwl_mvm_add_new_dqa_stream_wk(struct work_struct *wk)
 		if (tid == IEEE80211_NUM_TIDS)
 			tid = IWL_MAX_TID_COUNT;
 
-		iwl_mvm_sta_alloc_queue(mvm, txq->sta, txq->ac, tid);
+		/*
+		 * We can't really do much here, but if this fails we can't
+		 * transmit anyway - so just don't transmit the frame etc.
+		 * and let them back up ... we've tried our best to allocate
+		 * a queue in the function itself.
+		 */
+		if (iwl_mvm_sta_alloc_queue(mvm, txq->sta, txq->ac, tid)) {
+			list_del_init(&mvmtxq->list);
+			continue;
+		}
+
 		list_del_init(&mvmtxq->list);
 		local_bh_disable();
 		iwl_mvm_mac_itxq_xmit(mvm->hw, txq);
@@ -1533,8 +1515,15 @@ static int iwl_mvm_add_int_sta_common(struct iwl_mvm *mvm,
 
 	memset(&cmd, 0, sizeof(cmd));
 	cmd.sta_id = sta->sta_id;
-	cmd.mac_id_n_color = cpu_to_le32(FW_CMD_ID_AND_COLOR(mac_id,
-							     color));
+
+	if (iwl_fw_lookup_cmd_ver(mvm->fw, LONG_GROUP, ADD_STA,
+				  0) >= 12 &&
+	    sta->type == IWL_STA_AUX_ACTIVITY)
+		cmd.mac_id_n_color = cpu_to_le32(mac_id);
+	else
+		cmd.mac_id_n_color = cpu_to_le32(FW_CMD_ID_AND_COLOR(mac_id,
+								     color));
+
 	if (fw_has_api(&mvm->fw->ucode_capa, IWL_UCODE_TLV_API_STA_TYPE))
 		cmd.station_type = sta->type;
 
@@ -1795,7 +1784,7 @@ static void iwl_mvm_disable_sta_queues(struct iwl_mvm *mvm,
 		if (mvm_sta->tid_data[i].txq_id == IWL_MVM_INVALID_QUEUE)
 			continue;
 
-		iwl_mvm_disable_txq(mvm, sta, mvm_sta->tid_data[i].txq_id, i,
+		iwl_mvm_disable_txq(mvm, sta, &mvm_sta->tid_data[i].txq_id, i,
 				    0);
 		mvm_sta->tid_data[i].txq_id = IWL_MVM_INVALID_QUEUE;
 	}
@@ -1851,7 +1840,7 @@ int iwl_mvm_rm_sta(struct iwl_mvm *mvm,
 		return ret;
 
 	/* flush its queues here since we are freeing mvm_sta */
-	ret = iwl_mvm_flush_sta(mvm, mvm_sta, false, 0);
+	ret = iwl_mvm_flush_sta(mvm, mvm_sta, false);
 	if (ret)
 		return ret;
 	if (iwl_mvm_has_new_tx_api(mvm)) {
@@ -1963,9 +1952,8 @@ void iwl_mvm_dealloc_int_sta(struct iwl_mvm *mvm, struct iwl_mvm_int_sta *sta)
 static void iwl_mvm_enable_aux_snif_queue(struct iwl_mvm *mvm, u16 queue,
 					  u8 sta_id, u8 fifo)
 {
-	unsigned int wdg_timeout = iwlmvm_mod_params.tfd_q_hang_detect ?
-		mvm->trans->trans_cfg->base_params->wd_timeout :
-		IWL_WATCHDOG_DISABLED;
+	unsigned int wdg_timeout =
+		mvm->trans->trans_cfg->base_params->wd_timeout;
 	struct iwl_trans_txq_scd_cfg cfg = {
 		.fifo = fifo,
 		.sta_id = sta_id,
@@ -1981,9 +1969,8 @@ static void iwl_mvm_enable_aux_snif_queue(struct iwl_mvm *mvm, u16 queue,
 
 static int iwl_mvm_enable_aux_snif_queue_tvqm(struct iwl_mvm *mvm, u8 sta_id)
 {
-	unsigned int wdg_timeout = iwlmvm_mod_params.tfd_q_hang_detect ?
-		mvm->trans->trans_cfg->base_params->wd_timeout :
-		IWL_WATCHDOG_DISABLED;
+	unsigned int wdg_timeout =
+		mvm->trans->trans_cfg->base_params->wd_timeout;
 
 	WARN_ON(!iwl_mvm_has_new_tx_api(mvm));
 
@@ -1992,7 +1979,7 @@ static int iwl_mvm_enable_aux_snif_queue_tvqm(struct iwl_mvm *mvm, u8 sta_id)
 }
 
 static int iwl_mvm_add_int_sta_with_queue(struct iwl_mvm *mvm, int macidx,
-					  int maccolor,
+					  int maccolor, u8 *addr,
 					  struct iwl_mvm_int_sta *sta,
 					  u16 *queue, int fifo)
 {
@@ -2002,10 +1989,10 @@ static int iwl_mvm_add_int_sta_with_queue(struct iwl_mvm *mvm, int macidx,
 	if (!iwl_mvm_has_new_tx_api(mvm))
 		iwl_mvm_enable_aux_snif_queue(mvm, *queue, sta->sta_id, fifo);
 
-	ret = iwl_mvm_add_int_sta_common(mvm, sta, NULL, macidx, maccolor);
+	ret = iwl_mvm_add_int_sta_common(mvm, sta, addr, macidx, maccolor);
 	if (ret) {
 		if (!iwl_mvm_has_new_tx_api(mvm))
-			iwl_mvm_disable_txq(mvm, NULL, *queue,
+			iwl_mvm_disable_txq(mvm, NULL, queue,
 					    IWL_MAX_TID_COUNT, 0);
 		return ret;
 	}
@@ -2029,7 +2016,7 @@ static int iwl_mvm_add_int_sta_with_queue(struct iwl_mvm *mvm, int macidx,
 	return 0;
 }
 
-int iwl_mvm_add_aux_sta(struct iwl_mvm *mvm)
+int iwl_mvm_add_aux_sta(struct iwl_mvm *mvm, u32 lmac_id)
 {
 	int ret;
 
@@ -2042,7 +2029,11 @@ int iwl_mvm_add_aux_sta(struct iwl_mvm *mvm)
 	if (ret)
 		return ret;
 
-	ret = iwl_mvm_add_int_sta_with_queue(mvm, MAC_INDEX_AUX, 0,
+	/*
+	 * In CDB NICs we need to specify which lmac to use for aux activity
+	 * using the mac_id argument place to send lmac_id to the function
+	 */
+	ret = iwl_mvm_add_int_sta_with_queue(mvm, lmac_id, 0, NULL,
 					     &mvm->aux_sta, &mvm->aux_queue,
 					     IWL_MVM_TX_FIFO_MCAST);
 	if (ret) {
@@ -2060,7 +2051,8 @@ int iwl_mvm_add_snif_sta(struct iwl_mvm *mvm, struct ieee80211_vif *vif)
 	lockdep_assert_held(&mvm->mutex);
 
 	return iwl_mvm_add_int_sta_with_queue(mvm, mvmvif->id, mvmvif->color,
-					      &mvm->snif_sta, &mvm->snif_queue,
+					      NULL, &mvm->snif_sta,
+					      &mvm->snif_queue,
 					      IWL_MVM_TX_FIFO_BE);
 }
 
@@ -2070,7 +2062,10 @@ int iwl_mvm_rm_snif_sta(struct iwl_mvm *mvm, struct ieee80211_vif *vif)
 
 	lockdep_assert_held(&mvm->mutex);
 
-	iwl_mvm_disable_txq(mvm, NULL, mvm->snif_queue, IWL_MAX_TID_COUNT, 0);
+	if (WARN_ON_ONCE(mvm->snif_sta.sta_id == IWL_MVM_INVALID_STA))
+		return -EINVAL;
+
+	iwl_mvm_disable_txq(mvm, NULL, &mvm->snif_queue, IWL_MAX_TID_COUNT, 0);
 	ret = iwl_mvm_rm_sta_common(mvm, mvm->snif_sta.sta_id);
 	if (ret)
 		IWL_WARN(mvm, "Failed sending remove station\n");
@@ -2084,7 +2079,10 @@ int iwl_mvm_rm_aux_sta(struct iwl_mvm *mvm)
 
 	lockdep_assert_held(&mvm->mutex);
 
-	iwl_mvm_disable_txq(mvm, NULL, mvm->aux_queue, IWL_MAX_TID_COUNT, 0);
+	if (WARN_ON_ONCE(mvm->aux_sta.sta_id == IWL_MVM_INVALID_STA))
+		return -EINVAL;
+
+	iwl_mvm_disable_txq(mvm, NULL, &mvm->aux_queue, IWL_MAX_TID_COUNT, 0);
 	ret = iwl_mvm_rm_sta_common(mvm, mvm->aux_sta.sta_id);
 	if (ret)
 		IWL_WARN(mvm, "Failed sending remove station\n");
@@ -2180,19 +2178,19 @@ static void iwl_mvm_free_bcast_sta_queues(struct iwl_mvm *mvm,
 					  struct ieee80211_vif *vif)
 {
 	struct iwl_mvm_vif *mvmvif = iwl_mvm_vif_from_mac80211(vif);
-	int queue;
+	u16 *queueptr, queue;
 
 	lockdep_assert_held(&mvm->mutex);
 
-	iwl_mvm_flush_sta(mvm, &mvmvif->bcast_sta, true, 0);
+	iwl_mvm_flush_sta(mvm, &mvmvif->bcast_sta, true);
 
 	switch (vif->type) {
 	case NL80211_IFTYPE_AP:
 	case NL80211_IFTYPE_ADHOC:
-		queue = mvm->probe_queue;
+		queueptr = &mvm->probe_queue;
 		break;
 	case NL80211_IFTYPE_P2P_DEVICE:
-		queue = mvm->p2p_dev_queue;
+		queueptr = &mvm->p2p_dev_queue;
 		break;
 	default:
 		WARN(1, "Can't free bcast queue on vif type %d\n",
@@ -2200,7 +2198,8 @@ static void iwl_mvm_free_bcast_sta_queues(struct iwl_mvm *mvm,
 		return;
 	}
 
-	iwl_mvm_disable_txq(mvm, NULL, queue, IWL_MAX_TID_COUNT, 0);
+	queue = *queueptr;
+	iwl_mvm_disable_txq(mvm, NULL, queueptr, IWL_MAX_TID_COUNT, 0);
 	if (iwl_mvm_has_new_tx_api(mvm))
 		return;
 
@@ -2433,9 +2432,9 @@ int iwl_mvm_rm_mcast_sta(struct iwl_mvm *mvm, struct ieee80211_vif *vif)
 
 	lockdep_assert_held(&mvm->mutex);
 
-	iwl_mvm_flush_sta(mvm, &mvmvif->mcast_sta, true, 0);
+	iwl_mvm_flush_sta(mvm, &mvmvif->mcast_sta, true);
 
-	iwl_mvm_disable_txq(mvm, NULL, mvmvif->cab_queue, 0, 0);
+	iwl_mvm_disable_txq(mvm, NULL, &mvmvif->cab_queue, 0, 0);
 
 	ret = iwl_mvm_rm_sta_common(mvm, mvmvif->mcast_sta.sta_id);
 	if (ret)
@@ -2448,12 +2447,12 @@ int iwl_mvm_rm_mcast_sta(struct iwl_mvm *mvm, struct ieee80211_vif *vif)
 
 static void iwl_mvm_sync_rxq_del_ba(struct iwl_mvm *mvm, u8 baid)
 {
-	struct iwl_mvm_rss_sync_notif notif = {
-		.metadata.type = IWL_MVM_RXQ_NOTIF_DEL_BA,
-		.metadata.sync = 1,
-		.delba.baid = baid,
+	struct iwl_mvm_delba_data notif = {
+		.baid = baid,
 	};
-	iwl_mvm_sync_rx_queues_internal(mvm, (void *)&notif, sizeof(notif));
+
+	iwl_mvm_sync_rx_queues_internal(mvm, IWL_MVM_RXQ_NOTIF_DEL_BA, true,
+					&notif, sizeof(notif));
 };
 
 static void iwl_mvm_free_reorder(struct iwl_mvm *mvm,
@@ -2855,12 +2854,11 @@ int iwl_mvm_sta_tx_agg_start(struct iwl_mvm *mvm, struct ieee80211_vif *vif,
 
 	if (normalized_ssn == tid_data->next_reclaimed) {
 		tid_data->state = IWL_AGG_STARTING;
-		ieee80211_start_tx_ba_cb_irqsafe(vif, sta->addr, tid);
+		ret = IEEE80211_AMPDU_TX_START_IMMEDIATE;
 	} else {
 		tid_data->state = IWL_EMPTYING_HW_QUEUE_ADDBA;
+		ret = IEEE80211_AMPDU_TX_START_DELAY_ADDBA;
 	}
-
-	ret = 0;
 
 out:
 	spin_unlock_bh(&mvmsta->lock);
@@ -3119,11 +3117,11 @@ int iwl_mvm_sta_tx_agg_flush(struct iwl_mvm *mvm, struct ieee80211_vif *vif,
 
 		if (iwl_mvm_has_new_tx_api(mvm)) {
 			if (iwl_mvm_flush_sta_tids(mvm, mvmsta->sta_id,
-						   BIT(tid), 0))
+						   BIT(tid)))
 				IWL_ERR(mvm, "Couldn't flush the AGG queue\n");
 			iwl_trans_wait_txq_empty(mvm->trans, txq_id);
 		} else {
-			if (iwl_mvm_flush_tx_path(mvm, BIT(txq_id), 0))
+			if (iwl_mvm_flush_tx_path(mvm, BIT(txq_id)))
 				IWL_ERR(mvm, "Couldn't flush the AGG queue\n");
 			iwl_trans_wait_tx_queues_empty(mvm->trans, BIT(txq_id));
 		}
@@ -3198,6 +3196,20 @@ static struct iwl_mvm_sta *iwl_mvm_get_key_sta(struct iwl_mvm *mvm,
 	return NULL;
 }
 
+static int iwl_mvm_pn_cmp(const u8 *pn1, const u8 *pn2, int len)
+{
+	int i;
+
+	for (i = len - 1; i >= 0; i--) {
+		if (pn1[i] > pn2[i])
+			return 1;
+		if (pn1[i] < pn2[i])
+			return -1;
+	}
+
+	return 0;
+}
+
 static int iwl_mvm_send_sta_key(struct iwl_mvm *mvm,
 				u32 sta_id,
 				struct ieee80211_key_conf *key, bool mcast,
@@ -3216,6 +3228,9 @@ static int iwl_mvm_send_sta_key(struct iwl_mvm *mvm,
 	int i, size;
 	bool new_api = fw_has_api(&mvm->fw->ucode_capa,
 				  IWL_UCODE_TLV_API_TKIP_MIC_KEYS);
+	int api_ver = iwl_fw_lookup_cmd_ver(mvm->fw, LONG_GROUP,
+					    ADD_STA_KEY,
+					    new_api ? 2 : 1);
 
 	if (sta_id == IWL_MVM_INVALID_STA)
 		return -EINVAL;
@@ -3228,7 +3243,7 @@ static int iwl_mvm_send_sta_key(struct iwl_mvm *mvm,
 	switch (key->cipher) {
 	case WLAN_CIPHER_SUITE_TKIP:
 		key_flags |= cpu_to_le16(STA_KEY_FLG_TKIP);
-		if (new_api) {
+		if (api_ver >= 2) {
 			memcpy((void *)&u.cmd.tx_mic_key,
 			       &key->key[NL80211_TKIP_DATA_OFFSET_TX_MIC_KEY],
 			       IWL_MIC_KEY_SIZE);
@@ -3249,23 +3264,23 @@ static int iwl_mvm_send_sta_key(struct iwl_mvm *mvm,
 	case WLAN_CIPHER_SUITE_CCMP:
 		key_flags |= cpu_to_le16(STA_KEY_FLG_CCM);
 		memcpy(u.cmd.common.key, key->key, key->keylen);
-		if (new_api)
+		if (api_ver >= 2)
 			pn = atomic64_read(&key->tx_pn);
 		break;
 	case WLAN_CIPHER_SUITE_WEP104:
 		key_flags |= cpu_to_le16(STA_KEY_FLG_WEP_13BYTES);
-		/* fall through */
+		fallthrough;
 	case WLAN_CIPHER_SUITE_WEP40:
 		key_flags |= cpu_to_le16(STA_KEY_FLG_WEP);
 		memcpy(u.cmd.common.key + 3, key->key, key->keylen);
 		break;
 	case WLAN_CIPHER_SUITE_GCMP_256:
 		key_flags |= cpu_to_le16(STA_KEY_FLG_KEY_32BYTES);
-		/* fall through */
+		fallthrough;
 	case WLAN_CIPHER_SUITE_GCMP:
 		key_flags |= cpu_to_le16(STA_KEY_FLG_GCMP);
 		memcpy(u.cmd.common.key, key->key, key->keylen);
-		if (new_api)
+		if (api_ver >= 2)
 			pn = atomic64_read(&key->tx_pn);
 		break;
 	default:
@@ -3282,7 +3297,46 @@ static int iwl_mvm_send_sta_key(struct iwl_mvm *mvm,
 	u.cmd.common.key_flags = key_flags;
 	u.cmd.common.sta_id = sta_id;
 
-	if (new_api) {
+	if (key->cipher == WLAN_CIPHER_SUITE_TKIP)
+		i = 0;
+	else
+		i = -1;
+
+	for (; i < IEEE80211_NUM_TIDS; i++) {
+		struct ieee80211_key_seq seq = {};
+		u8 _rx_pn[IEEE80211_MAX_PN_LEN] = {}, *rx_pn = _rx_pn;
+		int rx_pn_len = 8;
+		/* there's a hole at 2/3 in FW format depending on version */
+		int hole = api_ver >= 3 ? 0 : 2;
+
+		ieee80211_get_key_rx_seq(key, i, &seq);
+
+		if (key->cipher == WLAN_CIPHER_SUITE_TKIP) {
+			rx_pn[0] = seq.tkip.iv16;
+			rx_pn[1] = seq.tkip.iv16 >> 8;
+			rx_pn[2 + hole] = seq.tkip.iv32;
+			rx_pn[3 + hole] = seq.tkip.iv32 >> 8;
+			rx_pn[4 + hole] = seq.tkip.iv32 >> 16;
+			rx_pn[5 + hole] = seq.tkip.iv32 >> 24;
+		} else if (key_flags & cpu_to_le16(STA_KEY_FLG_EXT)) {
+			rx_pn = seq.hw.seq;
+			rx_pn_len = seq.hw.seq_len;
+		} else {
+			rx_pn[0] = seq.ccmp.pn[0];
+			rx_pn[1] = seq.ccmp.pn[1];
+			rx_pn[2 + hole] = seq.ccmp.pn[2];
+			rx_pn[3 + hole] = seq.ccmp.pn[3];
+			rx_pn[4 + hole] = seq.ccmp.pn[4];
+			rx_pn[5 + hole] = seq.ccmp.pn[5];
+		}
+
+		if (iwl_mvm_pn_cmp(rx_pn, (u8 *)&u.cmd.common.rx_secur_seq_cnt,
+				   rx_pn_len) > 0)
+			memcpy(&u.cmd.common.rx_secur_seq_cnt, rx_pn,
+			       rx_pn_len);
+	}
+
+	if (api_ver >= 2) {
 		u.cmd.transmit_seq_cnt = cpu_to_le64(pn);
 		size = sizeof(u.cmd);
 	} else {
@@ -3318,7 +3372,8 @@ static int iwl_mvm_send_sta_igtk(struct iwl_mvm *mvm,
 
 	/* verify the key details match the required command's expectations */
 	if (WARN_ON((keyconf->flags & IEEE80211_KEY_FLAG_PAIRWISE) ||
-		    (keyconf->keyidx != 4 && keyconf->keyidx != 5) ||
+		    (keyconf->keyidx != 4 && keyconf->keyidx != 5 &&
+		     keyconf->keyidx != 6 && keyconf->keyidx != 7) ||
 		    (keyconf->cipher != WLAN_CIPHER_SUITE_AES_CMAC &&
 		     keyconf->cipher != WLAN_CIPHER_SUITE_BIP_GMAC_128 &&
 		     keyconf->cipher != WLAN_CIPHER_SUITE_BIP_GMAC_256)))
@@ -3367,9 +3422,10 @@ static int iwl_mvm_send_sta_igtk(struct iwl_mvm *mvm,
 						       ((u64) pn[0] << 40));
 	}
 
-	IWL_DEBUG_INFO(mvm, "%s igtk for sta %u\n",
+	IWL_DEBUG_INFO(mvm, "%s %sIGTK (%d) for sta %u\n",
 		       remove_key ? "removing" : "installing",
-		       igtk_cmd.sta_id);
+		       keyconf->keyidx >= 6 ? "B" : "",
+		       keyconf->keyidx, igtk_cmd.sta_id);
 
 	if (!iwl_mvm_has_new_rx_api(mvm)) {
 		struct iwl_mvm_mgmt_mcast_key_cmd_v1 igtk_cmd_v1 = {
@@ -3417,7 +3473,6 @@ static int __iwl_mvm_set_sta_key(struct iwl_mvm *mvm,
 				 u8 key_offset,
 				 bool mcast)
 {
-	int ret;
 	const u8 *addr;
 	struct ieee80211_key_seq seq;
 	u16 p1k[5];
@@ -3439,30 +3494,19 @@ static int __iwl_mvm_set_sta_key(struct iwl_mvm *mvm,
 		return -EINVAL;
 	}
 
-	switch (keyconf->cipher) {
-	case WLAN_CIPHER_SUITE_TKIP:
+	if (keyconf->cipher == WLAN_CIPHER_SUITE_TKIP) {
 		addr = iwl_mvm_get_mac_addr(mvm, vif, sta);
 		/* get phase 1 key from mac80211 */
 		ieee80211_get_key_rx_seq(keyconf, 0, &seq);
 		ieee80211_get_tkip_rx_p1k(keyconf, addr, seq.tkip.iv32, p1k);
-		ret = iwl_mvm_send_sta_key(mvm, sta_id, keyconf, mcast,
-					   seq.tkip.iv32, p1k, 0, key_offset,
-					   mfp);
-		break;
-	case WLAN_CIPHER_SUITE_CCMP:
-	case WLAN_CIPHER_SUITE_WEP40:
-	case WLAN_CIPHER_SUITE_WEP104:
-	case WLAN_CIPHER_SUITE_GCMP:
-	case WLAN_CIPHER_SUITE_GCMP_256:
-		ret = iwl_mvm_send_sta_key(mvm, sta_id, keyconf, mcast,
-					   0, NULL, 0, key_offset, mfp);
-		break;
-	default:
-		ret = iwl_mvm_send_sta_key(mvm, sta_id, keyconf, mcast,
-					   0, NULL, 0, key_offset, mfp);
+
+		return iwl_mvm_send_sta_key(mvm, sta_id, keyconf, mcast,
+					    seq.tkip.iv32, p1k, 0, key_offset,
+					    mfp);
 	}
 
-	return ret;
+	return iwl_mvm_send_sta_key(mvm, sta_id, keyconf, mcast,
+				    0, NULL, 0, key_offset, mfp);
 }
 
 int iwl_mvm_set_sta_key(struct iwl_mvm *mvm,
@@ -3757,7 +3801,7 @@ void iwl_mvm_rx_eosp_notif(struct iwl_mvm *mvm,
 	struct ieee80211_sta *sta;
 	u32 sta_id = le32_to_cpu(notif->sta_id);
 
-	if (WARN_ON_ONCE(sta_id >= IWL_MVM_STATION_COUNT))
+	if (WARN_ON_ONCE(sta_id >= mvm->fw->ucode_capa.num_stations))
 		return;
 
 	rcu_read_lock();
@@ -3800,8 +3844,12 @@ void iwl_mvm_sta_modify_disable_tx_ap(struct iwl_mvm *mvm,
 
 	mvm_sta->disable_tx = disable;
 
-	/* Tell mac80211 to start/stop queuing tx for this station */
-	ieee80211_sta_block_awake(mvm->hw, sta, disable);
+	/*
+	 * If sta PS state is handled by mac80211, tell it to start/stop
+	 * queuing tx for this station.
+	 */
+	if (!ieee80211_hw_check(mvm->hw, AP_LINK_PS))
+		ieee80211_sta_block_awake(mvm->hw, sta, disable);
 
 	iwl_mvm_sta_modify_disable_tx(mvm, mvm_sta, disable);
 
@@ -3823,7 +3871,7 @@ static void iwl_mvm_int_sta_modify_disable_tx(struct iwl_mvm *mvm,
 	};
 	int ret;
 
-	ret = iwl_mvm_send_cmd_pdu(mvm, ADD_STA, 0,
+	ret = iwl_mvm_send_cmd_pdu(mvm, ADD_STA, CMD_ASYNC,
 				   iwl_mvm_add_sta_cmd_size(mvm), &cmd);
 	if (ret)
 		IWL_ERR(mvm, "Failed to send ADD_STA command (%d)\n", ret);
@@ -3837,12 +3885,11 @@ void iwl_mvm_modify_all_sta_disable_tx(struct iwl_mvm *mvm,
 	struct iwl_mvm_sta *mvm_sta;
 	int i;
 
-	lockdep_assert_held(&mvm->mutex);
+	rcu_read_lock();
 
 	/* Block/unblock all the stations of the given mvmvif */
-	for (i = 0; i < ARRAY_SIZE(mvm->fw_id_to_mac_id); i++) {
-		sta = rcu_dereference_protected(mvm->fw_id_to_mac_id[i],
-						lockdep_is_held(&mvm->mutex));
+	for (i = 0; i < mvm->fw->ucode_capa.num_stations; i++) {
+		sta = rcu_dereference(mvm->fw_id_to_mac_id[i]);
 		if (IS_ERR_OR_NULL(sta))
 			continue;
 
@@ -3853,6 +3900,8 @@ void iwl_mvm_modify_all_sta_disable_tx(struct iwl_mvm *mvm,
 
 		iwl_mvm_sta_modify_disable_tx_ap(mvm, sta, disable);
 	}
+
+	rcu_read_unlock();
 
 	if (!fw_has_api(&mvm->fw->ucode_capa, IWL_UCODE_TLV_API_STA_TYPE))
 		return;
@@ -3898,4 +3947,44 @@ u16 iwl_mvm_tid_queued(struct iwl_mvm *mvm, struct iwl_mvm_tid_data *tid_data)
 		sn &= 0xff;
 
 	return ieee80211_sn_sub(sn, tid_data->next_reclaimed);
+}
+
+int iwl_mvm_add_pasn_sta(struct iwl_mvm *mvm, struct ieee80211_vif *vif,
+			 struct iwl_mvm_int_sta *sta, u8 *addr, u32 cipher,
+			 u8 *key, u32 key_len)
+{
+	int ret;
+	u16 queue;
+	struct iwl_mvm_vif *mvmvif = iwl_mvm_vif_from_mac80211(vif);
+	struct ieee80211_key_conf *keyconf;
+
+	ret = iwl_mvm_allocate_int_sta(mvm, sta, 0,
+				       NL80211_IFTYPE_UNSPECIFIED,
+				       IWL_STA_LINK);
+	if (ret)
+		return ret;
+
+	ret = iwl_mvm_add_int_sta_with_queue(mvm, mvmvif->id, mvmvif->color,
+					     addr, sta, &queue,
+					     IWL_MVM_TX_FIFO_BE);
+	if (ret)
+		goto out;
+
+	keyconf = kzalloc(sizeof(*keyconf) + key_len, GFP_KERNEL);
+	if (!keyconf) {
+		ret = -ENOBUFS;
+		goto out;
+	}
+
+	keyconf->cipher = cipher;
+	memcpy(keyconf->key, key, key_len);
+	keyconf->keylen = key_len;
+
+	ret = iwl_mvm_send_sta_key(mvm, sta->sta_id, keyconf, false,
+				   0, NULL, 0, 0, true);
+	kfree(keyconf);
+	return 0;
+out:
+	iwl_mvm_dealloc_int_sta(mvm, sta);
+	return ret;
 }

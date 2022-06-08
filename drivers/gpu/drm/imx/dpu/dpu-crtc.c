@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2020 NXP
+ * Copyright 2017-2021 NXP
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -12,7 +12,7 @@
  * for more details.
  */
 
-#include <drm/drmP.h>
+#include <drm/drm_vblank.h>
 #include <drm/drm_atomic.h>
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_crtc_helper.h>
@@ -91,7 +91,7 @@ struct dpu_crtc *dpu_crtc_get_aux_dpu_crtc(struct dpu_crtc *dpu_crtc)
 }
 
 static void dpu_crtc_atomic_enable(struct drm_crtc *crtc,
-				   struct drm_crtc_state *old_crtc_state)
+				   struct drm_atomic_state *state)
 {
 	struct dpu_crtc *dpu_crtc = to_dpu_crtc(crtc);
 	struct dpu_crtc *aux_dpu_crtc = dpu_crtc_get_aux_dpu_crtc(dpu_crtc);
@@ -287,9 +287,11 @@ static void dpu_crtc_atomic_enable(struct drm_crtc *crtc,
 }
 
 static void dpu_crtc_atomic_disable(struct drm_crtc *crtc,
-				    struct drm_crtc_state *old_crtc_state)
+				    struct drm_atomic_state *state)
 {
 	struct dpu_crtc *dpu_crtc = to_dpu_crtc(crtc);
+	struct drm_crtc_state *old_crtc_state =
+				drm_atomic_get_old_crtc_state(state, crtc);
 	struct imx_crtc_state *imx_crtc_state =
 					to_imx_crtc_state(old_crtc_state);
 	struct dpu_crtc_state *dcstate = to_dpu_crtc_state(imx_crtc_state);
@@ -583,13 +585,15 @@ static irqreturn_t dpu_crc_shdld_irq_handler(int irq, void *dev_id)
 }
 
 static int dpu_crtc_atomic_check(struct drm_crtc *crtc,
-				 struct drm_crtc_state *crtc_state)
+				 struct drm_atomic_state *state)
 {
 	struct drm_device *dev = crtc->dev;
 	struct drm_encoder *encoder;
 	struct drm_plane *plane;
 	struct drm_plane_state *plane_state;
 	struct dpu_plane_state *dpstate;
+	struct drm_crtc_state *crtc_state =
+				drm_atomic_get_new_crtc_state(state, crtc);
 	struct imx_crtc_state *imx_crtc_state = to_imx_crtc_state(crtc_state);
 	struct dpu_crtc_state *dcstate = to_dpu_crtc_state(imx_crtc_state);
 	struct imx_crtc_state *old_imx_crtc_state =
@@ -669,9 +673,11 @@ static int dpu_crtc_atomic_check(struct drm_crtc *crtc,
 }
 
 static void dpu_crtc_atomic_begin(struct drm_crtc *crtc,
-				  struct drm_crtc_state *old_crtc_state)
+				  struct drm_atomic_state *state)
 {
 	struct dpu_crtc *dpu_crtc = to_dpu_crtc(crtc);
+	struct drm_crtc_state *old_crtc_state =
+				drm_atomic_get_old_crtc_state(state, crtc);
 	struct imx_crtc_state *old_imx_crtc_state =
 					to_imx_crtc_state(old_crtc_state);
 	struct dpu_crtc_state *old_dcstate =
@@ -771,10 +777,12 @@ again:
 }
 
 static void dpu_crtc_atomic_flush(struct drm_crtc *crtc,
-				  struct drm_crtc_state *old_crtc_state)
+				  struct drm_atomic_state *state)
 {
 	struct dpu_crtc *dpu_crtc = to_dpu_crtc(crtc), *aux_dpu_crtc = NULL;
 	struct imx_crtc_state *imx_crtc_state = to_imx_crtc_state(crtc->state);
+	struct drm_crtc_state *old_crtc_state =
+				drm_atomic_get_old_crtc_state(state, crtc);
 	struct imx_crtc_state *old_imx_crtc_state =
 					to_imx_crtc_state(old_crtc_state);
 	struct dpu_crtc_state *dcstate = to_dpu_crtc_state(imx_crtc_state);
@@ -838,6 +846,17 @@ again1:
 		}
 	}
 
+	/*
+	 * Sync with FrameGen frame counter moving so that
+	 * we may disable DPRC repeat_en correctly.
+	 * FIXME: to disable preemption and irq to make sure
+	 *        DPRC repeat_en will be disabled ASAP.
+	 */
+	if (need_wait4fgfcm || need_aux_wait4fgfcm)
+		framegen_wait_for_frame_counter_moving(dcstate->use_pc ?
+						       dpu_crtc->m_fg :
+						       dpu_crtc->fg);
+
 	for (i = 0; i < dpu_crtc->hw_plane_num; i++) {
 		struct dpu_fetchunit *fe;
 		struct dpu_hscaler *hs;
@@ -847,17 +866,6 @@ again1:
 		old_dpstate = old_dcstate->dpu_plane_states[i];
 		if (!old_dpstate)
 			continue;
-
-		/*
-		 * Sync with FrameGen frame counter moving so that
-		 * we may disable DPRC repeat_en correctly.
-		 * FIXME: to disable preemption and irq to make sure
-		 *        DPRC repeat_en will be disabled ASAP.
-		 */
-		if (need_wait4fgfcm || need_aux_wait4fgfcm)
-			framegen_wait_for_frame_counter_moving(
-					dcstate->use_pc ?
-						dpu_crtc->m_fg : dpu_crtc->fg);
 
 		aux_source_disable = false;
 again2:

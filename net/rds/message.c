@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2006 Oracle.  All rights reserved.
+ * Copyright (c) 2006, 2020 Oracle and/or its affiliates.
  *
  * This software is available to you under a choice of one of two
  * licenses.  You may choose to be licensed under the terms of the GNU
@@ -162,12 +162,12 @@ static void rds_message_purge(struct rds_message *rm)
 	if (rm->rdma.op_active)
 		rds_rdma_free_op(&rm->rdma);
 	if (rm->rdma.op_rdma_mr)
-		rds_mr_put(rm->rdma.op_rdma_mr);
+		kref_put(&rm->rdma.op_rdma_mr->r_kref, __rds_put_mr_final);
 
 	if (rm->atomic.op_active)
 		rds_atomic_free_op(&rm->atomic);
 	if (rm->atomic.op_rdma_mr)
-		rds_mr_put(rm->atomic.op_rdma_mr);
+		kref_put(&rm->atomic.op_rdma_mr->r_kref, __rds_put_mr_final);
 }
 
 void rds_message_put(struct rds_message *rm)
@@ -347,8 +347,9 @@ struct rds_message *rds_message_map_pages(unsigned long *page_addrs, unsigned in
 	rm->data.op_nents = DIV_ROUND_UP(total_len, PAGE_SIZE);
 	rm->data.op_sg = rds_message_alloc_sgs(rm, num_sgs);
 	if (IS_ERR(rm->data.op_sg)) {
+		void *err = ERR_CAST(rm->data.op_sg);
 		rds_message_put(rm);
-		return ERR_CAST(rm->data.op_sg);
+		return err;
 	}
 
 	for (i = 0; i < rm->data.op_nents; ++i) {

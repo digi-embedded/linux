@@ -13,6 +13,7 @@ config IMX_DSP
 config IMX_SCU
 	bool "IMX SCU Protocol driver"
 	depends on IMX_MBOX
+	select SOC_BUS
 	help
 	  The System Controller Firmware (SCFW) is a low-level system function
 	  which runs on a dedicated Cortex-M core to provide power, clock, and
@@ -30,10 +31,22 @@ config IMX_SCU_PD
 
 config IMX_SECO_MU
 	tristate "i.MX Security Controller (SECO) support"
-	depends on IMX_SCU && IMX_MBOX && MAILBOX
+	depends on IMX_MBOX
+	default y if IMX_SCU
 
 	help
 	  It is possible to use APIs exposed by the SECO like HSM and SHE using the
 	  SAB protocol via the shared Messaging Unit. This driver exposes these
 	  interfaces via a set of file descriptors allowing to configure shared
+	  memory, send and receive messages.
+
+config IMX_EL_ENCLAVE
+	tristate "i.MX Embedded EdgeLock Enclave support."
+	depends on IMX_MBOX
+	default y if ARM64
+
+	help
+	  It is possible to use APIs exposed by the iMX EdgeLock Enclave like base, HSM &
+	  SHE using the SAB protocol via the shared Messaging Unit. This driver exposes
+	  these interfaces via a set of file descriptors allowing to configure shared
 	  memory, send and receive messages.

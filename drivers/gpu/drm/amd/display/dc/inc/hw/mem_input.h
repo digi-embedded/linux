@@ -33,6 +33,8 @@
 struct dchub_init_data;
 struct cstate_pstate_watermarks_st {
 	uint32_t cstate_exit_ns;
+	uint32_t cstate_exit_z8_ns;
+	uint32_t cstate_enter_plus_exit_z8_ns;
 	uint32_t cstate_enter_plus_exit_ns;
 	uint32_t pstate_change_ns;
 };
@@ -40,10 +42,9 @@ struct cstate_pstate_watermarks_st {
 struct dcn_watermarks {
 	uint32_t pte_meta_urgent_ns;
 	uint32_t urgent_ns;
-#if defined(CONFIG_DRM_AMD_DC_DCN2_1)
 	uint32_t frac_urg_bw_nom;
 	uint32_t frac_urg_bw_flip;
-#endif
+	int32_t urgent_latency_ns;
 	struct cstate_pstate_watermarks_st cstate_pstate;
 };
 

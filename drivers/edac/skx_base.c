@@ -46,7 +46,8 @@ static struct skx_dev *get_skx_dev(struct pci_bus *bus, u8 idx)
 }
 
 enum munittype {
-	CHAN0, CHAN1, CHAN2, SAD_ALL, UTIL_ALL, SAD
+	CHAN0, CHAN1, CHAN2, SAD_ALL, UTIL_ALL, SAD,
+	ERRCHAN0, ERRCHAN1, ERRCHAN2,
 };
 
 struct munit {
@@ -68,6 +69,9 @@ static const struct munit skx_all_munits[] = {
 	{ 0x2040, { PCI_DEVFN(10, 0), PCI_DEVFN(12, 0) }, 2, 2, CHAN0 },
 	{ 0x2044, { PCI_DEVFN(10, 4), PCI_DEVFN(12, 4) }, 2, 2, CHAN1 },
 	{ 0x2048, { PCI_DEVFN(11, 0), PCI_DEVFN(13, 0) }, 2, 2, CHAN2 },
+	{ 0x2043, { PCI_DEVFN(10, 3), PCI_DEVFN(12, 3) }, 2, 2, ERRCHAN0 },
+	{ 0x2047, { PCI_DEVFN(10, 7), PCI_DEVFN(12, 7) }, 2, 2, ERRCHAN1 },
+	{ 0x204b, { PCI_DEVFN(11, 3), PCI_DEVFN(13, 3) }, 2, 2, ERRCHAN2 },
 	{ 0x208e, { }, 1, 0, SAD },
 	{ }
 };
@@ -104,9 +108,17 @@ static int get_all_munits(const struct munit *m)
 		}
 
 		switch (m->mtype) {
-		case CHAN0: case CHAN1: case CHAN2:
+		case CHAN0:
+		case CHAN1:
+		case CHAN2:
 			pci_dev_get(pdev);
 			d->imc[i].chan[m->mtype].cdev = pdev;
+			break;
+		case ERRCHAN0:
+		case ERRCHAN1:
+		case ERRCHAN2:
+			pci_dev_get(pdev);
+			d->imc[i].chan[m->mtype - ERRCHAN0].edev = pdev;
 			break;
 		case SAD_ALL:
 			pci_dev_get(pdev);
@@ -145,8 +157,14 @@ fail:
 	return -ENODEV;
 }
 
+static struct res_config skx_cfg = {
+	.type			= SKX,
+	.decs_did		= 0x2016,
+	.busno_cfg_offset	= 0xcc,
+};
+
 static const struct x86_cpu_id skx_cpuids[] = {
-	{ X86_VENDOR_INTEL, 6, INTEL_FAM6_SKYLAKE_X, 0, 0 },
+	X86_MATCH_INTEL_FAM6_MODEL_STEPPINGS(SKYLAKE_X, X86_STEPPINGS(0x0, 0xf), &skx_cfg),
 	{ }
 };
 MODULE_DEVICE_TABLE(x86cpu, skx_cpuids);
@@ -156,7 +174,7 @@ static bool skx_check_ecc(u32 mcmtr)
 	return !!GET_BITFIELD(mcmtr, 2, 2);
 }
 
-static int skx_get_dimm_config(struct mem_ctl_info *mci)
+static int skx_get_dimm_config(struct mem_ctl_info *mci, struct res_config *cfg)
 {
 	struct skx_pvt *pvt = mci->pvt_info;
 	u32 mtr, mcmtr, amap, mcddrtcfg;
@@ -173,12 +191,11 @@ static int skx_get_dimm_config(struct mem_ctl_info *mci)
 		pci_read_config_dword(imc->chan[i].cdev, 0x8C, &amap);
 		pci_read_config_dword(imc->chan[i].cdev, 0x400, &mcddrtcfg);
 		for (j = 0; j < SKX_NUM_DIMMS; j++) {
-			dimm = EDAC_DIMM_PTR(mci->layers, mci->dimms,
-					     mci->n_layers, i, j, 0);
+			dimm = edac_get_dimm(mci, i, j, 0);
 			pci_read_config_dword(imc->chan[i].cdev,
 					      0x80 + 4 * j, &mtr);
 			if (IS_DIMM_PRESENT(mtr)) {
-				ndimms += skx_get_dimm_info(mtr, mcmtr, amap, dimm, imc, i, j);
+				ndimms += skx_get_dimm_info(mtr, mcmtr, amap, dimm, imc, i, j, cfg);
 			} else if (IS_NVDIMM_PRESENT(mcddrtcfg, j)) {
 				ndimms += skx_get_nvdimm_info(dimm, imc, i, j,
 							      EDAC_MOD_STR);
@@ -211,6 +228,40 @@ static int skx_get_dimm_config(struct mem_ctl_info *mci)
 
 #define SKX_ILV_REMOTE(tgt)	(((tgt) & 8) == 0)
 #define SKX_ILV_TARGET(tgt)	((tgt) & 7)
+
+static void skx_show_retry_rd_err_log(struct decoded_addr *res,
+				      char *msg, int len,
+				      bool scrub_err)
+{
+	u32 log0, log1, log2, log3, log4;
+	u32 corr0, corr1, corr2, corr3;
+	struct pci_dev *edev;
+	int n;
+
+	edev = res->dev->imc[res->imc].chan[res->channel].edev;
+
+	pci_read_config_dword(edev, 0x154, &log0);
+	pci_read_config_dword(edev, 0x148, &log1);
+	pci_read_config_dword(edev, 0x150, &log2);
+	pci_read_config_dword(edev, 0x15c, &log3);
+	pci_read_config_dword(edev, 0x114, &log4);
+
+	n = snprintf(msg, len, " retry_rd_err_log[%.8x %.8x %.8x %.8x %.8x]",
+		     log0, log1, log2, log3, log4);
+
+	pci_read_config_dword(edev, 0x104, &corr0);
+	pci_read_config_dword(edev, 0x108, &corr1);
+	pci_read_config_dword(edev, 0x10c, &corr2);
+	pci_read_config_dword(edev, 0x110, &corr3);
+
+	if (len - n > 0)
+		snprintf(msg + n, len - n,
+			 " correrrcnt[%.4x %.4x %.4x %.4x %.4x %.4x %.4x %.4x]",
+			 corr0 & 0xffff, corr0 >> 16,
+			 corr1 & 0xffff, corr1 >> 16,
+			 corr2 & 0xffff, corr2 >> 16,
+			 corr3 & 0xffff, corr3 >> 16);
+}
 
 static bool skx_sad_decode(struct decoded_addr *res)
 {
@@ -593,6 +644,7 @@ static inline void teardown_skx_debug(void) {}
 static int __init skx_init(void)
 {
 	const struct x86_cpu_id *id;
+	struct res_config *cfg;
 	const struct munit *m;
 	const char *owner;
 	int rc = 0, i, off[3] = {0xd0, 0xd4, 0xd8};
@@ -605,15 +657,20 @@ static int __init skx_init(void)
 	if (owner && strncmp(owner, EDAC_MOD_STR, sizeof(EDAC_MOD_STR)))
 		return -EBUSY;
 
+	if (cpu_feature_enabled(X86_FEATURE_HYPERVISOR))
+		return -ENODEV;
+
 	id = x86_match_cpu(skx_cpuids);
 	if (!id)
 		return -ENODEV;
+
+	cfg = (struct res_config *)id->driver_data;
 
 	rc = skx_get_hi_lo(0x2034, off, &skx_tolm, &skx_tohm);
 	if (rc)
 		return rc;
 
-	rc = skx_get_all_bus_mappings(0x2016, 0xcc, SKX, &skx_edac_list);
+	rc = skx_get_all_bus_mappings(cfg, &skx_edac_list);
 	if (rc < 0)
 		goto fail;
 	if (rc == 0) {
@@ -649,13 +706,13 @@ static int __init skx_init(void)
 			d->imc[i].node_id = node_id;
 			rc = skx_register_mci(&d->imc[i], d->imc[i].chan[0].cdev,
 					      "Skylake Socket", EDAC_MOD_STR,
-					      skx_get_dimm_config);
+					      skx_get_dimm_config, cfg);
 			if (rc < 0)
 				goto fail;
 		}
 	}
 
-	skx_set_decode(skx_decode);
+	skx_set_decode(skx_decode, skx_show_retry_rd_err_log);
 
 	if (nvdimm_count && skx_adxl_get() == -ENODEV)
 		skx_printk(KERN_NOTICE, "Only decoding DDR4 address!\n");

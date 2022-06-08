@@ -18,6 +18,8 @@
 	aliases {
 		ethernet0 = &pfe_mac0;
 		ethernet1 = &pfe_mac1;
+		mmc0 = &esdhc0;
+		mmc1 = &esdhc1;
 	};
 
 	sys_mclk: clock-mclk {
@@ -64,7 +66,7 @@
 	};
 };
 
-&pcie {
+&pcie1 {
 	status = "okay";
 };
 
@@ -142,4 +144,23 @@
 
 &sai2 {
 	status = "okay";
+};
+
+&pcie1 {
+	status = "okay";
+};
+
+&qspi {
+	status = "okay";
+
+	w25q16dw0: flash@0 {
+		compatible = "jedec,spi-nor";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		m25p,fast-read;
+		spi-max-frequency = <50000000>;
+		reg = <0>;
+		spi-rx-bus-width = <2>;
+		spi-tx-bus-width = <2>;
+	};
 };

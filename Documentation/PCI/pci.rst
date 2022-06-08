@@ -17,7 +17,7 @@ PCI device drivers.
 A more complete resource is the third edition of "Linux Device Drivers"
 by Jonathan Corbet, Alessandro Rubini, and Greg Kroah-Hartman.
 LDD3 is available for free (under Creative Commons License) from:
-http://lwn.net/Kernel/LDD3/.
+https://lwn.net/Kernel/LDD3/.
 
 However, keep in mind that all documents are subject to "bit rot".
 Refer to the source code if things are not working as described here.
@@ -103,6 +103,7 @@ need pass only as many optional fields as necessary:
   - subvendor and subdevice fields default to PCI_ANY_ID (FFFFFFFF)
   - class and classmask fields default to 0
   - driver_data defaults to 0UL.
+  - override_only field defaults to 0.
 
 Note that driver_data must match the value used by any of the pci_device_id
 entries defined in the driver. This makes the driver_data field mandatory
@@ -209,12 +210,12 @@ the PCI device by calling pci_enable_device(). This will:
    OS BUG: we don't check resource allocations before enabling those
    resources. The sequence would make more sense if we called
    pci_request_resources() before calling pci_enable_device().
-   Currently, the device drivers can't detect the bug when when two
+   Currently, the device drivers can't detect the bug when two
    devices have been allocated the same range. This is not a common
    problem and unlikely to get fixed soon.
 
    This has been discussed before but not changed as of 2.6.19:
-   http://lkml.org/lkml/2006/3/2/194
+   https://lore.kernel.org/r/20060302180025.GC28895@flint.arm.linux.org.uk/
 
 
 pci_set_master() will enable DMA by setting the bus master bit
@@ -239,7 +240,7 @@ from the PCI device config space. Use the values in the pci_dev structure
 as the PCI "bus address" might have been remapped to a "host physical"
 address by the arch/chip-set specific kernel support.
 
-See Documentation/io-mapping.txt for how to access device registers
+See Documentation/driver-api/io-mapping.rst for how to access device registers
 or device memory.
 
 The device driver needs to call pci_request_region() to verify
@@ -265,7 +266,7 @@ Set the DMA mask size
 ---------------------
 .. note::
    If anything below doesn't make sense, please refer to
-   Documentation/DMA-API.txt. This section is just a reminder that
+   Documentation/core-api/dma-api.rst. This section is just a reminder that
    drivers need to indicate DMA capabilities of the device and is not
    an authoritative source for DMA interfaces.
 
@@ -291,7 +292,7 @@ Many 64-bit "PCI" devices (before PCI-X) and some PCI-X devices are
 Setup shared control data
 -------------------------
 Once the DMA masks are set, the driver can allocate "consistent" (a.k.a. shared)
-memory.  See Documentation/DMA-API.txt for a full description of
+memory.  See Documentation/core-api/dma-api.rst for a full description of
 the DMA APIs. This section is just a reminder that it needs to be done
 before enabling DMA on the device.
 
@@ -421,7 +422,7 @@ owners if there is one.
 
 Then clean up "consistent" buffers which contain the control data.
 
-See Documentation/DMA-API.txt for details on unmapping interfaces.
+See Documentation/core-api/dma-api.rst for details on unmapping interfaces.
 
 
 Unregister from other subsystems
@@ -514,9 +515,8 @@ your driver if they're helpful, or just use plain hex constants.
 The device IDs are arbitrary hex numbers (vendor controlled) and normally used
 only in a single location, the pci_device_id table.
 
-Please DO submit new vendor/device IDs to http://pci-ids.ucw.cz/.
-There are mirrors of the pci.ids file at http://pciids.sourceforge.net/
-and https://github.com/pciutils/pciids.
+Please DO submit new vendor/device IDs to https://pci-ids.ucw.cz/.
+There's a mirror of the pci.ids file at https://github.com/pciutils/pciids.
 
 
 Obsolete functions

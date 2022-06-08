@@ -19,25 +19,25 @@
 #include "exynos_drm_plane.h"
 
 static void exynos_drm_crtc_atomic_enable(struct drm_crtc *crtc,
-					  struct drm_crtc_state *old_state)
+					  struct drm_atomic_state *state)
 {
 	struct exynos_drm_crtc *exynos_crtc = to_exynos_crtc(crtc);
 
-	if (exynos_crtc->ops->enable)
-		exynos_crtc->ops->enable(exynos_crtc);
+	if (exynos_crtc->ops->atomic_enable)
+		exynos_crtc->ops->atomic_enable(exynos_crtc);
 
 	drm_crtc_vblank_on(crtc);
 }
 
 static void exynos_drm_crtc_atomic_disable(struct drm_crtc *crtc,
-					   struct drm_crtc_state *old_state)
+					   struct drm_atomic_state *state)
 {
 	struct exynos_drm_crtc *exynos_crtc = to_exynos_crtc(crtc);
 
 	drm_crtc_vblank_off(crtc);
 
-	if (exynos_crtc->ops->disable)
-		exynos_crtc->ops->disable(exynos_crtc);
+	if (exynos_crtc->ops->atomic_disable)
+		exynos_crtc->ops->atomic_disable(exynos_crtc);
 
 	if (crtc->state->event && !crtc->state->active) {
 		spin_lock_irq(&crtc->dev->event_lock);
@@ -49,21 +49,23 @@ static void exynos_drm_crtc_atomic_disable(struct drm_crtc *crtc,
 }
 
 static int exynos_crtc_atomic_check(struct drm_crtc *crtc,
-				     struct drm_crtc_state *state)
+				     struct drm_atomic_state *state)
 {
+	struct drm_crtc_state *crtc_state = drm_atomic_get_new_crtc_state(state,
+									  crtc);
 	struct exynos_drm_crtc *exynos_crtc = to_exynos_crtc(crtc);
 
-	if (!state->enable)
+	if (!crtc_state->enable)
 		return 0;
 
 	if (exynos_crtc->ops->atomic_check)
-		return exynos_crtc->ops->atomic_check(exynos_crtc, state);
+		return exynos_crtc->ops->atomic_check(exynos_crtc, crtc_state);
 
 	return 0;
 }
 
 static void exynos_crtc_atomic_begin(struct drm_crtc *crtc,
-				     struct drm_crtc_state *old_crtc_state)
+				     struct drm_atomic_state *state)
 {
 	struct exynos_drm_crtc *exynos_crtc = to_exynos_crtc(crtc);
 
@@ -72,7 +74,7 @@ static void exynos_crtc_atomic_begin(struct drm_crtc *crtc,
 }
 
 static void exynos_crtc_atomic_flush(struct drm_crtc *crtc,
-				     struct drm_crtc_state *old_crtc_state)
+				     struct drm_atomic_state *state)
 {
 	struct exynos_drm_crtc *exynos_crtc = to_exynos_crtc(crtc);
 

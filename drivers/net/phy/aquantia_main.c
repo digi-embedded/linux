@@ -25,12 +25,6 @@
 #define PHY_ID_AQR112	0x03a1b662
 #define PHY_ID_AQR412	0x03a1b712
 
-/* PCS counters */
-#define MDIO_C45_PCS_STAT_XFI_TX_GOOD_FRAMES	0xc860
-#define MDIO_C45_PCS_STAT_XFI_TX_BAD_FRAMES	0xc862
-#define MDIO_C45_PCS_STAT_XFI_RX_GOOD_FRAMES	0xe860
-#define MDIO_C45_PCS_STAT_XFI_RX_BAD_FRAMES	0xe862
-
 #define MDIO_PHYXS_VEND_IF_STATUS		0xe812
 #define MDIO_PHYXS_VEND_IF_STATUS_TYPE_MASK	GENMASK(7, 3)
 #define MDIO_PHYXS_VEND_IF_STATUS_TYPE_KR	0
@@ -63,6 +57,7 @@
 #define MDIO_AN_TX_VEND_INT_STATUS1_DOWNSHIFT	BIT(1)
 
 #define MDIO_AN_TX_VEND_INT_STATUS2		0xcc01
+#define MDIO_AN_TX_VEND_INT_STATUS2_MASK	BIT(0)
 
 #define MDIO_AN_TX_VEND_INT_MASK2		0xd401
 #define MDIO_AN_TX_VEND_INT_MASK2_LINK		BIT(0)
@@ -159,12 +154,9 @@ struct aqr107_hw_stat {
 	const char *name;
 	int reg;
 	int size;
-	int devad;
 };
 
-#define SGMII_STAT(n, r, s) { n, MDIO_C22EXT_STAT_SGMII_ ## r, s, \
-			      MDIO_MMD_C22EXT}
-#define C45_PCS_STAT(n, r, s) { n, MDIO_C45_PCS_STAT_ ## r, s, MDIO_MMD_PCS }
+#define SGMII_STAT(n, r, s) { n, MDIO_C22EXT_STAT_SGMII_ ## r, s }
 static const struct aqr107_hw_stat aqr107_hw_stats[] = {
 	SGMII_STAT("sgmii_rx_good_frames",	    RX_GOOD_FRAMES,	26),
 	SGMII_STAT("sgmii_rx_bad_frames",	    RX_BAD_FRAMES,	26),
@@ -176,10 +168,6 @@ static const struct aqr107_hw_stat aqr107_hw_stats[] = {
 	SGMII_STAT("sgmii_tx_line_collisions",	    TX_LINE_COLLISIONS,	 8),
 	SGMII_STAT("sgmii_tx_frame_alignment_err",  TX_FRAME_ALIGN_ERR,	16),
 	SGMII_STAT("sgmii_tx_runt_frames",	    TX_RUNT_FRAMES,	22),
-	C45_PCS_STAT("xfi_rx_good_frames",	    XFI_RX_GOOD_FRAMES,	26),
-	C45_PCS_STAT("xfi_rx_bad_frames",	    XFI_RX_BAD_FRAMES,	26),
-	C45_PCS_STAT("xfi_tx_good_frames",	    XFI_TX_GOOD_FRAMES,	26),
-	C45_PCS_STAT("xfi_tx_bad_frames",	    XFI_TX_BAD_FRAMES,	26),
 };
 #define AQR107_SGMII_STAT_SZ ARRAY_SIZE(aqr107_hw_stats)
 
@@ -209,13 +197,13 @@ static u64 aqr107_get_stat(struct phy_device *phydev, int index)
 	u64 ret;
 	int val;
 
-	val = phy_read_mmd(phydev, stat->devad, stat->reg);
+	val = phy_read_mmd(phydev, MDIO_MMD_C22EXT, stat->reg);
 	if (val < 0)
 		return U64_MAX;
 
 	ret = val & GENMASK(len_l - 1, 0);
 	if (len_h) {
-		val = phy_read_mmd(phydev, stat->devad, stat->reg + 1);
+		val = phy_read_mmd(phydev, MDIO_MMD_C22EXT, stat->reg + 1);
 		if (val < 0)
 			return U64_MAX;
 
@@ -342,6 +330,13 @@ static int aqr_config_intr(struct phy_device *phydev)
 	bool en = phydev->interrupts == PHY_INTERRUPT_ENABLED;
 	int err;
 
+	if (en) {
+		/* Clear any pending interrupts before enabling them */
+		err = phy_read_mmd(phydev, MDIO_MMD_AN, MDIO_AN_TX_VEND_INT_STATUS2);
+		if (err < 0)
+			return err;
+	}
+
 	err = phy_write_mmd(phydev, MDIO_MMD_AN, MDIO_AN_TX_VEND_INT_MASK2,
 			    en ? MDIO_AN_TX_VEND_INT_MASK2_LINK : 0);
 	if (err < 0)
@@ -352,18 +347,39 @@ static int aqr_config_intr(struct phy_device *phydev)
 	if (err < 0)
 		return err;
 
-	return phy_write_mmd(phydev, MDIO_MMD_VEND1, VEND1_GLOBAL_INT_VEND_MASK,
-			     en ? VEND1_GLOBAL_INT_VEND_MASK_GLOBAL3 |
-			     VEND1_GLOBAL_INT_VEND_MASK_AN : 0);
+	err = phy_write_mmd(phydev, MDIO_MMD_VEND1, VEND1_GLOBAL_INT_VEND_MASK,
+			    en ? VEND1_GLOBAL_INT_VEND_MASK_GLOBAL3 |
+			    VEND1_GLOBAL_INT_VEND_MASK_AN : 0);
+	if (err < 0)
+		return err;
+
+	if (!en) {
+		/* Clear any pending interrupts after we have disabled them */
+		err = phy_read_mmd(phydev, MDIO_MMD_AN, MDIO_AN_TX_VEND_INT_STATUS2);
+		if (err < 0)
+			return err;
+	}
+
+	return 0;
 }
 
-static int aqr_ack_interrupt(struct phy_device *phydev)
+static irqreturn_t aqr_handle_interrupt(struct phy_device *phydev)
 {
-	int reg;
+	int irq_status;
 
-	reg = phy_read_mmd(phydev, MDIO_MMD_AN,
-			   MDIO_AN_TX_VEND_INT_STATUS2);
-	return (reg < 0) ? reg : 0;
+	irq_status = phy_read_mmd(phydev, MDIO_MMD_AN,
+				  MDIO_AN_TX_VEND_INT_STATUS2);
+	if (irq_status < 0) {
+		phy_error(phydev);
+		return IRQ_NONE;
+	}
+
+	if (!(irq_status & MDIO_AN_TX_VEND_INT_STATUS2_MASK))
+		return IRQ_NONE;
+
+	phy_trigger_machine(phydev);
+
+	return IRQ_HANDLED;
 }
 
 static int aqr_read_status(struct phy_device *phydev)
@@ -384,17 +400,6 @@ static int aqr_read_status(struct phy_device *phydev)
 	}
 
 	return genphy_c45_read_status(phydev);
-}
-
-static int aqr107_read_downshift_event(struct phy_device *phydev)
-{
-	int val;
-
-	val = phy_read_mmd(phydev, MDIO_MMD_AN, MDIO_AN_TX_VEND_INT_STATUS1);
-	if (val < 0)
-		return val;
-
-	return !!(val & MDIO_AN_TX_VEND_INT_STATUS1_DOWNSHIFT);
 }
 
 static int aqr107_read_rate(struct phy_device *phydev)
@@ -454,8 +459,10 @@ static int aqr107_read_status(struct phy_device *phydev)
 
 	switch (FIELD_GET(MDIO_PHYXS_VEND_IF_STATUS_TYPE_MASK, val)) {
 	case MDIO_PHYXS_VEND_IF_STATUS_TYPE_KR:
-	case MDIO_PHYXS_VEND_IF_STATUS_TYPE_XFI:
 		phydev->interface = PHY_INTERFACE_MODE_10GKR;
+		break;
+	case MDIO_PHYXS_VEND_IF_STATUS_TYPE_XFI:
+		phydev->interface = PHY_INTERFACE_MODE_10GBASER;
 		break;
 	case MDIO_PHYXS_VEND_IF_STATUS_TYPE_USXGMII:
 		phydev->interface = PHY_INTERFACE_MODE_USXGMII;
@@ -471,13 +478,7 @@ static int aqr107_read_status(struct phy_device *phydev)
 		break;
 	}
 
-	val = aqr107_read_downshift_event(phydev);
-	if (val <= 0)
-		return val;
-
-	phydev_warn(phydev, "Downshift occurred! Cabling may be defective.\n");
-
-	/* Read downshifted rate from vendor register */
+	/* Read possibly downshifted rate from vendor register */
 	return aqr107_read_rate(phydev);
 }
 
@@ -545,16 +546,11 @@ static int aqr107_set_tunable(struct phy_device *phydev,
  */
 static int aqr107_wait_reset_complete(struct phy_device *phydev)
 {
-	int val, retries = 100;
+	int val;
 
-	do {
-		val = phy_read_mmd(phydev, MDIO_MMD_VEND1, VEND1_GLOBAL_FW_ID);
-		if (val < 0)
-			return val;
-		msleep(20);
-	} while (!val && --retries);
-
-	return val ? 0 : -ETIMEDOUT;
+	return phy_read_mmd_poll_timeout(phydev, MDIO_MMD_VEND1,
+					 VEND1_GLOBAL_FW_ID, val, val != 0,
+					 20000, 2000000, false);
 }
 
 static void aqr107_chip_info(struct phy_device *phydev)
@@ -589,7 +585,8 @@ static int aqr107_config_init(struct phy_device *phydev)
 	    phydev->interface != PHY_INTERFACE_MODE_2500BASEX &&
 	    phydev->interface != PHY_INTERFACE_MODE_XGMII &&
 	    phydev->interface != PHY_INTERFACE_MODE_USXGMII &&
-	    phydev->interface != PHY_INTERFACE_MODE_10GKR)
+	    phydev->interface != PHY_INTERFACE_MODE_10GKR &&
+	    phydev->interface != PHY_INTERFACE_MODE_10GBASER)
 		return -ENODEV;
 
 	WARN(phydev->interface == PHY_INTERFACE_MODE_XGMII,
@@ -598,9 +595,6 @@ static int aqr107_config_init(struct phy_device *phydev)
 	ret = aqr107_wait_reset_complete(phydev);
 	if (!ret)
 		aqr107_chip_info(phydev);
-
-	/* ensure that a latched downshift event is cleared */
-	aqr107_read_downshift_event(phydev);
 
 	return aqr107_set_downshift(phydev, MDIO_AN_VEND_PROV_DOWNSHIFT_DFLT);
 }
@@ -625,9 +619,6 @@ static int aqcs109_config_init(struct phy_device *phydev)
 	ret = phy_set_max_speed(phydev, SPEED_2500);
 	if (ret)
 		return ret;
-
-	/* ensure that a latched downshift event is cleared */
-	aqr107_read_downshift_event(phydev);
 
 	return aqr107_set_downshift(phydev, MDIO_AN_VEND_PROV_DOWNSHIFT_DFLT);
 }
@@ -705,7 +696,7 @@ static struct phy_driver aqr_driver[] = {
 	.name		= "Aquantia AQ1202",
 	.config_aneg    = aqr_config_aneg,
 	.config_intr	= aqr_config_intr,
-	.ack_interrupt	= aqr_ack_interrupt,
+	.handle_interrupt = aqr_handle_interrupt,
 	.read_status	= aqr_read_status,
 },
 {
@@ -713,7 +704,7 @@ static struct phy_driver aqr_driver[] = {
 	.name		= "Aquantia AQ2104",
 	.config_aneg    = aqr_config_aneg,
 	.config_intr	= aqr_config_intr,
-	.ack_interrupt	= aqr_ack_interrupt,
+	.handle_interrupt = aqr_handle_interrupt,
 	.read_status	= aqr_read_status,
 },
 {
@@ -721,7 +712,7 @@ static struct phy_driver aqr_driver[] = {
 	.name		= "Aquantia AQR105",
 	.config_aneg    = aqr_config_aneg,
 	.config_intr	= aqr_config_intr,
-	.ack_interrupt	= aqr_ack_interrupt,
+	.handle_interrupt = aqr_handle_interrupt,
 	.read_status	= aqr_read_status,
 	.suspend	= aqr107_suspend,
 	.resume		= aqr107_resume,
@@ -731,7 +722,7 @@ static struct phy_driver aqr_driver[] = {
 	.name		= "Aquantia AQR106",
 	.config_aneg    = aqr_config_aneg,
 	.config_intr	= aqr_config_intr,
-	.ack_interrupt	= aqr_ack_interrupt,
+	.handle_interrupt = aqr_handle_interrupt,
 	.read_status	= aqr_read_status,
 },
 {
@@ -741,7 +732,7 @@ static struct phy_driver aqr_driver[] = {
 	.config_init	= aqr107_config_init,
 	.config_aneg    = aqr_config_aneg,
 	.config_intr	= aqr_config_intr,
-	.ack_interrupt	= aqr_ack_interrupt,
+	.handle_interrupt = aqr_handle_interrupt,
 	.read_status	= aqr107_read_status,
 	.get_tunable    = aqr107_get_tunable,
 	.set_tunable    = aqr107_set_tunable,
@@ -759,7 +750,7 @@ static struct phy_driver aqr_driver[] = {
 	.config_init	= aqcs109_config_init,
 	.config_aneg    = aqr_config_aneg,
 	.config_intr	= aqr_config_intr,
-	.ack_interrupt	= aqr_ack_interrupt,
+	.handle_interrupt = aqr_handle_interrupt,
 	.read_status	= aqr107_read_status,
 	.get_tunable    = aqr107_get_tunable,
 	.set_tunable    = aqr107_set_tunable,
@@ -775,32 +766,24 @@ static struct phy_driver aqr_driver[] = {
 	.name		= "Aquantia AQR405",
 	.config_aneg    = aqr_config_aneg,
 	.config_intr	= aqr_config_intr,
-	.ack_interrupt	= aqr_ack_interrupt,
+	.handle_interrupt = aqr_handle_interrupt,
 	.read_status	= aqr_read_status,
 },
 {
 	PHY_ID_MATCH_MODEL(PHY_ID_AQR112),
 	.name		= "Aquantia AQR112",
-	.probe		= aqr107_probe,
 	.config_aneg    = aqr_config_aneg_set_prot,
 	.config_intr	= aqr_config_intr,
-	.ack_interrupt	= aqr_ack_interrupt,
+	.handle_interrupt = aqr_handle_interrupt,
 	.read_status	= aqr_read_status,
-	.get_sset_count	= aqr107_get_sset_count,
-	.get_strings	= aqr107_get_strings,
-	.get_stats	= aqr107_get_stats,
 },
 {
 	PHY_ID_MATCH_MODEL(PHY_ID_AQR412),
 	.name		= "Aquantia AQR412",
-	.probe		= aqr107_probe,
 	.config_aneg    = aqr_config_aneg_set_prot,
 	.config_intr	= aqr_config_intr,
-	.ack_interrupt	= aqr_ack_interrupt,
+	.handle_interrupt = aqr_handle_interrupt,
 	.read_status	= aqr_read_status,
-	.get_sset_count	= aqr107_get_sset_count,
-	.get_strings	= aqr107_get_strings,
-	.get_stats	= aqr107_get_stats,
 },
 };
 

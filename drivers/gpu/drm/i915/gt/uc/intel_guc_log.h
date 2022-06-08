@@ -17,12 +17,10 @@ struct intel_guc;
 
 #ifdef CONFIG_DRM_I915_DEBUG_GUC
 #define CRASH_BUFFER_SIZE	SZ_2M
-#define DPC_BUFFER_SIZE		SZ_8M
-#define ISR_BUFFER_SIZE		SZ_8M
+#define DEBUG_BUFFER_SIZE	SZ_16M
 #else
 #define CRASH_BUFFER_SIZE	SZ_8K
-#define DPC_BUFFER_SIZE		SZ_32K
-#define ISR_BUFFER_SIZE		SZ_32K
+#define DEBUG_BUFFER_SIZE	SZ_64K
 #endif
 
 /*
@@ -47,6 +45,7 @@ struct intel_guc_log {
 	struct i915_vma *vma;
 	struct {
 		void *buf_addr;
+		bool started;
 		struct work_struct flush_work;
 		struct rchan *channel;
 		struct mutex lock;
@@ -65,8 +64,9 @@ int intel_guc_log_create(struct intel_guc_log *log);
 void intel_guc_log_destroy(struct intel_guc_log *log);
 
 int intel_guc_log_set_level(struct intel_guc_log *log, u32 level);
-bool intel_guc_log_relay_enabled(const struct intel_guc_log *log);
+bool intel_guc_log_relay_created(const struct intel_guc_log *log);
 int intel_guc_log_relay_open(struct intel_guc_log *log);
+int intel_guc_log_relay_start(struct intel_guc_log *log);
 void intel_guc_log_relay_flush(struct intel_guc_log *log);
 void intel_guc_log_relay_close(struct intel_guc_log *log);
 
@@ -76,5 +76,9 @@ static inline u32 intel_guc_log_get_level(struct intel_guc_log *log)
 {
 	return log->level;
 }
+
+void intel_guc_log_info(struct intel_guc_log *log, struct drm_printer *p);
+int intel_guc_log_dump(struct intel_guc_log *log, struct drm_printer *p,
+		       bool dump_load_err);
 
 #endif

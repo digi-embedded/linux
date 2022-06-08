@@ -210,7 +210,7 @@ int __cold dpa_stop(struct net_device *net_dev)
 }
 EXPORT_SYMBOL(dpa_stop);
 
-void __cold dpa_timeout(struct net_device *net_dev)
+void __cold dpa_timeout(struct net_device *net_dev, unsigned int txqueue)
 {
 	const struct dpa_priv_s	*priv;
 	struct dpa_percpu_priv_s *percpu_priv;
@@ -706,12 +706,6 @@ dpa_bp_alloc(struct dpa_bp *dpa_bp, struct device *dev)
 
 	dpa_bp->dev = dev;
 
-	if (dpa_bp->seed_cb) {
-		err = dpa_bp->seed_cb(dpa_bp);
-		if (err)
-			goto bman_free_pool;
-	}
-
 	dpa_bpid2pool_map(dpa_bp->bpid, dpa_bp);
 
 	return 0;
@@ -1050,6 +1044,7 @@ int dpaa_eth_cgr_init(struct dpa_priv_s *priv)
 	priv->cgr_data.cgr.cb = dpaa_eth_cgscn;
 
 	/* Enable Congestion State Change Notifications and CS taildrop */
+	memset(&initcgr, 0, sizeof(initcgr));
 	initcgr.we_mask = QM_CGR_WE_CSCN_EN | QM_CGR_WE_CS_THRES;
 	initcgr.cgr.cscn_en = QM_CGR_EN;
 
@@ -1527,6 +1522,33 @@ void dpaa_eth_init_ports(struct mac_device *mac_dev,
 }
 EXPORT_SYMBOL(dpaa_eth_init_ports);
 
+void dpa_release_sgt_by_bpid(struct qm_sg_entry *sgt)
+{
+	struct bm_buffer bmb[DPA_BUFF_RELEASE_MAX];
+	uint8_t i = 0, j;
+	uint8_t bpid;
+
+	memset(bmb, 0, DPA_BUFF_RELEASE_MAX * sizeof(struct bm_buffer));
+
+	do {
+		bpid = qm_sg_entry_get_bpid(&sgt[i]);
+
+		j = 0;
+		do {
+			DPA_BUG_ON(qm_sg_entry_get_ext(&sgt[i]));
+			bm_buffer_set64(&bmb[j], qm_sg_addr(&sgt[i]));
+			j++; i++;
+		} while (j < ARRAY_SIZE(bmb) &&
+			!qm_sg_entry_get_final(&sgt[i - 1]) &&
+			qm_sg_entry_get_bpid(&sgt[i - 1]) ==
+			qm_sg_entry_get_bpid(&sgt[i]));
+
+		while (bman_release_by_bpid(bpid, bmb, j))
+			cpu_relax();
+	} while (!qm_sg_entry_get_final(&sgt[i - 1]));
+}
+EXPORT_SYMBOL(dpa_release_sgt_by_bpid);
+
 void dpa_release_sgt(struct qm_sg_entry *sgt)
 {
 	struct dpa_bp *dpa_bp;
@@ -1569,7 +1591,27 @@ dpa_fd_release(const struct net_device *net_dev, const struct qm_fd *fd)
 	bm_buffer_set64(&bmb, qm_fd_addr(fd));
 
 	dpa_bp = dpa_bpid2pool(fd->bpid);
-	DPA_BUG_ON(!dpa_bp);
+
+	/* We can receive FDs with buffers from unrecognized buffer pools that
+	 * are owned by userspace. This can happen if userspace doesn't define
+	 * its own error queues and the error traffic reaches our driver.
+	 * Release the buffers to their original buffer pool based on bpid.
+	 */
+	if (!dpa_bp) {
+		netdev_warn(net_dev, "No dpa_bp for FD with bpid=%u len=%u offset=%u format=%d\n",
+			    fd->bpid, fd->length20, fd->offset, fd->format);
+
+		if (fd->format == qm_fd_sg) {
+			vaddr = phys_to_virt(qm_fd_addr(fd));
+			sgt = vaddr + dpa_fd_offset(fd);
+			dpa_release_sgt_by_bpid(sgt);
+		}
+
+		while (bman_release_by_bpid(fd->bpid, &bmb, 1))
+			cpu_relax();
+
+		return;
+	}
 
 	if (fd->format == qm_fd_sg) {
 		vaddr = phys_to_virt(qm_fd_addr(fd));

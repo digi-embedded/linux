@@ -56,6 +56,7 @@ struct dp_receiver_id_info;
 
 struct i2c_payloads;
 struct aux_payloads;
+enum aux_return_code_type;
 
 void dal_ddc_i2c_payloads_add(
 		struct i2c_payloads *payloads,
@@ -95,12 +96,18 @@ bool dal_ddc_service_query_ddc_data(
 		uint8_t *read_buf,
 		uint32_t read_size);
 
+bool dal_ddc_submit_aux_command(struct ddc_service *ddc,
+		struct aux_payload *payload);
+
 int dc_link_aux_transfer_raw(struct ddc_service *ddc,
 		struct aux_payload *payload,
-		enum aux_channel_operation_result *operation_result);
+		enum aux_return_code_type *operation_result);
 
 bool dc_link_aux_transfer_with_retries(struct ddc_service *ddc,
 		struct aux_payload *payload);
+
+bool dc_link_aux_try_to_configure_timeout(struct ddc_service *ddc,
+		uint32_t timeout);
 
 void dal_ddc_service_write_scdc_data(
 		struct ddc_service *ddc_service,

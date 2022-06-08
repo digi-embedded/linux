@@ -9,17 +9,12 @@ Required properties:
   - reg : the I2C address of the device.
 
 Optional properties:
+
+  - clocks : The clock source of the mclk
+
   - spk-mono: This is a boolean property. If present, the SPK_MONO bit
     of R51 (Class D Control 2) gets set, indicating that the speaker is
     in mono mode.
-
-  - amic-mono: This is a boolean property. If present, indicating that the
-    analog micphone is hardware mono input, the driver would enable monomix
-    for it.
-
-  - dmic-mono: This is a boolean property. If present, indicating that the
-    digital micphone is hardware mono input, the driver would enable monomix
-    for it.
 
   - mic-cfg : Default register value for R48 (Additional Control 4).
     If absent, the default should be the register default.
@@ -35,6 +30,7 @@ Example:
 wm8962: codec@1a {
 	compatible = "wlf,wm8962";
 	reg = <0x1a>;
+	clocks = <&clks IMX6QDL_CLK_CKO>;
 
 	gpio-cfg = <
 		0x0000 /* 0:Default */

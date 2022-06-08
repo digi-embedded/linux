@@ -7,10 +7,9 @@
 #include <linux/dma-mapping.h>
 #include <linux/interrupt.h>
 #include <linux/platform_device.h>
+#include <linux/slab.h>
 
 #include "dcss-dev.h"
-
-#define DCSS_CTXLD_DEVNAME		"dcss_ctxld"
 
 #define DCSS_CTXLD_CONTROL_STATUS	0x0
 #define   CTXLD_ENABLE			BIT(0)
@@ -39,7 +38,6 @@
 #define   SB_LP_COUNT_MASK		0xffff0000
 #define DCSS_AHB_ERR_ADDR		0x20
 
-#define CTXLD_IRQ_NAME			"ctx_ld"
 #define CTXLD_IRQ_COMPLETION		(DB_COMP | SB_HP_COMP | SB_LP_COMP)
 #define CTXLD_IRQ_ERROR			(RD_ERR | DB_PEND_SB_REC | AHB_ERR)
 
@@ -85,16 +83,12 @@ struct dcss_ctxld {
 	bool armed;
 
 	spinlock_t lock; /* protects concurent access to private data */
-
-	void (*dtg_disable_cb)(void *data);
-	void *dtg_disable_data;
 };
-
-static int __dcss_ctxld_enable(struct dcss_ctxld *ctxld);
 
 static irqreturn_t dcss_ctxld_irq_handler(int irq, void *data)
 {
 	struct dcss_ctxld *ctxld = data;
+	struct dcss_dev *dcss = dcss_drv_dev_to_dcss(ctxld->dev);
 	u32 irq_status;
 
 	irq_status = dcss_readl(ctxld->ctxld_reg + DCSS_CTXLD_CONTROL_STATUS);
@@ -103,11 +97,8 @@ static irqreturn_t dcss_ctxld_irq_handler(int irq, void *data)
 	    !(irq_status & CTXLD_ENABLE) && ctxld->in_use) {
 		ctxld->in_use = false;
 
-		if (ctxld->dtg_disable_cb) {
-			ctxld->dtg_disable_cb(ctxld->dtg_disable_data);
-			ctxld->dtg_disable_cb = NULL;
-			ctxld->dtg_disable_data = NULL;
-		}
+		if (dcss && dcss->disable_callback)
+			dcss->disable_callback(dcss);
 	} else if (irq_status & CTXLD_IRQ_ERROR) {
 		/*
 		 * Except for throwing an error message and clearing the status
@@ -132,16 +123,12 @@ static int dcss_ctxld_irq_config(struct dcss_ctxld *ctxld,
 {
 	int ret;
 
-	ctxld->irq = platform_get_irq_byname(pdev, CTXLD_IRQ_NAME);
-	if (ctxld->irq < 0) {
-		dev_err(ctxld->dev, "ctxld: can't get irq number\n");
+	ctxld->irq = platform_get_irq_byname(pdev, "ctxld");
+	if (ctxld->irq < 0)
 		return ctxld->irq;
-	}
 
-	ret = devm_request_irq(ctxld->dev, ctxld->irq,
-			       dcss_ctxld_irq_handler,
-			       IRQF_ONESHOT | IRQF_TRIGGER_HIGH,
-			       DCSS_CTXLD_DEVNAME, ctxld);
+	ret = request_irq(ctxld->irq, dcss_ctxld_irq_handler,
+			  0, "dcss_ctxld", ctxld);
 	if (ret) {
 		dev_err(ctxld->dev, "ctxld: irq request failed.\n");
 		return ret;
@@ -152,7 +139,7 @@ static int dcss_ctxld_irq_config(struct dcss_ctxld *ctxld,
 	return 0;
 }
 
-void dcss_ctxld_hw_cfg(struct dcss_ctxld *ctxld)
+static void dcss_ctxld_hw_cfg(struct dcss_ctxld *ctxld)
 {
 	dcss_writel(RD_ERR_EN | SB_HP_COMP_EN |
 		    DB_PEND_SB_REC_EN | AHB_ERR_EN | RD_ERR | AHB_ERR,
@@ -166,17 +153,17 @@ static void dcss_ctxld_free_ctx(struct dcss_ctxld *ctxld)
 
 	for (i = 0; i < 2; i++) {
 		if (ctxld->db[i]) {
-			dmam_free_coherent(ctxld->dev,
-					   CTXLD_DB_CTX_ENTRIES * sizeof(*ctx),
-					   ctxld->db[i], ctxld->db_paddr[i]);
+			dma_free_coherent(ctxld->dev,
+					  CTXLD_DB_CTX_ENTRIES * sizeof(*ctx),
+					  ctxld->db[i], ctxld->db_paddr[i]);
 			ctxld->db[i] = NULL;
 			ctxld->db_paddr[i] = 0;
 		}
 
 		if (ctxld->sb_hp[i]) {
-			dmam_free_coherent(ctxld->dev,
-					   CTXLD_SB_CTX_ENTRIES * sizeof(*ctx),
-					   ctxld->sb_hp[i], ctxld->sb_paddr[i]);
+			dma_free_coherent(ctxld->dev,
+					  CTXLD_SB_CTX_ENTRIES * sizeof(*ctx),
+					  ctxld->sb_hp[i], ctxld->sb_paddr[i]);
 			ctxld->sb_hp[i] = NULL;
 			ctxld->sb_paddr[i] = 0;
 		}
@@ -187,28 +174,24 @@ static int dcss_ctxld_alloc_ctx(struct dcss_ctxld *ctxld)
 {
 	struct dcss_ctxld_item *ctx;
 	int i;
-	dma_addr_t dma_handle;
 
 	for (i = 0; i < 2; i++) {
-		ctx = dmam_alloc_coherent(ctxld->dev,
-					  CTXLD_DB_CTX_ENTRIES * sizeof(*ctx),
-					  &dma_handle, GFP_KERNEL);
+		ctx = dma_alloc_coherent(ctxld->dev,
+					 CTXLD_DB_CTX_ENTRIES * sizeof(*ctx),
+					 &ctxld->db_paddr[i], GFP_KERNEL);
 		if (!ctx)
 			return -ENOMEM;
 
 		ctxld->db[i] = ctx;
-		ctxld->db_paddr[i] = dma_handle;
 
-		ctx = dmam_alloc_coherent(ctxld->dev,
-					  CTXLD_SB_CTX_ENTRIES * sizeof(*ctx),
-					  &dma_handle, GFP_KERNEL);
+		ctx = dma_alloc_coherent(ctxld->dev,
+					 CTXLD_SB_CTX_ENTRIES * sizeof(*ctx),
+					 &ctxld->sb_paddr[i], GFP_KERNEL);
 		if (!ctx)
 			return -ENOMEM;
 
 		ctxld->sb_hp[i] = ctx;
 		ctxld->sb_lp[i] = ctx + CTXLD_SB_HP_CTX_ENTRIES;
-
-		ctxld->sb_paddr[i] = dma_handle;
 	}
 
 	return 0;
@@ -219,8 +202,7 @@ int dcss_ctxld_init(struct dcss_dev *dcss, unsigned long ctxld_base)
 	struct dcss_ctxld *ctxld;
 	int ret;
 
-	ctxld = devm_kzalloc(dcss->dev, sizeof(struct dcss_ctxld),
-			     GFP_KERNEL);
+	ctxld = kzalloc(sizeof(*ctxld), GFP_KERNEL);
 	if (!ctxld)
 		return -ENOMEM;
 
@@ -235,7 +217,7 @@ int dcss_ctxld_init(struct dcss_dev *dcss, unsigned long ctxld_base)
 		goto err;
 	}
 
-	ctxld->ctxld_reg = devm_ioremap(dcss->dev, ctxld_base, SZ_4K);
+	ctxld->ctxld_reg = ioremap(ctxld_base, SZ_4K);
 	if (!ctxld->ctxld_reg) {
 		dev_err(dcss->dev, "ctxld: unable to remap ctxld base\n");
 		ret = -ENOMEM;
@@ -251,27 +233,27 @@ int dcss_ctxld_init(struct dcss_dev *dcss, unsigned long ctxld_base)
 	return 0;
 
 err_irq:
-	devm_iounmap(ctxld->dev, ctxld->ctxld_reg);
+	iounmap(ctxld->ctxld_reg);
 
 err:
 	dcss_ctxld_free_ctx(ctxld);
-	devm_kfree(ctxld->dev, ctxld);
+	kfree(ctxld);
 
 	return ret;
 }
 
 void dcss_ctxld_exit(struct dcss_ctxld *ctxld)
 {
-	devm_free_irq(ctxld->dev, ctxld->irq, ctxld);
+	free_irq(ctxld->irq, ctxld);
 
 	if (ctxld->ctxld_reg)
-		devm_iounmap(ctxld->dev, ctxld->ctxld_reg);
+		iounmap(ctxld->ctxld_reg);
 
 	dcss_ctxld_free_ctx(ctxld);
-	devm_kfree(ctxld->dev, ctxld);
+	kfree(ctxld);
 }
 
-static int __dcss_ctxld_enable(struct dcss_ctxld *ctxld)
+static int dcss_ctxld_enable_locked(struct dcss_ctxld *ctxld)
 {
 	int curr_ctx = ctxld->current_ctx;
 	u32 db_base, sb_base, sb_count;
@@ -341,11 +323,9 @@ static int __dcss_ctxld_enable(struct dcss_ctxld *ctxld)
 
 int dcss_ctxld_enable(struct dcss_ctxld *ctxld)
 {
-	unsigned long flags;
-
-	spin_lock_irqsave(&ctxld->lock, flags);
+	spin_lock_irq(&ctxld->lock);
 	ctxld->armed = true;
-	spin_unlock_irqrestore(&ctxld->lock, flags);
+	spin_unlock_irq(&ctxld->lock);
 
 	return 0;
 }
@@ -357,7 +337,7 @@ void dcss_ctxld_kick(struct dcss_ctxld *ctxld)
 	spin_lock_irqsave(&ctxld->lock, flags);
 	if (ctxld->armed && !ctxld->in_use) {
 		ctxld->armed = false;
-		__dcss_ctxld_enable(ctxld);
+		dcss_ctxld_enable_locked(ctxld);
 	}
 	spin_unlock_irqrestore(&ctxld->lock, flags);
 }
@@ -386,11 +366,9 @@ void dcss_ctxld_write_irqsafe(struct dcss_ctxld *ctxld, u32 ctx_id, u32 val,
 void dcss_ctxld_write(struct dcss_ctxld *ctxld, u32 ctx_id,
 		      u32 val, u32 reg_ofs)
 {
-	unsigned long flags;
-
-	spin_lock_irqsave(&ctxld->lock, flags);
+	spin_lock_irq(&ctxld->lock);
 	dcss_ctxld_write_irqsafe(ctxld, ctx_id, val, reg_ofs);
-	spin_unlock_irqrestore(&ctxld->lock, flags);
+	spin_unlock_irq(&ctxld->lock);
 }
 
 bool dcss_ctxld_is_flushed(struct dcss_ctxld *ctxld)
@@ -415,20 +393,19 @@ int dcss_ctxld_resume(struct dcss_ctxld *ctxld)
 int dcss_ctxld_suspend(struct dcss_ctxld *ctxld)
 {
 	int ret = 0;
-	int wait_time_ms = 0;
-	unsigned long flags;
+	unsigned long timeout = jiffies + msecs_to_jiffies(500);
 
-	dcss_ctxld_kick(ctxld);
+	if (!dcss_ctxld_is_flushed(ctxld)) {
+		dcss_ctxld_kick(ctxld);
 
-	while (ctxld->in_use && wait_time_ms < 500) {
-		msleep(20);
-		wait_time_ms += 20;
+		while (!time_after(jiffies, timeout) && ctxld->in_use)
+			msleep(20);
+
+		if (time_after(jiffies, timeout))
+			return -ETIMEDOUT;
 	}
 
-	if (wait_time_ms > 500)
-		return -ETIMEDOUT;
-
-	spin_lock_irqsave(&ctxld->lock, flags);
+	spin_lock_irq(&ctxld->lock);
 
 	if (ctxld->irq_en) {
 		disable_irq_nosync(ctxld->irq);
@@ -441,15 +418,12 @@ int dcss_ctxld_suspend(struct dcss_ctxld *ctxld)
 	ctxld->ctx_size[0][CTX_SB_HP] = 0;
 	ctxld->ctx_size[0][CTX_SB_LP] = 0;
 
-	spin_unlock_irqrestore(&ctxld->lock, flags);
+	spin_unlock_irq(&ctxld->lock);
 
 	return ret;
 }
 
-void dcss_ctxld_register_dtg_disable_cb(struct dcss_ctxld *ctxld,
-					void (*cb)(void *),
-					void *data)
+void dcss_ctxld_assert_locked(struct dcss_ctxld *ctxld)
 {
-	ctxld->dtg_disable_cb = cb;
-	ctxld->dtg_disable_data = data;
+	lockdep_assert_held(&ctxld->lock);
 }

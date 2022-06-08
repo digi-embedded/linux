@@ -11,6 +11,7 @@
 #include <uapi/linux/pkt_sched.h>
 
 #define DEFAULT_TX_QUEUE_LEN	1000
+#define STAB_SIZE_LOG_MAX	30
 
 struct qdisc_walker {
 	int	stop;
@@ -19,12 +20,14 @@ struct qdisc_walker {
 	int	(*fn)(struct Qdisc *, unsigned long cl, struct qdisc_walker *);
 };
 
-#define QDISC_ALIGNTO		64
-#define QDISC_ALIGN(len)	(((len) + QDISC_ALIGNTO-1) & ~(QDISC_ALIGNTO-1))
-
 static inline void *qdisc_priv(struct Qdisc *q)
 {
-	return (char *) q + QDISC_ALIGN(sizeof(struct Qdisc));
+	return &q->privdata;
+}
+
+static inline struct Qdisc *qdisc_from_priv(void *priv)
+{
+	return container_of(priv, struct Qdisc, privdata);
 }
 
 /* 
@@ -75,7 +78,15 @@ struct qdisc_watchdog {
 void qdisc_watchdog_init_clockid(struct qdisc_watchdog *wd, struct Qdisc *qdisc,
 				 clockid_t clockid);
 void qdisc_watchdog_init(struct qdisc_watchdog *wd, struct Qdisc *qdisc);
-void qdisc_watchdog_schedule_ns(struct qdisc_watchdog *wd, u64 expires);
+
+void qdisc_watchdog_schedule_range_ns(struct qdisc_watchdog *wd, u64 expires,
+				      u64 delta_ns);
+
+static inline void qdisc_watchdog_schedule_ns(struct qdisc_watchdog *wd,
+					      u64 expires)
+{
+	return qdisc_watchdog_schedule_range_ns(wd, expires, 0ULL);
+}
 
 static inline void qdisc_watchdog_schedule(struct qdisc_watchdog *wd,
 					   psched_time_t expires)
@@ -118,12 +129,7 @@ void __qdisc_run(struct Qdisc *q);
 static inline void qdisc_run(struct Qdisc *q)
 {
 	if (qdisc_run_begin(q)) {
-		/* NOLOCK qdisc must check 'state' under the qdisc seqlock
-		 * to avoid racing with dev_qdisc_reset()
-		 */
-		if (!(q->flags & TCQ_F_NOLOCK) ||
-		    likely(!test_bit(__QDISC_STATE_DEACTIVATED, &q->state)))
-			__qdisc_run(q);
+		__qdisc_run(q);
 		qdisc_run_end(q);
 	}
 }
@@ -170,12 +176,21 @@ struct tc_taprio_qopt_offload {
 	u64 cycle_time_extension;
 
 	size_t num_entries;
-	struct tc_taprio_sched_entry entries[0];
+	struct tc_taprio_sched_entry entries[];
 };
 
 /* Reference counting */
 struct tc_taprio_qopt_offload *taprio_offload_get(struct tc_taprio_qopt_offload
 						  *offload);
 void taprio_offload_free(struct tc_taprio_qopt_offload *offload);
+
+/* Ensure skb_mstamp_ns, which might have been populated with the txtime, is
+ * not mistaken for a software timestamp, because this will otherwise prevent
+ * the dispatch of hardware timestamps to the socket.
+ */
+static inline void skb_txtime_consumed(struct sk_buff *skb)
+{
+	skb->tstamp = ktime_set(0, 0);
+}
 
 #endif

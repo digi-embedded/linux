@@ -6,6 +6,7 @@
  */
 
 #include <linux/device.h>
+#include <linux/slab.h>
 
 #include "dcss-dev.h"
 
@@ -77,6 +78,7 @@ struct dcss_scaler_ch {
 	u32 c_vstart;
 	u32 c_hstart;
 
+	bool use_nn_interpolation;
 	int ch_num;
 };
 
@@ -248,6 +250,17 @@ static void dcss_scaler_gaussian_filter(int fc_q, bool use_5_taps,
 	}
 }
 
+static void dcss_scaler_nearest_neighbor_filter(bool use_5_taps,
+						int coef[][PSC_NUM_TAPS])
+{
+	int i, j;
+
+	for (i = 0; i < PSC_STORED_PHASES; i++)
+		for (j = 0; j < PSC_NUM_TAPS; j++)
+			coef[i][j] = j == PSC_NUM_TAPS >> 1 ?
+						(1 << PSC_COEFF_PRECISION) : 0;
+}
+
 /**
  * dcss_scaler_filter_design() - Compute filter coefficients using
  *				 Gaussian filter.
@@ -258,7 +271,8 @@ static void dcss_scaler_gaussian_filter(int fc_q, bool use_5_taps,
  */
 static void dcss_scaler_filter_design(int src_length, int dst_length,
 				      bool use_5_taps, bool phase0_identity,
-				      int coef[][PSC_NUM_TAPS])
+				      int coef[][PSC_NUM_TAPS],
+				      bool nn_interpolation)
 {
 	int fc_q;
 
@@ -268,8 +282,11 @@ static void dcss_scaler_filter_design(int src_length, int dst_length,
 	else
 		fc_q = div_q(dst_length, src_length * PSC_NUM_PHASES);
 
-	/* compute gaussian filter coefficients */
-	dcss_scaler_gaussian_filter(fc_q, use_5_taps, phase0_identity, coef);
+	if (nn_interpolation)
+		dcss_scaler_nearest_neighbor_filter(use_5_taps, coef);
+	else
+		/* compute gaussian filter coefficients */
+		dcss_scaler_gaussian_filter(fc_q, use_5_taps, phase0_identity, coef);
 }
 
 static void dcss_scaler_write(struct dcss_scaler_ch *ch, u32 val, u32 ofs)
@@ -290,7 +307,7 @@ static int dcss_scaler_ch_init_all(struct dcss_scaler *scl,
 
 		ch->base_ofs = scaler_base + i * 0x400;
 
-		ch->base_reg = devm_ioremap(scl->dev, ch->base_ofs, SZ_4K);
+		ch->base_reg = ioremap(ch->base_ofs, SZ_4K);
 		if (!ch->base_reg) {
 			dev_err(scl->dev, "scaler: unable to remap ch base\n");
 			return -ENOMEM;
@@ -307,7 +324,7 @@ int dcss_scaler_init(struct dcss_dev *dcss, unsigned long scaler_base)
 {
 	struct dcss_scaler *scaler;
 
-	scaler = devm_kzalloc(dcss->dev, sizeof(*scaler), GFP_KERNEL);
+	scaler = kzalloc(sizeof(*scaler), GFP_KERNEL);
 	if (!scaler)
 		return -ENOMEM;
 
@@ -324,11 +341,10 @@ int dcss_scaler_init(struct dcss_dev *dcss, unsigned long scaler_base)
 
 		for (i = 0; i < 3; i++) {
 			if (scaler->ch[i].base_reg)
-				devm_iounmap(scaler->dev,
-					     scaler->ch[i].base_reg);
+				iounmap(scaler->ch[i].base_reg);
 		}
 
-		devm_kfree(scaler->dev, scaler);
+		kfree(scaler);
 
 		return -ENOMEM;
 	}
@@ -346,10 +362,10 @@ void dcss_scaler_exit(struct dcss_scaler *scl)
 		dcss_writel(0, ch->base_reg + DCSS_SCALER_CTRL);
 
 		if (ch->base_reg)
-			devm_iounmap(scl->dev, ch->base_reg);
+			iounmap(ch->base_reg);
 	}
 
-	devm_kfree(scl->dev, scl);
+	kfree(scl);
 }
 
 void dcss_scaler_ch_enable(struct dcss_scaler *scl, int ch_num, bool en)
@@ -451,7 +467,7 @@ static void dcss_scaler_res_set(struct dcss_scaler_ch *ch,
 		src_is_444 = false;
 	} else if (pix_format == DRM_FORMAT_NV12 ||
 		   pix_format == DRM_FORMAT_NV21 ||
-		   pix_format == DRM_FORMAT_NV12_10LE40) {
+		   pix_format == DRM_FORMAT_NV15) {
 		csrc_xres >>= 1;
 		csrc_yres >>= 1;
 		src_is_444 = false;
@@ -695,12 +711,14 @@ static void dcss_scaler_yuv_coef_set(struct dcss_scaler_ch *ch,
 
 	/* horizontal luma */
 	dcss_scaler_filter_design(src_xres, dst_xres, false,
-				  src_xres == dst_xres, coef);
+				  src_xres == dst_xres, coef,
+				  ch->use_nn_interpolation);
 	dcss_scaler_program_7_coef_set(ch, DCSS_SCALER_COEF_HLUM, coef);
 
 	/* vertical luma */
 	dcss_scaler_filter_design(src_yres, dst_yres, program_5_taps,
-				  src_yres == dst_yres, coef);
+				  src_yres == dst_yres, coef,
+				  ch->use_nn_interpolation);
 
 	if (program_5_taps)
 		dcss_scaler_program_5_coef_set(ch, DCSS_SCALER_COEF_VLUM, coef);
@@ -720,14 +738,14 @@ static void dcss_scaler_yuv_coef_set(struct dcss_scaler_ch *ch,
 	/* horizontal chroma */
 	dcss_scaler_filter_design(src_xres, dst_xres, false,
 				  (src_xres == dst_xres) && (ch->c_hstart == 0),
-				  coef);
+				  coef, ch->use_nn_interpolation);
 
 	dcss_scaler_program_7_coef_set(ch, DCSS_SCALER_COEF_HCHR, coef);
 
 	/* vertical chroma */
 	dcss_scaler_filter_design(src_yres, dst_yres, program_5_taps,
 				  (src_yres == dst_yres) && (ch->c_vstart == 0),
-				  coef);
+				  coef, ch->use_nn_interpolation);
 	if (program_5_taps)
 		dcss_scaler_program_5_coef_set(ch, DCSS_SCALER_COEF_VCHR, coef);
 	else
@@ -742,12 +760,14 @@ static void dcss_scaler_rgb_coef_set(struct dcss_scaler_ch *ch,
 
 	/* horizontal RGB */
 	dcss_scaler_filter_design(src_xres, dst_xres, false,
-				  src_xres == dst_xres, coef);
+				  src_xres == dst_xres, coef,
+				  ch->use_nn_interpolation);
 	dcss_scaler_program_7_coef_set(ch, DCSS_SCALER_COEF_HLUM, coef);
 
 	/* vertical RGB */
 	dcss_scaler_filter_design(src_yres, dst_yres, false,
-				  src_yres == dst_yres, coef);
+				  src_yres == dst_yres, coef,
+				  ch->use_nn_interpolation);
 	dcss_scaler_program_7_coef_set(ch, DCSS_SCALER_COEF_VLUM, coef);
 }
 
@@ -791,6 +811,14 @@ static void dcss_scaler_set_rgb10_order(struct dcss_scaler_ch *ch,
 	}
 
 	ch->sdata_ctrl |= a2r10g10b10_format << A2R10G10B10_FORMAT_POS;
+}
+
+void dcss_scaler_set_filter(struct dcss_scaler *scl, int ch_num,
+			    enum drm_scaling_filter scaling_filter)
+{
+	struct dcss_scaler_ch *ch = &scl->ch[ch_num];
+
+	ch->use_nn_interpolation = scaling_filter == DRM_SCALING_FILTER_NEAREST_NEIGHBOR;
 }
 
 static void dcss_scaler_setup_path(struct dcss_scaler_ch *ch,
@@ -849,7 +877,7 @@ void dcss_scaler_setup(struct dcss_scaler *scl, int ch_num,
 
 		if (pix_format == DRM_FORMAT_NV12 ||
 		    pix_format == DRM_FORMAT_NV21 ||
-		    pix_format == DRM_FORMAT_NV12_10LE40) {
+		    pix_format == DRM_FORMAT_NV15) {
 			rtr_8line_en = true;
 			src_format = BUF_FMT_YUV420;
 		} else if (pix_format == DRM_FORMAT_UYVY ||
@@ -861,7 +889,7 @@ void dcss_scaler_setup(struct dcss_scaler *scl, int ch_num,
 
 		use_5_taps = !rtr_8line_en;
 
-		if (pix_format == DRM_FORMAT_NV12_10LE40)
+		if (pix_format == DRM_FORMAT_NV15)
 			pixel_depth = 30;
 	} else {
 		dcss_scaler_yuv_enable(ch, false);
@@ -896,6 +924,8 @@ void dcss_scaler_setup(struct dcss_scaler *scl, int ch_num,
 void dcss_scaler_write_sclctrl(struct dcss_scaler *scl)
 {
 	int chnum;
+
+	dcss_ctxld_assert_locked(scl->ctxld);
 
 	for (chnum = 0; chnum < 3; chnum++) {
 		struct dcss_scaler_ch *ch = &scl->ch[chnum];

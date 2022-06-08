@@ -132,6 +132,22 @@ void optc1_setup_vertical_interrupt2(
 }
 
 /**
+ * Vupdate keepout can be set to a window to block the update lock for that pipe from changing.
+ * Start offset begins with vstartup and goes for x number of clocks,
+ * end offset starts from end of vupdate to x number of clocks.
+ */
+void optc1_set_vupdate_keepout(struct timing_generator *optc,
+			       struct vupdate_keepout_params *params)
+{
+	struct optc *optc1 = DCN10TG_FROM_TG(optc);
+
+	REG_SET_3(OTG_VUPDATE_KEEPOUT, 0,
+		  MASTER_UPDATE_LOCK_VUPDATE_KEEPOUT_START_OFFSET, params->start_offset,
+		  MASTER_UPDATE_LOCK_VUPDATE_KEEPOUT_END_OFFSET, params->end_offset,
+		  OTG_MASTER_UPDATE_LOCK_VUPDATE_KEEPOUT_EN, params->enable);
+}
+
+/**
  * program_timing_generator   used by mode timing set
  * Program CRTC Timing Registers - OTG_H_*, OTG_V_*, Pixel repetition.
  * Including SYNC. Call BIOS command table to program Timings.
@@ -272,7 +288,7 @@ void optc1_program_timing(
 			vupdate_offset,
 			vupdate_width);
 
-	optc->funcs->set_vtg_params(optc, dc_crtc_timing);
+	optc->funcs->set_vtg_params(optc, dc_crtc_timing, true);
 
 	/* TODO
 	 * patched_crtc_timing.flags.HORZ_COUNT_BY_TWO == 1
@@ -288,12 +304,31 @@ void optc1_program_timing(
 	if (optc1_is_two_pixels_per_containter(&patched_crtc_timing) || optc1->opp_count == 2)
 		h_div = H_TIMING_DIV_BY2;
 
-	REG_UPDATE(OTG_H_TIMING_CNTL,
+	if (REG(OPTC_DATA_FORMAT_CONTROL)) {
+		uint32_t data_fmt = 0;
+
+		if (patched_crtc_timing.pixel_encoding == PIXEL_ENCODING_YCBCR422)
+			data_fmt = 1;
+		else if (patched_crtc_timing.pixel_encoding == PIXEL_ENCODING_YCBCR420)
+			data_fmt = 2;
+
+		REG_UPDATE(OPTC_DATA_FORMAT_CONTROL, OPTC_DATA_FORMAT, data_fmt);
+	}
+
+	if (optc1->tg_mask->OTG_H_TIMING_DIV_MODE != 0) {
+		if (optc1->opp_count == 4)
+			h_div = H_TIMING_DIV_BY4;
+
+		REG_UPDATE(OTG_H_TIMING_CNTL,
+		OTG_H_TIMING_DIV_MODE, h_div);
+	} else {
+		REG_UPDATE(OTG_H_TIMING_CNTL,
 		OTG_H_TIMING_DIV_BY2, h_div);
+	}
 }
 
 void optc1_set_vtg_params(struct timing_generator *optc,
-		const struct dc_crtc_timing *dc_crtc_timing)
+		const struct dc_crtc_timing *dc_crtc_timing, bool program_fp2)
 {
 	struct dc_crtc_timing patched_crtc_timing;
 	uint32_t asic_blank_end;
@@ -329,9 +364,12 @@ void optc1_set_vtg_params(struct timing_generator *optc,
 		}
 	}
 
-	REG_UPDATE_2(CONTROL,
-			VTG0_FP2, v_fp2,
-			VTG0_VCOUNT_INIT, v_init);
+	if (program_fp2)
+		REG_UPDATE_2(CONTROL,
+				VTG0_FP2, v_fp2,
+				VTG0_VCOUNT_INIT, v_init);
+	else
+		REG_UPDATE(CONTROL, VTG0_VCOUNT_INIT, v_init);
 }
 
 void optc1_set_blank_data_double_buffer(struct timing_generator *optc, bool enable)
@@ -342,6 +380,23 @@ void optc1_set_blank_data_double_buffer(struct timing_generator *optc, bool enab
 
 	REG_UPDATE(OTG_DOUBLE_BUFFER_CONTROL,
 			OTG_BLANK_DATA_DOUBLE_BUFFER_EN, blank_data_double_buffer_enable);
+}
+
+/**
+ * optc1_set_timing_double_buffer() - DRR double buffering control
+ *
+ * Sets double buffer point for V_TOTAL, H_TOTAL, VTOTAL_MIN,
+ * VTOTAL_MAX, VTOTAL_MIN_SEL and VTOTAL_MAX_SEL registers.
+ *
+ * Options: any time,  start of frame, dp start of frame (range timing)
+ */
+void optc1_set_timing_double_buffer(struct timing_generator *optc, bool enable)
+{
+	struct optc *optc1 = DCN10TG_FROM_TG(optc);
+	uint32_t mode = enable ? 2 : 0;
+
+	REG_UPDATE(OTG_DOUBLE_BUFFER_CONTROL,
+		   OTG_RANGE_TIMING_DBUF_UPDATE_MODE, mode);
 }
 
 /**
@@ -457,10 +512,15 @@ static bool optc1_enable_crtc(struct timing_generator *optc)
 	REG_UPDATE(CONTROL,
 			VTG0_ENABLE, 1);
 
+	REG_SEQ_START();
+
 	/* Enable CRTC */
 	REG_UPDATE_2(OTG_CONTROL,
 			OTG_DISABLE_POINT_CNTL, 3,
 			OTG_MASTER_EN, 1);
+
+	REG_SEQ_SUBMIT();
+	REG_SEQ_WAIT_DONE();
 
 	return true;
 }
@@ -613,6 +673,16 @@ void optc1_unlock(struct timing_generator *optc)
 
 	REG_SET(OTG_MASTER_UPDATE_LOCK, 0,
 			OTG_MASTER_UPDATE_LOCK, 0);
+}
+
+bool optc1_is_locked(struct timing_generator *optc)
+{
+	struct optc *optc1 = DCN10TG_FROM_TG(optc);
+	uint32_t locked;
+
+	REG_GET(OTG_MASTER_UPDATE_LOCK, UPDATE_LOCK_STATUS, &locked);
+
+	return (locked == 1);
 }
 
 void optc1_get_position(struct timing_generator *optc,
@@ -784,21 +854,26 @@ void optc1_set_early_control(
 
 void optc1_set_static_screen_control(
 	struct timing_generator *optc,
-	uint32_t value)
+	uint32_t event_triggers,
+	uint32_t num_frames)
 {
 	struct optc *optc1 = DCN10TG_FROM_TG(optc);
+
+	// By register spec, it only takes 8 bit value
+	if (num_frames > 0xFF)
+		num_frames = 0xFF;
 
 	/* Bit 8 is no longer applicable in RV for PSR case,
 	 * set bit 8 to 0 if given
 	 */
-	if ((value & STATIC_SCREEN_EVENT_MASK_RANGETIMING_DOUBLE_BUFFER_UPDATE_EN)
+	if ((event_triggers & STATIC_SCREEN_EVENT_MASK_RANGETIMING_DOUBLE_BUFFER_UPDATE_EN)
 			!= 0)
-		value = value &
+		event_triggers = event_triggers &
 		~STATIC_SCREEN_EVENT_MASK_RANGETIMING_DOUBLE_BUFFER_UPDATE_EN;
 
 	REG_SET_2(OTG_STATIC_SCREEN_CONTROL, 0,
-			OTG_STATIC_SCREEN_EVENT_MASK, value,
-			OTG_STATIC_SCREEN_FRAME_COUNT, 2);
+			OTG_STATIC_SCREEN_EVENT_MASK, event_triggers,
+			OTG_STATIC_SCREEN_FRAME_COUNT, num_frames);
 }
 
 void optc1_setup_manual_trigger(struct timing_generator *optc)
@@ -891,6 +966,17 @@ void optc1_set_drr(
 		REG_SET(OTG_V_TOTAL_MAX, 0,
 			OTG_V_TOTAL_MAX, 0);
 	}
+}
+
+void optc1_set_vtotal_min_max(struct timing_generator *optc, int vtotal_min, int vtotal_max)
+{
+	struct optc *optc1 = DCN10TG_FROM_TG(optc);
+
+	REG_SET(OTG_V_TOTAL_MAX, 0,
+		OTG_V_TOTAL_MAX, vtotal_max);
+
+	REG_SET(OTG_V_TOTAL_MIN, 0,
+		OTG_V_TOTAL_MIN, vtotal_min);
 }
 
 static void optc1_set_test_pattern(
@@ -1185,7 +1271,7 @@ static void optc1_enable_stereo(struct timing_generator *optc,
 			REG_UPDATE_3(OTG_STEREO_CONTROL,
 				OTG_STEREO_EN, stereo_en,
 				OTG_STEREO_SYNC_OUTPUT_LINE_NUM, 0,
-				OTG_STEREO_SYNC_OUTPUT_POLARITY, 0);
+				OTG_STEREO_SYNC_OUTPUT_POLARITY, flags->RIGHT_EYE_POLARITY == 0 ? 0 : 1);
 
 		if (flags->PROGRAM_POLARITY)
 			REG_UPDATE(OTG_STEREO_CONTROL,
@@ -1230,59 +1316,25 @@ bool optc1_is_stereo_left_eye(struct timing_generator *optc)
 	return ret;
 }
 
-bool optc1_is_matching_timing(struct timing_generator *tg,
-		const struct dc_crtc_timing *otg_timing)
+bool optc1_get_hw_timing(struct timing_generator *tg,
+		struct dc_crtc_timing *hw_crtc_timing)
 {
-	struct dc_crtc_timing hw_crtc_timing = {0};
 	struct dcn_otg_state s = {0};
 
-	if (tg == NULL || otg_timing == NULL)
+	if (tg == NULL || hw_crtc_timing == NULL)
 		return false;
 
 	optc1_read_otg_state(DCN10TG_FROM_TG(tg), &s);
 
-	hw_crtc_timing.h_total = s.h_total + 1;
-	hw_crtc_timing.h_addressable = s.h_total - ((s.h_total - s.h_blank_start) + s.h_blank_end);
-	hw_crtc_timing.h_front_porch = s.h_total + 1 - s.h_blank_start;
-	hw_crtc_timing.h_sync_width = s.h_sync_a_end - s.h_sync_a_start;
+	hw_crtc_timing->h_total = s.h_total + 1;
+	hw_crtc_timing->h_addressable = s.h_total - ((s.h_total - s.h_blank_start) + s.h_blank_end);
+	hw_crtc_timing->h_front_porch = s.h_total + 1 - s.h_blank_start;
+	hw_crtc_timing->h_sync_width = s.h_sync_a_end - s.h_sync_a_start;
 
-	hw_crtc_timing.v_total = s.v_total + 1;
-	hw_crtc_timing.v_addressable = s.v_total - ((s.v_total - s.v_blank_start) + s.v_blank_end);
-	hw_crtc_timing.v_front_porch = s.v_total + 1 - s.v_blank_start;
-	hw_crtc_timing.v_sync_width = s.v_sync_a_end - s.v_sync_a_start;
-
-	if (otg_timing->h_total != hw_crtc_timing.h_total)
-		return false;
-
-	if (otg_timing->h_border_left != hw_crtc_timing.h_border_left)
-		return false;
-
-	if (otg_timing->h_addressable != hw_crtc_timing.h_addressable)
-		return false;
-
-	if (otg_timing->h_border_right != hw_crtc_timing.h_border_right)
-		return false;
-
-	if (otg_timing->h_front_porch != hw_crtc_timing.h_front_porch)
-		return false;
-
-	if (otg_timing->h_sync_width != hw_crtc_timing.h_sync_width)
-		return false;
-
-	if (otg_timing->v_total != hw_crtc_timing.v_total)
-		return false;
-
-	if (otg_timing->v_border_top != hw_crtc_timing.v_border_top)
-		return false;
-
-	if (otg_timing->v_addressable != hw_crtc_timing.v_addressable)
-		return false;
-
-	if (otg_timing->v_border_bottom != hw_crtc_timing.v_border_bottom)
-		return false;
-
-	if (otg_timing->v_sync_width != hw_crtc_timing.v_sync_width)
-		return false;
+	hw_crtc_timing->v_total = s.v_total + 1;
+	hw_crtc_timing->v_addressable = s.v_total - ((s.v_total - s.v_blank_start) + s.v_blank_end);
+	hw_crtc_timing->v_front_porch = s.v_total + 1 - s.v_blank_start;
+	hw_crtc_timing->v_sync_width = s.v_sync_a_end - s.v_sync_a_start;
 
 	return true;
 }
@@ -1336,6 +1388,12 @@ void optc1_read_otg_state(struct optc *optc1,
 
 	REG_GET(OPTC_INPUT_GLOBAL_CONTROL,
 			OPTC_UNDERFLOW_OCCURRED_STATUS, &s->underflow_occurred_status);
+
+	REG_GET(OTG_VERTICAL_INTERRUPT2_CONTROL,
+			OTG_VERTICAL_INTERRUPT2_INT_ENABLE, &s->vertical_interrupt2_en);
+
+	REG_GET(OTG_VERTICAL_INTERRUPT2_POSITION,
+			OTG_VERTICAL_INTERRUPT2_LINE_START, &s->vertical_interrupt2_line);
 }
 
 bool optc1_get_otg_active_size(struct timing_generator *optc,
@@ -1379,6 +1437,7 @@ void optc1_clear_optc_underflow(struct timing_generator *optc)
 void optc1_tg_init(struct timing_generator *optc)
 {
 	optc1_set_blank_data_double_buffer(optc, true);
+	optc1_set_timing_double_buffer(optc, true);
 	optc1_clear_optc_underflow(optc);
 }
 
@@ -1486,7 +1545,6 @@ static const struct timing_generator_funcs dcn10_tg_funcs = {
 		.get_frame_count = optc1_get_vblank_counter,
 		.get_scanoutpos = optc1_get_crtc_scanoutpos,
 		.get_otg_active_size = optc1_get_otg_active_size,
-		.is_matching_timing = optc1_is_matching_timing,
 		.set_early_control = optc1_set_early_control,
 		/* used by enable_timing_synchronization. Not need for FPGA */
 		.wait_for_state = optc1_wait_for_state,
@@ -1498,9 +1556,11 @@ static const struct timing_generator_funcs dcn10_tg_funcs = {
 		.enable_crtc_reset = optc1_enable_crtc_reset,
 		.disable_reset_trigger = optc1_disable_reset_trigger,
 		.lock = optc1_lock,
+		.is_locked = optc1_is_locked,
 		.unlock = optc1_unlock,
 		.enable_optc_clock = optc1_enable_optc_clock,
 		.set_drr = optc1_set_drr,
+		.get_last_used_drr_vtotal = NULL,
 		.set_static_screen_control = optc1_set_static_screen_control,
 		.set_test_pattern = optc1_set_test_pattern,
 		.program_stereo = optc1_program_stereo,
@@ -1514,7 +1574,8 @@ static const struct timing_generator_funcs dcn10_tg_funcs = {
 		.configure_crc = optc1_configure_crc,
 		.set_vtg_params = optc1_set_vtg_params,
 		.program_manual_trigger = optc1_program_manual_trigger,
-		.setup_manual_trigger = optc1_setup_manual_trigger
+		.setup_manual_trigger = optc1_setup_manual_trigger,
+		.get_hw_timing = optc1_get_hw_timing,
 };
 
 void dcn10_timing_generator_init(struct optc *optc1)
@@ -1527,11 +1588,10 @@ void dcn10_timing_generator_init(struct optc *optc1)
 	optc1->min_h_blank = 32;
 	optc1->min_v_blank = 3;
 	optc1->min_v_blank_interlace = 5;
-	optc1->min_h_sync_width = 8;
+	optc1->min_h_sync_width = 4;
 	optc1->min_v_sync_width = 1;
 }
 
-#ifdef CONFIG_DRM_AMD_DC_DSC_SUPPORT
 /* "Containter" vs. "pixel" is a concept within HW blocks, mostly those closer to the back-end. It works like this:
  *
  * - In most of the formats (RGB or YCbCr 4:4:4, 4:2:2 uncompressed and DSC 4:2:2 Simple) pixel rate is the same as
@@ -1544,15 +1604,12 @@ void dcn10_timing_generator_init(struct optc *optc1)
  *   to it) and has to be treated the same as 4:2:0, i.e. target containter rate has to be halved in this case as well.
  *
  */
-#endif
 bool optc1_is_two_pixels_per_containter(const struct dc_crtc_timing *timing)
 {
 	bool two_pix = timing->pixel_encoding == PIXEL_ENCODING_YCBCR420;
 
-#ifdef CONFIG_DRM_AMD_DC_DSC_SUPPORT
 	two_pix = two_pix || (timing->flags.DSC && timing->pixel_encoding == PIXEL_ENCODING_YCBCR422
 			&& !timing->dsc_cfg.ycbcr422_simple);
-#endif
 	return two_pix;
 }
 

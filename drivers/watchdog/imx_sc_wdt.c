@@ -6,13 +6,11 @@
 #include <linux/arm-smccc.h>
 #include <linux/firmware/imx/sci.h>
 #include <linux/io.h>
-#include <linux/init.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/moduleparam.h>
 #include <linux/of.h>
 #include <linux/platform_device.h>
-#include <linux/reboot.h>
 #include <linux/watchdog.h>
 
 #define DEFAULT_TIMEOUT 60
@@ -33,9 +31,6 @@
 #define IMX_SIP_TIMER_SET_PRETIME_WDOG	0x07
 
 #define SC_TIMER_WDOG_ACTION_PARTITION	0
-
-#define SC_IRQ_WDOG			1
-#define SC_IRQ_GROUP_WDOG		1
 
 static bool nowayout = WATCHDOG_NOWAYOUT;
 module_param(nowayout, bool, 0000);
@@ -123,8 +118,8 @@ static int imx_sc_wdt_notify(struct notifier_block *nb,
 					      struct imx_sc_wdt_device,
 					      wdt_notifier);
 
-	if (event & SC_IRQ_WDOG &&
-	    *(u8 *)group == SC_IRQ_GROUP_WDOG)
+	if (event & IMX_SC_IRQ_WDOG &&
+	    *(u8 *)group == IMX_SC_IRQ_GROUP_WDOG)
 		watchdog_notify_pretimeout(&imx_sc_wdd->wdd);
 
 	return 0;
@@ -135,8 +130,8 @@ static void imx_sc_wdt_action(void *data)
 	struct notifier_block *wdt_notifier = data;
 
 	imx_scu_irq_unregister_notifier(wdt_notifier);
-	imx_scu_irq_group_enable(SC_IRQ_GROUP_WDOG,
-				 SC_IRQ_WDOG,
+	imx_scu_irq_group_enable(IMX_SC_IRQ_GROUP_WDOG,
+				 IMX_SC_IRQ_WDOG,
 				 false);
 }
 
@@ -185,27 +180,23 @@ static int imx_sc_wdt_probe(struct platform_device *pdev)
 	watchdog_stop_on_reboot(wdog);
 	watchdog_stop_on_unregister(wdog);
 
-	ret = devm_watchdog_register_device(dev, wdog);
-	if (ret)
-		return ret;
-
-	ret = imx_scu_irq_group_enable(SC_IRQ_GROUP_WDOG,
-				       SC_IRQ_WDOG,
+	ret = imx_scu_irq_group_enable(IMX_SC_IRQ_GROUP_WDOG,
+				       IMX_SC_IRQ_WDOG,
 				       true);
 	if (ret) {
 		dev_warn(dev, "Enable irq failed, pretimeout NOT supported\n");
-		return 0;
+		goto register_device;
 	}
 
 	imx_sc_wdd->wdt_notifier.notifier_call = imx_sc_wdt_notify;
 	ret = imx_scu_irq_register_notifier(&imx_sc_wdd->wdt_notifier);
 	if (ret) {
-		imx_scu_irq_group_enable(SC_IRQ_GROUP_WDOG,
-					 SC_IRQ_WDOG,
+		imx_scu_irq_group_enable(IMX_SC_IRQ_GROUP_WDOG,
+					 IMX_SC_IRQ_WDOG,
 					 false);
 		dev_warn(dev,
 			 "Register irq notifier failed, pretimeout NOT supported\n");
-		return 0;
+		goto register_device;
 	}
 
 	ret = devm_add_action_or_reset(dev, imx_sc_wdt_action,
@@ -215,7 +206,8 @@ static int imx_sc_wdt_probe(struct platform_device *pdev)
 	else
 		dev_warn(dev, "Add action failed, pretimeout NOT supported\n");
 
-	return 0;
+register_device:
+	return devm_watchdog_register_device(dev, wdog);
 }
 
 static int __maybe_unused imx_sc_wdt_suspend(struct device *dev)

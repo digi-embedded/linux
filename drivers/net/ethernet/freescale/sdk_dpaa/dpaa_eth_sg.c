@@ -166,7 +166,7 @@ dma_map_failed:
 
 build_skb_failed:
 netdev_alloc_failed:
-	net_err_ratelimited("dpa_bp_add_8_bufs() failed\n");
+	net_err_ratelimited("%s failed\n", __func__);
 	WARN_ONCE(1, "Memory allocation failure on Rx\n");
 
 	bm_buffer_set64(&bmb[i], 0);
@@ -178,31 +178,6 @@ netdev_alloc_failed:
 
 	return 0;
 }
-
-/* Cold path wrapper over _dpa_bp_add_8_bufs(). */
-static void dpa_bp_add_8_bufs(const struct dpa_bp *dpa_bp, int cpu)
-{
-	int *count_ptr = per_cpu_ptr(dpa_bp->percpu_count, cpu);
-	*count_ptr += _dpa_bp_add_8_bufs(dpa_bp);
-}
-
-int dpa_bp_priv_seed(struct dpa_bp *dpa_bp)
-{
-	int i;
-
-	/* Give each CPU an allotment of "config_count" buffers */
-	for_each_possible_cpu(i) {
-		int j;
-
-		/* Although we access another CPU's counters here
-		 * we do it at boot time so it is safe
-		 */
-		for (j = 0; j < dpa_bp->config_count; j += 8)
-			dpa_bp_add_8_bufs(dpa_bp, i);
-	}
-	return 0;
-}
-EXPORT_SYMBOL(dpa_bp_priv_seed);
 
 /* Add buffers/(pages) for Rx processing whenever bpool count falls below
  * REFILL_THRESHOLD.
@@ -333,7 +308,7 @@ bool dpa_skb_is_recyclable(struct sk_buff *skb)
 		return false;
 
 	/* or if it's an userspace buffer */
-	if (skb_shinfo(skb)->tx_flags & SKBTX_DEV_ZEROCOPY)
+	if (skb_shinfo(skb)->flags & SKBFL_ZEROCOPY_ENABLE)
 		return false;
 
 	/* or if it's cloned or shared */
@@ -648,25 +623,21 @@ void __hot _dpa_rx(struct net_device *net_dev,
 	skb_record_rx_queue(skb, raw_smp_processor_id());
 
 	if (use_gro) {
-		gro_result_t gro_result;
 		const struct qman_portal_config *pc =
 					qman_p_get_portal_config(portal);
 		struct dpa_napi_portal *np = &percpu_priv->np[pc->index];
 
 		np->p = portal;
-		gro_result = napi_gro_receive(&np->napi, skb);
-		/* If frame is dropped by the stack, rx_dropped counter is
-		 * incremented automatically, so no need for us to update it
+		/* The stack doesn't report if the frame was dropped but it
+		 * will increment rx_dropped automatically.
 		 */
-		if (unlikely(gro_result == GRO_DROP))
-			goto packet_dropped;
+		napi_gro_receive(&np->napi, skb);
 	} else if (unlikely(netif_receive_skb(skb) == NET_RX_DROP))
-		goto packet_dropped;
+		return;
 
 	percpu_stats->rx_packets++;
 	percpu_stats->rx_bytes += skb_len;
 
-packet_dropped:
 	return;
 
 _release_frame:
@@ -1098,6 +1069,8 @@ int __hot dpa_tx_extended(struct sk_buff *skb, struct net_device *net_dev,
 	bool nonlinear, skb_changed, skb_need_wa;
 	int *countptr, offset = 0;
 	struct sk_buff *nskb;
+	struct netdev_queue *txq;
+	int txq_id = skb_get_queue_mapping(skb);
 
 	/* Flags to help optimize the A050385 errata restriction checks.
 	 *
@@ -1117,7 +1090,7 @@ int __hot dpa_tx_extended(struct sk_buff *skb, struct net_device *net_dev,
 	/* Non-migratable context, safe to use raw_cpu_ptr */
 	percpu_priv = raw_cpu_ptr(priv->percpu_priv);
 	percpu_stats = &percpu_priv->stats;
-	countptr = raw_cpu_ptr(priv->dpa_bp->percpu_count);
+	countptr = raw_cpu_ptr(priv->percpu_count);
 
 	clear_fd(&fd);
 
@@ -1247,7 +1220,11 @@ int __hot dpa_tx_extended(struct sk_buff *skb, struct net_device *net_dev,
 	if (unlikely(dpa_xmit(priv, percpu_stats, &fd, egress_fq, conf_fq) < 0))
 		goto xmit_failed;
 
-	netif_trans_update(net_dev);
+	/* LLTX forces us to update our own jiffies for each netdev queue.
+	 * Use the queue mapping registered in the skb.
+	 */
+	txq = netdev_get_tx_queue(net_dev, txq_id);
+	txq->trans_start = jiffies;
 	return NETDEV_TX_OK;
 
 xmit_failed:

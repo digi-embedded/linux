@@ -10,13 +10,4 @@ config FSL_DPAA2
 	  Build drivers for Freescale DataPath Acceleration
 	  Architecture (DPAA2) family of SoCs.
 
-config FSL_DPAA2_ETHSW
-	tristate "Freescale DPAA2 Ethernet Switch"
-	depends on FSL_DPAA2
-	depends on NET_SWITCHDEV
-	help
-	  Driver for Freescale DPAA2 Ethernet Switch. Select
-	  BRIDGE to have support for bridge tools.
-
-source "drivers/staging/fsl-dpaa2/mac/Kconfig"
 source "drivers/staging/fsl-dpaa2/evb/Kconfig"

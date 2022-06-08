@@ -133,6 +133,8 @@
 &usdhc1 {
 	#address-cells = <1>;
 	#size-cells = <0>;
+	assigned-clocks = <&clk IMX_SC_R_SDHC_0 IMX_SC_PM_CLK_PER>;
+	assigned-clock-rates = <200000000>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_usdhc1>;
 	bus-width = <4>;
@@ -149,6 +151,8 @@
 
 /* SD */
 &usdhc2 {
+	assigned-clocks = <&clk IMX_SC_R_SDHC_1 IMX_SC_PM_CLK_PER>;
+	assigned-clock-rates = <200000000>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_usdhc2>;
 	bus-width = <4>;
@@ -191,7 +195,7 @@
 		fsl,pins = <
 			IMX8QXP_UART0_RX_ADMA_UART0_RX				0X06000020
 			IMX8QXP_UART0_TX_ADMA_UART0_TX				0X06000020
-			IMX8QXP_FLEXCAN0_TX_ADMA_UART0_CTS_B 			0x06000020
+			IMX8QXP_FLEXCAN0_TX_ADMA_UART0_CTS_B			0x06000020
 			IMX8QXP_FLEXCAN0_RX_ADMA_UART0_RTS_B			0x06000020
 		>;
 	};

@@ -7,10 +7,13 @@
 #include <crypto/algapi.h>
 #include <linux/interrupt.h>
 #include <linux/delay.h>
+#include <linux/scatterlist.h>
 #include <crypto/internal/hash.h>
+#include <crypto/internal/skcipher.h>
 
 #include <crypto/md5.h>
-#include <crypto/sha.h>
+#include <crypto/sha1.h>
+#include <crypto/sha2.h>
 
 #define _SBF(v, f)			((v) << (f))
 
@@ -256,7 +259,7 @@ enum alg_type {
 struct rk_crypto_tmp {
 	struct rk_crypto_info		*dev;
 	union {
-		struct crypto_alg	crypto;
+		struct skcipher_alg	skcipher;
 		struct ahash_alg	hash;
 	} alg;
 	enum alg_type			type;

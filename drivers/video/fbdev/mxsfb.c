@@ -4,7 +4,7 @@
  * This code is based on:
  * Author: Vitaly Wool <vital@embeddedalley.com>
  *
- * Copyright 2017-2019 NXP
+ * Copyright 2017-2019,2021 NXP
  * Copyright 2008-2015 Freescale Semiconductor, Inc. All Rights Reserved.
  * Copyright 2008 Embedded Alley Solutions, Inc All Rights Reserved.
  *
@@ -1643,8 +1643,6 @@ static void overlayfb_enable(struct mxsfb_layer *ofb)
 {
 	struct mxsfb_info *fbi = ofb->fbi;
 
-	lock_fb_info(fbi->fb_info);
-
 	if (fbi->cur_blank == FB_BLANK_UNBLANK) {
 		mxsfb_disable_controller(fbi->fb_info);
 		writel(CTRL1_FIFO_CLEAR, fbi->base + LCDC_CTRL1 + REG_SET);
@@ -1656,7 +1654,6 @@ static void overlayfb_enable(struct mxsfb_layer *ofb)
 		writel(CTRL1_FIFO_CLEAR, fbi->base + LCDC_CTRL1 + REG_CLR);
 		mxsfb_enable_controller(fbi->fb_info);
 	}
-	unlock_fb_info(fbi->fb_info);
 }
 
 static void overlayfb_disable(struct mxsfb_layer *ofb)
@@ -1898,14 +1895,11 @@ static int overlayfb_set_par(struct fb_info *info)
 	if (ofb->video_mem_size < size)
 		return -EINVAL;
 
-	lock_fb_info(fbi->fb_info);
-
 	if (fbi->cur_blank != FB_BLANK_UNBLANK) {
 		clk_enable_pix(fbi);
 		clk_enable_axi(fbi);
 		clk_enable_disp_axi(fbi);
 	}
-	unlock_fb_info(fbi->fb_info);
 
 	if (ofb->blank_state == FB_BLANK_UNBLANK)
 		ofb->ops->disable(ofb);
@@ -1915,14 +1909,11 @@ static int overlayfb_set_par(struct fb_info *info)
 	if (ofb->blank_state == FB_BLANK_UNBLANK)
 		ofb->ops->enable(ofb);
 
-	lock_fb_info(fbi->fb_info);
-
 	if (fbi->cur_blank != FB_BLANK_UNBLANK) {
 		clk_disable_disp_axi(fbi);
 		clk_disable_axi(fbi);
 		clk_disable_pix(fbi);
 	}
-	unlock_fb_info(fbi->fb_info);
 
 	if ((var->activate & FB_ACTIVATE_FORCE) &&
 	    (var->activate & FB_ACTIVATE_MASK) == FB_ACTIVATE_NOW)
@@ -1939,14 +1930,11 @@ static int overlayfb_blank(int blank, struct fb_info *info)
 	if (ofb->blank_state == blank)
 		return 0;
 
-	lock_fb_info(fbi->fb_info);
-
 	if (fbi->cur_blank != FB_BLANK_UNBLANK) {
 		clk_enable_pix(fbi);
 		clk_enable_axi(fbi);
 		clk_enable_disp_axi(fbi);
 	}
-	unlock_fb_info(fbi->fb_info);
 
 	switch (blank) {
 	case FB_BLANK_POWERDOWN:
@@ -1960,14 +1948,11 @@ static int overlayfb_blank(int blank, struct fb_info *info)
 		break;
 	}
 
-	lock_fb_info(fbi->fb_info);
-
 	if (fbi->cur_blank != FB_BLANK_UNBLANK) {
 		clk_disable_disp_axi(fbi);
 		clk_disable_axi(fbi);
 		clk_disable_pix(fbi);
 	}
-	unlock_fb_info(fbi->fb_info);
 
 	ofb->blank_state = blank;
 
@@ -1984,14 +1969,8 @@ static int overlayfb_pan_display(struct fb_var_screeninfo *var,
 
 	init_completion(&fbi->flip_complete);
 
-	lock_fb_info(fbi->fb_info);
-
-	if (fbi->cur_blank != FB_BLANK_UNBLANK) {
-		unlock_fb_info(fbi->fb_info);
+	if (fbi->cur_blank != FB_BLANK_UNBLANK)
 		return -EINVAL;
-	}
-
-	unlock_fb_info(fbi->fb_info);
 
 	bytes_offset = info->fix.line_length * var->yoffset;
 	writel(info->fix.smem_start + bytes_offset,
@@ -2412,7 +2391,7 @@ static int mxsfb_remove(struct platform_device *pdev)
 		mxsfb_disable_controller(fb_info);
 
 	if (host->devdata->flags & MXSFB_FLAG_PMQOS)
-		pm_qos_remove_request(&host->pm_qos_req);
+		cpu_latency_qos_remove_request(&host->pm_qos_req);
 
 	pm_runtime_disable(&host->pdev->dev);
 	mxsfb_overlay_exit(host);
@@ -2451,7 +2430,7 @@ static int mxsfb_runtime_suspend(struct device *dev)
 		release_bus_freq(BUS_FREQ_HIGH);
 
 	if (host->devdata->flags & MXSFB_FLAG_PMQOS)
-		pm_qos_remove_request(&host->pm_qos_req);
+		cpu_latency_qos_remove_request(&host->pm_qos_req);
 
 	dev_dbg(dev, "mxsfb busfreq high release.\n");
 
@@ -2466,8 +2445,7 @@ static int mxsfb_runtime_resume(struct device *dev)
 		request_bus_freq(BUS_FREQ_HIGH);
 
 	if (host->devdata->flags & MXSFB_FLAG_PMQOS)
-		pm_qos_add_request(&host->pm_qos_req,
-			PM_QOS_CPU_DMA_LATENCY, 0);
+		cpu_latency_qos_add_request(&host->pm_qos_req, 0);
 
 	dev_dbg(dev, "mxsfb busfreq high request.\n");
 

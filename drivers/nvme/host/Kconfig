@@ -1,12 +1,13 @@
 # SPDX-License-Identifier: GPL-2.0-only
 config NVME_CORE
 	tristate
+	select BLK_DEV_INTEGRITY_T10 if BLK_DEV_INTEGRITY
 
 config BLK_DEV_NVME
 	tristate "NVM Express block device"
 	depends on PCI && BLOCK
 	select NVME_CORE
-	---help---
+	help
 	  The NVM Express driver is for solid state drives directly
 	  connected to the PCI or PCI Express bus.  If you know you
 	  don't have one of these, it is safe to answer N.
@@ -17,19 +18,27 @@ config BLK_DEV_NVME
 config NVME_MULTIPATH
 	bool "NVMe multipath support"
 	depends on NVME_CORE
-	---help---
+	help
 	   This option enables support for multipath access to NVMe
 	   subsystems.  If this option is enabled only a single
-	   /dev/nvmeXnY device will show up for each NVMe namespaces,
+	   /dev/nvmeXnY device will show up for each NVMe namespace,
 	   even if it is accessible through multiple controllers.
 
+config NVME_HWMON
+	bool "NVMe hardware monitoring"
+	depends on (NVME_CORE=y && HWMON=y) || (NVME_CORE=m && HWMON)
+	help
+	  This provides support for NVMe hardware monitoring. If enabled,
+	  a hardware monitoring device will be created for each NVMe drive
+	  in the system.
+
 config NVME_FABRICS
+	select NVME_CORE
 	tristate
 
 config NVME_RDMA
 	tristate "NVM Express over Fabrics RDMA host driver"
 	depends on INFINIBAND && INFINIBAND_ADDR_TRANS && BLOCK
-	select NVME_CORE
 	select NVME_FABRICS
 	select SG_POOL
 	help
@@ -46,7 +55,6 @@ config NVME_FC
 	tristate "NVM Express over Fabrics FC host driver"
 	depends on BLOCK
 	depends on HAS_DMA
-	select NVME_CORE
 	select NVME_FABRICS
 	select SG_POOL
 	help
@@ -62,7 +70,7 @@ config NVME_FC
 config NVME_TCP
 	tristate "NVM Express over Fabrics TCP host driver"
 	depends on INET
-	depends on BLK_DEV_NVME
+	depends on BLOCK
 	select NVME_FABRICS
 	select CRYPTO
 	select CRYPTO_CRC32C

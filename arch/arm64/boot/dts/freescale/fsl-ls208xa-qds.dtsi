@@ -129,7 +129,6 @@
 
 &qspi {
 	status = "okay";
-	fsl,qspi-has-second-chip;
 	flash0: s25fl256s1@0 {
 		#address-cells = <1>;
 		#size-cells = <1>;

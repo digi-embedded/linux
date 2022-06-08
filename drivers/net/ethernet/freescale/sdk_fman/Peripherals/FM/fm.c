@@ -144,7 +144,7 @@ static t_Error CheckFmParameters(t_Fm *p_Fm)
         RETURN_ERROR(MAJOR, E_INVALID_VALUE, ("fmClkFreq must be set."));
     if (USEC_TO_CLK(p_Fm->p_FmDriverParam->dma_watchdog, p_Fm->p_FmStateStruct->fmClkFreq) > DMA_MAX_WATCHDOG)
         RETURN_ERROR(MAJOR, E_INVALID_VALUE,
-                     ("dma_watchdog depends on FM clock. dma_watchdog(in microseconds) * clk (in Mhz), may not exceed 0x08x", DMA_MAX_WATCHDOG));
+                     ("dma_watchdog depends on FM clock. dma_watchdog(in microseconds) * clk (in Mhz), may not exceed %u", DMA_MAX_WATCHDOG));
 
 #if (DPAA_VERSION >= 11)
     if ((p_Fm->partVSPBase + p_Fm->partNumOfVSPs) > FM_VSP_MAX_NUM_OF_ENTRIES)
@@ -156,7 +156,7 @@ static t_Error CheckFmParameters(t_Fm *p_Fm)
     if (!p_Fm->p_FmStateStruct->totalFifoSize ||
         (p_Fm->p_FmStateStruct->totalFifoSize > BMI_MAX_FIFO_SIZE))
         RETURN_ERROR(MAJOR, E_INVALID_VALUE,
-                     ("totalFifoSize (currently defined as %d) has to be in the range of 256 to %d",
+                     ("totalFifoSize (currently defined as %d) has to be in the range of 256 to %lu",
                       p_Fm->p_FmStateStruct->totalFifoSize,
                       BMI_MAX_FIFO_SIZE));
     if (!p_Fm->p_FmStateStruct->totalNumOfTasks ||
@@ -3447,7 +3447,7 @@ t_Handle FM_Config(t_FmParams *p_FmParam)
 #endif /* FM_QMI_NO_DEQ_OPTIONS_SUPPORT */
 
         p_Fm->p_FmStateStruct->totalFifoSize        = 0;
-        p_Fm->p_FmStateStruct->totalNumOfTasks      = 
+        p_Fm->p_FmStateStruct->totalNumOfTasks      =
             DEFAULT_totalNumOfTasks(p_Fm->p_FmStateStruct->revInfo.majorRev,
                                     p_Fm->p_FmStateStruct->revInfo.minorRev);
 
@@ -4253,7 +4253,7 @@ t_Error FmGetSetParams(t_Handle h_Fm, t_FmGetSetParams *p_Params)
 	if (p_Params->setParams.type & UPDATE_FPM_EXTC_CLEAR)
 		WRITE_UINT32(p_Fm->p_FmFpmRegs->fmfp_extc,0x00800000);
 	if (p_Params->setParams.type & UPDATE_FPM_BRKC_SLP)
-	{	
+	{
 		if (p_Params->setParams.sleep)
 			WRITE_UINT32(p_Fm->p_FmFpmRegs->fmfp_brkc, GET_UINT32(
 				p_Fm->p_FmFpmRegs->fmfp_brkc) | FPM_BRKC_SLP);
@@ -4508,7 +4508,7 @@ t_Error FM_SetPortsBandwidth(t_Handle h_Fm, t_FmPortsBandwidthParams *p_PortsBan
     for (i=0; i < p_PortsBandwidth->numOfPorts; i++)
         sum +=p_PortsBandwidth->portsBandwidths[i].bandwidth;
     if (sum != 100)
-        RETURN_ERROR(MAJOR, E_INVALID_VALUE, ("Sum of ports bandwidth differ from 100%"));
+        RETURN_ERROR(MAJOR, E_INVALID_VALUE, ("Sum of ports bandwidth differ from 100%%"));
 
     /* find highest percent */
     for (i=0; i < p_PortsBandwidth->numOfPorts; i++)
@@ -4804,7 +4804,7 @@ uint32_t FM_GetCounter(t_Handle h_Fm, e_FmCounters counter)
     {
         case (e_FM_COUNTERS_DEQ_1):
         case (e_FM_COUNTERS_DEQ_2):
-            /* fall through */
+            fallthrough;
         case (e_FM_COUNTERS_DEQ_3):
             if ((p_Fm->p_FmStateStruct->revInfo.majorRev == 4) ||
                 (p_Fm->p_FmStateStruct->revInfo.majorRev >= 6))
@@ -4812,14 +4812,14 @@ uint32_t FM_GetCounter(t_Handle h_Fm, e_FmCounters counter)
                 REPORT_ERROR(MAJOR, E_NOT_SUPPORTED, ("Requested counter not supported"));
                 return 0;
             }
-            /* fall through */
+            fallthrough;
         case (e_FM_COUNTERS_ENQ_TOTAL_FRAME):
         case (e_FM_COUNTERS_DEQ_TOTAL_FRAME):
         case (e_FM_COUNTERS_DEQ_0):
         case (e_FM_COUNTERS_DEQ_FROM_DEFAULT):
         case (e_FM_COUNTERS_DEQ_FROM_CONTEXT):
         case (e_FM_COUNTERS_DEQ_FROM_FD):
-            /* fall through */
+            fallthrough;
         case (e_FM_COUNTERS_DEQ_CONFIRM):
             if (!(GET_UINT32(p_Fm->p_FmQmiRegs->fmqm_gc) & QMI_CFG_EN_COUNTERS))
             {

@@ -7,7 +7,7 @@
 #include <linux/of.h>
 #include <linux/of_fdt.h>
 #include <linux/start_kernel.h>
-#include <linux/dma-contiguous.h>
+#include <linux/dma-map-ops.h>
 #include <linux/screen_info.h>
 #include <asm/sections.h>
 #include <asm/mmu_context.h>
@@ -26,41 +26,38 @@ struct screen_info screen_info = {
 
 static void __init csky_memblock_init(void)
 {
-	unsigned long zone_size[MAX_NR_ZONES];
+	unsigned long lowmem_size = PFN_DOWN(LOWMEM_LIMIT - PHYS_OFFSET_OFFSET);
+	unsigned long sseg_size = PFN_DOWN(SSEG_SIZE - PHYS_OFFSET_OFFSET);
+	unsigned long max_zone_pfn[MAX_NR_ZONES] = { 0 };
 	signed long size;
 
 	memblock_reserve(__pa(_stext), _end - _stext);
-#ifdef CONFIG_BLK_DEV_INITRD
-	memblock_reserve(__pa(initrd_start), initrd_end - initrd_start);
-#endif
 
 	early_init_fdt_reserve_self();
 	early_init_fdt_scan_reserved_mem();
 
 	memblock_dump_all();
 
-	memset(zone_size, 0, sizeof(zone_size));
-
 	min_low_pfn = PFN_UP(memblock_start_of_DRAM());
 	max_low_pfn = max_pfn = PFN_DOWN(memblock_end_of_DRAM());
 
 	size = max_pfn - min_low_pfn;
 
-	if (size <= PFN_DOWN(SSEG_SIZE - PHYS_OFFSET_OFFSET))
-		zone_size[ZONE_NORMAL] = size;
-	else if (size < PFN_DOWN(LOWMEM_LIMIT - PHYS_OFFSET_OFFSET)) {
-		zone_size[ZONE_NORMAL] =
-				PFN_DOWN(SSEG_SIZE - PHYS_OFFSET_OFFSET);
-		max_low_pfn = min_low_pfn + zone_size[ZONE_NORMAL];
-	} else {
-		zone_size[ZONE_NORMAL] =
-				PFN_DOWN(LOWMEM_LIMIT - PHYS_OFFSET_OFFSET);
-		max_low_pfn = min_low_pfn + zone_size[ZONE_NORMAL];
+	if (size >= lowmem_size) {
+		max_low_pfn = min_low_pfn + lowmem_size;
+#ifdef CONFIG_PAGE_OFFSET_80000000
 		write_mmu_msa1(read_mmu_msa0() + SSEG_SIZE);
+#endif
+	} else if (size > sseg_size) {
+		max_low_pfn = min_low_pfn + sseg_size;
 	}
 
+	max_zone_pfn[ZONE_NORMAL] = max_low_pfn;
+
+	mmu_init(min_low_pfn, max_low_pfn);
+
 #ifdef CONFIG_HIGHMEM
-	zone_size[ZONE_HIGHMEM] = max_pfn - max_low_pfn;
+	max_zone_pfn[ZONE_HIGHMEM] = max_pfn;
 
 	highstart_pfn = max_low_pfn;
 	highend_pfn   = max_pfn;
@@ -69,7 +66,7 @@ static void __init csky_memblock_init(void)
 
 	dma_contiguous_reserve(0);
 
-	free_area_init_node(0, zone_size, min_low_pfn, NULL);
+	free_area_init(max_zone_pfn);
 }
 
 void __init setup_arch(char **cmdline_p)
@@ -81,10 +78,7 @@ void __init setup_arch(char **cmdline_p)
 	pr_info("Phys. mem: %ldMB\n",
 		(unsigned long) memblock_phys_mem_size()/1024/1024);
 
-	init_mm.start_code = (unsigned long) _stext;
-	init_mm.end_code = (unsigned long) _etext;
-	init_mm.end_data = (unsigned long) _edata;
-	init_mm.brk = (unsigned long) _end;
+	setup_initial_init_mm(_stext, _etext, _edata, _end);
 
 	parse_early_param();
 
@@ -98,17 +92,26 @@ void __init setup_arch(char **cmdline_p)
 
 	sparse_init();
 
+	fixaddr_init();
+
 #ifdef CONFIG_HIGHMEM
 	kmap_init();
-#endif
-
-#if defined(CONFIG_VT) && defined(CONFIG_DUMMY_CONSOLE)
-	conswitchp = &dummy_con;
 #endif
 }
 
 unsigned long va_pa_offset;
 EXPORT_SYMBOL(va_pa_offset);
+
+static inline unsigned long read_mmu_msa(void)
+{
+#ifdef CONFIG_PAGE_OFFSET_80000000
+	return read_mmu_msa0();
+#endif
+
+#ifdef CONFIG_PAGE_OFFSET_A0000000
+	return read_mmu_msa1();
+#endif
+}
 
 asmlinkage __visible void __init csky_start(unsigned int unused,
 					    void *dtb_start)
@@ -116,10 +119,9 @@ asmlinkage __visible void __init csky_start(unsigned int unused,
 	/* Clean up bss section */
 	memset(__bss_start, 0, __bss_stop - __bss_start);
 
-	va_pa_offset = read_mmu_msa0() & ~(SSEG_SIZE - 1);
+	va_pa_offset = read_mmu_msa() & ~(SSEG_SIZE - 1);
 
 	pre_trap_init();
-	pre_mmu_init();
 
 	if (dtb_start == NULL)
 		early_init_dt_scan(__dtb_start);

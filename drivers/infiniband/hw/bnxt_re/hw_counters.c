@@ -114,7 +114,7 @@ static const char * const bnxt_re_stat_name[] = {
 
 int bnxt_re_ib_get_hw_stats(struct ib_device *ibdev,
 			    struct rdma_hw_stats *stats,
-			    u8 port, int index)
+			    u32 port, int index)
 {
 	struct bnxt_re_dev *rdev = to_bnxt_re_dev(ibdev, ibdev);
 	struct ctx_hw_stats *bnxt_re_stats = rdev->qplib_ctx.stats.dma;
@@ -132,7 +132,7 @@ int bnxt_re_ib_get_hw_stats(struct ib_device *ibdev,
 		stats->value[BNXT_RE_RECOVERABLE_ERRORS] =
 			le64_to_cpu(bnxt_re_stats->tx_bcast_pkts);
 		stats->value[BNXT_RE_RX_DROPS] =
-			le64_to_cpu(bnxt_re_stats->rx_drop_pkts);
+			le64_to_cpu(bnxt_re_stats->rx_error_pkts);
 		stats->value[BNXT_RE_RX_DISCARDS] =
 			le64_to_cpu(bnxt_re_stats->rx_discard_pkts);
 		stats->value[BNXT_RE_RX_PKTS] =
@@ -234,13 +234,10 @@ int bnxt_re_ib_get_hw_stats(struct ib_device *ibdev,
 	return ARRAY_SIZE(bnxt_re_stat_name);
 }
 
-struct rdma_hw_stats *bnxt_re_ib_alloc_hw_stats(struct ib_device *ibdev,
-						u8 port_num)
+struct rdma_hw_stats *bnxt_re_ib_alloc_hw_port_stats(struct ib_device *ibdev,
+						     u32 port_num)
 {
 	BUILD_BUG_ON(ARRAY_SIZE(bnxt_re_stat_name) != BNXT_RE_NUM_COUNTERS);
-	/* We support only per port stats */
-	if (!port_num)
-		return NULL;
 
 	return rdma_alloc_hw_stats_struct(bnxt_re_stat_name,
 					  ARRAY_SIZE(bnxt_re_stat_name),

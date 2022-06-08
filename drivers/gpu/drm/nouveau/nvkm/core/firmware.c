@@ -22,19 +22,53 @@
 #include <core/device.h>
 #include <core/firmware.h>
 
+int
+nvkm_firmware_load_name(const struct nvkm_subdev *subdev, const char *base,
+			const char *name, int ver, const struct firmware **pfw)
+{
+	char path[64];
+	int ret;
+
+	snprintf(path, sizeof(path), "%s%s", base, name);
+	ret = nvkm_firmware_get(subdev, path, ver, pfw);
+	if (ret < 0)
+		return ret;
+
+	return 0;
+}
+
+int
+nvkm_firmware_load_blob(const struct nvkm_subdev *subdev, const char *base,
+			const char *name, int ver, struct nvkm_blob *blob)
+{
+	const struct firmware *fw;
+	int ret;
+
+	ret = nvkm_firmware_load_name(subdev, base, name, ver, &fw);
+	if (ret == 0) {
+		blob->data = kmemdup(fw->data, fw->size, GFP_KERNEL);
+		blob->size = fw->size;
+		nvkm_firmware_put(fw);
+		if (!blob->data)
+			return -ENOMEM;
+	}
+
+	return ret;
+}
+
 /**
  * nvkm_firmware_get - load firmware from the official nvidia/chip/ directory
- * @subdev	subdevice that will use that firmware
- * @fwname	name of firmware file to load
- * @fw		firmware structure to load to
+ * @subdev:	subdevice that will use that firmware
+ * @fwname:	name of firmware file to load
+ * @ver:	firmware version to load
+ * @fw:		firmware structure to load to
  *
  * Use this function to load firmware files in the form nvidia/chip/fwname.bin.
  * Firmware files released by NVIDIA will always follow this format.
  */
 int
-nvkm_firmware_get_version(const struct nvkm_subdev *subdev, const char *fwname,
-			  int min_version, int max_version,
-			  const struct firmware **fw)
+nvkm_firmware_get(const struct nvkm_subdev *subdev, const char *fwname, int ver,
+		  const struct firmware **fw)
 {
 	struct nvkm_device *device = subdev->device;
 	char f[64];
@@ -50,32 +84,22 @@ nvkm_firmware_get_version(const struct nvkm_subdev *subdev, const char *fwname,
 		cname[i] = tolower(cname[i]);
 	}
 
-	for (i = max_version; i >= min_version; i--) {
-		if (i != 0)
-			snprintf(f, sizeof(f), "nvidia/%s/%s-%d.bin", cname, fwname, i);
-		else
-			snprintf(f, sizeof(f), "nvidia/%s/%s.bin", cname, fwname);
+	if (ver != 0)
+		snprintf(f, sizeof(f), "nvidia/%s/%s-%d.bin", cname, fwname, ver);
+	else
+		snprintf(f, sizeof(f), "nvidia/%s/%s.bin", cname, fwname);
 
-		if (!firmware_request_nowarn(fw, f, device->dev)) {
-			nvkm_debug(subdev, "firmware \"%s\" loaded\n", f);
-			return i;
-		}
-
-		nvkm_debug(subdev, "firmware \"%s\" unavailable\n", f);
+	if (!firmware_request_nowarn(fw, f, device->dev)) {
+		nvkm_debug(subdev, "firmware \"%s\" loaded - %zu byte(s)\n",
+			   f, (*fw)->size);
+		return 0;
 	}
 
-	nvkm_error(subdev, "failed to load firmware \"%s\"", fwname);
+	nvkm_debug(subdev, "firmware \"%s\" unavailable\n", f);
 	return -ENOENT;
 }
 
-int
-nvkm_firmware_get(const struct nvkm_subdev *subdev, const char *fwname,
-		  const struct firmware **fw)
-{
-	return nvkm_firmware_get_version(subdev, fwname, 0, 0, fw);
-}
-
-/**
+/*
  * nvkm_firmware_put - release firmware loaded with nvkm_firmware_get
  */
 void

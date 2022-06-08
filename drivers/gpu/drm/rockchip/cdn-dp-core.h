@@ -7,8 +7,7 @@
 #ifndef _CDN_DP_CORE_H
 #define _CDN_DP_CORE_H
 
-#include <drm/bridge/cdns-mhdp-common.h>
-#include <drm/drmP.h>
+#include <drm/bridge/cdns-mhdp.h>
 #include <drm/drm_dp_helper.h>
 #include <drm/drm_panel.h>
 #include <drm/drm_probe_helper.h>

@@ -68,11 +68,12 @@ __ioremap_caller(phys_addr_t addr, unsigned long size, pgprot_t prot, void *call
 	/*
 	 * Should check if it is a candidate for a BAT mapping
 	 */
+	pr_warn("ioremap() called early from %pS. Use early_ioremap() instead\n", caller);
 
-	err = early_ioremap_range(ioremap_bot - size, p, size, prot);
+	err = early_ioremap_range(ioremap_bot - size - PAGE_SIZE, p, size, prot);
 	if (err)
 		return NULL;
-	ioremap_bot -= size;
+	ioremap_bot -= size + PAGE_SIZE;
 
 	return (void __iomem *)ioremap_bot + offset;
 }

@@ -117,7 +117,7 @@ static void init_mqd(struct mqd_manager *mm, void **mqd,
 
 	m->cp_hqd_quantum = 1 << CP_HQD_QUANTUM__QUANTUM_EN__SHIFT |
 			1 << CP_HQD_QUANTUM__QUANTUM_SCALE__SHIFT |
-			10 << CP_HQD_QUANTUM__QUANTUM_DURATION__SHIFT;
+			1 << CP_HQD_QUANTUM__QUANTUM_DURATION__SHIFT;
 
 	set_priority(m, q);
 	m->cp_hqd_eop_rptr = 1 << CP_HQD_EOP_RPTR__INIT_FETCHER__SHIFT;
@@ -243,6 +243,13 @@ static void update_mqd(struct mqd_manager *mm, void *mqd,
 	__update_mqd(mm, mqd, q, MTYPE_CC, 1);
 }
 
+static uint32_t read_doorbell_id(void *mqd)
+{
+	struct vi_mqd *m = (struct vi_mqd *)mqd;
+
+	return m->queue_doorbell_id0;
+}
+
 static void update_mqd_tonga(struct mqd_manager *mm, void *mqd,
 			struct queue_properties *q)
 {
@@ -312,11 +319,7 @@ static void init_mqd_hiq(struct mqd_manager *mm, void **mqd,
 static void update_mqd_hiq(struct mqd_manager *mm, void *mqd,
 			struct queue_properties *q)
 {
-	struct vi_mqd *m;
 	__update_mqd(mm, mqd, q, MTYPE_UC, 0);
-
-	m = get_mqd(mqd);
-	m->cp_hqd_vmid = q->vmid;
 }
 
 static void init_mqd_sdma(struct mqd_manager *mm, void **mqd,
@@ -425,7 +428,6 @@ struct mqd_manager *mqd_manager_init_vi(enum KFD_MQD_TYPE type,
 
 	switch (type) {
 	case KFD_MQD_TYPE_CP:
-	case KFD_MQD_TYPE_COMPUTE:
 		mqd->allocate_mqd = allocate_mqd;
 		mqd->init_mqd = init_mqd;
 		mqd->free_mqd = free_mqd;
@@ -451,9 +453,10 @@ struct mqd_manager *mqd_manager_init_vi(enum KFD_MQD_TYPE type,
 #if defined(CONFIG_DEBUG_FS)
 		mqd->debugfs_show_mqd = debugfs_show_mqd;
 #endif
+		mqd->read_doorbell_id = read_doorbell_id;
 		break;
 	case KFD_MQD_TYPE_DIQ:
-		mqd->allocate_mqd = allocate_hiq_mqd;
+		mqd->allocate_mqd = allocate_mqd;
 		mqd->init_mqd = init_mqd_hiq;
 		mqd->free_mqd = free_mqd;
 		mqd->load_mqd = load_mqd;
@@ -494,7 +497,7 @@ struct mqd_manager *mqd_manager_init_vi_tonga(enum KFD_MQD_TYPE type,
 	mqd = mqd_manager_init_vi(type, dev);
 	if (!mqd)
 		return NULL;
-	if ((type == KFD_MQD_TYPE_CP) || (type == KFD_MQD_TYPE_COMPUTE))
+	if (type == KFD_MQD_TYPE_CP)
 		mqd->update_mqd = update_mqd_tonga;
 	return mqd;
 }

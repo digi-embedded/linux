@@ -45,10 +45,12 @@ struct ucsi_dp {
  * -EOPNOTSUPP.
  */
 
-static int ucsi_displayport_enter(struct typec_altmode *alt)
+static int ucsi_displayport_enter(struct typec_altmode *alt, u32 *vdo)
 {
 	struct ucsi_dp *dp = typec_altmode_get_drvdata(alt);
-	struct ucsi_control ctrl;
+	struct ucsi *ucsi = dp->con->ucsi;
+	int svdm_version;
+	u64 command;
 	u8 cur = 0;
 	int ret;
 
@@ -59,25 +61,21 @@ static int ucsi_displayport_enter(struct typec_altmode *alt)
 
 		dev_warn(&p->dev,
 			 "firmware doesn't support alternate mode overriding\n");
-		mutex_unlock(&dp->con->lock);
-		return -EOPNOTSUPP;
+		ret = -EOPNOTSUPP;
+		goto err_unlock;
 	}
 
-	UCSI_CMD_GET_CURRENT_CAM(ctrl, dp->con->num);
-	ret = ucsi_send_command(dp->con->ucsi, &ctrl, &cur, sizeof(cur));
+	command = UCSI_GET_CURRENT_CAM | UCSI_CONNECTOR_NUMBER(dp->con->num);
+	ret = ucsi_send_command(ucsi, command, &cur, sizeof(cur));
 	if (ret < 0) {
-		if (dp->con->ucsi->ppm->data->version > 0x0100) {
-			mutex_unlock(&dp->con->lock);
-			return ret;
-		}
+		if (ucsi->version > 0x0100)
+			goto err_unlock;
 		cur = 0xff;
 	}
 
 	if (cur != 0xff) {
-		mutex_unlock(&dp->con->lock);
-		if (dp->con->port_altmode[cur] == alt)
-			return 0;
-		return -EBUSY;
+		ret = dp->con->port_altmode[cur] == alt ? 0 : -EBUSY;
+		goto err_unlock;
 	}
 
 	/*
@@ -86,7 +84,13 @@ static int ucsi_displayport_enter(struct typec_altmode *alt)
 	 * mode, and letting the alt mode driver continue.
 	 */
 
-	dp->header = VDO(USB_TYPEC_DP_SID, 1, CMD_ENTER_MODE);
+	svdm_version = typec_altmode_get_svdm_version(alt);
+	if (svdm_version < 0) {
+		ret = svdm_version;
+		goto err_unlock;
+	}
+
+	dp->header = VDO(USB_TYPEC_DP_SID, 1, svdm_version, CMD_ENTER_MODE);
 	dp->header |= VDO_OPOS(USB_TYPEC_DP_MODE);
 	dp->header |= VDO_CMDT(CMDT_RSP_ACK);
 
@@ -94,16 +98,18 @@ static int ucsi_displayport_enter(struct typec_altmode *alt)
 	dp->vdo_size = 1;
 
 	schedule_work(&dp->work);
-
+	ret = 0;
+err_unlock:
 	mutex_unlock(&dp->con->lock);
 
-	return 0;
+	return ret;
 }
 
 static int ucsi_displayport_exit(struct typec_altmode *alt)
 {
 	struct ucsi_dp *dp = typec_altmode_get_drvdata(alt);
-	struct ucsi_control ctrl;
+	int svdm_version;
+	u64 command;
 	int ret = 0;
 
 	mutex_lock(&dp->con->lock);
@@ -117,12 +123,18 @@ static int ucsi_displayport_exit(struct typec_altmode *alt)
 		goto out_unlock;
 	}
 
-	ctrl.raw_cmd = UCSI_CMD_SET_NEW_CAM(dp->con->num, 0, dp->offset, 0);
-	ret = ucsi_send_command(dp->con->ucsi, &ctrl, NULL, 0);
+	command = UCSI_CMD_SET_NEW_CAM(dp->con->num, 0, dp->offset, 0);
+	ret = ucsi_send_command(dp->con->ucsi, command, NULL, 0);
 	if (ret < 0)
 		goto out_unlock;
 
-	dp->header = VDO(USB_TYPEC_DP_SID, 1, CMD_EXIT_MODE);
+	svdm_version = typec_altmode_get_svdm_version(alt);
+	if (svdm_version < 0) {
+		ret = svdm_version;
+		goto out_unlock;
+	}
+
+	dp->header = VDO(USB_TYPEC_DP_SID, 1, svdm_version, CMD_EXIT_MODE);
 	dp->header |= VDO_OPOS(USB_TYPEC_DP_MODE);
 	dp->header |= VDO_CMDT(CMDT_RSP_ACK);
 
@@ -172,14 +184,14 @@ static int ucsi_displayport_status_update(struct ucsi_dp *dp)
 static int ucsi_displayport_configure(struct ucsi_dp *dp)
 {
 	u32 pins = DP_CONF_GET_PIN_ASSIGN(dp->data.conf);
-	struct ucsi_control ctrl;
+	u64 command;
 
 	if (!dp->override)
 		return 0;
 
-	ctrl.raw_cmd = UCSI_CMD_SET_NEW_CAM(dp->con->num, 1, dp->offset, pins);
+	command = UCSI_CMD_SET_NEW_CAM(dp->con->num, 1, dp->offset, pins);
 
-	return ucsi_send_command(dp->con->ucsi, &ctrl, NULL, 0);
+	return ucsi_send_command(dp->con->ucsi, command, NULL, 0);
 }
 
 static int ucsi_displayport_vdm(struct typec_altmode *alt,
@@ -188,6 +200,7 @@ static int ucsi_displayport_vdm(struct typec_altmode *alt,
 	struct ucsi_dp *dp = typec_altmode_get_drvdata(alt);
 	int cmd_type = PD_VDO_CMDT(header);
 	int cmd = PD_VDO_CMD(header);
+	int svdm_version;
 
 	mutex_lock(&dp->con->lock);
 
@@ -200,9 +213,20 @@ static int ucsi_displayport_vdm(struct typec_altmode *alt,
 		return -EOPNOTSUPP;
 	}
 
+	svdm_version = typec_altmode_get_svdm_version(alt);
+	if (svdm_version < 0) {
+		mutex_unlock(&dp->con->lock);
+		return svdm_version;
+	}
+
 	switch (cmd_type) {
 	case CMDT_INIT:
-		dp->header = VDO(USB_TYPEC_DP_SID, 1, cmd);
+		if (PD_VDO_SVDM_VER(header) < svdm_version) {
+			typec_partner_set_svdm_version(dp->con->partner, PD_VDO_SVDM_VER(header));
+			svdm_version = PD_VDO_SVDM_VER(header);
+		}
+
+		dp->header = VDO(USB_TYPEC_DP_SID, 1, svdm_version, cmd);
 		dp->header |= VDO_OPOS(USB_TYPEC_DP_MODE);
 
 		switch (cmd) {
@@ -290,8 +314,6 @@ struct typec_altmode *ucsi_register_displayport(struct ucsi_connector *con,
 	struct typec_altmode *alt;
 	struct ucsi_dp *dp;
 
-	mutex_lock(&con->lock);
-
 	/* We can't rely on the firmware with the capabilities. */
 	desc->vdo |= DP_CAP_DP_SIGNALING | DP_CAP_RECEPTACLE;
 
@@ -300,15 +322,12 @@ struct typec_altmode *ucsi_register_displayport(struct ucsi_connector *con,
 	desc->vdo |= all_assignments << 16;
 
 	alt = typec_port_register_altmode(con->port, desc);
-	if (IS_ERR(alt)) {
-		mutex_unlock(&con->lock);
+	if (IS_ERR(alt))
 		return alt;
-	}
 
 	dp = devm_kzalloc(&alt->dev, sizeof(*dp), GFP_KERNEL);
 	if (!dp) {
 		typec_unregister_altmode(alt);
-		mutex_unlock(&con->lock);
 		return ERR_PTR(-ENOMEM);
 	}
 
@@ -320,8 +339,6 @@ struct typec_altmode *ucsi_register_displayport(struct ucsi_connector *con,
 
 	alt->ops = &ucsi_displayport_ops;
 	typec_altmode_set_drvdata(alt, dp);
-
-	mutex_unlock(&con->lock);
 
 	return alt;
 }

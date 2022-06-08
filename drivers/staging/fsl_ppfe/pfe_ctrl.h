@@ -9,7 +9,6 @@
 
 #include <linux/dmapool.h>
 
-#include "pfe_mod.h"
 #include "pfe/pfe.h"
 
 #define DMA_BUF_SIZE_128	0x80	/* enough for 1 conntracks */
@@ -35,6 +34,7 @@
 #define CLASS_DM_DROP_CNTR		(0x820)
 #define CLASS_DM_RESUME			(0x854)
 #define CLASS_DM_PESTATUS		(0x860)
+#define CLASS_DM_CRC_VALIDATED		(0x14b0)
 
 #define TMU_DM_SH_STATIC		(0x80)
 #define TMU_DM_CPU_TICKS		(TMU_DM_SH_STATIC)

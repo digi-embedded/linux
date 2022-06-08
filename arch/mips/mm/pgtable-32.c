@@ -10,7 +10,6 @@
 #include <linux/memblock.h>
 #include <linux/highmem.h>
 #include <asm/fixmap.h>
-#include <asm/pgtable.h>
 #include <asm/pgalloc.h>
 #include <asm/tlbflush.h>
 
@@ -46,7 +45,6 @@ void set_pmd_at(struct mm_struct *mm, unsigned long addr,
 		pmd_t *pmdp, pmd_t pmd)
 {
 	*pmdp = pmd;
-	flush_tlb_all();
 }
 #endif /* defined(CONFIG_TRANSPARENT_HUGEPAGE) */
 
@@ -56,6 +54,7 @@ void __init pagetable_init(void)
 	pgd_t *pgd_base;
 #ifdef CONFIG_HIGHMEM
 	pgd_t *pgd;
+	p4d_t *p4d;
 	pud_t *pud;
 	pmd_t *pmd;
 	pte_t *pte;
@@ -81,8 +80,9 @@ void __init pagetable_init(void)
 	vaddr = PKMAP_BASE;
 	fixrange_init(vaddr & PMD_MASK, vaddr + PAGE_SIZE*LAST_PKMAP, pgd_base);
 
-	pgd = swapper_pg_dir + __pgd_offset(vaddr);
-	pud = pud_offset(pgd, vaddr);
+	pgd = swapper_pg_dir + pgd_index(vaddr);
+	p4d = p4d_offset(pgd, vaddr);
+	pud = pud_offset(p4d, vaddr);
 	pmd = pmd_offset(pud, vaddr);
 	pte = pte_offset_kernel(pmd, vaddr);
 	pkmap_page_table = pte;

@@ -16,6 +16,14 @@
 /* Currently comes from Kconfig param as a ^2 (driver-required) */
 #define JOBR_DEPTH (1 << CONFIG_CRYPTO_DEV_FSL_CAAM_RINGSIZE)
 
+/*
+ * Maximum size for crypto-engine software queue based on Job Ring
+ * size (JOBR_DEPTH) and a THRESHOLD (reserved for the non-crypto-API
+ * requests that are not passed through crypto-engine)
+ */
+#define THRESHOLD 15
+#define CRYPTO_ENGINE_MAX_QLEN (JOBR_DEPTH - THRESHOLD)
+
 /* Kconfig params for interrupt coalescing if selected (else zero) */
 #ifdef CONFIG_CRYPTO_DEV_FSL_CAAM_INTC
 #define JOBR_INTC JRCFG_ICEN
@@ -105,7 +113,6 @@ struct caam_drv_private {
 	struct caam_job_ring __iomem *jr[4];	/* JobR's register space */
 	dma_addr_t __iomem *sm_base;	/* Secure memory storage base */
 	phys_addr_t sm_phy;		/* Secure memory storage physical */
-	u32 sm_size;
 
 	struct iommu_domain *domain;
 
@@ -269,23 +276,6 @@ static inline void caam_keygen_exit(void)
 }
 
 #endif /* CONFIG_CRYPTO_DEV_FSL_CAAM_TK_API */
-
-#ifdef CONFIG_DEBUG_FS
-static int caam_debugfs_u64_get(void *data, u64 *val)
-{
-	*val = caam64_to_cpu(*(u64 *)data);
-	return 0;
-}
-
-static int caam_debugfs_u32_get(void *data, u64 *val)
-{
-	*val = caam32_to_cpu(*(u32 *)data);
-	return 0;
-}
-
-DEFINE_SIMPLE_ATTRIBUTE(caam_fops_u32_ro, caam_debugfs_u32_get, NULL, "%llu\n");
-DEFINE_SIMPLE_ATTRIBUTE(caam_fops_u64_ro, caam_debugfs_u64_get, NULL, "%llu\n");
-#endif
 
 static inline u64 caam_get_dma_mask(struct device *dev)
 {

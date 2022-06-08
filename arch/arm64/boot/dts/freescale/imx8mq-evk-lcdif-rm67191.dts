@@ -37,6 +37,8 @@
 &mipi_dsi {
 	status = "okay";
 	fsl,clock-drop-level = <2>;
+	#address-cells = <1>;
+	#size-cells = <0>;
 
 	panel@0 {
 		compatible = "raydium,rm67191";
@@ -60,8 +62,11 @@
 		#size-cells = <0>;
 
 		port@0 {
+			#address-cells = <1>;
+			#size-cells = <0>;
 			reg = <0>;
-			mipi_dsi_in: endpoint {
+			mipi_dsi_in: endpoint@0 {
+				reg = <0>;
 				remote-endpoint = <&lcdif_mipi_dsi>;
 			};
 		};

@@ -24,9 +24,9 @@ Driver Initialization
 At the core of every DRM driver is a :c:type:`struct drm_driver
 <drm_driver>` structure. Drivers typically statically initialize
 a drm_driver structure, and then pass it to
-:c:func:`drm_dev_alloc()` to allocate a device instance. After the
+drm_dev_alloc() to allocate a device instance. After the
 device instance is fully initialized it can be registered (which makes
-it accessible from userspace) using :c:func:`drm_dev_register()`.
+it accessible from userspace) using drm_dev_register().
 
 The :c:type:`struct drm_driver <drm_driver>` structure
 contains static information that describes the driver and features it
@@ -75,6 +75,18 @@ update it, its value is mostly useless. The DRM core prints it to the
 kernel log at initialization time and passes it to userspace through the
 DRM_IOCTL_VERSION ioctl.
 
+Managing Ownership of the Framebuffer Aperture
+----------------------------------------------
+
+.. kernel-doc:: drivers/gpu/drm/drm_aperture.c
+   :doc: overview
+
+.. kernel-doc:: include/drm/drm_aperture.h
+   :internal:
+
+.. kernel-doc:: drivers/gpu/drm/drm_aperture.c
+   :export:
+
 Device Instance and Driver Handling
 -----------------------------------
 
@@ -99,15 +111,6 @@ Component Helper Usage
 .. kernel-doc:: drivers/gpu/drm/drm_drv.c
    :doc: component helper usage recommendations
 
-IRQ Helper Library
-~~~~~~~~~~~~~~~~~~
-
-.. kernel-doc:: drivers/gpu/drm/drm_irq.c
-   :doc: irq helpers
-
-.. kernel-doc:: drivers/gpu/drm/drm_irq.c
-   :export:
-
 Memory Manager Initialization
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -131,6 +134,18 @@ been mapped and any necessary information has been extracted, it should
 be unmapped; on many devices, the ROM address decoder is shared with
 other BARs, so leaving it mapped could cause undesired behaviour like
 hangs or memory corruption.
+
+Managed Resources
+-----------------
+
+.. kernel-doc:: drivers/gpu/drm/drm_managed.c
+   :doc: managed resources
+
+.. kernel-doc:: drivers/gpu/drm/drm_managed.c
+   :export:
+
+.. kernel-doc:: include/drm/drm_managed.h
+   :internal:
 
 Bus-specific Device Registration and PCI Support
 ------------------------------------------------

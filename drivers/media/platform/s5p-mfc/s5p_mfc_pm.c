@@ -78,7 +78,7 @@ int s5p_mfc_power_on(void)
 {
 	int i, ret = 0;
 
-	ret = pm_runtime_get_sync(pm->device);
+	ret = pm_runtime_resume_and_get(pm->device);
 	if (ret < 0)
 		return ret;
 

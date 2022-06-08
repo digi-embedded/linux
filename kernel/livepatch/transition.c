@@ -9,6 +9,7 @@
 
 #include <linux/cpu.h>
 #include <linux/stacktrace.h>
+#include <linux/tracehook.h>
 #include "core.h"
 #include "patch.h"
 #include "transition.h"
@@ -78,7 +79,7 @@ static void klp_complete_transition(void)
 		 klp_target_state == KLP_PATCHED ? "patching" : "unpatching");
 
 	if (klp_transition_patch->replace && klp_target_state == KLP_PATCHED) {
-		klp_discard_replaced_patches(klp_transition_patch);
+		klp_unpatch_replaced_patches(klp_transition_patch);
 		klp_discard_nops(klp_transition_patch);
 	}
 
@@ -369,9 +370,7 @@ static void klp_send_signals(void)
 			 * Send fake signal to all non-kthread tasks which are
 			 * still not migrated.
 			 */
-			spin_lock_irq(&task->sighand->siglock);
-			signal_wake_up(task, 0);
-			spin_unlock_irq(&task->sighand->siglock);
+			set_notify_signal(task);
 		}
 	}
 	read_unlock(&tasklist_lock);
@@ -412,7 +411,7 @@ void klp_try_complete_transition(void)
 	/*
 	 * Ditto for the idle "swapper" tasks.
 	 */
-	get_online_cpus();
+	cpus_read_lock();
 	for_each_possible_cpu(cpu) {
 		task = idle_task(cpu);
 		if (cpu_online(cpu)) {
@@ -424,7 +423,7 @@ void klp_try_complete_transition(void)
 			task->patch_state = klp_target_state;
 		}
 	}
-	put_online_cpus();
+	cpus_read_unlock();
 
 	if (!complete) {
 		if (klp_signals_cnt && !(klp_signals_cnt % SIGNALS_TIMEOUT))
@@ -446,14 +445,14 @@ void klp_try_complete_transition(void)
 	klp_complete_transition();
 
 	/*
-	 * It would make more sense to free the patch in
+	 * It would make more sense to free the unused patches in
 	 * klp_complete_transition() but it is called also
 	 * from klp_cancel_transition().
 	 */
-	if (!patch->enabled) {
-		klp_free_patch_start(patch);
-		schedule_work(&patch->free_work);
-	}
+	if (!patch->enabled)
+		klp_free_patch_async(patch);
+	else if (patch->replace)
+		klp_free_replaced_patches_async(patch);
 }
 
 /*

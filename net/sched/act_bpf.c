@@ -12,6 +12,7 @@
 #include <linux/bpf.h>
 
 #include <net/netlink.h>
+#include <net/sock.h>
 #include <net/pkt_sched.h>
 #include <net/pkt_cls.h>
 
@@ -42,18 +43,18 @@ static int tcf_bpf_act(struct sk_buff *skb, const struct tc_action *act,
 	tcf_lastuse_update(&prog->tcf_tm);
 	bstats_cpu_update(this_cpu_ptr(prog->common.cpu_bstats), skb);
 
-	rcu_read_lock();
 	filter = rcu_dereference(prog->filter);
 	if (at_ingress) {
 		__skb_push(skb, skb->mac_len);
 		bpf_compute_data_pointers(skb);
-		filter_res = BPF_PROG_RUN(filter, skb);
+		filter_res = bpf_prog_run(filter, skb);
 		__skb_pull(skb, skb->mac_len);
 	} else {
 		bpf_compute_data_pointers(skb);
-		filter_res = BPF_PROG_RUN(filter, skb);
+		filter_res = bpf_prog_run(filter, skb);
 	}
-	rcu_read_unlock();
+	if (skb_sk_is_prefetched(skb) && filter_res != TC_ACT_OK)
+		skb_orphan(skb);
 
 	/* A BPF program may overwrite the default action opcode.
 	 * Similarly as in cls_bpf, if filter_res == -1 we use the
@@ -62,7 +63,7 @@ static int tcf_bpf_act(struct sk_buff *skb, const struct tc_action *act,
 	 * In case a different well-known TC_ACT opcode has been
 	 * returned, it will overwrite the default one.
 	 *
-	 * For everything else that is unkown, TC_ACT_UNSPEC is
+	 * For everything else that is unknown, TC_ACT_UNSPEC is
 	 * returned.
 	 */
 	switch (filter_res) {
@@ -274,10 +275,11 @@ static void tcf_bpf_prog_fill_cfg(const struct tcf_bpf *prog,
 
 static int tcf_bpf_init(struct net *net, struct nlattr *nla,
 			struct nlattr *est, struct tc_action **act,
-			int replace, int bind, bool rtnl_held,
-			struct tcf_proto *tp, struct netlink_ext_ack *extack)
+			struct tcf_proto *tp, u32 flags,
+			struct netlink_ext_ack *extack)
 {
 	struct tc_action_net *tn = net_generic(net, bpf_net_id);
+	bool bind = flags & TCA_ACT_FLAGS_BIND;
 	struct nlattr *tb[TCA_ACT_BPF_MAX + 1];
 	struct tcf_chain *goto_ch = NULL;
 	struct tcf_bpf_cfg cfg, old;
@@ -303,7 +305,7 @@ static int tcf_bpf_init(struct net *net, struct nlattr *nla,
 	ret = tcf_idr_check_alloc(tn, &index, act, bind);
 	if (!ret) {
 		ret = tcf_idr_create(tn, index, est, act,
-				     &act_bpf_ops, bind, true);
+				     &act_bpf_ops, bind, true, 0);
 		if (ret < 0) {
 			tcf_idr_cleanup(tn, index);
 			return ret;
@@ -315,7 +317,7 @@ static int tcf_bpf_init(struct net *net, struct nlattr *nla,
 		if (bind)
 			return 0;
 
-		if (!replace) {
+		if (!(flags & TCA_ACT_FLAGS_REPLACE)) {
 			tcf_idr_release(*act, bind);
 			return -EEXIST;
 		}
@@ -361,9 +363,7 @@ static int tcf_bpf_init(struct net *net, struct nlattr *nla,
 	if (goto_ch)
 		tcf_chain_put_by_act(goto_ch);
 
-	if (res == ACT_P_CREATED) {
-		tcf_idr_insert(tn, *act);
-	} else {
+	if (res != ACT_P_CREATED) {
 		/* make sure the program being replaced is no longer executing */
 		synchronize_rcu();
 		tcf_bpf_cfg_cleanup(&old);

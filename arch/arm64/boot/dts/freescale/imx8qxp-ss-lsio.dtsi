@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Copyright 2018-2019 NXP
+ * Copyright 2018-2020 NXP
  *	Dong Aisheng <aisheng.dong@nxp.com>
  */
 
@@ -41,17 +41,17 @@
 };
 
 &lsio_mu1 {
-	compatible = "fsl,imx8qxp-mu", "fsl,imx6sx-mu";
+	compatible = "fsl,imx8-mu-scu", "fsl,imx8qxp-mu", "fsl,imx6sx-mu";
 };
 
 &lsio_mu2 {
-	compatible = "fsl,imx8qxp-mu", "fsl,imx6sx-mu";
+	compatible = "fsl,imx8-mu-scu", "fsl,imx8qxp-mu", "fsl,imx6sx-mu";
 };
 
 &lsio_mu3 {
-	compatible = "fsl,imx8qxp-mu", "fsl,imx6sx-mu";
+	compatible = "fsl,imx8-mu-scu", "fsl,imx8qxp-mu", "fsl,imx6sx-mu";
 };
 
 &lsio_mu4 {
-	compatible = "fsl,imx8qxp-mu", "fsl,imx6sx-mu";
+	compatible = "fsl,imx8-mu-scu", "fsl,imx8qxp-mu", "fsl,imx6sx-mu";
 };

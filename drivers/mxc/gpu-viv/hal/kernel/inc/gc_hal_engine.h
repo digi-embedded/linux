@@ -302,7 +302,7 @@ typedef struct _gscSURF_BLITDRAW_ARGS
        struct _gscSURF_BLITDRAW_ARG_v1
        {
             /* Whether it's clear or blit operation, can be extended. */
-            gceBLITDRAW_TYPE type;
+            gceBLIT_TYPE type;
 
             union _gscSURF_BLITDRAW_UNION
             {
@@ -506,6 +506,12 @@ gcoSURF_DrawBlitDepth(
     gscSURF_BLITDRAW_BLIT *Args
 );
 
+gceSTATUS
+gcoSURF_ComputeBlit(
+    gcsSURF_VIEW* SrcView,
+    gcsSURF_VIEW* DstView,
+    gscSURF_BLITDRAW_BLIT* Args
+);
 
 /******************************************************************************\
 ******************************** gcoINDEX Object *******************************
@@ -1903,6 +1909,9 @@ typedef struct _gcsTEXTURE
 
     gcuVALUE                    borderColor[4];
     gctBOOL                     descDirty;
+
+    /* texture stage */
+    gctINT                      stage;
 }
 gcsTEXTURE, * gcsTEXTURE_PTR;
 
@@ -2117,6 +2126,12 @@ gcoTEXTURE_Disable(
     IN gcoHAL Hal,
     IN gctINT Sampler,
     IN gctBOOL DefaultInteger
+    );
+
+gceSTATUS
+gcoTEXTURE_Clear(
+    IN gcoTEXTURE Texture,
+    IN gctINT MipMap
     );
 
 gceSTATUS
@@ -2720,6 +2735,12 @@ gcoBUFOBJ_IndexGetRange(
 /*  Sets a buffer object as dirty */
 gceSTATUS
 gcoBUFOBJ_SetDirty(
+    IN gcoBUFOBJ BufObj,
+    IN gctBOOL Dirty
+    );
+
+gctBOOL
+gcoBUFOBJ_IsDirty(
     IN gcoBUFOBJ BufObj
     );
 

@@ -48,17 +48,15 @@
 #include <linux/pm_runtime.h>
 #include <linux/clk.h>
 #include <linux/busfreq-imx.h>
-
+#include <linux/compat.h>
 #include <linux/delay.h>
 
 //#define CONFIG_DEVICE_THERMAL_HANTRO
 #ifdef CONFIG_DEVICE_THERMAL_HANTRO
-#include <linux/device_cooling.h>
-#define HANTRO_REG_THERMAL_NOTIFIER(a) register_devfreq_cooling_notifier(a)
-#define HANTRO_UNREG_THERMAL_NOTIFIER(a) unregister_devfreq_cooling_notifier(a)
+#include <linux/thermal.h>
 static DEFINE_SPINLOCK(thermal_lock);
 /*1:hot, 0: not hot*/
-static int thermal_event;
+#define HANTRO_COOLING_MAX_STATE 1
 static int hantro_clock_ratio = 2;
 static int hantro_dynamic_clock;
 module_param(hantro_clock_ratio, int, 0644);
@@ -98,6 +96,8 @@ MODULE_PARM_DESC(hantro_dynamic_clock, "enable or disable dynamic clock rate");
 
 #define DEC_IO_SIZE_MAX             (MAX(HANTRO_G2_DEC_REGS, HANTRO_G1_TOTAL_REGS) * 4)
 
+#define HANTRO_CORE_ID_INVALID		(-1)
+
 /********************************************************************
  *                                              PORTING SEGMENT
  * NOTES: customer should modify these configuration if do porting to own platform.
@@ -107,8 +107,6 @@ MODULE_PARM_DESC(hantro_dynamic_clock, "enable or disable dynamic clock rate");
 #define HXDEC_MAX_CORES                 2
 
 /* Logic module base address */
-#define SOCLE_LOGIC_0_BASE              0x38300000
-#define SOCLE_LOGIC_1_BASE              0x38310000
 #define BLK_CTL_BASE                          0x38330000 //0x38320000
 
 #define VEXPRESS_LOGIC_0_BASE           0xFC010000
@@ -132,11 +130,7 @@ static const int DecHwId[] = {
 	0x6732 /* G2 */
 };
 
-static ulong multicorebase[HXDEC_MAX_CORES] = {
-	SOCLE_LOGIC_0_BASE,
-	SOCLE_LOGIC_1_BASE
-};
-
+static ulong multicorebase[HXDEC_MAX_CORES];
 
 static struct class *hantro_class;
 #define DEVICE_NAME		"mxc_hantro"
@@ -161,7 +155,7 @@ MODULE_PARM_DESC(hantro_dbg, "Debug level (0-1)");
 
 
 static int hantrodec_major;
-static int cores = 2;
+static int cores;
 /* here's all the must remember stuff */
 typedef struct {
 	//char *buffer;
@@ -187,13 +181,15 @@ typedef struct {
 	struct device *dev;
 	struct mutex dev_mutex;
 	int thermal_cur;
+	int thermal_event;
+	struct thermal_cooling_device *cooling;
 } hantrodec_t;
 
 static hantrodec_t hantrodec_data[HXDEC_MAX_CORES]; /* dynamic allocation? */
 
 typedef struct {
-	char inst_id;
-	char core_id;	//1:g1; 2:g2; 3:unknow
+	int inst_id;
+	int core_id;
 } hantrodec_instance;
 static unsigned long instance_mask;
 #define MAX_HANTRODEC_INSTANCE 32
@@ -238,17 +234,14 @@ static DECLARE_WAIT_QUEUE_HEAD(hw_queue);
 
 static int hantro_device_id(struct device *dev)
 {
-	int id;
-
-	if (strcmp("vpu_g1", dev->of_node->name) == 0) {
-		id = 0;
-	} else if (strcmp("vpu_g2", dev->of_node->name) == 0) {
-		id = 1;
-	} else {
-		return id = -1;
+	if (strcmp("vpu_g1", dev->of_node->name) == 0 ||
+	    strcmp("vpu_g2", dev->of_node->name) == 0) {
+		return cores;
 	}
-	return id;
+
+	return HANTRO_CORE_ID_INVALID;
 }
+
 static int hantro_clk_enable(hantrodec_clk *clk)
 {
 	clk_prepare(clk->dec);
@@ -274,8 +267,8 @@ static int hantro_ctrlblk_reset(hantrodec_t *dev)
 
 	//config G1/G2
 	hantro_clk_enable(&dev->clk);
-	iobase = (volatile u8 *)ioremap_nocache(BLK_CTL_BASE, 0x10000);
-	if (dev->core_id == 0) {
+	iobase = (volatile u8 *)ioremap(BLK_CTL_BASE, 0x10000);
+	if (IS_G1(dev->hw_id)) {
 		val = ioread32(iobase);
 		val &= (~0x2);
 		iowrite32(val, iobase);  //assert G1 block soft reset  control
@@ -354,12 +347,12 @@ static int hantro_thermal_check(struct device *dev)
 	unsigned long flags;
 
 	spin_lock_irqsave(&thermal_lock, flags);
-	if (thermal_event == hantrodev->thermal_cur) {
+	if (hantrodev->thermal_event == hantrodev->thermal_cur) {
 		/*nothing to do and return directly*/
 		spin_unlock_irqrestore(&thermal_lock, flags);
 		return 0;
 	}
-	hantrodev->thermal_cur = thermal_event;
+	hantrodev->thermal_cur = hantrodev->thermal_event;
 	spin_unlock_irqrestore(&thermal_lock, flags);
 
 	if (hantrodev->thermal_cur) {
@@ -379,20 +372,36 @@ static int hantro_thermal_check(struct device *dev)
 	return 0;
 }
 
-static int hantro_thermal_hot_notify(struct notifier_block *nb, unsigned long event, void *dummy)
+static int hantro_cooling_get_max_state(struct thermal_cooling_device *cdev, unsigned long *state)
 {
-	unsigned long flags;
-
-	spin_lock_irqsave(&thermal_lock, flags);
-	thermal_event = event;		/*event: 1: hot, 0: cool*/
-	spin_unlock_irqrestore(&thermal_lock, flags);
-	pr_info("hantro receive hot notification event: %ld\n", event);
-
-	return NOTIFY_OK;
+	*state = HANTRO_COOLING_MAX_STATE;
+	return 0;
 }
 
-static struct notifier_block hantro_thermal_hot_notifier = {
-	.notifier_call = hantro_thermal_hot_notify,
+static int hantro_cooling_get_cur_state(struct thermal_cooling_device *cdev, unsigned long *state)
+{
+	hantrodec_t *hantrodev = cdev->devdata;
+
+	*state = hantrodev->thermal_event;
+	return 0;
+}
+
+static int hantro_cooling_set_cur_state(struct thermal_cooling_device *cdev, unsigned long state)
+{
+	unsigned long flags;
+	hantrodec_t *hantrodev = cdev->devdata;
+
+	spin_lock_irqsave(&thermal_lock, flags);
+	hantrodev->thermal_event = state;		/*event: 1: hot, 0: cool*/
+	spin_unlock_irqrestore(&thermal_lock, flags);
+	pr_info("hantro receive cooling set state: %ld\n", state);
+	return 0;
+}
+
+static struct thermal_cooling_device_ops hantro_cooling_ops = {
+	.get_max_state = hantro_cooling_get_max_state,
+	.get_cur_state = hantro_cooling_get_cur_state,
+	.set_cur_state = hantro_cooling_set_cur_state,
 };
 #endif  //CONFIG_DEVICE_THERMAL_HANTRO
 
@@ -532,7 +541,7 @@ static int GetDecCoreID(unsigned long format)
 {
 	long c;
 
-	int core_id = -1;
+	int core_id = HANTRO_CORE_ID_INVALID;
 
 	for (c = 0; c < cores; c++) {
 		/* a Core that has format */
@@ -556,7 +565,7 @@ static int hantrodec_choose_core(int is_g1)
 		return -EBUSY;
 	}
 
-	reg = (volatile u8 *) ioremap_nocache(blk_base, 0x1000);
+	reg = (volatile u8 *) ioremap(blk_base, 0x1000);
 
 	if (reg == NULL) {
 		pr_err("blk_ctl: failed to ioremap HW regs\n");
@@ -1345,14 +1354,15 @@ static long hantrodec_ioctl(struct file *filp, unsigned int cmd, unsigned long a
 
 		PDEBUG("Get DEC Core_id, format = %li\n", arg);
 		id = GetDecCoreID(arg);
-		if ((ctx->core_id == 3) && (id >= 0)) {
-			if (id == 0) {
-				ctx->core_id = 1; //g1
+		if (id == HANTRO_CORE_ID_INVALID || id >= cores)
+			return -EFAULT;
+		if (ctx->core_id == HANTRO_CORE_ID_INVALID) {
+			ctx->core_id = id;
+			if (id == 0 && cores > 1) {
 				/*power off g2*/
 				pm_runtime_put_sync(hantrodec_data[1].dev);
 				hantro_clk_disable(&hantrodec_data[1].clk);
 			} else if (id == 1) {
-				ctx->core_id = 2; //g2
 				/*power off g1*/
 				pm_runtime_put_sync(hantrodec_data[0].dev);
 				hantro_clk_disable(&hantrodec_data[0].clk);
@@ -1421,12 +1431,11 @@ static int put_hantro_core_desc32(struct core_desc *kp, struct core_desc_32 __us
 static long hantrodec_ioctl32(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 #define HANTRO_IOCTL32(err, filp, cmd, arg) { \
-		mm_segment_t old_fs = get_fs(); \
-		set_fs(KERNEL_DS); \
+		mm_segment_t old_fs = force_uaccess_begin(); \
 		err = hantrodec_ioctl(filp, cmd, arg); \
 		if (err) \
 			return err; \
-		set_fs(old_fs); \
+		force_uaccess_end(old_fs); \
 	}
 
 	union {
@@ -1495,12 +1504,12 @@ static int hantrodec_open(struct inode *inode, struct file *filp)
 		return -ENOMEM;
 
 	PDEBUG("dev opened: id: %d\n", idx);
-	hantrodec_ctx[idx].core_id = 3;  //unknow
+	hantrodec_ctx[idx].core_id = HANTRO_CORE_ID_INVALID;
 	hantrodec_ctx[idx].inst_id = idx;
 	filp->private_data = (void *)(&hantrodec_ctx[idx]);
 
 	/*not yet know which core id, so power on both g1 and g2 firstly*/
-	for (i = 0; i < 2; i++) {
+	for (i = 0; i < cores; i++) {
 		hantro_clk_enable(&hantrodec_data[i].clk);
 		hantro_power_on_disirq(&hantrodec_data[i]);
 	}
@@ -1520,32 +1529,31 @@ static int hantrodec_release(struct inode *inode, struct file *filp)
 	//hantrodec_t *dev = &hantrodec_data;
 	hantrodec_instance *ctx = (hantrodec_instance *)filp->private_data;
 
-	PDEBUG("closing ...\n");
+	PDEBUG("closing core_id:%d...\n", ctx->core_id);
 	for (n = 0; n < cores; n++) {
 		if (hantrodec_data[n].dec_owner == filp) {
 			PDEBUG("releasing dec Core %i lock\n", n);
 			ReleaseDecoder(&hantrodec_data[n]);
 		}
-	}
 
-	for (n = 0; n < 1; n++) {
 		if (hantrodec_data[n].pp_owner == filp) {
 			PDEBUG("releasing pp Core %i lock\n", n);
 			ReleasePostProcessor(&hantrodec_data[n]);
 		}
 	}
 
-	if (ctx->core_id & 0x1) {
-		pm_runtime_put_sync(hantrodec_data[0].dev);
-		hantro_clk_disable(&hantrodec_data[0].clk);
+	if (ctx->core_id == HANTRO_CORE_ID_INVALID) {
+		for (n = 0; n < cores; n++) {
+			pm_runtime_put_sync(hantrodec_data[n].dev);
+			hantro_clk_disable(&hantrodec_data[n].clk);
+		}
+	} else if (ctx->core_id < HXDEC_MAX_CORES) {
+		pm_runtime_put_sync(hantrodec_data[ctx->core_id].dev);
+		hantro_clk_disable(&hantrodec_data[ctx->core_id].clk);
 	}
-	if (ctx->core_id & 0x2) {
-		pm_runtime_put_sync(hantrodec_data[1].dev);
-		hantro_clk_disable(&hantrodec_data[1].clk);
-	}
+
 	hantro_free_instance(ctx->inst_id);
 
-	PDEBUG("closed: id: %d\n", n);
 	return 0;
 }
 
@@ -1774,7 +1782,7 @@ static int ReserveIO(int i)
 				return -EBUSY;
 			}
 
-			hantrodec_data[i].hwregs = (volatile u8 *) ioremap_nocache(multicorebase[i],
+			hantrodec_data[i].hwregs = (volatile u8 *) ioremap(multicorebase[i],
 			hantrodec_data[i].iosize);
 
 			if (hantrodec_data[i].hwregs == NULL) {
@@ -1925,12 +1933,13 @@ static int hantro_dev_probe(struct platform_device *pdev)
 {
 	int err = 0;
 	struct resource *res;
-	unsigned long reg_base;
 	int id;
 
 	id = hantro_device_id(&pdev->dev);
-	if (id < 0)
+	if (id == HANTRO_CORE_ID_INVALID || id >= HXDEC_MAX_CORES) {
+		pr_err("hantro: invalid id: %d\n", id);
 		return -ENODEV;
+	}
 
 	hantrodec_data[id].dev = &pdev->dev;
 	hantrodec_data[id].core_id = id;
@@ -1940,11 +1949,7 @@ static int hantro_dev_probe(struct platform_device *pdev)
 		pr_err("hantro: unable to get vpu base addr\n");
 		return -ENODEV;
 	}
-	reg_base = res->start;
-	if ((ulong)reg_base != multicorebase[id]) {
-		pr_err("hantrodec %d: regbase(0x%lX) not equal to expected value(0x%lX)\n", id, reg_base, multicorebase[id]);
-		return -ENODEV;
-	}
+	multicorebase[id] = res->start;
 
 	hantrodec_data[id].clk.dec = clk_get(&pdev->dev, "clk_hantro");
 	hantrodec_data[id].clk.bus = clk_get(&pdev->dev, "clk_hantro_bus");
@@ -1955,10 +1960,7 @@ static int hantro_dev_probe(struct platform_device *pdev)
 	pr_debug("hantro: dec, bus clock: 0x%lX, 0x%lX\n", clk_get_rate(hantrodec_data[id].clk.dec),
 				clk_get_rate(hantrodec_data[id].clk.bus));
 
-	hantro_clk_enable(&hantrodec_data[id].clk);
 	pm_runtime_enable(&pdev->dev);
-	pm_runtime_get_sync(&pdev->dev);
-	hantro_ctrlblk_reset(&hantrodec_data[id]);
 
 	err = hantrodec_init(pdev, id);
 	if (err != 0) {
@@ -1967,22 +1969,24 @@ static int hantro_dev_probe(struct platform_device *pdev)
 	}
 
 #ifdef CONFIG_DEVICE_THERMAL_HANTRO
-	HANTRO_REG_THERMAL_NOTIFIER(&hantro_thermal_hot_notifier);
-	thermal_event = 0;
+	hantrodec_data[id].cooling = thermal_of_cooling_device_register(pdev->dev.of_node,
+		(char *)dev_name(&pdev->dev), &hantrodec_data[id], &hantro_cooling_ops);
+	if (IS_ERR(hantrodec_data[id].cooling))
+		pr_err("hantro[%d] register cooling device failed\n", id);
+	hantrodec_data[id].thermal_event = 0;
 	hantro_dynamic_clock = 0;
 	hantrodec_data[id].thermal_cur = 0;
 #endif
 	hantrodec_data[id].timeout = 0;
 	mutex_init(&hantrodec_data[id].dev_mutex);
 	instance_mask = 0;
+	cores += 1;
 
 	goto out;
 
 error:
 	pr_err("hantro probe failed\n");
 out:
-	pm_runtime_put_sync(&pdev->dev);
-	hantro_clk_disable(&hantrodec_data[id].clk);
 	return err;
 }
 
@@ -1992,6 +1996,9 @@ static int hantro_dev_remove(struct platform_device *pdev)
 
 	hantro_clk_enable(&dev->clk);
 	pm_runtime_get_sync(&pdev->dev);
+#ifdef CONFIG_DEVICE_THERMAL_HANTRO
+	thermal_cooling_device_unregister(hantrodec_data[dev->core_id].cooling);
+#endif
 	hantrodec_cleanup(dev->core_id);
 	pm_runtime_put_sync(&pdev->dev);
 	pm_runtime_disable(&pdev->dev);
@@ -2001,9 +2008,10 @@ static int hantro_dev_remove(struct platform_device *pdev)
 	if (!IS_ERR(dev->clk.bus))
 		clk_put(dev->clk.bus);
 
-#ifdef CONFIG_DEVICE_THERMAL_HANTRO
-	HANTRO_UNREG_THERMAL_NOTIFIER(&hantro_thermal_hot_notifier);
-#endif
+	if (--cores < 0) {
+		pr_err("hantro: decrease cores count incorrect.\n");
+		cores = 0;
+	}
 
 	return 0;
 }

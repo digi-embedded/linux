@@ -85,9 +85,22 @@
 		compatible = "fsl,imx8qm-sabreauto-cs42888",
 				"fsl,imx-audio-cs42888";
 		model = "imx-cs42888";
-		esai-controller = <&esai0>;
+		audio-cpu = <&esai0>;
 		audio-codec = <&codec>;
-		asrc-controller = <&asrc0>;
+		audio-asrc = <&asrc0>;
+		audio-routing =
+			"Line Out Jack", "AOUT1L",
+			"Line Out Jack", "AOUT1R",
+			"Line Out Jack", "AOUT2L",
+			"Line Out Jack", "AOUT2R",
+			"Line Out Jack", "AOUT3L",
+			"Line Out Jack", "AOUT3R",
+			"Line Out Jack", "AOUT4L",
+			"Line Out Jack", "AOUT4R",
+			"AIN1L", "Line In Jack",
+			"AIN1R", "Line In Jack",
+			"AIN2L", "Line In Jack",
+			"AIN2R", "Line In Jack";
 		status = "okay";
 	};
 };
@@ -335,14 +348,6 @@
 			>;
 		};
 
-		pinctrl_mlb: mlbgrp {
-			fsl,pins = <
-				IMX8QXP_ESAI0_SCKT_CONN_MLB_SIG		0x21
-				IMX8QXP_ESAI0_FST_CONN_MLB_CLK		0x21
-				IMX8QXP_ESAI0_TX0_CONN_MLB_DATA		0x21
-			>;
-		};
-
 		pinctrl_usdhc1: usdhc1grp {
 			fsl,pins = <
 				IMX8QXP_EMMC0_CLK_CONN_EMMC0_CLK		0x06000041
@@ -467,7 +472,7 @@
 	phy-mode = "rgmii-txid";
 	phy-handle = <&ethphy0>;
 	fsl,magic-packet;
-	fsl,rgmii_rxc_dly;
+	rx-internal-delay-ps = <2000>;
 	status = "okay";
 
 	mdio {
@@ -477,16 +482,26 @@
 		ethphy0: ethernet-phy@0 {
 			compatible = "ethernet-phy-ieee802.3-c22";
 			reg = <0>;
-			at803x,eee-disabled;
-			at803x,vddio-1p8v;
+			qca,disable-smarteee;
+			vddio-supply = <&vddio0>;
+
+			vddio0: vddio-regulator {
+				regulator-min-microvolt = <1800000>;
+				regulator-max-microvolt = <1800000>;
+			};
 		};
 
 		ethphy1: ethernet-phy@1 {
 			compatible = "ethernet-phy-ieee802.3-c22";
 			reg = <1>;
-			at803x,eee-disabled;
-			at803x,vddio-1p8v;
+			qca,disable-smarteee;
+			vddio-supply = <&vddio1>;
 			status = "disabled";
+
+			vddio1: vddio-regulator {
+				regulator-min-microvolt = <1800000>;
+				regulator-max-microvolt = <1800000>;
+			};
 		};
 	};
 };
@@ -498,7 +513,7 @@
 	phy-handle = <&ethphy1>;
 	phy-supply = <&reg_fec2_supply>;
 	fsl,magic-packet;
-	fsl,rgmii_rxc_dly;
+	rx-internal-delay-ps = <2000>;
 	status = "disabled";
 };
 
@@ -569,9 +584,10 @@
 		reg = <0>;
 		#address-cells = <1>;
 		#size-cells = <1>;
-		compatible = "micron,mt35xu512aba";
+		compatible = "jedec,spi-nor";
 		spi-max-frequency = <133000000>;
-		spi-nor,ddr-quad-read-dummy = <8>;
+		spi-tx-bus-width = <1>;
+		spi-rx-bus-width = <8>;
 	};
 };
 
@@ -735,15 +751,6 @@
 };
 
 &cm40_intmux {
-	status = "okay";
-};
-
-&rpmsg{
-	/*
-	 * 64K for one rpmsg instance:
-	 */
-	vdev-nums = <1>;
-	reg = <0x0 0x90000000 0x0 0x10000>;
 	status = "okay";
 };
 

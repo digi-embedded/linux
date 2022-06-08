@@ -37,7 +37,6 @@
 #include <asm/bootparam.h>
 #include <asm/kasan.h>
 #include <asm/mmu_context.h>
-#include <asm/pgtable.h>
 #include <asm/processor.h>
 #include <asm/timex.h>
 #include <asm/platform.h>
@@ -64,7 +63,7 @@ extern unsigned long initrd_end;
 extern int initrd_below_start_ok;
 #endif
 
-#ifdef CONFIG_OF
+#ifdef CONFIG_USE_OF
 void *dtb_start = __dtb_start;
 #endif
 
@@ -94,7 +93,7 @@ typedef struct tagtable {
 } tagtable_t;
 
 #define __tagtable(tag, fn) static tagtable_t __tagtable_##fn 		\
-	__attribute__((used, section(".taglist"))) = { tag, fn }
+	__section(".taglist") __attribute__((used)) = { tag, fn }
 
 /* parse current tag */
 
@@ -126,7 +125,7 @@ __tagtable(BP_TAG_INITRD, parse_tag_initrd);
 
 #endif /* CONFIG_BLK_DEV_INITRD */
 
-#ifdef CONFIG_OF
+#ifdef CONFIG_USE_OF
 
 static int __init parse_tag_fdt(const bp_tag_t *tag)
 {
@@ -136,7 +135,7 @@ static int __init parse_tag_fdt(const bp_tag_t *tag)
 
 __tagtable(BP_TAG_FDT, parse_tag_fdt);
 
-#endif /* CONFIG_OF */
+#endif /* CONFIG_USE_OF */
 
 static int __init parse_tag_cmdline(const bp_tag_t* tag)
 {
@@ -184,7 +183,7 @@ static int __init parse_bootparam(const bp_tag_t *tag)
 }
 #endif
 
-#ifdef CONFIG_OF
+#ifdef CONFIG_USE_OF
 
 #if !XCHAL_HAVE_PTP_MMU || XCHAL_HAVE_SPANNING_WAY
 unsigned long xtensa_kio_paddr = XCHAL_KIO_DEFAULT_PADDR;
@@ -233,7 +232,7 @@ void __init early_init_devtree(void *params)
 		strlcpy(command_line, boot_command_line, COMMAND_LINE_SIZE);
 }
 
-#endif /* CONFIG_OF */
+#endif /* CONFIG_USE_OF */
 
 /*
  * Initialize architecture. (Early stage)
@@ -254,7 +253,7 @@ void __init init_arch(bp_tag_t *bp_start)
 	if (bp_start)
 		parse_bootparam(bp_start);
 
-#ifdef CONFIG_OF
+#ifdef CONFIG_USE_OF
 	early_init_devtree(dtb_start);
 #endif
 
@@ -284,6 +283,8 @@ extern char _UserExceptionVector_text_start;
 extern char _UserExceptionVector_text_end;
 extern char _DoubleExceptionVector_text_start;
 extern char _DoubleExceptionVector_text_end;
+extern char _exception_text_start;
+extern char _exception_text_end;
 #if XCHAL_EXCM_LEVEL >= 2
 extern char _Level2InterruptVector_text_start;
 extern char _Level2InterruptVector_text_end;
@@ -307,6 +308,10 @@ extern char _Level6InterruptVector_text_end;
 #ifdef CONFIG_SMP
 extern char _SecondaryResetVector_text_start;
 extern char _SecondaryResetVector_text_end;
+#endif
+#ifdef CONFIG_XIP_KERNEL
+extern char _xip_start[];
+extern char _xip_end[];
 #endif
 
 static inline int __init_memblock mem_reserve(unsigned long start,
@@ -339,8 +344,11 @@ void __init setup_arch(char **cmdline_p)
 #endif
 
 	mem_reserve(__pa(_stext), __pa(_end));
+#ifdef CONFIG_XIP_KERNEL
+	mem_reserve(__pa(_xip_start), __pa(_xip_end));
+#endif
 
-#ifdef CONFIG_VECTORS_OFFSET
+#ifdef CONFIG_VECTORS_ADDR
 	mem_reserve(__pa(&_WindowVectors_text_start),
 		    __pa(&_WindowVectors_text_end));
 
@@ -356,6 +364,8 @@ void __init setup_arch(char **cmdline_p)
 	mem_reserve(__pa(&_DoubleExceptionVector_text_start),
 		    __pa(&_DoubleExceptionVector_text_end));
 
+	mem_reserve(__pa(&_exception_text_start),
+		    __pa(&_exception_text_end));
 #if XCHAL_EXCM_LEVEL >= 2
 	mem_reserve(__pa(&_Level2InterruptVector_text_start),
 		    __pa(&_Level2InterruptVector_text_end));
@@ -377,7 +387,7 @@ void __init setup_arch(char **cmdline_p)
 		    __pa(&_Level6InterruptVector_text_end));
 #endif
 
-#endif /* CONFIG_VECTORS_OFFSET */
+#endif /* CONFIG_VECTORS_ADDR */
 
 #ifdef CONFIG_SMP
 	mem_reserve(__pa(&_SecondaryResetVector_text_start),
@@ -398,8 +408,6 @@ void __init setup_arch(char **cmdline_p)
 #ifdef CONFIG_VT
 # if defined(CONFIG_VGA_CONSOLE)
 	conswitchp = &vga_con;
-# elif defined(CONFIG_DUMMY_CONSOLE)
-	conswitchp = &dummy_con;
 # endif
 #endif
 }

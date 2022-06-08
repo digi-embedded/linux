@@ -44,7 +44,7 @@ static int ffb_pan_display(struct fb_var_screeninfo *, struct fb_info *);
  *  Frame buffer operations
  */
 
-static struct fb_ops ffb_ops = {
+static const struct fb_ops ffb_ops = {
 	.owner			= THIS_MODULE,
 	.fb_setcolreg		= ffb_setcolreg,
 	.fb_blank		= ffb_blank,
@@ -667,7 +667,7 @@ static int ffb_setcolreg(unsigned regno,
 
 /**
  *	ffb_blank - Optional function.  Blanks the display.
- *	@blank_mode: the blank mode we want.
+ *	@blank: the blank mode we want.
  *	@info: frame buffer structure that represents a single frame buffer
  */
 static int ffb_blank(int blank, struct fb_info *info)

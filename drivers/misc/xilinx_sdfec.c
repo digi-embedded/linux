@@ -627,12 +627,11 @@ static int xsdfec_table_write(struct xsdfec_dev *xsdfec, u32 offset,
 
 	nr_pages = n;
 
-	res = get_user_pages_fast((unsigned long)src_ptr, nr_pages, 0, pages);
+	res = pin_user_pages_fast((unsigned long)src_ptr, nr_pages, 0, pages);
 	if (res < nr_pages) {
-		if (res > 0) {
-			for (i = 0; i < res; i++)
-				put_page(pages[i]);
-		}
+		if (res > 0)
+			unpin_user_pages(pages, res);
+
 		return -EINVAL;
 	}
 
@@ -646,9 +645,9 @@ static int xsdfec_table_write(struct xsdfec_dev *xsdfec, u32 offset,
 			reg++;
 		} while ((reg < len) &&
 			 ((reg * XSDFEC_REG_WIDTH_JUMP) % PAGE_SIZE));
-		put_page(pages[i]);
+		unpin_user_page(pages[i]);
 	}
-	return reg;
+	return 0;
 }
 
 static int xsdfec_add_ldpc(struct xsdfec_dev *xsdfec, void __user *arg)
@@ -656,14 +655,9 @@ static int xsdfec_add_ldpc(struct xsdfec_dev *xsdfec, void __user *arg)
 	struct xsdfec_ldpc_params *ldpc;
 	int ret, n;
 
-	ldpc = kzalloc(sizeof(*ldpc), GFP_KERNEL);
-	if (!ldpc)
-		return -ENOMEM;
-
-	if (copy_from_user(ldpc, arg, sizeof(*ldpc))) {
-		ret = -EFAULT;
-		goto err_out;
-	}
+	ldpc = memdup_user(arg, sizeof(*ldpc));
+	if (IS_ERR(ldpc))
+		return PTR_ERR(ldpc);
 
 	if (xsdfec->config.code == XSDFEC_TURBO_CODE) {
 		ret = -EIO;
@@ -727,8 +721,6 @@ static int xsdfec_add_ldpc(struct xsdfec_dev *xsdfec, void __user *arg)
 	ret = xsdfec_table_write(xsdfec, 4 * ldpc->qc_off, ldpc->qc_table,
 				 ldpc->nqc, XSDFEC_LDPC_QC_TABLE_ADDR_BASE,
 				 XSDFEC_QC_TABLE_DEPTH);
-	if (ret > 0)
-		ret = 0;
 err_out:
 	kfree(ldpc);
 	return ret;
@@ -740,7 +732,7 @@ static int xsdfec_set_order(struct xsdfec_dev *xsdfec, void __user *arg)
 	enum xsdfec_order order;
 	int err;
 
-	err = get_user(order, (enum xsdfec_order *)arg);
+	err = get_user(order, (enum xsdfec_order __user *)arg);
 	if (err)
 		return -EFAULT;
 
@@ -952,8 +944,8 @@ static long xsdfec_dev_ioctl(struct file *fptr, unsigned int cmd,
 			     unsigned long data)
 {
 	struct xsdfec_dev *xsdfec;
-	void __user *arg = NULL;
-	int rval = -EINVAL;
+	void __user *arg = (void __user *)data;
+	int rval;
 
 	xsdfec = container_of(fptr->private_data, struct xsdfec_dev, miscdev);
 
@@ -962,16 +954,6 @@ static long xsdfec_dev_ioctl(struct file *fptr, unsigned int cmd,
 	    (cmd != XSDFEC_SET_DEFAULT_CONFIG && cmd != XSDFEC_GET_STATUS &&
 	     cmd != XSDFEC_GET_STATS && cmd != XSDFEC_CLEAR_STATS)) {
 		return -EPERM;
-	}
-
-	if (_IOC_TYPE(cmd) != XSDFEC_MAGIC)
-		return -ENOTTY;
-
-	/* check if ioctl argument is present and valid */
-	if (_IOC_DIR(cmd) != _IOC_NONE) {
-		arg = (void __user *)data;
-		if (!arg)
-			return rval;
 	}
 
 	switch (cmd) {
@@ -1018,19 +1000,11 @@ static long xsdfec_dev_ioctl(struct file *fptr, unsigned int cmd,
 		rval = xsdfec_is_active(xsdfec, (bool __user *)arg);
 		break;
 	default:
-		/* Should not get here */
+		rval = -ENOTTY;
 		break;
 	}
 	return rval;
 }
-
-#ifdef CONFIG_COMPAT
-static long xsdfec_dev_compat_ioctl(struct file *file, unsigned int cmd,
-				    unsigned long data)
-{
-	return xsdfec_dev_ioctl(file, cmd, (unsigned long)compat_ptr(data));
-}
-#endif
 
 static __poll_t xsdfec_poll(struct file *file, poll_table *wait)
 {
@@ -1038,9 +1012,6 @@ static __poll_t xsdfec_poll(struct file *file, poll_table *wait)
 	struct xsdfec_dev *xsdfec;
 
 	xsdfec = container_of(file->private_data, struct xsdfec_dev, miscdev);
-
-	if (!xsdfec)
-		return EPOLLNVAL | EPOLLHUP;
 
 	poll_wait(file, &xsdfec->waitq, wait);
 
@@ -1062,9 +1033,7 @@ static const struct file_operations xsdfec_fops = {
 	.release = xsdfec_dev_release,
 	.unlocked_ioctl = xsdfec_dev_ioctl,
 	.poll = xsdfec_poll,
-#ifdef CONFIG_COMPAT
-	.compat_ioctl = xsdfec_dev_compat_ioctl,
-#endif
+	.compat_ioctl = compat_ptr_ioctl,
 };
 
 static int xsdfec_parse_of(struct xsdfec_dev *xsdfec)
@@ -1491,25 +1460,7 @@ static struct platform_driver xsdfec_driver = {
 	.remove =  xsdfec_remove,
 };
 
-static int __init xsdfec_init(void)
-{
-	int err;
-
-	err = platform_driver_register(&xsdfec_driver);
-	if (err < 0) {
-		pr_err("%s Unabled to register SDFEC driver", __func__);
-		return err;
-	}
-	return 0;
-}
-
-static void __exit xsdfec_exit(void)
-{
-	platform_driver_unregister(&xsdfec_driver);
-}
-
-module_init(xsdfec_init);
-module_exit(xsdfec_exit);
+module_platform_driver(xsdfec_driver);
 
 MODULE_AUTHOR("Xilinx, Inc");
 MODULE_DESCRIPTION("Xilinx SD-FEC16 Driver");

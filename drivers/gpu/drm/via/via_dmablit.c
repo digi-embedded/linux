@@ -35,11 +35,11 @@
  */
 
 #include <linux/pagemap.h>
+#include <linux/pci.h>
 #include <linux/slab.h>
 #include <linux/vmalloc.h>
 
 #include <drm/drm_device.h>
-#include <drm/drm_pci.h>
 #include <drm/via_drm.h>
 
 #include "via_dmablit.h"
@@ -179,21 +179,21 @@ via_free_sg_info(struct pci_dev *pdev, drm_via_sg_info_t *vsg)
 	switch (vsg->state) {
 	case dr_via_device_mapped:
 		via_unmap_blit_from_device(pdev, vsg);
-		/* fall through */
+		fallthrough;
 	case dr_via_desc_pages_alloc:
 		for (i = 0; i < vsg->num_desc_pages; ++i) {
 			if (vsg->desc_pages[i] != NULL)
 				free_page((unsigned long)vsg->desc_pages[i]);
 		}
 		kfree(vsg->desc_pages);
-		/* fall through */
+		fallthrough;
 	case dr_via_pages_locked:
-		put_user_pages_dirty_lock(vsg->pages, vsg->num_pages,
-					  (vsg->direction == DMA_FROM_DEVICE));
-		/* fall through */
+		unpin_user_pages_dirty_lock(vsg->pages, vsg->num_pages,
+					   (vsg->direction == DMA_FROM_DEVICE));
+		fallthrough;
 	case dr_via_pages_alloc:
 		vfree(vsg->pages);
-		/* fall through */
+		fallthrough;
 	default:
 		vsg->state = dr_via_sg_init;
 	}
@@ -239,7 +239,7 @@ via_lock_all_dma_pages(drm_via_sg_info_t *vsg,  drm_via_dmablit_t *xfer)
 	vsg->pages = vzalloc(array_size(sizeof(struct page *), vsg->num_pages));
 	if (NULL == vsg->pages)
 		return -ENOMEM;
-	ret = get_user_pages_fast((unsigned long)xfer->mem_addr,
+	ret = pin_user_pages_fast((unsigned long)xfer->mem_addr,
 			vsg->num_pages,
 			vsg->direction == DMA_FROM_DEVICE ? FOLL_WRITE : 0,
 			vsg->pages);
@@ -494,6 +494,7 @@ via_dmablit_workqueue(struct work_struct *work)
 {
 	drm_via_blitq_t *blitq = container_of(work, drm_via_blitq_t, wq);
 	struct drm_device *dev = blitq->dev;
+	struct pci_dev *pdev = to_pci_dev(dev->dev);
 	unsigned long irqsave;
 	drm_via_sg_info_t *cur_sg;
 	int cur_released;
@@ -520,7 +521,7 @@ via_dmablit_workqueue(struct work_struct *work)
 
 		wake_up(&blitq->busy_queue);
 
-		via_free_sg_info(dev->pdev, cur_sg);
+		via_free_sg_info(pdev, cur_sg);
 		kfree(cur_sg);
 
 		spin_lock_irqsave(&blitq->blit_lock, irqsave);
@@ -540,9 +541,10 @@ via_init_dmablit(struct drm_device *dev)
 {
 	int i, j;
 	drm_via_private_t *dev_priv = (drm_via_private_t *)dev->dev_private;
+	struct pci_dev *pdev = to_pci_dev(dev->dev);
 	drm_via_blitq_t *blitq;
 
-	pci_set_master(dev->pdev);
+	pci_set_master(pdev);
 
 	for (i = 0; i < VIA_NUM_BLIT_ENGINES; ++i) {
 		blitq = dev_priv->blit_queues + i;
@@ -573,6 +575,7 @@ via_init_dmablit(struct drm_device *dev)
 static int
 via_build_sg_info(struct drm_device *dev, drm_via_sg_info_t *vsg, drm_via_dmablit_t *xfer)
 {
+	struct pci_dev *pdev = to_pci_dev(dev->dev);
 	int draw = xfer->to_fb;
 	int ret = 0;
 
@@ -652,17 +655,17 @@ via_build_sg_info(struct drm_device *dev, drm_via_sg_info_t *vsg, drm_via_dmabli
 
 	if (0 != (ret = via_lock_all_dma_pages(vsg, xfer))) {
 		DRM_ERROR("Could not lock DMA pages.\n");
-		via_free_sg_info(dev->pdev, vsg);
+		via_free_sg_info(pdev, vsg);
 		return ret;
 	}
 
-	via_map_blit_for_device(dev->pdev, xfer, vsg, 0);
+	via_map_blit_for_device(pdev, xfer, vsg, 0);
 	if (0 != (ret = via_alloc_desc_pages(vsg))) {
 		DRM_ERROR("Could not allocate DMA descriptor pages.\n");
-		via_free_sg_info(dev->pdev, vsg);
+		via_free_sg_info(pdev, vsg);
 		return ret;
 	}
-	via_map_blit_for_device(dev->pdev, xfer, vsg, 1);
+	via_map_blit_for_device(pdev, xfer, vsg, 1);
 
 	return 0;
 }

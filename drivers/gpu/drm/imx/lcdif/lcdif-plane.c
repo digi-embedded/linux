@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 NXP
+ * Copyright 2018,2021 NXP
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,7 +13,8 @@
  */
 
 #include <linux/module.h>
-#include <drm/drmP.h>
+#include <drm/drm_vblank.h>
+#include <drm/drm_fourcc.h>
 #include <drm/drm_atomic.h>
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_fb_cma_helper.h>
@@ -25,6 +26,7 @@
 #include <video/imx-lcdif.h>
 
 #include "lcdif-plane.h"
+#include "lcdif-kms.h"
 
 static uint32_t lcdif_pixel_formats[] = {
 	DRM_FORMAT_XRGB8888,
@@ -42,15 +44,18 @@ static uint32_t lcdif_pixel_formats[] = {
 };
 
 static int lcdif_plane_atomic_check(struct drm_plane *plane,
-				    struct drm_plane_state *plane_state)
+				    struct drm_atomic_state *state)
 {
 	int ret;
+	struct drm_plane_state *plane_state = drm_atomic_get_new_plane_state(state,
+									     plane);
 	struct drm_plane_state *old_state = plane->state;
 	struct drm_framebuffer *fb = plane_state->fb;
 	struct drm_framebuffer *old_fb = old_state->fb;
 	struct drm_crtc_state *crtc_state;
 	struct drm_display_mode *mode;
 	struct drm_rect clip = { 0 };
+	bool use_i80;
 
 	/* 'fb' should also be NULL which has been checked in
 	 * the core sanity check function 'drm_atomic_plane_check()'
@@ -64,7 +69,7 @@ static int lcdif_plane_atomic_check(struct drm_plane *plane,
 	if (plane_state->crtc_x || plane_state->crtc_y)
 		return -EINVAL;
 
-	crtc_state = drm_atomic_get_existing_crtc_state(plane_state->state,
+	crtc_state = drm_atomic_get_existing_crtc_state(state,
 							plane_state->crtc);
 	mode = &crtc_state->adjusted_mode;
 
@@ -94,19 +99,32 @@ static int lcdif_plane_atomic_check(struct drm_plane *plane,
 			crtc_state->mode_changed = true;
 	}
 
+	/* Add affected connectors to check if we use i80 mode or not. */
+	ret = drm_atomic_add_affected_connectors(state, plane_state->crtc);
+	if (ret)
+		return ret;
+
+	use_i80 = lcdif_drm_connector_is_self_refresh_aware(state);
+
+	/* Do not support cropping in i80 mode. */
+	if (use_i80 && (plane_state->src_w >> 16 != fb->width))
+		return -EINVAL;
+
 	return 0;
 }
 
 static void lcdif_plane_atomic_update(struct drm_plane *plane,
-				      struct drm_plane_state *old_state)
+				      struct drm_atomic_state *state)
 {
 	struct lcdif_plane *lcdif_plane = to_lcdif_plane(plane);
 	struct lcdif_soc *lcdif = lcdif_plane->lcdif;
-	struct drm_plane_state *state = plane->state;
-	struct drm_framebuffer *fb = state->fb;
+	struct drm_plane_state *new_plane_state = drm_atomic_get_new_plane_state(state,
+										 plane);
+	struct drm_framebuffer *fb = new_plane_state->fb;
 	struct drm_gem_cma_object *gem_obj = NULL;
 	u32 fb_addr, src_off, src_w, fb_idx, cpp, stride;
 	bool crop;
+	bool use_i80 = lcdif_drm_connector_is_self_refresh_aware(state);
 
 	/* plane and crtc is disabling */
 	if (!fb)
@@ -120,8 +138,8 @@ static void lcdif_plane_atomic_update(struct drm_plane *plane,
 	case DRM_PLANE_TYPE_PRIMARY:
 		/* TODO: only support RGB */
 		gem_obj = drm_fb_cma_get_gem_obj(fb, 0);
-		src_off = (state->src_y >> 16) * fb->pitches[0] +
-			  (state->src_x >> 16) * fb->format->cpp[0];
+		src_off = (new_plane_state->src_y >> 16) * fb->pitches[0] +
+			  (new_plane_state->src_x >> 16) * fb->format->cpp[0];
 		fb_addr = gem_obj->paddr + fb->offsets[0] + src_off;
 		fb_idx  = 0;
 		break;
@@ -130,34 +148,37 @@ static void lcdif_plane_atomic_update(struct drm_plane *plane,
 		return;
 	}
 
-	lcdif_set_fb_addr(lcdif, fb_idx, fb_addr);
+	lcdif_set_fb_addr(lcdif, fb_idx, fb_addr, use_i80);
 
 	/* Config pixel format and horizontal cropping
 	 * if CRTC needs a full modeset which needs to
 	 * enable LCDIF to run at the end.
 	 */
-	if (unlikely(drm_atomic_crtc_needs_modeset(state->crtc->state))) {
+	if (unlikely(drm_atomic_crtc_needs_modeset(new_plane_state->crtc->state))) {
 		if (plane->type == DRM_PLANE_TYPE_PRIMARY)
 			lcdif_set_pix_fmt(lcdif, fb->format->format);
 
 		cpp = fb->format->cpp[0];
 		stride = DIV_ROUND_UP(fb->pitches[0], cpp);
 
-		src_w = state->src_w >> 16;
+		src_w = new_plane_state->src_w >> 16;
 		WARN_ON(src_w > fb->width);
 
 		crop  = src_w != stride ? true : false;
 		lcdif_set_fb_hcrop(lcdif, src_w, stride, crop);
 
-		lcdif_enable_controller(lcdif);
+		lcdif_enable_controller(lcdif, use_i80);
+	} else if (use_i80) {
+		lcdif_enable_controller(lcdif, use_i80);
 	}
 }
 
 static void lcdif_plane_atomic_disable(struct drm_plane *plane,
-				       struct drm_plane_state *old_state)
+				       struct drm_atomic_state *state)
 {
-	struct drm_plane_state *state = plane->state;
-	struct drm_framebuffer *fb = state->fb;
+	struct drm_plane_state *new_plane_state = drm_atomic_get_new_plane_state(state,
+										 plane);
+	struct drm_framebuffer *fb = new_plane_state->fb;
 
 	WARN_ON(fb);
 

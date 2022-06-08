@@ -57,21 +57,18 @@
 	 * Used for the 2nd Linux.
 	 * TODO: M4 may use these pins.
 	 */
-	imx8mn-evk {
-		pinctrl_uart4: uart4grp {
-			fsl,pins = <
-				MX8MN_IOMUXC_UART4_RXD_UART4_DCE_RX	0x140
-				MX8MN_IOMUXC_UART4_TXD_UART4_DCE_TX	0x140
-			>;
-		};
+	pinctrl_uart4: uart4grp {
+		fsl,pins = <
+			MX8MN_IOMUXC_UART4_RXD_UART4_DCE_RX	0x140
+			MX8MN_IOMUXC_UART4_TXD_UART4_DCE_TX	0x140
+		>;
 	};
 };
 
 &clk {
 	init-on-array = <IMX8MN_CLK_NAND_USDHC_BUS
 			 IMX8MN_CLK_USDHC3_ROOT
-			 IMX8MN_CLK_UART4_ROOT
-			 IMX8MN_CLK_OCOTP_ROOT>;
+			 IMX8MN_CLK_UART4_ROOT>;
 };
 
 &uart2 {

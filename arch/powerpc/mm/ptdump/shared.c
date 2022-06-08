@@ -5,7 +5,7 @@
  *
  */
 #include <linux/kernel.h>
-#include <asm/pgtable.h>
+#include <linux/pgtable.h>
 
 #include "ptdump.h"
 
@@ -68,8 +68,10 @@ static const struct flag_info flag_array[] = {
 };
 
 struct pgtable_level pg_level[5] = {
-	{
-	}, { /* pgd */
+	{ /* pgd */
+		.flag	= flag_array,
+		.num	= ARRAY_SIZE(flag_array),
+	}, { /* p4d */
 		.flag	= flag_array,
 		.num	= ARRAY_SIZE(flag_array),
 	}, { /* pud */

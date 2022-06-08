@@ -85,23 +85,22 @@
 	};
 };
 
-&cpsw_emac1 {
+&cpsw_port2 {
+	status = "okay";
 	phy-handle = <&phy1>;
 	phy-mode = "mii";
-	dual_emac_res_vlan = <2>;
+	ti,dual-emac-pvid = <2>;
 };
 
-&davinci_mdio {
+&davinci_mdio_sw {
 	phy1: ethernet-phy@1 {
 		reg = <1>;
 	};
 };
 
-&mac {
-	slaves = <2>;
+&mac_sw {
 	pinctrl-names = "default";
 	pinctrl-0 = <&ethernet0_pins &ethernet1_pins>;
-	dual_emac = <1>;
 };
 
 /* GPIOs */
@@ -199,25 +198,4 @@
 	pinctrl-0 = <&uart1_rs485_pins>;
 	status = "okay";
 	linux,rs485-enabled-at-boot-time;
-};
-
-/* USB */
-&cppi41dma {
-	status = "okay";
-};
-
-&usb_ctrl_mod {
-	status = "okay";
-};
-
-&usb {
-	status = "okay";
-};
-
-&usb0 {
-	status = "okay";
-};
-
-&usb0_phy {
-	status = "okay";
 };

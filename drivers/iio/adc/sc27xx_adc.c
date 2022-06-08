@@ -307,7 +307,7 @@ static int sc27xx_adc_convert_volt(struct sc27xx_adc_data *data, int channel,
 
 	sc27xx_adc_volt_ratio(data, channel, scale, &numerator, &denominator);
 
-	return (volt * denominator + numerator / 2) / numerator;
+	return DIV_ROUND_CLOSEST(volt * denominator, numerator);
 }
 
 static int sc27xx_adc_read_processed(struct sc27xx_adc_data *data,
@@ -477,13 +477,6 @@ static void sc27xx_adc_disable(void *_data)
 			   SC27XX_MODULE_ADC_EN, 0);
 }
 
-static void sc27xx_adc_free_hwlock(void *_data)
-{
-	struct hwspinlock *hwlock = _data;
-
-	hwspin_lock_free(hwlock);
-}
-
 static int sc27xx_adc_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -520,17 +513,10 @@ static int sc27xx_adc_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	sc27xx_data->hwlock = hwspin_lock_request_specific(ret);
+	sc27xx_data->hwlock = devm_hwspin_lock_request_specific(dev, ret);
 	if (!sc27xx_data->hwlock) {
 		dev_err(dev, "failed to request hwspinlock\n");
 		return -ENXIO;
-	}
-
-	ret = devm_add_action_or_reset(dev, sc27xx_adc_free_hwlock,
-			      sc27xx_data->hwlock);
-	if (ret) {
-		dev_err(dev, "failed to add hwspinlock action\n");
-		return ret;
 	}
 
 	sc27xx_data->dev = dev;
@@ -547,7 +533,6 @@ static int sc27xx_adc_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	indio_dev->dev.parent = dev;
 	indio_dev->name = dev_name(dev);
 	indio_dev->modes = INDIO_DIRECT_MODE;
 	indio_dev->info = &sc27xx_info;
@@ -564,6 +549,7 @@ static const struct of_device_id sc27xx_adc_of_match[] = {
 	{ .compatible = "sprd,sc2731-adc", },
 	{ }
 };
+MODULE_DEVICE_TABLE(of, sc27xx_adc_of_match);
 
 static struct platform_driver sc27xx_adc_driver = {
 	.probe = sc27xx_adc_probe,

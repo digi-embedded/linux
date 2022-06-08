@@ -34,6 +34,7 @@ static atomic_t irq_poll_active;
  * true and let the handler run.
  */
 bool irq_wait_for_poll(struct irq_desc *desc)
+	__must_hold(&desc->lock)
 {
 	if (WARN_ONCE(irq_poll_cpu == smp_processor_id(),
 		      "irq poll in progress on cpu %d for irq %d\n",
@@ -402,6 +403,10 @@ void note_interrupt(struct irq_desc *desc, irqreturn_t action_ret)
 			desc->irqs_unhandled -= ok;
 	}
 
+	if (likely(!desc->irqs_unhandled))
+		return;
+
+	/* Now getting into unhandled irq detection */
 	desc->irq_count++;
 	if (likely(desc->irq_count < 100000))
 		return;

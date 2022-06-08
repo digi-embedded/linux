@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (c) 2019 NXP Semiconductor
+ * Copyright 2019-2021 NXP
  */
 
 #include <linux/module.h>
@@ -2388,7 +2388,7 @@ static int max9271_write_reg(struct sensor_data *max9286_data, int index, u8 reg
 	max9286_data->i2c_client->addr = ADDR_MAX9271 + index;
 	for (retry = 0; retry < timeout; retry++) {
 		ret = i2c_smbus_write_byte_data(client, reg, val);
-		if (val < 0)
+		if (ret < 0)
 			msleep(5);
 		else
 			break;
@@ -2739,7 +2739,7 @@ static int ov10635_change_mode(struct sensor_data *max9286_data)
 }
 
 static int max9286_enum_mbus_code(struct v4l2_subdev *sd,
-				  struct v4l2_subdev_pad_config *cfg,
+				  struct v4l2_subdev_state *sd_state,
 				  struct v4l2_subdev_mbus_code_enum *code)
 {
 	struct sensor_data *max9286_data = subdev_to_sensor_data(sd);
@@ -2757,7 +2757,7 @@ static int max9286_enum_mbus_code(struct v4l2_subdev *sd,
  * Return 0 if successful, otherwise -EINVAL.
  */
 static int max9286_enum_framesizes(struct v4l2_subdev *sd,
-				   struct v4l2_subdev_pad_config *cfg,
+				   struct v4l2_subdev_state *sd_state,
 				   struct v4l2_subdev_frame_size_enum *fse)
 {
 	if (fse->index > ov10635_mode_MAX)
@@ -2775,12 +2775,12 @@ static int max9286_enum_framesizes(struct v4l2_subdev *sd,
 }
 
 static int max9286_enum_frame_interval(struct v4l2_subdev *sd,
-				       struct v4l2_subdev_pad_config *cfg,
+				       struct v4l2_subdev_state *sd_state,
 				       struct v4l2_subdev_frame_interval_enum *fie)
 {
 	int i, j, count;
 
-	if (fie->index < 0 || fie->index > ov10635_mode_MAX)
+	if (fie->index > ov10635_mode_MAX)
 		return -EINVAL;
 
 	if (fie->width == 0 || fie->height == 0 || fie->code == 0) {
@@ -2810,7 +2810,7 @@ static int max9286_enum_frame_interval(struct v4l2_subdev *sd,
 }
 
 static int max9286_get_fmt(struct v4l2_subdev *sd,
-			   struct v4l2_subdev_pad_config *cfg,
+			   struct v4l2_subdev_state *sd_state,
 			   struct v4l2_subdev_format *fmt)
 {
 	struct sensor_data *max9286_data = subdev_to_sensor_data(sd);
@@ -2915,7 +2915,7 @@ max_resolution:
 }
 
 static int max9286_set_fmt(struct v4l2_subdev *sd,
-			   struct v4l2_subdev_pad_config *cfg,
+			   struct v4l2_subdev_state *sd_state,
 			   struct v4l2_subdev_format *fmt)
 {
 	struct sensor_data *max9286_data = subdev_to_sensor_data(sd);

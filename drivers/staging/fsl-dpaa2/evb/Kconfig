@@ -3,5 +3,5 @@ config FSL_DPAA2_EVB
 	depends on FSL_MC_BUS && FSL_DPAA2
 	select VLAN_8021Q
 	default y
-	---help---
-	Prototype driver for DPAA2 Edge Virtual Bridge.
+	help
+	  Prototype driver for DPAA2 Edge Virtual Bridge.

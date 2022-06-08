@@ -478,7 +478,7 @@ static void free_rx_bufs(struct adapter *adapter, struct sge_fl *fl, int n)
 		if (is_buf_mapped(sdesc))
 			dma_unmap_page(adapter->pdev_dev, get_buf_addr(sdesc),
 				       get_buf_size(adapter, sdesc),
-				       PCI_DMA_FROMDEVICE);
+				       DMA_FROM_DEVICE);
 		put_page(sdesc->page);
 		sdesc->page = NULL;
 		if (++fl->cidx == fl->size)
@@ -507,7 +507,7 @@ static void unmap_rx_buf(struct adapter *adapter, struct sge_fl *fl)
 	if (is_buf_mapped(sdesc))
 		dma_unmap_page(adapter->pdev_dev, get_buf_addr(sdesc),
 			       get_buf_size(adapter, sdesc),
-			       PCI_DMA_FROMDEVICE);
+			       DMA_FROM_DEVICE);
 	sdesc->page = NULL;
 	if (++fl->cidx == fl->size)
 		fl->cidx = 0;
@@ -644,7 +644,7 @@ static unsigned int refill_fl(struct adapter *adapter, struct sge_fl *fl,
 
 		dma_addr = dma_map_page(adapter->pdev_dev, page, 0,
 					PAGE_SIZE << s->fl_pg_order,
-					PCI_DMA_FROMDEVICE);
+					DMA_FROM_DEVICE);
 		if (unlikely(dma_mapping_error(adapter->pdev_dev, dma_addr))) {
 			/*
 			 * We've run out of DMA mapping space.  Free up the
@@ -682,7 +682,7 @@ alloc_small_pages:
 		poison_buf(page, PAGE_SIZE);
 
 		dma_addr = dma_map_page(adapter->pdev_dev, page, 0, PAGE_SIZE,
-				       PCI_DMA_FROMDEVICE);
+				       DMA_FROM_DEVICE);
 		if (unlikely(dma_mapping_error(adapter->pdev_dev, dma_addr))) {
 			put_page(page);
 			break;
@@ -954,7 +954,7 @@ static void write_sgl(const struct sk_buff *skb, struct sge_txq *tq,
 }
 
 /**
- *	check_ring_tx_db - check and potentially ring a TX queue's doorbell
+ *	ring_tx_db - check and potentially ring a TX queue's doorbell
  *	@adapter: the adapter
  *	@tq: the TX queue
  *	@n: number of new descriptors to give to HW
@@ -1154,7 +1154,7 @@ static inline void txq_advance(struct sge_txq *tq, unsigned int n)
  *
  *	Add a packet to an SGE Ethernet TX queue.  Runs with softirqs disabled.
  */
-int t4vf_eth_xmit(struct sk_buff *skb, struct net_device *dev)
+netdev_tx_t t4vf_eth_xmit(struct sk_buff *skb, struct net_device *dev)
 {
 	u32 wr_mid;
 	u64 cntrl, *end;
@@ -1692,7 +1692,7 @@ static inline bool is_new_response(const struct rsp_ctrl *rc,
  *	restore_rx_bufs - put back a packet's RX buffers
  *	@gl: the packet gather list
  *	@fl: the SGE Free List
- *	@nfrags: how many fragments in @si
+ *	@frags: how many fragments in @si
  *
  *	Called when we find out that the current packet, @si, can't be
  *	processed right away for some reason.  This is a very rare event and
@@ -2054,7 +2054,7 @@ irq_handler_t t4vf_intr_handler(struct adapter *adapter)
 
 /**
  *	sge_rx_timer_cb - perform periodic maintenance of SGE RX queues
- *	@data: the adapter
+ *	@t: Rx timer
  *
  *	Runs periodically from a timer to perform maintenance of SGE RX queues.
  *
@@ -2113,7 +2113,7 @@ static void sge_rx_timer_cb(struct timer_list *t)
 
 /**
  *	sge_tx_timer_cb - perform periodic maintenance of SGE Tx queues
- *	@data: the adapter
+ *	@t: Tx timer
  *
  *	Runs periodically from a timer to perform maintenance of SGE TX queues.
  *
@@ -2405,6 +2405,7 @@ err:
  *	t4vf_sge_alloc_eth_txq - allocate an SGE Ethernet TX Queue
  *	@adapter: the adapter
  *	@txq: pointer to the new txq to be filled in
+ *	@dev: the network device
  *	@devq: the network TX queue associated with the new txq
  *	@iqid: the relative ingress queue ID to which events relating to
  *		the new txq should be directed

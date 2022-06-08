@@ -7,6 +7,7 @@
  */
 /dts-v1/;
 
+#include <dt-bindings/interrupt-controller/irq.h>
 #include "fsl-ls1012a.dtsi"
 
 / {
@@ -14,13 +15,12 @@
 	compatible = "fsl,ls1012a-rdb", "fsl,ls1012a";
 
 	aliases {
+		serial0 = &duart0;
+		mmc0 = &esdhc0;
+		mmc1 = &esdhc1;
 		ethernet0 = &pfe_mac0;
 		ethernet1 = &pfe_mac1;
 	};
-};
-
-&pcie {
-	status = "okay";
 };
 
 &duart0 {
@@ -42,6 +42,65 @@
 
 &i2c0 {
 	status = "okay";
+
+	accelerometer@1e {
+		compatible = "nxp,fxos8700";
+		reg = <0x1e>;
+		interrupt-parent = <&gpio26>;
+		interrupts = <13 IRQ_TYPE_EDGE_RISING>;
+		interrupt-names = "INT1";
+	};
+
+	gyroscope@20 {
+		compatible = "nxp,fxas21002c";
+		reg = <0x20>;
+	};
+
+	gpio@24 {
+		compatible = "nxp,pcal9555a";
+		reg = <0x24>;
+		gpio-controller;
+		#gpio-cells = <2>;
+	};
+
+	gpio@25 {
+		compatible = "nxp,pcal9555a";
+		reg = <0x25>;
+		gpio-controller;
+		#gpio-cells = <2>;
+	};
+
+	gpio26: gpio@26 {
+		compatible = "nxp,pcal9555a";
+		reg = <0x26>;
+		interrupt-parent = <&gpio0>;
+		interrupts = <13 IRQ_TYPE_EDGE_FALLING>;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+		gpio-controller;
+		#gpio-cells = <2>;
+	};
+
+	current-sensor@40 {
+		compatible = "ti,ina220";
+		reg = <0x40>;
+		shunt-resistor = <2000>;
+	};
+};
+
+&qspi {
+	status = "okay";
+
+	s25fs512s0: flash@0 {
+		compatible = "jedec,spi-nor";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		spi-max-frequency = <50000000>;
+		m25p,fast-read;
+		reg = <0>;
+		spi-rx-bus-width = <1>;
+		spi-tx-bus-width = <1>;
+	};
 };
 
 &sata {
@@ -69,7 +128,7 @@
 		#size-cells = <0>;
 		reg = <0x1>;	/* GEM_ID */
 		fsl,mdio-mux-val = <0x0>;
-		phy-mode = "rgmii-txid";
+		phy-mode = "rgmii-id";
 		phy-handle = <&rgmii_phy>;
 	};
 	mdio@0 {
@@ -84,20 +143,4 @@
 			reg = <0x1>;
 		};
 	};
-};
-
-&qspi {
-	status = "okay";
-
-	s25fs512s0: flash@0 {
-		compatible = "jedec,spi-nor";
-		#address-cells = <1>;
-		#size-cells = <1>;
-		spi-max-frequency = <20000000>;
-		m25p,fast-read;
-		reg = <0>;
-		spi-rx-bus-width = <1>;
-		spi-tx-bus-width = <1>;
-	};
-
 };

@@ -73,6 +73,7 @@ static inline int ep_to_bit(struct ci_hdrc *ci, int n)
 
 /**
  * hw_device_state: enables/disables interrupts (execute without interruption)
+ * @ci: the controller
  * @dma: 0 => disable, !0 => enable and set dma engine
  *
  * This function returns an error code
@@ -92,6 +93,7 @@ static int hw_device_state(struct ci_hdrc *ci, u32 dma)
 
 /**
  * hw_ep_flush: flush endpoint fifo (execute without interruption)
+ * @ci: the controller
  * @num: endpoint number
  * @dir: endpoint direction
  *
@@ -113,6 +115,7 @@ static int hw_ep_flush(struct ci_hdrc *ci, int num, int dir)
 
 /**
  * hw_ep_disable: disables endpoint (execute without interruption)
+ * @ci: the controller
  * @num: endpoint number
  * @dir: endpoint direction
  *
@@ -127,6 +130,7 @@ static int hw_ep_disable(struct ci_hdrc *ci, int num, int dir)
 
 /**
  * hw_ep_enable: enables endpoint (execute without interruption)
+ * @ci: the controller
  * @num:  endpoint number
  * @dir:  endpoint direction
  * @type: endpoint type
@@ -162,6 +166,7 @@ static int hw_ep_enable(struct ci_hdrc *ci, int num, int dir, int type)
 
 /**
  * hw_ep_get_halt: return endpoint halt status
+ * @ci: the controller
  * @num: endpoint number
  * @dir: endpoint direction
  *
@@ -176,6 +181,7 @@ static int hw_ep_get_halt(struct ci_hdrc *ci, int num, int dir)
 
 /**
  * hw_ep_prime: primes endpoint (execute without interruption)
+ * @ci: the controller
  * @num:     endpoint number
  * @dir:     endpoint direction
  * @is_ctrl: true if control endpoint
@@ -206,6 +212,7 @@ static int hw_ep_prime(struct ci_hdrc *ci, int num, int dir, int is_ctrl)
 /**
  * hw_ep_set_halt: configures ep halt & resets data toggle after clear (execute
  *                 without interruption)
+ * @ci: the controller
  * @num:   endpoint number
  * @dir:   endpoint direction
  * @value: true => stall, false => unstall
@@ -231,7 +238,8 @@ static int hw_ep_set_halt(struct ci_hdrc *ci, int num, int dir, int value)
 }
 
 /**
- * hw_is_port_high_speed: test if port is high speed
+ * hw_port_is_high_speed: test if port is high speed
+ * @ci: the controller
  *
  * This function returns true if high speed port
  */
@@ -244,6 +252,7 @@ static int hw_port_is_high_speed(struct ci_hdrc *ci)
 /**
  * hw_test_and_clear_complete: test & clear complete status (execute without
  *                             interruption)
+ * @ci: the controller
  * @n: endpoint number
  *
  * This function returns complete status
@@ -257,6 +266,7 @@ static int hw_test_and_clear_complete(struct ci_hdrc *ci, int n)
 /**
  * hw_test_and_clear_intr_active: test & clear active interrupts (execute
  *                                without interruption)
+ * @ci: the controller
  *
  * This function returns active interrutps
  */
@@ -271,6 +281,7 @@ static u32 hw_test_and_clear_intr_active(struct ci_hdrc *ci)
 /**
  * hw_test_and_clear_setup_guard: test & clear setup guard (execute without
  *                                interruption)
+ * @ci: the controller
  *
  * This function returns guard value
  */
@@ -282,6 +293,7 @@ static int hw_test_and_clear_setup_guard(struct ci_hdrc *ci)
 /**
  * hw_test_and_set_setup_guard: test & set setup guard (execute without
  *                              interruption)
+ * @ci: the controller
  *
  * This function returns guard value
  */
@@ -292,6 +304,7 @@ static int hw_test_and_set_setup_guard(struct ci_hdrc *ci)
 
 /**
  * hw_usb_set_address: configures USB address (execute without interruption)
+ * @ci: the controller
  * @value: new USB address
  *
  * This function explicitly sets the address, without the "USBADRA" (advance)
@@ -306,6 +319,7 @@ static void hw_usb_set_address(struct ci_hdrc *ci, u8 value)
 /**
  * hw_usb_reset: restart device after a bus reset (execute without
  *               interruption)
+ * @ci: the controller
  *
  * This function returns an error code
  */
@@ -474,9 +488,10 @@ static void ci_add_buffer_entry(struct td_node *node, struct scatterlist *s)
 	int empty_td_slot_index = (CI_MAX_BUF_SIZE - node->td_remaining_size)
 			/ CI_HDRC_PAGE_SIZE;
 	int i;
+	u32 token;
 
-	node->ptr->token +=
-		cpu_to_le32(sg_dma_len(s) << __ffs(TD_TOTAL_BYTES));
+	token = le32_to_cpu(node->ptr->token) + (sg_dma_len(s) << __ffs(TD_TOTAL_BYTES));
+	node->ptr->token = cpu_to_le32(token);
 
 	for (i = empty_td_slot_index; i < TD_PAGE_COUNT; i++) {
 		u32 page = (u32) sg_dma_address(s) +
@@ -615,7 +630,7 @@ done:
 	return ret;
 }
 
-/*
+/**
  * free_pending_td: remove a pending request for the endpoint
  * @hwep: endpoint
  */
@@ -641,8 +656,8 @@ static int reprime_dtd(struct ci_hdrc *ci, struct ci_hw_ep *hwep,
 
 /**
  * _hardware_dequeue: handles a request at hardware level
- * @gadget: gadget
- * @hwep:   endpoint
+ * @hwep: endpoint
+ * @hwreq:  request
  *
  * This function returns an error code
  */
@@ -1221,11 +1236,11 @@ __acquires(ci->lock)
 			case USB_DEVICE_TEST_MODE:
 				tmode = le16_to_cpu(req.wIndex) >> 8;
 				switch (tmode) {
-				case TEST_J:
-				case TEST_K:
-				case TEST_SE0_NAK:
-				case TEST_PACKET:
-				case TEST_FORCE_EN:
+				case USB_TEST_J:
+				case USB_TEST_K:
+				case USB_TEST_SE0_NAK:
+				case USB_TEST_PACKET:
+				case USB_TEST_FORCE_ENABLE:
 					ci->test_mode = tmode;
 					err = isr_setup_status_phase(
 							ci);
@@ -1322,7 +1337,7 @@ __acquires(ci->lock)
 /******************************************************************************
  * ENDPT block
  *****************************************************************************/
-/**
+/*
  * ep_enable: configure endpoint, making it usable
  *
  * Check usb_ep_enable() at "usb_gadget.h" for details
@@ -1390,7 +1405,7 @@ static int ep_enable(struct usb_ep *ep,
 	return retval;
 }
 
-/**
+/*
  * ep_disable: endpoint is no longer usable
  *
  * Check usb_ep_disable() at "usb_gadget.h" for details
@@ -1430,7 +1445,7 @@ static int ep_disable(struct usb_ep *ep)
 	return retval;
 }
 
-/**
+/*
  * ep_alloc_request: allocate a request object to use with this endpoint
  *
  * Check usb_ep_alloc_request() at "usb_gadget.h" for details
@@ -1451,7 +1466,7 @@ static struct usb_request *ep_alloc_request(struct usb_ep *ep, gfp_t gfp_flags)
 	return (hwreq == NULL) ? NULL : &hwreq->req;
 }
 
-/**
+/*
  * ep_free_request: frees a request object
  *
  * Check usb_ep_free_request() at "usb_gadget.h" for details
@@ -1484,7 +1499,7 @@ static void ep_free_request(struct usb_ep *ep, struct usb_request *req)
 	spin_unlock_irqrestore(hwep->lock, flags);
 }
 
-/**
+/*
  * ep_queue: queues (submits) an I/O request to an endpoint
  *
  * Check usb_ep_queue()* at usb_gadget.h" for details
@@ -1509,7 +1524,7 @@ static int ep_queue(struct usb_ep *ep, struct usb_request *req,
 	return retval;
 }
 
-/**
+/*
  * ep_dequeue: dequeues (cancels, unlinks) an I/O request from an endpoint
  *
  * Check usb_ep_dequeue() at "usb_gadget.h" for details
@@ -1553,7 +1568,7 @@ static int ep_dequeue(struct usb_ep *ep, struct usb_request *req)
 	return 0;
 }
 
-/**
+/*
  * ep_set_halt: sets the endpoint halt feature
  *
  * Check usb_ep_set_halt() at "usb_gadget.h" for details
@@ -1563,7 +1578,7 @@ static int ep_set_halt(struct usb_ep *ep, int value)
 	return _ep_set_halt(ep, value, true);
 }
 
-/**
+/*
  * ep_set_wedge: sets the halt feature and ignores clear requests
  *
  * Check usb_ep_set_wedge() at "usb_gadget.h" for details
@@ -1583,7 +1598,7 @@ static int ep_set_wedge(struct usb_ep *ep)
 	return usb_ep_set_halt(ep);
 }
 
-/**
+/*
  * ep_fifo_flush: flushes contents of a fifo
  *
  * Check usb_ep_fifo_flush() at "usb_gadget.h" for details
@@ -1609,7 +1624,7 @@ static void ep_fifo_flush(struct usb_ep *ep)
 	spin_unlock_irqrestore(hwep->lock, flags);
 }
 
-/**
+/*
  * Endpoint-specific part of the API to the USB controller hardware
  * Check "usb_gadget.h" for details
  */
@@ -1628,19 +1643,58 @@ static const struct usb_ep_ops usb_ep_ops = {
 /******************************************************************************
  * GADGET block
  *****************************************************************************/
+/*
+ * ci_hdrc_gadget_connect: caller makes sure gadget driver is binded
+ */
+static void ci_hdrc_gadget_connect(struct usb_gadget *_gadget, int is_active)
+{
+	struct ci_hdrc *ci = container_of(_gadget, struct ci_hdrc, gadget);
+
+	if (is_active) {
+		pm_runtime_get_sync(ci->dev);
+		hw_device_reset(ci);
+		spin_lock_irq(&ci->lock);
+		if (ci->driver) {
+			hw_device_state(ci, ci->ep0out->qh.dma);
+			usb_gadget_set_state(_gadget, USB_STATE_POWERED);
+			spin_unlock_irq(&ci->lock);
+			usb_udc_vbus_handler(_gadget, true);
+		} else {
+			spin_unlock_irq(&ci->lock);
+		}
+	} else {
+		usb_udc_vbus_handler(_gadget, false);
+		if (ci->driver)
+			ci->driver->disconnect(&ci->gadget);
+		hw_device_state(ci, 0);
+		if (ci->platdata->notify_event)
+			ci->platdata->notify_event(ci,
+			CI_HDRC_CONTROLLER_STOPPED_EVENT);
+		_gadget_stop_activity(&ci->gadget);
+		pm_runtime_put_sync(ci->dev);
+		usb_gadget_set_state(_gadget, USB_STATE_NOTATTACHED);
+	}
+}
+
 static int ci_udc_vbus_session(struct usb_gadget *_gadget, int is_active)
 {
 	struct ci_hdrc *ci = container_of(_gadget, struct ci_hdrc, gadget);
 	unsigned long flags;
+	int ret = 0;
 
 	spin_lock_irqsave(&ci->lock, flags);
 	ci->vbus_active = is_active;
 	spin_unlock_irqrestore(&ci->lock, flags);
 
-	if (ci->usb_phy) {
-		/* Charger Detection */
-		ci_usb_charger_connect(ci, is_active);
+	if (ci->usb_phy)
+		usb_phy_set_charger_state(ci->usb_phy, is_active ?
+			USB_CHARGER_PRESENT : USB_CHARGER_ABSENT);
 
+	if (ci->platdata->notify_event)
+		ret = ci->platdata->notify_event(ci,
+				CI_HDRC_CONTROLLER_VBUS_EVENT);
+
+	if (ci->usb_phy) {
 		if (is_active)
 			usb_phy_set_event(ci->usb_phy, USB_EVENT_VBUS);
 		else
@@ -1650,7 +1704,7 @@ static int ci_udc_vbus_session(struct usb_gadget *_gadget, int is_active)
 	if (ci->driver)
 		ci_hdrc_gadget_connect(_gadget, is_active);
 
-	return 0;
+	return ret;
 }
 
 static int ci_udc_wakeup(struct usb_gadget *_gadget)
@@ -1701,7 +1755,7 @@ static int ci_udc_selfpowered(struct usb_gadget *_gadget, int is_on)
 }
 
 /* Change Data+ pullup status
- * this func is used by usb_gadget_connect/disconnet
+ * this func is used by usb_gadget_connect/disconnect
  */
 static int ci_udc_pullup(struct usb_gadget *_gadget, int is_on)
 {
@@ -1714,13 +1768,12 @@ static int ci_udc_pullup(struct usb_gadget *_gadget, int is_on)
 	if (ci_otg_is_fsm_mode(ci) || ci->role == CI_ROLE_HOST)
 		return 0;
 
-	if (ci->in_lpm)
-		return 0;
-
+	pm_runtime_get_sync(ci->dev);
 	if (is_on)
 		hw_write(ci, OP_USBCMD, USBCMD_RS, USBCMD_RS);
 	else
 		hw_write(ci, OP_USBCMD, USBCMD_RS, 0);
+	pm_runtime_put_sync(ci->dev);
 
 	return 0;
 }
@@ -1747,7 +1800,7 @@ static struct usb_ep *ci_udc_match_ep(struct usb_gadget *gadget,
 	return NULL;
 }
 
-/**
+/*
  * Device operations part of the API to the USB controller hardware,
  * which don't involve endpoints (or i/o)
  * Check  "usb_gadget.h" for details
@@ -1870,14 +1923,13 @@ static int ci_udc_start(struct usb_gadget *gadget,
 	ci->driver = driver;
 
 	/* Start otg fsm for B-device */
-	if (ci_otg_is_fsm_mode(ci)) {
-		if (ci->fsm.id)
-			ci_hdrc_otg_fsm_start(ci);
+	if (ci_otg_is_fsm_mode(ci) && ci->fsm.id) {
+		ci_hdrc_otg_fsm_start(ci);
 		return retval;
 	}
 
 	if (ci->vbus_active)
-		ci_hdrc_gadget_connect(&ci->gadget, 1);
+		ci_hdrc_gadget_connect(gadget, 1);
 	else
 		usb_udc_vbus_handler(&ci->gadget, false);
 
@@ -1900,7 +1952,7 @@ static void ci_udc_stop_for_otg_fsm(struct ci_hdrc *ci)
 	mutex_unlock(&ci->fsm.lock);
 }
 
-/**
+/*
  * ci_udc_stop: unregister a gadget driver
  */
 static int ci_udc_stop(struct usb_gadget *gadget)
@@ -1931,7 +1983,7 @@ static int ci_udc_stop(struct usb_gadget *gadget)
 /******************************************************************************
  * BUS block
  *****************************************************************************/
-/**
+/*
  * udc_irq: ci interrupt handler
  *
  * This function returns IRQ_HANDLED if the IRQ has been handled
@@ -2019,6 +2071,7 @@ static int udc_start(struct ci_hdrc *ci)
 	ci->gadget.name         = ci->platdata->name;
 	ci->gadget.otg_caps	= otg_caps;
 	ci->gadget.sg_supported = 1;
+	ci->gadget.irq		= ci->irq;
 
 	if (ci->platdata->flags & CI_HDRC_REQUIRES_ALIGNED_DMA)
 		ci->gadget.quirk_avoids_skb_reserve = 1;
@@ -2065,7 +2118,7 @@ free_qh_pool:
 	return retval;
 }
 
-/**
+/*
  * ci_hdrc_gadget_destroy: parent remove must call this to remove UDC
  *
  * No interrupts active, the IRQ has been released
@@ -2081,57 +2134,6 @@ void ci_hdrc_gadget_destroy(struct ci_hdrc *ci)
 
 	dma_pool_destroy(ci->td_pool);
 	dma_pool_destroy(ci->qh_pool);
-}
-
-int ci_usb_charger_connect(struct ci_hdrc *ci, int is_active)
-{
-	int ret = 0;
-
-	pm_runtime_get_sync(ci->dev);
-
-	if (ci->usb_phy->charger_detect) {
-		usb_phy_set_charger_state(ci->usb_phy, is_active ?
-			USB_CHARGER_PRESENT : USB_CHARGER_ABSENT);
-	} else if (ci->platdata->notify_event) {
-		ret = ci->platdata->notify_event(ci,
-				CI_HDRC_CONTROLLER_VBUS_EVENT);
-		schedule_work(&ci->usb_phy->chg_work);
-	}
-
-	pm_runtime_put_sync(ci->dev);
-	return ret;
-}
-
-/**
- * ci_hdrc_gadget_connect: caller make sure gadget driver is binded
- */
-void ci_hdrc_gadget_connect(struct usb_gadget *gadget, int is_active)
-{
-	struct ci_hdrc *ci = container_of(gadget, struct ci_hdrc, gadget);
-	unsigned long flags;
-
-	if (is_active) {
-		pm_runtime_get_sync(ci->dev);
-		hw_device_reset(ci);
-		spin_lock_irqsave(&ci->lock, flags);
-		if (ci->driver) {
-			hw_device_state(ci, ci->ep0out->qh.dma);
-			usb_gadget_set_state(gadget, USB_STATE_POWERED);
-			usb_udc_vbus_handler(gadget, true);
-		}
-		spin_unlock_irqrestore(&ci->lock, flags);
-	} else {
-		usb_udc_vbus_handler(gadget, false);
-		if (ci->driver)
-			ci->driver->disconnect(gadget);
-		hw_device_state(ci, 0);
-		if (ci->platdata->notify_event)
-			ci->platdata->notify_event(ci,
-			CI_HDRC_CONTROLLER_STOPPED_EVENT);
-		_gadget_stop_activity(gadget);
-		pm_runtime_put_sync(ci->dev);
-		usb_gadget_set_state(gadget, USB_STATE_NOTATTACHED);
-	}
 }
 
 static int udc_id_switch_for_device(struct ci_hdrc *ci)
@@ -2204,7 +2206,7 @@ static void udc_resume(struct ci_hdrc *ci, bool power_lost)
 
 /**
  * ci_hdrc_gadget_init - initialize device related bits
- * ci: the controller
+ * @ci: the controller
  *
  * This function initializes the gadget, if the device is "device capable".
  */
@@ -2222,9 +2224,9 @@ int ci_hdrc_gadget_init(struct ci_hdrc *ci)
 
 	rdrv->start	= udc_id_switch_for_device;
 	rdrv->stop	= udc_id_switch_for_host;
-	rdrv->irq	= udc_irq;
 	rdrv->suspend	= udc_suspend;
 	rdrv->resume	= udc_resume;
+	rdrv->irq	= udc_irq;
 	rdrv->name	= "gadget";
 
 	ret = udc_start(ci);

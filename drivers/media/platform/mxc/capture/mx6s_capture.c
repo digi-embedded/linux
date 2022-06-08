@@ -335,7 +335,7 @@ struct mx6s_csi_dev {
 	size_t						discard_size;
 	struct mx6s_buf_internal	buf_discard[2];
 
-	struct v4l2_async_subdev	asd;
+	struct fwnode_handle *fwnode;
 	struct v4l2_async_notifier	subdev_notifier;
 
 	bool csi_mipi_mode;
@@ -961,7 +961,8 @@ static void mx6s_stop_streaming(struct vb2_queue *vq)
 	list_for_each_entry_safe(buf, tmp,
 				&csi_dev->active_bufs, internal.queue) {
 		list_del_init(&buf->internal.queue);
-		if (buf->vb.vb2_buf.state == VB2_BUF_STATE_ACTIVE)
+		if (buf->internal.discard == false &&
+		    buf->vb.vb2_buf.state == VB2_BUF_STATE_ACTIVE)
 			vb2_buffer_done(&buf->vb.vb2_buf, VB2_BUF_STATE_ERROR);
 	}
 
@@ -1434,6 +1435,10 @@ static int mx6s_vidioc_try_fmt_vid_cap(struct file *file, void *priv,
 	pix->sizeimage = fmt->bpp * pix->height * pix->width;
 	pix->bytesperline = fmt->bpp * pix->width;
 
+	pix->colorspace = V4L2_COLORSPACE_SRGB;
+	pix->ycbcr_enc = V4L2_MAP_YCBCR_ENC_DEFAULT(pix->colorspace);
+	pix->quantization = V4L2_QUANTIZATION_FULL_RANGE;
+
 	return ret;
 }
 
@@ -1532,6 +1537,7 @@ static int mx6s_vidioc_streamoff(struct file *file, void *priv,
 {
 	struct mx6s_csi_dev *csi_dev = video_drvdata(file);
 	struct v4l2_subdev *sd = csi_dev->sd;
+	int ret;
 
 	WARN_ON(priv != file->private_data);
 
@@ -1542,11 +1548,11 @@ static int mx6s_vidioc_streamoff(struct file *file, void *priv,
 	 * This calls buf_release from host driver's videobuf_queue_ops for all
 	 * remaining buffers. When the last buffer is freed, stop capture
 	 */
-	vb2_streamoff(&csi_dev->vb2_vidq, i);
+	ret = vb2_streamoff(&csi_dev->vb2_vidq, i);
+	if (!ret)
+		v4l2_subdev_call(sd, video, s_stream, 0);
 
-	v4l2_subdev_call(sd, video, s_stream, 0);
-
-	return 0;
+	return ret;
 }
 
 static int mx6s_vidioc_g_pixelaspect(struct file *file, void *fh,
@@ -1705,12 +1711,12 @@ static int subdev_notifier_bound(struct v4l2_async_notifier *notifier,
 {
 	struct mx6s_csi_dev *csi_dev = notifier_to_mx6s_dev(notifier);
 
-	/* Find platform data for this sensor subdev */
-	if (csi_dev->asd.match.fwnode == dev_fwnode(subdev->dev))
-		csi_dev->sd = subdev;
-
 	if (subdev == NULL)
 		return -EINVAL;
+
+	/* Find platform data for this sensor subdev */
+	if (csi_dev->fwnode == dev_fwnode(subdev->dev))
+		csi_dev->sd = subdev;
 
 	v4l2_info(&csi_dev->v4l2_dev, "Registered sensor subdevice: %s\n",
 		  subdev->name);
@@ -1783,6 +1789,7 @@ static int mx6sx_register_subdevs(struct mx6s_csi_dev *csi_dev)
 {
 	struct device_node *parent = csi_dev->dev->of_node;
 	struct device_node *node, *port, *rem;
+	struct v4l2_async_subdev *asd;
 	int ret;
 
 	v4l2_async_notifier_init(&csi_dev->subdev_notifier);
@@ -1805,15 +1812,11 @@ static int mx6sx_register_subdevs(struct mx6s_csi_dev *csi_dev)
 			return -1;
 		}
 
-		csi_dev->asd.match_type = V4L2_ASYNC_MATCH_FWNODE;
-		csi_dev->asd.match.fwnode = of_fwnode_handle(rem);
-
-		ret = v4l2_async_notifier_add_subdev(&csi_dev->subdev_notifier,
-						&csi_dev->asd);
-		if (ret) {
-			of_node_put(rem);
-		}
-
+		csi_dev->fwnode = of_fwnode_handle(rem);
+		asd = v4l2_async_notifier_add_fwnode_subdev(
+					&csi_dev->subdev_notifier,
+					csi_dev->fwnode,
+					struct v4l2_async_subdev);
 		of_node_put(rem);
 		break;
 	}
@@ -1929,7 +1932,7 @@ static int mx6s_csi_probe(struct platform_device *pdev)
 	video_set_drvdata(csi_dev->vdev, csi_dev);
 	mutex_lock(&csi_dev->lock);
 
-	ret = video_register_device(csi_dev->vdev, VFL_TYPE_GRABBER, -1);
+	ret = video_register_device(csi_dev->vdev, VFL_TYPE_VIDEO, -1);
 	if (ret < 0) {
 		video_device_release(csi_dev->vdev);
 		mutex_unlock(&csi_dev->lock);
@@ -1971,6 +1974,7 @@ static int mx6s_csi_remove(struct platform_device *pdev)
 	struct mx6s_csi_dev *csi_dev =
 				container_of(v4l2_dev, struct mx6s_csi_dev, v4l2_dev);
 
+	v4l2_async_notifier_cleanup(&csi_dev->subdev_notifier);
 	v4l2_async_notifier_unregister(&csi_dev->subdev_notifier);
 
 	video_unregister_device(csi_dev->vdev);

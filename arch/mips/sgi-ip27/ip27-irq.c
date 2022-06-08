@@ -9,6 +9,7 @@
 
 #include <linux/interrupt.h>
 #include <linux/irq.h>
+#include <linux/irqdomain.h>
 #include <linux/ioport.h>
 #include <linux/kernel.h>
 #include <linux/bitops.h>
@@ -19,7 +20,6 @@
 #include <asm/sn/addrs.h>
 #include <asm/sn/agent.h>
 #include <asm/sn/arch.h>
-#include <asm/sn/hub.h>
 #include <asm/sn/intr.h>
 #include <asm/sn/irq_alloc.h>
 
@@ -76,7 +76,7 @@ static void setup_hub_mask(struct hub_irq_data *hd, const struct cpumask *mask)
 	if (cpu >= nr_cpu_ids)
 		cpu = cpumask_any(cpu_online_mask);
 
-	nasid = COMPACT_TO_NASID_NODEID(cpu_to_node(cpu));
+	nasid = cpu_to_node(cpu);
 	hd->cpu = cpu;
 	if (!cputoslice(cpu)) {
 		hd->irq_mask[0] = REMOTE_HUB_PTR(nasid, PI_INT_MASK0_A);
@@ -140,7 +140,7 @@ static int hub_domain_alloc(struct irq_domain *domain, unsigned int virq,
 			    handle_level_irq, NULL, NULL);
 
 	/* use CPU connected to nearest hub */
-	hub = hub_data(NASID_TO_COMPACT_NODEID(info->nasid));
+	hub = hub_data(info->nasid);
 	setup_hub_mask(hd, &hub->h_cpus);
 	info->nasid = cpu_to_node(hd->cpu);
 
@@ -190,7 +190,7 @@ static void ip27_do_irq_mask0(struct irq_desc *desc)
 	unsigned long *mask = per_cpu(irq_enable_mask, cpu);
 	struct irq_domain *domain;
 	u64 pend0;
-	int irq;
+	int ret;
 
 	/* copied from Irix intpend0() */
 	pend0 = LOCAL_HUB_L(PI_INT_PEND0);
@@ -216,10 +216,8 @@ static void ip27_do_irq_mask0(struct irq_desc *desc)
 #endif
 	{
 		domain = irq_desc_get_handler_data(desc);
-		irq = irq_linear_revmap(domain, __ffs(pend0));
-		if (irq)
-			generic_handle_irq(irq);
-		else
+		ret = generic_handle_domain_irq(domain, __ffs(pend0));
+		if (ret)
 			spurious_interrupt();
 	}
 
@@ -232,7 +230,7 @@ static void ip27_do_irq_mask1(struct irq_desc *desc)
 	unsigned long *mask = per_cpu(irq_enable_mask, cpu);
 	struct irq_domain *domain;
 	u64 pend1;
-	int irq;
+	int ret;
 
 	/* copied from Irix intpend0() */
 	pend1 = LOCAL_HUB_L(PI_INT_PEND1);
@@ -242,10 +240,8 @@ static void ip27_do_irq_mask1(struct irq_desc *desc)
 		return;
 
 	domain = irq_desc_get_handler_data(desc);
-	irq = irq_linear_revmap(domain, __ffs(pend1) + 64);
-	if (irq)
-		generic_handle_irq(irq);
-	else
+	ret = generic_handle_domain_irq(domain, __ffs(pend1) + 64);
+	if (ret)
 		spurious_interrupt();
 
 	LOCAL_HUB_L(PI_INT_PEND1);
@@ -288,10 +284,8 @@ void __init arch_init_irq(void)
 	 * Mark these as reserved right away so they won't be used accidentally
 	 * later.
 	 */
-	for (i = 0; i <= BASE_PCI_IRQ; i++)
+	for (i = 0; i <= CPU_CALL_B_IRQ; i++)
 		set_bit(i, hub_irq_map);
-
-	set_bit(IP_PEND0_6_63, hub_irq_map);
 
 	for (i = NI_BRDCAST_ERR_A; i <= MSC_PANIC_INTR; i++)
 		set_bit(i, hub_irq_map);

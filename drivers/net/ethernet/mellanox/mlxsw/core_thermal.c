@@ -19,22 +19,13 @@
 #define MLXSW_THERMAL_ASIC_TEMP_NORM	75000	/* 75C */
 #define MLXSW_THERMAL_ASIC_TEMP_HIGH	85000	/* 85C */
 #define MLXSW_THERMAL_ASIC_TEMP_HOT	105000	/* 105C */
-#define MLXSW_THERMAL_ASIC_TEMP_CRIT	110000	/* 110C */
 #define MLXSW_THERMAL_HYSTERESIS_TEMP	5000	/* 5C */
 #define MLXSW_THERMAL_MODULE_TEMP_SHIFT	(MLXSW_THERMAL_HYSTERESIS_TEMP * 2)
 #define MLXSW_THERMAL_ZONE_MAX_NAME	16
 #define MLXSW_THERMAL_TEMP_SCORE_MAX	GENMASK(31, 0)
 #define MLXSW_THERMAL_MAX_STATE	10
+#define MLXSW_THERMAL_MIN_STATE	2
 #define MLXSW_THERMAL_MAX_DUTY	255
-/* Minimum and maximum fan allowed speed in percent: from 20% to 100%. Values
- * MLXSW_THERMAL_MAX_STATE + x, where x is between 2 and 10 are used for
- * setting fan speed dynamic minimum. For example, if value is set to 14 (40%)
- * cooling levels vector will be set to 4, 4, 4, 4, 4, 5, 6, 7, 8, 9, 10 to
- * introduce PWM speed in percent: 40, 40, 40, 40, 40, 50, 60. 70, 80, 90, 100.
- */
-#define MLXSW_THERMAL_SPEED_MIN		(MLXSW_THERMAL_MAX_STATE + 2)
-#define MLXSW_THERMAL_SPEED_MAX		(MLXSW_THERMAL_MAX_STATE * 2)
-#define MLXSW_THERMAL_SPEED_MIN_LEVEL	2		/* 20% */
 
 /* External cooling devices, allowed for binding to mlxsw thermal zones. */
 static char * const mlxsw_thermal_external_allowed_cdev[] = {
@@ -45,7 +36,6 @@ enum mlxsw_thermal_trips {
 	MLXSW_THERMAL_TEMP_TRIP_NORM,
 	MLXSW_THERMAL_TEMP_TRIP_HIGH,
 	MLXSW_THERMAL_TEMP_TRIP_HOT,
-	MLXSW_THERMAL_TEMP_TRIP_CRIT,
 };
 
 struct mlxsw_thermal_trip {
@@ -75,16 +65,9 @@ static const struct mlxsw_thermal_trip default_thermal_trips[] = {
 	{	/* Warning */
 		.type		= THERMAL_TRIP_HOT,
 		.temp		= MLXSW_THERMAL_ASIC_TEMP_HOT,
-		.hyst		= MLXSW_THERMAL_HYSTERESIS_TEMP,
 		.min_state	= MLXSW_THERMAL_MAX_STATE,
 		.max_state	= MLXSW_THERMAL_MAX_STATE,
 	},
-	{	/* Critical - soft poweroff */
-		.type		= THERMAL_TRIP_CRITICAL,
-		.temp		= MLXSW_THERMAL_ASIC_TEMP_CRIT,
-		.min_state	= MLXSW_THERMAL_MAX_STATE,
-		.max_state	= MLXSW_THERMAL_MAX_STATE,
-	}
 };
 
 #define MLXSW_THERMAL_NUM_TRIPS	ARRAY_SIZE(default_thermal_trips)
@@ -98,7 +81,6 @@ struct mlxsw_thermal_module {
 	struct mlxsw_thermal *parent;
 	struct thermal_zone_device *tzdev;
 	struct mlxsw_thermal_trip trips[MLXSW_THERMAL_NUM_TRIPS];
-	enum thermal_device_mode mode;
 	int module; /* Module or gearbox number */
 };
 
@@ -110,8 +92,8 @@ struct mlxsw_thermal {
 	struct thermal_cooling_device *cdevs[MLXSW_MFCR_PWMS_MAX];
 	u8 cooling_levels[MLXSW_THERMAL_MAX_STATE + 1];
 	struct mlxsw_thermal_trip trips[MLXSW_THERMAL_NUM_TRIPS];
-	enum thermal_device_mode mode;
 	struct mlxsw_thermal_module *tz_module_arr;
+	u8 tz_module_num;
 	struct mlxsw_thermal_module *tz_gearbox_arr;
 	u8 tz_gearbox_num;
 	unsigned int tz_highest_score;
@@ -142,7 +124,7 @@ static int mlxsw_get_cooling_device_idx(struct mlxsw_thermal *thermal,
 	/* Allow mlxsw thermal zone binding to an external cooling device */
 	for (i = 0; i < ARRAY_SIZE(mlxsw_thermal_external_allowed_cdev); i++) {
 		if (strnstr(cdev->type, mlxsw_thermal_external_allowed_cdev[i],
-			    sizeof(cdev->type)))
+			    strlen(cdev->type)))
 			return 0;
 	}
 
@@ -155,34 +137,43 @@ mlxsw_thermal_module_trips_reset(struct mlxsw_thermal_module *tz)
 	tz->trips[MLXSW_THERMAL_TEMP_TRIP_NORM].temp = 0;
 	tz->trips[MLXSW_THERMAL_TEMP_TRIP_HIGH].temp = 0;
 	tz->trips[MLXSW_THERMAL_TEMP_TRIP_HOT].temp = 0;
-	tz->trips[MLXSW_THERMAL_TEMP_TRIP_CRIT].temp = 0;
 }
 
 static int
 mlxsw_thermal_module_trips_update(struct device *dev, struct mlxsw_core *core,
-				  struct mlxsw_thermal_module *tz)
+				  struct mlxsw_thermal_module *tz,
+				  int crit_temp, int emerg_temp)
 {
-	int crit_temp, emerg_temp;
 	int err;
 
-	err = mlxsw_env_module_temp_thresholds_get(core, tz->module,
-						   SFP_TEMP_HIGH_WARN,
-						   &crit_temp);
-	if (err)
-		return err;
+	/* Do not try to query temperature thresholds directly from the module's
+	 * EEPROM if we got valid thresholds from MTMP.
+	 */
+	if (!emerg_temp || !crit_temp) {
+		err = mlxsw_env_module_temp_thresholds_get(core, tz->module,
+							   SFP_TEMP_HIGH_WARN,
+							   &crit_temp);
+		if (err)
+			return err;
 
-	err = mlxsw_env_module_temp_thresholds_get(core, tz->module,
-						   SFP_TEMP_HIGH_ALARM,
-						   &emerg_temp);
-	if (err)
-		return err;
+		err = mlxsw_env_module_temp_thresholds_get(core, tz->module,
+							   SFP_TEMP_HIGH_ALARM,
+							   &emerg_temp);
+		if (err)
+			return err;
+	}
+
+	if (crit_temp > emerg_temp) {
+		dev_warn(dev, "%s : Critical threshold %d is above emergency threshold %d\n",
+			 tz->tzdev->type, crit_temp, emerg_temp);
+		return 0;
+	}
 
 	/* According to the system thermal requirements, the thermal zones are
-	 * defined with four trip points. The critical and emergency
+	 * defined with three trip points. The critical and emergency
 	 * temperature thresholds, provided by QSFP module are set as "active"
-	 * and "hot" trip points, "normal" and "critical" trip points are
-	 * derived from "active" and "hot" by subtracting or adding double
-	 * hysteresis value.
+	 * and "hot" trip points, "normal" trip point is derived from "active"
+	 * by subtracting double hysteresis value.
 	 */
 	if (crit_temp >= MLXSW_THERMAL_MODULE_TEMP_SHIFT)
 		tz->trips[MLXSW_THERMAL_TEMP_TRIP_NORM].temp = crit_temp -
@@ -191,11 +182,6 @@ mlxsw_thermal_module_trips_update(struct device *dev, struct mlxsw_core *core,
 		tz->trips[MLXSW_THERMAL_TEMP_TRIP_NORM].temp = crit_temp;
 	tz->trips[MLXSW_THERMAL_TEMP_TRIP_HIGH].temp = crit_temp;
 	tz->trips[MLXSW_THERMAL_TEMP_TRIP_HOT].temp = emerg_temp;
-	if (emerg_temp > crit_temp)
-		tz->trips[MLXSW_THERMAL_TEMP_TRIP_CRIT].temp = emerg_temp +
-					MLXSW_THERMAL_MODULE_TEMP_SHIFT;
-	else
-		tz->trips[MLXSW_THERMAL_TEMP_TRIP_CRIT].temp = emerg_temp;
 
 	return 0;
 }
@@ -208,7 +194,7 @@ static void mlxsw_thermal_tz_score_update(struct mlxsw_thermal *thermal,
 	struct mlxsw_thermal_trip *trip = trips;
 	unsigned int score, delta, i, shift = 1;
 
-	/* Calculate thermal zone score, if temperature is above the critical
+	/* Calculate thermal zone score, if temperature is above the hot
 	 * threshold score is set to MLXSW_THERMAL_TEMP_SCORE_MAX.
 	 */
 	score = MLXSW_THERMAL_TEMP_SCORE_MAX;
@@ -276,36 +262,6 @@ static int mlxsw_thermal_unbind(struct thermal_zone_device *tzdev,
 	return 0;
 }
 
-static int mlxsw_thermal_get_mode(struct thermal_zone_device *tzdev,
-				  enum thermal_device_mode *mode)
-{
-	struct mlxsw_thermal *thermal = tzdev->devdata;
-
-	*mode = thermal->mode;
-
-	return 0;
-}
-
-static int mlxsw_thermal_set_mode(struct thermal_zone_device *tzdev,
-				  enum thermal_device_mode mode)
-{
-	struct mlxsw_thermal *thermal = tzdev->devdata;
-
-	mutex_lock(&tzdev->lock);
-
-	if (mode == THERMAL_DEVICE_ENABLED)
-		tzdev->polling_delay = thermal->polling_delay;
-	else
-		tzdev->polling_delay = 0;
-
-	mutex_unlock(&tzdev->lock);
-
-	thermal->mode = mode;
-	thermal_zone_device_update(tzdev, THERMAL_EVENT_UNSPECIFIED);
-
-	return 0;
-}
-
 static int mlxsw_thermal_get_temp(struct thermal_zone_device *tzdev,
 				  int *p_temp)
 {
@@ -322,7 +278,7 @@ static int mlxsw_thermal_get_temp(struct thermal_zone_device *tzdev,
 		dev_err(dev, "Failed to query temp sensor\n");
 		return err;
 	}
-	mlxsw_reg_mtmp_unpack(mtmp_pl, &temp, NULL, NULL);
+	mlxsw_reg_mtmp_unpack(mtmp_pl, &temp, NULL, NULL, NULL, NULL);
 	if (temp > 0)
 		mlxsw_thermal_tz_score_update(thermal, tzdev, thermal->trips,
 					      temp);
@@ -361,8 +317,7 @@ static int mlxsw_thermal_set_trip_temp(struct thermal_zone_device *tzdev,
 {
 	struct mlxsw_thermal *thermal = tzdev->devdata;
 
-	if (trip < 0 || trip >= MLXSW_THERMAL_NUM_TRIPS ||
-	    temp > MLXSW_THERMAL_ASIC_TEMP_CRIT)
+	if (trip < 0 || trip >= MLXSW_THERMAL_NUM_TRIPS)
 		return -EINVAL;
 
 	thermal->trips[trip].temp = temp;
@@ -405,8 +360,6 @@ static int mlxsw_thermal_trend_get(struct thermal_zone_device *tzdev,
 static struct thermal_zone_device_ops mlxsw_thermal_ops = {
 	.bind = mlxsw_thermal_bind,
 	.unbind = mlxsw_thermal_unbind,
-	.get_mode = mlxsw_thermal_get_mode,
-	.set_mode = mlxsw_thermal_set_mode,
 	.get_temp = mlxsw_thermal_get_temp,
 	.get_trip_type	= mlxsw_thermal_get_trip_type,
 	.get_trip_temp	= mlxsw_thermal_get_trip_temp,
@@ -464,35 +417,30 @@ static int mlxsw_thermal_module_unbind(struct thermal_zone_device *tzdev,
 	return err;
 }
 
-static int mlxsw_thermal_module_mode_get(struct thermal_zone_device *tzdev,
-					 enum thermal_device_mode *mode)
+static void
+mlxsw_thermal_module_temp_and_thresholds_get(struct mlxsw_core *core,
+					     u16 sensor_index, int *p_temp,
+					     int *p_crit_temp,
+					     int *p_emerg_temp)
 {
-	struct mlxsw_thermal_module *tz = tzdev->devdata;
+	char mtmp_pl[MLXSW_REG_MTMP_LEN];
+	int err;
 
-	*mode = tz->mode;
+	/* Read module temperature and thresholds. */
+	mlxsw_reg_mtmp_pack(mtmp_pl, sensor_index, false, false);
+	err = mlxsw_reg_query(core, MLXSW_REG(mtmp), mtmp_pl);
+	if (err) {
+		/* Set temperature and thresholds to zero to avoid passing
+		 * uninitialized data back to the caller.
+		 */
+		*p_temp = 0;
+		*p_crit_temp = 0;
+		*p_emerg_temp = 0;
 
-	return 0;
-}
-
-static int mlxsw_thermal_module_mode_set(struct thermal_zone_device *tzdev,
-					 enum thermal_device_mode mode)
-{
-	struct mlxsw_thermal_module *tz = tzdev->devdata;
-	struct mlxsw_thermal *thermal = tz->parent;
-
-	mutex_lock(&tzdev->lock);
-
-	if (mode == THERMAL_DEVICE_ENABLED)
-		tzdev->polling_delay = thermal->polling_delay;
-	else
-		tzdev->polling_delay = 0;
-
-	mutex_unlock(&tzdev->lock);
-
-	tz->mode = mode;
-	thermal_zone_device_update(tzdev, THERMAL_EVENT_UNSPECIFIED);
-
-	return 0;
+		return;
+	}
+	mlxsw_reg_mtmp_unpack(mtmp_pl, p_temp, NULL, p_crit_temp, p_emerg_temp,
+			      NULL);
 }
 
 static int mlxsw_thermal_module_temp_get(struct thermal_zone_device *tzdev,
@@ -500,31 +448,26 @@ static int mlxsw_thermal_module_temp_get(struct thermal_zone_device *tzdev,
 {
 	struct mlxsw_thermal_module *tz = tzdev->devdata;
 	struct mlxsw_thermal *thermal = tz->parent;
-	struct device *dev = thermal->bus_info->dev;
-	char mtmp_pl[MLXSW_REG_MTMP_LEN];
-	int temp;
+	int temp, crit_temp, emerg_temp;
+	struct device *dev;
+	u16 sensor_index;
 	int err;
 
-	/* Read module temperature. */
-	mlxsw_reg_mtmp_pack(mtmp_pl, MLXSW_REG_MTMP_MODULE_INDEX_MIN +
-			    tz->module, false, false);
-	err = mlxsw_reg_query(thermal->core, MLXSW_REG(mtmp), mtmp_pl);
-	if (err) {
-		/* Do not return error - in case of broken module's sensor
-		 * it will cause error message flooding.
-		 */
-		temp = 0;
-		*p_temp = (int) temp;
-		return 0;
-	}
-	mlxsw_reg_mtmp_unpack(mtmp_pl, &temp, NULL, NULL);
+	dev = thermal->bus_info->dev;
+	sensor_index = MLXSW_REG_MTMP_MODULE_INDEX_MIN + tz->module;
+
+	/* Read module temperature and thresholds. */
+	mlxsw_thermal_module_temp_and_thresholds_get(thermal->core,
+						     sensor_index, &temp,
+						     &crit_temp, &emerg_temp);
 	*p_temp = temp;
 
 	if (!temp)
 		return 0;
 
 	/* Update trip points. */
-	err = mlxsw_thermal_module_trips_update(dev, thermal->core, tz);
+	err = mlxsw_thermal_module_trips_update(dev, thermal->core, tz,
+						crit_temp, emerg_temp);
 	if (!err && temp > 0)
 		mlxsw_thermal_tz_score_update(thermal, tzdev, tz->trips, temp);
 
@@ -563,8 +506,7 @@ mlxsw_thermal_module_trip_temp_set(struct thermal_zone_device *tzdev,
 {
 	struct mlxsw_thermal_module *tz = tzdev->devdata;
 
-	if (trip < 0 || trip >= MLXSW_THERMAL_NUM_TRIPS ||
-	    temp > tz->trips[MLXSW_THERMAL_TEMP_TRIP_CRIT].temp)
+	if (trip < 0 || trip >= MLXSW_THERMAL_NUM_TRIPS)
 		return -EINVAL;
 
 	tz->trips[trip].temp = temp;
@@ -610,8 +552,6 @@ static int mlxsw_thermal_module_trend_get(struct thermal_zone_device *tzdev,
 static struct thermal_zone_device_ops mlxsw_thermal_module_ops = {
 	.bind		= mlxsw_thermal_module_bind,
 	.unbind		= mlxsw_thermal_module_unbind,
-	.get_mode	= mlxsw_thermal_module_mode_get,
-	.set_mode	= mlxsw_thermal_module_mode_set,
 	.get_temp	= mlxsw_thermal_module_temp_get,
 	.get_trip_type	= mlxsw_thermal_module_trip_type_get,
 	.get_trip_temp	= mlxsw_thermal_module_trip_temp_get,
@@ -638,7 +578,7 @@ static int mlxsw_thermal_gearbox_temp_get(struct thermal_zone_device *tzdev,
 	if (err)
 		return err;
 
-	mlxsw_reg_mtmp_unpack(mtmp_pl, &temp, NULL, NULL);
+	mlxsw_reg_mtmp_unpack(mtmp_pl, &temp, NULL, NULL, NULL, NULL);
 	if (temp > 0)
 		mlxsw_thermal_tz_score_update(thermal, tzdev, tz->trips, temp);
 
@@ -649,8 +589,6 @@ static int mlxsw_thermal_gearbox_temp_get(struct thermal_zone_device *tzdev,
 static struct thermal_zone_device_ops mlxsw_thermal_gearbox_ops = {
 	.bind		= mlxsw_thermal_module_bind,
 	.unbind		= mlxsw_thermal_module_unbind,
-	.get_mode	= mlxsw_thermal_module_mode_get,
-	.set_mode	= mlxsw_thermal_module_mode_set,
 	.get_temp	= mlxsw_thermal_gearbox_temp_get,
 	.get_trip_type	= mlxsw_thermal_module_trip_type_get,
 	.get_trip_temp	= mlxsw_thermal_module_trip_temp_get,
@@ -700,48 +638,15 @@ static int mlxsw_thermal_set_cur_state(struct thermal_cooling_device *cdev,
 	struct mlxsw_thermal *thermal = cdev->devdata;
 	struct device *dev = thermal->bus_info->dev;
 	char mfsc_pl[MLXSW_REG_MFSC_LEN];
-	unsigned long cur_state, i;
 	int idx;
-	u8 duty;
 	int err;
+
+	if (state > MLXSW_THERMAL_MAX_STATE)
+		return -EINVAL;
 
 	idx = mlxsw_get_cooling_device_idx(thermal, cdev);
 	if (idx < 0)
 		return idx;
-
-	/* Verify if this request is for changing allowed fan dynamical
-	 * minimum. If it is - update cooling levels accordingly and update
-	 * state, if current state is below the newly requested minimum state.
-	 * For example, if current state is 5, and minimal state is to be
-	 * changed from 4 to 6, thermal->cooling_levels[0 to 5] will be changed
-	 * all from 4 to 6. And state 5 (thermal->cooling_levels[4]) should be
-	 * overwritten.
-	 */
-	if (state >= MLXSW_THERMAL_SPEED_MIN &&
-	    state <= MLXSW_THERMAL_SPEED_MAX) {
-		state -= MLXSW_THERMAL_MAX_STATE;
-		for (i = 0; i <= MLXSW_THERMAL_MAX_STATE; i++)
-			thermal->cooling_levels[i] = max(state, i);
-
-		mlxsw_reg_mfsc_pack(mfsc_pl, idx, 0);
-		err = mlxsw_reg_query(thermal->core, MLXSW_REG(mfsc), mfsc_pl);
-		if (err)
-			return err;
-
-		duty = mlxsw_reg_mfsc_pwm_duty_cycle_get(mfsc_pl);
-		cur_state = mlxsw_duty_to_state(duty);
-
-		/* If current fan state is lower than requested dynamical
-		 * minimum, increase fan speed up to dynamical minimum.
-		 */
-		if (state < cur_state)
-			return 0;
-
-		state = cur_state;
-	}
-
-	if (state > MLXSW_THERMAL_MAX_STATE)
-		return -EINVAL;
 
 	/* Normalize the state to the valid speed range. */
 	state = thermal->cooling_levels[state];
@@ -773,14 +678,18 @@ mlxsw_thermal_module_tz_init(struct mlxsw_thermal_module *module_tz)
 							MLXSW_THERMAL_TRIP_MASK,
 							module_tz,
 							&mlxsw_thermal_module_ops,
-							NULL, 0, 0);
+							NULL, 0,
+							module_tz->parent->polling_delay);
 	if (IS_ERR(module_tz->tzdev)) {
 		err = PTR_ERR(module_tz->tzdev);
 		return err;
 	}
 
-	module_tz->mode = THERMAL_DEVICE_ENABLED;
-	return 0;
+	err = thermal_zone_device_enable(module_tz->tzdev);
+	if (err)
+		thermal_zone_device_unregister(module_tz->tzdev);
+
+	return err;
 }
 
 static void mlxsw_thermal_module_tz_fini(struct thermal_zone_device *tzdev)
@@ -790,23 +699,13 @@ static void mlxsw_thermal_module_tz_fini(struct thermal_zone_device *tzdev)
 
 static int
 mlxsw_thermal_module_init(struct device *dev, struct mlxsw_core *core,
-			  struct mlxsw_thermal *thermal, u8 local_port)
+			  struct mlxsw_thermal *thermal, u8 module)
 {
 	struct mlxsw_thermal_module *module_tz;
-	char pmlp_pl[MLXSW_REG_PMLP_LEN];
-	u8 width, module;
-	int err;
+	int dummy_temp, crit_temp, emerg_temp;
+	u16 sensor_index;
 
-	mlxsw_reg_pmlp_pack(pmlp_pl, local_port);
-	err = mlxsw_reg_query(core, MLXSW_REG(pmlp), pmlp_pl);
-	if (err)
-		return err;
-
-	width = mlxsw_reg_pmlp_width_get(pmlp_pl);
-	if (!width)
-		return 0;
-
-	module = mlxsw_reg_pmlp_module_get(pmlp_pl, 0);
+	sensor_index = MLXSW_REG_MTMP_MODULE_INDEX_MIN + module;
 	module_tz = &thermal->tz_module_arr[module];
 	/* Skip if parent is already set (case of port split). */
 	if (module_tz->parent)
@@ -817,8 +716,12 @@ mlxsw_thermal_module_init(struct device *dev, struct mlxsw_core *core,
 	       sizeof(thermal->trips));
 	/* Initialize all trip point. */
 	mlxsw_thermal_module_trips_reset(module_tz);
+	/* Read module temperature and thresholds. */
+	mlxsw_thermal_module_temp_and_thresholds_get(core, sensor_index, &dummy_temp,
+						     &crit_temp, &emerg_temp);
 	/* Update trip point according to the module data. */
-	return mlxsw_thermal_module_trips_update(dev, core, module_tz);
+	return mlxsw_thermal_module_trips_update(dev, core, module_tz,
+						 crit_temp, emerg_temp);
 }
 
 static void mlxsw_thermal_module_fini(struct mlxsw_thermal_module *module_tz)
@@ -834,26 +737,34 @@ static int
 mlxsw_thermal_modules_init(struct device *dev, struct mlxsw_core *core,
 			   struct mlxsw_thermal *thermal)
 {
-	unsigned int module_count = mlxsw_core_max_ports(core);
 	struct mlxsw_thermal_module *module_tz;
+	char mgpir_pl[MLXSW_REG_MGPIR_LEN];
 	int i, err;
 
 	if (!mlxsw_core_res_query_enabled(core))
 		return 0;
 
-	thermal->tz_module_arr = kcalloc(module_count,
+	mlxsw_reg_mgpir_pack(mgpir_pl);
+	err = mlxsw_reg_query(core, MLXSW_REG(mgpir), mgpir_pl);
+	if (err)
+		return err;
+
+	mlxsw_reg_mgpir_unpack(mgpir_pl, NULL, NULL, NULL,
+			       &thermal->tz_module_num);
+
+	thermal->tz_module_arr = kcalloc(thermal->tz_module_num,
 					 sizeof(*thermal->tz_module_arr),
 					 GFP_KERNEL);
 	if (!thermal->tz_module_arr)
 		return -ENOMEM;
 
-	for (i = 1; i < module_count; i++) {
+	for (i = 0; i < thermal->tz_module_num; i++) {
 		err = mlxsw_thermal_module_init(dev, core, thermal, i);
 		if (err)
 			goto err_unreg_tz_module_arr;
 	}
 
-	for (i = 0; i < module_count - 1; i++) {
+	for (i = 0; i < thermal->tz_module_num; i++) {
 		module_tz = &thermal->tz_module_arr[i];
 		if (!module_tz->parent)
 			continue;
@@ -865,7 +776,7 @@ mlxsw_thermal_modules_init(struct device *dev, struct mlxsw_core *core,
 	return 0;
 
 err_unreg_tz_module_arr:
-	for (i = module_count - 1; i >= 0; i--)
+	for (i = thermal->tz_module_num - 1; i >= 0; i--)
 		mlxsw_thermal_module_fini(&thermal->tz_module_arr[i]);
 	kfree(thermal->tz_module_arr);
 	return err;
@@ -874,13 +785,12 @@ err_unreg_tz_module_arr:
 static void
 mlxsw_thermal_modules_fini(struct mlxsw_thermal *thermal)
 {
-	unsigned int module_count = mlxsw_core_max_ports(thermal->core);
 	int i;
 
 	if (!mlxsw_core_res_query_enabled(thermal->core))
 		return;
 
-	for (i = module_count - 1; i >= 0; i--)
+	for (i = thermal->tz_module_num - 1; i >= 0; i--)
 		mlxsw_thermal_module_fini(&thermal->tz_module_arr[i]);
 	kfree(thermal->tz_module_arr);
 }
@@ -889,6 +799,7 @@ static int
 mlxsw_thermal_gearbox_tz_init(struct mlxsw_thermal_module *gearbox_tz)
 {
 	char tz_name[MLXSW_THERMAL_ZONE_MAX_NAME];
+	int ret;
 
 	snprintf(tz_name, sizeof(tz_name), "mlxsw-gearbox%d",
 		 gearbox_tz->module + 1);
@@ -897,12 +808,16 @@ mlxsw_thermal_gearbox_tz_init(struct mlxsw_thermal_module *gearbox_tz)
 						MLXSW_THERMAL_TRIP_MASK,
 						gearbox_tz,
 						&mlxsw_thermal_gearbox_ops,
-						NULL, 0, 0);
+						NULL, 0,
+						gearbox_tz->parent->polling_delay);
 	if (IS_ERR(gearbox_tz->tzdev))
 		return PTR_ERR(gearbox_tz->tzdev);
 
-	gearbox_tz->mode = THERMAL_DEVICE_ENABLED;
-	return 0;
+	ret = thermal_zone_device_enable(gearbox_tz->tzdev);
+	if (ret)
+		thermal_zone_device_unregister(gearbox_tz->tzdev);
+
+	return ret;
 }
 
 static void
@@ -915,8 +830,10 @@ static int
 mlxsw_thermal_gearboxes_init(struct device *dev, struct mlxsw_core *core,
 			     struct mlxsw_thermal *thermal)
 {
+	enum mlxsw_reg_mgpir_device_type device_type;
 	struct mlxsw_thermal_module *gearbox_tz;
 	char mgpir_pl[MLXSW_REG_MGPIR_LEN];
+	u8 gbox_num;
 	int i;
 	int err;
 
@@ -928,10 +845,13 @@ mlxsw_thermal_gearboxes_init(struct device *dev, struct mlxsw_core *core,
 	if (err)
 		return err;
 
-	mlxsw_reg_mgpir_unpack(mgpir_pl, &thermal->tz_gearbox_num, NULL, NULL);
-	if (!thermal->tz_gearbox_num)
+	mlxsw_reg_mgpir_unpack(mgpir_pl, &gbox_num, &device_type, NULL,
+			       NULL);
+	if (device_type != MLXSW_REG_MGPIR_DEVICE_TYPE_GEARBOX_DIE ||
+	    !gbox_num)
 		return 0;
 
+	thermal->tz_gearbox_num = gbox_num;
 	thermal->tz_gearbox_arr = kcalloc(thermal->tz_gearbox_num,
 					  sizeof(*thermal->tz_gearbox_arr),
 					  GFP_KERNEL);
@@ -1037,8 +957,7 @@ int mlxsw_thermal_init(struct mlxsw_core *core,
 
 	/* Initialize cooling levels per PWM state. */
 	for (i = 0; i < MLXSW_THERMAL_MAX_STATE; i++)
-		thermal->cooling_levels[i] = max(MLXSW_THERMAL_SPEED_MIN_LEVEL,
-						 i);
+		thermal->cooling_levels[i] = max(MLXSW_THERMAL_MIN_STATE, i);
 
 	thermal->polling_delay = bus_info->low_frequency ?
 				 MLXSW_THERMAL_SLOW_POLL_INT :
@@ -1065,10 +984,15 @@ int mlxsw_thermal_init(struct mlxsw_core *core,
 	if (err)
 		goto err_unreg_modules_tzdev;
 
-	thermal->mode = THERMAL_DEVICE_ENABLED;
+	err = thermal_zone_device_enable(thermal->tzdev);
+	if (err)
+		goto err_unreg_gearboxes;
+
 	*p_thermal = thermal;
 	return 0;
 
+err_unreg_gearboxes:
+	mlxsw_thermal_gearboxes_fini(thermal);
 err_unreg_modules_tzdev:
 	mlxsw_thermal_modules_fini(thermal);
 err_unreg_tzdev:

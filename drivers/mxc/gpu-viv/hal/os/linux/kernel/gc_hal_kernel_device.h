@@ -123,14 +123,10 @@ typedef struct _gckGALDEVICE
     /* PCIE Bar */
     gctINT              bars[gcdMAX_GPU_COUNT];
 
-    /* Thread management. */
-    struct task_struct *threadCtxts[gcdMAX_GPU_COUNT];
-    struct semaphore    semas[gcdMAX_GPU_COUNT];
-    gctBOOL             threadInitializeds[gcdMAX_GPU_COUNT];
-    gctBOOL             killThread;
-
     /* States before suspend. */
     gceCHIPPOWERSTATE   statesStored[gcdMAX_GPU_COUNT];
+    gctPOINTER          suspendSemaphore;
+    gctBOOL             suspendSemaphoreAcquired;
 
     gcsDEBUGFS_DIR      debugfsDir;
 
@@ -159,6 +155,17 @@ typedef struct _gcsHAL_PRIVATE_DATA
     gctBOOL             isLocked;
 }
 gcsHAL_PRIVATE_DATA, * gcsHAL_PRIVATE_DATA_PTR;
+
+gceSTATUS
+gckGALDEVICE_Suspend(
+    IN gckGALDEVICE Device,
+    IN gceCHIPPOWERSTATE State
+    );
+
+gceSTATUS
+gckGALDEVICE_Resume(
+    IN gckGALDEVICE Device
+    );
 
 gceSTATUS
 gckGALDEVICE_Start(

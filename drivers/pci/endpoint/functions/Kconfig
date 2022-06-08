@@ -13,9 +13,15 @@ config PCI_EPF_TEST
 
 	   If in doubt, say "N" to disable Endpoint test driver.
 
-config IMX_MIC_EPF
-	tristate "i.MX MIC Endpoint driver"
-	depends on PCI_ENDPOINT && IMX_MIC_CARD
+config PCI_EPF_NTB
+	tristate "PCI Endpoint NTB driver"
+	depends on PCI_ENDPOINT
+	select CONFIGFS_FS
 	help
-	   Enable this configuration option to enable endpoint driver
-	   for i.MX MIC.
+	  Select this configuration option to enable the Non-Transparent
+	  Bridge (NTB) driver for PCI Endpoint. NTB driver implements NTB
+	  controller functionality using multiple PCIe endpoint instances.
+	  It can support NTB endpoint function devices created using
+	  device tree.
+
+	  If in doubt, say "N" to disable Endpoint NTB driver.

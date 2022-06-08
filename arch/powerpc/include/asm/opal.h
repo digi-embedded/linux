@@ -28,9 +28,6 @@ extern struct device_node *opal_node;
 
 /* API functions */
 int64_t opal_invalid_call(void);
-int64_t opal_npu_destroy_context(uint64_t phb_id, uint64_t pid, uint64_t bdf);
-int64_t opal_npu_init_context(uint64_t phb_id, int pasid, uint64_t msr,
-			uint64_t bdf);
 int64_t opal_npu_map_lpar(uint64_t phb_id, uint64_t bdf, uint64_t lparid,
 			uint64_t lpcr);
 int64_t opal_npu_spa_setup(uint64_t phb_id, uint32_t bdfn,
@@ -298,9 +295,16 @@ int opal_sensor_group_clear(u32 group_hndl, int token);
 int opal_sensor_group_enable(u32 group_hndl, int token, bool enable);
 int opal_nx_coproc_init(uint32_t chip_id, uint32_t ct);
 
+int opal_secvar_get(const char *key, uint64_t key_len, u8 *data,
+		    uint64_t *data_size);
+int opal_secvar_get_next(const char *key, uint64_t *key_len,
+			 uint64_t key_buf_size);
+int opal_secvar_enqueue_update(const char *key, uint64_t key_len, u8 *data,
+			       uint64_t data_size);
+
 s64 opal_mpipl_update(enum opal_mpipl_ops op, u64 src, u64 dest, u64 size);
 s64 opal_mpipl_register_tag(enum opal_mpipl_tags tag, u64 addr);
-s64 opal_mpipl_query_tag(enum opal_mpipl_tags tag, u64 *addr);
+s64 opal_mpipl_query_tag(enum opal_mpipl_tags tag, __be64 *addr);
 
 s64 opal_signal_system_reset(s32 cpu);
 s64 opal_quiesce(u64 shutdown_type, s32 cpu);

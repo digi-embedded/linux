@@ -2,7 +2,7 @@
 /*
  * Device Tree file for NXP LS1028A QDS Board.
  *
- * Copyright 2018-2019 NXP
+ * Copyright 2018 NXP
  *
  * Harninder Rai <harninder.rai@nxp.com>
  *
@@ -23,6 +23,9 @@
 		gpio2 = &gpio3;
 		serial0 = &duart0;
 		serial1 = &duart1;
+		mmc0 = &esdhc;
+		mmc1 = &esdhc1;
+		rtc1 = &ftm_alarm1;
 	};
 
 	chosen {
@@ -139,6 +142,91 @@
 	status = "okay";
 };
 
+&dspi0 {
+	bus-num = <0>;
+	status = "okay";
+
+	flash@0 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "jedec,spi-nor";
+		spi-cpol;
+		spi-cpha;
+		reg = <0>;
+		spi-max-frequency = <10000000>;
+	};
+
+	flash@1 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "jedec,spi-nor";
+		spi-cpol;
+		spi-cpha;
+		reg = <1>;
+		spi-max-frequency = <10000000>;
+	};
+
+	flash@2 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "jedec,spi-nor";
+		spi-cpol;
+		spi-cpha;
+		reg = <2>;
+		spi-max-frequency = <10000000>;
+	};
+};
+
+&dspi1 {
+	bus-num = <1>;
+	status = "okay";
+
+	flash@0 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "jedec,spi-nor";
+		spi-cpol;
+		spi-cpha;
+		reg = <0>;
+		spi-max-frequency = <10000000>;
+	};
+
+	flash@1 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "jedec,spi-nor";
+		spi-cpol;
+		spi-cpha;
+		reg = <1>;
+		spi-max-frequency = <10000000>;
+	};
+
+	flash@2 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "jedec,spi-nor";
+		spi-cpol;
+		spi-cpha;
+		reg = <2>;
+		spi-max-frequency = <10000000>;
+	};
+};
+
+&dspi2 {
+	bus-num = <2>;
+	status = "okay";
+
+	flash@0 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "jedec,spi-nor";
+		spi-cpol;
+		spi-cpha;
+		reg = <0>;
+		spi-max-frequency = <10000000>;
+	};
+};
+
 &duart0 {
 	status = "okay";
 };
@@ -147,11 +235,45 @@
 	status = "okay";
 };
 
+&enetc_port1 {
+	phy-handle = <&qds_phy1>;
+	phy-connection-type = "rgmii-id";
+	status = "okay";
+};
+
+&enetc_port2 {
+	status = "okay";
+};
+
 &esdhc {
 	status = "okay";
 };
 
 &esdhc1 {
+	status = "okay";
+};
+
+&fspi {
+	status = "okay";
+
+	mt35xu02g0: flash@0 {
+		compatible = "jedec,spi-nor";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		spi-max-frequency = <50000000>;
+		/* The following setting enables 1-1-8 (CMD-ADDR-DATA) mode */
+		spi-rx-bus-width = <8>; /* 8 SPI Rx lines */
+		spi-tx-bus-width = <1>; /* 1 SPI Tx line */
+		reg = <0>;
+	};
+};
+
+&ftm_alarm1 {
+	status = "okay";
+};
+
+&hdptx0 {
+	lane-mapping = <0x4e>;
 	status = "okay";
 };
 
@@ -221,8 +343,6 @@
 	};
 
 	fpga@66 {
-		#address-cells = <1>;
-		#size-cells = <0>;
 		compatible = "fsl,ls1028aqds-fpga", "fsl,fpga-qixis-i2c",
 			     "simple-mfd";
 		reg = <0x66>;
@@ -238,30 +358,24 @@
 
 &i2c1 {
 	status = "okay";
+
 	rtc@51 {
 		compatible = "nxp,pcf2129";
 		reg = <0x51>;
 	};
 };
 
-&enetc_port1 {
-	phy-handle = <&qds_phy1>;
-	phy-connection-type = "rgmii-id";
+&lpuart0 {
+	status = "okay";
 };
 
-&fspi {
+&lpuart1 {
 	status = "okay";
-	mt35xu02g: flash@0 {
-		compatible = "spansion,m25p80";
-		#address-cells = <1>;
-		#size-cells = <1>;
-		m25p,fast-read;
-		spi-max-frequency = <20000000>;
-		reg = <0>;
-		/* The following setting enables 1-1-8 (CMD-ADDR-DATA) mode */
-		spi-rx-bus-width = <8>; /* 8 SPI Rx lines */
-		spi-tx-bus-width = <1>; /* 1 SPI Tx line */
-	};
+};
+
+&mscc_felix_port4 {
+	ethernet = <&enetc_port2>;
+	status = "okay";
 };
 
 &sai1 {
@@ -269,10 +383,5 @@
 };
 
 &sata {
-	status = "okay";
-};
-
-&hdptx0 {
-	lane-mapping = <0x4e>;
 	status = "okay";
 };

@@ -138,6 +138,9 @@
 #define MACACCESS_CMD_READ                     6
 #define MACACCESS_CMD_WRITE                    7
 
+#define MACACCESS_ENTRY_TYPE_NORMAL		0
+#define MACACCESS_ENTRY_TYPE_LOCKED		1
+
 #define ANA_TABLES_VLANACCESS_VLAN_PORT_MASK(x)           (((x) << 2) & GENMASK(13, 2))
 #define ANA_TABLES_VLANACCESS_VLAN_PORT_MASK_M            GENMASK(13, 2)
 #define ANA_TABLES_VLANACCESS_VLAN_PORT_MASK_X(x)         (((x) & GENMASK(13, 2)) >> 2)

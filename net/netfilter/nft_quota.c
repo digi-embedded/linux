@@ -60,7 +60,7 @@ static void nft_quota_obj_eval(struct nft_object *obj,
 	if (overquota &&
 	    !test_and_set_bit(NFT_QUOTA_DEPLETED_BIT, &priv->flags))
 		nft_obj_notify(nft_net(pkt), obj->key.table, obj, 0, 0,
-			       NFT_MSG_NEWOBJ, nft_pf(pkt), 0, GFP_ATOMIC);
+			       NFT_MSG_NEWOBJ, 0, nft_pf(pkt), 0, GFP_ATOMIC);
 }
 
 static int nft_quota_do_init(const struct nlattr * const tb[],
@@ -254,3 +254,4 @@ MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Pablo Neira Ayuso <pablo@netfilter.org>");
 MODULE_ALIAS_NFT_EXPR("quota");
 MODULE_ALIAS_NFT_OBJ(NFT_OBJECT_QUOTA);
+MODULE_DESCRIPTION("Netfilter nftables quota module");

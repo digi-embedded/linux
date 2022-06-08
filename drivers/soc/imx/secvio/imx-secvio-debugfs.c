@@ -58,7 +58,11 @@ int snvs_reader(struct device *dev, u32 id, u32 *value, u8 mul)
 	int ret;
 	u32 *v1, *v2, *v3, *v4, *v5;
 
-	v1 = v2 = v3 = v4 = v5 = NULL;
+	v1 = NULL;
+	v2 = NULL;
+	v3 = NULL;
+	v4 = NULL;
+	v5 = NULL;
 
 	switch (mul) {
 	case 5:
@@ -151,19 +155,18 @@ struct imx_secvio_sc_info_seq_data {
 	int size;
 };
 
-static void * imx_secvio_sc_info_seq_start(struct seq_file *m, loff_t *pos)
+static void *imx_secvio_sc_info_seq_start(struct seq_file *m, loff_t *pos)
 {
 	struct imx_secvio_sc_info_seq_data *data = m->private;
 
 	/* Check we are not out of bound */
-	if (*pos >= data->size) {
+	if (*pos >= data->size)
 		return NULL;
-	}
 
 	return (void *)pos;
 }
 
-static void * imx_secvio_sc_info_seq_next(struct seq_file *m, void *v, loff_t *pos)
+static void *imx_secvio_sc_info_seq_next(struct seq_file *m, void *v, loff_t *pos)
 {
 	/* Increment the counter */
 	++*pos;
@@ -201,7 +204,7 @@ static int imx_secvio_sc_info_seq_show(struct seq_file *m, void *v)
 	for (idx = 0; idx < e->mul; idx++)
 		seq_printf(m, " %.8x", vals[idx]);
 
-	seq_printf(m, "\n");
+	seq_puts(m, "\n");
 
 	return 0;
 }
@@ -229,11 +232,11 @@ static int imx_secvio_sc_info_open(struct inode *inode, struct file *file)
 }
 
 static const struct file_operations imx_secvio_sc_info_ops = {
-    .owner = THIS_MODULE,
-    .open = imx_secvio_sc_info_open,
-    .read = seq_read,
-    .llseek = seq_lseek,
-    .release = seq_release_private,
+	.owner = THIS_MODULE,
+	.open = imx_secvio_sc_info_open,
+	.read = seq_read,
+	.llseek = seq_lseek,
+	.release = seq_release_private,
 };
 
 static void if_debugfs_remove_recursive(void *dentry)

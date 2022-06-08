@@ -9,8 +9,9 @@
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
-#include <drm/drmP.h>
+#include <drm/drm_atomic.h>
 #include <drm/drm_atomic_helper.h>
+#include <drm/drm_vblank.h>
 #include <video/imx-lcdifv3.h>
 #include <video/videomode.h>
 
@@ -80,22 +81,24 @@ static void lcdifv3_crtc_destroy_state(struct drm_crtc *crtc,
 }
 
 static int lcdifv3_crtc_atomic_check(struct drm_crtc *crtc,
-				   struct drm_crtc_state *state)
+				     struct drm_atomic_state *state)
 {
 	struct lcdifv3_crtc *lcdifv3_crtc = to_lcdifv3_crtc(crtc);
-	struct imx_crtc_state *imx_crtc_state = to_imx_crtc_state(state);
+	struct drm_crtc_state *crtc_state = drm_atomic_get_new_crtc_state(state,
+									  crtc);
+	struct imx_crtc_state *imx_crtc_state = to_imx_crtc_state(crtc_state);
 
 	/* Don't check 'bus_format' when CRTC is
 	 * going to be disabled.
 	 */
-	if (!state->enable)
+	if (!crtc_state->enable)
 		return 0;
 
 	/* For the commit that the CRTC is active
 	 * without planes attached to it should be
 	 * invalid.
 	 */
-	if (state->active && !state->plane_mask)
+	if (crtc_state->active && !crtc_state->plane_mask)
 		return -EINVAL;
 
 	/* check the requested bus format can be
@@ -117,7 +120,7 @@ static int lcdifv3_crtc_atomic_check(struct drm_crtc *crtc,
 }
 
 static void lcdifv3_crtc_atomic_begin(struct drm_crtc *crtc,
-				    struct drm_crtc_state *old_crtc_state)
+				      struct drm_atomic_state *state)
 {
 	drm_crtc_vblank_on(crtc);
 
@@ -131,7 +134,7 @@ static void lcdifv3_crtc_atomic_begin(struct drm_crtc *crtc,
 }
 
 static void lcdifv3_crtc_atomic_flush(struct drm_crtc *crtc,
-				    struct drm_crtc_state *old_crtc_state)
+				      struct drm_atomic_state *state)
 {
 	struct lcdifv3_crtc *lcdifv3_crtc = to_lcdifv3_crtc(crtc);
 	struct lcdifv3_soc *lcdifv3 = dev_get_drvdata(lcdifv3_crtc->dev->parent);
@@ -141,7 +144,7 @@ static void lcdifv3_crtc_atomic_flush(struct drm_crtc *crtc,
 }
 
 static void lcdifv3_crtc_atomic_enable(struct drm_crtc *crtc,
-				     struct drm_crtc_state *old_crtc_state)
+				       struct drm_atomic_state *state)
 {
 	struct lcdifv3_crtc *lcdifv3_crtc = to_lcdifv3_crtc(crtc);
 	struct lcdifv3_soc *lcdifv3 = dev_get_drvdata(lcdifv3_crtc->dev->parent);
@@ -156,7 +159,7 @@ static void lcdifv3_crtc_atomic_enable(struct drm_crtc *crtc,
 	else
 		vm.flags |= DISPLAY_FLAGS_DE_LOW;
 
-	if (imx_crtc_state->bus_flags & DRM_BUS_FLAG_PIXDATA_POSEDGE)
+	if (imx_crtc_state->bus_flags & DRM_BUS_FLAG_PIXDATA_SAMPLE_NEGEDGE)
 		vm.flags |= DISPLAY_FLAGS_PIXDATA_POSEDGE;
 	else
 		vm.flags |= DISPLAY_FLAGS_PIXDATA_NEGEDGE;
@@ -173,7 +176,7 @@ static void lcdifv3_crtc_atomic_enable(struct drm_crtc *crtc,
 }
 
 static void lcdifv3_crtc_atomic_disable(struct drm_crtc *crtc,
-				      struct drm_crtc_state *old_crtc_state)
+					struct drm_atomic_state *state)
 {
 	struct lcdifv3_crtc *lcdifv3_crtc = to_lcdifv3_crtc(crtc);
 	struct lcdifv3_soc *lcdifv3 = dev_get_drvdata(lcdifv3_crtc->dev->parent);
@@ -197,7 +200,7 @@ static enum drm_mode_status lcdifv3_crtc_mode_valid(struct drm_crtc * crtc,
 {
 	u8 vic;
 	long rate;
-	const struct drm_display_mode *dmt;
+	struct drm_display_mode *dmt, copy;
 	struct lcdifv3_crtc *lcdifv3_crtc = to_lcdifv3_crtc(crtc);
 	struct lcdifv3_soc *lcdifv3 = dev_get_drvdata(lcdifv3_crtc->dev->parent);
 
@@ -209,8 +212,13 @@ static enum drm_mode_status lcdifv3_crtc_mode_valid(struct drm_crtc * crtc,
 	/* check DMT mode */
 	dmt = drm_mode_find_dmt(crtc->dev, mode->hdisplay, mode->vdisplay,
 				drm_mode_vrefresh(mode), false);
-	if (dmt && drm_mode_equal(mode, dmt))
-		goto check_pix_clk;
+	if (dmt) {
+		drm_mode_copy(&copy, dmt);
+		drm_mode_destroy(crtc->dev, dmt);
+
+		if (drm_mode_equal(mode, &copy))
+			goto check_pix_clk;
+	}
 
 	return MODE_OK;
 

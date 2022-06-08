@@ -127,7 +127,7 @@ int imx_sc_seco_secvio_config(struct imx_sc_ipc *ipc, u8 id, u8 access,
 		} else {
 			return -EINVAL;
 		}
-		/* fallthrough */
+		fallthrough;
 	case 4:
 		if (data3) {
 			if (access)
@@ -135,7 +135,7 @@ int imx_sc_seco_secvio_config(struct imx_sc_ipc *ipc, u8 id, u8 access,
 		} else {
 			return -EINVAL;
 		}
-		/* fallthrough */
+		fallthrough;
 	case 3:
 		if (data2) {
 			if (access)
@@ -143,7 +143,7 @@ int imx_sc_seco_secvio_config(struct imx_sc_ipc *ipc, u8 id, u8 access,
 		} else {
 			return -EINVAL;
 		}
-		/* fallthrough */
+		fallthrough;
 	case 2:
 		if (data1) {
 			if (access)
@@ -151,7 +151,7 @@ int imx_sc_seco_secvio_config(struct imx_sc_ipc *ipc, u8 id, u8 access,
 		} else {
 			return -EINVAL;
 		}
-		/* fallthrough */
+		fallthrough;
 	case 1:
 		if (data0) {
 			if (access)
@@ -168,7 +168,7 @@ int imx_sc_seco_secvio_config(struct imx_sc_ipc *ipc, u8 id, u8 access,
 	msg.access = access;
 	msg.size = size;
 
-	ret = imx_scu_call_big_rpc(ipc, &msg, true);
+	ret = imx_scu_call_rpc(ipc, &msg, true);
 	if (ret)
 		return ret;
 
@@ -179,16 +179,16 @@ int imx_sc_seco_secvio_config(struct imx_sc_ipc *ipc, u8 id, u8 access,
 		switch (size) {
 		case 5:
 			*data4 = resp->data4;
-		/* fallthrough */
+		fallthrough;
 		case 4:
 			*data3 = resp->data3;
-		/* fallthrough */
+		fallthrough;
 		case 3:
 			*data2 = resp->data2;
-		/* fallthrough */
+		fallthrough;
 		case 2:
 			*data1 = resp->data1;
-		/* fallthrough */
+		fallthrough;
 		case 1:
 			*data0 = resp->data0;
 		}

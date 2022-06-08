@@ -1,5 +1,6 @@
 /*
  * Copyright 2005-2016 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright 2020,2021 NXP
  */
 /*
  * The code contained herein is licensed under the GNU General Public
@@ -601,15 +602,15 @@ static int ipu_probe(struct platform_device *pdev)
 			dev_err(&pdev->dev, "failed to reset: %d\n", ret);
 			return ret;
 		}
-
-		ipu_mem_reset(ipu);
-
-		ipu_disp_init(ipu);
-
-		/* Set MCU_T to divide MCU access window into 2 */
-		ipu_cm_write(ipu, 0x00400000L | (IPU_MCU_T_DEFAULT << 18),
-			     IPU_DISP_GEN);
 	}
+
+	ipu_mem_reset(ipu);
+
+	ipu_disp_init(ipu);
+
+	/* Set MCU_T to divide MCU access window into 2 */
+	ipu_cm_write(ipu, 0x00400000L | (IPU_MCU_T_DEFAULT << 18),
+		     IPU_DISP_GEN);
 
 	/* setup ipu clk tree after ipu reset  */
 	ret = ipu_clk_setup_enable(ipu);
@@ -2335,7 +2336,11 @@ int32_t ipu_enable_channel(struct ipu_soc *ipu, ipu_channel_t channel)
 		break;
 	case DIRECT_ASYNC0:
 		di = ipu->dc_di_assignment[8];
-		/* fall through */
+		if (ipu->di_use_count[di] > 0)
+			ipu_conf |= di ? IPU_CONF_DI1_EN : IPU_CONF_DI0_EN;
+		if (ipu->dc_use_count > 0)
+			ipu_conf |= IPU_CONF_DC_EN;
+		break;
 	case DIRECT_ASYNC1:
 		di = ipu->dc_di_assignment[9];
 		if (ipu->di_use_count[di] > 0)
@@ -2348,7 +2353,7 @@ int32_t ipu_enable_channel(struct ipu_soc *ipu, ipu_channel_t channel)
 	case MEM_ROT_VF_MEM:
 		if (ipu->rot_use_count > 0)
 			ipu_conf |= IPU_CONF_ROT_EN;
-		/* fall through */
+		fallthrough;
 	case MEM_PP_MEM:
 	case MEM_PRP_ENC_MEM:
 	case MEM_PRP_VF_MEM:

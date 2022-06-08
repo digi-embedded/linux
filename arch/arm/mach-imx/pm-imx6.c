@@ -4,11 +4,13 @@
  * Copyright 2011 Linaro Ltd.
  */
 
+#include <linux/clk/imx.h>
 #include <linux/delay.h>
 #include <linux/init.h>
 #include <linux/io.h>
 #include <linux/irq.h>
 #include <linux/genalloc.h>
+#include <linux/irqchip/arm-gic.h>
 #include <linux/mfd/syscon.h>
 #include <linux/mfd/syscon/imx6q-iomuxc-gpr.h>
 #include <linux/of.h>
@@ -576,11 +578,6 @@ static struct map_desc imx6_pm_io_desc[] __initdata = {
 	imx_map_entry(MX6Q, L2,	MT_DEVICE),
 };
 
-static const char * const low_power_ocram_match[] __initconst = {
-	"fsl,lpm-sram",
-	NULL
-};
-
 /*
  * This structure is for passing necessary data for low level ocram
  * suspend code(arch/arm/mach-imx/suspend-imx6.S), if this struct
@@ -998,7 +995,7 @@ static int __init imx6_dt_find_lpsram(unsigned long node, const char *uname,
 	unsigned long lpram_addr;
 	const __be32 *prop = of_get_flat_dt_prop(node, "reg", NULL);
 
-	if (of_flat_dt_match(node, low_power_ocram_match)) {
+	if (of_flat_dt_is_compatible(node, "fsl,lpm-sram")) {
 		if (!prop)
 			return -EINVAL;
 
@@ -1329,6 +1326,8 @@ void __init imx6_pm_ccm_init(const char *ccm_compat)
 	val = readl_relaxed(ccm_base + CLPCR);
 	val &= ~BM_CLPCR_LPM;
 	writel_relaxed(val, ccm_base + CLPCR);
+
+	of_node_put(np);
 }
 
 void __init imx6q_pm_init(void)
@@ -1352,7 +1351,7 @@ void __init imx6sl_pm_init(void)
 	if (cpu_is_imx6sll()) {
 		imx6_pm_common_init(&imx6sll_pm_data);
 		np = of_find_node_by_path(
-			"/soc/aips-bus@02000000/spba-bus@02000000/serial@02020000");
+			"/soc/bus@2000000/spba-bus@2000000/serial@2020000");
 		if (np)
 			console_base = of_iomap(np, 0);
 		/* i.MX6SLL has bus auto clock gating function */
@@ -1411,7 +1410,7 @@ void __init imx6sx_pm_init(void)
 	WARN_ON(!ocram_saved_in_ddr);
 
 	np = of_find_node_by_path(
-		"/soc/aips-bus@02000000/spba-bus@02000000/serial@02020000");
+		"/soc/bus@2000000/spba-bus@2000000/serial@2020000");
 	if (np)
 		console_base = of_iomap(np, 0);
 	if (imx_src_is_m4_enabled()) {
@@ -1434,7 +1433,7 @@ void __init imx6ul_pm_init(void)
 
 	if (cpu_is_imx6ull() || cpu_is_imx6ulz()) {
 		np = of_find_node_by_path(
-			"/soc/aips-bus@02000000/spba-bus@02000000/serial@02020000");
+			"/soc/bus@2000000/spba-bus@2000000/serial@2020000");
 		if (np)
 			console_base = of_iomap(np, 0);
 	}

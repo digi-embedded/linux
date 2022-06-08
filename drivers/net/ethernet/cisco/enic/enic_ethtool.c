@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright 2013 Cisco Systems, Inc.  All rights reserved.
  *
  * This program is free software; you may redistribute it and/or modify
@@ -147,7 +147,6 @@ static void enic_get_drvinfo(struct net_device *netdev,
 		return;
 
 	strlcpy(drvinfo->driver, DRV_NAME, sizeof(drvinfo->driver));
-	strlcpy(drvinfo->version, DRV_VERSION, sizeof(drvinfo->version));
 	strlcpy(drvinfo->fw_version, fw_info->fw_version,
 		sizeof(drvinfo->fw_version));
 	strlcpy(drvinfo->bus_info, pci_name(enic->pdev),
@@ -299,7 +298,9 @@ static void enic_set_msglevel(struct net_device *netdev, u32 value)
 }
 
 static int enic_get_coalesce(struct net_device *netdev,
-	struct ethtool_coalesce *ecmd)
+			     struct ethtool_coalesce *ecmd,
+			     struct kernel_ethtool_coalesce *kernel_coal,
+			     struct netlink_ext_ack *extack)
 {
 	struct enic *enic = netdev_priv(netdev);
 	struct enic_rx_coal *rxcoal = &enic->rx_coalesce_setting;
@@ -324,25 +325,6 @@ static int enic_coalesce_valid(struct enic *enic,
 	u32 rx_coalesce_usecs_low = min_t(u32, coalesce_usecs_max,
 					  ec->rx_coalesce_usecs_low);
 
-	if (ec->rx_max_coalesced_frames		||
-	    ec->rx_coalesce_usecs_irq		||
-	    ec->rx_max_coalesced_frames_irq	||
-	    ec->tx_max_coalesced_frames		||
-	    ec->tx_coalesce_usecs_irq		||
-	    ec->tx_max_coalesced_frames_irq	||
-	    ec->stats_block_coalesce_usecs	||
-	    ec->use_adaptive_tx_coalesce	||
-	    ec->pkt_rate_low			||
-	    ec->rx_max_coalesced_frames_low	||
-	    ec->tx_coalesce_usecs_low		||
-	    ec->tx_max_coalesced_frames_low	||
-	    ec->pkt_rate_high			||
-	    ec->rx_max_coalesced_frames_high	||
-	    ec->tx_coalesce_usecs_high		||
-	    ec->tx_max_coalesced_frames_high	||
-	    ec->rate_sample_interval)
-		return -EINVAL;
-
 	if ((vnic_dev_get_intr_mode(enic->vdev) != VNIC_DEV_INTR_MODE_MSIX) &&
 	    ec->tx_coalesce_usecs)
 		return -EINVAL;
@@ -363,7 +345,9 @@ static int enic_coalesce_valid(struct enic *enic,
 }
 
 static int enic_set_coalesce(struct net_device *netdev,
-	struct ethtool_coalesce *ecmd)
+			     struct ethtool_coalesce *ecmd,
+			     struct kernel_ethtool_coalesce *kernel_coal,
+			     struct netlink_ext_ack *extack)
 {
 	struct enic *enic = netdev_priv(netdev);
 	u32 tx_coalesce_usecs;
@@ -454,7 +438,6 @@ static int enic_grxclsrule(struct enic *enic, struct ethtool_rxnfc *cmd)
 		break;
 	default:
 		return -EINVAL;
-		break;
 	}
 
 	fsp->h_u.tcp_ip4_spec.ip4src = flow_get_u32_src(&n->keys);
@@ -636,6 +619,10 @@ static int enic_get_ts_info(struct net_device *netdev,
 }
 
 static const struct ethtool_ops enic_ethtool_ops = {
+	.supported_coalesce_params = ETHTOOL_COALESCE_USECS |
+				     ETHTOOL_COALESCE_USE_ADAPTIVE_RX |
+				     ETHTOOL_COALESCE_RX_USECS_LOW |
+				     ETHTOOL_COALESCE_RX_USECS_HIGH,
 	.get_drvinfo = enic_get_drvinfo,
 	.get_msglevel = enic_get_msglevel,
 	.set_msglevel = enic_set_msglevel,

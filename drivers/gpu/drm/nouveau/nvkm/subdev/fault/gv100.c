@@ -214,6 +214,7 @@ gv100_fault = {
 	.buffer.nr = 2,
 	.buffer.entry_size = 32,
 	.buffer.info = gv100_fault_buffer_info,
+	.buffer.pin = gp100_fault_buffer_pin,
 	.buffer.init = gv100_fault_buffer_init,
 	.buffer.fini = gv100_fault_buffer_fini,
 	.buffer.intr = gv100_fault_buffer_intr,
@@ -227,8 +228,8 @@ gv100_fault = {
 };
 
 int
-gv100_fault_new(struct nvkm_device *device, int index,
+gv100_fault_new(struct nvkm_device *device, enum nvkm_subdev_type type, int inst,
 		struct nvkm_fault **pfault)
 {
-	return nvkm_fault_new_(&gv100_fault, device, index, pfault);
+	return nvkm_fault_new_(&gv100_fault, device, type, inst, pfault);
 }

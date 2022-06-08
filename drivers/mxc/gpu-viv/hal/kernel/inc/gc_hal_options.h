@@ -326,15 +326,6 @@ This define enables the use of VM for gckCommand and fence buffers.
 #   define gcdENABLE_FSCALE_VAL_ADJUST          1
 #endif
 
-/*
-    gcdCAPTURE_ONLY_MODE
-        When non-zero, driver is built with capture only mode.
-        1) Set DDR address range in capture file with contiguousBase and contiguoutsSize.
-           Video memory allocation will go through reserved pool with capture only mode.
-        2) Set SRAM address range in capture file with sRAMBases, sRAMSizes and extSRAMBases, extSRAMSizes.
-           Video memory querion will go through reserved pool with capture only mode.
-        3) TODO: SRAM video memory allocation.
-*/
 #ifndef gcdCAPTURE_ONLY_MODE
 #   define gcdCAPTURE_ONLY_MODE                 0
 #endif
@@ -472,7 +463,7 @@ This define enables the use of VM for gckCommand and fence buffers.
         otherwise GPU will enter gcvPOWER_IDLE.
 */
 #ifndef gcdPOWER_SUSPEND_WHEN_IDLE
-#   define gcdPOWER_SUSPEND_WHEN_IDLE          1
+#   define gcdPOWER_SUSPEND_WHEN_IDLE          0
 #endif
 
 #ifndef gcdFPGA_BUILD
@@ -492,7 +483,7 @@ This define enables the use of VM for gckCommand and fence buffers.
 #if gcdFPGA_BUILD
 #   define gcdGPU_TIMEOUT                   2000000
 #else
-#   define gcdGPU_TIMEOUT                   20000
+#   define gcdGPU_TIMEOUT                   30000
 #endif
 #endif
 
@@ -1221,7 +1212,7 @@ This define enables the use of VM for gckCommand and fence buffers.
 
     When enabled, add bounary before and after a range of
     GPU address. So overflow can be trapped by MMU exception.
-    This is a debug option for new MMU and gcdUSE_MMU_EXCEPTION
+    This is a debug option for new MMU and mmuException module parameter
     is enabled.
 */
 #ifndef gcdBOUNDARY_CHECK
@@ -1293,10 +1284,6 @@ This define enables the use of VM for gckCommand and fence buffers.
 #else
 #   define gcdMMU_SECURE_AREA_SIZE              128
 #endif
-#endif
-
-#ifndef gcdUSE_MMU_EXCEPTION
-#   define gcdUSE_MMU_EXCEPTION                 1
 #endif
 
 #ifndef gcdVX_OPTIMIZER
@@ -1401,6 +1388,14 @@ This define enables the use of VM for gckCommand and fence buffers.
 */
 #ifndef gcdEXTERNAL_SRAM_DEFAULT_POOL
 #   define gcdEXTERNAL_SRAM_DEFAULT_POOL 0
+#endif
+
+/*
+    gcdENABLE_RECOVERY_ALL_CORES
+        When enabled, will recovery all cores when the gpu hang.
+*/
+#ifndef gcdENABLE_RECOVERY_ALL_CORES
+#   define gcdENABLE_RECOVERY_ALL_CORES 1
 #endif
 
 #endif /* __gc_hal_options_h_ */

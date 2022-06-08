@@ -13,6 +13,7 @@
 
 / {
 	model = "LS1043A RDB Board";
+	compatible = "fsl,ls1043a-rdb", "fsl,ls1043a";
 
 	aliases {
 		serial0 = &duart0;
@@ -37,6 +38,10 @@
 		compatible = "adi,adt7461";
 		reg = <0x4c>;
 	};
+	rtc@51 {
+		compatible = "nxp,pcf85263";
+		reg = <0x51>;
+	};
 	eeprom@52 {
 		compatible = "atmel,24c512";
 		reg = <0x52>;
@@ -48,10 +53,6 @@
 	rtc@68 {
 		compatible = "pericom,pt7c4338";
 		reg = <0x68>;
-	};
-	rtc@51 {
-		compatible = "nxp,pcf85263";
-		reg = <0x51>;
 	};
 };
 
@@ -113,22 +114,6 @@
 		spi-max-frequency = <2000000>;
 		fsl,spi-cs-sck-delay = <100>;
 		fsl,spi-sck-cs-delay = <50>;
-	};
-};
-
-&uqe {
-	ucc_hdlc: ucc@2000 {
-		compatible = "fsl,ucc-hdlc";
-		rx-clock-name = "clk8";
-		tx-clock-name = "clk9";
-		fsl,rx-sync-clock = "rsync_pin";
-		fsl,tx-sync-clock = "tsync_pin";
-		fsl,tx-timeslot-mask = <0xfffffffe>;
-		fsl,rx-timeslot-mask = <0xfffffffe>;
-		fsl,tdm-framer-type = "e1";
-		fsl,tdm-id = <0>;
-		fsl,siram-entry-id = <0>;
-		fsl,tdm-interface;
 	};
 };
 
@@ -211,4 +196,28 @@
 			reg = <0x1>;
 		};
 	};
+};
+
+&uqe {
+	ucc_hdlc: ucc@2000 {
+		compatible = "fsl,ucc-hdlc";
+		rx-clock-name = "clk8";
+		tx-clock-name = "clk9";
+		fsl,rx-sync-clock = "rsync_pin";
+		fsl,tx-sync-clock = "tsync_pin";
+		fsl,tx-timeslot-mask = <0xfffffffe>;
+		fsl,rx-timeslot-mask = <0xfffffffe>;
+		fsl,tdm-framer-type = "e1";
+		fsl,tdm-id = <0>;
+		fsl,siram-entry-id = <0>;
+		fsl,tdm-interface;
+	};
+};
+
+&usb0 {
+	status = "okay";
+};
+
+&usb1 {
+	status = "okay";
 };

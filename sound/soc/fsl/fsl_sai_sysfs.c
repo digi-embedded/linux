@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0+
-// Copyright 2020 NXP Semiconductors.
+// Copyright 2020 NXP
 
 #include <linux/clk.h>
 #include <linux/module.h>
@@ -230,7 +230,7 @@ rx_monitor_spdif_store(struct device *dev, struct device_attribute *attr,
 			const char *buf, size_t n)
 {
 	struct fsl_sai *sai = dev_get_drvdata(dev);
-	unsigned char offset = sai->soc->reg_offset;
+	unsigned char offset = sai->soc_data->reg_offset;
 	unsigned int val = 0;
 	bool enable = false;
 	unsigned int reg;

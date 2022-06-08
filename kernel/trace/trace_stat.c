@@ -72,9 +72,7 @@ static void destroy_session(struct stat_session *session)
 	kfree(session);
 }
 
-typedef int (*cmp_stat_t)(void *, void *);
-
-static int insert_stat(struct rb_root *root, void *stat, cmp_stat_t cmp)
+static int insert_stat(struct rb_root *root, void *stat, cmp_func_t cmp)
 {
 	struct rb_node **new = &(root->rb_node), *parent = NULL;
 	struct stat_node *data;
@@ -112,7 +110,7 @@ static int insert_stat(struct rb_root *root, void *stat, cmp_stat_t cmp)
  * This one will force an insertion as right-most node
  * in the rbtree.
  */
-static int dummy_cmp(void *p1, void *p2)
+static int dummy_cmp(const void *p1, const void *p2)
 {
 	return -1;
 }
@@ -278,13 +276,13 @@ static const struct file_operations tracing_stat_fops = {
 
 static int tracing_stat_init(void)
 {
-	struct dentry *d_tracing;
+	int ret;
 
-	d_tracing = tracing_init_dentry();
-	if (IS_ERR(d_tracing))
+	ret = tracing_init_dentry();
+	if (ret)
 		return -ENODEV;
 
-	stat_dir = tracefs_create_dir("trace_stat", d_tracing);
+	stat_dir = tracefs_create_dir("trace_stat", NULL);
 	if (!stat_dir) {
 		pr_warn("Could not create tracefs 'trace_stat' entry\n");
 		return -ENOMEM;
@@ -299,9 +297,9 @@ static int init_stat_file(struct stat_session *session)
 	if (!stat_dir && (ret = tracing_stat_init()))
 		return ret;
 
-	session->file = tracefs_create_file(session->ts->name, 0644,
-					    stat_dir,
-					    session, &tracing_stat_fops);
+	session->file = tracefs_create_file(session->ts->name, TRACE_MODE_WRITE,
+					    stat_dir, session,
+					    &tracing_stat_fops);
 	if (!session->file)
 		return -ENOMEM;
 	return 0;

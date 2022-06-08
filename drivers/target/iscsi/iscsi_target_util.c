@@ -28,23 +28,6 @@
 #include "iscsi_target_util.h"
 #include "iscsi_target.h"
 
-#define PRINT_BUFF(buff, len)					\
-{								\
-	int zzz;						\
-								\
-	pr_debug("%d:\n", __LINE__);				\
-	for (zzz = 0; zzz < len; zzz++) {			\
-		if (zzz % 16 == 0) {				\
-			if (zzz)				\
-				pr_debug("\n");			\
-			pr_debug("%4i: ", zzz);			\
-		}						\
-		pr_debug("%02x ", (unsigned char) (buff)[zzz]);	\
-	}							\
-	if ((len + 1) % 16)					\
-		pr_debug("\n");					\
-}
-
 extern struct list_head g_tiqn_list;
 extern spinlock_t tiqn_lock;
 
@@ -779,21 +762,22 @@ void iscsit_free_cmd(struct iscsi_cmd *cmd, bool shutdown)
 }
 EXPORT_SYMBOL(iscsit_free_cmd);
 
-int iscsit_check_session_usage_count(struct iscsi_session *sess)
+bool iscsit_check_session_usage_count(struct iscsi_session *sess,
+				      bool can_sleep)
 {
 	spin_lock_bh(&sess->session_usage_lock);
 	if (sess->session_usage_count != 0) {
 		sess->session_waiting_on_uc = 1;
 		spin_unlock_bh(&sess->session_usage_lock);
-		if (in_interrupt())
-			return 2;
+		if (!can_sleep)
+			return true;
 
 		wait_for_completion(&sess->session_waiting_on_uc_comp);
-		return 1;
+		return false;
 	}
 	spin_unlock_bh(&sess->session_usage_lock);
 
-	return 0;
+	return false;
 }
 
 void iscsit_dec_session_usage_count(struct iscsi_session *sess)
@@ -1228,18 +1212,20 @@ void iscsit_print_session_params(struct iscsi_session *sess)
 	iscsi_dump_sess_ops(sess->sess_ops);
 }
 
-static int iscsit_do_rx_data(
+int rx_data(
 	struct iscsi_conn *conn,
-	struct iscsi_data_count *count)
+	struct kvec *iov,
+	int iov_count,
+	int data)
 {
-	int data = count->data_length, rx_loop = 0, total_rx = 0;
+	int rx_loop = 0, total_rx = 0;
 	struct msghdr msg;
 
 	if (!conn || !conn->sock || !conn->conn_ops)
 		return -1;
 
 	memset(&msg, 0, sizeof(struct msghdr));
-	iov_iter_kvec(&msg.msg_iter, READ, count->iov, count->iov_count, data);
+	iov_iter_kvec(&msg.msg_iter, READ, iov, iov_count, data);
 
 	while (msg_data_left(&msg)) {
 		rx_loop = sock_recvmsg(conn->sock, &msg, MSG_WAITALL);
@@ -1254,26 +1240,6 @@ static int iscsit_do_rx_data(
 	}
 
 	return total_rx;
-}
-
-int rx_data(
-	struct iscsi_conn *conn,
-	struct kvec *iov,
-	int iov_count,
-	int data)
-{
-	struct iscsi_data_count c;
-
-	if (!conn || !conn->sock || !conn->conn_ops)
-		return -1;
-
-	memset(&c, 0, sizeof(struct iscsi_data_count));
-	c.iov = iov;
-	c.iov_count = iov_count;
-	c.data_length = data;
-	c.type = ISCSI_RX_DATA;
-
-	return iscsit_do_rx_data(conn, &c);
 }
 
 int tx_data(

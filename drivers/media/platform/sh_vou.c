@@ -220,7 +220,7 @@ static void sh_vou_stream_config(struct sh_vou_device *vou_dev)
 		break;
 	case V4L2_PIX_FMT_RGB565:
 		dataswap ^= 1;
-		/* fall through */
+		fallthrough;
 	case V4L2_PIX_FMT_RGB565X:
 		row_coeff = 2;
 		break;
@@ -802,7 +802,7 @@ static u32 sh_vou_ntsc_mode(enum sh_vou_bus_fmt bus_fmt)
 	default:
 		pr_warn("%s(): Invalid bus-format code %d, using default 8-bit\n",
 			__func__, bus_fmt);
-		/* fall through */
+		fallthrough;
 	case SH_VOU_BUS_8BIT:
 		return 1;
 	case SH_VOU_BUS_16BIT:
@@ -1133,7 +1133,11 @@ static int sh_vou_open(struct file *file)
 	if (v4l2_fh_is_singular_file(file) &&
 	    vou_dev->status == SH_VOU_INITIALISING) {
 		/* First open */
-		pm_runtime_get_sync(vou_dev->v4l2_dev.dev);
+		err = pm_runtime_resume_and_get(vou_dev->v4l2_dev.dev);
+		if (err < 0) {
+			v4l2_fh_release(file);
+			goto done_open;
+		}
 		err = sh_vou_hw_init(vou_dev);
 		if (err < 0) {
 			pm_runtime_put(vou_dev->v4l2_dev.dev);
@@ -1323,7 +1327,7 @@ static int sh_vou_probe(struct platform_device *pdev)
 		goto ei2cnd;
 	}
 
-	ret = video_register_device(vdev, VFL_TYPE_GRABBER, -1);
+	ret = video_register_device(vdev, VFL_TYPE_VIDEO, -1);
 	if (ret < 0)
 		goto evregdev;
 
@@ -1355,7 +1359,7 @@ static int sh_vou_remove(struct platform_device *pdev)
 	return 0;
 }
 
-static struct platform_driver __refdata sh_vou = {
+static struct platform_driver sh_vou = {
 	.remove  = sh_vou_remove,
 	.driver  = {
 		.name	= "sh-vou",

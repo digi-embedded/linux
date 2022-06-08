@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0
-/**
+/*
  * Common USB debugging functions
  *
- * Copyright (C) 2010-2011 Texas Instruments Incorporated - http://www.ti.com
+ * Copyright (C) 2010-2011 Texas Instruments Incorporated - https://www.ti.com
  *
  * Authors: Felipe Balbi <balbi@ti.com>,
  *	    Sebastian Andrzej Siewior <bigeasy@linutronix.de>
@@ -53,15 +53,15 @@ static const char *usb_decode_device_feature(u16 wValue)
 static const char *usb_decode_test_mode(u16 wIndex)
 {
 	switch (wIndex) {
-	case TEST_J:
+	case USB_TEST_J:
 		return ": TEST_J";
-	case TEST_K:
+	case USB_TEST_K:
 		return ": TEST_K";
-	case TEST_SE0_NAK:
+	case USB_TEST_SE0_NAK:
 		return ": TEST_SE0_NAK";
-	case TEST_PACKET:
+	case USB_TEST_PACKET:
 		return ": TEST_PACKET";
-	case TEST_FORCE_EN:
+	case USB_TEST_FORCE_ENABLE:
 		return ": TEST_FORCE_EN";
 	default:
 		return ": UNKNOWN";
@@ -208,7 +208,25 @@ static void usb_decode_set_isoch_delay(__u8 wValue, char *str, size_t size)
 }
 
 /**
- * usb_decode_ctrl - returns a string representation of ctrl request
+ * usb_decode_ctrl - Returns human readable representation of control request.
+ * @str: buffer to return a human-readable representation of control request.
+ *       This buffer should have about 200 bytes.
+ * @size: size of str buffer.
+ * @bRequestType: matches the USB bmRequestType field
+ * @bRequest: matches the USB bRequest field
+ * @wValue: matches the USB wValue field (CPU byte order)
+ * @wIndex: matches the USB wIndex field (CPU byte order)
+ * @wLength: matches the USB wLength field (CPU byte order)
+ *
+ * Function returns decoded, formatted and human-readable description of
+ * control request packet.
+ *
+ * The usage scenario for this is for tracepoints, so function as a return
+ * use the same value as in parameters. This approach allows to use this
+ * function in TP_printk
+ *
+ * Important: wValue, wIndex, wLength parameters before invoking this function
+ * should be processed by le16_to_cpu macro.
  */
 const char *usb_decode_ctrl(char *str, size_t size, __u8 bRequestType,
 			    __u8 bRequest, __u16 wValue, __u16 wIndex,

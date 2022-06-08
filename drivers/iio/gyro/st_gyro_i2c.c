@@ -9,7 +9,7 @@
 
 #include <linux/kernel.h>
 #include <linux/module.h>
-#include <linux/slab.h>
+#include <linux/mod_devicetable.h>
 #include <linux/i2c.h>
 #include <linux/iio/iio.h>
 
@@ -17,7 +17,6 @@
 #include <linux/iio/common/st_sensors_i2c.h>
 #include "st_gyro.h"
 
-#ifdef CONFIG_OF
 static const struct of_device_id st_gyro_of_match[] = {
 	{
 		.compatible = "st,l3g4200d-gyro",
@@ -58,9 +57,6 @@ static const struct of_device_id st_gyro_of_match[] = {
 	{},
 };
 MODULE_DEVICE_TABLE(of, st_gyro_of_match);
-#else
-#define st_gyro_of_match NULL
-#endif
 
 static int st_gyro_i2c_probe(struct i2c_client *client,
 			     const struct i2c_device_id *id)
@@ -70,8 +66,7 @@ static int st_gyro_i2c_probe(struct i2c_client *client,
 	struct iio_dev *indio_dev;
 	int err;
 
-	st_sensors_of_name_probe(&client->dev, st_gyro_of_match,
-				 client->name, sizeof(client->name));
+	st_sensors_dev_name_probe(&client->dev, client->name, sizeof(client->name));
 
 	settings = st_gyro_get_settings(client->name);
 	if (!settings) {
@@ -91,16 +86,29 @@ static int st_gyro_i2c_probe(struct i2c_client *client,
 	if (err < 0)
 		return err;
 
-	err = st_gyro_common_probe(indio_dev);
-	if (err < 0)
+	err = st_sensors_power_enable(indio_dev);
+	if (err)
 		return err;
 
+	err = st_gyro_common_probe(indio_dev);
+	if (err < 0)
+		goto st_gyro_power_off;
+
 	return 0;
+
+st_gyro_power_off:
+	st_sensors_power_disable(indio_dev);
+
+	return err;
 }
 
 static int st_gyro_i2c_remove(struct i2c_client *client)
 {
-	st_gyro_common_remove(i2c_get_clientdata(client));
+	struct iio_dev *indio_dev = i2c_get_clientdata(client);
+
+	st_gyro_common_remove(indio_dev);
+
+	st_sensors_power_disable(indio_dev);
 
 	return 0;
 }
@@ -122,7 +130,7 @@ MODULE_DEVICE_TABLE(i2c, st_gyro_id_table);
 static struct i2c_driver st_gyro_driver = {
 	.driver = {
 		.name = "st-gyro-i2c",
-		.of_match_table = of_match_ptr(st_gyro_of_match),
+		.of_match_table = st_gyro_of_match,
 	},
 	.probe = st_gyro_i2c_probe,
 	.remove = st_gyro_i2c_remove,

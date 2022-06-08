@@ -225,34 +225,6 @@ void __iomem *pci_remap_cfgspace(resource_size_t res_cookie, size_t size);
 #endif
 #endif
 
-/* access ports */
-#define setbits32(_addr, _v) iowrite32be(ioread32be(_addr) |  (_v), (_addr))
-#define clrbits32(_addr, _v) iowrite32be(ioread32be(_addr) & ~(_v), (_addr))
-
-#define setbits16(_addr, _v) iowrite16be(ioread16be(_addr) |  (_v), (_addr))
-#define clrbits16(_addr, _v) iowrite16be(ioread16be(_addr) & ~(_v), (_addr))
-
-#define setbits8(_addr, _v) iowrite8(ioread8(_addr) |  (_v), (_addr))
-#define clrbits8(_addr, _v) iowrite8(ioread8(_addr) & ~(_v), (_addr))
-
-/* Clear and set bits in one shot.  These macros can be used to clear and
- * set multiple bits in a register using a single read-modify-write.  These
- * macros can also be used to set a multiple-bit bit pattern using a mask,
- * by specifying the mask in the 'clear' parameter and the new bit pattern
- * in the 'set' parameter.
- */
-
-#define clrsetbits_be32(addr, clear, set) \
-	iowrite32be((ioread32be(addr) & ~(clear)) | (set), (addr))
-#define clrsetbits_le32(addr, clear, set) \
-	iowrite32le((ioread32le(addr) & ~(clear)) | (set), (addr))
-#define clrsetbits_be16(addr, clear, set) \
-	iowrite16be((ioread16be(addr) & ~(clear)) | (set), (addr))
-#define clrsetbits_le16(addr, clear, set) \
-	iowrite16le((ioread16le(addr) & ~(clear)) | (set), (addr))
-#define clrsetbits_8(addr, clear, set) \
-	iowrite8((ioread8(addr) & ~(clear)) | (set), (addr))
-
 /*
  *  IO port access primitives
  *  -------------------------
@@ -385,7 +357,6 @@ static inline void memcpy_toio(volatile void __iomem *to, const void *from,
  *
  * Function		Memory type	Cacheability	Cache hint
  * ioremap()		Device		n/a		n/a
- * ioremap_nocache()	Device		n/a		n/a
  * ioremap_cache()	Normal		Writeback	Read allocate
  * ioremap_wc()		Normal		Non-cacheable	n/a
  * ioremap_wt()		Normal		Non-cacheable	n/a
@@ -396,13 +367,6 @@ static inline void memcpy_toio(volatile void __iomem *to, const void *from,
  * - number, order and size of accesses are maintained
  * - unaligned accesses are "unpredictable"
  * - writes may be delayed before they hit the endpoint device
- *
- * ioremap_nocache() is the same as ioremap() as there are too many device
- * drivers using this for device registers, and documentation which tells
- * people to use it for such for this to be any different.  This is not a
- * safe fallback for memory-like mappings, or memory regions where the
- * compiler may generate unaligned accesses - eg, via inlining its own
- * memcpy.
  *
  * All normal memory mappings have the following properties:
  * - reads can be repeated with no side effects
@@ -421,19 +385,12 @@ static inline void memcpy_toio(volatile void __iomem *to, const void *from,
  */
 void __iomem *ioremap(resource_size_t res_cookie, size_t size);
 #define ioremap ioremap
-#define ioremap_nocache ioremap
 
 /*
  * Do not use ioremap_cache for mapping memory. Use memremap instead.
  */
 void __iomem *ioremap_cache(resource_size_t res_cookie, size_t size);
 #define ioremap_cache ioremap_cache
-
-/*
- * Do not use ioremap_cached in new code. Provided for the benefit of
- * the pxa2xx-flash MTD driver only.
- */
-void __iomem *ioremap_cached(resource_size_t res_cookie, size_t size);
 
 void __iomem *ioremap_wc(resource_size_t res_cookie, size_t size);
 #define ioremap_wc ioremap_wc
@@ -476,18 +433,12 @@ extern void pci_iounmap(struct pci_dev *dev, void __iomem *addr);
  */
 #define xlate_dev_mem_ptr(p)	__va(p)
 
-/*
- * Convert a virtual cached pointer to an uncached pointer
- */
-#define xlate_dev_kmem_ptr(p)	p
-
 #include <asm-generic/io.h>
 
 #ifdef CONFIG_MMU
 #define ARCH_HAS_VALID_PHYS_ADDR_RANGE
 extern int valid_phys_addr_range(phys_addr_t addr, size_t size);
 extern int valid_mmap_phys_addr_range(unsigned long pfn, size_t size);
-extern int devmem_is_allowed(unsigned long pfn);
 #endif
 
 /*

@@ -101,7 +101,6 @@
 	 * The reserved memory will be used when using U-Boot loading android
 	 * image. For booting kernel using xl tool, pass args:
 	 * cma=960M@2400M-3584M
-	 * For the rpmsg_reserved area, need xl tool to create for non-android.
 	 */
 	reserved-memory {
 		#address-cells = <2>;
@@ -113,9 +112,26 @@
 			no-map;
 			reg = <0 0x84000000 0 0x2000000>;
 		};
-		dsp_reserved: dsp@0x92400000 {
+		dsp_reserved: dsp@92400000 {
+			reg = <0 0x92400000 0 0x1000000>;
 			no-map;
-			reg = <0 0x92400000 0 0x2000000>;
+		};
+		dsp_reserved_heap: dsp_reserved_heap {
+			reg = <0 0x93400000 0 0xef0000>;
+			no-map;
+		};
+		dsp_vdev0vring0: vdev0vring0@942f0000 {
+			reg = <0 0x942f0000 0 0x8000>;
+			no-map;
+		};
+		dsp_vdev0vring1: vdev0vring1@942f8000 {
+			reg = <0 0x942f8000 0 0x8000>;
+			no-map;
+		};
+		dsp_vdev0buffer: vdev0buffer@94300000 {
+			compatible = "shared-dma-pool";
+			reg = <0 0x94300000 0 0x100000>;
+			no-map;
 		};
 		encoder_boot: encoder_boot@0x86000000 {
 			no-map;
@@ -138,17 +154,12 @@
 			reg = <0 0x95000000 0 0x400000>;
 		};
 
-		rpmsg_reserved: rpmsg@0x90000000 {
-			no-map;
-			reg = <0 0x90200000 0 0x200000>;
-		};
-
 		/* global autoconfigured region for contiguous allocations */
 		linux,cma {
 			compatible = "shared-dma-pool";
 			reusable;
 			size = <0 0x3c000000>;
-			alloc-ranges = <0 0x96000000 0 0x3c000000>;
+			alloc-ranges = <0 0xc0000000 0 0x3c000000>;
 			linux,cma-default;
 		};
 
@@ -351,7 +362,7 @@
 		model = "imx-cs42888";
 		esai-controller = <&esai0>;
 		audio-codec = <&cs42888>;
-		asrc-controller = <&asrc0>;
+		audio-asrc = <&asrc0>;
 		status = "okay";
 		xen,passthrough;
 	};
@@ -394,19 +405,19 @@
 		xen,passthrough;
 
 		dsp: dsp@556e8000 {
-			compatible = "fsl,imx8qm-dsp";
+			compatible = "fsl,imx8qm-hifi4";
 			reg = <0x556e8000 0x88000>;
 			clocks = <&clk_dummy>,
 				 <&clk_dummy>,
 				 <&clk_dummy>;
-			clock-names = "ipg", "ocram", "core";
-			fsl,dsp-firmware = "imx/dsp/hifi4.bin";
+			clock-names = "dsp_clk1", "dsp_clk2", "dsp_clk3";
+			firmware-name = "imx/dsp/hifi4.bin";
 			power-domains = <&pd IMX_SC_R_MU_13A>,
 					<&pd IMX_SC_R_MU_13B>,
 					<&pd IMX_SC_R_DSP>,
 					<&pd IMX_SC_R_DSP_RAM>;
-			memory-region = <&dsp_reserved>;
-			fixup-offset = <0x4000000>;
+			memory-region = <&dsp_vdev0buffer>, <&dsp_vdev0vring0>,
+					<&dsp_vdev0vring1>, <&dsp_reserved>;
 			status = "disabled";
 		};
 	};
@@ -453,7 +464,8 @@
 
 	edma214: dma-controller@5a2e0000 {
 		compatible = "fsl,imx8qm-edma";
-		reg = <0x5a2e0000 0x10000>, /* channel14 UART1 rx */
+		reg = <0x5a1f0000 0x10000>,
+		      <0x5a2e0000 0x10000>, /* channel14 UART1 rx */
 		      <0x5a2f0000 0x10000>; /* channel15 UART1 tx */
 		#dma-cells = <3>;
 		dma-channels = <2>;
@@ -842,9 +854,11 @@
 	status = "okay";
 };
 
+/*
 &usb3phynop1 {
 	status = "okay";
 };
+*/
 
 &usbotg3 {
 	dr_mode = "otg";
@@ -938,10 +952,12 @@
 	status = "okay";
 };
 
+/*
 &mu3_m0{
 	interrupts = <GIC_SPI 475 IRQ_TYPE_LEVEL_HIGH>;
 	status = "okay";
 };
+*/
 
 &vpu_decoder {
 	compatible = "nxp,imx8qm-b0-vpudec";
@@ -952,12 +968,14 @@
 	status = "okay";
 };
 
+/*
 &vpu_ts {
 	compatible = "nxp,imx8qm-b0-vpu-ts";
 	boot-region = <&ts_boot>;
 	reg-csr = <0x2d0b0000>;
 	status = "okay";
 };
+*/
 
 &vpu_encoder {
 	compatible = "nxp,imx8qm-b0-vpuenc";
@@ -1012,7 +1030,7 @@
 
 /* Audio */
 &dsp {
-	compatible = "fsl,imx8qm-dsp-v1";
+	compatible = "fsl,imx8qm-hifi4";
 	status = "okay";
 };
 
@@ -1063,6 +1081,10 @@
 	status = "disabled";
 };
 
+&usbotg3_cdns3 {
+	/delete-property/ iommus;
+	status = "disabled";
+};
 &sai7 {
 	assigned-clocks = <&acm IMX_ADMA_ACM_SAI7_MCLK_SEL>,
 			<&clk IMX_SC_R_AUDIO_PLL_1 IMX_SC_PM_CLK_PLL>,

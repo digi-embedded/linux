@@ -13,7 +13,6 @@
 #include <linux/irq.h>
 #include <linux/mfd/syscon.h>
 #include <linux/of_device.h>
-#include <linux/of_gpio.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <linux/regmap.h>
@@ -511,11 +510,16 @@ static void decon_swreset(struct decon_context *ctx)
 	       ctx->addr + DECON_CRCCTRL);
 }
 
-static void decon_enable(struct exynos_drm_crtc *crtc)
+static void decon_atomic_enable(struct exynos_drm_crtc *crtc)
 {
 	struct decon_context *ctx = crtc->ctx;
+	int ret;
 
-	pm_runtime_get_sync(ctx->dev);
+	ret = pm_runtime_resume_and_get(ctx->dev);
+	if (ret < 0) {
+		DRM_DEV_ERROR(ctx->dev, "failed to enable DECON device.\n");
+		return;
+	}
 
 	exynos_drm_pipe_clk_enable(crtc, true);
 
@@ -524,7 +528,7 @@ static void decon_enable(struct exynos_drm_crtc *crtc)
 	decon_commit(ctx->crtc);
 }
 
-static void decon_disable(struct exynos_drm_crtc *crtc)
+static void decon_atomic_disable(struct exynos_drm_crtc *crtc)
 {
 	struct decon_context *ctx = crtc->ctx;
 	int i;
@@ -600,8 +604,8 @@ static enum drm_mode_status decon_mode_valid(struct exynos_drm_crtc *crtc,
 }
 
 static const struct exynos_drm_crtc_ops decon_crtc_ops = {
-	.enable			= decon_enable,
-	.disable		= decon_disable,
+	.atomic_enable		= decon_atomic_enable,
+	.atomic_disable		= decon_atomic_disable,
 	.enable_vblank		= decon_enable_vblank,
 	.disable_vblank		= decon_disable_vblank,
 	.atomic_begin		= decon_atomic_begin,
@@ -652,7 +656,7 @@ static void decon_unbind(struct device *dev, struct device *master, void *data)
 {
 	struct decon_context *ctx = dev_get_drvdata(dev);
 
-	decon_disable(ctx->crtc);
+	decon_atomic_disable(ctx->crtc);
 
 	/* detach this sub driver from iommu mapping if supported. */
 	exynos_drm_unregister_dma(ctx->drm_dev, ctx->dev, &ctx->dma_priv);
@@ -775,8 +779,8 @@ static int decon_conf_irq(struct decon_context *ctx, const char *name,
 			return irq;
 		}
 	}
-	irq_set_status_flags(irq, IRQ_NOAUTOEN);
-	ret = devm_request_irq(ctx->dev, irq, handler, flags, "drm_decon", ctx);
+	ret = devm_request_irq(ctx->dev, irq, handler,
+			       flags | IRQF_NO_AUTOEN, "drm_decon", ctx);
 	if (ret < 0) {
 		dev_err(ctx->dev, "IRQ %s request failed\n", name);
 		return ret;
@@ -789,7 +793,6 @@ static int exynos5433_decon_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct decon_context *ctx;
-	struct resource *res;
 	int ret;
 	int i;
 
@@ -814,12 +817,9 @@ static int exynos5433_decon_probe(struct platform_device *pdev)
 		ctx->clks[i] = clk;
 	}
 
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	ctx->addr = devm_ioremap_resource(dev, res);
-	if (IS_ERR(ctx->addr)) {
-		dev_err(dev, "ioremap failed\n");
+	ctx->addr = devm_platform_ioremap_resource(pdev, 0);
+	if (IS_ERR(ctx->addr))
 		return PTR_ERR(ctx->addr);
-	}
 
 	ret = decon_conf_irq(ctx, "vsync", decon_irq_handler, 0);
 	if (ret < 0)

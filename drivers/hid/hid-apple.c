@@ -51,6 +51,12 @@ MODULE_PARM_DESC(swap_opt_cmd, "Swap the Option (\"Alt\") and Command (\"Flag\")
 		"(For people who want to keep Windows PC keyboard muscle memory. "
 		"[0] = as-is, Mac layout. 1 = swapped, Windows layout.)");
 
+static unsigned int swap_fn_leftctrl;
+module_param(swap_fn_leftctrl, uint, 0644);
+MODULE_PARM_DESC(swap_fn_leftctrl, "Swap the Fn and left Control keys. "
+		"(For people who want to keep PC keyboard muscle memory. "
+		"[0] = as-is, Mac layout, 1 = swapped, PC layout)");
+
 struct apple_sc {
 	unsigned long quirks;
 	unsigned int fn_on;
@@ -163,6 +169,11 @@ static const struct apple_key_translation swapped_option_cmd_keys[] = {
 	{ }
 };
 
+static const struct apple_key_translation swapped_fn_leftctrl_keys[] = {
+	{ KEY_FN, KEY_LEFTCTRL },
+	{ }
+};
+
 static const struct apple_key_translation *apple_find_translation(
 		const struct apple_key_translation *table, u16 from)
 {
@@ -176,6 +187,15 @@ static const struct apple_key_translation *apple_find_translation(
 	return NULL;
 }
 
+static void input_event_with_scancode(struct input_dev *input,
+		__u8 type, __u16 code, unsigned int hid, __s32 value)
+{
+	if (type == EV_KEY &&
+	    (!test_bit(code, input->key)) == value)
+		input_event(input, EV_MSC, MSC_SCAN, hid);
+	input_event(input, type, code, value);
+}
+
 static int hidinput_apple_event(struct hid_device *hid, struct input_dev *input,
 		struct hid_usage *usage, __s32 value)
 {
@@ -184,9 +204,12 @@ static int hidinput_apple_event(struct hid_device *hid, struct input_dev *input,
 	bool do_translate;
 	u16 code = 0;
 
-	if (usage->code == KEY_FN) {
+	u16 fn_keycode = (swap_fn_leftctrl) ? (KEY_LEFTCTRL) : (KEY_FN);
+
+	if (usage->code == fn_keycode) {
 		asc->fn_on = !!value;
-		input_event(input, usage->type, usage->code, value);
+		input_event_with_scancode(input, usage->type, KEY_FN,
+				usage->hid, value);
 		return 1;
 	}
 
@@ -227,7 +250,8 @@ static int hidinput_apple_event(struct hid_device *hid, struct input_dev *input,
 				code = do_translate ? trans->to : trans->from;
 			}
 
-			input_event(input, usage->type, code, value);
+			input_event_with_scancode(input, usage->type, code,
+					usage->hid, value);
 			return 1;
 		}
 
@@ -245,8 +269,8 @@ static int hidinput_apple_event(struct hid_device *hid, struct input_dev *input,
 					clear_bit(usage->code,
 							asc->pressed_numlock);
 
-				input_event(input, usage->type, trans->to,
-						value);
+				input_event_with_scancode(input, usage->type,
+						trans->to, usage->hid, value);
 			}
 
 			return 1;
@@ -257,7 +281,8 @@ static int hidinput_apple_event(struct hid_device *hid, struct input_dev *input,
 		if (hid->country == HID_COUNTRY_INTERNATIONAL_ISO) {
 			trans = apple_find_translation(apple_iso_keyboard, usage->code);
 			if (trans) {
-				input_event(input, usage->type, trans->to, value);
+				input_event_with_scancode(input, usage->type,
+						trans->to, usage->hid, value);
 				return 1;
 			}
 		}
@@ -266,7 +291,17 @@ static int hidinput_apple_event(struct hid_device *hid, struct input_dev *input,
 	if (swap_opt_cmd) {
 		trans = apple_find_translation(swapped_option_cmd_keys, usage->code);
 		if (trans) {
-			input_event(input, usage->type, trans->to, value);
+			input_event_with_scancode(input, usage->type,
+					trans->to, usage->hid, value);
+			return 1;
+		}
+	}
+
+	if (swap_fn_leftctrl) {
+		trans = apple_find_translation(swapped_fn_leftctrl_keys, usage->code);
+		if (trans) {
+			input_event_with_scancode(input, usage->type,
+					trans->to, usage->hid, value);
 			return 1;
 		}
 	}
@@ -285,8 +320,8 @@ static int apple_event(struct hid_device *hdev, struct hid_field *field,
 
 	if ((asc->quirks & APPLE_INVERT_HWHEEL) &&
 			usage->code == REL_HWHEEL) {
-		input_event(field->hidinput->input, usage->type, usage->code,
-				-value);
+		input_event_with_scancode(field->hidinput->input, usage->type,
+				usage->code, usage->hid, -value);
 		return 1;
 	}
 
@@ -301,11 +336,18 @@ static int apple_event(struct hid_device *hdev, struct hid_field *field,
 
 /*
  * MacBook JIS keyboard has wrong logical maximum
+ * Magic Keyboard JIS has wrong logical maximum
  */
 static __u8 *apple_report_fixup(struct hid_device *hdev, __u8 *rdesc,
 		unsigned int *rsize)
 {
 	struct apple_sc *asc = hid_get_drvdata(hdev);
+
+	if(*rsize >=71 && rdesc[70] == 0x65 && rdesc[64] == 0x65) {
+		hid_info(hdev,
+			 "fixing up Magic Keyboard JIS report descriptor\n");
+		rdesc[64] = rdesc[70] = 0xe7;
+	}
 
 	if ((asc->quirks & APPLE_RDESC_JIS) && *rsize >= 60 &&
 			rdesc[53] == 0x65 && rdesc[59] == 0x65) {
@@ -334,6 +376,11 @@ static void apple_setup_input(struct input_dev *input)
 
 	for (trans = apple_iso_keyboard; trans->from; trans++)
 		set_bit(trans->to, input->keybit);
+
+	if (swap_fn_leftctrl) {
+		for (trans = swapped_fn_leftctrl_keys; trans->from; trans++)
+			set_bit(trans->to, input->keybit);
+	}
 }
 
 static int apple_input_mapping(struct hid_device *hdev, struct hid_input *hi,
@@ -475,7 +522,11 @@ static const struct hid_device_id apple_devices[] = {
 			APPLE_RDESC_JIS },
 	{ HID_USB_DEVICE(USB_VENDOR_ID_APPLE, USB_DEVICE_ID_APPLE_ALU_REVB_ANSI),
 		.driver_data = APPLE_HAS_FN },
+	{ HID_BLUETOOTH_DEVICE(USB_VENDOR_ID_APPLE, USB_DEVICE_ID_APPLE_ALU_REVB_ANSI),
+		.driver_data = APPLE_HAS_FN },
 	{ HID_USB_DEVICE(USB_VENDOR_ID_APPLE, USB_DEVICE_ID_APPLE_ALU_REVB_ISO),
+		.driver_data = APPLE_HAS_FN },
+	{ HID_BLUETOOTH_DEVICE(USB_VENDOR_ID_APPLE, USB_DEVICE_ID_APPLE_ALU_REVB_ISO),
 		.driver_data = APPLE_HAS_FN },
 	{ HID_USB_DEVICE(USB_VENDOR_ID_APPLE, USB_DEVICE_ID_APPLE_ALU_REVB_JIS),
 		.driver_data = APPLE_HAS_FN },

@@ -57,7 +57,7 @@ static int set_mux_gdm1_to_gmac1_esw(struct mtk_eth *eth, int path)
 	default:
 		updated = false;
 		break;
-	};
+	}
 
 	if (updated) {
 		val = mtk_r32(eth, MTK_MAC_MISC);
@@ -143,7 +143,7 @@ static int set_mux_gmac1_gmac2_to_sgmii_rgmii(struct mtk_eth *eth, int path)
 	default:
 		updated = false;
 		break;
-	};
+	}
 
 	if (updated)
 		regmap_update_bits(eth->ethsys, ETHSYS_SYSCFG0,
@@ -174,7 +174,7 @@ static int set_mux_gmac12_to_gephy_sgmii(struct mtk_eth *eth, int path)
 		break;
 	default:
 		updated = false;
-	};
+	}
 
 	if (updated)
 		regmap_update_bits(eth->ethsys, ETHSYS_SYSCFG0,
@@ -241,22 +241,18 @@ out:
 
 int mtk_gmac_sgmii_path_setup(struct mtk_eth *eth, int mac_id)
 {
-	int err, path;
+	int path;
 
 	path = (mac_id == 0) ?  MTK_ETH_PATH_GMAC1_SGMII :
 				MTK_ETH_PATH_GMAC2_SGMII;
 
 	/* Setup proper MUXes along the path */
-	err = mtk_eth_mux_setup(eth, path);
-	if (err)
-		return err;
-
-	return 0;
+	return mtk_eth_mux_setup(eth, path);
 }
 
 int mtk_gmac_gephy_path_setup(struct mtk_eth *eth, int mac_id)
 {
-	int err, path = 0;
+	int path = 0;
 
 	if (mac_id == 1)
 		path = MTK_ETH_PATH_GMAC2_GEPHY;
@@ -265,25 +261,17 @@ int mtk_gmac_gephy_path_setup(struct mtk_eth *eth, int mac_id)
 		return -EINVAL;
 
 	/* Setup proper MUXes along the path */
-	err = mtk_eth_mux_setup(eth, path);
-	if (err)
-		return err;
-
-	return 0;
+	return mtk_eth_mux_setup(eth, path);
 }
 
 int mtk_gmac_rgmii_path_setup(struct mtk_eth *eth, int mac_id)
 {
-	int err, path;
+	int path;
 
 	path = (mac_id == 0) ?  MTK_ETH_PATH_GMAC1_RGMII :
 				MTK_ETH_PATH_GMAC2_RGMII;
 
 	/* Setup proper MUXes along the path */
-	err = mtk_eth_mux_setup(eth, path);
-	if (err)
-		return err;
-
-	return 0;
+	return mtk_eth_mux_setup(eth, path);
 }
 

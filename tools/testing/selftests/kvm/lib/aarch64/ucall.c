@@ -14,7 +14,7 @@ static bool ucall_mmio_init(struct kvm_vm *vm, vm_paddr_t gpa)
 	if (kvm_userspace_memory_region_find(vm, gpa, gpa + 1))
 		return false;
 
-	virt_pg_map(vm, gpa, gpa, 0);
+	virt_pg_map(vm, gpa, gpa);
 
 	ucall_exit_mmio_addr = (vm_vaddr_t *)gpa;
 	sync_global_to_guest(vm, ucall_exit_mmio_addr);
@@ -62,7 +62,7 @@ void ucall_init(struct kvm_vm *vm, void *arg)
 		if (ucall_mmio_init(vm, start + offset))
 			return;
 	}
-	TEST_ASSERT(false, "Can't find a ucall mmio address");
+	TEST_FAIL("Can't find a ucall mmio address");
 }
 
 void ucall_uninit(struct kvm_vm *vm)
@@ -93,6 +93,9 @@ uint64_t get_ucall(struct kvm_vm *vm, uint32_t vcpu_id, struct ucall *uc)
 {
 	struct kvm_run *run = vcpu_state(vm, vcpu_id);
 	struct ucall ucall = {};
+
+	if (uc)
+		memset(uc, 0, sizeof(*uc));
 
 	if (run->exit_reason == KVM_EXIT_MMIO &&
 	    run->mmio.phys_addr == (uint64_t)ucall_exit_mmio_addr) {

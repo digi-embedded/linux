@@ -22,15 +22,16 @@
  * Authors: Alex Deucher
  */
 
+#include <linux/pci.h>
 #include <linux/seq_file.h>
-
-#include <drm/drm_pci.h>
 
 #include "atom.h"
 #include "btc_dpm.h"
 #include "btcd.h"
 #include "cypress_dpm.h"
+#include "evergreen.h"
 #include "r600_dpm.h"
+#include "rv770.h"
 #include "radeon.h"
 #include "radeon_asic.h"
 
@@ -48,10 +49,6 @@
 
 #ifndef BTC_MGCG_SEQUENCE
 #define BTC_MGCG_SEQUENCE  300
-
-struct rv7xx_ps *rv770_get_ps(struct radeon_ps *rps);
-struct rv7xx_power_info *rv770_get_pi(struct radeon_device *rdev);
-struct evergreen_power_info *evergreen_get_pi(struct radeon_device *rdev);
 
 extern int ni_mc_load_microcode(struct radeon_device *rdev);
 

@@ -2,7 +2,7 @@
 /*
  * V4L2 Media Controller Driver for NXP IMX8QXP/QM SOC
  *
- * Copyright (c) 2019 NXP Semiconductor
+ * Copyright 2019-2021 NXP
  *
  */
 
@@ -92,10 +92,19 @@ struct mxc_parallel_csi_info {
 	int id;
 };
 
+struct mxc_hdmi_rx_info {
+	struct v4l2_subdev *sd;
+	struct media_entity *entity;
+	struct device_node *node;
+
+	char sd_name[MXC_NAME_LENS];
+	int id;
+};
+
 struct mxc_sensor_info {
 	int				id;
 	struct v4l2_subdev		*sd;
-	struct v4l2_async_subdev asd;
+	struct fwnode_handle *fwnode;
 	bool mipi_mode;
 };
 
@@ -103,6 +112,7 @@ struct mxc_md {
 	struct mxc_isi_info		mxc_isi[MXC_ISI_MAX_DEVS];
 	struct mxc_mipi_csi2_info	mipi_csi2[MXC_MIPI_CSI2_MAX_DEVS];
 	struct mxc_parallel_csi_info	pcsidev;
+	struct mxc_hdmi_rx_info		hdmi_rx;
 	struct mxc_sensor_info		sensor[MXC_MAX_SENSORS];
 
 	int link_status;
@@ -116,7 +126,6 @@ struct mxc_md {
 	struct platform_device *pdev;
 
 	struct v4l2_async_notifier subdev_notifier;
-	struct v4l2_async_subdev *async_subdevs[MXC_MAX_SENSORS];
 };
 
 static inline struct mxc_md *notifier_to_mxc_md(struct v4l2_async_notifier *n)
@@ -127,6 +136,7 @@ static inline struct mxc_md *notifier_to_mxc_md(struct v4l2_async_notifier *n)
 static void mxc_md_unregister_entities(struct mxc_md *mxc_md)
 {
 	struct mxc_parallel_csi_info *pcsidev = &mxc_md->pcsidev;
+	struct mxc_hdmi_rx_info *hdmi_rx = &mxc_md->hdmi_rx;
 	int i;
 
 	for (i = 0; i < MXC_ISI_MAX_DEVS; i++) {
@@ -148,6 +158,9 @@ static void mxc_md_unregister_entities(struct mxc_md *mxc_md)
 
 	if (pcsidev->sd)
 		v4l2_device_unregister_subdev(pcsidev->sd);
+
+	if (hdmi_rx->sd)
+		v4l2_device_unregister_subdev(hdmi_rx->sd);
 
 	v4l2_info(&mxc_md->v4l2_dev, "Unregistered all entities\n");
 }
@@ -291,6 +304,7 @@ static int mxc_md_create_links(struct mxc_md *mxc_md)
 	struct mxc_sensor_info *sensor;
 	struct mxc_mipi_csi2_info *mipi_csi2;
 	struct mxc_parallel_csi_info *pcsidev;
+	struct mxc_hdmi_rx_info *hdmi_rx;
 	int num_sensors = mxc_md->num_sensors;
 	int i, j, ret = 0;
 	u16  source_pad, sink_pad;
@@ -413,6 +427,14 @@ static int mxc_md_create_links(struct mxc_md *mxc_md)
 			break;
 
 		case ISI_INPUT_INTERFACE_HDMI:
+			hdmi_rx = &mxc_md->hdmi_rx;
+			if (!hdmi_rx->sd)
+				continue;
+			source = find_entity_by_name(mxc_md, hdmi_rx->sd_name);
+			source_pad = MXC_HDMI_RX_PAD_SOURCE;
+			sink_pad = MXC_ISI_SD_PAD_SINK_HDMI;
+			break;
+
 		case ISI_INPUT_INTERFACE_DC0:
 		case ISI_INPUT_INTERFACE_DC1:
 		case ISI_INPUT_INTERFACE_MEM:
@@ -548,7 +570,7 @@ static int subdev_notifier_bound(struct v4l2_async_notifier *notifier,
 
 	/* Find platform data for this sensor subdev */
 	for (i = 0; i < ARRAY_SIZE(mxc_md->sensor); i++) {
-		if (mxc_md->sensor[i].asd.match.fwnode ==
+		if (mxc_md->sensor[i].fwnode ==
 		    of_fwnode_handle(sd->dev->of_node)) {
 			sensor = &mxc_md->sensor[i];
 		}
@@ -618,13 +640,15 @@ static const struct media_device_ops mxc_md_ops = {
 static struct mxc_isi_info *mxc_md_parse_isi_entity(struct mxc_md *mxc_md,
 						    struct device_node *node)
 {
-	struct device *dev = &mxc_md->pdev->dev;
+	struct device *dev;
 	struct mxc_isi_info *mxc_isi;
 	struct device_node *child;
 	int ret, id = -1;
 
 	if (!mxc_md || !node)
 		return NULL;
+
+	dev = &mxc_md->pdev->dev;
 
 	id = of_alias_get_id(node, ISI_OF_NODE_NAME);
 	if (id < 0 || id >= MXC_ISI_MAX_DEVS)
@@ -699,6 +723,24 @@ mxc_md_parse_pcsi_entity(struct mxc_md *mxc_md, struct device_node *node)
 	return pcsidev;
 }
 
+struct mxc_hdmi_rx_info*
+mxc_md_parse_hdmi_rx_entity(struct mxc_md *mxc_md, struct device_node *node)
+{
+	struct mxc_hdmi_rx_info *hdmi_rx;
+
+	if (!mxc_md || !node)
+		return NULL;
+
+	hdmi_rx = &mxc_md->hdmi_rx;
+	if (!hdmi_rx)
+		return NULL;
+
+	hdmi_rx->node = node;
+	sprintf(hdmi_rx->sd_name, "mxc-hdmi-rx");
+
+	return hdmi_rx;
+}
+
 static struct v4l2_subdev *get_subdev_by_node(struct device_node *node)
 {
 	struct platform_device *pdev;
@@ -732,14 +774,21 @@ static int register_isi_entity(struct mxc_md *mxc_md,
 			       struct mxc_isi_info *mxc_isi)
 {
 	struct v4l2_subdev *sd;
-	int ret;
+	int ret = 0;
 
 	sd = get_subdev_by_node(mxc_isi->node);
 	if (!sd) {
-		dev_info(&mxc_md->pdev->dev,
-			 "deferring %s device registration\n",
-			 mxc_isi->node->name);
-		return -EPROBE_DEFER;
+		ret = of_device_is_available(mxc_isi->node);
+		if (!ret) {
+			dev_info(&mxc_md->pdev->dev, "%s device is disabled\n",
+				 mxc_isi->node->name);
+		} else {
+			dev_info(&mxc_md->pdev->dev,
+				 "deferring %s registration\n",
+				 mxc_isi->node->name);
+			ret = -EPROBE_DEFER;
+		}
+		return ret;
 	}
 
 	if (mxc_isi->id >= MXC_ISI_MAX_DEVS)
@@ -809,6 +858,25 @@ static int register_parallel_csi_entity(struct mxc_md *mxc_md,
 	return ret;
 }
 
+static int register_hdmi_rx_entity(struct mxc_md *mxc_md,
+			struct mxc_hdmi_rx_info *hdmi_rx)
+{
+	struct v4l2_subdev *sd;
+
+	sd = get_subdev_by_node(hdmi_rx->node);
+	if (!sd) {
+		dev_info(&mxc_md->pdev->dev,
+			 "deferring %s device registration\n",
+			 hdmi_rx->node->name);
+		return -EPROBE_DEFER;
+	}
+
+	sd->grp_id = GRP_ID_MXC_HDMI_RX;
+
+	hdmi_rx->sd = sd;
+
+	return true;
+}
 
 static int mxc_md_register_platform_entity(struct mxc_md *mxc_md,
 					   struct device_node *node,
@@ -818,6 +886,7 @@ static int mxc_md_register_platform_entity(struct mxc_md *mxc_md,
 	struct mxc_isi_info *isi;
 	struct mxc_mipi_csi2_info *mipi_csi2;
 	struct mxc_parallel_csi_info *pcsidev;
+	struct mxc_hdmi_rx_info *hdmi_rx;
 	int ret = -EINVAL;
 
 	switch (plat_entity) {
@@ -838,6 +907,12 @@ static int mxc_md_register_platform_entity(struct mxc_md *mxc_md,
 		if (!pcsidev)
 			return -ENODEV;
 		ret = register_parallel_csi_entity(mxc_md, pcsidev);
+		break;
+	case IDX_HDMI_RX:
+		hdmi_rx = mxc_md_parse_hdmi_rx_entity(mxc_md, node);
+		if (!hdmi_rx)
+			return -ENODEV;
+		ret = register_hdmi_rx_entity(mxc_md, hdmi_rx);
 		break;
 	default:
 		dev_err(dev, "Invalid platform entity (%d)", plat_entity);
@@ -866,6 +941,8 @@ static int mxc_md_register_platform_entities(struct mxc_md *mxc_md,
 			plat_entity = IDX_MIPI_CSI2;
 		else if (!strcmp(node->name, PARALLEL_OF_NODE_NAME))
 			plat_entity = IDX_PARALLEL_CSI;
+		else if (!strcmp(node->name, HDMI_RX_OF_NODE_NAME))
+			plat_entity = IDX_HDMI_RX;
 
 		if (plat_entity >= IDX_SENSOR && plat_entity < IDX_MAX) {
 			ret = mxc_md_register_platform_entity(mxc_md, node,
@@ -884,6 +961,7 @@ static int register_sensor_entities(struct mxc_md *mxc_md)
 	struct device_node *node, *ep, *rem;
 	struct v4l2_fwnode_endpoint endpoint;
 	struct i2c_client *client;
+	struct v4l2_async_subdev *asd;
 	int index = 0;
 	int ret;
 
@@ -892,6 +970,17 @@ static int register_sensor_entities(struct mxc_md *mxc_md)
 	/* Attach sensors linked to MIPI CSI2 / paralle csi / HDMI Rx */
 	for_each_available_child_of_node(parent, node) {
 		struct device_node *port;
+
+		if (!of_node_cmp(node->name, HDMI_RX_OF_NODE_NAME)) {
+			mxc_md->sensor[index].fwnode = of_fwnode_handle(node);
+				v4l2_async_notifier_add_fwnode_subdev(
+						&mxc_md->subdev_notifier,
+						mxc_md->sensor[index].fwnode,
+						struct v4l2_async_subdev);
+			mxc_md->num_sensors++;
+			index++;
+			continue;
+		}
 
 		if (of_node_cmp(node->name, MIPI_CSI2_OF_NODE_NAME) &&
 		    of_node_cmp(node->name, PARALLEL_OF_NODE_NAME))
@@ -944,10 +1033,16 @@ static int register_sensor_entities(struct mxc_md *mxc_md)
 			return -EPROBE_DEFER;
 		}
 
-		mxc_md->sensor[index].asd.match_type = V4L2_ASYNC_MATCH_FWNODE;
-		mxc_md->sensor[index].asd.match.fwnode = of_fwnode_handle(rem);
-		v4l2_async_notifier_add_subdev(&mxc_md->subdev_notifier,
-					       &mxc_md->sensor[index].asd);
+		mxc_md->sensor[index].fwnode = of_fwnode_handle(rem);
+		asd = v4l2_async_notifier_add_fwnode_subdev(
+						&mxc_md->subdev_notifier,
+						mxc_md->sensor[index].fwnode,
+						struct v4l2_async_subdev);
+		if (IS_ERR(asd)) {
+			v4l2_info(&mxc_md->v4l2_dev, "Can't find async subdev\n");
+			return PTR_ERR(asd);
+		}
+
 		mxc_md->num_sensors++;
 
 		index++;
@@ -1024,6 +1119,7 @@ static int mxc_md_probe(struct platform_device *pdev)
 			} else {
 				/* no sensors connected */
 				mxc_md_unregister_all(mxc_md);
+				v4l2_async_notifier_unregister(&mxc_md->subdev_notifier);
 			}
 		}
 	}
@@ -1046,6 +1142,7 @@ static int mxc_md_remove(struct platform_device *pdev)
 	if (!mxc_md)
 		return 0;
 
+	v4l2_async_notifier_cleanup(&mxc_md->subdev_notifier);
 	v4l2_async_notifier_unregister(&mxc_md->subdev_notifier);
 
 	v4l2_device_unregister(&mxc_md->v4l2_dev);

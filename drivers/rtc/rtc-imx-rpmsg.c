@@ -86,8 +86,8 @@ static int rtc_send_message(struct rtc_rpmsg_data *msg,
 	}
 
 	mutex_lock(&info->lock);
-	pm_qos_add_request(&info->pm_qos_req,
-			PM_QOS_CPU_DMA_LATENCY, 0);
+	cpu_latency_qos_add_request(&info->pm_qos_req,
+			0);
 
 	reinit_completion(&info->cmd_complete);
 
@@ -119,7 +119,7 @@ static int rtc_send_message(struct rtc_rpmsg_data *msg,
 	}
 
 err_out:
-	pm_qos_remove_request(&info->pm_qos_req);
+	cpu_latency_qos_remove_request(&info->pm_qos_req);
 	mutex_unlock(&info->lock);
 
 	return err;
@@ -130,6 +130,7 @@ static int imx_rpmsg_rtc_read_time(struct device *dev, struct rtc_time *tm)
 	struct rtc_rpmsg_data msg;
 	int ret;
 
+	memset(&msg, 0, sizeof(msg));
 	msg.header.cate = IMX_RPMSG_RTC;
 	msg.header.major = IMX_RMPSG_MAJOR;
 	msg.header.minor = IMX_RMPSG_MINOR;
@@ -140,7 +141,7 @@ static int imx_rpmsg_rtc_read_time(struct device *dev, struct rtc_time *tm)
 	if (ret)
 		return ret;
 
-	rtc_time_to_tm(rtc_rpmsg.msg->sec, tm);
+	rtc_time64_to_tm(rtc_rpmsg.msg->sec, tm);
 
 	return 0;
 }
@@ -151,8 +152,9 @@ static int imx_rpmsg_rtc_set_time(struct device *dev, struct rtc_time *tm)
 	unsigned long time;
 	int ret;
 
-	rtc_tm_to_time(tm, &time);
+	time = rtc_tm_to_time64(tm);
 
+	memset(&msg, 0, sizeof(msg));
 	msg.header.cate = IMX_RPMSG_RTC;
 	msg.header.major = IMX_RMPSG_MAJOR;
 	msg.header.minor = IMX_RMPSG_MINOR;
@@ -172,6 +174,7 @@ static int imx_rpmsg_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 	struct rtc_rpmsg_data msg;
 	int ret;
 
+	memset(&msg, 0, sizeof(msg));
 	msg.header.cate = IMX_RPMSG_RTC;
 	msg.header.major = IMX_RMPSG_MAJOR;
 	msg.header.minor = IMX_RMPSG_MINOR;
@@ -182,7 +185,7 @@ static int imx_rpmsg_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 	if (ret)
 		return ret;
 
-	rtc_time_to_tm(rtc_rpmsg.msg->sec, &alrm->time);
+	rtc_time64_to_tm(rtc_rpmsg.msg->sec, &alrm->time);
 	alrm->pending = rtc_rpmsg.msg->pending;
 
 	return rtc_rpmsg.msg->ret;
@@ -194,6 +197,7 @@ static int imx_rpmsg_rtc_alarm_irq_enable(struct device *dev,
 	struct rtc_rpmsg_data msg;
 	int ret;
 
+	memset(&msg, 0, sizeof(msg));
 	msg.header.cate = IMX_RPMSG_RTC;
 	msg.header.major = IMX_RMPSG_MAJOR;
 	msg.header.minor = IMX_RMPSG_MINOR;
@@ -214,8 +218,9 @@ static int imx_rpmsg_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 	unsigned long time;
 	int ret;
 
-	rtc_tm_to_time(&alrm->time, &time);
+	time = rtc_tm_to_time64(&alrm->time);
 
+	memset(&msg, 0, sizeof(msg));
 	msg.header.cate = IMX_RPMSG_RTC;
 	msg.header.major = IMX_RMPSG_MAJOR;
 	msg.header.minor = IMX_RMPSG_MINOR;
@@ -251,20 +256,32 @@ static struct rpmsg_device_id rtc_rpmsg_id_table[] = {
 	{ },
 };
 
-static int rtc_rpmsg_probe(struct rpmsg_device *rpdev)
+static int imx_rpmsg_rtc_probe(struct platform_device *pdev)
 {
 	int ret = 0;
 
-	dev_info(&rpdev->dev, "new channel: 0x%x -> 0x%x!\n",
-		rpdev->src, rpdev->dst);
+	data = devm_kzalloc(&pdev->dev, sizeof(*data), GFP_KERNEL);
+	if (!data)
+		return -ENOMEM;
 
-	rtc_rpmsg.rpdev = rpdev;
-	mutex_init(&rtc_rpmsg.lock);
+	platform_set_drvdata(pdev, data);
+	device_init_wakeup(&pdev->dev, true);
 
-	init_completion(&rtc_rpmsg.cmd_complete);
+	data->rtc = devm_rtc_device_register(&pdev->dev, pdev->name,
+					&imx_rpmsg_rtc_ops, THIS_MODULE);
+	if (IS_ERR(data->rtc)) {
+		ret = PTR_ERR(data->rtc);
+		dev_err(&pdev->dev, "failed to register rtc: %d\n", ret);
+	}
 
 	return ret;
 }
+
+static const struct of_device_id imx_rpmsg_rtc_dt_ids[] = {
+	{ .compatible = "fsl,imx-rpmsg-rtc", },
+	{ /* sentinel */ }
+};
+MODULE_DEVICE_TABLE(of, imx_rpmsg_rtc_dt_ids);
 
 static int rtc_rpmsg_cb(struct rpmsg_device *rpdev, void *data, int len,
 			void *priv, u32 src)
@@ -287,43 +304,6 @@ static int rtc_rpmsg_cb(struct rpmsg_device *rpdev, void *data, int len,
 static void rtc_rpmsg_remove(struct rpmsg_device *rpdev)
 {
 	dev_info(&rpdev->dev, "rtc rpmsg driver is removed\n");
-}
-
-static struct rpmsg_driver rtc_rpmsg_driver = {
-	.drv.name	= "rtc_rpmsg",
-	.drv.owner	= THIS_MODULE,
-	.id_table	= rtc_rpmsg_id_table,
-	.probe		= rtc_rpmsg_probe,
-	.callback	= rtc_rpmsg_cb,
-	.remove		= rtc_rpmsg_remove,
-};
-
-static int imx_rpmsg_rtc_probe(struct platform_device *pdev)
-{
-	int ret = 0;
-
-	data = devm_kzalloc(&pdev->dev, sizeof(*data), GFP_KERNEL);
-	if (!data)
-		return -ENOMEM;
-
-	platform_set_drvdata(pdev, data);
-	device_init_wakeup(&pdev->dev, true);
-
-	data->rtc = devm_rtc_device_register(&pdev->dev, pdev->name,
-					&imx_rpmsg_rtc_ops, THIS_MODULE);
-	if (IS_ERR(data->rtc)) {
-		ret = PTR_ERR(data->rtc);
-		dev_err(&pdev->dev, "failed to register rtc: %d\n", ret);
-		goto error_rtc_device_register;
-	}
-
-	ret = register_rpmsg_driver(&rtc_rpmsg_driver);
-	if (ret)
-		dev_err(&pdev->dev, "failed to register rpmsg for rtc: %d\n",
-			ret);
-
-error_rtc_device_register:
-	return ret;
 }
 
 #ifdef CONFIG_PM_SLEEP
@@ -362,12 +342,6 @@ static const struct dev_pm_ops imx_rpmsg_rtc_pm_ops = {
 
 #endif
 
-static const struct of_device_id imx_rpmsg_rtc_dt_ids[] = {
-	{ .compatible = "fsl,imx-rpmsg-rtc", },
-	{ /* sentinel */ }
-};
-MODULE_DEVICE_TABLE(of, imx_rpmsg_rtc_dt_ids);
-
 static struct platform_driver imx_rpmsg_rtc_driver = {
 	.driver = {
 		.name	= "imx_rpmsg_rtc",
@@ -376,7 +350,33 @@ static struct platform_driver imx_rpmsg_rtc_driver = {
 	},
 	.probe		= imx_rpmsg_rtc_probe,
 };
-module_platform_driver(imx_rpmsg_rtc_driver);
+
+static int rtc_rpmsg_probe(struct rpmsg_device *rpdev)
+{
+	dev_info(&rpdev->dev, "new channel: 0x%x -> 0x%x!\n",
+		rpdev->src, rpdev->dst);
+
+	rtc_rpmsg.rpdev = rpdev;
+	mutex_init(&rtc_rpmsg.lock);
+
+	init_completion(&rtc_rpmsg.cmd_complete);
+	return platform_driver_register(&imx_rpmsg_rtc_driver);
+}
+
+static struct rpmsg_driver rtc_rpmsg_driver = {
+	.drv.name	= "rtc_rpmsg",
+	.drv.owner	= THIS_MODULE,
+	.id_table	= rtc_rpmsg_id_table,
+	.probe		= rtc_rpmsg_probe,
+	.callback	= rtc_rpmsg_cb,
+	.remove		= rtc_rpmsg_remove,
+};
+
+static int __init rtc_imx_rpmsg_init(void)
+{
+	return register_rpmsg_driver(&rtc_rpmsg_driver);
+}
+late_initcall(rtc_imx_rpmsg_init);
 
 MODULE_AUTHOR("Anson Huang <Anson.Huang@nxp.com>");
 MODULE_DESCRIPTION("NXP i.MX RPMSG RTC Driver");

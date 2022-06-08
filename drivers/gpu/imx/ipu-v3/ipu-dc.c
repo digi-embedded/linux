@@ -141,7 +141,7 @@ static int ipu_bus_format_to_map(u32 fmt)
 	switch (fmt) {
 	default:
 		WARN_ON(1);
-		/* fall-through */
+		fallthrough;
 	case MEDIA_BUS_FMT_RGB888_1X24:
 		return IPU_DC_MAP_RGB24;
 	case MEDIA_BUS_FMT_RGB565_1X16:
@@ -166,6 +166,11 @@ int ipu_dc_init_sync(struct ipu_dc *dc, struct ipu_di *di, bool interlaced,
 	int map;
 
 	dc->di = ipu_di_get_num(di);
+
+	if (!IS_ALIGNED(width, 8)) {
+		dev_warn(priv->dev,
+			 "%s: hactive does not align to 8 byte\n", __func__);
+	}
 
 	map = ipu_bus_format_to_map(bus_format);
 

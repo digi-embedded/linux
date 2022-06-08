@@ -25,7 +25,7 @@
 #include <sound/soc.h>
 #include <sound/tlv.h>
 #include <sound/wm8960.h>
-#include "../fsl/fsl_rpmsg_i2s.h"
+#include "../fsl/imx-pcm-rpmsg.h"
 #include "wm8960.h"
 #include "rpmsg_wm8960.h"
 
@@ -697,11 +697,11 @@ static int wm8960_configure_clocking(struct snd_soc_component *component)
 {
 	struct rpmsg_wm8960_priv *wm8960 = snd_soc_component_get_drvdata(component);
 	int freq_out, freq_in;
-	u16 iface1 = snd_soc_component_read32(component, WM8960_IFACE1);
+	u16 iface1 = snd_soc_component_read(component, WM8960_IFACE1);
 	int i, j, k;
 	int ret;
 
-	if (!(iface1 & (1<<6))) {
+	if (!(iface1 & (1 << 6)) && !wm8960->sysclk) {
 		dev_dbg(component->dev,
 			"Codec is slave mode, no need to configure clock\n");
 		return 0;
@@ -766,7 +766,7 @@ static int wm8960_hw_params(struct snd_pcm_substream *substream,
 {
 	struct snd_soc_component *component = dai->component;
 	struct rpmsg_wm8960_priv *wm8960 = snd_soc_component_get_drvdata(component);
-	u16 iface = snd_soc_component_read32(component, WM8960_IFACE1) & 0xfff3;
+	u16 iface = snd_soc_component_read(component, WM8960_IFACE1) & 0xfff3;
 	bool tx = substream->stream == SNDRV_PCM_STREAM_PLAYBACK;
 	int i;
 
@@ -790,7 +790,7 @@ static int wm8960_hw_params(struct snd_pcm_substream *substream,
 			iface |= 0x000c;
 			break;
 		}
-		/* fall through */
+		fallthrough;
 	default:
 		dev_err(component->dev, "unsupported width %d\n",
 			params_width(params));
@@ -832,7 +832,7 @@ static int wm8960_hw_free(struct snd_pcm_substream *substream,
 	return 0;
 }
 
-static int wm8960_mute(struct snd_soc_dai *dai, int mute)
+static int wm8960_mute(struct snd_soc_dai *dai, int mute, int direction)
 {
 	struct snd_soc_component *component = dai->component;
 
@@ -847,7 +847,7 @@ static int wm8960_set_bias_level_out3(struct snd_soc_component *component,
 				      enum snd_soc_bias_level level)
 {
 	struct rpmsg_wm8960_priv *wm8960 = snd_soc_component_get_drvdata(component);
-	u16 pm2 = snd_soc_component_read32(component, WM8960_POWER2);
+	u16 pm2 = snd_soc_component_read(component, WM8960_POWER2);
 	int ret;
 
 	switch (level) {
@@ -937,7 +937,7 @@ static int wm8960_set_bias_level_capless(struct snd_soc_component *component,
 					 enum snd_soc_bias_level level)
 {
 	struct rpmsg_wm8960_priv *wm8960 = snd_soc_component_get_drvdata(component);
-	u16 pm2 = snd_soc_component_read32(component, WM8960_POWER2);
+	u16 pm2 = snd_soc_component_read(component, WM8960_POWER2);
 	int reg, ret;
 
 	switch (level) {
@@ -1153,7 +1153,7 @@ static int wm8960_set_pll(struct snd_soc_component *component,
 	if (!freq_in || !freq_out)
 		return 0;
 
-	reg = snd_soc_component_read32(component, WM8960_PLL1) & ~0x3f;
+	reg = snd_soc_component_read(component, WM8960_PLL1) & ~0x3f;
 	reg |= pll_div.pre_div << 4;
 	reg |= pll_div.n;
 
@@ -1199,23 +1199,23 @@ static int wm8960_set_dai_clkdiv(struct snd_soc_dai *codec_dai,
 
 	switch (div_id) {
 	case WM8960_SYSCLKDIV:
-		reg = snd_soc_component_read32(component, WM8960_CLOCK1) & 0x1f9;
+		reg = snd_soc_component_read(component, WM8960_CLOCK1) & 0x1f9;
 		snd_soc_component_write(component, WM8960_CLOCK1, reg | div);
 		break;
 	case WM8960_DACDIV:
-		reg = snd_soc_component_read32(component, WM8960_CLOCK1) & 0x1c7;
+		reg = snd_soc_component_read(component, WM8960_CLOCK1) & 0x1c7;
 		snd_soc_component_write(component, WM8960_CLOCK1, reg | div);
 		break;
 	case WM8960_OPCLKDIV:
-		reg = snd_soc_component_read32(component, WM8960_PLL1) & 0x03f;
+		reg = snd_soc_component_read(component, WM8960_PLL1) & 0x03f;
 		snd_soc_component_write(component, WM8960_PLL1, reg | div);
 		break;
 	case WM8960_DCLKDIV:
-		reg = snd_soc_component_read32(component, WM8960_CLOCK2) & 0x03f;
+		reg = snd_soc_component_read(component, WM8960_CLOCK2) & 0x03f;
 		snd_soc_component_write(component, WM8960_CLOCK2, reg | div);
 		break;
 	case WM8960_TOCLKSEL:
-		reg = snd_soc_component_read32(component, WM8960_ADDCTL1) & 0x1fd;
+		reg = snd_soc_component_read(component, WM8960_ADDCTL1) & 0x1fd;
 		snd_soc_component_write(component, WM8960_ADDCTL1, reg | div);
 		break;
 	default:
@@ -1268,11 +1268,12 @@ static int wm8960_set_dai_sysclk(struct snd_soc_dai *dai, int clk_id,
 static const struct snd_soc_dai_ops rpmsg_wm8960_dai_ops = {
 	.hw_params = wm8960_hw_params,
 	.hw_free = wm8960_hw_free,
-	.digital_mute = wm8960_mute,
+	.mute_stream = wm8960_mute,
 	.set_fmt = wm8960_set_dai_fmt,
 	.set_clkdiv = wm8960_set_dai_clkdiv,
 	.set_pll = wm8960_set_dai_pll,
 	.set_sysclk = wm8960_set_dai_sysclk,
+	.no_capture_mute = 1,
 };
 
 struct snd_soc_dai_driver rpmsg_wm8960_codec_dai = {
@@ -1292,7 +1293,7 @@ struct snd_soc_dai_driver rpmsg_wm8960_codec_dai = {
 		.formats = RPMSG_FORMATS,
 	},
 	.ops = &rpmsg_wm8960_dai_ops,
-	.symmetric_rates = 1,
+	.symmetric_rate = 1,
 };
 EXPORT_SYMBOL(rpmsg_wm8960_codec_dai);
 
@@ -1315,6 +1316,7 @@ static int rpmsg_wm8960_probe(struct snd_soc_component *component)
 	snd_soc_dapm_ignore_suspend(snd_soc_component_get_dapm(component), "Playback");
 	snd_soc_dapm_ignore_suspend(snd_soc_component_get_dapm(component), "Capture");
 	snd_soc_dapm_ignore_suspend(snd_soc_component_get_dapm(component), "MICB");
+	snd_soc_dapm_ignore_suspend(snd_soc_component_get_dapm(component), "LINPUT1");
 
 	return 0;
 }
@@ -1322,18 +1324,15 @@ static int rpmsg_wm8960_probe(struct snd_soc_component *component)
 static int rpmsg_wm8960_read(void *context, unsigned int reg, unsigned int *val)
 {
 	struct rpmsg_wm8960_priv *wm8960 = context;
-	struct fsl_rpmsg_i2s *rpmsg_i2s = wm8960->rpmsg_i2s;
-	struct i2s_info      *i2s_info =  &rpmsg_i2s->i2s_info;
-	struct i2s_rpmsg_s   *rpmsg = &i2s_info->rpmsg[GET_CODEC_VALUE].send_msg;
+	struct rpmsg_info *info = wm8960->info;
+	struct rpmsg_s_msg *s_msg = &info->msg[GET_CODEC_VALUE].s_msg;
 	int err, reg_val;
 
-	mutex_lock(&i2s_info->i2c_lock);
-	rpmsg->param.audioindex = wm8960->audioindex;
-	rpmsg->param.buffer_addr = reg;
-	rpmsg->header.cmd = GET_CODEC_VALUE;
-	err = i2s_info->send_message(&i2s_info->rpmsg[GET_CODEC_VALUE], i2s_info);
-	reg_val = i2s_info->rpmsg[GET_CODEC_VALUE].recv_msg.param.reg_data;
-	mutex_unlock(&i2s_info->i2c_lock);
+	s_msg->param.audioindex = wm8960->audioindex;
+	s_msg->param.buffer_addr = reg;
+	s_msg->header.cmd = GET_CODEC_VALUE;
+	err = info->send_message(&info->msg[GET_CODEC_VALUE], info);
+	reg_val = info->msg[GET_CODEC_VALUE].r_msg.param.reg_data;
 	if (err)
 		return -EIO;
 
@@ -1344,18 +1343,15 @@ static int rpmsg_wm8960_read(void *context, unsigned int reg, unsigned int *val)
 static int rpmsg_wm8960_write(void *context, unsigned int reg, unsigned int val)
 {
 	struct rpmsg_wm8960_priv *wm8960 = context;
-	struct fsl_rpmsg_i2s *rpmsg_i2s = wm8960->rpmsg_i2s;
-	struct i2s_info      *i2s_info =  &rpmsg_i2s->i2s_info;
-	struct i2s_rpmsg_s   *rpmsg = &i2s_info->rpmsg[SET_CODEC_VALUE].send_msg;
+	struct rpmsg_info *info = wm8960->info;
+	struct rpmsg_s_msg   *s_msg = &info->msg[SET_CODEC_VALUE].s_msg;
 	int err;
 
-	mutex_lock(&i2s_info->i2c_lock);
-	rpmsg->param.audioindex = wm8960->audioindex;
-	rpmsg->param.buffer_addr = reg;
-	rpmsg->param.buffer_size = val;
-	rpmsg->header.cmd = SET_CODEC_VALUE;
-	err = i2s_info->send_message(&i2s_info->rpmsg[SET_CODEC_VALUE], i2s_info);
-	mutex_unlock(&i2s_info->i2c_lock);
+	s_msg->param.audioindex = wm8960->audioindex;
+	s_msg->param.buffer_addr = reg;
+	s_msg->param.buffer_size = val;
+	s_msg->header.cmd = SET_CODEC_VALUE;
+	err = info->send_message(&info->msg[SET_CODEC_VALUE], info);
 	if (err)
 		return -EIO;
 
@@ -1415,18 +1411,21 @@ static const struct dev_pm_ops wm8960_pm = {
 
 static int rpmsg_wm8960_codec_probe(struct platform_device *pdev)
 {
-	struct fsl_rpmsg_i2s *rpmsg_i2s = dev_get_drvdata(pdev->dev.parent);
-	struct fsl_rpmsg_codec *pdata = pdev->dev.platform_data;
+	struct rpmsg_info *info = dev_get_drvdata(pdev->dev.parent);
+	struct rpmsg_codec *pdata = pdev->dev.platform_data;
 	struct rpmsg_wm8960_priv *wm8960;
 	int ret;
 	int repeat_reset = 10;
+
+	if (!info)
+		return -EPROBE_DEFER;
 
 	wm8960 = devm_kzalloc(&pdev->dev, sizeof(struct rpmsg_wm8960_priv),
 			      GFP_KERNEL);
 	if (wm8960 == NULL)
 		return -ENOMEM;
 
-	wm8960->rpmsg_i2s = rpmsg_i2s;
+	wm8960->info = info;
 
 	wm8960->mclk = devm_clk_get(pdev->dev.parent, "mclk");
 	if (IS_ERR(wm8960->mclk)) {
@@ -1509,4 +1508,5 @@ static struct platform_driver rpmsg_wm8960_codec_driver = {
 module_platform_driver(rpmsg_wm8960_codec_driver);
 
 MODULE_DESCRIPTION("rpmsg wm8960 Codec Driver");
+MODULE_ALIAS("platform:" RPMSG_CODEC_DRV_NAME_WM8960);
 MODULE_LICENSE("GPL");

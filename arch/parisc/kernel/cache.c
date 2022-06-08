@@ -24,7 +24,6 @@
 #include <asm/cacheflush.h>
 #include <asm/tlbflush.h>
 #include <asm/page.h>
-#include <asm/pgalloc.h>
 #include <asm/processor.h>
 #include <asm/sections.h>
 #include <asm/shmparam.h>
@@ -84,9 +83,9 @@ EXPORT_SYMBOL(flush_cache_all_local);
 #define pfn_va(pfn)	__va(PFN_PHYS(pfn))
 
 void
-update_mmu_cache(struct vm_area_struct *vma, unsigned long address, pte_t *ptep)
+__update_cache(pte_t pte)
 {
-	unsigned long pfn = pte_pfn(*ptep);
+	unsigned long pfn = pte_pfn(pte);
 	struct page *page;
 
 	/* We don't have pte special.  As a result, we can be called with
@@ -335,7 +334,7 @@ void flush_dcache_page(struct page *page)
 		return;
 	}
 
-	flush_kernel_dcache_page(page);
+	flush_kernel_dcache_page_addr(page_address(page));
 
 	if (!mapping)
 		return;
@@ -365,7 +364,7 @@ void flush_dcache_page(struct page *page)
 		if (old_addr == 0 || (old_addr & (SHM_COLOUR - 1))
 				      != (addr & (SHM_COLOUR - 1))) {
 			__flush_cache_page(mpnt, addr, page_to_phys(page));
-			if (old_addr)
+			if (parisc_requires_coherency() && old_addr)
 				printk(KERN_ERR "INEQUIVALENT ALIASES 0x%lx and 0x%lx in file %pD\n", old_addr, addr, mpnt->vm_file);
 			old_addr = addr;
 		}
@@ -376,7 +375,6 @@ EXPORT_SYMBOL(flush_dcache_page);
 
 /* Defined in arch/parisc/kernel/pacache.S */
 EXPORT_SYMBOL(flush_kernel_dcache_range_asm);
-EXPORT_SYMBOL(flush_kernel_dcache_page_asm);
 EXPORT_SYMBOL(flush_data_cache_local);
 EXPORT_SYMBOL(flush_kernel_icache_range_asm);
 
@@ -384,12 +382,12 @@ EXPORT_SYMBOL(flush_kernel_icache_range_asm);
 static unsigned long parisc_cache_flush_threshold __ro_after_init = FLUSH_THRESHOLD;
 
 #define FLUSH_TLB_THRESHOLD (16*1024) /* 16 KiB minimum TLB threshold */
-static unsigned long parisc_tlb_flush_threshold __ro_after_init = FLUSH_TLB_THRESHOLD;
+static unsigned long parisc_tlb_flush_threshold __ro_after_init = ~0UL;
 
 void __init parisc_setup_cache_timing(void)
 {
 	unsigned long rangetime, alltime;
-	unsigned long size, start;
+	unsigned long size;
 	unsigned long threshold;
 
 	alltime = mfctl(16);
@@ -423,14 +421,9 @@ void __init parisc_setup_cache_timing(void)
 		goto set_tlb_threshold;
 	}
 
-	size = 0;
-	start = (unsigned long) _text;
+	size = (unsigned long)_end - (unsigned long)_text;
 	rangetime = mfctl(16);
-	while (start < (unsigned long) _end) {
-		flush_tlb_kernel_range(start, start + PAGE_SIZE);
-		start += PAGE_SIZE;
-		size += PAGE_SIZE;
-	}
+	flush_tlb_kernel_range((unsigned long)_text, (unsigned long)_end);
 	rangetime = mfctl(16) - rangetime;
 
 	alltime = mfctl(16);
@@ -445,8 +438,11 @@ void __init parisc_setup_cache_timing(void)
 		threshold/1024);
 
 set_tlb_threshold:
-	if (threshold > parisc_tlb_flush_threshold)
+	if (threshold > FLUSH_TLB_THRESHOLD)
 		parisc_tlb_flush_threshold = threshold;
+	else
+		parisc_tlb_flush_threshold = FLUSH_TLB_THRESHOLD;
+
 	printk(KERN_INFO "TLB flush threshold set to %lu KiB\n",
 		parisc_tlb_flush_threshold/1024);
 }
@@ -534,11 +530,14 @@ static inline pte_t *get_ptep(pgd_t *pgd, unsigned long addr)
 	pte_t *ptep = NULL;
 
 	if (!pgd_none(*pgd)) {
-		pud_t *pud = pud_offset(pgd, addr);
-		if (!pud_none(*pud)) {
-			pmd_t *pmd = pmd_offset(pud, addr);
-			if (!pmd_none(*pmd))
-				ptep = pte_offset_map(pmd, addr);
+		p4d_t *p4d = p4d_offset(pgd, addr);
+		if (!p4d_none(*p4d)) {
+			pud_t *pud = pud_offset(p4d, addr);
+			if (!pud_none(*pud)) {
+				pmd_t *pmd = pmd_offset(pud, addr);
+				if (!pmd_none(*pmd))
+					ptep = pte_offset_map(pmd, addr);
+			}
 		}
 	}
 	return ptep;

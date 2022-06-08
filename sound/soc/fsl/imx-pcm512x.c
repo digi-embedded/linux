@@ -30,7 +30,7 @@
 #define DAC_CLK_EXT_48K 24576000UL
 
 struct imx_pcm512x_data {
-	struct snd_soc_dai_link dai_link[3];
+	struct snd_soc_dai_link dai_link[1];
 	struct snd_soc_card card;
 	struct snd_soc_codec_conf *codec_conf;
 	struct gpio_desc *mute_gpio;
@@ -72,8 +72,6 @@ static const struct imx_pcm512x_fs_map {
 	{ .rmin = 176400, .rmax = 192000, .wmin = 128,  .wmax = 256,  },
 	/* Oct */
 	{ .rmin = 352800, .rmax = 384000, .wmin = 32,   .wmax = 128,  },
-	/* Hex */
-	{ .rmin = 705600, .rmax = 768000, .wmin = 16,   .wmax = 64,   },
 };
 
 static const u32 pcm512x_rates[] = {
@@ -104,7 +102,7 @@ static bool imx_pcm512x_is_sclk(struct snd_soc_component *comp)
 {
 	unsigned int sclk;
 
-	snd_soc_component_read(comp, PCM512x_RATE_DET_4, &sclk);
+	sclk = snd_soc_component_read(comp, PCM512x_RATE_DET_4);
 
 	return (!(sclk & 0x40));
 }
@@ -137,8 +135,8 @@ static int imx_pcm512x_set_bias_level(struct snd_soc_card *card,
 	struct snd_soc_pcm_runtime *rtd;
 	struct snd_soc_dai *codec_dai;
 
-	rtd = snd_soc_get_pcm_runtime(card, card->dai_link[0].name);
-	codec_dai = rtd->codec_dai;
+	rtd = snd_soc_get_pcm_runtime(card, card->dai_link);
+	codec_dai = asoc_rtd_to_codec(rtd, 0);
 
 	if (dapm->dev != codec_dai->dev)
 		return 0;
@@ -190,56 +188,17 @@ static int imx_pcm512x_hw_params(struct snd_pcm_substream *substream,
 				struct snd_pcm_hw_params *params)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
-	struct snd_soc_dai *codec_dai = rtd->codec_dai;
+	struct snd_soc_dai *cpu_dai = asoc_rtd_to_cpu(rtd, 0);
+	struct snd_soc_dai *codec_dai = asoc_rtd_to_codec(rtd, 0);
 	struct snd_soc_component *comp = codec_dai->component;
 	struct snd_soc_card *card = rtd->card;
 	struct imx_pcm512x_data *data = snd_soc_card_get_drvdata(card);
-	unsigned int channels = params_channels(params);
 	unsigned int sample_rate = params_rate(params);
 	unsigned long mclk_freq;
 	int ret, i;
 
 	data->slots = 2;
 	data->slot_width = params_physical_width(params);
-
-	ret = snd_soc_dai_set_fmt(cpu_dai, data->daifmt);
-	if (ret) {
-		dev_err(card->dev, "failed to set cpu dai fmt: %d\n", ret);
-		return ret;
-	}
-
-	ret = snd_soc_dai_set_tdm_slot(cpu_dai,
-				       BIT(channels) - 1, BIT(channels) - 1,
-				       data->slots, data->slot_width);
-	if (ret) {
-		dev_err(card->dev, "failed to set cpu dai tdm slot: %d\n", ret);
-		return ret;
-	}
-
-	ret = snd_soc_dai_set_bclk_ratio(cpu_dai, data->slots * data->slot_width);
-	if (ret) {
-		dev_err(card->dev, "failed to set cpu dai bclk ratio\n");
-		return ret;
-	}
-
-	for (i = 0; i < rtd->num_codecs; i++) {
-		struct snd_soc_dai *codec_dai = rtd->codec_dai;
-
-		ret = snd_soc_dai_set_fmt(codec_dai, data->daifmt);
-		if (ret) {
-			dev_err(card->dev, "failed to set codec dai[%d] fmt: %d\n",
-					i, ret);
-			return ret;
-		}
-
-		ret = snd_soc_dai_set_bclk_ratio(codec_dai,
-					data->slots * data->slot_width);
-		if (ret) {
-			dev_err(card->dev, "failed to set cpu dai bclk ratio\n");
-			return ret;
-		}
-	}
 
 	/* set MCLK freq */
 	if (data->dac_pluspro && data->dac_sclk) {
@@ -266,6 +225,39 @@ static int imx_pcm512x_hw_params(struct snd_pcm_substream *substream,
 				mclk_freq, ret);
 	}
 
+	ret = snd_soc_dai_set_fmt(cpu_dai, data->daifmt);
+	if (ret) {
+		dev_err(card->dev, "failed to set cpu dai fmt: %d\n", ret);
+		return ret;
+	}
+
+	ret = snd_soc_dai_set_bclk_ratio(cpu_dai, data->slots * data->slot_width);
+	if (ret) {
+		dev_err(card->dev, "failed to set cpu dai bclk ratio\n");
+		return ret;
+	}
+
+	for (i = 0; i < rtd->num_codecs; i++) {
+		struct snd_soc_dai *codec_dai = asoc_rtd_to_codec(rtd, i);
+
+		ret = snd_soc_dai_set_fmt(codec_dai, data->daifmt);
+		if (ret) {
+			dev_err(card->dev, "failed to set codec dai[%d] fmt: %d\n",
+					i, ret);
+			return ret;
+		}
+
+		ret = snd_soc_dai_set_bclk_ratio(codec_dai,
+					data->slots * data->slot_width);
+		if (ret) {
+			dev_err(card->dev, "failed to set cpu dai bclk ratio\n");
+			return ret;
+		}
+	}
+
+	dev_dbg(card->dev, "mclk_freq: %lu; bclk_ratio: %d\n", mclk_freq,
+		data->slots * data->slot_width);
+
 	return ret;
 }
 
@@ -276,7 +268,7 @@ static int imx_pcm512x_startup(struct snd_pcm_substream *substream)
 	struct snd_soc_card *card = rtd->card;
 	struct imx_pcm512x_data *data = snd_soc_card_get_drvdata(card);
 	static struct snd_pcm_hw_constraint_list constraint_rates;
-	struct snd_soc_dai *codec_dai = rtd->codec_dai;
+	struct snd_soc_dai *codec_dai = asoc_rtd_to_codec(rtd, 0);
 	struct snd_soc_component *comp = codec_dai->component;
 	bool ext_44sclk, ext_48sclk, ext_nosclk;
 	int ret;
@@ -320,11 +312,14 @@ static void imx_pcm512x_shutdown(struct snd_pcm_substream *substream)
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_card *card = rtd->card;
 	struct imx_pcm512x_data *data = snd_soc_card_get_drvdata(card);
-	struct snd_soc_dai *codec_dai = rtd->codec_dai;
+	struct snd_soc_dai *codec_dai = asoc_rtd_to_codec(rtd, 0);
 	struct snd_soc_component *comp = codec_dai->component;
 
 	if (data->dac_led_status)
 		snd_soc_component_update_bits(comp, PCM512x_GPIO_CONTROL_1, 0x08, 0x00);
+
+	if (data->dac_sclk && data->dac_pluspro)
+		imx_pcm512x_select_ext_clk(comp, DAC_CLK_INT);
 }
 
 static struct snd_soc_ops imx_pcm512x_ops = {
@@ -409,6 +404,7 @@ static int imx_pcm512x_probe(struct platform_device *pdev)
 	data->dac_auto_mute = of_property_read_bool(np, "dac,auto_mute_amp");
 	data->dac_gpio_unmute = of_property_read_bool(np, "dac,unmute_amp");
 	data->dac_led_status = of_property_read_bool(np, "dac,led_status");
+	data->one2one_ratio = true;
 
 	if (data->dac_auto_mute || data->dac_gpio_unmute) {
 		data->mute_gpio = devm_gpiod_get_optional(&pdev->dev,
@@ -456,8 +452,8 @@ static int imx_pcm512x_probe(struct platform_device *pdev)
 		}
 	}
 
-	data->daifmt = snd_soc_of_parse_daifmt(np, NULL, &bitclkmaster, &framemaster);
-	data->daifmt &= ~SND_SOC_DAIFMT_MASTER_MASK;
+	snd_soc_daifmt_parse_clock_provider_as_phandle(np, NULL, &bitclkmaster, &framemaster);
+	data->daifmt = snd_soc_daifmt_parse_format(np, NULL);
 
 	if (codec_np == bitclkmaster)
 		data->daifmt |= (codec_np == framemaster) ?

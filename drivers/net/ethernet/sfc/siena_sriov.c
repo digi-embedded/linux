@@ -7,6 +7,7 @@
 #include <linux/module.h>
 #include "net_driver.h"
 #include "efx.h"
+#include "efx_channels.h"
 #include "nic.h"
 #include "io.h"
 #include "mcdi.h"
@@ -1056,7 +1057,7 @@ void efx_siena_sriov_probe(struct efx_nic *efx)
 		return;
 
 	if (efx_siena_sriov_cmd(efx, false, &efx->vi_scale, &count)) {
-		netif_info(efx, probe, efx->net_dev, "no SR-IOV VFs probed\n");
+		pci_info(efx->pci_dev, "no SR-IOV VFs probed\n");
 		return;
 	}
 	if (count > 0 && count > max_vfs)

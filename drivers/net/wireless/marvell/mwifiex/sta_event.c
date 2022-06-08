@@ -1,10 +1,10 @@
 /*
- * Marvell Wireless LAN device driver: station event handling
+ * NXP Wireless LAN device driver: station event handling
  *
- * Copyright (C) 2011-2014, Marvell International Ltd.
+ * Copyright 2011-2020 NXP
  *
- * This software file (the "File") is distributed by Marvell International
- * Ltd. under the terms of the GNU General Public License Version 2, June 1991
+ * This software file (the "File") is distributed by NXP
+ * under the terms of the GNU General Public License Version 2, June 1991
  * (the "License").  You may use, redistribute and/or modify this File in
  * accordance with the terms and conditions of the License, a copy of which
  * is available by writing to the Free Software Foundation, Inc.,
@@ -99,6 +99,7 @@ static int mwifiex_check_ibss_peer_capabilities(struct mwifiex_private *priv,
 			case IEEE80211_VHT_CAP_MAX_MPDU_LENGTH_3895:
 				sta_ptr->max_amsdu =
 					MWIFIEX_TX_DATA_BUF_SIZE_4K;
+				break;
 			default:
 				break;
 			}

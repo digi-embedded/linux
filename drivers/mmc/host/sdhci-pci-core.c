@@ -24,6 +24,8 @@
 #include <linux/iopoll.h>
 #include <linux/gpio.h>
 #include <linux/pm_runtime.h>
+#include <linux/pm_qos.h>
+#include <linux/debugfs.h>
 #include <linux/mmc/slot-gpio.h>
 #include <linux/mmc/sdhci-pci-data.h>
 #include <linux/acpi.h>
@@ -257,12 +259,8 @@ static int ricoh_probe(struct sdhci_pci_chip *chip)
 static int ricoh_mmc_probe_slot(struct sdhci_pci_slot *slot)
 {
 	slot->host->caps =
-		((0x21 << SDHCI_TIMEOUT_CLK_SHIFT)
-			& SDHCI_TIMEOUT_CLK_MASK) |
-
-		((0x21 << SDHCI_CLOCK_BASE_SHIFT)
-			& SDHCI_CLOCK_BASE_MASK) |
-
+		FIELD_PREP(SDHCI_TIMEOUT_CLK_MASK, 0x21) |
+		FIELD_PREP(SDHCI_CLOCK_BASE_MASK, 0x21) |
 		SDHCI_TIMEOUT_CLK_UNIT |
 		SDHCI_CAN_VDD_330 |
 		SDHCI_CAN_DO_HISPD |
@@ -518,8 +516,11 @@ struct intel_host {
 	int	drv_strength;
 	bool	d3_retune;
 	bool	rpm_retune_ok;
+	bool	needs_pwr_off;
 	u32	glk_rx_ctrl1;
 	u32	glk_tun_val;
+	u32	active_ltr;
+	u32	idle_ltr;
 };
 
 static const guid_t intel_dsm_guid =
@@ -615,15 +616,11 @@ static int intel_select_drive_strength(struct mmc_card *card,
 	return intel_host->drv_strength;
 }
 
-static int bxt_get_cd(struct mmc_host *mmc)
+static int sdhci_get_cd_nogpio(struct mmc_host *mmc)
 {
-	int gpio_cd = mmc_gpio_get_cd(mmc);
 	struct sdhci_host *host = mmc_priv(mmc);
 	unsigned long flags;
 	int ret = 0;
-
-	if (!gpio_cd)
-		return 0;
 
 	spin_lock_irqsave(&host->lock, flags);
 
@@ -637,14 +634,45 @@ out:
 	return ret;
 }
 
+static int bxt_get_cd(struct mmc_host *mmc)
+{
+	int gpio_cd = mmc_gpio_get_cd(mmc);
+
+	if (!gpio_cd)
+		return 0;
+
+	return sdhci_get_cd_nogpio(mmc);
+}
+
+static int mrfld_get_cd(struct mmc_host *mmc)
+{
+	return sdhci_get_cd_nogpio(mmc);
+}
+
 #define SDHCI_INTEL_PWR_TIMEOUT_CNT	20
 #define SDHCI_INTEL_PWR_TIMEOUT_UDELAY	100
 
 static void sdhci_intel_set_power(struct sdhci_host *host, unsigned char mode,
 				  unsigned short vdd)
 {
+	struct sdhci_pci_slot *slot = sdhci_priv(host);
+	struct intel_host *intel_host = sdhci_pci_priv(slot);
 	int cntr;
 	u8 reg;
+
+	/*
+	 * Bus power may control card power, but a full reset still may not
+	 * reset the power, whereas a direct write to SDHCI_POWER_CONTROL can.
+	 * That might be needed to initialize correctly, if the card was left
+	 * powered on previously.
+	 */
+	if (intel_host->needs_pwr_off) {
+		intel_host->needs_pwr_off = false;
+		if (mode != MMC_POWER_OFF) {
+			sdhci_writeb(host, 0, SDHCI_POWER_CONTROL);
+			usleep_range(10000, 12500);
+		}
+	}
 
 	sdhci_set_power(host, mode, vdd);
 
@@ -663,6 +691,15 @@ static void sdhci_intel_set_power(struct sdhci_host *host, unsigned char mode,
 		reg |= SDHCI_POWER_ON;
 		sdhci_writeb(host, reg, SDHCI_POWER_CONTROL);
 	}
+}
+
+static void sdhci_intel_set_uhs_signaling(struct sdhci_host *host,
+					  unsigned int timing)
+{
+	/* Set UHS timing to SDR25 for High Speed mode */
+	if (timing == MMC_TIMING_MMC_HS || timing == MMC_TIMING_SD_HS)
+		timing = MMC_TIMING_UHS_SDR25;
+	sdhci_set_uhs_signaling(host, timing);
 }
 
 #define INTEL_HS400_ES_REG 0x78
@@ -721,7 +758,7 @@ static const struct sdhci_ops sdhci_intel_byt_ops = {
 	.enable_dma		= sdhci_pci_enable_dma,
 	.set_bus_width		= sdhci_set_bus_width,
 	.reset			= sdhci_reset,
-	.set_uhs_signaling	= sdhci_set_uhs_signaling,
+	.set_uhs_signaling	= sdhci_intel_set_uhs_signaling,
 	.hw_reset		= sdhci_pci_hw_reset,
 };
 
@@ -731,7 +768,7 @@ static const struct sdhci_ops sdhci_intel_glk_ops = {
 	.enable_dma		= sdhci_pci_enable_dma,
 	.set_bus_width		= sdhci_set_bus_width,
 	.reset			= sdhci_cqhci_reset,
-	.set_uhs_signaling	= sdhci_set_uhs_signaling,
+	.set_uhs_signaling	= sdhci_intel_set_uhs_signaling,
 	.hw_reset		= sdhci_pci_hw_reset,
 	.irq			= sdhci_cqhci_irq,
 };
@@ -764,6 +801,108 @@ static int intel_execute_tuning(struct mmc_host *mmc, u32 opcode)
 	return 0;
 }
 
+#define INTEL_ACTIVELTR		0x804
+#define INTEL_IDLELTR		0x808
+
+#define INTEL_LTR_REQ		BIT(15)
+#define INTEL_LTR_SCALE_MASK	GENMASK(11, 10)
+#define INTEL_LTR_SCALE_1US	(2 << 10)
+#define INTEL_LTR_SCALE_32US	(3 << 10)
+#define INTEL_LTR_VALUE_MASK	GENMASK(9, 0)
+
+static void intel_cache_ltr(struct sdhci_pci_slot *slot)
+{
+	struct intel_host *intel_host = sdhci_pci_priv(slot);
+	struct sdhci_host *host = slot->host;
+
+	intel_host->active_ltr = readl(host->ioaddr + INTEL_ACTIVELTR);
+	intel_host->idle_ltr = readl(host->ioaddr + INTEL_IDLELTR);
+}
+
+static void intel_ltr_set(struct device *dev, s32 val)
+{
+	struct sdhci_pci_chip *chip = dev_get_drvdata(dev);
+	struct sdhci_pci_slot *slot = chip->slots[0];
+	struct intel_host *intel_host = sdhci_pci_priv(slot);
+	struct sdhci_host *host = slot->host;
+	u32 ltr;
+
+	pm_runtime_get_sync(dev);
+
+	/*
+	 * Program latency tolerance (LTR) accordingly what has been asked
+	 * by the PM QoS layer or disable it in case we were passed
+	 * negative value or PM_QOS_LATENCY_ANY.
+	 */
+	ltr = readl(host->ioaddr + INTEL_ACTIVELTR);
+
+	if (val == PM_QOS_LATENCY_ANY || val < 0) {
+		ltr &= ~INTEL_LTR_REQ;
+	} else {
+		ltr |= INTEL_LTR_REQ;
+		ltr &= ~INTEL_LTR_SCALE_MASK;
+		ltr &= ~INTEL_LTR_VALUE_MASK;
+
+		if (val > INTEL_LTR_VALUE_MASK) {
+			val >>= 5;
+			if (val > INTEL_LTR_VALUE_MASK)
+				val = INTEL_LTR_VALUE_MASK;
+			ltr |= INTEL_LTR_SCALE_32US | val;
+		} else {
+			ltr |= INTEL_LTR_SCALE_1US | val;
+		}
+	}
+
+	if (ltr == intel_host->active_ltr)
+		goto out;
+
+	writel(ltr, host->ioaddr + INTEL_ACTIVELTR);
+	writel(ltr, host->ioaddr + INTEL_IDLELTR);
+
+	/* Cache the values into lpss structure */
+	intel_cache_ltr(slot);
+out:
+	pm_runtime_put_autosuspend(dev);
+}
+
+static bool intel_use_ltr(struct sdhci_pci_chip *chip)
+{
+	switch (chip->pdev->device) {
+	case PCI_DEVICE_ID_INTEL_BYT_EMMC:
+	case PCI_DEVICE_ID_INTEL_BYT_EMMC2:
+	case PCI_DEVICE_ID_INTEL_BYT_SDIO:
+	case PCI_DEVICE_ID_INTEL_BYT_SD:
+	case PCI_DEVICE_ID_INTEL_BSW_EMMC:
+	case PCI_DEVICE_ID_INTEL_BSW_SDIO:
+	case PCI_DEVICE_ID_INTEL_BSW_SD:
+		return false;
+	default:
+		return true;
+	}
+}
+
+static void intel_ltr_expose(struct sdhci_pci_chip *chip)
+{
+	struct device *dev = &chip->pdev->dev;
+
+	if (!intel_use_ltr(chip))
+		return;
+
+	dev->power.set_latency_tolerance = intel_ltr_set;
+	dev_pm_qos_expose_latency_tolerance(dev);
+}
+
+static void intel_ltr_hide(struct sdhci_pci_chip *chip)
+{
+	struct device *dev = &chip->pdev->dev;
+
+	if (!intel_use_ltr(chip))
+		return;
+
+	dev_pm_qos_hide_latency_tolerance(dev);
+	dev->power.set_latency_tolerance = NULL;
+}
+
 static void byt_probe_slot(struct sdhci_pci_slot *slot)
 {
 	struct mmc_host_ops *ops = &slot->host->mmc_host_ops;
@@ -778,6 +917,43 @@ static void byt_probe_slot(struct sdhci_pci_slot *slot)
 	ops->start_signal_voltage_switch = intel_start_signal_voltage_switch;
 
 	device_property_read_u32(dev, "max-frequency", &mmc->f_max);
+
+	if (!mmc->slotno) {
+		slot->chip->slots[mmc->slotno] = slot;
+		intel_ltr_expose(slot->chip);
+	}
+}
+
+static void byt_add_debugfs(struct sdhci_pci_slot *slot)
+{
+	struct intel_host *intel_host = sdhci_pci_priv(slot);
+	struct mmc_host *mmc = slot->host->mmc;
+	struct dentry *dir = mmc->debugfs_root;
+
+	if (!intel_use_ltr(slot->chip))
+		return;
+
+	debugfs_create_x32("active_ltr", 0444, dir, &intel_host->active_ltr);
+	debugfs_create_x32("idle_ltr", 0444, dir, &intel_host->idle_ltr);
+
+	intel_cache_ltr(slot);
+}
+
+static int byt_add_host(struct sdhci_pci_slot *slot)
+{
+	int ret = sdhci_add_host(slot->host);
+
+	if (!ret)
+		byt_add_debugfs(slot);
+	return ret;
+}
+
+static void byt_remove_slot(struct sdhci_pci_slot *slot, int dead)
+{
+	struct mmc_host *mmc = slot->host->mmc;
+
+	if (!mmc->slotno)
+		intel_ltr_hide(slot->chip);
 }
 
 static int byt_emmc_probe_slot(struct sdhci_pci_slot *slot)
@@ -810,7 +986,7 @@ static int glk_emmc_probe_slot(struct sdhci_pci_slot *slot)
 		slot->host->mmc->caps2 |= MMC_CAP2_CQE;
 
 	if (slot->chip->pdev->device != PCI_DEVICE_ID_INTEL_GLK_EMMC) {
-		slot->host->mmc->caps2 |= MMC_CAP2_HS400_ES,
+		slot->host->mmc->caps2 |= MMC_CAP2_HS400_ES;
 		slot->host->mmc_host_ops.hs400_enhanced_strobe =
 						intel_hs400_enhanced_strobe;
 		slot->host->mmc->caps2 |= MMC_CAP2_CQE_DCMD;
@@ -858,6 +1034,8 @@ static int glk_emmc_add_host(struct sdhci_pci_slot *slot)
 	ret = __sdhci_add_host(host);
 	if (ret)
 		goto cleanup;
+
+	byt_add_debugfs(slot);
 
 	return 0;
 
@@ -985,6 +1163,14 @@ static int byt_sdio_probe_slot(struct sdhci_pci_slot *slot)
 	return 0;
 }
 
+static void byt_needs_pwr_off(struct sdhci_pci_slot *slot)
+{
+	struct intel_host *intel_host = sdhci_pci_priv(slot);
+	u8 reg = sdhci_readb(slot->host, SDHCI_POWER_CONTROL);
+
+	intel_host->needs_pwr_off = reg  & SDHCI_POWER_ON;
+}
+
 static int byt_sd_probe_slot(struct sdhci_pci_slot *slot)
 {
 	byt_probe_slot(slot);
@@ -1001,6 +1187,8 @@ static int byt_sd_probe_slot(struct sdhci_pci_slot *slot)
 	if (slot->chip->pdev->subsystem_vendor == PCI_VENDOR_ID_NI &&
 	    slot->chip->pdev->subsystem_device == PCI_SUBDEVICE_ID_NI_78E3)
 		slot->host->mmc->caps2 |= MMC_CAP2_AVOID_3_3V;
+
+	byt_needs_pwr_off(slot);
 
 	return 0;
 }
@@ -1036,6 +1224,8 @@ static const struct sdhci_pci_fixes sdhci_intel_byt_emmc = {
 #endif
 	.allow_runtime_pm = true,
 	.probe_slot	= byt_emmc_probe_slot,
+	.add_host	= byt_add_host,
+	.remove_slot	= byt_remove_slot,
 	.quirks		= SDHCI_QUIRK_NO_ENDATTR_IN_NOPDESC |
 			  SDHCI_QUIRK_NO_LED,
 	.quirks2	= SDHCI_QUIRK2_PRESET_VALUE_BROKEN |
@@ -1049,6 +1239,7 @@ static const struct sdhci_pci_fixes sdhci_intel_glk_emmc = {
 	.allow_runtime_pm	= true,
 	.probe_slot		= glk_emmc_probe_slot,
 	.add_host		= glk_emmc_add_host,
+	.remove_slot		= byt_remove_slot,
 #ifdef CONFIG_PM_SLEEP
 	.suspend		= sdhci_cqhci_suspend,
 	.resume			= sdhci_cqhci_resume,
@@ -1079,6 +1270,8 @@ static const struct sdhci_pci_fixes sdhci_ni_byt_sdio = {
 			  SDHCI_QUIRK2_PRESET_VALUE_BROKEN,
 	.allow_runtime_pm = true,
 	.probe_slot	= ni_byt_sdio_probe_slot,
+	.add_host	= byt_add_host,
+	.remove_slot	= byt_remove_slot,
 	.ops		= &sdhci_intel_byt_ops,
 	.priv_size	= sizeof(struct intel_host),
 };
@@ -1096,6 +1289,8 @@ static const struct sdhci_pci_fixes sdhci_intel_byt_sdio = {
 			SDHCI_QUIRK2_PRESET_VALUE_BROKEN,
 	.allow_runtime_pm = true,
 	.probe_slot	= byt_sdio_probe_slot,
+	.add_host	= byt_add_host,
+	.remove_slot	= byt_remove_slot,
 	.ops		= &sdhci_intel_byt_ops,
 	.priv_size	= sizeof(struct intel_host),
 };
@@ -1115,6 +1310,8 @@ static const struct sdhci_pci_fixes sdhci_intel_byt_sd = {
 	.allow_runtime_pm = true,
 	.own_cd_for_runtime_pm = true,
 	.probe_slot	= byt_sd_probe_slot,
+	.add_host	= byt_add_host,
+	.remove_slot	= byt_remove_slot,
 	.ops		= &sdhci_intel_byt_ops,
 	.priv_size	= sizeof(struct intel_host),
 };
@@ -1155,6 +1352,14 @@ static int intel_mrfld_mmc_probe_slot(struct sdhci_pci_slot *slot)
 					 MMC_CAP_1_8V_DDR;
 		break;
 	case INTEL_MRFLD_SD:
+		slot->cd_idx = 0;
+		slot->cd_override_level = true;
+		/*
+		 * There are two PCB designs of SD card slot with the opposite
+		 * card detection sense. Quirk this out by ignoring GPIO state
+		 * completely in the custom ->get_cd() callback.
+		 */
+		slot->host->mmc_host_ops.get_cd = mrfld_get_cd;
 		slot->host->quirks2 |= SDHCI_QUIRK2_NO_1_8_V;
 		break;
 	case INTEL_MRFLD_SDIO:
@@ -1744,6 +1949,8 @@ static const struct pci_device_id pci_ids[] = {
 	SDHCI_PCI_DEVICE(INTEL, CMLH_SD,   intel_byt_sd),
 	SDHCI_PCI_DEVICE(INTEL, JSL_EMMC,  intel_glk_emmc),
 	SDHCI_PCI_DEVICE(INTEL, JSL_SD,    intel_byt_sd),
+	SDHCI_PCI_DEVICE(INTEL, LKF_EMMC,  intel_glk_emmc),
+	SDHCI_PCI_DEVICE(INTEL, LKF_SD,    intel_byt_sd),
 	SDHCI_PCI_DEVICE(O2, 8120,     o2),
 	SDHCI_PCI_DEVICE(O2, 8220,     o2),
 	SDHCI_PCI_DEVICE(O2, 8221,     o2),
@@ -1758,6 +1965,7 @@ static const struct pci_device_id pci_ids[] = {
 	SDHCI_PCI_DEVICE(SYNOPSYS, DWC_MSHC, snps),
 	SDHCI_PCI_DEVICE(GLI, 9750, gl9750),
 	SDHCI_PCI_DEVICE(GLI, 9755, gl9755),
+	SDHCI_PCI_DEVICE(GLI, 9763E, gl9763e),
 	SDHCI_PCI_DEVICE_CLASS(AMD, SYSTEM_SDHCI, PCI_CLASS_MASK, amd),
 	/* Generic SD host controller */
 	{PCI_DEVICE_CLASS(SYSTEM_SDHCI, PCI_CLASS_MASK)},
@@ -2003,12 +2211,12 @@ static struct sdhci_pci_slot *sdhci_pci_probe_slot(
 
 	if (slot->cd_idx >= 0) {
 		ret = mmc_gpiod_request_cd(host->mmc, "cd", slot->cd_idx,
-					   slot->cd_override_level, 0, NULL);
+					   slot->cd_override_level, 0);
 		if (ret && ret != -EPROBE_DEFER)
 			ret = mmc_gpiod_request_cd(host->mmc, NULL,
 						   slot->cd_idx,
 						   slot->cd_override_level,
-						   0, NULL);
+						   0);
 		if (ret == -EPROBE_DEFER)
 			goto remove;
 

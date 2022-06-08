@@ -47,6 +47,7 @@
 #include "nfp_net_sriov.h"
 #include "nfp_port.h"
 #include "crypto/crypto.h"
+#include "crypto/fw.h"
 
 /**
  * nfp_net_get_fw_version() - Read and parse the FW version
@@ -473,6 +474,12 @@ static irqreturn_t nfp_net_irq_rxtx(int irq, void *data)
 {
 	struct nfp_net_r_vector *r_vec = data;
 
+	/* Currently we cannot tell if it's a rx or tx interrupt,
+	 * since dim does not need accurate event_ctr to calculate,
+	 * we just use this counter for both rx and tx dim.
+	 */
+	r_vec->event_ctr++;
+
 	napi_schedule_irqoff(&r_vec->napi);
 
 	/* The FW auto-masks any interrupt, either via the MASK bit in
@@ -872,7 +879,8 @@ nfp_net_tls_tx(struct nfp_net_dp *dp, struct nfp_net_r_vector *r_vec,
 
 		/* jump forward, a TX may have gotten lost, need to sync TX */
 		if (!resync_pending && seq - ntls->next_seq < U32_MAX / 4)
-			tls_offload_tx_resync_request(nskb->sk);
+			tls_offload_tx_resync_request(nskb->sk, seq,
+						      ntls->next_seq);
 
 		*nr_frags = 0;
 		return nskb;
@@ -972,7 +980,7 @@ static int nfp_net_prep_tx_meta(struct sk_buff *skb, u64 tls_handle)
  *
  * Return: NETDEV_TX_OK on success.
  */
-static int nfp_net_tx(struct sk_buff *skb, struct net_device *netdev)
+static netdev_tx_t nfp_net_tx(struct sk_buff *skb, struct net_device *netdev)
 {
 	struct nfp_net *nn = netdev_priv(netdev);
 	const skb_frag_t *frag;
@@ -1320,17 +1328,11 @@ nfp_net_tx_ring_reset(struct nfp_net_dp *dp, struct nfp_net_tx_ring *tx_ring)
 	netdev_tx_reset_queue(nd_q);
 }
 
-static void nfp_net_tx_timeout(struct net_device *netdev)
+static void nfp_net_tx_timeout(struct net_device *netdev, unsigned int txqueue)
 {
 	struct nfp_net *nn = netdev_priv(netdev);
-	int i;
 
-	for (i = 0; i < nn->dp.netdev->real_num_tx_queues; i++) {
-		if (!netif_tx_queue_stopped(netdev_get_tx_queue(netdev, i)))
-			continue;
-		nn_warn(nn, "TX timeout on ring: %d\n", i);
-	}
-	nn_warn(nn, "TX watchdog timeout\n");
+	nn_warn(nn, "TX watchdog timeout on ring: %u\n", txqueue);
 }
 
 /* Receive processing
@@ -1666,9 +1668,9 @@ nfp_net_set_hash_desc(struct net_device *netdev, struct nfp_meta_parsed *meta,
 			 &rx_hash->hash);
 }
 
-static void *
+static bool
 nfp_net_parse_meta(struct net_device *netdev, struct nfp_meta_parsed *meta,
-		   void *data, int meta_len)
+		   void *data, void *pkt, unsigned int pkt_len, int meta_len)
 {
 	u32 meta_info;
 
@@ -1698,14 +1700,20 @@ nfp_net_parse_meta(struct net_device *netdev, struct nfp_meta_parsed *meta,
 				(__force __wsum)__get_unaligned_cpu32(data);
 			data += 4;
 			break;
+		case NFP_NET_META_RESYNC_INFO:
+			if (nfp_net_tls_rx_resync_req(netdev, data, pkt,
+						      pkt_len))
+				return false;
+			data += sizeof(struct nfp_net_tls_resync_req);
+			break;
 		default:
-			return NULL;
+			return true;
 		}
 
 		meta_info >>= NFP_NET_META_FIELD_SIZE;
 	}
 
-	return data;
+	return data != pkt;
 }
 
 static void
@@ -1739,9 +1747,14 @@ nfp_net_tx_xdp_buf(struct nfp_net_dp *dp, struct nfp_net_rx_ring *rx_ring,
 		   struct nfp_net_rx_buf *rxbuf, unsigned int dma_off,
 		   unsigned int pkt_len, bool *completed)
 {
+	unsigned int dma_map_sz = dp->fl_bufsz - NFP_NET_RX_BUF_NON_DATA;
 	struct nfp_net_tx_buf *txbuf;
 	struct nfp_net_tx_desc *txd;
 	int wr_idx;
+
+	/* Reject if xdp_adjust_tail grow packet beyond DMA area */
+	if (pkt_len + dma_off > dma_map_sz)
+		return false;
 
 	if (unlikely(nfp_net_tx_full(tx_ring, 1))) {
 		if (!*completed) {
@@ -1812,10 +1825,10 @@ static int nfp_net_rx(struct nfp_net_rx_ring *rx_ring, int budget)
 	struct xdp_buff xdp;
 	int idx;
 
-	rcu_read_lock();
 	xdp_prog = READ_ONCE(dp->xdp_prog);
 	true_bufsz = xdp_prog ? PAGE_SIZE : dp->fl_bufsz;
-	xdp.rxq = &rx_ring->xdp_rxq;
+	xdp_init_buff(&xdp, PAGE_SIZE - NFP_NET_RX_BUF_HEADROOM,
+		      &rx_ring->xdp_rxq);
 	tx_ring = r_vec->xdp_ring;
 
 	while (pkts_polled < budget) {
@@ -1890,12 +1903,10 @@ static int nfp_net_rx(struct nfp_net_rx_ring *rx_ring, int budget)
 			nfp_net_set_hash_desc(dp->netdev, &meta,
 					      rxbuf->frag + meta_off, rxd);
 		} else if (meta_len) {
-			void *end;
-
-			end = nfp_net_parse_meta(dp->netdev, &meta,
-						 rxbuf->frag + meta_off,
-						 meta_len);
-			if (unlikely(end != rxbuf->frag + pkt_off)) {
+			if (unlikely(nfp_net_parse_meta(dp->netdev, &meta,
+							rxbuf->frag + meta_off,
+							rxbuf->frag + pkt_off,
+							pkt_len, meta_len))) {
 				nn_dp_warn(dp, "invalid RX packet metadata\n");
 				nfp_net_rx_drop(dp, r_vec, rx_ring, rxbuf,
 						NULL);
@@ -1908,10 +1919,10 @@ static int nfp_net_rx(struct nfp_net_rx_ring *rx_ring, int budget)
 			unsigned int dma_off;
 			int act;
 
-			xdp.data_hard_start = rxbuf->frag + NFP_NET_RX_BUF_HEADROOM;
-			xdp.data = orig_data;
-			xdp.data_meta = orig_data;
-			xdp.data_end = orig_data + pkt_len;
+			xdp_prepare_buff(&xdp,
+					 rxbuf->frag + NFP_NET_RX_BUF_HEADROOM,
+					 pkt_off - NFP_NET_RX_BUF_HEADROOM,
+					 pkt_len, true);
 
 			act = bpf_prog_run_xdp(xdp_prog, &xdp);
 
@@ -1934,10 +1945,10 @@ static int nfp_net_rx(struct nfp_net_rx_ring *rx_ring, int budget)
 				continue;
 			default:
 				bpf_warn_invalid_xdp_action(act);
-				/* fall through */
+				fallthrough;
 			case XDP_ABORTED:
 				trace_xdp_exception(dp->netdev, xdp_prog, act);
-				/* fall through */
+				fallthrough;
 			case XDP_DROP:
 				nfp_net_rx_give_one(dp, rx_ring, rxbuf->frag,
 						    rxbuf->dma_addr);
@@ -2030,7 +2041,6 @@ static int nfp_net_rx(struct nfp_net_rx_ring *rx_ring, int budget)
 			if (!nfp_net_xdp_complete(tx_ring))
 				pkts_polled = budget;
 	}
-	rcu_read_unlock();
 
 	return pkts_polled;
 }
@@ -2056,6 +2066,36 @@ static int nfp_net_poll(struct napi_struct *napi, int budget)
 	if (pkts_polled < budget)
 		if (napi_complete_done(napi, pkts_polled))
 			nfp_net_irq_unmask(r_vec->nfp_net, r_vec->irq_entry);
+
+	if (r_vec->nfp_net->rx_coalesce_adapt_on && r_vec->rx_ring) {
+		struct dim_sample dim_sample = {};
+		unsigned int start;
+		u64 pkts, bytes;
+
+		do {
+			start = u64_stats_fetch_begin(&r_vec->rx_sync);
+			pkts = r_vec->rx_pkts;
+			bytes = r_vec->rx_bytes;
+		} while (u64_stats_fetch_retry(&r_vec->rx_sync, start));
+
+		dim_update_sample(r_vec->event_ctr, pkts, bytes, &dim_sample);
+		net_dim(&r_vec->rx_dim, dim_sample);
+	}
+
+	if (r_vec->nfp_net->tx_coalesce_adapt_on && r_vec->tx_ring) {
+		struct dim_sample dim_sample = {};
+		unsigned int start;
+		u64 pkts, bytes;
+
+		do {
+			start = u64_stats_fetch_begin(&r_vec->tx_sync);
+			pkts = r_vec->tx_pkts;
+			bytes = r_vec->tx_bytes;
+		} while (u64_stats_fetch_retry(&r_vec->tx_sync, start));
+
+		dim_update_sample(r_vec->event_ctr, pkts, bytes, &dim_sample);
+		net_dim(&r_vec->tx_dim, dim_sample);
+	}
 
 	return pkts_polled;
 }
@@ -2281,9 +2321,9 @@ static bool nfp_ctrl_rx(struct nfp_net_r_vector *r_vec)
 	return budget;
 }
 
-static void nfp_ctrl_poll(unsigned long arg)
+static void nfp_ctrl_poll(struct tasklet_struct *t)
 {
-	struct nfp_net_r_vector *r_vec = (void *)arg;
+	struct nfp_net_r_vector *r_vec = from_tasklet(r_vec, t, tasklet);
 
 	spin_lock(&r_vec->lock);
 	nfp_net_tx_complete(r_vec->tx_ring, 0);
@@ -2331,8 +2371,7 @@ static void nfp_net_vecs_init(struct nfp_net *nn)
 
 			__skb_queue_head_init(&r_vec->queue);
 			spin_lock_init(&r_vec->lock);
-			tasklet_init(&r_vec->tasklet, nfp_ctrl_poll,
-				     (unsigned long)r_vec);
+			tasklet_setup(&r_vec->tasklet, nfp_ctrl_poll);
 			tasklet_disable(&r_vec->tasklet);
 		}
 
@@ -2528,7 +2567,7 @@ nfp_net_rx_ring_alloc(struct nfp_net_dp *dp, struct nfp_net_rx_ring *rx_ring)
 
 	if (dp->netdev) {
 		err = xdp_rxq_info_reg(&rx_ring->xdp_rxq, dp->netdev,
-				       rx_ring->idx);
+				       rx_ring->idx, rx_ring->r_vec->napi.napi_id);
 		if (err < 0)
 			return err;
 	}
@@ -2861,15 +2900,6 @@ static int nfp_net_set_config_and_enable(struct nfp_net *nn)
 	for (r = 0; r < nn->dp.num_rx_rings; r++)
 		nfp_net_rx_ring_fill_freelist(&nn->dp, &nn->dp.rx_rings[r]);
 
-	/* Since reconfiguration requests while NFP is down are ignored we
-	 * have to wipe the entire VXLAN configuration and reinitialize it.
-	 */
-	if (nn->dp.ctrl & NFP_NET_CFG_CTRL_VXLAN) {
-		memset(&nn->vxlan_ports, 0, sizeof(nn->vxlan_ports));
-		memset(&nn->vxlan_usecnt, 0, sizeof(nn->vxlan_usecnt));
-		udp_tunnel_get_rx_info(nn->dp.netdev);
-	}
-
 	return 0;
 }
 
@@ -2879,6 +2909,7 @@ static int nfp_net_set_config_and_enable(struct nfp_net *nn)
  */
 static void nfp_net_close_stack(struct nfp_net *nn)
 {
+	struct nfp_net_r_vector *r_vec;
 	unsigned int r;
 
 	disable_irq(nn->irq_entries[NFP_NET_IRQ_LSC_IDX].vector);
@@ -2886,8 +2917,16 @@ static void nfp_net_close_stack(struct nfp_net *nn)
 	nn->link_up = false;
 
 	for (r = 0; r < nn->dp.num_r_vecs; r++) {
-		disable_irq(nn->r_vecs[r].irq_vector);
-		napi_disable(&nn->r_vecs[r].napi);
+		r_vec = &nn->r_vecs[r];
+
+		disable_irq(r_vec->irq_vector);
+		napi_disable(&r_vec->napi);
+
+		if (r_vec->rx_ring)
+			cancel_work_sync(&r_vec->rx_dim.work);
+
+		if (r_vec->tx_ring)
+			cancel_work_sync(&r_vec->tx_dim.work);
 	}
 
 	netif_tx_disable(nn->dp.netdev);
@@ -2954,17 +2993,88 @@ void nfp_ctrl_close(struct nfp_net *nn)
 	rtnl_unlock();
 }
 
+static void nfp_net_rx_dim_work(struct work_struct *work)
+{
+	struct nfp_net_r_vector *r_vec;
+	unsigned int factor, value;
+	struct dim_cq_moder moder;
+	struct nfp_net *nn;
+	struct dim *dim;
+
+	dim = container_of(work, struct dim, work);
+	moder = net_dim_get_rx_moderation(dim->mode, dim->profile_ix);
+	r_vec = container_of(dim, struct nfp_net_r_vector, rx_dim);
+	nn = r_vec->nfp_net;
+
+	/* Compute factor used to convert coalesce '_usecs' parameters to
+	 * ME timestamp ticks.  There are 16 ME clock cycles for each timestamp
+	 * count.
+	 */
+	factor = nn->tlv_caps.me_freq_mhz / 16;
+	if (nfp_net_coalesce_para_check(factor * moder.usec, moder.pkts))
+		return;
+
+	/* copy RX interrupt coalesce parameters */
+	value = (moder.pkts << 16) | (factor * moder.usec);
+	nn_writel(nn, NFP_NET_CFG_RXR_IRQ_MOD(r_vec->rx_ring->idx), value);
+	(void)nfp_net_reconfig(nn, NFP_NET_CFG_UPDATE_IRQMOD);
+
+	dim->state = DIM_START_MEASURE;
+}
+
+static void nfp_net_tx_dim_work(struct work_struct *work)
+{
+	struct nfp_net_r_vector *r_vec;
+	unsigned int factor, value;
+	struct dim_cq_moder moder;
+	struct nfp_net *nn;
+	struct dim *dim;
+
+	dim = container_of(work, struct dim, work);
+	moder = net_dim_get_tx_moderation(dim->mode, dim->profile_ix);
+	r_vec = container_of(dim, struct nfp_net_r_vector, tx_dim);
+	nn = r_vec->nfp_net;
+
+	/* Compute factor used to convert coalesce '_usecs' parameters to
+	 * ME timestamp ticks.  There are 16 ME clock cycles for each timestamp
+	 * count.
+	 */
+	factor = nn->tlv_caps.me_freq_mhz / 16;
+	if (nfp_net_coalesce_para_check(factor * moder.usec, moder.pkts))
+		return;
+
+	/* copy TX interrupt coalesce parameters */
+	value = (moder.pkts << 16) | (factor * moder.usec);
+	nn_writel(nn, NFP_NET_CFG_TXR_IRQ_MOD(r_vec->tx_ring->idx), value);
+	(void)nfp_net_reconfig(nn, NFP_NET_CFG_UPDATE_IRQMOD);
+
+	dim->state = DIM_START_MEASURE;
+}
+
 /**
  * nfp_net_open_stack() - Start the device from stack's perspective
  * @nn:      NFP Net device to reconfigure
  */
 static void nfp_net_open_stack(struct nfp_net *nn)
 {
+	struct nfp_net_r_vector *r_vec;
 	unsigned int r;
 
 	for (r = 0; r < nn->dp.num_r_vecs; r++) {
-		napi_enable(&nn->r_vecs[r].napi);
-		enable_irq(nn->r_vecs[r].irq_vector);
+		r_vec = &nn->r_vecs[r];
+
+		if (r_vec->rx_ring) {
+			INIT_WORK(&r_vec->rx_dim.work, nfp_net_rx_dim_work);
+			r_vec->rx_dim.mode = DIM_CQ_PERIOD_MODE_START_FROM_EQE;
+		}
+
+		if (r_vec->tx_ring) {
+			INIT_WORK(&r_vec->tx_dim.work, nfp_net_tx_dim_work);
+			r_vec->tx_dim.mode = DIM_CQ_PERIOD_MODE_START_FROM_EQE;
+		}
+
+		napi_enable(&r_vec->napi);
+		enable_irq(r_vec->irq_vector);
 	}
 
 	netif_tx_wake_all_queues(nn->dp.netdev);
@@ -3167,16 +3277,11 @@ static int nfp_net_dp_swap_enable(struct nfp_net *nn, struct nfp_net_dp *dp)
 	for (r = 0; r <	nn->max_r_vecs; r++)
 		nfp_net_vector_assign_rings(&nn->dp, &nn->r_vecs[r], r);
 
-	err = netif_set_real_num_rx_queues(nn->dp.netdev, nn->dp.num_rx_rings);
+	err = netif_set_real_num_queues(nn->dp.netdev,
+					nn->dp.num_stack_tx_rings,
+					nn->dp.num_rx_rings);
 	if (err)
 		return err;
-
-	if (nn->dp.netdev->real_num_tx_queues != nn->dp.num_stack_tx_rings) {
-		err = netif_set_real_num_tx_queues(nn->dp.netdev,
-						   nn->dp.num_stack_tx_rings);
-		if (err)
-			return err;
-	}
 
 	return nfp_net_set_config_and_enable(nn);
 }
@@ -3560,95 +3665,11 @@ nfp_net_get_phys_port_name(struct net_device *netdev, char *name, size_t len)
 	return 0;
 }
 
-/**
- * nfp_net_set_vxlan_port() - set vxlan port in SW and reconfigure HW
- * @nn:   NFP Net device to reconfigure
- * @idx:  Index into the port table where new port should be written
- * @port: UDP port to configure (pass zero to remove VXLAN port)
- */
-static void nfp_net_set_vxlan_port(struct nfp_net *nn, int idx, __be16 port)
-{
-	int i;
-
-	nn->vxlan_ports[idx] = port;
-
-	if (!(nn->dp.ctrl & NFP_NET_CFG_CTRL_VXLAN))
-		return;
-
-	BUILD_BUG_ON(NFP_NET_N_VXLAN_PORTS & 1);
-	for (i = 0; i < NFP_NET_N_VXLAN_PORTS; i += 2)
-		nn_writel(nn, NFP_NET_CFG_VXLAN_PORT + i * sizeof(port),
-			  be16_to_cpu(nn->vxlan_ports[i + 1]) << 16 |
-			  be16_to_cpu(nn->vxlan_ports[i]));
-
-	nfp_net_reconfig_post(nn, NFP_NET_CFG_UPDATE_VXLAN);
-}
-
-/**
- * nfp_net_find_vxlan_idx() - find table entry of the port or a free one
- * @nn:   NFP Network structure
- * @port: UDP port to look for
- *
- * Return: if the port is already in the table -- it's position;
- *	   if the port is not in the table -- free position to use;
- *	   if the table is full -- -ENOSPC.
- */
-static int nfp_net_find_vxlan_idx(struct nfp_net *nn, __be16 port)
-{
-	int i, free_idx = -ENOSPC;
-
-	for (i = 0; i < NFP_NET_N_VXLAN_PORTS; i++) {
-		if (nn->vxlan_ports[i] == port)
-			return i;
-		if (!nn->vxlan_usecnt[i])
-			free_idx = i;
-	}
-
-	return free_idx;
-}
-
-static void nfp_net_add_vxlan_port(struct net_device *netdev,
-				   struct udp_tunnel_info *ti)
-{
-	struct nfp_net *nn = netdev_priv(netdev);
-	int idx;
-
-	if (ti->type != UDP_TUNNEL_TYPE_VXLAN)
-		return;
-
-	idx = nfp_net_find_vxlan_idx(nn, ti->port);
-	if (idx == -ENOSPC)
-		return;
-
-	if (!nn->vxlan_usecnt[idx]++)
-		nfp_net_set_vxlan_port(nn, idx, ti->port);
-}
-
-static void nfp_net_del_vxlan_port(struct net_device *netdev,
-				   struct udp_tunnel_info *ti)
-{
-	struct nfp_net *nn = netdev_priv(netdev);
-	int idx;
-
-	if (ti->type != UDP_TUNNEL_TYPE_VXLAN)
-		return;
-
-	idx = nfp_net_find_vxlan_idx(nn, ti->port);
-	if (idx == -ENOSPC || !nn->vxlan_usecnt[idx])
-		return;
-
-	if (!--nn->vxlan_usecnt[idx])
-		nfp_net_set_vxlan_port(nn, idx, 0);
-}
-
 static int nfp_net_xdp_setup_drv(struct nfp_net *nn, struct netdev_bpf *bpf)
 {
 	struct bpf_prog *prog = bpf->prog;
 	struct nfp_net_dp *dp;
 	int err;
-
-	if (!xdp_attachment_flags_ok(&nn->xdp, bpf))
-		return -EBUSY;
 
 	if (!prog == !nn->dp.xdp_prog) {
 		WRITE_ONCE(nn->dp.xdp_prog, prog);
@@ -3678,9 +3699,6 @@ static int nfp_net_xdp_setup_hw(struct nfp_net *nn, struct netdev_bpf *bpf)
 {
 	int err;
 
-	if (!xdp_attachment_flags_ok(&nn->xdp_hw, bpf))
-		return -EBUSY;
-
 	err = nfp_app_xdp_offload(nn->app, nn, bpf->prog, bpf->extack);
 	if (err)
 		return err;
@@ -3698,10 +3716,6 @@ static int nfp_net_xdp(struct net_device *netdev, struct netdev_bpf *xdp)
 		return nfp_net_xdp_setup_drv(nn, xdp);
 	case XDP_SETUP_PROG_HW:
 		return nfp_net_xdp_setup_hw(nn, xdp);
-	case XDP_QUERY_PROG:
-		return xdp_attachment_query(&nn->xdp, xdp);
-	case XDP_QUERY_PROG_HW:
-		return xdp_attachment_query(&nn->xdp_hw, xdp);
 	default:
 		return nfp_app_bpf(nn->app, nn, xdp);
 	}
@@ -3751,10 +3765,39 @@ const struct net_device_ops nfp_net_netdev_ops = {
 	.ndo_set_features	= nfp_net_set_features,
 	.ndo_features_check	= nfp_net_features_check,
 	.ndo_get_phys_port_name	= nfp_net_get_phys_port_name,
-	.ndo_udp_tunnel_add	= nfp_net_add_vxlan_port,
-	.ndo_udp_tunnel_del	= nfp_net_del_vxlan_port,
 	.ndo_bpf		= nfp_net_xdp,
 	.ndo_get_devlink_port	= nfp_devlink_get_devlink_port,
+};
+
+static int nfp_udp_tunnel_sync(struct net_device *netdev, unsigned int table)
+{
+	struct nfp_net *nn = netdev_priv(netdev);
+	int i;
+
+	BUILD_BUG_ON(NFP_NET_N_VXLAN_PORTS & 1);
+	for (i = 0; i < NFP_NET_N_VXLAN_PORTS; i += 2) {
+		struct udp_tunnel_info ti0, ti1;
+
+		udp_tunnel_nic_get_port(netdev, table, i, &ti0);
+		udp_tunnel_nic_get_port(netdev, table, i + 1, &ti1);
+
+		nn_writel(nn, NFP_NET_CFG_VXLAN_PORT + i * sizeof(ti0.port),
+			  be16_to_cpu(ti1.port) << 16 | be16_to_cpu(ti0.port));
+	}
+
+	return nfp_net_reconfig(nn, NFP_NET_CFG_UPDATE_VXLAN);
+}
+
+static const struct udp_tunnel_nic_info nfp_udp_tunnels = {
+	.sync_table     = nfp_udp_tunnel_sync,
+	.flags          = UDP_TUNNEL_NIC_INFO_MAY_SLEEP |
+			  UDP_TUNNEL_NIC_INFO_OPEN_ONLY,
+	.tables         = {
+		{
+			.n_entries      = NFP_NET_N_VXLAN_PORTS,
+			.tunnel_types   = UDP_TUNNEL_TYPE_VXLAN,
+		},
+	},
 };
 
 /**
@@ -3961,6 +4004,9 @@ static void nfp_net_irqmod_init(struct nfp_net *nn)
 	nn->rx_coalesce_max_frames = 64;
 	nn->tx_coalesce_usecs      = 50;
 	nn->tx_coalesce_max_frames = 64;
+
+	nn->rx_coalesce_adapt_on   = true;
+	nn->tx_coalesce_adapt_on   = true;
 }
 
 static void nfp_net_netdev_init(struct nfp_net *nn)
@@ -4004,6 +4050,7 @@ static void nfp_net_netdev_init(struct nfp_net *nn)
 	if (nn->cap & NFP_NET_CFG_CTRL_VXLAN) {
 		if (nn->cap & NFP_NET_CFG_CTRL_LSO)
 			netdev->hw_features |= NETIF_F_GSO_UDP_TUNNEL;
+		netdev->udp_tunnel_nic_info = &nfp_udp_tunnels;
 		nn->dp.ctrl |= NFP_NET_CFG_CTRL_VXLAN;
 	}
 	if (nn->cap & NFP_NET_CFG_CTRL_NVGRE) {

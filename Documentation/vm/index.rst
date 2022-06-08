@@ -29,8 +29,11 @@ descriptions of data structures and algorithms.
    :maxdepth: 1
 
    active_mm
+   arch_pgtable_helpers
    balance
    cleancache
+   damon/index
+   free_page_reporting
    frontswap
    highmem
    hmm

@@ -138,7 +138,7 @@ iMX6QDL/SX requires four clocks
 
 iMX6UL does only require three clocks
 
-	crypto: caam@2140000 {
+	crypto: crypto@2140000 {
 		compatible = "fsl,sec-v4.0";
 		#address-cells = <1>;
 		#size-cells = <1>;
@@ -544,6 +544,13 @@ System ON/OFF key driver
       Usage: option
       Value type: <boo>
       Definition: Button can wake-up the system.
+
+  - emulate-press:
+     Usage: option
+     Value type: <bool>
+     Definition: For ONOFF key only trigger interrupt after release but
+                 not press like i.mx6q/dl/sl, emulate press event before
+		 release.
 
  - regmap:
       Usage: required:

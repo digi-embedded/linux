@@ -18,29 +18,13 @@ struct device_node;
 enum mxc_cpu_pwr_mode;
 struct of_device_id;
 
-void mx21_map_io(void);
-void mx27_map_io(void);
 void mx31_map_io(void);
 void mx35_map_io(void);
 void imx21_init_early(void);
-void imx27_init_early(void);
 void imx31_init_early(void);
 void imx35_init_early(void);
-void mxc_init_irq(void __iomem *);
-void mx21_init_irq(void);
-void mx27_init_irq(void);
 void mx31_init_irq(void);
 void mx35_init_irq(void);
-void imx21_soc_init(void);
-void imx27_soc_init(void);
-void imx31_soc_init(void);
-void imx35_soc_init(void);
-int mx21_clocks_init(unsigned long lref, unsigned long fref);
-int mx27_clocks_init(unsigned long fref);
-int mx31_clocks_init(unsigned long fref);
-int mx35_clocks_init(void);
-struct platform_device *mxc_register_gpio(char *name, int id,
-	resource_size_t iobase, resource_size_t iosize, int irq, int irq_high);
 void mxc_set_cpu_type(unsigned int type);
 void mxc_restart(enum reboot_mode, const char *);
 void mxc_arch_reset_init(void __iomem *);
@@ -50,7 +34,6 @@ void imx_aips_allow_unprivileged_access(const char *compat);
 int mxc_device_init(void);
 void imx_set_soc_revision(unsigned int rev);
 void imx_init_revision_from_anatop(void);
-struct device *imx_soc_device_init(void);
 void imx6_enable_rbc(bool enable);
 void imx_gpc_check_dt(void);
 void imx_gpc_set_arm_power_in_lpm(bool power_off);
@@ -141,7 +124,6 @@ void imx_anatop_pre_suspend(void);
 void imx_anatop_post_resume(void);
 int imx6_set_lpm(enum mxc_cpu_pwr_mode mode);
 void imx6_set_int_mem_clk_lpm(bool enable);
-void imx6sl_set_wait_clk(bool enter);
 void imx6_enet_mac_init(const char *enet_compat, const char *ocotp_compat);
 void imx6sl_low_power_idle(void);
 void imx6sll_low_power_idle(void);
@@ -157,6 +139,7 @@ static inline int imx_mmdc_get_ddr_type(void) { return 0; }
 static inline int imx_mmdc_get_lpddr2_2ch_mode(void) { return 0; }
 #endif
 int imx7ulp_set_lpm(enum ulp_cpu_pwr_mode mode);
+u32 imx7ulp_get_mode(void);
 void imx_busfreq_map_io(void);
 void imx7_pm_map_io(void);
 void imx6_pm_map_io(void);
@@ -185,13 +168,13 @@ static inline void imx7ulp_cpu_resume(void) {}
 static inline void imx7ulp_suspend(void __iomem *ocram_vbase) {}
 #endif
 
+void v7_cpu_resume(void);
+
 #ifdef CONFIG_HAVE_IMX_DDRC
 int imx_ddrc_get_ddr_type(void);
 #else
 static inline int imx_ddrc_get_ddr_type(void) { return 0; }
 #endif
-
-void v7_cpu_resume(void);
 
 void imx6_pm_ccm_init(const char *ccm_compat);
 void imx6q_pm_init(void);

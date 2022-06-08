@@ -577,7 +577,7 @@ int gsc_try_selection(struct gsc_ctx *ctx, struct v4l2_selection *s)
 	v4l_bound_align_image(&tmp_w, min_w, max_w, mod_x,
 			      &tmp_h, min_h, max_h, mod_y, 0);
 
-	if (!V4L2_TYPE_IS_OUTPUT(s->type) &&
+	if (V4L2_TYPE_IS_CAPTURE(s->type) &&
 	    (ctx->gsc_ctrls.rotate->val == 90 ||
 	     ctx->gsc_ctrls.rotate->val == 270))
 		gsc_check_crop_change(tmp_h, tmp_w,
@@ -1210,17 +1210,18 @@ static int gsc_remove(struct platform_device *pdev)
 	struct gsc_dev *gsc = platform_get_drvdata(pdev);
 	int i;
 
-	pm_runtime_get_sync(&pdev->dev);
-
 	gsc_unregister_m2m_device(gsc);
 	v4l2_device_unregister(&gsc->v4l2_dev);
 
 	vb2_dma_contig_clear_max_seg_size(&pdev->dev);
-	for (i = 0; i < gsc->num_clocks; i++)
-		clk_disable_unprepare(gsc->clock[i]);
 
-	pm_runtime_put_noidle(&pdev->dev);
 	pm_runtime_disable(&pdev->dev);
+
+	if (!pm_runtime_status_suspended(&pdev->dev))
+		for (i = 0; i < gsc->num_clocks; i++)
+			clk_disable_unprepare(gsc->clock[i]);
+
+	pm_runtime_set_suspended(&pdev->dev);
 
 	dev_dbg(&pdev->dev, "%s driver unloaded\n", pdev->name);
 	return 0;

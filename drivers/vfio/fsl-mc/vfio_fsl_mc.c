@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause)
 /*
  * Copyright 2013-2016 Freescale Semiconductor Inc.
- * Copyright 2016-2017,2019 NXP
+ * Copyright 2016-2017,2019-2020 NXP
  */
 
 #include <linux/device.h>
@@ -13,81 +13,16 @@
 #include <linux/vfio.h>
 #include <linux/fsl/mc.h>
 #include <linux/delay.h>
+#include <linux/io-64-nonatomic-hi-lo.h>
 
 #include "vfio_fsl_mc_private.h"
 
-static DEFINE_MUTEX(reflck_lock);
+static struct fsl_mc_driver vfio_fsl_mc_driver;
 
-static void vfio_fsl_mc_reflck_get(struct vfio_fsl_mc_reflck *reflck)
+static int vfio_fsl_mc_open_device(struct vfio_device *core_vdev)
 {
-	kref_get(&reflck->kref);
-}
-
-static void vfio_fsl_mc_reflck_release(struct kref *kref)
-{
-	struct vfio_fsl_mc_reflck *reflck = container_of(kref,
-						      struct vfio_fsl_mc_reflck,
-						      kref);
-
-	kfree(reflck);
-	mutex_unlock(&reflck_lock);
-}
-
-static void vfio_fsl_mc_reflck_put(struct vfio_fsl_mc_reflck *reflck)
-{
-	kref_put_mutex(&reflck->kref, vfio_fsl_mc_reflck_release, &reflck_lock);
-}
-
-static struct vfio_fsl_mc_reflck *vfio_fsl_mc_reflck_alloc(void)
-{
-	struct vfio_fsl_mc_reflck *reflck;
-
-	reflck = kzalloc(sizeof(*reflck), GFP_KERNEL);
-	if (!reflck)
-		return ERR_PTR(-ENOMEM);
-
-	kref_init(&reflck->kref);
-	mutex_init(&reflck->lock);
-
-	return reflck;
-}
-
-static int vfio_fsl_mc_reflck_attach(struct vfio_fsl_mc_device *vdev)
-{
-	int ret = 0;
-
-	mutex_lock(&reflck_lock);
-	if (is_fsl_mc_bus_dprc(vdev->mc_dev)) {
-		vdev->reflck = vfio_fsl_mc_reflck_alloc();
-	} else {
-		struct device *mc_cont_dev = vdev->mc_dev->dev.parent;
-		struct vfio_device *device;
-		struct vfio_fsl_mc_device *cont_vdev;
-
-		device = vfio_device_get_from_dev(mc_cont_dev);
-		if (!device) {
-			ret = -ENODEV;
-			goto unlock;
-		}
-
-		cont_vdev = vfio_device_data(device);
-		if (!cont_vdev->reflck) {
-			vfio_device_put(device);
-			ret = -ENODEV;
-			goto unlock;
-		}
-		vfio_fsl_mc_reflck_get(cont_vdev->reflck);
-		vdev->reflck = cont_vdev->reflck;
-		vfio_device_put(device);
-	}
-
-unlock:
-	mutex_unlock(&reflck_lock);
-	return ret;
-}
-
-static int vfio_fsl_mc_regions_init(struct vfio_fsl_mc_device *vdev)
-{
+	struct vfio_fsl_mc_device *vdev =
+		container_of(core_vdev, struct vfio_fsl_mc_device, vdev);
 	struct fsl_mc_device *mc_dev = vdev->mc_dev;
 	int count = mc_dev->obj_desc.region_count;
 	int i;
@@ -99,92 +34,95 @@ static int vfio_fsl_mc_regions_init(struct vfio_fsl_mc_device *vdev)
 
 	for (i = 0; i < count; i++) {
 		struct resource *res = &mc_dev->regions[i];
+		int no_mmap = is_fsl_mc_bus_dprc(mc_dev);
 
 		vdev->regions[i].addr = res->start;
-		vdev->regions[i].size = PAGE_ALIGN((resource_size(res)));
-		vdev->regions[i].flags = VFIO_REGION_INFO_FLAG_MMAP;
+		vdev->regions[i].size = resource_size(res);
+		vdev->regions[i].type = mc_dev->regions[i].flags & IORESOURCE_BITS;
+		/*
+		 * Only regions addressed with PAGE granularity may be
+		 * MMAPed securely.
+		 */
+		if (!no_mmap && !(vdev->regions[i].addr & ~PAGE_MASK) &&
+				!(vdev->regions[i].size & ~PAGE_MASK))
+			vdev->regions[i].flags |=
+					VFIO_REGION_INFO_FLAG_MMAP;
 		vdev->regions[i].flags |= VFIO_REGION_INFO_FLAG_READ;
 		if (!(mc_dev->regions[i].flags & IORESOURCE_READONLY))
 			vdev->regions[i].flags |= VFIO_REGION_INFO_FLAG_WRITE;
 		vdev->regions[i].type = mc_dev->regions[i].flags & IORESOURCE_BITS;
 	}
 
-	vdev->num_regions = mc_dev->obj_desc.region_count;
 	return 0;
 }
-static void vfio_fsl_mc_regions_cleanup(struct vfio_fsl_mc_device *vdev)
+
+static int vfio_fsl_mc_reset_device(struct vfio_fsl_mc_device *vdev)
 {
-	int i;
+	struct fsl_mc_device *mc_dev = vdev->mc_dev;
+	int ret = 0;
 
-	for (i = 0; i < vdev->num_regions; i++)
-		iounmap(vdev->regions[i].ioaddr);
+	if (is_fsl_mc_bus_dprc(vdev->mc_dev)) {
+		return dprc_reset_container(mc_dev->mc_io, 0,
+					mc_dev->mc_handle,
+					mc_dev->obj_desc.id,
+					DPRC_RESET_OPTION_NON_RECURSIVE);
+	} else {
+		int err;
+		u16 token;
 
-	vdev->num_regions = 0;
-	kfree(vdev->regions);
-}
-
-static int vfio_fsl_mc_open(void *device_data)
-{
-	struct vfio_fsl_mc_device *vdev = device_data;
-	int ret;
-
-	if (!try_module_get(THIS_MODULE))
-		return -ENODEV;
-
-	mutex_lock(&vdev->reflck->lock);
-	if (!vdev->refcnt) {
-		ret = vfio_fsl_mc_regions_init(vdev);
-		if (ret)
-			goto err_reg_init;
+		err = fsl_mc_obj_open(mc_dev->mc_io, 0, mc_dev->obj_desc.id,
+				      mc_dev->obj_desc.type,
+				      &token);
+		if (err)
+			return err;
+		ret = fsl_mc_obj_reset(mc_dev->mc_io, 0, token);
+		err = fsl_mc_obj_close(mc_dev->mc_io, 0, token);
+		if (err)
+			return err;
 	}
-	vdev->refcnt++;
-
-	mutex_unlock(&vdev->reflck->lock);
-	return 0;
-
-err_reg_init:
-	mutex_unlock(&vdev->reflck->lock);
-	module_put(THIS_MODULE);
 	return ret;
 }
 
-static void vfio_fsl_mc_release(void *device_data)
+static void vfio_fsl_mc_regions_cleanup(struct vfio_fsl_mc_device *vdev)
 {
-	struct vfio_fsl_mc_device *vdev = device_data;
-	int ret;
+	struct fsl_mc_device *mc_dev = vdev->mc_dev;
+	int i;
 
-	mutex_lock(&vdev->reflck->lock);
-
-	if (!(--vdev->refcnt)) {
-		struct fsl_mc_device *mc_dev = vdev->mc_dev;
-		struct device *cont_dev = fsl_mc_cont_dev(&mc_dev->dev);
-		struct fsl_mc_device *mc_cont = to_fsl_mc_device(cont_dev);
-		struct fsl_mc_bus *mc_bus;
-
-		mc_bus = to_fsl_mc_bus(mc_cont);
-
-		vfio_fsl_mc_regions_cleanup(vdev);
-
-		/* reset the device before cleaning up the interrupts */
-		ret = dprc_reset_container(mc_dev->mc_io, 0,
-		      mc_dev->mc_handle,
-			  mc_dev->obj_desc.id);
-
-		vfio_fsl_mc_irqs_cleanup(vdev);
-
-		fsl_mc_cleanup_irq_pool(mc_bus);
-	}
-
-	mutex_unlock(&vdev->reflck->lock);
-
-	module_put(THIS_MODULE);
+	for (i = 0; i < mc_dev->obj_desc.region_count; i++)
+		iounmap(vdev->regions[i].ioaddr);
+	kfree(vdev->regions);
 }
 
-static long vfio_fsl_mc_ioctl(void *device_data, unsigned int cmd,
-			      unsigned long arg)
+
+static void vfio_fsl_mc_close_device(struct vfio_device *core_vdev)
+{
+	struct vfio_fsl_mc_device *vdev =
+		container_of(core_vdev, struct vfio_fsl_mc_device, vdev);
+	struct fsl_mc_device *mc_dev = vdev->mc_dev;
+	struct device *cont_dev = fsl_mc_cont_dev(&mc_dev->dev);
+	struct fsl_mc_device *mc_cont = to_fsl_mc_device(cont_dev);
+	int ret;
+
+	vfio_fsl_mc_regions_cleanup(vdev);
+
+	/* reset the device before cleaning up the interrupts */
+	ret = vfio_fsl_mc_reset_device(vdev);
+
+	if (WARN_ON(ret))
+		dev_warn(&mc_cont->dev,
+			 "VFIO_FLS_MC: reset device has failed (%d)\n", ret);
+
+	vfio_fsl_mc_irqs_cleanup(vdev);
+
+	fsl_mc_cleanup_irq_pool(mc_cont);
+}
+
+static long vfio_fsl_mc_ioctl(struct vfio_device *core_vdev,
+			      unsigned int cmd, unsigned long arg)
 {
 	unsigned long minsz;
-	struct vfio_fsl_mc_device *vdev = device_data;
+	struct vfio_fsl_mc_device *vdev =
+		container_of(core_vdev, struct vfio_fsl_mc_device, vdev);
 	struct fsl_mc_device *mc_dev = vdev->mc_dev;
 
 	switch (cmd) {
@@ -201,12 +139,15 @@ static long vfio_fsl_mc_ioctl(void *device_data, unsigned int cmd,
 			return -EINVAL;
 
 		info.flags = VFIO_DEVICE_FLAGS_FSL_MC;
+
+		if (is_fsl_mc_bus_dprc(mc_dev))
+			info.flags |= VFIO_DEVICE_FLAGS_RESET;
+
 		info.num_regions = mc_dev->obj_desc.region_count;
 		info.num_irqs = mc_dev->obj_desc.irq_count;
 
 		return copy_to_user((void __user *)arg, &info, minsz) ?
 			-EFAULT : 0;
-
 	}
 	case VFIO_DEVICE_GET_REGION_INFO:
 	{
@@ -220,7 +161,7 @@ static long vfio_fsl_mc_ioctl(void *device_data, unsigned int cmd,
 		if (info.argsz < minsz)
 			return -EINVAL;
 
-		if (info.index >= vdev->num_regions)
+		if (info.index >= mc_dev->obj_desc.region_count)
 			return -EINVAL;
 
 		/* map offset to the physical address  */
@@ -228,8 +169,9 @@ static long vfio_fsl_mc_ioctl(void *device_data, unsigned int cmd,
 		info.size = vdev->regions[info.index].size;
 		info.flags = vdev->regions[info.index].flags;
 
-		return copy_to_user((void __user *)arg, &info, minsz);
-
+		if (copy_to_user((void __user *)arg, &info, minsz))
+			return -EFAULT;
+		return 0;
 	}
 	case VFIO_DEVICE_GET_IRQ_INFO:
 	{
@@ -248,86 +190,66 @@ static long vfio_fsl_mc_ioctl(void *device_data, unsigned int cmd,
 		info.flags = VFIO_IRQ_INFO_EVENTFD;
 		info.count = 1;
 
-		return copy_to_user((void __user *)arg, &info, minsz);
+		if (copy_to_user((void __user *)arg, &info, minsz))
+			return -EFAULT;
+		return 0;
 	}
 	case VFIO_DEVICE_SET_IRQS:
 	{
 		struct vfio_irq_set hdr;
 		u8 *data = NULL;
 		int ret = 0;
+		size_t data_size = 0;
 
 		minsz = offsetofend(struct vfio_irq_set, count);
 
 		if (copy_from_user(&hdr, (void __user *)arg, minsz))
 			return -EFAULT;
 
-		if (hdr.argsz < minsz)
-			return -EINVAL;
+		ret = vfio_set_irqs_validate_and_prepare(&hdr, mc_dev->obj_desc.irq_count,
+					mc_dev->obj_desc.irq_count, &data_size);
+		if (ret)
+			return ret;
 
-		if (hdr.index >= mc_dev->obj_desc.irq_count)
-			return -EINVAL;
-
-		if (hdr.start != 0 || hdr.count > 1)
-			return -EINVAL;
-
-		if (hdr.count == 0 &&
-		    (!(hdr.flags & VFIO_IRQ_SET_DATA_NONE) ||
-		    !(hdr.flags & VFIO_IRQ_SET_ACTION_TRIGGER)))
-			return -EINVAL;
-
-		if (hdr.flags & ~(VFIO_IRQ_SET_DATA_TYPE_MASK |
-				  VFIO_IRQ_SET_ACTION_TYPE_MASK))
-			return -EINVAL;
-
-		if (!(hdr.flags & VFIO_IRQ_SET_DATA_NONE)) {
-			size_t size;
-
-			if (hdr.flags & VFIO_IRQ_SET_DATA_BOOL)
-				size = sizeof(uint8_t);
-			else if (hdr.flags & VFIO_IRQ_SET_DATA_EVENTFD)
-				size = sizeof(int32_t);
-			else
-				return -EINVAL;
-
-			if (hdr.argsz - minsz < hdr.count * size)
-				return -EINVAL;
-
+		if (data_size) {
 			data = memdup_user((void __user *)(arg + minsz),
-					   hdr.count * size);
+				   data_size);
 			if (IS_ERR(data))
 				return PTR_ERR(data);
 		}
 
+		mutex_lock(&vdev->igate);
 		ret = vfio_fsl_mc_set_irqs_ioctl(vdev, hdr.flags,
 						 hdr.index, hdr.start,
 						 hdr.count, data);
+		mutex_unlock(&vdev->igate);
+		kfree(data);
+
 		return ret;
 	}
 	case VFIO_DEVICE_RESET:
 	{
-		return -EINVAL;
+		return vfio_fsl_mc_reset_device(vdev);
+
 	}
 	default:
-		return -EINVAL;
+		return -ENOTTY;
 	}
 }
 
-static ssize_t vfio_fsl_mc_read(void *device_data, char __user *buf,
+static ssize_t vfio_fsl_mc_read(struct vfio_device *core_vdev, char __user *buf,
 				size_t count, loff_t *ppos)
 {
-	struct vfio_fsl_mc_device *vdev = device_data;
+	struct vfio_fsl_mc_device *vdev =
+		container_of(core_vdev, struct vfio_fsl_mc_device, vdev);
 	unsigned int index = VFIO_FSL_MC_OFFSET_TO_INDEX(*ppos);
 	loff_t off = *ppos & VFIO_FSL_MC_OFFSET_MASK;
+	struct fsl_mc_device *mc_dev = vdev->mc_dev;
 	struct vfio_fsl_mc_region *region;
-	uint64_t data[8];
+	u64 data[8];
 	int i;
 
-	/* Read ioctl supported only for DPRC and DPMCP device */
-	if (strcmp(vdev->mc_dev->obj_desc.type, "dprc") &&
-	    strcmp(vdev->mc_dev->obj_desc.type, "dpmcp"))
-		return -EINVAL;
-
-	if (index >= vdev->num_regions)
+	if (index >= mc_dev->obj_desc.region_count)
 		return -EINVAL;
 
 	region = &vdev->regions[index];
@@ -335,9 +257,8 @@ static ssize_t vfio_fsl_mc_read(void *device_data, char __user *buf,
 	if (!(region->flags & VFIO_REGION_INFO_FLAG_READ))
 		return -EINVAL;
 
-
 	if (!region->ioaddr) {
-		region->ioaddr = ioremap_nocache(region->addr, region->size);
+		region->ioaddr = ioremap(region->addr, region->size);
 		if (!region->ioaddr)
 			return -ENOMEM;
 	}
@@ -394,24 +315,20 @@ static int vfio_fsl_mc_send_command(void __iomem *ioaddr, uint64_t *cmd_data)
 	return 0;
 }
 
-
-static ssize_t vfio_fsl_mc_write(void *device_data, const char __user *buf,
-				 size_t count, loff_t *ppos)
+static ssize_t vfio_fsl_mc_write(struct vfio_device *core_vdev,
+				 const char __user *buf, size_t count,
+				 loff_t *ppos)
 {
-	struct vfio_fsl_mc_device *vdev = device_data;
+	struct vfio_fsl_mc_device *vdev =
+		container_of(core_vdev, struct vfio_fsl_mc_device, vdev);
 	unsigned int index = VFIO_FSL_MC_OFFSET_TO_INDEX(*ppos);
 	loff_t off = *ppos & VFIO_FSL_MC_OFFSET_MASK;
+	struct fsl_mc_device *mc_dev = vdev->mc_dev;
 	struct vfio_fsl_mc_region *region;
-	uint64_t data[8];
+	u64 data[8];
 	int ret;
 
-
-	/* Write ioctl supported only for DPRC and DPMCP device */
-	if (strcmp(vdev->mc_dev->obj_desc.type, "dprc") &&
-	    strcmp(vdev->mc_dev->obj_desc.type, "dpmcp"))
-		return -EINVAL;
-
-	if (index >= vdev->num_regions)
+	if (index >= mc_dev->obj_desc.region_count)
 		return -EINVAL;
 
 	region = &vdev->regions[index];
@@ -420,7 +337,7 @@ static ssize_t vfio_fsl_mc_write(void *device_data, const char __user *buf,
 		return -EINVAL;
 
 	if (!region->ioaddr) {
-		region->ioaddr = ioremap_nocache(region->addr, region->size);
+		region->ioaddr = ioremap(region->addr, region->size);
 		if (!region->ioaddr)
 			return -ENOMEM;
 	}
@@ -452,8 +369,8 @@ static int vfio_fsl_mc_mmap_mmio(struct vfio_fsl_mc_region region,
 	if (region.size < PAGE_SIZE || base + size > region.size)
 		return -EINVAL;
 
-	if (region.type & DPRC_REGION_CACHEABLE) {
-		if (!(region.type & DPRC_REGION_SHAREABLE))
+	if (region.type & FSL_MC_REGION_CACHEABLE) {
+		if (!(region.type & FSL_MC_REGION_SHAREABLE))
 			vma->vm_page_prot = pgprot_cached_ns(vma->vm_page_prot);
 	} else
 		vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
@@ -464,12 +381,13 @@ static int vfio_fsl_mc_mmap_mmio(struct vfio_fsl_mc_region region,
 			       size, vma->vm_page_prot);
 }
 
-static int vfio_fsl_mc_mmap(void *device_data, struct vm_area_struct *vma)
+static int vfio_fsl_mc_mmap(struct vfio_device *core_vdev,
+			    struct vm_area_struct *vma)
 {
-	struct vfio_fsl_mc_device *vdev = device_data;
+	struct vfio_fsl_mc_device *vdev =
+		container_of(core_vdev, struct vfio_fsl_mc_device, vdev);
 	struct fsl_mc_device *mc_dev = vdev->mc_dev;
-	unsigned long size, addr;
-	int index;
+	unsigned int index;
 
 	index = vma->vm_pgoff >> (VFIO_FSL_MC_OFFSET_SHIFT - PAGE_SHIFT);
 
@@ -481,7 +399,7 @@ static int vfio_fsl_mc_mmap(void *device_data, struct vm_area_struct *vma)
 		return -EINVAL;
 	if (!(vma->vm_flags & VM_SHARED))
 		return -EINVAL;
-	if (index >= vdev->num_regions)
+	if (index >= mc_dev->obj_desc.region_count)
 		return -EINVAL;
 
 	if (!(vdev->regions[index].flags & VFIO_REGION_INFO_FLAG_MMAP))
@@ -495,26 +413,56 @@ static int vfio_fsl_mc_mmap(void *device_data, struct vm_area_struct *vma)
 			&& (vma->vm_flags & VM_WRITE))
 		return -EINVAL;
 
-	addr = vdev->regions[index].addr;
-	size = vdev->regions[index].size;
-
 	vma->vm_private_data = mc_dev;
 
 	return vfio_fsl_mc_mmap_mmio(vdev->regions[index], vma);
+}
 
-	return -EFAULT;
+static const struct vfio_device_ops vfio_fsl_mc_ops = {
+	.name		= "vfio-fsl-mc",
+	.open_device	= vfio_fsl_mc_open_device,
+	.close_device	= vfio_fsl_mc_close_device,
+	.ioctl		= vfio_fsl_mc_ioctl,
+	.read		= vfio_fsl_mc_read,
+	.write		= vfio_fsl_mc_write,
+	.mmap		= vfio_fsl_mc_mmap,
+};
+
+static int vfio_fsl_mc_bus_notifier(struct notifier_block *nb,
+				    unsigned long action, void *data)
+{
+	struct vfio_fsl_mc_device *vdev = container_of(nb,
+					struct vfio_fsl_mc_device, nb);
+	struct device *dev = data;
+	struct fsl_mc_device *mc_dev = to_fsl_mc_device(dev);
+	struct fsl_mc_device *mc_cont = to_fsl_mc_device(mc_dev->dev.parent);
+
+	if (action == BUS_NOTIFY_ADD_DEVICE &&
+	    vdev->mc_dev == mc_cont) {
+		mc_dev->driver_override = kasprintf(GFP_KERNEL, "%s",
+						    vfio_fsl_mc_ops.name);
+		if (!mc_dev->driver_override)
+			dev_warn(dev, "VFIO_FSL_MC: Setting driver override for device in dprc %s failed\n",
+				 dev_name(&mc_cont->dev));
+		else
+			dev_info(dev, "VFIO_FSL_MC: Setting driver override for device in dprc %s\n",
+				 dev_name(&mc_cont->dev));
+	} else if (action == BUS_NOTIFY_BOUND_DRIVER &&
+		vdev->mc_dev == mc_cont) {
+		struct fsl_mc_driver *mc_drv = to_fsl_mc_driver(dev->driver);
+
+		if (mc_drv && mc_drv != &vfio_fsl_mc_driver)
+			dev_warn(dev, "VFIO_FSL_MC: Object %s bound to driver %s while DPRC bound to vfio-fsl-mc\n",
+				 dev_name(dev), mc_drv->driver.name);
+	}
+
+	return 0;
 }
 
 static int vfio_fsl_mc_init_device(struct vfio_fsl_mc_device *vdev)
 {
 	struct fsl_mc_device *mc_dev = vdev->mc_dev;
-	struct fsl_mc_bus *mc_bus;
-	size_t region_size;
-	int ret = 0;
-	unsigned int irq_count;
-
-	/* innherit the msi domain from parent */
-	dev_set_msi_domain(&mc_dev->dev, dev_get_msi_domain(mc_dev->dev.parent));
+	int ret;
 
 	/* Non-dprc devices share mc_io from parent */
 	if (!is_fsl_mc_bus_dprc(mc_dev)) {
@@ -524,68 +472,51 @@ static int vfio_fsl_mc_init_device(struct vfio_fsl_mc_device *vdev)
 		return 0;
 	}
 
-	/* Use dprc mc-portal for interaction with MC f/w. */
-	region_size = resource_size(mc_dev->regions);
-	ret = fsl_create_mc_io(&mc_dev->dev,
-			 mc_dev->regions[0].start,
-			 region_size,
-			 NULL,
-			 FSL_MC_IO_ATOMIC_CONTEXT_PORTAL,
-			 &mc_dev->mc_io);
-	if (ret < 0) {
-		dev_err(&mc_dev->dev, "failed to create mc-io (error = %d)\n", ret);
+	vdev->nb.notifier_call = vfio_fsl_mc_bus_notifier;
+	ret = bus_register_notifier(&fsl_mc_bus_type, &vdev->nb);
+	if (ret)
 		return ret;
+
+	/* open DPRC, allocate a MC portal */
+	ret = dprc_setup(mc_dev);
+	if (ret) {
+		dev_err(&mc_dev->dev, "VFIO_FSL_MC: Failed to setup DPRC (%d)\n", ret);
+		goto out_nc_unreg;
 	}
-	ret = dprc_open(mc_dev->mc_io, 0, mc_dev->obj_desc.id,
-			  &mc_dev->mc_handle);
-	if (ret < 0) {
-		dev_err(&mc_dev->dev, "dprc_open() failed: %d\n", ret);
-		goto clean_mc_io;
-	}
+	return 0;
 
-	mc_bus = to_fsl_mc_bus(mc_dev);
-	/* initialize resource pools */
-	fsl_mc_init_all_resource_pools(mc_dev);
-
-	mutex_init(&mc_bus->scan_mutex);
-
-	mutex_lock(&mc_bus->scan_mutex);
-	ret = dprc_scan_objects(mc_dev, mc_dev->driver_override, false,
-		&irq_count);
-	mutex_unlock(&mc_bus->scan_mutex);
-
-	if (ret < 0) {
-		dev_err(&mc_dev->dev, "dprc_scan_objects() failed: %d\n", ret);
-		goto clean_resource_pool;
-	}
-
-	if (irq_count > FSL_MC_IRQ_POOL_MAX_TOTAL_IRQS) {
-		dev_warn(&mc_dev->dev,
-			 "IRQs needed (%u) exceed IRQs preallocated (%u)\n",
-			 irq_count, FSL_MC_IRQ_POOL_MAX_TOTAL_IRQS);
-	}
-
-return 0;
-
-clean_resource_pool:
-	fsl_mc_cleanup_all_resource_pools(mc_dev);
-	dprc_close(mc_dev->mc_io, 0, mc_dev->mc_handle);
-
-clean_mc_io:
-	fsl_destroy_mc_io(mc_dev->mc_io);
-	mc_dev->mc_io = NULL;
-
+out_nc_unreg:
+	bus_unregister_notifier(&fsl_mc_bus_type, &vdev->nb);
 	return ret;
 }
-static const struct vfio_device_ops vfio_fsl_mc_ops = {
-	.name		= "vfio-fsl-mc",
-	.open		= vfio_fsl_mc_open,
-	.release	= vfio_fsl_mc_release,
-	.ioctl		= vfio_fsl_mc_ioctl,
-	.read		= vfio_fsl_mc_read,
-	.write		= vfio_fsl_mc_write,
-	.mmap		= vfio_fsl_mc_mmap,
-};
+
+static int vfio_fsl_mc_scan_container(struct fsl_mc_device *mc_dev)
+{
+	int ret;
+
+	/* non dprc devices do not scan for other devices */
+	if (!is_fsl_mc_bus_dprc(mc_dev))
+		return 0;
+	ret = dprc_scan_container(mc_dev, false);
+	if (ret) {
+		dev_err(&mc_dev->dev,
+			"VFIO_FSL_MC: Container scanning failed (%d)\n", ret);
+		dprc_remove_devices(mc_dev, NULL, 0);
+		return ret;
+	}
+	return 0;
+}
+
+static void vfio_fsl_uninit_device(struct vfio_fsl_mc_device *vdev)
+{
+	struct fsl_mc_device *mc_dev = vdev->mc_dev;
+
+	if (!is_fsl_mc_bus_dprc(mc_dev))
+		return;
+
+	dprc_cleanup(mc_dev);
+	bus_unregister_notifier(&fsl_mc_bus_type, &vdev->nb);
+}
 
 static int vfio_fsl_mc_probe(struct fsl_mc_device *mc_dev)
 {
@@ -596,91 +527,76 @@ static int vfio_fsl_mc_probe(struct fsl_mc_device *mc_dev)
 
 	group = vfio_iommu_group_get(dev);
 	if (!group) {
-		dev_err(dev, "%s: VFIO: No IOMMU group\n", __func__);
+		dev_err(dev, "VFIO_FSL_MC: No IOMMU group\n");
 		return -EINVAL;
 	}
 
-	vdev = devm_kzalloc(dev, sizeof(*vdev), GFP_KERNEL);
+	vdev = kzalloc(sizeof(*vdev), GFP_KERNEL);
 	if (!vdev) {
-		vfio_iommu_group_put(group, dev);
-		return -ENOMEM;
+		ret = -ENOMEM;
+		goto out_group_put;
 	}
 
+	vfio_init_group_dev(&vdev->vdev, dev, &vfio_fsl_mc_ops);
 	vdev->mc_dev = mc_dev;
+	mutex_init(&vdev->igate);
 
-	ret = vfio_add_group_dev(dev, &vfio_fsl_mc_ops, vdev);
-	if (ret) {
-		dev_err(dev, "%s: Failed to add to vfio group\n", __func__);
-		vfio_iommu_group_put(group, dev);
-		return ret;
-	}
-
-	ret = vfio_fsl_mc_reflck_attach(vdev);
-	if (ret) {
-		vfio_iommu_group_put(group, dev);
-		return ret;
-	}
+	if (is_fsl_mc_bus_dprc(mc_dev))
+		ret = vfio_assign_device_set(&vdev->vdev, &mc_dev->dev);
+	else
+		ret = vfio_assign_device_set(&vdev->vdev, mc_dev->dev.parent);
+	if (ret)
+		goto out_uninit;
 
 	ret = vfio_fsl_mc_init_device(vdev);
+	if (ret)
+		goto out_uninit;
+
+	ret = vfio_register_group_dev(&vdev->vdev);
 	if (ret) {
-		vfio_fsl_mc_reflck_put(vdev->reflck);
-		vfio_iommu_group_put(group, dev);
-		return ret;
+		dev_err(dev, "VFIO_FSL_MC: Failed to add to vfio group\n");
+		goto out_device;
 	}
 
-	return ret;
-}
-static int vfio_fsl_mc_device_remove(struct device *dev, void *data)
-{
-	struct fsl_mc_device *mc_dev;
-
-	WARN_ON(dev == NULL);
-	mc_dev = to_fsl_mc_device(dev);
-	if (WARN_ON(mc_dev == NULL))
-		return -ENODEV;
-	fsl_mc_device_remove(mc_dev);
-
+	ret = vfio_fsl_mc_scan_container(mc_dev);
+	if (ret)
+		goto out_group_dev;
+	dev_set_drvdata(dev, vdev);
 	return 0;
-}
 
-static void vfio_fsl_mc_cleanup_dprc(struct fsl_mc_device *mc_dev)
-{
-	device_for_each_child(&mc_dev->dev, NULL, vfio_fsl_mc_device_remove);
-	fsl_mc_cleanup_all_resource_pools(mc_dev);
-	dprc_close(mc_dev->mc_io, 0, mc_dev->mc_handle);
-	fsl_destroy_mc_io(mc_dev->mc_io);
+out_group_dev:
+	vfio_unregister_group_dev(&vdev->vdev);
+out_device:
+	vfio_fsl_uninit_device(vdev);
+out_uninit:
+	vfio_uninit_group_dev(&vdev->vdev);
+	kfree(vdev);
+out_group_put:
+	vfio_iommu_group_put(group, dev);
+	return ret;
 }
 
 static int vfio_fsl_mc_remove(struct fsl_mc_device *mc_dev)
 {
-	struct vfio_fsl_mc_device *vdev;
 	struct device *dev = &mc_dev->dev;
+	struct vfio_fsl_mc_device *vdev = dev_get_drvdata(dev);
 
-	vdev = vfio_del_group_dev(dev);
-	if (!vdev)
-		return -EINVAL;
+	vfio_unregister_group_dev(&vdev->vdev);
+	mutex_destroy(&vdev->igate);
 
-	vfio_fsl_mc_reflck_put(vdev->reflck);
+	dprc_remove_devices(mc_dev, NULL, 0);
+	vfio_fsl_uninit_device(vdev);
 
-	if (is_fsl_mc_bus_dprc(mc_dev))
-		vfio_fsl_mc_cleanup_dprc(vdev->mc_dev);
-
-	mc_dev->mc_io = NULL;
-
+	vfio_uninit_group_dev(&vdev->vdev);
+	kfree(vdev);
 	vfio_iommu_group_put(mc_dev->dev.iommu_group, dev);
-	devm_kfree(dev, vdev);
 
 	return 0;
 }
 
-/*
- * vfio-fsl_mc is a meta-driver, so use driver_override interface to
- * bind a fsl_mc container with this driver and match_id_table is NULL.
- */
 static struct fsl_mc_driver vfio_fsl_mc_driver = {
 	.probe		= vfio_fsl_mc_probe,
 	.remove		= vfio_fsl_mc_remove,
-	.match_id_table = NULL,
 	.driver	= {
 		.name	= "vfio-fsl-mc",
 		.owner	= THIS_MODULE,
@@ -700,5 +616,5 @@ static void __exit vfio_fsl_mc_driver_exit(void)
 module_init(vfio_fsl_mc_driver_init);
 module_exit(vfio_fsl_mc_driver_exit);
 
-MODULE_LICENSE("GPL v2");
+MODULE_LICENSE("Dual BSD/GPL");
 MODULE_DESCRIPTION("VFIO for FSL-MC devices - User Level meta-driver");

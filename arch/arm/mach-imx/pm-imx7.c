@@ -386,11 +386,6 @@ static struct map_desc imx7_pm_io_desc[] __initdata = {
 	imx_map_entry(MX7D, AIPS3, MT_DEVICE),
 };
 
-static const char * const low_power_ocram_match[] __initconst = {
-	"fsl,lpm-sram",
-	NULL
-};
-
 static void imx7_gpio_save(void)
 {
 	u32 i;
@@ -888,7 +883,7 @@ static int __init imx7_dt_find_lpsram(unsigned long node, const char *uname,
 	unsigned long lpram_addr;
 	const __be32 *prop = of_get_flat_dt_prop(node, "reg", NULL);
 
-	if (of_flat_dt_match(node, low_power_ocram_match)) {
+	if (of_flat_dt_is_compatible(node, "fsl,lpm-sram")) {
 		if (!prop)
 			return -EINVAL;
 
@@ -1148,7 +1143,7 @@ void __init imx7d_pm_init(void)
 
 		/* map the m4 bootrom from dtb */
 		np = of_find_node_by_path(
-			"/soc/sram@00180000");
+			"/soc/sram@180000");
 		if (np)
 			m4_bootrom_base = of_iomap(np, 0);
 		WARN_ON(!m4_bootrom_base);
@@ -1176,32 +1171,32 @@ void __init imx7d_pm_init(void)
 		WARN_ON(!lpm_ocram_saved_in_ddr);
 
 		np = of_find_node_by_path(
-			"/soc/aips-bus@30000000/iomuxc@30330000");
+			"/soc/bus@30000000/pinctrl@30330000");
 		if (np)
 			iomuxc_base = of_iomap(np, 0);
 		WARN_ON(!iomuxc_base);
 
 		np = of_find_node_by_path(
-			"/soc/aips-bus@30000000/gpt@302d0000");
+			"/soc/bus@30000000/timer@302d0000");
 		if (np)
 			gpt1_base = of_iomap(np, 0);
 		WARN_ON(!gpt1_base);
 
 		np = of_find_node_by_path(
-			"/soc/aips-bus@30400000/system-counter-cmp@306b0000");
+			"/soc/bus@30400000/system-counter-cmp@306b0000");
 		if (np)
 			system_counter_cmp_base = of_iomap(np, 0);
 		WARN_ON(!system_counter_cmp_base);
 
 		np = of_find_node_by_path(
-			"/soc/aips-bus@30000000/gpio@30200000");
+			"/soc/bus@30000000/gpio@30200000");
 		if (np)
 			gpio1_base = of_iomap(np, 0);
 		WARN_ON(!gpio1_base);
 	}
 
 	np = of_find_node_by_path(
-		"/soc/aips-bus@30400000/system-counter-ctrl@306c0000");
+		"/soc/bus@30400000/system-counter-ctrl@306c0000");
 	if (np)
 		system_counter_ctrl_base = of_iomap(np, 0);
 	WARN_ON(!system_counter_ctrl_base);
@@ -1221,7 +1216,7 @@ void __init imx7d_pm_init(void)
 	WARN_ON(!ocram_saved_in_ddr);
 
 	np = of_find_node_by_path(
-		"/soc/aips-bus@30800000/spba-bus@30800000/serial@30860000");
+		"/soc/bus@30800000/spba-bus@30800000/serial@30860000");
 	if (np)
 		console_base = of_iomap(np, 0);
 

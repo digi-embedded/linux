@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-2.0
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
 %YAML 1.2
 ---
 $id: http://devicetree.org/schemas/display/bridge/nwl-dsi.yaml#
@@ -14,9 +14,14 @@ description: |
   NWL MIPI-DSI host controller found on i.MX8 platforms. This is a dsi bridge for
   the SOCs NWL MIPI-DSI host controller.
 
+allOf:
+  - $ref: ../dsi-controller.yaml#
+
 properties:
   compatible:
-    const: fsl,imx8mq-nwl-dsi
+    enum:
+      - fsl,imx8mq-nwl-dsi
+      - fsl,imx8ulp-nwl-dsi
 
   reg:
     maxItems: 1
@@ -24,13 +29,23 @@ properties:
   interrupts:
     maxItems: 1
 
+  '#address-cells':
+    const: 1
+
+  '#size-cells':
+    const: 0
+
+  assigned-clock-parents: true
+  assigned-clock-rates: true
+  assigned-clocks: true
+
   clocks:
     items:
       - description: DSI core clock
       - description: RX_ESC clock (used in escape mode)
       - description: TX_ESC clock (used in escape mode)
       - description: PHY_REF clock
-      - description: VIDEO_PLL clock
+      - description: LCDIF clock
       - description: PHY_PARENT clock (optional)
 
   clock-names:
@@ -39,7 +54,7 @@ properties:
       - const: rx_esc
       - const: tx_esc
       - const: phy_ref
-      - const: video_pll
+      - const: lcdif
       - const: phy_parent
 
   mux-controls:
@@ -57,12 +72,8 @@ properties:
 
   power-domains:
     maxItems: 1
-    description:
-      A phandle to the power domain
 
   resets:
-    description:
-      phandles to the reset controller
     items:
       - description: dsi byte reset line
       - description: dsi dpi reset line
@@ -77,32 +88,45 @@ properties:
       - const: pclk
 
   ports:
-    type: object
-    description:
-      A node containing DSI input & output port nodes with endpoint
-      definitions as documented in
-      Documentation/devicetree/bindings/graph.txt.
+    $ref: /schemas/graph.yaml#/properties/ports
 
-  port@0:
-    type: object
-    description:
-      Input port node to receive pixel data from the
-      display controller
+    properties:
+      port@0:
+        $ref: /schemas/graph.yaml#/$defs/port-base
+        description:
+          Input port node to receive pixel data from the
+          display controller. Exactly one endpoint must be
+          specified.
+        properties:
+          endpoint@0:
+            $ref: /schemas/graph.yaml#/properties/endpoint
+            description: sub-node describing the input from LCDIF
 
-  port@1:
-    type: object
-    description:
-      DSI output port node to the panel or the next bridge
-      in the chain
+          endpoint@1:
+            $ref: /schemas/graph.yaml#/properties/endpoint
+            description: sub-node describing the input from DCSS
 
-  fsl,clock-drop-level:
-    description:
-      Specifies the level at wich the crtc_clock should be dropped
+        oneOf:
+          - required:
+              - endpoint@0
+          - required:
+              - endpoint@1
 
-patternProperties:
-  "^panel@[0-9]+$": true
+        unevaluatedProperties: false
+
+      port@1:
+        $ref: /schemas/graph.yaml#/properties/port
+        description:
+          DSI output port node to the panel or the next bridge
+          in the chain
+
+    required:
+      - port@0
+      - port@1
 
 required:
+  - '#address-cells'
+  - '#size-cells'
   - clock-names
   - clocks
   - compatible
@@ -115,20 +139,33 @@ required:
   - reset-names
   - resets
 
-examples:
- - |
+unevaluatedProperties: false
 
-   mipi_dsi: mipi_dsi@30a00000 {
+examples:
+  - |
+    #include <dt-bindings/clock/imx8mq-clock.h>
+    #include <dt-bindings/gpio/gpio.h>
+    #include <dt-bindings/interrupt-controller/arm-gic.h>
+    #include <dt-bindings/reset/imx8mq-reset.h>
+
+    dsi@30a00000 {
               #address-cells = <1>;
               #size-cells = <0>;
               compatible = "fsl,imx8mq-nwl-dsi";
               reg = <0x30A00000 0x300>;
-              clocks = <&clk 163>, <&clk 244>, <&clk 245>, <&clk 164>;
-              clock-names = "core", "rx_esc", "tx_esc", "phy_ref";
-              interrupts = <0 34 4>;
+              clocks = <&clk IMX8MQ_CLK_DSI_CORE>,
+                       <&clk IMX8MQ_CLK_DSI_AHB>,
+                       <&clk IMX8MQ_CLK_DSI_IPG_DIV>,
+                       <&clk IMX8MQ_CLK_DSI_PHY_REF>,
+                       <&clk IMX8MQ_CLK_LCDIF_PIXEL>;
+              clock-names = "core", "rx_esc", "tx_esc", "phy_ref", "lcdif";
+              interrupts = <GIC_SPI 34 IRQ_TYPE_LEVEL_HIGH>;
               mux-controls = <&mux 0>;
               power-domains = <&pgc_mipi>;
-              resets = <&src 0>, <&src 1>, <&src 2>, <&src 3>;
+              resets = <&src IMX8MQ_RESET_MIPI_DSI_RESET_BYTE_N>,
+                       <&src IMX8MQ_RESET_MIPI_DSI_DPI_RESET_N>,
+                       <&src IMX8MQ_RESET_MIPI_DSI_ESC_RESET_N>,
+                       <&src IMX8MQ_RESET_MIPI_DSI_PCLK_RESET_N>;
               reset-names = "byte", "dpi", "esc", "pclk";
               phys = <&dphy>;
               phy-names = "dphy";
@@ -136,7 +173,10 @@ examples:
               panel@0 {
                       compatible = "rocktech,jh057n00900";
                       reg = <0>;
-                      port@0 {
+                      vcc-supply = <&reg_2v8_p>;
+                      iovcc-supply = <&reg_1v8_p>;
+                      reset-gpios = <&gpio3 13 GPIO_ACTIVE_LOW>;
+                      port {
                            panel_in: endpoint {
                                      remote-endpoint = <&mipi_dsi_out>;
                            };
@@ -148,8 +188,11 @@ examples:
                     #size-cells = <0>;
 
                     port@0 {
+                           #size-cells = <0>;
+                           #address-cells = <1>;
                            reg = <0>;
-                           mipi_dsi_in: endpoint {
+                           mipi_dsi_in: endpoint@0 {
+                                        reg = <0>;
                                         remote-endpoint = <&lcdif_mipi_dsi>;
                            };
                     };
@@ -160,4 +203,4 @@ examples:
                            };
                     };
               };
-      };
+    };

@@ -39,7 +39,6 @@ static const struct drm_display_mode default_mode = {
 	.vsync_start = 800 + 10,
 	.vsync_end = 800 + 10 + 3,
 	.vtotal = 800 + 10 + 3 + 10,
-	.vrefresh = 60,
 	.width_mm = 217,
 	.height_mm = 135,
 	.flags = DRM_MODE_FLAG_NHSYNC |
@@ -51,7 +50,7 @@ static const u32 wks_bus_formats[] = {
 };
 
 static const u32 wks_bus_flags = DRM_BUS_FLAG_DE_HIGH |
-				 DRM_BUS_FLAG_PIXDATA_POSEDGE;
+				 DRM_BUS_FLAG_PIXDATA_DRIVE_NEGEDGE;
 
 static inline struct wks_panel *to_wks_panel(struct drm_panel *panel)
 {
@@ -120,22 +119,22 @@ static int wks_panel_unprepare(struct drm_panel *panel)
 	return 0;
 }
 
-static int wks_panel_get_modes(struct drm_panel *panel)
+static int wks_panel_get_modes(struct drm_panel *panel,
+			       struct drm_connector *connector)
 {
-	struct drm_connector *connector = panel->connector;
 	struct drm_display_mode *mode;
 
-	mode = drm_mode_duplicate(panel->drm, &default_mode);
+	mode = drm_mode_duplicate(connector->dev, &default_mode);
 	if (!mode) {
-		DRM_DEV_ERROR(panel->dev, "failed to add mode %ux%ux@%u\n",
+		DRM_DEV_ERROR(panel->dev, "failed to add mode %ux%ux@%d\n",
 			      default_mode.hdisplay, default_mode.vdisplay,
-			      default_mode.vrefresh);
+			      drm_mode_vrefresh(&default_mode));
 		return -ENOMEM;
 	}
 
 	drm_mode_set_name(mode);
 	mode->type = DRM_MODE_TYPE_DRIVER | DRM_MODE_TYPE_PREFERRED;
-	drm_mode_probed_add(panel->connector, mode);
+	drm_mode_probed_add(connector, mode);
 	DRM_DEV_DEBUG_DRIVER(panel->dev, "Mode flags: 0x%08X", mode->flags);
 
 	connector->display_info.width_mm = mode->width_mm;
@@ -178,14 +177,12 @@ static int wks_panel_probe(struct platform_device *pdev)
 		return err;
 	}
 
-	drm_panel_init(&panel->panel);
-	panel->panel.dev = dev;
-	panel->panel.funcs = &wks_panel_funcs;
+	drm_panel_init(&panel->panel,
+		       dev,
+		       &wks_panel_funcs,
+		       DRM_MODE_CONNECTOR_DPI);
 
-	err = drm_panel_add(&panel->panel);
-	if (err < 0)
-		return err;
-
+	drm_panel_add(&panel->panel);
 	dev_set_drvdata(dev, panel);
 
 	return 0;
@@ -213,7 +210,7 @@ static const struct of_device_id wks_of_match[] = {
 	{ .compatible = "wks,101wx001", },
 	{ /* sentinel */ }
 };
-MODULE_DEVICE_TABLE(of, platform_of_match);
+MODULE_DEVICE_TABLE(of, wks_of_match);
 
 static struct platform_driver wks_panel_platform_driver = {
 	.driver = {

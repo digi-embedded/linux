@@ -22,6 +22,7 @@
 
 #include "bnxt_hsi.h"
 #include "bnxt.h"
+#include "bnxt_hwrm.h"
 #include "bnxt_ulp.h"
 
 static int bnxt_register_dev(struct bnxt_en_dev *edev, int ulp_id,
@@ -81,7 +82,7 @@ static int bnxt_unregister_dev(struct bnxt_en_dev *edev, int ulp_id)
 		edev->en_ops->bnxt_free_msix(edev, ulp_id);
 
 	if (ulp->max_async_event_id)
-		bnxt_hwrm_func_rgtr_async_events(bp, NULL, 0);
+		bnxt_hwrm_func_drv_rgtr(bp, NULL, 0, true);
 
 	RCU_INIT_POINTER(ulp->ulp_ops, NULL);
 	synchronize_rcu();
@@ -104,7 +105,13 @@ static void bnxt_fill_msix_vecs(struct bnxt *bp, struct bnxt_msix_entry *ent)
 	for (i = 0; i < num_msix; i++) {
 		ent[i].vector = bp->irq_tbl[idx + i].vector;
 		ent[i].ring_idx = idx + i;
-		ent[i].db_offset = (idx + i) * 0x80;
+		if (bp->flags & BNXT_FLAG_CHIP_P5) {
+			ent[i].db_offset = DB_PF_OFFSET_P5;
+			if (BNXT_VF(bp))
+				ent[i].db_offset = DB_VF_OFFSET_P5;
+		} else {
+			ent[i].db_offset = (idx + i) * 0x80;
+		}
 	}
 }
 
@@ -186,7 +193,7 @@ static int bnxt_free_msix_vecs(struct bnxt_en_dev *edev, int ulp_id)
 
 	edev->ulp_tbl[ulp_id].msix_requested = 0;
 	edev->flags &= ~BNXT_EN_FLAG_MSIX_REQUESTED;
-	if (netif_running(dev)) {
+	if (netif_running(dev) && !(edev->flags & BNXT_EN_FLAG_ULP_STOPPED)) {
 		bnxt_close_nic(bp, true, false);
 		bnxt_open_nic(bp, true, false);
 	}
@@ -216,8 +223,12 @@ int bnxt_get_ulp_msix_base(struct bnxt *bp)
 
 int bnxt_get_ulp_stat_ctxs(struct bnxt *bp)
 {
-	if (bnxt_ulp_registered(bp->edev, BNXT_ROCE_ULP))
-		return BNXT_MIN_ROCE_STAT_CTXS;
+	if (bnxt_ulp_registered(bp->edev, BNXT_ROCE_ULP)) {
+		struct bnxt_en_dev *edev = bp->edev;
+
+		if (edev->ulp_tbl[BNXT_ROCE_ULP].msix_requested)
+			return BNXT_MIN_ROCE_STAT_CTXS;
+	}
 
 	return 0;
 }
@@ -227,27 +238,33 @@ static int bnxt_send_msg(struct bnxt_en_dev *edev, int ulp_id,
 {
 	struct net_device *dev = edev->net;
 	struct bnxt *bp = netdev_priv(dev);
+	struct output *resp;
 	struct input *req;
+	u32 resp_len;
 	int rc;
 
 	if (ulp_id != BNXT_ROCE_ULP && bp->fw_reset_state)
 		return -EBUSY;
 
-	mutex_lock(&bp->hwrm_cmd_lock);
-	req = fw_msg->msg;
-	req->resp_addr = cpu_to_le64(bp->hwrm_cmd_resp_dma_addr);
-	rc = _hwrm_send_message(bp, fw_msg->msg, fw_msg->msg_len,
-				fw_msg->timeout);
-	if (!rc) {
-		struct output *resp = bp->hwrm_cmd_resp_addr;
-		u32 len = le16_to_cpu(resp->resp_len);
+	rc = hwrm_req_init(bp, req, 0 /* don't care */);
+	if (rc)
+		return rc;
 
-		if (fw_msg->resp_max_len < len)
-			len = fw_msg->resp_max_len;
+	rc = hwrm_req_replace(bp, req, fw_msg->msg, fw_msg->msg_len);
+	if (rc)
+		return rc;
 
-		memcpy(fw_msg->resp, resp, len);
+	hwrm_req_timeout(bp, req, fw_msg->timeout);
+	resp = hwrm_req_hold(bp, req);
+	rc = hwrm_req_send(bp, req);
+	resp_len = le16_to_cpu(resp->resp_len);
+	if (resp_len) {
+		if (fw_msg->resp_max_len < resp_len)
+			resp_len = fw_msg->resp_max_len;
+
+		memcpy(fw_msg->resp, resp, resp_len);
 	}
-	mutex_unlock(&bp->hwrm_cmd_lock);
+	hwrm_req_drop(bp, req);
 	return rc;
 }
 
@@ -270,6 +287,7 @@ void bnxt_ulp_stop(struct bnxt *bp)
 	if (!edev)
 		return;
 
+	edev->flags |= BNXT_EN_FLAG_ULP_STOPPED;
 	for (i = 0; i < BNXT_MAX_ULP; i++) {
 		struct bnxt_ulp *ulp = &edev->ulp_tbl[i];
 
@@ -280,13 +298,18 @@ void bnxt_ulp_stop(struct bnxt *bp)
 	}
 }
 
-void bnxt_ulp_start(struct bnxt *bp)
+void bnxt_ulp_start(struct bnxt *bp, int err)
 {
 	struct bnxt_en_dev *edev = bp->edev;
 	struct bnxt_ulp_ops *ops;
 	int i;
 
 	if (!edev)
+		return;
+
+	edev->flags &= ~BNXT_EN_FLAG_ULP_STOPPED;
+
+	if (err)
 		return;
 
 	for (i = 0; i < BNXT_MAX_ULP; i++) {
@@ -439,7 +462,7 @@ static int bnxt_register_async_events(struct bnxt_en_dev *edev, int ulp_id,
 	/* Make sure bnxt_ulp_async_events() sees this order */
 	smp_wmb();
 	ulp->max_async_event_id = max_id;
-	bnxt_hwrm_func_rgtr_async_events(bp, events_bmap, max_id + 1);
+	bnxt_hwrm_func_drv_rgtr(bp, events_bmap, max_id + 1, true);
 	return 0;
 }
 
@@ -463,13 +486,17 @@ struct bnxt_en_dev *bnxt_ulp_probe(struct net_device *dev)
 		if (!edev)
 			return ERR_PTR(-ENOMEM);
 		edev->en_ops = &bnxt_en_ops_tbl;
-		if (bp->flags & BNXT_FLAG_ROCEV1_CAP)
-			edev->flags |= BNXT_EN_FLAG_ROCEV1_CAP;
-		if (bp->flags & BNXT_FLAG_ROCEV2_CAP)
-			edev->flags |= BNXT_EN_FLAG_ROCEV2_CAP;
 		edev->net = dev;
 		edev->pdev = bp->pdev;
+		edev->l2_db_size = bp->db_size;
+		edev->l2_db_size_nc = bp->db_size;
 		bp->edev = edev;
 	}
+	edev->flags &= ~BNXT_EN_FLAG_ROCE_CAP;
+	if (bp->flags & BNXT_FLAG_ROCEV1_CAP)
+		edev->flags |= BNXT_EN_FLAG_ROCEV1_CAP;
+	if (bp->flags & BNXT_FLAG_ROCEV2_CAP)
+		edev->flags |= BNXT_EN_FLAG_ROCEV2_CAP;
 	return bp->edev;
 }
+EXPORT_SYMBOL(bnxt_ulp_probe);

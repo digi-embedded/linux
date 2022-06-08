@@ -52,7 +52,8 @@ enum asrc_inclk {
 	INCLK_SSI3_TX = 0x0b,
 	INCLK_SPDIF_TX = 0x0c,
 	INCLK_ASRCK1_CLK = 0x0f,
-/* imx8 */
+
+	/* clocks for imx8 */
 	INCLK_AUD_PLL_DIV_CLK0 = 0x10,
 	INCLK_AUD_PLL_DIV_CLK1 = 0x11,
 	INCLK_AUD_CLK0         = 0x12,
@@ -92,7 +93,7 @@ enum asrc_outclk {
 	OUTCLK_SPDIF_RX = 0x0c,
 	OUTCLK_ASRCK1_CLK = 0x0f,
 
-/* imx8 */
+	/* clocks for imx8 */
 	OUTCLK_AUD_PLL_DIV_CLK0 = 0x10,
 	OUTCLK_AUD_PLL_DIV_CLK1 = 0x11,
 	OUTCLK_AUD_CLK0         = 0x12,

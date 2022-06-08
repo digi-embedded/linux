@@ -40,13 +40,15 @@
 #include <linux/export.h>
 #include <linux/console.h>
 #include <linux/kobject.h>
-#include <linux/dma-mapping.h>
+#include <linux/dma-map-ops.h>
 #include <linux/interrupt.h>
+#include <linux/irqdomain.h>
 #include <linux/of.h>
 #include <linux/slab.h>
 #include <linux/stat.h>
 #include <linux/of_platform.h>
 #include <asm/ibmebus.h>
+#include <asm/machdep.h>
 
 static struct device ibmebus_bus_device = { /* fake "parent" device */
 	.init_name = "ibmebus",
@@ -354,24 +356,23 @@ static int ibmebus_bus_device_probe(struct device *dev)
 	if (!drv->probe)
 		return error;
 
-	of_dev_get(of_dev);
+	get_device(dev);
 
 	if (of_driver_match_device(dev, dev->driver))
 		error = drv->probe(of_dev);
 	if (error)
-		of_dev_put(of_dev);
+		put_device(dev);
 
 	return error;
 }
 
-static int ibmebus_bus_device_remove(struct device *dev)
+static void ibmebus_bus_device_remove(struct device *dev)
 {
 	struct platform_device *of_dev = to_platform_device(dev);
 	struct platform_driver *drv = to_platform_driver(dev->driver);
 
 	if (dev->driver && drv->remove)
 		drv->remove(of_dev);
-	return 0;
 }
 
 static void ibmebus_bus_device_shutdown(struct device *dev)
@@ -464,4 +465,4 @@ static int __init ibmebus_bus_init(void)
 
 	return 0;
 }
-postcore_initcall(ibmebus_bus_init);
+machine_postcore_initcall(pseries, ibmebus_bus_init);

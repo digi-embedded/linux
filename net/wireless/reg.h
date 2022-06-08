@@ -63,7 +63,6 @@ unsigned int reg_get_max_bandwidth(const struct ieee80211_regdomain *rd,
 				   const struct ieee80211_reg_rule *rule);
 
 bool reg_last_request_cell_base(void);
-const struct ieee80211_regdomain *get_wiphy_regdom(struct wiphy *wiphy);
 
 /**
  * regulatory_hint_found_beacon - hints a beacon was found on a channel
@@ -114,7 +113,7 @@ void regulatory_hint_country_ie(struct wiphy *wiphy,
 			 u8 country_ie_len);
 
 /**
- * regulatory_hint_disconnect - informs all devices have been disconneted
+ * regulatory_hint_disconnect - informs all devices have been disconnected
  *
  * Regulotory rules can be enhanced further upon scanning and upon
  * connection to an AP. These rules become stale if we disconnect

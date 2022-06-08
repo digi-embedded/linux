@@ -1,16 +1,15 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Copyright 2019 NXP
+ * Copyright 2019-2021 NXP
  *	Dong Aisheng <aisheng.dong@nxp.com>
  */
 
 #include <dt-bindings/firmware/imx/rsrc.h>
-#include <linux/module.h>
 
 #include "clk-scu.h"
 
 /* Keep sorted in the ascending order */
-static u32 imx8qxp_clk_scu_rsrc_table[] = {
+static const u32 imx8qxp_clk_scu_rsrc_table[] = {
 	IMX_SC_R_DC_0_VIDEO0,
 	IMX_SC_R_DC_0_VIDEO1,
 	IMX_SC_R_DC_0,
@@ -55,11 +54,11 @@ static u32 imx8qxp_clk_scu_rsrc_table[] = {
 	IMX_SC_R_SDHC_2,
 	IMX_SC_R_ENET_0,
 	IMX_SC_R_ENET_1,
-	IMX_SC_R_MLB_0,
 	IMX_SC_R_USB_2,
 	IMX_SC_R_NAND,
 	IMX_SC_R_LVDS_0,
 	IMX_SC_R_LVDS_1,
+	IMX_SC_R_M4_0_UART,
 	IMX_SC_R_M4_0_I2C,
 	IMX_SC_R_ELCDIF_PLL,
 	IMX_SC_R_AUDIO_PLL_0,
@@ -90,5 +89,3 @@ const struct imx_clk_scu_rsrc_table imx_clk_scu_rsrc_imx8qxp = {
 	.rsrc = imx8qxp_clk_scu_rsrc_table,
 	.num = ARRAY_SIZE(imx8qxp_clk_scu_rsrc_table),
 };
-EXPORT_SYMBOL_GPL(imx_clk_scu_rsrc_imx8qxp);
-MODULE_LICENSE("GPL v2");

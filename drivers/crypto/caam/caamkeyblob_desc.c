@@ -44,7 +44,7 @@ int cnstr_desc_black_key(u32 **desc, char *key, size_t key_len,
 
 	/* Trusted key not supported */
 	if (trusted_key != UNTRUSTED_KEY)
-		return -ENOTSUPP;
+		return -EOPNOTSUPP;
 
 	memset(tmpdesc, 0, sizeof(tmpdesc));
 
@@ -252,7 +252,7 @@ int cnstr_desc_blob_encap(u32 **desc, dma_addr_t black_key,
 
 	/* Trusted key not supported */
 	if (trusted_key != UNTRUSTED_KEY)
-		return -ENOTSUPP;
+		return -EOPNOTSUPP;
 
 	memset(tmpdesc, 0, sizeof(tmpdesc));
 
@@ -388,7 +388,7 @@ int cnstr_desc_blob_decap(u32 **desc, dma_addr_t blob, size_t blob_len,
 
 	/* Trusted key not supported */
 	if (trusted_key != UNTRUSTED_KEY)
-		return -ENOTSUPP;
+		return -EOPNOTSUPP;
 
 	memset(tmpdesc, 0, sizeof(tmpdesc));
 

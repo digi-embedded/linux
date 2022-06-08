@@ -30,10 +30,10 @@
  */
 
 #include <linux/module.h>
+#include <linux/pci.h>
 
 #include <drm/drm_drv.h>
 #include <drm/drm_file.h>
-#include <drm/drm_pci.h>
 #include <drm/drm_pciids.h>
 #include <drm/drm_vblank.h>
 #include <drm/r128_drm.h>
@@ -85,7 +85,9 @@ static struct drm_driver driver = {
 
 int r128_driver_load(struct drm_device *dev, unsigned long flags)
 {
-	pci_set_master(dev->pdev);
+	struct pci_dev *pdev = to_pci_dev(dev->dev);
+
+	pci_set_master(pdev);
 	return drm_vblank_init(dev, 1);
 }
 

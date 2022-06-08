@@ -41,7 +41,7 @@
 #include <media/videobuf2-v4l2.h>
 #include <media/videobuf2-dma-contig.h>
 #include <media/videobuf2-vmalloc.h>
-
+#include <linux/imx_vpu.h>
 #include "vpu_b0.h"
 #include "insert_startcode.h"
 #include "vpu_debug_log.h"
@@ -627,7 +627,7 @@ static struct vpu_v4l2_fmt  formats_compressed_dec[] = {
 	},
 	{
 		.name       = "H265 HEVC Encoded Stream",
-		.fourcc     = VPU_PIX_FMT_HEVC,
+		.fourcc     = V4L2_PIX_FMT_HEVC,
 		.num_planes = 1,
 		.vdec_std   = VPU_VIDEO_HEVC,
 		.disable    = 0,
@@ -678,22 +678,71 @@ static int v4l2_ioctl_querycap(struct file *file,
 	return 0;
 }
 
+static bool is_10bit_format(struct vpu_ctx *ctx)
+{
+	WARN_ON(!ctx);
+	if (ctx->seqinfo.uBitDepthLuma > 8)
+		return true;
+	if (ctx->seqinfo.uBitDepthChroma > 8)
+		return true;
+	return false;
+}
+
+static u32 vpu_dec_get_capture_fmt(struct vpu_ctx *ctx)
+{
+	WARN_ON(!ctx);
+	if (is_10bit_format(ctx))
+		return V4L2_PIX_FMT_NV12_10BIT;
+	else
+		return V4L2_PIX_FMT_NV12;
+}
+
+static u32 vpu_dec_get_capture_fmt_index(struct vpu_ctx *ctx)
+{
+	u32 i;
+	u32 pixelformat;
+
+	WARN_ON(!ctx);
+	pixelformat = vpu_dec_get_capture_fmt(ctx);
+	for (i = 0; i < ARRAY_SIZE(formats_yuv_dec); i++) {
+		if (formats_yuv_dec[i].fourcc == pixelformat)
+			return i;
+	}
+
+	return ARRAY_SIZE(formats_yuv_dec);
+}
+
 static int v4l2_ioctl_enum_fmt_vid_cap(struct file *file,
 		void *fh,
 		struct v4l2_fmtdesc *f
 		)
 {
 	struct vpu_v4l2_fmt *fmt;
+	struct vpu_ctx *ctx = v4l2_fh_to_ctx(fh);
+	struct queue_data *q_data;
+	u32 fmt_cnt = ARRAY_SIZE(formats_yuv_dec);
+	u32 index;
 
 	vpu_dbg(LVL_BIT_FUNC, "%s()\n", __func__);
 
 	if (f->type != V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE)
 		return -EINVAL;
 
-	if (f->index >= ARRAY_SIZE(formats_yuv_dec))
+	index = f->index;
+	q_data = &ctx->q_data[V4L2_DST];
+	down(&q_data->drv_q_lock);
+	if (!ctx->b_firstseq) {
+		if (!f->index)
+			index = vpu_dec_get_capture_fmt_index(ctx);
+		else
+			index = fmt_cnt;
+	}
+	up(&q_data->drv_q_lock);
+
+	if (index >= fmt_cnt)
 		return -EINVAL;
 
-	fmt = &formats_yuv_dec[f->index];
+	fmt = &formats_yuv_dec[index];
 	strlcpy(f->description, fmt->name, sizeof(f->description));
 	f->pixelformat = fmt->fourcc;
 	vpu_dbg(LVL_INFO, "CAPTURE fmt[%d] %c%c%c%c\n",
@@ -778,29 +827,16 @@ static int v4l2_ioctl_enum_fmt_vid_out(struct file *file,
 	return 0;
 }
 
-static bool is_10bit_format(struct vpu_ctx *ctx)
+static void calculate_frame_size(struct queue_data *q_data, u32 width, u32 height, bool is_10bit)
 {
-	WARN_ON(!ctx);
-	if (ctx->seqinfo.uBitDepthLuma > 8)
-		return true;
-	if (ctx->seqinfo.uBitDepthChroma > 8)
-		return true;
-	return false;
-}
-
-static void calculate_frame_size(struct vpu_ctx *ctx)
-{
-	u_int32 width = ctx->seqinfo.uHorDecodeRes;
-	u_int32 height = ctx->seqinfo.uVerDecodeRes;
 	u_int32 luma_size;
 	u_int32 chroma_size;
 	u_int32 chroma_height;
-	bool b10BitFormat = is_10bit_format(ctx);
-	struct queue_data *q_data;
 
-	q_data = &ctx->q_data[V4L2_DST];
+	q_data->width = ALIGN(width, 8);
+	q_data->height = ALIGN(height, V4L2_NXP_FRAME_VERTICAL_ALIGN);
 
-	width = b10BitFormat?(width + ((width + 3) >> 2)):width;
+	width =  is_10bit ? (width + ((width + 3) >> 2)) : width;
 	width = ALIGN(width, V4L2_NXP_FRAME_HORIZONTAL_ALIGN);
 	q_data->stride = width;
 
@@ -810,10 +846,22 @@ static void calculate_frame_size(struct vpu_ctx *ctx)
 	luma_size = width * height;
 	chroma_size = width * chroma_height;
 
-	q_data->width = ctx->seqinfo.uHorRes;
-	q_data->height = ctx->seqinfo.uVerRes;
 	q_data->sizeimage[0] = luma_size;
 	q_data->sizeimage[1] = chroma_size;
+}
+
+static void vdec_setup_capture_size(struct vpu_ctx *ctx)
+{
+	struct queue_data *q_data;
+
+	q_data = &ctx->q_data[V4L2_DST];
+
+	calculate_frame_size(q_data,
+			ctx->seqinfo.uHorDecodeRes,
+			ctx->seqinfo.uVerDecodeRes,
+			is_10bit_format(ctx));
+	q_data->width = ctx->seqinfo.uHorRes;
+	q_data->height = ctx->seqinfo.uVerRes;
 	if (ctx->seqinfo.uProgressive == 1)
 		q_data->field = V4L2_FIELD_NONE;
 	else
@@ -905,11 +953,7 @@ static int v4l2_ioctl_g_fmt(struct file *file,
 	if (f->type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE) {
 		q_data = &ctx->q_data[V4L2_DST];
 		down(&q_data->drv_q_lock);
-		if (is_10bit_format(ctx))
-			pix_mp->pixelformat = V4L2_PIX_FMT_NV12_10BIT;
-		else
-			pix_mp->pixelformat = V4L2_PIX_FMT_NV12;
-
+		pix_mp->pixelformat = vpu_dec_get_capture_fmt(ctx);
 		pix_mp->width = q_data->width;
 		pix_mp->height = q_data->height;
 		pix_mp->field = q_data->field;
@@ -937,10 +981,12 @@ static int v4l2_ioctl_g_fmt(struct file *file,
 	} else
 		return -EINVAL;
 
+	down(&ctx->q_data[V4L2_DST].drv_q_lock);
 	pix_mp->colorspace = ctx->colorspace;
 	pix_mp->xfer_func = ctx->xfer_func;
 	pix_mp->ycbcr_enc = ctx->ycbcr_enc;
 	pix_mp->quantization = ctx->quantization;
+	up(&ctx->q_data[V4L2_DST].drv_q_lock);
 
 	vpu_dbg(LVL_BIT_FLOW, "%s g_fmt : %c%c%c%c %d x %d\n",
 		V4L2_TYPE_IS_OUTPUT(f->type) ? "OUTPUT" : "CAPTURE",
@@ -984,6 +1030,47 @@ static void set_output_default_sizeimage(struct queue_data *q_data)
 	}
 }
 
+static int try_colorspace(struct vpu_ctx *ctx, struct v4l2_format *f)
+{
+	struct v4l2_pix_format_mplane *pix_mp = &f->fmt.pix_mp;
+
+	down(&ctx->q_data[V4L2_DST].drv_q_lock);
+	if (ctx->b_firstseq) {
+		pix_mp->colorspace = V4L2_COLORSPACE_DEFAULT;
+		pix_mp->xfer_func = V4L2_XFER_FUNC_DEFAULT;
+		pix_mp->ycbcr_enc = V4L2_YCBCR_ENC_DEFAULT;
+		pix_mp->quantization = V4L2_QUANTIZATION_DEFAULT;
+	} else {
+		pix_mp->colorspace = ctx->colorspace;
+		pix_mp->xfer_func = ctx->xfer_func;
+		pix_mp->ycbcr_enc = ctx->ycbcr_enc;
+		pix_mp->quantization = ctx->quantization;
+	}
+	up(&ctx->q_data[V4L2_DST].drv_q_lock);
+
+	return 0;
+}
+
+static int set_colorspace(struct vpu_ctx *ctx, struct v4l2_format *f)
+{
+	struct v4l2_pix_format_mplane *pix_mp = &f->fmt.pix_mp;
+
+	down(&ctx->q_data[V4L2_DST].drv_q_lock);
+	if (ctx->b_firstseq) {
+		ctx->colorspace = pix_mp->colorspace;
+		ctx->xfer_func = pix_mp->xfer_func;
+		ctx->ycbcr_enc = pix_mp->ycbcr_enc;
+		ctx->quantization = pix_mp->quantization;
+	}
+	pix_mp->colorspace = ctx->colorspace;
+	pix_mp->xfer_func = ctx->xfer_func;
+	pix_mp->ycbcr_enc = ctx->ycbcr_enc;
+	pix_mp->quantization = ctx->quantization;
+	up(&ctx->q_data[V4L2_DST].drv_q_lock);
+
+	return 0;
+}
+
 static int v4l2_ioctl_s_fmt(struct file *file,
 		void *fh,
 		struct v4l2_format *f
@@ -1015,20 +1102,30 @@ static int v4l2_ioctl_s_fmt(struct file *file,
 	} else
 		return -EINVAL;
 
-	pix_mp->colorspace = ctx->colorspace;
-	pix_mp->xfer_func = ctx->xfer_func;
-	pix_mp->ycbcr_enc = ctx->ycbcr_enc;
-	pix_mp->quantization = ctx->quantization;
+	set_colorspace(ctx, f);
 	pix_mp->num_planes = q_data->num_planes;
 
 	down(&q_data->drv_q_lock);
-	if (V4L2_TYPE_IS_OUTPUT(f->type) || ctx->b_firstseq) {
+	if (V4L2_TYPE_IS_OUTPUT(f->type)) {
 		for (i = 0; i < q_data->num_planes; i++) {
 			q_data->stride = pix_mp->plane_fmt[i].bytesperline;
 			q_data->sizeimage[i] = pix_mp->plane_fmt[i].sizeimage;
 		}
 		q_data->width = pix_mp->width;
 		q_data->height = pix_mp->height;
+		set_output_default_sizeimage(q_data);
+	} else if (ctx->b_firstseq) {
+		calculate_frame_size(q_data, pix_mp->width, pix_mp->height, false);
+		for (i = 0; i < q_data->num_planes; i++) {
+			if (q_data->stride < pix_mp->plane_fmt[i].bytesperline)
+				q_data->stride = pix_mp->plane_fmt[i].bytesperline;
+			else
+				pix_mp->plane_fmt[i].bytesperline = q_data->stride;
+			if (q_data->sizeimage[i] < pix_mp->plane_fmt[i].sizeimage)
+				q_data->sizeimage[i] = pix_mp->plane_fmt[i].sizeimage;
+			else
+				pix_mp->plane_fmt[i].sizeimage = q_data->sizeimage[i];
+		}
 	} else {
 		for (i = 0; i < q_data->num_planes; i++) {
 			pix_mp->plane_fmt[i].bytesperline = q_data->stride;
@@ -1037,8 +1134,6 @@ static int v4l2_ioctl_s_fmt(struct file *file,
 		pix_mp->width = q_data->width;
 		pix_mp->height = q_data->height;
 	}
-	if (V4L2_TYPE_IS_OUTPUT(f->type))
-		set_output_default_sizeimage(q_data);
 	up(&q_data->drv_q_lock);
 
 	if (f->type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE)
@@ -1294,7 +1389,7 @@ static int v4l2_ioctl_subscribe_event(struct v4l2_fh *fh,
 		return v4l2_event_subscribe(fh, sub, 0, NULL);
 	case V4L2_EVENT_SOURCE_CHANGE:
 		return v4l2_src_change_event_subscribe(fh, sub);
-	case V4L2_EVENT_DECODE_ERROR:
+	case V4L2_EVENT_CODEC_ERROR:
 		return v4l2_event_subscribe(fh, sub, 0, NULL);
 	default:
 		return -EINVAL;
@@ -1559,6 +1654,9 @@ static void vpu_dec_receive_ts(struct vpu_ctx *ctx,
 		return;
 	}
 
+	if (!is_codec_config_data(vb))
+		ctx->statistic.frame_input++;
+
 	size += ctx->extra_size;
 	ctx->extra_size = 0;
 	vpu_dbg(LVL_BIT_TS, "[INPUT  TS]%32lld\n", input_ts);
@@ -1642,6 +1740,12 @@ static int v4l2_ioctl_dqbuf(struct file *file,
 		return ret;
 	}
 
+	if (!V4L2_TYPE_IS_OUTPUT(buf->type)) {
+		down(&ctx->q_data[V4L2_SRC].drv_q_lock);
+		ctx->statistic.frame_display++;
+		up(&ctx->q_data[V4L2_SRC].drv_q_lock);
+	}
+
 	if (q_data->vb2_reqs[buf->index].bfield)
 		buf->field = V4L2_FIELD_INTERLACED;
 	else
@@ -1688,10 +1792,7 @@ static int v4l2_ioctl_try_fmt(struct file *file,
 	} else
 		return -EINVAL;
 
-	f->fmt.pix_mp.colorspace = ctx->colorspace;
-	f->fmt.pix_mp.xfer_func = ctx->xfer_func;
-	f->fmt.pix_mp.ycbcr_enc = ctx->ycbcr_enc;
-	f->fmt.pix_mp.quantization = ctx->quantization;
+	try_colorspace(ctx, f);
 
 	return 0;
 }
@@ -1737,7 +1838,7 @@ static int v4l2_ioctl_decoder_cmd(struct file *file,
 		break;
 	case V4L2_DEC_CMD_RESUME:
 		break;
-	case IMX_V4L2_DEC_CMD_RESET:
+	case V4L2_DEC_CMD_RESET:
 		v4l2_update_stream_addr(ctx, 0);
 		mutex_lock(&ctx->fw_flow_mutex);
 		ret = vpu_dec_cmd_reset(ctx);
@@ -1881,7 +1982,7 @@ static int vpu_dec_v4l2_ioctl_g_parm(struct file *file, void *fh,
 		denominator = ctx->frame_interval.denominator;
 	}
 	if (!numerator || !denominator) {
-		numerator = 0;
+		numerator = 1;
 		denominator = 0;
 	}
 	parm->parm.capture.timeperframe.numerator = numerator;
@@ -1916,6 +2017,11 @@ static int vpu_dec_v4l2_ioctl_s_parm(struct file *file, void *fh,
 	ctx->fixed_frame_interval.denominator =
 		parm->parm.capture.timeperframe.denominator / gcd;
 	mutex_unlock(&ctx->instance_mutex);
+
+	vpu_dbg(LVL_BIT_FLOW, "%s s_parm : %d / %d\n",
+			V4L2_TYPE_IS_OUTPUT(parm->type) ? "OUTPUT" : "CAPTURE",
+			parm->parm.capture.timeperframe.numerator,
+			parm->parm.capture.timeperframe.denominator);
 
 	return 0;
 }
@@ -1963,79 +2069,9 @@ static struct vpu_v4l2_control vpu_controls_dec[] = {
 	},
 };
 
-static	struct v4l2_ctrl_config vpu_custom_g_cfg[] = {
-	{
-		.id = V4L2_CID_USER_FRAME_COLORDESC,
-		.name = "color description",
-		.type = V4L2_CTRL_TYPE_INTEGER,
-		.min = 0,
-		.max = 10,
-		.step = 1,
-		.def = 1,
-		.flags = V4L2_CTRL_FLAG_VOLATILE,
-	},
-	{
-		.id = V4L2_CID_USER_FRAME_TRANSFERCHARS,
-		.name = "transfer characteristics",
-		.type = V4L2_CTRL_TYPE_INTEGER,
-		.min = 0,
-		.max = 18,
-		.step = 1,
-		.def = 0,
-		.flags = V4L2_CTRL_FLAG_VOLATILE,
-	},
-	{
-		.id = V4L2_CID_USER_FRAME_MATRIXCOEFFS,
-		.name = "matrix coefficients",
-		.type = V4L2_CTRL_TYPE_INTEGER,
-		.min = 0,
-		.max = 10,
-		.step = 1,
-		.def = 0,
-		.flags = V4L2_CTRL_FLAG_VOLATILE,
-	},
-	{
-		.id = V4L2_CID_USER_FRAME_FULLRANGE,
-		.name = "vido full range flg",
-		.type = V4L2_CTRL_TYPE_INTEGER,
-		.min = 0,
-		.max = 1,
-		.step = 1,
-		.def = 0,
-		.flags = V4L2_CTRL_FLAG_VOLATILE,
-	},
-	{
-		.id = V4L2_CID_USER_FRAME_VUIPRESENT,
-		.name = "VUI present",
-		.type = V4L2_CTRL_TYPE_INTEGER,
-		.min = 0,
-		.max = 1,
-		.step = 1,
-		.def = 0,
-		.flags = V4L2_CTRL_FLAG_VOLATILE,
-	}
-};
-
 static	struct v4l2_ctrl_config vpu_custom_s_cfg[] = {
 	{
-		.id = V4L2_CID_USER_RAW_BASE,
-		.name = "Raw Ctrl",
-		.type = V4L2_CTRL_TYPE_INTEGER,
-		.min = 0,
-		.max = 1,
-		.step = 1,
-		.def = 0,
-	},
-	{
-		.id = V4L2_CID_USER_FRAME_DEPTH,
-		.name = "frame depth ctrl",
-		.type = V4L2_CTRL_TYPE_INTEGER,
-		.min = 1,
-		.max = VPU_FRAME_DEPTH_MAX,
-		.step = 1,
-	},
-	{
-		.id = V4L2_CID_USER_FRAME_DIS_REORDER,
+		.id = V4L2_CID_DIS_REORDER,
 		.name = "frame disable reoder ctrl",
 		.type = V4L2_CTRL_TYPE_BOOLEAN,
 		.min = 0,
@@ -2044,45 +2080,19 @@ static	struct v4l2_ctrl_config vpu_custom_s_cfg[] = {
 		.def = 0,
 	},
 	{
-		.id = V4L2_CID_USER_TS_THRESHOLD,
-		.name = "frame timestamp threshold",
+		.id = V4L2_CID_NON_FRAME,
+		.name = "stream input non frame mode",
 		.type = V4L2_CTRL_TYPE_INTEGER,
 		.min = 0,
-		.max = INT_MAX,
+		.max = 1,
 		.step = 1,
 		.def = 0,
-	},
-	{
-		.id = V4L2_CID_USER_BS_L_THRESHOLD,
-		.name = "frame bitstream low threshold",
-		.type = V4L2_CTRL_TYPE_INTEGER,
-		.min = 0,
-		.step = 1,
-		.def = 0,
-	},
-	{
-		.id = V4L2_CID_USER_BS_H_THRESHOLD,
-		.name = "frame bitstream high threshold",
-		.type = V4L2_CTRL_TYPE_INTEGER,
-		.min = 0,
-		.step = 1,
-		.def = 0,
-	},
-	{
-		.id = V4L2_CID_USER_STREAM_INPUT_MODE,
-		.name = "stream input mode",
-		.type = V4L2_CTRL_TYPE_INTEGER,
-		.min = 0,
-		.max = NON_FRAME_LVL,
-		.step = 1,
-		.def = 1,
 	}
 };
 
 #define CNT_STAND_G_CTRLS	ARRAY_SIZE(vpu_controls_dec)
-#define CNT_CUSTOM_G_CFG	ARRAY_SIZE(vpu_custom_g_cfg)
 #define CNT_CUSTOM_S_CFG	ARRAY_SIZE(vpu_custom_s_cfg)
-#define CNT_CTRLS_DEC		(CNT_STAND_G_CTRLS + CNT_CUSTOM_G_CFG + CNT_CUSTOM_S_CFG)
+#define CNT_CTRLS_DEC		(CNT_STAND_G_CTRLS + CNT_CUSTOM_S_CFG)
 
 static int v4l2_custom_s_ctrl(struct v4l2_ctrl *ctrl)
 {
@@ -2092,80 +2102,23 @@ static int v4l2_custom_s_ctrl(struct v4l2_ctrl *ctrl)
 			__func__, ctrl->id);
 
 	switch (ctrl->id) {
-	case V4L2_CID_USER_RAW_BASE:
-		ctx->start_code_bypass = ctrl->val;
-		break;
-	case V4L2_CID_USER_FRAME_DEPTH:
-		vpu_frm_depth = ctrl->val;
-		break;
-	case V4L2_CID_USER_FRAME_DIS_REORDER:
+	case V4L2_CID_DIS_REORDER:
 		ctx->b_dis_reorder = ctrl->val;
 		break;
-	case V4L2_CID_USER_TS_THRESHOLD:
-		ctx->ts_threshold = ctrl->val;
-		break;
-	case V4L2_CID_USER_BS_L_THRESHOLD:
-		ctx->bs_l_threshold = ctrl->val;
-		break;
-	case V4L2_CID_USER_BS_H_THRESHOLD:
-		ctx->bs_h_threshold = ctrl->val;
-		break;
-	case V4L2_CID_USER_STREAM_INPUT_MODE:
-		ctx->stream_input_mode = ctrl->val;
-		break;
-	default:
-		vpu_err("%s() Invalid costomer control(%d)\n",
-				__func__, ctrl->id);
-		return -EINVAL;
-	}
-	return 0;
-}
-
-static int v4l2_custom_g_ctrl(struct v4l2_ctrl *ctrl)
-{
-	struct vpu_ctx *ctx = v4l2_ctrl_to_ctx(ctrl);
-	struct v4l2_ctrl_config *ctrl_cfg = NULL;
-	int i;
-
-	vpu_dbg(LVL_BIT_FUNC, "%s() control(%d)\n",
-			__func__, ctrl->id);
-
-	for (i = 0; i < CNT_CUSTOM_G_CFG; i++) {
-		if (vpu_custom_g_cfg[i].id == ctrl->id) {
-			ctrl_cfg = &vpu_custom_g_cfg[i];
-			break;
+	case V4L2_CID_NON_FRAME:
+		if (ctrl->val) {
+			ctx->stream_input_mode = NON_FRAME_LVL;
+			ctx->start_code_bypass = true;
+		} else {
+			ctx->stream_input_mode = FRAME_LVL;
+			ctx->start_code_bypass = false;
 		}
-	}
-	if (!ctrl_cfg) {
-		vpu_err("%s() Invalid costomer control(%d)\n",
-				__func__, ctrl->id);
-		return -EINVAL;
-	}
-
-	switch (ctrl->id) {
-	case V4L2_CID_USER_FRAME_COLORDESC:
-		ctrl->val = ctx->seqinfo.uColorDesc;
-		break;
-	case V4L2_CID_USER_FRAME_TRANSFERCHARS:
-		ctrl->val = ctx->seqinfo.uTransferChars;
-		break;
-	case V4L2_CID_USER_FRAME_MATRIXCOEFFS:
-		ctrl->val = ctx->seqinfo.uMatrixCoeffs;
-		break;
-	case V4L2_CID_USER_FRAME_FULLRANGE:
-		ctrl->val = ctx->seqinfo.uVideoFullRangeFlag;
-		break;
-	case V4L2_CID_USER_FRAME_VUIPRESENT:
-		ctrl->val = ctx->seqinfo.uVUIPresent;
 		break;
 	default:
 		vpu_err("%s() Invalid costomer control(%d)\n",
 				__func__, ctrl->id);
 		return -EINVAL;
 	}
-	ctrl->val = max_t(s32, ctrl->val, ctrl_cfg->min);
-	ctrl->val = min_t(s32, ctrl->val, ctrl_cfg->max);
-	vpu_dbg(LVL_BIT_FLOW, "%s = %d\n", ctrl->name, ctrl->val);
 	return 0;
 }
 
@@ -2235,12 +2188,6 @@ static int add_custom_s_ctrl(struct vpu_ctx *This)
 	for (i = 0; i < CNT_CUSTOM_S_CFG; i++) {
 		vpu_custom_s_cfg[i].ops = &vpu_custom_ctrl_ops;
 
-		if (vpu_custom_s_cfg[i].id == V4L2_CID_USER_FRAME_DEPTH)
-			vpu_custom_s_cfg[i].def = vpu_frm_depth;
-		if (vpu_custom_s_cfg[i].id == V4L2_CID_USER_BS_L_THRESHOLD ||
-		    vpu_custom_s_cfg[i].id == V4L2_CID_USER_BS_H_THRESHOLD)
-			vpu_custom_s_cfg[i].max = vpu_max_bufsize;
-
 		ctrl = v4l2_ctrl_new_custom(&This->ctrl_handler,
 					    &vpu_custom_s_cfg[i], NULL);
 
@@ -2255,90 +2202,6 @@ static int add_custom_s_ctrl(struct vpu_ctx *This)
 	return 0;
 }
 
-static int add_custom_g_ctrl(struct vpu_ctx *This)
-{
-	static const struct v4l2_ctrl_ops vpu_custom_g_ctrl_ops = {
-		.g_volatile_ctrl = v4l2_custom_g_ctrl,
-	};
-
-	uint32_t i;
-	struct v4l2_ctrl *ctrl;
-
-	if (!This)
-		return -EINVAL;
-
-	for (i = 0; i < CNT_CUSTOM_G_CFG; i++) {
-		vpu_custom_g_cfg[i].ops = &vpu_custom_g_ctrl_ops;
-		ctrl = v4l2_ctrl_new_custom(&This->ctrl_handler,
-					    &vpu_custom_g_cfg[i], NULL);
-
-		if (This->ctrl_handler.error || !ctrl) {
-			vpu_err("%s() v4l2_ctrl_new_std[%d] failed: %d\n",
-				__func__, i, This->ctrl_handler.error);
-			return This->ctrl_handler.error;
-		}
-	}
-
-	ctrl = NULL;
-	return 0;
-}
-
-static int set_frame_threshold(struct v4l2_ctrl *ctrl)
-{
-	struct vpu_ctx *ctx = v4l2_ctrl_to_ctx(ctrl);
-
-	ctrl->val = max_t(s32, ctrl->val, ctrl->minimum);
-	ctrl->val = min_t(s32, ctrl->val, ctrl->maximum);
-	frame_threshold[ctx->str_index] = ctrl->val;
-	return 0;
-}
-
-static int get_frame_threshold(struct v4l2_ctrl *ctrl)
-{
-	struct vpu_ctx *ctx = v4l2_ctrl_to_ctx(ctrl);
-
-	ctrl->val = frame_threshold[ctx->str_index];
-	ctrl->val = max_t(s32, ctrl->val, ctrl->minimum);
-	ctrl->val = min_t(s32, ctrl->val, ctrl->maximum);
-	return 0;
-}
-
-static int add_ctrl_frame_threshold(struct vpu_ctx *ctx)
-{
-	static const struct v4l2_ctrl_ops ctrl_frame_threshold_ops = {
-		.s_ctrl = set_frame_threshold,
-		.g_volatile_ctrl = get_frame_threshold,
-	};
-	struct v4l2_ctrl_config ctrl_config = {
-		.id = V4L2_CID_USER_FRAME_THRESHOLD,
-		.name = "stream frame threshold",
-		.type = V4L2_CTRL_TYPE_INTEGER,
-		.min = 0,
-		.max = USHRT_MAX,
-		.step = 1,
-		.ops = &ctrl_frame_threshold_ops,
-	};
-	struct v4l2_ctrl *ctrl;
-
-	if (!ctx)
-		return -EINVAL;
-
-	ctrl_config.def = frame_threshold[ctx->str_index];
-	ctrl = v4l2_ctrl_new_custom(&ctx->ctrl_handler,
-					&ctrl_config,
-					NULL);
-	if (ctx->ctrl_handler.error || !ctrl) {
-		vpu_err("add frame threshold ctrl fail : %d\n",
-				ctx->ctrl_handler.error);
-		return ctx->ctrl_handler.error;
-	}
-
-	ctrl->flags |= V4L2_CTRL_FLAG_VOLATILE;
-	ctrl->flags |= V4L2_CTRL_FLAG_EXECUTE_ON_WRITE;
-
-	return 0;
-}
-
 static int add_dec_ctrl(struct vpu_ctx *This)
 {
 	if (!This)
@@ -2346,8 +2209,6 @@ static int add_dec_ctrl(struct vpu_ctx *This)
 
 	add_stand_g_ctrl(This);
 	add_custom_s_ctrl(This);
-	add_custom_g_ctrl(This);
-	add_ctrl_frame_threshold(This);
 
 	return 0;
 }
@@ -3139,7 +3000,8 @@ static int vpu_dec_cmd_reset(struct vpu_ctx *ctx)
 static void vpu_dec_event_decode_error(struct vpu_ctx *ctx)
 {
 	const struct v4l2_event ev = {
-		.type = V4L2_EVENT_DECODE_ERROR
+		.id = 0,
+		.type = V4L2_EVENT_CODEC_ERROR
 	};
 
 	if (!ctx)
@@ -3293,30 +3155,12 @@ static bool vpu_dec_stream_is_ready(struct vpu_ctx *ctx)
 					pStrBufDesc->rptr,
 					pStrBufDesc->start,
 					pStrBufDesc->end);
-	if (ctx->bs_l_threshold > 0) {
-		if (stream_size < ctx->bs_l_threshold)
-			return true;
-	}
 
 	/*
 	 *frame depth need to be set by user and then the condition works
 	 */
 	if (vpu_frm_depth > 0 && ctx->stream_input_mode == FRAME_LVL) {
 		if (ctx->frm_dec_delay >= vpu_frm_depth)
-			return false;
-	}
-
-	if (ctx->ts_threshold > 0 &&
-		TSM_TS_IS_VALID(ctx->output_ts) &&
-		TSM_TS_IS_VALID(ctx->capture_ts)) {
-		s64 threshold = ctx->ts_threshold * NSEC_PER_MSEC;
-
-		if (ctx->output_ts > ctx->capture_ts + threshold)
-			return false;
-	}
-
-	if (ctx->bs_h_threshold > 0) {
-		if (stream_size > ctx->bs_h_threshold)
 			return false;
 	}
 
@@ -3433,8 +3277,19 @@ static void enqueue_stream_data(struct vpu_ctx *ctx, uint32_t uStrBufIdx)
 		vb2_buffer_done(vb, VB2_BUF_STATE_DONE);
 	}
 	if (list_empty(&This->drv_q) && ctx->eos_stop_received) {
-		if (vpu_dec_is_active(ctx)) {
+		if (vpu_dec_is_active(ctx) && ctx->statistic.frame_input) {
 			vpu_dbg(LVL_EVENT, "ctx[%d]: insert eos directly\n", ctx->str_index);
+			if (ctx->statistic.eos_cnt) {
+				vpu_dbg(LVL_WARN,
+					"Warning : repeated eos at frame %ld (%ld), previous eos has been insert when input %ld frames(%ld bytes)\n",
+					ctx->statistic.frame_input,
+					ctx->total_write_bytes,
+					ctx->statistic.eos_frames, ctx->statistic.eos_bytes);
+			}
+			ctx->statistic.eos_cnt++;
+			ctx->statistic.eos_frames = ctx->statistic.frame_input;
+			ctx->statistic.eos_bytes = ctx->total_write_bytes;
+
 			if (add_scode(ctx, 0, EOS_PADDING_TYPE, true) > 0) {
 				record_log_info(ctx, LOG_EOS, 0, 0);
 				ctx->eos_stop_received = false;
@@ -3525,7 +3380,9 @@ static void report_buffer_done(struct vpu_ctx *ctx, void *frame_info)
 static void send_skip_event(struct vpu_ctx *ctx)
 {
 	const struct v4l2_event ev = {
-		.type = V4L2_EVENT_SKIP
+		.id = 0,
+		.type = V4L2_EVENT_SKIP,
+		.u.data[0] = 0xff,
 	};
 
 	if (!ctx)
@@ -3539,6 +3396,7 @@ static void send_skip_event(struct vpu_ctx *ctx)
 static void send_eos_event(struct vpu_ctx *ctx)
 {
 	const struct v4l2_event ev = {
+		.id = 0,
 		.type = V4L2_EVENT_EOS
 	};
 
@@ -3552,6 +3410,7 @@ static void send_eos_event(struct vpu_ctx *ctx)
 static void send_source_change_event(struct vpu_ctx *ctx)
 {
 	const struct v4l2_event ev = {
+		.id = 0,
 		.type = V4L2_EVENT_SOURCE_CHANGE,
 		.u.src_change.changes = V4L2_EVENT_SRC_CH_RESOLUTION
 	};
@@ -4070,6 +3929,64 @@ static void vpu_calculate_performance(struct vpu_ctx *ctx,  u_int32 uEvent, cons
 	}
 }
 
+static void vpu_ctx_show_statstic(struct vpu_ctx *ctx, const char *desc)
+{
+	char buf[256];
+	int num = 0;
+	int size = sizeof(buf);
+	pSTREAM_BUFFER_DESCRIPTOR_TYPE pStrBufDesc = get_str_buffer_desc(ctx);
+
+	num += scnprintf(buf + num, size - num, "[%d] ", ctx->str_index);
+	num += scnprintf(buf + num, size - num, "%s,", desc ? desc : "");
+	num += scnprintf(buf + num, size - num, "%c%c%c%c ",
+			ctx->q_data[V4L2_SRC].fourcc,
+			ctx->q_data[V4L2_SRC].fourcc >> 8,
+			ctx->q_data[V4L2_SRC].fourcc >> 16,
+			ctx->q_data[V4L2_SRC].fourcc >> 24);
+	num += scnprintf(buf + num, size - num, "%dx%d,",
+			ctx->q_data[V4L2_DST].width,
+			ctx->q_data[V4L2_DST].height);
+	num += scnprintf(buf + num, size - num, "input:%ld,",
+			ctx->statistic.frame_input);
+	num += scnprintf(buf + num, size - num, "parse:%ld,",
+			ctx->statistic.frame_hdr);
+	num += scnprintf(buf + num, size - num, "decode:%ld,",
+			ctx->statistic.frame_decoded);
+	num += scnprintf(buf + num, size - num, "ready:%ld,",
+			ctx->statistic.frame_ready);
+	num += scnprintf(buf + num, size - num, "skip:%ld,",
+			ctx->statistic.skipped_frame_count);
+	num += scnprintf(buf + num, size - num, "disp:%ld,",
+			ctx->statistic.frame_display);
+	num += scnprintf(buf + num, size - num, "bytes:%ld %ld,",
+			ctx->total_qbuf_bytes, ctx->total_write_bytes);
+	num += scnprintf(buf + num, size - num, "eos:%ld %ld %ld",
+			ctx->statistic.eos_cnt,
+			ctx->statistic.eos_frames,
+			ctx->statistic.eos_bytes);
+	num += scnprintf(buf + num, size - num,
+			",wptr:0x%x 0x%x 0x%x",
+			pStrBufDesc->wptr - pStrBufDesc->start,
+			pStrBufDesc->rptr - pStrBufDesc->start,
+			ctx->beginning - pStrBufDesc->start);
+	vpu_dbg(LVL_BIT_STRM_INFO, "%s\n", buf);
+};
+
+static void vpu_ctx_clear_statistic_on_abort(struct vpu_ctx *ctx)
+{
+
+	vpu_ctx_show_statstic(ctx, "abt");
+
+	ctx->statistic.eos_cnt = 0;
+	ctx->statistic.eos_frames = 0;
+	ctx->statistic.eos_bytes = 0;
+	ctx->statistic.frame_input = 0;
+	ctx->statistic.frame_hdr = 0;
+	ctx->statistic.frame_decoded = 0;
+	ctx->statistic.frame_ready = 0;
+	ctx->statistic.frame_display = 0;
+};
+
 static void vpu_api_event_handler(struct vpu_ctx *ctx, u_int32 uStrIdx, u_int32 uEvent, u_int32 *event_data)
 {
 	struct vpu_dev *dev;
@@ -4162,6 +4079,10 @@ static void vpu_api_event_handler(struct vpu_ctx *ctx, u_int32 uStrIdx, u_int32 
 		size_t wr_size;
 		struct vb2_data_req *p_data_req = NULL;
 		u32 consumed_count = event_data[13];
+
+		down(&ctx->q_data[V4L2_SRC].drv_q_lock);
+		ctx->statistic.frame_decoded++;
+		up(&ctx->q_data[V4L2_SRC].drv_q_lock);
 
 		if (This->vdec_std == VPU_VIDEO_HEVC)
 			uDpbmcCrc = pPerfDcpInfo->uDBEDpbCRC[0];
@@ -4268,14 +4189,14 @@ static void vpu_api_event_handler(struct vpu_ctx *ctx, u_int32 uStrIdx, u_int32 
 			ctx->seqinfo.uMatrixCoeffs,
 			ctx->seqinfo.uVideoFullRangeFlag,
 			ctx->seqinfo.uVUIPresent);
+
+		down(&ctx->q_data[V4L2_DST].drv_q_lock);
 		vpu_dec_convert_color_iso_aspect_to_v4l2_aspect(ctx,
 				ctx->seqinfo.uColorDesc,
 				ctx->seqinfo.uTransferChars,
 				ctx->seqinfo.uMatrixCoeffs,
 				ctx->seqinfo.uVideoFullRangeFlag);
-
-		down(&ctx->q_data[V4L2_DST].drv_q_lock);
-		calculate_frame_size(ctx);
+		vdec_setup_capture_size(ctx);
 		ctx->dcp_size = get_dcp_size(ctx);
 		if (ctx->b_firstseq) {
 			ctx->b_firstseq = false;
@@ -4291,6 +4212,9 @@ static void vpu_api_event_handler(struct vpu_ctx *ctx, u_int32 uStrIdx, u_int32 
 		}
 		break;
 	case VID_API_EVENT_PIC_HDR_FOUND:
+		down(&ctx->q_data[V4L2_SRC].drv_q_lock);
+		ctx->statistic.frame_hdr++;
+		up(&ctx->q_data[V4L2_SRC].drv_q_lock);
 		break;
 	case VID_API_EVENT_REQ_FRAME_BUFF: {
 		MEDIA_PLAYER_FSREQ *pFSREQ = (MEDIA_PLAYER_FSREQ *)event_data;
@@ -4374,6 +4298,10 @@ static void vpu_api_event_handler(struct vpu_ctx *ctx, u_int32 uStrIdx, u_int32 
 	case VID_API_EVENT_FRAME_BUFF_RDY: {
 		u_int32 *FrameInfo = (u_int32 *)event_data;
 
+		down(&ctx->q_data[V4L2_SRC].drv_q_lock);
+		ctx->statistic.frame_ready++;
+		up(&ctx->q_data[V4L2_SRC].drv_q_lock);
+
 		report_buffer_done(ctx, FrameInfo);
 		if (ctx->statistic.event[VID_API_EVENT_FRAME_BUFF_RDY] == 1)
 			vpu_calculate_performance(ctx, uEvent, "first ready");
@@ -4420,6 +4348,8 @@ static void vpu_api_event_handler(struct vpu_ctx *ctx, u_int32 uStrIdx, u_int32 
 				pStrBufDesc->end);
 
 		down(&queue->drv_q_lock);
+		vpu_ctx_clear_statistic_on_abort(ctx);
+
 		vpu_dbg(LVL_BIT_FLOW,
 			"ctx[%d] ABORT DONE, output qbuf(%ld/%ld),dqbuf(%ld)\n",
 			ctx->str_index,
@@ -4498,6 +4428,10 @@ static void vpu_api_event_handler(struct vpu_ctx *ctx, u_int32 uStrIdx, u_int32 
 	case VID_API_EVENT_STR_FMT_CHANGE:
 		break;
 	case VID_API_EVENT_FINISHED: {
+		down(&ctx->q_data[V4L2_SRC].drv_q_lock);
+		vpu_ctx_show_statstic(ctx, "eos");
+		up(&ctx->q_data[V4L2_SRC].drv_q_lock);
+
 		if (ctx->firmware_finished == true)
 			vpu_err("warning: receive VID_API_EVENT_FINISHED when firmware_finished == true\n");
 		ctx->firmware_finished = true;
@@ -4605,8 +4539,10 @@ static int vpu_next_free_instance(struct vpu_dev *dev)
 	}
 
 	idx = ffz(dev->instance_mask);
-	if (idx < 0 || idx >= VPU_MAX_NUM_STREAMS)
+	if (idx < 0 || idx >= VPU_MAX_NUM_STREAMS) {
+		vpu_err("no free instance\n");
 		return -EBUSY;
+	}
 
 	release_vpu_ctx(dev->ctx[idx]);
 
@@ -5387,9 +5323,6 @@ static ssize_t show_instance_buffer_info(struct device *dev,
 			"\t%40s:%16d\n", "total frame number",
 			ctx->frm_total_num);
 	num += scnprintf(buf + num, PAGE_SIZE - num,
-			"\t%40s:%16lld\n", "timestamp threshold(ms)",
-			ctx->ts_threshold);
-	num += scnprintf(buf + num, PAGE_SIZE - num,
 			"\t%40s:%6lld,%09lld\n", "output timestamp(ns)",
 			ctx->output_ts / NSEC_PER_SEC,
 			ctx->output_ts % NSEC_PER_SEC);
@@ -5397,12 +5330,6 @@ static ssize_t show_instance_buffer_info(struct device *dev,
 			"\t%40s:%6lld,%09lld\n", "capture timestamp(ns)",
 			ctx->capture_ts / NSEC_PER_SEC,
 			ctx->capture_ts % NSEC_PER_SEC);
-	num += scnprintf(buf + num, PAGE_SIZE - num,
-			"\t%40s:%16d\n", "bitstream low threshold",
-			ctx->bs_l_threshold);
-	num += scnprintf(buf + num, PAGE_SIZE - num,
-			"\t%40s:%16d\n", "bitstream high threshold",
-			ctx->bs_h_threshold);
 
 	This = &ctx->q_data[V4L2_SRC];
 	num += scnprintf(buf + num, PAGE_SIZE - num,
@@ -5892,6 +5819,7 @@ static int v4l2_open(struct file *filp)
 	pm_runtime_get_sync(dev->generic_dev);
 	ctx = kzalloc(sizeof(*ctx), GFP_KERNEL);
 	if (!ctx) {
+		vpu_err("failed to create decoder ctx\n");
 		pm_runtime_put_sync(dev->generic_dev);
 		return -ENOMEM;
 	}
@@ -6292,7 +6220,7 @@ static int parse_dt_info(struct vpu_dev *dev, struct device_node *np)
 		return -EINVAL;
 	}
 	dev->m0_p_fw_space_phy = reserved_res.start;
-	dev->m0_boot_size = reserved_res.end - reserved_res.start;
+	dev->m0_boot_size = resource_size(&reserved_res);
 	reserved_node = of_parse_phandle(np, "rpc-region", 0);
 	if (!reserved_node) {
 		vpu_err("error: rpc-region of_parse_phandle error\n");
@@ -6304,7 +6232,15 @@ static int parse_dt_info(struct vpu_dev *dev, struct device_node *np)
 		return -EINVAL;
 	}
 	dev->m0_rpc_phy = reserved_res.start;
-	dev->m0_rpc_size = reserved_res.end - reserved_res.start;
+	dev->m0_rpc_size = resource_size(&reserved_res);
+
+	if (rpc_check_memory_region(dev->m0_p_fw_space_phy,
+				dev->m0_rpc_phy,
+				dev->m0_rpc_size) != VPU_RPC_MEMORY_UNCACHED) {
+		vpu_err("rpc region<0x%x, 0x%x> isn't uncached for mu\n",
+				dev->m0_rpc_phy, dev->m0_rpc_size);
+		return -EINVAL;
+	}
 
 	ret = of_property_read_u32(np, "reg-csr", &csr_base);
 	if (ret) {
@@ -6342,7 +6278,7 @@ static int create_vpu_video_device(struct vpu_dev *dev)
 	video_set_drvdata(dev->pvpu_decoder_dev, dev);
 
 	ret = video_register_device(dev->pvpu_decoder_dev,
-			VFL_TYPE_GRABBER,
+			VFL_TYPE_VIDEO,
 			DECODER_NODE_NUMBER);
 	if (ret) {
 		vpu_err("error: %s unable to register video decoder device\n",

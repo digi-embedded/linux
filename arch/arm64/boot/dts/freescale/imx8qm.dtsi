@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Copyright 2018 NXP
+ * Copyright 2018-2019 NXP
  *	Dong Aisheng <aisheng.dong@nxp.com>
  */
 
+#include <dt-bindings/clock/imx8-lpcg.h>
 #include <dt-bindings/clock/imx8-clock.h>
 #include <dt-bindings/firmware/imx/rsrc.h>
 #include <dt-bindings/gpio/gpio.h>
@@ -39,7 +40,11 @@
 		isi7 = &isi_7;
 		csi0 = &mipi_csi_0;
 		csi1 = &mipi_csi_1;
+		mu0 = &lsio_mu0;
 		mu1 = &lsio_mu1;
+		mu2 = &lsio_mu2;
+		mu3 = &lsio_mu3;
+		mu4 = &lsio_mu4;
 		can0 = &flexcan1;
 		can1 = &flexcan2;
 		can2 = &flexcan3;
@@ -291,17 +296,11 @@
 
 	scu {
 		compatible = "fsl,imx-scu";
-		mbox-names = "tx0", "tx1", "tx2", "tx3",
-			     "rx0", "rx1", "rx2", "rx3",
+		mbox-names = "tx0",
+			     "rx0",
 			     "gip3";
 		mboxes = <&lsio_mu1 0 0
-			  &lsio_mu1 0 1
-			  &lsio_mu1 0 2
-			  &lsio_mu1 0 3
 			  &lsio_mu1 1 0
-			  &lsio_mu1 1 1
-			  &lsio_mu1 1 2
-			  &lsio_mu1 1 3
 			  &lsio_mu1 3 3>;
 
 		pd: imx8qx-pd {
@@ -347,7 +346,7 @@
 		};
 
 		tsens: thermal-sensor {
-			compatible = "fsl,imx8qm-sc-thermal";
+			compatible = "fsl,imx-sc-thermal";
 			tsens-num = <6>;
 			#thermal-sensor-cells = <1>;
 		};
@@ -468,36 +467,6 @@
 		};
 	};
 
-	rpmsg0: rpmsg0{
-		compatible = "fsl,imx8qm-rpmsg";
-		/* up to now, the following channels are used in imx rpmsg
-		 * - tx1/rx1: messages channel.
-		 * - general interrupt1: remote proc finish re-init rpmsg stack
-		 *   when A core is partition reset.
-		 */
-		mbox-names = "tx", "rx", "rxdb";
-		mboxes = <&lsio_mu5 0 1
-			  &lsio_mu5 1 1
-			  &lsio_mu5 3 1>;
-		mub-partition = <3>;
-		status = "disabled";
-	};
-
-	rpmsg1: rpmsg1{
-		compatible = "fsl,imx8qm-rpmsg";
-		/* up to now, the following channels are used in imx rpmsg
-		 * - tx1/rx1: messages channel.
-		 * - general interrupt1: remote proc finish re-init rpmsg stack
-		 *   when A core is partition reset.
-		 */
-		mbox-names = "tx", "rx", "rxdb";
-		mboxes = <&lsio_mu6 0 1
-			  &lsio_mu6 1 1
-			  &lsio_mu6 3 1>;
-		mub-partition = <4>;
-		status = "disabled";
-	};
-
         sc_pwrkey: sc-powerkey {
 		compatible = "fsl,imx8-pwrkey";
 		linux,keycode = <KEY_POWER>;
@@ -511,32 +480,34 @@
 		ranges = <0x55000000 0x0 0x55000000 0x1000000>;
 
 		dsp: dsp@556e8000 {
-			compatible = "fsl,imx8qm-dsp";
+			compatible = "fsl,imx8qm-hifi4";
 			reg = <0x556e8000 0x88000>;
 			clocks = <&clk_dummy>,
 				 <&clk_dummy>,
 				 <&clk_dummy>;
-			clock-names = "ipg", "ocram", "core";
-			fsl,dsp-firmware = "imx/dsp/hifi4.bin";
-			power-domains = <&pd IMX_SC_R_MU_13A>,
-					<&pd IMX_SC_R_MU_13B>,
+			clock-names = "dsp_clk1", "dsp_clk2", "dsp_clk3";
+			firmware-name = "imx/dsp/hifi4.bin";
+			power-domains = <&pd IMX_SC_R_MU_13B>,
 					<&pd IMX_SC_R_DSP>,
 					<&pd IMX_SC_R_DSP_RAM>;
-			memory-region = <&dsp_reserved>;
-			fixup-offset = <0x4000000>;
+			mbox-names = "tx", "rx", "rxdb";
+			mboxes = <&lsio_mu13 0 0>,
+				 <&lsio_mu13 1 0>,
+				 <&lsio_mu13 3 0>;
 			status = "disabled";
 		};
 	};
 
 	/* sorted in register address */
+	#include "imx8-ss-audio.dtsi"
+	#include "imx8-ss-img.dtsi"
+	#include "imx8-ss-dma.dtsi"
 	#include "imx8-ss-security.dtsi"
 	#include "imx8-ss-cm41.dtsi"
-	#include "imx8-ss-adma.dtsi"
 	#include "imx8-ss-conn.dtsi"
 	#include "imx8-ss-ddr.dtsi"
 	#include "imx8-ss-lsio.dtsi"
 	#include "imx8-ss-hsio.dtsi"
-	#include "imx8-ss-img.dtsi"
 	#include "imx8-ss-dc0.dtsi"
 	#include "imx8-ss-dc1.dtsi"
 	#include "imx8-ss-gpu0.dtsi"
@@ -544,6 +515,7 @@
 	#include "imx8-ss-vpu.dtsi"
 };
 
+#include "imx8qm-ss-img.dtsi"
 #include "imx8qm-ss-audio.dtsi"
 #include "imx8qm-ss-dma.dtsi"
 #include "imx8qm-ss-conn.dtsi"
@@ -554,5 +526,5 @@
 #include "imx8qm-ss-lvds.dtsi"
 #include "imx8qm-ss-mipi.dtsi"
 #include "imx8qm-ss-hdmi.dtsi"
-#include "imx8qm-ss-img.dtsi"
+#include "imx8qm-ss-hdmi-rx.dtsi"
 #include "imx8qm-ss-gpu.dtsi"

@@ -27,13 +27,13 @@ int fsl_esai_mix_hw_params(struct snd_pcm_substream *substream,
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_dmaengine_dai_dma_data *dma_data;
-	struct dma_slave_config config;
+	struct dma_slave_config config = {0};
 	int err = 0;
 
 	mix->channels   = params_channels(params);
 	mix->word_width = snd_pcm_format_physical_width(params_format(params)) / 8;
 
-	dma_data = snd_soc_dai_get_dma_data(rtd->cpu_dai, substream);
+	dma_data = snd_soc_dai_get_dma_data(asoc_rtd_to_cpu(rtd, 0), substream);
 	if (!dma_data)
 		return 0;
 
@@ -54,9 +54,9 @@ int fsl_esai_mix_open(struct snd_pcm_substream *substream, struct fsl_esai_mix *
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_dmaengine_dai_dma_data *dma_data;
 
-	dma_data = snd_soc_dai_get_dma_data(rtd->cpu_dai, substream);
+	dma_data = snd_soc_dai_get_dma_data(asoc_rtd_to_cpu(rtd, 0), substream);
 
-	mix->chan = dma_request_slave_channel(rtd->cpu_dai->dev,
+	mix->chan = dma_request_slave_channel(asoc_rtd_to_cpu(rtd, 0)->dev,
 					      dma_data->chan_name);
 
 	return 0;
@@ -122,7 +122,7 @@ static void fsl_esai_mix_buffer_from_fe_tx(struct snd_pcm_substream *substream, 
 {
 	bool tx = substream->stream == SNDRV_PCM_STREAM_PLAYBACK;
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
+	struct snd_soc_dai *cpu_dai = asoc_rtd_to_cpu(rtd, 0);
 	struct fsl_esai *esai = snd_soc_dai_get_drvdata(cpu_dai);
 	struct fsl_esai_mix *mix = &esai->mix[tx];
 	struct fsl_esai_client *client;
@@ -154,7 +154,7 @@ static void fsl_esai_mix_buffer_from_fe_tx(struct snd_pcm_substream *substream, 
 			continue;
 
 		mix->fe_substream[i] = snd_soc_dpcm_get_substream(dpcm->fe, substream->stream);
-		mix->client[i] = snd_soc_dai_get_drvdata(dpcm->fe->cpu_dai);
+		mix->client[i] = snd_soc_dai_get_drvdata(asoc_rtd_to_cpu(dpcm->fe, 0));
 
 		i++;
 		if (i >= MAX_CLIENT_NUM)
@@ -164,7 +164,7 @@ static void fsl_esai_mix_buffer_from_fe_tx(struct snd_pcm_substream *substream, 
 
 	avail = fsl_esai_tx_avail(mix);
 	if (avail >= mix->buffer_bytes && elapse)
-		dev_err(rtd->cpu_dai->dev, "mix underrun\n");
+		dev_err(asoc_rtd_to_cpu(rtd, 0)->dev, "mix underrun\n");
 
 	while (avail >= mix->period_bytes) {
 		size = mix->period_bytes;
@@ -224,7 +224,7 @@ static void fsl_esai_split_buffer_from_be_rx(struct snd_pcm_substream *substream
 {
 	bool tx = substream->stream == SNDRV_PCM_STREAM_PLAYBACK;
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
+	struct snd_soc_dai *cpu_dai = asoc_rtd_to_cpu(rtd, 0);
 	struct fsl_esai *esai = snd_soc_dai_get_drvdata(cpu_dai);
 	struct fsl_esai_mix *mix = &esai->mix[tx];
 	struct fsl_esai_client *client;
@@ -255,7 +255,7 @@ static void fsl_esai_split_buffer_from_be_rx(struct snd_pcm_substream *substream
 			continue;
 
 		mix->fe_substream[i] = snd_soc_dpcm_get_substream(dpcm->fe, substream->stream);
-		mix->client[i] = snd_soc_dai_get_drvdata(dpcm->fe->cpu_dai);
+		mix->client[i] = snd_soc_dai_get_drvdata(asoc_rtd_to_cpu(dpcm->fe, 0));
 
 		i++;
 		if (i >= MAX_CLIENT_NUM)
@@ -265,7 +265,7 @@ static void fsl_esai_split_buffer_from_be_rx(struct snd_pcm_substream *substream
 
 	avail = fsl_esai_rx_avail(mix);
 	if (avail >= mix->buffer_bytes && elapse)
-		dev_err(rtd->cpu_dai->dev, "mix overrun\n");
+		dev_err(asoc_rtd_to_cpu(rtd, 0)->dev, "mix overrun\n");
 
 	while (avail >= mix->period_bytes) {
 		size = mix->period_bytes;
@@ -336,7 +336,7 @@ static void fsl_esai_mix_dma_complete(void *arg)
 {
 	struct snd_pcm_substream *substream = arg;
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
+	struct snd_soc_dai *cpu_dai = asoc_rtd_to_cpu(rtd, 0);
 	struct fsl_esai *esai = snd_soc_dai_get_drvdata(cpu_dai);
 	bool tx = substream->stream == SNDRV_PCM_STREAM_PLAYBACK;
 	struct fsl_esai_mix *mix = &esai->mix[tx];

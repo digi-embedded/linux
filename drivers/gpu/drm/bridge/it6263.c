@@ -12,11 +12,14 @@
  * for more details.
  */
 
-#include <drm/drmP.h>
+#include <drm/drm_vblank.h>
+#include <drm/drm_bridge.h>
+#include <drm/drm_drv.h>
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_crtc_helper.h>
 #include <drm/drm_edid.h>
 #include <drm/drm_probe_helper.h>
+#include <drm/drm_print.h>
 #include <linux/gpio/consumer.h>
 #include <linux/i2c.h>
 #include <linux/module.h>
@@ -716,11 +719,17 @@ static void it6263_bridge_mode_set(struct drm_bridge *bridge,
 						AFE_IP_ER0 | AFE_IP_RESETB);
 }
 
-static int it6263_bridge_attach(struct drm_bridge *bridge)
+static int it6263_bridge_attach(struct drm_bridge *bridge,
+				enum drm_bridge_attach_flags flags)
 {
 	struct it6263 *it6263 = bridge_to_it6263(bridge);
 	struct drm_device *drm = bridge->dev;
 	int ret;
+
+	if (flags & DRM_BRIDGE_ATTACH_NO_CONNECTOR) {
+		DRM_ERROR("Fix bridge driver to make connector optional!");
+		return -EINVAL;
+	}
 
 	if (!drm_core_check_feature(drm, DRIVER_ATOMIC)) {
 		dev_err(&it6263->hdmi_i2c->dev,
@@ -859,9 +868,11 @@ static int it6263_probe(struct i2c_client *client,
 {
 	struct device *dev = &client->dev;
 	struct device_node *np = dev->of_node;
+#if IS_ENABLED(CONFIG_OF_DYNAMIC)
 	struct device_node *remote_node = NULL, *endpoint = NULL;
 	struct of_changeset ocs;
 	struct property *prop;
+#endif
 	struct it6263 *it6263;
 	int ret;
 
@@ -872,7 +883,7 @@ static int it6263_probe(struct i2c_client *client,
 	it6263->split_mode = of_property_read_bool(np, "split-mode");
 
 	it6263->hdmi_i2c = client;
-	it6263->lvds_i2c = i2c_new_dummy(client->adapter,
+	it6263->lvds_i2c = i2c_new_dummy_device(client->adapter,
 						LVDS_INPUT_CTRL_I2C_ADDR);
 	if (!it6263->lvds_i2c) {
 		ret = -ENODEV;
@@ -948,6 +959,7 @@ unregister_lvds_i2c:
 		return ret;
 
 of_reconfig:
+#if IS_ENABLED(CONFIG_OF_DYNAMIC)
 	endpoint = of_graph_get_next_endpoint(dev->of_node, NULL);
 	if (endpoint)
 		remote_node = of_graph_get_remote_port_parent(endpoint);
@@ -984,6 +996,7 @@ of_reconfig:
 
 		of_node_put(remote_node);
 	};
+#endif
 
 	return ret;
 }

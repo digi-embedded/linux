@@ -18,15 +18,16 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/of.h>
-#include <linux/of_device.h>
 #include <linux/platform_device.h>
 #include <linux/pwm.h>
 #include <linux/slab.h>
+#include <linux/spinlock.h>
 
 #define MX3_PWMCR			0x00    /* PWM Control Register */
 #define MX3_PWMSR			0x04    /* PWM Status Register */
 #define MX3_PWMSAR			0x0C    /* PWM Sample Register */
 #define MX3_PWMPR			0x10    /* PWM Period Register */
+#define MX3_PWMCNR			0x14    /* PWM Counter Register */
 
 #define MX3_PWMCR_FWM			GENMASK(27, 26)
 #define MX3_PWMCR_STOPEN		BIT(25)
@@ -86,13 +87,20 @@ struct pwm_imx27_chip {
 	struct clk	*clk_32k;
 	void __iomem	*mmio_base;
 	struct pwm_chip	chip;
+
+	/*
+	 * The driver cannot read the current duty cycle from the hardware if
+	 * the hardware is disabled. Cache the last programmed duty cycle
+	 * value to return in that case.
+	 */
+	unsigned int duty_cycle;
+	spinlock_t lock;
 };
 
 #define to_pwm_imx27_chip(chip)	container_of(chip, struct pwm_imx27_chip, chip)
 
-static int pwm_imx27_clk_prepare_enable(struct pwm_chip *chip)
+static int pwm_imx27_clk_prepare_enable(struct pwm_imx27_chip *imx)
 {
-	struct pwm_imx27_chip *imx = to_pwm_imx27_chip(chip);
 	int ret;
 
 	if (imx->clk_32k) {
@@ -119,10 +127,8 @@ err1:
 	return ret;
 }
 
-static void pwm_imx27_clk_disable_unprepare(struct pwm_chip *chip)
+static void pwm_imx27_clk_disable_unprepare(struct pwm_imx27_chip *imx)
 {
-	struct pwm_imx27_chip *imx = to_pwm_imx27_chip(chip);
-
 	clk_disable_unprepare(imx->clk_per);
 	clk_disable_unprepare(imx->clk_ipg);
 	if (imx->clk_32k)
@@ -137,7 +143,7 @@ static void pwm_imx27_get_state(struct pwm_chip *chip,
 	u64 tmp;
 	int ret;
 
-	ret = pwm_imx27_clk_prepare_enable(chip);
+	ret = pwm_imx27_clk_prepare_enable(imx);
 	if (ret < 0)
 		return;
 
@@ -161,25 +167,26 @@ static void pwm_imx27_get_state(struct pwm_chip *chip,
 
 	prescaler = MX3_PWMCR_PRESCALER_GET(val);
 	pwm_clk = clk_get_rate(imx->clk_per);
-	pwm_clk = DIV_ROUND_CLOSEST_ULL(pwm_clk, prescaler);
 	val = readl(imx->mmio_base + MX3_PWMPR);
 	period = val >= MX3_PWMPR_MAX ? MX3_PWMPR_MAX : val;
 
 	/* PWMOUT (Hz) = PWMCLK / (PWMPR + 2) */
-	tmp = NSEC_PER_SEC * (u64)(period + 2);
-	state->period = DIV_ROUND_CLOSEST_ULL(tmp, pwm_clk);
+	tmp = NSEC_PER_SEC * (u64)(period + 2) * prescaler;
+	state->period = DIV_ROUND_UP_ULL(tmp, pwm_clk);
 
-	/* PWMSAR can be read only if PWM is enabled */
-	if (state->enabled) {
+	/*
+	 * PWMSAR can be read only if PWM is enabled. If the PWM is disabled,
+	 * use the cached value.
+	 */
+	if (state->enabled)
 		val = readl(imx->mmio_base + MX3_PWMSAR);
-		tmp = NSEC_PER_SEC * (u64)(val);
-		state->duty_cycle = DIV_ROUND_CLOSEST_ULL(tmp, pwm_clk);
-	} else {
-		state->duty_cycle = 0;
-	}
+	else
+		val = imx->duty_cycle;
 
-	if (!state->enabled)
-		pwm_imx27_clk_disable_unprepare(chip);
+	tmp = NSEC_PER_SEC * (u64)(val) * prescaler;
+	state->duty_cycle = DIV_ROUND_UP_ULL(tmp, pwm_clk);
+
+	pwm_imx27_clk_disable_unprepare(imx);
 }
 
 static void pwm_imx27_sw_reset(struct pwm_chip *chip)
@@ -211,10 +218,10 @@ static void pwm_imx27_wait_fifo_slot(struct pwm_chip *chip,
 
 	sr = readl(imx->mmio_base + MX3_PWMSR);
 	fifoav = FIELD_GET(MX3_PWMSR_FIFOAV, sr);
-	if (fifoav == MX3_PWMSR_FIFOAV_4WORDS) {
-		period_ms = DIV_ROUND_UP(pwm_get_period(pwm),
+	if (fifoav >= MX3_PWMSR_FIFOAV_3WORDS) {
+		period_ms = DIV_ROUND_UP_ULL(pwm_get_period(pwm),
 					 NSEC_PER_MSEC);
-		msleep(period_ms);
+		msleep(period_ms * (fifoav - 2));
 
 		sr = readl(imx->mmio_base + MX3_PWMSR);
 		if (fifoav == FIELD_GET(MX3_PWMSR_FIFOAV, sr))
@@ -225,71 +232,130 @@ static void pwm_imx27_wait_fifo_slot(struct pwm_chip *chip,
 static int pwm_imx27_apply(struct pwm_chip *chip, struct pwm_device *pwm,
 			   const struct pwm_state *state)
 {
-	unsigned long period_cycles, duty_cycles, prescale;
+	unsigned long period_cycles, duty_cycles, prescale, counter_check, flags;
 	struct pwm_imx27_chip *imx = to_pwm_imx27_chip(chip);
+	void __iomem *reg_sar = imx->mmio_base + MX3_PWMSAR;
+	__force u32 sar_last, sar_current;
 	struct pwm_state cstate;
 	unsigned long long c;
+	unsigned long long clkrate;
 	int ret;
-	u32 cr;
+	u32 cr, timeout = 1000;
 
 	pwm_get_state(pwm, &cstate);
 
-	if (state->enabled) {
-		c = clk_get_rate(imx->clk_per);
-		c *= state->period;
+	clkrate = clk_get_rate(imx->clk_per);
+	c = clkrate * state->period;
 
-		do_div(c, 1000000000);
-		period_cycles = c;
+	do_div(c, NSEC_PER_SEC);
+	period_cycles = c;
 
-		prescale = period_cycles / 0x10000 + 1;
+	prescale = period_cycles / 0x10000 + 1;
 
-		period_cycles /= prescale;
-		c = (unsigned long long)period_cycles * state->duty_cycle;
-		do_div(c, state->period);
-		duty_cycles = c;
+	period_cycles /= prescale;
+	c = clkrate * state->duty_cycle;
+	do_div(c, NSEC_PER_SEC);
+	duty_cycles = c;
+	duty_cycles /= prescale;
 
-		/*
-		 * according to imx pwm RM, the real period value should be
-		 * PERIOD value in PWMPR plus 2.
-		 */
-		if (period_cycles > 2)
-			period_cycles -= 2;
-		else
-			period_cycles = 0;
+	/*
+	 * according to imx pwm RM, the real period value should be PERIOD
+	 * value in PWMPR plus 2.
+	 */
+	if (period_cycles > 2)
+		period_cycles -= 2;
+	else
+		period_cycles = 0;
 
-		/*
-		 * Wait for a free FIFO slot if the PWM is already enabled, and
-		 * flush the FIFO if the PWM was disabled and is about to be
-		 * enabled.
-		 */
-		if (cstate.enabled) {
-			pwm_imx27_wait_fifo_slot(chip, pwm);
-		} else {
-			ret = pwm_imx27_clk_prepare_enable(chip);
-			if (ret)
-				return ret;
+	/*
+	 * Wait for a free FIFO slot if the PWM is already enabled, and flush
+	 * the FIFO if the PWM was disabled and is about to be enabled.
+	 */
+	if (cstate.enabled) {
+		pwm_imx27_wait_fifo_slot(chip, pwm);
+	} else {
+		ret = pwm_imx27_clk_prepare_enable(imx);
+		if (ret)
+			return ret;
 
-			pwm_imx27_sw_reset(chip);
-		}
-
-		writel(duty_cycles, imx->mmio_base + MX3_PWMSAR);
-		writel(period_cycles, imx->mmio_base + MX3_PWMPR);
-
-		cr = MX3_PWMCR_PRESCALER_SET(prescale) |
-		     MX3_PWMCR_STOPEN | MX3_PWMCR_DOZEN | MX3_PWMCR_WAITEN |
-		     FIELD_PREP(MX3_PWMCR_CLKSRC, MX3_PWMCR_CLKSRC_IPG_HIGH) |
-		     MX3_PWMCR_DBGEN | MX3_PWMCR_EN;
-
-		if (state->polarity == PWM_POLARITY_INVERSED)
-			cr |= FIELD_PREP(MX3_PWMCR_POUTC,
-					MX3_PWMCR_POUTC_INVERTED);
-
-		writel(cr, imx->mmio_base + MX3_PWMCR);
-	} else if (cstate.enabled) {
-		writel(0, imx->mmio_base + MX3_PWMCR);
-
-		pwm_imx27_clk_disable_unprepare(chip);
+		pwm_imx27_sw_reset(chip);
 	}
+
+	/*
+	 * This is a limited workaround. When the SAR FIFO is empty, the new
+	 * write value will be directly applied to SAR even the current period
+	 * is not over.
+	 * If the new SAR value is less than the old one, and the counter is
+	 * greater than the new SAR value, the current period will not filp
+	 * the level. This will result in a pulse with a duty cycle of 100%.
+	 * So, writing the current value of the SAR to SAR here before updating
+	 * the new SAR value can avoid this issue.
+	 *
+	 * Add a spin lock and turn off the interrupt to ensure that the
+	 * real-time performance can be guaranteed as much as possible when
+	 * operating the following operations.
+	 *
+	 * 1. Add a threshold of 1.5us. If the time T between the read current
+	 * count value CNR and the end of the cycle is less than 1.5us, wait
+	 * for T to be longer than 1.5us before updating the SAR register.
+	 * This is to avoid the situation that when the first SAR is written,
+	 * the current cycle just ends and the SAR FIFO that just be written
+	 * is emptied again.
+	 *
+	 * 2. Use __raw_writel() to minimize the interval between two writes to
+	 * the SAR register to increase the fastest pwm frequency supported.
+	 *
+	 * When the PWM period is longer than 2us(or <500KHz), this workaround
+	 * can solve this problem.
+	 */
+	if (duty_cycles < imx->duty_cycle) {
+		c = clkrate * 1500;
+		do_div(c, NSEC_PER_SEC);
+		counter_check = c;
+		sar_last = cpu_to_le32(imx->duty_cycle);
+		sar_current = cpu_to_le32(duty_cycles);
+
+		spin_lock_irqsave(&imx->lock, flags);
+		if (state->period >= 2000) {
+			while ((period_cycles -
+				readl_relaxed(imx->mmio_base + MX3_PWMCNR))
+				< counter_check) {
+				if (!--timeout)
+					break;
+			};
+		}
+		if (!(MX3_PWMSR_FIFOAV &
+		      readl_relaxed(imx->mmio_base + MX3_PWMSR)))
+			__raw_writel(sar_last, reg_sar);
+		__raw_writel(sar_current, reg_sar);
+		spin_unlock_irqrestore(&imx->lock, flags);
+	} else
+		writel(duty_cycles, imx->mmio_base + MX3_PWMSAR);
+
+	writel(period_cycles, imx->mmio_base + MX3_PWMPR);
+
+	/*
+	 * Store the duty cycle for future reference in cases where the
+	 * MX3_PWMSAR register can't be read (i.e. when the PWM is disabled).
+	 */
+	imx->duty_cycle = duty_cycles;
+
+	cr = MX3_PWMCR_PRESCALER_SET(prescale) |
+	     MX3_PWMCR_STOPEN | MX3_PWMCR_DOZEN | MX3_PWMCR_WAITEN |
+	     FIELD_PREP(MX3_PWMCR_CLKSRC, MX3_PWMCR_CLKSRC_IPG_HIGH) |
+	     MX3_PWMCR_DBGEN;
+
+	if (state->polarity == PWM_POLARITY_INVERSED)
+		cr |= FIELD_PREP(MX3_PWMCR_POUTC,
+				MX3_PWMCR_POUTC_INVERTED);
+
+	if (state->enabled)
+		cr |= MX3_PWMCR_EN;
+
+	writel(cr, imx->mmio_base + MX3_PWMCR);
+
+	if (!state->enabled)
+		pwm_imx27_clk_disable_unprepare(imx);
 
 	return 0;
 }
@@ -309,35 +375,22 @@ MODULE_DEVICE_TABLE(of, pwm_imx27_dt_ids);
 static int pwm_imx27_probe(struct platform_device *pdev)
 {
 	struct pwm_imx27_chip *imx;
+	int ret;
+	u32 pwmcr;
 
 	imx = devm_kzalloc(&pdev->dev, sizeof(*imx), GFP_KERNEL);
 	if (imx == NULL)
 		return -ENOMEM;
 
-	platform_set_drvdata(pdev, imx);
-
 	imx->clk_ipg = devm_clk_get(&pdev->dev, "ipg");
-	if (IS_ERR(imx->clk_ipg)) {
-		int ret = PTR_ERR(imx->clk_ipg);
-
-		if (ret != -EPROBE_DEFER)
-			dev_err(&pdev->dev,
-				"getting ipg clock failed with %d\n",
-				ret);
-		return ret;
-	}
+	if (IS_ERR(imx->clk_ipg))
+		return dev_err_probe(&pdev->dev, PTR_ERR(imx->clk_ipg),
+				     "getting ipg clock failed\n");
 
 	imx->clk_per = devm_clk_get(&pdev->dev, "per");
-	if (IS_ERR(imx->clk_per)) {
-		int ret = PTR_ERR(imx->clk_per);
-
-		if (ret != -EPROBE_DEFER)
-			dev_err(&pdev->dev,
-				"failed to get peripheral clock: %d\n",
-				ret);
-
-		return ret;
-	}
+	if (IS_ERR(imx->clk_per))
+		return dev_err_probe(&pdev->dev, PTR_ERR(imx->clk_per),
+				     "failed to get peripheral clock\n");
 
 	imx->clk_32k = devm_clk_get_optional(&pdev->dev, "32k");
 	if (IS_ERR(imx->clk_32k)) {
@@ -346,30 +399,26 @@ static int pwm_imx27_probe(struct platform_device *pdev)
 		return PTR_ERR(imx->clk_32k);
 	}
 
+	spin_lock_init(&imx->lock);
+	imx->duty_cycle = 0;
 	imx->chip.ops = &pwm_imx27_ops;
 	imx->chip.dev = &pdev->dev;
-	imx->chip.base = -1;
 	imx->chip.npwm = 1;
-
-	imx->chip.of_xlate = of_pwm_xlate_with_flags;
-	imx->chip.of_pwm_n_cells = 3;
 
 	imx->mmio_base = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(imx->mmio_base))
 		return PTR_ERR(imx->mmio_base);
 
-	return pwmchip_add(&imx->chip);
-}
+	ret = pwm_imx27_clk_prepare_enable(imx);
+	if (ret)
+		return ret;
 
-static int pwm_imx27_remove(struct platform_device *pdev)
-{
-	struct pwm_imx27_chip *imx;
+	/* keep clks on if pwm is running */
+	pwmcr = readl(imx->mmio_base + MX3_PWMCR);
+	if (!(pwmcr & MX3_PWMCR_EN))
+		pwm_imx27_clk_disable_unprepare(imx);
 
-	imx = platform_get_drvdata(pdev);
-
-	pwm_imx27_clk_disable_unprepare(&imx->chip);
-
-	return pwmchip_remove(&imx->chip);
+	return devm_pwmchip_add(&pdev->dev, &imx->chip);
 }
 
 static struct platform_driver imx_pwm_driver = {
@@ -378,7 +427,6 @@ static struct platform_driver imx_pwm_driver = {
 		.of_match_table = pwm_imx27_dt_ids,
 	},
 	.probe = pwm_imx27_probe,
-	.remove = pwm_imx27_remove,
 };
 module_platform_driver(imx_pwm_driver);
 

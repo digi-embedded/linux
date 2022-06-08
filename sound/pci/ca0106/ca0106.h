@@ -663,11 +663,10 @@ struct snd_ca0106_details {
 // definition of the chip-specific record
 struct snd_ca0106 {
 	struct snd_card *card;
-	struct snd_ca0106_details *details;
+	const struct snd_ca0106_details *details;
 	struct pci_dev *pci;
 
 	unsigned long port;
-	struct resource *res_port;
 	int irq;
 
 	unsigned int serial;            /* serial number */
@@ -688,7 +687,7 @@ struct snd_ca0106 {
 	u8 i2c_capture_volume[4][2];
 	int capture_mic_line_in;
 
-	struct snd_dma_buffer buffer;
+	struct snd_dma_buffer *buffer;
 
 	struct snd_ca_midi midi;
 	struct snd_ca_midi midi2;

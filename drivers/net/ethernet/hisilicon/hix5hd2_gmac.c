@@ -893,7 +893,7 @@ static void hix5hd2_tx_timeout_task(struct work_struct *work)
 	hix5hd2_net_open(priv->netdev);
 }
 
-static void hix5hd2_net_timeout(struct net_device *dev)
+static void hix5hd2_net_timeout(struct net_device *dev, unsigned int txqueue)
 {
 	struct hix5hd2_priv *priv = netdev_priv(dev);
 
@@ -1024,9 +1024,9 @@ static int hix5hd2_init_sg_desc_queue(struct hix5hd2_priv *priv)
 	struct sg_desc *desc;
 	dma_addr_t phys_addr;
 
-	desc = (struct sg_desc *)dma_alloc_coherent(priv->dev,
-				TX_DESC_NUM * sizeof(struct sg_desc),
-				&phys_addr, GFP_KERNEL);
+	desc = dma_alloc_coherent(priv->dev,
+				  TX_DESC_NUM * sizeof(struct sg_desc),
+				  &phys_addr, GFP_KERNEL);
 	if (!desc)
 		return -ENOMEM;
 
@@ -1098,7 +1098,6 @@ static int hix5hd2_dev_probe(struct platform_device *pdev)
 	struct net_device *ndev;
 	struct hix5hd2_priv *priv;
 	struct mii_bus *bus;
-	const char *mac_addr;
 	int ret;
 
 	ndev = alloc_etherdev(sizeof(struct hix5hd2_priv));
@@ -1193,10 +1192,9 @@ static int hix5hd2_dev_probe(struct platform_device *pdev)
 	if (ret)
 		goto err_free_mdio;
 
-	priv->phy_mode = of_get_phy_mode(node);
-	if ((int)priv->phy_mode < 0) {
+	ret = of_get_phy_mode(node, &priv->phy_mode);
+	if (ret) {
 		netdev_err(ndev, "not find phy-mode\n");
-		ret = -EINVAL;
 		goto err_mdiobus;
 	}
 
@@ -1221,10 +1219,8 @@ static int hix5hd2_dev_probe(struct platform_device *pdev)
 		goto out_phy_node;
 	}
 
-	mac_addr = of_get_mac_address(node);
-	if (!IS_ERR(mac_addr))
-		ether_addr_copy(ndev->dev_addr, mac_addr);
-	if (!is_valid_ether_addr(ndev->dev_addr)) {
+	ret = of_get_mac_address(node, ndev->dev_addr);
+	if (ret) {
 		eth_hw_addr_random(ndev);
 		netdev_warn(ndev, "using random MAC address %pM\n",
 			    ndev->dev_addr);

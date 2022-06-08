@@ -4,7 +4,6 @@
  */
 
 #include <linux/irqchip.h>
-#include <linux/of.h>
 #include <linux/of_platform.h>
 #include <linux/mfd/syscon.h>
 #include <linux/mfd/syscon/imx6q-iomuxc-gpr.h>
@@ -52,15 +51,8 @@ static void __init imx6sl_init_late(void)
 
 static void __init imx6sl_init_machine(void)
 {
-	struct device *parent;
+	of_platform_default_populate(NULL, NULL, NULL);
 
-	parent = imx_soc_device_init();
-	if (parent == NULL)
-		pr_warn("failed to initialize soc device\n");
-
-	of_platform_default_populate(NULL, NULL, parent);
-
-	imx_anatop_init();
 	if (cpu_is_imx6sl())
 		imx6sl_fec_init();
 	imx_anatop_init();

@@ -22,12 +22,14 @@
 #include <drm/drm_fb_helper.h>
 #include <drm/drm_gem_cma_helper.h>
 #include <drm/drm_gem_framebuffer_helper.h>
+#include <drm/drm_managed.h>
 #include <drm/drm_of.h>
 #include <drm/drm_plane_helper.h>
 #include <drm/drm_probe_helper.h>
 #include <drm/drm_vblank.h>
 #include <video/dpu.h>
 
+#include "dpu/dpu-blit.h"
 #include "imx-drm.h"
 
 static int legacyfb_depth = 16;
@@ -41,12 +43,6 @@ void imx_drm_connector_destroy(struct drm_connector *connector)
 	drm_connector_cleanup(connector);
 }
 EXPORT_SYMBOL_GPL(imx_drm_connector_destroy);
-
-void imx_drm_encoder_destroy(struct drm_encoder *encoder)
-{
-	drm_encoder_cleanup(encoder);
-}
-EXPORT_SYMBOL_GPL(imx_drm_encoder_destroy);
 
 int imx_drm_encoder_parse_of(struct drm_device *drm,
 	struct drm_encoder *encoder, struct device_node *np)
@@ -64,8 +60,8 @@ int imx_drm_encoder_parse_of(struct drm_device *drm,
 
 	encoder->possible_crtcs = crtc_mask;
 
-	/* FIXME: this is the mask of outputs which can clone this output. */
-	encoder->possible_clones = ~0;
+	/* FIXME: cloning support not clear, disable it all for now */
+	encoder->possible_clones = 0;
 
 	return 0;
 }
@@ -75,21 +71,57 @@ static const struct drm_ioctl_desc imx_drm_ioctls[] = {
 	/* none so far */
 };
 
+static int imx_drm_ipu_dumb_create(struct drm_file *file_priv,
+				   struct drm_device *drm,
+				   struct drm_mode_create_dumb *args)
+{
+	u32 width = args->width;
+	int ret;
+
+	args->width = ALIGN(width, 8);
+
+	ret = drm_gem_cma_dumb_create(file_priv, drm, args);
+	if (ret)
+		return ret;
+
+	args->width = width;
+	return ret;
+}
+
 static struct drm_driver imx_drm_driver = {
 	.driver_features	= DRIVER_MODESET | DRIVER_GEM | DRIVER_ATOMIC,
-	.gem_free_object_unlocked = drm_gem_cma_free_object,
-	.gem_vm_ops		= &drm_gem_cma_vm_ops,
-	.dumb_create		= drm_gem_cma_dumb_create,
-
-	.prime_handle_to_fd	= drm_gem_prime_handle_to_fd,
-	.prime_fd_to_handle	= drm_gem_prime_fd_to_handle,
-	.gem_prime_get_sg_table	= drm_gem_cma_prime_get_sg_table,
-	.gem_prime_import_sg_table = drm_gem_cma_prime_import_sg_table,
-	.gem_prime_vmap		= drm_gem_cma_prime_vmap,
-	.gem_prime_vunmap	= drm_gem_cma_prime_vunmap,
-	.gem_prime_mmap		= drm_gem_cma_prime_mmap,
+	DRM_GEM_CMA_DRIVER_OPS,
 	.ioctls			= imx_drm_ioctls,
 	.num_ioctls		= ARRAY_SIZE(imx_drm_ioctls),
+	.fops			= &imx_drm_driver_fops,
+	.name			= "imx-drm",
+	.desc			= "i.MX DRM graphics",
+	.date			= "20120507",
+	.major			= 1,
+	.minor			= 0,
+	.patchlevel		= 0,
+};
+
+static const struct drm_driver imx_drm_ipu_driver = {
+	.driver_features	= DRIVER_MODESET | DRIVER_GEM | DRIVER_ATOMIC,
+	DRM_GEM_CMA_DRIVER_OPS_WITH_DUMB_CREATE(imx_drm_ipu_dumb_create),
+	.ioctls			= imx_drm_ioctls,
+	.num_ioctls		= ARRAY_SIZE(imx_drm_ioctls),
+	.fops			= &imx_drm_driver_fops,
+	.name			= "imx-drm",
+	.desc			= "i.MX DRM graphics",
+	.date			= "20120507",
+	.major			= 1,
+	.minor			= 0,
+	.patchlevel		= 0,
+};
+
+static const struct drm_driver imx_drm_dpu_driver = {
+	.driver_features	= DRIVER_MODESET | DRIVER_GEM | DRIVER_ATOMIC |
+				  DRIVER_RENDER,
+	DRM_GEM_CMA_DRIVER_OPS,
+	.ioctls			= imx_drm_dpu_ioctls,
+	.num_ioctls		= ARRAY_SIZE(imx_drm_dpu_ioctls),
 	.fops			= &imx_drm_driver_fops,
 	.name			= "imx-drm",
 	.desc			= "i.MX DRM graphics",
@@ -148,6 +180,13 @@ static int compare_of(struct device *dev, void *data)
 	return dev->of_node == np;
 }
 
+static const char *const imx_drm_ipu_comp_parents[] = {
+	"fsl,imx51-ipu",
+	"fsl,imx53-ipu",
+	"fsl,imx6q-ipu",
+	"fsl,imx6qp-ipu",
+};
+
 static const char *const imx_drm_dpu_comp_parents[] = {
 	"fsl,imx8qm-dpu",
 	"fsl,imx8qxp-dpu",
@@ -179,6 +218,12 @@ static bool imx_drm_parent_is_compatible(struct device *dev,
 	of_node_put(port);
 
 	return ret;
+}
+
+static inline bool has_ipu(struct device *dev)
+{
+	return imx_drm_parent_is_compatible(dev, imx_drm_ipu_comp_parents,
+					    ARRAY_SIZE(imx_drm_ipu_comp_parents));
 }
 
 static inline bool has_dpu(struct device *dev)
@@ -243,23 +288,16 @@ static int imx_drm_bind(struct device *dev)
 	struct drm_device *drm;
 	int ret;
 
-	if (has_dpu(dev))
-		imx_drm_driver.driver_features |= DRIVER_RENDER;
+	if (has_ipu(dev)) {
+		drm = drm_dev_alloc(&imx_drm_ipu_driver, dev);
+	} else if (has_dpu(dev)) {
+		drm = drm_dev_alloc(&imx_drm_dpu_driver, dev);
+	} else {
+		drm = drm_dev_alloc(&imx_drm_driver, dev);
+	}
 
-	drm = drm_dev_alloc(&imx_drm_driver, dev);
 	if (IS_ERR(drm))
 		return PTR_ERR(drm);
-
-	/*
-	 * enable drm irq mode.
-	 * - with irq_enabled = true, we can use the vblank feature.
-	 *
-	 * P.S. note that we wouldn't use drm irq handler but
-	 *      just specific driver own one instead because
-	 *      drm framework supports only one irq handler and
-	 *      drivers can well take care of their interrupts
-	 */
-	drm->irq_enabled = true;
 
 	/*
 	 * set max width and height as default value(4096x4096).
@@ -272,7 +310,9 @@ static int imx_drm_bind(struct device *dev)
 	drm->mode_config.max_height = 4096;
 	drm->mode_config.normalize_zpos = true;
 
-	drm_mode_config_init(drm);
+	ret = drmm_mode_config_init(drm);
+	if (ret)
+		goto err_kms;
 
 	ret = drm_vblank_init(drm, MAX_CRTC);
 	if (ret)
@@ -311,7 +351,6 @@ err_poll_fini:
 	drm_kms_helper_poll_fini(drm);
 	component_unbind_all(drm->dev, drm);
 err_kms:
-	drm_mode_config_cleanup(drm);
 	drm_dev_put(drm);
 
 	return ret;
@@ -321,20 +360,15 @@ static void imx_drm_unbind(struct device *dev)
 {
 	struct drm_device *drm = dev_get_drvdata(dev);
 
-	if (has_dpu(dev))
-		imx_drm_driver.driver_features &= ~DRIVER_RENDER;
-
 	drm_dev_unregister(drm);
 
 	drm_kms_helper_poll_fini(drm);
 
 	component_unbind_all(drm->dev, drm);
 
-	drm_mode_config_cleanup(drm);
+	drm_dev_put(drm);
 
 	dev_set_drvdata(dev, NULL);
-
-	drm_dev_put(drm);
 }
 
 static const struct component_master_ops imx_drm_ops = {

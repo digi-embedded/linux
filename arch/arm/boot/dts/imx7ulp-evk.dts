@@ -33,6 +33,11 @@
 		#size-cells = <1>;
 		ranges;
 
+		rsc_table: rsc_table@1fff8000{
+			reg = <0x1fff8000 0x1000>;
+			no-map;
+		};
+
 		vdev0vring0: vdev0vring0@9ff00000 {
 			reg = <0x9ff00000 0x8000>;
 			no-map;
@@ -217,22 +222,14 @@
 	};
 
 	rpmsg_sensor: rpmsg-sensor {
-		compatible = "fsl,rpmsg-input";
+		compatible = "nxp,rpmsg-iio-pedometer", "fsl,rpmsg-input";
 	};
 
-	rpmsg_i2s: rpmsg-i2s {
-		compatible = "fsl,imx7ulp-rpmsg-i2s";
-		/* the audio device index in m4 domain */
-		fsl,audioindex = <0> ;
-		status = "okay";
-	};
-
-	sound-rpmsg {
-		compatible = "fsl,imx-audio-rpmsg";
+	rpmsg_audio: rpmsg_audio {
+		compatible = "fsl,imx7ulp-rpmsg-audio";
 		model = "wm8960-audio";
-		cpu-dai = <&rpmsg_i2s>;
-		rpmsg-out;
-		rpmsg-in;
+		fsl,rpmsg-out;
+		fsl,rpmsg-in;
 		audio-routing =
 			"Headphone Jack", "HP_L",
 			"Headphone Jack", "HP_R",
@@ -259,12 +256,12 @@
 			  &mu 1 1
 			  &mu 3 1>;
 		memory-region = <&vdev0vring0>, <&vdev0vring1>,
-				<&vdev1vring0>, <&vdev1vring1>;
+				<&vdev1vring0>, <&vdev1vring1>, <&rsc_table>;
 	};
 };
 
 &cpu0 {
-	arm-supply= <&sw1_reg>;
+	cpu-supply= <&sw1_reg>;
 };
 
 &lpspi3 {
@@ -413,17 +410,6 @@
 	};
 };
 
-&rpmsg{
-	/*
-	 * 64K for one rpmsg instance, default using 2 rpmsg instances:
-	 * --0x9FF00000~0x9FF0FFFF: pmic,pm,audio,keys,gpio,sensor
-	 * --0x9FF10000~0x9FF1FFFF: pingpong,virtual tty
-	 */
-	vdev-nums = <2>;
-	reg = <0x9FF00000 0x20000>;
-	status = "disabled";
-};
-
 &tpm4 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_pwm0>;
@@ -447,6 +433,9 @@
 };
 
 &usdhc0 {
+	assigned-clocks = <&scg1 IMX7ULP_CLK_APLL_PFD1>, <&pcc2 IMX7ULP_CLK_USDHC0>;
+	assigned-clock-parents = <0>, <&scg1 IMX7ULP_CLK_APLL_PFD1>;
+	assigned-clock-rates = <0>, <352800000>;
 	pinctrl-names = "default", "state_100mhz", "state_200mhz", "sleep";
 	pinctrl-0 = <&pinctrl_usdhc0>;
 	pinctrl-1 = <&pinctrl_usdhc0>;
@@ -460,13 +449,15 @@
 };
 
 &usdhc1 {
+	assigned-clocks = <&scg1 IMX7ULP_CLK_APLL_PFD1>, <&pcc2 IMX7ULP_CLK_USDHC1>;
+	assigned-clock-parents = <0>, <&scg1 IMX7ULP_CLK_APLL_PFD1>;
+	assigned-clock-rates = <0>, <352800000>;
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&pinctrl_usdhc1>;
 	pinctrl-1 = <&pinctrl_usdhc1>;
 	bus-width = <4>;
 	no-1-8-v;
 	vmmc-supply = <&reg_sd1_vmmc>;
-	pm-ignore-notify;
 	keep-power-in-suspend;
 	non-removable;
 	status = "okay";

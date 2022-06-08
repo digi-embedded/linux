@@ -1,5 +1,6 @@
 /*
  *    Disk Array driver for HP Smart Array SAS controllers
+ *    Copyright (c) 2019-2020 Microchip Technology Inc. and its subsidiaries
  *    Copyright 2016 Microsemi Corporation
  *    Copyright 2014-2015 PMC-Sierra, Inc.
  *    Copyright 2000,2009-2015 Hewlett-Packard Development Company, L.P.
@@ -59,7 +60,7 @@
  * HPSA_DRIVER_VERSION must be 3 byte values (0-255) separated by '.'
  * with an optional trailing '-' followed by a byte value (0-255).
  */
-#define HPSA_DRIVER_VERSION "3.4.20-170"
+#define HPSA_DRIVER_VERSION "3.4.20-200"
 #define DRIVER_NAME "HP HPSA Driver (v " HPSA_DRIVER_VERSION ")"
 #define HPSA "hpsa"
 
@@ -79,7 +80,6 @@
 MODULE_AUTHOR("Hewlett-Packard Company");
 MODULE_DESCRIPTION("Driver for HP Smart Array Controller version " \
 	HPSA_DRIVER_VERSION);
-MODULE_SUPPORTED_DEVICE("HP Smart Array Controllers");
 MODULE_VERSION(HPSA_DRIVER_VERSION);
 MODULE_LICENSE("GPL");
 MODULE_ALIAS("cciss");
@@ -254,6 +254,10 @@ static irqreturn_t do_hpsa_intr_intx(int irq, void *dev_id);
 static irqreturn_t do_hpsa_intr_msi(int irq, void *dev_id);
 static int hpsa_ioctl(struct scsi_device *dev, unsigned int cmd,
 		      void __user *arg);
+static int hpsa_passthru_ioctl(struct ctlr_info *h,
+			       IOCTL_Command_struct *iocommand);
+static int hpsa_big_passthru_ioctl(struct ctlr_info *h,
+				   BIG_IOCTL_Command_struct *ioc);
 
 #ifdef CONFIG_COMPAT
 static int hpsa_compat_ioctl(struct scsi_device *dev, unsigned int cmd,
@@ -1146,7 +1150,10 @@ static void __enqueue_cmd_and_start_io(struct ctlr_info *h,
 {
 	dial_down_lockup_detection_during_fw_flash(h, c);
 	atomic_inc(&h->commands_outstanding);
-	if (c->device)
+	/*
+	 * Check to see if the command is being retried.
+	 */
+	if (c->device && !c->retry_pending)
 		atomic_inc(&c->device->commands_outstanding);
 
 	reply_queue = h->reply_map[raw_smp_processor_id()];
@@ -2130,6 +2137,7 @@ static int hpsa_slave_alloc(struct scsi_device *sdev)
 }
 
 /* configure scsi device based on internal per-device structure */
+#define CTLR_TIMEOUT (120 * HZ)
 static int hpsa_slave_configure(struct scsi_device *sdev)
 {
 	struct hpsa_scsi_dev_t *sd;
@@ -2140,17 +2148,21 @@ static int hpsa_slave_configure(struct scsi_device *sdev)
 
 	if (sd) {
 		sd->was_removed = 0;
+		queue_depth = sd->queue_depth != 0 ?
+				sd->queue_depth : sdev->host->can_queue;
 		if (sd->external) {
 			queue_depth = EXTERNAL_QD;
 			sdev->eh_timeout = HPSA_EH_PTRAID_TIMEOUT;
 			blk_queue_rq_timeout(sdev->request_queue,
 						HPSA_EH_PTRAID_TIMEOUT);
-		} else {
-			queue_depth = sd->queue_depth != 0 ?
-					sd->queue_depth : sdev->host->can_queue;
 		}
-	} else
+		if (is_hba_lunid(sd->scsi3addr)) {
+			sdev->eh_timeout = CTLR_TIMEOUT;
+			blk_queue_rq_timeout(sdev->request_queue, CTLR_TIMEOUT);
+		}
+	} else {
 		queue_depth = sdev->host->can_queue;
+	}
 
 	scsi_change_queue_depth(sdev, queue_depth);
 
@@ -2386,7 +2398,6 @@ static int handle_ioaccel_mode2_error(struct ctlr_info *h,
 			break;
 		case IOACCEL2_STATUS_SR_UNDERRUN:
 			cmd->result = (DID_OK << 16);		/* host byte */
-			cmd->result |= (COMMAND_COMPLETE << 8);	/* msg byte */
 			ioaccel2_resid = get_unaligned_le32(
 						&c2->error_data.resid_cnt[0]);
 			scsi_set_resid(cmd, ioaccel2_resid);
@@ -2587,8 +2598,7 @@ static void complete_scsi_command(struct CommandList *cp)
 		(c2->sg[0].chain_indicator == IOACCEL2_CHAIN))
 		hpsa_unmap_ioaccel2_sg_chain_block(h, c2);
 
-	cmd->result = (DID_OK << 16); 		/* host byte */
-	cmd->result |= (COMMAND_COMPLETE << 8);	/* msg byte */
+	cmd->result = (DID_OK << 16);		/* host byte */
 
 	/* SCSI command has already been cleaned up in SML */
 	if (dev->was_removed) {
@@ -3439,8 +3449,13 @@ static void hpsa_get_enclosure_info(struct ctlr_info *h,
 	struct ErrorInfo *ei = NULL;
 	struct bmic_sense_storage_box_params *bssbp = NULL;
 	struct bmic_identify_physical_device *id_phys = NULL;
-	struct ext_report_lun_entry *rle = &rlep->LUN[rle_index];
+	struct ext_report_lun_entry *rle;
 	u16 bmic_device_index = 0;
+
+	if (rle_index < 0 || rle_index >= HPSA_MAX_PHYS_LUN)
+		return;
+
+	rle = &rlep->LUN[rle_index];
 
 	encl_dev->eli =
 		hpsa_get_enclosure_logical_identifier(h, scsi3addr);
@@ -3866,8 +3881,6 @@ static unsigned char hpsa_volume_offline(struct ctlr_info *h,
 	u8 sense_key, asc, ascq;
 	int sense_len;
 	int rc, ldstat = 0;
-	u16 cmd_status;
-	u8 scsi_status;
 #define ASC_LUN_NOT_READY 0x04
 #define ASCQ_LUN_NOT_READY_FORMAT_IN_PROGRESS 0x04
 #define ASCQ_LUN_NOT_READY_INITIALIZING_CMD_REQ 0x02
@@ -3887,8 +3900,6 @@ static unsigned char hpsa_volume_offline(struct ctlr_info *h,
 	else
 		sense_len = c->err_info->SenseLen;
 	decode_sense_data(sense, sense_len, &sense_key, &asc, &ascq);
-	cmd_status = c->err_info->CommandStatus;
-	scsi_status = c->err_info->ScsiStatus;
 	cmd_free(h, c);
 
 	/* Determine the reason for not ready state */
@@ -4170,6 +4181,9 @@ static void hpsa_get_ioaccel_drive_info(struct ctlr_info *h,
 	int rc;
 	struct ext_report_lun_entry *rle;
 
+	if (rle_index < 0 || rle_index >= HPSA_MAX_PHYS_LUN)
+		return;
+
 	rle = &rlep->LUN[rle_index];
 
 	dev->ioaccel_handle = rle->ioaccel_handle;
@@ -4194,7 +4208,12 @@ static void hpsa_get_path_info(struct hpsa_scsi_dev_t *this_device,
 	struct ReportExtendedLUNdata *rlep, int rle_index,
 	struct bmic_identify_physical_device *id_phys)
 {
-	struct ext_report_lun_entry *rle = &rlep->LUN[rle_index];
+	struct ext_report_lun_entry *rle;
+
+	if (rle_index < 0 || rle_index >= HPSA_MAX_PHYS_LUN)
+		return;
+
+	rle = &rlep->LUN[rle_index];
 
 	if ((rle->device_flags & 0x08) && this_device->ioaccel_handle)
 		this_device->hba_ioaccel_enabled = 1;
@@ -4328,7 +4347,7 @@ static void hpsa_update_scsi_devices(struct ctlr_info *h)
 	u32 ndev_allocated = 0;
 	struct hpsa_scsi_dev_t **currentsd, *this_device, *tmpdevice;
 	int ncurrent = 0;
-	int i, n_ext_target_devs, ndevs_to_allocate;
+	int i, ndevs_to_allocate;
 	int raid_ctlr_position;
 	bool physical_device;
 	DECLARE_BITMAP(lunzerobits, MAX_EXT_TARGETS);
@@ -4393,7 +4412,6 @@ static void hpsa_update_scsi_devices(struct ctlr_info *h)
 		raid_ctlr_position = nphysicals + nlogicals;
 
 	/* adjust our table of devices */
-	n_ext_target_devs = 0;
 	for (i = 0; i < nphysicals + nlogicals + 1; i++) {
 		u8 *lunaddrbytes, is_OBDR = 0;
 		int rc = 0;
@@ -4416,7 +4434,8 @@ static void hpsa_update_scsi_devices(struct ctlr_info *h)
 		/*
 		 * Skip over some devices such as a spare.
 		 */
-		if (!tmpdevice->external && physical_device) {
+		if (phys_dev_index >= 0 && !tmpdevice->external &&
+			physical_device) {
 			skip_device = hpsa_skip_device(h, lunaddrbytes,
 					&physdev_list->LUN[phys_dev_index]);
 			if (skip_device)
@@ -4556,7 +4575,7 @@ static int hpsa_scatter_gather(struct ctlr_info *h,
 		struct scsi_cmnd *cmd)
 {
 	struct scatterlist *sg;
-	int use_sg, i, sg_limit, chained, last_sg;
+	int use_sg, i, sg_limit, chained;
 	struct SGDescriptor *curr_sg;
 
 	BUG_ON(scsi_sg_count(cmd) > h->maxsgentries);
@@ -4578,7 +4597,6 @@ static int hpsa_scatter_gather(struct ctlr_info *h,
 	curr_sg = cp->SG;
 	chained = use_sg > h->max_cmd_sg_entries;
 	sg_limit = chained ? h->max_cmd_sg_entries - 1 : use_sg;
-	last_sg = scsi_sg_count(cmd) - 1;
 	scsi_for_each_sg(cmd, sg, sg_limit, i) {
 		hpsa_set_sg_descriptor(curr_sg, sg);
 		curr_sg++;
@@ -4674,7 +4692,7 @@ static int fixup_ioaccel_cdb(u8 *cdb, int *cdb_len)
 	case WRITE_6:
 	case WRITE_12:
 		is_write = 1;
-		/* fall through */
+		fallthrough;
 	case READ_6:
 	case READ_12:
 		if (*cdb_len == 6) {
@@ -5124,7 +5142,7 @@ static int hpsa_scsi_ioaccel_raid_map(struct ctlr_info *h,
 	switch (cmd->cmnd[0]) {
 	case WRITE_6:
 		is_write = 1;
-		/* fall through */
+		fallthrough;
 	case READ_6:
 		first_block = (((cmd->cmnd[1] & 0x1F) << 16) |
 				(cmd->cmnd[2] << 8) |
@@ -5135,7 +5153,7 @@ static int hpsa_scsi_ioaccel_raid_map(struct ctlr_info *h,
 		break;
 	case WRITE_10:
 		is_write = 1;
-		/* fall through */
+		fallthrough;
 	case READ_10:
 		first_block =
 			(((u64) cmd->cmnd[2]) << 24) |
@@ -5148,7 +5166,7 @@ static int hpsa_scsi_ioaccel_raid_map(struct ctlr_info *h,
 		break;
 	case WRITE_12:
 		is_write = 1;
-		/* fall through */
+		fallthrough;
 	case READ_12:
 		first_block =
 			(((u64) cmd->cmnd[2]) << 24) |
@@ -5163,7 +5181,7 @@ static int hpsa_scsi_ioaccel_raid_map(struct ctlr_info *h,
 		break;
 	case WRITE_16:
 		is_write = 1;
-		/* fall through */
+		fallthrough;
 	case READ_16:
 		first_block =
 			(((u64) cmd->cmnd[2]) << 56) |
@@ -5551,7 +5569,8 @@ static inline void hpsa_cmd_partial_init(struct ctlr_info *h, int index,
 }
 
 static int hpsa_ioaccel_submit(struct ctlr_info *h,
-		struct CommandList *c, struct scsi_cmnd *cmd)
+		struct CommandList *c, struct scsi_cmnd *cmd,
+		bool retry)
 {
 	struct hpsa_scsi_dev_t *dev = cmd->device->hostdata;
 	int rc = IO_ACCEL_INELIGIBLE;
@@ -5568,18 +5587,22 @@ static int hpsa_ioaccel_submit(struct ctlr_info *h,
 	cmd->host_scribble = (unsigned char *) c;
 
 	if (dev->offload_enabled) {
-		hpsa_cmd_init(h, c->cmdindex, c);
+		hpsa_cmd_init(h, c->cmdindex, c); /* Zeroes out all fields */
 		c->cmd_type = CMD_SCSI;
 		c->scsi_cmd = cmd;
 		c->device = dev;
+		if (retry) /* Resubmit but do not increment device->commands_outstanding. */
+			c->retry_pending = true;
 		rc = hpsa_scsi_ioaccel_raid_map(h, c);
 		if (rc < 0)     /* scsi_dma_map failed. */
 			rc = SCSI_MLQUEUE_HOST_BUSY;
 	} else if (dev->hba_ioaccel_enabled) {
-		hpsa_cmd_init(h, c->cmdindex, c);
+		hpsa_cmd_init(h, c->cmdindex, c); /* Zeroes out all fields */
 		c->cmd_type = CMD_SCSI;
 		c->scsi_cmd = cmd;
 		c->device = dev;
+		if (retry) /* Resubmit but do not increment device->commands_outstanding. */
+			c->retry_pending = true;
 		rc = hpsa_scsi_ioaccel_direct_map(h, c);
 		if (rc < 0)     /* scsi_dma_map failed. */
 			rc = SCSI_MLQUEUE_HOST_BUSY;
@@ -5612,7 +5635,8 @@ static void hpsa_command_resubmit_worker(struct work_struct *work)
 
 		if (c2->error_data.serv_response ==
 				IOACCEL2_STATUS_SR_TASK_COMP_SET_FULL) {
-			rc = hpsa_ioaccel_submit(h, c, cmd);
+			/* Resubmit with the retry_pending flag set. */
+			rc = hpsa_ioaccel_submit(h, c, cmd, true);
 			if (rc == 0)
 				return;
 			if (rc == SCSI_MLQUEUE_HOST_BUSY) {
@@ -5628,6 +5652,15 @@ static void hpsa_command_resubmit_worker(struct work_struct *work)
 		}
 	}
 	hpsa_cmd_partial_init(c->h, c->cmdindex, c);
+	/*
+	 * Here we have not come in though queue_command, so we
+	 * can set the retry_pending flag to true for a driver initiated
+	 * retry attempt (I.E. not a SML retry).
+	 * I.E. We are submitting a driver initiated retry.
+	 * Note: hpsa_ciss_submit does not zero out the command fields like
+	 *       ioaccel submit does.
+	 */
+	c->retry_pending = true;
 	if (hpsa_ciss_submit(c->h, c, cmd, dev)) {
 		/*
 		 * If we get here, it means dma mapping failed. Try
@@ -5653,7 +5686,7 @@ static int hpsa_scsi_queue_command(struct Scsi_Host *sh, struct scsi_cmnd *cmd)
 	/* Get the ptr to our adapter structure out of cmd->host. */
 	h = sdev_to_hba(cmd->device);
 
-	BUG_ON(cmd->request->tag < 0);
+	BUG_ON(scsi_cmd_to_rq(cmd)->tag < 0);
 
 	dev = cmd->device->hostdata;
 	if (!dev) {
@@ -5690,11 +5723,16 @@ static int hpsa_scsi_queue_command(struct Scsi_Host *sh, struct scsi_cmnd *cmd)
 	/*
 	 * Call alternate submit routine for I/O accelerated commands.
 	 * Retries always go down the normal I/O path.
+	 * Note: If cmd->retries is non-zero, then this is a SML
+	 *       initiated retry and not a driver initiated retry.
+	 *       This command has been obtained from cmd_tagged_alloc
+	 *       and is therefore a brand-new command.
 	 */
 	if (likely(cmd->retries == 0 &&
-			!blk_rq_is_passthrough(cmd->request) &&
+			!blk_rq_is_passthrough(scsi_cmd_to_rq(cmd)) &&
 			h->acciopath_status)) {
-		rc = hpsa_ioaccel_submit(h, c, cmd);
+		/* Submit with the retry_pending flag unset. */
+		rc = hpsa_ioaccel_submit(h, c, cmd, false);
 		if (rc == 0)
 			return 0;
 		if (rc == SCSI_MLQUEUE_HOST_BUSY) {
@@ -5856,7 +5894,7 @@ static int hpsa_scsi_add_host(struct ctlr_info *h)
  */
 static int hpsa_get_cmd_index(struct scsi_cmnd *scmd)
 {
-	int idx = scmd->request->tag;
+	int idx = scsi_cmd_to_rq(scmd)->tag;
 
 	if (idx < 0)
 		return idx;
@@ -6089,6 +6127,7 @@ return_reset_status:
  * at init, and managed by cmd_tagged_alloc() and cmd_tagged_free() using the
  * block request tag as an index into a table of entries.  cmd_tagged_free() is
  * the complement, although cmd_free() may be called instead.
+ * This function is only called for new requests from queue_command.
  */
 static struct CommandList *cmd_tagged_alloc(struct ctlr_info *h,
 					    struct scsi_cmnd *scmd)
@@ -6123,8 +6162,14 @@ static struct CommandList *cmd_tagged_alloc(struct ctlr_info *h,
 	}
 
 	atomic_inc(&c->refcount);
-
 	hpsa_cmd_partial_init(h, idx, c);
+
+	/*
+	 * This is a new command obtained from queue_command so
+	 * there have not been any driver initiated retry attempts.
+	 */
+	c->retry_pending = false;
+
 	return c;
 }
 
@@ -6192,6 +6237,13 @@ static struct CommandList *cmd_alloc(struct ctlr_info *h)
 	}
 	hpsa_cmd_partial_init(h, i, c);
 	c->device = NULL;
+
+	/*
+	 * cmd_alloc is for "internal" commands and they are never
+	 * retried.
+	 */
+	c->retry_pending = false;
+
 	return c;
 }
 
@@ -6217,75 +6269,63 @@ static void cmd_free(struct ctlr_info *h, struct CommandList *c)
 static int hpsa_ioctl32_passthru(struct scsi_device *dev, unsigned int cmd,
 	void __user *arg)
 {
-	IOCTL32_Command_struct __user *arg32 =
-	    (IOCTL32_Command_struct __user *) arg;
+	struct ctlr_info *h = sdev_to_hba(dev);
+	IOCTL32_Command_struct __user *arg32 = arg;
 	IOCTL_Command_struct arg64;
-	IOCTL_Command_struct __user *p = compat_alloc_user_space(sizeof(arg64));
 	int err;
 	u32 cp;
 
+	if (!arg)
+		return -EINVAL;
+
 	memset(&arg64, 0, sizeof(arg64));
-	err = 0;
-	err |= copy_from_user(&arg64.LUN_info, &arg32->LUN_info,
-			   sizeof(arg64.LUN_info));
-	err |= copy_from_user(&arg64.Request, &arg32->Request,
-			   sizeof(arg64.Request));
-	err |= copy_from_user(&arg64.error_info, &arg32->error_info,
-			   sizeof(arg64.error_info));
-	err |= get_user(arg64.buf_size, &arg32->buf_size);
-	err |= get_user(cp, &arg32->buf);
-	arg64.buf = compat_ptr(cp);
-	err |= copy_to_user(p, &arg64, sizeof(arg64));
-
-	if (err)
+	if (copy_from_user(&arg64, arg32, offsetof(IOCTL_Command_struct, buf)))
 		return -EFAULT;
+	if (get_user(cp, &arg32->buf))
+		return -EFAULT;
+	arg64.buf = compat_ptr(cp);
 
-	err = hpsa_ioctl(dev, CCISS_PASSTHRU, p);
+	if (atomic_dec_if_positive(&h->passthru_cmds_avail) < 0)
+		return -EAGAIN;
+	err = hpsa_passthru_ioctl(h, &arg64);
+	atomic_inc(&h->passthru_cmds_avail);
 	if (err)
 		return err;
-	err |= copy_in_user(&arg32->error_info, &p->error_info,
-			 sizeof(arg32->error_info));
-	if (err)
+	if (copy_to_user(&arg32->error_info, &arg64.error_info,
+			 sizeof(arg32->error_info)))
 		return -EFAULT;
-	return err;
+	return 0;
 }
 
 static int hpsa_ioctl32_big_passthru(struct scsi_device *dev,
 	unsigned int cmd, void __user *arg)
 {
-	BIG_IOCTL32_Command_struct __user *arg32 =
-	    (BIG_IOCTL32_Command_struct __user *) arg;
+	struct ctlr_info *h = sdev_to_hba(dev);
+	BIG_IOCTL32_Command_struct __user *arg32 = arg;
 	BIG_IOCTL_Command_struct arg64;
-	BIG_IOCTL_Command_struct __user *p =
-	    compat_alloc_user_space(sizeof(arg64));
 	int err;
 	u32 cp;
 
+	if (!arg)
+		return -EINVAL;
 	memset(&arg64, 0, sizeof(arg64));
-	err = 0;
-	err |= copy_from_user(&arg64.LUN_info, &arg32->LUN_info,
-			   sizeof(arg64.LUN_info));
-	err |= copy_from_user(&arg64.Request, &arg32->Request,
-			   sizeof(arg64.Request));
-	err |= copy_from_user(&arg64.error_info, &arg32->error_info,
-			   sizeof(arg64.error_info));
-	err |= get_user(arg64.buf_size, &arg32->buf_size);
-	err |= get_user(arg64.malloc_size, &arg32->malloc_size);
-	err |= get_user(cp, &arg32->buf);
-	arg64.buf = compat_ptr(cp);
-	err |= copy_to_user(p, &arg64, sizeof(arg64));
-
-	if (err)
+	if (copy_from_user(&arg64, arg32,
+			   offsetof(BIG_IOCTL32_Command_struct, buf)))
 		return -EFAULT;
+	if (get_user(cp, &arg32->buf))
+		return -EFAULT;
+	arg64.buf = compat_ptr(cp);
 
-	err = hpsa_ioctl(dev, CCISS_BIG_PASSTHRU, p);
+	if (atomic_dec_if_positive(&h->passthru_cmds_avail) < 0)
+		return -EAGAIN;
+	err = hpsa_big_passthru_ioctl(h, &arg64);
+	atomic_inc(&h->passthru_cmds_avail);
 	if (err)
 		return err;
-	err |= copy_in_user(&arg32->error_info, &p->error_info,
-			 sizeof(arg32->error_info));
-	if (err)
+	if (copy_to_user(&arg32->error_info, &arg64.error_info,
+			 sizeof(arg32->error_info)))
 		return -EFAULT;
-	return err;
+	return 0;
 }
 
 static int hpsa_compat_ioctl(struct scsi_device *dev, unsigned int cmd,
@@ -6358,37 +6398,33 @@ static int hpsa_getdrivver_ioctl(struct ctlr_info *h, void __user *argp)
 	return 0;
 }
 
-static int hpsa_passthru_ioctl(struct ctlr_info *h, void __user *argp)
+static int hpsa_passthru_ioctl(struct ctlr_info *h,
+			       IOCTL_Command_struct *iocommand)
 {
-	IOCTL_Command_struct iocommand;
 	struct CommandList *c;
 	char *buff = NULL;
 	u64 temp64;
 	int rc = 0;
 
-	if (!argp)
-		return -EINVAL;
 	if (!capable(CAP_SYS_RAWIO))
 		return -EPERM;
-	if (copy_from_user(&iocommand, argp, sizeof(iocommand)))
-		return -EFAULT;
-	if ((iocommand.buf_size < 1) &&
-	    (iocommand.Request.Type.Direction != XFER_NONE)) {
+	if ((iocommand->buf_size < 1) &&
+	    (iocommand->Request.Type.Direction != XFER_NONE)) {
 		return -EINVAL;
 	}
-	if (iocommand.buf_size > 0) {
-		buff = kmalloc(iocommand.buf_size, GFP_KERNEL);
+	if (iocommand->buf_size > 0) {
+		buff = kmalloc(iocommand->buf_size, GFP_KERNEL);
 		if (buff == NULL)
 			return -ENOMEM;
-		if (iocommand.Request.Type.Direction & XFER_WRITE) {
+		if (iocommand->Request.Type.Direction & XFER_WRITE) {
 			/* Copy the data into the buffer we created */
-			if (copy_from_user(buff, iocommand.buf,
-				iocommand.buf_size)) {
+			if (copy_from_user(buff, iocommand->buf,
+				iocommand->buf_size)) {
 				rc = -EFAULT;
 				goto out_kfree;
 			}
 		} else {
-			memset(buff, 0, iocommand.buf_size);
+			memset(buff, 0, iocommand->buf_size);
 		}
 	}
 	c = cmd_alloc(h);
@@ -6398,23 +6434,23 @@ static int hpsa_passthru_ioctl(struct ctlr_info *h, void __user *argp)
 	c->scsi_cmd = SCSI_CMD_BUSY;
 	/* Fill in Command Header */
 	c->Header.ReplyQueue = 0; /* unused in simple mode */
-	if (iocommand.buf_size > 0) {	/* buffer to fill */
+	if (iocommand->buf_size > 0) {	/* buffer to fill */
 		c->Header.SGList = 1;
 		c->Header.SGTotal = cpu_to_le16(1);
 	} else	{ /* no buffers to fill */
 		c->Header.SGList = 0;
 		c->Header.SGTotal = cpu_to_le16(0);
 	}
-	memcpy(&c->Header.LUN, &iocommand.LUN_info, sizeof(c->Header.LUN));
+	memcpy(&c->Header.LUN, &iocommand->LUN_info, sizeof(c->Header.LUN));
 
 	/* Fill in Request block */
-	memcpy(&c->Request, &iocommand.Request,
+	memcpy(&c->Request, &iocommand->Request,
 		sizeof(c->Request));
 
 	/* Fill in the scatter gather information */
-	if (iocommand.buf_size > 0) {
+	if (iocommand->buf_size > 0) {
 		temp64 = dma_map_single(&h->pdev->dev, buff,
-			iocommand.buf_size, DMA_BIDIRECTIONAL);
+			iocommand->buf_size, DMA_BIDIRECTIONAL);
 		if (dma_mapping_error(&h->pdev->dev, (dma_addr_t) temp64)) {
 			c->SG[0].Addr = cpu_to_le64(0);
 			c->SG[0].Len = cpu_to_le32(0);
@@ -6422,12 +6458,12 @@ static int hpsa_passthru_ioctl(struct ctlr_info *h, void __user *argp)
 			goto out;
 		}
 		c->SG[0].Addr = cpu_to_le64(temp64);
-		c->SG[0].Len = cpu_to_le32(iocommand.buf_size);
+		c->SG[0].Len = cpu_to_le32(iocommand->buf_size);
 		c->SG[0].Ext = cpu_to_le32(HPSA_SG_LAST); /* not chaining */
 	}
 	rc = hpsa_scsi_do_simple_cmd(h, c, DEFAULT_REPLY_QUEUE,
 					NO_TIMEOUT);
-	if (iocommand.buf_size > 0)
+	if (iocommand->buf_size > 0)
 		hpsa_pci_unmap(h->pdev, c, 1, DMA_BIDIRECTIONAL);
 	check_ioctl_unit_attention(h, c);
 	if (rc) {
@@ -6436,16 +6472,12 @@ static int hpsa_passthru_ioctl(struct ctlr_info *h, void __user *argp)
 	}
 
 	/* Copy the error information out */
-	memcpy(&iocommand.error_info, c->err_info,
-		sizeof(iocommand.error_info));
-	if (copy_to_user(argp, &iocommand, sizeof(iocommand))) {
-		rc = -EFAULT;
-		goto out;
-	}
-	if ((iocommand.Request.Type.Direction & XFER_READ) &&
-		iocommand.buf_size > 0) {
+	memcpy(&iocommand->error_info, c->err_info,
+		sizeof(iocommand->error_info));
+	if ((iocommand->Request.Type.Direction & XFER_READ) &&
+		iocommand->buf_size > 0) {
 		/* Copy the data out of the buffer we created */
-		if (copy_to_user(iocommand.buf, buff, iocommand.buf_size)) {
+		if (copy_to_user(iocommand->buf, buff, iocommand->buf_size)) {
 			rc = -EFAULT;
 			goto out;
 		}
@@ -6457,9 +6489,9 @@ out_kfree:
 	return rc;
 }
 
-static int hpsa_big_passthru_ioctl(struct ctlr_info *h, void __user *argp)
+static int hpsa_big_passthru_ioctl(struct ctlr_info *h,
+				   BIG_IOCTL_Command_struct *ioc)
 {
-	BIG_IOCTL_Command_struct *ioc;
 	struct CommandList *c;
 	unsigned char **buff = NULL;
 	int *buff_size = NULL;
@@ -6470,29 +6502,17 @@ static int hpsa_big_passthru_ioctl(struct ctlr_info *h, void __user *argp)
 	u32 sz;
 	BYTE __user *data_ptr;
 
-	if (!argp)
-		return -EINVAL;
 	if (!capable(CAP_SYS_RAWIO))
 		return -EPERM;
-	ioc = vmemdup_user(argp, sizeof(*ioc));
-	if (IS_ERR(ioc)) {
-		status = PTR_ERR(ioc);
-		goto cleanup1;
-	}
+
 	if ((ioc->buf_size < 1) &&
-	    (ioc->Request.Type.Direction != XFER_NONE)) {
-		status = -EINVAL;
-		goto cleanup1;
-	}
+	    (ioc->Request.Type.Direction != XFER_NONE))
+		return -EINVAL;
 	/* Check kmalloc limits  using all SGs */
-	if (ioc->malloc_size > MAX_KMALLOC_SIZE) {
-		status = -EINVAL;
-		goto cleanup1;
-	}
-	if (ioc->buf_size > ioc->malloc_size * SG_ENTRIES_IN_CMD) {
-		status = -EINVAL;
-		goto cleanup1;
-	}
+	if (ioc->malloc_size > MAX_KMALLOC_SIZE)
+		return -EINVAL;
+	if (ioc->buf_size > ioc->malloc_size * SG_ENTRIES_IN_CMD)
+		return -EINVAL;
 	buff = kcalloc(SG_ENTRIES_IN_CMD, sizeof(char *), GFP_KERNEL);
 	if (!buff) {
 		status = -ENOMEM;
@@ -6565,10 +6585,6 @@ static int hpsa_big_passthru_ioctl(struct ctlr_info *h, void __user *argp)
 
 	/* Copy the error information out */
 	memcpy(&ioc->error_info, c->err_info, sizeof(ioc->error_info));
-	if (copy_to_user(argp, ioc, sizeof(*ioc))) {
-		status = -EFAULT;
-		goto cleanup0;
-	}
 	if ((ioc->Request.Type.Direction & XFER_READ) && ioc->buf_size > 0) {
 		int i;
 
@@ -6594,7 +6610,6 @@ cleanup1:
 		kfree(buff);
 	}
 	kfree(buff_size);
-	kvfree(ioc);
 	return status;
 }
 
@@ -6610,13 +6625,10 @@ static void check_ioctl_unit_attention(struct ctlr_info *h,
  * ioctl
  */
 static int hpsa_ioctl(struct scsi_device *dev, unsigned int cmd,
-		      void __user *arg)
+		      void __user *argp)
 {
-	struct ctlr_info *h;
-	void __user *argp = (void __user *)arg;
+	struct ctlr_info *h = sdev_to_hba(dev);
 	int rc;
-
-	h = sdev_to_hba(dev);
 
 	switch (cmd) {
 	case CCISS_DEREGDISK:
@@ -6628,18 +6640,35 @@ static int hpsa_ioctl(struct scsi_device *dev, unsigned int cmd,
 		return hpsa_getpciinfo_ioctl(h, argp);
 	case CCISS_GETDRIVVER:
 		return hpsa_getdrivver_ioctl(h, argp);
-	case CCISS_PASSTHRU:
+	case CCISS_PASSTHRU: {
+		IOCTL_Command_struct iocommand;
+
+		if (!argp)
+			return -EINVAL;
+		if (copy_from_user(&iocommand, argp, sizeof(iocommand)))
+			return -EFAULT;
 		if (atomic_dec_if_positive(&h->passthru_cmds_avail) < 0)
 			return -EAGAIN;
-		rc = hpsa_passthru_ioctl(h, argp);
+		rc = hpsa_passthru_ioctl(h, &iocommand);
 		atomic_inc(&h->passthru_cmds_avail);
+		if (!rc && copy_to_user(argp, &iocommand, sizeof(iocommand)))
+			rc = -EFAULT;
 		return rc;
-	case CCISS_BIG_PASSTHRU:
+	}
+	case CCISS_BIG_PASSTHRU: {
+		BIG_IOCTL_Command_struct ioc;
+		if (!argp)
+			return -EINVAL;
+		if (copy_from_user(&ioc, argp, sizeof(ioc)))
+			return -EFAULT;
 		if (atomic_dec_if_positive(&h->passthru_cmds_avail) < 0)
 			return -EAGAIN;
-		rc = hpsa_big_passthru_ioctl(h, argp);
+		rc = hpsa_big_passthru_ioctl(h, &ioc);
 		atomic_inc(&h->passthru_cmds_avail);
+		if (!rc && copy_to_user(argp, &ioc, sizeof(ioc)))
+			rc = -EFAULT;
 		return rc;
+	}
 	default:
 		return -ENOTTY;
 	}
@@ -6897,7 +6926,7 @@ static void __iomem *remap_pci_mem(ulong base, ulong size)
 {
 	ulong page_base = ((ulong) base) & PAGE_MASK;
 	ulong page_offs = ((ulong) base) - page_base;
-	void __iomem *page_remapped = ioremap_nocache(page_base,
+	void __iomem *page_remapped = ioremap(page_base,
 		page_offs + size);
 
 	return page_remapped ? (page_remapped + page_offs) : NULL;
@@ -7441,7 +7470,6 @@ static int find_PCI_BAR_index(struct pci_dev *pdev, unsigned long pci_bar_addr)
 				dev_warn(&pdev->dev,
 				       "base address is invalid\n");
 				return -1;
-				break;
 			}
 		}
 		if (offset == pci_bar_addr - PCI_BASE_ADDRESS_0)
@@ -8635,7 +8663,7 @@ static struct ctlr_info *hpda_alloc_ctlr_info(void)
 
 static int hpsa_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 {
-	int dac, rc;
+	int rc;
 	struct ctlr_info *h;
 	int try_soft_reset = 0;
 	unsigned long flags;
@@ -8711,13 +8739,9 @@ reinit_after_soft_reset:
 
 	/* configure PCI DMA stuff */
 	rc = dma_set_mask(&pdev->dev, DMA_BIT_MASK(64));
-	if (rc == 0) {
-		dac = 1;
-	} else {
+	if (rc != 0) {
 		rc = dma_set_mask(&pdev->dev, DMA_BIT_MASK(32));
-		if (rc == 0) {
-			dac = 0;
-		} else {
+		if (rc != 0) {
 			dev_err(&pdev->dev, "no suitable DMA available\n");
 			goto clean3;	/* shost, pci, lu, aer/h */
 		}
@@ -8854,7 +8878,7 @@ reinit_after_soft_reset:
 	/* hook into SCSI subsystem */
 	rc = hpsa_scsi_add_host(h);
 	if (rc)
-		goto clean7; /* perf, sg, cmd, irq, shost, pci, lu, aer/h */
+		goto clean8; /* lastlogicals, perf, sg, cmd, irq, shost, pci, lu, aer/h */
 
 	/* Monitor the controller for firmware lockups */
 	h->heartbeat_sample_interval = HEARTBEAT_SAMPLE_INTERVAL;
@@ -8869,6 +8893,8 @@ reinit_after_soft_reset:
 				HPSA_EVENT_MONITOR_INTERVAL);
 	return 0;
 
+clean8: /* lastlogicals, perf, sg, cmd, irq, shost, pci, lu, aer/h */
+	kfree(h->lastlogicals);
 clean7: /* perf, sg, cmd, irq, shost, pci, lu, aer/h */
 	hpsa_free_performant_mode(h);
 	h->access.set_intr_mask(h, HPSA_INTR_OFF);
@@ -9089,16 +9115,19 @@ static void hpsa_remove_one(struct pci_dev *pdev)
 	hpda_free_ctlr_info(h);				/* init_one 1 */
 }
 
-static int hpsa_suspend(__attribute__((unused)) struct pci_dev *pdev,
-	__attribute__((unused)) pm_message_t state)
+static int __maybe_unused hpsa_suspend(
+	__attribute__((unused)) struct device *dev)
 {
 	return -ENOSYS;
 }
 
-static int hpsa_resume(__attribute__((unused)) struct pci_dev *pdev)
+static int __maybe_unused hpsa_resume
+	(__attribute__((unused)) struct device *dev)
 {
 	return -ENOSYS;
 }
+
+static SIMPLE_DEV_PM_OPS(hpsa_pm_ops, hpsa_suspend, hpsa_resume);
 
 static struct pci_driver hpsa_pci_driver = {
 	.name = HPSA,
@@ -9106,8 +9135,7 @@ static struct pci_driver hpsa_pci_driver = {
 	.remove = hpsa_remove_one,
 	.id_table = hpsa_pci_device_id,	/* id_table */
 	.shutdown = hpsa_shutdown,
-	.suspend = hpsa_suspend,
-	.resume = hpsa_resume,
+	.driver.pm = &hpsa_pm_ops,
 };
 
 /* Fill in bucket_map[], given nsgs (the max number of
@@ -9296,10 +9324,9 @@ static int hpsa_enter_performant_mode(struct ctlr_info *h, u32 trans_support)
 	} else if (trans_support & CFGTBL_Trans_io_accel2) {
 		u64 cfg_offset, cfg_base_addr_index;
 		u32 bft2_offset, cfg_base_addr;
-		int rc;
 
-		rc = hpsa_find_cfg_addrs(h->pdev, h->vaddr, &cfg_base_addr,
-			&cfg_base_addr_index, &cfg_offset);
+		hpsa_find_cfg_addrs(h->pdev, h->vaddr, &cfg_base_addr,
+				    &cfg_base_addr_index, &cfg_offset);
 		BUILD_BUG_ON(offsetof(struct io_accel2_cmd, sg) != 64);
 		bft2[15] = h->ioaccel_maxsg + HPSA_IOACCEL2_HEADER_SZ;
 		calc_bucket_map(bft2, ARRAY_SIZE(bft2), h->ioaccel_maxsg,
@@ -9329,10 +9356,10 @@ static int hpsa_enter_performant_mode(struct ctlr_info *h, u32 trans_support)
 static void hpsa_free_ioaccel1_cmd_and_bft(struct ctlr_info *h)
 {
 	if (h->ioaccel_cmd_pool) {
-		pci_free_consistent(h->pdev,
-			h->nr_cmds * sizeof(*h->ioaccel_cmd_pool),
-			h->ioaccel_cmd_pool,
-			h->ioaccel_cmd_pool_dhandle);
+		dma_free_coherent(&h->pdev->dev,
+				  h->nr_cmds * sizeof(*h->ioaccel_cmd_pool),
+				  h->ioaccel_cmd_pool,
+				  h->ioaccel_cmd_pool_dhandle);
 		h->ioaccel_cmd_pool = NULL;
 		h->ioaccel_cmd_pool_dhandle = 0;
 	}
@@ -9382,10 +9409,10 @@ static void hpsa_free_ioaccel2_cmd_and_bft(struct ctlr_info *h)
 	hpsa_free_ioaccel2_sg_chain_blocks(h);
 
 	if (h->ioaccel2_cmd_pool) {
-		pci_free_consistent(h->pdev,
-			h->nr_cmds * sizeof(*h->ioaccel2_cmd_pool),
-			h->ioaccel2_cmd_pool,
-			h->ioaccel2_cmd_pool_dhandle);
+		dma_free_coherent(&h->pdev->dev,
+				  h->nr_cmds * sizeof(*h->ioaccel2_cmd_pool),
+				  h->ioaccel2_cmd_pool,
+				  h->ioaccel2_cmd_pool_dhandle);
 		h->ioaccel2_cmd_pool = NULL;
 		h->ioaccel2_cmd_pool_dhandle = 0;
 	}

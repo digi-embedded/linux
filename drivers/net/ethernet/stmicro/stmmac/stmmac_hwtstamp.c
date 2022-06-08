@@ -10,9 +10,13 @@
 *******************************************************************************/
 
 #include <linux/io.h>
+#include <linux/iopoll.h>
 #include <linux/delay.h>
+#include <linux/ptp_clock_kernel.h>
 #include "common.h"
 #include "stmmac_ptp.h"
+#include "dwmac4.h"
+#include "stmmac.h"
 
 static void config_hw_tstamping(void __iomem *ioaddr, u32 data)
 {
@@ -57,7 +61,6 @@ static void config_sub_second_increment(void __iomem *ioaddr,
 
 static int init_systime(void __iomem *ioaddr, u32 sec, u32 nsec)
 {
-	int limit;
 	u32 value;
 
 	writel(sec, ioaddr + PTP_STSUR);
@@ -68,16 +71,9 @@ static int init_systime(void __iomem *ioaddr, u32 sec, u32 nsec)
 	writel(value, ioaddr + PTP_TCR);
 
 	/* wait for present system time initialize to complete */
-	limit = 10;
-	while (limit--) {
-		if (!(readl(ioaddr + PTP_TCR) & PTP_TCR_TSINIT))
-			break;
-		mdelay(10);
-	}
-	if (limit < 0)
-		return -EBUSY;
-
-	return 0;
+	return readl_poll_timeout(ioaddr + PTP_TCR, value,
+				 !(value & PTP_TCR_TSINIT),
+				 10000, 100000);
 }
 
 static int config_addend(void __iomem *ioaddr, u32 addend)
@@ -160,6 +156,51 @@ static void get_systime(void __iomem *ioaddr, u64 *systime)
 		*systime = ns;
 }
 
+static void get_ptptime(void __iomem *ptpaddr, u64 *ptp_time)
+{
+	u64 ns;
+
+	ns = readl(ptpaddr + PTP_ATNR);
+	ns += readl(ptpaddr + PTP_ATSR) * NSEC_PER_SEC;
+
+	*ptp_time = ns;
+}
+
+static void timestamp_interrupt(struct stmmac_priv *priv)
+{
+	u32 num_snapshot, ts_status, tsync_int;
+	struct ptp_clock_event event;
+	unsigned long flags;
+	u64 ptp_time;
+	int i;
+
+	tsync_int = readl(priv->ioaddr + GMAC_INT_STATUS) & GMAC_INT_TSIE;
+
+	if (!tsync_int)
+		return;
+
+	/* Read timestamp status to clear interrupt from either external
+	 * timestamp or start/end of PPS.
+	 */
+	ts_status = readl(priv->ioaddr + GMAC_TIMESTAMP_STATUS);
+
+	if (!priv->plat->ext_snapshot_en)
+		return;
+
+	num_snapshot = (ts_status & GMAC_TIMESTAMP_ATSNS_MASK) >>
+		       GMAC_TIMESTAMP_ATSNS_SHIFT;
+
+	for (i = 0; i < num_snapshot; i++) {
+		spin_lock_irqsave(&priv->ptp_lock, flags);
+		get_ptptime(priv->ptpaddr, &ptp_time);
+		spin_unlock_irqrestore(&priv->ptp_lock, flags);
+		event.type = PTP_CLOCK_EXTTS;
+		event.index = 0;
+		event.timestamp = ptp_time;
+		ptp_clock_event(priv->ptp_clock, &event);
+	}
+}
+
 const struct stmmac_hwtimestamp stmmac_ptp = {
 	.config_hw_tstamping = config_hw_tstamping,
 	.init_systime = init_systime,
@@ -167,4 +208,6 @@ const struct stmmac_hwtimestamp stmmac_ptp = {
 	.config_addend = config_addend,
 	.adjust_systime = adjust_systime,
 	.get_systime = get_systime,
+	.get_ptptime = get_ptptime,
+	.timestamp_interrupt = timestamp_interrupt,
 };

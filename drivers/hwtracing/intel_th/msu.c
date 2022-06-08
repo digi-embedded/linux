@@ -138,6 +138,7 @@ struct msc {
 	struct list_head	win_list;
 	struct sg_table		single_sgt;
 	struct msc_window	*cur_win;
+	struct msc_window	*switch_on_unlock;
 	unsigned long		nr_pages;
 	unsigned long		single_sz;
 	unsigned int		single_wrap : 1;
@@ -153,6 +154,8 @@ struct msc {
 	struct mutex		buf_mutex;
 
 	struct list_head	iter_list;
+
+	bool			stop_on_full;
 
 	/* config */
 	unsigned int		enabled : 1,
@@ -1021,33 +1024,49 @@ err_nomem:
 }
 
 #ifdef CONFIG_X86
-static void msc_buffer_set_uc(struct msc_window *win, unsigned int nr_segs)
+static void msc_buffer_set_uc(struct msc *msc)
 {
 	struct scatterlist *sg_ptr;
+	struct msc_window *win;
 	int i;
 
-	for_each_sg(win->sgt->sgl, sg_ptr, nr_segs, i) {
-		/* Set the page as uncached */
-		set_memory_uc((unsigned long)sg_virt(sg_ptr),
-			      PFN_DOWN(sg_ptr->length));
+	if (msc->mode == MSC_MODE_SINGLE) {
+		set_memory_uc((unsigned long)msc->base, msc->nr_pages);
+		return;
+	}
+
+	list_for_each_entry(win, &msc->win_list, entry) {
+		for_each_sg(win->sgt->sgl, sg_ptr, win->nr_segs, i) {
+			/* Set the page as uncached */
+			set_memory_uc((unsigned long)sg_virt(sg_ptr),
+					PFN_DOWN(sg_ptr->length));
+		}
 	}
 }
 
-static void msc_buffer_set_wb(struct msc_window *win)
+static void msc_buffer_set_wb(struct msc *msc)
 {
 	struct scatterlist *sg_ptr;
+	struct msc_window *win;
 	int i;
 
-	for_each_sg(win->sgt->sgl, sg_ptr, win->nr_segs, i) {
-		/* Reset the page to write-back */
-		set_memory_wb((unsigned long)sg_virt(sg_ptr),
-			      PFN_DOWN(sg_ptr->length));
+	if (msc->mode == MSC_MODE_SINGLE) {
+		set_memory_wb((unsigned long)msc->base, msc->nr_pages);
+		return;
+	}
+
+	list_for_each_entry(win, &msc->win_list, entry) {
+		for_each_sg(win->sgt->sgl, sg_ptr, win->nr_segs, i) {
+			/* Reset the page to write-back */
+			set_memory_wb((unsigned long)sg_virt(sg_ptr),
+					PFN_DOWN(sg_ptr->length));
+		}
 	}
 }
 #else /* !X86 */
 static inline void
-msc_buffer_set_uc(struct msc_window *win, unsigned int nr_segs) {}
-static inline void msc_buffer_set_wb(struct msc_window *win) {}
+msc_buffer_set_uc(struct msc *msc) {}
+static inline void msc_buffer_set_wb(struct msc *msc) {}
 #endif /* CONFIG_X86 */
 
 /**
@@ -1093,8 +1112,6 @@ static int msc_buffer_win_alloc(struct msc *msc, unsigned int nr_blocks)
 
 	if (ret <= 0)
 		goto err_nomem;
-
-	msc_buffer_set_uc(win, ret);
 
 	win->nr_segs = ret;
 	win->nr_blocks = nr_blocks;
@@ -1148,8 +1165,6 @@ static void msc_buffer_win_free(struct msc *msc, struct msc_window *win)
 		msc->base = NULL;
 		msc->base_addr = 0;
 	}
-
-	msc_buffer_set_wb(win);
 
 	if (msc->mbuf && msc->mbuf->free_window)
 		msc->mbuf->free_window(msc->mbuf_priv, win->sgt);
@@ -1257,6 +1272,8 @@ static int msc_buffer_multi_alloc(struct msc *msc, unsigned long *nr_pages,
  */
 static void msc_buffer_free(struct msc *msc)
 {
+	msc_buffer_set_wb(msc);
+
 	if (msc->mode == MSC_MODE_SINGLE)
 		msc_buffer_contig_free(msc);
 	else if (msc->mode == MSC_MODE_MULTI)
@@ -1300,6 +1317,8 @@ static int msc_buffer_alloc(struct msc *msc, unsigned long *nr_pages,
 	}
 
 	if (!ret) {
+		msc_buffer_set_uc(msc);
+
 		/* allocation should be visible before the counter goes to 0 */
 		smp_mb__before_atomic();
 
@@ -1718,6 +1737,10 @@ void intel_th_msc_window_unlock(struct device *dev, struct sg_table *sgt)
 		return;
 
 	msc_win_set_lockout(win, WIN_LOCKED, WIN_READY);
+	if (msc->switch_on_unlock == win) {
+		msc->switch_on_unlock = NULL;
+		msc_win_switch(msc);
+	}
 }
 EXPORT_SYMBOL_GPL(intel_th_msc_window_unlock);
 
@@ -1758,7 +1781,11 @@ static irqreturn_t intel_th_msc_interrupt(struct intel_th_device *thdev)
 
 	/* next window: if READY, proceed, if LOCKED, stop the trace */
 	if (msc_win_set_lockout(next_win, WIN_READY, WIN_INUSE)) {
-		schedule_work(&msc->work);
+		if (msc->stop_on_full)
+			schedule_work(&msc->work);
+		else
+			msc->switch_on_unlock = next_win;
+
 		return IRQ_HANDLED;
 	}
 
@@ -1991,7 +2018,7 @@ nr_pages_store(struct device *dev, struct device_attribute *attr,
 		}
 
 		nr_wins++;
-		rewin = krealloc(win, sizeof(*win) * nr_wins, GFP_KERNEL);
+		rewin = krealloc_array(win, nr_wins, sizeof(*win), GFP_KERNEL);
 		if (!rewin) {
 			kfree(win);
 			return -ENOMEM;
@@ -2051,15 +2078,40 @@ win_switch_store(struct device *dev, struct device_attribute *attr,
 
 static DEVICE_ATTR_WO(win_switch);
 
+static ssize_t stop_on_full_show(struct device *dev,
+				 struct device_attribute *attr, char *buf)
+{
+	struct msc *msc = dev_get_drvdata(dev);
+
+	return sprintf(buf, "%d\n", msc->stop_on_full);
+}
+
+static ssize_t stop_on_full_store(struct device *dev,
+				  struct device_attribute *attr,
+				  const char *buf, size_t size)
+{
+	struct msc *msc = dev_get_drvdata(dev);
+	int ret;
+
+	ret = kstrtobool(buf, &msc->stop_on_full);
+	if (ret)
+		return ret;
+
+	return size;
+}
+
+static DEVICE_ATTR_RW(stop_on_full);
+
 static struct attribute *msc_output_attrs[] = {
 	&dev_attr_wrap.attr,
 	&dev_attr_mode.attr,
 	&dev_attr_nr_pages.attr,
 	&dev_attr_win_switch.attr,
+	&dev_attr_stop_on_full.attr,
 	NULL,
 };
 
-static struct attribute_group msc_output_group = {
+static const struct attribute_group msc_output_group = {
 	.attrs	= msc_output_attrs,
 };
 

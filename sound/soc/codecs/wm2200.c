@@ -30,7 +30,6 @@
 #include <sound/wm2200.h>
 
 #include "wm2200.h"
-#include "wmfw.h"
 #include "wm_adsp.h"
 
 #define WM2200_DSP_CONTROL_1                   0x00
@@ -70,13 +69,6 @@
 static const char *wm2200_core_supply_names[WM2200_NUM_CORE_SUPPLIES] = {
 	"DBVDD",
 	"LDOVDD",
-};
-
-struct wm2200_fll {
-	int fref;
-	int fout;
-	int src;
-	struct completion lock;
 };
 
 /* codec private data */
@@ -2027,7 +2019,7 @@ static int wm2200_set_fll(struct snd_soc_component *component, int fll_id, int s
 			msleep(1);
 		}
 
-		ret = snd_soc_component_read32(component,
+		ret = snd_soc_component_read(component,
 				   WM2200_INTERRUPT_RAW_STATUS_2);
 		if (ret < 0) {
 			dev_err(component->dev,
@@ -2060,7 +2052,7 @@ static int wm2200_dai_probe(struct snd_soc_dai *dai)
 	unsigned int val = 0;
 	int ret;
 
-	ret = snd_soc_component_read32(component, WM2200_GPIO_CTRL_1);
+	ret = snd_soc_component_read(component, WM2200_GPIO_CTRL_1);
 	if (ret >= 0) {
 		if ((ret & WM2200_GP1_FN_MASK) != 0) {
 			wm2200->symmetric_rates = true;

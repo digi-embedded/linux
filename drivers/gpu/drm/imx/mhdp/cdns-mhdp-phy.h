@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019 NXP Semiconductor, Inc.
+ * Copyright 2019-2021 NXP
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -148,8 +148,11 @@
 
 int cdns_dp_phy_set_imx8mq(struct cdns_mhdp_device *hdp);
 int cdns_dp_phy_set_imx8qm(struct cdns_mhdp_device *hdp);
+int cdns_dp_phy_shutdown(struct cdns_mhdp_device *mhdp);
 bool cdns_hdmi_phy_video_valid_imx8mq(struct cdns_mhdp_device *hdp);
 bool cdns_hdmi_phy_video_valid_imx8qm(struct cdns_mhdp_device *hdp);
 int cdns_hdmi_phy_set_imx8mq(struct cdns_mhdp_device *hdp);
 int cdns_hdmi_phy_set_imx8qm(struct cdns_mhdp_device *hdp);
+int cdns_hdmi_phy_shutdown(struct cdns_mhdp_device *mhdp);
+int cdns_hdmi_phy_power_up(struct cdns_mhdp_device *mhdp);
 #endif /* _CDNS_MHDP_PHY_H */

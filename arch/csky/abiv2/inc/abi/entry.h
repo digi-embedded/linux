@@ -1,5 +1,4 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-// Copyright (C) 2018 Hangzhou C-SKY Microsystems co.,ltd.
 
 #ifndef __ASM_CSKY_ENTRY_H
 #define __ASM_CSKY_ENTRY_H
@@ -25,6 +24,9 @@
 	subi    sp, 152
 	stw	tls, (sp, 0)
 	stw	lr, (sp, 4)
+
+	RD_MEH	lr
+	WR_MEH	lr
 
 	mfcr	lr, epc
 	movi	tls, \epc_inc
@@ -65,7 +67,6 @@
 .endm
 
 .macro	RESTORE_ALL
-	psrclr  ie
 	ldw	tls, (sp, 0)
 	ldw	lr, (sp, 4)
 	ldw	a0, (sp, 8)
@@ -100,6 +101,63 @@
 	mfcr	sp, ss0
 1:
 	rte
+.endm
+
+.macro SAVE_REGS_FTRACE
+	subi    sp, 152
+	stw	tls, (sp, 0)
+	stw	lr, (sp, 4)
+
+	mfcr	lr, psr
+	stw	lr, (sp, 12)
+
+	addi    lr, sp, 152
+	stw	lr, (sp, 16)
+
+	stw     a0, (sp, 20)
+	stw     a0, (sp, 24)
+	stw     a1, (sp, 28)
+	stw     a2, (sp, 32)
+	stw     a3, (sp, 36)
+
+	addi	sp, 40
+	stm	r4-r13, (sp)
+
+	addi    sp, 40
+	stm     r16-r30, (sp)
+#ifdef CONFIG_CPU_HAS_HILO
+	mfhi	lr
+	stw	lr, (sp, 60)
+	mflo	lr
+	stw	lr, (sp, 64)
+	mfcr	lr, cr14
+	stw	lr, (sp, 68)
+#endif
+	subi	sp, 80
+.endm
+
+.macro	RESTORE_REGS_FTRACE
+	ldw	tls, (sp, 0)
+
+#ifdef CONFIG_CPU_HAS_HILO
+	ldw	a0, (sp, 140)
+	mthi	a0
+	ldw	a0, (sp, 144)
+	mtlo	a0
+	ldw	a0, (sp, 148)
+	mtcr	a0, cr14
+#endif
+
+	ldw     a0, (sp, 24)
+	ldw     a1, (sp, 28)
+	ldw     a2, (sp, 32)
+	ldw     a3, (sp, 36)
+
+	addi	sp, 40
+	ldm	r4-r13, (sp)
+	addi    sp, 40
+	ldm     r16-r30, (sp)
+	addi    sp, 72
 .endm
 
 .macro SAVE_SWITCH_STACK
@@ -175,6 +233,16 @@
 	mtcr	\rx, cr<8, 15>
 .endm
 
+#ifdef CONFIG_PAGE_OFFSET_80000000
+#define MSA_SET cr<30, 15>
+#define MSA_CLR cr<31, 15>
+#endif
+
+#ifdef CONFIG_PAGE_OFFSET_A0000000
+#define MSA_SET cr<31, 15>
+#define MSA_CLR cr<30, 15>
+#endif
+
 .macro SETUP_MMU
 	/* Init psr and enable ee */
 	lrw	r6, DEFAULT_PSR_VALUE
@@ -225,15 +293,15 @@
 	 * 31 - 29 | 28 - 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0
 	 *   BA     Reserved  SH  WA  B   SO SEC  C   D   V
 	 */
-	mfcr	r6, cr<30, 15> /* Get MSA0 */
+	mfcr	r6, MSA_SET /* Get MSA */
 2:
 	lsri	r6, 29
 	lsli	r6, 29
 	addi	r6, 0x1ce
-	mtcr	r6, cr<30, 15> /* Set MSA0 */
+	mtcr	r6, MSA_SET /* Set MSA */
 
 	movi    r6, 0
-	mtcr	r6, cr<31, 15> /* Clr MSA1 */
+	mtcr	r6, MSA_CLR /* Clr MSA */
 
 	/* enable MMU */
 	mfcr    r6, cr18
@@ -242,10 +310,5 @@
 
 	jmpi	3f /* jump to va */
 3:
-.endm
-
-.macro ANDI_R3 rx, imm
-	lsri	\rx, 3
-	andi	\rx, (\imm >> 3)
 .endm
 #endif /* __ASM_CSKY_ENTRY_H */

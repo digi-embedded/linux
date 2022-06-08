@@ -110,6 +110,8 @@ extern const struct cpumask *cpu_coregroup_mask(int cpu);
 #define topology_die_id(cpu)			(cpu_data(cpu).cpu_die_id)
 #define topology_core_id(cpu)			(cpu_data(cpu).cpu_core_id)
 
+extern unsigned int __max_die_per_package;
+
 #ifdef CONFIG_SMP
 #define topology_die_cpumask(cpu)		(per_cpu(cpu_die_map, cpu))
 #define topology_core_cpumask(cpu)		(per_cpu(cpu_core_map, cpu))
@@ -117,8 +119,6 @@ extern const struct cpumask *cpu_coregroup_mask(int cpu);
 
 extern unsigned int __max_logical_packages;
 #define topology_max_packages()			(__max_logical_packages)
-
-extern unsigned int __max_die_per_package;
 
 static inline int topology_max_die_per_package(void)
 {
@@ -192,5 +192,35 @@ static inline void sched_clear_itmt_support(void)
 {
 }
 #endif /* CONFIG_SCHED_MC_PRIO */
+
+#if defined(CONFIG_SMP) && defined(CONFIG_X86_64)
+#include <asm/cpufeature.h>
+
+DECLARE_STATIC_KEY_FALSE(arch_scale_freq_key);
+
+#define arch_scale_freq_invariant() static_branch_likely(&arch_scale_freq_key)
+
+DECLARE_PER_CPU(unsigned long, arch_freq_scale);
+
+static inline long arch_scale_freq_capacity(int cpu)
+{
+	return per_cpu(arch_freq_scale, cpu);
+}
+#define arch_scale_freq_capacity arch_scale_freq_capacity
+
+extern void arch_scale_freq_tick(void);
+#define arch_scale_freq_tick arch_scale_freq_tick
+
+extern void arch_set_max_freq_ratio(bool turbo_disabled);
+#else
+static inline void arch_set_max_freq_ratio(bool turbo_disabled)
+{
+}
+#endif
+
+#ifdef CONFIG_ACPI_CPPC_LIB
+void init_freq_invariance_cppc(void);
+#define init_freq_invariance_cppc init_freq_invariance_cppc
+#endif
 
 #endif /* _ASM_X86_TOPOLOGY_H */

@@ -23,31 +23,28 @@ properties:
     const: nxp,imx8mq-dcss
 
   reg:
-    maxItems: 2
+    items:
+      - description: DCSS base address and size, up to IRQ steer start
+      - description: DCSS BLKCTL base address and size
 
   interrupts:
-    maxItems: 3
     items:
       - description: Context loader completion and error interrupt
       - description: DTG interrupt used to signal context loader trigger time
       - description: DTG interrupt for Vblank
 
   interrupt-names:
-    maxItems: 3
     items:
-      - const: ctx_ld
+      - const: ctxld
       - const: ctxld_kick
       - const: vblank
-      - const: dtrc_ch1
-      - const: dtrc_ch2
 
   clocks:
-    maxItems: 5
     items:
       - description: Display APB clock for all peripheral PIO access interfaces
       - description: Display AXI clock needed by DPR, Scaler, RTRAM_CTRL
       - description: RTRAM clock
-      - description: Pixel clock, can be driver either by HDMI phy clock or MIPI
+      - description: Pixel clock, can be driven either by HDMI phy clock or MIPI
       - description: DTRC clock, needed by video decompressor
       - description: PLL source clock, usually VIDEO2_PLL, used when output is HDMI;
       - description: PLL PHY reference clock, used when output is HDMI;
@@ -62,29 +59,53 @@ properties:
       - const: pll_src
       - const: pll_phy_ref
 
-  port@0:
-    type: object
-    description: A port node pointing to a hdmi_in or mipi_in port node.
+  assigned-clocks:
+    items:
+      - description: Phandle and clock specifier of IMX8MQ_CLK_DISP_AXI_ROOT
+      - description: Phandle and clock specifier of IMX8MQ_CLK_DISP_RTRM
+      - description: Phandle and clock specifier of either IMX8MQ_VIDEO2_PLL1_REF_SEL or
+                     IMX8MQ_VIDEO_PLL1_REF_SEL
+
+  assigned-clock-parents:
+    items:
+      - description: Phandle and clock specifier of IMX8MQ_SYS1_PLL_800M
+      - description: Phandle and clock specifier of IMX8MQ_SYS1_PLL_800M
+      - description: Phandle and clock specifier of IMX8MQ_CLK_27M
+
+  assigned-clock-rates:
+    items:
+      - description: Must be 800 MHz
+      - description: Must be 400 MHz
+
+  port:
+    $ref: /schemas/graph.yaml#/properties/port
+    description:
+      A port node pointing to the input port of a HDMI/DP or MIPI display bridge.
+
+additionalProperties: false
 
 examples:
   - |
+    #include <dt-bindings/clock/imx8mq-clock.h>
     dcss: display-controller@32e00000 {
-        #address-cells = <1>;
-        #size-cells = <0>;
         compatible = "nxp,imx8mq-dcss";
         reg = <0x32e00000 0x2d000>, <0x32e2f000 0x1000>;
-        interrupts = <6>, <8>, <9>, <16>, <17>;
-        interrupt-names = "ctx_ld", "ctxld_kick", "vblank", "dtrc_ch1", "dtrc_ch2";
+        interrupts = <6>, <8>, <9>;
+        interrupt-names = "ctxld", "ctxld_kick", "vblank";
         interrupt-parent = <&irqsteer>;
-        clocks = <&clk 248>, <&clk 247>, <&clk 249>,
-                 <&clk 254>,<&clk 122>, <&clk 266>, <&clk 267>;
+        clocks = <&clk IMX8MQ_CLK_DISP_APB_ROOT>, <&clk IMX8MQ_CLK_DISP_AXI_ROOT>,
+                 <&clk IMX8MQ_CLK_DISP_RTRM_ROOT>, <&clk IMX8MQ_VIDEO2_PLL_OUT>,
+                 <&clk IMX8MQ_CLK_DISP_DTRC>, <&clk IMX8MQ_VIDEO2_PLL1_REF_SEL>,
+                 <&clk IMX8MQ_CLK_PHY_27MHZ>;
         clock-names = "apb", "axi", "rtrm", "pix", "dtrc",
                       "pll_src", "pll_phy_ref";
-        assigned-clocks = <&clk 107>, <&clk 109>, <&clk 266>;
-        assigned-clock-parents = <&clk 78>, <&clk 78>, <&clk 3>;
+        assigned-clocks = <&clk IMX8MQ_CLK_DISP_AXI>, <&clk IMX8MQ_CLK_DISP_RTRM>,
+                          <&clk IMX8MQ_VIDEO2_PLL1_REF_SEL>;
+        assigned-clock-parents = <&clk IMX8MQ_SYS1_PLL_800M>, <&clk IMX8MQ_SYS1_PLL_800M>,
+                                 <&clk IMX8MQ_CLK_27M>;
         assigned-clock-rates = <800000000>,
                                <400000000>;
-        port@0 {
+        port {
             dcss_out: endpoint {
                 remote-endpoint = <&hdmi_in>;
             };

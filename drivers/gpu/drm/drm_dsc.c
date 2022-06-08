@@ -50,6 +50,33 @@ void drm_dsc_dp_pps_header_init(struct dp_sdp_header *pps_header)
 EXPORT_SYMBOL(drm_dsc_dp_pps_header_init);
 
 /**
+ * drm_dsc_dp_rc_buffer_size - get rc buffer size in bytes
+ * @rc_buffer_block_size: block size code, according to DPCD offset 62h
+ * @rc_buffer_size: number of blocks - 1, according to DPCD offset 63h
+ *
+ * return:
+ * buffer size in bytes, or 0 on invalid input
+ */
+int drm_dsc_dp_rc_buffer_size(u8 rc_buffer_block_size, u8 rc_buffer_size)
+{
+	int size = 1024 * (rc_buffer_size + 1);
+
+	switch (rc_buffer_block_size) {
+	case DP_DSC_RC_BUF_BLK_SIZE_1:
+		return 1 * size;
+	case DP_DSC_RC_BUF_BLK_SIZE_4:
+		return 4 * size;
+	case DP_DSC_RC_BUF_BLK_SIZE_16:
+		return 16 * size;
+	case DP_DSC_RC_BUF_BLK_SIZE_64:
+		return 64 * size;
+	default:
+		return 0;
+	}
+}
+EXPORT_SYMBOL(drm_dsc_dp_rc_buffer_size);
+
+/**
  * drm_dsc_pps_payload_pack() - Populates the DSC PPS
  *
  * @pps_payload:
@@ -71,7 +98,7 @@ void drm_dsc_pps_payload_pack(struct drm_dsc_picture_parameter_set *pps_payload,
 {
 	int i;
 
-	/* Protect against someone accidently changing struct size */
+	/* Protect against someone accidentally changing struct size */
 	BUILD_BUG_ON(sizeof(*pps_payload) !=
 		     DP_SDP_PPS_HEADER_PAYLOAD_BYTES_MINUS_1 + 1);
 
@@ -186,8 +213,7 @@ void drm_dsc_pps_payload_pack(struct drm_dsc_picture_parameter_set *pps_payload,
 	pps_payload->flatness_max_qp = dsc_cfg->flatness_max_qp;
 
 	/* PPS 38, 39 */
-	pps_payload->rc_model_size =
-		cpu_to_be16(DSC_RC_MODEL_SIZE_CONST);
+	pps_payload->rc_model_size = cpu_to_be16(dsc_cfg->rc_model_size);
 
 	/* PPS 40 */
 	pps_payload->rc_edge_factor = DSC_RC_EDGE_FACTOR_CONST;
@@ -216,13 +242,11 @@ void drm_dsc_pps_payload_pack(struct drm_dsc_picture_parameter_set *pps_payload,
 	 */
 	for (i = 0; i < DSC_NUM_BUF_RANGES; i++) {
 		pps_payload->rc_range_parameters[i] =
-			((dsc_cfg->rc_range_params[i].range_min_qp <<
-			  DSC_PPS_RC_RANGE_MINQP_SHIFT) |
-			 (dsc_cfg->rc_range_params[i].range_max_qp <<
-			  DSC_PPS_RC_RANGE_MAXQP_SHIFT) |
-			 (dsc_cfg->rc_range_params[i].range_bpg_offset));
-		pps_payload->rc_range_parameters[i] =
-			cpu_to_be16(pps_payload->rc_range_parameters[i]);
+			cpu_to_be16((dsc_cfg->rc_range_params[i].range_min_qp <<
+				     DSC_PPS_RC_RANGE_MINQP_SHIFT) |
+				    (dsc_cfg->rc_range_params[i].range_max_qp <<
+				     DSC_PPS_RC_RANGE_MAXQP_SHIFT) |
+				    (dsc_cfg->rc_range_params[i].range_bpg_offset));
 	}
 
 	/* PPS 88 */
@@ -336,12 +360,6 @@ int drm_dsc_compute_rc_parameters(struct drm_dsc_config *vdsc_cfg)
 	else
 		vdsc_cfg->nfl_bpg_offset = 0;
 
-	/* 2^16 - 1 */
-	if (vdsc_cfg->nfl_bpg_offset > 65535) {
-		DRM_DEBUG_KMS("NflBpgOffset is too large for this slice height\n");
-		return -ERANGE;
-	}
-
 	/* Number of groups used to code the entire slice */
 	groups_total = groups_per_line * vdsc_cfg->slice_height;
 
@@ -369,11 +387,6 @@ int drm_dsc_compute_rc_parameters(struct drm_dsc_config *vdsc_cfg)
 		 * be used to disable the scale increment at the end of the slice
 		 */
 		vdsc_cfg->scale_increment_interval = 0;
-	}
-
-	if (vdsc_cfg->scale_increment_interval > 65535) {
-		DRM_DEBUG_KMS("ScaleIncrementInterval is large for slice height\n");
-		return -ERANGE;
 	}
 
 	/*

@@ -22,7 +22,17 @@ struct numa_topology_node {
 
 struct numa_topology {
 	u32				nr;
-	struct numa_topology_node	nodes[0];
+	struct numa_topology_node	nodes[];
+};
+
+struct hybrid_topology_node {
+	char		*pmu_name;
+	char		*cpus;
+};
+
+struct hybrid_topology {
+	u32				nr;
+	struct hybrid_topology_node	nodes[];
 };
 
 struct cpu_topology *cpu_topology__new(void);
@@ -30,5 +40,8 @@ void cpu_topology__delete(struct cpu_topology *tp);
 
 struct numa_topology *numa_topology__new(void);
 void numa_topology__delete(struct numa_topology *tp);
+
+struct hybrid_topology *hybrid_topology__new(void);
+void hybrid_topology__delete(struct hybrid_topology *tp);
 
 #endif /* __PERF_CPUTOPO_H */

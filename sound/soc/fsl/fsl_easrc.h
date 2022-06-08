@@ -7,9 +7,9 @@
 #define _FSL_EASRC_H
 
 #include <sound/asound.h>
-#include <uapi/linux/mxc_asrc.h>
-#include <linux/miscdevice.h>
 #include <linux/platform_data/dma-imx.h>
+
+#include "fsl_asrc_common.h"
 
 /* EASRC Register Map */
 
@@ -354,10 +354,7 @@
 /* ASRC Resampling Ratio Low (RRL) */
 #define EASRC_RRL_RS_RL_SHIFT		0
 #define EASRC_RRL_RS_RL_WIDTH		32
-#define EASRC_RRL_RS_RL_MASK		((BIT(EASRC_RRL_RS_RL_WIDTH) - 1) \
-					 << EASRC_RRL_RS_RL_SHIFT)
-#define EASRC_RRL_RS_RL(v)		(((v) << EASRC_RRL_RS_RL_SHIFT) \
-					 & EASRC_RRL_RS_RL_MASK)
+#define EASRC_RRL_RS_RL(v)		((v) << EASRC_RRL_RS_RL_SHIFT)
 
 /* ASRC Resampling Ratio High (RRH) */
 #define EASRC_RRH_RS_VLD_SHIFT		31
@@ -373,10 +370,7 @@
 /* ASRC Resampling Ratio Update Control (RSUC) */
 #define EASRC_RSUC_RS_RM_SHIFT		0
 #define EASRC_RSUC_RS_RM_WIDTH		32
-#define EASRC_RSUC_RS_RM_MASK		((BIT(EASRC_RSUC_RS_RM_WIDTH) - 1) \
-					 << EASRC_RSUC_RS_RM_SHIFT)
-#define EASRC_RSUC_RS_RM(v)		(((v) << EASRC_RSUC_RS_RM_SHIFT) \
-					 & EASRC_RSUC_RS_RM_MASK)
+#define EASRC_RSUC_RS_RM(v)		((v) << EASRC_RSUC_RS_RM_SHIFT)
 
 /* ASRC Resampling Ratio Update Rate (RRUR) */
 #define EASRC_RRUR_RRR_SHIFT		0
@@ -389,34 +383,22 @@
 /* ASRC Resampling Center Tap Coefficient Low (RCTCL) */
 #define EASRC_RCTCL_RS_CL_SHIFT		0
 #define EASRC_RCTCL_RS_CL_WIDTH		32
-#define EASRC_RCTCL_RS_CL_MASK		((BIT(EASRC_RCTCL_RS_CL_WIDTH) - 1) \
-					 << EASRC_RCTCL_RS_CL_SHIFT)
-#define EASRC_RCTCL_RS_CL(v)		(((v) << EASRC_RCTCL_RS_CL_SHIFT) \
-					 & EASRC_RCTCL_RS_CL_MASK)
+#define EASRC_RCTCL_RS_CL(v)		((v) << EASRC_RCTCL_RS_CL_SHIFT)
 
 /* ASRC Resampling Center Tap Coefficient High (RCTCH) */
 #define EASRC_RCTCH_RS_CH_SHIFT		0
 #define EASRC_RCTCH_RS_CH_WIDTH		32
-#define EASRC_RCTCH_RS_CH_MASK		((BIT(EASRC_RCTCH_RS_CH_WIDTH) - 1) \
-					 << EASRC_RCTCH_RS_CH_SHIFT)
-#define EASRC_RCTCH_RS_CH(v)		(((v) << EASRC_RCTCH_RS_CH_SHIFT) \
-					 & EASRC_RCTCH_RS_CH_MASK)
+#define EASRC_RCTCH_RS_CH(v)		((v) << EASRC_RCTCH_RS_CH_SHIFT)
 
 /* ASRC Prefilter Coefficient FIFO (PCF) */
 #define EASRC_PCF_CD_SHIFT		0
 #define EASRC_PCF_CD_WIDTH		32
-#define EASRC_PCF_CD_MASK		((BIT(EASRC_PCF_CD_WIDTH) - 1) \
-					 << EASRC_PCF_CD_SHIFT)
-#define EASRC_PCF_CD(v)			(((v) << EASRC_PCF_CD_SHIFT) \
-					 & EASRC_PCF_CD_MASK)
+#define EASRC_PCF_CD(v)			((v) << EASRC_PCF_CD_SHIFT)
 
 /* ASRC Context Resampling Coefficient Memory (CRCM) */
 #define EASRC_CRCM_RS_CWD_SHIFT		0
 #define EASRC_CRCM_RS_CWD_WIDTH		32
-#define EASRC_CRCM_RS_CWD_MASK		((BIT(EASRC_CRCM_RS_CWD_WIDTH) - 1) \
-					 << EASRC_CRCM_RS_CWD_SHIFT)
-#define EASRC_CRCM_RS_CWD(v)		(((v) << EASRC_CRCM_RS_CWD_SHIFT) \
-					 & EASRC_CRCM_RS_CWD_MASK)
+#define EASRC_CRCM_RS_CWD(v)		((v) << EASRC_CRCM_RS_CWD_SHIFT)
 
 /* ASRC Context Resampling Coefficient Control (CRCC) */
 #define EASRC_CRCC_RS_CA_SHIFT		16
@@ -478,10 +460,7 @@
 /* ASRC Context Channel STAT */
 #define EASRC_CSx_CSx_SHIFT		0
 #define EASRC_CSx_CSx_WIDTH		32
-#define EASRC_CSx_CSx_MASK		((BIT(EASRC_CSx_CSx_WIDTH) - 1) \
-					 << EASRC_CSx_CSx_SHIFT)
-#define EASRC_CSx_CSx(v)		(((v) << EASRC_CSx_CSx_SHIFT) \
-					 & EASRC_CSx_CSx_MASK)
+#define EASRC_CSx_CSx(v)		((v) << EASRC_CSx_CSx_SHIFT)
 
 /* ASRC Debug Control Register */
 #define EASRC_DBGC_DMS_SHIFT		0
@@ -494,15 +473,10 @@
 /* ASRC Debug Status Register */
 #define EASRC_DBGS_DS_SHIFT		0
 #define EASRC_DBGS_DS_WIDTH		32
-#define EASRC_DBGS_DS_MASK		((BIT(EASRC_DBGS_DS_WIDTH) - 1) \
-					 << EASRC_DBGS_DS_SHIFT)
-#define EASRC_DBGS_DS(v)		(((v) << EASRC_DBGS_DS_SHIFT) \
-					 & EASRC_DBGS_DS_MASK)
+#define EASRC_DBGS_DS(v)		((v) << EASRC_DBGS_DS_SHIFT)
 
 /* General Constants */
 #define EASRC_CTX_MAX_NUM		4
-#define EASRC_32b_MASK			(BIT(32) - 1)
-#define EASRC_64b_MASK			(BIT(64) - 1)
 #define EASRC_RS_COEFF_MEM		0
 #define EASRC_PF_COEFF_MEM		1
 
@@ -523,10 +497,6 @@
 #define EASRC_INIT_MODE_REPLICATE	1
 #define EASRC_INIT_MODE_ZERO_FILL	2
 
-/* directions */
-#define IN	0
-#define OUT	1
-
 /* FIFO watermarks */
 #define FSL_EASRC_INPUTFIFO_WML		0x4
 #define FSL_EASRC_OUTPUTFIFO_WML	0x1
@@ -541,6 +511,8 @@
 
 #define FIRMWARE_MAGIC			0xDEAD
 #define FIRMWARE_VERSION		1
+
+#define PREFILTER_MEM_LEN		0x1800
 
 enum easrc_word_width {
 	EASRC_WIDTH_16_BIT = 0,
@@ -604,28 +576,41 @@ struct fsl_easrc_io_params {
 struct fsl_easrc_slot {
 	bool busy;
 	int ctx_index;
-	int num_channel;  /*maximum is 8*/
+	int slot_index;
+	int num_channel;  /* maximum is 8 */
 	int min_channel;
 	int max_channel;
 	int pf_mem_used;
 };
 
-struct fsl_easrc_context {
-	enum asrc_pair_index index;
-	struct fsl_easrc *easrc;
-	struct dma_chan *dma_chan[2];
-	struct dma_async_tx_descriptor *desc[2];
+/**
+ * fsl_easrc_ctx_priv: EASRC context private data
+ *
+ * @in_params: input parameter
+ * @out_params:  output parameter
+ * @st1_num_taps: tap number of stage 1
+ * @st2_num_taps: tap number of stage 2
+ * @st1_num_exp: exponent number of stage 1
+ * @pf_init_mode: prefilter init mode
+ * @rs_init_mode:  resample filter init mode
+ * @ctx_streams: stream flag of ctx
+ * @rs_ratio: resampler ratio
+ * @st1_coeff: pointer of stage 1 coeff
+ * @st2_coeff: pointer of stage 2 coeff
+ * @in_filled_sample: input filled sample
+ * @out_missed_sample: sample missed in output
+ * @st1_addexp: exponent added for stage1
+ * @st2_addexp: exponent added for stage2
+ */
+struct fsl_easrc_ctx_priv {
 	struct fsl_easrc_io_params in_params;
 	struct fsl_easrc_io_params out_params;
-	struct imx_dma_data dma_data;
-	unsigned int channels;
 	unsigned int st1_num_taps;
 	unsigned int st2_num_taps;
 	unsigned int st1_num_exp;
 	unsigned int pf_init_mode;
 	unsigned int rs_init_mode;
 	unsigned int ctx_streams;
-	unsigned int pos;
 	u64 rs_ratio;
 	u64 *st1_coeff;
 	u64 *st2_coeff;
@@ -633,66 +618,34 @@ struct fsl_easrc_context {
 	int out_missed_sample;
 	int st1_addexp;
 	int st2_addexp;
-	void *private_data;
 };
 
 /**
- * fsl_easrc: EASRC private data
+ * fsl_easrc_priv: EASRC private data
  *
- * name : name of EASRC device
- * @pdev: platform device pointer
- * @regmap: regmap handler
- * @dma_params_rx: DMA parameters for receive channel
- * @dma_params_tx: DMA parameters for transmit channel
- * @ctx:  context pointer
  * @slot: slot setting
- * @mem_clk: clock source to access register
  * @firmware_hdr:  the header of firmware
  * @interp: pointer to interpolation filter coeff
  * @prefil: pointer to prefilter coeff
  * @fw: firmware of coeff table
  * @fw_name: firmware name
- * @paddr: physical address to the base address of registers
  * @rs_num_taps:  resample filter taps, 32, 64, or 128
- * @bps_i2c958: bits per sample of iec958
- * @chn_avail: available channels, maximum 32
- * @lock: spin lock for resource protection
- * @easrc_rate: default sample rate for ASoC Back-Ends
- * @easrc_format: default sample format for ASoC Back-Ends
+ * @bps_iec958: bits per sample of iec958
+ * @rs_coeff: resampler coefficient
+ * @const_coeff: one tap prefilter coefficient
+ * @firmware_loaded: firmware is loaded
  */
-
-struct fsl_easrc {
-	char name[32];
-	struct platform_device *pdev;
-	struct regmap *regmap;
-	struct miscdevice easrc_miscdev;
-	struct snd_dmaengine_dai_dma_data dma_params_rx;
-	struct snd_dmaengine_dai_dma_data dma_params_tx;
-	struct fsl_easrc_context *ctx[EASRC_CTX_MAX_NUM];
+struct fsl_easrc_priv {
 	struct fsl_easrc_slot slot[EASRC_CTX_MAX_NUM][2];
-	struct clk *mem_clk;
 	struct asrc_firmware_hdr *firmware_hdr;
 	struct interp_params *interp;
 	struct prefil_params *prefil;
 	const struct firmware *fw;
 	const char *fw_name;
-	unsigned long paddr;
 	unsigned int rs_num_taps;
 	unsigned int bps_iec958[EASRC_CTX_MAX_NUM];
-	unsigned int chn_avail;
 	u64 *rs_coeff;
 	u64 const_coeff;
 	int firmware_loaded;
-	spinlock_t lock;  /* spin lock for resource protection */
-	int easrc_rate;
-	int easrc_format;
 };
-
-struct dma_chan *fsl_easrc_get_dma_channel(
-			struct fsl_easrc_context *ctx, bool dir);
-int fsl_easrc_request_context(
-			struct fsl_easrc_context *ctx, unsigned int channels);
-int fsl_easrc_release_context(struct fsl_easrc_context *ctx);
-
-#define DRV_NAME "fsl-easrc-dma"
 #endif /* _FSL_EASRC_H */

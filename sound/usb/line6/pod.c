@@ -110,7 +110,7 @@ enum {
 	POD_BUSY_MIDISEND
 };
 
-static struct snd_ratden pod_ratden = {
+static const struct snd_ratden pod_ratden = {
 	.num_min = 78125,
 	.num_max = 78125,
 	.num_step = 1,
@@ -373,11 +373,6 @@ static int pod_init(struct usb_line6 *line6,
 
 	/* create sysfs entries: */
 	err = snd_card_add_dev_attr(line6->card, &pod_dev_attr_group);
-	if (err < 0)
-		return err;
-
-	/* initialize MIDI subsystem: */
-	err = line6_init_midi(line6);
 	if (err < 0)
 		return err;
 

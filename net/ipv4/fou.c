@@ -230,14 +230,14 @@ static struct sk_buff *fou_gro_receive(struct sock *sk,
 				       struct list_head *head,
 				       struct sk_buff *skb)
 {
+	const struct net_offload __rcu **offloads;
 	u8 proto = fou_from_sock(sk)->protocol;
-	const struct net_offload **offloads;
 	const struct net_offload *ops;
 	struct sk_buff *pp = NULL;
 
 	/* We can clear the encap_mark for FOU as we are essentially doing
 	 * one of two possible things.  We are either adding an L4 tunnel
-	 * header to the outer L3 tunnel header, or we are are simply
+	 * header to the outer L3 tunnel header, or we are simply
 	 * treating the GRE tunnel header as though it is a UDP protocol
 	 * specific header such as VXLAN or GENEVE.
 	 */
@@ -263,10 +263,10 @@ out_unlock:
 static int fou_gro_complete(struct sock *sk, struct sk_buff *skb,
 			    int nhoff)
 {
-	const struct net_offload *ops;
+	const struct net_offload __rcu **offloads;
 	u8 proto = fou_from_sock(sk)->protocol;
+	const struct net_offload *ops;
 	int err = -ENOSYS;
-	const struct net_offload **offloads;
 
 	rcu_read_lock();
 	offloads = NAPI_GRO_CB(skb)->is_ipv6 ? inet6_offloads : inet_offloads;
@@ -311,7 +311,7 @@ static struct sk_buff *gue_gro_receive(struct sock *sk,
 				       struct list_head *head,
 				       struct sk_buff *skb)
 {
-	const struct net_offload **offloads;
+	const struct net_offload __rcu **offloads;
 	const struct net_offload *ops;
 	struct sk_buff *pp = NULL;
 	struct sk_buff *p;
@@ -429,7 +429,7 @@ next_proto:
 
 	/* We can clear the encap_mark for GUE as we are essentially doing
 	 * one of two possible things.  We are either adding an L4 tunnel
-	 * header to the outer L3 tunnel header, or we are are simply
+	 * header to the outer L3 tunnel header, or we are simply
 	 * treating the GRE tunnel header as though it is a UDP protocol
 	 * specific header such as VXLAN or GENEVE.
 	 */
@@ -457,8 +457,8 @@ out:
 
 static int gue_gro_complete(struct sock *sk, struct sk_buff *skb, int nhoff)
 {
-	const struct net_offload **offloads;
 	struct guehdr *guehdr = (struct guehdr *)(skb->data + nhoff);
+	const struct net_offload __rcu **offloads;
 	const struct net_offload *ops;
 	unsigned int guehlen = 0;
 	u8 proto;
@@ -911,7 +911,7 @@ static int fou_nl_dump(struct sk_buff *skb, struct netlink_callback *cb)
 	return skb->len;
 }
 
-static const struct genl_ops fou_nl_ops[] = {
+static const struct genl_small_ops fou_nl_ops[] = {
 	{
 		.cmd = FOU_CMD_ADD,
 		.validate = GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
@@ -940,8 +940,8 @@ static struct genl_family fou_nl_family __ro_after_init = {
 	.policy = fou_nl_policy,
 	.netnsok	= true,
 	.module		= THIS_MODULE,
-	.ops		= fou_nl_ops,
-	.n_ops		= ARRAY_SIZE(fou_nl_ops),
+	.small_ops	= fou_nl_ops,
+	.n_small_ops	= ARRAY_SIZE(fou_nl_ops),
 };
 
 size_t fou_encap_hlen(struct ip_tunnel_encap *e)
@@ -1304,3 +1304,4 @@ module_init(fou_init);
 module_exit(fou_fini);
 MODULE_AUTHOR("Tom Herbert <therbert@google.com>");
 MODULE_LICENSE("GPL");
+MODULE_DESCRIPTION("Foo over UDP");

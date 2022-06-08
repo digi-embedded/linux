@@ -32,7 +32,7 @@
  *  * Client writes WRITE cmd in communication region cmd address.
  *  * Client issues mbox_send_message() which rings the PCC doorbell
  *		for its PCC channel.
- *  * If command completes, then writes have succeded and it can release
+ *  * If command completes, then writes have succeeded and it can release
  *		the channel lock.
  *
  *  There is a Nominal latency defined for each channel which indicates
@@ -457,14 +457,17 @@ static int __init acpi_pcc_probe(void)
 			pr_warn("Error parsing PCC subspaces from PCCT\n");
 		else
 			pr_warn("Invalid PCCT: %d PCC subspaces\n", count);
-		return -EINVAL;
+
+		rc = -EINVAL;
+		goto err_put_pcct;
 	}
 
 	pcc_mbox_channels = kcalloc(count, sizeof(struct mbox_chan),
 				    GFP_KERNEL);
 	if (!pcc_mbox_channels) {
 		pr_err("Could not allocate space for PCC mbox channels\n");
-		return -ENOMEM;
+		rc = -ENOMEM;
+		goto err_put_pcct;
 	}
 
 	pcc_doorbell_vaddr = kcalloc(count, sizeof(void *), GFP_KERNEL);
@@ -535,6 +538,8 @@ err_free_db_vaddr:
 	kfree(pcc_doorbell_vaddr);
 err_free_mbox:
 	kfree(pcc_mbox_channels);
+err_put_pcct:
+	acpi_put_table(pcct_tbl);
 	return rc;
 }
 
@@ -568,11 +573,10 @@ static int pcc_mbox_probe(struct platform_device *pdev)
 	return ret;
 }
 
-struct platform_driver pcc_mbox_driver = {
+static struct platform_driver pcc_mbox_driver = {
 	.probe = pcc_mbox_probe,
 	.driver = {
 		.name = "PCCT",
-		.owner = THIS_MODULE,
 	},
 };
 

@@ -6,7 +6,7 @@
  * Copyright 2019 NXP
  *
  * Author: Subrahmanya Lingappa <l.subrahmanya@mobiveil.co.in>
- * Refactor: Zhiqiang Hou <Zhiqiang.Hou@nxp.com>
+ *	   Hou Zhiqiang <Zhiqiang.Hou@nxp.com>
  */
 
 #ifndef _PCIE_MOBIVEIL_H
@@ -163,9 +163,6 @@
 #define OFFSET_TO_PAGE_IDX(off)		\
 	((off >> PAGE_SEL_OFFSET_SHIFT) & PAGE_SEL_MASK)
 
-struct mobiveil_pcie;
-struct mobiveil_pcie_ep;
-
 struct mobiveil_msi {			/* MSI information */
 	struct mutex lock;		/* protect bitmap variable */
 	struct irq_domain *msi_domain;
@@ -175,14 +172,16 @@ struct mobiveil_msi {			/* MSI information */
 	DECLARE_BITMAP(msi_irq_in_use, PCI_NUM_MSI);
 };
 
+struct mobiveil_pcie;
+struct mobiveil_pcie_ep;
+
 struct mobiveil_rp_ops {
 	int (*interrupt_init)(struct mobiveil_pcie *pcie);
 	int (*read_other_conf)(struct pci_bus *bus, unsigned int devfn,
 			       int where, int size, u32 *val);
 };
 
-struct root_port {
-	u8 root_bus_nr;
+struct mobiveil_root_port {
 	void __iomem *config_axi_slave_base;	/* endpoint config base */
 	struct resource *ob_io_res;
 	struct mobiveil_rp_ops *ops;
@@ -190,6 +189,7 @@ struct root_port {
 	raw_spinlock_t intx_mask_lock;
 	struct irq_domain *intx_domain;
 	struct mobiveil_msi msi;
+	struct pci_host_bridge *bridge;
 };
 
 struct mobiveil_pab_ops {
@@ -221,17 +221,15 @@ struct mobiveil_pcie_ep {
 
 struct mobiveil_pcie {
 	struct platform_device *pdev;
-	struct list_head *resources;
-	void __iomem *csr_axi_slave_base;	/* PAB registers base */
-	phys_addr_t pcie_reg_base;	/* Physical PCIe Controller Base */
+	void __iomem *csr_axi_slave_base;	/* root port config base */
 	void __iomem *apb_csr_base;	/* MSI register base */
-	u32 apio_wins;
-	u32 ppio_wins;
-	u32 ob_wins_configured;		/* configured outbound windows */
-	u32 ib_wins_configured;		/* configured inbound windows */
+	phys_addr_t pcie_reg_base;	/* Physical PCIe Controller Base */
+	int apio_wins;
+	int ppio_wins;
+	int ob_wins_configured;		/* configured outbound windows */
+	int ib_wins_configured;		/* configured inbound windows */
 	const struct mobiveil_pab_ops *ops;
-	struct root_port rp;
-	struct pci_host_bridge *bridge;
+	struct mobiveil_root_port rp;
 	struct mobiveil_pcie_ep ep;
 };
 
@@ -246,37 +244,42 @@ void program_ob_windows(struct mobiveil_pcie *pcie, int win_num, u64 cpu_addr,
 			u64 pci_addr, u32 type, u64 size);
 void program_ib_windows(struct mobiveil_pcie *pcie, int win_num, u64 cpu_addr,
 			u64 pci_addr, u32 type, u64 size);
-u32 csr_read(struct mobiveil_pcie *pcie, u32 off, size_t size);
-void csr_write(struct mobiveil_pcie *pcie, u32 val, u32 off, size_t size);
+u32 mobiveil_csr_read(struct mobiveil_pcie *pcie, u32 off, size_t size);
+void mobiveil_csr_write(struct mobiveil_pcie *pcie, u32 val, u32 off,
+			size_t size);
 
-static inline u32 csr_readl(struct mobiveil_pcie *pcie, u32 off)
+static inline u32 mobiveil_csr_readl(struct mobiveil_pcie *pcie, u32 off)
 {
-	return csr_read(pcie, off, 0x4);
+	return mobiveil_csr_read(pcie, off, 0x4);
 }
 
-static inline u32 csr_readw(struct mobiveil_pcie *pcie, u32 off)
+static inline u16 mobiveil_csr_readw(struct mobiveil_pcie *pcie, u32 off)
 {
-	return csr_read(pcie, off, 0x2);
+	return mobiveil_csr_read(pcie, off, 0x2);
 }
 
-static inline u32 csr_readb(struct mobiveil_pcie *pcie, u32 off)
+static inline u8 mobiveil_csr_readb(struct mobiveil_pcie *pcie, u32 off)
 {
-	return csr_read(pcie, off, 0x1);
+	return mobiveil_csr_read(pcie, off, 0x1);
 }
 
-static inline void csr_writel(struct mobiveil_pcie *pcie, u32 val, u32 off)
+
+static inline void mobiveil_csr_writel(struct mobiveil_pcie *pcie, u32 val,
+				       u32 off)
 {
-	csr_write(pcie, val, off, 0x4);
+	mobiveil_csr_write(pcie, val, off, 0x4);
 }
 
-static inline void csr_writew(struct mobiveil_pcie *pcie, u32 val, u32 off)
+static inline void mobiveil_csr_writew(struct mobiveil_pcie *pcie, u16 val,
+				       u32 off)
 {
-	csr_write(pcie, val, off, 0x2);
+	mobiveil_csr_write(pcie, val, off, 0x2);
 }
 
-static inline void csr_writeb(struct mobiveil_pcie *pcie, u32 val, u32 off)
+static inline void mobiveil_csr_writeb(struct mobiveil_pcie *pcie, u8 val,
+				       u32 off)
 {
-	csr_write(pcie, val, off, 0x1);
+	mobiveil_csr_write(pcie, val, off, 0x1);
 }
 
 void program_ib_windows_ep(struct mobiveil_pcie *pcie, u8 func_no,

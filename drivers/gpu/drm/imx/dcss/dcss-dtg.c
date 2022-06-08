@@ -8,6 +8,7 @@
 #include <linux/interrupt.h>
 #include <linux/of.h>
 #include <linux/platform_device.h>
+#include <linux/slab.h>
 
 #include "dcss-dev.h"
 
@@ -89,20 +90,10 @@ struct dcss_dtg {
 
 	u32 control_status;
 	u32 alpha;
+	u32 alpha_cfg;
 
 	int ctxld_kick_irq;
 	bool ctxld_kick_irq_en;
-
-	struct clk *pix_clk;
-	struct clk *pll_src_clk;
-	struct clk *pll_phy_ref_clk;
-
-	/*
-	 * This will be passed on by DRM CRTC so that we can signal when DTG has
-	 * been successfully stopped. Otherwise, any modesetting while DTG is
-	 * still ON may result in unpredictable behavior.
-	 */
-	struct completion *dis_completion;
 };
 
 static void dcss_dtg_write(struct dcss_dtg *dtg, u32 val, u32 ofs)
@@ -110,7 +101,8 @@ static void dcss_dtg_write(struct dcss_dtg *dtg, u32 val, u32 ofs)
 	if (!dtg->in_use)
 		dcss_writel(val, dtg->base_reg + ofs);
 
-	dcss_ctxld_write(dtg->ctxld, dtg->ctx_id, val, dtg->base_ofs + ofs);
+	dcss_ctxld_write(dtg->ctxld, dtg->ctx_id,
+			 val, dtg->base_ofs + ofs);
 }
 
 static irqreturn_t dcss_dtg_irq_handler(int irq, void *data)
@@ -121,7 +113,7 @@ static irqreturn_t dcss_dtg_irq_handler(int irq, void *data)
 	status = dcss_readl(dtg->base_reg + DCSS_DTG_INT_STATUS);
 
 	if (!(status & LINE0_IRQ))
-		return IRQ_HANDLED;
+		return IRQ_NONE;
 
 	dcss_ctxld_kick(dtg->ctxld);
 
@@ -136,18 +128,14 @@ static int dcss_dtg_irq_config(struct dcss_dtg *dtg,
 	int ret;
 
 	dtg->ctxld_kick_irq = platform_get_irq_byname(pdev, "ctxld_kick");
-	if (dtg->ctxld_kick_irq < 0) {
-		dev_err(dtg->dev, "dtg: can't get line2 irq number\n");
+	if (dtg->ctxld_kick_irq < 0)
 		return dtg->ctxld_kick_irq;
-	}
 
 	dcss_update(0, LINE0_IRQ | LINE1_IRQ,
 		    dtg->base_reg + DCSS_DTG_INT_MASK);
 
-	ret = devm_request_irq(dtg->dev, dtg->ctxld_kick_irq,
-			       dcss_dtg_irq_handler,
-			       IRQF_TRIGGER_HIGH,
-			       "dcss_ctxld_kick", dtg);
+	ret = request_irq(dtg->ctxld_kick_irq, dcss_dtg_irq_handler,
+			  0, "dcss_ctxld_kick", dtg);
 	if (ret) {
 		dev_err(dtg->dev, "dtg: irq request failed.\n");
 		return ret;
@@ -165,7 +153,7 @@ int dcss_dtg_init(struct dcss_dev *dcss, unsigned long dtg_base)
 	int ret = 0;
 	struct dcss_dtg *dtg;
 
-	dtg = devm_kzalloc(dcss->dev, sizeof(*dtg), GFP_KERNEL);
+	dtg = kzalloc(sizeof(*dtg), GFP_KERNEL);
 	if (!dtg)
 		return -ENOMEM;
 
@@ -174,7 +162,7 @@ int dcss_dtg_init(struct dcss_dev *dcss, unsigned long dtg_base)
 	dtg->ctxld = dcss->ctxld;
 	dtg->hdmi_output = dcss->hdmi_output;
 
-	dtg->base_reg = devm_ioremap(dcss->dev, dtg_base, SZ_4K);
+	dtg->base_reg = ioremap(dtg_base, SZ_4K);
 	if (!dtg->base_reg) {
 		dev_err(dcss->dev, "dtg: unable to remap dtg base\n");
 		ret = -ENOMEM;
@@ -183,10 +171,6 @@ int dcss_dtg_init(struct dcss_dev *dcss, unsigned long dtg_base)
 
 	dtg->base_ofs = dtg_base;
 	dtg->ctx_id = CTX_DB;
-
-	dtg->pix_clk = dcss->pix_clk;
-	dtg->pll_src_clk = dcss->pll_src_clk;
-	dtg->pll_phy_ref_clk = dcss->pll_phy_ref_clk;
 
 	dtg->alpha = 255;
 
@@ -200,29 +184,27 @@ int dcss_dtg_init(struct dcss_dev *dcss, unsigned long dtg_base)
 	return 0;
 
 err_irq:
-	devm_iounmap(dtg->dev, dtg->base_reg);
+	iounmap(dtg->base_reg);
 
 err_ioremap:
-	devm_kfree(dtg->dev, dtg);
+	kfree(dtg);
 
 	return ret;
 }
 
 void dcss_dtg_exit(struct dcss_dtg *dtg)
 {
-	/* stop DTG */
-	dcss_writel(DTG_START, dtg->base_reg + DCSS_DTG_TC_CONTROL_STATUS);
-
-	devm_free_irq(dtg->dev, dtg->ctxld_kick_irq, dtg);
+	free_irq(dtg->ctxld_kick_irq, dtg);
 
 	if (dtg->base_reg)
-		devm_iounmap(dtg->dev, dtg->base_reg);
+		iounmap(dtg->base_reg);
 
-	devm_kfree(dtg->dev, dtg);
+	kfree(dtg);
 }
 
 void dcss_dtg_sync_set(struct dcss_dtg *dtg, struct videomode *vm)
 {
+	struct dcss_dev *dcss = dcss_drv_dev_to_dcss(dtg->dev);
 	u16 dtg_lrc_x, dtg_lrc_y;
 	u16 dis_ulc_x, dis_ulc_y;
 	u16 dis_lrc_x, dis_lrc_y;
@@ -240,20 +222,20 @@ void dcss_dtg_sync_set(struct dcss_dtg *dtg, struct videomode *vm)
 	dis_lrc_y = vm->vsync_len + vm->vfront_porch + vm->vback_porch +
 		    vm->vactive - 1;
 
-	clk_disable_unprepare(dtg->pix_clk);
-	if (dtg->hdmi_output) {
+	clk_disable_unprepare(dcss->pix_clk);
+	if (dcss->hdmi_output) {
 		int err;
 
-		clk_disable_unprepare(dtg->pll_src_clk);
-		err = clk_set_parent(dtg->pll_src_clk, dtg->pll_phy_ref_clk);
+		clk_disable_unprepare(dcss->pll_src_clk);
+		err = clk_set_parent(dcss->pll_src_clk, dcss->pll_phy_ref_clk);
 		if (err < 0)
-			dev_warn(dtg->dev, "clk_set_parent() returned %d", err);
-		clk_prepare_enable(dtg->pll_src_clk);
+			dev_warn(dcss->dev, "clk_set_parent() returned %d", err);
+		clk_prepare_enable(dcss->pll_src_clk);
 	}
-	clk_set_rate(dtg->pix_clk, vm->pixelclock);
-	clk_prepare_enable(dtg->pix_clk);
+	clk_set_rate(dcss->pix_clk, vm->pixelclock);
+	clk_prepare_enable(dcss->pix_clk);
 
-	actual_clk = clk_get_rate(dtg->pix_clk);
+	actual_clk = clk_get_rate(dcss->pix_clk);
 	if (pixclock != actual_clk) {
 		dev_info(dtg->dev,
 			 "Pixel clock set to %u kHz instead of %u kHz.\n",
@@ -317,71 +299,54 @@ bool dcss_dtg_global_alpha_changed(struct dcss_dtg *dtg, int ch_num, int alpha)
 void dcss_dtg_plane_alpha_set(struct dcss_dtg *dtg, int ch_num,
 			      const struct drm_format_info *format, int alpha)
 {
-	u32 alpha_val;
-
 	/* we care about alpha only when channel 0 is concerned */
 	if (ch_num)
 		return;
-
-	alpha_val = (alpha << DEFAULT_FG_ALPHA_POS) & DEFAULT_FG_ALPHA_MASK;
 
 	/*
 	 * Use global alpha if pixel format does not have alpha channel or the
 	 * user explicitly chose to use global alpha (i.e. alpha is not OPAQUE).
 	 */
-	if (!format->has_alpha || alpha != 255) {
-		dtg->control_status &= ~(CH1_ALPHA_SEL | DEFAULT_FG_ALPHA_MASK);
-		dtg->control_status |= alpha_val;
-	} else { /* use per-pixel alpha otherwise */
-		dtg->control_status |= CH1_ALPHA_SEL;
-	}
+	if (!format->has_alpha || alpha != 255)
+		dtg->alpha_cfg = (alpha << DEFAULT_FG_ALPHA_POS) & DEFAULT_FG_ALPHA_MASK;
+	else /* use per-pixel alpha otherwise */
+		dtg->alpha_cfg = CH1_ALPHA_SEL;
 
 	dtg->alpha = alpha;
 }
 
-void dcss_dtg_css_set(struct dcss_dtg *dtg, bool out_is_yuv)
+void dcss_dtg_css_set(struct dcss_dtg *dtg,
+		      enum dcss_pixel_pipe_output output_encoding)
 {
 	dtg->control_status &= ~CSS_PIX_COMP_SWAP_MASK;
 
-	if (out_is_yuv)
+	if (output_encoding != DCSS_PIPE_OUTPUT_RGB)
 		return;
 
 	dtg->control_status |=
 			(0x5 << CSS_PIX_COMP_SWAP_POS) & CSS_PIX_COMP_SWAP_MASK;
 }
 
-static void dcss_dtg_disable_callback(void *data)
+void dcss_dtg_enable(struct dcss_dtg *dtg)
 {
-	struct dcss_dtg *dtg = data;
+	dtg->control_status |= DTG_START;
 
+	dtg->control_status &= ~(CH1_ALPHA_SEL | DEFAULT_FG_ALPHA_MASK);
+	dtg->control_status |= dtg->alpha_cfg;
+
+	dcss_dtg_write(dtg, dtg->control_status, DCSS_DTG_TC_CONTROL_STATUS);
+
+	dtg->in_use = true;
+}
+
+void dcss_dtg_shutoff(struct dcss_dtg *dtg)
+{
 	dtg->control_status &= ~DTG_START;
 
 	dcss_writel(dtg->control_status,
 		    dtg->base_reg + DCSS_DTG_TC_CONTROL_STATUS);
 
 	dtg->in_use = false;
-
-	complete(dtg->dis_completion);
-}
-
-void dcss_dtg_enable(struct dcss_dtg *dtg, bool en,
-		     struct completion *dis_completion)
-{
-	if (!en) {
-		dtg->dis_completion = dis_completion;
-		dcss_ctxld_register_dtg_disable_cb(dtg->ctxld,
-						   dcss_dtg_disable_callback,
-						   dtg);
-		return;
-	}
-
-	dtg->dis_completion = NULL;
-
-	dtg->control_status |= DTG_START;
-
-	dcss_dtg_write(dtg, dtg->control_status, DCSS_DTG_TC_CONTROL_STATUS);
-
-	dtg->in_use = true;
 }
 
 bool dcss_dtg_is_enabled(struct dcss_dtg *dtg)
@@ -396,6 +361,9 @@ void dcss_dtg_ch_enable(struct dcss_dtg *dtg, int ch_num, bool en)
 
 	control_status = dtg->control_status & ~ch_en_map[ch_num];
 	control_status |= en ? ch_en_map[ch_num] : 0;
+
+	control_status &= ~(CH1_ALPHA_SEL | DEFAULT_FG_ALPHA_MASK);
+	control_status |= dtg->alpha_cfg;
 
 	if (dtg->control_status != control_status)
 		dcss_dtg_write(dtg, control_status, DCSS_DTG_TC_CONTROL_STATUS);
@@ -430,7 +398,8 @@ void dcss_dtg_ctxld_kick_irq_enable(struct dcss_dtg *dtg, bool en)
 				    dtg->base_reg + DCSS_DTG_INT_CONTROL);
 			enable_irq(dtg->ctxld_kick_irq);
 			dtg->ctxld_kick_irq_en = true;
-			goto mask_unmask;
+			dcss_update(mask, LINE0_IRQ,
+				    dtg->base_reg + DCSS_DTG_INT_MASK);
 		}
 
 		return;
@@ -442,7 +411,6 @@ void dcss_dtg_ctxld_kick_irq_enable(struct dcss_dtg *dtg, bool en)
 	disable_irq_nosync(dtg->ctxld_kick_irq);
 	dtg->ctxld_kick_irq_en = false;
 
-mask_unmask:
 	dcss_update(mask, LINE0_IRQ, dtg->base_reg + DCSS_DTG_INT_MASK);
 }
 

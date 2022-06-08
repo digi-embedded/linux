@@ -16,6 +16,7 @@
 #include <asm/efi.h>
 #include <asm/uv/uv.h>
 #include <asm/cpu_device_id.h>
+#include <asm/realmode.h>
 #include <asm/reboot.h>
 
 #define EFI_MIN_RESERVE 5120
@@ -243,7 +244,7 @@ EXPORT_SYMBOL_GPL(efi_query_variable_store);
  */
 void __init efi_arch_mem_reserve(phys_addr_t addr, u64 size)
 {
-	phys_addr_t new_phys, new_size;
+	struct efi_memory_map_data data = { 0 };
 	struct efi_mem_range mr;
 	efi_memory_desc_t md;
 	int num_entries;
@@ -271,24 +272,21 @@ void __init efi_arch_mem_reserve(phys_addr_t addr, u64 size)
 	num_entries = efi_memmap_split_count(&md, &mr.range);
 	num_entries += efi.memmap.nr_map;
 
-	new_size = efi.memmap.desc_size * num_entries;
-
-	new_phys = efi_memmap_alloc(num_entries);
-	if (!new_phys) {
+	if (efi_memmap_alloc(num_entries, &data) != 0) {
 		pr_err("Could not allocate boot services memmap\n");
 		return;
 	}
 
-	new = early_memremap(new_phys, new_size);
+	new = early_memremap(data.phys_map, data.size);
 	if (!new) {
 		pr_err("Failed to map new boot services memmap\n");
 		return;
 	}
 
 	efi_memmap_insert(&efi.memmap, new, &mr);
-	early_memunmap(new, new_size);
+	early_memunmap(new, data.size);
 
-	efi_memmap_install(new_phys, num_entries);
+	efi_memmap_install(&data);
 	e820__range_update(addr, size, E820_TYPE_RAM, E820_TYPE_RESERVED);
 	e820__update_table(e820_table);
 }
@@ -317,6 +315,9 @@ static __init bool can_free_region(u64 start, u64 size)
 void __init efi_reserve_boot_services(void)
 {
 	efi_memory_desc_t *md;
+
+	if (!efi_enabled(EFI_MEMMAP))
+		return;
 
 	for_each_efi_memory_desc(md) {
 		u64 start = md->phys_addr;
@@ -380,19 +381,11 @@ static void __init efi_unmap_pages(efi_memory_desc_t *md)
 	u64 va = md->virt_addr;
 
 	/*
-	 * To Do: Remove this check after adding functionality to unmap EFI boot
-	 * services code/data regions from direct mapping area because
-	 * "efi=old_map" maps EFI regions in swapper_pg_dir.
-	 */
-	if (efi_enabled(EFI_OLD_MEMMAP))
-		return;
-
-	/*
 	 * EFI mixed mode has all RAM mapped to access arguments while making
 	 * EFI runtime calls, hence don't unmap EFI boot services code/data
 	 * regions.
 	 */
-	if (!efi_is_native())
+	if (efi_is_mixed())
 		return;
 
 	if (kernel_unmap_pages_in_pgd(pgd, pa, md->num_pages))
@@ -404,10 +397,14 @@ static void __init efi_unmap_pages(efi_memory_desc_t *md)
 
 void __init efi_free_boot_services(void)
 {
-	phys_addr_t new_phys, new_size;
+	struct efi_memory_map_data data = { 0 };
 	efi_memory_desc_t *md;
 	int num_entries = 0;
 	void *new, *new_md;
+
+	/* Keep all regions for /sys/kernel/debug/efi */
+	if (efi_enabled(EFI_DBG))
+		return;
 
 	for_each_efi_memory_desc(md) {
 		unsigned long long start = md->phys_addr;
@@ -444,7 +441,7 @@ void __init efi_free_boot_services(void)
 		 * 1.4.4 with SGX enabled booting Linux via Fedora 24's
 		 * grub2-efi on a hard disk.  (And no, I don't know why
 		 * this happened, but Linux should still try to boot rather
-		 * panicing early.)
+		 * panicking early.)
 		 */
 		rm_size = real_mode_size_needed();
 		if (rm_size && (start + rm_size) < (1<<20) && size >= rm_size) {
@@ -453,20 +450,30 @@ void __init efi_free_boot_services(void)
 			size -= rm_size;
 		}
 
+		/*
+		 * Don't free memory under 1M for two reasons:
+		 * - BIOS might clobber it
+		 * - Crash kernel needs it to be reserved
+		 */
+		if (start + size < SZ_1M)
+			continue;
+		if (start < SZ_1M) {
+			size -= (SZ_1M - start);
+			start = SZ_1M;
+		}
+
 		memblock_free_late(start, size);
 	}
 
 	if (!num_entries)
 		return;
 
-	new_size = efi.memmap.desc_size * num_entries;
-	new_phys = efi_memmap_alloc(num_entries);
-	if (!new_phys) {
+	if (efi_memmap_alloc(num_entries, &data) != 0) {
 		pr_err("Failed to allocate new EFI memmap\n");
 		return;
 	}
 
-	new = memremap(new_phys, new_size, MEMREMAP_WB);
+	new = memremap(data.phys_map, data.size, MEMREMAP_WB);
 	if (!new) {
 		pr_err("Failed to map new EFI memmap\n");
 		return;
@@ -490,7 +497,7 @@ void __init efi_free_boot_services(void)
 
 	memunmap(new);
 
-	if (efi_memmap_install(new_phys, num_entries)) {
+	if (efi_memmap_install(&data) != 0) {
 		pr_err("Could not install new EFI memmap\n");
 		return;
 	}
@@ -538,7 +545,7 @@ int __init efi_reuse_config(u64 tables, int nr_tables)
 		goto out_memremap;
 	}
 
-	for (i = 0; i < efi.systab->nr_tables; i++) {
+	for (i = 0; i < nr_tables; i++) {
 		efi_guid_t guid;
 
 		guid = ((efi_config_table_64_t *)p)->guid;
@@ -555,16 +562,6 @@ out:
 	return ret;
 }
 
-static const struct dmi_system_id sgi_uv1_dmi[] = {
-	{ NULL, "SGI UV1",
-		{	DMI_MATCH(DMI_PRODUCT_NAME,	"Stoutland Platform"),
-			DMI_MATCH(DMI_PRODUCT_VERSION,	"1.0"),
-			DMI_MATCH(DMI_BIOS_VENDOR,	"SGI.COM"),
-		}
-	},
-	{ } /* NULL entry stops DMI scanning */
-};
-
 void __init efi_apply_memmap_quirks(void)
 {
 	/*
@@ -576,10 +573,6 @@ void __init efi_apply_memmap_quirks(void)
 		pr_info("Setup done, disabling due to 32/64-bit mismatch\n");
 		efi_memmap_unmap();
 	}
-
-	/* UV2+ BIOS has a fix for this issue.  UV1 still needs the quirk. */
-	if (dmi_check_system(sgi_uv1_dmi))
-		set_bit(EFI_OLD_MEMMAP, &efi.flags);
 }
 
 /*
@@ -653,12 +646,9 @@ static int qrk_capsule_setup_info(struct capsule_info *cap_info, void **pkbuff,
 	return 1;
 }
 
-#define ICPU(family, model, quirk_handler) \
-	{ X86_VENDOR_INTEL, family, model, X86_FEATURE_ANY, \
-	  (unsigned long)&quirk_handler }
-
 static const struct x86_cpu_id efi_capsule_quirk_ids[] = {
-	ICPU(5, 9, qrk_capsule_setup_info),	/* Intel Quark X1000 */
+	X86_MATCH_VENDOR_FAM_MODEL(INTEL, 5, INTEL_FAM5_QUARK_X1000,
+				   &qrk_capsule_setup_info),
 	{ }
 };
 
@@ -709,17 +699,25 @@ int efi_capsule_setup_info(struct capsule_info *cap_info, void *kbuff,
  * @return: Returns, if the page fault is not handled. This function
  * will never return if the page fault is handled successfully.
  */
-void efi_recover_from_page_fault(unsigned long phys_addr)
+void efi_crash_gracefully_on_page_fault(unsigned long phys_addr)
 {
 	if (!IS_ENABLED(CONFIG_X86_64))
 		return;
 
 	/*
-	 * Make sure that an efi runtime service caused the page fault.
-	 * "efi_mm" cannot be used to check if the page fault had occurred
-	 * in the firmware context because efi=old_map doesn't use efi_pgd.
+	 * If we get an interrupt/NMI while processing an EFI runtime service
+	 * then this is a regular OOPS, not an EFI failure.
 	 */
-	if (efi_rts_work.efi_rts_id == EFI_NONE)
+	if (in_interrupt())
+		return;
+
+	/*
+	 * Make sure that an efi runtime service caused the page fault.
+	 * READ_ONCE() because we might be OOPSing in a different thread,
+	 * and we don't want to trip KTSAN while trying to OOPS.
+	 */
+	if (READ_ONCE(efi_rts_work.efi_rts_id) == EFI_NONE ||
+	    current_work() != &efi_rts_work.work)
 		return;
 
 	/*
@@ -740,7 +738,7 @@ void efi_recover_from_page_fault(unsigned long phys_addr)
 	 * Buggy efi_reset_system() is handled differently from other EFI
 	 * Runtime Services as it doesn't use efi_rts_wq. Although,
 	 * native_machine_emergency_restart() says that machine_real_restart()
-	 * could fail, it's better not to compilcate this fault handler
+	 * could fail, it's better not to complicate this fault handler
 	 * because this case occurs *very* rarely and hence could be improved
 	 * on a need by basis.
 	 */
@@ -771,6 +769,4 @@ void efi_recover_from_page_fault(unsigned long phys_addr)
 		set_current_state(TASK_IDLE);
 		schedule();
 	}
-
-	return;
 }

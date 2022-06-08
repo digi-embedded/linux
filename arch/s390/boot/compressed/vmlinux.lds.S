@@ -1,6 +1,9 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 #include <asm-generic/vmlinux.lds.h>
 #include <asm/vmlinux.lds.h>
+#include <asm/thread_info.h>
+#include <asm/page.h>
+#include <asm/sclp.h>
 
 OUTPUT_FORMAT("elf64-s390", "elf64-s390", "elf64-s390")
 OUTPUT_ARCH(s390:64-bit)
@@ -27,36 +30,40 @@ SECTIONS
 		*(.rodata.*)
 		_erodata = . ;
 	}
+	NOTES
 	.data :	{
 		_data = . ;
 		*(.data)
 		*(.data.*)
 		_edata = . ;
 	}
-	/*
-	* .dma section for code, data, ex_table that need to stay below 2 GB,
-	* even when the kernel is relocate: above 2 GB.
-	*/
-	. = ALIGN(PAGE_SIZE);
-	_sdma = .;
-	.dma.text : {
-		_stext_dma = .;
-		*(.dma.text)
-		. = ALIGN(PAGE_SIZE);
-		_etext_dma = .;
-	}
-	. = ALIGN(16);
-	.dma.ex_table : {
-		_start_dma_ex_table = .;
-		KEEP(*(.dma.ex_table))
-		_stop_dma_ex_table = .;
-	}
-	.dma.data : { *(.dma.data) }
-	. = ALIGN(PAGE_SIZE);
-	_edma = .;
 
 	BOOT_DATA
 	BOOT_DATA_PRESERVED
+
+	/*
+	 * This is the BSS section of the decompressor and not of the decompressed Linux kernel.
+	 * It will consume place in the decompressor's image.
+	 */
+	. = ALIGN(8);
+	.bss : {
+		_bss = . ;
+		*(.bss)
+		*(.bss.*)
+		*(COMMON)
+		/*
+		 * Stacks for the decompressor
+		 */
+		. = ALIGN(PAGE_SIZE);
+		_dump_info_stack_start = .;
+		. += PAGE_SIZE;
+		_dump_info_stack_end = .;
+		. = ALIGN(PAGE_SIZE);
+		_stack_start = .;
+		. += BOOT_STACK_SIZE;
+		_stack_end = .;
+		_ebss = .;
+	}
 
 	/*
 	 * uncompressed image info used by the decompressor it should match
@@ -67,6 +74,14 @@ SECTIONS
 	.vmlinux.info : {
 		_vmlinux_info = .;
 		*(.vmlinux.info)
+	}
+
+	.decompressor.syms : {
+		. += 1; /* make sure we have \0 before the first entry */
+		. = ALIGN(2);
+		_decompressor_syms_start = .;
+		*(.decompressor.syms)
+		_decompressor_syms_end = .;
 	}
 
 #ifdef CONFIG_KERNEL_UNCOMPRESSED
@@ -80,15 +95,6 @@ SECTIONS
 		_compressed_end = .;
 		FILL(0xff);
 		. = ALIGN(4096);
-	}
-	. = ALIGN(256);
-	.bss : {
-		_bss = . ;
-		*(.bss)
-		*(.bss.*)
-		*(COMMON)
-		. = ALIGN(8);	/* For convenience during zeroing */
-		_ebss = .;
 	}
 	_end = .;
 

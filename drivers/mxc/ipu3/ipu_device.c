@@ -1,6 +1,6 @@
 /*
  * Copyright 2005-2015 Freescale Semiconductor, Inc. All Rights Reserved.
- * Copyright 2019,2020 NXP
+ * Copyright 2019-2021 NXP
  */
 
 /*
@@ -82,12 +82,12 @@ do {									\
 } while (0)
 
 #define DECLARE_PERF_VAR						\
-	struct timespec ts_queue;					\
-	struct timespec ts_dotask;					\
-	struct timespec ts_waitirq;					\
-	struct timespec ts_sche;					\
-	struct timespec ts_rel;						\
-	struct timespec ts_frame
+	struct timespec64 ts_queue;					\
+	struct timespec64 ts_dotask;					\
+	struct timespec64 ts_waitirq;					\
+	struct timespec64 ts_sche;					\
+	struct timespec64 ts_rel;						\
+	struct timespec64 ts_frame
 
 #define PRINT_TASK_STATISTICS						\
 do {									\
@@ -321,12 +321,12 @@ struct ipu_task_entry {
 	} vdoa_dma;
 
 #ifdef DBG_IPU_PERF
-	struct timespec ts_queue;
-	struct timespec ts_dotask;
-	struct timespec ts_waitirq;
-	struct timespec ts_inirq;
-	struct timespec ts_wakeup;
-	struct timespec ts_rel;
+	struct timespec64 ts_queue;
+	struct timespec64 ts_dotask;
+	struct timespec64 ts_waitirq;
+	struct timespec64 ts_inirq;
+	struct timespec64 ts_wakeup;
+	struct timespec64 ts_rel;
 #endif
 };
 
@@ -368,7 +368,7 @@ static struct device *ipu_dev;
 static int debug;
 module_param(debug, int, 0600);
 #ifdef DBG_IPU_PERF
-static struct timespec ts_frame_max;
+static struct timespec64 ts_frame_max;
 static u32 ts_frame_avg;
 static atomic_t frame_cnt;
 #endif
@@ -2481,7 +2481,7 @@ static void vdi_split_process(struct ipu_soc *ipu, struct ipu_task_entry *t)
 		base_off = page_address(pfn_to_page(t->output.paddr >> PAGE_SHIFT));
 		base_off += t->output.paddr & ((1 << PAGE_SHIFT) - 1);
 	} else {
-		base_off = (char *)ioremap_nocache(t->output.paddr,
+		base_off = (char *)ioremap(t->output.paddr,
 				t->output.width * t->output.height *
 				fmt_to_bpp(t->output.format)/8);
 	}
@@ -3242,7 +3242,7 @@ static int ipu_task_thread(void *argv)
 	struct ipu_split_task sp_task[4];
 	/* priority lower than irq_thread */
 	const struct sched_param param = {
-		.sched_priority = MAX_USER_RT_PRIO/2 - 1,
+		.sched_priority = MAX_RT_PRIO/2 - 1,
 	};
 	int ret;
 	int curr_thread_id;

@@ -2167,10 +2167,10 @@ static int hrz_open (struct atm_vcc *atm_vcc)
   
   // Part of the job is done by atm_pcr_goal which gives us a PCR
   // specification which says: EITHER grab the maximum available PCR
-  // (and perhaps a lower bound which we musn't pass), OR grab this
+  // (and perhaps a lower bound which we must not pass), OR grab this
   // amount, rounding down if you have to (and perhaps a lower bound
-  // which we musn't pass) OR grab this amount, rounding up if you
-  // have to (and perhaps an upper bound which we musn't pass). If any
+  // which we must not pass) OR grab this amount, rounding up if you
+  // have to (and perhaps an upper bound which we must not pass). If any
   // bounds ARE passed we fail. Note that rounding is only rounding to
   // match device limitations, we do not round down to satisfy
   // bandwidth availability even if this would not violate any given
@@ -2526,46 +2526,6 @@ static void hrz_close (struct atm_vcc * atm_vcc) {
   // say the VPI/VCI is free again
   clear_bit(ATM_VF_ADDR,&atm_vcc->flags);
 }
-
-#if 0
-static int hrz_getsockopt (struct atm_vcc * atm_vcc, int level, int optname,
-			   void *optval, int optlen) {
-  hrz_dev * dev = HRZ_DEV(atm_vcc->dev);
-  PRINTD (DBG_FLOW|DBG_VCC, "hrz_getsockopt");
-  switch (level) {
-    case SOL_SOCKET:
-      switch (optname) {
-//	case SO_BCTXOPT:
-//	  break;
-//	case SO_BCRXOPT:
-//	  break;
-	default:
-	  return -ENOPROTOOPT;
-      };
-      break;
-  }
-  return -EINVAL;
-}
-
-static int hrz_setsockopt (struct atm_vcc * atm_vcc, int level, int optname,
-			   void *optval, unsigned int optlen) {
-  hrz_dev * dev = HRZ_DEV(atm_vcc->dev);
-  PRINTD (DBG_FLOW|DBG_VCC, "hrz_setsockopt");
-  switch (level) {
-    case SOL_SOCKET:
-      switch (optname) {
-//	case SO_BCTXOPT:
-//	  break;
-//	case SO_BCRXOPT:
-//	  break;
-	default:
-	  return -ENOPROTOOPT;
-      };
-      break;
-  }
-  return -EINVAL;
-}
-#endif
 
 #if 0
 static int hrz_ioctl (struct atm_dev * atm_dev, unsigned int cmd, void *arg) {

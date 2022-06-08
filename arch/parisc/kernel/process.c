@@ -17,9 +17,6 @@
  *    Copyright (C) 2001-2014 Helge Deller <deller@gmx.de>
  *    Copyright (C) 2002 Randolph Chung <tausq with parisc-linux.org>
  */
-
-#include <stdarg.h>
-
 #include <linux/elf.h>
 #include <linux/errno.h>
 #include <linux/kernel.h>
@@ -47,7 +44,6 @@
 #include <asm/assembly.h>
 #include <asm/pdc.h>
 #include <asm/pdc_chassis.h>
-#include <asm/pgalloc.h>
 #include <asm/unwind.h>
 #include <asm/sections.h>
 
@@ -153,25 +149,6 @@ void release_thread(struct task_struct *dead_task)
 }
 
 /*
- * Fill in the FPU structure for a core dump.
- */
-
-int dump_fpu (struct pt_regs * regs, elf_fpregset_t *r)
-{
-	if (regs == NULL)
-		return 0;
-
-	memcpy(r, regs->fr, sizeof *r);
-	return 1;
-}
-
-int dump_task_fpu (struct task_struct *tsk, elf_fpregset_t *r)
-{
-	memcpy(r, tsk->thread.regs.fr, sizeof(*r));
-	return 1;
-}
-
-/*
  * Idle thread support
  *
  * Detect when running on QEMU with SeaBIOS PDC Firmware and let
@@ -189,7 +166,7 @@ void __cpuidle arch_cpu_idle_dead(void)
 
 void __cpuidle arch_cpu_idle(void)
 {
-	local_irq_enable();
+	raw_local_irq_enable();
 
 	/* nop on real hardware, qemu will idle sleep. */
 	asm volatile("or %%r10,%%r10,%%r10\n":::);
@@ -208,7 +185,7 @@ arch_initcall(parisc_idle_init);
  * Copy architecture-specific thread state
  */
 int
-copy_thread_tls(unsigned long clone_flags, unsigned long usp,
+copy_thread(unsigned long clone_flags, unsigned long usp,
 	    unsigned long kthread_arg, struct task_struct *p, unsigned long tls)
 {
 	struct pt_regs *cregs = &(p->thread.regs);
@@ -220,7 +197,7 @@ copy_thread_tls(unsigned long clone_flags, unsigned long usp,
 	extern void * const ret_from_kernel_thread;
 	extern void * const child_return;
 
-	if (unlikely(p->flags & PF_KTHREAD)) {
+	if (unlikely(p->flags & (PF_KTHREAD | PF_IO_WORKER))) {
 		/* kernel thread */
 		memset(cregs, 0, sizeof(struct pt_regs));
 		if (!usp) /* idle thread */
@@ -269,7 +246,7 @@ get_wchan(struct task_struct *p)
 	unsigned long ip;
 	int count = 0;
 
-	if (!p || p == current || p->state == TASK_RUNNING)
+	if (!p || p == current || task_is_running(p))
 		return 0;
 
 	/*
@@ -280,6 +257,8 @@ get_wchan(struct task_struct *p)
 	do {
 		if (unwind_once(&info) < 0)
 			return 0;
+		if (task_is_running(p))
+                        return 0;
 		ip = info.ip;
 		if (!in_sched_functions(ip))
 			return ip;
@@ -293,7 +272,7 @@ void *dereference_function_descriptor(void *ptr)
 	Elf64_Fdesc *desc = ptr;
 	void *p;
 
-	if (!probe_kernel_address(&desc->addr, p))
+	if (!get_kernel_nofault(p, (void *)&desc->addr))
 		ptr = p;
 	return ptr;
 }

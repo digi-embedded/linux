@@ -14,8 +14,6 @@
 
 #include <linux/console.h>
 #include <linux/dma-mapping.h>
-#include <linux/fb.h>
-#include <linux/fbcon.h>
 #include <linux/init.h>
 #include <linux/ipu-v3.h>
 #include <linux/module.h>
@@ -1768,9 +1766,6 @@ static int mxc_vidioc_s_input_crop(struct mxc_vout_output *vout,
 	if (crop->type != V4L2_BUF_TYPE_VIDEO_OUTPUT)
 		return -EINVAL;
 
-	if (crop->c.width < 0 || crop->c.height < 0)
-		return -EINVAL;
-
 	vout->task.input.crop.pos.x = crop->c.left;
 	vout->task.input.crop.pos.y = crop->c.top;
 	vout->task.input.crop.w = crop->c.width;
@@ -1887,8 +1882,6 @@ static int config_disp_output(struct mxc_vout_output *vout)
 	var.activate |= FB_ACTIVATE_FORCE;
 	console_lock();
 	ret = fb_set_var(fbi, &var);
-	if (!ret)
-		fbcon_update_vcs(fbi, var.activate & FB_ACTIVATE_ALL);
 	console_unlock();
 	if (ret < 0) {
 		v4l2_err(vout->vfd->v4l2_dev,
@@ -2192,7 +2185,7 @@ static int mxc_vout_setup_output(struct mxc_vout_dev *dev)
 		video_set_drvdata(vout->vfd, vout);
 
 		if (video_register_device(vout->vfd,
-			VFL_TYPE_GRABBER, video_nr + i) < 0) {
+			VFL_TYPE_VIDEO, video_nr + i) < 0) {
 			ret = -ENODEV;
 			break;
 		}

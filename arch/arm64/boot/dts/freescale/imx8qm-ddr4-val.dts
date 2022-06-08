@@ -56,25 +56,6 @@
 			no-map;
 			reg = <0 0x86000000 0 0x400000>;
 		};
-		/*
-		 * reserved-memory layout
-		 * 0x8800_0000 ~ 0x8FFF_FFFF is reserved for M4
-		 * Shouldn't be used at A core and Linux side.
-		 *
-		 */
-		m4_reserved: m4@0x88000000 {
-			no-map;
-			reg = <0 0x88000000 0 0x8000000>;
-		};
-		rpmsg_reserved: rpmsg@0x90000000 {
-			no-map;
-			reg = <0 0x90000000 0 0x400000>;
-		};
-		rpmsg_dma_reserved:rpmsg_dma@0x90400000 {
-			compatible = "shared-dma-pool";
-			no-map;
-			reg = <0 0x90400000 0 0x100000>;
-		};
 		decoder_rpc: decoder_rpc@0x92000000 {
 			no-map;
 			reg = <0 0x92000000 0 0x200000>;
@@ -83,9 +64,26 @@
 			no-map;
 			reg = <0 0x92200000 0 0x200000>;
 		};
-		dsp_reserved: dsp@0x92400000 {
+		dsp_reserved: dsp@92400000 {
+			reg = <0 0x92400000 0 0x1000000>;
 			no-map;
-			reg = <0 0x92400000 0 0x2000000>;
+		};
+		dsp_reserved_heap: dsp_reserved_heap {
+			reg = <0 0x93400000 0 0xef0000>;
+			no-map;
+		};
+		dsp_vdev0vring0: vdev0vring0@942f0000 {
+			reg = <0 0x942f0000 0 0x8000>;
+			no-map;
+		};
+		dsp_vdev0vring1: vdev0vring1@942f8000 {
+			reg = <0 0x942f8000 0 0x8000>;
+			no-map;
+		};
+		dsp_vdev0buffer: vdev0buffer@94300000 {
+			compatible = "shared-dma-pool";
+			reg = <0 0x94300000 0 0x100000>;
+			no-map;
 		};
 		encoder_reserved: encoder_reserved@0x94400000 {
 			no-map;
@@ -97,7 +95,7 @@
 			compatible = "shared-dma-pool";
 			reusable;
 			size = <0 0x3c000000>;
-			alloc-ranges = <0 0x96000000 0 0x3c000000>;
+			alloc-ranges = <0 0xc0000000 0 0x3c000000>;
 			linux,cma-default;
 		};
 	};
@@ -334,14 +332,6 @@
 			>;
 		};
 
-		pinctrl_mlb: mlbgrp {
-			fsl,pins = <
-				IMX8QM_MLB_SIG_CONN_MLB_SIG               0x21
-				IMX8QM_MLB_CLK_CONN_MLB_CLK               0x21
-				IMX8QM_MLB_DATA_CONN_MLB_DATA             0x21
-			>;
-		};
-
 		pinctrl_isl29023: isl29023grp {
 			fsl,pins = <
 				IMX8QM_ADC_IN2_LSIO_GPIO3_IO20		0x00000021
@@ -543,7 +533,7 @@
 	phy-mode = "rgmii-txid";
 	phy-handle = <&ethphy0>;
 	fsl,magic-packet;
-	fsl,rgmii_rxc_dly;
+	rx-internal-delay-ps = <2000>;
 	status = "okay";
 
 	mdio {
@@ -553,16 +543,26 @@
 		ethphy0: ethernet-phy@0 {
 			compatible = "ethernet-phy-ieee802.3-c22";
 			reg = <0>;
-			at803x,eee-disabled;
-			at803x,vddio-1p8v;
+			qca,disable-smarteee;
+			vddio-supply = <&vddio0>;
+
+			vddio0: vddio-regulator {
+				regulator-min-microvolt = <1800000>;
+				regulator-max-microvolt = <1800000>;
+			};
 		};
 
 		ethphy1: ethernet-phy@1 {
 			compatible = "ethernet-phy-ieee802.3-c22";
 			reg = <1>;
-			at803x,eee-disabled;
-			at803x,vddio-1p8v;
+			qca,disable-smarteee;
+			vddio-supply = <&vddio1>;
 			status = "disabled";
+
+			vddio1: vddio-regulator {
+				regulator-min-microvolt = <1800000>;
+				regulator-max-microvolt = <1800000>;
+			};
 		};
 	};
 };
@@ -574,7 +574,7 @@
 	phy-handle = <&ethphy1>;
 	phy-supply = <&reg_fec2_supply>;
 	fsl,magic-packet;
-	fsl,rgmii_rxc_dly;
+	rx-internal-delay-ps = <2000>;
 	status = "okay";
 };
 
@@ -608,9 +608,10 @@
 		reg = <0>;
 		#address-cells = <1>;
 		#size-cells = <1>;
-		compatible = "micron,mt35xu512aba";
+		compatible = "jedec,spi-nor";
 		spi-max-frequency = <133000000>;
-		spi-nor,ddr-quad-read-dummy = <8>;
+		spi-tx-bus-width = <1>;
+		spi-rx-bus-width = <8>;
 	};
 };
 
@@ -776,15 +777,6 @@
 };
 
 &cm41_intmux {
-	status = "okay";
-};
-
-&rpmsg1{
-	/*
-	 * 64K for one rpmsg instance:
-	 */
-	vdev-nums = <1>;
-	reg = <0x0 0x90100000 0x0 0x10000>;
 	status = "okay";
 };
 

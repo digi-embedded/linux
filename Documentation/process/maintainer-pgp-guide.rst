@@ -462,7 +462,7 @@ geographical region, and open/proprietary hardware considerations.
 .. _`Nitrokey Start`: https://shop.nitrokey.com/shop/product/nitrokey-start-6
 .. _`Nitrokey Pro 2`: https://shop.nitrokey.com/shop/product/nitrokey-pro-2-3
 .. _`Yubikey 5`: https://www.yubico.com/products/yubikey-5-overview/
-.. _Gnuk: http://www.fsij.org/doc-gnuk/
+.. _Gnuk: https://www.fsij.org/doc-gnuk/
 .. _`LWN has a good review`: https://lwn.net/Articles/736231/
 .. _`qualify for a free Nitrokey Start`: https://www.kernel.org/nitrokey-digital-tokens-for-kernel-developers.html
 
@@ -944,12 +944,11 @@ have on your keyring::
     uid           [ unknown] Linus Torvalds <torvalds@kernel.org>
     sub   rsa2048 2011-09-20 [E]
 
-Next, open the `PGP pathfinder`_. In the "From" field, paste the key
-fingerprint of Linus Torvalds from the output above. In the "To" field,
-paste the key-id you found via ``gpg --search`` of the unknown key, and
-check the results:
-
-- `Finding paths to Linus`_
+Next, find a trust path from Linus Torvalds to the key-id you found via ``gpg
+--search`` of the unknown key.  For this, you can use several tools including
+https://github.com/mricon/wotmate,
+https://git.kernel.org/pub/scm/docs/kernel/pgpkeys.git/tree/graphs, and
+https://the.earth.li/~noodles/pathfind.html.
 
 If you get a few decent trust paths, then it's a pretty good indication
 that it is a valid key. You can add it to your keyring from the
@@ -962,6 +961,3 @@ administrators of the PGP Pathfinder service to not be malicious (in
 fact, this goes against :ref:`devs_not_infra`). However, if you
 do not carefully maintain your own web of trust, then it is a marked
 improvement over blindly trusting keyservers.
-
-.. _`PGP pathfinder`: https://pgp.cs.uu.nl/
-.. _`Finding paths to Linus`: https://pgp.cs.uu.nl/paths/79BE3E4300411886/to/C94035C21B4F2AEB.html

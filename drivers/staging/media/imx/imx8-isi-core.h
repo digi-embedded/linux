@@ -218,10 +218,16 @@ struct mxc_isi_m2m_dev {
 	unsigned int aborting;
 	unsigned int frame_count;
 
+	enum v4l2_colorspace	colorspace;
+	enum v4l2_ycbcr_encoding ycbcr_enc;
+	enum v4l2_quantization	quant;
+	enum v4l2_xfer_func	xfer_func;
+
 	u32 req_cap_buf_num;
 	u32 req_out_buf_num;
 
 	u8 id;
+	int refcnt;
 };
 
 struct mxc_isi_ctx {
@@ -279,11 +285,25 @@ struct mxc_isi_set_thd {
 	struct mxc_isi_panic_thd panic_set_thd_v;
 };
 
+struct mxc_isi_rst_ops {
+	int (*parse)(struct mxc_isi_dev *mxc_isi);
+	int (*assert)(struct mxc_isi_dev *mxc_isi);
+	int (*deassert)(struct mxc_isi_dev *mxc_isi);
+};
+
+struct mxc_isi_gate_clk_ops {
+	int (*gclk_get)(struct mxc_isi_dev *mxc_isi);
+	int (*gclk_enable)(struct mxc_isi_dev *mxc_isi);
+	int (*gclk_disable)(struct mxc_isi_dev *mxc_isi);
+};
+
 struct mxc_isi_plat_data {
 	struct mxc_isi_dev_ops *ops;
 	struct mxc_isi_chan_src *chan_src;
 	struct mxc_isi_ier_reg  *ier_reg;
 	struct mxc_isi_set_thd *set_thd;
+	struct mxc_isi_rst_ops *rst_ops;
+	struct mxc_isi_gate_clk_ops *gclk_ops;
 };
 
 struct mxc_isi_cap_dev {
@@ -310,6 +330,7 @@ struct mxc_isi_cap_dev {
 
 	u32 frame_count;
 	u32 id;
+	u32 is_streaming[MXC_ISI_MAX_DEVS];
 	bool is_link_setup;
 
 	struct mutex lock;
@@ -338,11 +359,17 @@ struct mxc_isi_dev {
 	struct clk *clk_disp_apb;
 	struct clk *clk_root_disp_axi;
 	struct clk *clk_root_disp_apb;
+	struct clk *isi_proc;
+	struct clk *isi_apb;
+	struct clk *isi_bus;
 
 	const struct mxc_isi_plat_data *pdata;
 
 	struct reset_control *soft_resetn;
 	struct reset_control *clk_enable;
+	struct reset_control *isi_rst_proc;
+	struct reset_control *isi_rst_apb;
+	struct reset_control *isi_rst_bus;
 
 	struct regmap *chain;
 
@@ -354,7 +381,9 @@ struct mxc_isi_dev {
 	u8 chain_buf;
 	u8 alpha;
 	bool m2m_enabled;
+	bool cap_enabled;
 	bool buf_active_reverse;
+	bool no_dispmix;
 
 	/* manage share ISI channel resource */
 	atomic_t usage_count;
@@ -367,7 +396,7 @@ struct mxc_isi_dev {
 
 	u32 status;
 
-	u32 interface[MAX_PORTS];
+	int interface[MAX_PORTS];
 	int id;
 
 	unsigned int hflip:1;
@@ -376,7 +405,7 @@ struct mxc_isi_dev {
 	unsigned int scale:1;
 	unsigned int alphaen:1;
 	unsigned int crop:1;
-	unsigned int deinterlace:1;
+	unsigned int deinterlace:3;
 	unsigned int is_streaming:1;
 };
 
@@ -407,5 +436,22 @@ static inline void set_frame_crop(struct mxc_isi_frame *f,
 	f->v_off = top;
 	f->c_width  = width;
 	f->c_height = height;
+}
+
+static inline void bounds_adjust(struct mxc_isi_frame *f, struct v4l2_rect *r)
+{
+	if (r->left < 0)
+		r->left = 0;
+	if (r->left >= f->o_width)
+		r->left = f->o_width - 1;
+	if (r->top < 0)
+		r->top = 0;
+	if (r->top >= f->o_height)
+		r->top = f->o_height - 1;
+
+	if (r->left + r->width >= f->o_width)
+		r->width = f->o_width - r->left;
+	if (r->top + r->height >= f->o_height)
+		r->height = f->o_height - r->top;
 }
 #endif /* __MXC_ISI_CORE_H__ */

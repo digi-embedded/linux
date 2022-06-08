@@ -78,7 +78,7 @@
 	};
 
 	fpga: board-control@2,0 {
-		compatible = "fsl,ls1043aqds-fpga", "fsl,fpga-qixis", "simple-bus";
+		compatible = "fsl,ls1043aqds-fpga", "fsl,fpga-qixis", "simple-mfd";
 		reg = <0x2 0x0 0x0000100>;
 		#address-cells = <1>;
 		#size-cells = <1>;
@@ -167,6 +167,10 @@
 	};
 };
 
+&usb0 {
+	status = "okay";
+};
+
 #include "fsl-ls1043-post.dtsi"
 
 &fman0 {
@@ -247,12 +251,15 @@
 			qsgmii_phy_s1_p1: ethernet-phy@4 {
 				reg = <0x4>;
 			};
+
 			qsgmii_phy_s1_p2: ethernet-phy@5 {
 				reg = <0x5>;
 			};
+
 			qsgmii_phy_s1_p3: ethernet-phy@6 {
 				reg = <0x6>;
 			};
+
 			qsgmii_phy_s1_p4: ethernet-phy@7 {
 				reg = <0x7>;
 			};
@@ -272,12 +279,15 @@
 			qsgmii_phy_s2_p1: ethernet-phy@8 {
 				reg = <0x8>;
 			};
+
 			qsgmii_phy_s2_p2: ethernet-phy@9 {
 				reg = <0x9>;
 			};
+
 			qsgmii_phy_s2_p3: ethernet-phy@a {
 				reg = <0xa>;
 			};
+
 			qsgmii_phy_s2_p4: ethernet-phy@b {
 				reg = <0xb>;
 			};

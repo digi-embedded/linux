@@ -4,6 +4,7 @@
  */
 
 #include <linux/device.h>
+#include <linux/slab.h>
 
 #include "dcss-dev.h"
 
@@ -73,6 +74,20 @@
 #define   THRES_LOW_MASK			GENMASK(6, 4)
 #define   ABORT_SEL				BIT(7)
 
+enum dcss_tile_type {
+	TILE_LINEAR = 0,
+	TILE_GPU_STANDARD,
+	TILE_GPU_SUPER,
+	TILE_VPU_YUV420,
+	TILE_VPU_VP9,
+};
+
+enum dcss_pix_size {
+	PIX_SIZE_8,
+	PIX_SIZE_16,
+	PIX_SIZE_32,
+};
+
 struct dcss_dpr_ch {
 	struct dcss_dpr *dpr;
 	void __iomem *base_reg;
@@ -125,7 +140,7 @@ static int dcss_dpr_ch_init_all(struct dcss_dpr *dpr, unsigned long dpr_base)
 
 		ch->base_ofs = dpr_base + i * 0x1000;
 
-		ch->base_reg = devm_ioremap(dpr->dev, ch->base_ofs, SZ_4K);
+		ch->base_reg = ioremap(ch->base_ofs, SZ_4K);
 		if (!ch->base_reg) {
 			dev_err(dpr->dev, "dpr: unable to remap ch %d base\n",
 				i);
@@ -145,7 +160,7 @@ int dcss_dpr_init(struct dcss_dev *dcss, unsigned long dpr_base)
 {
 	struct dcss_dpr *dpr;
 
-	dpr = devm_kzalloc(dcss->dev, sizeof(struct dcss_dpr), GFP_KERNEL);
+	dpr = kzalloc(sizeof(*dpr), GFP_KERNEL);
 	if (!dpr)
 		return -ENOMEM;
 
@@ -160,10 +175,10 @@ int dcss_dpr_init(struct dcss_dev *dcss, unsigned long dpr_base)
 
 		for (i = 0; i < 3; i++) {
 			if (dpr->ch[i].base_reg)
-				devm_iounmap(dpr->dev, dpr->ch[i].base_reg);
+				iounmap(dpr->ch[i].base_reg);
 		}
 
-		devm_kfree(dpr->dev, dpr);
+		kfree(dpr);
 
 		return -ENOMEM;
 	}
@@ -182,10 +197,10 @@ void dcss_dpr_exit(struct dcss_dpr *dpr)
 		dcss_writel(0, ch->base_reg + DCSS_DPR_SYSTEM_CTRL0);
 
 		if (ch->base_reg)
-			devm_iounmap(dpr->dev, ch->base_reg);
+			iounmap(ch->base_reg);
 	}
 
-	devm_kfree(dpr->dev, dpr);
+	kfree(dpr);
 }
 
 static u32 dcss_dpr_x_pix_wide_adjust(struct dcss_dpr_ch *ch, u32 pix_wide,
@@ -202,7 +217,7 @@ static u32 dcss_dpr_x_pix_wide_adjust(struct dcss_dpr_ch *ch, u32 pix_wide,
 
 	pix_in_64byte = pix_in_64byte_map[ch->pix_size][ch->tile];
 
-	if (pix_format == DRM_FORMAT_NV12_10LE40)
+	if (pix_format == DRM_FORMAT_NV15)
 		pix_wide = pix_wide * 10 / 8;
 
 	div_64byte_mod = pix_wide % pix_in_64byte;
@@ -233,7 +248,7 @@ void dcss_dpr_set_res(struct dcss_dpr *dpr, int ch_num, u32 xres, u32 yres)
 
 	if (pix_format == DRM_FORMAT_NV12 ||
 	    pix_format == DRM_FORMAT_NV21 ||
-	    pix_format == DRM_FORMAT_NV12_10LE40)
+	    pix_format == DRM_FORMAT_NV15)
 		max_planes = 2;
 
 	for (plane = 0; plane < max_planes; plane++) {
@@ -301,19 +316,19 @@ static void dcss_dpr_pix_size_set(struct dcss_dpr_ch *ch,
 	switch (format->format) {
 	case DRM_FORMAT_NV12:
 	case DRM_FORMAT_NV21:
-	case DRM_FORMAT_NV12_10LE40:
-		val = 0;
+	case DRM_FORMAT_NV15:
+		val = PIX_SIZE_8;
 		break;
 
 	case DRM_FORMAT_UYVY:
 	case DRM_FORMAT_VYUY:
 	case DRM_FORMAT_YUYV:
 	case DRM_FORMAT_YVYU:
-		val = 1;
+		val = PIX_SIZE_16;
 		break;
 
 	default:
-		val = 2;
+		val = PIX_SIZE_32;
 		break;
 	}
 
@@ -411,7 +426,7 @@ static void dcss_dpr_rtram_set(struct dcss_dpr_ch *ch, u32 pix_format)
 	switch (pix_format) {
 	case DRM_FORMAT_NV21:
 	case DRM_FORMAT_NV12:
-	case DRM_FORMAT_NV12_10LE40:
+	case DRM_FORMAT_NV15:
 		ch->rtram_3buf_en = true;
 		ch->rtram_4line_en = false;
 		break;
@@ -485,6 +500,8 @@ static void dcss_dpr_setup_components(struct dcss_dpr_ch *ch,
 
 static void dcss_dpr_tile_set(struct dcss_dpr_ch *ch, uint64_t modifier)
 {
+	struct device *dev = ch->dpr->dev;
+
 	switch (ch->ch_num) {
 	case 0:
 		switch (modifier) {
@@ -499,13 +516,31 @@ static void dcss_dpr_tile_set(struct dcss_dpr_ch *ch, uint64_t modifier)
 			ch->tile = TILE_GPU_SUPER;
 			break;
 		default:
-			WARN_ON(1);
+			dev_err(dev, "dpr: unsupported modifier(0x%016llx) for graphics path.\n",
+				modifier);
 			break;
 		}
 		break;
 	case 1:
 	case 2:
-		ch->tile = TILE_LINEAR;
+		switch (modifier) {
+		case DRM_FORMAT_MOD_LINEAR:
+		case DRM_FORMAT_MOD_VSI_G1_TILED:
+		case DRM_FORMAT_MOD_VSI_G2_TILED:
+		case DRM_FORMAT_MOD_VSI_G2_TILED_COMPRESSED:
+			ch->tile = TILE_LINEAR;
+			break;
+		case DRM_FORMAT_MOD_VIVANTE_TILED:
+			ch->tile = TILE_GPU_STANDARD;
+			break;
+		case DRM_FORMAT_MOD_VIVANTE_SUPER_TILED:
+			ch->tile = TILE_GPU_SUPER;
+			break;
+		default:
+			dev_err(dev, "dpr: unsupported modifier(0x%016llx) for video path.\n",
+				modifier);
+			break;
+		}
 		break;
 	default:
 		WARN_ON(1);
@@ -522,7 +557,10 @@ void dcss_dpr_format_set(struct dcss_dpr *dpr, int ch_num,
 	struct dcss_dpr_ch *ch = &dpr->ch[ch_num];
 
 	ch->format = *format;
-	ch->use_dtrc = ch_num && modifier != DRM_FORMAT_MOD_LINEAR;
+	ch->use_dtrc = ch_num &&
+			(modifier == DRM_FORMAT_MOD_VSI_G1_TILED ||
+			 modifier == DRM_FORMAT_MOD_VSI_G2_TILED ||
+			 modifier == DRM_FORMAT_MOD_VSI_G2_TILED_COMPRESSED);
 
 	dcss_dpr_yuv_en(ch, format->is_yuv);
 
@@ -541,6 +579,8 @@ void dcss_dpr_format_set(struct dcss_dpr *dpr, int ch_num,
 void dcss_dpr_write_sysctrl(struct dcss_dpr *dpr)
 {
 	int chnum;
+
+	dcss_ctxld_assert_locked(dpr->ctxld);
 
 	for (chnum = 0; chnum < 3; chnum++) {
 		struct dcss_dpr_ch *ch = &dpr->ch[chnum];

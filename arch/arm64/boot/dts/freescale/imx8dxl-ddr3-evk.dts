@@ -8,8 +8,8 @@
 #include "imx8dxl.dtsi"
 
 / {
-	model = "Freescale i.MX8DXL DDR3 VAL";
-	compatible = "fsl,imx8dxl-mek", "fsl,imx8dxl";
+	model = "Freescale i.MX8DXL DDR3 EVK";
+	compatible = "fsl,imx8dxl-evk", "fsl,imx8dxl";
 
 	chosen {
 		stdout-path = &lpuart0;
@@ -24,21 +24,6 @@
 		#address-cells = <2>;
 		#size-cells = <2>;
 		ranges;
-
-		/*
-		 * 0x8800_0000 ~ 0x8FFF_FFFF is reserved for M4
-		 * Shouldn't be used at A core and Linux side.
-		 *
-		 */
-		m4_reserved: m4@0x88000000 {
-			no-map;
-			reg = <0 0x88000000 0 0x8000000>;
-		};
-
-		rpmsg_reserved: rpmsg@0x90000000 {
-			no-map;
-			reg = <0 0x90200000 0 0x200000>;
-		};
 
 		vdev0vring0: vdev0vring0@90000000 {
 			compatible = "shared-dma-pool";
@@ -127,19 +112,10 @@
 		compatible = "fsl,imx7d-evk-wm8960",
 			   "fsl,imx-audio-wm8960";
 		model = "wm8960-audio";
-		cpu-dai = <&sai1>;
+		audio-cpu = <&sai1>;
 		audio-codec = <&wm8960_1>;
-		asrc-controller = <&asrc0>;
-		codec-master;
-		/*
-		 * hp-det = <hp-det-pin hp-det-polarity>;
-		 * hp-det-pin: JD1 JD2  or JD3
-		 * hp-det-polarity = 0: hp detect high for headphone
-		 * hp-det-polarity = 1: hp detect high for speaker
-		 */
-		hp-det = <2 0>;
-		hp-det-gpios = <&pca6416_2 11 GPIO_ACTIVE_HIGH>;
-		mic-det-gpios = <&pca6416_2 11 GPIO_ACTIVE_HIGH>;
+		audio-asrc = <&asrc0>;
+		hp-det-gpio = <&pca6416_2 11 GPIO_ACTIVE_HIGH>;
 		audio-routing =
 			"Headphone Jack", "HP_L",
 			"Headphone Jack", "HP_R",
@@ -148,30 +124,17 @@
 			"Ext Spk", "SPK_RP",
 			"Ext Spk", "SPK_RN",
 			"LINPUT1", "Mic Jack",
-			"Mic Jack", "MICB",
-			"CPU-Playback", "ASRC-Playback",
-			"Playback", "CPU-Playback",
-			"ASRC-Capture", "CPU-Capture",
-			"CPU-Capture", "Capture";
+			"Mic Jack", "MICB";
 	};
 
 	sound-wm8960-2 {
 		compatible = "fsl,imx7d-evk-wm8960",
 			   "fsl,imx-audio-wm8960";
 		model = "wm8960-audio-2";
-		cpu-dai = <&sai2>;
+		audio-cpu = <&sai2>;
 		audio-codec = <&wm8960_2>;
-		codec-master;
 		capture-only;
-		/*
-		 * hp-det = <hp-det-pin hp-det-polarity>;
-		 * hp-det-pin: JD1 JD2  or JD3
-		 * hp-det-polarity = 0: hp detect high for headphone
-		 * hp-det-polarity = 1: hp detect high for speaker
-		 */
-		hp-det = <2 0>;
-		hp-det-gpios = <&pca6416_2 12 GPIO_ACTIVE_HIGH>;
-		mic-det-gpios = <&pca6416_2 12 GPIO_ACTIVE_HIGH>;
+		hp-det-gpio = <&pca6416_2 12 GPIO_ACTIVE_HIGH>;
 		audio-routing =
 			"Headphone Jack", "HP_L",
 			"Headphone Jack", "HP_R",
@@ -180,28 +143,17 @@
 			"Ext Spk", "SPK_RP",
 			"Ext Spk", "SPK_RN",
 			"LINPUT1", "Mic Jack",
-			"Mic Jack", "MICB",
-			"Playback", "CPU-Playback",
-			"CPU-Capture", "Capture";
+			"Mic Jack", "MICB";
 	};
 
 	sound-wm8960-3 {
 		compatible = "fsl,imx7d-evk-wm8960",
 			   "fsl,imx-audio-wm8960";
 		model = "wm8960-audio-3";
-		cpu-dai = <&sai3>;
+		audio-cpu = <&sai3>;
 		audio-codec = <&wm8960_3>;
-		codec-master;
 		capture-only;
-		/*
-		 * hp-det = <hp-det-pin hp-det-polarity>;
-		 * hp-det-pin: JD1 JD2  or JD3
-		 * hp-det-polarity = 0: hp detect high for headphone
-		 * hp-det-polarity = 1: hp detect high for speaker
-		 */
-		hp-det = <2 0>;
-		hp-det-gpios = <&pca6416_2 13 GPIO_ACTIVE_HIGH>;
-		mic-det-gpios = <&pca6416_2 13 GPIO_ACTIVE_HIGH>;
+		hp-det-gpio = <&pca6416_2 13 GPIO_ACTIVE_HIGH>;
 		audio-routing =
 			"Headphone Jack", "HP_L",
 			"Headphone Jack", "HP_R",
@@ -210,27 +162,16 @@
 			"Ext Spk", "SPK_RP",
 			"Ext Spk", "SPK_RN",
 			"LINPUT1", "Mic Jack",
-			"Mic Jack", "MICB",
-			"Playback", "CPU-Playback",
-			"CPU-Capture", "Capture";
+			"Mic Jack", "MICB";
 	};
 
 	sound-wm8960-4 {
 		compatible = "fsl,imx7d-evk-wm8960",
 			   "fsl,imx-audio-wm8960";
 		model = "wm8960-audio-4";
-		cpu-dai = <&sai0>;
+		audio-cpu = <&sai0>;
 		audio-codec = <&wm8960_4>;
-		codec-master;
-		/*
-		 * hp-det = <hp-det-pin hp-det-polarity>;
-		 * hp-det-pin: JD1 JD2  or JD3
-		 * hp-det-polarity = 0: hp detect high for headphone
-		 * hp-det-polarity = 1: hp detect high for speaker
-		 */
-		hp-det = <2 0>;
-		hp-det-gpios = <&pca6416_2 10 GPIO_ACTIVE_HIGH>;
-		mic-det-gpios = <&pca6416_2 10 GPIO_ACTIVE_HIGH>;
+		hp-det-gpio = <&pca6416_2 10 GPIO_ACTIVE_HIGH>;
 		audio-routing =
 			"Headphone Jack", "HP_L",
 			"Headphone Jack", "HP_R",
@@ -239,9 +180,7 @@
 			"Ext Spk", "SPK_RP",
 			"Ext Spk", "SPK_RN",
 			"LINPUT1", "Mic Jack",
-			"Mic Jack", "MICB",
-			"Playback", "CPU-Playback",
-			"CPU-Capture", "Capture";
+			"Mic Jack", "MICB";
 	};
 };
 
@@ -249,6 +188,84 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_adc>;
 	vref-supply = <&reg_vref_1v8>;
+	status = "okay";
+};
+
+&edma2 {
+	status = "okay";
+};
+
+&eqos {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_eqos>;
+	phy-mode = "rgmii-id";
+	phy-handle = <&ethphy0>;
+	snps,reset-gpios = <&pca6416_1 2 GPIO_ACTIVE_LOW>;
+	snps,reset-delays-us = <10 20 200000>;
+	status = "okay";
+
+	mdio {
+		compatible = "snps,dwmac-mdio";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		ethphy0: ethernet-phy@0 {
+			compatible = "ethernet-phy-ieee802.3-c22";
+			reg = <0>;
+			eee-broken-1000t;
+			qca,disable-smarteee;
+			vddio-supply = <&vddio0>;
+
+			vddio0: vddio-regulator {
+				regulator-min-microvolt = <1800000>;
+				regulator-max-microvolt = <1800000>;
+			};
+		};
+
+	};
+};
+
+&fec1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_fec1>;
+	phy-mode = "rgmii-txid";
+	phy-handle = <&ethphy1>;
+	fsl,magic-packet;
+	rx-internal-delay-ps = <2000>;
+	phy-reset-gpios = <&pca6416_1 0 GPIO_ACTIVE_LOW>;
+	phy-reset-duration = <10>;
+	phy-reset-post-delay = <150>;
+	status = "disabled";
+
+	mdio {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		ethphy1: ethernet-phy@1 {
+			compatible = "ethernet-phy-ieee802.3-c22";
+			reg = <1>;
+			qca,disable-smarteee;
+			vddio-supply = <&vddio1>;
+
+			vddio1: vddio-regulator {
+				regulator-min-microvolt = <1800000>;
+				regulator-max-microvolt = <1800000>;
+			};
+		};
+	};
+};
+
+&flexcan2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_flexcan2>;
+	xceiver-supply = <&reg_can0_stby>;
+	status = "okay";
+};
+
+&flexcan3 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_flexcan3>;
+	xceiver-supply = <&reg_can1_stby>;
 	status = "okay";
 };
 
@@ -263,23 +280,17 @@
 		#size-cells = <1>;
 		compatible = "jedec,spi-nor";
 		spi-max-frequency = <133000000>;
-		spi-tx-bus-width = <4>;
-		spi-rx-bus-width = <4>;
+		spi-tx-bus-width = <1>;
+		spi-rx-bus-width = <8>;
 	};
 };
 
-&lpspi3 {
-	fsl,spi-num-chipselects = <1>;
+&gpmi {
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_lpspi3>;
-	pinctrl-assert-gpios = <&pca6416_1 7 GPIO_ACTIVE_HIGH>;
+	pinctrl-0 = <&pinctrl_gpmi_nand_1>;
 	status = "okay";
-
-	spidev0: spi@0 {
-		reg = <0>;
-		compatible = "rohm,dh2228fv";
-		spi-max-frequency = <30000000>;
-	};
+	nand-on-flash-bbt;
+	fsl,max-nand-cs = <1>;
 };
 
 &i2c2 {
@@ -303,7 +314,7 @@
 		gpio-controller;
 		#gpio-cells = <2>;
 		interrupt-parent = <&lsio_gpio2>;
-		interrupts = <5 IRQ_TYPE_EDGE_RISING>;
+		interrupts = <5 IRQ_TYPE_EDGE_BOTH>;
 	};
 
 	pca9548_1: pca9548@70 {
@@ -338,6 +349,8 @@
 				clocks = <&mclkout0_lpcg 0>;
 				clock-names = "mclk";
 				wlf,shared-lrclk;
+				wlf,hp-cfg = <2 2 3>;
+				wlf,gpio-cfg = <1 3>;
 				assigned-clocks = <&clk IMX_SC_R_AUDIO_PLL_0 IMX_SC_PM_CLK_PLL>,
 						  <&clk IMX_SC_R_AUDIO_PLL_0 IMX_SC_PM_CLK_SLV_BUS>,
 						  <&clk IMX_SC_R_AUDIO_PLL_0 IMX_SC_PM_CLK_MST_BUS>,
@@ -358,6 +371,8 @@
 				clocks = <&mclkout0_lpcg 0>;
 				clock-names = "mclk";
 				wlf,shared-lrclk;
+				wlf,hp-cfg = <2 2 3>;
+				wlf,gpio-cfg = <1 3>;
 				assigned-clocks = <&clk IMX_SC_R_AUDIO_PLL_0 IMX_SC_PM_CLK_PLL>,
 						  <&clk IMX_SC_R_AUDIO_PLL_0 IMX_SC_PM_CLK_SLV_BUS>,
 						  <&clk IMX_SC_R_AUDIO_PLL_0 IMX_SC_PM_CLK_MST_BUS>,
@@ -378,6 +393,8 @@
 				clocks = <&mclkout0_lpcg 0>;
 				clock-names = "mclk";
 				wlf,shared-lrclk;
+				wlf,hp-cfg = <2 2 3>;
+				wlf,gpio-cfg = <1 3>;
 				assigned-clocks = <&clk IMX_SC_R_AUDIO_PLL_0 IMX_SC_PM_CLK_PLL>,
 						  <&clk IMX_SC_R_AUDIO_PLL_0 IMX_SC_PM_CLK_SLV_BUS>,
 						  <&clk IMX_SC_R_AUDIO_PLL_0 IMX_SC_PM_CLK_MST_BUS>,
@@ -398,6 +415,8 @@
 				clocks = <&mclkout0_lpcg 0>;
 				clock-names = "mclk";
 				wlf,shared-lrclk;
+				wlf,hp-cfg = <2 2 3>;
+				wlf,gpio-cfg = <1 3>;
 				assigned-clocks = <&clk IMX_SC_R_AUDIO_PLL_0 IMX_SC_PM_CLK_PLL>,
 						  <&clk IMX_SC_R_AUDIO_PLL_0 IMX_SC_PM_CLK_SLV_BUS>,
 						  <&clk IMX_SC_R_AUDIO_PLL_0 IMX_SC_PM_CLK_MST_BUS>,
@@ -473,6 +492,21 @@
 	};
 };
 
+&lpspi3 {
+	fsl,spi-num-chipselects = <1>;
+	fsl,spi-only-use-cs1-sel;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lpspi3>;
+	pinctrl-assert-gpios = <&pca6416_1 7 GPIO_ACTIVE_HIGH>;
+	status = "okay";
+
+	spidev0: spi@0 {
+		reg = <0>;
+		compatible = "rohm,dh2228fv";
+		spi-max-frequency = <30000000>;
+	};
+};
+
 &lpuart0 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lpuart0>;
@@ -485,34 +519,12 @@
        status = "okay";
 };
 
-&flexcan2 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_flexcan2>;
-	xceiver-supply = <&reg_can0_stby>;
-	status = "okay";
-};
-
-&flexcan3 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_flexcan3>;
-	xceiver-supply = <&reg_can1_stby>;
-	status = "okay";
-};
-
 &lsio_gpio4 {
 	status = "okay";
 };
 
 &lsio_gpio5 {
 	status = "okay";
-};
-
-&gpmi {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_gpmi_nand_1>;
-	status = "okay";
-	nand-on-flash-bbt;
-	max-cs = <1>;
 };
 
 &pcieb{
@@ -580,7 +592,7 @@
 	pmic-thermal0 {
 		polling-delay-passive = <250>;
 		polling-delay = <2000>;
-		thermal-sensors = <&tsens 497>;
+		thermal-sensors = <&tsens IMX_SC_R_PMIC_0>;
 		trips {
 			pmic_alert0: trip0 {
 				temperature = <110000>;
@@ -615,56 +627,6 @@
 	wp-gpios = <&lsio_gpio5 0 GPIO_ACTIVE_HIGH>;
 	max-frequency = <100000000>;
 	status = "okay";
-};
-
-&eqos {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_eqos>;
-	phy-mode = "rgmii-id";
-	phy-handle = <&ethphy0>;
-	snps,reset-gpios = <&pca6416_1 2 GPIO_ACTIVE_LOW>;
-	snps,reset-delays-us = <10 20 200000>;
-	status = "okay";
-
-	mdio {
-		compatible = "snps,dwmac-mdio";
-		#address-cells = <1>;
-		#size-cells = <0>;
-
-		ethphy0: ethernet-phy@0 {
-			compatible = "ethernet-phy-ieee802.3-c22";
-			reg = <0>;
-			eee-broken-1000t;
-			at803x,eee-disabled;
-			at803x,vddio-1p8v;
-		};
-
-	};
-};
-
-&fec1 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_fec1>;
-	phy-mode = "rgmii-txid";
-	phy-handle = <&ethphy1>;
-	fsl,magic-packet;
-	fsl,rgmii_rxc_dly;
-	phy-reset-gpios = <&pca6416_1 0 GPIO_ACTIVE_LOW>;
-	phy-reset-duration = <10>;
-	phy-reset-post-delay = <150>;
-	status = "disabled";
-
-	mdio {
-		#address-cells = <1>;
-		#size-cells = <0>;
-
-		ethphy1: ethernet-phy@1 {
-			compatible = "ethernet-phy-ieee802.3-c22";
-			reg = <1>;
-			at803x,eee-disabled;
-			at803x,vddio-1p8v;
-		};
-	};
 };
 
 &usbphy1 {
@@ -709,15 +671,12 @@
 			>;
 		};
 
-		pinctrl_usbotg1: otg1 {
+		pinctrl_adc: adcgrp{
 			fsl,pins = <
-				IMX8DXL_USB_SS3_TC0_CONN_USB_OTG1_PWR		0x00000021
-			>;
-		};
-
-		pinctrl_usbotg2: otg2 {
-			fsl,pins = <
-				IMX8DXL_USB_SS3_TC1_CONN_USB_OTG2_PWR		0x00000021
+				IMX8DXL_ADC_IN0_ADMA_ADC_IN0	0x06000021
+				IMX8DXL_ADC_IN1_ADMA_ADC_IN1	0x06000021
+				IMX8DXL_ADC_IN4_ADMA_ADC_IN4	0x06000021
+				IMX8DXL_ADC_IN5_ADMA_ADC_IN5	0x06000021
 			>;
 		};
 
@@ -737,6 +696,20 @@
 				IMX8DXL_ENET1_RGMII_RXD1_CONN_EQOS_RGMII_RXD1		0x06000020
 				IMX8DXL_ENET1_RGMII_RXD2_CONN_EQOS_RGMII_RXD2		0x06000020
 				IMX8DXL_ENET1_RGMII_RXD3_CONN_EQOS_RGMII_RXD3		0x06000020
+			>;
+		};
+
+		pinctrl_flexcan2: flexcan2grp {
+			fsl,pins = <
+				IMX8DXL_UART2_TX_ADMA_FLEXCAN1_TX	0x00000021
+				IMX8DXL_UART2_RX_ADMA_FLEXCAN1_RX	0x00000021
+			>;
+		};
+
+		pinctrl_flexcan3: flexcan3grp {
+			fsl,pins = <
+				IMX8DXL_FLEXCAN2_TX_ADMA_FLEXCAN2_TX	0x00000021
+				IMX8DXL_FLEXCAN2_RX_ADMA_FLEXCAN2_RX	0x00000021
 			>;
 		};
 
@@ -803,10 +776,10 @@
 
 		pinctrl_lpspi3: lpspi3grp {
 			fsl,pins = <
-				IMX8DXL_SPI3_SCK_ADMA_SPI3_SCK		0x600004c
-				IMX8DXL_SPI3_SDO_ADMA_SPI3_SDO		0x600004c
-				IMX8DXL_SPI3_SDI_ADMA_SPI3_SDI		0x600004c
-				IMX8DXL_SPI3_CS1_ADMA_SPI3_CS1		0x600004c
+				IMX8DXL_SPI3_SCK_ADMA_SPI3_SCK		0x6000040
+				IMX8DXL_SPI3_SDO_ADMA_SPI3_SDO		0x6000040
+				IMX8DXL_SPI3_SDI_ADMA_SPI3_SDI		0x6000040
+				IMX8DXL_SPI3_CS1_ADMA_SPI3_CS1		0x6000040
 			>;
 		};
 
@@ -840,20 +813,14 @@
                        >;
                };
 
-		pinctrl_flexcan2: flexcan2grp {
+
+		pinctrl_pcieb: pcieagrp{
 			fsl,pins = <
-				IMX8DXL_UART2_TX_ADMA_FLEXCAN1_TX	0x00000021
-				IMX8DXL_UART2_RX_ADMA_FLEXCAN1_RX	0x00000021
+				IMX8DXL_PCIE_CTRL0_PERST_B_LSIO_GPIO4_IO00	0x06000021
+				IMX8DXL_PCIE_CTRL0_CLKREQ_B_LSIO_GPIO4_IO01	0x06000021
+				IMX8DXL_PCIE_CTRL0_WAKE_B_LSIO_GPIO4_IO02	0x04000021
 			>;
 		};
-
-		pinctrl_flexcan3: flexcan3grp {
-			fsl,pins = <
-				IMX8DXL_FLEXCAN2_TX_ADMA_FLEXCAN2_TX	0x00000021
-				IMX8DXL_FLEXCAN2_RX_ADMA_FLEXCAN2_RX	0x00000021
-			>;
-		};
-
 		pinctrl_sai0: sai0grp {
 			fsl,pins = <
 				IMX8DXL_SPI0_SCK_ADMA_SAI0_TXC     0x06000040
@@ -932,20 +899,15 @@
 			>;
 		};
 
-		pinctrl_pcieb: pcieagrp{
+		pinctrl_usbotg1: otg1 {
 			fsl,pins = <
-				IMX8DXL_PCIE_CTRL0_PERST_B_LSIO_GPIO4_IO00	0x06000021
-				IMX8DXL_PCIE_CTRL0_CLKREQ_B_LSIO_GPIO4_IO01	0x06000021
-				IMX8DXL_PCIE_CTRL0_WAKE_B_LSIO_GPIO4_IO02	0x04000021
+				IMX8DXL_USB_SS3_TC0_CONN_USB_OTG1_PWR		0x00000021
 			>;
 		};
 
-		pinctrl_adc: adcgrp{
+		pinctrl_usbotg2: otg2 {
 			fsl,pins = <
-				IMX8DXL_ADC_IN0_ADMA_ADC_IN0	0x06000021
-				IMX8DXL_ADC_IN1_ADMA_ADC_IN1	0x06000021
-				IMX8DXL_ADC_IN4_ADMA_ADC_IN4	0x06000021
-				IMX8DXL_ADC_IN5_ADMA_ADC_IN5	0x06000021
+				IMX8DXL_USB_SS3_TC1_CONN_USB_OTG2_PWR		0x00000021
 			>;
 		};
 };

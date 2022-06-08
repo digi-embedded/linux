@@ -167,7 +167,7 @@
 	};
 
 	fpga: board-control@2,0 {
-		compatible = "fsl,ls1046aqds-fpga", "fsl,fpga-qixis", "simple-bus";
+		compatible = "fsl,ls1046aqds-fpga", "fsl,fpga-qixis", "simple-mfd";
 		reg = <0x2 0x0 0x0000100>;
 		ranges = <0 2 0 0x100>;
 	};
@@ -302,12 +302,15 @@
 			qsgmii_phy_s2_p1: ethernet-phy@8 {
 				reg = <0x8>;
 			};
+
 			qsgmii_phy_s2_p2: ethernet-phy@9 {
 				reg = <0x9>;
 			};
+
 			qsgmii_phy_s2_p3: ethernet-phy@a {
 				reg = <0xa>;
 			};
+
 			qsgmii_phy_s2_p4: ethernet-phy@b {
 				reg = <0xb>;
 			};

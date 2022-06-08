@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: (GPL-2.0 OR BSD-3-Clause) */
+/* SPDX-License-Identifier: (GPL-2.0-only OR BSD-3-Clause) */
 /*
  * This file is provided under a dual BSD/GPLv2 license.  When using or
  * redistributing this file, you may do so under either license.
@@ -26,6 +26,9 @@ struct snd_sof_pdata {
 	const char *platform;
 
 	struct device *dev;
+
+	/* indicate how many first bytes shouldn't be loaded into DSP memory. */
+	size_t fw_offset;
 
 	/*
 	 * notification callback used if the hardware initialization
@@ -61,6 +64,11 @@ struct sof_dev_desc {
 	/* list of machines using this configuration */
 	struct snd_soc_acpi_mach *machines;
 
+	/* alternate list of machines using this configuration */
+	struct snd_soc_acpi_mach *alt_machines;
+
+	bool use_acpi_target_states;
+
 	/* Platform resource indexes in BAR / ACPI resources. */
 	/* Must set to -1 if not used - add new items to end */
 	int resindex_lpe_base;
@@ -81,7 +89,6 @@ struct sof_dev_desc {
 	const void *chip_info;
 
 	/* defaults for no codec mode */
-	const char *nocodec_fw_filename;
 	const char *nocodec_tplg_filename;
 
 	/* defaults paths for firmware and topology files */
@@ -92,9 +99,9 @@ struct sof_dev_desc {
 	const char *default_fw_filename;
 
 	const struct snd_sof_dsp_ops *ops;
-	const struct sof_arch_ops *arch_ops;
 };
 
-int sof_nocodec_setup(struct device *dev,
-		      const struct snd_sof_dsp_ops *ops);
+int sof_dai_get_mclk(struct snd_soc_pcm_runtime *rtd);
+int sof_dai_get_bclk(struct snd_soc_pcm_runtime *rtd);
+
 #endif

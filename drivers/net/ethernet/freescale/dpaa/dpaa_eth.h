@@ -47,8 +47,6 @@
 /* Total number of Tx queues */
 #define DPAA_ETH_TXQ_NUM	(DPAA_TC_NUM * DPAA_TC_TXQ_NUM)
 
-#define DPAA_BPS_NUM 3 /* number of bpools per interface */
-
 /* More detailed FQ types - used for fine-grained WQ assignments */
 enum dpaa_fq_type {
 	FQ_TYPE_RX_DEFAULT = 1, /* Rx Default FQs */
@@ -70,6 +68,7 @@ struct dpaa_fq {
 	u16 channel;
 	u8 wq;
 	enum dpaa_fq_type fq_type;
+	struct xdp_rxq_info xdp_rxq;
 };
 
 struct dpaa_fq_cbs {
@@ -80,9 +79,11 @@ struct dpaa_fq_cbs {
 	struct qman_fq egress_ern;
 };
 
+struct dpaa_priv;
+
 struct dpaa_bp {
-	/* device used in the DMA mapping operations */
-	struct device *dev;
+	/* used in the DMA mapping operations */
+	struct dpaa_priv *priv;
 	/* current number of buffers in the buffer pool alloted to each CPU */
 	int __percpu *percpu_count;
 	/* all buffers allocated for this pool have this raw size */
@@ -126,6 +127,7 @@ struct dpaa_napi_portal {
 	struct napi_struct napi;
 	struct qman_portal *p;
 	bool down;
+	int xdp_act;
 };
 
 struct dpaa_percpu_priv {
@@ -144,15 +146,26 @@ struct dpaa_buffer_layout {
 	u16 priv_data_size;
 };
 
+/* Information to be used on the Tx confirmation path. Stored just
+ * before the start of the transmit buffer. Maximum size allowed
+ * is DPAA_TX_PRIV_DATA_SIZE bytes.
+ */
+struct dpaa_eth_swbp {
+	struct sk_buff *skb;
+	struct xdp_frame *xdpf;
+};
+
 struct dpaa_priv {
 	struct dpaa_percpu_priv __percpu *percpu_priv;
-	struct dpaa_bp *dpaa_bps[DPAA_BPS_NUM];
+	struct dpaa_bp *dpaa_bp;
 	/* Store here the needed Tx headroom for convenience and speed
 	 * (even though it can be computed based on the fields of buf_layout)
 	 */
 	u16 tx_headroom;
 	struct net_device *net_dev;
 	struct mac_device *mac_dev;
+	struct device *rx_dma_dev;
+	struct device *tx_dma_dev;
 	struct qman_fq *egress_fqs[DPAA_ETH_TXQ_NUM];
 	struct qman_fq *conf_fqs[DPAA_ETH_TXQ_NUM];
 
@@ -186,6 +199,8 @@ struct dpaa_priv {
 
 	bool tx_tstamp; /* Tx timestamping enabled */
 	bool rx_tstamp; /* Rx timestamping enabled */
+
+	struct bpf_prog *xdp_prog;
 };
 
 /* from dpaa_ethtool.c */

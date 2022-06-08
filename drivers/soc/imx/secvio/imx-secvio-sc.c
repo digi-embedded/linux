@@ -91,7 +91,7 @@ int imx_secvio_sc_notifier_call_chain(struct secvio_sc_notifier_info *info)
 }
 
 int int_imx_secvio_sc_get_state(struct device *dev,
-				  struct secvio_sc_notifier_info *info)
+				struct secvio_sc_notifier_info *info)
 {
 	struct secvio_sc_notifier_info _info = {0};
 	struct secvio_sc_notifier_info *p_info;
@@ -456,7 +456,7 @@ exit:
 	return ret;
 }
 
-static struct file_operations imx_secvio_sc_fops = {
+const static struct file_operations imx_secvio_sc_fops = {
 	.owner = THIS_MODULE,
 	.open = imx_secvio_sc_open,
 	.unlocked_ioctl = imx_secvio_sc_ioctl,
@@ -520,7 +520,7 @@ static int imx_secvio_sc_setup(struct device *dev)
 	     SECO_MINOR_VERSION_SUPPORT_SECVIO_TAMPER) {
 		dev_err(dev, "SECO version %.8x doesn't support all secvio\n",
 			seco_version);
-		ret = -ENOTSUPP;
+		ret = -EOPNOTSUPP;
 		goto clean;
 	}
 
@@ -573,7 +573,7 @@ static int imx_secvio_sc_setup(struct device *dev)
 	}
 
 	ret = devm_add_action_or_reset(dev, if_imx_scu_irq_register_notifier,
-				   &data->irq_nb);
+				       &data->irq_nb);
 	if (ret) {
 		dev_err(dev, "Failed to add action to remove irq notif\n");
 		goto clean;
@@ -588,7 +588,7 @@ static int imx_secvio_sc_setup(struct device *dev)
 	}
 
 	ret = devm_add_action_or_reset(dev, if_unregister_imx_secvio_sc_notifier,
-				   &data->report_nb);
+				       &data->report_nb);
 	if (ret) {
 		dev_err(dev, "Failed to add action to remove report notif\n");
 		goto clean;
@@ -603,7 +603,7 @@ static int imx_secvio_sc_setup(struct device *dev)
 	}
 
 	ret = devm_add_action(dev, if_unregister_imx_secvio_sc_notifier,
-				   &data->audit_nb);
+			      &data->audit_nb);
 	if (ret) {
 		dev_err(dev, "Failed to add action to remove audit notif\n");
 		goto clean;

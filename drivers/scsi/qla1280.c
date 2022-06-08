@@ -490,7 +490,6 @@ __setup("qla1280=", qla1280_setup);
 #define	CMD_SNSLEN(Cmnd)	SCSI_SENSE_BUFFERSIZE
 #define	CMD_RESULT(Cmnd)	Cmnd->result
 #define	CMD_HANDLE(Cmnd)	Cmnd->host_scribble
-#define CMD_REQUEST(Cmnd)	Cmnd->request->cmd
 
 #define CMD_HOST(Cmnd)		Cmnd->device->host
 #define SCSI_BUS_32(Cmnd)	Cmnd->device->channel
@@ -526,7 +525,7 @@ static struct pci_device_id qla1280_pci_tbl[] = {
 };
 MODULE_DEVICE_TABLE(pci, qla1280_pci_tbl);
 
-DEFINE_MUTEX(qla1280_firmware_mutex);
+static DEFINE_MUTEX(qla1280_firmware_mutex);
 
 struct qla_fw {
 	char *fwname;
@@ -535,7 +534,7 @@ struct qla_fw {
 
 #define QL_NUM_FW_IMAGES 3
 
-struct qla_fw qla1280_fw_tbl[QL_NUM_FW_IMAGES] = {
+static struct qla_fw qla1280_fw_tbl[QL_NUM_FW_IMAGES] = {
 	{"qlogic/1040.bin",  NULL},	/* image 0 */
 	{"qlogic/1280.bin",  NULL},	/* image 1 */
 	{"qlogic/12160.bin", NULL},	/* image 2 */
@@ -633,13 +632,13 @@ static int qla1280_read_nvram(struct scsi_qla_host *ha)
 	 * to be read a word (two bytes) at a time.
 	 *
 	 * The net result of this would be that the word (and
-	 * doubleword) quantites in the firmware would be correct, but
+	 * doubleword) quantities in the firmware would be correct, but
 	 * the bytes would be pairwise reversed.  Since most of the
-	 * firmware quantites are, in fact, bytes, we do an extra
+	 * firmware quantities are, in fact, bytes, we do an extra
 	 * le16_to_cpu() in the firmware read routine.
 	 *
 	 * The upshot of all this is that the bytes in the firmware
-	 * are in the correct places, but the 16 and 32 bit quantites
+	 * are in the correct places, but the 16 and 32 bit quantities
 	 * are still in little endian format.  We fix that up below by
 	 * doing extra reverses on them */
 	nv->isp_parameter = cpu_to_le16(nv->isp_parameter);
@@ -687,7 +686,7 @@ qla1280_info(struct Scsi_Host *host)
  * The mid-level driver tries to ensures that queuecommand never gets invoked
  * concurrently with itself or the interrupt handler (although the
  * interrupt handler may call this routine as part of request-completion
- * handling).   Unfortunely, it sometimes calls the scheduler in interrupt
+ * handling).   Unfortunately, it sometimes calls the scheduler in interrupt
  * context which is a big NO! NO!.
  **************************************************************************/
 static int
@@ -1241,7 +1240,7 @@ qla1280_done(struct scsi_qla_host *ha)
 {
 	struct srb *sp;
 	struct list_head *done_q;
-	int bus, target, lun;
+	int bus, target;
 	struct scsi_cmnd *cmd;
 
 	ENTER("qla1280_done");
@@ -1256,7 +1255,6 @@ qla1280_done(struct scsi_qla_host *ha)
 		cmd = sp->cmd;
 		bus = SCSI_BUS_32(cmd);
 		target = SCSI_TCN_32(cmd);
-		lun = SCSI_LUN_32(cmd);
 
 		switch ((CMD_RESULT(cmd) >> 16)) {
 		case DID_RESET:
@@ -1699,6 +1697,16 @@ qla1280_load_firmware_pio(struct scsi_qla_host *ha)
 	return err;
 }
 
+#ifdef QLA_64BIT_PTR
+#define LOAD_CMD	MBC_LOAD_RAM_A64_ROM
+#define DUMP_CMD	MBC_DUMP_RAM_A64_ROM
+#define CMD_ARGS	(BIT_7 | BIT_6 | BIT_4 | BIT_3 | BIT_2 | BIT_1 | BIT_0)
+#else
+#define LOAD_CMD	MBC_LOAD_RAM
+#define DUMP_CMD	MBC_DUMP_RAM
+#define CMD_ARGS	(BIT_4 | BIT_3 | BIT_2 | BIT_1 | BIT_0)
+#endif
+
 #define DUMP_IT_BACK 0		/* for debug of RISC loading */
 static int
 qla1280_load_firmware_dma(struct scsi_qla_host *ha)
@@ -1748,7 +1756,7 @@ qla1280_load_firmware_dma(struct scsi_qla_host *ha)
 		for(i = 0; i < cnt; i++)
 			((__le16 *)ha->request_ring)[i] = fw_data[i];
 
-		mb[0] = MBC_LOAD_RAM;
+		mb[0] = LOAD_CMD;
 		mb[1] = risc_address;
 		mb[4] = cnt;
 		mb[3] = ha->request_dma & 0xffff;
@@ -1759,8 +1767,7 @@ qla1280_load_firmware_dma(struct scsi_qla_host *ha)
 				__func__, mb[0],
 				(void *)(long)ha->request_dma,
 				mb[6], mb[7], mb[2], mb[3]);
-		err = qla1280_mailbox_command(ha, BIT_4 | BIT_3 | BIT_2 |
-				BIT_1 | BIT_0, mb);
+		err = qla1280_mailbox_command(ha, CMD_ARGS, mb);
 		if (err) {
 			printk(KERN_ERR "scsi(%li): Failed to load partial "
 			       "segment of f\n", ha->host_no);
@@ -1768,7 +1775,7 @@ qla1280_load_firmware_dma(struct scsi_qla_host *ha)
 		}
 
 #if DUMP_IT_BACK
-		mb[0] = MBC_DUMP_RAM;
+		mb[0] = DUMP_CMD;
 		mb[1] = risc_address;
 		mb[4] = cnt;
 		mb[3] = p_tbuf & 0xffff;
@@ -1776,8 +1783,7 @@ qla1280_load_firmware_dma(struct scsi_qla_host *ha)
 		mb[7] = upper_32_bits(p_tbuf) & 0xffff;
 		mb[6] = upper_32_bits(p_tbuf) >> 16;
 
-		err = qla1280_mailbox_command(ha, BIT_4 | BIT_3 | BIT_2 |
-				BIT_1 | BIT_0, mb);
+		err = qla1280_mailbox_command(ha, CMD_ARGS, mb);
 		if (err) {
 			printk(KERN_ERR
 			       "Failed to dump partial segment of f/w\n");
@@ -2177,13 +2183,12 @@ qla1280_nvram_config(struct scsi_qla_host *ha)
 		nv->cntr_flags_1.disable_loading_risc_code;
 
 	if (IS_ISP1040(ha)) {
-		uint16_t hwrev, cfg1, cdma_conf, ddma_conf;
+		uint16_t hwrev, cfg1, cdma_conf;
 
 		hwrev = RD_REG_WORD(&reg->cfg_0) & ISP_CFG0_HWMSK;
 
 		cfg1 = RD_REG_WORD(&reg->cfg_1) & ~(BIT_4 | BIT_5 | BIT_6);
 		cdma_conf = RD_REG_WORD(&reg->cdma_cfg);
-		ddma_conf = RD_REG_WORD(&reg->ddma_cfg);
 
 		/* Busted fifo, says mjacob. */
 		if (hwrev != ISP_CFG0_1040A)
@@ -2419,7 +2424,6 @@ qla1280_mailbox_command(struct scsi_qla_host *ha, uint8_t mr, uint16_t *mb)
 	int cnt;
 	uint16_t *optr, *iptr;
 	uint16_t __iomem *mptr;
-	uint16_t data;
 	DECLARE_COMPLETION_ONSTACK(wait);
 
 	ENTER("qla1280_mailbox_command");
@@ -2454,7 +2458,7 @@ qla1280_mailbox_command(struct scsi_qla_host *ha, uint8_t mr, uint16_t *mb)
 
 	spin_unlock_irq(ha->host->host_lock);
 	WRT_REG_WORD(&reg->host_cmd, HC_SET_HOST_INT);
-	data = qla1280_debounce_register(&reg->istatus);
+	qla1280_debounce_register(&reg->istatus);
 
 	wait_for_completion(&wait);
 	del_timer_sync(&ha->mailbox_timer);
@@ -2822,7 +2826,7 @@ qla1280_64bit_start_scsi(struct scsi_qla_host *ha, struct srb * sp)
 	memset(((char *)pkt + 8), 0, (REQUEST_ENTRY_SIZE - 8));
 
 	/* Set ISP command timeout. */
-	pkt->timeout = cpu_to_le16(cmd->request->timeout/HZ);
+	pkt->timeout = cpu_to_le16(scsi_cmd_to_rq(cmd)->timeout / HZ);
 
 	/* Set device target ID and LUN */
 	pkt->lun = SCSI_LUN_32(cmd);
@@ -3049,7 +3053,7 @@ qla1280_32bit_start_scsi(struct scsi_qla_host *ha, struct srb * sp)
 
 	/* Check for empty slot in outstanding command list. */
 	for (cnt = 0; cnt < MAX_OUTSTANDING_COMMANDS &&
-		     (ha->outstanding_cmds[cnt] != 0); cnt++) ;
+	     ha->outstanding_cmds[cnt]; cnt++);
 
 	if (cnt >= MAX_OUTSTANDING_COMMANDS) {
 		status = SCSI_MLQUEUE_HOST_BUSY;
@@ -3077,7 +3081,7 @@ qla1280_32bit_start_scsi(struct scsi_qla_host *ha, struct srb * sp)
 	memset(((char *)pkt + 8), 0, (REQUEST_ENTRY_SIZE - 8));
 
 	/* Set ISP command timeout. */
-	pkt->timeout = cpu_to_le16(cmd->request->timeout/HZ);
+	pkt->timeout = cpu_to_le16(scsi_cmd_to_rq(cmd)->timeout / HZ);
 
 	/* Set device target ID and LUN */
 	pkt->lun = SCSI_LUN_32(cmd);
@@ -3596,7 +3600,6 @@ static void
 qla1280_status_entry(struct scsi_qla_host *ha, struct response *pkt,
 		     struct list_head *done_q)
 {
-	unsigned int bus, target, lun;
 	int sense_sz;
 	struct srb *sp;
 	struct scsi_cmnd *cmd;
@@ -3621,11 +3624,6 @@ qla1280_status_entry(struct scsi_qla_host *ha, struct response *pkt,
 	ha->outstanding_cmds[handle] = NULL;
 
 	cmd = sp->cmd;
-
-	/* Generate LU queue on cntrl, target, LUN */
-	bus = SCSI_BUS_32(cmd);
-	target = SCSI_TCN_32(cmd);
-	lun = SCSI_LUN_32(cmd);
 
 	if (comp_status || scsi_status) {
 		dprintk(3, "scsi: comp_status = 0x%x, scsi_status = "
@@ -3665,7 +3663,8 @@ qla1280_status_entry(struct scsi_qla_host *ha, struct response *pkt,
 
 			dprintk(2, "qla1280_status_entry: Check "
 				"condition Sense data, b %i, t %i, "
-				"l %i\n", bus, target, lun);
+				"l %i\n", SCSI_BUS_32(cmd), SCSI_TCN_32(cmd),
+				SCSI_LUN_32(cmd));
 			if (sense_sz)
 				qla1280_dump_buffer(2,
 						    (char *)cmd->sense_buffer,
@@ -3906,18 +3905,18 @@ qla1280_get_target_parameters(struct scsi_qla_host *ha,
 	printk(KERN_INFO "scsi(%li:%d:%d:%d):", ha->host_no, bus, target, lun);
 
 	if (mb[3] != 0) {
-		printk(" Sync: period %d, offset %d",
+		printk(KERN_CONT " Sync: period %d, offset %d",
 		       (mb[3] & 0xff), (mb[3] >> 8));
 		if (mb[2] & BIT_13)
-			printk(", Wide");
+			printk(KERN_CONT ", Wide");
 		if ((mb[2] & BIT_5) && ((mb[6] >> 8) & 0xff) >= 2)
-			printk(", DT");
+			printk(KERN_CONT ", DT");
 	} else
-		printk(" Async");
+		printk(KERN_CONT " Async");
 
 	if (device->simple_tags)
-		printk(", Tagged queuing: depth %d", device->queue_depth);
-	printk("\n");
+		printk(KERN_CONT ", Tagged queuing: depth %d", device->queue_depth);
+	printk(KERN_CONT "\n");
 }
 
 
@@ -3981,7 +3980,7 @@ __qla1280_print_scsi_cmd(struct scsi_cmnd *cmd)
 	   qla1280_dump_buffer(1, (char *)sg, (cmd->use_sg*sizeof(struct scatterlist)));
 	   } */
 	printk("  tag=%d, transfersize=0x%x \n",
-	       cmd->tag, cmd->transfersize);
+	       scsi_cmd_to_rq(cmd)->tag, cmd->transfersize);
 	printk("  SP=0x%p\n", CMD_SP(cmd));
 	printk(" underflow size = 0x%x, direction=0x%x\n",
 	       cmd->underflow, cmd->sc_data_direction);
@@ -4403,15 +4402,3 @@ MODULE_FIRMWARE("qlogic/1040.bin");
 MODULE_FIRMWARE("qlogic/1280.bin");
 MODULE_FIRMWARE("qlogic/12160.bin");
 MODULE_VERSION(QLA1280_VERSION);
-
-/*
- * Overrides for Emacs so that we almost follow Linus's tabbing style.
- * Emacs will notice this stuff at the end of the file and automatically
- * adjust the settings for this buffer only.  This must remain at the end
- * of the file.
- * ---------------------------------------------------------------------------
- * Local variables:
- * c-basic-offset: 8
- * tab-width: 8
- * End:
- */

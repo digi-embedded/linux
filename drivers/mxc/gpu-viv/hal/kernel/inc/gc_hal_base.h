@@ -62,6 +62,12 @@
 #include "shared/gc_hal_base_shared.h"
 
 
+#ifdef __QNXNTO__
+#define CHECK_PRINTF_FORMAT(string_index, first_to_check) __attribute__((__format__(__printf__, (string_index), (first_to_check))))
+#else
+#define CHECK_PRINTF_FORMAT(string_index, first_to_check)
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -661,7 +667,7 @@ gcoOS_AllocateVideoMemory(
     IN gctBOOL InUserSpace,
     IN gctBOOL InCacheable,
     IN OUT gctSIZE_T * Bytes,
-    OUT gctUINT32 * Physical,
+    OUT gctUINT32 * Address,
     OUT gctPOINTER * Logical,
     OUT gctPOINTER * Handle
     );
@@ -954,7 +960,8 @@ gcoHAL_ReadShBuffer(
 /* Config power management to be enabled or disabled. */
 gceSTATUS
 gcoHAL_ConfigPowerManagement(
-    IN gctBOOL Enable
+    IN gctBOOL Enable,
+    OUT gctBOOL *OldValue
     );
 
 gceSTATUS
@@ -1183,6 +1190,14 @@ gcoOS_Allocate(
     OUT gctPOINTER * Memory
     );
 
+gceSTATUS
+gcoOS_Realloc(
+    IN gcoOS Os,
+    IN gctSIZE_T Bytes,
+    IN gctSIZE_T OrgBytes,
+    OUT gctPOINTER * Memory
+    );
+
 /* Get allocated memory size. */
 gceSTATUS
 gcoOS_GetMemorySize(
@@ -1218,6 +1233,15 @@ gceSTATUS
 gcoOS_AllocateMemory(
     IN gcoOS Os,
     IN gctSIZE_T Bytes,
+    OUT gctPOINTER * Memory
+    );
+
+/* Realloc memory. */
+gceSTATUS
+gcoOS_ReallocMemory(
+    IN gcoOS Os,
+    IN gctSIZE_T Bytes,
+    IN gctSIZE_T OrgBytes,
     OUT gctPOINTER * Memory
     );
 
@@ -1545,7 +1569,8 @@ gcoOS_PrintStrSafe(
     IN OUT gctUINT * Offset,
     IN gctCONST_STRING Format,
     ...
-    );
+    )
+CHECK_PRINTF_FORMAT(4, 5);
 
 gceSTATUS
 gcoOS_LoadLibrary(
@@ -1594,6 +1619,7 @@ gceSTATUS
 gcoOS_SetProfileSetting(
         IN gcoOS Os,
         IN gctBOOL Enable,
+        IN gceProfilerMode ProfileMode,
         IN gctCONST_STRING FileName
         );
 #endif
@@ -1978,17 +2004,17 @@ void gcoOS_ModuleDestructor(
 #   define gcmPROFILE_INIT(freq, start)     _gcmPROFILE_INIT(gco, freq, start)
 #   define gcmPROFILE_QUERY(start, ticks)   _gcmPROFILE_QUERY(gco, start, ticks)
 #   define gcmPROFILE_ONLY(x)               x
-#   define gcmPROFILE_ELSE(x)               do { } while (gcvFALSE)
+#   define gcmPROFILE_ELSE(x)
 #   define gcmPROFILE_DECLARE_ONLY(x)       x
 #   define gcmPROFILE_DECLARE_ELSE(x)       typedef x
 #else
-#   define gcmkPROFILE_INIT(start, freq)    do { } while (gcvFALSE)
-#   define gcmkPROFILE_QUERY(start, ticks)  do { } while (gcvFALSE)
-#   define gcmPROFILE_INIT(start, freq)     do { } while (gcvFALSE)
-#   define gcmPROFILE_QUERY(start, ticks)   do { } while (gcvFALSE)
-#   define gcmPROFILE_ONLY(x)               do { } while (gcvFALSE)
+#   define gcmkPROFILE_INIT(start, freq)
+#   define gcmkPROFILE_QUERY(start, ticks)
+#   define gcmPROFILE_INIT(start, freq)
+#   define gcmPROFILE_QUERY(start, ticks)
+#   define gcmPROFILE_ONLY(x)
 #   define gcmPROFILE_ELSE(x)               x
-#   define gcmPROFILE_DECLARE_ONLY(x)       do { } while (gcvFALSE)
+#   define gcmPROFILE_DECLARE_ONLY(x)
 #   define gcmPROFILE_DECLARE_ELSE(x)       x
 #endif
 
@@ -3129,14 +3155,16 @@ gckOS_DebugTrace(
     IN gctUINT32 Level,
     IN gctCONST_STRING Message,
     ...
-    );
+    )
+CHECK_PRINTF_FORMAT(2, 3);
 
 void
 gcoOS_DebugTrace(
     IN gctUINT32 Level,
     IN gctCONST_STRING Message,
     ...
-    );
+    )
+CHECK_PRINTF_FORMAT(2, 3);
 
 #if gcmIS_DEBUG(gcdDEBUG_TRACE)
 #   define gcmTRACE             gcoOS_DebugTrace
@@ -3704,13 +3732,15 @@ void
 gckOS_Print(
     IN gctCONST_STRING Message,
     ...
-    );
+    )
+CHECK_PRINTF_FORMAT(1, 2);
 
 void
 gcoOS_Print(
     IN gctCONST_STRING Message,
     ...
-    );
+    )
+CHECK_PRINTF_FORMAT(1, 2);
 
 #define gcmPRINT                gcoOS_Print
 #define gcmkPRINT               gckOS_Print
@@ -3756,7 +3786,7 @@ gcoOS_Print(
                       gcvVERSION_STRING)
 #else
 #   define gcmPRINT_VERSION()       do { gcmSTACK_DUMP(); } while (gcvFALSE)
-#   define gcmkPRINT_VERSION()      do { } while (gcvFALSE)
+#   define gcmkPRINT_VERSION()
 #endif
 
 void
@@ -3780,8 +3810,8 @@ gckOS_DumpBuffer(
 
 #   define gcmkDUMP_BUFFER      gckOS_DumpBuffer
 #else
-#   define gcmkDUMP(...)        do {} while (0)
-#   define gcmkDUMP_BUFFER(...) do {} while (0)
+#   define gcmkDUMP(...)
+#   define gcmkDUMP_BUFFER(...)
 #endif
 
 /*******************************************************************************
@@ -3836,7 +3866,7 @@ gcoOS_Dump(
     );
 #  define gcmDUMP               gcoOS_Dump
 #else
-#  define gcmDUMP(...)          do {} while (0)
+#  define gcmDUMP(...)
 #endif
 
 /*******************************************************************************
@@ -3875,7 +3905,7 @@ gcoOS_DumpBuffer(
     );
 #   define gcmDUMP_BUFFER       gcoOS_DumpBuffer
 #else
-#   define gcmDUMP_BUFFER(...)  do {} while (0)
+#   define gcmDUMP_BUFFER(...)
 #endif
 
 #if gcdDUMP
@@ -3885,7 +3915,7 @@ gcoOS_DumpLock(
     );
 #   define gcmDUMP_LOCK         gcoOS_DumpLock
 #else
-#   define gcmDUMP_LOCK(...)    do {} while (0)
+#   define gcmDUMP_LOCK(...)
 #endif
 
 #if gcdDUMP
@@ -3895,7 +3925,7 @@ gcoOS_DumpUnlock(
     );
 #   define gcmDUMP_UNLOCK       gcoOS_DumpUnlock
 #else
-#   define gcmDUMP_UNLOCK(...)  do {} while (0)
+#   define gcmDUMP_UNLOCK(...)
 #endif
 
 /*******************************************************************************
@@ -3914,7 +3944,7 @@ gceSTATUS gcoOS_DumpApi(IN gctCONST_STRING String, ...);
 #if gcdDUMP_API
 #   define gcmDUMP_API          gcoOS_DumpApi
 #else
-#   define gcmDUMP_API(...)     do {} while (0)
+#   define gcmDUMP_API(...)
 #endif
 
 /*******************************************************************************
@@ -3932,7 +3962,7 @@ gceSTATUS gcoOS_DumpArray(IN gctCONST_POINTER Data, IN gctUINT32 Size);
 #if gcdDUMP_API
 #   define gcmDUMP_API_ARRAY        gcoOS_DumpArray
 #else
-#   define gcmDUMP_API_ARRAY(...)   do {} while (0)
+#   define gcmDUMP_API_ARRAY(...)
 #endif
 
 /*******************************************************************************
@@ -3950,7 +3980,7 @@ gceSTATUS gcoOS_DumpArrayToken(IN gctCONST_POINTER Data, IN gctUINT32 Terminatio
 #if gcdDUMP_API
 #   define gcmDUMP_API_ARRAY_TOKEN      gcoOS_DumpArrayToken
 #else
-#   define gcmDUMP_API_ARRAY_TOKEN(...) do {} while (0)
+#   define gcmDUMP_API_ARRAY_TOKEN(...)
 #endif
 
 /*******************************************************************************
@@ -3968,7 +3998,7 @@ gceSTATUS gcoOS_DumpApiData(IN gctCONST_POINTER Data, IN gctSIZE_T Size);
 #if gcdDUMP_API
 #   define gcmDUMP_API_DATA         gcoOS_DumpApiData
 #else
-#   define gcmDUMP_API_DATA(...)    do {} while (0)
+#   define gcmDUMP_API_DATA(...)
 #endif
 
 /*******************************************************************************
@@ -3987,7 +4017,7 @@ gceSTATUS gcoOS_Dump2DCommand(IN gctUINT32_PTR Command, IN gctUINT32 Size);
         if (Hardware->newDump2DLevel > 1) \
             gcoOS_Dump2DCommand(cmd, size)
 #else
-#   define gcmDUMP_2D_COMMAND(...)  do {} while (0)
+#   define gcmDUMP_2D_COMMAND(...)
 #endif
 
 /*******************************************************************************
@@ -4006,7 +4036,7 @@ gceSTATUS gcoOS_Dump2DSurface(IN gctBOOL Src, IN gctUINT32 Address);
         if (Hardware->newDump2DLevel > 2) \
            gcoOS_Dump2DSurface(src, addr)
 #else
-#   define gcmDUMP_2D_SURFACE(...)  do {} while (0)
+#   define gcmDUMP_2D_SURFACE(...)
 #endif
 
 /*******************************************************************************
@@ -4023,7 +4053,7 @@ gceSTATUS gcfAddMemoryInfo(IN gctUINT32 GPUAddress, IN gctPOINTER Logical, IN gc
 #if gcdDUMP_2D
 #   define gcmDUMP_ADD_MEMORY_INFO  gcfAddMemoryInfo
 #else
-#   define gcmDUMP_ADD_MEMORY_INFO(...) do {} while (0)
+#   define gcmDUMP_ADD_MEMORY_INFO(...)
 #endif
 
 /*******************************************************************************
@@ -4039,7 +4069,7 @@ gceSTATUS gcfDelMemoryInfo(IN gctUINT32 Address);
 #if gcdDUMP_2D
 #   define gcmDUMP_DEL_MEMORY_INFO  gcfDelMemoryInfo
 #else
-#   define gcmDUMP_DEL_MEMORY_INFO(...) do {} while (0)
+#   define gcmDUMP_DEL_MEMORY_INFO(...)
 #endif
 
 /*******************************************************************************

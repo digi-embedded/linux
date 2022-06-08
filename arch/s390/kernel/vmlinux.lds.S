@@ -5,15 +5,19 @@
 
 #include <asm/thread_info.h>
 #include <asm/page.h>
+#include <asm/ftrace.lds.h>
 
 /*
  * Put .bss..swapper_pg_dir as the first thing in .bss. This will
  * make sure it has 16k alignment.
  */
-#define BSS_FIRST_SECTIONS *(.bss..swapper_pg_dir)
+#define BSS_FIRST_SECTIONS *(.bss..swapper_pg_dir) \
+			   *(.bss..invalid_pg_dir)
 
 /* Handle ro_after_init data on our own. */
 #define RO_AFTER_INIT_DATA
+
+#define EMITS_PT_NOTE
 
 #include <asm-generic/vmlinux.lds.h>
 #include <asm/vmlinux.lds.h>
@@ -43,6 +47,7 @@ SECTIONS
 		KPROBES_TEXT
 		IRQENTRY_TEXT
 		SOFTIRQENTRY_TEXT
+		FTRACE_HOTPATCH_TRAMPOLINES_TEXT
 		*(.text.*_indirect_*)
 		*(.fixup)
 		*(.gnu.warning)
@@ -50,11 +55,7 @@ SECTIONS
 		_etext = .;		/* End of text section */
 	} :text = 0x0700
 
-	NOTES :text :note
-
-	.dummy : { *(.dummy) } :data
-
-	RO_DATA_SECTION(PAGE_SIZE)
+	RO_DATA(PAGE_SIZE)
 
 	. = ALIGN(PAGE_SIZE);
 	_sdata = .;		/* Start of data section */
@@ -64,13 +65,20 @@ SECTIONS
 	.data..ro_after_init : {
 		 *(.data..ro_after_init)
 		JUMP_TABLE_DATA
-	}
+	} :data
 	EXCEPTION_TABLE(16)
 	. = ALIGN(PAGE_SIZE);
 	__end_ro_after_init = .;
 
-	RW_DATA_SECTION(0x100, PAGE_SIZE, THREAD_SIZE)
+	RW_DATA(0x100, PAGE_SIZE, THREAD_SIZE)
 	BOOT_DATA_PRESERVED
+
+	. = ALIGN(8);
+	.amode31.refs : {
+		_start_amode31_refs = .;
+		*(.amode31.refs)
+		_end_amode31_refs = .;
+	}
 
 	_edata = .;		/* End of data section */
 
@@ -137,6 +145,32 @@ SECTIONS
 
 	BOOT_DATA
 
+	/*
+	 * .amode31 section for code, data, ex_table that need to stay
+	 * below 2 GB, even when the kernel is relocated above 2 GB.
+	 */
+	. = ALIGN(PAGE_SIZE);
+	_samode31 = .;
+	.amode31.text : {
+		_stext_amode31 = .;
+		*(.amode31.text)
+		*(.amode31.text.*_indirect_*)
+		. = ALIGN(PAGE_SIZE);
+		_etext_amode31 = .;
+	}
+	. = ALIGN(16);
+	.amode31.ex_table : {
+		_start_amode31_ex_table = .;
+		KEEP(*(.amode31.ex_table))
+		_stop_amode31_ex_table = .;
+	}
+	. = ALIGN(PAGE_SIZE);
+	.amode31.data : {
+		*(.amode31.data)
+	}
+	. = ALIGN(PAGE_SIZE);
+	_eamode31 = .;
+
 	/* early.c uses stsi, which requires page aligned data. */
 	. = ALIGN(PAGE_SIZE);
 	INIT_DATA_SECTION(0x100)
@@ -183,6 +217,7 @@ SECTIONS
 	/* Debugging sections.	*/
 	STABS_DEBUG
 	DWARF_DEBUG
+	ELF_DETAILS
 
 	/* Sections to be discarded */
 	DISCARDS

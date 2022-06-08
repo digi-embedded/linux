@@ -556,6 +556,9 @@ enum host_event_code {
 	/* Keyboard recovery combo with hardware reinitialization */
 	EC_HOST_EVENT_KEYBOARD_RECOVERY_HW_REINIT = 30,
 
+	/* WoV */
+	EC_HOST_EVENT_WOV = 31,
+
 	/*
 	 * The high bit of the event mask is not used as a host event code.  If
 	 * it reads back as set, then the entire event mask should be
@@ -1277,12 +1280,22 @@ enum ec_feature_code {
 	 * MOTIONSENSE_CMD_TABLET_MODE_LID_ANGLE.
 	 */
 	EC_FEATURE_REFINED_TABLET_MODE_HYSTERESIS = 37,
-	/* EC supports audio codec. */
-	EC_FEATURE_AUDIO_CODEC = 38,
 	/* The MCU is a System Companion Processor (SCP). */
 	EC_FEATURE_SCP = 39,
 	/* The MCU is an Integrated Sensor Hub */
 	EC_FEATURE_ISH = 40,
+	/* New TCPMv2 TYPEC_ prefaced commands supported */
+	EC_FEATURE_TYPEC_CMD = 41,
+	/*
+	 * The EC will wait for direction from the AP to enter Type-C alternate
+	 * modes or USB4.
+	 */
+	EC_FEATURE_TYPEC_REQUIRE_AP_MODE_ENTRY = 42,
+	/*
+	 * The EC will wait for an acknowledge from the AP after setting the
+	 * mux.
+	 */
+	EC_FEATURE_TYPEC_MUX_REQUIRE_AP_ACK = 43,
 };
 
 #define EC_FEATURE_MASK_0(event_code) BIT(event_code % 32)
@@ -1418,7 +1431,7 @@ struct ec_response_flash_info_2 {
 	uint16_t num_banks_total;
 	/* Number of banks described in banks array. */
 	uint16_t num_banks_desc;
-	struct ec_flash_bank banks[0];
+	struct ec_flash_bank banks[];
 } __ec_align4;
 
 /*
@@ -2419,12 +2432,12 @@ struct ec_response_motion_sense_fifo_info {
 	/* Total amount of vector lost */
 	uint16_t total_lost;
 	/* Lost events since the last fifo_info, per sensors */
-	uint16_t lost[0];
+	uint16_t lost[];
 } __ec_todo_packed;
 
 struct ec_response_motion_sense_fifo_data {
 	uint32_t number_data;
-	struct ec_response_motion_sensor_data data[0];
+	struct ec_response_motion_sensor_data data[];
 } __ec_todo_packed;
 
 /* List supported activity recognition */
@@ -3092,7 +3105,7 @@ struct ec_response_tmp006_get_calibration_v1 {
 	uint8_t algorithm;
 	uint8_t num_params;
 	uint8_t reserved[2];
-	float val[0];
+	float val[];
 } __ec_align4;
 
 struct ec_params_tmp006_set_calibration_v1 {
@@ -3100,7 +3113,7 @@ struct ec_params_tmp006_set_calibration_v1 {
 	uint8_t algorithm;
 	uint8_t num_params;
 	uint8_t reserved;
-	float val[0];
+	float val[];
 } __ec_align4;
 
 
@@ -3454,6 +3467,7 @@ struct ec_response_get_next_event_v1 {
 #define EC_MKBP_LID_OPEN	0
 #define EC_MKBP_TABLET_MODE	1
 #define EC_MKBP_BASE_ATTACHED	2
+#define EC_MKBP_FRONT_PROXIMITY	3
 
 /* Run keyboard factory test scanning */
 #define EC_CMD_KEYBOARD_FACTORY_TEST 0x0068
@@ -4214,6 +4228,7 @@ enum ec_device_event {
 	EC_DEVICE_EVENT_TRACKPAD,
 	EC_DEVICE_EVENT_DSP,
 	EC_DEVICE_EVENT_WIFI,
+	EC_DEVICE_EVENT_WLC,
 };
 
 enum ec_device_event_param {
@@ -4468,92 +4483,247 @@ enum mkbp_cec_event {
 
 /*****************************************************************************/
 
-/* Commands for I2S recording on audio codec. */
+/* Commands for audio codec. */
+#define EC_CMD_EC_CODEC 0x00BC
 
-#define EC_CMD_CODEC_I2S 0x00BC
-#define EC_WOV_I2S_SAMPLE_RATE 48000
-
-enum ec_codec_i2s_subcmd {
-	EC_CODEC_SET_SAMPLE_DEPTH = 0x0,
-	EC_CODEC_SET_GAIN = 0x1,
-	EC_CODEC_GET_GAIN = 0x2,
-	EC_CODEC_I2S_ENABLE = 0x3,
-	EC_CODEC_I2S_SET_CONFIG = 0x4,
-	EC_CODEC_I2S_SET_TDM_CONFIG = 0x5,
-	EC_CODEC_I2S_SET_BCLK = 0x6,
-	EC_CODEC_I2S_SUBCMD_COUNT = 0x7,
+enum ec_codec_subcmd {
+	EC_CODEC_GET_CAPABILITIES = 0x0,
+	EC_CODEC_GET_SHM_ADDR = 0x1,
+	EC_CODEC_SET_SHM_ADDR = 0x2,
+	EC_CODEC_SUBCMD_COUNT,
 };
 
-enum ec_sample_depth_value {
-	EC_CODEC_SAMPLE_DEPTH_16 = 0,
-	EC_CODEC_SAMPLE_DEPTH_24 = 1,
+enum ec_codec_cap {
+	EC_CODEC_CAP_WOV_AUDIO_SHM = 0,
+	EC_CODEC_CAP_WOV_LANG_SHM = 1,
+	EC_CODEC_CAP_LAST = 32,
 };
 
-enum ec_i2s_config {
-	EC_DAI_FMT_I2S = 0,
-	EC_DAI_FMT_RIGHT_J = 1,
-	EC_DAI_FMT_LEFT_J = 2,
-	EC_DAI_FMT_PCM_A = 3,
-	EC_DAI_FMT_PCM_B = 4,
-	EC_DAI_FMT_PCM_TDM = 5,
+enum ec_codec_shm_id {
+	EC_CODEC_SHM_ID_WOV_AUDIO = 0x0,
+	EC_CODEC_SHM_ID_WOV_LANG = 0x1,
+	EC_CODEC_SHM_ID_LAST,
 };
 
-/*
- * For subcommand EC_CODEC_GET_GAIN.
- */
-struct __ec_align1 ec_codec_i2s_gain {
-	uint8_t left;
-	uint8_t right;
+enum ec_codec_shm_type {
+	EC_CODEC_SHM_TYPE_EC_RAM = 0x0,
+	EC_CODEC_SHM_TYPE_SYSTEM_RAM = 0x1,
 };
 
-struct __ec_todo_unpacked ec_param_codec_i2s_tdm {
-	int16_t ch0_delay; /* 0 to 496 */
-	int16_t ch1_delay; /* -1 to 496 */
-	uint8_t adjacent_to_ch0;
-	uint8_t adjacent_to_ch1;
+struct __ec_align1 ec_param_ec_codec_get_shm_addr {
+	uint8_t shm_id;
+	uint8_t reserved[3];
 };
 
-struct __ec_todo_packed ec_param_codec_i2s {
-	/* enum ec_codec_i2s_subcmd */
-	uint8_t cmd;
+struct __ec_align4 ec_param_ec_codec_set_shm_addr {
+	uint64_t phys_addr;
+	uint32_t len;
+	uint8_t shm_id;
+	uint8_t reserved[3];
+};
+
+struct __ec_align4 ec_param_ec_codec {
+	uint8_t cmd; /* enum ec_codec_subcmd */
+	uint8_t reserved[3];
+
 	union {
-		/*
-		 * EC_CODEC_SET_SAMPLE_DEPTH
-		 * Value should be one of ec_sample_depth_value.
-		 */
-		uint8_t depth;
-
-		/*
-		 * EC_CODEC_SET_GAIN
-		 * Value should be 0~43 for both channels.
-		 */
-		struct ec_codec_i2s_gain gain;
-
-		/*
-		 * EC_CODEC_I2S_ENABLE
-		 * 1 to enable, 0 to disable.
-		 */
-		uint8_t i2s_enable;
-
-		/*
-		 * EC_CODEC_I2S_SET_CONFIG
-		 * Value should be one of ec_i2s_config.
-		 */
-		uint8_t i2s_config;
-
-		/*
-		 * EC_CODEC_I2S_SET_TDM_CONFIG
-		 * Value should be one of ec_i2s_config.
-		 */
-		struct ec_param_codec_i2s_tdm tdm_param;
-
-		/*
-		 * EC_CODEC_I2S_SET_BCLK
-		 */
-		uint32_t bclk;
+		struct ec_param_ec_codec_get_shm_addr
+				get_shm_addr_param;
+		struct ec_param_ec_codec_set_shm_addr
+				set_shm_addr_param;
 	};
 };
 
+struct __ec_align4 ec_response_ec_codec_get_capabilities {
+	uint32_t capabilities;
+};
+
+struct __ec_align4 ec_response_ec_codec_get_shm_addr {
+	uint64_t phys_addr;
+	uint32_t len;
+	uint8_t type;
+	uint8_t reserved[3];
+};
+
+/*****************************************************************************/
+
+/* Commands for DMIC on audio codec. */
+#define EC_CMD_EC_CODEC_DMIC 0x00BD
+
+enum ec_codec_dmic_subcmd {
+	EC_CODEC_DMIC_GET_MAX_GAIN = 0x0,
+	EC_CODEC_DMIC_SET_GAIN_IDX = 0x1,
+	EC_CODEC_DMIC_GET_GAIN_IDX = 0x2,
+	EC_CODEC_DMIC_SUBCMD_COUNT,
+};
+
+enum ec_codec_dmic_channel {
+	EC_CODEC_DMIC_CHANNEL_0 = 0x0,
+	EC_CODEC_DMIC_CHANNEL_1 = 0x1,
+	EC_CODEC_DMIC_CHANNEL_2 = 0x2,
+	EC_CODEC_DMIC_CHANNEL_3 = 0x3,
+	EC_CODEC_DMIC_CHANNEL_4 = 0x4,
+	EC_CODEC_DMIC_CHANNEL_5 = 0x5,
+	EC_CODEC_DMIC_CHANNEL_6 = 0x6,
+	EC_CODEC_DMIC_CHANNEL_7 = 0x7,
+	EC_CODEC_DMIC_CHANNEL_COUNT,
+};
+
+struct __ec_align1 ec_param_ec_codec_dmic_set_gain_idx {
+	uint8_t channel; /* enum ec_codec_dmic_channel */
+	uint8_t gain;
+	uint8_t reserved[2];
+};
+
+struct __ec_align1 ec_param_ec_codec_dmic_get_gain_idx {
+	uint8_t channel; /* enum ec_codec_dmic_channel */
+	uint8_t reserved[3];
+};
+
+struct __ec_align4 ec_param_ec_codec_dmic {
+	uint8_t cmd; /* enum ec_codec_dmic_subcmd */
+	uint8_t reserved[3];
+
+	union {
+		struct ec_param_ec_codec_dmic_set_gain_idx
+				set_gain_idx_param;
+		struct ec_param_ec_codec_dmic_get_gain_idx
+				get_gain_idx_param;
+	};
+};
+
+struct __ec_align1 ec_response_ec_codec_dmic_get_max_gain {
+	uint8_t max_gain;
+};
+
+struct __ec_align1 ec_response_ec_codec_dmic_get_gain_idx {
+	uint8_t gain;
+};
+
+/*****************************************************************************/
+
+/* Commands for I2S RX on audio codec. */
+
+#define EC_CMD_EC_CODEC_I2S_RX 0x00BE
+
+enum ec_codec_i2s_rx_subcmd {
+	EC_CODEC_I2S_RX_ENABLE = 0x0,
+	EC_CODEC_I2S_RX_DISABLE = 0x1,
+	EC_CODEC_I2S_RX_SET_SAMPLE_DEPTH = 0x2,
+	EC_CODEC_I2S_RX_SET_DAIFMT = 0x3,
+	EC_CODEC_I2S_RX_SET_BCLK = 0x4,
+	EC_CODEC_I2S_RX_RESET = 0x5,
+	EC_CODEC_I2S_RX_SUBCMD_COUNT,
+};
+
+enum ec_codec_i2s_rx_sample_depth {
+	EC_CODEC_I2S_RX_SAMPLE_DEPTH_16 = 0x0,
+	EC_CODEC_I2S_RX_SAMPLE_DEPTH_24 = 0x1,
+	EC_CODEC_I2S_RX_SAMPLE_DEPTH_COUNT,
+};
+
+enum ec_codec_i2s_rx_daifmt {
+	EC_CODEC_I2S_RX_DAIFMT_I2S = 0x0,
+	EC_CODEC_I2S_RX_DAIFMT_RIGHT_J = 0x1,
+	EC_CODEC_I2S_RX_DAIFMT_LEFT_J = 0x2,
+	EC_CODEC_I2S_RX_DAIFMT_COUNT,
+};
+
+struct __ec_align1 ec_param_ec_codec_i2s_rx_set_sample_depth {
+	uint8_t depth;
+	uint8_t reserved[3];
+};
+
+struct __ec_align1 ec_param_ec_codec_i2s_rx_set_gain {
+	uint8_t left;
+	uint8_t right;
+	uint8_t reserved[2];
+};
+
+struct __ec_align1 ec_param_ec_codec_i2s_rx_set_daifmt {
+	uint8_t daifmt;
+	uint8_t reserved[3];
+};
+
+struct __ec_align4 ec_param_ec_codec_i2s_rx_set_bclk {
+	uint32_t bclk;
+};
+
+struct __ec_align4 ec_param_ec_codec_i2s_rx {
+	uint8_t cmd; /* enum ec_codec_i2s_rx_subcmd */
+	uint8_t reserved[3];
+
+	union {
+		struct ec_param_ec_codec_i2s_rx_set_sample_depth
+				set_sample_depth_param;
+		struct ec_param_ec_codec_i2s_rx_set_daifmt
+				set_daifmt_param;
+		struct ec_param_ec_codec_i2s_rx_set_bclk
+				set_bclk_param;
+	};
+};
+
+/*****************************************************************************/
+/* Commands for WoV on audio codec. */
+
+#define EC_CMD_EC_CODEC_WOV 0x00BF
+
+enum ec_codec_wov_subcmd {
+	EC_CODEC_WOV_SET_LANG = 0x0,
+	EC_CODEC_WOV_SET_LANG_SHM = 0x1,
+	EC_CODEC_WOV_GET_LANG = 0x2,
+	EC_CODEC_WOV_ENABLE = 0x3,
+	EC_CODEC_WOV_DISABLE = 0x4,
+	EC_CODEC_WOV_READ_AUDIO = 0x5,
+	EC_CODEC_WOV_READ_AUDIO_SHM = 0x6,
+	EC_CODEC_WOV_SUBCMD_COUNT,
+};
+
+/*
+ * @hash is SHA256 of the whole language model.
+ * @total_len indicates the length of whole language model.
+ * @offset is the cursor from the beginning of the model.
+ * @buf is the packet buffer.
+ * @len denotes how many bytes in the buf.
+ */
+struct __ec_align4 ec_param_ec_codec_wov_set_lang {
+	uint8_t hash[32];
+	uint32_t total_len;
+	uint32_t offset;
+	uint8_t buf[128];
+	uint32_t len;
+};
+
+struct __ec_align4 ec_param_ec_codec_wov_set_lang_shm {
+	uint8_t hash[32];
+	uint32_t total_len;
+};
+
+struct __ec_align4 ec_param_ec_codec_wov {
+	uint8_t cmd; /* enum ec_codec_wov_subcmd */
+	uint8_t reserved[3];
+
+	union {
+		struct ec_param_ec_codec_wov_set_lang
+				set_lang_param;
+		struct ec_param_ec_codec_wov_set_lang_shm
+				set_lang_shm_param;
+	};
+};
+
+struct __ec_align4 ec_response_ec_codec_wov_get_lang {
+	uint8_t hash[32];
+};
+
+struct __ec_align4 ec_response_ec_codec_wov_read_audio {
+	uint8_t buf[128];
+	uint32_t len;
+};
+
+struct __ec_align4 ec_response_ec_codec_wov_read_audio_shm {
+	uint32_t offset;
+	uint32_t len;
+};
 
 /*****************************************************************************/
 /* System commands */
@@ -4574,6 +4744,7 @@ enum ec_reboot_cmd {
 	EC_REBOOT_DISABLE_JUMP = 5,  /* Disable jump until next reboot */
 	EC_REBOOT_HIBERNATE = 6,     /* Hibernate EC */
 	EC_REBOOT_HIBERNATE_CLEAR_AP_OFF = 7, /* and clears AP_OFF flag */
+	EC_REBOOT_COLD_AP_OFF = 8,   /* Cold-reboot and don't boot AP */
 };
 
 /* Flags for ec_params_reboot_ec.reboot_flags */
@@ -4762,15 +4933,26 @@ struct ec_response_usb_pd_control_v1 {
 #define USBC_PD_CC_UFP_ATTACHED	4 /* UFP attached to usbc */
 #define USBC_PD_CC_DFP_ATTACHED	5 /* DPF attached to usbc */
 
+/* Active/Passive Cable */
+#define USB_PD_CTRL_ACTIVE_CABLE        BIT(0)
+/* Optical/Non-optical cable */
+#define USB_PD_CTRL_OPTICAL_CABLE       BIT(1)
+/* 3rd Gen TBT device (or AMA)/2nd gen tbt Adapter */
+#define USB_PD_CTRL_TBT_LEGACY_ADAPTER  BIT(2)
+/* Active Link Uni-Direction */
+#define USB_PD_CTRL_ACTIVE_LINK_UNIDIR  BIT(3)
+
 struct ec_response_usb_pd_control_v2 {
 	uint8_t enabled;
 	uint8_t role;
 	uint8_t polarity;
 	char state[32];
-	uint8_t cc_state; /* USBC_PD_CC_*Encoded cc state */
-	uint8_t dp_mode;  /* Current DP pin mode (MODE_DP_PIN_[A-E]) */
-	/* CL:1500994 Current cable type */
-	uint8_t reserved_cable_type;
+	uint8_t cc_state;	/* enum pd_cc_states representing cc state */
+	uint8_t dp_mode;	/* Current DP pin mode (MODE_DP_PIN_[A-E]) */
+	uint8_t reserved;	/* Reserved for future use */
+	uint8_t control_flags;	/* USB_PD_CTRL_*flags */
+	uint8_t cable_speed;	/* TBT_SS_* cable speed */
+	uint8_t cable_gen;	/* TBT_GEN3_* cable rounded support */
 } __ec_align1;
 
 #define EC_CMD_USB_PD_PORTS 0x0102
@@ -4910,7 +5092,7 @@ struct ec_response_pd_log {
 	uint8_t type;       /* event type : see PD_EVENT_xx below */
 	uint8_t size_port;  /* [7:5] port number [4:0] payload size in bytes */
 	uint16_t data;      /* type-defined data payload */
-	uint8_t payload[0]; /* optional additional data payload: 0..16 bytes */
+	uint8_t payload[];  /* optional additional data payload: 0..16 bytes */
 } __ec_align4;
 
 /* The timestamp is the microsecond counter shifted to get about a ms. */
@@ -5052,11 +5234,15 @@ struct ec_params_usb_pd_mux_info {
 } __ec_align1;
 
 /* Flags representing mux state */
-#define USB_PD_MUX_USB_ENABLED       BIT(0) /* USB connected */
-#define USB_PD_MUX_DP_ENABLED        BIT(1) /* DP connected */
-#define USB_PD_MUX_POLARITY_INVERTED BIT(2) /* CC line Polarity inverted */
-#define USB_PD_MUX_HPD_IRQ           BIT(3) /* HPD IRQ is asserted */
-#define USB_PD_MUX_HPD_LVL           BIT(4) /* HPD level is asserted */
+#define USB_PD_MUX_NONE               0      /* Open switch */
+#define USB_PD_MUX_USB_ENABLED        BIT(0) /* USB connected */
+#define USB_PD_MUX_DP_ENABLED         BIT(1) /* DP connected */
+#define USB_PD_MUX_POLARITY_INVERTED  BIT(2) /* CC line Polarity inverted */
+#define USB_PD_MUX_HPD_IRQ            BIT(3) /* HPD IRQ is asserted */
+#define USB_PD_MUX_HPD_LVL            BIT(4) /* HPD level is asserted */
+#define USB_PD_MUX_SAFE_MODE          BIT(5) /* DP is in safe mode */
+#define USB_PD_MUX_TBT_COMPAT_ENABLED BIT(6) /* TBT compat enabled */
+#define USB_PD_MUX_USB4_ENABLED       BIT(7) /* USB4 enabled */
 
 struct ec_response_usb_pd_mux_info {
 	uint8_t flags; /* USB_PD_MUX_*-encoded USB mux state */
@@ -5274,6 +5460,335 @@ struct ec_response_rollback_info {
 
 /* Issue AP reset */
 #define EC_CMD_AP_RESET 0x0125
+
+/**
+ * Get the number of peripheral charge ports
+ */
+#define EC_CMD_PCHG_COUNT 0x0134
+
+#define EC_PCHG_MAX_PORTS 8
+
+struct ec_response_pchg_count {
+	uint8_t port_count;
+} __ec_align1;
+
+/**
+ * Get the status of a peripheral charge port
+ */
+#define EC_CMD_PCHG 0x0135
+
+struct ec_params_pchg {
+	uint8_t port;
+} __ec_align1;
+
+struct ec_response_pchg {
+	uint32_t error;			/* enum pchg_error */
+	uint8_t state;			/* enum pchg_state state */
+	uint8_t battery_percentage;
+	uint8_t unused0;
+	uint8_t unused1;
+	/* Fields added in version 1 */
+	uint32_t fw_version;
+	uint32_t dropped_event_count;
+} __ec_align2;
+
+enum pchg_state {
+	/* Charger is reset and not initialized. */
+	PCHG_STATE_RESET = 0,
+	/* Charger is initialized or disabled. */
+	PCHG_STATE_INITIALIZED,
+	/* Charger is enabled and ready to detect a device. */
+	PCHG_STATE_ENABLED,
+	/* Device is in proximity. */
+	PCHG_STATE_DETECTED,
+	/* Device is being charged. */
+	PCHG_STATE_CHARGING,
+	/* Device is fully charged. It implies DETECTED (& not charging). */
+	PCHG_STATE_FULL,
+	/* In download (a.k.a. firmware update) mode */
+	PCHG_STATE_DOWNLOAD,
+	/* In download mode. Ready for receiving data. */
+	PCHG_STATE_DOWNLOADING,
+	/* Device is ready for data communication. */
+	PCHG_STATE_CONNECTED,
+	/* Put no more entry below */
+	PCHG_STATE_COUNT,
+};
+
+#define EC_PCHG_STATE_TEXT { \
+	[PCHG_STATE_RESET] = "RESET", \
+	[PCHG_STATE_INITIALIZED] = "INITIALIZED", \
+	[PCHG_STATE_ENABLED] = "ENABLED", \
+	[PCHG_STATE_DETECTED] = "DETECTED", \
+	[PCHG_STATE_CHARGING] = "CHARGING", \
+	[PCHG_STATE_FULL] = "FULL", \
+	[PCHG_STATE_DOWNLOAD] = "DOWNLOAD", \
+	[PCHG_STATE_DOWNLOADING] = "DOWNLOADING", \
+	[PCHG_STATE_CONNECTED] = "CONNECTED", \
+	}
+
+/*****************************************************************************/
+/* Voltage regulator controls */
+
+/*
+ * Get basic info of voltage regulator for given index.
+ *
+ * Returns the regulator name and supported voltage list in mV.
+ */
+#define EC_CMD_REGULATOR_GET_INFO 0x012C
+
+/* Maximum length of regulator name */
+#define EC_REGULATOR_NAME_MAX_LEN 16
+
+/* Maximum length of the supported voltage list. */
+#define EC_REGULATOR_VOLTAGE_MAX_COUNT 16
+
+struct ec_params_regulator_get_info {
+	uint32_t index;
+} __ec_align4;
+
+struct ec_response_regulator_get_info {
+	char name[EC_REGULATOR_NAME_MAX_LEN];
+	uint16_t num_voltages;
+	uint16_t voltages_mv[EC_REGULATOR_VOLTAGE_MAX_COUNT];
+} __ec_align2;
+
+/*
+ * Configure the regulator as enabled / disabled.
+ */
+#define EC_CMD_REGULATOR_ENABLE 0x012D
+
+struct ec_params_regulator_enable {
+	uint32_t index;
+	uint8_t enable;
+} __ec_align4;
+
+/*
+ * Query if the regulator is enabled.
+ *
+ * Returns 1 if the regulator is enabled, 0 if not.
+ */
+#define EC_CMD_REGULATOR_IS_ENABLED 0x012E
+
+struct ec_params_regulator_is_enabled {
+	uint32_t index;
+} __ec_align4;
+
+struct ec_response_regulator_is_enabled {
+	uint8_t enabled;
+} __ec_align1;
+
+/*
+ * Set voltage for the voltage regulator within the range specified.
+ *
+ * The driver should select the voltage in range closest to min_mv.
+ *
+ * Also note that this might be called before the regulator is enabled, and the
+ * setting should be in effect after the regulator is enabled.
+ */
+#define EC_CMD_REGULATOR_SET_VOLTAGE 0x012F
+
+struct ec_params_regulator_set_voltage {
+	uint32_t index;
+	uint32_t min_mv;
+	uint32_t max_mv;
+} __ec_align4;
+
+/*
+ * Get the currently configured voltage for the voltage regulator.
+ *
+ * Note that this might be called before the regulator is enabled, and this
+ * should return the configured output voltage if the regulator is enabled.
+ */
+#define EC_CMD_REGULATOR_GET_VOLTAGE 0x0130
+
+struct ec_params_regulator_get_voltage {
+	uint32_t index;
+} __ec_align4;
+
+struct ec_response_regulator_get_voltage {
+	uint32_t voltage_mv;
+} __ec_align4;
+
+/*
+ * Gather all discovery information for the given port and partner type.
+ *
+ * Note that if discovery has not yet completed, only the currently completed
+ * responses will be filled in.   If the discovery data structures are changed
+ * in the process of the command running, BUSY will be returned.
+ *
+ * VDO field sizes are set to the maximum possible number of VDOs a VDM may
+ * contain, while the number of SVIDs here is selected to fit within the PROTO2
+ * maximum parameter size.
+ */
+#define EC_CMD_TYPEC_DISCOVERY 0x0131
+
+enum typec_partner_type {
+	TYPEC_PARTNER_SOP = 0,
+	TYPEC_PARTNER_SOP_PRIME = 1,
+};
+
+struct ec_params_typec_discovery {
+	uint8_t port;
+	uint8_t partner_type; /* enum typec_partner_type */
+} __ec_align1;
+
+struct svid_mode_info {
+	uint16_t svid;
+	uint16_t mode_count;  /* Number of modes partner sent */
+	uint32_t mode_vdo[6]; /* Max VDOs allowed after VDM header is 6 */
+};
+
+struct ec_response_typec_discovery {
+	uint8_t identity_count;    /* Number of identity VDOs partner sent */
+	uint8_t svid_count;	   /* Number of SVIDs partner sent */
+	uint16_t reserved;
+	uint32_t discovery_vdo[6]; /* Max VDOs allowed after VDM header is 6 */
+	struct svid_mode_info svids[0];
+} __ec_align1;
+
+/* USB Type-C commands for AP-controlled device policy. */
+#define EC_CMD_TYPEC_CONTROL 0x0132
+
+enum typec_control_command {
+	TYPEC_CONTROL_COMMAND_EXIT_MODES,
+	TYPEC_CONTROL_COMMAND_CLEAR_EVENTS,
+	TYPEC_CONTROL_COMMAND_ENTER_MODE,
+};
+
+struct ec_params_typec_control {
+	uint8_t port;
+	uint8_t command;	/* enum typec_control_command */
+	uint16_t reserved;
+
+	/*
+	 * This section will be interpreted based on |command|. Define a
+	 * placeholder structure to avoid having to increase the size and bump
+	 * the command version when adding new sub-commands.
+	 */
+	union {
+		uint32_t clear_events_mask;
+		uint8_t mode_to_enter;      /* enum typec_mode */
+		uint8_t placeholder[128];
+	};
+} __ec_align1;
+
+/*
+ * Gather all status information for a port.
+ *
+ * Note: this covers many of the return fields from the deprecated
+ * EC_CMD_USB_PD_CONTROL command, except those that are redundant with the
+ * discovery data.  The "enum pd_cc_states" is defined with the deprecated
+ * EC_CMD_USB_PD_CONTROL command.
+ *
+ * This also combines in the EC_CMD_USB_PD_MUX_INFO flags.
+ */
+#define EC_CMD_TYPEC_STATUS 0x0133
+
+/*
+ * Power role.
+ *
+ * Note this is also used for PD header creation, and values align to those in
+ * the Power Delivery Specification Revision 3.0 (See
+ * 6.2.1.1.4 Port Power Role).
+ */
+enum pd_power_role {
+	PD_ROLE_SINK = 0,
+	PD_ROLE_SOURCE = 1
+};
+
+/*
+ * Data role.
+ *
+ * Note this is also used for PD header creation, and the first two values
+ * align to those in the Power Delivery Specification Revision 3.0 (See
+ * 6.2.1.1.6 Port Data Role).
+ */
+enum pd_data_role {
+	PD_ROLE_UFP = 0,
+	PD_ROLE_DFP = 1,
+	PD_ROLE_DISCONNECTED = 2,
+};
+
+enum pd_vconn_role {
+	PD_ROLE_VCONN_OFF = 0,
+	PD_ROLE_VCONN_SRC = 1,
+};
+
+/*
+ * Note: BIT(0) may be used to determine whether the polarity is CC1 or CC2,
+ * regardless of whether a debug accessory is connected.
+ */
+enum tcpc_cc_polarity {
+	/*
+	 * _CCx: is used to indicate the polarity while not connected to
+	 * a Debug Accessory.  Only one CC line will assert a resistor and
+	 * the other will be open.
+	 */
+	POLARITY_CC1 = 0,
+	POLARITY_CC2 = 1,
+
+	/*
+	 * _CCx_DTS is used to indicate the polarity while connected to a
+	 * SRC Debug Accessory.  Assert resistors on both lines.
+	 */
+	POLARITY_CC1_DTS = 2,
+	POLARITY_CC2_DTS = 3,
+
+	/*
+	 * The current TCPC code relies on these specific POLARITY values.
+	 * Adding in a check to verify if the list grows for any reason
+	 * that this will give a hint that other places need to be
+	 * adjusted.
+	 */
+	POLARITY_COUNT
+};
+
+#define PD_STATUS_EVENT_SOP_DISC_DONE		BIT(0)
+#define PD_STATUS_EVENT_SOP_PRIME_DISC_DONE	BIT(1)
+#define PD_STATUS_EVENT_HARD_RESET		BIT(2)
+
+struct ec_params_typec_status {
+	uint8_t port;
+} __ec_align1;
+
+struct ec_response_typec_status {
+	uint8_t pd_enabled;		/* PD communication enabled - bool */
+	uint8_t dev_connected;		/* Device connected - bool */
+	uint8_t sop_connected;		/* Device is SOP PD capable - bool */
+	uint8_t source_cap_count;	/* Number of Source Cap PDOs */
+
+	uint8_t power_role;		/* enum pd_power_role */
+	uint8_t data_role;		/* enum pd_data_role */
+	uint8_t vconn_role;		/* enum pd_vconn_role */
+	uint8_t sink_cap_count;		/* Number of Sink Cap PDOs */
+
+	uint8_t polarity;		/* enum tcpc_cc_polarity */
+	uint8_t cc_state;		/* enum pd_cc_states */
+	uint8_t dp_pin;			/* DP pin mode (MODE_DP_IN_[A-E]) */
+	uint8_t mux_state;		/* USB_PD_MUX* - encoded mux state */
+
+	char tc_state[32];		/* TC state name */
+
+	uint32_t events;		/* PD_STATUS_EVENT bitmask */
+
+	/*
+	 * BCD PD revisions for partners
+	 *
+	 * The format has the PD major reversion in the upper nibble, and PD
+	 * minor version in the next nibble.  Following two nibbles are
+	 * currently 0.
+	 * ex. PD 3.2 would map to 0x3200
+	 *
+	 * PD major/minor will be 0 if no PD device is connected.
+	 */
+	uint16_t sop_revision;
+	uint16_t sop_prime_revision;
+
+	uint32_t source_cap_pdos[7];	/* Max 7 PDOs can be present */
+
+	uint32_t sink_cap_pdos[7];	/* Max 7 PDOs can be present */
+} __ec_align1;
 
 /*****************************************************************************/
 /* The command range 0x200-0x2FF is reserved for Rotor. */
@@ -5536,7 +6051,7 @@ struct ec_response_fp_encryption_status {
 
 struct ec_response_tp_frame_info {
 	uint32_t n_frames;
-	uint32_t frame_sizes[0];
+	uint32_t frame_sizes[];
 } __ec_align4;
 
 /* Create a snapshot of current frame readings */
@@ -5645,6 +6160,13 @@ struct ec_params_charger_control {
 	uint16_t otg_voltage;
 	uint8_t allow_charging;
 } __ec_align_size1;
+
+/* Get ACK from the USB-C SS muxes */
+#define EC_CMD_USB_PD_MUX_ACK 0x0603
+
+struct ec_params_usb_pd_mux_ack {
+	uint8_t port; /* USB-C port number */
+} __ec_align1;
 
 /*****************************************************************************/
 /*

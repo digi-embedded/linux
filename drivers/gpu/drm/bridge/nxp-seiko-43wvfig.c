@@ -14,11 +14,11 @@
  * GNU General Public License for more details.
  */
 
-#include <drm/drmP.h>
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_crtc_helper.h>
 #include <drm/drm_of.h>
 #include <drm/drm_panel.h>
+#include <drm/drm_print.h>
 #include <drm/drm_probe_helper.h>
 #include <linux/of.h>
 #include <linux/of_graph.h>
@@ -48,7 +48,7 @@ static int seiko_adapter_connector_get_modes(struct drm_connector *connector)
 						struct seiko_adapter,
 						connector);
 
-	num_modes = drm_panel_get_modes(adap->panel);
+	num_modes = drm_panel_get_modes(adap->panel, connector);
 
 	/*
 	 * The panel will populate the connector display_info properties with
@@ -76,7 +76,8 @@ static const struct drm_connector_helper_funcs
 	.get_modes = seiko_adapter_connector_get_modes,
 };
 
-static int seiko_adapter_bridge_attach(struct drm_bridge *bridge)
+static int seiko_adapter_bridge_attach(struct drm_bridge *bridge,
+					enum drm_bridge_attach_flags flags)
 {
 	struct seiko_adapter *adap = bridge->driver_private;
 	struct device *dev = adap->dev;
@@ -109,13 +110,6 @@ static int seiko_adapter_bridge_attach(struct drm_bridge *bridge)
 	adap->connector.dpms = DRM_MODE_DPMS_OFF;
 	drm_connector_attach_encoder(&adap->connector, encoder);
 
-	ret = drm_panel_attach(adap->panel, &adap->connector);
-	if (ret) {
-		DRM_DEV_ERROR(dev, "Failed to attach panel: %d\n", ret);
-		drm_connector_cleanup(&adap->connector);
-		return ret;
-	}
-
 	return ret;
 }
 
@@ -123,7 +117,6 @@ static void seiko_adapter_bridge_detach(struct drm_bridge *bridge)
 {
 	struct seiko_adapter *adap = bridge->driver_private;
 
-	drm_panel_detach(adap->panel);
 	drm_connector_cleanup(&adap->connector);
 }
 
@@ -157,20 +150,49 @@ static void seiko_adapter_bridge_disable(struct drm_bridge *bridge)
 		DRM_DEV_ERROR(dev, "failed to unprepare panel\n");
 }
 
+#define MAX_INPUT_FORMATS 1
+static u32 *
+seiko_adapter_atomic_get_input_bus_fmts(struct drm_bridge *bridge,
+					struct drm_bridge_state *bridge_state,
+					struct drm_crtc_state *crtc_state,
+					struct drm_connector_state *conn_state,
+					u32 output_fmt,
+					unsigned int *num_input_fmts) {
+	struct seiko_adapter *adap = bridge->driver_private;
+	u32 *input_fmts;
+
+	*num_input_fmts = 0;
+
+	input_fmts = kcalloc(MAX_INPUT_FORMATS, sizeof(*input_fmts),
+			     GFP_KERNEL);
+	if (!input_fmts)
+		return NULL;
+
+	input_fmts[0] = adap->bus_format;
+	*num_input_fmts = MAX_INPUT_FORMATS;
+
+	return input_fmts;
+}
+
 static const struct drm_bridge_funcs seiko_adapter_bridge_funcs = {
 	.enable = seiko_adapter_bridge_enable,
 	.disable = seiko_adapter_bridge_disable,
 	.attach = seiko_adapter_bridge_attach,
 	.detach = seiko_adapter_bridge_detach,
+
+	.atomic_get_input_bus_fmts = seiko_adapter_atomic_get_input_bus_fmts,
+
+	.atomic_duplicate_state = drm_atomic_helper_bridge_duplicate_state,
+	.atomic_destroy_state = drm_atomic_helper_bridge_destroy_state,
+	.atomic_reset = drm_atomic_helper_bridge_reset,
 };
 
 static int seiko_adapter_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct seiko_adapter *adap;
-	struct device_node *remote;
 	u32 bus_mode;
-	int port;
+	int port, ret;
 
 	adap = devm_kzalloc(dev, sizeof(*adap), GFP_KERNEL);
 	if (!adap)
@@ -194,18 +216,16 @@ static int seiko_adapter_probe(struct platform_device *pdev)
 	}
 
 	for (port = 0; port < 2; port++) {
-		remote = of_graph_get_remote_node(dev->of_node, port, -1);
-		if (!remote) {
-			dev_err(dev, "No remote for port %d\n", port);
-			return -ENODEV;
-		}
-		adap->panel = of_drm_find_panel(remote);
-		if (!IS_ERR(adap->panel))
+		ret = drm_of_find_panel_or_bridge(dev->of_node,
+						  port, 0,
+						  &adap->panel, NULL);
+		if (!ret)
 			break;
 	}
-	if (IS_ERR(adap->panel)) {
-		dev_err(dev, "No panel found: %ld\n", PTR_ERR(adap->panel));
-		return PTR_ERR(adap->panel);
+
+	if (ret) {
+		dev_err(dev, "No panel found: %d\n", ret);
+		return ret;
 	}
 
 	adap->dev = dev;

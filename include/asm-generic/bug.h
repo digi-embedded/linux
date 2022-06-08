@@ -3,6 +3,8 @@
 #define _ASM_GENERIC_BUG_H
 
 #include <linux/compiler.h>
+#include <linux/instrumentation.h>
+#include <linux/once_lite.h>
 
 #define CUT_HERE		"------------[ cut here ]------------\n"
 
@@ -16,7 +18,8 @@
 #endif
 
 #ifndef __ASSEMBLY__
-#include <linux/kernel.h>
+#include <linux/panic.h>
+#include <linux/printk.h>
 
 #ifdef CONFIG_BUG
 
@@ -83,14 +86,19 @@ extern __printf(4, 5)
 void warn_slowpath_fmt(const char *file, const int line, unsigned taint,
 		       const char *fmt, ...);
 #define __WARN()		__WARN_printf(TAINT_WARN, NULL)
-#define __WARN_printf(taint, arg...)					\
-	warn_slowpath_fmt(__FILE__, __LINE__, taint, arg)
+#define __WARN_printf(taint, arg...) do {				\
+		instrumentation_begin();				\
+		warn_slowpath_fmt(__FILE__, __LINE__, taint, arg);	\
+		instrumentation_end();					\
+	} while (0)
 #else
 extern __printf(1, 2) void __warn_printk(const char *fmt, ...);
 #define __WARN()		__WARN_FLAGS(BUGFLAG_TAINT(TAINT_WARN))
 #define __WARN_printf(taint, arg...) do {				\
+		instrumentation_begin();				\
 		__warn_printk(arg);					\
 		__WARN_FLAGS(BUGFLAG_NO_CUT_HERE | BUGFLAG_TAINT(taint));\
+		instrumentation_end();					\
 	} while (0)
 #define WARN_ON_ONCE(condition) ({				\
 	int __ret_warn_on = !!(condition);			\
@@ -134,39 +142,15 @@ void __warn(const char *file, int line, void *caller, unsigned taint,
 })
 
 #ifndef WARN_ON_ONCE
-#define WARN_ON_ONCE(condition)	({				\
-	static bool __section(.data.once) __warned;		\
-	int __ret_warn_once = !!(condition);			\
-								\
-	if (unlikely(__ret_warn_once && !__warned)) {		\
-		__warned = true;				\
-		WARN_ON(1);					\
-	}							\
-	unlikely(__ret_warn_once);				\
-})
+#define WARN_ON_ONCE(condition)					\
+	DO_ONCE_LITE_IF(condition, WARN_ON, 1)
 #endif
 
-#define WARN_ONCE(condition, format...)	({			\
-	static bool __section(.data.once) __warned;		\
-	int __ret_warn_once = !!(condition);			\
-								\
-	if (unlikely(__ret_warn_once && !__warned)) {		\
-		__warned = true;				\
-		WARN(1, format);				\
-	}							\
-	unlikely(__ret_warn_once);				\
-})
+#define WARN_ONCE(condition, format...)				\
+	DO_ONCE_LITE_IF(condition, WARN, 1, format)
 
-#define WARN_TAINT_ONCE(condition, taint, format...)	({	\
-	static bool __section(.data.once) __warned;		\
-	int __ret_warn_once = !!(condition);			\
-								\
-	if (unlikely(__ret_warn_once && !__warned)) {		\
-		__warned = true;				\
-		WARN_TAINT(1, taint, format);			\
-	}							\
-	unlikely(__ret_warn_once);				\
-})
+#define WARN_TAINT_ONCE(condition, taint, format...)		\
+	DO_ONCE_LITE_IF(condition, WARN_TAINT, 1, taint, format)
 
 #else /* !CONFIG_BUG */
 #ifndef HAVE_ARCH_BUG
@@ -233,6 +217,22 @@ void __warn(const char *file, int line, void *caller, unsigned taint,
  * warning.
  */
 # define WARN_ON_SMP(x)			({0;})
+#endif
+
+/*
+ * WARN_ON_FUNCTION_MISMATCH() warns if a value doesn't match a
+ * function address, and can be useful for catching issues with
+ * callback functions, for example.
+ *
+ * With CONFIG_CFI_CLANG, the warning is disabled because the
+ * compiler replaces function addresses taken in C code with
+ * local jump table addresses, which breaks cross-module function
+ * address equality.
+ */
+#if defined(CONFIG_CFI_CLANG) && defined(CONFIG_MODULES)
+# define WARN_ON_FUNCTION_MISMATCH(x, fn) ({ 0; })
+#else
+# define WARN_ON_FUNCTION_MISMATCH(x, fn) WARN_ON_ONCE((x) != (fn))
 #endif
 
 #endif /* __ASSEMBLY__ */

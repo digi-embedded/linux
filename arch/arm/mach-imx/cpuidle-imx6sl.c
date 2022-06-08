@@ -4,6 +4,7 @@
  * Copyright 2017-2018 NXP.
  */
 
+#include <linux/clk/imx.h>
 #include <linux/busfreq-imx.h>
 #include <linux/cpuidle.h>
 #include <linux/module.h>

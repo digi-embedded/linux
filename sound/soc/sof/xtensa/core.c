@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: (GPL-2.0 OR BSD-3-Clause)
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-3-Clause)
 //
 // This file is provided under a dual BSD/GPLv2 license.  When using or
 // redistributing this file, you may do so under either license.
@@ -122,9 +122,9 @@ static void xtensa_stack(struct snd_sof_dev *sdev, void *oops, u32 *stack,
 	 * 0x0049fbb0: 8000f2d0 0049fc00 6f6c6c61 00632e63
 	 */
 	for (i = 0; i < stack_words; i += 4) {
-		hex_dump_to_buffer(stack + i * 4, 16, 16, 4,
+		hex_dump_to_buffer(stack + i, 16, 16, 4,
 				   buf, sizeof(buf), false);
-		dev_err(sdev->dev, "0x%08x: %s\n", stack_ptr + i, buf);
+		dev_err(sdev->dev, "0x%08x: %s\n", stack_ptr + i * 4, buf);
 	}
 }
 
@@ -132,7 +132,7 @@ const struct sof_arch_ops sof_xtensa_arch_ops = {
 	.dsp_oops = xtensa_dsp_oops,
 	.dsp_stack = xtensa_stack,
 };
-EXPORT_SYMBOL(sof_xtensa_arch_ops);
+EXPORT_SYMBOL_NS(sof_xtensa_arch_ops, SND_SOC_SOF_XTENSA);
 
 MODULE_DESCRIPTION("SOF Xtensa DSP support");
 MODULE_LICENSE("Dual BSD/GPL");

@@ -6,7 +6,7 @@
  * Copyright 2019 NXP
  *
  * Author: Subrahmanya Lingappa <l.subrahmanya@mobiveil.co.in>
- * Refactor: Zhiqiang Hou <Zhiqiang.Hou@nxp.com>
+ *	   Hou Zhiqiang <Zhiqiang.Hou@nxp.com>
  */
 
 #include <linux/delay.h>
@@ -36,7 +36,8 @@ static void mobiveil_pcie_sel_page(struct mobiveil_pcie *pcie, u8 pg_idx)
 	writel(val, pcie->csr_axi_slave_base + PAB_CTRL);
 }
 
-static void *mobiveil_pcie_comp_addr(struct mobiveil_pcie *pcie, u32 off)
+static void __iomem *mobiveil_pcie_comp_addr(struct mobiveil_pcie *pcie,
+					     u32 off)
 {
 	if (off < PAGED_ADDR_BNDRY) {
 		/* For directly accessed registers, clear the pg_sel field */
@@ -95,9 +96,9 @@ static int mobiveil_pcie_write(void __iomem *addr, int size, u32 val)
 	return PCIBIOS_SUCCESSFUL;
 }
 
-u32 csr_read(struct mobiveil_pcie *pcie, u32 off, size_t size)
+u32 mobiveil_csr_read(struct mobiveil_pcie *pcie, u32 off, size_t size)
 {
-	void *addr;
+	void __iomem *addr;
 	u32 val;
 	int ret;
 
@@ -110,9 +111,10 @@ u32 csr_read(struct mobiveil_pcie *pcie, u32 off, size_t size)
 	return val;
 }
 
-void csr_write(struct mobiveil_pcie *pcie, u32 val, u32 off, size_t size)
+void mobiveil_csr_write(struct mobiveil_pcie *pcie, u32 val, u32 off,
+			       size_t size)
 {
-	void *addr;
+	void __iomem *addr;
 	int ret;
 
 	addr = mobiveil_pcie_comp_addr(pcie, off);
@@ -127,12 +129,12 @@ bool mobiveil_pcie_link_up(struct mobiveil_pcie *pcie)
 	if (pcie->ops->link_up)
 		return pcie->ops->link_up(pcie);
 
-	return (csr_readl(pcie, LTSSM_STATUS) &
+	return (mobiveil_csr_readl(pcie, LTSSM_STATUS) &
 		LTSSM_STATUS_L0_MASK) == LTSSM_STATUS_L0;
 }
 
-void program_ib_windows(struct mobiveil_pcie *pcie, int win_num, u64 cpu_addr,
-			u64 pci_addr, u32 type, u64 size)
+void program_ib_windows(struct mobiveil_pcie *pcie, int win_num,
+			u64 cpu_addr, u64 pci_addr, u32 type, u64 size)
 {
 	u32 value;
 	u64 size64 = ~(size - 1);
@@ -143,24 +145,24 @@ void program_ib_windows(struct mobiveil_pcie *pcie, int win_num, u64 cpu_addr,
 		return;
 	}
 
-	value = csr_readl(pcie, PAB_PEX_AMAP_CTRL(win_num));
+	value = mobiveil_csr_readl(pcie, PAB_PEX_AMAP_CTRL(win_num));
 	value &= ~(AMAP_CTRL_TYPE_MASK << AMAP_CTRL_TYPE_SHIFT | WIN_SIZE_MASK);
 	value |= type << AMAP_CTRL_TYPE_SHIFT | 1 << AMAP_CTRL_EN_SHIFT |
 		 (lower_32_bits(size64) & WIN_SIZE_MASK);
-	csr_writel(pcie, value, PAB_PEX_AMAP_CTRL(win_num));
+	mobiveil_csr_writel(pcie, value, PAB_PEX_AMAP_CTRL(win_num));
 
-	csr_writel(pcie, upper_32_bits(size64),
-		   PAB_EXT_PEX_AMAP_SIZEN(win_num));
+	mobiveil_csr_writel(pcie, upper_32_bits(size64),
+			    PAB_EXT_PEX_AMAP_SIZEN(win_num));
 
-	csr_writel(pcie, lower_32_bits(cpu_addr),
-		   PAB_PEX_AMAP_AXI_WIN(win_num));
-	csr_writel(pcie, upper_32_bits(cpu_addr),
-		   PAB_EXT_PEX_AMAP_AXI_WIN(win_num));
+	mobiveil_csr_writel(pcie, lower_32_bits(cpu_addr),
+			    PAB_PEX_AMAP_AXI_WIN(win_num));
+	mobiveil_csr_writel(pcie, upper_32_bits(cpu_addr),
+			    PAB_EXT_PEX_AMAP_AXI_WIN(win_num));
 
-	csr_writel(pcie, lower_32_bits(pci_addr),
-		   PAB_PEX_AMAP_PEX_WIN_L(win_num));
-	csr_writel(pcie, upper_32_bits(pci_addr),
-		   PAB_PEX_AMAP_PEX_WIN_H(win_num));
+	mobiveil_csr_writel(pcie, lower_32_bits(pci_addr),
+			    PAB_PEX_AMAP_PEX_WIN_L(win_num));
+	mobiveil_csr_writel(pcie, upper_32_bits(pci_addr),
+			    PAB_PEX_AMAP_PEX_WIN_H(win_num));
 
 	pcie->ib_wins_configured++;
 }
@@ -178,28 +180,30 @@ void __program_ob_windows(struct mobiveil_pcie *pcie, u8 func_no, int win_num,
 	 * program Enable Bit to 1, Type Bit to (00) base 2, AXI Window Size Bit
 	 * to 4 KB in PAB_AXI_AMAP_CTRL register
 	 */
-	value = csr_readl(pcie, PAB_AXI_AMAP_CTRL(win_num));
+	value = mobiveil_csr_readl(pcie, PAB_AXI_AMAP_CTRL(win_num));
 	value &= ~(WIN_TYPE_MASK << WIN_TYPE_SHIFT | WIN_SIZE_MASK);
 	value |= 1 << WIN_ENABLE_SHIFT | type << WIN_TYPE_SHIFT |
 		 (lower_32_bits(size64) & WIN_SIZE_MASK);
-	csr_writel(pcie, value, PAB_AXI_AMAP_CTRL(win_num));
+	mobiveil_csr_writel(pcie, value, PAB_AXI_AMAP_CTRL(win_num));
 
-	csr_writel(pcie, upper_32_bits(size64), PAB_EXT_AXI_AMAP_SIZE(win_num));
+	mobiveil_csr_writel(pcie, upper_32_bits(size64),
+			    PAB_EXT_AXI_AMAP_SIZE(win_num));
 
-	csr_writel(pcie, func_no, PAB_AXI_AMAP_PCI_HDR_PARAM(win_num));
+	mobiveil_csr_writel(pcie, func_no, PAB_AXI_AMAP_PCI_HDR_PARAM(win_num));
 	/*
 	 * program AXI window base with appropriate value in
 	 * PAB_AXI_AMAP_AXI_WIN0 register
 	 */
-	csr_writel(pcie, lower_32_bits(cpu_addr) & (~AXI_WINDOW_ALIGN_MASK),
-		   PAB_AXI_AMAP_AXI_WIN(win_num));
-	csr_writel(pcie, upper_32_bits(cpu_addr),
-		   PAB_EXT_AXI_AMAP_AXI_WIN(win_num));
+	mobiveil_csr_writel(pcie,
+			    lower_32_bits(cpu_addr) & (~AXI_WINDOW_ALIGN_MASK),
+			    PAB_AXI_AMAP_AXI_WIN(win_num));
+	mobiveil_csr_writel(pcie, upper_32_bits(cpu_addr),
+			    PAB_EXT_AXI_AMAP_AXI_WIN(win_num));
 
-	csr_writel(pcie, lower_32_bits(pci_addr),
-		   PAB_AXI_AMAP_PEX_WIN_L(win_num));
-	csr_writel(pcie, upper_32_bits(pci_addr),
-		   PAB_AXI_AMAP_PEX_WIN_H(win_num));
+	mobiveil_csr_writel(pcie, lower_32_bits(pci_addr),
+			    PAB_AXI_AMAP_PEX_WIN_L(win_num));
+	mobiveil_csr_writel(pcie, upper_32_bits(pci_addr),
+			    PAB_AXI_AMAP_PEX_WIN_H(win_num));
 }
 
 void program_ob_windows(struct mobiveil_pcie *pcie, int win_num, u64 cpu_addr,
@@ -230,10 +234,10 @@ void program_ob_windows_ep(struct mobiveil_pcie *pcie, u8 func_no, int win_num,
 void program_ib_windows_ep(struct mobiveil_pcie *pcie, u8 func_no,
 			   int bar, u64 phys)
 {
-	csr_writel(pcie, upper_32_bits(phys),
-		   PAB_EXT_PEX_BAR_AMAP(func_no, bar));
-	csr_writel(pcie, lower_32_bits(phys) | PEX_BAR_AMAP_EN,
-		   PAB_PEX_BAR_AMAP(func_no, bar));
+	mobiveil_csr_writel(pcie, upper_32_bits(phys),
+			    PAB_EXT_PEX_BAR_AMAP(func_no, bar));
+	mobiveil_csr_writel(pcie, lower_32_bits(phys) | PEX_BAR_AMAP_EN,
+			    PAB_PEX_BAR_AMAP(func_no, bar));
 }
 
 void mobiveil_pcie_disable_ib_win_ep(struct mobiveil_pcie *pcie,
@@ -241,55 +245,55 @@ void mobiveil_pcie_disable_ib_win_ep(struct mobiveil_pcie *pcie,
 {
 	u32 val;
 
-	val = csr_readl(pcie, PAB_PEX_BAR_AMAP(func_no, bar));
+	val = mobiveil_csr_readl(pcie, PAB_PEX_BAR_AMAP(func_no, bar));
 	val &= ~(1 << 0);
-	csr_writel(pcie, val, PAB_PEX_BAR_AMAP(func_no, bar));
+	mobiveil_csr_writel(pcie, val, PAB_PEX_BAR_AMAP(func_no, bar));
 }
 
 void mobiveil_pcie_disable_ob_win(struct mobiveil_pcie *pcie, int win_num)
 {
 	u32 val;
 
-	val = csr_readl(pcie, PAB_AXI_AMAP_CTRL(win_num));
+	val = mobiveil_csr_readl(pcie, PAB_AXI_AMAP_CTRL(win_num));
 	val &= ~(1 << WIN_ENABLE_SHIFT);
-	csr_writel(pcie, val, PAB_AXI_AMAP_CTRL(win_num));
+	mobiveil_csr_writel(pcie, val, PAB_AXI_AMAP_CTRL(win_num));
 }
 
 void mobiveil_pcie_enable_bridge_pio(struct mobiveil_pcie *pcie)
 {
 	u32 val;
 
-	val = csr_readl(pcie, PAB_CTRL);
+	val = mobiveil_csr_readl(pcie, PAB_CTRL);
 	val |= 1 << AMBA_PIO_ENABLE_SHIFT;
 	val |= 1 << PEX_PIO_ENABLE_SHIFT;
-	csr_writel(pcie, val, PAB_CTRL);
+	mobiveil_csr_writel(pcie, val, PAB_CTRL);
 }
 
 void mobiveil_pcie_enable_engine_apio(struct mobiveil_pcie *pcie)
 {
 	u32 val;
 
-	val = csr_readl(pcie, PAB_AXI_PIO_CTRL);
+	val = mobiveil_csr_readl(pcie, PAB_AXI_PIO_CTRL);
 	val |= APIO_EN_MASK;
-	csr_writel(pcie, val, PAB_AXI_PIO_CTRL);
+	mobiveil_csr_writel(pcie, val, PAB_AXI_PIO_CTRL);
 }
 
 void mobiveil_pcie_enable_engine_ppio(struct mobiveil_pcie *pcie)
 {
 	u32 val;
 
-	val = csr_readl(pcie, PAB_PEX_PIO_CTRL);
+	val = mobiveil_csr_readl(pcie, PAB_PEX_PIO_CTRL);
 	val |= 1 << PIO_ENABLE_SHIFT;
-	csr_writel(pcie, val, PAB_PEX_PIO_CTRL);
+	mobiveil_csr_writel(pcie, val, PAB_PEX_PIO_CTRL);
 }
 
 void mobiveil_pcie_enable_msi_ep(struct mobiveil_pcie *pcie)
 {
 	u32 val;
 
-	val =  csr_readl(pcie, PAB_INTP_AMBA_MISC_ENB);
+	val =  mobiveil_csr_readl(pcie, PAB_INTP_AMBA_MISC_ENB);
 	val |= PAB_INTP_PAMR;
-	csr_writel(pcie, val, PAB_INTP_AMBA_MISC_ENB);
+	mobiveil_csr_writel(pcie, val, PAB_INTP_AMBA_MISC_ENB);
 }
 
 int mobiveil_bringup_link(struct mobiveil_pcie *pcie)
@@ -304,7 +308,7 @@ int mobiveil_bringup_link(struct mobiveil_pcie *pcie)
 		usleep_range(LINK_WAIT_MIN, LINK_WAIT_MAX);
 	}
 
-	dev_err(&pcie->pdev->dev, "link never came up\n");
+	dev_info(&pcie->pdev->dev, "link never came up\n");
 
 	return -ETIMEDOUT;
 }

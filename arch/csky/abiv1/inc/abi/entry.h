@@ -1,5 +1,4 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-// Copyright (C) 2018 Hangzhou C-SKY Microsystems co.,ltd.
 
 #ifndef __ASM_CSKY_ENTRY_H
 #define __ASM_CSKY_ENTRY_H
@@ -80,7 +79,6 @@
 .endm
 
 .macro	RESTORE_ALL
-	psrclr  ie
 	ldw	lr, (sp, 4)
 	ldw     a0, (sp, 8)
 	mtcr    a0, epc
@@ -174,10 +172,5 @@
 
 	movi	r6, 0
 	cpwcr	r6, cpcr31
-.endm
-
-.macro ANDI_R3 rx, imm
-	lsri	\rx, 3
-	andi	\rx, (\imm >> 3)
 .endm
 #endif /* __ASM_CSKY_ENTRY_H */

@@ -39,11 +39,11 @@
 	status = "disabled";
 };
 
-&lpuart1 {
+&cm40_lpuart {
 	status = "disabled";
 };
 
-&cm40_lpuart {
+&lpuart1 {
 	status = "disabled";
 };
 
@@ -108,6 +108,7 @@
 	assigned-clock-parents = <&clk IMX_SC_R_ELCDIF_PLL IMX_SC_PM_CLK_PLL>,
 				 <&clk IMX_SC_R_LCD_0 IMX_SC_PM_CLK_BYPASS>;
 	assigned-clock-rates = <0>, <24000000>, <711000000>;
+	interrupts = <GIC_SPI 18 IRQ_TYPE_LEVEL_HIGH>;
 
 	port@0 {
 		lcdif_out: endpoint {

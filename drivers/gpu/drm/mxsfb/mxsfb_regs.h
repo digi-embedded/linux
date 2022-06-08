@@ -14,8 +14,8 @@
 
 #define LCDC_CTRL			0x00
 #define LCDC_CTRL1			0x10
-#define LCDC_V4_CTRL2			0x20
 #define LCDC_V3_TRANSFER_COUNT		0x20
+#define LCDC_V4_CTRL2			0x20
 #define LCDC_V4_TRANSFER_COUNT		0x30
 #define LCDC_V4_CUR_BUF			0x40
 #define LCDC_V4_NEXT_BUF		0x50
@@ -39,15 +39,11 @@
 #define LCDC_AS_CTRL			0x210
 #define LCDC_AS_BUF			0x220
 #define LCDC_AS_NEXT_BUF		0x230
+#define LCDC_AS_CLRKEYLOW		0x240
+#define LCDC_AS_CLRKEYHIGH		0x250
 
-/* reg bit manipulation */
 #define REG_PUT(x, h, l) (((x) << (l)) & GENMASK(h, l))
 #define REG_GET(x, h, l) (((x) & GENMASK(h, l)) >> (l))
-
-#define SWIZZLE_LE		0 /* Little-Endian or No swap */
-#define SWIZZLE_BE		1 /* Big-Endian or swap all */
-#define SWIZZLE_HWD		2 /* Swap half-words */
-#define SWIZZLE_HWD_BYTE	3 /* Swap bytes within each half-word */
 
 #define CTRL_SFTRST			BIT(31)
 #define CTRL_CLKGATE			BIT(30)
@@ -60,17 +56,24 @@
 #define CTRL_INPUT_SWIZZLE(x)		REG_PUT((x), 15, 14)
 #define CTRL_CSC_SWIZZLE(x)		REG_PUT((x), 13, 12)
 #define CTRL_SET_BUS_WIDTH(x)		REG_PUT((x), 11, 10)
-#define CTRL_GET_BUS_WIDTH(x)		REG_GET((x), 11, 10)
 #define CTRL_BUS_WIDTH_MASK		REG_PUT((0x3), 11, 10)
 #define CTRL_SET_WORD_LENGTH(x)		REG_PUT((x), 9, 8)
-#define CTRL_GET_WORD_LENGTH(x)		REG_GET((x), 9, 8)
 #define CTRL_MASTER			BIT(5)
 #define CTRL_DF16			BIT(3)
 #define CTRL_DF18			BIT(2)
 #define CTRL_DF24			BIT(1)
 #define CTRL_RUN			BIT(0)
 
-#define CTRL1_RECOVERY_ON_UNDERFLOW	BIT(24)
+#define CTRL_BUS_WIDTH_8		CTRL_SET_BUS_WIDTH(1)
+#define CTRL_BUS_WIDTH_16		CTRL_SET_BUS_WIDTH(0)
+#define CTRL_BUS_WIDTH_18		CTRL_SET_BUS_WIDTH(2)
+#define CTRL_BUS_WIDTH_24		CTRL_SET_BUS_WIDTH(3)
+#define CTRL_WORD_LENGTH_8		CTRL_SET_WORD_LENGTH(1)
+#define CTRL_WORD_LENGTH_16		CTRL_SET_WORD_LENGTH(0)
+#define CTRL_WORD_LENGTH_18		CTRL_SET_WORD_LENGTH(2)
+#define CTRL_WORD_LENGTH_24		CTRL_SET_WORD_LENGTH(3)
+
+#define CTRL1_RECOVER_ON_UNDERFLOW	BIT(24)
 #define CTRL1_FIFO_CLEAR		BIT(21)
 
 /*
@@ -91,12 +94,17 @@
 #define CTRL1_CUR_FRAME_DONE_IRQ_EN	BIT(13)
 #define CTRL1_CUR_FRAME_DONE_IRQ	BIT(9)
 
-#define CTRL2_OUTSTANDING_REQS(x)	REG_PUT((x), 23, 21)
-#define REQ_1	0
-#define REQ_2	1
-#define REQ_4	2
-#define REQ_8	3
-#define REQ_16	4
+#define CTRL2_SET_OUTSTANDING_REQS_1	0
+#define CTRL2_SET_OUTSTANDING_REQS_2	(0x1 << 21)
+#define CTRL2_SET_OUTSTANDING_REQS_4	(0x2 << 21)
+#define CTRL2_SET_OUTSTANDING_REQS_8	(0x3 << 21)
+#define CTRL2_SET_OUTSTANDING_REQS_16	(0x4 << 21)
+#define CTRL2_SET_OUTSTANDING_REQS_MASK	(0x7 << 21)
+
+#define SWIZZLE_LE		0 /* Little-Endian or No swap */
+#define SWIZZLE_BE		1 /* Big-Endian or swap all */
+#define SWIZZLE_HWD		2 /* Swap half-words */
+#define SWIZZLE_HWD_BYTE	3 /* Swap bytes within each half-word */
 
 #define CTRL2_ODD_LINE_PATTERN(x)	REG_PUT((x), 18, 16)
 #define CTRL2_EVEN_LINE_PATTERN(x)	REG_PUT((x), 14, 12)
@@ -145,6 +153,23 @@
 #define DEBUG0_HSYNC			BIT(26)
 #define DEBUG0_VSYNC			BIT(25)
 
+#define AS_CTRL_PS_DISABLE		BIT(23)
+#define AS_CTRL_ALPHA_INVERT		BIT(20)
+#define AS_CTRL_ALPHA(a)		(((a) & 0xff) << 8)
+#define AS_CTRL_FORMAT_RGB565		(0xe << 4)
+#define AS_CTRL_FORMAT_RGB444		(0xd << 4)
+#define AS_CTRL_FORMAT_RGB555		(0xc << 4)
+#define AS_CTRL_FORMAT_ARGB4444		(0x9 << 4)
+#define AS_CTRL_FORMAT_ARGB1555		(0x8 << 4)
+#define AS_CTRL_FORMAT_RGB888		(0x4 << 4)
+#define AS_CTRL_FORMAT_ARGB8888		(0x0 << 4)
+#define AS_CTRL_ENABLE_COLORKEY		BIT(3)
+#define AS_CTRL_ALPHA_CTRL_ROP		(3 << 1)
+#define AS_CTRL_ALPHA_CTRL_MULTIPLY	(2 << 1)
+#define AS_CTRL_ALPHA_CTRL_OVERRIDE	(1 << 1)
+#define AS_CTRL_ALPHA_CTRL_EMBEDDED	(0 << 1)
+#define AS_CTRL_AS_ENABLE		BIT(0)
+
 /* pigeon registers for crop */
 #define HW_EPDC_PIGEON_12_0		0xb00
 #define HW_EPDC_PIGEON_12_1		0xb10
@@ -165,18 +190,5 @@
 #define MXSFB_MIN_YRES			120
 #define MXSFB_MAX_XRES			0xffff
 #define MXSFB_MAX_YRES			0xffff
-
-#define RED 0
-#define GREEN 1
-#define BLUE 2
-#define TRANSP 3
-
-#define STMLCDIF_8BIT  1 /* pixel data bus to the display is of 8 bit width */
-#define STMLCDIF_16BIT 0 /* pixel data bus to the display is of 16 bit width */
-#define STMLCDIF_18BIT 2 /* pixel data bus to the display is of 18 bit width */
-#define STMLCDIF_24BIT 3 /* pixel data bus to the display is of 24 bit width */
-
-#define MXSFB_SYNC_DATA_ENABLE_HIGH_ACT	BIT(6)
-#define MXSFB_SYNC_DOTCLK_FALLING_ACT	BIT(7) /* negative edge sampling */
 
 #endif /* __MXSFB_REGS_H__ */

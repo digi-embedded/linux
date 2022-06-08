@@ -50,6 +50,7 @@ enum dln2_handle {
 	DLN2_HANDLE_GPIO,
 	DLN2_HANDLE_I2C,
 	DLN2_HANDLE_SPI,
+	DLN2_HANDLE_ADC,
 	DLN2_HANDLES
 };
 
@@ -649,8 +650,19 @@ static int dln2_start_rx_urbs(struct dln2_dev *dln2, gfp_t gfp)
 	return 0;
 }
 
+enum {
+	DLN2_ACPI_MATCH_GPIO	= 0,
+	DLN2_ACPI_MATCH_I2C	= 1,
+	DLN2_ACPI_MATCH_SPI	= 2,
+	DLN2_ACPI_MATCH_ADC	= 3,
+};
+
 static struct dln2_platform_data dln2_pdata_gpio = {
 	.handle = DLN2_HANDLE_GPIO,
+};
+
+static struct mfd_cell_acpi_match dln2_acpi_match_gpio = {
+	.adr = DLN2_ACPI_MATCH_GPIO,
 };
 
 /* Only one I2C port seems to be supported on current hardware */
@@ -659,26 +671,53 @@ static struct dln2_platform_data dln2_pdata_i2c = {
 	.port = 0,
 };
 
+static struct mfd_cell_acpi_match dln2_acpi_match_i2c = {
+	.adr = DLN2_ACPI_MATCH_I2C,
+};
+
 /* Only one SPI port supported */
 static struct dln2_platform_data dln2_pdata_spi = {
 	.handle = DLN2_HANDLE_SPI,
 	.port = 0,
 };
 
+static struct mfd_cell_acpi_match dln2_acpi_match_spi = {
+	.adr = DLN2_ACPI_MATCH_SPI,
+};
+
+/* Only one ADC port supported */
+static struct dln2_platform_data dln2_pdata_adc = {
+	.handle = DLN2_HANDLE_ADC,
+	.port = 0,
+};
+
+static struct mfd_cell_acpi_match dln2_acpi_match_adc = {
+	.adr = DLN2_ACPI_MATCH_ADC,
+};
+
 static const struct mfd_cell dln2_devs[] = {
 	{
 		.name = "dln2-gpio",
+		.acpi_match = &dln2_acpi_match_gpio,
 		.platform_data = &dln2_pdata_gpio,
 		.pdata_size = sizeof(struct dln2_platform_data),
 	},
 	{
 		.name = "dln2-i2c",
+		.acpi_match = &dln2_acpi_match_i2c,
 		.platform_data = &dln2_pdata_i2c,
 		.pdata_size = sizeof(struct dln2_platform_data),
 	},
 	{
 		.name = "dln2-spi",
+		.acpi_match = &dln2_acpi_match_spi,
 		.platform_data = &dln2_pdata_spi,
+		.pdata_size = sizeof(struct dln2_platform_data),
+	},
+	{
+		.name = "dln2-adc",
+		.acpi_match = &dln2_acpi_match_adc,
+		.platform_data = &dln2_pdata_adc,
 		.pdata_size = sizeof(struct dln2_platform_data),
 	},
 };

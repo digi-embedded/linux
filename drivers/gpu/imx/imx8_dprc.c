@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2020 NXP
+ * Copyright 2017-2021 NXP
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -421,6 +421,10 @@ void dprc_configure(struct dprc *dprc, unsigned int stream_id,
 		mt_h = 8;
 		break;
 	case DRM_FORMAT_MOD_VIVANTE_TILED:
+		preq = BYTE_256;
+		mt_w = bpp == 16 ? 8 : 4;
+		mt_h = 4;
+		break;
 	case DRM_FORMAT_MOD_VIVANTE_SUPER_TILED:
 		if (bpp == 16) {
 			preq = BYTE_64;
@@ -507,7 +511,7 @@ void dprc_configure(struct dprc *dprc, unsigned int stream_id,
 	case DRM_FORMAT_YUYV:
 	case DRM_FORMAT_UYVY:
 		val |= YUV_EN;
-		/* fall-through */
+		fallthrough;
 	case DRM_FORMAT_RGB565:
 		val |= PIX_SIZE_16BIT;
 		break;
@@ -811,11 +815,11 @@ static int dprc_probe(struct platform_device *pdev)
 	case IMX_SC_R_DC_0_BLIT1:
 	case IMX_SC_R_DC_1_BLIT1:
 		dprc->has_aux_prg = true;
-		/* fall-through */
+		fallthrough;
 	case IMX_SC_R_DC_0_BLIT0:
 	case IMX_SC_R_DC_1_BLIT0:
 		dprc->is_blit_chan = true;
-		/* fall-through */
+		fallthrough;
 	case IMX_SC_R_DC_0_FRAC0:
 	case IMX_SC_R_DC_1_FRAC0:
 		break;

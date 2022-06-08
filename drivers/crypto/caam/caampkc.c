@@ -187,7 +187,8 @@ static void rsa_priv_f_done(struct device *dev, u32 *desc, u32 err,
 }
 
 /**
- * Count leading zeros, need it to strip, from a given scatterlist
+ * caam_rsa_count_leading_zeros - Count leading zeros, need it to strip,
+ *                                from a given scatterlist
  *
  * @sgl   : scatterlist to count zeros from
  * @nbytes: number of zeros, in bytes, to strip
@@ -378,6 +379,9 @@ static int akcipher_do_one_req(struct crypto_engine *engine, void *areq)
 	req_ctx->edesc->bklog = true;
 
 	ret = caam_jr_enqueue(jrdev, desc, req_ctx->akcipher_op_done, req);
+
+	if (ret == -ENOSPC && engine->retry_support)
+		return ret;
 
 	if (ret != -EINPROGRESS) {
 		rsa_pub_unmap(jrdev, req_ctx->edesc, req);
@@ -854,14 +858,14 @@ static int caam_rsa_dec(struct akcipher_request *req)
 
 static void caam_rsa_free_key(struct caam_rsa_key *key)
 {
-	kzfree(key->d);
-	kzfree(key->p);
-	kzfree(key->q);
-	kzfree(key->dp);
-	kzfree(key->dq);
-	kzfree(key->qinv);
-	kzfree(key->tmp1);
-	kzfree(key->tmp2);
+	kfree_sensitive(key->d);
+	kfree_sensitive(key->p);
+	kfree_sensitive(key->q);
+	kfree_sensitive(key->dp);
+	kfree_sensitive(key->dq);
+	kfree_sensitive(key->qinv);
+	kfree_sensitive(key->tmp1);
+	kfree_sensitive(key->tmp2);
 	kfree(key->e);
 	kfree(key->n);
 	memset(key, 0, sizeof(*key));
@@ -1018,17 +1022,17 @@ static void caam_rsa_set_priv_key_form(struct caam_rsa_ctx *ctx,
 	return;
 
 free_dq:
-	kzfree(rsa_key->dq);
+	kfree_sensitive(rsa_key->dq);
 free_dp:
-	kzfree(rsa_key->dp);
+	kfree_sensitive(rsa_key->dp);
 free_tmp2:
-	kzfree(rsa_key->tmp2);
+	kfree_sensitive(rsa_key->tmp2);
 free_tmp1:
-	kzfree(rsa_key->tmp1);
+	kfree_sensitive(rsa_key->tmp1);
 free_q:
-	kzfree(rsa_key->q);
+	kfree_sensitive(rsa_key->q);
 free_p:
-	kzfree(rsa_key->p);
+	kfree_sensitive(rsa_key->p);
 }
 
 static int caam_rsa_set_priv_key(struct crypto_akcipher *tfm, const void *key,
@@ -1152,16 +1156,27 @@ static struct caam_akcipher_alg caam_rsa = {
 int caam_pkc_init(struct device *ctrldev)
 {
 	struct caam_drv_private *priv = dev_get_drvdata(ctrldev);
-	u32 pk_inst;
+	u32 pk_inst, pkha;
 	int err;
 	init_done = false;
 
 	/* Determine public key hardware accelerator presence. */
-	if (priv->era < 10)
+	if (priv->era < 10) {
 		pk_inst = (rd_reg32(&priv->jr[0]->perfmon.cha_num_ls) &
 			   CHA_ID_LS_PK_MASK) >> CHA_ID_LS_PK_SHIFT;
-	else
-		pk_inst = rd_reg32(&priv->jr[0]->vreg.pkha) & CHA_VER_NUM_MASK;
+	} else {
+		pkha = rd_reg32(&priv->jr[0]->vreg.pkha);
+		pk_inst = pkha & CHA_VER_NUM_MASK;
+
+		/*
+		 * Newer CAAMs support partially disabled functionality. If this is the
+		 * case, the number is non-zero, but this bit is set to indicate that
+		 * no encryption or decryption is supported. Only signing and verifying
+		 * is supported.
+		 */
+		if (pkha & CHA_VER_MISC_PKHA_NO_CRYPT)
+			pk_inst = 0;
+	}
 
 	/* Do not register algorithms if PKHA is not present. */
 	if (!pk_inst)

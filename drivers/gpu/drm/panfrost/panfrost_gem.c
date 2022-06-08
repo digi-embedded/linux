@@ -41,8 +41,8 @@ static void panfrost_gem_free_object(struct drm_gem_object *obj)
 
 		for (i = 0; i < n_sgt; i++) {
 			if (bo->sgts[i].sgl) {
-				dma_unmap_sg(pfdev->dev, bo->sgts[i].sgl,
-					     bo->sgts[i].nents, DMA_BIDIRECTIONAL);
+				dma_unmap_sgtable(pfdev->dev, &bo->sgts[i],
+						  DMA_BIDIRECTIONAL, 0);
 				sg_free_table(&bo->sgts[i]);
 			}
 		}
@@ -60,7 +60,7 @@ panfrost_gem_mapping_get(struct panfrost_gem_object *bo,
 
 	mutex_lock(&bo->mappings.lock);
 	list_for_each_entry(iter, &bo->mappings.list, node) {
-		if (iter->mmu == &priv->mmu) {
+		if (iter->mmu == priv->mmu) {
 			kref_get(&iter->refcount);
 			mapping = iter;
 			break;
@@ -74,16 +74,13 @@ panfrost_gem_mapping_get(struct panfrost_gem_object *bo,
 static void
 panfrost_gem_teardown_mapping(struct panfrost_gem_mapping *mapping)
 {
-	struct panfrost_file_priv *priv;
-
 	if (mapping->active)
 		panfrost_mmu_unmap(mapping);
 
-	priv = container_of(mapping->mmu, struct panfrost_file_priv, mmu);
-	spin_lock(&priv->mm_lock);
+	spin_lock(&mapping->mmu->mm_lock);
 	if (drm_mm_node_allocated(&mapping->mmnode))
 		drm_mm_remove_node(&mapping->mmnode);
-	spin_unlock(&priv->mm_lock);
+	spin_unlock(&mapping->mmu->mm_lock);
 }
 
 static void panfrost_gem_mapping_release(struct kref *kref)
@@ -93,7 +90,8 @@ static void panfrost_gem_mapping_release(struct kref *kref)
 	mapping = container_of(kref, struct panfrost_gem_mapping, refcount);
 
 	panfrost_gem_teardown_mapping(mapping);
-	drm_gem_object_put_unlocked(&mapping->obj->base.base);
+	drm_gem_object_put(&mapping->obj->base.base);
+	panfrost_mmu_ctx_put(mapping->mmu);
 	kfree(mapping);
 }
 
@@ -105,14 +103,12 @@ void panfrost_gem_mapping_put(struct panfrost_gem_mapping *mapping)
 	kref_put(&mapping->refcount, panfrost_gem_mapping_release);
 }
 
-void panfrost_gem_teardown_mappings(struct panfrost_gem_object *bo)
+void panfrost_gem_teardown_mappings_locked(struct panfrost_gem_object *bo)
 {
 	struct panfrost_gem_mapping *mapping;
 
-	mutex_lock(&bo->mappings.lock);
 	list_for_each_entry(mapping, &bo->mappings.list, node)
 		panfrost_gem_teardown_mapping(mapping);
-	mutex_unlock(&bo->mappings.lock);
 }
 
 int panfrost_gem_open(struct drm_gem_object *obj, struct drm_file *file_priv)
@@ -145,11 +141,11 @@ int panfrost_gem_open(struct drm_gem_object *obj, struct drm_file *file_priv)
 	else
 		align = size >= SZ_2M ? SZ_2M >> PAGE_SHIFT : 0;
 
-	mapping->mmu = &priv->mmu;
-	spin_lock(&priv->mm_lock);
-	ret = drm_mm_insert_node_generic(&priv->mm, &mapping->mmnode,
+	mapping->mmu = panfrost_mmu_ctx_get(priv->mmu);
+	spin_lock(&mapping->mmu->mm_lock);
+	ret = drm_mm_insert_node_generic(&mapping->mmu->mm, &mapping->mmnode,
 					 size >> PAGE_SHIFT, align, color, 0);
-	spin_unlock(&priv->mm_lock);
+	spin_unlock(&mapping->mmu->mm_lock);
 	if (ret)
 		goto err;
 
@@ -178,7 +174,7 @@ void panfrost_gem_close(struct drm_gem_object *obj, struct drm_file *file_priv)
 
 	mutex_lock(&bo->mappings.lock);
 	list_for_each_entry(iter, &bo->mappings.list, node) {
-		if (iter->mmu == &priv->mmu) {
+		if (iter->mmu == priv->mmu) {
 			mapping = iter;
 			list_del(&iter->node);
 			break;
@@ -207,7 +203,7 @@ static const struct drm_gem_object_funcs panfrost_gem_funcs = {
 	.get_sg_table = drm_gem_shmem_get_sg_table,
 	.vmap = drm_gem_shmem_vmap,
 	.vunmap = drm_gem_shmem_vunmap,
-	.vm_ops = &drm_gem_shmem_vm_ops,
+	.mmap = drm_gem_shmem_mmap,
 };
 
 /**
@@ -220,6 +216,7 @@ static const struct drm_gem_object_funcs panfrost_gem_funcs = {
  */
 struct drm_gem_object *panfrost_gem_create_object(struct drm_device *dev, size_t size)
 {
+	struct panfrost_device *pfdev = dev->dev_private;
 	struct panfrost_gem_object *obj;
 
 	obj = kzalloc(sizeof(*obj), GFP_KERNEL);
@@ -229,6 +226,7 @@ struct drm_gem_object *panfrost_gem_create_object(struct drm_device *dev, size_t
 	INIT_LIST_HEAD(&obj->mappings.list);
 	mutex_init(&obj->mappings.lock);
 	obj->base.base.funcs = &panfrost_gem_funcs;
+	obj->base.map_wc = !pfdev->coherent;
 
 	return &obj->base.base;
 }
@@ -261,7 +259,7 @@ panfrost_gem_create_with_handle(struct drm_file *file_priv,
 	 */
 	ret = drm_gem_handle_create(file_priv, &shmem->base, handle);
 	/* drop reference from allocate - handle holds it now. */
-	drm_gem_object_put_unlocked(&shmem->base);
+	drm_gem_object_put(&shmem->base);
 	if (ret)
 		return ERR_PTR(ret);
 

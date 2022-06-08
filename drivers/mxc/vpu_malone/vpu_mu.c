@@ -21,11 +21,6 @@
 
 static void vpu_mu_inq_msg(struct vpu_dev *dev, void *msg)
 {
-	if (&dev->mu_msg_fifo == NULL) {
-		vpu_err("&dev->mu_msg_fifo == NULL\n");
-		return;
-	}
-
 	if (kfifo_in(&dev->mu_msg_fifo, msg, sizeof(u_int32)) != sizeof(u_int32)) {
 		vpu_err("No memory for mu msg fifo\n");
 		return;
@@ -55,11 +50,6 @@ static void vpu_rx_callback(struct mbox_client *c, void *msg)
 	struct vpu_sc_chan *sc_chan = container_of(c, struct vpu_sc_chan, cl);
 	struct vpu_dev *dev =
 		container_of(sc_chan, struct vpu_dev, sc_chan_rx);
-
-	if (&dev->mu_msg_fifo == NULL) {
-		vpu_err("&dev->mu_msg_fifo == NULL\n");
-		return;
-	}
 
 	vpu_mu_inq_msg(dev, msg);
 }
@@ -152,7 +142,7 @@ int vpu_mu_request(struct vpu_dev *dev)
 		if (!ret)
 			dev->vpu_mu_init = TRUE;
 		else
-			vpu_dbg(LVL_WARN, "warning: init rtx channel failed, ret: %d\n",
+			vpu_dbg(LVL_WARN, "init rtx channel failed, ret: %d\n",
 				ret);
 	}
 
@@ -244,7 +234,7 @@ int vpu_sc_check_fuse(struct vpu_dev *dev, struct vpu_v4l2_fmt *pformat_table,
 	val = (fuse >> VPU_IMX_DECODER_FUSE_OFFSET) & 0x3UL;
 	if (val == 0x1UL) {
 		for (i = 0; i < table_size; i++)
-			if (pformat_table[i].fourcc == VPU_PIX_FMT_HEVC)
+			if (pformat_table[i].fourcc == V4L2_PIX_FMT_HEVC)
 				pformat_table[i].disable = 1;
 		vpu_dbg(LVL_WARN, "H265 is disabled\n");
 	} else if (val == 0x2UL) {

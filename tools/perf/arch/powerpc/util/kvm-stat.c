@@ -39,7 +39,7 @@ static void hcall_event_get_key(struct evsel *evsel,
 				struct event_key *key)
 {
 	key->info = 0;
-	key->key = perf_evsel__intval(evsel, sample, "req");
+	key->key = evsel__intval(evsel, sample, "req");
 }
 
 static const char *get_hcall_exit_reason(u64 exit_code)
@@ -113,10 +113,10 @@ static int is_tracepoint_available(const char *str, struct evlist *evlist)
 	struct parse_events_error err;
 	int ret;
 
-	err.str = NULL;
+	bzero(&err, sizeof(err));
 	ret = parse_events(evlist, str, &err);
 	if (err.str)
-		pr_err("%s : %s\n", str, err.str);
+		parse_events_print_error(&err, "tracepoint");
 	return ret;
 }
 
@@ -176,7 +176,7 @@ int cpu_isa_init(struct perf_kvm_stat *kvm, const char *cpuid __maybe_unused)
 }
 
 /*
- * Incase of powerpc architecture, pmu registers are programmable
+ * In case of powerpc architecture, pmu registers are programmable
  * by guest kernel. So monitoring guest via host may not provide
  * valid samples with default 'cycles' event. It is better to use
  * 'trace_imc/trace_cycles' event for guest profiling, since it

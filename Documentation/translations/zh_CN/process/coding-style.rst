@@ -61,7 +61,7 @@ Linux 内核代码风格
 	case 'K':
 	case 'k':
 		mem <<= 10;
-		/* fall through */
+		fallthrough;
 	default:
 		break;
 	}
@@ -268,8 +268,7 @@ C 程序员不使用类似 ThisVariableIsATemporaryCounter 这样华丽的名字
 ``count_active_users()`` 或者类似的名字，你不应该叫它 ``cntuser()`` 。
 
 在函数名中包含函数类型 (所谓的匈牙利命名法) 是脑子出了问题——编译器知道那些类
-型而且能够检查那些类型，这样做只能把程序员弄糊涂了。难怪微软总是制造出有问题
-的程序。
+型而且能够检查那些类型，这样做只能把程序员弄糊涂了。
 
 本地变量名应该简短，而且能够表达相关的含义。如果你有一些随机的整数型的循环计
 数器，它应该被称为 ``i`` 。叫它 ``loop_counter`` 并无益处，如果它没有被误解的
@@ -826,7 +825,7 @@ inline gcc 也可以自动使其内联。而且其他用户可能会要求移除
 
 .. code-block:: c
 
-	#define FIELD_SIZEOF(t, f) (sizeof(((t*)0)->f))
+	#define sizeof_field(t, f) (sizeof(((t*)0)->f))
 
 还有可以做严格的类型检查的 min() 和 max() 宏，如果你需要可以使用它们。你可以
 自己看看那个头文件里还定义了什么你可以拿来用的东西，如果有定义的话，你就不应
@@ -946,7 +945,7 @@ Addison-Wesley, Inc., 1999.
 ISBN 0-201-61586-X.
 
 GNU 手册 - 遵循 K&R 标准和此文本 - cpp, gcc, gcc internals and indent,
-都可以从 http://www.gnu.org/manual/ 找到
+都可以从 https://www.gnu.org/manual/ 找到
 
 WG14 是 C 语言的国际标准化工作组，URL: http://www.open-std.org/JTC1/SC22/WG14/
 

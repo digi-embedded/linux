@@ -52,10 +52,6 @@
 #include <linux/inetdevice.h>
 #include <rdma/ib_cache.h>
 
-#define DRV_VERSION "1.0.0"
-
-const char ipoib_driver_version[] = DRV_VERSION;
-
 MODULE_AUTHOR("Roland Dreier");
 MODULE_DESCRIPTION("IP-over-InfiniBand net driver");
 MODULE_LICENSE("Dual BSD/GPL");
@@ -90,11 +86,11 @@ struct workqueue_struct *ipoib_workqueue;
 
 struct ib_sa_client ipoib_sa_client;
 
-static void ipoib_add_one(struct ib_device *device);
+static int ipoib_add_one(struct ib_device *device);
 static void ipoib_remove_one(struct ib_device *device, void *client_data);
 static void ipoib_neigh_reclaim(struct rcu_head *rp);
 static struct net_device *ipoib_get_net_dev_by_params(
-		struct ib_device *dev, u8 port, u16 pkey,
+		struct ib_device *dev, u32 port, u16 pkey,
 		const union ib_gid *gid, const struct sockaddr *addr,
 		void *client_data);
 static int ipoib_set_mac(struct net_device *dev, void *addr);
@@ -145,8 +141,6 @@ int ipoib_open(struct net_device *dev)
 
 	set_bit(IPOIB_FLAG_ADMIN_UP, &priv->flags);
 
-	priv->sm_fullmember_sendonly_support = false;
-
 	if (ipoib_ib_dev_open(dev)) {
 		if (!test_bit(IPOIB_PKEY_ASSIGNED, &priv->flags))
 			return 0;
@@ -170,8 +164,13 @@ int ipoib_open(struct net_device *dev)
 			dev_change_flags(cpriv->dev, flags | IFF_UP, NULL);
 		}
 		up_read(&priv->vlan_rwsem);
-	}
+	} else if (priv->parent) {
+		struct ipoib_dev_priv *ppriv = ipoib_priv(priv->parent);
 
+		if (!test_bit(IPOIB_FLAG_ADMIN_UP, &ppriv->flags))
+			ipoib_dbg(priv, "parent device %s is not up, so child device may be not functioning.\n",
+				  ppriv->dev->name);
+	}
 	netif_start_queue(dev);
 
 	return 0;
@@ -317,7 +316,7 @@ static bool ipoib_is_dev_match_addr_rcu(const struct sockaddr *addr,
 	return false;
 }
 
-/**
+/*
  * Find the master net_device on top of the given net_device.
  * @dev: base IPoIB net_device
  *
@@ -346,9 +345,10 @@ struct ipoib_walk_data {
 	struct net_device *result;
 };
 
-static int ipoib_upper_walk(struct net_device *upper, void *_data)
+static int ipoib_upper_walk(struct net_device *upper,
+			    struct netdev_nested_priv *priv)
 {
-	struct ipoib_walk_data *data = _data;
+	struct ipoib_walk_data *data = (struct ipoib_walk_data *)priv->data;
 	int ret = 0;
 
 	if (ipoib_is_dev_match_addr_rcu(data->addr, upper)) {
@@ -361,8 +361,9 @@ static int ipoib_upper_walk(struct net_device *upper, void *_data)
 }
 
 /**
- * Find a net_device matching the given address, which is an upper device of
- * the given net_device.
+ * ipoib_get_net_dev_match_addr - Find a net_device matching
+ * the given address, which is an upper device of the given net_device.
+ *
  * @addr: IP address to look for.
  * @dev: base IPoIB net_device
  *
@@ -372,10 +373,12 @@ static int ipoib_upper_walk(struct net_device *upper, void *_data)
 static struct net_device *ipoib_get_net_dev_match_addr(
 		const struct sockaddr *addr, struct net_device *dev)
 {
+	struct netdev_nested_priv priv;
 	struct ipoib_walk_data data = {
 		.addr = addr,
 	};
 
+	priv.data = (void *)&data;
 	rcu_read_lock();
 	if (ipoib_is_dev_match_addr_rcu(addr, dev)) {
 		dev_hold(dev);
@@ -383,7 +386,7 @@ static struct net_device *ipoib_get_net_dev_match_addr(
 		goto out;
 	}
 
-	netdev_walk_all_upper_dev_rcu(dev, ipoib_upper_walk, &data);
+	netdev_walk_all_upper_dev_rcu(dev, ipoib_upper_walk, &priv);
 out:
 	rcu_read_unlock();
 	return data.result;
@@ -441,7 +444,7 @@ static int ipoib_match_gid_pkey_addr(struct ipoib_dev_priv *priv,
 /* Returns the number of matching net_devs found (between 0 and 2). Also
  * return the matching net_device in the @net_dev parameter, holding a
  * reference to the net_device, if the number of matches >= 1 */
-static int __ipoib_get_net_dev_by_params(struct list_head *dev_list, u8 port,
+static int __ipoib_get_net_dev_by_params(struct list_head *dev_list, u32 port,
 					 u16 pkey_index,
 					 const union ib_gid *gid,
 					 const struct sockaddr *addr,
@@ -466,7 +469,7 @@ static int __ipoib_get_net_dev_by_params(struct list_head *dev_list, u8 port,
 }
 
 static struct net_device *ipoib_get_net_dev_by_params(
-		struct ib_device *dev, u8 port, u16 pkey,
+		struct ib_device *dev, u32 port, u16 pkey,
 		const union ib_gid *gid, const struct sockaddr *addr,
 		void *client_data)
 {
@@ -481,9 +484,6 @@ static struct net_device *ipoib_get_net_dev_by_params(
 
 	ret = ib_find_cached_pkey(dev, port, pkey, &pkey_index);
 	if (ret)
-		return NULL;
-
-	if (!dev_list)
 		return NULL;
 
 	/* See if we can find a unique device matching the L2 parameters */
@@ -509,7 +509,7 @@ static struct net_device *ipoib_get_net_dev_by_params(
 	default:
 		dev_warn_ratelimited(&dev->dev,
 				     "duplicate IP address detected\n");
-		/* Fall through */
+		fallthrough;
 	case 1:
 		return net_dev;
 	}
@@ -533,6 +533,7 @@ int ipoib_set_mode(struct net_device *dev, const char *buf)
 			   "will cause multicast packet drops\n");
 		netdev_update_features(dev);
 		dev_set_mtu(dev, ipoib_cm_max_mtu(dev));
+		netif_set_real_num_tx_queues(dev, 1);
 		rtnl_unlock();
 		priv->tx_wr.wr.send_flags &= ~IB_SEND_IP_CSUM;
 
@@ -544,6 +545,7 @@ int ipoib_set_mode(struct net_device *dev, const char *buf)
 		clear_bit(IPOIB_FLAG_ADMIN_CM, &priv->flags);
 		netdev_update_features(dev);
 		dev_set_mtu(dev, min(priv->mcast_mtu, dev->mtu));
+		netif_set_real_num_tx_queues(dev, dev->num_tx_queues);
 		rtnl_unlock();
 		ipoib_flush_paths(dev);
 		return (!rtnl_trylock()) ? -EBUSY : 0;
@@ -1182,10 +1184,15 @@ unref:
 	return NETDEV_TX_OK;
 }
 
-static void ipoib_timeout(struct net_device *dev)
+static void ipoib_timeout(struct net_device *dev, unsigned int txqueue)
 {
 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
+	struct rdma_netdev *rn = netdev_priv(dev);
 
+	if (rn->tx_timeout) {
+		rn->tx_timeout(dev, txqueue);
+		return;
+	}
 	ipoib_warn(priv, "transmit timeout: latency %d msecs\n",
 		   jiffies_to_msecs(jiffies - dev_trans_start(dev)));
 	ipoib_warn(priv,
@@ -1281,7 +1288,7 @@ struct ipoib_neigh *ipoib_neigh_get(struct net_device *dev, u8 *daddr)
 	     neigh = rcu_dereference_bh(neigh->hnext)) {
 		if (memcmp(daddr, neigh->daddr, INFINIBAND_ALEN) == 0) {
 			/* found, take one ref on behalf of the caller */
-			if (!atomic_inc_not_zero(&neigh->refcnt)) {
+			if (!refcount_inc_not_zero(&neigh->refcnt)) {
 				/* deleted */
 				neigh = NULL;
 				goto out_unlock;
@@ -1376,7 +1383,7 @@ static struct ipoib_neigh *ipoib_neigh_ctor(u8 *daddr,
 	INIT_LIST_HEAD(&neigh->list);
 	ipoib_cm_set(neigh, NULL);
 	/* one ref on behalf of the caller */
-	atomic_set(&neigh->refcnt, 1);
+	refcount_set(&neigh->refcnt, 1);
 
 	return neigh;
 }
@@ -1408,7 +1415,7 @@ struct ipoib_neigh *ipoib_neigh_alloc(u8 *daddr,
 					       lockdep_is_held(&priv->lock))) {
 		if (memcmp(daddr, neigh->daddr, INFINIBAND_ALEN) == 0) {
 			/* found, take one ref on behalf of the caller */
-			if (!atomic_inc_not_zero(&neigh->refcnt)) {
+			if (!refcount_inc_not_zero(&neigh->refcnt)) {
 				/* deleted */
 				neigh = NULL;
 				break;
@@ -1423,7 +1430,7 @@ struct ipoib_neigh *ipoib_neigh_alloc(u8 *daddr,
 		goto out_unlock;
 
 	/* one ref on behalf of the hash table */
-	atomic_inc(&neigh->refcnt);
+	refcount_inc(&neigh->refcnt);
 	neigh->alive = jiffies;
 	/* put in hash */
 	rcu_assign_pointer(neigh->hnext,
@@ -1738,10 +1745,10 @@ static int ipoib_ioctl(struct net_device *dev, struct ifreq *ifr,
 {
 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
 
-	if (!priv->rn_ops->ndo_do_ioctl)
+	if (!priv->rn_ops->ndo_eth_ioctl)
 		return -EOPNOTSUPP;
 
-	return priv->rn_ops->ndo_do_ioctl(dev, ifr, cmd);
+	return priv->rn_ops->ndo_eth_ioctl(dev, ifr, cmd);
 }
 
 static int ipoib_dev_init(struct net_device *dev)
@@ -1864,7 +1871,7 @@ static int ipoib_parent_init(struct net_device *ndev)
 			priv->port);
 		return result;
 	}
-	priv->max_ib_mtu = ib_mtu_enum_to_int(attr.max_mtu);
+	priv->max_ib_mtu = rdma_mtu_from_attr(priv->ca, priv->port, &attr);
 
 	result = ib_query_pkey(priv->ca, priv->port, 0, &priv->pkey);
 	if (result) {
@@ -1897,14 +1904,22 @@ static void ipoib_child_init(struct net_device *ndev)
 
 	priv->max_ib_mtu = ppriv->max_ib_mtu;
 	set_bit(IPOIB_FLAG_SUBINTERFACE, &priv->flags);
-	memcpy(priv->dev->dev_addr, ppriv->dev->dev_addr, INFINIBAND_ALEN);
-	memcpy(&priv->local_gid, &ppriv->local_gid, sizeof(priv->local_gid));
+	if (memchr_inv(priv->dev->dev_addr, 0, INFINIBAND_ALEN))
+		memcpy(&priv->local_gid, priv->dev->dev_addr + 4,
+		       sizeof(priv->local_gid));
+	else {
+		memcpy(priv->dev->dev_addr, ppriv->dev->dev_addr,
+		       INFINIBAND_ALEN);
+		memcpy(&priv->local_gid, &ppriv->local_gid,
+		       sizeof(priv->local_gid));
+	}
 }
 
 static int ipoib_ndo_init(struct net_device *ndev)
 {
 	struct ipoib_dev_priv *priv = ipoib_priv(ndev);
 	int rc;
+	struct rdma_netdev *rn = netdev_priv(ndev);
 
 	if (priv->parent) {
 		ipoib_child_init(ndev);
@@ -1917,6 +1932,7 @@ static int ipoib_ndo_init(struct net_device *ndev)
 	/* MTU will be reset when mcast join happens */
 	ndev->mtu = IPOIB_UD_MTU(priv->max_ib_mtu);
 	priv->mcast_mtu = priv->admin_mtu = ndev->mtu;
+	rn->mtu = priv->mcast_mtu;
 	ndev->max_mtu = IPOIB_CM_MTU;
 
 	ndev->neigh_priv_len = sizeof(struct ipoib_neigh);
@@ -2023,6 +2039,15 @@ static int ipoib_set_vf_guid(struct net_device *dev, int vf, u64 guid, int type)
 	return ib_set_vf_guid(priv->ca, vf, priv->port, guid, type);
 }
 
+static int ipoib_get_vf_guid(struct net_device *dev, int vf,
+			     struct ifla_vf_guid *node_guid,
+			     struct ifla_vf_guid *port_guid)
+{
+	struct ipoib_dev_priv *priv = ipoib_priv(dev);
+
+	return ib_get_vf_guid(priv->ca, vf, priv->port, node_guid, port_guid);
+}
+
 static int ipoib_get_vf_stats(struct net_device *dev, int vf,
 			      struct ifla_vf_stats *vf_stats)
 {
@@ -2049,10 +2074,11 @@ static const struct net_device_ops ipoib_netdev_ops_pf = {
 	.ndo_set_vf_link_state	 = ipoib_set_vf_link_state,
 	.ndo_get_vf_config	 = ipoib_get_vf_config,
 	.ndo_get_vf_stats	 = ipoib_get_vf_stats,
+	.ndo_get_vf_guid	 = ipoib_get_vf_guid,
 	.ndo_set_vf_guid	 = ipoib_set_vf_guid,
 	.ndo_set_mac_address	 = ipoib_set_mac,
 	.ndo_get_stats64	 = ipoib_get_stats,
-	.ndo_do_ioctl		 = ipoib_ioctl,
+	.ndo_eth_ioctl		 = ipoib_ioctl,
 };
 
 static const struct net_device_ops ipoib_netdev_ops_vf = {
@@ -2067,12 +2093,20 @@ static const struct net_device_ops ipoib_netdev_ops_vf = {
 	.ndo_set_rx_mode	 = ipoib_set_mcast_list,
 	.ndo_get_iflink		 = ipoib_get_iflink,
 	.ndo_get_stats64	 = ipoib_get_stats,
-	.ndo_do_ioctl		 = ipoib_ioctl,
+	.ndo_eth_ioctl		 = ipoib_ioctl,
+};
+
+static const struct net_device_ops ipoib_netdev_default_pf = {
+	.ndo_init		 = ipoib_dev_init_default,
+	.ndo_uninit		 = ipoib_dev_uninit_default,
+	.ndo_open		 = ipoib_ib_dev_open_default,
+	.ndo_stop		 = ipoib_ib_dev_stop_default,
 };
 
 void ipoib_setup_common(struct net_device *dev)
 {
 	dev->header_ops		 = &ipoib_header_ops;
+	dev->netdev_ops          = &ipoib_netdev_default_pf;
 
 	ipoib_set_ethtool_ops(dev);
 
@@ -2122,14 +2156,7 @@ static void ipoib_build_priv(struct net_device *dev)
 	INIT_DELAYED_WORK(&priv->neigh_reap_task, ipoib_reap_neigh);
 }
 
-static const struct net_device_ops ipoib_netdev_default_pf = {
-	.ndo_init		 = ipoib_dev_init_default,
-	.ndo_uninit		 = ipoib_dev_uninit_default,
-	.ndo_open		 = ipoib_ib_dev_open_default,
-	.ndo_stop		 = ipoib_ib_dev_stop_default,
-};
-
-static struct net_device *ipoib_alloc_netdev(struct ib_device *hca, u8 port,
+static struct net_device *ipoib_alloc_netdev(struct ib_device *hca, u32 port,
 					     const char *name)
 {
 	struct net_device *dev;
@@ -2146,7 +2173,7 @@ static struct net_device *ipoib_alloc_netdev(struct ib_device *hca, u8 port,
 	return dev;
 }
 
-int ipoib_intf_init(struct ib_device *hca, u8 port, const char *name,
+int ipoib_intf_init(struct ib_device *hca, u32 port, const char *name,
 		    struct net_device *dev)
 {
 	struct rdma_netdev *rn = netdev_priv(dev);
@@ -2166,7 +2193,6 @@ int ipoib_intf_init(struct ib_device *hca, u8 port, const char *name,
 		if (rc != -EOPNOTSUPP)
 			goto out;
 
-		dev->netdev_ops = &ipoib_netdev_default_pf;
 		rn->send = ipoib_send;
 		rn->attach_mcast = ipoib_mcast_attach;
 		rn->detach_mcast = ipoib_mcast_detach;
@@ -2198,7 +2224,7 @@ out:
 	return rc;
 }
 
-struct net_device *ipoib_intf_alloc(struct ib_device *hca, u8 port,
+struct net_device *ipoib_intf_alloc(struct ib_device *hca, u32 port,
 				    const char *name)
 {
 	struct net_device *dev;
@@ -2243,23 +2269,24 @@ void ipoib_intf_free(struct net_device *dev)
 	kfree(priv);
 }
 
-static ssize_t show_pkey(struct device *dev,
-			 struct device_attribute *attr, char *buf)
+static ssize_t pkey_show(struct device *dev, struct device_attribute *attr,
+			 char *buf)
 {
 	struct net_device *ndev = to_net_dev(dev);
 	struct ipoib_dev_priv *priv = ipoib_priv(ndev);
 
-	return sprintf(buf, "0x%04x\n", priv->pkey);
+	return sysfs_emit(buf, "0x%04x\n", priv->pkey);
 }
-static DEVICE_ATTR(pkey, S_IRUGO, show_pkey, NULL);
+static DEVICE_ATTR_RO(pkey);
 
-static ssize_t show_umcast(struct device *dev,
-			   struct device_attribute *attr, char *buf)
+static ssize_t umcast_show(struct device *dev, struct device_attribute *attr,
+			   char *buf)
 {
 	struct net_device *ndev = to_net_dev(dev);
 	struct ipoib_dev_priv *priv = ipoib_priv(ndev);
 
-	return sprintf(buf, "%d\n", test_bit(IPOIB_FLAG_UMCAST, &priv->flags));
+	return sysfs_emit(buf, "%d\n",
+			  test_bit(IPOIB_FLAG_UMCAST, &priv->flags));
 }
 
 void ipoib_set_umcast(struct net_device *ndev, int umcast_val)
@@ -2274,9 +2301,8 @@ void ipoib_set_umcast(struct net_device *ndev, int umcast_val)
 		clear_bit(IPOIB_FLAG_UMCAST, &priv->flags);
 }
 
-static ssize_t set_umcast(struct device *dev,
-			  struct device_attribute *attr,
-			  const char *buf, size_t count)
+static ssize_t umcast_store(struct device *dev, struct device_attribute *attr,
+			    const char *buf, size_t count)
 {
 	unsigned long umcast_val = simple_strtoul(buf, NULL, 0);
 
@@ -2284,7 +2310,7 @@ static ssize_t set_umcast(struct device *dev,
 
 	return count;
 }
-static DEVICE_ATTR(umcast, S_IWUSR | S_IRUGO, show_umcast, set_umcast);
+static DEVICE_ATTR_RW(umcast);
 
 int ipoib_add_umcast_attr(struct net_device *dev)
 {
@@ -2355,9 +2381,9 @@ static int ipoib_set_mac(struct net_device *dev, void *addr)
 	return 0;
 }
 
-static ssize_t create_child(struct device *dev,
-			    struct device_attribute *attr,
-			    const char *buf, size_t count)
+static ssize_t create_child_store(struct device *dev,
+				  struct device_attribute *attr,
+				  const char *buf, size_t count)
 {
 	int pkey;
 	int ret;
@@ -2372,11 +2398,11 @@ static ssize_t create_child(struct device *dev,
 
 	return ret ? ret : count;
 }
-static DEVICE_ATTR(create_child, S_IWUSR, NULL, create_child);
+static DEVICE_ATTR_WO(create_child);
 
-static ssize_t delete_child(struct device *dev,
-			    struct device_attribute *attr,
-			    const char *buf, size_t count)
+static ssize_t delete_child_store(struct device *dev,
+				  struct device_attribute *attr,
+				  const char *buf, size_t count)
 {
 	int pkey;
 	int ret;
@@ -2392,7 +2418,7 @@ static ssize_t delete_child(struct device *dev,
 	return ret ? ret : count;
 
 }
-static DEVICE_ATTR(delete_child, S_IWUSR, NULL, delete_child);
+static DEVICE_ATTR_WO(delete_child);
 
 int ipoib_add_pkey_attr(struct net_device *dev)
 {
@@ -2429,7 +2455,7 @@ static ssize_t dev_id_show(struct device *dev,
 			"\"%s\" wants to know my dev_id. Should it look at dev_port instead? See Documentation/ABI/testing/sysfs-class-net for more info.\n",
 			current->comm);
 
-	return sprintf(buf, "%#x\n", ndev->dev_id);
+	return sysfs_emit(buf, "%#x\n", ndev->dev_id);
 }
 static DEVICE_ATTR_RO(dev_id);
 
@@ -2440,7 +2466,7 @@ static int ipoib_intercept_dev_id_attr(struct net_device *dev)
 }
 
 static struct net_device *ipoib_add_port(const char *format,
-					 struct ib_device *hca, u8 port)
+					 struct ib_device *hca, u32 port)
 {
 	struct rtnl_link_ops *ops = ipoib_get_link_ops();
 	struct rdma_netdev_alloc_params params;
@@ -2462,6 +2488,8 @@ static struct net_device *ipoib_add_port(const char *format,
 
 	/* call event handler to ensure pkey in sync */
 	queue_work(ipoib_workqueue, &priv->flush_heavy);
+
+	ndev->rtnl_link_ops = ipoib_get_link_ops();
 
 	result = register_netdev(ndev);
 	if (result) {
@@ -2512,7 +2540,7 @@ sysfs_failed:
 	return ERR_PTR(-ENOMEM);
 }
 
-static void ipoib_add_one(struct ib_device *device)
+static int ipoib_add_one(struct ib_device *device)
 {
 	struct list_head *dev_list;
 	struct net_device *dev;
@@ -2522,7 +2550,7 @@ static void ipoib_add_one(struct ib_device *device)
 
 	dev_list = kmalloc(sizeof(*dev_list), GFP_KERNEL);
 	if (!dev_list)
-		return;
+		return -ENOMEM;
 
 	INIT_LIST_HEAD(dev_list);
 
@@ -2539,19 +2567,17 @@ static void ipoib_add_one(struct ib_device *device)
 
 	if (!count) {
 		kfree(dev_list);
-		return;
+		return -EOPNOTSUPP;
 	}
 
 	ib_set_client_data(device, &ipoib_client, dev_list);
+	return 0;
 }
 
 static void ipoib_remove_one(struct ib_device *device, void *client_data)
 {
 	struct ipoib_dev_priv *priv, *tmp, *cpriv, *tcpriv;
 	struct list_head *dev_list = client_data;
-
-	if (!dev_list)
-		return;
 
 	list_for_each_entry_safe(priv, tmp, dev_list, list) {
 		LIST_HEAD(head);

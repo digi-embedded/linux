@@ -18,9 +18,14 @@
 		compatible = "rohm,bd71847";
 		reg = <0x4b>;
 		pinctrl-0 = <&pinctrl_pmic>;
+		pinctrl-names = "default";
 		interrupt-parent = <&gpio1>;
 		interrupts = <3 GPIO_ACTIVE_LOW>;
 		rohm,reset-snvs-powered;
+
+		#clock-cells = <0>;
+		clocks = <&osc_32k 0>;
+		clock-output-names = "clk-32k-out";
 
 		regulators {
 			buck1_reg: BUCK1 {
@@ -82,7 +87,7 @@
 			ldo1_reg: LDO1 {
 				regulator-name = "LDO1";
 				regulator-min-microvolt = <1600000>;
-				regulator-max-microvolt = <1900000>;
+				regulator-max-microvolt = <3300000>;
 				regulator-boot-on;
 				regulator-always-on;
 			};

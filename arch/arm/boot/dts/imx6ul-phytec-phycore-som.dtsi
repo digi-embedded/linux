@@ -20,7 +20,7 @@
 	 * Set the minimum memory size here and
 	 * let the bootloader set the real size.
 	 */
-	memory {
+	memory@80000000 {
 		device_type = "memory";
 		reg = <0x80000000 0x8000000>;
 	};
@@ -75,6 +75,7 @@
 
 	eeprom@52 {
 		compatible = "catalyst,24c32", "atmel,24c32";
+		pagesize = <32>;
 		reg = <0x52>;
 	};
 };

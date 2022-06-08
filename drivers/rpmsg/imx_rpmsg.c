@@ -3,6 +3,7 @@
  * Copyright 2019 NXP
  */
 
+#include <linux/slab.h>
 #include <linux/circ_buf.h>
 #include <linux/delay.h>
 #include <linux/err.h>
@@ -60,8 +61,6 @@ struct imx_rpmsg_vproc {
 	struct notifier_block proc_nb;
 	struct platform_device *pdev;
 };
-
-#define SC_IRQ_GROUP_REBOOTED   5U      /* Partition reboot complete */
 
 /*
  * The time consumption by remote ready is less than 1ms in the
@@ -162,7 +161,7 @@ static struct virtqueue *rp_find_vq(struct virtio_device *vdev,
 		return ERR_PTR(-ENOMEM);
 
 	/* ioremap'ing normal memory, so we cast away sparse's complaints */
-	rpvq->addr = (__force void *) ioremap_nocache(virdev->vring[index],
+	rpvq->addr = (__force void *) ioremap(virdev->vring[index],
 							RPMSG_RING_SIZE);
 	if (!rpvq->addr) {
 		err = -ENOMEM;
@@ -418,7 +417,7 @@ static int imx_rpmsg_partition_notify(struct notifier_block *nb,
 
 	/* Ignore other irqs */
 	if (!((event & BIT(rpdev->mub_partition)) &&
-		(*(u8 *)group == SC_IRQ_GROUP_REBOOTED)))
+		(*(u8 *)group == IMX_SC_IRQ_GROUP_REBOOTED)))
 		return 0;
 
 	imx_rpmsg_restore(rpdev);
@@ -533,6 +532,7 @@ err_out:
 static int imx_rpmsg_probe(struct platform_device *pdev)
 {
 	int j, ret = 0;
+	unsigned long variant;
 	char *buf;
 	struct device *dev = &pdev->dev;
 	struct device_node *np = pdev->dev.of_node;
@@ -550,7 +550,8 @@ static int imx_rpmsg_probe(struct platform_device *pdev)
 #ifdef CONFIG_IMX_SCU
 	rpdev->proc_nb.notifier_call = imx_rpmsg_partition_notify;
 #endif
-	rpdev->variant = (enum imx_rpmsg_variants)of_device_get_match_data(dev);
+	variant = (uintptr_t)of_device_get_match_data(dev);
+	rpdev->variant = (enum imx_rpmsg_variants)variant;
 	rpdev->rx_buffer.buf = buf;
 	rpdev->rx_buffer.head = 0;
 	rpdev->rx_buffer.tail = 0;
@@ -618,7 +619,7 @@ static int imx_rpmsg_probe(struct platform_device *pdev)
 					&rpdev->mub_partition))
 			rpdev->mub_partition = 3; /* default partition 3 */
 
-		ret = imx_scu_irq_group_enable(SC_IRQ_GROUP_REBOOTED,
+		ret = imx_scu_irq_group_enable(IMX_SC_IRQ_GROUP_REBOOTED,
 					      BIT(rpdev->mub_partition),
 					      true);
 		if (ret) {
@@ -628,7 +629,7 @@ static int imx_rpmsg_probe(struct platform_device *pdev)
 
 		ret = imx_scu_irq_register_notifier(&rpdev->proc_nb);
 		if (ret) {
-			imx_scu_irq_group_enable(SC_IRQ_GROUP_REBOOTED,
+			imx_scu_irq_group_enable(IMX_SC_IRQ_GROUP_REBOOTED,
 						BIT(rpdev->mub_partition),
 						false);
 			dev_warn(&pdev->dev, "reqister scu notifier failed.\n");

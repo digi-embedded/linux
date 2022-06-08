@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 NXP
+ * Copyright 2018,2021-2022 NXP
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -254,7 +254,6 @@ EXPORT_SYMBOL(lcdif_get_bus_fmt_from_pix_fmt);
 
 int lcdif_set_pix_fmt(struct lcdif_soc *lcdif, u32 format)
 {
-	struct drm_format_name_buf format_name;
 	u32 ctrl = 0, ctrl1 = 0;
 
 	/* TODO: lcdif should be disabled to set pixel format */
@@ -325,8 +324,8 @@ int lcdif_set_pix_fmt(struct lcdif_soc *lcdif, u32 format)
 			       lcdif->base + LCDIF_CTRL2 + REG_SET);
 		break;
 	default:
-		dev_err(lcdif->dev, "unsupported pixel format: %s\n",
-			drm_get_format_name(format, &format_name));
+		dev_err(lcdif->dev, "unsupported pixel format: %p4cc\n",
+			&format);
 		return -EINVAL;
 	}
 
@@ -361,12 +360,15 @@ void lcdif_set_bus_fmt(struct lcdif_soc *lcdif, u32 bus_format)
 }
 EXPORT_SYMBOL(lcdif_set_bus_fmt);
 
-void lcdif_set_fb_addr(struct lcdif_soc *lcdif, int id, u32 addr)
+void lcdif_set_fb_addr(struct lcdif_soc *lcdif, int id, u32 addr, bool use_i80)
 {
 	switch (id) {
 	case 0:
 		/* primary plane */
-		writel(addr, lcdif->base + LCDIF_NEXT_BUF);
+		if (use_i80)
+			writel(addr, lcdif->base + LCDIF_CUR_BUF);
+		else
+			writel(addr, lcdif->base + LCDIF_NEXT_BUF);
 		break;
 	default:
 		/* TODO: add overlay support */
@@ -378,8 +380,8 @@ EXPORT_SYMBOL(lcdif_set_fb_addr);
 void lcdif_set_fb_hcrop(struct lcdif_soc *lcdif, u32 src_w,
 			u32 fb_w, bool crop)
 {
-	u32 mask_cnt, htotal, hcount;
-	u32 vdctrl2, vdctrl3, vdctrl4, transfer_count;
+	u32 mask_cnt;
+	u32 vdctrl3, vdctrl4, transfer_count;
 	u32 pigeon_12_0, pigeon_12_1, pigeon_12_2;
 
 	if (!crop) {
@@ -389,23 +391,14 @@ void lcdif_set_fb_hcrop(struct lcdif_soc *lcdif, u32 src_w,
 		return;
 	}
 
-	/* transfer_count's hcount, vdctrl2's htotal and vdctrl4's
-	 * H_VALID_DATA_CNT should use fb width instead of hactive
-	 * when requires cropping.
-	 * */
+	/*
+	 * transfer_count's hcount and vdctrl4's H_VALID_DATA_CNT
+	 * should use fb width instead of hactive when requires cropping.
+	 */
 	transfer_count = readl(lcdif->base + LCDIF_TRANSFER_COUNT);
-	hcount = TRANSFER_COUNT_GET_HCOUNT(transfer_count);
-
 	transfer_count &= ~TRANSFER_COUNT_SET_HCOUNT(0xffff);
 	transfer_count |= TRANSFER_COUNT_SET_HCOUNT(fb_w);
 	writel(transfer_count, lcdif->base + LCDIF_TRANSFER_COUNT);
-
-	vdctrl2 = readl(lcdif->base + LCDIF_VDCTRL2);
-	htotal  = VDCTRL2_GET_HSYNC_PERIOD(vdctrl2);
-	htotal  += fb_w - hcount;
-	vdctrl2 &= ~VDCTRL2_SET_HSYNC_PERIOD(0x3ffff);
-	vdctrl2 |= VDCTRL2_SET_HSYNC_PERIOD(htotal);
-	writel(vdctrl2, lcdif->base + LCDIF_VDCTRL2);
 
 	vdctrl4 = readl(lcdif->base + LCDIF_VDCTRL4);
 	vdctrl4 &= ~SET_DOTCLK_H_VALID_DATA_CNT(0x3ffff);
@@ -433,7 +426,8 @@ void lcdif_set_fb_hcrop(struct lcdif_soc *lcdif, u32 src_w,
 EXPORT_SYMBOL(lcdif_set_fb_hcrop);
 
 
-void lcdif_set_mode(struct lcdif_soc *lcdif, struct videomode *vmode)
+void lcdif_set_mode(struct lcdif_soc *lcdif, struct videomode *vmode,
+		    bool use_i80)
 {
 	const struct of_device_id *of_id =
 			of_match_device(imx_lcdif_dt_ids, lcdif->dev);
@@ -457,6 +451,12 @@ void lcdif_set_mode(struct lcdif_soc *lcdif, struct videomode *vmode)
 	writel(TRANSFER_COUNT_SET_VCOUNT(vmode->vactive) |
 	       TRANSFER_COUNT_SET_HCOUNT(vmode->hactive),
 	       lcdif->base + LCDIF_TRANSFER_COUNT);
+
+	if (use_i80) {
+		/* use MPU 8080 mode */
+		writel(CTRL1_MODE86, lcdif->base + LCDIF_CTRL1 + REG_CLR);
+		return;
+	}
 
 	vdctrl0 = VDCTRL0_ENABLE_PRESENT		|
 		  VDCTRL0_VSYNC_PERIOD_UNIT 		|
@@ -515,20 +515,36 @@ void lcdif_set_mode(struct lcdif_soc *lcdif, struct videomode *vmode)
 }
 EXPORT_SYMBOL(lcdif_set_mode);
 
-void lcdif_enable_controller(struct lcdif_soc *lcdif)
+void lcdif_enable_controller(struct lcdif_soc *lcdif, bool use_i80)
 {
-	u32 ctrl2, vdctrl4;
+	u32 ctrl2, vdctrl4, timing;
 
 	ctrl2	= readl(lcdif->base + LCDIF_CTRL2);
 	vdctrl4 = readl(lcdif->base + LCDIF_VDCTRL4);
 
 	ctrl2 &= ~CTRL2_OUTSTANDING_REQS(0x7);
-	ctrl2 |= CTRL2_OUTSTANDING_REQS(REQ_16);
+	ctrl2 |= CTRL2_OUTSTANDING_REQS(use_i80 ? REQ_8 : REQ_16);
 	writel(ctrl2, lcdif->base + LCDIF_CTRL2);
 
-	/* Continous dotclock mode */
-	writel(CTRL_BYPASS_COUNT | CTRL_DOTCLK_MODE,
-	       lcdif->base + LCDIF_CTRL + REG_SET);
+	if (use_i80) {
+		/* MPU 8080 write mode */
+		writel(CTRL_DATA_SELECT, lcdif->base + LCDIF_CTRL + REG_SET);
+		writel(CTRL_READ_WRITEB, lcdif->base + LCDIF_CTRL + REG_CLR);
+		writel(CTRL_BYPASS_COUNT, lcdif->base + LCDIF_CTRL + REG_CLR);
+		writel(CTRL_DVI_MODE | CTRL_VSYNC_MODE | CTRL_DOTCLK_MODE,
+		       lcdif->base + LCDIF_CTRL + REG_CLR);
+
+		writel(CTRL1_COMBINE_MPU_WR_STRB,
+		       lcdif->base + LCDIF_CTRL1 + REG_CLR);
+
+		timing = TIMING_CMD_HOLD(2)  | TIMING_CMD_SETUP(1) |
+			 TIMING_DATA_HOLD(2) | TIMING_DATA_SETUP(1);
+		writel(timing, lcdif->base + LCDIF_TIMING);
+	} else {
+		/* Continuous dotclock mode */
+		writel(CTRL_BYPASS_COUNT | CTRL_DOTCLK_MODE,
+		       lcdif->base + LCDIF_CTRL + REG_SET);
+	}
 
 	/* enable the SYNC signals first, then the DMA engine */
 	vdctrl4 |= VDCTRL4_SYNC_SIGNALS_ON;
@@ -544,18 +560,21 @@ void lcdif_enable_controller(struct lcdif_soc *lcdif)
 }
 EXPORT_SYMBOL(lcdif_enable_controller);
 
-void lcdif_disable_controller(struct lcdif_soc *lcdif)
+void lcdif_disable_controller(struct lcdif_soc *lcdif, bool use_i80)
 {
 	int ret;
 	u32 ctrl, vdctrl4;
 
 	writel(CTRL_RUN, lcdif->base + LCDIF_CTRL + REG_CLR);
-	writel(CTRL_DOTCLK_MODE, lcdif->base + LCDIF_CTRL + REG_CLR);
 
-	ret = readl_poll_timeout(lcdif->base + LCDIF_CTRL, ctrl,
-				 !(ctrl & CTRL_RUN), 0, 1000);
-	if (WARN_ON(ret))
-		dev_err(lcdif->dev, "disable lcdif run timeout\n");
+	if (!use_i80) {
+		writel(CTRL_DOTCLK_MODE, lcdif->base + LCDIF_CTRL + REG_CLR);
+
+		ret = readl_poll_timeout(lcdif->base + LCDIF_CTRL, ctrl,
+					 !(ctrl & CTRL_RUN), 0, 1000);
+		if (WARN_ON(ret))
+			dev_err(lcdif->dev, "disable lcdif run timeout\n");
+	}
 
 	writel(CTRL_MASTER, lcdif->base + LCDIF_CTRL + REG_CLR);
 
@@ -564,6 +583,16 @@ void lcdif_disable_controller(struct lcdif_soc *lcdif)
 	writel(vdctrl4, lcdif->base + LCDIF_VDCTRL4);
 }
 EXPORT_SYMBOL(lcdif_disable_controller);
+
+long lcdif_pix_clk_round_rate(struct lcdif_soc *lcdif,
+			      unsigned long rate)
+{
+	if (unlikely(!rate))
+		return -EINVAL;
+
+	return clk_round_rate(lcdif->clk_pix, rate);
+}
+EXPORT_SYMBOL(lcdif_pix_clk_round_rate);
 
 static int platform_remove_device_fn(struct device *dev, void *data)
 {

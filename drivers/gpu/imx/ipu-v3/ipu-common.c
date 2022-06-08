@@ -133,73 +133,6 @@ enum ipu_color_space ipu_pixelformat_to_colorspace(u32 pixelformat)
 }
 EXPORT_SYMBOL_GPL(ipu_pixelformat_to_colorspace);
 
-bool ipu_pixelformat_is_planar(u32 pixelformat)
-{
-	switch (pixelformat) {
-	case V4L2_PIX_FMT_YUV420:
-	case V4L2_PIX_FMT_YVU420:
-	case V4L2_PIX_FMT_YUV422P:
-	case V4L2_PIX_FMT_NV12:
-	case V4L2_PIX_FMT_NV21:
-	case V4L2_PIX_FMT_NV16:
-	case V4L2_PIX_FMT_NV61:
-		return true;
-	}
-
-	return false;
-}
-EXPORT_SYMBOL_GPL(ipu_pixelformat_is_planar);
-
-enum ipu_color_space ipu_mbus_code_to_colorspace(u32 mbus_code)
-{
-	switch (mbus_code & 0xf000) {
-	case 0x1000:
-		return IPUV3_COLORSPACE_RGB;
-	case 0x2000:
-		return IPUV3_COLORSPACE_YUV;
-	default:
-		return IPUV3_COLORSPACE_UNKNOWN;
-	}
-}
-EXPORT_SYMBOL_GPL(ipu_mbus_code_to_colorspace);
-
-int ipu_stride_to_bytes(u32 pixel_stride, u32 pixelformat)
-{
-	switch (pixelformat) {
-	case V4L2_PIX_FMT_YUV420:
-	case V4L2_PIX_FMT_YVU420:
-	case V4L2_PIX_FMT_YUV422P:
-	case V4L2_PIX_FMT_NV12:
-	case V4L2_PIX_FMT_NV21:
-	case V4L2_PIX_FMT_NV16:
-	case V4L2_PIX_FMT_NV61:
-		/*
-		 * for the planar YUV formats, the stride passed to
-		 * cpmem must be the stride in bytes of the Y plane.
-		 * And all the planar YUV formats have an 8-bit
-		 * Y component.
-		 */
-		return (8 * pixel_stride) >> 3;
-	case V4L2_PIX_FMT_RGB565:
-	case V4L2_PIX_FMT_YUYV:
-	case V4L2_PIX_FMT_UYVY:
-		return (16 * pixel_stride) >> 3;
-	case V4L2_PIX_FMT_BGR24:
-	case V4L2_PIX_FMT_RGB24:
-		return (24 * pixel_stride) >> 3;
-	case V4L2_PIX_FMT_BGR32:
-	case V4L2_PIX_FMT_RGB32:
-	case V4L2_PIX_FMT_XBGR32:
-	case V4L2_PIX_FMT_XRGB32:
-		return (32 * pixel_stride) >> 3;
-	default:
-		break;
-	}
-
-	return -EINVAL;
-}
-EXPORT_SYMBOL_GPL(ipu_stride_to_bytes);
-
 int ipu_degrees_to_rot_mode(enum ipu_rotate_mode *mode, int degrees,
 			    bool hflip, bool vflip)
 {
@@ -1070,19 +1003,16 @@ err_cpmem:
 static void ipu_irq_handle(struct ipu_soc *ipu, const int *regs, int num_regs)
 {
 	unsigned long status;
-	int i, bit, irq;
+	int i, bit;
 
 	for (i = 0; i < num_regs; i++) {
 
 		status = ipu_cm_read(ipu, IPU_INT_STAT(regs[i]));
 		status &= ipu_cm_read(ipu, IPU_INT_CTRL(regs[i]));
 
-		for_each_set_bit(bit, &status, 32) {
-			irq = irq_linear_revmap(ipu->domain,
-						regs[i] * 32 + bit);
-			if (irq)
-				generic_handle_irq(irq);
-		}
+		for_each_set_bit(bit, &status, 32)
+			generic_handle_domain_irq(ipu->domain,
+						  regs[i] * 32 + bit);
 	}
 }
 

@@ -267,11 +267,16 @@ static int rt298_jack_detect(struct rt298_priv *rt298, bool *hp, bool *mic)
 				msleep(300);
 				regmap_read(rt298->regmap,
 					RT298_CBJ_CTRL2, &val);
-				if (0x0070 == (val & 0x0070))
+				if (0x0070 == (val & 0x0070)) {
 					*mic = true;
-				else
+				} else {
 					*mic = false;
+					regmap_update_bits(rt298->regmap,
+						RT298_CBJ_CTRL1,
+						0xfcc0, 0xc400);
+				}
 			}
+
 			regmap_update_bits(rt298->regmap,
 				RT298_DC_GAIN, 0x200, 0x0);
 
@@ -508,7 +513,7 @@ static int rt298_adc_event(struct snd_soc_dapm_widget *w,
 			VERB_CMD(AC_VERB_SET_AMP_GAIN_MUTE, nid, 0),
 			0x7080, 0x7000);
 		 /* If MCLK doesn't exist, reset AD filter */
-		if (!(snd_soc_component_read32(component, RT298_VAD_CTRL) & 0x200)) {
+		if (!(snd_soc_component_read(component, RT298_VAD_CTRL) & 0x200)) {
 			pr_info("NO MCLK\n");
 			switch (nid) {
 			case RT298_ADC_IN1:
@@ -1084,7 +1089,7 @@ static struct snd_soc_dai_driver rt298_dai[] = {
 			.formats = RT298_FORMATS,
 		},
 		.ops = &rt298_aif_dai_ops,
-		.symmetric_rates = 1,
+		.symmetric_rate = 1,
 	},
 	{
 		.name = "rt298-aif2",
@@ -1104,7 +1109,7 @@ static struct snd_soc_dai_driver rt298_dai[] = {
 			.formats = RT298_FORMATS,
 		},
 		.ops = &rt298_aif_dai_ops,
-		.symmetric_rates = 1,
+		.symmetric_rate = 1,
 	},
 
 };
@@ -1145,11 +1150,13 @@ static const struct i2c_device_id rt298_i2c_id[] = {
 };
 MODULE_DEVICE_TABLE(i2c, rt298_i2c_id);
 
+#ifdef CONFIG_ACPI
 static const struct acpi_device_id rt298_acpi_match[] = {
 	{ "INT343A", 0 },
 	{},
 };
 MODULE_DEVICE_TABLE(acpi, rt298_acpi_match);
+#endif
 
 static const struct dmi_system_id force_combo_jack_table[] = {
 	{

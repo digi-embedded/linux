@@ -100,7 +100,6 @@
 #include "mx31.h"
 #include "mx35.h"
 #include "mx2x.h"
-#include "mx21.h"
 #include "mx27.h"
 #include "mx6.h"
 #include "mx7.h"
@@ -112,9 +111,5 @@
 	.length = soc ## _ ## name ## _SIZE,				\
 	.type = _type,							\
 }
-
-/* There's an off-by-one between the gpio bank number and the gpiochip */
-/* range e.g. GPIO_1_5 is gpio 5 under linux */
-#define IMX_GPIO_NR(bank, nr)		(((bank) - 1) * 32 + (nr))
 
 #endif /* __ASM_ARCH_MXC_HARDWARE_H__ */

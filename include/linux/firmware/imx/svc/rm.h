@@ -4,8 +4,8 @@
  * Copyright 2017-2020 NXP
  *
  * Header file containing the public API for the System Controller (SC)
- * Power Management (PM) function. This includes functions for power state
- * control, clock control, reset control, and wake-up event control.
+ * Resource Management (RM) function. This includes functions for
+ * partitioning resources, pads, and memory regions.
  *
  * RM_SVC (SVC) Resource Management Service
  *
@@ -59,6 +59,7 @@ enum imx_sc_rm_func {
 
 #if IS_ENABLED(CONFIG_IMX_SCU)
 bool imx_sc_rm_is_resource_owned(struct imx_sc_ipc *ipc, u16 resource);
+int imx_sc_rm_get_partition(struct imx_sc_ipc *ipc, u8 *pt);
 int imx_sc_rm_find_memreg(struct imx_sc_ipc *ipc, u8 *mr, u64 addr_start,
 			  u64 addr_end);
 int imx_sc_rm_get_resource_owner(struct imx_sc_ipc *ipc, u16 resource, u8 *pt);
@@ -70,6 +71,11 @@ static inline bool
 imx_sc_rm_is_resource_owned(struct imx_sc_ipc *ipc, u16 resource)
 {
 	return true;
+}
+
+static inline int imx_sc_rm_get_partition(struct imx_sc_ipc *ipc, u8 *pt)
+{
+	return -ENOENT;
 }
 
 static inline
@@ -98,4 +104,5 @@ int imx_sc_rm_get_did(struct imx_sc_ipc *ipc, u8 *did)
 	return -EOPNOTSUPP;
 }
 #endif
+
 #endif

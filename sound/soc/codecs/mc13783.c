@@ -5,7 +5,7 @@
  * Copyright 2012 Philippe Retornaz, philippe.retornaz@epfl.ch
  *
  * Initial development of this code was funded by
- * Phytec Messtechnik GmbH, http://www.phytec.de
+ * Phytec Messtechnik GmbH, https://www.phytec.de
  */
 #include <linux/module.h>
 #include <linux/device.h>
@@ -712,7 +712,7 @@ static struct snd_soc_dai_driver mc13783_dai_sync[] = {
 			.formats = MC13783_FORMATS,
 		},
 		.ops = &mc13783_ops_sync,
-		.symmetric_rates = 1,
+		.symmetric_rate = 1,
 	}
 };
 

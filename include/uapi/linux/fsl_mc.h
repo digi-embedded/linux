@@ -2,7 +2,7 @@
 /*
  * Management Complex (MC) userspace public interface
  *
- * Copyright 2018 NXP
+ * Copyright 2021 NXP
  *
  */
 #ifndef _UAPI_FSL_MC_H_

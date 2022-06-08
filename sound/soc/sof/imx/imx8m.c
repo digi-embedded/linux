@@ -1,101 +1,144 @@
-// SPDX-License-Identifier: (GPL-2.0 OR BSD-3-Clause)
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-3-Clause)
 //
-// Copyright 2019 NXP
+// Copyright 2020 NXP
 //
 // Author: Daniel Baluta <daniel.baluta@nxp.com>
 //
-// Hardware interface for audio DSP on i.MX8
+// Hardware interface for audio DSP on i.MX8M
 
+#include <linux/bits.h>
+#include <linux/clk.h>
 #include <linux/firmware.h>
+#include <linux/mfd/syscon.h>
 #include <linux/of_platform.h>
 #include <linux/of_address.h>
 #include <linux/of_irq.h>
-#include <linux/pm_domain.h>
+#include <linux/regmap.h>
 
 #include <linux/module.h>
 #include <sound/sof.h>
 #include <sound/sof/xtensa.h>
 #include <linux/firmware/imx/dsp.h>
-#include <linux/clk.h>
-#include <linux/bits.h>
 
 #include "../ops.h"
-#include "../../fsl/fsl_dsp_audiomix.h"
-
-/* DSP memories */
-#define IRAM_OFFSET		0x10000
-#define IRAM_SIZE		(2 * 1024)
-#define DRAM0_OFFSET		0x0
-#define DRAM0_SIZE		(32 * 1024)
-#define DRAM1_OFFSET		0x8000
-#define DRAM1_SIZE		(32 * 1024)
-#define SYSRAM_OFFSET		0x18000
-#define SYSRAM_SIZE		(256 * 1024)
-#define SYSROM_OFFSET		0x58000
-#define SYSROM_SIZE		(192 * 1024)
-
-#define RESET_VECTOR_VADDR	0x596f8000
+#include "../sof-of-dev.h"
+#include "imx-common.h"
 
 #define MBOX_OFFSET	0x800000
 #define MBOX_SIZE	0x1000
 
-#define IMX8M_DAP_DEBUG		0x28800000
-#define IMX8M_DAP_DEBUG_SIZE	(64 * 1024)
-#define IMX8M_DAP_PWRCTL	(0x4000 + 0x3020)
-#define IMX8M_PWRCTL_CORERESET		BIT(16)
+/* DAP registers */
+#define IMX8M_DAP_DEBUG                0x28800000
+#define IMX8M_DAP_DEBUG_SIZE   (64 * 1024)
+#define IMX8M_DAP_PWRCTL       (0x4000 + 0x3020)
+#define IMX8M_PWRCTL_CORERESET         BIT(16)
 
-#define IMX8M_DSP_CLK_NUM	9
-static const char *imx8m_dsp_clks[IMX8M_DSP_CLK_NUM] = {
-	"ocram",
-	"core",
-	"debug",
-	"sdma3",
-	"sai3_bus",
-	"sai3_mclk0",
-	"sai3_mclk1",
-	"sai3_mclk2",
-	"sai3_mclk3",
+/* DSP audio mix registers */
+#define AudioDSP_REG0	0x100
+#define AudioDSP_REG1	0x104
+#define AudioDSP_REG2	0x108
+#define AudioDSP_REG3	0x10c
+
+#define AudioDSP_REG2_RUNSTALL	BIT(5)
+
+#define IMX8M_DSP_CLK_NUM	3
+static const char *imx8m_dsp_clks_names[IMX8M_DSP_CLK_NUM] =
+{
+	/* DSP clocks */
+	"ipg", "ocram", "core",
+};
+
+#define IMX8M_DAI_CLK_NUM	11
+static const char *imx8m_dai_clks_names[IMX8M_DAI_CLK_NUM] =
+{
+	/* SAI1 clocks */
+	"sai1_bus", "sai1_mclk0", "sai1_mclk1", "sai1_mclk2", "sai1_mclk3",
+	/* SAI3 clocks */
+	"sai3_bus", "sai3_mclk0", "sai3_mclk1", "sai3_mclk2", "sai3_mclk3",
+	/* DMA3 clocks */
+	"sdma3_root",
 };
 
 struct imx8m_priv {
 	struct device *dev;
 	struct snd_sof_dev *sdev;
-	bool suspended;
-
-	struct imx_audiomix_dsp_data *audiomix;
 
 	/* DSP IPC handler */
 	struct imx_dsp_ipc *dsp_ipc;
 	struct platform_device *ipc_dev;
 
-	/* Power domain handling */
-	int num_domains;
-	struct device **pd_dev;
-	struct device_link **link;
+	struct clk *dsp_clks[IMX8M_DSP_CLK_NUM];
+	struct clk *dai_clks[IMX8M_DAI_CLK_NUM];
 
-	struct clk *clks[IMX8M_DSP_CLK_NUM];
 	void __iomem *dap;
+	struct regmap *regmap;
 };
 
-int imx8m_dsp_configure_audmix(struct imx8m_priv *dsp_priv)
+static int imx8m_init_clocks(struct snd_sof_dev *sdev)
 {
-	struct device_node *np;
-	struct platform_device *pdev;
+	int i;
+	struct imx8m_priv *priv = (struct imx8m_priv *)sdev->pdata->hw_pdata;
 
-	np = of_find_node_by_name(NULL, "audiomix_dsp");
-	if (!np)
-		return -EPROBE_DEFER;
+	for (i = 0; i < IMX8M_DSP_CLK_NUM; i++) {
+		priv->dsp_clks[i] = devm_clk_get(priv->dev, imx8m_dsp_clks_names[i]);
+		if (IS_ERR(priv->dsp_clks[i]))
+		    return PTR_ERR(priv->dsp_clks[i]);
+	}
 
-	pdev = of_find_device_by_node(np);
-	if (!pdev)
-		return -EPROBE_DEFER;
-
-	dsp_priv->audiomix = dev_get_drvdata(&pdev->dev);
-	if (!dsp_priv->audiomix)
-		return -EPROBE_DEFER;
+	for (i = 0; i < IMX8M_DAI_CLK_NUM; i++)
+		priv->dai_clks[i] = devm_clk_get_optional(priv->dev, imx8m_dai_clks_names[i]);
 
 	return 0;
 }
+
+static int imx8m_prepare_clocks(struct snd_sof_dev *sdev)
+{
+	int i, j, ret;
+	struct imx8m_priv *priv = (struct imx8m_priv *)sdev->pdata->hw_pdata;
+
+	for (i = 0; i < IMX8M_DSP_CLK_NUM; i++) {
+		ret = clk_prepare_enable(priv->dsp_clks[i]);
+		if (ret < 0) {
+			dev_err(priv->dev, "Failed to enable clk %s\n",
+				imx8m_dsp_clks_names[i]);
+			goto err_dsp_clks;
+		}
+	}
+
+	for (j = 0; j < IMX8M_DAI_CLK_NUM; j++) {
+		ret = clk_prepare_enable(priv->dai_clks[j]);
+		if (ret < 0) {
+			dev_err(priv->dev, "Failed to enable clk %s\n",
+				imx8m_dai_clks_names[j]);
+			goto err_dai_clks;
+		}
+	}
+
+	return 0;
+
+err_dai_clks:
+	while (--j >= 0)
+		clk_disable_unprepare(priv->dai_clks[j]);
+
+err_dsp_clks:
+	while (--i >= 0)
+		clk_disable_unprepare(priv->dsp_clks[i]);
+
+	return ret;
+}
+
+static void imx8m_disable_clocks(struct snd_sof_dev *sdev)
+{
+	int i;
+	struct imx8m_priv *priv = (struct imx8m_priv *)sdev->pdata->hw_pdata;
+
+	for (i = 0; i < IMX8M_DSP_CLK_NUM; i++)
+		clk_disable_unprepare(priv->dsp_clks[i]);
+
+	for (i = 0; i < IMX8M_DAI_CLK_NUM; i++)
+		clk_disable_unprepare(priv->dai_clks[i]);
+}
+
 
 static void imx8m_get_reply(struct snd_sof_dev *sdev)
 {
@@ -155,18 +198,26 @@ static void imx8m_dsp_handle_reply(struct imx_dsp_ipc *ipc)
 static void imx8m_dsp_handle_request(struct imx_dsp_ipc *ipc)
 {
 	struct imx8m_priv *priv = imx_dsp_get_data(ipc);
+	u32 p; /* Panic code */
 
-	snd_sof_ipc_msgs_rx(priv->sdev);
+	/* Read the message from the debug box. */
+	sof_mailbox_read(priv->sdev, priv->sdev->debug_box.offset + 4, &p, sizeof(p));
+
+	/* Check to see if the message is a panic code (0x0dead***) */
+	if ((p & SOF_IPC_PANIC_MAGIC_MASK) == SOF_IPC_PANIC_MAGIC)
+		snd_sof_dsp_panic(priv->sdev, p);
+	else
+		snd_sof_ipc_msgs_rx(priv->sdev);
 }
 
-static struct imx_dsp_ops dsp_ops = {
+static struct imx_dsp_ops imx8m_dsp_ops = {
 	.handle_reply		= imx8m_dsp_handle_reply,
 	.handle_request		= imx8m_dsp_handle_request,
 };
 
 static int imx8m_send_msg(struct snd_sof_dev *sdev, struct snd_sof_ipc_msg *msg)
 {
-	struct imx8m_priv *priv = (struct imx8m_priv *)sdev->private;
+	struct imx8m_priv *priv = sdev->pdata->hw_pdata;
 
 	sof_mailbox_write(sdev, sdev->host_box.offset, msg->msg_data,
 			  msg->msg_size);
@@ -180,32 +231,32 @@ static int imx8m_send_msg(struct snd_sof_dev *sdev, struct snd_sof_ipc_msg *msg)
  */
 static int imx8m_run(struct snd_sof_dev *sdev)
 {
-	struct imx8m_priv *dsp_priv = (struct imx8m_priv *)sdev->private;
+	struct imx8m_priv *priv = (struct imx8m_priv *)sdev->pdata->hw_pdata;
 
-	imx_audiomix_dsp_start(dsp_priv->audiomix);
+	regmap_update_bits(priv->regmap, AudioDSP_REG2, AudioDSP_REG2_RUNSTALL, 0);
 
 	return 0;
 }
 
 static int imx8m_reset(struct snd_sof_dev *sdev) {
-
-	struct imx8m_priv *dsp_priv = (struct imx8m_priv *)sdev->private;
+	struct imx8m_priv *priv = (struct imx8m_priv *)sdev->pdata->hw_pdata;
 	u32 pwrctl;
 
 	/* put DSP into reset and stall */
-	pwrctl = readl(dsp_priv->dap + IMX8M_DAP_PWRCTL);
+	pwrctl = readl(priv->dap + IMX8M_DAP_PWRCTL);
 	pwrctl |= IMX8M_PWRCTL_CORERESET;
-	writel(pwrctl, dsp_priv->dap + IMX8M_DAP_PWRCTL);
+	writel(pwrctl, priv->dap + IMX8M_DAP_PWRCTL);
 
 	/* keep reset asserted for 10 cycles */
 	usleep_range(1, 2);
 
-	imx_audiomix_dsp_stall(dsp_priv->audiomix);
+	regmap_update_bits(priv->regmap, AudioDSP_REG2,
+			   AudioDSP_REG2_RUNSTALL, AudioDSP_REG2_RUNSTALL);
 
 	/* take the DSP out of reset and keep stalled for FW loading */
-	pwrctl = readl(dsp_priv->dap + IMX8M_DAP_PWRCTL);
+	pwrctl = readl(priv->dap + IMX8M_DAP_PWRCTL);
 	pwrctl &= ~IMX8M_PWRCTL_CORERESET;
-	writel(pwrctl, dsp_priv->dap + IMX8M_DAP_PWRCTL);
+	writel(pwrctl, priv->dap + IMX8M_DAP_PWRCTL);
 
 	return 0;
 }
@@ -221,67 +272,20 @@ static int imx8m_probe(struct snd_sof_dev *sdev)
 	struct resource res;
 	u32 base, size;
 	int ret = 0;
-	int i = 0;
 
 	priv = devm_kzalloc(&pdev->dev, sizeof(*priv), GFP_KERNEL);
 	if (!priv)
 		return -ENOMEM;
 
-	sdev->private = priv;
+	sdev->pdata->hw_pdata = priv;
 	priv->dev = sdev->dev;
 	priv->sdev = sdev;
 
-	ret = imx8m_dsp_configure_audmix(priv);
-	if (ret < 0)
-		return ret;
-
-	/* power up device associated power domains */
-	priv->num_domains = of_count_phandle_with_args(np, "power-domains",
-						       "#power-domain-cells");
-	if (priv->num_domains < 0) {
-		dev_err(sdev->dev, "no power-domains property in %pOF\n", np);
-		return priv->num_domains;
-	}
-
-	/* power domain already enabled by PM core */
-	if (priv->num_domains == 1)
-		goto done_pm;
-
-	priv->pd_dev = devm_kmalloc_array(&pdev->dev, priv->num_domains,
-					  sizeof(*priv->pd_dev), GFP_KERNEL);
-	if (!priv->pd_dev)
-		return -ENOMEM;
-
-	priv->link = devm_kmalloc_array(&pdev->dev, priv->num_domains,
-					sizeof(*priv->link), GFP_KERNEL);
-	if (!priv->link)
-		return -ENOMEM;
-
-	for (i = 0; i < priv->num_domains; i++) {
-		priv->pd_dev[i] = dev_pm_domain_attach_by_id(&pdev->dev, i);
-		if (IS_ERR(priv->pd_dev[i])) {
-			ret = PTR_ERR(priv->pd_dev[i]);
-			goto exit_unroll_pm;
-		}
-		priv->link[i] = device_link_add(&pdev->dev, priv->pd_dev[i],
-						DL_FLAG_STATELESS |
-						DL_FLAG_PM_RUNTIME |
-						DL_FLAG_RPM_ACTIVE);
-		if (!priv->link[i]) {
-			ret = -ENOMEM;
-			dev_pm_domain_detach(priv->pd_dev[i], false);
-			goto exit_unroll_pm;
-		}
-	}
-
-done_pm:
 	priv->ipc_dev = platform_device_register_data(sdev->dev, "imx-dsp",
 						      PLATFORM_DEVID_NONE,
 						      pdev, sizeof(*pdev));
-	if (IS_ERR(priv->ipc_dev)) {
-		ret = PTR_ERR(priv->ipc_dev);
-		goto exit_unroll_pm;
-	}
+	if (IS_ERR(priv->ipc_dev))
+		return PTR_ERR(priv->ipc_dev);
 
 	priv->dsp_ipc = dev_get_drvdata(&priv->ipc_dev->dev);
 	if (!priv->dsp_ipc) {
@@ -292,7 +296,7 @@ done_pm:
 	}
 
 	imx_dsp_set_data(priv->dsp_ipc, priv);
-	priv->dsp_ipc->ops = &dsp_ops;
+	priv->dsp_ipc->ops = &imx8m_dsp_ops;
 
 	/* DSP base */
 	mmio = platform_get_resource(pdev, IORESOURCE_MEM, 0);
@@ -334,8 +338,7 @@ done_pm:
 	}
 
 	sdev->bar[SOF_FW_BLK_TYPE_SRAM] = devm_ioremap_wc(sdev->dev, res.start,
-							  res.end - res.start +
-							  1);
+							  resource_size(&res));
 	if (!sdev->bar[SOF_FW_BLK_TYPE_SRAM]) {
 		dev_err(sdev->dev, "failed to ioremap mem 0x%x size 0x%x\n",
 			base, size);
@@ -347,41 +350,28 @@ done_pm:
 	/* set default mailbox offset for FW ready message */
 	sdev->dsp_box.offset = MBOX_OFFSET;
 
-	for (i = 0; i < IMX8M_DSP_CLK_NUM; i++) {
-		priv->clks[i] = devm_clk_get(&pdev->dev, imx8m_dsp_clks[i]);
-		if (IS_ERR(priv->clks[i]))
-			priv->clks[i] = NULL;
+	priv->regmap = syscon_regmap_lookup_by_compatible("fsl,imx8mp-audio-blk-ctrl");
+	if (IS_ERR(priv->regmap)) {
+		dev_err(sdev->dev, "cannot find audio-blk-ctrl registers");
+		ret = PTR_ERR(priv->regmap);
+		goto exit_pdev_unregister;
 	}
-	/* TODO: handle clocks at PM suspend/resume time */
-	for (i = 0; i < IMX8M_DSP_CLK_NUM; i++)
-		clk_prepare_enable(priv->clks[i]);
+
+	imx8m_init_clocks(sdev);
+	imx8m_prepare_clocks(sdev);
 
 	return 0;
 
 exit_pdev_unregister:
 	platform_device_unregister(priv->ipc_dev);
-exit_unroll_pm:
-	while (--i >= 0) {
-		device_link_del(priv->link[i]);
-		dev_pm_domain_detach(priv->pd_dev[i], false);
-	}
 	return ret;
 }
 
 static int imx8m_remove(struct snd_sof_dev *sdev)
 {
-	struct imx8m_priv *priv = (struct imx8m_priv *)sdev->private;
-	int i;
+	struct imx8m_priv *priv = sdev->pdata->hw_pdata;
 
 	platform_device_unregister(priv->ipc_dev);
-
-	for (i = 0; i < priv->num_domains; i++) {
-		device_link_del(priv->link[i]);
-		dev_pm_domain_detach(priv->pd_dev[i], false);
-	}
-
-	for (i = 0; i < IMX8M_DSP_CLK_NUM; i++)
-		clk_disable_unprepare(priv->clks[i]);
 
 	return 0;
 }
@@ -389,36 +379,55 @@ static int imx8m_remove(struct snd_sof_dev *sdev)
 /* on i.MX8 there is 1 to 1 match between type and BAR idx */
 static int imx8m_get_bar_index(struct snd_sof_dev *sdev, u32 type)
 {
-	return type;
-}
-
-static void imx8m_ipc_msg_data(struct snd_sof_dev *sdev,
-			       struct snd_pcm_substream *substream,
-			       void *p, size_t sz)
-{
-	sof_mailbox_read(sdev, sdev->dsp_box.offset, p, sz);
-}
-
-static int imx8m_ipc_pcm_params(struct snd_sof_dev *sdev,
-				struct snd_pcm_substream *substream,
-				const struct sof_ipc_pcm_params_reply *reply)
-{
-	return 0;
+	/* Only IRAM and SRAM bars are valid */
+	switch (type) {
+	case SOF_FW_BLK_TYPE_IRAM:
+	case SOF_FW_BLK_TYPE_SRAM:
+		return type;
+	default:
+		return -EINVAL;
+	}
 }
 
 static struct snd_soc_dai_driver imx8m_dai[] = {
 {
+	.name = "sai1",
+	.playback = {
+		.channels_min = 1,
+		.channels_max = 32,
+	},
+	.capture = {
+		.channels_min = 1,
+		.channels_max = 32,
+	},
+},
+{
 	.name = "sai3",
+	.playback = {
+		.channels_min = 1,
+		.channels_max = 32,
+	},
+	.capture = {
+		.channels_min = 1,
+		.channels_max = 32,
+	},
 },
 };
 
+int imx8m_dsp_set_power_state(struct snd_sof_dev *sdev,
+			  const struct sof_dsp_power_state *target_state)
+{
+	sdev->dsp_power_state = *target_state;
+
+	return 0;
+}
+
 int imx8m_resume(struct snd_sof_dev *sdev)
 {
-	struct imx8m_priv *priv = (struct imx8m_priv *)sdev->private;
+	struct imx8m_priv *priv = (struct imx8m_priv *)sdev->pdata->hw_pdata;
 	int i;
 
-	for (i = 0; i < IMX8M_DSP_CLK_NUM; i++)
-		clk_prepare_enable(priv->clks[i]);
+	imx8m_prepare_clocks(sdev);
 
 	for (i = 0; i < DSP_MU_CHAN_NUM; i++)
 		imx_dsp_request_channel(priv->dsp_ipc, i);
@@ -428,54 +437,75 @@ int imx8m_resume(struct snd_sof_dev *sdev)
 
 int imx8m_suspend(struct snd_sof_dev *sdev)
 {
-	struct imx8m_priv *priv = (struct imx8m_priv *)sdev->private;
+	struct imx8m_priv *priv = (struct imx8m_priv *)sdev->pdata->hw_pdata;
 	int i;
 
 	for (i = 0; i < DSP_MU_CHAN_NUM; i++)
 		imx_dsp_free_channel(priv->dsp_ipc, i);
 
-	for (i = 0; i < IMX8M_DSP_CLK_NUM; i++)
-		clk_disable_unprepare(priv->clks[i]);
+	imx8m_disable_clocks(sdev);
 
 	return 0;
 }
 
 static int imx8m_dsp_runtime_resume(struct snd_sof_dev *sdev)
 {
-	return imx8m_resume(sdev);
+	const struct sof_dsp_power_state target_dsp_state = {
+		.state = SOF_DSP_PM_D0,
+		.substate = 0,
+	};
+
+	imx8m_resume(sdev);
+	return snd_sof_dsp_set_power_state(sdev, &target_dsp_state);
 }
 
 static int imx8m_dsp_runtime_suspend(struct snd_sof_dev *sdev)
 {
-	return imx8m_suspend(sdev);
+	const struct sof_dsp_power_state target_dsp_state = {
+		.state = SOF_DSP_PM_D3,
+		.substate = 0,
+	};
+
+	imx8m_suspend(sdev);
+
+	return snd_sof_dsp_set_power_state(sdev, &target_dsp_state);
 }
 
 static int imx8m_dsp_resume(struct snd_sof_dev *sdev)
 {
-	struct imx8m_priv *priv = (struct imx8m_priv *)sdev->private;
+	const struct sof_dsp_power_state target_dsp_state = {
+		.state = SOF_DSP_PM_D0,
+		.substate = 0,
+	};
 
-	if (priv->suspended) {
-		imx8m_resume(sdev);
-		priv->suspended = false;
+	imx8m_resume(sdev);
+
+	if (pm_runtime_suspended(sdev->dev)) {
+		pm_runtime_disable(sdev->dev);
+		pm_runtime_set_active(sdev->dev);
+		pm_runtime_mark_last_busy(sdev->dev);
+		pm_runtime_enable(sdev->dev);
+		pm_runtime_idle(sdev->dev);
 	}
 
-	return 0;
+	return snd_sof_dsp_set_power_state(sdev, &target_dsp_state);
 }
 
-static int imx8m_dsp_suspend(struct snd_sof_dev *sdev)
+static int imx8m_dsp_suspend(struct snd_sof_dev *sdev, unsigned int target_state)
 {
-	struct imx8m_priv *priv = (struct imx8m_priv *)sdev->private;
+	const struct sof_dsp_power_state target_dsp_state = {
+		.state = target_state,
+		.substate = 0,
+	};
 
-	if (!priv->suspended) {
+	if (!pm_runtime_suspended(sdev->dev))
 		imx8m_suspend(sdev);
-		priv->suspended = true;
-	}
 
-	return 0;
+	return snd_sof_dsp_set_power_state(sdev, &target_dsp_state);
 }
 
 /* i.MX8 ops */
-struct snd_sof_dsp_ops sof_imx8m_ops = {
+static const struct snd_sof_dsp_ops sof_imx8m_ops = {
 	/* probe and remove */
 	.probe		= imx8m_probe,
 	.remove		= imx8m_remove,
@@ -487,14 +517,17 @@ struct snd_sof_dsp_ops sof_imx8m_ops = {
 	.block_read	= sof_block_read,
 	.block_write	= sof_block_write,
 
+	/* Module IO */
+	.read64	= sof_io_read64,
+
 	/* ipc */
 	.send_msg	= imx8m_send_msg,
 	.fw_ready	= sof_fw_ready,
 	.get_mailbox_offset	= imx8m_get_mailbox_offset,
 	.get_window_offset	= imx8m_get_window_offset,
 
-	.ipc_msg_data	= imx8m_ipc_msg_data,
-	.ipc_pcm_params	= imx8m_ipc_pcm_params,
+	.ipc_msg_data	= sof_ipc_msg_data,
+	.ipc_pcm_params	= sof_ipc_pcm_params,
 
 	/* module loading */
 	.load_module	= snd_sof_parse_module_memcpy,
@@ -502,9 +535,18 @@ struct snd_sof_dsp_ops sof_imx8m_ops = {
 	/* firmware loading */
 	.load_firmware	= snd_sof_load_firmware_memcpy,
 
+	/* Debug information */
+	.dbg_dump = imx8_dump,
+
+	/* stream callbacks */
+	.pcm_open	= sof_stream_pcm_open,
+	.pcm_close	= sof_stream_pcm_close,
+	/* Firmware ops */
+	.arch_ops = &sof_xtensa_arch_ops,
+
 	/* DAI drivers */
 	.drv = imx8m_dai,
-	.num_drv = 1, /* we have only 1 ESAI interface on i.MX8 */
+	.num_drv = ARRAY_SIZE(imx8m_dai),
 
 	.suspend	= imx8m_dsp_suspend,
 	.resume		= imx8m_dsp_resume,
@@ -512,12 +554,40 @@ struct snd_sof_dsp_ops sof_imx8m_ops = {
 	.runtime_suspend = imx8m_dsp_runtime_suspend,
 	.runtime_resume = imx8m_dsp_runtime_resume,
 
+	.set_power_state = imx8m_dsp_set_power_state,
+
 	.hw_info = SNDRV_PCM_INFO_MMAP |
 		SNDRV_PCM_INFO_MMAP_VALID |
 		SNDRV_PCM_INFO_INTERLEAVED |
 		SNDRV_PCM_INFO_PAUSE |
 		SNDRV_PCM_INFO_NO_PERIOD_WAKEUP,
 };
-EXPORT_SYMBOL(sof_imx8m_ops);
 
+static struct sof_dev_desc sof_of_imx8mp_desc = {
+	.default_fw_path = "imx/sof",
+	.default_tplg_path = "imx/sof-tplg",
+	.default_fw_filename = "sof-imx8m.ri",
+	.nocodec_tplg_filename = "sof-imx8-nocodec.tplg",
+	.ops = &sof_imx8m_ops,
+};
+
+static const struct of_device_id sof_of_imx8m_ids[] = {
+	{ .compatible = "fsl,imx8mp-dsp", .data = &sof_of_imx8mp_desc},
+	{ }
+};
+MODULE_DEVICE_TABLE(of, sof_of_imx8m_ids);
+
+/* DT driver definition */
+static struct platform_driver snd_sof_of_imx8m_driver = {
+	.probe = sof_of_probe,
+	.remove = sof_of_remove,
+	.driver = {
+		.name = "sof-audio-of-imx8m",
+		.pm = &sof_of_pm,
+		.of_match_table = sof_of_imx8m_ids,
+	},
+};
+module_platform_driver(snd_sof_of_imx8m_driver);
+
+MODULE_IMPORT_NS(SND_SOC_SOF_XTENSA);
 MODULE_LICENSE("Dual BSD/GPL");

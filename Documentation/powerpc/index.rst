@@ -7,6 +7,8 @@ powerpc
 .. toctree::
     :maxdepth: 1
 
+    associativity
+    booting
     bootwrapper
     cpu_families
     cpu_features
@@ -18,8 +20,11 @@ powerpc
     elfnote
     firmware-assisted-dump
     hvcs
+    imc
     isa-versions
+    kaslr-booke32
     mpc52xx
+    papr_hcalls
     pci_iov_resource_on_powernv
     pmu-ebb
     ptrace
@@ -27,6 +32,10 @@ powerpc
     syscall64-abi
     transactional_memory
     ultravisor
+    vas-api
+    vcpudispatch_stats
+
+    features
 
 .. only::  subproject and html
 

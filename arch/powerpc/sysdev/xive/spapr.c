@@ -18,6 +18,7 @@
 #include <linux/delay.h>
 #include <linux/libfdt.h>
 
+#include <asm/machdep.h>
 #include <asm/prom.h>
 #include <asm/io.h>
 #include <asm/smp.h>
@@ -26,6 +27,8 @@
 #include <asm/xive.h>
 #include <asm/xive-regs.h>
 #include <asm/hvcall.h>
+#include <asm/svm.h>
+#include <asm/ultravisor.h>
 
 #include "xive-internal.h"
 
@@ -501,6 +504,9 @@ static int xive_spapr_configure_queue(u32 target, struct xive_q *q, u8 prio,
 		rc = -EIO;
 	} else {
 		q->qpage = qpage;
+		if (is_secure_guest())
+			uv_share_page(PHYS_PFN(qpage_phys),
+					1 << xive_alloc_order(order));
 	}
 fail:
 	return rc;
@@ -534,6 +540,8 @@ static void xive_spapr_cleanup_queue(unsigned int cpu, struct xive_cpu *xc,
 		       hw_cpu, prio);
 
 	alloc_order = xive_alloc_order(xive_queue_shift);
+	if (is_secure_guest())
+		uv_unshare_page(PHYS_PFN(__pa(q->qpage)), 1 << alloc_order);
 	free_pages((unsigned long)q->qpage, alloc_order);
 	q->qpage = NULL;
 }
@@ -541,7 +549,7 @@ static void xive_spapr_cleanup_queue(unsigned int cpu, struct xive_cpu *xc,
 static bool xive_spapr_match(struct device_node *node)
 {
 	/* Ignore cascaded controllers for the moment */
-	return 1;
+	return true;
 }
 
 #ifdef CONFIG_SMP
@@ -620,11 +628,6 @@ static void xive_spapr_update_pending(struct xive_cpu *xc)
 	}
 }
 
-static void xive_spapr_eoi(u32 hw_irq)
-{
-	/* Not used */;
-}
-
 static void xive_spapr_setup_cpu(unsigned int cpu, struct xive_cpu *xc)
 {
 	/* Only some debug on the TIMA settings */
@@ -645,6 +648,21 @@ static void xive_spapr_sync_source(u32 hw_irq)
 	plpar_int_sync(0, hw_irq);
 }
 
+static int xive_spapr_debug_show(struct seq_file *m, void *private)
+{
+	struct xive_irq_bitmap *xibm;
+	char *buf = kmalloc(PAGE_SIZE, GFP_KERNEL);
+
+	list_for_each_entry(xibm, &xive_irq_bitmaps, list) {
+		memset(buf, 0, PAGE_SIZE);
+		bitmap_print_to_pagebuf(true, buf, xibm->bitmap, xibm->count);
+		seq_printf(m, "bitmap #%d: %s", xibm->count, buf);
+	}
+	kfree(buf);
+
+	return 0;
+}
+
 static const struct xive_ops xive_spapr_ops = {
 	.populate_irq_data	= xive_spapr_populate_irq_data,
 	.configure_irq		= xive_spapr_configure_irq,
@@ -654,7 +672,6 @@ static const struct xive_ops xive_spapr_ops = {
 	.match			= xive_spapr_match,
 	.shutdown		= xive_spapr_shutdown,
 	.update_pending		= xive_spapr_update_pending,
-	.eoi			= xive_spapr_eoi,
 	.setup_cpu		= xive_spapr_setup_cpu,
 	.teardown_cpu		= xive_spapr_teardown_cpu,
 	.sync_source		= xive_spapr_sync_source,
@@ -662,6 +679,7 @@ static const struct xive_ops xive_spapr_ops = {
 #ifdef CONFIG_SMP
 	.get_ipi		= xive_spapr_get_ipi,
 	.put_ipi		= xive_spapr_put_ipi,
+	.debug_show		= xive_spapr_debug_show,
 #endif /* CONFIG_SMP */
 	.name			= "spapr",
 };
@@ -744,7 +762,7 @@ static const u8 *get_vec5_feature(unsigned int index)
 	return vec5 + index;
 }
 
-static bool xive_spapr_disabled(void)
+static bool __init xive_spapr_disabled(void)
 {
 	const u8 *vec5_xive;
 
@@ -833,9 +851,11 @@ bool __init xive_spapr_init(void)
 	}
 
 	/* Initialize XIVE core with our backend */
-	if (!xive_core_init(&xive_spapr_ops, tima, TM_QW1_OS, max_prio))
+	if (!xive_core_init(np, &xive_spapr_ops, tima, TM_QW1_OS, max_prio))
 		return false;
 
 	pr_info("Using %dkB queues\n", 1 << (xive_queue_shift - 10));
 	return true;
 }
+
+machine_arch_initcall(pseries, xive_core_debug_init);

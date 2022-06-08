@@ -24,9 +24,9 @@
 #define WMFW_CTL_FLAG_READABLE    0x0001
 
 /* Non-ALSA coefficient types start at 0x1000 */
-#define WMFW_CTL_TYPE_ACKED       0x1000 /* acked control */
-#define WMFW_CTL_TYPE_HOSTEVENT   0x1001 /* event control */
-#define WMFW_CTL_TYPE_HOST_BUFFER 0x1002 /* host buffer pointer */
+#define WMFW_CTL_TYPE_ACKED       ((__force snd_ctl_elem_type_t)0x1000) /* acked control */
+#define WMFW_CTL_TYPE_HOSTEVENT   ((__force snd_ctl_elem_type_t)0x1001) /* event control */
+#define WMFW_CTL_TYPE_HOST_BUFFER ((__force snd_ctl_elem_type_t)0x1002) /* host buffer pointer */
 
 struct wmfw_header {
 	char magic[4];
@@ -180,6 +180,7 @@ struct wmfw_coeff_item {
 
 #define WMFW_ABSOLUTE         0xf0
 #define WMFW_ALGORITHM_DATA   0xf2
+#define WMFW_METADATA         0xfc
 #define WMFW_NAME_TEXT        0xfe
 #define WMFW_INFO_TEXT        0xff
 

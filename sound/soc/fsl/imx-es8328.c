@@ -145,13 +145,13 @@ static int imx_es8328_probe(struct platform_device *pdev)
 	data = devm_kzalloc(dev, sizeof(*data), GFP_KERNEL);
 	if (!data) {
 		ret = -ENOMEM;
-		goto fail;
+		goto put_device;
 	}
 
 	comp = devm_kzalloc(dev, 3 * sizeof(*comp), GFP_KERNEL);
 	if (!comp) {
 		ret = -ENOMEM;
-		goto fail;
+		goto put_device;
 	}
 
 	data->dev = dev;
@@ -182,38 +182,31 @@ static int imx_es8328_probe(struct platform_device *pdev)
 	ret = snd_soc_of_parse_card_name(&data->card, "model");
 	if (ret) {
 		dev_err(dev, "Unable to parse card name\n");
-		goto fail;
+		goto put_device;
 	}
 	ret = snd_soc_of_parse_audio_routing(&data->card, "audio-routing");
 	if (ret) {
 		dev_err(dev, "Unable to parse routing: %d\n", ret);
-		goto fail;
+		goto put_device;
 	}
 	data->card.num_links = 1;
 	data->card.owner = THIS_MODULE;
 	data->card.dai_link = &data->dai;
 
-	ret = snd_soc_register_card(&data->card);
+	ret = devm_snd_soc_register_card(&pdev->dev, &data->card);
 	if (ret) {
 		dev_err(dev, "Unable to register: %d\n", ret);
-		goto fail;
+		goto put_device;
 	}
 
 	platform_set_drvdata(pdev, data);
+put_device:
+	put_device(&ssi_pdev->dev);
 fail:
 	of_node_put(ssi_np);
 	of_node_put(codec_np);
 
 	return ret;
-}
-
-static int imx_es8328_remove(struct platform_device *pdev)
-{
-	struct imx_es8328_data *data = platform_get_drvdata(pdev);
-
-	snd_soc_unregister_card(&data->card);
-
-	return 0;
 }
 
 static const struct of_device_id imx_es8328_dt_ids[] = {
@@ -228,7 +221,6 @@ static struct platform_driver imx_es8328_driver = {
 		.of_match_table = imx_es8328_dt_ids,
 	},
 	.probe = imx_es8328_probe,
-	.remove = imx_es8328_remove,
 };
 module_platform_driver(imx_es8328_driver);
 

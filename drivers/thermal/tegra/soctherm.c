@@ -360,7 +360,7 @@ static struct soctherm_oc_irq_chip_data soc_irq_cdata;
 /**
  * ccroc_writel() - writes a value to a CCROC register
  * @ts: pointer to a struct tegra_soctherm
- * @v: the value to write
+ * @value: the value to write
  * @reg: the register offset
  *
  * Writes @v to @reg.  No return value.
@@ -435,6 +435,7 @@ static int tegra_thermctl_get_temp(void *data, int *out_temp)
 
 /**
  * enforce_temp_range() - check and enforce temperature range [min, max]
+ * @dev: struct device * of the SOC_THERM instance
  * @trip_temp: the trip temperature to check
  *
  * Checks and enforces the permitted temperature range that SOC_THERM
@@ -449,8 +450,8 @@ static int enforce_temp_range(struct device *dev, int trip_temp)
 
 	temp = clamp_val(trip_temp, min_low_temp, max_high_temp);
 	if (temp != trip_temp)
-		dev_info(dev, "soctherm: trip temperature %d forced to %d\n",
-			 trip_temp, temp);
+		dev_dbg(dev, "soctherm: trip temperature %d forced to %d\n",
+			trip_temp, temp);
 	return temp;
 }
 
@@ -747,6 +748,8 @@ static int get_hot_temp(struct thermal_zone_device *tz, int *trip, int *temp)
 /**
  * tegra_soctherm_set_hwtrips() - set HW trip point from DT data
  * @dev: struct device * of the SOC_THERM instance
+ * @sg: pointer to the sensor group to set the thermtrip temperature for
+ * @tz: struct thermal_zone_device *
  *
  * Configure the SOC_THERM HW trip points, setting "THERMTRIP"
  * "THROTTLE" trip points , using "thermtrips", "critical" or "hot"
@@ -931,6 +934,7 @@ static irqreturn_t soctherm_thermal_isr_thread(int irq, void *dev_id)
 
 /**
  * soctherm_oc_intr_enable() - Enables the soctherm over-current interrupt
+ * @ts:		pointer to a struct tegra_soctherm
  * @alarm:		The soctherm throttle id
  * @enable:		Flag indicating enable the soctherm over-current
  *			interrupt or disable it
@@ -1156,7 +1160,7 @@ static void soctherm_oc_irq_enable(struct irq_data *data)
 
 /**
  * soctherm_oc_irq_disable() - Disables overcurrent interrupt requests
- * @irq_data:	The interrupt request information
+ * @data:	The interrupt request information
  *
  * Clears the interrupt request enable bit of the overcurrent
  * interrupt request chip data.
@@ -1206,6 +1210,7 @@ static int soctherm_oc_irq_map(struct irq_domain *h, unsigned int virq,
 /**
  * soctherm_irq_domain_xlate_twocell() - xlate for soctherm interrupts
  * @d:      Interrupt request domain
+ * @ctrlr:      Controller device tree node
  * @intspec:    Array of u32s from DTs "interrupt" property
  * @intsize:    Number of values inside the intspec array
  * @out_hwirq:  HW IRQ value associated with this interrupt
@@ -1681,6 +1686,7 @@ err:
 /**
  * soctherm_init_hw_throt_cdev() - Parse the HW throttle configurations
  * and register them as cooling devices.
+ * @pdev: Pointer to platform_device struct
  */
 static void soctherm_init_hw_throt_cdev(struct platform_device *pdev)
 {
@@ -1751,6 +1757,7 @@ static void soctherm_init_hw_throt_cdev(struct platform_device *pdev)
 
 /**
  * throttlectl_cpu_level_cfg() - programs CCROC NV_THERM level config
+ * @ts: pointer to a struct tegra_soctherm
  * @level: describing the level LOW/MED/HIGH of throttling
  *
  * It's necessary to set up the CPU-local CCROC NV_THERM instance with
@@ -1798,6 +1805,7 @@ static void throttlectl_cpu_level_cfg(struct tegra_soctherm *ts, int level)
 
 /**
  * throttlectl_cpu_level_select() - program CPU pulse skipper config
+ * @ts: pointer to a struct tegra_soctherm
  * @throt: the LIGHT/HEAVY of throttle event id
  *
  * Pulse skippers are used to throttle clock frequencies.  This
@@ -1841,6 +1849,7 @@ static void throttlectl_cpu_level_select(struct tegra_soctherm *ts,
 
 /**
  * throttlectl_cpu_mn() - program CPU pulse skipper configuration
+ * @ts: pointer to a struct tegra_soctherm
  * @throt: the LIGHT/HEAVY of throttle event id
  *
  * Pulse skippers are used to throttle clock frequencies.  This
@@ -1874,6 +1883,7 @@ static void throttlectl_cpu_mn(struct tegra_soctherm *ts,
 
 /**
  * throttlectl_gpu_level_select() - selects throttling level for GPU
+ * @ts: pointer to a struct tegra_soctherm
  * @throt: the LIGHT/HEAVY of throttle event id
  *
  * This function programs soctherm's interface to GK20a NV_THERM to select
@@ -1918,6 +1928,7 @@ static int soctherm_oc_cfg_program(struct tegra_soctherm *ts,
 
 /**
  * soctherm_throttle_program() - programs pulse skippers' configuration
+ * @ts: pointer to a struct tegra_soctherm
  * @throt: the LIGHT/HEAVY of the throttle event id.
  *
  * Pulse skippers are used to throttle clock frequencies.
@@ -2107,7 +2118,6 @@ static int tegra_soctherm_probe(struct platform_device *pdev)
 	struct tegra_soctherm *tegra;
 	struct thermal_zone_device *z;
 	struct tsensor_shared_calib shared_calib;
-	struct resource *res;
 	struct tegra_soctherm_soc *soc;
 	unsigned int i;
 	int err;
@@ -2129,26 +2139,20 @@ static int tegra_soctherm_probe(struct platform_device *pdev)
 
 	tegra->soc = soc;
 
-	res = platform_get_resource_byname(pdev, IORESOURCE_MEM,
-					   "soctherm-reg");
-	tegra->regs = devm_ioremap_resource(&pdev->dev, res);
+	tegra->regs = devm_platform_ioremap_resource_byname(pdev, "soctherm-reg");
 	if (IS_ERR(tegra->regs)) {
 		dev_err(&pdev->dev, "can't get soctherm registers");
 		return PTR_ERR(tegra->regs);
 	}
 
 	if (!tegra->soc->use_ccroc) {
-		res = platform_get_resource_byname(pdev, IORESOURCE_MEM,
-						   "car-reg");
-		tegra->clk_regs = devm_ioremap_resource(&pdev->dev, res);
+		tegra->clk_regs = devm_platform_ioremap_resource_byname(pdev, "car-reg");
 		if (IS_ERR(tegra->clk_regs)) {
 			dev_err(&pdev->dev, "can't get car clk registers");
 			return PTR_ERR(tegra->clk_regs);
 		}
 	} else {
-		res = platform_get_resource_byname(pdev, IORESOURCE_MEM,
-						   "ccroc-reg");
-		tegra->ccroc_regs = devm_ioremap_resource(&pdev->dev, res);
+		tegra->ccroc_regs = devm_platform_ioremap_resource_byname(pdev, "ccroc-reg");
 		if (IS_ERR(tegra->ccroc_regs)) {
 			dev_err(&pdev->dev, "can't get ccroc registers");
 			return PTR_ERR(tegra->ccroc_regs);
@@ -2184,7 +2188,7 @@ static int tegra_soctherm_probe(struct platform_device *pdev)
 	if (err)
 		return err;
 
-	/* calculate tsensor calibaration data */
+	/* calculate tsensor calibration data */
 	for (i = 0; i < soc->num_tsensors; ++i) {
 		err = tegra_calc_tsensor_calib(&soc->tsensors[i],
 					       &shared_calib,

@@ -4,6 +4,7 @@
  *	Dong Aisheng <aisheng.dong@nxp.com>
  */
 
+#include <dt-bindings/clock/imx8-lpcg.h>
 #include <dt-bindings/firmware/imx/rsrc.h>
 
 audio_subsys: bus@59000000 {
@@ -19,130 +20,28 @@ audio_subsys: bus@59000000 {
 		clock-output-names = "audio_ipg_clk";
 	};
 
-	edma0: dma-controller@591F0000 {
-		compatible = "fsl,imx8qm-edma";
-		reg = <0x59200000 0x10000>, /* asrc0 */
-			<0x59210000 0x10000>,
-			<0x59220000 0x10000>,
-			<0x59230000 0x10000>,
-			<0x59240000 0x10000>,
-			<0x59250000 0x10000>,
-			<0x59260000 0x10000>, /* esai0 rx */
-			<0x59270000 0x10000>, /* esai0 tx */
-			<0x59280000 0x10000>, /* spdif0 rx */
-			<0x59290000 0x10000>, /* spdif0 tx */
-			<0x592c0000 0x10000>, /* sai0 rx */
-			<0x592d0000 0x10000>, /* sai0 tx */
-			<0x592e0000 0x10000>, /* sai1 rx */
-			<0x592f0000 0x10000>, /* sai1 tx */
-			<0x59300000 0x10000>, /* sai2 rx */
-			<0x59310000 0x10000>, /* sai3 rx */
-			<0x59350000 0x10000>,
-			<0x59370000 0x10000>;
-		#dma-cells = <3>;
-		shared-interrupt;
-		dma-channels = <18>;
-		interrupts = <GIC_SPI 374 IRQ_TYPE_LEVEL_HIGH>, /* asrc 0 */
-				<GIC_SPI 375 IRQ_TYPE_LEVEL_HIGH>,
-				<GIC_SPI 376 IRQ_TYPE_LEVEL_HIGH>,
-				<GIC_SPI 377 IRQ_TYPE_LEVEL_HIGH>,
-				<GIC_SPI 378 IRQ_TYPE_LEVEL_HIGH>,
-				<GIC_SPI 379 IRQ_TYPE_LEVEL_HIGH>,
-				<GIC_SPI 410 IRQ_TYPE_LEVEL_HIGH>, /* esai0 */
-				<GIC_SPI 410 IRQ_TYPE_LEVEL_HIGH>,
-				<GIC_SPI 457 IRQ_TYPE_LEVEL_HIGH>, /* spdif0 */
-				<GIC_SPI 459 IRQ_TYPE_LEVEL_HIGH>,
-				<GIC_SPI 315 IRQ_TYPE_LEVEL_HIGH>, /* sai0 */
-				<GIC_SPI 315 IRQ_TYPE_LEVEL_HIGH>,
-				<GIC_SPI 317 IRQ_TYPE_LEVEL_HIGH>, /* sai1 */
-				<GIC_SPI 317 IRQ_TYPE_LEVEL_HIGH>,
-				<GIC_SPI 319 IRQ_TYPE_LEVEL_HIGH>, /* sai2 */
-				<GIC_SPI 324 IRQ_TYPE_LEVEL_HIGH>, /* sai3 */
-				<GIC_SPI 391 IRQ_TYPE_LEVEL_HIGH>,
-				<GIC_SPI 393 IRQ_TYPE_LEVEL_HIGH>;
-		interrupt-names = "edma0-chan0-rx", "edma0-chan1-rx", /* asrc0 */
-				"edma0-chan2-rx", "edma0-chan3-tx",
-				"edma0-chan4-tx", "edma0-chan5-tx",
-				"edma0-chan6-rx", "edma0-chan7-tx", /* esai0 */
-				"edma0-chan8-rx", "edma0-chan9-tx", /* spdif0 */
-				"edma0-chan12-rx", "edma0-chan13-tx", /* sai0 */
-				"edma0-chan14-rx", "edma0-chan15-tx", /* sai1 */
-				"edma0-chan16-rx", "edma0-chan17-rx", /* sai2, sai3 */
-				"edma0-chan21-tx",              /* gpt5 */
-				"edma0-chan23-rx";              /* gpt7 */
-		power-domains = <&pd IMX_SC_R_DMA_0_CH0>,
-				<&pd IMX_SC_R_DMA_0_CH1>,
-				<&pd IMX_SC_R_DMA_0_CH2>,
-				<&pd IMX_SC_R_DMA_0_CH3>,
-				<&pd IMX_SC_R_DMA_0_CH4>,
-				<&pd IMX_SC_R_DMA_0_CH5>,
-				<&pd IMX_SC_R_DMA_0_CH6>,
-				<&pd IMX_SC_R_DMA_0_CH7>,
-				<&pd IMX_SC_R_DMA_0_CH8>,
-				<&pd IMX_SC_R_DMA_0_CH9>,
-				<&pd IMX_SC_R_DMA_0_CH12>,
-				<&pd IMX_SC_R_DMA_0_CH13>,
-				<&pd IMX_SC_R_DMA_0_CH14>,
-				<&pd IMX_SC_R_DMA_0_CH15>,
-				<&pd IMX_SC_R_DMA_0_CH16>,
-				<&pd IMX_SC_R_DMA_0_CH17>,
-				<&pd IMX_SC_R_DMA_0_CH21>,
-				<&pd IMX_SC_R_DMA_0_CH23>;
-		power-domain-names = "edma0-chan0", "edma0-chan1",
-				     "edma0-chan2", "edma0-chan3",
-				     "edma0-chan4", "edma0-chan5",
-				     "edma0-chan6", "edma0-chan7",
-				     "edma0-chan8", "edma0-chan9",
-				     "edma0-chan12", "edma0-chan13",
-				     "edma0-chan14", "edma0-chan15",
-				     "edma0-chan16", "edma0-chan17",
-				     "edma0-chan21", "edma0-chan23";
-		status = "okay";
+	dsp_lpcg: clock-controller@59580000 {
+		compatible = "fsl,imx8qxp-lpcg";
+		reg = <0x59580000 0x10000>;
+		#clock-cells = <1>;
+		clocks = <&audio_ipg_clk>,
+			 <&audio_ipg_clk>,
+			 <&audio_ipg_clk>;
+		bit-offset = <16 20 28>;
+		clock-output-names = "dsp_lpcg_adb_clk",
+				     "dsp_lpcg_ipg_clk",
+				     "dsp_lpcg_core_clk";
+		power-domains = <&pd IMX_SC_R_DSP>;
 	};
 
-	edma1: dma-controller@599F0000 {
-		compatible = "fsl,imx8qm-edma";
-		reg = <0x59A00000 0x10000>, /* asrc1 */
-			<0x59A10000 0x10000>,
-			<0x59A20000 0x10000>,
-			<0x59A30000 0x10000>,
-			<0x59A40000 0x10000>,
-			<0x59A50000 0x10000>,
-			<0x59A80000 0x10000>, /* sai4 rx */
-			<0x59A90000 0x10000>, /* sai4 tx */
-			<0x59AA0000 0x10000>; /* sai5 tx */
-		#dma-cells = <3>;
-		shared-interrupt;
-		dma-channels = <9>;
-		interrupts = <GIC_SPI 382 IRQ_TYPE_LEVEL_HIGH>, /* asrc 1 */
-				<GIC_SPI 383 IRQ_TYPE_LEVEL_HIGH>,
-				<GIC_SPI 384 IRQ_TYPE_LEVEL_HIGH>,
-				<GIC_SPI 385 IRQ_TYPE_LEVEL_HIGH>,
-				<GIC_SPI 386 IRQ_TYPE_LEVEL_HIGH>,
-				<GIC_SPI 387 IRQ_TYPE_LEVEL_HIGH>,
-				<GIC_SPI 330 IRQ_TYPE_LEVEL_HIGH>, /* sai4 */
-				<GIC_SPI 330 IRQ_TYPE_LEVEL_HIGH>,
-				<GIC_SPI 332 IRQ_TYPE_LEVEL_HIGH>; /* sai5 */
-		interrupt-names = "edma1-chan0-rx", "edma1-chan1-rx", /* asrc1 */
-				"edma1-chan2-rx", "edma1-chan3-tx",
-				"edma1-chan4-tx", "edma1-chan5-tx",
-				"edma1-chan8-rx", "edma1-chan9-tx", /* sai4 */
-				"edma1-chan10-tx";                 /* sai5 */
-		power-domains = <&pd IMX_SC_R_DMA_1_CH0>,
-				<&pd IMX_SC_R_DMA_1_CH1>,
-				<&pd IMX_SC_R_DMA_1_CH2>,
-				<&pd IMX_SC_R_DMA_1_CH3>,
-				<&pd IMX_SC_R_DMA_1_CH4>,
-				<&pd IMX_SC_R_DMA_1_CH5>,
-				<&pd IMX_SC_R_DMA_1_CH8>,
-				<&pd IMX_SC_R_DMA_1_CH9>,
-				<&pd IMX_SC_R_DMA_1_CH10>;
-		power-domain-names = "edma1-chan0", "edma1-chan1",
-				     "edma1-chan2", "edma1-chan3",
-				     "edma1-chan4", "edma1-chan5",
-				     "edma1-chan8", "edma1-chan9",
-				     "edma1-chan10";
-		status = "okay";
+	dsp_ram_lpcg: clock-controller@59590000 {
+		compatible = "fsl,imx8qxp-lpcg";
+		reg = <0x59590000 0x10000>;
+		#clock-cells = <1>;
+		clocks = <&audio_ipg_clk>;
+		bit-offset = <16>;
+		clock-output-names = "dsp_ram_lpcg_ipg_clk";
+		power-domains = <&pd IMX_SC_R_DSP_RAM>;
 	};
 
 	acm: acm@59e00000 {
@@ -169,7 +68,7 @@ audio_subsys: bus@59000000 {
 	};
 
 	asrc0: asrc@59000000 {
-		compatible = "fsl,imx8qm-asrc0";
+		compatible = "fsl,imx8qm-asrc";
 		reg = <0x59000000 0x10000>;
 		interrupts = <GIC_SPI 372 IRQ_TYPE_LEVEL_HIGH>,
 			<GIC_SPI 373 IRQ_TYPE_LEVEL_HIGH>;
@@ -204,6 +103,7 @@ audio_subsys: bus@59000000 {
 				"txa", "txb", "txc";
 		fsl,asrc-rate  = <8000>;
 		fsl,asrc-width = <16>;
+		fsl,asrc-clk-map = <0>;
 		power-domains = <&pd IMX_SC_R_ASRC_0>;
 		status = "disabled";
         };
@@ -340,7 +240,7 @@ audio_subsys: bus@59000000 {
 	};
 
 	asrc1: asrc@59800000 {
-		compatible = "fsl,imx8qm-asrc1";
+		compatible = "fsl,imx8qm-asrc";
 		reg = <0x59800000 0x10000>;
 		interrupts = <GIC_SPI 380 IRQ_TYPE_LEVEL_HIGH>,
 			<GIC_SPI 381 IRQ_TYPE_LEVEL_HIGH>;
@@ -375,6 +275,7 @@ audio_subsys: bus@59000000 {
 				"txa", "txb", "txc";
 		fsl,asrc-rate  = <8000>;
 		fsl,asrc-width = <16>;
+		fsl,asrc-clk-map = <1>;
 		power-domains = <&pd IMX_SC_R_ASRC_1>;
 		status = "disabled";
 	};
@@ -429,6 +330,134 @@ audio_subsys: bus@59000000 {
 		clock-names = "core", "mclk";
 		power-domains = <&pd IMX_SC_R_MQS_0>;
 		status = "disabled";
+	};
+
+	edma0: dma-controller@591F0000 {
+		compatible = "fsl,imx8qm-edma";
+		reg =	<0x591f0000 0x10000>,
+			<0x59200000 0x10000>, /* asrc0 */
+			<0x59210000 0x10000>,
+			<0x59220000 0x10000>,
+			<0x59230000 0x10000>,
+			<0x59240000 0x10000>,
+			<0x59250000 0x10000>,
+			<0x59260000 0x10000>, /* esai0 rx */
+			<0x59270000 0x10000>, /* esai0 tx */
+			<0x59280000 0x10000>, /* spdif0 rx */
+			<0x59290000 0x10000>, /* spdif0 tx */
+			<0x592c0000 0x10000>, /* sai0 rx */
+			<0x592d0000 0x10000>, /* sai0 tx */
+			<0x592e0000 0x10000>, /* sai1 rx */
+			<0x592f0000 0x10000>, /* sai1 tx */
+			<0x59300000 0x10000>, /* sai2 rx */
+			<0x59310000 0x10000>, /* sai3 rx */
+			<0x59350000 0x10000>,
+			<0x59370000 0x10000>;
+		#dma-cells = <3>;
+		shared-interrupt;
+		dma-channels = <18>;
+		interrupts = <GIC_SPI 374 IRQ_TYPE_LEVEL_HIGH>, /* asrc 0 */
+				<GIC_SPI 375 IRQ_TYPE_LEVEL_HIGH>,
+				<GIC_SPI 376 IRQ_TYPE_LEVEL_HIGH>,
+				<GIC_SPI 377 IRQ_TYPE_LEVEL_HIGH>,
+				<GIC_SPI 378 IRQ_TYPE_LEVEL_HIGH>,
+				<GIC_SPI 379 IRQ_TYPE_LEVEL_HIGH>,
+				<GIC_SPI 410 IRQ_TYPE_LEVEL_HIGH>, /* esai0 */
+				<GIC_SPI 410 IRQ_TYPE_LEVEL_HIGH>,
+				<GIC_SPI 457 IRQ_TYPE_LEVEL_HIGH>, /* spdif0 */
+				<GIC_SPI 459 IRQ_TYPE_LEVEL_HIGH>,
+				<GIC_SPI 315 IRQ_TYPE_LEVEL_HIGH>, /* sai0 */
+				<GIC_SPI 315 IRQ_TYPE_LEVEL_HIGH>,
+				<GIC_SPI 317 IRQ_TYPE_LEVEL_HIGH>, /* sai1 */
+				<GIC_SPI 317 IRQ_TYPE_LEVEL_HIGH>,
+				<GIC_SPI 319 IRQ_TYPE_LEVEL_HIGH>, /* sai2 */
+				<GIC_SPI 324 IRQ_TYPE_LEVEL_HIGH>, /* sai3 */
+				<GIC_SPI 391 IRQ_TYPE_LEVEL_HIGH>,
+				<GIC_SPI 393 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-names = "edma0-chan0-rx", "edma0-chan1-rx", /* asrc0 */
+				"edma0-chan2-rx", "edma0-chan3-tx",
+				"edma0-chan4-tx", "edma0-chan5-tx",
+				"edma0-chan6-rx", "edma0-chan7-tx", /* esai0 */
+				"edma0-chan8-rx", "edma0-chan9-tx", /* spdif0 */
+				"edma0-chan12-rx", "edma0-chan13-tx", /* sai0 */
+				"edma0-chan14-rx", "edma0-chan15-tx", /* sai1 */
+				"edma0-chan16-rx", "edma0-chan17-rx", /* sai2, sai3 */
+				"edma0-chan21-tx",              /* gpt5 */
+				"edma0-chan23-rx";              /* gpt7 */
+		power-domains = <&pd IMX_SC_R_DMA_0_CH0>,
+				<&pd IMX_SC_R_DMA_0_CH1>,
+				<&pd IMX_SC_R_DMA_0_CH2>,
+				<&pd IMX_SC_R_DMA_0_CH3>,
+				<&pd IMX_SC_R_DMA_0_CH4>,
+				<&pd IMX_SC_R_DMA_0_CH5>,
+				<&pd IMX_SC_R_DMA_0_CH6>,
+				<&pd IMX_SC_R_DMA_0_CH7>,
+				<&pd IMX_SC_R_DMA_0_CH8>,
+				<&pd IMX_SC_R_DMA_0_CH9>,
+				<&pd IMX_SC_R_DMA_0_CH12>,
+				<&pd IMX_SC_R_DMA_0_CH13>,
+				<&pd IMX_SC_R_DMA_0_CH14>,
+				<&pd IMX_SC_R_DMA_0_CH15>,
+				<&pd IMX_SC_R_DMA_0_CH16>,
+				<&pd IMX_SC_R_DMA_0_CH17>,
+				<&pd IMX_SC_R_DMA_0_CH21>,
+				<&pd IMX_SC_R_DMA_0_CH23>;
+		power-domain-names = "edma0-chan0", "edma0-chan1",
+				     "edma0-chan2", "edma0-chan3",
+				     "edma0-chan4", "edma0-chan5",
+				     "edma0-chan6", "edma0-chan7",
+				     "edma0-chan8", "edma0-chan9",
+				     "edma0-chan12", "edma0-chan13",
+				     "edma0-chan14", "edma0-chan15",
+				     "edma0-chan16", "edma0-chan17",
+				     "edma0-chan21", "edma0-chan23";
+		status = "okay";
+	};
+
+	edma1: dma-controller@599F0000 {
+		compatible = "fsl,imx8qm-edma";
+		reg =	<0x599F0000 0x10000>,
+			<0x59A00000 0x10000>, /* asrc1 */
+			<0x59A10000 0x10000>,
+			<0x59A20000 0x10000>,
+			<0x59A30000 0x10000>,
+			<0x59A40000 0x10000>,
+			<0x59A50000 0x10000>,
+			<0x59A80000 0x10000>, /* sai4 rx */
+			<0x59A90000 0x10000>, /* sai4 tx */
+			<0x59AA0000 0x10000>; /* sai5 tx */
+		#dma-cells = <3>;
+		shared-interrupt;
+		dma-channels = <9>;
+		interrupts = <GIC_SPI 382 IRQ_TYPE_LEVEL_HIGH>, /* asrc 1 */
+				<GIC_SPI 383 IRQ_TYPE_LEVEL_HIGH>,
+				<GIC_SPI 384 IRQ_TYPE_LEVEL_HIGH>,
+				<GIC_SPI 385 IRQ_TYPE_LEVEL_HIGH>,
+				<GIC_SPI 386 IRQ_TYPE_LEVEL_HIGH>,
+				<GIC_SPI 387 IRQ_TYPE_LEVEL_HIGH>,
+				<GIC_SPI 330 IRQ_TYPE_LEVEL_HIGH>, /* sai4 */
+				<GIC_SPI 330 IRQ_TYPE_LEVEL_HIGH>,
+				<GIC_SPI 332 IRQ_TYPE_LEVEL_HIGH>; /* sai5 */
+		interrupt-names = "edma1-chan0-rx", "edma1-chan1-rx", /* asrc1 */
+				"edma1-chan2-rx", "edma1-chan3-tx",
+				"edma1-chan4-tx", "edma1-chan5-tx",
+				"edma1-chan8-rx", "edma1-chan9-tx", /* sai4 */
+				"edma1-chan10-tx";                 /* sai5 */
+		power-domains = <&pd IMX_SC_R_DMA_1_CH0>,
+				<&pd IMX_SC_R_DMA_1_CH1>,
+				<&pd IMX_SC_R_DMA_1_CH2>,
+				<&pd IMX_SC_R_DMA_1_CH3>,
+				<&pd IMX_SC_R_DMA_1_CH4>,
+				<&pd IMX_SC_R_DMA_1_CH5>,
+				<&pd IMX_SC_R_DMA_1_CH8>,
+				<&pd IMX_SC_R_DMA_1_CH9>,
+				<&pd IMX_SC_R_DMA_1_CH10>;
+		power-domain-names = "edma1-chan0", "edma1-chan1",
+				     "edma1-chan2", "edma1-chan3",
+				     "edma1-chan4", "edma1-chan5",
+				     "edma1-chan8", "edma1-chan9",
+				     "edma1-chan10";
+		status = "okay";
 	};
 
 	asrc0_lpcg: clock-controller@59400000 {
@@ -524,30 +553,6 @@ audio_subsys: bus@59000000 {
 		clock-output-names = "sai3_lpcg_mclk",
 				     "sai3_lpcg_ipg_clk";
 		power-domains = <&pd IMX_SC_R_SAI_3>;
-	};
-
-	dsp_lpcg: clock-controller@59580000 {
-		compatible = "fsl,imx8qxp-lpcg";
-		reg = <0x59580000 0x10000>;
-		#clock-cells = <1>;
-		clocks = <&audio_ipg_clk>,
-			 <&audio_ipg_clk>,
-			 <&audio_ipg_clk>;
-		bit-offset = <16 20 28>;
-		clock-output-names = "dsp_lpcg_adb_aclk",
-				     "dsp_lpcg_ipg_clk",
-				     "dsp_lpcg_core_clk";
-		power-domains = <&pd IMX_SC_R_DSP>;
-	};
-
-	dsp_ram_lpcg: clock-controller@59590000 {
-		compatible = "fsl,imx8qxp-lpcg";
-		reg = <0x59590000 0x10000>;
-		#clock-cells = <1>;
-		clocks = <&audio_ipg_clk>;
-		bit-offset = <16>;
-		clock-output-names = "dsp_ram_lpcg_ipg_clk";
-		power-domains = <&pd IMX_SC_R_DSP_RAM>;
 	};
 
 	asrc1_lpcg: clock-controller@59c00000 {

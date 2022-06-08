@@ -24,8 +24,10 @@
 #ifndef __SOC15_IH_CLIENTID_H__
 #define __SOC15_IH_CLIENTID_H__
 
- /*
-  * vega10+ IH clients
+/*
+ * Vega10+ IH clients
+ * Whenever this structure is updated, which should not happen, make sure
+ * soc15_ih_clientid_name in the below is also updated accordingly.
  */
 enum soc15_ih_clientid {
 	SOC15_IH_CLIENTID_IH		= 0x00,
@@ -54,6 +56,7 @@ enum soc15_ih_clientid {
 	SOC15_IH_CLIENTID_DF		= 0x17,
 	SOC15_IH_CLIENTID_VCE1		= 0x18,
 	SOC15_IH_CLIENTID_PWR		= 0x19,
+	SOC15_IH_CLIENTID_RESERVED	= 0x1a,
 	SOC15_IH_CLIENTID_UTCL2		= 0x1b,
 	SOC15_IH_CLIENTID_EA		= 0x1c,
 	SOC15_IH_CLIENTID_UTCL2LOG	= 0x1d,
@@ -66,12 +69,15 @@ enum soc15_ih_clientid {
 	SOC15_IH_CLIENTID_VCN1		= SOC15_IH_CLIENTID_UVD1,
 	SOC15_IH_CLIENTID_SDMA2		= SOC15_IH_CLIENTID_ACP,
 	SOC15_IH_CLIENTID_SDMA3		= SOC15_IH_CLIENTID_DCE,
+	SOC15_IH_CLIENTID_SDMA3_Sienna_Cichlid    = SOC15_IH_CLIENTID_ISP,
 	SOC15_IH_CLIENTID_SDMA4		= SOC15_IH_CLIENTID_ISP,
 	SOC15_IH_CLIENTID_SDMA5		= SOC15_IH_CLIENTID_VCE0,
 	SOC15_IH_CLIENTID_SDMA6		= SOC15_IH_CLIENTID_XDMA,
 	SOC15_IH_CLIENTID_SDMA7		= SOC15_IH_CLIENTID_VCE1,
 	SOC15_IH_CLIENTID_VMC1		= SOC15_IH_CLIENTID_PCIE0,
 };
+
+extern const char *soc15_ih_clientid_name[];
 
 #endif
 

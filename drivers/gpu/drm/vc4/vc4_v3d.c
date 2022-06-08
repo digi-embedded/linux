@@ -10,8 +10,6 @@
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 
-#include <drm/drm_irq.h>
-
 #include "vc4_drv.h"
 #include "vc4_regs.h"
 
@@ -122,7 +120,7 @@ static int vc4_v3d_debugfs_ident(struct seq_file *m, void *unused)
 	return 0;
 }
 
-/**
+/*
  * Wraps pm_runtime_get_sync() in a refcount, so that we can reliably
  * get the pm_runtime refcount to 0 in vc4_reset().
  */
@@ -168,7 +166,7 @@ static void vc4_v3d_init_hw(struct drm_device *dev)
 
 int vc4_v3d_get_bin_slot(struct vc4_dev *vc4)
 {
-	struct drm_device *dev = vc4->dev;
+	struct drm_device *dev = &vc4->base;
 	unsigned long irqflags;
 	int slot;
 	uint64_t seqno = 0;
@@ -205,7 +203,7 @@ try_again:
 	return -ENOMEM;
 }
 
-/**
+/*
  * bin_bo_alloc() - allocates the memory that will be used for
  * tile binning.
  *
@@ -246,7 +244,7 @@ static int bin_bo_alloc(struct vc4_dev *vc4)
 	INIT_LIST_HEAD(&list);
 
 	while (true) {
-		struct vc4_bo *bo = vc4_bo_create(vc4->dev, size, true,
+		struct vc4_bo *bo = vc4_bo_create(&vc4->base, size, true,
 						  VC4_BO_TYPE_BIN);
 
 		if (IS_ERR(bo)) {
@@ -308,7 +306,7 @@ static int bin_bo_alloc(struct vc4_dev *vc4)
 						    struct vc4_bo, unref_head);
 
 		list_del(&bo->unref_head);
-		drm_gem_object_put_unlocked(&bo->base.base);
+		drm_gem_object_put(&bo->base.base);
 	}
 
 	return ret;
@@ -344,7 +342,7 @@ static void bin_bo_release(struct kref *ref)
 	if (WARN_ON_ONCE(!vc4->bin_bo))
 		return;
 
-	drm_gem_object_put_unlocked(&vc4->bin_bo->base.base);
+	drm_gem_object_put(&vc4->bin_bo->base.base);
 	vc4->bin_bo = NULL;
 }
 
@@ -361,7 +359,7 @@ static int vc4_v3d_runtime_suspend(struct device *dev)
 	struct vc4_v3d *v3d = dev_get_drvdata(dev);
 	struct vc4_dev *vc4 = v3d->vc4;
 
-	vc4_irq_uninstall(vc4->dev);
+	vc4_irq_disable(&vc4->base);
 
 	clk_disable_unprepare(v3d->clk);
 
@@ -378,11 +376,11 @@ static int vc4_v3d_runtime_resume(struct device *dev)
 	if (ret != 0)
 		return ret;
 
-	vc4_v3d_init_hw(vc4->dev);
+	vc4_v3d_init_hw(&vc4->base);
 
 	/* We disabled the IRQ as part of vc4_irq_uninstall in suspend. */
-	enable_irq(vc4->dev->irq);
-	vc4_irq_postinstall(vc4->dev);
+	enable_irq(vc4->irq);
+	vc4_irq_enable(&vc4->base);
 
 	return 0;
 }
@@ -448,7 +446,12 @@ static int vc4_v3d_bind(struct device *dev, struct device *master, void *data)
 
 	vc4_v3d_init_hw(drm);
 
-	ret = drm_irq_install(drm, platform_get_irq(pdev, 0));
+	ret = platform_get_irq(pdev, 0);
+	if (ret < 0)
+		return ret;
+	vc4->irq = ret;
+
+	ret = vc4_irq_install(drm, vc4->irq);
 	if (ret) {
 		DRM_ERROR("Failed to install IRQ handler\n");
 		return ret;
@@ -473,7 +476,7 @@ static void vc4_v3d_unbind(struct device *dev, struct device *master,
 
 	pm_runtime_disable(dev);
 
-	drm_irq_uninstall(drm);
+	vc4_irq_uninstall(drm);
 
 	/* Disable the binner's overflow memory address, so the next
 	 * driver probe (if any) doesn't try to reuse our old

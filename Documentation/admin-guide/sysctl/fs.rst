@@ -261,7 +261,7 @@ directories like /tmp. The common method of exploitation of this flaw
 is to cross privilege boundaries when following a given symlink (i.e. a
 root process follows a symlink belonging to another user). For a likely
 incomplete list of hundreds of examples across the years, please see:
-http://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=/tmp
+https://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=/tmp
 
 When set to "0", symlink following behavior is unrestricted.
 
@@ -380,5 +380,5 @@ This configuration option sets the maximum number of "watches" that are
 allowed for each user.
 Each "watch" costs roughly 90 bytes on a 32bit kernel, and roughly 160 bytes
 on a 64bit one.
-The current default value for  max_user_watches  is the 1/32 of the available
-low memory, divided for the "watch" cost in bytes.
+The current default value for  max_user_watches  is the 1/25 (4%) of the
+available low memory, divided for the "watch" cost in bytes.

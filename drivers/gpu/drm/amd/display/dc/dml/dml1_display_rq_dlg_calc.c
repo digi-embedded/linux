@@ -243,7 +243,7 @@ void dml1_extract_rq_regs(
 	rq_regs->rq_regs_l.swath_height = dml_log2(rq_param.dlg.rq_l.swath_height);
 	rq_regs->rq_regs_c.swath_height = dml_log2(rq_param.dlg.rq_c.swath_height);
 
-	/* FIXME: take the max between luma, chroma chunk size?
+	/* TODO: take the max between luma, chroma chunk size?
 	 * okay for now, as we are setting chunk_bytes to 8kb anyways
 	 */
 	if (rq_param.sizing.rq_l.chunk_bytes >= 32 * 1024) { /*32kb */
@@ -344,13 +344,31 @@ static void handle_det_buf_split(
 	if (surf_linear) {
 		log2_swath_height_l = 0;
 		log2_swath_height_c = 0;
-	} else if (!surf_vert) {
-		log2_swath_height_l = dml_log2(rq_param->misc.rq_l.blk256_height) - req128_l;
-		log2_swath_height_c = dml_log2(rq_param->misc.rq_c.blk256_height) - req128_c;
 	} else {
-		log2_swath_height_l = dml_log2(rq_param->misc.rq_l.blk256_width) - req128_l;
-		log2_swath_height_c = dml_log2(rq_param->misc.rq_c.blk256_width) - req128_c;
+		unsigned int swath_height_l;
+		unsigned int swath_height_c;
+
+		if (!surf_vert) {
+			swath_height_l = rq_param->misc.rq_l.blk256_height;
+			swath_height_c = rq_param->misc.rq_c.blk256_height;
+		} else {
+			swath_height_l = rq_param->misc.rq_l.blk256_width;
+			swath_height_c = rq_param->misc.rq_c.blk256_width;
+		}
+
+		if (swath_height_l > 0)
+			log2_swath_height_l = dml_log2(swath_height_l);
+
+		if (req128_l && log2_swath_height_l > 0)
+			log2_swath_height_l -= 1;
+
+		if (swath_height_c > 0)
+			log2_swath_height_c = dml_log2(swath_height_c);
+
+		if (req128_c && log2_swath_height_c > 0)
+			log2_swath_height_c -= 1;
 	}
+
 	rq_param->dlg.rq_l.swath_height = 1 << log2_swath_height_l;
 	rq_param->dlg.rq_c.swath_height = 1 << log2_swath_height_c;
 
@@ -438,7 +456,7 @@ static void dml1_rq_dlg_get_row_heights(
 	log2_meta_req_bytes = 6; /* meta request is 64b and is 8x8byte meta element */
 
 	/* each 64b meta request for dcn is 8x8 meta elements and
-	 * a meta element covers one 256b block of the the data surface.
+	 * a meta element covers one 256b block of the data surface.
 	 */
 	log2_meta_req_height = log2_blk256_height + 3; /* meta req is 8x8 */
 	log2_meta_req_width = log2_meta_req_bytes + 8 - log2_bytes_per_element
@@ -602,7 +620,7 @@ static void get_surf_rq_param(
 	unsigned int log2_dpte_group_length;
 	unsigned int func_meta_row_height, func_dpte_row_height;
 
-	/* FIXME check if ppe apply for both luma and chroma in 422 case */
+	/* TODO check if ppe apply for both luma and chroma in 422 case */
 	if (is_chroma) {
 		vp_width = pipe_src_param.viewport_width_c / ppe;
 		vp_height = pipe_src_param.viewport_height_c;
@@ -700,7 +718,7 @@ static void get_surf_rq_param(
 	log2_meta_req_bytes = 6; /* meta request is 64b and is 8x8byte meta element */
 
 	/* each 64b meta request for dcn is 8x8 meta elements and
-	 * a meta element covers one 256b block of the the data surface.
+	 * a meta element covers one 256b block of the data surface.
 	 */
 	log2_meta_req_height = log2_blk256_height + 3; /* meta req is 8x8 byte, each byte represent 1 blk256 */
 	log2_meta_req_width = log2_meta_req_bytes + 8 - log2_bytes_per_element
@@ -1141,7 +1159,7 @@ void dml1_rq_dlg_get_dlg_params(
 	ASSERT(disp_dlg_regs->refcyc_h_blank_end < (unsigned int) dml_pow(2, 13));
 	disp_dlg_regs->dlg_vblank_end = interlaced ? (vblank_end / 2) : vblank_end; /* 15 bits */
 
-	prefetch_xy_calc_in_dcfclk = 24.0; /* FIXME: ip_param */
+	prefetch_xy_calc_in_dcfclk = 24.0; /* TODO: ip_param */
 	min_dcfclk_mhz = dlg_sys_param.deepsleep_dcfclk_mhz;
 	t_calc_us = prefetch_xy_calc_in_dcfclk / min_dcfclk_mhz;
 	min_ttu_vblank = dlg_sys_param.t_urg_wm_us;
@@ -1182,7 +1200,7 @@ void dml1_rq_dlg_get_dlg_params(
 	dcc_en = e2e_pipe_param.pipe.src.dcc;
 	dual_plane = is_dual_plane(
 			(enum source_format_class) e2e_pipe_param.pipe.src.source_format);
-	mode_422 = 0; /* FIXME */
+	mode_422 = 0; /* TODO */
 	access_dir = (e2e_pipe_param.pipe.src.source_scan == dm_vert); /* vp access direction: horizontal or vertical accessed */
 	bytes_per_element_l = get_bytes_per_element(
 			(enum source_format_class) e2e_pipe_param.pipe.src.source_format,
@@ -1837,7 +1855,7 @@ void dml1_rq_dlg_get_dlg_params(
 		cur0_width_ub = dml_ceil((double) cur0_src_width / (double) cur0_req_width, 1)
 				* (double) cur0_req_width;
 		cur0_req_per_width = cur0_width_ub / (double) cur0_req_width;
-		hactive_cur0 = (double) cur0_src_width / hratios_cur0; /* FIXME: oswin to think about what to do for cursor */
+		hactive_cur0 = (double) cur0_src_width / hratios_cur0; /* TODO: oswin to think about what to do for cursor */
 
 		if (vratio_pre_l <= 1.0) {
 			refcyc_per_req_delivery_pre_cur0 = hactive_cur0 * ref_freq_to_pix_freq

@@ -11,8 +11,8 @@
 #include <linux/platform_device.h>
 #include <linux/regmap.h>
 #include <linux/ahci_platform.h>
+#include <linux/gpio/consumer.h>
 #include <linux/of_device.h>
-#include <linux/of_gpio.h>
 #include <linux/mfd/syscon.h>
 #include <linux/mfd/syscon/imx6q-iomuxc-gpr.h>
 #include <linux/libata.h>
@@ -144,7 +144,7 @@ struct imx_ahci_priv {
 	struct clk *per_clk4;
 	struct clk *per_clk5;
 	void __iomem *phy_base;
-	int clkreq_gpio;
+	struct gpio_desc *clkreq_gpiod;
 	struct regmap *gpr;
 	bool no_device;
 	bool first_time;
@@ -1039,7 +1039,7 @@ static int ahci_imx_softreset(struct ata_link *link, unsigned int *class,
 	struct ata_host *host = dev_get_drvdata(ap->dev);
 	struct ahci_host_priv *hpriv = host->private_data;
 	struct imx_ahci_priv *imxpriv = hpriv->plat_data;
-	int ret = -EIO;
+	int ret;
 
 	if (imxpriv->type == AHCI_IMX53)
 		ret = ahci_pmp_retry_srst_ops.softreset(link, class, deadline);
@@ -1243,8 +1243,8 @@ static int imx8_sata_probe(struct device *dev, struct imx_ahci_priv *imxpriv)
 	struct device_node *np = dev->of_node;
 	struct regmap_config regconfig = imx_sata_regconfig;
 
-	if (!(dev->bus_dma_mask)) {
-		dev->bus_dma_mask = DMA_BIT_MASK(32);
+	if (!(dev->bus_dma_limit)) {
+		dev->bus_dma_limit = DMA_BIT_MASK(32);
 		dev_info(dev, "imx8qm sata only supports 32bit dma.\n");
 	}
 	if (of_property_read_u32(np, "ext_osc", &imxpriv->ext_osc) < 0) {
@@ -1341,14 +1341,12 @@ static int imx8_sata_probe(struct device *dev, struct imx_ahci_priv *imxpriv)
 	}
 
 	/* Fetch GPIO, then enable the external OSC */
-	imxpriv->clkreq_gpio = of_get_named_gpio(np, "clkreq-gpio", 0);
-	if (gpio_is_valid(imxpriv->clkreq_gpio)) {
-		devm_gpio_request_one(dev, imxpriv->clkreq_gpio,
-					    GPIOF_OUT_INIT_LOW,
-					    "SATA CLKREQ");
-	} else if (imxpriv->clkreq_gpio == -EPROBE_DEFER) {
-		return imxpriv->clkreq_gpio;
-	}
+	imxpriv->clkreq_gpiod = devm_gpiod_get_optional(dev, "clkreq",
+				GPIOD_OUT_LOW | GPIOD_FLAGS_BIT_NONEXCLUSIVE);
+	if (IS_ERR(imxpriv->clkreq_gpiod))
+		return PTR_ERR(imxpriv->clkreq_gpiod);
+	if (imxpriv->clkreq_gpiod)
+		gpiod_set_consumer_name(imxpriv->clkreq_gpiod, "SATA CLKREQ");
 
 	return 0;
 }

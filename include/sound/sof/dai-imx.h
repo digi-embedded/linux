@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: (GPL-2.0 OR BSD-3-Clause) */
+/* SPDX-License-Identifier: (GPL-2.0-only OR BSD-3-Clause) */
 /*
  * Copyright 2019 NXP
  *
@@ -52,4 +52,3 @@ struct sof_ipc_dai_sai_params {
 	uint16_t reserved2;	/* alignment */
 } __packed;
 #endif
-

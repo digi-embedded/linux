@@ -17,6 +17,9 @@
 	#size-cells = <2>;
 
 	aliases {
+		can0 = &flexcan1;
+		can1 = &flexcan2;
+		can2 = &flexcan3;
 		ethernet0 = &fec1;
 		ethernet1 = &eqos;
 		gpio0 = &lsio_gpio0;
@@ -29,24 +32,21 @@
 		gpio7 = &lsio_gpio7;
 		i2c2 = &i2c2;
 		i2c3 = &i2c3;
+		mmc0 = &usdhc1;
+		mmc1 = &usdhc2;
 		mu1 = &lsio_mu1;
 		serial0 = &lpuart0;
 		serial1 = &lpuart1;
 		serial2 = &lpuart2;
 		serial3 = &lpuart3;
 		serial4 = &cm40_lpuart;
-		can0 = &flexcan1;
-		can1 = &flexcan2;
-		can2 = &flexcan3;
-		mmc0 = &usdhc1;
-		mmc1 = &usdhc2;
 	};
 
 	cpus: cpus {
 		#address-cells = <2>;
 		#size-cells = <0>;
 
-		/* We have 1 clusters with 4 Cortex-A35 cores */
+		/* We have 1 clusters with 2 Cortex-A35 cores */
 		A35_0: cpu@0 {
 			device_type = "cpu";
 			compatible = "arm,cortex-a35";
@@ -92,51 +92,6 @@
 		};
 	};
 
-	gic: interrupt-controller@51a00000 {
-		compatible = "arm,gic-v3";
-		reg = <0x0 0x51a00000 0 0x10000>, /* GIC Dist */
-		      <0x0 0x51b00000 0 0xc0000>; /* GICR (RD_base + SGI_base) */
-		#interrupt-cells = <3>;
-		interrupt-controller;
-		interrupts = <GIC_PPI 9 IRQ_TYPE_LEVEL_HIGH>;
-	};
-
-	reserved-memory {
-		#address-cells = <2>;
-		#size-cells = <2>;
-		ranges;
-
-		dsp_reserved: dsp@92400000 {
-			reg = <0 0x92400000 0 0x2000000>;
-			no-map;
-		};
-	};
-
-	pmu {
-		compatible = "arm,armv8-pmuv3";
-		interrupts = <GIC_PPI 7 IRQ_TYPE_LEVEL_HIGH>;
-	};
-
-	psci {
-		compatible = "arm,psci-1.0";
-		method = "smc";
-	};
-
-	rpmsg: rpmsg{
-		compatible = "fsl,imx8qxp-rpmsg";
-		/* up to now, the following channels are used in imx rpmsg
-		 * - tx1/rx1: messages channel.
-		 * - general interrupt1: remote proc finish re-init rpmsg stack
-		 *   when A core is partition reset.
-		 */
-		mbox-names = "tx", "rx", "rxdb";
-		mboxes = <&lsio_mu5 0 1
-			  &lsio_mu5 1 1
-			  &lsio_mu5 3 1>;
-		mub-partition = <3>;
-		status = "disabled";
-	};
-
 	imx8dxl_cm4: imx8dxl_cm4@0 {
 		compatible = "fsl,imx8qxp-cm4";
 		rsc-da = <0x90000000>;
@@ -152,20 +107,32 @@
 				<&pd IMX_SC_R_M4_0_MU_1A>;
 	};
 
+	gic: interrupt-controller@51a00000 {
+		compatible = "arm,gic-v3";
+		reg = <0x0 0x51a00000 0 0x10000>, /* GIC Dist */
+		      <0x0 0x51b00000 0 0xc0000>; /* GICR (RD_base + SGI_base) */
+		#interrupt-cells = <3>;
+		interrupt-controller;
+		interrupts = <GIC_PPI 9 IRQ_TYPE_LEVEL_HIGH>;
+	};
+
+	pmu {
+		compatible = "arm,armv8-pmuv3";
+		interrupts = <GIC_PPI 7 IRQ_TYPE_LEVEL_HIGH>;
+	};
+
+	psci {
+		compatible = "arm,psci-1.0";
+		method = "smc";
+	};
 
 	scu {
 		compatible = "fsl,imx-scu";
-		mbox-names = "tx0", "tx1", "tx2", "tx3",
-			     "rx0", "rx1", "rx2", "rx3",
+		mbox-names = "tx0",
+			     "rx0",
 			     "gip3";
 		mboxes = <&lsio_mu1 0 0
-			  &lsio_mu1 0 1
-			  &lsio_mu1 0 2
-			  &lsio_mu1 0 3
 			  &lsio_mu1 1 0
-			  &lsio_mu1 1 1
-			  &lsio_mu1 1 2
-			  &lsio_mu1 1 3
 			  &lsio_mu1 3 3>;
 
 		pd: imx8dxl-pd {
@@ -187,7 +154,7 @@
 		};
 
 		ocotp: imx8qx-ocotp {
-			compatible = "fsl,imx8qxp-scu-ocotp";
+			compatible = "fsl,imx8dxl-scu-ocotp", "fsl,imx8qxp-scu-ocotp";
 			#address-cells = <1>;
 			#size-cells = <1>;
 
@@ -201,23 +168,18 @@
 		};
 
 		rtc: rtc {
-			compatible = "fsl,imx8qxp-sc-rtc";
+			compatible = "fsl,imx8dxl-sc-rtc", "fsl,imx8qxp-sc-rtc";
 		};
 
 		watchdog {
-			compatible = "fsl,imx8qxp-sc-wdt", "fsl,imx-sc-wdt";
+			compatible = "fsl,imx-sc-wdt";
 			timeout-sec = <60>;
 		};
 
 		tsens: thermal-sensor {
-			compatible = "fsl,imx8qxp-sc-thermal";
-			tsens-num = <2>;
+			compatible = "fsl,imx-sc-thermal";
 			#thermal-sensor-cells = <1>;
 		};
-	};
-
-	soc {
-		compatible = "fsl,imx8qxp-soc";
 	};
 
 	timer {
@@ -232,7 +194,8 @@
 		cpu-thermal0 {
 			polling-delay-passive = <250>;
 			polling-delay = <2000>;
-			thermal-sensors = <&tsens 355>;
+			thermal-sensors = <&tsens IMX_SC_R_SYSTEM>;
+
 			trips {
 				cpu_alert0: trip0 {
 					temperature = <107000>;
@@ -306,10 +269,6 @@
 #include "imx8dxl-ss-hsio.dtsi"
 #include "imx8dxl-ss-ddr.dtsi"
 #include "imx8dxl-ss-security.dtsi"
-
-&edma2 {
-	status = "okay";
-};
 
 &cm40_intmux {
 	interrupts = <GIC_SPI 8 IRQ_TYPE_LEVEL_HIGH>,

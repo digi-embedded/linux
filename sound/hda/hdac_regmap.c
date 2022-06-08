@@ -363,6 +363,7 @@ static const struct regmap_config hda_regmap_cfg = {
 	.reg_write = hda_reg_write,
 	.use_single_read = true,
 	.use_single_write = true,
+	.disable_locking = true,
 };
 
 /**
@@ -385,7 +386,7 @@ int snd_hdac_regmap_init(struct hdac_device *codec)
 EXPORT_SYMBOL_GPL(snd_hdac_regmap_init);
 
 /**
- * snd_hdac_regmap_init - Release the regmap from HDA codec
+ * snd_hdac_regmap_exit - Release the regmap from HDA codec
  * @codec: the codec object
  */
 void snd_hdac_regmap_exit(struct hdac_device *codec)
@@ -541,7 +542,7 @@ static int reg_raw_update(struct hdac_device *codec, unsigned int reg,
  * snd_hdac_regmap_update_raw - update a pseudo register with power mgmt
  * @codec: the codec object
  * @reg: pseudo register
- * @mask: bit mask to udpate
+ * @mask: bit mask to update
  * @val: value to update
  *
  * Returns zero if successful or a negative error code.

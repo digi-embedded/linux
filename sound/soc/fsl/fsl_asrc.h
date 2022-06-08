@@ -2,7 +2,7 @@
 /*
  * fsl_asrc.h - Freescale ASRC ALSA SoC header file
  *
- * Copyright (C) 2014-2016 Freescale Semiconductor, Inc.
+ * Copyright (C) 2014 Freescale Semiconductor, Inc.
  *
  * Author: Nicolin Chen <nicoleotsuka@gmail.com>
  */
@@ -10,14 +10,8 @@
 #ifndef _FSL_ASRC_H
 #define _FSL_ASRC_H
 
+#include  "fsl_asrc_common.h"
 #include <sound/asound.h>
-#include <uapi/linux/mxc_asrc.h>
-#include <linux/miscdevice.h>
-
-#define ASRC_PAIR_MAX_NUM	(ASRC_PAIR_C + 1)
-
-#define IN	0
-#define OUT	1
 
 #define ASRC_DMA_BUFFER_NUM		2
 #define ASRC_INPUTFIFO_THRESHOLD	32
@@ -290,7 +284,10 @@
 #define ASRMCR1i_OW16_MASK		(1 << ASRMCR1i_OW16_SHIFT)
 #define ASRMCR1i_OW16(v)		((v) << ASRMCR1i_OW16_SHIFT)
 
+#define ASRC_PAIR_MAX_NUM	(ASRC_PAIR_C + 1)
+
 #define ASRC_CLK_MAX_NUM	16
+#define ASRC_CLK_MAP_LEN	0x30
 
 enum asrc_word_width {
 	ASRC_WIDTH_24_BIT = 0,
@@ -299,95 +296,46 @@ enum asrc_word_width {
 };
 
 struct dma_block {
+	dma_addr_t dma_paddr;
 	void *dma_vaddr;
 	unsigned int length;
 };
 
 /**
- * fsl_asrc_pair: ASRC Pair private data
+ * fsl_asrc_soc_data: soc specific data
  *
- * @asrc_priv: pointer to its parent module
- * @config: configuration profile
- * @error: error record
- * @index: pair index (ASRC_PAIR_A, ASRC_PAIR_B, ASRC_PAIR_C)
- * @channels: occupied channel number
- * @desc: input and output dma descriptors
- * @dma_chan: inputer and output DMA channels
- * @dma_data: private dma data
- * @pos: hardware pointer position
- * @private: pair private area
+ * @use_edma: using edma as dma device or not
+ * @channel_bits: width of ASRCNCR register for each pair
  */
-struct fsl_asrc_pair {
-	struct fsl_asrc *asrc_priv;
-	struct asrc_config *config;
-	unsigned int error;
-
-	enum asrc_pair_index index;
-	unsigned int channels;
-
-	struct dma_async_tx_descriptor *desc[2];
-	struct dma_chan *dma_chan[2];
-	struct imx_dma_data dma_data;
-	unsigned int pos;
-	unsigned int pair_streams;
-
-	void *private;
+struct fsl_asrc_soc_data {
+	bool use_edma;
+	unsigned int channel_bits;
 };
 
 /**
- * fsl_asrc_pair: ASRC private data
+ * fsl_asrc_pair_priv: ASRC Pair private data
  *
- * @dma_params_rx: DMA parameters for receive channel
- * @dma_params_tx: DMA parameters for transmit channel
- * @pdev: platform device pointer
- * @regmap: regmap handler
- * @paddr: physical address to the base address of registers
- * @mem_clk: clock source to access register
- * @ipg_clk: clock source to drive peripheral
- * @spba_clk: SPBA clock (optional, depending on SoC design)
+ * @config: configuration profile
+ */
+struct fsl_asrc_pair_priv {
+	struct asrc_config *config;
+};
+
+/**
+ * fsl_asrc_priv: ASRC private data
+ *
  * @asrck_clk: clock sources to driver ASRC internal logic
- * @lock: spin lock for resource protection
- * @pair: pair pointers
- * @channel_bits: width of ASRCNCR register for each pair
- * @channel_avail: non-occupied channel numbers
- * @pair_streams:indicat which substream is running
- * @asrc_rate: default sample rate for ASoC Back-Ends
- * @asrc_width: default sample width for ASoC Back-Ends
+ * @soc: soc specific data
+ * @clk_map: clock map for input/output clock
  * @regcache_cfg: store register value of REG_ASRCFG
  */
-struct fsl_asrc {
-	struct snd_dmaengine_dai_dma_data dma_params_rx;
-	struct snd_dmaengine_dai_dma_data dma_params_tx;
-	struct platform_device *pdev;
-	struct regmap *regmap;
-	unsigned long paddr;
-	struct clk *mem_clk;
-	struct clk *ipg_clk;
-	struct clk *spba_clk;
+struct fsl_asrc_priv {
 	struct clk *asrck_clk[ASRC_CLK_MAX_NUM];
+	const struct fsl_asrc_soc_data *soc;
 	unsigned char *clk_map[2];
-	spinlock_t lock;
-
-	struct fsl_asrc_pair *pair[ASRC_PAIR_MAX_NUM];
-	struct miscdevice asrc_miscdev;
-	unsigned int channel_bits;
-	unsigned int channel_avail;
-
-	int asrc_rate;
-	int asrc_width;
-	int dma_type;  /* 0 is sdma, 1 is edma */
 
 	u32 regcache_cfg;
 	char name[20];
 };
-
-#define DMA_SDMA 0
-#define DMA_EDMA 1
-
-#define DRV_NAME "fsl-asrc-dai"
-extern struct snd_soc_component_driver fsl_asrc_component;
-struct dma_chan *fsl_asrc_get_dma_channel(struct fsl_asrc_pair *pair, bool dir);
-int fsl_asrc_request_pair(int channels, struct fsl_asrc_pair *pair);
-void fsl_asrc_release_pair(struct fsl_asrc_pair *pair);
 
 #endif /* _FSL_ASRC_H */

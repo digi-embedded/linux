@@ -86,6 +86,11 @@
 #define bond_for_each_slave_rcu(bond, pos, iter) \
 	netdev_for_each_lower_private_rcu((bond)->dev, pos, iter)
 
+#define BOND_XFRM_FEATURES (NETIF_F_HW_ESP | NETIF_F_HW_ESP_TX_CSUM | \
+			    NETIF_F_GSO_ESP)
+
+#define BOND_TLS_FEATURES (NETIF_F_HW_TLS_TX | NETIF_F_HW_TLS_RX)
+
 #ifdef CONFIG_NET_POLL_CONTROLLER
 extern atomic_t netpoll_block_tx;
 
@@ -124,6 +129,7 @@ struct bond_params {
 	int updelay;
 	int downdelay;
 	int peer_notif_delay;
+	int lacp_active;
 	int lacp_fast;
 	unsigned int min_links;
 	int ad_select;
@@ -142,11 +148,6 @@ struct bond_params {
 
 	/* 2 bytes of padding : see ether_addr_equal_64bits() */
 	u8 ad_actor_system[ETH_ALEN + 2];
-};
-
-struct bond_parm_tbl {
-	char *modename;
-	int mode;
 };
 
 struct slave {
@@ -180,16 +181,26 @@ struct slave {
 	struct rtnl_link_stats64 slave_stats;
 };
 
+static inline struct slave *to_slave(struct kobject *kobj)
+{
+	return container_of(kobj, struct slave, kobj);
+}
+
 struct bond_up_slave {
 	unsigned int	count;
 	struct rcu_head rcu;
-	struct slave	*arr[0];
+	struct slave	*arr[];
 };
 
 /*
  * Link pseudo-state only used internally by monitors
  */
 #define BOND_LINK_NOCHANGE -1
+
+struct bond_ipsec {
+	struct list_head list;
+	struct xfrm_state *xs;
+};
 
 /*
  * Here are the locking policies for the two bonding locks:
@@ -200,7 +211,8 @@ struct bonding {
 	struct   slave __rcu *curr_active_slave;
 	struct   slave __rcu *current_arp_slave;
 	struct   slave __rcu *primary_slave;
-	struct   bond_up_slave __rcu *slave_arr; /* Array of usable slaves */
+	struct   bond_up_slave __rcu *usable_slaves;
+	struct   bond_up_slave __rcu *all_slaves;
 	bool     force_primary;
 	s32      slave_cnt; /* never change this value outside the attach/detach wrappers */
 	int     (*recv_probe)(const struct sk_buff *, struct bonding *,
@@ -221,7 +233,7 @@ struct bonding {
 	char     proc_file_name[IFNAMSIZ];
 #endif /* CONFIG_PROC_FS */
 	struct   list_head bond_list;
-	u32      rr_tx_counter;
+	u32 __percpu *rr_tx_counter;
 	struct   ad_bond_info ad_info;
 	struct   alb_bond_info alb_info;
 	struct   bond_params params;
@@ -237,7 +249,12 @@ struct bonding {
 	struct	 dentry *debug_dir;
 #endif /* CONFIG_DEBUG_FS */
 	struct rtnl_link_stats64 bond_stats;
-	struct lock_class_key stats_lock_key;
+#ifdef CONFIG_XFRM_OFFLOAD
+	struct list_head ipsec_list;
+	/* protecting ipsec_list */
+	spinlock_t ipsec_lock;
+#endif /* CONFIG_XFRM_OFFLOAD */
+	struct bpf_prog *xdp_prog;
 };
 
 #define bond_slave_get_rcu(dev) \
@@ -253,6 +270,8 @@ struct bond_vlan_tag {
 	__be16		vlan_proto;
 	unsigned short	vlan_id;
 };
+
+bool bond_sk_check(struct bonding *bond);
 
 /**
  * Returns NULL if the net_device does not belong to any of the bond's slaves
@@ -505,18 +524,17 @@ static inline unsigned long slave_last_rx(struct bonding *bond,
 }
 
 #ifdef CONFIG_NET_POLL_CONTROLLER
-static inline void bond_netpoll_send_skb(const struct slave *slave,
+static inline netdev_tx_t bond_netpoll_send_skb(const struct slave *slave,
 					 struct sk_buff *skb)
 {
-	struct netpoll *np = slave->np;
-
-	if (np)
-		netpoll_send_skb(np, skb);
+	return netpoll_send_skb(slave->np, skb);
 }
 #else
-static inline void bond_netpoll_send_skb(const struct slave *slave,
+static inline netdev_tx_t bond_netpoll_send_skb(const struct slave *slave,
 					 struct sk_buff *skb)
 {
+	BUG();
+	return NETDEV_TX_OK;
 }
 #endif
 
@@ -610,7 +628,7 @@ struct bond_net {
 };
 
 int bond_arp_rcv(const struct sk_buff *skb, struct bonding *bond, struct slave *slave);
-void bond_dev_queue_xmit(struct bonding *bond, struct sk_buff *skb, struct net_device *slave_dev);
+netdev_tx_t bond_dev_queue_xmit(struct bonding *bond, struct sk_buff *skb, struct net_device *slave_dev);
 int bond_create(struct net *net, const char *name);
 int bond_create_sysfs(struct bond_net *net);
 void bond_destroy_sysfs(struct bond_net *net);
@@ -732,21 +750,18 @@ static inline int bond_get_targets_ip(__be32 *targets, __be32 ip)
 
 /* exported from bond_main.c */
 extern unsigned int bond_net_id;
-extern const struct bond_parm_tbl bond_lacp_tbl[];
-extern const struct bond_parm_tbl xmit_hashtype_tbl[];
-extern const struct bond_parm_tbl arp_validate_tbl[];
-extern const struct bond_parm_tbl arp_all_targets_tbl[];
-extern const struct bond_parm_tbl fail_over_mac_tbl[];
-extern const struct bond_parm_tbl pri_reselect_tbl[];
-extern struct bond_parm_tbl ad_select_tbl[];
 
 /* exported from bond_netlink.c */
 extern struct rtnl_link_ops bond_link_ops;
 
-static inline void bond_tx_drop(struct net_device *dev, struct sk_buff *skb)
+/* exported from bond_sysfs_slave.c */
+extern const struct sysfs_ops slave_sysfs_ops;
+
+static inline netdev_tx_t bond_tx_drop(struct net_device *dev, struct sk_buff *skb)
 {
 	atomic_long_inc(&dev->tx_dropped);
 	dev_kfree_skb_any(skb);
+	return NET_XMIT_DROP;
 }
 
 #endif /* _NET_BONDING_H */

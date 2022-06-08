@@ -56,7 +56,7 @@
 
 /* Registers for bit and genmask */
 #define FSL_QDMA_CQIDR_SQT		BIT(15)
-#define QDMA_CCDF_FOTMAT		BIT(29)
+#define QDMA_CCDF_FORMAT		BIT(29)
 #define QDMA_CCDF_SER			BIT(30)
 #define QDMA_SG_FIN			BIT(30)
 #define QDMA_SG_LEN_MASK		GENMASK(29, 0)
@@ -109,9 +109,21 @@
 #define FSL_QDMA_CMD_WTHROTL_OFFSET	20
 #define FSL_QDMA_CMD_DSEN_OFFSET	19
 #define FSL_QDMA_CMD_LWC_OFFSET		16
+#define FSL_QDMA_CMD_PF			BIT(17)
+
+/* Field definition for Descriptor status */
+#define QDMA_CCDF_STATUS_RTE		BIT(5)
+#define QDMA_CCDF_STATUS_WTE		BIT(4)
+#define QDMA_CCDF_STATUS_CDE		BIT(2)
+#define QDMA_CCDF_STATUS_SDE		BIT(1)
+#define QDMA_CCDF_STATUS_DDE		BIT(0)
+#define QDMA_CCDF_STATUS_MASK		(QDMA_CCDF_STATUS_RTE | \
+					QDMA_CCDF_STATUS_WTE | \
+					QDMA_CCDF_STATUS_CDE | \
+					QDMA_CCDF_STATUS_SDE | \
+					QDMA_CCDF_STATUS_DDE)
 
 /* Field definition for Descriptor offset */
-#define QDMA_CCDF_STATUS		20
 #define QDMA_CCDF_OFFSET		20
 #define QDMA_SDDF_CMD(x)		(((u64)(x)) << 32)
 
@@ -136,7 +148,7 @@
  * @__reserved1:	    Reserved field.
  * @cfg8b_w1:		    Compound descriptor command queue origin produced
  *			    by qDMA and dynamic debug field.
- * @data		    Pointer to the memory 40-bit address, describes DMA
+ * @data:		    Pointer to the memory 40-bit address, describes DMA
  *			    source information and DMA destination information.
  */
 struct fsl_qdma_format {
@@ -243,13 +255,14 @@ qdma_ccdf_get_offset(const struct fsl_qdma_format *ccdf)
 static inline void
 qdma_ccdf_set_format(struct fsl_qdma_format *ccdf, int offset)
 {
-	ccdf->cfg = cpu_to_le32(QDMA_CCDF_FOTMAT | offset);
+	ccdf->cfg = cpu_to_le32(QDMA_CCDF_FORMAT |
+				(offset << QDMA_CCDF_OFFSET));
 }
 
 static inline int
 qdma_ccdf_get_status(const struct fsl_qdma_format *ccdf)
 {
-	return (le32_to_cpu(ccdf->status) & QDMA_CCDF_MASK) >> QDMA_CCDF_STATUS;
+	return (le32_to_cpu(ccdf->status) & QDMA_CCDF_STATUS_MASK);
 }
 
 static inline void
@@ -372,7 +385,8 @@ static void fsl_qdma_comp_fill_memcpy(struct fsl_qdma_comp *fsl_comp,
 	qdma_csgf_set_f(csgf_dest, len);
 	/* Descriptor Buffer */
 	cmd = cpu_to_le32(FSL_QDMA_CMD_RWTTYPE <<
-			  FSL_QDMA_CMD_RWTTYPE_OFFSET);
+			  FSL_QDMA_CMD_RWTTYPE_OFFSET) |
+			  FSL_QDMA_CMD_PF;
 	sdf->data = QDMA_SDDF_CMD(cmd);
 
 	cmd = cpu_to_le32(FSL_QDMA_CMD_RWTTYPE <<
@@ -618,6 +632,7 @@ fsl_qdma_queue_transfer_complete(struct fsl_qdma_engine *fsl_qdma,
 {
 	bool duplicate;
 	u32 reg, i, count;
+	u8 completion_status;
 	struct fsl_qdma_queue *temp_queue;
 	struct fsl_qdma_format *status_addr;
 	struct fsl_qdma_comp *fsl_comp = NULL;
@@ -677,6 +692,8 @@ fsl_qdma_queue_transfer_complete(struct fsl_qdma_engine *fsl_qdma,
 		}
 		list_del(&fsl_comp->list);
 
+		completion_status = qdma_ccdf_get_status(status_addr);
+
 		reg = qdma_readl(fsl_qdma, block + FSL_QDMA_BSQMR);
 		reg |= FSL_QDMA_BSQMR_DI;
 		qdma_desc_addr_set64(status_addr, 0x0);
@@ -685,6 +702,31 @@ fsl_qdma_queue_transfer_complete(struct fsl_qdma_engine *fsl_qdma,
 			fsl_status->virt_head = fsl_status->cq;
 		qdma_writel(fsl_qdma, reg, block + FSL_QDMA_BSQMR);
 		spin_unlock(&temp_queue->queue_lock);
+
+		/* The completion_status is evaluated here
+		 * (outside of spin lock)
+		 */
+		if (completion_status) {
+			/* A completion error occurred! */
+			if (completion_status & QDMA_CCDF_STATUS_WTE) {
+				/* Write transaction error */
+				fsl_comp->vdesc.tx_result.result =
+					DMA_TRANS_WRITE_FAILED;
+			} else if (completion_status & QDMA_CCDF_STATUS_RTE) {
+				/* Read transaction error */
+				fsl_comp->vdesc.tx_result.result =
+					DMA_TRANS_READ_FAILED;
+			} else {
+				/* Command/source/destination
+				 * description error
+				 */
+				fsl_comp->vdesc.tx_result.result =
+					DMA_TRANS_ABORTED;
+				dev_err(fsl_qdma->dma_dev.dev,
+					"DMA status descriptor error %x\n",
+					completion_status);
+			}
+		}
 
 		spin_lock(&fsl_comp->qchan->vchan.lock);
 		vchan_cookie_complete(&fsl_comp->vdesc);
@@ -700,11 +742,22 @@ static irqreturn_t fsl_qdma_error_handler(int irq, void *dev_id)
 	unsigned int intr;
 	struct fsl_qdma_engine *fsl_qdma = dev_id;
 	void __iomem *status = fsl_qdma->status_base;
+	unsigned int decfdw0r;
+	unsigned int decfdw1r;
+	unsigned int decfdw2r;
+	unsigned int decfdw3r;
 
 	intr = qdma_readl(fsl_qdma, status + FSL_QDMA_DEDR);
 
-	if (intr)
-		dev_err(fsl_qdma->dma_dev.dev, "DMA transaction error!\n");
+	if (intr) {
+		decfdw0r = qdma_readl(fsl_qdma, status + FSL_QDMA_DECFDW0R);
+		decfdw1r = qdma_readl(fsl_qdma, status + FSL_QDMA_DECFDW1R);
+		decfdw2r = qdma_readl(fsl_qdma, status + FSL_QDMA_DECFDW2R);
+		decfdw3r = qdma_readl(fsl_qdma, status + FSL_QDMA_DECFDW3R);
+		dev_err(fsl_qdma->dma_dev.dev,
+			"DMA transaction error! (%x: %x-%x-%x-%x)\n",
+			intr, decfdw0r, decfdw1r, decfdw2r, decfdw3r);
+	}
 
 	qdma_writel(fsl_qdma, FSL_QDMA_DEDR_CLEAR, status + FSL_QDMA_DEDR);
 	return IRQ_HANDLED;
@@ -1150,10 +1203,6 @@ static int fsl_qdma_probe(struct platform_device *pdev)
 	if (!fsl_qdma->queue)
 		return -ENOMEM;
 
-	ret = fsl_qdma_irq_init(pdev, fsl_qdma);
-	if (ret)
-		return ret;
-
 	fsl_qdma->irq_base = platform_get_irq_byname(pdev, "qdma-queue0");
 	if (fsl_qdma->irq_base < 0)
 		return fsl_qdma->irq_base;
@@ -1184,20 +1233,28 @@ static int fsl_qdma_probe(struct platform_device *pdev)
 	fsl_qdma->dma_dev.device_synchronize = fsl_qdma_synchronize;
 	fsl_qdma->dma_dev.device_terminate_all = fsl_qdma_terminate_all;
 
-	dma_set_mask(&pdev->dev, DMA_BIT_MASK(40));
+	ret = dma_set_mask(&pdev->dev, DMA_BIT_MASK(40));
+	if (ret) {
+		dev_err(&pdev->dev, "dma_set_mask failure.\n");
+		return ret;
+	}
 
 	platform_set_drvdata(pdev, fsl_qdma);
+
+	ret = fsl_qdma_reg_init(fsl_qdma);
+	if (ret) {
+		dev_err(&pdev->dev, "Can't Initialize the qDMA engine.\n");
+		return ret;
+	}
+
+	ret = fsl_qdma_irq_init(pdev, fsl_qdma);
+	if (ret)
+		return ret;
 
 	ret = dma_async_device_register(&fsl_qdma->dma_dev);
 	if (ret) {
 		dev_err(&pdev->dev,
 			"Can't register NXP Layerscape qDMA engine.\n");
-		return ret;
-	}
-
-	ret = fsl_qdma_reg_init(fsl_qdma);
-	if (ret) {
-		dev_err(&pdev->dev, "Can't Initialize the qDMA engine.\n");
 		return ret;
 	}
 

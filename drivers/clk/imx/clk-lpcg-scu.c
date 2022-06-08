@@ -4,6 +4,7 @@
  *	Dong Aisheng <aisheng.dong@nxp.com>
  */
 
+#include <linux/bits.h>
 #include <linux/clk-provider.h>
 #include <linux/delay.h>
 #include <linux/err.h>
@@ -109,7 +110,6 @@ static const struct clk_ops clk_lpcg_scu_ops = {
 	.enable = clk_lpcg_scu_enable,
 	.disable = clk_lpcg_scu_disable,
 };
-EXPORT_SYMBOL_GPL(imx_clk_lpcg_scu_pm_ops);
 
 struct clk_hw *__imx_clk_lpcg_scu(struct device *dev, const char *name,
 				  const char *parent_name, unsigned long flags,
@@ -141,6 +141,7 @@ struct clk_hw *__imx_clk_lpcg_scu(struct device *dev, const char *name,
 	if (ret) {
 		kfree(clk);
 		hw = ERR_PTR(ret);
+		return hw;
 	}
 
 	if (dev)
@@ -148,9 +149,16 @@ struct clk_hw *__imx_clk_lpcg_scu(struct device *dev, const char *name,
 
 	return hw;
 }
-EXPORT_SYMBOL_GPL(__imx_clk_lpcg_scu);
 
-int __maybe_unused imx_clk_lpcg_scu_suspend(struct device *dev)
+void imx_clk_lpcg_scu_unregister(struct clk_hw *hw)
+{
+	struct clk_lpcg_scu *clk = to_clk_lpcg_scu(hw);
+
+	clk_hw_unregister(&clk->hw);
+	kfree(clk);
+}
+
+static int __maybe_unused imx_clk_lpcg_scu_suspend(struct device *dev)
 {
 	struct clk_lpcg_scu *clk = dev_get_drvdata(dev);
 
@@ -163,14 +171,18 @@ int __maybe_unused imx_clk_lpcg_scu_suspend(struct device *dev)
 	return 0;
 }
 
-int __maybe_unused imx_clk_lpcg_scu_resume(struct device *dev)
+static int __maybe_unused imx_clk_lpcg_scu_resume(struct device *dev)
 {
 	struct clk_lpcg_scu *clk = dev_get_drvdata(dev);
 
 	if (!strncmp("hdmi_lpcg", clk_hw_get_name(&clk->hw), strlen("hdmi_lpcg")))
 		return 0;
 
-	/* FIXME: double write in case a failure */
+	/*
+	 * FIXME: Sometimes writes don't work unless the CPU issues
+	 * them twice
+	 */
+
 	writel(clk->state, clk->reg);
 	do_lpcg_workaround(0, clk->reg, clk->state);
 	dev_dbg(dev, "restore lpcg state 0x%x\n", clk->state);

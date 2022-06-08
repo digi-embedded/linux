@@ -7,6 +7,7 @@
 #include <linux/t10-pi.h>
 #include <linux/blkdev.h>
 #include <linux/crc-t10dif.h>
+#include <linux/module.h>
 #include <net/checksum.h>
 
 typedef __be16 (csum_fn) (void *, unsigned int);
@@ -146,11 +147,10 @@ static void t10_pi_type1_prepare(struct request *rq)
 			break;
 
 		bip_for_each_vec(iv, bip, iter) {
-			void *p, *pmap;
 			unsigned int j;
+			void *p;
 
-			pmap = kmap_atomic(iv.bv_page);
-			p = pmap + iv.bv_offset;
+			p = bvec_kmap_local(&iv);
 			for (j = 0; j < iv.bv_len; j += tuple_sz) {
 				struct t10_pi_tuple *pi = p;
 
@@ -160,8 +160,7 @@ static void t10_pi_type1_prepare(struct request *rq)
 				ref_tag++;
 				p += tuple_sz;
 			}
-
-			kunmap_atomic(pmap);
+			kunmap_local(p);
 		}
 
 		bip->bip_flags |= BIP_MAPPED_INTEGRITY;
@@ -194,11 +193,10 @@ static void t10_pi_type1_complete(struct request *rq, unsigned int nr_bytes)
 		struct bvec_iter iter;
 
 		bip_for_each_vec(iv, bip, iter) {
-			void *p, *pmap;
 			unsigned int j;
+			void *p;
 
-			pmap = kmap_atomic(iv.bv_page);
-			p = pmap + iv.bv_offset;
+			p = bvec_kmap_local(&iv);
 			for (j = 0; j < iv.bv_len && intervals; j += tuple_sz) {
 				struct t10_pi_tuple *pi = p;
 
@@ -209,8 +207,7 @@ static void t10_pi_type1_complete(struct request *rq, unsigned int nr_bytes)
 				intervals--;
 				p += tuple_sz;
 			}
-
-			kunmap_atomic(pmap);
+			kunmap_local(p);
 		}
 	}
 }
@@ -235,16 +232,12 @@ static blk_status_t t10_pi_type3_verify_ip(struct blk_integrity_iter *iter)
 	return t10_pi_verify(iter, t10_pi_ip_fn, T10_PI_TYPE3_PROTECTION);
 }
 
-/**
- * Type 3 does not have a reference tag so no remapping is required.
- */
+/* Type 3 does not have a reference tag so no remapping is required. */
 static void t10_pi_type3_prepare(struct request *rq)
 {
 }
 
-/**
- * Type 3 does not have a reference tag so no remapping is required.
- */
+/* Type 3 does not have a reference tag so no remapping is required. */
 static void t10_pi_type3_complete(struct request *rq, unsigned int nr_bytes)
 {
 }
@@ -284,3 +277,5 @@ const struct blk_integrity_profile t10_pi_type3_ip = {
 	.complete_fn		= t10_pi_type3_complete,
 };
 EXPORT_SYMBOL(t10_pi_type3_ip);
+
+MODULE_LICENSE("GPL");

@@ -17,6 +17,7 @@
 #include <linux/pci-acpi.h>
 #include <linux/pm_runtime.h>
 #include <linux/pm_qos.h>
+#include <linux/rwsem.h>
 #include "pci.h"
 
 /*
@@ -439,7 +440,7 @@ enum hpx_type3_dev_type {
 static u16 hpx3_device_type(struct pci_dev *dev)
 {
 	u16 pcie_type = pci_pcie_type(dev);
-	const int pcie_to_hpx3_type[] = {
+	static const int pcie_to_hpx3_type[] = {
 		[PCI_EXP_TYPE_ENDPOINT]    = HPX_TYPE_ENDPOINT,
 		[PCI_EXP_TYPE_LEG_END]     = HPX_TYPE_LEG_END,
 		[PCI_EXP_TYPE_RC_END]      = HPX_TYPE_RC_END,
@@ -527,8 +528,8 @@ static void program_hpx_type3_register(struct pci_dev *dev,
 			return;
 
 		break;
-	case HPX_CFG_VEND_CAP:	/* Fall through */
-	case HPX_CFG_DVSEC:	/* Fall through */
+	case HPX_CFG_VEND_CAP:
+	case HPX_CFG_DVSEC:
 	default:
 		pci_warn(dev, "Encountered _HPX type 3 with unsupported config space location");
 		return;
@@ -934,48 +935,77 @@ static pci_power_t acpi_pci_choose_state(struct pci_dev *pdev)
 
 static struct acpi_device *acpi_pci_find_companion(struct device *dev);
 
-static bool acpi_pci_bridge_d3(struct pci_dev *dev)
+void pci_set_acpi_fwnode(struct pci_dev *dev)
 {
-	const struct fwnode_handle *fwnode;
-	struct acpi_device *adev;
-	struct pci_dev *root;
-	u8 val;
+	if (!dev_fwnode(&dev->dev) && !pci_dev_is_added(dev))
+		ACPI_COMPANION_SET(&dev->dev,
+				   acpi_pci_find_companion(&dev->dev));
+}
 
-	if (!dev->is_hotplug_bridge)
-		return false;
+/**
+ * pci_dev_acpi_reset - do a function level reset using _RST method
+ * @dev: device to reset
+ * @probe: if true, return 0 if device supports _RST
+ */
+int pci_dev_acpi_reset(struct pci_dev *dev, bool probe)
+{
+	acpi_handle handle = ACPI_HANDLE(&dev->dev);
 
-	/*
-	 * Look for a special _DSD property for the root port and if it
-	 * is set we know the hierarchy behind it supports D3 just fine.
-	 */
-	root = pci_find_pcie_root_port(dev);
-	if (!root)
-		return false;
+	if (!handle || !acpi_has_method(handle, "_RST"))
+		return -ENOTTY;
 
-	adev = ACPI_COMPANION(&root->dev);
-	if (root == dev) {
-		/*
-		 * It is possible that the ACPI companion is not yet bound
-		 * for the root port so look it up manually here.
-		 */
-		if (!adev && !pci_dev_is_added(root))
-			adev = acpi_pci_find_companion(&root->dev);
+	if (probe)
+		return 0;
+
+	if (ACPI_FAILURE(acpi_evaluate_object(handle, "_RST", NULL, NULL))) {
+		pci_warn(dev, "ACPI _RST failed\n");
+		return -ENOTTY;
 	}
 
-	if (!adev)
-		return false;
-
-	fwnode = acpi_fwnode_handle(adev);
-	if (fwnode_property_read_u8(fwnode, "HotPlugSupportInD3", &val))
-		return false;
-
-	return val == 1;
+	return 0;
 }
 
 static bool acpi_pci_power_manageable(struct pci_dev *dev)
 {
 	struct acpi_device *adev = ACPI_COMPANION(&dev->dev);
-	return adev ? acpi_device_power_manageable(adev) : false;
+
+	if (!adev)
+		return false;
+	return acpi_device_power_manageable(adev);
+}
+
+static bool acpi_pci_bridge_d3(struct pci_dev *dev)
+{
+	const union acpi_object *obj;
+	struct acpi_device *adev;
+	struct pci_dev *rpdev;
+
+	if (!dev->is_hotplug_bridge)
+		return false;
+
+	/* Assume D3 support if the bridge is power-manageable by ACPI. */
+	if (acpi_pci_power_manageable(dev))
+		return true;
+
+	/*
+	 * The ACPI firmware will provide the device-specific properties through
+	 * _DSD configuration object. Look for the 'HotPlugSupportInD3' property
+	 * for the root port and if it is set we know the hierarchy behind it
+	 * supports D3 just fine.
+	 */
+	rpdev = pcie_find_root_port(dev);
+	if (!rpdev)
+		return false;
+
+	adev = ACPI_COMPANION(&rpdev->dev);
+	if (!adev)
+		return false;
+
+	if (acpi_dev_get_property(adev, "HotPlugSupportInD3",
+				   ACPI_TYPE_INTEGER, &obj) < 0)
+		return false;
+
+	return obj->integer.value == 1;
 }
 
 static int acpi_pci_set_power_state(struct pci_dev *dev, pci_power_t state)
@@ -1001,7 +1031,7 @@ static int acpi_pci_set_power_state(struct pci_dev *dev, pci_power_t state)
 			error = -EBUSY;
 			break;
 		}
-		/* Fall through */
+		fallthrough;
 	case PCI_D0:
 	case PCI_D1:
 	case PCI_D2:
@@ -1011,7 +1041,7 @@ static int acpi_pci_set_power_state(struct pci_dev *dev, pci_power_t state)
 
 	if (!error)
 		pci_dbg(dev, "power state changed by ACPI to %s\n",
-			 acpi_power_state_string(state_conv[state]));
+		        acpi_power_state_string(adev->power.state));
 
 	return error;
 }
@@ -1050,7 +1080,7 @@ static int acpi_pci_propagate_wakeup(struct pci_bus *bus, bool enable)
 {
 	while (bus->parent) {
 		if (acpi_pm_device_can_wakeup(&bus->self->dev))
-			return acpi_pm_set_bridge_wakeup(&bus->self->dev, enable);
+			return acpi_pm_set_device_wakeup(&bus->self->dev, enable);
 
 		bus = bus->parent;
 	}
@@ -1058,7 +1088,7 @@ static int acpi_pci_propagate_wakeup(struct pci_bus *bus, bool enable)
 	/* We have reached the root bus. */
 	if (bus->bridge) {
 		if (acpi_pm_device_can_wakeup(bus->bridge))
-			return acpi_pm_set_bridge_wakeup(bus->bridge, enable);
+			return acpi_pm_set_device_wakeup(bus->bridge, enable);
 	}
 	return 0;
 }
@@ -1128,7 +1158,7 @@ void acpi_pci_add_bus(struct pci_bus *bus)
 		return;
 
 	obj = acpi_evaluate_dsm(ACPI_HANDLE(bus->bridge), &pci_acpi_dsm_guid, 3,
-				RESET_DELAY_DSM, NULL);
+				DSM_PCI_POWER_ON_RESET_DELAY, NULL);
 	if (!obj)
 		return;
 
@@ -1149,17 +1179,113 @@ void acpi_pci_remove_bus(struct pci_bus *bus)
 }
 
 /* ACPI bus type */
+
+
+static DECLARE_RWSEM(pci_acpi_companion_lookup_sem);
+static struct acpi_device *(*pci_acpi_find_companion_hook)(struct pci_dev *);
+
+/**
+ * pci_acpi_set_companion_lookup_hook - Set ACPI companion lookup callback.
+ * @func: ACPI companion lookup callback pointer or NULL.
+ *
+ * Set a special ACPI companion lookup callback for PCI devices whose companion
+ * objects in the ACPI namespace have _ADR with non-standard bus-device-function
+ * encodings.
+ *
+ * Return 0 on success or a negative error code on failure (in which case no
+ * changes are made).
+ *
+ * The caller is responsible for the appropriate ordering of the invocations of
+ * this function with respect to the enumeration of the PCI devices needing the
+ * callback installed by it.
+ */
+int pci_acpi_set_companion_lookup_hook(struct acpi_device *(*func)(struct pci_dev *))
+{
+	int ret;
+
+	if (!func)
+		return -EINVAL;
+
+	down_write(&pci_acpi_companion_lookup_sem);
+
+	if (pci_acpi_find_companion_hook) {
+		ret = -EBUSY;
+	} else {
+		pci_acpi_find_companion_hook = func;
+		ret = 0;
+	}
+
+	up_write(&pci_acpi_companion_lookup_sem);
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(pci_acpi_set_companion_lookup_hook);
+
+/**
+ * pci_acpi_clear_companion_lookup_hook - Clear ACPI companion lookup callback.
+ *
+ * Clear the special ACPI companion lookup callback previously set by
+ * pci_acpi_set_companion_lookup_hook().  Block until the last running instance
+ * of the callback returns before clearing it.
+ *
+ * The caller is responsible for the appropriate ordering of the invocations of
+ * this function with respect to the enumeration of the PCI devices needing the
+ * callback cleared by it.
+ */
+void pci_acpi_clear_companion_lookup_hook(void)
+{
+	down_write(&pci_acpi_companion_lookup_sem);
+
+	pci_acpi_find_companion_hook = NULL;
+
+	up_write(&pci_acpi_companion_lookup_sem);
+}
+EXPORT_SYMBOL_GPL(pci_acpi_clear_companion_lookup_hook);
+
 static struct acpi_device *acpi_pci_find_companion(struct device *dev)
 {
 	struct pci_dev *pci_dev = to_pci_dev(dev);
+	struct acpi_device *adev;
 	bool check_children;
 	u64 addr;
+
+	if (!dev->parent)
+		return NULL;
+
+	down_read(&pci_acpi_companion_lookup_sem);
+
+	adev = pci_acpi_find_companion_hook ?
+		pci_acpi_find_companion_hook(pci_dev) : NULL;
+
+	up_read(&pci_acpi_companion_lookup_sem);
+
+	if (adev)
+		return adev;
 
 	check_children = pci_is_bridge(pci_dev);
 	/* Please ref to ACPI spec for the syntax of _ADR */
 	addr = (PCI_SLOT(pci_dev->devfn) << 16) | PCI_FUNC(pci_dev->devfn);
-	return acpi_find_child_device(ACPI_COMPANION(dev->parent), addr,
+	adev = acpi_find_child_device(ACPI_COMPANION(dev->parent), addr,
 				      check_children);
+
+	/*
+	 * There may be ACPI device objects in the ACPI namespace that are
+	 * children of the device object representing the host bridge, but don't
+	 * represent PCI devices.  Both _HID and _ADR may be present for them,
+	 * even though that is against the specification (for example, see
+	 * Section 6.1 of ACPI 6.3), but in many cases the _ADR returns 0 which
+	 * appears to indicate that they should not be taken into consideration
+	 * as potential companions of PCI devices on the root bus.
+	 *
+	 * To catch this special case, disregard the returned device object if
+	 * it has a valid _HID, addr is 0 and the PCI device at hand is on the
+	 * root bus.
+	 */
+	if (adev && adev->pnp.type.platform_id && !addr &&
+	    pci_is_root_bus(pci_dev->bus))
+		return NULL;
+
+	return adev;
 }
 
 /**
@@ -1167,7 +1293,7 @@ static struct acpi_device *acpi_pci_find_companion(struct device *dev)
  * @pdev: the PCI device whose delay is to be updated
  * @handle: ACPI handle of this device
  *
- * Update the d3_delay and d3cold_delay of a PCI device from the ACPI _DSM
+ * Update the d3hot_delay and d3cold_delay of a PCI device from the ACPI _DSM
  * control method of either the device itself or the PCI host bridge.
  *
  * Function 8, "Reset Delay," applies to the entire hierarchy below a PCI
@@ -1193,7 +1319,7 @@ static void pci_acpi_optimize_delay(struct pci_dev *pdev,
 		pdev->d3cold_delay = 0;
 
 	obj = acpi_evaluate_dsm(handle, &pci_acpi_dsm_guid, 3,
-				FUNCTION_DELAY_DSM, NULL);
+				DSM_PCI_DEVICE_READINESS_DURATIONS, NULL);
 	if (!obj)
 		return;
 
@@ -1206,14 +1332,14 @@ static void pci_acpi_optimize_delay(struct pci_dev *pdev,
 		}
 		if (elements[3].type == ACPI_TYPE_INTEGER) {
 			value = (int)elements[3].integer.value / 1000;
-			if (value < PCI_PM_D3_WAIT)
-				pdev->d3_delay = value;
+			if (value < PCI_PM_D3HOT_WAIT)
+				pdev->d3hot_delay = value;
 		}
 	}
 	ACPI_FREE(obj);
 }
 
-static void pci_acpi_set_untrusted(struct pci_dev *dev)
+static void pci_acpi_set_external_facing(struct pci_dev *dev)
 {
 	u8 val;
 
@@ -1224,11 +1350,10 @@ static void pci_acpi_set_untrusted(struct pci_dev *dev)
 
 	/*
 	 * These root ports expose PCIe (including DMA) outside of the
-	 * system so make sure we treat them and everything behind as
-	 * untrusted.
+	 * system.  Everything downstream from them is external.
 	 */
 	if (val)
-		dev->untrusted = 1;
+		dev->external_facing = 1;
 }
 
 static void pci_acpi_setup(struct device *dev)
@@ -1240,7 +1365,8 @@ static void pci_acpi_setup(struct device *dev)
 		return;
 
 	pci_acpi_optimize_delay(pci_dev, adev->handle);
-	pci_acpi_set_untrusted(pci_dev);
+	pci_acpi_set_external_facing(pci_dev);
+	pci_acpi_add_edr_notifier(pci_dev);
 
 	pci_acpi_add_pm_notifier(adev, pci_dev);
 	if (!adev->wakeup.flags.valid)
@@ -1268,6 +1394,7 @@ static void pci_acpi_cleanup(struct device *dev)
 	if (!adev)
 		return;
 
+	pci_acpi_remove_edr_notifier(pci_dev);
 	pci_acpi_remove_pm_notifier(adev);
 	if (adev->wakeup.flags.valid) {
 		acpi_device_power_remove_dependent(adev, dev);

@@ -315,7 +315,8 @@ OnError:
 }
 
 static gctUINT32
-_SetPage(gctUINT32 PageAddress, gctUINT32 PageAddressExt, gctBOOL Writable)
+_SetPage(gctUINT32 PageAddress, gctUINT32 PageAddressExt,
+        gctBOOL Writable, gctUINT mmuException)
 {
     gctUINT32 entry = PageAddress
                     /* AddressExt */
@@ -330,14 +331,12 @@ _SetPage(gctUINT32 PageAddress, gctUINT32 PageAddressExt, gctBOOL Writable)
         /* writable */
         entry |= (1 << 2);
     }
-#if gcdUSE_MMU_EXCEPTION
-    else
+    else if (mmuException)
     {
         /* If this page is read only, set exception bit to make exception happens
         ** when writing to it. */
         entry |= gcdMMU_STLB_EXCEPTION;
     }
-#endif
 
     return entry;
 }
@@ -800,7 +799,9 @@ _FillFlatMapping(
         for (i = 0; i < (flatSize / gcdMMU_PAGE_4K_SIZE); i++)
         {
             /* Flat mapping in page table. */
-            _WritePageEntry(stlbEntry, _SetPage(physBase + i * gcdMMU_PAGE_4K_SIZE, 0, gcvTRUE));
+            _WritePageEntry(stlbEntry,
+                    _SetPage(physBase + i * gcdMMU_PAGE_4K_SIZE, 0,
+                        gcvTRUE, Mmu->mmuException));
 #if gcdMMU_TABLE_DUMP
             gckOS_Print("%s(%d): insert MTLB[%d] STLB[%d]: %08x\n",
                 __FUNCTION__, __LINE__,
@@ -814,9 +815,9 @@ _FillFlatMapping(
 #if gcdDUMP_IN_KERNEL
         {
             gctPHYS_ADDR_T physical;
-            gctUINT32 data = _SetPage(physBase, 0, gcvTRUE) & ~0xF;
-            gctUINT32 step = (_SetPage(physBase + gcdMMU_PAGE_4K_SIZE, 0, gcvTRUE) & ~0xF) - data;
-            gctUINT32 mask = _SetPage(physBase, 0, gcvTRUE) & 0xF;
+            gctUINT32 data = _SetPage(physBase, 0, gcvTRUE, Mmu->mmuException) & ~0xF;
+            gctUINT32 step = (_SetPage(physBase + gcdMMU_PAGE_4K_SIZE, 0, gcvTRUE, Mmu->mmuException) & ~0xF) - data;
+            gctUINT32 mask = _SetPage(physBase, 0, gcvTRUE, Mmu->mmuException) & 0xF;
 
             physical  = area->stlbPhysical + 4 * _AddressToIndex(area, physBase);
 
@@ -1105,7 +1106,9 @@ _FillFlatMapping(
                 }
                 else
                 {
-                    _WritePageEntry(stlbLogical + sStart, _SetPage(start, physBaseExt, gcvTRUE));
+                    _WritePageEntry(stlbLogical + sStart,
+                        _SetPage(start, physBaseExt,
+                            gcvTRUE, Mmu->mmuException));
                 }
 #if gcdMMU_TABLE_DUMP
                 gckOS_Print("%s(%d): insert STLB[%d]: %08x\n",
@@ -1295,16 +1298,16 @@ _ConstructDynamicStlb(
                 gcvFALSE,
                 (gctPOINTER *)&Area->stlbLogical));
 
-#if gcdUSE_MMU_EXCEPTION
-    gcmkONERROR(_FillPageTable(Area->stlbLogical,
+    if (Mmu->mmuException) {
+        gcmkONERROR(_FillPageTable(Area->stlbLogical,
                                Area->stlbEntries,
                                /* Enable exception */
                                1 << 1));
-#else
-    /* Invalidate all entries. */
-    gcmkONERROR(gckOS_ZeroMemory(Area->stlbLogical,
+    } else {
+        /* Invalidate all entries. */
+        gcmkONERROR(gckOS_ZeroMemory(Area->stlbLogical,
                 Area->stlbSize));
-#endif
+    }
 
     /* Get stlb table physical. */
     gcmkONERROR(gckVIDMEM_NODE_GetPhysical(
@@ -1447,7 +1450,7 @@ gckMMU_SetupDynamicSpace(
     gckOS_Free(Mmu->os, (gctPOINTER)nodeArray);
 
 #if gcdENABLE_TRUST_APPLICATION
-    if (gckHARDWARE_IsFeatureAvailable(Mmu->hardware, gcvFEATURE_SECURITY) == gcvSTATUS_TRUE)
+    if (Mmu->hardware->options.secureMode == gcvSECURE_IN_TA)
     {
         /* Setup secure address area when needed. */
         gctUINT32 secureAreaSize = gcdMMU_SECURE_AREA_SIZE;
@@ -1604,9 +1607,9 @@ _Construct(
     gcePOOL pool;
     gctUINT64 data;
     gctUINT32 allocFlag = gcvALLOC_FLAG_CONTIGUOUS;
-    gctUINT64 mmuEnabled;
+    gctUINT64 mmuEnabled = 1;
 
-    gcmkHEADER_ARG("Kernel=0x%x MmuSize=%lu", Kernel, MmuSize);
+    gcmkHEADER_ARG("Kernel=%p MmuSize=%lu", Kernel, MmuSize);
 
     /* Verify the arguments. */
     gcmkVERIFY_OBJECT(Kernel, gcvOBJ_KERNEL);
@@ -1649,6 +1652,8 @@ _Construct(
     /* Create the page table mutex. */
     gcmkONERROR(gckOS_CreateMutex(os, &mmu->pageTableMutex));
 
+    gckOS_QueryOption(os, "mmuException", &mmuEnabled);
+    mmu->mmuException = (gctUINT) mmuEnabled;
     gcmkONERROR(gckOS_QueryOption(os, "mmu", &mmuEnabled));
 
     if (hardware->mmuVersion == 0)
@@ -1949,7 +1954,7 @@ _Construct(
     *Mmu = mmu;
 
     /* Success. */
-    gcmkFOOTER_ARG("*Mmu=0x%x", *Mmu);
+    gcmkFOOTER_ARG("*Mmu=%p", *Mmu);
     return gcvSTATUS_OK;
 
 OnError:
@@ -2041,7 +2046,7 @@ _Destroy(
 {
     gckKERNEL kernel = Mmu->hardware->kernel;
 
-    gcmkHEADER_ARG("Mmu=0x%x", Mmu);
+    gcmkHEADER_ARG("Mmu=%p", Mmu);
 
     /* Verify the arguments. */
     gcmkVERIFY_OBJECT(Mmu, gcvOBJ_MMU);
@@ -2331,7 +2336,7 @@ _AllocatePages(
     gctUINT32 pageCount;
     gcsADDRESS_AREA_PTR area = _GetProcessArea(Mmu, PageType, Secure);
 
-    gcmkHEADER_ARG("Mmu=0x%x PageCount=%lu", Mmu, PageCount);
+    gcmkHEADER_ARG("Mmu=%p PageCount=%lu", Mmu, PageCount);
 
     /* Verify the arguments. */
     gcmkVERIFY_OBJECT(Mmu, gcvOBJ_MMU);
@@ -2521,7 +2526,7 @@ _AllocatePages(
     gcmkVERIFY_OK(gckOS_ReleaseMutex(Mmu->os, Mmu->pageTableMutex));
 
     /* Success. */
-    gcmkFOOTER_ARG("*PageTable=0x%x *Address=%08x",
+    gcmkFOOTER_ARG("*PageTable=%p *Address=%08x",
                    *PageTable, gcmOPT_VALUE(Address));
     return gcvSTATUS_OK;
 
@@ -2579,7 +2584,7 @@ _FreePages(
     gctUINT32 pageSize = (PageType == gcvPAGE_TYPE_1M)
                        ? gcdMMU_PAGE_1M_SIZE : gcdMMU_PAGE_4K_SIZE;
 
-    gcmkHEADER_ARG("Mmu=0x%x PageTable=0x%x PageCount=%lu",
+    gcmkHEADER_ARG("Mmu=%p PageTable=%p PageCount=%lu",
                    Mmu, PageTable, PageCount);
 
     /* Verify the arguments. */
@@ -2621,12 +2626,15 @@ _FreePages(
 
         if (PageTable != gcvNULL)
         {
-#if gcdUSE_MMU_EXCEPTION
-        /* Enable exception */
-        _WritePageEntry(PageTable, (1 << 1));
-#else
-        _WritePageEntry(PageTable, 0);
-#endif
+            if (Mmu->mmuException)
+            {
+                /* Enable exception */
+                _WritePageEntry(PageTable, (1 << 1));
+            }
+            else
+            {
+                _WritePageEntry(PageTable, 0);
+            }
         }
     }
     else
@@ -2637,12 +2645,15 @@ _FreePages(
 
         if (PageTable != gcvNULL)
         {
-#if gcdUSE_MMU_EXCEPTION
-            /* Enable exception */
-            gcmkVERIFY_OK(_FillPageTable(PageTable, (gctUINT32)PageCount, 1 << 1));
-#else
-            gcmkVERIFY_OK(_FillPageTable(PageTable, (gctUINT32)PageCount, 0));
-#endif
+            if (Mmu->mmuException)
+            {
+                /* Enable exception */
+                gcmkVERIFY_OK(_FillPageTable(PageTable, (gctUINT32)PageCount, 1 << 1));
+            }
+            else
+            {
+                gcmkVERIFY_OK(_FillPageTable(PageTable, (gctUINT32)PageCount, 0));
+            }
         }
     }
 
@@ -2745,7 +2756,7 @@ gckMMU_SetPage(
     gctUINT32 addressExt;
     gctUINT32 address;
 
-    gcmkHEADER_ARG("Mmu=0x%x", Mmu);
+    gcmkHEADER_ARG("Mmu=%p", Mmu);
 
     /* Verify the arguments. */
     gcmkVERIFY_OBJECT(Mmu, gcvOBJ_MMU);
@@ -2771,7 +2782,8 @@ gckMMU_SetPage(
     }
     else
     {
-        _WritePageEntry(PageEntry, _SetPage(address, addressExt, gcvTRUE));
+        _WritePageEntry(PageEntry,
+                _SetPage(address, addressExt, gcvTRUE, Mmu->mmuException));
     }
 
 #ifdef DUMP_IN_KERNEL
@@ -2882,7 +2894,7 @@ gckMMU_DumpPageTableEntry(
     gctUINT32 stlbEntryNum = (AreaType == gcvAREA_TYPE_4K)
                            ? gcdMMU_STLB_4K_ENTRY_NUM : gcdMMU_STLB_1M_ENTRY_NUM;
 
-    gcmkHEADER_ARG("Mmu=0x%08X Address=0x%08X", Mmu, Address);
+    gcmkHEADER_ARG("Mmu=%p Address=0x%08X", Mmu, Address);
     gcmkVERIFY_OBJECT(Mmu, gcvOBJ_MMU);
 
     gcmkASSERT(Mmu->hardware->mmuVersion > 0);
@@ -2970,7 +2982,6 @@ gckMMU_DumpAddressSpace(
 {
     gctUINT i;
     gctUINT next;
-    /* TODO: */
     gcsADDRESS_AREA_PTR area = &Mmu->dynamicArea4K;
     gctUINT32_PTR map = area->mapLogical;
     gctBOOL used = gcvFALSE;
@@ -3133,7 +3144,7 @@ gckMMU_SetupSRAM(
     gceSTATUS status;
     gckKERNEL kernel = Hardware->kernel;
 
-    gcmkHEADER_ARG("Mmu=0x%x Hardware=0x%x", Mmu, Hardware);
+    gcmkHEADER_ARG("Mmu=%p Hardware=%p", Mmu, Hardware);
 
     gcmkVERIFY_OBJECT(Hardware, gcvOBJ_HARDWARE);
 
@@ -3162,6 +3173,15 @@ gckMMU_SetupSRAM(
                 /* Map the internal SRAM. */
                 if (needMapInternalSRAM)
                 {
+                    if (Device->showSRAMMapInfo)
+                    {
+                            gcmkPRINT("Galcore Info: MMU mapped core%d SRAM base=0x%llx size=0x%x",
+                            i,
+                            reservedBase,
+                            reservedSize
+                            );
+                    }
+
                     /*
                      * Default gpu virtual base = 0.
                      * It can be specified if not conflict with existing mapping.
@@ -3342,7 +3362,7 @@ gckMMU_GetPageEntry(
     gctUINT32 mtlbOffset, stlbOffset;
     gcsADDRESS_AREA_PTR area = _GetProcessArea(Mmu, PageType, gcvFALSE);
 
-    gcmkHEADER_ARG("Mmu=0x%08X Address=0x%08X", Mmu, Address);
+    gcmkHEADER_ARG("Mmu=%p Address=0x%08X", Mmu, Address);
     gcmkVERIFY_OBJECT(Mmu, gcvOBJ_MMU);
 
     gcmkASSERT(Mmu->hardware->mmuVersion > 0);

@@ -32,9 +32,12 @@
 #define LTR501_PART_ID 0x86
 #define LTR501_MANUFAC_ID 0x87
 #define LTR501_ALS_DATA1 0x88 /* 16-bit, little endian */
+#define LTR501_ALS_DATA1_UPPER 0x89 /* upper 8 bits of LTR501_ALS_DATA1 */
 #define LTR501_ALS_DATA0 0x8a /* 16-bit, little endian */
+#define LTR501_ALS_DATA0_UPPER 0x8b /* upper 8 bits of LTR501_ALS_DATA0 */
 #define LTR501_ALS_PS_STATUS 0x8c
 #define LTR501_PS_DATA 0x8d /* 16-bit, little endian */
+#define LTR501_PS_DATA_UPPER 0x8e /* upper 8 bits of LTR501_PS_DATA */
 #define LTR501_INTR 0x8f /* output mode, polarity, mode */
 #define LTR501_PS_THRESH_UP 0x90 /* 11 bit, ps upper threshold */
 #define LTR501_PS_THRESH_LOW 0x92 /* 11 bit, ps lower threshold */
@@ -101,12 +104,12 @@ struct ltr501_gain {
 	int uscale;
 };
 
-static struct ltr501_gain ltr501_als_gain_tbl[] = {
+static const struct ltr501_gain ltr501_als_gain_tbl[] = {
 	{1, 0},
 	{0, 5000},
 };
 
-static struct ltr501_gain ltr559_als_gain_tbl[] = {
+static const struct ltr501_gain ltr559_als_gain_tbl[] = {
 	{1, 0},
 	{0, 500000},
 	{0, 250000},
@@ -117,14 +120,14 @@ static struct ltr501_gain ltr559_als_gain_tbl[] = {
 	{0, 10000},
 };
 
-static struct ltr501_gain ltr501_ps_gain_tbl[] = {
+static const struct ltr501_gain ltr501_ps_gain_tbl[] = {
 	{1, 0},
 	{0, 250000},
 	{0, 125000},
 	{0, 62500},
 };
 
-static struct ltr501_gain ltr559_ps_gain_tbl[] = {
+static const struct ltr501_gain ltr559_ps_gain_tbl[] = {
 	{0, 62500}, /* x16 gain */
 	{0, 31250}, /* x32 gain */
 	{0, 15625}, /* bits X1 are for x64 gain */
@@ -133,9 +136,9 @@ static struct ltr501_gain ltr559_ps_gain_tbl[] = {
 
 struct ltr501_chip_info {
 	u8 partid;
-	struct ltr501_gain *als_gain;
+	const struct ltr501_gain *als_gain;
 	int als_gain_tbl_size;
-	struct ltr501_gain *ps_gain;
+	const struct ltr501_gain *ps_gain;
 	int ps_gain_tbl_size;
 	u8 als_mode_active;
 	u8 als_gain_mask;
@@ -149,7 +152,7 @@ struct ltr501_chip_info {
 struct ltr501_data {
 	struct i2c_client *client;
 	struct mutex lock_als, lock_ps;
-	struct ltr501_chip_info *chip_info;
+	const struct ltr501_chip_info *chip_info;
 	u8 als_contr, ps_contr;
 	int als_period, ps_period; /* period in micro seconds */
 	struct regmap *regmap;
@@ -192,7 +195,7 @@ static int ltr501_match_samp_freq(const struct ltr501_samp_table *tab,
 	return -EINVAL;
 }
 
-static int ltr501_als_read_samp_freq(struct ltr501_data *data,
+static int ltr501_als_read_samp_freq(const struct ltr501_data *data,
 				     int *val, int *val2)
 {
 	int ret, i;
@@ -210,7 +213,7 @@ static int ltr501_als_read_samp_freq(struct ltr501_data *data,
 	return IIO_VAL_INT_PLUS_MICRO;
 }
 
-static int ltr501_ps_read_samp_freq(struct ltr501_data *data,
+static int ltr501_ps_read_samp_freq(const struct ltr501_data *data,
 				    int *val, int *val2)
 {
 	int ret, i;
@@ -266,7 +269,7 @@ static int ltr501_ps_write_samp_freq(struct ltr501_data *data,
 	return ret;
 }
 
-static int ltr501_als_read_samp_period(struct ltr501_data *data, int *val)
+static int ltr501_als_read_samp_period(const struct ltr501_data *data, int *val)
 {
 	int ret, i;
 
@@ -282,7 +285,7 @@ static int ltr501_als_read_samp_period(struct ltr501_data *data, int *val)
 	return IIO_VAL_INT;
 }
 
-static int ltr501_ps_read_samp_period(struct ltr501_data *data, int *val)
+static int ltr501_ps_read_samp_period(const struct ltr501_data *data, int *val)
 {
 	int ret, i;
 
@@ -321,7 +324,7 @@ static unsigned long ltr501_calculate_lux(u16 vis_data, u16 ir_data)
 	return lux / 1000;
 }
 
-static int ltr501_drdy(struct ltr501_data *data, u8 drdy_mask)
+static int ltr501_drdy(const struct ltr501_data *data, u8 drdy_mask)
 {
 	int tries = 100;
 	int ret, status;
@@ -373,7 +376,8 @@ static int ltr501_set_it_time(struct ltr501_data *data, int it)
 }
 
 /* read int time in micro seconds */
-static int ltr501_read_it_time(struct ltr501_data *data, int *val, int *val2)
+static int ltr501_read_it_time(const struct ltr501_data *data,
+			       int *val, int *val2)
 {
 	int ret, index;
 
@@ -391,7 +395,7 @@ static int ltr501_read_it_time(struct ltr501_data *data, int *val, int *val2)
 	return IIO_VAL_INT_PLUS_MICRO;
 }
 
-static int ltr501_read_als(struct ltr501_data *data, __le16 buf[2])
+static int ltr501_read_als(const struct ltr501_data *data, __le16 buf[2])
 {
 	int ret;
 
@@ -403,23 +407,24 @@ static int ltr501_read_als(struct ltr501_data *data, __le16 buf[2])
 				buf, 2 * sizeof(__le16));
 }
 
-static int ltr501_read_ps(struct ltr501_data *data)
+static int ltr501_read_ps(const struct ltr501_data *data)
 {
-	int ret, status;
+	__le16 status;
+	int ret;
 
 	ret = ltr501_drdy(data, LTR501_STATUS_PS_RDY);
 	if (ret < 0)
 		return ret;
 
 	ret = regmap_bulk_read(data->regmap, LTR501_PS_DATA,
-			       &status, 2);
+			       &status, sizeof(status));
 	if (ret < 0)
 		return ret;
 
-	return status;
+	return le16_to_cpu(status);
 }
 
-static int ltr501_read_intr_prst(struct ltr501_data *data,
+static int ltr501_read_intr_prst(const struct ltr501_data *data,
 				 enum iio_chan_type type,
 				 int *val2)
 {
@@ -716,7 +721,7 @@ static int ltr501_read_raw(struct iio_dev *indio_dev,
 	return -EINVAL;
 }
 
-static int ltr501_get_gain_index(struct ltr501_gain *gain, int size,
+static int ltr501_get_gain_index(const struct ltr501_gain *gain, int size,
 				 int val, int val2)
 {
 	int i;
@@ -734,7 +739,7 @@ static int ltr501_write_raw(struct iio_dev *indio_dev,
 {
 	struct ltr501_data *data = iio_priv(indio_dev);
 	int i, ret, freq_val, freq_val2;
-	struct ltr501_chip_info *info = data->chip_info;
+	const struct ltr501_chip_info *info = data->chip_info;
 
 	ret = iio_device_claim_direct_mode(indio_dev);
 	if (ret)
@@ -848,14 +853,14 @@ static int ltr501_write_raw(struct iio_dev *indio_dev,
 	return ret;
 }
 
-static int ltr501_read_thresh(struct iio_dev *indio_dev,
+static int ltr501_read_thresh(const struct iio_dev *indio_dev,
 			      const struct iio_chan_spec *chan,
 			      enum iio_event_type type,
 			      enum iio_event_direction dir,
 			      enum iio_event_info info,
 			      int *val, int *val2)
 {
-	struct ltr501_data *data = iio_priv(indio_dev);
+	const struct ltr501_data *data = iio_priv(indio_dev);
 	int ret, thresh_data;
 
 	switch (chan->type) {
@@ -1081,7 +1086,7 @@ static ssize_t ltr501_show_proximity_scale_avail(struct device *dev,
 						 char *buf)
 {
 	struct ltr501_data *data = iio_priv(dev_to_iio_dev(dev));
-	struct ltr501_chip_info *info = data->chip_info;
+	const struct ltr501_chip_info *info = data->chip_info;
 	ssize_t len = 0;
 	int i;
 
@@ -1103,7 +1108,7 @@ static ssize_t ltr501_show_intensity_scale_avail(struct device *dev,
 						 char *buf)
 {
 	struct ltr501_data *data = iio_priv(dev_to_iio_dev(dev));
-	struct ltr501_chip_info *info = data->chip_info;
+	const struct ltr501_chip_info *info = data->chip_info;
 	ssize_t len = 0;
 	int i;
 
@@ -1183,7 +1188,7 @@ static const struct iio_info ltr301_info = {
 	.write_event_config	= &ltr501_write_event_config,
 };
 
-static struct ltr501_chip_info ltr501_chip_info_tbl[] = {
+static const struct ltr501_chip_info ltr501_chip_info_tbl[] = {
 	[ltr501] = {
 		.partid = 0x08,
 		.als_gain = ltr501_als_gain_tbl,
@@ -1204,7 +1209,7 @@ static struct ltr501_chip_info ltr501_chip_info_tbl[] = {
 		.als_gain_tbl_size = ARRAY_SIZE(ltr559_als_gain_tbl),
 		.ps_gain = ltr559_ps_gain_tbl,
 		.ps_gain_tbl_size = ARRAY_SIZE(ltr559_ps_gain_tbl),
-		.als_mode_active = BIT(1),
+		.als_mode_active = BIT(0),
 		.als_gain_mask = BIT(2) | BIT(3) | BIT(4),
 		.als_gain_shift = 2,
 		.info = &ltr501_info,
@@ -1266,7 +1271,7 @@ static irqreturn_t ltr501_trigger_handler(int irq, void *p)
 
 	if (mask & LTR501_STATUS_ALS_RDY) {
 		ret = regmap_bulk_read(data->regmap, LTR501_ALS_DATA1,
-				       (u8 *)als_buf, sizeof(als_buf));
+				       als_buf, sizeof(als_buf));
 		if (ret < 0)
 			return ret;
 		if (test_bit(0, indio_dev->active_scan_mask))
@@ -1353,16 +1358,19 @@ static bool ltr501_is_volatile_reg(struct device *dev, unsigned int reg)
 {
 	switch (reg) {
 	case LTR501_ALS_DATA1:
+	case LTR501_ALS_DATA1_UPPER:
 	case LTR501_ALS_DATA0:
+	case LTR501_ALS_DATA0_UPPER:
 	case LTR501_ALS_PS_STATUS:
 	case LTR501_PS_DATA:
+	case LTR501_PS_DATA_UPPER:
 		return true;
 	default:
 		return false;
 	}
 }
 
-static struct regmap_config ltr501_regmap_config = {
+static const struct regmap_config ltr501_regmap_config = {
 	.name =  LTR501_REGMAP_NAME,
 	.reg_bits = 8,
 	.val_bits = 8,
@@ -1482,7 +1490,6 @@ static int ltr501_probe(struct i2c_client *client,
 	if ((partid >> 4) != data->chip_info->partid)
 		return -ENODEV;
 
-	indio_dev->dev.parent = &client->dev;
 	indio_dev->info = data->chip_info->info;
 	indio_dev->channels = data->chip_info->channels;
 	indio_dev->num_channels = data->chip_info->no_channels;

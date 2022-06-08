@@ -4,6 +4,11 @@
 #include <linux/mlx5/eswitch.h>
 #include "dr_types.h"
 
+#define DR_DOMAIN_SW_STEERING_SUPPORTED(dmn, dmn_type)	\
+	((dmn)->info.caps.dmn_type##_sw_owner ||	\
+	 ((dmn)->info.caps.dmn_type##_sw_owner_v2 &&	\
+	  (dmn)->info.caps.sw_format_ver <= MLX5_STEERING_FORMAT_CONNECTX_6DX))
+
 static int dr_domain_init_cache(struct mlx5dr_domain *dmn)
 {
 	/* Per vport cached FW FT for checksum recalculation, this
@@ -57,9 +62,15 @@ static int dr_domain_init_resources(struct mlx5dr_domain *dmn)
 {
 	int ret;
 
+	dmn->ste_ctx = mlx5dr_ste_get_ctx(dmn->info.caps.sw_format_ver);
+	if (!dmn->ste_ctx) {
+		mlx5dr_err(dmn, "SW Steering on this device is unsupported\n");
+		return -EOPNOTSUPP;
+	}
+
 	ret = mlx5_core_alloc_pd(dmn->mdev, &dmn->pdn);
 	if (ret) {
-		mlx5dr_dbg(dmn, "Couldn't allocate PD\n");
+		mlx5dr_err(dmn, "Couldn't allocate PD, ret: %d", ret);
 		return ret;
 	}
 
@@ -181,6 +192,7 @@ static int dr_domain_query_fdb_caps(struct mlx5_core_dev *mdev,
 		return ret;
 
 	dmn->info.caps.fdb_sw_owner = dmn->info.caps.esw_caps.sw_owner;
+	dmn->info.caps.fdb_sw_owner_v2 = dmn->info.caps.esw_caps.sw_owner_v2;
 	dmn->info.caps.esw_rx_drop_address = dmn->info.caps.esw_caps.drop_icm_address_rx;
 	dmn->info.caps.esw_tx_drop_address = dmn->info.caps.esw_caps.drop_icm_address_tx;
 
@@ -192,7 +204,7 @@ static int dr_domain_query_fdb_caps(struct mlx5_core_dev *mdev,
 
 	ret = dr_domain_query_vports(dmn);
 	if (ret) {
-		mlx5dr_dbg(dmn, "Failed to query vports caps\n");
+		mlx5dr_err(dmn, "Failed to query vports caps (err: %d)", ret);
 		goto free_vports_caps;
 	}
 
@@ -213,7 +225,7 @@ static int dr_domain_caps_init(struct mlx5_core_dev *mdev,
 	int ret;
 
 	if (MLX5_CAP_GEN(mdev, port_type) != MLX5_CAP_PORT_TYPE_ETH) {
-		mlx5dr_dbg(dmn, "Failed to allocate domain, bad link type\n");
+		mlx5dr_err(dmn, "Failed to allocate domain, bad link type\n");
 		return -EOPNOTSUPP;
 	}
 
@@ -229,20 +241,20 @@ static int dr_domain_caps_init(struct mlx5_core_dev *mdev,
 
 	switch (dmn->type) {
 	case MLX5DR_DOMAIN_TYPE_NIC_RX:
-		if (!dmn->info.caps.rx_sw_owner)
+		if (!DR_DOMAIN_SW_STEERING_SUPPORTED(dmn, rx))
 			return -ENOTSUPP;
 
 		dmn->info.supp_sw_steering = true;
-		dmn->info.rx.ste_type = MLX5DR_STE_TYPE_RX;
+		dmn->info.rx.type = DR_DOMAIN_NIC_TYPE_RX;
 		dmn->info.rx.default_icm_addr = dmn->info.caps.nic_rx_drop_address;
 		dmn->info.rx.drop_icm_addr = dmn->info.caps.nic_rx_drop_address;
 		break;
 	case MLX5DR_DOMAIN_TYPE_NIC_TX:
-		if (!dmn->info.caps.tx_sw_owner)
+		if (!DR_DOMAIN_SW_STEERING_SUPPORTED(dmn, tx))
 			return -ENOTSUPP;
 
 		dmn->info.supp_sw_steering = true;
-		dmn->info.tx.ste_type = MLX5DR_STE_TYPE_TX;
+		dmn->info.tx.type = DR_DOMAIN_NIC_TYPE_TX;
 		dmn->info.tx.default_icm_addr = dmn->info.caps.nic_tx_allow_address;
 		dmn->info.tx.drop_icm_addr = dmn->info.caps.nic_tx_drop_address;
 		break;
@@ -250,14 +262,14 @@ static int dr_domain_caps_init(struct mlx5_core_dev *mdev,
 		if (!dmn->info.caps.eswitch_manager)
 			return -ENOTSUPP;
 
-		if (!dmn->info.caps.fdb_sw_owner)
+		if (!DR_DOMAIN_SW_STEERING_SUPPORTED(dmn, fdb))
 			return -ENOTSUPP;
 
-		dmn->info.rx.ste_type = MLX5DR_STE_TYPE_RX;
-		dmn->info.tx.ste_type = MLX5DR_STE_TYPE_TX;
+		dmn->info.rx.type = DR_DOMAIN_NIC_TYPE_RX;
+		dmn->info.tx.type = DR_DOMAIN_NIC_TYPE_TX;
 		vport_cap = mlx5dr_get_vport_cap(&dmn->info.caps, 0);
 		if (!vport_cap) {
-			mlx5dr_dbg(dmn, "Failed to get esw manager vport\n");
+			mlx5dr_err(dmn, "Failed to get esw manager vport\n");
 			return -ENOENT;
 		}
 
@@ -268,7 +280,7 @@ static int dr_domain_caps_init(struct mlx5_core_dev *mdev,
 		dmn->info.tx.drop_icm_addr = dmn->info.caps.esw_tx_drop_address;
 		break;
 	default:
-		mlx5dr_dbg(dmn, "Invalid domain\n");
+		mlx5dr_err(dmn, "Invalid domain\n");
 		ret = -EINVAL;
 		break;
 	}
@@ -297,10 +309,11 @@ mlx5dr_domain_create(struct mlx5_core_dev *mdev, enum mlx5dr_domain_type type)
 	dmn->mdev = mdev;
 	dmn->type = type;
 	refcount_set(&dmn->refcount, 1);
-	mutex_init(&dmn->mutex);
+	mutex_init(&dmn->info.rx.mutex);
+	mutex_init(&dmn->info.tx.mutex);
 
 	if (dr_domain_caps_init(mdev, dmn)) {
-		mlx5dr_dbg(dmn, "Failed init domain, no caps\n");
+		mlx5dr_err(dmn, "Failed init domain, no caps\n");
 		goto free_domain;
 	}
 
@@ -326,9 +339,6 @@ mlx5dr_domain_create(struct mlx5_core_dev *mdev, enum mlx5dr_domain_type type)
 		goto uninit_resourses;
 	}
 
-	/* Init CRC table for htbl CRC calculation */
-	mlx5dr_crc32_init_table();
-
 	return dmn;
 
 uninit_resourses:
@@ -348,11 +358,14 @@ int mlx5dr_domain_sync(struct mlx5dr_domain *dmn, u32 flags)
 	int ret = 0;
 
 	if (flags & MLX5DR_DOMAIN_SYNC_FLAGS_SW) {
-		mutex_lock(&dmn->mutex);
+		mlx5dr_domain_lock(dmn);
 		ret = mlx5dr_send_ring_force_drain(dmn);
-		mutex_unlock(&dmn->mutex);
-		if (ret)
+		mlx5dr_domain_unlock(dmn);
+		if (ret) {
+			mlx5dr_err(dmn, "Force drain failed flags: %d, ret: %d\n",
+				   flags, ret);
 			return ret;
+		}
 	}
 
 	if (flags & MLX5DR_DOMAIN_SYNC_FLAGS_HW)
@@ -371,7 +384,8 @@ int mlx5dr_domain_destroy(struct mlx5dr_domain *dmn)
 	dr_domain_uninit_cache(dmn);
 	dr_domain_uninit_resources(dmn);
 	dr_domain_caps_uninit(dmn);
-	mutex_destroy(&dmn->mutex);
+	mutex_destroy(&dmn->info.tx.mutex);
+	mutex_destroy(&dmn->info.rx.mutex);
 	kfree(dmn);
 	return 0;
 }
@@ -379,7 +393,7 @@ int mlx5dr_domain_destroy(struct mlx5dr_domain *dmn)
 void mlx5dr_domain_set_peer(struct mlx5dr_domain *dmn,
 			    struct mlx5dr_domain *peer_dmn)
 {
-	mutex_lock(&dmn->mutex);
+	mlx5dr_domain_lock(dmn);
 
 	if (dmn->peer_dmn)
 		refcount_dec(&dmn->peer_dmn->refcount);
@@ -389,5 +403,5 @@ void mlx5dr_domain_set_peer(struct mlx5dr_domain *dmn,
 	if (dmn->peer_dmn)
 		refcount_inc(&dmn->peer_dmn->refcount);
 
-	mutex_unlock(&dmn->mutex);
+	mlx5dr_domain_unlock(dmn);
 }

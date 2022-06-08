@@ -2485,8 +2485,10 @@ _ProgramMMUStates(
     gctUINT32 reserveBytes = 0;
 
     gctBOOL config2D;
+    gctUINT i;
+    gctUINT probeSelectCount = 4;
 
-    gcmkHEADER_ARG("Hardware=0x%x", Hardware);
+    gcmkHEADER_ARG("Hardware=%p", Hardware);
 
     /* Verify the arguments. */
     gcmkVERIFY_OBJECT(Hardware, gcvOBJ_HARDWARE);
@@ -2532,7 +2534,7 @@ _ProgramMMUStates(
         }
     }
 
-    reserveBytes += 8;
+    reserveBytes += 8 + 8 * probeSelectCount;
 
     physical = Mmu->mtlbPhysical;
 
@@ -2876,7 +2878,106 @@ _ProgramMMUStates(
  16:16))) | (((gctUINT32) ((gctUINT32) (1) & ((gctUINT32) ((((1 ?
  16:16) - (0 ?
  16:16) + 1) == 32) ?
- ~0U : (~(~0U << ((1 ? 16:16) - (0 ? 16:16) + 1))))))) << (0 ? 16:16)));
+ ~0U : (~(~0U << ((1 ? 16:16) - (0 ? 16:16) + 1))))))) << (0 ? 16:16))) |
+              ((((gctUINT32) (0)) & ~(((gctUINT32) (((gctUINT32) ((((1 ?
+ 24:24) - (0 ?
+ 24:24) + 1) == 32) ?
+ ~0U : (~(~0U << ((1 ?
+ 24:24) - (0 ?
+ 24:24) + 1))))))) << (0 ?
+ 24:24))) | (((gctUINT32) ((gctUINT32) (1) & ((gctUINT32) ((((1 ?
+ 24:24) - (0 ?
+ 24:24) + 1) == 32) ?
+ ~0U : (~(~0U << ((1 ? 24:24) - (0 ? 24:24) + 1))))))) << (0 ? 24:24))) |
+              ((((gctUINT32) (0)) & ~(((gctUINT32) (((gctUINT32) ((((1 ?
+ 19:19) - (0 ?
+ 19:19) + 1) == 32) ?
+ ~0U : (~(~0U << ((1 ?
+ 19:19) - (0 ?
+ 19:19) + 1))))))) << (0 ?
+ 19:19))) | (((gctUINT32) ((gctUINT32) (1) & ((gctUINT32) ((((1 ?
+ 19:19) - (0 ?
+ 19:19) + 1) == 32) ?
+ ~0U : (~(~0U << ((1 ? 19:19) - (0 ? 19:19) + 1))))))) << (0 ? 19:19))) |
+              ((((gctUINT32) (0)) & ~(((gctUINT32) (((gctUINT32) ((((1 ?
+ 22:22) - (0 ?
+ 22:22) + 1) == 32) ?
+ ~0U : (~(~0U << ((1 ?
+ 22:22) - (0 ?
+ 22:22) + 1))))))) << (0 ?
+ 22:22))) | (((gctUINT32) ((gctUINT32) (1) & ((gctUINT32) ((((1 ?
+ 22:22) - (0 ?
+ 22:22) + 1) == 32) ?
+ ~0U : (~(~0U << ((1 ? 22:22) - (0 ? 22:22) + 1))))))) << (0 ? 22:22)));
+
+
+        for (i = 0; i < probeSelectCount; i++)
+        {
+            *buffer++
+                = ((((gctUINT32) (0)) & ~(((gctUINT32) (((gctUINT32) ((((1 ?
+ 31:27) - (0 ?
+ 31:27) + 1) == 32) ?
+ ~0U : (~(~0U << ((1 ?
+ 31:27) - (0 ?
+ 31:27) + 1))))))) << (0 ?
+ 31:27))) | (((gctUINT32) (0x01 & ((gctUINT32) ((((1 ?
+ 31:27) - (0 ?
+ 31:27) + 1) == 32) ?
+ ~0U : (~(~0U << ((1 ? 31:27) - (0 ? 31:27) + 1))))))) << (0 ? 31:27)))
+                | ((((gctUINT32) (0)) & ~(((gctUINT32) (((gctUINT32) ((((1 ?
+ 15:0) - (0 ?
+ 15:0) + 1) == 32) ?
+ ~0U : (~(~0U << ((1 ?
+ 15:0) - (0 ?
+ 15:0) + 1))))))) << (0 ?
+ 15:0))) | (((gctUINT32) ((gctUINT32) (0x0E1E) & ((gctUINT32) ((((1 ?
+ 15:0) - (0 ?
+ 15:0) + 1) == 32) ?
+ ~0U : (~(~0U << ((1 ? 15:0) - (0 ? 15:0) + 1))))))) << (0 ? 15:0)))
+                | ((((gctUINT32) (0)) & ~(((gctUINT32) (((gctUINT32) ((((1 ?
+ 25:16) - (0 ?
+ 25:16) + 1) == 32) ?
+ ~0U : (~(~0U << ((1 ?
+ 25:16) - (0 ?
+ 25:16) + 1))))))) << (0 ?
+ 25:16))) | (((gctUINT32) ((gctUINT32) (1) & ((gctUINT32) ((((1 ?
+ 25:16) - (0 ?
+ 25:16) + 1) == 32) ?
+ ~0U : (~(~0U << ((1 ? 25:16) - (0 ? 25:16) + 1))))))) << (0 ? 25:16)));
+
+
+            *buffer++
+                = ((((gctUINT32) (0)) & ~(((gctUINT32) (((gctUINT32) ((((1 ?
+ 15:0) - (0 ?
+ 15:0) + 1) == 32) ?
+ ~0U : (~(~0U << ((1 ?
+ 15:0) - (0 ?
+ 15:0) + 1))))))) << (0 ?
+ 15:0))) | (((gctUINT32) ((gctUINT32) (i) & ((gctUINT32) ((((1 ?
+ 15:0) - (0 ?
+ 15:0) + 1) == 32) ?
+ ~0U : (~(~0U << ((1 ? 15:0) - (0 ? 15:0) + 1))))))) << (0 ? 15:0))) |
+                  ((((gctUINT32) (0)) & ~(((gctUINT32) (((gctUINT32) ((((1 ?
+ 20:16) - (0 ?
+ 20:16) + 1) == 32) ?
+ ~0U : (~(~0U << ((1 ?
+ 20:16) - (0 ?
+ 20:16) + 1))))))) << (0 ?
+ 20:16))) | (((gctUINT32) (0x0A & ((gctUINT32) ((((1 ?
+ 20:16) - (0 ?
+ 20:16) + 1) == 32) ?
+ ~0U : (~(~0U << ((1 ? 20:16) - (0 ? 20:16) + 1))))))) << (0 ? 20:16))) |
+                  ((((gctUINT32) (0)) & ~(((gctUINT32) (((gctUINT32) ((((1 ?
+ 25:24) - (0 ?
+ 25:24) + 1) == 32) ?
+ ~0U : (~(~0U << ((1 ?
+ 25:24) - (0 ?
+ 25:24) + 1))))))) << (0 ?
+ 25:24))) | (((gctUINT32) (0x1 & ((gctUINT32) ((((1 ?
+ 25:24) - (0 ?
+ 25:24) + 1) == 32) ?
+ ~0U : (~(~0U << ((1 ? 25:24) - (0 ? 25:24) + 1))))))) << (0 ? 25:24)));
+        }
 
         do{*buffer++ = ((((gctUINT32) (0)) & ~(((gctUINT32) (((gctUINT32) ((((1 ?
  31:27) - (0 ?
@@ -3355,7 +3456,7 @@ _ProgramMMUStatesMCFE(
     gctBOOL ace;
     gctUINT32 reserveBytes = 0;
 
-    gcmkHEADER_ARG("Hardware=0x%x", Hardware);
+    gcmkHEADER_ARG("Hardware=%p", Hardware);
 
     /* Verify the arguments. */
     gcmkVERIFY_OBJECT(Hardware, gcvOBJ_HARDWARE);
@@ -3760,7 +3861,7 @@ _FuncInit_MMU(IN gcsFUNCTION_EXECUTION_PTR Execution)
     mode = gcvMMU_MODE_4K;
 #endif
 
-    flags |= gcvALLOC_FLAG_4GB_ADDR;
+    flags |= gcvALLOC_FLAG_4GB_ADDR | gcvALLOC_FLAG_4K_PAGES;
 
 #if gcdENABLE_CACHEABLE_COMMAND_BUFFER
     flags |= gcvALLOC_FLAG_CACHEABLE;
@@ -3898,7 +3999,7 @@ _FuncExecute_MMU(IN gcsFUNCTION_EXECUTION_PTR Execution)
     gceSTATUS status = gcvSTATUS_OK;
     gctUINT32 address = 0;
     gctUINT32 idle;
-    gctUINT32 timer = 0, delay = 1;
+    gctUINT32 timer = 0, delay = 10;
     gckHARDWARE hardware = (gckHARDWARE)Execution->hardware;
     gckMMU mmu = hardware->kernel->mmu;
 
@@ -4055,7 +4156,7 @@ _FuncExecute_MMU(IN gcsFUNCTION_EXECUTION_PTR Execution)
     /* Wait until MMU configure finishes. */
     do
     {
-        gckOS_Delay(hardware->os, delay);
+        gckOS_Udelay(hardware->os, delay);
 
         gcmkONERROR(gckOS_ReadRegisterEx(
             hardware->os,
@@ -10828,7 +10929,7 @@ gceSTATUS gckFUNCTION_Construct(IN         gctPOINTER Hardware)
     gctPOINTER pointer = gcvNULL;
     gctUINT i;
 
-    gcmkHEADER_ARG("Hardware=0x%x", Hardware);
+    gcmkHEADER_ARG("Hardware=%p", Hardware);
     /* Verify the arguments. */
     gcmkVERIFY_ARGUMENT(Hardware != gcvNULL);
 
@@ -10941,7 +11042,7 @@ gceSTATUS gckFUNCTION_Destory(IN    gctPOINTER Hardware)
     gckHARDWARE hardware = (gckHARDWARE)Hardware;
     gctUINT i;
 
-    gcmkHEADER_ARG("Hardware=0x%x", Hardware);
+    gcmkHEADER_ARG("Hardware=%p", Hardware);
     /* Verify the arguments. */
     gcmkVERIFY_ARGUMENT(Hardware != gcvNULL);
 
@@ -10963,7 +11064,7 @@ gceSTATUS gckFUNCTION_Validate(IN gcsFUNCTION_EXECUTION_PTR Execution,
 {
     gceSTATUS status = gcvSTATUS_NOT_SUPPORTED;
 
-    gcmkHEADER_ARG("Execution=0x%x", Execution);
+    gcmkHEADER_ARG("Execution=%p", Execution);
     /* Verify the arguments. */
     gcmkVERIFY_ARGUMENT(Execution != gcvNULL);
     gcmkVERIFY_ARGUMENT(Valid != gcvNULL);
@@ -10982,7 +11083,7 @@ gceSTATUS gckFUNCTION_Init(IN gcsFUNCTION_EXECUTION_PTR Execution)
 {
     gceSTATUS status = gcvSTATUS_NOT_SUPPORTED;
 
-    gcmkHEADER_ARG("Execution=0x%x", Execution);
+    gcmkHEADER_ARG("Execution=%p", Execution);
     /* Verify the arguments. */
     gcmkVERIFY_ARGUMENT(Execution != gcvNULL);
 
@@ -11005,7 +11106,7 @@ gceSTATUS gckFUNCTION_Execute(IN gcsFUNCTION_EXECUTION_PTR Execution)
 {
     gceSTATUS status = gcvSTATUS_NOT_SUPPORTED;
 
-    gcmkHEADER_ARG("Execution=0x%x", Execution);
+    gcmkHEADER_ARG("Execution=%p", Execution);
     /* Verify the arguments. */
     gcmkVERIFY_ARGUMENT(Execution != gcvNULL);
 
@@ -11022,7 +11123,7 @@ gceSTATUS gckFUNCTION_Release(IN gcsFUNCTION_EXECUTION_PTR Execution)
 {
     gceSTATUS status = gcvSTATUS_NOT_SUPPORTED;
 
-    gcmkHEADER_ARG("Execution=0x%x", Execution);
+    gcmkHEADER_ARG("Execution=%p", Execution);
     /* Verify the arguments. */
     gcmkVERIFY_ARGUMENT(Execution != gcvNULL);
 

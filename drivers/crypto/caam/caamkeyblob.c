@@ -137,7 +137,7 @@ static void unmap_read_write_data(struct device *dev, dma_addr_t dma_addr,
 {
 	/* Free the resources and clear the data*/
 	dma_unmap_single(dev, dma_addr, size, dir);
-	kzfree(allocated_data);
+	kfree_sensitive(allocated_data);
 }
 
 /**

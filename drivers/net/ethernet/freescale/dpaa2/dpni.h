@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause) */
 /* Copyright 2013-2016 Freescale Semiconductor Inc.
  * Copyright 2016 NXP
+ * Copyright 2020 NXP
  */
 #ifndef __FSL_DPNI_H
 #define __FSL_DPNI_H
@@ -9,71 +10,78 @@
 
 struct fsl_mc_io;
 
-/**
- * Data Path Network Interface API
+/* Data Path Network Interface API
  * Contains initialization APIs and runtime control APIs for DPNI
  */
 
 /** General DPNI macros */
 
 /**
- * Maximum number of traffic classes
+ * DPNI_MAX_TC - Maximum number of traffic classes
  */
 #define DPNI_MAX_TC				8
 /**
- * Maximum number of buffer pools per DPNI
+ * DPNI_MAX_DPBP - Maximum number of buffer pools per DPNI
  */
 #define DPNI_MAX_DPBP				8
 
 /**
- * All traffic classes considered; see dpni_set_queue()
+ * DPNI_ALL_TCS - All traffic classes considered; see dpni_set_queue()
  */
 #define DPNI_ALL_TCS				(u8)(-1)
 /**
- * All flows within traffic class considered; see dpni_set_queue()
+ * DPNI_ALL_TC_FLOWS - All flows within traffic class considered; see
+ * dpni_set_queue()
  */
 #define DPNI_ALL_TC_FLOWS			(u16)(-1)
 /**
- * Generate new flow ID; see dpni_set_queue()
+ * DPNI_NEW_FLOW_ID - Generate new flow ID; see dpni_set_queue()
  */
 #define DPNI_NEW_FLOW_ID			(u16)(-1)
 
 /**
- * Tx traffic is always released to a buffer pool on transmit, there are no
- * resources allocated to have the frames confirmed back to the source after
- * transmission.
+ * DPNI_OPT_TX_FRM_RELEASE - Tx traffic is always released to a buffer pool on
+ * transmit, there are no resources allocated to have the frames confirmed back
+ * to the source after transmission.
  */
 #define DPNI_OPT_TX_FRM_RELEASE			0x000001
 /**
- * Disables support for MAC address filtering for addresses other than primary
- * MAC address. This affects both unicast and multicast. Promiscuous mode can
- * still be enabled/disabled for both unicast and multicast. If promiscuous mode
- * is disabled, only traffic matching the primary MAC address will be accepted.
+ * DPNI_OPT_NO_MAC_FILTER - Disables support for MAC address filtering for
+ * addresses other than primary MAC address. This affects both unicast and
+ * multicast. Promiscuous mode can still be enabled/disabled for both unicast
+ * and multicast. If promiscuous mode is disabled, only traffic matching the
+ * primary MAC address will be accepted.
  */
 #define DPNI_OPT_NO_MAC_FILTER			0x000002
 /**
- * Allocate policers for this DPNI. They can be used to rate-limit traffic per
- * traffic class (TC) basis.
+ * DPNI_OPT_HAS_POLICING - Allocate policers for this DPNI. They can be used to
+ * rate-limit traffic per traffic class (TC) basis.
  */
 #define DPNI_OPT_HAS_POLICING			0x000004
 /**
- * Congestion can be managed in several ways, allowing the buffer pool to
- * deplete on ingress, taildrop on each queue or use congestion groups for sets
- * of queues. If set, it configures a single congestion groups across all TCs.
- * If reset, a congestion group is allocated for each TC. Only relevant if the
- * DPNI has multiple traffic classes.
+ * DPNI_OPT_SHARED_CONGESTION - Congestion can be managed in several ways,
+ * allowing the buffer pool to deplete on ingress, taildrop on each queue or
+ * use congestion groups for sets of queues. If set, it configures a single
+ * congestion groups across all TCs.  If reset, a congestion group is allocated
+ * for each TC. Only relevant if the DPNI has multiple traffic classes.
  */
 #define DPNI_OPT_SHARED_CONGESTION		0x000008
 /**
- * Enables TCAM for Flow Steering and QoS look-ups. If not specified, all
- * look-ups are exact match. Note that TCAM is not available on LS1088 and its
- * variants. Setting this bit on these SoCs will trigger an error.
+ * DPNI_OPT_HAS_KEY_MASKING - Enables TCAM for Flow Steering and QoS look-ups.
+ * If not specified, all look-ups are exact match. Note that TCAM is not
+ * available on LS1088 and its variants. Setting this bit on these SoCs will
+ * trigger an error.
  */
 #define DPNI_OPT_HAS_KEY_MASKING		0x000010
 /**
- * Disables the flow steering table.
+ * DPNI_OPT_NO_FS - Disables the flow steering table.
  */
 #define DPNI_OPT_NO_FS				0x000020
+/**
+ * DPNI_OPT_SHARED_FS - Flow steering table is shared between all traffic
+ * classes
+ */
+#define DPNI_OPT_SHARED_FS			0x001000
 
 int dpni_open(struct fsl_mc_io	*mc_io,
 	      u32		cmd_flags,
@@ -124,20 +132,14 @@ int dpni_reset(struct fsl_mc_io	*mc_io,
 	       u32		cmd_flags,
 	       u16		token);
 
-/**
- * DPNI IRQ Index and Events
- */
+/* DPNI IRQ Index and Events */
 
-/**
- * IRQ index
- */
 #define DPNI_IRQ_INDEX				0
-/**
- * IRQ events:
- *       indicates a change in link state
- *       indicates a change in endpoint
- */
+
+/* DPNI_IRQ_EVENT_LINK_CHANGED - indicates a change in link state */
 #define DPNI_IRQ_EVENT_LINK_CHANGED		0x00000001
+
+/* DPNI_IRQ_EVENT_ENDPOINT_CHANGED - indicates a change in endpoint */
 #define DPNI_IRQ_EVENT_ENDPOINT_CHANGED		0x00000002
 
 int dpni_set_irq_enable(struct fsl_mc_io	*mc_io,
@@ -217,32 +219,30 @@ int dpni_get_attributes(struct fsl_mc_io	*mc_io,
 			u16			token,
 			struct dpni_attr	*attr);
 
-/**
- * DPNI errors
- */
+/* DPNI errors */
 
 /**
- * Extract out of frame header error
+ * DPNI_ERROR_EOFHE - Extract out of frame header error
  */
 #define DPNI_ERROR_EOFHE	0x00020000
 /**
- * Frame length error
+ * DPNI_ERROR_FLE - Frame length error
  */
 #define DPNI_ERROR_FLE		0x00002000
 /**
- * Frame physical error
+ * DPNI_ERROR_FPE - Frame physical error
  */
 #define DPNI_ERROR_FPE		0x00001000
 /**
- * Parsing header error
+ * DPNI_ERROR_PHE - Parsing header error
  */
 #define DPNI_ERROR_PHE		0x00000020
 /**
- * Parser L3 checksum error
+ * DPNI_ERROR_L3CE - Parser L3 checksum error
  */
 #define DPNI_ERROR_L3CE		0x00000004
 /**
- * Parser L3 checksum error
+ * DPNI_ERROR_L4CE - Parser L3 checksum error
  */
 #define DPNI_ERROR_L4CE		0x00000001
 
@@ -276,36 +276,35 @@ int dpni_set_errors_behavior(struct fsl_mc_io		*mc_io,
 			     u16			token,
 			     struct dpni_error_cfg	*cfg);
 
-/**
- * DPNI buffer layout modification options
- */
+/* DPNI buffer layout modification options */
 
 /**
- * Select to modify the time-stamp setting
+ * DPNI_BUF_LAYOUT_OPT_TIMESTAMP - Select to modify the time-stamp setting
  */
 #define DPNI_BUF_LAYOUT_OPT_TIMESTAMP		0x00000001
 /**
- * Select to modify the parser-result setting; not applicable for Tx
+ * DPNI_BUF_LAYOUT_OPT_PARSER_RESULT - Select to modify the parser-result
+ * setting; not applicable for Tx
  */
 #define DPNI_BUF_LAYOUT_OPT_PARSER_RESULT	0x00000002
 /**
- * Select to modify the frame-status setting
+ * DPNI_BUF_LAYOUT_OPT_FRAME_STATUS - Select to modify the frame-status setting
  */
 #define DPNI_BUF_LAYOUT_OPT_FRAME_STATUS	0x00000004
 /**
- * Select to modify the private-data-size setting
+ * DPNI_BUF_LAYOUT_OPT_PRIVATE_DATA_SIZE - Select to modify the private-data-size setting
  */
 #define DPNI_BUF_LAYOUT_OPT_PRIVATE_DATA_SIZE	0x00000008
 /**
- * Select to modify the data-alignment setting
+ * DPNI_BUF_LAYOUT_OPT_DATA_ALIGN - Select to modify the data-alignment setting
  */
 #define DPNI_BUF_LAYOUT_OPT_DATA_ALIGN		0x00000010
 /**
- * Select to modify the data-head-room setting
+ * DPNI_BUF_LAYOUT_OPT_DATA_HEAD_ROOM - Select to modify the data-head-room setting
  */
 #define DPNI_BUF_LAYOUT_OPT_DATA_HEAD_ROOM	0x00000020
 /**
- * Select to modify the data-tail-room setting
+ * DPNI_BUF_LAYOUT_OPT_DATA_TAIL_ROOM - Select to modify the data-tail-room setting
  */
 #define DPNI_BUF_LAYOUT_OPT_DATA_TAIL_ROOM	0x00000040
 
@@ -338,7 +337,8 @@ struct dpni_buffer_layout {
  * @DPNI_QUEUE_TX: Tx queue
  * @DPNI_QUEUE_TX_CONFIRM: Tx confirmation queue
  * @DPNI_QUEUE_RX_ERR: Rx error queue
- */enum dpni_queue_type {
+ */
+enum dpni_queue_type {
 	DPNI_QUEUE_RX,
 	DPNI_QUEUE_TX,
 	DPNI_QUEUE_TX_CONFIRM,
@@ -419,7 +419,7 @@ int dpni_get_tx_data_offset(struct fsl_mc_io	*mc_io,
  *	lack of buffers
  * @page_2.egress_discarded_frames: Egress discarded frame count
  * @page_2.egress_confirmed_frames: Egress confirmed frame count
- * @page3: Page_3 statistics structure
+ * @page_3: Page_3 statistics structure
  * @page_3.egress_dequeue_bytes: Cumulative count of the number of bytes
  *	dequeued from egress FQs
  * @page_3.egress_dequeue_frames: Cumulative count of the number of frames
@@ -497,65 +497,30 @@ int dpni_get_statistics(struct fsl_mc_io	*mc_io,
 			u8			param,
 			union dpni_statistics	*stat);
 
-int dpni_reset_statistics(struct fsl_mc_io *mc_io,
-			  u32 cmd_flags,
-			  u16 token);
+int dpni_reset_statistics(struct fsl_mc_io	*mc_io,
+			  u32			cmd_flags,
+			  u16			token);
 
-/**
- * Enable auto-negotiation
- */
 #define DPNI_LINK_OPT_AUTONEG		0x0000000000000001ULL
-/**
- * Enable half-duplex mode
- */
 #define DPNI_LINK_OPT_HALF_DUPLEX	0x0000000000000002ULL
-/**
- * Enable pause frames
- */
 #define DPNI_LINK_OPT_PAUSE		0x0000000000000004ULL
-/**
- * Enable a-symmetric pause frames
- */
 #define DPNI_LINK_OPT_ASYM_PAUSE	0x0000000000000008ULL
-
-/**
- * Enable priority flow control pause frames
- */
 #define DPNI_LINK_OPT_PFC_PAUSE		0x0000000000000010ULL
-/**
- * Advertised link speeds
- */
-#define DPNI_ADVERTISED_10BASET_FULL           0x0000000000000001ULL
-#define DPNI_ADVERTISED_100BASET_FULL          0x0000000000000002ULL
-#define DPNI_ADVERTISED_1000BASET_FULL         0x0000000000000004ULL
-#define DPNI_ADVERTISED_10000BASET_FULL        0x0000000000000010ULL
-#define DPNI_ADVERTISED_2500BASEX_FULL         0x0000000000000020ULL
 
 /**
- * Advertise auto-negotiation enabled
- */
-#define DPNI_ADVERTISED_AUTONEG                0x0000000000000008ULL
-
-/**
- * struct - Structure representing DPNI link configuration
+ * struct dpni_link_cfg - Structure representing DPNI link configuration
  * @rate: Rate
  * @options: Mask of available options; use 'DPNI_LINK_OPT_<X>' values
  */
 struct dpni_link_cfg {
 	u32 rate;
 	u64 options;
-	u64 advertising;
 };
 
 int dpni_set_link_cfg(struct fsl_mc_io			*mc_io,
 		      u32				cmd_flags,
 		      u16				token,
 		      const struct dpni_link_cfg	*cfg);
-
-int dpni_set_link_cfg_v2(struct fsl_mc_io		*mc_io,
-			 u32				cmd_flags,
-			 u16				token,
-			 const struct dpni_link_cfg	*cfg);
 
 int dpni_get_link_cfg(struct fsl_mc_io			*mc_io,
 		      u32				cmd_flags,
@@ -571,38 +536,13 @@ int dpni_get_link_cfg(struct fsl_mc_io			*mc_io,
 struct dpni_link_state {
 	u32	rate;
 	u64	options;
-	u64	supported;
-	u64	advertising;
 	int	up;
-	int	state_valid;
 };
 
 int dpni_get_link_state(struct fsl_mc_io	*mc_io,
 			u32			cmd_flags,
 			u16			token,
 			struct dpni_link_state	*state);
-
-int dpni_get_link_state_v2(struct fsl_mc_io	*mc_io,
-			   u32			cmd_flags,
-			   u16			token,
-			   struct dpni_link_state	*state);
-
-/**
- * struct dpni_tx_shaping - Structure representing DPNI tx shaping configuration
- * @rate_limit: rate in Mbps
- * @max_burst_size: burst size in bytes (up to 64KB)
- */
-struct dpni_tx_shaping_cfg {
-	u32	rate_limit;
-	u16	max_burst_size;
-};
-
-int dpni_set_tx_shaping(struct fsl_mc_io *mc_io,
-			u32 cmd_flags,
-			u16 token,
-			const struct dpni_tx_shaping_cfg *tx_cr_shaper,
-			const struct dpni_tx_shaping_cfg *tx_er_shaper,
-			int coupled);
 
 int dpni_set_max_frame_length(struct fsl_mc_io	*mc_io,
 			      u32		cmd_flags,
@@ -775,8 +715,8 @@ int dpni_set_rx_tc_dist(struct fsl_mc_io			*mc_io,
 			const struct dpni_rx_tc_dist_cfg	*cfg);
 
 /**
- * When used for fs_miss_flow_id in function dpni_set_rx_dist,
- * will signal to dpni to drop all unclassified frames
+ * DPNI_FS_MISS_DROP - When used for fs_miss_flow_id in function
+ * dpni_set_rx_dist, will signal to dpni to drop all unclassified frames
  */
 #define DPNI_FS_MISS_DROP		((uint16_t)-1)
 
@@ -854,7 +794,7 @@ enum dpni_dest {
 
 /**
  * struct dpni_queue - Queue structure
- * @destination - Destination structure
+ * @destination: - Destination structure
  * @destination.id: ID of the destination, only relevant if DEST_TYPE is > 0.
  *	Identifies either a DPIO or a DPCON object.
  *	Not relevant for Tx queues.
@@ -925,9 +865,7 @@ struct dpni_queue_id {
 	u16 qdbin;
 };
 
-/**
- * Set User Context
- */
+/* Set User Context */
 #define DPNI_QUEUE_OPT_USER_CTX		0x00000001
 #define DPNI_QUEUE_OPT_DEST		0x00000002
 #define DPNI_QUEUE_OPT_FLC		0x00000004
@@ -992,9 +930,9 @@ struct dpni_dest_cfg {
 /* DPNI congestion options */
 
 /**
- * This congestion will trigger flow control or priority flow control.
- * This will have effect only if flow control is enabled with
- * dpni_set_link_cfg().
+ * DPNI_CONG_OPT_FLOW_CONTROL - This congestion will trigger flow control or
+ * priority flow control.  This will have effect only if flow control is
+ * enabled with dpni_set_link_cfg().
  */
 #define DPNI_CONG_OPT_FLOW_CONTROL		0x00000040
 
@@ -1084,23 +1022,24 @@ struct dpni_rule_cfg {
 };
 
 /**
- * Discard matching traffic. If set, this takes precedence over any other
- * configuration and matching traffic is always discarded.
+ * DPNI_FS_OPT_DISCARD - Discard matching traffic. If set, this takes
+ * precedence over any other configuration and matching traffic is always
+ * discarded.
  */
  #define DPNI_FS_OPT_DISCARD            0x1
 
 /**
- * Set FLC value. If set, flc member of struct dpni_fs_action_cfg is used to
- * override the FLC value set per queue.
+ * DPNI_FS_OPT_SET_FLC - Set FLC value. If set, flc member of struct
+ * dpni_fs_action_cfg is used to override the FLC value set per queue.
  * For more details check the Frame Descriptor section in the hardware
  * documentation.
  */
 #define DPNI_FS_OPT_SET_FLC            0x2
 
 /**
- * Indicates whether the 6 lowest significant bits of FLC are used for stash
- * control. If set, the 6 least significant bits in value are interpreted as
- * follows:
+ * DPNI_FS_OPT_SET_STASH_CONTROL - Indicates whether the 6 lowest significant
+ * bits of FLC are used for stash control. If set, the 6 least significant bits
+ * in value are interpreted as follows:
  *     - bits 0-1: indicates the number of 64 byte units of context that are
  *     stashed. FLC value is interpreted as a memory address in this case,
  *     excluding the 6 LS bits.
@@ -1161,5 +1100,66 @@ int dpni_get_api_version(struct fsl_mc_io *mc_io,
 			 u32 cmd_flags,
 			 u16 *major_ver,
 			 u16 *minor_ver);
+/**
+ * struct dpni_tx_shaping_cfg - Structure representing DPNI tx shaping configuration
+ * @rate_limit:		Rate in Mbps
+ * @max_burst_size:	Burst size in bytes (up to 64KB)
+ */
+struct dpni_tx_shaping_cfg {
+	u32 rate_limit;
+	u16 max_burst_size;
+};
+
+int dpni_set_tx_shaping(struct fsl_mc_io *mc_io,
+			u32 cmd_flags,
+			u16 token,
+			const struct dpni_tx_shaping_cfg *tx_cr_shaper,
+			const struct dpni_tx_shaping_cfg *tx_er_shaper,
+			int coupled);
+
+/**
+ * struct dpni_single_step_cfg - configure single step PTP (IEEE 1588)
+ * @en:		enable single step PTP. When enabled the PTPv1 functionality
+ *		will not work. If the field is zero, offset and ch_update
+ *		parameters will be ignored
+ * @offset:	start offset from the beginning of the frame where
+ *		timestamp field is found. The offset must respect all MAC
+ *		headers, VLAN tags and other protocol headers
+ * @ch_update:	when set UDP checksum will be updated inside packet
+ * @peer_delay:	For peer-to-peer transparent clocks add this value to the
+ *		correction field in addition to the transient time update.
+ *		The value expresses nanoseconds.
+ * @ptp_onestep_reg_base: 1588 SINGLE_STEP register base address. This address
+ *			  is used to update directly the register contents.
+ *			  User has to create an address mapping for it.
+ *
+ *
+ */
+struct dpni_single_step_cfg {
+	u8	en;
+	u8	ch_update;
+	u16	offset;
+	u32	peer_delay;
+	u32	ptp_onestep_reg_base;
+};
+
+int dpni_set_single_step_cfg(struct fsl_mc_io *mc_io,
+			     u32 cmd_flags,
+			     u16 token,
+			     struct dpni_single_step_cfg *ptp_cfg);
+
+int dpni_get_single_step_cfg(struct fsl_mc_io *mc_io,
+			     u32 cmd_flags,
+			     u16 token,
+			     struct dpni_single_step_cfg *ptp_cfg);
+
+int dpni_enable_vlan_filter(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token,
+			    u32 en);
+
+int dpni_add_vlan_id(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token,
+		     u16 vlan_id, u8 flags, u8 tc_id, u8 flow_id);
+
+int dpni_remove_vlan_id(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token,
+			u16 vlan_id);
 
 #endif /* __FSL_DPNI_H */

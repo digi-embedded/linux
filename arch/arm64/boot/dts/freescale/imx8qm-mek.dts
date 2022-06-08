@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Copyright 2018 NXP
+ * Copyright 2018-2019 NXP
  *	Dong Aisheng <aisheng.dong@nxp.com>
  */
 
@@ -92,7 +92,7 @@
 		};
 	};
 
-	resmem: reserved-memory {
+	reserved-memory {
 		#address-cells = <2>;
 		#size-cells = <2>;
 		ranges;
@@ -110,20 +110,6 @@
 			no-map;
 			reg = <0 0x86000000 0 0x400000>;
 		};
-		/*
-		 * reserved-memory layout
-		 * 0x8800_0000 ~ 0x8FFF_FFFF is reserved for M4
-		 * Shouldn't be used at A core and Linux side.
-		 *
-		 */
-		m4_reserved: m4@0x88000000 {
-			no-map;
-			reg = <0 0x88000000 0 0x8000000>;
-		};
-		rpmsg_reserved: rpmsg@0x90000000 {
-			no-map;
-			reg = <0 0x90200000 0 0x200000>;
-		};
 		decoder_rpc: decoder_rpc@0x92000000 {
 			no-map;
 			reg = <0 0x92000000 0 0x200000>;
@@ -132,17 +118,30 @@
 			no-map;
 			reg = <0 0x92200000 0 0x200000>;
 		};
-		dsp_reserved: dsp@0x92400000 {
+		dsp_reserved: dsp@92400000 {
+			reg = <0 0x92400000 0 0x1000000>;
 			no-map;
-			reg = <0 0x92400000 0 0x2000000>;
+		};
+		dsp_reserved_heap: dsp_reserved_heap {
+			reg = <0 0x93400000 0 0xef0000>;
+			no-map;
+		};
+		dsp_vdev0vring0: vdev0vring0@942f0000 {
+			reg = <0 0x942f0000 0 0x8000>;
+			no-map;
+		};
+		dsp_vdev0vring1: vdev0vring1@942f8000 {
+			reg = <0 0x942f8000 0 0x8000>;
+			no-map;
+		};
+		dsp_vdev0buffer: vdev0buffer@94300000 {
+			compatible = "shared-dma-pool";
+			reg = <0 0x94300000 0 0x100000>;
+			no-map;
 		};
 		encoder_reserved: encoder_reserved@0x94400000 {
 			no-map;
 			reg = <0 0x94400000 0 0x800000>;
-		};
-		ts_boot: ts_boot@0x95000000 {
-			no-map;
-			reg = <0 0x95000000 0 0x400000>;
 		};
 
 		/* global autoconfigured region for contiguous allocations */
@@ -150,7 +149,7 @@
 			compatible = "shared-dma-pool";
 			reusable;
 			size = <0 0x3c000000>;
-			alloc-ranges = <0 0x96000000 0 0x3c000000>;
+			alloc-ranges = <0 0xc0000000 0 0x3c000000>;
 			linux,cma-default;
 		};
 
@@ -174,6 +173,15 @@
 		regulator-min-microvolt = <1800000>;
 		regulator-max-microvolt = <1800000>;
 		gpio = <&max7322 0 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+	};
+
+	reg_usb_otg1_vbus: regulator-usbotg1-vbus {
+		compatible = "regulator-fixed";
+		regulator-name = "usb_otg1_vbus";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		gpio = <&lsio_gpio4 3 GPIO_ACTIVE_HIGH>;
 		enable-active-high;
 	};
 
@@ -265,31 +273,35 @@
 	};
 
 	sound-cs42888 {
-		compatible = "fsl,imx8qm-sabreauto-cs42888",
+		compatible = "fsl,imx8qm-mek-cs42888",
 				 "fsl,imx-audio-cs42888";
 		model = "imx-cs42888";
-		esai-controller = <&esai0>;
+		audio-cpu = <&esai0>;
 		audio-codec = <&cs42888>;
-		asrc-controller = <&asrc0>;
+		audio-asrc = <&asrc0>;
+		audio-routing =
+			"Line Out Jack", "AOUT1L",
+			"Line Out Jack", "AOUT1R",
+			"Line Out Jack", "AOUT2L",
+			"Line Out Jack", "AOUT2R",
+			"Line Out Jack", "AOUT3L",
+			"Line Out Jack", "AOUT3R",
+			"Line Out Jack", "AOUT4L",
+			"Line Out Jack", "AOUT4R",
+			"AIN1L", "Line In Jack",
+			"AIN1R", "Line In Jack",
+			"AIN2L", "Line In Jack",
+			"AIN2R", "Line In Jack";
 		status = "okay";
 	};
 
 	sound-wm8960 {
-		compatible = "fsl,imx7d-evk-wm8960",
+		compatible = "fsl,imx8qm-mek-wm8960",
 			   "fsl,imx-audio-wm8960";
 		model = "wm8960-audio";
-		cpu-dai = <&sai1>;
+		audio-cpu = <&sai1>;
 		audio-codec = <&wm8960>;
-		codec-master;
-		/*
-		 * hp-det = <hp-det-pin hp-det-polarity>;
-		 * hp-det-pin: JD1 JD2  or JD3
-		 * hp-det-polarity = 0: hp detect high for headphone
-		 * hp-det-polarity = 1: hp detect high for speaker
-		 */
-		hp-det = <2 0>;
-		hp-det-gpios = <&lsio_gpio0 31 GPIO_ACTIVE_HIGH>;
-		mic-det-gpios = <&lsio_gpio0 31 GPIO_ACTIVE_HIGH>;
+		hp-det-gpio = <&lsio_gpio0 31 GPIO_ACTIVE_HIGH>;
 		audio-routing =
 			"Headphone Jack", "HP_L",
 			"Headphone Jack", "HP_R",
@@ -297,14 +309,8 @@
 			"Ext Spk", "SPK_LN",
 			"Ext Spk", "SPK_RP",
 			"Ext Spk", "SPK_RN",
-			"LINPUT2", "Mic Jack",
-			"LINPUT3", "Mic Jack",
-			"RINPUT1", "Main MIC",
-			"RINPUT2", "Main MIC",
-			"Mic Jack", "MICB",
-			"Main MIC", "MICB",
-			"Playback", "CPU-Playback",
-			"CPU-Capture", "Capture";
+			"LINPUT1", "Mic Jack",
+			"Mic Jack", "MICB";
 	};
 
 	imx8qm_cm40: imx8qm_cm4@0 {
@@ -315,8 +321,8 @@
 			  &lsio_mu5 1 1
 			  &lsio_mu5 3 1>;
 		mub-partition = <3>;
-		memory-region = <&vdev0vring0>, <&vdev0vring1>, <&vdevbuffer>,
-				<&vdev1vring0>, <&vdev1vring1>;
+		memory-region = <&vdevbuffer>, <&vdev0vring0>, <&vdev0vring1>,
+				<&vdev1vring0>, <&vdev1vring1>, <&rsc_table0>;
 		core-index = <0>;
 		core-id = <IMX_SC_R_M4_0_PID0>;
 		status = "okay";
@@ -332,8 +338,8 @@
 			  &lsio_mu6 1 1
 			  &lsio_mu6 3 1>;
 		mub-partition = <4>;
-		memory-region = <&vdev2vring0>, <&vdev2vring1>, <&vdevbuffer>,
-				<&vdev3vring0>, <&vdev3vring1>;
+		memory-region = <&vdevbuffer>, <&vdev2vring0>, <&vdev2vring1>,
+				<&vdev3vring0>, <&vdev3vring1>, <&rsc_table1>;
 		core-index = <1>;
 		core-id = <IMX_SC_R_M4_1_PID0>;
 		status = "okay";
@@ -347,30 +353,26 @@
 		ranges;
 
 		vdev0vring0: vdev0vring0@90000000 {
-                        compatible = "shared-dma-pool";
 			reg = <0 0x90000000 0 0x8000>;
 			no-map;
 		};
 
 		vdev0vring1: vdev0vring1@90008000 {
-                        compatible = "shared-dma-pool";
 			reg = <0 0x90008000 0 0x8000>;
 			no-map;
 		};
 
 		vdev1vring0: vdev1vring0@90010000 {
-                        compatible = "shared-dma-pool";
 			reg = <0 0x90010000 0 0x8000>;
 			no-map;
 		};
 
 		vdev1vring1: vdev1vring1@90018000 {
-                        compatible = "shared-dma-pool";
 			reg = <0 0x90018000 0 0x8000>;
 			no-map;
 		};
 
-		rsc-table@0 {
+		rsc_table0: rsc_table0@900ff000 {
 			reg = <0 0x900ff000 0 0x1000>;
 			no-map;
 		};
@@ -382,30 +384,26 @@
 		};
 
 		vdev2vring0: vdev0vring0@90100000 {
-                        compatible = "shared-dma-pool";
 			reg = <0 0x90100000 0 0x8000>;
 			no-map;
 		};
 
 		vdev2vring1: vdev0vring1@90108000 {
-                        compatible = "shared-dma-pool";
 			reg = <0 0x90108000 0 0x8000>;
 			no-map;
 		};
 
 		vdev3vring0: vdev1vring0@90110000 {
-                        compatible = "shared-dma-pool";
 			reg = <0 0x90110000 0 0x8000>;
 			no-map;
 		};
 
 		vdev3vring1: vdev1vring1@90118000 {
-                        compatible = "shared-dma-pool";
 			reg = <0 0x90118000 0 0x8000>;
 			no-map;
 		};
 
-		rsc-table@1 {
+		rsc_table1: rsc_table1@901ff000 {
 			reg = <0 0x901ff000 0 0x1000>;
 			no-map;
 		};
@@ -528,7 +526,9 @@
 };
 
 &dsp {
-	compatible = "fsl,imx8qm-dsp-v1";
+	compatible = "fsl,imx8qm-hifi4";
+	memory-region = <&dsp_vdev0buffer>, <&dsp_vdev0vring0>,
+			<&dsp_vdev0vring1>, <&dsp_reserved>;
 	status = "okay";
 };
 
@@ -939,7 +939,7 @@
 	fsl,magic-packet;
 	nvmem-cells = <&fec_mac0>;
 	nvmem-cell-names = "mac-address";
-	fsl,rgmii_rxc_dly;
+	rx-internal-delay-ps = <2000>;
 	status = "okay";
 
 	mdio {
@@ -949,15 +949,25 @@
 		ethphy0: ethernet-phy@0 {
 			compatible = "ethernet-phy-ieee802.3-c22";
 			reg = <0>;
-			at803x,eee-disabled;
-			at803x,vddio-1p8v;
+			qca,disable-smarteee;
+			vddio-supply = <&vddio0>;
+
+			vddio0: vddio-regulator {
+				regulator-min-microvolt = <1800000>;
+				regulator-max-microvolt = <1800000>;
+			};
 		};
 
 		ethphy1: ethernet-phy@1 {
 			compatible = "ethernet-phy-ieee802.3-c22";
 			reg = <1>;
-			at803x,eee-disabled;
-			at803x,vddio-1p8v;
+			qca,disable-smarteee;
+			vddio-supply = <&vddio1>;
+
+			vddio1: vddio-regulator {
+				regulator-min-microvolt = <1800000>;
+				regulator-max-microvolt = <1800000>;
+			};
 		};
 	};
 };
@@ -971,13 +981,14 @@
 	fsl,magic-packet;
 	nvmem-cells = <&fec_mac1>;
 	nvmem-cell-names = "mac-address";
-	fsl,rgmii_rxc_dly;
+	rx-internal-delay-ps = <2000>;
 	status = "okay";
 };
 
 &flexspi0 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexspi0>;
+	nxp,fspi-dll-slvdly = <4>;
 	status = "okay";
 
 	flash0: mt35xu512aba@0 {
@@ -986,8 +997,8 @@
 		#size-cells = <1>;
 		compatible = "jedec,spi-nor";
 		spi-max-frequency = <133000000>;
-		spi-tx-bus-width = <4>;
-		spi-rx-bus-width = <4>;
+		spi-tx-bus-width = <8>;
+		spi-rx-bus-width = <8>;
 	};
 };
 
@@ -1009,26 +1020,6 @@
 	status = "okay";
 };
 
-&rpmsg0{
-	/*
-	 * 64K for one rpmsg instance:
-	 */
-	vdev-nums = <2>;
-	reg = <0x0 0x90000000 0x0 0x20000>;
-	memory-region = <&vdevbuffer>;
-	status = "disabled";
-};
-
-&rpmsg1{
-	/*
-	 * 64K for one rpmsg instance:
-	 */
-	vdev-nums = <2>;
-	reg = <0x0 0x90100000 0x0 0x20000>;
-	memory-region = <&vdevbuffer>;
-	status = "disabled";
-};
-
 &sata {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_sata>;
@@ -1042,27 +1033,39 @@
 };
 
 &usbotg1 {
+	vbus-supply = <&reg_usb_otg1_vbus>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_usbotg1>;
 	srp-disable;
 	hnp-disable;
 	adp-disable;
-	power-active-high;
 	disable-over-current;
 	status = "okay";
 };
 
-&usb3phynop1 {
+&usb3_phy {
 	status = "okay";
 };
 
 &usbotg3 {
-	dr_mode = "otg";
-	extcon = <&ptn5110>;
 	status = "okay";
 };
 
+&usbotg3_cdns3 {
+	dr_mode = "otg";
+	usb-role-switch;
+	status = "okay";
+
+	port {
+		usb3_drd_sw: endpoint {
+			remote-endpoint = <&typec_dr_sw>;
+		};
+	};
+};
+
 &usdhc1 {
+	assigned-clocks = <&clk IMX_SC_R_SDHC_0 IMX_SC_PM_CLK_PER>;
+	assigned-clock-rates = <400000000>;
 	pinctrl-names = "default", "state_100mhz", "state_200mhz";
 	pinctrl-0 = <&pinctrl_usdhc1>;
 	pinctrl-1 = <&pinctrl_usdhc1>;
@@ -1110,8 +1113,8 @@
 		interrupt-open-drain;
 	};
 
-	fxas2100x@20 {
-		compatible = "fsl,fxas2100x";
+	fxas21002c@20 {
+		compatible = "nxp,fxas21002c";
 		reg = <0x20>;
 		interrupt-open-drain;
 	};
@@ -1137,6 +1140,12 @@
 		interrupt-parent = <&lsio_gpio4>;
 		interrupts = <26 IRQ_TYPE_LEVEL_LOW>;
 		status = "okay";
+
+		port {
+			typec_dr_sw: endpoint {
+				remote-endpoint = <&usb3_drd_sw>;
+			};
+		};
 
 		usb_con1: connector {
 			compatible = "usb-c-connector";
@@ -1177,6 +1186,8 @@
 		clocks = <&mclkout0_lpcg 0>;
 		clock-names = "mclk";
 		wlf,shared-lrclk;
+		wlf,hp-cfg = <2 2 3>;
+		wlf,gpio-cfg = <1 3>;
 		assigned-clocks = <&clk IMX_SC_R_AUDIO_PLL_0 IMX_SC_PM_CLK_PLL>,
 				<&clk IMX_SC_R_AUDIO_PLL_0 IMX_SC_PM_CLK_SLV_BUS>,
 				<&clk IMX_SC_R_AUDIO_PLL_0 IMX_SC_PM_CLK_MST_BUS>,
@@ -1509,9 +1520,9 @@
 
 	pinctrl_lpspi2: lpspi2grp {
 		fsl,pins = <
-			IMX8QM_SPI2_SCK_DMA_SPI2_SCK		0x0600004c
-			IMX8QM_SPI2_SDO_DMA_SPI2_SDO		0x0600004c
-			IMX8QM_SPI2_SDI_DMA_SPI2_SDI		0x0600004c
+			IMX8QM_SPI2_SCK_DMA_SPI2_SCK		0x06000040
+			IMX8QM_SPI2_SDO_DMA_SPI2_SDO		0x06000040
+			IMX8QM_SPI2_SDI_DMA_SPI2_SDI		0x06000040
 		>;
 	};
 
@@ -1639,7 +1650,7 @@
 
 	pinctrl_usbotg1: usbotg1 {
 		fsl,pins = <
-			IMX8QM_USB_SS3_TC0_CONN_USB_OTG1_PWR		0x00000021
+			IMX8QM_USB_SS3_TC0_LSIO_GPIO4_IO03		0x06000021
 		>;
 	};
 
@@ -1823,24 +1834,12 @@
 	status = "okay";
 };
 
-&mu3_m0{
-	interrupts = <GIC_SPI 475 IRQ_TYPE_LEVEL_HIGH>;
-	status = "okay";
-};
-
 &vpu_decoder {
 	compatible = "nxp,imx8qm-b0-vpudec";
 	boot-region = <&decoder_boot>;
 	rpc-region = <&decoder_rpc>;
 	reg-csr = <0x2d080000>;
 	core_type = <2>;
-	status = "okay";
-};
-
-&vpu_ts {
-	compatible = "nxp,imx8qm-b0-vpu-ts";
-	boot-region = <&ts_boot>;
-	reg-csr = <0x2d0b0000>;
 	status = "okay";
 };
 
@@ -1851,6 +1850,7 @@
 	reserved-region = <&encoder_reserved>;
 	reg-rpc-system = <0x40000000>;
 	resolution-max = <1920 1920>;
+	fps-max = <120>;
 	power-domains = <&pd IMX_SC_R_VPU_ENC_0>, <&pd IMX_SC_R_VPU_ENC_1>,
 			<&pd IMX_SC_R_VPU>;
 	power-domain-names = "vpuenc1", "vpuenc2", "vpu";

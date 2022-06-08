@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /*
- * Copyright 2017-2019 NXP
+ * Copyright 2017-2020 NXP
  */
 /*
  * Based on STMP378X LCDIF
@@ -115,7 +115,8 @@ struct mxc_epdc_fb_data {
 	struct fb_var_screeninfo epdc_fb_var; /* Internal copy of screeninfo
 						so we can sync changes to it */
 	u32 pseudo_palette[16];
-	char fw_str[24];
+#define FW_STR_LEN	32
+	char fw_str[FW_STR_LEN];
 	struct list_head list;
 	struct imx_epdc_fb_mode *cur_mode;
 	struct imx_epdc_fb_platform_data *pdata;
@@ -3309,7 +3310,8 @@ static int mxc_epdc_fb_ioctl(struct fb_info *info, unsigned int cmd,
 			if (put_user(pwrdown_delay,
 				(int __user *)argp))
 				ret = -EFAULT;
-			ret = 0;
+			else
+				ret = 0;
 			break;
 		}
 
@@ -3360,6 +3362,7 @@ static int mxc_epdc_fb_ioctl(struct fb_info *info, unsigned int cmd,
 	return ret;
 }
 
+#ifdef CONFIG_FB_MXC_EINK_AUTO_UPDATE_MODE
 static void mxc_epdc_fb_update_pages(struct mxc_epdc_fb_data *fb_data,
 				     u16 y1, u16 y2)
 {
@@ -3408,6 +3411,7 @@ static void mxc_epdc_fb_deferred_io(struct fb_info *info,
 
 	mxc_epdc_fb_update_pages(fb_data, miny, maxy);
 }
+#endif
 
 void mxc_epdc_fb_flush_updates(struct mxc_epdc_fb_data *fb_data)
 {
@@ -3568,10 +3572,12 @@ static struct fb_ops mxc_epdc_fb_ops = {
 	.fb_imageblit = cfb_imageblit,
 };
 
+#ifdef CONFIG_FB_MXC_EINK_AUTO_UPDATE_MODE
 static struct fb_deferred_io mxc_epdc_fb_defio = {
 	.delay = HZ,
 	.deferred_io = mxc_epdc_fb_deferred_io,
 };
+#endif
 
 static void epdc_done_work_func(struct work_struct *work)
 {
@@ -4283,7 +4289,7 @@ static void mxc_epdc_fb_fw_handler(const struct firmware *fw,
 		dev_dbg(fb_data->dev,
 			"Can't find firmware. Trying fallback fw\n");
 		fb_data->fw_default_load = true;
-		ret = request_firmware_nowait(THIS_MODULE, FW_ACTION_HOTPLUG,
+		ret = request_firmware_nowait(THIS_MODULE, FW_ACTION_UEVENT,
 			"imx/epdc/epdc.fw", fb_data->dev, GFP_KERNEL, fb_data,
 			mxc_epdc_fb_fw_handler);
 		if (ret)
@@ -4410,13 +4416,15 @@ static int mxc_epdc_fb_init_hw(struct fb_info *info)
 	 */
 	if (fb_data->cur_mode) {
 		strcpy(fb_data->fw_str, "imx/epdc/epdc_");
-		strcat(fb_data->fw_str, fb_data->cur_mode->vmode->name);
-		strcat(fb_data->fw_str, ".fw");
+		strncat(fb_data->fw_str, fb_data->cur_mode->vmode->name,
+			FW_STR_LEN - strlen(fb_data->fw_str) - 1);
+		strncat(fb_data->fw_str, ".fw",
+			FW_STR_LEN - strlen(fb_data->fw_str) - 1);
 	}
 
 	fb_data->fw_default_load = false;
 
-	ret = request_firmware_nowait(THIS_MODULE, FW_ACTION_HOTPLUG,
+	ret = request_firmware_nowait(THIS_MODULE, FW_ACTION_UEVENT,
 				fb_data->fw_str, fb_data->dev, GFP_KERNEL,
 				fb_data, mxc_epdc_fb_fw_handler);
 	if (ret)
@@ -4855,7 +4863,7 @@ int mxc_epdc_fb_probe(struct platform_device *pdev)
 
 	/* Initialize all LUTs to inactive */
 	fb_data->lut_update_order =
-		kzalloc(fb_data->num_luts * sizeof(u32 *), GFP_KERNEL);
+		kzalloc(fb_data->num_luts * sizeof(u32), GFP_KERNEL);
 	for (i = 0; i < fb_data->num_luts; i++)
 		fb_data->lut_update_order[i] = 0;
 
@@ -4888,8 +4896,8 @@ int mxc_epdc_fb_probe(struct platform_device *pdev)
 		goto out_dma_work_buf;
 	}
 
-	info->fbdefio = &mxc_epdc_fb_defio;
 #ifdef CONFIG_FB_MXC_EINK_AUTO_UPDATE_MODE
+	info->fbdefio = &mxc_epdc_fb_defio;
 	fb_deferred_io_init(info);
 #endif
 
@@ -5586,4 +5594,3 @@ module_exit(mxc_epdc_fb_exit);
 MODULE_AUTHOR("Freescale Semiconductor, Inc.");
 MODULE_DESCRIPTION("MXC EPDC framebuffer driver");
 MODULE_LICENSE("GPL");
-MODULE_SUPPORTED_DEVICE("fb");

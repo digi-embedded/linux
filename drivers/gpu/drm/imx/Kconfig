@@ -31,8 +31,10 @@ config DRM_IMX_TVE
 	  found on i.MX53 processors.
 
 config DRM_IMX_LDB
-	tristate "Support for i.MX6 LVDS displays"
-	depends on DRM_IMX && DRM_FSL_IMX_LVDS_BRIDGE
+	tristate "Support for LVDS displays"
+	depends on DRM_IMX && MFD_SYSCON
+	depends on COMMON_CLK
+	select DRM_PANEL
 	help
 	  Choose this to enable the internal LVDS Display Bridge (LDB)
 	  found on i.MX53 and i.MX6 processors.
@@ -68,27 +70,6 @@ config DRM_IMX_IPUV3
 	default y if DRM_IMX=y
 	default m if DRM_IMX=m
 
-config DRM_IMX_IPUV3
-	tristate
-	depends on DRM_IMX
-	depends on IMX_IPUV3_CORE
-	default y if DRM_IMX=y
-	default m if DRM_IMX=m
-
-config DRM_IMX_IPUV3
-	tristate
-	depends on DRM_IMX
-	depends on IMX_IPUV3_CORE
-	default y if DRM_IMX=y
-	default m if DRM_IMX=m
-
-config DRM_IMX_IPUV3
-	tristate
-	depends on DRM_IMX
-	depends on IMX_IPUV3_CORE
-	default y if DRM_IMX=y
-	default m if DRM_IMX=m
-
 config IMX8MP_HDMI_PAVI
 	tristate "NXP i.MX8MP HDMI Audio Video (PVI/PAI)"
 	help
@@ -98,7 +79,7 @@ config DRM_IMX_HDMI
 	tristate "Freescale i.MX DRM HDMI"
 	select DRM_DW_HDMI
 	select IMX8MP_HDMI_PAVI
-	depends on DRM_IMX
+	depends on DRM_IMX && OF
 	help
 	  Choose this if you want to use HDMI on i.MX6/i.MX8.
 
@@ -111,9 +92,10 @@ config DRM_IMX_SEC_DSIM
 	  Choose this to enable the internal SEC MIPI DSIM controller
 	  found on i.MX platform.
 
+source "drivers/gpu/drm/imx/dcnano/Kconfig"
 source "drivers/gpu/drm/imx/dpu/Kconfig"
+source "drivers/gpu/drm/imx/dcss/Kconfig"
+source "drivers/gpu/drm/imx/mhdp/Kconfig"
 source "drivers/gpu/drm/imx/ipuv3/Kconfig"
 source "drivers/gpu/drm/imx/lcdif/Kconfig"
 source "drivers/gpu/drm/imx/lcdifv3/Kconfig"
-source "drivers/gpu/drm/imx/dcss/Kconfig"
-source "drivers/gpu/drm/imx/mhdp/Kconfig"

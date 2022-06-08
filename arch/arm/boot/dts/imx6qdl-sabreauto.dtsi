@@ -221,16 +221,28 @@
 
 	sound-cs42888 {
 		compatible = "fsl,imx6-sabreauto-cs42888",
-				"fsl,imx-audio-cs42888";
+			"fsl,imx-audio-cs42888";
 		model = "imx-cs42888";
-		esai-controller = <&esai>;
-		asrc-controller = <&asrc>;
+		audio-cpu = <&esai>;
+		audio-asrc = <&asrc>;
 		audio-codec = <&codec>;
+		audio-routing =
+			"Line Out Jack", "AOUT1L",
+			"Line Out Jack", "AOUT1R",
+			"Line Out Jack", "AOUT2L",
+			"Line Out Jack", "AOUT2R",
+			"Line Out Jack", "AOUT3L",
+			"Line Out Jack", "AOUT3R",
+			"Line Out Jack", "AOUT4L",
+			"Line Out Jack", "AOUT4R",
+			"AIN1L", "Line In Jack",
+			"AIN1R", "Line In Jack",
+			"AIN2L", "Line In Jack",
+			"AIN2R", "Line In Jack";
 	};
 
 	sound-hdmi {
-		compatible = "fsl,imx6q-audio-hdmi",
-			     "fsl,imx-audio-hdmi";
+		compatible = "fsl,imx6qdl-audio-hdmi";
 		model = "imx-audio-hdmi";
 		hdmi-controller = <&hdmi_audio>;
 	};
@@ -239,8 +251,8 @@
 		compatible = "fsl,imx-audio-si476x",
 			   "fsl,imx-tuner-si476x";
 		model = "imx-radio-si4763";
-		ssi-controller = <&ssi2>;
-		fm-controller = <&si476x_codec>;
+		audio-cpu = <&ssi2>;
+		audio-codec = <&si476x_codec>;
 		mux-int-port = <2>;
 		mux-ext-port = <5>;
 	};
@@ -407,7 +419,7 @@
 };
 
 &ecspi1 {
-	cs-gpios = <&gpio3 19 0>;
+	cs-gpios = <&gpio3 19 GPIO_ACTIVE_LOW>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_ecspi1 &pinctrl_ecspi1_cs>;
 	status = "disabled"; /* pin conflict with WEIM NOR */
@@ -435,6 +447,8 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_enet>;
 	phy-mode = "rgmii-id";
+	fsl,magic-packet;
+	fsl,err006687-workaround-present;
 	fsl,magic-packet;
 	status = "okay";
 };
@@ -1079,6 +1093,7 @@
 };
 
 &pwm3 {
+	#pwm-cells = <2>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_pwm3>;
 	status = "okay";

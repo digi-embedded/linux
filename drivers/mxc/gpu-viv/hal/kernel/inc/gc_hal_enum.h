@@ -197,6 +197,8 @@ typedef enum _gceSURF_FLAG
     gcvSURF_FLAG_MULTI_NODE          = 0x8,
     /* surface no need do dither when resovle*/
     gcvSURF_FLAG_DITHER_DISABLED     = 0x10,
+    /* surface used a fake hal format */
+    gcvSURF_FLAG_FAKE_FORMAT         = 0x20,
 }
 gceSURF_FLAG;
 
@@ -865,6 +867,20 @@ typedef enum _gceTEXTURE_DS_TEX_MODE
 
     gcvTEXTURE_DS_TEXTURE_MODE_INVALID,
 }gceTEXTURE_DS_TEX_MODE;
+
+/* Texture stage */
+typedef enum _gceTEXTURE_STAGE
+{
+    gcvTEXTURE_STAGE_INVALID = -1,
+    gcvTEXTURE_STAGE_VS   = 0,
+    gcvTEXTURE_STAGE_TCS,
+    gcvTEXTURE_STAGE_TES,
+    gcvTEXTURE_STAGE_GS,
+    gcvTEXTURE_STAGE_FS,
+    gcvTEXTURE_STAGE_CS,
+
+    gcvTEXTURE_STAGE_LAST
+}gceTEXTURE_STAGE;
 
 /* Pixel output swizzle modes. */
 typedef enum _gcePIXEL_SWIZZLE
@@ -1588,16 +1604,17 @@ typedef enum _gceCLEAR
 }
 gceCLEAR;
 
-typedef enum _gceBLITDRAW_TYPE
+typedef enum _gceBLIT_TYPE
 {
-    gcvBLITDRAW_CLEAR      = 0,
-    gcvBLITDRAW_BLIT       = 1,
-    gcvBLITDRAW_BLIT_DEPTH = 2,
+    gcvBLIT_DRAW_CLEAR      = 0,
+    gcvBLIT_DRAW_BLIT       = 1,
+    gcvBLIT_DRAW_BLIT_DEPTH = 2,
+    gcvBLIT_COMPUTE_BLIT    = 3,
 
     /* last number, not a real type */
-    gcvBLITDRAW_NUM_TYPE
+    gcvBLIT_NUM_TYPE
  }
-gceBLITDRAW_TYPE;
+gceBLIT_TYPE;
 
 typedef enum _gceSPLIT_DRAW_TYPE
 {
@@ -2124,57 +2141,6 @@ enum
 
     gcvPLATFORM_FLAG_IMX_MM           = 1 << 1,
 };
-
-/* No special needs. */
-#define gcvALLOC_FLAG_NONE                  0x00000000
-
-/* Physical contiguous. */
-#define gcvALLOC_FLAG_CONTIGUOUS            0x00000001
-/* Physical non contiguous. */
-#define gcvALLOC_FLAG_NON_CONTIGUOUS        0x00000002
-
-/* Should not swap out. */
-#define gcvALLOC_FLAG_NON_PAGED             0x00000004
-
-/* CPU access explicitly needed. */
-#define gcvALLOC_FLAG_CPU_ACCESS            0x00000008
-/* Can be remapped as cacheable. */
-#define gcvALLOC_FLAG_CACHEABLE             0x00000010
-
-/* Need 32bit address. */
-#define gcvALLOC_FLAG_4GB_ADDR              0x00000020
-
-/* Secure buffer. */
-#define gcvALLOC_FLAG_SECURITY              0x00000040
-/* Can be exported as dmabuf-fd */
-#define gcvALLOC_FLAG_DMABUF_EXPORTABLE     0x00000080
-/* Do not try slow pools (gcvPOOL_VIRTUAL) */
-#define gcvALLOC_FLAG_FAST_POOLS            0x00000100
-
-/* Import DMABUF. */
-#define gcvALLOC_FLAG_DMABUF                0x00001000
-/* Import USERMEMORY. */
-#define gcvALLOC_FLAG_USERMEMORY            0x00002000
-/* Import an External Buffer. */
-#define gcvALLOC_FLAG_EXTERNAL_MEMORY       0x00004000
-/* Import linux reserved memory. */
-#define gcvALLOC_FLAG_LINUX_RESERVED_MEM    0x00008000
-
-/* 1M pages unit allocation. */
-#define gcvALLOC_FLAG_1M_PAGES              0x00010000
-
-/* Non 1M pages unit allocation. */
-#define gcvALLOC_FLAG_4K_PAGES              0x00020000
-
-/* Real allocation happens when GPU page fault. */
-#define gcvALLOC_FLAG_ALLOC_ON_FAULT        0x01000000
-/* Alloc with memory limit. */
-#define gcvALLOC_FLAG_MEMLIMIT              0x02000000
-
-/* CMA allocator only */
-#define gcvALLOC_FLAG_CMA_LIMIT             0x04000000
-
-#define gcvALLOC_FLAG_CMA_PREEMPT           0x08000000
 
 /* GL_VIV internal usage */
 #ifndef GL_MAP_BUFFER_OBJ_VIV

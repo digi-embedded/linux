@@ -247,9 +247,8 @@ static int saa7146_pgtable_build(struct saa7146_dev *dev, struct saa7146_buf *bu
 
 		/* walk all pages, copy all page addresses to ptr1 */
 		for (i = 0; i < length; i++, list++) {
-			for (p = 0; p * 4096 < list->length; p++, ptr1++) {
+			for (p = 0; p * 4096 < sg_dma_len(list); p++, ptr1++)
 				*ptr1 = cpu_to_le32(sg_dma_address(list) - list->offset);
-			}
 		}
 /*
 		ptr1 = pt1->cpu;
@@ -345,7 +344,8 @@ static int video_begin(struct saa7146_fh *fh)
 
 	fmt = saa7146_format_by_fourcc(dev, vv->video_fmt.pixelformat);
 	/* we need to have a valid format set here */
-	BUG_ON(NULL == fmt);
+	if (!fmt)
+		return -EINVAL;
 
 	if (0 != (fmt->flags & FORMAT_IS_PLANAR)) {
 		resource = RESOURCE_DMA1_HPS|RESOURCE_DMA2_CLP|RESOURCE_DMA3_BRS;
@@ -398,7 +398,8 @@ static int video_end(struct saa7146_fh *fh, struct file *file)
 
 	fmt = saa7146_format_by_fourcc(dev, vv->video_fmt.pixelformat);
 	/* we need to have a valid format set here */
-	BUG_ON(NULL == fmt);
+	if (!fmt)
+		return -EINVAL;
 
 	if (0 != (fmt->flags & FORMAT_IS_PLANAR)) {
 		resource = RESOURCE_DMA1_HPS|RESOURCE_DMA2_CLP|RESOURCE_DMA3_BRS;
@@ -769,10 +770,8 @@ static int vidioc_s_fmt_vid_overlay(struct file *file, void *__fh, struct v4l2_f
 	vv->ov.nclips = f->fmt.win.clipcount;
 	if (vv->ov.nclips > 16)
 		vv->ov.nclips = 16;
-	if (copy_from_user(vv->ov.clips, f->fmt.win.clips,
-				sizeof(struct v4l2_clip) * vv->ov.nclips)) {
-		return -EFAULT;
-	}
+	memcpy(vv->ov.clips, f->fmt.win.clips,
+	       sizeof(struct v4l2_clip) * vv->ov.nclips);
 
 	/* vv->ov.fh is used to indicate that we have valid overlay information, too */
 	vv->ov.fh = fh;

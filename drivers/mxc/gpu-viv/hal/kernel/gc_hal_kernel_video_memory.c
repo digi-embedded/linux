@@ -56,7 +56,6 @@
 #include "gc_hal_kernel_precomp.h"
 
 #if defined(__QNXNTO__)
-#include "gc_hal_kernel_qnx.h"
 #include <stdint.h>
 #include <stdlib.h>
 #include <sys/slogcodes.h>
@@ -264,7 +263,7 @@ gckVIDMEM_Construct(
     gctUINT32 bankSize;
     gctUINT32 base = 0;
 
-    gcmkHEADER_ARG("Os=0x%x PhysicalBase=%12llx Bytes=%lu Threshold=%lu "
+    gcmkHEADER_ARG("Os=%p PhysicalBase=%12llx Bytes=%lu Threshold=%lu "
                    "BankSize=%lu",
                    Os, PhysicalBase, Bytes, Threshold, BankSize);
 
@@ -272,12 +271,6 @@ gckVIDMEM_Construct(
     gcmkVERIFY_OBJECT(Os, gcvOBJ_OS);
     gcmkVERIFY_ARGUMENT(Bytes > 0);
     gcmkVERIFY_ARGUMENT(Memory != gcvNULL);
-
-    if (BankSize == 0)
-    {
-        /* set two banks in 16:1 */
-        BankSize = Bytes >> 4;
-    }
 
     gcmkSAFECASTSIZET(heapBytes, Bytes);
     gcmkSAFECASTSIZET(bankSize, BankSize);
@@ -370,11 +363,6 @@ gckVIDMEM_Construct(
         /* Mark sentinel. */
         memory->sentinel[i].VidMem.bytes = 0;
 
-        if (bankSize == (heapBytes >> 4))
-        {
-            bankSize = heapBytes;
-        }
-
         /* Adjust address for next bank. */
         base += bytes;
         heapBytes   -= bytes;
@@ -385,23 +373,23 @@ gckVIDMEM_Construct(
     memory->mapping[gcvVIDMEM_TYPE_COLOR_BUFFER]    = banks - 1;
     memory->mapping[gcvVIDMEM_TYPE_BITMAP]          = banks - 1;
 
-    if (banks > 7) --banks;
+    if (banks > 1) --banks;
     memory->mapping[gcvVIDMEM_TYPE_DEPTH_BUFFER]    = banks - 1;
     memory->mapping[gcvVIDMEM_TYPE_HZ_BUFFER]       = banks - 1;
 
-    if (banks > 6) --banks;
+    if (banks > 1) --banks;
     memory->mapping[gcvVIDMEM_TYPE_TEXTURE]         = banks - 1;
 
-    if (banks > 5) --banks;
+    if (banks > 1) --banks;
     memory->mapping[gcvVIDMEM_TYPE_VERTEX_BUFFER]   = banks - 1;
 
-    if (banks > 4) --banks;
+    if (banks > 1) --banks;
     memory->mapping[gcvVIDMEM_TYPE_INDEX_BUFFER]    = banks - 1;
 
-    if (banks > 3) --banks;
+    if (banks > 1) --banks;
     memory->mapping[gcvVIDMEM_TYPE_TILE_STATUS]     = banks - 1;
 
-    if (banks > 2) --banks;
+    if (banks > 1) --banks;
     memory->mapping[gcvVIDMEM_TYPE_COMMAND]         = banks - 1;
 
     if (banks > 1) --banks;
@@ -443,7 +431,7 @@ gckVIDMEM_Construct(
     *Memory = memory;
 
     /* Success. */
-    gcmkFOOTER_ARG("*Memory=0x%x", *Memory);
+    gcmkFOOTER_ARG("*Memory=%p", *Memory);
     return gcvSTATUS_OK;
 
 OnError:
@@ -495,7 +483,7 @@ gckVIDMEM_Destroy(
     gcuVIDMEM_NODE_PTR node, next;
     gctINT i;
 
-    gcmkHEADER_ARG("Memory=0x%x", Memory);
+    gcmkHEADER_ARG("Memory=%p", Memory);
 
     /* Verify the arguments. */
     gcmkVERIFY_OBJECT(Memory, gcvOBJ_VIDMEM);
@@ -644,11 +632,7 @@ _FindNode(
 {
     gcuVIDMEM_NODE_PTR node;
     gctUINT32 alignment;
-
-#if gcdENABLE_BANK_ALIGNMENT
     gctUINT32 bankAlignment;
-    gceSTATUS status;
-#endif
 
     if (Memory->sentinel[Bank].VidMem.nextFree == gcvNULL)
     {
@@ -656,30 +640,40 @@ _FindNode(
         return gcvNULL;
     }
 
-#if gcdENABLE_BANK_ALIGNMENT
     /* Walk all free nodes until we have one that is big enough or we have
     ** reached the sentinel. */
     for (node = Memory->sentinel[Bank].VidMem.nextFree;
          node->VidMem.bytes != 0;
          node = node->VidMem.nextFree)
     {
+        gctUINT offset;
+
+        gcmkSAFECASTSIZET(offset, node->VidMem.offset);
+
         if (node->VidMem.bytes < Bytes)
         {
             continue;
         }
 
-        gcmkONERROR(_GetSurfaceBankAlignment(
+#if gcdENABLE_BANK_ALIGNMENT
+        if (gcmIS_ERROR(_GetSurfaceBankAlignment(
             Kernel,
             Type,
             (gctUINT32)(node->VidMem.parent->physicalBase + node->VidMem.offset),
-            &bankAlignment));
+            &bankAlignment)))
+        {
+            return gcvNULL;
+        }
 
         bankAlignment = gcmALIGN(bankAlignment, *Alignment);
+#else
+        bankAlignment = 0;
+#endif
 
         /* Compute number of bytes to skip for alignment. */
         alignment = (*Alignment == 0)
                   ? 0
-                  : (*Alignment - (node->VidMem.offset % *Alignment));
+                  : (*Alignment - (offset & (*Alignment - 1)));
 
         if (alignment == *Alignment)
         {
@@ -694,42 +688,7 @@ _FindNode(
             return node;
         }
     }
-#endif
 
-    /* Walk all free nodes until we have one that is big enough or we have
-       reached the sentinel. */
-    for (node = Memory->sentinel[Bank].VidMem.nextFree;
-         node->VidMem.bytes != 0;
-         node = node->VidMem.nextFree)
-    {
-        gctUINT offset;
-
-        gctINT modulo;
-
-        gcmkSAFECASTSIZET(offset, node->VidMem.offset);
-
-        modulo = gckMATH_ModuloInt(offset, *Alignment);
-
-        /* Compute number of bytes to skip for alignment. */
-        alignment = (*Alignment == 0) ? 0 : (*Alignment - modulo);
-
-        if (alignment == *Alignment)
-        {
-            /* Node is already aligned. */
-            alignment = 0;
-        }
-
-        if (node->VidMem.bytes >= Bytes + alignment)
-        {
-            /* This node is big enough. */
-            *Alignment = alignment;
-            return node;
-        }
-    }
-
-#if gcdENABLE_BANK_ALIGNMENT
-OnError:
-#endif
     /* Not enough memory. */
     return gcvNULL;
 }
@@ -786,7 +745,7 @@ gckVIDMEM_AllocateLinear(
     gctBOOL acquired = gcvFALSE;
     gctUINT64 mappingInOne = 1;
 
-    gcmkHEADER_ARG("Memory=0x%x Bytes=%lu Alignment=%u Type=%d",
+    gcmkHEADER_ARG("Memory=%p Bytes=%lu Alignment=%u Type=%d",
                    Memory, Bytes, Alignment, Type);
 
     /* Verify the arguments. */
@@ -794,6 +753,11 @@ gckVIDMEM_AllocateLinear(
     gcmkVERIFY_ARGUMENT(Bytes > 0);
     gcmkVERIFY_ARGUMENT(Node != gcvNULL);
     gcmkVERIFY_ARGUMENT(Type < gcvVIDMEM_TYPE_COUNT);
+
+    if (Alignment && (Alignment & (Alignment - 1)))
+    {
+        gcmkONERROR(gcvSTATUS_INVALID_ARGUMENT);
+    }
 
     /* Acquire the mutex. */
     gcmkONERROR(gckOS_AcquireMutex(Memory->os, Memory->mutex, gcvINFINITE));
@@ -805,6 +769,9 @@ gckVIDMEM_AllocateLinear(
         static time_t last_slog_time;
         int do_slog_now = 0;
         time_t this_slog_time = time(NULL);
+        gctUINT32 pid = 0;
+
+        gcmkVERIFY_OK(gckOS_GetProcessID(&pid));
 
         if (Memory->freeBytes < lowwaterFPC) {
             if (Memory->freeBytes < slogLowWaterFPC) {
@@ -819,8 +786,9 @@ gckVIDMEM_AllocateLinear(
 
         if (do_slog_now) {
             last_slog_time = this_slog_time;
-            slogf(_SLOGC_GRAPHICS_GL, _SLOG_INFO, "%s: Memory->freeBytes = %u, lowest Memory->freeBytes = %u",
-                    __FUNCTION__, (unsigned) Memory->freeBytes, (unsigned) lowwaterFPC);
+            slogf(_SLOGC_GRAPHICS_GL, _SLOG_INFO, "%s: Memory->freeBytes = %u, lowest Memory->freeBytes = %u. "
+                    "Handling message from pid: %u. Requested bytes: %zu",
+                    __FUNCTION__, (unsigned) Memory->freeBytes, (unsigned) lowwaterFPC, pid, Bytes);
         }
     }
 #endif
@@ -957,11 +925,11 @@ gckVIDMEM_AllocateLinear(
     *Node = node;
 
     gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_VIDMEM,
-                   "Allocated %u bytes @ 0x%x [0x%08X]",
+                   "Allocated %u bytes @ %p [0x%08X]",
                    node->VidMem.bytes, node, node->VidMem.offset);
 
     /* Success. */
-    gcmkFOOTER_ARG("*Node=0x%x", *Node);
+    gcmkFOOTER_ARG("*Node=%p", *Node);
     return gcvSTATUS_OK;
 
 OnError:
@@ -1009,7 +977,7 @@ gckVIDMEM_AllocateVirtual(
     gctPOINTER pointer = gcvNULL;
     gctINT i;
 
-    gcmkHEADER_ARG("Kernel=0x%x Flag=%x Bytes=%lu", Kernel, Flag, Bytes);
+    gcmkHEADER_ARG("Kernel=%p Flag=%x Bytes=%zu", Kernel, Flag, Bytes);
 
     /* Verify the arguments. */
     gcmkVERIFY_OBJECT(Kernel, gcvOBJ_KERNEL);
@@ -1059,11 +1027,11 @@ gckVIDMEM_AllocateVirtual(
     *Node = node;
 
     gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_VIDMEM,
-                   "Created virtual node 0x%x for %u bytes @ 0x%x",
+                   "Created virtual node %p for %zu bytes @ %p",
                    node, Bytes, node->Virtual.physical);
 
     /* Success. */
-    gcmkFOOTER_ARG("*Node=0x%x", *Node);
+    gcmkFOOTER_ARG("*Node=%p", *Node);
     return gcvSTATUS_OK;
 
 OnError:
@@ -1309,7 +1277,7 @@ _ConvertPhysical(
     gceSTATUS status;
     gctUINT64 physical = 0;
 
-    gcmkHEADER_ARG("Node=0x%X", Node);
+    gcmkHEADER_ARG("Node=%p", Node);
 
     if ((Node && !Node->Virtual.contiguous) ||
         (VidMemBlock && !VidMemBlock->contiguous))
@@ -1429,10 +1397,27 @@ gckVIDMEM_MapVidMemBlock(
                               &VidMemBlock->addresses[hwType]);
     if (gcmIS_ERROR(status))
     {
+        gctSIZE_T pageCount = VidMemBlock->pageCount;
+
+        /* If physical address is not aligned. */
+        if (physAddr & (gcd1M_PAGE_SIZE - 1))
+        {
+            if (VidMemBlock->contiguous)
+            {
+                pageCount++;
+            }
+            else
+            {
+                gcmkONERROR(gcvSTATUS_NOT_SUPPORTED);
+            }
+        }
+
+        VidMemBlock->fixedPageCount = (gctUINT32)pageCount;
+
         /* Allocate pages inside the MMU. */
         gcmkONERROR(
             gckMMU_AllocatePagesEx(Kernel->mmu,
-                                   VidMemBlock->pageCount,
+                                   pageCount,
                                    VidMemBlock->type,
                                    gcvPAGE_TYPE_1M,
                                    VidMemBlock->secure,
@@ -1446,7 +1431,7 @@ gckVIDMEM_MapVidMemBlock(
                 gckOS_Map1MPages(os,
                                  Kernel->core,
                                  VidMemBlock->physical,
-                                 VidMemBlock->pageCount,
+                                 pageCount,
                                  VidMemBlock->addresses[hwType],
                                  VidMemBlock->pageTables[hwType],
                                  gcvTRUE,
@@ -1460,7 +1445,7 @@ gckVIDMEM_MapVidMemBlock(
     }
 
     gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_VIDMEM,
-                   "Mapped video memory block 0x%x to 0x%08X",
+                   "Mapped video memory block %p to 0x%08X",
                    VidMemBlock,
                    VidMemBlock->addresses[hwType]);
 
@@ -1476,7 +1461,7 @@ OnError:
                              gcvPAGE_TYPE_1M,
                              VidMemBlock->addresses[hwType],
                              VidMemBlock->pageTables[hwType],
-                             VidMemBlock->pageCount));
+                             VidMemBlock->fixedPageCount));
 
         VidMemBlock->pageTables[hwType] = gcvNULL;
     }
@@ -1507,7 +1492,7 @@ _UnmapVidMemBlock(
                              gcvPAGE_TYPE_1M,
                              VidMemBlock->addresses[HwType],
                              VidMemBlock->pageTables[HwType],
-                             VidMemBlock->pageCount));
+                             VidMemBlock->fixedPageCount));
 
         VidMemBlock->pageTables[HwType] = gcvNULL;
     }
@@ -1537,7 +1522,7 @@ gckVIDMEM_BLOCK_Construct(
     gctPOINTER pointer;
     gctINT i;
 
-    gcmkHEADER_ARG("Kernel=0x%x BlockSize=%lu Type=%x Flag=%x", Kernel, BlockSize, Type);
+    gcmkHEADER_ARG("Kernel=%p BlockSize=%zu Type=%d Flag=0x%x", Kernel, BlockSize, Type, Flag);
 
     /* Verify the arguments. */
     gcmkVERIFY_ARGUMENT(BlockSize > 0);
@@ -1619,7 +1604,7 @@ gckVIDMEM_BLOCK_Construct(
 
     *VidMemBlock = vidMemBlock;
 
-    gcmkFOOTER_ARG("*VidMemBlock=0x%x", *VidMemBlock);
+    gcmkFOOTER_ARG("*VidMemBlock=%p", *VidMemBlock);
 
     return gcvSTATUS_OK;
 
@@ -1708,7 +1693,7 @@ _AllocateVirtualChunk(
     gcuVIDMEM_NODE_PTR node;
     gctSIZE_T bytes;
 
-    gcmkHEADER_ARG("Kernel=%p VidMemBlock=%p Type=%x Bytes=%zx",
+    gcmkHEADER_ARG("Kernel=%p VidMemBlock=%p Type=%d Bytes=%zx",
         Kernel, VidMemBlock, Type, *Bytes);
 
     gcmkVERIFY_ARGUMENT(Node != gcvNULL);
@@ -1780,7 +1765,7 @@ gckVIDMEM_AllocateVirtualChunk(
     gctSIZE_T blockSize;
     gctBOOL acquired = gcvFALSE;
 
-    gcmkHEADER_ARG("Kernel=0x%x Flag=%x Bytes=%lu", Kernel, Flag, Bytes);
+    gcmkHEADER_ARG("Kernel=%p Flag=%x Bytes=%zu", Kernel, Flag, Bytes);
 
     /* Verify the arguments. */
     gcmkVERIFY_OBJECT(Kernel, gcvOBJ_KERNEL);
@@ -1827,11 +1812,11 @@ gckVIDMEM_AllocateVirtualChunk(
     gcmkVERIFY_OK(gckOS_ReleaseMutex(os, Kernel->vidMemBlockMutex));
 
     gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_VIDMEM,
-                   "Created virtual node 0x%x for %u bytes @ 0x%x",
+                   "Created virtual node %p for %zu bytes @ %p",
                    node, Bytes, node->Virtual.physical);
 
     /* Success. */
-    gcmkFOOTER_ARG("*Node=0x%x", *Node);
+    gcmkFOOTER_ARG("*Node=%p", *Node);
     return gcvSTATUS_OK;
 
 OnError:
@@ -1880,7 +1865,7 @@ gckVIDMEM_Free(
     gctBOOL vbListMutexAcquired = gcvFALSE;
     gctUINT64 mappingInOne = 1;
 
-    gcmkHEADER_ARG("Node=0x%x", Node);
+    gcmkHEADER_ARG("Node=%p", Node);
 
     /* Verify the arguments. */
     if ((Node == gcvNULL)
@@ -1950,7 +1935,7 @@ gckVIDMEM_Free(
             if (Node->VidMem.kernelVirtual)
             {
                 gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_VIDMEM,
-                        "%s(%d) Unmap %x from kernel space.",
+                        "%s(%d) Unmap %p from kernel space.",
                         __FUNCTION__, __LINE__,
                         Node->VidMem.kernelVirtual);
 
@@ -2024,7 +2009,7 @@ gckVIDMEM_Free(
         gcmkVERIFY_OK(gckOS_ReleaseMutex(memory->os, memory->mutex));
 
         gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_VIDMEM,
-                       "Node 0x%x is freed.",
+                       "Node %p is freed.",
                        Node);
 
         /* Success. */
@@ -2138,7 +2123,7 @@ gckVIDMEM_Free(
     if (Node->Virtual.kernelVirtual)
     {
         gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_VIDMEM,
-                "%s(%d) Unmap %x from kernel space.",
+                "%s(%d) Unmap %p from kernel space.",
                 __FUNCTION__, __LINE__,
                 Node->Virtual.kernelVirtual);
 
@@ -2265,7 +2250,7 @@ gckVIDMEM_Lock(
     *Address = Node->VidMem.address;
 
     gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_VIDMEM,
-                  "Locked node 0x%x (%d) @ 0x%08X",
+                  "Locked node %p (%d) @ 0x%08X",
                   Node,
                   Node->VidMem.locked,
                   *Address);
@@ -2407,7 +2392,7 @@ gckVIDMEM_LockVirtual(
             }
 
 #if gcdENABLE_VG
-            if (Kernel->core == gcvCORE_VG)
+            if ((gcvNULL != Kernel->vg) && (Kernel->core == gcvCORE_VG))
             {
                 gcmkONERROR(gckVGMMU_Flush(Kernel->vg->mmu));
             }
@@ -2423,7 +2408,7 @@ gckVIDMEM_LockVirtual(
         }
 
         gcmkTRACE_ZONE(gcvLEVEL_INFO, gcvZONE_VIDMEM,
-                       "Mapped virtual node 0x%x to 0x%08X",
+                       "Mapped virtual node %p to 0x%08X",
                        Node,
                        Node->Virtual.addresses[hwType]);
     }
@@ -2549,7 +2534,7 @@ gckVIDMEM_Unlock(
 {
     gceSTATUS status;
 
-    gcmkHEADER_ARG("Node=0x%x *Asynchroneous=%d",
+    gcmkHEADER_ARG("Node=%p *Asynchroneous=%d",
                    Node, gcmOPT_VALUE(Asynchroneous));
 
     if (Node->VidMem.locked <= 0)
@@ -2594,7 +2579,7 @@ gckVIDMEM_UnlockVirtual(
     gceSTATUS status;
     gceHARDWARE_TYPE hwType;
 
-    gcmkHEADER_ARG("Node=0x%x *Asynchroneous=%d",
+    gcmkHEADER_ARG("Node=%p *Asynchroneous=%d",
                    Node, gcmOPT_VALUE(Asynchroneous));
 
     gcmkVERIFY_OK(
@@ -2693,7 +2678,7 @@ gckVIDMEM_UnlockVirtualChunk(
     gceSTATUS status;
     gceHARDWARE_TYPE hwType;
 
-    gcmkHEADER_ARG("Node=0x%x *Asynchroneous=%d",
+    gcmkHEADER_ARG("Node=%p *Asynchroneous=%d",
                    Node, gcmOPT_VALUE(Asynchroneous));
 
     gcmkVERIFY_OK(
@@ -2769,7 +2754,7 @@ gckVIDMEM_HANDLE_Allocate(
     gckVIDMEM_HANDLE handleObject = gcvNULL;
     gckOS os                      = Kernel->os;
 
-    gcmkHEADER_ARG("Kernel=0x%X, Node=0x%X", Kernel, Node);
+    gcmkHEADER_ARG("Kernel=%p, Node=%p", Kernel, Node);
 
     gcmkVERIFY_OBJECT(os, gcvOBJ_OS);
 
@@ -2939,7 +2924,7 @@ gckVIDMEM_HANDLE_Lookup(
     gctPOINTER mutex              = gcvNULL;
     gctBOOL acquired              = gcvFALSE;
 
-    gcmkHEADER_ARG("Kernel=0x%X ProcessID=%d Handle=%d",
+    gcmkHEADER_ARG("Kernel=%p ProcessID=%d Handle=%d",
                    Kernel, ProcessID, Handle);
 
     gcmkONERROR(
@@ -2958,7 +2943,7 @@ gckVIDMEM_HANDLE_Lookup(
 
     *Node = node;
 
-    gcmkFOOTER_ARG("*Node=%d", *Node);
+    gcmkFOOTER_ARG("*Node=%p", *Node);
     return gcvSTATUS_OK;
 
 OnError:
@@ -2986,7 +2971,7 @@ gckVIDMEM_HANDLE_Lookup2(
     gctPOINTER mutex              = gcvNULL;
     gctBOOL acquired              = gcvFALSE;
 
-    gcmkHEADER_ARG("Kernel=0x%X Database=%p Handle=%d",
+    gcmkHEADER_ARG("Kernel=%p Database=%p Handle=%d",
                    Kernel, Database, Handle);
 
     database = Database->handleDatabase;
@@ -3005,7 +2990,7 @@ gckVIDMEM_HANDLE_Lookup2(
 
     *Node = node;
 
-    gcmkFOOTER_ARG("*Node=%d", *Node);
+    gcmkFOOTER_ARG("*Node=%p", *Node);
     return gcvSTATUS_OK;
 
 OnError:
@@ -3121,7 +3106,7 @@ gckVIDMEM_NODE_AllocateLinear(
     gcuVIDMEM_NODE_PTR node = gcvNULL;
     gckVIDMEM_NODE nodeObject = gcvNULL;
 
-    gcmkHEADER_ARG("Kernel=%p VideoMemory=%p Pool=%d Alignment=%d Type=%d *Bytes=%u",
+    gcmkHEADER_ARG("Kernel=%p VideoMemory=%p Pool=%d Alignment=%d Type=%d *Bytes=%zu",
                    Kernel, VideoMemory, Pool, Alignment, Type, bytes);
 
     gcmkONERROR(
@@ -3253,7 +3238,7 @@ gckVIDMEM_NODE_Reference(
     )
 {
     gctINT32 oldValue;
-    gcmkHEADER_ARG("Kernel=0x%X NodeObject=0x%X", Kernel, NodeObject);
+    gcmkHEADER_ARG("Kernel=%p NodeObject=%p", Kernel, NodeObject);
 
     gcmkVERIFY_ARGUMENT(NodeObject != gcvNULL);
 
@@ -3274,7 +3259,7 @@ gckVIDMEM_NODE_Dereference(
     gctPOINTER mutex    = Kernel->db->nameDatabaseMutex;
     gctUINT i;
 
-    gcmkHEADER_ARG("Kernel=0x%X NodeObject=0x%X", Kernel, NodeObject);
+    gcmkHEADER_ARG("Kernel=%p NodeObject=%p", Kernel, NodeObject);
     gcmkVERIFY_ARGUMENT(NodeObject != gcvNULL);
 
     gcmkVERIFY_OK(gckOS_AcquireMutex(Kernel->os, mutex, gcvINFINITE));
@@ -3356,10 +3341,18 @@ gckVIDMEM_NODE_Lock(
     gceSTATUS status;
     gckOS os = Kernel->os;
     gctBOOL acquired = gcvFALSE;
-    gcuVIDMEM_NODE_PTR node = NodeObject->node;
-    gckVIDMEM_BLOCK vidMemBlock = node->VirtualChunk.parent;
+    gcuVIDMEM_NODE_PTR node;
+    gckVIDMEM_BLOCK vidMemBlock;
 
     gcmkHEADER_ARG("NodeObject=%p", NodeObject);
+
+    if (gcvNULL == NodeObject)
+    {
+        gcmkONERROR(gcvSTATUS_INVALID_OBJECT);
+    }
+
+    node = NodeObject->node;
+    vidMemBlock = node->VirtualChunk.parent;
 
     /* Grab the mutex. */
     gcmkONERROR(gckOS_AcquireMutex(os, NodeObject->mutex, gcvINFINITE));
@@ -3459,7 +3452,7 @@ gckVIDMEM_NODE_CleanCache(
     gckVIDMEM_BLOCK vidMemBlock = node->VirtualChunk.parent;
     gceSTATUS status;
 
-    gcmkHEADER_ARG("Kernel=%p NodeObject=%d Offset=0x%llx Logical=%p Bytes=0x%llx",
+    gcmkHEADER_ARG("Kernel=%p NodeObject=%p Offset=0x%zx Logical=%p Bytes=0x%zx",
                    Kernel, NodeObject, Offset, Logical, Bytes);
 
     if (node->VidMem.parent->object.type == gcvOBJ_VIDMEM)
@@ -3510,7 +3503,7 @@ gckVIDMEM_NODE_InvalidateCache(
     gckVIDMEM_BLOCK vidMemBlock = node->VirtualChunk.parent;
     gceSTATUS status;
 
-    gcmkHEADER_ARG("Kernel=%p NodeObject=%d Offset=0x%llx Logical=%p Bytes=0x%llx",
+    gcmkHEADER_ARG("Kernel=%p NodeObject=%p Offset=0x%zx Logical=%p Bytes=0x%zx",
                    Kernel, NodeObject, Offset, Logical, Bytes);
 
     if (node->VidMem.parent->object.type == gcvOBJ_VIDMEM)
@@ -4024,12 +4017,22 @@ static struct sg_table *_dmabuf_map(struct dma_buf_attachment *attachment,
         gctPHYS_ADDR physical = gcvNULL;
         gctSIZE_T offset = 0;
         gctSIZE_T bytes = 0;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 8, 0)
+        DEFINE_DMA_ATTRS(attrs);
+#else
+        unsigned long attrs = 0;
+#endif
 
         if (node->VidMem.parent->object.type == gcvOBJ_VIDMEM)
         {
             physical = node->VidMem.parent->physical;
             offset = node->VidMem.offset;
             bytes = node->VidMem.bytes;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 8, 0)
+            dma_set_attr(DMA_ATTR_SKIP_CPU_SYNC, &attrs);
+#else
+            attrs |= DMA_ATTR_SKIP_CPU_SYNC;
+#endif
         }
         else if (vidMemBlock && vidMemBlock->object.type == gcvOBJ_VIDMEM_BLOCK)
         {
@@ -4046,7 +4049,11 @@ static struct sg_table *_dmabuf_map(struct dma_buf_attachment *attachment,
 
         gcmkERR_BREAK(gckOS_MemoryGetSGT(nodeObject->kernel->os, physical, offset, bytes, (gctPOINTER*)&sgt));
 
-        if (dma_map_sg(attachment->dev, sgt->sgl, sgt->nents, direction) == 0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 8, 0)
+        if (dma_map_sg_attrs(attachment->dev, sgt->sgl, sgt->nents, direction, &attrs) == 0)
+#else
+        if (dma_map_sg_attrs(attachment->dev, sgt->sgl, sgt->nents, direction, attrs) == 0)
+#endif
         {
             sg_free_table(sgt);
             kfree(sgt);
@@ -4063,7 +4070,30 @@ static void _dmabuf_unmap(struct dma_buf_attachment *attachment,
                           struct sg_table *sgt,
                           enum dma_data_direction direction)
 {
-    dma_unmap_sg(attachment->dev, sgt->sgl, sgt->nents, direction);
+    struct dma_buf *dmabuf = attachment->dmabuf;
+    gckVIDMEM_NODE nodeObject = dmabuf->priv;
+    gcuVIDMEM_NODE_PTR node = nodeObject->node;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 8, 0)
+    DEFINE_DMA_ATTRS(attrs);
+#else
+    unsigned long attrs = 0;
+#endif
+
+    if (node->VidMem.parent->object.type == gcvOBJ_VIDMEM)
+    {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 8, 0)
+        dma_set_attr(DMA_ATTR_SKIP_CPU_SYNC, &attrs);
+#else
+        attrs |= DMA_ATTR_SKIP_CPU_SYNC;
+#endif
+
+    }
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 8, 0)
+    dma_unmap_sg_attrs(attachment->dev, sgt->sgl, sgt->nents, direction, &attrs);
+#else
+    dma_unmap_sg_attrs(attachment->dev, sgt->sgl, sgt->nents, direction, attrs);
+#endif
 
     sg_free_table(sgt);
     kfree(sgt);
@@ -4216,7 +4246,7 @@ gckVIDMEM_NODE_Export(
     gceSTATUS status = gcvSTATUS_OK;
     struct dma_buf *dmabuf = gcvNULL;
 
-    gcmkHEADER_ARG("Kernel=%p NodeObject=0x%x", Kernel, NodeObject);
+    gcmkHEADER_ARG("Kernel=%p NodeObject=%p", Kernel, NodeObject);
 
     dmabuf = NodeObject->dmabuf;
     if (!dmabuf)
@@ -4311,7 +4341,7 @@ gckVIDMEM_NODE_Name(
     gctPOINTER mutex    = Kernel->db->nameDatabaseMutex;
     gctBOOL acquired    = gcvFALSE;
     gctBOOL referenced  = gcvFALSE;
-    gcmkHEADER_ARG("Kernel=0x%X NodeObject=%p", Kernel, NodeObject);
+    gcmkHEADER_ARG("Kernel=%p NodeObject=%p", Kernel, NodeObject);
 
     gcmkVERIFY_ARGUMENT(Name != gcvNULL);
 
@@ -4371,7 +4401,7 @@ gckVIDMEM_NODE_Import(
     gctBOOL acquired    = gcvFALSE;
     gctBOOL referenced  = gcvFALSE;
 
-    gcmkHEADER_ARG("Kernel=0x%X Name=%d", Kernel, Name);
+    gcmkHEADER_ARG("Kernel=%p Name=%d", Kernel, Name);
 
     gcmkONERROR(gckOS_AcquireMutex(Kernel->os, mutex, gcvINFINITE));
     acquired = gcvTRUE;
@@ -4450,7 +4480,7 @@ gckVIDMEM_NODE_GetFd(
     gceSTATUS status;
     gctBOOL referenced  = gcvFALSE;
     gcsVIDMEM_NODE_FDPRIVATE * fdPrivate = gcvNULL;
-    gcmkHEADER_ARG("Kernel=0x%X NodeObject=%d", Kernel, NodeObject);
+    gcmkHEADER_ARG("Kernel=%p NodeObject=%p", Kernel, NodeObject);
 
     /* Reference node object. */
     gcmkVERIFY_OK(gckVIDMEM_NODE_Reference(Kernel, NodeObject));
@@ -4501,7 +4531,7 @@ gckVIDMEM_NODE_WrapUserMemory(
     gckVIDMEM_NODE nodeObject = gcvNULL;
     gctBOOL found = gcvFALSE;
 
-    gcmkHEADER_ARG("Kernel=0x%x", Kernel);
+    gcmkHEADER_ARG("Kernel=%p", Kernel);
 
     gcmkVERIFY_ARGUMENT(Desc != gcvNULL);
 

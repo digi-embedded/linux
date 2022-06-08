@@ -373,6 +373,7 @@ EXPORT_SYMBOL(cnstr_shdsc_aead_encap);
  *         with OP_ALG_AAI_HMAC_PRECOMP.
  * @ivsize: initialization vector size
  * @icvsize: integrity check value (ICV) size (truncated or full)
+ * @geniv: whether to generate Encrypted Chain IV
  * @is_rfc3686: true when ctr(aes) is wrapped by rfc3686 template
  * @nonce: pointer to rfc3686 nonce
  * @ctx1_iv_off: IV offset in CONTEXT1 register
@@ -649,11 +650,21 @@ void cnstr_shdsc_tls_encap(u32 * const desc, struct alginfo *cdata,
 	 * Compute the index (in bytes) for the LOAD with destination of
 	 * Class 1 Data Size Register and for the LOAD that generates padding
 	 */
-	if (adata->key_inline) {
+	if (adata->key_inline && cdata->key_inline) {
 		idx_ld_datasz = DESC_TLS10_ENC_LEN + adata->keylen_pad +
 				cdata->keylen - 4 * CAAM_CMD_SZ;
 		idx_ld_pad = DESC_TLS10_ENC_LEN + adata->keylen_pad +
 			     cdata->keylen - 2 * CAAM_CMD_SZ;
+	} else if (adata->key_inline && !cdata->key_inline) {
+		idx_ld_datasz = DESC_TLS10_ENC_LEN + adata->keylen_pad +
+				CAAM_PTR_SZ - 4 * CAAM_CMD_SZ;
+		idx_ld_pad = DESC_TLS10_ENC_LEN + adata->keylen_pad +
+			     CAAM_PTR_SZ - 2 * CAAM_CMD_SZ;
+	} else if (adata->key_inline && !cdata->key_inline) {
+		idx_ld_datasz = DESC_TLS10_ENC_LEN + cdata->keylen +
+				CAAM_PTR_SZ - 4 * CAAM_CMD_SZ;
+		idx_ld_pad = DESC_TLS10_ENC_LEN + cdata->keylen +
+			     CAAM_PTR_SZ - 2 * CAAM_CMD_SZ;
 	} else {
 		idx_ld_datasz = DESC_TLS10_ENC_LEN + 2 * CAAM_PTR_SZ -
 				4 * CAAM_CMD_SZ;
@@ -697,11 +708,14 @@ void cnstr_shdsc_tls_encap(u32 * const desc, struct alginfo *cdata,
 	append_operation(desc, cdata->algtype | OP_ALG_AS_INITFINAL |
 			 OP_ALG_ENCRYPT);
 
-	/* payloadlen = input data length - (assoclen + ivlen) */
-	append_math_sub_imm_u32(desc, REG0, SEQINLEN, IMM, assoclen + ivsize);
+	/* payloadlen = input data length
+	 * - (assoclen + ivsize + xplicit ivsize)
+	 */
+	append_math_sub_imm_u32(desc, REG0, SEQINLEN,
+				IMM, assoclen + 2 * ivsize);
 
-	/* math1 = payloadlen + icvlen */
-	append_math_add_imm_u32(desc, REG1, REG0, IMM, authsize);
+	/* math1 = payloadlen + icvlen + xplicit ivsize */
+	append_math_add_imm_u32(desc, REG1, REG0, IMM, authsize + ivsize);
 
 	/* padlen = block_size - math1 % block_size */
 	append_math_and_imm_u32(desc, REG3, REG1, IMM, blocksize - 1);
@@ -740,6 +754,11 @@ void cnstr_shdsc_tls_encap(u32 * const desc, struct alginfo *cdata,
 	/* read assoc for authentication */
 	append_seq_fifo_load(desc, assoclen, FIFOLD_CLASS_CLASS2 |
 			     FIFOLD_TYPE_MSG);
+
+	/* read xplicit iv in case of >TL10 */
+	append_seq_fifo_load(desc, ivsize, FIFOLD_CLASS_CLASS1 |
+				     FIFOLD_TYPE_MSG);
+
 	/* insnoop payload */
 	append_seq_fifo_load(desc, 0, FIFOLD_CLASS_BOTH | FIFOLD_TYPE_MSG |
 			     FIFOLD_TYPE_LAST2 | FIFOLDST_VLF);
@@ -1984,13 +2003,14 @@ void cnstr_shdsc_xts_skcipher_encap(u32 * const desc, struct alginfo *cdata)
 	set_jump_tgt_here(desc, key_jump_cmd);
 
 	/*
-	 * create sequence for loading the sector index
-	 * Upper 8B of IV - will be used as sector index
-	 * Lower 8B of IV - will be discarded
+	 * create sequence for loading the sector index / 16B tweak value
+	 * Lower 8B of IV - sector index / tweak lower half
+	 * Upper 8B of IV - upper half of 16B tweak
 	 */
 	append_seq_load(desc, 8, LDST_SRCDST_BYTE_CONTEXT | LDST_CLASS_1_CCB |
 			(0x20 << LDST_OFFSET_SHIFT));
-	append_seq_fifo_load(desc, 8, FIFOLD_CLASS_SKIP);
+	append_seq_load(desc, 8, LDST_SRCDST_BYTE_CONTEXT | LDST_CLASS_1_CCB |
+			(0x30 << LDST_OFFSET_SHIFT));
 
 	/* Load operation */
 	append_operation(desc, cdata->algtype | OP_ALG_AS_INITFINAL |
@@ -1999,9 +2019,11 @@ void cnstr_shdsc_xts_skcipher_encap(u32 * const desc, struct alginfo *cdata)
 	/* Perform operation */
 	skcipher_append_src_dst(desc);
 
-	/* Store upper 8B of IV */
+	/* Store lower 8B and upper 8B of IV */
 	append_seq_store(desc, 8, LDST_SRCDST_BYTE_CONTEXT | LDST_CLASS_1_CCB |
 			 (0x20 << LDST_OFFSET_SHIFT));
+	append_seq_store(desc, 8, LDST_SRCDST_BYTE_CONTEXT | LDST_CLASS_1_CCB |
+			 (0x30 << LDST_OFFSET_SHIFT));
 
 	print_hex_dump_debug("xts skcipher enc shdesc@" __stringify(__LINE__)
 			     ": ", DUMP_PREFIX_ADDRESS, 16, 4,
@@ -2043,23 +2065,25 @@ void cnstr_shdsc_xts_skcipher_decap(u32 * const desc, struct alginfo *cdata)
 	set_jump_tgt_here(desc, key_jump_cmd);
 
 	/*
-	 * create sequence for loading the sector index
-	 * Upper 8B of IV - will be used as sector index
-	 * Lower 8B of IV - will be discarded
+	 * create sequence for loading the sector index / 16B tweak value
+	 * Lower 8B of IV - sector index / tweak lower half
+	 * Upper 8B of IV - upper half of 16B tweak
 	 */
 	append_seq_load(desc, 8, LDST_SRCDST_BYTE_CONTEXT | LDST_CLASS_1_CCB |
 			(0x20 << LDST_OFFSET_SHIFT));
-	append_seq_fifo_load(desc, 8, FIFOLD_CLASS_SKIP);
-
+	append_seq_load(desc, 8, LDST_SRCDST_BYTE_CONTEXT | LDST_CLASS_1_CCB |
+			(0x30 << LDST_OFFSET_SHIFT));
 	/* Load operation */
 	append_dec_op1(desc, cdata->algtype);
 
 	/* Perform operation */
 	skcipher_append_src_dst(desc);
 
-	/* Store upper 8B of IV */
+	/* Store lower 8B and upper 8B of IV */
 	append_seq_store(desc, 8, LDST_SRCDST_BYTE_CONTEXT | LDST_CLASS_1_CCB |
 			 (0x20 << LDST_OFFSET_SHIFT));
+	append_seq_store(desc, 8, LDST_SRCDST_BYTE_CONTEXT | LDST_CLASS_1_CCB |
+			 (0x30 << LDST_OFFSET_SHIFT));
 
 	print_hex_dump_debug("xts skcipher dec shdesc@" __stringify(__LINE__)
 			     ": ", DUMP_PREFIX_ADDRESS, 16, 4, desc,

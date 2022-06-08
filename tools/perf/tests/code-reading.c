@@ -10,6 +10,7 @@
 #include <sys/param.h>
 #include <perf/cpumap.h>
 #include <perf/evlist.h>
+#include <perf/mmap.h>
 
 #include "debug.h"
 #include "dso.h"
@@ -25,6 +26,7 @@
 #include "event.h"
 #include "record.h"
 #include "util/mmap.h"
+#include "util/string2.h"
 #include "util/synthetic-events.h"
 #include "thread.h"
 
@@ -39,15 +41,6 @@ struct state {
 	u64 done[1024];
 	size_t done_cnt;
 };
-
-static unsigned int hex(char c)
-{
-	if (c >= '0' && c <= '9')
-		return c - '0';
-	if (c >= 'a' && c <= 'f')
-		return c - 'a' + 10;
-	return c - 'A' + 10;
-}
 
 static size_t read_objdump_chunk(const char **line, unsigned char **buf,
 				 size_t *buf_len)
@@ -236,8 +229,8 @@ static int read_object_code(u64 addr, size_t len, u8 cpumode,
 			    struct thread *thread, struct state *state)
 {
 	struct addr_location al;
-	unsigned char buf1[BUFSZ];
-	unsigned char buf2[BUFSZ];
+	unsigned char buf1[BUFSZ] = {0};
+	unsigned char buf2[BUFSZ] = {0};
 	size_t ret_len;
 	u64 objdump_addr;
 	const char *objdump_name;
@@ -275,7 +268,7 @@ static int read_object_code(u64 addr, size_t len, u8 cpumode,
 		len = al.map->end - addr;
 
 	/* Read the object code using perf */
-	ret_len = dso__data_read_offset(al.map->dso, thread->mg->machine,
+	ret_len = dso__data_read_offset(al.map->dso, thread->maps->machine,
 					al.addr, buf1, len);
 	if (ret_len != len) {
 		pr_debug("dso__data_read_offset failed\n");
@@ -377,8 +370,8 @@ static int process_sample_event(struct machine *machine,
 	struct thread *thread;
 	int ret;
 
-	if (perf_evlist__parse_sample(evlist, event, &sample)) {
-		pr_debug("perf_evlist__parse_sample failed\n");
+	if (evlist__parse_sample(evlist, event, &sample)) {
+		pr_debug("evlist__parse_sample failed\n");
 		return -1;
 	}
 
@@ -425,16 +418,16 @@ static int process_events(struct machine *machine, struct evlist *evlist,
 
 	for (i = 0; i < evlist->core.nr_mmaps; i++) {
 		md = &evlist->mmap[i];
-		if (perf_mmap__read_init(md) < 0)
+		if (perf_mmap__read_init(&md->core) < 0)
 			continue;
 
-		while ((event = perf_mmap__read_event(md)) != NULL) {
+		while ((event = perf_mmap__read_event(&md->core)) != NULL) {
 			ret = process_event(machine, evlist, event, state);
-			perf_mmap__consume(md);
+			perf_mmap__consume(&md->core);
 			if (ret < 0)
 				return ret;
 		}
-		perf_mmap__read_done(md);
+		perf_mmap__read_done(&md->core);
 	}
 	return 0;
 }
@@ -636,7 +629,7 @@ static int do_test_code_reading(bool try_kcore)
 
 		evlist = evlist__new();
 		if (!evlist) {
-			pr_debug("perf_evlist__new failed\n");
+			pr_debug("evlist__new failed\n");
 			goto out_put;
 		}
 
@@ -650,7 +643,7 @@ static int do_test_code_reading(bool try_kcore)
 			goto out_put;
 		}
 
-		perf_evlist__config(evlist, &opts, NULL);
+		evlist__config(evlist, &opts, NULL);
 
 		evsel = evlist__first(evlist);
 
@@ -665,7 +658,7 @@ static int do_test_code_reading(bool try_kcore)
 				/*
 				 * Both cpus and threads are now owned by evlist
 				 * and will be freed by following perf_evlist__set_maps
-				 * call. Getting refference to keep them alive.
+				 * call. Getting reference to keep them alive.
 				 */
 				perf_cpu_map__get(cpus);
 				perf_thread_map__get(threads);
@@ -677,7 +670,7 @@ static int do_test_code_reading(bool try_kcore)
 
 			if (verbose > 0) {
 				char errbuf[512];
-				perf_evlist__strerror_open(evlist, errno, errbuf, sizeof(errbuf));
+				evlist__strerror_open(evlist, errno, errbuf, sizeof(errbuf));
 				pr_debug("perf_evlist__open() failed!\n%s\n", errbuf);
 			}
 
@@ -713,13 +706,9 @@ static int do_test_code_reading(bool try_kcore)
 out_put:
 	thread__put(thread);
 out_err:
-
-	if (evlist) {
-		evlist__delete(evlist);
-	} else {
-		perf_cpu_map__put(cpus);
-		perf_thread_map__put(threads);
-	}
+	evlist__delete(evlist);
+	perf_cpu_map__put(cpus);
+	perf_thread_map__put(threads);
 	machine__delete_threads(machine);
 	machine__delete(machine);
 

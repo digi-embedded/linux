@@ -22,12 +22,14 @@
  * Authors: Alex Deucher
  */
 
-#include <drm/drm_pci.h>
+#include <linux/pci.h>
 
 #include "atom.h"
 #include "cypress_dpm.h"
+#include "evergreen.h"
 #include "evergreend.h"
 #include "r600_dpm.h"
+#include "rv770.h"
 #include "radeon.h"
 #include "radeon_asic.h"
 
@@ -42,10 +44,6 @@
 #define MC_CG_SEQ_DRAMCONF_S1       0x06
 #define MC_CG_SEQ_YCLK_SUSPEND      0x04
 #define MC_CG_SEQ_YCLK_RESUME       0x0a
-
-struct rv7xx_ps *rv770_get_ps(struct radeon_ps *rps);
-struct rv7xx_power_info *rv770_get_pi(struct radeon_device *rdev);
-struct evergreen_power_info *evergreen_get_pi(struct radeon_device *rdev);
 
 static void cypress_enable_bif_dynamic_pcie_gen2(struct radeon_device *rdev,
 						 bool enable)

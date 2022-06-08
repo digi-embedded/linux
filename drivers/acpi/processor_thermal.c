@@ -17,12 +17,6 @@
 #include <acpi/processor.h>
 #include <linux/uaccess.h>
 
-#define PREFIX "ACPI: "
-
-#define ACPI_PROCESSOR_CLASS            "processor"
-#define _COMPONENT              ACPI_PROCESSOR_COMPONENT
-ACPI_MODULE_NAME("processor_thermal");
-
 #ifdef CONFIG_CPU_FREQ
 
 /* If a passive cooling situation is detected, primarily CPUfreq is used, as it

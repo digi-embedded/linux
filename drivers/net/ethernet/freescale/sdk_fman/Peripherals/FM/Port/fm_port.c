@@ -1,5 +1,6 @@
 /*
  * Copyright 2008-2012 Freescale Semiconductor Inc.
+ * Copyright 2021 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -197,7 +198,7 @@ static t_Error CheckInitParameters(t_FmPort *p_FmPort)
             RETURN_ERROR(
                     MAJOR,
                     E_INVALID_VALUE,
-                    ("rxFifoPriElevationLevel has to be in the range of 256 - %d", MAX_PORT_FIFO_SIZE));
+                    ("rxFifoPriElevationLevel has to be in the range of 256 - %lu", MAX_PORT_FIFO_SIZE));
         if (p_DfltConfig->rx_fifo_thr % BMI_FIFO_UNITS)
             RETURN_ERROR(
                     MAJOR,
@@ -208,7 +209,7 @@ static t_Error CheckInitParameters(t_FmPort *p_FmPort)
             RETURN_ERROR(
                     MAJOR,
                     E_INVALID_VALUE,
-                    ("rxFifoThreshold has to be in the range of 256 - %d", MAX_PORT_FIFO_SIZE));
+                    ("rxFifoThreshold has to be in the range of 256 - %lu", MAX_PORT_FIFO_SIZE));
 
         /* Check that not larger than 16 */
         if (p_DfltConfig->rx_cut_end_bytes > FRAME_END_DATA_SIZE)
@@ -268,7 +269,7 @@ static t_Error CheckInitParameters(t_FmPort *p_FmPort)
             RETURN_ERROR(
                     MAJOR,
                     E_INVALID_VALUE,
-                    ("txFifoMinFillLevel has to be in the range of 0 - %d", (MAX_PORT_FIFO_SIZE - 256)));
+                    ("txFifoMinFillLevel has to be in the range of 0 - %lu", (MAX_PORT_FIFO_SIZE - 256)));
         if (p_DfltConfig->tx_fifo_low_comf_level % BMI_FIFO_UNITS)
             RETURN_ERROR(
                     MAJOR,
@@ -279,7 +280,7 @@ static t_Error CheckInitParameters(t_FmPort *p_FmPort)
             RETURN_ERROR(
                     MAJOR,
                     E_INVALID_VALUE,
-                    ("txFifoLowComfLevel has to be in the range of 256 - %d", MAX_PORT_FIFO_SIZE));
+                    ("txFifoLowComfLevel has to be in the range of 256 - %lu", MAX_PORT_FIFO_SIZE));
 
         if (p_FmPort->portType == e_FM_PORT_TYPE_TX)
             if (p_FmPort->p_FmPortDriverParam->dfltCfg.tx_fifo_deq_pipeline_depth
@@ -397,7 +398,7 @@ static t_Error CheckInitParameters(t_FmPort *p_FmPort)
         RETURN_ERROR(
                 MAJOR,
                 E_INVALID_VALUE,
-                ("fifoBufs.num has to be in the range of 256 - %d", MAX_PORT_FIFO_SIZE));
+                ("fifoBufs.num has to be in the range of 256 - %lu", MAX_PORT_FIFO_SIZE));
     if (p_Params->setSizeOfFifo && (p_FmPort->fifoBufs.num % BMI_FIFO_UNITS))
         RETURN_ERROR(
                 MAJOR, E_INVALID_VALUE,
@@ -1394,7 +1395,7 @@ static t_Error SetPcd(t_FmPort *p_FmPort, t_FmPortPcdParams *p_PcdParams)
             case (e_FM_PORT_PCD_SUPPORT_PRS_AND_KG_AND_CC):
             case (e_FM_PORT_PCD_SUPPORT_PRS_AND_KG_AND_CC_AND_PLCR):
                 tmpReg = NIA_KG_CC_EN;
-                /* fall through */
+                fallthrough;
             case (e_FM_PORT_PCD_SUPPORT_PRS_AND_KG):
             case (e_FM_PORT_PCD_SUPPORT_PRS_AND_KG_AND_PLCR):
                 if (p_PcdParams->p_KgParams->directScheme)
@@ -1531,7 +1532,7 @@ static t_Error SetPcd(t_FmPort *p_FmPort, t_FmPortPcdParams *p_PcdParams)
             /* case for using sw parser as the initial NIA address, before
                * HW parsing
                */
-            if ((p_PcdParams->p_PrsParams->additionalParams[i].hdr == HEADER_TYPE_NONE) && 
+            if ((p_PcdParams->p_PrsParams->additionalParams[i].hdr == HEADER_TYPE_NONE) &&
                     p_PcdParams->p_PrsParams->additionalParams[i].swPrsEnable)
             {
                 initialSwPrs = FmPcdGetSwPrsOffset(p_FmPort->h_FmPcd, HEADER_TYPE_NONE,
@@ -1857,7 +1858,7 @@ static t_Error DetachPCD(t_FmPort *p_FmPort)
             *p_BmiNia,
             (p_FmPort->savedBmiNia & BMI_RFNE_FDCS_MASK) | GET_NO_PCD_NIA_BMI_AC_ENQ_FRAME());
 
-    if (FmPcdGetHcHandle(p_FmPort->h_FmPcd))
+    if (FmPcdIsHcUsageAllowed(p_FmPort->h_FmPcd))
         FmPcdHcSync(p_FmPort->h_FmPcd);
 
     if (p_FmPort->requiredAction & UPDATE_NIA_FENE)
@@ -2406,7 +2407,7 @@ t_Handle FM_PORT_Config(t_FmPortParams *p_FmPortParams)
                          tmpReg);
 #endif /* FM_WRONG_RESET_VALUES_ERRATA_FMAN_A005127 */
 
-            /* fall through */
+            fallthrough;
         case (e_FM_PORT_TYPE_TX_10G):
                 tmpReg =
                         GET_UINT32(p_FmPort->p_FmPortBmiRegs->txPortBmiRegs.fmbm_tfp);
@@ -2438,7 +2439,7 @@ t_Handle FM_PORT_Config(t_FmPortParams *p_FmPortParams)
             p_FmPort->p_FmPortDriverParam->noScatherGather =
                     DEFAULT_PORT_noScatherGather;
 #endif /* (DPAA_VERSION >= 11) */
-            /* fall through */
+            fallthrough;
         case (e_FM_PORT_TYPE_OH_HOST_COMMAND):
             p_FmPort->p_FmPortDriverParam->deqPrefetchOption =
                     DEFAULT_PORT_deqPrefetchOption_HC;
@@ -3432,7 +3433,7 @@ t_Error FM_PORT_SetSizeOfFifo(t_Handle h_FmPort, t_FmPortRsrc *p_SizeOfFifo)
         RETURN_ERROR(
                 MAJOR,
                 E_INVALID_VALUE,
-                ("SizeOfFifo-num has to be in the range of 256 - %d", MAX_PORT_FIFO_SIZE));
+                ("SizeOfFifo-num has to be in the range of 256 - %lu", MAX_PORT_FIFO_SIZE));
     if (p_SizeOfFifo->num % BMI_FIFO_UNITS)
         RETURN_ERROR(
                 MAJOR, E_INVALID_VALUE,
@@ -4274,7 +4275,7 @@ t_Error FM_PORT_ModifyCounter(t_Handle h_FmPort, e_FmPortCounters counter,
                 RETURN_ERROR(
                         MINOR, E_INVALID_STATE,
                         ("Requested counter is not available for Rx ports"));
-            /* fall through */
+            fallthrough;
         case (e_FM_PORT_COUNTERS_ENQ_TOTAL):
             bmiCounter = FALSE;
             break;
@@ -6001,7 +6002,7 @@ t_Error FM_PORT_EnterDsar(t_Handle h_FmPortRx, t_FmPortDsarParams *params)
     t_FmGetSetParams fmGetSetParams;
     memset(&fmGetSetParams, 0, sizeof (t_FmGetSetParams));
     fmGetSetParams.setParams.type = UPDATE_FPM_BRKC_SLP;
-    fmGetSetParams.setParams.sleep = 1;    
+    fmGetSetParams.setParams.sleep = 1;
 
     err = DsarCheckParams(params, p_FmPort->deepSleepVars.autoResMaxSizes);
     if (err != E_OK)

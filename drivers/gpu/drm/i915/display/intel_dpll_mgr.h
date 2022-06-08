@@ -154,6 +154,23 @@ enum intel_dpll_id {
 	 * @DPLL_ID_TGL_MGPLL6: TGL TC PLL port 6 (TC6)
 	 */
 	DPLL_ID_TGL_MGPLL6 = 8,
+
+	/**
+	 * @DPLL_ID_DG1_DPLL0: DG1 combo PHY DPLL0
+	 */
+	DPLL_ID_DG1_DPLL0 = 0,
+	/**
+	 * @DPLL_ID_DG1_DPLL1: DG1 combo PHY DPLL1
+	 */
+	DPLL_ID_DG1_DPLL1 = 1,
+	/**
+	 * @DPLL_ID_DG1_DPLL2: DG1 combo PHY DPLL2
+	 */
+	DPLL_ID_DG1_DPLL2 = 2,
+	/**
+	 * @DPLL_ID_DG1_DPLL3: DG1 combo PHY DPLL3
+	 */
+	DPLL_ID_DG1_DPLL3 = 3,
 };
 
 #define I915_NUM_PLLS 9
@@ -187,9 +204,8 @@ struct intel_dpll_hw_state {
 	/* HDMI only, 0 when used for DP */
 	u32 cfgcr1, cfgcr2;
 
-	/* cnl */
+	/* icl */
 	u32 cfgcr0;
-	/* CNL also uses cfgcr1 */
 
 	/* bxt */
 	u32 ebb0, ebb4, pll0, pll1, pll2, pll3, pll6, pll8, pll9, pll10, pcsdw12;
@@ -224,9 +240,9 @@ struct intel_dpll_hw_state {
  */
 struct intel_shared_dpll_state {
 	/**
-	 * @crtc_mask: mask of CRTC using this DPLL, active or not
+	 * @pipe_mask: mask of pipes using this DPLL, active or not
 	 */
-	unsigned crtc_mask;
+	u8 pipe_mask;
 
 	/**
 	 * @hw_state: hardware configuration for the DPLL stored in
@@ -278,6 +294,16 @@ struct intel_shared_dpll_funcs {
 	bool (*get_hw_state)(struct drm_i915_private *dev_priv,
 			     struct intel_shared_dpll *pll,
 			     struct intel_dpll_hw_state *hw_state);
+
+	/**
+	 * @get_freq:
+	 *
+	 * Hook for calculating the pll's output frequency based on its
+	 * passed in state.
+	 */
+	int (*get_freq)(struct drm_i915_private *i915,
+			const struct intel_shared_dpll *pll,
+			const struct intel_dpll_hw_state *pll_state);
 };
 
 /**
@@ -324,9 +350,9 @@ struct intel_shared_dpll {
 	struct intel_shared_dpll_state state;
 
 	/**
-	 * @active_mask: mask of active CRTCs (i.e. DPMS on) using this DPLL
+	 * @active_mask: mask of active pipes (i.e. DPMS on) using this DPLL
 	 */
-	unsigned active_mask;
+	u8 active_mask;
 
 	/**
 	 * @on: is the PLL actually active? Disabled during modeset
@@ -337,6 +363,11 @@ struct intel_shared_dpll {
 	 * @info: platform specific info
 	 */
 	const struct dpll_info *info;
+
+	/**
+	 * @wakeref: In some platforms a device-level runtime pm reference may
+	 * need to be grabbed to disable DC states while this DPLL is enabled
+	 */
 	intel_wakeref_t wakeref;
 };
 
@@ -367,15 +398,23 @@ void icl_set_active_port_dpll(struct intel_crtc_state *crtc_state,
 void intel_update_active_dpll(struct intel_atomic_state *state,
 			      struct intel_crtc *crtc,
 			      struct intel_encoder *encoder);
+int intel_dpll_get_freq(struct drm_i915_private *i915,
+			const struct intel_shared_dpll *pll,
+			const struct intel_dpll_hw_state *pll_state);
+bool intel_dpll_get_hw_state(struct drm_i915_private *i915,
+			     struct intel_shared_dpll *pll,
+			     struct intel_dpll_hw_state *hw_state);
 void intel_prepare_shared_dpll(const struct intel_crtc_state *crtc_state);
 void intel_enable_shared_dpll(const struct intel_crtc_state *crtc_state);
 void intel_disable_shared_dpll(const struct intel_crtc_state *crtc_state);
 void intel_shared_dpll_swap_state(struct intel_atomic_state *state);
 void intel_shared_dpll_init(struct drm_device *dev);
+void intel_dpll_update_ref_clks(struct drm_i915_private *dev_priv);
+void intel_dpll_readout_hw_state(struct drm_i915_private *dev_priv);
+void intel_dpll_sanitize_state(struct drm_i915_private *dev_priv);
 
 void intel_dpll_dump_hw_state(struct drm_i915_private *dev_priv,
 			      const struct intel_dpll_hw_state *hw_state);
-int cnl_hdmi_pll_ref_clock(struct drm_i915_private *dev_priv);
 enum intel_dpll_id icl_tc_port_to_pll_id(enum tc_port tc_port);
 bool intel_dpll_is_combophy(enum intel_dpll_id id);
 

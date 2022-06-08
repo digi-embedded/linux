@@ -117,7 +117,7 @@ static sc_ipc_t gpu_ipcHandle;
 #include <linux/pm_runtime.h>
 #include <linux/regulator/consumer.h>
 
-#ifdef CONFIG_DEVICE_THERMAL
+#if IS_ENABLED(CONFIG_DEVICE_THERMAL)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
 #    include <linux/device_cooling.h>
 #    define REG_THERMAL_NOTIFIER(a) register_devfreq_cooling_notifier(a);
@@ -558,6 +558,14 @@ static ssize_t gpu_govern_store(struct device_driver *dev, const char *buf, size
     struct imx_priv *priv = &imxPriv;
     int core = gcvCORE_MAJOR;
     int i;
+    gckGALDEVICE device = platform_get_drvdata(pdevice);
+    gctBOOL mutex_acquired = gcvFALSE;
+    gceSTATUS status;
+
+    if (!device)
+    {
+        return count;
+    }
 
     for (i = 0; i < GOVERN_COUNT; i++)
     {
@@ -571,6 +579,14 @@ static ssize_t gpu_govern_store(struct device_driver *dev, const char *buf, size
     {
         return count;
     }
+
+    /* Get the device commit mutex. */
+    gcmkONERROR(gckOS_AcquireMutex(device->os, device->device->commitMutex,
+            gcvINFINITE));
+    mutex_acquired = gcvTRUE;
+
+    /* Suspend the GPU. */
+    gcmkONERROR(gckGALDEVICE_Suspend(device, gcvPOWER_SUSPEND));
 
     core_freq   = priv->imx_gpu_govern.core_clk_freq[i];
     shader_freq = priv->imx_gpu_govern.shader_clk_freq[i];
@@ -593,6 +609,17 @@ static ssize_t gpu_govern_store(struct device_driver *dev, const char *buf, size
             pm_runtime_put_sync(priv->pmdev[core]);
 #endif
         }
+    }
+
+    /* Resume GPU to previous state. */
+    gcmkVERIFY_OK(gckGALDEVICE_Resume(device));
+
+OnError:
+    /* Release the commit mutex. */
+    if (mutex_acquired)
+    {
+        gcmkVERIFY_OK(gckOS_ReleaseMutex(device->os,
+                device->device->commitMutex));
     }
 
     return count;
@@ -910,7 +937,6 @@ static inline int get_power_imx8_subsystem(struct device *pdev)
         }
 
 #if defined(CONFIG_ANDROID) && LINUX_VERSION_CODE < KERNEL_VERSION(4,9,0)
-        /* TODO: freescale BSP issue in some platform like imx8dv. */
         clk_prepare(clk_core);
         clk_set_rate(clk_core, 800000000);
         clk_unprepare(clk_core);
@@ -1197,7 +1223,7 @@ static int patch_param(struct platform_device *pdev,
 
 #if defined(IMX8_PHYS_SIZE)
         args->physSize = IMX8_PHYS_SIZE;
-#else
+#elif defined(CONFIG_SOC_IMX6Q)
         args->physSize = 0x80000000;
 #endif
     }
@@ -1885,6 +1911,9 @@ int gckPLATFORM_Init(struct platform_driver *pdrv,
 #endif
 
     *platform = &imx_platform;
+#ifdef GALCORE_BUILD_BY
+    printk("module built by %s at %s", GALCORE_BUILD_BY, GALCORE_BUILD_TM);
+#endif
     return 0;
 }
 

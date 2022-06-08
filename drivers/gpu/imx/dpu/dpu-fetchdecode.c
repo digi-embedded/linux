@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2016 Freescale Semiconductor, Inc.
- * Copyright 2017-2019 NXP
+ * Copyright 2017-2019,2021 NXP
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -104,7 +104,7 @@ fetchdecode_set_baseaddress(struct dpu_fetchunit *fu, unsigned int width,
 
 	if (nonzero_mod) {
 		/* consider PRG x offset to calculate buffer address */
-		baddr += (x_offset % mt_w) * (bpp / 8);
+		baddr += (dma_addr_t)(x_offset % mt_w) * (bpp / 8);
 
 		burst_size = fetchunit_burst_size_fixup_tkt343664(baddr);
 
@@ -113,7 +113,7 @@ fetchdecode_set_baseaddress(struct dpu_fetchunit *fu, unsigned int width,
 							  baddr, nonzero_mod);
 
 		/* consider PRG y offset to calculate buffer address */
-		baddr += (y_offset % mt_h) * stride;
+		baddr += (dma_addr_t)(y_offset % mt_h) * stride;
 	}
 
 	mutex_lock(&fu->mutex);
@@ -146,7 +146,7 @@ fetchdecode_set_src_stride(struct dpu_fetchunit *fu,
 	if (use_prefetch) {
 		/* consider PRG x offset to calculate buffer address */
 		if (nonzero_mod)
-			baddr += (x_offset % mt_w) * (bpp / 8);
+			baddr += (dma_addr_t)(x_offset % mt_w) * (bpp / 8);
 
 		burst_size = fetchunit_burst_size_fixup_tkt343664(baddr);
 
@@ -203,7 +203,7 @@ static void fetchdecode_set_fmt(struct dpu_fetchunit *fu,
 	case DRM_FORMAT_NV16:
 	case DRM_FORMAT_NV61:
 		is_yuv422upsamplingmode_interpolate = true;
-		/* fall-through */
+		fallthrough;
 	case DRM_FORMAT_NV12:
 	case DRM_FORMAT_NV21:
 		if (deinterlace)

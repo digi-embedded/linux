@@ -5,6 +5,7 @@
 
 #include <linux/device.h>
 #include <linux/of.h>
+#include <linux/slab.h>
 
 #include "dcss-dev.h"
 
@@ -12,7 +13,7 @@
 #define   B_CLK_RESETN			BIT(0)
 #define   APB_CLK_RESETN		BIT(1)
 #define   P_CLK_RESETN			BIT(2)
-#define   RTR_CLK_RESETN		BIT(3)
+#define   RTR_CLK_RESETN		BIT(4)
 #define DCSS_BLKCTL_CONTROL0		0x10
 #define   HDMI_MIPI_CLK_SEL		BIT(0)
 #define   DISPMIX_REFCLK_SEL_POS	4
@@ -21,15 +22,13 @@
 #define   HDMI_SRC_SECURE_EN		BIT(16)
 
 struct dcss_blkctl {
-	struct device *dev;
+	struct dcss_dev *dcss;
 	void __iomem *base_reg;
-
-	bool hdmi_output;
 };
 
 void dcss_blkctl_cfg(struct dcss_blkctl *blkctl)
 {
-	if (blkctl->hdmi_output)
+	if (blkctl->dcss->hdmi_output)
 		dcss_writel(0, blkctl->base_reg + DCSS_BLKCTL_CONTROL0);
 	else
 		dcss_writel(DISPMIX_PIXCLK_SEL,
@@ -43,20 +42,19 @@ int dcss_blkctl_init(struct dcss_dev *dcss, unsigned long blkctl_base)
 {
 	struct dcss_blkctl *blkctl;
 
-	blkctl = devm_kzalloc(dcss->dev, sizeof(*blkctl), GFP_KERNEL);
+	blkctl = kzalloc(sizeof(*blkctl), GFP_KERNEL);
 	if (!blkctl)
 		return -ENOMEM;
 
-	blkctl->base_reg = devm_ioremap(dcss->dev, blkctl_base, SZ_4K);
+	blkctl->base_reg = ioremap(blkctl_base, SZ_4K);
 	if (!blkctl->base_reg) {
 		dev_err(dcss->dev, "unable to remap BLK CTRL base\n");
-		devm_kfree(dcss->dev, blkctl);
+		kfree(blkctl);
 		return -ENOMEM;
 	}
 
 	dcss->blkctl = blkctl;
-	blkctl->dev = dcss->dev;
-	blkctl->hdmi_output = dcss->hdmi_output;
+	blkctl->dcss = dcss;
 
 	dcss_blkctl_cfg(blkctl);
 
@@ -65,11 +63,8 @@ int dcss_blkctl_init(struct dcss_dev *dcss, unsigned long blkctl_base)
 
 void dcss_blkctl_exit(struct dcss_blkctl *blkctl)
 {
-	dcss_clr(P_CLK_RESETN | RTR_CLK_RESETN,
-		 blkctl->base_reg + DCSS_BLKCTL_RESET_CTRL);
-
 	if (blkctl->base_reg)
-		devm_iounmap(blkctl->dev, blkctl->base_reg);
+		iounmap(blkctl->base_reg);
 
-	devm_kfree(blkctl->dev, blkctl);
+	kfree(blkctl);
 }

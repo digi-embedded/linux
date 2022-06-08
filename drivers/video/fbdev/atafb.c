@@ -58,7 +58,6 @@
 
 #include <asm/setup.h>
 #include <linux/uaccess.h>
-#include <asm/pgtable.h>
 #include <asm/irq.h>
 #include <asm/io.h>
 
@@ -240,14 +239,6 @@ static int *MV300_reg = MV300_reg_8bit;
 
 
 static int inverse;
-
-extern int fontheight_8x8;
-extern int fontwidth_8x8;
-extern unsigned char fontdata_8x8[];
-
-extern int fontheight_8x16;
-extern int fontwidth_8x16;
-extern unsigned char fontdata_8x16[];
 
 /*
  * struct fb_ops {

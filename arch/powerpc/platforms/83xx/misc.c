@@ -17,6 +17,8 @@
 #include <sysdev/fsl_soc.h>
 #include <sysdev/fsl_pci.h>
 
+#include <mm/mmu_decl.h>
+
 #include "mpc83xx.h"
 
 static __be32 __iomem *restart_reg_base;
@@ -88,13 +90,6 @@ void __init mpc83xx_ipic_init_IRQ(void)
 	ipic_set_default_priority();
 }
 
-#ifdef CONFIG_QUICC_ENGINE
-void __init mpc83xx_ipic_and_qe_init_IRQ(void)
-{
-	mpc83xx_ipic_init_IRQ();
-}
-#endif /* CONFIG_QUICC_ENGINE */
-
 static const struct of_device_id of_bus_ids[] __initconst = {
 	{ .type = "soc", },
 	{ .compatible = "soc", },
@@ -129,7 +124,14 @@ void __init mpc83xx_setup_arch(void)
 	if (ppc_md.progress)
 		ppc_md.progress("mpc83xx_setup_arch()", 0);
 
-	mpc83xx_setup_pci();
+	if (!__map_without_bats) {
+		phys_addr_t immrbase = get_immrbase();
+		int immrsize = IS_ALIGNED(immrbase, SZ_2M) ? SZ_2M : SZ_1M;
+		unsigned long va = fix_to_virt(FIX_IMMR_BASE);
+
+		setbat(-1, va, immrbase, immrsize, PAGE_KERNEL_NCG);
+		update_bats();
+	}
 }
 
 int machine_check_83xx(struct pt_regs *regs)

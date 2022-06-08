@@ -2,7 +2,7 @@
 /*
  * Device Tree fragment for LS1028A QDS board, serdes 85xx
  *
- * Copyright 2019 NXP
+ * Copyright 2019-2021 NXP
  *
  * Requires a LS1028A QDS board without lane B rework.
  * Requires a SCH-24801 card in slot 1.
@@ -36,6 +36,7 @@
 			};
 		};
 	};
+
 	fragment@1 {
 		target = <&mscc_felix_ports>;
 		__overlay__ {
@@ -66,6 +67,13 @@
 				phy-mode = "sgmii";
 				managed = "in-band-status";
 			};
+		};
+	};
+
+	fragment@2 {
+		target = <&mscc_felix>;
+		__overlay__ {
+			status = "okay";
 		};
 	};
 };

@@ -3,53 +3,75 @@
  * Copyright 2019~2020 NXP
  */
 
-/delete-node/ &sai4;
-/delete-node/ &sai5;
-/delete-node/ &esai0;
 /delete-node/ &asrc1;
-/delete-node/ &spdif1;
-/delete-node/ &amix;
-/delete-node/ &adc1;
-/delete-node/ &emvsim0;
-/delete-node/ &edma1;
-/delete-node/ &sai4_lpcg;
-/delete-node/ &sai5_lpcg;
-/delete-node/ &esai0_lpcg;
 /delete-node/ &asrc1_lpcg;
-/delete-node/ &spdif1_lpcg;
-/delete-node/ &amix_lpcg;
-/delete-node/ &emvsim0_lpcg;
+/delete-node/ &adc1;
 /delete-node/ &adc1_lpcg;
+/delete-node/ &amix;
+/delete-node/ &amix_lpcg;
 /delete-node/ &dsp_lpcg;
 /delete-node/ &dsp_ram_lpcg;
+/delete-node/ &edma1;
+/delete-node/ &emvsim0;
+/delete-node/ &emvsim0_lpcg;
+/delete-node/ &esai0;
+/delete-node/ &esai0_lpcg;
+/delete-node/ &sai4;
+/delete-node/ &sai4_lpcg;
+/delete-node/ &sai5;
+/delete-node/ &sai5_lpcg;
+/delete-node/ &spdif1;
+/delete-node/ &spdif1_lpcg;
 
-&dma_ipg_clk {
-	clock-frequency = <160000000>;
+&acm {
+	compatible = "nxp,imx8dxl-acm";
+	power-domains = <&pd IMX_SC_R_AUDIO_CLK_0>,
+			<&pd IMX_SC_R_AUDIO_CLK_1>,
+			<&pd IMX_SC_R_MCLK_OUT_0>,
+			<&pd IMX_SC_R_MCLK_OUT_1>,
+			<&pd IMX_SC_R_AUDIO_PLL_0>,
+			<&pd IMX_SC_R_AUDIO_PLL_1>,
+			<&pd IMX_SC_R_ASRC_0>,
+			<&pd IMX_SC_R_SAI_0>,
+			<&pd IMX_SC_R_SAI_1>,
+			<&pd IMX_SC_R_SAI_2>,
+			<&pd IMX_SC_R_SAI_3>,
+			<&pd IMX_SC_R_SPDIF_0>,
+			<&pd IMX_SC_R_MQS_0>;
+};
+
+&adc0 {
+	interrupts = <GIC_SPI 146 IRQ_TYPE_LEVEL_HIGH>;
 };
 
 &audio_ipg_clk {
 	clock-frequency = <160000000>;
 };
 
+&dma_ipg_clk {
+	clock-frequency = <160000000>;
+};
+
 &edma0 {
-	reg = <0x59200000 0x10000>, /* asrc0 */
-			<0x59210000 0x10000>,
-			<0x59220000 0x10000>,
-			<0x59230000 0x10000>,
-			<0x59240000 0x10000>,
-			<0x59250000 0x10000>,
-			<0x59280000 0x10000>, /* spdif0 rx */
-			<0x59290000 0x10000>, /* spdif0 tx */
-			<0x592c0000 0x10000>, /* sai0 rx */
-			<0x592d0000 0x10000>, /* sai0 tx */
-			<0x592e0000 0x10000>, /* sai1 rx */
-			<0x592f0000 0x10000>, /* sai1 tx */
-			<0x59300000 0x10000>, /* sai2 rx */
-			<0x59310000 0x10000>, /* sai3 rx */
-			<0x59350000 0x10000>, /* gpt0 */
-			<0x59360000 0x10000>, /* gpt1 */
-			<0x59370000 0x10000>, /* gpt2 */
-			<0x59380000 0x10000>; /* gpt3 */
+	reg = <0x591f0000 0x10000>,
+		<0x59200000 0x10000>, /* asrc0 */
+		<0x59210000 0x10000>,
+		<0x59220000 0x10000>,
+		<0x59230000 0x10000>,
+		<0x59240000 0x10000>,
+		<0x59250000 0x10000>,
+		<0x59280000 0x10000>, /* spdif0 rx */
+		<0x59290000 0x10000>, /* spdif0 tx */
+		<0x592c0000 0x10000>, /* sai0 rx */
+		<0x592d0000 0x10000>, /* sai0 tx */
+		<0x592e0000 0x10000>, /* sai1 rx */
+		<0x592f0000 0x10000>, /* sai1 tx */
+		<0x59300000 0x10000>, /* sai2 rx */
+		<0x59310000 0x10000>, /* sai3 rx */
+		<0x59350000 0x10000>, /* gpt0 */
+		<0x59360000 0x10000>, /* gpt1 */
+		<0x59370000 0x10000>, /* gpt2 */
+		<0x59380000 0x10000>; /* gpt3 */
 	interrupts = <GIC_SPI 262 IRQ_TYPE_LEVEL_HIGH>, /* asrc 0 */
 		<GIC_SPI 263 IRQ_TYPE_LEVEL_HIGH>,
 		<GIC_SPI 264 IRQ_TYPE_LEVEL_HIGH>,
@@ -108,23 +130,6 @@
 			     "edma0-chan23", "edma0-chan24";
 };
 
-&acm {
-	compatible = "nxp,imx8dxl-acm";
-	power-domains = <&pd IMX_SC_R_AUDIO_CLK_0>,
-			<&pd IMX_SC_R_AUDIO_CLK_1>,
-			<&pd IMX_SC_R_MCLK_OUT_0>,
-			<&pd IMX_SC_R_MCLK_OUT_1>,
-			<&pd IMX_SC_R_AUDIO_PLL_0>,
-			<&pd IMX_SC_R_AUDIO_PLL_1>,
-			<&pd IMX_SC_R_ASRC_0>,
-			<&pd IMX_SC_R_SAI_0>,
-			<&pd IMX_SC_R_SAI_1>,
-			<&pd IMX_SC_R_SAI_2>,
-			<&pd IMX_SC_R_SAI_3>,
-			<&pd IMX_SC_R_SPDIF_0>,
-			<&pd IMX_SC_R_MQS_0>;
-};
-
 &edma2 {
 	interrupts = <GIC_SPI 288 IRQ_TYPE_LEVEL_HIGH>,
 		     <GIC_SPI 289 IRQ_TYPE_LEVEL_HIGH>,
@@ -144,24 +149,19 @@
 		     <GIC_SPI 315 IRQ_TYPE_LEVEL_HIGH>;
 };
 
-&lpuart0 {
-	compatible = "fsl,imx8dxl-lpuart", "fsl,imx8qxp-lpuart", "fsl,imx7ulp-lpuart";
-	interrupts = <GIC_SPI 228 IRQ_TYPE_LEVEL_HIGH>;
+&flexcan1 {
+	compatible = "fsl,imx8dxl-flexcan", "fsl,imx8qxp-flexcan", "fsl,imx8qm-flexcan";
+	interrupts = <GIC_SPI 238 IRQ_TYPE_LEVEL_HIGH>;
 };
 
-&lpuart1 {
-	compatible = "fsl,imx8dxl-lpuart", "fsl,imx8qxp-lpuart", "fsl,imx7ulp-lpuart";
-	interrupts = <GIC_SPI 229 IRQ_TYPE_LEVEL_HIGH>;
+&flexcan2 {
+	compatible = "fsl,imx8dxl-flexcan", "fsl,imx8qxp-flexcan", "fsl,imx8qm-flexcan";
+	interrupts = <GIC_SPI 239 IRQ_TYPE_LEVEL_HIGH>;
 };
 
-&lpuart2 {
-	compatible = "fsl,imx8dxl-lpuart", "fsl,imx8qxp-lpuart", "fsl,imx7ulp-lpuart";
-	interrupts = <GIC_SPI 230 IRQ_TYPE_LEVEL_HIGH>;
-};
-
-&lpuart3 {
-	compatible = "fsl,imx8dxl-lpuart", "fsl,imx8qxp-lpuart", "fsl,imx7ulp-lpuart";
-	interrupts = <GIC_SPI 231 IRQ_TYPE_LEVEL_HIGH>;
+&flexcan3 {
+	compatible = "fsl,imx8dxl-flexcan", "fsl,imx8qxp-flexcan", "fsl,imx8qm-flexcan";
+	interrupts = <GIC_SPI 240 IRQ_TYPE_LEVEL_HIGH>;
 };
 
 &i2c0 {
@@ -184,28 +184,44 @@
 	interrupts = <GIC_SPI 225 IRQ_TYPE_LEVEL_HIGH>;
 };
 
+&lpspi0 {
+	compatible = "fsl,imx8dxl-spi", "fsl,imx8qxp-spi", "fsl,imx7ulp-spi";
+	interrupts = <GIC_SPI 218 IRQ_TYPE_LEVEL_HIGH>;
+};
+
+&lpspi1 {
+	compatible = "fsl,imx8dxl-spi", "fsl,imx8qxp-spi", "fsl,imx7ulp-spi";
+	interrupts = <GIC_SPI 219 IRQ_TYPE_LEVEL_HIGH>;
+};
+
+&lpspi2 {
+	compatible = "fsl,imx8dxl-spi", "fsl,imx8qxp-spi", "fsl,imx7ulp-spi";
+	interrupts = <GIC_SPI 220 IRQ_TYPE_LEVEL_HIGH>;
+};
+
 &lpspi3 {
 	compatible = "fsl,imx8dxl-spi", "fsl,imx8qxp-spi", "fsl,imx7ulp-spi";
 	interrupts = <GIC_SPI 221 IRQ_TYPE_LEVEL_HIGH>;
 };
 
-&flexcan1 {
-	compatible = "fsl,imx8dxl-flexcan", "fsl,imx8qxp-flexcan", "fsl,imx8qm-flexcan";
-	interrupts = <GIC_SPI 238 IRQ_TYPE_LEVEL_HIGH>;
+&lpuart0 {
+	compatible = "fsl,imx8dxl-lpuart", "fsl,imx8qxp-lpuart", "fsl,imx7ulp-lpuart";
+	interrupts = <GIC_SPI 228 IRQ_TYPE_LEVEL_HIGH>;
 };
 
-&flexcan2 {
-	compatible = "fsl,imx8dxl-flexcan", "fsl,imx8qxp-flexcan", "fsl,imx8qm-flexcan";
-	interrupts = <GIC_SPI 239 IRQ_TYPE_LEVEL_HIGH>;
+&lpuart1 {
+	compatible = "fsl,imx8dxl-lpuart", "fsl,imx8qxp-lpuart", "fsl,imx7ulp-lpuart";
+	interrupts = <GIC_SPI 229 IRQ_TYPE_LEVEL_HIGH>;
 };
 
-&flexcan3 {
-	compatible = "fsl,imx8dxl-flexcan", "fsl,imx8qxp-flexcan", "fsl,imx8qm-flexcan";
-	interrupts = <GIC_SPI 240 IRQ_TYPE_LEVEL_HIGH>;
+&lpuart2 {
+	compatible = "fsl,imx8dxl-lpuart", "fsl,imx8qxp-lpuart", "fsl,imx7ulp-lpuart";
+	interrupts = <GIC_SPI 230 IRQ_TYPE_LEVEL_HIGH>;
 };
 
-&adc0 {
-	interrupts = <GIC_SPI 146 IRQ_TYPE_LEVEL_HIGH>;
+&lpuart3 {
+	compatible = "fsl,imx8dxl-lpuart", "fsl,imx8qxp-lpuart", "fsl,imx7ulp-lpuart";
+	interrupts = <GIC_SPI 231 IRQ_TYPE_LEVEL_HIGH>;
 };
 
 &sai0 {
@@ -225,6 +241,6 @@
 };
 
 &spdif0 {
-	interrupts =  <GIC_SPI 326 IRQ_TYPE_LEVEL_HIGH>, /* rx */
-		      <GIC_SPI 328 IRQ_TYPE_LEVEL_HIGH>; /* tx */
+	interrupts = <GIC_SPI 326 IRQ_TYPE_LEVEL_HIGH>, /* rx */
+		     <GIC_SPI 328 IRQ_TYPE_LEVEL_HIGH>; /* tx */
 };

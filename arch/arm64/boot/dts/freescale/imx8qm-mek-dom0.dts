@@ -346,11 +346,6 @@
 			reg = <0 0x88000000 0 0x8000000>;
 			xen,passthrough;
 		};
-		rpmsg@0x90000000 {
-			no-map;
-			reg = <0 0x90200000 0 0x200000>;
-			xen,passthrough;
-		};
 		decoder_rpc@0x92000000 {
 			no-map;
 			reg = <0 0x92000000 0 0x200000>;
@@ -385,7 +380,7 @@
 			compatible = "shared-dma-pool";
 			reusable;
 			size = <0 0x3c000000>;
-			alloc-ranges = <0 0xa8000000 0 0x58000000>;
+			alloc-ranges = <0 0xc0000000 0 0x58000000>;
 			linux,cma-default;
 		};
 };
@@ -600,9 +595,11 @@
 	xen,passthrough;
 };
 
+/*
 &vpu_ts {
 	xen,passthrough;
 };
+*/
 
 &dsp {
 	xen,passthrough;
@@ -624,9 +621,11 @@
 	xen,passthrough;
 };
 
+/*
 &mu3_m0 {
 	xen,passthrough;
 };
+*/
 
 &vpu_enc_core0 {
 	xen,passthrough;
@@ -660,9 +659,11 @@
 	iommus = <&smmu>;
 };
 
+/*
 &usb3phynop1 {
 	status = "disabled";
 };
+*/
 
 &usb3_lpcg {
 	xen,passthrough;

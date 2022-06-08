@@ -11,7 +11,7 @@
  * Authors:	Ross Biro
  *		Fred N. van Kempen, <waltje@uWalt.NL.Mugnet.ORG>
  *
- *		Relocated to include/linux where it belongs by Alan Cox 
+ *		Relocated to include/linux where it belongs by Alan Cox
  *							<gw4pts@gw4pts.ampr.org>
  */
 #ifndef _LINUX_ETHERDEVICE_H
@@ -20,6 +20,7 @@
 #include <linux/if_ether.h>
 #include <linux/netdevice.h>
 #include <linux/random.h>
+#include <linux/crc32.h>
 #include <asm/unaligned.h>
 #include <asm/bitsperlong.h>
 
@@ -28,7 +29,7 @@ struct device;
 int eth_platform_get_mac_address(struct device *dev, u8 *mac_addr);
 unsigned char *arch_get_platform_mac_address(void);
 int nvmem_get_mac_address(struct device *dev, void *addrbuf);
-u32 eth_get_headlen(const struct net_device *dev, void *data, unsigned int len);
+u32 eth_get_headlen(const struct net_device *dev, const void *data, u32 len);
 __be16 eth_type_trans(struct sk_buff *skb, struct net_device *dev);
 extern const struct header_ops eth_header_ops;
 
@@ -43,7 +44,6 @@ __be16 eth_header_parse_protocol(const struct sk_buff *skb);
 int eth_prepare_mac_addr_change(struct net_device *dev, void *p);
 void eth_commit_mac_addr_change(struct net_device *dev, void *p);
 int eth_mac_addr(struct net_device *dev, void *p);
-int eth_change_mtu(struct net_device *dev, int new_mtu);
 int eth_validate_addr(struct net_device *dev);
 
 struct net_device *alloc_etherdev_mqs(int sizeof_priv, unsigned int txqs,
@@ -267,6 +267,17 @@ static inline void eth_hw_addr_random(struct net_device *dev)
 }
 
 /**
+ * eth_hw_addr_crc - Calculate CRC from netdev_hw_addr
+ * @ha: pointer to hardware address
+ *
+ * Calculate CRC from a hardware address as basis for filter hashes.
+ */
+static inline u32 eth_hw_addr_crc(struct netdev_hw_addr *ha)
+{
+	return ether_crc(ETH_ALEN, ha->addr);
+}
+
+/**
  * ether_addr_copy - Copy an Ethernet address
  * @dst: Pointer to a six-byte array Ethernet address destination
  * @src: Pointer to a six-byte array Ethernet address source
@@ -286,6 +297,18 @@ static inline void ether_addr_copy(u8 *dst, const u8 *src)
 	a[1] = b[1];
 	a[2] = b[2];
 #endif
+}
+
+/**
+ * eth_hw_addr_set - Assign Ethernet address to a net_device
+ * @dev: pointer to net_device structure
+ * @addr: address to assign
+ *
+ * Assign given address to the net_device, addr_assign_type is not changed.
+ */
+static inline void eth_hw_addr_set(struct net_device *dev, const u8 *addr)
+{
+	__dev_addr_set(dev, addr, ETH_ALEN);
 }
 
 /**

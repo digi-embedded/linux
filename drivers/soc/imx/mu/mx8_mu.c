@@ -104,6 +104,7 @@ void MU_SendMessage(void __iomem *base, uint32_t regIndex, uint32_t msg)
 		writel_relaxed(msg, base + MU_ATR0_OFFSET1  + (regIndex * 4));
 	}
 }
+EXPORT_SYMBOL(MU_SendMessage);
 
 /*
  * Wait and send message to the other core with timeout mechanism.

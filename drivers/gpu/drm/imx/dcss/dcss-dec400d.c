@@ -68,7 +68,7 @@ int dcss_dec400d_init(struct dcss_dev *dcss, unsigned long dec400d_base)
 	struct dcss_dec400d *dec400d;
 	int ret;
 
-	dec400d = devm_kzalloc(dcss->dev, sizeof(*dec400d), GFP_KERNEL);
+	dec400d = kzalloc(sizeof(*dec400d), GFP_KERNEL);
 	if (!dec400d)
 		return -ENOMEM;
 
@@ -76,7 +76,7 @@ int dcss_dec400d_init(struct dcss_dev *dcss, unsigned long dec400d_base)
 	dec400d->dev = dcss->dev;
 	dec400d->ctxld = dcss->ctxld;
 
-	dec400d->base_reg = devm_ioremap(dcss->dev, dec400d_base, SZ_4K);
+	dec400d->base_reg = ioremap(dec400d_base, SZ_4K);
 	if (!dec400d->base_reg) {
 		dev_err(dcss->dev, "dec400d: unable to remap dec400d base\n");
 		ret = -ENOMEM;
@@ -90,16 +90,16 @@ int dcss_dec400d_init(struct dcss_dev *dcss, unsigned long dec400d_base)
 	return 0;
 
 free_mem:
-	devm_kfree(dcss->dev, dcss->dec400d);
+	kfree(dcss->dec400d);
 	return ret;
 }
 
 void dcss_dec400d_exit(struct dcss_dec400d *dec400d)
 {
 	if (dec400d->base_reg)
-		devm_iounmap(dec400d->dev, dec400d->base_reg);
+		iounmap(dec400d->base_reg);
 
-	devm_kfree(dec400d->dev, dec400d);
+	kfree(dec400d);
 }
 
 void dcss_dec400d_read_config(struct dcss_dec400d *dec400d,

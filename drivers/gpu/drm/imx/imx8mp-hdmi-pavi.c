@@ -69,7 +69,7 @@ void imx8mp_hdmi_pai_disable(void)
 EXPORT_SYMBOL(imx8mp_hdmi_pai_disable);
 
 /* PVI APIs  */
-void imx8mp_hdmi_pvi_enable(struct drm_display_mode *mode)
+void imx8mp_hdmi_pvi_enable(const struct drm_display_mode *mode)
 {
 	writel(0x00000003, gpavi->base + HTX_PVI_IRQ_MASK);
 	writel(0x08970464, gpavi->base + HTX_TMG_GEN_DISP_LRC);

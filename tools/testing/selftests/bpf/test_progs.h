@@ -16,7 +16,6 @@ typedef __u16 __sum16;
 #include <linux/if_packet.h>
 #include <linux/ip.h>
 #include <linux/ipv6.h>
-#include <netinet/tcp.h>
 #include <linux/filter.h>
 #include <linux/perf_event.h>
 #include <linux/socket.h>
@@ -35,12 +34,26 @@ typedef __u16 __sum16;
 
 #include "test_iptunnel_common.h"
 #include "bpf_util.h"
-#include "bpf_endian.h"
+#include <bpf/bpf_endian.h>
 #include "trace_helpers.h"
+#include "testing_helpers.h"
 #include "flow_dissector_load.h"
 
+enum verbosity {
+	VERBOSE_NONE,
+	VERBOSE_NORMAL,
+	VERBOSE_VERY,
+	VERBOSE_SUPER,
+};
+
+struct str_set {
+	const char **strs;
+	int cnt;
+};
+
 struct test_selector {
-	const char *name;
+	struct str_set whitelist;
+	struct str_set blacklist;
 	bool *num_set;
 	int num_set_len;
 };
@@ -49,21 +62,26 @@ struct test_env {
 	struct test_selector test_selector;
 	struct test_selector subtest_selector;
 	bool verifier_stats;
-	bool verbose;
-	bool very_verbose;
+	enum verbosity verbosity;
 
 	bool jit_enabled;
+	bool has_testmod;
+	bool get_test_cnt;
+	bool list_test_names;
 
 	struct prog_test_def *test;
 	FILE *stdout;
 	FILE *stderr;
 	char *log_buf;
 	size_t log_cnt;
+	int nr_cpus;
 
 	int succ_cnt; /* successful tests */
 	int sub_succ_cnt; /* successful sub-tests */
 	int fail_cnt; /* total failed tests + sub-tests */
 	int skip_cnt; /* skipped tests */
+
+	int saved_netns_fd;
 };
 
 extern struct test_env env;
@@ -74,43 +92,36 @@ extern void test__skip(void);
 extern void test__fail(void);
 extern int test__join_cgroup(const char *path);
 
-#define MAGIC_BYTES 123
-
-/* ipv4 test vector */
-struct ipv4_packet {
-	struct ethhdr eth;
-	struct iphdr iph;
-	struct tcphdr tcp;
-} __packed;
-extern struct ipv4_packet pkt_v4;
-
-/* ipv6 test vector */
-struct ipv6_packet {
-	struct ethhdr eth;
-	struct ipv6hdr iph;
-	struct tcphdr tcp;
-} __packed;
-extern struct ipv6_packet pkt_v6;
+#define PRINT_FAIL(format...)                                                  \
+	({                                                                     \
+		test__fail();                                                  \
+		fprintf(stdout, "%s:FAIL:%d ", __func__, __LINE__);            \
+		fprintf(stdout, ##format);                                     \
+	})
 
 #define _CHECK(condition, tag, duration, format...) ({			\
 	int __ret = !!(condition);					\
+	int __save_errno = errno;					\
 	if (__ret) {							\
 		test__fail();						\
-		printf("%s:FAIL:%s ", __func__, tag);			\
-		printf(format);						\
+		fprintf(stdout, "%s:FAIL:%s ", __func__, tag);		\
+		fprintf(stdout, ##format);				\
 	} else {							\
-		printf("%s:PASS:%s %d nsec\n",				\
+		fprintf(stdout, "%s:PASS:%s %d nsec\n",			\
 		       __func__, tag, duration);			\
 	}								\
+	errno = __save_errno;						\
 	__ret;								\
 })
 
 #define CHECK_FAIL(condition) ({					\
 	int __ret = !!(condition);					\
+	int __save_errno = errno;					\
 	if (__ret) {							\
 		test__fail();						\
-		printf("%s:FAIL:%d\n", __func__, __LINE__);		\
+		fprintf(stdout, "%s:FAIL:%d\n", __func__, __LINE__);	\
 	}								\
+	errno = __save_errno;						\
 	__ret;								\
 })
 
@@ -119,20 +130,167 @@ extern struct ipv6_packet pkt_v6;
 #define CHECK_ATTR(condition, tag, format...) \
 	_CHECK(condition, tag, tattr.duration, format)
 
-#define MAGIC_VAL 0x1234
-#define NUM_ITER 100000
-#define VIP_NUM 5
+#define ASSERT_TRUE(actual, name) ({					\
+	static int duration = 0;					\
+	bool ___ok = (actual);						\
+	CHECK(!___ok, (name), "unexpected %s: got FALSE\n", (name));	\
+	___ok;								\
+})
+
+#define ASSERT_FALSE(actual, name) ({					\
+	static int duration = 0;					\
+	bool ___ok = !(actual);						\
+	CHECK(!___ok, (name), "unexpected %s: got TRUE\n", (name));	\
+	___ok;								\
+})
+
+#define ASSERT_EQ(actual, expected, name) ({				\
+	static int duration = 0;					\
+	typeof(actual) ___act = (actual);				\
+	typeof(expected) ___exp = (expected);				\
+	bool ___ok = ___act == ___exp;					\
+	CHECK(!___ok, (name),						\
+	      "unexpected %s: actual %lld != expected %lld\n",		\
+	      (name), (long long)(___act), (long long)(___exp));	\
+	___ok;								\
+})
+
+#define ASSERT_NEQ(actual, expected, name) ({				\
+	static int duration = 0;					\
+	typeof(actual) ___act = (actual);				\
+	typeof(expected) ___exp = (expected);				\
+	bool ___ok = ___act != ___exp;					\
+	CHECK(!___ok, (name),						\
+	      "unexpected %s: actual %lld == expected %lld\n",		\
+	      (name), (long long)(___act), (long long)(___exp));	\
+	___ok;								\
+})
+
+#define ASSERT_LT(actual, expected, name) ({				\
+	static int duration = 0;					\
+	typeof(actual) ___act = (actual);				\
+	typeof(expected) ___exp = (expected);				\
+	bool ___ok = ___act < ___exp;					\
+	CHECK(!___ok, (name),						\
+	      "unexpected %s: actual %lld >= expected %lld\n",		\
+	      (name), (long long)(___act), (long long)(___exp));	\
+	___ok;								\
+})
+
+#define ASSERT_LE(actual, expected, name) ({				\
+	static int duration = 0;					\
+	typeof(actual) ___act = (actual);				\
+	typeof(expected) ___exp = (expected);				\
+	bool ___ok = ___act <= ___exp;					\
+	CHECK(!___ok, (name),						\
+	      "unexpected %s: actual %lld > expected %lld\n",		\
+	      (name), (long long)(___act), (long long)(___exp));	\
+	___ok;								\
+})
+
+#define ASSERT_GT(actual, expected, name) ({				\
+	static int duration = 0;					\
+	typeof(actual) ___act = (actual);				\
+	typeof(expected) ___exp = (expected);				\
+	bool ___ok = ___act > ___exp;					\
+	CHECK(!___ok, (name),						\
+	      "unexpected %s: actual %lld <= expected %lld\n",		\
+	      (name), (long long)(___act), (long long)(___exp));	\
+	___ok;								\
+})
+
+#define ASSERT_GE(actual, expected, name) ({				\
+	static int duration = 0;					\
+	typeof(actual) ___act = (actual);				\
+	typeof(expected) ___exp = (expected);				\
+	bool ___ok = ___act >= ___exp;					\
+	CHECK(!___ok, (name),						\
+	      "unexpected %s: actual %lld < expected %lld\n",		\
+	      (name), (long long)(___act), (long long)(___exp));	\
+	___ok;								\
+})
+
+#define ASSERT_STREQ(actual, expected, name) ({				\
+	static int duration = 0;					\
+	const char *___act = actual;					\
+	const char *___exp = expected;					\
+	bool ___ok = strcmp(___act, ___exp) == 0;			\
+	CHECK(!___ok, (name),						\
+	      "unexpected %s: actual '%s' != expected '%s'\n",		\
+	      (name), ___act, ___exp);					\
+	___ok;								\
+})
+
+#define ASSERT_STRNEQ(actual, expected, len, name) ({			\
+	static int duration = 0;					\
+	const char *___act = actual;					\
+	const char *___exp = expected;					\
+	int ___len = len;						\
+	bool ___ok = strncmp(___act, ___exp, ___len) == 0;		\
+	CHECK(!___ok, (name),						\
+	      "unexpected %s: actual '%.*s' != expected '%.*s'\n",	\
+	      (name), ___len, ___act, ___len, ___exp);			\
+	___ok;								\
+})
+
+#define ASSERT_OK(res, name) ({						\
+	static int duration = 0;					\
+	long long ___res = (res);					\
+	bool ___ok = ___res == 0;					\
+	CHECK(!___ok, (name), "unexpected error: %lld (errno %d)\n",	\
+	      ___res, errno);						\
+	___ok;								\
+})
+
+#define ASSERT_ERR(res, name) ({					\
+	static int duration = 0;					\
+	long long ___res = (res);					\
+	bool ___ok = ___res < 0;					\
+	CHECK(!___ok, (name), "unexpected success: %lld\n", ___res);	\
+	___ok;								\
+})
+
+#define ASSERT_NULL(ptr, name) ({					\
+	static int duration = 0;					\
+	const void *___res = (ptr);					\
+	bool ___ok = !___res;						\
+	CHECK(!___ok, (name), "unexpected pointer: %p\n", ___res);	\
+	___ok;								\
+})
+
+#define ASSERT_OK_PTR(ptr, name) ({					\
+	static int duration = 0;					\
+	const void *___res = (ptr);					\
+	int ___err = libbpf_get_error(___res);				\
+	bool ___ok = ___err == 0;					\
+	CHECK(!___ok, (name), "unexpected error: %d\n", ___err);	\
+	___ok;								\
+})
+
+#define ASSERT_ERR_PTR(ptr, name) ({					\
+	static int duration = 0;					\
+	const void *___res = (ptr);					\
+	int ___err = libbpf_get_error(___res);				\
+	bool ___ok = ___err != 0;					\
+	CHECK(!___ok, (name), "unexpected pointer: %p\n", ___res);	\
+	___ok;								\
+})
 
 static inline __u64 ptr_to_u64(const void *ptr)
 {
 	return (__u64) (unsigned long) ptr;
 }
 
+static inline void *u64_to_ptr(__u64 ptr)
+{
+	return (void *) (unsigned long) ptr;
+}
+
 int bpf_find_map(const char *test, struct bpf_object *obj, const char *name);
 int compare_map_keys(int map1_fd, int map2_fd);
 int compare_stack_ips(int smap_fd, int amap_fd, int stack_trace_len);
 int extract_build_id(char *build_id, size_t size);
-void *spin_lock_thread(void *arg);
+int kern_sync_rcu(void);
 
 #ifdef __x86_64__
 #define SYS_NANOSLEEP_KPROBE_NAME "__x64_sys_nanosleep"

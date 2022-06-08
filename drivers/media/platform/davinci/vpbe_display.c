@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (C) 2010 Texas Instruments Incorporated - http://www.ti.com/
+ * Copyright (C) 2010 Texas Instruments Incorporated - https://www.ti.com/
  */
 #include <linux/kernel.h>
 #include <linux/init.h>
@@ -17,7 +17,6 @@
 #include <linux/videodev2.h>
 #include <linux/slab.h>
 
-#include <asm/pgtable.h>
 
 #include <media/v4l2-dev.h>
 #include <media/v4l2-common.h>
@@ -48,7 +47,7 @@ static int venc_is_second_field(struct vpbe_display *disp_dev)
 
 	ret = v4l2_subdev_call(vpbe_dev->venc,
 			       core,
-			       ioctl,
+			       command,
 			       VENC_GET_FLD,
 			       &val);
 	if (ret < 0) {
@@ -1339,7 +1338,7 @@ static int register_device(struct vpbe_layer *vpbe_display_layer,
 
 	vpbe_display_layer->video_dev.queue = &vpbe_display_layer->buffer_queue;
 	err = video_register_device(&vpbe_display_layer->video_dev,
-				    VFL_TYPE_GRABBER,
+				    VFL_TYPE_VIDEO,
 				    -1);
 	if (err)
 		return -ENODEV;

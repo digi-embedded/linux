@@ -23,7 +23,7 @@ static inline void preempt_count_set(u64 pc)
 } while (0)
 
 #define init_idle_preempt_count(p, cpu) do { \
-	task_thread_info(p)->preempt_count = PREEMPT_ENABLED; \
+	task_thread_info(p)->preempt_count = PREEMPT_DISABLED; \
 } while (0)
 
 static inline void set_preempt_need_resched(void)
@@ -79,11 +79,11 @@ static inline bool should_resched(int preempt_offset)
 	return pc == preempt_offset;
 }
 
-#ifdef CONFIG_PREEMPT
+#ifdef CONFIG_PREEMPTION
 void preempt_schedule(void);
 #define __preempt_schedule() preempt_schedule()
 void preempt_schedule_notrace(void);
 #define __preempt_schedule_notrace() preempt_schedule_notrace()
-#endif /* CONFIG_PREEMPT */
+#endif /* CONFIG_PREEMPTION */
 
 #endif /* __ASM_PREEMPT_H */

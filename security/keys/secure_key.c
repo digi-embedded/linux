@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-/* Copyright (C) 2018 NXP
+/* Copyright (C) 2018, 2021 NXP
  * Secure key is generated using NXP CAAM hardware block. CAAM generates the
  * random number (used as a key) and creates its blob for the user.
  */
@@ -215,26 +215,26 @@ static int secure_instantiate(struct key *key,
 	}
 out:
 	if (data)
-		kzfree(data);
+		kfree_sensitive(data);
 	if (dev)
 		caam_jr_free(dev);
 
 	if (!ret)
 		rcu_assign_keypointer(key, payload);
 	else
-		kzfree(payload);
+		kfree_sensitive(payload);
 
 	return ret;
 }
 
 /*
- * secure_read - copy the  blob data to userspace in hex.
+ * secure_read - copy the blob data to internal buffer in hex.
  * param[in]: key pointer to key struct
  * param[in]: buffer pointer to user data for creating key
  * param[in]: buflen is the length of the buffer
- * On success, return to userspace the secure key data size.
+ * On success, return to kernel space the secure key data size.
  */
-static long secure_read(const struct key *key, char __user *buffer,
+static long secure_read(const struct key *key, char *buffer,
 			 size_t buflen)
 {
 	const struct secure_key_payload *p = NULL;
@@ -254,11 +254,8 @@ static long secure_read(const struct key *key, char __user *buffer,
 		bufp = ascii_buf;
 		for (i = 0; i < p->blob_len; i++)
 			bufp = hex_byte_pack(bufp, p->blob[i]);
-		if (copy_to_user(buffer, ascii_buf, 2 * p->blob_len) != 0) {
-			kzfree(ascii_buf);
-			return -EFAULT;
-		}
-		kzfree(ascii_buf);
+		memcpy(buffer, ascii_buf, 2 * p->blob_len);
+		kfree_sensitive(ascii_buf);
 	}
 	return 2 * p->blob_len;
 }
@@ -268,7 +265,7 @@ static long secure_read(const struct key *key, char __user *buffer,
  */
 static void secure_destroy(struct key *key)
 {
-	kzfree(key->payload.data[0]);
+	kfree_sensitive(key->payload.data[0]);
 }
 
 struct key_type key_type_secure = {

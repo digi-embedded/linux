@@ -31,12 +31,12 @@
  */
 
 #include <linux/module.h>
+#include <linux/pci.h>
 
 #include <drm/drm_drv.h>
 #include <drm/drm_file.h>
 #include <drm/drm_ioctl.h>
 #include <drm/drm_legacy.h>
-#include <drm/drm_pci.h>
 #include <drm/drm_pciids.h>
 
 #include "tdfx_drv.h"
@@ -56,7 +56,7 @@ static const struct file_operations tdfx_driver_fops = {
 	.llseek = noop_llseek,
 };
 
-static struct drm_driver driver = {
+static const struct drm_driver driver = {
 	.driver_features = DRIVER_LEGACY,
 	.fops = &tdfx_driver_fops,
 	.name = DRIVER_NAME,

@@ -88,21 +88,21 @@
 };
 
 &flexcan1 {
-	fsl,clk-source = <1>;
+	fsl,clk-source = /bits/ 8 <1>;
 };
 
 &flexcan2 {
 	clocks = <&can1_lpcg 1>,
 		 <&can1_lpcg 0>;
 	assigned-clocks = <&clk IMX_SC_R_CAN_1 IMX_SC_PM_CLK_PER>;
-	fsl,clk-source = <1>;
+	fsl,clk-source = /bits/ 8 <1>;
 };
 
 &flexcan3 {
 	clocks = <&can2_lpcg 1>,
 		 <&can2_lpcg 0>;
 	assigned-clocks = <&clk IMX_SC_R_CAN_2 IMX_SC_PM_CLK_PER>;
-	fsl,clk-source = <1>;
+	fsl,clk-source = /bits/ 8 <1>;
 };
 
 &lpspi2 {
@@ -111,7 +111,8 @@
 
 /* edma0 called in imx8qm RM with the same address in edma2 of imx8qxp */
 &edma2 {
-	reg = <0x5a200000 0x10000>, /* channel0 LPSPI0 rx */
+	reg = <0x5a1f0000 0x10000>,
+	      <0x5a200000 0x10000>, /* channel0 LPSPI0 rx */
 	      <0x5a210000 0x10000>, /* channel1 LPSPI0 tx */
 	      <0x5a220000 0x10000>, /* channel2 LPSPI1 rx */
 	      <0x5a230000 0x10000>, /* channel3 LPSPI1 tx */

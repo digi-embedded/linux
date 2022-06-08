@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0+
 // Copyright 2020 NXP
 
-#include <linux/module.h>
 #include <linux/pm_runtime.h>
 #include <linux/pm_domain.h>
 #include "clk-imx-acm-utils.h"
@@ -58,7 +57,6 @@ detach_pm:
 	}
 	return ret;
 }
-EXPORT_SYMBOL_GPL(clk_imx_acm_attach_pm_domains);
 
 /**
  * fsl_dev_detach_pm_domains
@@ -78,5 +76,3 @@ int clk_imx_acm_detach_pm_domains(struct device *dev,
 
 	return 0;
 }
-EXPORT_SYMBOL_GPL(clk_imx_acm_detach_pm_domains);
-MODULE_LICENSE("GPL v2");

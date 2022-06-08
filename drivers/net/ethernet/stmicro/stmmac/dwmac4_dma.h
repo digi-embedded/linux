@@ -22,8 +22,13 @@
 #define DMA_DEBUG_STATUS_1		0x00001010
 #define DMA_DEBUG_STATUS_2		0x00001014
 #define DMA_AXI_BUS_MODE		0x00001028
+#define DMA_TBS_CTRL			0x00001050
 
 /* DMA Bus Mode bitmap */
+#define DMA_BUS_MODE_DCHE		BIT(19)
+#define DMA_BUS_MODE_INTM_MASK		GENMASK(17, 16)
+#define DMA_BUS_MODE_INTM_SHIFT		16
+#define DMA_BUS_MODE_INTM_MODE1		0x1
 #define DMA_BUS_MODE_SFT_RESET		BIT(0)
 
 /* DMA SYS Bus Mode bitmap */
@@ -65,7 +70,7 @@
 #define DMA_SYS_BUS_MB			BIT(14)
 #define DMA_AXI_1KBBE			BIT(13)
 #define DMA_SYS_BUS_AAL			BIT(12)
-#define DMA_SYS_EAME			BIT(11)
+#define DMA_SYS_BUS_EAME		BIT(11)
 #define DMA_AXI_BLEN256			BIT(7)
 #define DMA_AXI_BLEN128			BIT(6)
 #define DMA_AXI_BLEN64			BIT(5)
@@ -82,6 +87,11 @@
 
 #define DMA_AXI_BURST_LEN_MASK		0x000000FE
 
+/* DMA TBS Control */
+#define DMA_TBS_FTOS			GENMASK(31, 8)
+#define DMA_TBS_FTOV			BIT(0)
+#define DMA_TBS_DEF_FTOS		(DMA_TBS_FTOS | DMA_TBS_FTOV)
+
 /* Following DMA defines are chanels oriented */
 #define DMA_CHAN_BASE_ADDR		0x00001100
 #define DMA_CHAN_BASE_OFFSET		0x80
@@ -92,9 +102,9 @@
 #define DMA_CHAN_CONTROL(x)		DMA_CHANX_BASE_ADDR(x)
 #define DMA_CHAN_TX_CONTROL(x)		(DMA_CHANX_BASE_ADDR(x) + 0x4)
 #define DMA_CHAN_RX_CONTROL(x)		(DMA_CHANX_BASE_ADDR(x) + 0x8)
-#define DMA_CHAN_TX_BASE_HADDR(x)	(DMA_CHANX_BASE_ADDR(x) + 0x10)
+#define DMA_CHAN_TX_BASE_ADDR_HI(x)	(DMA_CHANX_BASE_ADDR(x) + 0x10)
 #define DMA_CHAN_TX_BASE_ADDR(x)	(DMA_CHANX_BASE_ADDR(x) + 0x14)
-#define DMA_CHAN_RX_BASE_HADDR(x)	(DMA_CHANX_BASE_ADDR(x) + 0x18)
+#define DMA_CHAN_RX_BASE_ADDR_HI(x)	(DMA_CHANX_BASE_ADDR(x) + 0x18)
 #define DMA_CHAN_RX_BASE_ADDR(x)	(DMA_CHANX_BASE_ADDR(x) + 0x1c)
 #define DMA_CHAN_TX_END_ADDR(x)		(DMA_CHANX_BASE_ADDR(x) + 0x20)
 #define DMA_CHAN_RX_END_ADDR(x)		(DMA_CHANX_BASE_ADDR(x) + 0x28)
@@ -114,6 +124,7 @@
 #define DMA_CONTROL_MSS_MASK		GENMASK(13, 0)
 
 /* DMA Tx Channel X Control register defines */
+#define DMA_CONTROL_EDSE		BIT(28)
 #define DMA_CONTROL_TSE			BIT(12)
 #define DMA_CONTROL_OSP			BIT(4)
 #define DMA_CONTROL_ST			BIT(0)
@@ -141,6 +152,25 @@
 #define DMA_CHAN_STATUS_TBU		BIT(2)
 #define DMA_CHAN_STATUS_TPS		BIT(1)
 #define DMA_CHAN_STATUS_TI		BIT(0)
+
+#define DMA_CHAN_STATUS_MSK_COMMON	(DMA_CHAN_STATUS_NIS | \
+					 DMA_CHAN_STATUS_AIS | \
+					 DMA_CHAN_STATUS_CDE | \
+					 DMA_CHAN_STATUS_FBE)
+
+#define DMA_CHAN_STATUS_MSK_RX		(DMA_CHAN_STATUS_REB | \
+					 DMA_CHAN_STATUS_ERI | \
+					 DMA_CHAN_STATUS_RWT | \
+					 DMA_CHAN_STATUS_RPS | \
+					 DMA_CHAN_STATUS_RBU | \
+					 DMA_CHAN_STATUS_RI | \
+					 DMA_CHAN_STATUS_MSK_COMMON)
+
+#define DMA_CHAN_STATUS_MSK_TX		(DMA_CHAN_STATUS_ETI | \
+					 DMA_CHAN_STATUS_TBU | \
+					 DMA_CHAN_STATUS_TPS | \
+					 DMA_CHAN_STATUS_TI | \
+					 DMA_CHAN_STATUS_MSK_COMMON)
 
 /* Interrupt enable bits per channel */
 #define DMA_CHAN_INTR_ENA_NIE		BIT(16)
@@ -199,7 +229,7 @@ void dwmac4_dma_stop_tx(void __iomem *ioaddr, u32 chan);
 void dwmac4_dma_start_rx(void __iomem *ioaddr, u32 chan);
 void dwmac4_dma_stop_rx(void __iomem *ioaddr, u32 chan);
 int dwmac4_dma_interrupt(void __iomem *ioaddr,
-			 struct stmmac_extra_stats *x, u32 chan);
+			 struct stmmac_extra_stats *x, u32 chan, u32 dir);
 void dwmac4_set_rx_ring_len(void __iomem *ioaddr, u32 len, u32 chan);
 void dwmac4_set_tx_ring_len(void __iomem *ioaddr, u32 len, u32 chan);
 void dwmac4_set_rx_tail_ptr(void __iomem *ioaddr, u32 tail_ptr, u32 chan);

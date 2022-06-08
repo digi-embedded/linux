@@ -191,9 +191,9 @@ static void hfa384x_usbctlx_resptimerfn(struct timer_list *t);
 
 static void hfa384x_usb_throttlefn(struct timer_list *t);
 
-static void hfa384x_usbctlx_completion_task(unsigned long data);
+static void hfa384x_usbctlx_completion_task(struct tasklet_struct *t);
 
-static void hfa384x_usbctlx_reaper_task(unsigned long data);
+static void hfa384x_usbctlx_reaper_task(struct tasklet_struct *t);
 
 static int hfa384x_usbctlx_submit(struct hfa384x *hw,
 				  struct hfa384x_usbctlx *ctlx);
@@ -293,13 +293,11 @@ void dbprint_urb(struct urb *urb)
 	pr_debug("urb->transfer_buffer_length=0x%08x\n",
 		 urb->transfer_buffer_length);
 	pr_debug("urb->actual_length=0x%08x\n", urb->actual_length);
-	pr_debug("urb->bandwidth=0x%08x\n", urb->bandwidth);
 	pr_debug("urb->setup_packet(ctl)=0x%08x\n",
 		 (unsigned int)urb->setup_packet);
 	pr_debug("urb->start_frame(iso/irq)=0x%08x\n", urb->start_frame);
 	pr_debug("urb->interval(irq)=0x%08x\n", urb->interval);
 	pr_debug("urb->error_count(iso)=0x%08x\n", urb->error_count);
-	pr_debug("urb->timeout=0x%08x\n", urb->timeout);
 	pr_debug("urb->context=0x%08x\n", (unsigned int)urb->context);
 	pr_debug("urb->complete=0x%08x\n", (unsigned int)urb->complete);
 }
@@ -541,10 +539,8 @@ void hfa384x_create(struct hfa384x *hw, struct usb_device *usb)
 	/* Initialize the authentication queue */
 	skb_queue_head_init(&hw->authq);
 
-	tasklet_init(&hw->reaper_bh,
-		     hfa384x_usbctlx_reaper_task, (unsigned long)hw);
-	tasklet_init(&hw->completion_bh,
-		     hfa384x_usbctlx_completion_task, (unsigned long)hw);
+	tasklet_setup(&hw->reaper_bh, hfa384x_usbctlx_reaper_task);
+	tasklet_setup(&hw->completion_bh, hfa384x_usbctlx_completion_task);
 	INIT_WORK(&hw->link_bh, prism2sta_processing_defer);
 	INIT_WORK(&hw->usb_work, hfa384x_usb_defer);
 
@@ -2476,7 +2472,7 @@ int hfa384x_drvr_stop(struct hfa384x *hw)
  *----------------------------------------------------------------
  */
 int hfa384x_drvr_txframe(struct hfa384x *hw, struct sk_buff *skb,
-			 union p80211_hdr *p80211_hdr,
+			 struct p80211_hdr *p80211_hdr,
 			 struct p80211_metawep *p80211_wep)
 {
 	int usbpktlen = sizeof(struct hfa384x_tx_frame);
@@ -2520,8 +2516,7 @@ int hfa384x_drvr_txframe(struct hfa384x *hw, struct sk_buff *skb,
 	cpu_to_le16s(&hw->txbuff.txfrm.desc.tx_control);
 
 	/* copy the header over to the txdesc */
-	memcpy(&hw->txbuff.txfrm.desc.frame_control, p80211_hdr,
-	       sizeof(union p80211_hdr));
+	hw->txbuff.txfrm.desc.hdr = *p80211_hdr;
 
 	/* if we're using host WEP, increase size by IV+ICV */
 	if (p80211_wep->data) {
@@ -2601,9 +2596,9 @@ void hfa384x_tx_timeout(struct wlandevice *wlandev)
  *	Interrupt
  *----------------------------------------------------------------
  */
-static void hfa384x_usbctlx_reaper_task(unsigned long data)
+static void hfa384x_usbctlx_reaper_task(struct tasklet_struct *t)
 {
-	struct hfa384x *hw = (struct hfa384x *)data;
+	struct hfa384x *hw = from_tasklet(hw, t, reaper_bh);
 	struct hfa384x_usbctlx *ctlx, *temp;
 	unsigned long flags;
 
@@ -2635,9 +2630,9 @@ static void hfa384x_usbctlx_reaper_task(unsigned long data)
  *	Interrupt
  *----------------------------------------------------------------
  */
-static void hfa384x_usbctlx_completion_task(unsigned long data)
+static void hfa384x_usbctlx_completion_task(struct tasklet_struct *t)
 {
-	struct hfa384x *hw = (struct hfa384x *)data;
+	struct hfa384x *hw = from_tasklet(hw, t, completion_bh);
 	struct hfa384x_usbctlx *ctlx, *temp;
 	unsigned long flags;
 
@@ -3251,15 +3246,18 @@ static void hfa384x_usbin_rx(struct wlandevice *wlandev, struct sk_buff *skb)
 	struct p80211_rxmeta *rxmeta;
 	u16 data_len;
 	u16 fc;
+	u16 status;
 
 	/* Byte order convert once up front. */
 	le16_to_cpus(&usbin->rxfrm.desc.status);
 	le32_to_cpus(&usbin->rxfrm.desc.time);
 
 	/* Now handle frame based on port# */
-	switch (HFA384x_RXSTATUS_MACPORT_GET(usbin->rxfrm.desc.status)) {
+	status = HFA384x_RXSTATUS_MACPORT_GET(usbin->rxfrm.desc.status);
+
+	switch (status) {
 	case 0:
-		fc = le16_to_cpu(usbin->rxfrm.desc.frame_control);
+		fc = le16_to_cpu(usbin->rxfrm.desc.hdr.frame_control);
 
 		/* If exclude and we receive an unencrypted, drop it */
 		if ((wlandev->hostwep & HOSTWEP_EXCLUDEUNENCRYPTED) &&
@@ -3279,7 +3277,7 @@ static void hfa384x_usbin_rx(struct wlandevice *wlandev, struct sk_buff *skb)
 		 * with an "overlapping" copy
 		 */
 		memmove(skb_push(skb, hdrlen),
-			&usbin->rxfrm.desc.frame_control, hdrlen);
+			&usbin->rxfrm.desc.hdr, hdrlen);
 
 		skb->dev = wlandev->netdev;
 
@@ -3314,8 +3312,9 @@ static void hfa384x_usbin_rx(struct wlandevice *wlandev, struct sk_buff *skb)
 		break;
 
 	default:
-		netdev_warn(hw->wlandev->netdev, "Received frame on unsupported port=%d\n",
-			    HFA384x_RXSTATUS_MACPORT_GET(usbin->rxfrm.desc.status));
+		netdev_warn(hw->wlandev->netdev,
+			    "Received frame on unsupported port=%d\n",
+			    status);
 		break;
 	}
 }
@@ -3356,7 +3355,7 @@ static void hfa384x_int_rxmonitor(struct wlandevice *wlandev,
 
 	/* Remember the status, time, and data_len fields are in host order */
 	/* Figure out how big the frame is */
-	fc = le16_to_cpu(rxdesc->frame_control);
+	fc = le16_to_cpu(rxdesc->hdr.frame_control);
 	hdrlen = p80211_headerlen(fc);
 	datalen = le16_to_cpu(rxdesc->data_len);
 
@@ -3404,7 +3403,7 @@ static void hfa384x_int_rxmonitor(struct wlandevice *wlandev,
 	/* Copy the 802.11 header to the skb
 	 * (ctl frames may be less than a full header)
 	 */
-	skb_put_data(skb, &rxdesc->frame_control, hdrlen);
+	skb_put_data(skb, &rxdesc->hdr.frame_control, hdrlen);
 
 	/* If any, copy the data from the card to the skb */
 	if (datalen > 0) {

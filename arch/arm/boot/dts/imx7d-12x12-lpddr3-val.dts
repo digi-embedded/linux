@@ -138,6 +138,19 @@
 	memory {
 		reg = <0x80000000 0x80000000>;
 	};
+
+	reserved-memory {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		linux,cma {
+			compatible = "shared-dma-pool";
+			reusable;
+			size = <0x14000000>;
+			linux,cma-default;
+		};
+	};
 };
 
 &adc1 {
@@ -146,7 +159,7 @@
 };
 
 &cpu0 {
-	arm-supply = <&sw1a_reg>;
+	cpu-supply = <&sw1a_reg>;
 };
 
 &epdc {
@@ -423,7 +436,7 @@
 		reg = <0x1a>;
 		clocks = <&clks IMX7D_AUDIO_MCLK_ROOT_CLK>,
 			<&clks IMX7D_CLK_DUMMY>;
-		clock-names = "mclk1", "mclk2";
+		clock-names = "MCLK1", "MCLK2";
 
 		DBVDD1-supply = <&reg_aud_1v8>;
 		DBVDD2-supply = <&reg_aud_1v8>;
@@ -434,6 +447,8 @@
 		SPKVDD2-supply = <&reg_coedc_5v>;
 		wlf,ldo1ena;
 		wlf,ldo2ena;
+		wlf,gpio-cfg = <0x8102 0xa101 0xa101 0xa101 0xa101 0xa101
+				0xa101 0xa101 0xa101 0xa101 0xa101>;
 	};
 };
 
@@ -919,6 +934,14 @@
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&pinctrl_sim1_1>;
 	pinctrl-1 = <&pinctrl_sim1_1>;
+	status = "okay";
+};
+
+&snvs_poweroff {
+	status = "okay";
+};
+
+&snvs_pwrkey {
 	status = "okay";
 };
 

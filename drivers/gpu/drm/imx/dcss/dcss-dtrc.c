@@ -142,11 +142,10 @@ static int dcss_dtrc_irq_config(struct dcss_dtrc *dtrc, int ch_num)
 		return ch->irq;
 	}
 
-	ret = devm_request_irq(dtrc->dev, ch->irq,
-			       dcss_dtrc_irq_handler,
-			       IRQF_TRIGGER_HIGH,
-			       "dcss-dtrc", ch);
+	ret = request_irq(ch->irq, dcss_dtrc_irq_handler,
+			  0, "dcss-dtrc", ch);
 	if (ret) {
+		ch->irq = 0;
 		dev_err(dtrc->dev, "dtrc: irq request failed.\n");
 		return ret;
 	}
@@ -166,7 +165,7 @@ static int dcss_dtrc_ch_init_all(struct dcss_dtrc *dtrc, u32 dtrc_base)
 
 		ch->base_ofs = dtrc_base + i * 0x1000;
 
-		ch->base_reg = devm_ioremap(dtrc->dev, ch->base_ofs, SZ_4K);
+		ch->base_reg = ioremap(ch->base_ofs, SZ_4K);
 		if (!ch->base_reg) {
 			dev_err(dtrc->dev, "dtrc: unable to remap ch base\n");
 			return -ENOMEM;
@@ -199,7 +198,7 @@ int dcss_dtrc_init(struct dcss_dev *dcss, unsigned long dtrc_base)
 {
 	struct dcss_dtrc *dtrc;
 
-	dtrc = devm_kzalloc(dcss->dev, sizeof(*dtrc), GFP_KERNEL);
+	dtrc = kzalloc(sizeof(*dtrc), GFP_KERNEL);
 	if (!dtrc)
 		return -ENOMEM;
 
@@ -216,13 +215,13 @@ int dcss_dtrc_init(struct dcss_dev *dcss, unsigned long dtrc_base)
 			ch = &dtrc->ch[i];
 
 			if (ch->irq)
-				devm_free_irq(dtrc->dev, ch->irq, ch);
+				free_irq(ch->irq, ch);
 
 			if (ch->base_reg)
-				devm_iounmap(dtrc->dev, ch->base_reg);
+				iounmap(ch->base_reg);
 		}
 
-		devm_kfree(dtrc->dev, dtrc);
+		kfree(dtrc);
 
 		return -ENOMEM;
 	}
@@ -241,11 +240,14 @@ void dcss_dtrc_exit(struct dcss_dtrc *dtrc)
 			/* reset the module to default */
 			dcss_writel(HOT_RESET,
 				    ch->base_reg + DCSS_DTRC_DTCTRL);
-			devm_iounmap(dtrc->dev, ch->base_reg);
+			iounmap(ch->base_reg);
 		}
+
+		if (ch->irq)
+			free_irq(ch->irq, ch);
 	}
 
-	devm_kfree(dtrc->dev, dtrc);
+	kfree(dtrc);
 }
 
 void dcss_dtrc_bypass(struct dcss_dtrc *dtrc, int ch_num)
@@ -326,7 +328,7 @@ void dcss_dtrc_set_res(struct dcss_dtrc *dtrc, int ch_num,
 	ch->pix_format = pixel_format;
 	ch->format_modifier = fb->modifier;
 
-	pix_depth = ch->pix_format == DRM_FORMAT_NV12_10LE40 ? 10 : 8;
+	pix_depth = ch->pix_format == DRM_FORMAT_NV15 ? 10 : 8;
 
 	old_xres = state->src_w >> 16;
 	old_yres = state->src_h >> 16;
@@ -353,7 +355,7 @@ void dcss_dtrc_set_res(struct dcss_dtrc *dtrc, int ch_num,
 	 *   - 128 pixels for width (8-bit) or 256 (10-bit);
 	 *   - 8 lines for height;
 	 */
-	width_align = ch->pix_format == DRM_FORMAT_NV12_10LE40 ? 0xff : 0x7f;
+	width_align = ch->pix_format == DRM_FORMAT_NV15 ? 0xff : 0x7f;
 
 	if (xres == old_xres && !(xres & width_align) &&
 	    yres == old_yres && !(yres & 0xf)) {
@@ -458,7 +460,7 @@ void dcss_dtrc_enable(struct dcss_dtrc *dtrc, int ch_num, bool enable)
 
 	fdctl = ch->dctl & ~(PIX_DEPTH_8BIT_EN | COMPRESSION_DIS);
 
-	fdctl |= ch->pix_format == DRM_FORMAT_NV12_10LE40 ? 0 : PIX_DEPTH_8BIT_EN;
+	fdctl |= ch->pix_format == DRM_FORMAT_NV15 ? 0 : PIX_DEPTH_8BIT_EN;
 
 	if (ch->format_modifier != DRM_FORMAT_MOD_VSI_G2_TILED_COMPRESSED)
 		fdctl |= COMPRESSION_DIS;

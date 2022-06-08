@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019 NXP Semiconductor, Inc.
+ * Copyright 2019-2021 NXP
  *
  * this program is free software; you can redistribute it and/or modify
  * it under the terms of the gnu general public license version 2 as
@@ -102,7 +102,7 @@ static void imx8qm_pixel_link_sync_disable(u32 dual_mode)
 		imx_sc_misc_set_control(handle, IMX_SC_R_DC_0, IMX_SC_C_SYNC_CTRL0, 0);
 }
 
-static void imx8qm_phy_reset(u8 reset)
+void imx8qm_phy_reset(u8 reset)
 {
 	struct imx_sc_ipc *handle;
 
@@ -487,7 +487,7 @@ int cdns_mhdp_power_on_imx8qm(struct cdns_mhdp_device *mhdp)
 	return 0;
 }
 
-void cdns_mhdp_plat_init_imx8qm(struct cdns_mhdp_device *mhdp)
+void cdns_mhdp_plat_deinit_imx8qm(struct cdns_mhdp_device *mhdp)
 {
 	struct imx_mhdp_device *imx_mhdp =
 				container_of(mhdp, struct imx_mhdp_device, mhdp);
@@ -497,7 +497,7 @@ void cdns_mhdp_plat_init_imx8qm(struct cdns_mhdp_device *mhdp)
 	imx8qm_pixel_link_invalid(dual_mode);
 }
 
-void cdns_mhdp_plat_deinit_imx8qm(struct cdns_mhdp_device *mhdp)
+void cdns_mhdp_plat_init_imx8qm(struct cdns_mhdp_device *mhdp)
 {
 	struct imx_mhdp_device *imx_mhdp =
 				container_of(mhdp, struct imx_mhdp_device, mhdp);
@@ -565,7 +565,7 @@ static int cdns_mhdp_firmware_load(struct imx_mhdp_device *imx_mhdp)
 		goto out;
 
 	if (!imx_mhdp->fw) {
-		ret = request_firmware_nowait(THIS_MODULE, FW_ACTION_NOHOTPLUG,
+		ret = request_firmware_nowait(THIS_MODULE, FW_ACTION_NOUEVENT,
 						imx_mhdp->firmware_name,
 						imx_mhdp->mhdp.dev, GFP_KERNEL,
 						imx_mhdp,

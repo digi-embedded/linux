@@ -22,34 +22,48 @@
  *
  */
 
+#include <linux/sched/mm.h>
+
 #include "display/intel_frontbuffer.h"
-#include "gt/intel_gt.h"
 #include "i915_drv.h"
 #include "i915_gem_clflush.h"
 #include "i915_gem_context.h"
+#include "i915_gem_mman.h"
 #include "i915_gem_object.h"
-#include "i915_globals.h"
+#include "i915_memcpy.h"
 #include "i915_trace.h"
 
-static struct i915_global_object {
-	struct i915_global base;
-	struct kmem_cache *slab_objects;
-} global;
+static struct kmem_cache *slab_objects;
+
+static const struct drm_gem_object_funcs i915_gem_object_funcs;
 
 struct drm_i915_gem_object *i915_gem_object_alloc(void)
 {
-	return kmem_cache_zalloc(global.slab_objects, GFP_KERNEL);
+	struct drm_i915_gem_object *obj;
+
+	obj = kmem_cache_zalloc(slab_objects, GFP_KERNEL);
+	if (!obj)
+		return NULL;
+	obj->base.funcs = &i915_gem_object_funcs;
+
+	return obj;
 }
 
 void i915_gem_object_free(struct drm_i915_gem_object *obj)
 {
-	return kmem_cache_free(global.slab_objects, obj);
+	return kmem_cache_free(slab_objects, obj);
 }
 
 void i915_gem_object_init(struct drm_i915_gem_object *obj,
-			  const struct drm_i915_gem_object_ops *ops)
+			  const struct drm_i915_gem_object_ops *ops,
+			  struct lock_class_key *key, unsigned flags)
 {
-	mutex_init(&obj->mm.lock);
+	/*
+	 * A gem object is embedded both in a struct ttm_buffer_object :/ and
+	 * in a drm_i915_gem_object. Make sure they are aliased.
+	 */
+	BUILD_BUG_ON(offsetof(typeof(*obj), base) !=
+		     offsetof(typeof(*obj), __do_not_access.base));
 
 	spin_lock_init(&obj->vma.lock);
 	INIT_LIST_HEAD(&obj->vma.list);
@@ -57,14 +71,22 @@ void i915_gem_object_init(struct drm_i915_gem_object *obj,
 	INIT_LIST_HEAD(&obj->mm.link);
 
 	INIT_LIST_HEAD(&obj->lut_list);
+	spin_lock_init(&obj->lut_lock);
+
+	spin_lock_init(&obj->mmo.lock);
+	obj->mmo.offsets = RB_ROOT;
 
 	init_rcu_head(&obj->rcu);
 
 	obj->ops = ops;
+	GEM_BUG_ON(flags & ~I915_BO_ALLOC_FLAGS);
+	obj->flags = flags;
 
 	obj->mm.madv = I915_MADV_WILLNEED;
 	INIT_RADIX_TREE(&obj->mm.get_page.radix, GFP_KERNEL | __GFP_NOWARN);
 	mutex_init(&obj->mm.get_page.lock);
+	INIT_RADIX_TREE(&obj->mm.get_dma_page.radix, GFP_KERNEL | __GFP_NOWARN);
+	mutex_init(&obj->mm.get_dma_page.lock);
 }
 
 /**
@@ -89,24 +111,38 @@ void i915_gem_object_set_cache_coherency(struct drm_i915_gem_object *obj,
 		!(obj->cache_coherent & I915_BO_CACHE_COHERENT_FOR_WRITE);
 }
 
-void i915_gem_close_object(struct drm_gem_object *gem, struct drm_file *file)
+static void i915_gem_close_object(struct drm_gem_object *gem, struct drm_file *file)
 {
 	struct drm_i915_gem_object *obj = to_intel_bo(gem);
 	struct drm_i915_file_private *fpriv = file->driver_priv;
+	struct i915_lut_handle bookmark = {};
+	struct i915_mmap_offset *mmo, *mn;
 	struct i915_lut_handle *lut, *ln;
 	LIST_HEAD(close);
 
-	i915_gem_object_lock(obj);
+	spin_lock(&obj->lut_lock);
 	list_for_each_entry_safe(lut, ln, &obj->lut_list, obj_link) {
 		struct i915_gem_context *ctx = lut->ctx;
 
-		if (ctx->file_priv != fpriv)
-			continue;
+		if (ctx && ctx->file_priv == fpriv) {
+			i915_gem_context_get(ctx);
+			list_move(&lut->obj_link, &close);
+		}
 
-		i915_gem_context_get(ctx);
-		list_move(&lut->obj_link, &close);
+		/* Break long locks, and carefully continue on from this spot */
+		if (&ln->obj_link != &obj->lut_list) {
+			list_add_tail(&bookmark.obj_link, &ln->obj_link);
+			if (cond_resched_lock(&obj->lut_lock))
+				list_safe_reset_next(&bookmark, ln, obj_link);
+			__list_del_entry(&bookmark.obj_link);
+		}
 	}
-	i915_gem_object_unlock(obj);
+	spin_unlock(&obj->lut_lock);
+
+	spin_lock(&obj->mmo.lock);
+	rbtree_postorder_for_each_entry_safe(mmo, mn, &obj->mmo.offsets, offset)
+		drm_vma_node_revoke(&mmo->vma_node, file);
+	spin_unlock(&obj->mmo.lock);
 
 	list_for_each_entry_safe(lut, ln, &close, obj_link) {
 		struct i915_gem_context *ctx = lut->ctx;
@@ -117,16 +153,14 @@ void i915_gem_close_object(struct drm_gem_object *gem, struct drm_file *file)
 		 * vma, in the same fd namespace, by virtue of flink/open.
 		 */
 
-		mutex_lock(&ctx->mutex);
+		mutex_lock(&ctx->lut_mutex);
 		vma = radix_tree_delete(&ctx->handles_vma, lut->handle);
 		if (vma) {
 			GEM_BUG_ON(vma->obj != obj);
 			GEM_BUG_ON(!atomic_read(&vma->open_count));
-			if (atomic_dec_and_test(&vma->open_count) &&
-			    !i915_vma_is_ggtt(vma))
-				i915_vma_close(vma);
+			i915_vma_close(vma);
 		}
-		mutex_unlock(&ctx->mutex);
+		mutex_unlock(&ctx->lut_mutex);
 
 		i915_gem_context_put(lut->ctx);
 		i915_lut_handle_free(lut);
@@ -134,7 +168,7 @@ void i915_gem_close_object(struct drm_gem_object *gem, struct drm_file *file)
 	}
 }
 
-static void __i915_gem_free_object_rcu(struct rcu_head *head)
+void __i915_gem_free_object_rcu(struct rcu_head *head)
 {
 	struct drm_i915_gem_object *obj =
 		container_of(head, typeof(*obj), rcu);
@@ -147,51 +181,97 @@ static void __i915_gem_free_object_rcu(struct rcu_head *head)
 	atomic_dec(&i915->mm.free_count);
 }
 
+static void __i915_gem_object_free_mmaps(struct drm_i915_gem_object *obj)
+{
+	/* Skip serialisation and waking the device if known to be not used. */
+
+	if (obj->userfault_count)
+		i915_gem_object_release_mmap_gtt(obj);
+
+	if (!RB_EMPTY_ROOT(&obj->mmo.offsets)) {
+		struct i915_mmap_offset *mmo, *mn;
+
+		i915_gem_object_release_mmap_offset(obj);
+
+		rbtree_postorder_for_each_entry_safe(mmo, mn,
+						     &obj->mmo.offsets,
+						     offset) {
+			drm_vma_offset_remove(obj->base.dev->vma_offset_manager,
+					      &mmo->vma_node);
+			kfree(mmo);
+		}
+		obj->mmo.offsets = RB_ROOT;
+	}
+}
+
+void __i915_gem_free_object(struct drm_i915_gem_object *obj)
+{
+	trace_i915_gem_object_destroy(obj);
+
+	if (!list_empty(&obj->vma.list)) {
+		struct i915_vma *vma;
+
+		/*
+		 * Note that the vma keeps an object reference while
+		 * it is active, so it *should* not sleep while we
+		 * destroy it. Our debug code errs insits it *might*.
+		 * For the moment, play along.
+		 */
+		spin_lock(&obj->vma.lock);
+		while ((vma = list_first_entry_or_null(&obj->vma.list,
+						       struct i915_vma,
+						       obj_link))) {
+			GEM_BUG_ON(vma->obj != obj);
+			spin_unlock(&obj->vma.lock);
+
+			__i915_vma_put(vma);
+
+			spin_lock(&obj->vma.lock);
+		}
+		spin_unlock(&obj->vma.lock);
+	}
+
+	__i915_gem_object_free_mmaps(obj);
+
+	GEM_BUG_ON(!list_empty(&obj->lut_list));
+
+	atomic_set(&obj->mm.pages_pin_count, 0);
+	__i915_gem_object_put_pages(obj);
+	GEM_BUG_ON(i915_gem_object_has_pages(obj));
+	bitmap_free(obj->bit_17);
+
+	if (obj->base.import_attach)
+		drm_prime_gem_destroy(&obj->base, NULL);
+
+	drm_gem_free_mmap_offset(&obj->base);
+
+	if (obj->ops->release)
+		obj->ops->release(obj);
+
+	if (obj->mm.n_placements > 1)
+		kfree(obj->mm.placements);
+
+	if (obj->shares_resv_from)
+		i915_vm_resv_put(obj->shares_resv_from);
+}
+
 static void __i915_gem_free_objects(struct drm_i915_private *i915,
 				    struct llist_node *freed)
 {
 	struct drm_i915_gem_object *obj, *on;
-	intel_wakeref_t wakeref;
 
-	wakeref = intel_runtime_pm_get(&i915->runtime_pm);
 	llist_for_each_entry_safe(obj, on, freed, freed) {
-		struct i915_vma *vma, *vn;
-
-		trace_i915_gem_object_destroy(obj);
-
-		mutex_lock(&i915->drm.struct_mutex);
-
-		list_for_each_entry_safe(vma, vn, &obj->vma.list, obj_link) {
-			GEM_BUG_ON(i915_vma_is_active(vma));
-			vma->flags &= ~I915_VMA_PIN_MASK;
-			i915_vma_destroy(vma);
+		might_sleep();
+		if (obj->ops->delayed_free) {
+			obj->ops->delayed_free(obj);
+			continue;
 		}
-		GEM_BUG_ON(!list_empty(&obj->vma.list));
-		GEM_BUG_ON(!RB_EMPTY_ROOT(&obj->vma.tree));
-
-		mutex_unlock(&i915->drm.struct_mutex);
-
-		GEM_BUG_ON(atomic_read(&obj->bind_count));
-		GEM_BUG_ON(obj->userfault_count);
-		GEM_BUG_ON(!list_empty(&obj->lut_list));
-
-		atomic_set(&obj->mm.pages_pin_count, 0);
-		__i915_gem_object_put_pages(obj, I915_MM_NORMAL);
-		GEM_BUG_ON(i915_gem_object_has_pages(obj));
-		bitmap_free(obj->bit_17);
-
-		if (obj->base.import_attach)
-			drm_prime_gem_destroy(&obj->base, NULL);
-
-		drm_gem_free_mmap_offset(&obj->base);
-
-		if (obj->ops->release)
-			obj->ops->release(obj);
+		__i915_gem_free_object(obj);
 
 		/* But keep the pointer alive for RCU-protected lookups */
 		call_rcu(&obj->rcu, __i915_gem_free_object_rcu);
+		cond_resched();
 	}
-	intel_runtime_pm_put(&i915->runtime_pm, wakeref);
 }
 
 void i915_gem_flush_free_objects(struct drm_i915_private *i915)
@@ -210,7 +290,7 @@ static void __i915_gem_free_work(struct work_struct *work)
 	i915_gem_flush_free_objects(i915);
 }
 
-void i915_gem_free_object(struct drm_gem_object *gem_obj)
+static void i915_gem_free_object(struct drm_gem_object *gem_obj)
 {
 	struct drm_i915_gem_object *obj = to_intel_bo(gem_obj);
 	struct drm_i915_private *i915 = to_i915(obj->base.dev);
@@ -244,58 +324,329 @@ void i915_gem_free_object(struct drm_gem_object *gem_obj)
 	 * worker and performing frees directly from subsequent allocations for
 	 * crude but effective memory throttling.
 	 */
+
 	if (llist_add(&obj->freed, &i915->mm.free_list))
 		queue_work(i915->wq, &i915->mm.free_work);
 }
 
-static bool gpu_write_needs_clflush(struct drm_i915_gem_object *obj)
+void __i915_gem_object_flush_frontbuffer(struct drm_i915_gem_object *obj,
+					 enum fb_op_origin origin)
 {
-	return !(obj->cache_level == I915_CACHE_NONE ||
-		 obj->cache_level == I915_CACHE_WT);
+	struct intel_frontbuffer *front;
+
+	front = __intel_frontbuffer_get(obj);
+	if (front) {
+		intel_frontbuffer_flush(front, origin);
+		intel_frontbuffer_put(front);
+	}
 }
 
-void
-i915_gem_object_flush_write_domain(struct drm_i915_gem_object *obj,
-				   unsigned int flush_domains)
+void __i915_gem_object_invalidate_frontbuffer(struct drm_i915_gem_object *obj,
+					      enum fb_op_origin origin)
+{
+	struct intel_frontbuffer *front;
+
+	front = __intel_frontbuffer_get(obj);
+	if (front) {
+		intel_frontbuffer_invalidate(front, origin);
+		intel_frontbuffer_put(front);
+	}
+}
+
+static void
+i915_gem_object_read_from_page_kmap(struct drm_i915_gem_object *obj, u64 offset, void *dst, int size)
+{
+	void *src_map;
+	void *src_ptr;
+
+	src_map = kmap_atomic(i915_gem_object_get_page(obj, offset >> PAGE_SHIFT));
+
+	src_ptr = src_map + offset_in_page(offset);
+	if (!(obj->cache_coherent & I915_BO_CACHE_COHERENT_FOR_READ))
+		drm_clflush_virt_range(src_ptr, size);
+	memcpy(dst, src_ptr, size);
+
+	kunmap_atomic(src_map);
+}
+
+static void
+i915_gem_object_read_from_page_iomap(struct drm_i915_gem_object *obj, u64 offset, void *dst, int size)
+{
+	void __iomem *src_map;
+	void __iomem *src_ptr;
+	dma_addr_t dma = i915_gem_object_get_dma_address(obj, offset >> PAGE_SHIFT);
+
+	src_map = io_mapping_map_wc(&obj->mm.region->iomap,
+				    dma - obj->mm.region->region.start,
+				    PAGE_SIZE);
+
+	src_ptr = src_map + offset_in_page(offset);
+	if (!i915_memcpy_from_wc(dst, (void __force *)src_ptr, size))
+		memcpy_fromio(dst, src_ptr, size);
+
+	io_mapping_unmap(src_map);
+}
+
+/**
+ * i915_gem_object_read_from_page - read data from the page of a GEM object
+ * @obj: GEM object to read from
+ * @offset: offset within the object
+ * @dst: buffer to store the read data
+ * @size: size to read
+ *
+ * Reads data from @obj at the specified offset. The requested region to read
+ * from can't cross a page boundary. The caller must ensure that @obj pages
+ * are pinned and that @obj is synced wrt. any related writes.
+ *
+ * Returns 0 on success or -ENODEV if the type of @obj's backing store is
+ * unsupported.
+ */
+int i915_gem_object_read_from_page(struct drm_i915_gem_object *obj, u64 offset, void *dst, int size)
+{
+	GEM_BUG_ON(offset >= obj->base.size);
+	GEM_BUG_ON(offset_in_page(offset) > PAGE_SIZE - size);
+	GEM_BUG_ON(!i915_gem_object_has_pinned_pages(obj));
+
+	if (i915_gem_object_has_struct_page(obj))
+		i915_gem_object_read_from_page_kmap(obj, offset, dst, size);
+	else if (i915_gem_object_has_iomem(obj))
+		i915_gem_object_read_from_page_iomap(obj, offset, dst, size);
+	else
+		return -ENODEV;
+
+	return 0;
+}
+
+/**
+ * i915_gem_object_evictable - Whether object is likely evictable after unbind.
+ * @obj: The object to check
+ *
+ * This function checks whether the object is likely unvictable after unbind.
+ * If the object is not locked when checking, the result is only advisory.
+ * If the object is locked when checking, and the function returns true,
+ * then an eviction should indeed be possible. But since unlocked vma
+ * unpinning and unbinding is currently possible, the object can actually
+ * become evictable even if this function returns false.
+ *
+ * Return: true if the object may be evictable. False otherwise.
+ */
+bool i915_gem_object_evictable(struct drm_i915_gem_object *obj)
 {
 	struct i915_vma *vma;
+	int pin_count = atomic_read(&obj->mm.pages_pin_count);
 
-	assert_object_held(obj);
+	if (!pin_count)
+		return true;
 
-	if (!(obj->write_domain & flush_domains))
-		return;
-
-	switch (obj->write_domain) {
-	case I915_GEM_DOMAIN_GTT:
-		for_each_ggtt_vma(vma, obj)
-			intel_gt_flush_ggtt_writes(vma->vm->gt);
-
-		intel_frontbuffer_flush(obj->frontbuffer, ORIGIN_CPU);
-
-		for_each_ggtt_vma(vma, obj) {
-			if (vma->iomap)
-				continue;
-
-			i915_vma_unset_ggtt_write(vma);
+	spin_lock(&obj->vma.lock);
+	list_for_each_entry(vma, &obj->vma.list, obj_link) {
+		if (i915_vma_is_pinned(vma)) {
+			spin_unlock(&obj->vma.lock);
+			return false;
 		}
+		if (atomic_read(&vma->pages_count))
+			pin_count--;
+	}
+	spin_unlock(&obj->vma.lock);
+	GEM_WARN_ON(pin_count < 0);
 
-		break;
+	return pin_count == 0;
+}
 
-	case I915_GEM_DOMAIN_WC:
-		wmb();
-		break;
+/**
+ * i915_gem_object_migratable - Whether the object is migratable out of the
+ * current region.
+ * @obj: Pointer to the object.
+ *
+ * Return: Whether the object is allowed to be resident in other
+ * regions than the current while pages are present.
+ */
+bool i915_gem_object_migratable(struct drm_i915_gem_object *obj)
+{
+	struct intel_memory_region *mr = READ_ONCE(obj->mm.region);
 
-	case I915_GEM_DOMAIN_CPU:
-		i915_gem_clflush_object(obj, I915_CLFLUSH_SYNC);
-		break;
+	if (!mr)
+		return false;
 
-	case I915_GEM_DOMAIN_RENDER:
-		if (gpu_write_needs_clflush(obj))
-			obj->cache_dirty = true;
-		break;
+	return obj->mm.n_placements > 1;
+}
+
+/**
+ * i915_gem_object_has_struct_page - Whether the object is page-backed
+ * @obj: The object to query.
+ *
+ * This function should only be called while the object is locked or pinned,
+ * otherwise the page backing may change under the caller.
+ *
+ * Return: True if page-backed, false otherwise.
+ */
+bool i915_gem_object_has_struct_page(const struct drm_i915_gem_object *obj)
+{
+#ifdef CONFIG_LOCKDEP
+	if (IS_DGFX(to_i915(obj->base.dev)) &&
+	    i915_gem_object_evictable((void __force *)obj))
+		assert_object_held_shared(obj);
+#endif
+	return obj->mem_flags & I915_BO_FLAG_STRUCT_PAGE;
+}
+
+/**
+ * i915_gem_object_has_iomem - Whether the object is iomem-backed
+ * @obj: The object to query.
+ *
+ * This function should only be called while the object is locked or pinned,
+ * otherwise the iomem backing may change under the caller.
+ *
+ * Return: True if iomem-backed, false otherwise.
+ */
+bool i915_gem_object_has_iomem(const struct drm_i915_gem_object *obj)
+{
+#ifdef CONFIG_LOCKDEP
+	if (IS_DGFX(to_i915(obj->base.dev)) &&
+	    i915_gem_object_evictable((void __force *)obj))
+		assert_object_held_shared(obj);
+#endif
+	return obj->mem_flags & I915_BO_FLAG_IOMEM;
+}
+
+/**
+ * i915_gem_object_can_migrate - Whether an object likely can be migrated
+ *
+ * @obj: The object to migrate
+ * @id: The region intended to migrate to
+ *
+ * Check whether the object backend supports migration to the
+ * given region. Note that pinning may affect the ability to migrate as
+ * returned by this function.
+ *
+ * This function is primarily intended as a helper for checking the
+ * possibility to migrate objects and might be slightly less permissive
+ * than i915_gem_object_migrate() when it comes to objects with the
+ * I915_BO_ALLOC_USER flag set.
+ *
+ * Return: true if migration is possible, false otherwise.
+ */
+bool i915_gem_object_can_migrate(struct drm_i915_gem_object *obj,
+				 enum intel_region_id id)
+{
+	struct drm_i915_private *i915 = to_i915(obj->base.dev);
+	unsigned int num_allowed = obj->mm.n_placements;
+	struct intel_memory_region *mr;
+	unsigned int i;
+
+	GEM_BUG_ON(id >= INTEL_REGION_UNKNOWN);
+	GEM_BUG_ON(obj->mm.madv != I915_MADV_WILLNEED);
+
+	mr = i915->mm.regions[id];
+	if (!mr)
+		return false;
+
+	if (obj->mm.region == mr)
+		return true;
+
+	if (!i915_gem_object_evictable(obj))
+		return false;
+
+	if (!obj->ops->migrate)
+		return false;
+
+	if (!(obj->flags & I915_BO_ALLOC_USER))
+		return true;
+
+	if (num_allowed == 0)
+		return false;
+
+	for (i = 0; i < num_allowed; ++i) {
+		if (mr == obj->mm.placements[i])
+			return true;
 	}
 
-	obj->write_domain = 0;
+	return false;
+}
+
+/**
+ * i915_gem_object_migrate - Migrate an object to the desired region id
+ * @obj: The object to migrate.
+ * @ww: An optional struct i915_gem_ww_ctx. If NULL, the backend may
+ * not be successful in evicting other objects to make room for this object.
+ * @id: The region id to migrate to.
+ *
+ * Attempt to migrate the object to the desired memory region. The
+ * object backend must support migration and the object may not be
+ * pinned, (explicitly pinned pages or pinned vmas). The object must
+ * be locked.
+ * On successful completion, the object will have pages pointing to
+ * memory in the new region, but an async migration task may not have
+ * completed yet, and to accomplish that, i915_gem_object_wait_migration()
+ * must be called.
+ *
+ * Note: the @ww parameter is not used yet, but included to make sure
+ * callers put some effort into obtaining a valid ww ctx if one is
+ * available.
+ *
+ * Return: 0 on success. Negative error code on failure. In particular may
+ * return -ENXIO on lack of region space, -EDEADLK for deadlock avoidance
+ * if @ww is set, -EINTR or -ERESTARTSYS if signal pending, and
+ * -EBUSY if the object is pinned.
+ */
+int i915_gem_object_migrate(struct drm_i915_gem_object *obj,
+			    struct i915_gem_ww_ctx *ww,
+			    enum intel_region_id id)
+{
+	struct drm_i915_private *i915 = to_i915(obj->base.dev);
+	struct intel_memory_region *mr;
+
+	GEM_BUG_ON(id >= INTEL_REGION_UNKNOWN);
+	GEM_BUG_ON(obj->mm.madv != I915_MADV_WILLNEED);
+	assert_object_held(obj);
+
+	mr = i915->mm.regions[id];
+	GEM_BUG_ON(!mr);
+
+	if (!i915_gem_object_can_migrate(obj, id))
+		return -EINVAL;
+
+	if (!obj->ops->migrate) {
+		if (GEM_WARN_ON(obj->mm.region != mr))
+			return -EINVAL;
+		return 0;
+	}
+
+	return obj->ops->migrate(obj, mr);
+}
+
+/**
+ * i915_gem_object_placement_possible - Check whether the object can be
+ * placed at certain memory type
+ * @obj: Pointer to the object
+ * @type: The memory type to check
+ *
+ * Return: True if the object can be placed in @type. False otherwise.
+ */
+bool i915_gem_object_placement_possible(struct drm_i915_gem_object *obj,
+					enum intel_memory_type type)
+{
+	unsigned int i;
+
+	if (!obj->mm.n_placements) {
+		switch (type) {
+		case INTEL_MEMORY_LOCAL:
+			return i915_gem_object_has_iomem(obj);
+		case INTEL_MEMORY_SYSTEM:
+			return i915_gem_object_has_pages(obj);
+		default:
+			/* Ignore stolen for now */
+			GEM_BUG_ON(1);
+			return false;
+		}
+	}
+
+	for (i = 0; i < obj->mm.n_placements; i++) {
+		if (obj->mm.placements[i]->type == type)
+			return true;
+	}
+
+	return false;
 }
 
 void i915_gem_init__objects(struct drm_i915_private *i915)
@@ -303,35 +654,30 @@ void i915_gem_init__objects(struct drm_i915_private *i915)
 	INIT_WORK(&i915->mm.free_work, __i915_gem_free_work);
 }
 
-static void i915_global_objects_shrink(void)
+void i915_objects_module_exit(void)
 {
-	kmem_cache_shrink(global.slab_objects);
+	kmem_cache_destroy(slab_objects);
 }
 
-static void i915_global_objects_exit(void)
+int __init i915_objects_module_init(void)
 {
-	kmem_cache_destroy(global.slab_objects);
-}
-
-static struct i915_global_object global = { {
-	.shrink = i915_global_objects_shrink,
-	.exit = i915_global_objects_exit,
-} };
-
-int __init i915_global_objects_init(void)
-{
-	global.slab_objects =
-		KMEM_CACHE(drm_i915_gem_object, SLAB_HWCACHE_ALIGN);
-	if (!global.slab_objects)
+	slab_objects = KMEM_CACHE(drm_i915_gem_object, SLAB_HWCACHE_ALIGN);
+	if (!slab_objects)
 		return -ENOMEM;
 
-	i915_global_register(&global.base);
 	return 0;
 }
+
+static const struct drm_gem_object_funcs i915_gem_object_funcs = {
+	.free = i915_gem_free_object,
+	.close = i915_gem_close_object,
+	.export = i915_gem_prime_export,
+};
 
 #if IS_ENABLED(CONFIG_DRM_I915_SELFTEST)
 #include "selftests/huge_gem_object.c"
 #include "selftests/huge_pages.c"
+#include "selftests/i915_gem_migrate.c"
 #include "selftests/i915_gem_object.c"
 #include "selftests/i915_gem_coherency.c"
 #endif

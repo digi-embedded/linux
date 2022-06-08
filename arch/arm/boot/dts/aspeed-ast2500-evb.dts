@@ -13,7 +13,7 @@
 
 	chosen {
 		stdout-path = &uart5;
-		bootargs = "console=tty0 console=ttyS4,115200 earlyprintk";
+		bootargs = "console=tty0 console=ttyS4,115200 earlycon";
 	};
 
 	memory@80000000 {
@@ -40,6 +40,7 @@
 		status = "okay";
 		m25p,fast-read;
 		label = "bmc";
+		spi-max-frequency = <50000000>;
 #include "openbmc-flash-layout.dtsi"
 	};
 };
@@ -50,6 +51,7 @@
 		status = "okay";
 		m25p,fast-read;
 		label = "pnor";
+		spi-max-frequency = <100000000>;
 	};
 };
 
@@ -126,4 +128,8 @@
 &gfx {
      status = "okay";
      memory-region = <&gfx_memory>;
+};
+
+&rtc {
+	status = "okay";
 };

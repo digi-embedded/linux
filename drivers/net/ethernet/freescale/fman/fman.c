@@ -634,12 +634,14 @@ static void set_port_order_restoration(struct fman_fpm_regs __iomem *fpm_rg,
 	iowrite32be(tmp, &fpm_rg->fmfp_prc);
 }
 
-#ifdef CONFIG_PPC
 static void set_port_liodn(struct fman *fman, u8 port_id,
 			   u32 liodn_base, u32 liodn_ofst)
 {
 	u32 tmp;
 
+	iowrite32be(liodn_ofst, &fman->bmi_regs->fmbm_spliodn[port_id - 1]);
+	if (!IS_ENABLED(CONFIG_FSL_PAMU))
+		return;
 	/* set LIODN base for this port */
 	tmp = ioread32be(&fman->dma_regs->fmdmplr[port_id / 2]);
 	if (port_id % 2) {
@@ -650,29 +652,7 @@ static void set_port_liodn(struct fman *fman, u8 port_id,
 		tmp |= liodn_base << DMA_LIODN_SHIFT;
 	}
 	iowrite32be(tmp, &fman->dma_regs->fmdmplr[port_id / 2]);
-	iowrite32be(liodn_ofst, &fman->bmi_regs->fmbm_spliodn[port_id - 1]);
 }
-#elif defined(CONFIG_ARM) || defined(CONFIG_ARM64)
-static void save_restore_port_icids(struct fman *fman, bool save)
-{
-	int port_idxes[] = {
-		0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9, 0xa, 0xb, 0xc,
-		0xd, 0xe, 0xf, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f,
-		0x10, 0x11, 0x30, 0x31
-	};
-	int idx, i;
-
-	for (i = 0; i < ARRAY_SIZE(port_idxes); i++) {
-		idx = port_idxes[i];
-		if (save)
-			fman->sp_icids[idx] =
-				ioread32be(&fman->bmi_regs->fmbm_spliodn[idx]);
-		else
-			iowrite32be(fman->sp_icids[idx],
-				    &fman->bmi_regs->fmbm_spliodn[idx]);
-	}
-}
-#endif
 
 static void enable_rams_ecc(struct fman_fpm_regs __iomem *fpm_rg)
 {
@@ -1940,10 +1920,7 @@ _return:
 static int fman_init(struct fman *fman)
 {
 	struct fman_cfg *cfg = NULL;
-	int err = 0, count;
-#ifdef CONFIG_PPC
-	int i;
-#endif
+	int err = 0, i, count;
 
 	if (is_init_done(fman->cfg))
 		return -EINVAL;
@@ -1963,7 +1940,6 @@ static int fman_init(struct fman *fman)
 	memset_io((void __iomem *)(fman->base_addr + CGP_OFFSET), 0,
 		  fman->state->fm_port_num_of_cg);
 
-#ifdef CONFIG_PPC
 	/* Save LIODN info before FMan reset
 	 * Skipping non-existent port 0 (i = 1)
 	 */
@@ -1972,6 +1948,8 @@ static int fman_init(struct fman *fman)
 
 		fman->liodn_offset[i] =
 			ioread32be(&fman->bmi_regs->fmbm_spliodn[i - 1]);
+		if (!IS_ENABLED(CONFIG_FSL_PAMU))
+			continue;
 		liodn_base = ioread32be(&fman->dma_regs->fmdmplr[i / 2]);
 		if (i % 2) {
 			/* FMDM_PLR LSB holds LIODN base for odd ports */
@@ -1983,9 +1961,6 @@ static int fman_init(struct fman *fman)
 		}
 		fman->liodn_base[i] = liodn_base;
 	}
-#elif defined(CONFIG_ARM) || defined(CONFIG_ARM64)
-	save_restore_port_icids(fman, true);
-#endif
 
 	err = fman_reset(fman);
 	if (err)
@@ -2088,11 +2063,11 @@ static int fman_set_exception(struct fman *fman,
 /**
  * fman_register_intr
  * @fman:	A Pointer to FMan device
- * @mod:	Calling module
+ * @module:	Calling module
  * @mod_id:	Module id (if more than 1 exists, '0' if not)
  * @intr_type:	Interrupt type (error/normal) selection.
- * @f_isr:	The interrupt service routine.
- * @h_src_arg:	Argument to be passed to f_isr.
+ * @isr_cb:	The interrupt service routine.
+ * @src_arg:	Argument to be passed to isr_cb.
  *
  * Used to register an event handler to be processed by FMan
  *
@@ -2116,7 +2091,7 @@ EXPORT_SYMBOL(fman_register_intr);
 /**
  * fman_unregister_intr
  * @fman:	A Pointer to FMan device
- * @mod:	Calling module
+ * @module:	Calling module
  * @mod_id:	Module id (if more than 1 exists, '0' if not)
  * @intr_type:	Interrupt type (error/normal) selection.
  *
@@ -2214,12 +2189,8 @@ int fman_set_port_params(struct fman *fman,
 	if (err)
 		goto return_err;
 
-#ifdef CONFIG_PPC
 	set_port_liodn(fman, port_id, fman->liodn_base[port_id],
 		       fman->liodn_offset[port_id]);
-#elif defined(CONFIG_ARM) || defined(CONFIG_ARM64)
-	save_restore_port_icids(fman, false);
-#endif
 
 	if (fman->state->rev_info.major < 6)
 		set_port_order_restoration(fman->fpm_regs, port_id);
@@ -2371,8 +2342,8 @@ EXPORT_SYMBOL(fman_get_bmi_max_fifo_size);
 
 /**
  * fman_get_revision
- * @fman		- Pointer to the FMan module
- * @rev_info		- A structure of revision information parameters.
+ * @fman:		- Pointer to the FMan module
+ * @rev_info:		- A structure of revision information parameters.
  *
  * Returns the FM revision
  *
@@ -2537,7 +2508,7 @@ EXPORT_SYMBOL(fman_get_rx_extra_headroom);
 
 /**
  * fman_bind
- * @dev:	FMan OF device pointer
+ * @fm_dev:	FMan OF device pointer
  *
  * Bind to a specific FMan device.
  *

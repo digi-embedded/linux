@@ -50,12 +50,12 @@ static void fsl_mc_io_unset_dpmcp(struct fsl_mc_io *mc_io)
 }
 
 /**
- * Creates an MC I/O object
+ * fsl_create_mc_io() - Creates an MC I/O object
  *
  * @dev: device to be associated with the MC I/O object
  * @mc_portal_phys_addr: physical address of the MC portal to use
  * @mc_portal_size: size in bytes of the MC portal
- * @dpmcp-dev: Pointer to the DPMCP object associated with this MC I/O
+ * @dpmcp_dev: Pointer to the DPMCP object associated with this MC I/O
  * object or NULL if none.
  * @flags: flags for the new MC I/O object
  * @new_mc_io: Area to return pointer to newly created MC I/O object
@@ -97,12 +97,12 @@ int __must_check fsl_create_mc_io(struct device *dev,
 		return -EBUSY;
 	}
 
-	mc_portal_virt_addr = devm_ioremap_nocache(dev,
+	mc_portal_virt_addr = devm_ioremap(dev,
 						   mc_portal_phys_addr,
 						   mc_portal_size);
 	if (!mc_portal_virt_addr) {
 		dev_err(dev,
-			"devm_ioremap_nocache failed for MC portal %pa\n",
+			"devm_ioremap failed for MC portal %pa\n",
 			&mc_portal_phys_addr);
 		return -ENXIO;
 	}
@@ -123,13 +123,18 @@ error_destroy_mc_io:
 }
 
 /**
- * Destroys an MC I/O object
+ * fsl_destroy_mc_io() - Destroys an MC I/O object
  *
  * @mc_io: MC I/O object to destroy
  */
 void fsl_destroy_mc_io(struct fsl_mc_io *mc_io)
 {
-	struct fsl_mc_device *dpmcp_dev = mc_io->dpmcp_dev;
+	struct fsl_mc_device *dpmcp_dev;
+
+	if (!mc_io)
+		return;
+
+	dpmcp_dev = mc_io->dpmcp_dev;
 
 	if (dpmcp_dev)
 		fsl_mc_io_unset_dpmcp(mc_io);
@@ -169,16 +174,14 @@ int __must_check fsl_mc_portal_allocate(struct fsl_mc_device *mc_dev,
 	int error = -EINVAL;
 	struct fsl_mc_resource *resource = NULL;
 	struct fsl_mc_io *mc_io = NULL;
-	struct device *root_dprc_dev;
 
-	if (fsl_mc_is_root_dprc(&mc_dev->dev)) {
+	if (mc_dev->flags & FSL_MC_IS_DPRC) {
 		mc_bus_dev = mc_dev;
 	} else {
-		fsl_mc_get_root_dprc(&mc_dev->dev, &root_dprc_dev);
-		if (WARN_ON(!root_dprc_dev))
-			return -EINVAL;
+		if (!dev_is_fsl_mc(mc_dev->dev.parent))
+			return error;
 
-		mc_bus_dev = to_fsl_mc_device(root_dprc_dev);
+		mc_bus_dev = to_fsl_mc_device(mc_dev->dev.parent);
 	}
 
 	mc_bus = to_fsl_mc_bus(mc_bus_dev);

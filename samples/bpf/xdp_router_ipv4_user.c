@@ -21,7 +21,7 @@
 #include <sys/ioctl.h>
 #include <sys/syscall.h>
 #include "bpf_util.h"
-#include "libbpf.h"
+#include <bpf/libbpf.h>
 #include <sys/resource.h>
 #include <libgen.h>
 
@@ -625,7 +625,6 @@ static void usage(const char *prog)
 
 int main(int ac, char **argv)
 {
-	struct rlimit r = {RLIM_INFINITY, RLIM_INFINITY};
 	struct bpf_prog_load_attr prog_load_attr = {
 		.prog_type	= BPF_PROG_TYPE_XDP,
 	};
@@ -662,13 +661,11 @@ int main(int ac, char **argv)
 		}
 	}
 
+	if (!(flags & XDP_FLAGS_SKB_MODE))
+		flags |= XDP_FLAGS_DRV_MODE;
+
 	if (optind == ac) {
 		usage(basename(argv[0]));
-		return 1;
-	}
-
-	if (setrlimit(RLIMIT_MEMLOCK, &r)) {
-		perror("setrlimit(RLIMIT_MEMLOCK)");
 		return 1;
 	}
 

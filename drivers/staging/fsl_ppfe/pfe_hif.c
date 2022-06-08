@@ -138,6 +138,8 @@ static void send_dummy_pkt_to_hif(void)
 				STATUS_TCP_CHECKSUM_CORRECT |
 				STATUS_UNICAST_HASH_MATCH |
 				STATUS_CUMULATIVE_ARC_HIT));
+	local_hdr.status2 = 0;
+
 	copy_to_lmem((u32 *)lmem_virt_addr, (u32 *)&local_hdr,
 		     sizeof(local_hdr));
 
@@ -732,8 +734,10 @@ void __hif_tx_done_process(struct pfe_hif *hif, int count)
 					 desc_sw->len, DMA_TO_DEVICE);
 		}
 
-		if (desc_sw->client_id > HIF_CLIENTS_MAX)
+		if (desc_sw->client_id >= HIF_CLIENTS_MAX) {
 			pr_err("Invalid cl id %d\n", desc_sw->client_id);
+			break;
+		}
 
 		pkts_done[desc_sw->client_id]++;
 

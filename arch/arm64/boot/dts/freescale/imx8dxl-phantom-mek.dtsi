@@ -17,33 +17,6 @@
 		stdout-path = &lpuart0;
 	};
 
-	reserved-memory {
-		#address-cells = <2>;
-		#size-cells = <2>;
-		ranges;
-
-		/*
-		 * 0x8800_0000 ~ 0x8FFF_FFFF is reserved for M4
-		 * Shouldn't be used at A core and Linux side.
-		 *
-		 */
-		m4_reserved: m4@0x88000000 {
-			no-map;
-			reg = <0 0x88000000 0 0x8000000>;
-		};
-
-		rpmsg_reserved: rpmsg@0x90000000 {
-			no-map;
-			reg = <0 0x90000000 0 0x400000>;
-		};
-
-		rpmsg_dma_reserved:rpmsg_dma@0x90400000 {
-			compatible = "shared-dma-pool";
-			no-map;
-			reg = <0 0x90400000 0 0x100000>;
-		};
-	};
-
 	modem_reset: modem-reset {
 		compatible = "gpio-reset";
 		pinctrl-names = "default", "sleep";
@@ -68,17 +41,6 @@
 		m4_reserved: m4@0x88000000 {
 			no-map;
 			reg = <0 0x88000000 0 0x8000000>;
-		};
-
-		rpmsg_reserved: rpmsg@0x90000000 {
-			no-map;
-			reg = <0 0x90000000 0 0x400000>;
-		};
-
-		rpmsg_dma_reserved:rpmsg_dma@0x90400000 {
-			compatible = "shared-dma-pool";
-			no-map;
-			reg = <0 0x90400000 0 0x100000>;
 		};
 	};
 
@@ -179,22 +141,12 @@
 	};
 
 	sound: sound {
-		compatible = "fsl,imx7d-evk-wm8960",
-			   "fsl,imx-audio-wm8960";
+		compatible = "fsl,imx-audio-wm8960";
 		model = "wm8960-audio";
-		cpu-dai = <&sai1>;
+		audio-cpu = <&sai1>;
 		audio-codec = <&wm8960>;
-		asrc-controller = <&asrc0>;
-		codec-master;
-		/*
-		 * hp-det = <hp-det-pin hp-det-polarity>;
-		 * hp-det-pin: JD1 JD2  or JD3
-		 * hp-det-polarity = 0: hp detect high for headphone
-		 * hp-det-polarity = 1: hp detect high for speaker
-		 */
-		hp-det = <2 0>;
-		hp-det-gpios = <&lsio_gpio0 13 0>;
-		mic-det-gpios = <&lsio_gpio0 13 0>;
+		audio-asrc = <&asrc0>;
+		hp-det-gpio = <&lsio_gpio0 13 0>;
 		audio-routing =
 			"Headphone Jack", "HP_L",
 			"Headphone Jack", "HP_R",
@@ -204,29 +156,15 @@
 			"Ext Spk", "SPK_RN",
 			"LINPUT2", "Mic Jack",
 			"LINPUT3", "Mic Jack",
-			"RINPUT1", "Main MIC",
-			"RINPUT2", "Main MIC",
+			"RINPUT1", "AMIC",
+			"RINPUT2", "AMIC",
 			"Mic Jack", "MICB",
-			"Main MIC", "MICB",
-			"CPU-Playback", "ASRC-Playback",
-			"Playback", "CPU-Playback",
-			"ASRC-Capture", "CPU-Capture",
-			"CPU-Capture", "Capture";
+			"AMIC", "MICB";
 	};
 };
 
 &lvds_subsys {
 	status = "disabled";
-};
-
-&rpmsg{
-	/*
-	 * 64K for one rpmsg instance:
-	 */
-	vdev-nums = <2>;
-	reg = <0x0 0x90000000 0x0 0x20000>;
-	memory-region = <&rpmsg_dma_reserved>;
-	status = "okay";
 };
 
 &acm {
@@ -527,7 +465,7 @@
 	fsl,magic-packet;
 	nvmem-cells = <&fec_mac1>;
 	nvmem-cell-names = "mac-address";
-	fsl,rgmii_rxc_dly;
+	rx-internal-delay-ps = <2000>;
 	status = "okay";
 
 	mdio {
@@ -537,8 +475,13 @@
 		ethphy0: ethernet-phy@0 {
 			compatible = "ethernet-phy-ieee802.3-c22";
 			reg = <0>;
-			at803x,eee-disabled;
-			at803x,vddio-1p8v;
+			qca,disable-smarteee;
+			vddio-supply = <&vddio>;
+
+			vddio: vddio-regulator {
+				regulator-min-microvolt = <1800000>;
+				regulator-max-microvolt = <1800000>;
+			};
 		};
 	};
 };
@@ -566,9 +509,10 @@
 		reg = <0>;
 		#address-cells = <1>;
 		#size-cells = <1>;
-		compatible = "micron,mt35xu512aba";
+		compatible = "jedec,spi-nor";
 		spi-max-frequency = <133000000>;
-		spi-nor,ddr-quad-read-dummy = <4>;
+		spi-tx-bus-width = <1>;
+		spi-rx-bus-width = <8>;
 	};
 };
 
@@ -590,6 +534,8 @@
 		clocks = <&mclkout0_lpcg 0>;
 		clock-names = "mclk";
 		wlf,shared-lrclk;
+		wlf,hp-cfg = <2 2 3>;
+		wlf,gpio-cfg = <1 3>;
 		assigned-clocks = <&clk IMX_SC_R_AUDIO_PLL_0 IMX_SC_PM_CLK_PLL>,
 				<&clk IMX_SC_R_AUDIO_PLL_0 IMX_SC_PM_CLK_SLV_BUS>,
 				<&clk IMX_SC_R_AUDIO_PLL_0 IMX_SC_PM_CLK_MST_BUS>,
@@ -720,15 +666,5 @@
 	reset-gpio = <&lsio_gpio4 0 GPIO_ACTIVE_LOW>;
 	epdev_on-supply = <&epdev_on>;
 	ext_osc = <1>;
-	status = "okay";
-};
-
-&rpmsg{
-	/*
-	 * 64K for one rpmsg instance:
-	 */
-	vdev-nums = <2>;
-	reg = <0x0 0x90000000 0x0 0x20000>;
-	memory-region = <&rpmsg_dma_reserved>;
 	status = "okay";
 };

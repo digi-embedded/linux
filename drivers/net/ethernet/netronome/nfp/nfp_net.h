@@ -17,6 +17,7 @@
 #include <linux/list.h>
 #include <linux/netdevice.h>
 #include <linux/pci.h>
+#include <linux/dim.h>
 #include <linux/io-64-nonatomic-hi-lo.h>
 #include <linux/semaphore.h>
 #include <linux/workqueue.h>
@@ -360,6 +361,9 @@ struct nfp_net_rx_ring {
  * @rx_ring:        Pointer to RX ring
  * @xdp_ring:	    Pointer to an extra TX ring for XDP
  * @irq_entry:      MSI-X table entry (use for talking to the device)
+ * @event_ctr:	    Number of interrupt
+ * @rx_dim:	    Dynamic interrupt moderation structure for RX
+ * @tx_dim:	    Dynamic interrupt moderation structure for TX
  * @rx_sync:	    Seqlock for atomic updates of RX stats
  * @rx_pkts:        Number of received packets
  * @rx_bytes:	    Number of received bytes
@@ -409,6 +413,10 @@ struct nfp_net_r_vector {
 	struct nfp_net_rx_ring *rx_ring;
 
 	u16 irq_entry;
+
+	u16 event_ctr;
+	struct dim rx_dim;
+	struct dim tx_dim;
 
 	struct u64_stats_sync rx_sync;
 	u64 rx_pkts;
@@ -571,12 +579,12 @@ struct nfp_net_dp {
  *			mailbox area, crypto TLV
  * @link_up:            Is the link up?
  * @link_status_lock:	Protects @link_* and ensures atomicity with BAR reading
+ * @rx_coalesce_adapt_on:   Is RX interrupt moderation adaptive?
+ * @tx_coalesce_adapt_on:   Is TX interrupt moderation adaptive?
  * @rx_coalesce_usecs:      RX interrupt moderation usecs delay parameter
  * @rx_coalesce_max_frames: RX interrupt moderation frame count parameter
  * @tx_coalesce_usecs:      TX interrupt moderation usecs delay parameter
  * @tx_coalesce_max_frames: TX interrupt moderation frame count parameter
- * @vxlan_ports:	VXLAN ports for RX inner csum offload communicated to HW
- * @vxlan_usecnt:	IPv4/IPv6 VXLAN port use counts
  * @qcp_cfg:            Pointer to QCP queue used for configuration notification
  * @tx_bar:             Pointer to mapped TX queues
  * @rx_bar:             Pointer to mapped FL/RX queues
@@ -586,6 +594,9 @@ struct nfp_net_dp {
  * @ktls_conn_id_gen:	Trivial generator for kTLS connection ids (for TX)
  * @ktls_no_space:	Counter of firmware rejecting kTLS connection due to
  *			lack of space
+ * @ktls_rx_resync_req:	Counter of TLS RX resync requested
+ * @ktls_rx_resync_ign:	Counter of TLS RX resync requests ignored
+ * @ktls_rx_resync_sent:    Counter of TLS RX resync completed
  * @mbox_cmsg:		Common Control Message via vNIC mailbox state
  * @mbox_cmsg.queue:	CCM mbox queue of pending messages
  * @mbox_cmsg.wq:	CCM mbox wait queue of waiting processes
@@ -653,13 +664,12 @@ struct nfp_net {
 
 	struct semaphore bar_lock;
 
+	bool rx_coalesce_adapt_on;
+	bool tx_coalesce_adapt_on;
 	u32 rx_coalesce_usecs;
 	u32 rx_coalesce_max_frames;
 	u32 tx_coalesce_usecs;
 	u32 tx_coalesce_max_frames;
-
-	__be16 vxlan_ports[NFP_NET_N_VXLAN_PORTS];
-	u8 vxlan_usecnt[NFP_NET_N_VXLAN_PORTS];
 
 	u8 __iomem *qcp_cfg;
 
@@ -674,6 +684,9 @@ struct nfp_net {
 	atomic64_t ktls_conn_id_gen;
 
 	atomic_t ktls_no_space;
+	atomic_t ktls_rx_resync_req;
+	atomic_t ktls_rx_resync_ign;
+	atomic_t ktls_rx_resync_sent;
 
 	struct {
 		struct sk_buff_head queue;
@@ -916,6 +929,14 @@ extern const struct net_device_ops nfp_net_netdev_ops;
 static inline bool nfp_netdev_is_nfp_net(struct net_device *netdev)
 {
 	return netdev->netdev_ops == &nfp_net_netdev_ops;
+}
+
+static inline int nfp_net_coalesce_para_check(u32 usecs, u32 pkts)
+{
+	if ((usecs >= ((1 << 16) - 1)) || (pkts >= ((1 << 16) - 1)))
+		return -EINVAL;
+
+	return 0;
 }
 
 /* Prototypes */

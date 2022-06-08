@@ -133,9 +133,11 @@
 		compatible = "fsl,imx6q-sabresd-wm8962",
 			   "fsl,imx-audio-wm8962";
 		model = "wm8962-audio";
-		audio-cpu = <&ssi2>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_hp>;
+		ssi-controller = <&ssi2>;
 		audio-codec = <&codec>;
-		asrc-controller = <&asrc>;
+		audio-asrc = <&asrc>;
 		audio-routing =
 			"Headphone Jack", "HPOUTL",
 			"Headphone Jack", "HPOUTR",
@@ -144,21 +146,15 @@
 			"AMIC", "MICBIAS",
 			"IN3R", "AMIC",
 			"DMIC", "MICBIAS",
-			"DMICDAT", "DMIC",
-			"CPU-Playback", "ASRC-Playback",
-			"Playback", "CPU-Playback",
-			"ASRC-Capture", "CPU-Capture",
-			"CPU-Capture", "Capture";
+			"DMICDAT", "DMIC";
 		mux-int-port = <2>;
 		mux-ext-port = <3>;
-		codec-master;
-		hp-det-gpios = <&gpio7 8 1>;
-		mic-det-gpios = <&gpio1 9 1>;
+		hp-det-gpio = <&gpio7 8 GPIO_ACTIVE_LOW>;
+		mic-det-gpio = <&gpio1 9 GPIO_ACTIVE_LOW>;
 	};
 
 	sound-hdmi {
-		compatible = "fsl,imx6q-audio-hdmi",
-			     "fsl,imx-audio-hdmi";
+		compatible = "fsl,imx6qdl-audio-hdmi";
 		model = "imx-audio-hdmi";
 		hdmi-controller = <&hdmi_audio>;
 	};
@@ -332,7 +328,7 @@
 };
 
 &ecspi1 {
-	cs-gpios = <&gpio4 9 0>;
+	cs-gpios = <&gpio4 9 GPIO_ACTIVE_LOW>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_ecspi1>;
 	status = "okay";
@@ -350,9 +346,21 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_enet>;
 	phy-mode = "rgmii-id";
-	phy-reset-gpios = <&gpio1 25 GPIO_ACTIVE_LOW>;
+	phy-handle = <&phy>;
 	fsl,magic-packet;
 	status = "okay";
+
+	mdio {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		phy: ethernet-phy@1 {
+			reg = <1>;
+			qca,clk-out-frequency = <125000000>;
+			reset-gpios = <&gpio1 25 GPIO_ACTIVE_LOW>;
+			reset-assert-us = <10000>;
+		};
+	};
 };
 
 &gpc {
@@ -378,7 +386,7 @@
 &hdmi_video {
 	fsl,phy_reg_vlev = <0x294>;
 	fsl,phy_reg_cksymtx = <0x800d>;
-	HDMI-supply = <&reg_hdmi>;
+/*	HDMI-supply = <&reg_hdmi>; */
 	status = "okay";
 };
 
@@ -411,7 +419,6 @@
 			0x8014 /* 4:FN_DMICCDAT */
 			0x0000 /* 5:Default */
 		>;
-		amic-mono;
 	};
 
 	accelerometer@1c {
@@ -679,7 +686,7 @@
 		pinctrl-0 = <&pinctrl_i2c3_isl29023_int>;
 		interrupt-parent = <&gpio3>;
 		interrupts = <9 IRQ_TYPE_EDGE_FALLING>;
-		vdd-supply = <&reg_sensors>;
+		vcc-supply = <&reg_sensors>;
 	};
 };
 
@@ -703,8 +710,6 @@
 				MX6QDL_PAD_ENET_RXD0__GPIO1_IO27 0x80000000
 				MX6QDL_PAD_EIM_A25__GPIO5_IO02 0x80000000
 				MX6QDL_PAD_EIM_D23__GPIO3_IO23 0x80000000
-				MX6QDL_PAD_SD3_RST__GPIO7_IO08 0x80000000
-				MX6QDL_PAD_GPIO_9__GPIO1_IO09  0x80000000
 				MX6QDL_PAD_NANDF_CS0__GPIO6_IO11 0x80000000
 			>;
 		};
@@ -772,6 +777,13 @@
 			fsl,pins = <
 				MX6QDL_PAD_KEY_COL3__HDMI_TX_DDC_SCL 0x4001b8b1
 				MX6QDL_PAD_KEY_ROW3__HDMI_TX_DDC_SDA 0x4001b8b1
+			>;
+		};
+
+		pinctrl_hp: hpgrp {
+			fsl,pins = <
+				MX6QDL_PAD_SD3_RST__GPIO7_IO08          0x1b0b0
+				MX6QDL_PAD_GPIO_9__GPIO1_IO09           0x1b0b0
 			>;
 		};
 
@@ -1096,6 +1108,7 @@
 };
 
 &pwm1 {
+	#pwm-cells = <2>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_pwm1>;
 	status = "okay";

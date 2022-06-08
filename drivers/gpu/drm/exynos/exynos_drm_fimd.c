@@ -343,13 +343,18 @@ static void fimd_enable_shadow_channel_path(struct fimd_context *ctx,
 	writel(val, ctx->regs + SHADOWCON);
 }
 
-static void fimd_clear_channels(struct exynos_drm_crtc *crtc)
+static int fimd_clear_channels(struct exynos_drm_crtc *crtc)
 {
 	struct fimd_context *ctx = crtc->ctx;
 	unsigned int win, ch_enabled = 0;
+	int ret;
 
 	/* Hardware is in unknown state, so ensure it gets enabled properly */
-	pm_runtime_get_sync(ctx->dev);
+	ret = pm_runtime_resume_and_get(ctx->dev);
+	if (ret < 0) {
+		dev_err(ctx->dev, "failed to enable FIMD device.\n");
+		return ret;
+	}
 
 	clk_prepare_enable(ctx->bus_clk);
 	clk_prepare_enable(ctx->lcd_clk);
@@ -384,6 +389,8 @@ static void fimd_clear_channels(struct exynos_drm_crtc *crtc)
 	clk_disable_unprepare(ctx->bus_clk);
 
 	pm_runtime_put(ctx->dev);
+
+	return 0;
 }
 
 
@@ -723,8 +730,9 @@ static void fimd_win_set_colkey(struct fimd_context *ctx, unsigned int win)
 }
 
 /**
- * shadow_protect_win() - disable updating values from shadow registers at vsync
+ * fimd_shadow_protect_win() - disable updating values from shadow registers at vsync
  *
+ * @ctx: local driver data
  * @win: window to protect registers for
  * @protect: 1 to protect (disable updates)
  */
@@ -895,7 +903,7 @@ static void fimd_disable_plane(struct exynos_drm_crtc *crtc,
 		fimd_enable_shadow_channel_path(ctx, win, false);
 }
 
-static void fimd_enable(struct exynos_drm_crtc *crtc)
+static void fimd_atomic_enable(struct exynos_drm_crtc *crtc)
 {
 	struct fimd_context *ctx = crtc->ctx;
 
@@ -904,7 +912,10 @@ static void fimd_enable(struct exynos_drm_crtc *crtc)
 
 	ctx->suspended = false;
 
-	pm_runtime_get_sync(ctx->dev);
+	if (pm_runtime_resume_and_get(ctx->dev) < 0) {
+		dev_warn(ctx->dev, "failed to enable FIMD device.\n");
+		return;
+	}
 
 	/* if vblank was enabled status, enable it again. */
 	if (test_and_clear_bit(0, &ctx->irq_flags))
@@ -913,7 +924,7 @@ static void fimd_enable(struct exynos_drm_crtc *crtc)
 	fimd_commit(ctx->crtc);
 }
 
-static void fimd_disable(struct exynos_drm_crtc *crtc)
+static void fimd_atomic_disable(struct exynos_drm_crtc *crtc)
 {
 	struct fimd_context *ctx = crtc->ctx;
 	int i;
@@ -1007,8 +1018,8 @@ static void fimd_dp_clock_enable(struct exynos_drm_clk *clk, bool enable)
 }
 
 static const struct exynos_drm_crtc_ops fimd_crtc_ops = {
-	.enable = fimd_enable,
-	.disable = fimd_disable,
+	.atomic_enable = fimd_atomic_enable,
+	.atomic_disable = fimd_atomic_disable,
 	.enable_vblank = fimd_enable_vblank,
 	.disable_vblank = fimd_disable_vblank,
 	.atomic_begin = fimd_atomic_begin,
@@ -1088,8 +1099,13 @@ static int fimd_bind(struct device *dev, struct device *master, void *data)
 	if (ctx->encoder)
 		exynos_dpi_bind(drm_dev, ctx->encoder);
 
-	if (is_drm_iommu_supported(drm_dev))
-		fimd_clear_channels(ctx->crtc);
+	if (is_drm_iommu_supported(drm_dev)) {
+		int ret;
+
+		ret = fimd_clear_channels(ctx->crtc);
+		if (ret < 0)
+			return ret;
+	}
 
 	return exynos_drm_register_dma(drm_dev, dev, &ctx->dma_priv);
 }
@@ -1099,7 +1115,7 @@ static void fimd_unbind(struct device *dev, struct device *master,
 {
 	struct fimd_context *ctx = dev_get_drvdata(dev);
 
-	fimd_disable(ctx->crtc);
+	fimd_atomic_disable(ctx->crtc);
 
 	exynos_drm_unregister_dma(ctx->drm_dev, ctx->dev, &ctx->dma_priv);
 
@@ -1186,9 +1202,7 @@ static int fimd_probe(struct platform_device *pdev)
 		return PTR_ERR(ctx->lcd_clk);
 	}
 
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-
-	ctx->regs = devm_ioremap_resource(dev, res);
+	ctx->regs = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(ctx->regs))
 		return PTR_ERR(ctx->regs);
 

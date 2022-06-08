@@ -1,23 +1,10 @@
+// SPDX-License-Identifier: LGPL-2.1
 /*
- *   fs/cifs/smb2file.c
  *
  *   Copyright (C) International Business Machines  Corp., 2002, 2011
  *   Author(s): Steve French (sfrench@us.ibm.com),
  *              Pavel Shilovsky ((pshilovsky@samba.org) 2012
  *
- *   This library is free software; you can redistribute it and/or modify
- *   it under the terms of the GNU Lesser General Public License as published
- *   by the Free Software Foundation; either version 2.1 of the License, or
- *   (at your option) any later version.
- *
- *   This library is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See
- *   the GNU Lesser General Public License for more details.
- *
- *   You should have received a copy of the GNU Lesser General Public License
- *   along with this library; if not, write to the Free Software
- *   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
  */
 #include <linux/fs.h>
 #include <linux/stat.h>
@@ -62,7 +49,7 @@ smb2_open_file(const unsigned int xid, struct cifs_open_parms *oparms,
 	smb2_oplock = SMB2_OPLOCK_LEVEL_BATCH;
 
 	rc = SMB2_open(xid, oparms, smb2_path, &smb2_oplock, smb2_data, NULL,
-		       NULL);
+		       NULL, NULL);
 	if (rc)
 		goto out;
 
@@ -152,7 +139,12 @@ smb2_unlock_range(struct cifsFileInfo *cfile, struct file_lock *flock,
 		    (li->offset + li->length))
 			continue;
 		if (current->tgid != li->pid)
-			continue;
+			/*
+			 * flock and OFD lock are associated with an open
+			 * file description, not the process.
+			 */
+			if (!(flock->fl_flags & (FL_FLOCK | FL_OFDLCK)))
+				continue;
 		if (cinode->can_cache_brlcks) {
 			/*
 			 * We can cache brlock requests - simply remove a lock

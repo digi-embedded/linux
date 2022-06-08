@@ -59,9 +59,9 @@ static void ls_pcie_g4_ep_init(struct mobiveil_pcie_ep *ep)
 	 * value 1 in uncorrectable_Error_Severity_Register, make the
 	 * unsupported request error generate the fatal error.
 	 */
-	val =  csr_readl(mv_pci, CFG_UNCORRECTABLE_ERROR_SEVERITY);
+	val =  mobiveil_csr_readl(mv_pci, CFG_UNCORRECTABLE_ERROR_SEVERITY);
 	val |= 1 << UNSUPPORTED_REQUEST_ERROR_SHIFT;
-	csr_writel(mv_pci, val, CFG_UNCORRECTABLE_ERROR_SEVERITY);
+	mobiveil_csr_writel(mv_pci, val, CFG_UNCORRECTABLE_ERROR_SEVERITY);
 
 	ep->bar_num = PCIE_LX2_BAR_NUM;
 

@@ -11,10 +11,10 @@
 
 	sound-mqs {
 		compatible = "fsl,imx6sx-sdb-mqs",
-				"fsl,imx-audio-mqs";
+			     "fsl,imx-audio-mqs";
 		model = "mqs-audio";
-		cpu-dai = <&sai1>;
-		asrc-controller = <&asrc>;
+		audio-cpu = <&sai1>;
+		audio-asrc = <&asrc>;
 		audio-codec = <&mqs>;
 	};
 };

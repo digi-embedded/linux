@@ -9,7 +9,7 @@
 #include <linux/delay.h>
 
 #define AVC_GENERIC_FRAME_MAXIMUM_BYTES	512
-#define CALLBACK_TIMEOUT	200
+#define READY_TIMEOUT_MS	600
 
 /*
  * According to datasheet of Oxford Semiconductor:
@@ -153,12 +153,30 @@ static int init_stream(struct snd_oxfw *oxfw, struct amdtp_stream *stream)
 	struct cmp_connection *conn;
 	enum cmp_direction c_dir;
 	enum amdtp_stream_direction s_dir;
+	unsigned int flags = 0;
 	int err;
+
+	if (!(oxfw->quirks & SND_OXFW_QUIRK_BLOCKING_TRANSMISSION))
+		flags |= CIP_NONBLOCKING;
+	else
+		flags |= CIP_BLOCKING;
+
+	// OXFW 970/971 has no function to generate playback timing according to the sequence
+	// of value in syt field, thus the packet should include NO_INFO value in the field.
+	// However, some models just ignore data blocks in packet with NO_INFO for audio data
+	// processing.
+	if (!(oxfw->quirks & SND_OXFW_QUIRK_IGNORE_NO_INFO_PACKET))
+		flags |= CIP_UNAWARE_SYT;
 
 	if (stream == &oxfw->tx_stream) {
 		conn = &oxfw->out_conn;
 		c_dir = CMP_OUTPUT;
 		s_dir = AMDTP_IN_STREAM;
+
+		if (oxfw->quirks & SND_OXFW_QUIRK_JUMBO_PAYLOAD)
+			flags |= CIP_JUMBO_PAYLOAD;
+		if (oxfw->quirks & SND_OXFW_QUIRK_WRONG_DBS)
+			flags |= CIP_WRONG_DBS;
 	} else {
 		conn = &oxfw->in_conn;
 		c_dir = CMP_INPUT;
@@ -169,22 +187,10 @@ static int init_stream(struct snd_oxfw *oxfw, struct amdtp_stream *stream)
 	if (err < 0)
 		return err;
 
-	err = amdtp_am824_init(stream, oxfw->unit, s_dir, CIP_NONBLOCKING);
+	err = amdtp_am824_init(stream, oxfw->unit, s_dir, flags);
 	if (err < 0) {
 		cmp_connection_destroy(conn);
 		return err;
-	}
-
-	/*
-	 * OXFW starts to transmit packets with non-zero dbc.
-	 * OXFW postpone transferring packets till handling any asynchronous
-	 * packets. As a result, next isochronous packet includes more data
-	 * blocks than IEC 61883-6 defines.
-	 */
-	if (stream == &oxfw->tx_stream) {
-		oxfw->tx_stream.flags |= CIP_JUMBO_PAYLOAD;
-		if (oxfw->wrong_dbs)
-			oxfw->tx_stream.flags |= CIP_WRONG_DBS;
 	}
 
 	return 0;
@@ -244,7 +250,9 @@ static int keep_resources(struct snd_oxfw *oxfw, struct amdtp_stream *stream)
 
 int snd_oxfw_stream_reserve_duplex(struct snd_oxfw *oxfw,
 				   struct amdtp_stream *stream,
-				   unsigned int rate, unsigned int pcm_channels)
+				   unsigned int rate, unsigned int pcm_channels,
+				   unsigned int frames_per_period,
+				   unsigned int frames_per_buffer)
 {
 	struct snd_oxfw_stream_formation formation;
 	enum avc_general_plug_dir dir;
@@ -305,6 +313,15 @@ int snd_oxfw_stream_reserve_duplex(struct snd_oxfw *oxfw,
 				return err;
 			}
 		}
+
+		err = amdtp_domain_set_events_per_period(&oxfw->domain,
+					frames_per_period, frames_per_buffer);
+		if (err < 0) {
+			cmp_connection_release(&oxfw->in_conn);
+			if (oxfw->has_output)
+				cmp_connection_release(&oxfw->out_conn);
+			return err;
+		}
 	}
 
 	return 0;
@@ -327,6 +344,9 @@ int snd_oxfw_stream_start_duplex(struct snd_oxfw *oxfw)
 	}
 
 	if (!amdtp_stream_running(&oxfw->rx_stream)) {
+		unsigned int tx_init_skip_cycles = 0;
+		bool replay_seq = false;
+
 		err = start_stream(oxfw, &oxfw->rx_stream);
 		if (err < 0) {
 			dev_err(&oxfw->unit->device,
@@ -342,25 +362,31 @@ int snd_oxfw_stream_start_duplex(struct snd_oxfw *oxfw)
 					"fail to prepare tx stream: %d\n", err);
 				goto error;
 			}
+
+			if (oxfw->quirks & SND_OXFW_QUIRK_JUMBO_PAYLOAD) {
+				// Just after changing sampling transfer frequency, many cycles are
+				// skipped for packet transmission.
+				tx_init_skip_cycles = 400;
+			} else if (oxfw->quirks & SND_OXFW_QUIRK_VOLUNTARY_RECOVERY) {
+				// It takes a bit time for target device to adjust event frequency
+				// according to nominal event frequency in isochronous packets from
+				// ALSA oxfw driver.
+				tx_init_skip_cycles = 4000;
+			} else {
+				replay_seq = true;
+			}
 		}
 
-		err = amdtp_domain_start(&oxfw->domain);
+		// NOTE: The device ignores presentation time expressed by the value of syt field
+		// of CIP header in received packets. The sequence of the number of data blocks per
+		// packet is important for media clock recovery.
+		err = amdtp_domain_start(&oxfw->domain, tx_init_skip_cycles, replay_seq, false);
 		if (err < 0)
 			goto error;
 
-		// Wait first packet.
-		if (!amdtp_stream_wait_callback(&oxfw->rx_stream,
-						CALLBACK_TIMEOUT)) {
+		if (!amdtp_domain_wait_ready(&oxfw->domain, READY_TIMEOUT_MS)) {
 			err = -ETIMEDOUT;
 			goto error;
-		}
-
-		if (oxfw->has_output) {
-			if (!amdtp_stream_wait_callback(&oxfw->tx_stream,
-							CALLBACK_TIMEOUT)) {
-				err = -ETIMEDOUT;
-				goto error;
-			}
 		}
 	}
 
@@ -502,7 +528,7 @@ int snd_oxfw_stream_parse_format(u8 *format,
 	 *  Level 1:	AM824 Compound  (0x40)
 	 */
 	if ((format[0] != 0x90) || (format[1] != 0x40))
-		return -ENOSYS;
+		return -ENXIO;
 
 	/* check the sampling rate */
 	for (i = 0; i < ARRAY_SIZE(avc_stream_rate_table); i++) {
@@ -510,7 +536,7 @@ int snd_oxfw_stream_parse_format(u8 *format,
 			break;
 	}
 	if (i == ARRAY_SIZE(avc_stream_rate_table))
-		return -ENOSYS;
+		return -ENXIO;
 
 	formation->rate = oxfw_rate_table[i];
 
@@ -554,13 +580,13 @@ int snd_oxfw_stream_parse_format(u8 *format,
 		/* Don't care */
 		case 0xff:
 		default:
-			return -ENOSYS;	/* not supported */
+			return -ENXIO;	/* not supported */
 		}
 	}
 
 	if (formation->pcm  > AM824_MAX_CHANNELS_FOR_PCM ||
 	    formation->midi > AM824_MAX_CHANNELS_FOR_MIDI)
-		return -ENOSYS;
+		return -ENXIO;
 
 	return 0;
 }
@@ -645,7 +671,7 @@ static int fill_stream_formats(struct snd_oxfw *oxfw,
 	/* get first entry */
 	len = AVC_GENERIC_FRAME_MAXIMUM_BYTES;
 	err = avc_stream_get_format_list(oxfw->unit, dir, 0, buf, &len, 0);
-	if (err == -ENOSYS) {
+	if (err == -ENXIO) {
 		/* LIST subfunction is not implemented */
 		len = AVC_GENERIC_FRAME_MAXIMUM_BYTES;
 		err = assume_stream_formats(oxfw, dir, pid, buf, &len,
@@ -717,49 +743,63 @@ int snd_oxfw_stream_discover(struct snd_oxfw *oxfw)
 			err);
 		goto end;
 	} else if ((plugs[0] == 0) && (plugs[1] == 0)) {
-		err = -ENOSYS;
+		err = -ENXIO;
 		goto end;
 	}
 
 	/* use oPCR[0] if exists */
 	if (plugs[1] > 0) {
 		err = fill_stream_formats(oxfw, AVC_GENERAL_PLUG_DIR_OUT, 0);
-		if (err < 0)
-			goto end;
+		if (err < 0) {
+			if (err != -ENXIO)
+				return err;
 
-		for (i = 0; i < SND_OXFW_STREAM_FORMAT_ENTRIES; i++) {
-			format = oxfw->tx_stream_formats[i];
-			if (format == NULL)
-				continue;
-			err = snd_oxfw_stream_parse_format(format, &formation);
-			if (err < 0)
-				continue;
+			// The oPCR is not available for isoc communication.
+			err = 0;
+		} else {
+			for (i = 0; i < SND_OXFW_STREAM_FORMAT_ENTRIES; i++) {
+				format = oxfw->tx_stream_formats[i];
+				if (format == NULL)
+					continue;
+				err = snd_oxfw_stream_parse_format(format,
+								   &formation);
+				if (err < 0)
+					continue;
 
-			/* Add one MIDI port. */
-			if (formation.midi > 0)
-				oxfw->midi_input_ports = 1;
+				/* Add one MIDI port. */
+				if (formation.midi > 0)
+					oxfw->midi_input_ports = 1;
+			}
+
+			oxfw->has_output = true;
 		}
-
-		oxfw->has_output = true;
 	}
 
 	/* use iPCR[0] if exists */
 	if (plugs[0] > 0) {
 		err = fill_stream_formats(oxfw, AVC_GENERAL_PLUG_DIR_IN, 0);
-		if (err < 0)
-			goto end;
+		if (err < 0) {
+			if (err != -ENXIO)
+				return err;
 
-		for (i = 0; i < SND_OXFW_STREAM_FORMAT_ENTRIES; i++) {
-			format = oxfw->rx_stream_formats[i];
-			if (format == NULL)
-				continue;
-			err = snd_oxfw_stream_parse_format(format, &formation);
-			if (err < 0)
-				continue;
+			// The iPCR is not available for isoc communication.
+			err = 0;
+		} else {
+			for (i = 0; i < SND_OXFW_STREAM_FORMAT_ENTRIES; i++) {
+				format = oxfw->rx_stream_formats[i];
+				if (format == NULL)
+					continue;
+				err = snd_oxfw_stream_parse_format(format,
+								   &formation);
+				if (err < 0)
+					continue;
 
-			/* Add one MIDI port. */
-			if (formation.midi > 0)
-				oxfw->midi_output_ports = 1;
+				/* Add one MIDI port. */
+				if (formation.midi > 0)
+					oxfw->midi_output_ports = 1;
+			}
+
+			oxfw->has_input = true;
 		}
 	}
 end:

@@ -158,7 +158,8 @@ release_io_hfcpci(struct hfc_pci *hc)
 	/* disable memory mapped ports + busmaster */
 	pci_write_config_word(hc->pdev, PCI_COMMAND, 0);
 	del_timer(&hc->hw.timer);
-	pci_free_consistent(hc->pdev, 0x8000, hc->hw.fifos, hc->hw.dmahandle);
+	dma_free_coherent(&hc->pdev->dev, 0x8000, hc->hw.fifos,
+			  hc->hw.dmahandle);
 	iounmap(hc->hw.pci_io);
 }
 
@@ -566,8 +567,7 @@ hfcpci_empty_fifo_trans(struct bchannel *bch, struct bzfifo *rxbz,
 	}
 	maxlen = bchannel_get_rxbuf(bch, fcnt_rx);
 	if (maxlen < 0) {
-		pr_warning("B%d: No bufferspace for %d bytes\n",
-			   bch->nr, fcnt_rx);
+		pr_warn("B%d: No bufferspace for %d bytes\n", bch->nr, fcnt_rx);
 	} else {
 		ptr = skb_put(bch->rx_skb, fcnt_rx);
 		if (le16_to_cpu(*z2r) + fcnt_rx <= B_FIFO_SIZE + B_SUB_VAL)
@@ -1280,7 +1280,7 @@ mode_hfcpci(struct bchannel *bch, int bc, int protocol)
 	case (-1): /* used for init */
 		bch->state = -1;
 		bch->nr = bc;
-		/* fall through */
+		fallthrough;
 	case (ISDN_P_NONE):
 		if (bch->state == ISDN_P_NONE)
 			return 0;
@@ -1994,24 +1994,25 @@ setup_hw(struct hfc_pci *hc)
 	pci_set_master(hc->pdev);
 	if (!hc->irq) {
 		printk(KERN_WARNING "HFC-PCI: No IRQ for PCI card found\n");
-		return 1;
+		return -EINVAL;
 	}
 	hc->hw.pci_io =
 		(char __iomem *)(unsigned long)hc->pdev->resource[1].start;
 
 	if (!hc->hw.pci_io) {
 		printk(KERN_WARNING "HFC-PCI: No IO-Mem for PCI card found\n");
-		return 1;
+		return -ENOMEM;
 	}
 	/* Allocate memory for FIFOS */
 	/* the memory needs to be on a 32k boundary within the first 4G */
-	pci_set_dma_mask(hc->pdev, 0xFFFF8000);
-	buffer = pci_alloc_consistent(hc->pdev, 0x8000, &hc->hw.dmahandle);
+	dma_set_mask(&hc->pdev->dev, 0xFFFF8000);
+	buffer = dma_alloc_coherent(&hc->pdev->dev, 0x8000, &hc->hw.dmahandle,
+				    GFP_KERNEL);
 	/* We silently assume the address is okay if nonzero */
 	if (!buffer) {
 		printk(KERN_WARNING
 		       "HFC-PCI: Error allocating memory for FIFO!\n");
-		return 1;
+		return -ENOMEM;
 	}
 	hc->hw.fifos = buffer;
 	pci_write_config_dword(hc->pdev, 0x80, hc->hw.dmahandle);
@@ -2019,9 +2020,9 @@ setup_hw(struct hfc_pci *hc)
 	if (unlikely(!hc->hw.pci_io)) {
 		printk(KERN_WARNING
 		       "HFC-PCI: Error in ioremap for PCI!\n");
-		pci_free_consistent(hc->pdev, 0x8000, hc->hw.fifos,
-				    hc->hw.dmahandle);
-		return 1;
+		dma_free_coherent(&hc->pdev->dev, 0x8000, hc->hw.fifos,
+				  hc->hw.dmahandle);
+		return -ENOMEM;
 	}
 
 	printk(KERN_INFO
@@ -2341,7 +2342,7 @@ static void __exit
 HFC_cleanup(void)
 {
 	if (timer_pending(&hfc_tl))
-		del_timer(&hfc_tl);
+		del_timer_sync(&hfc_tl);
 
 	pci_unregister_driver(&hfc_driver);
 }

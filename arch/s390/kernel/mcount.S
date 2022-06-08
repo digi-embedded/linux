@@ -33,19 +33,14 @@ ENDPROC(ftrace_stub)
 #define TRACED_FUNC_FRAME_SIZE	STACK_FRAME_OVERHEAD
 #endif
 
-ENTRY(_mcount)
-	BR_EX	%r14
-ENDPROC(_mcount)
-EXPORT_SYMBOL(_mcount)
-
 ENTRY(ftrace_caller)
 	.globl	ftrace_regs_caller
 	.set	ftrace_regs_caller,ftrace_caller
 	stg	%r14,(__SF_GPRS+8*8)(%r15)	# save traced function caller
+	lghi	%r14,0				# save condition code
+	ipm	%r14				# don't put any instructions
+	sllg	%r14,%r14,16			# clobbering CC before this point
 	lgr	%r1,%r15
-#if !(defined(CC_USING_HOTPATCH) || defined(CC_USING_NOP_MCOUNT))
-	aghi	%r0,MCOUNT_RETURN_FIXUP
-#endif
 	# allocate stack frame for ftrace_caller to contain traced function
 	aghi	%r15,-TRACED_FUNC_FRAME_SIZE
 	stg	%r1,__SF_BACKCHAIN(%r15)
@@ -54,6 +49,9 @@ ENTRY(ftrace_caller)
 	# allocate pt_regs and stack frame for ftrace_trace_function
 	aghi	%r15,-STACK_FRAME_SIZE
 	stg	%r1,(STACK_PTREGS_GPRS+15*8)(%r15)
+	stg	%r14,(STACK_PTREGS_PSW)(%r15)
+	lg	%r14,(__SF_GPRS+8*8)(%r1)	# restore original return address
+	stosm	(STACK_PTREGS_PSW)(%r15),0
 	aghi	%r1,-TRACED_FUNC_FRAME_SIZE
 	stg	%r1,__SF_BACKCHAIN(%r15)
 	stg	%r0,(STACK_PTREGS_PSW+8)(%r15)
@@ -61,13 +59,13 @@ ENTRY(ftrace_caller)
 #ifdef CONFIG_HAVE_MARCH_Z196_FEATURES
 	aghik	%r2,%r0,-MCOUNT_INSN_SIZE
 	lgrl	%r4,function_trace_op
-	lgrl	%r1,ftrace_trace_function
+	lgrl	%r1,ftrace_func
 #else
 	lgr	%r2,%r0
 	aghi	%r2,-MCOUNT_INSN_SIZE
 	larl	%r4,function_trace_op
 	lg	%r4,0(%r4)
-	larl	%r1,ftrace_trace_function
+	larl	%r1,ftrace_func
 	lg	%r1,0(%r1)
 #endif
 	lgr	%r3,%r14

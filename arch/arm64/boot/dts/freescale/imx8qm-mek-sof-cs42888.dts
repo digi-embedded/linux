@@ -4,6 +4,19 @@
 #include "imx8qm-mek-rpmsg.dts"
 
 / {
+	reserved-memory {
+		/delete-node/ dsp_reserved;
+		/delete-node/ dsp_reserved_heap;
+		/delete-node/ dsp_vdev0vring0;
+		/delete-node/ dsp_vdev0vring1;
+		/delete-node/ dsp_vdev0buffer;
+
+		dsp_reserved: dsp@92400000 {
+			reg = <0 0x92400000 0 0x2000000>;
+			no-map;
+		};
+	};
+
 	sound-cs42888 {
 		status = "disabled";
 	};
@@ -30,8 +43,7 @@
 			"AIN1L", "Line In Jack",
 			"AIN1R", "Line In Jack",
 			"AIN2L", "Line In Jack",
-			"AIN2R", "Line In Jack",
-			"Playback",  "ESAI0.OUT";
+			"AIN2R", "Line In Jack";
 		status = "okay";
 		simple-audio-card,dai-link {
 			format = "i2s";
@@ -47,7 +59,8 @@
 
 &edma0 {
 	compatible = "fsl,imx8qm-edma";
-	reg = <0x59280000 0x10000>, /* spdif0 rx */
+	reg = <0x591f0000 0x10000>,
+		<0x59280000 0x10000>, /* spdif0 rx */
 		<0x59290000 0x10000>, /* spdif0 tx */
 		<0x592c0000 0x10000>, /* sai0 rx */
 		<0x592d0000 0x10000>, /* sai0 tx */
@@ -89,25 +102,14 @@
 &dsp {
 	compatible = "fsl,imx8qm-dsp";
 	#sound-dai-cells = <1>;
+
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_esai0>;
 
-	power-domains = <&pd IMX_SC_R_ESAI_0>,
-			<&pd IMX_SC_R_DMA_2_CH6>,
-			<&pd IMX_SC_R_DMA_2_CH7>,
-			<&pd IMX_SC_R_AUDIO_CLK_0>,
-			<&pd IMX_SC_R_AUDIO_CLK_1>,
-			<&pd IMX_SC_R_AUDIO_PLL_0>,
-			<&pd IMX_SC_R_AUDIO_PLL_1>,
-			<&pd IMX_SC_R_MU_13A>,
-			<&pd IMX_SC_R_MU_13B>,
-			<&pd IMX_SC_R_DSP>,
-			<&pd IMX_SC_R_DSP_RAM>,
-			<&pd IMX_SC_R_IRQSTR_DSP>;
-
-	clocks = <&esai0_lpcg 1>, <&esai0_lpcg 0>,  <&esai0_lpcg 1>,
-		<&clk_dummy>;
-	clock-names = "esai0_core", "esai0_extal", "esai0_fsys", "esai0_spba";
+	clocks = <&clk_dummy>, <&clk_dummy>, <&clk_dummy>,
+		<&esai0_lpcg 1>, <&esai0_lpcg 0>,  <&esai0_lpcg 1>, <&clk_dummy>;
+	clock-names = "ipg", "ocram", "core",
+		"esai0_core", "esai0_extal", "esai0_fsys", "esai0_spba";
 	assigned-clocks = <&acm IMX_ADMA_ACM_ESAI0_MCLK_SEL>,
 		<&clk IMX_SC_R_AUDIO_PLL_0 IMX_SC_PM_CLK_PLL>,
 		<&clk IMX_SC_R_AUDIO_PLL_0 IMX_SC_PM_CLK_MISC0>,
@@ -116,13 +118,29 @@
 	assigned-clock-parents = <&aud_pll_div0_lpcg 0>;
 	assigned-clock-rates = <0>, <786432000>, <49152000>, <12288000>, <49152000>;
 
+	power-domains = <&pd IMX_SC_R_MU_13A>,
+		<&pd IMX_SC_R_MU_13B>,
+		<&pd IMX_SC_R_DSP>,
+		<&pd IMX_SC_R_DSP_RAM>,
+		<&pd IMX_SC_R_IRQSTR_DSP>,
+		<&pd IMX_SC_R_DMA_2_CH6>,
+		<&pd IMX_SC_R_DMA_2_CH7>,
+		<&pd IMX_SC_R_AUDIO_CLK_0>,
+		<&pd IMX_SC_R_AUDIO_CLK_1>,
+		<&pd IMX_SC_R_AUDIO_PLL_0>,
+		<&pd IMX_SC_R_AUDIO_PLL_1>;
+
 	mbox-names = "txdb0", "txdb1", "rxdb0", "rxdb1";
 	mboxes = <&lsio_mu13 2 0>,
 		<&lsio_mu13 2 1>,
 		<&lsio_mu13 3 0>,
 		<&lsio_mu13 3 1>;
-	tplg-name = "sof-imx8qxp-cs42888.tplg";
+	memory-region = <&dsp_reserved>;
+	/delete-property/ firmware-name;
+
+	tplg-name = "sof-imx8-cs42888.tplg";
 	machine-drv-name = "asoc-simple-card";
+
 	status = "okay";
 };
 

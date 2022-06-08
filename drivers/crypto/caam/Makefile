@@ -15,7 +15,6 @@ obj-$(CONFIG_CRYPTO_DEV_FSL_CAAM_CRYPTO_API_DESC) += caamalg_desc.o
 obj-$(CONFIG_CRYPTO_DEV_FSL_CAAM_AHASH_API_DESC) += caamhash_desc.o
 obj-$(CONFIG_CRYPTO_DEV_FSL_CAAM_KEYBLOB_API_DESC) += caamkeyblob_desc.o
 obj-$(CONFIG_CRYPTO_DEV_FSL_CAAM_JR_UIO) += fsl_jr_uio.o
-obj-$(CONFIG_CRYPTO_DEV_FSL_CAAM_KEYBLOB) += caam_keyblob.o
 
 caam-y := ctrl.o
 caam_jr-y := jr.o key_gen.o
@@ -35,7 +34,10 @@ ifneq ($(CONFIG_CRYPTO_DEV_FSL_CAAM_CRYPTO_API_QI),)
 	ccflags-y += -DCONFIG_CAAM_QI
 endif
 
+caam-$(CONFIG_DEBUG_FS) += debugfs.o
+
 obj-$(CONFIG_CRYPTO_DEV_FSL_DPAA2_CAAM) += dpaa2_caam.o
+obj-$(CONFIG_CRYPTO_DEV_FSL_CAAM_KEYBLOB) += caam_keyblob.o
 
 dpaa2_caam-y    := caamalg_qi2.o dpseci.o
 dpaa2_caam-$(CONFIG_DEBUG_FS) += dpseci-debugfs.o

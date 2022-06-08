@@ -11,79 +11,73 @@
 		#size-cells = <2>;
 		ranges;
 
-		m_core_reserved: m_core@0x80000000 {
-			no-map;
-			reg = <0 0x80000000 0 0x1000000>;
+		/* global autoconfigured region for contiguous allocations */
+		linux,cma {
+			compatible = "shared-dma-pool";
+			reusable;
+			size = <0 0x14000000>;
+			alloc-ranges = <0 0x40000000 0 0x40000000>;
+			linux,cma-default;
 		};
 
-		vdev0vring0: vdev0vring0@b8000000 {
-			compatible = "shared-dma-pool";
-			reg = <0 0xb8000000 0 0x8000>;
+		m_core_reserved: m_core@0x77000000 {
 			no-map;
+			reg = <0 0x77000000 0 0x1000000>;
 		};
 
-		vdev0vring1: vdev0vring1@b8008000 {
-			compatible = "shared-dma-pool";
-			reg = <0 0xb8008000 0 0x8000>;
-			no-map;
-		};
-		vdevbuffer: vdevbuffer@b8400000 {
-			compatible = "shared-dma-pool";
-			reg = <0 0xb8400000 0 0x100000>;
-			no-map;
-		};
-
-		/*
-		 * The following three is just a workaround
-		 * to avoid Linux use the memory.
-		 * This board only has 1GB memory, the 0xb8000000
-		 * exceeds the DRAM, and round back to 0x78000000,
-		 * since we not modify Mcore image, so we need to avoid
-		 * Linux touch 0x78000000 and mark Mcore ddr demo broken.
-		 */
-		vdev0vring0@78000000 {
+		vdev0vring0: vdev0vring0@78000000 {
 			reg = <0 0x78000000 0 0x8000>;
 			no-map;
 		};
 
-		vdev0vring1@78008000 {
+		vdev0vring1: vdev0vring1@78008000 {
 			reg = <0 0x78008000 0 0x8000>;
 			no-map;
 		};
 
-		rsc-table {
+		rsc_table: rsc_table@0x780ff000 {
 			reg = <0 0x780ff000 0 0x1000>;
 			no-map;
 		};
 
-		vdevbuffer@78400000 {
+		vdevbuffer: vdevbuffer@78400000 {
+			compatible = "shared-dma-pool";
 			reg = <0 0x78400000 0 0x100000>;
 			no-map;
 		};
+	};
+
+	bt_sco_codec: bt_sco_codec {
+		status = "disabled";
+	};
+
+	sound-bt-sco {
+		status = "disabled";
 	};
 
 	sound-wm8524 {
 		status = "disabled";
 	};
 
-	wm8524: wm8524{
+	wm8524: audio-codec {
 		status = "disabled";
 	};
 
-	rpmsg_i2s: rpmsg-i2s {
-		compatible = "fsl,imx8mn-rpmsg-i2s";
-		/* the audio device index in m4 domain */
-		fsl,audioindex = <0> ;
-		fsl,dma-buffer-size = <0x6000000>;
-		fsl,enable-lpa;
-		status = "okay";
-	};
-
-	sound-rpmsg {
-		compatible = "fsl,imx-audio-rpmsg";
+	rpmsg_audio: rpmsg_audio {
+		compatible = "fsl,imx8mn-rpmsg-audio";
 		model = "wm8524-audio";
-		cpu-dai = <&rpmsg_i2s>;
-		rpmsg-out;
+		fsl,enable-lpa;
+		fsl,rpmsg-out;
+		assigned-clocks = <&clk IMX8MN_CLK_SAI3>;
+		assigned-clock-parents = <&clk IMX8MN_AUDIO_PLL1_OUT>;
+		assigned-clock-rates = <24576000>;
+		clocks = <&clk IMX8MN_CLK_SAI3_IPG>,
+			 <&clk IMX8MN_CLK_SAI3_ROOT>,
+			 <&clk IMX8MN_CLK_SDMA3_ROOT>,
+			 <&clk IMX8MN_AUDIO_PLL1_OUT>,
+			 <&clk IMX8MN_AUDIO_PLL2_OUT>;
+		clock-names = "ipg", "mclk", "dma", "pll8k", "pll11k";
+		status = "okay";
 	};
 
 	imx8mn-cm7 {
@@ -93,7 +87,7 @@
 		mboxes = <&mu 0 1
 			  &mu 1 1
 			  &mu 3 1>;
-		memory-region = <&vdev0vring0>, <&vdev0vring1>, <&vdevbuffer>;
+		memory-region = <&vdev0vring0>, <&vdev0vring1>, <&vdevbuffer>, <&rsc_table>;
 		status = "okay";
 	};
 };
@@ -125,14 +119,7 @@
 	status = "disabled";
 };
 
-&rpmsg{
-	/*
-	 * 64K for one rpmsg instance:
-	 * --0xb8000000~0xb800ffff: pingpong
-	 */
-	vdev-nums = <1>;
-	reg = <0x0 0xb8000000 0x0 0x10000>;
-	memory-region = <&vdevbuffer>;
+&sai2 {
 	status = "disabled";
 };
 
@@ -141,10 +128,6 @@
 };
 
 &uart4 {
-	status = "disabled";
-};
-
-&sdma1{
 	status = "disabled";
 };
 

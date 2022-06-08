@@ -95,7 +95,7 @@ static int asiliantfb_set_par(struct fb_info *info);
 static int asiliantfb_setcolreg(u_int regno, u_int red, u_int green, u_int blue,
 				u_int transp, struct fb_info *info);
 
-static struct fb_ops asiliantfb_ops = {
+static const struct fb_ops asiliantfb_ops = {
 	.owner		= THIS_MODULE,
 	.fb_check_var	= asiliantfb_check_var,
 	.fb_set_par	= asiliantfb_set_par,
@@ -226,6 +226,9 @@ static int asiliantfb_check_var(struct fb_var_screeninfo *var,
 			     struct fb_info *p)
 {
 	unsigned long Ftarget, ratio, remainder;
+
+	if (!var->pixclock)
+		return -EINVAL;
 
 	ratio = 1000000 / var->pixclock;
 	remainder = 1000000 % var->pixclock;

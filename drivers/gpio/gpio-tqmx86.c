@@ -101,7 +101,10 @@ static int tqmx86_gpio_direction_output(struct gpio_chip *chip,
 static int tqmx86_gpio_get_direction(struct gpio_chip *chip,
 				     unsigned int offset)
 {
-	return !!(TQMX86_DIR_INPUT_MASK & BIT(offset));
+	if (TQMX86_DIR_INPUT_MASK & BIT(offset))
+		return GPIO_LINE_DIRECTION_IN;
+
+	return GPIO_LINE_DIRECTION_OUT;
 }
 
 static void tqmx86_gpio_irq_mask(struct irq_data *data)
@@ -180,7 +183,7 @@ static void tqmx86_gpio_irq_handler(struct irq_desc *desc)
 	struct tqmx86_gpio_data *gpio = gpiochip_get_data(chip);
 	struct irq_chip *irq_chip = irq_desc_get_chip(desc);
 	unsigned long irq_bits;
-	int i = 0, child_irq;
+	int i = 0;
 	u8 irq_status;
 
 	chained_irq_enter(irq_chip, desc);
@@ -189,11 +192,9 @@ static void tqmx86_gpio_irq_handler(struct irq_desc *desc)
 	tqmx86_gpio_write(gpio, irq_status, TQMX86_GPIIS);
 
 	irq_bits = irq_status;
-	for_each_set_bit(i, &irq_bits, TQMX86_NGPI) {
-		child_irq = irq_find_mapping(gpio->chip.irq.domain,
-					     i + TQMX86_NGPO);
-		generic_handle_irq(child_irq);
-	}
+	for_each_set_bit(i, &irq_bits, TQMX86_NGPI)
+		generic_handle_domain_irq(gpio->chip.irq.domain,
+					  i + TQMX86_NGPO);
 
 	chained_irq_exit(irq_chip, desc);
 }
@@ -235,8 +236,8 @@ static int tqmx86_gpio_probe(struct platform_device *pdev)
 	struct resource *res;
 	int ret, irq;
 
-	irq = platform_get_irq(pdev, 0);
-	if (irq < 0)
+	irq = platform_get_irq_optional(pdev, 0);
+	if (irq < 0 && irq != -ENXIO)
 		return irq;
 
 	res = platform_get_resource(pdev, IORESOURCE_IO, 0);
@@ -275,7 +276,7 @@ static int tqmx86_gpio_probe(struct platform_device *pdev)
 
 	pm_runtime_enable(&pdev->dev);
 
-	if (irq) {
+	if (irq > 0) {
 		struct irq_chip *irq_chip = &gpio->irq_chip;
 		u8 irq_status;
 

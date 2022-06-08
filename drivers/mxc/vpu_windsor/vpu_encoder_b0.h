@@ -196,6 +196,7 @@ struct queue_data {
 	unsigned int width;
 	unsigned int height;
 	unsigned int sizeimage[VB2_MAX_PLANES];
+	unsigned int stride[VB2_MAX_PLANES];
 	struct v4l2_rect rect;
 	int buf_type; // v4l2_buf_type
 	bool vb2_q_inited;
@@ -264,6 +265,7 @@ struct vpu_attr {
 	u32 h264_vui_sar_idc;
 	u32 h264_vui_sar_width;
 	u32 h264_vui_sar_height;
+	u32 sc_enable;
 
 	unsigned long ts_start[2];
 	unsigned long msg_count;

@@ -36,6 +36,10 @@
 	compatible = "fsl,imx6ull-ocotp", "syscon";
 };
 
+&gpc {
+	fsl,mf-mix-wakeup-irq = <0xfc00000 0x7d00 0x0 0x1400640>;
+};
+
 &pxp {
 	compatible = "fsl,imx6ull-pxp-dma", "fsl,imx7d-pxp-dma";
 	interrupts = <GIC_SPI 8 IRQ_TYPE_LEVEL_HIGH>,
@@ -81,7 +85,7 @@
 			fsl,max_ddr_freq = <400000000>;
 		};
 
-		aips3: aips-bus@2200000 {
+		aips3: bus@2200000 {
 			compatible = "fsl,aips-bus", "simple-bus";
 			#address-cells = <1>;
 			#size-cells = <1>;
@@ -99,7 +103,7 @@
 			};
 
 			rngb: rng@2284000 {
-				compatible = "fsl,imx25-rngb";
+				compatible = "fsl,imx6ull-rngb", "fsl,imx25-rngb";
 				reg = <0x02284000 0x4000>;
 				interrupts = <GIC_SPI 6 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&clks IMX6UL_CLK_DUMMY>;
@@ -126,8 +130,9 @@
 				interrupts = <GIC_SPI 112 IRQ_TYPE_LEVEL_HIGH>;
 				reg = <0x228c000 0x4000>;
 				clocks = <&clks IMX6ULL_CLK_EPDC_ACLK>,
-					 <&clks IMX6ULL_CLK_EPDC_PIX>;
-				clock-names = "epdc_axi", "epdc_pix";
+					 <&clks IMX6ULL_CLK_EPDC_PIX>,
+					 <&clks IMX6UL_CLK_DUMMY>;
+				clock-names = "epdc_axi", "epdc_pix", "epdc_ahb";
 				/* Need to fix epdc-ram */
 				/* epdc-ram = <&gpr 0x4 30>; */
 				status = "disabled";

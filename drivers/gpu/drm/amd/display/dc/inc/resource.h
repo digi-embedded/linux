@@ -46,12 +46,10 @@ struct resource_caps {
 	int num_pll;
 	int num_dwb;
 	int num_ddc;
-#ifdef CONFIG_DRM_AMD_DC_DCN2_0
 	int num_vmid;
-#ifdef CONFIG_DRM_AMD_DC_DSC_SUPPORT
 	int num_dsc;
-#endif
-#endif
+	unsigned int num_dig_link_enc; // Total number of DIGs (digital encoders) in DIO (Display Input/Output).
+	int num_mpc_3dlut;
 };
 
 struct resource_straps {
@@ -118,6 +116,10 @@ bool resource_are_streams_timing_synchronizable(
 		struct dc_stream_state *stream1,
 		struct dc_stream_state *stream2);
 
+bool resource_are_vblanks_synchronizable(
+		struct dc_stream_state *stream1,
+		struct dc_stream_state *stream2);
+
 struct clock_source *resource_find_used_clk_src_for_sharing(
 		struct resource_context *res_ctx,
 		struct pipe_ctx *pipe_ctx);
@@ -141,9 +143,6 @@ struct pipe_ctx *find_idle_secondary_pipe(
 		struct resource_context *res_ctx,
 		const struct resource_pool *pool,
 		const struct pipe_ctx *primary_pipe);
-
-bool resource_is_stream_unchanged(
-	struct dc_state *old_context, struct dc_stream_state *stream);
 
 bool resource_validate_attach_surfaces(
 		const struct dc_validation_set set[],
@@ -180,5 +179,12 @@ void update_audio_usage(
 		bool acquired);
 
 unsigned int resource_pixel_format_to_bpp(enum surface_pixel_format format);
+
+void get_audio_check(struct audio_info *aud_modes,
+	struct audio_check *aud_chk);
+
+int get_num_mpc_splits(struct pipe_ctx *pipe);
+
+int get_num_odm_splits(struct pipe_ctx *pipe);
 
 #endif /* DRIVERS_GPU_DRM_AMD_DC_DEV_DC_INC_RESOURCE_H_ */

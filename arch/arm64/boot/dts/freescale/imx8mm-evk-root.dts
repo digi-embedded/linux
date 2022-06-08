@@ -17,8 +17,7 @@
 &clk {
 	init-on-array = <IMX8MM_CLK_USDHC3_ROOT
 			 IMX8MM_CLK_NAND_USDHC_BUS
-			 IMX8MM_CLK_UART4_ROOT
-			 IMX8MM_CLK_OCOTP_ROOT>;
+			 IMX8MM_CLK_UART4_ROOT>;
 };
 
 &iomuxc {
@@ -71,6 +70,10 @@
 		no-map;
 		reg = <0 0x93c00000 0x0 0x24000000>;
 	};
+};
+
+&{/reserved-memory/linux,cma} {
+	alloc-ranges = <0 0x40000000 0 0x60000000>;
 };
 
 &uart2 {

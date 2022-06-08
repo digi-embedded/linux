@@ -4,6 +4,7 @@
  */
 
 #include <linux/device.h>
+#include <linux/slab.h>
 
 #include "dcss-dev.h"
 
@@ -82,7 +83,7 @@ int dcss_ss_init(struct dcss_dev *dcss, unsigned long ss_base)
 {
 	struct dcss_ss *ss;
 
-	ss = devm_kzalloc(dcss->dev, sizeof(*ss), GFP_KERNEL);
+	ss = kzalloc(sizeof(*ss), GFP_KERNEL);
 	if (!ss)
 		return -ENOMEM;
 
@@ -90,10 +91,10 @@ int dcss_ss_init(struct dcss_dev *dcss, unsigned long ss_base)
 	ss->dev = dcss->dev;
 	ss->ctxld = dcss->ctxld;
 
-	ss->base_reg = devm_ioremap(dcss->dev, ss_base, SZ_4K);
+	ss->base_reg = ioremap(ss_base, SZ_4K);
 	if (!ss->base_reg) {
 		dev_err(dcss->dev, "ss: unable to remap ss base\n");
-		devm_kfree(ss->dev, ss);
+		kfree(ss);
 		return -ENOMEM;
 	}
 
@@ -109,17 +110,34 @@ void dcss_ss_exit(struct dcss_ss *ss)
 	dcss_writel(0, ss->base_reg + DCSS_SS_SYS_CTRL);
 
 	if (ss->base_reg)
-		devm_iounmap(ss->dev, ss->base_reg);
+		iounmap(ss->base_reg);
 
-	devm_kfree(ss->dev, ss);
+	kfree(ss);
 }
 
-void dcss_ss_subsam_set(struct dcss_ss *ss, bool out_is_yuv)
+void dcss_ss_subsam_set(struct dcss_ss *ss,
+			enum dcss_pixel_pipe_output output_encoding)
 {
-	dcss_ss_write(ss, out_is_yuv ? 0x21612161 : 0x41614161, DCSS_SS_COEFF);
-	dcss_ss_write(ss, out_is_yuv ? 2 : 0, DCSS_SS_MODE);
-	dcss_ss_write(ss, 0x03ff0000, DCSS_SS_CLIP_CB);
-	dcss_ss_write(ss, 0x03ff0000, DCSS_SS_CLIP_CR);
+	u32 ss_coeff = 0x41614161;
+	u32 ss_mode = 0;
+	u32 ss_clip = 0x03ff0000;
+
+	if (output_encoding == DCSS_PIPE_OUTPUT_YUV420) {
+		ss_coeff = 0x21612161;
+		ss_mode = 2;
+		ss_clip = 0x03c00040;
+	} else if (output_encoding == DCSS_PIPE_OUTPUT_YUV422) {
+		ss_coeff = 0x33a333a3;
+		ss_mode = 1;
+		ss_clip = 0x03c00040;
+	} else if (output_encoding == DCSS_PIPE_OUTPUT_YUV444) {
+		ss_clip = 0x03c00040;
+	}
+
+	dcss_ss_write(ss, ss_coeff, DCSS_SS_COEFF);
+	dcss_ss_write(ss, ss_mode, DCSS_SS_MODE);
+	dcss_ss_write(ss, ss_clip, DCSS_SS_CLIP_CB);
+	dcss_ss_write(ss, ss_clip, DCSS_SS_CLIP_CR);
 }
 
 void dcss_ss_sync_set(struct dcss_ss *ss, struct videomode *vm,
@@ -172,8 +190,8 @@ void dcss_ss_enable(struct dcss_ss *ss)
 	ss->in_use = true;
 }
 
-void dcss_ss_disable(struct dcss_ss *ss)
+void dcss_ss_shutoff(struct dcss_ss *ss)
 {
-	dcss_ss_write(ss, 0, DCSS_SS_SYS_CTRL);
+	dcss_writel(0, ss->base_reg + DCSS_SS_SYS_CTRL);
 	ss->in_use = false;
 }

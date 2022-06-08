@@ -183,7 +183,6 @@ bool blk_integrity_merge_rq(struct request_queue *q, struct request *req,
 
 	return true;
 }
-EXPORT_SYMBOL(blk_integrity_merge_rq);
 
 bool blk_integrity_merge_bio(struct request_queue *q, struct request *req,
 			     struct bio *bio)
@@ -212,7 +211,6 @@ bool blk_integrity_merge_bio(struct request_queue *q, struct request *req,
 
 	return true;
 }
-EXPORT_SYMBOL(blk_integrity_merge_bio);
 
 struct integrity_sysfs_entry {
 	struct attribute attr;
@@ -408,7 +406,14 @@ void blk_integrity_register(struct gendisk *disk, struct blk_integrity *template
 	bi->tuple_size = template->tuple_size;
 	bi->tag_size = template->tag_size;
 
-	disk->queue->backing_dev_info->capabilities |= BDI_CAP_STABLE_WRITES;
+	blk_queue_flag_set(QUEUE_FLAG_STABLE_WRITES, disk->queue);
+
+#ifdef CONFIG_BLK_INLINE_ENCRYPTION
+	if (disk->queue->ksm) {
+		pr_warn("blk-integrity: Integrity and hardware inline encryption are not supported together. Disabling hardware inline encryption.\n");
+		blk_ksm_unregister(disk->queue);
+	}
+#endif
 }
 EXPORT_SYMBOL(blk_integrity_register);
 
@@ -421,18 +426,27 @@ EXPORT_SYMBOL(blk_integrity_register);
  */
 void blk_integrity_unregister(struct gendisk *disk)
 {
-	disk->queue->backing_dev_info->capabilities &= ~BDI_CAP_STABLE_WRITES;
-	memset(&disk->queue->integrity, 0, sizeof(struct blk_integrity));
+	struct blk_integrity *bi = &disk->queue->integrity;
+
+	if (!bi->profile)
+		return;
+
+	/* ensure all bios are off the integrity workqueue */
+	blk_flush_integrity();
+	blk_queue_flag_clear(QUEUE_FLAG_STABLE_WRITES, disk->queue);
+	memset(bi, 0, sizeof(*bi));
 }
 EXPORT_SYMBOL(blk_integrity_unregister);
 
-void blk_integrity_add(struct gendisk *disk)
+int blk_integrity_add(struct gendisk *disk)
 {
-	if (kobject_init_and_add(&disk->integrity_kobj, &integrity_ktype,
-				 &disk_to_dev(disk)->kobj, "%s", "integrity"))
-		return;
+	int ret;
 
-	kobject_uevent(&disk->integrity_kobj, KOBJ_ADD);
+	ret = kobject_init_and_add(&disk->integrity_kobj, &integrity_ktype,
+				   &disk_to_dev(disk)->kobj, "%s", "integrity");
+	if (!ret)
+		kobject_uevent(&disk->integrity_kobj, KOBJ_ADD);
+	return ret;
 }
 
 void blk_integrity_del(struct gendisk *disk)

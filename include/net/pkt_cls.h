@@ -32,6 +32,12 @@ struct tcf_block_ext_info {
 	u32 block_index;
 };
 
+struct tcf_qevent {
+	struct tcf_block	*block;
+	struct tcf_block_ext_info info;
+	struct tcf_proto __rcu *filter_chain;
+};
+
 struct tcf_block_cb;
 bool tcf_queue_work(struct rcu_work *rwork, work_func_t func);
 
@@ -42,7 +48,7 @@ void tcf_chain_put_by_act(struct tcf_chain *chain);
 struct tcf_chain *tcf_get_next_chain(struct tcf_block *block,
 				     struct tcf_chain *chain);
 struct tcf_proto *tcf_get_next_proto(struct tcf_chain *chain,
-				     struct tcf_proto *tp, bool rtnl_held);
+				     struct tcf_proto *tp);
 void tcf_block_netif_keep_dst(struct tcf_block *block);
 int tcf_block_get(struct tcf_block **p_block,
 		  struct tcf_proto __rcu **p_filter_chain, struct Qdisc *q,
@@ -70,8 +76,10 @@ static inline struct Qdisc *tcf_block_q(struct tcf_block *block)
 	return block->q;
 }
 
-int tcf_classify(struct sk_buff *skb, const struct tcf_proto *tp,
-		 struct tcf_result *res, bool compat_mode);
+int tcf_classify(struct sk_buff *skb,
+		 const struct tcf_block *block,
+		 const struct tcf_proto *tp, struct tcf_result *res,
+		 bool compat_mode);
 
 #else
 static inline bool tcf_block_shared(struct tcf_block *block)
@@ -128,11 +136,14 @@ void tc_setup_cb_block_unregister(struct tcf_block *block, flow_setup_cb_t *cb,
 {
 }
 
-static inline int tcf_classify(struct sk_buff *skb, const struct tcf_proto *tp,
+static inline int tcf_classify(struct sk_buff *skb,
+			       const struct tcf_block *block,
+			       const struct tcf_proto *tp,
 			       struct tcf_result *res, bool compat_mode)
 {
 	return TC_ACT_UNSPEC;
 }
+
 #endif
 
 static inline unsigned long
@@ -249,7 +260,8 @@ static inline void tcf_exts_put_net(struct tcf_exts *exts)
 
 static inline void
 tcf_exts_stats_update(const struct tcf_exts *exts,
-		      u64 bytes, u64 packets, u64 lastuse)
+		      u64 bytes, u64 packets, u64 drops, u64 lastuse,
+		      u8 used_hw_stats, bool used_hw_stats_valid)
 {
 #ifdef CONFIG_NET_CLS_ACT
 	int i;
@@ -259,7 +271,10 @@ tcf_exts_stats_update(const struct tcf_exts *exts,
 	for (i = 0; i < exts->nr_actions; i++) {
 		struct tc_action *a = exts->actions[i];
 
-		tcf_action_stats_update(a, bytes, packets, lastuse, true);
+		tcf_action_stats_update(a, bytes, packets, drops,
+					lastuse, true);
+		a->used_hw_stats = used_hw_stats;
+		a->used_hw_stats_valid = used_hw_stats_valid;
 	}
 
 	preempt_enable();
@@ -304,15 +319,19 @@ tcf_exts_exec(struct sk_buff *skb, struct tcf_exts *exts,
 
 int tcf_exts_validate(struct net *net, struct tcf_proto *tp,
 		      struct nlattr **tb, struct nlattr *rate_tlv,
-		      struct tcf_exts *exts, bool ovr, bool rtnl_held,
+		      struct tcf_exts *exts, u32 flags,
 		      struct netlink_ext_ack *extack);
 void tcf_exts_destroy(struct tcf_exts *exts);
 void tcf_exts_change(struct tcf_exts *dst, struct tcf_exts *src);
 int tcf_exts_dump(struct sk_buff *skb, struct tcf_exts *exts);
+int tcf_exts_terse_dump(struct sk_buff *skb, struct tcf_exts *exts);
 int tcf_exts_dump_stats(struct sk_buff *skb, struct tcf_exts *exts);
 
 /**
  * struct tcf_pkt_info - packet information
+ *
+ * @ptr: start of the pkt data
+ * @nexthdr: offset of the next header
  */
 struct tcf_pkt_info {
 	unsigned char *		ptr;
@@ -331,6 +350,7 @@ struct tcf_ematch_ops;
  * @ops: the operations lookup table of the corresponding ematch module
  * @datalen: length of the ematch specific configuration data
  * @data: ematch specific data
+ * @net: the network namespace
  */
 struct tcf_ematch {
 	struct tcf_ematch_ops * ops;
@@ -488,13 +508,17 @@ tcf_change_indev(struct net *net, struct nlattr *indev_tlv,
 	char indev[IFNAMSIZ];
 	struct net_device *dev;
 
-	if (nla_strlcpy(indev, indev_tlv, IFNAMSIZ) >= IFNAMSIZ) {
-		NL_SET_ERR_MSG(extack, "Interface name too long");
+	if (nla_strscpy(indev, indev_tlv, IFNAMSIZ) < 0) {
+		NL_SET_ERR_MSG_ATTR(extack, indev_tlv,
+				    "Interface name too long");
 		return -EINVAL;
 	}
 	dev = __dev_get_by_name(net, indev);
-	if (!dev)
+	if (!dev) {
+		NL_SET_ERR_MSG_ATTR(extack, indev_tlv,
+				    "Network device not found");
 		return -ENODEV;
+	}
 	return dev->ifindex;
 }
 
@@ -509,7 +533,7 @@ tcf_match_indev(struct sk_buff *skb, int ifindex)
 }
 
 int tc_setup_flow_action(struct flow_action *flow_action,
-			 const struct tcf_exts *exts, bool rtnl_held);
+			 const struct tcf_exts *exts);
 void tc_cleanup_flow_action(struct flow_action *flow_action);
 
 int tc_setup_cb_call(struct tcf_block *block, enum tc_setup_type type,
@@ -530,6 +554,49 @@ int tc_setup_cb_reoffload(struct tcf_block *block, struct tcf_proto *tp,
 			  enum tc_setup_type type, void *type_data,
 			  void *cb_priv, u32 *flags, unsigned int *in_hw_count);
 unsigned int tcf_exts_num_actions(struct tcf_exts *exts);
+
+#ifdef CONFIG_NET_CLS_ACT
+int tcf_qevent_init(struct tcf_qevent *qe, struct Qdisc *sch,
+		    enum flow_block_binder_type binder_type,
+		    struct nlattr *block_index_attr,
+		    struct netlink_ext_ack *extack);
+void tcf_qevent_destroy(struct tcf_qevent *qe, struct Qdisc *sch);
+int tcf_qevent_validate_change(struct tcf_qevent *qe, struct nlattr *block_index_attr,
+			       struct netlink_ext_ack *extack);
+struct sk_buff *tcf_qevent_handle(struct tcf_qevent *qe, struct Qdisc *sch, struct sk_buff *skb,
+				  struct sk_buff **to_free, int *ret);
+int tcf_qevent_dump(struct sk_buff *skb, int attr_name, struct tcf_qevent *qe);
+#else
+static inline int tcf_qevent_init(struct tcf_qevent *qe, struct Qdisc *sch,
+				  enum flow_block_binder_type binder_type,
+				  struct nlattr *block_index_attr,
+				  struct netlink_ext_ack *extack)
+{
+	return 0;
+}
+
+static inline void tcf_qevent_destroy(struct tcf_qevent *qe, struct Qdisc *sch)
+{
+}
+
+static inline int tcf_qevent_validate_change(struct tcf_qevent *qe, struct nlattr *block_index_attr,
+					     struct netlink_ext_ack *extack)
+{
+	return 0;
+}
+
+static inline struct sk_buff *
+tcf_qevent_handle(struct tcf_qevent *qe, struct Qdisc *sch, struct sk_buff *skb,
+		  struct sk_buff **to_free, int *ret)
+{
+	return skb;
+}
+
+static inline int tcf_qevent_dump(struct sk_buff *skb, int attr_name, struct tcf_qevent *qe)
+{
+	return 0;
+}
+#endif
 
 struct tc_cls_u32_knode {
 	struct tcf_exts *exts;
@@ -638,6 +705,17 @@ tc_cls_common_offload_init(struct flow_cls_common_offload *cls_common,
 		cls_common->extack = extack;
 }
 
+#if IS_ENABLED(CONFIG_NET_TC_SKB_EXT)
+static inline struct tc_skb_ext *tc_skb_ext_alloc(struct sk_buff *skb)
+{
+	struct tc_skb_ext *tc_skb_ext = skb_ext_add(skb, TC_SKB_EXT);
+
+	if (tc_skb_ext)
+		memset(tc_skb_ext, 0, sizeof(*tc_skb_ext));
+	return tc_skb_ext;
+}
+#endif
+
 enum tc_matchall_command {
 	TC_CLSMATCHALL_REPLACE,
 	TC_CLSMATCHALL_DESTROY,
@@ -712,6 +790,41 @@ struct tc_mq_qopt_offload {
 	};
 };
 
+enum tc_htb_command {
+	/* Root */
+	TC_HTB_CREATE, /* Initialize HTB offload. */
+	TC_HTB_DESTROY, /* Destroy HTB offload. */
+
+	/* Classes */
+	/* Allocate qid and create leaf. */
+	TC_HTB_LEAF_ALLOC_QUEUE,
+	/* Convert leaf to inner, preserve and return qid, create new leaf. */
+	TC_HTB_LEAF_TO_INNER,
+	/* Delete leaf, while siblings remain. */
+	TC_HTB_LEAF_DEL,
+	/* Delete leaf, convert parent to leaf, preserving qid. */
+	TC_HTB_LEAF_DEL_LAST,
+	/* TC_HTB_LEAF_DEL_LAST, but delete driver data on hardware errors. */
+	TC_HTB_LEAF_DEL_LAST_FORCE,
+	/* Modify parameters of a node. */
+	TC_HTB_NODE_MODIFY,
+
+	/* Class qdisc */
+	TC_HTB_LEAF_QUERY_QUEUE, /* Query qid by classid. */
+};
+
+struct tc_htb_qopt_offload {
+	struct netlink_ext_ack *extack;
+	enum tc_htb_command command;
+	u32 parent_classid;
+	u16 classid;
+	u16 qid;
+	u64 rate;
+	u64 ceil;
+};
+
+#define TC_HTB_CLASSID_ROOT U32_MAX
+
 enum tc_red_command {
 	TC_RED_REPLACE,
 	TC_RED_DESTROY,
@@ -727,6 +840,7 @@ struct tc_red_qopt_offload_params {
 	u32 limit;
 	bool is_ecn;
 	bool is_harddrop;
+	bool is_nodrop;
 	struct gnet_stats_queue *qstats;
 };
 
@@ -796,9 +910,8 @@ enum tc_prio_command {
 struct tc_prio_qopt_offload_params {
 	int bands;
 	u8 priomap[TC_PRIO_MAX + 1];
-	/* In case that a prio qdisc is offloaded and now is changed to a
-	 * non-offloadedable config, it needs to update the backlog & qlen
-	 * values to negate the HW backlog & qlen values (and only them).
+	/* At the point of un-offloading the Qdisc, the reported backlog and
+	 * qlen need to be reduced by the portion that is in HW.
 	 */
 	struct gnet_stats_queue *qstats;
 };
@@ -827,6 +940,74 @@ struct tc_root_qopt_offload {
 	enum tc_root_command command;
 	u32 handle;
 	bool ingress;
+};
+
+enum tc_ets_command {
+	TC_ETS_REPLACE,
+	TC_ETS_DESTROY,
+	TC_ETS_STATS,
+	TC_ETS_GRAFT,
+};
+
+struct tc_ets_qopt_offload_replace_params {
+	unsigned int bands;
+	u8 priomap[TC_PRIO_MAX + 1];
+	unsigned int quanta[TCQ_ETS_MAX_BANDS];	/* 0 for strict bands. */
+	unsigned int weights[TCQ_ETS_MAX_BANDS];
+	struct gnet_stats_queue *qstats;
+};
+
+struct tc_ets_qopt_offload_graft_params {
+	u8 band;
+	u32 child_handle;
+};
+
+struct tc_ets_qopt_offload {
+	enum tc_ets_command command;
+	u32 handle;
+	u32 parent;
+	union {
+		struct tc_ets_qopt_offload_replace_params replace_params;
+		struct tc_qopt_offload_stats stats;
+		struct tc_ets_qopt_offload_graft_params graft_params;
+	};
+};
+
+enum tc_tbf_command {
+	TC_TBF_REPLACE,
+	TC_TBF_DESTROY,
+	TC_TBF_STATS,
+};
+
+struct tc_tbf_qopt_offload_replace_params {
+	struct psched_ratecfg rate;
+	u32 max_size;
+	struct gnet_stats_queue *qstats;
+};
+
+struct tc_tbf_qopt_offload {
+	enum tc_tbf_command command;
+	u32 handle;
+	u32 parent;
+	union {
+		struct tc_tbf_qopt_offload_replace_params replace_params;
+		struct tc_qopt_offload_stats stats;
+	};
+};
+
+enum tc_fifo_command {
+	TC_FIFO_REPLACE,
+	TC_FIFO_DESTROY,
+	TC_FIFO_STATS,
+};
+
+struct tc_fifo_qopt_offload {
+	enum tc_fifo_command command;
+	u32 handle;
+	u32 parent;
+	union {
+		struct tc_qopt_offload_stats stats;
+	};
 };
 
 #endif

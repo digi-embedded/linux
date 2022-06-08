@@ -423,7 +423,7 @@ static void flexrm_enqueue_desc(u32 nhpos, u32 nhcnt, u32 reqid,
 	 *
 	 * In general use, number of non-HEADER descriptors can easily go
 	 * beyond 31. To tackle this situation, we have packet (or request)
-	 * extenstion bits (STARTPKT and ENDPKT) in the HEADER descriptor.
+	 * extension bits (STARTPKT and ENDPKT) in the HEADER descriptor.
 	 *
 	 * To use packet extension, the first HEADER descriptor of request
 	 * (or packet) will have STARTPKT=1 and ENDPKT=0. The intermediate
@@ -1095,7 +1095,7 @@ static int flexrm_process_completions(struct flexrm_ring *ring)
 	/*
 	 * Get current completion read and write offset
 	 *
-	 * Note: We should read completion write pointer atleast once
+	 * Note: We should read completion write pointer at least once
 	 * after we get a MSI interrupt because HW maintains internal
 	 * MSI status which will allow next MSI interrupt only after
 	 * completion write pointer is read.
@@ -1523,7 +1523,6 @@ static int flexrm_mbox_probe(struct platform_device *pdev)
 	mbox->regs = devm_ioremap_resource(&pdev->dev, iomem);
 	if (IS_ERR(mbox->regs)) {
 		ret = PTR_ERR(mbox->regs);
-		dev_err(&pdev->dev, "Failed to remap mailbox regs: %d\n", ret);
 		goto fail;
 	}
 	regs_end = mbox->regs + resource_size(iomem);
@@ -1599,6 +1598,7 @@ static int flexrm_mbox_probe(struct platform_device *pdev)
 					  1 << RING_CMPL_ALIGN_ORDER, 0);
 	if (!mbox->cmpl_pool) {
 		ret = -ENOMEM;
+		goto fail_destroy_bd_pool;
 	}
 
 	/* Allocate platform MSIs for each ring */
@@ -1661,6 +1661,7 @@ fail_free_debugfs_root:
 	platform_msi_domain_free_irqs(dev);
 fail_destroy_cmpl_pool:
 	dma_pool_destroy(mbox->cmpl_pool);
+fail_destroy_bd_pool:
 	dma_pool_destroy(mbox->bd_pool);
 fail:
 	return ret;

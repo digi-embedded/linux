@@ -17,6 +17,7 @@
 #include <linux/interrupt.h>
 #include <linux/init.h>
 #include <linux/io.h>
+#include <linux/iopoll.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
 #include <linux/of_device.h>
@@ -33,7 +34,7 @@
  * Register definitions
  *
  * For register details see datasheet:
- * http://www.xilinx.com/support/documentation/ip_documentation/opb_uartlite.pdf
+ * https://www.xilinx.com/support/documentation/ip_documentation/opb_uartlite.pdf
  */
 
 #define ULITE_RX		0x00
@@ -55,7 +56,7 @@
 #define ULITE_CONTROL_RST_TX	0x01
 #define ULITE_CONTROL_RST_RX	0x02
 #define ULITE_CONTROL_IE	0x10
-#define UART_AUTOSUSPEND_TIMEOUT	3000
+#define UART_AUTOSUSPEND_TIMEOUT	3000	/* ms */
 
 /* Static pointer to console port */
 #ifdef CONFIG_SERIAL_UARTLITE_CONSOLE
@@ -65,7 +66,6 @@ static struct uart_port *console_port;
 struct uartlite_data {
 	const struct uartlite_reg_ops *reg_ops;
 	struct clk *clk;
-	struct uart_driver *ulite_uart_driver;
 };
 
 struct uartlite_reg_ops {
@@ -393,8 +393,12 @@ static int ulite_verify_port(struct uart_port *port, struct serial_struct *ser)
 static void ulite_pm(struct uart_port *port, unsigned int state,
 		     unsigned int oldstate)
 {
+	int ret;
+
 	if (!state) {
-		pm_runtime_get_sync(port->dev);
+		ret = pm_runtime_get_sync(port->dev);
+		if (ret < 0)
+			dev_err(port->dev, "Failed to enable clocks\n");
 	} else {
 		pm_runtime_mark_last_busy(port->dev);
 		pm_runtime_put_autosuspend(port->dev);
@@ -451,24 +455,15 @@ static const struct uart_ops ulite_ops = {
 static void ulite_console_wait_tx(struct uart_port *port)
 {
 	u8 val;
-	unsigned long timeout;
 
 	/*
 	 * Spin waiting for TX fifo to have space available.
 	 * When using the Microblaze Debug Module this can take up to 1s
 	 */
-	timeout = jiffies + msecs_to_jiffies(1000);
-	while (1) {
-		val = uart_in32(ULITE_STATUS, port);
-		if ((val & ULITE_STATUS_TXFULL) == 0)
-			break;
-		if (time_after(jiffies, timeout)) {
-			dev_warn(port->dev,
-				 "timeout waiting for TX buffer empty\n");
-			break;
-		}
-		cpu_relax();
-	}
+	if (read_poll_timeout_atomic(uart_in32, val, !(val & ULITE_STATUS_TXFULL),
+				     0, 1000000, false, ULITE_STATUS, port))
+		dev_warn(port->dev,
+			 "timeout waiting for TX buffer empty\n");
 }
 
 static void ulite_console_putchar(struct uart_port *port, int ch)
@@ -508,20 +503,22 @@ static void ulite_console_write(struct console *co, const char *s,
 
 static int ulite_console_setup(struct console *co, char *options)
 {
-	struct uart_port *port;
+	struct uart_port *port = NULL;
 	int baud = 9600;
 	int bits = 8;
 	int parity = 'n';
 	int flow = 'n';
 
-
-	port = console_port;
+	if (co->index >= 0 && co->index < ULITE_NR_UARTS)
+		port = ulite_ports + co->index;
 
 	/* Has the device been initialized yet? */
-	if (!port->mapbase) {
+	if (!port || !port->mapbase) {
 		pr_debug("console on ttyUL%i not present\n", co->index);
 		return -ENODEV;
 	}
+
+	console_port = port;
 
 	/* not initialized yet? */
 	if (!port->membase) {
@@ -556,16 +553,15 @@ static void early_uartlite_putc(struct uart_port *port, int c)
 	 * This limit is pretty arbitrary, unless we are at about 10 baud
 	 * we'll never timeout on a working UART.
 	 */
-
 	unsigned retries = 1000000;
-	/* read status bit - 0x8 offset */
-	while (--retries && (readl(port->membase + 8) & (1 << 3)))
+
+	while (--retries &&
+	       (readl(port->membase + ULITE_STATUS) & ULITE_STATUS_TXFULL))
 		;
 
 	/* Only attempt the iowrite if we didn't timeout */
-	/* write to TX_FIFO - 0x4 offset */
 	if (retries)
-		writel(c & 0xff, port->membase + 4);
+		writel(c & 0xff, port->membase + ULITE_TX);
 }
 
 static void early_uartlite_write(struct console *console,
@@ -658,17 +654,6 @@ static int ulite_assign(struct device *dev, int id, u32 base, int irq,
 
 	dev_set_drvdata(dev, port);
 
-#ifdef CONFIG_SERIAL_UARTLITE_CONSOLE
-	/*
-	 * If console hasn't been found yet try to assign this port
-	 * because it is required to be assigned for console setup function.
-	 * If register_console() don't assign value, then console_port pointer
-	 * is cleanup.
-	 */
-	if (ulite_uart_driver.cons->index == -1)
-		console_port = port;
-#endif
-
 	/* Register the port */
 	rc = uart_add_one_port(&ulite_uart_driver, port);
 	if (rc) {
@@ -677,12 +662,6 @@ static int ulite_assign(struct device *dev, int id, u32 base, int irq,
 		dev_set_drvdata(dev, NULL);
 		return rc;
 	}
-
-#ifdef CONFIG_SERIAL_UARTLITE_CONSOLE
-	/* This is not port which is used for console that's why clean it up */
-	if (ulite_uart_driver.cons->index == -1)
-		console_port = NULL;
-#endif
 
 	return 0;
 }
@@ -697,9 +676,7 @@ static int ulite_release(struct device *dev)
 	int rc = 0;
 
 	if (port) {
-		struct uartlite_data *pdata = port->private_data;
-
-		rc = uart_remove_one_port(pdata->ulite_uart_driver, port);
+		rc = uart_remove_one_port(&ulite_uart_driver, port);
 		dev_set_drvdata(dev, NULL);
 		port->mapbase = 0;
 	}
@@ -717,11 +694,8 @@ static int __maybe_unused ulite_suspend(struct device *dev)
 {
 	struct uart_port *port = dev_get_drvdata(dev);
 
-	if (port) {
-		struct uartlite_data *pdata = port->private_data;
-
-		uart_suspend_port(pdata->ulite_uart_driver, port);
-	}
+	if (port)
+		uart_suspend_port(&ulite_uart_driver, port);
 
 	return 0;
 }
@@ -736,11 +710,8 @@ static int __maybe_unused ulite_resume(struct device *dev)
 {
 	struct uart_port *port = dev_get_drvdata(dev);
 
-	if (port) {
-		struct uartlite_data *pdata = port->private_data;
-
-		uart_resume_port(pdata->ulite_uart_driver, port);
-	}
+	if (port)
+		uart_resume_port(&ulite_uart_driver, port);
 
 	return 0;
 }
@@ -758,10 +729,16 @@ static int __maybe_unused ulite_runtime_resume(struct device *dev)
 {
 	struct uart_port *port = dev_get_drvdata(dev);
 	struct uartlite_data *pdata = port->private_data;
+	int ret;
 
-	clk_enable(pdata->clk);
+	ret = clk_enable(pdata->clk);
+	if (ret) {
+		dev_err(dev, "Cannot enable clock.\n");
+		return ret;
+	}
 	return 0;
 }
+
 /* ---------------------------------------------------------------------
  * Platform bus binding
  */
@@ -795,22 +772,6 @@ static int ulite_probe(struct platform_device *pdev)
 	if (prop)
 		id = be32_to_cpup(prop);
 #endif
-	if (id < 0) {
-		/* Look for a serialN alias */
-		id = of_alias_get_id(pdev->dev.of_node, "serial");
-		if (id < 0)
-			id = 0;
-	}
-
-	if (!ulite_uart_driver.state) {
-		dev_dbg(&pdev->dev, "uartlite: calling uart_register_driver()\n");
-		ret = uart_register_driver(&ulite_uart_driver);
-		if (ret < 0) {
-			dev_err(&pdev->dev, "Failed to register driver\n");
-			return ret;
-		}
-	}
-
 	pdata = devm_kzalloc(&pdev->dev, sizeof(struct uartlite_data),
 			     GFP_KERNEL);
 	if (!pdata)
@@ -821,8 +782,8 @@ static int ulite_probe(struct platform_device *pdev)
 		return -ENODEV;
 
 	irq = platform_get_irq(pdev, 0);
-	if (irq <= 0)
-		return -ENXIO;
+	if (irq < 0)
+		return irq;
 
 	pdata->clk = devm_clk_get(&pdev->dev, "s_axi_aclk");
 	if (IS_ERR(pdata->clk)) {
@@ -836,7 +797,6 @@ static int ulite_probe(struct platform_device *pdev)
 		pdata->clk = NULL;
 	}
 
-	pdata->ulite_uart_driver = &ulite_uart_driver;
 	ret = clk_prepare_enable(pdata->clk);
 	if (ret) {
 		dev_err(&pdev->dev, "Failed to prepare clock\n");
@@ -847,6 +807,16 @@ static int ulite_probe(struct platform_device *pdev)
 	pm_runtime_set_autosuspend_delay(&pdev->dev, UART_AUTOSUSPEND_TIMEOUT);
 	pm_runtime_set_active(&pdev->dev);
 	pm_runtime_enable(&pdev->dev);
+
+	if (!ulite_uart_driver.state) {
+		dev_dbg(&pdev->dev, "uartlite: calling uart_register_driver()\n");
+		ret = uart_register_driver(&ulite_uart_driver);
+		if (ret < 0) {
+			dev_err(&pdev->dev, "Failed to register driver\n");
+			clk_disable_unprepare(pdata->clk);
+			return ret;
+		}
+	}
 
 	ret = ulite_assign(&pdev->dev, id, res->start, irq, pdata);
 
@@ -862,7 +832,7 @@ static int ulite_remove(struct platform_device *pdev)
 	struct uartlite_data *pdata = port->private_data;
 	int rc;
 
-	clk_unprepare(pdata->clk);
+	clk_disable_unprepare(pdata->clk);
 	rc = ulite_release(&pdev->dev);
 	pm_runtime_disable(&pdev->dev);
 	pm_runtime_set_suspended(&pdev->dev);

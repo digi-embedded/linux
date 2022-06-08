@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0+ */
 /*
- * Copyright 2018 NXP
+ * Copyright 2018-2021 NXP
  *   Dong Aisheng <aisheng.dong@nxp.com>
  */
 
@@ -19,14 +19,14 @@ struct imx_clk_scu_rsrc_table {
 	u8 num;
 };
 
-extern u32 clock_cells;
 extern struct list_head imx_scu_clks[];
 extern const struct dev_pm_ops imx_clk_lpcg_scu_pm_ops;
 extern const struct imx_clk_scu_rsrc_table imx_clk_scu_rsrc_imx8qxp;
 extern const struct imx_clk_scu_rsrc_table imx_clk_scu_rsrc_imx8qm;
 extern const struct imx_clk_scu_rsrc_table imx_clk_scu_rsrc_imx8dxl;
 
-int imx_clk_scu_init(struct device_node *np, const void *data);
+int imx_clk_scu_init(struct device_node *np,
+		     const struct imx_clk_scu_rsrc_table *data);
 struct clk_hw *imx_scu_of_clk_src_get(struct of_phandle_args *clkspec,
 				      void *data);
 struct clk_hw *imx_clk_scu_alloc_dev(const char *name,
@@ -37,9 +37,12 @@ struct clk_hw *__imx_clk_scu(struct device *dev, const char *name,
 			     const char * const *parents, int num_parents,
 			     u32 rsrc_id, u8 clk_type);
 
+void imx_clk_scu_unregister(void);
+
 struct clk_hw *__imx_clk_lpcg_scu(struct device *dev, const char *name,
 				  const char *parent_name, unsigned long flags,
 				  void __iomem *reg, u8 bit_idx, bool hw_gate);
+void imx_clk_lpcg_scu_unregister(struct clk_hw *hw);
 
 struct clk_hw *__imx_clk_gpr_scu(const char *name, const char * const *parent_name,
 				 int num_parents, u32 rsrc_id, u8 gpr_id, u8 flags,
@@ -48,19 +51,13 @@ struct clk_hw *__imx_clk_gpr_scu(const char *name, const char * const *parent_na
 static inline struct clk_hw *imx_clk_scu(const char *name, u32 rsrc_id,
 					 u8 clk_type)
 {
-	if (clock_cells == 2)
-		return imx_clk_scu_alloc_dev(name, NULL, 0, rsrc_id, clk_type);
-	else
-		return __imx_clk_scu(NULL, name, NULL, 0, rsrc_id, clk_type);
+	return imx_clk_scu_alloc_dev(name, NULL, 0, rsrc_id, clk_type);
 }
 
 static inline struct clk_hw *imx_clk_scu2(const char *name, const char * const *parents,
 					  int num_parents, u32 rsrc_id, u8 clk_type)
 {
-	if (clock_cells == 2)
-		return imx_clk_scu_alloc_dev(name, parents, num_parents, rsrc_id, clk_type);
-	else
-		return __imx_clk_scu(NULL, name, parents, num_parents, rsrc_id, clk_type);
+	return imx_clk_scu_alloc_dev(name, parents, num_parents, rsrc_id, clk_type);
 }
 
 static inline struct clk_hw *imx_clk_lpcg_scu_dev(struct device *dev, const char *name,

@@ -14,7 +14,7 @@
 
 /**
  * struct clk_pfd - IMX PFD clock
- * @clk_hw:	clock source
+ * @hw:		clock source
  * @reg:	PFD register address
  * @idx:	the index of PFD encoded in the register
  *

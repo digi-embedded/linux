@@ -1,117 +1,267 @@
-/*
- * ASoC HDMI Transmitter driver for IMX development boards
- *
- * Copyright (C) 2011-2016 Freescale Semiconductor, Inc.
- *
- * based on stmp3780_devb_hdmi.c
- *
- * Vladimir Barinov <vbarinov@embeddedalley.com>
- *
- * Copyright 2008 SigmaTel, Inc
- * Copyright 2008 Embedded Alley Solutions, Inc
- *
- * This file is licensed under the terms of the GNU General Public License
- * version 2.  This program  is licensed "as is" without any warranty of any
- * kind, whether express or implied.
- */
+// SPDX-License-Identifier: GPL-2.0
+// Copyright 2017-2020 NXP
 
 #include <linux/module.h>
 #include <linux/of_platform.h>
-#include <linux/mfd/mxc-hdmi-core.h>
-#include <sound/soc.h>
+#include <sound/jack.h>
+#include <sound/pcm_params.h>
+#include <sound/hdmi-codec.h>
+#include "fsl_sai.h"
 
-#include "imx-hdmi.h"
+#define SUPPORT_RATE_NUM 10
 
-SND_SOC_DAILINK_DEFS(hifi,
-	DAILINK_COMP_ARRAY(COMP_EMPTY()),
-	DAILINK_COMP_ARRAY(COMP_CODEC("hdmi-audio-codec", "i2s-hifi")),
-	DAILINK_COMP_ARRAY(COMP_PLATFORM("imx-hdmi-audio")));
-
-/* imx digital audio interface glue - connects codec <--> CPU */
-static struct snd_soc_dai_link imx_hdmi_dai_link = {
-	.name = "i.MX HDMI Audio Tx",
-	.stream_name = "i.MX HDMI Audio Tx",
-	SND_SOC_DAILINK_REG(hifi),
+/**
+ * struct cpu_priv - CPU private data
+ * @sysclk_id: SYSCLK ids for set_sysclk()
+ * @slot_width: Slot width of each frame
+ *
+ * Note: [1] for tx and [0] for rx
+ */
+struct cpu_priv {
+	u32 sysclk_id[2];
+	u32 slot_width;
 };
 
-static struct snd_soc_card snd_soc_card_imx_hdmi = {
-	.name = "imx-hdmi-soc",
-	.dai_link = &imx_hdmi_dai_link,
-	.num_links = 1,
-	.owner = THIS_MODULE,
+struct imx_hdmi_data {
+	struct snd_soc_dai_link dai;
+	struct snd_soc_card card;
+	struct snd_soc_jack hdmi_jack;
+	struct snd_soc_jack_pin hdmi_jack_pin;
+	struct cpu_priv cpu_priv;
+	u32 dai_fmt;
 };
 
-static int imx_hdmi_audio_probe(struct platform_device *pdev)
+static int imx_sii902x_startup(struct snd_pcm_substream *substream)
 {
-	struct device_node *hdmi_np, *np = pdev->dev.of_node;
-	struct snd_soc_card *card = &snd_soc_card_imx_hdmi;
-	struct platform_device *hdmi_pdev;
-	int ret = 0;
+	struct snd_pcm_runtime *runtime = substream->runtime;
+	static struct snd_pcm_hw_constraint_list constraint_rates;
+	static u32 support_rates[SUPPORT_RATE_NUM];
+	int ret;
 
-	if (!hdmi_get_registered()) {
-		dev_err(&pdev->dev, "initialize HDMI-audio failed. load HDMI-video first!\n");
-		return -ENODEV;
-	}
+	support_rates[0] = 32000;
+	support_rates[1] = 48000;
+	support_rates[2] = 96000;
+	support_rates[3] = 192000;
+	constraint_rates.list = support_rates;
+	constraint_rates.count = 4;
 
-	hdmi_np = of_parse_phandle(np, "hdmi-controller", 0);
-	if (!hdmi_np) {
-		dev_err(&pdev->dev, "failed to find hdmi-audio cpudai\n");
-		ret = -EINVAL;
-		goto end;
-	}
-
-	hdmi_pdev = of_find_device_by_node(hdmi_np);
-	if (!hdmi_pdev) {
-		dev_err(&pdev->dev, "failed to find SSI platform device\n");
-		ret = -EINVAL;
-		goto end;
-	}
-
-	card->dev = &pdev->dev;
-	card->dai_link->cpus->dai_name = dev_name(&hdmi_pdev->dev);
-
-	platform_set_drvdata(pdev, card);
-
-	ret = snd_soc_register_card(card);
+	ret = snd_pcm_hw_constraint_list(runtime, 0, SNDRV_PCM_HW_PARAM_RATE,
+					 &constraint_rates);
 	if (ret)
-		dev_err(&pdev->dev, "failed to register card: %d\n", ret);
+		return ret;
 
-end:
-	if (hdmi_np)
-		of_node_put(hdmi_np);
-
-	return ret;
-}
-
-static int imx_hdmi_audio_remove(struct platform_device *pdev)
-{
-	struct snd_soc_card *card = platform_get_drvdata(pdev);
-
-	snd_soc_unregister_card(card);
+	ret = snd_pcm_hw_constraint_minmax(runtime, SNDRV_PCM_HW_PARAM_CHANNELS,
+					   1, 2);
+	if (ret)
+		return ret;
 
 	return 0;
 }
 
+static int imx_hdmi_hw_params(struct snd_pcm_substream *substream,
+			      struct snd_pcm_hw_params *params)
+{
+	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct imx_hdmi_data *data = snd_soc_card_get_drvdata(rtd->card);
+	bool tx = substream->stream == SNDRV_PCM_STREAM_PLAYBACK;
+	struct snd_soc_dai *cpu_dai = asoc_rtd_to_cpu(rtd, 0);
+	struct snd_soc_card *card = rtd->card;
+	struct device *dev = card->dev;
+	u32 slot_width = data->cpu_priv.slot_width;
+	int ret;
+
+	/* MCLK always is (256 or 192) * rate. */
+	ret = snd_soc_dai_set_sysclk(cpu_dai, data->cpu_priv.sysclk_id[tx],
+				     8 * slot_width * params_rate(params),
+				     tx ? SND_SOC_CLOCK_OUT : SND_SOC_CLOCK_IN);
+	if (ret && ret != -ENOTSUPP) {
+		dev_err(dev, "failed to set cpu sysclk: %d\n", ret);
+		return ret;
+	}
+
+	ret = snd_soc_dai_set_tdm_slot(cpu_dai, 0, 0, 2, slot_width);
+	if (ret && ret != -ENOTSUPP) {
+		dev_err(dev, "failed to set cpu dai tdm slot: %d\n", ret);
+		return ret;
+	}
+
+	return 0;
+}
+
+static struct snd_soc_ops imx_hdmi_ops = {
+	.hw_params = imx_hdmi_hw_params,
+};
+
+static struct snd_soc_ops imx_sii902x_ops = {
+	.startup = imx_sii902x_startup,
+	.hw_params = imx_hdmi_hw_params,
+};
+
+static const struct snd_soc_dapm_widget imx_hdmi_widgets[] = {
+	SND_SOC_DAPM_LINE("HDMI Jack", NULL),
+};
+
+static int imx_hdmi_init(struct snd_soc_pcm_runtime *rtd)
+{
+	struct snd_soc_card *card = rtd->card;
+	struct snd_soc_dai *codec_dai = asoc_rtd_to_codec(rtd, 0);
+	struct snd_soc_component *component = codec_dai->component;
+	struct imx_hdmi_data *data = snd_soc_card_get_drvdata(card);
+	int ret;
+
+	data->hdmi_jack_pin.pin = "HDMI Jack";
+	data->hdmi_jack_pin.mask = SND_JACK_LINEOUT;
+	/* enable jack detection */
+	ret = snd_soc_card_jack_new(card, "HDMI Jack", SND_JACK_LINEOUT,
+				    &data->hdmi_jack, &data->hdmi_jack_pin, 1);
+	if (ret) {
+		dev_err(card->dev, "Can't new HDMI Jack %d\n", ret);
+		return ret;
+	}
+
+	ret = snd_soc_component_set_jack(component, &data->hdmi_jack, NULL);
+	if (ret && ret != -ENOTSUPP) {
+		dev_err(card->dev, "Can't set HDMI Jack %d\n", ret);
+		return ret;
+	}
+
+	return 0;
+};
+
+static int imx_hdmi_probe(struct platform_device *pdev)
+{
+	struct device_node *np = pdev->dev.of_node;
+	bool hdmi_out = of_property_read_bool(np, "hdmi-out");
+	bool hdmi_in = of_property_read_bool(np, "hdmi-in");
+	struct snd_soc_dai_link_component *dlc;
+	struct platform_device *cpu_pdev;
+	struct device_node *cpu_np;
+	struct imx_hdmi_data *data;
+	int ret;
+
+	dlc = devm_kzalloc(&pdev->dev, 3 * sizeof(*dlc), GFP_KERNEL);
+	if (!dlc)
+		return -ENOMEM;
+
+	cpu_np = of_parse_phandle(np, "audio-cpu", 0);
+	if (!cpu_np) {
+		dev_err(&pdev->dev, "cpu dai phandle missing or invalid\n");
+		ret = -EINVAL;
+		goto fail;
+	}
+
+	cpu_pdev = of_find_device_by_node(cpu_np);
+	if (!cpu_pdev) {
+		dev_err(&pdev->dev, "failed to find SAI platform device\n");
+		ret = -EINVAL;
+		goto fail;
+	}
+
+	data = devm_kzalloc(&pdev->dev, sizeof(*data), GFP_KERNEL);
+	if (!data) {
+		ret = -ENOMEM;
+		goto fail;
+	}
+
+	data->dai.cpus = &dlc[0];
+	data->dai.num_cpus = 1;
+	data->dai.platforms = &dlc[1];
+	data->dai.num_platforms = 1;
+	data->dai.codecs = &dlc[2];
+	data->dai.num_codecs = 1;
+
+	data->dai.name = "i.MX HDMI";
+	data->dai.stream_name = "i.MX HDMI";
+	data->dai.cpus->dai_name = dev_name(&cpu_pdev->dev);
+	data->dai.platforms->of_node = cpu_np;
+	data->dai.ops = &imx_hdmi_ops;
+	data->dai.playback_only = true;
+	data->dai.capture_only = false;
+	data->dai.init = imx_hdmi_init;
+
+	if (of_node_name_eq(cpu_np, "sai")) {
+		data->cpu_priv.sysclk_id[1] = FSL_SAI_CLK_MAST1;
+		data->cpu_priv.sysclk_id[0] = FSL_SAI_CLK_MAST1;
+	}
+
+	if (of_device_is_compatible(np, "fsl,imx-audio-sii902x")) {
+		data->dai_fmt = SND_SOC_DAIFMT_LEFT_J;
+		data->cpu_priv.slot_width = 24;
+		data->dai.ops = &imx_sii902x_ops;
+	} else {
+		data->dai_fmt = SND_SOC_DAIFMT_I2S;
+		data->cpu_priv.slot_width = 32;
+	}
+
+	if ((hdmi_out && hdmi_in) || (!hdmi_out && !hdmi_in)) {
+		dev_err(&pdev->dev, "Invalid HDMI DAI link\n");
+		ret = -EINVAL;
+		goto fail;
+	}
+
+	if (hdmi_out) {
+		data->dai.playback_only = true;
+		data->dai.capture_only = false;
+		data->dai.codecs->dai_name = "i2s-hifi";
+		data->dai.codecs->name = "hdmi-audio-codec.1";
+		data->dai.dai_fmt = data->dai_fmt |
+				    SND_SOC_DAIFMT_NB_NF |
+				    SND_SOC_DAIFMT_CBS_CFS;
+	}
+
+	if (hdmi_in) {
+		data->dai.playback_only = false;
+		data->dai.capture_only = true;
+		data->dai.codecs->dai_name = "i2s-hifi";
+		data->dai.codecs->name = "hdmi-audio-codec.2";
+		data->dai.dai_fmt = data->dai_fmt |
+				    SND_SOC_DAIFMT_NB_NF |
+				    SND_SOC_DAIFMT_CBM_CFM;
+	}
+
+	data->card.dapm_widgets = imx_hdmi_widgets;
+	data->card.num_dapm_widgets = ARRAY_SIZE(imx_hdmi_widgets);
+	data->card.dev = &pdev->dev;
+	data->card.owner = THIS_MODULE;
+	ret = snd_soc_of_parse_card_name(&data->card, "model");
+	if (ret)
+		goto fail;
+
+	data->card.num_links = 1;
+	data->card.dai_link = &data->dai;
+
+	snd_soc_card_set_drvdata(&data->card, data);
+	ret = devm_snd_soc_register_card(&pdev->dev, &data->card);
+	if (ret) {
+		dev_err(&pdev->dev, "snd_soc_register_card failed (%d)\n", ret);
+		goto fail;
+	}
+
+fail:
+	if (cpu_np)
+		of_node_put(cpu_np);
+
+	return ret;
+}
+
 static const struct of_device_id imx_hdmi_dt_ids[] = {
 	{ .compatible = "fsl,imx-audio-hdmi", },
+	{ .compatible = "fsl,imx-audio-sii902x", },
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, imx_hdmi_dt_ids);
 
-static struct platform_driver imx_hdmi_audio_driver = {
-	.probe = imx_hdmi_audio_probe,
-	.remove = imx_hdmi_audio_remove,
+static struct platform_driver imx_hdmi_driver = {
 	.driver = {
-		.of_match_table = imx_hdmi_dt_ids,
-		.name = "imx-audio-hdmi",
-		.owner = THIS_MODULE,
+		.name = "imx-hdmi",
 		.pm = &snd_soc_pm_ops,
+		.of_match_table = imx_hdmi_dt_ids,
 	},
+	.probe = imx_hdmi_probe,
 };
-
-module_platform_driver(imx_hdmi_audio_driver);
+module_platform_driver(imx_hdmi_driver);
 
 MODULE_AUTHOR("Freescale Semiconductor, Inc.");
-MODULE_DESCRIPTION("IMX HDMI TX ASoC driver");
-MODULE_LICENSE("GPL");
-MODULE_ALIAS("platform:imx-audio-hdmi");
+MODULE_DESCRIPTION("Freescale i.MX hdmi audio ASoC machine driver");
+MODULE_LICENSE("GPL v2");
+MODULE_ALIAS("platform:imx-hdmi");

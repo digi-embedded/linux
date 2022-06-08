@@ -5,7 +5,7 @@
  * ISI is a Image Sensor Interface of i.MX8QXP/QM platform, which
  * used to process image from camera sensor to memory or DC
  *
- * Copyright (c) 2019 NXP Semiconductor
+ * Copyright 2019-2021 NXP
  *
  */
 
@@ -15,6 +15,7 @@
 #define ISI_OF_NODE_NAME	"isi"
 #define MIPI_CSI2_OF_NODE_NAME  "csi"
 #define PARALLEL_OF_NODE_NAME   "pcsi"
+#define HDMI_RX_OF_NODE_NAME	"hdmi_rx"
 
 #define MXC_ISI_MAX_DEVS	8
 #define MXC_MIPI_CSI2_MAX_DEVS	2
@@ -57,7 +58,15 @@
 #define MXC_PARALLEL_CSI_PAD_SINK		1
 #define MXC_PARALLEL_CSI_PADS_NUM		2
 
-#define ISI_2K		2048
+/* HDMI PADS */
+#define MXC_HDMI_RX_PAD_SINK		1
+#define MXC_HDMI_RX_PAD_SOURCE		2
+#define MXC_HDMI_RX_PADS_NUM		3
+
+#define ISI_2K		2048U
+#define ISI_4K		4096U
+#define ISI_8K		8192U
+#define ISI_MIN		32U
 
 enum {
 	IN_PORT,

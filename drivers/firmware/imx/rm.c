@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Copyright (C) 2016 Freescale Semiconductor, Inc.
- * Copyright 2017~2020 NXP
+ * Copyright 2020 NXP
  *
  * File containing client-side RPC functions for the RM service. These
  * function are ported to clients that communicate to the SC.
@@ -14,13 +13,18 @@ struct imx_sc_msg_rm_rsrc_owned {
 	u16 resource;
 } __packed __aligned(4);
 
+struct imx_sc_msg_rm_pt {
+	struct imx_sc_rpc_msg hdr;
+	u8 val;
+} __packed __aligned(4);
+
 /*
  * This function check @resource is owned by current partition or not
  *
  * @param[in]     ipc         IPC handle
  * @param[in]     resource    resource the control is associated with
  *
- * @return Returns 0 for success and < 0 for errors.
+ * @return Returns 0 for not owned and 1 for owned.
  */
 bool imx_sc_rm_is_resource_owned(struct imx_sc_ipc *ipc, u16 resource)
 {
@@ -34,11 +38,46 @@ bool imx_sc_rm_is_resource_owned(struct imx_sc_ipc *ipc, u16 resource)
 
 	msg.resource = resource;
 
+	/*
+	 * SCU firmware only returns value 0 or 1
+	 * for resource owned check which means not owned or owned.
+	 * So it is always successful.
+	 */
 	imx_scu_call_rpc(ipc, &msg, true);
 
 	return hdr->func;
 }
 EXPORT_SYMBOL(imx_sc_rm_is_resource_owned);
+
+/*
+ * This function returns the current partition number
+ *
+ * @param[in]     ipc         IPC handle
+ * @param[out]    pt          holding the partition number
+ *
+ * @return Returns 0 for success and < 0 for errors.
+ */
+int imx_sc_rm_get_partition(struct imx_sc_ipc *ipc, u8 *pt)
+{
+	struct imx_sc_msg_rm_pt msg;
+	struct imx_sc_rpc_msg *hdr = &msg.hdr;
+	int ret;
+
+	hdr->ver = IMX_SC_RPC_VERSION;
+	hdr->svc = IMX_SC_RPC_SVC_RM;
+	hdr->func = IMX_SC_RM_FUNC_GET_PARTITION;
+	hdr->size = 1;
+
+	ret = imx_scu_call_rpc(ipc, &msg, true);
+	if (ret)
+		return ret;
+
+	if (pt != NULL)
+		*pt = msg.val;
+
+	return 0;
+}
+EXPORT_SYMBOL(imx_sc_rm_get_partition);
 
 struct imx_sc_msg_rm_find_memreg {
 	struct imx_sc_rpc_msg hdr;

@@ -162,7 +162,7 @@ config XES_MPC85xx
 	  computers from Extreme Engineering Solutions (X-ES) based on
 	  Freescale MPC85xx processors.
 	  Manufacturer: Extreme Engineering Solutions, Inc.
-	  URL: <http://www.xes-inc.com/>
+	  URL: <https://www.xes-inc.com/>
 
 config STX_GP3
 	bool "Silicon Turnkey Express GP3"
@@ -209,12 +209,6 @@ config TQM8560
 	select DEFAULT_UIMAGE
 	select TQM85xx
 	select CPM2
-
-config SBC8548
-	bool "Wind River SBC8548"
-	select DEFAULT_UIMAGE
-	help
-	  This option enables support for the Wind River SBC8548 board
 
 config PPA8548
 	bool "Prodrive PPA8548"

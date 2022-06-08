@@ -70,15 +70,16 @@ Documentation written by Tom Zanussi
   modified by appending any of the following modifiers to the field
   name:
 
-	=========== ==========================================
-        .hex        display a number as a hex value
-	.sym        display an address as a symbol
-	.sym-offset display an address as a symbol and offset
-	.syscall    display a syscall id as a system call name
-	.execname   display a common_pid as a program name
-	.log2       display log2 value rather than raw number
-	.usecs      display a common_timestamp in microseconds
-	=========== ==========================================
+	=============  =================================================
+        .hex           display a number as a hex value
+	.sym           display an address as a symbol
+	.sym-offset    display an address as a symbol and offset
+	.syscall       display a syscall id as a system call name
+	.execname      display a common_pid as a program name
+	.log2          display log2 value rather than raw number
+	.buckets=size  display grouping of values rather than raw number
+	.usecs         display a common_timestamp in microseconds
+	=============  =================================================
 
   Note that in general the semantics of a given field aren't
   interpreted when applying a modifier to it, but there are some
@@ -191,7 +192,7 @@ Documentation written by Tom Zanussi
                                 with the event, in nanoseconds.  May be
 			        modified by .usecs to have timestamps
 			        interpreted as microseconds.
-    cpu                    int  the cpu on which the event occurred.
+    common_cpu             int  the cpu on which the event occurred.
     ====================== ==== =======================================
 
 Extended error information
@@ -228,7 +229,7 @@ Extended error information
   that lists the total number of bytes requested for each function in
   the kernel that made one or more calls to kmalloc::
 
-    # echo 'hist:key=call_site:val=bytes_req' > \
+    # echo 'hist:key=call_site:val=bytes_req.buckets=32' > \
             /sys/kernel/debug/tracing/events/kmem/kmalloc/trigger
 
   This tells the tracing system to create a 'hist' trigger using the
@@ -1495,7 +1496,7 @@ Extended error information
     #
 
     { stacktrace:
-             _do_fork+0x18e/0x330
+             kernel_clone+0x18e/0x330
              kernel_thread+0x29/0x30
              kthreadd+0x154/0x1b0
              ret_from_fork+0x3f/0x70
@@ -1588,7 +1589,7 @@ Extended error information
              SYSC_sendto+0xef/0x170
     } hitcount:         88
     { stacktrace:
-             _do_fork+0x18e/0x330
+             kernel_clone+0x18e/0x330
              SyS_clone+0x19/0x20
              entry_SYSCALL_64_fastpath+0x12/0x6a
     } hitcount:        244
@@ -1776,6 +1777,24 @@ consisting of the name of the new event along with one or more
 variables and their types, which can be any valid field type,
 separated by semicolons, to the tracing/synthetic_events file.
 
+See synth_field_size() for available types.
+
+If field_name contains [n], the field is considered to be a static array.
+
+If field_names contains[] (no subscript), the field is considered to
+be a dynamic array, which will only take as much space in the event as
+is required to hold the array.
+
+A string field can be specified using either the static notation:
+
+  char name[32];
+
+Or the dynamic:
+
+  char name[];
+
+The size limit for either is 256.
+
 For instance, the following creates a new event named 'wakeup_latency'
 with 3 fields: lat, pid, and prio.  Each of those fields is simply a
 variable reference to a variable on another event::
@@ -1805,19 +1824,98 @@ and variables defined on other events (see Section 2.2.3 below on
 how that is done using hist trigger 'onmatch' action). Once that is
 done, the 'wakeup_latency' synthetic event instance is created.
 
-A histogram can now be defined for the new synthetic event::
-
-  # echo 'hist:keys=pid,prio,lat.log2:sort=pid,lat' >> \
-        /sys/kernel/debug/tracing/events/synthetic/wakeup_latency/trigger
-
 The new event is created under the tracing/events/synthetic/ directory
 and looks and behaves just like any other event::
 
   # ls /sys/kernel/debug/tracing/events/synthetic/wakeup_latency
         enable  filter  format  hist  id  trigger
 
+A histogram can now be defined for the new synthetic event::
+
+  # echo 'hist:keys=pid,prio,lat.log2:sort=lat' >> \
+        /sys/kernel/debug/tracing/events/synthetic/wakeup_latency/trigger
+
+The above shows the latency "lat" in a power of 2 grouping.
+
 Like any other event, once a histogram is enabled for the event, the
 output can be displayed by reading the event's 'hist' file.
+
+  # cat /sys/kernel/debug/tracing/events/synthetic/wakeup_latency/hist
+
+  # event histogram
+  #
+  # trigger info: hist:keys=pid,prio,lat.log2:vals=hitcount:sort=lat.log2:size=2048 [active]
+  #
+
+  { pid:       2035, prio:          9, lat: ~ 2^2  } hitcount:         43
+  { pid:       2034, prio:          9, lat: ~ 2^2  } hitcount:         60
+  { pid:       2029, prio:          9, lat: ~ 2^2  } hitcount:        965
+  { pid:       2034, prio:        120, lat: ~ 2^2  } hitcount:          9
+  { pid:       2033, prio:        120, lat: ~ 2^2  } hitcount:          5
+  { pid:       2030, prio:          9, lat: ~ 2^2  } hitcount:        335
+  { pid:       2030, prio:        120, lat: ~ 2^2  } hitcount:         10
+  { pid:       2032, prio:        120, lat: ~ 2^2  } hitcount:          1
+  { pid:       2035, prio:        120, lat: ~ 2^2  } hitcount:          2
+  { pid:       2031, prio:          9, lat: ~ 2^2  } hitcount:        176
+  { pid:       2028, prio:        120, lat: ~ 2^2  } hitcount:         15
+  { pid:       2033, prio:          9, lat: ~ 2^2  } hitcount:         91
+  { pid:       2032, prio:          9, lat: ~ 2^2  } hitcount:        125
+  { pid:       2029, prio:        120, lat: ~ 2^2  } hitcount:          4
+  { pid:       2031, prio:        120, lat: ~ 2^2  } hitcount:          3
+  { pid:       2029, prio:        120, lat: ~ 2^3  } hitcount:          2
+  { pid:       2035, prio:          9, lat: ~ 2^3  } hitcount:         41
+  { pid:       2030, prio:        120, lat: ~ 2^3  } hitcount:          1
+  { pid:       2032, prio:          9, lat: ~ 2^3  } hitcount:         32
+  { pid:       2031, prio:          9, lat: ~ 2^3  } hitcount:         44
+  { pid:       2034, prio:          9, lat: ~ 2^3  } hitcount:         40
+  { pid:       2030, prio:          9, lat: ~ 2^3  } hitcount:         29
+  { pid:       2033, prio:          9, lat: ~ 2^3  } hitcount:         31
+  { pid:       2029, prio:          9, lat: ~ 2^3  } hitcount:         31
+  { pid:       2028, prio:        120, lat: ~ 2^3  } hitcount:         18
+  { pid:       2031, prio:        120, lat: ~ 2^3  } hitcount:          2
+  { pid:       2028, prio:        120, lat: ~ 2^4  } hitcount:          1
+  { pid:       2029, prio:          9, lat: ~ 2^4  } hitcount:          4
+  { pid:       2031, prio:        120, lat: ~ 2^7  } hitcount:          1
+  { pid:       2032, prio:        120, lat: ~ 2^7  } hitcount:          1
+
+  Totals:
+      Hits: 2122
+      Entries: 30
+      Dropped: 0
+
+
+The latency values can also be grouped linearly by a given size with
+the ".buckets" modifier and specify a size (in this case groups of 10).
+
+  # echo 'hist:keys=pid,prio,lat.buckets=10:sort=lat' >> \
+        /sys/kernel/debug/tracing/events/synthetic/wakeup_latency/trigger
+
+  # event histogram
+  #
+  # trigger info: hist:keys=pid,prio,lat.buckets=10:vals=hitcount:sort=lat.buckets=10:size=2048 [active]
+  #
+
+  { pid:       2067, prio:          9, lat: ~ 0-9 } hitcount:        220
+  { pid:       2068, prio:          9, lat: ~ 0-9 } hitcount:        157
+  { pid:       2070, prio:          9, lat: ~ 0-9 } hitcount:        100
+  { pid:       2067, prio:        120, lat: ~ 0-9 } hitcount:          6
+  { pid:       2065, prio:        120, lat: ~ 0-9 } hitcount:          2
+  { pid:       2066, prio:        120, lat: ~ 0-9 } hitcount:          2
+  { pid:       2069, prio:          9, lat: ~ 0-9 } hitcount:        122
+  { pid:       2069, prio:        120, lat: ~ 0-9 } hitcount:          8
+  { pid:       2070, prio:        120, lat: ~ 0-9 } hitcount:          1
+  { pid:       2068, prio:        120, lat: ~ 0-9 } hitcount:          7
+  { pid:       2066, prio:          9, lat: ~ 0-9 } hitcount:        365
+  { pid:       2064, prio:        120, lat: ~ 0-9 } hitcount:         35
+  { pid:       2065, prio:          9, lat: ~ 0-9 } hitcount:        998
+  { pid:       2071, prio:          9, lat: ~ 0-9 } hitcount:         85
+  { pid:       2065, prio:          9, lat: ~ 10-19 } hitcount:          2
+  { pid:       2064, prio:        120, lat: ~ 10-19 } hitcount:          2
+
+  Totals:
+      Hits: 2112
+      Entries: 16
+      Dropped: 0
 
 2.2.3 Hist trigger 'handlers' and 'actions'
 -------------------------------------------

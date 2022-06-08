@@ -29,7 +29,7 @@
  *    Rickard E. (Rik) Faith <faith@valinux.com>
  *    Kevin E. Martin <martin@valinux.com>
  *    Gareth Hughes <gareth@valinux.com>
- *    Michel D�zer <daenzerm@student.ethz.ch>
+ *    Michel Dänzer <daenzerm@student.ethz.ch>
  */
 
 #ifndef __R128_DRV_H__
@@ -39,10 +39,11 @@
 #include <linux/io.h>
 #include <linux/irqreturn.h>
 
-#include <drm/ati_pcigart.h>
 #include <drm/drm_ioctl.h>
 #include <drm/drm_legacy.h>
 #include <drm/r128_drm.h>
+
+#include "ati_pcigart.h"
 
 /* General customization:
  */

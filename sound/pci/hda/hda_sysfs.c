@@ -139,7 +139,7 @@ static int reconfig_codec(struct hda_codec *codec)
 			   "The codec is being used, can't reconfigure.\n");
 		goto error;
 	}
-	err = snd_hda_codec_configure(codec);
+	err = device_reprobe(hda_codec_dev(codec));
 	if (err < 0)
 		goto error;
 	err = snd_card_register(codec->card);
@@ -611,7 +611,7 @@ struct hda_patch_item {
 	void (*parser)(char *buf, struct hda_bus *bus, struct hda_codec **retc);
 };
 
-static struct hda_patch_item patch_items[NUM_LINE_MODES] = {
+static const struct hda_patch_item patch_items[NUM_LINE_MODES] = {
 	[LINE_MODE_CODEC] = {
 		.tag = "[codec]",
 		.parser = parse_codec_mode,

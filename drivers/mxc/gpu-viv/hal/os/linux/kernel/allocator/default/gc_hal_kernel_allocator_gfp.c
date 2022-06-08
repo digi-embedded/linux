@@ -276,9 +276,9 @@ _NonContiguousAlloc(
         pages[i] = p;
     }
 
-    MdlPriv->contiguousPages = (struct page *)pages;
+    MdlPriv->nonContiguousPages = pages;
 
-    gcmkFOOTER_ARG("pages=0x%X", pages);
+    gcmkFOOTER_ARG("pages=%p", pages);
     return gcvSTATUS_OK;
 }
 
@@ -413,7 +413,7 @@ _NonContiguous1MPagesAlloc(
             gcmkONERROR(gcvSTATUS_OUT_OF_MEMORY);
         }
     }
-    MdlPriv->contiguousPages = (struct page *)pages;
+    MdlPriv->nonContiguousPages = pages;
 
     for (i = 0; i < numPages1M; i++)
     {
@@ -474,7 +474,11 @@ _GFPAlloc(
     gceSTATUS status;
     gctSIZE_T i = 0;
     gctBOOL contiguous = Flags & gcvALLOC_FLAG_CONTIGUOUS;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0)
     u32 normal_gfp = __GFP_HIGH | __GFP_ATOMIC | __GFP_NORETRY | gcdNOWARN;
+#else
+    u32 normal_gfp = __GFP_HIGH | __GFP_NORETRY | gcdNOWARN;
+#endif
     u32 gfp = (contiguous ? normal_gfp : GFP_KERNEL) | __GFP_HIGHMEM | gcdNOWARN;
 
     struct gfp_alloc *priv = (struct gfp_alloc *)Allocator->privateData;
@@ -486,12 +490,22 @@ _GFPAlloc(
     gcmkHEADER_ARG("Allocator=%p Mdl=%p NumPages=%zu Flags=0x%x", Allocator, Mdl, NumPages, Flags);
 
 #ifdef gcdSYS_FREE_MEMORY_LIMIT
-    if (Flags & gcvALLOC_FLAG_MEMLIMIT)
+    if ((Flags & gcvALLOC_FLAG_MEMLIMIT) && !contiguous)
     {
+        long freeram = 0;
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0)
+        freeram = global_zone_page_state(NR_FREE_PAGES);
+#ifdef CONFIG_CMA
+        freeram -= global_zone_page_state(NR_FREE_CMA_PAGES);
+#endif
+#else
         struct sysinfo temsysinfo;
         si_meminfo(&temsysinfo);
+        freeram = temsysinfo.freeram;
+#endif
 
-        if ((temsysinfo.freeram < NumPages) || ((temsysinfo.freeram-NumPages) < gcdSYS_FREE_MEMORY_LIMIT))
+        if ((freeram < NumPages) || ((freeram - NumPages) < gcdSYS_FREE_MEMORY_LIMIT))
         {
             gcmkONERROR(gcvSTATUS_OUT_OF_MEMORY);
         }
@@ -611,12 +625,10 @@ _GFPAlloc(
                 gcmkONERROR(_NonContiguousAlloc(mdlPriv, NumPages, gfp));
             }
         }
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION (3,6,0) \
-    && (defined(ARCH_HAS_SG_CHAIN) || defined(CONFIG_ARCH_HAS_SG_CHAIN))
+#if gcdUSE_Linux_SG_TABLE_API
         result = sg_alloc_table_from_pages(&mdlPriv->sgt,
                     mdlPriv->nonContiguousPages, NumPages, 0,
-                    NumPages << PAGE_SHIFT, GFP_KERNEL);
+                    NumPages << PAGE_SHIFT, normal_gfp);
 
 #else
         result = alloc_sg_list_from_pages(&mdlPriv->sgt.sgl,
@@ -653,8 +665,7 @@ _GFPAlloc(
                 _NonContiguousFree(mdlPriv->nonContiguousPages, NumPages);
             }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION (3,6,0) \
-    && (defined (ARCH_HAS_SG_CHAIN) || defined (CONFIG_ARCH_HAS_SG_CHAIN))
+#if gcdUSE_Linux_SG_TABLE_API
             sg_free_table(&mdlPriv->sgt);
 #else
             kfree(mdlPriv->sgt.sgl);
@@ -815,8 +826,7 @@ _GFPFree(
         dma_unmap_sg(galcore_device, mdlPriv->sgt.sgl, mdlPriv->sgt.nents,
                 DMA_FROM_DEVICE);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION (3,6,0) \
-    && (defined (ARCH_HAS_SG_CHAIN) || defined (CONFIG_ARCH_HAS_SG_CHAIN))
+#if gcdUSE_Linux_SG_TABLE_API
         sg_free_table(&mdlPriv->sgt);
 #else
         kfree(mdlPriv->sgt.sgl);

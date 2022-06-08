@@ -34,18 +34,9 @@ static const struct drm_mode_config_funcs zx_drm_mode_config_funcs = {
 
 DEFINE_DRM_GEM_CMA_FOPS(zx_drm_fops);
 
-static struct drm_driver zx_drm_driver = {
+static const struct drm_driver zx_drm_driver = {
 	.driver_features = DRIVER_GEM | DRIVER_MODESET | DRIVER_ATOMIC,
-	.gem_free_object_unlocked = drm_gem_cma_free_object,
-	.gem_vm_ops = &drm_gem_cma_vm_ops,
-	.dumb_create = drm_gem_cma_dumb_create,
-	.prime_handle_to_fd = drm_gem_prime_handle_to_fd,
-	.prime_fd_to_handle = drm_gem_prime_fd_to_handle,
-	.gem_prime_get_sg_table = drm_gem_cma_prime_get_sg_table,
-	.gem_prime_import_sg_table = drm_gem_cma_prime_import_sg_table,
-	.gem_prime_vmap = drm_gem_cma_prime_vmap,
-	.gem_prime_vunmap = drm_gem_cma_prime_vunmap,
-	.gem_prime_mmap = drm_gem_cma_prime_mmap,
+	DRM_GEM_CMA_DRIVER_OPS,
 	.fops = &zx_drm_fops,
 	.name = "zx-vou",
 	.desc = "ZTE VOU Controller DRM",
@@ -83,12 +74,6 @@ static int zx_drm_bind(struct device *dev)
 		DRM_DEV_ERROR(dev, "failed to init vblank: %d\n", ret);
 		goto out_unbind;
 	}
-
-	/*
-	 * We will manage irq handler on our own.  In this case, irq_enabled
-	 * need to be true for using vblank core support.
-	 */
-	drm->irq_enabled = true;
 
 	drm_mode_config_reset(drm);
 	drm_kms_helper_poll_init(drm);

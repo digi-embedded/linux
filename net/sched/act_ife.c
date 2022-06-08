@@ -479,10 +479,11 @@ static int populate_metalist(struct tcf_ife_info *ife, struct nlattr **tb,
 
 static int tcf_ife_init(struct net *net, struct nlattr *nla,
 			struct nlattr *est, struct tc_action **a,
-			int ovr, int bind, bool rtnl_held,
-			struct tcf_proto *tp, struct netlink_ext_ack *extack)
+			struct tcf_proto *tp, u32 flags,
+			struct netlink_ext_ack *extack)
 {
 	struct tc_action_net *tn = net_generic(net, ife_net_id);
+	bool bind = flags & TCA_ACT_FLAGS_BIND;
 	struct nlattr *tb[TCA_IFE_MAX + 1];
 	struct nlattr *tb2[IFE_META_MAX + 1];
 	struct tcf_chain *goto_ch = NULL;
@@ -531,7 +532,7 @@ static int tcf_ife_init(struct net *net, struct nlattr *nla,
 			kfree(p);
 			return err;
 		}
-		err = load_metalist(tb2, rtnl_held);
+		err = load_metalist(tb2, !(flags & TCA_ACT_FLAGS_NO_RTNL));
 		if (err) {
 			kfree(p);
 			return err;
@@ -552,14 +553,14 @@ static int tcf_ife_init(struct net *net, struct nlattr *nla,
 
 	if (!exists) {
 		ret = tcf_idr_create(tn, index, est, a, &act_ife_ops,
-				     bind, true);
+				     bind, true, 0);
 		if (ret) {
 			tcf_idr_cleanup(tn, index);
 			kfree(p);
 			return ret;
 		}
 		ret = ACT_P_CREATED;
-	} else if (!ovr) {
+	} else if (!(flags & TCA_ACT_FLAGS_REPLACE)) {
 		tcf_idr_release(*a, bind);
 		kfree(p);
 		return -EEXIST;
@@ -599,7 +600,8 @@ static int tcf_ife_init(struct net *net, struct nlattr *nla,
 	}
 
 	if (tb[TCA_IFE_METALST]) {
-		err = populate_metalist(ife, tb2, exists, rtnl_held);
+		err = populate_metalist(ife, tb2, exists,
+					!(flags & TCA_ACT_FLAGS_NO_RTNL));
 		if (err)
 			goto metadata_parse_err;
 	} else {
@@ -617,7 +619,7 @@ static int tcf_ife_init(struct net *net, struct nlattr *nla,
 		spin_lock_bh(&ife->tcf_lock);
 	/* protected by tcf_lock when modifying existing action */
 	goto_ch = tcf_action_set_ctrlact(*a, parm->action, goto_ch);
-	rcu_swap_protected(ife->params, p, 1);
+	p = rcu_replace_pointer(ife->params, p, 1);
 
 	if (exists)
 		spin_unlock_bh(&ife->tcf_lock);
@@ -625,9 +627,6 @@ static int tcf_ife_init(struct net *net, struct nlattr *nla,
 		tcf_chain_put_by_act(goto_ch);
 	if (p)
 		kfree_rcu(p, rcu);
-
-	if (ret == ACT_P_CREATED)
-		tcf_idr_insert(tn, *a);
 
 	return ret;
 metadata_parse_err:

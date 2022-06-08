@@ -72,7 +72,7 @@ static void flush_bios(struct bio *bio)
 	while (bio) {
 		n = bio->bi_next;
 		bio->bi_next = NULL;
-		generic_make_request(bio);
+		submit_bio_noacct(bio);
 		bio = n;
 	}
 }
@@ -325,6 +325,10 @@ static void delay_status(struct dm_target *ti, status_type_t type,
 			DMEMIT(" ");
 			DMEMIT_DELAY_CLASS(&dc->flush);
 		}
+		break;
+
+	case STATUSTYPE_IMA:
+		*result = '\0';
 		break;
 	}
 }

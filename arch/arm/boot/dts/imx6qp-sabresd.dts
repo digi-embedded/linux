@@ -68,6 +68,10 @@
 	status = "okay";
 };
 
+&sata {
+	status = "okay";
+};
+
 &pre1 {
 	status = "okay";
 };

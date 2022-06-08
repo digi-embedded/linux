@@ -6,6 +6,9 @@
  */
 #include <linux/types.h>
 
+#define compat_mode_t	compat_mode_t
+typedef u16		compat_mode_t;
+
 #include <asm-generic/compat.h>
 
 #define COMPAT_USER_HZ		100
@@ -13,16 +16,11 @@
 
 typedef u16		__compat_uid_t;
 typedef u16		__compat_gid_t;
-typedef u32		__compat_uid32_t;
-typedef u32		__compat_gid32_t;
-typedef u16		compat_mode_t;
 typedef u16		compat_dev_t;
 typedef s16		compat_nlink_t;
 typedef u16		compat_ipc_pid_t;
-typedef u32		compat_caddr_t;
 typedef __kernel_fsid_t	compat_fsid_t;
-typedef s64		compat_s64;
-typedef u64		compat_u64;
+
 struct compat_stat {
 	compat_dev_t	st_dev;
 	compat_ino_t	st_ino;
@@ -116,50 +114,7 @@ struct compat_statfs {
 
 #define COMPAT_RLIM_INFINITY 0x7fffffff
 
-typedef u32		compat_old_sigset_t;
-
-#define _COMPAT_NSIG		64
-#define _COMPAT_NSIG_BPW	32
-
-typedef u32		compat_sigset_word;
-
 #define COMPAT_OFF_T_MAX	0x7fffffff
-
-/*
- * A pointer passed in from user mode. This should not
- * be used for syscall parameters, just declare them
- * as pointers because the syscall entry code will have
- * appropriately converted them already.
- */
-
-static inline void __user *compat_ptr(compat_uptr_t uptr)
-{
-	return (void __user *)(unsigned long)uptr;
-}
-
-static inline compat_uptr_t ptr_to_compat(void __user *uptr)
-{
-	return (u32)(unsigned long)uptr;
-}
-
-#ifdef CONFIG_COMPAT
-static inline void __user *arch_compat_alloc_user_space(long len)
-{
-	struct pt_regs *regs = current_thread_info()->kregs;
-	unsigned long usp = regs->u_regs[UREG_I6];
-
-	if (test_thread_64bit_stack(usp))
-		usp += STACK_BIAS;
-
-	if (test_thread_flag(TIF_32BIT))
-		usp &= 0xffffffffUL;
-
-	usp -= len;
-	usp &= ~0x7UL;
-
-	return (void __user *) usp;
-}
-#endif
 
 struct compat_ipc64_perm {
 	compat_key_t key;

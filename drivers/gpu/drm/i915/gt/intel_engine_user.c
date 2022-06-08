@@ -1,6 +1,5 @@
+// SPDX-License-Identifier: MIT
 /*
- * SPDX-License-Identifier: MIT
- *
  * Copyright © 2019 Intel Corporation
  */
 
@@ -11,6 +10,8 @@
 #include "i915_drv.h"
 #include "intel_engine.h"
 #include "intel_engine_user.h"
+#include "intel_gt.h"
+#include "uc/intel_guc_submission.h"
 
 struct intel_engine_cs *
 intel_engine_lookup_user(struct drm_i915_private *i915, u8 class, u8 instance)
@@ -48,7 +49,8 @@ static const u8 uabi_classes[] = {
 	[VIDEO_ENHANCEMENT_CLASS] = I915_ENGINE_CLASS_VIDEO_ENHANCE,
 };
 
-static int engine_cmp(void *priv, struct list_head *A, struct list_head *B)
+static int engine_cmp(void *priv, const struct list_head *A,
+		      const struct list_head *B)
 {
 	const struct intel_engine_cs *a =
 		container_of((struct rb_node *)A, typeof(*a), uabi_node);
@@ -107,12 +109,15 @@ static void set_scheduler_caps(struct drm_i915_private *i915)
 	for_each_uabi_engine(engine, i915) { /* all engines must agree! */
 		int i;
 
-		if (engine->schedule)
+		if (engine->sched_engine->schedule)
 			enabled |= (I915_SCHEDULER_CAP_ENABLED |
 				    I915_SCHEDULER_CAP_PRIORITY);
 		else
 			disabled |= (I915_SCHEDULER_CAP_ENABLED |
 				     I915_SCHEDULER_CAP_PRIORITY);
+
+		if (intel_uc_uses_guc_submission(&i915->gt.uc))
+			enabled |= I915_SCHEDULER_CAP_STATIC_PRIORITY_MAP;
 
 		for (i = 0; i < ARRAY_SIZE(map); i++) {
 			if (engine->flags & BIT(map[i].engine))
@@ -160,10 +165,10 @@ static int legacy_ring_idx(const struct legacy_ring *ring)
 	};
 
 	if (GEM_DEBUG_WARN_ON(ring->class >= ARRAY_SIZE(map)))
-		return -1;
+		return INVALID_ENGINE;
 
 	if (GEM_DEBUG_WARN_ON(ring->instance >= map[ring->class].max))
-		return -1;
+		return INVALID_ENGINE;
 
 	return map[ring->class].base + ring->instance;
 }
@@ -171,23 +176,15 @@ static int legacy_ring_idx(const struct legacy_ring *ring)
 static void add_legacy_ring(struct legacy_ring *ring,
 			    struct intel_engine_cs *engine)
 {
-	int idx;
-
 	if (engine->gt != ring->gt || engine->class != ring->class) {
 		ring->gt = engine->gt;
 		ring->class = engine->class;
 		ring->instance = 0;
 	}
 
-	idx = legacy_ring_idx(ring);
-	if (unlikely(idx == -1))
-		return;
-
-	GEM_BUG_ON(idx >= ARRAY_SIZE(ring->gt->engine));
-	ring->gt->engine[idx] = engine;
-	ring->instance++;
-
-	engine->legacy_idx = idx;
+	engine->legacy_idx = legacy_ring_idx(ring);
+	if (engine->legacy_idx != INVALID_ENGINE)
+		ring->instance++;
 }
 
 void intel_engines_driver_register(struct drm_i915_private *i915)
@@ -207,6 +204,9 @@ void intel_engines_driver_register(struct drm_i915_private *i915)
 			container_of((struct rb_node *)it, typeof(*engine),
 				     uabi_node);
 		char old[sizeof(engine->name)];
+
+		if (intel_gt_has_unrecoverable_error(engine->gt))
+			continue; /* ignore incomplete engines */
 
 		GEM_BUG_ON(engine->class >= ARRAY_SIZE(uabi_classes));
 		engine->uabi_class = uabi_classes[engine->class];
@@ -282,7 +282,8 @@ void intel_engines_driver_register(struct drm_i915_private *i915)
 			}
 		}
 
-		if (WARN(errors, "Invalid UABI engine mapping found"))
+		if (drm_WARN(&i915->drm, errors,
+			     "Invalid UABI engine mapping found"))
 			i915->uabi_engines = RB_ROOT;
 	}
 

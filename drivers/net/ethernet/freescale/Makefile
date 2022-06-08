@@ -5,6 +5,7 @@
 
 obj-$(CONFIG_FEC) += fec.o
 fec-objs :=fec_main.o fec_ptp.o
+obj-$(CONFIG_FEC_UIO) += fec_uio.o
 
 obj-$(CONFIG_FEC_MPC52xx) += fec_mpc52xx.o
 ifeq ($(CONFIG_FEC_MPC52xx_MDIO),y)
@@ -27,5 +28,4 @@ obj-$(CONFIG_FSL_DPAA_ETH) += dpaa/
 
 obj-$(CONFIG_FSL_DPAA2_ETH) += dpaa2/
 
-obj-$(CONFIG_FSL_ENETC) += enetc/
-obj-$(CONFIG_FSL_ENETC_VF) += enetc/
+obj-y += enetc/

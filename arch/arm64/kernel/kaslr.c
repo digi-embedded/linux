@@ -10,15 +10,25 @@
 #include <linux/mm_types.h>
 #include <linux/sched.h>
 #include <linux/types.h>
+#include <linux/pgtable.h>
+#include <linux/random.h>
 
 #include <asm/cacheflush.h>
 #include <asm/fixmap.h>
 #include <asm/kernel-pgtable.h>
 #include <asm/memory.h>
 #include <asm/mmu.h>
-#include <asm/pgtable.h>
 #include <asm/sections.h>
+#include <asm/setup.h>
 
+enum kaslr_status {
+	KASLR_ENABLED,
+	KASLR_DISABLED_CMDLINE,
+	KASLR_DISABLED_NO_SEED,
+	KASLR_DISABLED_FDT_REMAP,
+};
+
+static enum kaslr_status __initdata kaslr_status;
 u64 __ro_after_init module_alloc_base;
 u16 __initdata memstart_offset_seed;
 
@@ -41,26 +51,7 @@ static __init u64 get_kaslr_seed(void *fdt)
 	return ret;
 }
 
-static __init const u8 *kaslr_get_cmdline(void *fdt)
-{
-	static __initconst const u8 default_cmdline[] = CONFIG_CMDLINE;
-
-	if (!IS_ENABLED(CONFIG_CMDLINE_FORCE)) {
-		int node;
-		const u8 *prop;
-
-		node = fdt_path_offset(fdt, "/chosen");
-		if (node < 0)
-			goto out;
-
-		prop = fdt_getprop(fdt, node, "bootargs", NULL);
-		if (!prop)
-			goto out;
-		return prop;
-	}
-out:
-	return default_cmdline;
-}
+struct arm64_ftr_override kaslr_feature_override __initdata;
 
 /*
  * This routine will be executed with the kernel mapped at its default virtual
@@ -70,45 +61,58 @@ out:
  * containing function pointers) to be reinitialized, and zero-initialized
  * .bss variables will be reset to 0.
  */
-u64 __init kaslr_early_init(u64 dt_phys)
+u64 __init kaslr_early_init(void)
 {
 	void *fdt;
 	u64 seed, offset, mask, module_range;
-	const u8 *cmdline, *str;
-	int size;
+	unsigned long raw;
 
 	/*
 	 * Set a reasonable default for module_alloc_base in case
 	 * we end up running with module randomization disabled.
 	 */
 	module_alloc_base = (u64)_etext - MODULES_VSIZE;
-	__flush_dcache_area(&module_alloc_base, sizeof(module_alloc_base));
+	dcache_clean_inval_poc((unsigned long)&module_alloc_base,
+			    (unsigned long)&module_alloc_base +
+				    sizeof(module_alloc_base));
 
 	/*
 	 * Try to map the FDT early. If this fails, we simply bail,
 	 * and proceed with KASLR disabled. We will make another
 	 * attempt at mapping the FDT in setup_machine()
 	 */
-	early_fixmap_init();
-	fdt = fixmap_remap_fdt(dt_phys, &size, PAGE_KERNEL);
-	if (!fdt)
+	fdt = get_early_fdt_ptr();
+	if (!fdt) {
+		kaslr_status = KASLR_DISABLED_FDT_REMAP;
 		return 0;
+	}
 
 	/*
 	 * Retrieve (and wipe) the seed from the FDT
 	 */
 	seed = get_kaslr_seed(fdt);
-	if (!seed)
-		return 0;
 
 	/*
 	 * Check if 'nokaslr' appears on the command line, and
 	 * return 0 if that is the case.
 	 */
-	cmdline = kaslr_get_cmdline(fdt);
-	str = strstr(cmdline, "nokaslr");
-	if (str == cmdline || (str > cmdline && *(str - 1) == ' '))
+	if (kaslr_feature_override.val & kaslr_feature_override.mask & 0xf) {
+		kaslr_status = KASLR_DISABLED_CMDLINE;
 		return 0;
+	}
+
+	/*
+	 * Mix in any entropy obtainable architecturally if enabled
+	 * and supported.
+	 */
+
+	if (arch_get_random_seed_long_early(&raw))
+		seed ^= raw;
+
+	if (!seed) {
+		kaslr_status = KASLR_DISABLED_NO_SEED;
+		return 0;
+	}
 
 	/*
 	 * OK, so we are proceeding with KASLR enabled. Calculate a suitable
@@ -126,14 +130,17 @@ u64 __init kaslr_early_init(u64 dt_phys)
 	/* use the top 16 bits to randomize the linear region */
 	memstart_offset_seed = seed >> 48;
 
-	if (IS_ENABLED(CONFIG_KASAN))
+	if (!IS_ENABLED(CONFIG_KASAN_VMALLOC) &&
+	    (IS_ENABLED(CONFIG_KASAN_GENERIC) ||
+	     IS_ENABLED(CONFIG_KASAN_SW_TAGS)))
 		/*
-		 * KASAN does not expect the module region to intersect the
-		 * vmalloc region, since shadow memory is allocated for each
-		 * module at load time, whereas the vmalloc region is shadowed
-		 * by KASAN zero pages. So keep modules out of the vmalloc
-		 * region if KASAN is enabled, and put the kernel well within
-		 * 4 GB of the module region.
+		 * KASAN without KASAN_VMALLOC does not expect the module region
+		 * to intersect the vmalloc region, since shadow memory is
+		 * allocated for each module at load time, whereas the vmalloc
+		 * region is shadowed by KASAN zero pages. So keep modules
+		 * out of the vmalloc region if KASAN is enabled without
+		 * KASAN_VMALLOC, and put the kernel well within 4 GB of the
+		 * module region.
 		 */
 		return offset % SZ_2G;
 
@@ -155,7 +162,9 @@ u64 __init kaslr_early_init(u64 dt_phys)
 		 * a PAGE_SIZE multiple in the range [_etext - MODULES_VSIZE,
 		 * _stext) . This guarantees that the resulting region still
 		 * covers [_stext, _etext], and that all relative branches can
-		 * be resolved without veneers.
+		 * be resolved without veneers unless this region is exhausted
+		 * and we fall back to a larger 2GB window in module_alloc()
+		 * when ARM64_MODULE_PLTS is enabled.
 		 */
 		module_range = MODULES_VSIZE - (u64)(_etext - _stext);
 		module_alloc_base = (u64)_etext + offset - MODULES_VSIZE;
@@ -165,8 +174,33 @@ u64 __init kaslr_early_init(u64 dt_phys)
 	module_alloc_base += (module_range * (seed & ((1 << 21) - 1))) >> 21;
 	module_alloc_base &= PAGE_MASK;
 
-	__flush_dcache_area(&module_alloc_base, sizeof(module_alloc_base));
-	__flush_dcache_area(&memstart_offset_seed, sizeof(memstart_offset_seed));
+	dcache_clean_inval_poc((unsigned long)&module_alloc_base,
+			    (unsigned long)&module_alloc_base +
+				    sizeof(module_alloc_base));
+	dcache_clean_inval_poc((unsigned long)&memstart_offset_seed,
+			    (unsigned long)&memstart_offset_seed +
+				    sizeof(memstart_offset_seed));
 
 	return offset;
 }
+
+static int __init kaslr_init(void)
+{
+	switch (kaslr_status) {
+	case KASLR_ENABLED:
+		pr_info("KASLR enabled\n");
+		break;
+	case KASLR_DISABLED_CMDLINE:
+		pr_info("KASLR disabled on command line\n");
+		break;
+	case KASLR_DISABLED_NO_SEED:
+		pr_warn("KASLR disabled due to lack of seed\n");
+		break;
+	case KASLR_DISABLED_FDT_REMAP:
+		pr_warn("KASLR disabled due to FDT remapping failure\n");
+		break;
+	}
+
+	return 0;
+}
+core_initcall(kaslr_init)

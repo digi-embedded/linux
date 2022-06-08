@@ -7,7 +7,6 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/of.h>
-#include <linux/of_device.h>
 #include <linux/platform_device.h>
 #include <linux/pm_wakeirq.h>
 #include <linux/rtc.h>
@@ -152,17 +151,14 @@ static int snvs_rtc_read_time(struct device *dev, struct rtc_time *tm)
 	unsigned long time;
 	int ret;
 
-	if (data->clk) {
-		ret = clk_enable(data->clk);
-		if (ret)
-			return ret;
-	}
+	ret = clk_enable(data->clk);
+	if (ret)
+		return ret;
 
 	time = rtc_read_lp_counter(data);
 	rtc_time64_to_tm(time, tm);
 
-	if (data->clk)
-		clk_disable(data->clk);
+	clk_disable(data->clk);
 
 	return 0;
 }
@@ -173,11 +169,9 @@ static int snvs_rtc_set_time(struct device *dev, struct rtc_time *tm)
 	unsigned long time = rtc_tm_to_time64(tm);
 	int ret;
 
-	if (data->clk) {
-		ret = clk_enable(data->clk);
-		if (ret)
-			return ret;
-	}
+	ret = clk_enable(data->clk);
+	if (ret)
+		return ret;
 
 	/* Disable RTC first */
 	ret = snvs_rtc_enable(data, false);
@@ -191,8 +185,7 @@ static int snvs_rtc_set_time(struct device *dev, struct rtc_time *tm)
 	/* Enable RTC again */
 	ret = snvs_rtc_enable(data, true);
 
-	if (data->clk)
-		clk_disable(data->clk);
+	clk_disable(data->clk);
 
 	return ret;
 }
@@ -203,11 +196,9 @@ static int snvs_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 	u32 lptar, lpsr;
 	int ret;
 
-	if (data->clk) {
-		ret = clk_enable(data->clk);
-		if (ret)
-			return ret;
-	}
+	ret = clk_enable(data->clk);
+	if (ret)
+		return ret;
 
 	regmap_read(data->regmap, data->offset + SNVS_LPTAR, &lptar);
 	rtc_time64_to_tm(lptar, &alrm->time);
@@ -215,8 +206,7 @@ static int snvs_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 	regmap_read(data->regmap, data->offset + SNVS_LPSR, &lpsr);
 	alrm->pending = (lpsr & SNVS_LPSR_LPTA) ? 1 : 0;
 
-	if (data->clk)
-		clk_disable(data->clk);
+	clk_disable(data->clk);
 
 	return 0;
 }
@@ -226,11 +216,9 @@ static int snvs_rtc_alarm_irq_enable(struct device *dev, unsigned int enable)
 	struct snvs_rtc_data *data = dev_get_drvdata(dev);
 	int ret;
 
-	if (data->clk) {
-		ret = clk_enable(data->clk);
-		if (ret)
-			return ret;
-	}
+	ret = clk_enable(data->clk);
+	if (ret)
+		return ret;
 
 	regmap_update_bits(data->regmap, data->offset + SNVS_LPCR,
 			   (SNVS_LPCR_LPTA_EN | SNVS_LPCR_LPWUI_EN),
@@ -238,8 +226,7 @@ static int snvs_rtc_alarm_irq_enable(struct device *dev, unsigned int enable)
 
 	ret = rtc_write_sync_lp(data);
 
-	if (data->clk)
-		clk_disable(data->clk);
+	clk_disable(data->clk);
 
 	return ret;
 }
@@ -250,11 +237,9 @@ static int snvs_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 	unsigned long time = rtc_tm_to_time64(&alrm->time);
 	int ret;
 
-	if (data->clk) {
-		ret = clk_enable(data->clk);
-		if (ret)
-			return ret;
-	}
+	ret = clk_enable(data->clk);
+	if (ret)
+		return ret;
 
 	regmap_update_bits(data->regmap, data->offset + SNVS_LPCR, SNVS_LPCR_LPTA_EN, 0);
 	ret = rtc_write_sync_lp(data);
@@ -265,8 +250,7 @@ static int snvs_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 	/* Clear alarm interrupt status bit */
 	regmap_write(data->regmap, data->offset + SNVS_LPSR, SNVS_LPSR_LPTA);
 
-	if (data->clk)
-		clk_disable(data->clk);
+	clk_disable(data->clk);
 
 	return snvs_rtc_alarm_irq_enable(dev, alrm->enabled);
 }
@@ -286,8 +270,7 @@ static irqreturn_t snvs_rtc_irq_handler(int irq, void *dev_id)
 	u32 lpsr;
 	u32 events = 0;
 
-	if (data->clk)
-		clk_enable(data->clk);
+	clk_enable(data->clk);
 
 	regmap_read(data->regmap, data->offset + SNVS_LPSR, &lpsr);
 
@@ -303,8 +286,7 @@ static irqreturn_t snvs_rtc_irq_handler(int irq, void *dev_id)
 	/* clear interrupt status */
 	regmap_write(data->regmap, data->offset + SNVS_LPSR, lpsr);
 
-	if (data->clk)
-		clk_disable(data->clk);
+	clk_disable(data->clk);
 
 	return events ? IRQ_HANDLED : IRQ_NONE;
 }
@@ -314,6 +296,11 @@ static const struct regmap_config snvs_rtc_config = {
 	.val_bits = 32,
 	.reg_stride = 4,
 };
+
+static void snvs_rtc_action(void *data)
+{
+	clk_disable_unprepare(data);
+}
 
 static int snvs_rtc_probe(struct platform_device *pdev)
 {
@@ -365,6 +352,10 @@ static int snvs_rtc_probe(struct platform_device *pdev)
 		}
 	}
 
+	ret = devm_add_action_or_reset(&pdev->dev, snvs_rtc_action, data->clk);
+	if (ret)
+		return ret;
+
 	platform_set_drvdata(pdev, data);
 
 	/* Initialize glitch detect */
@@ -377,7 +368,7 @@ static int snvs_rtc_probe(struct platform_device *pdev)
 	ret = snvs_rtc_enable(data, true);
 	if (ret) {
 		dev_err(&pdev->dev, "failed to enable rtc %d\n", ret);
-		goto error_rtc_device_register;
+		return ret;
 	}
 
 	device_init_wakeup(&pdev->dev, true);
@@ -390,32 +381,20 @@ static int snvs_rtc_probe(struct platform_device *pdev)
 	if (ret) {
 		dev_err(&pdev->dev, "failed to request irq %d: %d\n",
 			data->irq, ret);
-		goto error_rtc_device_register;
+		return ret;
 	}
 
 	data->rtc->ops = &snvs_rtc_ops;
 	data->rtc->range_max = U32_MAX;
-	ret = rtc_register_device(data->rtc);
-	if (ret) {
-		dev_err(&pdev->dev, "failed to register rtc: %d\n", ret);
-		goto error_rtc_device_register;
-	}
 
-	return 0;
-
-error_rtc_device_register:
-	if (data->clk)
-		clk_disable_unprepare(data->clk);
-
-	return ret;
+	return devm_rtc_register_device(data->rtc);
 }
 
 static int __maybe_unused snvs_rtc_suspend_noirq(struct device *dev)
 {
 	struct snvs_rtc_data *data = dev_get_drvdata(dev);
 
-	if (data->clk)
-		clk_disable(data->clk);
+	clk_disable(data->clk);
 
 	return 0;
 }

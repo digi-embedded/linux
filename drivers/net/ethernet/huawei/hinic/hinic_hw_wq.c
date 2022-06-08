@@ -89,6 +89,7 @@ static inline int WQE_PAGE_NUM(struct hinic_wq *wq, u16 idx)
 	return (((idx) >> ((wq)->wqebbs_per_page_shift))
 		& ((wq)->num_q_pages - 1));
 }
+
 /**
  * queue_alloc_page - allocate page for Queue
  * @hwif: HW interface for allocating DMA
@@ -503,7 +504,7 @@ err_alloc_wq_pages:
  * Return 0 - Success, negative - Failure
  **/
 int hinic_wq_allocate(struct hinic_wqs *wqs, struct hinic_wq *wq,
-		      u16 wqebb_size, u16 wq_page_size, u16 q_depth,
+		      u16 wqebb_size, u32 wq_page_size, u16 q_depth,
 		      u16 max_wqe_size)
 {
 	struct hinic_hwif *hwif = wqs->hwif;
@@ -600,7 +601,7 @@ void hinic_wq_free(struct hinic_wqs *wqs, struct hinic_wq *wq)
  **/
 int hinic_wqs_cmdq_alloc(struct hinic_cmdq_pages *cmdq_pages,
 			 struct hinic_wq *wq, struct hinic_hwif *hwif,
-			 int cmdq_blocks, u16 wqebb_size, u16 wq_page_size,
+			 int cmdq_blocks, u16 wqebb_size, u32 wq_page_size,
 			 u16 q_depth, u16 max_wqe_size)
 {
 	struct pci_dev *pdev = hwif->pdev;
@@ -768,7 +769,10 @@ struct hinic_hw_wqe *hinic_get_wqe(struct hinic_wq *wq, unsigned int wqe_size,
 
 	*prod_idx = curr_prod_idx;
 
-	if (curr_pg != end_pg) {
+	/* If we only have one page, still need to get shadown wqe when
+	 * wqe rolling-over page
+	 */
+	if (curr_pg != end_pg || MASKED_WQE_IDX(wq, end_prod_idx) < *prod_idx) {
 		void *shadow_addr = &wq->shadow_wqe[curr_pg * wq->max_wqe_size];
 
 		copy_wqe_to_shadow(wq, shadow_addr, num_wqebbs, *prod_idx);

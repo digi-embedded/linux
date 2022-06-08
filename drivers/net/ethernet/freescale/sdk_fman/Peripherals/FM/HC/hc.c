@@ -1,5 +1,6 @@
 /*
  * Copyright 2008-2012 Freescale Semiconductor Inc.
+ * Copyright 2021 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -127,6 +128,7 @@ typedef struct t_HcFrame {
 typedef struct t_FmHc {
     t_Handle                    h_FmPcd;
     t_Handle                    h_HcPortDev;
+    bool						usageAllowed;    /**< HC usage is allowed or denied by user via API */
     t_FmPcdQmEnqueueCallback    *f_QmEnqueue;     /**< A callback for enqueuing frames to the QM */
     t_Handle                    h_QmArg;          /**< A handle to the QM module */
     uint8_t                     dataMemId;        /**< Memory partition ID for data buffers */
@@ -216,7 +218,7 @@ static __inline__ t_Error EnQFrm(t_FmHc *p_FmHc, t_DpaaFD *p_FmFd, uint32_t seqN
     ASSERT_COND(!p_FmHc->enqueued[seqNum]);
     p_FmHc->enqueued[seqNum] = TRUE;
     FmPcdUnlock(p_FmHc->h_FmPcd, intFlags);
-    DBG(TRACE, ("Send Hc, SeqNum %d, buff@0x%x, fd offset 0x%x",
+    DBG(TRACE, ("Send Hc, SeqNum %d, buff@0x%p, fd offset 0x%x",
                 seqNum,
                 DPAA_FD_GET_ADDR(p_FmFd),
                 DPAA_FD_GET_OFFSET(p_FmFd)));
@@ -252,6 +254,7 @@ t_Handle FmHcConfigAndInit(t_FmHcParams *p_FmHcParams)
     p_FmHc->f_QmEnqueue         = p_FmHcParams->params.f_QmEnqueue;
     p_FmHc->h_QmArg             = p_FmHcParams->params.h_QmArg;
     p_FmHc->dataMemId           = DEFAULT_dataMemId;
+    p_FmHc->usageAllowed		= TRUE;
 
     err = FillBufPool(p_FmHc);
     if (err != E_OK)
@@ -362,7 +365,7 @@ void FmHcTxConf(t_Handle h_FmHc, t_DpaaFD *p_Fd)
     intFlags = FmPcdLock(p_FmHc->h_FmPcd);
     p_HcFrame  = (t_HcFrame *)PTR_MOVE(DPAA_FD_GET_ADDR(p_Fd), DPAA_FD_GET_OFFSET(p_Fd));
 
-    DBG(TRACE, ("Hc Conf, SeqNum %d, FD@0x%x, fd offset 0x%x",
+    DBG(TRACE, ("Hc Conf, SeqNum %d, FD@0x%p, fd offset 0x%x",
                 p_HcFrame->commandSequence, DPAA_FD_GET_ADDR(p_Fd), DPAA_FD_GET_OFFSET(p_Fd)));
 
     if (!(p_FmHc->enqueued[p_HcFrame->commandSequence]))
@@ -661,7 +664,7 @@ t_Error FmHcPcdKgSetClsPlan(t_Handle h_FmHc, t_FmPcdKgInterModuleClsPlanSet *p_S
 
         idx = (uint8_t)(i - p_Set->baseEntry);
         ASSERT_COND(idx < FM_PCD_MAX_NUM_OF_CLS_PLANS);
-	dest = (void *)&p_HcFrame->hcSpecificData.clsPlanEntries; 
+	dest = (void *)&p_HcFrame->hcSpecificData.clsPlanEntries;
 	src = &p_Set->vectors[idx];
         memcpy(dest, src, CLS_PLAN_NUM_PER_GRP*sizeof(uint32_t));
         p_HcFrame->commandSequence = seqNum;
@@ -1233,4 +1236,22 @@ t_Handle    FmHcGetPort(t_Handle h_FmHc)
 {
     t_FmHc *p_FmHc = (t_FmHc*)h_FmHc;
     return p_FmHc->h_HcPortDev;
+}
+
+void FmAllowHcUsage(t_Handle h_FmHc, bool allow)
+{
+	t_FmHc *p_FmHc = (t_FmHc*)h_FmHc;
+
+	if (p_FmHc)
+		p_FmHc->usageAllowed = allow;
+}
+
+bool FmIsHcUsageAllowed(t_Handle h_FmHc)
+{
+	t_FmHc *p_FmHc = (t_FmHc*)h_FmHc;
+
+	if (p_FmHc == NULL)
+		return FALSE;
+
+	return p_FmHc->usageAllowed;
 }

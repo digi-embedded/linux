@@ -18,6 +18,7 @@
 #include <drm/bridge/fsl_imx_ldb.h>
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_probe_helper.h>
+#include <drm/drm_simple_kms_helper.h>
 
 #include "imx-drm.h"
 
@@ -434,10 +435,6 @@ imx8qxp_ldb_connector_helper_funcs = {
 	.best_encoder = imx8qxp_ldb_connector_best_encoder,
 };
 
-static const struct drm_encoder_funcs imx8qxp_ldb_encoder_funcs = {
-	.destroy = imx_drm_encoder_destroy,
-};
-
 static const struct drm_encoder_helper_funcs
 imx8qxp_ldb_encoder_helper_funcs = {
 	.atomic_mode_set = imx8qxp_ldb_encoder_atomic_mode_set,
@@ -607,8 +604,7 @@ imx8qxp_ldb_bind(struct device *dev, struct device *master, void *data)
 
 		drm_encoder_helper_add(encoder[i],
 				      &imx8qxp_ldb_encoder_helper_funcs);
-		drm_encoder_init(drm, encoder[i], &imx8qxp_ldb_encoder_funcs,
-				 DRM_MODE_ENCODER_LVDS, NULL);
+		drm_simple_encoder_init(drm, encoder[i], DRM_MODE_ENCODER_LVDS);
 	}
 
 	dual = of_property_read_bool(np, "fsl,dual-channel");

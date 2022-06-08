@@ -76,13 +76,13 @@ static int nft_limit_init(struct nft_limit *limit,
 		return -EOVERFLOW;
 
 	if (pkts) {
-		tokens = div_u64(limit->nsecs, limit->rate) * limit->burst;
+		tokens = div64_u64(limit->nsecs, limit->rate) * limit->burst;
 	} else {
 		/* The token bucket size limits the number of tokens can be
 		 * accumulated. tokens_max specifies the bucket size.
 		 * tokens_max = unit * (rate + burst) / rate.
 		 */
-		tokens = div_u64(limit->nsecs * (limit->rate + limit->burst),
+		tokens = div64_u64(limit->nsecs * (limit->rate + limit->burst),
 				 limit->rate);
 	}
 
@@ -372,3 +372,4 @@ MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Patrick McHardy <kaber@trash.net>");
 MODULE_ALIAS_NFT_EXPR("limit");
 MODULE_ALIAS_NFT_OBJ(NFT_OBJECT_LIMIT);
+MODULE_DESCRIPTION("nftables limit expression support");

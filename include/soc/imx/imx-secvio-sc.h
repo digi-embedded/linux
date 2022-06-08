@@ -170,9 +170,9 @@ enum ioctl_cmd_t {
 
 /* Definition for the ioctl interface */
 #define IMX_SECVIO_SC_GET_STATE   _IOR('S', GET_STATE, \
-									  struct secvio_sc_notifier_info)
+				struct secvio_sc_notifier_info)
 #define IMX_SECVIO_SC_CHECK_STATE _IO('S', CHECK_STATE)
 #define IMX_SECVIO_SC_CLEAR_STATE _IOW('S', CLEAR_STATE, \
-									  struct secvio_sc_notifier_info)
+				struct secvio_sc_notifier_info)
 
 #endif /* _MISC_IMX_SECVIO_SC_H_ */

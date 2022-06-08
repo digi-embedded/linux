@@ -4,7 +4,6 @@
  */
 
 #include <dt-bindings/firmware/imx/rsrc.h>
-#include <linux/module.h>
 
 #include "clk-scu.h"
 
@@ -48,7 +47,6 @@ static u32 imx8dxl_clk_scu_rsrc_table[] = {
 	IMX_SC_R_SDHC_2,
 	IMX_SC_R_ENET_0,
 	IMX_SC_R_ENET_1,
-	IMX_SC_R_MLB_0,
 	IMX_SC_R_USB_1,
 	IMX_SC_R_NAND,
 	IMX_SC_R_M4_0_I2C,
@@ -65,5 +63,3 @@ const struct imx_clk_scu_rsrc_table imx_clk_scu_rsrc_imx8dxl = {
 	.rsrc = imx8dxl_clk_scu_rsrc_table,
 	.num = ARRAY_SIZE(imx8dxl_clk_scu_rsrc_table),
 };
-EXPORT_SYMBOL_GPL(imx_clk_scu_rsrc_imx8dxl);
-MODULE_LICENSE("GPL v2");

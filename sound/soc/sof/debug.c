@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: (GPL-2.0 OR BSD-3-Clause)
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-3-Clause)
 //
 // This file is provided under a dual BSD/GPLv2 license.  When using or
 // redistributing this file, you may do so under either license.
@@ -14,8 +14,225 @@
 #include <linux/debugfs.h>
 #include <linux/io.h>
 #include <linux/pm_runtime.h>
+#include <sound/sof/ext_manifest.h>
+#include <sound/sof/debug.h>
 #include "sof-priv.h"
 #include "ops.h"
+
+#if IS_ENABLED(CONFIG_SND_SOC_SOF_DEBUG_PROBES)
+#include "probe.h"
+
+/**
+ * strsplit_u32 - Split string into sequence of u32 tokens
+ * @buf:	String to split into tokens.
+ * @delim:	String containing delimiter characters.
+ * @tkns:	Returned u32 sequence pointer.
+ * @num_tkns:	Returned number of tokens obtained.
+ */
+static int
+strsplit_u32(char **buf, const char *delim, u32 **tkns, size_t *num_tkns)
+{
+	char *s;
+	u32 *data, *tmp;
+	size_t count = 0;
+	size_t cap = 32;
+	int ret = 0;
+
+	*tkns = NULL;
+	*num_tkns = 0;
+	data = kcalloc(cap, sizeof(*data), GFP_KERNEL);
+	if (!data)
+		return -ENOMEM;
+
+	while ((s = strsep(buf, delim)) != NULL) {
+		ret = kstrtouint(s, 0, data + count);
+		if (ret)
+			goto exit;
+		if (++count >= cap) {
+			cap *= 2;
+			tmp = krealloc(data, cap * sizeof(*data), GFP_KERNEL);
+			if (!tmp) {
+				ret = -ENOMEM;
+				goto exit;
+			}
+			data = tmp;
+		}
+	}
+
+	if (!count)
+		goto exit;
+	*tkns = kmemdup(data, count * sizeof(*data), GFP_KERNEL);
+	if (*tkns == NULL) {
+		ret = -ENOMEM;
+		goto exit;
+	}
+	*num_tkns = count;
+
+exit:
+	kfree(data);
+	return ret;
+}
+
+static int tokenize_input(const char __user *from, size_t count,
+		loff_t *ppos, u32 **tkns, size_t *num_tkns)
+{
+	char *buf;
+	int ret;
+
+	buf = kmalloc(count + 1, GFP_KERNEL);
+	if (!buf)
+		return -ENOMEM;
+
+	ret = simple_write_to_buffer(buf, count, ppos, from, count);
+	if (ret != count) {
+		ret = ret >= 0 ? -EIO : ret;
+		goto exit;
+	}
+
+	buf[count] = '\0';
+	ret = strsplit_u32((char **)&buf, ",", tkns, num_tkns);
+exit:
+	kfree(buf);
+	return ret;
+}
+
+static ssize_t probe_points_read(struct file *file,
+		char __user *to, size_t count, loff_t *ppos)
+{
+	struct snd_sof_dfsentry *dfse = file->private_data;
+	struct snd_sof_dev *sdev = dfse->sdev;
+	struct sof_probe_point_desc *desc;
+	size_t num_desc, len = 0;
+	char *buf;
+	int i, ret;
+
+	if (sdev->extractor_stream_tag == SOF_PROBE_INVALID_NODE_ID) {
+		dev_warn(sdev->dev, "no extractor stream running\n");
+		return -ENOENT;
+	}
+
+	buf = kzalloc(PAGE_SIZE, GFP_KERNEL);
+	if (!buf)
+		return -ENOMEM;
+
+	ret = sof_ipc_probe_points_info(sdev, &desc, &num_desc);
+	if (ret < 0)
+		goto exit;
+
+	for (i = 0; i < num_desc; i++) {
+		ret = snprintf(buf + len, PAGE_SIZE - len,
+			"Id: %#010x  Purpose: %d  Node id: %#x\n",
+			desc[i].buffer_id, desc[i].purpose, desc[i].stream_tag);
+		if (ret < 0)
+			goto free_desc;
+		len += ret;
+	}
+
+	ret = simple_read_from_buffer(to, count, ppos, buf, len);
+free_desc:
+	kfree(desc);
+exit:
+	kfree(buf);
+	return ret;
+}
+
+static ssize_t probe_points_write(struct file *file,
+		const char __user *from, size_t count, loff_t *ppos)
+{
+	struct snd_sof_dfsentry *dfse = file->private_data;
+	struct snd_sof_dev *sdev = dfse->sdev;
+	struct sof_probe_point_desc *desc;
+	size_t num_tkns, bytes;
+	u32 *tkns;
+	int ret;
+
+	if (sdev->extractor_stream_tag == SOF_PROBE_INVALID_NODE_ID) {
+		dev_warn(sdev->dev, "no extractor stream running\n");
+		return -ENOENT;
+	}
+
+	ret = tokenize_input(from, count, ppos, &tkns, &num_tkns);
+	if (ret < 0)
+		return ret;
+	bytes = sizeof(*tkns) * num_tkns;
+	if (!num_tkns || (bytes % sizeof(*desc))) {
+		ret = -EINVAL;
+		goto exit;
+	}
+
+	desc = (struct sof_probe_point_desc *)tkns;
+	ret = sof_ipc_probe_points_add(sdev,
+			desc, bytes / sizeof(*desc));
+	if (!ret)
+		ret = count;
+exit:
+	kfree(tkns);
+	return ret;
+}
+
+static const struct file_operations probe_points_fops = {
+	.open = simple_open,
+	.read = probe_points_read,
+	.write = probe_points_write,
+	.llseek = default_llseek,
+};
+
+static ssize_t probe_points_remove_write(struct file *file,
+		const char __user *from, size_t count, loff_t *ppos)
+{
+	struct snd_sof_dfsentry *dfse = file->private_data;
+	struct snd_sof_dev *sdev = dfse->sdev;
+	size_t num_tkns;
+	u32 *tkns;
+	int ret;
+
+	if (sdev->extractor_stream_tag == SOF_PROBE_INVALID_NODE_ID) {
+		dev_warn(sdev->dev, "no extractor stream running\n");
+		return -ENOENT;
+	}
+
+	ret = tokenize_input(from, count, ppos, &tkns, &num_tkns);
+	if (ret < 0)
+		return ret;
+	if (!num_tkns) {
+		ret = -EINVAL;
+		goto exit;
+	}
+
+	ret = sof_ipc_probe_points_remove(sdev, tkns, num_tkns);
+	if (!ret)
+		ret = count;
+exit:
+	kfree(tkns);
+	return ret;
+}
+
+static const struct file_operations probe_points_remove_fops = {
+	.open = simple_open,
+	.write = probe_points_remove_write,
+	.llseek = default_llseek,
+};
+
+static int snd_sof_debugfs_probe_item(struct snd_sof_dev *sdev,
+				 const char *name, mode_t mode,
+				 const struct file_operations *fops)
+{
+	struct snd_sof_dfsentry *dfse;
+
+	dfse = devm_kzalloc(sdev->dev, sizeof(*dfse), GFP_KERNEL);
+	if (!dfse)
+		return -ENOMEM;
+
+	dfse->type = SOF_DFSENTRY_TYPE_BUF;
+	dfse->sdev = sdev;
+
+	debugfs_create_file(name, mode, sdev->debugfs_root, dfse, fops);
+	/* add to dfsentry list */
+	list_add(&dfse->list, &sdev->dfsentry_list);
+
+	return 0;
+}
+#endif
 
 #if IS_ENABLED(CONFIG_SND_SOC_SOF_DEBUG_IPC_FLOOD_TEST)
 #define MAX_IPC_FLOOD_DURATION_MS 1000
@@ -135,7 +352,7 @@ static ssize_t sof_dfsentry_write(struct file *file, const char __user *buffer,
 	char *string;
 	int ret;
 
-	string = kzalloc(count, GFP_KERNEL);
+	string = kzalloc(count+1, GFP_KERNEL);
 	if (!string)
 		return -ENOMEM;
 
@@ -190,7 +407,7 @@ static ssize_t sof_dfsentry_write(struct file *file, const char __user *buffer,
 	}
 
 	ret = pm_runtime_get_sync(sdev->dev);
-	if (ret < 0) {
+	if (ret < 0 && ret != -EACCES) {
 		dev_err_ratelimited(sdev->dev,
 				    "error: debugfs write failed to resume %d\n",
 				    ret);
@@ -234,8 +451,7 @@ static ssize_t sof_dfsentry_read(struct file *file, char __user *buffer,
 
 	dentry = file->f_path.dentry;
 	if ((!strcmp(dentry->d_name.name, "ipc_flood_count") ||
-	     !strcmp(dentry->d_name.name, "ipc_flood_duration_ms")) &&
-	    dfse->cache_buf) {
+	     !strcmp(dentry->d_name.name, "ipc_flood_duration_ms"))) {
 		if (*ppos)
 			return 0;
 
@@ -392,14 +608,16 @@ int snd_sof_debugfs_buf_item(struct snd_sof_dev *sdev,
 	dfse->sdev = sdev;
 
 #if IS_ENABLED(CONFIG_SND_SOC_SOF_DEBUG_IPC_FLOOD_TEST)
-	/*
-	 * cache_buf is unused for SOF_DFSENTRY_TYPE_BUF debugfs entries.
-	 * So, use it to save the results of the last IPC flood test.
-	 */
-	dfse->cache_buf = devm_kzalloc(sdev->dev, IPC_FLOOD_TEST_RESULT_LEN,
-				       GFP_KERNEL);
-	if (!dfse->cache_buf)
-		return -ENOMEM;
+	if (!strncmp(name, "ipc_flood", strlen("ipc_flood"))) {
+		/*
+		 * cache_buf is unused for SOF_DFSENTRY_TYPE_BUF debugfs entries.
+		 * So, use it to save the results of the last IPC flood test.
+		 */
+		dfse->cache_buf = devm_kzalloc(sdev->dev, IPC_FLOOD_TEST_RESULT_LEN,
+					       GFP_KERNEL);
+		if (!dfse->cache_buf)
+			return -ENOMEM;
+	}
 #endif
 
 	debugfs_create_file(name, mode, sdev->debugfs_root, dfse,
@@ -410,6 +628,121 @@ int snd_sof_debugfs_buf_item(struct snd_sof_dev *sdev,
 	return 0;
 }
 EXPORT_SYMBOL_GPL(snd_sof_debugfs_buf_item);
+
+static int memory_info_update(struct snd_sof_dev *sdev, char *buf, size_t buff_size)
+{
+	struct sof_ipc_cmd_hdr msg = {
+		.size = sizeof(struct sof_ipc_cmd_hdr),
+		.cmd = SOF_IPC_GLB_DEBUG | SOF_IPC_DEBUG_MEM_USAGE,
+	};
+	struct sof_ipc_dbg_mem_usage *reply;
+	int len;
+	int ret;
+	int i;
+
+	reply = kmalloc(SOF_IPC_MSG_MAX_SIZE, GFP_KERNEL);
+	if (!reply)
+		return -ENOMEM;
+
+	ret = pm_runtime_get_sync(sdev->dev);
+	if (ret < 0 && ret != -EACCES) {
+		pm_runtime_put_noidle(sdev->dev);
+		dev_err(sdev->dev, "error: enabling device failed: %d\n", ret);
+		goto error;
+	}
+
+	ret = sof_ipc_tx_message(sdev->ipc, msg.cmd, &msg, msg.size, reply, SOF_IPC_MSG_MAX_SIZE);
+	pm_runtime_mark_last_busy(sdev->dev);
+	pm_runtime_put_autosuspend(sdev->dev);
+	if (ret < 0 || reply->rhdr.error < 0) {
+		ret = min(ret, reply->rhdr.error);
+		dev_err(sdev->dev, "error: reading memory info failed, %d\n", ret);
+		goto error;
+	}
+
+	if (struct_size(reply, elems, reply->num_elems) != reply->rhdr.hdr.size) {
+		dev_err(sdev->dev, "error: invalid memory info ipc struct size, %d\n",
+			reply->rhdr.hdr.size);
+		ret = -EINVAL;
+		goto error;
+	}
+
+	for (i = 0, len = 0; i < reply->num_elems; i++) {
+		ret = snprintf(buf + len, buff_size - len, "zone %d.%d used %#8x free %#8x\n",
+			       reply->elems[i].zone, reply->elems[i].id,
+			       reply->elems[i].used, reply->elems[i].free);
+		if (ret < 0)
+			goto error;
+		len += ret;
+	}
+
+	ret = len;
+error:
+	kfree(reply);
+	return ret;
+}
+
+static ssize_t memory_info_read(struct file *file, char __user *to, size_t count, loff_t *ppos)
+{
+	struct snd_sof_dfsentry *dfse = file->private_data;
+	struct snd_sof_dev *sdev = dfse->sdev;
+	int data_length;
+
+	/* read memory info from FW only once for each file read */
+	if (!*ppos) {
+		dfse->buf_data_size = 0;
+		data_length = memory_info_update(sdev, dfse->buf, dfse->size);
+		if (data_length < 0)
+			return data_length;
+		dfse->buf_data_size = data_length;
+	}
+
+	return simple_read_from_buffer(to, count, ppos, dfse->buf, dfse->buf_data_size);
+}
+
+static int memory_info_open(struct inode *inode, struct file *file)
+{
+	struct snd_sof_dfsentry *dfse = inode->i_private;
+	struct snd_sof_dev *sdev = dfse->sdev;
+
+	file->private_data = dfse;
+
+	/* allocate buffer memory only in first open run, to save memory when unused */
+	if (!dfse->buf) {
+		dfse->buf = devm_kmalloc(sdev->dev, PAGE_SIZE, GFP_KERNEL);
+		if (!dfse->buf)
+			return -ENOMEM;
+		dfse->size = PAGE_SIZE;
+	}
+
+	return 0;
+}
+
+static const struct file_operations memory_info_fops = {
+	.open = memory_info_open,
+	.read = memory_info_read,
+	.llseek = default_llseek,
+};
+
+int snd_sof_dbg_memory_info_init(struct snd_sof_dev *sdev)
+{
+	struct snd_sof_dfsentry *dfse;
+
+	dfse = devm_kzalloc(sdev->dev, sizeof(*dfse), GFP_KERNEL);
+	if (!dfse)
+		return -ENOMEM;
+
+	/* don't allocate buffer before first usage, to save memory when unused */
+	dfse->type = SOF_DFSENTRY_TYPE_BUF;
+	dfse->sdev = sdev;
+
+	debugfs_create_file("memory_info", 0444, sdev->debugfs_root, dfse, &memory_info_fops);
+
+	/* add to dfsentry list */
+	list_add(&dfse->list, &sdev->dfsentry_list);
+	return 0;
+}
+EXPORT_SYMBOL_GPL(snd_sof_dbg_memory_info_init);
 
 int snd_sof_dbg_init(struct snd_sof_dev *sdev)
 {
@@ -435,6 +768,17 @@ int snd_sof_dbg_init(struct snd_sof_dev *sdev)
 		if (err < 0)
 			return err;
 	}
+
+#if IS_ENABLED(CONFIG_SND_SOC_SOF_DEBUG_PROBES)
+	err = snd_sof_debugfs_probe_item(sdev, "probe_points",
+			0644, &probe_points_fops);
+	if (err < 0)
+		return err;
+	err = snd_sof_debugfs_probe_item(sdev, "probe_points_remove",
+			0200, &probe_points_remove_fops);
+	if (err < 0)
+		return err;
+#endif
 
 #if IS_ENABLED(CONFIG_SND_SOC_SOF_DEBUG_IPC_FLOOD_TEST)
 	/* create read-write ipc_flood_count debugfs entry */
@@ -463,3 +807,19 @@ void snd_sof_free_debug(struct snd_sof_dev *sdev)
 	debugfs_remove_recursive(sdev->debugfs_root);
 }
 EXPORT_SYMBOL_GPL(snd_sof_free_debug);
+
+void snd_sof_handle_fw_exception(struct snd_sof_dev *sdev)
+{
+	if (IS_ENABLED(CONFIG_SND_SOC_SOF_DEBUG_RETAIN_DSP_CONTEXT) ||
+	    (sof_core_debug & SOF_DBG_RETAIN_CTX)) {
+		/* should we prevent DSP entering D3 ? */
+		dev_info(sdev->dev, "info: preventing DSP entering D3 state to preserve context\n");
+		pm_runtime_get_noresume(sdev->dev);
+	}
+
+	/* dump vital information to the logs */
+	snd_sof_dsp_dbg_dump(sdev, SOF_DBG_DUMP_REGS | SOF_DBG_DUMP_MBOX);
+	snd_sof_ipc_dump(sdev);
+	snd_sof_trace_notify_for_error(sdev);
+}
+EXPORT_SYMBOL(snd_sof_handle_fw_exception);

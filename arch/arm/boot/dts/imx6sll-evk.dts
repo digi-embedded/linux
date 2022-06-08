@@ -163,9 +163,11 @@
 
 	sound {
 		compatible = "fsl,imx6sl-evk-wm8962", "fsl,imx-audio-wm8962";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_hp>;
 		model = "wm8962-audio";
 		audio-cpu = <&ssi2>;
-		audio-codec = <&codec>;
+		audio-codec = <&wm8962>;
 		audio-routing =
 			"Headphone Jack", "HPOUTL",
 			"Headphone Jack", "HPOUTR",
@@ -175,8 +177,7 @@
 			"IN3R", "AMIC";
 		mux-int-port = <2>;
 		mux-ext-port = <3>;
-		codec-master;
-		hp-det-gpios = <&gpio4 24 1>;
+		hp-det-gpio = <&gpio4 24 GPIO_ACTIVE_LOW>;
 	};
 };
 
@@ -388,7 +389,7 @@
 	pinctrl-0 = <&pinctrl_i2c3>;
 	status = "okay";
 
-	codec: wm8962@1a {
+	wm8962: audio-codec@1a {
 		compatible = "wlf,wm8962";
 		reg = <0x1a>;
 		clocks = <&clks IMX6SLL_CLK_EXTERN_AUDIO>;
@@ -400,7 +401,6 @@
 		PLLVDD-supply = <&vgen3_reg>;
 		SPKVDD1-supply = <&reg_aud4v>;
 		SPKVDD2-supply = <&reg_aud4v>;
-		amic-mono;
 	};
 };
 
@@ -438,6 +438,7 @@
 };
 
 &pwm1 {
+	#pwm-cells = <2>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_pwm1>;
 	status = "okay";
@@ -541,7 +542,6 @@
 
 	pinctrl_hog: hoggrp {
 		fsl,pins = <
-			MX6SLL_PAD_GPIO4_IO24__GPIO4_IO24 0x17059 /* HP DETECT */
 			/* CHG_FLT, CHG_UOK/DOK, CHG_STATUS */
 			MX6SLL_PAD_ECSPI2_MISO__GPIO4_IO14 0x17000
 			MX6SLL_PAD_ECSPI2_MOSI__GPIO4_IO13 0x17000
@@ -599,6 +599,12 @@
 		>;
 	};
 
+	pinctrl_hp: hpgrp {
+		fsl,pins = <
+			MX6SLL_PAD_GPIO4_IO24__GPIO4_IO24 0x17059 /* HP DETECT */
+		>;
+	};
+
 	pinctrl_reg_sd3_vmmc: sd3vmmcgrp {
 		fsl,pins = <
 			MX6SLL_PAD_KEY_COL6__GPIO4_IO04 0x17059
@@ -638,7 +644,6 @@
 
 	pinctrl_uart5: uart5grp {
 		fsl,pins = <
-			MX6SLL_PAD_KEY_ROW1__GPIO3_IO27 0x1b0b1  /* bt reg on */
 			MX6SLL_PAD_ECSPI1_MOSI__UART5_DCE_TX 0x1b0b1
 			MX6SLL_PAD_ECSPI1_SCLK__UART5_DCE_RX 0x1b0b1
 			MX6SLL_PAD_ECSPI1_SS0__UART5_DCE_CTS 0x1b0b1

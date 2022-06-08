@@ -38,7 +38,7 @@ static void snd_wm8776_activate_ctl(struct snd_wm8776 *wm,
 	unsigned int index_offset;
 
 	memset(&elem_id, 0, sizeof(elem_id));
-	strlcpy(elem_id.name, ctl_name, sizeof(elem_id.name));
+	strscpy(elem_id.name, ctl_name, sizeof(elem_id.name));
 	elem_id.iface = SNDRV_CTL_ELEM_IFACE_MIXER;
 	kctl = snd_ctl_find_id(card, &elem_id);
 	if (!kctl)
@@ -129,7 +129,7 @@ static const DECLARE_TLV_DB_SCALE(wm8776_ngth_tlv, -7800, 600, 0);
 static const DECLARE_TLV_DB_SCALE(wm8776_maxatten_lim_tlv, -1200, 100, 0);
 static const DECLARE_TLV_DB_SCALE(wm8776_maxatten_alc_tlv, -2100, 400, 0);
 
-static struct snd_wm8776_ctl snd_wm8776_default_ctl[WM8776_CTL_COUNT] = {
+static const struct snd_wm8776_ctl snd_wm8776_default_ctl[WM8776_CTL_COUNT] = {
 	[WM8776_CTL_DAC_VOL] = {
 		.name = "Master Playback Volume",
 		.type = SNDRV_CTL_ELEM_TYPE_INTEGER,

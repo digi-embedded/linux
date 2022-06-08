@@ -69,14 +69,13 @@ out_clk:
 	return ret;
 }
 
-static int nmk_rng_remove(struct amba_device *dev)
+static void nmk_rng_remove(struct amba_device *dev)
 {
 	amba_release_regions(dev);
 	clk_disable(rng_clk);
-	return 0;
 }
 
-static struct amba_id nmk_rng_ids[] = {
+static const struct amba_id nmk_rng_ids[] = {
 	{
 		.id	= 0x000805e1,
 		.mask	= 0x000fffff, /* top bits are rev and cfg: accept all */

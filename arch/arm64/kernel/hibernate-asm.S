@@ -45,7 +45,7 @@
  * Because this code has to be copied to a 'safe' page, it can't call out to
  * other functions by PC-relative address. Also remember that it may be
  * mid-way through over-writing other functions. For this reason it contains
- * code from flush_icache_range() and uses the copy_page() macro.
+ * code from caches_clean_inval_pou() and uses the copy_page() macro.
  *
  * This 'safe' page is mapped via ttbr0, and executed from there. This function
  * switches to a copy of the linear map in ttbr1, performs the restore, then
@@ -65,7 +65,7 @@
  * x5: physical address of a  zero page that remains zero after resume
  */
 .pushsection    ".hibernate_exit.text", "ax"
-ENTRY(swsusp_arch_suspend_exit)
+SYM_CODE_START(swsusp_arch_suspend_exit)
 	/*
 	 * We execute from ttbr0, change ttbr1 to our copied linear map tables
 	 * with a break-before-make via the zero page
@@ -87,11 +87,12 @@ ENTRY(swsusp_arch_suspend_exit)
 	copy_page	x0, x1, x2, x3, x4, x5, x6, x7, x8, x9
 
 	add	x1, x10, #PAGE_SIZE
-	/* Clean the copied page to PoU - based on flush_icache_range() */
+	/* Clean the copied page to PoU - based on caches_clean_inval_pou() */
 	raw_dcache_line_size x2, x3
 	sub	x3, x2, #1
 	bic	x4, x10, x3
-2:	dc	cvau, x4	/* clean D line / unified line */
+2:	/* clean D line / unified line */
+alternative_insn "dc cvau, x4",  "dc civac, x4",  ARM64_WORKAROUND_CLEAN_CACHE
 	add	x4, x4, x2
 	cmp	x4, x1
 	b.lo	2b
@@ -110,9 +111,7 @@ ENTRY(swsusp_arch_suspend_exit)
 	cbz	x24, 3f		/* Do we need to re-initialise EL2? */
 	hvc	#0
 3:	ret
-
-	.ltorg
-ENDPROC(swsusp_arch_suspend_exit)
+SYM_CODE_END(swsusp_arch_suspend_exit)
 
 /*
  * Restore the hyp stub.
@@ -121,15 +120,15 @@ ENDPROC(swsusp_arch_suspend_exit)
  *
  * x24: The physical address of __hyp_stub_vectors
  */
-el1_sync:
+SYM_CODE_START_LOCAL(el1_sync)
 	msr	vbar_el2, x24
 	eret
-ENDPROC(el1_sync)
+SYM_CODE_END(el1_sync)
 
 .macro invalid_vector	label
-\label:
+SYM_CODE_START_LOCAL(\label)
 	b \label
-ENDPROC(\label)
+SYM_CODE_END(\label)
 .endm
 
 	invalid_vector	el2_sync_invalid
@@ -143,7 +142,7 @@ ENDPROC(\label)
 
 /* el2 vectors - switch el2 here while we restore the memory image. */
 	.align 11
-ENTRY(hibernate_el2_vectors)
+SYM_CODE_START(hibernate_el2_vectors)
 	ventry	el2_sync_invalid		// Synchronous EL2t
 	ventry	el2_irq_invalid			// IRQ EL2t
 	ventry	el2_fiq_invalid			// FIQ EL2t
@@ -163,6 +162,6 @@ ENTRY(hibernate_el2_vectors)
 	ventry	el1_irq_invalid			// IRQ 32-bit EL1
 	ventry	el1_fiq_invalid			// FIQ 32-bit EL1
 	ventry	el1_error_invalid		// Error 32-bit EL1
-END(hibernate_el2_vectors)
+SYM_CODE_END(hibernate_el2_vectors)
 
 .popsection

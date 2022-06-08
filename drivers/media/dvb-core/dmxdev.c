@@ -476,9 +476,11 @@ static int dvb_dmxdev_ts_callback(const u8 *buffer1, size_t buffer1_len,
 			ret = dvb_dmxdev_buffer_write(buffer,
 						      buffer2, buffer2_len);
 	}
+	if (ret < 0)
+		buffer->error = ret;
 	spin_unlock(&dmxdevfilter->dev->lock);
 	wake_up(&buffer->queue);
-	return ret;
+	return 0;
 }
 
 /* stop feed but only mark the specified filter as stopped (state set) */
@@ -718,7 +720,7 @@ static int dvb_dmxdev_filter_start(struct dmxdev_filter *filter)
 			ret = dmxdev->demux->allocate_section_feed(dmxdev->demux,
 								   secfeed,
 								   dvb_dmxdev_section_callback);
-			if (ret < 0) {
+			if (!*secfeed) {
 				pr_err("DVB (%s): could not alloc feed\n",
 				       __func__);
 				return ret;

@@ -8,6 +8,7 @@
 #include <linux/io.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
+#include <linux/platform_device.h>
 #include <linux/reset-controller.h>
 #include <linux/smp.h>
 #include <asm/smp_plat.h>
@@ -58,9 +59,6 @@ static int imx_src_reset_module(struct reset_controller_dev *rcdev,
 	int bit;
 	u32 val;
 
-	if (!src_base)
-		return -ENODEV;
-
 	if (sw_reset_idx >= ARRAY_SIZE(sw_reset_bits))
 		return -EINVAL;
 
@@ -84,11 +82,6 @@ static int imx_src_reset_module(struct reset_controller_dev *rcdev,
 
 static const struct reset_control_ops imx_src_ops = {
 	.reset = imx_src_reset_module,
-};
-
-static struct reset_controller_dev imx_reset_controller = {
-	.ops = &imx_src_ops,
-	.nr_resets = ARRAY_SIZE(sw_reset_bits),
 };
 
 void imx_enable_cpu(int cpu, bool enable)
@@ -157,8 +150,12 @@ void __init imx_src_init(void)
 	u32 val;
 
 	np = of_find_compatible_node(NULL, NULL, "fsl,imx51-src");
-	if (!np)
-		return;
+	if (!np) {
+		np = of_find_compatible_node(NULL, NULL, "fsl,imx7d-src");
+		if (!np)
+			return;
+	}
+
 	src_base = of_iomap(np, 0);
 	WARN_ON(!src_base);
 
@@ -170,10 +167,6 @@ void __init imx_src_init(void)
 			m4_is_enabled = false;
 		return;
 	}
-
-	imx_reset_controller.of_node = np;
-	if (IS_ENABLED(CONFIG_RESET_CONTROLLER))
-		reset_controller_register(&imx_reset_controller);
 
 	/*
 	 * force warm reset sources to generate cold reset
@@ -193,3 +186,33 @@ void __init imx_src_init(void)
 	writel_relaxed(val, src_base + SRC_SCR);
 	spin_unlock(&src_lock);
 }
+
+static const struct of_device_id imx_src_dt_ids[] = {
+	{ .compatible = "fsl,imx51-src" },
+	{ /* sentinel */ }
+};
+
+static int imx_src_probe(struct platform_device *pdev)
+{
+	struct reset_controller_dev *rcdev;
+
+	rcdev = devm_kzalloc(&pdev->dev, sizeof(*rcdev), GFP_KERNEL);
+	if (!rcdev)
+		return -ENOMEM;
+
+	rcdev->ops = &imx_src_ops;
+	rcdev->dev = &pdev->dev;
+	rcdev->of_node = pdev->dev.of_node;
+	rcdev->nr_resets = ARRAY_SIZE(sw_reset_bits);
+
+	return devm_reset_controller_register(&pdev->dev, rcdev);
+}
+
+static struct platform_driver imx_src_driver = {
+	.driver = {
+		.name = "imx-src",
+		.of_match_table = imx_src_dt_ids,
+	},
+	.probe = imx_src_probe,
+};
+builtin_platform_driver(imx_src_driver);

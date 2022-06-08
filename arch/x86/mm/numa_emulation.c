@@ -13,9 +13,10 @@
 static int emu_nid_to_phys[MAX_NUMNODES];
 static char *emu_cmdline __initdata;
 
-void __init numa_emu_cmdline(char *str)
+int __init numa_emu_cmdline(char *str)
 {
 	emu_cmdline = str;
+	return 0;
 }
 
 static int __init emu_find_memblk_by_nid(int nid, const struct numa_meminfo *mi)
@@ -324,7 +325,7 @@ static int __init split_nodes_size_interleave(struct numa_meminfo *ei,
 			0, NULL, 0);
 }
 
-int __init setup_emu2phys_nid(int *dfl_phys_nid)
+static int __init setup_emu2phys_nid(int *dfl_phys_nid)
 {
 	int i, max_emu_nid = 0;
 
@@ -438,7 +439,7 @@ void __init numa_emulation(struct numa_meminfo *numa_meminfo, int numa_dist_cnt)
 		goto no_emu;
 
 	if (numa_cleanup_meminfo(&ei) < 0) {
-		pr_warning("NUMA: Warning: constructed meminfo invalid, disabling emulation\n");
+		pr_warn("NUMA: Warning: constructed meminfo invalid, disabling emulation\n");
 		goto no_emu;
 	}
 
@@ -446,13 +447,12 @@ void __init numa_emulation(struct numa_meminfo *numa_meminfo, int numa_dist_cnt)
 	if (numa_dist_cnt) {
 		u64 phys;
 
-		phys = memblock_find_in_range(0, PFN_PHYS(max_pfn_mapped),
-					      phys_size, PAGE_SIZE);
+		phys = memblock_phys_alloc_range(phys_size, PAGE_SIZE, 0,
+						 PFN_PHYS(max_pfn_mapped));
 		if (!phys) {
-			pr_warning("NUMA: Warning: can't allocate copy of distance table, disabling emulation\n");
+			pr_warn("NUMA: Warning: can't allocate copy of distance table, disabling emulation\n");
 			goto no_emu;
 		}
-		memblock_reserve(phys, phys_size);
 		phys_dist = __va(phys);
 
 		for (i = 0; i < numa_dist_cnt; i++)
@@ -517,8 +517,7 @@ void __init numa_emulation(struct numa_meminfo *numa_meminfo, int numa_dist_cnt)
 	}
 
 	/* free the copied physical distance table */
-	if (phys_dist)
-		memblock_free(__pa(phys_dist), phys_size);
+	memblock_free_ptr(phys_dist, phys_size);
 	return;
 
 no_emu:

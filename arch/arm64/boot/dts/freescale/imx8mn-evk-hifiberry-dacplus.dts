@@ -63,15 +63,13 @@
 };
 
 &iomuxc {
-	imx8mn-evk {
-		pinctrl_sai5: sai5grp {
-			fsl,pins = <
-				MX8MN_IOMUXC_SAI5_RXD1_SAI5_TX_SYNC	0xd6
-				MX8MN_IOMUXC_SAI5_RXD2_SAI5_TX_BCLK	0xd6
-				MX8MN_IOMUXC_SAI5_RXD3_SAI5_TX_DATA0	0xd6
-				MX8MN_IOMUXC_SAI5_RXD0_SAI5_RX_DATA0	0xd6
-			>;
-		};
+	pinctrl_sai5: sai5grp {
+		fsl,pins = <
+			MX8MN_IOMUXC_SAI5_RXD1_SAI5_TX_SYNC	0xd6
+			MX8MN_IOMUXC_SAI5_RXD2_SAI5_TX_BCLK	0xd6
+			MX8MN_IOMUXC_SAI5_RXD3_SAI5_TX_DATA0	0xd6
+			MX8MN_IOMUXC_SAI5_RXD0_SAI5_RX_DATA0	0xd6
+		>;
 	};
 };
 

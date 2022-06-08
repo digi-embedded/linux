@@ -1234,7 +1234,7 @@ static int ov5640_change_mode_direct(enum ov5640_frame_rate frame_rate,
 
 	/* skip 9 vysnc: start capture at 10th vsync */
 	if (mode == ov5640_mode_XGA_1024_768 && frame_rate == ov5640_30_fps) {
-		pr_warning("ov5640: actual frame rate of XGA is 22.5fps\n");
+		pr_warn("ov5640: actual frame rate of XGA is 22.5fps\n");
 		/* 1/22.5 * 9*/
 		msleep(400);
 		return retval;
@@ -1368,7 +1368,7 @@ static int ov5640_change_mode_exposure_calc(enum ov5640_frame_rate frame_rate,
 	/* skip 2 vysnc: start capture at 3rd vsync
 	 * frame rate of QSXGA and 1080P is 7.5fps: 1/7.5 * 2
 	 */
-	pr_warning("ov5640: the actual frame rate of %s is 7.5fps\n",
+	pr_warn("ov5640: the actual frame rate of %s is 7.5fps\n",
 		mode == ov5640_mode_1080P_1920_1080 ? "1080P" : "QSXGA");
 	msleep(267);
 err:
@@ -1552,7 +1552,7 @@ error:
 }
 
 static int ov5640_set_fmt(struct v4l2_subdev *sd,
-			  struct v4l2_subdev_pad_config *cfg,
+			  struct v4l2_subdev_state *sd_state,
 			  struct v4l2_subdev_format *format)
 {
 	struct v4l2_mbus_framefmt *mf = &format->format;
@@ -1579,7 +1579,7 @@ static int ov5640_set_fmt(struct v4l2_subdev *sd,
 }
 
 static int ov5640_get_fmt(struct v4l2_subdev *sd,
-			  struct v4l2_subdev_pad_config *cfg,
+			  struct v4l2_subdev_state *sd_state,
 			  struct v4l2_subdev_format *format)
 {
 	struct v4l2_mbus_framefmt *mf = &format->format;
@@ -1598,7 +1598,7 @@ static int ov5640_get_fmt(struct v4l2_subdev *sd,
 }
 
 static int ov5640_enum_code(struct v4l2_subdev *sd,
-			    struct v4l2_subdev_pad_config *cfg,
+			    struct v4l2_subdev_state *sd_state,
 			    struct v4l2_subdev_mbus_code_enum *code)
 {
 	if (code->pad || code->index >= ARRAY_SIZE(ov5640_colour_fmts))
@@ -1617,7 +1617,7 @@ static int ov5640_enum_code(struct v4l2_subdev *sd,
  * Return 0 if successful, otherwise -EINVAL.
  */
 static int ov5640_enum_framesizes(struct v4l2_subdev *sd,
-			       struct v4l2_subdev_pad_config *cfg,
+			       struct v4l2_subdev_state *sd_state,
 			       struct v4l2_subdev_frame_size_enum *fse)
 {
 	if (fse->index > ov5640_mode_MAX)
@@ -1643,17 +1643,17 @@ static int ov5640_enum_framesizes(struct v4l2_subdev *sd,
  * Return 0 if successful, otherwise -EINVAL.
  */
 static int ov5640_enum_frameintervals(struct v4l2_subdev *sd,
-		struct v4l2_subdev_pad_config *cfg,
+		struct v4l2_subdev_state *sd_state,
 		struct v4l2_subdev_frame_interval_enum *fie)
 {
 	int i, j, count;
 
-	if (fie->index < 0 || fie->index > ov5640_mode_MAX)
+	if (fie->index > ov5640_mode_MAX)
 		return -EINVAL;
 
 	if (fie->width == 0 || fie->height == 0 ||
 	    fie->code == 0) {
-		pr_warning("Please assign pixel format, width and height.\n");
+		pr_warn("Please assign pixel format, width and height.\n");
 		return -EINVAL;
 	}
 
@@ -1854,14 +1854,14 @@ static int ov5640_probe(struct i2c_client *client,
 	if (retval < 0 || chip_id_high != 0x56) {
 		ov5640_regualtor_disable();
 		clk_disable_unprepare(ov5640_data.sensor_clk);
-		pr_warning("camera ov5640 is not found\n");
+		pr_warn("camera ov5640 is not found\n");
 		return -ENODEV;
 	}
 	retval = ov5640_read_reg(OV5640_CHIP_ID_LOW_BYTE, &chip_id_low);
 	if (retval < 0 || chip_id_low != 0x40) {
 		ov5640_regualtor_disable();
 		clk_disable_unprepare(ov5640_data.sensor_clk);
-		pr_warning("camera ov5640 is not found\n");
+		pr_warn("camera ov5640 is not found\n");
 		return -ENODEV;
 	}
 
@@ -1869,7 +1869,7 @@ static int ov5640_probe(struct i2c_client *client,
 	if (retval < 0) {
 		ov5640_regualtor_disable();
 		clk_disable_unprepare(ov5640_data.sensor_clk);
-		pr_warning("camera ov5640 init failed\n");
+		pr_warn("camera ov5640 init failed\n");
 		ov5640_power_down(1);
 		return retval;
 	}

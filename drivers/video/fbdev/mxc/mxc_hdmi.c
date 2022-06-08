@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2016 Freescale Semiconductor, Inc.
+ * Copyright (C) 2011-2021 Freescale Semiconductor, Inc.
  *
  * The code contained herein is licensed under the GNU General Public
  * License. You may obtain a copy of the GNU General Public License
@@ -1769,7 +1769,7 @@ static void hdmi_disable_overflow_interrupts(void)
 
 static void mxc_hdmi_notify_fb(struct mxc_hdmi *hdmi)
 {
-	int ret = 0;
+	int ret;
 
 	dev_dbg(&hdmi->pdev->dev, "%s\n", __func__);
 
@@ -1789,8 +1789,7 @@ static void mxc_hdmi_notify_fb(struct mxc_hdmi *hdmi)
 	console_lock();
 	ret = fb_set_var(hdmi->fbi, &hdmi->fbi->var);
 	if (!ret)
-		fbcon_update_vcs(hdmi->fbi,
-				 hdmi->fbi->var.activate & FB_ACTIVATE_ALL);
+		fbcon_update_vcs(hdmi->fbi, hdmi->fbi->var.activate & FB_ACTIVATE_ALL);
 	console_unlock();
 
 	dev_dbg(&hdmi->pdev->dev, "%s exit\n", __func__);
@@ -1817,7 +1816,7 @@ static void mxc_hdmi_edid_rebuild_modelist(struct mxc_hdmi *hdmi)
 		mode = &hdmi->fbi->monspecs.modedb[i];
 
 		if (!(mode->vmode & FB_VMODE_INTERLACED) &&
-				(!only_cea || mxc_edid_mode_to_vic(mode))) {
+				(!only_cea || mxc_edid_mode_to_vic(mode) != 0)) {
 
 			dev_dbg(&hdmi->pdev->dev, "Added mode %d:", i);
 			dev_dbg(&hdmi->pdev->dev,
@@ -1972,9 +1971,9 @@ static void mxc_hdmi_cable_connected(struct mxc_hdmi *hdmi)
 
 	case HDMI_EDID_FAIL:
 		mxc_hdmi_default_edid_cfg(hdmi);
-		/* fall through */
+		fallthrough;
 	case HDMI_EDID_NO_MODES:
-		/* fall through */
+		fallthrough;
 	default:
 		mxc_hdmi_default_modelist(hdmi);
 		break;

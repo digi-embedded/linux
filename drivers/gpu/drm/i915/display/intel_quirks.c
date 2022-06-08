@@ -14,7 +14,7 @@
 static void quirk_ssc_force_disable(struct drm_i915_private *i915)
 {
 	i915->quirks |= QUIRK_LVDS_SSC_DISABLE;
-	DRM_INFO("applying lvds SSC disable quirk\n");
+	drm_info(&i915->drm, "applying lvds SSC disable quirk\n");
 }
 
 /*
@@ -24,14 +24,14 @@ static void quirk_ssc_force_disable(struct drm_i915_private *i915)
 static void quirk_invert_brightness(struct drm_i915_private *i915)
 {
 	i915->quirks |= QUIRK_INVERT_BRIGHTNESS;
-	DRM_INFO("applying inverted panel brightness quirk\n");
+	drm_info(&i915->drm, "applying inverted panel brightness quirk\n");
 }
 
 /* Some VBT's incorrectly indicate no backlight is present */
 static void quirk_backlight_present(struct drm_i915_private *i915)
 {
 	i915->quirks |= QUIRK_BACKLIGHT_PRESENT;
-	DRM_INFO("applying backlight present quirk\n");
+	drm_info(&i915->drm, "applying backlight present quirk\n");
 }
 
 /* Toshiba Satellite P50-C-18C requires T12 delay to be min 800ms
@@ -40,7 +40,7 @@ static void quirk_backlight_present(struct drm_i915_private *i915)
 static void quirk_increase_t12_delay(struct drm_i915_private *i915)
 {
 	i915->quirks |= QUIRK_INCREASE_T12_DELAY;
-	DRM_INFO("Applying T12 delay quirk\n");
+	drm_info(&i915->drm, "Applying T12 delay quirk\n");
 }
 
 /*
@@ -50,7 +50,13 @@ static void quirk_increase_t12_delay(struct drm_i915_private *i915)
 static void quirk_increase_ddi_disabled_time(struct drm_i915_private *i915)
 {
 	i915->quirks |= QUIRK_INCREASE_DDI_DISABLED_TIME;
-	DRM_INFO("Applying Increase DDI Disabled quirk\n");
+	drm_info(&i915->drm, "Applying Increase DDI Disabled quirk\n");
+}
+
+static void quirk_no_pps_backlight_power_hook(struct drm_i915_private *i915)
+{
+	i915->quirks |= QUIRK_NO_PPS_BACKLIGHT_POWER_HOOK;
+	drm_info(&i915->drm, "Applying no pps backlight power quirk\n");
 }
 
 struct intel_quirk {
@@ -72,6 +78,12 @@ static int intel_dmi_reverse_brightness(const struct dmi_system_id *id)
 	return 1;
 }
 
+static int intel_dmi_no_pps_backlight(const struct dmi_system_id *id)
+{
+	DRM_INFO("No pps backlight support on %s\n", id->ident);
+	return 1;
+}
+
 static const struct intel_dmi_quirk intel_dmi_quirks[] = {
 	{
 		.dmi_id_list = &(const struct dmi_system_id[]) {
@@ -82,9 +94,41 @@ static const struct intel_dmi_quirk intel_dmi_quirks[] = {
 					    DMI_MATCH(DMI_PRODUCT_NAME, ""),
 				},
 			},
+			{
+				.callback = intel_dmi_reverse_brightness,
+				.ident = "Thundersoft TST178 tablet",
+				/* DMI strings are too generic, also match on BIOS date */
+				.matches = {DMI_EXACT_MATCH(DMI_BOARD_VENDOR, "AMI Corporation"),
+					    DMI_EXACT_MATCH(DMI_BOARD_NAME, "Aptio CRB"),
+					    DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "To be filled by O.E.M."),
+					    DMI_EXACT_MATCH(DMI_BIOS_DATE, "04/15/2014"),
+				},
+			},
 			{ }  /* terminating entry */
 		},
 		.hook = quirk_invert_brightness,
+	},
+	{
+		.dmi_id_list = &(const struct dmi_system_id[]) {
+			{
+				.callback = intel_dmi_no_pps_backlight,
+				.ident = "Google Lillipup sku524294",
+				.matches = {DMI_EXACT_MATCH(DMI_BOARD_VENDOR, "Google"),
+					    DMI_EXACT_MATCH(DMI_BOARD_NAME, "Lindar"),
+					    DMI_EXACT_MATCH(DMI_PRODUCT_SKU, "sku524294"),
+				},
+			},
+			{
+				.callback = intel_dmi_no_pps_backlight,
+				.ident = "Google Lillipup sku524295",
+				.matches = {DMI_EXACT_MATCH(DMI_BOARD_VENDOR, "Google"),
+					    DMI_EXACT_MATCH(DMI_BOARD_NAME, "Lindar"),
+					    DMI_EXACT_MATCH(DMI_PRODUCT_SKU, "sku524295"),
+				},
+			},
+			{ }
+		},
+		.hook = quirk_no_pps_backlight_power_hook,
 	},
 };
 
@@ -150,7 +194,7 @@ static struct intel_quirk intel_quirks[] = {
 
 void intel_init_quirks(struct drm_i915_private *i915)
 {
-	struct pci_dev *d = i915->drm.pdev;
+	struct pci_dev *d = to_pci_dev(i915->drm.dev);
 	int i;
 
 	for (i = 0; i < ARRAY_SIZE(intel_quirks); i++) {

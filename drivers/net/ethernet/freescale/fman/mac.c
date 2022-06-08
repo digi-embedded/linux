@@ -359,8 +359,8 @@ EXPORT_SYMBOL(fman_set_mac_active_pause);
 /**
  * fman_get_pause_cfg
  * @mac_dev:	A pointer to the MAC device
- * @rx:		Return value for RX setting
- * @tx:		Return value for TX setting
+ * @rx_pause:	Return value for RX setting
+ * @tx_pause:	Return value for TX setting
  *
  * Determine the MAC RX/TX PAUSE frames settings based on PHY
  * autonegotiation or values set by eththool.
@@ -524,6 +524,7 @@ static void setup_memac(struct mac_device *mac_dev)
 	| SUPPORTED_Autoneg \
 	| SUPPORTED_Pause \
 	| SUPPORTED_Asym_Pause \
+	| SUPPORTED_FIBRE \
 	| SUPPORTED_MII)
 
 static DEFINE_MUTEX(eth_lock);
@@ -605,10 +606,9 @@ static int mac_probe(struct platform_device *_of_dev)
 	struct platform_device	*of_dev;
 	struct resource		 res;
 	struct mac_priv_s	*priv;
-	const u8		*mac_addr;
 	u32			 val;
 	u8			fman_id;
-	int			phy_if;
+	phy_interface_t          phy_if;
 
 	dev = &_of_dev->dev;
 	mac_node = dev->of_node;
@@ -692,7 +692,7 @@ static int mac_probe(struct platform_device *_of_dev)
 
 	mac_dev->res = __devm_request_region(dev,
 					     fman_get_mem_region(priv->fman),
-					     res.start, res.end + 1 - res.start,
+					     res.start, resource_size(&res),
 					     "mac");
 	if (!mac_dev->res) {
 		dev_err(dev, "__devm_request_mem_region(mac) failed\n");
@@ -701,7 +701,7 @@ static int mac_probe(struct platform_device *_of_dev)
 	}
 
 	priv->vaddr = devm_ioremap(dev, mac_dev->res->start,
-				   mac_dev->res->end + 1 - mac_dev->res->start);
+				   resource_size(mac_dev->res));
 	if (!priv->vaddr) {
 		dev_err(dev, "devm_ioremap() failed\n");
 		err = -EIO;
@@ -723,13 +723,9 @@ static int mac_probe(struct platform_device *_of_dev)
 	priv->cell_index = (u8)val;
 
 	/* Get the MAC address */
-	mac_addr = of_get_mac_address(mac_node);
-	if (IS_ERR(mac_addr)) {
-		dev_err(dev, "of_get_mac_address(%pOF) failed\n", mac_node);
-		err = -EINVAL;
-		goto _return_of_get_parent;
-	}
-	ether_addr_copy(mac_dev->addr, mac_addr);
+	err = of_get_mac_address(mac_node, mac_dev->addr);
+	if (err)
+		dev_warn(dev, "of_get_mac_address(%pOF) failed\n", mac_node);
 
 	/* Get the port handles */
 	nph = of_count_phandle_with_args(mac_node, "fsl,fman-ports", NULL);
@@ -776,8 +772,8 @@ static int mac_probe(struct platform_device *_of_dev)
 	}
 
 	/* Get the PHY connection type */
-	phy_if = of_get_phy_mode(mac_node);
-	if (phy_if < 0) {
+	err = of_get_phy_mode(mac_node, &phy_if);
+	if (err) {
 		dev_warn(dev,
 			 "of_get_phy_mode() for %pOF failed. Defaulting to SGMII\n",
 			 mac_node);
@@ -855,7 +851,8 @@ static int mac_probe(struct platform_device *_of_dev)
 	if (err < 0)
 		dev_err(dev, "fman_set_mac_active_pause() = %d\n", err);
 
-	dev_info(dev, "FMan MAC address: %pM\n", mac_dev->addr);
+	if (!is_zero_ether_addr(mac_dev->addr))
+		dev_info(dev, "FMan MAC address: %pM\n", mac_dev->addr);
 
 	priv->eth_dev = dpaa_eth_add_device(fman_id, mac_dev);
 	if (IS_ERR(priv->eth_dev)) {

@@ -23,8 +23,7 @@
 	init-on-array = <IMX8MP_CLK_USDHC3_ROOT
 			 IMX8MP_CLK_NAND_USDHC_BUS
 			 IMX8MP_CLK_HSIO_ROOT
-			 IMX8MP_CLK_UART4_ROOT
-			 IMX8MP_CLK_OCOTP_ROOT>;
+			 IMX8MP_CLK_UART4_ROOT>;
 };
 
 &{/busfreq} {
@@ -61,6 +60,11 @@
 		no-map;
 		reg = <0 0xc0000000 0x0 0x3d700000>;
 	};
+};
+
+&{/reserved-memory/linux,cma} {
+	size = <0 0x28000000>;
+	alloc-ranges = <0 0x40000000 0 0x60000000>;
 };
 
 &iomuxc {

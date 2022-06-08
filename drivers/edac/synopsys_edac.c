@@ -556,30 +556,19 @@ static void handle_error(struct mem_ctl_info *mci, struct synps_ecc_status *p)
 
 	if (p->ce_cnt) {
 		pinf = &p->ceinfo;
-		if (!priv->p_data->quirks) {
+		if (priv->p_data->quirks & DDR_ECC_INTR_SUPPORT) {
 			snprintf(priv->message, SYNPS_EDAC_MSG_SIZE,
-				 "DDR ECC error type:%s Row %d Bank %d Col %d "
-				 "Bit Position: %d Data: 0x%08x",
+				 "DDR ECC error type:%s Row %d Bank %d BankGroup Number %d Block Number %d Bit Position: %d Data: 0x%08x Data_high: 0x%08x Syndrome: 0x%08x",
+				 "CE", pinf->row, pinf->bank,
+				 pinf->bankgrpnr, pinf->blknr,
+				 pinf->bitpos, pinf->data_low,
+				 zynqmp_get_dtype(priv->baseaddr) == DEV_X8 ? pinf->data_high : 0,
+				 zynqmp_get_dtype(priv->baseaddr) == DEV_X8 ? pinf->syndrome : 0 );
+		} else {
+			snprintf(priv->message, SYNPS_EDAC_MSG_SIZE,
+				 "DDR ECC error type:%s Row %d Bank %d Col %d Bit Position: %d Data: 0x%08x",
 				 "CE", pinf->row, pinf->bank, pinf->col,
 				 pinf->bitpos, pinf->data_low);
-		} else {
-			if (zynqmp_get_dtype(priv->baseaddr) == DEV_X8) {
-				snprintf(priv->message, SYNPS_EDAC_MSG_SIZE,
-					"DDR ECC error type:%s Row %d Bank %d "
-					"BankGroup Number %d Block Number %d "
-					"Bit Position: %d Data_low: 0x%08x "
-					"Data_high: 0x%08x Syndrome: 0x%08x",
-					"CE", pinf->row, pinf->bank, pinf->bankgrpnr,
-					pinf->blknr, pinf->bitpos, pinf->data_low,
-					pinf->data_high, pinf->syndrome);
-			} else {
-				snprintf(priv->message, SYNPS_EDAC_MSG_SIZE,
-					"DDR ECC error type:%s Row %d Bank %d "
-					"BankGroup Number %d Block Number %d "
-					"Bit Position: %d Data: 0x%08x",
-					"CE", pinf->row, pinf->bank, pinf->bankgrpnr,
-					pinf->blknr, pinf->bitpos, pinf->data_low);
-			}
 		}
 
 		edac_mc_handle_error(HW_EVENT_ERR_CORRECTED, mci,
@@ -589,16 +578,15 @@ static void handle_error(struct mem_ctl_info *mci, struct synps_ecc_status *p)
 
 	if (p->ue_cnt) {
 		pinf = &p->ueinfo;
-		if (!priv->p_data->quirks) {
+		if (priv->p_data->quirks & DDR_ECC_INTR_SUPPORT) {
 			snprintf(priv->message, SYNPS_EDAC_MSG_SIZE,
-				 "DDR ECC error type :%s Row %d Bank %d Col %d ",
-				"UE", pinf->row, pinf->bank, pinf->col);
+				 "DDR ECC error type :%s Row %d Bank %d BankGroup Number %d Block Number %d",
+				 "UE", pinf->row, pinf->bank,
+				 pinf->bankgrpnr, pinf->blknr);
 		} else {
 			snprintf(priv->message, SYNPS_EDAC_MSG_SIZE,
-				 "DDR ECC error type :%s Row %d Bank %d "
-				 "BankGroup Number %d Block Number %d",
-				 "UE", pinf->row, pinf->bank, pinf->bankgrpnr,
-				 pinf->blknr);
+				 "DDR ECC error type :%s Row %d Bank %d Col %d ",
+				 "UE", pinf->row, pinf->bank, pinf->col);
 		}
 
 		edac_mc_handle_error(HW_EVENT_ERR_UNCORRECTED, mci,
@@ -853,7 +841,7 @@ static void init_csrows(struct mem_ctl_info *mci)
 
 		for (j = 0; j < csi->nr_channels; j++) {
 			dimm		= csi->channels[j]->dimm;
-			dimm->edac_mode	= EDAC_FLAG_SECDED;
+			dimm->edac_mode	= EDAC_SECDED;
 			dimm->mtype	= p_data->get_mtype(priv->baseaddr);
 			dimm->nr_pages	= (size >> PAGE_SHIFT) / csi->nr_channels;
 			dimm->grain	= SYNPS_EDAC_ERR_GRAIN;
@@ -880,8 +868,7 @@ static void mc_init(struct mem_ctl_info *mci, struct platform_device *pdev)
 	platform_set_drvdata(pdev, mci);
 
 	/* Initialize controller capabilities and configuration */
-	mci->mtype_cap = MEM_FLAG_LRDDR4 | MEM_FLAG_DDR4 |
-			 MEM_FLAG_DDR3 | MEM_FLAG_DDR2;
+	mci->mtype_cap = MEM_FLAG_LRDDR4 | MEM_FLAG_DDR4 | MEM_FLAG_DDR3 | MEM_FLAG_DDR2;
 	mci->edac_ctl_cap = EDAC_FLAG_NONE | EDAC_FLAG_SECDED;
 	mci->scrub_cap = SCRUB_HW_SRC;
 	mci->scrub_mode = SCRUB_NONE;
@@ -1443,7 +1430,8 @@ static int mc_probe(struct platform_device *pdev)
 
 #ifdef CONFIG_EDAC_DEBUG
 	if (priv->p_data->quirks & DDR_ECC_DATA_POISON_SUPPORT) {
-		if (edac_create_sysfs_attributes(mci)) {
+		rc = edac_create_sysfs_attributes(mci);
+		if (rc) {
 			edac_printk(KERN_ERR, EDAC_MC,
 					"Failed to create sysfs entries\n");
 			goto free_edac_mc;

@@ -8,6 +8,7 @@
 
 #include <drm/drm_atomic.h>
 #include <drm/drm_fourcc.h>
+#include <drm/drm_plane.h>
 #include <linux/io.h>
 #include <video/videomode.h>
 
@@ -58,6 +59,13 @@ enum dcss_ctxld_ctx_type {
 	CTX_SB_LP, /* low-priority  */
 };
 
+enum dcss_pixel_pipe_output {
+	DCSS_PIPE_OUTPUT_RGB = 0,
+	DCSS_PIPE_OUTPUT_YUV444,
+	DCSS_PIPE_OUTPUT_YUV422,
+	DCSS_PIPE_OUTPUT_YUV420,
+};
+
 struct dcss_dev {
 	struct device *dev;
 	const struct dcss_type_data *devtype;
@@ -85,27 +93,23 @@ struct dcss_dev {
 	struct clk *pll_src_clk;
 	struct clk *pll_phy_ref_clk;
 
-	void (*dcss_disable_callback)(void *data);
-
-	bool clks_on;
-	bool bus_freq_on;
 	bool hdmi_output;
-};
 
-enum dcss_color_space {
-	DCSS_COLORSPACE_RGB,
-	DCSS_COLORSPACE_YUV,
-	DCSS_COLORSPACE_UNKNOWN,
+	void (*disable_callback)(void *data);
+	struct completion disable_completion;
 };
 
 struct dcss_dev *dcss_drv_dev_to_dcss(struct device *dev);
 struct drm_device *dcss_drv_dev_to_drm(struct device *dev);
-struct dcss_dev *dcss_dev_create(struct device *dev, bool mipi_output);
+bool dcss_drv_is_componentized(struct device *dev);
+struct dcss_dev *dcss_dev_create(struct device *dev, bool hdmi_output);
 void dcss_dev_destroy(struct dcss_dev *dcss);
 int dcss_dev_runtime_suspend(struct device *dev);
 int dcss_dev_runtime_resume(struct device *dev);
 int dcss_dev_suspend(struct device *dev);
 int dcss_dev_resume(struct device *dev);
+void dcss_enable_dtg_and_ss(struct dcss_dev *dcss);
+void dcss_disable_dtg_and_ss(struct dcss_dev *dcss);
 
 /* BLKCTL */
 int dcss_blkctl_init(struct dcss_dev *dcss, unsigned long blkctl_base);
@@ -124,28 +128,14 @@ void dcss_ctxld_write_irqsafe(struct dcss_ctxld *ctlxd, u32 ctx_id, u32 val,
 void dcss_ctxld_kick(struct dcss_ctxld *ctxld);
 bool dcss_ctxld_is_flushed(struct dcss_ctxld *ctxld);
 int dcss_ctxld_enable(struct dcss_ctxld *ctxld);
-void dcss_ctxld_register_dtg_disable_cb(struct dcss_ctxld *ctxld,
-					void (*cb)(void *),
-					void *data);
+void dcss_ctxld_register_completion(struct dcss_ctxld *ctxld,
+				    struct completion *dis_completion);
+void dcss_ctxld_assert_locked(struct dcss_ctxld *ctxld);
 void dcss_ctxld_register_dtrc_cb(struct dcss_ctxld *ctxld,
 				 bool (*cb)(void *),
 				 void *data);
 
 /* DPR */
-enum dcss_tile_type {
-	TILE_LINEAR = 0,
-	TILE_GPU_STANDARD,
-	TILE_GPU_SUPER,
-	TILE_VPU_YUV420,
-	TILE_VPU_VP9,
-};
-
-enum dcss_pix_size {
-	PIX_SIZE_8,
-	PIX_SIZE_16,
-	PIX_SIZE_32,
-};
-
 int dcss_dpr_init(struct dcss_dev *dcss, unsigned long dpr_base);
 void dcss_dpr_exit(struct dcss_dpr *dpr);
 void dcss_dpr_write_sysctrl(struct dcss_dpr *dpr);
@@ -164,9 +154,10 @@ bool dcss_dtg_vblank_irq_valid(struct dcss_dtg *dtg);
 void dcss_dtg_vblank_irq_enable(struct dcss_dtg *dtg, bool en);
 void dcss_dtg_vblank_irq_clear(struct dcss_dtg *dtg);
 void dcss_dtg_sync_set(struct dcss_dtg *dtg, struct videomode *vm);
-void dcss_dtg_css_set(struct dcss_dtg *dtg, bool out_is_yuv);
-void dcss_dtg_enable(struct dcss_dtg *dtg, bool en,
-		     struct completion *dis_completion);
+void dcss_dtg_css_set(struct dcss_dtg *dtg,
+		      enum dcss_pixel_pipe_output output_encoding);
+void dcss_dtg_enable(struct dcss_dtg *dtg);
+void dcss_dtg_shutoff(struct dcss_dtg *dtg);
 bool dcss_dtg_is_enabled(struct dcss_dtg *dtg);
 void dcss_dtg_ctxld_kick_irq_enable(struct dcss_dtg *dtg, bool en);
 bool dcss_dtg_global_alpha_changed(struct dcss_dtg *dtg, int ch_num, int alpha);
@@ -180,14 +171,17 @@ void dcss_dtg_ch_enable(struct dcss_dtg *dtg, int ch_num, bool en);
 int dcss_ss_init(struct dcss_dev *dcss, unsigned long subsam_base);
 void dcss_ss_exit(struct dcss_ss *ss);
 void dcss_ss_enable(struct dcss_ss *ss);
-void dcss_ss_disable(struct dcss_ss *ss);
-void dcss_ss_subsam_set(struct dcss_ss *ss, bool output_is_yuv);
+void dcss_ss_shutoff(struct dcss_ss *ss);
+void dcss_ss_subsam_set(struct dcss_ss *ss,
+			enum dcss_pixel_pipe_output output_encoding);
 void dcss_ss_sync_set(struct dcss_ss *ss, struct videomode *vm,
 		      bool phsync, bool pvsync);
 
 /* SCALER */
 int dcss_scaler_init(struct dcss_dev *dcss, unsigned long scaler_base);
 void dcss_scaler_exit(struct dcss_scaler *scl);
+void dcss_scaler_set_filter(struct dcss_scaler *scl, int ch_num,
+			    enum drm_scaling_filter scaling_filter);
 void dcss_scaler_setup(struct dcss_scaler *scl, int ch_num,
 		       const struct drm_format_info *format,
 		       int src_xres, int src_yres, int dst_xres, int dst_yres,
@@ -289,6 +283,9 @@ struct dcss_hdr10_pipe_cfg {
 
 int dcss_hdr10_init(struct dcss_dev *dcss, unsigned long hdr10_base);
 void dcss_hdr10_exit(struct dcss_hdr10 *hdr10);
+bool dcss_hdr10_pipe_cfg_is_supported(struct dcss_hdr10 *hdr10,
+				      struct dcss_hdr10_pipe_cfg *ipipe_cfg,
+				      struct dcss_hdr10_pipe_cfg *opipe_cfg);
 void dcss_hdr10_setup(struct dcss_hdr10 *hdr10, int ch_num,
 		      struct dcss_hdr10_pipe_cfg *ipipe_cfg,
 		      struct dcss_hdr10_pipe_cfg *opipe_cfg);

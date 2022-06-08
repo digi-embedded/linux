@@ -7,7 +7,6 @@
 #include <linux/export.h>
 #include <linux/sched.h>
 #include <linux/string.h>
-#include <linux/cryptohash.h>
 #include <linux/delay.h>
 #include <linux/in6.h>
 #include <linux/syscalls.h>
@@ -17,6 +16,7 @@
 
 #include <asm/checksum.h>
 #include <asm/ftrace.h>
+#include <asm/virt.h>
 
 /*
  * libgcc functions - functions that are used internally by the
@@ -175,4 +175,8 @@ EXPORT_SYMBOL(__pv_offset);
 #ifdef CONFIG_HAVE_ARM_SMCCC
 EXPORT_SYMBOL(__arm_smccc_smc);
 EXPORT_SYMBOL(__arm_smccc_hvc);
+#endif
+
+#ifdef CONFIG_ARM_VIRT_EXT
+EXPORT_SYMBOL_GPL(__boot_cpu_mode);
 #endif

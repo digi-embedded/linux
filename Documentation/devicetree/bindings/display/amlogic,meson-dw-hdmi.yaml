@@ -79,16 +79,14 @@ properties:
 
   hdmi-supply:
     description: phandle to an external 5V regulator to power the HDMI logic
-    allOf:
-      - $ref: /schemas/types.yaml#/definitions/phandle
 
   port@0:
-    type: object
+    $ref: /schemas/graph.yaml#/properties/port
     description:
       A port node pointing to the VENC Input port node.
 
   port@1:
-    type: object
+    $ref: /schemas/graph.yaml#/properties/port
     description:
       A port node pointing to the TMDS Output port node.
 

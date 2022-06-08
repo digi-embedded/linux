@@ -89,7 +89,7 @@ zalon_probe(struct parisc_device *dev)
 	struct gsc_irq gsc_irq;
 	u32 zalon_vers;
 	int error = -ENODEV;
-	void __iomem *zalon = ioremap_nocache(dev->hpa.start, 4096);
+	void __iomem *zalon = ioremap(dev->hpa.start, 4096);
 	void __iomem *io_port = zalon + GSC_SCSI_ZALON_OFFSET;
 	static int unit = 0;
 	struct Scsi_Host *host;
@@ -168,15 +168,13 @@ static const struct parisc_device_id zalon_tbl[] __initconst = {
 
 MODULE_DEVICE_TABLE(parisc, zalon_tbl);
 
-static int __exit zalon_remove(struct parisc_device *dev)
+static void __exit zalon_remove(struct parisc_device *dev)
 {
 	struct Scsi_Host *host = dev_get_drvdata(&dev->dev);
 
 	scsi_remove_host(host);
 	ncr53c8xx_release(host);
 	free_irq(dev->irq, host);
-
-	return 0;
 }
 
 static struct parisc_driver zalon_driver __refdata = {

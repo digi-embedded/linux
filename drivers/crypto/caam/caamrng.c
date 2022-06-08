@@ -13,6 +13,7 @@
 #include <linux/completion.h>
 #include <linux/atomic.h>
 #include <linux/kfifo.h>
+#include <linux/busfreq-imx.h>
 
 #include "compat.h"
 
@@ -51,7 +52,6 @@ static struct caam_rng_ctx *to_caam_rng_ctx(struct hwrng *r)
 {
 	return (struct caam_rng_ctx *)r->priv;
 }
-
 
 static void caam_rng_done(struct device *jrdev, u32 *desc, u32 err,
 			  void *context)
@@ -100,6 +100,7 @@ static int caam_rng_read_one(struct device *jrdev,
 		return -ENOMEM;
 	}
 
+	request_bus_freq(BUS_FREQ_HIGH);
 	init_completion(done);
 	err = caam_jr_enqueue(jrdev,
 			      caam_init_desc(desc, dst_dma),
@@ -109,6 +110,7 @@ static int caam_rng_read_one(struct device *jrdev,
 		err = 0;
 	}
 
+	release_bus_freq(BUS_FREQ_HIGH);
 	dma_unmap_single(jrdev, dst_dma, len, DMA_FROM_DEVICE);
 
 	return err ?: (ret ?: len);
@@ -304,7 +306,6 @@ int caam_rng_init(struct device *ctrldev)
 	}
 
 #ifdef CONFIG_CRYPTO_DEV_FSL_CAAM_RNG_TEST
-	dev_info(ctrldev, "Running self-test\n");
 	self_test(&ctx->rng);
 #endif
 

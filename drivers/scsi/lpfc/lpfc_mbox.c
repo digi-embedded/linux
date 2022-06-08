@@ -1,7 +1,7 @@
 /*******************************************************************
  * This file is part of the Emulex Linux Device Driver for         *
  * Fibre Channel Host Bus Adapters.                                *
- * Copyright (C) 2017-2018 Broadcom. All Rights Reserved. The term *
+ * Copyright (C) 2017-2021 Broadcom. All Rights Reserved. The term *
  * “Broadcom” refers to Broadcom Inc. and/or its subsidiaries.     *
  * Copyright (C) 2004-2016 Emulex.  All rights reserved.           *
  * EMULEX and SLI are trademarks of Emulex.                        *
@@ -513,15 +513,18 @@ lpfc_init_link(struct lpfc_hba * phba,
 		break;
 	}
 
-	if ((phba->pcidev->device == PCI_DEVICE_ID_LANCER_G6_FC ||
-	     phba->pcidev->device == PCI_DEVICE_ID_LANCER_G7_FC) &&
+	/* Topology handling for ASIC_GEN_NUM 0xC and later */
+	if ((phba->sli4_hba.pc_sli4_params.sli_family == LPFC_SLI_INTF_FAMILY_G6 ||
+	     phba->sli4_hba.pc_sli4_params.if_type == LPFC_SLI_INTF_IF_TYPE_6) &&
+	    !(phba->sli4_hba.pc_sli4_params.pls) &&
 	    mb->un.varInitLnk.link_flags & FLAGS_TOPOLOGY_MODE_LOOP) {
 		mb->un.varInitLnk.link_flags = FLAGS_TOPOLOGY_MODE_PT_PT;
 		phba->cfg_topology = FLAGS_TOPOLOGY_MODE_PT_PT;
 	}
 
 	/* Enable asynchronous ABTS responses from firmware */
-	mb->un.varInitLnk.link_flags |= FLAGS_IMED_ABORT;
+	if (phba->sli_rev == LPFC_SLI_REV3 && !phba->cfg_fcp_wait_abts_rsp)
+		mb->un.varInitLnk.link_flags |= FLAGS_IMED_ABORT;
 
 	/* NEW_FEATURE
 	 * Setting up the link speed
@@ -867,9 +870,7 @@ lpfc_sli4_unreg_all_rpis(struct lpfc_vport *vport)
 
 /**
  * lpfc_reg_vpi - Prepare a mailbox command for registering vport identifier
- * @phba: pointer to lpfc hba data structure.
- * @vpi: virtual N_Port identifier.
- * @sid: Fibre Channel S_ID (N_Port_ID assigned to a virtual N_Port).
+ * @vport: pointer to a vport object.
  * @pmb: pointer to the driver internal queue element for mailbox command.
  *
  * The registration vport identifier mailbox command is used to activate a
@@ -1198,7 +1199,7 @@ lpfc_config_hbq(struct lpfc_hba *phba, uint32_t id,
 /**
  * lpfc_config_ring - Prepare a mailbox command for configuring an IOCB ring
  * @phba: pointer to lpfc hba data structure.
- * @ring:
+ * @ring: ring number/index
  * @pmb: pointer to the driver internal queue element for mailbox command.
  *
  * The configure ring mailbox command is used to configure an IOCB ring. This
@@ -1298,8 +1299,6 @@ lpfc_config_port(struct lpfc_hba *phba, LPFC_MBOXQ_t *pmb)
 	if (phba->sli_rev == LPFC_SLI_REV3 && phba->vpd.sli3Feat.cerbm) {
 		if (phba->cfg_enable_bg)
 			mb->un.varCfgPort.cbg = 1; /* configure BlockGuard */
-		if (phba->cfg_enable_dss)
-			mb->un.varCfgPort.cdss = 1; /* Configure Security */
 		mb->un.varCfgPort.cerbm = 1; /* Request HBQs */
 		mb->un.varCfgPort.ccrp = 1; /* Command Ring Polling */
 		mb->un.varCfgPort.max_hbq = lpfc_sli_hbq_count();
@@ -1379,7 +1378,8 @@ lpfc_config_port(struct lpfc_hba *phba, LPFC_MBOXQ_t *pmb)
 	 */
 
 	if (phba->cfg_hostmem_hgp && phba->sli_rev != 3) {
-		phba->host_gp = &phba->mbox->us.s2.host[0];
+		phba->host_gp = (struct lpfc_hgp __iomem *)
+				 &phba->mbox->us.s2.host[0];
 		phba->hbq_put = NULL;
 		offset = (uint8_t *)&phba->mbox->us.s2.host -
 			(uint8_t *)phba->slim2p.virt;
@@ -1613,7 +1613,7 @@ lpfc_mbox_dev_check(struct lpfc_hba *phba)
 /**
  * lpfc_mbox_tmo_val - Retrieve mailbox command timeout value
  * @phba: pointer to lpfc hba data structure.
- * @cmd: mailbox command code.
+ * @mboxq: pointer to the driver internal queue element for mailbox command.
  *
  * This routine retrieves the proper timeout value according to the mailbox
  * command code.
@@ -1700,6 +1700,7 @@ lpfc_sli4_mbx_sge_set(struct lpfcMboxq *mbox, uint32_t sgentry,
  * lpfc_sli4_mbx_sge_get - Get a sge entry from non-embedded mailbox command
  * @mbox: pointer to lpfc mbox command.
  * @sgentry: sge entry index.
+ * @sge: pointer to lpfc mailbox sge to load into.
  *
  * This routine gets an entry from the non-embedded mailbox command at the sge
  * index location.
@@ -1767,6 +1768,7 @@ lpfc_sli4_mbox_cmd_free(struct lpfc_hba *phba, struct lpfcMboxq *mbox)
  * @subsystem: The sli4 config sub mailbox subsystem.
  * @opcode: The sli4 config sub mailbox command opcode.
  * @length: Length of the sli4 config mailbox command (including sub-header).
+ * @emb: True if embedded mbox command should be setup.
  *
  * This routine sets up the header fields of SLI4 specific mailbox command
  * for sending IOCTL command.
@@ -2012,6 +2014,7 @@ lpfc_sli_config_mbox_opcode_get(struct lpfc_hba *phba, LPFC_MBOXQ_t *mbox)
 /**
  * lpfc_sli4_mbx_read_fcf_rec - Allocate and construct read fcf mbox cmd
  * @phba: pointer to lpfc hba data structure.
+ * @mboxq: pointer to lpfc mbox command.
  * @fcf_index: index to fcf table.
  *
  * This routine routine allocates and constructs non-embedded mailbox command
@@ -2068,6 +2071,7 @@ lpfc_sli4_mbx_read_fcf_rec(struct lpfc_hba *phba,
 
 /**
  * lpfc_request_features: Configure SLI4 REQUEST_FEATURES mailbox
+ * @phba: pointer to lpfc hba data structure.
  * @mboxq: pointer to lpfc mbox command.
  *
  * This routine sets up the mailbox for an SLI4 REQUEST_FEATURES
@@ -2097,6 +2101,12 @@ lpfc_request_features(struct lpfc_hba *phba, struct lpfcMboxq *mboxq)
 		/* iaab/iaar NOT set for now */
 		bf_set(lpfc_mbx_rq_ftr_rq_iaab, &mboxq->u.mqe.un.req_ftrs, 0);
 		bf_set(lpfc_mbx_rq_ftr_rq_iaar, &mboxq->u.mqe.un.req_ftrs, 0);
+	}
+
+	/* Enable Application Services Header for appheader VMID */
+	if (phba->cfg_vmid_app_header) {
+		bf_set(lpfc_mbx_rq_ftr_rq_ashdr, &mboxq->u.mqe.un.req_ftrs, 1);
+		bf_set(lpfc_ftr_ashdr, &phba->sli4_hba.sli4_flags, 1);
 	}
 	return;
 }
@@ -2407,7 +2417,7 @@ error:
 
 
 /*
- * lpfc_sli4_dump_sfp_pagea0 - Dump sli4 read SFP Diagnostic.
+ * lpfc_sli4_dump_page_a0 - Dump sli4 read SFP Diagnostic.
  * @phba: pointer to the hba structure containing.
  * @mbox: pointer to lpfc mbox command to initialize.
  *
@@ -2622,39 +2632,3 @@ lpfc_resume_rpi(struct lpfcMboxq *mbox, struct lpfc_nodelist *ndlp)
 	resume_rpi->event_tag = ndlp->phba->fc_eventTag;
 }
 
-/**
- * lpfc_supported_pages - Initialize the PORT_CAPABILITIES supported pages
- *                        mailbox command.
- * @mbox: pointer to lpfc mbox command to initialize.
- *
- * The PORT_CAPABILITIES supported pages mailbox command is issued to
- * retrieve the particular feature pages supported by the port.
- **/
-void
-lpfc_supported_pages(struct lpfcMboxq *mbox)
-{
-	struct lpfc_mbx_supp_pages *supp_pages;
-
-	memset(mbox, 0, sizeof(*mbox));
-	supp_pages = &mbox->u.mqe.un.supp_pages;
-	bf_set(lpfc_mqe_command, &mbox->u.mqe, MBX_PORT_CAPABILITIES);
-	bf_set(cpn, supp_pages, LPFC_SUPP_PAGES);
-}
-
-/**
- * lpfc_pc_sli4_params - Initialize the PORT_CAPABILITIES SLI4 Params mbox cmd.
- * @mbox: pointer to lpfc mbox command to initialize.
- *
- * The PORT_CAPABILITIES SLI4 parameters mailbox command is issued to
- * retrieve the particular SLI4 features supported by the port.
- **/
-void
-lpfc_pc_sli4_params(struct lpfcMboxq *mbox)
-{
-	struct lpfc_mbx_pc_sli4_params *sli4_params;
-
-	memset(mbox, 0, sizeof(*mbox));
-	sli4_params = &mbox->u.mqe.un.sli4_params;
-	bf_set(lpfc_mqe_command, &mbox->u.mqe, MBX_PORT_CAPABILITIES);
-	bf_set(cpn, sli4_params, LPFC_SLI4_PARAMETERS);
-}

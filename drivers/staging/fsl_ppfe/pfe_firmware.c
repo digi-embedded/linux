@@ -14,11 +14,13 @@
 #include "pfe_mod.h"
 #include "pfe_firmware.h"
 #include "pfe/pfe.h"
+#include <linux/of_platform.h>
+#include <linux/of_address.h>
 
-static struct elf32_shdr *get_elf_section_header(const struct firmware *fw,
+static struct elf32_shdr *get_elf_section_header(const u8 *fw,
 						 const char *section)
 {
-	struct elf32_hdr *elf_hdr = (struct elf32_hdr *)fw->data;
+	struct elf32_hdr *elf_hdr = (struct elf32_hdr *)fw;
 	struct elf32_shdr *shdr;
 	struct elf32_shdr *shdr_shstr;
 	Elf32_Off e_shoff = be32_to_cpu(elf_hdr->e_shoff);
@@ -31,17 +33,17 @@ static struct elf32_shdr *get_elf_section_header(const struct firmware *fw,
 	int i;
 
 	/* Section header strings */
-	shdr_shstr = (struct elf32_shdr *)(fw->data + e_shoff + e_shstrndx *
-					e_shentsize);
+	shdr_shstr = (struct elf32_shdr *)((u8 *)elf_hdr + e_shoff + e_shstrndx
+					* e_shentsize);
 	shstr_offset = be32_to_cpu(shdr_shstr->sh_offset);
 
 	for (i = 0; i < e_shnum; i++) {
-		shdr = (struct elf32_shdr *)(fw->data + e_shoff
+		shdr = (struct elf32_shdr *)((u8 *)elf_hdr + e_shoff
 					     + i * e_shentsize);
 
 		sh_name = be32_to_cpu(shdr->sh_name);
 
-		name = (const char *)(fw->data + shstr_offset + sh_name);
+		name = (const char *)((u8 *)elf_hdr + shstr_offset + sh_name);
 
 		if (!strcmp(name, section))
 			return shdr;
@@ -53,7 +55,7 @@ static struct elf32_shdr *get_elf_section_header(const struct firmware *fw,
 }
 
 #if defined(CFG_DIAGS)
-static int pfe_get_diags_info(const struct firmware *fw, struct pfe_diags_info
+static int pfe_get_diags_info(const u8 *fw, struct pfe_diags_info
 				*diags_info)
 {
 	struct elf32_shdr *shdr;
@@ -66,7 +68,7 @@ static int pfe_get_diags_info(const struct firmware *fw, struct pfe_diags_info
 		diags_info->diags_str_base = be32_to_cpu(shdr->sh_addr);
 		diags_info->diags_str_size = size;
 		diags_info->diags_str_array = kmalloc(size, GFP_KERNEL);
-		memcpy(diags_info->diags_str_array, fw->data + offset, size);
+		memcpy(diags_info->diags_str_array, fw + offset, size);
 
 		return 0;
 	} else {
@@ -75,9 +77,10 @@ static int pfe_get_diags_info(const struct firmware *fw, struct pfe_diags_info
 }
 #endif
 
-static void pfe_check_version_info(const struct firmware *fw)
+static void pfe_check_version_info(const u8 *fw)
 {
 	/*static char *version = NULL;*/
+	const u8 *elf_data = fw;
 	static char *version;
 
 	struct elf32_shdr *shdr = get_elf_section_header(fw, ".version");
@@ -88,7 +91,7 @@ static void pfe_check_version_info(const struct firmware *fw)
 			 * this is the first fw we load, use its version
 			 * string as reference (whatever it is)
 			 */
-			version = (char *)(fw->data +
+			version = (char *)(elf_data +
 					be32_to_cpu(shdr->sh_offset));
 
 			pr_info("PFE binary version: %s\n", version);
@@ -97,7 +100,7 @@ static void pfe_check_version_info(const struct firmware *fw)
 			 * already have loaded at least one firmware, check
 			 * sequence can start now
 			 */
-			if (strcmp(version, (char *)(fw->data +
+			if (strcmp(version, (char *)(elf_data +
 				be32_to_cpu(shdr->sh_offset)))) {
 				pr_info(
 				"WARNING: PFE firmware binaries from incompatible version\n");
@@ -122,11 +125,11 @@ static void pfe_check_version_info(const struct firmware *fw)
  * @return		0 on success, a negative value on error
  *
  */
-int pfe_load_elf(int pe_mask, const struct firmware *fw, struct pfe *pfe)
+int pfe_load_elf(int pe_mask, const u8 *fw, struct pfe *pfe)
 {
-	struct elf32_hdr *elf_hdr = (struct elf32_hdr *)fw->data;
+	struct elf32_hdr *elf_hdr = (struct elf32_hdr *)fw;
 	Elf32_Half sections = be16_to_cpu(elf_hdr->e_shnum);
-	struct elf32_shdr *shdr = (struct elf32_shdr *)(fw->data +
+	struct elf32_shdr *shdr = (struct elf32_shdr *)(fw +
 					be32_to_cpu(elf_hdr->e_shoff));
 	int id, section;
 	int rc;
@@ -164,7 +167,7 @@ int pfe_load_elf(int pe_mask, const struct firmware *fw, struct pfe *pfe)
 
 		for (id = 0; id < MAX_PE; id++)
 			if (pe_mask & (1 << id)) {
-				rc = pe_load_elf_section(id, fw->data, shdr,
+				rc = pe_load_elf_section(id, elf_hdr, shdr,
 							 pfe->dev);
 				if (rc < 0)
 					goto err;
@@ -177,6 +180,78 @@ int pfe_load_elf(int pe_mask, const struct firmware *fw, struct pfe *pfe)
 
 err:
 	return rc;
+}
+
+int get_firmware_in_fdt(const u8 **pe_fw, const char *name)
+{
+	struct device_node *np;
+	const unsigned int *len;
+	const void *data;
+
+	if (!strcmp(name, CLASS_FIRMWARE_FILENAME)) {
+		/* The firmware should be inside the device tree. */
+		np = of_find_compatible_node(NULL, NULL,
+					     "fsl,pfe-class-firmware");
+		if (!np) {
+			pr_info("Failed to find the node\n");
+			return -ENOENT;
+		}
+
+		data = of_get_property(np, "fsl,class-firmware", NULL);
+		if (data) {
+			len = of_get_property(np, "length", NULL);
+			pr_info("CLASS fw of length %d bytes loaded from FDT.\n",
+				be32_to_cpu(*len));
+		} else {
+			pr_info("fsl,class-firmware not found!!!!\n");
+			return -ENOENT;
+		}
+		of_node_put(np);
+		*pe_fw = data;
+	} else if (!strcmp(name, TMU_FIRMWARE_FILENAME)) {
+		np = of_find_compatible_node(NULL, NULL,
+					     "fsl,pfe-tmu-firmware");
+		if (!np) {
+			pr_info("Failed to find the node\n");
+			return -ENOENT;
+		}
+
+		data = of_get_property(np, "fsl,tmu-firmware", NULL);
+		if (data) {
+			len = of_get_property(np, "length", NULL);
+			pr_info("TMU fw of length %d bytes loaded from FDT.\n",
+				be32_to_cpu(*len));
+		} else {
+			pr_info("fsl,tmu-firmware not found!!!!\n");
+			return -ENOENT;
+		}
+		of_node_put(np);
+		*pe_fw = data;
+	} else if (!strcmp(name, UTIL_FIRMWARE_FILENAME)) {
+		np = of_find_compatible_node(NULL, NULL,
+					     "fsl,pfe-util-firmware");
+		if (!np) {
+			pr_info("Failed to find the node\n");
+			return -ENOENT;
+		}
+
+		data = of_get_property(np, "fsl,util-firmware", NULL);
+		if (data) {
+			len = of_get_property(np, "length", NULL);
+			pr_info("UTIL fw of length %d bytes loaded from FDT.\n",
+				be32_to_cpu(*len));
+		} else {
+			pr_info("fsl,util-firmware not found!!!!\n");
+			return -ENOENT;
+		}
+		of_node_put(np);
+		*pe_fw = data;
+	} else {
+		pr_err("firmware:%s not known\n", name);
+		return -EINVAL;
+	}
+
+	return 0;
 }
 
 /* PFE firmware initialization.
@@ -192,46 +267,65 @@ err:
 int pfe_firmware_init(struct pfe *pfe)
 {
 	const struct firmware *class_fw, *tmu_fw;
-	int rc = 0;
+	const u8 *class_elf_fw, *tmu_elf_fw;
+	int rc = 0, fs_load = 0;
 #if !defined(CONFIG_FSL_PPFE_UTIL_DISABLED)
-	const char *util_fw_name;
 	const struct firmware *util_fw;
+	const u8 *util_elf_fw;
+
 #endif
 
 	pr_info("%s\n", __func__);
 
-	if (request_firmware(&class_fw, CLASS_FIRMWARE_FILENAME, pfe->dev)) {
-		pr_err("%s: request firmware %s failed\n", __func__,
-		       CLASS_FIRMWARE_FILENAME);
-		rc = -ETIMEDOUT;
-		goto err0;
-	}
+#if !defined(CONFIG_FSL_PPFE_UTIL_DISABLED)
+	if (get_firmware_in_fdt(&class_elf_fw, CLASS_FIRMWARE_FILENAME) ||
+	    get_firmware_in_fdt(&tmu_elf_fw, TMU_FIRMWARE_FILENAME) ||
+	    get_firmware_in_fdt(&util_elf_fw, UTIL_FIRMWARE_FILENAME))
+#else
+	if (get_firmware_in_fdt(&class_elf_fw, CLASS_FIRMWARE_FILENAME) ||
+	    get_firmware_in_fdt(&tmu_elf_fw, TMU_FIRMWARE_FILENAME))
+#endif
+	{
+		pr_info("%s:PFE firmware not found in FDT.\n", __func__);
+		pr_info("%s:Trying to load firmware from filesystem...!\n", __func__);
 
-	if (request_firmware(&tmu_fw, TMU_FIRMWARE_FILENAME, pfe->dev)) {
-		pr_err("%s: request firmware %s failed\n", __func__,
-		       TMU_FIRMWARE_FILENAME);
-		rc = -ETIMEDOUT;
-		goto err1;
-}
+		/* look for firmware in filesystem...!*/
+		fs_load = 1;
+		if (request_firmware(&class_fw, CLASS_FIRMWARE_FILENAME, pfe->dev)) {
+			pr_err("%s: request firmware %s failed\n", __func__,
+			       CLASS_FIRMWARE_FILENAME);
+			rc = -ETIMEDOUT;
+			goto err0;
+		}
+		class_elf_fw = class_fw->data;
+
+		if (request_firmware(&tmu_fw, TMU_FIRMWARE_FILENAME, pfe->dev)) {
+			pr_err("%s: request firmware %s failed\n", __func__,
+			       TMU_FIRMWARE_FILENAME);
+			rc = -ETIMEDOUT;
+			goto err1;
+		}
+		tmu_elf_fw = tmu_fw->data;
 
 #if !defined(CONFIG_FSL_PPFE_UTIL_DISABLED)
-	util_fw_name = UTIL_FIRMWARE_FILENAME;
-
-	if (request_firmware(&util_fw, util_fw_name, pfe->dev)) {
-		pr_err("%s: request firmware %s failed\n", __func__,
-		       util_fw_name);
-		rc = -ETIMEDOUT;
-		goto err2;
-	}
+		if (request_firmware(&util_fw, UTIL_FIRMWARE_FILENAME, pfe->dev)) {
+			pr_err("%s: request firmware %s failed\n", __func__,
+			       UTIL_FIRMWARE_FILENAME);
+			rc = -ETIMEDOUT;
+			goto err2;
+		}
+		util_elf_fw = util_fw->data;
 #endif
-	rc = pfe_load_elf(CLASS_MASK, class_fw, pfe);
+	}
+
+	rc = pfe_load_elf(CLASS_MASK, class_elf_fw, pfe);
 	if (rc < 0) {
 		pr_err("%s: class firmware load failed\n", __func__);
 		goto err3;
 	}
 
 #if defined(CFG_DIAGS)
-	rc = pfe_get_diags_info(class_fw, &pfe->diags.class_diags_info);
+	rc = pfe_get_diags_info(class_elf_fw, &pfe->diags.class_diags_info);
 	if (rc < 0) {
 		pr_warn(
 			"PFE diags won't be available for class PEs\n");
@@ -239,21 +333,21 @@ int pfe_firmware_init(struct pfe *pfe)
 	}
 #endif
 
-	rc = pfe_load_elf(TMU_MASK, tmu_fw, pfe);
+	rc = pfe_load_elf(TMU_MASK, tmu_elf_fw, pfe);
 	if (rc < 0) {
 		pr_err("%s: tmu firmware load failed\n", __func__);
 		goto err3;
 	}
 
 #if !defined(CONFIG_FSL_PPFE_UTIL_DISABLED)
-	rc = pfe_load_elf(UTIL_MASK, util_fw, pfe);
+	rc = pfe_load_elf(UTIL_MASK, util_elf_fw, pfe);
 	if (rc < 0) {
 		pr_err("%s: util firmware load failed\n", __func__);
 		goto err3;
 	}
 
 #if defined(CFG_DIAGS)
-	rc = pfe_get_diags_info(util_fw, &pfe->diags.util_diags_info);
+	rc = pfe_get_diags_info(util_elf_fw, &pfe->diags.util_diags_info);
 	if (rc < 0) {
 		pr_warn(
 			"PFE diags won't be available for util PE\n");
@@ -269,14 +363,16 @@ int pfe_firmware_init(struct pfe *pfe)
 
 err3:
 #if !defined(CONFIG_FSL_PPFE_UTIL_DISABLED)
-	release_firmware(util_fw);
-
+	if (fs_load)
+		release_firmware(util_fw);
 err2:
 #endif
-	release_firmware(tmu_fw);
+	if (fs_load)
+		release_firmware(tmu_fw);
 
 err1:
-	release_firmware(class_fw);
+	if (fs_load)
+		release_firmware(class_fw);
 
 err0:
 	return rc;

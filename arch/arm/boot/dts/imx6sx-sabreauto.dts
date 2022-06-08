@@ -67,19 +67,19 @@
 		vin-supply = <&reg_can_en>;
 	};
 
-	reg_vref_3v3: regulator-adc-verf {
-		compatible = "regulator-fixed";
-		regulator-name = "vref-3v3";
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
-	};
-
-	reg_audio: cs42888_supply {
+	reg_cs42888: cs42888_supply {
 		compatible = "regulator-fixed";
 		regulator-name = "cs42888_supply";
 		regulator-min-microvolt = <3300000>;
 		regulator-max-microvolt = <3300000>;
 		regulator-always-on;
+	};
+
+	reg_vref_3v3: regulator-adc-verf {
+		compatible = "regulator-fixed";
+		regulator-name = "vref-3v3";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
 	};
 
 	si4763_vio1: vio1_tnr {
@@ -116,11 +116,24 @@
 
 	sound-cs42888 {
 		compatible = "fsl,imx6-sabreauto-cs42888",
-			   "fsl,imx-audio-cs42888";
+			     "fsl,imx-audio-cs42888";
 		model = "imx-cs42888";
-		esai-controller = <&esai>;
-		asrc-controller = <&asrc>;
-		audio-codec = <&codec>;
+		audio-cpu = <&esai>;
+		audio-asrc = <&asrc>;
+		audio-codec = <&cs42888>;
+		audio-routing =
+			"Line Out Jack", "AOUT1L",
+			"Line Out Jack", "AOUT1R",
+			"Line Out Jack", "AOUT2L",
+			"Line Out Jack", "AOUT2R",
+			"Line Out Jack", "AOUT3L",
+			"Line Out Jack", "AOUT3R",
+			"Line Out Jack", "AOUT4L",
+			"Line Out Jack", "AOUT4R",
+			"AIN1L", "Line In Jack",
+			"AIN1R", "Line In Jack",
+			"AIN2L", "Line In Jack",
+			"AIN2R", "Line In Jack";
 	};
 
 	sound-fm {
@@ -171,22 +184,6 @@
 	assigned-clock-rates = <0>, <0>, <24576000>;
 };
 
-&esai {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_esai_2>;
-	assigned-clocks = <&clks IMX6SX_CLK_ESAI_SEL>,
-			<&clks IMX6SX_CLK_ESAI_EXTAL>;
-	assigned-clock-parents = <&clks IMX6SX_CLK_PLL4_AUDIO_DIV>;
-	assigned-clock-rates = <0>, <24576000>;
-	status = "okay";
-};
-
-&spdif {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_spdif_3>;
-	status = "okay";
-};
-
 &ssi2 {
 	fsl,mode = "i2s-master";
 	status = "okay";
@@ -213,6 +210,15 @@
 	status = "okay";
 };
 
+&esai {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_esai>;
+	assigned-clocks = <&clks IMX6SX_CLK_ESAI_SEL>,
+			<&clks IMX6SX_CLK_ESAI_EXTAL>;
+	assigned-clock-parents = <&clks IMX6SX_CLK_PLL4_AUDIO_DIV>;
+	assigned-clock-rates = <0>, <24576000>;
+};
+
 &fec1 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_enet1>;
@@ -228,13 +234,13 @@
 		ethphy0: ethernet-phy@0 {
 			compatible = "ethernet-phy-ieee802.3-c22";
 			reg = <0>;
-			at803x,eee-disabled;
+			qca,disable-smarteee;
 		};
 
 		ethphy1: ethernet-phy@1 {
 			compatible = "ethernet-phy-ieee802.3-c22";
 			reg = <1>;
-			at803x,eee-disabled;
+			qca,disable-smarteee;
 		};
 	};
 };
@@ -394,7 +400,7 @@
 		>;
 	};
 
-	pinctrl_esai_2: esaigrp-2 {
+	pinctrl_esai: esaigrp {
 		fsl,pins = <
 			MX6SX_PAD_CSI_DATA00__ESAI_TX_CLK   0x1b030
 			MX6SX_PAD_CSI_DATA01__ESAI_TX_FS    0x1b030
@@ -406,12 +412,6 @@
 			MX6SX_PAD_CSI_DATA03__ESAI_RX_FS    0x1b030
 			MX6SX_PAD_CSI_VSYNC__ESAI_TX5_RX0   0x1b030
 			MX6SX_PAD_CSI_DATA05__ESAI_TX4_RX1  0x1b030
-		>;
-	};
-
-	pinctrl_spdif_3: spdifgrp-3 {
-		fsl,pins = <
-			MX6SX_PAD_ENET2_COL__SPDIF_IN           0x1b0b0
 		>;
 	};
 
@@ -470,6 +470,12 @@
 		>;
 	};
 
+	pinctrl_spdif: spdifgrp {
+		fsl,pins = <
+			MX6SX_PAD_ENET2_COL__SPDIF_IN           0x1b0b0
+		>;
+	};
+
 	pinctrl_qspi1_1: qspi1grp_1 {
 		fsl,pins = <
 			MX6SX_PAD_QSPI1A_DATA0__QSPI1_A_DATA_0  0x70a1
@@ -489,8 +495,8 @@
 
 	pinctrl_uart1: uart1grp {
 		fsl,pins = <
-			MX6SX_PAD_GPIO1_IO04__UART1_TX		0x1b0b1
-			MX6SX_PAD_GPIO1_IO05__UART1_RX		0x1b0b1
+			MX6SX_PAD_GPIO1_IO04__UART1_DCE_TX		0x1b0b1
+			MX6SX_PAD_GPIO1_IO05__UART1_DCE_RX		0x1b0b1
 		>;
 	};
 
@@ -598,15 +604,15 @@
 	pinctrl-0 = <&pinctrl_i2c2>;
 	status = "okay";
 
-	codec: cs42888@48 {
+	cs42888: cs42888@48 {
 		compatible = "cirrus,cs42888";
 		reg = <0x48>;
 		clocks = <&anaclk2 0>;
 		clock-names = "mclk";
-		VA-supply = <&reg_audio>;
-		VD-supply = <&reg_audio>;
-		VLS-supply = <&reg_audio>;
-		VLC-supply = <&reg_audio>;
+		VA-supply = <&reg_cs42888>;
+		VD-supply = <&reg_cs42888>;
+		VLS-supply = <&reg_cs42888>;
+		VLC-supply = <&reg_cs42888>;
 	};
 
 	si4763: si4763@63 {
@@ -787,6 +793,14 @@
 		interrupt-parent = <&gpio3>;
 		interrupts = <23 2>;
 	};
+};
+
+&spdif {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_spdif>;
+	assigned-clocks = <&clks IMX6SX_CLK_SPDIF_PODF>;
+	assigned-clock-rates = <24576000>;
+	status = "okay";
 };
 
 &vadc {

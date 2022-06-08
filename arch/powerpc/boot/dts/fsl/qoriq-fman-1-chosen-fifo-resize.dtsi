@@ -3,7 +3,7 @@
  * Copyright 2018 NXP
  */
 
-&soc {
+/ {
 	chosen {
 		name = "chosen";
 		dpaa-extended-args {

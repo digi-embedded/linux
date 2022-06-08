@@ -2,20 +2,18 @@
 //
 // rcpm.c - Freescale QorIQ RCPM driver
 //
-// Copyright 2019 NXP
+// Copyright 2019-2020 NXP
 //
 // Author: Ran Wang <ran.wang_1@nxp.com>
 
-#include <linux/acpi.h>
 #include <linux/init.h>
-#include <linux/kernel.h>
-#include <linux/mfd/syscon.h>
 #include <linux/module.h>
-#include <linux/of_address.h>
 #include <linux/platform_device.h>
-#include <linux/regmap.h>
+#include <linux/of_address.h>
 #include <linux/slab.h>
 #include <linux/suspend.h>
+#include <linux/kernel.h>
+#include <linux/acpi.h>
 
 #define RCPM_WAKEUP_CELL_MAX_SIZE	7
 
@@ -24,6 +22,28 @@ struct rcpm {
 	void __iomem	*ippdexpcr_base;
 	bool		little_endian;
 };
+
+#define  SCFG_SPARECR8	0x051c
+
+static void copy_ippdexpcr1_setting(u32 val)
+{
+	struct device_node *np;
+	void __iomem *regs;
+	u32 reg_val;
+
+	np = of_find_compatible_node(NULL, NULL, "fsl,ls1021a-scfg");
+	if (!np)
+		return;
+
+	regs = of_iomap(np, 0);
+	if (!regs)
+		return;
+
+	reg_val = ioread32be(regs + SCFG_SPARECR8);
+	iowrite32be(val | reg_val, regs + SCFG_SPARECR8);
+
+	iounmap(regs);
+}
 
 /**
  * rcpm_pm_prepare - performs device-level tasks associated with power
@@ -40,9 +60,6 @@ static int rcpm_pm_prepare(struct device *dev)
 	struct device_node	*np = dev->of_node;
 	u32 value[RCPM_WAKEUP_CELL_MAX_SIZE + 1];
 	u32 setting[RCPM_WAKEUP_CELL_MAX_SIZE] = {0};
-	struct regmap *scfg_addr_regmap = NULL;
-	u32 reg_offset[RCPM_WAKEUP_CELL_MAX_SIZE + 1];
-	u32 reg_value = 0;
 
 	rcpm = dev_get_drvdata(dev);
 	if (!rcpm)
@@ -62,9 +79,19 @@ static int rcpm_pm_prepare(struct device *dev)
 				"fsl,rcpm-wakeup", value,
 				rcpm->wakeup_cells + 1);
 
-		/*  Wakeup source should refer to current rcpm device */
-		if (ret || (np->phandle != value[0]))
+		if (ret)
 			continue;
+
+		/*
+		 * For DT mode, would handle devices with "fsl,rcpm-wakeup"
+		 * pointing to the current RCPM node.
+		 *
+		 * For ACPI mode, currently we assume there is only one
+		 * RCPM controller existing.
+		 */
+		if (is_of_node(dev->fwnode))
+			if (np->phandle != value[0])
+				continue;
 
 		/* Property "#fsl,rcpm-wakeup-cells" of rcpm node defines the
 		 * number of IPPDEXPCR register cells, and "fsl,rcpm-wakeup"
@@ -104,35 +131,9 @@ static int rcpm_pm_prepare(struct device *dev)
 		 * to register SCFG_SPARECR8.And the value of
 		 * ippdexpcr1 will be read from SCFG_SPARECR8.
 		 */
-		if (device_property_present(dev, "fsl,ippdexpcr1-alt-addr")) {
-			if (dev_of_node(dev)) {
-				scfg_addr_regmap = syscon_regmap_lookup_by_phandle(np,
-										   "fsl,ippdexpcr1-alt-addr");
-			} else if (is_acpi_node(dev->fwnode)) {
-				dev_err(dev, "not support acpi for rcpm\n");
-				continue;
-			}
-
-			if (scfg_addr_regmap && (i == 1)) {
-				if (device_property_read_u32_array(dev,
-				    "fsl,ippdexpcr1-alt-addr",
-				    reg_offset,
-				    1 + sizeof(u64)/sizeof(u32))) {
-					scfg_addr_regmap = NULL;
-					continue;
-				}
-				/* Read value from register SCFG_SPARECR8 */
-				regmap_read(scfg_addr_regmap,
-					    ((((u64)reg_offset[1] << (sizeof(u32) * 8) |
-					    reg_offset[2])) & 0xffffffff),
-					    &reg_value);
-				/* Write value to register SCFG_SPARECR8 */
-				regmap_write(scfg_addr_regmap,
-					     ((((u64)reg_offset[1] << (sizeof(u32) * 8) |
-					     reg_offset[2])) & 0xffffffff),
-					     tmp | reg_value);
-			}
-		}
+		if (dev_of_node(dev) && (i == 1))
+			if (of_device_is_compatible(np, "fsl,ls1021a-rcpm"))
+				copy_ippdexpcr1_setting(tmp);
 	}
 
 	return 0;
@@ -182,10 +183,19 @@ static const struct of_device_id rcpm_of_match[] = {
 };
 MODULE_DEVICE_TABLE(of, rcpm_of_match);
 
+#ifdef CONFIG_ACPI
+static const struct acpi_device_id rcpm_acpi_ids[] = {
+	{"NXP0015",},
+	{ }
+};
+MODULE_DEVICE_TABLE(acpi, rcpm_acpi_ids);
+#endif
+
 static struct platform_driver rcpm_driver = {
 	.driver = {
 		.name = "rcpm",
 		.of_match_table = rcpm_of_match,
+		.acpi_match_table = ACPI_PTR(rcpm_acpi_ids),
 		.pm	= &rcpm_pm_ops,
 	},
 	.probe = rcpm_probe,

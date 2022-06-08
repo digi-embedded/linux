@@ -995,30 +995,21 @@ static enum usb_charger_type mxs_phy_dcd_flow(struct usb_phy *phy)
 
 static int mxs_phy_probe(struct platform_device *pdev)
 {
-	struct resource *res;
 	void __iomem *base;
 	struct clk *clk;
 	struct mxs_phy *mxs_phy;
 	int ret;
-	const struct of_device_id *of_id;
 	struct device_node *np = pdev->dev.of_node;
 	u32 val;
 
-	of_id = of_match_device(mxs_phy_dt_ids, &pdev->dev);
-	if (!of_id)
-		return -ENODEV;
-
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	base = devm_ioremap_resource(&pdev->dev, res);
+	base = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(base))
 		return PTR_ERR(base);
 
 	clk = devm_clk_get(&pdev->dev, NULL);
-	if (IS_ERR(clk)) {
-		dev_err(&pdev->dev,
-			"can't get the clock, err=%ld", PTR_ERR(clk));
-		return PTR_ERR(clk);
-	}
+	if (IS_ERR(clk))
+		return dev_err_probe(&pdev->dev, PTR_ERR(clk),
+				     "failed to get clock\n");
 
 	mxs_phy = devm_kzalloc(&pdev->dev, sizeof(*mxs_phy), GFP_KERNEL);
 	if (!mxs_phy)
@@ -1081,8 +1072,6 @@ static int mxs_phy_probe(struct platform_device *pdev)
 	ret = of_alias_get_id(np, "usbphy");
 	if (ret < 0)
 		dev_dbg(&pdev->dev, "failed to get alias id, errno %d\n", ret);
-	mxs_phy->clk = clk;
-	mxs_phy->data = of_id->data;
 	mxs_phy->port_id = ret;
 
 	mxs_phy->phy.io_priv		= base;
@@ -1095,28 +1084,28 @@ static int mxs_phy_probe(struct platform_device *pdev)
 	mxs_phy->phy.notify_disconnect	= mxs_phy_on_disconnect;
 	mxs_phy->phy.type		= USB_PHY_TYPE_USB2;
 	mxs_phy->phy.set_wakeup		= mxs_phy_set_wakeup;
+	mxs_phy->clk = clk;
+	mxs_phy->data = of_device_get_match_data(&pdev->dev);
+	mxs_phy->phy.set_mode		= mxs_phy_set_mode;
+
 	if (mxs_phy->data->flags & MXS_PHY_HAS_DCD)
 		mxs_phy->phy.charger_detect	= mxs_phy_dcd_flow;
 	else
 		mxs_phy->phy.charger_detect	= mxs_phy_charger_detect;
 
-	mxs_phy->phy.set_mode		= mxs_phy_set_mode;
 	if (mxs_phy->data->flags & MXS_PHY_SENDING_SOF_TOO_FAST) {
 		mxs_phy->phy.notify_suspend = mxs_phy_on_suspend;
 		mxs_phy->phy.notify_resume = mxs_phy_on_resume;
 	}
 
 	mxs_phy->phy_3p0 = devm_regulator_get(&pdev->dev, "phy-3p0");
-	if (PTR_ERR(mxs_phy->phy_3p0) == -EPROBE_DEFER) {
-		return -EPROBE_DEFER;
-	} else if (PTR_ERR(mxs_phy->phy_3p0) == -ENODEV) {
+	if (PTR_ERR(mxs_phy->phy_3p0) == -ENODEV)
 		/* not exist */
 		mxs_phy->phy_3p0 = NULL;
-	} else if (IS_ERR(mxs_phy->phy_3p0)) {
-		dev_err(&pdev->dev, "Getting regulator error: %ld\n",
-			PTR_ERR(mxs_phy->phy_3p0));
-		return PTR_ERR(mxs_phy->phy_3p0);
-	}
+	else if (IS_ERR(mxs_phy->phy_3p0))
+		return dev_err_probe(&pdev->dev, PTR_ERR(mxs_phy->phy_3p0),
+				     "Getting regulator error\n");
+
 	if (mxs_phy->phy_3p0)
 		regulator_set_voltage(mxs_phy->phy_3p0, 3200000, 3200000);
 

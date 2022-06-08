@@ -646,7 +646,7 @@ static int viacam_vb2_start_streaming(struct vb2_queue *vq, unsigned int count)
 	 * requirement which will keep the CPU out of the deeper sleep
 	 * states.
 	 */
-	pm_qos_add_request(&cam->qos_request, PM_QOS_CPU_DMA_LATENCY, 50);
+	cpu_latency_qos_add_request(&cam->qos_request, 50);
 	viacam_start_engine(cam);
 	return 0;
 out:
@@ -662,7 +662,7 @@ static void viacam_vb2_stop_streaming(struct vb2_queue *vq)
 	struct via_camera *cam = vb2_get_drv_priv(vq);
 	struct via_buffer *buf, *tmp;
 
-	pm_qos_remove_request(&cam->qos_request);
+	cpu_latency_qos_remove_request(&cam->qos_request);
 	viacam_stop_engine(cam);
 
 	list_for_each_entry_safe(buf, tmp, &cam->buffer_queue, queue) {
@@ -844,6 +844,9 @@ static int viacam_do_try_fmt(struct via_camera *cam,
 {
 	int ret;
 	struct v4l2_subdev_pad_config pad_cfg;
+	struct v4l2_subdev_state pad_state = {
+		.pads = &pad_cfg
+		};
 	struct v4l2_subdev_format format = {
 		.which = V4L2_SUBDEV_FORMAT_TRY,
 	};
@@ -852,7 +855,7 @@ static int viacam_do_try_fmt(struct via_camera *cam,
 	upix->pixelformat = f->pixelformat;
 	viacam_fmt_pre(upix, spix);
 	v4l2_fill_mbus_format(&format.format, spix, f->mbus_code);
-	ret = sensor_call(cam, pad, set_fmt, &pad_cfg, &format);
+	ret = sensor_call(cam, pad, set_fmt, &pad_state, &format);
 	v4l2_fill_pix_format(spix, &format.format);
 	viacam_fmt_post(upix, spix);
 	return ret;
@@ -1262,7 +1265,7 @@ static int viacam_probe(struct platform_device *pdev)
 	cam->vdev.lock = &cam->lock;
 	cam->vdev.queue = vq;
 	video_set_drvdata(&cam->vdev, cam);
-	ret = video_register_device(&cam->vdev, VFL_TYPE_GRABBER, -1);
+	ret = video_register_device(&cam->vdev, VFL_TYPE_VIDEO, -1);
 	if (ret)
 		goto out_irq;
 

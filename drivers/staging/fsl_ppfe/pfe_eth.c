@@ -476,9 +476,20 @@ static void pfe_eth_fill_stats(struct net_device *ndev, struct ethtool_stats
 {
 	struct pfe_eth_priv_s *priv = netdev_priv(ndev);
 	int i;
+	u64 pfe_crc_validated = 0;
+	int id;
 
-	for (i = 0; i < ARRAY_SIZE(fec_stats); i++)
+	for (id = CLASS0_ID; id <= CLASS_MAX_ID; id++) {
+		pfe_crc_validated += be32_to_cpu(pe_dmem_read(id,
+			CLASS_DM_CRC_VALIDATED + (priv->id * 4), 4));
+	}
+
+	for (i = 0; i < ARRAY_SIZE(fec_stats); i++) {
 		data[i] = readl(priv->EMAC_baseaddr + fec_stats[i].offset);
+
+		if (fec_stats[i].offset == IEEE_R_DROP)
+			data[i] -= pfe_crc_validated;
+	}
 }
 
 static void pfe_eth_gstrings(struct net_device *netdev,
@@ -650,7 +661,9 @@ static void pfe_eth_set_msglevel(struct net_device *ndev, uint32_t data)
  *
  */
 static int pfe_eth_set_coalesce(struct net_device *ndev,
-				struct ethtool_coalesce *ec)
+				struct ethtool_coalesce *ec,
+				struct kernel_ethtool_coalesce *kernel_coal,
+				struct netlink_ext_ack *extack)
 {
 	if (ec->rx_coalesce_usecs > HIF_RX_COAL_MAX_USECS)
 		return -EINVAL;
@@ -671,7 +684,9 @@ static int pfe_eth_set_coalesce(struct net_device *ndev,
  *
  */
 static int pfe_eth_get_coalesce(struct net_device *ndev,
-				struct ethtool_coalesce *ec)
+				struct ethtool_coalesce *ec,
+				struct kernel_ethtool_coalesce *kernel_coal,
+				struct netlink_ext_ack *extack)
 {
 	int reg_val = readl(HIF_INT_COAL);
 
@@ -783,6 +798,7 @@ static int pfe_eth_get_hash(u8 *addr)
 }
 
 const struct ethtool_ops pfe_ethtool_ops = {
+	.supported_coalesce_params = ETHTOOL_COALESCE_RX_USECS,
 	.get_drvinfo = pfe_eth_get_drvinfo,
 	.get_regs_len = pfe_eth_gemac_reglen,
 	.get_regs = pfe_eth_gemac_get_regs,
@@ -991,9 +1007,9 @@ static int pfe_eth_mdio_init(struct pfe *pfe,
 	priv->mdc_div = mdio_info->mdc_div;
 	if (!priv->mdc_div)
 		priv->mdc_div = 64;
-		dev_info(bus->parent, "%s: mdc_div: %d, phy_mask: %x\n",
-			 __func__, priv->mdc_div, bus->phy_mask);
 
+	dev_info(bus->parent, "%s: mdc_div: %d, phy_mask: %x\n",
+		 __func__, priv->mdc_div, bus->phy_mask);
 	mdio_node = of_get_child_by_name(pfe->dev->of_node, "mdio");
 	if ((mdio_info->id == 0) && mdio_node) {
 		rc = of_mdiobus_register(bus, mdio_node);
@@ -1124,7 +1140,7 @@ static void pfe_eth_adjust_link(struct net_device *ndev)
 			gemac_set_speed(priv->EMAC_baseaddr,
 					pfe_get_phydev_speed(phydev));
 			if (priv->einfo->mii_config ==
-					PHY_INTERFACE_MODE_RGMII_TXID)
+					PHY_INTERFACE_MODE_RGMII_ID)
 				pfe_set_rgmii_speed(phydev);
 			priv->oldspeed = phydev->speed;
 		}
@@ -1327,6 +1343,7 @@ static int pfe_gemac_init(struct pfe_eth_priv_s *priv)
 
 	netif_info(priv, ifup, priv->ndev, "%s\n", __func__);
 
+	cfg.mode = 0;
 	cfg.speed = SPEED_1000M;
 	cfg.duplex = DUPLEX_FULL;
 
@@ -1483,7 +1500,7 @@ err0:
 int pfe_eth_shutdown(struct net_device *ndev, int wake)
 {
 	struct pfe_eth_priv_s *priv = netdev_priv(ndev);
-	int i, qstatus;
+	int i, qstatus, id;
 	unsigned long next_poll = jiffies + 1, end = jiffies +
 				(TX_POLL_TIMEOUT_MS * HZ) / 1000;
 	int tx_pkts, prv_tx_pkts;
@@ -1563,6 +1580,11 @@ int pfe_eth_shutdown(struct net_device *ndev, int wake)
 	napi_disable(&priv->lro_napi);
 	napi_disable(&priv->low_napi);
 	napi_disable(&priv->high_napi);
+
+	for (id = CLASS0_ID; id <= CLASS_MAX_ID; id++) {
+		pe_dmem_write(id, 0, CLASS_DM_CRC_VALIDATED
+			      + (priv->id * 4), 4);
+	}
 
 	hif_lib_client_unregister(&priv->client);
 

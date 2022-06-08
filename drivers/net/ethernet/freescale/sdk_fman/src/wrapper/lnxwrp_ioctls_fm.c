@@ -1,5 +1,6 @@
 /*
  * Copyright 2008-2012 Freescale Semiconductor Inc.
+ * Copyright 2021 NXP
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -38,14 +39,6 @@
 
 /* Linux Headers ------------------- */
 #include <linux/version.h>
-
-#if defined(CONFIG_MODVERSIONS) && !defined(MODVERSIONS)
-#define MODVERSIONS
-#endif
-#ifdef MODVERSIONS
-#include <config/modversions.h>
-#endif /* MODVERSIONS */
-
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/slab.h>
@@ -526,6 +519,7 @@ Status: PCD API to fmlib (file: drivers/net/dpa/NetCommSw/inc/Peripherals/fm_pcd
     FM_PCD_Enable
     FM_PCD_Disable
     FM_PCD_ForceIntr
+    FM_PCD_AllowHcUsage
     FM_PCD_SetException
     FM_PCD_KgSetAdditionalDataAfterParsing
     FM_PCD_KgSetDfltValue
@@ -706,6 +700,27 @@ Status: feature not supported
 
             err = FM_PCD_ForceIntr(p_LnxWrpFmDev->h_PcdDev, (e_FmPcdExceptions)exception);
             break;
+        }
+
+        case FM_PCD_IOC_ALLOW_HC_USAGE:
+        {
+        	uint8_t allow_hc;
+
+#if defined(CONFIG_COMPAT)
+            if (compat)
+            {
+                if (get_user(allow_hc, (uint8_t *) compat_ptr(arg)))
+                    RETURN_ERROR(MINOR, E_WRITE_FAILED, NO_MSG);
+            }
+            else
+#endif
+            {
+                if (get_user(allow_hc, (uint8_t *)arg))
+                   RETURN_ERROR(MINOR, E_WRITE_FAILED, NO_MSG);
+            }
+
+            err = FM_PCD_AllowHcUsage(p_LnxWrpFmDev->h_PcdDev, allow_hc);
+        	break;
         }
 
         case FM_PCD_IOC_SET_EXCEPTION:

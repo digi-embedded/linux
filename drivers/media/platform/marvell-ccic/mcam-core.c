@@ -24,6 +24,7 @@
 #include <linux/clk.h>
 #include <linux/clk-provider.h>
 #include <linux/videodev2.h>
+#include <linux/pm_runtime.h>
 #include <media/v4l2-device.h>
 #include <media/v4l2-ioctl.h>
 #include <media/v4l2-ctrls.h>
@@ -388,7 +389,7 @@ static int mcam_alloc_dma_bufs(struct mcam_camera *cam, int loadtime)
 		dma_free_coherent(cam->dev, cam->dma_buf_size,
 				cam->dma_bufs[0], cam->dma_handles[0]);
 		cam->nbufs = 0;
-		/* fall-through */
+		fallthrough;
 	case 0:
 		cam_err(cam, "Insufficient DMA buffers, cannot operate\n");
 		return -ENOMEM;
@@ -438,9 +439,9 @@ static void mcam_ctlr_dma_vmalloc(struct mcam_camera *cam)
 /*
  * Copy data out to user space in the vmalloc case
  */
-static void mcam_frame_tasklet(unsigned long data)
+static void mcam_frame_tasklet(struct tasklet_struct *t)
 {
-	struct mcam_camera *cam = (struct mcam_camera *) data;
+	struct mcam_camera *cam = from_tasklet(cam, t, s_tasklet);
 	int i;
 	unsigned long flags;
 	struct mcam_vb_buffer *buf;
@@ -691,7 +692,7 @@ static void mcam_dma_sg_done(struct mcam_camera *cam, int frame)
  * Scatter/gather mode requires stopping the controller between
  * frames so we can put in a new DMA descriptor array.  If no new
  * buffer exists at frame completion, the controller is left stopped;
- * this function is charged with gettig things going again.
+ * this function is charged with getting things going again.
  */
 static void mcam_sg_restart(struct mcam_camera *cam)
 {
@@ -895,30 +896,6 @@ static void mcam_ctlr_power_down(struct mcam_camera *cam)
 
 /* ---------------------------------------------------------------------- */
 /*
- * Controller clocks.
- */
-static void mcam_clk_enable(struct mcam_camera *mcam)
-{
-	unsigned int i;
-
-	for (i = 0; i < NR_MCAM_CLK; i++) {
-		if (!IS_ERR(mcam->clk[i]))
-			clk_prepare_enable(mcam->clk[i]);
-	}
-}
-
-static void mcam_clk_disable(struct mcam_camera *mcam)
-{
-	int i;
-
-	for (i = NR_MCAM_CLK - 1; i >= 0; i--) {
-		if (!IS_ERR(mcam->clk[i]))
-			clk_disable_unprepare(mcam->clk[i]);
-	}
-}
-
-/* ---------------------------------------------------------------------- */
-/*
  * Master sensor clock.
  */
 static int mclk_prepare(struct clk_hw *hw)
@@ -941,6 +918,7 @@ static int mclk_enable(struct clk_hw *hw)
 	struct mcam_camera *cam = container_of(hw, struct mcam_camera, mclk_hw);
 	int mclk_src;
 	int mclk_div;
+	int ret;
 
 	/*
 	 * Clock the sensor appropriately.  Controller clock should
@@ -954,6 +932,9 @@ static int mclk_enable(struct clk_hw *hw)
 		mclk_div = 2;
 	}
 
+	ret = pm_runtime_resume_and_get(cam->dev);
+	if (ret < 0)
+		return ret;
 	clk_enable(cam->clk[0]);
 	mcam_reg_write(cam, REG_CLKCTRL, (mclk_src << 29) | mclk_div);
 	mcam_ctlr_power_up(cam);
@@ -967,6 +948,7 @@ static void mclk_disable(struct clk_hw *hw)
 
 	mcam_ctlr_power_down(cam);
 	clk_disable(cam->clk[0]);
+	pm_runtime_put(cam->dev);
 }
 
 static unsigned long mclk_recalc_rate(struct clk_hw *hw,
@@ -1323,8 +1305,7 @@ static int mcam_setup_vb2(struct mcam_camera *cam)
 		break;
 	case B_vmalloc:
 #ifdef MCAM_MODE_VMALLOC
-		tasklet_init(&cam->s_tasklet, mcam_frame_tasklet,
-				(unsigned long) cam);
+		tasklet_setup(&cam->s_tasklet, mcam_frame_tasklet);
 		vq->ops = &mcam_vb2_ops;
 		vq->mem_ops = &vb2_vmalloc_memops;
 		cam->dma_setup = mcam_ctlr_dma_vmalloc;
@@ -1369,6 +1350,9 @@ static int mcam_vidioc_try_fmt_vid_cap(struct file *filp, void *priv,
 	struct mcam_format_struct *f;
 	struct v4l2_pix_format *pix = &fmt->fmt.pix;
 	struct v4l2_subdev_pad_config pad_cfg;
+	struct v4l2_subdev_state pad_state = {
+		.pads = &pad_cfg
+		};
 	struct v4l2_subdev_format format = {
 		.which = V4L2_SUBDEV_FORMAT_TRY,
 	};
@@ -1377,7 +1361,7 @@ static int mcam_vidioc_try_fmt_vid_cap(struct file *filp, void *priv,
 	f = mcam_find_format(pix->pixelformat);
 	pix->pixelformat = f->pixelformat;
 	v4l2_fill_mbus_format(&format.format, pix, f->mbus_code);
-	ret = sensor_call(cam, pad, set_fmt, &pad_cfg, &format);
+	ret = sensor_call(cam, pad, set_fmt, &pad_state, &format);
 	v4l2_fill_pix_format(pix, &format.format);
 	pix->bytesperline = pix->width * f->bpp;
 	switch (f->pixelformat) {
@@ -1633,7 +1617,9 @@ static int mcam_v4l_open(struct file *filp)
 		ret = sensor_call(cam, core, s_power, 1);
 		if (ret)
 			goto out;
-		mcam_clk_enable(cam);
+		ret = pm_runtime_resume_and_get(cam->dev);
+		if (ret < 0)
+			goto out;
 		__mcam_cam_reset(cam);
 		mcam_set_config_needed(cam, 1);
 	}
@@ -1656,7 +1642,7 @@ static int mcam_v4l_release(struct file *filp)
 	if (last_open) {
 		mcam_disable_mipi(cam);
 		sensor_call(cam, core, s_power, 0);
-		mcam_clk_disable(cam);
+		pm_runtime_put(cam->dev);
 		if (cam->buffer_mode == B_vmalloc && alloc_bufs_at_read)
 			mcam_free_dma_bufs(cam);
 	}
@@ -1802,7 +1788,7 @@ static int mccic_notify_bound(struct v4l2_async_notifier *notifier,
 	cam->vdev.lock = &cam->s_mutex;
 	cam->vdev.queue = &cam->vb_queue;
 	video_set_drvdata(&cam->vdev, cam);
-	ret = video_register_device(&cam->vdev, VFL_TYPE_GRABBER, -1);
+	ret = video_register_device(&cam->vdev, VFL_TYPE_VIDEO, -1);
 	if (ret) {
 		cam->sensor = NULL;
 		goto out;
@@ -1890,16 +1876,6 @@ int mccic_register(struct mcam_camera *cam)
 	cam->pix_format = mcam_def_pix_format;
 	cam->mbus_code = mcam_def_mbus_code;
 
-	/*
-	 * Register sensor notifier.
-	 */
-	v4l2_async_notifier_init(&cam->notifier);
-	ret = v4l2_async_notifier_add_subdev(&cam->notifier, &cam->asd);
-	if (ret) {
-		cam_warn(cam, "failed to add subdev to a notifier");
-		goto out;
-	}
-
 	cam->notifier.ops = &mccic_notify_ops;
 	ret = v4l2_async_notifier_register(&cam->v4l2_dev, &cam->notifier);
 	if (ret < 0) {
@@ -1969,8 +1945,6 @@ EXPORT_SYMBOL_GPL(mccic_shutdown);
 /*
  * Power management
  */
-#ifdef CONFIG_PM
-
 void mccic_suspend(struct mcam_camera *cam)
 {
 	mutex_lock(&cam->s_mutex);
@@ -1979,7 +1953,6 @@ void mccic_suspend(struct mcam_camera *cam)
 
 		mcam_ctlr_stop_dma(cam);
 		sensor_call(cam, core, s_power, 0);
-		mcam_clk_disable(cam);
 		cam->state = cstate;
 	}
 	mutex_unlock(&cam->s_mutex);
@@ -1992,7 +1965,6 @@ int mccic_resume(struct mcam_camera *cam)
 
 	mutex_lock(&cam->s_mutex);
 	if (!list_empty(&cam->vdev.fh_list)) {
-		mcam_clk_enable(cam);
 		ret = sensor_call(cam, core, s_power, 1);
 		if (ret) {
 			mutex_unlock(&cam->s_mutex);
@@ -2017,7 +1989,6 @@ int mccic_resume(struct mcam_camera *cam)
 	return ret;
 }
 EXPORT_SYMBOL_GPL(mccic_resume);
-#endif /* CONFIG_PM */
 
 MODULE_LICENSE("GPL v2");
 MODULE_AUTHOR("Jonathan Corbet <corbet@lwn.net>");

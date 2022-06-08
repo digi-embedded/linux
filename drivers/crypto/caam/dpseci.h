@@ -79,10 +79,10 @@ int dpseci_enable(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token);
 
 int dpseci_disable(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token);
 
+int dpseci_reset(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token);
+
 int dpseci_is_enabled(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token,
 		      int *en);
-
-int dpseci_reset(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token);
 
 int dpseci_get_irq_enable(struct fsl_mc_io *mc_io, u32 cmd_flags, u16 token,
 			  u8 irq_index, u8 *en);

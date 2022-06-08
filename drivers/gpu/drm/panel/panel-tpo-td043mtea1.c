@@ -186,7 +186,7 @@ static ssize_t vmirror_show(struct device *dev, struct device_attribute *attr,
 {
 	struct td043mtea1_panel *lcd = dev_get_drvdata(dev);
 
-	return snprintf(buf, PAGE_SIZE, "%d\n", lcd->vmirror);
+	return sysfs_emit(buf, "%d\n", lcd->vmirror);
 }
 
 static ssize_t vmirror_store(struct device *dev, struct device_attribute *attr,
@@ -214,7 +214,7 @@ static ssize_t mode_show(struct device *dev, struct device_attribute *attr,
 {
 	struct td043mtea1_panel *lcd = dev_get_drvdata(dev);
 
-	return snprintf(buf, PAGE_SIZE, "%d\n", lcd->mode);
+	return sysfs_emit(buf, "%d\n", lcd->mode);
 }
 
 static ssize_t mode_store(struct device *dev, struct device_attribute *attr,
@@ -339,19 +339,18 @@ static const struct drm_display_mode td043mtea1_mode = {
 	.vsync_start = 480 + 39,
 	.vsync_end = 480 + 39 + 1,
 	.vtotal = 480 + 39 + 1 + 34,
-	.vrefresh = 60,
 	.type = DRM_MODE_TYPE_DRIVER | DRM_MODE_TYPE_PREFERRED,
 	.flags = DRM_MODE_FLAG_NHSYNC | DRM_MODE_FLAG_NVSYNC,
 	.width_mm = 94,
 	.height_mm = 56,
 };
 
-static int td043mtea1_get_modes(struct drm_panel *panel)
+static int td043mtea1_get_modes(struct drm_panel *panel,
+				struct drm_connector *connector)
 {
-	struct drm_connector *connector = panel->connector;
 	struct drm_display_mode *mode;
 
-	mode = drm_mode_duplicate(panel->drm, &td043mtea1_mode);
+	mode = drm_mode_duplicate(connector->dev, &td043mtea1_mode);
 	if (!mode)
 		return -ENOMEM;
 
@@ -458,15 +457,10 @@ static int td043mtea1_probe(struct spi_device *spi)
 		return ret;
 	}
 
-	drm_panel_init(&lcd->panel);
-	lcd->panel.dev = &lcd->spi->dev;
-	lcd->panel.funcs = &td043mtea1_funcs;
+	drm_panel_init(&lcd->panel, &lcd->spi->dev, &td043mtea1_funcs,
+		       DRM_MODE_CONNECTOR_DPI);
 
-	ret = drm_panel_add(&lcd->panel);
-	if (ret < 0) {
-		sysfs_remove_group(&spi->dev.kobj, &td043mtea1_attr_group);
-		return ret;
-	}
+	drm_panel_add(&lcd->panel);
 
 	return 0;
 }

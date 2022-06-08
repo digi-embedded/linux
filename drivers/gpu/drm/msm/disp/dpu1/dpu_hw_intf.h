@@ -40,6 +40,7 @@ struct intf_prog_fetch {
 
 struct intf_status {
 	u8 is_en;		/* interface timing engine is enabled or not */
+	u8 is_prog_fetch_en;	/* interface prog fetch counter is enabled or not */
 	u32 frame_count;	/* frame count since timing engine enabled */
 	u32 line_count;		/* current line count including blanking */
 };
@@ -52,6 +53,8 @@ struct intf_status {
  * @ enable_timing: enable/disable timing engine
  * @ get_status: returns if timing engine is enabled or not
  * @ get_line_count: reads current vertical line counter
+ * @bind_pingpong_blk: enable/disable the connection with pingpong which will
+ *                     feed pixels to this interface
  */
 struct dpu_hw_intf_ops {
 	void (*setup_timing_gen)(struct dpu_hw_intf *intf,
@@ -68,6 +71,10 @@ struct dpu_hw_intf_ops {
 			struct intf_status *status);
 
 	u32 (*get_line_count)(struct dpu_hw_intf *intf);
+
+	void (*bind_pingpong_blk)(struct dpu_hw_intf *intf,
+			bool enable,
+			const enum dpu_pingpong pp);
 };
 
 struct dpu_hw_intf {
@@ -84,6 +91,16 @@ struct dpu_hw_intf {
 };
 
 /**
+ * to_dpu_hw_intf - convert base object dpu_hw_base to container
+ * @hw: Pointer to base hardware block
+ * return: Pointer to hardware block container
+ */
+static inline struct dpu_hw_intf *to_dpu_hw_intf(struct dpu_hw_blk *hw)
+{
+	return container_of(hw, struct dpu_hw_intf, base);
+}
+
+/**
  * dpu_hw_intf_init(): Initializes the intf driver for the passed
  * interface idx.
  * @idx:  interface index for which driver object is required
@@ -92,7 +109,7 @@ struct dpu_hw_intf {
  */
 struct dpu_hw_intf *dpu_hw_intf_init(enum dpu_intf idx,
 		void __iomem *addr,
-		struct dpu_mdss_cfg *m);
+		const struct dpu_mdss_cfg *m);
 
 /**
  * dpu_hw_intf_destroy(): Destroys INTF driver context

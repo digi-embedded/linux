@@ -72,7 +72,7 @@
 	restore_user_regs_last
 	.endm
 
-#ifdef CONFIG_PREEMPT
+#ifdef CONFIG_PREEMPTION
 	.macro	preempt_stop
 	.endm
 #else
@@ -120,7 +120,7 @@ work_pending:
 	andi	$p1, $r1, #_TIF_NEED_RESCHED
 	bnez	$p1, work_resched
 
-	andi	$p1, $r1, #_TIF_SIGPENDING|#_TIF_NOTIFY_RESUME
+	andi	$p1, $r1, #_TIF_SIGPENDING|#_TIF_NOTIFY_RESUME|#_TIF_NOTIFY_SIGNAL
 	beqz	$p1, no_work_pending
 
 	move	$r0, $sp			! 'regs'
@@ -158,7 +158,7 @@ no_work_pending:
 /*
  * preemptive kernel
  */
-#ifdef CONFIG_PREEMPT
+#ifdef CONFIG_PREEMPTION
 resume_kernel:
 	gie_disable
 	lwi	$t0, [tsk+#TSK_TI_PREEMPT]

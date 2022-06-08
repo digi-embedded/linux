@@ -121,7 +121,7 @@ static int __init jr_uio_init(struct jr_dev *uio_dev)
 	info->uio.name = uio_dev->info.name;
 	info->uio.mem[0].name = "JR config space";
 	info->uio.mem[0].addr = uio_dev->res->start;
-	info->uio.mem[0].size = uio_dev->res->end - uio_dev->res->start + 1;
+	info->uio.mem[0].size = resource_size(uio_dev->res);
 	info->uio.mem[0].internal_addr = uio_dev->global_regs;
 	info->uio.mem[0].memtype = UIO_MEM_PHYS;
 	info->uio.irq = uio_dev->irq;
@@ -151,7 +151,6 @@ static const struct of_device_id jr_ids[] = {
 
 static int fsl_jr_probe(struct platform_device *dev)
 {
-	struct resource regs;
 	struct jr_dev *jr_dev;
 	struct device_node *jr_node;
 	int ret, count = 0;
@@ -179,14 +178,6 @@ static int fsl_jr_probe(struct platform_device *dev)
 	jr_dev->dev = &dev->dev;
 	platform_set_drvdata(dev, jr_dev);
 
-	/* Get the resource from dtb node */
-	ret = of_address_to_resource(jr_node, 0, &regs);
-	if (unlikely(ret < 0)) {
-		dev_err(&dev->dev, "OF-Address-to-resource Failed\n");
-		ret = -EFAULT;
-		goto abort;
-	}
-
 	jr_dev->res = platform_get_resource(dev, IORESOURCE_MEM, 0);
 	if (unlikely(!jr_dev->res)) {
 		dev_err(jr_dev->dev, "platform_get_resource() failed\n");
@@ -196,7 +187,7 @@ static int fsl_jr_probe(struct platform_device *dev)
 
 	jr_dev->global_regs =
 		devm_ioremap(&dev->dev, jr_dev->res->start,
-			     jr_dev->res->end - jr_dev->res->start + 1);
+			     resource_size(jr_dev->res));
 	if (unlikely(jr_dev->global_regs == 0)) {
 		dev_err(jr_dev->dev, "devm_ioremap failed\n");
 		ret = -EIO;

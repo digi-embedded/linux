@@ -298,10 +298,8 @@ struct diag26c_mac_resp {
 union diag318_info {
 	unsigned long val;
 	struct {
-		unsigned int cpnc : 8;
-		unsigned int cpvc_linux : 24;
-		unsigned char cpvc_distro[3];
-		unsigned char zero;
+		unsigned long cpnc : 8;
+		unsigned long cpvc : 56;
 	};
 };
 
@@ -311,6 +309,10 @@ int diag26c(void *req, void *resp, enum diag26c_sc subcode);
 
 struct hypfs_diag0c_entry;
 
+/*
+ * This structure must contain only pointers/references into
+ * the AMODE31 text section.
+ */
 struct diag_ops {
 	int (*diag210)(struct diag210 *addr);
 	int (*diag26c)(void *req, void *resp, enum diag26c_sc subcode);
@@ -319,6 +321,13 @@ struct diag_ops {
 	void (*diag308_reset)(void);
 };
 
-extern struct diag_ops diag_dma_ops;
-extern struct diag210 *__diag210_tmp_dma;
+extern struct diag_ops diag_amode31_ops;
+extern struct diag210 *__diag210_tmp_amode31;
+
+int _diag210_amode31(struct diag210 *addr);
+int _diag26c_amode31(void *req, void *resp, enum diag26c_sc subcode);
+int _diag14_amode31(unsigned long rx, unsigned long ry1, unsigned long subcode);
+void _diag0c_amode31(struct hypfs_diag0c_entry *entry);
+void _diag308_reset_amode31(void);
+
 #endif /* _ASM_S390_DIAG_H */

@@ -65,8 +65,8 @@
 extern gceSTATUS
 drv_signal_mgr_add(
     gctUINT32 Pid,
-    gctINT32 Coid,
     gctINT32 Rcvid,
+    const struct sigevent *Event,
     gctUINT64 Signal,
     gctPOINTER *Handle);
 #endif
@@ -559,7 +559,7 @@ _AllocateTaskContainer(
         /* Set the result. */
         * Buffer = buffer;
 
-        gcmkFOOTER_ARG("*Buffer=0x%x",*Buffer);
+        gcmkFOOTER_ARG("*Buffer=%p",*Buffer);
         /* Success. */
         return gcvSTATUS_OK;
     }
@@ -851,9 +851,8 @@ _ScheduleTasks(
                 {
                     gcmkTRACE_ZONE(
                         gcvLEVEL_VERBOSE, gcvZONE_COMMAND,
-                        "  first task container for the block added\n",
-                        block
-                        );
+                        "  first task container for the block %d added\n",
+                        block);
 
                     /* Nothing yet, set the container buffer pointer. */
                     kernelTaskEntry->container = container;
@@ -904,13 +903,6 @@ _ScheduleTasks(
 
                     gcmkVERIFY_OK(_RemoveRecordFromProcesDB(Command, taskHeader));
 
-                    gcmkTRACE_ZONE(
-                            gcvLEVEL_VERBOSE, gcvZONE_COMMAND,
-                            "    task ID = %d, size = %d\n",
-                            ((gcsTASK_HEADER_PTR) (userTask + 1))->id,
-                            userTask->size
-                            );
-
                     /* Copy the task data. */
                     if(needCopy)
                     {
@@ -937,13 +929,13 @@ _ScheduleTasks(
 
                         gcmkVERIFY_OK(gckOS_GetProcessID(&pid));
 
-                        taskSignal->coid  = TaskTable->coid;
                         taskSignal->rcvid = TaskTable->rcvid;
+                        taskSignal->event = TaskTable->event;
 
                         gcmkERR_BREAK(drv_signal_mgr_add(
                                     pid,
-                                    taskSignal->coid,
                                     taskSignal->rcvid,
+                                    &taskSignal->event,
                                     gcmPTR_TO_UINT64(taskSignal->signal),
                                     &signal));
 
@@ -1555,7 +1547,7 @@ _TaskIncrement(
         gcsTASK_INCREMENT_PTR task = (gcsTASK_INCREMENT_PTR) TaskHeader->task;
 
         /* Convert physical into logical address. */
-        gctUINT32_PTR logical;
+        gctUINT32_PTR logical = gcvNULL;
         gcmkERR_BREAK(gckOS_MapPhysical(
             Command->os,
             task->address,
@@ -1599,7 +1591,7 @@ _TaskDecrement(
         gcsTASK_DECREMENT_PTR task = (gcsTASK_DECREMENT_PTR) TaskHeader->task;
 
         /* Convert physical into logical address. */
-        gctUINT32_PTR logical;
+        gctUINT32_PTR logical = gcvNULL;
         gcmkERR_BREAK(gckOS_MapPhysical(
             Command->os,
             task->address,
@@ -1646,7 +1638,7 @@ _TaskSignal(
         /* Map the signal into kernel space. */
 #ifdef __QNXNTO__
         status = gckOS_UserSignal(
-            Command->os, task->signal, task->rcvid, task->coid
+            Command->os, task->signal, task->rcvid, &task->event
             );
 #else
         status = gckOS_UserSignal(
@@ -3050,7 +3042,7 @@ gckVGCOMMAND_Construct(
         /* Return gckVGCOMMAND object pointer. */
         *Command = command;
 
-        gcmkFOOTER_ARG("*Command=0x%x",*Command);
+        gcmkFOOTER_ARG("*Command=%p",*Command);
         /* Success. */
         return gcvSTATUS_OK;
     }
@@ -3373,7 +3365,7 @@ gckVGCOMMAND_Allocate(
 {
     gceSTATUS status;
 
-    gcmkHEADER_ARG("Command=%p Size=0x%x CommandBuffer=%p Data=0x%x",
+    gcmkHEADER_ARG("Command=%p Size=0x%x CommandBuffer=%p Data=%p",
         Command, Size, CommandBuffer, Data);
 
     /* Verify the arguments. */
@@ -3461,19 +3453,19 @@ gckVGCOMMAND_Execute(
 
 gceSTATUS
 gckVGCOMMAND_Commit(
-    IN gckVGCOMMAND Command,
-    IN gcsVGCONTEXT_PTR Context,
-    IN gcsVGCMDQUEUE_PTR Queue,
-    IN gctUINT EntryCount,
-    IN gcsTASK_MASTER_TABLE_PTR TaskTable
-    )
+        IN gckVGCOMMAND Command,
+        IN gcsVGCONTEXT_PTR Context,
+        IN gcsVGCMDQUEUE_PTR Queue,
+        IN gctUINT EntryCount,
+        IN gcsTASK_MASTER_TABLE_PTR TaskTable
+        )
 {
     /*
-        The first buffer is executed through a direct gckVGHARDWARE_Execute call,
-        therefore only an update is needed after the execution is over. All
-        consequent buffers need to be executed upon the first update call from
-        the FE interrupt handler.
-    */
+       The first buffer is executed through a direct gckVGHARDWARE_Execute call,
+       therefore only an update is needed after the execution is over. All
+       consequent buffers need to be executed upon the first update call from
+       the FE interrupt handler.
+       */
     static gcsQUEUE_UPDATE_CONTROL _dynamicBuffer[] =
     {
         {
@@ -3506,8 +3498,8 @@ gckVGCOMMAND_Commit(
         }
     };
 
-    gceSTATUS status, last;
-    struct _gcsTASK_MASTER_TABLE  _TaskTable;
+    gceSTATUS status;
+    struct _gcsTASK_MASTER_TABLE _TaskTable;
 #ifdef __QNXNTO__
     gcsVGCONTEXT_PTR userContext = gcvNULL;
     gctBOOL userContextMapped = gcvFALSE;
@@ -3518,6 +3510,27 @@ gckVGCOMMAND_Commit(
     struct _gcsVGCONTEXT  _Context;
     gctBOOL needCopy = gcvFALSE;
 
+
+    gctBOOL haveFETasks;
+    gctUINT queueSize = 0;
+    gcsVGCMDQUEUE_PTR mappedQueue = gcvNULL;
+    gcsVGCMDQUEUE_PTR userEntry = gcvNULL;
+    gcsKERNEL_CMDQUEUE_PTR kernelEntry;
+    gcsQUEUE_UPDATE_CONTROL_PTR queueControl;
+    gctUINT currentLength;
+    gctUINT queueLength;
+    gctUINT entriesQueued;
+    gctUINT8_PTR previousEnd;
+    gctBOOL previousDynamic;
+    gctBOOL previousExecuted;
+    gctUINT controlIndex;
+    gctINT pid;
+    gctBOOL powerSemaphoreAcquired = gcvFALSE;
+    gctBOOL commitMutexAcquired = gcvFALSE;
+    gctBOOL queueMutexAcquired = gcvFALSE;
+
+
+
     gcmkHEADER_ARG("Command=%p Context=%p Queue=%p EntryCount=0x%x TaskTable=%p",
             Command, Context, Queue, EntryCount, TaskTable);
 
@@ -3527,371 +3540,360 @@ gckVGCOMMAND_Commit(
     gcmkVERIFY_ARGUMENT(Queue != gcvNULL);
     gcmkVERIFY_ARGUMENT(EntryCount > 1);
 
-    do
-    {
-        gctBOOL haveFETasks;
-        gctUINT queueSize = 0;
-        gcsVGCMDQUEUE_PTR mappedQueue=gcvNULL;
-        gcsVGCMDQUEUE_PTR userEntry=gcvNULL;
-        gcsKERNEL_CMDQUEUE_PTR kernelEntry;
-        gcsQUEUE_UPDATE_CONTROL_PTR queueControl;
-        gctUINT currentLength;
-        gctUINT queueLength;
-        gctUINT entriesQueued;
-        gctUINT8_PTR previousEnd;
-        gctBOOL previousDynamic;
-        gctBOOL previousExecuted;
-        gctUINT controlIndex;
-        gctINT pid;
+
 #ifdef __QNXNTO__
-        /* Map the context into the kernel space. */
-        userContext = Context;
+    /* Map the context into the kernel space. */
+    userContext = Context;
 
-        gcmkERR_BREAK(gckOS_MapUserPointer(
-                    Command->os,
-                    userContext,
-                    gcmSIZEOF(*userContext),
-                    &pointer));
+    gcmkONERROR(gckOS_MapUserPointer(
+                Command->os,
+                userContext,
+                gcmSIZEOF(*userContext),
+                &pointer));
 
-        Context = pointer;
+    Context = pointer;
 
-        userContextMapped = gcvTRUE;
+    userContextMapped = gcvTRUE;
 
-        /* Map the taskTable into the kernel space. */
-        userTaskTable = TaskTable;
+    /* Map the taskTable into the kernel space. */
+    userTaskTable = TaskTable;
 
-        gcmkERR_BREAK(gckOS_MapUserPointer(
-                    Command->os,
-                    userTaskTable,
-                    gcmSIZEOF(*userTaskTable),
-                    &pointer));
+    gcmkONERROR(gckOS_MapUserPointer(
+                Command->os,
+                userTaskTable,
+                gcmSIZEOF(*userTaskTable),
+                &pointer));
 
-        TaskTable = pointer;
+    TaskTable = pointer;
 
-        userTaskTableMapped = gcvTRUE;
+    userTaskTableMapped = gcvTRUE;
 
-        /* Update the signal info. */
-        TaskTable->coid  = Context->coid;
-        TaskTable->rcvid = Context->rcvid;
+    /* Update the signal info. */
+    TaskTable->rcvid = Context->rcvid;
+    TaskTable->event = Context->event;
 #endif
 
-        gcmkERR_BREAK(gckOS_GetProcessID((gctUINT32_PTR)&pid));
-        gcmkERR_BREAK(gckOS_QueryNeedCopy(Command->os, pid, &needCopy));
-        if(needCopy)
-        {
-            gcmkERR_BREAK(gckOS_CopyFromUserData(
-                        Command->os,
-                        &_TaskTable,
-                        TaskTable,
-                        gcmSIZEOF(struct _gcsTASK_MASTER_TABLE)
-                        ));
-            TaskTable = &_TaskTable;
-            /* Determine whether there are FE tasks to be performed. */
-            gcmkERR_BREAK(gckOS_CopyFromUserData(
-                        Command->os,
-                        &_Context,
-                        Context,
-                        gcmSIZEOF(struct _gcsVGCONTEXT)
-                        ));
-            Context = &_Context;
-        }
-
-        gcmkERR_BREAK(gckVGHARDWARE_SetPowerState(
-                    Command->hardware, gcvPOWER_ON_AUTO
+    gcmkONERROR(gckOS_GetProcessID((gctUINT32_PTR)&pid));
+    gcmkONERROR(gckOS_QueryNeedCopy(Command->os, pid, &needCopy));
+    if(needCopy)
+    {
+        gcmkONERROR(gckOS_CopyFromUserData(
+                    Command->os,
+                    &_TaskTable,
+                    TaskTable,
+                    gcmSIZEOF(struct _gcsTASK_MASTER_TABLE)
                     ));
-
-        /* Acquire the power semaphore. */
-        gcmkERR_BREAK(gckOS_AcquireSemaphore(
-                    Command->os, Command->powerSemaphore
+        TaskTable = &_TaskTable;
+        /* Determine whether there are FE tasks to be performed. */
+        gcmkONERROR(gckOS_CopyFromUserData(
+                    Command->os,
+                    &_Context,
+                    Context,
+                    gcmSIZEOF(struct _gcsVGCONTEXT)
                     ));
+        Context = &_Context;
+    }
 
-        /* Acquire the mutex. */
-        status = gckOS_AcquireMutex(
+    gcmkONERROR(gckVGHARDWARE_SetPowerState(
+                Command->hardware, gcvPOWER_ON_AUTO
+                ));
+
+    /* Acquire the power semaphore. */
+    gcmkONERROR(gckOS_AcquireSemaphore(
+                Command->os, Command->powerSemaphore
+                ));
+    powerSemaphoreAcquired = gcvTRUE;
+    /* Acquire the mutex. */
+    gcmkONERROR(gckOS_AcquireMutex(
                 Command->os,
                 Command->commitMutex,
                 gcvINFINITE
-                );
+                ));
+    commitMutexAcquired = gcvTRUE;
 
-        if (gcmIS_ERROR(status))
+
+    gcmkONERROR(_FlushMMU(Command));
+
+    /* Assign a context ID if not yet assigned. */
+    if (Context->id == 0)
+    {
+        /* Assign the next context number. */
+        Context->id = ++ Command->contextCounter;
+        /* See if we overflowed. */
+        if (Command->contextCounter == 0)
         {
-            gcmkVERIFY_OK(gckOS_ReleaseSemaphore(
-                        Command->os, Command->powerSemaphore));
-            break;
+            /* We actually did overflow, wow... */
+            gcmkONERROR(gcvSTATUS_OUT_OF_RESOURCES);
         }
+    }
 
-        do
-        {
-            gcmkERR_BREAK(_FlushMMU(Command));
+    /* The first entry in the queue is always the context buffer.
+       Verify whether the user context is the same as the current
+       context and if that's the case, skip the first entry. */
+    if (Context->id == Command->currentContext)
+    {
+        /* Same context as before, skip the first entry. */
+        EntryCount -= 1;
+        Queue      += 1;
 
-            /* Assign a context ID if not yet assigned. */
-            if (Context->id == 0)
-            {
-                /* Assign the next context number. */
-                Context->id = ++ Command->contextCounter;
-                /* See if we overflowed. */
-                if (Command->contextCounter == 0)
-                {
-                    /* We actually did overflow, wow... */
-                    status = gcvSTATUS_OUT_OF_RESOURCES;
-                    break;
-                }
-            }
-
-            /* The first entry in the queue is always the context buffer.
-               Verify whether the user context is the same as the current
-               context and if that's the case, skip the first entry. */
-            if (Context->id == Command->currentContext)
-            {
-                /* Same context as before, skip the first entry. */
-                EntryCount -= 1;
-                Queue      += 1;
-
-                /* Set the signal to avoid user waiting. */
+        /* Set the signal to avoid user waiting. */
 #ifdef __QNXNTO__
-                gcmkERR_BREAK(gckOS_UserSignal(
-                            Command->os,
-                            Context->userSignal,
-                            Context->rcvid,
-                            Context->coid
-                            ));
+        gcmkONERROR(gckOS_UserSignal(
+                    Command->os,
+                    Context->userSignal,
+                    Context->rcvid,
+                    &Context->event
+                    ));
 #else
-                gcmkERR_BREAK(gckOS_UserSignal(
-                            Command->os, Context->signal, Context->process
-                            ));
+        gcmkONERROR(gckOS_UserSignal(
+                    Command->os, Context->signal, Context->process
+                    ));
 #endif
-            }
-            else
-            {
-                /* Different user context - keep the first entry.
-                   Set the user context as the current one. */
-                Command->currentContext = Context->id;
-            }
+    }
+    else
+    {
+        /* Different user context - keep the first entry.
+           Set the user context as the current one. */
+        Command->currentContext = Context->id;
+    }
 
-            /* Reset pointers. */
-            queueControl = gcvNULL;
-            previousEnd  = gcvNULL;
+    /* Reset pointers. */
+    queueControl = gcvNULL;
+    previousEnd  = gcvNULL;
 
-            haveFETasks = (TaskTable->table[gcvBLOCK_COMMAND].head != gcvNULL);
+    haveFETasks = (TaskTable->table[gcvBLOCK_COMMAND].head != gcvNULL);
 
-            /* Determine the size of the queue. */
-            queueSize = EntryCount * gcmSIZEOF(gcsVGCMDQUEUE);
-            if(needCopy)
-            {
-                gctPOINTER pointer = gcvNULL;
-                gcmkERR_BREAK(gckOS_Allocate(
-                            Command->os,
-                            queueSize,
-                            &pointer
-                            ));
-                userEntry = pointer;
-                mappedQueue = pointer;
-                gcmkERR_BREAK(gckOS_CopyFromUserData(
-                            Command->os,
-                            userEntry,
-                            Queue,
-                            queueSize
-                            ));
-            }
-            else
-            {
-                /* Map the command queue into the kernel space. */
-                gcmkERR_BREAK(gckOS_MapUserPointer(
-                            Command->os,
-                            Queue,
-                            queueSize,
-                            (gctPOINTER *) &mappedQueue
-                            ));
-                userEntry = mappedQueue;
-            }
-            /* Set the first entry. */
+    /* Determine the size of the queue. */
+    queueSize = EntryCount * gcmSIZEOF(gcsVGCMDQUEUE);
+    if(needCopy)
+    {
+        gctPOINTER pointer = gcvNULL;
+        gcmkONERROR(gckOS_Allocate(
+                    Command->os,
+                    queueSize,
+                    &pointer
+                    ));
+        userEntry = pointer;
+        mappedQueue = pointer;
+        gcmkONERROR(gckOS_CopyFromUserData(
+                    Command->os,
+                    userEntry,
+                    Queue,
+                    queueSize
+                    ));
+    }
+    else
+    {
+        /* Map the command queue into the kernel space. */
+        gcmkONERROR(gckOS_MapUserPointer(
+                    Command->os,
+                    Queue,
+                    queueSize,
+                    (gctPOINTER *) &mappedQueue
+                    ));
+        userEntry = mappedQueue;
+    }
+    /* Set the first entry. */
 
-            /* Process the command queue. */
-            while (EntryCount)
-            {
-                /* Lock the current queue. */
-                gcmkERR_BREAK(_LockCurrentQueue(
-                            Command, &kernelEntry, &queueLength
-                            ));
+    /* Process the command queue. */
+    while (EntryCount)
+    {
+        /* Lock the current queue. */
+        gcmkONERROR(_LockCurrentQueue(
+                    Command, &kernelEntry, &queueLength
+                    ));
+        queueMutexAcquired = gcvTRUE;
 
-                /* Determine the number of entries to process. */
-                currentLength = (queueLength < EntryCount)
-                    ? queueLength
-                    : EntryCount;
+        /* Determine the number of entries to process. */
+        currentLength = (queueLength < EntryCount)
+            ? queueLength
+            : EntryCount;
 
-                /* Update the number of the entries left to process. */
-                EntryCount -= currentLength;
+        /* Update the number of the entries left to process. */
+        EntryCount -= currentLength;
 
-                /* Reset previous flags. */
-                previousDynamic  = gcvFALSE;
-                previousExecuted = gcvFALSE;
+        /* Reset previous flags. */
+        previousDynamic  = gcvFALSE;
+        previousExecuted = gcvFALSE;
 
-                /* Set the initial control index. */
-                controlIndex = 0;
+        /* Set the initial control index. */
+        controlIndex = 0;
 
-                /* Process entries. */
-                for (entriesQueued = 0; entriesQueued < currentLength; entriesQueued += 1)
-                {
-                    /* Get the kernel pointer to the command buffer header. */
-                    gcsCMDBUFFER_PTR commandBuffer = gcvNULL;
-                    gcmkERR_BREAK(_ConvertUserCommandBufferPointer(
-                                Command,
-                                userEntry->commandBuffer,
-                                &commandBuffer
-                                ));
-
-                    /* Is it a dynamic command buffer? */
-                    if (userEntry->dynamic)
-                    {
-                        /* Select dynamic buffer control functions. */
-                        queueControl = &_dynamicBuffer[controlIndex];
-                    }
-
-                    /* No, a static command buffer. */
-                    else
-                    {
-                        /* Select static buffer control functions. */
-                        queueControl = &_staticBuffer[controlIndex];
-                    }
-
-                    /* Set the command buffer pointer to the entry. */
-                    kernelEntry->commandBuffer = commandBuffer;
-
-                    /* If the previous entry was a dynamic command buffer,
-                       link it to the current. */
-                    if (previousDynamic)
-                    {
-                        gcmkERR_BREAK(gckVGCOMMAND_FetchCommand(
-                                    Command,
-                                    previousEnd,
-                                    commandBuffer->address,
-                                    commandBuffer->dataCount,
-                                    gcvNULL
-                                    ));
-
-                        /* The buffer will be auto-executed, only need to
-                           update it after it has been executed. */
-                        kernelEntry->handler = queueControl->update;
-
-                        /* The buffer is only being updated. */
-                        previousExecuted = gcvFALSE;
-                    }
-                    else
-                    {
-                        /* Set the buffer up for execution. */
-                        kernelEntry->handler = queueControl->execute;
-
-                        /* The buffer is being updated. */
-                        previousExecuted = gcvTRUE;
-                    }
-
-                    /* The current buffer's END command becomes the last END. */
-                    previousEnd
-                        = ((gctUINT8_PTR) commandBuffer)
-                        + commandBuffer->bufferOffset
-                        + commandBuffer->dataCount * Command->info.commandAlignment
-                        - Command->info.staticTailSize;
-
-                    /* Update the last entry info. */
-                    previousDynamic = userEntry->dynamic;
-
-                    /* Advance entries. */
-                    userEntry   ++;
-                    kernelEntry ++;
-
-                    /* Update the control index. */
-                    controlIndex = 1;
-                }
-
-                /* If the previous entry was a dynamic command buffer,
-                   terminate it with an END. */
-                if (previousDynamic)
-                {
-                    gcmkERR_BREAK(gckVGCOMMAND_EndCommand(
-                                Command,
-                                previousEnd,
-                                Command->info.feBufferInt,
-                                gcvNULL
-                                ));
-                }
-
-                /* Last buffer? */
-                if (EntryCount == 0)
-                {
-                    /* Modify the last command buffer's routines to handle
-                       tasks if any.*/
-                    if (haveFETasks)
-                    {
-                        if (previousExecuted)
-                        {
-                            kernelEntry[-1].handler = queueControl->lastExecute;
-                        }
-                        else
-                        {
-                            kernelEntry[-1].handler = queueControl->lastUpdate;
-                        }
-                    }
-
-                    /* Release the mutex. */
-                    gcmkERR_BREAK(gckOS_ReleaseMutex(
-                                Command->os,
-                                Command->queueMutex
-                                ));
-                    /* Add a semaphore stall after PE EVENT (Before the END). */
-                    {
-                        gctUINT32_PTR memory = (gctUINT32_PTR)(previousEnd - 0x10);
-                        *memory++ = 0x10000007;
-                        *memory++ = 0;
-
-                        *memory++ = 0x20000007;
-                        *memory++ = 0;
-                    }
-                    /* Schedule tasks. */
-                    gcmkERR_BREAK(_ScheduleTasks(Command, TaskTable, previousEnd - 0x10));
-
-                    /* Acquire the mutex. */
-                    gcmkERR_BREAK(gckOS_AcquireMutex(
-                                Command->os,
-                                Command->queueMutex,
-                                gcvINFINITE
-                                ));
-                }
-
-                /* Unkock and schedule the current queue for execution. */
-                gcmkERR_BREAK(_UnlockCurrentQueue(
-                            Command, currentLength
-                            ));
-            }
-        }
-        while (gcvFALSE);
-
-        if (mappedQueue)
+        /* Process entries. */
+        for (entriesQueued = 0; entriesQueued < currentLength; entriesQueued += 1)
         {
-            if(!needCopy)
+            /* Get the kernel pointer to the command buffer header. */
+            gcsCMDBUFFER_PTR commandBuffer = gcvNULL;
+            gcmkONERROR(_ConvertUserCommandBufferPointer(
+                        Command,
+                        userEntry->commandBuffer,
+                        &commandBuffer
+                        ));
+
+            /* Is it a dynamic command buffer? */
+            if (userEntry->dynamic)
             {
-                /* Unmap the user command buffer. */
-                gcmkERR_BREAK(gckOS_UnmapUserPointer(
-                            Command->os,
-                            Queue,
-                            queueSize,
-                            mappedQueue
+                /* Select dynamic buffer control functions. */
+                queueControl = &_dynamicBuffer[controlIndex];
+            }
+
+            /* No, a static command buffer. */
+            else
+            {
+                /* Select static buffer control functions. */
+                queueControl = &_staticBuffer[controlIndex];
+            }
+
+            /* Set the command buffer pointer to the entry. */
+            kernelEntry->commandBuffer = commandBuffer;
+
+            /* If the previous entry was a dynamic command buffer,
+               link it to the current. */
+            if (previousDynamic)
+            {
+                gcmkONERROR(gckVGCOMMAND_FetchCommand(
+                            Command,
+                            previousEnd,
+                            commandBuffer->address,
+                            commandBuffer->dataCount,
+                            gcvNULL
                             ));
+
+                /* The buffer will be auto-executed, only need to
+                   update it after it has been executed. */
+                kernelEntry->handler = queueControl->update;
+
+                /* The buffer is only being updated. */
+                previousExecuted = gcvFALSE;
             }
             else
             {
-                gcmkERR_BREAK(gckOS_Free(Command->os, mappedQueue));
+                /* Set the buffer up for execution. */
+                kernelEntry->handler = queueControl->execute;
+
+                /* The buffer is being updated. */
+                previousExecuted = gcvTRUE;
             }
+
+            /* The current buffer's END command becomes the last END. */
+            previousEnd
+                = ((gctUINT8_PTR) commandBuffer)
+                + commandBuffer->bufferOffset
+                + commandBuffer->dataCount * Command->info.commandAlignment
+                - Command->info.staticTailSize;
+
+            /* Update the last entry info. */
+            previousDynamic = userEntry->dynamic;
+
+            /* Advance entries. */
+            userEntry   ++;
+            kernelEntry ++;
+
+            /* Update the control index. */
+            controlIndex = 1;
         }
 
-        /* Release the mutex. */
-        gcmkCHECK_STATUS(gckOS_ReleaseMutex(
+        /* If the previous entry was a dynamic command buffer,
+           terminate it with an END. */
+        if (previousDynamic)
+        {
+            gcmkONERROR(gckVGCOMMAND_EndCommand(
+                        Command,
+                        previousEnd,
+                        Command->info.feBufferInt,
+                        gcvNULL
+                        ));
+        }
+
+        /* Last buffer? */
+        if (EntryCount == 0)
+        {
+            /* Modify the last command buffer's routines to handle
+               tasks if any.*/
+            if (haveFETasks && controlIndex == 1)
+            {
+                if (previousExecuted)
+                {
+                    kernelEntry[-1].handler = queueControl->lastExecute;
+                }
+                else
+                {
+                    kernelEntry[-1].handler = queueControl->lastUpdate;
+                }
+            }
+
+            /* Release the mutex. */
+            gcmkONERROR(gckOS_ReleaseMutex(
+                        Command->os,
+                        Command->queueMutex
+                        ));
+            queueMutexAcquired = gcvFALSE;
+            /* Add a semaphore stall after PE EVENT (Before the END). */
+            {
+                gctUINT32_PTR memory = (gctUINT32_PTR)(previousEnd - 0x10);
+                *memory++ = 0x10000007;
+                *memory++ = 0;
+
+                *memory++ = 0x20000007;
+                *memory++ = 0;
+            }
+            /* Schedule tasks. */
+            gcmkONERROR(_ScheduleTasks(Command, TaskTable, previousEnd - 0x10));
+
+            /* Acquire the mutex. */
+            gcmkONERROR(gckOS_AcquireMutex(
+                        Command->os,
+                        Command->queueMutex,
+                        gcvINFINITE
+                        ));
+            queueMutexAcquired = gcvTRUE;
+        }
+
+        /* Unkock and schedule the current queue for execution. */
+        gcmkONERROR(_UnlockCurrentQueue(
+                    Command, currentLength
+                    ));
+        queueMutexAcquired = gcvFALSE;
+    }
+
+OnError:
+    if (queueMutexAcquired)
+    {
+        gcmkVERIFY_OK(gckOS_ReleaseMutex(
+                    Command->os,
+                    Command->queueMutex
+                    ));
+    }
+    if (mappedQueue)
+    {
+        if(!needCopy)
+        {
+            /* Unmap the user command buffer. */
+            gcmkVERIFY_OK(gckOS_UnmapUserPointer(
+                        Command->os,
+                        Queue,
+                        queueSize,
+                        mappedQueue
+                        ));
+        }
+        else
+        {
+            gcmkVERIFY_OK(gckOS_Free(Command->os, mappedQueue));
+        }
+    }
+    /* Release the mutex. */
+    if (commitMutexAcquired)
+    {
+        gcmkVERIFY_OK(gckOS_ReleaseMutex(
                     Command->os,
                     Command->commitMutex
                     ));
-
+    }
+    if (powerSemaphoreAcquired)
+    {
         gcmkVERIFY_OK(gckOS_ReleaseSemaphore(
                     Command->os, Command->powerSemaphore));
     }
-    while (gcvFALSE);
 #ifdef __QNXNTO__
     if (userContextMapped)
     {

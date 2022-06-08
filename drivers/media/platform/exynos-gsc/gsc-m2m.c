@@ -56,10 +56,8 @@ static void __gsc_m2m_job_abort(struct gsc_ctx *ctx)
 static int gsc_m2m_start_streaming(struct vb2_queue *q, unsigned int count)
 {
 	struct gsc_ctx *ctx = q->drv_priv;
-	int ret;
 
-	ret = pm_runtime_get_sync(&ctx->gsc_dev->pdev->dev);
-	return ret > 0 ? 0 : ret;
+	return pm_runtime_resume_and_get(&ctx->gsc_dev->pdev->dev);
 }
 
 static void __gsc_m2m_cleanup_queue(struct gsc_ctx *ctx)
@@ -255,7 +253,7 @@ static int gsc_m2m_buf_prepare(struct vb2_buffer *vb)
 	if (IS_ERR(frame))
 		return PTR_ERR(frame);
 
-	if (!V4L2_TYPE_IS_OUTPUT(vb->vb2_queue->type)) {
+	if (V4L2_TYPE_IS_CAPTURE(vb->vb2_queue->type)) {
 		for (i = 0; i < frame->fmt->num_planes; i++)
 			vb2_set_plane_payload(vb, i, frame->payload[i]);
 	}
@@ -771,7 +769,7 @@ int gsc_register_m2m_device(struct gsc_dev *gsc)
 		return PTR_ERR(gsc->m2m.m2m_dev);
 	}
 
-	ret = video_register_device(&gsc->vdev, VFL_TYPE_GRABBER, -1);
+	ret = video_register_device(&gsc->vdev, VFL_TYPE_VIDEO, -1);
 	if (ret) {
 		dev_err(&pdev->dev,
 			 "%s(): failed to register video device\n", __func__);

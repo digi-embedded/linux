@@ -13,30 +13,14 @@
 #include "linux/fsl/mc.h"
 #include "vfio_fsl_mc_private.h"
 
-static int vfio_fsl_mc_irq_mask(struct vfio_fsl_mc_device *vdev,
-				unsigned int index, unsigned int start,
-				unsigned int count, uint32_t flags,
-				void *data)
-{
-	return -EINVAL;
-}
-
-static int vfio_fsl_mc_irq_unmask(struct vfio_fsl_mc_device *vdev,
-				unsigned int index, unsigned int start,
-				unsigned int count, uint32_t flags,
-				void *data)
-{
-	return -EINVAL;
-}
-
-int vfio_fsl_mc_irqs_allocate(struct vfio_fsl_mc_device *vdev)
+static int vfio_fsl_mc_irqs_allocate(struct vfio_fsl_mc_device *vdev)
 {
 	struct fsl_mc_device *mc_dev = vdev->mc_dev;
 	struct vfio_fsl_mc_irq *mc_irq;
 	int irq_count;
 	int ret, i;
 
-    /* Device does not support any interrupt */
+	/* Device does not support any interrupt */
 	if (mc_dev->obj_desc.irq_count == 0)
 		return 0;
 
@@ -47,7 +31,7 @@ int vfio_fsl_mc_irqs_allocate(struct vfio_fsl_mc_device *vdev)
 	irq_count = mc_dev->obj_desc.irq_count;
 
 	mc_irq = kcalloc(irq_count, sizeof(*mc_irq), GFP_KERNEL);
-	if (mc_irq == NULL)
+	if (!mc_irq)
 		return -ENOMEM;
 
 	/* Allocate IRQs */
@@ -66,6 +50,7 @@ int vfio_fsl_mc_irqs_allocate(struct vfio_fsl_mc_device *vdev)
 
 	return 0;
 }
+
 static irqreturn_t vfio_fsl_mc_irq_handler(int irq_num, void *arg)
 {
 	struct vfio_fsl_mc_irq *mc_irq = (struct vfio_fsl_mc_irq *)arg;
@@ -120,40 +105,34 @@ static int vfio_set_trigger(struct vfio_fsl_mc_device *vdev,
 
 static int vfio_fsl_mc_set_irq_trigger(struct vfio_fsl_mc_device *vdev,
 				       unsigned int index, unsigned int start,
-				       unsigned int count, uint32_t flags,
+				       unsigned int count, u32 flags,
 				       void *data)
 {
 	struct fsl_mc_device *mc_dev = vdev->mc_dev;
-	struct fsl_mc_bus *mc_bus;
 	int ret, hwirq;
 	struct vfio_fsl_mc_irq *irq;
 	struct device *cont_dev = fsl_mc_cont_dev(&mc_dev->dev);
 	struct fsl_mc_device *mc_cont = to_fsl_mc_device(cont_dev);
 
+	if (!count && (flags & VFIO_IRQ_SET_DATA_NONE))
+		return vfio_set_trigger(vdev, index, -1);
+
 	if (start != 0 || count != 1)
 		return -EINVAL;
 
-	mc_bus = to_fsl_mc_bus(mc_cont);
-
-	mutex_lock(&vdev->reflck->lock);
-	if (!mc_bus->irq_resources) {
-
-		ret = fsl_mc_populate_irq_pool(mc_bus,
+	mutex_lock(&vdev->vdev.dev_set->lock);
+	ret = fsl_mc_populate_irq_pool(mc_cont,
 			FSL_MC_IRQ_POOL_MAX_TOTAL_IRQS);
-		if (ret)
-			goto unlock;
-	}
+	if (ret)
+		goto unlock;
 
 	ret = vfio_fsl_mc_irqs_allocate(vdev);
 	if (ret)
 		goto unlock;
-	mutex_unlock(&vdev->reflck->lock);
-
-	if (!count && (flags & VFIO_IRQ_SET_DATA_NONE))
-		return vfio_set_trigger(vdev, index, -1);
+	mutex_unlock(&vdev->vdev.dev_set->lock);
 
 	if (flags & VFIO_IRQ_SET_DATA_EVENTFD) {
-		int32_t fd = *(int32_t *)data;
+		s32 fd = *(s32 *)data;
 
 		return vfio_set_trigger(vdev, index, fd);
 	}
@@ -166,7 +145,7 @@ static int vfio_fsl_mc_set_irq_trigger(struct vfio_fsl_mc_device *vdev,
 		vfio_fsl_mc_irq_handler(hwirq, irq);
 
 	} else if (flags & VFIO_IRQ_SET_DATA_BOOL) {
-		uint8_t trigger = *(uint8_t *)data;
+		u8 trigger = *(u8 *)data;
 
 		if (trigger)
 			vfio_fsl_mc_irq_handler(hwirq, irq);
@@ -175,32 +154,21 @@ static int vfio_fsl_mc_set_irq_trigger(struct vfio_fsl_mc_device *vdev,
 	return 0;
 
 unlock:
-	mutex_unlock(&vdev->reflck->lock);
+	mutex_unlock(&vdev->vdev.dev_set->lock);
 	return ret;
+
 }
+
 int vfio_fsl_mc_set_irqs_ioctl(struct vfio_fsl_mc_device *vdev,
-			       uint32_t flags, unsigned int index,
+			       u32 flags, unsigned int index,
 			       unsigned int start, unsigned int count,
 			       void *data)
 {
-	int ret = -ENOTTY;
-
-	switch (flags & VFIO_IRQ_SET_ACTION_TYPE_MASK) {
-	case VFIO_IRQ_SET_ACTION_MASK:
-		ret = vfio_fsl_mc_irq_mask(vdev, index, start, count,
-					   flags, data);
-		break;
-	case VFIO_IRQ_SET_ACTION_UNMASK:
-		ret = vfio_fsl_mc_irq_unmask(vdev, index, start, count,
-					     flags, data);
-		break;
-	case VFIO_IRQ_SET_ACTION_TRIGGER:
-		ret = vfio_fsl_mc_set_irq_trigger(vdev, index, start,
-						  count, flags, data);
-		break;
-	}
-
-	return ret;
+	if (flags & VFIO_IRQ_SET_ACTION_TRIGGER)
+		return  vfio_fsl_mc_set_irq_trigger(vdev, index, start,
+			  count, flags, data);
+	else
+		return -EINVAL;
 }
 
 /* Free All IRQs for the given MC object */
@@ -210,10 +178,11 @@ void vfio_fsl_mc_irqs_cleanup(struct vfio_fsl_mc_device *vdev)
 	int irq_count = mc_dev->obj_desc.irq_count;
 	int i;
 
-	/* Device does not support any interrupt or the interrupts
+	/*
+	 * Device does not support any interrupt or the interrupts
 	 * were not configured
 	 */
-	if (mc_dev->obj_desc.irq_count == 0 || !vdev->mc_irqs)
+	if (!vdev->mc_irqs)
 		return;
 
 	for (i = 0; i < irq_count; i++)

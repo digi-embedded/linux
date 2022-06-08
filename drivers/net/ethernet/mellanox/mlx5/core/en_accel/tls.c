@@ -167,7 +167,7 @@ static int mlx5e_tls_resync(struct net_device *netdev, struct sock *sk,
 	struct tls_context *tls_ctx = tls_get_ctx(sk);
 	struct mlx5e_priv *priv = netdev_priv(netdev);
 	struct mlx5e_tls_offload_context_rx *rx_ctx;
-	u64 rcd_sn = *(u64 *)rcd_sn_data;
+	__be64 rcd_sn = *(__be64 *)rcd_sn_data;
 
 	if (WARN_ON_ONCE(direction != TLS_OFFLOAD_CTX_DIR_RX))
 		return -EINVAL;
@@ -192,12 +192,13 @@ void mlx5e_tls_build_netdev(struct mlx5e_priv *priv)
 	struct net_device *netdev = priv->netdev;
 	u32 caps;
 
-	if (mlx5_accel_is_ktls_device(priv->mdev)) {
+	if (mlx5e_accel_is_ktls_device(priv->mdev)) {
 		mlx5e_ktls_build_netdev(priv);
 		return;
 	}
 
-	if (!mlx5_accel_is_tls_device(priv->mdev))
+	/* FPGA */
+	if (!mlx5e_accel_is_tls_device(priv->mdev))
 		return;
 
 	caps = mlx5_accel_tls_device_caps(priv->mdev);
@@ -221,8 +222,12 @@ void mlx5e_tls_build_netdev(struct mlx5e_priv *priv)
 
 int mlx5e_tls_init(struct mlx5e_priv *priv)
 {
-	struct mlx5e_tls *tls = kzalloc(sizeof(*tls), GFP_KERNEL);
+	struct mlx5e_tls *tls;
 
+	if (!mlx5e_accel_is_tls_device(priv->mdev))
+		return 0;
+
+	tls = kzalloc(sizeof(*tls), GFP_KERNEL);
 	if (!tls)
 		return -ENOMEM;
 

@@ -470,7 +470,8 @@ static int sun4i_irq_init(struct platform_device *pdev, const char *name,
 	}
 
 	*irq = ret;
-	ret = devm_request_any_context_irq(&pdev->dev, *irq, handler, 0,
+	ret = devm_request_any_context_irq(&pdev->dev, *irq, handler,
+					   IRQF_NO_AUTOEN,
 					   devname, info);
 	if (ret < 0) {
 		dev_err(&pdev->dev, "could not request %s interrupt: %d\n",
@@ -478,7 +479,6 @@ static int sun4i_irq_init(struct platform_device *pdev, const char *name,
 		return ret;
 	}
 
-	disable_irq(*irq);
 	atomic_set(atomic, 0);
 
 	return 0;
@@ -496,7 +496,6 @@ static int sun4i_gpadc_probe_dt(struct platform_device *pdev,
 				struct iio_dev *indio_dev)
 {
 	struct sun4i_gpadc_iio *info = iio_priv(indio_dev);
-	struct resource *mem;
 	void __iomem *base;
 	int ret;
 
@@ -508,8 +507,7 @@ static int sun4i_gpadc_probe_dt(struct platform_device *pdev,
 	indio_dev->num_channels = ARRAY_SIZE(sun8i_a33_gpadc_channels);
 	indio_dev->channels = sun8i_a33_gpadc_channels;
 
-	mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	base = devm_ioremap_resource(&pdev->dev, mem);
+	base = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(base))
 		return PTR_ERR(base);
 
@@ -621,8 +619,6 @@ static int sun4i_gpadc_probe(struct platform_device *pdev)
 	info->indio_dev = indio_dev;
 	init_completion(&info->completion);
 	indio_dev->name = dev_name(&pdev->dev);
-	indio_dev->dev.parent = &pdev->dev;
-	indio_dev->dev.of_node = pdev->dev.of_node;
 	indio_dev->info = &sun4i_gpadc_iio_info;
 	indio_dev->modes = INDIO_DIRECT_MODE;
 

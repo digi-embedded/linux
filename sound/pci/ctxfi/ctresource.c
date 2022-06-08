@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-/**
+/*
  * Copyright (C) 2008, Creative Technology Ltd. All Rights Reserved.
  *
  * @File	ctresource.c
@@ -92,7 +92,7 @@ int mgr_put_resource(struct rsc_mgr *mgr, unsigned int n, unsigned int idx)
 	return 0;
 }
 
-static unsigned char offset_in_audio_slot_block[NUM_RSCTYP] = {
+static const unsigned char offset_in_audio_slot_block[NUM_RSCTYP] = {
 	/* SRC channel is at Audio Ring slot 1 every 16 slots. */
 	[SRC]		= 0x1,
 	[AMIXER]	= 0x4,
@@ -209,7 +209,7 @@ int rsc_mgr_init(struct rsc_mgr *mgr, enum RSCTYP type,
 
 	mgr->type = NUM_RSCTYP;
 
-	mgr->rscs = kzalloc(((amount + 8 - 1) / 8), GFP_KERNEL);
+	mgr->rscs = kzalloc(DIV_ROUND_UP(amount, 8), GFP_KERNEL);
 	if (!mgr->rscs)
 		return -ENOMEM;
 

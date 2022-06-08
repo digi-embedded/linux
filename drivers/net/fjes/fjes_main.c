@@ -48,7 +48,7 @@ static void fjes_get_stats64(struct net_device *, struct rtnl_link_stats64 *);
 static int fjes_change_mtu(struct net_device *, int);
 static int fjes_vlan_rx_add_vid(struct net_device *, __be16 proto, u16);
 static int fjes_vlan_rx_kill_vid(struct net_device *, __be16 proto, u16);
-static void fjes_tx_retry(struct net_device *);
+static void fjes_tx_retry(struct net_device *, unsigned int txqueue);
 
 static int fjes_acpi_add(struct acpi_device *);
 static int fjes_acpi_remove(struct acpi_device *);
@@ -90,16 +90,8 @@ static struct platform_driver fjes_driver = {
 };
 
 static struct resource fjes_resource[] = {
-	{
-		.flags = IORESOURCE_MEM,
-		.start = 0,
-		.end = 0,
-	},
-	{
-		.flags = IORESOURCE_IRQ,
-		.start = 0,
-		.end = 0,
-	},
+	DEFINE_RES_MEM(0, 1),
+	DEFINE_RES_IRQ(0)
 };
 
 static bool is_extended_socket_device(struct acpi_device *device)
@@ -795,7 +787,7 @@ fjes_xmit_frame(struct sk_buff *skb, struct net_device *netdev)
 	return ret;
 }
 
-static void fjes_tx_retry(struct net_device *netdev)
+static void fjes_tx_retry(struct net_device *netdev, unsigned int txqueue)
 {
 	struct netdev_queue *queue = netdev_get_tx_queue(netdev, 0);
 
@@ -974,7 +966,7 @@ static void fjes_stop_req_irq(struct fjes_adapter *adapter, int src_epid)
 				FJES_RX_STOP_REQ_DONE;
 		spin_unlock_irqrestore(&hw->rx_status_lock, flags);
 		clear_bit(src_epid, &hw->txrx_stop_req_bit);
-		/* fall through */
+		fallthrough;
 	case EP_PARTNER_UNSHARE:
 	case EP_PARTNER_COMPLETE:
 	default:
@@ -1262,6 +1254,10 @@ static int fjes_probe(struct platform_device *plat_dev)
 	adapter->interrupt_watch_enable = false;
 
 	res = platform_get_resource(plat_dev, IORESOURCE_MEM, 0);
+	if (!res) {
+		err = -EINVAL;
+		goto err_free_control_wq;
+	}
 	hw->hw_res.start = res->start;
 	hw->hw_res.size = resource_size(res);
 	hw->hw_res.irq = platform_get_irq(plat_dev, 0);

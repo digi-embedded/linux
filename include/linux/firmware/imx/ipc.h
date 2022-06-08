@@ -9,6 +9,7 @@
 #define _SC_IPC_H
 
 #include <linux/device.h>
+#include <linux/types.h>
 
 #define IMX_SC_RPC_VERSION	1
 #define IMX_SC_RPC_MAX_MSG	8
@@ -35,7 +36,7 @@ struct imx_sc_rpc_msg {
 	uint8_t func;
 };
 
-#if IS_ENABLED(CONFIG_IMX_SCU)
+#ifdef CONFIG_IMX_SCU
 /*
  * This is an function to send an RPC message over an IPC channel.
  * It is called by client-side SCFW API function shims.
@@ -48,8 +49,6 @@ struct imx_sc_rpc_msg {
  * and returns the result in msg.
  */
 int imx_scu_call_rpc(struct imx_sc_ipc *ipc, void *msg, bool have_resp);
-int imx_scu_call_big_rpc(struct imx_sc_ipc *ipc, void *msg, bool have_resp);
-
 
 /*
  * This function gets the default ipc handle used by SCU
@@ -60,23 +59,15 @@ int imx_scu_call_big_rpc(struct imx_sc_ipc *ipc, void *msg, bool have_resp);
  */
 int imx_scu_get_handle(struct imx_sc_ipc **ipc);
 #else
-static inline int
-imx_scu_call_rpc(struct imx_sc_ipc *ipc, void *msg, bool have_resp)
+static inline int imx_scu_call_rpc(struct imx_sc_ipc *ipc, void *msg,
+				   bool have_resp)
 {
-	return -EIO;
-
-}
-
-static inline int
-imx_scu_call_big_rpc(struct imx_sc_ipc *ipc, void *msg, bool have_resp)
-{
-	return -EIO;
-
+	return -ENOTSUPP;
 }
 
 static inline int imx_scu_get_handle(struct imx_sc_ipc **ipc)
 {
-	return -EIO;
+	return -ENOTSUPP;
 }
 #endif
 #endif /* _SC_IPC_H */

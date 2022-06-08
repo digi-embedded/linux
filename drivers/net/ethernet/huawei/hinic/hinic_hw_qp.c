@@ -108,7 +108,12 @@ void hinic_sq_prepare_ctxt(struct hinic_sq_ctxt *sq_ctxt,
 	wq_page_pfn_hi = upper_32_bits(wq_page_pfn);
 	wq_page_pfn_lo = lower_32_bits(wq_page_pfn);
 
-	wq_block_pfn = HINIC_WQ_BLOCK_PFN(wq->block_paddr);
+	/* If only one page, use 0-level CLA */
+	if (wq->num_q_pages == 1)
+		wq_block_pfn = HINIC_WQ_BLOCK_PFN(wq_page_addr);
+	else
+		wq_block_pfn = HINIC_WQ_BLOCK_PFN(wq->block_paddr);
+
 	wq_block_pfn_hi = upper_32_bits(wq_block_pfn);
 	wq_block_pfn_lo = lower_32_bits(wq_block_pfn);
 
@@ -409,7 +414,6 @@ int hinic_init_rq(struct hinic_rq *rq, struct hinic_hwif *hwif,
 	rq->pi_virt_addr = dma_alloc_coherent(&pdev->dev, pi_size,
 					      &rq->pi_dma_addr, GFP_KERNEL);
 	if (!rq->pi_virt_addr) {
-		dev_err(&pdev->dev, "Failed to allocate PI address\n");
 		err = -ENOMEM;
 		goto err_pi_virt;
 	}
@@ -638,6 +642,7 @@ void hinic_sq_write_db(struct hinic_sq *sq, u16 prod_idx, unsigned int wqe_size,
 
 	/* increment prod_idx to the next */
 	prod_idx += ALIGN(wqe_size, wq->wqebb_size) / wq->wqebb_size;
+	prod_idx = SQ_MASKED_IDX(sq, prod_idx);
 
 	wmb();  /* Write all before the doorbell */
 
@@ -889,7 +894,7 @@ struct hinic_rq_wqe *hinic_rq_read_next_wqe(struct hinic_rq *rq,
 }
 
 /**
- * hinic_put_wqe - release the ci for new wqes
+ * hinic_rq_put_wqe - release the ci for new wqes
  * @rq: recv queue
  * @cons_idx: consumer index of the wqe
  * @wqe_size: the size of the wqe

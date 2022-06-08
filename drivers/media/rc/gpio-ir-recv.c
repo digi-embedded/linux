@@ -22,25 +22,37 @@ struct gpio_rc_dev {
 	struct rc_dev *rcdev;
 	struct gpio_desc *gpiod;
 	int irq;
+	struct device *pmdev;
 	struct pm_qos_request qos;
 };
 
 static irqreturn_t gpio_ir_recv_irq(int irq, void *dev_id)
 {
-	int ret, val;
+	int val;
 	struct gpio_rc_dev *gpio_dev = dev_id;
-	struct device *dev = gpio_dev->rcdev->dev.parent;
+	struct device *pmdev = gpio_dev->pmdev;
 
-	ret = pm_runtime_get(dev);
-	if (ret < 0)
-		return IRQ_NONE;
+	/*
+	 * For some cpuidle systems, not all:
+	 * Respond to interrupt taking more latency when cpu in idle.
+	 * Invoke asynchronous pm runtime get from interrupt context,
+	 * this may introduce a millisecond delay to call resume callback,
+	 * where to disable cpuilde.
+	 *
+	 * Two issues lead to fail to decode first frame, one is latency to
+	 * respond to interrupt, another is delay introduced by async api.
+	 */
+	if (pmdev)
+		pm_runtime_get(pmdev);
 
 	val = gpiod_get_value(gpio_dev->gpiod);
 	if (val >= 0)
 		ir_raw_event_store_edge(gpio_dev->rcdev, val == 1);
 
-	pm_runtime_mark_last_busy(dev);
-	pm_runtime_put_autosuspend(dev);
+	if (pmdev) {
+		pm_runtime_mark_last_busy(pmdev);
+		pm_runtime_put_autosuspend(pmdev);
+	}
 
 	return IRQ_HANDLED;
 }
@@ -51,6 +63,7 @@ static int gpio_ir_recv_probe(struct platform_device *pdev)
 	struct device_node *np = dev->of_node;
 	struct gpio_rc_dev *gpio_dev;
 	struct rc_dev *rcdev;
+	u32 period = 0;
 	int rc;
 
 	if (!np)
@@ -101,12 +114,16 @@ static int gpio_ir_recv_probe(struct platform_device *pdev)
 		return rc;
 	}
 
-	platform_set_drvdata(pdev, gpio_dev);
+	of_property_read_u32(np, "linux,autosuspend-period", &period);
+	if (period) {
+		gpio_dev->pmdev = dev;
+		pm_runtime_set_autosuspend_delay(dev, period);
+		pm_runtime_use_autosuspend(dev);
+		pm_runtime_set_suspended(dev);
+		pm_runtime_enable(dev);
+	}
 
-	pm_runtime_set_autosuspend_delay(dev, (rcdev->timeout / 1000 / 1000));
-	pm_runtime_use_autosuspend(dev);
-	pm_runtime_set_suspended(dev);
-	pm_runtime_enable(dev);
+	platform_set_drvdata(pdev, gpio_dev);
 
 	return devm_request_irq(dev, gpio_dev->irq, gpio_ir_recv_irq,
 				IRQF_TRIGGER_FALLING | IRQF_TRIGGER_RISING,
@@ -142,7 +159,7 @@ static int gpio_ir_recv_runtime_suspend(struct device *dev)
 {
 	struct gpio_rc_dev *gpio_dev = dev_get_drvdata(dev);
 
-	pm_qos_remove_request(&gpio_dev->qos);
+	cpu_latency_qos_remove_request(&gpio_dev->qos);
 
 	return 0;
 }
@@ -151,7 +168,7 @@ static int gpio_ir_recv_runtime_resume(struct device *dev)
 {
 	struct gpio_rc_dev *gpio_dev = dev_get_drvdata(dev);
 
-	pm_qos_add_request(&gpio_dev->qos, PM_QOS_CPU_DMA_LATENCY, 0);
+	cpu_latency_qos_add_request(&gpio_dev->qos, 0);
 
 	return 0;
 }

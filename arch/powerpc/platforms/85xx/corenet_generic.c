@@ -12,11 +12,11 @@
 #include <linux/kdev_t.h>
 #include <linux/delay.h>
 #include <linux/interrupt.h>
+#include <linux/pgtable.h>
 
 #include <asm/time.h>
 #include <asm/machdep.h>
 #include <asm/pci-bridge.h>
-#include <asm/pgtable.h>
 #include <asm/ppc-pci.h>
 #include <mm/mmu_decl.h>
 #include <asm/prom.h>
@@ -56,8 +56,6 @@ void __init corenet_gen_setup_arch(void)
 	swiotlb_detect_4g();
 
 	pr_info("%s board\n", ppc_md.name);
-
-	mpc85xx_qe_init();
 }
 
 static const struct of_device_id of_device_ids[] = {
@@ -108,6 +106,7 @@ int __init corenet_gen_publish_devices(void)
 {
 	return of_platform_bus_probe(NULL, of_device_ids, NULL);
 }
+machine_arch_initcall(corenet_generic, corenet_gen_publish_devices);
 
 static const char * const boards[] __initconst = {
 	"fsl,P2041RDB",
@@ -208,5 +207,3 @@ define_machine(corenet_generic) {
 	.power_save		= e500_idle,
 #endif
 };
-
-machine_arch_initcall(corenet_generic, corenet_gen_publish_devices);

@@ -448,7 +448,7 @@ static int sm_key_job(struct device *ksdev, u32 *jobdesc)
 	if (rtn != -EINPROGRESS)
 		goto exit;
 
-	wait_for_completion_interruptible(&testres.completion);
+	wait_for_completion(&testres.completion);
 	rtn = testres.error;
 
 exit:
@@ -993,7 +993,7 @@ int sm_keystore_slot_import(struct device *dev, u32 unit, u32 slot, u8 keycolor,
 	inbuf_dma = dma_map_single(dev_for_dma_op, inbuf,
 					keylen + BLOB_OVERHEAD, DMA_TO_DEVICE);
 	if (dma_mapping_error(dev_for_dma_op, inbuf_dma)) {
-		dev_err(dev, "unable to map inbuf: %p\n", (void *)inbuf_dma);
+		dev_err(dev, "unable to map inbuf: %p\n", inbuf);
 		retval = (-ENOMEM);
 		goto unmap_keymod;
 	}

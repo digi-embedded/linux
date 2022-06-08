@@ -5,8 +5,8 @@
 #include <subdev/ltc.h>
 #include <core/enum.h>
 
-int nvkm_ltc_new_(const struct nvkm_ltc_func *, struct nvkm_device *,
-		  int index, struct nvkm_ltc **);
+int nvkm_ltc_new_(const struct nvkm_ltc_func *, struct nvkm_device *, enum nvkm_subdev_type, int,
+		  struct nvkm_ltc **);
 
 struct nvkm_ltc_func {
 	int  (*oneinit)(struct nvkm_ltc *);
@@ -46,4 +46,6 @@ void gm107_ltc_zbc_clear_depth(struct nvkm_ltc *, int, const u32);
 int gp100_ltc_oneinit(struct nvkm_ltc *);
 void gp100_ltc_init(struct nvkm_ltc *);
 void gp100_ltc_intr(struct nvkm_ltc *);
+
+void gp102_ltc_zbc_clear_stencil(struct nvkm_ltc *, int, const u32);
 #endif

@@ -85,7 +85,8 @@ static int imx8qxp_lpcg_clk_probe(struct platform_device *pdev)
 		if (bit_offset[i] > 31) {
 			dev_warn(&pdev->dev, "invalid bit offset of clock %d\n",
 				 i);
-			return -EINVAL;
+			ret = -EINVAL;
+			goto unreg;
 		}
 
 		clk_hws[i] = imx_clk_lpcg_scu_dev(&pdev->dev, output_names[i],
@@ -94,15 +95,28 @@ static int imx8qxp_lpcg_clk_probe(struct platform_device *pdev)
 		if (IS_ERR(clk_hws[i])) {
 			dev_warn(&pdev->dev, "failed to register clock %d\n",
 				 i);
-			return -EINVAL;
+			ret = PTR_ERR(clk_hws[i]);
+			goto unreg;
 		}
 	}
 
 	ret = devm_of_clk_add_hw_provider(&pdev->dev, of_clk_hw_onecell_get,
 					  clk_data);
+	if (ret)
+		goto unreg;
 
 	pm_runtime_mark_last_busy(&pdev->dev);
 	pm_runtime_put_autosuspend(&pdev->dev);
+
+	return 0;
+
+unreg:
+	while (--i >= 0) {
+		if (clk_hws[i])
+			imx_clk_lpcg_scu_unregister(clk_hws[i]);
+	}
+
+	pm_runtime_disable(&pdev->dev);
 
 	return ret;
 }
@@ -123,4 +137,7 @@ static struct platform_driver imx8qxp_lpcg_clk_driver = {
 };
 
 builtin_platform_driver(imx8qxp_lpcg_clk_driver);
+
+MODULE_AUTHOR("Aisheng Dong <aisheng.dong@nxp.com>");
+MODULE_DESCRIPTION("NXP i.MX8QXP LPCG clock driver");
 MODULE_LICENSE("GPL v2");

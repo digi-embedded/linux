@@ -5,7 +5,7 @@
 
 menuconfig VIRT_DRIVERS
 	bool "Virtualization drivers"
-	---help---
+	help
 	  Say Y here to get to see options for device drivers that support
 	  virtualization environments.
 
@@ -43,4 +43,8 @@ config JAILHOUSE_DBGCON
 	  of the console interface.
 
 source "drivers/virt/vboxguest/Kconfig"
+
+source "drivers/virt/nitro_enclaves/Kconfig"
+
+source "drivers/virt/acrn/Kconfig"
 endif

@@ -29,7 +29,6 @@
  */
 
 #include "qman_priv.h"
-#include <linux/iommu.h>
 
 struct qman_portal *qman_dma_portal;
 EXPORT_SYMBOL(qman_dma_portal);
@@ -47,9 +46,6 @@ static void portal_set_cpu(struct qm_portal_config *pcfg, int cpu)
 {
 #ifdef CONFIG_FSL_PAMU
 	struct device *dev = pcfg->dev;
-	int window_count = 1;
-	struct iommu_domain_geometry geom_attr;
-	struct pamu_stash_attribute stash_attr;
 	int ret;
 
 	pcfg->iommu_domain = iommu_domain_alloc(&platform_bus_type);
@@ -57,38 +53,9 @@ static void portal_set_cpu(struct qm_portal_config *pcfg, int cpu)
 		dev_err(dev, "%s(): iommu_domain_alloc() failed", __func__);
 		goto no_iommu;
 	}
-	geom_attr.aperture_start = 0;
-	geom_attr.aperture_end =
-		((dma_addr_t)1 << min(8 * sizeof(dma_addr_t), (size_t)36)) - 1;
-	geom_attr.force_aperture = true;
-	ret = iommu_domain_set_attr(pcfg->iommu_domain, DOMAIN_ATTR_GEOMETRY,
-				    &geom_attr);
+	ret = fsl_pamu_configure_l1_stash(pcfg->iommu_domain, cpu);
 	if (ret < 0) {
-		dev_err(dev, "%s(): iommu_domain_set_attr() = %d", __func__,
-			ret);
-		goto out_domain_free;
-	}
-	ret = iommu_domain_set_attr(pcfg->iommu_domain, DOMAIN_ATTR_WINDOWS,
-				    &window_count);
-	if (ret < 0) {
-		dev_err(dev, "%s(): iommu_domain_set_attr() = %d", __func__,
-			ret);
-		goto out_domain_free;
-	}
-	stash_attr.cpu = cpu;
-	stash_attr.cache = PAMU_ATTR_CACHE_L1;
-	ret = iommu_domain_set_attr(pcfg->iommu_domain,
-				    DOMAIN_ATTR_FSL_PAMU_STASH,
-				    &stash_attr);
-	if (ret < 0) {
-		dev_err(dev, "%s(): iommu_domain_set_attr() = %d",
-			__func__, ret);
-		goto out_domain_free;
-	}
-	ret = iommu_domain_window_enable(pcfg->iommu_domain, 0, 0, 1ULL << 36,
-					 IOMMU_READ | IOMMU_WRITE);
-	if (ret < 0) {
-		dev_err(dev, "%s(): iommu_domain_window_enable() = %d",
+		dev_err(dev, "%s(): fsl_pamu_configure_l1_stash() = %d",
 			__func__, ret);
 		goto out_domain_free;
 	}
@@ -98,14 +65,6 @@ static void portal_set_cpu(struct qm_portal_config *pcfg, int cpu)
 			ret);
 		goto out_domain_free;
 	}
-	ret = iommu_domain_set_attr(pcfg->iommu_domain,
-				    DOMAIN_ATTR_FSL_PAMU_ENABLE,
-				    &window_count);
-	if (ret < 0) {
-		dev_err(dev, "%s(): iommu_domain_set_attr() = %d", __func__,
-			ret);
-		goto out_detach_device;
-	}
 
 no_iommu:
 #endif
@@ -114,8 +73,6 @@ no_iommu:
 	return;
 
 #ifdef CONFIG_FSL_PAMU
-out_detach_device:
-	iommu_detach_device(pcfg->iommu_domain, NULL);
 out_domain_free:
 	iommu_domain_free(pcfg->iommu_domain);
 	pcfg->iommu_domain = NULL;
@@ -170,15 +127,8 @@ static void qman_portal_update_sdest(const struct qm_portal_config *pcfg,
 							unsigned int cpu)
 {
 #ifdef CONFIG_FSL_PAMU /* TODO */
-	struct pamu_stash_attribute stash_attr;
-	int ret;
-
 	if (pcfg->iommu_domain) {
-		stash_attr.cpu = cpu;
-		stash_attr.cache = PAMU_ATTR_CACHE_L1;
-		ret = iommu_domain_set_attr(pcfg->iommu_domain,
-				DOMAIN_ATTR_FSL_PAMU_STASH, &stash_attr);
-		if (ret < 0) {
+		if (fsl_pamu_configure_l1_stash(pcfg->iommu_domain, cpu) < 0) {
 			dev_err(pcfg->dev,
 				"Failed to update pamu stash setting\n");
 			return;
@@ -232,7 +182,6 @@ static int qman_portal_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct device_node *node = dev->of_node;
-	struct iommu_domain *domain;
 	struct qm_portal_config *pcfg;
 	struct resource *addr_phys[2];
 	int irq, cpu, err, i;
@@ -296,21 +245,6 @@ static int qman_portal_probe(struct platform_device *pdev)
 		goto err_ioremap2;
 	}
 
-	/* Create an 1-to-1 iommu mapping for cena portal area */
-	domain = iommu_get_domain_for_dev(dev);
-	if (domain) {
-		/*
-		 * Note: not mapping this as cacheable triggers the infamous
-		 * QMan CIDE error.
-		 */
-		err = iommu_map(domain,
-				addr_phys[0]->start, addr_phys[0]->start,
-				PAGE_ALIGN(resource_size(addr_phys[0])),
-				IOMMU_READ | IOMMU_WRITE | IOMMU_CACHE);
-		if (err)
-			dev_warn(dev, "failed to iommu_map() %d\n", err);
-	}
-
 	pcfg->pools = qm_get_pools_sdqcr();
 
 	spin_lock(&qman_lock);
@@ -319,13 +253,10 @@ static int qman_portal_probe(struct platform_device *pdev)
 		__qman_portals_probed = 1;
 		/* unassigned portal, skip init */
 		spin_unlock(&qman_lock);
-		return 0;
+		goto check_cleanup;
 	}
 
 	cpumask_set_cpu(cpu, &portal_cpus);
-	if (!__qman_portals_probed &&
-	    cpumask_weight(&portal_cpus) == num_online_cpus())
-		__qman_portals_probed = 1;
 	spin_unlock(&qman_lock);
 	pcfg->cpu = cpu;
 
@@ -343,6 +274,7 @@ static int qman_portal_probe(struct platform_device *pdev)
 	if (!cpu_online(cpu))
 		qman_offline_cpu(cpu);
 
+check_cleanup:
 	if (__qman_portals_probed == 1 && qman_requires_cleanup()) {
 		/*
 		 * QMan wasn't reset prior to boot (Kexec for example)

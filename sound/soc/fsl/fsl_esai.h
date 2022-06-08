@@ -353,21 +353,15 @@
 #define ESAI_RX_DIV_FP		5
 
 /**
- * fsl_esai_soc_data: soc specific data
- *
- * @imx: for imx platform
+ * struct fsl_esai_soc_data - soc specific data
  * @reset_at_xrun: flags for enable reset operaton
- * @use_edma: edma is used.
  */
 struct fsl_esai_soc_data {
-	bool imx;
 	bool reset_at_xrun;
-	bool use_edma;
 };
 
 /**
- * fsl_esai: ESAI private data
- *
+ * struct fsl_esai - ESAI private data
  * @dma_params_rx: DMA parameters for receive channel
  * @dma_params_tx: DMA parameters for transmit channel
  * @pdev: platform device pointer
@@ -376,11 +370,14 @@ struct fsl_esai_soc_data {
  * @extalclk: esai clock source to derive HCK, SCK and FS
  * @fsysclk: system clock source to derive HCK, SCK and FS
  * @spbaclk: SPBA clock (optional, depending on SoC design)
+ * @task: tasklet to handle the reset operation
  * @soc: soc specific data
  * @lock: spin lock between hw_reset() and trigger()
  * @fifo_depth: depth of tx/rx FIFO
  * @slot_width: width of each DAI slot
  * @slots: number of slots
+ * @tx_mask: slot mask for TX
+ * @rx_mask: slot mask for RX
  * @channels: channel num for tx or rx
  * @hck_rate: clock rate of desired HCKx clock
  * @sck_rate: clock rate of desired SCKx clock
@@ -388,7 +385,6 @@ struct fsl_esai_soc_data {
  * @sck_div: if using PSR/PM dividers for SCKx clock
  * @slave_mode: if fully using DAI slave mode
  * @synchronous: if using tx/rx synchronous mode
- * @sw_mix: enable sw mix in driver
  * @name: driver name
  */
 struct fsl_esai {
@@ -400,6 +396,7 @@ struct fsl_esai {
 	struct clk *extalclk;
 	struct clk *fsysclk;
 	struct clk *spbaclk;
+	struct work_struct work;
 	const struct fsl_esai_soc_data *soc;
 	struct fsl_esai_mix mix[2];
 	spinlock_t lock; /* Protect hw_reset and trigger */

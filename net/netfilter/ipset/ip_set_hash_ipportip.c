@@ -25,7 +25,8 @@
 /*				2    Counters support added */
 /*				3    Comments support added */
 /*				4    Forceadd support added */
-#define IPSET_TYPE_REV_MAX	5 /* skbinfo support added */
+/*				5    skbinfo support added */
+#define IPSET_TYPE_REV_MAX	6 /* bucketsize, initval support added */
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Jozsef Kadlecsik <kadlec@netfilter.org>");
@@ -46,7 +47,7 @@ struct hash_ipportip4_elem {
 	u8 padding;
 };
 
-static inline bool
+static bool
 hash_ipportip4_data_equal(const struct hash_ipportip4_elem *ip1,
 			  const struct hash_ipportip4_elem *ip2,
 			  u32 *multi)
@@ -72,7 +73,7 @@ nla_put_failure:
 	return true;
 }
 
-static inline void
+static void
 hash_ipportip4_data_next(struct hash_ipportip4_elem *next,
 			 const struct hash_ipportip4_elem *d)
 {
@@ -179,6 +180,9 @@ hash_ipportip4_uadt(struct ip_set *set, struct nlattr *tb[],
 			swap(port, port_to);
 	}
 
+	if (((u64)ip_to - ip + 1)*(port_to - port + 1) > IPSET_MAX_RANGE)
+		return -ERANGE;
+
 	if (retried)
 		ip = ntohl(h->next.ip);
 	for (; ip <= ip_to; ip++) {
@@ -210,7 +214,7 @@ struct hash_ipportip6_elem {
 
 /* Common functions */
 
-static inline bool
+static bool
 hash_ipportip6_data_equal(const struct hash_ipportip6_elem *ip1,
 			  const struct hash_ipportip6_elem *ip2,
 			  u32 *multi)
@@ -236,7 +240,7 @@ nla_put_failure:
 	return true;
 }
 
-static inline void
+static void
 hash_ipportip6_data_next(struct hash_ipportip6_elem *next,
 			 const struct hash_ipportip6_elem *d)
 {
@@ -356,11 +360,13 @@ static struct ip_set_type hash_ipportip_type __read_mostly = {
 	.family		= NFPROTO_UNSPEC,
 	.revision_min	= IPSET_TYPE_REV_MIN,
 	.revision_max	= IPSET_TYPE_REV_MAX,
+	.create_flags[IPSET_TYPE_REV_MAX] = IPSET_CREATE_FLAG_BUCKETSIZE,
 	.create		= hash_ipportip_create,
 	.create_policy	= {
 		[IPSET_ATTR_HASHSIZE]	= { .type = NLA_U32 },
 		[IPSET_ATTR_MAXELEM]	= { .type = NLA_U32 },
-		[IPSET_ATTR_PROBES]	= { .type = NLA_U8 },
+		[IPSET_ATTR_INITVAL]	= { .type = NLA_U32 },
+		[IPSET_ATTR_BUCKETSIZE]	= { .type = NLA_U8 },
 		[IPSET_ATTR_RESIZE]	= { .type = NLA_U8  },
 		[IPSET_ATTR_TIMEOUT]	= { .type = NLA_U32 },
 		[IPSET_ATTR_CADT_FLAGS]	= { .type = NLA_U32 },

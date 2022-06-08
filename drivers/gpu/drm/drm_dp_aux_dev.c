@@ -63,7 +63,7 @@ static struct drm_dp_aux_dev *drm_dp_aux_dev_get_by_minor(unsigned index)
 
 	mutex_lock(&aux_idr_mutex);
 	aux_dev = idr_find(&aux_idr, index);
-	if (!kref_get_unless_zero(&aux_dev->refcount))
+	if (aux_dev && !kref_get_unless_zero(&aux_dev->refcount))
 		aux_dev = NULL;
 	mutex_unlock(&aux_idr_mutex);
 
@@ -163,11 +163,7 @@ static ssize_t auxdev_read_iter(struct kiocb *iocb, struct iov_iter *to)
 			break;
 		}
 
-		if (aux_dev->aux->is_remote)
-			res = drm_dp_mst_dpcd_read(aux_dev->aux, pos, buf,
-						   todo);
-		else
-			res = drm_dp_dpcd_read(aux_dev->aux, pos, buf, todo);
+		res = drm_dp_dpcd_read(aux_dev->aux, pos, buf, todo);
 
 		if (res <= 0)
 			break;
@@ -215,11 +211,7 @@ static ssize_t auxdev_write_iter(struct kiocb *iocb, struct iov_iter *from)
 			break;
 		}
 
-		if (aux_dev->aux->is_remote)
-			res = drm_dp_mst_dpcd_write(aux_dev->aux, pos, buf,
-						    todo);
-		else
-			res = drm_dp_dpcd_write(aux_dev->aux, pos, buf, todo);
+		res = drm_dp_dpcd_write(aux_dev->aux, pos, buf, todo);
 
 		if (res <= 0)
 			break;
@@ -285,6 +277,12 @@ void drm_dp_aux_unregister_devnode(struct drm_dp_aux *aux)
 	aux_dev = drm_dp_aux_dev_get_by_aux(aux);
 	if (!aux_dev) /* attach must have failed */
 		return;
+
+	/*
+	 * As some AUX adapters may exist as platform devices which outlive their respective DRM
+	 * devices, we clear drm_dev to ensure that we never accidentally reference a stale pointer
+	 */
+	aux->drm_dev = NULL;
 
 	mutex_lock(&aux_idr_mutex);
 	idr_remove(&aux_idr, aux_dev->index);

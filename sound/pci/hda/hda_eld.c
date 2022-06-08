@@ -98,7 +98,7 @@ static const char * const cea_audio_coding_type_names[] = {
 /*
  * SS1:SS0 index => sample size
  */
-static int cea_sample_sizes[4] = {
+static const int cea_sample_sizes[4] = {
 	0,	 		/* 0: Refer to Stream Header */
 	AC_SUPPCM_BITS_16,	/* 1: 16 bits */
 	AC_SUPPCM_BITS_20,	/* 2: 20 bits */
@@ -108,7 +108,7 @@ static int cea_sample_sizes[4] = {
 /*
  * SF2:SF1:SF0 index => sampling frequency
  */
-static int cea_sampling_frequencies[8] = {
+static const int cea_sampling_frequencies[8] = {
 	0,			/* 0: Refer to Stream Header */
 	SNDRV_PCM_RATE_32000,	/* 1:  32000Hz */
 	SNDRV_PCM_RATE_44100,	/* 2:  44100Hz */
@@ -260,7 +260,7 @@ int snd_hdmi_parse_eld(struct hda_codec *codec, struct parsed_hdmi_eld *e,
 		codec_info(codec, "HDMI: out of range MNL %d\n", mnl);
 		goto out_fail;
 	} else
-		strlcpy(e->monitor_name, buf + ELD_FIXED_BYTES, mnl + 1);
+		strscpy(e->monitor_name, buf + ELD_FIXED_BYTES, mnl + 1);
 
 	for (i = 0; i < e->sad_count; i++) {
 		if (ELD_FIXED_BYTES + mnl + 3 * (i + 1) > size) {
@@ -352,7 +352,7 @@ error:
  */
 static void hdmi_print_pcm_rates(int pcm, char *buf, int buflen)
 {
-	static unsigned int alsa_rates[] = {
+	static const unsigned int alsa_rates[] = {
 		5512, 8000, 11025, 16000, 22050, 32000, 44100, 48000, 64000,
 		88200, 96000, 176400, 192000, 384000
 	};

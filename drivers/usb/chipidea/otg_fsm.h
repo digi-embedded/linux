@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * Copyright (C) 2014 Freescale Semiconductor, Inc.
  *
@@ -39,8 +39,6 @@
 					 * 500ms is used for B switch to host
 					 * for safe
 					 */
-
-#define TA_DP_END             (200)
 
 /*
  * B-device timing constants

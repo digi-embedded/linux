@@ -27,6 +27,10 @@ static const struct soc_device_attribute imx8_soc[] = {
 		.revision = "1.0",
 	}, {
 		.soc_id   = "i.MX8MP",
+	}, {
+		.soc_id   = "i.MX8ULP",
+	}, {
+		/* sentinel */
 	},
 };
 
@@ -77,27 +81,65 @@ static irqreturn_t mxc_isi_irq_handler(int irq, void *priv)
 	return IRQ_HANDLED;
 }
 
-static int disp_mix_sft_rstn(struct reset_control *reset, bool enable)
+static int disp_mix_sft_parse_resets(struct mxc_isi_dev *mxc_isi)
 {
-	int ret;
+	struct mxc_isi_plat_data const *pdata = mxc_isi->pdata;
 
-	if (!reset)
+	if (mxc_isi->no_dispmix)
 		return 0;
 
-	ret = enable ? reset_control_assert(reset) :
-			 reset_control_deassert(reset);
+	if (!pdata->rst_ops || !pdata->rst_ops->parse)
+		return -EINVAL;
+
+	return pdata->rst_ops->parse(mxc_isi);
+}
+
+static int disp_mix_sft_rstn(struct mxc_isi_dev *mxc_isi, bool enable)
+{
+	struct mxc_isi_plat_data const *pdata = mxc_isi->pdata;
+	int ret;
+
+	if (mxc_isi->no_dispmix)
+		return 0;
+
+	if (!pdata->rst_ops ||
+	    !pdata->rst_ops->assert ||
+	    !pdata->rst_ops->deassert)
+		return -EINVAL;
+
+	ret = enable ? pdata->rst_ops->assert(mxc_isi) :
+		       pdata->rst_ops->deassert(mxc_isi);
 	return ret;
 }
 
-static int disp_mix_clks_enable(struct reset_control *reset, bool enable)
+static int disp_mix_clks_get(struct mxc_isi_dev *mxc_isi)
 {
-	int ret;
+	struct mxc_isi_plat_data  const *pdata = mxc_isi->pdata;
 
-	if (!reset)
+	if (mxc_isi->no_dispmix)
 		return 0;
 
-	ret = enable ? reset_control_assert(reset) :
-			 reset_control_deassert(reset);
+	if (!pdata->gclk_ops || !pdata->gclk_ops->gclk_get)
+		return -EINVAL;
+
+	return pdata->gclk_ops->gclk_get(mxc_isi);
+}
+
+static int disp_mix_clks_enable(struct mxc_isi_dev *mxc_isi, bool enable)
+{
+	struct mxc_isi_plat_data const *pdata = mxc_isi->pdata;
+	int ret;
+
+	if (mxc_isi->no_dispmix)
+		return 0;
+
+	if (!pdata->gclk_ops ||
+	    !pdata->gclk_ops->gclk_enable ||
+	    !pdata->gclk_ops->gclk_disable)
+		return -EINVAL;
+
+	ret = enable ? pdata->gclk_ops->gclk_enable(mxc_isi) :
+		       pdata->gclk_ops->gclk_disable(mxc_isi);
 	return ret;
 }
 
@@ -292,64 +334,7 @@ static struct mxc_isi_dev_ops mxc_imx8mn_clk_ops = {
 	.clk_disable = mxc_imx8mn_clk_disable,
 };
 
-static struct mxc_isi_plat_data mxc_imx8mn_data = {
-	.ops      = &mxc_imx8mn_clk_ops,
-	.chan_src = &mxc_imx8mn_chan_src,
-	.ier_reg  = &mxc_imx8_isi_ier_v1,
-	.set_thd  = &mxc_imx8_isi_thd_v1,
-};
-
-static int mxc_isi_parse_dt(struct mxc_isi_dev *mxc_isi)
-{
-	struct device *dev = &mxc_isi->pdev->dev;
-	struct device_node *node = dev->of_node;
-	int ret = 0;
-
-	mxc_isi->id = of_alias_get_id(node, "isi");
-
-	ret = of_property_read_u32_array(node, "interface", mxc_isi->interface, 3);
-	if (ret < 0)
-		return ret;
-
-	dev_dbg(dev, "%s, isi_%d,interface(%d, %d, %d)\n", __func__,
-		mxc_isi->id,
-		mxc_isi->interface[0],
-		mxc_isi->interface[1],
-		mxc_isi->interface[2]);
-	return 0;
-}
-
-static int mxc_isi_clk_get(struct mxc_isi_dev *mxc_isi)
-{
-	const struct mxc_isi_dev_ops *ops = mxc_isi->pdata->ops;
-
-	if (!ops && !ops->clk_get)
-		return -EINVAL;
-
-	return ops->clk_get(mxc_isi);
-}
-
-static int mxc_isi_clk_enable(struct mxc_isi_dev *mxc_isi)
-{
-	const struct mxc_isi_dev_ops *ops = mxc_isi->pdata->ops;
-
-	if (!ops && !ops->clk_enable)
-		return -EINVAL;
-
-	return ops->clk_enable(mxc_isi);
-}
-
-static void mxc_isi_clk_disable(struct mxc_isi_dev *mxc_isi)
-{
-	const struct mxc_isi_dev_ops *ops = mxc_isi->pdata->ops;
-
-	if (!ops && !ops->clk_disable)
-		return;
-
-	ops->clk_disable(mxc_isi);
-}
-
-static int mxc_isi_of_parse_resets(struct mxc_isi_dev *mxc_isi)
+static int mxc_isi_imx8mn_parse_resets(struct mxc_isi_dev *mxc_isi)
 {
 	int ret;
 	struct device *dev = &mxc_isi->pdev->dev;
@@ -358,7 +343,7 @@ static int mxc_isi_of_parse_resets(struct mxc_isi_dev *mxc_isi)
 	struct of_phandle_args args;
 	struct reset_control *rstc;
 	const char *compat;
-	uint32_t len, rstc_num = 0;
+	u32 len, rstc_num = 0;
 
 	ret = of_parse_phandle_with_args(np, "resets", "#reset-cells",
 					 0, &args);
@@ -396,6 +381,273 @@ static int mxc_isi_of_parse_resets(struct mxc_isi_dev *mxc_isi)
 	return 0;
 }
 
+static int mxc_isi_imx8mn_resets_assert(struct mxc_isi_dev *mxc_isi)
+{
+	if (!mxc_isi->soft_resetn)
+		return -EINVAL;
+
+	return reset_control_assert(mxc_isi->soft_resetn);
+}
+
+static int mxc_isi_imx8mn_resets_deassert(struct mxc_isi_dev *mxc_isi)
+{
+	if (!mxc_isi->soft_resetn)
+		return -EINVAL;
+
+	return reset_control_deassert(mxc_isi->soft_resetn);
+}
+
+static struct mxc_isi_rst_ops mxc_imx8mn_isi_rst_ops = {
+	.parse  = mxc_isi_imx8mn_parse_resets,
+	.assert = mxc_isi_imx8mn_resets_assert,
+	.deassert = mxc_isi_imx8mn_resets_deassert,
+};
+
+static int mxc_isi_imx8mn_gclk_get(struct mxc_isi_dev *mxc_isi)
+{
+	if (mxc_isi->clk_enable)
+		return 0;
+
+	return mxc_isi_imx8mn_parse_resets(mxc_isi);
+}
+
+static int mxc_isi_imx8mn_gclk_enable(struct mxc_isi_dev *mxc_isi)
+{
+	if (!mxc_isi->clk_enable)
+		return -EINVAL;
+
+	return reset_control_assert(mxc_isi->clk_enable);
+}
+
+static int mxc_isi_imx8mn_gclk_disable(struct mxc_isi_dev *mxc_isi)
+{
+	if (!mxc_isi->clk_enable)
+		return -EINVAL;
+
+	return reset_control_deassert(mxc_isi->clk_enable);
+}
+
+static struct mxc_isi_gate_clk_ops mxc_imx8mn_isi_gclk_ops = {
+	.gclk_get = mxc_isi_imx8mn_gclk_get,
+	.gclk_enable  = mxc_isi_imx8mn_gclk_enable,
+	.gclk_disable = mxc_isi_imx8mn_gclk_disable,
+};
+
+static struct mxc_isi_plat_data mxc_imx8mn_data = {
+	.ops      = &mxc_imx8mn_clk_ops,
+	.chan_src = &mxc_imx8mn_chan_src,
+	.ier_reg  = &mxc_imx8_isi_ier_v1,
+	.set_thd  = &mxc_imx8_isi_thd_v1,
+	.rst_ops  = &mxc_imx8mn_isi_rst_ops,
+	.gclk_ops = &mxc_imx8mn_isi_gclk_ops,
+};
+
+static int mxc_isi_imx8mp_parse_resets(struct mxc_isi_dev *mxc_isi)
+{
+	struct device *dev = &mxc_isi->pdev->dev;
+	struct reset_control *reset;
+
+	reset = devm_reset_control_get_optional_shared(dev, "isi_rst_proc");
+	if (IS_ERR(reset)) {
+		if (PTR_ERR(reset) != -EPROBE_DEFER)
+			dev_err(dev, "Failed to get isi proc reset control\n");
+		return PTR_ERR(reset);
+	}
+	mxc_isi->isi_rst_proc = reset;
+
+	reset = devm_reset_control_get_optional_shared(dev, "isi_rst_apb");
+	if (IS_ERR(reset)) {
+		if (PTR_ERR(reset) != -EPROBE_DEFER)
+			dev_err(dev, "Failed to get isi apb reset control\n");
+		return PTR_ERR(reset);
+	}
+	mxc_isi->isi_rst_apb = reset;
+
+	return 0;
+}
+
+static int mxc_isi_imx8mp_resets_assert(struct mxc_isi_dev *mxc_isi)
+{
+	struct device *dev = &mxc_isi->pdev->dev;
+	int ret;
+
+	if (!mxc_isi->isi_rst_proc || !mxc_isi->isi_rst_apb)
+		return -EINVAL;
+
+	ret = reset_control_assert(mxc_isi->isi_rst_proc);
+	if (ret) {
+		dev_err(dev, "Failed to assert isi proc reset control\n");
+		return ret;
+	}
+
+	ret = reset_control_assert(mxc_isi->isi_rst_apb);
+	if (ret) {
+		dev_err(dev, "Failed to assert isi apb reset control\n");
+		return ret;
+	}
+
+	ret = reset_control_assert(mxc_isi->isi_rst_bus);
+	if (ret) {
+		dev_err(dev, "Failed to assert isi bus reset control\n");
+		return ret;
+	}
+
+	return ret;
+}
+
+static int mxc_isi_imx8mp_resets_deassert(struct mxc_isi_dev *mxc_isi)
+{
+	if (!mxc_isi->isi_rst_proc || !mxc_isi->isi_rst_apb)
+		return -EINVAL;
+
+	reset_control_deassert(mxc_isi->isi_rst_proc);
+	reset_control_deassert(mxc_isi->isi_rst_apb);
+	reset_control_deassert(mxc_isi->isi_rst_bus);
+
+	return 0;
+}
+
+static struct mxc_isi_rst_ops mxc_imx8mp_isi_rst_ops = {
+	.parse  = mxc_isi_imx8mp_parse_resets,
+	.assert = mxc_isi_imx8mp_resets_assert,
+	.deassert = mxc_isi_imx8mp_resets_deassert,
+};
+
+static int mxc_isi_imx8mp_gclk_get(struct mxc_isi_dev *mxc_isi)
+{
+	struct device *dev = &mxc_isi->pdev->dev;
+
+	mxc_isi->isi_proc = devm_clk_get(dev, "media_blk_isi_proc");
+	if (IS_ERR(mxc_isi->isi_proc)) {
+		if (PTR_ERR(mxc_isi->isi_proc) != -EPROBE_DEFER)
+			dev_err(dev, "Failed to get media isi proc clock\n");
+		return -ENODEV;
+	}
+
+	mxc_isi->isi_apb = devm_clk_get(dev, "media_blk_isi_apb");
+	if (IS_ERR(mxc_isi->isi_apb)) {
+		if (PTR_ERR(mxc_isi->isi_apb) != -EPROBE_DEFER)
+			dev_err(dev, "Failed to get media isi apb clock\n");
+		return -ENODEV;
+	}
+
+	mxc_isi->isi_bus = devm_clk_get(dev, "media_blk_bus");
+	if (IS_ERR(mxc_isi->isi_bus)) {
+		if (PTR_ERR(mxc_isi->isi_bus) != -EPROBE_DEFER)
+			dev_err(dev, "Failed to get media bus clock\n");
+		return -ENODEV;
+	}
+
+	return 0;
+}
+
+static int mxc_isi_imx8mp_gclk_enable(struct mxc_isi_dev *mxc_isi)
+{
+	struct device *dev = &mxc_isi->pdev->dev;
+	int ret;
+
+	ret = clk_prepare_enable(mxc_isi->isi_proc);
+	if (ret) {
+		dev_err(dev, "enable isi proc clock failed!\n");
+		return ret;
+	}
+
+	ret = clk_prepare_enable(mxc_isi->isi_apb);
+	if (ret) {
+		dev_err(dev, "enable isi apb clock failed!\n");
+		return ret;
+	}
+
+	ret = clk_prepare_enable(mxc_isi->isi_bus);
+	if (ret) {
+		dev_err(dev, "enable bus clock failed!\n");
+		return ret;
+	}
+
+	return ret;
+}
+
+static int mxc_isi_imx8mp_gclk_disable(struct mxc_isi_dev *mxc_isi)
+{
+	clk_disable_unprepare(mxc_isi->isi_proc);
+	clk_disable_unprepare(mxc_isi->isi_apb);
+	clk_disable_unprepare(mxc_isi->isi_bus);
+
+	return 0;
+}
+
+static struct mxc_isi_gate_clk_ops mxc_imx8mp_isi_gclk_ops = {
+	.gclk_get = mxc_isi_imx8mp_gclk_get,
+	.gclk_enable  = mxc_isi_imx8mp_gclk_enable,
+	.gclk_disable = mxc_isi_imx8mp_gclk_disable,
+};
+
+static struct mxc_isi_plat_data mxc_imx8mp_data = {
+	.ops      = &mxc_imx8mn_clk_ops,
+	.chan_src = &mxc_imx8mn_chan_src,
+	.ier_reg  = &mxc_imx8_isi_ier_v1,
+	.set_thd  = &mxc_imx8_isi_thd_v1,
+	.rst_ops  = &mxc_imx8mp_isi_rst_ops,
+	.gclk_ops = &mxc_imx8mp_isi_gclk_ops,
+};
+
+static struct mxc_isi_plat_data mxc_imx8ulp_data = {
+	.ops      = &mxc_imx8_clk_ops,
+	.chan_src = &mxc_imx8mn_chan_src,
+	.ier_reg  = &mxc_imx8_isi_ier_v2,
+	.set_thd  = &mxc_imx8_isi_thd_v1,
+};
+
+static int mxc_isi_parse_dt(struct mxc_isi_dev *mxc_isi)
+{
+	struct device *dev = &mxc_isi->pdev->dev;
+	struct device_node *node = dev->of_node;
+	int ret = 0;
+
+	mxc_isi->id = of_alias_get_id(node, "isi");
+
+	ret = of_property_read_u32_array(node, "interface", mxc_isi->interface, 3);
+	if (ret < 0)
+		return ret;
+
+	dev_dbg(dev, "%s, isi_%d,interface(%d, %d, %d)\n", __func__,
+		mxc_isi->id,
+		mxc_isi->interface[0],
+		mxc_isi->interface[1],
+		mxc_isi->interface[2]);
+	return 0;
+}
+
+static int mxc_isi_clk_get(struct mxc_isi_dev *mxc_isi)
+{
+	const struct mxc_isi_dev_ops *ops = mxc_isi->pdata->ops;
+
+	if (!ops || !ops->clk_get)
+		return -EINVAL;
+
+	return ops->clk_get(mxc_isi);
+}
+
+static int mxc_isi_clk_enable(struct mxc_isi_dev *mxc_isi)
+{
+	const struct mxc_isi_dev_ops *ops = mxc_isi->pdata->ops;
+
+	if (!ops || !ops->clk_enable)
+		return -EINVAL;
+
+	return ops->clk_enable(mxc_isi);
+}
+
+static void mxc_isi_clk_disable(struct mxc_isi_dev *mxc_isi)
+{
+	const struct mxc_isi_dev_ops *ops = mxc_isi->pdata->ops;
+
+	if (!ops || !ops->clk_disable)
+		return;
+
+	ops->clk_disable(mxc_isi);
+}
+
 static int mxc_isi_soc_match(struct mxc_isi_dev *mxc_isi,
 			     const struct soc_device_attribute *data)
 {
@@ -405,7 +657,7 @@ static int mxc_isi_soc_match(struct mxc_isi_dev *mxc_isi,
 
 	match = soc_device_match(data);
 	if (!match)
-		return -EINVAL;
+		return -EPROBE_DEFER;
 
 	mxc_isi->buf_active_reverse = false;
 
@@ -417,7 +669,8 @@ static int mxc_isi_soc_match(struct mxc_isi_dev *mxc_isi,
 			memcpy(set_thd, &mxc_imx8_isi_thd_v1, sizeof(*set_thd));
 			mxc_isi->buf_active_reverse = true;
 		}
-	} else if (!strcmp(match->soc_id, "i.MX8MP")) {
+	} else if (!strcmp(match->soc_id, "i.MX8MP") ||
+		   !strcmp(match->soc_id, "i.MX8ULP")) {
 		memcpy(ier_reg, &mxc_imx8_isi_ier_v2, sizeof(*ier_reg));
 		mxc_isi->buf_active_reverse = true;
 	}
@@ -451,7 +704,8 @@ static int mxc_isi_probe(struct platform_device *pdev)
 
 	ret = mxc_isi_soc_match(mxc_isi, imx8_soc);
 	if (ret < 0) {
-		dev_err(dev, "Can't match soc version\n");
+		if (ret != -EPROBE_DEFER)
+			dev_err(dev, "Can't match soc version\n");
 		return ret;
 	}
 
@@ -473,17 +727,25 @@ static int mxc_isi_probe(struct platform_device *pdev)
 	mutex_init(&mxc_isi->lock);
 	atomic_set(&mxc_isi->usage_count, 0);
 
-	if (!of_property_read_bool(dev->of_node, "no-reset-control")) {
-		ret = mxc_isi_of_parse_resets(mxc_isi);
-		if (ret) {
-			dev_warn(dev, "Can not parse reset control\n");
-			return ret;
-		}
+	mxc_isi->no_dispmix =
+		of_property_read_bool(dev->of_node, "no-reset-control");
+
+	ret = disp_mix_sft_parse_resets(mxc_isi);
+	if (ret) {
+		if (ret != -EPROBE_DEFER)
+			dev_err(dev, "Can not parse reset control for isi\n");
+		return ret;
 	}
 
 	ret = mxc_isi_clk_get(mxc_isi);
 	if (ret < 0) {
 		dev_err(dev, "ISI_%d get clocks fail\n", mxc_isi->id);
+		return ret;
+	}
+
+	ret = disp_mix_clks_get(mxc_isi);
+	if (ret < 0) {
+		dev_err(dev, "Failed to get disp mix clocks");
 		return ret;
 	}
 
@@ -499,8 +761,8 @@ static int mxc_isi_probe(struct platform_device *pdev)
 		dev_err(dev, "ISI_%d enable clocks fail\n", mxc_isi->id);
 		return ret;
 	}
-	disp_mix_sft_rstn(mxc_isi->soft_resetn, false);
-	disp_mix_clks_enable(mxc_isi->clk_enable, true);
+	disp_mix_sft_rstn(mxc_isi, false);
+	disp_mix_clks_enable(mxc_isi, true);
 
 	mxc_isi_clean_registers(mxc_isi);
 
@@ -523,6 +785,7 @@ static int mxc_isi_probe(struct platform_device *pdev)
 		dev_warn(dev, "Populate child platform device fail\n");
 
 	mxc_isi_clk_disable(mxc_isi);
+	disp_mix_clks_enable(mxc_isi, false);
 
 	platform_set_drvdata(pdev, mxc_isi);
 	pm_runtime_enable(dev);
@@ -531,8 +794,8 @@ static int mxc_isi_probe(struct platform_device *pdev)
 	return 0;
 
 err:
-	disp_mix_clks_enable(mxc_isi->clk_enable, false);
-	disp_mix_sft_rstn(mxc_isi->soft_resetn, true);
+	disp_mix_clks_enable(mxc_isi, false);
+	disp_mix_sft_rstn(mxc_isi, true);
 	mxc_isi_clk_disable(mxc_isi);
 	return -ENXIO;
 }
@@ -568,7 +831,7 @@ static int mxc_isi_runtime_suspend(struct device *dev)
 {
 	struct mxc_isi_dev *mxc_isi = dev_get_drvdata(dev);
 
-	disp_mix_clks_enable(mxc_isi->clk_enable, false);
+	disp_mix_clks_enable(mxc_isi, false);
 	mxc_isi_clk_disable(mxc_isi);
 
 	return 0;
@@ -584,8 +847,8 @@ static int mxc_isi_runtime_resume(struct device *dev)
 		dev_err(dev, "%s clk enable fail\n", __func__);
 		return ret;
 	}
-	disp_mix_sft_rstn(mxc_isi->soft_resetn, false);
-	disp_mix_clks_enable(mxc_isi->clk_enable, true);
+	disp_mix_sft_rstn(mxc_isi, false);
+	disp_mix_clks_enable(mxc_isi, true);
 
 	return 0;
 }
@@ -598,6 +861,8 @@ static const struct dev_pm_ops mxc_isi_pm_ops = {
 static const struct of_device_id mxc_isi_of_match[] = {
 	{.compatible = "fsl,imx8-isi", .data = &mxc_imx8_data },
 	{.compatible = "fsl,imx8mn-isi", .data = &mxc_imx8mn_data },
+	{.compatible = "fsl,imx8mp-isi", .data = &mxc_imx8mp_data },
+	{.compatible = "fsl,imx8ulp-isi", .data = &mxc_imx8ulp_data },
 	{ /* sentinel */ },
 };
 MODULE_DEVICE_TABLE(of, mxc_isi_of_match);
