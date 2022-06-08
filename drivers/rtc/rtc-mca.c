@@ -243,9 +243,9 @@ static void mca_rtc_adjust_alarm_time(struct rtc_wkalrm *alrm, bool inc)
 {
 	unsigned long time;
 
-	rtc_tm_to_time(&alrm->time, &time);
+	time = rtc_tm_to_time64(&alrm->time);
 	time = inc ? time + 1 : time - 1;
-	rtc_time_to_tm(time, &alrm->time);
+	rtc_time64_to_tm(time, &alrm->time);
 }
 
 static int mca_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alrm)

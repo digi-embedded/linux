@@ -127,7 +127,7 @@ static int __init __reserved_mem_alloc_size(unsigned long node,
 		unsigned long mem_threshold;
 
 		/* Calculate the amount of available memory in the system */
-		for_each_memblock(memory, reg)
+		for_each_mem_region(reg)
 			total_pages += memblock_region_memory_end_pfn(reg) -
 				       memblock_region_memory_base_pfn(reg);
 

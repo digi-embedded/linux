@@ -736,7 +736,7 @@ static int mca_tamper_remove(struct platform_device *pdev)
 			devm_free_irq(&pdev->dev, mca_tamper[iface]->irq,
 				      mca_tamper[iface]->iio);
 		iio_device_unregister(mca_tamper[iface]->iio);
-		devm_iio_device_free(&pdev->dev, mca_tamper[iface]->iio);
+		iio_device_free(mca_tamper[iface]->iio);
 	}
 	kfree(mca_tamper);
 

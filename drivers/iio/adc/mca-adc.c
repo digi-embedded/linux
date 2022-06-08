@@ -866,7 +866,7 @@ error_dev_free:
 			       gpio_base + adc_ch_list[num_adcs - 1]);
 		num_adcs--;
 	}
-	devm_iio_device_free(&pdev->dev, indio_dev);
+	iio_device_free(indio_dev);
 
 	return ret;
 }
@@ -898,7 +898,7 @@ static int mca_adc_remove(struct platform_device *pdev)
 
 	devm_kfree(&pdev->dev, (void *)indio_dev->channels);
 	iio_device_unregister(indio_dev);
-	devm_iio_device_free(&pdev->dev, indio_dev);
+	iio_device_free(indio_dev);
 
 	return 0;
 }

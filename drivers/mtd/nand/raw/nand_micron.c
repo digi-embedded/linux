@@ -594,11 +594,15 @@ static void micron_fixup_onfi_param_page(struct nand_chip *chip,
 
 static void micron_nand_decode_id(struct nand_chip *chip)
 {
+	struct nand_device *base = &chip->base;
+	struct nand_ecc_props requirements = { };
+
 	nand_decode_ext_id(chip);
 
 	if (chip->id.data[1] == 0xda) {
-		chip->base.eccreq.strength = 4;
-		chip->base.eccreq.step_size = 512;
+		requirements.strength = 4;
+		requirements.step_size = 512;
+		nanddev_set_ecc_requirements(base, &requirements);
 	}
 }
 

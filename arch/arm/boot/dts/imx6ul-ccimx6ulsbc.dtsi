@@ -16,7 +16,7 @@
 
 	lcd_backlight: backlight {
 		compatible = "pwm-backlight";
-		pwms = <&pwm5 0 50000>;
+		pwms = <&pwm5 0 50000 0>;
 		brightness-levels = <0 4 8 16 32 64 128 255>;
 		default-brightness-level = <6>;
 		status = "disabled";
