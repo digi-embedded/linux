@@ -423,6 +423,14 @@
 	status = "disabled";
 };
 
+/* These GPIOs banks are not available in the SOM */
+&lsio_gpio6 {
+	status = "disabled";
+};
+
+&lsio_gpio7 {
+	status = "disabled";
+};
 /*
  * Disable mipi1 lpcg nodes by default, not supported on the DualXZ variants.
  * An overlay re-enables these nodes if supported by the corresponding variant.
