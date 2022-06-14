@@ -84,10 +84,9 @@
 
 	/*
 	 * Add your slave devices here. Next is an example of spidev.
-	 * Expect a harmless kernel warning if you enable spidev as slave.
 	 */
 	spidev@0 {
-		compatible = "spidev";
+		compatible = "rohm,dh2228fv";
 		reg = <0>;
 		spi-max-frequency = <4000000>;
 	};
