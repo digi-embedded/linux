@@ -376,22 +376,9 @@ static int mca_gpio_irq_set_wake(struct irq_data *d, unsigned int enable)
 	return 0;
 }
 
-static int mca_gpio_to_irq(struct gpio_chip *gc, u32 offset)
-{
-	struct mca_gpio *gpio = to_mca_gpio(gc);
-
-	if (GPIO_BYTE(offset) >= MCA_MAX_IO_BYTES)
-		return -EINVAL;
-
-	/* Discard non irq capable gpios */
-	if (!mca_gpio_is_irq_capable(gpio, offset))
-		return -EINVAL;
-
-	return irq_create_mapping(gc->irq.domain, offset);
-}
-
 static int mca_gpio_irq_setup(struct mca_gpio *gpio, int nbank)
 {
+	struct gpio_irq_chip *girq;
 	unsigned int val;
 	int ret, i;
 
@@ -425,6 +412,17 @@ static int mca_gpio_irq_setup(struct mca_gpio *gpio, int nbank)
 	gpio->irqchip.irq_bus_sync_unlock = mca_gpio_irq_bus_sync_unlock;
 	gpio->irqchip.irq_set_type = mca_gpio_irq_set_type;
 
+	girq = &gpio->gc.irq;
+	girq->chip = &gpio->irqchip;
+	/* This will let us handle the parent IRQ in the driver */
+	girq->parent_handler = NULL;
+	girq->num_parents = 0;
+	girq->parents = NULL;
+	girq->default_type = IRQ_TYPE_NONE;
+	girq->handler = handle_edge_irq;
+	girq->threaded = true;
+	girq->first = 0;
+
 	for (i = 0; i < nbank; i++) {
 		if (gpio->irq[i] < 0)
 			continue;
@@ -440,32 +438,6 @@ static int mca_gpio_irq_setup(struct mca_gpio *gpio, int nbank)
 		}
 	}
 
-	ret = gpiochip_irqchip_add_nested(&gpio->gc,
-					  &gpio->irqchip,
-					  0,
-					  handle_edge_irq,
-					  IRQ_TYPE_NONE);
-	if (ret) {
-		dev_err(gpio->dev,
-			"Failed to connect irqchip to gpiochip (%d)\n", ret);
-		return ret;
-	}
-
-	/*
-	 * gpiochip_irqchip_add_nested() sets .to_irq with its own implementation but
-	 * we have to use our own version because not all GPIOs are irq capable.
-	 * Therefore, we overwrite it.
-	 */
-	gpio->gc.to_irq = mca_gpio_to_irq;
-
-	for (i = 0; i < MCA_MAX_GPIO_IRQ_BANKS; i++) {
-		if (gpio->irq[i] < 0)
-			continue;
-		gpiochip_set_nested_irqchip(&gpio->gc,
-					    &gpio->irqchip,
-					    gpio->irq[i]);
-	}
-
 	return 0;
 }
 
@@ -475,7 +447,6 @@ static struct gpio_chip reference_gc = {
 	.set			= mca_gpio_set,
 	.direction_input	= mca_gpio_direction_input,
 	.direction_output	= mca_gpio_direction_output,
-	.to_irq			= mca_gpio_to_irq,
 	.set_config		= mca_gpio_set_config,
 	.can_sleep		= 1,
 	.base			= -1,
@@ -571,15 +542,15 @@ static int mca_gpio_probe(struct platform_device *pdev)
 
 	gpio->gc.ngpio = ngpio;
 
-	ret = gpiochip_add_data(&gpio->gc, gpio);
-	if (ret < 0) {
-		dev_err(&pdev->dev, "Could not register gpiochip, %d\n", ret);
-		goto err;
-	}
-
 	ret = mca_gpio_irq_setup(gpio, nbank);
 	if (ret) {
 		gpiochip_remove(&gpio->gc);
+		goto err;
+	}
+
+	ret = gpiochip_add_data(&gpio->gc, gpio);
+	if (ret < 0) {
+		dev_err(&pdev->dev, "Could not register gpiochip, %d\n", ret);
 		goto err;
 	}
 
