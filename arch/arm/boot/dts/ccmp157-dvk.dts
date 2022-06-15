@@ -555,6 +555,16 @@
 	status = "okay";
 };
 
+/* PCIe connector uses USB */
+&gpioc {
+	pcie {
+		gpio-hog;
+		gpios = <11 0>;
+		output-high;
+		line-name = "PCIe-EN";
+	};
+};
+
 &pinctrl {
 	ccmp15_usart3_pins: usart3-1 {
 		pins1 {
