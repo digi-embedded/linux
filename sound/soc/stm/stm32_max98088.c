@@ -78,8 +78,8 @@ static int stm32_hifi_hw_params(struct snd_pcm_substream *substream,
 		return ret;
 	}
 
-	/* Select I2S Bus clock to set RCLK and BCLK */
-	ret = snd_soc_dai_set_sysclk(cpu_dai, 0, 0, SND_SOC_CLOCK_OUT);
+	/* Select I2S Bus clock to set RCLK, BCLK and I2S mclk */
+	ret = snd_soc_dai_set_sysclk(cpu_dai, 0, clk_get_rate(data->mclk), SND_SOC_CLOCK_OUT);
 	if (ret) {
 		dev_err(dev, "failed to set cpu sysclk: %d\n", ret);
 		return ret;
