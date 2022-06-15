@@ -51,6 +51,14 @@
 		};
 	};
 
+	clocks {
+		clk_ext_camera: clk-ext-camera {
+			#clock-cells = <0>;
+			compatible = "fixed-clock";
+			clock-frequency = <24000000>;
+		};
+	};
+
 	display_bl: display-bl {
 		compatible = "pwm-backlight";
 		/* node TIM2_CH1 period (ns) */
@@ -380,6 +388,30 @@
 		#clock-cells = <0>;
 	        status = "okay";
 	};
+
+	ov5640: camera@3c {
+		compatible = "ovti,ov5640";
+		reg = <0x3c>;
+		clocks = <&clk_ext_camera>;
+		clock-names = "xclk";
+		DOVDD-supply = <&v2v8>;
+		powerdown-gpios = <&gpioe 5 (GPIO_ACTIVE_HIGH | GPIO_PUSH_PULL)>;
+		reset-gpios = <&gpioe 0 (GPIO_ACTIVE_LOW | GPIO_PUSH_PULL)>;
+		rotation = <180>;
+		status = "okay";
+
+		port {
+			ov5640_0: endpoint {
+				remote-endpoint = <&dcmi_0>;
+				bus-width = <8>;
+				data-shift = <2>; /* lines 9:2 are used */
+				hsync-active = <0>;
+				vsync-active = <0>;
+				pclk-sample = <1>;
+				pclk-max-frequency = <77000000>;
+			};
+		};
+	};
 };
 
 &i2c6 {
@@ -489,20 +521,20 @@
 };
 
 &dcmi {
-	status = "disabled";
+	status = "okay";
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&ccmp15_dcmi_pins_a>;
 	pinctrl-1 = <&ccmp15_dcmi_sleep_pins_a>;
 
 	port {
 		dcmi_0: endpoint {
-			//remote-endpoint = <&ov5640_0>;
+			remote-endpoint = <&ov5640_0>;
 			bus-type = <5>;
 			bus-width = <8>;
 			hsync-active = <0>;
 			vsync-active = <0>;
 			pclk-sample = <1>;
-			pclk-max-frequency = <24000000>;
+			pclk-max-frequency = <77000000>;
 		};
 	};
 };
