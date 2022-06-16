@@ -33,6 +33,10 @@
 		stdout-path = "serial0:115200n8";
 	};
 
+	aliases {
+		serial3 = &uart7;
+	};
+
 	/* 5V */
 	regulators {
 		compatible = "simple-bus";
@@ -565,6 +569,23 @@
 	};
 };
 
+/* RS485 */
+&uart7 {
+	linux,rs485-enabled-at-boot-time;
+	pinctrl-names = "default";
+	pinctrl-0 = <&ccmp15_uart7_pins_a>;
+	rts-gpios = <&gpiof 8 GPIO_ACTIVE_HIGH>;
+	status = "okay";
+};
+
+/* UART mode
+&uart7 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&ccmp15_uart7_pins_a &ccmp15_uart7_rtscts_pins_a>;
+	uart-has-rtscts;
+	status = "okay";
+};*/
+
 &pinctrl {
 	ccmp15_usart3_pins: usart3-1 {
 		pins1 {
@@ -833,6 +854,27 @@
 		pins {
 			pinmux = <STM32_PINMUX('B', 13, ANALOG)>, /* CAN2_TX */
 				 <STM32_PINMUX('B', 12, ANALOG)>; /* CAN2_RX */
+		};
+	};
+
+	ccmp15_uart7_pins_a: uart7-0 {
+		pins1 {
+			pinmux = <STM32_PINMUX('F', 7, AF7)>; /* UART7_TX */
+			bias-disable;
+			drive-push-pull;
+			slew-rate = <0>;
+		};
+		pins2 {
+			pinmux = <STM32_PINMUX('F', 6, AF7)>; /* UART7_RX */
+			bias-disable;
+		};
+	};
+
+	ccmp15_uart7_rtscts_pins_a: uart7rtscts-0 {
+		pins {
+			pinmux = <STM32_PINMUX('F', 8, AF7)>, /* UART7_RTS */
+				 <STM32_PINMUX('F', 9, AF7)>; /* UART7_CTS */
+			bias-disable;
 		};
 	};
 };
