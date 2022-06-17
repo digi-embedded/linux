@@ -75,6 +75,10 @@
 
 	/*panel {
 		compatible = "auo,g101evn010", "simple-panel";
+		/* Fusion 10 inch
+		compatible = "tpk,f10a-0102";
+		/* Fusion 7 inch
+		compatible = "tpk,f07a-0102";
 		power-supply = <&v3v3>;
 		backlight = <&display_bl>;
 
