@@ -33,6 +33,24 @@
 		stdout-path = "serial0:115200n8";
 	};
 
+	/* 5V */
+	regulators {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		reg_5v_board: regulator@1 {
+			compatible = "regulator-fixed";
+			reg = <4>;
+			regulator-name = "5v_board";
+			regulator-min-microvolt = <5000000>;
+			regulator-max-microvolt = <5000000>;
+			gpio = <&gpioc 10 GPIO_ACTIVE_HIGH>;
+			enable-active-high;
+			status = "okay";
+		};
+	};
+
 	display_bl: display-bl {
 		compatible = "pwm-backlight";
 		/* node TIM12_CH2 period (ns) */
@@ -43,17 +61,17 @@
 		status = "okay";
 	};
 
-	panel {
+	/*panel {
 		compatible = "auo,g101evn010", "simple-panel";
 		power-supply = <&v3v3>;
 		backlight = <&display_bl>;
 
 		port {
 			panel_in: endpoint {
-				remote-endpoint = <&display_out>;
+				remote-endpoint = <&ltdc_ep0_out>;
 			};
 		};
-	};
+	};*/
 
 	usb_phy_tuning: usb-phy-tuning {
 		st,hs-dc-level = <2>;
@@ -200,15 +218,27 @@
 	};
 };
 
-&ltdc {
+/* Display Controller for LVDS */
+/* &ltdc {
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&ccmp15_ltdc_pins>;
 	pinctrl-1 = <&ccmp15_ltdc_sleep_pins>;
 	status = "disabled";
 
 	port {
-		display_out: endpoint {
+		ltdc_ep0_out: endpoint {
 			remote-endpoint = <&panel_in>;
+		};
+	};
+};*/
+
+/* Display Controller for MIPI-DSI to HDMI */
+&ltdc {
+	status = "okay";
+
+	port {
+		ltdc_ep0_out: endpoint {
+			remote-endpoint = <&dsi_in>;
 		};
 	};
 };
@@ -216,7 +246,7 @@
 &dsi {
 	#address-cells = <1>;
 	#size-cells = <0>;
-	status = "disabled";
+	status = "okay";
 
 	ports {
 		#address-cells = <1>;
@@ -224,30 +254,20 @@
 
 		port@0 {
 			reg = <0>;
-			mipi_dsi_hdmi_out: endpoint {
+			dsi_in: endpoint {
+				remote-endpoint = <&ltdc_ep0_out>;
+			};
+		};
+
+		port@1 {
+			reg = <1>;
+			dsi_out: endpoint {
 				remote-endpoint = <&lt8912_1_in>;
 			};
 		};
 
-/*		port@1 {
-			reg = <1>;
-			mipi_dsi_lvds_out: endpoint {
-				remote-endpoint = <&bu90t82_1_in>;
-			};
-		};*/
 	};
 
-/*	bu90t82_1_in: panel-dsi@0 {
-		reset-gpios = <&gpioa 8 GPIO_ACTIVE_LOW>;
-		power-supply = <&v3v3>;
-		status = "okay";
-
-		port {
-			dsi_panel_in: endpoint {
-				remote-endpoint = <&mipi_dsi_lvds_out>;
-			};
-		};
-	};*/
 };
 
 &spi4 {
@@ -283,24 +303,6 @@
 	/* spare dmas for other usage */
 	/delete-property/dmas;
 	/delete-property/dma-names;
-
-	lt_bridge: lt8912@48 {
-		compatible = "lontium,lt8912";
-		reg = <0x48>;
-		reset-gpios = <&gpioa 9 GPIO_ACTIVE_LOW>;
-		//hpd-gpios = <&gpioX X GPIO_ACTIVE_HIGH>;
-		digi,dsi-lanes = <2>;
-		vdd1-supply = <&vin>;
-		no-edid;
-		status = "okay";
-
-		port {
-			lt8912_1_in: endpoint {
-				/* add lanes */
-				remote-endpoint = <&mipi_dsi_hdmi_out>;
-			};
-		};
-	};
 
 	/* Touch */
 	fusion_touch: fusion@14 {
@@ -339,10 +341,65 @@
 	pinctrl-1 = <&i2c6_sleep_pins_a>;
 	i2c-scl-rising-time-ns = <185>;
 	i2c-scl-falling-time-ns = <20>;
-	status = "disabled";
+	status = "okay";
 	/* spare dmas for other usage */
 	/delete-property/dmas;
 	/delete-property/dma-names;
+
+	lt_bridge: lt8912@48 {
+		compatible = "lontium,lt8912";
+		reg = <0x48>;
+		reset-gpios = <&gpioa 9 GPIO_ACTIVE_LOW>;
+		hpd-gpios = <&gpiog 1 GPIO_ACTIVE_HIGH>;
+		digi,dsi-lanes = <2>;
+		vdd1-supply = <&reg_5v_board>;
+		status = "okay";
+
+		port {
+			lt8912_1_in: endpoint {
+				/* add lanes */
+				remote-endpoint = <&dsi_out>;
+			};
+		};
+
+		display-timings {
+			native-mode = <&timing0>;
+
+			/* High Definition */
+			timing0: timing0 {
+				clock-frequency = <74250000>;
+				hactive = <1280>;
+				vactive = <720>;
+				hfront-porch = <110>;
+				hsync-len = <40>;
+				hback-porch = <220>;
+				vfront-porch = <5>;
+				vsync-len = <5>;
+				vback-porch = <20>;
+				hsync-active = <0>;
+				vsync-active = <0>;
+				de-active = <0>;
+				pixelclk-active = <0>;
+			};
+
+			/* Full HD */
+			timing1: timing1 {
+				clock-frequency = <148500000>;
+				hactive = <1920>;
+				vactive = <1080>;
+				hfront-porch = <88>;
+				hsync-len = <44>;
+				hback-porch = <148>;
+				vfront-porch = <36>;
+				vsync-len = <5>;
+				vback-porch = <4>;
+				hsync-active = <0>;
+				vsync-active = <0>;
+				de-active = <0>;
+				pixelclk-active = <0>;
+			};
+		};
+	};
 };
 
 &usbh_ehci {
