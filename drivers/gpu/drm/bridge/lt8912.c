@@ -386,7 +386,7 @@ static int lt8912_connector_get_modes(struct drm_connector *connector)
 			return ret;
 		}
 
-		mode->type |= DRM_MODE_TYPE_PREFERRED;
+		mode->type |= DRM_MODE_TYPE_DRIVER | DRM_MODE_TYPE_PREFERRED;
 		drm_mode_set_name(mode);
 		drm_mode_probed_add(connector, mode);
 
