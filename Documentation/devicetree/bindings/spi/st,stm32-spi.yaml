@@ -29,6 +29,9 @@ allOf:
         st,spi-midi-ns: false
 
 properties:
+  "#address-cells": true
+  "#size-cells": true
+
   compatible:
     enum:
       - st,stm32f4-spi
