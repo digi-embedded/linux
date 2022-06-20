@@ -479,8 +479,8 @@ static int lt8912_bridge_attach(struct drm_bridge *bridge,
 	drm_connector_attach_encoder(connector, bridge->encoder);
 
 	ret = lt8912_attach_dsi(lt);
-
-	enable_irq(lt->hpd_irq);
+	if (!lt->no_hpd)
+		enable_irq(lt->hpd_irq);
 
 	return ret;
 }
