@@ -117,9 +117,15 @@ static int audio_mute_stream(struct device *dev, void *data,
 static int audio_get_eld(struct device *dev, void *data,
 			 u8 *buf, size_t len)
 {
-	struct snd_dw_hdmi *dw = dev_get_drvdata(dev);
+	struct dw_hdmi_audio_data *audio = data;
+	u8 *eld;
 
-	memcpy(buf, dw->data.eld, min_t(size_t, MAX_ELD_BYTES, len));
+	eld = audio->get_eld(audio->hdmi);
+	if (eld)
+		memcpy(buf, eld, min_t(size_t, MAX_ELD_BYTES, len));
+	else
+		/* Pass en empty ELD if connector not available */
+		memset(buf, 0, len);
 
 	return 0;
 }
@@ -151,6 +157,7 @@ static int snd_dw_hdmi_probe(struct platform_device *pdev)
 		.spdif = 0,
 		.ops = &audio_codec_ops,
 		.max_i2s_channels = 8,
+		.data = (void *)data,
 	};
 
 	dw = devm_kzalloc(&pdev->dev, sizeof(*dw), GFP_KERNEL);

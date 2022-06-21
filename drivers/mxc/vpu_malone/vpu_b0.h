@@ -69,12 +69,13 @@ extern unsigned int vpu_dbg_level_decoder;
 
 #define V4L2_PIX_FMT_NV12_10BIT    v4l2_fourcc('N', 'T', '1', '2') /*  Y/CbCr 4:2:0 for 10bit  */
 #define	VPU_FRAME_DEPTH_MAX     512
-#define VPU_FRAME_DEPTH_DEFAULT 256
 #define DECODER_NODE_NUMBER 12 // use /dev/video12 as vpu decoder
 #define DEFAULT_LOG_DEPTH 20
 #define DEFAULT_FRMDBG_ENABLE 0
 #define DEFAULT_FRMDBG_LEVEL 0
 #define VPU_DEC_CMD_DATA_MAX_NUM	16
+#define VPU_DEC_MIN_WIDTH		16
+#define VPU_DEC_MIN_HEIGHT		16
 #define VPU_DEC_MAX_WIDTH		8188
 #define VPU_DEC_MAX_HEIGTH		8188
 #define VPU_DEC_FMT_DIVX_MASK		(1 << 20)
@@ -218,6 +219,7 @@ struct queue_data {
 	unsigned long dqbuf_count;
 	unsigned long process_count;
 	bool enable;
+	struct v4l2_rect rect;
 	struct vpu_ctx *ctx;
 };
 
@@ -319,12 +321,14 @@ struct vpu_dev {
 	struct device_link *pd_mu_link;
 };
 
+#define VDEC_EVENT_RECORD_LAST		VID_API_EVENT_PIC_SKIPPED
 struct vpu_statistic {
 	unsigned long cmd[VID_API_CMD_TS + 2];
-	unsigned long event[VID_API_EVENT_DEC_CFG_INFO + 2];
+	unsigned long event[VDEC_EVENT_RECORD_LAST + 2];
 	unsigned long current_cmd;
 	unsigned long current_event;
 	unsigned long skipped_frame_count;
+	unsigned long error_frame_count;
 	struct timespec64 ts_cmd;
 	struct timespec64 ts_event;
 	atomic64_t total_dma_size;
@@ -444,10 +448,6 @@ struct vpu_ctx {
 	struct file *crc_fp;
 	loff_t pos;
 
-	int frm_dis_delay;
-	int frm_dec_delay;
-	int frm_total_num;
-
 	long total_qbuf_bytes;
 	long total_write_bytes;
 	u32 extra_size;
@@ -475,6 +475,12 @@ struct vpu_ctx {
 	u8 xfer_func;
 	u8 ycbcr_enc;
 	u8 quantization;
+
+	u32 out_min_buffer;
+	u32 cap_min_buffer;
+
+	u32 out_sequence;
+	u32 cap_sequence;
 };
 
 #define LVL_WARN		(1 << 0)
@@ -501,6 +507,15 @@ struct vpu_ctx {
 			pr_info("[VPU Decoder] " fmt, ## arg); \
 	} while (0)
 
+#define vpu_warn(ctx, fmt, arg...)	\
+	vpu_dbg(LVL_WARN, "warning: ctx[%d] %c%c%c%c: "fmt, \
+			ctx->str_index, \
+			ctx->q_data[0].fourcc, \
+			ctx->q_data[0].fourcc >> 8, \
+			ctx->q_data[0].fourcc >> 16, \
+			ctx->q_data[0].fourcc >> 24, \
+			## arg)
+
 #define V4L2_NXP_BUF_FLAG_CODECCONFIG		0x00200000
 #define V4L2_NXP_BUF_FLAG_TIMESTAMP_INVALID	0x00400000
 
@@ -514,6 +529,9 @@ struct vpu_ctx {
 #define V4L2_NXP_FRAME_HORIZONTAL_ALIGN		512
 
 #define VPU_IMX_DECODER_FUSE_OFFSET		14
+
+#define VPU_IMX_OUT_MIN_BUFFER			8
+#define VPU_IMX_CAP_MIN_BUFFER			8
 
 pSTREAM_BUFFER_DESCRIPTOR_TYPE get_str_buffer_desc(struct vpu_ctx *ctx);
 u_int32 got_free_space(u_int32 wptr, u_int32 rptr, u_int32 start, u_int32 end);

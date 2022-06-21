@@ -367,9 +367,9 @@ static int cdns_hdmi_connector_atomic_check(struct drm_connector *connector,
 			!new_con_state->hdr_output_metadata ||
 			!old_con_state->hdr_output_metadata ||
 			new_con_state->colorspace != old_con_state->colorspace;
-		/* save new connector state */
-		memcpy(&mhdp->connector.new_state, new_con_state, sizeof(struct drm_connector_state));
 	}
+	/* save new connector state */
+	memcpy(&mhdp->connector.new_state, new_con_state, sizeof(struct drm_connector_state));
 
 	/*
 	 * These properties are handled by fastset, and might not end up in a
@@ -548,8 +548,11 @@ bool cdns_hdmi_bridge_mode_fixup(struct drm_bridge *bridge,
 			video->color_fmt = YCBCR_4_2_0;
 		else
 			video->color_fmt = YCBCR_4_4_4;
-	} else if (new_state->colorspace == DRM_MODE_COLORIMETRY_DEFAULT)
-		return !drm_mode_is_420_only(di, mode);
+	} else if (new_state->colorspace == DRM_MODE_COLORIMETRY_DEFAULT) {
+		/* set default color fmt for YUV420 only mode */
+		if (drm_mode_is_420_only(di, mode))
+			video->color_fmt = YCBCR_4_2_0;
+	}
 
 	return true;
 }
@@ -573,11 +576,25 @@ static void hotplug_work_func(struct work_struct *work)
 
 	if (connector->status == connector_status_connected) {
 		DRM_INFO("HDMI Cable Plug In\n");
+
+		/* Recovery HDCP state */
+		if (connector->state->content_protection != DRM_MODE_CONTENT_PROTECTION_UNDESIRED)
+			mhdp->hdcp.state = HDCP_STATE_ENABLING;
+
 		mhdp->force_mode_set = true;
 		enable_irq(mhdp->irq[IRQ_OUT]);
 	} else if (connector->status == connector_status_disconnected) {
 		/* Cable Disconnedted  */
 		DRM_INFO("HDMI Cable Plug Out\n");
+
+		/* Disable HDCP when cable plugout,
+		 * set content_protection to DESIRED, recovery HDCP state after cable plugin
+		 */
+		if (connector->state->content_protection != DRM_MODE_CONTENT_PROTECTION_UNDESIRED) {
+			connector->state->content_protection = DRM_MODE_CONTENT_PROTECTION_DESIRED;
+			mhdp->hdcp.state = HDCP_STATE_DISABLING;
+		}
+
 		/* force mode set for cable replugin to recovery HDMI2.0 video modes */
 		mhdp->force_mode_set = true;
 		enable_irq(mhdp->irq[IRQ_IN]);

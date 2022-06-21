@@ -111,6 +111,7 @@
 
 #define FXLS8962AF_DEVICE_ID			0x62
 #define FXLS8964AF_DEVICE_ID			0x84
+#define FXLS8974CF_DEVICE_ID			0x86
 
 /* Raw temp channel offset */
 #define FXLS8962AF_TEMP_CENTER_VAL		25
@@ -154,12 +155,20 @@ struct fxls8962af_data {
 	u8 watermark;
 };
 
-const struct regmap_config fxls8962af_regmap_conf = {
+const struct regmap_config fxls8962af_i2c_regmap_conf = {
 	.reg_bits = 8,
 	.val_bits = 8,
 	.max_register = FXLS8962AF_MAX_REG,
 };
-EXPORT_SYMBOL_GPL(fxls8962af_regmap_conf);
+EXPORT_SYMBOL_GPL(fxls8962af_i2c_regmap_conf);
+
+const struct regmap_config fxls8962af_spi_regmap_conf = {
+	.reg_bits = 8,
+	.pad_bits = 8,
+	.val_bits = 8,
+	.max_register = FXLS8962AF_MAX_REG,
+};
+EXPORT_SYMBOL_GPL(fxls8962af_spi_regmap_conf);
 
 enum {
 	fxls8962af_idx_x,
@@ -513,6 +522,12 @@ static const struct fxls8962af_chip_info fxls_chip_info_table[] = {
 	[fxls8964af] = {
 		.chip_id = FXLS8964AF_DEVICE_ID,
 		.name = "fxls8964af",
+		.channels = fxls8962af_channels,
+		.num_channels = ARRAY_SIZE(fxls8962af_channels),
+	},
+	[fxls8974cf] = {
+		.chip_id = FXLS8974CF_DEVICE_ID,
+		.name = "fxls8974cf",
 		.channels = fxls8962af_channels,
 		.num_channels = ARRAY_SIZE(fxls8962af_channels),
 	},
@@ -916,6 +931,13 @@ int fxls8962af_core_probe(struct device *dev, struct regmap *regmap, int irq)
 						  &fxls8962af_buffer_ops);
 		if (ret)
 			return ret;
+	} else if (device_property_read_bool(dev, "drive-open-drain")) {
+		ret = regmap_update_bits(data->regmap, FXLS8962AF_SENS_CONFIG4,
+					 FXLS8962AF_SC4_INT_PP_OD_MASK,
+					 FXLS8962AF_SC4_INT_PP_OD_PREP(1));
+		if (ret)
+			return ret;
+
 	}
 
 	ret = pm_runtime_set_active(dev);
