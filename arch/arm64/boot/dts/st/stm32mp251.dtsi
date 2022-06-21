@@ -1954,6 +1954,11 @@
 			feature-domains = <&rifsc 156>;
 		};
 
+		power: syscon@44210000 {
+			compatible = "st,stm32mp25-pwr", "syscon";
+			reg = <0x44210000 0x0400>;
+		};
+
 		exti1: interrupt-controller@44220000 {
 			compatible = "st,stm32mp1-exti", "syscon";
 			interrupt-controller;
@@ -2307,6 +2312,7 @@
 			resets = <&scmi_reset RST_SCMI_C2_R>,
 				 <&scmi_reset RST_SCMI_C2_HOLDBOOT_R>;
 			reset-names = "mcu_rst", "hold_boot";
+			st,syscfg-cm-state = <&power 0x204 0x0000000c>;
 			interrupt-parent = <&intc>;
 			interrupts = <GIC_SPI 4 IRQ_TYPE_LEVEL_HIGH>;
 
