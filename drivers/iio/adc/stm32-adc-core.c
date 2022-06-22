@@ -812,9 +812,9 @@ static int stm32_adc_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, &priv->common);
 
 	priv->dev = dev;
-	priv->nb_adc_max = STM32_ADC_MAX_ADCS;
 	priv->cfg = (const struct stm32_adc_priv_cfg *)
 		of_match_device(dev->driver->of_match_table, dev)->data;
+	priv->nb_adc_max = priv->cfg->num_adcs;
 	spin_lock_init(&priv->common.lock);
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
@@ -976,7 +976,6 @@ static const struct stm32_adc_priv_cfg stm32mp1_adc_priv_cfg = {
 	.has_syscfg = HAS_VBOOSTER | HAS_ANASWVDD,
 	.ipid = STM32MP15_IPIDR_NUMBER,
 	.num_irqs = 2,
-	.num_adcs = 2,
 };
 
 static const struct stm32_adc_priv_cfg stm32mp13_adc_priv_cfg = {
