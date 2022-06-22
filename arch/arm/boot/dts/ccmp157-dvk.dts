@@ -358,13 +358,13 @@
 
 	/* Touch */
 	fusion_touch: fusion@14 {
-                compatible = "touchrev,fusion-touch";
-                reg = <0x14>;
-                interrupt-parent = <&gpioc>;
-                interrupts = <2 IRQ_TYPE_EDGE_RISING>;
-		irq-gpios = <&gpioc 8 GPIO_ACTIVE_HIGH>;
-                status = "disabled";
-        };
+		compatible = "touchrev,fusion-touch";
+		reg = <0x14>;
+		interrupt-parent = <&gpiog>;
+		interrupts = <1 IRQ_TYPE_EDGE_RISING>;
+		irq-gpios = <&gpiog 1 GPIO_ACTIVE_LOW>;
+		status = "disabled";
+	};
 
 	goodix_touch@14 {
 		compatible = "goodix,gt9271";
