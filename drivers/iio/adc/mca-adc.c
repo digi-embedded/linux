@@ -1,6 +1,6 @@
-/* adc-mca.c - ADC driver for MCA devices.
+/* mca-adc.c - ADC driver for MCA devices.
  *
- * Copyright (C) 2017 - 2021  Digi International Inc
+ * Copyright (C) 2017 - 2022  Digi International Inc
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -25,7 +25,6 @@
 #include <linux/of_device.h>
 #include <linux/platform_device.h>
 #include <linux/regmap.h>
-#include <linux/mfd/mca-common/registers.h>
 #include <linux/mfd/mca-common/core.h>
 
 #define MCA_VREF_uV(v)		((u32)((v) * 1000 * 1000))
@@ -34,11 +33,11 @@
 #define MCA_ADC_INT_VREF	MCA_VREF_uV(1.2)
 #define MCA_ADC_DEF_VREF	MCA_VREF_uV(3)
 
-#define MCA_DRVNAME_ADC		"mca-adc"
+#define MCA_BASE_DRVNAME_ADC		"mca-adc"
 
 #ifdef CONFIG_OF
 enum mca_adc_type {
-	CCMP1_MCA_ADC,
+	CC_MCA_ADC,
 	IOEXP_MCA_ADC,
 };
 
@@ -906,8 +905,8 @@ static int mca_adc_remove(struct platform_device *pdev)
 
 #ifdef CONFIG_OF
 static struct mca_adc_data mca_adc_devdata[] = {
-	[CCMP1_MCA_ADC] = {
-		.devtype = CCMP1_MCA_ADC,
+	[CC_MCA_ADC] = {
+		.devtype = CC_MCA_ADC,
 	},
 	[IOEXP_MCA_ADC] = {
 		.devtype = IOEXP_MCA_ADC,
@@ -915,8 +914,8 @@ static struct mca_adc_data mca_adc_devdata[] = {
 };
 
 static const struct of_device_id mca_adc_dt_ids[] = {
-	{ .compatible = "digi,mca-ccmp1-adc",
-	  .data = &mca_adc_devdata[CCMP1_MCA_ADC]},
+	{ .compatible = "digi,mca-adc",
+	  .data = &mca_adc_devdata[CC_MCA_ADC]},
 	{ .compatible = "digi,mca-ioexp-adc",
 	  .data = &mca_adc_devdata[IOEXP_MCA_ADC]},
 	{ /* sentinel */ }
@@ -928,7 +927,7 @@ static struct platform_driver mca_adc_driver = {
 	.probe		= mca_adc_probe,
 	.remove		= mca_adc_remove,
 	.driver		= {
-		.name	= MCA_DRVNAME_ADC,
+		.name	= MCA_BASE_DRVNAME_ADC,
 		.owner	= THIS_MODULE,
 #ifdef CONFIG_OF
 		.of_match_table = mca_adc_dt_ids,
@@ -952,4 +951,4 @@ module_exit(mca_adc_exit);
 MODULE_AUTHOR("Digi International Inc.");
 MODULE_DESCRIPTION("ADC device driver for MCA of ConnectCore Modules");
 MODULE_LICENSE("GPL v2");
-MODULE_ALIAS("platform:" MCA_DRVNAME_ADC);
+MODULE_ALIAS("platform:" MCA_BASE_DRVNAME_ADC);

@@ -1,6 +1,6 @@
 /* gpio-mca.c - GPIO driver for MCA devices.
  *
- * Copyright (C) 2017 - 2021  Digi International Inc
+ * Copyright (C) 2017 - 2022  Digi International Inc
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -26,9 +26,8 @@
 #include <linux/regulator/consumer.h>
 
 #include <linux/mfd/mca-common/core.h>
-#include <linux/mfd/mca-common/registers.h>
 
-#define MCA_DRVNAME_GPIO	"mca-gpio"
+#define MCA_BASE_DRVNAME_GPIO	"mca-gpio"
 
 /*
  * The following macros return the register address to read/write for a given
@@ -51,7 +50,7 @@
 
 #ifdef CONFIG_OF
 enum mca_gpio_type {
-	CCMP1_MCA_GPIO,
+	CC_MCA_GPIO,
 	IOEXP_MCA_GPIO,
 };
 
@@ -578,8 +577,8 @@ static int mca_gpio_remove(struct platform_device *pdev)
 
 #ifdef CONFIG_OF
 static struct mca_gpio_data mca_gpio_devdata[] = {
-	[CCMP1_MCA_GPIO] = {
-		.devtype = CCMP1_MCA_GPIO,
+	[CC_MCA_GPIO] = {
+		.devtype = CC_MCA_GPIO,
 		.label = "mca-gpio"
 	},
 	[IOEXP_MCA_GPIO] = {
@@ -589,8 +588,8 @@ static struct mca_gpio_data mca_gpio_devdata[] = {
 };
 
 static const struct of_device_id mca_gpio_dt_ids[] = {
-	{ .compatible = "digi,mca-ccmp1-gpio",
-	  .data = &mca_gpio_devdata[CCMP1_MCA_GPIO]},
+	{ .compatible = "digi,mca-gpio",
+	  .data = &mca_gpio_devdata[CC_MCA_GPIO]},
 	{ .compatible = "digi,mca-ioexp-gpio",
 	  .data = &mca_gpio_devdata[IOEXP_MCA_GPIO]},
 	{ /* sentinel */ }
@@ -602,7 +601,7 @@ static struct platform_driver mca_gpio_driver = {
 	.probe		= mca_gpio_probe,
 	.remove		= mca_gpio_remove,
 	.driver		= {
-		.name	= MCA_DRVNAME_GPIO,
+		.name	= MCA_BASE_DRVNAME_GPIO,
 		.owner	= THIS_MODULE,
 #ifdef CONFIG_OF
 		.of_match_table = mca_gpio_dt_ids,
@@ -626,4 +625,4 @@ module_exit(mca_gpio_exit);
 MODULE_AUTHOR("Digi International Inc.");
 MODULE_DESCRIPTION("GPIO device driver for MCA of ConnectCore Modules");
 MODULE_LICENSE("GPL v2");
-MODULE_ALIAS("platform:" MCA_DRVNAME_GPIO);
+MODULE_ALIAS("platform:" MCA_BASE_DRVNAME_GPIO);

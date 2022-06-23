@@ -1,7 +1,7 @@
-/* uart-mca.c - UART driver for MCA devices.
+/* mca-uart.c - UART driver for MCA devices.
  * Based on sc16is7xx.c, by Jon Ringle <jringle@gridpoint.com>
  *
- * Copyright (C) 2017-2021  Digi International Inc
+ * Copyright (C) 2017-2022  Digi International Inc
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -24,12 +24,10 @@
 #include <linux/regmap.h>
 #include <linux/serial_core.h>
 #include <linux/tty_flip.h>
-#include <linux/mfd/mca-common/registers.h>
 #include <linux/mfd/mca-common/core.h>
-#include <linux/mfd/mca-ccmp1/core.h>
 #include <linux/delay.h>
 
-#define MCA_DRVNAME_UART		"mca-uart"
+#define MCA_BASE_DRVNAME_UART		"mca-uart"
 #define MCA_UART_DEV_NAME		"ttyMCA"
 #define MCA_UART_DEFAULT_BRATE		9600
 #define MCA_UART_DEFAULT_BAUD_REG	MCA_REG_UART_BAUD_9600
@@ -54,22 +52,10 @@ bool required[] = {1, 1, 0, 0};
 
 #define MCA_REG_UART_PIN(p)		(MCA_REG_UART_RXPIN + (p))
 
-enum mca_uart_type {
-	CCMP1_MCA_UART,
-};
-
 enum {
 	WORK_FLUSH_BUF	= BIT(0),
 	WORK_RS485_CFG	= BIT(1),
 };
-
-struct mca_uart_data {
-	enum mca_uart_type	devtype;
-	u16			since;
-	int			nuarts;
-};
-
-static struct mca_uart_data mca_uart_devdata[];
 
 struct mca_uart {
 	u32			line;
@@ -932,7 +918,7 @@ static int mca_uart_allocate_port_resources(struct mca_uart_drv *uart_drv,
 		int mca_io = mca_uart->pins[i];
 		int gpio = mca_uart->mca->gpio_base + mca_io;
 
-		ret = devm_gpio_request(uart_drv->dev, gpio, MCA_DRVNAME_UART);
+		ret = devm_gpio_request(uart_drv->dev, gpio, MCA_BASE_DRVNAME_UART);
 		if (ret) {
 			dev_err(uart_drv->dev,
 				"Failed to allocate MCA IO%d (gpio %d) (%d)\n",
@@ -955,7 +941,7 @@ static int mca_uart_allocate_port_resources(struct mca_uart_drv *uart_drv,
 	ret = devm_request_threaded_irq(uart_drv->dev,
 					mca_uart->port.irq,
 					NULL, mca_uart_irq_handler,
-					IRQF_ONESHOT, MCA_DRVNAME_UART,
+					IRQF_ONESHOT, MCA_BASE_DRVNAME_UART,
 					mca_uart);
 	if (ret) {
 		dev_err(uart_drv->dev, "Failed to register IRQ\n");
@@ -1063,7 +1049,9 @@ static int mca_uart_probe(struct platform_device *pdev)
 		ret = -ENODEV;
 		goto err_free2;
 	}
-	if (mca->fw_version < uart_drv->uart_data->since) {
+
+	if (!MCA_FEATURE_IS_SUPPORTED(mca, MCA_UART_KL03_MIN_FW,
+	                              MCA_UART_KL17_MIN_FW)) {
 		dev_err(&pdev->dev,
 			"UART is not supported in MCA firmware v%d.%02d.\n",
 			MCA_FW_VER_MAJOR(mca->fw_version),
@@ -1193,7 +1181,7 @@ static int mca_uart_remove(struct platform_device *pdev)
  * The code snippet below was grabbed from drivers/tty/serial/serial_core.c
  * It is used for retrieving the TTY layer struct device. This struct is used to
  * check the value of /sys/class/tty/ttyMCAx/power/wakeup which is more standard
- * than the one at /sys/bus/i2c/devices/0-0063/mca-cc8-uart/power/wakeup.
+ * than the one at /sys/bus/i2c/devices/0-0063/mca-uart/power/wakeup.
  */
 struct uart_match {
 	struct uart_port *port;
@@ -1249,18 +1237,9 @@ static const struct dev_pm_ops mca_uart_pm_ops = {
 };
 #endif
 
-static struct mca_uart_data mca_uart_devdata[] = {
-	[CCMP1_MCA_UART] = {
-		.devtype	= CCMP1_MCA_UART,
-		.since		= MCA_CCMP1_UART_MIN_FW,
-		.nuarts		= 1,
-	},
-};
-
 static const struct platform_device_id mca_uart_devtype[] = {
 	{
-		.name = "mca-ccmp1-uart",
-		.driver_data = (kernel_ulong_t)&mca_uart_devdata[CCMP1_MCA_UART],
+		.name = MCA_BASE_DRVNAME_UART,
 	}, {
 		/* sentinel */
 	}
@@ -1270,8 +1249,7 @@ MODULE_DEVICE_TABLE(platform, mca_uart_devtype);
 #ifdef CONFIG_OF
 static const struct of_device_id mca_uart_ids[] = {
 	{
-		.compatible = "digi,mca-ccmp1-uart",
-		.data = &mca_uart_devdata[CCMP1_MCA_UART]
+		.compatible = "digi,mca-uart",
 	}, {
 		/* sentinel */
 	}
@@ -1284,7 +1262,7 @@ static struct platform_driver mca_uart_driver = {
 	.remove	= mca_uart_remove,
 	.id_table = mca_uart_devtype,
 	.driver	= {
-		.name	= MCA_DRVNAME_UART,
+		.name	= MCA_BASE_DRVNAME_UART,
 		.of_match_table = of_match_ptr(mca_uart_ids),
 #ifdef CONFIG_PM
 		.pm	= &mca_uart_pm_ops,
@@ -1307,4 +1285,4 @@ module_exit(mca_uart_exit);
 MODULE_AUTHOR("Digi International Inc");
 MODULE_DESCRIPTION("UART driver for MCA of ConnectCore modules");
 MODULE_LICENSE("GPL v2");
-MODULE_ALIAS("platform:" MCA_DRVNAME_UART);
+MODULE_ALIAS("platform:" MCA_BASE_DRVNAME_UART);

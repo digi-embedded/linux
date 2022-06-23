@@ -1,5 +1,5 @@
 /*
- *  Copyright 2017 - 2019 Digi International Inc
+ *  Copyright 2017 - 2022 Digi International Inc
  *
  *  This program is free software; you can redistribute  it and/or modify it
  *  under  the terms of  the GNU General  Public License as published by the
@@ -15,6 +15,8 @@
 #include <linux/syscore_ops.h>
 #include <linux/mfd/mca-common/registers.h>
 #include <linux/gpio.h>
+#include <linux/regmap.h>
+#include <soc/imx/soc.h>
 
 #define MCA_MAKE_FW_VER(a,b)		(u16)(((a) << 8) | ((b) & 0xff))
 #define MCA_FW_VER_MAJOR(v)		(((v) >> 8) & 0xff)
@@ -76,5 +78,90 @@ struct mca_drv {
 	struct syscore_ops syscore;
 	bool suspended;
 };
+
+/* Platform-dependent values */
+#define MCA_KL03_DEVICE_ID	0x61
+#define MCA_UART_KL03_MIN_FW	MCA_MAKE_FW_VER(1, 19)
+#define TICK_COUNT_KL03_FW_VER	MCA_MAKE_FW_VER(0,15)
+#define VREF_KL03_FW_VER	MCA_MAKE_FW_VER(0,15)
+#define LAST_WAKEUP_KL03_FW_VER	MCA_MAKE_FW_VER(1,2)
+#define NVRAM_KL03_FW_VER	MCA_MAKE_FW_VER(1,2)
+#define REBOOT_SAFE_KL03_FW_VER	MCA_MAKE_FW_VER(1,2)
+#define DEBTB50M_KL03_FW_VER	MCA_MAKE_FW_VER(1, 7)
+#define PWRKEY_UP_KL03_FW_VER	MCA_MAKE_FW_VER(1, 14)
+
+#define MCA_KL17_DEVICE_ID	0x4A
+#define MCA_UART_KL17_MIN_FW	MCA_MAKE_FW_VER(0, 13)
+#define TICK_COUNT_KL17_FW_VER	MCA_MAKE_FW_VER(0,0)
+#define VREF_KL17_FW_VER	MCA_MAKE_FW_VER(0,11)
+#define LAST_WAKEUP_KL17_FW_VER	MCA_MAKE_FW_VER(0,4)
+#define NVRAM_KL17_FW_VER	MCA_MAKE_FW_VER(0,8)
+#define REBOOT_SAFE_KL17_FW_VER	MCA_MAKE_FW_VER(1,03)
+#define DEBTB50M_KL17_FW_VER	MCA_MAKE_FW_VER(0, 13)
+#define PWRKEY_UP_KL17_FW_VER	MCA_MAKE_FW_VER(0, 17)
+
+/* Function to know if a feature is supported in a specific FW version */
+#define MCA_FEATURE_IS_SUPPORTED(mca, kl03_ver, kl17_ver)	\
+	(mca->fw_version >= (mca->dev_id == MCA_KL03_DEVICE_ID ? kl03_ver : kl17_ver))
+
+/* MCA modules */
+#define MCA_DRVNAME_CORE	"mca-core"
+#define MCA_DRVNAME_RTC		"mca-som-rtc"
+#define MCA_DRVNAME_WATCHDOG	"mca-som-watchdog"
+#define MCA_DRVNAME_GPIO	"mca-som-gpio"
+#define MCA_DRVNAME_PWRKEY	"mca-som-pwrkey"
+#define MCA_DRVNAME_ADC		"mca-som-adc"
+#define MCA_DRVNAME_TAMPER	"mca-som-tamper"
+#define MCA_DRVNAME_COMPARATOR	"mca-som-comparator"
+#define MCA_DRVNAME_UART	"mca-som-uart"
+
+/* Values exclusive to the CC8 family */
+#define MCA_CC8_DRVNAME_GPIO_WATCHDOG	"mca-som-gpio-watchdog"
+#define MCA_CC8_DRVNAME_KEYPAD		"mca-som-keypad"
+#define MCA_CC8_DRVNAME_LED		"mca-som-led"
+#define MCA_CC8_DRVNAME_PWM		"mca-som-pwm"
+#define MCA_CC8_LEDS_MIN_FW		MCA_MAKE_FW_VER(1, 1)
+
+/* Interrupts */
+enum mca_irqs {
+	MCA_IRQ_RTC_ALARM,
+	MCA_IRQ_RTC_1HZ,
+	MCA_IRQ_RTC_PERIODIC_IRQ,
+	MCA_IRQ_WATCHDOG,
+	MCA_IRQ_PWR_SLEEP,
+	MCA_IRQ_PWR_OFF,
+	MCA_IRQ_TAMPER0,
+	MCA_IRQ_TAMPER1,
+	MCA_IRQ_ADC,
+	MCA_IRQ_GPIO_BANK_0,
+	MCA_IRQ_TAMPER2,
+	MCA_IRQ_TAMPER3,
+	MCA_IRQ_UART0,
+	/* Values exclusive to the CC8 family */
+	MCA_CC8_IRQ_GPIO_BANK_1,
+	MCA_CC8_IRQ_GPIO_BANK_2,
+	MCA_CC8_IRQ_UART1,
+	MCA_CC8_IRQ_UART2,
+	MCA_CC8_IRQ_KEYPAD,
+	/* ... */
+
+	MCA_NUM_IRQS,
+};
+
+int mca_device_init(struct mca_drv *mca, u32 irq);
+int mca_irq_init(struct mca_drv *mca);
+void mca_device_exit(struct mca_drv *mca);
+void mca_irq_exit(struct mca_drv *mca);
+int mca_suspend(struct device *dev);
+int mca_resume(struct device *dev);
+
+
+#if defined(CONFIG_MFD_MCA_CC8)
+/* Functions specific to the cc8x */
+int mca_cc8x_add_irq_chip(struct regmap *map, int irq, int irq_base,
+			  const struct regmap_irq_chip *chip,
+			  struct regmap_irq_chip_data **data);
+void mca_cc8x_del_irq_chip(struct regmap_irq_chip_data *d);
+#endif
 
 #endif /* MFD_MCA_COMMON_CORE_H_ */

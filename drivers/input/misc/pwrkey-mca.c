@@ -1,5 +1,5 @@
 /* pwrkey-mca.c - Power Key device driver for MCA on ConnectCore modules
- * Copyright (C) 2016 - 2021  Digi International Inc
+ * Copyright (C) 2016 - 2022  Digi International Inc
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -33,7 +33,7 @@
 #include <linux/of_irq.h>
 #include <linux/regmap.h>
 
-#define MCA_DRVNAME_PWRKEY        "mca-pwrkey"
+#define MCA_BASE_DRVNAME_PWRKEY	"mca-pwrkey"
 
 #define DEFAULT_PWR_KEY_DEBOUNCE	150	/* 150 ms */
 #define DEFAULT_PWR_KEY_DELAY		4	/* 4 seconds */
@@ -44,15 +44,8 @@
 #define MAX_PWR_KEY_GUARD		255
 
 #ifdef CONFIG_OF
-enum mca_pwrkey_type {
-	CCMP1_MCA_PWRKEY,
-};
-
 struct mca_pwrkey_data {
-	enum mca_pwrkey_type devtype;
 	char drv_name_phys[40];
-	uint16_t version_supports_debtb50ms;
-	uint16_t version_supports_pwrkey_up;
 };
 #endif
 
@@ -237,8 +230,11 @@ static int of_mca_pwrkey_read_settings(struct device_node *np,
 	pwrkey->key_power = of_property_read_bool(np, "digi,key-power");
 	pwrkey->key_power_up = of_property_read_bool(np, "digi,key-power-up");
 	if (pwrkey->key_power_up) {
-		const uint16_t min_version = devdata->version_supports_pwrkey_up;
-		if (pwrkey->mca->fw_version < min_version) {
+		if (!MCA_FEATURE_IS_SUPPORTED(pwrkey->mca, PWRKEY_UP_KL03_FW_VER,
+		                              PWRKEY_UP_KL17_FW_VER)) {
+			uint16_t min_version = pwrkey->mca->dev_id == MCA_KL03_DEVICE_ID ?
+			                                              PWRKEY_UP_KL03_FW_VER :
+			                                              PWRKEY_UP_KL17_FW_VER;
 			dev_warn(pwrkey->mca->dev,
 				 "Invalid MCA firmware version for key-power-up."
 				 " Required MCAv%d.%d or above\n",
@@ -343,7 +339,7 @@ static int mca_pwrkey_probe(struct platform_device *pdev)
 	/* Find entry in device-tree */
 	if (mca->dev->of_node) {
 		const char * compatible = pdev->dev.driver->
-				    of_match_table[devdata->devtype].compatible;
+				    of_match_table[0].compatible;
 
 		/* Return if pwrkey node does not exist or if it is disabled */
 		np = of_find_compatible_node(mca->dev->of_node, NULL, compatible);
@@ -365,7 +361,8 @@ static int mca_pwrkey_probe(struct platform_device *pdev)
 		goto err_free;
 	}
 
-	if (mca->fw_version >= devdata->version_supports_debtb50ms)
+	if (MCA_FEATURE_IS_SUPPORTED(mca, DEBTB50M_KL03_FW_VER,
+	                             DEBTB50M_KL17_FW_VER))
 		pwrkey->supports_debtb50ms = true;
 
 	platform_set_drvdata(pdev, pwrkey);
@@ -497,18 +494,13 @@ SIMPLE_DEV_PM_OPS(mca_pwrkey_pm_ops, mca_pwrkey_suspend, mca_pwrkey_resume);
 #endif /* CONFIG_PM_SLEEP */
 
 #ifdef CONFIG_OF
-static struct mca_pwrkey_data mca_pwrkey_devdata[] = {
-	[CCMP1_MCA_PWRKEY] = {
-		.devtype = CCMP1_MCA_PWRKEY,
-		.drv_name_phys= "mca-ccmp1-pwrkey/input0",
-		.version_supports_debtb50ms= MCA_MAKE_FW_VER(1, 7),
-		.version_supports_pwrkey_up= MCA_MAKE_FW_VER(1, 14)
-	},
+static struct mca_pwrkey_data mca_pwrkey_devdata = {
+	.drv_name_phys= "mca-pwrkey/input0"
 };
 
 static const struct of_device_id mca_pwrkey_ids[] = {
-        { .compatible = "digi,mca-ccmp1-pwrkey",
-	  .data = &mca_pwrkey_devdata[CCMP1_MCA_PWRKEY]},
+        { .compatible = "digi,mca-pwrkey",
+	  .data = &mca_pwrkey_devdata},
         { /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, mca_pwrkey_ids);
@@ -518,7 +510,7 @@ static struct platform_driver mca_pwrkey_driver = {
 	.probe	= mca_pwrkey_probe,
 	.remove	= mca_pwrkey_remove,
 	.driver	= {
-		.name	= MCA_DRVNAME_PWRKEY,
+		.name	= MCA_BASE_DRVNAME_PWRKEY,
 		.owner	= THIS_MODULE,
 		.of_match_table = of_match_ptr(mca_pwrkey_ids),
 #ifdef CONFIG_PM_SLEEP
@@ -542,4 +534,4 @@ module_exit(mca_pwrkey_exit);
 MODULE_AUTHOR("Digi International Inc");
 MODULE_DESCRIPTION("pwrkey device driver for MCA of ConnectCore Modules");
 MODULE_LICENSE("GPL v2");
-MODULE_ALIAS("platform:" MCA_DRVNAME_PWRKEY);
+MODULE_ALIAS("platform:" MCA_BASE_DRVNAME_PWRKEY);

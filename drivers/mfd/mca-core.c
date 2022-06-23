@@ -1,5 +1,5 @@
 /*
- *  Copyright 2016 - 2021 Digi International Inc
+ *  Copyright 2016 - 2022 Digi International Inc
  *
  *  This program is free software; you can redistribute  it and/or modify it
  *  under  the terms of  the GNU General  Public License as published by the
@@ -24,18 +24,19 @@
 #include <linux/uaccess.h>
 #include <linux/i2c.h>
 #include <linux/syscore_ops.h>
+#include <linux/platform_data/i2c-imx.h>
 
 #include <linux/mfd/mca-common/core.h>
-#include <linux/mfd/mca-ccmp1/core.h>
 
 #include <asm/unaligned.h>
 
-#define MCA_CCMP1_NVRAM_SIZE	(MCA_CCMP1_MPU_NVRAM_END - MCA_CCMP1_MPU_NVRAM_START + 1)
+#define MCA_NVRAM_SIZE	(MCA_MPU_NVRAM_END - MCA_MPU_NVRAM_START + 1)
 
 extern int digi_get_som_hv(void);
 
 struct dyn_attribute {
-	u16			since;	/* Minimum firmware version required */
+	u16			since_kl03;	/* Minimum firmware version required for KL03 */
+	u16			since_kl17;	/* Minimum firmware version required for KL17 */
 	struct attribute	*attr;
 };
 
@@ -44,198 +45,328 @@ struct mca_reason {
 	const char	*text;
 };
 
+enum lpi2c_imx_mode {
+	STANDARD,	/* 100+Kbps */
+	FAST,		/* 400+Kbps */
+	FAST_PLUS,	/* 1.0+Mbps */
+	HS,		/* 3.4+Mbps */
+	ULTRA_FAST,	/* 5.0+Mbps */
+};
+
 static const struct mca_reason last_mca_reset[] = {
-	{MCA_CCMP1_LAST_MCA_RST_LLW,	"LL Wakeup"},
-	{MCA_CCMP1_LAST_MCA_RST_LVD,	"Low Voltage"},
-	{MCA_CCMP1_LAST_MCA_RST_WD,	"Watchdog"},
-	{MCA_CCMP1_LAST_MCA_RST_PIN,	"Reset Pin"},
-	{MCA_CCMP1_LAST_MCA_RST_PWRON,	"Power On"},
-	{MCA_CCMP1_LAST_MCA_RST_LOCKUP,	"Core Lockup"},
-	{MCA_CCMP1_LAST_MCA_RST_SW,	"Software"},
-	{MCA_CCMP1_LAST_MCA_RST_MDMAPP,	"MDM-APP debuger"},
-	{MCA_CCMP1_LAST_MCA_RST_SMAE, 	"Stop Mode Ack Error"},
+	{MCA_LAST_MCA_RST_LLW,	"LL Wakeup"},
+	{MCA_LAST_MCA_RST_LVD,	"Low Voltage"},
+	{MCA_LAST_MCA_RST_WD,	"Watchdog"},
+	{MCA_LAST_MCA_RST_PIN,	"Reset Pin"},
+	{MCA_LAST_MCA_RST_PWRON,	"Power On"},
+	{MCA_LAST_MCA_RST_LOCKUP,	"Core Lockup"},
+	{MCA_LAST_MCA_RST_SW,	"Software"},
+	{MCA_LAST_MCA_RST_MDMAPP,	"MDM-APP debuger"},
+	{MCA_LAST_MCA_RST_SMAE, 	"Stop Mode Ack Error"},
 };
 
 static const struct mca_reason last_mpu_reset[] = {
-	{MCA_CCMP1_LAST_MPU_RST_PWRON,	"Power On"},
-	{MCA_CCMP1_LAST_MPU_RST_SYSR,	"System Reset"},
-	{MCA_CCMP1_LAST_MPU_RST_WD,	"Watchdog"},
-	{MCA_CCMP1_LAST_MPU_RST_OFFWAKE,"Off wakeup"},
-	{MCA_CCMP1_LAST_MPU_RST_MCARST,	"MCA reset"},
+	{MCA_LAST_MPU_RST_PWRON,	"Power On"},
+	{MCA_LAST_MPU_RST_SYSR,	"System Reset"},
+	{MCA_LAST_MPU_RST_WD,	"Watchdog"},
+	{MCA_LAST_MPU_RST_OFFWAKE,"Off wakeup"},
+	{MCA_LAST_MPU_RST_MCARST,	"MCA reset"},
 };
 
 static const struct mca_reason last_wakeup[] = {
-	{MCA_CCMP1_LAST_WAKEUP_PWRIO,	"Power IO"},
-	{MCA_CCMP1_LAST_WAKEUP_TIMER,	"Timer"},
-	{MCA_CCMP1_LAST_WAKEUP_RTC,	"RTC"},
-	{MCA_CCMP1_LAST_WAKEUP_LPUART,	"LP UART"},
-	{MCA_CCMP1_LAST_WAKEUP_TAMPER0,	"Tamper0"},
-	{MCA_CCMP1_LAST_WAKEUP_TAMPER1,	"Tamper1"},
-	{MCA_CCMP1_LAST_WAKEUP_TAMPER2,	"Tamper2"},
-	{MCA_CCMP1_LAST_WAKEUP_TAMPER3,	"Tamper3"},
-	{MCA_CCMP1_LAST_WAKEUP_IO0,	"IO0"},
-	{MCA_CCMP1_LAST_WAKEUP_IO1,	"IO1"},
-	{MCA_CCMP1_LAST_WAKEUP_IO2,	"IO2"},
-	{MCA_CCMP1_LAST_WAKEUP_IO3,	"IO3"},
-	{MCA_CCMP1_LAST_WAKEUP_IO4,	"IO4"},
-	{MCA_CCMP1_LAST_WAKEUP_IO5,	"IO5"},
-	{MCA_CCMP1_LAST_WAKEUP_IO6,	"IO6"},
-	{MCA_CCMP1_LAST_WAKEUP_IO7,	"IO7"},
-	{MCA_CCMP1_LAST_WAKEUP_VCC,	"Vcc"},
-	{MCA_CCMP1_LAST_WAKEUP_CPU,	"CPU"},
+	{MCA_LAST_WAKEUP_PWRIO,	"Power IO"},
+	{MCA_LAST_WAKEUP_TIMER,	"Timer"},
+	{MCA_LAST_WAKEUP_RTC,	"RTC"},
+	{MCA_LAST_WAKEUP_LPUART,	"LP UART"},
+	{MCA_LAST_WAKEUP_TAMPER0,	"Tamper0"},
+	{MCA_LAST_WAKEUP_TAMPER1,	"Tamper1"},
+	{MCA_LAST_WAKEUP_TAMPER2,	"Tamper2"},
+	{MCA_LAST_WAKEUP_TAMPER3,	"Tamper3"},
+	{MCA_LAST_WAKEUP_IO0,	"IO0"},
+	{MCA_LAST_WAKEUP_IO1,	"IO1"},
+	{MCA_LAST_WAKEUP_IO2,	"IO2"},
+	{MCA_LAST_WAKEUP_IO3,	"IO3"},
+	{MCA_LAST_WAKEUP_IO4,	"IO4"},
+	{MCA_LAST_WAKEUP_IO5,	"IO5"},
+	{MCA_LAST_WAKEUP_IO6,	"IO6"},
+	{MCA_LAST_WAKEUP_IO7,	"IO7"},
+	{MCA_LAST_WAKEUP_VCC,	"Vcc"},
+	{MCA_LAST_WAKEUP_CPU,	"CPU"},
+	/* Values exclusive to the CC8 family */
+	{MCA_CC8_LAST_WAKEUP_IO8,	"IO8"},
+	{MCA_CC8_LAST_WAKEUP_IO9,	"IO9"},
+	{MCA_CC8_LAST_WAKEUP_IO10,	"IO10"},
+	{MCA_CC8_LAST_WAKEUP_IO11,	"IO11"},
+	{MCA_CC8_LAST_WAKEUP_IO12,	"IO12"},
+	{MCA_CC8_LAST_WAKEUP_IO13,	"IO13"},
+	{MCA_CC8_LAST_WAKEUP_IO14,	"IO14"},
+	{MCA_CC8_LAST_WAKEUP_IO15,	"IO15"},
+	{MCA_CC8_LAST_WAKEUP_IO16,	"IO16"},
+	{MCA_CC8_LAST_WAKEUP_IO17,	"IO17"},
+	{MCA_CC8_LAST_WAKEUP_IO18,	"IO18"},
+	{MCA_CC8_LAST_WAKEUP_IO19,	"IO19"},
+	{MCA_CC8_LAST_WAKEUP_IO20,	"IO20"},
+	{MCA_CC8_LAST_WAKEUP_IO21,	"IO21"},
 };
+
+/* Keep track of the number of wakeup reasons used by the CC6UL */
+#define MCA_NUM_CC6UL_WAKEUP_REASONS		18
 
 static struct mca_drv *pmca;
 
 static const char _enabled[] = "enabled";
 static const char _disabled[] = "disabled";
+static const char _unlock_pattern[] = "CTRU";
 
-static struct resource mca_ccmp1_rtc_resources[] = {
+static struct resource mca_rtc_resources[] = {
 	{
 		.name   = MCA_IRQ_RTC_ALARM_NAME,
-		.start  = MCA_CCMP1_IRQ_RTC_ALARM,
-		.end    = MCA_CCMP1_IRQ_RTC_ALARM,
+		.start  = MCA_IRQ_RTC_ALARM,
+		.end    = MCA_IRQ_RTC_ALARM,
 		.flags  = IORESOURCE_IRQ,
 	},
 	{
 		.name   = MCA_IRQ_RTC_1HZ_NAME,
-		.start  = MCA_CCMP1_IRQ_RTC_1HZ,
-		.end    = MCA_CCMP1_IRQ_RTC_1HZ,
+		.start  = MCA_IRQ_RTC_1HZ,
+		.end    = MCA_IRQ_RTC_1HZ,
 		.flags  = IORESOURCE_IRQ,
 	},
 	{
 		.name   = MCA_IRQ_RTC_PERIODIC_IRQ_NAME,
-		.start  = MCA_CCMP1_IRQ_RTC_PERIODIC_IRQ,
-		.end    = MCA_CCMP1_IRQ_RTC_PERIODIC_IRQ,
+		.start  = MCA_IRQ_RTC_PERIODIC_IRQ,
+		.end    = MCA_IRQ_RTC_PERIODIC_IRQ,
 		.flags  = IORESOURCE_IRQ,
 	},
 };
 
-static struct resource mca_ccmp1_watchdog_resources[] = {
+static struct resource mca_watchdog_resources[] = {
 	{
 		.name   = MCA_IRQ_WATCHDOG_NAME,
-		.start  = MCA_CCMP1_IRQ_WATCHDOG,
-		.end    = MCA_CCMP1_IRQ_WATCHDOG,
+		.start  = MCA_IRQ_WATCHDOG,
+		.end    = MCA_IRQ_WATCHDOG,
 		.flags  = IORESOURCE_IRQ,
 	},
 };
 
-static struct resource mca_ccmp1_pwrkey_resources[] = {
+static struct resource mca_pwrkey_resources[] = {
 	{
 		.name   = MCA_IRQ_PWR_SLEEP_NAME,
-		.start  = MCA_CCMP1_IRQ_PWR_SLEEP,
-		.end    = MCA_CCMP1_IRQ_PWR_SLEEP,
+		.start  = MCA_IRQ_PWR_SLEEP,
+		.end    = MCA_IRQ_PWR_SLEEP,
 		.flags  = IORESOURCE_IRQ,
 	},
 	{
 		.name   = MCA_IRQ_PWR_OFF_NAME,
-		.start  = MCA_CCMP1_IRQ_PWR_OFF,
-		.end    = MCA_CCMP1_IRQ_PWR_OFF,
+		.start  = MCA_IRQ_PWR_OFF,
+		.end    = MCA_IRQ_PWR_OFF,
 		.flags  = IORESOURCE_IRQ,
 	},
 };
 
-static struct resource mca_ccmp1_adc_resources[] = {
+static struct resource mca_adc_resources[] = {
 	{
 		.name   = MCA_IRQ_ADC_NAME,
-		.start  = MCA_CCMP1_IRQ_ADC,
-		.end    = MCA_CCMP1_IRQ_ADC,
+		.start  = MCA_IRQ_ADC,
+		.end    = MCA_IRQ_ADC,
 		.flags  = IORESOURCE_IRQ,
 	},
 };
 
-static struct resource mca_ccmp1_tamper_resources[] = {
+static struct resource mca_tamper_resources[] = {
 	{
 		.name   = MCA_IRQ_TAMPER0_NAME,
-		.start  = MCA_CCMP1_IRQ_TAMPER0,
-		.end    = MCA_CCMP1_IRQ_TAMPER0,
+		.start  = MCA_IRQ_TAMPER0,
+		.end    = MCA_IRQ_TAMPER0,
 		.flags  = IORESOURCE_IRQ,
 	},
 	{
 		.name   = MCA_IRQ_TAMPER1_NAME,
-		.start  = MCA_CCMP1_IRQ_TAMPER1,
-		.end    = MCA_CCMP1_IRQ_TAMPER1,
+		.start  = MCA_IRQ_TAMPER1,
+		.end    = MCA_IRQ_TAMPER1,
 		.flags  = IORESOURCE_IRQ,
 	},
 	{
 		.name   = MCA_IRQ_TAMPER2_NAME,
-		.start  = MCA_CCMP1_IRQ_TAMPER2,
-		.end    = MCA_CCMP1_IRQ_TAMPER2,
+		.start  = MCA_IRQ_TAMPER2,
+		.end    = MCA_IRQ_TAMPER2,
 		.flags  = IORESOURCE_IRQ,
 	},
 	{
 		.name   = MCA_IRQ_TAMPER3_NAME,
-		.start  = MCA_CCMP1_IRQ_TAMPER3,
-		.end    = MCA_CCMP1_IRQ_TAMPER3,
+		.start  = MCA_IRQ_TAMPER3,
+		.end    = MCA_IRQ_TAMPER3,
 		.flags  = IORESOURCE_IRQ,
 	},
 };
 
-static struct resource mca_ccmp1_gpios_resources[] = {
+static struct resource mca_gpios_resources[] = {
 	{
 		.name   = MCA_IRQ_GPIO_BANK_0_NAME,
-		.start  = MCA_CCMP1_IRQ_GPIO_BANK_0,
-		.end    = MCA_CCMP1_IRQ_GPIO_BANK_0,
+		.start  = MCA_IRQ_GPIO_BANK_0,
+		.end    = MCA_IRQ_GPIO_BANK_0,
+		.flags  = IORESOURCE_IRQ,
+	},
+	/* GPIO banks 1 and 2 are exclusive to the CC8 family */
+	{
+		.name   = MCA_IRQ_GPIO_BANK_1_NAME,
+		.start  = MCA_CC8_IRQ_GPIO_BANK_1,
+		.end    = MCA_CC8_IRQ_GPIO_BANK_1,
+		.flags  = IORESOURCE_IRQ,
+	},
+	{
+		.name   = MCA_IRQ_GPIO_BANK_2_NAME,
+		.start  = MCA_CC8_IRQ_GPIO_BANK_2,
+		.end    = MCA_CC8_IRQ_GPIO_BANK_2,
 		.flags  = IORESOURCE_IRQ,
 	},
 };
 
-static struct resource mca_ccmp1_uart_resources[] = {
+static struct resource mca_uart_resources[] = {
 	{
 		.name   = MCA_IRQ_UART0_NAME,
-		.start  = MCA_CCMP1_IRQ_UART0,
-		.end    = MCA_CCMP1_IRQ_UART0,
+		.start  = MCA_IRQ_UART0,
+		.end    = MCA_IRQ_UART0,
+		.flags  = IORESOURCE_IRQ,
+	},
+	/* UART1 and UART2 are exclusive to the CC8 family */
+	{
+		.name   = MCA_IRQ_UART1_NAME,
+		.start  = MCA_CC8_IRQ_UART1,
+		.end    = MCA_CC8_IRQ_UART1,
+		.flags  = IORESOURCE_IRQ,
+	},
+	{
+		.name   = MCA_IRQ_UART2_NAME,
+		.start  = MCA_CC8_IRQ_UART2,
+		.end    = MCA_CC8_IRQ_UART2,
 		.flags  = IORESOURCE_IRQ,
 	},
 };
 
-static const struct mfd_cell mca_ccmp1_devs[] = {
+
+static struct resource mca_cc8_keypad_resources[] = {
 	{
-		.name           = MCA_CCMP1_DRVNAME_RTC,
-		.num_resources  = ARRAY_SIZE(mca_ccmp1_rtc_resources),
-		.resources      = mca_ccmp1_rtc_resources,
-		.of_compatible  = "digi,mca-ccmp1-rtc",
+		.name   = MCA_IRQ_KEYPAD_NAME,
+		.start  = MCA_CC8_IRQ_KEYPAD,
+		.end    = MCA_CC8_IRQ_KEYPAD,
+		.flags  = IORESOURCE_IRQ,
+	},
+};
+
+static const struct mfd_cell mca_cc6ul_devs[] = {
+	{
+		.name           = MCA_DRVNAME_RTC,
+		.num_resources  = ARRAY_SIZE(mca_rtc_resources),
+		.resources      = mca_rtc_resources,
+		.of_compatible  = "digi,mca-rtc",
 	},
 	{
-		.name           = MCA_CCMP1_DRVNAME_WATCHDOG,
-		.num_resources	= ARRAY_SIZE(mca_ccmp1_watchdog_resources),
-		.resources	= mca_ccmp1_watchdog_resources,
-		.of_compatible  = "digi,mca-ccmp1-wdt",
+		.name           = MCA_DRVNAME_WATCHDOG,
+		.num_resources	= ARRAY_SIZE(mca_watchdog_resources),
+		.resources	= mca_watchdog_resources,
+		.of_compatible  = "digi,mca-wdt",
 	},
 	{
-		.name           = MCA_CCMP1_DRVNAME_GPIO,
-		.num_resources	= ARRAY_SIZE(mca_ccmp1_gpios_resources),
-		.resources	= mca_ccmp1_gpios_resources,
-		.of_compatible = "digi,mca-ccmp1-gpio",
+		.name           = MCA_DRVNAME_GPIO,
+		/* Use CC6UL subset of GPIOs */
+		.num_resources	= ARRAY_SIZE(mca_gpios_resources) - 2,
+		.resources	= mca_gpios_resources,
+		.of_compatible = "digi,mca-gpio",
 	},
 	{
-		.name           = MCA_CCMP1_DRVNAME_PWRKEY,
-		.num_resources  = ARRAY_SIZE(mca_ccmp1_pwrkey_resources),
-		.resources      = mca_ccmp1_pwrkey_resources,
-		.of_compatible = "digi,mca-ccmp1-pwrkey",
+		.name           = MCA_DRVNAME_PWRKEY,
+		.num_resources  = ARRAY_SIZE(mca_pwrkey_resources),
+		.resources      = mca_pwrkey_resources,
+		.of_compatible = "digi,mca-pwrkey",
 	},
 	{
-		.name           = MCA_CCMP1_DRVNAME_ADC,
-		.of_compatible = "digi,mca-ccmp1-adc",
-		.num_resources  = ARRAY_SIZE(mca_ccmp1_adc_resources),
-		.resources      = mca_ccmp1_adc_resources,
+		.name           = MCA_DRVNAME_ADC,
+		.of_compatible = "digi,mca-adc",
+		.num_resources  = ARRAY_SIZE(mca_adc_resources),
+		.resources      = mca_adc_resources,
 	},
 	{
-		.name           = MCA_CCMP1_DRVNAME_TAMPER,
-		.num_resources  = ARRAY_SIZE(mca_ccmp1_tamper_resources),
-		.resources      = mca_ccmp1_tamper_resources,
-		.of_compatible = "digi,mca-ccmp1-tamper",
+		.name           = MCA_DRVNAME_TAMPER,
+		.num_resources  = ARRAY_SIZE(mca_tamper_resources),
+		.resources      = mca_tamper_resources,
+		.of_compatible = "digi,mca-tamper",
 	},
 	{
-		.name           = MCA_CCMP1_DRVNAME_UART,
-		.num_resources  = ARRAY_SIZE(mca_ccmp1_uart_resources),
-		.resources      = mca_ccmp1_uart_resources,
-		.of_compatible = "digi,mca-ccmp1-uart",
+		.name           = MCA_DRVNAME_UART,
+		/* Use CC6UL subset of UARTs */
+		.num_resources  = ARRAY_SIZE(mca_uart_resources) - 2,
+		.resources      = mca_uart_resources,
+		.of_compatible = "digi,mca-uart",
+	},
+};
+
+static const struct mfd_cell mca_cc8_devs[] = {
+	{
+		.name           = MCA_DRVNAME_RTC,
+		.num_resources  = ARRAY_SIZE(mca_rtc_resources),
+		.resources      = mca_rtc_resources,
+		.of_compatible  = "digi,mca-rtc",
+	},
+	{
+		.name           = MCA_DRVNAME_WATCHDOG,
+		.num_resources	= ARRAY_SIZE(mca_watchdog_resources),
+		.resources	= mca_watchdog_resources,
+		.of_compatible  = "digi,mca-wdt",
+	},
+	{
+		.name           = MCA_CC8_DRVNAME_GPIO_WATCHDOG,
+		.num_resources	= ARRAY_SIZE(mca_watchdog_resources),
+		.resources	= mca_watchdog_resources,
+		.of_compatible  = "digi,mca-gpio-wdt",
+	},
+	{
+		.name           = MCA_DRVNAME_GPIO,
+		.num_resources	= ARRAY_SIZE(mca_gpios_resources),
+		.resources	= mca_gpios_resources,
+		.of_compatible = "digi,mca-gpio",
+	},
+	{
+		.name           = MCA_DRVNAME_PWRKEY,
+		.num_resources  = ARRAY_SIZE(mca_pwrkey_resources),
+		.resources      = mca_pwrkey_resources,
+		.of_compatible = "digi,mca-pwrkey",
+	},
+	{
+		.name           = MCA_DRVNAME_ADC,
+		.of_compatible = "digi,mca-adc",
+		.num_resources  = ARRAY_SIZE(mca_adc_resources),
+		.resources      = mca_adc_resources,
+	},
+	{
+		.name           = MCA_DRVNAME_TAMPER,
+		.num_resources  = ARRAY_SIZE(mca_tamper_resources),
+		.resources      = mca_tamper_resources,
+		.of_compatible = "digi,mca-tamper",
+	},
+	{
+		.name           = MCA_DRVNAME_UART,
+		.num_resources  = ARRAY_SIZE(mca_uart_resources),
+		.resources      = mca_uart_resources,
+		.of_compatible = "digi,mca-uart",
+	},
+	{
+		.name           = MCA_CC8_DRVNAME_PWM,
+		.of_compatible	= "digi,mca-pwm",
+	},
+	{
+		.name           = MCA_CC8_DRVNAME_KEYPAD,
+		.of_compatible	= "digi,mca-keypad",
+		.num_resources  = ARRAY_SIZE(mca_cc8_keypad_resources),
+		.resources      = mca_cc8_keypad_resources,
+	},
+	{
+		.name           = MCA_CC8_DRVNAME_LED,
+		.of_compatible	= "digi,mca-led",
 	},
 };
 
 /* Read a block of registers */
-int mca_ccmp1_read_block(struct mca_drv *mca, u16 addr, u8 *data,
+int mca_read_block(struct mca_drv *mca, u16 addr, u8 *data,
 			 size_t nregs)
 {
 	int ret;
@@ -249,10 +380,10 @@ int mca_ccmp1_read_block(struct mca_drv *mca, u16 addr, u8 *data,
 	return ret;
 
 }
-EXPORT_SYMBOL_GPL(mca_ccmp1_read_block);
+EXPORT_SYMBOL_GPL(mca_read_block);
 
 /* Write a block of data into MCA registers */
-int mca_ccmp1_write_block(struct mca_drv *mca , u16 addr, u8 *data,
+int mca_write_block(struct mca_drv *mca , u16 addr, u8 *data,
 			  size_t nregs)
 {
 	u8 *frame;	/* register address + payload */
@@ -274,9 +405,9 @@ int mca_ccmp1_write_block(struct mca_drv *mca , u16 addr, u8 *data,
 	kfree(frame);
 	return ret;
 }
-EXPORT_SYMBOL_GPL(mca_ccmp1_write_block);
+EXPORT_SYMBOL_GPL(mca_write_block);
 
-static int mca_ccmp1_unlock_ctrl(struct mca_drv *mca)
+static int mca_unlock_ctrl(struct mca_drv *mca)
 {
 	int ret;
 	const uint8_t unlock_pattern[] = {'C', 'T', 'R', 'U'};
@@ -290,7 +421,7 @@ static int mca_ccmp1_unlock_ctrl(struct mca_drv *mca)
 	return ret;
 }
 
-static int mca_ccmp1_get_tick_cnt(struct mca_drv *mca, u32 *tick)
+static int mca_get_tick_cnt(struct mca_drv *mca, u32 *tick)
 {
 	return regmap_bulk_read(mca->regmap, MCA_TIMER_TICK_0,
 				tick, sizeof(*tick));
@@ -329,7 +460,7 @@ static ssize_t ext_32khz_store(struct device *dev, struct device_attribute *attr
 	else
 		return -EINVAL;
 
-	ret = mca_ccmp1_unlock_ctrl(mca);
+	ret = mca_unlock_ctrl(mca);
 	if (ret)
 		return ret;
 
@@ -377,7 +508,7 @@ static ssize_t vref_store(struct device *dev, struct device_attribute *attr,
 	else
 		return -EINVAL;
 
-	ret = mca_ccmp1_unlock_ctrl(mca);
+	ret = mca_unlock_ctrl(mca);
 	if (ret)
 		return ret;
 
@@ -420,7 +551,7 @@ static ssize_t tick_cnt_show(struct device *dev, struct device_attribute *attr,
 	u32 tick_cnt;
 	int ret;
 
-	ret = mca_ccmp1_get_tick_cnt(mca, &tick_cnt);
+	ret = mca_get_tick_cnt(mca, &tick_cnt);
 	if (ret) {
 		dev_err(mca->dev, "Cannot read MCA tick counter(%d)\n", ret);
 		return ret;
@@ -442,6 +573,22 @@ static ssize_t fw_update_show(struct device *dev, struct device_attribute *attr,
 		       gpio_get_value_cansleep(mca->fw_update_gpio));
 }
 
+static struct imxi2c_platform_data i2c_data_mca = { 0 };
+
+static void set_i2c_speed(struct mca_drv *mca, u32 bitrate)
+{
+	struct i2c_adapter *i2c_adapter = (struct i2c_adapter *)
+					  dev_get_drvdata(mca->i2c_adapter_dev);
+	struct imxi2c_platform_data *i2c_data = dev_get_platdata(&i2c_adapter->dev);
+
+	if (i2c_data == NULL) {
+		i2c_data_mca.bitrate = bitrate;
+		i2c_adapter->dev.platform_data = &i2c_data_mca;
+	} else {
+		i2c_data->bitrate = bitrate;
+	}
+}
+
 static ssize_t fw_update_store(struct device *dev,
 			       struct device_attribute *attr,
 			       const char *buf, size_t count)
@@ -452,6 +599,9 @@ static ssize_t fw_update_store(struct device *dev,
 
 	if (!gpio_is_valid(mca->fw_update_gpio))
 		return -EINVAL;
+
+	/* set i2c bus speed to 100kbps during firmware update */
+	set_i2c_speed(mca, 100000);
 
 	status = kstrtol(buf, 0, &value);
 	if (status == 0) {
@@ -468,9 +618,15 @@ static ssize_t last_wakeup_reason_show(struct device *dev,
 				       char *buf)
 {
 	struct mca_drv *mca = dev_get_drvdata(dev);
+	/* Use CC6UL subset of wakeup reasons by default */
+	int n_reasons = MCA_NUM_CC6UL_WAKEUP_REASONS;
 	bool comma = false;
 	u32 last_wakeup_val;
 	int ret, i;
+
+	/* Use full reason array if a CC8 module is detected */
+	if (mca->dev_id == MCA_KL17_DEVICE_ID)
+		n_reasons = ARRAY_SIZE(last_wakeup);
 
 	ret = regmap_bulk_read(mca->regmap, MCA_LAST_WAKEUP_REASON_0,
 			       &last_wakeup_val, sizeof(last_wakeup_val));
@@ -483,7 +639,7 @@ static ssize_t last_wakeup_reason_show(struct device *dev,
 
 	buf[0] = 0;
 
-	for (i = 0; i < ARRAY_SIZE(last_wakeup); i++) {
+	for (i = 0; i < n_reasons; i++) {
 		if (last_wakeup[i].flag & last_wakeup_val) {
 			if (comma)
 				strcat(buf, ", ");
@@ -560,13 +716,13 @@ static ssize_t nvram_read(struct file *filp, struct kobject *kobj,
 	if (!dev || (mca = dev_get_drvdata(dev)) == NULL)
 		return -ENODEV;
 
-	if (unlikely(off >= MCA_CCMP1_NVRAM_SIZE) || unlikely(!count))
+	if (unlikely(off >= MCA_NVRAM_SIZE) || unlikely(!count))
 		return 0;
-	if ((off + count) > MCA_CCMP1_NVRAM_SIZE)
-		count = MCA_CCMP1_NVRAM_SIZE - off;
+	if ((off + count) > MCA_NVRAM_SIZE)
+		count = MCA_NVRAM_SIZE - off;
 
 	ret = regmap_bulk_read(mca->regmap,
-			       MCA_CCMP1_MPU_NVRAM_START + off, buf, count);
+			       MCA_MPU_NVRAM_START + off, buf, count);
 	if (ret) {
 		dev_err(mca->dev, "%s error (%d)\n", __func__, ret);
 		return ret;
@@ -586,15 +742,15 @@ static ssize_t nvram_write(struct file *filp, struct kobject *kobj,
 	if (!dev || (mca = dev_get_drvdata(dev)) == NULL)
 		return -ENODEV;
 
-	if (unlikely(off >= MCA_CCMP1_NVRAM_SIZE))
+	if (unlikely(off >= MCA_NVRAM_SIZE))
 		return -EFBIG;
-	if ((off + count) > MCA_CCMP1_NVRAM_SIZE)
-		count = MCA_CCMP1_NVRAM_SIZE - off;
+	if ((off + count) > MCA_NVRAM_SIZE)
+		count = MCA_NVRAM_SIZE - off;
 	if (unlikely(!count))
 		return count;
 
 	ret = regmap_bulk_write(mca->regmap,
-				MCA_CCMP1_MPU_NVRAM_START + off, buf, count);
+				MCA_MPU_NVRAM_START + off, buf, count);
 	if (ret) {
 		dev_err(mca->dev, "%s error (%d)\n", __func__, ret);
 		return ret;
@@ -622,7 +778,99 @@ static ssize_t uid_show(struct device *dev,
 }
 static DEVICE_ATTR(uid, S_IRUGO, uid_show, NULL);
 
-static struct attribute *mca_ccmp1_sysfs_entries[] = {
+static ssize_t reboot_safe_store(struct device *dev,
+				 struct device_attribute *attr,
+				 const char *buf, size_t count)
+{
+	struct mca_drv *mca = dev_get_drvdata(dev);
+	u8 value;
+	int ret;
+
+	if (count < sizeof(_unlock_pattern))
+		return -ENODATA ;
+
+	if (strncmp(buf, _unlock_pattern, sizeof(_unlock_pattern) - 1))
+		return -EINVAL;
+
+	/* Timeout value must be provided */
+	ret = kstrtou8(&buf[4], 0, &value);
+	if (ret) {
+		dev_err(pmca->dev,
+			"failed to parse timeout value, range is 0-255 (%d)\n",
+			ret);
+		return ret;
+	}
+
+	ret = mca_unlock_ctrl(mca);
+	if (ret)
+		return ret;
+
+	ret = regmap_write(pmca->regmap, MCA_RESET_SAFE_TIMEOUT, value);
+	if (ret) {
+		dev_err(pmca->dev,
+			"failed to write MCA_RESET_SAFE_TIMEOUT (%d)\n",
+			ret);
+		return ret;
+	}
+
+	ret = regmap_write(pmca->regmap, MCA_CTRL_0, MCA_RESET_SAFE);
+	if (ret) {
+		dev_err(mca->dev, "Cannot update MCA CTRL_0 register (%d)\n",
+			ret);
+		return ret;
+	}
+
+	return count;
+}
+static DEVICE_ATTR(reboot_safe, 0200, NULL, reboot_safe_store);
+
+static ssize_t pwroff_safe_store(struct device *dev,
+				 struct device_attribute *attr,
+				 const char *buf, size_t count)
+{
+	struct mca_drv *mca = dev_get_drvdata(dev);
+	u8 value;
+	int ret;
+
+	/* Timeout value must be provided */
+	if (count < sizeof(_unlock_pattern))
+		return -ENODATA ;
+
+	if (strncmp(buf, _unlock_pattern, sizeof(_unlock_pattern) - 1))
+		return -EINVAL;
+
+	ret = kstrtou8(&buf[4], 0, &value);
+	if (ret) {
+		dev_err(pmca->dev,
+			"failed to parse timeout value, range is 0-255 (%d)\n",
+			ret);
+		return ret;
+	}
+
+	ret = mca_unlock_ctrl(mca);
+	if (ret)
+		return ret;
+
+	ret = regmap_write(pmca->regmap, MCA_PWROFF_SAFE_TIMEOUT, value);
+	if (ret) {
+		dev_err(pmca->dev,
+			"failed to write MCA_PWROFF_SAFE_TTIMEOUT (%d)\n",
+			ret);
+		return ret;
+	}
+
+	ret = regmap_write(pmca->regmap, MCA_CTRL_0, MCA_PWROFF_SAFE);
+	if (ret) {
+		dev_err(mca->dev, "Cannot update MCA CTRL_0 register (%d)\n",
+			ret);
+		return ret;
+	}
+
+	return count;
+}
+static DEVICE_ATTR(pwroff_safe, 0200, NULL, pwroff_safe_store);
+
+static struct attribute *mca_sysfs_entries[] = {
 	&dev_attr_ext_32khz.attr,
 	&dev_attr_hw_version.attr,
 	&dev_attr_fw_version.attr,
@@ -631,35 +879,50 @@ static struct attribute *mca_ccmp1_sysfs_entries[] = {
 	NULL,
 };
 
-static struct attribute_group mca_ccmp1_attr_group = {
+static struct attribute_group mca_attr_group = {
 	.name	= NULL,			/* put in device directory */
-	.attrs	= mca_ccmp1_sysfs_entries,
+	.attrs	= mca_sysfs_entries,
 };
 
-static struct dyn_attribute mca_ccmp1_sysfs_dyn_entries[] = {
+static struct dyn_attribute mca_sysfs_dyn_entries[] = {
 	{
-		.since =	MCA_MAKE_FW_VER(0,15),
+		.since_kl03 =	TICK_COUNT_KL03_FW_VER,
+		.since_kl17 =	TICK_COUNT_KL17_FW_VER,
 		.attr =		&dev_attr_tick_cnt.attr,
 	},
 	{
-		.since =	MCA_MAKE_FW_VER(0,15),
+		.since_kl03 =	VREF_KL03_FW_VER,
+		.since_kl17 =	VREF_KL17_FW_VER,
 		.attr =		&dev_attr_vref.attr,
 	},
 	{
-		.since =	MCA_MAKE_FW_VER(1,2),
+		.since_kl03 =	LAST_WAKEUP_KL03_FW_VER,
+		.since_kl17 =	LAST_WAKEUP_KL17_FW_VER,
 		.attr =		&dev_attr_last_wakeup_reason.attr,
 	},
 	{
-		.since =	MCA_MAKE_FW_VER(1,2),
+		.since_kl03 =	LAST_WAKEUP_KL03_FW_VER,
+		.since_kl17 =	LAST_WAKEUP_KL17_FW_VER,
 		.attr =		&dev_attr_last_mca_reset.attr,
 	},
 	{
-		.since =	MCA_MAKE_FW_VER(1,2),
+		.since_kl03 =	LAST_WAKEUP_KL03_FW_VER,
+		.since_kl17 =	LAST_WAKEUP_KL17_FW_VER,
 		.attr =		&dev_attr_last_mpu_reset.attr,
+	},
+	{
+		.since_kl03 =	REBOOT_SAFE_KL03_FW_VER,
+		.since_kl17 =	REBOOT_SAFE_KL17_FW_VER,
+		.attr =		&dev_attr_reboot_safe.attr,
+	},
+	{
+		.since_kl03 =	REBOOT_SAFE_KL03_FW_VER,
+		.since_kl17 =	REBOOT_SAFE_KL17_FW_VER,
+		.attr =		&dev_attr_pwroff_safe.attr,
 	},
 };
 
-int mca_ccmp1_suspend(struct device *dev)
+int mca_suspend(struct device *dev)
 {
 	struct mca_drv *mca = dev_get_drvdata(dev);
 
@@ -668,6 +931,8 @@ int mca_ccmp1_suspend(struct device *dev)
 		return -ENODEV;
 	}
 
+	mca->suspended = true;
+
 	/* Set the suspend bit in PWR_CTRL_0 */
 	return regmap_update_bits(pmca->regmap, MCA_PWR_CTRL_0,
 				  MCA_PWR_GO_SUSPEND,
@@ -675,7 +940,7 @@ int mca_ccmp1_suspend(struct device *dev)
 }
 
 #define MCA_MAX_RESUME_RD_RETRIES 10
-int mca_ccmp1_resume(struct device *dev)
+int mca_resume(struct device *dev)
 {
 	struct mca_drv *mca = dev_get_drvdata(dev);
 	unsigned int val;
@@ -685,6 +950,8 @@ int mca_ccmp1_resume(struct device *dev)
 		dev_err(dev, " mca was null in %s\n", __func__);
 		return -ENODEV;
 	}
+
+	mca->suspended = false;
 
 	/*
 	 * Generate traffic on the i2c bus to wakeup the MCA, in case it was in
@@ -709,7 +976,7 @@ int mca_ccmp1_resume(struct device *dev)
 }
 
 #define MCA_MAX_PWROFF_TRIES 5
-static void mca_ccmp1_power_off(void)
+static void mca_power_off(void)
 {
 	int try = 0;
 	int ret;
@@ -750,7 +1017,7 @@ static void mca_ccmp1_power_off(void)
 }
 
 #define MCA_MAX_RESET_TRIES 5
-static void mca_ccmp1_reset(void)
+static void mca_reset(void)
 {
 	const uint8_t unlock_pattern[] = {'C', 'T', 'R', 'U'};
 	int ret, try = 0;
@@ -786,23 +1053,23 @@ reset_retry:
 	dev_err(pmca->dev, "failed to reboot!\n");
 }
 
-static void mca_ccmp1_shutdown(void)
+static void mca_shutdown(void)
 {
 	switch (system_state) {
 	case SYSTEM_HALT:
 		/* fall through on purpose */
 	case SYSTEM_POWER_OFF:
-		mca_ccmp1_power_off();
+		mca_power_off();
 		break;
 	case SYSTEM_RESTART:
-		mca_ccmp1_reset();
+		mca_reset();
 		break;
 	default:
 		break;
 	}
 }
 
-static int mca_ccmp1_add_dyn_sysfs_entries(struct mca_drv *mca,
+static int mca_add_dyn_sysfs_entries(struct mca_drv *mca,
 					   const struct dyn_attribute *dattr,
 					   int num_entries,
 					   const struct attribute_group *grp)
@@ -816,8 +1083,9 @@ static int mca_ccmp1_add_dyn_sysfs_entries(struct mca_drv *mca,
 		if (!dattr->attr)
 			continue;
 
-		/* Create the sysfs files if the MCA fw supports the feature*/
-		if (mca->fw_version >= dattr->since) {
+		/* Create the sysfs files if the MCA fw supports the feature */
+		if (MCA_FEATURE_IS_SUPPORTED(mca, dattr->since_kl03,
+		                             dattr->since_kl17)) {
 			ret = sysfs_add_file_to_group(&mca->dev->kobj,
 						      dattr->attr,
 						      grp->name);
@@ -831,8 +1099,10 @@ static int mca_ccmp1_add_dyn_sysfs_entries(struct mca_drv *mca,
 	return 0;
 }
 
-int mca_ccmp1_device_init(struct mca_drv *mca, u32 irq)
+int mca_device_init(struct mca_drv *mca, u32 irq)
 {
+	const struct mfd_cell *mca_devs = mca_cc6ul_devs;
+	int n_devs = ARRAY_SIZE(mca_cc6ul_devs);
 	int ret;
 	unsigned int val;
 
@@ -843,8 +1113,20 @@ int mca_ccmp1_device_init(struct mca_drv *mca, u32 irq)
 	}
 	mca->dev_id = (u8)val;
 
-	if (mca->dev_id != MCA_CCMP1_DEVICE_ID_VAL) {
+	if (mca->dev_id != MCA_KL03_DEVICE_ID &&
+	    mca->dev_id != MCA_KL17_DEVICE_ID) {
 		dev_err(mca->dev, "Invalid MCA Device ID (%x)\n", mca->dev_id);
+		return -ENODEV;
+	}
+
+	/* Check for mismatches between MCA model and SOM */
+	if ((mca->dev_id == MCA_KL03_DEVICE_ID &&
+	    !of_machine_is_compatible("digi,ccimx6ul")) ||
+	    (mca->dev_id == MCA_KL17_DEVICE_ID &&
+	    !of_machine_is_compatible("digi,ccimx8")))
+	{
+		dev_err(mca->dev, "MCA Device ID (%x) doesn't match the SOM\n",
+			mca->dev_id);
 		return -ENODEV;
 	}
 
@@ -872,7 +1154,14 @@ int mca_ccmp1_device_init(struct mca_drv *mca, u32 irq)
 	mca->fw_version = (u16)(val & ~MCA_FW_VER_ALPHA_MASK);
 	mca->fw_is_alpha = val & MCA_FW_VER_ALPHA_MASK ? true : false;
 
-	if (mca->fw_version >= MCA_MAKE_FW_VER(1, 2)) {
+	/* Operate at 100KHz for CC6UL MCA versions older than 1.19 */
+	if (mca->dev_id == MCA_KL03_DEVICE_ID &&
+	    mca->fw_version < MCA_MAKE_FW_VER(1, 19)) {
+		set_i2c_speed(mca, 100000);
+	}
+
+	if (MCA_FEATURE_IS_SUPPORTED(mca, LAST_WAKEUP_KL03_FW_VER,
+	                             LAST_WAKEUP_KL17_FW_VER)) {
 		ret = regmap_bulk_read(mca->regmap, MCA_LAST_MCA_RESET_0,
 				       &mca->last_mca_reset,
 				       sizeof(mca->last_mca_reset));
@@ -892,36 +1181,58 @@ int mca_ccmp1_device_init(struct mca_drv *mca, u32 irq)
 		}
 	}
 
-	/* Write the SOM hardware version to MCA register */
-	mca->som_hv = digi_get_som_hv();
-	if (mca->som_hv > 0) {
-		ret = regmap_write(mca->regmap, MCA_HWVER_SOM,
-				   mca->som_hv);
+	/* CC6UL handles SOM version and fw update gpio differently */
+	if (mca->dev_id == MCA_KL03_DEVICE_ID) {
+		/* Write the SOM hardware version to MCA register */
+		mca->som_hv = digi_get_som_hv();
+		if (mca->som_hv > 0) {
+			ret = regmap_write(mca->regmap, MCA_HWVER_SOM,
+					   mca->som_hv);
+			if (ret != 0)
+				dev_warn(mca->dev,
+					 "Cannot set SOM hardware version (%d)\n", ret);
+		}
+
+		mca->fw_update_gpio = of_get_named_gpio(mca->dev->of_node,
+						"fw-update-gpio", 0);
+		if (of_machine_is_compatible("digi,ccimx6ul") &&
+		    gpio_is_valid(mca->fw_update_gpio) && mca->som_hv >= 4) {
+			/*
+			 * On the CC6UL HV >= 4 this GPIO must be driven low
+			 * so that the CPU resets together with the reset button.
+			 */
+			if (devm_gpio_request_one(mca->dev, mca->fw_update_gpio,
+						  GPIOF_OUT_INIT_LOW, "mca-fw-update"))
+				dev_warn(mca->dev, "failed to get fw-update-gpio: %d\n",
+					 ret);
+		} else {
+			/* Invalidate GPIO */
+			mca->fw_update_gpio = -EINVAL;
+		}
+	} else {
+		/*
+		 * Read the SOM hardware version the MCA is using. For CC8X module it
+		 * is set by uboot
+		 */
+		ret = regmap_read(mca->regmap, MCA_HWVER_SOM, &mca->som_hv);
 		if (ret != 0)
 			dev_warn(mca->dev,
-				 "Cannot set SOM hardware version (%d)\n", ret);
-	}
+				 "Cannot read SOM hardware version (%d)\n", ret);
 
-	mca->fw_update_gpio = of_get_named_gpio(mca->dev->of_node,
-						"fw-update-gpio", 0);
-	if (gpio_is_valid(mca->fw_update_gpio) && mca->som_hv >= 4) {
-		/*
-		 * On the CCMP1 HV >= 4 this GPIO must be driven low
-		 * so that the CPU resets together with the reset button.
-		 */
-		if (devm_gpio_request_one(mca->dev, mca->fw_update_gpio,
-					  GPIOF_OUT_INIT_LOW, "mca-fw-update"))
-			dev_warn(mca->dev, "failed to get fw-update-gpio: %d\n",
-				 ret);
-	} else {
-		/* Invalidate GPIO */
-		mca->fw_update_gpio = -EINVAL;
+		mca->fw_update_gpio = of_get_named_gpio(mca->dev->of_node,
+							"fw-update-gpio", 0);
+		if (!gpio_is_valid(mca->fw_update_gpio) ||
+		    devm_gpio_request_one(mca->dev, mca->fw_update_gpio,
+					  GPIOF_OUT_INIT_LOW, "mca-fw-update")) {
+			dev_warn(mca->dev, "failed to get fw-update-gpio: %d\n", ret);
+			mca->fw_update_gpio = -EINVAL;
+		}
 	}
 
 	mca->chip_irq = irq;
 	mca->gpio_base = -1;
 
-	ret = mca_ccmp1_irq_init(mca);
+	ret = mca_irq_init(mca);
 	if (ret != 0) {
 		dev_err(mca->dev, "Cannot initialize interrupts (%d)\n", ret);
 		return ret;
@@ -932,15 +1243,21 @@ int mca_ccmp1_device_init(struct mca_drv *mca, u32 irq)
 	 */
 	mca->dev->dma_mask = &mca->dev->coherent_dma_mask;
 
-	ret = mfd_add_devices(mca->dev, -1, mca_ccmp1_devs,
-			      ARRAY_SIZE(mca_ccmp1_devs), NULL, mca->irq_base,
+	/* Use CC8 devs array if a CC8 module is detected */
+	if (mca->dev_id == MCA_KL17_DEVICE_ID) {
+		mca_devs = mca_cc8_devs;
+		n_devs = ARRAY_SIZE(mca_cc8_devs);
+	}
+
+	ret = mfd_add_devices(mca->dev, -1, mca_devs,
+			      n_devs, NULL, mca->irq_base,
 			      regmap_irq_get_domain(mca->regmap_irq));
 	if (ret) {
 		dev_err(mca->dev, "Cannot add MFD cells (%d)\n", ret);
 		goto out_irq;
 	}
 
-	ret = sysfs_create_group(&mca->dev->kobj, &mca_ccmp1_attr_group);
+	ret = sysfs_create_group(&mca->dev->kobj, &mca_attr_group);
 	if (ret) {
 		dev_err(mca->dev, "Cannot create sysfs entries (%d)\n", ret);
 		goto out_dev;
@@ -950,9 +1267,9 @@ int mca_ccmp1_device_init(struct mca_drv *mca, u32 irq)
 		sysfs_remove_file(&mca->dev->kobj, &dev_attr_fw_update.attr);
 	}
 
-	ret = mca_ccmp1_add_dyn_sysfs_entries(mca, mca_ccmp1_sysfs_dyn_entries,
-					      ARRAY_SIZE(mca_ccmp1_sysfs_dyn_entries),
-					      &mca_ccmp1_attr_group);
+	ret = mca_add_dyn_sysfs_entries(mca, mca_sysfs_dyn_entries,
+					      ARRAY_SIZE(mca_sysfs_dyn_entries),
+					      &mca_attr_group);
 	if (ret) {
 		dev_err(mca->dev, "Cannot create sysfs dynamic entries (%d)\n",
 			ret);
@@ -980,10 +1297,11 @@ int mca_ccmp1_device_init(struct mca_drv *mca, u32 irq)
 	 * can not be a reset_handler because that callback is executed in
 	 * atomic context.
 	 */
-	mca->syscore.shutdown = mca_ccmp1_shutdown;
+	mca->syscore.shutdown = mca_shutdown;
 	register_syscore_ops(&mca->syscore);
 
-	if (mca->fw_version >= MCA_MAKE_FW_VER(1, 2)) {
+	if (MCA_FEATURE_IS_SUPPORTED(mca, NVRAM_KL03_FW_VER,
+	                             NVRAM_KL17_FW_VER)) {
 		mca->nvram = devm_kzalloc(mca->dev, sizeof(struct bin_attribute),
 					  GFP_KERNEL);
 		if (!mca->nvram) {
@@ -1014,25 +1332,26 @@ out_nvram:
 out_pwr_off:
 out_sysfs_remove:
 	pmca = NULL;
-	sysfs_remove_group(&mca->dev->kobj, &mca_ccmp1_attr_group);
+	sysfs_remove_group(&mca->dev->kobj, &mca_attr_group);
 out_dev:
 	mfd_remove_devices(mca->dev);
 out_irq:
-	mca_ccmp1_irq_exit(mca);
+	mca_irq_exit(mca);
 
 	return ret;
 }
 
-void mca_ccmp1_device_exit(struct mca_drv *mca)
+void mca_device_exit(struct mca_drv *mca)
 {
 	unregister_syscore_ops(&mca->syscore);
 	pmca = NULL;
-	sysfs_remove_group(&mca->dev->kobj, &mca_ccmp1_attr_group);
+	pm_runtime_put_noidle(mca->dev->parent->parent);
+	sysfs_remove_group(&mca->dev->kobj, &mca_attr_group);
 	mfd_remove_devices(mca->dev);
-	mca_ccmp1_irq_exit(mca);
+	mca_irq_exit(mca);
 	kfree(mca->nvram);
 }
 
 MODULE_AUTHOR("Digi International Inc");
-MODULE_DESCRIPTION("MCA driver for ConnectCore MP1");
+MODULE_DESCRIPTION("MCA driver for ConnectCore SoMs");
 MODULE_LICENSE("GPL");

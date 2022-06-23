@@ -1,5 +1,5 @@
 /* rtc-mca.c - Real time clock device driver for MCA on ConnectCore modules
- * Copyright (C) 2016 - 2021  Digi International
+ * Copyright (C) 2016 - 2022  Digi International
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -30,7 +30,7 @@
 #include <linux/of_irq.h>
 #include <linux/regmap.h>
 
-#define MCA_DRVNAME_RTC		"mca-rtc"
+#define MCA_BASE_DRVNAME_RTC		"mca-rtc"
 
 // Digi RTC IOCTLs custom implementation using MCA
 #define RTC_IOCTL_DIGI 0x100
@@ -43,16 +43,6 @@
 
 #define CLOCK_DATA_LEN	(MCA_RTC_COUNT_SEC - MCA_RTC_COUNT_YEAR_L + 1)
 #define ALARM_DATA_LEN	(MCA_RTC_ALARM_SEC - MCA_RTC_ALARM_YEAR_L + 1)
-
-#ifdef CONFIG_OF
-enum mca_rtc_type {
-	CCMP1_MCA_RTC,
-};
-
-struct mca_rtc_data {
-	enum mca_rtc_type devtype;
-};
-#endif
 
 struct mca_rtc {
 	struct rtc_device *rtc_dev;
@@ -251,9 +241,9 @@ static int mca_rtc_set_time(struct device *dev, struct rtc_time *tm)
  */
 static void mca_rtc_adjust_alarm_time(struct rtc_wkalrm *alrm, bool inc)
 {
-	time64_t time = 0;
+	unsigned long time;
 
-	rtc_tm_to_time64(&alrm->time);
+	time = rtc_tm_to_time64(&alrm->time);
 	time = inc ? time + 1 : time - 1;
 	rtc_time64_to_tm(time, &alrm->time);
 }
@@ -459,8 +449,6 @@ static int mca_rtc_probe(struct platform_device *pdev)
 {
 	struct mca_drv *mca = dev_get_drvdata(pdev->dev.parent);
 	struct mca_rtc *rtc;
-	const struct mca_rtc_data *devdata =
-				   of_device_get_match_data(&pdev->dev);
 	struct device_node *np = NULL;
 	int ret = 0;
 
@@ -478,7 +466,7 @@ static int mca_rtc_probe(struct platform_device *pdev)
 	/* Find entry in device-tree */
 	if (mca->dev->of_node) {
 		const char * compatible = pdev->dev.driver->
-				    of_match_table[devdata->devtype].compatible;
+				    of_match_table[0].compatible;
 
 		/*
 		 * Return silently if RTC node does not exist
@@ -504,7 +492,7 @@ static int mca_rtc_probe(struct platform_device *pdev)
 	}
 
 	/* Register RTC device */
-	rtc->rtc_dev = devm_rtc_device_register(&pdev->dev, MCA_DRVNAME_RTC,
+	rtc->rtc_dev = devm_rtc_device_register(&pdev->dev, MCA_BASE_DRVNAME_RTC,
 					   &mca_rtc_ops, THIS_MODULE);
 	if (IS_ERR(rtc->rtc_dev)) {
 		dev_err(&pdev->dev, "Failed to register RTC device: %ld\n",
@@ -618,15 +606,8 @@ static const struct dev_pm_ops mca_rtc_pm_ops = {
 #endif
 
 #ifdef CONFIG_OF
-static struct mca_rtc_data mca_rtc_devdata[] = {
-	[CCMP1_MCA_RTC] = {
-		.devtype = CCMP1_MCA_RTC,
-	},
-};
-
 static const struct of_device_id mca_rtc_dt_ids[] = {
-	{ .compatible = "digi,mca-ccmp1-rtc",
-	  .data = &mca_rtc_devdata[CCMP1_MCA_RTC]},
+	{ .compatible = "digi,mca-rtc",},
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, mca_rtc_dt_ids);
@@ -636,7 +617,7 @@ static struct platform_driver mca_rtc_driver = {
 	.probe		= mca_rtc_probe,
 	.remove		= mca_rtc_remove,
 	.driver		= {
-		.name	= MCA_DRVNAME_RTC,
+		.name	= MCA_BASE_DRVNAME_RTC,
 		.owner	= THIS_MODULE,
 #ifdef CONFIG_PM
 		.pm	= &mca_rtc_pm_ops,
@@ -663,4 +644,4 @@ module_exit(mca_rtc_exit);
 MODULE_AUTHOR("Digi International Inc.");
 MODULE_DESCRIPTION("Real time clock device driver for MCA of ConnectCore Modules");
 MODULE_LICENSE("GPL v2");
-MODULE_ALIAS("platform:" MCA_DRVNAME_RTC);
+MODULE_ALIAS("platform:" MCA_BASE_DRVNAME_RTC);

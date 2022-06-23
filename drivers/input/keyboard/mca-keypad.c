@@ -1,6 +1,6 @@
-/* keypad-mca.c - Keypad driver for MCA devices.
+/* mca-keypad.c - Keypad driver for MCA devices.
  *
- * Copyright (C) 2021  Digi International Inc
+ * Copyright (C) 2022  Digi International Inc
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
