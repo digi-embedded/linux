@@ -234,7 +234,7 @@ static void dcmipp_par_adjust_fmt(struct dcmipp_par_device *par,
 		fmt->code = fmt_default.code;
 
 	/* Exclude JPEG if BT656 bus is selected */
-	if (vpix->code_sink == MEDIA_BUS_FMT_JPEG_1X8 &&
+	if (vpix && vpix->code_sink == MEDIA_BUS_FMT_JPEG_1X8 &&
 	    par->ved.bus_type == V4L2_MBUS_BT656)
 		fmt->code = fmt_default.code;
 
