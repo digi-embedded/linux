@@ -86,6 +86,9 @@ static const struct flash_info macronix_nor_parts[] = {
 		NO_SFDP_FLAGS(SECT_4K | SPI_NOR_DUAL_READ |
 			      SPI_NOR_QUAD_READ) },
 	{ "mx25l25655e", INFO(0xc22619, 0, 64 * 1024, 512) },
+	{ "mx25lw51245g", INFO(0xc2863a, 0, 64 * 1024, 1024)
+		NO_SFDP_FLAGS(SECT_4K)
+		FIXUP_FLAGS(SPI_NOR_4B_OPCODES) },
 	{ "mx66l51235f", INFO(0xc2201a, 0, 64 * 1024, 1024)
 		NO_SFDP_FLAGS(SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ)
 		FIXUP_FLAGS(SPI_NOR_4B_OPCODES) },
