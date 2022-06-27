@@ -110,6 +110,8 @@ static void stm32_usart_config_reg_rs485(u32 *cr1, u32 *cr3,  u32 baud,
 	*cr3 |= USART_CR3_DEM;
 	over8 = *cr1 & USART_CR1_OVER8;
 
+	*cr1 &= ~(USART_CR1_DEDT_MASK | USART_CR1_DEAT_MASK);
+
 	/* Assertion time */
 	tmp = stm32_usart_config_delay_rs485(cr1, delay_ADE, baud, over8,
 					     rs485_deat_dedt_max, rs485conf);
