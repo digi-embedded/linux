@@ -14,6 +14,7 @@
 #include <linux/irqchip.h>
 #include <linux/irqchip/chained_irq.h>
 #include <linux/irqdomain.h>
+#include <linux/list.h>
 #include <linux/module.h>
 #include <linux/of_address.h>
 #include <linux/of_irq.h>
@@ -56,6 +57,7 @@ struct stm32_exti_chip_data {
 };
 
 struct stm32_exti_host_data {
+	struct list_head lh;
 	void __iomem *base;
 	struct stm32_exti_chip_data *chips_data;
 	const struct stm32_exti_drv_data *drv_data;
@@ -63,7 +65,7 @@ struct stm32_exti_host_data {
 	struct device_node *irq_map_node;
 };
 
-static struct stm32_exti_host_data *stm32_host_data;
+static LIST_HEAD(stm32_host_data_list);
 
 static const struct stm32_exti_bank stm32f4xx_exti_b1 = {
 	.imr_ofst	= 0x00,
@@ -628,50 +630,65 @@ static void stm32_exti_h_ack(struct irq_data *d)
 		irq_chip_ack_parent(d);
 }
 
-static int __maybe_unused stm32_exti_h_suspend(void)
+static int stm32_exti_h_suspend(void)
 {
 	struct stm32_exti_chip_data *chip_data;
+	struct stm32_exti_host_data *host_data;
 	int i;
 
-	for (i = 0; i < stm32_host_data->drv_data->bank_nr; i++) {
-		chip_data = &stm32_host_data->chips_data[i];
-		raw_spin_lock(&chip_data->rlock);
-		stm32_chip_suspend(chip_data, chip_data->wake_active);
-		raw_spin_unlock(&chip_data->rlock);
+	list_for_each_entry(host_data, &stm32_host_data_list, lh) {
+		for (i = 0; i < host_data->drv_data->bank_nr; i++) {
+			chip_data = &host_data->chips_data[i];
+			raw_spin_lock(&chip_data->rlock);
+			stm32_chip_suspend(chip_data, chip_data->wake_active);
+			raw_spin_unlock(&chip_data->rlock);
+		}
 	}
 
 	return 0;
 }
 
-static void __maybe_unused stm32_exti_h_resume(void)
+static void stm32_exti_h_resume(void)
 {
 	struct stm32_exti_chip_data *chip_data;
+	struct stm32_exti_host_data *host_data;
 	int i;
 
-	for (i = 0; i < stm32_host_data->drv_data->bank_nr; i++) {
-		chip_data = &stm32_host_data->chips_data[i];
-		raw_spin_lock(&chip_data->rlock);
-		stm32_chip_resume(chip_data, chip_data->mask_cache);
-		raw_spin_unlock(&chip_data->rlock);
+	list_for_each_entry(host_data, &stm32_host_data_list, lh) {
+		for (i = 0; i < host_data->drv_data->bank_nr; i++) {
+			chip_data = &host_data->chips_data[i];
+			raw_spin_lock(&chip_data->rlock);
+			stm32_chip_resume(chip_data, chip_data->mask_cache);
+			raw_spin_unlock(&chip_data->rlock);
+		}
 	}
 }
 
 static struct syscore_ops stm32_exti_h_syscore_ops = {
-#ifdef CONFIG_PM_SLEEP
 	.suspend	= stm32_exti_h_suspend,
 	.resume		= stm32_exti_h_resume,
-#endif
 };
 
 static void stm32_exti_h_syscore_init(struct stm32_exti_host_data *host_data)
 {
-	stm32_host_data = host_data;
-	register_syscore_ops(&stm32_exti_h_syscore_ops);
+	if (IS_ENABLED(CONFIG_PM_SLEEP)) {
+		if (list_empty(&stm32_host_data_list))
+			register_syscore_ops(&stm32_exti_h_syscore_ops);
+
+		list_add_tail(&host_data->lh, &stm32_host_data_list);
+	}
 }
 
-static void stm32_exti_h_syscore_deinit(void)
+static void stm32_exti_h_syscore_deinit(struct platform_device *pdev)
 {
-	unregister_syscore_ops(&stm32_exti_h_syscore_ops);
+	struct stm32_exti_host_data *host_data = platform_get_drvdata(pdev);
+
+	if (IS_ENABLED(CONFIG_PM_SLEEP)) {
+		list_del(&host_data->lh);
+
+		if (list_empty(&stm32_host_data_list))
+			unregister_syscore_ops(&stm32_exti_h_syscore_ops);
+	}
 }
 
 static int stm32_exti_h_retrigger(struct irq_data *d)
@@ -850,8 +867,6 @@ stm32_exti_host_data *stm32_exti_host_init(const struct stm32_exti_drv_data *dd,
 		goto free_chips_data;
 	}
 
-	stm32_host_data = host_data;
-
 	return host_data;
 
 free_chips_data:
@@ -985,7 +1000,7 @@ static void stm32_exti_remove_irq(void *data)
 
 static int stm32_exti_remove(struct platform_device *pdev)
 {
-	stm32_exti_h_syscore_deinit();
+	stm32_exti_h_syscore_deinit(pdev);
 	return 0;
 }
 
@@ -1004,6 +1019,8 @@ static int stm32_exti_probe(struct platform_device *pdev)
 	host_data = devm_kzalloc(dev, sizeof(*host_data), GFP_KERNEL);
 	if (!host_data)
 		return -ENOMEM;
+
+	platform_set_drvdata(pdev, host_data);
 
 	/* check for optional hwspinlock which may be not available yet */
 	ret = of_hwspin_lock_get_id(np, 0);
