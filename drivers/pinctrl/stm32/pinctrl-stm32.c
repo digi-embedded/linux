@@ -44,7 +44,14 @@
 #define STM32_GPIO_LCKR		0x1c
 #define STM32_GPIO_AFRL		0x20
 #define STM32_GPIO_AFRH		0x24
+#define STM32_GPIO_DELAYRL	0x40
+#define STM32_GPIO_PIOCFGRL	0x48
 #define STM32_GPIO_SECCFGR	0x30
+
+#define STM32_GPIO_PIOCFGR_DELAY_PATH_POS	0
+#define STM32_GPIO_PIOCFGR_CLK_EDGE_POS		1
+#define STM32_GPIO_PIOCFGR_CLK_TYPE_POS		2
+#define STM32_GPIO_PIOCFGR_RETIME_POS		3
 
 /* custom bitfield to backup pin status */
 #define STM32_GPIO_BKP_MODE_SHIFT	0
@@ -57,11 +64,22 @@
 #define STM32_GPIO_BKP_PUPD_MASK	GENMASK(9, 8)
 #define STM32_GPIO_BKP_TYPE		10
 #define STM32_GPIO_BKP_VAL		11
+#define STM32_GPIO_BKP_PIOCFG_SHIFT	12
+#define STM32_GPIO_BKP_PIOCFG_MASK	GENMASK(15, 12)
+#define STM32_GPIO_BKP_DELAY_SHIFT	16
+#define STM32_GPIO_BKP_DELAY_MASK	GENMASK(19, 16)
 
 #define STM32_GPIO_PINS_PER_BANK 16
 #define STM32_GPIO_IRQ_LINE	 16
 
 #define SYSCFG_IRQMUX_MASK GENMASK(3, 0)
+
+/* Vendor specific pin configurations */
+#define STM32_GPIO_PIN_CONFIG_DELAY_PATH	(PIN_CONFIG_END + 1)
+#define STM32_GPIO_PIN_CONFIG_CLK_EDGE		(PIN_CONFIG_END + 2)
+#define STM32_GPIO_PIN_CONFIG_CLK_TYPE		(PIN_CONFIG_END + 3)
+#define STM32_GPIO_PIN_CONFIG_RETIME		(PIN_CONFIG_END + 4)
+#define STM32_GPIO_PIN_CONFIG_DELAY		(PIN_CONFIG_END + 5)
 
 #define gpio_range_to_bank(chip) \
 		container_of(chip, struct stm32_gpio_bank, range)
@@ -76,6 +94,14 @@ static const char * const stm32_gpio_functions[] = {
 	"af11", "af12", "af13",
 	"af14", "af15", "analog",
 	"reserved",
+};
+
+static const struct pinconf_generic_params stm32_gpio_bindings[] = {
+	{"st,io-delay-path",	STM32_GPIO_PIN_CONFIG_DELAY_PATH,	0},
+	{"st,io-clk-edge",	STM32_GPIO_PIN_CONFIG_CLK_EDGE,		0},
+	{"st,io-clk-type",	STM32_GPIO_PIN_CONFIG_CLK_TYPE,		0},
+	{"st,io-retime",	STM32_GPIO_PIN_CONFIG_RETIME,		0},
+	{"st,io-delay",		STM32_GPIO_PIN_CONFIG_DELAY,		0},
 };
 
 struct stm32_pinctrl_group {
@@ -98,6 +124,7 @@ struct stm32_gpio_bank {
 	u32 pin_backup[STM32_GPIO_PINS_PER_BANK];
 	u8 irq_type[STM32_GPIO_PINS_PER_BANK];
 	bool secure_control;
+	bool io_sync_control;
 };
 
 struct stm32_pinctrl {
@@ -189,6 +216,18 @@ static void stm32_gpio_backup_bias(struct stm32_gpio_bank *bank, u32 offset,
 {
 	bank->pin_backup[offset] &= ~STM32_GPIO_BKP_PUPD_MASK;
 	bank->pin_backup[offset] |= bias << STM32_GPIO_BKP_PUPD_SHIFT;
+}
+
+static void stm32_gpio_backup_piocfg(struct stm32_gpio_bank *bank, u32 offset, u32 bpos, u32 bval)
+{
+	bank->pin_backup[offset] &= ~BIT(STM32_GPIO_BKP_PIOCFG_SHIFT + bpos);
+	bank->pin_backup[offset] |= bval << (STM32_GPIO_BKP_PIOCFG_SHIFT + bpos);
+}
+
+static void stm32_gpio_backup_delay(struct stm32_gpio_bank *bank, u32 offset, u32 delay)
+{
+	bank->pin_backup[offset] &= ~STM32_GPIO_BKP_DELAY_MASK;
+	bank->pin_backup[offset] |= delay << STM32_GPIO_BKP_DELAY_SHIFT;
 }
 
 /* GPIO functions */
@@ -1061,6 +1100,114 @@ static u32 stm32_pconf_get_bias(struct stm32_gpio_bank *bank,
 	return (val >> (offset * 2));
 }
 
+static int stm32_pconf_set_piocfgr(struct stm32_gpio_bank *bank, int offset, u32 bpos, u32 bval)
+{
+	struct stm32_pinctrl *pctl = dev_get_drvdata(bank->gpio_chip.parent);
+	int piocfgr_offset = STM32_GPIO_PIOCFGRL + (offset / 8) * 4;
+	int piocfgr_bit = bpos + (offset % 8) * 4;
+	unsigned long flags;
+	int err = 0;
+	u32 val;
+
+	if (!bank->io_sync_control)
+		return -ENOTSUPP;
+
+	spin_lock_irqsave(&bank->lock, flags);
+
+	if (pctl->hwlock) {
+		err = hwspin_lock_timeout_in_atomic(pctl->hwlock, HWSPNLCK_TIMEOUT);
+		if (err) {
+			dev_err(pctl->dev, "Can't get hwspinlock\n");
+			goto unlock;
+		}
+	}
+
+	val = readl_relaxed(bank->base + piocfgr_offset);
+	val &= ~BIT(piocfgr_bit);
+	val |= bval << piocfgr_bit;
+	writel_relaxed(val, bank->base + piocfgr_offset);
+
+	if (pctl->hwlock)
+		hwspin_unlock_in_atomic(pctl->hwlock);
+
+	stm32_gpio_backup_piocfg(bank, offset, bpos, bval);
+
+unlock:
+	spin_unlock_irqrestore(&bank->lock, flags);
+
+	return err;
+}
+
+static u32 stm32_pconf_get_piocfgr(struct stm32_gpio_bank *bank, int offset, u32 bpos)
+{
+	int piocfgr_offset = STM32_GPIO_PIOCFGRL + (offset / 8) * 4;
+	int piocfgr_bit = bpos + (offset % 8) * 4;
+	unsigned long flags;
+	u32 val;
+
+	spin_lock_irqsave(&bank->lock, flags);
+
+	val = readl_relaxed(bank->base + piocfgr_offset);
+	val &= BIT(piocfgr_bit);
+
+	spin_unlock_irqrestore(&bank->lock, flags);
+	return (val >> piocfgr_bit);
+}
+
+static int stm32_pconf_set_delay(struct stm32_gpio_bank *bank, int offset, u32 delay)
+{
+	struct stm32_pinctrl *pctl = dev_get_drvdata(bank->gpio_chip.parent);
+	int delay_offset = STM32_GPIO_DELAYRL + (offset / 8) * 4;
+	int delay_shift = (offset % 8) * 4;
+	unsigned long flags;
+	int err = 0;
+	u32 val;
+
+	if (!bank->io_sync_control)
+		return -ENOTSUPP;
+
+	spin_lock_irqsave(&bank->lock, flags);
+
+	if (pctl->hwlock) {
+		err = hwspin_lock_timeout_in_atomic(pctl->hwlock, HWSPNLCK_TIMEOUT);
+		if (err) {
+			dev_err(pctl->dev, "Can't get hwspinlock\n");
+			goto unlock;
+		}
+	}
+
+	val = readl_relaxed(bank->base + delay_offset);
+	val &= ~GENMASK(delay_shift + 3, delay_shift);
+	val |= (delay << delay_shift);
+	writel_relaxed(val, bank->base + delay_offset);
+
+	if (pctl->hwlock)
+		hwspin_unlock_in_atomic(pctl->hwlock);
+
+	stm32_gpio_backup_delay(bank, offset, delay);
+
+unlock:
+	spin_unlock_irqrestore(&bank->lock, flags);
+
+	return err;
+}
+
+static u32 stm32_pconf_get_delay(struct stm32_gpio_bank *bank, int offset)
+{
+	int delay_offset = STM32_GPIO_DELAYRL + (offset / 8) * 4;
+	int delay_shift = (offset % 8) * 4;
+	unsigned long flags;
+	u32 val;
+
+	spin_lock_irqsave(&bank->lock, flags);
+
+	val = readl_relaxed(bank->base + delay_offset);
+	val &= GENMASK(delay_shift + 3, delay_shift);
+
+	spin_unlock_irqrestore(&bank->lock, flags);
+	return (val >> delay_shift);
+}
+
 static bool stm32_pconf_get(struct stm32_gpio_bank *bank,
 	unsigned int offset, bool dir)
 {
@@ -1104,7 +1251,7 @@ static int stm32_pconf_parse_conf(struct pinctrl_dev *pctldev,
 		return -EACCES;
 	}
 
-	switch (param) {
+	switch ((unsigned int)param) {
 	case PIN_CONFIG_DRIVE_PUSH_PULL:
 		ret = stm32_pconf_set_driving(bank, offset, 0);
 		break;
@@ -1126,6 +1273,25 @@ static int stm32_pconf_parse_conf(struct pinctrl_dev *pctldev,
 	case PIN_CONFIG_OUTPUT:
 		__stm32_gpio_set(bank, offset, arg);
 		ret = stm32_pmx_gpio_set_direction(pctldev, range, pin, false);
+		break;
+	case STM32_GPIO_PIN_CONFIG_DELAY_PATH:
+		ret = stm32_pconf_set_piocfgr(bank, offset,
+					      STM32_GPIO_PIOCFGR_DELAY_PATH_POS, arg);
+		break;
+	case STM32_GPIO_PIN_CONFIG_CLK_EDGE:
+		ret = stm32_pconf_set_piocfgr(bank, offset,
+					      STM32_GPIO_PIOCFGR_CLK_EDGE_POS, arg);
+		break;
+	case STM32_GPIO_PIN_CONFIG_CLK_TYPE:
+		ret = stm32_pconf_set_piocfgr(bank, offset,
+					      STM32_GPIO_PIOCFGR_CLK_TYPE_POS, arg);
+		break;
+	case STM32_GPIO_PIN_CONFIG_RETIME:
+		ret = stm32_pconf_set_piocfgr(bank, offset,
+					      STM32_GPIO_PIOCFGR_RETIME_POS, arg);
+		break;
+	case STM32_GPIO_PIN_CONFIG_DELAY:
+		ret = stm32_pconf_set_delay(bank, offset, arg);
 		break;
 	default:
 		ret = -ENOTSUPP;
@@ -1273,6 +1439,26 @@ static void stm32_pconf_dbg_show(struct pinctrl_dev *pctldev,
 	case 3:
 		break;
 	}
+
+	if (bank->io_sync_control) {
+		u32 retime, clk_type, clk_edge, delay_path, delay;
+
+		retime = stm32_pconf_get_piocfgr(bank, offset,
+						 STM32_GPIO_PIOCFGR_RETIME_POS);
+		clk_type = stm32_pconf_get_piocfgr(bank, offset,
+						   STM32_GPIO_PIOCFGR_CLK_TYPE_POS);
+		clk_edge = stm32_pconf_get_piocfgr(bank, offset,
+						   STM32_GPIO_PIOCFGR_CLK_EDGE_POS);
+		delay_path = stm32_pconf_get_piocfgr(bank, offset,
+						     STM32_GPIO_PIOCFGR_DELAY_PATH_POS);
+		delay = stm32_pconf_get_delay(bank, offset);
+
+		if (retime || clk_type || clk_edge || delay_path || delay)
+			seq_printf(s, " - Retime:%d InvClk:%d DblEdge:%d DelayIn:%d",
+				   retime, clk_type, clk_edge, delay_path);
+		if (delay)
+			seq_printf(s, " - Delay: %d (%d ps)", delay, delay * 250);
+	}
 }
 
 static const struct pinconf_ops stm32_pconf_ops = {
@@ -1369,6 +1555,7 @@ static int stm32_gpiolib_register_bank(struct stm32_pinctrl *pctl, struct fwnode
 	bank->bank_nr = bank_nr;
 	bank->bank_ioport_nr = bank_ioport_nr;
 	bank->secure_control = pctl->match_data->secure_control;
+	bank->io_sync_control = pctl->match_data->io_sync_control;
 	spin_lock_init(&bank->lock);
 
 	if (pctl->domain) {
@@ -1615,6 +1802,8 @@ int stm32_pctl_probe(struct platform_device *pdev)
 	pctl->pctl_desc.confops = &stm32_pconf_ops;
 	pctl->pctl_desc.pctlops = &stm32_pctrl_ops;
 	pctl->pctl_desc.pmxops = &stm32_pmx_ops;
+	pctl->pctl_desc.num_custom_params = ARRAY_SIZE(stm32_gpio_bindings);
+	pctl->pctl_desc.custom_params = stm32_gpio_bindings;
 	pctl->dev = &pdev->dev;
 
 	pctl->pctl_dev = devm_pinctrl_register(&pdev->dev, &pctl->pctl_desc,
@@ -1674,6 +1863,16 @@ int stm32_pctl_probe(struct platform_device *pdev)
 	return 0;
 }
 
+static int __maybe_unused stm32_pinctrl_restore_piocfgr(struct stm32_gpio_bank *bank,
+							int offset, u32 bpos)
+{
+	u32 val;
+
+	val = bank->pin_backup[offset] & BIT(STM32_GPIO_BKP_PIOCFG_SHIFT + bpos);
+	val >>= (STM32_GPIO_BKP_PIOCFG_SHIFT + bpos);
+	return stm32_pconf_set_piocfgr(bank, offset, bpos, val);
+}
+
 static int __maybe_unused stm32_pinctrl_restore_gpio_regs(
 					struct stm32_pinctrl *pctl, u32 pin)
 {
@@ -1730,6 +1929,34 @@ static int __maybe_unused stm32_pinctrl_restore_gpio_regs(
 	ret = stm32_pconf_set_bias(bank, offset, val);
 	if (ret)
 		return ret;
+
+	if (bank->io_sync_control) {
+		ret = stm32_pinctrl_restore_piocfgr(bank, offset,
+						    STM32_GPIO_PIOCFGR_DELAY_PATH_POS);
+		if (ret)
+			return ret;
+
+		ret = stm32_pinctrl_restore_piocfgr(bank, offset,
+						    STM32_GPIO_PIOCFGR_CLK_EDGE_POS);
+		if (ret)
+			return ret;
+
+		ret = stm32_pinctrl_restore_piocfgr(bank, offset,
+						    STM32_GPIO_PIOCFGR_CLK_TYPE_POS);
+		if (ret)
+			return ret;
+
+		ret = stm32_pinctrl_restore_piocfgr(bank, offset,
+						    STM32_GPIO_PIOCFGR_RETIME_POS);
+		if (ret)
+			return ret;
+
+		val = bank->pin_backup[offset] & STM32_GPIO_BKP_DELAY_MASK;
+		val >>= STM32_GPIO_BKP_DELAY_SHIFT;
+		ret = stm32_pconf_set_delay(bank, offset, val);
+		if (ret)
+			return ret;
+	}
 
 	if (pin_is_irq)
 		regmap_field_write(pctl->irqmux[offset], bank->bank_ioport_nr);
