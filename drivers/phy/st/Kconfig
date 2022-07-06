@@ -47,3 +47,12 @@ config PHY_STM32_USBPHYC
 	  used by an HS USB Host controller, and the second one is shared
 	  between an HS USB OTG controller and an HS USB Host controller,
 	  selected by a USB switch.
+
+config PHY_STM32_USB2FEMTO
+	tristate "STMicroelectronics STM32 USB2 FEMTO PHY Controller driver"
+	depends on ARCH_STM32 || COMPILE_TEST
+	select GENERIC_PHY
+	help
+	  Enable this to support the High-Speed USB2 transceivers that are part
+	  of some STMicroelectronics STM32 SoCs. The PHY integrated is from
+	  synopsys, and called FEMTO-PHY
