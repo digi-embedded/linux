@@ -12,6 +12,8 @@
 			device_type = "cpu";
 			reg = <1>;
 			enable-method = "psci";
+			clocks = <&scmi_perf 0>;
+			clock-names = "cpu";
 		};
 	};
 
