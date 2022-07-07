@@ -1915,7 +1915,11 @@ static int ltdc_get_caps(struct drm_device *ddev)
 		ldev->caps.pix_fmt_nb = ARRAY_SIZE(ltdc_drm_fmt_a2);
 		ldev->caps.pix_fmt_flex = true;
 		ldev->caps.non_alpha_only_l1 = false;
-		ldev->caps.pad_max_freq_hz = 90000000;
+		/* Need a pad max frequency of 150MHz for 3 layers */
+		if (lcr == 3)
+			ldev->caps.pad_max_freq_hz = 150000000;
+		else
+			ldev->caps.pad_max_freq_hz = 90000000;
 		ldev->caps.nb_irq = 2;
 		ldev->caps.ycbcr_input = true;
 		ldev->caps.ycbcr_output = true;
