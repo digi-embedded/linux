@@ -73,11 +73,21 @@
 		status = "okay";
 	};
 
+	/* AUO G101EVN01.0 */
 	/*panel {
 		compatible = "auo,g101evn010", "simple-panel";
-		/* Fusion 10 inch
-		compatible = "tpk,f10a-0102";
-		/* Fusion 7 inch
+		power-supply = <&v3v3>;
+		backlight = <&display_bl>;
+
+		port {
+			panel_in: endpoint {
+				remote-endpoint = <&ltdc_ep0_out>;
+			};
+		};
+	};*/
+
+	/* Fusion 7/10 inch */
+	/*panel {
 		compatible = "tpk,f07a-0102";
 		power-supply = <&v3v3>;
 		backlight = <&display_bl>;
@@ -376,13 +386,13 @@
 	};
 
 	goodix_touch2@5d {
-                compatible = "goodix,gt9271";
-                reg = <0x5d>;
-                interrupt-parent = <&gpiog>;
-                interrupts = <1 IRQ_TYPE_EDGE_RISING>;
-                irq-gpios = <&gpiog 1 GPIO_ACTIVE_LOW>;
-                status = "okay";
-        };
+		compatible = "goodix,gt9271";
+		reg = <0x5d>;
+		interrupt-parent = <&gpiog>;
+		interrupts = <1 IRQ_TYPE_EDGE_RISING>;
+		irq-gpios = <&gpiog 1 GPIO_ACTIVE_LOW>;
+		status = "okay";
+	};
 
 	max98089: codec@10 {
 		compatible = "maxim,max98089";
