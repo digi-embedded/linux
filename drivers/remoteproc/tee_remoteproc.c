@@ -245,6 +245,7 @@ struct tee_rproc *tee_rproc_register(struct device *dev, unsigned int fw_id)
 {
 	struct tee_client_device *rproc_tee_device;
 	struct tee_ioctl_open_session_arg sess_arg;
+	struct tee_param param[MAX_TEE_PARAM_ARRY_MEMBER];
 	struct tee_rproc *trproc;
 	int ret;
 
@@ -266,9 +267,15 @@ struct tee_rproc *tee_rproc_register(struct device *dev, unsigned int fw_id)
 	 * TEE_IOCTL_LOGIN_REE_KERNEL?
 	 */
 	sess_arg.clnt_login = TEE_IOCTL_LOGIN_PUBLIC;
-	sess_arg.num_params = 0;
+	sess_arg.num_params = 1;
 
-	ret = tee_client_open_session(pvt_data.ctx, &sess_arg, NULL);
+	param[0] = (struct tee_param) {
+		.attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT,
+		.u.value.a = fw_id,
+	};
+
+
+	ret = tee_client_open_session(pvt_data.ctx, &sess_arg, param);
 	if (ret < 0 || sess_arg.ret != 0) {
 		dev_err(dev, "tee_client_open_session failed, err: %x\n",
 			sess_arg.ret);
