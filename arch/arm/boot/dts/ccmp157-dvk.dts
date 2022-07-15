@@ -37,7 +37,6 @@
 		serial3 = &uart7;
 	};
 
-	/* 5V */
 	regulators {
 		compatible = "simple-bus";
 		#address-cells = <1>;
@@ -45,11 +44,22 @@
 
 		reg_5v_board: regulator@1 {
 			compatible = "regulator-fixed";
-			reg = <4>;
+			reg = <1>;
 			regulator-name = "5v_board";
 			regulator-min-microvolt = <5000000>;
 			regulator-max-microvolt = <5000000>;
 			gpio = <&gpioc 10 GPIO_ACTIVE_HIGH>;
+			enable-active-high;
+			status = "okay";
+		};
+
+		reg_3v3_eth_pwr: regulator@2 {
+			compatible = "regulator-fixed";
+			reg = <2>;
+			regulator-name = "3v3_eth_pwr";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			gpio = <&gpioc 9 GPIO_ACTIVE_HIGH>;
 			enable-active-high;
 			status = "okay";
 		};
@@ -219,18 +229,7 @@
 	phy-mode = "rgmii-id";
 	max-speed = <1000>;
 	phy-handle = <&phy0>;
-	local-mac-address = [00 04 F3 22 23 24];
-	st,eth-clk-sel = <1>; /* Internal 125 MHz clock */
-	clock-names = "stmmaceth",
-				  "mac-clk-tx",
-				  "mac-clk-rx",
-				  "eth-ck",
-				  "ethstp";
-	clocks = <&rcc ETHMAC>,
-			 <&rcc ETHTX>,
-			 <&rcc ETHRX>,
-			 <&rcc ETHCK_K>,
-			 <&rcc ETHSTP>;
+	phy-supply = <&reg_3v3_eth_pwr>;
 
 	mdio0 {
 		#address-cells = <1>;
@@ -239,12 +238,10 @@
 
 		phy0: ethernet-phy@0 {
 			reg = <0>;
-			compatible = "ethernet-phy-id0283.bc30"; /* PHY ID for ADIN1300 */
+			compatible = "ethernet-phy-id0141.0dd0"; /* PHY ID for Marvell 88E1512 */
 			reset-gpios = <&gpiog 0 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
 			reset-assert-us = <1000>;
 			reset-deassert-us = <2000>;
-			interrupt-parent = <&gpiog>; /* ETH_INT */
-			interrupts = <5 IRQ_TYPE_LEVEL_LOW>;
 		};
 	};
 };
@@ -807,7 +804,8 @@
 
 	ccmp15_ethernet0_rgmii_pins: rgmii-1 {
 		pins1 {
-			pinmux = <STM32_PINMUX('G', 4, AF11)>, /* ETH_RGMII_GTX_CLK */
+			pinmux = <STM32_PINMUX('G', 5, AF11)>, /* ETH_RGMII_CLK125 */
+				 <STM32_PINMUX('G', 4, AF11)>, /* ETH_RGMII_GTX_CLK */
 				 <STM32_PINMUX('G', 13, AF11)>, /* ETH_RGMII_TXD0 */
 				 <STM32_PINMUX('G', 14, AF11)>, /* ETH_RGMII_TXD1 */
 				 <STM32_PINMUX('C', 2, AF11)>, /* ETH_RGMII_TXD2 */
@@ -837,7 +835,8 @@
 
 	ccmp15_ethernet0_rgmii_sleep_pins: rgmii-sleep-1 {
 		pins1 {
-			pinmux = <STM32_PINMUX('G', 4, ANALOG)>, /* ETH_RGMII_GTX_CLK */
+			pinmux = <STM32_PINMUX('G', 5, ANALOG)>, /* ETH_RGMII_CLK125 */
+				 <STM32_PINMUX('G', 4, ANALOG)>, /* ETH_RGMII_GTX_CLK */
 				 <STM32_PINMUX('G', 13, ANALOG)>, /* ETH_RGMII_TXD0 */
 				 <STM32_PINMUX('G', 14, ANALOG)>, /* ETH_RGMII_TXD1 */
 				 <STM32_PINMUX('C', 2, ANALOG)>, /* ETH_RGMII_TXD2 */
