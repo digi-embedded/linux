@@ -33,6 +33,8 @@
 #define RNG_NIST_CONFIG_B	0x1801000
 #define RNG_NIST_CONFIG_MASK	GENMASK(25, 8)
 
+#define RNG_MAX_NOISE_CLK_FREQ	3000000
+
 struct stm32_rng_data {
 	bool	has_cond_reset;
 };
@@ -90,6 +92,28 @@ static int stm32_rng_read(struct hwrng *rng, void *data, size_t max, bool wait)
 	return retval || !wait ? retval : -EIO;
 }
 
+static uint stm32_rng_clock_freq_restrain(struct hwrng *rng)
+{
+	struct stm32_rng_private *priv =
+	    container_of(rng, struct stm32_rng_private, rng);
+	unsigned long clock_rate = 0;
+	uint clock_div = 0;
+
+	clock_rate = clk_get_rate(priv->clk);
+
+	/*
+	 * Get the exponent to apply on the CLKDIV field in RNG_CR register
+	 * No need to handle the case when clock-div > 0xF as it is physically
+	 * impossible
+	 */
+	while ((clock_rate >> clock_div) > RNG_MAX_NOISE_CLK_FREQ)
+		clock_div++;
+
+	pr_debug("RNG clk rate : %lu\n", clk_get_rate(priv->clk) >> clock_div);
+
+	return clock_div;
+}
+
 static int stm32_rng_init(struct hwrng *rng)
 {
 	struct stm32_rng_private *priv =
@@ -106,8 +130,10 @@ static int stm32_rng_init(struct hwrng *rng)
 	if (!priv->ced) {
 		reg |= RNG_CR_CED;
 		if (priv->data->has_cond_reset) {
+			uint clock_div = stm32_rng_clock_freq_restrain(rng);
+
 			reg &= ~RNG_NIST_CONFIG_MASK;
-			reg |= RNG_CR_CONDRST | RNG_NIST_CONFIG_B;
+			reg |= RNG_CR_CONDRST | RNG_NIST_CONFIG_B | clock_div;
 			writel_relaxed(reg, priv->base + RNG_CR);
 			reg &= ~RNG_CR_CONDRST;
 			reg |= RNG_CR_CONFLOCK;
