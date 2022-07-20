@@ -45,6 +45,7 @@ struct stm32_rng_private {
 	struct clk *clk;
 	struct reset_control *rst;
 	const struct stm32_rng_data *data;
+	u32 pm_cr;
 	bool ced;
 };
 
@@ -127,25 +128,25 @@ static int stm32_rng_init(struct hwrng *rng)
 
 	reg = readl_relaxed(priv->base + RNG_CR);
 
-	if (!priv->ced) {
+	if (!priv->ced)
 		reg |= RNG_CR_CED;
-		if (priv->data->has_cond_reset) {
-			uint clock_div = stm32_rng_clock_freq_restrain(rng);
 
-			reg &= ~RNG_NIST_CONFIG_MASK;
-			reg |= RNG_CR_CONDRST | RNG_NIST_CONFIG_B | clock_div;
-			writel_relaxed(reg, priv->base + RNG_CR);
-			reg &= ~RNG_CR_CONDRST;
-			reg |= RNG_CR_CONFLOCK;
-			writel_relaxed(reg, priv->base + RNG_CR);
-			err = readl_relaxed_poll_timeout_atomic(priv->base + RNG_CR,
-								reg, (!(reg & RNG_CR_CONDRST)),
-								10, 50000);
-			if (err) {
-				dev_err((struct device *)priv->rng.priv,
-					"%s: timeout %x!\n", __func__, reg);
-				return -EINVAL;
-			}
+	if (priv->data->has_cond_reset) {
+		uint clock_div = stm32_rng_clock_freq_restrain(rng);
+
+		reg &= ~RNG_NIST_CONFIG_MASK;
+		reg |= RNG_CR_CONDRST | RNG_NIST_CONFIG_B | clock_div;
+		writel_relaxed(reg, priv->base + RNG_CR);
+		reg &= ~RNG_CR_CONDRST;
+		reg |= RNG_CR_CONFLOCK;
+		writel_relaxed(reg, priv->base + RNG_CR);
+		err = readl_relaxed_poll_timeout_atomic(priv->base + RNG_CR, reg,
+							(!(reg & RNG_CR_CONDRST)),
+							10, 50000);
+		if (err) {
+			dev_err((struct device *)priv->rng.priv,
+				"%s: timeout %x!\n", __func__, reg);
+			return -EINVAL;
 		}
 	}
 
@@ -183,6 +184,7 @@ static int stm32_rng_runtime_suspend(struct device *dev)
 
 	reg = readl_relaxed(priv->base + RNG_CR);
 	reg &= ~RNG_CR_RNGEN;
+	priv->pm_cr = reg;
 	writel_relaxed(reg, priv->base + RNG_CR);
 	clk_disable_unprepare(priv->clk);
 
@@ -195,9 +197,28 @@ static int stm32_rng_runtime_resume(struct device *dev)
 	struct stm32_rng_private *priv = dev_get_drvdata(dev);
 
 	clk_prepare_enable(priv->clk);
-	reg = readl_relaxed(priv->base + RNG_CR);
-	reg |= RNG_CR_RNGEN;
-	writel_relaxed(reg, priv->base + RNG_CR);
+
+	/* Clean error indications */
+	writel_relaxed(0, priv->base + RNG_SR);
+
+	if (priv->data->has_cond_reset) {
+		/*
+		 * Correct configuration in bits [29:4] must be set in the same
+		 * access that set RNG_CR_CONDRST bit. Else config setting is
+		 * not taken into account. CONFIGLOCK bit must also be unset but
+		 * it is not handled at the moment.
+		 */
+		writel_relaxed(priv->pm_cr | RNG_CR_CONDRST, priv->base + RNG_CR);
+
+		reg = readl_relaxed(priv->base + RNG_CR);
+		reg |= RNG_CR_RNGEN;
+		reg &= ~RNG_CR_CONDRST;
+		writel_relaxed(reg, priv->base + RNG_CR);
+	} else {
+		reg = readl_relaxed(priv->base + RNG_CR);
+		reg |= RNG_CR_RNGEN;
+		writel_relaxed(reg, priv->base + RNG_CR);
+	}
 
 	return 0;
 }
