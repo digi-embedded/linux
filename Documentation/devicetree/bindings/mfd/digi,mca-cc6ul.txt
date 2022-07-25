@@ -44,6 +44,11 @@ Sub-nodes:
   the MCA. Refer to binding at:
   "Documentation/devicetree/bindings/rtc/digi,mca-rtc.txt"
 
+- tamper : The presence of this node enables the tamper support.
+
+- uart : This node defines settings for the MCA UART. Refer to binding at:
+  "Documentation/devicetree/bindings/serial/digi,mca-uart.txt"
+
 - watchdog : This node defines settings for the Watchdog timer associated
   with the MCA. Refer to binding at:
   "Documentation/devicetree/bindings/watchdog/mca-wdt.txt"
@@ -63,22 +68,12 @@ Example:
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_mca_cc6ul>;
 
-		mca_adc: adc {
+		adc {
 			compatible = "digi,mca-adc";
 			digi,adc-ch-list = <4>;
 		};
 
-		pwrkey {
-			compatible = "digi,mca-pwrkey";
-			digi,key-power;
-			digi,key-power-up;
-			digi,key-sleep;
-			digi,debounce-ms = <100>;
-			digi,pwroff-delay-sec = <6>;
-			digi,pwroff-guard-sec = <30>;
-		};
-
-		mca_gpio: gpio {
+		gpio {
 			compatible = "digi,mca-gpio";
 			gpio-controller;
 			#gpio-cells = <2>;
@@ -91,15 +86,36 @@ Example:
 			pwroff-wakeup-capable-ios = <>;
 		};
 
+		pwrkey {
+			compatible = "digi,mca-pwrkey";
+			digi,key-power;
+			digi,key-power-up;
+			digi,key-sleep;
+			digi,debounce-ms = <100>;
+			digi,pwroff-delay-sec = <6>;
+			digi,pwroff-guard-sec = <30>;
+		};
+
 		rtc {
 			compatible = "digi,mca-rtc";
 		};
 
-		wdt {
-			compatible = "digi,mca-wdt";
+		tamper {
+			compatible = "digi,mca-tamper";
 		};
 
-		mca_tamper: tamper {
-			compatible = "digi,mca-tamper";
+		uart {
+			compatible = "digi,mca-uart";
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			mca_uart0: serial@0x900 {
+				reg = <0x900>;
+				index = <0>;
+			};
+		};
+
+		wdt {
+			compatible = "digi,mca-wdt";
 		};
 	};
