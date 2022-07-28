@@ -280,7 +280,7 @@
 	status = "okay";
 
 	mca_cc8x: mca@63 {
-		compatible = "digi,mca-cc8";
+		compatible = "digi,mca-kl17";
 		reg = <0x63>;
 		interrupt-parent = <&gic>;
 		interrupts = <GIC_SPI 177 IRQ_TYPE_LEVEL_HIGH>;

@@ -73,44 +73,61 @@ static const struct mca_reason last_mpu_reset[] = {
 	{MCA_LAST_MPU_RST_MCARST,	"MCA reset"},
 };
 
-static const struct mca_reason last_wakeup[] = {
-	{MCA_LAST_WAKEUP_PWRIO,	"Power IO"},
-	{MCA_LAST_WAKEUP_TIMER,	"Timer"},
-	{MCA_LAST_WAKEUP_RTC,	"RTC"},
+static const struct mca_reason last_wakeup_kl03[] = {
+	{MCA_LAST_WAKEUP_PWRIO,		"Power IO"},
+	{MCA_LAST_WAKEUP_TIMER,		"Timer"},
+	{MCA_LAST_WAKEUP_RTC,		"RTC"},
 	{MCA_LAST_WAKEUP_LPUART,	"LP UART"},
 	{MCA_LAST_WAKEUP_TAMPER0,	"Tamper0"},
 	{MCA_LAST_WAKEUP_TAMPER1,	"Tamper1"},
 	{MCA_LAST_WAKEUP_TAMPER2,	"Tamper2"},
 	{MCA_LAST_WAKEUP_TAMPER3,	"Tamper3"},
-	{MCA_LAST_WAKEUP_IO0,	"IO0"},
-	{MCA_LAST_WAKEUP_IO1,	"IO1"},
-	{MCA_LAST_WAKEUP_IO2,	"IO2"},
-	{MCA_LAST_WAKEUP_IO3,	"IO3"},
-	{MCA_LAST_WAKEUP_IO4,	"IO4"},
-	{MCA_LAST_WAKEUP_IO5,	"IO5"},
-	{MCA_LAST_WAKEUP_IO6,	"IO6"},
-	{MCA_LAST_WAKEUP_IO7,	"IO7"},
-	{MCA_LAST_WAKEUP_VCC,	"Vcc"},
-	{MCA_LAST_WAKEUP_CPU,	"CPU"},
-	/* Values exclusive to the CC8 family */
-	{MCA_CC8_LAST_WAKEUP_IO8,	"IO8"},
-	{MCA_CC8_LAST_WAKEUP_IO9,	"IO9"},
-	{MCA_CC8_LAST_WAKEUP_IO10,	"IO10"},
-	{MCA_CC8_LAST_WAKEUP_IO11,	"IO11"},
-	{MCA_CC8_LAST_WAKEUP_IO12,	"IO12"},
-	{MCA_CC8_LAST_WAKEUP_IO13,	"IO13"},
-	{MCA_CC8_LAST_WAKEUP_IO14,	"IO14"},
-	{MCA_CC8_LAST_WAKEUP_IO15,	"IO15"},
-	{MCA_CC8_LAST_WAKEUP_IO16,	"IO16"},
-	{MCA_CC8_LAST_WAKEUP_IO17,	"IO17"},
-	{MCA_CC8_LAST_WAKEUP_IO18,	"IO18"},
-	{MCA_CC8_LAST_WAKEUP_IO19,	"IO19"},
-	{MCA_CC8_LAST_WAKEUP_IO20,	"IO20"},
-	{MCA_CC8_LAST_WAKEUP_IO21,	"IO21"},
+	{MCA_LAST_WAKEUP_IO0,		"IO0"},
+	{MCA_LAST_WAKEUP_IO1,		"IO1"},
+	{MCA_LAST_WAKEUP_IO2,		"IO2"},
+	{MCA_LAST_WAKEUP_IO3,		"IO3"},
+	{MCA_LAST_WAKEUP_IO4,		"IO4"},
+	{MCA_LAST_WAKEUP_IO5,		"IO5"},
+	{MCA_LAST_WAKEUP_IO6,		"IO6"},
+	{MCA_LAST_WAKEUP_IO7,		"IO7"},
+	{MCA_LAST_WAKEUP_VCC,		"Vcc"},
+	{MCA_LAST_WAKEUP_CPU,		"CPU"},
 };
 
-/* Keep track of the number of wakeup reasons used by the CC6UL */
-#define MCA_NUM_CC6UL_WAKEUP_REASONS		18
+static const struct mca_reason last_wakeup_kl17[] = {
+	{MCA_LAST_WAKEUP_PWRIO,		"Power IO"},
+	{MCA_LAST_WAKEUP_TIMER,		"Timer"},
+	{MCA_LAST_WAKEUP_RTC,		"RTC"},
+	{MCA_LAST_WAKEUP_LPUART,	"LP UART"},
+	{MCA_LAST_WAKEUP_TAMPER0,	"Tamper0"},
+	{MCA_LAST_WAKEUP_TAMPER1,	"Tamper1"},
+	{MCA_LAST_WAKEUP_TAMPER2,	"Tamper2"},
+	{MCA_LAST_WAKEUP_TAMPER3,	"Tamper3"},
+	{MCA_LAST_WAKEUP_IO0,		"IO0"},
+	{MCA_LAST_WAKEUP_IO1,		"IO1"},
+	{MCA_LAST_WAKEUP_IO2,		"IO2"},
+	{MCA_LAST_WAKEUP_IO3,		"IO3"},
+	{MCA_LAST_WAKEUP_IO4,		"IO4"},
+	{MCA_LAST_WAKEUP_IO5,		"IO5"},
+	{MCA_LAST_WAKEUP_IO6,		"IO6"},
+	{MCA_LAST_WAKEUP_IO7,		"IO7"},
+	{MCA_KL17_LAST_WAKEUP_VCC,	"Vcc"},
+	{MCA_KL17_LAST_WAKEUP_CPU,	"CPU"},
+	{MCA_KL17_LAST_WAKEUP_IO8,	"IO8"},
+	{MCA_KL17_LAST_WAKEUP_IO9,	"IO9"},
+	{MCA_KL17_LAST_WAKEUP_IO10,	"IO10"},
+	{MCA_KL17_LAST_WAKEUP_IO11,	"IO11"},
+	{MCA_KL17_LAST_WAKEUP_IO12,	"IO12"},
+	{MCA_KL17_LAST_WAKEUP_IO13,	"IO13"},
+	{MCA_KL17_LAST_WAKEUP_IO14,	"IO14"},
+	{MCA_KL17_LAST_WAKEUP_IO15,	"IO15"},
+	{MCA_KL17_LAST_WAKEUP_IO16,	"IO16"},
+	{MCA_KL17_LAST_WAKEUP_IO17,	"IO17"},
+	{MCA_KL17_LAST_WAKEUP_IO18,	"IO18"},
+	{MCA_KL17_LAST_WAKEUP_IO19,	"IO19"},
+	{MCA_KL17_LAST_WAKEUP_IO20,	"IO20"},
+	{MCA_KL17_LAST_WAKEUP_IO21,	"IO21"},
+};
 
 static struct mca_drv *pmca;
 
@@ -206,17 +223,17 @@ static struct resource mca_gpios_resources[] = {
 		.end    = MCA_IRQ_GPIO_BANK_0,
 		.flags  = IORESOURCE_IRQ,
 	},
-	/* GPIO banks 1 and 2 are exclusive to the CC8 family */
+	/* GPIO banks 1 and 2 are exclusive to the KL17 */
 	{
 		.name   = MCA_IRQ_GPIO_BANK_1_NAME,
-		.start  = MCA_CC8_IRQ_GPIO_BANK_1,
-		.end    = MCA_CC8_IRQ_GPIO_BANK_1,
+		.start  = MCA_KL17_IRQ_GPIO_BANK_1,
+		.end    = MCA_KL17_IRQ_GPIO_BANK_1,
 		.flags  = IORESOURCE_IRQ,
 	},
 	{
 		.name   = MCA_IRQ_GPIO_BANK_2_NAME,
-		.start  = MCA_CC8_IRQ_GPIO_BANK_2,
-		.end    = MCA_CC8_IRQ_GPIO_BANK_2,
+		.start  = MCA_KL17_IRQ_GPIO_BANK_2,
+		.end    = MCA_KL17_IRQ_GPIO_BANK_2,
 		.flags  = IORESOURCE_IRQ,
 	},
 };
@@ -228,32 +245,32 @@ static struct resource mca_uart_resources[] = {
 		.end    = MCA_IRQ_UART0,
 		.flags  = IORESOURCE_IRQ,
 	},
-	/* UART1 and UART2 are exclusive to the CC8 family */
+	/* UART1 and UART2 are exclusive to the KL17 */
 	{
 		.name   = MCA_IRQ_UART1_NAME,
-		.start  = MCA_CC8_IRQ_UART1,
-		.end    = MCA_CC8_IRQ_UART1,
+		.start  = MCA_KL17_IRQ_UART1,
+		.end    = MCA_KL17_IRQ_UART1,
 		.flags  = IORESOURCE_IRQ,
 	},
 	{
 		.name   = MCA_IRQ_UART2_NAME,
-		.start  = MCA_CC8_IRQ_UART2,
-		.end    = MCA_CC8_IRQ_UART2,
+		.start  = MCA_KL17_IRQ_UART2,
+		.end    = MCA_KL17_IRQ_UART2,
 		.flags  = IORESOURCE_IRQ,
 	},
 };
 
 
-static struct resource mca_cc8_keypad_resources[] = {
+static struct resource mca_kl17_keypad_resources[] = {
 	{
 		.name   = MCA_IRQ_KEYPAD_NAME,
-		.start  = MCA_CC8_IRQ_KEYPAD,
-		.end    = MCA_CC8_IRQ_KEYPAD,
+		.start  = MCA_KL17_IRQ_KEYPAD,
+		.end    = MCA_KL17_IRQ_KEYPAD,
 		.flags  = IORESOURCE_IRQ,
 	},
 };
 
-static const struct mfd_cell mca_cc6ul_devs[] = {
+static const struct mfd_cell mca_kl03_devs[] = {
 	{
 		.name           = MCA_DRVNAME_RTC,
 		.num_resources  = ARRAY_SIZE(mca_rtc_resources),
@@ -268,7 +285,7 @@ static const struct mfd_cell mca_cc6ul_devs[] = {
 	},
 	{
 		.name           = MCA_DRVNAME_GPIO,
-		/* Use CC6UL subset of GPIOs */
+		/* Use KL03 subset of GPIOs */
 		.num_resources	= ARRAY_SIZE(mca_gpios_resources) - 2,
 		.resources	= mca_gpios_resources,
 		.of_compatible = "digi,mca-gpio",
@@ -293,14 +310,14 @@ static const struct mfd_cell mca_cc6ul_devs[] = {
 	},
 	{
 		.name           = MCA_DRVNAME_UART,
-		/* Use CC6UL subset of UARTs */
+		/* Use KL03 subset of UARTs */
 		.num_resources  = ARRAY_SIZE(mca_uart_resources) - 2,
 		.resources      = mca_uart_resources,
 		.of_compatible = "digi,mca-uart",
 	},
 };
 
-static const struct mfd_cell mca_cc8_devs[] = {
+static const struct mfd_cell mca_kl17_devs[] = {
 	{
 		.name           = MCA_DRVNAME_RTC,
 		.num_resources  = ARRAY_SIZE(mca_rtc_resources),
@@ -314,7 +331,7 @@ static const struct mfd_cell mca_cc8_devs[] = {
 		.of_compatible  = "digi,mca-wdt",
 	},
 	{
-		.name           = MCA_CC8_DRVNAME_GPIO_WATCHDOG,
+		.name           = MCA_DRVNAME_GPIO_WATCHDOG,
 		.num_resources	= ARRAY_SIZE(mca_watchdog_resources),
 		.resources	= mca_watchdog_resources,
 		.of_compatible  = "digi,mca-gpio-wdt",
@@ -350,17 +367,17 @@ static const struct mfd_cell mca_cc8_devs[] = {
 		.of_compatible = "digi,mca-uart",
 	},
 	{
-		.name           = MCA_CC8_DRVNAME_PWM,
+		.name           = MCA_DRVNAME_PWM,
 		.of_compatible	= "digi,mca-pwm",
 	},
 	{
-		.name           = MCA_CC8_DRVNAME_KEYPAD,
+		.name           = MCA_DRVNAME_KEYPAD,
 		.of_compatible	= "digi,mca-keypad",
-		.num_resources  = ARRAY_SIZE(mca_cc8_keypad_resources),
-		.resources      = mca_cc8_keypad_resources,
+		.num_resources  = ARRAY_SIZE(mca_kl17_keypad_resources),
+		.resources      = mca_kl17_keypad_resources,
 	},
 	{
-		.name           = MCA_CC8_DRVNAME_LED,
+		.name           = MCA_DRVNAME_LED,
 		.of_compatible	= "digi,mca-led",
 	},
 };
@@ -618,15 +635,18 @@ static ssize_t last_wakeup_reason_show(struct device *dev,
 				       char *buf)
 {
 	struct mca_drv *mca = dev_get_drvdata(dev);
-	/* Use CC6UL subset of wakeup reasons by default */
-	int n_reasons = MCA_NUM_CC6UL_WAKEUP_REASONS;
+	/* Use KL03 subset of wakeup reasons by default */
+	const struct mca_reason *last_wakeup = last_wakeup_kl03;
+	int n_reasons = ARRAY_SIZE(last_wakeup_kl03);
 	bool comma = false;
 	u32 last_wakeup_val;
 	int ret, i;
 
-	/* Use full reason array if a CC8 module is detected */
-	if (mca->dev_id == MCA_KL17_DEVICE_ID)
-		n_reasons = ARRAY_SIZE(last_wakeup);
+	/* Use KL17 reason array if KL17 detected */
+	if (mca->dev_id == MCA_KL17_DEVICE_ID) {
+		last_wakeup = last_wakeup_kl17;
+		n_reasons = ARRAY_SIZE(last_wakeup_kl17);
+	}
 
 	ret = regmap_bulk_read(mca->regmap, MCA_LAST_WAKEUP_REASON_0,
 			       &last_wakeup_val, sizeof(last_wakeup_val));
@@ -1101,8 +1121,8 @@ static int mca_add_dyn_sysfs_entries(struct mca_drv *mca,
 
 int mca_device_init(struct mca_drv *mca, u32 irq)
 {
-	const struct mfd_cell *mca_devs = mca_cc6ul_devs;
-	int n_devs = ARRAY_SIZE(mca_cc6ul_devs);
+	const struct mfd_cell *mca_devs = mca_kl03_devs;
+	int n_devs = ARRAY_SIZE(mca_kl03_devs);
 	int ret;
 	unsigned int val;
 
@@ -1154,7 +1174,7 @@ int mca_device_init(struct mca_drv *mca, u32 irq)
 	mca->fw_version = (u16)(val & ~MCA_FW_VER_ALPHA_MASK);
 	mca->fw_is_alpha = val & MCA_FW_VER_ALPHA_MASK ? true : false;
 
-	/* Operate at 100KHz for CC6UL MCA versions older than 1.19 */
+	/* Operate at 100KHz for KL03 MCA versions older than 1.19 */
 	if (mca->dev_id == MCA_KL03_DEVICE_ID &&
 	    mca->fw_version < MCA_MAKE_FW_VER(1, 19)) {
 		set_i2c_speed(mca, 100000);
@@ -1181,7 +1201,7 @@ int mca_device_init(struct mca_drv *mca, u32 irq)
 		}
 	}
 
-	/* CC6UL handles SOM version and fw update gpio differently */
+	/* KL03 handles SOM version and fw update gpio differently */
 	if (mca->dev_id == MCA_KL03_DEVICE_ID) {
 		/* Write the SOM hardware version to MCA register */
 		mca->som_hv = digi_get_som_hv();
@@ -1243,10 +1263,10 @@ int mca_device_init(struct mca_drv *mca, u32 irq)
 	 */
 	mca->dev->dma_mask = &mca->dev->coherent_dma_mask;
 
-	/* Use CC8 devs array if a CC8 module is detected */
+	/* Use KL17 devs array if a KL17 is detected */
 	if (mca->dev_id == MCA_KL17_DEVICE_ID) {
-		mca_devs = mca_cc8_devs;
-		n_devs = ARRAY_SIZE(mca_cc8_devs);
+		mca_devs = mca_kl17_devs;
+		n_devs = ARRAY_SIZE(mca_kl17_devs);
 	}
 
 	ret = mfd_add_devices(mca->dev, -1, mca_devs,

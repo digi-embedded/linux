@@ -32,9 +32,8 @@ static const struct regmap_access_table mca_readable_table = {
 	.n_yes_ranges = ARRAY_SIZE(mca_readable_ranges),
 };
 
-/* CC6UL ranges */
-
-static const struct regmap_range mca_cc6ul_writeable_ranges[] = {
+/* KL03 ranges */
+static const struct regmap_range mca_kl03_writeable_ranges[] = {
 	regmap_reg_range(MCA_HWVER_SOM, MCA_HWVER_SOM),
 	regmap_reg_range(MCA_IRQ_STATUS_0, MCA_IRQ_MASK_3),
 	regmap_reg_range(MCA_PWR_CTRL_0, MCA_PWR_KEY_GUARD),
@@ -64,7 +63,7 @@ static const struct regmap_range mca_cc6ul_writeable_ranges[] = {
 	regmap_reg_range(MCA_RESET_SAFE_TIMEOUT, MCA_PWROFF_SAFE_TIMEOUT),
 };
 
-static const struct regmap_range mca_cc6ul_volatile_ranges[] = {
+static const struct regmap_range mca_kl03_volatile_ranges[] = {
 	/* Real volatile registers */
 	regmap_reg_range(MCA_IRQ_STATUS_0, MCA_IRQ_STATUS_3),
 	regmap_reg_range(MCA_TAMPER0_DATE_START, MCA_TAMPER0_EVENT),
@@ -122,31 +121,30 @@ static const struct regmap_range mca_cc6ul_volatile_ranges[] = {
 			 MCA_UART0_OFFSET + MCA_REG_UART_LEN),
 };
 
-static const struct regmap_access_table mca_cc6ul_writeable_table = {
-	.yes_ranges = mca_cc6ul_writeable_ranges,
-	.n_yes_ranges = ARRAY_SIZE(mca_cc6ul_writeable_ranges),
+static const struct regmap_access_table mca_kl03_writeable_table = {
+	.yes_ranges = mca_kl03_writeable_ranges,
+	.n_yes_ranges = ARRAY_SIZE(mca_kl03_writeable_ranges),
 };
 
-static const struct regmap_access_table mca_cc6ul_volatile_table = {
-	.yes_ranges = mca_cc6ul_volatile_ranges,
-	.n_yes_ranges = ARRAY_SIZE(mca_cc6ul_volatile_ranges),
+static const struct regmap_access_table mca_kl03_volatile_table = {
+	.yes_ranges = mca_kl03_volatile_ranges,
+	.n_yes_ranges = ARRAY_SIZE(mca_kl03_volatile_ranges),
 };
 
-static struct regmap_config mca_cc6ul_regmap_config = {
+static struct regmap_config mca_kl03_regmap_config = {
 	.reg_bits = 16,
 	.val_bits = 8,
 	.max_register = 0xFFFF,
 
 	.rd_table = &mca_readable_table,
-	.wr_table = &mca_cc6ul_writeable_table,
-	.volatile_table = &mca_cc6ul_volatile_table,
+	.wr_table = &mca_kl03_writeable_table,
+	.volatile_table = &mca_kl03_volatile_table,
 
 	.cache_type = REGCACHE_NONE,
 };
 
-/* CC8 ranges */
-
-static const struct regmap_range mca_cc8_writeable_ranges[] = {
+/* KL17 ranges */
+static const struct regmap_range mca_kl17_writeable_ranges[] = {
 	regmap_reg_range(MCA_HWVER_SOM, MCA_HWVER_SOM),
 	regmap_reg_range(MCA_IRQ_STATUS_0, MCA_IRQ_MASK_3),
 	regmap_reg_range(MCA_PWR_CTRL_0, MCA_PWR_KEY_GUARD),
@@ -183,7 +181,7 @@ static const struct regmap_range mca_cc8_writeable_ranges[] = {
 	regmap_reg_range(MCA_REG_LED0_CFG0, MCA_REG_LED8_BLK_MS_OFF_H),
 };
 
-static const struct regmap_range mca_cc8_volatile_ranges[] = {
+static const struct regmap_range mca_kl17_volatile_ranges[] = {
 	/* Real volatile registers */
 	regmap_reg_range(MCA_IRQ_STATUS_0, MCA_IRQ_STATUS_3),
 	regmap_reg_range(MCA_TAMPER0_DATE_START, MCA_TAMPER0_EVENT),
@@ -248,24 +246,24 @@ static const struct regmap_range mca_cc8_volatile_ranges[] = {
 	regmap_reg_range(MCA_REG_LED0_CFG0, MCA_REG_LED8_BLK_MS_OFF_H),
 };
 
-static const struct regmap_access_table mca_cc8_writeable_table = {
-	.yes_ranges = mca_cc8_writeable_ranges,
-	.n_yes_ranges = ARRAY_SIZE(mca_cc8_writeable_ranges),
+static const struct regmap_access_table mca_kl17_writeable_table = {
+	.yes_ranges = mca_kl17_writeable_ranges,
+	.n_yes_ranges = ARRAY_SIZE(mca_kl17_writeable_ranges),
 };
 
-static const struct regmap_access_table mca_cc8_volatile_table = {
-	.yes_ranges = mca_cc8_volatile_ranges,
-	.n_yes_ranges = ARRAY_SIZE(mca_cc8_volatile_ranges),
+static const struct regmap_access_table mca_kl17_volatile_table = {
+	.yes_ranges = mca_kl17_volatile_ranges,
+	.n_yes_ranges = ARRAY_SIZE(mca_kl17_volatile_ranges),
 };
 
-static struct regmap_config mca_cc8_regmap_config = {
+static struct regmap_config mca_kl17_regmap_config = {
 	.reg_bits = 16,
 	.val_bits = 8,
 	.max_register = 0xFFFF,
 
 	.rd_table = &mca_readable_table,
-	.wr_table = &mca_cc8_writeable_table,
-	.volatile_table = &mca_cc8_volatile_table,
+	.wr_table = &mca_kl17_writeable_table,
+	.volatile_table = &mca_kl17_volatile_table,
 
 	.cache_type = REGCACHE_NONE,
 };
@@ -273,12 +271,21 @@ static struct regmap_config mca_cc8_regmap_config = {
 /* Associate each compatible string with its corresponding regmap config */
 static const struct of_device_id mca_dt_ids[] = {
 	{
+		.compatible = "digi,mca-kl03",
+		.data = &mca_kl03_regmap_config
+	},
+	{
+		.compatible = "digi,mca-kl17",
+		.data = &mca_kl17_regmap_config
+	},
+	/* keep old strings for backwards compatibility */
+	{
 		.compatible = "digi,mca-cc6ul",
-		.data = &mca_cc6ul_regmap_config
+		.data = &mca_kl03_regmap_config
 	},
 	{
 		.compatible = "digi,mca-cc8",
-		.data = &mca_cc8_regmap_config
+		.data = &mca_kl17_regmap_config
 	},
 	{ }
 };

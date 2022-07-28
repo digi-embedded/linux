@@ -14,7 +14,7 @@ watchdog                 Watchdog
 
 Required properties:
 
-- compatible : Should be "digi,mca-cc6ul"
+- compatible : Should be "digi,mca-kl03"
 - reg : Specifies the I2C slave address (this defaults to 0x7e but it can be
   modified to match the chip's OTP settings).
 - interrupt-parent : Specifies the reference to the interrupt controller for
@@ -58,7 +58,7 @@ Sub-nodes:
 Example:
 
 	mca_cc6ul: mca@7e {
-		compatible = "digi,mca-cc6ul";
+		compatible = "digi,mca-kl03";
 		reg = <0x7e>;
 		interrupt-parent = <&gpio5>;
 		interrupts = <4 IRQ_TYPE_EDGE_FALLING>;

@@ -354,7 +354,7 @@ config PWM_LPSS_PLATFORM
 
 config PWM_MCA
 	tristate "Digi MCA PWM support"
-	depends on MFD_MCA_CC8
+	depends on MFD_MCA
 	help
 	  PWM framework driver for Digi MCA.
 
