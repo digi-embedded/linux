@@ -98,6 +98,7 @@ struct mca_drv {
 #define REBOOT_SAFE_KL17_FW_VER	MCA_MAKE_FW_VER(1,03)
 #define DEBTB50M_KL17_FW_VER	MCA_MAKE_FW_VER(0, 13)
 #define PWRKEY_UP_KL17_FW_VER	MCA_MAKE_FW_VER(0, 17)
+#define MCA_LEDS_MIN_FW		MCA_MAKE_FW_VER(1, 1)
 
 /* Function to know if a feature is supported in a specific FW version */
 #define MCA_FEATURE_IS_SUPPORTED(mca, kl03_ver, kl17_ver)	\
@@ -114,12 +115,11 @@ struct mca_drv {
 #define MCA_DRVNAME_COMPARATOR	"mca-som-comparator"
 #define MCA_DRVNAME_UART	"mca-som-uart"
 
-/* Values exclusive to the CC8 family */
-#define MCA_CC8_DRVNAME_GPIO_WATCHDOG	"mca-som-gpio-watchdog"
-#define MCA_CC8_DRVNAME_KEYPAD		"mca-som-keypad"
-#define MCA_CC8_DRVNAME_LED		"mca-som-led"
-#define MCA_CC8_DRVNAME_PWM		"mca-som-pwm"
-#define MCA_CC8_LEDS_MIN_FW		MCA_MAKE_FW_VER(1, 1)
+/* Modules exclusively available on KL17 */
+#define MCA_DRVNAME_GPIO_WATCHDOG	"mca-som-gpio-watchdog"
+#define MCA_DRVNAME_KEYPAD		"mca-som-keypad"
+#define MCA_DRVNAME_LED			"mca-som-led"
+#define MCA_DRVNAME_PWM			"mca-som-pwm"
 
 /* Interrupts */
 enum mca_irqs {
@@ -136,12 +136,12 @@ enum mca_irqs {
 	MCA_IRQ_TAMPER2,
 	MCA_IRQ_TAMPER3,
 	MCA_IRQ_UART0,
-	/* Values exclusive to the CC8 family */
-	MCA_CC8_IRQ_GPIO_BANK_1,
-	MCA_CC8_IRQ_GPIO_BANK_2,
-	MCA_CC8_IRQ_UART1,
-	MCA_CC8_IRQ_UART2,
-	MCA_CC8_IRQ_KEYPAD,
+	/* Values exclusive to the KL17 */
+	MCA_KL17_IRQ_GPIO_BANK_1,
+	MCA_KL17_IRQ_GPIO_BANK_2,
+	MCA_KL17_IRQ_UART1,
+	MCA_KL17_IRQ_UART2,
+	MCA_KL17_IRQ_KEYPAD,
 	/* ... */
 
 	MCA_NUM_IRQS,
@@ -155,7 +155,7 @@ int mca_suspend(struct device *dev);
 int mca_resume(struct device *dev);
 
 
-#if defined(CONFIG_MFD_MCA_CC8)
+#if defined(CONFIG_MFD_MCA_CC8X)
 /* Functions specific to the cc8x */
 int mca_cc8x_add_irq_chip(struct regmap *map, int irq, int irq_base,
 			  const struct regmap_irq_chip *chip,

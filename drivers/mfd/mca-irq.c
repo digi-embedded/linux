@@ -74,37 +74,37 @@ static const struct regmap_irq mca_irqs[] = {
 		.reg_offset = MCA_IRQ_2_OFFSET,
 		.mask = MCA_M_RTC_PERIODIC_IRQ,
 	},
-	/* IRQs exclusive to the cc8 family */
-	[MCA_CC8_IRQ_GPIO_BANK_1] = {
+	/* IRQs exclusive to the KL17 */
+	[MCA_KL17_IRQ_GPIO_BANK_1] = {
 		.reg_offset = MCA_IRQ_1_OFFSET,
 		.mask = MCA_GPIO_BANK_1,
 	},
-	[MCA_CC8_IRQ_GPIO_BANK_2] = {
+	[MCA_KL17_IRQ_GPIO_BANK_2] = {
 		.reg_offset = MCA_IRQ_1_OFFSET,
 		.mask = MCA_GPIO_BANK_2,
 	},
-	[MCA_CC8_IRQ_UART1] = {
+	[MCA_KL17_IRQ_UART1] = {
 		.reg_offset = MCA_IRQ_2_OFFSET,
 		.mask = MCA_M_UART1,
 	},
-	[MCA_CC8_IRQ_UART2] = {
+	[MCA_KL17_IRQ_UART2] = {
 		.reg_offset = MCA_IRQ_2_OFFSET,
 		.mask = MCA_M_UART2,
 	},
-	[MCA_CC8_IRQ_KEYPAD] = {
+	[MCA_KL17_IRQ_KEYPAD] = {
 		.reg_offset = MCA_IRQ_2_OFFSET,
 		.mask = MCA_M_KEYPAD_IRQ,
 	},
 };
 
-/* Keep track of the number of IRQs that are exclusive to the CC8 family */
-#define MCA_NUM_CC8_IRQS		5
+/* Keep track of the number of IRQs that are exclusive to the KL17 */
+#define MCA_NUM_KL17_IRQS		5
 
 static struct regmap_irq_chip mca_irq_chip = {
 	.name = "mca-irq",
 	.irqs = mca_irqs,
-	/* By default, use only the CC6UL subset of IRQs */
-	.num_irqs = ARRAY_SIZE(mca_irqs) - MCA_NUM_CC8_IRQS,
+	/* By default, use only the KL03 subset of IRQs */
+	.num_irqs = ARRAY_SIZE(mca_irqs) - MCA_NUM_KL17_IRQS,
 	.num_regs = MCA_NUM_IRQ_REGS,
 	.status_base = MCA_IRQ_STATUS_0,
 	.mask_base = MCA_IRQ_MASK_0,
@@ -123,11 +123,11 @@ int mca_irq_init(struct mca_drv *mca)
 
 	mca->irq_base = -1;
 
-	/* Use full IRQ array if a CC8 module is detected */
+	/* Use full IRQ array if a KL17 is detected */
 	if (mca->dev_id == MCA_KL17_DEVICE_ID)
-		mca_irq_chip.num_irqs += MCA_NUM_CC8_IRQS;
+		mca_irq_chip.num_irqs += MCA_NUM_KL17_IRQS;
 
-#if defined(CONFIG_MFD_MCA_CC8)
+#if defined(CONFIG_MFD_MCA_CC8X)
 	if (of_machine_is_compatible("digi,ccimx8x")) {
 		ret = mca_cc8x_add_irq_chip(mca->regmap, mca->chip_irq,
 					    mca->irq_base, &mca_irq_chip,
@@ -151,15 +151,12 @@ int mca_irq_init(struct mca_drv *mca)
 
 void mca_irq_exit(struct mca_drv *mca)
 {
-#if defined(CONFIG_MFD_MCA_CC8)
 	if (!mca->chip_irq) {
-		if (of_machine_is_compatible("fsl,imx8qxp") ||
-		    of_machine_is_compatible("fsl,imx8dxp"))
+#if defined(CONFIG_MFD_MCA_CC8X)
+		if (of_machine_is_compatible("digi,ccimx8x"))
 			mca_cc8x_del_irq_chip(mca->regmap_irq);
 		else
 #endif
 			regmap_del_irq_chip(mca->chip_irq, mca->regmap_irq);
-#if defined(CONFIG_MFD_MCA_CC8)
 	}
-#endif
 }
