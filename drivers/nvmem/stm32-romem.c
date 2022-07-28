@@ -263,9 +263,8 @@ static int stm32_romem_probe(struct platform_device *pdev)
 			/* wait for OP-TEE client driver to be up and ready */
 			if (!priv->ta) {
 				/* BSEC PTA is required or SMC not ready */
-				if (cfg->ta || !stm32_bsec_check()) {
+				if (cfg->ta || !stm32_bsec_check())
 					return -EPROBE_DEFER;
-				}
 			}
 		}
 		if (priv->ta) {
@@ -289,7 +288,7 @@ static int stm32_romem_probe(struct platform_device *pdev)
 		if (priv->clk) {
 			ret = clk_prepare_enable(priv->clk);
 			if (ret)
-				return dev_err_probe(dev, ret,"failed to enable clock\n");
+				return dev_err_probe(dev, ret, "failed to enable clock\n");
 		}
 
 		pm_runtime_set_autosuspend_delay(dev, STM32_ROMEM_AUTOSUSPEND_DELAY_MS);
