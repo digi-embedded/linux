@@ -1161,6 +1161,36 @@ static int gc2145_enum_frame_size(struct v4l2_subdev *sd, struct v4l2_subdev_sta
 	return 0;
 }
 
+static int gc2145_enum_frame_interval(struct v4l2_subdev *sd, struct v4l2_subdev_state *sd_state,
+				      struct v4l2_subdev_frame_interval_enum *fie)
+{
+	struct gc2145 *gc2145 = to_gc2145(sd);
+	const struct gc2145_format *gc2145_format;
+	u32 code, i;
+
+	/* The driver currently only support a unique framerate per resolution */
+	if (fie->index > 0)
+		return -EINVAL;
+
+	gc2145_format = gc2145_get_format_code(gc2145, fie->code);
+	code = gc2145_format->code;
+	if (fie->code != code)
+		return -EINVAL;
+
+	for (i = 0; i < ARRAY_SIZE(supported_modes); i++)
+		if (supported_modes[i].width == fie->width &&
+		    supported_modes[i].height == fie->height)
+			break;
+
+	if (i >= ARRAY_SIZE(supported_modes))
+		return -EINVAL;
+
+	fie->interval.numerator = supported_modes[i].frame_interval.numerator;
+	fie->interval.denominator = supported_modes[i].frame_interval.denominator;
+
+	return 0;
+}
+
 static void gc2145_reset_colorspace(struct v4l2_mbus_framefmt *fmt)
 {
 	fmt->colorspace = V4L2_COLORSPACE_SRGB;
@@ -1591,6 +1621,7 @@ static const struct v4l2_subdev_pad_ops gc2145_pad_ops = {
 	.get_fmt = gc2145_get_pad_format,
 	.set_fmt = gc2145_set_pad_format,
 	.enum_frame_size = gc2145_enum_frame_size,
+	.enum_frame_interval = gc2145_enum_frame_interval,
 };
 
 static const struct v4l2_subdev_ops gc2145_subdev_ops = {
