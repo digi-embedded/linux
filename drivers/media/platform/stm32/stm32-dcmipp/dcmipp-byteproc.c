@@ -41,6 +41,7 @@
 #define DCMIPP_P0PPCR_BSM_MASK GENMASK(8, 7)
 #define DCMIPP_P0PPCR_BSM_SHIFT 0x7
 #define DCMIPP_P0PPCR_LSM BIT(10)
+#define DCMIPP_P0PPCR_OELS BIT(11)
 
 #define IS_SINK(pad) (!(pad))
 #define IS_SRC(pad)  ((pad))
@@ -494,7 +495,7 @@ static int dcmipp_byteproc_configure_scale_crop
 
 	vprediv = byteproc->sink_fmt.height / byteproc->compose.height;
 	if (vprediv == 2)
-		val |= DCMIPP_P0PPCR_LSM; /* one line out of two */
+		val |= DCMIPP_P0PPCR_LSM | DCMIPP_P0PPCR_OELS;
 
 	/* decimate using bytes and lines skipping */
 	if (val) {
