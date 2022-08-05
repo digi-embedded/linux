@@ -947,7 +947,7 @@ static irqreturn_t dcmipp_bytecap_irq_callback(int irq, void *arg)
 			container_of(arg, struct dcmipp_bytecap_device, ved);
 
 	/* Store interrupt status register */
-	vcap->cmsr2 = reg_read(vcap, DCMIPP_CMSR2);
+	vcap->cmsr2 = reg_read(vcap, DCMIPP_CMSR2) & vcap->cmier;
 	vcap->it_count++;
 
 	/* Clear interrupt */
