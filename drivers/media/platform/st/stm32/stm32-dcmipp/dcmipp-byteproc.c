@@ -80,6 +80,18 @@ static const struct dcmipp_byteproc_pix_map dcmipp_byteproc_pix_map_list[] = {
 	PIXMAP_MBUS_BPP(SGBRG8_1X8, 1, MIPI_CSI2_DT_RAW8),
 	PIXMAP_MBUS_BPP(SGRBG8_1X8, 1, MIPI_CSI2_DT_RAW8),
 	PIXMAP_MBUS_BPP(SRGGB8_1X8, 1, MIPI_CSI2_DT_RAW8),
+	PIXMAP_MBUS_BPP(SBGGR10_1X10, 1, MIPI_CSI2_DT_RAW10),
+	PIXMAP_MBUS_BPP(SGBRG10_1X10, 1, MIPI_CSI2_DT_RAW10),
+	PIXMAP_MBUS_BPP(SGRBG10_1X10, 1, MIPI_CSI2_DT_RAW10),
+	PIXMAP_MBUS_BPP(SRGGB10_1X10, 1, MIPI_CSI2_DT_RAW10),
+	PIXMAP_MBUS_BPP(SBGGR12_1X12, 1, MIPI_CSI2_DT_RAW12),
+	PIXMAP_MBUS_BPP(SGBRG12_1X12, 1, MIPI_CSI2_DT_RAW12),
+	PIXMAP_MBUS_BPP(SGRBG12_1X12, 1, MIPI_CSI2_DT_RAW12),
+	PIXMAP_MBUS_BPP(SRGGB12_1X12, 1, MIPI_CSI2_DT_RAW12),
+	PIXMAP_MBUS_BPP(SBGGR14_1X14, 1, MIPI_CSI2_DT_RAW14),
+	PIXMAP_MBUS_BPP(SGBRG14_1X14, 1, MIPI_CSI2_DT_RAW14),
+	PIXMAP_MBUS_BPP(SGRBG14_1X14, 1, MIPI_CSI2_DT_RAW14),
+	PIXMAP_MBUS_BPP(SRGGB14_1X14, 1, MIPI_CSI2_DT_RAW14),
 	PIXMAP_MBUS_BPP(JPEG_1X8, 1, 0x00), /* TODO - DT value to be fixed */
 };
 
@@ -173,9 +185,23 @@ static void dcmipp_byteproc_adjust_compose(struct v4l2_rect *r,
 	r->left = 0;
 
 	/* Compose is not possible for JPEG or Bayer formats */
-	if (fmt->code == MEDIA_BUS_FMT_JPEG_1X8 ||
-	    fmt->code == MEDIA_BUS_FMT_SBGGR8_1X8 || fmt->code == MEDIA_BUS_FMT_SGBRG8_1X8 ||
-	    fmt->code == MEDIA_BUS_FMT_SGRBG8_1X8 || fmt->code == MEDIA_BUS_FMT_SRGGB8_1X8) {
+	if ((fmt->code == MEDIA_BUS_FMT_JPEG_1X8) ||
+	    (fmt->code == MEDIA_BUS_FMT_SBGGR8_1X8) ||
+	    (fmt->code == MEDIA_BUS_FMT_SGBRG8_1X8) ||
+	    (fmt->code == MEDIA_BUS_FMT_SGRBG8_1X8) ||
+	    (fmt->code == MEDIA_BUS_FMT_SRGGB8_1X8) ||
+	    (fmt->code == MEDIA_BUS_FMT_SBGGR10_1X10) ||
+	    (fmt->code == MEDIA_BUS_FMT_SGBRG10_1X10) ||
+	    (fmt->code == MEDIA_BUS_FMT_SGRBG10_1X10) ||
+	    (fmt->code == MEDIA_BUS_FMT_SRGGB10_1X10) ||
+	    (fmt->code == MEDIA_BUS_FMT_SBGGR12_1X12) ||
+	    (fmt->code == MEDIA_BUS_FMT_SGBRG12_1X12) ||
+	    (fmt->code == MEDIA_BUS_FMT_SGRBG12_1X12) ||
+	    (fmt->code == MEDIA_BUS_FMT_SRGGB12_1X12) ||
+	    (fmt->code == MEDIA_BUS_FMT_SBGGR14_1X14) ||
+	    (fmt->code == MEDIA_BUS_FMT_SGBRG14_1X14) ||
+	    (fmt->code == MEDIA_BUS_FMT_SGRBG14_1X14) ||
+	    (fmt->code == MEDIA_BUS_FMT_SRGGB14_1X14)) {
 		r->width = fmt->width;
 		r->height = fmt->height;
 		return;
