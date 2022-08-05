@@ -50,7 +50,6 @@
 
 /* CSI2 HW configuration */
 #define IMX335_LINK_FREQ	594000000
-#define IMX335_NUM_DATA_LANES	4
 
 #define IMX335_REG_MIN		0x00
 #define IMX335_REG_MAX		0xfffff
@@ -86,7 +85,8 @@ struct imx335_reg_list {
  * @vblank_max: Maximum vertical blanking in lines
  * @pclk: Sensor pixel clock
  * @link_freq_idx: Link frequency index
- * @reg_list: Register list for sensor mode
+ * @common_regs: Register list for common settings
+ * @mode_regs: Register list for mode specific settings
  */
 struct imx335_mode {
 	u32 width;
@@ -98,7 +98,8 @@ struct imx335_mode {
 	u32 vblank_max;
 	u64 pclk;
 	u32 link_freq_idx;
-	struct imx335_reg_list reg_list;
+	struct imx335_reg_list common_regs;
+	struct imx335_reg_list mode_regs;
 };
 
 /**
@@ -121,6 +122,7 @@ struct imx335_mode {
  * @cur_mode: Pointer to current selected sensor mode
  * @mutex: Mutex for serializing sensor controls
  * @streaming: Flag indicating streaming state
+ * @nb_lanes: Number of lanes to use
  */
 struct imx335 {
 	struct device *dev;
@@ -143,6 +145,7 @@ struct imx335 {
 	const struct imx335_mode *cur_mode;
 	struct mutex mutex;
 	bool streaming;
+	u32 nb_lanes;
 };
 
 static const s64 link_freq[] = {
@@ -237,8 +240,24 @@ static const struct imx335_reg mode_2592x1940_regs[] = {
 	{0x3a00, 0x01},
 };
 
+static const struct imx335_reg mode_10bits_regs[] = {
+	{0x3050, 0x00},
+	{0x319D, 0x00},
+	{0x341c, 0xff},
+	{0x341d, 0x01},
+	{0x3a01, 0x01},
+};
+
+static const struct imx335_reg mode_12bits_regs[] = {
+	{0x3050, 0x01},
+	{0x319D, 0x01},
+	{0x341c, 0x47},
+	{0x341d, 0x00},
+	{0x3a01, 0x03},
+};
+
 /* Supported sensor mode configurations */
-static const struct imx335_mode supported_mode = {
+static const struct imx335_mode supported_mode_4lanes = {
 	.width = 2592,
 	.height = 1940,
 	.hblank = 342,
@@ -248,9 +267,33 @@ static const struct imx335_mode supported_mode = {
 	.pclk = 396000000,
 	.link_freq_idx = 0,
 	.code = MEDIA_BUS_FMT_SRGGB12_1X12,
-	.reg_list = {
+	.common_regs = {
 		.num_of_regs = ARRAY_SIZE(mode_2592x1940_regs),
 		.regs = mode_2592x1940_regs,
+	},
+	.mode_regs = {
+		.num_of_regs = ARRAY_SIZE(mode_12bits_regs),
+		.regs = mode_12bits_regs,
+	},
+};
+
+static const struct imx335_mode supported_mode_2lanes = {
+	.width = 2592,
+	.height = 1940,
+	.hblank = 342,
+	.vblank = 2560,
+	.vblank_min = 2560,
+	.vblank_max = 133060,
+	.pclk = 396000000,
+	.link_freq_idx = 0,
+	.code = MEDIA_BUS_FMT_SRGGB10_1X10,
+	.common_regs = {
+		.num_of_regs = ARRAY_SIZE(mode_2592x1940_regs),
+		.regs = mode_2592x1940_regs,
+	},
+	.mode_regs = {
+		.num_of_regs = ARRAY_SIZE(mode_10bits_regs),
+		.regs = mode_10bits_regs,
 	},
 };
 
@@ -499,10 +542,12 @@ static int imx335_enum_mbus_code(struct v4l2_subdev *sd,
 				 struct v4l2_subdev_state *sd_state,
 				 struct v4l2_subdev_mbus_code_enum *code)
 {
+	struct imx335 *imx335 = to_imx335(sd);
+
 	if (code->index > 0)
 		return -EINVAL;
 
-	code->code = supported_mode.code;
+	code->code = imx335->cur_mode->code;
 
 	return 0;
 }
@@ -519,15 +564,17 @@ static int imx335_enum_frame_size(struct v4l2_subdev *sd,
 				  struct v4l2_subdev_state *sd_state,
 				  struct v4l2_subdev_frame_size_enum *fsize)
 {
+	struct imx335 *imx335 = to_imx335(sd);
+
 	if (fsize->index > 0)
 		return -EINVAL;
 
-	if (fsize->code != supported_mode.code)
+	if (fsize->code != imx335->cur_mode->code)
 		return -EINVAL;
 
-	fsize->min_width = supported_mode.width;
+	fsize->min_width = imx335->cur_mode->width;
 	fsize->max_width = fsize->min_width;
-	fsize->min_height = supported_mode.height;
+	fsize->min_height = imx335->cur_mode->height;
 	fsize->max_height = fsize->min_height;
 
 	return 0;
@@ -602,7 +649,7 @@ static int imx335_set_pad_format(struct v4l2_subdev *sd,
 
 	mutex_lock(&imx335->mutex);
 
-	mode = &supported_mode;
+	mode = imx335->cur_mode;
 	imx335_fill_pad_format(imx335, mode, fmt);
 
 	if (fmt->which == V4L2_SUBDEV_FORMAT_TRY) {
@@ -635,7 +682,7 @@ static int imx335_init_pad_cfg(struct v4l2_subdev *sd,
 	struct v4l2_subdev_format fmt = { 0 };
 
 	fmt.which = sd_state ? V4L2_SUBDEV_FORMAT_TRY : V4L2_SUBDEV_FORMAT_ACTIVE;
-	imx335_fill_pad_format(imx335, &supported_mode, &fmt);
+	imx335_fill_pad_format(imx335, imx335->cur_mode, &fmt);
 
 	return imx335_set_pad_format(sd, sd_state, &fmt);
 }
@@ -652,11 +699,23 @@ static int imx335_start_streaming(struct imx335 *imx335)
 	int ret;
 
 	/* Write sensor mode registers */
-	reg_list = &imx335->cur_mode->reg_list;
+	reg_list = &imx335->cur_mode->common_regs;
 	ret = imx335_write_regs(imx335, reg_list->regs,
 				reg_list->num_of_regs);
 	if (ret) {
 		dev_err(imx335->dev, "fail to write initial registers");
+		return ret;
+	}
+
+	/*
+	 * Perform specific configuration depending on the number
+	 * of lanes used
+	 */
+	reg_list = &imx335->cur_mode->mode_regs;
+	ret = imx335_write_regs(imx335, reg_list->regs,
+				reg_list->num_of_regs);
+	if (ret) {
+		dev_err(imx335->dev, "fail to write mode registers");
 		return ret;
 	}
 
@@ -823,13 +882,16 @@ static int imx335_parse_hw_config(struct imx335 *imx335)
 	if (ret)
 		return ret;
 
-	if (bus_cfg.bus.mipi_csi2.num_data_lanes != IMX335_NUM_DATA_LANES) {
+	if (bus_cfg.bus.mipi_csi2.num_data_lanes != 2 &&
+	    bus_cfg.bus.mipi_csi2.num_data_lanes != 4) {
 		dev_err(imx335->dev,
 			"number of CSI2 data lanes %d is not supported",
 			bus_cfg.bus.mipi_csi2.num_data_lanes);
 		ret = -EINVAL;
 		goto done_endpoint_free;
 	}
+
+	imx335->nb_lanes = bus_cfg.bus.mipi_csi2.num_data_lanes;
 
 	if (!bus_cfg.nr_of_link_frequencies) {
 		dev_err(imx335->dev, "no link frequencies defined");
@@ -1050,7 +1112,10 @@ static int imx335_probe(struct i2c_client *client)
 	}
 
 	/* Set default mode to max resolution */
-	imx335->cur_mode = &supported_mode;
+	if (imx335->nb_lanes == 2)
+		imx335->cur_mode = &supported_mode_2lanes;
+	else
+		imx335->cur_mode = &supported_mode_4lanes;
 	imx335->vblank = imx335->cur_mode->vblank;
 
 	ret = imx335_init_controls(imx335);
