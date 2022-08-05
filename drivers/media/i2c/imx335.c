@@ -108,6 +108,7 @@ struct imx335_mode {
  * @sd: V4L2 sub-device
  * @pad: Media pad. Only one pad supported
  * @reset_gpio: Sensor reset gpio
+ * @powerdown_gpio: Sensor powerdown gpio
  * @inclk: Sensor input clock
  * @ctrl_handler: V4L2 control handler
  * @link_freq_ctrl: Pointer to link frequency control
@@ -127,6 +128,7 @@ struct imx335 {
 	struct v4l2_subdev sd;
 	struct media_pad pad;
 	struct gpio_desc *reset_gpio;
+	struct gpio_desc *powerdown_gpio;
 	struct clk *inclk;
 	struct v4l2_ctrl_handler ctrl_handler;
 	struct v4l2_ctrl *link_freq_ctrl;
@@ -790,6 +792,15 @@ static int imx335_parse_hw_config(struct imx335 *imx335)
 		return PTR_ERR(imx335->reset_gpio);
 	}
 
+	/* Request optional powerdown pin */
+	imx335->powerdown_gpio = devm_gpiod_get_optional(imx335->dev, "powerdown",
+							 GPIOD_OUT_LOW);
+	if (IS_ERR(imx335->powerdown_gpio)) {
+		dev_err(imx335->dev, "failed to get powerdown gpio %ld",
+			PTR_ERR(imx335->powerdown_gpio));
+		return PTR_ERR(imx335->powerdown_gpio);
+	}
+
 	/* Get sensor input clock */
 	imx335->inclk = devm_clk_get(imx335->dev, NULL);
 	if (IS_ERR(imx335->inclk)) {
@@ -868,6 +879,12 @@ static int imx335_power_on(struct device *dev)
 	struct imx335 *imx335 = to_imx335(sd);
 	int ret;
 
+	gpiod_set_value_cansleep(imx335->powerdown_gpio, 1);
+	/*
+	 * Spec says that T-low (timing between power on and rise of reset)
+	 * should be at least 500ns - giving it even more time
+	 */
+	usleep_range(5000, 10000);
 	gpiod_set_value_cansleep(imx335->reset_gpio, 1);
 
 	ret = clk_prepare_enable(imx335->inclk);
@@ -882,6 +899,7 @@ static int imx335_power_on(struct device *dev)
 
 error_reset:
 	gpiod_set_value_cansleep(imx335->reset_gpio, 0);
+	gpiod_set_value_cansleep(imx335->powerdown_gpio, 0);
 
 	return ret;
 }
@@ -898,6 +916,7 @@ static int imx335_power_off(struct device *dev)
 	struct imx335 *imx335 = to_imx335(sd);
 
 	gpiod_set_value_cansleep(imx335->reset_gpio, 0);
+	gpiod_set_value_cansleep(imx335->powerdown_gpio, 0);
 
 	clk_disable_unprepare(imx335->inclk);
 
