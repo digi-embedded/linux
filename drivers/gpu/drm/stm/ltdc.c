@@ -806,9 +806,15 @@ static void ltdc_crtc_atomic_disable(struct drm_crtc *crtc,
 	drm_crtc_vblank_off(crtc);
 
 	/* Disable all layers */
-	for (layer_index = 0; layer_index < ldev->caps.nb_layers; layer_index++)
+	for (layer_index = 0; layer_index < ldev->caps.nb_layers; layer_index++) {
 		regmap_write_bits(ldev->regmap, LTDC_L1CR + layer_index * LAY_OFS,
 				  LXCR_CLUTEN | LXCR_LEN, 0);
+
+		/* immediately commit disable of layer */
+		if (ldev->caps.plane_reg_shadow)
+			regmap_write_bits(ldev->regmap, LTDC_L1RCR + layer_index * LAY_OFS,
+					  LXRCR_IMR | LXRCR_VBR | LXRCR_GRMSK, LXRCR_IMR);
+	}
 
 	/* disable IRQ */
 	regmap_clear_bits(ldev->regmap, LTDC_IER, IER_FUWIE | IER_FUEIE | IER_RRIE | IER_TERRIE);
