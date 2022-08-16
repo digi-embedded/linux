@@ -108,6 +108,9 @@ static irqreturn_t stm32mp25_venc_irq(int irq, void *dev_id)
 
 static void stm32mp25_venc_reset(struct hantro_ctx *ctx)
 {
+	struct hantro_dev *vpu = ctx->dev;
+
+	reset_control_reset(vpu->resets);
 }
 
 /*
