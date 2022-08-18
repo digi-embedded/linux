@@ -577,6 +577,9 @@ unspinlock:
 unlock:
 	raw_spin_unlock(&chip_data->rlock);
 
+	if (d->parent_data->chip)
+		irq_chip_set_type_parent(d, type);
+
 	return err;
 }
 
@@ -594,6 +597,9 @@ static int stm32_exti_h_set_wake(struct irq_data *d, unsigned int on)
 
 	raw_spin_unlock(&chip_data->rlock);
 
+	if (d->parent_data->chip)
+		irq_chip_set_wake_parent(d, on);
+
 	return 0;
 }
 
@@ -604,6 +610,12 @@ static int stm32_exti_h_set_affinity(struct irq_data *d,
 		return irq_chip_set_affinity_parent(d, dest, force);
 
 	return IRQ_SET_MASK_OK_DONE;
+}
+
+static void stm32_exti_h_ack(struct irq_data *d)
+{
+	if (d->parent_data->chip)
+		irq_chip_ack_parent(d);
 }
 
 static int __maybe_unused stm32_exti_h_suspend(void)
@@ -667,6 +679,7 @@ static int stm32_exti_h_retrigger(struct irq_data *d)
 static struct irq_chip stm32_exti_h_chip = {
 	.name			= "stm32-exti-h",
 	.irq_eoi		= stm32_exti_h_eoi,
+	.irq_ack		= stm32_exti_h_ack,
 	.irq_mask		= stm32_exti_h_mask,
 	.irq_unmask		= stm32_exti_h_unmask,
 	.irq_request_resources	= irq_chip_request_resources_parent,
