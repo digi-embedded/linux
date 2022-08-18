@@ -16,11 +16,15 @@
 /dts-v1/;
 
 #include <dt-bindings/usb/pd.h>
-#include "imx93.dtsi"
+/* i.MX93 CPU */
+#include "../freescale/imx93.dtsi"
+/* Digi ConnectCore 93 (SOM) */
+#include "ccimx93.dtsi"
 
 / {
-	model = "NXP i.MX93 11X11 EVK board";
-	compatible = "fsl,imx93-11x11-evk", "fsl,imx93";
+	model = "Digi International ConnectCore 93 DVK";
+	compatible = "digi,ccimx93-dvk", "digi,ccimx93", "fsl,imx93";
+	digi,machine,name = "ccimx93-dvk";
 
 	chosen {
 		stdout-path = &lpuart1;
