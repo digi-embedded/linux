@@ -60,6 +60,7 @@ struct stm32_exti_host_data {
 	struct stm32_exti_chip_data *chips_data;
 	const struct stm32_exti_drv_data *drv_data;
 	struct hwspinlock *hwlock;
+	struct device_node *irq_map_node;
 };
 
 static struct stm32_exti_host_data *stm32_host_data;
@@ -724,8 +725,9 @@ static int stm32_exti_h_domain_alloc(struct irq_domain *dm,
 	u8 desc_irq;
 	struct irq_fwspec *fwspec = data;
 	struct irq_fwspec p_fwspec;
+	struct of_phandle_args out_irq;
 	irq_hw_number_t hwirq;
-	int bank;
+	int bank, ret;
 	u32 event_trg;
 	struct irq_chip *chip;
 
@@ -741,6 +743,26 @@ static int stm32_exti_h_domain_alloc(struct irq_domain *dm,
 	       &stm32_exti_h_chip : &stm32_exti_h_chip_direct;
 
 	irq_domain_set_hwirq_and_chip(dm, virq, hwirq, chip, chip_data);
+
+	if (host_data->irq_map_node) {
+		out_irq.np = host_data->irq_map_node;
+		out_irq.args_count = 2;
+		out_irq.args[0] = fwspec->param[0];
+		out_irq.args[1] = fwspec->param[1];
+
+		ret = of_irq_parse_raw(NULL, &out_irq);
+		if (ret)
+			return ret;
+		/* we only support one parent, so far */
+		if (of_node_to_fwnode(out_irq.np) != dm->parent->fwnode)
+			return -EINVAL;
+
+		of_phandle_args_to_fwspec(out_irq.np, out_irq.args,
+					  out_irq.args_count, &p_fwspec);
+
+		return irq_domain_alloc_irqs_parent(dm, virq, 1, &p_fwspec);
+	}
+
 	/*
 	 * EXTI 55 to 60 are mapped to PWR interrupt controller.
 	 * The hwirq translation is done diferently than for GIC.
@@ -1033,6 +1055,10 @@ static int stm32_exti_probe(struct platform_device *pdev)
 		if (ret)
 			return ret;
 	}
+
+	child = of_get_child_by_name(np, "exti-interrupt-map");
+	if (child && of_property_read_bool(child, "interrupt-map"))
+		host_data->irq_map_node = child;
 
 	stm32_exti_h_syscore_init(host_data);
 
