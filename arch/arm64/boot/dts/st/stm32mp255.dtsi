@@ -8,6 +8,16 @@
 / {
 	soc@0 {
 		rifsc: rifsc@42080000 {
+			vdec: vdec@480d0000 {
+				compatible = "st,stm32mp25-vdec";
+				reg = <0x480d0000 0x3c8>;
+				resets = <&rcc VDEC_R>;
+				interrupt-names = "vdec";
+				interrupts = <GIC_SPI 117 IRQ_TYPE_LEVEL_HIGH>;
+				clock-names = "vdec-clk";
+				clocks = <&rcc CK_BUS_VDEC>;
+				feature-domains = <&rifsc STM32MP25_RIFSC_VDEC_ID>;
+			};
 		};
 	};
 };
