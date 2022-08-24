@@ -2,7 +2,7 @@
  * pf8x00-sc-regulator.c - regulator driver for the PF8100/PF8200 connected to
  *                         the SCU of the i.mx8 family.
  *
- * Copyright (C) 2020 Digi International, Inc.
+ * Copyright (C) 2020-2022 Digi International, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,8 +34,10 @@
 
 #define PF8X00_NUM_SW_REGS		7
 #define PF8X00_NUM_LDO_REGS		4
+#define PF8X00_NUM_VCOIN_REGS	1
 #define PF8X00_NUM_REGS			(PF8X00_NUM_SW_REGS + \
-					 PF8X00_NUM_LDO_REGS)
+								 PF8X00_NUM_LDO_REGS + \
+								 PF8X00_NUM_VCOIN_REGS)
 
 /* PMIC ids */
 #define PF8X00_DEVICE_ID		0x00
@@ -44,6 +46,7 @@
 #define PF8X00_PROG_ID			0x03
 
 /* Regulators base addresses */
+#define PF8X00_VCOIN_BASE		0x41
 #define PF8X00_SW1_BASE			0x4d
 #define PF8X00_SW2_BASE			0x55
 #define PF8X00_SW3_BASE			0x5d
@@ -86,6 +89,10 @@
 #define PF8X00_DEF_MODE			PF8X00_PFM
 #define PF8X00_DEF_STBY_MODE		PF8X00_STBY_PFM
 
+/* VCOIN macros*/
+#define VCOIN_VOLT_MASK			0x0f
+#define VCOIN_COINCHG_EN		BIT(5)
+
 /* SCU interface communication macros */
 #define IMX_SC_C_MISC0			62U
 #define IMX_SC_R_PMIC_0			497
@@ -103,6 +110,7 @@ enum pf8x00_reg_ids {
 	PF8X00_LDO2,
 	PF8X00_LDO3,
 	PF8X00_LDO4,
+	PF8X00_VCOIN,
 };
 
 enum pf8x00_sw_mode {
@@ -315,6 +323,16 @@ static struct regulator_ops pf8x00_sc_ldo_ops = {
 	.set_suspend_voltage	= pf8x00_sc_ldo_set_suspend_voltage,
 };
 
+static struct regulator_ops pf8x00_sc_vcoin_ops = {
+	.enable			= pf8x00_sc_ldo_enable,
+	.disable		= pf8x00_sc_ldo_disable,
+	.is_enabled		= pf8x00_sc_ldo_is_enabled,
+	.list_voltage		= regulator_list_voltage_table,
+	.get_voltage_sel	= pf8x00_sc_get_voltage_sel,
+	.set_voltage_sel	= pf8x00_sc_set_voltage_sel,
+	.set_suspend_enable	= pf8x00_sc_ldo_enable,
+};
+
 static int pf8x00_sc_sw_get_mode(struct regulator_dev *rdev, bool stby)
 {
 	struct pf8x00_sc_pmic *pmic = rdev_get_drvdata(rdev);
@@ -488,6 +506,14 @@ static const int pf8x00_ldo_volts[] = {
 	3350000, 4000000, 4900000, 5000000,
 };
 
+/* VCOIN - 1.80 to 3.6V (no linear) */
+static const int  pf8x00_vcoin_volts[] = {
+	1800000, 2000000, 2100000, 2200000,
+	2300000, 2400000, 2500000, 2600000,
+	2700000, 2800000, 2900000, 3000000,
+	3100000, 3200000, 3300000, 3600000,
+};
+
 static struct regulator_desc pf8x00_regulators[] = {
 	{
 		.of_match = of_match_ptr("SW1"),
@@ -638,6 +664,19 @@ static struct regulator_desc pf8x00_regulators[] = {
 		.enable_reg = LDOx_CONFIG2(PF8X00_LDO4_BASE),
 		.enable_mask = LDOx_RUN_EN,
 	},
+	{
+		.of_match = of_match_ptr("VCOIN"),
+		.id = PF8X00_VCOIN,
+		.type = REGULATOR_VOLTAGE,
+		.owner = THIS_MODULE,
+		.ops = &pf8x00_sc_vcoin_ops,
+		.n_voltages = ARRAY_SIZE(pf8x00_vcoin_volts),
+		.volt_table = pf8x00_vcoin_volts,
+		.vsel_reg = PF8X00_VCOIN_BASE,
+		.vsel_mask = VCOIN_VOLT_MASK,
+		.enable_reg = PF8X00_VCOIN_BASE,
+		.enable_mask = VCOIN_COINCHG_EN,
+	},
 };
 
 #ifdef CONFIG_OF
@@ -654,6 +693,7 @@ static struct of_regulator_match pf8x00_matches[] = {
 	{ .name = "LDO2",	},
 	{ .name = "LDO3",	},
 	{ .name = "LDO4",	},
+	{ .name = "VCOIN",	},
 };
 
 static int pf8x00_sc_parse_dt_reg_data(struct platform_device *pdev,
