@@ -1228,6 +1228,7 @@
 			#interrupt-cells = <2>;
 			#address-cells = <0>;
 			reg = <0x5000d000 0x400>;
+			wakeup-parent = <&pwr_irq>;
 
 			exti-interrupt-map {
 				#address-cells = <0>;
@@ -1273,6 +1274,12 @@
 					<52 0 &intc GIC_SPI 140 IRQ_TYPE_LEVEL_HIGH>,
 					<53 0 &intc GIC_SPI 141 IRQ_TYPE_LEVEL_HIGH>,
 					<54 0 &intc GIC_SPI 135 IRQ_TYPE_LEVEL_HIGH>,
+					<55 0 &pwr_irq 0 IRQ_TYPE_EDGE_FALLING 0>,
+					<56 0 &pwr_irq 1 IRQ_TYPE_EDGE_FALLING 0>,
+					<57 0 &pwr_irq 2 IRQ_TYPE_EDGE_FALLING 0>,
+					<58 0 &pwr_irq 3 IRQ_TYPE_EDGE_FALLING 0>,
+					<59 0 &pwr_irq 4 IRQ_TYPE_EDGE_FALLING 0>,
+					<60 0 &pwr_irq 5 IRQ_TYPE_EDGE_FALLING 0>,
 					<61 0 &intc GIC_SPI 100 IRQ_TYPE_LEVEL_HIGH>,
 					<65 0 &intc GIC_SPI 144 IRQ_TYPE_LEVEL_HIGH>,
 					<68 0 &intc GIC_SPI 143 IRQ_TYPE_LEVEL_HIGH>,
