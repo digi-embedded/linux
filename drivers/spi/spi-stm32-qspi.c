@@ -568,7 +568,7 @@ static int stm32_qspi_transfer_one_message(struct spi_controller *ctrl,
 	struct spi_transfer *transfer;
 	struct spi_device *spi = msg->spi;
 	struct spi_mem_op op;
-	int ret;
+	int ret = 0;
 
 	if (!spi->cs_gpiod)
 		return -EOPNOTSUPP;
@@ -598,8 +598,10 @@ static int stm32_qspi_transfer_one_message(struct spi_controller *ctrl,
 			dummy_bytes = transfer->len;
 
 			/* if happens, means that message is not correctly built */
-			if (list_is_last(&transfer->transfer_list, &msg->transfers))
+			if (list_is_last(&transfer->transfer_list, &msg->transfers)) {
+				ret = -EINVAL;
 				goto end_of_transfer;
+			}
 
 			transfer = list_next_entry(transfer, transfer_list);
 		}
