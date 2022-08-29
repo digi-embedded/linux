@@ -707,6 +707,57 @@ static struct irq_chip stm32_exti_h_chip_direct = {
 	.irq_set_affinity	= IS_ENABLED(CONFIG_SMP) ? irq_chip_set_affinity_parent : NULL,
 };
 
+static int stm32_exti_h_domain_match(struct irq_domain *dm,
+				     struct device_node *node,
+				     enum irq_domain_bus_token bus_token)
+{
+	struct stm32_exti_host_data *host_data = dm->host_data;
+
+	if (!node ||
+	    (bus_token != DOMAIN_BUS_ANY && dm->bus_token != bus_token))
+		return 0;
+
+	if (!host_data->irq_map_node)
+		return (to_of_node(dm->fwnode) == node);
+
+	if (node != host_data->irq_map_node->parent)
+		return 0;
+
+	return (to_of_node(dm->parent->fwnode) ==
+		of_irq_find_parent(host_data->irq_map_node->parent));
+}
+
+static int stm32_exti_h_domain_select(struct irq_domain *dm,
+				      struct irq_fwspec *fwspec,
+				      enum irq_domain_bus_token bus_token)
+{
+	struct fwnode_handle *fwnode = fwspec->fwnode;
+	struct stm32_exti_host_data *host_data = dm->host_data;
+	struct of_phandle_args out_irq;
+	int ret;
+
+	if (!fwnode ||
+	    (bus_token != DOMAIN_BUS_ANY && dm->bus_token != bus_token))
+		return 0;
+
+	if (!host_data->irq_map_node)
+		return (dm->fwnode == fwnode);
+
+	if (fwnode != of_node_to_fwnode(host_data->irq_map_node->parent))
+		return 0;
+
+	out_irq.np = host_data->irq_map_node;
+	out_irq.args_count = 2;
+	out_irq.args[0] = fwspec->param[0];
+	out_irq.args[1] = fwspec->param[1];
+
+	ret = of_irq_parse_raw(NULL, &out_irq);
+	if (ret)
+		return ret;
+
+	return (dm->parent->fwnode == of_node_to_fwnode(out_irq.np));
+}
+
 static int stm32_exti_h_domain_alloc(struct irq_domain *dm,
 				     unsigned int virq,
 				     unsigned int nr_irqs, void *data)
@@ -744,9 +795,6 @@ static int stm32_exti_h_domain_alloc(struct irq_domain *dm,
 		ret = of_irq_parse_raw(NULL, &out_irq);
 		if (ret)
 			return ret;
-		/* we only support one parent, so far */
-		if (of_node_to_fwnode(out_irq.np) != dm->parent->fwnode)
-			return -EINVAL;
 
 		of_phandle_args_to_fwspec(out_irq.np, out_irq.args,
 					  out_irq.args_count, &p_fwspec);
@@ -909,6 +957,8 @@ out_unmap:
 }
 
 static const struct irq_domain_ops stm32_exti_h_domain_ops = {
+	.match	= stm32_exti_h_domain_match,
+	.select = stm32_exti_h_domain_select,
 	.alloc	= stm32_exti_h_domain_alloc,
 	.free	= irq_domain_free_irqs_common,
 	.xlate = irq_domain_xlate_twocell,
@@ -917,8 +967,12 @@ static const struct irq_domain_ops stm32_exti_h_domain_ops = {
 static void stm32_exti_remove_irq(void *data)
 {
 	struct irq_domain *domain = data;
+	struct fwnode_handle *fwnode = domain->fwnode;
 
 	irq_domain_remove(domain);
+
+	if (is_fwnode_irqchip(fwnode))
+		irq_domain_free_fwnode(fwnode);
 }
 
 static int stm32_exti_remove(struct platform_device *pdev)
@@ -931,10 +985,12 @@ static int stm32_exti_probe(struct platform_device *pdev)
 {
 	int ret, i;
 	struct device *dev = &pdev->dev;
-	struct device_node *child, *np = dev->of_node;
-	struct irq_domain *parent_domain, *domain;
+	struct device_node *child, *np = dev->of_node, *wakeup_np;
+	struct irq_domain *parent_domain, *domain, *wakeup_domain;
+	struct fwnode_handle *fwnode;
 	struct stm32_exti_host_data *host_data;
 	const struct stm32_exti_drv_data *drv_data;
+	char *name;
 
 	host_data = devm_kzalloc(dev, sizeof(*host_data), GFP_KERNEL);
 	if (!host_data)
@@ -1002,6 +1058,44 @@ static int stm32_exti_probe(struct platform_device *pdev)
 	child = of_get_child_by_name(np, "exti-interrupt-map");
 	if (child && of_property_read_bool(child, "interrupt-map"))
 		host_data->irq_map_node = child;
+
+	wakeup_np = of_parse_phandle(np, "wakeup-parent", 0);
+	if (wakeup_np && !host_data->irq_map_node) {
+		dev_warn(dev, "wakeup-parent ignored due to missing interrupt-map nexus node");
+		of_node_put(wakeup_np);
+		wakeup_np = NULL;
+	}
+	if (wakeup_np) {
+		wakeup_domain = irq_find_host(wakeup_np);
+		of_node_put(wakeup_np);
+		if (!wakeup_domain)
+			return -EPROBE_DEFER;
+
+		/* as in __irq_domain_add() */
+		name = kasprintf(GFP_KERNEL, "%pOF-wakeup", np);
+		if (!name)
+			return -ENOMEM;
+		strreplace(name, '/', ':');
+
+		fwnode = irq_domain_alloc_named_fwnode(name);
+		kfree(name);
+		if (!fwnode)
+			return -ENOMEM;
+
+		domain = irq_domain_create_hierarchy(wakeup_domain, 0,
+						     drv_data->bank_nr * IRQS_PER_BANK,
+						     fwnode, &stm32_exti_h_domain_ops,
+						     host_data);
+		if (!domain) {
+			dev_err(dev, "Could not register exti domain\n");
+			irq_domain_free_fwnode(fwnode);
+			return -ENOMEM;
+		}
+
+		ret = devm_add_action_or_reset(dev, stm32_exti_remove_irq, domain);
+		if (ret)
+			return ret;
+	}
 
 	stm32_exti_h_syscore_init(host_data);
 
