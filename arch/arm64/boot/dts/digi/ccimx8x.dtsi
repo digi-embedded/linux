@@ -158,7 +158,7 @@
 		};
 	};
 
-	pf8x00-sc {
+	pf8x00_sc: pf8x00-sc {
 		compatible = "digi,pf8x00-sc";
 
 		vcc_main1_reg: SW1 {
