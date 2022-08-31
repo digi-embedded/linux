@@ -1310,13 +1310,14 @@
 			compatible = "st,stm32mp1-exti", "syscon";
 			interrupt-controller;
 			#interrupt-cells = <2>;
+			#address-cells = <0>;
 			reg = <0x5000d000 0x400>;
 			hwlocks = <&hsem 1 1>;
-			interrupt-parent = <&exti_int_map>;
+			wakeup-parent = <&pwr_irq>;
 
-			exti_int_map: exti-interrupt-map {
-				#address-cells = <1>;
-				#interrupt-cells = <1>;
+			exti-interrupt-map {
+				#address-cells = <0>;
+				#interrupt-cells = <2>;
 				interrupt-map-mask = <0xffffffff 0>;
 				interrupt-map =
 					<0  0 &intc GIC_SPI 6   IRQ_TYPE_LEVEL_HIGH>,
