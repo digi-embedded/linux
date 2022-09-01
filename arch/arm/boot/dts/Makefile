@@ -1148,6 +1148,7 @@ dtb-$(CONFIG_ARCH_STM32) += \
 	_ov_board_microe-accel2-click_ccmp1.dtbo \
 	_ov_board_microe-gyro-click_ccmp1.dtbo \
 	_ov_board_microe-i2c-2-spi_ccmp1.dtbo \
+	_ov_board_fusion10-parallel_ccmp15-dvk.dtbo \
 	_ov_board_g101evn010-lvds_ccmp15-dvk.dtbo \
 	stm32f429-disco.dtb \
 	stm32f469-disco.dtb \

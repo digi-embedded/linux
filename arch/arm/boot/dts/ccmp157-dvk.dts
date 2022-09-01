@@ -84,19 +84,6 @@
 		status = "disabled";
 	};
 
-	/* Fusion 7/10 inch */
-	/*panel {
-		compatible = "tpk,f07a-0102";
-		power-supply = <&v3v3>;
-		backlight = <&display_bl>;
-
-		port {
-			panel_in: endpoint {
-				remote-endpoint = <&ltdc_ep0_out>;
-			};
-		};
-	};*/
-
 	usb_phy_tuning: usb-phy-tuning {
 		st,hs-dc-level = <2>;
 		st,fs-rftime-tuning;
