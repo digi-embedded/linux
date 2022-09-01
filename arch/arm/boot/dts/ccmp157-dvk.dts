@@ -81,21 +81,8 @@
 		brightness-levels = <0 16 22 30 40 55 75 102 138 188 255>;
 		default-brightness-level = <8>;
 		power-supply = <&reg_5v_board>;
-		status = "okay";
+		status = "disabled";
 	};
-
-	/* AUO G101EVN01.0 */
-	/*panel {
-		compatible = "auo,g101evn010", "simple-panel";
-		power-supply = <&v3v3>;
-		backlight = <&display_bl>;
-
-		port {
-			panel_in: endpoint {
-				remote-endpoint = <&ltdc_ep0_out>;
-			};
-		};
-	};*/
 
 	/* Fusion 7/10 inch */
 	/*panel {
@@ -271,20 +258,6 @@
 	status = "okay";
 };
 
-/* Display Controller for LVDS */
-/* &ltdc {
-	pinctrl-names = "default", "sleep";
-	pinctrl-0 = <&ccmp15_ltdc_18_bits_pins>;
-	pinctrl-1 = <&ccmp15_ltdc_sleep_pins>;
-	status = "disabled";
-
-	port {
-		ltdc_ep0_out: endpoint {
-			remote-endpoint = <&panel_in>;
-		};
-	};
-};*/
-
 /* Display Controller for MIPI-DSI to HDMI */
 &ltdc {
 	status = "okay";
@@ -380,7 +353,7 @@
 		interrupt-parent = <&gpiog>;
 		interrupts = <1 IRQ_TYPE_EDGE_RISING>;
 		irq-gpios = <&gpiog 1 GPIO_ACTIVE_LOW>;
-		status = "okay";
+		status = "disabled";
 	};
 
 	goodix_touch2@5d {
@@ -389,7 +362,7 @@
 		interrupt-parent = <&gpiog>;
 		interrupts = <1 IRQ_TYPE_EDGE_RISING>;
 		irq-gpios = <&gpiog 1 GPIO_ACTIVE_LOW>;
-		status = "okay";
+		status = "disabled";
 	};
 
 	max98089: codec@10 {
