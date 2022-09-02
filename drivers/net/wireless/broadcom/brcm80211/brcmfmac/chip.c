@@ -545,6 +545,21 @@ char *brcmf_chip_name(u32 id, u32 rev, char *buf, uint len)
 	return buf;
 }
 
+static bool brcmf_chip_find_coreid(struct brcmf_chip_priv *ci, u16 coreid)
+{
+	struct brcmf_core_priv *core;
+
+	list_for_each_entry(core, &ci->cores, list) {
+		brcmf_dbg(TRACE, " core 0x%x:%-2d base 0x%08x wrap 0x%08x\n",
+			  core->pub.id, core->pub.rev, core->pub.base,
+			  core->wrapbase);
+		if (core->pub.id == coreid)
+			return true;
+	}
+
+	return false;
+}
+
 static struct brcmf_core *brcmf_chip_add_core(struct brcmf_chip_priv *ci,
 					      u16 coreid, u32 base,
 					      u32 wrapbase)
@@ -991,7 +1006,8 @@ int brcmf_chip_dmp_erom_scan(struct brcmf_chip_priv *ci)
 		/* need core with ports */
 		if (nmw + nsw == 0 &&
 		    id != BCMA_CORE_PMU &&
-		    id != BCMA_CORE_GCI)
+		    id != BCMA_CORE_GCI &&
+			id != BCMA_CORE_SR)
 			continue;
 
 		/* try to obtain register address info */
@@ -1663,7 +1679,6 @@ bool brcmf_chip_sr_capable(struct brcmf_chip *pub)
 		return reg != 0;
 	case BRCM_CC_4355_CHIP_ID:
 	case CY_CC_4373_CHIP_ID:
-	case CY_CC_55572_CHIP_ID:
 		/* explicitly check SR engine enable bit */
 		addr = CORE_CC_REG(base, sr_control0);
 		reg = chip->ops->read32(chip->ctx, addr);
@@ -1675,6 +1690,8 @@ bool brcmf_chip_sr_capable(struct brcmf_chip *pub)
 		reg = chip->ops->read32(chip->ctx, addr);
 		return (reg & (PMU_RCTL_MACPHY_DISABLE_MASK |
 			       PMU_RCTL_LOGIC_DISABLE_MASK)) == 0;
+	case CY_CC_55572_CHIP_ID:
+		return brcmf_chip_find_coreid(chip, BCMA_CORE_SR);
 	default:
 		addr = CORE_CC_REG(pmu->base, pmucapabilities_ext);
 		reg = chip->ops->read32(chip->ctx, addr);
