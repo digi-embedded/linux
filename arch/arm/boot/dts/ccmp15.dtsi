@@ -191,7 +191,7 @@
 	pinctrl-0 = <&ccmp15_usart1_pins_c>, <&ccmp15_usart1_pins_z>;
 	pinctrl-1 = <&ccmp15_usart1_sleep_pins_c>, <&ccmp15_usart1_sleep_pins_z>;
 	uart-has-rtscts;
-	status = "okay";
+	status = "disabled";
 
 	bluetooth {
 		shutdown-gpios = <&gpioz 6 GPIO_ACTIVE_HIGH>;
