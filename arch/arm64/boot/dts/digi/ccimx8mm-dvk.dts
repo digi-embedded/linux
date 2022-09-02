@@ -740,6 +740,8 @@
 &usbotg2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_usbotg2>;
+
+	power-active-high;
 	status = "okay";
 };
 
@@ -783,8 +785,6 @@
 		fsl,pins = <
 			/* GPIO1_IO10 on expansion connector */
 			MX8MM_IOMUXC_GPIO1_IO10_GPIO1_IO10	0x16
-			/* GPIO1_IO11 on expansion connector */
-			MX8MM_IOMUXC_GPIO1_IO11_GPIO1_IO11	0x16
 			/* User LED 3 */
 			MX8MM_IOMUXC_SD2_RESET_B_GPIO2_IO19	0x16
 			/* User button 2 */
@@ -1088,6 +1088,8 @@
 			MX8MM_IOMUXC_GPIO1_IO14_USB2_OTG_PWR		0x16
 			/* USB otg2 overcurrent detect */
 			MX8MM_IOMUXC_GPIO1_IO15_USB2_OTG_OC		0x16
+			/* USB otg2 ID */
+			MX8MM_IOMUXC_GPIO1_IO11_USB2_OTG_ID		0x16
 		>;
 	};
 
