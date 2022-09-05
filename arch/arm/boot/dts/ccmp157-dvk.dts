@@ -165,36 +165,6 @@
 	status = "okay";
 };
 
-/* 10/100 Ethernet */
-/*&ethernet0 {
-	status = "okay";
-	pinctrl-0 = <&ethernet0_rmii_pins_a>;
-	pinctrl-1 = <&ethernet0_rmii_sleep_pins_a>;
-	pinctrl-names = "default", "sleep";
-	phy-mode = "rmii";
-	max-speed = <100>;
-	phy-handle = <&phy0>;
-	local-mac-address = [00 04 F3 22 23 24];
-	st,eth-ref-clk-sel = <1>;
-	st,ext-phyclk = <1>;
-
-	mdio0 {
-		#address-cells = <1>;
-		#size-cells = <0>;
-		compatible = "snps,dwmac-mdio";
-
-		phy0: ethernet-phy@0 {
-			reg = <0>;
-			compatible = "ethernet-phy-ieee802.3-c22";
-			reset-gpios = <&gpioh 15 GPIO_ACTIVE_LOW>;
-			reset-assert-us = <500>;
-			smsc,disable-energy-detect;
-			interrupt-parent = <&gpioi>;
-			interrupts = <6 IRQ_TYPE_LEVEL_LOW>;
-		};
-	};
-};*/
-
 /* 10/100/1000 Ethernet */
 &ethernet0 {
 	status = "okay";
