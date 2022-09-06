@@ -205,8 +205,11 @@ void ucsi_altmode_update_active(struct ucsi_connector *con)
 	ret = ucsi_send_command(con->ucsi, command, &cur, sizeof(cur));
 	if (ret < 0) {
 		if (con->ucsi->version > 0x0100) {
-			dev_err(con->ucsi->dev,
-				"GET_CURRENT_CAM command failed\n");
+			if (ret != -EOPNOTSUPP)
+				dev_err(con->ucsi->dev,
+					"GET_CURRENT_CAM command failed %d\n", ret);
+			else
+				dev_dbg(con->ucsi->dev, "GET_CURRENT_CAM not supported\n");
 			return;
 		}
 		cur = 0xff;
