@@ -495,7 +495,7 @@
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&ccmp15_can2_pins_a>;
 	pinctrl-1 = <&ccmp15_can2_sleep_pins_a>;
-	status = "okay";
+	status = "disabled";
 };
 
 /* PCIe connector uses USB */
