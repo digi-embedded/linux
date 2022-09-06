@@ -450,6 +450,7 @@ static struct irq_chip optee_it_irq_chip = {
 	.name = "optee-it",
 	.irq_disable = optee_it_irq_mask,
 	.irq_enable = optee_it_irq_unmask,
+	.flags = IRQCHIP_SKIP_SET_WAKE,
 };
 
 static int optee_it_alloc(struct irq_domain *d, unsigned int virq,
