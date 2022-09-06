@@ -27,10 +27,13 @@ struct timestamp_event_queue {
 	spinlock_t lock;
 };
 
+struct ptp_clock;
+
 struct ptp_clock {
 	struct posix_clock clock;
 	struct device dev;
 	struct ptp_clock_info *info;
+	struct ptp_clock *peer;
 	dev_t devid;
 	int index; /* index into clocks.map */
 	struct pps_device *pps_source;
