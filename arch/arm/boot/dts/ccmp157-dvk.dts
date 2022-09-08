@@ -34,6 +34,7 @@
 	};
 
 	aliases {
+		mmc1 = &sdmmc2; /* Micro SD */
 		serial3 = &uart7;
 	};
 
