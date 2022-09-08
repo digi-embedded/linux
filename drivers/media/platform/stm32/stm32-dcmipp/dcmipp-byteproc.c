@@ -159,12 +159,13 @@ static void dcmipp_byteproc_adjust_crop(struct v4l2_rect *r, struct v4l2_rect *c
 static void dcmipp_byteproc_adjust_compose(struct v4l2_rect *r,
 					   const struct v4l2_mbus_framefmt *fmt)
 {
-	r->top = r->left = 0;
+	r->top = 0;
+	r->left = 0;
 
 	/* Compose is not possible for JPEG or Bayer formats */
-	if ((fmt->code == MEDIA_BUS_FMT_JPEG_1X8) ||
-	    (fmt->code == MEDIA_BUS_FMT_SBGGR8_1X8) || (fmt->code == MEDIA_BUS_FMT_SGBRG8_1X8) ||
-	    (fmt->code == MEDIA_BUS_FMT_SGRBG8_1X8) || (fmt->code == MEDIA_BUS_FMT_SRGGB8_1X8)) {
+	if (fmt->code == MEDIA_BUS_FMT_JPEG_1X8 ||
+	    fmt->code == MEDIA_BUS_FMT_SBGGR8_1X8 || fmt->code == MEDIA_BUS_FMT_SGBRG8_1X8 ||
+	    fmt->code == MEDIA_BUS_FMT_SGRBG8_1X8 || fmt->code == MEDIA_BUS_FMT_SRGGB8_1X8) {
 		r->width = fmt->width;
 		r->height = fmt->height;
 		return;
@@ -177,7 +178,7 @@ static void dcmipp_byteproc_adjust_compose(struct v4l2_rect *r,
 		r->height = fmt->height;
 
 	/* Adjust width - /2 or /4 for 8bits formats and /2 for 16bits formats */
-	if ((fmt->code == MEDIA_BUS_FMT_Y8_1X8) && (r->width <= (fmt->width / 4)))
+	if (fmt->code == MEDIA_BUS_FMT_Y8_1X8 && r->width <= (fmt->width / 4))
 		r->width = fmt->width / 4;
 	else if (r->width <= (fmt->width / 2))
 		r->width = fmt->width / 2;
@@ -222,7 +223,8 @@ static int dcmipp_byteproc_init_cfg(struct v4l2_subdev *sd,
 		else
 			r = v4l2_subdev_get_try_crop(sd, sd_state, i);
 
-		r->top = r->left = 0;
+		r->top = 0;
+		r->left = 0;
 		r->width = DCMIPP_FMT_WIDTH_DEFAULT;
 		r->height = DCMIPP_FMT_HEIGHT_DEFAULT;
 	}
@@ -326,9 +328,11 @@ static int dcmipp_byteproc_set_fmt(struct v4l2_subdev *sd,
 		fmt->format.height = crop->height;
 	} else {
 		dcmipp_byteproc_adjust_fmt(&fmt->format);
-		crop->top = crop->left = compose->top = compose->left = 0;
-		crop->width = compose->width = fmt->format.width;
-		crop->height = compose->height = fmt->format.height;
+		crop->top = 0;
+		crop->left = 0;
+		crop->width = fmt->format.width;
+		crop->height = fmt->format.height;
+		*compose = *crop;
 		*sink_fmt = fmt->format;
 	}
 
@@ -351,14 +355,14 @@ static int dcmipp_byteproc_get_selection(struct v4l2_subdev *sd,
 	 * Compose is done on the sink pad
 	 * Crop is done on the src pad
 	 */
-	if (((s->target == V4L2_SEL_TGT_CROP) ||
-	     (s->target == V4L2_SEL_TGT_CROP_BOUNDS) ||
-	     (s->target == V4L2_SEL_TGT_CROP_DEFAULT)) && IS_SINK(s->pad))
+	if ((s->target == V4L2_SEL_TGT_CROP ||
+	     s->target == V4L2_SEL_TGT_CROP_BOUNDS ||
+	     s->target == V4L2_SEL_TGT_CROP_DEFAULT) && IS_SINK(s->pad))
 		return -EINVAL;
 
-	if (((s->target == V4L2_SEL_TGT_COMPOSE) ||
-	     (s->target == V4L2_SEL_TGT_COMPOSE_BOUNDS) ||
-	     (s->target == V4L2_SEL_TGT_COMPOSE_DEFAULT)) && IS_SRC(s->pad))
+	if ((s->target == V4L2_SEL_TGT_COMPOSE ||
+	     s->target == V4L2_SEL_TGT_COMPOSE_BOUNDS ||
+	     s->target == V4L2_SEL_TGT_COMPOSE_DEFAULT) && IS_SRC(s->pad))
 		return -EINVAL;
 
 	if (s->which == V4L2_SUBDEV_FORMAT_ACTIVE) {
@@ -386,7 +390,8 @@ static int dcmipp_byteproc_get_selection(struct v4l2_subdev *sd,
 		s->r = dcmipp_byteproc_get_compose_bound(sink_fmt);
 		break;
 	case V4L2_SEL_TGT_COMPOSE_DEFAULT:
-		s->r.top = s->r.left = 0;
+		s->r.top = 0;
+		s->r.left = 0;
 		s->r.width = sink_fmt->width;
 		s->r.height = sink_fmt->height;
 		break;
@@ -410,14 +415,14 @@ static int dcmipp_byteproc_set_selection(struct v4l2_subdev *sd,
 	 * Compose is done on the sink pad
 	 * Crop is done on the src pad
 	 */
-	if (((s->target == V4L2_SEL_TGT_CROP) ||
-	     (s->target == V4L2_SEL_TGT_CROP_BOUNDS) ||
-	     (s->target == V4L2_SEL_TGT_CROP_DEFAULT)) && IS_SINK(s->pad))
+	if ((s->target == V4L2_SEL_TGT_CROP ||
+	     s->target == V4L2_SEL_TGT_CROP_BOUNDS ||
+	     s->target == V4L2_SEL_TGT_CROP_DEFAULT) && IS_SINK(s->pad))
 		return -EINVAL;
 
-	if (((s->target == V4L2_SEL_TGT_COMPOSE) ||
-	     (s->target == V4L2_SEL_TGT_COMPOSE_BOUNDS) ||
-	     (s->target == V4L2_SEL_TGT_COMPOSE_DEFAULT)) && IS_SRC(s->pad))
+	if ((s->target == V4L2_SEL_TGT_COMPOSE ||
+	     s->target == V4L2_SEL_TGT_COMPOSE_BOUNDS ||
+	     s->target == V4L2_SEL_TGT_COMPOSE_DEFAULT) && IS_SRC(s->pad))
 		return -EINVAL;
 
 	if (s->which == V4L2_SUBDEV_FORMAT_ACTIVE) {
@@ -734,8 +739,10 @@ static int dcmipp_byteproc_comp_bind(struct device *comp, struct device *master,
 
 	/* Initialize the frame format */
 	byteproc->sink_fmt = fmt_default;
-	byteproc->compose = byteproc->crop = r;
-	byteproc->sink_interval = byteproc->src_interval = interval;
+	byteproc->crop = r;
+	byteproc->compose = r;
+	byteproc->src_interval = interval;
+	byteproc->sink_interval = interval;
 
 	return 0;
 }
