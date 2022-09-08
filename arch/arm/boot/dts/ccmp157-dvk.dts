@@ -394,7 +394,7 @@
 	max98089: codec@10 {
 		compatible = "maxim,max98089";
 		reg = <0x10>;
-		clocks = <&i2s2>;
+		clocks = <&rcc SPI2_K>;
 		clock-names = "mclk";
 		interrupt-parent = <&gpiof>;
 		interrupts = <2 IRQ_TYPE_EDGE_FALLING>;
