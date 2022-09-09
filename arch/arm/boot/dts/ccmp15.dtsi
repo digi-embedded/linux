@@ -186,7 +186,7 @@
 };
 
 &rtc {
-        status = "okay";
+	status = "disabled";
 };
 
 /* USART1 (Bluetooth) */
