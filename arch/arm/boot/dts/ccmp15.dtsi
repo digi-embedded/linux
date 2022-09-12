@@ -134,55 +134,55 @@
 };
 
 &cpu0{
-        cpu-supply = <&vddcore>;
+	cpu-supply = <&vddcore>;
 };
 
 &sram {
-        dma_pool: dma_pool@0 {
-                reg = <0x50000 0x10000>;
-                pool;
-        };
+	dma_pool: dma_pool@0 {
+		reg = <0x50000 0x10000>;
+		pool;
+	};
 };
 
 &crc1 {
-        status = "okay";
+	status = "okay";
 };
 
 &dma1 {
-        sram = <&dma_pool>;
+	sram = <&dma_pool>;
 };
 
 &dma2 {
-        sram = <&dma_pool>;
+	sram = <&dma_pool>;
 };
 
 &dts {
-        status = "okay";
+	status = "okay";
 };
 
 &hash1 {
-        status = "okay";
+	status = "okay";
 };
 
 &cpu0_opp_table {
-                opp-650000000 {
-                        opp-hz = /bits/ 64 <650000000>;
-                        opp-microvolt = <1200000>;
-                        opp-supported-hw = <0x1>;
-                };
+		opp-650000000 {
+			opp-hz = /bits/ 64 <650000000>;
+			opp-microvolt = <1200000>;
+			opp-supported-hw = <0x1>;
+		};
 };
 
 &ipcc {
-        status = "okay";
+	status = "okay";
 };
 
 &iwdg2 {
-        timeout-sec = <32>;
-        status = "okay";
+	timeout-sec = <32>;
+	status = "okay";
 };
 
 &rng1 {
-        status = "okay";
+	status = "okay";
 };
 
 &rtc {
@@ -232,39 +232,39 @@
 };
 
 /*&m4_rproc {
-        memory-region = <&retram>, <&mcuram>, <&mcuram2>, <&vdev0vring0>,
-                        <&vdev0vring1>, <&vdev0buffer>, <&mcu_rsc_table>;
-        mboxes = <&ipcc 0>, <&ipcc 1>, <&ipcc 2>;
-        mbox-names = "vq0", "vq1", "shutdown";
-        interrupt-parent = <&exti>;
-        interrupts = <68 1>;
-        wakeup-source;
-        status = "okay";
+	memory-region = <&retram>, <&mcuram>, <&mcuram2>, <&vdev0vring0>,
+			<&vdev0vring1>, <&vdev0buffer>, <&mcu_rsc_table>;
+	mboxes = <&ipcc 0>, <&ipcc 1>, <&ipcc 2>;
+	mbox-names = "vq0", "vq1", "shutdown";
+	interrupt-parent = <&exti>;
+	interrupts = <68 1>;
+	wakeup-source;
+	status = "okay";
 };*/
 
 &vrefbuf {
-        regulator-min-microvolt = <1500000>;
-        regulator-max-microvolt = <1500000>;
-        vdda-supply = <&vdd>;
-        status = "okay";
+	regulator-min-microvolt = <1500000>;
+	regulator-max-microvolt = <1500000>;
+	vdda-supply = <&vdd>;
+	status = "okay";
 };
 
 &fmc {
-        pinctrl-names = "default", "sleep";
-        pinctrl-0 = <&fmc_pins_a>;
-        pinctrl-1 = <&fmc_sleep_pins_a>;
-        status = "okay";
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&fmc_pins_a>;
+	pinctrl-1 = <&fmc_sleep_pins_a>;
+	status = "okay";
 
-        nand-controller@4,0 {
-                status = "okay";
+	nand-controller@4,0 {
+		status = "okay";
 
-                nand@0 {
-                        reg = <0>;
-                        nand-on-flash-bbt;
-                        #address-cells = <1>;
-                        #size-cells = <1>;
-                };
-        };
+		nand@0 {
+			reg = <0>;
+			nand-on-flash-bbt;
+			#address-cells = <1>;
+			#size-cells = <1>;
+		};
+	};
 };
 
 &i2c4 {
