@@ -102,7 +102,7 @@
 			gpio = <&gpiog 0 GPIO_ACTIVE_HIGH>; /* 3V3_RF_EN */
 			enable-active-high;
 			startup-delay-us = <100000>;
-			status = "okay";
+			status = "disabled";
 		};
 
 		reg_rf_wl_en: regulator-som@2 {
@@ -115,7 +115,7 @@
 			enable-active-high;
 			startup-delay-us = <100>;
 			vin-supply = <&reg_3v3_rf>;
-			status = "okay";
+			status = "disabled";
 		};
 	};
 
@@ -127,10 +127,6 @@
 		regulator-always-on;
 	};
 
-	wireless {
-		/* U-Boot will fill in the MAC address here */
-		status = "okay";
-	};
 };
 
 &cpu0{
@@ -217,7 +213,7 @@
 	st,neg-edge;
 	bus-width = <4>;
 	vmmc-supply = <&reg_rf_wl_en>;
-	status = "okay";
+	status = "disabled";
 
 	#address-cells = <1>;
 	#size-cells = <0>;
