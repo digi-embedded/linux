@@ -24,6 +24,7 @@
 			clock-names = "cpu";
 			nvmem-cells = <&part_number_otp>;
 			nvmem-cell-names = "part_number";
+			#cooling-cells = <2>;
 		};
 	};
 
@@ -150,7 +151,12 @@
 			thermal-sensors = <&dts>;
 
 			trips {
-				cpu-crit {
+				cpu_alert: cpu-alert0 {
+					temperature = <95000>;
+					hysteresis = <10000>;
+					type = "passive";
+				};
+				cpu_crit: cpu-crit0 {
 					temperature = <120000>;
 					hysteresis = <0>;
 					type = "critical";
@@ -158,6 +164,10 @@
 			};
 
 			cooling-maps {
+				map0 {
+					trip = <&cpu_alert>;
+					cooling-device = <&cpu0 1 1>;
+				};
 			};
 		};
 	};
