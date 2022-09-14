@@ -80,7 +80,7 @@
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&ccmp13_fmc_pins_a>;
 	pinctrl-1 = <&ccmp13_fmc_sleep_pins_a>;
-	status = "disabled";
+	status = "okay";
 
 	nand-controller@4,0 {
 		status = "okay";
