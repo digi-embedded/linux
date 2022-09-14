@@ -319,7 +319,7 @@ static __maybe_unused int mdio_bus_phy_resume(struct device *dev)
 	 * PHY_HALTED nor PHY_READY this is an indication that something went wrong
 	 * and we should most likely be using MAC managed PM and we are not.
 	 */
-	WARN_ON(phydev->state != PHY_HALTED && phydev->state != PHY_READY);
+//	WARN_ON(phydev->state != PHY_HALTED && phydev->state != PHY_READY);
 
 	ret = phy_init_hw(phydev);
 	if (ret < 0)
