@@ -94,11 +94,11 @@
 	status = "okay";
 
 	bluetooth {
-		//shutdown-gpios = <&mcp23017 13 GPIO_ACTIVE_HIGH>;
+		shutdown-gpios = <&gpiod 13 GPIO_ACTIVE_HIGH>;
 		compatible = "brcm,bcm43438-bt";
 		max-speed = <3000000>;
-		vbat-supply = <&v3v3_ao>;
-		vddio-supply = <&v3v3_ao>;
+		vbat-supply = <&v3v3>;
+		vddio-supply = <&reg_3v3_rf>;
 	};
 };
 
