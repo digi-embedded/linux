@@ -36,6 +36,37 @@
 		};
 	};
 
+	regulators {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		reg_3v3_rf: regulator-som@1 {
+			compatible = "regulator-fixed";
+			reg = <1>;
+			regulator-name = "3v3_rf";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			gpio = <&gpiob 7 GPIO_ACTIVE_HIGH>; /* 3V3_RF_EN */
+			enable-active-high;
+			startup-delay-us = <100000>;
+			status = "okay";
+		};
+
+		reg_rf_wl_en: regulator-som@2 {
+			compatible = "regulator-fixed";
+			reg = <2>;
+			regulator-name = "rf_wl_en";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			gpio = <&gpiod 6 GPIO_ACTIVE_HIGH>; /* WL_REG_EN */
+			enable-active-high;
+			startup-delay-us = <100>;
+			vin-supply = <&reg_3v3_rf>;
+			status = "okay";
+		};
+	};
+
 	vin: vin {
 		compatible = "regulator-fixed";
 		regulator-name = "vin";
@@ -50,11 +81,6 @@
 		regulator-min-microvolt = <3300000>;
 		regulator-max-microvolt = <3300000>;
 		regulator-always-on;
-	};
-
-	wifi_pwrseq: wifi-pwrseq {
-		compatible = "mmc-pwrseq-simple";
-		//reset-gpios = <&mcp23017 11 GPIO_ACTIVE_LOW>;
 	};
 };
 
@@ -251,7 +277,7 @@
 	};
 };
 
-/* Wifi */
+/* Wireless */
 &sdmmc2 {
 	arm,primecell-periphid = <0x10153180>;
 	pinctrl-names = "default", "opendrain", "sleep";
@@ -259,17 +285,21 @@
 	pinctrl-1 = <&sdmmc2_b4_od_pins_a &sdmmc2_clk_pins_a>;
 	pinctrl-2 = <&sdmmc2_b4_sleep_pins_a>;
 	non-removable;
+	no-1-8-v;
 	st,neg-edge;
 	bus-width = <4>;
-	vmmc-supply = <&v3v3_ao>;
-	mmc-pwrseq = <&wifi_pwrseq>;
-	#address-cells = <1>;
-	#size-cells = <0>;
+	vmmc-supply = <&reg_rf_wl_en>;
 	status = "okay";
 
+	#address-cells = <1>;
+	#size-cells = <0>;
 	brcmf: bcrmf@1 {
 		reg = <1>;
 		compatible = "brcm,bcm4329-fmac";
+
+		brcm,broken_sg_support;
+		brcm,sd_head_align = /bits/  16 <8>;
+		brcm,sd_sgentry_align = /bits/ 16 <32>;
 	};
 };
 
