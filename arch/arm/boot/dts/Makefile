@@ -10,8 +10,6 @@ DTC_FLAGS_stm32429i-eval += -@
 DTC_FLAGS_stm32746g-eval += -@
 DTC_FLAGS_stm32h743i-eval += -@
 DTC_FLAGS_stm32h743i-disco += -@
-DTC_FLAGS_stm32mp135d-dk += -@
-DTC_FLAGS_stm32mp135d-dk-a7-examples += -@
 DTC_FLAGS_stm32mp135f-dk += -@
 DTC_FLAGS_stm32mp135f-dk-a7-examples +=-@
 DTC_FLAGS_stm32mp157a-dk1 += -@
@@ -1155,8 +1153,6 @@ dtb-$(CONFIG_ARCH_STM32) += \
 	stm32h743i-eval.dtb \
 	stm32h743i-disco.dtb \
 	stm32h750i-art-pi.dtb \
-	stm32mp135d-dk.dtb \
-	stm32mp135d-dk-a7-examples.dtb \
 	stm32mp135f-dk.dtb \
 	stm32mp135f-dk-a7-examples.dtb \
 	stm32mp153c-dhcom-drc02.dtb \
