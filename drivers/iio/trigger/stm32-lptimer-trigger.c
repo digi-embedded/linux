@@ -16,11 +16,16 @@
 #include <linux/platform_device.h>
 #include <linux/property.h>
 
+#define STM32_LPTIM_TRIGGERS		3
+#define STM32MP25_LPTIM_TRIGGERS	5
+
 /* List Low-Power Timer triggers */
 static const char * const stm32_lptim_triggers[] = {
 	LPTIM1_OUT,
 	LPTIM2_OUT,
-	LPTIM3_OUT,
+	LPTIM3_OUT,		/* STM32_LPTIM_TRIGGERS */
+	LPTIM4_OUT,
+	LPTIM5_OUT,		/* STM32MP25_LPTIM_TRIGGERS */
 };
 
 struct stm32_lptim_trigger {
@@ -73,6 +78,7 @@ static int stm32_lptim_trigger_probe(struct platform_device *pdev)
 {
 	struct stm32_lptim_trigger *priv;
 	u32 index;
+	unsigned int num_triggers;
 	int ret;
 
 	priv = devm_kzalloc(&pdev->dev, sizeof(*priv), GFP_KERNEL);
@@ -82,7 +88,9 @@ static int stm32_lptim_trigger_probe(struct platform_device *pdev)
 	if (device_property_read_u32(&pdev->dev, "reg", &index))
 		return -EINVAL;
 
-	if (index >= ARRAY_SIZE(stm32_lptim_triggers))
+	num_triggers = (uintptr_t)device_get_match_data(&pdev->dev);
+
+	if (index >= ARRAY_SIZE(stm32_lptim_triggers) || index >= num_triggers)
 		return -EINVAL;
 
 	priv->dev = &pdev->dev;
@@ -98,7 +106,8 @@ static int stm32_lptim_trigger_probe(struct platform_device *pdev)
 }
 
 static const struct of_device_id stm32_lptim_trig_of_match[] = {
-	{ .compatible = "st,stm32-lptimer-trigger", },
+	{ .compatible = "st,stm32-lptimer-trigger", .data = (void *)STM32_LPTIM_TRIGGERS},
+	{ .compatible = "st,stm32mp25-lptimer-trigger", .data = (void *)STM32MP25_LPTIM_TRIGGERS},
 	{},
 };
 MODULE_DEVICE_TABLE(of, stm32_lptim_trig_of_match);
