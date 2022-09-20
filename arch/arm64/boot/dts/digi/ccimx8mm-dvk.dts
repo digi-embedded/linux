@@ -740,6 +740,8 @@
 &usbotg2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_usbotg2>;
+
+	power-active-high;
 	status = "okay";
 };
 
