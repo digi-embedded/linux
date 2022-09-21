@@ -1622,6 +1622,10 @@ static struct dma_async_tx_descriptor *stm32_dma3_prep_dma_memcpy(struct dma_cha
 	bool prevent_refactor = !!FIELD_GET(STM32_DMA3_DT_NOPACK, chan->dt_config.tr_conf) ||
 				!!FIELD_GET(STM32_DMA3_DT_NOREFACT, chan->dt_config.tr_conf);
 
+	/* Semaphore could be lost during suspend/resume */
+	if (chan->semaphore_mode && !chan->semaphore_taken)
+		return NULL;
+
 	/* TODO: Check if channel is busy ? */
 
 /* TODO: ch12-15 extra block size
@@ -1702,6 +1706,10 @@ static struct dma_async_tx_descriptor *stm32_dma3_prep_slave_sg(struct dma_chan 
 	bool prevent_refactor = !!FIELD_GET(STM32_DMA3_DT_NOPACK, chan->dt_config.tr_conf) ||
 				!!FIELD_GET(STM32_DMA3_DT_NOREFACT, chan->dt_config.tr_conf);
 	int ret;
+
+	/* Semaphore could be lost during suspend/resume */
+	if (chan->semaphore_mode && !chan->semaphore_taken)
+		return NULL;
 
 	/* TODO: Check if channel is busy ? */
 
@@ -1809,6 +1817,10 @@ static struct dma_async_tx_descriptor *stm32_dma3_prep_dma_cyclic(struct dma_cha
 	u32 count, i, max_block_size = STM32_DMA3_MAX_BLOCK_SIZE;
 	u32 ccr, ctr1, ctr2, ctr3;
 	int ret;
+
+	/* Semaphore could be lost during suspend/resume */
+	if (chan->semaphore_mode && !chan->semaphore_taken)
+		return NULL;
 
 	/* TODO: Check if channel is busy ? */
 
@@ -2409,8 +2421,6 @@ static int __maybe_unused stm32_dma3_runtime_suspend(struct device *dev)
 {
 	struct stm32_dma3_ddata *ddata = dev_get_drvdata(dev);
 
-	//TODO: check if a channel is active
-	//TODO: disable dma ?
 	clk_disable_unprepare(ddata->clk);
 
 	return 0;
@@ -2423,16 +2433,75 @@ static int __maybe_unused stm32_dma3_runtime_resume(struct device *dev)
 
 	ret = clk_prepare_enable(ddata->clk);
 	if (ret)
-		dev_err(dev, "clk_prepare_enable failed: %d\n", ret);
-
-	//TODO: enable dma ?
+		dev_err(dev, "Failed to enable clk: %d\n", ret);
 
 	return ret;
 }
 
+static int __maybe_unused stm32_dma3_pm_suspend(struct device *dev)
+{
+	struct stm32_dma3_ddata *ddata = dev_get_drvdata(dev);
+	struct dma_device *dma_dev = &ddata->dma_dev;
+	struct dma_chan *c;
+	int ccr, ret;
+
+	ret = pm_runtime_resume_and_get(dev);
+	if (ret < 0)
+		return ret;
+
+	list_for_each_entry(c, &dma_dev->channels, device_node) {
+		struct stm32_dma3_chan *chan = to_stm32_dma3_chan(c);
+
+		ccr = readl_relaxed(ddata->base + STM32_DMA3_CCR(chan->id));
+		if (ccr & CCR_EN) {
+			dev_warn(dev, "Suspend is prevented: %s still in use by %s\n",
+				 dma_chan_name(c), dev_name(c->slave));
+			pm_runtime_put_sync(dev);
+			return -EBUSY;
+		}
+	}
+
+	pm_runtime_put_sync(dev);
+
+	pm_runtime_force_suspend(dev);
+
+	return 0;
+}
+
+static int __maybe_unused stm32_dma3_pm_resume(struct device *dev)
+{
+	struct stm32_dma3_ddata *ddata = dev_get_drvdata(dev);
+	struct dma_device *dma_dev = &ddata->dma_dev;
+	struct dma_chan *c;
+	int ret;
+
+	ret = pm_runtime_force_resume(dev);
+	if (ret < 0)
+		return ret;
+
+	ret = pm_runtime_resume_and_get(dev);
+	if (ret < 0)
+		return ret;
+
+	/*
+	 * Channels semaphore need to be restored in case of registers reset during low power.
+	 * stm32_dma3_get_chan_sem() will prior check the semaphore status.
+	 */
+	list_for_each_entry(c, &dma_dev->channels, device_node) {
+		struct stm32_dma3_chan *chan = to_stm32_dma3_chan(c);
+
+		if (chan->semaphore_mode && chan->semaphore_taken)
+			stm32_dma3_get_chan_sem(chan);
+	}
+
+	pm_runtime_put_sync(dev);
+
+	return 0;
+}
+
 static const struct dev_pm_ops stm32_dma3_pm_ops = {
-	SET_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend,
-				pm_runtime_force_resume)
+	SET_SYSTEM_SLEEP_PM_OPS(stm32_dma3_pm_suspend,
+				stm32_dma3_pm_resume)
 	SET_RUNTIME_PM_OPS(stm32_dma3_runtime_suspend,
 			   stm32_dma3_runtime_resume, NULL)
 };
