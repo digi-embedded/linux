@@ -42,8 +42,13 @@ static const struct stm32_sai_conf stm32_sai_conf_h7 = {
 	.get_sai_ck_parent = stm32_sai_get_parent_clk,
 };
 
-/* STM32MP25: do not use SAI parent clock handles */
+/*
+ * STM32MP25:
+ * - do not use SAI parent clock source selection
+ * - do not use DMA burst mode
+ */
 static const struct stm32_sai_conf stm32_sai_conf_mp25 = {
+	.no_dma_burst = true,
 };
 
 static const struct of_device_id stm32_sai_ids[] = {

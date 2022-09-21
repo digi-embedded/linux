@@ -1313,7 +1313,7 @@ static int stm32_sai_dai_probe(struct snd_soc_dai *cpu_dai)
 	 * constraints).
 	 */
 	sai->dma_params.maxburst = 4;
-	if (sai->pdata->conf.fifo_size < 8)
+	if (sai->pdata->conf.fifo_size < 8 || sai->pdata->conf.no_dma_burst)
 		sai->dma_params.maxburst = 1;
 	/* Buswidth will be set by framework at runtime */
 	sai->dma_params.addr_width = DMA_SLAVE_BUSWIDTH_UNDEFINED;
