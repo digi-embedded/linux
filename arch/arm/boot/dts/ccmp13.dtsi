@@ -15,6 +15,10 @@
 #include <dt-bindings/pinctrl/stm32-pinfunc.h>
 
 / {
+	aliases {
+		mmc0 = &sdmmc2; /* Wireless */
+	};
+
 	memory@c0000000 {
 		device_type = "memory";
 		reg = <0xc0000000 0x10000000>; /* 256 MB */
