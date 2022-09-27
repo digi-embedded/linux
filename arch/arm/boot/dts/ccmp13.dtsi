@@ -101,7 +101,7 @@
 		shutdown-gpios = <&gpiod 13 GPIO_ACTIVE_HIGH>;
 		compatible = "brcm,bcm43438-bt";
 		max-speed = <3000000>;
-		vbat-supply = <&v3v3>;
+		vbat-supply = <&reg_3v3_rf>;
 		vddio-supply = <&reg_3v3_rf>;
 	};
 };
