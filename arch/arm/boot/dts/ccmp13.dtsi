@@ -78,14 +78,6 @@
 		regulator-max-microvolt = <5000000>;
 		regulator-always-on;
 	};
-
-	v3v3_ao: v3v3_ao {
-		compatible = "regulator-fixed";
-		regulator-name = "v3v3_ao";
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
-		regulator-always-on;
-	};
 };
 
 /* Bluetooth */
