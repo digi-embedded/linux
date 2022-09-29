@@ -1044,8 +1044,12 @@ static int stm32_rproc_probe(struct platform_device *pdev)
 	ddata = rproc->priv;
 	ddata->desc = desc;
 	ddata->trproc = trproc;
-	if (trproc)
+	if (trproc) {
 		ddata->trproc->rproc = rproc;
+		rproc->fw_format = RPROC_FW_TEE;
+	} else {
+		rproc->fw_format = RPROC_FW_ELF;
+	}
 
 	rproc_coredump_set_elf_info(rproc, ELFCLASS32, EM_NONE);
 
