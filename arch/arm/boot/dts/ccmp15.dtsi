@@ -13,6 +13,7 @@
 //#include "stm32mp15-m4-srm-pinctrl.dtsi"
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/mfd/st,stpmic1.h>
+#include <dt-bindings/rtc/rtc-stm32.h>
 
 / {
 	aliases {
@@ -99,7 +100,7 @@
 			regulator-name = "3v3_rf";
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
-			gpio = <&gpiog 0 GPIO_ACTIVE_HIGH>; /* 3V3_RF_EN */
+			gpio = <&gpiof 2 GPIO_ACTIVE_HIGH>; /* 3V3_RF_EN */
 			enable-active-high;
 			startup-delay-us = <100000>;
 			status = "disabled";
@@ -182,7 +183,10 @@
 };
 
 &rtc {
-	status = "disabled";
+	st,lsco = <RTC_OUT2_RMP>;
+	pinctrl-0 = <&rtc_out2_rmp_pins_a>;
+	pinctrl-names = "default";
+	status = "okay";
 };
 
 /* USART1 (Bluetooth) */
