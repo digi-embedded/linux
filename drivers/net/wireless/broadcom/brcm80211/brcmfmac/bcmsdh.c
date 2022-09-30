@@ -928,6 +928,7 @@ int brcmf_sdiod_probe(struct brcmf_sdio_dev *sdiodev)
 		f2_blksz = SDIO_89459_FUNC2_BLOCKSIZE;
 		break;
 	case SDIO_DEVICE_ID_CYPRESS_55572:
+	case SDIO_DEVICE_ID_CYPRESS_55500:
 		f2_blksz = SDIO_CYW55572_FUNC2_BLOCKSIZE;
 		break;
 	default:
@@ -1007,6 +1008,7 @@ static const struct sdio_device_id brcmf_sdmmc_ids[] = {
 	CYW_SDIO_DEVICE(SDIO_DEVICE_ID_CYPRESS_54591),
 	CYW_SDIO_DEVICE(SDIO_DEVICE_ID_CYPRESS_54594),
 	CYW_SDIO_DEVICE(SDIO_DEVICE_ID_CYPRESS_55572),
+	CYW_SDIO_DEVICE(SDIO_DEVICE_ID_CYPRESS_55500),
 	{ /* end: all zeroes */ }
 };
 MODULE_DEVICE_TABLE(sdio, brcmf_sdmmc_ids);
