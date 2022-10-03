@@ -10,6 +10,7 @@
 #include "stm32mp15-pinctrl.dtsi"
 #include "stm32mp15xxac-pinctrl.dtsi"
 #include "stm32mp15xx-dkx.dtsi"
+#include "stm32mp157a-dk1-scmi.dtsi"
 
 / {
 	model = "STMicroelectronics STM32MP157A-DK1 Discovery Board";
