@@ -292,11 +292,21 @@
 	status = "okay";
 };
 
-&spi5 {
+&spi4 {
 	pinctrl-names = "default", "sleep";
-	pinctrl-0 = <&spi5_pins_a>;
-	pinctrl-1 = <&spi5_sleep_pins_a>;
-	status = "disabled";
+	pinctrl-0 = <&ccmp13_spi4_pins>;
+	pinctrl-1 = <&ccmp13_spi4_sleep_pins>;
+	status = "okay";
+
+	spidev@0{
+		/* spidev uses a compatible string 'rohm,fs2228fv' to have the
+		 * driver create an spi device node. This is just an example,
+		 * there is not a real device connected on the SPI bus.
+		 */
+		compatible = "rohm,dh2228fv";
+		reg = <0>;
+		spi-max-frequency = <4000000>;
+	};
 };
 
 &timers3 {
@@ -574,6 +584,31 @@
 				 <STM32_PINMUX('A', 4, ANALOG)>, /* I2S1_WS */
 				 <STM32_PINMUX('C', 0, ANALOG)>, /* I2S1_MCK */
 				 <STM32_PINMUX('C', 3, ANALOG)>; /* I2S1_CK */
+		};
+	};
+
+	ccmp13_spi4_pins: ccmp13-spi4-0 {
+		pins1 {
+			pinmux = <STM32_PINMUX('D', 10, AF5)>, /* SPI4_NSS */
+				 <STM32_PINMUX('E', 11, AF5)>, /* SPI4_MOSI */
+				 <STM32_PINMUX('E', 12, AF5)>; /* SPI4_SCK */
+			bias-disable;
+			drive-push-pull;
+			slew-rate = <1>;
+		};
+
+		pins2 {
+			pinmux = <STM32_PINMUX('E', 13, AF5)>; /* SPI4_MISO */
+			bias-disable;
+		};
+	};
+
+	ccmp13_spi4_sleep_pins: ccmp13-spi4-sleep-0 {
+		pins {
+			pinmux = <STM32_PINMUX('D', 10, ANALOG)>, /* SPI4_NSS */
+				 <STM32_PINMUX('E', 11, ANALOG)>, /* SPI4_MOSI */
+				 <STM32_PINMUX('E', 12, ANALOG)>, /* SPI4_SCK */
+				 <STM32_PINMUX('E', 13, ANALOG)>; /* SPI4_MISO */
 		};
 	};
 
