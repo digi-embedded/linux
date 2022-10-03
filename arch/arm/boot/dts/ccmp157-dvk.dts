@@ -327,8 +327,6 @@
 		reg = <0x10>;
 		clocks = <&rcc SPI2_K>;
 		clock-names = "mclk";
-		interrupt-parent = <&gpiof>;
-		interrupts = <2 IRQ_TYPE_EDGE_FALLING>;
 		#sound-dai-cells = <0>;
 		#clock-cells = <0>;
 	        status = "okay";
