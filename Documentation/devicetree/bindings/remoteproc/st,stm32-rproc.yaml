@@ -102,6 +102,14 @@ properties:
           - description: The offset of the power setting register
           - description: The field mask of the PDDS selection
 
+  st,syscfg-nsvtor:
+    $ref: "/schemas/types.yaml#/definitions/phandle-array"
+    description: |
+      Reference to the system configuration register which stores the remote processor
+      non-secure vector table pointer.
+      address, used to boot it.
+    maxItems: 1
+
   st,syscfg-m4-state:
     $ref: "/schemas/types.yaml#/definitions/phandle-array"
     description: |
