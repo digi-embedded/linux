@@ -236,6 +236,16 @@
 	status = "okay";
 };
 
+/* PCIe connector uses USB */
+&gpiob {
+	pcie {
+		gpio-hog;
+		gpios = <6 0>;
+		output-high;
+		line-name = "PCIe-EN";
+	};
+};
+
 &rtc {
 	st,lsco = <RTC_OUT2_RMP>;
 	pinctrl-0 = <&rtc_out2_rmp_pins_a>;
