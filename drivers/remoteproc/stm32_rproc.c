@@ -23,6 +23,7 @@
 #include <linux/workqueue.h>
 
 #include "remoteproc_internal.h"
+#include "remoteproc_elf_helpers.h"
 
 #define HOLD_BOOT		0
 #define RELEASE_BOOT		1
@@ -108,6 +109,7 @@ struct stm32_rproc {
 	struct stm32_syscon pdds;
 	struct stm32_syscon cm_state;
 	struct stm32_syscon rsctbl;
+	struct stm32_syscon boot_vec;
 	int wdg_irq;
 	u32 nb_rmems;
 	struct stm32_rproc_mem *rmems;
@@ -118,6 +120,56 @@ struct stm32_rproc {
 	const struct stm32_rproc_data *desc;
 	void __iomem *rsc_va;
 };
+
+static u64 stm32_rproc_get_vect_table(struct rproc *rproc, const struct firmware *fw)
+{
+	struct device *dev = rproc->dev.parent;
+	struct stm32_rproc *ddata = rproc->priv;
+	const void *shdr, *name_table_shdr;
+	const char *name_table;
+	const u8 *elf_data = (void *)fw->data;
+	const void *ehdr = elf_data;
+	size_t fw_size = fw->size;
+	int i;
+	u8 class = fw_elf_get_class(fw);
+	u32 elf_shdr_get_size = elf_size_of_shdr(class);
+	u16 shnum = elf_hdr_get_e_shnum(class, ehdr);
+	u16 shstrndx = elf_hdr_get_e_shstrndx(class, ehdr);
+
+	/*
+	 * If the platform does not support the boot address configuration set the boot address
+	 * to 0.
+	 */
+	if (!ddata->boot_vec.map)
+		return 0;
+
+	/* Look for the vector table */
+	/* First, get the section header according to the elf class */
+	shdr = elf_data + elf_hdr_get_e_shoff(class, ehdr);
+	/* Compute name table section header entry in shdr array */
+	name_table_shdr = shdr + (shstrndx * elf_shdr_get_size);
+	/* Finally, compute the name table section address in elf */
+	name_table = elf_data + elf_shdr_get_sh_offset(class, name_table_shdr);
+
+	for (i = 0; i < shnum; i++, shdr += elf_shdr_get_size) {
+		u64 size = elf_shdr_get_sh_size(class, shdr);
+		u64 offset = elf_shdr_get_sh_offset(class, shdr);
+		u32 name = elf_shdr_get_sh_name(class, shdr);
+
+		if (strcmp(name_table + name, ".isr_vectors"))
+			continue;
+
+		/* make sure we have the entire table */
+		if (offset + size > fw_size || offset + size < size) {
+			dev_err(dev, "vector table truncated\n");
+			return 0;
+		}
+
+		return elf_shdr_get_sh_addr(class, shdr);
+	}
+
+	return 0;
+}
 
 static int stm32_rproc_pa_to_da(struct rproc *rproc, phys_addr_t pa, u64 *da)
 {
@@ -645,6 +697,22 @@ static int stm32_rproc_start(struct rproc *rproc)
 		}
 	}
 
+	/* Configure the boot vector register with the vector table address read in the ELF. */
+	if (ddata->boot_vec.map) {
+		if (rproc->bootaddr & ~ddata->boot_vec.mask) {
+			dev_err(&rproc->dev, "Boot address is %#llx no aligned on mask %#x\n",
+				rproc->bootaddr, ddata->boot_vec.mask);
+			return err;
+		}
+		dev_dbg(&rproc->dev, "boot vector address = %#llx", rproc->bootaddr);
+		err = regmap_update_bits(ddata->boot_vec.map, ddata->boot_vec.reg,
+					 ddata->boot_vec.mask, rproc->bootaddr);
+		if (err) {
+			dev_err(&rproc->dev, "failed to set boot_vec\n");
+				return err;
+		}
+	}
+
 	err = stm32_rproc_set_hold_boot(rproc, false);
 	if (err)
 		return err;
@@ -809,7 +877,7 @@ static const struct rproc_ops st_rproc_ops = {
 	.find_loaded_rsc_table = rproc_elf_find_loaded_rsc_table,
 	.get_loaded_rsc_table = stm32_rproc_get_loaded_rsc_table,
 	.sanity_check	= rproc_elf_sanity_check,
-	.get_boot_addr	= rproc_elf_get_boot_addr,
+	.get_boot_addr = stm32_rproc_get_vect_table,
 };
 
 static const struct rproc_ops st_rproc_tee_ops = {
@@ -1008,8 +1076,9 @@ static int stm32_rproc_probe(struct platform_device *pdev)
 	struct stm32_rproc *ddata;
 	struct device_node *np = dev->of_node;
 	const struct stm32_rproc_data *desc;
-	struct tee_rproc *trproc;
+	struct tee_rproc *trproc = NULL;
 	struct rproc *rproc;
+	struct stm32_syscon boot_vec;
 	unsigned int state;
 	int ret;
 
@@ -1019,15 +1088,20 @@ static int stm32_rproc_probe(struct platform_device *pdev)
 	if (ret)
 		return ret;
 
-	trproc = tee_rproc_register(dev, desc->fw_id);
-	if (!IS_ERR_OR_NULL(trproc)) {
-		/*
-		 * Delegate the firmware management to the secure context. The
-		 * firmware loaded has to be signed.
-		 */
-		dev_info(dev, "Support of signed firmware only\n");
+	/*
+	 * If the "st,syscfg-nsvtor" property is defined in DT, the Linux
+	 * remoteproc driver expects to load the firmware. In this case we don't
+	 * verify if we have to delegate the firmware management to the
+	 * secure context. Exception should be raised on secure context side in case
+	 * of issue.
+	 */
+	ret = stm32_rproc_get_syscon(np, "st,syscfg-nsvtor", &boot_vec);
+	if (ret)
+		dev_dbg(dev, "nsvector sys config not defined\n");
 
-	} else {
+	if (!boot_vec.map)
+		trproc = tee_rproc_register(dev, desc->fw_id);
+	if (IS_ERR(trproc)) {
 		if (PTR_ERR(trproc) == -EPROBE_DEFER)
 			return PTR_ERR(trproc);
 		trproc = NULL;
@@ -1044,18 +1118,25 @@ static int stm32_rproc_probe(struct platform_device *pdev)
 	ddata = rproc->priv;
 	ddata->desc = desc;
 	ddata->trproc = trproc;
+	ddata->boot_vec = boot_vec;
+
+	ret = stm32_rproc_parse_dt(pdev, ddata, &rproc->auto_boot);
+	if (ret)
+		goto free_rproc;
+
 	if (trproc) {
-		ddata->trproc->rproc = rproc;
+		/*
+		 * Delegate the firmware management to the secure context. The
+		 * firmware loaded has to be signed.
+		 */
+		dev_info(dev, "Support of signed firmware only\n");
 		rproc->fw_format = RPROC_FW_TEE;
+		trproc->rproc = rproc;
 	} else {
 		rproc->fw_format = RPROC_FW_ELF;
 	}
 
 	rproc_coredump_set_elf_info(rproc, ELFCLASS32, EM_NONE);
-
-	ret = stm32_rproc_parse_dt(pdev, ddata, &rproc->auto_boot);
-	if (ret)
-		goto free_rproc;
 
 	ret = stm32_rproc_of_memory_translations(pdev, ddata);
 	if (ret)
