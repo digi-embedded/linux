@@ -193,8 +193,8 @@
 	ext_rtc: ext_rtc@52 {
 		compatible = "microcrystal,rv3028";
 		reg = <0x52>;
-		interrupt-parent = <&gpioa>;
-		interrupts = <4 IRQ_TYPE_EDGE_FALLING>;
+		interrupt-parent = <&gpiog>;
+		interrupts = <7 IRQ_TYPE_EDGE_FALLING>;
 	};
 };
 
