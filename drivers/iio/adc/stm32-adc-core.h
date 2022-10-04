@@ -272,6 +272,8 @@ enum stm32h7_adc_dmngt {
 #define STM32MP25_RES_MASK		GENMASK(3, 2)
 
 /* STM32MP25_ADC23_OR - specific bit fields */
+#define STM32MP25_VDDGPUEN		BIT(4)
+#define STM32MP25_VDDCPUEN		BIT(3)
 #define STM32MP25_VDDCOREEN		BIT(2)
 #define STM32MP25_SELBG			BIT(1)
 #define STM32MP25_SELREF		BIT(0)
