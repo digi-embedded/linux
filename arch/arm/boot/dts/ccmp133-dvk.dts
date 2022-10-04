@@ -402,6 +402,14 @@
 	status = "okay";
 };
 
+&usbotg_hs {
+	pinctrl-0 = <&ccmp13_usbotg_hs_pins>;
+	pinctrl-names = "default";
+	phy-names = "usb2-phy";
+	phys = <&usbphyc_port1 0>;
+	status = "okay";
+};
+
 &usbphyc {
 	status = "okay";
 };
@@ -639,6 +647,12 @@
 		pins {
 			pinmux = <STM32_PINMUX('A', 0, ANALOG)>, /* UART5_TX */
 				 <STM32_PINMUX('F', 13, ANALOG)>; /* UART5_RX */
+		};
+	};
+
+	ccmp13_usbotg_hs_pins: ccmp13_usbotg-hs-0 {
+		pins {
+			pinmux = <STM32_PINMUX('A', 10, ANALOG)>; /* OTG_ID */
 		};
 	};
 };
