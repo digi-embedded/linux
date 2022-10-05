@@ -261,7 +261,7 @@ struct stm32_adc_cfg {
  * @chan_name:		channel name array
  * @num_diff:		number of differential channels
  * @int_ch:		internal channel indexes array
- * @oversampling:	current oversampling ratio
+ * @ovs_idx:		current oversampling ratio index (in oversampling array)
  */
 struct stm32_adc {
 	struct stm32_adc_common	*common;
@@ -288,7 +288,7 @@ struct stm32_adc {
 	char			chan_name[STM32_ADC_CH_MAX][STM32_ADC_CH_SZ];
 	u32			num_diff;
 	int			int_ch[STM32_ADC_INT_CH_NB];
-	int			oversampling;
+	int			ovs_idx;
 };
 
 struct stm32_adc_diff_channel {
@@ -1560,7 +1560,7 @@ static int stm32_adc_write_raw(struct iio_dev *indio_dev, struct iio_chan_spec c
 		pm_runtime_mark_last_busy(dev);
 		pm_runtime_put_autosuspend(dev);
 
-		adc->oversampling = adc->cfg->adc_info->oversampling[idx];
+		adc->ovs_idx = idx;
 
 err:
 		iio_device_release_direct_mode(indio_dev);
@@ -1630,7 +1630,7 @@ static int stm32_adc_read_raw(struct iio_dev *indio_dev,
 		return IIO_VAL_INT;
 
 	case IIO_CHAN_INFO_OVERSAMPLING_RATIO:
-		*val = adc->oversampling;
+		*val = adc->cfg->adc_info->oversampling[adc->ovs_idx];
 		return IIO_VAL_INT;
 
 	default:
@@ -2105,8 +2105,8 @@ static void stm32_adc_chan_init_one(struct iio_dev *indio_dev,
 	chan->info_mask_shared_by_type = BIT(IIO_CHAN_INFO_SCALE) |
 					 BIT(IIO_CHAN_INFO_OFFSET);
 	if (adc->cfg->has_oversampling) {
-		chan->info_mask_shared_by_type |= BIT(IIO_CHAN_INFO_OVERSAMPLING_RATIO);
-		chan->info_mask_shared_by_type_available = BIT(IIO_CHAN_INFO_OVERSAMPLING_RATIO);
+		chan->info_mask_shared_by_all |= BIT(IIO_CHAN_INFO_OVERSAMPLING_RATIO);
+		chan->info_mask_shared_by_all_available = BIT(IIO_CHAN_INFO_OVERSAMPLING_RATIO);
 	}
 	chan->scan_type.sign = 'u';
 	chan->scan_type.realbits = adc->cfg->adc_info->resolutions[adc->res];
