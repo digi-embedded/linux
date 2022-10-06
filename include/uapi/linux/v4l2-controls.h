@@ -1155,6 +1155,39 @@ enum v4l2_jpeg_chroma_subsampling {
 #define V4L2_CID_TEST_PATTERN			(V4L2_CID_IMAGE_PROC_CLASS_BASE + 3)
 #define V4L2_CID_DEINTERLACING_MODE		(V4L2_CID_IMAGE_PROC_CLASS_BASE + 4)
 #define V4L2_CID_DIGITAL_GAIN			(V4L2_CID_IMAGE_PROC_CLASS_BASE + 5)
+#define V4L2_CID_ISP_EXPOSURE			(V4L2_CID_IMAGE_PROC_CLASS_BASE + 6)
+/**
+ * struct v4l2_ctrl_isp_exposure - Exposure Block control within an ISP
+ *
+ * @enable: boolean indicating if the exposure compensation should be enabled or not
+ * @shift_R: shift for RED component
+ * @mult_R: multiply for RED component
+ * @shift_G: shift for GREEN component
+ * @mult_G: multiply for GREEN component
+ * @shift_B: shift for BLUE component
+ * @mult_B: multiply for BLUE component
+ */
+struct v4l2_ctrl_isp_exposure {
+	bool enable;
+	__u8 shift_R;
+	__u8 mult_R;
+	__u8 shift_G;
+	__u8 mult_G;
+	__u8 shift_B;
+	__u8 mult_B;
+};
+
+#define V4L2_CID_ISP_CONTRAST			(V4L2_CID_IMAGE_PROC_CLASS_BASE + 7)
+/**
+ * struct v4l2_ctrl_isp_contrast - Contrast Block control within an ISP
+ *
+ * @enable: boolean indicating if the contrast compensation should be enabled or not
+ * @lum: luminance increase value table (9 * 8 bits)
+ */
+struct v4l2_ctrl_isp_contrast {
+	bool enable;
+	__u8 lum[9];
+};
 
 /*  DV-class control IDs defined by V4L2 */
 #define V4L2_CID_DV_CLASS_BASE			(V4L2_CTRL_CLASS_DV | 0x900)

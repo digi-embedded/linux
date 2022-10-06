@@ -350,6 +350,12 @@ void v4l2_ctrl_type_op_log(const struct v4l2_ctrl *ctrl)
 	case V4L2_CTRL_TYPE_HEVC_DECODE_PARAMS:
 		pr_cont("HEVC_DECODE_PARAMS");
 		break;
+	case V4L2_CTRL_TYPE_ISP_EXPOSURE:
+		pr_cont("ISP_EXPOSURE");
+		break;
+	case V4L2_CTRL_TYPE_ISP_CONTRAST:
+		pr_cont("ISP_CONTRAST");
+		break;
 	default:
 		pr_cont("unknown type %d", ctrl->type);
 		break;
@@ -916,6 +922,10 @@ static int std_validate_compound(const struct v4l2_ctrl *ctrl, u32 idx,
 		area = p;
 		if (!area->width || !area->height)
 			return -EINVAL;
+		break;
+
+	case V4L2_CTRL_TYPE_ISP_EXPOSURE:
+	case V4L2_CTRL_TYPE_ISP_CONTRAST:
 		break;
 
 	default:
@@ -1601,6 +1611,12 @@ static struct v4l2_ctrl *v4l2_ctrl_new(struct v4l2_ctrl_handler *hdl,
 		break;
 	case V4L2_CTRL_TYPE_VP9_FRAME:
 		elem_size = sizeof(struct v4l2_ctrl_vp9_frame);
+		break;
+	case V4L2_CTRL_TYPE_ISP_EXPOSURE:
+		elem_size = sizeof(struct v4l2_ctrl_isp_exposure);
+		break;
+	case V4L2_CTRL_TYPE_ISP_CONTRAST:
+		elem_size = sizeof(struct v4l2_ctrl_isp_contrast);
 		break;
 	case V4L2_CTRL_TYPE_AREA:
 		elem_size = sizeof(struct v4l2_area);

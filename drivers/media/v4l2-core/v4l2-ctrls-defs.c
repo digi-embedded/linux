@@ -1120,6 +1120,8 @@ const char *v4l2_ctrl_get_name(u32 id)
 	case V4L2_CID_TEST_PATTERN:		return "Test Pattern";
 	case V4L2_CID_DEINTERLACING_MODE:	return "Deinterlacing Mode";
 	case V4L2_CID_DIGITAL_GAIN:		return "Digital Gain";
+	case V4L2_CID_ISP_EXPOSURE:		return "ISP Exposure";
+	case V4L2_CID_ISP_CONTRAST:		return "ISP Contrast";
 
 	/* DV controls */
 	/* Keep the order of the 'case's the same as in v4l2-controls.h! */
@@ -1538,6 +1540,12 @@ void v4l2_ctrl_fill(u32 id, const char **name, enum v4l2_ctrl_type *type,
 		break;
 	case V4L2_CID_COLORIMETRY_HDR10_MASTERING_DISPLAY:
 		*type = V4L2_CTRL_TYPE_HDR10_MASTERING_DISPLAY;
+		break;
+	case V4L2_CID_ISP_EXPOSURE:
+		*type = V4L2_CTRL_TYPE_ISP_EXPOSURE;
+		break;
+	case V4L2_CID_ISP_CONTRAST:
+		*type = V4L2_CTRL_TYPE_ISP_CONTRAST;
 		break;
 	default:
 		*type = V4L2_CTRL_TYPE_INTEGER;
