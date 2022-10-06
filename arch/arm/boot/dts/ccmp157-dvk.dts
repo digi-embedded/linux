@@ -304,7 +304,7 @@
 		status = "disabled";
 	};
 
-	goodix_touch@14 {
+	goodix_touch: goodix_touch@14 {
 		compatible = "goodix,gt9271";
 		reg = <0x14>;
 		interrupt-parent = <&gpiog>;
@@ -313,7 +313,7 @@
 		status = "disabled";
 	};
 
-	goodix_touch2@5d {
+	goodix_touch2: goodix_touch2@5d {
 		compatible = "goodix,gt9271";
 		reg = <0x5d>;
 		interrupt-parent = <&gpiog>;
