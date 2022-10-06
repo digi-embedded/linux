@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 /*
- * Copyright 2019 NXP
+ * Copyright 2019,2022 NXP
  */
 
 #include <linux/busfreq-imx.h>
@@ -82,6 +82,7 @@ static struct lcdifv3_soc_pdata imx8mp_lcdif3_pdata = {
 	.hdmimix     = true,
 };
 static const struct of_device_id imx_lcdifv3_dt_ids[] = {
+	{ .compatible = "fsl,imx93-lcdif", },
 	{ .compatible = "fsl,imx8mp-lcdif1", .data = &imx8mp_lcdif1_pdata, },
 	{ .compatible = "fsl,imx8mp-lcdif2", .data = &imx8mp_lcdif2_pdata, },
 	{ .compatible = "fsl,imx8mp-lcdif3", .data = &imx8mp_lcdif3_pdata,},
@@ -733,6 +734,15 @@ static int imx_lcdifv3_probe(struct platform_device *pdev)
 	if (IS_ERR(lcdifv3->base))
 		return PTR_ERR(lcdifv3->base);
 
+	if (of_device_is_compatible(np, "fsl,imx93-lcdif")) {
+		lcdifv3->gpr = syscon_regmap_lookup_by_phandle(np, "fsl,gpr");
+		if (IS_ERR(lcdifv3->gpr)) {
+			ret = PTR_ERR(lcdifv3->gpr);
+			dev_err(dev, "failed to get gpr: %d\n", ret);
+			return ret;
+		}
+	}
+
 	lcdifv3->dev = dev;
 
 	/* reset controller to avoid any conflict
@@ -759,7 +769,7 @@ static int imx_lcdifv3_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, lcdifv3);
 
-	if (soc_pdata->hdmimix) {
+	if (soc_pdata && soc_pdata->hdmimix) {
 		ret = hdmimix_lcdif3_setup(lcdifv3);
 		if (ret < 0) {
 			dev_err(dev, "hdmimix lcdif3 setup failed\n");
@@ -795,6 +805,10 @@ static int imx_lcdifv3_runtime_suspend(struct device *dev)
 
 	release_bus_freq(BUS_FREQ_HIGH);
 
+	/* clear LCDIF QoS and cache */
+	if (of_device_is_compatible(dev->of_node, "fsl,imx93-lcdif"))
+		regmap_write(lcdifv3->gpr, 0xc, 0x0);
+
 	return 0;
 }
 
@@ -810,6 +824,10 @@ static int imx_lcdifv3_runtime_resume(struct device *dev)
 
 	if (!atomic_dec_and_test(&lcdifv3->rpm_suspended))
 		return 0;
+
+	/* set LCDIF QoS and cache */
+	if (of_device_is_compatible(dev->of_node, "fsl,imx93-lcdif"))
+		regmap_write(lcdifv3->gpr, 0xc, 0x3712);
 
 	request_bus_freq(BUS_FREQ_HIGH);
 
