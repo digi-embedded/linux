@@ -2378,6 +2378,13 @@
 				status = "disabled";
 			};
 		};
+
+		a35ssc_m33: syscon@488020a0 {
+			compatible = "st,stm32mp25-a35ssc-m33", "syscon";
+			reg = <0x488020a0 0x0c>;
+			clocks = <&scmi_clk CK_SCMI_SYSCPU1>;
+			status = "disabled";
+		};
 	};
 
 	mlahb: ahb {
