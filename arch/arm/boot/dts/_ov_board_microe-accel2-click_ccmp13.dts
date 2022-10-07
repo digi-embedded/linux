@@ -20,23 +20,18 @@
 	fragment@0 {
 		target-path = "/";
 		__overlay__ {
-			overlay-description = "SOM: Bluetooth";
+			overlay-description = "DVK: MicroE accelerometer (accel2-click) ";
 		};
 	};
 
-	/* Enable the RF regulator */
+	/* MicroE accelerometer (accel2-click) */
 	fragment@1 {
-		target = <&reg_3v3_rf>;
+		target = <&i2c2>;
 		__overlay__ {
-			status = "okay";
-		};
-	};
-
-	/* Enable USART1 (Bluetooth) */
-	fragment@2 {
-		target = <&usart1>;
-		__overlay__ {
-			status = "okay";
+			accelerometer@1d {
+				compatible = "st,lis3dh-accel";
+				reg = <0x1d>;
+			};
 		};
 	};
 };
