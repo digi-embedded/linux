@@ -59,16 +59,6 @@
 		};
 	};
 
-	gpio-keys {
-		compatible = "gpio-keys";
-
-		user-pa13 {
-			label = "User-PA13";
-			linux,code = <BTN_1>;
-			gpios = <&gpioa 13 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
-		};
-	};
-
 	sound_max98089: sound-max98089 {
 		compatible = "st,stm-audio-max98088";
 		model = "stm32_max98088";
