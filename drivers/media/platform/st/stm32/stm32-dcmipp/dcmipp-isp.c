@@ -28,6 +28,8 @@
 #define DCMIPP_FMT_WIDTH_DEFAULT  640
 #define DCMIPP_FMT_HEIGHT_DEFAULT 480
 
+#define DCMIPP_CMSR2_P1VSYNCF BIT(18)
+
 #define DCMIPP_P1FSCR (0x804)
 #define DCMIPP_P1FSCR_DTIDA_MASK GENMASK(5, 0)
 #define DCMIPP_P1FSCR_DTIDA_SHIFT 0
@@ -63,6 +65,17 @@
 #define DCMIPP_P1BLCCR_BLCR_SHIFT 24
 #define DCMIPP_P1BLCCR_BLCR_MASK GENMASK(31, 24)
 
+#define DCMIPP_P1EXCR1 (0x844)
+#define DCMIPP_P1EXCR1_ENABLE BIT(0)
+#define DCMIPP_P1EXCR1_MULTR_SHIFT 20
+#define DCMIPP_P1EXCR1_SHFR_SHIFT 28
+
+#define DCMIPP_P1EXCR2 (0x848)
+#define DCMIPP_P1EXCR2_MULTB_SHIFT 4
+#define DCMIPP_P1EXCR2_SHFB_SHIFT 12
+#define DCMIPP_P1EXCR2_MULTG_SHIFT 20
+#define DCMIPP_P1EXCR2_SHFG_SHIFT 28
+
 #define DCMIPP_P1DMCR (0x870)
 #define DCMIPP_P1DMCR_ENABLE BIT(0)
 #define DCMIPP_P1DMCR_TYPE_SHIFT 1
@@ -91,6 +104,22 @@
 #define DCMIPP_P1CCGR2 (0x890)
 #define DCMIPP_P1CCBR1 (0x894)
 #define DCMIPP_P1CCBR2 (0x898)
+
+#define DCMIPP_P1CTCR1 (0x8a0)
+#define DCMIPP_P1CTCR1_ENABLE BIT(0)
+#define DCMIPP_P1CTCR1_LUM0_SHIFT 9
+
+#define DCMIPP_P1CTCR2 (0x8a4)
+#define DCMIPP_P1CTCR2_LUM4_SHIFT 1
+#define DCMIPP_P1CTCR2_LUM3_SHIFT 9
+#define DCMIPP_P1CTCR2_LUM2_SHIFT 17
+#define DCMIPP_P1CTCR2_LUM1_SHIFT 25
+
+#define DCMIPP_P1CTCR3 (0x8a8)
+#define DCMIPP_P1CTCR3_LUM8_SHIFT 1
+#define DCMIPP_P1CTCR3_LUM7_SHIFT 9
+#define DCMIPP_P1CTCR3_LUM6_SHIFT 17
+#define DCMIPP_P1CTCR3_LUM5_SHIFT 25
 
 #define DCMIPP_P1CRSZR (0x908)
 #define DCMIPP_P1CRSZR_HSIZE_SHIFT 0
@@ -214,10 +243,18 @@ struct dcmipp_isp_device {
 	struct v4l2_rect crop;
 	struct v4l2_rect compose;
 	bool streaming;
+	/* Protects the access of variables shared within the interrupt */
+	spinlock_t irqlock;
 	/* Protect this data structure */
 	struct mutex lock;
 
 	void __iomem *regs;
+
+	/* Exposure / Contrast control */
+	struct v4l2_ctrl_isp_exposure exposure;
+	bool exposure_needs_update;
+	struct v4l2_ctrl_isp_contrast contrast;
+	bool contrast_needs_update;
 
 	struct v4l2_ctrl_handler ctrls;
 };
@@ -254,8 +291,12 @@ static int dcmipp_isp_s_ctrl(struct v4l2_ctrl *ctrl)
 	struct dcmipp_isp_device *isp =
 			container_of(ctrl->handler, struct dcmipp_isp_device, ctrls);
 
+	dev_dbg(isp->dev, ">> %s: ctrl->id = 0x%x\n", __func__, ctrl->id);
+
 	if (!isp->streaming)
 		return 0;
+
+	spin_lock_irq(&isp->irqlock);
 
 	switch (ctrl->id) {
 	case V4L2_CID_ISP_DEMOSAICING_PEAK:
@@ -286,7 +327,17 @@ static int dcmipp_isp_s_ctrl(struct v4l2_ctrl *ctrl)
 			   ((ctrl->val - 1) << DCMIPP_P1BPRCR_STRENGTH_SHIFT) |
 			   DCMIPP_P1BPRCR_ENABLE : 0);
 		break;
+	case V4L2_CID_ISP_EXPOSURE:
+		isp->exposure = *(struct v4l2_ctrl_isp_exposure *)ctrl->p_new.p;
+		isp->exposure_needs_update = true;
+		break;
+	case V4L2_CID_ISP_CONTRAST:
+		isp->contrast = *(struct v4l2_ctrl_isp_contrast *)ctrl->p_new.p;
+		isp->contrast_needs_update = true;
+		break;
 	}
+
+	spin_unlock_irq(&isp->irqlock);
 
 	return 0;
 };
@@ -389,6 +440,16 @@ static const struct v4l2_ctrl_config dcmipp_isp_ctrls[] = {
 		.step		= 1,
 		.def		= 0,
 		.flags		= V4L2_CTRL_FLAG_READ_ONLY | V4L2_CTRL_FLAG_VOLATILE,
+	}, {
+		.ops		= &dcmipp_isp_ctrl_ops,
+		.id		= V4L2_CID_ISP_EXPOSURE,
+		.type		= V4L2_CTRL_TYPE_ISP_EXPOSURE,
+		.name		= "ISP Exposure block control",
+	}, {
+		.ops		= &dcmipp_isp_ctrl_ops,
+		.id		= V4L2_CID_ISP_CONTRAST,
+		.type		= V4L2_CTRL_TYPE_ISP_CONTRAST,
+		.name		= "ISP Contrast block control",
 	}
 };
 
@@ -763,7 +824,7 @@ static void dcmipp_isp_config_demosaicing(struct dcmipp_isp_device *isp)
 	reg_clear(isp, DCMIPP_P1DMCR, DCMIPP_P1DMCR_ENABLE | DCMIPP_P1DMCR_TYPE_MASK);
 
 	if (vpix->code >= 0x3000 && vpix->code < 0x4000) {
-		dev_info(isp->dev, "Input is RawBayer, enable Demosaicing\n");
+		dev_dbg(isp->dev, "Input is RawBayer, enable Demosaicing\n");
 
 		if (vpix->code == MEDIA_BUS_FMT_SBGGR8_1X8 ||
 		    vpix->code == MEDIA_BUS_FMT_SBGGR10_1X10 ||
@@ -879,6 +940,59 @@ static const struct v4l2_subdev_ops dcmipp_isp_ops = {
 	.video = &dcmipp_isp_video_ops,
 };
 
+/*
+ * Thread handler of IT for the ISP subdev
+ * Used for updating the ISP block shadow registers on the VSYNC
+ * to ensure that they are properly all taken into account all at
+ * once
+ */
+static irqreturn_t dcmipp_isp_irq_thread(int irq, void *arg)
+{
+	struct dcmipp_isp_device *isp =
+			container_of(arg, struct dcmipp_isp_device, ved);
+	struct dcmipp_ent_device *ved = arg;
+
+	/* We are only interrested in VSYNC interrupts */
+	if (!(ved->cmsr2 & DCMIPP_CMSR2_P1VSYNCF))
+		return IRQ_HANDLED;
+
+	spin_lock_irq(&isp->irqlock);
+
+	if (isp->exposure_needs_update) {
+		reg_write(isp, DCMIPP_P1EXCR2,
+			  (isp->exposure.mult_B << DCMIPP_P1EXCR2_MULTB_SHIFT) |
+			  (isp->exposure.shift_B << DCMIPP_P1EXCR2_SHFB_SHIFT) |
+			  (isp->exposure.mult_G << DCMIPP_P1EXCR2_MULTG_SHIFT) |
+			  (isp->exposure.shift_G << DCMIPP_P1EXCR2_SHFG_SHIFT));
+		reg_write(isp, DCMIPP_P1EXCR1,
+			  (isp->exposure.mult_R << DCMIPP_P1EXCR1_MULTR_SHIFT) |
+			  (isp->exposure.shift_R << DCMIPP_P1EXCR1_SHFR_SHIFT) |
+			  (isp->exposure.enable ? DCMIPP_P1EXCR1_ENABLE : 0));
+		isp->exposure_needs_update = false;
+	}
+
+	if (isp->contrast_needs_update) {
+		reg_write(isp, DCMIPP_P1CTCR2,
+			  (isp->contrast.lum[1] << DCMIPP_P1CTCR2_LUM1_SHIFT) |
+			  (isp->contrast.lum[2] << DCMIPP_P1CTCR2_LUM2_SHIFT) |
+			  (isp->contrast.lum[3] << DCMIPP_P1CTCR2_LUM3_SHIFT) |
+			  (isp->contrast.lum[4] << DCMIPP_P1CTCR2_LUM4_SHIFT));
+		reg_write(isp, DCMIPP_P1CTCR3,
+			  (isp->contrast.lum[5] << DCMIPP_P1CTCR3_LUM5_SHIFT) |
+			  (isp->contrast.lum[6] << DCMIPP_P1CTCR3_LUM6_SHIFT) |
+			  (isp->contrast.lum[7] << DCMIPP_P1CTCR3_LUM7_SHIFT) |
+			  (isp->contrast.lum[8] << DCMIPP_P1CTCR3_LUM8_SHIFT));
+		reg_write(isp, DCMIPP_P1CTCR1,
+			  (isp->contrast.lum[0] << DCMIPP_P1CTCR1_LUM0_SHIFT) |
+			  (isp->contrast.enable ? DCMIPP_P1CTCR1_ENABLE : 0));
+		isp->contrast_needs_update = false;
+	}
+
+	spin_unlock_irq(&isp->irqlock);
+
+	return IRQ_HANDLED;
+}
+
 /* FIXME */
 static void dcmipp_isp_release(struct v4l2_subdev *sd)
 {
@@ -931,7 +1045,7 @@ static int dcmipp_isp_comp_bind(struct device *comp, struct device *master,
 				     MEDIA_PAD_FL_SOURCE,
 				     },
 				     &dcmipp_isp_int_ops, &dcmipp_isp_ops,
-				     NULL, NULL);
+				     NULL, dcmipp_isp_irq_thread);
 	if (ret) {
 		kfree(isp);
 		return ret;
