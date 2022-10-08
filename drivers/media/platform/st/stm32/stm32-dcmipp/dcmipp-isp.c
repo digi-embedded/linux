@@ -923,9 +923,10 @@ static int dcmipp_isp_comp_bind(struct device *comp, struct device *master,
 	ret = dcmipp_ent_sd_register(&isp->ved, &isp->sd,
 				     bind_data->v4l2_dev,
 				     pdata->entity_name,
-				     MEDIA_ENT_F_PROC_VIDEO_PIXEL_FORMATTER, 3,
-				     (const unsigned long[3]) {
+				     MEDIA_ENT_F_PROC_VIDEO_PIXEL_FORMATTER, 4,
+				     (const unsigned long[4]) {
 				     MEDIA_PAD_FL_SINK,
+				     MEDIA_PAD_FL_SOURCE,
 				     MEDIA_PAD_FL_SOURCE,
 				     MEDIA_PAD_FL_SOURCE,
 				     },

@@ -138,6 +138,7 @@ static const struct dcmipp_pipeline_config stm32mp13_pipe_cfg = {
 #define	ID_MAIN_CAPTURE	5
 #define	ID_AUX_POSTPROC 6
 #define	ID_AUX_CAPTURE 7
+#define	ID_ISP_STAT_CAPTURE 8
 static const struct dcmipp_ent_config stm32mp25_ent_config[] = {
 	{
 		.name = "dcmipp_parallel",
@@ -171,6 +172,10 @@ static const struct dcmipp_ent_config stm32mp25_ent_config[] = {
 		.name = "dcmipp_aux_capture",
 		.drv = "dcmipp-pixelcap",
 	},
+	{
+		.name = "dcmipp_main_isp_stat_capture",
+		.drv = "dcmipp-statcap",
+	},
 };
 
 static const struct dcmipp_ent_link stm32mp25_ent_links[] = {
@@ -185,6 +190,8 @@ static const struct dcmipp_ent_link stm32mp25_ent_links[] = {
 			MEDIA_LNK_FL_ENABLED | MEDIA_LNK_FL_IMMUTABLE),
 	DCMIPP_ENT_LINK(ID_PARALLEL,	1, ID_AUX_POSTPROC,  0, 0),
 	DCMIPP_ENT_LINK(ID_AUX_POSTPROC,	1, ID_AUX_CAPTURE,  0,
+			MEDIA_LNK_FL_ENABLED | MEDIA_LNK_FL_IMMUTABLE),
+	DCMIPP_ENT_LINK(ID_MAIN_ISP,	3, ID_ISP_STAT_CAPTURE,  0,
 			MEDIA_LNK_FL_ENABLED | MEDIA_LNK_FL_IMMUTABLE),
 };
 
