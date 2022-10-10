@@ -374,6 +374,7 @@
 		reg = <0x48>;
 		reset-gpios = <&gpioa 9 GPIO_ACTIVE_LOW>;
 		hpd-gpios = <&gpiog 1 GPIO_ACTIVE_HIGH>;
+		no-edid;
 		digi,dsi-lanes = <2>;
 		vdd1-supply = <&reg_5v_board>;
 		status = "okay";
