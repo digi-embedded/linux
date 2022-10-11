@@ -1153,6 +1153,7 @@ dtb-$(CONFIG_ARCH_STM32) += \
 	_ov_board_microe-gyro-click_ccmp15.dtbo \
 	_ov_board_microe-i2c-2-spi_ccmp13.dtbo \
 	_ov_board_microe-i2c-2-spi_ccmp15.dtbo \
+	_ov_board_can1_ccmp15-dvk.dtbo \
 	_ov_board_can2_ccmp15-dvk.dtbo \
 	_ov_board_eth0-10-100_ccmp15-dvk.dtbo \
 	_ov_board_fusion10-parallel_ccmp15-dvk.dtbo \
