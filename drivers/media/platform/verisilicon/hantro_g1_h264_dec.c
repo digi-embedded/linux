@@ -272,7 +272,7 @@ int hantro_g1_h264_dec_run(struct hantro_ctx *ctx)
 			   G1_REG_CONFIG_DEC_TIMEOUT_E |
 			   G1_REG_CONFIG_DEC_OUT_ENDIAN |
 			   G1_REG_CONFIG_DEC_STRENDIAN_E |
-			   G1_REG_CONFIG_DEC_MAX_BURST(16) |
+			   G1_REG_CONFIG_DEC_MAX_BURST(vpu->max_burst_length) |
 			   G1_REG_CONFIG_DEC_OUTSWAP32_E |
 			   G1_REG_CONFIG_DEC_INSWAP32_E |
 			   G1_REG_CONFIG_DEC_STRSWAP32_E |

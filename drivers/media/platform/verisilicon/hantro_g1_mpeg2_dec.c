@@ -177,7 +177,7 @@ int hantro_g1_mpeg2_dec_run(struct hantro_ctx *ctx)
 	      G1_REG_DEC_OUT_ENDIAN(1) |
 	      G1_REG_DEC_ADV_PRE_DIS(0) |
 	      G1_REG_DEC_SCMD_DIS(0) |
-	      G1_REG_DEC_MAX_BURST(16);
+	      G1_REG_DEC_MAX_BURST(vpu->max_burst_length);
 	vdpu_write_relaxed(vpu, reg, G1_SWREG(2));
 
 	reg = G1_REG_DEC_MODE(5) |

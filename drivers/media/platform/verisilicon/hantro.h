@@ -203,6 +203,7 @@ struct hantro_dev {
 	void __iomem *enc_base;
 	void __iomem *dec_base;
 	void __iomem *ctrl_base;
+	u32 max_burst_length;
 
 	struct mutex vpu_mutex;	/* video_device lock */
 	spinlock_t irqlock;

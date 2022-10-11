@@ -902,13 +902,15 @@ static int hantro_probe(struct platform_device *pdev)
 	const struct of_device_id *match;
 	struct hantro_dev *vpu;
 	struct resource *res;
+	struct device_node *np;
 	int num_bases;
-	int i, ret;
+	int i, ret, mbl;
 
 	vpu = devm_kzalloc(&pdev->dev, sizeof(*vpu), GFP_KERNEL);
 	if (!vpu)
 		return -ENOMEM;
 
+	np = pdev->dev.of_node;
 	vpu->dev = &pdev->dev;
 	vpu->pdev = pdev;
 	mutex_init(&vpu->vpu_mutex);
@@ -984,6 +986,14 @@ static int hantro_probe(struct platform_device *pdev)
 		return ret;
 	}
 	vb2_dma_contig_set_max_seg_size(&pdev->dev, DMA_BIT_MASK(32));
+
+	/* get max burst length */
+	ret = of_property_read_u32(np, "maxburstlen", &mbl);
+	if (ret)
+		/* Set to max value if not DT properties */
+		mbl = 64;
+
+	vpu->max_burst_length = mbl / 8;
 
 	for (i = 0; i < vpu->variant->num_irqs; i++) {
 		const char *irq_name;

@@ -134,7 +134,7 @@ int hantro_h1_jpeg_enc_run(struct hantro_ctx *ctx)
 
 	reg = H1_REG_AXI_CTRL_OUTPUT_SWAP16
 		| H1_REG_AXI_CTRL_INPUT_SWAP16
-		| H1_REG_AXI_CTRL_BURST_LEN(16)
+		| H1_REG_AXI_CTRL_BURST_LEN(vpu->max_burst_length)
 		| H1_REG_AXI_CTRL_OUTPUT_SWAP32
 		| H1_REG_AXI_CTRL_INPUT_SWAP32
 		| H1_REG_AXI_CTRL_OUTPUT_SWAP8
