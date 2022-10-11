@@ -20,7 +20,7 @@
 	fragment@0 {
 		target-path = "/";
 		__overlay__ {
-			overlay-description = "DVK: Fusion 10\" parallel display";
+			overlay-description = "DVK: Fusion 10\" LVDS display";
 		};
 	};
 
