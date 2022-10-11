@@ -2204,7 +2204,7 @@ static long usdpaa_ioctl(struct file *fp, unsigned int cmd, unsigned long arg)
 	}
 	case USDPAA_IOCTL_ENABLE_LINK_STATUS_INTERRUPT:
 	{
-		struct usdpaa_ioctl_link_status input;
+		struct usdpaa_ioctl_link_status input = {0};
 		int ret;
 
 		if (copy_from_user(&input, a, sizeof(input)))
@@ -2217,21 +2217,23 @@ static long usdpaa_ioctl(struct file *fp, unsigned int cmd, unsigned long arg)
 	}
 	case USDPAA_IOCTL_DISABLE_LINK_STATUS_INTERRUPT:
 	{
-		char *input;
+		char if_name[IF_NAME_MAX_LEN];
 		int ret;
 
-		if (copy_from_user(&input, a, sizeof(input)))
+		if (copy_from_user(&if_name, a, sizeof(if_name)))
 			return -EFAULT;
-		ret = ioctl_disable_if_link_status(input);
+		if_name[IF_NAME_MAX_LEN - 1] = '\0';
+
+		ret = ioctl_disable_if_link_status(if_name);
 		if (ret)
 			pr_err("Error(%d) Disabling link interrupt:IF: %s\n",
-				ret, input);
+				ret, if_name);
 		return ret;
 	}
 	case USDPAA_IOCTL_GET_LINK_STATUS:
 	{
 		int ret;
-		struct usdpaa_ioctl_link_status_args input;
+		struct usdpaa_ioctl_link_status_args input = {0};
 
 		if (copy_from_user(&input, a, sizeof(input)))
 			return -EFAULT;
@@ -2247,7 +2249,7 @@ static long usdpaa_ioctl(struct file *fp, unsigned int cmd, unsigned long arg)
 	}
 	case USDPAA_IOCTL_UPDATE_LINK_STATUS:
 	{
-		struct usdpaa_ioctl_update_link_status input;
+		struct usdpaa_ioctl_update_link_status input = {0};
 		int ret;
 
 		if (copy_from_user(&input, a, sizeof(input)))
@@ -2270,7 +2272,7 @@ static long usdpaa_ioctl(struct file *fp, unsigned int cmd, unsigned long arg)
 	}
 	case USDPAA_IOCTL_UPDATE_LINK_SPEED:
 	{
-		struct usdpaa_ioctl_update_link_speed input;
+		struct usdpaa_ioctl_update_link_speed input = {0};
 		int ret;
 
 		if (copy_from_user(&input, a, sizeof(input)))
@@ -2284,16 +2286,17 @@ static long usdpaa_ioctl(struct file *fp, unsigned int cmd, unsigned long arg)
 	}
 	case USDPAA_IOCTL_RESTART_LINK_AUTONEG:
 	{
-		char *input;
+		char if_name[IF_NAME_MAX_LEN];
 		int ret;
 
-		if (copy_from_user(&input, a, sizeof(input)))
+		if (copy_from_user(&if_name, a, sizeof(if_name)))
 			return -EFAULT;
+		if_name[IF_NAME_MAX_LEN - 1] = '\0';
 
-		ret = ioctl_link_restart_autoneg(input);
+		ret = ioctl_link_restart_autoneg(if_name);
 		if (ret)
 			pr_err("Error(%d) restarting autoneg:IF: %s\n",
-			       ret, input);
+			       ret, if_name);
 		return ret;
 	}
 	}

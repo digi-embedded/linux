@@ -153,8 +153,7 @@ static unsigned long clk_fracn_gppll_recalc_rate(struct clk_hw *hw, unsigned lon
 	if (rate)
 		return (unsigned long)rate;
 
-	if (!rdiv)
-		rdiv = rdiv + 1;
+	rdiv = rdiv + 1;
 
 	switch (odiv) {
 	case 0:

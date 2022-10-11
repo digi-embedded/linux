@@ -31,7 +31,6 @@
 	i2c-scl-hz = <400000>;
 	status = "okay";
 
-	/* i2c device */
 	codec: wm8962@1a {
 		compatible = "wlf,wm8962";
 		reg = <0x1a 0x00 0x50>;
@@ -73,6 +72,8 @@
 		reg = <0x6a 0x208 0x6c0000>;
 		assigned-address = <0x6a>;
 	};
+
+	/* i2c devices */
 };
 
 &iomuxc {

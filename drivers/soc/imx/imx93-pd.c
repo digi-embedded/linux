@@ -12,6 +12,7 @@
 #include <linux/pm_domain.h>
 #include <dt-bindings/power/imx93-power.h>
 
+#define IMX93_SRC_MLMIX_OFF		0x1800
 #define IMX93_SRC_MEDIAMIX_OFF		0x2400
 
 #define MIX_SLICE_SW_CTRL_OFF		0x20
@@ -49,6 +50,10 @@ struct imx93_slice_info imx93_slice_infos[] = {
 	[IMX93_POWER_DOMAIN_MEDIAMIX] = {
 		.name      = "mediamix",
 		.mix_off = IMX93_SRC_MEDIAMIX_OFF,
+	},
+	[IMX93_POWER_DOMAIN_MLMIX] = {
+		.name      = "mlmix",
+		.mix_off = IMX93_SRC_MLMIX_OFF,
 	}
 };
 
@@ -204,6 +209,7 @@ static int imx93_pd_probe(struct platform_device *pdev)
 		}
 
 		domain = &pd[index];
+		domain->dev = dev;
 
 		domain->num_clks = of_clk_bulk_get_all(np, &domain->clks);
 		if (domain->num_clks < 0) {

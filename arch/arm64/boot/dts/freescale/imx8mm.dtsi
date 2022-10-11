@@ -953,6 +953,7 @@
 					compatible = "fsl,sec-v4.0-job-ring";
 					reg = <0x1000 0x1000>;
 					interrupts = <GIC_SPI 105 IRQ_TYPE_LEVEL_HIGH>;
+					status = "disabled";
 				};
 
 				sec_jr1: jr@2000 {
@@ -1124,7 +1125,6 @@
 				nvmem-cell-names = "mac-address";
 				nvmem_macaddr_swap;
 				fsl,stop-mode = <&gpr 0x10 3>;
-				fsl,wakeup_irq = <2>;
 				status = "disabled";
 			};
 

@@ -694,6 +694,9 @@ static int imx_rproc_prepare(struct rproc *rproc)
 		if (!strcmp(it.node->name, "vdev0buffer"))
 			continue;
 
+		if (!strcmp(it.node->name, "rsc-table"))
+			continue;
+
 		rmem = of_reserved_mem_lookup(it.node);
 		if (!rmem) {
 			dev_err(priv->dev, "unable to acquire memory-region\n");
@@ -1083,11 +1086,11 @@ static int imx_rproc_detect_mode(struct imx_rproc *priv)
 
 		if (priv->num_domains) {
 			priv->pm_devices = devm_kcalloc(dev, priv->num_domains,
-							sizeof(struct device), GFP_KERNEL);
+							sizeof(*priv->pm_devices), GFP_KERNEL);
 			if (!priv->pm_devices)
 				return -ENOMEM;
 			priv->pm_devices_link = devm_kcalloc(dev, priv->num_domains,
-							     sizeof(struct device_link),
+							     sizeof(*priv->pm_devices_link),
 							     GFP_KERNEL);
 			if (!priv->pm_devices)
 				return -ENOMEM;
@@ -1231,6 +1234,8 @@ static int imx_rproc_probe(struct platform_device *pdev)
 		goto err_put_rproc;
 	}
 
+	INIT_WORK(&priv->rproc_work, imx_rproc_vq_work);
+
 	ret = imx_rproc_xtr_mbox_init(rproc);
 	if (ret)
 		goto err_put_wkq;
@@ -1248,8 +1253,6 @@ static int imx_rproc_probe(struct platform_device *pdev)
 	ret = imx_rproc_clk_enable(priv);
 	if (ret)
 		goto err_put_mbox;
-
-	INIT_WORK(&priv->rproc_work, imx_rproc_vq_work);
 
 	rproc->auto_boot = false;
 	if (priv->early_boot)

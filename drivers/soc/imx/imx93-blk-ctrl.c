@@ -20,6 +20,32 @@
 
 #define BLK_MAX_CLKS 4
 
+#define LCDIF_QOS_REG		0xC
+#define LCDIF_DEFAULT_QOS_OFF	12
+#define LCDIF_CFG_QOS_OFF	8
+
+#define PXP_QOS_REG		0x10
+#define PXP_R_DEFAULT_QOS_OFF	28
+#define PXP_R_CFG_QOS_OFF	24
+#define PXP_W_DEFAULT_QOS_OFF	20
+#define PXP_W_CFG_QOS_OFF	16
+
+#define ISI_CACHE_REG		0x14
+
+#define ISI_QOS_REG		0x1C
+#define ISI_V_DEFAULT_QOS_OFF	28
+#define ISI_V_CFG_QOS_OFF	24
+#define ISI_U_DEFAULT_QOS_OFF	20
+#define ISI_U_CFG_QOS_OFF	16
+#define ISI_Y_R_DEFAULT_QOS_OFF	12
+#define ISI_Y_R_CFG_QOS_OFF	8
+#define ISI_Y_W_DEFAULT_QOS_OFF	4
+#define ISI_Y_W_CFG_QOS_OFF	0
+
+#define PRIO_MASK		0xF
+
+#define PRIO(X)			(X)
+
 struct imx93_blk_ctrl_domain;
 
 struct imx93_blk_ctrl {
@@ -31,13 +57,24 @@ struct imx93_blk_ctrl {
 	struct genpd_onecell_data onecell_data;
 };
 
+#define DOMAIN_MAX_QOS 4
+
+struct imx93_blk_ctrl_qos {
+	u32 reg;
+	u32 cfg_off;
+	u32 default_prio;
+	u32 cfg_prio;
+};
+
 struct imx93_blk_ctrl_domain_data {
 	const char *name;
 	const char * const *clk_names;
 	int num_clks;
 	u32 rst_mask;
 	u32 clk_mask;
-
+	u32 num_qos;
+	struct imx93_blk_ctrl_qos qos[DOMAIN_MAX_QOS];
+	const struct regmap_access_table *reg_access_table;
 };
 
 #define DOMAIN_MAX_CLKS 4
@@ -50,21 +87,56 @@ struct imx93_blk_ctrl_domain {
 };
 
 struct imx93_blk_ctrl_data {
-	int max_reg;
 	const struct imx93_blk_ctrl_domain_data *domains;
 	const struct imx93_blk_ctrl_domain_data *bus;
 	int num_domains;
 };
 
+static const struct regmap_range imx93_media_blk_ctl_yes_ranges[] = {
+		regmap_reg_range(BLK_SFT_RSTN, BLK_CLK_EN),
+		regmap_reg_range(LCDIF_QOS_REG, ISI_CACHE_REG),
+		regmap_reg_range(ISI_QOS_REG, ISI_QOS_REG),
+};
+
+static const struct regmap_access_table imx93_media_blk_ctl_access_table = {
+	.yes_ranges	= imx93_media_blk_ctl_yes_ranges,
+	.n_yes_ranges	= ARRAY_SIZE(imx93_media_blk_ctl_yes_ranges),
+};
+
 static const struct imx93_blk_ctrl_domain_data imx93_media_blk_ctl_bus_data = {
 	.clk_names = (const char *[]){ "axi", "apb", "nic", },
 	.num_clks = 3,
+	.reg_access_table = &imx93_media_blk_ctl_access_table,
 };
 
 static inline struct imx93_blk_ctrl_domain *
 to_imx93_blk_ctrl_domain(struct generic_pm_domain *genpd)
 {
 	return container_of(genpd, struct imx93_blk_ctrl_domain, genpd);
+}
+
+static int imx93_blk_ctrl_set_qos(struct imx93_blk_ctrl_domain *domain)
+{
+	const struct imx93_blk_ctrl_domain_data *data = domain->data;
+	struct imx93_blk_ctrl *bc = domain->bc;
+	const struct imx93_blk_ctrl_qos *qos;
+	u32 val, mask;
+	int i;
+
+	for (i = 0; i < data->num_qos; i++) {
+		qos = &data->qos[i];
+
+		mask = PRIO_MASK << qos->cfg_off;
+		mask |= PRIO_MASK << (qos->cfg_off + 4);
+		val = qos->cfg_prio << qos->cfg_off;
+		val |= qos->default_prio << (qos->cfg_off + 4);
+
+		regmap_write_bits(bc->regmap, qos->reg, mask, val);
+
+		dev_dbg(bc->dev, "data->qos[i].reg 0x%x 0x%x\n", qos->reg, val);
+	}
+
+	return 0;
 }
 
 static int imx93_blk_ctrl_power_on(struct generic_pm_domain *genpd)
@@ -86,6 +158,8 @@ static int imx93_blk_ctrl_power_on(struct generic_pm_domain *genpd)
 		return ret;
 	}
 
+	/* Make sure PM runtime is active */
+	pm_runtime_set_active(bc->dev);
 	ret = pm_runtime_get_sync(bc->dev);
 	if (ret < 0) {
 		pm_runtime_put_noidle(bc->dev);
@@ -101,7 +175,7 @@ static int imx93_blk_ctrl_power_on(struct generic_pm_domain *genpd)
 
 	dev_dbg(bc->dev, "pd_on: name: %s\n", genpd->name);
 
-	return 0;
+	return imx93_blk_ctrl_set_qos(domain);
 
 disable_clk:
 	clk_bulk_disable_unprepare(data->num_clks, domain->clks);
@@ -144,17 +218,20 @@ imx93_blk_ctrl_xlate(struct of_phandle_args *args, void *data)
 
 static int imx93_blk_ctrl_probe(struct platform_device *pdev)
 {
-	const struct imx93_blk_ctrl_data *bc_data;
 	struct device *dev = &pdev->dev;
+	const struct imx93_blk_ctrl_data *bc_data = of_device_get_match_data(dev);
+	const struct imx93_blk_ctrl_domain_data *bus = bc_data->bus;
 	struct imx93_blk_ctrl *bc;
 	void __iomem *base;
 	int i, ret;
-	const struct imx93_blk_ctrl_domain_data *bus;
 
 	struct regmap_config regmap_config = {
 		.reg_bits	= 32,
 		.val_bits	= 32,
 		.reg_stride	= 4,
+		.rd_table	= bus->reg_access_table,
+		.wr_table	= bus->reg_access_table,
+		.max_register   = SZ_4K,
 	};
 
 	bc = devm_kzalloc(dev, sizeof(*bc), GFP_KERNEL);
@@ -163,14 +240,11 @@ static int imx93_blk_ctrl_probe(struct platform_device *pdev)
 
 	bc->dev = dev;
 
-	bc_data = of_device_get_match_data(dev);
-
 	base = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(base))
 		return PTR_ERR(base);
 
-	regmap_config.max_register = bc_data->max_reg;
-	bc->regmap = devm_regmap_init_mmio(dev, base, &regmap_config);
+	bc->regmap = regmap_init_mmio(NULL, base, &regmap_config);
 	if (IS_ERR(bc->regmap))
 		return dev_err_probe(dev, PTR_ERR(bc->regmap),
 				     "failed to init regmap\n");
@@ -178,18 +252,20 @@ static int imx93_blk_ctrl_probe(struct platform_device *pdev)
 	bc->domains = devm_kcalloc(dev, bc_data->num_domains + 1,
 				   sizeof(struct imx93_blk_ctrl_domain),
 				   GFP_KERNEL);
-	if (!bc->domains)
-		return -ENOMEM;
-
-	bus = bc_data->bus;
+	if (!bc->domains) {
+		ret = -ENOMEM;
+		goto free_regmap;
+	}
 
 	bc->onecell_data.num_domains = bc_data->num_domains;
 	bc->onecell_data.xlate = imx93_blk_ctrl_xlate;
 	bc->onecell_data.domains =
 		devm_kcalloc(dev, bc_data->num_domains,
 			     sizeof(struct generic_pm_domain *), GFP_KERNEL);
-	if (!bc->onecell_data.domains)
-		return -ENOMEM;
+	if (!bc->onecell_data.domains) {
+		ret = -ENOMEM;
+		goto free_regmap;
+	}
 
 	for (i = 0; i < bus->num_clks; i++)
 		bc->clks[i].id = bus->clk_names[i];
@@ -198,7 +274,7 @@ static int imx93_blk_ctrl_probe(struct platform_device *pdev)
 	ret = devm_clk_bulk_get(dev, bc->num_clks, bc->clks);
 	if (ret) {
 		dev_err_probe(dev, ret, "failed to get bus clock\n");
-		return ret;
+		goto free_regmap;
 	}
 
 	for (i = 0; i < bc_data->num_domains; i++) {
@@ -248,6 +324,9 @@ cleanup_pds:
 	for (i--; i >= 0; i--)
 		pm_genpd_remove(&bc->domains[i].genpd);
 
+free_regmap:
+	regmap_exit(bc->regmap);
+
 	return ret;
 }
 
@@ -288,6 +367,20 @@ static const struct imx93_blk_ctrl_domain_data imx93_media_blk_ctl_domain_data[]
 		.num_clks = 1,
 		.rst_mask = BIT(7) | BIT(8),
 		.clk_mask = BIT(7) | BIT(8),
+		.num_qos = 2,
+		.qos = {
+			{
+				.reg = PXP_QOS_REG,
+				.cfg_off = PXP_R_CFG_QOS_OFF,
+				.default_prio = PRIO(3),
+				.cfg_prio = PRIO(6),
+			}, {
+				.reg = PXP_QOS_REG,
+				.cfg_off = PXP_W_CFG_QOS_OFF,
+				.default_prio = PRIO(3),
+				.cfg_prio = PRIO(6),
+			}
+		}
 	},
 	[IMX93_MEDIABLK_PD_LCDIF] = {
 		.name = "mediablk-lcdif",
@@ -295,6 +388,15 @@ static const struct imx93_blk_ctrl_domain_data imx93_media_blk_ctl_domain_data[]
 		.num_clks = 2,
 		.rst_mask = BIT(4) | BIT(5) | BIT(6),
 		.clk_mask = BIT(4) | BIT(5) | BIT(6),
+		.num_qos = 1,
+		.qos = {
+			{
+			.reg = LCDIF_QOS_REG,
+			.cfg_off = LCDIF_CFG_QOS_OFF,
+			.default_prio = PRIO(3),
+			.cfg_prio = PRIO(7),
+			}
+		}
 	},
 	[IMX93_MEDIABLK_PD_ISI] = {
 		.name = "mediablk-isi",
@@ -302,11 +404,34 @@ static const struct imx93_blk_ctrl_domain_data imx93_media_blk_ctl_domain_data[]
 		.num_clks = 1,
 		.rst_mask = BIT(2) | BIT(3),
 		.clk_mask = BIT(2) | BIT(3),
+		.num_qos = 4,
+		.qos = {
+			{
+				.reg = ISI_QOS_REG,
+				.cfg_off = ISI_Y_W_CFG_QOS_OFF,
+				.default_prio = PRIO(3),
+				.cfg_prio = PRIO(7),
+			}, {
+				.reg = ISI_QOS_REG,
+				.cfg_off = ISI_Y_R_CFG_QOS_OFF,
+				.default_prio = PRIO(3),
+				.cfg_prio = PRIO(7),
+			}, {
+				.reg = ISI_QOS_REG,
+				.cfg_off = ISI_U_CFG_QOS_OFF,
+				.default_prio = PRIO(3),
+				.cfg_prio = PRIO(7),
+			}, {
+				.reg = ISI_QOS_REG,
+				.cfg_off = ISI_V_CFG_QOS_OFF,
+				.default_prio = PRIO(3),
+				.cfg_prio = PRIO(7),
+			}
+		}
 	},
 };
 
 static const struct imx93_blk_ctrl_data imx93_media_blk_ctl_dev_data = {
-	.max_reg = 0x90,
 	.domains = imx93_media_blk_ctl_domain_data,
 	.bus = &imx93_media_blk_ctl_bus_data,
 	.num_domains = ARRAY_SIZE(imx93_media_blk_ctl_domain_data),

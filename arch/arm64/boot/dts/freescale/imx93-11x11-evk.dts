@@ -28,6 +28,12 @@
 			linux,cma-default;
 		};
 
+		ethosu_mem: ethosu_region@C0000000 {
+			compatible = "shared-dma-pool";
+			reusable;
+			reg = <0x0 0xC0000000 0x0 0x10000000>;
+		};
+
 		vdev0vring0: vdev0vring0@a4000000 {
 			reg = <0 0xa4000000 0 0x8000>;
 			no-map;
@@ -71,6 +77,13 @@
 		fsl,startup-delay-ms = <500>;
 	};
 
+	ethosu {
+		compatible = "arm,ethosu";
+		fsl,cm33-proc = <&cm33>;
+		memory-region = <&ethosu_mem>;
+		power-domains = <&mlmix>;
+	};
+
 	reg_can2_stby: regulator-can2-stby {
 		compatible = "regulator-fixed";
 		regulator-name = "can2-stby";
@@ -110,6 +123,16 @@
 	usdhc3_pwrseq: usdhc3_pwrseq {
 		compatible = "mmc-pwrseq-simple";
 		reset-gpios = <&pcal6524 20 GPIO_ACTIVE_LOW>;
+	};
+
+	reg_audio_pwr: regulator-audio-pwr {
+		compatible = "regulator-fixed";
+		regulator-name = "audio-pwr";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		gpio = <&adp5585gpio 1 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		regulator-always-on;
 	};
 
 	reg_dvdd_sel: regulator-dvdd_sel {
@@ -166,16 +189,6 @@
 		regulator-max-microvolt = <2800000>;
 		enable-active-high;
 		vin-supply = <&reg_vaa_sel>;
-	};
-
-	reg_audio_pwr: regulator-audio-pwr {
-		compatible = "regulator-fixed";
-		regulator-name = "audio-pwr";
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
-		gpio = <&adp5585gpio 1 GPIO_ACTIVE_HIGH>;
-		enable-active-high;
-		regulator-always-on;
 	};
 
 	sound-wm8962 {
@@ -289,7 +302,7 @@
 	assigned-clock-rates = <12288000>, <200000000>;
 	status = "okay";
 };
-
+	
 &adc1 {
 	vref-supply = <&reg_vref_1v8>;
 	status = "okay";
@@ -629,6 +642,11 @@
 			gpio-controller;
 			#gpio-cells = <2>;
 		};
+
+		adp5585pwm_isp: pwm-isp@34 {
+			compatible = "adp5585-pwm";
+			#pwm-cells = <3>;
+		};
 	};
 
 	ap1302: ap1302_mipi@3c {
@@ -658,6 +676,7 @@
 &lpuart5 {
 	/* BT */
 	pinctrl-names = "default";
+	pinctrl-assert-gpios = <&pcal6524 19 GPIO_ACTIVE_HIGH>;
 	pinctrl-0 = <&pinctrl_uart5>;
 	status = "okay";
 };
@@ -813,8 +832,8 @@
 
 	pinctrl_lpi2c3: lpi2c3grp {
 		fsl,pins = <
-			MX93_PAD_GPIO_IO28__LPI2C3_SDA		0x40000b9e
-			MX93_PAD_GPIO_IO29__LPI2C3_SCL		0x40000b9e
+			MX93_PAD_GPIO_IO28__LPI2C3_SDA			0x40000b9e
+			MX93_PAD_GPIO_IO29__LPI2C3_SCL			0x40000b9e
 		>;
 	};
 
