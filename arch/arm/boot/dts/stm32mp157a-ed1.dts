@@ -1,21 +1,25 @@
-// SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause)
+// SPDX-License-Identifier: (GPL-2.0-or-later OR BSD-3-Clause)
 /*
- * Copyright (C) STMicroelectronics 2017 - All Rights Reserved
- * Author: Ludovic Barre <ludovic.barre@st.com> for STMicroelectronics.
+ * Copyright (C) STMicroelectronics 2022 - All Rights Reserved
+ * Author: Alexandre Torgue <alexandre.torgue@foss.st.com> for STMicroelectronics.
  */
 /dts-v1/;
 
 #include "stm32mp157.dtsi"
-#include "stm32mp15xc.dtsi"
+#include "stm32mp15xa.dtsi"
 #include "stm32mp15-pinctrl.dtsi"
 #include "stm32mp15xxaa-pinctrl.dtsi"
-#include "stm32mp157c-ed1-scmi.dtsi"
+#include "stm32mp157a-ed1-scmi.dtsi"
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/mfd/st,stpmic1.h>
 
 / {
-	model = "STMicroelectronics STM32MP157C eval daughter";
-	compatible = "st,stm32mp157c-ed1", "st,stm32mp157";
+	model = "STMicroelectronics STM32MP157A eval daughter";
+	compatible = "st,stm32mp157a-ed1", "st,stm32mp157";
+
+	aliases {
+		serial0 = &uart4;
+	};
 
 	chosen {
 		stdout-path = "serial0:115200n8";
@@ -67,17 +71,13 @@
 			no-map;
 		};
 
-		gpu_reserved: gpu@e8000000 {
-			reg = <0xe8000000 0x8000000>;
+		gpu_reserved: gpu@f6000000 {
+			reg = <0xf6000000 0x8000000>;
 			no-map;
 		};
 	};
 
-	aliases {
-		serial0 = &uart4;
-	};
-
-	sd_switch: regulator-sd_switch {
+	sd_switch: regulator-sd-switch {
 		compatible = "regulator-gpio";
 		regulator-name = "sd_switch";
 		regulator-min-microvolt = <1800000>;
@@ -117,10 +117,6 @@
 };
 
 &crc1 {
-	status = "okay";
-};
-
-&cryp1 {
 	status = "okay";
 };
 
@@ -265,7 +261,7 @@
 				interrupts = <IT_CURLIM_LDO6 0>;
 			};
 
-			vref_ddr: vref_ddr {
+			vref_ddr: vref-ddr {
 				regulator-name = "vref_ddr";
 				regulator-always-on;
 			};
@@ -275,12 +271,12 @@
 				interrupts = <IT_OCP_BOOST 0>;
 			};
 
-			vbus_otg: pwr_sw1 {
+			vbus_otg: pwr-sw1 {
 				regulator-name = "vbus_otg";
 				interrupts = <IT_OCP_OTG 0>;
 			};
 
-			vbus_sw: pwr_sw2 {
+			vbus_sw: pwr-sw2 {
 				regulator-name = "vbus_sw";
 				interrupts = <IT_OCP_SWOUT 0>;
 				regulator-active-discharge = <1>;
