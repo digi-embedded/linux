@@ -98,8 +98,16 @@ properties:
               - st,stm32mp157f-ed1
           - const: st,stm32mp157
       - items:
-          - const: st,stm32mp157c-ev1
-          - const: st,stm32mp157c-ed1
+          - enum:
+              - st,stm32mp157a-ev1
+              - st,stm32mp157c-ev1
+              - st,stm32mp157d-ev1
+              - st,stm32mp157f-ev1
+          - enum:
+              - st,stm32mp157a-ed1
+              - st,stm32mp157c-ed1
+              - st,stm32mp157d-ed1
+              - st,stm32mp157f-ed1
           - const: st,stm32mp157
 
       - description: DH STM32MP1 SoM based Boards
