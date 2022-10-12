@@ -81,7 +81,9 @@ properties:
           - const: st,stm32mp157
 
       - items:
-          - const: st,stm32mp157a-dk1
+          - enum:
+              - st,stm32mp157a-dk1
+              - st,stm32mp157d-dk1
           - const: st,stm32mp157
       - items:
           - enum:
