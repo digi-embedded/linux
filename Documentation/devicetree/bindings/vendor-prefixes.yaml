@@ -1332,6 +1332,8 @@ patternProperties:
     description: TPO
   "^tq,.*":
     description: TQ-Systems GmbH
+  "^ttt,.*":
+    description: TTTech
   "^traverse,.*":
     description: Traverse Technologies Australia Pty Ltd
   "^tronfy,.*":
