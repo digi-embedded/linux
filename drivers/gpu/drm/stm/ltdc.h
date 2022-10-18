@@ -56,6 +56,7 @@ struct ltdc_device {
 	struct drm_atomic_state *suspend_state;
 	int crc_skip_count;
 	bool crc_active;
+	u32 max_burst_length;
 };
 
 int ltdc_load(struct drm_device *ddev);

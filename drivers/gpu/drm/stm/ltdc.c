@@ -1494,6 +1494,9 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 		}
 	}
 
+	/* Configure burst length */
+	regmap_write(ldev->regmap, LTDC_L1BLCR + lofs, ldev->max_burst_length);
+
 	/* Enable layer and CLUT if needed */
 	val = fb->format->format == DRM_FORMAT_C8 ? LXCR_CLUTEN : 0;
 	val |= LXCR_LEN;
@@ -1980,6 +1983,7 @@ int ltdc_load(struct drm_device *ddev)
 	struct reset_control *rstc;
 	int irq, i, nb_endpoints;
 	int ret = -ENODEV;
+	u32 mbl;
 
 	DRM_DEBUG_DRIVER("\n");
 
@@ -1987,6 +1991,14 @@ int ltdc_load(struct drm_device *ddev)
 	nb_endpoints = of_graph_get_endpoint_count(np);
 	if (!nb_endpoints)
 		return -ENODEV;
+
+	/* Get LTDC max burst length */
+	ret = of_property_read_u32(np, "st,burstlen", &mbl);
+	if (ret)
+		/* set to max burst length value */
+		ldev->max_burst_length = 0;
+	else
+		ldev->max_burst_length = mbl / 8;
 
 	ldev->pixel_clk = devm_clk_get(dev, "lcd");
 	if (IS_ERR(ldev->pixel_clk)) {
