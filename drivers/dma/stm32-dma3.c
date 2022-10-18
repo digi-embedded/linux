@@ -393,6 +393,9 @@ struct stm32_dma3_ddata {
 	u32 dma_channels;
 	u32 dma_requests;
 	u32 chan_reserved;
+#ifdef CONFIG_STM32MP25_REVA
+	u32 max_burst_length;
+#endif
 };
 
 static inline struct stm32_dma3_chan *to_stm32_dma3_chan(struct dma_chan *c)
@@ -2070,6 +2073,12 @@ static int stm32_dma3_probe(struct platform_device *pdev)
 		ddata->dma_requests = FIELD_GET(G_MAX_REQ_ID, hwcfgr[0]) + 1;
 	}
 
+#ifdef CONFIG_STM32MP25_REVA
+	/* if st,burstlen is not defined, force max value to 64 */
+	if (of_property_read_u32(np, "st,burstlen", &ddata->max_burst_length))
+		ddata->max_burst_length = 64;
+#endif
+
 	//TODO: pre-allocate any memory needed during transfer setup to avoid
 	//putting to much pressure on the nowait allocator.
 
@@ -2109,6 +2118,9 @@ static int stm32_dma3_probe(struct platform_device *pdev)
 		chan->id = i;
 		chan->fifo_size = g_fifosz; /* If !g_fifosz, then no FIFO, burst = 0 */
 		chan->max_burst = (!chan->fifo_size) ? 0 : (1 << (chan->fifo_size + 1)) / 2;
+#ifdef CONFIG_STM32MP25_REVA
+		chan->max_burst = min_t(u32, chan->max_burst, ddata->max_burst_length);
+#endif
 		chan->ext_addressing = (g_addr != G_ADDRESSING_FIXED_BLOCK);
 		chan->vchan.desc_free = stm32_dma3_chan_vdesc_free;
 
