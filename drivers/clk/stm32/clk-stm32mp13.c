@@ -657,8 +657,12 @@ static CLK_STM32_GATE(tim15_k, "timg3_ck", CLK_SET_RATE_PARENT, GATE_TIM15);
 static CLK_STM32_GATE(tim16_k, "timg3_ck", CLK_SET_RATE_PARENT, GATE_TIM16);
 static CLK_STM32_GATE(tim17_k, "timg3_ck", CLK_SET_RATE_PARENT, GATE_TIM17);
 
+static CLK_STM32_GATE(spi2, "pclk1", 0, GATE_SPI2);
+static CLK_STM32_GATE(spi3, "pclk1", 0, GATE_SPI3);
+
 static CLK_STM32_GATE(sai1, "pclk2", 0, GATE_SAI1);
 static CLK_STM32_GATE(sai2, "pclk2", 0, GATE_SAI2);
+static CLK_STM32_GATE(spi1, "pclk2", 0, GATE_SPI1);
 
 static CLK_STM32_GATE(syscfg, "pclk3", 0, GATE_SYSCFG);
 static CLK_STM32_GATE(vref, "pclk3", 0, GATE_VREF);
@@ -683,6 +687,9 @@ static CLK_STM32_GATE(ddrperfm, "pclk4", 0, GATE_DDRPERFM);
 static CLK_STM32_GATE(tzpc, "pclk5", 0, GATE_TZC);
 static CLK_STM32_GATE(iwdg1, "pclk5", 0, GATE_IWDG1APB);
 static CLK_STM32_GATE(bsec, "pclk5", 0, GATE_BSEC);
+
+static CLK_STM32_GATE(spi4, "pclk6", 0, GATE_SPI4);
+static CLK_STM32_GATE(spi5, "pclk6", 0, GATE_SPI5);
 
 static CLK_STM32_GATE(dma1, "ck_mlahb", 0, GATE_DMA1);
 static CLK_STM32_GATE(dma2, "ck_mlahb",  0, GATE_DMA2);
@@ -795,6 +802,11 @@ static const struct clock_config stm32mp13_clock_cfg[] = {
 	STM32_GATE_CFG(TIM17_K, tim17_k, SECF_TIM17),
 
 	/* Peripheral clocks */
+	STM32_GATE_CFG(SPI1, spi1, SECF_NONE),
+	STM32_GATE_CFG(SPI2, spi2, SECF_NONE),
+	STM32_GATE_CFG(SPI3, spi3, SECF_NONE),
+	STM32_GATE_CFG(SPI4, spi4, SECF_SPI4),
+	STM32_GATE_CFG(SPI5, spi5, SECF_SPI5),
 	STM32_GATE_CFG(SAI1, sai1, SECF_NONE),
 	STM32_GATE_CFG(SAI2, sai2, SECF_NONE),
 	STM32_GATE_CFG(SYSCFG, syscfg, SECF_NONE),
