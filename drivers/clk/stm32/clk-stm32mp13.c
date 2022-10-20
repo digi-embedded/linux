@@ -883,6 +883,16 @@ static struct clk_stm32_gate tim17_k = {
 };
 
 /* Peripheral clocks */
+static struct clk_stm32_gate spi2 = {
+	.gate_id = GATE_SPI2,
+	.hw.init = CLK_HW_INIT("spi2", "pclk1", &clk_stm32_gate_ops, 0),
+};
+
+static struct clk_stm32_gate spi3 = {
+	.gate_id = GATE_SPI3,
+	.hw.init = CLK_HW_INIT("spi3", "pclk1", &clk_stm32_gate_ops, 0),
+};
+
 static struct clk_stm32_gate sai1 = {
 	.gate_id = GATE_SAI1,
 	.hw.init = CLK_HW_INIT("sai1", "pclk2", &clk_stm32_gate_ops, 0),
@@ -891,6 +901,11 @@ static struct clk_stm32_gate sai1 = {
 static struct clk_stm32_gate sai2 = {
 	.gate_id = GATE_SAI2,
 	.hw.init = CLK_HW_INIT("sai2", "pclk2", &clk_stm32_gate_ops, 0),
+};
+
+static struct clk_stm32_gate spi1 = {
+	.gate_id = GATE_SPI1,
+	.hw.init = CLK_HW_INIT("spi1", "pclk2", &clk_stm32_gate_ops, 0),
 };
 
 static struct clk_stm32_gate syscfg = {
@@ -996,6 +1011,16 @@ static struct clk_stm32_gate iwdg1 = {
 static struct clk_stm32_gate bsec = {
 	.gate_id = GATE_BSEC,
 	.hw.init = CLK_HW_INIT("bsec", "pclk5", &clk_stm32_gate_ops, 0),
+};
+
+static struct clk_stm32_gate spi4 = {
+	.gate_id = GATE_SPI4,
+	.hw.init = CLK_HW_INIT("spi4", "pclk6", &clk_stm32_gate_ops, 0),
+};
+
+static struct clk_stm32_gate spi5 = {
+	.gate_id = GATE_SPI5,
+	.hw.init = CLK_HW_INIT("spi5", "pclk6", &clk_stm32_gate_ops, 0),
 };
 
 static struct clk_stm32_gate dma1 = {
@@ -1522,6 +1547,11 @@ static const struct clock_config stm32mp13_clock_cfg[] = {
 	STM32_GATE_CFG(TIM17_K, tim17_k, SECF_TIM17),
 
 	/* Peripheral clocks */
+	STM32_GATE_CFG(SPI1, spi1, SECF_NONE),
+	STM32_GATE_CFG(SPI2, spi2, SECF_NONE),
+	STM32_GATE_CFG(SPI3, spi3, SECF_NONE),
+	STM32_GATE_CFG(SPI4, spi4, SECF_SPI4),
+	STM32_GATE_CFG(SPI5, spi5, SECF_SPI5),
 	STM32_GATE_CFG(SAI1, sai1, SECF_NONE),
 	STM32_GATE_CFG(SAI2, sai2, SECF_NONE),
 	STM32_GATE_CFG(SYSCFG, syscfg, SECF_NONE),
@@ -2181,8 +2211,12 @@ static struct clk_summary stm32mp13_clock_summary[] = {
 	CS_GATE("tim16_k", "timg3_ck", GATE_TIM16),
 	CS_GATE("tim17_k", "timg3_ck", GATE_TIM17),
 
+	CS_GATE("spi2", "pclk1", GATE_SPI2),
+	CS_GATE("spi3", "pclk1", GATE_SPI3),
+
 	CS_GATE("sai1", "pclk2", GATE_SAI1),
 	CS_GATE("sai2", "pclk2", GATE_SAI2),
+	CS_GATE("spi1", "pclk2", GATE_SPI1),
 
 	CS_GATE("syscfg", "pclk3", GATE_SYSCFG),
 	CS_GATE("vref", "pclk3", GATE_VREF),
@@ -2207,6 +2241,9 @@ static struct clk_summary stm32mp13_clock_summary[] = {
 	CS_GATE("tzpc", "pclk5", GATE_TZC),
 	CS_GATE("iwdg1", "pclk5", GATE_IWDG1APB),
 	CS_GATE("bsec", "pclk5", GATE_BSEC),
+
+	CS_GATE("spi4", "pclk6", GATE_SPI4),
+	CS_GATE("spi5", "pclk6", GATE_SPI5),
 
 	CS_GATE("dma1", "ck_mlahb", GATE_DMA1),
 	CS_GATE("dma2", "ck_mlahb", GATE_DMA2),
