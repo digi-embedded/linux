@@ -338,7 +338,7 @@
 		clocks = <&clk_ext_camera>;
 		clock-names = "xclk";
 		DOVDD-supply = <&v2v8>;
-		powerdown-gpios = <&gpioe 5 (GPIO_ACTIVE_HIGH | GPIO_PUSH_PULL)>;
+		powerdown-gpios = <&gpiof 14 (GPIO_ACTIVE_HIGH | GPIO_PUSH_PULL)>;
 		reset-gpios = <&gpioe 0 (GPIO_ACTIVE_LOW | GPIO_PUSH_PULL)>;
 		rotation = <180>;
 		status = "okay";
