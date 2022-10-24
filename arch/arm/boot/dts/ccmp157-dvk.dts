@@ -718,7 +718,7 @@
 
 	ccmp15_dcmi_sleep_pins_a: dcmi-sleep-0 {
 		pins {
-			pinmux = <STM32_PINMUX('H', 8,  ANALOG)>,/* DCMI_HSYNC */
+			pinmux = <STM32_PINMUX('D', 9,  ANALOG)>,/* DCMI_HSYNC */
 				 <STM32_PINMUX('B', 7,  ANALOG)>,/* DCMI_VSYNC */
 				 <STM32_PINMUX('A', 6,  ANALOG)>,/* DCMI_PIXCLK */
 				 <STM32_PINMUX('H', 9,  ANALOG)>,/* DCMI_D0 */
