@@ -1109,6 +1109,12 @@ static void goodix_config_cb(const struct firmware *cfg, void *ctx)
 		error = goodix_send_cfg(ts, cfg->data, cfg->size);
 		if (error)
 			goto err_release_cfg;
+
+		if (ts->reload_fw_on_resume) {
+			ts->cfg.size = cfg->size;
+			ts->cfg.data = kzalloc(cfg->size, GFP_KERNEL);
+			memcpy((void *)ts->cfg.data, cfg->data, cfg->size);
+		}
 	}
 
 	goodix_configure_dev(ts);
@@ -1201,6 +1207,8 @@ static int goodix_ts_probe(struct i2c_client *client,
 		return error;
 
 reset:
+	ts->reload_fw_on_resume = device_property_read_bool(&client->dev,
+						    "reload-fw-on-resume");
 	if (ts->reset_controller_at_probe) {
 		/* reset the controller */
 		error = goodix_reset(ts);
@@ -1282,6 +1290,8 @@ static int goodix_ts_remove(struct i2c_client *client)
 	if (ts->load_cfg_from_disk)
 		wait_for_completion(&ts->firmware_loading_complete);
 
+	kfree(ts->cfg.data);
+
 	return 0;
 }
 
@@ -1303,30 +1313,42 @@ static int __maybe_unused goodix_suspend(struct device *dev)
 	/* Free IRQ as IRQ pin is used as output in the suspend sequence */
 	goodix_free_irq(ts);
 
-	/* Output LOW on the INT pin for 5 ms */
-	error = goodix_irq_direction_output(ts, 0);
-	if (error) {
-		goodix_request_irq(ts);
-		return error;
+	if (ts->reload_fw_on_resume) {
+		/*
+		 * Leave the int gpio in high state to be ready when the touch
+		 * controller is powered up again
+		 */
+		error = goodix_irq_direction_output(ts, 1);
+		if (error) {
+			goodix_request_irq(ts);
+			return error;
+		}
+	} else {
+		/* Output LOW on the INT pin for 5 ms */
+		error = goodix_irq_direction_output(ts, 0);
+		if (error) {
+			goodix_request_irq(ts);
+			return error;
+		}
+
+		usleep_range(5000, 6000);
+
+		error = goodix_i2c_write_u8(ts->client, GOODIX_REG_COMMAND,
+					    GOODIX_CMD_SCREEN_OFF);
+		if (error) {
+			dev_err(&ts->client->dev, "Screen off command failed\n");
+			goodix_irq_direction_input(ts);
+			goodix_request_irq(ts);
+			return -EAGAIN;
+		}
+
+		/*
+		 * The datasheet specifies that the interval between sending screen-off
+		 * command and wake-up should be longer than 58 ms. To avoid waking up
+		 * sooner, delay 58ms here.
+		 */
+		msleep(58);
 	}
-
-	usleep_range(5000, 6000);
-
-	error = goodix_i2c_write_u8(ts->client, GOODIX_REG_COMMAND,
-				    GOODIX_CMD_SCREEN_OFF);
-	if (error) {
-		dev_err(&ts->client->dev, "Screen off command failed\n");
-		goodix_irq_direction_input(ts);
-		goodix_request_irq(ts);
-		return -EAGAIN;
-	}
-
-	/*
-	 * The datasheet specifies that the interval between sending screen-off
-	 * command and wake-up should be longer than 58 ms. To avoid waking up
-	 * sooner, delay 58ms here.
-	 */
-	msleep(58);
 
 	return 0;
 }
@@ -1343,19 +1365,36 @@ static int __maybe_unused goodix_resume(struct device *dev)
 		return 0;
 	}
 
-	/*
-	 * Exit sleep mode by outputting HIGH level to INT pin
-	 * for 2ms~5ms.
-	 */
-	error = goodix_irq_direction_output(ts, 1);
-	if (error)
-		return error;
+	if (ts->reload_fw_on_resume) {
+		error = goodix_reset(ts);
+		if (error) {
+			dev_err(&client->dev, "Controller reset failed.\n");
+			return error;
+		}
 
-	usleep_range(2000, 5000);
+		/*
+		 * If the controller configuration was provided through the
+		 * firmware subsystem, send again the configuration
+		 */
+		if (ts->cfg.size > 0) {
+			error = goodix_send_cfg(ts, ts->config, ts->chip->config_len);
+			if (error) {
+				dev_err(&ts->client->dev,
+					"Unable to load firmware\n");
+				return error;
+			}
+		}
+	} else {
+		/*
+		* Exit sleep mode by outputting HIGH level to INT pin
+		* for 2ms~5ms.
+		*/
+		error = goodix_irq_direction_output(ts, 1);
+		if (error)
+			return error;
 
-	error = goodix_int_sync(ts);
-	if (error)
-		return error;
+		usleep_range(2000, 5000);
+	}
 
 	error = goodix_i2c_read(ts->client, ts->chip->config_addr,
 				&config_ver, 1);
