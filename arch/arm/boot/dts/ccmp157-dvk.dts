@@ -261,6 +261,11 @@
 	status = "okay";
 
 	spidev@0{
+		/* 
+		 * spidev uses a compatible string 'rohm,fs2228fv' to have the
+		 * driver create an spi device node. This is just an example,
+		 * there is not a real device connected on the SPI bus.
+		 */
 		compatible = "rohm,dh2228fv";
 		reg = <0>;
 		spi-max-frequency = <4000000>;
