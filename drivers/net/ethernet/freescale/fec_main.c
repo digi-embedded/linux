@@ -4223,7 +4223,7 @@ fec_drv_remove(struct platform_device *pdev)
 	pm_runtime_put_noidle(&pdev->dev);
 	pm_runtime_disable(&pdev->dev);
 
-	free_netdev(ndev);
+	fec_enet_free_queue(ndev);
 	return 0;
 }
 
