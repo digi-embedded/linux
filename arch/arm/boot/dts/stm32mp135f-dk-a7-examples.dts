@@ -12,3 +12,11 @@
 	model = "STMicroelectronics STM32MP135F-DK configured to run Linux A7 examples";
 	compatible = "st,stm32mp135f-dk-a7-examples", "st,stm32mp135f-dk", "st,stm32mp135";
 };
+
+&uart8 {
+	status = "okay";
+};
+
+&usart1 {
+	status = "okay";
+};
