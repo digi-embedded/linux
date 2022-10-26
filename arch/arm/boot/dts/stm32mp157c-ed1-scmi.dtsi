@@ -76,3 +76,7 @@
 &rtc {
 	clocks = <&scmi_clk CK_SCMI_RTCAPB>, <&scmi_clk CK_SCMI_RTC>;
 };
+
+&usart1 {
+	clocks = <&scmi_clk CK_SCMI_USART1>;
+};
