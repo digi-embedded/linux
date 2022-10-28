@@ -229,7 +229,7 @@ struct stm32_adc;
 struct stm32_adc_cfg {
 	const struct stm32_adc_regspec	*regs;
 	const struct stm32_adc_info	*adc_info;
-	struct stm32_adc_trig_info	*trigs;
+	struct stm32_adc_trig_info	*trigs[2];
 	bool clk_required;
 	bool has_vregready;
 	bool has_boostmode;
@@ -274,6 +274,7 @@ struct stm32_adc_cfg {
  * @int_ch:		internal channel indexes array
  * @nsmps:		number of channels with optional sample time
  * @ovs_idx:		current oversampling ratio index (in oversampling array)
+ * @trigs:		trigger list in use
  */
 struct stm32_adc {
 	struct stm32_adc_common	*common;
@@ -302,6 +303,7 @@ struct stm32_adc {
 	int			int_ch[STM32_ADC_INT_CH_NB];
 	int			nsmps;
 	int			ovs_idx;
+	struct stm32_adc_trig_info	*trigs;
 };
 
 struct stm32_adc_diff_channel {
@@ -567,12 +569,14 @@ static const struct stm32_adc_regspec stm32h7_adc_regspec = {
 	.smp_bits = stm32h7_smp_bits,
 };
 
-/* STM32MP25 external trigger sources for all instances */
-static struct stm32_adc_trig_info stm32mp25_adc_trigs[] = {
+/* STM32MP25 external trigger sources for ADC12 */
+static struct stm32_adc_trig_info stm32mp25_adc12_trigs[] = {
 	{ TIM1_TRGO, STM32_EXT0 },
 	{ TIM1_TRGO2, STM32_EXT1 },
 	{ TIM8_TRGO, STM32_EXT2 },
 	{ TIM8_TRGO2, STM32_EXT3 },
+	{ TIM20_TRGO, STM32_EXT4 },
+	{ TIM20_TRGO2, STM32_EXT5 },
 	{ TIM2_TRGO, STM32_EXT6 },
 	{ TIM3_TRGO, STM32_EXT7 },
 	{ TIM4_TRGO, STM32_EXT8 },
@@ -582,10 +586,46 @@ static struct stm32_adc_trig_info stm32mp25_adc_trigs[] = {
 	{ TIM1_CH1, STM32_EXT12 },
 	{ TIM1_CH2, STM32_EXT13 },
 	{ TIM1_CH3, STM32_EXT14 },
+	{ TIM20_OC1, STM32_EXT15 },
+	{ TIM20_OC2, STM32_EXT16 },
+	{ TIM20_OC3, STM32_EXT17 },
 	{ TIM2_CH2, STM32_EXT18 },
 	{ TIM3_CH4, STM32_EXT19 },
 	{ TIM4_CH4, STM32_EXT20 },
 	{ TIM5_CH1, STM32_EXT21 },
+	{ TIM12_CH1, STM32_EXT22 },
+	{ LPTIM1_OUT, STM32_EXT24 },
+	{ LPTIM2_OUT, STM32_EXT25 },
+	{ LPTIM3_OUT, STM32_EXT26 },
+	{ LPTIM4_OUT, STM32_EXT27 },
+	{ LPTIM5_OUT, STM32_EXT28 },
+	{},
+};
+
+/* STM32MP25 external trigger sources for ADC3 */
+static struct stm32_adc_trig_info stm32mp25_adc3_trigs[] = {
+	{ TIM1_TRGO, STM32_EXT0 },
+	{ TIM1_TRGO2, STM32_EXT1 },
+	{ TIM8_TRGO, STM32_EXT2 },
+	{ TIM8_TRGO2, STM32_EXT3 },
+	{ TIM20_TRGO, STM32_EXT4 },
+	{ TIM20_TRGO2, STM32_EXT5 },
+	{ TIM2_TRGO, STM32_EXT6 },
+	{ TIM3_TRGO, STM32_EXT7 },
+	{ TIM4_TRGO, STM32_EXT8 },
+	{ TIM5_TRGO, STM32_EXT9 },
+	{ TIM6_TRGO, STM32_EXT10 },
+	{ TIM7_TRGO, STM32_EXT11 },  /* TIM15_TRGO */
+	{ TIM15_TRGO, STM32_EXT12 }, /* TIM1_CH1   */
+	{ TIM17_OC1, STM32_EXT13 },  /* TIM1_CH2   */
+	{ TIM1_CH3, STM32_EXT14 },
+	{ TIM8_CH1, STM32_EXT15 },   /* TIM20_OC1  */
+	{ TIM20_OC1, STM32_EXT16 },  /* TIM20_OC2  */
+	{ TIM2_CH1, STM32_EXT17 },   /* TIM20_OC3  */
+	{ TIM2_CH3, STM32_EXT18 },   /* TIM2_CH2   */
+	{ TIM3_CH1, STM32_EXT19 },   /* TIM3_CH4   */
+	{ TIM4_CH1, STM32_EXT20 },   /* TIM4_CH4   */
+	{ TIM5_CH3, STM32_EXT21 },   /* TIM5_CH1   */
 	{ TIM12_CH1, STM32_EXT22 },
 	{ LPTIM1_OUT, STM32_EXT24 },
 	{ LPTIM2_OUT, STM32_EXT25 },
@@ -1598,15 +1638,15 @@ static int stm32_adc_get_trig_extsel(struct iio_dev *indio_dev,
 	int i;
 
 	/* lookup triggers registered by stm32 timer trigger driver */
-	for (i = 0; adc->cfg->trigs[i].name; i++) {
+	for (i = 0; adc->trigs[i].name; i++) {
 		/**
 		 * Checking both stm32 timer trigger type and trig name
 		 * should be safe against arbitrary trigger names.
 		 */
 		if ((is_stm32_timer_trigger(trig) ||
 		     is_stm32_lptim_trigger(trig)) &&
-		    !strcmp(adc->cfg->trigs[i].name, trig->name)) {
-			return adc->cfg->trigs[i].extsel;
+		    !strcmp(adc->trigs[i].name, trig->name)) {
+			return adc->trigs[i].extsel;
 		}
 	}
 
@@ -2808,6 +2848,14 @@ static int stm32_adc_probe(struct platform_device *pdev)
 	if (ret < 0)
 		return ret;
 
+	if (adc->cfg->trigs[adc->common->trig_id])
+		adc->trigs = adc->cfg->trigs[adc->common->trig_id];
+
+	if (!adc->trigs) {
+		dev_err(&pdev->dev, "Can't get trigger list\n");
+		return -EINVAL;
+	}
+
 	ret = stm32_adc_dma_request(dev, indio_dev);
 	if (ret < 0)
 		return ret;
@@ -2950,7 +2998,7 @@ static const struct dev_pm_ops stm32_adc_pm_ops = {
 static const struct stm32_adc_cfg stm32f4_adc_cfg = {
 	.regs = &stm32f4_adc_regspec,
 	.adc_info = &stm32f4_adc_info,
-	.trigs = stm32f4_adc_trigs,
+	.trigs = { stm32f4_adc_trigs, },
 	.clk_required = true,
 	.start_conv = stm32f4_adc_start_conv,
 	.stop_conv = stm32f4_adc_stop_conv,
@@ -2964,7 +3012,7 @@ static_assert(ARRAY_SIZE(stm32_adc_min_ts_h7) == STM32_ADC_INT_CH_NB);
 static const struct stm32_adc_cfg stm32h7_adc_cfg = {
 	.regs = &stm32h7_adc_regspec,
 	.adc_info = &stm32h7_adc_info,
-	.trigs = stm32h7_adc_trigs,
+	.trigs = { stm32h7_adc_trigs, },
 	.has_boostmode = true,
 	.has_linearcal = true,
 	.has_presel = true,
@@ -2985,7 +3033,7 @@ static_assert(ARRAY_SIZE(stm32_adc_min_ts_mp1) == STM32_ADC_INT_CH_NB);
 static const struct stm32_adc_cfg stm32mp1_adc_cfg = {
 	.regs = &stm32mp1_adc_regspec,
 	.adc_info = &stm32h7_adc_info,
-	.trigs = stm32h7_adc_trigs,
+	.trigs = { stm32h7_adc_trigs, },
 	.has_vregready = true,
 	.has_boostmode = true,
 	.has_linearcal = true,
@@ -3007,7 +3055,7 @@ static_assert(ARRAY_SIZE(stm32_adc_min_ts_mp13) == STM32_ADC_INT_CH_NB);
 static const struct stm32_adc_cfg stm32mp13_adc_cfg = {
 	.regs = &stm32mp13_adc_regspec,
 	.adc_info = &stm32mp13_adc_info,
-	.trigs = stm32h7_adc_trigs,
+	.trigs = { stm32h7_adc_trigs, },
 	.has_oversampling = true,
 	.start_conv = stm32mp13_adc_start_conv,
 	.stop_conv = stm32h7_adc_stop_conv,
@@ -3026,7 +3074,7 @@ static_assert(ARRAY_SIZE(stm32_adc_min_ts_mp25) == STM32_ADC_INT_CH_NB);
 static const struct stm32_adc_cfg stm32mp25_adc_cfg = {
 	.regs = &stm32mp25_adc_regspec,
 	.adc_info = &stm32mp25_adc_info,
-	.trigs = stm32mp25_adc_trigs,
+	.trigs = { stm32mp25_adc12_trigs, stm32mp25_adc3_trigs },
 	.has_oversampling = true,
 	.has_presel = true,
 	.start_conv = stm32h7_adc_start_conv,
