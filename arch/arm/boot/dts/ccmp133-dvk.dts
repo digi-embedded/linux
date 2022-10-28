@@ -208,7 +208,7 @@
 
 &i2s1 {
 	#clock-cells = <0>;
-	clocks = <&rcc SPI1_K>, <&rcc SPI1_K>, <&scmi_clk CK_SCMI_PLL3_Q>, <&scmi_clk CK_SCMI_PLL3_R>;
+	clocks = <&rcc SPI1>, <&rcc SPI1_K>, <&scmi_clk CK_SCMI_PLL3_Q>, <&scmi_clk CK_SCMI_PLL3_R>;
 	clock-names = "pclk", "i2sclk", "x8k", "x11k";
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&ccmp13_i2s1_pins_a>;
