@@ -19,6 +19,7 @@
 #define CCMR_CHANNEL_SHIFT 8
 #define CCMR_CHANNEL_MASK  0xFF
 #define MAX_BREAKINPUT 2
+#define MAX_PWM_OUTPUT 4
 
 struct stm32_breakinput {
 	u32 index;
@@ -564,9 +565,16 @@ static int stm32_pwm_probe_breakinputs(struct stm32_pwm *priv,
 	return stm32_pwm_apply_breakinputs(priv);
 }
 
-static void stm32_pwm_detect_complementary(struct stm32_pwm *priv)
+static void stm32_pwm_detect_complementary(struct stm32_pwm *priv, struct stm32_timers *ddata)
 {
-	u32 ccer;
+	u32 ccer, val;
+
+	if (ddata->ipidr) {
+		/* Simply read from HWCFGR the number of complementary outputs (MP25). */
+		regmap_read(priv->regmap, TIM_HWCFGR1, &val);
+		priv->have_complementary_output = !!FIELD_GET(TIM_HWCFGR1_NB_OF_DT, val);
+		return;
+	}
 
 	/*
 	 * If complementary bit doesn't exist writing 1 will have no
@@ -580,10 +588,22 @@ static void stm32_pwm_detect_complementary(struct stm32_pwm *priv)
 	priv->have_complementary_output = (ccer != 0);
 }
 
-static int stm32_pwm_detect_channels(struct stm32_pwm *priv)
+static int stm32_pwm_detect_channels(struct stm32_pwm *priv, struct stm32_timers *ddata)
 {
-	u32 ccer;
+	u32 ccer, val;
 	int npwm = 0;
+
+	if (ddata->ipidr) {
+		/* Simply deduce from HWCFGR the number of outputs (MP25). */
+		regmap_read(priv->regmap, TIM_HWCFGR1, &val);
+		/*
+		 * Timers may have more capture/compare channels than the
+		 * actual number of PWM channel outputs (e.g. TIM_CH[1..4]).
+		 */
+		npwm = FIELD_GET(TIM_HWCFGR1_NB_OF_CC, val);
+
+		return npwm < MAX_PWM_OUTPUT ? npwm : MAX_PWM_OUTPUT;
+	}
 
 	/*
 	 * If channels enable bits don't exist writing 1 will have no
@@ -633,11 +653,11 @@ static int stm32_pwm_probe(struct platform_device *pdev)
 	if (ret)
 		return ret;
 
-	stm32_pwm_detect_complementary(priv);
+	stm32_pwm_detect_complementary(priv, ddata);
 
 	priv->chip.dev = dev;
 	priv->chip.ops = &stm32pwm_ops;
-	priv->chip.npwm = stm32_pwm_detect_channels(priv);
+	priv->chip.npwm = stm32_pwm_detect_channels(priv, ddata);
 
 	ret = pwmchip_add(&priv->chip);
 	if (ret < 0)
@@ -699,6 +719,7 @@ static SIMPLE_DEV_PM_OPS(stm32_pwm_pm_ops, stm32_pwm_suspend, stm32_pwm_resume);
 
 static const struct of_device_id stm32_pwm_of_match[] = {
 	{ .compatible = "st,stm32-pwm",	},
+	{ .compatible = "st,stm32mp25-pwm", },
 	{ /* end node */ },
 };
 MODULE_DEVICE_TABLE(of, stm32_pwm_of_match);
