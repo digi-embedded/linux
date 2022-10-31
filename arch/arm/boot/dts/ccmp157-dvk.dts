@@ -435,6 +435,7 @@
 		reg = <0x52>;
 		interrupt-parent = <&gpioa>;
 		interrupts = <4 IRQ_TYPE_EDGE_FALLING>;
+		wakeup-source;
 	};
 };
 
