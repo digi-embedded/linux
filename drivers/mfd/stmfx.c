@@ -449,6 +449,10 @@ static int stmfx_probe(struct i2c_client *client,
 	if (ret)
 		goto err_chip_exit;
 
+	/* Parent I2C controller could use DMA, STMFX and child devices do not */
+	dev->coherent_dma_mask = 0;
+	dev->dma_mask = &dev->coherent_dma_mask;
+
 	ret = devm_mfd_add_devices(dev, PLATFORM_DEVID_NONE,
 				   stmfx_cells, ARRAY_SIZE(stmfx_cells), NULL,
 				   0, stmfx->irq_domain);
