@@ -425,6 +425,7 @@ static void stmfx_pinctrl_irq_mask(struct irq_data *data)
 	u32 mask = get_mask(data->hwirq);
 
 	pctl->irq_gpi_src[reg] &= ~mask;
+	gpiochip_disable_irq(gpio_chip, data->hwirq);
 }
 
 static void stmfx_pinctrl_irq_unmask(struct irq_data *data)
@@ -434,6 +435,7 @@ static void stmfx_pinctrl_irq_unmask(struct irq_data *data)
 	u32 reg = get_reg(data->hwirq);
 	u32 mask = get_mask(data->hwirq);
 
+	gpiochip_enable_irq(gpio_chip, data->hwirq);
 	pctl->irq_gpi_src[reg] |= mask;
 }
 
@@ -684,9 +686,10 @@ static int stmfx_pinctrl_probe(struct platform_device *pdev)
 	pctl->irq_chip.irq_bus_sync_unlock = stmfx_pinctrl_irq_bus_sync_unlock;
 	pctl->irq_chip.irq_request_resources = stmfx_gpio_irq_request_resources;
 	pctl->irq_chip.irq_release_resources = stmfx_gpio_irq_release_resources;
+	pctl->irq_chip.flags = IRQCHIP_IMMUTABLE;
 
 	girq = &pctl->gpio_chip.irq;
-	girq->chip = &pctl->irq_chip;
+	gpio_irq_chip_set_chip(girq, &pctl->irq_chip);
 	/* This will let us handle the parent IRQ in the driver */
 	girq->parent_handler = NULL;
 	girq->num_parents = 0;
