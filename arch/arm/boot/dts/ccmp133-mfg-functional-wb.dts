@@ -1,0 +1,43 @@
+/*
+ * Copyright 2022 Digi International, Inc.
+ *
+ * The code contained herein is licensed under the GNU General Public
+ * License. You may obtain a copy of the GNU General Public License
+ * Version 2 or later at the following locations:
+ *
+ * http://www.opensource.org/licenses/gpl-license.html
+ * http://www.gnu.org/copyleft/gpl.html
+ */
+
+/* Digi ConnectCore MP13 non-wireless FCT */
+#include "ccmp133-mfg-functional.dts"
+
+/ {
+	bluetooth {
+		/* U-Boot will fill in the MAC address here */
+	};
+
+	wireless {
+		/* U-Boot will fill in the MAC address here */
+	};
+};
+
+/* Enable the RF regulator */
+&reg_3v3_rf{
+	status = "okay";
+};
+
+/* Enable the WL regulator */
+&reg_rf_wl_en{
+	status = "okay";
+};
+
+/* Enable SDMMC2 (Wireless) */
+&sdmmc2{
+	status = "okay";
+};
+
+/* Enable USART2 (Bluetooth) */
+&usart2{
+	status = "okay";
+};
