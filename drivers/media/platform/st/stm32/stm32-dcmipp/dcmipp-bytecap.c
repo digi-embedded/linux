@@ -447,9 +447,12 @@ static int dcmipp_pipeline_s_stream(struct dcmipp_bytecap_device *vcap,
 				    int state)
 {
 	struct media_entity *entity = &vcap->vdev.entity;
+	struct media_device *mdev = entity->graph_obj.mdev;
 	struct v4l2_subdev *subdev;
 	struct media_pad *pad;
-	int ret;
+	int ret = 0;
+
+	mutex_lock(&mdev->graph_mutex);
 
 	/* Start/stop all entities within pipeline */
 	while (1) {
@@ -464,18 +467,43 @@ static int dcmipp_pipeline_s_stream(struct dcmipp_bytecap_device *vcap,
 		entity = pad->entity;
 		subdev = media_entity_to_v4l2_subdev(entity);
 
+		if (state) {
+			/* Increment stream_count to indicate that entity is streamon */
+			entity->stream_count++;
+
+			/*
+			 * Do not streamon entities already started and streamon
+			 * by another capture pipeline
+			 */
+			if (entity->stream_count > 1)
+				continue;
+		} else {
+			/* Decrement stream_count to indicate that entity is streamoff. */
+			entity->stream_count--;
+
+			/*
+			 * Only streamoff if entity is not owned anymore
+			 * by other pipelines
+			 */
+			if (entity->stream_count > 0)
+				continue;
+		}
+
 		ret = v4l2_subdev_call(subdev, video, s_stream, state);
 		if (ret < 0 && ret != -ENOIOCTLCMD) {
 			dev_err(vcap->dev, "%s: \"%s\" failed to %s streaming (%d)\n",
 				__func__, subdev->name,
 				state ? "start" : "stop", ret);
 
-			return ret;
+			goto out;
 		}
 
 		dev_dbg(vcap->dev, "\"%s\" is %s\n",
 			subdev->name, state ? "started" : "stopped");
 	}
+
+out:
+	mutex_unlock(&mdev->graph_mutex);
 
 	return 0;
 }
@@ -500,6 +528,8 @@ static int dcmipp_bytecap_start_streaming(struct vb2_queue *vq,
 {
 	struct dcmipp_bytecap_device *vcap = vb2_get_drv_priv(vq);
 	struct media_entity *entity = &vcap->vdev.entity;
+	struct media_device *mdev = entity->graph_obj.mdev;
+	struct media_pipeline *pipe;
 	struct dcmipp_buf *buf, *node;
 	int ret;
 
@@ -521,8 +551,21 @@ static int dcmipp_bytecap_start_streaming(struct vb2_queue *vq,
 		goto err_pm_put;
 	}
 
-	/* Start the media pipeline */
-	ret = media_pipeline_start(entity->pads, &vcap->pipe);
+	/*
+	 * Start the media pipeline
+	 *
+	 * Pipeline is shared between all elements of the pipeline
+	 * including video capture nodes.
+	 * Instead of creating a common media_pipeline struct
+	 * global variable, use the one of the first capture
+	 * node. All the elements of the pipeline -including
+	 * other capture nodes- will be then assigned to this
+	 * pipeline (entity->pipe) in __media_pipeline_start().
+	 */
+	mutex_lock(&mdev->graph_mutex);
+	pipe = entity->pads[0].pipe ? : &vcap->pipe;
+	ret = __video_device_pipeline_start(&vcap->vdev, pipe);
+	mutex_unlock(&mdev->graph_mutex);
 	if (ret) {
 		dev_err(vcap->dev, "%s: Failed to start streaming, media pipeline start error (%d)\n",
 			__func__, ret);
