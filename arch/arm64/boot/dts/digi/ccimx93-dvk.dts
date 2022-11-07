@@ -27,7 +27,7 @@
 	digi,machine,name = "ccimx93-dvk";
 
 	chosen {
-		stdout-path = &lpuart1;
+		stdout-path = &lpuart6;
 	};
 
 	reserved-memory {
@@ -663,9 +663,9 @@
 	};
 };
 
-&lpuart1 { /* console */
+&lpuart6 { /* console */
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_uart1>;
+	pinctrl-0 = <&pinctrl_uart6>;
 	status = "okay";
 };
 
@@ -838,10 +838,10 @@
 		>;
 	};
 
-	pinctrl_uart1: uart1grp {
+	pinctrl_uart6: uart6grp {
 		fsl,pins = <
-			MX93_PAD_UART1_RXD__LPUART1_RX			0x31e
-			MX93_PAD_UART1_TXD__LPUART1_TX			0x31e
+			MX93_PAD_GPIO_IO05__LPUART6_RX			0x31e
+			MX93_PAD_GPIO_IO04__LPUART6_TX			0x31e
 		>;
 	};
 
