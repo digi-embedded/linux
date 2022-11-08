@@ -287,6 +287,21 @@
 	};
 };
 
+&timers4 {
+	/delete-property/dmas;
+	/delete-property/dma-names;
+	status = "okay";
+	pwm4: pwm {
+		pinctrl-0 = <&ccmp15_pwm4_pins>;
+		pinctrl-1 = <&ccmp15_pwm4_sleep_pins>;
+		pinctrl-names = "default", "sleep";
+		status = "okay";
+	};
+	timer@3 {
+		status = "okay";
+	};
+};
+
 &i2c2 {
 	clock-frequency = <400000>;
 	pinctrl-names = "default", "sleep";
@@ -807,6 +822,21 @@
 	ccmp15_pwm2_sleep_pins: pwm2-sleep-0 {
 		pins {
 			pinmux = <STM32_PINMUX('A', 15, ANALOG)>; /* TIM2_CH1 */
+		};
+	};
+
+	ccmp15_pwm4_pins: ccmp15-pwm4-0 {
+		pins {
+			pinmux = <STM32_PINMUX('B', 6, AF2)>; /* TIM4_CH1 */
+			bias-disable;
+			drive-push-pull;
+			slew-rate = <0>;
+		};
+	};
+
+	ccmp15_pwm4_sleep_pins: ccmp15-pwm4-sleep-0 {
+		pins {
+			pinmux = <STM32_PINMUX('B', 6, ANALOG)>; /* TIM4_CH1 */
 		};
 	};
 
