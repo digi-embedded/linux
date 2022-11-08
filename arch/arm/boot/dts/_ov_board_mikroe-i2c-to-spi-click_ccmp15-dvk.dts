@@ -20,17 +20,17 @@
 	fragment@0 {
 		target-path = "/";
 		__overlay__ {
-			overlay-description = "DVK: MicroE Gyro (gyro-click) ";
+			overlay-description = "DVK: MikroE I2C to SPI Click board";
 		};
 	};
 
-	/* MicroE Gyro (gyro-click) */
+	/* MikroE I2C to SPI bridge (I2C to SPI-click) */
 	fragment@1 {
 		target = <&i2c6>;
 		__overlay__ {
-			gyroscope@68 {
-				compatible = "st,l3g4200d-gyro";
-				reg = <0x68>;
+			sc18is602@28 {
+				compatible = "nxp,sc18is602";
+				reg = <0x28>;
 			};
 		};
 	};

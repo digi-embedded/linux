@@ -20,13 +20,13 @@
 	fragment@0 {
 		target-path = "/";
 		__overlay__ {
-			overlay-description = "DVK: MicroE I2C to SPI click";
+			overlay-description = "DVK: MikroE I2C to SPI Click board";
 		};
 	};
 
-	/* MicroE I2C to SPI bridge (I2C to SPI-click) */
+	/* MikroE I2C to SPI bridge (I2C to SPI-click) */
 	fragment@1 {
-		target = <&i2c6>;
+		target = <&i2c2>;
 		__overlay__ {
 			sc18is602@28 {
 				compatible = "nxp,sc18is602";
