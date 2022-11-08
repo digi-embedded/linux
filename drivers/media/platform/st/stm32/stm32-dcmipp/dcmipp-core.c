@@ -38,6 +38,7 @@
 #define DCMIPP_CMHWCFGR (0x200)
 #define DCMIPP_CMCR (0x204)
 #define DCMIPP_CMCR_INSEL BIT(0)
+#define DCMIPP_CMSR2 (0x3F8)
 #define DCMIPP_P0HWCFGR (0x400)
 #define DCMIPP_VERR (0xFF4)
 
@@ -418,10 +419,15 @@ static irqreturn_t dcmipp_irq_callback(int irq, void *arg)
 	struct dcmipp_ent_device *ved;
 	irqreturn_t ret = IRQ_HANDLED;
 	unsigned int i;
+	u32 cmsr2;
+
+	/* Centralized read of CMSR2 */
+	cmsr2 = reg_read(dcmipp, DCMIPP_CMSR2);
 
 	/* Call irq handler of each entities of pipeline */
 	for (i = 0; i < dcmipp->pipe_cfg->num_ents; i++) {
 		ved = platform_get_drvdata(dcmipp->subdevs[i]);
+		ved->cmsr2 = cmsr2;
 		if (ved->handler)
 			ved->handler_ret = ved->handler(irq, ved);
 		else if (ved->thread_fn)

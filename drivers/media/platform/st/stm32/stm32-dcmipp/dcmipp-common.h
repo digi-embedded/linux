@@ -121,6 +121,7 @@ struct dcmipp_ent_device {
 	enum v4l2_mbus_type		bus_type;
 	irq_handler_t handler;
 	irqreturn_t handler_ret;
+	u32 cmsr2;
 	irq_handler_t thread_fn;
 };
 

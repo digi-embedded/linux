@@ -1139,9 +1139,9 @@ static irqreturn_t dcmipp_pixelcap_irq_callback(int irq, void *arg)
 {
 	struct dcmipp_pixelcap_device *vcap =
 			container_of(arg, struct dcmipp_pixelcap_device, ved);
+	struct dcmipp_ent_device *ved = arg;
 
-	vcap->cmsr2 = reg_read(vcap, DCMIPP_CMSR2);
-	vcap->cmsr2 = vcap->cmsr2 & vcap->cmier;
+	vcap->cmsr2 = ved->cmsr2 & vcap->cmier;
 
 	vcap->it_count++;
 
