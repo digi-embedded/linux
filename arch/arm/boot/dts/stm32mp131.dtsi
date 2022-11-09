@@ -5,6 +5,7 @@
  */
 #include <dt-bindings/interrupt-controller/arm-gic.h>
 #include <dt-bindings/clock/stm32mp13-clks.h>
+#include <dt-bindings/regulator/st,stm32mp13-regulator.h>
 #include <dt-bindings/reset/stm32mp13-resets.h>
 
 / {
@@ -50,6 +51,28 @@
 			scmi_reset: protocol@16 {
 				reg = <0x16>;
 				#reset-cells = <1>;
+			};
+
+			scmi_voltd: protocol@17 {
+				reg = <0x17>;
+
+				scmi_regu: regulators {
+					#address-cells = <1>;
+					#size-cells = <0>;
+
+					scmi_reg11: voltd-reg11 {
+						reg = <VOLTD_SCMI_REG11>;
+						regulator-name = "reg11";
+					};
+					scmi_reg18: voltd-reg18 {
+						reg = <VOLTD_SCMI_REG18>;
+						regulator-name = "reg18";
+					};
+					scmi_usb33: voltd-usb33 {
+						reg = <VOLTD_SCMI_USB33>;
+						regulator-name = "usb33";
+					};
+				};
 			};
 		};
 	};
