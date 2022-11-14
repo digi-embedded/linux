@@ -367,11 +367,11 @@
 			ov5640_0: endpoint {
 				remote-endpoint = <&dcmi_0>;
 				bus-width = <8>;
-				data-shift = <2>; /* lines 9:2 are used */
+				data-shift = <0>;
 				hsync-active = <0>;
 				vsync-active = <0>;
 				pclk-sample = <1>;
-				pclk-max-frequency = <77000000>;
+				pclk-max-frequency = <24000000>;
 			};
 		};
 	};
@@ -503,7 +503,7 @@
 			hsync-active = <0>;
 			vsync-active = <0>;
 			pclk-sample = <1>;
-			pclk-max-frequency = <77000000>;
+			pclk-max-frequency = <24000000>;
 		};
 	};
 };
