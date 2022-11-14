@@ -1147,12 +1147,12 @@ dtb-$(CONFIG_ARCH_STM32) += \
 	ccmp133-dvk.dtb \
 	ccmp151-dvk.dtb \
 	ccmp157-dvk.dtb \
-	_ov_board_microe-accel2-click_ccmp13.dtbo \
-	_ov_board_microe-accel2-click_ccmp15.dtbo \
-	_ov_board_microe-gyro-click_ccmp13.dtbo \
-	_ov_board_microe-gyro-click_ccmp15.dtbo \
-	_ov_board_microe-i2c-2-spi_ccmp13.dtbo \
-	_ov_board_microe-i2c-2-spi_ccmp15.dtbo \
+	_ov_board_mikroe-accel2-click_ccmp13-dvk.dtbo \
+	_ov_board_mikroe-accel2-click_ccmp15-dvk.dtbo \
+	_ov_board_mikroe-gyro-click_ccmp13-dvk.dtbo \
+	_ov_board_mikroe-gyro-click_ccmp15-dvk.dtbo \
+	_ov_board_mikroe-i2c-to-spi-click_ccmp13-dvk.dtbo \
+	_ov_board_mikroe-i2c-to-spi-click_ccmp15-dvk.dtbo \
 	_ov_board_can1_ccmp15-dvk.dtbo \
 	_ov_board_can2_ccmp15-dvk.dtbo \
 	_ov_board_eth0-10-100_ccmp15-dvk.dtbo \
