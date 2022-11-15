@@ -512,6 +512,7 @@
 			interrupts-extended = <&exti 30 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&rcc UART4_K>;
 			wakeup-source;
+			power-domains = <&pd_core>;
 			dmas = <&dmamux1 63 0x400 0x15>,
 			       <&dmamux1 64 0x400 0x11>;
 			dma-names = "rx", "tx";
