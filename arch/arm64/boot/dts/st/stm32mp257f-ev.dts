@@ -96,3 +96,11 @@
 	/delete-property/dma-names;
 	status = "okay";
 };
+
+&usb2_phy1 {
+	status = "okay";
+};
+
+&usb2_phy2 {
+	status = "okay";
+};
