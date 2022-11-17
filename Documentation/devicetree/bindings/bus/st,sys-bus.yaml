@@ -1,0 +1,102 @@
+# SPDX-License-Identifier: GPL-2.0-only OR BSD-2-Clause
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/bus/stm32,sys-bus.yaml
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title:  STM32 System Bus
+
+description: |
+  The STM32 System Bus is an internal bus to which some internal peripherals
+  are connected. STM32 System Bus integrates a firewall controlling access to each
+  device. This bus prevents non-accessible devices to be probed.
+
+  To see which peripherals are securable, please check the SoC reference manual.
+
+maintainers:
+  - Gatien Chevallier <gatien.chevallier@foss.st.com>
+
+properties:
+  compatible:
+    enum:
+      - st,stm32mp13-sys-bus
+      - st,stm32mp15-sys-bus
+
+  reg:
+    maxItems: 1
+
+  "#address-cells":
+    description: |
+      The first cell is the bank number (chip select).
+      The second cell is the address offset within the bank.
+    const: 2
+
+  "#size-cells":
+    const: 1
+
+  '#feature-domain-cells':
+    $ref: /schemas/types.yaml#/definitions/uint32
+    description:
+      Number of cells in a domain controller specifier.
+      Set const to 2 here for nodes providing the peripheral
+      id for the firewall check.
+    const: 1
+
+  ranges: true
+
+  feature-domain-controller: true
+
+patternProperties:
+  "^.*@[1-5],[1-9a-f][0-9a-f]+$":
+    description: Devices attached to system bus
+    type: object
+
+required:
+  - compatible
+  - reg
+  - "#address-cells"
+  - "#size-cells"
+  - feature-domain-controller
+  - '#feature-domain-cells'
+  - ranges
+
+additionalProperties: false
+
+examples:
+  - |
+    // In this example,
+    // - the hash1 device refers to etzpc as his domain controller.
+    // - same goes for rng1.
+    // Access rights are verified before creating devices.
+
+    etzpc: etzpc@0x5C007000 {
+        compatible = "st,stm32mp15-sys-bus";
+        reg = <0x5c007000 0x400>;
+        #address-cells = <1>;
+        #size-cells = <1>;
+        ranges;
+        feature-domain-controller;
+        #feature-domain-cells = <2>;
+
+        hash1: hash@54002000 {
+          compatible = "st,stm32f756-hash";
+          reg = <0x54002000 0x400>;
+          interrupts = <GIC_SPI 80 IRQ_TYPE_LEVEL_HIGH>;
+          clocks = <&scmi_clk CK_SCMI_HASH1>;
+          resets = <&scmi_reset RST_SCMI_HASH1>;
+          dmas = <&mdma1 31 0x2 0x1000A02 0x0 0x0 0x0>;
+          dma-names = "in";
+          dma-maxburst = <2>;
+          feature-domains = <&etzpc STM32MP1_ETZPC_HASH1_ID>;
+          status = "disabled";
+        };
+
+        rng1: rng@54003000 {
+          compatible = "st,stm32-rng";
+          reg = <0x54003000 0x400>;
+          clocks = <&scmi_clk CK_SCMI_RNG1>;
+          resets = <&scmi_reset RST_SCMI_RNG1>;
+          feature-domains = <&etzpc STM32MP1_ETZPC_RNG1_ID>;
+          status = "disabled";
+        };
+    };
