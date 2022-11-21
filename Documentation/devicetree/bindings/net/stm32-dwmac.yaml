@@ -93,6 +93,11 @@ properties:
       select RCC clock instead of ETH_REF_CLK.
     type: boolean
 
+  st,eth-ptp-from-rcc:
+    description:
+      set this property when PTP (IEEE1588) clock selection is from RCC,
+      by default ETHSW ptp ref clock is used
+    type: boolean
 required:
   - compatible
   - clocks

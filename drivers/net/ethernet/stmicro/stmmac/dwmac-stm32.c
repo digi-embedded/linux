@@ -53,6 +53,7 @@
 /* STM32MP2 register definitions */
 #define SYSCFG_MP2_ETH_MASK		GENMASK(31, 0)
 
+#define SYSCFG_ETHCR_ETH_PTP_CLK_SEL	BIT(2)
 #define SYSCFG_ETHCR_ETH_CLK_SEL	BIT(1)
 #define SYSCFG_ETHCR_ETH_REF_CLK_SEL	BIT(0)
 
@@ -94,6 +95,7 @@ struct stm32_dwmac {
 	int ext_phyclk;
 	int enable_eth_ck;
 	int eth_clk_sel_reg;
+	int eth_ptp_sel_reg;
 	int eth_ref_clk_sel_reg;
 	u32 mode_reg;		 /* MAC glue-logic mode register */
 	u32 mode_mask;
@@ -303,6 +305,9 @@ static int stm32mp2_set_mode(struct plat_stmmacenet_data *plat_dat)
 		return -EINVAL;
 	}
 
+	if (dwmac->eth_ptp_sel_reg)
+		val |= SYSCFG_ETHCR_ETH_PTP_CLK_SEL;
+
 	/* Update ETHCR (set register) */
 	return regmap_update_bits(dwmac->regmap, reg,
 				  dwmac->ops->syscfg_eth_mask, val);
@@ -404,6 +409,9 @@ static int stm32mp1_parse_data(struct stm32_dwmac *dwmac,
 
 	/* Ethernet PHY have no crystal */
 	dwmac->ext_phyclk = of_property_read_bool(np, "st,ext-phyclk");
+
+	/* PTP (IEEE1588) clock selection */
+	dwmac->eth_ptp_sel_reg = of_property_read_bool(np, "st,eth-ptp-from-rcc");
 
 	/* Gigabit Ethernet 125MHz clock selection. */
 	dwmac->eth_clk_sel_reg = of_property_read_bool(np, "st,eth-clk-sel");
