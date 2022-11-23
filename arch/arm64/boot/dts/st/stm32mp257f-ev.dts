@@ -104,3 +104,12 @@
 &usb2_phy2 {
 	status = "okay";
 };
+
+&usb3dr {
+	status = "okay";
+
+	dwc3: usb@48300000 {
+		maximum-speed = "high-speed";
+		dr_mode = "peripheral";
+	};
+};
