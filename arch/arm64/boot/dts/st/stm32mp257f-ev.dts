@@ -105,6 +105,14 @@
 	status = "okay";
 };
 
+&usb2h {
+	status = "okay";
+
+	usb2h_ohci: usb@482e0000 {
+		status = "disabled";
+	};
+};
+
 &usb3dr {
 	status = "okay";
 
