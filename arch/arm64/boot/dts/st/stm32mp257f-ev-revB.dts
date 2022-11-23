@@ -131,5 +131,6 @@
 	dwc3: usb@48300000 {
 		maximum-speed = "high-speed";
 		dr_mode = "peripheral";
+		snps,incr-burst-type-adjustment = <4>;
 	};
 };
