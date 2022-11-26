@@ -135,8 +135,13 @@ int mca_irq_init(struct mca_drv *mca)
 	} else
 #endif
 	{
+		unsigned int irq_flags = IRQF_TRIGGER_LOW | IRQF_ONESHOT | IRQF_SHARED;
+
+		of_property_read_u32(mca->dev->of_node, "interrupt-flags",
+				     &irq_flags);
+
 		ret = regmap_add_irq_chip(mca->regmap, mca->chip_irq,
-					  IRQF_TRIGGER_LOW | IRQF_ONESHOT | IRQF_SHARED,
+					  irq_flags,
 					  mca->irq_base, &mca_irq_chip,
 					  &mca->regmap_irq);
 	}
