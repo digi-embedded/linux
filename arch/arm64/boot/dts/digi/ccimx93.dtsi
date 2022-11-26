@@ -70,6 +70,11 @@
 	};
 };
 
+/* Disable CPU power key */
+&bbnsm_pwrkey {
+	status = "disabled";
+};
+
 /* I2C bus conneccted to MCA and PMIC */
 &lpi2c1 {
 	#address-cells = <1>;
