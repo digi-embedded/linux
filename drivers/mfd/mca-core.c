@@ -1143,7 +1143,9 @@ int mca_device_init(struct mca_drv *mca, u32 irq)
 	if ((mca->dev_id == MCA_KL03_DEVICE_ID &&
 	    !of_machine_is_compatible("digi,ccimx6ul")) ||
 	    (mca->dev_id == MCA_KL17_DEVICE_ID &&
-	    !of_machine_is_compatible("digi,ccimx8")))
+	    !(of_machine_is_compatible("digi,ccimx8") ||
+	      of_machine_is_compatible("digi,ccimx93"))))
+
 	{
 		dev_err(mca->dev, "MCA Device ID (%x) doesn't match the SOM\n",
 			mca->dev_id);
