@@ -29,6 +29,27 @@
 	chosen {
 		stdout-path = &lpuart6;
 	};
+
+	sound_max98089: sound-max98089 {
+		compatible = "fsl,imx-audio-max98088";
+		model = "imx-max98088";
+		cpu-dai = <&sai3>;
+		audio-codec = <&max98089>;
+		audio-routing =
+			"Headphone Jack", "HPL",
+			"Headphone Jack", "HPR",
+			"Ext Spk", "SPKL",
+			"Ext Spk", "SPKR",
+			"LineOut", "RECL",
+			"LineOut", "RECR",
+			"Mic1", "MIC1",
+			"Mic2", "MIC2",
+			"LineInA", "INA1",
+			"LineInA", "INA2",
+			"LineInB", "INB1",
+			"LineInB", "INB2";
+		status = "okay";
+	};
 };
 
 /* MIPI DSI PHY */
@@ -143,6 +164,28 @@
 	};
 };
 
+/* I2C4 - Audio codec, camera, ... */
+&lpi2c4 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	clock-frequency = <400000>;
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&pinctrl_lpi2c4>;
+	pinctrl-1 = <&pinctrl_lpi2c4>;
+	status = "okay";
+
+	max98089: codec@10 {
+		compatible = "maxim,max98089";
+		reg = <0x10>;
+		clocks = <&clk IMX93_CLK_SAI3_GATE>;
+		clock-names = "mclk";
+		// TODO
+		// Add regulators when defined for the DVK
+		// vcc-supply = <&reg_3v3_audio>;
+		// dvdd-supply = <&reg_1v8_ext>;
+	};
+};
+
 &lpuart6 { /* console */
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_uart6>;
@@ -173,6 +216,17 @@
 			at803x,vddio-1p8v;
 		};
 	};
+};
+
+/* Audio interface */
+&sai3 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_sai3>;
+	assigned-clocks = <&clk IMX93_CLK_SAI3>;
+	assigned-clock-parents = <&clk IMX93_CLK_AUDIO_PLL>;
+	assigned-clock-rates = <12288000>;
+	fsl,sai-mclk-direction-output;
+	status = "okay";
 };
 
 /* USB_OTG1 connected to usb hub */
@@ -228,6 +282,14 @@
 		>;
 	};
 
+	/* I2C4 */
+	pinctrl_lpi2c4: lpi2c4grp {
+		fsl,pins = <
+			MX93_PAD_GPIO_IO02__LPI2C4_SDA				0x40000b9e
+			MX93_PAD_GPIO_IO03__LPI2C4_SCL				0x40000b9e
+		>;
+	};
+
 	/* HDMI bridge IOs */
 	pinctrl_lt8912: lt8912grp {
 		fsl,pins = <
@@ -235,6 +297,17 @@
 
 			/* Interrupt */
 			MX93_PAD_CCM_CLKO2__GPIO3_IO27				0x31e
+		>;
+	};
+
+	/* Audio Interface */
+	pinctrl_sai3: sai3grp {
+		fsl,pins = <
+			MX93_PAD_GPIO_IO21__SAI3_TX_DATA00			0x31e
+			MX93_PAD_GPIO_IO20__SAI3_RX_DATA00			0x31e
+			MX93_PAD_GPIO_IO26__SAI3_TX_SYNC			0x31e
+			MX93_PAD_GPIO_IO16__SAI3_TX_BCLK			0x31e
+			MX93_PAD_GPIO_IO17__SAI3_MCLK				0x31e
 		>;
 	};
 
