@@ -63,6 +63,13 @@
 	};
 };
 
+/* USB_OTG1 connected to usb hub */
+&usbotg1 {
+	dr_mode = "host";
+	disable-over-current;
+	status = "okay";
+};
+
 /* SD card */
 &usdhc2 {
 	pinctrl-names = "default", "state_100mhz", "state_200mhz";
