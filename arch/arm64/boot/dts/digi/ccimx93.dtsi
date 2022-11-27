@@ -326,6 +326,13 @@
 	};
 };
 
+/* Bluetooth UART */
+&lpuart1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_uart1>;
+	status = "disabled";
+};
+
 /* eMMC */
 &usdhc1 {
 	pinctrl-names = "default", "state_100mhz", "state_200mhz";
@@ -375,6 +382,16 @@
 		fsl,pins = <
 			MX93_PAD_I2C1_SCL__GPIO1_IO00			0xb9e
 			MX93_PAD_I2C1_SDA__GPIO1_IO01			0xb9e
+		>;
+	};
+
+	/* Bluetooth UART */
+	pinctrl_uart1: uart1grp {
+		fsl,pins = <
+			MX93_PAD_UART1_RXD__LPUART1_RX			0x31e
+			MX93_PAD_UART1_TXD__LPUART1_TX			0x31e
+			MX93_PAD_UART2_RXD__LPUART1_CTS_B		0x31e
+			MX93_PAD_UART2_TXD__LPUART1_RTS_B		0x31e
 		>;
 	};
 
