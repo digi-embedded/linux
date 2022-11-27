@@ -46,3 +46,4 @@ endif
 dtb-$(CONFIG_ARCH_MXC) += ccimx93-dvk.dtb \
 
 dtb-$(CONFIG_ARCH_MXC) += _ov_som_wifi_ccimx93.dtbo \
+			  _ov_som_bt_ccimx93.dtbo \
