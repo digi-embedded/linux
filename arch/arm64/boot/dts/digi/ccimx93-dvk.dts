@@ -63,6 +63,21 @@
 	};
 };
 
+/* SD card */
+&usdhc2 {
+	pinctrl-names = "default", "state_100mhz", "state_200mhz";
+	pinctrl-0 = <&pinctrl_usdhc2>, <&pinctrl_usdhc2_gpio>;
+	pinctrl-1 = <&pinctrl_usdhc2>, <&pinctrl_usdhc2_gpio>;
+	pinctrl-2 = <&pinctrl_usdhc2>, <&pinctrl_usdhc2_gpio>;
+	// Enable CD when the connector works
+	// cd-gpios = <&gpio3 00 GPIO_ACTIVE_LOW>;
+	broken-cd;
+	bus-width = <4>;
+	status = "okay";
+	no-sdio;
+	no-mmc;
+};
+
 &iomuxc {
 	/* Ethernet 1 */
 	pinctrl_eqos: eqosgrp {
@@ -83,6 +98,26 @@
 			MX93_PAD_ENET1_TX_CTL__ENET_QOS_RGMII_TX_CTL		0x57e
 			/* PHY reset */
 			MX93_PAD_ENET2_MDIO__GPIO4_IO15                         0x31e
+		>;
+	};
+
+	/* SD card */
+	pinctrl_usdhc2_gpio: usdhc2gpiogrp {
+		fsl,pins = <
+			MX93_PAD_SD2_CD_B__GPIO3_IO00				0x31e
+		>;
+	};
+
+	pinctrl_usdhc2: usdhc2grp {
+		fsl,pins = <
+			MX93_PAD_SD2_CLK__USDHC2_CLK				0x17fe
+			MX93_PAD_SD2_CMD__USDHC2_CMD				0x13fe
+			MX93_PAD_SD2_DATA0__USDHC2_DATA0			0x13fe
+			MX93_PAD_SD2_DATA1__USDHC2_DATA1			0x13fe
+			MX93_PAD_SD2_DATA2__USDHC2_DATA2			0x13fe
+			MX93_PAD_SD2_DATA3__USDHC2_DATA3			0x13fe
+			MX93_PAD_SD2_VSELECT__USDHC2_VSELECT			0x51e
+			MX93_PAD_SD2_VSELECT__USDHC2_VSELECT			0x51e
 		>;
 	};
 
