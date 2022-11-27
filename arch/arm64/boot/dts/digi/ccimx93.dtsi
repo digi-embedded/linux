@@ -73,6 +73,12 @@
 				<&vdev1vring0>, <&vdev1vring1>, <&rsc_table>;
 		fsl,startup-delay-ms = <500>;
 	};
+
+	wlan_pwrseq: wlan_pwrseq {
+		compatible = "mmc-pwrseq-simple";
+		/* Note that this is connected to the PDn line */
+		reset-gpios = <&gpio2 2 GPIO_ACTIVE_LOW>;
+	};
 };
 
 /* Disable CPU power key */
@@ -329,6 +335,30 @@
 	status = "okay";
 };
 
+/* Wifi MAC */
+&usdhc3 {
+	pinctrl-names = "default", "state_100mhz", "state_200mhz";
+	pinctrl-0 = <&pinctrl_usdhc3>, <&pinctrl_usdhc3_wlan>;
+	pinctrl-1 = <&pinctrl_usdhc3>, <&pinctrl_usdhc3_wlan>;
+	pinctrl-2 = <&pinctrl_usdhc3>, <&pinctrl_usdhc3_wlan>;
+
+	mmc-pwrseq = <&wlan_pwrseq>;
+	bus-width = <4>;
+	keep-power-in-suspend;
+	non-removable;
+	wakeup-source;
+	fsl,sdio-async-interrupt-enabled;
+	status = "disabled";
+
+	// TODO enable when IO is defined
+	//wifi_wake_host {
+	//	compatible = "nxp,wifi-wake-host";
+	//	interrupt-parent = <&gpio3>;
+	//	interrupts = <26 IRQ_TYPE_LEVEL_LOW>;
+	//	interrupt-names = "host-wake";
+	//};
+};
+
 /* IOMUX */
 &iomuxc {
 	/* Internal I2C (MCA, PMIC) */
@@ -360,6 +390,26 @@
 			MX93_PAD_SD1_DATA6__USDHC1_DATA6		0x13fe
 			MX93_PAD_SD1_DATA7__USDHC1_DATA7		0x13fe
 			MX93_PAD_SD1_STROBE__USDHC1_STROBE		0x17fe
+		>;
+	};
+
+	/* Wifi MAC */
+	pinctrl_usdhc3: usdhc3grp {
+		fsl,pins = <
+			MX93_PAD_SD3_CLK__USDHC3_CLK			0x13fe
+			MX93_PAD_SD3_CMD__USDHC3_CMD			0x13fe
+			MX93_PAD_SD3_DATA0__USDHC3_DATA0		0x13fe
+			MX93_PAD_SD3_DATA1__USDHC3_DATA1        	0x13fe
+			MX93_PAD_SD3_DATA2__USDHC3_DATA2        	0x13fe
+			MX93_PAD_SD3_DATA3__USDHC3_DATA3        	0x13fe
+		>;
+	};
+
+	/* Wifi/BT control lines */
+	pinctrl_usdhc3_wlan: usdhc3wlangrp {
+		fsl,pins = <
+			/* WLAN_PDn */
+			MX93_PAD_GPIO_IO26__GPIO2_IO26			0x31e
 		>;
 	};
 
