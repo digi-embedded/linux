@@ -78,7 +78,7 @@
 		compatible = "mmc-pwrseq-simple";
 		/* Note that this is connected to the PDn line */
 
-		reset-gpios = <&gpio2 2 GPIO_ACTIVE_LOW>;
+		reset-gpios = <&gpio2 7 GPIO_ACTIVE_LOW>;
 		status = "disabled";
 	};
 };
@@ -428,7 +428,7 @@
 	pinctrl_usdhc3_wlan: usdhc3wlangrp {
 		fsl,pins = <
 			/* WLAN_PDn */
-			MX93_PAD_GPIO_IO26__GPIO2_IO26			0x31e
+			MX93_PAD_GPIO_IO07__GPIO2_IO07			0x31e
 		>;
 	};
 
