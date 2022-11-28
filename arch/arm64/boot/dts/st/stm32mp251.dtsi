@@ -1565,6 +1565,15 @@
 				};
 			};
 
+			rng: rng@42020000 {
+				compatible = "st,stm32mp13-rng";
+				reg = <0x42020000 0x400>;
+				clocks = <&rcc CK_BUS_RNG>;
+				resets = <&rcc RNG_R>;
+				feature-domains = <&rifsc STM32MP25_RIFSC_RNG_ID>;
+				status = "disabled";
+			};
+
 			spi8: spi@46020000 {
 				#address-cells = <1>;
 				#size-cells = <0>;
