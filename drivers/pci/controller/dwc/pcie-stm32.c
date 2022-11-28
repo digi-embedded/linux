@@ -24,12 +24,75 @@ struct stm32_pcie {
 	struct phy *phy;
 	struct clk *clk;
 	struct gpio_desc *reset_gpio;
+    u32     max_payload;
+	u32     max_readreq;
 };
 
 static const struct of_device_id stm32_pcie_of_match[] = {
 	{ .compatible = "st,stm32mp25-pcie-rc" },
 	{},
 };
+
+static int stm32_pcie_set_max_payload(struct dw_pcie *pci, u32 size)
+{
+	u32 val;
+	u16 exp_cap_off = dw_pcie_find_capability(pci, PCI_CAP_ID_EXP);
+	int max_payload_size = fls(size) - 8;
+	struct device *dev = pci->dev;
+
+	if (size != 128 && size != 256) {
+		dev_err(dev, "Unexpected payload size %d\n", size);
+		return -EINVAL;
+	}
+
+	val = dw_pcie_readl_dbi(pci, exp_cap_off + PCI_EXP_DEVCTL);
+
+	val &= ~PCI_EXP_DEVCTL_PAYLOAD;
+	val |= PCIE_CAP_MAX_PAYLOAD_SIZE(max_payload_size);
+	dw_pcie_writel_dbi(pci, exp_cap_off + PCI_EXP_DEVCTL, val);
+
+	return 0;
+}
+
+static int stm32_pcie_set_max_rd_req_size(struct dw_pcie *pci, u32 size)
+{
+	u32 val;
+	u16 exp_cap_off = dw_pcie_find_capability(pci, PCI_CAP_ID_EXP);
+	int max_readreq_size = fls(size) - 8;
+	struct device *dev = pci->dev;
+
+	if (!is_power_of_2(size) || size < 128 || size > 1024) {
+		dev_err(dev, "Unexpected read request size %d\n", size);
+		return -EINVAL;
+	}
+
+	val = dw_pcie_readl_dbi(pci, exp_cap_off + PCI_EXP_DEVCTL);
+
+	val &= ~PCI_EXP_DEVCTL_READRQ;
+	val |= PCIE_CAP_MAX_READ_REQ_SIZE(max_readreq_size);
+	dw_pcie_writel_dbi(pci, exp_cap_off + PCI_EXP_DEVCTL, val);
+
+	return 0;
+}
+
+static int stm32_pcie_host_init(struct dw_pcie_rp *pp)
+{
+	struct dw_pcie *pci = to_dw_pcie_from_pp(pp);
+	struct stm32_pcie *stm32_pcie = to_stm32_pcie(pci);
+	int ret = 0;
+
+	if (stm32_pcie->max_payload) {
+		ret = stm32_pcie_set_max_payload(pci, stm32_pcie->max_payload);
+		if (ret)
+			return ret;
+	}
+
+	if (stm32_pcie->max_readreq)
+		ret = stm32_pcie_set_max_rd_req_size(pci,
+						     stm32_pcie->max_readreq);
+
+	return ret;
+}
 
 static int stm32_pcie_start_link(struct dw_pcie *pci)
 {
@@ -71,6 +134,7 @@ static void stm32_pcie_stop_link(struct dw_pcie *pci)
 }
 
 static const struct dw_pcie_host_ops stm32_pcie_host_ops = {
+	.host_init = stm32_pcie_host_init
 };
 
 static const struct dw_pcie_ops dw_pcie_ops = {
@@ -151,6 +215,16 @@ static int stm32_pcie_probe(struct platform_device *pdev)
 	if (IS_ERR(stm32_pcie->rst))
 		return dev_err_probe(dev, PTR_ERR(stm32_pcie->rst),
 				     "Failed to get PCIe reset\n");
+
+	/* Optionally limit payload */
+	ret = of_property_read_u32(np, "max-payload-size", &stm32_pcie->max_payload);
+	if (ret && ret != -EINVAL)
+		return dev_err_probe(dev, ret, "Error reading max-payload value\n");
+
+	/* Optionally limit readreq */
+	ret = of_property_read_u32(np, "max-readreq-size", &stm32_pcie->max_readreq);
+	if (ret && ret != -EINVAL)
+		return dev_err_probe(dev, ret, "Error reading max-readreq value\n");
 
 	stm32_pcie->reset_gpio = devm_gpiod_get_optional(dev, "reset", GPIOD_OUT_HIGH);
 	if (IS_ERR(stm32_pcie->reset_gpio))
