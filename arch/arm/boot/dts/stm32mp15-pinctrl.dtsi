@@ -2602,4 +2602,31 @@
 				 <STM32_PINMUX('Z', 2, ANALOG)>; /* SPI1_MOSI */
 		};
 	};
+
+	usart1_pins_a: usart1-0 {
+		pins1 {
+			pinmux = <STM32_PINMUX('Z', 6, AF4)>; /* USART1_CK */
+			drive-push-pull;
+			bias-disable;
+		};
+		pins2 {
+			pinmux = <STM32_PINMUX('Z', 7, AF7)>; /* USART1_TX_RX */
+			drive-open-drain;
+			bias-disable;
+		};
+	};
+
+	usart1_idle_pins_a: usart1-idle-0 {
+		pins {
+			pinmux = <STM32_PINMUX('Z', 7, ANALOG)>, /* USART1_TX_RX */
+				 <STM32_PINMUX('Z', 6, ANALOG)>; /* USART1_CK */
+		};
+	};
+
+	usart1_sleep_pins_a: usart1-sleep-0 {
+		pins {
+			pinmux = <STM32_PINMUX('Z', 7, ANALOG)>, /* USART1_TX_RX */
+				 <STM32_PINMUX('Z', 6, ANALOG)>; /* USART1_CK */
+		};
+	};
 };
