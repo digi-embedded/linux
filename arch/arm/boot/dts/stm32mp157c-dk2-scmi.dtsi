@@ -29,7 +29,7 @@
 };
 
 &dsi {
-	phy-dsi-supply = <&scmi_reg18>;
+	phy-dsi-supply = <&reg18>;
 	clocks = <&rcc DSI_K>, <&scmi_clk CK_SCMI_HSE>, <&rcc DSI_PX>;
 };
 
