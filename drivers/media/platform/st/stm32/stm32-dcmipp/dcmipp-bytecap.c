@@ -470,9 +470,6 @@ static int dcmipp_pipeline_s_stream(struct dcmipp_bytecap_device *vcap,
 				__func__, subdev->name,
 				state ? "start" : "stop", ret);
 
-			if (!state)
-				v4l2_subdev_call(subdev, core, s_power, state);
-
 			return ret;
 		}
 
