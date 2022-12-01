@@ -15,7 +15,6 @@
 
 /dts-v1/;
 
-#include <dt-bindings/usb/pd.h>
 /* i.MX93 CPU */
 #include "../freescale/imx93.dtsi"
 /* Digi ConnectCore 93 (SOM) */
