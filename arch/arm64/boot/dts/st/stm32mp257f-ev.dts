@@ -10,6 +10,7 @@
 #include "stm32mp25xf.dtsi"
 #include "stm32mp25-pinctrl.dtsi"
 #include "stm32mp25xxai-pinctrl.dtsi"
+#include "stm32mp257f-ev-ca35tdcid-resmem.dtsi"
 
 / {
 	model = "STMicroelectronics STM32MP257F-EV Evaluation Board";
