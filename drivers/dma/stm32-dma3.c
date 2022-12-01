@@ -299,6 +299,8 @@ enum g_data_width {
 #define STM32_DMA3_DT_BREQ		BIT(8)		/* CTR2_BREQ */
 #define STM32_DMA3_DT_PFREQ		BIT(9)		/* CTR2_PFREQ */
 #define STM32_DMA3_DT_TCEM		GENMASK(13, 12)	/* CTR2_TCEM */
+#define STM32_DMA3_DT_NOPACK		BIT(16)		/* CTR1_PAM */
+
 /* .tr_conf_ext */
 #define STM32_DMA3_DT_SAO		GENMASK(12, 0)	/* CTR3_SAO */
 #define STM32_DMA3_DT_SDEC		BIT(13)		/* CBR1_SDEC */
@@ -810,16 +812,22 @@ static int stm32_dma3_chan_prep_hw(struct stm32_dma3_chan *chan, enum dma_transf
 
 	switch (dir) {
 	case DMA_MEM_TO_DEV:
-		/* Set source (memory) data width and burst */
-		sdw = stm32_dma3_get_max_dw(len, src_addr, chan->max_burst);
-		_ctr1 |= FIELD_PREP(CTR1_SDW_LOG2, ilog2(sdw));
-		sbl_max = stm32_dma3_get_max_burst(len, sdw, chan->max_burst);
-		_ctr1 |= FIELD_PREP(CTR1_SBL_1, sbl_max - 1);
-
 		/* Set destination (device) data width and burst */
 		ddw = min_t(u32, ddw, stm32_dma3_get_max_dw(len, dst_addr, chan->max_burst));
-		_ctr1 |= FIELD_PREP(CTR1_DDW_LOG2, ilog2(ddw));
 		dbl_max = min_t(u32, dbl_max, stm32_dma3_get_max_burst(len, ddw, chan->max_burst));
+
+		/* Set source (memory) data width and burst */
+		if (!!FIELD_GET(STM32_DMA3_DT_NOPACK, tr_conf)) {
+			sdw = ddw;
+			sbl_max = dbl_max;
+		} else {
+			sdw = stm32_dma3_get_max_dw(len, src_addr, chan->max_burst);
+			sbl_max = stm32_dma3_get_max_burst(len, sdw, chan->max_burst);
+		}
+
+		_ctr1 |= FIELD_PREP(CTR1_SDW_LOG2, ilog2(sdw));
+		_ctr1 |= FIELD_PREP(CTR1_SBL_1, sbl_max - 1);
+		_ctr1 |= FIELD_PREP(CTR1_DDW_LOG2, ilog2(ddw));
 		_ctr1 |= FIELD_PREP(CTR1_DBL_1, dbl_max - 1);
 
 		/* TODO: packing is not supported if PFREQ=1 */
@@ -841,14 +849,20 @@ static int stm32_dma3_chan_prep_hw(struct stm32_dma3_chan *chan, enum dma_transf
 	case DMA_DEV_TO_MEM:
 		/* Set source (device) data width and burst */
 		sdw = min_t(u32, sdw, stm32_dma3_get_max_dw(len, src_addr, chan->max_burst));
-		_ctr1 |= FIELD_PREP(CTR1_SDW_LOG2, ilog2(sdw));
 		sbl_max = min_t(u32, sbl_max, stm32_dma3_get_max_burst(len, sdw, chan->max_burst));
-		_ctr1 |= FIELD_PREP(CTR1_SBL_1, sbl_max - 1);
 
 		/* Set destination (memory) data width and burst */
-		ddw = stm32_dma3_get_max_dw(len, dst_addr, chan->max_burst);
+		if (!!FIELD_GET(STM32_DMA3_DT_NOPACK, tr_conf)) {
+			ddw = sdw;
+			dbl_max = sbl_max;
+		} else {
+			ddw = stm32_dma3_get_max_dw(len, dst_addr, chan->max_burst);
+			dbl_max = stm32_dma3_get_max_burst(len, ddw, chan->max_burst);
+		}
+
+		_ctr1 |= FIELD_PREP(CTR1_SDW_LOG2, ilog2(sdw));
+		_ctr1 |= FIELD_PREP(CTR1_SBL_1, sbl_max - 1);
 		_ctr1 |= FIELD_PREP(CTR1_DDW_LOG2, ilog2(ddw));
-		dbl_max = stm32_dma3_get_max_burst(len, ddw, chan->max_burst);
 		_ctr1 |= FIELD_PREP(CTR1_DBL_1, dbl_max - 1);
 
 		/* TODO: packing is not supported if PFREQ=1 */
