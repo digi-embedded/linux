@@ -132,7 +132,11 @@
 		regulator-max-microvolt = <5000000>;
 		regulator-always-on;
 	};
+};
 
+&adc {
+	vdd-supply = <&vdd>;
+	vdda-supply = <&vdda>;
 };
 
 &cpu0{
