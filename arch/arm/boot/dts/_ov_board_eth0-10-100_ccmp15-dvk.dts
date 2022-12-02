@@ -1,0 +1,61 @@
+/*
+ * Copyright 2022 Digi International Inc.
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+#include <dt-bindings/interrupt-controller/irq.h>
+#include <dt-bindings/gpio/gpio.h>
+
+/dts-v1/;
+/plugin/;
+
+/ {
+	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			overlay-description = "DVK: Ethernet 10/100";
+		};
+	};
+
+	fragment@1 {
+		target = <&ethernet0>;
+		__overlay__ {
+			pinctrl-names = "default", "sleep";
+			pinctrl-0 = <&ethernet0_rmii_pins_a>;
+			pinctrl-1 = <&ethernet0_rmii_sleep_pins_a>;
+			phy-mode = "rmii";
+			max-speed = <100>;
+			phy-handle = <&phy0>;
+			phy-supply = <&reg_3v3_eth_pwr>;
+			st,eth-ref-clk-sel = <1>;
+			st,ext-phyclk = <1>;
+
+			mdio0 {
+				#address-cells = <1>;
+				#size-cells = <0>;
+				compatible = "snps,dwmac-mdio";
+
+				phy0: ethernet-phy@0 {
+					reg = <0>;
+					compatible = "ethernet-phy-ieee802.3-c22";
+					smsc,disable-energy-detect;
+					reset-gpios = <&gpiog 0 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+					reset-assert-us = <1000>;
+					reset-deassert-us = <2000>;
+					interrupt-parent = <&gpiog>;
+					interrupts = <5 IRQ_TYPE_LEVEL_LOW>;
+				};
+			};
+		};
+	};
+};

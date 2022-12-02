@@ -892,4 +892,15 @@ config INPUT_STPMIC1_ONKEY
 	  To compile this driver as a module, choose M here: the
 	  module will be called stpmic1_onkey.
 
+config INPUT_MCA_PWRKEY
+	tristate "Digi ConnectCore SOMs Micro Controller Assist Power key"
+	select MFD_MCA
+	help
+	  If you say Y here you will get support for the Power Key in the
+	  Micro Controller Assist of Digi ConnectCore system-on-modules,
+	  as an input device, reporting the power input/button status.
+
+	  This driver can also be built as a module, if so, the module
+	  will be called "pwrkey-mca".
+
 endif

@@ -1,0 +1,243 @@
+* Digi ConnectCore 8 SoMs Micro-Controller Assist (MCA)
+
+The CC8 MCA consists of a varied group of sub-devices (I2C Only):
+
+Device                   Description
+------                   ------------
+adc                      ADC channels (multiplexed with IOs)
+gpio                     IO pins (multiplexed with ADCs)
+pwrkey                   Power key
+rtc                      Real-Time Clock
+watchdog                 Watchdog
+
+======
+
+Required properties:
+
+- compatible: must be "digi,mca-kl17".
+- reg : Specifies the I2C slave address (this defaults to 0x63 but it can be
+  modified to match the chip's OTP settings).
+- interrupt-parent : Specifies the reference to the interrupt controller for
+  the MCA.
+- interrupts : IRQ line information.
+- interrupt-controller
+
+Optional properties:
+
+- fw-update-gpio : Control GPIO for MCA firmware update.
+
+Sub-nodes:
+
+- adc : This node defines settings for the ADC channels associated with the
+  MCA. Refer to binding at:
+  "Documentation/devicetree/bindings/iio/adc/digi,mca-adc.txt"
+
+- gpio : This node defines settings for the GPIO pins associated with the MCA.
+  Refer to binding at:
+  "Documentation/devicetree/bindings/gpio/gpio-mca.txt"
+
+- pwrkey : This node defines settings for the power key associated with the MCA.
+  Refer to binding at:
+  "Documentation/devicetree/bindings/input/digi,mca-powerkey.txt"
+
+- rtc : This node defines settings for the Real-Time Clock associated with
+  the MCA. Refer to binding at:
+  "Documentation/devicetree/bindings/rtc/digi,mca-rtc.txt"
+
+- tamper : The presence of this node enables the tamper support.
+
+- pwms : This node defines settings for the MCA PWMs.  Refer to binding at:
+  "Documentation/devicetree/bindings/pwm/digi,mca-pwm.txt"
+
+- uart : This node defines settings for the MCA UARTs. Refer to binding at:
+  "Documentation/devicetree/bindings/serial/digi,mca-uart.txt"
+
+- watchdog : This node defines settings for the Watchdog timer associated
+  with the MCA. Refer to binding at:
+  "Documentation/devicetree/bindings/watchdog/mca-wdt.txt"
+
+
+
+Example:
+
+	mca_cc8x: mca@63 {
+		compatible = "digi,mca-kl17";
+		reg = <0x63>;
+		interrupt-parent = <&wu>;
+		interrupts = <GIC_SPI 177 IRQ_TYPE_EDGE_HIGH>;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+		fw-update-gpio = <&gpio3 9 GPIO_ACTIVE_LOW>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_mca_cc8x>;
+
+		adc {
+			compatible = "digi,mca-adc";
+			digi,adc-ch-list = <4>;
+		};
+
+		gpio {
+			compatible = "digi,mca-gpio";
+			gpio-controller;
+			#gpio-cells = <2>;
+
+			interrupt-parent = <&mca_cc8x>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
+
+			/* Disable all mca GPIOs as power off wake up sources */
+			pwroff-wakeup-capable-ios = <>;
+		};
+
+		pwms {
+			compatible = "digi,mca-pwm";
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			mca_pwm0: pwm@0 {
+				reg = <0>;
+				pwm-channels = <6>;
+				#pwm-cells = <3>;
+			};
+
+			mca_pwm1: pwm@1 {
+				reg = <1>;
+				pwm-channels = <2>;
+				#pwm-cells = <3>;
+			};
+
+			mca_pwm2: pwm@2 {
+				reg = <2>;
+				pwm-channels = <2>;
+				#pwm-cells = <3>;
+			};
+		};
+
+		pwrkey {
+			compatible = "digi,mca-pwrkey";
+			digi,key-power;
+			digi,key-power-up;
+			digi,key-sleep;
+			digi,debounce-ms = <100>;
+			digi,pwroff-delay-sec = <6>;
+			digi,pwroff-guard-sec = <30>;
+		};
+
+		rtc {
+			compatible = "digi,mca-rtc";
+		};
+
+		tamper {
+			compatible = "digi,mca-tamper";
+		};
+
+		uart {
+			compatible = "digi,mca-uart";
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			mca_uart0: serial@0x900 {
+				reg = <0x900>;
+				index = <0>;
+			};
+
+			mca_uart1: serial@0x920 {
+				reg = <0x920>;
+				index = <1>;
+			};
+
+			mca_uart2: serial@0x940 {
+				reg = <0x940>;
+				index = <2>;
+			};
+		};
+
+		wdt {
+			compatible = "digi,mca-wdt";
+		};
+	};
+
+	mca_cc8m: mca@63 {
+		compatible = "digi,mca-kl17";
+		reg = <0x63>;
+		interrupt-parent = <&gpio3>;
+		interrupts = <8 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+		fw-update-gpio = <&gpio1 4 GPIO_ACTIVE_LOW>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_mca_cc8m>;
+
+		adc {
+			compatible = "digi,mca-adc";
+			digi,adc-ch-list = <4>;
+		};
+
+		gpio {
+			compatible = "digi,mca-gpio";
+			gpio-controller;
+			#gpio-cells = <2>;
+
+			interrupt-parent = <&mca_cc8m>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
+
+			/* Disable all mca GPIOs as power off wake up sources */
+			pwroff-wakeup-capable-ios = <>;
+		};
+
+		pwms {
+			compatible = "digi,mca-pwm";
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			pwm@0 {
+				reg = <0>;
+				pwm-channels = <6>;
+				#pwm-cells = <3>;
+			};
+		};
+
+		pwrkey {
+			compatible = "digi,mca-pwrkey";
+			digi,key-power;
+			digi,key-power-up;
+			digi,key-sleep;
+			digi,debounce-ms = <100>;
+			digi,pwroff-delay-sec = <6>;
+			digi,pwroff-guard-sec = <30>;
+		};
+
+		rtc {
+			compatible = "digi,mca-rtc";
+		};
+
+		tamper {
+			compatible = "digi,mca-tamper";
+		};
+
+		uart {
+			compatible = "digi,mca-uart";
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			mca_uart0: serial@0x900 {
+				reg = <0x900>;
+				index = <0>;
+			};
+
+			mca_uart1: serial@0x920 {
+				reg = <0x920>;
+				index = <1>;
+			};
+
+			mca_uart2: serial@0x940 {
+				reg = <0x940>;
+				index = <2>;
+			};
+		};
+
+		wdt {
+			compatible = "digi,mca-wdt";
+		};
+	};

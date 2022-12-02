@@ -1,0 +1,107 @@
+/*
+ * Copyright 2022 Digi International Inc.
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+/dts-v1/;
+/plugin/;
+
+/ {
+	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			overlay-description = "DVK: AUO 10\" LVDS display";
+		};
+	};
+
+	/* Enable backlight support */
+	fragment@1 {
+		target = <&display_bl>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+
+	/* Disable LT8912 */
+	fragment@2 {
+		target = <&lt_bridge>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	/* Add AUO G101EVN01.0 panel*/
+	fragment@3 {
+		target-path = "/";
+		__overlay__ {
+			panel {
+				compatible = "auo,g101evn010", "simple-panel";
+				power-supply = <&v3v3>;
+				backlight = <&display_bl>;
+
+				port {
+					panel_in: endpoint {
+						remote-endpoint = <&ltdc_ep0_out>;
+					};
+				};
+			};
+		};
+	};
+
+	/* Disable XBee USART3 because shares pins with LTDC */
+	fragment@4 {
+		target = <&usart3>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	/* Enable Goodix touch panel */
+	fragment@5 {
+		target = <&goodix_touch>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+
+	fragment@6 {
+		target = <&goodix_touch2>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+
+	/* Display Controller for LVDS */
+	fragment@7 {
+		target = <&ltdc>;
+		__overlay__ {
+			pinctrl-names = "default", "sleep";
+			pinctrl-0 = <&ccmp15_ltdc_18_bits_pins>;
+			pinctrl-1 = <&ccmp15_ltdc_sleep_pins>;
+
+			port {
+				ltdc_ep0_out: endpoint {
+					remote-endpoint = <&panel_in>;
+				};
+			};
+		};
+	};
+
+	/* Disable DSI */
+	fragment@8 {
+		target = <&dsi>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+};
