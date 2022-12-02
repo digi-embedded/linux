@@ -252,10 +252,7 @@
 };*/
 
 &vrefbuf {
-	regulator-min-microvolt = <1500000>;
-	regulator-max-microvolt = <1500000>;
-	vdda-supply = <&vdd>;
-	status = "okay";
+	vdda-supply = <&vdda>;
 };
 
 &fmc {

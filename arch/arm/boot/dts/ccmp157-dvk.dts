@@ -119,7 +119,7 @@
 
 &adc {
 	/* ANA0, ANA1 are dedicated pins and don't need pinctrl */
-	vref-supply = <&vdda>;
+	vref-supply = <&vrefbuf>;
 	status = "okay";
 
 	adc1: adc@0 {
