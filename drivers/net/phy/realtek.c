@@ -421,6 +421,16 @@ static int rtl8211f_config_init(struct phy_device *phydev)
 		}
 	}
 
+	if (of_property_read_bool(dev->of_node, "realtek,eee-disable")) {
+		rtl821x_write_page(phydev, 0xa4b);
+		phy_write(phydev, 0x11, 0x1110);
+		rtl821x_write_page(phydev, 0);
+		phy_write(phydev, 0xd,7);
+		phy_write(phydev, 0xe,0x3c);
+		phy_write(phydev, 0xd,0x4007);
+		phy_write(phydev, 0xe,0x0);
+	}
+
 	return genphy_soft_reset(phydev);
 }
 
