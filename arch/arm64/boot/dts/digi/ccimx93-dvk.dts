@@ -278,7 +278,7 @@
 
 &eqos {
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_eqos>;
+	pinctrl-0 = <&pinctrl_eqos>, <&pinctrl_eth_mdio>;
 	phy-mode = "rgmii-id";
 	phy-handle = <&ethphy0>;
 	status = "okay";
@@ -339,8 +339,6 @@
 	/* Ethernet 1 */
 	pinctrl_eqos: eqosgrp {
 		fsl,pins = <
-			MX93_PAD_ENET1_MDC__ENET_QOS_MDC			0x57e
-			MX93_PAD_ENET1_MDIO__ENET_QOS_MDIO			0x57e
 			MX93_PAD_ENET1_RD0__ENET_QOS_RGMII_RD0			0x57e
 			MX93_PAD_ENET1_RD1__ENET_QOS_RGMII_RD1			0x57e
 			MX93_PAD_ENET1_RD2__ENET_QOS_RGMII_RD2			0x57e
@@ -355,6 +353,14 @@
 			MX93_PAD_ENET1_TX_CTL__ENET_QOS_RGMII_TX_CTL		0x57e
 			/* PHY reset */
 			MX93_PAD_ENET2_MDIO__GPIO4_IO15                         0x31e
+		>;
+	};
+
+	/* Ethernet MDIO, shared by both interfaces */
+	pinctrl_eth_mdio: ethmdio {
+		fsl,pins = <
+			MX93_PAD_ENET1_MDC__ENET_QOS_MDC			0x57e
+			MX93_PAD_ENET1_MDIO__ENET_QOS_MDIO			0x57e
 		>;
 	};
 
