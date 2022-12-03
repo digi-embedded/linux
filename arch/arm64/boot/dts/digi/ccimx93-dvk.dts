@@ -29,6 +29,56 @@
 		stdout-path = &lpuart6;
 	};
 
+	lvds_backlight: lvds_backlight {
+		compatible = "pwm-backlight";
+		pwms = <&mca_pwm0 4 100000 0>;
+
+		brightness-levels = < 0  1  2  3  4  5  6  7  8  9
+				     10 11 12 13 14 15 16 17 18 19
+				     20 21 22 23 24 25 26 27 28 29
+				     30 31 32 33 34 35 36 37 38 39
+				     40 41 42 43 44 45 46 47 48 49
+				     50 51 52 53 54 55 56 57 58 59
+				     60 61 62 63 64 65 66 67 68 69
+				     70 71 72 73 74 75 76 77 78 79
+				     80 81 82 83 84 85 86 87 88 89
+				     90 91 92 93 94 95 96 97 98 99
+				    100>;
+		default-brightness-level = <80>;
+		power-supply = <&reg_5v_board>;
+		status = "disabled";
+	};
+
+	lvds_panel: lvds_panel {
+		compatible = "panel-lvds";
+		status = "disabled";
+
+		port {
+			panel_lvds_in: endpoint {
+				remote-endpoint = <&lvds_out>;
+			};
+		};
+
+	};
+
+	regulators {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		reg_5v_board: regulator@1 {
+			compatible = "regulator-fixed";
+			reg = <4>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_reg_5v_board>;
+			regulator-name = "5v_board";
+			regulator-min-microvolt = <5000000>;
+			regulator-max-microvolt = <5000000>;
+			gpio = <&gpio1 6 GPIO_ACTIVE_HIGH>;
+			enable-active-high;
+		};
+	};
+
 	sound_max98089: sound-max98089 {
 		compatible = "fsl,imx-audio-max98088";
 		model = "imx-max98088";
@@ -85,6 +135,26 @@
 &lcdif {
 	status = "okay";
 	assigned-clock-rates = <445333333>, <148444444>, <400000000>, <133333333>;
+};
+
+&ldb {
+	status = "disabled";
+
+	lvds-channel@0 {
+		status = "disabled";
+
+		port@1 {
+			reg = <1>;
+
+			lvds_out: endpoint {
+				remote-endpoint = <&panel_lvds_in>;
+			};
+		};
+	};
+};
+
+&ldb_phy {
+	status = "disabled";
 };
 
 /* I2C3 - HDMI bridge, ... */
@@ -182,6 +252,21 @@
 		// Add regulators when defined for the DVK
 		// vcc-supply = <&reg_3v3_audio>;
 		// dvdd-supply = <&reg_1v8_ext>;
+	};
+
+	goodix_touch: gt9271@5d {
+		compatible = "goodix,gt9271";
+		reg = <0x5d>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_touch>;
+		/* LVDS interrupt */
+		interrupt-parent = <&gpio2>;
+		interrupts = <24 IRQ_TYPE_EDGE_FALLING>;
+		irq-gpios = <&gpio2 24 GPIO_ACTIVE_LOW>;
+		reload-fw-on-resume;
+		skip-firmware-request;
+		vin-supply = <&reg_5v_board>;
+		status = "disabled";
 	};
 };
 
@@ -299,6 +384,14 @@
 		>;
 	};
 
+	/* DVK 5V power switch */
+	pinctrl_reg_5v_board: reg_5v_board_grp {
+		fsl,pins = <
+			/* 5V regulator power enable */
+			MX93_PAD_SAI1_RXD0__GPIO1_IO14				0x31e
+		>;
+	};
+
 	/* Audio Interface */
 	pinctrl_sai3: sai3grp {
 		fsl,pins = <
@@ -307,6 +400,14 @@
 			MX93_PAD_GPIO_IO26__SAI3_TX_SYNC			0x31e
 			MX93_PAD_GPIO_IO16__SAI3_TX_BCLK			0x31e
 			MX93_PAD_GPIO_IO17__SAI3_MCLK				0x31e
+		>;
+	};
+
+	/* LVDS touch interface IOs */
+	pinctrl_touch: touchgrp {
+		fsl,pins = <
+			/* LVDS touch interrupt */
+			MX93_PAD_GPIO_IO24__GPIO2_IO24				0x31e
 		>;
 	};
 
@@ -338,4 +439,3 @@
 		>;
 	};
 };
-
