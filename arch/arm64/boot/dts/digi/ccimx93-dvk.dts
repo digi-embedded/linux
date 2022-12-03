@@ -302,6 +302,27 @@
 	};
 };
 
+&fec {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_fec>, <&pinctrl_eth_mdio>;
+	phy-mode = "rgmii-id";
+	phy-handle = <&ethphy1>;
+	fsl,magic-packet;
+	status = "okay";
+
+	mdio {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		ethphy1: ethernet-phy@1 {
+			/* PHY ID for Marvell 88E1512 */
+			compatible = "ethernet-phy-id0141.0dd0";
+			reg = <1>;
+			eee-broken-1000t;
+		};
+	};
+};
+
 /* Audio interface */
 &sai3 {
 	pinctrl-names = "default";
@@ -361,6 +382,24 @@
 		fsl,pins = <
 			MX93_PAD_ENET1_MDC__ENET_QOS_MDC			0x57e
 			MX93_PAD_ENET1_MDIO__ENET_QOS_MDIO			0x57e
+		>;
+	};
+
+	/* Ethernet 2 */
+	pinctrl_fec: fecgrp {
+		fsl,pins = <
+			MX93_PAD_ENET2_RD0__ENET1_RGMII_RD0			0x57e
+			MX93_PAD_ENET2_RD1__ENET1_RGMII_RD1			0x57e
+			MX93_PAD_ENET2_RD2__ENET1_RGMII_RD2			0x57e
+			MX93_PAD_ENET2_RD3__ENET1_RGMII_RD3			0x57e
+			MX93_PAD_ENET2_RXC__ENET1_RGMII_RXC			0x5fe
+			MX93_PAD_ENET2_RX_CTL__ENET1_RGMII_RX_CTL		0x57e
+			MX93_PAD_ENET2_TD0__ENET1_RGMII_TD0			0x57e
+			MX93_PAD_ENET2_TD1__ENET1_RGMII_TD1			0x57e
+			MX93_PAD_ENET2_TD2__ENET1_RGMII_TD2			0x57e
+			MX93_PAD_ENET2_TD3__ENET1_RGMII_TD3			0x57e
+			MX93_PAD_ENET2_TXC__ENET1_RGMII_TXC			0x5fe
+			MX93_PAD_ENET2_TX_CTL__ENET1_RGMII_TX_CTL		0x57e
 		>;
 	};
 
