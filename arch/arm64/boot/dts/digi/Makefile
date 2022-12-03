@@ -44,5 +44,9 @@ dtb-$(CONFIG_ARCH_MXC) += _ov_board_flexcan1_ccimx8x-sbc-pro.dtbo \
 
 endif
 
-ccimx93-dtbs := ccimx93-dvk.dtb _ov_som_wifi_ccimx93.dtbo _ov_som_bt_ccimx93.dtbo
-dtb-$(CONFIG_ARCH_MXC) += ccimx93.dtb
+ccimx93-dtbs :=		   ccimx93-dvk.dtb \
+			   _ov_som_wifi_ccimx93.dtbo \
+			   _ov_som_bt_ccimx93.dtbo \
+			   _ov_board_lvds_ccimx93-dvk.dtbo
+
+dtb-$(CONFIG_ARCH_MXC) +=  ccimx93.dtb
