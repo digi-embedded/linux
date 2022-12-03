@@ -354,17 +354,12 @@ err_free:
 static int mca_pwm_remove(struct platform_device *pdev)
 {
 	struct mca_pwm_drv *pwm_drv = platform_get_drvdata(pdev);
-	int ret, i;
+	int i;
 
 	for (i = 0; i < pwm_drv->num_tpms; i++) {
 		struct mca_tpm_mod *tpm = &pwm_drv->tpms[i];
 
-		ret = pwmchip_remove(&tpm->chip);
-		if (ret) {
-			dev_warn(&pdev->dev,
-				 "error removing PWM chip (tpm: %d)\n",
-				 tpm->tpm_idx);
-		}
+		pwmchip_remove(&tpm->chip);
 	}
 
 	kfree(pwm_drv->tpms);
