@@ -98,13 +98,12 @@ static int __maybe_unused onboard_hub_suspend(struct device *dev)
 	mutex_lock(&hub->lock);
 
 	list_for_each_entry(node, &hub->udev_list, list) {
-		if (!device_may_wakeup(node->udev->bus->controller))
+		if (!device_may_wakeup(node->udev->bus->controller) &&
+		    !usb_wakeup_enabled_descendants(node->udev))
 			continue;
 
-		if (usb_wakeup_enabled_descendants(node->udev)) {
-			power_off = false;
-			break;
-		}
+		power_off = false;
+		break;
 	}
 
 	mutex_unlock(&hub->lock);
