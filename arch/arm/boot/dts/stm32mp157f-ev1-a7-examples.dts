@@ -30,6 +30,26 @@
 	};
 };
 
+&adc {
+	status = "okay";
+};
+
+&dac {
+	status = "okay";
+};
+
+&timers2 {
+	status = "okay";
+};
+
+&timers8 {
+	status = "okay";
+};
+
+&timers12 {
+	status = "okay";
+};
+
 &usart3 {
 	status = "okay";
 };
