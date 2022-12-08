@@ -48,6 +48,9 @@
 	status = "okay";
 
 	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
 		port@0 {
 			reg = <0>;
 			dsi_in_ltdc: endpoint {
@@ -103,8 +106,7 @@
 	status = "okay";
 
 	port {
-		ltdc_out_dsi: endpoint@0 {
-			reg = <0>;
+		ltdc_out_dsi: endpoint {
 			remote-endpoint = <&dsi_in_ltdc>;
 		};
 	};
