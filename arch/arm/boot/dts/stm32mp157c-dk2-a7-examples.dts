@@ -13,6 +13,30 @@
 	compatible = "st,stm32mp157c-dk2-a7-examples", "st,stm32mp157c-dk2", "st,stm32mp157";
 };
 
+&timers1 {
+	status = "okay";
+};
+
+&timers3 {
+	status = "okay";
+};
+
+&timers4 {
+	status = "okay";
+};
+
+&timers5 {
+	status = "okay";
+};
+
+&timers6 {
+	status = "okay";
+};
+
+&timers12 {
+	status = "okay";
+};
+
 &uart7 {
 	status = "okay";
 };
