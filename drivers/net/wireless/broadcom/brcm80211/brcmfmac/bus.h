@@ -205,6 +205,11 @@ struct brcmf_bus {
 #ifdef CONFIG_BRCMFMAC_BT_SHARED_SDIO
 	struct brcmf_bt_dev *bt_dev;
 #endif /* CONFIG_BRCMFMAC_BT_SHARED_SDIO */
+#ifdef CONFIG_INFFMAC_BT_SHARED_SDIO
+	struct inf_bt_if *bt_if;
+#endif /* CONFIG_INFFMAC_BT_SHARED_SDIO */
+
+
 };
 
 /*

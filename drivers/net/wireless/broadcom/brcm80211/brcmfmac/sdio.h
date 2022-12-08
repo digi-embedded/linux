@@ -232,6 +232,7 @@ struct brcmf_ulp_event {
 struct brcmf_sdio_dev {
 	struct sdio_func *func1;
 	struct sdio_func *func2;
+	struct sdio_func *func3;
 	u32 sbwad;			/* Save backplane window address */
 	struct brcmf_core *cc_core;	/* chipcommon core info struct */
 	struct brcmf_sdio *bus;
@@ -436,6 +437,7 @@ void brcmf_sdio_wd_timer(struct brcmf_sdio *bus, bool active);
 void brcmf_sdio_wowl_config(struct device *dev, bool enabled);
 int brcmf_sdio_sleep(struct brcmf_sdio *bus, bool sleep);
 void brcmf_sdio_trigger_dpc(struct brcmf_sdio *bus);
+u32 brcmf_sdio_get_enum_addr(struct brcmf_sdio *bus);
 
 /* SHM offsets */
 #define M_DS1_CTRL_SDIO(ptr)	((ptr).ulp_shm_offset.m_ulp_ctrl_sdio)
