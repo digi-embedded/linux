@@ -66,6 +66,7 @@ struct brcmf_mp_device {
 	bool		sdio_rxf_in_kthread_enabled;
 	unsigned int	offload_prof;
 	unsigned int	offload_feat;
+	bool		bt_over_sdio;
 	struct brcmfmac_pd_cc *country_codes;
 	const char	*board_type;
 	unsigned char	mac[ETH_ALEN];

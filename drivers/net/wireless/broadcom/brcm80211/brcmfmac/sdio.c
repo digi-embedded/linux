@@ -5533,3 +5533,8 @@ static int brcmf_ulp_event_notify(struct brcmf_if *ifp,
 
 	return err;
 }
+
+u32 brcmf_sdio_get_enum_addr(struct brcmf_sdio *bus)
+{
+	return bus->sdio_core->base;
+}
