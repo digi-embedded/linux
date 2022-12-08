@@ -17,6 +17,7 @@
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <linux/reset.h>
+#include <media/v4l2-ctrls.h>
 #include <media/v4l2-ioctl.h>
 #include <media/v4l2-mc.h>
 #include <media/videobuf2-core.h>
@@ -40,7 +41,23 @@
  * a subset: how to make it configurable ??
  */
 
+#define DCMIPP_P1STSTR	(0x85C)
+#define DCMIPP_P1STSTR_HSTART_SHIFT	0
+#define DCMIPP_P1STSTR_HSTART_MASK	GENMASK(11, 0)
+#define DCMIPP_P1STSTR_VSTART_SHIFT	16
+#define DCMIPP_P1STSTR_VSTART_MASK	GENMASK(27, 16)
+
+#define DCMIPP_P1STSZR	(0x860)
+#define DCMIPP_P1STSZR_HSIZE_SHIFT	0
+#define DCMIPP_P1STSZR_HSIZE_MASK	GENMASK(11, 0)
+#define DCMIPP_P1STSZR_VSIZE_SHIFT	16
+#define DCMIPP_P1STSZR_VSIZE_MASK	GENMASK(27, 16)
+#define DCMIPP_P1STSZR_ENABLE		BIT(31)
+
 #define DCMIPP_P1STXSR(a) (0x864 + ((a) * 0x4))
+
+#define DCMIPP_NB_STAT_REGION	1
+
 /*
  * TODO - should be moved to an include file accessible from user space,
  * such as within uapi folder
@@ -89,6 +106,9 @@ struct dcmipp_statcap_device {
 	struct video_device vdev;
 	struct device *dev;
 	struct device *cdev;
+	struct v4l2_ctrl_handler ctrls;
+	/* Protect ctrls */
+	struct mutex ctrl_lock;
 	struct vb2_queue queue;
 	struct list_head buffers;
 	/* Protects the access of variables shared within the interrupt */
@@ -100,6 +120,7 @@ struct dcmipp_statcap_device {
 	u32 frame_width;
 	u32 frame_height;
 	u32 frame_format;
+	struct v4l2_rect stat_region[DCMIPP_NB_STAT_REGION];
 	u32 nb_comp_pix[COMP_MAX];
 
 	/*
@@ -538,6 +559,69 @@ static const struct media_entity_operations dcmipp_statcap_mops = {
 	.link_validate		= dcmipp_link_validate,
 };
 
+static int dcmipp_statcap_s_ctrl(struct v4l2_ctrl *ctrl)
+{
+	struct dcmipp_statcap_device *vcap =
+			container_of(ctrl->handler, struct dcmipp_statcap_device, ctrls);
+	struct v4l2_ctrl_isp_stat_region *region;
+	int i;
+
+	dev_dbg(vcap->dev, ">> %s: ctrl->id = 0x%x\n", __func__, ctrl->id);
+
+	switch (ctrl->id) {
+	case V4L2_CID_ISP_STAT_REGION:
+		region = (struct v4l2_ctrl_isp_stat_region *)ctrl->p_new.p;
+		if (region->nb_regions > DCMIPP_NB_STAT_REGION) {
+			dev_dbg(vcap->dev, "Unsupported number of stat region: %d vs max=%d\n",
+				region->nb_regions, DCMIPP_NB_STAT_REGION);
+			return -EINVAL;
+		}
+		for (i = 0; i < region->nb_regions; i++) {
+			vcap->stat_region[i].width = region->width[i];
+			vcap->stat_region[i].height = region->height[i];
+			vcap->stat_region[i].left = region->left[i];
+			vcap->stat_region[i].top = region->top[i];
+
+			/* This hardware supports only one region */
+			if (!i) {
+				/* Update window size and start */
+				reg_clear(vcap, DCMIPP_P1STSTR,
+					  DCMIPP_P1STSTR_HSTART_MASK | DCMIPP_P1STSTR_VSTART_MASK);
+				reg_set(vcap, DCMIPP_P1STSTR,
+					(region->left[i] << DCMIPP_P1STSTR_HSTART_SHIFT) |
+					(region->top[i] << DCMIPP_P1STSTR_VSTART_SHIFT));
+
+				reg_clear(vcap, DCMIPP_P1STSZR,
+					  DCMIPP_P1STSZR_HSIZE_MASK | DCMIPP_P1STSZR_VSIZE_MASK);
+				reg_set(vcap, DCMIPP_P1STSZR,
+					(region->width[i] << DCMIPP_P1STSZR_HSIZE_SHIFT) |
+					(region->height[i] << DCMIPP_P1STSZR_VSIZE_SHIFT) |
+					DCMIPP_P1STSZR_ENABLE);
+			}
+		}
+
+		/* Update number of pixels per components */
+		for (i = 0; i < COMP_MAX; i++)
+			vcap->nb_comp_pix[i] = dcmipp_statcap_get_nb_comp_pix(vcap, i);
+		break;
+	}
+
+	return 0;
+};
+
+static const struct v4l2_ctrl_ops dcmipp_statcap_ctrl_ops = {
+	.s_ctrl = dcmipp_statcap_s_ctrl,
+};
+
+static const struct v4l2_ctrl_config dcmipp_statcap_ctrls[] = {
+	{
+		.ops	= &dcmipp_statcap_ctrl_ops,
+		.id	= V4L2_CID_ISP_STAT_REGION,
+		.type	= V4L2_CTRL_TYPE_ISP_STAT_REGION,
+		.name	= "ISP stat region control",
+	}
+};
+
 static void dcmipp_statcap_release(struct video_device *vdev)
 {
 	struct dcmipp_statcap_device *vcap =
@@ -728,7 +812,7 @@ static int dcmipp_statcap_comp_bind(struct device *comp, struct device *master,
 	struct dcmipp_statcap_device *vcap;
 	struct video_device *vdev;
 	struct vb2_queue *q;
-	int ret = 0;
+	int i, ret = 0;
 
 	/* Allocate the dcmipp_cap_device struct */
 	vcap = kzalloc(sizeof(*vcap), GFP_KERNEL);
@@ -800,16 +884,38 @@ static int dcmipp_statcap_comp_bind(struct device *comp, struct device *master,
 	strscpy(vdev->name, pdata->entity_name, sizeof(vdev->name));
 	video_set_drvdata(vdev, &vcap->ved);
 
+	/* Add controls */
+	v4l2_ctrl_handler_init(&vcap->ctrls, ARRAY_SIZE(dcmipp_statcap_ctrls));
+	vcap->ctrls.lock = &vcap->ctrl_lock;
+
+	for (i = 0; i < ARRAY_SIZE(dcmipp_statcap_ctrls); i++) {
+		v4l2_ctrl_new_custom(&vcap->ctrls, &dcmipp_statcap_ctrls[i], NULL);
+		ret = vcap->ctrls.error;
+		if (ret < 0) {
+			dev_err(vcap->dev, "Control initialization error %d\n",	ret);
+			goto err_clean_ctrl_hdl;
+		}
+	}
+	vcap->vdev.ctrl_handler = &vcap->ctrls;
+
+	ret = v4l2_ctrl_handler_setup(&vcap->ctrls);
+	if (ret < 0) {
+		dev_err(vcap->dev, "Failed to set up control handlers (%d)\n", ret);
+		goto err_clean_ctrl_hdl;
+	}
+
 	/* Register the video_device with the v4l2 and the media framework */
 	ret = video_register_device(vdev, VFL_TYPE_VIDEO, -1);
 	if (ret) {
 		dev_err(comp, "%s: video register failed (err=%d)\n",
 			vcap->vdev.name, ret);
-		goto err_clean_m_ent;
+		goto err_clean_ctrl_hdl;
 	}
 
 	return 0;
 
+err_clean_ctrl_hdl:
+	v4l2_ctrl_handler_free(&vcap->ctrls);
 err_clean_m_ent:
 	media_entity_cleanup(&vcap->vdev.entity);
 err_clean_pads:
