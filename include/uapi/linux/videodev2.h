@@ -1876,6 +1876,7 @@ enum v4l2_ctrl_type {
 
 	V4L2_CTRL_TYPE_ISP_EXPOSURE        = 0x0300,
 	V4L2_CTRL_TYPE_ISP_CONTRAST        = 0x0301,
+	V4L2_CTRL_TYPE_ISP_STAT_REGION     = 0x0310,
 };
 
 /*  Used in the VIDIOC_QUERYCTRL ioctl for querying controls */

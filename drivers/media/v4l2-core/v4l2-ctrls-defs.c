@@ -1122,6 +1122,7 @@ const char *v4l2_ctrl_get_name(u32 id)
 	case V4L2_CID_DIGITAL_GAIN:		return "Digital Gain";
 	case V4L2_CID_ISP_EXPOSURE:		return "ISP Exposure";
 	case V4L2_CID_ISP_CONTRAST:		return "ISP Contrast";
+	case V4L2_CID_ISP_STAT_REGION:		return "ISP Stat Region";
 
 	/* DV controls */
 	/* Keep the order of the 'case's the same as in v4l2-controls.h! */
@@ -1546,6 +1547,9 @@ void v4l2_ctrl_fill(u32 id, const char **name, enum v4l2_ctrl_type *type,
 		break;
 	case V4L2_CID_ISP_CONTRAST:
 		*type = V4L2_CTRL_TYPE_ISP_CONTRAST;
+		break;
+	case V4L2_CID_ISP_STAT_REGION:
+		*type = V4L2_CTRL_TYPE_ISP_STAT_REGION;
 		break;
 	default:
 		*type = V4L2_CTRL_TYPE_INTEGER;
