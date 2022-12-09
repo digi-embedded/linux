@@ -52,7 +52,7 @@
 		};
 	};
 
-	panel@0 {
+	panel_otm8009a: panel-otm8009a@0 {
 		compatible = "orisetech,otm8009a";
 		reg = <0>;
 		reset-gpios = <&gpioe 4 GPIO_ACTIVE_LOW>;
@@ -78,6 +78,7 @@
 		touchscreen-size-y = <800>;
 		vcc-supply = <&v3v3>;
 		iovcc-supply = <&v3v3>;
+		panel = <&panel_otm8009a>;
 		status = "okay";
 	};
 };
