@@ -24,6 +24,11 @@
 		mmc2 = &usdhc1;
 	};
 
+	memory@40000000 {
+		device_type = "memory";
+		reg = <0x0 0x40000000 0 0x80000000>;
+	};
+
 	/* Bluetooth, disabled by default */
 	bluetooth: bluetooth {
 		/* U-Boot will fill in the MAC address here */
@@ -120,6 +125,18 @@
 };
 
 &A53_0 {
+	arm-supply = <&buck2_reg_pca9450>;
+};
+
+&A53_1 {
+	arm-supply = <&buck2_reg_pca9450>;
+};
+
+&A53_2 {
+	arm-supply = <&buck2_reg_pca9450>;
+};
+
+&A53_3 {
 	arm-supply = <&buck2_reg_pca9450>;
 };
 
@@ -259,7 +276,7 @@
 	/* NXP PCA9450 PMIC */
 	pmic_pca9450: pca9450@25 {
 		reg = <0x25>;
-		compatible = "nxp,pca9450";
+		compatible = "nxp,pca9450a";
 		status = "okay";
 
 		pca9450,pmic-buck1-uses-i2c-dvs;
@@ -387,16 +404,6 @@
 &ocotp {
 	/* By default, make the OTP bits read-only */
 	read-only;
-};
-
-&rpmsg{
-	/*
-	 * 64K for one rpmsg instance:
-	 * --0xb8000000~0xb800ffff: pingpong
-	 */
-	vdev-nums = <1>;
-	reg = <0x0 0xb8000000 0x0 0x10000>;
-	status = "okay";
 };
 
 /* Disable CPU RTC */
