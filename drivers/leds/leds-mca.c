@@ -18,8 +18,6 @@
 
 #include <linux/mfd/mca-common/core.h>
 
-#define MCA_DRVNAME_LED		"mca-led"
-
 #define MAX_NUM_LEDS		9
 #define MAX_BRIGHTNESS		19
 
