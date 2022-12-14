@@ -17,6 +17,9 @@ description: |
   Techstar TS8550B is 480x854, 2-lane MIPI DSI LCD panel which has
   inbuilt ST7701 chip.
 
+  DLC DLC0200CCP04DF-2 is 480x360, 2-lane MIPI DSI LCD panel which has
+  inbuilt ST7701 chip.
+
 allOf:
   - $ref: panel-common.yaml#
 
@@ -25,6 +28,7 @@ properties:
     items:
       - enum:
           - techstar,ts8550b
+          - dlc,dlc0200cc904df
       - const: sitronix,st7701
 
   reg:
