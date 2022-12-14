@@ -503,7 +503,7 @@ static int st7701_dsi_probe(struct mipi_dsi_device *dsi)
 	st7701->reset = devm_gpiod_get(&dsi->dev, "reset", GPIOD_OUT_LOW);
 	if (IS_ERR(st7701->reset)) {
 		dev_err(&dsi->dev, "Couldn't get our reset GPIO\n");
-		return PTR_ERR(st7701->reset);
+		st7701->reset = NULL;
 	}
 
 	drm_panel_init(&st7701->panel, &dsi->dev, &st7701_funcs,
