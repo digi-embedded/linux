@@ -21,6 +21,7 @@ properties:
     enum:
       - st,stm32mp13-sys-bus
       - st,stm32mp15-sys-bus
+      - st,stm32mp25-sys-bus
 
   reg:
     maxItems: 1
