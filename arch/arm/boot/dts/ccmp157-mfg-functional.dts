@@ -122,6 +122,58 @@
 	status = "okay";
 };
 
+/* Display Controller for MIPI-DSI to HDMI */
+&ltdc {
+	status = "okay";
+
+	port {
+		ltdc_ep0_out: endpoint {
+			remote-endpoint = <&dsi_in>;
+		};
+	};
+};
+
+&dsi {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	status = "okay";
+
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		port@0 {
+			reg = <0>;
+			dsi_in: endpoint {
+				remote-endpoint = <&ltdc_ep0_out>;
+			};
+		};
+
+		port@1 {
+			reg = <1>;
+			dsi_out: endpoint {
+				remote-endpoint = <&panel_in>;
+			};
+		};
+
+	};
+
+	panel@0 {
+		compatible = "dlc,dlc0200cc904df";
+		reg = <0>;
+		VCC-supply = <&v3v3>;
+		IOVCC-supply = <&v3v3>;
+		status = "okay";
+
+		port {
+			panel_in: endpoint {
+				remote-endpoint = <&dsi_out>;
+			};
+		};
+	};
+
+};
+
 &usbh_ehci {
 	phys = <&usbphyc_port0>;
 	phy-names = "usb";
