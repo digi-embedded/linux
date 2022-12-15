@@ -292,6 +292,7 @@
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&ccmp13_spi4_pins>;
 	pinctrl-1 = <&ccmp13_spi4_sleep_pins>;
+	cs-gpios = <&gpiod 10 0>;
 	status = "okay";
 
 	spidev@0{
@@ -600,8 +601,7 @@
 
 	ccmp13_spi4_pins: ccmp13-spi4-0 {
 		pins1 {
-			pinmux = <STM32_PINMUX('D', 10, AF5)>, /* SPI4_NSS */
-				 <STM32_PINMUX('E', 11, AF5)>, /* SPI4_MOSI */
+			pinmux = <STM32_PINMUX('E', 11, AF5)>, /* SPI4_MOSI */
 				 <STM32_PINMUX('E', 12, AF5)>; /* SPI4_SCK */
 			bias-disable;
 			drive-push-pull;
@@ -616,8 +616,7 @@
 
 	ccmp13_spi4_sleep_pins: ccmp13-spi4-sleep-0 {
 		pins {
-			pinmux = <STM32_PINMUX('D', 10, ANALOG)>, /* SPI4_NSS */
-				 <STM32_PINMUX('E', 11, ANALOG)>, /* SPI4_MOSI */
+			pinmux = <STM32_PINMUX('E', 11, ANALOG)>, /* SPI4_MOSI */
 				 <STM32_PINMUX('E', 12, ANALOG)>, /* SPI4_SCK */
 				 <STM32_PINMUX('E', 13, ANALOG)>; /* SPI4_MISO */
 		};
