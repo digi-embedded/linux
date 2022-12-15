@@ -59,6 +59,7 @@
 	regulator-min-microvolt = <1800000>;
 	regulator-max-microvolt = <1800000>;
 	status = "okay";
+	regulator-always-on;
 };
 
 &adc {
@@ -187,4 +188,16 @@
 &usbphyc_port0 {
 	phy-supply = <&vdd_usb>;
 	st,phy-tuning = <&usb_phy_tuning>;
+};
+
+&vdd_sd {
+	regulator-always-on;
+};
+
+&vbus_otg {
+	regulator-always-on;
+};
+
+&vbus_sw {
+	regulator-always-on;
 };
