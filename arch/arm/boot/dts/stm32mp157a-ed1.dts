@@ -334,6 +334,7 @@
 	mbox-names = "vq0", "vq1", "shutdown", "detach";
 	interrupt-parent = <&exti>;
 	interrupts = <68 1>;
+	wakeup-source;
 	status = "okay";
 };
 
