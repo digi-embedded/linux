@@ -56,6 +56,9 @@ description: |
         0x0: at block level
         0x2: at LLI level
         0x3: at channel level (last LLI)
+      -bit 16: Prevent packing/unpacking mode
+        0x0: pack/unpack enabled when source data width/burst != destination data width/burst
+        0x1: memory data width/burst forced to peripheral data width/burst to prevent pack/unpack
     4. A 32-bit mask specifying the DMA transfer extended requirements
       -bit 0-12: The source address offset increment
       -bit 13: The source address increment type
