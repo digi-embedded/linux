@@ -50,7 +50,7 @@
 			no-map;
 		};
 
-		mcu_rsc_table: mcu_rsc_table@10048000 {
+		mcu_rsc_table: mcu-rsc-table@10048000 {
 			compatible = "shared-dma-pool";
 			reg = <0x10048000 0x8000>;
 			no-map;
