@@ -548,8 +548,8 @@
 &uart7 {
 	linux,rs485-enabled-at-boot-time;
 	pinctrl-names = "default";
-	pinctrl-0 = <&ccmp15_uart7_pins_a>;
-	rts-gpios = <&gpiof 8 GPIO_ACTIVE_HIGH>;
+	pinctrl-0 = <&ccmp15_uart7_pins_a &ccmp15_uart7_rtscts_pins_a>;
+	uart-has-rtscts;
 	status = "okay";
 };
 
