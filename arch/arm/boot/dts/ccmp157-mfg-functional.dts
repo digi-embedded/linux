@@ -49,11 +49,21 @@
 	};
 };
 
+/*
+ * Internal VREFBUF can be set to 2.5 V, 2.048 V, 1.8 V or 1.5 V which are output
+ * at VREF+ pad.
+ * If you plan to use an external voltage reference, disable vrefbuf and change
+ * the ADC 'vref-supply' to the external regulator.
+ */
+&vrefbuf {
+	regulator-min-microvolt = <1800000>;
+	regulator-max-microvolt = <1800000>;
+	status = "okay";
+};
+
 &adc {
 	/* ANA0, ANA1 are dedicated pins and don't need pinctrl */
-	vdd-supply = <&vdd>;
-	vdda-supply = <&vdda>;
-	vref-supply = <&vdda>;
+	vref-supply = <&vrefbuf>;
 	status = "okay";
 
 	adc1: adc@0 {
