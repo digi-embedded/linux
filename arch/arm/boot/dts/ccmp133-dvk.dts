@@ -442,6 +442,13 @@
 	st,no-lsfs-sc;
 };
 
+&m_can2 {
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&ccmp13_can2_pins_a>;
+	pinctrl-1 = <&ccmp13_can2_sleep_pins_a>;
+	status = "okay";
+};
+
 &pinctrl {
 	ccmp13_adc1_pins: ccmp13_adc1-pins-0 {
 		pins {
@@ -693,6 +700,33 @@
 	ccmp13_usbotg_hs_pins: ccmp13_usbotg-hs-0 {
 		pins {
 			pinmux = <STM32_PINMUX('A', 10, ANALOG)>; /* OTG_ID */
+		};
+	};
+
+	ccmp13_can2_pins_a: ccmp13-can2-0 {
+		pins1 {
+			pinmux = <STM32_PINMUX('B', 13, AF9)>; /* CAN2_TX */
+			slew-rate = <1>;
+			drive-push-pull;
+			bias-disable;
+		};
+		pins2 {
+			pinmux = <STM32_PINMUX('B', 5, AF9)>; /* CAN2_RX */
+			bias-disable;
+		};
+		pins3 {
+			pinmux = <STM32_PINMUX('C', 7, GPIO)>; /* FDCAN2_STB */
+			bias-pull-down;
+			drive-push-pull;
+			slew-rate = <0>;
+		};
+	};
+
+	ccmp13_can2_sleep_pins_a: ccmp13-can2-sleep-0 {
+		pins {
+			pinmux = <STM32_PINMUX('B', 13, ANALOG)>, /* CAN2_TX */
+				 <STM32_PINMUX('B', 5, ANALOG)>, /* CAN2_RX */
+				 <STM32_PINMUX('C', 7, ANALOG)>; /* FDCAN2_STB */
 		};
 	};
 };
