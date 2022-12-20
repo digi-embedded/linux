@@ -180,7 +180,7 @@
 		reg = <0x52>;
 		interrupt-parent = <&gpiog>;
 		interrupts = <7 IRQ_TYPE_EDGE_FALLING>;
-		wakeup-sources;
+		wakeup-source;
 	};
 };
 
