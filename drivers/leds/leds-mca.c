@@ -120,6 +120,10 @@ static int mca_led_probe(struct platform_device *pdev)
 	struct device_node *np = NULL;
 	int ret, num_leds;
 
+	/* wait for the gpio-mca driver until it is initialized */
+	if (mca->gpio_base == -1)
+		return -EPROBE_DEFER;
+
 	if (mca->dev->of_node) {
 		const char * compatible = pdev->dev.driver->
 				    of_match_table[0].compatible;
