@@ -79,7 +79,6 @@ struct mca_uart_drv {
 	struct device_node	*np;
 	struct uart_driver	uart;
 	struct mca_uart		*ports;
-	struct mca_uart_data	*uart_data;
 };
 
 #define to_mca_uart(p,e)	(container_of((p), struct mca_uart, e))
@@ -774,17 +773,6 @@ static struct attribute_group uart_port_extra_attr = {
 };
 
 static const struct of_device_id mca_uart_ids[];
-static inline struct mca_uart_data *mca_uart_get_driver_data(struct platform_device *pdev)
-{
-#ifdef CONFIG_OF
-	if (pdev->dev.of_node) {
-		const struct of_device_id *match;
-		match = of_match_node(mca_uart_ids, pdev->dev.of_node);
-		return (struct mca_uart_data *)match->data;
-	}
-#endif
-	return (struct mca_uart_data *)platform_get_device_id(pdev)->driver_data;
-}
 
 static int mca_uart_get_rs485_config_of(struct mca_uart *mca_uart, struct device_node *np)
 {
@@ -1043,13 +1031,6 @@ static int mca_uart_probe(struct platform_device *pdev)
 	}
 
 	/* Check if the firmware has uart support */
-	uart_drv->uart_data = mca_uart_get_driver_data(pdev);
-	if (!uart_drv->uart_data) {
-		dev_err(&pdev->dev, "failed to get MCA UART data\n");
-		ret = -ENODEV;
-		goto err_free2;
-	}
-
 	if (!MCA_FEATURE_IS_SUPPORTED(mca, MCA_UART_KL03_MIN_FW,
 	                              MCA_UART_KL17_MIN_FW)) {
 		dev_err(&pdev->dev,
