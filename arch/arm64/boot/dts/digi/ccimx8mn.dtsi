@@ -138,7 +138,7 @@
 		compatible = "digi,mca-kl17";
 		reg = <0x63>;
 		interrupt-parent = <&gpio2>;
-		interrupts = <10 IRQ_TYPE_LEVEL_HIGH>;
+		interrupts = <10 IRQ_TYPE_LEVEL_LOW>;
 		interrupt-controller;
 		#interrupt-cells = <2>;
 		fw-update-gpio = <&gpio1 5 GPIO_ACTIVE_LOW>;
@@ -264,6 +264,10 @@
 		pca9450,pmic-buck1-uses-i2c-dvs;
 		/* Run/Standby voltage */
 		pca9450,pmic-buck1-dvs-voltage = <950000>, <850000>;
+
+		interrupt-parent = <&gpio2>;
+		interrupts = <10 IRQ_TYPE_LEVEL_LOW>;
+		interrupt-flags = <0x00002088>;
 
 		regulators {
 			#address-cells = <1>;
