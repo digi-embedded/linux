@@ -144,6 +144,7 @@ struct sn65dsi83 {
 	struct drm_bridge		*panel_bridge;
 	struct gpio_desc		*enable_gpio;
 	int				dsi_lanes;
+	unsigned int			mode_flags;
 	bool				lvds_dual_link;
 	bool				lvds_dual_link_even_odd_swap;
 };
@@ -272,7 +273,7 @@ static int sn65dsi83_attach(struct drm_bridge *bridge,
 
 	dsi->lanes = ctx->dsi_lanes;
 	dsi->format = MIPI_DSI_FMT_RGB888;
-	dsi->mode_flags = MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_VIDEO_BURST;
+	dsi->mode_flags = ctx->mode_flags;
 
 	ret = mipi_dsi_attach(dsi);
 	if (ret < 0) {
@@ -602,6 +603,10 @@ static int sn65dsi83_parse_dt(struct sn65dsi83 *ctx, enum sn65dsi83_model model)
 	struct device_node *endpoint;
 	struct drm_panel *panel;
 	int ret;
+
+	/* Use custom mipi mode flags if provided */
+	ctx->mode_flags = MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_VIDEO_BURST;
+	of_property_read_u32(dev->of_node, "digi,mipi-mode-flags", &ctx->mode_flags);
 
 	endpoint = of_graph_get_endpoint_by_regs(dev->of_node, 0, 0);
 	ctx->dsi_lanes = of_property_count_u32_elems(endpoint, "data-lanes");
