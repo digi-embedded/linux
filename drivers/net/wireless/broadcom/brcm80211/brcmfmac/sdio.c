@@ -40,6 +40,7 @@
 #include "bcdc.h"
 #include "fwil.h"
 #include "bt_shared_sdio.h"
+#include "bt_shared_sdio_ifx.h"
 #include "trxhdr.h"
 #include "feature.h"
 
@@ -1089,8 +1090,14 @@ static int brcmf_sdio_clkctl(struct brcmf_sdio *bus, uint target, bool pendok)
 			brcmf_sdio_wd_timer(bus, true);
 			break;
 		}
-
 #endif /* CONFIG_BRCMFMAC_BT_SHARED_SDIO */
+#ifdef CONFIG_IFX_BT_SHARED_SDIO
+		if (ifx_btsdio_is_active(bus->sdiodev->bus_if)) {
+			brcmf_dbg(SDIO, "BT is active, not switching to CLK_SDONLY\n");
+			brcmf_sdio_wd_timer(bus, true);
+			break;
+		}
+#endif /* CONFIG_IFX_BT_SHARED_SDIO */
 		/* Remove HT request, or bring up SD clock */
 		if (bus->clkstate == CLK_NONE)
 			brcmf_sdio_sdclk(bus, true);
@@ -1114,6 +1121,12 @@ static int brcmf_sdio_clkctl(struct brcmf_sdio *bus, uint target, bool pendok)
 			break;
 		}
 #endif /* CONFIG_BRCMFMAC_BT_SHARED_SDIO */
+#ifdef CONFIG_IFX_BT_SHARED_SDIO
+		if (ifx_btsdio_is_active(bus->sdiodev->bus_if)) {
+			brcmf_dbg(SDIO, "BT is active, not switching to CLK_NONE\n");
+			break;
+		}
+#endif /* CONFIG_IFX_BT_SHARED_SDIO */
 
 		/* Make sure to remove HT request */
 		if (bus->clkstate == CLK_AVAIL)
@@ -1135,10 +1148,6 @@ brcmf_sdio_bus_sleep(struct brcmf_sdio *bus, bool sleep, bool pendok)
 	int err = 0;
 	u8 clkcsr;
 
-	brcmf_dbg(SDIO, "Enter: request %s currently %s\n",
-		  (sleep ? "SLEEP" : "WAKE"),
-		  (bus->sleeping ? "SLEEP" : "WAKE"));
-
 #ifdef CONFIG_BRCMFMAC_BT_SHARED_SDIO
 	/* The following is the assumption based on which the hook is placed.
 	 * From WLAN driver, either from the active contexts OR from the
@@ -1155,12 +1164,21 @@ brcmf_sdio_bus_sleep(struct brcmf_sdio *bus, bool sleep, bool pendok)
 	 * clock and if another WLAN context is active they are any way
 	 * serialized with sdlock.
 	 */
-	if (brcmf_btsdio_bus_count(bus->sdiodev->bus_if)) {
+	if (sleep && brcmf_btsdio_bus_count(bus->sdiodev->bus_if)) {
 		brcmf_dbg(SDIO, "Cannot sleep when BT is active\n");
-		err = -EBUSY;
-		goto done;
+		return -EBUSY;
 	}
 #endif /* CONFIG_BRCMFMAC_BT_SHARED_SDIO */
+#ifdef CONFIG_IFX_BT_SHARED_SDIO
+	if (sleep && ifx_btsdio_is_active(bus->sdiodev->bus_if)) {
+		brcmf_dbg(SDIO, "Bus cannot sleep when BT is active\n");
+		return -EBUSY;
+	}
+#endif /* CONFIG_IFX_BT_SHARED_SDIO */
+
+	brcmf_dbg(SDIO, "Enter: request %s currently %s\n",
+		  (sleep ? "SLEEP" : "WAKE"),
+		  (bus->sleeping ? "SLEEP" : "WAKE"));
 
 	/* If SR is enabled control bus state with KSO */
 	if (bus->sr_enabled) {
@@ -4325,7 +4343,7 @@ static void brcmf_sdio_bus_watchdog(struct brcmf_sdio *bus)
 #endif				/* DEBUG */
 
 	/* On idle timeout clear activity flag and/or turn off clock */
-	if (!bus->dpc_triggered &&
+	if (!bus->dpc_triggered && !ifx_btsdio_is_active(bus->sdiodev->bus_if) &&
 	    brcmf_btsdio_bus_count(bus->sdiodev->bus_if) == 0) {
 		rmb();
 		if ((!bus->dpc_running) && (bus->idletime > 0) &&
@@ -5234,6 +5252,8 @@ static void brcmf_sdio_firmware_callback(struct device *dev, int err,
 			goto free;
 		}
 
+		ifx_btsdio_init(bus_if);
+
 		/* Register for ULP events */
 		if (sdiod->func1->device == SDIO_DEVICE_ID_BROADCOM_CYPRESS_43012 ||
 		    sdiod->func1->device == SDIO_DEVICE_ID_BROADCOM_CYPRESS_43022 ||
@@ -5443,6 +5463,8 @@ fail:
 /* Detach and free everything */
 void brcmf_sdio_remove(struct brcmf_sdio *bus)
 {
+	struct brcmf_bus *bus_if = bus->sdiodev->bus_if;
+
 	brcmf_dbg(TRACE, "Enter\n");
 
 	if (bus) {
@@ -5531,11 +5553,13 @@ void brcmf_sdio_remove(struct brcmf_sdio *bus)
 		if (bus->sdiodev->settings)
 			brcmf_release_module_param(bus->sdiodev->settings);
 #ifdef CONFIG_BRCMFMAC_BT_SHARED_SDIO
-		brcmf_btsdio_detach(bus->sdiodev->bus_if);
+		brcmf_btsdio_detach(bus_if);
 #endif /* CONFIG_BRCMFMAC_BT_SHARED_SDIO */
 
 		release_firmware(bus->sdiodev->clm_fw);
 		bus->sdiodev->clm_fw = NULL;
+		ifx_btsdio_deinit(bus_if);
+
 		kfree(bus->rxbuf);
 		kfree(bus->hdrbuf);
 		kfree(bus);
