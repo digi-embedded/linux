@@ -40,7 +40,6 @@ ccimx8mn-dtbs :=	ccimx8mn-dvk.dtb \
 			_ov_som_bt_ccimx8m.dtbo \
 			_ov_board_flexspi_ccimx8m-dvk.dtbo \
 			_ov_board_gpio-watchdog_ccimx8m-dvk.dtbo \
-			_ov_board_hsd101pfw2-lvds_ccimx8m-dvk.dtbo \
 			_ov_board_lvds_ccimx8m-dvk.dtbo \
 			_ov_board_v1-v2_ccimx8mn-dvk.dtbo \
 			_ov_board_user-leds_ccimx8m-dvk.dtbo \

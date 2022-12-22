@@ -173,6 +173,16 @@
 		};
 	};
 
+	lvds_panel: lvds_panel {
+		status = "disabled";
+
+		port {
+			panel_in_brg: endpoint {
+				remote-endpoint = <&brg_out_panel>;
+			};
+		};
+	};
+
 	sound_max98089: sound-max98089 {
 		compatible = "fsl,imx-audio-max98088";
 		model = "imx-max98088";
@@ -374,60 +384,34 @@
 
 	dsi_lvds_bridge: sn65dsi84@2c {
 		compatible = "ti,sn65dsi83";
-		reg = <0x2c>;
-		ti,dsi-lanes = <4>;
-		ti,lvds-format = <1>;
-		ti,lvds-bpp = <24>;
-		ti,width-mm = <217>;
-		ti,height-mm = <136>;
 		enable-gpios = <&gpio3 0 GPIO_ACTIVE_HIGH>;
-		interrupt-parent = <&gpio3>;
-		interrupts = <6 IRQ_TYPE_LEVEL_HIGH>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_lvds>;
+		reg = <0x2c>;
+		/* MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_VIDEO_BURST |
+		   MIPI_DSI_MODE_NO_EOT_PACKET */
+		digi,mipi-mode-flags = <0x203>;
 		status = "disabled";
 
-		display-timings {
-			native-mode = <&lvds0_g101evn010>;
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
 
-			/* AUO G101EVN01.0 */
-			lvds0_g101evn010: timing@0 {
-				clock-frequency = <69000000>;
-				hactive = <1280>;
-				vactive = <800>;
-				hfront-porch = <120>;
-				hback-porch = <1>;
-				hsync-len = <8>;
-				vback-porch = <10>;
-				vfront-porch = <1>;
-				vsync-len = <6>;
-				hsync-active = <1>;
-				vsync-active = <1>;
-				de-active = <1>;
-				pixelclk-active = <0>;
+			port@0 {
+				reg = <0>;
+
+				bridge_in_dsi: endpoint {
+					remote-endpoint = <&mipi_dsi_out>;
+					data-lanes = <1 2 3 4>;
+				};
 			};
 
-			/* Fusion 10" F10A-0102 */
-			lvds0_hsd101pfw2: timing@1 {
-				clock-frequency = <69000000>;
-				hactive = <1024>;
-				vactive = <600>;
-				hfront-porch = <120>;
-				hback-porch = <1>;
-				hsync-len = <8>;
-				vback-porch = <10>;
-				vfront-porch = <1>;
-				vsync-len = <6>;
-				hsync-active = <1>;
-				vsync-active = <1>;
-				de-active = <1>;
-				pixelclk-active = <0>;
-			};
-		};
+			port@2 {
+				reg = <2>;
 
-		port {
-			dsi_lvds_bridge_in: endpoint {
-				remote-endpoint = <&mipi_dsi_lvds_out>;
+				brg_out_panel: endpoint {
+					remote-endpoint = <&panel_in_brg>;
+				};
 			};
 		};
 	};
@@ -604,6 +588,8 @@
 
 &mipi_dsi {
 	status = "okay";
+	#address-cells = <0x1>;
+	#size-cells = <0x0>;
 
 	port@1 {
 		mipi_dsi_hdmi_out: endpoint {
@@ -613,9 +599,9 @@
 	};
 
 	port@2 {
-		mipi_dsi_lvds_out: endpoint {
-			remote-endpoint = <&dsi_lvds_bridge_in>;
+		mipi_dsi_out: endpoint {
 			attach-bridge;
+			remote-endpoint = <&bridge_in_dsi>;
 		};
 	};
 };
