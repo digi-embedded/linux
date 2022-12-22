@@ -90,9 +90,11 @@
 	status = "okay";
 
 	adc1: adc@0 {
-		st,adc-channels = <2>;
-		st,min-sample-time-nsecs = <5000>;
 		status = "okay";
+		channel@2 {
+			reg = <2>;
+			st,min-sample-time-nsecs = <5000>;
+		};
 	};
 };
 
