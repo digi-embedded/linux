@@ -596,11 +596,8 @@ u8 ifx_bus_reg_readb(struct brcmf_bus *bus_if, u8 fn, u32 addr, int *err)
 	ktime_get_ts64(&ts_start);
 	if (fn == SDIO_FUNC_0)
 		val = brcmf_sdiod_func0_rb(sdiodev, addr, err);
-	// wait for next commit for reading another function register
-	#if 0
 	else
 		val = brcmf_sdiod_func_rb(func, addr, err);
-	#endif
 	// wait for next commit to recoed command
 	//_btsdio_record_cmd(&sdiodev->sdcnt.bt_reg_rb[fn], ts_start);
 	sdio_release_host(sdiodev->func1);
@@ -644,11 +641,8 @@ void ifx_bus_reg_writeb(struct brcmf_bus *bus_if, u8 fn, u32 addr, u8 val, int *
 	ktime_get_ts64(&ts_start);
 	if (fn == SDIO_FUNC_0)
 		brcmf_sdiod_func0_wb(sdiodev, addr, val, err);
-	// wait for next commit for reading another function register
-	#if 0
 	else
 		brcmf_sdiod_func_wb(func, addr, val, err);
-	#endif
 	// wait for next commit to recoed command
 	//_btsdio_record_cmd(&sdiodev->sdcnt.bt_reg_wb[fn], ts_start);
 	sdio_release_host(sdiodev->func1);
