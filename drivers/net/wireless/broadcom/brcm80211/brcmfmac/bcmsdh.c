@@ -1096,6 +1096,7 @@ static int brcmf_ops_sdio_probe(struct sdio_func *func,
 	 */
 	sdiodev->func1 = func->card->sdio_func[0];
 	sdiodev->func2 = func;
+	sdiodev->func3 = func->card->sdio_func[2];
 
 	sdiodev->bus_if = bus_if;
 	bus_if->bus_priv.sdio = sdiodev;
