@@ -401,7 +401,8 @@ void brcmf_sdiod_writel(struct brcmf_sdio_dev *sdiodev, u32 addr, u32 data,
  */
 int brcmf_sdiod_send_pkt(struct brcmf_sdio_dev *sdiodev,
 			 struct sk_buff_head *pktq);
-int brcmf_sdiod_send_buf(struct brcmf_sdio_dev *sdiodev, u8 *buf, uint nbytes);
+int brcmf_sdiod_send_buf(struct brcmf_sdio_dev *sdiodev, u8 fn,
+			 u8 *buf, uint nbytes);
 
 int brcmf_sdiod_recv_pkt(struct brcmf_sdio_dev *sdiodev, u8 fn,
 			 struct sk_buff *pkt);

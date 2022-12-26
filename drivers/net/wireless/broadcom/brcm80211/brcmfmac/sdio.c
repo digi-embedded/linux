@@ -2818,7 +2818,7 @@ static int brcmf_sdio_tx_ctrlframe(struct brcmf_sdio *bus, u8 *frame, u16 len)
 			   frame, min_t(u16, len, 16), "TxHdr:\n");
 
 	do {
-		ret = brcmf_sdiod_send_buf(bus->sdiodev, frame, len);
+		ret = brcmf_sdiod_send_buf(bus->sdiodev, SDIO_FUNC_2, frame, len);
 
 		if (ret < 0)
 			brcmf_sdio_txfail(bus);
