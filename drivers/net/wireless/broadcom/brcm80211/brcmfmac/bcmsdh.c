@@ -302,6 +302,7 @@ static int brcmf_sdiod_skbuff_read(struct brcmf_sdio_dev *sdiodev,
 					 req_sz);
 		break;
 	case SDIO_FUNC_2:
+	case SDIO_FUNC_3:
 		err = sdio_readsb(func, ((u8 *)(skb->data)), addr, req_sz);
 		break;
 	default:
@@ -520,10 +521,11 @@ exit:
 	return ret;
 }
 
-int brcmf_sdiod_recv_buf(struct brcmf_sdio_dev *sdiodev, u8 *buf, uint nbytes)
+int brcmf_sdiod_recv_buf(struct brcmf_sdio_dev *sdiodev, u8 fn,
+			 u8 *buf, uint nbytes)
 {
-	struct sk_buff *mypkt;
-	int err;
+	struct sk_buff *mypkt = NULL;
+	int err = 0;
 
 	mypkt = brcmu_pkt_buf_get_skb(nbytes);
 	if (!mypkt) {
@@ -532,7 +534,7 @@ int brcmf_sdiod_recv_buf(struct brcmf_sdio_dev *sdiodev, u8 *buf, uint nbytes)
 		return -EIO;
 	}
 
-	err = brcmf_sdiod_recv_pkt(sdiodev, mypkt);
+	err = brcmf_sdiod_recv_pkt(sdiodev, fn, mypkt);
 	if (!err)
 		memcpy(buf, mypkt->data, nbytes);
 
@@ -540,22 +542,43 @@ int brcmf_sdiod_recv_buf(struct brcmf_sdio_dev *sdiodev, u8 *buf, uint nbytes)
 	return err;
 }
 
-int brcmf_sdiod_recv_pkt(struct brcmf_sdio_dev *sdiodev, struct sk_buff *pkt)
+int brcmf_sdiod_recv_pkt(struct brcmf_sdio_dev *sdiodev, u8 fn,
+			 struct sk_buff *pkt)
 {
-	u32 addr = sdiodev->cc_core->base;
+	struct sdio_func *func = NULL;
+	u32 base_addr = 0;
+	u32 recv_addr = 0;
 	int err = 0;
 
-	brcmf_dbg(SDIO, "addr = 0x%x, size = %d\n", addr, pkt->len);
+	if (fn == SDIO_FUNC_2) {
+		/* F2 is only DMA. HW ignore the address field in the cmd53 /cmd52. */
+		base_addr = sdiodev->cc_core->base;
+		recv_addr = base_addr & SBSDIO_SB_OFT_ADDR_MASK;
+		recv_addr |= SBSDIO_SB_ACCESS_2_4B_FLAG;
+		func = sdiodev->func2;
+	} else if (fn == SDIO_FUNC_3) {
+		/* F3 has registers and DMA. A DMA access is identified using the
+		 * address value 0x0. If the address field has any other value, it
+		 * won't be considered as F3 packet transfer. If the address corresponds
+		 * to a valid F3 register address, driver will get proper response,
+		 * otherwise driver will get error response.
+		 */
+		base_addr = 0;
+		recv_addr = 0;
+		func = sdiodev->func3;
+	} else {
+		brcmf_err("invalid function number: %d\n", fn);
+		return -EINVAL;
+	}
 
-	err = brcmf_sdiod_set_backplane_window(sdiodev, addr);
+	err = brcmf_sdiod_set_backplane_window(sdiodev, base_addr);
 	if (err)
 		goto done;
 
-	addr &= SBSDIO_SB_OFT_ADDR_MASK;
-	addr |= SBSDIO_SB_ACCESS_2_4B_FLAG;
+	err = brcmf_sdiod_skbuff_read(sdiodev, func, recv_addr, pkt);
 
-	err = brcmf_sdiod_skbuff_read(sdiodev, sdiodev->func2, addr, pkt);
-
+	brcmf_dbg(DATA, "F%d, base addr: 0x%x, recv addr: 0x%x, size: %d, err: %d\n",
+		  fn, base_addr, recv_addr, pkt->len, err);
 done:
 	return err;
 }
