@@ -764,8 +764,7 @@ int ifx_bus_send_buf(struct brcmf_bus *bus_if, u8 *buf, u32 nbytes)
 	sdiodev = bus_if->bus_priv.sdio;
 
 	sdio_claim_host(sdiodev->func1);
-	// wait for next commit for Tx
-	//err = brcmf_sdiod_send_buf(sdiodev, SDIO_FUNC_3, buf, nbytes);
+	err = brcmf_sdiod_send_buf(sdiodev, SDIO_FUNC_3, buf, nbytes);
 	sdio_release_host(sdiodev->func1);
 
 	brcmf_dbg(DATA, "F3 send nbytes: %d, err: %d\n", nbytes, err);

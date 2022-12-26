@@ -328,7 +328,12 @@ static int brcmf_sdiod_skbuff_write(struct brcmf_sdio_dev *sdiodev,
 	req_sz = skb->len + 3;
 	req_sz &= (uint)~3;
 
-	err = sdio_memcpy_toio(func, addr, ((u8 *)(skb->data)), req_sz);
+	if (func->num == SDIO_FUNC_1 || func->num == SDIO_FUNC_2)
+		err = sdio_memcpy_toio(func, addr, ((u8 *)(skb->data)), req_sz);
+	else if (func->num == SDIO_FUNC_3)
+		err = sdio_writesb(func, addr, ((u8 *)(skb->data)), req_sz);
+	else
+		return -EINVAL;
 
 	if (err == -ENOMEDIUM)
 		brcmf_sdiod_change_state(sdiodev, BRCMF_SDIOD_NOMEDIUM);
@@ -626,11 +631,35 @@ done:
 	return err;
 }
 
-int brcmf_sdiod_send_buf(struct brcmf_sdio_dev *sdiodev, u8 *buf, uint nbytes)
+int brcmf_sdiod_send_buf(struct brcmf_sdio_dev *sdiodev, u8 fn,
+			 u8 *buf, uint nbytes)
 {
-	struct sk_buff *mypkt;
-	u32 addr = sdiodev->cc_core->base;
-	int err;
+	struct sk_buff *mypkt = NULL;
+	struct sdio_func *func = NULL;
+	u32 base_addr = 0;
+	u32 send_addr = 0;
+	int err = 0;
+
+	if (fn == 2) {
+		/* F2 is only DMA. HW ignore the address field in the cmd53 /cmd52. */
+		base_addr = sdiodev->cc_core->base;
+		send_addr = base_addr & SBSDIO_SB_OFT_ADDR_MASK;
+		send_addr |= SBSDIO_SB_ACCESS_2_4B_FLAG;
+		func = sdiodev->func2;
+	} else if (fn == 3) {
+		/* F3 has registers and DMA. A DMA access is identified using the
+		 * address value 0x0. If the address field has any other value, it
+		 * won't be considered as F3 packet transfer. If the address corresponds
+		 * to a valid F3 register address, driver will get proper response,
+		 * otherwise driver will get error response.
+		 */
+		base_addr = 0;
+		send_addr = 0;
+		func = sdiodev->func3;
+	} else {
+		brcmf_err("invalid function number: %d\n", fn);
+		return -EINVAL;
+	}
 
 	mypkt = brcmu_pkt_buf_get_skb(nbytes);
 
@@ -642,14 +671,14 @@ int brcmf_sdiod_send_buf(struct brcmf_sdio_dev *sdiodev, u8 *buf, uint nbytes)
 
 	memcpy(mypkt->data, buf, nbytes);
 
-	err = brcmf_sdiod_set_backplane_window(sdiodev, addr);
+	err = brcmf_sdiod_set_backplane_window(sdiodev, base_addr);
 	if (err)
 		goto out;
 
-	addr &= SBSDIO_SB_OFT_ADDR_MASK;
-	addr |= SBSDIO_SB_ACCESS_2_4B_FLAG;
+	err = brcmf_sdiod_skbuff_write(sdiodev, func, send_addr, mypkt);
 
-	err = brcmf_sdiod_skbuff_write(sdiodev, sdiodev->func2, addr, mypkt);
+	brcmf_dbg(DATA, "F%d, base addr: 0x%x, send addr: 0x%x, size: %d, err: %d\n",
+		  fn, base_addr, send_addr, mypkt->len, err);
 out:
 	brcmu_pkt_buf_free_skb(mypkt);
 
