@@ -309,9 +309,10 @@
 	status = "okay";
 };
 
+/* Ethernet EQoS */
 &eqos {
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_eqos>, <&pinctrl_eth_mdio>;
+	pinctrl-0 = <&pinctrl_eqos>, <&pinctrl_eqos_mdio>;
 	phy-mode = "rgmii-id";
 	phy-handle = <&ethphy0>;
 	status = "okay";
@@ -320,17 +321,11 @@
 		compatible = "snps,dwmac-mdio";
 		#address-cells = <1>;
 		#size-cells = <0>;
+		clock-frequency = <5000000>;
 
 		ethphy0: ethernet-phy@0 {
 			compatible = "ethernet-phy-ieee802.3-c22";
 			reg = <0>;
-			// TODO revisit and enable PHY reset line
-			//reset-gpios = <&gpio4 15 GPIO_ACTIVE_LOW>;
-			//reset-assert-us = <100>;
-			//reset-deassert-us = <200>;
-			eee-broken-1000t;
-			at803x,eee-disabled;
-			at803x,vddio-1p8v;
 		};
 	};
 };
@@ -391,7 +386,7 @@
 };
 
 &iomuxc {
-	/* Ethernet 1 */
+	/* EQoS RGMII */
 	pinctrl_eqos: eqosgrp {
 		fsl,pins = <
 			MX93_PAD_ENET1_RD0__ENET_QOS_RGMII_RD0			0x57e
@@ -406,13 +401,11 @@
 			MX93_PAD_ENET1_TD3__ENET_QOS_RGMII_TD3			0x57e
 			MX93_PAD_ENET1_TXC__CCM_ENET_QOS_CLOCK_GENERATE_TX_CLK	0x5fe
 			MX93_PAD_ENET1_TX_CTL__ENET_QOS_RGMII_TX_CTL		0x57e
-			/* PHY reset */
-			MX93_PAD_ENET2_MDIO__GPIO4_IO15                         0x31e
 		>;
 	};
 
-	/* Ethernet MDIO, shared by both interfaces */
-	pinctrl_eth_mdio: ethmdio {
+	/* EQoS MDIO */
+	pinctrl_eqos_mdio: ethmdio {
 		fsl,pins = <
 			MX93_PAD_ENET1_MDC__ENET_QOS_MDC			0x57e
 			MX93_PAD_ENET1_MDIO__ENET_QOS_MDIO			0x57e
