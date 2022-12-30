@@ -14,10 +14,12 @@
  */
 
 / {
+#if HAS_MCA
 	aliases {
 		rtc0 = &mca_rtc;
 		rtc1 = &bbnsm_rtc;
 	};
+#endif
 
 	reserved-memory {
 		#address-cells = <2>;
@@ -83,10 +85,12 @@
 	};
 };
 
+#if HAS_MCA
 /* Disable CPU power key */
 &bbnsm_pwrkey {
 	status = "disabled";
 };
+#endif
 
 /* I2C bus conneccted to MCA and PMIC */
 &lpi2c1 {
@@ -204,6 +208,7 @@
 		};
 	};
 
+#if HAS_MCA
 	mca_cc93: mca@63 {
 		compatible = "digi,mca-kl17";
 		reg = <0x63>;
@@ -324,6 +329,7 @@
 			status = "disabled";
 		};
 	};
+#endif
 };
 
 /* Bluetooth UART */
