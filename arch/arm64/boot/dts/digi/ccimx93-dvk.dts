@@ -335,9 +335,10 @@
 	};
 };
 
+/* Ethernet MAC (ENET) */
 &fec {
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_fec>, <&pinctrl_eth_mdio>;
+	pinctrl-0 = <&pinctrl_fec>, <&pinctrl_fec_mdio>;
 	phy-mode = "rgmii-id";
 	phy-handle = <&ethphy1>;
 	fsl,magic-packet;
@@ -346,12 +347,12 @@
 	mdio {
 		#address-cells = <1>;
 		#size-cells = <0>;
+		clock-frequency = <5000000>;
 
 		ethphy1: ethernet-phy@1 {
 			/* PHY ID for Marvell 88E1512 */
-			compatible = "ethernet-phy-id0141.0dd0";
+			compatible = "ethernet-phy-ieee802.3-c22";
 			reg = <1>;
-			eee-broken-1000t;
 		};
 	};
 };
@@ -418,7 +419,7 @@
 		>;
 	};
 
-	/* Ethernet 2 */
+	/* FEC RGMII */
 	pinctrl_fec: fecgrp {
 		fsl,pins = <
 			MX93_PAD_ENET2_RD0__ENET1_RGMII_RD0			0x57e
@@ -433,6 +434,14 @@
 			MX93_PAD_ENET2_TD3__ENET1_RGMII_TD3			0x57e
 			MX93_PAD_ENET2_TXC__ENET1_RGMII_TXC			0x5fe
 			MX93_PAD_ENET2_TX_CTL__ENET1_RGMII_TX_CTL		0x57e
+		>;
+	};
+
+	/* FEC MDIO */
+	pinctrl_fec_mdio: fecmdiogrp {
+		fsl,pins = <
+			MX93_PAD_ENET2_MDC__ENET1_MDC				0x57e
+			MX93_PAD_ENET2_MDIO__ENET1_MDIO				0x57e
 		>;
 	};
 
