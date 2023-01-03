@@ -39,7 +39,6 @@
 	};
 
 	lvds_panel: lvds_panel {
-		compatible = "panel-lvds";
 		status = "disabled";
 
 		port {
@@ -47,7 +46,6 @@
 				remote-endpoint = <&lvds_out>;
 			};
 		};
-
 	};
 
 	regulators {

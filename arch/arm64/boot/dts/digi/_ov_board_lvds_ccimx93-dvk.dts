@@ -79,33 +79,23 @@
 	fragment@7 {
 		target = <&lvds_panel>;
 		__overlay__ {
+			compatible = "auo,g101evn010";
 			status = "okay";
-
 			backlight = <&lvds_backlight>;
 			power-supply = <&reg_5v_board>;
-			width-mm = <216>;
-			height-mm = <135>;
-			data-mapping = "jeida-18";
+		};
+	};
 
-			/* AUO G101EVN01.0 */
-			panel-timing {
-				clock-frequency = <68930000>;
-				hactive = <1280>;
-				vactive = <800>;
-				hfront-porch = <120>;
-				hback-porch = <2>;
-				hsync-len = <8>;
-				vback-porch = <10>;
-				vfront-porch = <2>;
-				vsync-len = <6>;
-				hsync-active = <1>;
-				vsync-active = <1>;
-			};
+	/* Adjust ldcif clock */
+	fragment@8 {
+		target = <&lcdif>;
+		__overlay__ {
+			assigned-clock-rates = <498000000>, <68930000>, <400000000>, <133333333>;
 		};
 	};
 
 	/* Enable goodix_touch */
-	fragment@8 {
+	fragment@9 {
 		target = <&goodix_touch>;
 		__overlay__ {
 			status = "okay";
