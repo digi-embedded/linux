@@ -204,23 +204,39 @@
 		vin-supply = <&reg_5v_board>;
 		status = "disabled";
 	};
+};
+
+/* I2C4 - Audio codec and HDMI bridge */
+&lpi2c4 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	clock-frequency = <400000>;
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&pinctrl_lpi2c4>;
+	pinctrl-1 = <&pinctrl_lpi2c4>;
+	status = "okay";
+
+	max98089: codec@10 {
+		compatible = "maxim,max98089";
+		reg = <0x10>;
+		clocks = <&clk IMX93_CLK_SAI3_GATE>;
+		clock-names = "mclk";
+		// TODO
+		// Add regulators when defined for the DVK
+		// vcc-supply = <&reg_3v3_audio>;
+		// dvdd-supply = <&reg_1v8_ext>;
+	};
 
 	lt_bridge: lt8912@48 {
 		compatible = "lontium,lt8912";
 		reg = <0x48>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_lt8912>;
-
-		// TODO
-		// Configure reset gpio when supported. First version of the
-		// CC93 SoM does not provide an IO on the DVK line.
-		// reset-gpios = <&gpio3 7 GPIO_ACTIVE_LOW>;
+		reset-gpios = <&gpio1 3 GPIO_ACTIVE_LOW>;
 		hpd-gpios = <&gpio3 27 GPIO_ACTIVE_HIGH>;
 		// no-hpd;
 		digi,dsi-lanes = <4>;
-		// TODO
-		// provide a regulator when regulators are defined for the DVK
-		// vdd1-supply = <&reg_5v_board>;
+		vdd1-supply = <&reg_5v_board>;
 		no-edid;
 		status = "okay";
 
@@ -268,28 +284,6 @@
 				pixelclk-active = <0>;
 			};
 		};
-	};
-};
-
-/* I2C4 - Audio codec, camera, ... */
-&lpi2c4 {
-	#address-cells = <1>;
-	#size-cells = <0>;
-	clock-frequency = <400000>;
-	pinctrl-names = "default", "sleep";
-	pinctrl-0 = <&pinctrl_lpi2c4>;
-	pinctrl-1 = <&pinctrl_lpi2c4>;
-	status = "okay";
-
-	max98089: codec@10 {
-		compatible = "maxim,max98089";
-		reg = <0x10>;
-		clocks = <&clk IMX93_CLK_SAI3_GATE>;
-		clock-names = "mclk";
-		// TODO
-		// Add regulators when defined for the DVK
-		// vcc-supply = <&reg_3v3_audio>;
-		// dvdd-supply = <&reg_1v8_ext>;
 	};
 };
 
@@ -472,7 +466,7 @@
 	pinctrl_lt8912: lt8912grp {
 		fsl,pins = <
 			/* Reset */
-
+			MX93_PAD_I2C2_SDA__GPIO1_IO03				0x31e
 			/* Interrupt */
 			MX93_PAD_CCM_CLKO2__GPIO3_IO27				0x31e
 		>;
