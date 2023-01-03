@@ -190,6 +190,21 @@
 	pinctrl-1 = <&pinctrl_lpi2c3>;
 	status = "okay";
 
+	goodix_touch: gt9271@14 {
+		compatible = "goodix,gt9271";
+		reg = <0x14>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_touch>;
+		/* LVDS interrupt */
+		interrupt-parent = <&gpio2>;
+		interrupts = <24 IRQ_TYPE_EDGE_FALLING>;
+		irq-gpios = <&gpio2 24 GPIO_ACTIVE_LOW>;
+		reload-fw-on-resume;
+		skip-firmware-request;
+		vin-supply = <&reg_5v_board>;
+		status = "disabled";
+	};
+
 	lt_bridge: lt8912@48 {
 		compatible = "lontium,lt8912";
 		reg = <0x48>;
@@ -275,21 +290,6 @@
 		// Add regulators when defined for the DVK
 		// vcc-supply = <&reg_3v3_audio>;
 		// dvdd-supply = <&reg_1v8_ext>;
-	};
-
-	goodix_touch: gt9271@5d {
-		compatible = "goodix,gt9271";
-		reg = <0x5d>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_touch>;
-		/* LVDS interrupt */
-		interrupt-parent = <&gpio2>;
-		interrupts = <24 IRQ_TYPE_EDGE_FALLING>;
-		irq-gpios = <&gpio2 24 GPIO_ACTIVE_LOW>;
-		reload-fw-on-resume;
-		skip-firmware-request;
-		vin-supply = <&reg_5v_board>;
-		status = "disabled";
 	};
 };
 
