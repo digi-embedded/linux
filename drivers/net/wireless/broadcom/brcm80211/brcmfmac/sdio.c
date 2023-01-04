@@ -2177,6 +2177,31 @@ static void brcmf_sdio_pad(struct brcmf_sdio *bus, u16 *pad, u16 *rdlen)
 	}
 }
 
+static bool brcmf_sdio_rx_pkt_is_avail(struct brcmf_sdio *bus)
+{
+	struct brcmf_sdio_dev *sdiod = bus->sdiodev;
+	u32 newstatus = 0;
+	u32 intstat_addr = bus->sdio_core->base + SD_REG(intstatus);
+	int err = 0;
+	bool ret = true;
+
+	if (!ifx_btsdio_is_active(bus->sdiodev->bus_if))
+		return true;
+
+	/* read interrupt to get fifo status*/
+	newstatus = brcmf_sdiod_readl(sdiod, intstat_addr, &err);
+	if (err < 0) {
+		brcmf_err("read int status failed %d\n", err);
+		ret = false;
+	} else if (!(newstatus & I_XMTDATA_AVAIL)) {
+		/* no more frames */
+		brcmf_dbg(DATA, "no more frames, int status: 0x%08x\n", newstatus);
+		ret = false;
+	}
+
+	return ret;
+}
+
 static uint brcmf_sdio_readframes(struct brcmf_sdio *bus, uint maxframes)
 {
 	struct sk_buff *pkt;		/* Packet for event or data frames */
@@ -2210,9 +2235,16 @@ static uint brcmf_sdio_readframes(struct brcmf_sdio *bus, uint maxframes)
 			continue;
 		}
 
+		sdio_claim_host(bus->sdiodev->func1);
+		/* make sure rx pkt check and rece buf in the same critical section */
+		if (!brcmf_sdio_rx_pkt_is_avail(bus)) {
+			bus->rxpending = false;
+			sdio_release_host(bus->sdiodev->func1);
+			break;
+		}
+
 		rd->len_left = rd->len;
 		/* read header first for unknow frame length */
-		sdio_claim_host(bus->sdiodev->func1);
 		if (!rd->len) {
 			ret = brcmf_sdiod_recv_buf(bus->sdiodev, SDIO_FUNC_2,
 						   bus->rxhdr, BRCMF_FIRSTREAD);
