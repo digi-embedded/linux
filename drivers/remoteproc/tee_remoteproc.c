@@ -105,16 +105,7 @@ int tee_rproc_load_fw(struct tee_rproc *trproc, const struct firmware *fw)
 	struct tee_shm *fw_shm;
 	int ret;
 
-	/*
-	 * useless copy waiting that tee_shm_register and tee well support
-	 * kernel buffers registration
-	 */
-
-	fw_shm = tee_shm_alloc_kernel_buf(pvt_data.ctx, fw->size);
-	if (IS_ERR(fw_shm))
-		return PTR_ERR(fw_shm);
-
-	memcpy(tee_shm_get_va(fw_shm, 0), fw->data, fw->size);
+	fw_shm = tee_shm_register_kernel_buf(pvt_data.ctx, (void *)fw->data, fw->size);
 
 	prepare_args(trproc, TA_RPROC_FW_CMD_LOAD_FW, &arg, param, 1);
 
