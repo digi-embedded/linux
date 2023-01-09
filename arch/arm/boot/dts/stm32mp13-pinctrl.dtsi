@@ -6,6 +6,13 @@
 #include <dt-bindings/pinctrl/stm32-pinfunc.h>
 
 &pinctrl {
+	adc1_usb_cc_pins_a: adc1-usb-cc-pins-0 {
+		pins {
+			pinmux = <STM32_PINMUX('F', 12, ANALOG)>, /* ADC1 in6 */
+				 <STM32_PINMUX('A', 3, ANALOG)>; /* ADC1 in12 */
+		};
+	};
+
 	dfsdm_clkout_pins_a: dfsdm-clkout-pins-0 {
 		pins {
 			pinmux = <STM32_PINMUX('C', 3, AF3)>; /* DFSDM_CKOUT */
