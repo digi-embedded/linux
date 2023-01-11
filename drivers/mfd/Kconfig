@@ -2127,14 +2127,6 @@ config MFD_STMFX
 	  additional drivers must be enabled in order to use the functionality
 	  of the device.
 
-config MFD_PCA9450
-	tristate "PCA9450 Power Management chip"
-	depends on I2C=y
-	select MFD_CORE
-	help
-	  if you say yes here you get support for the PCA9450
-	  Power Management chips.
-
 config MFD_RPISENSE_CORE
 	tristate "Raspberry Pi Sense HAT core functions"
 	depends on I2C
