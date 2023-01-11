@@ -355,8 +355,8 @@
 	status = "okay";
 };
 
-/* USB_OTG1 connected to usb hub */
-&usbotg1 {
+/* USB_OTG2 connected to usb hub */
+&usbotg2 {
 	dr_mode = "host";
 	disable-over-current;
 	status = "okay";
