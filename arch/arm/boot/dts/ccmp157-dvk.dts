@@ -96,11 +96,12 @@
 	};
 
 	sound_max98089: sound-max98089 {
-		compatible = "st,stm-audio-max98088";
-		model = "stm32_max98088";
-		cpu-dai = <&i2s2>;
-		audio-codec = <&max98089>;
-		audio-routing =
+		compatible = "simple-audio-card";
+		simple-audio-card,name = "stm32max98088";
+		simple-audio-card,format = "i2s";
+		simple-audio-card,bitclock-master = <&cpu_dai>;
+		simple-audio-card,frame-master = <&cpu_dai>;
+		routing =
 			"Headphone Jack", "HPL",
 			"Headphone Jack", "HPR",
 			"Ext Spk", "SPKL",
@@ -113,7 +114,16 @@
 			"LineInA", "INA2",
 			"LineInB", "INB1",
 			"LineInB", "INB2";
-		status = "okay";
+
+		cpu_dai: simple-audio-card,cpu {
+			sound-dai = <&i2s2>;
+			system-clock-direction-out;
+			clocks = <&rcc SPI2_K>;
+		};
+
+		codec_dai: simple-audio-card,codec {
+			sound-dai = <&max98089>;
+		};
 	};
 };
 
@@ -217,11 +227,13 @@
 
 &i2s2 {
 	#clock-cells = <0>;
+	#sound-dai-cells = <0>;
 	clocks = <&rcc SPI2>, <&rcc SPI2_K>, <&rcc PLL3_Q>, <&rcc PLL3_R>;
 	clock-names = "pclk", "i2sclk", "x8k", "x11k";
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&ccmp15_i2s2_pins_a>;
 	pinctrl-1 = <&ccmp15_i2s2_sleep_pins_a>;
+	digi,i2s-master;
 	status = "okay";
 };
 
