@@ -42,21 +42,6 @@
 	};
 };
 
-&adc_1 {
-	/* PA5 which is shared with MikroE PWM */
-	pinctrl-names = "default";
-	pinctrl-0 = <&ccmp13_adc1_pins>;
-	vdda-supply = <&scmi_vdd_adc>;
-	vref-supply = <&scmi_vdd_adc>;
-	status = "okay";
-
-	adc1: adc@0 {
-		st,adc-channels = <2>;
-		st,min-sample-time-nsecs = <5000>;
-		status = "okay";
-	};
-};
-
 /* 10/100/1000 Ethernet */
 &eth1 {
 	status = "disabled";
@@ -126,11 +111,6 @@
 };
 
 &pinctrl {
-	ccmp13_adc1_pins: ccmp13_adc1-pins-0 {
-		pins {
-			pinmux = <STM32_PINMUX('A', 5, ANALOG)>; /* ADC1 in2 */
-		};
-	};
 
 	ccmp13_uart5_pins_a: ccmp13_uart5-0 {
 		pins1 {
