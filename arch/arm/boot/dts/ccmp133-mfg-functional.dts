@@ -57,22 +57,6 @@
 	};
 };
 
-&crc1 {
-	status = "okay";
-};
-
-&dma1 {
-	sram = <&dma_pool>;
-};
-
-&dma2 {
-	sram = <&dma_pool>;
-};
-
-&dts {
-	status = "okay";
-};
-
 /* 10/100/1000 Ethernet */
 &eth1 {
 	status = "disabled";
@@ -95,41 +79,6 @@
 			compatible = "ethernet-phy-id0007.c0f0"; /* PHY ID for SMSC LAN8720Ai */
 			smsc,disable-energy-detect;
 		};
-	};
-};
-
-&scmi_regu {
-	scmi_vddcpu: voltd-vddcpu {
-		voltd-name = "vddcpu";
-		regulator-name = "vddcpu";
-	};
-	scmi_vdd: voltd-vdd {
-		voltd-name = "vdd";
-		regulator-name = "vdd";
-	};
-	scmi_vddcore: voltd-vddcore {
-		voltd-name = "vddcore";
-		regulator-name = "vddcore";
-	};
-	scmi_vdd_adc: voltd-vdd_adc {
-		voltd-name = "vdd_adc";
-		regulator-name = "vdd_adc";
-	};
-	scmi_vdd_usb: voltd-vdd_usb {
-		voltd-name = "vdd_usb";
-		regulator-name = "vdd_usb";
-	};
-	scmi_vdd_sd: voltd-vdd_sd {
-		voltd-name = "vdd_sd";
-		regulator-name = "vdd_sd";
-	};
-	scmi_v1v8_periph: voltd-v1v8_periph {
-		voltd-name = "v1v8_periph";
-		regulator-name = "v1v8_periph";
-	};
-	scmi_v3v3_sw: voltd-v3v3_sw {
-		voltd-name = "v3v3_sw";
-		regulator-name = "v3v3_sw";
 	};
 };
 
