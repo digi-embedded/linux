@@ -14,13 +14,6 @@
  */
 
 / {
-#if HAS_MCA
-	aliases {
-		rtc0 = &mca_rtc;
-		rtc1 = &bbnsm_rtc;
-	};
-#endif
-
 	reserved-memory {
 		#address-cells = <2>;
 		#size-cells = <2>;
@@ -85,13 +78,6 @@
 	};
 };
 
-#if HAS_MCA
-/* Disable CPU power key */
-&bbnsm_pwrkey {
-	status = "disabled";
-};
-#endif
-
 /* I2C bus conneccted to MCA and PMIC */
 &lpi2c1 {
 	#address-cells = <1>;
@@ -107,13 +93,12 @@
 	digi,buffer-time-us = <35>;
 	status = "okay";
 
-	pmic@25 {
+	pmic_cc93: pmic@25 {
 		compatible = "nxp,pca9451a";
 		reg = <0x25>;
 
 		interrupt-parent = <&gpio2>;
 		interrupts = <29 IRQ_TYPE_LEVEL_LOW>;
-		interrupt-flags = <0x00002088>;
 
 		regulators {
 			buck1: BUCK1 {
@@ -208,7 +193,6 @@
 		};
 	};
 
-#if HAS_MCA
 	mca_cc93: mca@63 {
 		compatible = "digi,mca-kl17";
 		reg = <0x63>;
@@ -219,6 +203,7 @@
 		fw-update-gpio = <&gpio2 28 GPIO_ACTIVE_LOW>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_mca_cc93>;
+		status = "disabled";
 
 		mca_adc: adc {
 			compatible = "digi,mca-adc";
@@ -329,7 +314,6 @@
 			status = "disabled";
 		};
 	};
-#endif
 };
 
 /* Bluetooth UART */
