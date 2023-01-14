@@ -78,6 +78,11 @@
 	};
 };
 
+/* Configure pwrkey to generate KEY_SLEEP events */
+&bbnsm_pwrkey {
+	linux,keycode = <KEY_SLEEP>;
+};
+
 /* I2C bus conneccted to MCA and PMIC */
 &lpi2c1 {
 	#address-cells = <1>;
