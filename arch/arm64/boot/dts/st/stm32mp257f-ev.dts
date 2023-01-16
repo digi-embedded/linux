@@ -37,6 +37,10 @@
 	status = "okay";
 };
 
+&rtc {
+	status = "okay";
+};
+
 &scmi_regu {
 	scmi_v3v3: voltd-v3v3 {
 		reg = <VOLTD_SCMI_STPMIC2_BUCK7>;
