@@ -1469,6 +1469,13 @@
 			status = "disabled";
 		};
 
+		crc1: crc@58009000 {
+			compatible = "st,stm32f7-crc";
+			reg = <0x58009000 0x400>;
+			clocks = <&rcc CRC1>;
+			status = "disabled";
+		};
+
 		eth1: eth1@5800a000 {
 			compatible = "snps,dwmac-4.20a", "st,stm32mp13-dwmac";
 			reg = <0x5800a000 0x2000>;
