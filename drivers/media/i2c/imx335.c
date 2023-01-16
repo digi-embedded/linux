@@ -941,6 +941,7 @@ static int imx335_power_on(struct device *dev)
 	struct imx335 *imx335 = to_imx335(sd);
 	int ret;
 
+	gpiod_set_value_cansleep(imx335->reset_gpio, 0);
 	gpiod_set_value_cansleep(imx335->powerdown_gpio, 1);
 	/*
 	 * Spec says that T-low (timing between power on and rise of reset)
@@ -955,7 +956,8 @@ static int imx335_power_on(struct device *dev)
 		goto error_reset;
 	}
 
-	usleep_range(20, 22);
+	/* Ensure that all is stable after reset */
+	usleep_range(5000, 10000);
 
 	return 0;
 
