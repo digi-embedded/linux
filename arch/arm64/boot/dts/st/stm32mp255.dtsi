@@ -18,6 +18,17 @@
 				clocks = <&rcc CK_BUS_VDEC>;
 				feature-domains = <&rifsc STM32MP25_RIFSC_VDEC_ID>;
 			};
+			venc: venc@480e0000 {
+				compatible = "st,stm32mp25-venc";
+				reg = <0x480e0000 0x800>;
+				reset-names = "venc-rst";
+				resets = <&rcc VENC_R>;
+				interrupt-names = "venc";
+				interrupts = <GIC_SPI 167 IRQ_TYPE_LEVEL_HIGH>;
+				clock-names = "venc-clk";
+				clocks = <&rcc CK_BUS_VENC>;
+				feature-domains = <&rifsc STM32MP25_RIFSC_VENC_ID>;
+			};
 		};
 	};
 };
