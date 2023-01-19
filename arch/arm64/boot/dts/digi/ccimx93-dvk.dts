@@ -198,7 +198,7 @@
 		/* LVDS interrupt */
 		interrupt-parent = <&gpio2>;
 		interrupts = <24 IRQ_TYPE_EDGE_FALLING>;
-		irq-gpios = <&gpio2 24 GPIO_ACTIVE_LOW>;
+		irq-gpios = <&gpio2 24 GPIO_ACTIVE_HIGH>;
 		reload-fw-on-resume;
 		skip-firmware-request;
 		vin-supply = <&reg_5v_board>;
