@@ -898,11 +898,13 @@ retry_get_irq_gpio:
 			ts->irq_pin_access_method = IRQ_PIN_ACCESS_NONE;
 		break;
 	default:
-		if (ts->gpiod_int && ts->gpiod_rst) {
-			ts->reset_controller_at_probe = true;
+		if (ts->gpiod_int) {
 			ts->load_cfg_from_disk = false;
 			ts->irq_pin_access_method = IRQ_PIN_ACCESS_GPIO;
 		}
+
+		if (ts->gpiod_rst)
+			ts->reset_controller_at_probe = true;
 	}
 
 	return 0;
@@ -1207,6 +1209,8 @@ reset:
 		error = goodix_reset(ts);
 		if (error)
 			return error;
+	} else {
+		goodix_int_sync(ts);
 	}
 
 	error = goodix_i2c_test(client);
