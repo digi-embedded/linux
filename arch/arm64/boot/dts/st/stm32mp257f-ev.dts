@@ -19,6 +19,8 @@
 	compatible = "st,stm32mp257f-ev", "st,stm32mp257";
 
 	aliases {
+		ethernet0 = &eth2;
+		ethernet1 = &eth1;
 		serial0 = &usart2;
 	};
 
@@ -35,6 +37,67 @@
 &arm_wdt {
 	timeout-sec = <32>;
 	status = "okay";
+};
+
+&eth1 {
+	status = "okay";
+	pinctrl-0 = <&eth1_mdio_pins_a>;
+	pinctrl-names = "default";
+	phy-mode = "rgmii";
+	max-speed = <1000>;
+	st,eth-clk-sel;
+
+	fixed_link: fixed-link {
+		speed = <1000>;
+		full-duplex;
+	};
+
+	mdio1 {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		compatible = "snps,dwmac-mdio";
+
+		phy1_eth1: ethernet-phy@4 {
+			compatible = "ethernet-phy-id001c.c916",
+				     "ethernet-phy-ieee802.3-c22";
+			realtek,eee-disable;
+			reg = <4>;
+		};
+
+		phy2_eth1: ethernet-phy@5 {
+			compatible = "ethernet-phy-id001c.c916",
+				     "ethernet-phy-ieee802.3-c22";
+			reset-gpios =  <&gpioj 9 GPIO_ACTIVE_LOW>;
+			reset-assert-us = <10000>;
+			reset-deassert-us = <300>;
+			realtek,eee-disable;
+			reg = <5>;
+		};
+	};
+};
+
+&eth2 {
+	status = "okay";
+	pinctrl-0 = <&eth2_rgmii_pins_a>;
+	pinctrl-names = "default";
+	phy-mode = "rgmii-id";
+	max-speed = <1000>;
+	phy-handle = <&phy1_eth2>;
+	st,eth-ptp-from-rcc;
+
+	mdio1 {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		compatible = "snps,dwmac-mdio";
+		phy1_eth2: ethernet-phy@1 {
+			compatible = "ethernet-phy-id001c.c916";
+			reset-gpios =  <&gpiog 6 GPIO_ACTIVE_LOW>;
+			reset-assert-us = <10000>;
+			reset-deassert-us = <300>;
+			realtek,eee-disable;
+			reg = <1>;
+		};
+	};
 };
 
 &i2c2 {
@@ -85,6 +148,14 @@
 	vmmc-supply = <&scmi_vdd_sdcard>;
 	vqmmc-supply = <&scmi_vddio1>;
 	status = "okay";
+};
+
+&switch0 {
+	status = "okay";
+	pinctrl-0 = <&eth1_rgmii_pins_a>, <&eth3_rgmii_pins_a>;
+	pinctrl-names = "default";
+	phy-mode = "rgmii";
+	st,ethsw-internal-125;
 };
 
 &usart2 {
