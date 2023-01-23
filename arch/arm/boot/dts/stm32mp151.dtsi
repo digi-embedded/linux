@@ -28,21 +28,9 @@
 		};
 	};
 
-	arm-pmu {
-		compatible = "arm,cortex-a7-pmu";
-		interrupts = <GIC_SPI 200 IRQ_TYPE_LEVEL_HIGH>;
-		interrupt-affinity = <&cpu0>;
-		interrupt-parent = <&intc>;
-	};
-
 	cpu0_opp_table: cpu0-opp-table {
 		compatible = "operating-points-v2";
 		opp-shared;
-	};
-
-	psci {
-		compatible = "arm,psci-1.0";
-		method = "smc";
 	};
 
 	intc: interrupt-controller@a0021000 {
@@ -51,6 +39,18 @@
 		interrupt-controller;
 		reg = <0xa0021000 0x1000>,
 		      <0xa0022000 0x2000>;
+	};
+
+	arm-pmu {
+		compatible = "arm,cortex-a7-pmu";
+		interrupts = <GIC_SPI 200 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-affinity = <&cpu0>;
+		interrupt-parent = <&intc>;
+	};
+
+	psci {
+		compatible = "arm,psci-1.0";
+		method = "smc";
 	};
 
 	timer {
@@ -63,6 +63,12 @@
 	};
 
 	clocks {
+		clk_csi: clk-csi {
+			#clock-cells = <0>;
+			compatible = "fixed-clock";
+			clock-frequency = <4000000>;
+		};
+
 		clk_hse: clk-hse {
 			#clock-cells = <0>;
 			compatible = "fixed-clock";
@@ -86,37 +92,6 @@
 			compatible = "fixed-clock";
 			clock-frequency = <32000>;
 		};
-
-		clk_csi: clk-csi {
-			#clock-cells = <0>;
-			compatible = "fixed-clock";
-			clock-frequency = <4000000>;
-		};
-	};
-
-	thermal-zones {
-		cpu_thermal: cpu-thermal {
-			polling-delay-passive = <0>;
-			polling-delay = <0>;
-			thermal-sensors = <&dts>;
-
-			trips {
-				cpu-crit {
-					temperature = <120000>;
-					hysteresis = <0>;
-					type = "critical";
-				};
-			};
-
-			cooling-maps {
-			};
-		};
-	};
-
-	booster: regulator-booster {
-		compatible = "st,stm32mp1-booster";
-		st,syscfg = <&syscfg>;
-		status = "disabled";
 	};
 
 	pm_domain {
@@ -135,6 +110,31 @@
 				reg = <2>;
 				#power-domain-cells = <0>;
 				label = "CORE";
+			};
+		};
+	};
+
+	booster: regulator-booster {
+		compatible = "st,stm32mp1-booster";
+		st,syscfg = <&syscfg>;
+		status = "disabled";
+	};
+
+	thermal-zones {
+		cpu_thermal: cpu-thermal {
+			polling-delay-passive = <0>;
+			polling-delay = <0>;
+			thermal-sensors = <&dts>;
+
+			trips {
+				cpu-crit {
+					temperature = <120000>;
+					hysteresis = <0>;
+					type = "critical";
+				};
+			};
+
+			cooling-maps {
 			};
 		};
 	};
@@ -1263,7 +1263,7 @@
 			};
 		};
 
-		pwr_mcu: pwr_mcu@50001014 {
+		pwr_mcu: pwr-mcu@50001014 {
 			compatible = "st,stm32mp151-pwr-mcu", "syscon";
 			reg = <0x50001014 0x4>;
 		};
@@ -1530,7 +1530,7 @@
 			interrupts = <GIC_SPI 80 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&rcc HASH1>;
 			resets = <&rcc HASH1_R>;
-			dmas = <&mdma1 31 0x2 0x1000A02 0x0 0x0>;
+			dmas = <&mdma1 31 0x2 0x1000a02 0x0 0x0>;
 			dma-names = "in";
 			dma-maxburst = <2>;
 			status = "disabled";
@@ -2013,10 +2013,10 @@
 			      <0x30000000 0x40000>,
 			      <0x38000000 0x10000>;
 			resets = <&rcc MCU_R>;
-			st,syscfg-holdboot = <&rcc 0x10C 0x1>;
+			st,syscfg-holdboot = <&rcc 0x10c 0x1>;
 			st,syscfg-pdds = <&pwr_mcu 0x0 0x1>;
-			st,syscfg-rsc-tbl = <&tamp 0x144 0xFFFFFFFF>;
-			st,syscfg-m4-state = <&tamp 0x148 0xFFFFFFFF>;
+			st,syscfg-rsc-tbl = <&tamp 0x144 0xffffffff>;
+			st,syscfg-m4-state = <&tamp 0x148 0xffffffff>;
 			status = "disabled";
 
 			m4_system_resources {

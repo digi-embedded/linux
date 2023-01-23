@@ -19,6 +19,10 @@
 	model = "STMicroelectronics STM32MP157C eval daughter";
 	compatible = "st,stm32mp157c-ed1", "st,stm32mp157";
 
+	aliases {
+		serial0 = &uart4;
+	};
+
 	chosen {
 		stdout-path = "serial0:115200n8";
 	};
@@ -81,10 +85,6 @@
 		};
 	};
 
-	aliases {
-		serial0 = &uart4;
-	};
-
 	led {
 		compatible = "gpio-leds";
 		led-blue {
@@ -95,7 +95,7 @@
 		};
 	};
 
-	sd_switch: regulator-sd_switch {
+	sd_switch: regulator-sd-switch {
 		compatible = "regulator-gpio";
 		regulator-name = "sd_switch";
 		regulator-min-microvolt = <1800000>;
@@ -301,7 +301,7 @@
 				interrupts = <IT_CURLIM_LDO6 0>;
 			};
 
-			vref_ddr: vref_ddr {
+			vref_ddr: vref-ddr {
 				regulator-name = "vref_ddr";
 				regulator-always-on;
 			};
@@ -311,12 +311,12 @@
 				interrupts = <IT_OCP_BOOST 0>;
 			};
 
-			vbus_otg: pwr_sw1 {
+			vbus_otg: pwr-sw1 {
 				regulator-name = "vbus_otg";
 				interrupts = <IT_OCP_OTG 0>;
 			};
 
-			vbus_sw: pwr_sw2 {
+			vbus_sw: pwr-sw2 {
 				regulator-name = "vbus_sw";
 				interrupts = <IT_OCP_SWOUT 0>;
 				regulator-active-discharge = <1>;

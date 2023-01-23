@@ -14,6 +14,11 @@
 	model = "STMicroelectronics STM32MP157C eval daughter on eval mother";
 	compatible = "st,stm32mp157c-ev1", "st,stm32mp157c-ed1", "st,stm32mp157";
 
+	aliases {
+		serial1 = &usart3;
+		ethernet0 = &ethernet0;
+	};
+
 	chosen {
 		#address-cells = <1>;
 		#size-cells = <1>;
@@ -25,11 +30,6 @@
 			clocks = <&rcc LTDC_PX>;
 			status = "disabled";
 		};
-	};
-
-	aliases {
-		serial1 = &usart3;
-		ethernet0 = &ethernet0;
 	};
 
 	clocks {
