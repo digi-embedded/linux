@@ -33,6 +33,7 @@ ccimx8m_som_overlays := _ov_som_bt_ccimx8m.dtbo \
 
 ccimx8m_dvk_overlays := _ov_board_flexspi_ccimx8m-dvk.dtbo \
 			_ov_board_gpio-watchdog_ccimx8m-dvk.dtbo \
+			_ov_board_hsd101pfw2-lvds_ccimx8m-dvk.dtbo \
 			_ov_board_lvds_ccimx8m-dvk.dtbo \
 			_ov_board_user-leds_ccimx8m-dvk.dtbo
 
