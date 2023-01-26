@@ -136,7 +136,7 @@
 
 /* 10/100 Ethernet */
 &eth2 {
-	status = "disabled";
+	status = "okay";
 	pinctrl-0 = <&ccmp13_eth2_rmii_pins>;
 	pinctrl-1 = <&ccmp13_eth2_rmii_sleep_pins>;
 	pinctrl-names = "default", "sleep";
@@ -154,7 +154,7 @@
 		phy0_eth2: ethernet-phy@0 {
 			reg = <0>;
 			compatible = "ethernet-phy-id0007.c0f0"; /* PHY ID for SMSC LAN8720Ai */
-			reset-gpios = <&gpioi 2 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+			reset-gpios = <&gpioh 7 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
 		};
 	};
 };
@@ -469,7 +469,7 @@
 		pins1 {
 			pinmux = <STM32_PINMUX('F', 7,  AF11)>, /* ETH2_TXD0 */
 				 <STM32_PINMUX('G', 11, AF10)>, /* ETH2_TXD1 */
-				 <STM32_PINMUX('H', 11, AF11)>, /* ETH2_REF_CLK */
+				 <STM32_PINMUX('A', 11, AF13)>, /* ETH2_CLK */
 				 <STM32_PINMUX('F', 6,  AF11)>, /* ETH2_TX_EN */
 				 <STM32_PINMUX('B', 2,  AF11)>, /* ETH2_MDIO */
 				 <STM32_PINMUX('G', 5,  AF10)>; /* ETH2_MDC */
@@ -481,7 +481,8 @@
 		pins2 {
 			pinmux = <STM32_PINMUX('F', 4,  AF11)>, /* ETH2_RXD0 */
 				 <STM32_PINMUX('E', 2,  AF10)>, /* ETH2_RXD1 */
-				 <STM32_PINMUX('A', 12, AF11)>; /* ETH2_RX_DV */
+				 <STM32_PINMUX('A', 12, AF11)>, /* ETH2_RX_DV */
+				 <STM32_PINMUX('F', 11, AF12)>; /* ETH2_RX_ER */
 			bias-disable;
 		};
 	};
@@ -490,13 +491,14 @@
 		pins1 {
 			pinmux = <STM32_PINMUX('F', 7,  ANALOG)>, /* ETH2_TXD0 */
 				 <STM32_PINMUX('G', 11, ANALOG)>, /* ETH2_TXD1 */
-				 <STM32_PINMUX('H', 11, ANALOG)>, /* ETH2_REF_CLK */
+				 <STM32_PINMUX('A', 11, ANALOG)>, /* ETH2_CLK */
 				 <STM32_PINMUX('F', 6,  ANALOG)>, /* ETH2_TX_EN */
 				 <STM32_PINMUX('B', 2,  ANALOG)>, /* ETH2_MDIO */
 				 <STM32_PINMUX('G', 5,  ANALOG)>, /* ETH2_MDC */
 				 <STM32_PINMUX('F', 4,  ANALOG)>, /* ETH2_RXD0 */
 				 <STM32_PINMUX('E', 2,  ANALOG)>, /* ETH2_RXD1 */
-				 <STM32_PINMUX('A', 12, ANALOG)>; /* ETH2_RX_DV */
+				 <STM32_PINMUX('A', 12, ANALOG)>, /* ETH2_RX_DV */
+				 <STM32_PINMUX('F', 11, ANALOG)>; /* ETH2_RX_ER */
 		};
 	};
 
