@@ -52,6 +52,7 @@ ccimx93-dtbs :=		ccimx93-dvk.dtb \
 			_ov_som_mca_ccimx93.dtbo \
 			_ov_som_npu_ccimx93.dtbo \
 			_ov_som_wifi_ccimx93.dtbo \
+			_ov_board_dsi_display_ccimx93-dvk.dtbo \
 			_ov_board_enet2_ccimx93-dvk.dtbo \
 			_ov_board_lvds_ccimx93-dvk.dtbo \
 			_ov_board_mikroe-accel2-click_ccimx93-dvk.dtbo \
