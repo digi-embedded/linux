@@ -6,6 +6,7 @@
  * Author: Christian Bruel <christian.bruel@foss.st.com>
  */
 
+#include <linux/bitfield.h>
 #include <linux/clk.h>
 #include <linux/io.h>
 #include <linux/mfd/syscon.h>
@@ -26,6 +27,8 @@
 
 /* SYSCFG PCIEPRGCR */
 #define STM32MP25_PCIEPRGCR_EN	  BIT(0)
+#define STM32MP25_PCIEPRG_IMPCTRL_OHM     GENMASK(3, 1)
+#define STM32MP25_PCIEPRG_IMPCTRL_VSWING  GENMASK(5, 4)
 
 /* SYSCFG SYSCFG_COMBOPHY_SR */
 #define STM32MP25_PIPE0_PHYSTATUS BIT(1)
@@ -79,6 +82,80 @@ struct stm32_combophy {
 	unsigned int type;
 };
 
+struct clk_impedance  {
+	u32 microohm;
+	u32 vswing[4];
+};
+
+/*
+ * lookup table to hold the settings needed for a ref clock frequency
+ * impedance, the offset is used to set the IMP_CTL and DE_EMP bit of the
+ * PRG_IMP_CTRL register
+ */
+static const struct clk_impedance imp_lookup[] = {
+	{ 6090000, { 442000, 564000, 684000, 802000 } },
+	{ 5662000, { 528000, 621000, 712000, 803000 } },
+	{ 5292000, { 491000, 596000, 700000, 802000 } },
+	{ 4968000, { 558000, 640000, 722000, 803000 } },
+	{ 4684000, { 468000, 581000, 692000, 802000 } },
+	{ 4429000, { 554000, 613000, 717000, 803000 } },
+	{ 4204000, { 511000, 609000, 706000, 802000 } },
+	{ 3999000, { 571000, 648000, 726000, 803000 } }
+};
+
+static int stm32_impedance_tune(struct stm32_combophy *combophy)
+{
+	u8 imp_size = ARRAY_SIZE(imp_lookup);
+	u8 vswing_size = ARRAY_SIZE(imp_lookup[0].vswing);
+	u8 imp_of, vswing_of;
+	u32 max_imp = imp_lookup[0].microohm;
+	u32 min_imp = imp_lookup[imp_size - 1].microohm;
+	u32 max_vswing = imp_lookup[imp_size - 1].vswing[vswing_size - 1];
+	u32 min_vswing = imp_lookup[0].vswing[0];
+	u32 val;
+
+	if (!of_property_read_u32(combophy->dev->of_node, "st,output-micro-ohms", &val)) {
+		if (val < min_imp || val > max_imp) {
+			dev_err(combophy->dev, "Invalid value %u for ouput ohm\n", val);
+			return -EINVAL;
+		}
+
+		for (imp_of = 0 ; imp_of < ARRAY_SIZE(imp_lookup); imp_of++)
+			if (imp_lookup[imp_of].microohm <= val)
+				break;
+
+		dev_dbg(combophy->dev, "Set %u micro-ohms ouput impedance\n",
+			imp_lookup[imp_of].microohm);
+
+		regmap_update_bits(combophy->regmap, SYSCFG_PCIEPRGCR,
+				   STM32MP25_PCIEPRG_IMPCTRL_OHM,
+				   FIELD_PREP(STM32MP25_PCIEPRG_IMPCTRL_OHM, imp_of));
+	} else {
+		regmap_read(combophy->regmap, SYSCFG_PCIEPRGCR, &val);
+		imp_of = FIELD_GET(STM32MP25_PCIEPRG_IMPCTRL_OHM, val);
+	}
+
+	if (!of_property_read_u32(combophy->dev->of_node, "st,output-vswing-microvolt", &val)) {
+		if (val < min_vswing || val > max_vswing) {
+			dev_err(combophy->dev, "Invalid value %u for ouput vswing\n", val);
+			return -EINVAL;
+		}
+
+		for (vswing_of = 0 ; vswing_of < ARRAY_SIZE(imp_lookup[imp_of].vswing); vswing_of++)
+			if (imp_lookup[imp_of].vswing[vswing_of] >= val)
+				break;
+
+		dev_dbg(combophy->dev, "Set %u microvolt swing\n",
+			 imp_lookup[imp_of].vswing[vswing_of]);
+
+		regmap_update_bits(combophy->regmap, SYSCFG_PCIEPRGCR,
+				   STM32MP25_PCIEPRG_IMPCTRL_VSWING,
+				   FIELD_PREP(STM32MP25_PCIEPRG_IMPCTRL_VSWING, vswing_of));
+	}
+
+	return 0;
+}
+
 static int stm32_combophy_pll_init(struct stm32_combophy *combophy)
 {
 	int ret;
@@ -114,6 +191,12 @@ static int stm32_combophy_pll_init(struct stm32_combophy *combophy)
 		dev_info(combophy->dev, "Enabling clock with SSC\n");
 		regmap_update_bits(combophy->regmap, SYSCFG_COMBOPHY_CR1,
 				   SYSCFG_COMBOPHY_CR1_SSCEN, SYSCFG_COMBOPHY_CR1_SSCEN);
+	}
+
+	ret = stm32_impedance_tune(combophy);
+	if (ret) {
+		reset_control_deassert(combophy->phy_reset);
+		goto out;
 	}
 
 	if (combophy->type == PHY_TYPE_PCIE)
