@@ -901,6 +901,10 @@ static int mca_uart_allocate_port_resources(struct mca_uart_drv *uart_drv,
 	struct regmap *regmap = mca_uart->mca->regmap;
 	int i, ret;
 
+	/* wait for the gpio-mca driver until it is initialized */
+	if (mca_uart->mca->gpio_base == -1)
+		return -EPROBE_DEFER;
+
 	/* Request GPIOs */
 	for (i = 0; i < mca_uart->npins; i++) {
 		int mca_io = mca_uart->pins[i];

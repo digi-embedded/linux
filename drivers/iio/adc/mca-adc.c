@@ -717,6 +717,10 @@ static int mca_adc_probe(struct platform_device *pdev)
 	if (!mca_dev || !mca_dev->parent || !mca_dev->parent->of_node)
 		return -EPROBE_DEFER;
 
+	/* wait for the gpio-mca driver until it is initialized */
+	if (mca->gpio_base == -1)
+		return -EPROBE_DEFER;
+
 	indio_dev = devm_iio_device_alloc(&pdev->dev, sizeof(*mca_adc));
 	if (!indio_dev) {
 		dev_err(&pdev->dev, "Failed to allocate indio_dev device\n");
