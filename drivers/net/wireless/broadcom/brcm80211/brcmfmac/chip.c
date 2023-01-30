@@ -1714,6 +1714,7 @@ bool brcmf_chip_sr_capable(struct brcmf_chip *pub)
 	case BRCM_CC_4359_CHIP_ID:
 	case CY_CC_43752_CHIP_ID:
 	case CY_CC_43012_CHIP_ID:
+	case CY_CC_43022_CHIP_ID:
 		addr = CORE_CC_REG(pmu->base, retention_ctl);
 		reg = chip->ops->read32(chip->ctx, addr);
 		return (reg & (PMU_RCTL_MACPHY_DISABLE_MASK |
@@ -1747,6 +1748,7 @@ void brcmf_chip_reset_pmu_regs(struct brcmf_chip *pub)
 
 	switch (pub->chip) {
 	case CY_CC_43012_CHIP_ID:
+	case CY_CC_43022_CHIP_ID:
 		/* SW scratch */
 		addr = CORE_CC_REG(base, swscratch);
 		chip->ops->write32(chip->ctx, addr, 0);
@@ -1780,6 +1782,7 @@ void brcmf_chip_set_default_min_res_mask(struct brcmf_chip *pub)
 	base = brcmf_chip_get_pmu(pub)->base;
 	switch (pub->chip) {
 	case CY_CC_43012_CHIP_ID:
+	case CY_CC_43022_CHIP_ID:
 		addr = CORE_CC_REG(base, min_res_mask);
 		chip->ops->write32(chip->ctx, addr,
 			CY_43012_PMU_MIN_RES_MASK);
@@ -1852,6 +1855,7 @@ void brcmf_chip_reset_watchdog(struct brcmf_chip *pub)
 
 	switch (pub->chip) {
 	case CY_CC_43012_CHIP_ID:
+	case CY_CC_43022_CHIP_ID:
 		addr = CORE_CC_REG(base, min_res_mask);
 		chip->ops->write32(chip->ctx, addr,
 			CY_43012_PMU_MIN_RES_MASK);
