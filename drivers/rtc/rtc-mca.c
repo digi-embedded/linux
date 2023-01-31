@@ -1,5 +1,5 @@
 /* rtc-mca.c - Real time clock device driver for MCA on ConnectCore modules
- * Copyright (C) 2016 - 2022  Digi International
+ * Copyright (C) 2016 - 2023  Digi International
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -51,6 +51,7 @@ struct mca_rtc {
 	int irq_1HZ;
 	int irq_periodic;
 	bool alarm_enabled;
+	bool prepare_enabled;
 };
 
 enum {
@@ -198,10 +199,13 @@ static int mca_rtc_read_time(struct device *dev, struct rtc_time *tm)
 	int ret;
 	unsigned int rtc_adquire_datetime = MCA_RTC_ACQUIRE_REQUESTED;
 
-	ret = regmap_write(rtc->mca->regmap, MCA_RTC_PREPARE_DATETIME,
-			   rtc_adquire_datetime);
-	if (ret)
-		dev_warn(dev, "failed to write PREPARE_DATETIME (%d)\n", ret);
+	if (rtc->prepare_enabled) {
+		ret = regmap_write(rtc->mca->regmap, MCA_RTC_PREPARE_DATETIME,
+				   rtc_adquire_datetime);
+		if (ret)
+			dev_warn(dev, "failed to write PREPARE_DATETIME (%d)\n",
+				 ret);
+	}
 
 	ret = regmap_bulk_read(rtc->mca->regmap, MCA_RTC_COUNT_YEAR_L,
 			       data, CLOCK_DATA_LEN);
@@ -256,10 +260,13 @@ static int mca_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alrm)
 	unsigned int val;
 	unsigned int rtc_adquire_alarm = MCA_RTC_ACQUIRE_REQUESTED;
 
-	ret = regmap_write(rtc->mca->regmap, MCA_RTC_PREPARE_ALARM,
-			   rtc_adquire_alarm);
-	if (ret)
-		dev_warn(dev, "failed to write PREPARE_ALARM (%d)\n", ret);
+	if (rtc->prepare_enabled) {
+		ret = regmap_write(rtc->mca->regmap, MCA_RTC_PREPARE_ALARM,
+				   rtc_adquire_alarm);
+		if (ret)
+			dev_warn(dev, "failed to write PREPARE_ALARM (%d)\n",
+				 ret);
+	}
 
 	ret = regmap_bulk_read(rtc->mca->regmap, MCA_RTC_ALARM_YEAR_L,
 			       data, ALARM_DATA_LEN);
@@ -462,6 +469,9 @@ static int mca_rtc_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, rtc);
 	device_init_wakeup(&pdev->dev, 1);
 	rtc->mca = mca;
+
+	/* Use prepare command depending on the version of the firmware */
+	rtc->prepare_enabled = mca->rtc_prepare_enabled;
 
 	/* Find entry in device-tree */
 	if (mca->dev->of_node) {
