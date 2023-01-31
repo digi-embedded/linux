@@ -1991,9 +1991,14 @@ static void ov5640_power(struct ov5640_dev *sensor, bool enable)
 
 static void ov5640_reset(struct ov5640_dev *sensor)
 {
-	if (!sensor->reset_gpio)
-		return;
+	struct i2c_client *client = sensor->i2c_client;
 
+	if (!sensor->reset_gpio) {
+		dev_dbg(&client->dev, "%s: no reset line, skiping\n", __func__);
+		return;
+    }
+
+	dev_dbg(&client->dev, "%s: reset with power cycle\n", __func__);
 	gpiod_set_value_cansleep(sensor->reset_gpio, 0);
 
 	/* camera power cycle */
@@ -2003,7 +2008,7 @@ static void ov5640_reset(struct ov5640_dev *sensor)
 	usleep_range(5000, 10000);
 
 	gpiod_set_value_cansleep(sensor->reset_gpio, 1);
-	usleep_range(1000, 2000);
+	usleep_range(10000, 20000);
 
 	gpiod_set_value_cansleep(sensor->reset_gpio, 0);
 	usleep_range(20000, 25000);
@@ -2029,8 +2034,8 @@ static int ov5640_set_power_on(struct ov5640_dev *sensor)
 		goto xclk_off;
 	}
 
-	ov5640_reset(sensor);
 	ov5640_power(sensor, true);
+	ov5640_reset(sensor);
 
 	ret = ov5640_init_slave_id(sensor);
 	if (ret)
