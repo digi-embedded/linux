@@ -344,8 +344,13 @@ int dcmipp_colorconv_configure(struct device *dev,
 		FMT_STR(sink_fmt), RANGE_STR(sink_range),
 		FMT_STR(src_fmt), RANGE_STR(src_range));
 
-	if (src_range == RANGE_LIMITED)
+	if (src_range == RANGE_LIMITED) {
 		cfg->clamping = true;
+		if (src->code >= MEDIA_BUS_FMT_Y8_1X8 && src->code < MEDIA_BUS_FMT_SBGGR8_1X8)
+			cfg->clamping_as_rgb = false;
+		else
+			cfg->clamping_as_rgb = true;
+	}
 
 	cfg->enable = true;
 

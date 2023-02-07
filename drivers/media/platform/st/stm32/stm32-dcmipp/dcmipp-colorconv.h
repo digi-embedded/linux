@@ -14,6 +14,7 @@
 struct dcmipp_colorconv_config {
 	unsigned int conv_matrix[6];
 	bool clamping;
+	bool clamping_as_rgb;
 	bool enable;
 };
 

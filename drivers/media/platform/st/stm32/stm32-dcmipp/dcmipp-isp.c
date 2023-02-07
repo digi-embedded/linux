@@ -562,10 +562,6 @@ static int dcmipp_isp_get_fmt(struct v4l2_subdev *sd,
 	return 0;
 }
 
-#define dcmipp_isp_is_yuv_fmt(a) ({					      \
-	typeof(a) __a = (a);						      \
-	((__a) >= MEDIA_BUS_FMT_Y8_1X8 && (__a) < MEDIA_BUS_FMT_SBGGR8_1X8) ? \
-	 true : false; })
 static int dcmipp_isp_set_fmt(struct v4l2_subdev *sd,
 			      struct v4l2_subdev_state *state,
 			      struct v4l2_subdev_format *fmt)
@@ -596,7 +592,8 @@ static int dcmipp_isp_set_fmt(struct v4l2_subdev *sd,
 	if (IS_SINK(fmt->pad) && fmt->which == V4L2_SUBDEV_FORMAT_ACTIVE) {
 		/* When setting sink format, we have to update the src format */
 		isp->src_fmt = fmt->format;
-		if (dcmipp_isp_is_yuv_fmt(fmt->format.code))
+		if (fmt->format.code >= MEDIA_BUS_FMT_Y8_1X8 &&
+		    fmt->format.code < MEDIA_BUS_FMT_SBGGR8_1X8)
 			isp->src_fmt.code = MEDIA_BUS_FMT_YUV8_1X24;
 		else
 			isp->src_fmt.code = MEDIA_BUS_FMT_RGB888_1X24;
@@ -870,7 +867,7 @@ static int dcmipp_isp_colorconv_config(struct dcmipp_isp_device *isp)
 
 	if (ccconf.clamping)
 		val |= DCMIPP_P1CCCR_CLAMP;
-	if (!dcmipp_isp_is_yuv_fmt(isp->src_fmt.code))
+	if (ccconf.clamping_as_rgb)
 		val |= DCMIPP_P1CCCR_TYPE_RGB;
 	if (ccconf.enable)
 		val |= DCMIPP_P1CCCR_ENABLE;

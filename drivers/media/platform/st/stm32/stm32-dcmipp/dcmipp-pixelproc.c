@@ -410,10 +410,6 @@ static int dcmipp_pixelproc_get_fmt(struct v4l2_subdev *sd,
 	return 0;
 }
 
-#define dcmipp_pixelproc_is_yuv_fmt(a) ({				      \
-	typeof(a) __a = (a);						      \
-	((__a) >= MEDIA_BUS_FMT_Y8_1X8 && (__a) < MEDIA_BUS_FMT_SBGGR8_1X8) ? \
-	 true : false; })
 static int dcmipp_pixelproc_set_fmt(struct v4l2_subdev *sd,
 				    struct v4l2_subdev_state *state,
 				    struct v4l2_subdev_format *fmt)
@@ -470,10 +466,11 @@ static int dcmipp_pixelproc_set_fmt(struct v4l2_subdev *sd,
 
 		/* Update src pad format & size */
 		pixelproc->src_fmt = fmt_src_default;
-		pixelproc->src_fmt.code =
-			dcmipp_pixelproc_is_yuv_fmt(fmt->format.code) ?
-				MEDIA_BUS_FMT_YUYV8_2X8 :
-				MEDIA_BUS_FMT_RGB565_2X8_LE;
+		if (fmt->format.code >= MEDIA_BUS_FMT_Y8_1X8 &&
+		    fmt->format.code < MEDIA_BUS_FMT_SBGGR8_1X8)
+			pixelproc->src_fmt.code = MEDIA_BUS_FMT_YUYV8_2X8;
+		else
+			pixelproc->src_fmt.code = MEDIA_BUS_FMT_RGB565_2X8_LE;
 		pixelproc->src_fmt.width = fmt->format.width;
 		pixelproc->src_fmt.height = fmt->format.height;
 	}
@@ -634,7 +631,7 @@ dcmipp_pixelproc_colorconv_config(struct dcmipp_pixelproc_device *pixelproc)
 
 	if (ccconf.clamping)
 		val |= DCMIPP_P1YUVCR_CLAMP;
-	if (!dcmipp_pixelproc_is_yuv_fmt(pixelproc->src_fmt.code))
+	if (ccconf.clamping_as_rgb)
 		val |= DCMIPP_P1YUVCR_TYPE_RGB;
 	if (ccconf.enable)
 		val |= DCMIPP_P1YUVCR_ENABLE;
