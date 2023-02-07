@@ -1189,6 +1189,22 @@ struct v4l2_ctrl_isp_contrast {
 	__u8 lum[9];
 };
 
+#define V4L2_CID_ISP_COLOR_CONV			(V4L2_CID_IMAGE_PROC_CLASS_BASE + 8)
+/**
+ * struct v4l2_ctrl_isp_color_conv - Color Conversion parameters within an ISP
+ *
+ * @enable: boolean indicating if the color conversion should be enabled or not
+ * @clamping: boolean indicating if the converted color shall be clamped or not
+ * @clamping_as_rgb: boolean indicating if the clamping applies to RGB color space (YUV otherwise)
+ * @coeff: color conversion coefficients of the matrix (RGB 3x3 + 1 offset column)
+ */
+struct v4l2_ctrl_isp_color_conv {
+	bool enable;
+	bool clamping;
+	bool clamping_as_rgb;
+	__u16 coeff[3][4];
+};
+
 #define V4L2_CID_ISP_STAT_REGION		(V4L2_CID_IMAGE_PROC_CLASS_BASE + 10)
 /**
  * struct v4l2_ctrl_isp_stat_region - Region where ISP statistics are collected

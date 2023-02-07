@@ -1123,6 +1123,7 @@ const char *v4l2_ctrl_get_name(u32 id)
 
 	case V4L2_CID_ISP_EXPOSURE:		return "ISP Exposure";
 	case V4L2_CID_ISP_CONTRAST:		return "ISP Contrast";
+	case V4L2_CID_ISP_COLOR_CONV:		return "ISP Color Conversion";
 	case V4L2_CID_ISP_STAT_REGION:		return "ISP Stat Region";
 	case V4L2_CID_ISP_STAT_LOCATION:	return "ISP Stat Location";
 	case V4L2_CID_ISP_STAT_AVG_FILTER:	return "ISP Stat Average Filter";
@@ -1551,6 +1552,9 @@ void v4l2_ctrl_fill(u32 id, const char **name, enum v4l2_ctrl_type *type,
 		break;
 	case V4L2_CID_ISP_CONTRAST:
 		*type = V4L2_CTRL_TYPE_ISP_CONTRAST;
+		break;
+	case V4L2_CID_ISP_COLOR_CONV:
+		*type = V4L2_CTRL_TYPE_ISP_COLOR_CONV;
 		break;
 	case V4L2_CID_ISP_STAT_REGION:
 		*type = V4L2_CTRL_TYPE_ISP_STAT_REGION;

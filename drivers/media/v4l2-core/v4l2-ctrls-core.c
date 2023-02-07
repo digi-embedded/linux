@@ -356,6 +356,9 @@ void v4l2_ctrl_type_op_log(const struct v4l2_ctrl *ctrl)
 	case V4L2_CTRL_TYPE_ISP_CONTRAST:
 		pr_cont("ISP_CONTRAST");
 		break;
+	case V4L2_CTRL_TYPE_ISP_COLOR_CONV:
+		pr_cont("ISP_COLOR_CONV");
+		break;
 	case V4L2_CTRL_TYPE_ISP_STAT_REGION:
 		pr_cont("ISP_STAT_REGION");
 		break;
@@ -929,6 +932,7 @@ static int std_validate_compound(const struct v4l2_ctrl *ctrl, u32 idx,
 
 	case V4L2_CTRL_TYPE_ISP_EXPOSURE:
 	case V4L2_CTRL_TYPE_ISP_CONTRAST:
+	case V4L2_CTRL_TYPE_ISP_COLOR_CONV:
 	case V4L2_CTRL_TYPE_ISP_STAT_REGION:
 		break;
 
@@ -1621,6 +1625,9 @@ static struct v4l2_ctrl *v4l2_ctrl_new(struct v4l2_ctrl_handler *hdl,
 		break;
 	case V4L2_CTRL_TYPE_ISP_CONTRAST:
 		elem_size = sizeof(struct v4l2_ctrl_isp_contrast);
+		break;
+	case V4L2_CTRL_TYPE_ISP_COLOR_CONV:
+		elem_size = sizeof(struct v4l2_ctrl_isp_color_conv);
 		break;
 	case V4L2_CTRL_TYPE_ISP_STAT_REGION:
 		elem_size = sizeof(struct v4l2_ctrl_isp_stat_region);
