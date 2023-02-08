@@ -80,6 +80,7 @@ struct phylink {
 	DECLARE_PHY_INTERFACE_MASK(sfp_interfaces);
 	__ETHTOOL_DECLARE_LINK_MODE_MASK(sfp_support);
 	u8 sfp_port;
+	bool mac_resume_phy_separately;
 };
 
 #define phylink_printk(level, pl, fmt, ...) \
@@ -1486,6 +1487,7 @@ struct phylink *phylink_create(struct phylink_config *config,
 		return ERR_PTR(-EINVAL);
 	}
 
+	pl->mac_resume_phy_separately = false;
 	pl->using_mac_select_pcs = using_mac_select_pcs;
 	pl->phy_state.interface = iface;
 	pl->link_interface = iface;
@@ -1938,8 +1940,12 @@ void phylink_start(struct phylink *pl)
 	}
 	if (poll)
 		mod_timer(&pl->link_poll, jiffies + HZ);
-	if (pl->phydev)
-		phy_start(pl->phydev);
+	if (pl->phydev) {
+		if (!pl->mac_resume_phy_separately)
+			phy_start(pl->phydev);
+		else
+			pl->mac_resume_phy_separately = false;
+	}
 	if (pl->sfp_bus)
 		sfp_upstream_start(pl->sfp_bus);
 }
@@ -2018,6 +2024,27 @@ void phylink_suspend(struct phylink *pl, bool mac_wol)
 	}
 }
 EXPORT_SYMBOL_GPL(phylink_suspend);
+
+/**
+ * phylink_phy_resume() - resume phy alone
+ * @pl: a pointer to a &struct phylink returned from phylink_create()
+ *
+ * In the MAC driver using phylink, if the MAC needs the clock of the phy
+ * when it resumes, can call this function to resume the phy separately.
+ * Then proceed to MAC resume operations.
+ */
+void phylink_phy_resume(struct phylink *pl)
+{
+	ASSERT_RTNL();
+
+	if (!test_bit(PHYLINK_DISABLE_MAC_WOL, &pl->phylink_disable_state)
+	    && pl->phydev) {
+		phy_start(pl->phydev);
+		pl->mac_resume_phy_separately = true;
+	}
+
+}
+EXPORT_SYMBOL_GPL(phylink_phy_resume);
 
 /**
  * phylink_resume() - handle a network device resume event
