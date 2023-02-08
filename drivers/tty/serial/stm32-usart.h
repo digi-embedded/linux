@@ -195,7 +195,7 @@ struct stm32_usart_info {
 static const unsigned int STM32_USART_PRESC_VAL[] = {1, 2, 4, 6, 8, 10, 12, 16, 32, 64, 128, 256};
 
 #define STM32_SERIAL_NAME "ttySTM"
-#define STM32_MAX_PORTS 8
+#define STM32_MAX_PORTS 9
 
 #define RX_BUF_L 4096		 /* dma rx buffer length     */
 #define RX_BUF_P (RX_BUF_L / 2)	 /* dma rx buffer period     */
