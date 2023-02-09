@@ -5562,6 +5562,11 @@ void brcmf_sdio_remove(struct brcmf_sdio *bus)
 								       &err);
 					reg_val |= SDIO_CCCR_BRCM_CARDCTRL_WLANRESET;
 
+					if (ifx_btsdio_set_bt_reset(bus_if))
+						reg_val |= SDIO_CCCR_BRCM_CARDCTRL_BTRESET;
+
+					brcmf_dbg(SDIO, "Write CARDCTRL = 0x%x\n", reg_val);
+
 					brcmf_sdiod_func0_wb(sdiodev, SDIO_CCCR_BRCM_CARDCTRL,
 							     reg_val, &err);
 					brcmf_sdiod_func0_wb(sdiodev, SDIO_CCCR_ABORT,
