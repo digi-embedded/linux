@@ -545,6 +545,10 @@ static int mca_init_hardware(struct mca_tamper *tp)
 					 tp->iface);
 			}
 		}
+	} else {
+		dev_warn(tp->mca->dev,
+			 "Error registering GPIO %d for tamper %d input. MCA GPIO driver might not be initialized.\n",
+			 tp->mca->gpio_base + tp->io_in, tp->iface);
 	}
 
 	return 0;
@@ -577,7 +581,8 @@ static int mca_tamper_probe(struct platform_device *pdev)
 	u16 num_tamper_ifaces;
 	u16 digital_tamper_cnt;
 
-	if (!mca || !mca->dev || !mca->dev->of_node || !devdata)
+	if (!mca || !mca->dev || !mca->dev->of_node || !devdata \
+		 || mca->gpio_base < 0)
 		return -EPROBE_DEFER;
 
 	pr_info("Tamper driver for MCA\n");
