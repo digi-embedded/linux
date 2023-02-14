@@ -13,6 +13,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <dt-bindings/rtc/rtc-stm32.h>
+
 /dts-v1/;
 /plugin/;
 
@@ -40,6 +42,16 @@
 		target = <&usart2>;
 		__overlay__ {
 			status = "okay";
+		};
+	};
+
+	/* Enable External 32kHz Low-Power Oscillator */
+	fragment@3 {
+		target = <&rtc>;
+		__overlay__ {
+			st,lsco = <RTC_OUT2_RMP>;
+			pinctrl-0 = <&rtc_out2_rmp_pins_a>;
+			pinctrl-names = "default";
 		};
 	};
 };

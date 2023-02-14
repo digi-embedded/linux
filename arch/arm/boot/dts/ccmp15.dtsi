@@ -192,9 +192,6 @@
 };
 
 &rtc {
-	st,lsco = <RTC_OUT2_RMP>;
-	pinctrl-0 = <&rtc_out2_rmp_pins_a>;
-	pinctrl-names = "default";
 	status = "okay";
 };
 
