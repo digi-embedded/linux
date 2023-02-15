@@ -251,7 +251,11 @@ struct sbsocramregs {
 #define BRCMF_BLHS_POLL_INTERVAL			10	/* msec */
 #define BRCMF_BLHS_D2H_READY_TIMEOUT			100	/* msec */
 #define BRCMF_BLHS_D2H_TRXHDR_PARSE_DONE_TIMEOUT	50	/* msec */
-#define BRCMF_BLHS_D2H_VALDN_DONE_TIMEOUT		450	/* msec */
+
+//TODO: original value is 450, check if need assign to specific chip or not.
+#define BRCMF_BLHS_D2H_VALDN_DONE_TIMEOUT		250	/* msec */
+#define BRCMF_BLHS_D2H_MV_NVRAM_DONE_TIMEOUT		100	/* msec */
+#define BRCMF_BLHS_D2H_BP_CLK_DISABLE_REQ_TIMEOUT	(5 * 1000)	/* msec */
 
 /* Bootloader handshake flags - dongle to host */
 #define BRCMF_BLHS_D2H_START			BIT(0)
@@ -261,12 +265,16 @@ struct sbsocramregs {
 #define BRCMF_BLHS_D2H_VALDN_START		BIT(4)
 #define BRCMF_BLHS_D2H_VALDN_RESULT		BIT(5)
 #define BRCMF_BLHS_D2H_VALDN_DONE		BIT(6)
+#define BRCMF_BLHS_D2H_MV_NVRAM_DONE		BIT(7)
+#define BRCMF_BLHS_D2H_BP_CLK_DISABLE_REQ	BIT(8)
 
 /* Bootloader handshake flags - host to dongle */
 #define BRCMF_BLHS_H2D_DL_FW_START		BIT(0)
 #define BRCMF_BLHS_H2D_DL_FW_DONE		BIT(1)
 #define BRCMF_BLHS_H2D_DL_NVRAM_DONE		BIT(2)
 #define BRCMF_BLHS_H2D_BL_RESET_ON_ERROR	BIT(3)
+#define BRCMF_BLHS_H2D_DL_NVRAM_START		BIT(4)
+#define BRCMF_BLHS_H2D_BP_CLK_DISABLE_ACK	BIT(5)
 
 struct brcmf_core_priv {
 	struct brcmf_core pub;
@@ -1079,7 +1087,7 @@ static int brcmf_blhs_is_bootloader_ready(struct brcmf_chip_priv *chip)
 	return 0;
 }
 
-static int brcmf_blhs_prep_fw_download(struct brcmf_chip *pub)
+static int brcmf_blhs_pre_nvram_download(struct brcmf_chip *pub)
 {
 	struct brcmf_chip_priv *chip;
 	u32 addr;
@@ -1093,6 +1101,51 @@ static int brcmf_blhs_prep_fw_download(struct brcmf_chip *pub)
 	if (err)
 		return err;
 
+	/* Host notification about NVRAM download start */
+	addr = pub->blhs->h2d;
+	pub->blhs->write(chip->ctx, addr, BRCMF_BLHS_H2D_DL_NVRAM_START);
+
+	return 0;
+}
+
+static int brcmf_blhs_ack_wait_dongle_access(struct brcmf_chip *pub)
+{
+	struct brcmf_chip_priv *chip;
+	u32 addr, base;
+	int err;
+
+	chip = container_of(pub, struct brcmf_chip_priv, pub);
+
+	addr = pub->blhs->d2h;
+	SPINWAIT_MS((pub->blhs->read(chip->ctx, addr) &
+		     BRCMF_BLHS_D2H_BP_CLK_DISABLE_REQ) == 0,
+		    BRCMF_BLHS_D2H_BP_CLK_DISABLE_REQ_TIMEOUT,
+		    BRCMF_BLHS_POLL_INTERVAL);
+
+	addr = pub->blhs->h2d;
+	pub->blhs->write(chip->ctx, addr, BRCMF_BLHS_H2D_BP_CLK_DISABLE_ACK);
+
+	err = brcmf_get_intr_pending_data(chip->ctx);
+
+	return err;
+}
+
+static int brcmf_blhs_prep_fw_download(struct brcmf_chip *pub)
+{
+	struct brcmf_chip_priv *chip;
+	u32 addr;
+	int err;
+
+	chip = container_of(pub, struct brcmf_chip_priv, pub);
+	/* Host indication for bootloader to start the init */
+	if (!(pub->chip == CY_CC_43022_CHIP_ID)) {
+		brcmf_blhs_init(pub);
+
+		chip = container_of(pub, struct brcmf_chip_priv, pub);
+		err = brcmf_blhs_is_bootloader_ready(chip);
+		if (err)
+			return err;
+	}
 	/* Host notification about FW download start */
 	addr = pub->blhs->h2d;
 	pub->blhs->write(chip->ctx, addr, BRCMF_BLHS_H2D_DL_FW_START);
@@ -1105,30 +1158,36 @@ static int brcmf_blhs_post_fw_download(struct brcmf_chip *pub)
 	struct brcmf_chip_priv *chip;
 	u32 addr;
 	u32 regdata;
+	int err = 0;
 
 	chip = container_of(pub, struct brcmf_chip_priv, pub);
 	addr = pub->blhs->h2d;
 	pub->blhs->write(chip->ctx, addr, BRCMF_BLHS_H2D_DL_FW_DONE);
-	addr = pub->blhs->d2h;
-	SPINWAIT_MS((pub->blhs->read(chip->ctx, addr) &
-		     BRCMF_BLHS_D2H_TRXHDR_PARSE_DONE) == 0,
-		    BRCMF_BLHS_D2H_TRXHDR_PARSE_DONE_TIMEOUT,
-		    BRCMF_BLHS_POLL_INTERVAL);
 
-	regdata = pub->blhs->read(chip->ctx, addr);
-	if (!(regdata & BRCMF_BLHS_D2H_TRXHDR_PARSE_DONE)) {
-		brcmf_err("TRX header parsing failed\n");
+	if (pub->chip == CY_CC_43022_CHIP_ID) {
+		err = brcmf_blhs_ack_wait_dongle_access(pub);
+	} else {
+		addr = pub->blhs->d2h;
+		SPINWAIT_MS((pub->blhs->read(chip->ctx, addr) &
+			     BRCMF_BLHS_D2H_TRXHDR_PARSE_DONE) == 0,
+			    BRCMF_BLHS_D2H_TRXHDR_PARSE_DONE_TIMEOUT,
+			    BRCMF_BLHS_POLL_INTERVAL);
 
-		/* Host indication for bootloader to get reset on error */
-		addr = pub->blhs->h2d;
 		regdata = pub->blhs->read(chip->ctx, addr);
-		regdata |= BRCMF_BLHS_H2D_BL_RESET_ON_ERROR;
-		pub->blhs->write(chip->ctx, addr, regdata);
+		if (!(regdata & BRCMF_BLHS_D2H_TRXHDR_PARSE_DONE)) {
+			brcmf_err("TRX header parsing failed\n");
+
+			/* Host indication for bootloader to get reset on error */
+			addr = pub->blhs->h2d;
+			regdata = pub->blhs->read(chip->ctx, addr);
+			regdata |= BRCMF_BLHS_H2D_BL_RESET_ON_ERROR;
+			pub->blhs->write(chip->ctx, addr, regdata);
 
 		return -EPERM;
+		}
 	}
 
-	return 0;
+	return err;
 }
 
 static void brcmf_blhs_post_nvram_download(struct brcmf_chip *pub)
@@ -1139,9 +1198,21 @@ static void brcmf_blhs_post_nvram_download(struct brcmf_chip *pub)
 
 	chip = container_of(pub, struct brcmf_chip_priv, pub);
 	addr = pub->blhs->h2d;
-	regdata = pub->blhs->read(chip->ctx, addr);
-	regdata |= BRCMF_BLHS_H2D_DL_NVRAM_DONE;
-	pub->blhs->write(chip->ctx, addr, regdata);
+	if (pub->chip == CY_CC_43022_CHIP_ID) {
+		regdata = pub->blhs->read(chip->ctx, addr);
+		regdata |= BRCMF_BLHS_H2D_DL_NVRAM_DONE;
+		pub->blhs->write(chip->ctx, addr, regdata);
+
+		addr = pub->blhs->d2h;
+		SPINWAIT_MS((pub->blhs->read(chip->ctx, addr) &
+			     BRCMF_BLHS_D2H_MV_NVRAM_DONE) == 0,
+			    BRCMF_BLHS_D2H_MV_NVRAM_DONE_TIMEOUT,
+			    BRCMF_BLHS_POLL_INTERVAL);
+	} else {
+		regdata = pub->blhs->read(chip->ctx, addr);
+		regdata |= BRCMF_BLHS_H2D_DL_NVRAM_DONE;
+		pub->blhs->write(chip->ctx, addr, regdata);
+	}
 }
 
 static int brcmf_blhs_chk_validation(struct brcmf_chip *pub)
@@ -1390,9 +1461,11 @@ struct brcmf_chip *brcmf_chip_attach(void *ctx, u16 devid,
 
 		if (blhs) {
 			blhs->init = brcmf_blhs_init;
+			blhs->pre_nvramdl = brcmf_blhs_pre_nvram_download;
 			blhs->prep_fwdl = brcmf_blhs_prep_fw_download;
 			blhs->post_fwdl = brcmf_blhs_post_fw_download;
 			blhs->post_nvramdl = brcmf_blhs_post_nvram_download;
+			blhs->bp_clk_ack = brcmf_blhs_ack_wait_dongle_access;
 			blhs->chk_validation = brcmf_blhs_chk_validation;
 			blhs->post_wdreset = brcmf_blhs_post_watchdog_reset;
 		}
