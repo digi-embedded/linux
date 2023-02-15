@@ -528,6 +528,7 @@ static void brcmf_fw_free_request(struct brcmf_fw_request *req)
 
 	for (i = 0, item = &req->items[0]; i < req->n_items; i++, item++) {
 		if (item->type == BRCMF_FW_TYPE_BINARY ||
+		    item->type == BRCMF_FW_TYPE_TRXS ||
 		    item->type == BRCMF_FW_TYPE_TRXSE)
 			release_firmware(item->binary);
 		else if (item->type == BRCMF_FW_TYPE_NVRAM)
@@ -601,6 +602,7 @@ static int brcmf_fw_complete_request(const struct firmware *fw,
 		break;
 	case BRCMF_FW_TYPE_BINARY:
 	case BRCMF_FW_TYPE_TRXSE:
+	case BRCMF_FW_TYPE_TRXS:
 		if (fw)
 			cur->binary = fw;
 		else
@@ -681,6 +683,14 @@ static void brcmf_fw_request_done(const struct firmware *fw, void *ctx)
 	char alt_path[BRCMF_FW_NAME_LEN];
 	int ret;
 
+	if (!fw && cur->type == BRCMF_FW_TYPE_TRXS) {
+		strscpy(alt_path, cur->path, BRCMF_FW_NAME_LEN);
+		/* strip 'se' from .trxse at the end */
+		//alt_path[strlen(alt_path) - ] = 0;
+		ret = request_firmware(&fw, alt_path, fwctx->dev);
+		if (!ret)
+			cur->path = alt_path;
+	}
 	if (!fw && cur->type == BRCMF_FW_TYPE_TRXSE) {
 		strlcpy(alt_path, cur->path, BRCMF_FW_NAME_LEN);
 		/* strip 'se' from .trxse at the end */

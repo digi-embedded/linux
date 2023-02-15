@@ -50,6 +50,7 @@
 
 /* function 0 vendor specific CCCR registers */
 
+#define SDIO_CCCR_INTR_PND			0x05
 #define SDIO_CCCR_BRCM_CARDCAP			0xf0
 #define SDIO_CCCR_BRCM_CARDCAP_CMD14_SUPPORT	BIT(1)
 #define SDIO_CCCR_BRCM_CARDCAP_CMD14_EXT	BIT(2)

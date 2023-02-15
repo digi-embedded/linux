@@ -100,9 +100,11 @@ struct brcmf_blhs {
 	u32 d2h;
 	u32 h2d;
 	void (*init)(struct brcmf_chip *pub);
+	int (*pre_nvramdl)(struct brcmf_chip *pub);
 	int (*prep_fwdl)(struct brcmf_chip *pub);
 	int (*post_fwdl)(struct brcmf_chip *pub);
 	void (*post_nvramdl)(struct brcmf_chip *pub);
+	int (*bp_clk_ack)(struct brcmf_chip *pub);
 	int (*chk_validation)(struct brcmf_chip *pub);
 	int (*post_wdreset)(struct brcmf_chip *pub);
 	u32 (*read)(void *ctx, u32 addr);
@@ -136,5 +138,6 @@ void brcmf_chip_reset_watchdog(struct brcmf_chip *pub);
 void brcmf_chip_ulp_reset_lhl_regs(struct brcmf_chip *pub);
 void brcmf_chip_reset_pmu_regs(struct brcmf_chip *pub);
 void brcmf_chip_set_default_min_res_mask(struct brcmf_chip *pub);
+int brcmf_get_intr_pending_data(void *ctx);
 
 #endif /* BRCMF_AXIDMP_H */
