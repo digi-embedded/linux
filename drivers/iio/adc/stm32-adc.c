@@ -2203,11 +2203,13 @@ static int stm32_adc_legacy_chan_init(struct iio_dev *indio_dev,
 	}
 
 	ret = device_property_read_u32_array(dev, "st,adc-channels", chans,
-					     nchans);
-	if (ret)
+					     nchans - num_diff);
+	if (ret) {
+		dev_err(&indio_dev->dev, "Failed to get st,adc-channels %d\n", ret);
 		return ret;
+	}
 
-	for (c = 0; c < nchans; c++) {
+	for (c = 0; c < (nchans - num_diff); c++) {
 		if (chans[c] >= adc_info->max_channels) {
 			dev_err(&indio_dev->dev, "Invalid channel %d\n",
 				chans[c]);
