@@ -39,6 +39,15 @@
 #define BRCMF_SDIO_REG_DAR_H2D_MSG_0	0x10030
 #define BRCMF_SDIO_REG_DAR_D2H_MSG_0	0x10038
 
+#define BRCMF_SDIO_REG_D2H_MSG_0	0x1800204C
+#define BRCMF_SDIO_REG_H2D_MSG_0	0x18002048
+
+#define CM3_SOCRAM_WRITE_END_LOCATION	0x80000
+
+/* Sdio rev 27 only */
+/* To read secure-mode bit */
+#define SBSDIO_FUNC1_SECURE_MODE	0x10001
+
 /* function 0 vendor specific CCCR registers */
 
 #define SDIO_CCCR_BRCM_CARDCAP			0xf0
