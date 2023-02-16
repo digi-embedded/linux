@@ -1143,8 +1143,18 @@ static int brcmf_sdio_readshared(struct brcmf_sdio *bus,
 	/*
 	 * Read last word in socram to determine
 	 * address of sdpcm_shared structure
+	 *
+	 * In 43022:secure-mode shared console address will be present at
+	 * (512KB-4) location because other RAM area will be Read-blocked
+	 * for host. Host can only read/write (384Kb-512Kb) RAM area.
+	 * Read block is controlled by OTP bit.
 	 */
-	shaddr = bus->ci->rambase + bus->ci->ramsize - 4;
+
+	if (bus->ci->blhs && (bus->ci->chip == CY_CC_43022_CHIP_ID))
+		shaddr = bus->ci->rambase + CM3_SOCRAM_WRITE_END_LOCATION - 4;
+	else
+		shaddr = bus->ci->rambase + bus->ci->ramsize - 4;
+
 	if (!bus->ci->rambase && brcmf_chip_sr_capable(bus->ci))
 		shaddr -= bus->ci->srsize;
 	rv = brcmf_sdiod_ramrw(bus->sdiodev, false, shaddr,
@@ -3796,7 +3806,12 @@ static int brcmf_sdio_download_nvram(struct brcmf_sdio *bus,
 
 	brcmf_dbg(TRACE, "Enter\n");
 
-	address = bus->ci->ramsize - varsz + bus->ci->rambase;
+	/* In 43022:secure-mode NVRAM should be copied to 512KB RAM area */
+	if (bus->ci->blhs && (bus->ci->chip == CY_CC_43022_CHIP_ID))
+		address = CM3_SOCRAM_WRITE_END_LOCATION - varsz + bus->ci->rambase;
+	else
+		address = bus->ci->ramsize - varsz + bus->ci->rambase;
+
 	err = brcmf_sdiod_ramrw(bus->sdiodev, true, address, vars, varsz);
 	if (err)
 		brcmf_err("error %d on writing %d nvram bytes at 0x%08x\n",
