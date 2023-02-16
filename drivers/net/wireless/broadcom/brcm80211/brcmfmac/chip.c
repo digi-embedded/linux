@@ -676,6 +676,11 @@ static void brcmf_chip_socram_ramsize(struct brcmf_core_priv *sr, u32 *ramsize,
 	*ramsize = 0;
 	*srsize = 0;
 
+	if (sr->chip->pub.chip == CY_CC_43022_CHIP_ID && sr->chip->pub.blhs) {
+		*ramsize = 0xA0000;
+		return;
+	}
+
 	if (WARN_ON(sr->pub.rev < 4))
 		return;
 
@@ -1713,10 +1718,12 @@ void brcmf_chip_set_passive(struct brcmf_chip *pub)
 		brcmf_chip_ca7_set_passive(chip);
 		return;
 	}
-	arm = brcmf_chip_get_core(pub, BCMA_CORE_ARM_CM3);
-	if (arm) {
-		brcmf_chip_cm3_set_passive(chip);
-		return;
+	if (!(pub->chip == CY_CC_43022_CHIP_ID && pub->blhs)) {
+		arm = brcmf_chip_get_core(pub, BCMA_CORE_ARM_CM3);
+		if (arm) {
+			brcmf_chip_cm3_set_passive(chip);
+			return;
+		}
 	}
 }
 
