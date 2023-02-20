@@ -692,7 +692,7 @@ static void brcmf_fw_request_done(const struct firmware *fw, void *ctx)
 			cur->path = alt_path;
 	}
 	if (!fw && cur->type == BRCMF_FW_TYPE_TRXSE) {
-		strlcpy(alt_path, cur->path, BRCMF_FW_NAME_LEN);
+		strscpy(alt_path, cur->path, BRCMF_FW_NAME_LEN);
 		/* strip 'se' from .trxse at the end */
 		alt_path[strlen(alt_path) - 2] = 0;
 		ret = request_firmware(&fw, alt_path, fwctx->dev);
