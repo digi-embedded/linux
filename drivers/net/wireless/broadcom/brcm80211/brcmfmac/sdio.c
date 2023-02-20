@@ -1268,7 +1268,6 @@ static int brcmf_sdio_readshared(struct brcmf_sdio *bus,
 	 * for host. Host can only read/write (384Kb-512Kb) RAM area.
 	 * Read block is controlled by OTP bit.
 	 */
-
 	if (bus->ci->blhs && (bus->ci->chip == CY_CC_43022_CHIP_ID))
 		shaddr = bus->ci->rambase + CM3_SOCRAM_WRITE_END_LOCATION - 4;
 	else
@@ -3954,21 +3953,30 @@ static int brcmf_sdio_download_code_file(struct brcmf_sdio *bus,
 			image = fw->data;
 			image = image + TRX_HDR_SZ;
 		}
+		err = brcmf_sdiod_ramrw(bus->sdiodev, true, address,
+					image, fw_size);
+		if (err)
+			brcmf_err("error %d on writing %d membytes at 0x%08x\n",
+				  err, (int)fw_size, address);
+		else if (!brcmf_sdio_verifymemory(bus->sdiodev, address,
+						  image, fw_size))
+			err = -EIO;
 	} else {
 		if (trx->magic == cpu_to_le32(TRX_MAGIC)) {
 			address -= sizeof(struct trx_header_le);
 			fw_size = le32_to_cpu(trx->len);
 		}
-	}
 
-	err = brcmf_sdiod_ramrw(bus->sdiodev, true, address,
-				image, fw_size);
-	if (err)
-		brcmf_err("error %d on writing %d membytes at 0x%08x\n",
-			  err, (int)fw_size, address);
-	else if (!brcmf_sdio_verifymemory(bus->sdiodev, address,
-					  image, fw_size))
-		err = -EIO;
+		err = brcmf_sdiod_ramrw(bus->sdiodev, true, address,
+					(u8 *)fw->data, fw_size);
+
+		if (err)
+			brcmf_err("error %d on writing %d membytes at 0x%08x\n",
+				  err, (int)fw_size, address);
+		else if (!brcmf_sdio_verifymemory(bus->sdiodev, address,
+						  (u8 *)fw->data, fw_size))
+			err = -EIO;
+	}
 
 	return err;
 }
@@ -4066,7 +4074,7 @@ static int brcmf_sdio_download_firmware(struct brcmf_sdio *bus,
 		}
 	}
 
-	if (bus->ci->chip == CY_CC_43022_CHIP_ID && !(bus->ci->blhs)) {
+	if (!(bus->ci->blhs)) {
 		bcmerror = brcmf_sdio_download_code_file(bus, fw);
 		release_firmware(fw);
 		if (bcmerror) {
@@ -4091,7 +4099,7 @@ static int brcmf_sdio_download_firmware(struct brcmf_sdio *bus,
 			goto err;
 		}
 	}
-	if (bus->ci->chip == CY_CC_43022_CHIP_ID && !(bus->ci->blhs)) {
+	if (!(bus->ci->blhs)) {
 		bcmerror = brcmf_sdio_download_nvram(bus, nvram, nvlen);
 		brcmf_fw_nvram_free(nvram);
 		if (bcmerror) {
@@ -5464,11 +5472,21 @@ static struct brcmf_fw_request *
 brcmf_sdio_prepare_fw_request(struct brcmf_sdio *bus)
 {
 	struct brcmf_fw_request *fwreq;
-	struct brcmf_fw_name fwnames[] = {
-		{ ".trxs", bus->sdiodev->fw_name },
-		{ ".txt", bus->sdiodev->nvram_name },
-		{ ".clm_blob", bus->sdiodev->clm_name },
-	};
+	struct brcmf_fw_name fwnames[3];
+
+	if (bus->ci->blhs && bus->ci->chip == CY_CC_43022_CHIP_ID) {
+		/* 43022 : secure-mode supports .trxs image only */
+		fwnames[0].extension = ".trxs";
+		fwnames[0].path = bus->sdiodev->fw_name;
+	} else {
+		fwnames[0].extension = ".bin";
+		fwnames[0].path = bus->sdiodev->fw_name;
+	}
+	fwnames[1].extension = ".txt";
+	fwnames[1].path = bus->sdiodev->nvram_name;
+
+	fwnames[2].extension = ".clm_blob";
+	fwnames[2].path = bus->sdiodev->clm_name;
 
 	fwreq = brcmf_fw_alloc_request(bus->ci->chip, bus->ci->chiprev,
 				       brcmf_sdio_fwnames,
