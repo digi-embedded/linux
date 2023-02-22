@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Digi International, Inc.
+ * Copyright 2022-2023 Digi International, Inc.
  *
  * The code contained herein is licensed under the GNU General Public
  * License. You may obtain a copy of the GNU General Public License
@@ -31,7 +31,8 @@
 		serial0 = &uart5;
 		serial1 = &usart1;
 		serial2 = &uart8;
-		serial3 = &usart2;
+		serial3 = &usart3;
+		serial4 = &usart2;
 	};
 
 	chosen {
@@ -419,6 +420,16 @@
 	status = "okay";
 };
 
+/* RS485 */
+&usart3 {
+	linux,rs485-enabled-at-boot-time;
+	pinctrl-names = "default","sleep";
+	pinctrl-0 = <&ccmp13_usart3_pins_a &ccmp13_usart3_rtscts_pins_a>;
+	pinctrl-1 = <&ccmp13_usart3_sleep_pins_a>;
+	uart-has-rtscts;
+	status = "okay";
+};
+
 &pinctrl {
 	ccmp13_adc1_pins: ccmp13_adc1-pins-0 {
 		pins {
@@ -666,6 +677,36 @@
 		pins {
 			pinmux = <STM32_PINMUX('E', 4, ANALOG)>, /* UART8_TX */
 				 <STM32_PINMUX('E', 0, ANALOG)>; /* UART8_RX */
+		};
+	};
+
+	ccmp13_usart3_pins_a: ccmp13-usart3-0 {
+		pins1 {
+			pinmux = <STM32_PINMUX('D', 8, AF7)>; /* USART3_TX */
+			bias-disable;
+			drive-push-pull;
+			slew-rate = <0>;
+		};
+		pins2 {
+			pinmux = <STM32_PINMUX('G', 4, AF8)>; /* USART3_RX */
+			bias-disable;
+		};
+	};
+
+	ccmp13_usart3_rtscts_pins_a: ccmp13-usart3rtscts-0 {
+		pins {
+			pinmux = <STM32_PINMUX('G', 8, AF8)>, /* USART3_RTS */
+				 <STM32_PINMUX('G', 12, AF8)>; /* USART3_CTS */
+			bias-disable;
+		};
+	};
+
+	ccmp13_usart3_sleep_pins_a: ccmp13-usart3_sleep-0 {
+		pins {
+			pinmux = <STM32_PINMUX('D', 8, ANALOG)>, /* USART3_TX */
+				 <STM32_PINMUX('G', 4, ANALOG)>, /* USART3_RX */
+				 <STM32_PINMUX('G', 8, ANALOG)>, /* USART3_RTS */
+				 <STM32_PINMUX('G', 12, ANALOG)>; /* USART3_CTS */
 		};
 	};
 
