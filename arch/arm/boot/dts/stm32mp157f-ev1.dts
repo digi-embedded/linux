@@ -181,6 +181,15 @@
 	pinctrl-0 = <&dcmi_pins_a>;
 	pinctrl-1 = <&dcmi_sleep_pins_a>;
 
+	/*
+	 * Enable DMA-MDMA chaining by adding a SRAM pool and
+	 * a MDMA channel
+	 */
+	sram = <&dcmi_pool>;
+
+	dmas = <&dmamux1 75 0x400 0x01>, <&mdma1 0 0x3 0x1200000a 0 0>;
+	dma-names = "tx", "mdma_tx";
+
 	port {
 		dcmi_0: endpoint {
 			remote-endpoint = <&ov5640_0>;
@@ -657,6 +666,13 @@
 	pinctrl-0 = <&spi1_pins_a>;
 	pinctrl-1 = <&spi1_sleep_pins_a>;
 	status = "disabled";
+};
+
+&sram4 {
+	dcmi_pool: dcmi_pool@0 {
+		reg = <0x0 0x8000>;
+		pool;
+	};
 };
 
 &timers2 {
