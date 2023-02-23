@@ -89,6 +89,18 @@
 			sound-dai = <&max98089>;
 		};
 	};
+
+	power_button {
+		compatible = "gpio-keys";
+		status = "okay";
+
+		button {
+			label = "power_button";
+			linux,code = <KEY_POWER>;
+			interrupts-extended = <&optee 0>;
+			status = "okay";
+		};
+	};
 };
 
 &adc_1 {
