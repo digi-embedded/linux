@@ -50,7 +50,7 @@
 		target = <&rtc>;
 		__overlay__ {
 			st,lsco = <RTC_OUT2_RMP>;
-			pinctrl-0 = <&rtc_out2_rmp_pins_a>;
+			pinctrl-0 = <&ccmp13_rtc_out1_pins_a &rtc_out2_rmp_pins_a>;
 			pinctrl-names = "default";
 		};
 	};
