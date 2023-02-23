@@ -255,6 +255,8 @@ struct dcmipp_isp_device {
 	bool exposure_needs_update;
 	struct v4l2_ctrl_isp_contrast contrast;
 	bool contrast_needs_update;
+	struct v4l2_ctrl_isp_color_conv color_conv;
+	bool color_conv_needs_update;
 
 	struct v4l2_ctrl_handler ctrls;
 };
@@ -334,6 +336,10 @@ static int dcmipp_isp_s_ctrl(struct v4l2_ctrl *ctrl)
 	case V4L2_CID_ISP_CONTRAST:
 		isp->contrast = *(struct v4l2_ctrl_isp_contrast *)ctrl->p_new.p;
 		isp->contrast_needs_update = true;
+		break;
+	case V4L2_CID_ISP_COLOR_CONV:
+		isp->color_conv = *(struct v4l2_ctrl_isp_color_conv *)ctrl->p_new.p;
+		isp->color_conv_needs_update = true;
 		break;
 	}
 
@@ -450,6 +456,11 @@ static const struct v4l2_ctrl_config dcmipp_isp_ctrls[] = {
 		.id		= V4L2_CID_ISP_CONTRAST,
 		.type		= V4L2_CTRL_TYPE_ISP_CONTRAST,
 		.name		= "ISP Contrast block control",
+	}, {
+		.ops		= &dcmipp_isp_ctrl_ops,
+		.id		= V4L2_CID_ISP_COLOR_CONV,
+		.type		= V4L2_CTRL_TYPE_ISP_COLOR_CONV,
+		.name		= "ISP Color Conversion block control",
 	}
 };
 
@@ -851,30 +862,57 @@ static void dcmipp_isp_config_demosaicing(struct dcmipp_isp_device *isp)
 		reg_set(isp, DCMIPP_P1DMCR, val);
 }
 
-static int dcmipp_isp_colorconv_config(struct dcmipp_isp_device *isp)
+static int dcmipp_isp_colorconv_set(struct dcmipp_isp_device *isp,
+				    struct dcmipp_colorconv_config *ccconf)
 {
-	struct dcmipp_colorconv_config ccconf = { 0 };
-	int i, ret = 0;
-	unsigned int val = 0;
-
-	ret = dcmipp_colorconv_configure(isp->dev, &isp->sink_fmt,
-					 &isp->src_fmt, &ccconf);
-	if (ret)
-		return ret;
+	u32 val = 0;
+	int i;
 
 	for (i = 0; i < 6; i++)
-		reg_write(isp, DCMIPP_P1CCRR1 + (4 * i), ccconf.conv_matrix[i]);
+		reg_write(isp, DCMIPP_P1CCRR1 + (4 * i), ccconf->conv_matrix[i]);
 
-	if (ccconf.clamping)
+	if (ccconf->clamping)
 		val |= DCMIPP_P1CCCR_CLAMP;
-	if (ccconf.clamping_as_rgb)
+	if (ccconf->clamping_as_rgb)
 		val |= DCMIPP_P1CCCR_TYPE_RGB;
-	if (ccconf.enable)
+	if (ccconf->enable)
 		val |= DCMIPP_P1CCCR_ENABLE;
 
 	reg_write(isp, DCMIPP_P1CCCR, val);
 
 	return 0;
+}
+
+static int dcmipp_isp_colorconv_auto(struct dcmipp_isp_device *isp)
+{
+	struct dcmipp_colorconv_config ccconf;
+	int ret;
+
+	/* Get the "src to sink" color conversion matrix */
+	ret = dcmipp_colorconv_configure(isp->dev, &isp->sink_fmt, &isp->src_fmt, &ccconf);
+	if (ret)
+		return ret;
+
+	return dcmipp_isp_colorconv_set(isp, &ccconf);
+}
+
+static int dcmipp_isp_colorconv_user(struct dcmipp_isp_device *isp)
+{
+	struct dcmipp_colorconv_config ccconf;
+
+	/* Get the color conversion matrix from the user control */
+	ccconf.conv_matrix[0] = isp->color_conv.coeff[0][1] << 16 | isp->color_conv.coeff[0][0];
+	ccconf.conv_matrix[1] = isp->color_conv.coeff[0][3] << 16 | isp->color_conv.coeff[0][2];
+	ccconf.conv_matrix[2] = isp->color_conv.coeff[1][1] << 16 | isp->color_conv.coeff[1][0];
+	ccconf.conv_matrix[3] = isp->color_conv.coeff[1][3] << 16 | isp->color_conv.coeff[1][2];
+	ccconf.conv_matrix[4] = isp->color_conv.coeff[2][1] << 16 | isp->color_conv.coeff[2][0];
+	ccconf.conv_matrix[5] = isp->color_conv.coeff[2][3] << 16 | isp->color_conv.coeff[2][2];
+
+	ccconf.enable = isp->color_conv.enable;
+	ccconf.clamping = isp->color_conv.clamping;
+	ccconf.clamping_as_rgb = isp->color_conv.clamping_as_rgb;
+
+	return dcmipp_isp_colorconv_set(isp, &ccconf);
 }
 
 static int dcmipp_isp_s_stream(struct v4l2_subdev *sd, int enable)
@@ -911,7 +949,7 @@ static int dcmipp_isp_s_stream(struct v4l2_subdev *sd, int enable)
 		dcmipp_isp_config_demosaicing(isp);
 
 		/* Configure ColorConversion */
-		ret = dcmipp_isp_colorconv_config(isp);
+		ret = dcmipp_isp_colorconv_auto(isp);
 		if (ret)
 			goto out;
 	}
@@ -983,6 +1021,11 @@ static irqreturn_t dcmipp_isp_irq_thread(int irq, void *arg)
 			  (isp->contrast.lum[0] << DCMIPP_P1CTCR1_LUM0_SHIFT) |
 			  (isp->contrast.enable ? DCMIPP_P1CTCR1_ENABLE : 0));
 		isp->contrast_needs_update = false;
+	}
+
+	if (isp->color_conv_needs_update) {
+		dcmipp_isp_colorconv_user(isp);
+		isp->color_conv_needs_update = false;
 	}
 
 	spin_unlock_irq(&isp->irqlock);
