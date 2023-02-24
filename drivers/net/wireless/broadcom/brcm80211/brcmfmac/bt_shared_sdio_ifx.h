@@ -36,7 +36,6 @@
 
 void ifx_btsdio_init(struct brcmf_bus *bus_if);
 void ifx_btsdio_deinit(struct brcmf_bus *bus_if);
-void ifx_btsdio_int_handler(struct brcmf_bus *bus_if);
 bool ifx_btsdio_is_active(struct brcmf_bus *bus_if);
 bool ifx_btsdio_set_bt_reset(struct brcmf_bus *bus_if);
 bool ifx_btsdio_inited(struct brcmf_bus *bus_if);

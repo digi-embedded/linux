@@ -440,19 +440,29 @@ static void *_btsdio_get_func_entity(struct brcmf_sdio_dev *sdiodev, u8 fn)
 	return func;
 }
 
-void ifx_btsdio_int_handler(struct brcmf_bus *bus_if)
+static void _btsdio_int_handler(struct sdio_func *func)
 {
+	struct brcmf_bus *bus_if = NULL;
+	struct brcmf_sdio_dev *sdiodev = NULL;
 	struct ifx_bt_if *bt_if = NULL;
+
+	if (!func) {
+		brcmf_err("func is null\n");
+		return;
+	}
+	bus_if = dev_get_drvdata(&func->dev);
 
 	if (!bus_if) {
 		brcmf_err("bus_if is null\n");
 		return;
 	}
+	sdiodev = bus_if->bus_priv.sdio;
+	bt_if = bus_if->bt_if;
 
 	if (!bus_if->bt_if)
 		return;
 
-	bt_if = bus_if->bt_if;
+	brcmf_dbg(INTR, "F%d IB intr triggered\n", func->num);
 
 	if (bt_if->bt_sdio_int_cb)
 		bt_if->bt_sdio_int_cb(bt_if->bt_data);
@@ -948,6 +958,7 @@ static bool _btsdio_is_over_sdio(struct brcmf_bus *bus_if)
 void ifx_btsdio_init(struct brcmf_bus *bus_if)
 {
 	struct brcmf_sdio_dev *sdiodev = NULL;
+	struct brcmfmac_sdio_pd *pdata = NULL;
 	struct ifx_bt_if *bt_if = NULL;
 
 	brcmf_dbg(INFO, "Enter\n");
@@ -957,6 +968,7 @@ void ifx_btsdio_init(struct brcmf_bus *bus_if)
 		return;
 	}
 	sdiodev = bus_if->bus_priv.sdio;
+	pdata = &sdiodev->settings->bus.sdio;
 
 	if (!_btsdio_is_over_sdio(bus_if)) {
 		brcmf_err("bt over uart\n");
@@ -981,8 +993,15 @@ void ifx_btsdio_init(struct brcmf_bus *bus_if)
 	if (sdiodev->func1->device == SDIO_DEVICE_ID_CYPRESS_55500)
 		bt_if->set_bt_reset = true;
 
-	// wait for next commit for F3 interrupt
-	//brcmf_sdiod_intr_register_f3(sdiodev);
+	sdio_claim_host(sdiodev->func1);
+	/* drvdata used for irqhandler */
+	dev_set_drvdata(&sdiodev->func3->dev, bus_if);
+	/* register interrupt */
+	if (!pdata->oob_irq_supported) {
+		brcmf_dbg(INFO, "register F3 ib irq\n");
+		sdio_claim_irq(sdiodev->func3, _btsdio_int_handler);
+	}
+	sdio_release_host(sdiodev->func1);
 
 	brcmf_dbg(INFO, "init version (%d.%d.%d) done\n",
 		  BTS_VER_MAJOR, BTS_VER_MINOR, BTS_VER_PATCH);
@@ -990,6 +1009,9 @@ void ifx_btsdio_init(struct brcmf_bus *bus_if)
 
 void ifx_btsdio_deinit(struct brcmf_bus *bus_if)
 {
+	struct brcmf_sdio_dev *sdiodev = NULL;
+	struct brcmfmac_sdio_pd *pdata = NULL;
+
 	brcmf_dbg(INFO, "Enter\n");
 
 	if (!bus_if) {
@@ -999,6 +1021,18 @@ void ifx_btsdio_deinit(struct brcmf_bus *bus_if)
 
 	if (!bus_if->bt_if)
 		return;
+
+	sdiodev = bus_if->bus_priv.sdio;
+	pdata = &sdiodev->settings->bus.sdio;
+
+	/* unregister interrupt */
+	sdio_claim_host(sdiodev->func1);
+	if (!pdata->oob_irq_supported) {
+		brcmf_dbg(INFO, "release F3 ib irq\n");
+		sdio_release_irq(sdiodev->func3);
+	}
+	dev_set_drvdata(&sdiodev->func3->dev, NULL);
+	sdio_release_host(sdiodev->func1);
 
 	ifx_bus_detach(bus_if);
 

@@ -83,12 +83,13 @@ static irqreturn_t brcmf_sdiod_oob_irqhandler(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
+/* interrupt handler for SDIO function 1 interrupt */
 static void brcmf_sdiod_ib_irqhandler(struct sdio_func *func)
 {
 	struct brcmf_bus *bus_if = dev_get_drvdata(&func->dev);
 	struct brcmf_sdio_dev *sdiodev = bus_if->bus_priv.sdio;
 
-	brcmf_dbg(INTR, "IB intr triggered\n");
+	brcmf_dbg(INTR, "F%d IB intr triggered\n", func->num);
 
 	brcmf_sdio_isr(sdiodev->bus, false);
 }
@@ -1120,8 +1121,8 @@ static int brcmf_ops_sdio_probe(struct sdio_func *func,
 	 */
 	func->card->quirks |= MMC_QUIRK_BLKSZ_FOR_BYTE_MODE;
 
-	/* Consume func num 1 but dont do anything with it. */
-	if (func->num == SDIO_FUNC_1)
+	/* Consume func 1 & 3 but dont do anything with it. */
+	if (func->num == SDIO_FUNC_1 || func->num == SDIO_FUNC_3)
 		return 0;
 
 	/* Ignore anything but func 2 */
