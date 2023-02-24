@@ -192,6 +192,9 @@
 };
 
 &rtc {
+	st,alarm = <RTC_OUT1>;
+	pinctrl-0 = <&ccmp15_rtc_out1_pins_a>;
+	pinctrl-names = "default";
 	status = "okay";
 };
 
@@ -492,6 +495,12 @@
 };
 
 &pinctrl {
+	ccmp15_rtc_out1_pins_a: ccmp15_rtc-out1-pins-0 {
+		pins {
+			pinmux = <STM32_PINMUX('C', 13, ANALOG)>; /* RTC_OUT1 */
+		};
+	};
+
 	ccmp15_usart1_pins_c: usart1-2 {
 		pins1 {
 			pinmux = <STM32_PINMUX('A', 12, AF7)>; /* USART1_RTS */
