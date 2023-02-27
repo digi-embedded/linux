@@ -98,6 +98,22 @@
 	};
 };
 
+&crc1 {
+	status = "okay";
+};
+
+&dma1 {
+	sram = <&dma_pool>;
+};
+
+&dma2 {
+	sram = <&dma_pool>;
+};
+
+&dts {
+	status = "okay";
+};
+
 &fmc {
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&ccmp13_fmc_pins_a>;
@@ -127,6 +143,53 @@
 	/* spare dmas for other usage */
 	/delete-property/dmas;
 	/delete-property/dma-names;
+};
+
+&iwdg2 {
+	timeout-sec = <32>;
+	status = "okay";
+};
+
+&rtc {
+	st,alarm = <RTC_OUT1>;
+	pinctrl-0 = <&ccmp13_rtc_out1_pins_a>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+
+&scmi_regu {
+	scmi_vddcpu: voltd-vddcpu {
+		voltd-name = "vddcpu";
+		regulator-name = "vddcpu";
+	};
+	scmi_vdd: voltd-vdd {
+		voltd-name = "vdd";
+		regulator-name = "vdd";
+	};
+	scmi_vddcore: voltd-vddcore {
+		voltd-name = "vddcore";
+		regulator-name = "vddcore";
+	};
+	scmi_vdd_adc: voltd-vdd_adc {
+		voltd-name = "vdd_adc";
+		regulator-name = "vdd_adc";
+	};
+	scmi_vdd_usb: voltd-vdd_usb {
+		voltd-name = "vdd_usb";
+		regulator-name = "vdd_usb";
+	};
+	scmi_vdd_sd: voltd-vdd_sd {
+		voltd-name = "vdd_sd";
+		regulator-name = "vdd_sd";
+	};
+	scmi_v1v8_periph: voltd-v1v8_periph {
+		voltd-name = "v1v8_periph";
+		regulator-name = "v1v8_periph";
+	};
+	scmi_v3v3_sw: voltd-v3v3_sw {
+		voltd-name = "v3v3_sw";
+		regulator-name = "v3v3_sw";
+	};
 };
 
 /* Wireless */
@@ -209,8 +272,8 @@
 
 	ccmp13_i2c4_pins_a: ccmp13_i2c4-0 {
 		pins {
-			pinmux = <STM32_PINMUX('E', 15, AF5)>, /* I2C4_SCL */
-				 <STM32_PINMUX('B', 9, AF5)>; /* I2C4_SDA */
+			pinmux = <STM32_PINMUX('E', 15, AF6)>, /* I2C4_SCL */
+				 <STM32_PINMUX('B', 9, AF6)>; /* I2C4_SDA */
 			bias-disable;
 			drive-open-drain;
 			slew-rate = <0>;
@@ -224,17 +287,23 @@
 		};
 	};
 
+	ccmp13_rtc_out1_pins_a: ccmp13_rtc-out1-pins-0 {
+		pins {
+			pinmux = <STM32_PINMUX('C', 13, ANALOG)>; /* RTC_OUT1 */
+		};
+	};
+
 	ccmp13_usart2_pins_a: ccmp13_usart2-0 {
 		pins1 {
 			pinmux = <STM32_PINMUX('H', 12, AF1)>, /* USART2_TX */
-				 <STM32_PINMUX('A', 1, AF3)>; /* USART2_RTS */
+				 <STM32_PINMUX('A', 1, AF7)>; /* USART2_RTS */
 			bias-disable;
 			drive-push-pull;
 			slew-rate = <0>;
 		};
 		pins2 {
 			pinmux = <STM32_PINMUX('H', 8, AF3)>, /* USART2_RX */
-				 <STM32_PINMUX('D', 3, AF2)>; /* USART2_CTS_NSS */
+				 <STM32_PINMUX('D', 3, AF3)>; /* USART2_CTS_NSS */
 			bias-disable;
 		};
 	};

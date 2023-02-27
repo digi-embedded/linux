@@ -192,8 +192,8 @@
 };
 
 &rtc {
-	st,lsco = <RTC_OUT2_RMP>;
-	pinctrl-0 = <&rtc_out2_rmp_pins_a>;
+	st,alarm = <RTC_OUT1>;
+	pinctrl-0 = <&ccmp15_rtc_out1_pins_a>;
 	pinctrl-names = "default";
 	status = "okay";
 };
@@ -353,7 +353,7 @@
 	pmic: stpmic@33 {
 		compatible = "st,stpmic1";
 		reg = <0x33>;
-		interrupts-extended = <&exti_pwr 55 IRQ_TYPE_EDGE_FALLING>;
+		interrupts-extended = <&exti 55 IRQ_TYPE_EDGE_FALLING>;
 		interrupt-controller;
 		#interrupt-cells = <2>;
 		status = "okay";
@@ -495,6 +495,12 @@
 };
 
 &pinctrl {
+	ccmp15_rtc_out1_pins_a: ccmp15_rtc-out1-pins-0 {
+		pins {
+			pinmux = <STM32_PINMUX('C', 13, ANALOG)>; /* RTC_OUT1 */
+		};
+	};
+
 	ccmp15_usart1_pins_c: usart1-2 {
 		pins1 {
 			pinmux = <STM32_PINMUX('A', 12, AF7)>; /* USART1_RTS */

@@ -1083,12 +1083,17 @@ static int stm32_i2s_parse_dt(struct platform_device *pdev,
 			return ret;
 	}
 
+	if (of_property_read_bool(np, "digi,i2s-master")) {
+		dev_dbg(&pdev->dev, "Set I2S master mode through DT\n");
+		i2s->ms_flg = I2S_MS_MASTER;
+	}
+
 	/* Get irqs */
 	irq = platform_get_irq(pdev, 0);
 	if (irq < 0)
 		return irq;
 
-	ret = devm_request_irq(&pdev->dev, irq, stm32_i2s_isr, IRQF_ONESHOT,
+	ret = devm_request_irq(&pdev->dev, irq, stm32_i2s_isr, 0,
 			       dev_name(&pdev->dev), i2s);
 	if (ret) {
 		dev_err(&pdev->dev, "irq request returned %d\n", ret);
