@@ -1166,7 +1166,7 @@ static int brcmf_ops_sdio_suspend(struct device *dev)
 	struct sdio_func *func;
 	struct brcmf_bus *bus_if;
 	struct brcmf_sdio_dev *sdiodev;
-	mmc_pm_flag_t pm_caps, sdio_flags;
+	mmc_pm_flag_t sdio_flags;
 	struct brcmf_cfg80211_info *config;
 	int retry = BRCMF_PM_WAIT_MAXRETRY;
 	int ret = 0;
