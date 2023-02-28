@@ -153,6 +153,18 @@
 	/delete-property/dma-names;
 };
 
+&ipcc1 {
+	status = "okay";
+};
+
+&m33_rproc {
+	mboxes = <&ipcc1 0x100>, <&ipcc1 0x101>, <&ipcc1 2>;
+	mbox-names = "vq0", "vq1", "shutdown";
+	memory-region = <&ipc_shmem_1>, <&vdev0vring0>,
+			<&vdev0vring1>, <&vdev0buffer>;
+	status = "okay";
+};
+
 &pcie_rc {
 	pinctrl-names = "default", "init";
 	pinctrl-0 = <&pcie_pins_a>;
