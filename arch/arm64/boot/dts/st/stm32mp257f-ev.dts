@@ -165,6 +165,15 @@
 	status = "okay";
 };
 
+&mlahb {
+	intc_rpmsg: interrupt-controller@0 {
+		compatible = "rpmsg,intc";
+		reg = <0 0>;
+		#interrupt-cells = <1>;
+		interrupt-controller;
+	};
+};
+
 &pcie_rc {
 	pinctrl-names = "default", "init";
 	pinctrl-0 = <&pcie_pins_a>;
