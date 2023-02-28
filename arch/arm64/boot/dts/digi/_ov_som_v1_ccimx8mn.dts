@@ -1,5 +1,5 @@
 /*
- * Copyright 2019, 2020 Digi International Inc.
+ * Copyright 2019-2023, Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -69,21 +69,43 @@
 
 	/* Enable ROHM BD71850 PMIC */
 	fragment@4 {
-		target = <&A53_0>;
-		__overlay__ {
-			arm-supply = <&buck2_reg_bd71850>;
-		};
-	};
-
-	fragment@5 {
 		target = <&pmic_bd71850>;
 		__overlay__ {
 			status = "okay";
 		};
 	};
 
-	/* Update uSD MUX_VSELECT pin for somv1 on dvkv1 */
+	/* CPU supply from ROHM BD71850 PMIC */
+	fragment@5 {
+		target = <&A53_0>;
+		__overlay__ {
+			cpu-supply = <&buck2_reg_bd71850>;
+		};
+	};
+
 	fragment@6 {
+		target = <&A53_1>;
+		__overlay__ {
+			cpu-supply = <&buck2_reg_bd71850>;
+		};
+	};
+
+	fragment@7 {
+		target = <&A53_2>;
+		__overlay__ {
+			cpu-supply = <&buck2_reg_bd71850>;
+		};
+	};
+
+	fragment@8 {
+		target = <&A53_3>;
+		__overlay__ {
+			cpu-supply = <&buck2_reg_bd71850>;
+		};
+	};
+
+	/* Update uSD MUX_VSELECT pin for somv1 on dvkv1 */
+	fragment@9 {
 		target = <&usdhc2>;
 		__overlay__ {
 			/* Assert GPIO5_IO1 low for 3V3 (def) or high for 1.8V */
@@ -101,7 +123,7 @@
 	};
 
 	/* Wireless interface is supplied to 3V3 in somv1 */
-	fragment@7 {
+	fragment@10 {
 		target = <&usdhc1>;
 		__overlay__ {
 			no-1-8-v;

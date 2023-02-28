@@ -32,6 +32,9 @@ properties:
     maxItems: 1
     description: GPIO specifier for bridge_en pin (active high).
 
+  digi,mipi-mode-flags:
+    description: Custom MIPI DSI mode flags, as defined in drm_mipi_dsi.h.
+
   ports:
     $ref: /schemas/graph.yaml#/properties/ports
 

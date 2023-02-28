@@ -921,12 +921,15 @@ static int pca9450_i2c_probe(struct i2c_client *i2c,
 	struct regulator_config config = { };
 	struct pca9450 *pca9450;
 	unsigned int device_id, i;
+	unsigned int irq_flags = IRQF_TRIGGER_FALLING | IRQF_ONESHOT;
 	int ret;
 
 	if (!i2c->irq) {
 		dev_err(&i2c->dev, "No IRQ configured?\n");
 		return -EINVAL;
 	}
+
+	of_property_read_u32(i2c->dev.of_node, "interrupt-flags", &irq_flags);
 
 	pca9450 = devm_kzalloc(&i2c->dev, sizeof(struct pca9450), GFP_KERNEL);
 	if (!pca9450)
@@ -1001,7 +1004,7 @@ static int pca9450_i2c_probe(struct i2c_client *i2c,
 
 	ret = devm_request_threaded_irq(pca9450->dev, pca9450->irq, NULL,
 					pca9450_irq_handler,
-					(IRQF_TRIGGER_FALLING | IRQF_ONESHOT),
+					irq_flags,
 					"pca9450-irq", pca9450);
 	if (ret != 0) {
 		dev_err(pca9450->dev, "Failed to request IRQ: %d\n",
@@ -1046,9 +1049,10 @@ static int pca9450_i2c_probe(struct i2c_client *i2c,
 		return PTR_ERR(pca9450->sd_vsel_gpio);
 	}
 
-	dev_info(&i2c->dev, "%s probed.\n",
+	dev_info(&i2c->dev, "%s probed (irq-flags %x)\n",
 		type == PCA9450_TYPE_PCA9450A ? "pca9450a" :
-		(type == PCA9450_TYPE_PCA9451A ? "pca9451a" : "pca9450bc"));
+		(type == PCA9450_TYPE_PCA9451A ? "pca9451a" : "pca9450bc"),
+		irq_flags);
 
 	return 0;
 }

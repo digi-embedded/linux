@@ -63,4 +63,16 @@
 			status = "okay";
 		};
 	};
+
+	/* Enable lvds_panel */
+	fragment@6 {
+		target = <&lvds_panel>;
+		__overlay__ {
+			status = "okay";
+
+			compatible = "auo,g101evn010";
+			backlight = <&lvds_backlight>;
+			power-supply = <&reg_5v_board>;
+		};
+	};
 };

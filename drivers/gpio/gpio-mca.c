@@ -474,6 +474,7 @@ static int mca_gpio_probe(struct platform_device *pdev)
 	if (!mca_dev)
 		return -EPROBE_DEFER;
 
+	pr_info("GPIO driver for MCA\n");
 	gpio->dev = mca_dev;
 	gpio->regmap = regmap;
 

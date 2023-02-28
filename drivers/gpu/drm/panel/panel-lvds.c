@@ -32,6 +32,7 @@ struct panel_lvds {
 	struct videomode video_mode;
 	unsigned int bus_format;
 	bool data_mirror;
+	bool de_high;
 
 	struct regulator *supply;
 
@@ -101,6 +102,9 @@ static int panel_lvds_get_modes(struct drm_panel *panel,
 	connector->display_info.bus_flags = lvds->data_mirror
 					  ? DRM_BUS_FLAG_DATA_LSB_TO_MSB
 					  : DRM_BUS_FLAG_DATA_MSB_TO_LSB;
+	connector->display_info.bus_flags |= lvds->de_high
+					  ? DRM_BUS_FLAG_DE_HIGH
+					  : 0;
 	drm_connector_set_panel_orientation(connector, lvds->orientation);
 
 	return 1;
@@ -169,6 +173,7 @@ static int panel_lvds_parse_dt(struct panel_lvds *lvds)
 	}
 
 	lvds->data_mirror = of_property_read_bool(np, "data-mirror");
+	lvds->de_high = of_property_read_bool(np, "de-high");
 
 	return 0;
 }

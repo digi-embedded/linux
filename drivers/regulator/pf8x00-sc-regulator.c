@@ -464,7 +464,7 @@ static struct regulator_ops pf8x00_sc_sw7_reg_ops = {
 };
 
 /* SW1/2/3/4/5/6 - 0.40 to 1.50V (6.25mV step) + 1.8V */
-static const struct regulator_linear_range pf8x00_sw123456_voltage_ranges[] = {
+static const struct linear_range pf8x00_sw123456_voltage_ranges[] = {
 	REGULATOR_LINEAR_RANGE(400000,  0x00, 0xb0, 6250),
 	REGULATOR_LINEAR_RANGE(1800000,  0xb1, 0xb1, 0),
 };
