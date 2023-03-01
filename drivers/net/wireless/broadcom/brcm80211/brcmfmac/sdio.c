@@ -5131,33 +5131,36 @@ static void brcmf_sdio_firmware_callback(struct device *dev, int err,
 	brcmf_sdio_wd_timer(bus, true);
 	sdio_release_host(sdiod->func1);
 
-	err = brcmf_alloc(sdiod->dev, sdiod->settings);
-	if (err) {
-		brcmf_err("brcmf_alloc failed\n");
-		goto claim;
-	}
+	if (!bus->sdiodev->ulp ||
+	    (bus->sdiodev->ulp && bus->sdiodev->fmac_ulp.ulp_state != FMAC_ULP_TRIGGERED)) {
+		err = brcmf_alloc(sdiod->dev, sdiod->settings);
+		if (err) {
+			brcmf_err("brcmf_alloc failed\n");
+			goto claim;
+		}
 
 #ifdef CONFIG_BRCMFMAC_BT_SHARED_SDIO
-	err = brcmf_btsdio_init(bus_if);
-	if (err) {
-		brcmf_err("brcmf_btsdio_init failed\n");
-		goto free;
-	}
+		err = brcmf_btsdio_init(bus_if);
+		if (err) {
+			brcmf_err("brcmf_btsdio_init failed\n");
+			goto free;
+		}
 #endif /* CONFIG_BRCMFMAC_BT_SHARED_SDIO */
 
-	/* Attach to the common layer, reserve hdr space */
-	err = brcmf_attach(sdiod->dev, !bus->sdiodev->ulp);
-	if (err != 0) {
-		brcmf_err("brcmf_attach failed\n");
-		goto free;
-	}
+		/* Attach to the common layer, reserve hdr space */
+		err = brcmf_attach(sdiod->dev, !bus->sdiodev->ulp);
+		if (err != 0) {
+			brcmf_err("brcmf_attach failed\n");
+			goto free;
+		}
 
-	/* Register for ULP events */
-	if (sdiod->func1->device == SDIO_DEVICE_ID_BROADCOM_CYPRESS_43012 ||
-	    sdiod->func1->device == SDIO_DEVICE_ID_BROADCOM_CYPRESS_43022 ||
-	    sdiod->func1->device == SDIO_DEVICE_ID_CYPRESS_43022)
-		brcmf_fweh_register(bus_if->drvr, BRCMF_E_ULP,
-				    brcmf_ulp_event_notify);
+		/* Register for ULP events */
+		if (sdiod->func1->device == SDIO_DEVICE_ID_BROADCOM_CYPRESS_43012 ||
+		    sdiod->func1->device == SDIO_DEVICE_ID_BROADCOM_CYPRESS_43022 ||
+		    sdiod->func1->device == SDIO_DEVICE_ID_CYPRESS_43022)
+			brcmf_fweh_register(bus_if->drvr, BRCMF_E_ULP,
+					    brcmf_ulp_event_notify);
+	}
 
 	if (bus->sdiodev->ulp) {
 		/* For ULP, after firmware redownload complete
