@@ -24,6 +24,7 @@
 		ethernet0 = &eth2;
 		ethernet1 = &eth1;
 		serial0 = &usart2;
+		serial1 = &usart6;
 	};
 
 	chosen {
@@ -227,6 +228,15 @@
 	/delete-property/dmas;
 	/delete-property/dma-names;
 	status = "okay";
+};
+
+&usart6 {
+	pinctrl-names = "default", "idle", "sleep";
+	pinctrl-0 = <&usart6_pins_a>;
+	pinctrl-1 = <&usart6_idle_pins_a>;
+	pinctrl-2 = <&usart6_sleep_pins_a>;
+	uart-has-rtscts;
+	status = "disabled";
 };
 
 &usb2_phy1 {
