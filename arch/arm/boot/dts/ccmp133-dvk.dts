@@ -694,9 +694,14 @@
 	};
 
 	ccmp13_usart3_rtscts_pins_a: ccmp13-usart3rtscts-0 {
-		pins {
-			pinmux = <STM32_PINMUX('G', 8, AF8)>, /* USART3_RTS */
-				 <STM32_PINMUX('G', 12, AF8)>; /* USART3_CTS */
+		pins1 {
+			pinmux = <STM32_PINMUX('G', 8, AF8)>; /* USART3_RTS */
+			bias-disable;
+			drive-push-pull;
+			slew-rate = <0>;
+		};
+		pins2 {
+			pinmux = <STM32_PINMUX('G', 12, AF8)>; /* USART3_CTS */
 			bias-disable;
 		};
 	};

@@ -923,9 +923,14 @@
 	};
 
 	ccmp15_uart7_rtscts_pins_a: ccmp15-uart7rtscts-0 {
-		pins {
-			pinmux = <STM32_PINMUX('F', 8, AF7)>, /* UART7_RTS */
-				 <STM32_PINMUX('F', 9, AF7)>; /* UART7_CTS */
+		pins1 {
+			pinmux = <STM32_PINMUX('F', 8, AF7)>; /* UART7_RTS */
+			bias-disable;
+			drive-push-pull;
+			slew-rate = <0>;
+		};
+		pins2 {
+			pinmux = <STM32_PINMUX('F', 9, AF7)>; /* UART7_CTS */
 			bias-disable;
 		};
 	};
