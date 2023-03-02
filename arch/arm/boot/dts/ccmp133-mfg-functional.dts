@@ -102,11 +102,11 @@
 
 	/*
 	 * Hack to keep hub active if wakeup source is enabled
-	 * otherwise the hub will wakeup the port0 as soon as the v3v3_sw is disabled
+	 * otherwise the hub will wakeup the port0 as soon as the vbus_sw is disabled
 	 */
 	connector {
 		compatible = "usb-a-connector";
-		vbus-supply = <&scmi_v3v3_sw>;
+		vbus-supply = <&scmi_vbus_sw>;
 	};
 };
 
