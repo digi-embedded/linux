@@ -630,7 +630,12 @@ static CLK_STM32_GATE(ck_sys_dbg, "ck_icn_apbdbg", 0, GATE_DBG);
 static CLK_STM32_GATE(ck_ker_tsdbg, "ck_flexgen_43", 0, GATE_DBG);
 static CLK_STM32_GATE(ck_ker_tpiu, "ck_flexgen_44", 0, GATE_TRACE);
 static CLK_STM32_GATE(ck_sys_atb, "ck_flexgen_45", 0, GATE_DBG);
+
+#ifdef CONFIG_STM32MP25_REVA
+static CLK_STM32_GATE(ck_icn_m_etr, "ck_flexgen_45", CLK_IS_CRITICAL, GATE_ETR);
+#else
 static CLK_STM32_GATE(ck_icn_m_etr, "ck_flexgen_45", 0, GATE_ETR);
+#endif
 
 /* LTDC */
 static CLK_STM32_GATE(ck_icn_p_ltdc, "ck_icn_apb4", 0, GATE_LTDC);
@@ -826,7 +831,11 @@ static CLK_STM32_GATE(ck_icn_p_stgen, "ck_icn_apb4", 0, GATE_STGEN);
 static CLK_STM32_GATE(ck_ker_stgen, "ck_flexgen_33", 0, GATE_STGEN);
 
 /* STM500 */
+#ifdef CONFIG_STM32MP25_REVA
+static CLK_STM32_GATE(ck_icn_s_stm500, "ck_icn_ls_mcu", CLK_IS_CRITICAL, GATE_STM500);
+#else
 static CLK_STM32_GATE(ck_icn_s_stm500, "ck_icn_ls_mcu", 0, GATE_STM500);
+#endif
 
 /* Timers */
 static CLK_STM32_GATE(ck_icn_p_tim2, "ck_icn_apb1", 0, GATE_TIM2);
