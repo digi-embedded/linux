@@ -158,17 +158,9 @@
 };
 
 &scmi_regu {
-	scmi_vddcpu: voltd-vddcpu {
-		voltd-name = "vddcpu";
-		regulator-name = "vddcpu";
-	};
 	scmi_vdd: voltd-vdd {
 		voltd-name = "vdd";
 		regulator-name = "vdd";
-	};
-	scmi_vddcore: voltd-vddcore {
-		voltd-name = "vddcore";
-		regulator-name = "vddcore";
 	};
 	scmi_vdd_adc: voltd-vdd_adc {
 		voltd-name = "vdd_adc";
