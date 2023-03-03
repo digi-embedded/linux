@@ -1800,6 +1800,7 @@ struct v4l2_ext_control {
 		struct v4l2_ctrl_hevc_slice_params __user *p_hevc_slice_params;
 		struct v4l2_ctrl_hevc_scaling_matrix __user *p_hevc_scaling_matrix;
 		struct v4l2_ctrl_hevc_decode_params __user *p_hevc_decode_params;
+		struct v4l2_ctrl_vp8_encode_params __user *p_vp8_encode_params;
 		void __user *ptr;
 	};
 } __attribute__ ((packed));
@@ -1873,6 +1874,8 @@ enum v4l2_ctrl_type {
 	V4L2_CTRL_TYPE_HEVC_SLICE_PARAMS	= 0x0272,
 	V4L2_CTRL_TYPE_HEVC_SCALING_MATRIX	= 0x0273,
 	V4L2_CTRL_TYPE_HEVC_DECODE_PARAMS	= 0x0274,
+
+	V4L2_CTRL_TYPE_VP8_ENCODE_PARAMS	= 0x0280,
 
 	V4L2_CTRL_TYPE_ISP_EXPOSURE        = 0x0300,
 	V4L2_CTRL_TYPE_ISP_CONTRAST        = 0x0301,

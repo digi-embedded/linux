@@ -2869,6 +2869,97 @@ struct v4l2_ctrl_vp9_compressed_hdr {
 	struct v4l2_vp9_mv_probs mv;
 };
 
+#define V4L2_CID_STATELESS_VP8_ENCODE_PARAMS	(V4L2_CID_CODEC_STATELESS_BASE + 501)
+
+#define V4L2_VP8_FRAME_FLAG_SHOWFRAME			0x1
+#define V4L2_VP8_FRAME_FLAG_GOLDEN_REFRESH		0x2
+#define V4L2_VP8_FRAME_FLAG_ALTREF_REFRESH		0x4
+#define V4L2_VP8_FRAME_FLAG_SEGMENT_ENABLED		0x8
+#define V4L2_VP8_FRAME_FLAG_LOOP_FILTER_ADJ_ENABLED	0x10
+#define V4L2_VP8_FRAME_FLAG_REFRESH_ENTROPY_PROBS	0x20
+
+#define V4L2_VP8_FRAME_TYPE_KEYFRAME	0
+#define V4L2_VP8_FRAME_TYPE_INTER	1
+
+#define V4L2_VP8_FRAME_COLOR_SPACE_YUV		0
+#define V4L2_VP8_FRAME_COLOR_SPACE_RESERVED	1
+
+#define V4L2_VP8_FRAME_CLAMPING_REQUIRED	0
+#define V4L2_VP8_FRAME_CLAMPING_NO		1
+
+#define V4L2_VP8_FRAME_FILTER_TYPE_NORMAL	0
+#define V4L2_VP8_FRAME_FILTER_TYPE_SIMPLE	1
+
+#define V4L2_VP8_FRAME_NBR_DCT_PARTITIONS_1	0
+#define V4L2_VP8_FRAME_NBR_DCT_PARTITIONS_2	1
+#define V4L2_VP8_FRAME_NBR_DCT_PARTITIONS_4	2
+#define V4L2_VP8_FRAME_NBR_DCT_PARTITIONS_8	3
+
+#define V4L2_VP8_FRAME_GOLDEN_KEEP		0
+#define V4L2_VP8_FRAME_GOLDEN_LASTFRAME		1
+#define V4L2_VP8_FRAME_GOLDEN_ALTREF		2
+
+#define V4L2_VP8_FRAME_ALTREF_KEEP		0
+#define V4L2_VP8_FRAME_ALTREF_LASTFRAME		1
+#define V4L2_VP8_FRAME_ALTREF_GOLDEN		2
+
+#define V4L2_VP8_FRAME_REF_LAST		0
+#define V4L2_VP8_FRAME_REF_GOLDEN	1
+#define V4L2_VP8_FRAME_REF_ALT		2
+
+/**
+ * struct v4l2_ctrl_vp8_encode_params - VP8 encode parameters
+ * @flags: combination of V4L2_VP8_FRAME_FLAG_{} flags.
+ * @frame_type: specifies the frame type (key or inter).
+ *		Set to one of V4L2_VP8_FRAME_TYPE_{}.
+ * @color_space: defines the YUV color space of the sequence.
+ *		 V4L2_VP8_FRAME_TYPE_INTER frames shall set this field to zero.
+ *		 Set to one of V4L2_VP8_FRAME_COLOR_SPACE_{}.
+ * @clamping_type: defines pixel value clamping type.
+ *		   V4L2_VP8_FRAME_TYPE_INTER frames shall set this field to zero.
+ *		   Set to one of V4L2_VP8_FRAME_CLAMPING_{}.
+ * @loop_filter_type: selects the type of loop filter applied.
+ *		      Set to one of V4L2_VP8_FRAME_FILTER_TYPE_{}.
+ * @loop_filter_level: sets the strength of the applied loop filter.
+ *		       Set to a value from the rage 0..63.
+ * @sharpness_level: sets the sharpness of the applied loop filter.
+ *		     Set to a value from the range 0..7.
+ * @log2_nbr_of_dct_partitions: determines the number of separate partitions
+ *				containing the DCT coefficients of macroblocks.
+ *				Set to one of V4L2_VP8_FRAME_NBR_DCT_PARTITIONS_{}.
+ * @prob_intra: indicates the probability of an intra macroblock.
+ *		Set to a value from the range 0..255.
+ * @prob_last: indicates the probability that the last reference frame is used for inter-prediction.
+ *	       Set to a value from the range 0..255.
+ * @prob_gf: indicates the probability that the golden reference frame is used for inter-prediction.
+ *	     Set to a value from the range 0..255.
+ * @copy_buffer_to_golden: specifies the golden frame refresh strategy.
+ *			   Set to one of V4L2_VP8_FRAME_FLAG_GOLDEN_{}.
+ * @copy_buffer_to_alternate: specifies the atlref frame refresh strategy.
+ *			      Set to one of V4L2_VP8_FRAME_FLAG_ALTREF_{}.
+ * @reference_type: specifies what kind of reference to use for current inter frame.
+ *		    V4L2_VP8_FRAME_TYPE_KEYFRAME shall set this field to zero.
+ *		    Set to one of V4L2_VP8_FRAME_REF_{}.
+ */
+struct v4l2_ctrl_vp8_encode_params {
+	__u32 flags;
+	__u8 frame_type;
+	__u8 color_space;
+	__u8 clamping_type;
+	__u8 loop_filter_type;
+	__u8 loop_filter_level;
+	__u8 sharpness_level;
+	__u8 log2_nbr_of_dct_partitions;
+	__u8 prob_intra;
+	__u8 prob_last;
+	__u8 prob_gf;
+	__u8 copy_buffer_to_golden;
+	__u8 copy_buffer_to_alternate;
+	__u8 reference_type;
+};
+
+#define V4L2_CID_STATELESS_VP8_ENCODE_QP	(V4L2_CID_CODEC_STATELESS_BASE + 502)
+
 /* MPEG-compression definitions kept for backwards compatibility */
 #ifndef __KERNEL__
 #define V4L2_CTRL_CLASS_MPEG            V4L2_CTRL_CLASS_CODEC
