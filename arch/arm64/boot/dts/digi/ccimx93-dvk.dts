@@ -204,6 +204,16 @@
 		vin-supply = <&reg_5v_board>;
 		status = "disabled";
 	};
+
+	ext_rtc: ext_rtc@52 {
+		compatible = "microcrystal,rv3028";
+		reg = <0x52>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_rtc>;
+		interrupt-parent = <&gpio2>;
+		interrupts = <18 IRQ_TYPE_EDGE_FALLING>;
+		wakeup-source;
+	};
 };
 
 /* I2C4 - Audio codec and HDMI bridge */
@@ -498,6 +508,13 @@
 	pinctrl_reg_can2_stby: reg_can2_stby_grp {
 		fsl,pins = <
 			MX93_PAD_SAI1_TXD0__GPIO1_IO13				0x31e
+		>;
+	};
+
+	/* RTC INT */
+	pinctrl_rtc: rtc_grp {
+		fsl,pins = <
+			MX93_PAD_GPIO_IO18__GPIO2_IO18				0x31e
 		>;
 	};
 
