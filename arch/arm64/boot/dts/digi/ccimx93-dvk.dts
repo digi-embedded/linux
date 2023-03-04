@@ -303,10 +303,15 @@
 	status = "okay";
 };
 
-/* XBee RF interface */
-&lpuart7 {
+/*
+ * XBee interface
+ * The lines of this interface are shared with ENET2. Refer to the hardware and
+ * software documentation for additional information about how to configure the
+ * board.
+ */
+&lpuart4 {
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_uart7>, <&pinctrl_xbee_rf_gpios>;
+	pinctrl-0 = <&pinctrl_uart4>, <&pinctrl_xbee_rf_gpios>;
 	fsl,uart-has-rtscts;
 	status = "okay";
 };
@@ -565,25 +570,21 @@
 		>;
 	};
 
-	/* XBee RF uart */
-	pinctrl_uart7: uart7grp {
-		fsl,pins = <
-			MX93_PAD_GPIO_IO08__LPUART7_TX				0x31e
-			MX93_PAD_GPIO_IO09__LPUART7_RX				0x31e
-			MX93_PAD_GPIO_IO10__LPUART7_CTS_B			0x31e
-			MX93_PAD_GPIO_IO11__LPUART7_RTS_B			0x31e
+	/* XBee uart */
+	pinctrl_uart4: uart4grp {
+	fsl,pins = <
+			MX93_PAD_ENET2_RD0__LPUART4_RX				0x31e
+			MX93_PAD_ENET2_TD0__LPUART4_TX				0x31e
+			MX93_PAD_ENET2_RD2__LPUART4_CTS_B			0x31e
+			MX93_PAD_ENET2_TD1__LPUART4_RTS_B			0x31e
 		>;
 	};
 
 	/* XBee RF IO lines */
 	pinctrl_xbee_rf_gpios: xbeerfgrp {
 		fsl,pins = <
-			/* XBEE2_RESET_N */
-			MX93_PAD_GPIO_IO15__GPIO2_IO15				0x31e
-			/* XBEE2_ON/SLEEP_N */
-			MX93_PAD_GPIO_IO14__GPIO2_IO14				0x31e
-			/* XBEE2_SLEEP_RQ */
-			MX93_PAD_GPIO_IO14__GPIO2_IO14				0x31e
+			/* XBEE_RESET_N */
+			MX93_PAD_GPIO_IO19__GPIO2_IO19				0x31e
 		>;
 	};
 };

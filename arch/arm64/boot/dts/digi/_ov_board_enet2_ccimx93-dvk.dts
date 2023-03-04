@@ -31,4 +31,12 @@
 			status = "okay";
 		};
 	};
+
+	/* Disable the uart of the XBee interface */
+	fragment@2 {
+		target = <&lpuart4>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
 };
