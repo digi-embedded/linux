@@ -114,6 +114,7 @@ struct dcmi_buf {
 	struct vb2_v4l2_buffer	vb;
 	bool			prepared;
 	struct sg_table		sgt;
+	struct dma_async_tx_descriptor *dma_desc;
 	size_t			size;
 	struct list_head	list;
 };
@@ -300,7 +301,6 @@ static void dcmi_dma_callback(void *param)
 static int dcmi_start_dma(struct stm32_dcmi *dcmi,
 			  struct dcmi_buf *buf)
 {
-	struct dma_async_tx_descriptor *desc = NULL;
 	struct dma_slave_config config;
 	int ret;
 
@@ -319,36 +319,12 @@ static int dcmi_start_dma(struct stm32_dcmi *dcmi,
 		return ret;
 	}
 
-	/*
-	 * Avoid call of dmaengine_terminate_sync() between
-	 * dmaengine_prep_slave_single() and dmaengine_submit()
-	 * by locking the whole DMA submission sequence
-	 */
-	mutex_lock(&dcmi->dma_lock);
-
-	/* Prepare a DMA transaction */
-	desc = dmaengine_prep_slave_sg(dcmi->dma_chan, buf->sgt.sgl, buf->sgt.nents,
-				       DMA_DEV_TO_MEM,
-				       DMA_PREP_INTERRUPT);
-	if (!desc) {
-		dev_err(dcmi->dev, "%s: DMA dmaengine_prep_slave_sg failed\n", __func__);
-		mutex_unlock(&dcmi->dma_lock);
-		return -EINVAL;
-	}
-
-	/* Set completion callback routine for notification */
-	desc->callback = dcmi_dma_callback;
-	desc->callback_param = dcmi;
-
 	/* Push current DMA transaction in the pending queue */
-	dcmi->dma_cookie = dmaengine_submit(desc);
+	dcmi->dma_cookie = dmaengine_submit(buf->dma_desc);
 	if (dma_submit_error(dcmi->dma_cookie)) {
 		dev_err(dcmi->dev, "%s: DMA submission failed\n", __func__);
-		mutex_unlock(&dcmi->dma_lock);
 		return -ENXIO;
 	}
-
-	mutex_unlock(&dcmi->dma_lock);
 
 	dma_async_issue_pending(dcmi->dma_chan);
 
@@ -564,12 +540,52 @@ static int dcmi_buf_prepare(struct vb2_buffer *vb)
 			size -= bytes;
 		}
 
+		/* Prepare a DMA transaction */
+		buf->dma_desc = dmaengine_prep_slave_sg(dcmi->dma_chan, buf->sgt.sgl,
+							buf->sgt.nents, DMA_DEV_TO_MEM,
+							DMA_PREP_INTERRUPT);
+		if (!buf->dma_desc) {
+			dev_err(dcmi->dev, "%s: DMA dmaengine_prep_slave_sg failed\n", __func__);
+			sg_free_table(&buf->sgt);
+			return -EIO;
+		}
+
+		/* Set completion callback routine for notification */
+		buf->dma_desc->callback = dcmi_dma_callback;
+		buf->dma_desc->callback_param = dcmi;
+
+		/* Mark the descriptor as reusable to avoid having to prepare it */
+		ret = dmaengine_desc_set_reuse(buf->dma_desc);
+		if (ret) {
+			dev_err(dcmi->dev, "%s: DMA dmaengine_desc_set_reuse failed\n", __func__);
+			dmaengine_desc_free(buf->dma_desc);
+			sg_free_table(&buf->sgt);
+			return -EIO;
+		}
+
 		buf->prepared = true;
 
 		vb2_set_plane_payload(&buf->vb.vb2_buf, 0, buf->size);
 	}
 
 	return 0;
+}
+
+static void dcmi_buf_cleanup(struct vb2_buffer *vb)
+{
+	struct stm32_dcmi *dcmi =  vb2_get_drv_priv(vb->vb2_queue);
+	struct vb2_v4l2_buffer *vbuf = to_vb2_v4l2_buffer(vb);
+	struct dcmi_buf *buf = container_of(vbuf, struct dcmi_buf, vb);
+	int ret;
+
+	if (!buf->prepared)
+		return;
+
+	ret = dmaengine_desc_free(buf->dma_desc);
+	if (ret)
+		dev_err(dcmi->dev, "%s: Failed to free the mdma descriptor (0x%x)\n",
+			__func__, ret);
+	sg_free_table(&buf->sgt);
 }
 
 static void dcmi_buf_queue(struct vb2_buffer *vb)
@@ -933,6 +949,7 @@ static const struct vb2_ops dcmi_video_qops = {
 	.queue_setup		= dcmi_queue_setup,
 	.buf_init		= dcmi_buf_init,
 	.buf_prepare		= dcmi_buf_prepare,
+	.buf_cleanup		= dcmi_buf_cleanup,
 	.buf_queue		= dcmi_buf_queue,
 	.start_streaming	= dcmi_start_streaming,
 	.stop_streaming		= dcmi_stop_streaming,
