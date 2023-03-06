@@ -244,7 +244,9 @@
 	disable-wp;
 	st,neg-edge;
 	bus-width = <4>;
-	vmmc-supply = <&scmi_vdd_sd>;
+	vmmc-supply = <&scmi_vdd>;
+	/* Optional supply (via 0-ohm resistors) */
+	//vmmc-supply = <&scmi_vdd_sd>;
 	status = "okay";
 };
 
