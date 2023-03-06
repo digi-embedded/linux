@@ -37,7 +37,6 @@ DTC_FLAGS_stm32mp157c-ev1-m4-examples += -@
 DTC_FLAGS_stm32mp157f-ev1-a7-examples += -@
 DTC_FLAGS_stm32mp157f-ev1-m4-examples += -@
 DTC_FLAGS_ccmp133-dvk += -@
-DTC_FLAGS_ccmp151-dvk += -@
 DTC_FLAGS_ccmp157-dvk += -@
 
 dtb-$(CONFIG_ARCH_ALPINE) += \
@@ -1150,7 +1149,6 @@ dtb-$(CONFIG_ARCH_STM32) += \
 	ccmp133-dvk.dtb \
 	ccmp133-mfg-functional.dtb \
 	ccmp133-mfg-functional-wb.dtb \
-	ccmp151-dvk.dtb \
 	ccmp157-dvk.dtb \
 	ccmp157-mfg-functional.dtb \
 	ccmp157-mfg-functional-wb.dtb \
