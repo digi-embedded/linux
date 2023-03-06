@@ -123,6 +123,10 @@
 	status = "okay";
 };
 
+&ldo2 {
+	regulator-always-on;
+};
+
 /* Display Controller for MIPI-DSI to HDMI */
 &ltdc {
 	status = "okay";
