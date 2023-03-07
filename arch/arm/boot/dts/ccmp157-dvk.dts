@@ -415,13 +415,7 @@
 		compatible = "lontium,lt8912";
 		reg = <0x48>;
 		reset-gpios = <&gpioa 9 GPIO_ACTIVE_LOW>;
-		/*
-		 * By default, on the DVK, the hot plug detect (HPD) line is not
-		 * used because this line is shared with the LCD/LVDS touch
-		 * controller interrupt line.
-		 */
-		/*hpd-gpios = <&gpiog 1 GPIO_ACTIVE_HIGH>;*/
-		no-hpd;
+		hpd-gpios = <&gpiof 15 GPIO_ACTIVE_HIGH>;
 		no-edid;
 		digi,dsi-lanes = <2>;
 		vdd1-supply = <&ldo6>;
