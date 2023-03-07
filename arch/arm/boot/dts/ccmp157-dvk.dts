@@ -553,7 +553,7 @@
 /* RS485 */
 &uart7 {
 	linux,rs485-enabled-at-boot-time;
-	pinctrl-names = "default","sleep";
+	pinctrl-names = "default";
 	pinctrl-0 = <&ccmp15_uart7_pins_a &ccmp15_uart7_rtscts_pins_a>;
 	pinctrl-1 = <&ccmp15_uart7_sleep_pins_a>;
 	uart-has-rtscts;

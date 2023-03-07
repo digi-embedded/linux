@@ -1165,7 +1165,6 @@ dtb-$(CONFIG_ARCH_STM32) += \
 	_ov_board_fusion7-parallel_ccmp15-dvk.dtbo \
 	_ov_board_g101evn010-lvds_ccmp15-dvk.dtbo \
 	_ov_board_pwm8_ccmp13-dvk.dtbo \
-	_ov_board_uart7_rs232_ccmp15-dvk.dtbo \
 	_ov_board_usart3_rs232_ccmp13-dvk.dtbo \
 	_ov_board_v1_ccmp15-dvk.dtbo \
 	_ov_som_bt_ccmp13.dtbo \
