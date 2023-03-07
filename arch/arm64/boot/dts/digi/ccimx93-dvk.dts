@@ -108,6 +108,18 @@
 			"LineInB", "INB2";
 		status = "okay";
 	};
+
+	leds {
+		compatible = "gpio-leds";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_gpio_led>;
+
+		led1 {
+			label = "led1";
+			gpios = <&gpio4 29 GPIO_ACTIVE_LOW>;
+			linux,default-trigger = "heartbeat";
+		};
+	};
 };
 
 /* MIPI DSI PHY */
@@ -406,6 +418,9 @@
 };
 
 &iomuxc {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_gpio>;
+
 	/* EQoS RGMII */
 	pinctrl_eqos: eqosgrp {
 		fsl,pins = <
@@ -471,6 +486,23 @@
 		fsl,pins = <
 			MX93_PAD_GPIO_IO25__CAN2_TX				0x139e
 			MX93_PAD_GPIO_IO27__CAN2_RX				0x139e
+		>;
+	};
+
+	/* GPIOs for User Leds and Buttons */
+	pinctrl_gpio: gpiogrp {
+		fsl,pins = <
+			/* ULED/BUTTON1 */
+			MX93_PAD_SD2_RESET_B__GPIO3_IO07			0x31e
+			/* ULED/BUTTON2 */
+			MX93_PAD_ENET2_RXC__GPIO4_IO23				0x31e
+		>;
+	};
+
+	/* Power led */
+	pinctrl_gpio_led: gpioledgrp {
+		fsl,pins = <
+			MX93_PAD_CCM_CLKO4__GPIO4_IO29				0x31e
 		>;
 	};
 
