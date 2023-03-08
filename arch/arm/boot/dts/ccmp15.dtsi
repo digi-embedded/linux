@@ -423,6 +423,7 @@
 				regulator-name = "ldo2";
 				regulator-min-microvolt = <2800000>;
 				regulator-max-microvolt = <2800000>;
+				regulator-always-on;
 				interrupts = <IT_CURLIM_LDO2 0>;
 			};
 

@@ -418,7 +418,7 @@
 		hpd-gpios = <&gpiof 15 GPIO_ACTIVE_HIGH>;
 		no-edid;
 		digi,dsi-lanes = <2>;
-		vdd1-supply = <&ldo6>;
+		vdd1-supply = <&reg_5v_board>;
 		status = "okay";
 
 		port {
