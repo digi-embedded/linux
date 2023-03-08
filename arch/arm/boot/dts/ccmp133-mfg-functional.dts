@@ -73,10 +73,6 @@
 	regulator-always-on;
 };
 
-&scmi_vdd_sd {
-	regulator-always-on;
-};
-
 &scmi_ldo6 {
 	regulator-min-microvolt = <1800000>;
 	regulator-max-microvolt = <1800000>;
@@ -84,10 +80,26 @@
 };
 
 &scmi_vbus_otg {
+	regulator-min-microvolt = <5200000>;
+	regulator-max-microvolt = <5200000>;
 	regulator-always-on;
 };
 
 &scmi_vbus_sw {
+	regulator-min-microvolt = <5200000>;
+	regulator-max-microvolt = <5200000>;
+	regulator-always-on;
+};
+
+&scmi_vdd {
+	regulator-min-microvolt = <3300000>;
+	regulator-max-microvolt = <3300000>;
+	regulator-always-on;
+};
+
+&scmi_vdd_sd {
+	regulator-min-microvolt = <3300000>;
+	regulator-max-microvolt = <3300000>;
 	regulator-always-on;
 };
 
