@@ -830,7 +830,7 @@
 
 	ccmp15_pwm2_sleep_pins: pwm2-sleep-0 {
 		pins {
-			pinmux = <STM32_PINMUX('A', 15, ANALOG)>; /* TIM2_CH1 */
+			pinmux = <STM32_PINMUX('A', 15, ANALOG)>;
 		};
 	};
 
@@ -845,7 +845,7 @@
 
 	ccmp15_pwm4_sleep_pins: ccmp15-pwm4-sleep-0 {
 		pins {
-			pinmux = <STM32_PINMUX('B', 6, ANALOG)>; /* TIM4_CH1 */
+			pinmux = <STM32_PINMUX('B', 6, ANALOG)>;
 		};
 	};
 

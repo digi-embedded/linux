@@ -578,7 +578,7 @@
 
 	ccmp13_pwm8_pins_a: pwm8-0 {
 		pins {
-			pinmux = <STM32_PINMUX('A', 5, AF3)>; /* TIM8_CH3 */
+			pinmux = <STM32_PINMUX('A', 5, AF3)>; /* TIM8_CH1 */
 			bias-pull-down;
 			drive-push-pull;
 			slew-rate = <0>;
@@ -587,7 +587,7 @@
 
 	ccmp13_pwm8_sleep_pins_a: pwm8-sleep-0 {
 		pins {
-			pinmux = <STM32_PINMUX('A', 5, ANALOG)>; /* TIM8_CH3 */
+			pinmux = <STM32_PINMUX('A', 5, ANALOG)>;
 		};
 	};
 
