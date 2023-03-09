@@ -613,7 +613,7 @@ done:
 
 static int optee_ffa_do_call_with_arg(struct tee_context *ctx,
 				      struct tee_shm *shm, u_int offs,
-				      bool system_call)
+				      struct optee_call_extra *call_extra)
 {
 	struct ffa_send_direct_data data = {
 		.data0 = OPTEE_FFA_YIELDING_CALL_WITH_ARG,

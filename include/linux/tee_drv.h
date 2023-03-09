@@ -77,6 +77,36 @@ struct tee_param {
 	} u;
 };
 
+/* State an Ocall context for argument passed with struct tee_ocall2_arg */
+enum tee_ocall2_state {
+	TEE_OCALL2_IDLE,
+	TEE_OCALL2_IN_PROGRESS,
+};
+
+/*
+ * struct tee_ocall2_arg - Ocall context argument passed by caller
+ *
+ * @state: Ocall unused, ready, in-progress
+ * @session; Session the Ocall relates to
+ * @in_commnad: Ocall command 32bit ID from the TEE service
+ * @in_param: Ocall 32bit input parameter value from the TEE service
+ * @out_result: Ocall 32bit result ID. Value 0 indicates an error.
+ * @out_param: Ocall 32bit output parameter. TEEC_ERROR_* when @out_result is 0.
+ */
+struct tee_ocall2_arg {
+	enum tee_ocall2_state state;
+	u32 session;
+	u32 in_param1;
+	u32 in_param2;
+	u32 out_param1;
+	u32 out_param2;
+};
+
+#define TEE_OCALL2_OUT_PARAM1_ERROR	0
+
+#define TEE_OCALL2_ARG_INIT \
+		((struct tee_ocall2_arg){ .state = TEE_OCALL2_IDLE })
+
 /**
  * struct tee_driver_ops - driver operations vtable
  * @get_version:	returns version of driver
@@ -105,6 +135,10 @@ struct tee_driver_ops {
 	int (*invoke_func)(struct tee_context *ctx,
 			   struct tee_ioctl_invoke_arg *arg,
 			   struct tee_param *param);
+	int (*invoke_func_ocall2)(struct tee_context *ctx,
+				  struct tee_ioctl_invoke_arg *arg,
+				  struct tee_param *param,
+				  struct tee_ocall2_arg *ocall_arg);
 	int (*cancel_req)(struct tee_context *ctx, u32 cancel_id, u32 session);
 	int (*supp_recv)(struct tee_context *ctx, u32 *func, u32 *num_params,
 			 struct tee_param *param);
@@ -523,4 +557,42 @@ struct tee_context *teedev_open(struct tee_device *teedev);
  */
 void teedev_close_context(struct tee_context *ctx);
 
+/* Ocall2 helper macros & functions */
+#define TEE_OCALL2_PARAM1_ERROR		0
+
+static inline bool tee_ocall_is_used(struct tee_ocall2_arg *arg)
+{
+	return arg;
+}
+
+static inline bool tee_ocall_in_progress(struct tee_ocall2_arg *arg)
+{
+	return arg && arg->state == TEE_OCALL2_IN_PROGRESS;
+}
+
+static inline void tee_ocall_failure(struct tee_ocall2_arg *arg)
+{
+	arg->out_param1 = TEE_OCALL2_PARAM1_ERROR;
+	arg->out_param2 = 0;
+}
+
+/**
+ * tee_client_invoke_func_ocall2() - Invoke a TEE service with Ocall2 support
+ * @ctx:        TEE Context
+ * @arg:        Invoke arguments, see description of struct tee_ioctl_invoke_arg
+ * @param:      Parameters passed to the Trusted Application
+ * @ocall_arg:  Input/output arguments for the Ocall or NULL
+ *
+ * Returns < 0 on error else see @arg->ret for result.
+ * On successful return, use tee_ocall_in_progress() to distinguish between
+ * a regular invocation return and an Ocall command from TEE.
+ *
+ * In order to return from an Ocall, call tee_client_invoke_with_ocall2()
+ * with the same @context, @ocall_arg arguments and allocated @arg and
+ * @param memory areas.
+ */
+int tee_client_invoke_func_ocall2(struct tee_context *ctx,
+				  struct tee_ioctl_invoke_arg *arg,
+				  struct tee_param *param,
+				  struct tee_ocall2_arg *ocall_arg);
 #endif /*__TEE_DRV_H*/
