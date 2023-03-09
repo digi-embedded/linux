@@ -183,7 +183,6 @@ struct dcmipp_pixelcap_device {
 	struct dcmipp_buf *active;
 
 	void __iomem *regs;
-	struct reset_control *rstc;
 
 	u32 pipe_id;
 
@@ -839,17 +838,6 @@ static void dcmipp_pixelcap_stop_streaming(struct vb2_queue *vq)
 
 	pm_runtime_put(vcap->cdev);
 
-	if (ret) {
-		/* Reset IP on timeout */
-		if (reset_control_assert(vcap->rstc))
-			dev_warn(vcap->dev, "Failed to assert the reset line\n");
-
-		usleep_range(3000, 5000);
-
-		if (reset_control_deassert(vcap->rstc))
-			dev_warn(vcap->dev, "Failed to deassert the reset line\n");
-	}
-
 	if (vcap->errors_count)
 		dev_warn(vcap->dev, "Some errors found while streaming: errors=%d (overrun=%d), buffers=%d\n",
 			 vcap->errors_count, vcap->overrun_count,
@@ -1240,7 +1228,6 @@ static int dcmipp_pixelcap_comp_bind(struct device *comp, struct device *master,
 	dev_set_drvdata(comp, &vcap->ved);
 	vcap->dev = comp;
 	vcap->regs = bind_data->regs;
-	vcap->rstc = bind_data->rstc;
 	vcap->cdev = master;
 
 	/* Initialize the video_device struct */

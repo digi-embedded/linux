@@ -263,7 +263,6 @@ static int dcmipp_comp_bind(struct device *master)
 
 	/* Bind subdevices */
 	bind_data.v4l2_dev = &dcmipp->v4l2_dev;
-	bind_data.rstc = dcmipp->rstc;
 	bind_data.regs = dcmipp->regs;
 	ret = component_bind_all(master, &bind_data);
 	if (ret)

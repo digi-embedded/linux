@@ -142,7 +142,6 @@ struct dcmipp_bytecap_device {
 	struct dcmipp_buf *active, *next;
 
 	void __iomem *regs;
-	struct reset_control *rstc;
 
 	u32 cmier;
 	u32 cmsr2;
@@ -693,17 +692,6 @@ static void dcmipp_bytecap_stop_streaming(struct vb2_queue *vq)
 
 	pm_runtime_put(vcap->cdev);
 
-	if (ret) {
-		/* Reset IP on timeout */
-		if (reset_control_assert(vcap->rstc))
-			dev_warn(vcap->dev, "Failed to assert the reset line\n");
-
-		usleep_range(3000, 5000);
-
-		if (reset_control_deassert(vcap->rstc))
-			dev_warn(vcap->dev, "Failed to deassert the reset line\n");
-	}
-
 	if (vcap->errors_count)
 		dev_warn(vcap->dev, "Some errors found while streaming: errors=%d (overrun=%d, limit=%d, nactive=%d), underrun=%d, buffers=%d\n",
 			 vcap->errors_count, vcap->overrun_count, vcap->limit_count,
@@ -1073,7 +1061,6 @@ static int dcmipp_bytecap_comp_bind(struct device *comp, struct device *master,
 	dev_set_drvdata(comp, &vcap->ved);
 	vcap->dev = comp;
 	vcap->regs = bind_data->regs;
-	vcap->rstc = bind_data->rstc;
 	vcap->cdev = master;
 
 	/* Initialize the video_device struct */

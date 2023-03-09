@@ -86,7 +86,6 @@ struct dcmipp_bind_data {
 	struct v4l2_device		*v4l2_dev;
 
 	/* Hardware resources */
-	struct reset_control		*rstc;
 	void __iomem			*regs;
 };
 
