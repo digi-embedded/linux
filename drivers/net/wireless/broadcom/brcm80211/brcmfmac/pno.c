@@ -12,6 +12,8 @@
 #include "fwil_types.h"
 #include "cfg80211.h"
 #include "pno.h"
+#include "vendor_ifx.h"
+#include <brcmu_wifi.h>
 
 #define BRCMF_PNO_VERSION		2
 #define BRCMF_PNO_REPEAT		4
@@ -592,4 +594,250 @@ u32 brcmf_pno_get_bucket_map(struct brcmf_pno_info *pi,
 	}
 	mutex_unlock(&pi->req_lock);
 	return bucket_map;
+}
+
+int pfn_send_network_blob_fw(struct wiphy *wiphy,
+				struct wireless_dev *wdev)
+{
+	int i, ret;
+	struct brcmf_cfg80211_vif *vif;
+	struct brcmf_if *ifp;
+	struct network_blob *network_blob_data;
+	brcm_pfn_param_t pfn_param;
+	struct brcm_pfn *pfn_list_buffer, *pssidnet;
+	int brcm_pfn_length = 0;
+
+	struct brcmf_cfg80211_info *cfg = wiphy_to_cfg(wiphy);
+	vif = container_of(wdev, struct brcmf_cfg80211_vif, wdev);
+	ifp = vif->ifp;
+
+	brcmf_dbg(TRACE, "Enter\n");
+	brcmf_pno_clean(ifp);
+
+	ret = brcmf_fil_iovar_int_set(ifp, "sup_wpa", 1);
+	if (ret) {
+		brcmf_err("sup_wpa set error:%d\n", ret);
+		return -1;
+	}
+
+	if (!cfg->pfn_data.count && !strlen(cfg->curr_network.ssid))
+		return 0;
+
+	pfn_param.version = PFN_VERSION;
+	pfn_param.flags = (PFN_LIST_ORDER << SORT_CRITERIA_BIT | ENABLE << IMMEDIATE_SCAN_BIT);
+	pfn_param.scan_freq = 30;
+	pfn_param.slow_freq = 0;
+	pfn_param.rssi_margin = 10;
+	pfn_param.lost_network_timeout = 60;
+	pfn_param.bestn = DEFAULT_BESTN;
+	pfn_param.mscan = DEFAULT_MSCAN;
+	pfn_param.repeat = DEFAULT_REPEAT;
+	pfn_param.exp = DEFAULT_EXP;
+	pfn_param.flags |= AUTO_CONNECT_MASK;
+
+	pfn_param.version = cpu_to_le32(pfn_param.version);
+	pfn_param.scan_freq = cpu_to_le32(pfn_param.scan_freq);
+	pfn_param.lost_network_timeout = cpu_to_le32(pfn_param.lost_network_timeout);
+	pfn_param.flags = cpu_to_le16(pfn_param.flags);
+	pfn_param.rssi_margin = cpu_to_le16(pfn_param.rssi_margin);
+	pfn_param.slow_freq = cpu_to_le32(pfn_param.slow_freq);
+
+	ret = brcmf_fil_iovar_data_set(ifp, "pfn_set", (void *)&pfn_param,
+					sizeof(brcm_pfn_param_t));
+	if (ret) {
+		brcmf_err("set pfn_set enable error:%d\n", ret);
+		return -1;
+	}
+
+	brcm_pfn_length = (cfg->pfn_data.count) * sizeof(struct brcm_pfn);
+
+	if (strlen(cfg->curr_network.ssid))
+		brcm_pfn_length += sizeof(struct brcm_pfn);
+
+	pfn_list_buffer = (struct brcm_pfn *)kzalloc(brcm_pfn_length, GFP_KERNEL);
+	pssidnet = pfn_list_buffer;
+	network_blob_data = cfg->pfn_data.network_blob_data;
+
+	if (strlen(cfg->curr_network.ssid)) {
+		pssidnet->auth = WLAN_AUTH_OPEN;
+		pssidnet->wpa_auth = WPA_AUTH_DISABLED;
+		pssidnet->wsec = WPA_CIPHER_NONE;
+		pssidnet->infra = WPAS_MODE_IBSS;
+		pssidnet->flags = 0;
+		memcpy((char *)pssidnet->ssid.SSID, cfg->curr_network.ssid,
+				strlen(cfg->curr_network.ssid));
+		pssidnet->ssid.SSID_len = cpu_to_le32(strlen(cfg->curr_network.ssid));
+		pssidnet->flags = cpu_to_le32(pssidnet->flags);
+
+		if (cfg->curr_network.proto == KEY_MGMT_WPA &&
+				cfg->curr_network.key_mgmt == KEY_MGMT_WPA) {
+			pssidnet->wpa_auth = WPA_AUTH_PSK;
+
+		} else if (cfg->curr_network.proto == WPA_PROTO_RSN &&
+				cfg->curr_network.key_mgmt == KEY_MGMT_WPA2) {
+			pssidnet->wpa_auth = WPA2_AUTH_PSK;
+
+		} else if (cfg->curr_network.proto == WPA_PROTO_RSN &&
+				cfg->curr_network.key_mgmt == KEY_MGMT_SAE) {
+			pssidnet->wpa_auth = WPA3_AUTH_SAE_PSK;
+			pssidnet->auth = WLAN_AUTH_SAE;
+
+		} else if (cfg->curr_network.proto == WPA_PROTO_RSN &&
+				cfg->curr_network.key_mgmt == KEY_MGMT_OWE) {
+			pssidnet->wpa_auth = WPA3_AUTH_OWE;
+		}
+
+		if (cfg->curr_network.pairwise_cipher == BIT(WPA_CIPHER_AES_CCM))
+			pssidnet->wsec = AES_ENABLED;
+
+		else if (cfg->curr_network.pairwise_cipher == BIT(WPA_CIPHER_TKIP))
+			pssidnet->wsec = TKIP_ENABLED;
+
+		brcmf_dbg(TRACE, "ssid %s key_mgmt %d proto %d wsec %d wpa_auth %d auth %d\n",
+				cfg->curr_network.ssid, cfg->curr_network.key_mgmt,
+				cfg->curr_network.proto, pssidnet->wsec,
+				pssidnet->wpa_auth, pssidnet->auth);
+		pssidnet++;
+	}
+
+	for (i = 0; i < cfg->pfn_data.count; i++) {
+		/* Default setting, open, no WPA, no WEP and bss */
+		pssidnet->auth = WLAN_AUTH_OPEN;
+		pssidnet->wpa_auth = WPA_AUTH_DISABLED;
+		pssidnet->wsec = WPA_CIPHER_NONE;
+		pssidnet->infra = WPAS_MODE_IBSS;
+		pssidnet->flags = 0;
+		memcpy((char *)pssidnet->ssid.SSID, network_blob_data->ssid,
+				strlen(network_blob_data->ssid));
+		pssidnet->ssid.SSID_len = cpu_to_le32(strlen(network_blob_data->ssid));
+		pssidnet->flags = cpu_to_le32(pssidnet->flags);
+
+		if (network_blob_data->proto == KEY_MGMT_WPA &&
+				network_blob_data->key_mgmt == KEY_MGMT_WPA) {
+			pssidnet->wpa_auth = WPA_AUTH_PSK;
+			pssidnet->wsec = AES_ENABLED;
+
+		} else if (network_blob_data->proto == WPA_PROTO_RSN &&
+				network_blob_data->key_mgmt == KEY_MGMT_WPA2) {
+			pssidnet->wpa_auth = WPA2_AUTH_PSK;
+			pssidnet->wsec = AES_ENABLED;
+
+		} else if (network_blob_data->proto == WPA_PROTO_RSN &&
+				network_blob_data->key_mgmt == KEY_MGMT_SAE) {
+			pssidnet->wpa_auth = WPA3_AUTH_SAE_PSK;
+			pssidnet->wsec = AES_ENABLED;
+			pssidnet->auth = WLAN_AUTH_SAE;
+
+		} else if (network_blob_data->proto == WPA_PROTO_RSN &&
+				network_blob_data->key_mgmt == KEY_MGMT_OWE) {
+			pssidnet->wpa_auth = WPA3_AUTH_OWE;
+			pssidnet->wsec = AES_ENABLED;
+		}
+
+		if (network_blob_data->pairwise_cipher == BIT(WPA_CIPHER_AES_CCM))
+			pssidnet->wsec = AES_ENABLED;
+
+		else if (network_blob_data->pairwise_cipher == BIT(WPA_CIPHER_TKIP))
+			pssidnet->wsec = TKIP_ENABLED;
+
+		brcmf_dbg(TRACE, "ssid %s key_mgmt %d proto %d wsec %d wpa_auth %d auth %d\n",
+				network_blob_data->ssid, network_blob_data->key_mgmt,
+				network_blob_data->proto, pssidnet->wsec,
+				pssidnet->wpa_auth, pssidnet->auth);
+		pssidnet++;
+		network_blob_data++;
+	}
+
+	ret = brcmf_fil_iovar_data_set(ifp, "pfn_add", (void *)pfn_list_buffer, brcm_pfn_length);
+	if (ret) {
+		brcmf_err("set pfnadd enable error:%d\n", ret);
+		return -1;
+	}
+	ret =  brcmf_fil_iovar_int_set(ifp, "pfn", PFN_SET);
+	if (ret) {
+		brcmf_err("set pfn error:%d\n", ret);
+		return -1;
+	}
+	kfree(pfn_list_buffer);
+	brcmf_dbg(TRACE, "Exit\n");
+	return 0;
+}
+
+int pfn_save_curr_network(struct wiphy *wiphy, struct net_device *ndev,
+				struct cfg80211_connect_params *sme)
+{
+	struct brcmf_cfg80211_info *cfg = wiphy_to_cfg(wiphy);
+	struct brcmf_if *ifp = netdev_priv(ndev);
+	struct brcmf_pub *drvr = ifp->drvr;
+	struct network_blob *curr_network;
+	int ret;
+	s32 val;
+
+	brcmf_dbg(TRACE, "Enter\n");
+	curr_network = &cfg->curr_network;
+	brcmf_pno_clean(ifp);
+
+	if (sme->ssid)
+		memcpy(curr_network->ssid, sme->ssid, sme->ssid_len);
+
+	ret = brcmf_fil_bsscfg_int_get(netdev_priv(ndev), "wpa_auth", &val);
+	if (ret) {
+		bphy_err(drvr, "could not get wpa_auth (%d)\n", ret);
+		return ret;
+	}
+
+	if (val & (WPA_AUTH_PSK | WPA_AUTH_UNSPECIFIED)) {
+		switch (sme->crypto.akm_suites[0]) {
+		case WLAN_AKM_SUITE_8021X:
+			val = WPA_AUTH_UNSPECIFIED;
+			curr_network->proto = (WPA_PROTO_RSN | WPA_PROTO_WPA);
+			curr_network->key_mgmt = KEY_MGMT_WPA_NONE;
+			break;
+		case WLAN_AKM_SUITE_PSK:
+			val = WPA_AUTH_PSK;
+			curr_network->proto = WPA_PROTO_RSN;
+			curr_network->key_mgmt = KEY_MGMT_WPA;
+			break;
+		default:
+			bphy_err(drvr, "invalid cipher group (%d)\n",
+					sme->crypto.cipher_group);
+			return -EINVAL;
+		}
+	} else if (val & (WPA2_AUTH_PSK | WPA2_AUTH_UNSPECIFIED)) {
+		switch (sme->crypto.akm_suites[0]) {
+		case WLAN_AKM_SUITE_8021X:
+			val = WPA2_AUTH_UNSPECIFIED;
+			curr_network->proto = (WPA_PROTO_RSN | WPA_PROTO_WPA);
+			curr_network->key_mgmt = KEY_MGMT_WPA_NONE;
+			break;
+		case WLAN_AKM_SUITE_PSK:
+			val = WPA2_AUTH_PSK;
+			curr_network->proto = WPA_PROTO_RSN;
+			curr_network->key_mgmt = KEY_MGMT_WPA2;
+			break;
+		case WLAN_AKM_SUITE_OWE:
+			val = WPA3_AUTH_OWE;
+			curr_network->proto = WPA_PROTO_RSN;
+			curr_network->key_mgmt = KEY_MGMT_OWE;
+			break;
+		default:
+			bphy_err(drvr, "invalid cipher group (%d)\n",
+					sme->crypto.cipher_group);
+			return -EINVAL;
+		}
+	} else if (val & WPA3_AUTH_SAE_PSK) {
+		switch (sme->crypto.akm_suites[0]) {
+		case WLAN_AKM_SUITE_SAE:
+			val = WPA3_AUTH_SAE_PSK;
+			curr_network->proto = WPA_PROTO_RSN;
+			curr_network->key_mgmt = KEY_MGMT_SAE;
+			break;
+		default:
+			bphy_err(drvr, "invalid cipher group (%d)\n",
+					sme->crypto.cipher_group);
+			return -EINVAL;
+		}
+	}
+	brcmf_dbg(TRACE, "Exit\n");
+	return 0;
 }

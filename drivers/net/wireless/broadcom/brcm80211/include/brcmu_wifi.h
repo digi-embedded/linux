@@ -260,4 +260,7 @@ static inline bool ac_bitmap_tst(u8 bitmap, int prec)
 #define HT_CAP_RX_STBC_NO		0x0
 #define HT_CAP_RX_STBC_ONE_STREAM	0x1
 
+#define WPA_PROTO_WPA BIT(0)
+#define WPA_PROTO_RSN BIT(1)
+
 #endif				/* _BRCMU_WIFI_H_ */
