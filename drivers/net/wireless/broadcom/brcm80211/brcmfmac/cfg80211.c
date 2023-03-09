@@ -3024,6 +3024,13 @@ brcmf_cfg80211_connect(struct wiphy *wiphy, struct net_device *ndev,
 
 	brcmf_set_join_pref(ifp, &sme->bss_select);
 
+	if (cfg->pfn_enable) {
+		err = pfn_save_curr_network(wiphy, ndev, sme);
+		if (err) {
+			brcmf_err("pfn: not able to save the curr network:%d\n", err);
+		}
+	}
+
 	/* The internal supplicant judges to use assoc or reassoc itself.
 	 * it is not necessary to specify REASSOC
 	 */
@@ -3090,6 +3097,11 @@ brcmf_cfg80211_disconnect(struct wiphy *wiphy, struct net_device *ndev,
 	clear_bit(BRCMF_VIF_STATUS_EAP_SUCCESS, &ifp->vif->sme_state);
 	clear_bit(BRCMF_VIF_STATUS_ASSOC_SUCCESS, &ifp->vif->sme_state);
 	cfg80211_disconnected(ndev, reason_code, NULL, 0, true, GFP_KERNEL);
+
+	if (cfg->pfn_enable) {
+		memset(&cfg->curr_network, '\0', sizeof(struct network_blob));
+		pfn_send_network_blob_fw(wiphy, &ifp->vif->wdev);
+	}
 
 	memcpy(&scbval.ea, &profile->bssid, ETH_ALEN);
 	scbval.val = cpu_to_le32(reason_code);
@@ -7891,7 +7903,14 @@ brcmf_bss_connect_done(struct brcmf_cfg80211_info *cfg,
 	struct brcmf_cfg80211_connect_info *conn_info = cfg_to_conn(cfg);
 	struct cfg80211_connect_resp_params conn_params;
 
-	brcmf_dbg(TRACE, "Enter\n");
+	brcmf_dbg(TRACE, "Enter cfg->pfn_enable %d\n", cfg->pfn_enable);
+	if (cfg->pfn_enable) {
+		if (!completed)
+			memset(&cfg->curr_network, '\0', sizeof(struct network_blob));
+
+		if (strlen(cfg->curr_network.ssid))
+			pfn_send_network_blob_fw(cfg->wiphy, &ifp->vif->wdev);
+	}
 
 	if (test_and_clear_bit(BRCMF_VIF_STATUS_CONNECTING,
 			       &ifp->vif->sme_state)) {
@@ -8020,6 +8039,7 @@ brcmf_notify_connect_status(struct brcmf_if *ifp,
 			} else {
 				brcmf_bss_connect_done(cfg, ndev, e, true);
 			}
+			brcmf_bss_connect_done(cfg, ndev, e, true);
 		}
 		brcmf_net_setcarrier(ifp, true);
 	} else if (brcmf_is_linkdown(ifp->vif, e)) {

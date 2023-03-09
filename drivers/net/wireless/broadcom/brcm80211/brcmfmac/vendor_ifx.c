@@ -38,6 +38,7 @@
 #include "vendor_ifx.h"
 #include "xtlv.h"
 #include "twt.h"
+#include "pno.h"
 #include "bus.h"
 #include <linux/string.h>
 #include <linux/kernel.h>
@@ -1029,4 +1030,97 @@ int ifx_cfg80211_vndr_cmds_str(struct wiphy *wiphy, struct wireless_dev *wdev,
 	}
 
 	return ret;
+}
+
+int ifx_cfg80211_vndr_cmds_config_pfn(struct wiphy *wiphy,
+		struct wireless_dev *wdev,
+		const void *data, int len)
+{
+	int buflen;
+	struct brcmf_cfg80211_info *cfg = wiphy_to_cfg(wiphy);
+
+	brcmf_dbg(TRACE, "Enter pfn_enable %d Network_blob count %d\n",
+			cfg->pfn_enable, *((u8 *)data));
+
+	if (!cfg->pfn_enable)
+		memset(&cfg->curr_network, '\0', sizeof(struct network_blob));
+
+	cfg->pfn_enable = 1;
+	cfg->pfn_data.count = *((u8 *)data);
+
+	if (!cfg->pfn_data.count)
+		return 0;
+
+	buflen = cfg->pfn_data.count * sizeof(struct network_blob);
+	cfg->pfn_data.network_blob_data = (struct network_blob *)kmalloc(buflen, GFP_KERNEL);
+	memset(cfg->pfn_data.network_blob_data, '\0', buflen);
+	memcpy(cfg->pfn_data.network_blob_data, (u8 *)data + sizeof(u8), buflen);
+	pfn_send_network_blob_fw(wiphy, wdev);
+	brcmf_dbg(TRACE, "Exit\n");
+	return 0;
+}
+
+int ifx_cfg80211_vndr_cmds_get_pfn_status(struct wiphy *wiphy,
+					struct wireless_dev *wdev,
+					const void *data, int len)
+{
+	struct brcmf_cfg80211_info *cfg = wiphy_to_cfg(wiphy);
+	u8 *buf = NULL;
+	struct brcmf_bss_info_le *bi = NULL;
+	int err = 0, i = 0;
+	struct brcmf_cfg80211_vif *vif;
+	struct brcmf_if *ifp;
+	struct network_blob *curr_network = NULL, *network_blob_data = NULL;
+	struct brcmu_chan ch;
+	struct pfn_conn_info curr_bssid;
+
+	brcmf_dbg(TRACE, "Enter\n");
+	vif = container_of(wdev, struct brcmf_cfg80211_vif, wdev);
+	ifp = vif->ifp;
+	if (cfg->pfn_enable != 1)
+		return 0;
+	buf = kzalloc(WL_BSS_INFO_MAX, GFP_KERNEL);
+	if (!buf) {
+		err = -ENOMEM;
+		return 0;
+	}
+
+	*(u32 *)buf = cpu_to_le32(WL_BSS_INFO_MAX);
+	err = brcmf_fil_cmd_data_get(ifp, BRCMF_C_GET_BSS_INFO,
+					buf, WL_BSS_INFO_MAX);
+	if (err) {
+		brcmf_err("pfn_status buf error:%d\n", err);
+		return 0;
+	}
+	bi = (struct brcmf_bss_info_le *)(buf + 4);
+	memset(&curr_bssid, '\0', sizeof(struct pfn_conn_info));
+
+	if (bi->SSID_len > 0) {
+		memcpy(curr_bssid.SSID, bi->SSID, bi->SSID_len);
+		memcpy(curr_bssid.BSSID, bi->BSSID, ETH_ALEN);
+		curr_bssid.SSID_len = bi->SSID_len;
+		curr_bssid.RSSI = bi->RSSI;
+		curr_bssid.phy_noise = bi->phy_noise;
+		ch.chspec = le16_to_cpu(bi->chanspec);
+		cfg->d11inf.decchspec(&ch);
+		curr_bssid.channel = ch.control_ch_num;
+		curr_bssid.SNR = bi->SNR;
+
+		network_blob_data = cfg->pfn_data.network_blob_data;
+		for (; i < cfg->pfn_data.count && network_blob_data; i++) {
+			if (!strncmp(network_blob_data->ssid, bi->SSID, bi->SSID_len)) {
+				curr_network = network_blob_data;
+				curr_bssid.proto = network_blob_data->proto;
+				curr_bssid.key_mgmt = network_blob_data->key_mgmt;
+				break;
+			}
+			network_blob_data++;
+		}
+	}
+	if (curr_bssid.SSID_len)
+		ifx_cfg80211_vndr_send_cmd_reply(wiphy, (void *)&curr_bssid,
+						sizeof(struct pfn_conn_info));
+	kfree(buf);
+	brcmf_dbg(TRACE, "Exit\n");
+	return 0;
 }

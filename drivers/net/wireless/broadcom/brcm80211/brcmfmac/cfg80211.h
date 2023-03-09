@@ -352,6 +352,21 @@ struct brcmf_cfg80211_wowl {
 	bool nd_enabled;
 };
 
+struct network_blob {
+	char ssid[32];
+	int key_mgmt;
+	char psk[64];
+	char sae_password[64];
+	u8 proto;
+	u8 pairwise_cipher;
+	u8 frequency;
+};
+
+struct drv_config_pfn_params {
+	u8 count;
+	struct network_blob *network_blob_data;
+};
+
 /**
  * struct brcmf_cfg80211_info - dongle private data of cfg80211 interface
  *
@@ -422,6 +437,9 @@ struct brcmf_cfg80211_info {
 	u8 ac_priority[MAX_8021D_PRIO];
 	u8 pm_state;
 	u8 num_softap;
+	u8 pfn_enable;
+	struct drv_config_pfn_params pfn_data;
+	struct network_blob curr_network;
 };
 
 /**
