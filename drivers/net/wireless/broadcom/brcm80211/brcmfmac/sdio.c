@@ -18,6 +18,7 @@
 #include <linux/mmc/sdio_func.h>
 #include <linux/mmc/card.h>
 #include <linux/mmc/core.h>
+#include <linux/mmc/host.h>
 #include <linux/semaphore.h>
 #include <linux/firmware.h>
 #include <linux/module.h>
@@ -340,6 +341,7 @@ struct rte_console {
 #define BRCMF_IDLE_ACTIVE	0	/* Do not request any SD clock change
 					 * when idle
 					 */
+#define BRCMF_IDLE_STOP		(-1)	/* Request SD clock be stopped */
 #define BRCMF_IDLE_INTERVAL	1
 
 #define KSO_WAIT_US 50
@@ -986,10 +988,63 @@ static int brcmf_sdio_htclk(struct brcmf_sdio *bus, bool on, bool pendok)
 	return 0;
 }
 
+/**
+ *	brcmf_sdio_set_sdbus_clk_width - set SD clock enable/disable and sd_mode
+ *	@func: SDIO function attached to host
+ *	@flags: reusing existing mmc->pm_flags to pass idle clk disable/enable or
+ *		change sdbus width through mmc.
+ */
+int brcmf_sdio_set_sdbus_clk_width(struct brcmf_sdio *bus, unsigned int flags)
+{
+	struct mmc_host *host;
+	u8 ctrl;
+	int ret = 0;
+
+	if (WARN_ON(!bus))
+		return -EINVAL;
+
+	host = bus->sdiodev->func1->card->host;
+
+	brcmf_dbg(SDIO, "Enter\n");
+
+	if (flags == SDIO_IDLECLOCK_DIS || flags == SDIO_IDLECLOCK_EN) {
+		/* Switch OFF/ON SD CLOCK in sdio Host Controller */
+		host->pm_caps |= flags;
+		/* Call SDHCI interface function from ops */
+		host->ops->set_ios(host, &host->ios);
+	} else if (flags == SDIO_SDMODE_1BIT || flags == SDIO_SDMODE_4BIT) {
+		ctrl = brcmf_sdiod_func0_rb(bus->sdiodev, SDIO_CCCR_IF, &ret);
+		/* Check for Error */
+		if (ret)
+			return ret;
+
+		/* Clear first two bits
+		 * 00 - 1 bit wide
+		 * 10 - 4 bit wide
+		 */
+		ctrl &= ~SDIO_BUS_WIDTH_MASK;
+		/* set as 4-bit bus width */
+		if (flags == SDIO_SDMODE_4BIT)
+			ctrl |= SDIO_BUS_WIDTH_4BIT;
+
+		brcmf_sdiod_func0_wb(bus->sdiodev, SDIO_CCCR_IF, ctrl, &ret);
+		/* Update HOST CTRL register with 1 bit or 4 bit mode */
+		host->pm_caps |= flags;
+		/* Call SDHCI interface function from ops */
+		host->ops->set_ios(host, &host->ios);
+	}
+	return ret;
+}
+
 /* Change idle/active SD state */
 static int brcmf_sdio_sdclk(struct brcmf_sdio *bus, bool on)
 {
 	brcmf_dbg(SDIO, "Enter\n");
+
+	if (bus->idleclock == BRCMF_IDLE_STOP)
+		brcmf_sdio_set_sdbus_clk_width(bus, (on ?
+									   SDIO_IDLECLOCK_DIS :
+									   SDIO_IDLECLOCK_EN));
 
 	if (on)
 		bus->clkstate = CLK_SDONLY;
@@ -1124,9 +1179,24 @@ brcmf_sdio_bus_sleep(struct brcmf_sdio *bus, bool sleep, bool pendok)
 						   SBSDIO_FUNC1_CHIPCLKCSR,
 						   SBSDIO_ALP_AVAIL_REQ, &err);
 			}
+
+			if (bus->idleclock == BRCMF_IDLE_STOP)
+				brcmf_sdio_set_sdbus_clk_width(bus,
+							       SDIO_SDMODE_1BIT);
+
 			err = brcmf_sdio_kso_control(bus, false);
+
+			if (bus->idleclock == BRCMF_IDLE_STOP)
+				brcmf_sdio_sdclk(bus, false);
 		} else {
+			if (bus->idleclock == BRCMF_IDLE_STOP && bus->clkstate == CLK_NONE)
+				brcmf_sdio_clkctl(bus, CLK_SDONLY, false);
+
 			err = brcmf_sdio_kso_control(bus, true);
+
+			if (bus->idleclock == BRCMF_IDLE_STOP)
+				brcmf_sdio_set_sdbus_clk_width(bus,
+							       SDIO_SDMODE_4BIT);
 		}
 		if (err) {
 			brcmf_err("error while changing bus sleep state %d\n",
@@ -5178,6 +5248,22 @@ static void brcmf_sdio_firmware_callback(struct device *dev, int err,
 		 */
 		if (bus->sdiodev->fmac_ulp.ulp_state == FMAC_ULP_TRIGGERED)
 			bus->sdiodev->fmac_ulp.ulp_state = FMAC_ULP_IDLE;
+	}
+
+	if (sdiod->settings->idleclk_disable == BRCMFMAC_DISABLE) {
+		bus->idleclock = BRCMF_IDLE_ACTIVE;
+	} else if (sdiod->settings->idleclk_disable == BRCMFMAC_ENABLE) {
+		bus->idleclock = BRCMF_IDLE_STOP;
+	} else if (sdiod->settings->idleclk_disable == BRCMFMAC_AUTO) {
+		if (sdiod->func1->device == SDIO_DEVICE_ID_BROADCOM_CYPRESS_43012 ||
+		    sdiod->func1->device == SDIO_DEVICE_ID_BROADCOM_CYPRESS_43022 ||
+		    sdiod->func1->device == SDIO_DEVICE_ID_CYPRESS_43022) {
+			bus->idleclock = BRCMF_IDLE_STOP;
+		} else {
+			bus->idleclock = BRCMF_IDLE_ACTIVE;
+		}
+	} else {
+		brcmf_err("unexpected idleclk_disable%d\n", sdiod->settings->idleclk_disable);
 	}
 
 	/* ready */
