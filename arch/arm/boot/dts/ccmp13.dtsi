@@ -161,6 +161,7 @@
 	scmi_vdd: voltd-vdd {
 		voltd-name = "vdd";
 		regulator-name = "vdd";
+		regulator-always-on;
 	};
 	scmi_vdd_adc: voltd-vdd_adc {
 		voltd-name = "vdd_adc";
