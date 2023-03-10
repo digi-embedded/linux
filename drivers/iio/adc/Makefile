@@ -96,6 +96,7 @@ obj-$(CONFIG_STM32_ADC) += stm32-adc.o
 obj-$(CONFIG_STM32_DFSDM_CORE) += stm32-dfsdm-core.o
 obj-$(CONFIG_STM32_DFSDM_ADC) += stm32-dfsdm-adc.o
 obj-$(CONFIG_STM32_MDF_CORE) += stm32-mdf-core.o
+obj-$(CONFIG_STM32_MDF_CORE) += stm32-mdf-serial.o
 obj-$(CONFIG_STM32_MDF_ADC) += stm32-mdf-adc.o
 obj-$(CONFIG_STMPE_ADC) += stmpe-adc.o
 obj-$(CONFIG_TI_ADC081C) += ti-adc081c.o

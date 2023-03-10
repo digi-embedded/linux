@@ -2,7 +2,7 @@
 /*
  * This file is part of STM32 MDF driver
  *
- * Copyright (C) 2023, STMicroelectronics.
+ * Copyright (C) 2023, STMicroelectronics - All Rights Reserved
  * Author: Olivier Moysan <olivier.moysan@foss.st.com>.
  */
 
@@ -67,7 +67,7 @@
 #define MDF_SITFCR_SITFEN BIT(0)
 #define MDF_SITFCR_SCKSRC_MASK GENMASK(2, 1)
 #define MDF_SITFCR_SCKSRC(v) FIELD_PREP(MDF_SITFCR_SCKSRC_MASK, v)
-#define MDF_SITFCR_SITFMOD_MASK GENMASK(6, 4)
+#define MDF_SITFCR_SITFMOD_MASK GENMASK(5, 4)
 #define MDF_SITFCR_SITFMOD(v) FIELD_PREP(MDF_SITFCR_SITFMOD_MASK, v)
 #define MDF_SITFCR_STH_MASK GENMASK(12, 8)
 #define MDF_SITFCR_STH(v) FIELD_PREP(MDF_SITFCR_STH_MASK, v)
@@ -85,7 +85,7 @@
 #define MDF_DFLTCR_ACQMOD_MASK GENMASK(6, 4)
 #define MDF_DFLTCR_ACQMOD(v) FIELD_PREP(MDF_DFLTCR_ACQMOD_MASK, v)
 #define MDF_DFLTCR_TRGSENS BIT(8)
-#define MDF_DFLTCR_TRGSRC_MASK GENMASK(12, 15)
+#define MDF_DFLTCR_TRGSRC_MASK GENMASK(15, 12)
 #define MDF_DFLTCR_TRGSRC(v) FIELD_PREP(MDF_DFLTCR_TRGSRC_MASK, v)
 #define MDF_DFLTCR_SNPSFMT BIT(16)
 #define MDF_DFLTCR_NBDIS_MASK GENMASK(27, 20)
@@ -101,8 +101,6 @@
 #define MDF_DFLTCICR_MCICD_MASK GENMASK(16, 8)
 #define MDF_DFLTCICR_MCICD(v) FIELD_PREP(MDF_DFLTCICR_MCICD_MASK, v)
 #define MDF_DFLTCICR_MCICD_MIN 2
-#define MDF_DFLTCICR_MCICD_MAX                                                 \
-	(FIELD_GET(MDF_DFLTCICR_MCICD_MASK, MDF_DFLTCICR_MCICD_MASK) + 1)
 #define MDF_DFLTCICR_SCALE_MASK GENMASK(25, 20)
 #define MDF_DFLTCICR_SCALE(v) FIELD_PREP(MDF_DFLTCICR_SCALE_MASK, v)
 
@@ -242,42 +240,65 @@
 
 #define STM32MP25_MDF_IPIDR_NUMBER 0x00110032
 
+enum stm32_sitf_mode {
+	STM32_MDF_MODE_LF_SPI,
+	STM32_MDF_MODE_SPI,
+	STM32_MDF_MODE_MANCHESTER_R,
+	STM32_MDF_MODE_MANCHESTER_F,
+	STM32_MDF_MODE_NB,
+};
+
 /*
  * struct stm32_mdf_sitf - STM32 MDF serial interface data
+ * @entry: serial interface list head
  * @dev: pointer to parent device
+ * @regmap: regmap for register read/write
+ * @mdf: mdf common data pointer
+ * @node: serial interface node handle
  * @sck: sitf clock handle
- * @kclk: mdf kernel clock handle
  * @base: sitf registers base cpu addr
  * @lock: sitf state manegement lock
  * @refcnt: sitf usage reference counter
  * @scksrc: sitf clock source
+ * @id: serial interface index
  * @mode: sitf mode
- * @registered: sitf status
  */
 struct stm32_mdf_sitf {
+	struct list_head entry;
 	struct device *dev;
+	struct regmap *regmap;
+	struct stm32_mdf *mdf;
+	struct fwnode_handle *node;
 	struct clk *sck;
-	struct clk *kclk;
 	void __iomem *base;
 	spinlock_t lock; /* Manage race conditions on sitf state */
 	unsigned int refcnt;
 	unsigned int scksrc;
+	u32 id;
 	u32 mode;
-	bool registered;
 };
 
 /*
  * struct stm32_mdf - STM32 MDF driver common data (for all instances)
- * @sitf: pointer to serial interfaces list
+ * @sitf_list: pointer to serial interfaces list
+ * @filter_list: pointer to filter interfaces list
+ * @fh_interleave: interleaved filter handle list pointer
+ * @fproc: processing clock frequency
  * @nbf: total number of digital filters
+ * @nb_interleave: number of interleaved filters
  */
 struct stm32_mdf {
-	struct stm32_mdf_sitf *sitf;
+	struct list_head sitf_list;
+	struct list_head filter_list;
+	struct fwnode_handle **fh_interleave;
+	unsigned long fproc;
 	unsigned int nbf;
+	unsigned int nb_interleave;
 };
 
 int stm32_mdf_start_mdf(struct stm32_mdf *mdf);
 int stm32_mdf_stop_mdf(struct stm32_mdf *mdf);
+int stm32_mdf_trigger(struct stm32_mdf *mdf);
 
-int stm32_mdf_start_sitf(struct stm32_mdf_sitf *sitf);
-int stm32_mdf_stop_sitf(struct stm32_mdf_sitf *sitf);
+int stm32_mdf_sitf_start(struct stm32_mdf_sitf *sitf);
+int stm32_mdf_sitf_stop(struct stm32_mdf_sitf *sitf);

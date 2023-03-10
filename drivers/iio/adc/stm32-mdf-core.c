@@ -2,7 +2,7 @@
 /*
  * This file is part of STM32 MDF driver
  *
- * Copyright (C) 2023, STMicroelectronics.
+ * Copyright (C) 2023, STMicroelectronics - All Rights Reserved
  * Author: Olivier Moysan <olivier.moysan@foss.st.com>.
  */
 
@@ -10,14 +10,16 @@
 #include <linux/clk-provider.h>
 #include <linux/device.h>
 #include <linux/gcd.h>
+#include <linux/list.h>
 #include <linux/module.h>
 #include <linux/of_address.h>
 #include <linux/of_device.h>
+#include <linux/pinctrl/consumer.h>
+#include <linux/pm_runtime.h>
 #include <linux/regmap.h>
+#include <linux/reset.h>
 
 #include "stm32-mdf.h"
-
-#define STM32_MDF_MODE_SZ 12
 
 static bool stm32_mdf_readable_reg(struct device *dev, unsigned int reg)
 {
@@ -73,7 +75,6 @@ static const struct regmap_config stm32_mdf_regmap_cfg = {
  * @div: serial clock divider data
  * @gate: serial clock gating data
  * @id: serial clock provider id (0 for cck0 & 1 for cck1)
- * @lock: lock to manage common divider
  */
 struct stm32_mdf_sck_prov {
 	struct clk_hw *hw;
@@ -81,7 +82,6 @@ struct stm32_mdf_sck_prov {
 	struct clk_divider div;
 	struct clk_gate gate;
 	unsigned int id;
-	spinlock_t lock; /* Manage common divider concurrent accesses */
 };
 
 /*
@@ -94,6 +94,7 @@ struct stm32_mdf_sck_prov {
  * @base: mdf registers base cpu address
  * @phys_base: mdf registers base physical address
  * @n_active_ch: number of active channels
+ * @lock: lock to manage clock provider
  * @cck_freq: output cck clocks frequencies array
  * @procdiv: processing divider (common divider)
  * @cckdiv: cck divider (cck0 & cck1 common divider)
@@ -107,86 +108,19 @@ struct stm32_mdf_priv {
 	void __iomem *base;
 	phys_addr_t phys_base;
 	atomic_t n_active_ch;
-	unsigned long cck_freq[2];
+	spinlock_t lock; /* Manage clock provider race conditions */
+	unsigned long cck_freq;
 	u32 procdiv;
 	u32 cckdiv;
 };
 
 #define gate_to_sck_prov(p) container_of(p, struct stm32_mdf_sck_prov, gate)
 #define div_to_sck_prov(p) container_of(p, struct stm32_mdf_sck_prov, div)
-
-enum {
-	STM32_MDF_MODE_SPI,
-	STM32_MDF_MODE_SPI_LF,
-	STM32_MDF_MODE_MANCHESTER_R,
-	STM32_MDF_MODE_MANCHESTER_F,
-	STM32_MDF_MODE_NB,
-};
-
-enum {
-	STM32_MDF_SCKSRC_CCK0,
-	STM32_MDF_SCKSRC_CCK1,
-	STM32_MDF_SCKSRC_CLK,
-	STM32_MDF_SCKSRC_NONE,
-};
-
-#define STM32_MDF_MAX_CCK STM32_MDF_SCKSRC_CLK
-
-struct stm32_mdf_sf_mode {
-	const char *name;
-	u32 idx;
-};
-
-static const struct stm32_mdf_sf_mode stm32_mdf_mode[STM32_MDF_MODE_NB] = {
-	{ "spi", STM32_MDF_MODE_SPI },
-	{ "spi_lf", STM32_MDF_MODE_SPI_LF },
-	{ "manchester_r", STM32_MDF_MODE_MANCHESTER_R },
-	{ "manchester_f", STM32_MDF_MODE_MANCHESTER_F },
-};
+#define STM32_MDF_MAX_CCK 2
 
 static inline struct stm32_mdf_priv *to_stm32_mdf_priv(struct stm32_mdf *mdf)
 {
 	return container_of(mdf, struct stm32_mdf_priv, mdf);
-}
-
-static int stm32_mdf_sitf_readl(struct stm32_mdf_sitf *sitf, u32 reg)
-{
-	int ret;
-
-	ret = clk_enable(sitf->kclk);
-	if (ret < 0)
-		return ret;
-
-	readl_relaxed(sitf->base + reg);
-
-	clk_disable(sitf->kclk);
-
-	return 0;
-}
-
-static int stm32_mdf_sitf_writel(struct stm32_mdf_sitf *sitf, u32 reg, u32 val)
-{
-	int ret;
-
-	ret = clk_enable(sitf->kclk);
-	if (ret < 0)
-		return ret;
-
-	writel_relaxed(val, sitf->base + reg);
-
-	clk_disable(sitf->kclk);
-
-	return 0;
-}
-
-static int stm32_mdf_sitf_clr_bits(struct stm32_mdf_sitf *sitf, u32 reg, u32 bits)
-{
-	return stm32_mdf_sitf_writel(sitf, reg, stm32_mdf_sitf_readl(sitf, reg) & ~bits);
-}
-
-static int stm32_mdf_sitf_set_bits(struct stm32_mdf_sitf *sitf, u32 reg, u32 bits)
-{
-	return stm32_mdf_sitf_writel(sitf, reg, stm32_mdf_sitf_readl(sitf, reg) | bits);
 }
 
 int stm32_mdf_start_mdf(struct stm32_mdf *mdf)
@@ -197,30 +131,47 @@ int stm32_mdf_start_mdf(struct stm32_mdf *mdf)
 	u32 val;
 
 	if (atomic_inc_return(&priv->n_active_ch) == 1) {
+		ret = pm_runtime_resume_and_get(dev);
+		if (ret < 0)
+			goto err;
+
 		/* Enable PROCDIV and CCKDIV clock dividers */
 		ret = regmap_set_bits(priv->regmap, MDF_CKGCR_REG, MDF_CKG_CKGDEN);
 		if (ret < 0)
-			goto err;
+			goto pm_put;
 
 		/* Check clock status */
 		regmap_read(priv->regmap, MDF_CKGCR_REG, &val);
 		if (!(val & MDF_CKG_ACTIVE)) {
 			ret = -EINVAL;
 			dev_err(dev, "MDF clock not active\n");
-			goto err;
+			goto pm_put;
 		}
-
-		/* TODO: Manage syncronous mode with TRGO trigger. UC with several filters */
 	}
 
 	return 0;
 
+pm_put:
+	pm_runtime_put_sync(dev);
 err:
 	atomic_dec(&priv->n_active_ch);
 
 	return ret;
 }
 EXPORT_SYMBOL_GPL(stm32_mdf_start_mdf);
+
+int stm32_mdf_trigger(struct stm32_mdf *mdf)
+{
+	struct stm32_mdf_priv *priv = to_stm32_mdf_priv(mdf);
+	int ret;
+
+	ret = regmap_set_bits(priv->regmap, MDF_GCR_REG, MDF_GCR_TRGO);
+	if (ret < 0)
+		return ret;
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(stm32_mdf_trigger);
 
 int stm32_mdf_stop_mdf(struct stm32_mdf *mdf)
 {
@@ -231,47 +182,13 @@ int stm32_mdf_stop_mdf(struct stm32_mdf *mdf)
 		ret = regmap_clear_bits(priv->regmap, MDF_CKGCR_REG, MDF_CKG_CKGDEN);
 		if (ret < 0)
 			return ret;
+
+		pm_runtime_put_sync(&priv->pdev->dev);
 	}
 
 	return 0;
 }
 EXPORT_SYMBOL_GPL(stm32_mdf_stop_mdf);
-
-int stm32_mdf_start_sitf(struct stm32_mdf_sitf *sitf)
-{
-	int ret;
-
-	spin_lock(&sitf->lock);
-
-	ret = stm32_mdf_sitf_set_bits(sitf, MDF_SITFCR_REG, MDF_SITFCR_SITFEN);
-	if (ret)
-		goto err;
-
-	sitf->refcnt++;
-
-err:
-	spin_unlock(&sitf->lock);
-
-	return ret;
-}
-EXPORT_SYMBOL_GPL(stm32_mdf_start_sitf);
-
-int stm32_mdf_stop_sitf(struct stm32_mdf_sitf *sitf)
-{
-	int ret = 0;
-
-	spin_lock(&sitf->lock);
-
-	sitf->refcnt--;
-
-	if (!sitf->refcnt)
-		ret = stm32_mdf_sitf_clr_bits(sitf, MDF_SITFCR_REG, MDF_SITFCR_SITFEN);
-
-	spin_unlock(&sitf->lock);
-
-	return ret;
-}
-EXPORT_SYMBOL_GPL(stm32_mdf_stop_sitf);
 
 static int stm32_mdf_clk_gate_endisable(struct clk_hw *hw, int enable)
 {
@@ -344,30 +261,35 @@ static long stm32_mdf_cck_divider_round_rate(struct clk_hw *hw, unsigned long ra
 	struct stm32_mdf_sck_prov *prov = div_to_sck_prov(div);
 	struct stm32_mdf_priv *priv = prov->data;
 	struct device *dev = &priv->pdev->dev;
-	unsigned long ratio, delta;
+	unsigned long ratio, delta, delta_ppm;
 	u32 cckdiv, procdiv;
+	int ret;
 
-	/* Compute procdiv / cckdiv if not already set */
-	/* TODO: manage race conditions and concurrency on procdiv configuration for cck0/1 */
+	/* Protect CCK0/1 shared dividers against concurrent accesses */
+	spin_lock(&priv->lock);
+
+	/*
+	 * Compute procdiv / cckdiv if not already set.
+	 * Done only once as CCK0 and CCK1 share the same frequency.
+	 */
 	if (!priv->procdiv || !priv->cckdiv) {
 		ratio = DIV_ROUND_CLOSEST(*parent_rate, rate);
 		if (!ratio) {
 			dev_err(dev, "CCK frequency above kernel frequency\n");
-			return -EINVAL;
+			ret = -EINVAL;
+			goto err;
 		}
 
 		delta = abs(*parent_rate - (ratio * rate));
-		if (delta) {
-			/* Warn if frequency deviation is higher than 1% */
-			if (delta / *parent_rate > 1)
-				dev_warn(dev, "CCK clock frequency not accurate\n");
-				/*
-				 * TODO: If rate is not a multiple of freq,
-				 * try to change parent rate ?
-				 */
-			else
-				dev_dbg(dev, "CCK clock frequency not accurate\n");
-		}
+
+		delta_ppm = (1000000 * delta) / *parent_rate;
+		if (delta_ppm > 1000)
+			/* Warn if frequency deviation is higher than 1000 ppm */
+			dev_warn(dev, "CCK clock deviation [%lu] ppm: [%lu] vs [%lu] Hz\n",
+				 delta_ppm, *parent_rate / ratio, rate);
+		else if (delta)
+			dev_dbg(dev, "CCK clock frequency not accurate: [%lu] ppm deviation\n",
+				delta_ppm);
 
 		/*
 		 * The total divider ratio must be split between proc divider and
@@ -380,16 +302,26 @@ static long stm32_mdf_cck_divider_round_rate(struct clk_hw *hw, unsigned long ra
 		if (procdiv > MDF_PROCDIV_MAX) {
 			dev_err(dev, "Proc divider out of range: %d > %d\n",
 				procdiv, MDF_PROCDIV_MAX);
-			return -EINVAL;
+			ret = -EINVAL;
+			goto err;
 		}
 
 		priv->procdiv = procdiv;
 		priv->cckdiv = cckdiv;
+
+		priv->mdf.fproc = DIV_ROUND_CLOSEST(*parent_rate, procdiv);
 	} else {
 		ratio = priv->procdiv * priv->cckdiv;
 	}
 
+	spin_unlock(&priv->lock);
+
 	return DIV_ROUND_CLOSEST_ULL((u64)*parent_rate, ratio);
+
+err:
+	spin_unlock(&priv->lock);
+
+	return ret;
 };
 
 static const struct clk_ops cck_gate_ops = {
@@ -416,32 +348,38 @@ static int stm32_mdf_core_register_clock_provider(struct platform_device *pdev,
 	struct clk_gate *gate;
 	struct clk_divider *div;
 	const char *clk_name;
-	const __be32 *p;
 	u32 ckgcr = 0;
-	int index;
+	int index = 0, ret, clk_id;
 
 	clk_data = devm_kzalloc(dev, struct_size(clk_data, hws, STM32_MDF_MAX_CCK), GFP_KERNEL);
 	if (!clk_data)
 		return -ENOMEM;
 
-	of_property_for_each_u32 (node, "clock-indices", prop, p, index) {
-		of_property_read_string_index(node, "clock-output-names", index, &clk_name);
+	spin_lock_init(&priv->lock);
 
+	of_property_for_each_string(node, "clock-output-names", prop, clk_name) {
 		if (index >= STM32_MDF_MAX_CCK) {
 			dev_err(dev, "Too many cck providers defined\n");
 			return -EINVAL;
 		}
 
+		if (!strncmp(clk_name, "cck0", 4)) {
+			clk_id = 0;
+		} else if (!strncmp(clk_name, "cck1", 4)) {
+			clk_id = 1;
+		} else {
+			dev_err(dev, "Unexpected cck clock provider name [%s]\n", clk_name);
+			return -EINVAL;
+		}
+
 		gate = &priv->prov[index].gate;
 		gate->reg = priv->base + MDF_CKGCR_REG;
-		gate->bit_idx = index ? MDF_CKG_CCK1EN : MDF_CKG_CCK0EN;
+		gate->bit_idx = clk_id ? MDF_CKG_CCK1EN : MDF_CKG_CCK0EN;
 
 		div = &priv->prov[index].div;
 		div->reg = priv->base + MDF_CKGCR_REG;
 		div->shift = MDF_CKG_CCKDIV_SHIFT;
 		div->width = MDF_CKG_CCKDIV_WIDTH;
-		div->lock = &priv->prov[index].lock;
-		spin_lock_init(div->lock);
 
 		priv->prov[index].data = priv;
 
@@ -456,40 +394,49 @@ static int stm32_mdf_core_register_clock_provider(struct platform_device *pdev,
 
 		priv->prov[index].hw = hw;
 		clk_data->hws[index] = hw;
-		clk_data->num++;
 
 		/* Configure the CCKx clock as output */
-		ckgcr |= index ? MDF_CKG_CCK1DIR : MDF_CKG_CCK0DIR;
+		ckgcr |= clk_id ? MDF_CKG_CCK1DIR : MDF_CKG_CCK0DIR;
+
+		index++;
 	}
 
-	devm_of_clk_add_hw_provider(dev, of_clk_hw_onecell_get, clk_data);
+	/*
+	 * Set num to max number of clock. This allows any clocks indice below maximum
+	 * in of_clk_hw_onecell_get, whatever the actual number of providers.
+	 */
+	clk_data->num = STM32_MDF_MAX_CCK;
+	ret = devm_of_clk_add_hw_provider(dev, of_clk_hw_onecell_get, clk_data);
+	if (ret) {
+		dev_err(dev, "Failed to add %s clock provider: %d\n", clk_name, ret);
+		return ret;
+	}
 
 	/* Configure CKGCR register */
 	return regmap_set_bits(priv->regmap, MDF_CKGCR_REG, ckgcr);
 }
 
-static int stm32_mdf_of_cck_get(struct platform_device *pdev, const char *prop,
-				unsigned long *cck_freq)
+static int stm32_mdf_of_cck_get(struct platform_device *pdev, struct stm32_mdf_priv *priv)
 {
 	struct device *dev = &pdev->dev;
 	u32 freq;
 	int ret;
 
-	ret = device_property_read_u32(dev, prop, &freq);
+	ret = device_property_read_u32(dev, "clock-frequency", &freq);
 	if (ret < 0) {
 		/* If property does not exist return immediately */
 		if (ret == -EINVAL)
 			return 0;
 
-		dev_err(dev, "Failed to read %s property: %d\n", prop, ret);
+		dev_err(dev, "Failed to read clock-frequency property: %d\n", ret);
 		return ret;
 	}
 
 	if (!freq) {
-		dev_err(dev, "Null frequency not allowed for %s\n", prop);
+		dev_err(dev, "Null frequency not allowed for cck output frequency\n");
 		return -EINVAL;
 	}
-	*cck_freq = freq;
+	priv->cck_freq = freq;
 
 	return 0;
 }
@@ -506,11 +453,7 @@ static int stm32_mdf_core_parse_clocks(struct platform_device *pdev, struct stm3
 	priv->kclk = kclk;
 
 	/* CCK0 and CCK1 clocks are optional. Used only in SPI master modes. */
-	ret = stm32_mdf_of_cck_get(pdev, "st,cck-freq-hz", &priv->cck_freq[0]);
-	if (ret)
-		return ret;
-
-	ret = stm32_mdf_of_cck_get(pdev, "st,cck-freq-hz", &priv->cck_freq[1]);
+	ret = stm32_mdf_of_cck_get(pdev, priv);
 	if (ret)
 		return ret;
 
@@ -518,155 +461,20 @@ static int stm32_mdf_core_parse_clocks(struct platform_device *pdev, struct stm3
 	if (ret)
 		return ret;
 
-	if (priv->cck_freq[0]) {
-		ret = clk_set_rate(priv->prov[0].div.hw.clk, priv->cck_freq[0]);
+	if (priv->cck_freq) {
+		/* Set CCK0 frequency if CCK0 provider exists */
+		ret = clk_set_rate(priv->prov[0].div.hw.clk, priv->cck_freq);
 		if (ret) {
 			dev_err(dev, "Failed to set cck0 rate: %d\n", ret);
 			return ret;
 		}
-	}
 
-	if (priv->cck_freq[1]) {
-		ret = clk_set_rate(priv->prov[1].div.hw.clk, priv->cck_freq[1]);
+		/* Set CCK1 frequency if CCK1 provider exists */
+		ret = clk_set_rate(priv->prov[1].div.hw.clk, priv->cck_freq);
 		if (ret) {
-			dev_err(dev, "Failed to set cck0 rate: %d\n", ret);
+			dev_err(dev, "Failed to set cck1 rate: %d\n", ret);
 			return ret;
 		}
-	}
-
-	return 0;
-}
-
-static int stm32_get_sitf_clk(struct device_node *np, struct stm32_mdf_sitf *sitf)
-{
-	struct clk *sck;
-
-	sck = of_clk_get(np, 0);
-	if (IS_ERR(sck)) {
-		if (PTR_ERR(sck) == -ENOENT)
-			return 0;
-		else
-			return dev_err_probe(sitf->dev, PTR_ERR(sck), "Can't get serial clock\n");
-	}
-
-	if (!strncmp(__clk_get_name(sck), "cck0", 4))
-		sitf->scksrc = STM32_MDF_SCKSRC_CCK0;
-	else if (!strncmp(__clk_get_name(sck), "cck1", 4))
-		sitf->scksrc = STM32_MDF_SCKSRC_CCK1;
-	else
-		sitf->scksrc = STM32_MDF_SCKSRC_CLK;
-
-	sitf->sck = sck;
-
-	return 0;
-};
-
-static int stm32_mdf_core_parse_sitf(struct platform_device *pdev, struct stm32_mdf_priv *priv)
-{
-	struct device_node *node = pdev->dev.of_node;
-	struct stm32_mdf *mdf = &priv->mdf;
-	struct stm32_mdf_sitf *sitf = mdf->sitf;
-	struct device_node *child;
-	struct device *dev = &pdev->dev;
-	struct resource res;
-	void __iomem *base;
-	const char *str;
-	int ret, i;
-	u32 idx, mode, sitfcr;
-
-	sitf = devm_kzalloc(&pdev->dev, mdf->nbf * sizeof(*mdf->sitf), GFP_KERNEL);
-	if (!sitf)
-		return -ENOMEM;
-	spin_lock_init(&sitf->lock);
-	mdf->sitf = sitf;
-
-	for (i = 0; i < mdf->nbf; i++) {
-		sitf[i].dev = dev;
-		sitf[i].scksrc = STM32_MDF_SCKSRC_NONE;
-	}
-
-	for_each_available_child_of_node(node, child) {
-		/* If compatible found, child node is not a sitf node. skip it */
-		ret = of_property_read_string(child, "compatible", &str);
-		if (!ret)
-			continue;
-
-		ret = of_property_read_u32(child, "reg", &idx);
-		if (ret) {
-			dev_err(dev, "Could not get interface index: %d\n", ret);
-			return ret;
-		}
-		idx = (idx >> 7) - 1;
-
-		of_address_to_resource(child, 0, &res);
-		if (ret) {
-			dev_err(dev, "Failed to get resource from address: %d\n", ret);
-			return ret;
-		}
-
-		base = devm_ioremap_resource(dev, &res);
-		if (IS_ERR(base)) {
-			ret = PTR_ERR(base);
-			dev_err(dev, "Failed to get sitf resource: %d\n", ret);
-			return ret;
-		}
-		sitf[idx].base = base;
-
-		if (idx > priv->mdf.nbf) {
-			dev_err(dev, "Interface index [%d] exceeds maximum [%d]\n", idx,
-				priv->mdf.nbf);
-			return -EINVAL;
-		}
-
-		/* Get SITF mode */
-		ret = of_property_read_string(child, "st,sitf-mode", &str);
-		if (ret) {
-			/* skip if mode is not defined */
-			if (ret == -EINVAL)
-				continue;
-
-			dev_err(dev, "Could not get interface mode: %d\n", ret);
-			return ret;
-		}
-
-		i = 0;
-		while (i < STM32_MDF_MODE_NB) {
-			if (!strncmp(stm32_mdf_mode[i].name, str, STM32_MDF_MODE_SZ)) {
-				mode = stm32_mdf_mode[i].idx;
-				break;
-			}
-			i++;
-		}
-
-		if (i >= STM32_MDF_MODE_NB) {
-			dev_err(dev, "Unknown serial interface mode [%s]\n", str);
-			return -EINVAL;
-		}
-
-		sitf[idx].mode = mode;
-		sitfcr = MDF_SITFCR_SITFMOD(mode);
-
-		/* Optional clocks. Clock not needed in Manchester mode */
-		ret = stm32_get_sitf_clk(child, &sitf[idx]);
-		if (ret)
-			return ret;
-
-		if ((mode == STM32_MDF_MODE_SPI || mode == STM32_MDF_MODE_SPI_LF) &&
-		    sitf[idx].scksrc == STM32_MDF_SCKSRC_NONE) {
-			dev_err(dev, "Missing clock for serial interface [%d]\n", idx);
-			return -EINVAL;
-		}
-
-		sitf[idx].kclk = priv->kclk;
-		sitf[idx].registered = true;
-		sitfcr |= MDF_SITFCR_SCKSRC(sitf[idx].scksrc);
-
-		/* TODO: check clock config & ratio cck/ck_ker versus mode */
-
-		/* Configure SITF register */
-		stm32_mdf_sitf_set_bits(&sitf[idx], MDF_SITFCR_REG, sitfcr);
-
-		dev_dbg(dev, "Serial interface [%d] registered\n", idx);
 	}
 
 	return 0;
@@ -675,18 +483,58 @@ static int stm32_mdf_core_parse_sitf(struct platform_device *pdev, struct stm32_
 static int stm32_mdf_core_parse_of(struct platform_device *pdev, struct stm32_mdf_priv *priv)
 {
 	struct device_node *node = pdev->dev.of_node;
-	int ret;
+	struct reset_control *rst;
+	struct device *dev = &pdev->dev;
+	struct fwnode_handle *fwnode = dev_fwnode(dev);
+	struct fwnode_handle *handle;
+	struct fwnode_handle **fh;
+	int count, ret, i;
 
 	if (!node)
 		return -EINVAL;
+
+	rst = devm_reset_control_get_optional_exclusive(&pdev->dev, "mdf");
+	if (IS_ERR(rst))
+		return dev_err_probe(dev, PTR_ERR(rst), "Failed to get reset controller\n");
+
+	ret = reset_control_reset(rst);
+	if (ret) {
+		dev_err(&pdev->dev, "reset_control_reset failed %d\n", ret);
+		return ret;
+	}
 
 	ret = stm32_mdf_core_parse_clocks(pdev, priv);
 	if (ret < 0)
 		return ret;
 
-	ret = stm32_mdf_core_parse_sitf(pdev, priv);
-	if (ret < 0)
-		return ret;
+	if (device_property_present(&pdev->dev, "st,interleave")) {
+		count = fwnode_property_count_u32(fwnode, "st,interleave");
+		if (count < 2 || count > priv->mdf.nbf) {
+			dev_err(dev, "Wrong interleave filters number [%d]\n", count);
+			return -EINVAL;
+		}
+
+		fh = devm_kzalloc(dev, count * sizeof(*fh), GFP_KERNEL);
+		if (!fh)
+			return -ENOMEM;
+		priv->mdf.fh_interleave = fh;
+
+		for (i = 0; i < count; i++) {
+			handle = fwnode_find_reference(fwnode, "st,interleave", i);
+			if (IS_ERR(handle)) {
+				dev_err(dev, "Failed to read filter handle: %ld\n",
+					PTR_ERR(handle));
+				return PTR_ERR(handle);
+			}
+			priv->mdf.fh_interleave[i] = handle;
+		}
+
+		priv->mdf.nb_interleave = count;
+
+		/* Configure GCR */
+		ret = regmap_update_bits(priv->regmap, MDF_GCR_REG,
+					 MDF_GCR_ILVNB_MASK, MDF_GCR_ILVNB(count - 1));
+	}
 
 	return ret;
 }
@@ -752,10 +600,97 @@ static int stm32_mdf_core_probe(struct platform_device *pdev)
 	if (ret < 0)
 		return ret;
 
+	INIT_LIST_HEAD(&priv->mdf.sitf_list);
+	INIT_LIST_HEAD(&priv->mdf.filter_list);
+
 	platform_set_drvdata(pdev, priv);
 
-	return devm_of_platform_populate(&pdev->dev);
+	pm_runtime_get_noresume(&pdev->dev);
+	pm_runtime_set_active(&pdev->dev);
+	pm_runtime_enable(&pdev->dev);
+
+	ret = of_platform_populate(pdev->dev.of_node, NULL, NULL, &pdev->dev);
+	if (ret)
+		goto pm_put;
+
+	pm_runtime_put(&pdev->dev);
+
+	return 0;
+
+pm_put:
+	pm_runtime_disable(&pdev->dev);
+	pm_runtime_set_suspended(&pdev->dev);
+	pm_runtime_put_noidle(&pdev->dev);
+
+	return ret;
 }
+
+static int stm32_mdf_core_remove(struct platform_device *pdev)
+{
+	pm_runtime_get_sync(&pdev->dev);
+	of_platform_depopulate(&pdev->dev);
+	pm_runtime_disable(&pdev->dev);
+	pm_runtime_set_suspended(&pdev->dev);
+	pm_runtime_put_noidle(&pdev->dev);
+
+	return 0;
+}
+
+static int stm32_mdf_core_suspend(struct device *dev)
+{
+	struct stm32_mdf *mdf = dev_get_drvdata(dev);
+	struct stm32_mdf_priv *priv = to_stm32_mdf_priv(mdf);
+	int ret;
+
+	ret = pm_runtime_force_suspend(dev);
+	if (ret)
+		return ret;
+
+	regcache_cache_only(priv->regmap, true);
+	regcache_mark_dirty(priv->regmap);
+
+	/* Balance devm_regmap_init_mmio_clk() clk_prepare() */
+	clk_unprepare(priv->kclk);
+
+	return pinctrl_pm_select_sleep_state(dev);
+}
+
+static int stm32_mdf_core_resume(struct device *dev)
+{
+	struct stm32_mdf *mdf = dev_get_drvdata(dev);
+	struct stm32_mdf_priv *priv = to_stm32_mdf_priv(mdf);
+	int ret;
+
+	ret = pinctrl_pm_select_default_state(dev);
+	if (ret)
+		return ret;
+
+	ret = clk_prepare(priv->kclk);
+	if (ret)
+		return ret;
+
+	regcache_cache_only(priv->regmap, false);
+	ret = regcache_sync(priv->regmap);
+	if (ret)
+		return ret;
+
+	return pm_runtime_force_resume(dev);
+}
+
+static int stm32_mdf_core_runtime_suspend(struct device *dev)
+{
+	return 0;
+}
+
+static int stm32_mdf_core_runtime_resume(struct device *dev)
+{
+	return 0;
+}
+
+static const struct dev_pm_ops stm32_mdf_core_pm_ops = {
+	SET_SYSTEM_SLEEP_PM_OPS(stm32_mdf_core_suspend, stm32_mdf_core_resume)
+	SET_RUNTIME_PM_OPS(stm32_mdf_core_runtime_suspend, stm32_mdf_core_runtime_resume, NULL)
+};
 
 static const struct of_device_id stm32_mdf_of_match[] = {
 	{ .compatible = "st,stm32mp25-mdf" },
@@ -765,9 +700,11 @@ MODULE_DEVICE_TABLE(of, stm32_mdf_of_match);
 
 static struct platform_driver stm32_mdf_driver = {
 	.probe = stm32_mdf_core_probe,
+	.remove = stm32_mdf_core_remove,
 	.driver = {
 		.name = "stm32-mdf",
 		.of_match_table = stm32_mdf_of_match,
+		.pm = &stm32_mdf_core_pm_ops,
 	},
 };
 

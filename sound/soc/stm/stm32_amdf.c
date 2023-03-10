@@ -113,7 +113,7 @@ static const struct snd_soc_dai_ops stm32_amdf_dai_ops = {
 static const struct snd_soc_dai_driver stm32_amdf_dai = {
 	.capture = {
 		    .channels_min = 1,
-		    .channels_max = 1,
+		    .channels_max = 2,
 		    .formats = SNDRV_PCM_FMTBIT_S16_LE |
 			       SNDRV_PCM_FMTBIT_S32_LE,
 		    .rates = SNDRV_PCM_RATE_CONTINUOUS,
