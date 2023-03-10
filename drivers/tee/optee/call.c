@@ -120,8 +120,8 @@ void optee_cq_wait_final(struct optee_call_queue *cq,
 }
 
 /* Requires the filpstate mutex to be held */
-static struct optee_session *find_session(struct optee_context_data *ctxdata,
-					  u32 session_id)
+struct optee_session *optee_find_session(struct optee_context_data *ctxdata,
+					 u32 session_id)
 {
 	struct optee_session *sess;
 
@@ -328,7 +328,7 @@ int optee_open_session(struct tee_context *ctx,
 		goto out;
 	}
 
-	if (optee->ops->do_call_with_arg(ctx, shm, offs)) {
+	if (optee->ops->do_call_with_arg(ctx, shm, offs, false)) {
 		msg_arg->ret = TEEC_ERROR_COMMUNICATION;
 		msg_arg->ret_origin = TEEC_ORIGIN_COMMS;
 	}
@@ -360,7 +360,8 @@ out:
 	return rc;
 }
 
-int optee_close_session_helper(struct tee_context *ctx, u32 session)
+int optee_close_session_helper(struct tee_context *ctx,
+			       struct optee_session *sess)
 {
 	struct optee *optee = tee_get_drvdata(ctx->teedev);
 	struct optee_shm_arg_entry *entry;
@@ -373,8 +374,8 @@ int optee_close_session_helper(struct tee_context *ctx, u32 session)
 		return PTR_ERR(msg_arg);
 
 	msg_arg->cmd = OPTEE_MSG_CMD_CLOSE_SESSION;
-	msg_arg->session = session;
-	optee->ops->do_call_with_arg(ctx, shm, offs);
+	msg_arg->session = sess->session_id;
+	optee->ops->do_call_with_arg(ctx, shm, offs, sess->system);
 
 	optee_free_msg_arg(ctx, entry, offs);
 
@@ -385,18 +386,21 @@ int optee_close_session(struct tee_context *ctx, u32 session)
 {
 	struct optee_context_data *ctxdata = ctx->data;
 	struct optee_session *sess;
+	int rc;
 
 	/* Check that the session is valid and remove it from the list */
 	mutex_lock(&ctxdata->mutex);
-	sess = find_session(ctxdata, session);
+	sess = optee_find_session(ctxdata, session);
 	if (sess)
 		list_del(&sess->list_node);
 	mutex_unlock(&ctxdata->mutex);
 	if (!sess)
 		return -EINVAL;
+
+	rc = optee_close_session_helper(ctx, sess);
 	kfree(sess);
 
-	return optee_close_session_helper(ctx, session);
+	return rc;
 }
 
 int optee_invoke_func(struct tee_context *ctx, struct tee_ioctl_invoke_arg *arg,
@@ -413,7 +417,7 @@ int optee_invoke_func(struct tee_context *ctx, struct tee_ioctl_invoke_arg *arg,
 
 	/* Check that the session is valid */
 	mutex_lock(&ctxdata->mutex);
-	sess = find_session(ctxdata, arg->session);
+	sess = optee_find_session(ctxdata, arg->session);
 	mutex_unlock(&ctxdata->mutex);
 	if (!sess)
 		return -EINVAL;
@@ -432,7 +436,7 @@ int optee_invoke_func(struct tee_context *ctx, struct tee_ioctl_invoke_arg *arg,
 	if (rc)
 		goto out;
 
-	if (optee->ops->do_call_with_arg(ctx, shm, offs)) {
+	if (optee->ops->do_call_with_arg(ctx, shm, offs, sess->system)) {
 		msg_arg->ret = TEEC_ERROR_COMMUNICATION;
 		msg_arg->ret_origin = TEEC_ORIGIN_COMMS;
 	}
@@ -462,7 +466,7 @@ int optee_cancel_req(struct tee_context *ctx, u32 cancel_id, u32 session)
 
 	/* Check that the session is valid */
 	mutex_lock(&ctxdata->mutex);
-	sess = find_session(ctxdata, session);
+	sess = optee_find_session(ctxdata, session);
 	mutex_unlock(&ctxdata->mutex);
 	if (!sess)
 		return -EINVAL;
@@ -474,7 +478,7 @@ int optee_cancel_req(struct tee_context *ctx, u32 cancel_id, u32 session)
 	msg_arg->cmd = OPTEE_MSG_CMD_CANCEL;
 	msg_arg->session = session;
 	msg_arg->cancel_id = cancel_id;
-	optee->ops->do_call_with_arg(ctx, shm, offs);
+	optee->ops->do_call_with_arg(ctx, shm, offs, false);
 
 	optee_free_msg_arg(ctx, entry, offs);
 	return 0;
