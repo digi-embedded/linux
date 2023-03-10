@@ -11,6 +11,22 @@
 
 #define BRCMF_FW_ALTPATH_LEN			256
 
+#define BRCMFMAC_DISABLE	0
+#define BRCMFMAC_ENABLE		1
+#define BRCMFMAC_AUTO		2
+
+/* Keeping these macro definition here because these are defined in mmc drivers.
+ * So for 3rd party mmc, fmac build should not fail due to build error.
+ */
+
+/* SDIO IDLECLOCK Support - reusing pm_caps */
+#ifndef SDIO_IDLECLOCK_DIS
+#define SDIO_IDLECLOCK_DIS	BIT(2)	/* Start SDClock */
+#define SDIO_IDLECLOCK_EN	BIT(3)	/* Stop SDClock */
+#define SDIO_SDMODE_1BIT	BIT(4)	/* Set 1-bit Bus mode */
+#define SDIO_SDMODE_4BIT	BIT(5)	/* Set 4-bit Bus mode */
+#endif /* !SDIO_IDLECLOCK_DIS */
+
 /* Definitions for the module global and device specific settings are defined
  * here. Two structs are used for them. brcmf_mp_global_t and brcmf_mp_device.
  * The mp_global is instantiated once in a global struct and gets initialized
@@ -49,6 +65,7 @@ extern struct brcmf_mp_global_t brcmf_mp_global;
  * @country_codes: If available, pointer to struct for translating country codes
  * @bus: Bus specific platform data. Only SDIO at the mmoment.
  * @pkt_prio: Support customer dscp to WMM up mapping.
+ * @idleclk_disable: SDIO bus clock output disable when bus is idle.
  */
 struct brcmf_mp_device {
 	bool		p2p_enable;
@@ -75,6 +92,7 @@ struct brcmf_mp_device {
 		struct brcmfmac_sdio_pd sdio;
 	} bus;
 	bool		pkt_prio;
+	int			idleclk_disable;
 };
 
 /**

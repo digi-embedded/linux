@@ -132,6 +132,10 @@ static int brcmf_bt_over_sdio;
 module_param_named(bt_over_sdio, brcmf_bt_over_sdio, int, 0);
 MODULE_PARM_DESC(bt_over_sdio, "Enable BT over SDIO");
 
+static int brcmf_sdio_idleclk_disable = BRCMFMAC_AUTO;
+module_param_named(sdio_idleclk_disable, brcmf_sdio_idleclk_disable, int, 0644);
+MODULE_PARM_DESC(sdio_idleclk_disable, "Disable SDIO idle clock");
+
 static struct brcmfmac_platform_data *brcmfmac_pdata;
 struct brcmf_mp_global_t brcmf_mp_global;
 
@@ -747,6 +751,9 @@ struct brcmf_mp_device *brcmf_get_module_param(struct device *dev,
 
 	settings->bt_over_sdio = !!brcmf_bt_over_sdio;
 	brcmf_dbg(INFO, "bt_over_sdio: %d\n", settings->bt_over_sdio);
+
+	settings->idleclk_disable = brcmf_sdio_idleclk_disable;
+	brcmf_dbg(INFO, "idleclk_disable: %d\n", settings->idleclk_disable);
 
 	if (bus_type == BRCMF_BUSTYPE_SDIO) {
 		settings->bus.sdio.txglomsz = brcmf_sdiod_txglomsz;
