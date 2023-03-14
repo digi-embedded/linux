@@ -3134,12 +3134,16 @@ brcmf_sdio_ulp_pre_redownload_check(struct brcmf_sdio *bus, u32 hmb_data)
 					   &err);
 		brcmf_dbg(ULP, "wowl_wake_ind: 0x%08x, ulp_wake_ind: 0x%08x\n",
 			  wowl_wake_ind, ulp_wake_ind);
-		reg_addr = CORE_CC_REG(
-			  brcmf_chip_get_pmu(bus->ci)->base, min_res_mask);
-		brcmf_sdiod_writel(sdiod, reg_addr,
-				   DEFAULT_43012_MIN_RES_MASK, &err);
-		if (err)
-			brcmf_err("min_res_mask failed\n");
+
+		/* skip setting min resource mask for secure chip */
+		if (bus->ci->chip != CY_CC_43022_CHIP_ID) {
+			reg_addr = CORE_CC_REG(brcmf_chip_get_pmu(bus->ci)->base,
+					       min_res_mask);
+			brcmf_sdiod_writel(sdiod, reg_addr,
+					   DEFAULT_43012_MIN_RES_MASK, &err);
+			if (err)
+				brcmf_err("min_res_mask failed\n");
+		}
 
 		return true;
 	}
@@ -3255,6 +3259,11 @@ static void brcmf_sdio_dpc(struct brcmf_sdio *bus)
 	if (intstatus & I_CHIPACTIVE) {
 		brcmf_dbg(SDIO, "Dongle reports CHIPACTIVE\n");
 		intstatus &= ~I_CHIPACTIVE;
+	}
+
+	if (intstatus & I_HMB_FC_STATE) {
+		brcmf_dbg(INFO, "Dongle reports HMB_FC_STATE\n");
+		intstatus &= ~I_HMB_FC_STATE;
 	}
 
 	/* Ignore frame indications if rxskip is set */
