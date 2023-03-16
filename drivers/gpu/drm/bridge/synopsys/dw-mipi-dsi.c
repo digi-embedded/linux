@@ -851,6 +851,9 @@ static void dw_mipi_dsi_bridge_post_atomic_disable(struct drm_bridge *bridge,
 	struct dw_mipi_dsi *dsi = bridge_to_dsi(bridge);
 	const struct dw_mipi_dsi_phy_ops *phy_ops = dsi->plat_data->phy_ops;
 
+	if (!pm_runtime_active(dsi->dev))
+		return;
+
 	/*
 	 * Switch to command mode before panel-bridge post_disable &
 	 * panel unprepare.
@@ -878,7 +881,6 @@ static void dw_mipi_dsi_bridge_post_atomic_disable(struct drm_bridge *bridge,
 	}
 	dw_mipi_dsi_disable(dsi);
 
-	clk_disable_unprepare(dsi->pclk);
 	pm_runtime_put(dsi->dev);
 }
 
@@ -904,14 +906,11 @@ static void dw_mipi_dsi_mode_set(struct dw_mipi_dsi *dsi,
 	int ret;
 	u32 lanes = dw_mipi_dsi_get_lanes(dsi);
 
-	clk_prepare_enable(dsi->pclk);
-
 	ret = phy_ops->get_lane_mbps(priv_data, adjusted_mode, dsi->mode_flags,
 				     lanes, dsi->format, &dsi->lane_mbps);
 	if (ret)
 		DRM_DEBUG_DRIVER("Phy get_lane_mbps() failed\n");
 
-	pm_runtime_get_sync(dsi->dev);
 	dw_mipi_dsi_init(dsi);
 	dw_mipi_dsi_dpi_config(dsi, adjusted_mode);
 	dw_mipi_dsi_packet_handler_config(dsi);
@@ -948,6 +947,8 @@ static void dw_mipi_dsi_bridge_mode_set(struct drm_bridge *bridge,
 {
 	struct dw_mipi_dsi *dsi = bridge_to_dsi(bridge);
 
+	pm_runtime_get_sync(dsi->dev);
+
 	dw_mipi_dsi_mode_set(dsi, adjusted_mode);
 	if (dsi->slave)
 		dw_mipi_dsi_mode_set(dsi->slave, adjusted_mode);
@@ -957,6 +958,9 @@ static void dw_mipi_dsi_bridge_atomic_enable(struct drm_bridge *bridge,
 					     struct drm_bridge_state *old_bridge_state)
 {
 	struct dw_mipi_dsi *dsi = bridge_to_dsi(bridge);
+
+	if (!pm_runtime_active(dsi->dev))
+		return;
 
 	/* Switch to video mode for panel-bridge enable & panel enable */
 	dw_mipi_dsi_set_mode(dsi, MIPI_DSI_MODE_VIDEO);
