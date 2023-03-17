@@ -773,6 +773,50 @@ static bool brcmf_fw_request_is_valid(struct brcmf_fw_request *req)
 	return true;
 }
 
+int brcmf_fw_get_firmware_sync(struct device *dev, struct brcmf_fw_request *req,
+			       void (*fw_cb)(struct device *dev, int err,
+					     struct brcmf_fw_request *req))
+{
+	struct brcmf_fw_item *first = &req->items[0];
+	struct brcmf_fw *fwctx;
+	char *alt_path = NULL;
+	const struct firmware *fw;
+	int ret = -ENOENT;
+
+	brcmf_dbg(TRACE, "enter: dev=%s\n", dev_name(dev));
+
+	if (!brcmf_fw_request_is_valid(req))
+		return -EINVAL;
+
+	if (req->n_items > 1)
+		return -EINVAL;
+
+	fwctx = kzalloc(sizeof(*fwctx), GFP_KERNEL);
+	if (!fwctx)
+		return -ENOMEM;
+
+	fwctx->dev = dev;
+	fwctx->req = req;
+	fwctx->done = fw_cb;
+
+	/* First try alternative board-specific path if any */
+	if (fwctx->req->board_types[0])
+		alt_path = brcm_alt_fw_path(first->path,
+					    fwctx->req->board_types[0]);
+	if (alt_path) {
+		/* Do not fallback to user-mode helper if file does not exist */
+		ret = request_firmware_direct(&fw, alt_path, fwctx->dev);
+		kfree(alt_path);
+	}
+
+	if (ret == -ENOENT)
+		ret = request_firmware(&fw, first->path, fwctx->dev);
+
+	brcmf_fw_request_done(fw, fwctx);
+
+	return ret;
+}
+
 int brcmf_fw_get_firmwares(struct device *dev, struct brcmf_fw_request *req,
 			   void (*fw_cb)(struct device *dev, int err,
 					 struct brcmf_fw_request *req))
@@ -804,8 +848,8 @@ int brcmf_fw_get_firmwares(struct device *dev, struct brcmf_fw_request *req,
 	if (alt_path) {
 		fwctx->board_index++;
 		ret = request_firmware_nowait(THIS_MODULE, true, alt_path,
-					      fwctx->dev, GFP_KERNEL, fwctx,
-					      brcmf_fw_request_done_alt_path);
+						fwctx->dev, GFP_KERNEL, fwctx,
+						brcmf_fw_request_done_alt_path);
 		kfree(alt_path);
 	} else {
 		ret = request_firmware_nowait(THIS_MODULE, true, first->path,

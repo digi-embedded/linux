@@ -111,4 +111,13 @@ int brcmf_fw_get_firmwares(struct device *dev, struct brcmf_fw_request *req,
 			   void (*fw_cb)(struct device *dev, int err,
 					 struct brcmf_fw_request *req));
 
+/**
+ * Request single firmware synchronously.
+ * Callback is called on a valid request
+ * whether it succeeds or not.
+ */
+int brcmf_fw_get_firmware_sync(struct device *dev, struct brcmf_fw_request *req,
+			       void (*fw_cb)(struct device *dev, int err,
+					     struct brcmf_fw_request *req));
+
 #endif /* BRCMFMAC_FIRMWARE_H */
