@@ -20,6 +20,7 @@
 #include "common.h"
 #include "bcdc.h"
 #include "cfg80211.h"
+#include "fwil.h"
 
 
 #define IOCTL_RESP_TIMEOUT		msecs_to_jiffies(2000)
@@ -148,6 +149,9 @@ struct brcmf_usbdev_info {
 	const u8 *image;	/* buffer for combine fw and nvram */
 	int image_len;
 
+	char clm_name[BRCMF_FW_NAME_LEN];
+	const struct firmware *clm_fw;
+
 	struct usb_device *usbdev;
 	struct device *dev;
 	struct completion dev_init_done;
@@ -167,6 +171,8 @@ struct brcmf_usbdev_info {
 
 	struct brcmf_mp_device *settings;
 };
+
+static int brcmf_usb_get_clmblob(struct brcmf_usbdev_info *devinfo);
 
 static void brcmf_usb_rx_refill(struct brcmf_usbdev_info *devinfo,
 				struct brcmf_usbreq  *req);
@@ -677,6 +683,7 @@ out:
 static int brcmf_usb_up(struct device *dev)
 {
 	struct brcmf_usbdev_info *devinfo = brcmf_usb_get_businfo(dev);
+	int ret;
 
 	brcmf_dbg(USB, "Enter\n");
 	if (devinfo->bus_pub.state == BRCMFMAC_USB_STATE_UP)
@@ -704,7 +711,11 @@ static int brcmf_usb_up(struct device *dev)
 		devinfo->ctl_read.wIndex = cpu_to_le16(devinfo->ifnum);
 	}
 	brcmf_usb_rx_fill_all(devinfo);
-	return 0;
+
+	/* CLM blob needed after firmware download and re-attach has occurred */
+	ret = brcmf_usb_get_clmblob(devinfo);
+
+	return ret;
 }
 
 static void brcmf_cancel_all_urbs(struct brcmf_usbdev_info *devinfo)
@@ -1162,8 +1173,21 @@ error:
 static int brcmf_usb_get_blob(struct device *dev, const struct firmware **fw,
 			      enum brcmf_blob_type type)
 {
-	/* No blobs for USB devices... */
-	return -ENOENT;
+	struct brcmf_usbdev_info *devinfo = brcmf_usb_get_businfo(dev);
+
+	switch (type) {
+	case BRCMF_BLOB_CLM:
+		*fw = devinfo->clm_fw;
+		devinfo->clm_fw = NULL;
+		break;
+	default:
+		return -ENOENT;
+	}
+
+	if (!*fw)
+		return -ENOENT;
+
+	return 0;
 }
 
 static const struct brcmf_bus_ops brcmf_usb_bus_ops = {
@@ -1176,6 +1200,9 @@ static const struct brcmf_bus_ops brcmf_usb_bus_ops = {
 };
 
 #define BRCMF_USB_FW_CODE	0
+
+/* Note - CLM blob file obtained separately from FW so also uses index 0 */
+#define BRCMF_USB_FW_CLM	0
 
 static void brcmf_usb_probe_phase2(struct device *dev, int ret,
 				   struct brcmf_fw_request *fwreq)
@@ -1560,11 +1587,69 @@ static int brcmf_usb_reset_resume(struct usb_interface *intf)
 	return ret;
 }
 
+
+static void brcmf_usb_get_clmblob_complete(struct device *dev, int ret,
+					   struct brcmf_fw_request *fwreq)
+{
+	struct brcmf_bus *bus = dev_get_drvdata(dev);
+	struct brcmf_usbdev_info *devinfo = bus->bus_priv.usb->devinfo;
+
+	brcmf_dbg(USB, "Enter\n");
+
+	if (fwreq) {
+		devinfo->clm_fw = fwreq->items[BRCMF_USB_FW_CLM].binary;
+		kfree(fwreq);
+	}
+}
+
+static int brcmf_usb_get_clmblob(struct brcmf_usbdev_info *devinfo)
+{
+	struct brcmf_fw_request *fwreq;
+	struct brcmf_fw_name fwnames[] = {
+		{ ".clm_blob", devinfo->clm_name },
+	};
+	struct brcmf_bus *bus_if;
+	struct brcmf_if *ifp;
+	struct brcmf_rev_info_le revinfo;
+	int ret = -1;
+
+	brcmf_dbg(USB, "Enter\n");
+
+	bus_if = dev_get_drvdata(devinfo->dev);
+	if (bus_if && bus_if->drvr) {
+		ifp = bus_if->drvr->iflist[0];
+		ret = brcmf_fil_cmd_data_get(ifp, BRCMF_C_GET_REVINFO,
+					     &revinfo, sizeof(revinfo));
+	}
+
+	if (ret) {
+		brcmf_err("Unable to get version for CLM blob request!");
+		goto error_return;
+	}
+
+	fwreq = brcmf_fw_alloc_request(le32_to_cpu(revinfo.chipnum),
+				       le32_to_cpu(revinfo.chiprev),
+				       brcmf_usb_fwnames,
+				       ARRAY_SIZE(brcmf_usb_fwnames),
+				       fwnames, ARRAY_SIZE(fwnames));
+	if (!fwreq)
+		return -ENOMEM;
+
+	fwreq->items[BRCMF_USB_FW_CLM].type = BRCMF_FW_TYPE_BINARY;
+	fwreq->items[BRCMF_USB_FW_CLM].flags = BRCMF_FW_REQF_OPTIONAL;
+
+	ret = brcmf_fw_get_firmware_sync(devinfo->dev, fwreq, brcmf_usb_get_clmblob_complete);
+
+error_return:
+	return ret;
+}
+
 #define BRCMF_USB_DEVICE(dev_id) \
 	{ \
 		USB_DEVICE(BRCM_USB_VENDOR_ID_BROADCOM, dev_id), \
 		.driver_info = BRCMF_FWVENDOR_WCC \
 	}
+
 
 #define LINKSYS_USB_DEVICE(dev_id) \
 	{ \
