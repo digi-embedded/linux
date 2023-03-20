@@ -341,7 +341,7 @@ struct rte_console {
 
 #define KSO_WAIT_US 50
 #define MAX_KSO_ATTEMPTS (PMU_MAX_TRANSITION_DLY/KSO_WAIT_US)
-#define BRCMF_SDIO_MAX_ACCESS_ERRORS	20
+#define BRCMF_SDIO_MAX_ACCESS_ERRORS	40
 
 static void brcmf_sdio_firmware_callback(struct device *dev, int err,
 					 struct brcmf_fw_request *fwreq);
