@@ -1174,6 +1174,20 @@
 			};
 		};
 
+		gpio1: gpio@47400080 {
+			compatible = "fsl,imx93-gpio", "fsl,imx7ulp-gpio";
+			reg = <0x47400080 0x1000>, <0x47400040 0x40>;
+			gpio-controller;
+			#gpio-cells = <2>;
+			interrupts = <GIC_SPI 10 IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
+			clocks = <&clk IMX93_CLK_GPIO1_GATE>,
+				 <&clk IMX93_CLK_GPIO1_GATE>;
+			clock-names = "gpio", "port";
+			gpio-ranges = <&iomuxc 0 92 16>;
+		};
+
 		gpio2: gpio@43810080 {
 			compatible = "fsl,imx93-gpio", "fsl,imx7ulp-gpio";
 			reg = <0x43810080 0x1000>, <0x43810040 0x40>;
@@ -1215,20 +1229,6 @@
 				 <&clk IMX93_CLK_GPIO4_GATE>;
 			clock-names = "gpio", "port";
 			gpio-ranges = <&iomuxc 0 38 28>, <&iomuxc 28 36 2>;
-		};
-
-		gpio1: gpio@47400080 {
-			compatible = "fsl,imx93-gpio", "fsl,imx7ulp-gpio";
-			reg = <0x47400080 0x1000>, <0x47400040 0x40>;
-			gpio-controller;
-			#gpio-cells = <2>;
-			interrupts = <GIC_SPI 10 IRQ_TYPE_LEVEL_HIGH>;
-			interrupt-controller;
-			#interrupt-cells = <2>;
-			clocks = <&clk IMX93_CLK_GPIO1_GATE>,
-				 <&clk IMX93_CLK_GPIO1_GATE>;
-			clock-names = "gpio", "port";
-			gpio-ranges = <&iomuxc 0 92 16>;
 		};
 
 		ocotp: efuse@47510000 {
