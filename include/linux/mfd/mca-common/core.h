@@ -76,6 +76,7 @@ struct mca_drv {
 	struct device *i2c_adapter_dev;
 	struct syscore_ops syscore;
 	bool suspended;
+	bool rtc_prepare_enabled;
 };
 
 /* Platform-dependent values */
@@ -88,6 +89,7 @@ struct mca_drv {
 #define REBOOT_SAFE_KL03_FW_VER	MCA_MAKE_FW_VER(1,2)
 #define DEBTB50M_KL03_FW_VER	MCA_MAKE_FW_VER(1, 7)
 #define PWRKEY_UP_KL03_FW_VER	MCA_MAKE_FW_VER(1, 14)
+#define RTC_PREPARE_KL03_FW_VER	MCA_MAKE_FW_VER(1, 20)
 
 #define MCA_KL17_DEVICE_ID	0x4A
 #define MCA_UART_KL17_MIN_FW	MCA_MAKE_FW_VER(0, 13)

@@ -1231,6 +1231,9 @@ int mca_device_init(struct mca_drv *mca, u32 irq)
 			/* Invalidate GPIO */
 			mca->fw_update_gpio = -EINVAL;
 		}
+
+		if (mca->fw_version >= RTC_PREPARE_KL03_FW_VER)
+			mca->rtc_prepare_enabled = true;
 	} else {
 		/*
 		 * Read the SOM hardware version the MCA is using. For CC8X module it
