@@ -413,13 +413,13 @@
 	dr_mode = "otg";
 	vbus-supply = <&reg_usb_otg1_vbus>;
 	pinctrl-0 = <&pinctrl_usbotg1>;
-	digi,power-line-active-high;
+	power-active-high;
 	status = "disabled";
 };
 
 &usbotg2 {
 	dr_mode = "host";
-	digi,power-line-active-high;
+	power-active-high;
 	disable-over-current;
 	status = "disabled";
 };
