@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: ISC
-
 /* Copyright 2019, Cypress Semiconductor Corporation or a subsidiary of
  * Cypress Semiconductor Corporation. All rights reserved.
  * This software, including source code, documentation and related
@@ -149,11 +147,11 @@ int brcmf_get_wlan_info(struct brcmf_bus *bus_if, struct btsdio_info *bs_info)
 
 	ifp = bus_if->drvr->iflist[0];
 
-	bs_info->bt_buf_reg_addr = SI_ENUM_BASE + 0xC00 +
+	bs_info->bt_buf_reg_addr = SI_ENUM_BASE_DEFAULT + 0xC00 +
 				     CHIPGCIREGOFFS(gci_input[6]);
-	bs_info->host_ctrl_reg_addr = SI_ENUM_BASE + 0xC00 +
+	bs_info->host_ctrl_reg_addr = SI_ENUM_BASE_DEFAULT + 0xC00 +
 				      CHIPGCIREGOFFS(gci_output[3]);
-	bs_info->bt_ctrl_reg_addr = SI_ENUM_BASE + 0xC00 +
+	bs_info->bt_ctrl_reg_addr = SI_ENUM_BASE_DEFAULT + 0xC00 +
 				    CHIPGCIREGOFFS(gci_input[7]);
 	brcmf_dbg(INFO, "BT buf reg addr: 0x%x\n",
 		  bs_info->bt_buf_reg_addr);

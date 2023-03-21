@@ -104,4 +104,12 @@
 			status = "disabled";
 		};
 	};
+
+	/* Enable ROHM BU90T82 bridge power (LDO6) */
+	fragment@9 {
+		target = <&ldo6>;
+		__overlay__ {
+			regulator-always-on;
+		};
+	};
 };

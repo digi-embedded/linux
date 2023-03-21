@@ -15,6 +15,7 @@
 #include "cfg80211.h"
 #include "vendor.h"
 #include "fwil.h"
+#include "vendor_ifx.h"
 
 static int brcmf_cfg80211_vndr_cmds_dcmd_handler(struct wiphy *wiphy,
 						 struct wireless_dev *wdev,
@@ -155,15 +156,17 @@ static int brcmf_cfg80211_vndr_cmds_frameburst(struct wiphy *wiphy,
 	vif = container_of(wdev, struct brcmf_cfg80211_vif, wdev);
 	ifp = vif->ifp;
 
-	if (val == 0x0 || val == 0x1)
+	if (val == 0x0 || val == 0x1) {
 		ret = brcmf_cfg80211_vndr_cmds_int_set(ifp, val,
 						       BRCMF_C_SET_FAKEFRAG);
-	else if (val == 0xff)
+	} else if (val == 0xff) {
 		ret = brcmf_cfg80211_vndr_cmds_int_get(ifp,
 						       BRCMF_C_GET_FAKEFRAG,
 						       wiphy);
-	else
+	} else {
 		brcmf_err("Invalid Input\n");
+		ret = -EINVAL;
+	}
 
 	return ret;
 }
@@ -239,6 +242,92 @@ const struct wiphy_vendor_command brcmf_vendor_cmds[] = {
 		.policy = VENDOR_CMD_RAW_DATA,
 		.doit = brcmf_cfg80211_vndr_cmds_frameburst
 	},
+	{
+		IFX_SUBCMD(DCMD,
+			   (WIPHY_VENDOR_CMD_NEED_WDEV |
+			    WIPHY_VENDOR_CMD_NEED_NETDEV),
+			   VENDOR_CMD_RAW_DATA,
+			   brcmf_cfg80211_vndr_cmds_dcmd_handler)
+	},
+	{
+		IFX_SUBCMD(FRAMEBURST,
+			   (WIPHY_VENDOR_CMD_NEED_WDEV |
+			    WIPHY_VENDOR_CMD_NEED_NETDEV),
+			   VENDOR_CMD_RAW_DATA,
+			   brcmf_cfg80211_vndr_cmds_frameburst)
+	},
+	{
+		IFX_SUBCMD(MUEDCA_OPT_ENABLE,
+			   (WIPHY_VENDOR_CMD_NEED_WDEV |
+			    WIPHY_VENDOR_CMD_NEED_NETDEV),
+			   VENDOR_CMD_RAW_DATA,
+			   ifx_cfg80211_vndr_cmds_muedca_opt)
+	},
+	{
+		IFX_SUBCMD(LDPC_CAP,
+			   (WIPHY_VENDOR_CMD_NEED_WDEV |
+			    WIPHY_VENDOR_CMD_NEED_NETDEV),
+			   VENDOR_CMD_RAW_DATA,
+			   ifx_cfg80211_vndr_cmds_ldpc_cap)
+	},
+	{
+		IFX_SUBCMD(AMSDU,
+			   (WIPHY_VENDOR_CMD_NEED_WDEV |
+			    WIPHY_VENDOR_CMD_NEED_NETDEV),
+			   VENDOR_CMD_RAW_DATA,
+			   ifx_cfg80211_vndr_cmds_amsdu)
+	},
+	{
+		IFX_SUBCMD(TWT,
+			   (WIPHY_VENDOR_CMD_NEED_WDEV |
+			    WIPHY_VENDOR_CMD_NEED_NETDEV),
+			   ifx_vendor_attr_twt_policy,
+			   ifx_cfg80211_vndr_cmds_twt),
+		.maxattr = IFX_VENDOR_ATTR_TWT_MAX
+	},
+	{
+		IFX_SUBCMD(OCE_ENABLE,
+			   (WIPHY_VENDOR_CMD_NEED_WDEV |
+				WIPHY_VENDOR_CMD_NEED_NETDEV),
+			VENDOR_CMD_RAW_DATA,
+			ifx_cfg80211_vndr_cmds_oce_enable)
+	},
+	{
+		IFX_SUBCMD(BSSCOLOR,
+			   (WIPHY_VENDOR_CMD_NEED_WDEV |
+				WIPHY_VENDOR_CMD_NEED_NETDEV),
+			VENDOR_CMD_RAW_DATA,
+			ifx_cfg80211_vndr_cmds_bsscolor)
+	},
+	{
+		IFX_SUBCMD(RANDMAC,
+			   (WIPHY_VENDOR_CMD_NEED_WDEV |
+				WIPHY_VENDOR_CMD_NEED_NETDEV),
+			VENDOR_CMD_RAW_DATA,
+			ifx_cfg80211_vndr_cmds_randmac)
+	},
+	{
+		IFX_SUBCMD(MBO,
+			   (WIPHY_VENDOR_CMD_NEED_WDEV |
+				WIPHY_VENDOR_CMD_NEED_NETDEV),
+			ifx_vendor_attr_mbo_policy,
+			ifx_cfg80211_vndr_cmds_mbo),
+		.maxattr = IFX_VENDOR_ATTR_MBO_MAX
+	},
+	{
+		IFX_SUBCMD(MPC,
+			   (WIPHY_VENDOR_CMD_NEED_WDEV |
+			    WIPHY_VENDOR_CMD_NEED_NETDEV),
+			   VENDOR_CMD_RAW_DATA,
+			   ifx_cfg80211_vndr_cmds_mpc)
+	},
+	{
+		IFX_SUBCMD(GIANTRX,
+			   (WIPHY_VENDOR_CMD_NEED_WDEV |
+			    WIPHY_VENDOR_CMD_NEED_NETDEV),
+			   VENDOR_CMD_RAW_DATA,
+			   ifx_cfg80211_vndr_cmds_giantrx)
+	},
 };
 
 const struct nl80211_vendor_cmd_info brcmf_vendor_events[] = {
@@ -247,3 +336,10 @@ const struct nl80211_vendor_cmd_info brcmf_vendor_events[] = {
 		.subcmd = BRCMF_VNDR_EVTS_PHY_TEMP,
 	},
 };
+
+int get_brcmf_num_vndr_cmds(void)
+{
+	int num = ARRAY_SIZE(brcmf_vendor_cmds);
+
+	return num;
+}

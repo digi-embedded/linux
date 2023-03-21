@@ -45,6 +45,7 @@ static const struct brcmf_feat_fwcap brcmf_fwcap_map[] = {
 	{ BRCMF_FEAT_SAE_EXT, "sae_ext " },
 	{ BRCMF_FEAT_FBT, "fbt " },
 	{ BRCMF_FEAT_OKC, "okc" },
+	{ BRCMF_FEAT_GCMP, "gcmp" },
 };
 
 #ifdef DEBUG
@@ -330,4 +331,9 @@ bool brcmf_feat_is_quirk_enabled(struct brcmf_if *ifp,
 				 enum brcmf_feat_quirk quirk)
 {
 	return (ifp->drvr->chip_quirks & BIT(quirk));
+}
+
+bool brcmf_feat_is_6ghz_enabled(struct brcmf_if *ifp)
+{
+	return (!ifp->drvr->settings->disable_6ghz);
 }

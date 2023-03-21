@@ -37,7 +37,6 @@ DTC_FLAGS_stm32mp157c-ev1-m4-examples += -@
 DTC_FLAGS_stm32mp157f-ev1-a7-examples += -@
 DTC_FLAGS_stm32mp157f-ev1-m4-examples += -@
 DTC_FLAGS_ccmp133-dvk += -@
-DTC_FLAGS_ccmp151-dvk += -@
 DTC_FLAGS_ccmp157-dvk += -@
 
 dtb-$(CONFIG_ARCH_ALPINE) += \
@@ -1150,7 +1149,6 @@ dtb-$(CONFIG_ARCH_STM32) += \
 	ccmp133-dvk.dtb \
 	ccmp133-mfg-functional.dtb \
 	ccmp133-mfg-functional-wb.dtb \
-	ccmp151-dvk.dtb \
 	ccmp157-dvk.dtb \
 	ccmp157-mfg-functional.dtb \
 	ccmp157-mfg-functional-wb.dtb \
@@ -1167,8 +1165,7 @@ dtb-$(CONFIG_ARCH_STM32) += \
 	_ov_board_fusion7-parallel_ccmp15-dvk.dtbo \
 	_ov_board_g101evn010-lvds_ccmp15-dvk.dtbo \
 	_ov_board_pwm8_ccmp13-dvk.dtbo \
-	_ov_board_uart7_rs232_ccmp15-dvk.dtbo \
-	_ov_board_usart3_rs232_ccmp13-dvk.dtbo \
+	_ov_board_v1_ccmp15-dvk.dtbo \
 	_ov_som_bt_ccmp13.dtbo \
 	_ov_som_bt_ccmp15.dtbo \
 	_ov_som_wifi_ccmp13.dtbo \

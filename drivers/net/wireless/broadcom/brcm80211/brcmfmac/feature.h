@@ -31,6 +31,7 @@
  * FWAUTH: Firmware authenticator
  * DUMP_OBSS: Firmware has capable to dump obss info to support ACS
  * SAE_EXT: SAE be handled by userspace supplicant
+ * GCMP: firmware has defined GCMP or not.
  */
 #define BRCMF_FEAT_LIST \
 	BRCMF_FEAT_DEF(MBSS) \
@@ -57,7 +58,8 @@
 	BRCMF_FEAT_DEF(DUMP_OBSS) \
 	BRCMF_FEAT_DEF(SAE_EXT) \
 	BRCMF_FEAT_DEF(FBT) \
-	BRCMF_FEAT_DEF(OKC)
+	BRCMF_FEAT_DEF(OKC) \
+	BRCMF_FEAT_DEF(GCMP)
 
 /*
  * Quirks:
@@ -125,5 +127,14 @@ bool brcmf_feat_is_enabled(struct brcmf_if *ifp, enum brcmf_feat_id id);
  */
 bool brcmf_feat_is_quirk_enabled(struct brcmf_if *ifp,
 				 enum brcmf_feat_quirk quirk);
+
+/**
+ * brcmf_feat_is_6ghz_enabled() - Find if 6GHZ Operation is allowed
+ *
+ * @ifp: interface instance.
+ *
+ * Return: true if 6GHz operation is allowed; otherwise false.
+ */
+bool brcmf_feat_is_6ghz_enabled(struct brcmf_if *ifp);
 
 #endif /* _BRCMF_FEATURE_H */

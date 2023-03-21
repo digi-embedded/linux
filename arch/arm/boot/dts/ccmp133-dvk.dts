@@ -144,6 +144,14 @@
 			reset-assert-us = <1000>;
 			reset-deassert-us = <2000>;
 		};
+
+		phy0_eth2: ethernet-phy@1 {
+			reg = <1>;
+			compatible = "ethernet-phy-id0007.c0f0"; /* PHY ID for SMSC LAN8720Ai */
+			reset-gpios = <&gpioh 7 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+			interrupt-parent = <&gpioh>;
+			interrupts = <2 IRQ_TYPE_LEVEL_LOW>;
+		};
 	};
 };
 
@@ -158,18 +166,6 @@
 	phy-handle = <&phy0_eth2>;
 	st,ext-phyclk;
 	phy-supply = <&reg_3v3_eth_pwr>;
-
-	mdio1 {
-		#address-cells = <1>;
-		#size-cells = <0>;
-		compatible = "snps,dwmac-mdio";
-
-		phy0_eth2: ethernet-phy@0 {
-			reg = <0>;
-			compatible = "ethernet-phy-id0007.c0f0"; /* PHY ID for SMSC LAN8720Ai */
-			reset-gpios = <&gpioh 7 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
-		};
-	};
 };
 
 &i2c2 {
@@ -248,7 +244,9 @@
 	disable-wp;
 	st,neg-edge;
 	bus-width = <4>;
-	vmmc-supply = <&scmi_vdd_sd>;
+	no-1-8-v;
+	vmmc-supply = <&scmi_vdd>;
+	vqmmc-supply = <&scmi_vdd_sd>;
 	status = "okay";
 };
 
@@ -391,11 +389,11 @@
 
 	/*
 	 * Hack to keep hub active if wakeup source is enabled
-	 * otherwise the hub will wakeup the port0 as soon as the v3v3_sw is disabled
+	 * otherwise the hub will wakeup the port0 as soon as the vbus_sw is disabled
 	 */
 	connector {
 		compatible = "usb-a-connector";
-		vbus-supply = <&scmi_v3v3_sw>;
+		vbus-supply = <&scmi_vbus_sw>;
 	};
 };
 
@@ -493,9 +491,7 @@
 			pinmux = <STM32_PINMUX('F', 7,  AF11)>, /* ETH2_TXD0 */
 				 <STM32_PINMUX('G', 11, AF10)>, /* ETH2_TXD1 */
 				 <STM32_PINMUX('A', 11, AF13)>, /* ETH2_CLK */
-				 <STM32_PINMUX('F', 6,  AF11)>, /* ETH2_TX_EN */
-				 <STM32_PINMUX('B', 2,  AF11)>, /* ETH2_MDIO */
-				 <STM32_PINMUX('G', 5,  AF10)>; /* ETH2_MDC */
+				 <STM32_PINMUX('F', 6,  AF11)>; /* ETH2_TX_EN */
 			bias-disable;
 			drive-push-pull;
 			slew-rate = <1>;
@@ -516,8 +512,6 @@
 				 <STM32_PINMUX('G', 11, ANALOG)>, /* ETH2_TXD1 */
 				 <STM32_PINMUX('A', 11, ANALOG)>, /* ETH2_CLK */
 				 <STM32_PINMUX('F', 6,  ANALOG)>, /* ETH2_TX_EN */
-				 <STM32_PINMUX('B', 2,  ANALOG)>, /* ETH2_MDIO */
-				 <STM32_PINMUX('G', 5,  ANALOG)>, /* ETH2_MDC */
 				 <STM32_PINMUX('F', 4,  ANALOG)>, /* ETH2_RXD0 */
 				 <STM32_PINMUX('E', 2,  ANALOG)>, /* ETH2_RXD1 */
 				 <STM32_PINMUX('A', 12, ANALOG)>, /* ETH2_RX_DV */
@@ -584,7 +578,7 @@
 
 	ccmp13_pwm8_pins_a: pwm8-0 {
 		pins {
-			pinmux = <STM32_PINMUX('A', 5, AF3)>; /* TIM8_CH3 */
+			pinmux = <STM32_PINMUX('A', 5, AF3)>; /* TIM8_CH1 */
 			bias-pull-down;
 			drive-push-pull;
 			slew-rate = <0>;
@@ -593,7 +587,7 @@
 
 	ccmp13_pwm8_sleep_pins_a: pwm8-sleep-0 {
 		pins {
-			pinmux = <STM32_PINMUX('A', 5, ANALOG)>; /* TIM8_CH3 */
+			pinmux = <STM32_PINMUX('A', 5, ANALOG)>;
 		};
 	};
 
@@ -694,9 +688,14 @@
 	};
 
 	ccmp13_usart3_rtscts_pins_a: ccmp13-usart3rtscts-0 {
-		pins {
-			pinmux = <STM32_PINMUX('G', 8, AF8)>, /* USART3_RTS */
-				 <STM32_PINMUX('G', 12, AF8)>; /* USART3_CTS */
+		pins1 {
+			pinmux = <STM32_PINMUX('G', 8, AF8)>; /* USART3_RTS */
+			bias-disable;
+			drive-push-pull;
+			slew-rate = <0>;
+		};
+		pins2 {
+			pinmux = <STM32_PINMUX('G', 12, AF8)>; /* USART3_CTS */
 			bias-disable;
 		};
 	};

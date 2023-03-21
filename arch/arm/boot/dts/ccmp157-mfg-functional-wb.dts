@@ -13,6 +13,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <dt-bindings/rtc/rtc-stm32.h>
 /* Digi ConnectCore MP15 non-wireless FCT */
 #include "ccmp157-mfg-functional.dts"
 
@@ -33,6 +34,13 @@
 
 /* Enable the WL regulator */
 &reg_rf_wl_en{
+	status = "okay";
+};
+
+&rtc{
+	st,lsco = <RTC_OUT2_RMP>;
+	pinctrl-0 = <&ccmp15_rtc_out1_pins_a &rtc_out2_rmp_pins_a>;
+	pinctrl-names = "default";
 	status = "okay";
 };
 

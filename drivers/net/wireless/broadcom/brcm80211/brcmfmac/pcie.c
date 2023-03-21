@@ -63,7 +63,7 @@ BRCMF_FW_DEF(4366B, "brcmfmac4366b-pcie");
 BRCMF_FW_DEF(4366C, "brcmfmac4366c-pcie");
 BRCMF_FW_DEF(4371, "brcmfmac4371-pcie");
 CY_FW_DEF(4355, "cyfmac54591-pcie");
-CY_FW_TRXSE_DEF(55560, "cyfmac55560-pcie");
+CY_FW_TRXSE_DEF(55572, "cyfmac55572-pcie");
 CY_FW_DEF(4373, "cyfmac4373-pcie");
 
 /* firmware config files */
@@ -94,7 +94,7 @@ static const struct brcmf_firmware_mapping brcmf_pcie_fwnames[] = {
 	BRCMF_FW_ENTRY(BRCM_CC_43666_CHIP_ID, 0xFFFFFFF0, 4366C),
 	BRCMF_FW_ENTRY(BRCM_CC_4371_CHIP_ID, 0xFFFFFFFF, 4371),
 	BRCMF_FW_ENTRY(CY_CC_89459_CHIP_ID, 0xFFFFFFFF, 4355),
-	BRCMF_FW_ENTRY(CY_CC_55560_CHIP_ID, 0xFFFFFFFF, 55560),
+	BRCMF_FW_ENTRY(CY_CC_55572_CHIP_ID, 0xFFFFFFFF, 55572),
 	BRCMF_FW_ENTRY(CY_CC_4373_CHIP_ID, 0xFFFFFFFF, 4373),
 };
 
@@ -113,7 +113,7 @@ static const struct brcmf_firmware_mapping brcmf_pcie_fwnames[] = {
 
 #define BRCMF_PCIE_BAR0_WRAPBASE_DMP_OFFSET	0x1000
 #define BRCMF_PCIE_BAR0_PCIE_ENUM_OFFSET	0x2000
-#define BRCMF_CYW55560_PCIE_BAR0_PCIE_ENUM_OFFSET	0x3000
+#define BRCMF_CYW55572_PCIE_BAR0_PCIE_ENUM_OFFSET	0x3000
 
 #define BRCMF_PCIE_ARMCR4REG_BANKIDX		0x40
 #define BRCMF_PCIE_ARMCR4REG_BANKPDA		0x4C
@@ -2097,6 +2097,9 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 
 		/* Convert nvram_len to words to determine the length token */
 		nvram_lenw = nvram_len / 4;
+		/* subtract word used to store the token itself on non-blhs devices */
+		if (!devinfo->ci->blhs)
+			nvram_lenw -= 1;
 		nvram_csm = (~nvram_lenw << 16) | (nvram_lenw & 0x0000FFFF);
 		brcmf_fw_nvram_free(nvram);
 	} else {
@@ -2105,7 +2108,7 @@ static int brcmf_pcie_download_fw_nvram(struct brcmf_pciedev_info *devinfo,
 			  devinfo->nvram_name);
 	}
 
-	if (devinfo->ci->chip == CY_CC_55560_CHIP_ID) {
+	if (devinfo->ci->chip == CY_CC_55572_CHIP_ID) {
 		/* Write the length token to the last word of RAM address */
 		brcmf_pcie_write_ram32(devinfo, devinfo->ci->ramsize - 4,
 				       cpu_to_le32(nvram_csm));
@@ -2315,8 +2318,8 @@ static int brcmf_pcie_buscore_blhs_attach(void *ctx, struct brcmf_blhs **blhs,
 		blhsh->write = brcmf_pcie_buscore_blhs_write;
 
 		/* Host indication for bootloarder to start the init */
-		if (devinfo->pdev->device == CY_PCIE_55560_DEVICE_ID)
-			pcie_enum = BRCMF_CYW55560_PCIE_BAR0_PCIE_ENUM_OFFSET;
+		if (devinfo->pdev->device == CY_PCIE_55572_DEVICE_ID)
+			pcie_enum = BRCMF_CYW55572_PCIE_BAR0_PCIE_ENUM_OFFSET;
 		else
 			pcie_enum = BRCMF_PCIE_BAR0_PCIE_ENUM_OFFSET;
 
@@ -2882,7 +2885,7 @@ static const struct pci_device_id brcmf_pcie_devid_table[] = {
 	BRCMF_PCIE_DEVICE(CY_PCIE_54591_DEVICE_ID),
 	BRCMF_PCIE_DEVICE(CY_PCIE_54590_DEVICE_ID),
 	BRCMF_PCIE_DEVICE(CY_PCIE_54594_DEVICE_ID),
-	BRCMF_PCIE_DEVICE_CY(CY_PCIE_55560_DEVICE_ID),
+	BRCMF_PCIE_DEVICE_CY(CY_PCIE_55572_DEVICE_ID),
 	BRCMF_PCIE_DEVICE(CY_PCIE_4373_RAW_DEVICE_ID),
 	BRCMF_PCIE_DEVICE(CY_PCIE_4373_DUAL_DEVICE_ID),
 	BRCMF_PCIE_DEVICE(CY_PCIE_4373_2G_DEVICE_ID),

@@ -320,11 +320,9 @@ static inline int brcmf_usb_register(void) { return 0; }
 #ifdef CONFIG_BRCMFMAC_PCIE
 void brcmf_pcie_exit(void);
 int brcmf_pcie_register(void);
-void brcmf_pcie_handle_mb_data(struct brcmf_bus *bus_if, u32 d2h_mb_data);
 #else
 static inline void brcmf_pcie_exit(void) { }
 static inline int brcmf_pcie_register(void) { return 0; }
-static inline void brcmf_pcie_handle_mb_data(struct brcmf_bus *bus_if, u32 d2h_mb_data) { }
 #endif
 
 #endif /* BRCMFMAC_BUS_H */

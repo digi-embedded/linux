@@ -171,7 +171,7 @@
 	contiguous-area = <&gpu_reserved>;
 };
 
-/* Micro SD */ 
+/* Micro SD */
 &sdmmc2 {
 	pinctrl-names = "default", "opendrain", "sleep";
 	pinctrl-0 = <&sdmmc2_b4_pins_a>;
@@ -283,7 +283,7 @@
 	status = "okay";
 
 	spidev@0{
-		/* 
+		/*
 		 * spidev uses a compatible string 'rohm,fs2228fv' to have the
 		 * driver create an spi device node. This is just an example,
 		 * there is not a real device connected on the SPI bus.
@@ -379,7 +379,7 @@
 		reg = <0x3c>;
 		clocks = <&clk_ext_camera>;
 		clock-names = "xclk";
-		DOVDD-supply = <&v2v8>;
+		DOVDD-supply = <&ldo2>;
 		powerdown-gpios = <&gpiof 14 (GPIO_ACTIVE_HIGH | GPIO_PUSH_PULL)>;
 		reset-gpios = <&gpioe 0 (GPIO_ACTIVE_LOW | GPIO_PUSH_PULL)>;
 		rotation = <180>;
@@ -415,13 +415,7 @@
 		compatible = "lontium,lt8912";
 		reg = <0x48>;
 		reset-gpios = <&gpioa 9 GPIO_ACTIVE_LOW>;
-		/*
-		 * By default, on the DVK, the hot plug detect (HPD) line is not
-		 * used because this line is shared with the LCD/LVDS touch
-		 * controller interrupt line.
-		 */
-		/*hpd-gpios = <&gpiog 1 GPIO_ACTIVE_HIGH>;*/
-		no-hpd;
+		hpd-gpios = <&gpiof 15 GPIO_ACTIVE_HIGH>;
 		no-edid;
 		digi,dsi-lanes = <2>;
 		vdd1-supply = <&reg_5v_board>;
@@ -559,7 +553,7 @@
 /* RS485 */
 &uart7 {
 	linux,rs485-enabled-at-boot-time;
-	pinctrl-names = "default","sleep";
+	pinctrl-names = "default";
 	pinctrl-0 = <&ccmp15_uart7_pins_a &ccmp15_uart7_rtscts_pins_a>;
 	pinctrl-1 = <&ccmp15_uart7_sleep_pins_a>;
 	uart-has-rtscts;
@@ -836,7 +830,7 @@
 
 	ccmp15_pwm2_sleep_pins: pwm2-sleep-0 {
 		pins {
-			pinmux = <STM32_PINMUX('A', 15, ANALOG)>; /* TIM2_CH1 */
+			pinmux = <STM32_PINMUX('A', 15, ANALOG)>;
 		};
 	};
 
@@ -851,7 +845,7 @@
 
 	ccmp15_pwm4_sleep_pins: ccmp15-pwm4-sleep-0 {
 		pins {
-			pinmux = <STM32_PINMUX('B', 6, ANALOG)>; /* TIM4_CH1 */
+			pinmux = <STM32_PINMUX('B', 6, ANALOG)>;
 		};
 	};
 
@@ -923,9 +917,14 @@
 	};
 
 	ccmp15_uart7_rtscts_pins_a: ccmp15-uart7rtscts-0 {
-		pins {
-			pinmux = <STM32_PINMUX('F', 8, AF7)>, /* UART7_RTS */
-				 <STM32_PINMUX('F', 9, AF7)>; /* UART7_CTS */
+		pins1 {
+			pinmux = <STM32_PINMUX('F', 8, AF7)>; /* UART7_RTS */
+			bias-disable;
+			drive-push-pull;
+			slew-rate = <0>;
+		};
+		pins2 {
+			pinmux = <STM32_PINMUX('F', 9, AF7)>; /* UART7_CTS */
 			bias-disable;
 		};
 	};

@@ -59,6 +59,8 @@
 #define BRCMF_SCANTYPE_PASSIVE		1
 
 #define BRCMF_WSEC_MAX_PSK_LEN		32
+#define BRCMF_WSEC_PMK_LEN_SUITEB_192   48
+#define BRCMF_WSEC_MAX_PMK_LEN		64	/* SUITE-B-192's PMK is 48 bytes */
 #define	BRCMF_WSEC_PASSPHRASE		BIT(0)
 
 #define BRCMF_WSEC_MAX_SAE_PASSWORD_LEN 128
@@ -201,6 +203,10 @@ enum {
 #define DL_END				0x0004
 
 #define DL_TYPE_CLM			2
+
+#define MAX_RSSI_LEVELS			8
+#define WL_RSSI_EVENT_BRCM_VERSION      0
+#define WL_RSSI_EVENT_IFX_VERSION       1
 
 /* join preference types for join_pref iovar */
 enum brcmf_join_pref_types {
@@ -535,7 +541,7 @@ struct brcmf_wsec_key_le {
 struct brcmf_wsec_pmk_le {
 	__le16  key_len;
 	__le16  flags;
-	u8 key[2 * BRCMF_WSEC_MAX_PSK_LEN + 1];
+	u8 key[2 * BRCMF_WSEC_MAX_PMK_LEN + 1];
 };
 
 /**
@@ -1109,6 +1115,22 @@ struct brcmf_gscan_config {
 	u8 retry_threshold;
 	__le16  lost_ap_window;
 	struct brcmf_gscan_bucket_config bucket[1];
+};
+
+/* BRCM_E_RSSI event data */
+struct wl_event_data_rssi {
+	s32 rssi;
+	s32 snr;
+	s32 noise;
+};
+
+/** RSSI event notification configuration. */
+struct wl_rssi_event {
+	u32 rate_limit_msec;
+	u8 num_rssi_levels;
+	s8 rssi_levels[MAX_RSSI_LEVELS];
+	u8 version;
+	s8 pad[2];
 };
 
 #endif /* FWIL_TYPES_H_ */

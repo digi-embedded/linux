@@ -20,15 +20,20 @@
 	fragment@0 {
 		target-path = "/";
 		__overlay__ {
-			overlay-description = "DVK: Enable USART3 in RS232 mode";
+			overlay-description = "DVK: version 1";
 		};
 	};
 
-	/* USART3 available in J31 MikroBus connector */
 	fragment@1 {
-		target = <&usart3>;
+		target = <&lt_bridge>;
 		__overlay__ {
-			/delete-property/linux,rs485-enabled-at-boot-time;
+			/*
+			 * By default, on the DVKv1, the hot plug detect (HPD) line is not
+			 * used because this line is shared with the LCD/LVDS touch
+			 * controller interrupt line, so the hpd-gpios device tree property
+			 * should be also removed
+			 */
+			no-hpd;
 		};
 	};
 };

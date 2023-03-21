@@ -101,6 +101,14 @@
 #define WL_WOWLAN_PKT_FILTER_ID_FIRST	201
 #define WL_WOWLAN_PKT_FILTER_ID_LAST	(WL_WOWLAN_PKT_FILTER_ID_FIRST + \
 					WL_WOWLAN_MAX_PATTERNS - 1)
+
+#define WL_RSPEC_ENCODE_HE	     0x03000000 /* HE MCS and Nss is stored in RSPEC_RATE_MASK */
+#define WL_RSPEC_HE_NSS_UNSPECIFIED	0xF
+#define WL_RSPEC_HE_NSS_SHIFT	     4               /* HE Nss value shift */
+#define WL_RSPEC_HE_GI_MASK	     0x00000C00      /* HE GI indices */
+#define WL_RSPEC_HE_GI_SHIFT	     10
+#define HE_GI_TO_RSPEC(gi)	     (((gi) << WL_RSPEC_HE_GI_SHIFT) & WL_RSPEC_HE_GI_MASK)
+
 /**
  * enum brcmf_scan_status - scan engine status
  *
@@ -303,6 +311,11 @@ struct escan_info {
 		   struct cfg80211_scan_request *request);
 };
 
+struct cqm_rssi_info {
+	bool enable;
+	s32 rssi_threshold;
+};
+
 /**
  * struct brcmf_cfg80211_vif_event - virtual interface event information.
  *
@@ -399,6 +412,7 @@ struct brcmf_cfg80211_info {
 	struct escan_info escan_info;
 	struct timer_list escan_timeout;
 	struct work_struct escan_timeout_work;
+	struct cqm_rssi_info cqm_info;
 	struct list_head vif_list;
 	struct brcmf_cfg80211_vif_event vif_event;
 	struct completion vif_disabled;
@@ -422,6 +436,12 @@ struct brcmf_tlv {
 	u8 id;
 	u8 len;
 	u8 data[1];
+};
+
+struct bcm_xtlv {
+	u16	id;
+	u16	len;
+	u8	data[1];
 };
 
 static inline struct wiphy *cfg_to_wiphy(struct brcmf_cfg80211_info *cfg)

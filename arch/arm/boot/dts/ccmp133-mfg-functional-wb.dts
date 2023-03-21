@@ -9,6 +9,7 @@
  * http://www.gnu.org/copyleft/gpl.html
  */
 
+#include <dt-bindings/rtc/rtc-stm32.h>
 /* Digi ConnectCore MP13 non-wireless FCT */
 #include "ccmp133-mfg-functional.dts"
 
@@ -29,6 +30,13 @@
 
 /* Enable the WL regulator */
 &reg_rf_wl_en{
+	status = "okay";
+};
+
+&rtc{
+	st,lsco = <RTC_OUT2_RMP>;
+	pinctrl-0 = <&ccmp13_rtc_out1_pins_a &rtc_out2_rmp_pins_a>;
+	pinctrl-names = "default";
 	status = "okay";
 };
 

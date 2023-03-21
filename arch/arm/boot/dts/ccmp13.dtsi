@@ -158,21 +158,18 @@
 };
 
 &scmi_regu {
-	scmi_vddcpu: voltd-vddcpu {
-		voltd-name = "vddcpu";
-		regulator-name = "vddcpu";
-	};
 	scmi_vdd: voltd-vdd {
 		voltd-name = "vdd";
 		regulator-name = "vdd";
-	};
-	scmi_vddcore: voltd-vddcore {
-		voltd-name = "vddcore";
-		regulator-name = "vddcore";
+		regulator-always-on;
 	};
 	scmi_vdd_adc: voltd-vdd_adc {
 		voltd-name = "vdd_adc";
 		regulator-name = "vdd_adc";
+	};
+	scmi_ldo2: voltd-ldo2 {
+		voltd-name = "ldo2";
+		regulator-name = "ldo2";
 	};
 	scmi_vdd_usb: voltd-vdd_usb {
 		voltd-name = "vdd_usb";
@@ -182,13 +179,17 @@
 		voltd-name = "vdd_sd";
 		regulator-name = "vdd_sd";
 	};
-	scmi_v1v8_periph: voltd-v1v8_periph {
-		voltd-name = "v1v8_periph";
-		regulator-name = "v1v8_periph";
+	scmi_ldo6: voltd-ldo6 {
+		voltd-name = "ldo6";
+		regulator-name = "ldo6";
 	};
-	scmi_v3v3_sw: voltd-v3v3_sw {
-		voltd-name = "v3v3_sw";
-		regulator-name = "v3v3_sw";
+	scmi_vbus_otg: voltd-vbus_otg {
+		voltd-name = "vbus_otg";
+		regulator-name = "vbus_otg";
+	};
+	scmi_vbus_sw: voltd-vbus_sw {
+		voltd-name = "vbus_sw";
+		regulator-name = "vbus_sw";
 	};
 };
 
