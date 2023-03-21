@@ -39,4 +39,12 @@
 			status = "disabled";
 		};
 	};
+
+	/* Disable the USB TypeC */
+	fragment@3 {
+		target = <&ptn5110>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
 };

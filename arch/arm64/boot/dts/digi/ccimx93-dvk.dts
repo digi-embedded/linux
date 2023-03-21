@@ -19,6 +19,7 @@
 #include "../freescale/imx93.dtsi"
 /* Digi ConnectCore 93 (SOM) */
 #include "ccimx93.dtsi"
+#include <dt-bindings/usb/pd.h>
 
 / {
 	model = "Digi International ConnectCore 93 DVK";
@@ -226,6 +227,30 @@
 		interrupts = <18 IRQ_TYPE_EDGE_FALLING>;
 		wakeup-source;
 	};
+
+	ptn5110: tcpc@53 {
+		compatible = "nxp,ptn5110";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_usbc>;
+		reg = <0x53>;
+		interrupt-parent = <&gpio4>;
+		interrupts = <21 IRQ_TYPE_LEVEL_LOW>;
+		status = "okay";
+
+		port {
+			typec1_dr_sw: endpoint {
+				remote-endpoint = <&usb1_drd_sw>;
+			};
+		};
+
+		typec1_con: connector {
+			compatible = "usb-c-connector";
+			label = "USB-C";
+			power-role = "source";
+			data-role = "dual";
+			source-pdos = <PDO_FIXED(5000, 3000, PDO_FIXED_USB_COMM)>;
+		};
+	};
 };
 
 /* I2C4 - Audio codec and HDMI bridge */
@@ -393,6 +418,25 @@
 	assigned-clock-rates = <12288000>;
 	fsl,sai-mclk-direction-output;
 	status = "okay";
+};
+
+/* USB_OTG1 - USB TypeC */
+&usbotg1 {
+	dr_mode = "otg";
+	hnp-disable;
+	srp-disable;
+	adp-disable;
+	usb-role-switch;
+	disable-over-current;
+	samsung,picophy-pre-emp-curr-control = <3>;
+	samsung,picophy-dc-vol-level-adjust = <7>;
+	status = "okay";
+
+	port {
+		usb1_drd_sw: endpoint {
+			remote-endpoint = <&typec1_dr_sw>;
+		};
+	};
 };
 
 /* USB_OTG2 connected to usb hub */
@@ -640,6 +684,14 @@
 			MX93_PAD_GPIO_IO08__LPUART7_TX				0x31e
 			/* RS485_DE */
 			MX93_PAD_GPIO_IO10__GPIO2_IO10				0x31e
+		>;
+	};
+
+	/* USB TypeC IRQ */
+	pinctrl_usbc: usbcgrp {
+		fsl,pins = <
+			/* USBC Alert */
+			MX93_PAD_ENET2_TXC__GPIO4_IO21				0x31e
 		>;
 	};
 };
