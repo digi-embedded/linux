@@ -1031,7 +1031,7 @@
 &usbotg {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_usbotg>;
-	digi,power-line-active-high;
+	power-active-high;
 };
 
 &usdhc2 {
