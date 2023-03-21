@@ -62,7 +62,7 @@
 
 &usbotg2 {
 	dr_mode = "host";
-	digi,power-line-active-high;
+	power-active-high;
 	disable-over-current;
 	status = "okay";
 };
