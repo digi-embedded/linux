@@ -87,6 +87,13 @@
 			gpio = <&gpio1 13 GPIO_ACTIVE_LOW>;
 			enable-active-low;
 		};
+
+		reg_vref_1v8: regulator-adc-vref {
+			compatible = "regulator-fixed";
+			regulator-name = "vref_1v8";
+			regulator-min-microvolt = <1800000>;
+			regulator-max-microvolt = <1800000>;
+		};
 	};
 
 	sound_max98089: sound-max98089 {
@@ -121,6 +128,12 @@
 			linux,default-trigger = "heartbeat";
 		};
 	};
+};
+
+/* ADC - 4 channels available on expansion connector */
+&adc1 {
+	vref-supply = <&reg_vref_1v8>;
+	status = "okay";
 };
 
 /* MIPI DSI PHY */
