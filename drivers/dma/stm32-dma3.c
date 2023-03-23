@@ -300,6 +300,7 @@ enum g_data_width {
 #define STM32_DMA3_DT_PFREQ		BIT(9)		/* CTR2_PFREQ */
 #define STM32_DMA3_DT_TCEM		GENMASK(13, 12)	/* CTR2_TCEM */
 #define STM32_DMA3_DT_NOPACK		BIT(16)		/* CTR1_PAM */
+#define STM32_DMA3_DT_NOREFACT		BIT(17)
 
 /* .tr_conf_ext */
 #define STM32_DMA3_DT_SAO		GENMASK(12, 0)	/* CTR3_SAO */
@@ -1428,7 +1429,8 @@ static struct dma_async_tx_descriptor *stm32_dma3_prep_dma_memcpy(struct dma_cha
 	size_t next_size, offset;
 	u32 max_block_size = STM32_DMA3_MAX_BLOCK_SIZE;
 	u32 count, i, ccr, ctr1, ctr2, ctr3;
-	bool prevent_refactor = !!FIELD_GET(STM32_DMA3_DT_NOPACK, chan->dt_config.tr_conf);
+	bool prevent_refactor = !!FIELD_GET(STM32_DMA3_DT_NOPACK, chan->dt_config.tr_conf) ||
+				!!FIELD_GET(STM32_DMA3_DT_NOREFACT, chan->dt_config.tr_conf);
 
 	/* TODO: Check if channel is busy ? */
 
@@ -1507,7 +1509,8 @@ static struct dma_async_tx_descriptor *stm32_dma3_prep_slave_sg(struct dma_chan 
 	dma_addr_t sg_addr, dev_addr, src, dst;
 	u32 max_block_size = STM32_DMA3_MAX_BLOCK_SIZE;
 	u32 i, j, count, ccr, ctr1, ctr2, ctr3;
-	bool prevent_refactor = !!FIELD_GET(STM32_DMA3_DT_NOPACK, chan->dt_config.tr_conf);
+	bool prevent_refactor = !!FIELD_GET(STM32_DMA3_DT_NOPACK, chan->dt_config.tr_conf) ||
+				!!FIELD_GET(STM32_DMA3_DT_NOREFACT, chan->dt_config.tr_conf);
 	int ret;
 
 	/* TODO: Check if channel is busy ? */
