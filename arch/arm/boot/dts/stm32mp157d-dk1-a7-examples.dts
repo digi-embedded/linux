@@ -13,6 +13,10 @@
 	compatible = "st,stm32mp157d-dk1-a7-examples", "st,stm32mp157d-dk1", "st,stm32mp157";
 };
 
+&i2c5 {
+	status = "okay";
+};
+
 &uart7 {
 	status = "okay";
 };
