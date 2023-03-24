@@ -257,11 +257,12 @@ u32 brcmf_sdiod_readl(struct brcmf_sdio_dev *sdiodev, u32 addr, int *ret)
 	if (retval)
 		goto out;
 
+	brcmf_dbg(TRACE, "reading from addr 0x%x bar0 0x%08x\n", addr, sdiodev->sbwad);
+
 	addr &= SBSDIO_SB_OFT_ADDR_MASK;
 	addr |= SBSDIO_SB_ACCESS_2_4B_FLAG;
 
 	data = sdio_readl(sdiodev->func1, addr, &retval);
-
 out:
 	if (ret)
 		*ret = retval;
@@ -277,6 +278,8 @@ void brcmf_sdiod_writel(struct brcmf_sdio_dev *sdiodev, u32 addr,
 	retval = brcmf_sdiod_set_backplane_window(sdiodev, addr);
 	if (retval)
 		goto out;
+
+	brcmf_dbg(TRACE, "writing %d to addr 0x%x bar0 0x%08x\n", data, addr, sdiodev->sbwad);
 
 	addr &= SBSDIO_SB_OFT_ADDR_MASK;
 	addr |= SBSDIO_SB_ACCESS_2_4B_FLAG;
