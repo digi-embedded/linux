@@ -1268,13 +1268,17 @@ static int brcmf_sdio_readshared(struct brcmf_sdio *bus,
 	 * for host. Host can only read/write (384Kb-512Kb) RAM area.
 	 * Read block is controlled by OTP bit.
 	 */
-	if (bus->ci->blhs && (bus->ci->chip == CY_CC_43022_CHIP_ID))
+	if (bus->ci->blhs && bus->ci->chip == CY_CC_43022_CHIP_ID) {
 		shaddr = bus->ci->rambase + CM3_SOCRAM_WRITE_END_LOCATION - 4;
-	else
+	} else {
 		shaddr = bus->ci->rambase + bus->ci->ramsize - 4;
+		/* can't access PMU register in 43022 and bus->ci->srsize is zero
+		 * for 43022. So, skip the below statement for 43022.
+		 */
+		if (!bus->ci->rambase && brcmf_chip_sr_capable(bus->ci))
+			shaddr -= bus->ci->srsize;
+	}
 
-	if (!bus->ci->rambase && brcmf_chip_sr_capable(bus->ci))
-		shaddr -= bus->ci->srsize;
 	rv = brcmf_sdiod_ramrw(bus->sdiodev, false, shaddr,
 			       (u8 *)&addr_le, 4);
 	if (rv < 0)
@@ -1309,6 +1313,8 @@ static int brcmf_sdio_readshared(struct brcmf_sdio *bus,
 	sh->assert_line = le32_to_cpu(sh_le.assert_line);
 	sh->console_addr = le32_to_cpu(sh_le.console_addr);
 	sh->msgtrace_addr = le32_to_cpu(sh_le.msgtrace_addr);
+
+	brcmf_dbg(INFO, "rte_console address is  is 0x%08x\n", sh->console_addr);
 
 	if ((sh->flags & SDPCM_SHARED_VERSION_MASK) > SDPCM_SHARED_VERSION) {
 		brcmf_err("sdpcm shared version unsupported: dhd %d dongle %d\n",
@@ -1385,9 +1391,8 @@ static u32 brcmf_sdio_hostmail(struct brcmf_sdio *bus, u32 *hmbd)
 		    (hmb_data & HMB_DATA_VERSION_MASK) >>
 		    HMB_DATA_VERSION_SHIFT;
 		if (bus->sdpcm_ver != SDPCM_PROT_VERSION)
-			brcmf_err("Version mismatch, dongle reports %d, "
-				  "expecting %d\n",
-				  bus->sdpcm_ver, SDPCM_PROT_VERSION);
+			brcmf_err("ver mismatch, %d, expecting %d, hmb_data 0x%x\n",
+				  bus->sdpcm_ver, SDPCM_PROT_VERSION, hmb_data);
 		else
 			brcmf_dbg(SDIO, "Dongle ready, protocol version %d\n",
 				  bus->sdpcm_ver);
@@ -3057,83 +3062,91 @@ brcmf_sdio_ulp_pre_redownload_check(struct brcmf_sdio *bus, u32 hmb_data)
 		brcmf_dbg(ULP, "GOT THE INTERRUPT FROM UCODE\n");
 		sdiod->ulp = true;
 		fmac_ulp->ulp_state = FMAC_ULP_TRIGGERED;
-		ulp_wake_ind = D11SHM_RDW(sdiod,
-					  M_ULP_WAKE_IND(sdiod->fmac_ulp),
-					  &err);
-		wowl_wake_ind = D11SHM_RDW(sdiod,
-					   M_WAKEEVENT_IND(sdiod->fmac_ulp),
-					   &err);
 
-		brcmf_dbg(ULP, "wowl_wake_ind: 0x%08x, ulp_wake_ind: 0x%08x state %s\n",
-			  wowl_wake_ind, ulp_wake_ind, (fmac_ulp->ulp_state) ?
-			  "DS1 Exit Triggered" : "IDLE State");
+		/* D11 SHM and PMU can not be accessed from host in case of 43022.
+		 * so, this logic may have to be moved to DS2 FW. Until then, skip it
+		 * for DS2.
+		 */
+		if (bus->ci->chip != CY_CC_43022_CHIP_ID) {
+			ulp_wake_ind = D11SHM_RDW(sdiod,
+						  M_ULP_WAKE_IND(sdiod->fmac_ulp),
+						  &err);
+			wowl_wake_ind = D11SHM_RDW(sdiod,
+						   M_WAKEEVENT_IND(sdiod->fmac_ulp),
+						   &err);
 
-		if (wowl_wake_ind || ulp_wake_ind) {
-			/* RX wake Don't do anything.
-			 * Just bail out and re-download firmware.
-			 */
-			 /* Print out PHY TX error block when bit 9 set */
-			if ((ulp_wake_ind & C_DS1_PHY_TXERR) &&
-			    M_DS1_PHYTX_ERR_BLK(sdiod->fmac_ulp)) {
-				brcmf_err("Dump PHY TX Error SHM Locations\n");
-				for (i = 0; i < PHYTX_ERR_BLK_SIZE; i++) {
-					pr_err("0x%x",
-					       D11SHM_RDW(sdiod,
-					       (M_DS1_PHYTX_ERR_BLK(sdiod->fmac_ulp) +
-						(i * 2)), &err));
+			brcmf_dbg(ULP, "wowl_wake_ind: 0x%08x, ulp_wake_ind: 0x%08x state %s\n",
+				  wowl_wake_ind, ulp_wake_ind, (fmac_ulp->ulp_state) ?
+				  "DS1 Exit Triggered" : "IDLE State");
+
+			if (wowl_wake_ind || ulp_wake_ind) {
+				/* RX wake Don't do anything.
+				 * Just bail out and re-download firmware.
+				 */
+				 /* Print out PHY TX error block when bit 9 set */
+				if ((ulp_wake_ind & C_DS1_PHY_TXERR) &&
+				    M_DS1_PHYTX_ERR_BLK(sdiod->fmac_ulp)) {
+					brcmf_err("Dump PHY TX Error SHM Locations\n");
+					for (i = 0; i < PHYTX_ERR_BLK_SIZE; i++) {
+						u32 tx_err;
+
+						tx_err = D11SHM_RDW(sdiod,
+								    (M_DS1_PHYTX_ERR_BLK(sdiod->fmac_ulp) +
+								    (i * 2)), &err);
+						pr_err("0x%x", tx_err);
+					}
+					brcmf_err("\n");
 				}
-				brcmf_err("\n");
-			}
-		} else {
-			/* TX wake negotiate with MAC */
-			brcmf_dbg(ULP, "M_DS1_CTRL_SDIO: 0x%08x\n",
-				  (u32)D11SHM_RDW(sdiod,
-				  M_DS1_CTRL_SDIO(sdiod->fmac_ulp),
-				  &err));
-			val32 = D11SHM_RD(sdiod,
+			} else {
+				/* TX wake negotiate with MAC */
+				brcmf_dbg(ULP, "M_DS1_CTRL_SDIO: 0x%08x\n",
+					  (u32)D11SHM_RDW(sdiod,
 					  M_DS1_CTRL_SDIO(sdiod->fmac_ulp),
-					  &err);
-			D11SHM_WR(sdiod, M_DS1_CTRL_SDIO(sdiod->fmac_ulp),
-				  val32, (C_DS1_CTRL_SDIO_DS1_EXIT |
-				  C_DS1_CTRL_REQ_VALID), &err);
-			val32 = D11REG_RD(sdiod, D11_MACCONTROL_REG, &err);
-			val32 = val32 | D11_MACCONTROL_REG_WAKE;
-			D11REG_WR(sdiod, D11_MACCONTROL_REG, val32, &err);
+					  &err));
+				val32 = D11SHM_RD(sdiod,
+						  M_DS1_CTRL_SDIO(sdiod->fmac_ulp),
+						  &err);
+				D11SHM_WR(sdiod, M_DS1_CTRL_SDIO(sdiod->fmac_ulp),
+					  val32, (C_DS1_CTRL_SDIO_DS1_EXIT |
+					  C_DS1_CTRL_REQ_VALID), &err);
+				val32 = D11REG_RD(sdiod, D11_MACCONTROL_REG, &err);
+				val32 = val32 | D11_MACCONTROL_REG_WAKE;
+				D11REG_WR(sdiod, D11_MACCONTROL_REG, val32, &err);
 
-			/* Poll for PROC_DONE to be set by ucode */
-			value = D11SHM_RDW(sdiod,
-					   M_DS1_CTRL_SDIO(sdiod->fmac_ulp),
-					   &err);
-			/* Wait here (polling) for C_DS1_CTRL_PROC_DONE */
-			timeout = jiffies + ULP_HUDI_PROC_DONE_TIME;
-			while (!(value & C_DS1_CTRL_PROC_DONE)) {
+				/* Poll for PROC_DONE to be set by ucode */
 				value = D11SHM_RDW(sdiod,
 						   M_DS1_CTRL_SDIO(sdiod->fmac_ulp),
 						   &err);
-				if (time_after(jiffies, timeout))
-					break;
-				usleep_range(1000, 2000);
+				/* Wait here (polling) for C_DS1_CTRL_PROC_DONE */
+				timeout = jiffies + ULP_HUDI_PROC_DONE_TIME;
+				while (!(value & C_DS1_CTRL_PROC_DONE)) {
+					value = D11SHM_RDW(sdiod,
+							   M_DS1_CTRL_SDIO(sdiod->fmac_ulp),
+							   &err);
+					if (time_after(jiffies, timeout))
+						break;
+					usleep_range(1000, 2000);
+				}
+				brcmf_dbg(ULP, "M_DS1_CTRL_SDIO: 0x%08x\n",
+					  (u32)D11SHM_RDW(sdiod,
+					  M_DS1_CTRL_SDIO(sdiod->fmac_ulp), &err));
+				value = D11SHM_RDW(sdiod,
+						   M_DS1_CTRL_SDIO(sdiod->fmac_ulp),
+						   &err);
+				if (!(value & C_DS1_CTRL_PROC_DONE)) {
+					brcmf_err("Timeout Failed to enter DS1 Exit state!\n");
+					return false;
+				}
 			}
-			brcmf_dbg(ULP, "M_DS1_CTRL_SDIO: 0x%08x\n",
-				  (u32)D11SHM_RDW(sdiod,
-				  M_DS1_CTRL_SDIO(sdiod->fmac_ulp), &err));
-			value = D11SHM_RDW(sdiod,
-					   M_DS1_CTRL_SDIO(sdiod->fmac_ulp),
-					   &err);
-			if (!(value & C_DS1_CTRL_PROC_DONE)) {
-				brcmf_err("Timeout Failed to enter DS1 Exit state!\n");
-				return false;
-			}
-		}
 
-		ulp_wake_ind = D11SHM_RDW(sdiod,
-					  M_ULP_WAKE_IND(sdiod->fmac_ulp),
-					  &err);
-		wowl_wake_ind = D11SHM_RDW(sdiod,
-					   M_WAKEEVENT_IND(sdiod->fmac_ulp),
-					   &err);
-		brcmf_dbg(ULP, "wowl_wake_ind: 0x%08x, ulp_wake_ind: 0x%08x\n",
-			  wowl_wake_ind, ulp_wake_ind);
+			ulp_wake_ind = D11SHM_RDW(sdiod,
+						  M_ULP_WAKE_IND(sdiod->fmac_ulp),
+						  &err);
+			wowl_wake_ind = D11SHM_RDW(sdiod,
+						   M_WAKEEVENT_IND(sdiod->fmac_ulp),
+						   &err);
+			brcmf_dbg(ULP, "wowl_wake_ind: 0x%08x, ulp_wake_ind: 0x%08x\n",
+				  wowl_wake_ind, ulp_wake_ind);
 
 		/* skip setting min resource mask for secure chip */
 		if (bus->ci->chip != CY_CC_43022_CHIP_ID) {
@@ -3144,7 +3157,6 @@ brcmf_sdio_ulp_pre_redownload_check(struct brcmf_sdio *bus, u32 hmb_data)
 			if (err)
 				brcmf_err("min_res_mask failed\n");
 		}
-
 		return true;
 	}
 
@@ -4061,7 +4073,6 @@ static int brcmf_sdio_download_firmware(struct brcmf_sdio *bus,
 			brcmf_fw_nvram_free(nvram);
 			goto err;
 		}
-
 		bcmerror = bus->ci->blhs->chk_validation(bus->ci);
 		if (bcmerror) {
 			brcmf_err("FW validation failed, err=%d\n", bcmerror);
@@ -5367,7 +5378,6 @@ static void brcmf_sdio_firmware_callback(struct device *dev, int err,
 		sdio_disable_func(sdiod->func2);
 		goto checkdied;
 	}
-
 	if (brcmf_chip_sr_capable(bus->ci)) {
 		brcmf_sdio_sr_init(bus);
 	} else {
