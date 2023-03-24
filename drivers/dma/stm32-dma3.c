@@ -317,6 +317,9 @@ enum g_data_width {
 #define STM32_DMA3_MAX_BLOCK_SIZE	ALIGN_DOWN(CBR1_BNDT, 64)
 #define STM32_DMA3_MAX_16B_BLOCK_SIZE	(STM32_DMA3_MAX_BLOCK_SIZE * 16)
 #define STM32_DMA3_MAX_256B_BLOCK_SIZE	(STM32_DMA3_MAX_BLOCK_SIZE * 256)
+#define STM32_DMA3_MAX_BURST_LEN	(min_t(u32, FIELD_GET(CTR1_SBL_1, CTR1_SBL_1),	\
+					       FIELD_GET(CTR1_DBL_1, CTR1_DBL_1))	\
+					 + 1)
 
 /*
  * Static linked-list data structure
@@ -399,6 +402,7 @@ struct stm32_dma3_ddata {
 #ifdef CONFIG_STM32MP25_REVA
 	u32 max_burst_length;
 #endif
+	u32 axi_max_burst_len;
 };
 
 static inline struct stm32_dma3_chan *to_stm32_dma3_chan(struct dma_chan *c)
@@ -729,7 +733,8 @@ static enum dma_slave_buswidth stm32_dma3_get_max_dw(u32 len, dma_addr_t addr, u
 	return max_dw;
 }
 
-static u32 stm32_dma3_get_max_burst(u32 len, enum dma_slave_buswidth dw, u32 chan_max_burst)
+static u32 stm32_dma3_get_max_burst(u32 len, enum dma_slave_buswidth dw,
+				    u32 chan_max_burst, u32 bus_max_burst)
 {
 	u32 max_burst = chan_max_burst / dw;
 
@@ -743,8 +748,9 @@ static u32 stm32_dma3_get_max_burst(u32 len, enum dma_slave_buswidth dw, u32 cha
 	/*
 	 * HW doesn't modify the burst if burst size <= half of the fifo size.
 	 * If len is not a multiple of burst size, last burst is shortened by HW.
+	 * Take care of maximum burst supported on interconnect bus.
 	 */
-	return max_burst;
+	return min_t(u32, max_burst, bus_max_burst);
 }
 
 static int stm32_dma3_chan_prep_hw(struct stm32_dma3_chan *chan, enum dma_transfer_direction dir,
@@ -753,6 +759,7 @@ static int stm32_dma3_chan_prep_hw(struct stm32_dma3_chan *chan, enum dma_transf
 {
 	struct stm32_dma3_ddata *ddata = to_stm32_dma3_ddata(&chan->vchan.chan);
 	struct dma_device dma_device = ddata->dma_dev;
+	u32 src_max_burst = STM32_DMA3_MAX_BURST_LEN, dst_max_burst = STM32_DMA3_MAX_BURST_LEN;
 	u32 sdw, ddw, sbl_max, dbl_max, tcem, init_dw, init_bl_max, id = chan->id;
 	u32 _ccr, _ctr1 = 0, _ctr2 = 0, _ctr3 = 0;
 	u32 ch_conf = chan->dt_config.ch_conf;
@@ -791,12 +798,16 @@ static int stm32_dma3_chan_prep_hw(struct stm32_dma3_chan *chan, enum dma_transf
 
 	if (FIELD_GET(STM32_DMA3_DT_SINC, tr_conf))
 		_ctr1 |= CTR1_SINC;
-	if (FIELD_GET(STM32_DMA3_DT_SAP, tr_conf))
+	if (FIELD_GET(STM32_DMA3_DT_SAP, tr_conf)) /* AHB */
 		_ctr1 |= CTR1_SAP;
+	else					   /* AXI */
+		src_max_burst = ddata->axi_max_burst_len;
 	if (FIELD_GET(STM32_DMA3_DT_DINC, tr_conf))
 		_ctr1 |= CTR1_DINC;
-	if (FIELD_GET(STM32_DMA3_DT_DAP, tr_conf))
+	if (FIELD_GET(STM32_DMA3_DT_DAP, tr_conf)) /* AHB */
 		_ctr1 |= CTR1_DAP;
+	else					   /* AXI */
+		dst_max_burst = ddata->axi_max_burst_len;
 
 	_ctr2 |= FIELD_PREP(CTR2_REQSEL, chan->dt_config.req_line);
 	_ctr2 &= ~CTR2_SWREQ;
@@ -815,7 +826,8 @@ static int stm32_dma3_chan_prep_hw(struct stm32_dma3_chan *chan, enum dma_transf
 	case DMA_MEM_TO_DEV:
 		/* Set destination (device) data width and burst */
 		ddw = min_t(u32, ddw, stm32_dma3_get_max_dw(len, dst_addr, chan->max_burst));
-		dbl_max = min_t(u32, dbl_max, stm32_dma3_get_max_burst(len, ddw, chan->max_burst));
+		dbl_max = min_t(u32, dbl_max, stm32_dma3_get_max_burst(len, ddw, chan->max_burst,
+								       dst_max_burst));
 
 		/* Set source (memory) data width and burst */
 		if (!!FIELD_GET(STM32_DMA3_DT_NOPACK, tr_conf)) {
@@ -823,7 +835,8 @@ static int stm32_dma3_chan_prep_hw(struct stm32_dma3_chan *chan, enum dma_transf
 			sbl_max = dbl_max;
 		} else {
 			sdw = stm32_dma3_get_max_dw(len, src_addr, chan->max_burst);
-			sbl_max = stm32_dma3_get_max_burst(len, sdw, chan->max_burst);
+			sbl_max = stm32_dma3_get_max_burst(len, sdw, chan->max_burst,
+							   src_max_burst);
 		}
 
 		_ctr1 |= FIELD_PREP(CTR1_SDW_LOG2, ilog2(sdw));
@@ -850,7 +863,8 @@ static int stm32_dma3_chan_prep_hw(struct stm32_dma3_chan *chan, enum dma_transf
 	case DMA_DEV_TO_MEM:
 		/* Set source (device) data width and burst */
 		sdw = min_t(u32, sdw, stm32_dma3_get_max_dw(len, src_addr, chan->max_burst));
-		sbl_max = min_t(u32, sbl_max, stm32_dma3_get_max_burst(len, sdw, chan->max_burst));
+		sbl_max = min_t(u32, sbl_max, stm32_dma3_get_max_burst(len, sdw, chan->max_burst,
+								       src_max_burst));
 
 		/* Set destination (memory) data width and burst */
 		if (!!FIELD_GET(STM32_DMA3_DT_NOPACK, tr_conf)) {
@@ -858,7 +872,8 @@ static int stm32_dma3_chan_prep_hw(struct stm32_dma3_chan *chan, enum dma_transf
 			dbl_max = sbl_max;
 		} else {
 			ddw = stm32_dma3_get_max_dw(len, dst_addr, chan->max_burst);
-			dbl_max = stm32_dma3_get_max_burst(len, ddw, chan->max_burst);
+			dbl_max = stm32_dma3_get_max_burst(len, ddw, chan->max_burst,
+							   dst_max_burst);
 		}
 
 		_ctr1 |= FIELD_PREP(CTR1_SDW_LOG2, ilog2(sdw));
@@ -887,7 +902,7 @@ static int stm32_dma3_chan_prep_hw(struct stm32_dma3_chan *chan, enum dma_transf
 		init_dw = sdw;
 		init_bl_max = sbl_max;
 		sdw = stm32_dma3_get_max_dw(len, src_addr, chan->max_burst);
-		sbl_max = stm32_dma3_get_max_burst(len, sdw, chan->max_burst);
+		sbl_max = stm32_dma3_get_max_burst(len, sdw, chan->max_burst, src_max_burst);
 		if (chan->config_set & STM32_DMA3_CFG_SET_DMA) {
 			sdw = min_t(u32, init_dw, sdw);
 			sbl_max = min_t(u32, init_bl_max, sbl_max);
@@ -897,7 +912,7 @@ static int stm32_dma3_chan_prep_hw(struct stm32_dma3_chan *chan, enum dma_transf
 		init_dw = ddw;
 		init_bl_max = dbl_max;
 		ddw = stm32_dma3_get_max_dw(len, dst_addr, chan->max_burst);
-		dbl_max = stm32_dma3_get_max_burst(len, ddw, chan->max_burst);
+		dbl_max = stm32_dma3_get_max_burst(len, ddw, chan->max_burst, dst_max_burst);
 		if (chan->config_set & STM32_DMA3_CFG_SET_DMA) {
 			ddw = min_t(u32, init_dw, ddw);
 			dbl_max = min_t(u32, init_bl_max, dbl_max);
@@ -2089,6 +2104,14 @@ static int stm32_dma3_probe(struct platform_device *pdev)
 		hwcfgr[0] = readl_relaxed(ddata->base + STM32_DMA3_HWCFGR2);
 		ddata->dma_requests = FIELD_GET(G_MAX_REQ_ID, hwcfgr[0]) + 1;
 	}
+
+	/* st,axi-max-burst-len is optional, if not defined, use STM32_DMA3_MAX_BURST_LEN  */
+	if (of_property_read_u32(np, "st,axi-max-burst-len", &ddata->axi_max_burst_len))
+		ddata->axi_max_burst_len = STM32_DMA3_MAX_BURST_LEN;
+	else
+		ddata->axi_max_burst_len = min_t(u32, ddata->axi_max_burst_len,
+						 STM32_DMA3_MAX_BURST_LEN);
+	dev_dbg(&pdev->dev, "Burst is limited to %u beats\n", ddata->axi_max_burst_len);
 
 #ifdef CONFIG_STM32MP25_REVA
 	/* if st,burstlen is not defined, force max value to 64 */
