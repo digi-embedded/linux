@@ -7905,11 +7905,13 @@ brcmf_bss_connect_done(struct brcmf_cfg80211_info *cfg,
 
 	brcmf_dbg(TRACE, "Enter cfg->pfn_enable %d\n", cfg->pfn_enable);
 	if (cfg->pfn_enable) {
-		if (!completed)
+		if (!completed) {
 			memset(&cfg->curr_network, '\0', sizeof(struct network_blob));
-
-		if (strlen(cfg->curr_network.ssid))
 			pfn_send_network_blob_fw(cfg->wiphy, &ifp->vif->wdev);
+		}
+		if (cfg->curr_network.ssid_len) {
+			pfn_send_network_blob_fw(cfg->wiphy, &ifp->vif->wdev);
+		}
 	}
 
 	if (test_and_clear_bit(BRCMF_VIF_STATUS_CONNECTING,

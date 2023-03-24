@@ -1048,9 +1048,6 @@ int ifx_cfg80211_vndr_cmds_config_pfn(struct wiphy *wiphy,
 	cfg->pfn_enable = 1;
 	cfg->pfn_data.count = *((u8 *)data);
 
-	if (!cfg->pfn_data.count)
-		return 0;
-
 	buflen = cfg->pfn_data.count * sizeof(struct network_blob);
 	cfg->pfn_data.network_blob_data = (struct network_blob *)kmalloc(buflen, GFP_KERNEL);
 	memset(cfg->pfn_data.network_blob_data, '\0', buflen);
@@ -1070,7 +1067,7 @@ int ifx_cfg80211_vndr_cmds_get_pfn_status(struct wiphy *wiphy,
 	int err = 0, i = 0;
 	struct brcmf_cfg80211_vif *vif;
 	struct brcmf_if *ifp;
-	struct network_blob *curr_network = NULL, *network_blob_data = NULL;
+	struct network_blob *network_blob_data = NULL;
 	struct brcmu_chan ch;
 	struct pfn_conn_info curr_bssid;
 
@@ -1107,14 +1104,21 @@ int ifx_cfg80211_vndr_cmds_get_pfn_status(struct wiphy *wiphy,
 		curr_bssid.SNR = bi->SNR;
 
 		network_blob_data = cfg->pfn_data.network_blob_data;
-		for (; i < cfg->pfn_data.count && network_blob_data; i++) {
-			if (!strncmp(network_blob_data->ssid, bi->SSID, bi->SSID_len)) {
-				curr_network = network_blob_data;
-				curr_bssid.proto = network_blob_data->proto;
-				curr_bssid.key_mgmt = network_blob_data->key_mgmt;
-				break;
+		if (cfg->curr_network.ssid_len) {
+			if (!strncmp(cfg->curr_network.ssid, bi->SSID, bi->SSID_len)) {
+				curr_bssid.proto = cfg->curr_network.proto;
+				curr_bssid.key_mgmt = cfg->curr_network.key_mgmt;
 			}
-			network_blob_data++;
+
+		} else {
+			for (; i < cfg->pfn_data.count && network_blob_data; i++) {
+				if (!strncmp(network_blob_data->ssid, bi->SSID, bi->SSID_len)) {
+					curr_bssid.proto = network_blob_data->proto;
+					curr_bssid.key_mgmt = network_blob_data->key_mgmt;
+					break;
+				}
+				network_blob_data++;
+			}
 		}
 	}
 	if (curr_bssid.SSID_len)
