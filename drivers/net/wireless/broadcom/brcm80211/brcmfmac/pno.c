@@ -612,6 +612,15 @@ int pfn_send_network_blob_fw(struct wiphy *wiphy,
 	ifp = vif->ifp;
 
 	brcmf_dbg(TRACE, "Enter\n");
+
+	if (!cfg->curr_network.ssid_len) {
+		ret = brcmf_fil_cmd_data_set(vif->ifp,
+				BRCMF_C_DISASSOC, NULL, 0);
+		if (ret) {
+			brcmf_err("BRCMF_C_DISASSOC error:%d\n", ret);
+			return -1;
+		}
+	}
 	brcmf_pno_clean(ifp);
 
 	ret = brcmf_fil_iovar_int_set(ifp, "sup_wpa", 1);
@@ -620,7 +629,7 @@ int pfn_send_network_blob_fw(struct wiphy *wiphy,
 		return -1;
 	}
 
-	if (!cfg->pfn_data.count && !strlen(cfg->curr_network.ssid))
+	if (!cfg->pfn_data.count && !cfg->curr_network.ssid_len)
 		return 0;
 
 	pfn_param.version = PFN_VERSION;
@@ -651,25 +660,25 @@ int pfn_send_network_blob_fw(struct wiphy *wiphy,
 
 	brcm_pfn_length = (cfg->pfn_data.count) * sizeof(struct brcm_pfn);
 
-	if (strlen(cfg->curr_network.ssid))
+	if (cfg->curr_network.ssid_len)
 		brcm_pfn_length += sizeof(struct brcm_pfn);
 
 	pfn_list_buffer = (struct brcm_pfn *)kzalloc(brcm_pfn_length, GFP_KERNEL);
 	pssidnet = pfn_list_buffer;
 	network_blob_data = cfg->pfn_data.network_blob_data;
 
-	if (strlen(cfg->curr_network.ssid)) {
+	if (cfg->curr_network.ssid_len) {
 		pssidnet->auth = WLAN_AUTH_OPEN;
 		pssidnet->wpa_auth = WPA_AUTH_DISABLED;
 		pssidnet->wsec = WPA_CIPHER_NONE;
 		pssidnet->infra = WPAS_MODE_IBSS;
 		pssidnet->flags = 0;
 		memcpy((char *)pssidnet->ssid.SSID, cfg->curr_network.ssid,
-				strlen(cfg->curr_network.ssid));
-		pssidnet->ssid.SSID_len = cpu_to_le32(strlen(cfg->curr_network.ssid));
+				cfg->curr_network.ssid_len);
+		pssidnet->ssid.SSID_len = cpu_to_le32(cfg->curr_network.ssid_len);
 		pssidnet->flags = cpu_to_le32(pssidnet->flags);
 
-		if (cfg->curr_network.proto == KEY_MGMT_WPA &&
+		if (cfg->curr_network.proto == WPA_PROTO_WPA &&
 				cfg->curr_network.key_mgmt == KEY_MGMT_WPA) {
 			pssidnet->wpa_auth = WPA_AUTH_PSK;
 
@@ -708,30 +717,26 @@ int pfn_send_network_blob_fw(struct wiphy *wiphy,
 		pssidnet->infra = WPAS_MODE_IBSS;
 		pssidnet->flags = 0;
 		memcpy((char *)pssidnet->ssid.SSID, network_blob_data->ssid,
-				strlen(network_blob_data->ssid));
-		pssidnet->ssid.SSID_len = cpu_to_le32(strlen(network_blob_data->ssid));
+				network_blob_data->ssid_len);
+		pssidnet->ssid.SSID_len = cpu_to_le32(network_blob_data->ssid_len);
 		pssidnet->flags = cpu_to_le32(pssidnet->flags);
 
-		if (network_blob_data->proto == KEY_MGMT_WPA &&
+		if (network_blob_data->proto == WPA_PROTO_WPA &&
 				network_blob_data->key_mgmt == KEY_MGMT_WPA) {
 			pssidnet->wpa_auth = WPA_AUTH_PSK;
-			pssidnet->wsec = AES_ENABLED;
 
 		} else if (network_blob_data->proto == WPA_PROTO_RSN &&
 				network_blob_data->key_mgmt == KEY_MGMT_WPA2) {
 			pssidnet->wpa_auth = WPA2_AUTH_PSK;
-			pssidnet->wsec = AES_ENABLED;
 
 		} else if (network_blob_data->proto == WPA_PROTO_RSN &&
 				network_blob_data->key_mgmt == KEY_MGMT_SAE) {
 			pssidnet->wpa_auth = WPA3_AUTH_SAE_PSK;
-			pssidnet->wsec = AES_ENABLED;
 			pssidnet->auth = WLAN_AUTH_SAE;
 
 		} else if (network_blob_data->proto == WPA_PROTO_RSN &&
 				network_blob_data->key_mgmt == KEY_MGMT_OWE) {
 			pssidnet->wpa_auth = WPA3_AUTH_OWE;
-			pssidnet->wsec = AES_ENABLED;
 		}
 
 		if (network_blob_data->pairwise_cipher == BIT(WPA_CIPHER_AES_CCM))
@@ -777,9 +782,10 @@ int pfn_save_curr_network(struct wiphy *wiphy, struct net_device *ndev,
 	curr_network = &cfg->curr_network;
 	brcmf_pno_clean(ifp);
 
-	if (sme->ssid)
+	if (sme->ssid_len)
 		memcpy(curr_network->ssid, sme->ssid, sme->ssid_len);
 
+	curr_network->ssid_len = sme->ssid_len;
 	ret = brcmf_fil_bsscfg_int_get(netdev_priv(ndev), "wpa_auth", &val);
 	if (ret) {
 		bphy_err(drvr, "could not get wpa_auth (%d)\n", ret);
