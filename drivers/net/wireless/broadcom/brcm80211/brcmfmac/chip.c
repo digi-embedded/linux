@@ -1070,6 +1070,10 @@ static void brcmf_blhs_init(struct brcmf_chip *pub)
 
 	chip = container_of(pub, struct brcmf_chip_priv, pub);
 	addr = pub->blhs->h2d;
+	brcmf_dbg(TRACE,
+		  "h2d value before initing: 0x%08x (addr 0x%08x)\n",
+		  pub->blhs->read(chip->ctx, addr),
+		  addr);
 	pub->blhs->write(chip->ctx, addr, 0);
 }
 
@@ -1080,15 +1084,19 @@ static int brcmf_blhs_is_bootloader_ready(struct brcmf_chip_priv *chip)
 
 	addr = chip->pub.blhs->d2h;
 	SPINWAIT_MS((chip->pub.blhs->read(chip->ctx, addr) &
-		     BRCMF_BLHS_D2H_READY) == 0,
-		    BRCMF_BLHS_D2H_READY_TIMEOUT, BRCMF_BLHS_POLL_INTERVAL);
+		    BRCMF_BLHS_D2H_READY) == 0,
+		    BRCMF_BLHS_D2H_READY_TIMEOUT,
+		    BRCMF_BLHS_POLL_INTERVAL);
 
 	regdata = chip->pub.blhs->read(chip->ctx, addr);
 	if (!(regdata & BRCMF_BLHS_D2H_READY)) {
-		brcmf_err("Timeout waiting for bootloader ready\n");
+		brcmf_err("Timeout waiting for bootloader ready, waittime %d ms addr 0x%x\n",
+			  BRCMF_BLHS_D2H_READY_TIMEOUT,
+			  addr);
 		return -EPERM;
+	} else {
+		brcmf_dbg(TRACE, "bootloader is ready\n");
 	}
-
 	return 0;
 }
 
@@ -1229,14 +1237,15 @@ static int brcmf_blhs_chk_validation(struct brcmf_chip *pub)
 	chip = container_of(pub, struct brcmf_chip_priv, pub);
 	addr = pub->blhs->d2h;
 	SPINWAIT_MS((pub->blhs->read(chip->ctx, addr) &
-		     BRCMF_BLHS_D2H_VALDN_DONE) == 0,
+		    BRCMF_BLHS_D2H_VALDN_DONE) == 0,
 		    BRCMF_BLHS_D2H_VALDN_DONE_TIMEOUT,
 		    BRCMF_BLHS_POLL_INTERVAL);
 
 	regdata = pub->blhs->read(chip->ctx, addr);
 	if (!(regdata & BRCMF_BLHS_D2H_VALDN_DONE) ||
 	    !(regdata & BRCMF_BLHS_D2H_VALDN_RESULT)) {
-		brcmf_err("TRX image validation check failed\n");
+		brcmf_err("TRX image validation check failed, timeout %d\n",
+			  BRCMF_BLHS_D2H_VALDN_DONE_TIMEOUT);
 
 		/* Host notification for bootloader to get reset on error */
 		addr = pub->blhs->h2d;
@@ -1245,8 +1254,9 @@ static int brcmf_blhs_chk_validation(struct brcmf_chip *pub)
 		pub->blhs->write(chip->ctx, addr, regdata);
 
 		return -EPERM;
+	} else {
+		brcmf_dbg(INFO, "TRX Image validation check completed successfully\n");
 	}
-
 	return 0;
 }
 
