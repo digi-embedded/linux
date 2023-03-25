@@ -52,7 +52,8 @@ ccimx93-dtbs :=		ccimx93-dvk.dtb \
 			_ov_som_mca_ccimx93.dtbo \
 			_ov_som_wifi_ccimx93.dtbo \
 			_ov_board_enet2_ccimx93-dvk.dtbo \
-			_ov_board_lvds_ccimx93-dvk.dtbo
+			_ov_board_lvds_ccimx93-dvk.dtbo \
+			_ov_board_mikroe-gyro-click_ccimx93-dvk.dtbo
 
 dtb-$(CONFIG_ARCH_MXC) += ccimx8mm.dtb \
 			  ccimx8mm-mfg-functional.dtb \

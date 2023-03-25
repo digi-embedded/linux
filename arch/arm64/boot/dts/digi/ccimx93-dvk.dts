@@ -567,13 +567,15 @@
 		>;
 	};
 
-	/* GPIOs for User Leds and Buttons */
+	/* GPIOs for User Leds, Buttons, ... */
 	pinctrl_gpio: gpiogrp {
 		fsl,pins = <
 			/* ULED/BUTTON1 */
 			MX93_PAD_SD2_RESET_B__GPIO3_IO07			0x31e
 			/* ULED/BUTTON2 */
 			MX93_PAD_ENET2_RXC__GPIO4_IO23				0x31e
+			/* MIKROBUS_INT */
+			MX93_PAD_GPIO_IO11__GPIO2_IO11				0x31e
 		>;
 	};
 
