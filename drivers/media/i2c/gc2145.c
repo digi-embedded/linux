@@ -25,6 +25,9 @@
 /* Page 0 */
 #define GC2145_REG_ANALOG_MODE1	0x17
 #define GC2145_REG_OUTPUT_FMT	0x84
+#define GC2145_REG_SYNC_MODE	0x86
+#define GC2145_SYNC_MODE_COL_SWITCH	BIT(4)
+#define GC2145_SYNC_MODE_ROW_SWITCH	BIT(5)
 #define GC2145_REG_DEBUG_MODE2	0x8c
 #define GC2145_REG_DEBUG_MODE3	0x8d
 #define GC2145_REG_CHIP_ID	0xf0
@@ -894,12 +897,14 @@ static const struct gc2145_mode supported_modes[] = {
  * @colorspace: V4L2 colospace
  * @datatype: MIPI CSI2 data type
  * @output_fmt: GC2145 output format
+ * @row_col_switch: control of GC2145 row/col switch feature
  */
 struct gc2145_format {
 	unsigned int code;
 	unsigned int colorspace;
 	unsigned char datatype;
 	unsigned char output_fmt;
+	unsigned char row_col_switch;
 };
 
 /* All supported formats */
@@ -936,10 +941,32 @@ static const struct gc2145_format supported_formats[] = {
 		.output_fmt	= 0x06,
 	},
 	{
+		.code           = MEDIA_BUS_FMT_SGRBG8_1X8,
+		.colorspace     = V4L2_COLORSPACE_RAW,
+		.datatype       = MIPI_CSI2_DT_RAW8,
+		.output_fmt     = 0x17,
+		.row_col_switch = GC2145_SYNC_MODE_COL_SWITCH,
+	},
+	{
 		.code           = MEDIA_BUS_FMT_SRGGB8_1X8,
 		.colorspace     = V4L2_COLORSPACE_RAW,
 		.datatype       = MIPI_CSI2_DT_RAW8,
-		.output_fmt     = 0x19, /* Image is taken out of the Lens correction */
+		.output_fmt     = 0x17,
+		.row_col_switch = GC2145_SYNC_MODE_COL_SWITCH | GC2145_SYNC_MODE_ROW_SWITCH,
+	},
+	{
+		.code           = MEDIA_BUS_FMT_SBGGR8_1X8,
+		.colorspace     = V4L2_COLORSPACE_RAW,
+		.datatype       = MIPI_CSI2_DT_RAW8,
+		.output_fmt     = 0x17,
+		.row_col_switch = 0,
+	},
+	{
+		.code           = MEDIA_BUS_FMT_SGBRG8_1X8,
+		.colorspace     = V4L2_COLORSPACE_RAW,
+		.datatype       = MIPI_CSI2_DT_RAW8,
+		.output_fmt     = 0x17,
+		.row_col_switch = GC2145_SYNC_MODE_ROW_SWITCH,
 	},
 };
 
@@ -1281,6 +1308,7 @@ static int gc2145_start_streaming(struct gc2145 *gc2145)
 	const struct gc2145_reg_list *reg_list;
 	const struct gc2145_format *gc2145_format;
 	uint16_t lwc, fifo_full_lvl, fifo_gate_mode;
+	u8 sync_mode;
 	int ret;
 
 	ret = pm_runtime_resume_and_get(&client->dev);
@@ -1313,6 +1341,17 @@ static int gc2145_start_streaming(struct gc2145 *gc2145)
 	if (ret)
 		return ret;
 
+	ret = gc2145_read_reg(gc2145, GC2145_REG_SYNC_MODE, &sync_mode, 1);
+	if (ret)
+		return ret;
+
+	sync_mode &= ~(GC2145_SYNC_MODE_COL_SWITCH | GC2145_SYNC_MODE_ROW_SWITCH);
+	sync_mode |= gc2145_format->row_col_switch;
+
+	ret = gc2145_write_reg(gc2145, GC2145_REG_SYNC_MODE, sync_mode);
+	if (ret)
+		return ret;
+
 	/* Set 3rd page access */
 	ret = gc2145_write_reg(gc2145, GC2145_REG_PAGE_SELECT, 0x03);
 	if (ret)
@@ -1326,7 +1365,10 @@ static int gc2145_start_streaming(struct gc2145 *gc2145)
 	 */
 	if (gc2145_format->colorspace != V4L2_COLORSPACE_RAW)
 		lwc = gc2145->mode->width * 2;
-	else if (gc2145_format->code == MEDIA_BUS_FMT_SRGGB8_1X8)
+	else if (gc2145_format->code == MEDIA_BUS_FMT_SGRBG8_1X8 ||
+		 gc2145_format->code == MEDIA_BUS_FMT_SRGGB8_1X8 ||
+		 gc2145_format->code == MEDIA_BUS_FMT_SBGGR8_1X8 ||
+		 gc2145_format->code == MEDIA_BUS_FMT_SGBRG8_1X8)
 		lwc = gc2145->mode->width * 1;
 	else
 		lwc = gc2145->mode->width + (gc2145->mode->width / 4);
