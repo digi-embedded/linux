@@ -7723,6 +7723,7 @@ static s32 brcmf_get_assoc_ies(struct brcmf_cfg80211_info *cfg,
 
 	brcmf_clear_assoc_ies(cfg);
 
+	memset(cfg->extra_buf, '\0', WL_EXTRA_BUF_MAX);
 	err = brcmf_fil_iovar_data_get(ifp, "assoc_info",
 				       cfg->extra_buf, WL_ASSOC_INFO_MAX);
 	if (err) {
@@ -7740,6 +7741,7 @@ static s32 brcmf_get_assoc_ies(struct brcmf_cfg80211_info *cfg,
 		return -EINVAL;
 	}
 	if (req_len) {
+		memset(cfg->extra_buf, '\0', WL_EXTRA_BUF_MAX);
 		err = brcmf_fil_iovar_data_get(ifp, "assoc_req_ies",
 					       cfg->extra_buf,
 					       WL_ASSOC_INFO_MAX);
@@ -7768,6 +7770,7 @@ static s32 brcmf_get_assoc_ies(struct brcmf_cfg80211_info *cfg,
 	 * the assoc_resp_ie length should minus the 6 bytes which starts from rate_ie.
 	 */
 	if (resp_len) {
+		memset(cfg->extra_buf, '\0', WL_EXTRA_BUF_MAX);
 		err = brcmf_fil_iovar_data_get(ifp, "assoc_resp_ies",
 					       cfg->extra_buf,
 					       WL_ASSOC_INFO_MAX);
