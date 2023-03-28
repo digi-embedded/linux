@@ -511,6 +511,8 @@ static void stm32_exti_h_eoi(struct irq_data *d)
 	if (stm32_bank->fpr_ofst != UNDEF_REG)
 		stm32_exti_write_bit(d, stm32_bank->fpr_ofst);
 
+	chip_data->mask_cache = stm32_exti_set_bit(d, stm32_bank->imr_ofst);
+
 	raw_spin_unlock(&chip_data->rlock);
 
 	if (d->parent_data->chip)
