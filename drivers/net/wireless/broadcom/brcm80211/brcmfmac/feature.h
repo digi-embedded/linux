@@ -137,4 +137,13 @@ bool brcmf_feat_is_quirk_enabled(struct brcmf_if *ifp,
  */
 bool brcmf_feat_is_6ghz_enabled(struct brcmf_if *ifp);
 
+/**
+ * brcmf_feat_sdio_in_isr() - handle SDIO DPC handler in ISR
+ *
+ * @ifp: interface instance.
+ *
+ * Return: true if handle SDIO DPC in ISR is enabled; otherwise false.
+ */
+bool brcmf_feat_sdio_in_isr(struct brcmf_if *ifp);
+
 #endif /* _BRCMF_FEATURE_H */

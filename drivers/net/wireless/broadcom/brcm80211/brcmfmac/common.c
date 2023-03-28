@@ -96,6 +96,10 @@ static int brcmf_disable_6ghz;
 module_param_named(disable_6ghz, brcmf_disable_6ghz, int, 0400);
 MODULE_PARM_DESC(disable_6ghz, "Disable 6GHz Operation");
 
+static int brcmf_sdio_in_isr;
+module_param_named(sdio_in_isr, brcmf_sdio_in_isr, int, 0400);
+MODULE_PARM_DESC(sdio_in_isr, "Handle SDIO DPC in ISR");
+
 static struct brcmfmac_platform_data *brcmfmac_pdata;
 struct brcmf_mp_global_t brcmf_mp_global;
 
@@ -547,6 +551,7 @@ struct brcmf_mp_device *brcmf_get_module_param(struct device *dev,
 #endif
 	settings->fw_ap_select = !!brcmf_fw_ap_select;
 	settings->disable_6ghz = !!brcmf_disable_6ghz;
+	settings->sdio_in_isr = !!brcmf_sdio_in_isr;
 
 	if (bus_type == BRCMF_BUSTYPE_SDIO)
 		settings->bus.sdio.txglomsz = brcmf_sdiod_txglomsz;
