@@ -532,8 +532,7 @@ static int shash_prepare_alg(struct shash_alg *alg)
 	struct crypto_alg *base = &alg->base;
 
 	if (alg->digestsize > HASH_MAX_DIGESTSIZE ||
-	    alg->descsize > HASH_MAX_DESCSIZE ||
-	    alg->statesize > HASH_MAX_STATESIZE)
+	    alg->descsize > HASH_MAX_DESCSIZE)
 		return -EINVAL;
 
 	if ((alg->export && !alg->import) || (alg->import && !alg->export))
