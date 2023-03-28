@@ -40,6 +40,7 @@
 #include "fwil.h"
 #include "bt_shared_sdio.h"
 #include "trxhdr.h"
+#include "feature.h"
 
 #define DCMD_RESP_TIMEOUT	msecs_to_jiffies(2500)
 #define CTL_DONE_TIMEOUT	msecs_to_jiffies(2500)
@@ -549,6 +550,7 @@ struct brcmf_sdio {
 	bool txglom;		/* host tx glomming enable flag */
 	u16 head_align;		/* buffer pointer alignment */
 	u16 sgentry_align;	/* scatter-gather buffer alignment */
+	struct mutex sdsem;
 };
 
 /* clkstate */
@@ -2171,7 +2173,7 @@ static uint brcmf_sdio_readframes(struct brcmf_sdio *bus, uint maxframes)
 static void
 brcmf_sdio_wait_event_wakeup(struct brcmf_sdio *bus)
 {
-	wake_up_interruptible(&bus->ctrl_wait);
+	wake_up(&bus->ctrl_wait);
 	return;
 }
 
@@ -2452,9 +2454,7 @@ static uint brcmf_sdio_sendfromq(struct brcmf_sdio *bus, uint maxframes)
 					      &prec_out);
 			if (pkt == NULL)
 				break;
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 16, 0))
 			skb_orphan(pkt);
-#endif
 			__skb_queue_tail(&pktq, pkt);
 		}
 		spin_unlock_bh(&bus->txq_lock);
@@ -3241,8 +3241,9 @@ brcmf_sdio_bus_txctl(struct device *dev, unsigned char *msg, uint msglen)
 	bus->ctrl_frame_stat = true;
 
 	brcmf_sdio_trigger_dpc(bus);
-	wait_event_interruptible_timeout(bus->ctrl_wait, !bus->ctrl_frame_stat,
-					 CTL_DONE_TIMEOUT);
+	wait_event_timeout(bus->ctrl_wait, !bus->ctrl_frame_stat,
+			   CTL_DONE_TIMEOUT);
+
 	ret = 0;
 	if (bus->ctrl_frame_stat) {
 		sdio_claim_host(bus->sdiodev->func1);
@@ -3975,14 +3976,15 @@ done:
 
 void brcmf_sdio_trigger_dpc(struct brcmf_sdio *bus)
 {
-	if (!bus->dpc_triggered) {
-		bus->dpc_triggered = true;
-		queue_work(bus->brcmf_wq, &bus->datawork);
-	}
+	bus->dpc_triggered = true;
+	queue_work(bus->brcmf_wq, &bus->datawork);
 }
 
 void brcmf_sdio_isr(struct brcmf_sdio *bus, bool in_isr)
 {
+	struct brcmf_bus *bus_if = dev_get_drvdata(bus->sdiodev->dev);
+	struct brcmf_if *ifp = bus_if->drvr->iflist[0];
+
 	brcmf_dbg(TRACE, "Enter\n");
 
 	if (!bus) {
@@ -4003,8 +4005,26 @@ void brcmf_sdio_isr(struct brcmf_sdio *bus, bool in_isr)
 	if (!bus->intr)
 		brcmf_err("isr w/o interrupt configured!\n");
 
-	bus->dpc_triggered = true;
-	queue_work(bus->brcmf_wq, &bus->datawork);
+	if (brcmf_feat_sdio_in_isr(ifp)) {
+		if (!mutex_trylock(&bus->sdsem)) {
+			bus->dpc_triggered = true;
+			queue_work(bus->brcmf_wq, &bus->datawork);
+		} else {
+			bus->dpc_triggered = true;
+
+			/* make sure dpc_triggered is true */
+			wmb();
+			while (READ_ONCE(bus->dpc_triggered)) {
+				bus->dpc_triggered = false;
+				brcmf_sdio_dpc(bus);
+				bus->idlecount = 0;
+			}
+			mutex_unlock(&bus->sdsem);
+		}
+	} else {
+		bus->dpc_triggered = true;
+		queue_work(bus->brcmf_wq, &bus->datawork);
+	}
 }
 
 static void brcmf_sdio_bus_watchdog(struct brcmf_sdio *bus)
@@ -4097,20 +4117,46 @@ static void brcmf_sdio_dataworker(struct work_struct *work)
 {
 	struct brcmf_sdio *bus = container_of(work, struct brcmf_sdio,
 					      datawork);
+	struct brcmf_bus *bus_if = dev_get_drvdata(bus->sdiodev->dev);
+	struct brcmf_if *ifp = bus_if->drvr->iflist[0];
 
-	bus->dpc_running = true;
-	wmb();
-	while (READ_ONCE(bus->dpc_triggered)) {
-		bus->dpc_triggered = false;
-		brcmf_sdio_dpc(bus);
-		bus->idlecount = 0;
+	if (brcmf_feat_sdio_in_isr(ifp)) {
+		if (mutex_trylock(&bus->sdsem)) {
+			bus->dpc_running = true;
+
+			/* make sure dpc_running is true */
+			wmb();
+			while (READ_ONCE(bus->dpc_triggered)) {
+				bus->dpc_triggered = false;
+				brcmf_sdio_dpc(bus);
+				bus->idlecount = 0;
+			}
+			mutex_unlock(&bus->sdsem);
+			bus->dpc_running = false;
+			if (brcmf_sdiod_freezing(bus->sdiodev)) {
+				brcmf_sdiod_change_state(bus->sdiodev, BRCMF_SDIOD_DOWN);
+				brcmf_sdiod_try_freeze(bus->sdiodev);
+				brcmf_sdiod_change_state(bus->sdiodev, BRCMF_SDIOD_DATA);
+			}
+		}
+	} else {
+		bus->dpc_running = true;
+
+		/* make sure dpc_running is true */
+		wmb();
+		while (READ_ONCE(bus->dpc_triggered)) {
+			bus->dpc_triggered = false;
+			brcmf_sdio_dpc(bus);
+			bus->idlecount = 0;
+		}
+		bus->dpc_running = false;
+		if (brcmf_sdiod_freezing(bus->sdiodev)) {
+			brcmf_sdiod_change_state(bus->sdiodev, BRCMF_SDIOD_DOWN);
+			brcmf_sdiod_try_freeze(bus->sdiodev);
+			brcmf_sdiod_change_state(bus->sdiodev, BRCMF_SDIOD_DATA);
+		}
 	}
-	bus->dpc_running = false;
-	if (brcmf_sdiod_freezing(bus->sdiodev)) {
-		brcmf_sdiod_change_state(bus->sdiodev, BRCMF_SDIOD_DOWN);
-		brcmf_sdiod_try_freeze(bus->sdiodev);
-		brcmf_sdiod_change_state(bus->sdiodev, BRCMF_SDIOD_DATA);
-	}
+	return;
 }
 
 static void
@@ -4918,6 +4964,8 @@ struct brcmf_sdio *brcmf_sdio_probe(struct brcmf_sdio_dev *sdiodev)
 	spin_lock_init(&bus->txq_lock);
 	init_waitqueue_head(&bus->ctrl_wait);
 	init_waitqueue_head(&bus->dcmd_resp_wait);
+	/* Initialize thread based operation and lock */
+	mutex_init(&bus->sdsem);
 
 	/* Set up the watchdog timer */
 	timer_setup(&bus->timer, brcmf_sdio_watchdog, 0);

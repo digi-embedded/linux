@@ -9152,7 +9152,7 @@ static int brcmf_setup_wiphy(struct wiphy *wiphy, struct brcmf_if *ifp)
 		if (bandlist[i] == cpu_to_le32(WLC_BAND_6G) &&
 		    brcmf_feat_is_6ghz_enabled(ifp)) {
 			band = kmemdup(&__wl_band_6ghz, sizeof(__wl_band_6ghz),
-					   GFP_KERNEL);
+					GFP_KERNEL);
 			if (!band)
 				return -ENOMEM;
 
