@@ -20,6 +20,25 @@
 	wireless {
 		/* U-Boot will fill in the MAC address here */
 	};
+
+	bluetooth {
+		/* U-Boot will fill in the MAC address here */
+	};
+};
+
+/* Enable USDHC3 (Wireless) */
+&usdhc3 {
+	status = "okay";
+};
+
+/* Enable WLAN PWR control */
+&wlan_pwrseq {
+	status = "okay";
+};
+
+/* Enable LPUART1 (Bluetooth) */
+&lpuart1 {
+	status = "okay";
 };
 
 /* IOMUX */
