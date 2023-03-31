@@ -173,6 +173,7 @@
 				     <GIC_SPI 48 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&scmi_clk CK_SCMI_HPDMA1>;
 			#dma-cells = <4>;
+			st,axi-max-burst-len = <16>;
 		};
 
 		hpdma2: dma-controller@40410000 {
@@ -196,6 +197,7 @@
 				     <GIC_SPI 64 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&scmi_clk CK_SCMI_HPDMA2>;
 			#dma-cells = <4>;
+			st,axi-max-burst-len = <16>;
 		};
 
 		hpdma3: dma-controller@40420000 {
@@ -219,6 +221,7 @@
 				     <GIC_SPI 80 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&scmi_clk CK_SCMI_HPDMA3>;
 			#dma-cells = <4>;
+			st,axi-max-burst-len = <16>;
 		};
 
 		rifsc: rifsc@42080000 {
