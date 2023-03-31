@@ -102,6 +102,14 @@ properties:
     minItems: 4
     maxItems: 16
 
+  st,axi-max-burst-len:
+    description: |
+      Restrict master AXI burst length in unit of beat by value specified in this property.
+      If this property is missing the maximum AXI burst length supported by DMA3 is used.
+    $ref: /schemas/types.yaml#/definitions/uint32
+    minimum: 1
+    maximum: 256
+
 required:
   - compatible
   - reg
@@ -135,6 +143,7 @@ examples:
                    <GIC_SPI 48 IRQ_TYPE_LEVEL_HIGH>;
       clocks = <&rcc CK_BUS_HPDMA1>;
       #dma-cells = <4>;
+      st,axi-max-burst-len = <16>;
     };
 ...
 
