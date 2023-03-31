@@ -163,6 +163,15 @@ config QCOM_SSC_BLOCK_BUS
 	  i2c/spi/uart controllers, a hexagon core, and a clock controller
 	  which provides clocks for the above.
 
+config STM32_SYS_BUS
+	bool "STM32 System bus controller"
+	depends on ARCH_STM32
+	default MACH_STM32MP157 || MACH_STM32MP13
+	help
+	  Say y to enable device access right verification before device probing.
+	  If access not granted, device won't be probed and an error message will
+	  provide the reason.
+
 config SUN50I_DE2_BUS
 	bool "Allwinner A64 DE2 Bus Driver"
 	  default ARM64
