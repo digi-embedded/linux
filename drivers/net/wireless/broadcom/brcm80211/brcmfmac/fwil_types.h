@@ -140,6 +140,11 @@
 #define BRCMF_WOWL_MAXPATTERNS		16
 #define BRCMF_WOWL_MAXPATTERNSIZE	128
 
+/* IPV4 address length */
+#define BRCMF_IPV4_ADDR_LEN             4
+/* IPV6 address length */
+#define BRCMF_IPV6_ADDR_LEN             16
+
 enum {
 	BRCMF_UNICAST_FILTER_NUM = 0,
 	BRCMF_BROADCAST_FILTER_NUM,
@@ -207,6 +212,43 @@ enum {
 #define MAX_RSSI_LEVELS			8
 #define WL_RSSI_EVENT_BRCM_VERSION      0
 #define WL_RSSI_EVENT_IFX_VERSION       1
+
+/* Offloads profile configuration version */
+#define BRCMF_OL_CFG_VER_1		1
+
+extern unsigned int brcmf_offload_prof;
+extern unsigned int brcmf_offload_feat;
+
+/* Packet types to be offloaded to firmware for processing */
+enum brcmf_ol_feats {
+	BRCMF_OL_ARP = BIT(0),
+	BRCMF_OL_ND = BIT(1),
+	BRCMF_OL_BDO = BIT(2),
+	BRCMF_OL_ICMP = BIT(3),
+	BRCMF_OL_TKO = BIT(4),
+	BRCMF_OL_DLTRO = BIT(5),
+	BRCMF_OL_PNO = BIT(6),
+	BRCMF_OL_KEEPALIVE = BIT(7),
+	BRCMF_OL_GTKOE = BIT(8),
+	BRCMF_OL_WOWLPF	= BIT(9)
+};
+
+enum brcmf_ol_cfg_id {
+	BRCMF_OL_CFG_ID_PROF = 1,		/* Offload Profile Update */
+	BRCMF_OL_CFG_ID_INET_V4,		/* ADD/DEL IPv4 Address */
+	BRCMF_OL_CFG_ID_INET_V6,		/* ADD/DEL IPv6 Address */
+	BRCMF_OL_CFG_ID_ACTIVATE,		/* Activate/Deactivate Offload */
+	/*  Add new type before this line */
+	BRCMF_OL_CFG_ID_MAX			/* Max Offload Config ID */
+};
+
+enum brcmf_ol_prof_type {
+	BRCMF_OL_PROF_TYPE_LOW_PWR = 1,		/* Low Power Profile */
+	BRCMF_OL_PROF_TYPE_MID_PWR = 2,		/* Mid Power Profile */
+	BRCMF_OL_PROF_TYPE_HIGH_PWR = 3,	/* High Power Profile */
+	/*  Add new type before this line */
+	BRCMF_OL_PROF_TYPE_MAX			/* Max Offload Profile */
+};
 
 /* join preference types for join_pref iovar */
 enum brcmf_join_pref_types {
@@ -1155,6 +1197,46 @@ struct wl_rssi_event {
 	s8 rssi_levels[MAX_RSSI_LEVELS];
 	u8 version;
 	s8 pad[2];
+};
+
+struct ipv4_addr {
+	u8 addr[BRCMF_IPV4_ADDR_LEN];
+};
+
+struct ipv6_addr {
+	u8 addr[BRCMF_IPV6_ADDR_LEN];
+};
+
+/* Offload profile configuration */
+struct brcmf_ol_cfg_v1 {
+	u16 ver;					/* version of this structure */
+	u16 len;					/* length of structure in bytes */
+	enum brcmf_ol_cfg_id id;			/* Offload Config ID */
+
+	union {
+		struct {
+			enum brcmf_ol_prof_type type;	/* offload profile type */
+			bool reset;			/* Remove profile configuration */
+			u8 pad[3];
+		} ol_profile;
+		struct {
+			struct ipv4_addr host_ipv4;
+			bool del;			/* 1:del 0:add host ipv4 address */
+			u8 pad[3];
+		} ol_inet_v4;
+		struct {
+			struct ipv6_addr host_ipv6;
+			u8 type;			/* 0:unicast 1:anycast */
+			bool del;			/* 1:del 0:add host ipv6 address */
+			u8 pad[2];
+		} ol_inet_v6;
+		struct {
+			bool enable;			/* enable/disable offload feature */
+			u8 pad[3];
+		} ol_activate;
+	} u;
+
+	u32 offload_skip;				/* Bitmap of offload to be skipped */
 };
 
 #endif /* FWIL_TYPES_H_ */
