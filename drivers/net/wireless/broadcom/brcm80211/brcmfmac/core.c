@@ -1326,64 +1326,79 @@ static int brcmf_inetaddr_changed(struct notifier_block *nb,
 			return NOTIFY_DONE;
 	}
 
-	/* check if arp offload is supported */
-	ret = brcmf_fil_iovar_int_get(ifp, "arpoe", &val);
-	if (ret)
-		return NOTIFY_OK;
+	if (!brcmf_feat_is_enabled(ifp, BRCMF_FEAT_OFFLOADS)) {
+		/* check if arp offload is supported */
+		ret = brcmf_fil_iovar_int_get(ifp, "arpoe", &val);
+		if (ret)
+			return NOTIFY_OK;
 
-	/* old version only support primary index */
-	ret = brcmf_fil_iovar_int_get(ifp, "arp_version", &val);
-	if (ret)
-		val = 1;
-	if (val == 1)
-		ifp = drvr->iflist[0];
+		/* old version only support primary index */
+		ret = brcmf_fil_iovar_int_get(ifp, "arp_version", &val);
+		if (ret)
+			val = 1;
+		if (val == 1)
+			ifp = drvr->iflist[0];
 
-	/* retrieve the table from firmware */
-	ret = brcmf_fil_iovar_data_get(ifp, "arp_hostip", addr_table,
-				       sizeof(addr_table));
-	if (ret) {
-		bphy_err(drvr, "fail to get arp ip table err:%d\n", ret);
-		return NOTIFY_OK;
+		/* retrieve the table from firmware */
+		ret = brcmf_fil_iovar_data_get(ifp, "arp_hostip", addr_table,
+					       sizeof(addr_table));
+		if (ret) {
+			bphy_err(drvr, "fail to get arp ip table err:%d\n", ret);
+			return NOTIFY_OK;
+		}
+
+		for (i = 0; i < ARPOL_MAX_ENTRIES; i++)
+			if (ifa->ifa_address == addr_table[i])
+				break;
 	}
-
-	for (i = 0; i < ARPOL_MAX_ENTRIES; i++)
-		if (ifa->ifa_address == addr_table[i])
-			break;
 
 	switch (action) {
 	case NETDEV_UP:
-		if (i == ARPOL_MAX_ENTRIES) {
-			brcmf_dbg(TRACE, "add %pI4 to arp table\n",
-				  &ifa->ifa_address);
-			/* set it directly */
-			ret = brcmf_fil_iovar_data_set(ifp, "arp_hostip",
-				&ifa->ifa_address, sizeof(ifa->ifa_address));
-			if (ret)
-				bphy_err(drvr, "add arp ip err %d\n", ret);
+		if (brcmf_feat_is_enabled(ifp, BRCMF_FEAT_OFFLOADS)) {
+			brcmf_generic_offload_host_ipv4_update(ifp,
+							       BRCMF_OL_ARP | BRCMF_OL_ICMP,
+							       ifa->ifa_address, true);
+		} else {
+			if (i == ARPOL_MAX_ENTRIES) {
+				brcmf_dbg(TRACE, "add %pI4 to arp table\n",
+					  &ifa->ifa_address);
+				/* set it directly */
+				ret = brcmf_fil_iovar_data_set(ifp, "arp_hostip",
+							       &ifa->ifa_address,
+							       sizeof(ifa->ifa_address));
+				if (ret)
+					bphy_err(drvr, "add arp ip err %d\n", ret);
+			}
 		}
 		break;
 	case NETDEV_DOWN:
-		if (i < ARPOL_MAX_ENTRIES) {
-			addr_table[i] = 0;
-			brcmf_dbg(TRACE, "remove %pI4 from arp table\n",
-				  &ifa->ifa_address);
-			/* clear the table in firmware */
-			ret = brcmf_fil_iovar_data_set(ifp, "arp_hostip_clear",
-						       NULL, 0);
-			if (ret) {
-				bphy_err(drvr, "fail to clear arp ip table err:%d\n",
-					 ret);
-				return NOTIFY_OK;
-			}
-			for (i = 0; i < ARPOL_MAX_ENTRIES; i++) {
-				if (addr_table[i] == 0)
-					continue;
-				ret = brcmf_fil_iovar_data_set(ifp, "arp_hostip",
-							       &addr_table[i],
-							       sizeof(addr_table[i]));
-				if (ret)
-					bphy_err(drvr, "add arp ip err %d\n",
+		if (brcmf_feat_is_enabled(ifp, BRCMF_FEAT_OFFLOADS)) {
+			brcmf_generic_offload_host_ipv4_update(ifp,
+							       BRCMF_OL_ARP | BRCMF_OL_ICMP,
+							       ifa->ifa_address, false);
+		} else {
+			if (i < ARPOL_MAX_ENTRIES) {
+				addr_table[i] = 0;
+				brcmf_dbg(TRACE, "remove %pI4 from arp table\n",
+					  &ifa->ifa_address);
+				/* clear the table in firmware */
+				ret = brcmf_fil_iovar_data_set(ifp, "arp_hostip_clear",
+							       NULL, 0);
+				if (ret) {
+					bphy_err(drvr, "fail to clear arp ip table err:%d\n",
 						 ret);
+					return NOTIFY_OK;
+				}
+				for (i = 0; i < ARPOL_MAX_ENTRIES; i++) {
+					if (addr_table[i] == 0)
+						continue;
+					ret = brcmf_fil_iovar_data_set(ifp, "arp_hostip",
+								       &addr_table[i],
+								       sizeof(addr_table[i]));
+					if (ret)
+						bphy_err(drvr, "add arp ip err %d\n",
+							 ret);
+				}
 			}
 		}
 		break;

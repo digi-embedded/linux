@@ -108,6 +108,25 @@ static int brcmf_sdio_rxf_in_kthread;
 module_param_named(sdio_rxf_thread, brcmf_sdio_rxf_in_kthread, int, 0400);
 MODULE_PARM_DESC(sdio_rxf_thread, "SDIO RX Frame in Kthread");
 
+unsigned int brcmf_offload_prof = BRCMF_OL_PROF_TYPE_LOW_PWR;
+module_param_named(offload_prof, brcmf_offload_prof, uint, 0400);
+MODULE_PARM_DESC(offload_prof,
+		 "Offload power profile: 1:low 2:mid 3:high (default:1)");
+
+unsigned int brcmf_offload_feat = BRCMF_OL_ARP |
+				  BRCMF_OL_ND |
+				  BRCMF_OL_BDO |
+				  BRCMF_OL_ICMP |
+				  BRCMF_OL_TKO |
+				  BRCMF_OL_DLTRO |
+				  BRCMF_OL_PNO |
+				  BRCMF_OL_KEEPALIVE |
+				  BRCMF_OL_GTKOE;
+module_param_named(offload_feat, brcmf_offload_feat, uint, 0400);
+MODULE_PARM_DESC(offload_feat,
+		 "Offload feat bitmap: 0:arp 1:nd 2:mdns 3:icmp 4:tcp-keepalive "
+		 "5:dhcp-renewal 6:pno 7:keepalive 8:gtk 9:wowlpf (default: 0x1FF)");
+
 static struct brcmfmac_platform_data *brcmfmac_pdata;
 struct brcmf_mp_global_t brcmf_mp_global;
 
@@ -116,6 +135,109 @@ static struct notifier_block brcmf_reboot_notifier = {
 	.notifier_call = brcmf_reboot_callback,
 	.priority = 1,
 };
+
+/* Offload features to firmware based on a user based power profile using module param
+ * offload_prof and offload_feat (provides flag list of all offloads).
+ * Default power profile : LowPwr with all offloads enabled.
+ */
+void brcmf_generic_offload_config(struct brcmf_if *ifp, unsigned int ol_feat,
+				  unsigned int ol_profile, bool reset)
+{
+	struct brcmf_ol_cfg_v1 ol_cfg = {0};
+	u32 ol_feat_skip = ~ol_feat;
+	int err = 0;
+
+	ol_cfg.ver = BRCMF_OL_CFG_VER_1;
+	ol_cfg.len = sizeof(ol_cfg);
+	ol_cfg.id = BRCMF_OL_CFG_ID_PROF;
+	ol_cfg.offload_skip = ol_feat_skip;
+	ol_cfg.u.ol_profile.reset = reset;
+	ol_cfg.u.ol_profile.type = ol_profile;
+
+	err = brcmf_fil_iovar_data_set(ifp, "offload_config", &ol_cfg,
+				       sizeof(ol_cfg));
+	if (err < 0)
+		brcmf_err("failed to %s generic offload profile:%u feat:0x%x, err = %d",
+			  reset ? "reset" : "set", ol_profile, ol_feat, err);
+	else
+		brcmf_info("successfully %s generic offload profile:%u feat:0x%x",
+			   reset ? "reset" : "set", ol_profile, ol_feat);
+}
+
+/* Enable specific offloads that are not enabled in a power profile but have
+ * to be enabled in suspend state as host goes to sleep.
+ */
+void brcmf_generic_offload_enable(struct brcmf_if *ifp, unsigned int ol_feat,
+				  bool enable)
+{
+	struct brcmf_ol_cfg_v1 ol_cfg = {0};
+	u32 ol_feat_skip = ~ol_feat;
+	int err = 0;
+
+	ol_cfg.ver = BRCMF_OL_CFG_VER_1;
+	ol_cfg.len = sizeof(ol_cfg);
+	ol_cfg.id = BRCMF_OL_CFG_ID_ACTIVATE;
+	ol_cfg.u.ol_activate.enable = enable;
+	ol_cfg.offload_skip = ol_feat_skip;
+
+	err = brcmf_fil_iovar_data_set(ifp, "offload_config", &ol_cfg,
+				       sizeof(ol_cfg));
+	if (err < 0)
+		brcmf_err("failed to %s generic offload feat:0x%x, err = %d",
+			  enable ? "enable" : "disable", ol_feat, err);
+	else
+		brcmf_info("successfully %s generic offload feat:0x%x",
+			   enable ? "enabled" : "disabled", ol_feat);
+}
+
+void brcmf_generic_offload_host_ipv4_update(struct brcmf_if *ifp, unsigned int ol_feat,
+					    u32 ipaddr, bool is_add)
+{
+	struct brcmf_ol_cfg_v1 ol_cfg = {0};
+	u32 ol_feat_skip = ~ol_feat;
+	int err = 0;
+
+	ol_cfg.ver = BRCMF_OL_CFG_VER_1;
+	ol_cfg.len = sizeof(ol_cfg);
+	ol_cfg.id = BRCMF_OL_CFG_ID_INET_V4;
+	ol_cfg.u.ol_inet_v4.del = !is_add;
+	memcpy(ol_cfg.u.ol_inet_v4.host_ipv4.addr, &ipaddr, sizeof(struct ipv4_addr));
+	ol_cfg.offload_skip = ol_feat_skip;
+
+	err = brcmf_fil_iovar_data_set(ifp, "offload_config", &ol_cfg,
+				       sizeof(ol_cfg));
+	if (err < 0)
+		brcmf_err("failed to %s generic offload host address %pI4, err = %d",
+			  is_add ? "add" : "del", &ipaddr, err);
+	else
+		brcmf_dbg(TRACE, "successfully %s generic offload host address %pI4",
+			  is_add ? "added" : "deleted", &ipaddr);
+}
+
+void brcmf_generic_offload_host_ipv6_update(struct brcmf_if *ifp, unsigned int ol_feat,
+					    void *ptr, u8 type, bool is_add)
+{
+	struct brcmf_ol_cfg_v1 ol_cfg = {0};
+	u32 ol_feat_skip = ~ol_feat;
+	int err = 0;
+
+	ol_cfg.ver = BRCMF_OL_CFG_VER_1;
+	ol_cfg.len = sizeof(ol_cfg);
+	ol_cfg.id = BRCMF_OL_CFG_ID_INET_V6;
+	ol_cfg.u.ol_inet_v6.del = !is_add;
+	ol_cfg.u.ol_inet_v6.type = type;
+	memcpy(ol_cfg.u.ol_inet_v6.host_ipv6.addr, ptr, sizeof(struct ipv6_addr));
+	ol_cfg.offload_skip = ol_feat_skip;
+
+	err = brcmf_fil_iovar_data_set(ifp, "offload_config", &ol_cfg,
+				       sizeof(ol_cfg));
+	if (err < 0)
+		brcmf_err("failed to %s host address %pI6 err = %d",
+			  is_add ? "add" : "del", ptr, err);
+	else
+		brcmf_dbg(TRACE, "successfully %s host address %pI6",
+			  is_add ? "add" : "del", ptr);
+}
 
 void brcmf_c_set_joinpref_default(struct brcmf_if *ifp)
 {
@@ -562,6 +684,14 @@ struct brcmf_mp_device *brcmf_get_module_param(struct device *dev,
 	settings->sdio_in_isr = !!brcmf_sdio_in_isr;
 	settings->pkt_prio = !!brcmf_pkt_prio_enable;
 	settings->sdio_rxf_in_kthread_enabled = !!brcmf_sdio_rxf_in_kthread;
+
+	if (brcmf_offload_prof >= BRCMF_OL_PROF_TYPE_MAX) {
+		brcmf_err("Invalid Offload power profile %u, using default profile 1",
+			  brcmf_offload_prof);
+		brcmf_offload_prof = BRCMF_OL_PROF_TYPE_LOW_PWR;
+	}
+	settings->offload_prof = brcmf_offload_prof;
+	settings->offload_feat = brcmf_offload_feat;
 
 	if (bus_type == BRCMF_BUSTYPE_SDIO)
 		settings->bus.sdio.txglomsz = brcmf_sdiod_txglomsz;

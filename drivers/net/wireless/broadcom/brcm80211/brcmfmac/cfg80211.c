@@ -4635,6 +4635,12 @@ static s32 brcmf_cfg80211_resume(struct wiphy *wiphy)
 		brcmf_pktfilter_enable(ifp->ndev, false);
 
 	}
+	/* During resume, disable all offload modules which are enabled
+	 * previously while entering suspend.
+	 */
+	if (brcmf_feat_is_enabled(ifp, BRCMF_FEAT_OFFLOADS))
+		brcmf_generic_offload_enable(ifp, brcmf_offload_feat, false);
+
 	config->pm_state = BRCMF_CFG80211_PM_STATE_RESUMED;
 	return 0;
 }
@@ -4742,6 +4748,13 @@ static s32 brcmf_cfg80211_suspend(struct wiphy *wiphy,
 	if (test_bit(BRCMF_SCAN_STATUS_BUSY, &cfg->scan_status))
 		brcmf_abort_scanning(cfg);
 
+	/* Enable offload features that were not in default (LOW) or user selected
+	 * power profile but should be offloaded to fw in suspend as host goes to
+	 * sleep. These will be disabled on resume.
+	 */
+	if (brcmf_feat_is_enabled(ifp, BRCMF_FEAT_OFFLOADS))
+		brcmf_generic_offload_enable(ifp, brcmf_offload_feat, true);
+
 	if (!wowl || !test_bit(BRCMF_VIF_STATUS_CONNECTED,
 			       &ifp->vif->sme_state)) {
 		brcmf_bus_wowl_config(cfg->pub->bus_if, false);
@@ -4770,6 +4783,8 @@ static s32 brcmf_cfg80211_suspend(struct wiphy *wiphy,
 			/* Prevent disassociation due to inactivity with keep-alive */
 			brcmf_keepalive_start(ifp, 30);
 		}
+		if (brcmf_feat_is_enabled(ifp, BRCMF_FEAT_OFFLOADS))
+			brcmf_generic_offload_enable(ifp, BRCMF_OL_WOWLPF, true);
 	}
 
 exit:
@@ -9571,6 +9586,7 @@ static s32 brcmf_config_dongle(struct brcmf_cfg80211_info *cfg)
 	s32 power_mode;
 	s32 eap_restrict;
 	s32 err = 0;
+	u32 wowl_config = 0;
 
 	if (cfg->dongle_up)
 		return err;
@@ -9607,7 +9623,22 @@ static s32 brcmf_config_dongle(struct brcmf_cfg80211_info *cfg)
 	if (err)
 		goto default_conf_out;
 
-	brcmf_configure_arp_nd_offload(ifp, true);
+	/* Configure user based power profile for offloads.
+	 * Default profile is LOW_PWR.
+	 */
+	if (brcmf_feat_is_enabled(ifp, BRCMF_FEAT_OFFLOADS)) {
+		brcmf_generic_offload_config(ifp, brcmf_offload_feat,
+					     brcmf_offload_prof, false);
+
+		if (brcmf_feat_is_enabled(ifp, BRCMF_FEAT_ULP)) {
+			wowl_config = BRCMF_WOWL_DIS | BRCMF_WOWL_BCN;
+			err = brcmf_fil_iovar_int_set(ifp, "wowl", wowl_config);
+			if (err < 0)
+				brcmf_err("wowl_flags DIS,BCN not set");
+		}
+	} else {
+		brcmf_configure_arp_nd_offload(ifp, true);
+	}
 
 	err = brcmf_fil_cmd_int_set(ifp, BRCMF_C_SET_FAKEFRAG, 1);
 	if (err) {
@@ -9632,6 +9663,13 @@ static s32 __brcmf_cfg80211_up(struct brcmf_if *ifp)
 static s32 __brcmf_cfg80211_down(struct brcmf_if *ifp)
 {
 	struct brcmf_cfg80211_info *cfg = ifp->drvr->config;
+
+	/* Disable all offloads started on brcmf_config_dongle before
+	 * link is brought down.
+	 */
+	if (brcmf_feat_is_enabled(ifp, BRCMF_FEAT_OFFLOADS))
+		brcmf_generic_offload_config(ifp, brcmf_offload_feat,
+					     brcmf_offload_prof, true);
 
 	/*
 	 * While going down, if associated with AP disassociate
