@@ -48,6 +48,8 @@ static const struct brcmf_feat_fwcap brcmf_fwcap_map[] = {
 	{ BRCMF_FEAT_FBT, "fbt " },
 	{ BRCMF_FEAT_OKC, "okc" },
 	{ BRCMF_FEAT_GCMP, "gcmp" },
+	{ BRCMF_FEAT_OFFLOADS, "offloads" },
+	{ BRCMF_FEAT_ULP, "ulp" },
 };
 
 #ifdef DEBUG
@@ -371,4 +373,12 @@ bool brcmf_feat_is_sdio_rxf_in_kthread(struct brcmf_pub *drvr)
 		return drvr->settings->sdio_rxf_in_kthread_enabled;
 	else
 		return false;
+}
+
+bool brcmf_feat_is_offloads_enabled(struct brcmf_if *ifp)
+{
+	if (ifp && ifp->drvr)
+		return ifp->drvr->settings->offload_prof;
+
+	return false;
 }
