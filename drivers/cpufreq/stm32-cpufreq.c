@@ -41,7 +41,7 @@ static int stm32_cpufreq_probe(struct platform_device *pdev)
 	/* Get chip info */
 	ret = nvmem_cell_read_u8(cpu_dev, "part_number", &part_number);
 	if (ret) {
-		dev_err(&pdev->dev, "Failed to get chip info: %d\n", ret);
+		dev_err_probe(&pdev->dev, ret, "Failed to get chip info: %d\n", ret);
 		return ret;
 	}
 
@@ -54,9 +54,7 @@ static int stm32_cpufreq_probe(struct platform_device *pdev)
 	priv->token = dev_pm_opp_set_supported_hw(cpu_dev, &supported_hw, 1);
 	if (priv->token < 0) {
 		ret = priv->token;
-		if (ret != -EPROBE_DEFER)
-			dev_err(&pdev->dev, "Failed to set supported opp: %d\n",
-				ret);
+		dev_err_probe(&pdev->dev, ret, "Failed to set supported opp: %d\n", ret);
 		return ret;
 	}
 
