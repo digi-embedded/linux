@@ -165,6 +165,20 @@
 	status = "okay";
 };
 
+&m_can1 {
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&m_can1_pins_a>;
+	pinctrl-1 = <&m_can1_sleep_pins_a>;
+	status = "okay";
+};
+
+&m_can3 {
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&m_can3_pins_a>;
+	pinctrl-1 = <&m_can3_sleep_pins_a>;
+	status = "okay";
+};
+
 &mlahb {
 	intc_rpmsg: interrupt-controller@0 {
 		compatible = "rpmsg,intc";
