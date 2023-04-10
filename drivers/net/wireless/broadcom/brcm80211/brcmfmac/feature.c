@@ -338,8 +338,7 @@ bool brcmf_feat_is_6ghz_enabled(struct brcmf_if *ifp)
 	return (!ifp->drvr->settings->disable_6ghz);
 }
 
-bool brcmf_feat_sdio_in_isr(struct brcmf_if *ifp)
+bool brcmf_feat_is_sdio_rxf_in_kthread(struct brcmf_pub *drvr)
 {
-	return ifp->drvr->settings->sdio_in_isr;
+	return drvr->settings->sdio_rxf_in_kthread_enabled;
 }
-
