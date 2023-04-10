@@ -508,8 +508,8 @@ static int brcmf_rx_hdrpull(struct brcmf_pub *drvr, struct sk_buff *skb,
 	return 0;
 }
 
-void brcmf_rx_frame(struct device *dev, struct sk_buff *skb, bool handle_event,
-		    bool inirq)
+struct sk_buff *brcmf_rx_frame(struct device *dev, struct sk_buff *skb, bool handle_event,
+			       bool inirq)
 {
 	struct brcmf_if *ifp;
 	struct brcmf_bus *bus_if = dev_get_drvdata(dev);
@@ -518,7 +518,7 @@ void brcmf_rx_frame(struct device *dev, struct sk_buff *skb, bool handle_event,
 	brcmf_dbg(DATA, "Enter: %s: rxp=%p\n", dev_name(dev), skb);
 
 	if (brcmf_rx_hdrpull(drvr, skb, &ifp))
-		return;
+		return NULL;
 
 	if (brcmf_proto_is_reorder_skb(skb)) {
 		brcmf_proto_rxreorder(ifp, skb);
@@ -530,8 +530,14 @@ void brcmf_rx_frame(struct device *dev, struct sk_buff *skb, bool handle_event,
 			brcmf_fweh_process_skb(ifp->drvr, skb,
 					       BCMILCP_SUBTYPE_VENDOR_LONG, gfp);
 		}
-		brcmf_netif_rx(ifp, skb);
+
+		/* if sdio_rxf_in_kthread, enqueue it and process it later. */
+		if (brcmf_feat_is_sdio_rxf_in_kthread(drvr))
+			return skb;
+		else
+			brcmf_netif_rx(ifp, skb);
 	}
+	return NULL;
 }
 
 void brcmf_rx_event(struct device *dev, struct sk_buff *skb)
