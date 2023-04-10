@@ -342,11 +342,6 @@
 	status = "okay";
 };
 
-&iwdg2 {
-	timeout-sec = <32>;
-	status = "okay";
-};
-
 &m4_rproc {
 	memory-region = <&retram>, <&mcuram>, <&mcuram2>, <&vdev0vring0>,
 			<&vdev0vring1>, <&vdev0buffer>, <&mcu_rsc_table>;

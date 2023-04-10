@@ -414,11 +414,6 @@
 	};
 };
 
-&iwdg2 {
-	timeout-sec = <32>;
-	status = "okay";
-};
-
 &ltdc {
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&ltdc_pins_a>;
