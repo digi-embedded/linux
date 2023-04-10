@@ -138,12 +138,10 @@ bool brcmf_feat_is_quirk_enabled(struct brcmf_if *ifp,
 bool brcmf_feat_is_6ghz_enabled(struct brcmf_if *ifp);
 
 /**
- * brcmf_feat_sdio_in_isr() - handle SDIO DPC handler in ISR
+ * brcmf_feat_is_sdio_rxf_in_kthread() - handle SDIO Rx frame in kthread.
  *
- * @ifp: interface instance.
- *
- * Return: true if handle SDIO DPC in ISR is enabled; otherwise false.
+ * @drvr: driver instance.
  */
-bool brcmf_feat_sdio_in_isr(struct brcmf_if *ifp);
+bool brcmf_feat_is_sdio_rxf_in_kthread(struct brcmf_pub *drvr);
 
 #endif /* _BRCMF_FEATURE_H */
