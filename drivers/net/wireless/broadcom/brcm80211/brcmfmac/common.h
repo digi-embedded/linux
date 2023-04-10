@@ -60,6 +60,7 @@ struct brcmf_mp_device {
 	bool		fw_ap_select;
 	bool		disable_6ghz;
 	bool		sdio_in_isr;
+	bool		sdio_rxf_in_kthread_enabled;
 	struct brcmfmac_pd_cc *country_codes;
 	const char	*board_type;
 	unsigned char	mac[ETH_ALEN];

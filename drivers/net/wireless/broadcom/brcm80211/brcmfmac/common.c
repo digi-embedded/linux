@@ -100,6 +100,10 @@ static int brcmf_sdio_in_isr;
 module_param_named(sdio_in_isr, brcmf_sdio_in_isr, int, 0400);
 MODULE_PARM_DESC(sdio_in_isr, "Handle SDIO DPC in ISR");
 
+static int brcmf_sdio_rxf_in_kthread;
+module_param_named(sdio_rxf_thread, brcmf_sdio_rxf_in_kthread, int, 0400);
+MODULE_PARM_DESC(sdio_rxf_thread, "SDIO RX Frame in Kthread");
+
 static struct brcmfmac_platform_data *brcmfmac_pdata;
 struct brcmf_mp_global_t brcmf_mp_global;
 
@@ -552,6 +556,7 @@ struct brcmf_mp_device *brcmf_get_module_param(struct device *dev,
 	settings->fw_ap_select = !!brcmf_fw_ap_select;
 	settings->disable_6ghz = !!brcmf_disable_6ghz;
 	settings->sdio_in_isr = !!brcmf_sdio_in_isr;
+	settings->sdio_rxf_in_kthread_enabled = !!brcmf_sdio_rxf_in_kthread;
 
 	if (bus_type == BRCMF_BUSTYPE_SDIO)
 		settings->bus.sdio.txglomsz = brcmf_sdiod_txglomsz;
