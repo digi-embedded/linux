@@ -1335,8 +1335,11 @@ static void brcmf_sdio_get_console_addr(struct brcmf_sdio *bus)
 {
 	struct sdpcm_shared sh;
 
-	if (brcmf_sdio_readshared(bus, &sh) == 0)
+	if (brcmf_sdio_readshared(bus, &sh) == 0) {
+		/* reset the last read count when buffer address is updated */
+		bus->console.last = 0;
 		bus->console_addr = sh.console_addr;
+	}
 }
 #else
 static void brcmf_sdio_get_console_addr(struct brcmf_sdio *bus)
@@ -1359,8 +1362,8 @@ static u32 brcmf_sdio_hostmail(struct brcmf_sdio *bus, u32 *hmbd)
 	hmb_data = brcmf_sdiod_readl(sdiod,
 				     core->base + SD_REG(tohostmailboxdata),
 				     &ret);
-
-	if (!ret)
+	/* skip generating SMB_INT_ACK if there is no MB data */
+	if (!ret && hmb_data)
 		brcmf_sdiod_writel(sdiod, core->base + SD_REG(tosbmailbox),
 				   SMB_INT_ACK, &ret);
 
@@ -3024,6 +3027,9 @@ brcmf_sdio_ulp_reinit_fw(struct brcmf_sdio *bus)
 	if (!fwreq)
 		return -ENOMEM;
 
+	/* stop the watch dog -> idle time until reinit is done */
+	brcmf_sdio_wd_timer(bus, false);
+
 	err = brcmf_fw_get_firmwares(sdiodev->dev, fwreq,
 				     brcmf_sdio_firmware_callback);
 	if (err != 0) {
@@ -4055,8 +4061,12 @@ static int brcmf_sdio_download_firmware(struct brcmf_sdio *bus,
 			goto err;
 		}
 
-		bus->ci->blhs->post_nvramdl(bus->ci);
-
+		bcmerror = bus->ci->blhs->post_nvramdl(bus->ci);
+		if (bcmerror) {
+			brcmf_err("error in post NVRAM download hs err=%d\n",
+				  bcmerror);
+			goto err;
+		}
 		bcmerror = bus->ci->blhs->prep_fwdl(bus->ci);
 
 		bcmerror = brcmf_sdio_download_code_file(bus, fw);
@@ -4079,11 +4089,6 @@ static int brcmf_sdio_download_firmware(struct brcmf_sdio *bus,
 			brcmf_fw_nvram_free(nvram);
 			goto err;
 		}
-#ifdef DEBUG
-		brcmf_sdio_bus_sleep(bus, false, false);
-		if (brcmf_sdio_readconsole(bus) < 0)
-			brcmf_err("Console buffer read failed\n");
-#endif /* DEBUG */
 	} else if (bus->ci->blhs) {
 		bcmerror = bus->ci->blhs->prep_fwdl(bus->ci);
 		if (bcmerror) {
@@ -4838,7 +4843,7 @@ static const struct brcmf_buscore_ops brcmf_sdio_buscore_ops = {
 	.sec_attach = brcmf_sdio_buscore_sec_attach,
 };
 
-#define LOOP_TO_CHECK_FOR_BP_ENABLE                     500      /* Wait for 500msec */
+#define LOOP_TO_CHECK_FOR_BP_ENABLE                     50000      /* Wait for 500msec */
 
 int brcmf_get_intr_pending_data(void *ctx)
 {
@@ -4862,7 +4867,8 @@ int brcmf_get_intr_pending_data(void *ctx)
 	/* Bootloader hung after backplane disable */
 	if (loop == LOOP_TO_CHECK_FOR_BP_ENABLE) {
 		err = -EBUSY;
-		brcmf_err("Device hung, return failure.\n");
+		brcmf_err("Device hung, return failure. time out %d ms\n",
+			  (LOOP_TO_CHECK_FOR_BP_ENABLE * 10) / 1000);
 	}
 
 	return 0;
