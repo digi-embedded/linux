@@ -1203,7 +1203,7 @@ static int brcmf_blhs_post_fw_download(struct brcmf_chip *pub)
 	return err;
 }
 
-static void brcmf_blhs_post_nvram_download(struct brcmf_chip *pub)
+static int brcmf_blhs_post_nvram_download(struct brcmf_chip *pub)
 {
 	struct brcmf_chip_priv *chip;
 	u32 addr;
@@ -1221,11 +1221,24 @@ static void brcmf_blhs_post_nvram_download(struct brcmf_chip *pub)
 			     BRCMF_BLHS_D2H_MV_NVRAM_DONE) == 0,
 			    BRCMF_BLHS_D2H_MV_NVRAM_DONE_TIMEOUT,
 			    BRCMF_BLHS_POLL_INTERVAL);
+		/* check if the NVRAM move has been done */
+		regdata = pub->blhs->read(chip->ctx, addr);
+		if ((regdata & BRCMF_BLHS_D2H_MV_NVRAM_DONE)) {
+			brcmf_dbg(INFO,
+				  "NVRAM moved to the end of the RAM. regdata 0x%08x\n",
+				  regdata);
+		} else {
+		/* Timeout waiting for the NVRAM to be moved to the end of the RAM. */
+			brcmf_err("Timeout:%dms for BRCMF_BLHS_D2H_MV_NVRAM_DONE regdata 0x%08x\n"
+				  BRCMF_BLHS_D2H_MV_NVRAM_DONE_TIMEOUT, regdata);
+			return -EPERM;
+		}
 	} else {
 		regdata = pub->blhs->read(chip->ctx, addr);
 		regdata |= BRCMF_BLHS_H2D_DL_NVRAM_DONE;
 		pub->blhs->write(chip->ctx, addr, regdata);
 	}
+	return 0;
 }
 
 static int brcmf_blhs_chk_validation(struct brcmf_chip *pub)
@@ -1945,7 +1958,6 @@ void brcmf_chip_reset_watchdog(struct brcmf_chip *pub)
 
 	switch (pub->chip) {
 	case CY_CC_43012_CHIP_ID:
-	case CY_CC_43022_CHIP_ID:
 		addr = CORE_CC_REG(base, min_res_mask);
 		chip->ops->write32(chip->ctx, addr,
 			CY_43012_PMU_MIN_RES_MASK);
@@ -1969,6 +1981,9 @@ void brcmf_chip_reset_watchdog(struct brcmf_chip *pub)
 		chip->ops->write32(chip->ctx, addr,
 			CY_4373_PMU_WATCHDOG_TICK_VAL);
 		mdelay(100);
+		break;
+	case CY_CC_43022_CHIP_ID:
+		brcmf_dbg(INFO, "DO NOTHING FOR 43022 here... can't access PMU registers\n");
 		break;
 	default:
 		break;
