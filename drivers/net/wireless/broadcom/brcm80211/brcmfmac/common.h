@@ -99,7 +99,7 @@ void brcmf_generic_offload_enable(struct brcmf_if *ifp, unsigned int ol_feat,
 				  bool enable);
 void brcmf_generic_offload_host_ipv4_update(struct brcmf_if *ifp, unsigned int ol_feat,
 					    u32 ipaddr, bool is_add);
-void brcmf_generic_offload_host_ipv6_update(struct brcmf_if *ifp, unsigned int ol_feat,
-					    void *ptr, u8 type, bool is_add);
+int brcmf_generic_offload_host_ipv6_update(struct brcmf_if *ifp, unsigned int ol_feat,
+					   void *ptr, u8 type, bool is_add);
 
 #endif /* BRCMFMAC_COMMON_H */
