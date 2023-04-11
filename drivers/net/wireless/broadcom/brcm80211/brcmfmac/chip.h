@@ -103,7 +103,7 @@ struct brcmf_blhs {
 	int (*pre_nvramdl)(struct brcmf_chip *pub);
 	int (*prep_fwdl)(struct brcmf_chip *pub);
 	int (*post_fwdl)(struct brcmf_chip *pub);
-	void (*post_nvramdl)(struct brcmf_chip *pub);
+	int (*post_nvramdl)(struct brcmf_chip *pub);
 	int (*bp_clk_ack)(struct brcmf_chip *pub);
 	int (*chk_validation)(struct brcmf_chip *pub);
 	int (*post_wdreset)(struct brcmf_chip *pub);
