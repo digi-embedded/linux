@@ -244,11 +244,12 @@
 				 <STM32_PINMUX('G', 9, AF12)>; /* FMC_NE2_FMC_NCE */
 			bias-disable;
 			drive-push-pull;
-			slew-rate = <1>;
+			slew-rate = <2>; /* OSPEEDR at High speed (0x10) */
 		};
 		pins2 {
 			pinmux = <STM32_PINMUX('A', 9, AF10)>; /* FMC_NWAIT */
 			bias-pull-up;
+			slew-rate = <2>; /* OSPEEDR at High speed (0x10) */
 		};
 	};
 

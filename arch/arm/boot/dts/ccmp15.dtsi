@@ -257,8 +257,8 @@
 
 &fmc {
 	pinctrl-names = "default", "sleep";
-	pinctrl-0 = <&fmc_pins_a>;
-	pinctrl-1 = <&fmc_sleep_pins_a>;
+	pinctrl-0 = <&ccmp15_fmc_pins_a>;
+	pinctrl-1 = <&ccmp15_fmc_sleep_pins_a>;
 	status = "okay";
 
 	nand-controller@4,0 {
@@ -493,6 +493,51 @@
 };
 
 &pinctrl {
+	ccmp15_fmc_pins_a: ccmp15_fmc-0 {
+		pins1 {
+			pinmux = <STM32_PINMUX('D', 4, AF12)>, /* FMC_NOE */
+				 <STM32_PINMUX('D', 5, AF12)>, /* FMC_NWE */
+				 <STM32_PINMUX('D', 11, AF12)>, /* FMC_A16_FMC_CLE */
+				 <STM32_PINMUX('D', 12, AF12)>, /* FMC_A17_FMC_ALE */
+				 <STM32_PINMUX('D', 14, AF12)>, /* FMC_D0 */
+				 <STM32_PINMUX('D', 15, AF12)>, /* FMC_D1 */
+				 <STM32_PINMUX('D', 0, AF12)>, /* FMC_D2 */
+				 <STM32_PINMUX('D', 1, AF12)>, /* FMC_D3 */
+				 <STM32_PINMUX('E', 7, AF12)>, /* FMC_D4 */
+				 <STM32_PINMUX('E', 8, AF12)>, /* FMC_D5 */
+				 <STM32_PINMUX('E', 9, AF12)>, /* FMC_D6 */
+				 <STM32_PINMUX('E', 10, AF12)>, /* FMC_D7 */
+				 <STM32_PINMUX('G', 9, AF12)>; /* FMC_NE2_FMC_NCE */
+			bias-disable;
+			drive-push-pull;
+			slew-rate = <2>; /* OSPEEDR at High speed (0x10) */
+		};
+		pins2 {
+			pinmux = <STM32_PINMUX('D', 6, AF12)>; /* FMC_NWAIT */
+			bias-pull-up;
+			slew-rate = <2>; /* OSPEEDR at High speed (0x10) */
+		};
+	};
+
+	ccmp15_fmc_sleep_pins_a: ccmp15_fmc-sleep-0 {
+		pins {
+			pinmux = <STM32_PINMUX('D', 4, ANALOG)>, /* FMC_NOE */
+				 <STM32_PINMUX('D', 5, ANALOG)>, /* FMC_NWE */
+				 <STM32_PINMUX('D', 11, ANALOG)>, /* FMC_A16_FMC_CLE */
+				 <STM32_PINMUX('D', 12, ANALOG)>, /* FMC_A17_FMC_ALE */
+				 <STM32_PINMUX('D', 14, ANALOG)>, /* FMC_D0 */
+				 <STM32_PINMUX('D', 15, ANALOG)>, /* FMC_D1 */
+				 <STM32_PINMUX('D', 0, ANALOG)>, /* FMC_D2 */
+				 <STM32_PINMUX('D', 1, ANALOG)>, /* FMC_D3 */
+				 <STM32_PINMUX('E', 7, ANALOG)>, /* FMC_D4 */
+				 <STM32_PINMUX('E', 8, ANALOG)>, /* FMC_D5 */
+				 <STM32_PINMUX('E', 9, ANALOG)>, /* FMC_D6 */
+				 <STM32_PINMUX('E', 10, ANALOG)>, /* FMC_D7 */
+				 <STM32_PINMUX('D', 6, ANALOG)>, /* FMC_NWAIT */
+				 <STM32_PINMUX('G', 9, ANALOG)>; /* FMC_NE2_FMC_NCE */
+		};
+	};
+
 	ccmp15_rtc_out1_pins_a: ccmp15_rtc-out1-pins-0 {
 		pins {
 			pinmux = <STM32_PINMUX('C', 13, ANALOG)>; /* RTC_OUT1 */
