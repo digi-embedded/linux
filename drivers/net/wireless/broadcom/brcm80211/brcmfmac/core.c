@@ -362,30 +362,43 @@ static void _brcmf_set_multicast_list(struct work_struct *work)
 }
 
 #if IS_ENABLED(CONFIG_IPV6)
-static void _brcmf_update_ndtable(struct work_struct *work)
+static void brcmf_update_ipv6_addr(struct work_struct *work)
 {
 	struct brcmf_if *ifp = container_of(work, struct brcmf_if,
 					    ndoffload_work);
 	struct brcmf_pub *drvr = ifp->drvr;
 	int i, ret;
+	struct ipv6_addr addr = {0};
 
 	/* clear the table in firmware */
-	ret = brcmf_fil_iovar_data_set(ifp, "nd_hostip_clear", NULL, 0);
+
+	if (brcmf_feat_is_enabled(ifp, BRCMF_FEAT_OFFLOADS))
+		ret = brcmf_generic_offload_host_ipv6_update(ifp, BRCMF_OL_ICMP | BRCMF_OL_ND,
+							     &addr, 1, false);
+	else
+		ret = brcmf_fil_iovar_data_set(ifp, "nd_hostip_clear", NULL, 0);
+
 	if (ret) {
 		brcmf_dbg(TRACE, "fail to clear nd ip table err:%d\n", ret);
 		return;
 	}
 
 	for (i = 0; i < ifp->ipv6addr_idx; i++) {
-		ret = brcmf_fil_iovar_data_set(ifp, "nd_hostip",
-					       &ifp->ipv6_addr_tbl[i],
-					       sizeof(struct in6_addr));
+		if (brcmf_feat_is_enabled(ifp, BRCMF_FEAT_OFFLOADS))
+			ret = brcmf_generic_offload_host_ipv6_update(ifp,
+								     BRCMF_OL_ICMP | BRCMF_OL_ND,
+								     &ifp->ipv6_addr_tbl[i],
+								     0, true);
+		else
+			ret = brcmf_fil_iovar_data_set(ifp, "nd_hostip",
+						       &ifp->ipv6_addr_tbl[i],
+						       sizeof(struct in6_addr));
 		if (ret)
 			bphy_err(drvr, "add nd ip err %d\n", ret);
 	}
 }
 #else
-static void _brcmf_update_ndtable(struct work_struct *work)
+static void brcmf_update_ipv6_addr(struct work_struct *work)
 {
 }
 #endif
@@ -958,7 +971,7 @@ int brcmf_net_attach(struct brcmf_if *ifp, bool locked)
 	dev_net_set(ndev, wiphy_net(cfg_to_wiphy(drvr->config)));
 
 	INIT_WORK(&ifp->multicast_work, _brcmf_set_multicast_list);
-	INIT_WORK(&ifp->ndoffload_work, _brcmf_update_ndtable);
+	INIT_WORK(&ifp->ndoffload_work, brcmf_update_ipv6_addr);
 
 	if (locked)
 		err = cfg80211_register_netdevice(ndev);

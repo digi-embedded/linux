@@ -214,8 +214,8 @@ void brcmf_generic_offload_host_ipv4_update(struct brcmf_if *ifp, unsigned int o
 			  is_add ? "added" : "deleted", &ipaddr);
 }
 
-void brcmf_generic_offload_host_ipv6_update(struct brcmf_if *ifp, unsigned int ol_feat,
-					    void *ptr, u8 type, bool is_add)
+int brcmf_generic_offload_host_ipv6_update(struct brcmf_if *ifp, unsigned int ol_feat,
+					   void *ptr, u8 type, bool is_add)
 {
 	struct brcmf_ol_cfg_v1 ol_cfg = {0};
 	u32 ol_feat_skip = ~ol_feat;
@@ -237,6 +237,8 @@ void brcmf_generic_offload_host_ipv6_update(struct brcmf_if *ifp, unsigned int o
 	else
 		brcmf_dbg(TRACE, "successfully %s host address %pI6",
 			  is_add ? "add" : "del", ptr);
+
+	return err;
 }
 
 void brcmf_c_set_joinpref_default(struct brcmf_if *ifp)
