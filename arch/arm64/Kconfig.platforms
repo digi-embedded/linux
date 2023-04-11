@@ -295,6 +295,14 @@ config ARCH_STM32
 	help
 	  This enables support for ARMv8 based STMicroelectronics STM32 family.
 
+if ARCH_STM32
+config STM32MP25_REVA
+	prompt "STM32MP25 RevA SoC support"
+	def_bool n
+	help
+	  This enables support for ARMv8 STM32MP25 RevA SoC.
+endif
+
 config ARCH_SYNQUACER
 	bool "Socionext SynQuacer SoC Family"
 	select IRQ_FASTEOI_HIERARCHY_HANDLERS
