@@ -33,10 +33,6 @@ properties:
   "#clock-cells":
     const: 1
 
-  clock-indices:
-    minItems: 1
-    maxItems: 2
-
   clock-output-names:
     description: |
       CCK0 and CCK1 are optional output clocks, which share the same clock frequency,
@@ -45,9 +41,9 @@ properties:
       - const: cck0
       - const: cck1
 
-  st,cck-freq-hz:
+  clock-frequency:
     description: |
-      CCK0/1 clock out frequency (Hz).
+      Common clock frequency (Hz) for CCK0 and CCK1 output clocks.
       The frequency must be a multiple of the "ker_ck" clock frequency.
     maximum: 25000000
 
@@ -60,6 +56,21 @@ properties:
   ranges: true
 
   clock-ranges: true
+
+  resets:
+    maxItems: 1
+
+  reset-names:
+    items:
+      - const: mdf
+
+  st,interleave:
+    description: |
+      List of phandles of interleaved filters. The indexes of interleaved filters must be
+      consecutives starting from 0 (i.e in range [0..N]). The samples from interleaved filters
+      are muxed in a single channel and retrieved through the device associated to the filter 0.
+      The filters 1..N have to be enabled, but inherit their configuration from filter 0.
+    $ref: /schemas/types.yaml#/definitions/phandle-array
 
 required:
   - compatible
@@ -79,6 +90,10 @@ patternProperties:
     description: Serial interface child node
 
     properties:
+      compatible:
+        enum:
+          - st,stm32mp25-sitf-mdf
+
       reg:
         description: Specify the SITF serial interface instance
         maxItems: 1
@@ -92,9 +107,11 @@ patternProperties:
         description: |
           Select serial interface protocol
           - spi: SPI mode
+          - lf_spi: low frequency SPI mode for low power applications
         $ref: "/schemas/types.yaml#/definitions/string"
         enum:
           - spi
+          - lf_spi
 
         required:
           - reg
@@ -143,32 +160,51 @@ patternProperties:
           - [1-3]: MCIC & ACIC filters in Sinc mode order 1 to 3
           - [4-5]: Single CIC filter in Sinc mode order 4 to 5
           For audio purpose it is recommended to use CIC Sinc4 or Sinc5
+          This property is mandatory for filter 0 or filters not used in interleave mode.
         $ref: /schemas/types.yaml#/definitions/uint32
         minimum: 0
         maximum: 5
 
-      st,sitf-indexes:
-        description: Index of the serial interface connected to the digital filter
-        $ref: /schemas/types.yaml#/definitions/uint32
-        minimum: 0
-        maximum: 7
+      st,rs-filter-bypass:
+        description: Bypass RSFLT reshaping filter.
+        $ref: /schemas/types.yaml#/definitions/flag
 
-      st,sitf-streams:
+      st,hpf-filter-cutoff-bp:
         description: |
-          Select the bitstream on the falling or rising edge of the serial interface clock
-          - 0: rising edge
-          - 1: falling edge
-        $ref: /schemas/types.yaml#/definitions/uint32
-        enum: [0, 1]
+          High Pass Filter (HPF) cut-off frequency expressed as a fraction of the PCM sampling rate.
+          Cut-off frequency = st,hpf-filter-cutoff-bp x Fpcm / 100.
+          If this property is not defined the HPF is disabled.
+        enum: [625, 1250, 2500, 9500]
+
+      st,sync:
+        description:
+          Synchronize to another filter.
+          Must contain the phandle of the filter providing the synchronization.
+        allOf:
+          - $ref: /schemas/types.yaml#/definitions/phandle-array
+          - maxItems: 1
+
+      st,sitf:
+        $ref: /schemas/types.yaml#/definitions/phandle-array
+        items:
+          - items:
+              - description: Phandle of the serial interface connected to the digital filter
+              - description: |
+                  The phandle's argument selects the bitstream on the falling or rising edge
+                  of the serial interface clock:
+                  - 0: rising edge
+                  - 1: falling edge
+                enum: [0, 1]
+                default: 0
+        description:
+          Should be phandle/bitstream pair.
 
     required:
       - compatible
       - reg
       - interrupts
       - "#io-channel-cells"
-      - st,cic-mode
-      - st,sitf-indexes
-      - st,sitf-streams
+      - st,sitf
 
     patternProperties:
       "^mdf-dai+$":
@@ -209,11 +245,11 @@ examples:
       clock-names = "ker_ck";
       clock-ranges;
       #clock-cells = <1>;
-      clock-indices = <0>, <1>;
       clock-output-names = "cck0", "cck1";
-      st,cck-freq-hz = <2048000>;
+      clock-frequency = <2048000>;
 
       sitf5: sitf@300 {
+        compatible = "st,stm32mp25-sitf-mdf";
         reg = <0x300 0x4>;
         st,sitf-mode = "spi";
         clocks = <&mdf1 0>;
@@ -227,8 +263,7 @@ examples:
         dmas = <&hpdma 63 0x63 0x12 0>;
         dma-names = "rx";
         st,cic-mode	= <5>;
-        st,sitf-indexes = <5>;
-        st,sitf-streams = <0>;
+        st,sitf = <&sitf5 0>;
 
         asoc_pdm0: mdf-dai {
           compatible = "st,stm32mp25-mdf-dai";
