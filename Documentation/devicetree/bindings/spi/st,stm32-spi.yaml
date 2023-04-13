@@ -38,6 +38,7 @@ properties:
     enum:
       - st,stm32f4-spi
       - st,stm32h7-spi
+      - st,stm32mp25-spi
 
   reg:
     maxItems: 1
@@ -90,7 +91,7 @@ patternProperties:
     properties:
       st,spi-midi-ns:
         description: |
-          Only for STM32H7, (Master Inter-Data Idleness) minimum time
+          Only available since STM32H7, (Master Inter-Data Idleness) minimum time
           delay in nanoseconds inserted between two consecutive data frames.
 
 required:
