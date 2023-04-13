@@ -230,6 +230,52 @@
 			clocks = <&scmi_clk CK_SCMI_SYSCPU1>;
 		};
 
+		exti2: interrupt-controller@46230000 {
+			compatible = "st,stm32mp1-exti", "syscon";
+			interrupt-controller;
+			#interrupt-cells = <2>;
+			#address-cells = <0>;
+			reg = <0x46230000 0x400>;
+
+			exti-interrupt-map {
+				#address-cells = <0>;
+				#interrupt-cells = <2>;
+				interrupt-map-mask = <0xffffffff 0>;
+				interrupt-map =
+					<16 0 &intc 0 GIC_SPI 12  IRQ_TYPE_LEVEL_HIGH>,
+					<17 0 &intc 0 GIC_SPI 13  IRQ_TYPE_LEVEL_HIGH>,
+					<21 0 &intc 0 GIC_SPI 14  IRQ_TYPE_LEVEL_HIGH>,
+					<22 0 &intc 0 GIC_SPI 15  IRQ_TYPE_LEVEL_HIGH>,
+					<25 0 &intc 0 GIC_SPI 212 IRQ_TYPE_LEVEL_HIGH>,
+					<26 0 &intc 0 GIC_SPI 151 IRQ_TYPE_LEVEL_HIGH>,
+					<27 0 &intc 0 GIC_SPI 156 IRQ_TYPE_LEVEL_HIGH>,
+					<29 0 &intc 0 GIC_SPI 216 IRQ_TYPE_LEVEL_HIGH>,
+					<30 0 &intc 0 GIC_SPI 217 IRQ_TYPE_LEVEL_HIGH>,
+					<31 0 &intc 0 GIC_SPI 218 IRQ_TYPE_LEVEL_HIGH>,
+					<33 0 &intc 0 GIC_SPI 207 IRQ_TYPE_LEVEL_HIGH>,
+					<34 0 &intc 0 GIC_SPI 175 IRQ_TYPE_LEVEL_HIGH>,
+					//	<34 0 &intc 0 GIC_SPI 176 IRQ_TYPE_LEVEL_HIGH>,
+					<37 0 &intc 0 GIC_SPI 177 IRQ_TYPE_LEVEL_HIGH>,
+					//	<37 0 &intc 0 GIC_SPI 178 IRQ_TYPE_LEVEL_HIGH>,
+					<40 0 &intc 0 GIC_SPI 199 IRQ_TYPE_LEVEL_HIGH>,
+					<43 0 &intc 0 GIC_SPI 200 IRQ_TYPE_LEVEL_HIGH>,
+					<46 0 &intc 0 GIC_SPI 11  IRQ_TYPE_LEVEL_HIGH>,
+					<48 0 &intc 0 GIC_SPI 5   IRQ_TYPE_LEVEL_HIGH>,
+					<49 0 &intc 0 GIC_SPI 4   IRQ_TYPE_LEVEL_HIGH>,
+					<50 0 &intc 0 GIC_SPI 6   IRQ_TYPE_LEVEL_HIGH>,
+					<51 0 &intc 0 GIC_SPI 7   IRQ_TYPE_LEVEL_HIGH>,
+					<52 0 &intc 0 GIC_SPI 2   IRQ_TYPE_LEVEL_HIGH>,
+					<53 0 &intc 0 GIC_SPI 3   IRQ_TYPE_LEVEL_HIGH>,
+					<61 0 &intc 0 GIC_SPI 221 IRQ_TYPE_LEVEL_HIGH>,
+					<62 0 &intc 0 GIC_SPI 246 IRQ_TYPE_LEVEL_HIGH>,
+					<64 0 &intc 0 GIC_SPI 247 IRQ_TYPE_LEVEL_HIGH>,
+					<65 0 &intc 0 GIC_SPI 248 IRQ_TYPE_LEVEL_HIGH>,
+					<66 0 &intc 0 GIC_SPI 249 IRQ_TYPE_LEVEL_HIGH>,
+					<67 0 &intc 0 GIC_SPI 256 IRQ_TYPE_LEVEL_HIGH>,
+					<70 0 &intc 0 GIC_SPI 213 IRQ_TYPE_LEVEL_HIGH>;
+			};
+		};
+
 		/* Break node order to solve dependency probe issue between pinctrl and exti. */
 
 		pinctrl: pinctrl@44240000 {
