@@ -3,6 +3,7 @@
  * Copyright (C) STMicroelectronics 2023 - All Rights Reserved
  * Author: Alexandre Torgue <alexandre.torgue@foss.st.com> for STMicroelectronics.
  */
+#include <dt-bindings/bus/stm32mp25_sys_bus.h>
 #include <dt-bindings/interrupt-controller/arm-gic.h>
 
 / {
@@ -87,12 +88,37 @@
 		interrupt-parent = <&intc>;
 		ranges = <0x0 0x0 0x0 0x80000000>;
 
-		usart2: serial@400e0000 {
-			compatible = "st,stm32h7-uart";
-			reg = <0x400e0000 0x400>;
-			interrupts = <GIC_SPI 115 IRQ_TYPE_LEVEL_HIGH>;
-			clocks = <&ck_flexgen_08>;
-			status = "disabled";
+		rifsc: rifsc@42080000 {
+			compatible = "st,stm32mp25-sys-bus";
+			reg = <0x42080000 0x1000>;
+			#address-cells = <1>;
+			#size-cells = <1>;
+			ranges;
+			feature-domain-controller;
+			#feature-domain-cells = <1>;
+
+			usart2: serial@400e0000 {
+				compatible = "st,stm32h7-uart";
+				reg = <0x400e0000 0x400>;
+				interrupts = <GIC_SPI 115 IRQ_TYPE_LEVEL_HIGH>;
+				clocks = <&ck_flexgen_08>;
+				feature-domains = <&rifsc STM32MP25_RIFSC_USART2_ID>;
+				status = "disabled";
+			};
+
+			sdmmc1: mmc@48220000 {
+				compatible = "st,stm32mp25-sdmmc2", "arm,pl18x", "arm,primecell";
+				arm,primecell-periphid = <0x00353180>;
+				reg = <0x48220000 0x400>, <0x44230400 0x8>;
+				interrupts = <GIC_SPI 123 IRQ_TYPE_LEVEL_HIGH>;
+				clocks = <&ck_flexgen_51>;
+				clock-names = "apb_pclk";
+				cap-sd-highspeed;
+				cap-mmc-highspeed;
+				max-frequency = <120000000>;
+				feature-domains = <&rifsc STM32MP25_RIFSC_SDMMC1_ID>;
+				status = "disabled";
+			};
 		};
 
 		/* Break node order to solve dependency probe issue between pinctrl and exti. */
@@ -245,19 +271,6 @@
 				status = "disabled";
 			};
 
-		};
-
-		sdmmc1: mmc@48220000 {
-			compatible = "st,stm32mp25-sdmmc2", "arm,pl18x", "arm,primecell";
-			arm,primecell-periphid = <0x00353180>;
-			reg = <0x48220000 0x400>, <0x44230400 0x8>;
-			interrupts = <GIC_SPI 123 IRQ_TYPE_LEVEL_HIGH>;
-			clocks = <&ck_flexgen_51>;
-			clock-names = "apb_pclk";
-			cap-sd-highspeed;
-			cap-mmc-highspeed;
-			max-frequency = <120000000>;
-			status = "disabled";
 		};
 	};
 };

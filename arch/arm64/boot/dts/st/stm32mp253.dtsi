@@ -20,4 +20,9 @@
 			     <GIC_SPI 369 IRQ_TYPE_LEVEL_HIGH>;
 		interrupt-affinity = <&cpu0>, <&cpu1>;
 	};
+
+	soc@0 {
+		rifsc: rifsc@42080000 {
+		};
+	};
 };

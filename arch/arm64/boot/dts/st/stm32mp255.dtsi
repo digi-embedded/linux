@@ -6,4 +6,8 @@
 #include "stm32mp253.dtsi"
 
 / {
+	soc@0 {
+		rifsc: rifsc@42080000 {
+		};
+	};
 };

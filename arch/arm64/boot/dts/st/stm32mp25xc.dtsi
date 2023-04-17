@@ -3,6 +3,11 @@
  * Copyright (C) STMicroelectronics 2023 - All Rights Reserved
  * Author: Alexandre Torgue <alexandre.torgue@foss.st.com> for STMicroelectronics.
  */
+#include <dt-bindings/bus/stm32mp25_sys_bus.h>
 
 / {
+	soc {
+		rifsc: rifsc@42080000 {
+		};
+	};
 };
