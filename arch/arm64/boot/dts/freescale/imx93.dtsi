@@ -688,6 +688,14 @@
 				status = "disabled";
 			};
 
+			tpm6: pwm@42510000 {
+				compatible = "fsl,imx7ulp-pwm";
+				reg = <0x42510000 0x1000>;
+				clocks = <&clk IMX93_CLK_TPM6_GATE>;
+				#pwm-cells = <3>;
+				status = "disabled";
+			};
+
 			i3c2: i3c-master@42520000 {
 				#address-cells = <3>;
 				#size-cells = <0>;

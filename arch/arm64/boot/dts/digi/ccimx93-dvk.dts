@@ -39,11 +39,10 @@
 	};
 
 	lvds_backlight: lvds_backlight {
-		compatible = "gpio-backlight";
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_lvds_backlight>;
-		gpios = <&gpio2 23 GPIO_ACTIVE_HIGH>;
-		default-on;
+		compatible = "pwm-backlight";
+		pwms = <&tpm6 1 50000 0>;
+		brightness-levels = <0 20 25 30 35 40 100>;
+		default-brightness-level = <6>;
 		status = "disabled";
 	};
 
@@ -136,6 +135,12 @@
 			linux,default-trigger = "heartbeat";
 		};
 	};
+};
+
+/* LVDS PWM backlight */
+&tpm6 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_tpm6>;
 };
 
 /* ADC - 4 channels available on expansion connector */
@@ -684,13 +689,6 @@
 		>;
 	};
 
-	/* LVDS gpio backlight */
-	pinctrl_lvds_backlight: lvdsbacklightgrp {
-		fsl,pins = <
-			MX93_PAD_GPIO_IO23__GPIO2_IO23				0x31e
-		>;
-	};
-
 	/* DVK 5V power switch */
 	pinctrl_reg_5v_board: reg_5v_board_grp {
 		fsl,pins = <
@@ -799,6 +797,13 @@
 		fsl,pins = <
 			/* USBC Alert */
 			MX93_PAD_ENET2_TXC__GPIO4_IO21				0x31e
+		>;
+	};
+
+	/* LVDS PWM backlight */
+	pinctrl_tpm6: tpm6grp {
+		fsl,pins = <
+			MX93_PAD_GPIO_IO23__TPM6_CH1					0x19e
 		>;
 	};
 };

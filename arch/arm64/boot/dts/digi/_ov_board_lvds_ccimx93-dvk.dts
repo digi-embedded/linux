@@ -67,8 +67,16 @@
 		};
 	};
 
-	/* Enable lvds_backlight */
+	/* Enable the LVDS backlight PWM */
 	fragment@6 {
+		target = <&tpm6>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+	
+	/* Enable the lvds_backlight */
+	fragment@7 {
 		target = <&lvds_backlight>;
 		__overlay__ {
 			status = "okay";
@@ -76,7 +84,7 @@
 	};
 
 	/* Enable lvds_panel */
-	fragment@7 {
+	fragment@8 {
 		target = <&lvds_panel>;
 		__overlay__ {
 			compatible = "panel-lvds";
@@ -106,7 +114,7 @@
 	};
 
 	/* Adjust ldcif clock */
-	fragment@8 {
+	fragment@9 {
 		target = <&lcdif>;
 		__overlay__ {
 			assigned-clock-rates = <498000000>, <68930000>, <400000000>, <133333333>;
@@ -114,7 +122,7 @@
 	};
 
 	/* Enable goodix_touch */
-	fragment@9 {
+	fragment@10 {
 		target = <&goodix_touch>;
 		__overlay__ {
 			status = "okay";
