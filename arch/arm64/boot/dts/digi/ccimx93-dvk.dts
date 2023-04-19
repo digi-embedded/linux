@@ -556,7 +556,7 @@
 
 &iomuxc {
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_gpio>;
+	pinctrl-0 = <&pinctrl_gpio>, <&pinctrl_gpio_shared_enet2>;
 
 	/* EQoS RGMII */
 	pinctrl_eqos: eqosgrp {
@@ -631,10 +631,26 @@
 		fsl,pins = <
 			/* ULED/BUTTON1 */
 			MX93_PAD_SD2_RESET_B__GPIO3_IO07			0x31e
-			/* ULED/BUTTON2 */
-			MX93_PAD_ENET2_RXC__GPIO4_IO23				0x31e
 			/* MIKROBUS_INT */
 			MX93_PAD_GPIO_IO11__GPIO2_IO11				0x31e
+		>;
+	};
+
+	/* Shared GPIOs with ENET2 to be removed with overlay */
+	pinctrl_gpio_shared_enet2: gpiosharedenet2grp {
+		fsl,pins = <
+			/* GPIO4_IO16 */
+			MX93_PAD_ENET2_TD3__GPIO4_IO16			0x31e
+			/* GPIO4_IO17 */
+			MX93_PAD_ENET2_TD2__GPIO4_IO17			0x31e
+			/* GPIO4_IO22 */
+			MX93_PAD_ENET2_RX_CTL__GPIO4_IO22			0x31e
+			/* ULED/BUTTON2 */
+			MX93_PAD_ENET2_RXC__GPIO4_IO23			0x31e
+			/* GPIO4_IO25 */
+			MX93_PAD_ENET2_RD1__GPIO4_IO25			0x31e
+			/* GPIO4_IO27 */
+			MX93_PAD_ENET2_RD3__GPIO4_IO27			0x31e
 		>;
 	};
 

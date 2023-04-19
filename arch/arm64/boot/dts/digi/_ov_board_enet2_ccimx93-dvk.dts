@@ -47,4 +47,12 @@
 			status = "disabled";
 		};
 	};
+
+	/* Remove shared ENET2 GPIOs */
+	fragment@4 {
+		target = <&iomuxc>;
+		__overlay__ {
+			pinctrl-0 = <&pinctrl_gpio>;
+		};
+	};
 };
