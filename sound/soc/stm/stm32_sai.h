@@ -264,13 +264,17 @@ enum stm32_sai_syncout {
 	STM_SAI_SYNC_OUT_B,
 };
 
+struct stm32_sai_data;
+
 /**
  * struct stm32_sai_conf - SAI configuration
+ * @get_sai_ck_parent: get parent clock of SAI kernel clock
  * @version: SAI version
  * @fifo_size: SAI fifo size as words number
  * @has_spdif_pdm: SAI S/PDIF and PDM features support flag
  */
 struct stm32_sai_conf {
+	int (*get_sai_ck_parent)(struct stm32_sai_data *sai);
 	u32 version;
 	u32 fifo_size;
 	bool has_spdif_pdm;
