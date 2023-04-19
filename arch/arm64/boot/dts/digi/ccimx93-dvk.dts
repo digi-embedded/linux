@@ -459,6 +459,15 @@
 	status = "okay";
 };
 
+/* Messaging Units for inter-processors communication */
+&mu1 {
+	status = "okay";
+};
+
+&mu2 {
+	status = "okay";
+};
+
 /* Ethernet EQoS */
 &eqos {
 	pinctrl-names = "default";
