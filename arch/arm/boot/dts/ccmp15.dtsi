@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Digi International, Inc.
+ * Copyright 2022, 2023 Digi International, Inc.
  *
  * The code contained herein is licensed under the GNU General Public
  * License. You may obtain a copy of the GNU General Public License
@@ -206,12 +206,13 @@
 	uart-has-rtscts;
 	status = "disabled";
 
-	bluetooth {
+	cyw4373_bt: cyw4373-bt {
 		shutdown-gpios = <&gpioz 6 GPIO_ACTIVE_HIGH>;
 		compatible = "brcm,bcm43438-bt";
 		max-speed = <3000000>;
 		vbat-supply = <&v3v3>;
 		vddio-supply = <&reg_3v3_rf>;
+		status = "disabled";
 	};
 };
 
