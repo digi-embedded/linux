@@ -1184,19 +1184,27 @@ static void stm32_dma3_chan_set_residue(struct stm32_dma3_chan *chan,
 
 	residue = 0;
 
-	if (chan->dma_status != DMA_PAUSED) {
+	csr = readl_relaxed(ddata->base + STM32_DMA3_CSR(chan->id));
+	if (!(csr & CSR_IDLEF) && chan->dma_status != DMA_PAUSED) {
 		/* Suspend current transfer to read registers for a snapshot */
 		ccr = readl_relaxed(ddata->base + STM32_DMA3_CCR(chan->id));
 		writel_relaxed(ccr | CCR_SUSP, ddata->base + STM32_DMA3_CCR(chan->id));
 		ret = readl_relaxed_poll_timeout_atomic(ddata->base + STM32_DMA3_CSR(chan->id), csr,
 							csr & CSR_SUSPF, 10, USEC_PER_SEC);
 		if (ret < 0) {
+			writel_relaxed(CFCR_SUSPF, ddata->base + STM32_DMA3_CFCR(chan->id));
 			writel_relaxed(ccr & ~CCR_SUSP, ddata->base + STM32_DMA3_CCR(chan->id));
-			dev_err(dev, "can't get residue: transfer not suspended (%d)\n", ret);
-			return;
+			if (!(csr & CSR_IDLEF)) {
+				dev_err(dev,
+					"can't get residue: transfer not suspended (%d)\n", ret);
+				return;
+			}
 		}
-	} else {
-		csr = readl_relaxed(ddata->base + STM32_DMA3_CSR(chan->id));
+	}
+
+	if ((csr & CSR_IDLEF) && (csr & CSR_TCF) && !(csr & CSR_SUSPF)) {
+		chan->dma_status = DMA_COMPLETE;
+		return;
 	}
 
 	/* Read registers to have a snapshot */
@@ -1204,7 +1212,7 @@ static void stm32_dma3_chan_set_residue(struct stm32_dma3_chan *chan,
 	cbr1 = readl_relaxed(ddata->base + STM32_DMA3_CBR1(chan->id));
 	cllr = readl_relaxed(ddata->base + STM32_DMA3_CLLR(chan->id));
 
-	if (chan->dma_status != DMA_PAUSED) {
+	if ((csr & CSR_SUSPF) && chan->dma_status != DMA_PAUSED) {
 		/* Resume current transfer */
 		writel_relaxed(CFCR_SUSPF, ddata->base + STM32_DMA3_CFCR(chan->id));
 		writel_relaxed(ccr & ~CCR_SUSP, ddata->base + STM32_DMA3_CCR(chan->id));
