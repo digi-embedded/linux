@@ -343,8 +343,8 @@ struct rte_console {
 #define BRCMF_IDLE_INTERVAL	1
 
 #define KSO_WAIT_US 50
+#define KSO_MAX_SEQ_TIME (1000 * 10) /* Ideal time for kso sequence 10ms */
 #define MAX_KSO_ATTEMPTS (PMU_MAX_TRANSITION_DLY/KSO_WAIT_US)
-#define BRCMF_SDIO_MAX_ACCESS_ERRORS	20
 
 static void brcmf_sdio_firmware_callback(struct device *dev, int err,
 					 struct brcmf_fw_request *fwreq);
@@ -753,6 +753,8 @@ brcmf_sdio_kso_control(struct brcmf_sdio *bus, bool on)
 	int err = 0;
 	int err_cnt = 0;
 	int try_cnt = 0;
+	unsigned long start_jiffy = 0;
+	unsigned int kso_loop_time = 0;
 
 	brcmf_dbg(TRACE, "Enter: on=%d\n", on);
 
@@ -763,6 +765,10 @@ brcmf_sdio_kso_control(struct brcmf_sdio *bus, bool on)
 		sdio_retune_hold_now(bus->sdiodev->func1);
 
 	wr_val = (on << SBSDIO_FUNC1_SLEEPCSR_KSO_SHIFT);
+
+	/* Start time of kso_sequence */
+	start_jiffy = jiffies;
+
 	/* 1st KSO write goes to AOS wake up core if device is asleep  */
 	brcmf_sdiod_writeb(bus->sdiodev, SBSDIO_FUNC1_SLEEPCSR, wr_val, &err);
 
@@ -805,11 +811,9 @@ brcmf_sdio_kso_control(struct brcmf_sdio *bus, bool on)
 		if (!err) {
 			if ((rd_val & bmask) == cmp_val)
 				break;
-			err_cnt = 0;
+		} else {
+			err_cnt++;
 		}
-		/* bail out upon subsequent access errors */
-		if (err && (err_cnt++ > BRCMF_SDIO_MAX_ACCESS_ERRORS))
-			break;
 
 		/* Do one KSO write-read-check without any delay in between the steps,
 		 * if Device is already up KSO sequence will complete immediately
@@ -839,12 +843,18 @@ brcmf_sdio_kso_control(struct brcmf_sdio *bus, bool on)
 
 	} while (try_cnt++ < MAX_KSO_ATTEMPTS);
 
-	if (try_cnt > 2)
-		brcmf_dbg(SDIO, "try_cnt=%d rd_val=0x%x err=%d\n", try_cnt,
-			  rd_val, err);
+	kso_loop_time = jiffies_to_usecs(jiffies - start_jiffy);
 
 	if (try_cnt > MAX_KSO_ATTEMPTS)
-		brcmf_err("max tries: rd_val=0x%x err=%d\n", rd_val, err);
+		brcmf_err("ERR: KSO=%d sequence failed after max tries=%d and err_cnt=%d kso_seq_time=%uus rd_val=0x%x err=%d\n",
+			  on, try_cnt, err_cnt, kso_loop_time, rd_val, err);
+
+	if (kso_loop_time > KSO_MAX_SEQ_TIME)
+		brcmf_dbg(SDIO, "WARN: KSO=%d sequence took %uus > expected %uus try_cnt=%d err_cnt=%d rd_val=0x%x err=%d\n",
+			  on, kso_loop_time, KSO_MAX_SEQ_TIME, try_cnt, err_cnt, rd_val, err);
+	else
+		brcmf_dbg(SDIO, "INFO: KSO=%d try_cnt=%d err_cnt=%d kso_seq_time=%uus rd_val=0x%x err=%d\n",
+			  on, try_cnt, err_cnt, kso_loop_time, rd_val, err);
 
 	if (on)
 		sdio_retune_release(bus->sdiodev->func1);
