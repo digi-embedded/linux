@@ -9,6 +9,7 @@
 #include <linux/clk.h>
 #include <linux/mfd/syscon.h>
 #include <linux/module.h>
+#include <linux/of_irq.h>
 #include <linux/of_platform.h>
 #include <linux/of_gpio.h>
 #include <linux/phy/phy.h>
@@ -24,7 +25,9 @@ struct stm32_pcie {
 	struct phy *phy;
 	struct clk *clk;
 	struct gpio_desc *reset_gpio;
-    u32     max_payload;
+	int aer_irq;
+	int pme_irq;
+	u32     max_payload;
 	u32     max_readreq;
 };
 
@@ -142,12 +145,78 @@ static const struct dw_pcie_ops dw_pcie_ops = {
 	.stop_link = stm32_pcie_stop_link
 };
 
+/*
+ * PME/AER platform irq in this driver only re-initialises the platform IRQ glue logic.
+ * The handling is done by the generic pci drivers (trough platform IRQ hook), through shared IRQ
+ */
+static irqreturn_t stm32_pcie_pme_msi_irq_handler(int irq, void *priv)
+{
+	struct stm32_pcie *stm32_pcie = priv;
+
+	regmap_write(stm32_pcie->regmap, SYSCFG_PCIEPMEMSICR, 1);
+	regmap_write(stm32_pcie->regmap, SYSCFG_PCIEPMEMSICR, 0);
+
+	return IRQ_HANDLED;
+}
+
+static irqreturn_t stm32_pcie_aer_msi_irq_handler(int irq, void *priv)
+{
+	struct stm32_pcie *stm32_pcie = priv;
+
+	regmap_write(stm32_pcie->regmap, SYSCFG_PCIEAERRCMSICR, 1);
+	regmap_write(stm32_pcie->regmap, SYSCFG_PCIEAERRCMSICR, 0);
+
+	return IRQ_HANDLED;
+}
+
 static int stm32_add_pcie_port(struct stm32_pcie *stm32_pcie,
 			       struct platform_device *pdev)
 {
 	struct dw_pcie *pci = stm32_pcie->pci;
+	struct device *dev = stm32_pcie->pci->dev;
 	struct dw_pcie_rp *pp = &pci->pp;
 	int ret;
+
+	/* Use generic AER driver if we can register the port_drv */
+	if (pci_aer_available()) {
+		stm32_pcie->aer_irq = platform_get_irq_byname_optional(pdev, "aer_msi");
+		if (stm32_pcie->aer_irq < 0) {
+			if (stm32_pcie->aer_irq != -ENXIO)
+				return dev_err_probe(dev, stm32_pcie->aer_irq,
+						     "failed to get AER IRQ\n");
+			stm32_pcie->aer_irq = 0;
+		}
+
+		if (stm32_pcie->aer_irq) {
+			ret = devm_request_irq(dev, stm32_pcie->aer_irq,
+					       stm32_pcie_aer_msi_irq_handler,
+					       IRQF_SHARED, "stm32-aer-msi", stm32_pcie);
+			if (ret < 0) {
+				dev_err(dev, "failed to request AER MSI IRQ %d\n",
+					stm32_pcie->aer_irq);
+				return ret;
+			}
+		}
+	}
+
+	stm32_pcie->pme_irq = platform_get_irq_byname_optional(pdev, "pme_msi");
+	if (stm32_pcie->pme_irq < 0) {
+		if (stm32_pcie->pme_irq != -ENXIO)
+			return dev_err_probe(dev, stm32_pcie->pme_irq,
+					     "failed to get PME MSI IRQ\n");
+		stm32_pcie->pme_irq = 0;
+	}
+
+	if (stm32_pcie->pme_irq) {
+		ret = devm_request_irq(dev, stm32_pcie->pme_irq,
+				       stm32_pcie_pme_msi_irq_handler,
+				       IRQF_SHARED, "stm32-pme-msi", stm32_pcie);
+		if (ret < 0) {
+			dev_err(dev, "failed to request PME MSI IRQ %d\n",
+				stm32_pcie->pme_irq);
+			return ret;
+		}
+	}
 
 	ret = regmap_update_bits(stm32_pcie->regmap, SYSCFG_PCIECR,
 				 STM32MP25_PCIECR_TYPE_MASK, STM32MP25_PCIECR_RC);
