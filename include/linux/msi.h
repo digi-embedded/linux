@@ -293,6 +293,12 @@ static inline void msi_device_destroy_sysfs(struct device *dev) { }
  */
 bool arch_restore_msi_irqs(struct pci_dev *dev);
 
+/*
+ * Hook for the platform to provide alternative IRQs
+ * than MSI or legacy
+ */
+extern int (*pcie_port_irqs_hook)(struct pci_dev *dev, u32 *pme, u32 *aer, u32 *dpc);
+
 #ifdef CONFIG_GENERIC_MSI_IRQ_DOMAIN
 
 #include <linux/irqhandler.h>
