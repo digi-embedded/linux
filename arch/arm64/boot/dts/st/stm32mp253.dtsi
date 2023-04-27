@@ -115,3 +115,8 @@
 		};
 	};
 };
+
+&ltdc {
+	clocks = <&rcc CK_BUS_LTDC>, <&rcc CK_KER_LTDC>, <&lvds 0>;
+	clock-names = "bus", "lcd", "lvds";
+};
