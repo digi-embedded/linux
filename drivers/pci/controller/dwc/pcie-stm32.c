@@ -13,6 +13,7 @@
 #include <linux/of_platform.h>
 #include <linux/of_gpio.h>
 #include <linux/phy/phy.h>
+#include <linux/msi.h>
 #include <linux/regmap.h>
 #include <linux/reset.h>
 #include "pcie-designware.h"
@@ -169,6 +170,30 @@ static irqreturn_t stm32_pcie_aer_msi_irq_handler(int irq, void *priv)
 	return IRQ_HANDLED;
 }
 
+static int stm32_pcie_port_irqs(struct pci_dev *pci_dev, u32 *pme, u32 *aer, u32 *dpc)
+{
+	struct dw_pcie_rp *pp = pci_dev->bus->sysdata;
+	struct dw_pcie *pci = to_dw_pcie_from_pp(pp);
+	struct stm32_pcie *stm32_pcie = to_stm32_pcie(pci);
+	int nirqs = 0;
+
+	if (aer && stm32_pcie->aer_irq)
+		nirqs++;
+	if (pme && stm32_pcie->pme_irq)
+		nirqs++;
+
+	nirqs = pci_alloc_irq_vectors(pci_dev, nirqs, nirqs, PCI_IRQ_MSI);
+	if (nirqs < 0)
+		return nirqs;
+
+	if (aer && stm32_pcie->aer_irq)
+		*aer = stm32_pcie->aer_irq;
+	if (pme && stm32_pcie->pme_irq)
+		*pme = stm32_pcie->pme_irq;
+
+	return 0;
+}
+
 static int stm32_add_pcie_port(struct stm32_pcie *stm32_pcie,
 			       struct platform_device *pdev)
 {
@@ -217,6 +242,10 @@ static int stm32_add_pcie_port(struct stm32_pcie *stm32_pcie,
 			return ret;
 		}
 	}
+
+	/* Register AER/PME pordrv hook */
+	if (stm32_pcie->pme_irq || stm32_pcie->aer_irq)
+		pcie_port_irqs_hook = stm32_pcie_port_irqs;
 
 	ret = regmap_update_bits(stm32_pcie->regmap, SYSCFG_PCIECR,
 				 STM32MP25_PCIECR_TYPE_MASK, STM32MP25_PCIECR_RC);
@@ -329,6 +358,8 @@ static int stm32_pcie_remove(struct platform_device *pdev)
 
 	dw_pcie_host_deinit(pp);
 	clk_disable_unprepare(stm32_pcie->clk);
+	pcie_port_irqs_hook = NULL;
+
 	phy_exit(stm32_pcie->phy);
 
 	return 0;
