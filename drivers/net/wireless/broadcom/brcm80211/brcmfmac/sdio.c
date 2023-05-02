@@ -4711,7 +4711,22 @@ brcmf_sdio_rxf_thread(void *data)
 	 */
 	memset(&param, 0, sizeof(struct sched_param));
 	param.sched_priority = 1;
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0))
+	if (param.sched_priority >= MAX_RT_PRIO / 2)
+		/* If the priority is MAX_RT_PRIO/2 or higher,
+		 * it is considered as high priority.
+		 * sched_priority of FIFO task dosen't
+		 * exceed MAX_RT_PRIO/2.
+		 */
+		sched_set_fifo(current);
+	else
+		/* For when you don't much care about FIFO,
+		 * but want to be above SCHED_NORMAL.
+		 */
+		sched_set_fifo_low(current);
+#else
 	sched_setscheduler(current, SCHED_FIFO, &param);
+#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0) */
 
 	while (1) {
 		if (kthread_should_stop())
@@ -4720,8 +4735,7 @@ brcmf_sdio_rxf_thread(void *data)
 		if (down_interruptible(&bus->thr_rxf_ctl.sema) == 0) {
 			struct sk_buff *skb = NULL;
 
-			smp_read_barrier_depends();
-
+			smp_mb();/* ensure skb null */
 			skb = brcmf_rxf_dequeue(bus);
 			if (!skb) {
 				brcmf_err("nothing is dequeued, thread terminate\n");
@@ -4732,7 +4746,7 @@ brcmf_sdio_rxf_thread(void *data)
 				struct sk_buff *skbnext = skb->next;
 
 				skb->next = NULL;
-				netif_rx_ni(skb);
+				netif_rx(skb);
 				skb = skbnext;
 			}
 		} else {
