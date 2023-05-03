@@ -798,6 +798,18 @@
 			};
 		};
 
+		dts: dts@44070000 {
+			compatible = "moortec,mr75203";
+			reg = <0x44070000 0x80>,
+			      <0x44070080 0x180>,
+			      <0x44070200 0x200>,
+			      <0x44070400 0xc00>;
+			reg-names = "common", "ts", "pd", "vm";
+			clocks = <&rcc CK_KER_DTS>;
+			resets = <&rcc DTS_R>;
+			#thermal-sensor-cells = <1>;
+		};
+
 		rcc: rcc@44200000 {
 			compatible = "st,stm32mp25-rcc";
 			reg = <0x44200000 0x10000>;
