@@ -554,9 +554,7 @@
 	pinctrl-0 = <&pinctrl_usdhc2>, <&pinctrl_usdhc2_gpio>;
 	pinctrl-1 = <&pinctrl_usdhc2>, <&pinctrl_usdhc2_gpio>;
 	pinctrl-2 = <&pinctrl_usdhc2>, <&pinctrl_usdhc2_gpio>;
-	// Enable CD when the connector works
-	// cd-gpios = <&gpio3 00 GPIO_ACTIVE_LOW>;
-	broken-cd;
+	cd-gpios = <&gpio3 00 GPIO_ACTIVE_HIGH>;
 	bus-width = <4>;
 	status = "okay";
 	no-sdio;
