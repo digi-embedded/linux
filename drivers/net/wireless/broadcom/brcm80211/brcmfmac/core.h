@@ -148,6 +148,8 @@ struct brcmf_pub {
 	const struct brcmf_fwvid_ops *vops;
 	void *vdata;
 	struct brcmf_pkt_filter_enable_le pkt_filter[MAX_PKT_FILTER_COUNT];
+	u16 cnt_ver;
+
 	struct cfg80211_qos_map *qos_map;
 };
 
