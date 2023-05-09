@@ -530,4 +530,7 @@ int hantro_vp8_enc_init(struct hantro_ctx *ctx);
 void rockchip_vpu2_vp8_enc_done(struct hantro_ctx *ctx);
 void hantro_vp8_enc_exit(struct hantro_ctx *ctx);
 
+int hantro_h1_vp8_enc_run(struct hantro_ctx *ctx);
+void hantro_h1_vp8_enc_done(struct hantro_ctx *ctx);
+
 #endif /* HANTRO_HW_H_ */
