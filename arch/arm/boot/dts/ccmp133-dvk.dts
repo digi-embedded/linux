@@ -21,7 +21,7 @@
 
 / {
 	model = "Digi International ConnectCore MP13 DVK.";
-	compatible = "digi,ccmp13-dvk", "digi,ccmp13", "st,stm32mp133";
+	compatible = "digi,ccmp13-dvk", "digi,ccmp13", "digi,ccmp1", "st,stm32mp133";
 	digi,machine,name = "ccmp133-dvk";
 
 	aliases {

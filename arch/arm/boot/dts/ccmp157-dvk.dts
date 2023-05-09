@@ -26,7 +26,7 @@
 
 / {
 	model = "Digi International ConnectCore MP15 DVK.";
-	compatible = "digi,ccmp15-dvk", "digi,ccmp15", "st,stm32mp157";
+	compatible = "digi,ccmp15-dvk", "digi,ccmp15", "digi,ccmp1", "st,stm32mp157";
 	digi,machine,name = "ccmp157-dvk";
 
 	chosen {
