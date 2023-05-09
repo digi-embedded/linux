@@ -713,6 +713,7 @@ static CLK_STM32_GATE(ck_icn_p_gicv2m, "ck_icn_apb4", 0, GATE_GICV2M);
 
 /* GPU */
 static CLK_STM32_GATE(ck_icn_m_gpu, "ck_flexgen_59", 0, GATE_GPU);
+static CLK_STM32_GATE(ck_ker_gpu, "ck_pll3", 0, GATE_GPU);
 
 /* HASH */
 static CLK_STM32_GATE(ck_icn_p_hash, "ck_icn_ls_mcu", 0, GATE_HASH);
@@ -1173,6 +1174,7 @@ static const struct clock_config stm32mp25_clock_cfg[] = {
 	STM32_GATE_CFG(CK_KER_ETH1PTP, ck_ker_eth1ptp, SEC_RIFSC(ETH1)),
 	STM32_GATE_CFG(CK_KER_ETH2PTP, ck_ker_eth2ptp, SEC_RIFSC(ETH2)),
 	STM32_GATE_CFG(CK_BUS_GPU, ck_icn_m_gpu, SEC_RIFSC(GPU)),
+	STM32_GATE_CFG(CK_KER_GPU, ck_ker_gpu, SEC_RIFSC(GPU)),
 	STM32_GATE_CFG(CK_KER_ETHSWREF, ck_ker_ethswref, SEC_RIFSC(ETHSW_DEIP)),
 	STM32_GATE_CFG(CK_BUS_ETHSWACMCFG, ck_icn_p_ethsw_acm_cfg, SEC_RIFSC(ETHSW_ACM_CFG)),
 	STM32_GATE_CFG(CK_BUS_ETHSWACMMSG, ck_icn_p_ethsw_acm_msg, SEC_RIFSC(ETHSW_ACM_MSGBUF)),
