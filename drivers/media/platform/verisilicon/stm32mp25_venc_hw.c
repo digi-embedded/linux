@@ -22,6 +22,19 @@
 
 static const struct hantro_fmt stm32mp25_venc_fmts[] = {
 	{
+		.fourcc = V4L2_PIX_FMT_NV12,
+		.codec_mode = HANTRO_MODE_NONE,
+		.enc_fmt = ROCKCHIP_VPU_ENC_FMT_YUV420SP,
+		.frmsize = {
+			.min_width = 96,
+			.max_width = 8176,
+			.step_width = MB_DIM,
+			.min_height = 32,
+			.max_height = 8176,
+			.step_height = MB_DIM,
+		},
+	},
+	{
 		.fourcc = V4L2_PIX_FMT_YUV420M,
 		.codec_mode = HANTRO_MODE_NONE,
 		.enc_fmt = ROCKCHIP_VPU_ENC_FMT_YUV420P,
