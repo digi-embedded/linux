@@ -1028,6 +1028,7 @@ static const struct irq_domain_ops stm32_exti_h_domain_ops = {
 
 static void stm32_exti_check_rif(struct stm32_exti_host_data *host_data)
 {
+#ifndef CONFIG_STM32MP25_REVA
 	u32 cid, cidcfgr, hwcfgr1;
 	unsigned int bank, i, event;
 
@@ -1045,6 +1046,7 @@ static void stm32_exti_check_rif(struct stm32_exti_host_data *host_data)
 				host_data->chips_data[bank].event_reserved |= BIT(i);
 		}
 	}
+#endif /* CONFIG_STM32MP25_REVA */
 }
 
 static void stm32_exti_remove_irq(void *data)
