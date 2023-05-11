@@ -227,4 +227,10 @@ enum {
 #define WDOG_B_CFG_COLD_LDO12		0x80
 #define WDOG_B_CFG_COLD			0xC0
 
+/* PCA9450 LDO ENMODE bits */
+#define LDO_ENMODE_OFF                 0x00
+#define LDO_ENMODE_ONREQ               0x40
+#define LDO_ENMODE_ONREQ_STBYREQ       0x80
+#define LDO_ENMODE_ON                  0xC0
+
 #endif /* __LINUX_REG_PCA9450_H__ */

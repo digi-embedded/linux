@@ -64,6 +64,7 @@ struct imx_tpm_pwm_chip {
 	u32 user_count;
 	u32 enable_count;
 	u32 real_period;
+	bool suspended;
 };
 
 struct imx_tpm_pwm_param {
@@ -178,6 +179,9 @@ static int pwm_imx_tpm_apply_hw(struct pwm_chip *chip,
 	u32 val, cmod, cur_prescale;
 	unsigned long timeout;
 	struct pwm_state c;
+
+	if (tpm->suspended)
+		return 0;
 
 	if (state->period != tpm->real_period) {
 		/*
@@ -363,6 +367,7 @@ static int pwm_imx_tpm_probe(struct platform_device *pdev)
 
 	tpm->chip.dev = &pdev->dev;
 	tpm->chip.ops = &imx_tpm_pwm_ops;
+	tpm->suspended = false;
 
 	/* get number of channels */
 	val = readl(tpm->base + PWM_IMX_TPM_PARAM);
@@ -405,6 +410,8 @@ static int __maybe_unused pwm_imx_tpm_suspend(struct device *dev)
 	 */
 	tpm->real_period = 0;
 
+	tpm->suspended = true;
+
 	clk_disable_unprepare(tpm->clk);
 
 	return 0;
@@ -413,11 +420,27 @@ static int __maybe_unused pwm_imx_tpm_suspend(struct device *dev)
 static int __maybe_unused pwm_imx_tpm_resume(struct device *dev)
 {
 	struct imx_tpm_pwm_chip *tpm = dev_get_drvdata(dev);
+	struct pwm_chip *chip = &tpm->chip;
+	struct pwm_device *pwm;
 	int ret = 0;
+	int index;
 
 	ret = clk_prepare_enable(tpm->clk);
-	if (ret)
+	if (ret) {
 		dev_err(dev, "failed to prepare or enable clock: %d\n", ret);
+		return ret;
+	}
+
+	tpm->suspended = false;
+
+	/* Restore the state of all active pwms */
+	for (index = 0; index < chip->npwm; index++) {
+		pwm = &chip->pwms[index];
+		if (pwm->state.enabled) {
+			dev_dbg(dev, "restoring state on pwm %d\n", index);
+			pwm_imx_tpm_apply(chip, pwm, &pwm->state);
+		}
+	}
 
 	return ret;
 }

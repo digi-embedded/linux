@@ -50,8 +50,13 @@ ccimx8mn-dtbs :=	ccimx8mn-dvk.dtb \
 ccimx93-dtbs :=		ccimx93-dvk.dtb \
 			_ov_som_bt_ccimx93.dtbo \
 			_ov_som_mca_ccimx93.dtbo \
+			_ov_som_npu_ccimx93.dtbo \
 			_ov_som_wifi_ccimx93.dtbo \
-			_ov_board_lvds_ccimx93-dvk.dtbo
+			_ov_board_dsi_display_ccimx93-dvk.dtbo \
+			_ov_board_enet2_ccimx93-dvk.dtbo \
+			_ov_board_lvds_ccimx93-dvk.dtbo \
+			_ov_board_mikroe-accel2-click_ccimx93-dvk.dtbo \
+			_ov_board_mikroe-gyro-click_ccimx93-dvk.dtbo
 
 dtb-$(CONFIG_ARCH_MXC) += ccimx8mm.dtb \
 			  ccimx8mm-mfg-functional.dtb \
@@ -59,4 +64,6 @@ dtb-$(CONFIG_ARCH_MXC) += ccimx8mm.dtb \
 			  ccimx8mn.dtb \
 			  ccimx8mn-mfg-functional.dtb \
 			  ccimx8mn-mfg-functional-wb.dtb \
-			  ccimx93.dtb
+			  ccimx93.dtb \
+			  ccimx93-mfg-functional.dtb \
+			  ccimx93-mfg-functional-wb.dtb

@@ -19,6 +19,7 @@
 #include "../freescale/imx93.dtsi"
 /* Digi ConnectCore 93 (SOM) */
 #include "ccimx93.dtsi"
+#include <dt-bindings/usb/pd.h>
 
 / {
 	model = "Digi International ConnectCore 93 DVK";
@@ -29,12 +30,19 @@
 		stdout-path = &lpuart6;
 	};
 
+	/* fixed 24MHz crystal for mipi camera */
+	mipi_csi_xtal24m: mipi_csi_xtal24m {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <24000000>;
+		clock-output-names = "xtal_24MHz";
+	};
+
 	lvds_backlight: lvds_backlight {
-		compatible = "gpio-backlight";
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_lvds_backlight>;
-		gpios = <&gpio2 23 GPIO_ACTIVE_HIGH>;
-		default-on;
+		compatible = "pwm-backlight";
+		pwms = <&tpm6 1 50000 0>;
+		brightness-levels = <0 20 25 30 35 40 100>;
+		default-brightness-level = <6>;
 		status = "disabled";
 	};
 
@@ -86,6 +94,13 @@
 			gpio = <&gpio1 13 GPIO_ACTIVE_LOW>;
 			enable-active-low;
 		};
+
+		reg_vref_1v8: regulator-adc-vref {
+			compatible = "regulator-fixed";
+			regulator-name = "vref_1v8";
+			regulator-min-microvolt = <1800000>;
+			regulator-max-microvolt = <1800000>;
+		};
 	};
 
 	sound_max98089: sound-max98089 {
@@ -107,6 +122,61 @@
 			"LineInB", "INB1",
 			"LineInB", "INB2";
 		status = "okay";
+	};
+
+	leds {
+		compatible = "gpio-leds";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_gpio_led>;
+
+		led1 {
+			label = "led1";
+			gpios = <&gpio4 29 GPIO_ACTIVE_LOW>;
+			linux,default-trigger = "heartbeat";
+		};
+	};
+};
+
+/* LVDS PWM backlight */
+&tpm6 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_tpm6>;
+};
+
+/* ADC - 4 channels available on expansion connector */
+&adc1 {
+	vref-supply = <&reg_vref_1v8>;
+	status = "okay";
+};
+
+/* MIPI-CSI CAMERA */
+&cameradev {
+	status = "okay";
+};
+
+&isi_0 {
+	status = "okay";
+
+	cap_device {
+		status = "okay";
+	};
+};
+
+&mipi_csi {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	status = "okay";
+
+	/* Camera 0 MIPI CSI */
+	port@0 {
+		reg = <0>;
+		mipi_csi0_ep: endpoint {
+			remote-endpoint = <&ov5640_mipi_ep>;
+			data-lanes = <2>;
+			cfg-clk-range = <28>;
+			hs-clk-range = <0x16>;
+			bus-type = <4>;
+		};
 	};
 };
 
@@ -145,14 +215,6 @@
 	pinctrl-0 = <&pinctrl_flexcan2>;
 	xceiver-supply = <&reg_can2_stby>;
 	status = "okay";
-};
-
-&isi_0 {
-	status = "okay";
-
-	cap_device {
-		status = "okay";
-	};
 };
 
 &lcdif {
@@ -204,6 +266,63 @@
 		vin-supply = <&reg_5v_board>;
 		status = "disabled";
 	};
+
+	ext_rtc: ext_rtc@52 {
+		compatible = "microcrystal,rv3028";
+		reg = <0x52>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_rtc>;
+		interrupt-parent = <&gpio2>;
+		interrupts = <18 IRQ_TYPE_EDGE_FALLING>;
+		wakeup-source;
+	};
+
+	ptn5110: tcpc@53 {
+		compatible = "nxp,ptn5110";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_usbc>;
+		reg = <0x53>;
+		interrupt-parent = <&gpio4>;
+		interrupts = <21 IRQ_TYPE_LEVEL_LOW>;
+		status = "okay";
+
+		port {
+			typec1_dr_sw: endpoint {
+				remote-endpoint = <&usb1_drd_sw>;
+			};
+		};
+
+		typec1_con: connector {
+			compatible = "usb-c-connector";
+			label = "USB-C";
+			power-role = "source";
+			data-role = "dual";
+			source-pdos = <PDO_FIXED(5000, 3000, PDO_FIXED_USB_COMM)>;
+		};
+	};
+
+	/* MIPI-CSI camera */
+	ov5640_mipi: ov5640_mipi@3c {
+		compatible = "ovti,ov5640";
+		reg = <0x3c>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_mipi>;
+		clocks = <&mipi_csi_xtal24m>;
+		clock-names = "xclk";
+		csi_id = <0>;
+		reset-gpios = <&gpio2 22 GPIO_ACTIVE_LOW>;
+		mclk = <24000000>;
+		mclk_source = <0>;
+		mipi_csi;
+		status = "okay";
+		port {
+			ov5640_mipi_ep: endpoint {
+				remote-endpoint = <&mipi_csi0_ep>;
+				data-lanes = <1 2>;
+				clocks-lanes = <0>;
+			};
+		};
+	};
 };
 
 /* I2C4 - Audio codec and HDMI bridge */
@@ -233,7 +352,7 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_lt8912>;
 		reset-gpios = <&gpio1 3 GPIO_ACTIVE_LOW>;
-		hpd-gpios = <&gpio3 27 GPIO_ACTIVE_HIGH>;
+		hpd-gpios = <&gpio1 12 GPIO_ACTIVE_HIGH>;
 		// no-hpd;
 		digi,dsi-lanes = <4>;
 		vdd1-supply = <&reg_5v_board>;
@@ -287,17 +406,65 @@
 	};
 };
 
+/* mikroBUS SPI interface */
+&lpspi8 {
+	fsl,spi-num-chipselects = <1>;
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&pinctrl_lpspi8>;
+	pinctrl-1 = <&pinctrl_lpspi8>;
+	cs-gpios = <&gpio2 12 GPIO_ACTIVE_LOW>;
+	status = "okay";
+
+	spidev0: spi@0 {
+		/*
+		 * spidev uses a compatible string 'rohm,fs2228fv' to have the
+		 * driver create an spi device node. This is just an example,
+		 * there is not a real device connected on the SPI bus.
+		 */
+		compatible = "rohm,dh2228fv";
+		reg = <0>;
+		spi-max-frequency = <1000000>;
+	};
+};
+
 &lpuart6 { /* console */
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_uart6>;
 	status = "okay";
 };
 
-/* XBee RF interface */
+/*
+ * XBee interface
+ * The lines of this interface are shared with ENET2. Refer to the hardware and
+ * software documentation for additional information about how to configure the
+ * board.
+ */
+&lpuart4 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_uart4>, <&pinctrl_xbee_rf_gpios>;
+	fsl,uart-has-rtscts;
+	status = "okay";
+};
+
+/*
+ * RS485/mikroBUS UART
+ * The uart of the RS485 and the mikroBUS interfaces is shared. Configure the
+ * corresponding jumpers to select the desired functionality.
+ */
 &lpuart7 {
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_uart7>, <&pinctrl_xbee_rf_gpios>;
-	fsl,uart-has-rtscts;
+	pinctrl-0 = <&pinctrl_uart7>;
+	linux,rs485-enabled-at-boot-time;
+	digi,rts-gpio = <&gpio2 10 GPIO_ACTIVE_HIGH>;
+	status = "okay";
+};
+
+/* Messaging Units for inter-processors communication */
+&mu1 {
+	status = "okay";
+};
+
+&mu2 {
 	status = "okay";
 };
 
@@ -329,7 +496,7 @@
 	phy-mode = "rgmii-id";
 	phy-handle = <&ethphy1>;
 	fsl,magic-packet;
-	status = "okay";
+	status = "disabled";
 
 	mdio {
 		#address-cells = <1>;
@@ -355,6 +522,25 @@
 	status = "okay";
 };
 
+/* USB_OTG1 - USB TypeC */
+&usbotg1 {
+	dr_mode = "otg";
+	hnp-disable;
+	srp-disable;
+	adp-disable;
+	usb-role-switch;
+	disable-over-current;
+	samsung,picophy-pre-emp-curr-control = <3>;
+	samsung,picophy-dc-vol-level-adjust = <7>;
+	status = "okay";
+
+	port {
+		usb1_drd_sw: endpoint {
+			remote-endpoint = <&typec1_dr_sw>;
+		};
+	};
+};
+
 /* USB_OTG2 connected to usb hub */
 &usbotg2 {
 	dr_mode = "host";
@@ -368,9 +554,7 @@
 	pinctrl-0 = <&pinctrl_usdhc2>, <&pinctrl_usdhc2_gpio>;
 	pinctrl-1 = <&pinctrl_usdhc2>, <&pinctrl_usdhc2_gpio>;
 	pinctrl-2 = <&pinctrl_usdhc2>, <&pinctrl_usdhc2_gpio>;
-	// Enable CD when the connector works
-	// cd-gpios = <&gpio3 00 GPIO_ACTIVE_LOW>;
-	broken-cd;
+	cd-gpios = <&gpio3 00 GPIO_ACTIVE_HIGH>;
 	bus-width = <4>;
 	status = "okay";
 	no-sdio;
@@ -378,6 +562,9 @@
 };
 
 &iomuxc {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_gpio>, <&pinctrl_gpio_shared_enet2>;
+
 	/* EQoS RGMII */
 	pinctrl_eqos: eqosgrp {
 		fsl,pins = <
@@ -446,6 +633,41 @@
 		>;
 	};
 
+	/* GPIOs for User Leds, Buttons, ... */
+	pinctrl_gpio: gpiogrp {
+		fsl,pins = <
+			/* ULED/BUTTON1 */
+			MX93_PAD_SD2_RESET_B__GPIO3_IO07			0x31e
+			/* MIKROBUS_INT */
+			MX93_PAD_GPIO_IO11__GPIO2_IO11				0x31e
+		>;
+	};
+
+	/* Shared GPIOs with ENET2 to be removed with overlay */
+	pinctrl_gpio_shared_enet2: gpiosharedenet2grp {
+		fsl,pins = <
+			/* GPIO4_IO16 */
+			MX93_PAD_ENET2_TD3__GPIO4_IO16			0x31e
+			/* GPIO4_IO17 */
+			MX93_PAD_ENET2_TD2__GPIO4_IO17			0x31e
+			/* GPIO4_IO22 */
+			MX93_PAD_ENET2_RX_CTL__GPIO4_IO22			0x31e
+			/* ULED/BUTTON2 */
+			MX93_PAD_ENET2_RXC__GPIO4_IO23			0x31e
+			/* GPIO4_IO25 */
+			MX93_PAD_ENET2_RD1__GPIO4_IO25			0x31e
+			/* GPIO4_IO27 */
+			MX93_PAD_ENET2_RD3__GPIO4_IO27			0x31e
+		>;
+	};
+
+	/* Power led */
+	pinctrl_gpio_led: gpioledgrp {
+		fsl,pins = <
+			MX93_PAD_CCM_CLKO4__GPIO4_IO29				0x31e
+		>;
+	};
+
 	/* I2C3 */
 	pinctrl_lpi2c3: lpi2c3grp {
 		fsl,pins = <
@@ -462,20 +684,31 @@
 		>;
 	};
 
+	/* mikroBUS SPI interface */
+	pinctrl_lpspi8: lpspi8grp {
+		fsl,pins = <
+			MX93_PAD_GPIO_IO12__GPIO2_IO12				0x3fe
+			MX93_PAD_GPIO_IO13__LPSPI8_SIN				0x3fe
+			MX93_PAD_GPIO_IO14__LPSPI8_SOUT				0x3fe
+			MX93_PAD_GPIO_IO15__LPSPI8_SCK				0x3fe
+		>;
+	};
+
+	/* MIPI Camera */
+	pinctrl_mipi: mipi {
+		fsl,pins = <
+			/* MIPI_CSI_RESET_N */
+			MX93_PAD_GPIO_IO22__GPIO2_IO22 				0x31e
+		>;
+	};
+
 	/* HDMI bridge IOs */
 	pinctrl_lt8912: lt8912grp {
 		fsl,pins = <
 			/* Reset */
 			MX93_PAD_I2C2_SDA__GPIO1_IO03				0x31e
-			/* Interrupt */
-			MX93_PAD_CCM_CLKO2__GPIO3_IO27				0x31e
-		>;
-	};
-
-	/* LVDS gpio backlight */
-	pinctrl_lvds_backlight: lvdsbacklightgrp {
-		fsl,pins = <
-			MX93_PAD_GPIO_IO23__GPIO2_IO23				0x31e
+			/* HPD Interrupt */
+			MX93_PAD_SAI1_TXC__GPIO1_IO12				0x31e
 		>;
 	};
 
@@ -498,6 +731,13 @@
 	pinctrl_reg_can2_stby: reg_can2_stby_grp {
 		fsl,pins = <
 			MX93_PAD_SAI1_TXD0__GPIO1_IO13				0x31e
+		>;
+	};
+
+	/* RTC INT */
+	pinctrl_rtc: rtc_grp {
+		fsl,pins = <
+			MX93_PAD_GPIO_IO18__GPIO2_IO18				0x31e
 		>;
 	};
 
@@ -529,13 +769,12 @@
 
 	pinctrl_usdhc2: usdhc2grp {
 		fsl,pins = <
-			MX93_PAD_SD2_CLK__USDHC2_CLK				0x17fe
+			MX93_PAD_SD2_CLK__USDHC2_CLK				0x15fe
 			MX93_PAD_SD2_CMD__USDHC2_CMD				0x13fe
 			MX93_PAD_SD2_DATA0__USDHC2_DATA0			0x13fe
 			MX93_PAD_SD2_DATA1__USDHC2_DATA1			0x13fe
 			MX93_PAD_SD2_DATA2__USDHC2_DATA2			0x13fe
 			MX93_PAD_SD2_DATA3__USDHC2_DATA3			0x13fe
-			MX93_PAD_SD2_VSELECT__USDHC2_VSELECT			0x51e
 			MX93_PAD_SD2_VSELECT__USDHC2_VSELECT			0x51e
 		>;
 	};
@@ -548,25 +787,46 @@
 		>;
 	};
 
-	/* XBee RF uart */
-	pinctrl_uart7: uart7grp {
-		fsl,pins = <
-			MX93_PAD_GPIO_IO08__LPUART7_TX				0x31e
-			MX93_PAD_GPIO_IO09__LPUART7_RX				0x31e
-			MX93_PAD_GPIO_IO10__LPUART7_CTS_B			0x31e
-			MX93_PAD_GPIO_IO11__LPUART7_RTS_B			0x31e
+	/* XBee uart */
+	pinctrl_uart4: uart4grp {
+	fsl,pins = <
+			MX93_PAD_ENET2_RD0__LPUART4_RX				0x31e
+			MX93_PAD_ENET2_TD0__LPUART4_TX				0x31e
+			MX93_PAD_ENET2_RD2__LPUART4_CTS_B			0x31e
+			MX93_PAD_ENET2_TD1__LPUART4_RTS_B			0x31e
 		>;
 	};
 
 	/* XBee RF IO lines */
 	pinctrl_xbee_rf_gpios: xbeerfgrp {
 		fsl,pins = <
-			/* XBEE2_RESET_N */
-			MX93_PAD_GPIO_IO15__GPIO2_IO15				0x31e
-			/* XBEE2_ON/SLEEP_N */
-			MX93_PAD_GPIO_IO14__GPIO2_IO14				0x31e
-			/* XBEE2_SLEEP_RQ */
-			MX93_PAD_GPIO_IO14__GPIO2_IO14				0x31e
+			/* XBEE_RESET_N */
+			MX93_PAD_GPIO_IO19__GPIO2_IO19				0x31e
+		>;
+	};
+
+	/* mikroBUS/RS485 uart */
+	pinctrl_uart7: uart7grp {
+	fsl,pins = <
+			MX93_PAD_GPIO_IO09__LPUART7_RX				0x31e
+			MX93_PAD_GPIO_IO08__LPUART7_TX				0x31e
+			/* RS485_DE */
+			MX93_PAD_GPIO_IO10__GPIO2_IO10				0x31e
+		>;
+	};
+
+	/* USB TypeC IRQ */
+	pinctrl_usbc: usbcgrp {
+		fsl,pins = <
+			/* USBC Alert */
+			MX93_PAD_ENET2_TXC__GPIO4_IO21				0x31e
+		>;
+	};
+
+	/* LVDS PWM backlight */
+	pinctrl_tpm6: tpm6grp {
+		fsl,pins = <
+			MX93_PAD_GPIO_IO23__TPM6_CH1					0x19e
 		>;
 	};
 };
