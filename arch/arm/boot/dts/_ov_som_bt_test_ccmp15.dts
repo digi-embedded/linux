@@ -1,5 +1,5 @@
 /*
- * Copyright 2022, 2023 Digi International Inc.
+ * Copyright 2023 Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -22,7 +22,7 @@
 	fragment@0 {
 		target-path = "/";
 		__overlay__ {
-			overlay-description = "SOM: Bluetooth";
+			overlay-description = "SOM: Bluetooth test";
 			bluetooth {
 				/* U-Boot will fill in the MAC address here */
 			};
@@ -37,19 +37,19 @@
 		};
 	};
 
-	/* Enable USART2 (Bluetooth) */
+	/* Enable USART1 (Bluetooth) */
 	fragment@2 {
-		target = <&usart2>;
+		target = <&usart1>;
 		__overlay__ {
 			status = "okay";
 		};
 	};
 
-	/* Enable CYW4373 Bluetooth node */
+	/* Disable CYW4373 Bluetooth node */
 	fragment@3 {
 		target = <&cyw4373_bt>;
 		__overlay__ {
-			status = "okay";
+			status = "disabled";
 		};
 	};
 
@@ -58,7 +58,7 @@
 		target = <&rtc>;
 		__overlay__ {
 			st,lsco = <RTC_OUT2_RMP>;
-			pinctrl-0 = <&ccmp13_rtc_out1_pins_a &rtc_out2_rmp_pins_a>;
+			pinctrl-0 = <&ccmp15_rtc_out1_pins_a &rtc_out2_rmp_pins_a>;
 			pinctrl-names = "default";
 		};
 	};

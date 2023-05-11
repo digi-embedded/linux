@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Digi International Inc.
+ * Copyright 2022, 2023 Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -45,8 +45,16 @@
 		};
 	};
 
-	/* Enable External 32kHz Low-Power Oscillator */
+	/* Enable CYW4373 Bluetooth node */
 	fragment@3 {
+		target = <&cyw4373_bt>;
+		__overlay__ {
+			status = "okay";
+		};
+	};
+
+	/* Enable External 32kHz Low-Power Oscillator */
+	fragment@4 {
 		target = <&rtc>;
 		__overlay__ {
 			st,lsco = <RTC_OUT2_RMP>;
