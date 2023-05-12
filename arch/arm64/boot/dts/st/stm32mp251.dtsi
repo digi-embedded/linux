@@ -284,6 +284,49 @@
 			st,axi-max-burst-len = <16>;
 		};
 
+		ommanager: ommanager@40500000 {
+			#address-cells = <2>;
+			#size-cells = <1>;
+			compatible = "st,stm32mp25-omm";
+			reg = <0x40500000 0x400>, <0x60000000 0x10000000>;
+			reg-names = "omm", "omm_mm";
+			clocks = <&rcc CK_BUS_OSPIIOM>;
+			resets = <&rcc OSPIIOM_R>;
+			st,syscfg-amcr = <&syscfg 0x2c00 0x7>;
+			feature-domains = <&rifsc STM32MP25_RIFSC_OCTOSPIM_ID>;
+			status = "disabled";
+			ranges = <0 0 0x40430000 0x400>,
+				 <1 0 0x40440000 0x400>;
+
+			ospi1: spi@40430000 {
+				compatible = "st,stm32mp25-omi";
+				reg = <0 0 0x400>;
+				interrupts = <GIC_SPI 163 IRQ_TYPE_LEVEL_HIGH>;
+				dmas = <&hpdma 2 0x62 0x00003121 0x0>,
+				       <&hpdma 2 0x42 0x00003112 0x0>;
+				dma-names = "tx", "rx";
+				st,syscfg-dlyb = <&syscfg 0x1000>;
+				clocks = <&scmi_clk CK_SCMI_OSPI1>;
+				resets = <&scmi_reset RST_SCMI_OSPI1>, <&scmi_reset RST_SCMI_OSPI1DLL>;
+				feature-domains = <&rifsc STM32MP25_RIFSC_OCTOSPI1_ID>;
+				status = "disabled";
+			};
+
+			ospi2: spi@40440000 {
+				compatible = "st,stm32mp25-omi";
+				reg = <1 0 0x400>;
+				interrupts = <GIC_SPI 164 IRQ_TYPE_LEVEL_HIGH>;
+				dmas = <&hpdma 3 0x62 0x00003121 0x0>,
+				       <&hpdma 3 0x42 0x00003112 0x0>;
+				dma-names = "tx", "rx";
+				st,syscfg-dlyb = <&syscfg 0x1400>;
+				clocks = <&scmi_clk CK_SCMI_OSPI2>;
+				resets = <&scmi_reset RST_SCMI_OSPI2>, <&scmi_reset RST_SCMI_OSPI2DLL>;
+				feature-domains = <&rifsc STM32MP25_RIFSC_OCTOSPI2_ID>;
+				status = "disabled";
+			};
+		};
+
 		rifsc: rifsc@42080000 {
 			compatible = "st,stm32mp25-sys-bus";
 			reg = <0x42080000 0x1000>;
