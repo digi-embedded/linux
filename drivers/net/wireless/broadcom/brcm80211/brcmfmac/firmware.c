@@ -24,6 +24,10 @@
 #define BRCMF_FW_MACADDR_FMT			"macaddr=%pM"
 #define BRCMF_FW_MACADDR_LEN			(7 + ETH_ALEN * 3)
 
+static int brcmf_testmode = 0;
+module_param_named(testmode, brcmf_testmode, int, 0444);
+MODULE_PARM_DESC(testmode, "Enable Test Mode Operation");
+
 enum nvram_parser_state {
 	IDLE,
 	KEY,
@@ -892,6 +896,15 @@ brcmf_fw_alloc_request(u32 chip, u32 chiprev,
 		}
 		strlcat(fwnames[j].path, mapping_table[i].fw_base,
 			BRCMF_FW_NAME_LEN);
+
+		/* If brcmfmac.testmode=1, load '_mfgtest' binary instead */
+		if (!strcmp(fwnames[j].extension, ".bin")) {
+			if (brcmf_testmode) {
+				brcmf_info("loading 'mfgtest' firmware\n");
+				strlcat(fwnames[j].path, "_mfgtest", BRCMF_FW_NAME_LEN);
+			}
+		}
+
 		strlcat(fwnames[j].path, fwnames[j].extension,
 			BRCMF_FW_NAME_LEN);
 		fwreq->items[j].path = fwnames[j].path;
