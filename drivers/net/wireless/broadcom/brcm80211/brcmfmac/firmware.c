@@ -26,6 +26,11 @@ static int brcmf_testmode = 0;
 module_param_named(testmode, brcmf_testmode, int, 0444);
 MODULE_PARM_DESC(testmode, "Enable Test Mode Operation");
 
+#define MAX_REGDMN_LEN					10
+static char brcmf_regdmn[MAX_REGDMN_LEN] = "US";
+module_param_string(regdmn, brcmf_regdmn, MAX_REGDMN_LEN, 0444);
+MODULE_PARM_DESC(regdmn, "Regulatory domain");
+
 enum nvram_parser_state {
 	IDLE,
 	KEY,
@@ -815,6 +820,14 @@ brcmf_fw_alloc_request(u32 chip, u32 chiprev,
 				brcmf_info("loading 'mfgtest' firmware\n");
 				strlcat(fwnames[j].path, "_mfgtest", BRCMF_FW_NAME_LEN);
 			}
+		}
+		/* If brcmfmac.regdmn=XX, load a specific CLM blob file (default: US) */
+		else if (!strcmp(fwnames[j].extension, ".clm_blob")) {
+			char regdmn_suffix[MAX_REGDMN_LEN+1];
+
+			brcmf_info("loading '%s' CLM blob file\n", brcmf_regdmn);
+			snprintf(regdmn_suffix, MAX_REGDMN_LEN+1, "_%s", brcmf_regdmn);
+			strlcat(fwnames[j].path, regdmn_suffix, BRCMF_FW_NAME_LEN);
 		}
 
 		strlcat(fwnames[j].path, fwnames[j].extension,
