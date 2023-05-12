@@ -29,9 +29,14 @@
 #define BDADDR_BCM43341B (&(bdaddr_t) {{0xac, 0x1f, 0x00, 0x1b, 0x34, 0x43}})
 
 #define BCM_FW_NAME_LEN			64
-#define BCM_FW_NAME_COUNT_MAX		2
+#define BCM_FW_NAME_COUNT_MAX		3
 /* For kmalloc-ing the fw-name array instead of putting it on the stack */
 typedef char bcm_fw_name[BCM_FW_NAME_LEN];
+
+#define MAX_REGDMN_LEN					10
+static char btbcm_regdmn[MAX_REGDMN_LEN] = "FCC.CE";
+module_param_string(regdmn, btbcm_regdmn, MAX_REGDMN_LEN, 0444);
+MODULE_PARM_DESC(regdmn, "Regulatory domain");
 
 int btbcm_check_bdaddr(struct hci_dev *hdev)
 {
@@ -552,6 +557,14 @@ int btbcm_initialize(struct hci_dev *hdev, bool *fw_load_done)
 		return -ENOMEM;
 
 	if (hw_name) {
+		/*
+		 * First try to load the firmware specified by regdmn, and if that
+		 * fails, fall back to load the generic firmware.
+		 */
+		snprintf(fw_name[fw_name_count], BCM_FW_NAME_LEN,
+			 "brcm/%s%s_%s.hcd", hw_name, postfix, btbcm_regdmn);
+		fw_name_count++;
+
 		snprintf(fw_name[fw_name_count], BCM_FW_NAME_LEN,
 			 "brcm/%s%s.hcd", hw_name, postfix);
 		fw_name_count++;
