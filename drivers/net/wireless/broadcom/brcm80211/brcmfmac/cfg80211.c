@@ -7049,7 +7049,7 @@ static int brcmf_cfg80211_set_pmk(struct wiphy *wiphy, struct net_device *dev,
 			(ifp->vif->profile.is_okc != true)))
 		return -EINVAL;
 
-	if (conf->pmk_len > BRCMF_WSEC_MAX_PSK_LEN)
+	if (conf->pmk_len > BRCMF_WSEC_MAX_PMK_LEN)
 		return -ERANGE;
 
 	if (ifp->vif->profile.is_okc) {
