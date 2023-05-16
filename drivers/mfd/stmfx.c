@@ -304,6 +304,21 @@ irq_exit:
 	return ret;
 }
 
+static int stmfx_chip_wait_boot(struct stmfx *stmfx)
+{
+	unsigned long timeout_ms = 0;
+	unsigned int val;
+	int ret;
+
+	while (1) {
+		ret = regmap_read(stmfx->map, STMFX_REG_FW_VERSION_MSB, &val);
+		if (ret != -ENXIO || timeout_ms > STMFX_BOOT_TIME_MS)
+			return ret;
+		mdelay(1);
+		timeout_ms++;
+	}
+}
+
 static int stmfx_chip_reset(struct stmfx *stmfx)
 {
 	int ret;
@@ -339,6 +354,11 @@ static int stmfx_chip_init(struct i2c_client *client)
 			dev_err(&client->dev, "VDD enable failed: %d\n", ret);
 			return ret;
 		}
+	}
+	ret = stmfx_chip_wait_boot(stmfx);
+	if (ret) {
+		dev_err(stmfx->dev, "Boot chip failed: %d\n", ret);
+		return ret;
 	}
 
 	ret = regmap_read(stmfx->map, STMFX_REG_CHIP_ID, &id);
@@ -512,6 +532,11 @@ static int stmfx_resume(struct device *dev)
 				"VDD enable failed: %d\n", ret);
 			return ret;
 		}
+	}
+	ret = stmfx_chip_wait_boot(stmfx);
+	if (ret) {
+		dev_err(stmfx->dev, "Boot chip failed: %d\n", ret);
+		return ret;
 	}
 
 	/* Reset STMFX - supply has been stopped during suspend */
