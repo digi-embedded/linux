@@ -9,6 +9,20 @@
 / {
 };
 
+&adc_12{
+	adc2: adc@100 {
+		/delete-node/channel@17;
+		/delete-node/channel@18;
+	};
+};
+
+&adc_3 {
+	adc3: adc@0 {
+		/delete-node/channel@17;
+		/delete-node/channel@18;
+	};
+};
+
 &eth1 {
 	/delete-property/snps,mixed-burst;
 	snps,fixed-burst;
