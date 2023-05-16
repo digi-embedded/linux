@@ -60,3 +60,5 @@
 	/delete-property/dmas;
 	/delete-property/dma-names;
 };
+
+/delete-node/&timers13;
