@@ -9,6 +9,26 @@
 / {
 };
 
+&eth1 {
+	/delete-node/tx-queues-config;
+
+	mtl_tx_setup_1: tx-queues-config {
+		snps,tx-queues-to-use = <2>;
+		queue0 {};
+		queue1 {};
+	};
+};
+
+&eth2 {
+	/delete-node/tx-queues-config;
+
+	mtl_tx_setup_2: tx-queues-config {
+		snps,tx-queues-to-use = <2>;
+		queue0 {};
+		queue1 {};
+	};
+};
+
 &i2c8 {
 	/delete-property/dmas;
 	/delete-property/dma-names;
