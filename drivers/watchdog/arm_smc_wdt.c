@@ -148,15 +148,6 @@ static int smcwd_probe(struct platform_device *pdev)
 	if (err)
 		return err;
 
-	if (IS_ENABLED(CONFIG_WATCHDOG_HANDLE_BOOT_ENABLED)) {
-		err = smcwd_start(wdd);
-		if (err)
-			return err;
-
-		/* Make sure the watchdog is serviced */
-		set_bit(WDOG_HW_RUNNING, &wdd->status);
-	}
-
 	err = devm_watchdog_register_device(&pdev->dev, wdd);
 	if (err)
 		return err;
