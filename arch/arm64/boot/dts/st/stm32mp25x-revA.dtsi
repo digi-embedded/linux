@@ -33,3 +33,7 @@
 	/delete-property/dmas;
 	/delete-property/dma-names;
 };
+
+&pcie_rc {
+	resets = <&scmi_reset RST_SCMI_PCIE>;
+};
