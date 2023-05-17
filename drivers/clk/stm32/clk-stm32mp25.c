@@ -850,9 +850,9 @@ static CLK_STM32_GATE(ck_icn_p_spi6, "ck_icn_apb2", 0, GATE_SPI6);
 static CLK_STM32_GATE(ck_icn_p_spi7, "ck_icn_apb2", 0, GATE_SPI7);
 static CLK_STM32_GATE(ck_icn_p_spi8, "ck_icn_ls_mcu", 0, GATE_SPI8);
 
-static CLK_STM32_GATE(ck_ker_spi1, "ck_flexgen_16", 0, GATE_SPI1);
-static CLK_STM32_GATE(ck_ker_spi2, "ck_flexgen_10", 0, GATE_SPI2);
-static CLK_STM32_GATE(ck_ker_spi3, "ck_flexgen_10", 0, GATE_SPI3);
+static CLK_STM32_GATE(ck_ker_spi1, "ck_flexgen_16", CLK_SET_RATE_PARENT, GATE_SPI1);
+static CLK_STM32_GATE(ck_ker_spi2, "ck_flexgen_10", CLK_SET_RATE_PARENT, GATE_SPI2);
+static CLK_STM32_GATE(ck_ker_spi3, "ck_flexgen_10", CLK_SET_RATE_PARENT, GATE_SPI3);
 static CLK_STM32_GATE(ck_ker_spi4, "ck_flexgen_17", 0, GATE_SPI4);
 static CLK_STM32_GATE(ck_ker_spi5, "ck_flexgen_17", 0, GATE_SPI5);
 static CLK_STM32_GATE(ck_ker_spi6, "ck_flexgen_18", 0, GATE_SPI6);
