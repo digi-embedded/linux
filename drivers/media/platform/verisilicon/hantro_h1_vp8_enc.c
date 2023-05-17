@@ -1475,6 +1475,7 @@ int hantro_h1_vp8_enc_run(struct hantro_ctx *ctx)
 	/* Start the hardware. */
 	reg =     H1_REG_ENC_CTRL_TIMEOUT_EN
 		| H1_REG_ENC_CTRL_MV_WRITE //for VEPU_REG_MV_WRITE_EN in VEPU_REG_INTERRUPT
+		| H1_REG_ENC_REC_WRITE_DISABLE//FIXME needed to have visually correct P frames
 		| H1_REG_ENC_CTRL_WIDTH(MB_WIDTH(ctx->src_fmt.width))
 		| H1_REG_ENC_CTRL_HEIGHT(MB_HEIGHT(ctx->src_fmt.height))
 		| H1_REG_ENC_CTRL_ENC_MODE_VP8
