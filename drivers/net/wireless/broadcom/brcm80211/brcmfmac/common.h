@@ -10,7 +10,7 @@
 #include "fwil_types.h"
 
 #define BRCMF_FW_ALTPATH_LEN			256
-
+#define BRCMF_COREDUMP_PATH_LEN			256
 #define BRCMFMAC_DISABLE	0
 #define BRCMFMAC_ENABLE		1
 #define BRCMFMAC_AUTO		2
@@ -105,6 +105,8 @@ struct brcmf_mp_device {
 	bool		pkt_prio;
 	int			idleclk_disable;
 	int		sdio_bus_idle_time;
+	char	coredump_path[BRCMF_COREDUMP_PATH_LEN];
+	int		coredump_file_size;
 };
 
 /**

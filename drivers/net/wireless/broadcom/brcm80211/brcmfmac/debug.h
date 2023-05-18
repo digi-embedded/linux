@@ -33,6 +33,13 @@
 #define BRCMF_TWT_VAL		0x00400000
 #define BRCMF_SDIOEXT_VAL	0x00800000
 
+#define BRCMF_DEBUG_DUMP_TIME_BUF_LEN (17 + 1)
+#define BRCMF_LOG_DUMP_TS_MULTIPLIER_VALUE    60
+#define BRCMF_LOG_DUMP_BOOTTIME    "%5lld.%06ld"
+#define BRCMF_OK 0
+#define BRCMF_COMMON_DUMP_PATH    "/root/"
+#define vfs_write(fp, buf, len, pos) kernel_write(fp, buf, len, pos)
+
 /* set default print format */
 #undef pr_fmt
 #define pr_fmt(fmt)		KBUILD_MODNAME ": " fmt
@@ -128,6 +135,10 @@ struct brcmf_pub;
 struct dentry *brcmf_debugfs_get_devdir(struct brcmf_pub *drvr);
 void brcmf_debugfs_add_entry(struct brcmf_pub *drvr, const char *fn,
 			     int (*read_fn)(struct seq_file *seq, void *data));
+int brcmf_debug_write_file(struct brcmf_bus *bus, const char *file_name,
+			   u32 flags, void *buf, size_t size);
+void brcmf_debug_get_dump_time(char *str);
+int brcmf_debug_ramdump_to_file(struct brcmf_bus *bus, void *dump, size_t size, char *fname);
 int brcmf_debug_create_memdump(struct brcmf_bus *bus, const void *data,
 			       size_t len);
 int brcmf_debug_fwlog_init(struct brcmf_pub *drvr);

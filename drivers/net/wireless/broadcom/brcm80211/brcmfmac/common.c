@@ -148,6 +148,16 @@ static int brcmf_short_psq;
 module_param_named(short_psq, brcmf_short_psq, int, 0);
 MODULE_PARM_DESC(short_psq, "Use shorter PS Queue");
 
+static char brcmf_coredump_path[BRCMF_COREDUMP_PATH_LEN] = {0};
+module_param_string(coredump_path, brcmf_coredump_path,
+		    BRCMF_COREDUMP_PATH_LEN, 0400);
+MODULE_PARM_DESC(coredump_path, "coredump path");
+
+/* Default value as 0 means unlimited storing file size. */
+static int brcmf_coredump_file_size;
+module_param_named(coredump_file_size, brcmf_coredump_file_size, int, 0400);
+MODULE_PARM_DESC(coredump_file_size, "Handle coredump file storing size");
+
 static struct brcmfmac_platform_data *brcmfmac_pdata;
 struct brcmf_mp_global_t brcmf_mp_global;
 
@@ -791,6 +801,8 @@ int brcmf_debugfs_param_read(struct seq_file *s, void *data)
 	seq_printf(s, "%-20s: %d\n", "bt_over_sdio", !!brcmf_bt_over_sdio);
 	seq_printf(s, "%-20s: %d\n", "bus_idle_time", brcmf_sdio_bus_idle_time);
 	seq_printf(s, "%-20s: %d\n", "short_psq", !!brcmf_short_psq);
+	seq_printf(s, "%-20s: %s\n", "coredump_path", brcmf_coredump_path);
+	seq_printf(s, "%-20s: %d\n", "coredump_file_size", brcmf_coredump_file_size);
 
 	return 0;
 }
@@ -873,6 +885,17 @@ struct brcmf_mp_device *brcmf_get_module_param(struct device *dev,
 
 	settings->sdio_bus_idle_time = brcmf_sdio_bus_idle_time;
 	brcmf_dbg(INFO, "sdio_bus_idle_time: %d\n", settings->sdio_bus_idle_time);
+
+	if (brcmf_coredump_path[0] == '\0') {
+		strscpy(settings->coredump_path, BRCMF_COMMON_DUMP_PATH,
+			BRCMF_COREDUMP_PATH_LEN);
+	} else {
+		strscpy(settings->coredump_path, brcmf_coredump_path,
+			BRCMF_COREDUMP_PATH_LEN);
+	}
+
+	settings->coredump_file_size = brcmf_coredump_file_size;
+	brcmf_dbg(INFO, "coredump_file_size: %d\n", settings->coredump_file_size);
 
 	/* See if there is any device specific platform data configured */
 	found = false;
