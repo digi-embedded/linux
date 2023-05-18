@@ -3154,8 +3154,7 @@ brcmf_sdio_ulp_pre_redownload_check(struct brcmf_sdio *bus, u32 hmb_data)
 			brcmf_dbg(ULP, "wowl_wake_ind: 0x%08x, ulp_wake_ind: 0x%08x\n",
 				  wowl_wake_ind, ulp_wake_ind);
 
-		/* skip setting min resource mask for secure chip */
-		if (bus->ci->chip != CY_CC_43022_CHIP_ID) {
+			/* skip setting min resource mask for secure chip */
 			reg_addr = CORE_CC_REG(brcmf_chip_get_pmu(bus->ci)->base,
 					       min_res_mask);
 			brcmf_sdiod_writel(sdiod, reg_addr,
@@ -3977,7 +3976,7 @@ static int brcmf_sdio_download_code_file(struct brcmf_sdio *bus,
 			err = brcmf_sdiod_ramrw(bus->sdiodev, true, TRX_HDR_START_ADDR,
 						(u8 *)fw->data, sizeof(struct trx_header_le));
 			fw_size -= sizeof(struct trx_header_le);
-			image = fw->data;
+			image = (u8 *)fw->data;
 			image = image + TRX_HDR_SZ;
 		}
 		err = brcmf_sdiod_ramrw(bus->sdiodev, true, address,
@@ -4851,7 +4850,7 @@ int brcmf_get_intr_pending_data(void *ctx)
 	int loop = 0, status = 0, err = 0;
 	u32 reg_val = 0;
 
-	for (loop == 0; loop < LOOP_TO_CHECK_FOR_BP_ENABLE; loop++) {
+	for (loop = 0; loop < LOOP_TO_CHECK_FOR_BP_ENABLE; loop++) {
 		sdio_claim_host(sdiodev->func1);
 		reg_val = brcmf_sdiod_func0_rb(sdiodev, SDIO_CCCR_INTx, &err);
 		sdio_release_host(sdiodev->func1);
@@ -5665,9 +5664,10 @@ fail:
 void brcmf_sdio_remove(struct brcmf_sdio *bus)
 {
 	struct brcmf_bus *bus_if = bus->sdiodev->bus_if;
+	u32 reg_val, read_reg;
+	int err = 0;
 
 	brcmf_dbg(TRACE, "Enter\n");
-
 	if (bus) {
 		/* Stop watchdog task */
 		if (bus->watchdog_tsk) {
@@ -5710,46 +5710,100 @@ void brcmf_sdio_remove(struct brcmf_sdio *bus)
 					brcmf_chip_set_passive(bus->ci);
 				}
 
-				if (bus->ci->blhs)
-					bus->ci->blhs->init(bus->ci);
-
-				/* Configure registers to trigger WLAN reset on
-				 * "SDIO Soft Reset", and set RES bit to trigger
-				 *  SDIO as well as WLAN reset
-				 * (instead of using PMU/CC Watchdog register)
-				 */
-				if (bus->ci->ccsec) {
-					struct brcmf_sdio_dev *sdiodev;
-					int err = 0;
-					u32 reg_val = 0;
-
-					sdiodev = bus->sdiodev;
-					/* Set card control so an SDIO card reset
-					 *does a WLAN backplane reset */
-					reg_val = brcmf_sdiod_func0_rb(sdiodev,
+				if (bus->ci->blhs &&
+				    (bus->ci->chip == CY_CC_43012_CHIP_ID ||
+				     bus->ci->chip == CY_CC_43022_CHIP_ID)) {
+					/* Set card control so an SDIO card
+					 * reset does a WLAN backplane reset
+					 */
+					reg_val = brcmf_sdiod_func0_rb(bus->sdiodev,
 								       SDIO_CCCR_BRCM_CARDCTRL,
 								       &err);
-					reg_val |= SDIO_CCCR_BRCM_CARDCTRL_WLANRESET;
-
-					if (ifx_btsdio_set_bt_reset(bus_if))
-						reg_val |= SDIO_CCCR_BRCM_CARDCTRL_BTRESET;
-
-					brcmf_dbg(SDIO, "Write CARDCTRL = 0x%x\n", reg_val);
-
-					brcmf_sdiod_func0_wb(sdiodev, SDIO_CCCR_BRCM_CARDCTRL,
-							     reg_val, &err);
-					brcmf_sdiod_func0_wb(sdiodev, SDIO_CCCR_ABORT,
-							    sdiodev->func1->num |\
-								SDIO_IO_CARD_RESET,
-								NULL);
-				} else {
-					/* Reset the PMU, backplane and all the
-					 * cores by using the PMUWatchdogCounter.
+					if (!err) {
+						/* For 43022 bit 1 and bit 2 are required
+						 * to be set for SDIO reset
+						 */
+						reg_val |= SDIO_CCCR_BRCM_CARDCTRL_WLANRESET;
+						if (ifx_btsdio_set_bt_reset(bus_if))
+							reg_val |= SDIO_CCCR_BRCM_CARDCTRL_BTRESET;
+						brcmf_sdiod_func0_wb(bus->sdiodev,
+								     SDIO_CCCR_BRCM_CARDCTRL,
+								     reg_val, &err);
+						brcmf_dbg(INFO, "Write CARDCTRL = 0x%x err:%d\n",
+							  reg_val, err);
+						read_reg = brcmf_sdiod_func0_rb(bus->sdiodev,
+										SDIO_CCCR_BRCM_CARDCTRL,
+										&err);
+						brcmf_dbg(INFO, "Card CTRL reg dump [0x%x], read err:%d\n",
+							  read_reg, err);
+					} else {
+						brcmf_err("Failed to read Card CTRL [err = %d]\n",
+							  err);
+					}
+					/* For 43022, bit 3 needs to be set
+					 * for IO Card reset
 					 */
-					brcmf_chip_reset_watchdog(bus->ci);
+					reg_val = brcmf_sdiod_func0_rb(bus->sdiodev,
+								       SDIO_CCCR_IO_ABORT,
+								       &err);
+					if (!err) {
+						reg_val |= SDIO_CCCR_IO_ABORT_RES;
+						brcmf_err("Setting IO Card Reset (RES) bit"
+							" in IOAbort register, after this point no"
+							" SDIO access is allowed till full"
+							" SDIO init\n");
+						brcmf_sdiod_func0_wb(bus->sdiodev,
+								     SDIO_CCCR_IO_ABORT,
+								     reg_val, &err);
+					} else {
+						brcmf_err("Failed to read IO Abort [err = %d]\n",
+							  err);
+					}
+					mdelay(20);
+				} else {
+					if (bus->ci->blhs)
+						bus->ci->blhs->init(bus->ci);
+
+					/* Configure registers to trigger WLAN reset on
+					 * "SDIO Soft Reset", and set RES bit to trigger
+					 *  SDIO as well as WLAN reset
+					 * (instead of using PMU/CC Watchdog register)
+					 */
+					if (bus->ci->ccsec) {
+						struct brcmf_sdio_dev *sdiodev;
+						int err = 0;
+						u32 reg_val = 0;
+
+						sdiodev = bus->sdiodev;
+						/* Set card control so an SDIO card reset
+						 * does a WLAN backplane reset
+						 */
+						reg_val = brcmf_sdiod_func0_rb(sdiodev,
+									       SDIO_CCCR_BRCM_CARDCTRL,
+									       &err);
+						reg_val |= SDIO_CCCR_BRCM_CARDCTRL_WLANRESET;
+                                                if (ifx_btsdio_set_bt_reset(bus_if))
+                                                        reg_val |= SDIO_CCCR_BRCM_CARDCTRL_BTRESET;
+						brcmf_sdiod_func0_wb(sdiodev,
+								     SDIO_CCCR_BRCM_CARDCTRL,
+								     reg_val, &err);
+						brcmf_dbg(INFO, "Write CARDCTRL = 0x%x err:%d\n",
+							  reg_val, err);
+						brcmf_sdiod_func0_wb(sdiodev,
+								     SDIO_CCCR_ABORT,
+								     sdiodev->func1->num |
+								     SDIO_IO_CARD_RESET,
+								     NULL);
+					} else {
+						/* Reset the PMU, backplane and all the
+						 * cores by using the PMUWatchdogCounter.
+						 */
+						brcmf_chip_reset_watchdog(bus->ci);
+					}
+
+					if (bus->ci->blhs)
+						bus->ci->blhs->post_wdreset(bus->ci);
 				}
-				if (bus->ci->blhs)
-					bus->ci->blhs->post_wdreset(bus->ci);
 
 				brcmf_sdio_clkctl(bus, CLK_NONE, false);
 				sdio_release_host(bus->sdiodev->func1);
