@@ -254,7 +254,7 @@ struct sbsocramregs {
 
 //TODO: original value is 450, check if need assign to specific chip or not.
 #define BRCMF_BLHS_D2H_VALDN_DONE_TIMEOUT		250	/* msec */
-#define BRCMF_BLHS_D2H_MV_NVRAM_DONE_TIMEOUT		100	/* msec */
+#define BRCMF_BLHS_D2H_MV_NVRAM_DONE_TIMEOUT		(100)	/* msec */
 #define BRCMF_BLHS_D2H_BP_CLK_DISABLE_REQ_TIMEOUT	(5 * 1000)	/* msec */
 
 /* Bootloader handshake flags - dongle to host */
@@ -1124,7 +1124,7 @@ static int brcmf_blhs_pre_nvram_download(struct brcmf_chip *pub)
 static int brcmf_blhs_ack_wait_dongle_access(struct brcmf_chip *pub)
 {
 	struct brcmf_chip_priv *chip;
-	u32 addr, base;
+	u32 addr;
 	int err;
 
 	chip = container_of(pub, struct brcmf_chip_priv, pub);
@@ -1229,7 +1229,7 @@ static int brcmf_blhs_post_nvram_download(struct brcmf_chip *pub)
 				  regdata);
 		} else {
 		/* Timeout waiting for the NVRAM to be moved to the end of the RAM. */
-			brcmf_err("Timeout:%dms for BRCMF_BLHS_D2H_MV_NVRAM_DONE regdata 0x%08x\n"
+			brcmf_err("Timeout: %dms for BRCMF_BLHS_D2H_MV_NVRAM_DONE regdata 0x%08x\n",
 				  BRCMF_BLHS_D2H_MV_NVRAM_DONE_TIMEOUT, regdata);
 			return -EPERM;
 		}
