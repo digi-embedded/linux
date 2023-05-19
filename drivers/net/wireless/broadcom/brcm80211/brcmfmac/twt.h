@@ -83,6 +83,30 @@ enum brcmf_twt_flow_flag {
 };
 
 /**
+ * enum brcmf_twt_session_state - TWT session state in the Host driver list
+ *
+ * @BRCMF_TWT_SESS_STATE_UNSPEC: Reserved value 0.
+ * @BRCMF_TWT_SESS_STATE_SETUP_INPROGRESS: TWT session setup request was sent
+ *	to the Firmware.
+ * @BRCMF_TWT_SESS_STATE_SETUP_COMPLETE: TWT session setup is complete and received
+ * 	setup event from the Firmweare.
+ * @BRCMF_TWT_SESS_STATE_TEARDOWN_INPROGRESS: TWT session teardown request was sent
+ *	to the Firmware.
+ * @BRCMF_TWT_SESS_STATE_TEARDOWN_COMPLETE: TWT session teardown is complete and
+ *	received Teardown event from the Firmware.
+ * @BRCMF_TWT_SESS_STATE_MAX: This acts as a the tail of state list.
+ *      Make sure it located at the end of the list.
+ */
+enum brcmf_twt_session_state {
+	BRCMF_TWT_SESS_STATE_UNSPEC,
+	BRCMF_TWT_SESS_STATE_SETUP_INPROGRESS,
+	BRCMF_TWT_SESS_STATE_SETUP_COMPLETE,
+	BRCMF_TWT_SESS_STATE_TEARDOWN_INPROGRESS,
+	BRCMF_TWT_SESS_STATE_TEARDOWN_COMPLETE,
+	BRCMF_TWT_SESS_STATE_MAX
+};
+
+/**
  * struct brcmf_twt_params - TWT session parameters
  *
  * @twt_oper: TWT operation, Refer enum ifx_twt_oper.
@@ -126,6 +150,25 @@ struct brcmf_twt_params {
 	u8 twt_info_frame_disabled;
 	u8 min_twt_unit;
 	u8 teardown_all_twt;
+};
+
+/**
+ * struct brcmf_twt_session - TWT session structure.
+ *
+ * @ifidx: interface index.
+ * @bsscfgidx: bsscfg index.
+ * @peer: TWT peer address.
+ * @state: TWT session state, refer enum brcmf_twt_session_state.
+ * @twt_params: TWT session parameters.
+ * @list: linked list.
+ */
+struct brcmf_twt_session {
+	u8 ifidx;
+	s32 bsscfgidx;
+	struct ether_addr peer_addr;
+	enum brcmf_twt_session_state state;
+	struct brcmf_twt_params twt_params;
+	struct list_head list;
 };
 
 /**
@@ -183,6 +226,24 @@ struct brcmf_twt_sdesc {
 };
 
 /**
+ * struct brcmf_twt_setup_event - TWT Setup Completion event data from firmware TWT module
+ *
+ * @version: Structure version.
+ * @length:the byte count of fields from 'dialog' onwards.
+ * @dialog: the dialog token user supplied to the TWT setup API.
+ * @pad: 3 byte Pad.
+ * @status: Event status.
+ */
+struct brcmf_twt_setup_event {
+	u16 version;
+	u16 length;
+	u8 dialog;
+	u8 pad[3];
+	s32 status;
+        /* enum brcmf_twt_sdesc sdesc; */
+};
+
+/**
  * struct brcmf_twt_setup_oper - TWT iovar Setup operation subcmd data to firmware TWT module
  *
  * @version: Structure version.
@@ -215,6 +276,20 @@ struct brcmf_twt_teardesc {
 };
 
 /**
+ * struct brcmf_twt_teardown_event - TWT Teardown Completion event data from firmware TWT module.
+ *
+ * @version: structure version.
+ * @length: the byte count of fields from 'status' onwards.
+ * @status: Event status.
+ */
+struct brcmf_twt_teardown_event {
+	u16 version;
+	u16 length;
+	s32 status;
+	/* enum ifx_twt_teardesc teardesc; */
+};
+
+/**
  * struct brcmf_twt_teardown_oper - TWT iovar Teardown operation subcmd data to firmware TWT module.
  *
  * @version: structure version.
@@ -228,6 +303,23 @@ struct brcmf_twt_teardown_oper {
 	struct ether_addr peer;
 	struct brcmf_twt_teardesc teardesc;
 };
+
+/**
+ * brcmf_twt_cleanup_sessions - Cleanup the TWT sessions from the driver list.
+ *
+ * @ifp: interface instatnce.
+ */
+s32 brcmf_twt_cleanup_sessions(struct brcmf_if *ifp);
+
+/**
+ * brcmf_notify_twt_event() - Handle the TWT Event notifications from Firmware.
+ *
+ * @ifp: interface instatnce.
+ * @e: event message.
+ * @data: payload of message, contains TWT session data.
+ */
+int brcmf_notify_twt_event(struct brcmf_if *ifp, const struct brcmf_event_msg *e,
+			  void *data);
 
 /**
  * brcmf_twt_oper() - Handle the TWT Operation requests from Userspace.
