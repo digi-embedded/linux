@@ -1609,6 +1609,7 @@ static int brcmf_bus_started(struct brcmf_pub *drvr, struct cfg80211_ops *ops)
 	brcmf_feat_debugfs_create(drvr);
 	brcmf_proto_debugfs_create(drvr);
 	brcmf_bus_debugfs_create(bus_if);
+	brcmf_twt_debugfs_create(drvr);
 
 	return 0;
 

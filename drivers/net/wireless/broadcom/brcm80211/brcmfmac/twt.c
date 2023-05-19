@@ -144,6 +144,91 @@ brcmf_twt_float_to_u32(u8 exponent, u16 mantissa)
 }
 
 /**
+ * brcmf_twt_stats_read() - Read the contents of the debugfs file "twt_stats".
+ *
+ * @seq: sequence for debugfs entry.
+ * @data: raw data pointer.
+ *
+ * return: 0.
+ */
+static int
+brcmf_twt_stats_read(struct seq_file *seq, void *data)
+{
+	struct brcmf_bus *bus_if = dev_get_drvdata(seq->private);
+	struct brcmf_pub *drvr = bus_if->drvr;
+	int i;
+
+	/* Return if the if TWT is not supported by Firmware */
+	if (!(drvr->feat_flags & BIT(BRCMF_FEAT_TWT)))
+		return 0;
+
+	/* Iterate the interface list in struct brcmf_pub */
+	for (i = 0; i < BRCMF_MAX_IFS; i++) {
+		struct brcmf_if *ifp = drvr->iflist[i];
+		struct brcmf_twt_session *twt_sess;
+
+		/* Skip interface if TWT session list in struct brcmf_if is empty */
+		if (!ifp || list_empty(&ifp->twt_sess_list))
+			continue;
+
+		seq_printf(seq, "ifname: %s, ifidx: %u, bsscfgidx: %d\n",
+			   ifp->ndev ? ifp->ndev->name : "<no-ndev>" ,
+			   ifp->ifidx, ifp->bsscfgidx);
+
+		/* Iterate the TWT session list in struct brcmf_if */
+		list_for_each_entry(twt_sess, &ifp->twt_sess_list, list) {
+			struct brcmf_twt_params *twt_params;
+			u32 wake_dur, wake_int;
+
+			twt_params = &twt_sess->twt_params;
+
+			wake_dur = brcmf_twt_min_twt_to_wake_dur(twt_params->min_twt,
+								 twt_params->min_twt_unit);
+			wake_int = brcmf_twt_float_to_u32(twt_params->exponent,
+							  twt_params->mantissa);
+
+			if (twt_params->negotiation_type == IFX_TWT_PARAM_NEGO_TYPE_ITWT)
+				seq_printf(seq, "\tiTWT Session, Flow ID: %u\n",
+					   twt_params->flow_id);
+			else if (twt_params->negotiation_type == IFX_TWT_PARAM_NEGO_TYPE_BTWT)
+				seq_printf(seq, "\tbTWT Session, Bcast TWT ID: %u\n",
+					   twt_params->bcast_twt_id);
+			else
+				continue;
+
+			seq_printf(seq, "\t\tSession state       : %s\n",
+				   brcmf_twt_session_state_str[twt_sess->state]);
+			seq_printf(seq, "\t\tTWT peer            : %pM\n",
+				   twt_sess->peer_addr.octet);
+			seq_printf(seq, "\t\tTarget Wake Time    : %llu uS\n",
+				   twt_params->twt);
+			seq_printf(seq, "\t\tWake Duration       : %u uS\n",
+				   wake_dur);
+			seq_printf(seq, "\t\tWake Interval       : %u uS\n",
+				   wake_int);
+			seq_printf(seq, "\t\tDialog_token        : %u\n",
+				   twt_params->dialog_token);
+			seq_printf(seq, "\t\tSession type        : %s, %s, %s\n\n",
+				   twt_params->implicit ? "Implicit" : "Explicit",
+				   twt_params->trigger ? "Trigger based" : "Non-Trigger based",
+				   twt_params->flow_type ? "Un-Announced" : "Announced");
+		}
+	}
+	return 0;
+}
+
+/**
+ * brcmf_twt_debugfs_create() - create debugfs entries.
+ *
+ * @drvr: driver instance.
+ */
+void
+brcmf_twt_debugfs_create(struct brcmf_pub *drvr)
+{
+	brcmf_debugfs_add_entry(drvr, "twt_stats", brcmf_twt_stats_read);
+}
+
+/**
  * brcmf_twt_cleanup_sessions - Cleanup the TWT sessions from the driver list.
  *
  * @ifp: interface instatnce.
