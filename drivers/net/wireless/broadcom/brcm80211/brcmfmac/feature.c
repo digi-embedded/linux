@@ -342,6 +342,7 @@ void brcmf_feat_attach(struct brcmf_pub *drvr)
 
 	brcmf_feat_iovar_int_get(ifp, BRCMF_FEAT_FWSUP, "sup_wpa");
 	brcmf_feat_iovar_int_get(ifp, BRCMF_FEAT_SCAN_V2, "scan_ver");
+	brcmf_feat_iovar_int_get(ifp, BRCMF_FEAT_TWT, "twt");
 
 	brcmf_fwvid_feat_attach(ifp);
 
