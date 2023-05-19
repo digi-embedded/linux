@@ -305,6 +305,13 @@ struct brcmf_twt_teardown_oper {
 };
 
 /**
+ * brcmf_twt_debugfs_create() - create debugfs entries.
+ *
+ * @drvr: driver instance.
+ */
+void brcmf_twt_debugfs_create(struct brcmf_pub *drvr);
+
+/**
  * brcmf_twt_cleanup_sessions - Cleanup the TWT sessions from the driver list.
  *
  * @ifp: interface instatnce.
