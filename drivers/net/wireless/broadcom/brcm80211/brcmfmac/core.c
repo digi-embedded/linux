@@ -30,6 +30,7 @@
 #include "proto.h"
 #include "pcie.h"
 #include "common.h"
+#include "twt.h"
 
 #define MAX_WAIT_FOR_8021X_TX			msecs_to_jiffies(950)
 
@@ -1204,6 +1205,11 @@ struct brcmf_if *brcmf_add_if(struct brcmf_pub *drvr, s32 bsscfgidx, s32 ifidx,
 	BRCMF_IF_STA_LIST_LOCK_INIT(ifp);
 	 /* Initialize STA info list */
 	INIT_LIST_HEAD(&ifp->sta_list);
+
+	spin_lock_init(&ifp->twt_sess_list_lock);
+	 /* Initialize TWT Session list */
+	INIT_LIST_HEAD(&ifp->twt_sess_list);
+
 	if (mac_addr != NULL)
 		memcpy(ifp->mac_addr, mac_addr, ETH_ALEN);
 
