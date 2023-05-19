@@ -433,21 +433,6 @@ enum ifx_twt_oper_setup_cmd_type {
 	IFX_TWT_OPER_SETUP_CMD_TYPE_MAX		= 8
 };
 
-/* TWT top level command IDs */
-enum {
-	IFX_TWT_CMD_ENAB = 0,
-	IFX_TWT_CMD_SETUP = 1,
-	IFX_TWT_CMD_TEARDOWN = 2,
-	IFX_TWT_CMD_INFO = 3,
-	IFX_TWT_CMD_AUTOSCHED = 4,
-	IFX_TWT_CMD_STATS = 5,
-	IFX_TWT_CMD_EARLY_TERM_TIME = 6,
-	IFX_TWT_CMD_RESP_CONFIG = 7,
-	IFX_TWT_CMD_SPPS_ENAB = 8,
-	IFX_TWT_CMD_FEATURES = 9,
-	IFX_TWT_CMD_LAST
-};
-
 /**
  * HE top level command IDs
  */
@@ -542,91 +527,6 @@ static const struct nla_policy ifx_vendor_attr_twt_policy[IFX_VENDOR_ATTR_TWT_MA
 	[IFX_VENDOR_ATTR_TWT_PARAMS] =
 		NLA_POLICY_NESTED(ifx_vendor_attr_twt_param_policy),
 	[IFX_VENDOR_ATTR_TWT_MAX] = {.type = NLA_U8},
-};
-
-struct ifx_twt {
-	u8 twt_oper;
-	enum ifx_twt_param_nego_type negotiation_type;
-	enum ifx_twt_oper_setup_cmd_type setup_cmd;
-	u8 dialog_token;
-	u64 twt;
-	u64 twt_offset;
-	u8 min_twt;
-	u8 exponent;
-	u16 mantissa;
-	u8 requestor;
-	u8 trigger;
-	u8 implicit;
-	u8 flow_type;
-	u8 flow_id;
-	u8 bcast_twt_id;
-	u8 protection;
-	u8 twt_channel;
-	u8 twt_info_frame_disabled;
-	u8 min_twt_unit;
-	u8 teardown_all_twt;
-};
-
-/* NOTES:
- * ifx_twt_sdesc is used to support both broadcast TWT and individual TWT.
- * Value in bit[0:2] in 'flow_id' field is interpreted differently:
- * - flow id for individual TWT (when IFX_TWT_FLOW_FLAG_BROADCAST bit is NOT set
- *   in 'flow_flags' field)
- * - flow id as defined in Table 8-248l1 for broadcast TWT (when
- *   IFX_TWT_FLOW_FLAG_BROADCAST bit is set)
- * In latter case other bits could be used to differentiate different flows
- * in order to support multiple broadcast TWTs with the same flow id.
- */
-
-/* TWT Setup descriptor */
-struct ifx_twt_sdesc {
-	/* Setup Command. */
-	u8 setup_cmd;		/* See TWT_SETUP_CMD_XXXX in 802.11ah.h */
-	u8 flow_flags;		/* Flow attributes. See WL_TWT_FLOW_FLAG_XXXX below */
-	u8 flow_id;		/* must be between 0 and 7. Set 0xFF for auto assignment */
-	u8 wake_type;	/* See WL_TWT_TIME_TYPE_XXXX below */
-	u32 wake_time_h;	/* target wake time - BSS TSF (us) */
-	u32 wake_time_l;
-	u32 wake_dur;	/* target wake duration in unit of microseconds */
-	u32 wake_int;	/* target wake interval */
-	u32 btwt_persistence;	/* Broadcast TWT Persistence */
-	u32 wake_int_max;	/* max wake interval(uS) for TWT */
-	u8 duty_cycle_min;	/* min duty cycle for TWT(Percentage) */
-	u8 pad;
-	u8 bid;		/* must be between 0 and 31. Set 0xFF for auto assignment */
-	u8 channel;		/* Twt channel - Not used for now */
-	u8 negotiation_type;	/* Negotiation Type: See macros TWT_NEGO_TYPE_X */
-	u8 frame_recomm;	/* frame recommendation for broadcast TWTs - Not used for now	 */
-};
-
-/* twt teardown descriptor */
-struct ifx_twt_teardesc {
-	u8 negotiation_type;
-	u8 flow_id;		/* must be between 0 and 7 */
-	u8 bid;		/* must be between 0 and 31 */
-	u8 alltwt;		/* all twt teardown - 0 or 1 */
-};
-
-/* HE TWT Setup command */
-struct ifx_twt_setup {
-	/* structure control */
-	u16 version;	/* structure version */
-	u16 length;	/* data length (starting after this field) */
-	/* peer address */
-	struct ether_addr peer;	/* leave it all 0s' for AP */
-	u8 pad[2];
-	/* setup descriptor */
-	struct ifx_twt_sdesc desc;
-};
-
-/* HE TWT Teardown command */
-struct ifx_twt_teardown {
-	/* structure control */
-	u16 version;	/* structure version */
-	u16 length;	/* data length (starting after this field) */
-	/* peer address */
-	struct ether_addr peer;	/* leave it all 0s' for AP */
-	struct ifx_twt_teardesc teardesc;	/* Teardown descriptor */
 };
 
 /* randmac define/enum/struct
