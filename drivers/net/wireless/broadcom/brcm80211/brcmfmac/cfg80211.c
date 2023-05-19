@@ -34,6 +34,7 @@
 #include "vendor_ifx.h"
 #include "bus.h"
 #include "common.h"
+#include "twt.h"
 
 #define BRCMF_SCAN_IE_LEN_MAX		2048
 
@@ -1912,6 +1913,7 @@ static void brcmf_link_down(struct brcmf_cfg80211_vif *vif, u16 reason,
 			brcmf_set_pmk(vif->ifp, NULL, 0);
 		vif->profile.use_fwsup = BRCMF_PROFILE_FWSUP_NONE;
 	}
+
 	brcmf_dbg(TRACE, "Exit\n");
 }
 
@@ -2967,8 +2969,14 @@ brcmf_cfg80211_disconnect(struct wiphy *wiphy, struct net_device *ndev,
 	scbval.val = cpu_to_le32(reason_code);
 	err = brcmf_fil_cmd_data_set(ifp, BRCMF_C_DISASSOC,
 				     &scbval, sizeof(scbval));
-	if (err)
+	if (err) {
 		bphy_err(drvr, "error (%d)\n", err);
+	} else {
+		if (brcmf_feat_is_enabled(ifp, BRCMF_FEAT_TWT)) {
+		         /* Cleanup TWT Session list */
+		        brcmf_twt_cleanup_sessions(ifp);
+		}
+	}
 
 	brcmf_dbg(TRACE, "Exit\n");
 	return err;
@@ -7896,14 +7904,6 @@ brcmf_notify_beacon_loss(struct brcmf_if *ifp,
 	return 0;
 }
 
-int brcmf_notify_twt(struct brcmf_if *ifp,
-		     const struct brcmf_event_msg *e,
-		     void *data)
-{
-	brcmf_dbg(TRACE, "Enter\n");
-	return 0;
-}
-
 static void brcmf_init_conf(struct brcmf_cfg80211_conf *conf)
 {
 	conf->frag_threshold = (u32)-1;
@@ -7974,8 +7974,13 @@ static void brcmf_register_event_handlers(struct brcmf_cfg80211_info *cfg)
 			    brcmf_notify_mgmt_tx_status);
 	brcmf_fweh_register(cfg->pub, BRCMF_E_BCNLOST_MSG,
 			    brcmf_notify_beacon_loss);
-	brcmf_fweh_register(cfg->pub, BRCMF_E_TWT_SETUP,
-			    brcmf_notify_twt);
+
+	if (brcmf_feat_is_enabled(ifp, BRCMF_FEAT_TWT)) {
+		brcmf_fweh_register(cfg->pub, BRCMF_E_TWT_SETUP,
+				    brcmf_notify_twt_event);
+		brcmf_fweh_register(cfg->pub, BRCMF_E_TWT_TEARDOWN,
+				    brcmf_notify_twt_event);
+	}
 }
 
 static void brcmf_deinit_priv_mem(struct brcmf_cfg80211_info *cfg)

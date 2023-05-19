@@ -201,8 +201,10 @@ struct brcmf_if {
 	struct in6_addr ipv6_addr_tbl[NDOL_MAX_ENTRIES];
 	u8 ipv6addr_idx;
 	bool fwil_fwerr;
-	struct list_head sta_list;              /* sll of associated stations */
+	struct list_head sta_list;              /* dll of associated stations */
 	spinlock_t sta_list_lock;
+	struct list_head twt_sess_list;         /* dll of TWT sessions */
+	spinlock_t twt_sess_list_lock;
 	bool fmac_pkt_fwd_en;
 };
 
