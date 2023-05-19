@@ -32,6 +32,7 @@
  * DUMP_OBSS: Firmware has capable to dump obss info to support ACS
  * SAE_EXT: SAE be handled by userspace supplicant
  * GCMP: firmware has defined GCMP or not.
+ * TWT: Firmware has the TWT Module Support.
  */
 #define BRCMF_FEAT_LIST \
 	BRCMF_FEAT_DEF(MBSS) \
@@ -59,7 +60,8 @@
 	BRCMF_FEAT_DEF(SAE_EXT) \
 	BRCMF_FEAT_DEF(FBT) \
 	BRCMF_FEAT_DEF(OKC) \
-	BRCMF_FEAT_DEF(GCMP)
+	BRCMF_FEAT_DEF(GCMP) \
+	BRCMF_FEAT_DEF(TWT)
 
 /*
  * Quirks:
