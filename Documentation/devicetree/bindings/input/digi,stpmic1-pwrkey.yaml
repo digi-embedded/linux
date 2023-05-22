@@ -1,0 +1,37 @@
+# SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/input/digi,stpmic1-pwrkey.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Power Key device driver for ConnectCore modules
+
+maintainers:
+  - Arturo Buzarra <Arturo.Buzarra@digi.com>
+
+allOf:
+  - $ref: input.yaml#
+
+properties:
+  compatible:
+    enum:
+      - digi,stpmic1-pwrkey
+
+  interrupts:
+    maxItems: 2
+
+required:
+  - compatible
+  - interrupts
+
+unevaluatedProperties: false
+
+examples:
+  - |
+    #include "dt-bindings/input/input.h"
+    power_button {
+        compatible = "digi,stpmic1-pwrkey";
+        interrupts-extended = <&optee 0>, <&optee 1>;
+        interrupt-names = "stpmic1_pwrkey_fall", "stpmic1_pwrkey_rise";
+        status = "okay";
+    };
