@@ -11,11 +11,13 @@
 #include <linux/dmaengine.h>
 #include <linux/dma-mapping.h>
 #include <linux/dmapool.h>
+#include <linux/genalloc.h>
 #include <linux/init.h>
 #include <linux/iopoll.h>
 #include <linux/list.h>
 #include <linux/module.h>
 #include <linux/of_dma.h>
+#include <linux/of_reserved_mem.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <linux/reset.h>
@@ -354,7 +356,7 @@ struct stm32_dma3_hwdesc {
  */
 struct stm32_dma3_lli {
 	struct stm32_dma3_hwdesc *hwdesc;
-	dma_addr_t hwdesc_lli;
+	dma_addr_t hwdesc_addr;
 };
 
 struct stm32_dma3_swdesc {
@@ -384,7 +386,6 @@ struct stm32_dma3_chan {
 	struct stm32_dma3_dt_conf dt_config;
 	struct dma_slave_config dma_config;
 	u8 config_set;
-	struct dma_pool *lli_pool;
 	struct stm32_dma3_swdesc *swdesc;
 	enum ctr2_tcem tcem;
 	u32 curr_lli;
@@ -403,6 +404,8 @@ struct stm32_dma3_ddata {
 	u32 max_burst_length;
 #endif
 	u32 axi_max_burst_len;
+	struct gen_pool *gen_pool;
+	struct dma_pool *dma_pool;
 };
 
 static inline struct stm32_dma3_chan *to_stm32_dma3_chan(struct dma_chan *c)
@@ -558,7 +561,7 @@ static void stm32_dma3_chan_dump_reg(struct stm32_dma3_chan *chan)
 
 static void stm32_dma3_chan_dump_hwdesc(struct stm32_dma3_chan *chan, struct stm32_dma3_lli *lli)
 {
-	dev_dbg(chan2dev(chan), "hwdesc: %pad\n", &lli->hwdesc_lli);
+	dev_dbg(chan2dev(chan), "hwdesc: %pad\n", &lli->hwdesc_addr);
 	dev_dbg(chan2dev(chan), "CTR1: 0x%08x\n", lli->hwdesc->ctr1);
 	dev_dbg(chan2dev(chan), "CTR2: 0x%08x\n", lli->hwdesc->ctr2);
 	dev_dbg(chan2dev(chan), "CBR1: 0x%08x\n", lli->hwdesc->cbr1);
@@ -567,12 +570,119 @@ static void stm32_dma3_chan_dump_hwdesc(struct stm32_dma3_chan *chan, struct stm
 	dev_dbg(chan2dev(chan), "CLLR: 0x%08x\n", lli->hwdesc->cllr);
 }
 
+static int stm32_dma3_lli_pool_create(struct platform_device *pdev, struct stm32_dma3_ddata *ddata)
+{
+	struct device_node *rmem_np;
+	struct reserved_mem *rmem;
+	void *rmem_va;
+	int ret;
+
+	/* Check if a specific pool is specified in device tree for Linked-List Items */
+	rmem_np = of_parse_phandle(pdev->dev.of_node, "memory-region", 0);
+	if (!rmem_np)
+		goto no_specific_pool;
+
+	rmem = of_reserved_mem_lookup(rmem_np);
+	if (!rmem)
+		goto no_specific_pool;
+
+	ddata->gen_pool = devm_gen_pool_create(&pdev->dev, ilog2(sizeof(struct stm32_dma3_hwdesc)),
+					       dev_to_node(&pdev->dev),	dev_name(&pdev->dev));
+	if (!ddata->gen_pool)
+		goto no_specific_pool;
+
+	rmem_va = devm_memremap(&pdev->dev, rmem->base, rmem->size, MEMREMAP_WC);
+	ret = gen_pool_add_virt(ddata->gen_pool, (unsigned long)rmem_va, rmem->base, rmem->size,
+				dev_to_node(&pdev->dev));
+	if (ret) {
+		gen_pool_destroy(ddata->gen_pool);
+		ddata->gen_pool = NULL;
+		goto no_specific_pool;
+	}
+
+	dev_dbg(&pdev->dev, "LLI gen_pool %s (%ldKiB)\n",
+		rmem->name, gen_pool_size(ddata->gen_pool) / SZ_1K);
+
+no_specific_pool:
+	of_node_put(rmem_np);
+
+	/* Fallback pool */
+	ddata->dma_pool = dmam_pool_create(dev_name(&pdev->dev), &pdev->dev,
+					   sizeof(struct stm32_dma3_hwdesc),
+					   __alignof__(struct stm32_dma3_hwdesc), 0);
+	if (!ddata->gen_pool && !ddata->dma_pool)
+		return -ENOMEM;
+
+	dev_dbg(&pdev->dev, "created LLI %sdma_pool in DDR\n", ddata->gen_pool ? "fallback " : "");
+
+	return 0;
+}
+
+static void stm32_dma3_lli_pool_dma_free(struct stm32_dma3_ddata *ddata, struct stm32_dma3_lli lli)
+{
+	unsigned long addr = (unsigned long)lli.hwdesc;
+	size_t size = sizeof(struct stm32_dma3_hwdesc);
+
+	if (ddata->gen_pool && gen_pool_has_addr(ddata->gen_pool, addr, size))
+		gen_pool_free(ddata->gen_pool, addr, size);
+	else
+		dma_pool_free(ddata->dma_pool, lli.hwdesc, lli.hwdesc_addr);
+}
+
+static int stm32_dma3_lli_pool_dma_alloc(struct stm32_dma3_ddata *ddata, struct stm32_dma3_lli *lli,
+					 u32 count)
+{
+	size_t avail;
+	int i;
+
+	/* Fallback to dma_pool, if no gen_pool */
+	if (!ddata->gen_pool)
+		goto from_dma_pool;
+
+	/* Check if there is enough room in gen_pool, otherwise fallback to dma_pool */
+	avail = gen_pool_avail(ddata->gen_pool);
+	if (avail < (count * __alignof__(struct stm32_dma3_hwdesc)))
+		goto from_dma_pool;
+
+	/* Allocate LLIs in gen_pool */
+	for (i = 0; i < count; i++) {
+		lli[i].hwdesc = gen_pool_dma_zalloc_align(ddata->gen_pool,
+							  sizeof(struct stm32_dma3_hwdesc),
+							  &lli[i].hwdesc_addr,
+							  __alignof__(struct stm32_dma3_hwdesc));
+		if (!lli[i].hwdesc)
+			goto gen_pool_free;
+	}
+
+	return 0;
+
+gen_pool_free:
+	while (--i >= 0)
+		stm32_dma3_lli_pool_dma_free(ddata, lli[i]);
+
+from_dma_pool:
+	/* Allocate LLIs in dma_pool */
+	for (i = 0; i < count; i++) {
+		lli[i].hwdesc = dma_pool_zalloc(ddata->dma_pool, GFP_NOWAIT, &lli[i].hwdesc_addr);
+		if (!lli[i].hwdesc)
+			goto err_pool_free;
+	}
+
+	return 0;
+
+err_pool_free:
+	while (--i >= 0)
+		stm32_dma3_lli_pool_dma_free(ddata, lli[i]);
+
+	return -ENOMEM;
+}
+
 static struct stm32_dma3_swdesc *stm32_dma3_chan_desc_alloc(struct stm32_dma3_chan *chan, u32 count)
 {
 	struct stm32_dma3_ddata *ddata = to_stm32_dma3_ddata(&chan->vchan.chan);
 	struct stm32_dma3_swdesc *swdesc;
 	u32 ccr;
-	int i;
+	int ret;
 
 	/*
 	 * If the number of hwdesc to allocate is greater than the maximum address of CLLR_LA,
@@ -592,16 +702,16 @@ static struct stm32_dma3_swdesc *stm32_dma3_chan_desc_alloc(struct stm32_dma3_ch
 	 * tab of hwdesc or not ?
 	 * may depend on the @ of next LL constraints
 	 */
-
-	for (i = 0; i < count; i++) {
-		swdesc->lli[i].hwdesc = dma_pool_zalloc(chan->lli_pool, GFP_NOWAIT,
-							&swdesc->lli[i].hwdesc_lli);
-		if (!swdesc->lli[i].hwdesc)
-			goto err_pool_free;
+	/* Allocate all LLIs in the same pool so that the LL base address is the same */
+	ret = stm32_dma3_lli_pool_dma_alloc(ddata, swdesc->lli, count);
+	if (ret) {
+		dev_err(chan2dev(chan), "Failed to alloc descriptors\n");
+		kfree(swdesc);
+		return NULL;
 	}
 
 	/* Set LL base address */
-	writel_relaxed(swdesc->lli[0].hwdesc_lli & CLBAR_LBA,
+	writel_relaxed(swdesc->lli[0].hwdesc_addr & CLBAR_LBA,
 		       ddata->base + STM32_DMA3_CLBAR(chan->id));
 
 	/* Set LL allocated port (AXI) */
@@ -611,24 +721,17 @@ static struct stm32_dma3_swdesc *stm32_dma3_chan_desc_alloc(struct stm32_dma3_ch
 	swdesc->lli_size = count;
 
 	return swdesc;
-
-err_pool_free:
-	dev_err(chan2dev(chan), "Failed to alloc descriptors.\n");
-	while (--i >= 0)
-		dma_pool_free(chan->lli_pool, swdesc->lli[i].hwdesc, swdesc->lli[i].hwdesc_lli);
-	kfree(swdesc);
-
-	return NULL;
 }
 
 static void stm32_dma3_chan_desc_free(struct stm32_dma3_chan *chan,
 				      struct stm32_dma3_swdesc *swdesc)
 {
+	struct stm32_dma3_ddata *ddata = to_stm32_dma3_ddata(&chan->vchan.chan);
 	int i;
 
 	for (i = 0; i < swdesc->lli_size; i++)
-		dma_pool_free(chan->lli_pool, swdesc->lli[i].hwdesc,
-			      swdesc->lli[i].hwdesc_lli);
+		stm32_dma3_lli_pool_dma_free(ddata, swdesc->lli[i]);
+
 	kfree(swdesc);
 }
 
@@ -692,11 +795,11 @@ static int stm32_dma3_chan_prep_hwdesc(struct stm32_dma3_chan *chan,
 
 	if (is_last) {
 		if (is_cyclic)
-			next_lli = swdesc->lli[0].hwdesc_lli;
+			next_lli = swdesc->lli[0].hwdesc_addr;
 		else
 			next_lli = 0;
 	} else {
-		next_lli = swdesc->lli[next].hwdesc_lli;
+		next_lli = swdesc->lli[next].hwdesc_addr;
 	}
 
 	/* TODO:
@@ -1056,7 +1159,7 @@ static int stm32_dma3_chan_get_curr_hwdesc(struct stm32_dma3_swdesc *swdesc, u32
 		return swdesc->lli_size - 1;
 
 	for (i = swdesc->lli_size - 1; i >= 0; i--) {
-		lli_offset = swdesc->lli[i].hwdesc_lli & CLLR_LA;
+		lli_offset = swdesc->lli[i].hwdesc_addr & CLLR_LA;
 		if (lli_offset == next_lli_offset) {
 			if (i > 0)
 				return i - 1;
@@ -1302,15 +1405,6 @@ static int stm32_dma3_alloc_chan_resources(struct dma_chan *c)
 		goto err_put_sync;
 	}
 
-	chan->lli_pool = dmam_pool_create(dev_name(&c->dev->device), c->device->dev,
-					  sizeof(struct stm32_dma3_hwdesc),
-					  __alignof__(struct stm32_dma3_hwdesc), 0);
-	if (!chan->lli_pool) {
-		dev_err(chan2dev(chan), "Failed to create LLI pool\n");
-		ret = -ENOMEM;
-		goto err_put_sync;
-	}
-
 	/* Take the channel semaphore */
 	if (chan->semaphore_mode) {
 		writel_relaxed(CSEMCR_SEM_MUTEX, ddata->base + STM32_DMA3_CSEMCR(id));
@@ -1320,16 +1414,12 @@ static int stm32_dma3_alloc_chan_resources(struct dma_chan *c)
 		if (ccid != CCIDCFGR_CID1) {
 			dev_err(chan2dev(chan), "not under CID1 control (used by CID%d)\n", ccid);
 			ret = -EPERM;
-			goto err_pool_destroy;
+			goto err_put_sync;
 		}
 		dev_dbg(chan2dev(chan), "under CID1 control (semcr=0x%08x)\n", csemcr);
 	}
 
 	return 0;
-
-err_pool_destroy:
-	dmam_pool_destroy(chan->lli_pool);
-	chan->lli_pool = NULL;
 
 err_put_sync:
 	pm_runtime_put_sync(ddata->dma_dev.dev);
@@ -1352,12 +1442,6 @@ static void stm32_dma3_free_chan_resources(struct dma_chan *c)
 	spin_unlock_irqrestore(&chan->vchan.lock, flags);
 
 	vchan_free_chan_resources(to_virt_chan(c));
-	/*
-	 * Caller must guarantee that no more memory from the pool is in use,
-	 * and that nothing will try to use the pool after this call.
-	 */
-	dmam_pool_destroy(chan->lli_pool);
-	chan->lli_pool = NULL;
 
 	/* Release the channel semaphore */
 	if (chan->semaphore_mode)
@@ -2011,6 +2095,7 @@ static int stm32_dma3_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	dma_dev = &ddata->dma_dev;
+	platform_set_drvdata(pdev, ddata);
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	ddata->base = devm_ioremap_resource(&pdev->dev, res);
@@ -2122,6 +2207,10 @@ static int stm32_dma3_probe(struct platform_device *pdev)
 	//TODO: pre-allocate any memory needed during transfer setup to avoid
 	//putting to much pressure on the nowait allocator.
 
+	ret = stm32_dma3_lli_pool_create(pdev, ddata);
+	if (ret)
+		goto err_clk_disable;
+
 	//TODO: as many vchan as dma_channels or dma_requests ?
 	ddata->chans = devm_kcalloc(&pdev->dev, ddata->dma_channels, sizeof(*ddata->chans),
 				    GFP_KERNEL);
@@ -2195,8 +2284,6 @@ static int stm32_dma3_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "Failed to register controller: %d\n", ret);
 		goto err_clk_disable;
 	}
-
-	platform_set_drvdata(pdev, ddata);
 
 	verr = readl_relaxed(ddata->base + STM32_DMA3_VERR);
 
