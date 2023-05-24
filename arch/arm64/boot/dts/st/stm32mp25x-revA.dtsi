@@ -80,3 +80,11 @@
 };
 
 /delete-node/&timers13;
+
+&vdec {
+	maxburstlen = <24>;
+};
+
+&venc {
+	maxburstlen = <16>;
+};
