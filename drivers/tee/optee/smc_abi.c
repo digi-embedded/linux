@@ -924,7 +924,7 @@ static void call_out_of_thread(struct tee_context *ctx, bool system_call)
 		 */
 		thd->thread_cnt--;
 		thd->thread_free_cnt--;
-		pr_warn("optee: decrement max thread to %u\n", thd->thread_cnt);
+		pr_warn("optee: decrement max thread to %zu\n", thd->thread_cnt);
 
 		/*
 		 * If no enough thread to satisfy already provisioned system
