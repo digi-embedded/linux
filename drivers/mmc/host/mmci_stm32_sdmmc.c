@@ -566,6 +566,25 @@ static int sdmmc_post_sig_volt_switch(struct mmci_host *host,
 	return ret;
 }
 
+static void sdmmc_enable_sdio_irq(struct mmci_host *host, int enable)
+{
+	void __iomem *base = host->base;
+	u32 mask = readl_relaxed(base + MMCIMASK0);
+
+	if (enable)
+		writel_relaxed(mask | MCI_ST_SDIOITMASK, base + MMCIMASK0);
+	else
+		writel_relaxed(mask & ~MCI_ST_SDIOITMASK, base + MMCIMASK0);
+}
+
+static void sdmmc_sdio_irq(struct mmci_host *host, u32 status)
+{
+	if (status & MCI_ST_SDIOIT) {
+		sdmmc_enable_sdio_irq(host, 0);
+		sdio_signal_irq(host->mmc);
+	}
+}
+
 static struct mmci_host_ops sdmmc_variant_ops = {
 	.validate_data = sdmmc_idma_validate_data,
 	.prep_data = sdmmc_idma_prep_data,
@@ -579,6 +598,8 @@ static struct mmci_host_ops sdmmc_variant_ops = {
 	.busy_complete = sdmmc_busy_complete,
 	.pre_sig_volt_switch = sdmmc_pre_sig_volt_vswitch,
 	.post_sig_volt_switch = sdmmc_post_sig_volt_switch,
+	.enable_sdio_irq = sdmmc_enable_sdio_irq,
+	.sdio_irq = sdmmc_sdio_irq,
 };
 
 void sdmmc_variant_init(struct mmci_host *host)
