@@ -315,7 +315,7 @@ static int dw_mipi_dsi_host_attach(struct mipi_dsi_host *host,
 	struct dw_mipi_dsi *dsi = host_to_dsi(host);
 	const struct dw_mipi_dsi_plat_data *pdata = dsi->plat_data;
 	struct drm_bridge *bridge;
-	int ret;
+	int ret, nb_endpoints, i;
 
 	if (device->lanes > dsi->plat_data->max_data_lanes) {
 		dev_err(dsi->dev, "the number of data lanes(%u) is too many\n",
@@ -328,13 +328,31 @@ static int dw_mipi_dsi_host_attach(struct mipi_dsi_host *host,
 	dsi->format = device->format;
 	dsi->mode_flags = device->mode_flags;
 
-	bridge = devm_drm_of_get_bridge(dsi->dev, dsi->dev->of_node, 1, 0);
-	if (IS_ERR(bridge))
-		return PTR_ERR(bridge);
+	nb_endpoints = of_graph_get_endpoint_count(dsi->dev->of_node);
+	if (!nb_endpoints)
+		return -ENODEV;
 
-	dsi->panel_bridge = bridge;
+	for (i = 1; i < nb_endpoints; i ++) {
+		bridge = devm_drm_of_get_bridge(dsi->dev, dsi->dev->of_node, i, 0);
 
-	drm_bridge_add(&dsi->bridge);
+		/*
+		 * If at least one endpoint is -ENODEV, continue probing,
+		 * else if at least one endpoint returned an error
+		 * (ie -EPROBE_DEFER) then stop probing.
+		 */
+		if (IS_ERR(bridge)) {
+			if (PTR_ERR(bridge) == -ENODEV)
+				continue;
+			else
+				return PTR_ERR(bridge);
+		} else {
+			dsi->panel_bridge = bridge;
+
+			drm_bridge_add(&dsi->bridge);
+
+			break;
+		}
+	}
 
 	if (pdata->host_ops && pdata->host_ops->attach) {
 		ret = pdata->host_ops->attach(pdata->priv_data, device);
