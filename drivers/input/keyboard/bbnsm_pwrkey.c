@@ -121,7 +121,7 @@ static int bbnsm_pwrkey_probe(struct platform_device *pdev)
 	bbnsm->wakeup = of_property_read_bool(np, "wakeup-source");
 
 	bbnsm->irq = platform_get_irq(pdev, 0);
-	if (bbnsm ->irq < 0)
+	if (bbnsm->irq < 0)
 		return -EINVAL;
 
 	/* config the BBNSM power related register */
