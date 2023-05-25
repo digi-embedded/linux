@@ -10,8 +10,17 @@
 };
 
 &eth1 {
-	/delete-node/tx-queues-config;
+	/delete-property/snps,mixed-burst;
+	snps,fixed-burst;
 
+	/delete-node/stmmac-axi-config;
+	stmmac_axi_config_1: stmmac-axi-config {
+		snps,wr_osr_lmt = <0x7>;
+		snps,rd_osr_lmt = <0x7>;
+		snps,blen = <0 0 0 0 0 0 4>;
+	};
+
+	/delete-node/tx-queues-config;
 	mtl_tx_setup_1: tx-queues-config {
 		snps,tx-queues-to-use = <2>;
 		queue0 {};
@@ -20,8 +29,17 @@
 };
 
 &eth2 {
-	/delete-node/tx-queues-config;
+	/delete-property/snps,mixed-burst;
+	snps,fixed-burst;
 
+	/delete-node/stmmac-axi-config;
+	stmmac_axi_config_2: stmmac-axi-config {
+		snps,wr_osr_lmt = <0x7>;
+		snps,rd_osr_lmt = <0x7>;
+		snps,blen = <0 0 0 0 0 0 4>;
+	};
+
+	/delete-node/tx-queues-config;
 	mtl_tx_setup_2: tx-queues-config {
 		snps,tx-queues-to-use = <2>;
 		queue0 {};
