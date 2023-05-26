@@ -66,6 +66,51 @@
 		device_type = "memory";
 		reg = <0x0 0x80000000 0x1 0x0>;
 	};
+
+	panel_dsi_backlight: panel-dsi-backlight {
+		compatible = "gpio-backlight";
+		gpios = <&gpioi 5 GPIO_ACTIVE_LOW>;
+		default-on;
+		default-brightness-level = <0>;
+		status = "disabled";
+	};
+
+	panel_lvds: panel-lvds {
+		compatible = "edt,etml0700z9ndha", "panel-lvds";
+		enable-gpios = <&gpiog 15 GPIO_ACTIVE_HIGH>;
+		backlight = <&panel_lvds_backlight>;
+		status = "okay";
+
+		width-mm = <156>;
+		height-mm = <92>;
+		data-mapping = "vesa-24";
+
+		panel-timing {
+			clock-frequency = <54000000>;
+			hactive = <1024>;
+			vactive = <600>;
+			hfront-porch = <150>;
+			hback-porch = <150>;
+			hsync-len = <21>;
+			vfront-porch = <24>;
+			vback-porch = <24>;
+			vsync-len = <21>;
+		};
+
+		port {
+			lvds_panel_in: endpoint {
+				remote-endpoint = <&lvds_out0>;
+			};
+		};
+	};
+
+	panel_lvds_backlight: panel-lvds-backlight {
+		compatible = "gpio-backlight";
+		gpios = <&gpioi 5 GPIO_ACTIVE_HIGH>;
+		default-on;
+		default-brightness-level = <0>;
+		status = "okay";
+	};
 };
 
 &arm_wdt {
@@ -77,6 +122,52 @@
 	clocks = <&rcc CK_BUS_USB3PCIEPHY>, <&rcc CK_KER_USB3PCIEPHY>, <&pad_clk>;
 	clock-names = "apb-clk", "ker-clk", "pad-clk";
 	status = "okay";
+};
+
+&dsi {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	status = "disabled";
+
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		port@0 {
+			reg = <0>;
+			dsi_in: endpoint {
+				remote-endpoint = <&ltdc_ep1_out>;
+			};
+		};
+
+		port@1 {
+			reg = <1>;
+			dsi_out1: endpoint {
+				remote-endpoint = <&panel_in_dsi>;
+			};
+		};
+
+		port@2 {
+			reg = <2>;
+			dsi_out2: endpoint {
+				remote-endpoint = <&adv7535_in>;
+			};
+		};
+	};
+
+	panel_dsi: panel-dsi@0 {
+		compatible = "raydium,rm68200";
+		reg = <0>;
+		reset-gpios = <&gpiog 14 GPIO_ACTIVE_LOW>;
+		backlight = <&panel_dsi_backlight >;
+		status = "disabled";
+
+		port {
+			panel_in_dsi: endpoint {
+				remote-endpoint = <&dsi_out1>;
+			};
+		};
+	};
 };
 
 &eth1 {
@@ -151,10 +242,87 @@
 	/* spare dmas for other usage */
 	/delete-property/dmas;
 	/delete-property/dma-names;
+
+	adv7535: hdmi@3d {
+		compatible = "adi,adv7535";
+		reg = <0x3d>, <0x3c>, <0x3f>, <0x38>;
+		reg-names = "main", "cec", "edid", "packet";
+		status = "disabled";
+		adi,dsi-lanes = <4>;
+		reset-gpios = <&gpiog 14 GPIO_ACTIVE_LOW>;
+
+		port {
+			adv7535_in: endpoint {
+				remote-endpoint = <&dsi_out2>;
+			};
+		};
+	};
+
+	ili2511: ili2511@41 {
+		compatible = "ilitek,ili251x";
+		reg = <0x41>;
+		interrupt-parent = <&gpioi>;
+		interrupts = <13 IRQ_TYPE_EDGE_FALLING>;
+		reset-gpios = <&gpiog 14 GPIO_ACTIVE_LOW>;
+		status = "okay";
+	};
+
+	gt9147: goodix-ts@5d {
+		compatible = "goodix,gt9147";
+		reg = <0x5d>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&goodix_pins_a>;
+		panel = <&panel_dsi>;
+		interrupt-parent = <&gpioi>;
+		interrupts = <13 IRQ_TYPE_EDGE_FALLING>;
+		status = "disabled";
+	};
 };
 
 &ipcc1 {
 	status = "okay";
+};
+
+&ltdc {
+	status = "okay";
+
+	port {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		ltdc_ep0_out: endpoint@0 {
+			reg = <0>;
+			remote-endpoint = <&lvds_in>;
+		};
+
+		ltdc_ep1_out: endpoint@1 {
+			reg = <1>;
+			remote-endpoint = <&dsi_in>;
+		};
+	};
+};
+
+&lvds {
+	status = "okay";
+
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		port@0 {
+			reg = <0>;
+			lvds_in: endpoint {
+				remote-endpoint = <&ltdc_ep0_out>;
+			};
+		};
+
+		port@1 {
+			reg = <1>;
+			lvds_out0: endpoint {
+				remote-endpoint = <&lvds_panel_in>;
+			};
+		};
+	};
 };
 
 &m33_rproc {
