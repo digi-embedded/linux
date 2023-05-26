@@ -79,9 +79,10 @@
 	};
 };
 
-/* Configure pwrkey to generate KEY_SLEEP events */
+/* Configure pwrkey timeout */
 &bbnsm_pwrkey {
-	linux,keycode = <KEY_SLEEP>;
+	/* Supported discrete values: 0 (disable power-off), 5, 10, 15 */
+	power-off-time-sec = <10>;
 };
 
 /* I2C bus conneccted to MCA and PMIC */
