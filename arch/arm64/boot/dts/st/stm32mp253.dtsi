@@ -53,6 +53,17 @@
 				status = "disabled";
 			};
 
+			lvds: lvds@48060000 {
+				#clock-cells = <0>;
+				compatible = "st,stm32-lvds";
+				reg = <0x48060000 0x2000>;
+				clocks = <&rcc CK_BUS_LVDS>, <&rcc CK_KER_LVDSPHY>;
+				clock-names = "pclk", "ref";
+				resets = <&rcc LVDS_R>;
+				feature-domains = <&rifsc STM32MP25_RIFSC_LVDS_ID>;
+				status = "disabled";
+			};
+
 			eth2: eth2@482d0000 {
 				compatible = "st,stm32mp25-dwmac", "snps,dwmac-5.10a";
 				reg = <0x482d0000 0x4000>;
