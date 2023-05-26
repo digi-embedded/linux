@@ -39,6 +39,7 @@ struct bbnsm_pwrkey {
 	int keycode;
 	int keystate;  /* 1:pressed */
 	int wakeup;
+	u32 btn_press_tout;
 	struct timer_list check_timer;
 	struct input_dev *input;
 };
@@ -101,6 +102,7 @@ static int bbnsm_pwrkey_probe(struct platform_device *pdev)
 	struct bbnsm_pwrkey *bbnsm;
 	struct input_dev *input;
 	struct device_node *np = pdev->dev.of_node;
+	unsigned int btn_tout = 0;
 	int error;
 
 	bbnsm = devm_kzalloc(&pdev->dev, sizeof(*bbnsm), GFP_KERNEL);
@@ -118,6 +120,25 @@ static int bbnsm_pwrkey_probe(struct platform_device *pdev)
 		dev_warn(&pdev->dev, "KEY_POWER without setting in dts\n");
 	}
 
+	if (!of_property_read_u32(np, "power-off-time-sec", &bbnsm->btn_press_tout)) {
+		switch (bbnsm->btn_press_tout) {
+		case 5: /* default */
+			break;
+		case 10:
+			btn_tout = BIT(16);
+			break;
+		case 15:
+			btn_tout = BIT(17);
+			break;
+		default: /* 0 (disable power-off) and not supported values */
+			if (bbnsm->btn_press_tout)
+				dev_err(&pdev->dev,
+					"power-off-time-sec out of range: 0 (disable power-off), 5, 10, 15\n");
+			btn_tout = BIT(16) | BIT(17);
+			break;
+		}
+	}
+
 	bbnsm->wakeup = of_property_read_bool(np, "wakeup-source");
 
 	bbnsm->irq = platform_get_irq(pdev, 0);
@@ -126,6 +147,7 @@ static int bbnsm_pwrkey_probe(struct platform_device *pdev)
 
 	/* config the BBNSM power related register */
 	regmap_update_bits(bbnsm->regmap, BBNSM_CTRL, BBNSM_DP_EN, BBNSM_DP_EN);
+	regmap_update_bits(bbnsm->regmap, BBNSM_CTRL, GENMASK(17, 16), btn_tout);
 
 	/* clear the unexpected interrupt before driver ready */
 	regmap_write_bits(bbnsm->regmap, BBNSM_EVENTS, BBNSM_PWRKEY_EVENTS, BBNSM_PWRKEY_EVENTS);
