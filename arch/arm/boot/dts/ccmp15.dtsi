@@ -296,6 +296,7 @@
 		interrupt-controller;
 		#interrupt-cells = <2>;
 		fw-update-gpio = <&gpiof 3 GPIO_ACTIVE_LOW>;
+		status = "disabled";
 
 		mca_gpio: gpio {
 			compatible = "digi,mca-ccmp1-gpio";
