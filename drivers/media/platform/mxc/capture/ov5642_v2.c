@@ -3688,7 +3688,7 @@ static int ioctl_s_parm(struct v4l2_int_device *s, struct v4l2_streamparm *a)
 		else if (old_fps == 30)
 			old_frame_rate = ov5642_30_fps;
 		else {
-			pr_warning(" No valid frame rate set!\n");
+			pr_warn(" No valid frame rate set!\n");
 			old_frame_rate = ov5642_30_fps;
 		}
 
@@ -3926,7 +3926,7 @@ static int ioctl_enum_frameintervals(struct v4l2_int_device *s,
 
 	if (fival->pixel_format == 0 || fival->width == 0 ||
 			fival->height == 0) {
-		pr_warning("Please assign pixelformat, width and height.\n");
+		pr_warn("Please assign pixelformat, width and height.\n");
 		return -EINVAL;
 	}
 
@@ -4252,7 +4252,7 @@ static int ov5642_probe(struct i2c_client *client,
 
 	retval = ov5642_read_reg(OV5642_CHIP_ID_HIGH_BYTE, &chip_id_high);
 	if (retval < 0 || chip_id_high != 0x56) {
-		pr_warning("camera ov5642 is not found\n");
+		pr_warn("camera ov5642 is not found\n");
 		clk_disable_unprepare(ov5642_data.sensor_clk);
 		ov5642_regulator_disable();
 		return -ENODEV;
@@ -4260,7 +4260,7 @@ static int ov5642_probe(struct i2c_client *client,
 
 	retval = ov5642_read_reg(OV5642_CHIP_ID_LOW_BYTE, &chip_id_low);
 	if (retval < 0 || chip_id_low != 0x42) {
-		pr_warning("camera ov5642 is not found\n");
+		pr_warn("camera ov5642 is not found\n");
 		clk_disable_unprepare(ov5642_data.sensor_clk);
 		ov5642_regulator_disable();
 		return -ENODEV;
@@ -4273,7 +4273,7 @@ static int ov5642_probe(struct i2c_client *client,
 			int mask = ov5642_data.csi ? (1 << 20) : (1 << 19);
 
 			if (sensor->csi != sensor->ipu_id) {
-				pr_warning("%s: csi_id != ipu_id\n", __func__);
+				pr_warn("%s: csi_id != ipu_id\n", __func__);
 				return -ENODEV;
 			}
 
