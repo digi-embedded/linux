@@ -30,6 +30,11 @@
 		stdout-path = &lpuart6;
 	};
 
+	aliases {
+		ethernet0 = &eqos;
+		ethernet1 = &fec;
+	};
+
 	/* fixed 24MHz crystal for mipi camera */
 	mipi_csi_xtal24m: mipi_csi_xtal24m {
 		compatible = "fixed-clock";
