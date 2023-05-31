@@ -1974,8 +1974,9 @@
 						<0 0 0 2 &intc 0 GIC_SPI 265 IRQ_TYPE_LEVEL_HIGH>,
 						<0 0 0 3 &intc 0 GIC_SPI 266 IRQ_TYPE_LEVEL_HIGH>,
 						<0 0 0 4 &intc 0 GIC_SPI 267 IRQ_TYPE_LEVEL_HIGH>;
-				interrupts = <GIC_SPI 232 IRQ_TYPE_LEVEL_HIGH>;
-				interrupt-names = "aer_msi";
+				interrupts = <GIC_SPI 232 IRQ_TYPE_LEVEL_HIGH>,
+					     <GIC_SPI 238 IRQ_TYPE_LEVEL_HIGH>;
+				interrupt-names = "aer_msi", "pme_msi";
 				#address-cells = <3>;
 				#size-cells = <2>;
 				ranges = <0x01000000 0 0x10010000 0x10010000 0 0x10000>,
