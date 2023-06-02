@@ -1038,20 +1038,20 @@ int ifx_cfg80211_vndr_cmds_config_pfn(struct wiphy *wiphy,
 {
 	int buflen;
 	struct brcmf_cfg80211_info *cfg = wiphy_to_cfg(wiphy);
+	struct drv_config_pfn_params *pfn_data;
 
 	brcmf_dbg(TRACE, "Enter pfn_enable %d Network_blob count %d\n",
 			cfg->pfn_enable, *((u8 *)data));
 
-	if (!cfg->pfn_enable)
-		memset(&cfg->curr_network, '\0', sizeof(struct network_blob));
-
 	cfg->pfn_enable = 1;
-	cfg->pfn_data.count = *((u8 *)data);
+	pfn_data = (struct drv_config_pfn_params *)data;
+	cfg->pfn_data.pfn_config = pfn_data->pfn_config;
+	cfg->pfn_data.count = pfn_data->count;
 
 	buflen = cfg->pfn_data.count * sizeof(struct network_blob);
 	cfg->pfn_data.network_blob_data = (struct network_blob *)kmalloc(buflen, GFP_KERNEL);
 	memset(cfg->pfn_data.network_blob_data, '\0', buflen);
-	memcpy(cfg->pfn_data.network_blob_data, (u8 *)data + sizeof(u8), buflen);
+	memcpy(cfg->pfn_data.network_blob_data, (u8 *)data + PFN_CONFIG_AND_COUNT_SIZE, buflen);
 	pfn_send_network_blob_fw(wiphy, wdev);
 	brcmf_dbg(TRACE, "Exit\n");
 	return 0;
@@ -1104,21 +1104,13 @@ int ifx_cfg80211_vndr_cmds_get_pfn_status(struct wiphy *wiphy,
 		curr_bssid.SNR = bi->SNR;
 
 		network_blob_data = cfg->pfn_data.network_blob_data;
-		if (cfg->curr_network.ssid_len) {
-			if (!strncmp(cfg->curr_network.ssid, bi->SSID, bi->SSID_len)) {
-				curr_bssid.proto = cfg->curr_network.proto;
-				curr_bssid.key_mgmt = cfg->curr_network.key_mgmt;
+		for (; i < cfg->pfn_data.count && network_blob_data; i++) {
+			if (!strncmp(network_blob_data->ssid, bi->SSID, bi->SSID_len)) {
+				curr_bssid.proto = network_blob_data->proto;
+				curr_bssid.key_mgmt = network_blob_data->key_mgmt;
+				break;
 			}
-
-		} else {
-			for (; i < cfg->pfn_data.count && network_blob_data; i++) {
-				if (!strncmp(network_blob_data->ssid, bi->SSID, bi->SSID_len)) {
-					curr_bssid.proto = network_blob_data->proto;
-					curr_bssid.key_mgmt = network_blob_data->key_mgmt;
-					break;
-				}
-				network_blob_data++;
-			}
+			network_blob_data++;
 		}
 	}
 	if (curr_bssid.SSID_len)

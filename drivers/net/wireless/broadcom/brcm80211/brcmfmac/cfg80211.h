@@ -364,6 +364,7 @@ struct network_blob {
 };
 
 struct drv_config_pfn_params {
+	u8 pfn_config;
 	u8 count;
 	struct network_blob *network_blob_data;
 };
@@ -439,8 +440,8 @@ struct brcmf_cfg80211_info {
 	u8 pm_state;
 	u8 num_softap;
 	u8 pfn_enable;
+	u8 pfn_connection;
 	struct drv_config_pfn_params pfn_data;
-	struct network_blob curr_network;
 };
 
 /**

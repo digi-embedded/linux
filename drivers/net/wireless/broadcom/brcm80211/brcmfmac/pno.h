@@ -17,6 +17,7 @@
 #define WPA_CIPHER_WEP_104              5       /* WEP (104-bit) */
 
 #define AUTO_CONNECT_MASK		0x0010
+#define AUTO_NET_SWITCH_MASK		0x0002
 #define BRCMF_PNO_WPA_AUTH_ANY		0xFFFFFFFF
 #define MAXNUM_SSID_PER_ADD		16
 #define WSEC_MIN_PSK_LEN		8
@@ -24,6 +25,7 @@
 #define DOT11_MAX_SSID_LEN		32      /* d11 max ssid length */
 #define PFN_VERSION			2
 #define PFN_LIST_ORDER			0
+#define PFN_RSSI			1
 #define SORT_CRITERIA_BIT		0
 #define ENABLE				1
 #define IMMEDIATE_SCAN_BIT		3
@@ -34,6 +36,7 @@
 #define WPA_AUTH_DISABLED		0x0000
 #define PFN_SET				1
 #define PFN_UNSET			0
+#define PFN_CONFIG_AND_COUNT_SIZE	2
 #define WLAN_AUTH_OPEN			0
 #define WLAN_AUTH_SHARED_KEY		1
 #define WLAN_AUTH_FT			2
@@ -110,6 +113,12 @@ struct pfn_conn_info {
 	int key_mgmt;
 };
 
+enum {
+	PFN_CONFIG_AUTOCONNECT,
+	PFN_CONFIG_AUTOSWITCH_LISTORDER,
+	PFN_CONFIG_AUTOSWITCH_RSSI,
+};
+
 enum wpas_mode {
 	WPAS_MODE_INFRA = 0,
 	WPAS_MODE_IBSS = 1,
@@ -182,6 +191,3 @@ u32 brcmf_pno_get_bucket_map(struct brcmf_pno_info *pi,
 
 int pfn_send_network_blob_fw(struct wiphy *wiphy,
 				struct wireless_dev *wdev);
-
-int pfn_save_curr_network(struct wiphy *wiphy, struct net_device *ndev,
-				struct cfg80211_connect_params *sme);
