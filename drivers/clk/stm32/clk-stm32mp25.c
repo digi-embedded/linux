@@ -659,16 +659,7 @@ static CLK_STM32_GATE(ck_icn_p_cryp1, "ck_icn_ls_mcu", 0, GATE_CRYP1);
 static CLK_STM32_GATE(ck_icn_p_cryp2, "ck_icn_ls_mcu", 0, GATE_CRYP2);
 
 /* DBG & TRACE*/
-static CLK_STM32_GATE(ck_sys_dbg, "ck_icn_apbdbg", 0, GATE_DBG);
-static CLK_STM32_GATE(ck_ker_tsdbg, "ck_flexgen_43", 0, GATE_DBG);
-static CLK_STM32_GATE(ck_ker_tpiu, "ck_flexgen_44", 0, GATE_TRACE);
-static CLK_STM32_GATE(ck_sys_atb, "ck_flexgen_45", 0, GATE_DBG);
-
-#ifdef CONFIG_STM32MP25_REVA
-static CLK_STM32_GATE(ck_icn_m_etr, "ck_flexgen_45", CLK_IS_CRITICAL, GATE_ETR);
-#else
-static CLK_STM32_GATE(ck_icn_m_etr, "ck_flexgen_45", 0, GATE_ETR);
-#endif
+/* Trace and debug clocks are managed by SCMI */
 
 /* LTDC */
 static CLK_STM32_GATE(ck_icn_p_ltdc, "ck_icn_apb4", 0, GATE_LTDC);
@@ -795,12 +786,6 @@ static CLK_STM32_GATE(ck_icn_p_mdf1, "ck_icn_ls_mcu", 0, GATE_MDF1);
 static CLK_STM32_GATE(ck_ker_mdf1, "ck_flexgen_23", 0, GATE_MDF1);
 
 /* OSPI */
-static CLK_STM32_GATE(ck_icn_s_ospi1, "ck_icn_hs_mcu", 0, GATE_OSPI1);
-static CLK_STM32_GATE(ck_icn_s_ospi2, "ck_icn_hs_mcu", 0, GATE_OSPI2);
-static CLK_STM32_GATE(ck_icn_p_otfd1, "ck_icn_hs_mcu", 0, GATE_OSPI1);
-static CLK_STM32_GATE(ck_icn_p_otfd2, "ck_icn_hs_mcu", 0, GATE_OSPI2);
-static CLK_STM32_GATE(ck_ker_ospi1, "ck_flexgen_48", 0, GATE_OSPI1);
-static CLK_STM32_GATE(ck_ker_ospi2, "ck_flexgen_49", 0, GATE_OSPI2);
 static CLK_STM32_GATE(ck_icn_p_ospiiom, "ck_icn_ls_mcu", 0, GATE_OSPIIOM);
 
 /* PCIE */
@@ -858,13 +843,6 @@ static CLK_STM32_GATE(ck_ker_spi5, "ck_flexgen_17", 0, GATE_SPI5);
 static CLK_STM32_GATE(ck_ker_spi6, "ck_flexgen_18", 0, GATE_SPI6);
 static CLK_STM32_GATE(ck_ker_spi7, "ck_flexgen_18", 0, GATE_SPI7);
 static CLK_STM32_GATE(ck_ker_spi8, "ck_flexgen_37", 0, GATE_SPI8);
-
-/* STM500 */
-#ifdef CONFIG_STM32MP25_REVA
-static CLK_STM32_GATE(ck_icn_s_stm500, "ck_icn_ls_mcu", CLK_IS_CRITICAL, GATE_STM500);
-#else
-static CLK_STM32_GATE(ck_icn_s_stm500, "ck_icn_ls_mcu", 0, GATE_STM500);
-#endif
 
 /* Timers */
 static CLK_STM32_GATE(ck_icn_p_tim2, "ck_icn_apb1", 0, GATE_TIM2);
@@ -1018,11 +996,6 @@ static int stm32mp25_check_security(void __iomem *base,
 }
 
 static const struct clock_config stm32mp25_clock_cfg[] = {
-	STM32_GATE_CFG(CK_BUS_OSPI1, ck_icn_s_ospi1, SEC_RIFRCC(OSPI1)),
-	STM32_GATE_CFG(CK_BUS_OSPI2, ck_icn_s_ospi2, SEC_RIFRCC(OSPI2)),
-	STM32_GATE_CFG(CK_BUS_OTFD1, ck_icn_p_otfd1, SEC_RIFRCC(OSPI1)),
-	STM32_GATE_CFG(CK_BUS_OTFD2, ck_icn_p_otfd2, SEC_RIFRCC(OSPI2)),
-	STM32_GATE_CFG(CK_BUS_STM500, ck_icn_s_stm500, SEC_RIFRCC(DBG)),
 	STM32_GATE_CFG(CK_BUS_ETH1, ck_icn_p_eth1, SEC_RIFSC(ETH1)),
 	STM32_GATE_CFG(CK_BUS_ETH2, ck_icn_p_eth2, SEC_RIFSC(ETH2)),
 	STM32_GATE_CFG(CK_BUS_PCIE, ck_icn_p_pcie, SEC_RIFSC(PCIE)),
@@ -1125,7 +1098,6 @@ static const struct clock_config stm32mp25_clock_cfg[] = {
 	STM32_GATE_CFG(CK_BUS_USB3PCIEPHY, ck_icn_p_usb3pciephy, SEC_RIFSC(USB3DR)),
 	STM32_GATE_CFG(CK_BUS_VDEC, ck_icn_p_vdec, SEC_RIFSC(VDEC)),
 	STM32_GATE_CFG(CK_BUS_VENC, ck_icn_p_venc, SEC_RIFSC(VENC)),
-	STM32_GATE_CFG(CK_SYSDBG, ck_sys_dbg, SEC_RIFRCC(DBG)),
 	STM32_GATE_CFG(CK_KER_TIM2, ck_ker_tim2, SEC_RIFSC(TIM2)),
 	STM32_GATE_CFG(CK_KER_TIM3, ck_ker_tim3, SEC_RIFSC(TIM3)),
 	STM32_GATE_CFG(CK_KER_TIM4, ck_ker_tim4, SEC_RIFSC(TIM4)),
@@ -1190,12 +1162,6 @@ static const struct clock_config stm32mp25_clock_cfg[] = {
 	STM32_GATE_CFG(CK_KER_LPTIM4, ck_ker_lptim4, SEC_RIFSC(LPTIM4)),
 	STM32_GATE_CFG(CK_KER_LPTIM5, ck_ker_lptim5, SEC_RIFSC(LPTIM5)),
 	STM32_GATE_CFG(CK_KER_ADF1, ck_ker_adf1, SEC_RIFSC(ADF1)),
-	STM32_GATE_CFG(CK_KER_TSDBG, ck_ker_tsdbg, SEC_RIFRCC(DBG)),
-	STM32_GATE_CFG(CK_KER_TPIU, ck_ker_tpiu, SEC_RIFRCC(DBG)),
-	STM32_GATE_CFG(CK_BUS_ETR, ck_icn_m_etr, SEC_RIFRCC(DBG)),
-	STM32_GATE_CFG(CK_BUS_SYSATB, ck_sys_atb, SEC_RIFRCC(DBG)),
-	STM32_GATE_CFG(CK_KER_OSPI1, ck_ker_ospi1, SEC_RIFRCC(OSPI1)),
-	STM32_GATE_CFG(CK_KER_OSPI2, ck_ker_ospi2, SEC_RIFRCC(OSPI2)),
 	STM32_GATE_CFG(CK_KER_SDMMC1, ck_ker_sdmmc1, SEC_RIFSC(SDMMC1)),
 	STM32_GATE_CFG(CK_KER_SDMMC2, ck_ker_sdmmc2, SEC_RIFSC(SDMMC2)),
 	STM32_GATE_CFG(CK_KER_SDMMC3, ck_ker_sdmmc3, SEC_RIFSC(SDMMC3)),
