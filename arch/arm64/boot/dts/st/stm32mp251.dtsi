@@ -1348,6 +1348,19 @@
 				status = "disabled";
 			};
 
+			dcmi: dcmi@404a0000 {
+				compatible = "st,stm32-dcmi";
+				reg = <0x404a0000 0x400>;
+				interrupts = <GIC_SPI 141 IRQ_TYPE_LEVEL_HIGH>;
+				resets = <&rcc CCI_R>;
+				clocks = <&rcc CK_BUS_CCI>;
+				clock-names = "mclk";
+				dmas = <&hpdma 137 0x40 0x00003012 0>;
+				dma-names = "tx";
+				feature-domains = <&rifsc STM32MP25_RIFSC_DCMI_PSSI_ID>;
+				status = "disabled";
+			};
+
 			adc_12: adc@404e0000 {
 				compatible = "st,stm32mp25-adc-core";
 				reg = <0x404e0000 0x400>;
