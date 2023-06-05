@@ -66,6 +66,10 @@
 	/delete-property/dma-names;
 };
 
+&ltdc {
+	st,burstlen = <32>;
+};
+
 &pcie_rc {
 	resets = <&scmi_reset RST_SCMI_PCIE>;
 };
