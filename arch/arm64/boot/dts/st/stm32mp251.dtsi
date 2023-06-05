@@ -1719,6 +1719,18 @@
 				};
 			};
 
+			dsi: dsi@48000000 {
+				compatible = "st,stm32-dsi";
+				reg = <0x48000000 0x800>;
+				clocks = <&rcc CK_BUS_DSI>, <&rcc CK_KER_DSIPHY>,
+					 <&rcc CK_KER_LTDC>;
+				clock-names = "pclk", "ref", "px_clk";
+				resets = <&rcc DSI_R>;
+				reset-names = "apb";
+				feature-domains = <&rifsc STM32MP25_RIFSC_DSI_CMN_ID>;
+				status = "disabled";
+			};
+
 			ltdc: display-controller@48010000 {
 				compatible = "st,stm32-ltdc";
 				reg = <0x48010000 0x400>;
