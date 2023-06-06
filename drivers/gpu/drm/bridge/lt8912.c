@@ -8,6 +8,7 @@
 #include <linux/gpio.h>
 #include <linux/gpio/consumer.h>
 #include <linux/i2c.h>
+#include <linux/media-bus-format.h>
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/of_irq.h>
@@ -24,6 +25,7 @@
 #include <drm/drm_of.h>
 #include <drm/drm_atomic.h>
 #include <drm/drm_atomic_helper.h>
+#include <drm/drm_edid.h>
 #include <drm/drm_panel.h>
 #include <drm/drm_mipi_dsi.h>
 #include <drm/drm_probe_helper.h>
@@ -707,15 +709,13 @@ static int lt8912_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 	return 0;
 }
 
-static int lt8912_remove(struct i2c_client *i2c)
+static void lt8912_remove(struct i2c_client *i2c)
 {
 	struct lt8912 *lt = i2c_get_clientdata(i2c);
 
 	lt8912_sleep(lt);
 	mipi_dsi_detach(lt->dsi);
 	drm_bridge_remove(&lt->bridge);
-
-	return 0;
 }
 
 static const struct i2c_device_id lt8912_i2c_ids[] = {

@@ -857,16 +857,23 @@ static ssize_t gpu_mult_show(struct device *dev, struct device_attribute *attr,
     static gctUINT gpu_clk_mult, min_clk_mult, max_clk_mult;
     gckHARDWARE hardware;
     gckGALDEVICE galDevice;
+    gckDEVICE device;
 
     galDevice = dev_get_drvdata(dev);
-    if (!(galDevice) ||
-        !(galDevice->kernels[gcvCORE_MAJOR])) {
-        /* GPU is not ready, so it is meaningless to change GPU freq. */
-        dev_err(dev, "galDevice or galDevice->kernels is NULL!\n");
+    if (!galDevice) {
+        /* GPU is not ready */
+        dev_err(dev, "galDevice is NULL!\n");
         return NOTIFY_OK;
     }
 
-    hardware = galDevice->kernels[gcvCORE_MAJOR]->hardware;
+    device = galDevice->devices[0];
+    if (!device->kernels[gcvCORE_MAJOR]) {
+        /* GPU is not ready */
+        dev_err(dev, "device->kernels is NULL!\n");
+        return NOTIFY_OK;
+    }
+
+    hardware = device->kernels[gcvCORE_MAJOR]->hardware;
     if (!hardware) {
         dev_err(dev, "hardware is NULL!\n");
         return NOTIFY_OK;
@@ -884,18 +891,25 @@ static ssize_t gpu_mult_store(struct device *dev,
 {
     gckHARDWARE hardware;
     gckGALDEVICE galDevice;
+    gckDEVICE device;
     int err;
     unsigned long gpu_clk_mult;
 
     galDevice = dev_get_drvdata(dev);
-    if (!(galDevice) ||
-        !(galDevice->kernels[gcvCORE_MAJOR])) {
-        /* GPU is not ready, so it is meaningless to change GPU freq. */
-        dev_err(dev, "galDevice or galDevice->kernels is NULL!\n");
+    if (!galDevice) {
+        /* GPU is not ready */
+        dev_err(dev, "galDevice is NULL!\n");
         return NOTIFY_OK;
     }
 
-    hardware = galDevice->kernels[gcvCORE_MAJOR]->hardware;
+    device = galDevice->devices[0];
+    if (!device->kernels[gcvCORE_MAJOR]) {
+        /* GPU is not ready */
+        dev_err(dev, "device->kernels is NULL!\n");
+        return NOTIFY_OK;
+    }
+
+    hardware = device->kernels[gcvCORE_MAJOR]->hardware;
     if (!hardware) {
         dev_err(dev, "hardware is NULL!\n");
         return NOTIFY_OK;
