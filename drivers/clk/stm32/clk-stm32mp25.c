@@ -709,7 +709,7 @@ static CLK_STM32_GATE(ck_icn_p_fdcan, "ck_icn_apb2", 0, GATE_FDCAN);
 static CLK_STM32_GATE(ck_ker_fdcan, "ck_flexgen_26", 0, GATE_FDCAN);
 
 /* GICV2M */
-static CLK_STM32_GATE(ck_icn_p_gicv2m, "ck_icn_apb4", 0, GATE_GICV2M);
+static CLK_STM32_GATE(ck_icn_p_gicv2m, "ck_icn_apb4", CLK_IS_CRITICAL, GATE_GICV2M);
 
 /* GPU */
 static CLK_STM32_GATE(ck_icn_m_gpu, "ck_flexgen_59", 0, GATE_GPU);
