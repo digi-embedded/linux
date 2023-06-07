@@ -277,6 +277,11 @@
 	};
 };
 
+&gpu {
+	contiguous-area = <&gpu_reserved>;
+	status = "okay";
+};
+
 &hpdma {
 	st,burstlen = <32>;
 	memory-region = <&hpdma1_lli>;
