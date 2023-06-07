@@ -14,6 +14,8 @@
 			enable-method = "psci";
 			clocks = <&scmi_perf 0>;
 			clock-names = "cpu";
+			power-domains = <&CPU_PD1>;
+			power-domain-names = "psci";
 		};
 	};
 
@@ -21,6 +23,13 @@
 		interrupts = <GIC_SPI 368 IRQ_TYPE_LEVEL_HIGH>,
 			     <GIC_SPI 369 IRQ_TYPE_LEVEL_HIGH>;
 		interrupt-affinity = <&cpu0>, <&cpu1>;
+	};
+
+	psci {
+		CPU_PD1: power-domain-cpu1 {
+			#power-domain-cells = <0>;
+			power-domains = <&CLUSTER_PD>;
+		};
 	};
 
 	soc@0 {
@@ -36,6 +45,7 @@
 				clock-names = "hclk", "cclk";
 				bosch,mram-cfg = <0x0 0 0 32 0 0 2 2>;
 				feature-domains = <&rifsc STM32MP25_RIFSC_FDCAN_ID>;
+				power-domains = <&CLUSTER_PD>;
 				status = "disabled";
 			};
 
@@ -50,6 +60,7 @@
 				clock-names = "hclk", "cclk";
 				bosch,mram-cfg = <0x1400 0 0 32 0 0 2 2>;
 				feature-domains = <&rifsc STM32MP25_RIFSC_FDCAN_ID>;
+				power-domains = <&CLUSTER_PD>;
 				status = "disabled";
 			};
 
@@ -61,6 +72,7 @@
 				clock-names = "pclk", "ref";
 				resets = <&rcc LVDS_R>;
 				feature-domains = <&rifsc STM32MP25_RIFSC_LVDS_ID>;
+				power-domains = <&CLUSTER_PD>;
 				status = "disabled";
 			};
 
@@ -88,6 +100,7 @@
 				snps,axi-config = <&stmmac_axi_config_2>;
 				snps,tso;
 				feature-domains = <&rifsc STM32MP25_RIFSC_ETH2_ID>;
+				power-domains = <&CLUSTER_PD>;
 				status = "disabled";
 				snps,mtl-rx-config = <&mtl_rx_setup_2>;
 				snps,mtl-tx-config = <&mtl_tx_setup_2>;

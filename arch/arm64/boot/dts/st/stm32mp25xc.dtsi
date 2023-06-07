@@ -16,6 +16,7 @@
 		       <&hpdma 5 0x43 0x3012 0x0>;
 		dma-names = "in", "out";
 		feature-domains = <&rifsc STM32MP25_RIFSC_CRYP1_ID>;
+		power-domains = <&CLUSTER_PD>;
 		status = "disabled";
 	};
 };
