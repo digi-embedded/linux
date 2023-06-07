@@ -29,6 +29,18 @@
 				clocks = <&rcc CK_BUS_VENC>;
 				feature-domains = <&rifsc STM32MP25_RIFSC_VENC_ID>;
 			};
+
+			gpu: gpu@48280000 {
+				compatible = "vivante,gc";
+				reg = <0x48280000 0x800>;
+				interrupts = <GIC_SPI 183 IRQ_TYPE_LEVEL_HIGH>;
+				resets = <&rcc GPU_R>;
+				clock-names = "axi", "core";
+				clocks = <&rcc CK_BUS_GPU>, <&rcc CK_KER_GPU>;
+				gpu-supply =  <&scmi_vddgpu>;
+				feature-domains = <&rifsc STM32MP25_RIFSC_GPU_ID>;
+				status = "disabled";
+			};
 		};
 	};
 };
