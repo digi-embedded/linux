@@ -102,6 +102,15 @@ properties:
     minItems: 4
     maxItems: 16
 
+  memory-region:
+    description: |
+      Phandle to a /reserved-memory child node assigned to STM32 DMA3 for linked-list items
+      allocation. When not defined, linked-list items are allocated in DDR.
+      During transfer, STM32 DMA3 updates its registers reading the linked-list items in memory.
+      There reads are 32-bit single read. Allocating the linked-list items in internal RAM improves
+      the STM32 DMA3 performance.
+    maxItems: 1
+
   st,axi-max-burst-len:
     description: |
       Restrict master AXI burst length in unit of beat by value specified in this property.
