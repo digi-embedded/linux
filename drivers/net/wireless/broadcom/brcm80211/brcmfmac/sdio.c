@@ -785,7 +785,6 @@ brcmf_sdio_kso_control(struct brcmf_sdio *bus, bool on)
 		cmp_val = SBSDIO_FUNC1_SLEEPCSR_KSO_MASK |
 			  SBSDIO_FUNC1_SLEEPCSR_DEVON_MASK;
 		bmask = cmp_val;
-		usleep_range(2000, 3000);
 	} else {
 		/* Put device to sleep, turn off KSO */
 		cmp_val = 0;
@@ -812,7 +811,29 @@ brcmf_sdio_kso_control(struct brcmf_sdio *bus, bool on)
 		if (err && (err_cnt++ > BRCMF_SDIO_MAX_ACCESS_ERRORS))
 			break;
 
-		udelay(KSO_WAIT_US);
+		/* Do one KSO write-read-check without any delay in between the steps,
+		 * if Device is already up KSO sequence will complete immediately
+		 * without any delay for Host
+		 */
+		if (try_cnt == 0) {
+			/* If Device is already up then it will not reach here,
+			 * if the control reaches here it means device is in sleep
+			 * so delay for some time to let Device wake up before
+			 * starting subsequent KSO wr-rd-check sequence
+			 * Delay should be less than the time device takes to wakeup
+			 * in normal case, because giving more delay than what device needs
+			 * will lead to host being unnecessarily blocked here while device is
+			 * already up and ready, leading to more power consumptions of both
+			 * host and device, as well as overall increased response delays
+			 */
+			usleep_range(1000, 1500);
+		} else {
+			/* Initial delay is done, now do continuous KSO wr-rd-check
+			 * sequence with some small delay
+			 */
+			usleep_range(KSO_WAIT_US / 2, KSO_WAIT_US);
+		}
+
 		brcmf_sdiod_writeb(bus->sdiodev, SBSDIO_FUNC1_SLEEPCSR, wr_val,
 				   &err);
 
