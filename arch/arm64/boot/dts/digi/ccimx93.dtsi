@@ -263,19 +263,19 @@
 			compatible = "digi,mca-gpio-wdt";
 			status = "disabled";
 
-			gpio_wdt0: gpio-wdt@0x210 {
+			gpio_wdt0: gpio-wdt@210 {
 				status = "disabled";
 			};
 
-			gpio_wdt1: gpio-wdt@0x220 {
+			gpio_wdt1: gpio-wdt@220 {
 				status = "disabled";
 			};
 
-			gpio_wdt2: gpio-wdt@0x230 {
+			gpio_wdt2: gpio-wdt@230 {
 				status = "disabled";
 			};
 
-			gpio_wdt3: gpio-wdt@0x240 {
+			gpio_wdt3: gpio-wdt@240 {
 				status = "disabled";
 			};
 		};
@@ -302,19 +302,19 @@
 			#size-cells = <0>;
 			status = "disabled";
 
-			mca_uart0: serial@0x900 {
+			mca_uart0: serial@900 {
 				reg = <0x900>;
 				index = <0>;
 				status = "disabled";
 			};
 
-			mca_uart1: serial@0x920 {
+			mca_uart1: serial@920 {
 				reg = <0x920>;
 				index = <1>;
 				status = "disabled";
 			};
 
-			mca_uart2: serial@0x940 {
+			mca_uart2: serial@940 {
 				reg = <0x940>;
 				index = <2>;
 				status = "disabled";
