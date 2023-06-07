@@ -47,7 +47,7 @@
 			no-map;
 		};
 
-		rsc_table: rsc_table@2021f000 {
+		rsc_table: rsc-table@2021f000 {
 			reg = <0 0x2021f000 0 0x1000>;
 			no-map;
 		};
@@ -55,6 +55,12 @@
 		vdevbuffer: vdevbuffer@a4020000 {
 			compatible = "shared-dma-pool";
 			reg = <0 0xa4020000 0 0x100000>;
+			no-map;
+		};
+
+		ele_reserved: ele-reserved@a4120000 {
+			compatible = "shared-dma-pool";
+			reg = <0 0xa4120000 0 0x100000>;
 			no-map;
 		};
 	};
@@ -77,6 +83,10 @@
 		reset-gpios = <&gpio2 7 GPIO_ACTIVE_LOW>;
 		status = "disabled";
 	};
+};
+
+&ele_mu {
+	memory-region = <&ele_reserved>;
 };
 
 /* Configure pwrkey timeout */

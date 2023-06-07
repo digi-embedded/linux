@@ -516,6 +516,11 @@
 	};
 };
 
+&lpm {
+	soc-supply = <&buck1>;
+	status = "okay";
+};
+
 /* Audio interface */
 &sai3 {
 	pinctrl-names = "default";
