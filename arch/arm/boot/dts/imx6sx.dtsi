@@ -172,7 +172,7 @@
 		#phy-cells = <0>;
 	};
 
-	soc {
+	soc: soc {
 		#address-cells = <1>;
 		#size-cells = <1>;
 		compatible = "simple-bus";
@@ -204,6 +204,9 @@
 		ocrams: sram@8f8000 {
 			compatible = "fsl,lpm-sram";
 			reg = <0x8f8000 0x4000>;
+			ranges = <0 0x8f8000 0x4000>;
+			#address-cells = <1>;
+			#size-cells = <1>;
 			clocks = <&clks IMX6SX_CLK_OCRAM_S>;
 		};
 
@@ -216,6 +219,9 @@
 		ocram: sram@901000 {
 			compatible = "mmio-sram";
 			reg = <0x901000 0x1F000>;
+			ranges = <0 0x901000 0x1F000>;
+			#address-cells = <1>;
+			#size-cells = <1>;
 			clocks = <&clks IMX6SX_CLK_OCRAM>;
 		};
 
@@ -964,7 +970,7 @@
 				};
 			};
 
-			sdma: sdma@20ec000 {
+			sdma: dma-controller@20ec000 {
 				compatible = "fsl,imx6sx-sdma", "fsl,imx6q-sdma";
 				reg = <0x020ec000 0x4000>;
 				interrupts = <GIC_SPI 2 IRQ_TYPE_LEVEL_HIGH>;
@@ -1077,6 +1083,7 @@
 				fsl,num-tx-queues = <3>;
 				fsl,num-rx-queues = <3>;
 				fsl,stop-mode = <&gpr 0x10 3>;
+				fsl,wakeup_irq = <0>;
 				status = "disabled";
 			};
 
@@ -1197,6 +1204,7 @@
 				fsl,stop-mode = <&gpr 0x10 4>;
 				fsl,num-tx-queues=<3>;
 				fsl,num-rx-queues=<3>;
+				fsl,wakeup_irq = <0>;
 				status = "disabled";
 			};
 
@@ -1582,15 +1590,15 @@
 		};
 
 		pcie: pcie@8ffc000 {
-			compatible = "fsl,imx6sx-pcie", "snps,dw-pcie";
+			compatible = "fsl,imx6sx-pcie";
 			reg = <0x08ffc000 0x04000>, <0x08f00000 0x80000>;
 			reg-names = "dbi", "config";
 			#address-cells = <3>;
 			#size-cells = <2>;
 			device_type = "pci";
 			bus-range = <0x00 0xff>;
-			ranges = <0x81000000 0 0          0x08f80000 0 0x00010000 /* downstream I/O */
-				  0x82000000 0 0x08000000 0x08000000 0 0x00f00000>; /* non-prefetchable memory */
+			ranges = <0x81000000 0 0          0x08f80000 0 0x00010000>, /* downstream I/O */
+				 <0x82000000 0 0x08000000 0x08000000 0 0x00f00000>; /* non-prefetchable memory */
 			num-lanes = <1>;
 			interrupts = <GIC_SPI 120 IRQ_TYPE_LEVEL_HIGH>;
 			interrupt-names = "msi";

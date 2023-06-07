@@ -18,13 +18,11 @@
 #include <drm/drm_atomic.h>
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_drv.h>
-#include <drm/drm_fb_cma_helper.h>
 #include <drm/drm_fb_helper.h>
-#include <drm/drm_gem_cma_helper.h>
+#include <drm/drm_gem_dma_helper.h>
 #include <drm/drm_gem_framebuffer_helper.h>
 #include <drm/drm_managed.h>
 #include <drm/drm_of.h>
-#include <drm/drm_plane_helper.h>
 #include <drm/drm_probe_helper.h>
 #include <drm/drm_vblank.h>
 #include <video/dpu.h>
@@ -35,7 +33,7 @@
 static int legacyfb_depth = 16;
 module_param(legacyfb_depth, int, 0444);
 
-DEFINE_DRM_GEM_CMA_FOPS(imx_drm_driver_fops);
+DEFINE_DRM_GEM_DMA_FOPS(imx_drm_driver_fops);
 
 void imx_drm_connector_destroy(struct drm_connector *connector)
 {
@@ -80,7 +78,7 @@ static int imx_drm_ipu_dumb_create(struct drm_file *file_priv,
 
 	args->width = ALIGN(width, 8);
 
-	ret = drm_gem_cma_dumb_create(file_priv, drm, args);
+	ret = drm_gem_dma_dumb_create(file_priv, drm, args);
 	if (ret)
 		return ret;
 
@@ -88,9 +86,9 @@ static int imx_drm_ipu_dumb_create(struct drm_file *file_priv,
 	return ret;
 }
 
-static struct drm_driver imx_drm_driver = {
+static const struct drm_driver imx_drm_driver = {
 	.driver_features	= DRIVER_MODESET | DRIVER_GEM | DRIVER_ATOMIC,
-	DRM_GEM_CMA_DRIVER_OPS,
+	DRM_GEM_DMA_DRIVER_OPS,
 	.ioctls			= imx_drm_ioctls,
 	.num_ioctls		= ARRAY_SIZE(imx_drm_ioctls),
 	.fops			= &imx_drm_driver_fops,
@@ -104,7 +102,7 @@ static struct drm_driver imx_drm_driver = {
 
 static const struct drm_driver imx_drm_ipu_driver = {
 	.driver_features	= DRIVER_MODESET | DRIVER_GEM | DRIVER_ATOMIC,
-	DRM_GEM_CMA_DRIVER_OPS_WITH_DUMB_CREATE(imx_drm_ipu_dumb_create),
+	DRM_GEM_DMA_DRIVER_OPS_WITH_DUMB_CREATE(imx_drm_ipu_dumb_create),
 	.ioctls			= imx_drm_ioctls,
 	.num_ioctls		= ARRAY_SIZE(imx_drm_ioctls),
 	.fops			= &imx_drm_driver_fops,
@@ -119,7 +117,7 @@ static const struct drm_driver imx_drm_ipu_driver = {
 static const struct drm_driver imx_drm_dpu_driver = {
 	.driver_features	= DRIVER_MODESET | DRIVER_GEM | DRIVER_ATOMIC |
 				  DRIVER_RENDER,
-	DRM_GEM_CMA_DRIVER_OPS,
+	DRM_GEM_DMA_DRIVER_OPS,
 	.ioctls			= imx_drm_dpu_ioctls,
 	.num_ioctls		= ARRAY_SIZE(imx_drm_dpu_ioctls),
 	.fops			= &imx_drm_driver_fops,
@@ -432,7 +430,21 @@ static struct platform_driver imx_drm_pdrv = {
 		.of_match_table = imx_drm_dt_ids,
 	},
 };
-module_platform_driver(imx_drm_pdrv);
+
+static int __init imx_drm_init(void)
+{
+	if (drm_firmware_drivers_only())
+		return -ENODEV;
+
+	return platform_driver_register(&imx_drm_pdrv);
+}
+module_init(imx_drm_init);
+
+static void __exit imx_drm_exit(void)
+{
+	platform_driver_unregister(&imx_drm_pdrv);
+}
+module_exit(imx_drm_exit);
 
 MODULE_AUTHOR("Sascha Hauer <s.hauer@pengutronix.de>");
 MODULE_DESCRIPTION("i.MX drm driver core");

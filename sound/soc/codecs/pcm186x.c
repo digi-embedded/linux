@@ -37,9 +37,10 @@ struct pcm186x_priv {
 	struct regmap *regmap;
 	struct regulator_bulk_data supplies[PCM186x_NUM_SUPPLIES];
 	unsigned int sysclk;
+	unsigned int bclk_ratio;
 	unsigned int tdm_offset;
 	bool is_tdm_mode;
-	bool is_master_mode;
+	bool is_provider_mode;
 };
 
 static const DECLARE_TLV_DB_SCALE(pcm186x_pga_tlv, -1200, 50, 0);
@@ -310,7 +311,10 @@ static int pcm186x_hw_params(struct snd_pcm_substream *substream,
 			    PCM186X_PCM_CFG_TX_WLEN_MASK,
 			    pcm_cfg);
 
-	div_lrck = width * channels;
+	if (priv->bclk_ratio)
+		div_lrck = priv->bclk_ratio;
+	else
+		div_lrck = width * channels;
 
 	if (priv->is_tdm_mode) {
 		/* Select TDM transmission data */
@@ -340,8 +344,8 @@ static int pcm186x_hw_params(struct snd_pcm_substream *substream,
 				    PCM186X_PCM_CFG_TDM_LRCK_MODE);
 	}
 
-	/* Only configure clock dividers in master mode. */
-	if (priv->is_master_mode) {
+	/* Only configure clock dividers in provider mode. */
+	if (priv->is_provider_mode) {
 		div_bck = priv->sysclk / (div_lrck * rate);
 
 		dev_dbg(component->dev,
@@ -364,18 +368,18 @@ static int pcm186x_set_fmt(struct snd_soc_dai *dai, unsigned int format)
 
 	dev_dbg(component->dev, "%s() format=0x%x\n", __func__, format);
 
-	/* set master/slave audio interface */
-	switch (format & SND_SOC_DAIFMT_MASTER_MASK) {
-	case SND_SOC_DAIFMT_CBM_CFM:
+	switch (format & SND_SOC_DAIFMT_CLOCK_PROVIDER_MASK) {
+	case SND_SOC_DAIFMT_CBP_CFP:
 		if (!priv->sysclk) {
-			dev_err(component->dev, "operating in master mode requires sysclock to be configured\n");
-			return -EINVAL;
+			dev_warn(component->dev, "operating in provider mode requires sysclock to be configured\n");
+			priv->is_provider_mode = false;
+			break;
 		}
 		clk_ctrl |= PCM186X_CLK_CTRL_MST_MODE;
-		priv->is_master_mode = true;
+		priv->is_provider_mode = true;
 		break;
-	case SND_SOC_DAIFMT_CBS_CFS:
-		priv->is_master_mode = false;
+	case SND_SOC_DAIFMT_CBC_CFC:
+		priv->is_provider_mode = false;
 		break;
 	default:
 		dev_err(component->dev, "Invalid DAI master/slave interface\n");
@@ -475,8 +479,22 @@ static int pcm186x_set_dai_sysclk(struct snd_soc_dai *dai, int clk_id,
 	return 0;
 }
 
+static int pcm186x_set_bclk_ratio(struct snd_soc_dai *dai, unsigned int ratio)
+{
+	struct snd_soc_component *component = dai->component;
+	struct pcm186x_priv *priv = snd_soc_component_get_drvdata(component);
+
+	if (ratio > 256)
+		return -EINVAL;
+
+	priv->bclk_ratio = ratio;
+
+	return 0;
+}
+
 static const struct snd_soc_dai_ops pcm186x_dai_ops = {
 	.set_sysclk = pcm186x_set_dai_sysclk,
+	.set_bclk_ratio = pcm186x_set_bclk_ratio,
 	.set_tdm_slot = pcm186x_set_tdm_slot,
 	.set_fmt = pcm186x_set_fmt,
 	.hw_params = pcm186x_hw_params,
@@ -535,19 +553,14 @@ static int pcm186x_power_on(struct snd_soc_component *component)
 static int pcm186x_power_off(struct snd_soc_component *component)
 {
 	struct pcm186x_priv *priv = snd_soc_component_get_drvdata(component);
-	int ret;
 
 	snd_soc_component_update_bits(component, PCM186X_POWER_CTRL,
 			    PCM186X_PWR_CTRL_PWRDN, PCM186X_PWR_CTRL_PWRDN);
 
 	regcache_cache_only(priv->regmap, true);
 
-	ret = regulator_bulk_disable(ARRAY_SIZE(priv->supplies),
+	return regulator_bulk_disable(ARRAY_SIZE(priv->supplies),
 				     priv->supplies);
-	if (ret)
-		return ret;
-
-	return 0;
 }
 
 static int pcm186x_set_bias_level(struct snd_soc_component *component,
@@ -584,7 +597,6 @@ static struct snd_soc_component_driver soc_codec_dev_pcm1863 = {
 	.idle_bias_on		= 1,
 	.use_pmdown_time	= 1,
 	.endianness		= 1,
-	.non_legacy_dai_naming	= 1,
 };
 
 static struct snd_soc_component_driver soc_codec_dev_pcm1865 = {
@@ -599,7 +611,6 @@ static struct snd_soc_component_driver soc_codec_dev_pcm1865 = {
 	.idle_bias_on		= 1,
 	.use_pmdown_time	= 1,
 	.endianness		= 1,
-	.non_legacy_dai_naming	= 1,
 };
 
 static bool pcm186x_volatile(struct device *dev, unsigned int reg)

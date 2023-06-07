@@ -55,12 +55,13 @@ int xp_alloc_tx_descs(struct xsk_buff_pool *pool, struct xdp_sock *xs)
 struct xsk_buff_pool *xp_create_and_assign_umem(struct xdp_sock *xs,
 						struct xdp_umem *umem)
 {
+	bool unaligned = umem->flags & XDP_UMEM_UNALIGNED_CHUNK_FLAG;
 	struct xsk_buff_pool *pool;
 	struct xdp_buff_xsk *xskb;
-	u32 i;
+	u32 i, entries;
 
-	pool = kvzalloc(struct_size(pool, free_heads, umem->chunks),
-			GFP_KERNEL);
+	entries = unaligned ? umem->chunks : 0;
+	pool = kvzalloc(struct_size(pool, free_heads, entries),	GFP_KERNEL);
 	if (!pool)
 		goto out;
 
@@ -77,9 +78,9 @@ struct xsk_buff_pool *xp_create_and_assign_umem(struct xdp_sock *xs,
 	pool->heads_cnt = umem->chunks;
 	pool->free_heads_cnt = umem->chunks;
 	pool->headroom = umem->headroom;
-	pool->tx_headroom = umem->tx_headroom;
 	pool->chunk_size = umem->chunk_size;
-	pool->unaligned = umem->flags & XDP_UMEM_UNALIGNED_CHUNK_FLAG;
+	pool->chunk_shift = ffs(umem->chunk_size) - 1;
+	pool->unaligned = unaligned;
 	pool->frame_len = umem->chunk_size - umem->headroom -
 		XDP_PACKET_HEADROOM;
 	pool->umem = umem;
@@ -97,7 +98,11 @@ struct xsk_buff_pool *xp_create_and_assign_umem(struct xdp_sock *xs,
 		xskb = &pool->heads[i];
 		xskb->pool = pool;
 		xskb->xdp.frame_sz = umem->chunk_size - umem->headroom;
-		pool->free_heads[i] = xskb;
+		INIT_LIST_HEAD(&xskb->free_list_node);
+		if (pool->unaligned)
+			pool->free_heads[i] = xskb;
+		else
+			xp_init_xskb_addr(xskb, pool, i * pool->chunk_size);
 	}
 
 	return pool;
@@ -207,17 +212,18 @@ err_unreg_pool:
 	return err;
 }
 
-int xp_assign_dev_shared(struct xsk_buff_pool *pool, struct xdp_umem *umem,
+int xp_assign_dev_shared(struct xsk_buff_pool *pool, struct xdp_sock *umem_xs,
 			 struct net_device *dev, u16 queue_id)
 {
 	u16 flags;
+	struct xdp_umem *umem = umem_xs->umem;
 
 	/* One fill and completion ring required for each queue id. */
 	if (!pool->fq || !pool->cq)
 		return -EINVAL;
 
 	flags = umem->zc ? XDP_ZEROCOPY : XDP_COPY;
-	if (pool->uses_need_wakeup)
+	if (umem_xs->pool->uses_need_wakeup)
 		flags |= XDP_USE_NEED_WAKEUP;
 
 	return xp_assign_dev(pool, dev, queue_id, flags);
@@ -374,6 +380,16 @@ static void xp_check_dma_contiguity(struct xsk_dma_map *dma_map)
 
 static int xp_init_dma_info(struct xsk_buff_pool *pool, struct xsk_dma_map *dma_map)
 {
+	if (!pool->unaligned) {
+		u32 i;
+
+		for (i = 0; i < pool->heads_cnt; i++) {
+			struct xdp_buff_xsk *xskb = &pool->heads[i];
+
+			xp_init_xskb_dma(xskb, pool, dma_map->dma_pages, xskb->orig_addr);
+		}
+	}
+
 	pool->dma_pages = kvcalloc(dma_map->dma_pages_cnt, sizeof(*pool->dma_pages), GFP_KERNEL);
 	if (!pool->dma_pages)
 		return -ENOMEM;
@@ -465,12 +481,9 @@ static struct xdp_buff_xsk *__xp_alloc(struct xsk_buff_pool *pool)
 	if (pool->free_heads_cnt == 0)
 		return NULL;
 
-	xskb = pool->free_heads[--pool->free_heads_cnt];
-
 	for (;;) {
 		if (!xskq_cons_peek_addr_unchecked(pool->fq, &addr)) {
 			pool->fq->queue_empty_descs++;
-			xp_release(xskb);
 			return NULL;
 		}
 
@@ -483,17 +496,17 @@ static struct xdp_buff_xsk *__xp_alloc(struct xsk_buff_pool *pool)
 		}
 		break;
 	}
-	xskq_cons_release(pool->fq);
 
-	xskb->orig_addr = addr;
-	xskb->xdp.data_hard_start = pool->addrs + addr + pool->headroom;
-	if (pool->dma_pages_cnt) {
-		xskb->frame_dma = (pool->dma_pages[addr >> PAGE_SHIFT] &
-				   ~XSK_NEXT_PG_CONTIG_MASK) +
-				  (addr & ~PAGE_MASK);
-		xskb->dma = xskb->frame_dma + pool->headroom +
-			    XDP_PACKET_HEADROOM;
+	if (pool->unaligned) {
+		xskb = pool->free_heads[--pool->free_heads_cnt];
+		xp_init_xskb_addr(xskb, pool, addr);
+		if (pool->dma_pages_cnt)
+			xp_init_xskb_dma(xskb, pool, pool->dma_pages, addr);
+	} else {
+		xskb = &pool->heads[xp_aligned_extract_idx(pool, addr)];
 	}
+
+	xskq_cons_release(pool->fq);
 	return xskb;
 }
 
@@ -509,7 +522,7 @@ struct xdp_buff *xp_alloc(struct xsk_buff_pool *pool)
 		pool->free_list_cnt--;
 		xskb = list_first_entry(&pool->free_list, struct xdp_buff_xsk,
 					free_list_node);
-		list_del(&xskb->free_list_node);
+		list_del_init(&xskb->free_list_node);
 	}
 
 	xskb->xdp.data = xskb->xdp.data_hard_start + XDP_PACKET_HEADROOM;
@@ -550,13 +563,16 @@ static u32 xp_alloc_new_from_fq(struct xsk_buff_pool *pool, struct xdp_buff **xd
 			continue;
 		}
 
-		xskb = pool->free_heads[--pool->free_heads_cnt];
+		if (pool->unaligned) {
+			xskb = pool->free_heads[--pool->free_heads_cnt];
+			xp_init_xskb_addr(xskb, pool, addr);
+			if (pool->dma_pages_cnt)
+				xp_init_xskb_dma(xskb, pool, pool->dma_pages, addr);
+		} else {
+			xskb = &pool->heads[xp_aligned_extract_idx(pool, addr)];
+		}
+
 		*xdp = &xskb->xdp;
-		xskb->orig_addr = addr;
-		xskb->xdp.data_hard_start = pool->addrs + addr + pool->headroom;
-		xskb->frame_dma = (pool->dma_pages[addr >> PAGE_SHIFT] &
-				   ~XSK_NEXT_PG_CONTIG_MASK) + (addr & ~PAGE_MASK);
-		xskb->dma = xskb->frame_dma + pool->headroom + XDP_PACKET_HEADROOM;
 		xdp++;
 	}
 
@@ -574,7 +590,7 @@ static u32 xp_alloc_reused(struct xsk_buff_pool *pool, struct xdp_buff **xdp, u3
 	i = nb_entries;
 	while (i--) {
 		xskb = list_first_entry(&pool->free_list, struct xdp_buff_xsk, free_list_node);
-		list_del(&xskb->free_list_node);
+		list_del_init(&xskb->free_list_node);
 
 		*xdp = &xskb->xdp;
 		xdp++;
@@ -589,9 +605,13 @@ u32 xp_alloc_batch(struct xsk_buff_pool *pool, struct xdp_buff **xdp, u32 max)
 	u32 nb_entries1 = 0, nb_entries2;
 
 	if (unlikely(pool->dma_need_sync)) {
+		struct xdp_buff *buff;
+
 		/* Slow path */
-		*xdp = xp_alloc(pool);
-		return !!*xdp;
+		buff = xp_alloc(pool);
+		if (buff)
+			*xdp = buff;
+		return !!buff;
 	}
 
 	if (unlikely(pool->free_list_cnt)) {
@@ -621,6 +641,9 @@ EXPORT_SYMBOL(xp_can_alloc);
 
 void xp_free(struct xdp_buff_xsk *xskb)
 {
+	if (!list_empty(&xskb->free_list_node))
+		return;
+
 	xskb->pool->free_list_cnt++;
 	list_add(&xskb->free_list_node, &xskb->pool->free_list);
 }

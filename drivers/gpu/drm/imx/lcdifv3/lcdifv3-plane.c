@@ -1,15 +1,16 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Copyright 2019,2020 NXP
+ * Copyright 2019,2020,2022 NXP
  */
 
 #include <linux/module.h>
 #include <drm/drm_atomic.h>
 #include <drm/drm_atomic_helper.h>
-#include <drm/drm_fb_cma_helper.h>
+#include <drm/drm_blend.h>
+#include <drm/drm_fb_dma_helper.h>
 #include <drm/drm_fourcc.h>
 #include <drm/drm_framebuffer.h>
-#include <drm/drm_gem_cma_helper.h>
+#include <drm/drm_gem_dma_helper.h>
 #include <drm/drm_plane.h>
 #include <drm/drm_plane_helper.h>
 #include <drm/drm_rect.h>
@@ -57,8 +58,8 @@ static int lcdifv3_plane_atomic_check(struct drm_plane *plane,
 	mode = &crtc_state->adjusted_mode;
 
 	ret = drm_atomic_helper_check_plane_state(plane_state, crtc_state,
-						  DRM_PLANE_HELPER_NO_SCALING,
-						  DRM_PLANE_HELPER_NO_SCALING,
+						  DRM_PLANE_NO_SCALING,
+						  DRM_PLANE_NO_SCALING,
 						  false, true);
 	if (ret)
 		return ret;
@@ -78,17 +79,16 @@ static int lcdifv3_plane_atomic_check(struct drm_plane *plane,
 	return 0;
 }
 
-static void lcdifv3_plane_atomic_update(struct drm_plane *plane,
-					struct drm_atomic_state *state)
+void lcdifv3_plane_atomic_update(struct drm_plane *plane,
+				 struct drm_atomic_state *state)
 {
 	struct lcdifv3_plane *lcdifv3_plane = to_lcdifv3_plane(plane);
 	struct lcdifv3_soc *lcdifv3 = lcdifv3_plane->lcdifv3;
 	struct drm_plane_state *new_plane_state = drm_atomic_get_new_plane_state(state,
 										 plane);
 	struct drm_framebuffer *fb = new_plane_state->fb;
-	struct drm_gem_cma_object *gem_obj = NULL;
-	u32 fb_addr, src_off, src_w, fb_idx, cpp, stride;
-	bool crop;
+	struct drm_gem_dma_object *gem_obj = NULL;
+	u32 fb_addr, src_off, fb_idx;
 
 	/* plane and crtc is disabling */
 	if (!fb)
@@ -104,10 +104,10 @@ static void lcdifv3_plane_atomic_update(struct drm_plane *plane,
 	switch (plane->type) {
 	case DRM_PLANE_TYPE_PRIMARY:
 		/* TODO: only support RGB */
-		gem_obj = drm_fb_cma_get_gem_obj(fb, 0);
+		gem_obj = drm_fb_dma_get_gem_obj(fb, 0);
 		src_off = (new_plane_state->src_y >> 16) * fb->pitches[0] +
 			  (new_plane_state->src_x >> 16) * fb->format->cpp[0];
-		fb_addr = gem_obj->paddr + fb->offsets[0] + src_off;
+		fb_addr = gem_obj->dma_addr + fb->offsets[0] + src_off;
 		fb_idx  = 0;
 		break;
 	default:
@@ -116,18 +116,6 @@ static void lcdifv3_plane_atomic_update(struct drm_plane *plane,
 	}
 
 	lcdifv3_set_fb_addr(lcdifv3, fb_idx, fb_addr);
-
-	/* config horizontal cropping if crtc needs modeset */
-	if (unlikely(drm_atomic_crtc_needs_modeset(new_plane_state->crtc->state))) {
-		cpp = fb->format->cpp[0];
-		stride = DIV_ROUND_UP(fb->pitches[0], cpp);
-
-		src_w = new_plane_state->src_w >> 16;
-		WARN_ON(src_w > fb->width);
-
-		crop  = src_w != stride ? true : false;
-		lcdifv3_set_fb_hcrop(lcdifv3, src_w, fb->pitches[0], crop);
-	}
 }
 
 static void lcdifv3_plane_atomic_disable(struct drm_plane *plane,
@@ -178,7 +166,9 @@ struct lcdifv3_plane *lcdifv3_plane_init(struct drm_device *dev,
 	struct lcdifv3_plane *lcdifv3_plane;
 
 	/* lcdifv3 doesn't support fb modifiers */
-	if (zpos || dev->mode_config.allow_fb_modifiers)
+	dev->mode_config.fb_modifiers_not_supported = true;
+
+	if (zpos)
 		return ERR_PTR(-EINVAL);
 
 	lcdifv3_plane = kzalloc(sizeof(*lcdifv3_plane), GFP_KERNEL);

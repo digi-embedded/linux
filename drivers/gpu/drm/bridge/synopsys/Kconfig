@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: GPL-2.0-only
 config DRM_DW_HDMI
 	tristate
+	select DRM_DISPLAY_HDMI_HELPER
+	select DRM_DISPLAY_HELPER
 	select DRM_KMS_HELPER
 	select REGMAP_MMIO
 	select CEC_CORE if CEC_NOTIFIER
@@ -33,8 +35,7 @@ config DRM_DW_HDMI_GP_AUDIO
 	select SND_PCM_IEC958
 	help
 	  Support the GP Audio interface which is part of the Synopsys
-	  Designware HDMI block.  This is used in conjunction with
-	  the i.MX865 HDMI driver.
+	  Designware HDMI block.
 
 config DRM_DW_HDMI_CEC
 	tristate "Synopsis Designware CEC interface"

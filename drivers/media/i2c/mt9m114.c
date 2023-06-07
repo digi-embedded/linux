@@ -1079,14 +1079,13 @@ fail:
 	return ret;
 }
 
-static int mt9m114_remove(struct i2c_client *client)
+static void mt9m114_remove(struct i2c_client *client)
 {
 	struct v4l2_subdev *sd = i2c_get_clientdata(client);
 	struct mt9m114 *sensor = to_mt9m114(sd);
 
 	v4l2_device_unregister_subdev(sd);
 	kfree(sensor);
-	return 0;
 }
 
 static const struct i2c_device_id mt9m114_id[] = {

@@ -969,7 +969,6 @@ struct snd_soc_component_driver rpmsg_codec_dev_ak4497 = {
 	.idle_bias_on = 1,
 	.use_pmdown_time = 1,
 	.endianness = 1,
-	.non_legacy_dai_naming = 1,
 };
 
 static int rpmsg_ak4497_read(void *context, unsigned int reg, unsigned int *val)

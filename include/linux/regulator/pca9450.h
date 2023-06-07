@@ -227,10 +227,17 @@ enum {
 #define WDOG_B_CFG_COLD_LDO12		0x80
 #define WDOG_B_CFG_COLD			0xC0
 
+/* PCA9450_REG_CONFIG2 bits */
+#define I2C_LT_MASK			0x03
+#define I2C_LT_FORCE_DISABLE		0x00
+#define I2C_LT_ON_STANDBY_RUN		0x01
+#define I2C_LT_ON_RUN			0x02
+#define I2C_LT_FORCE_ENABLE		0x03
+
 /* PCA9450 LDO ENMODE bits */
-#define LDO_ENMODE_OFF                 0x00
-#define LDO_ENMODE_ONREQ               0x40
-#define LDO_ENMODE_ONREQ_STBYREQ       0x80
-#define LDO_ENMODE_ON                  0xC0
+#define LDO_ENMODE_OFF			0x00
+#define LDO_ENMODE_ONREQ		0x40
+#define LDO_ENMODE_ONREQ_STBYREQ	0x80
+#define LDO_ENMODE_ON			0xC0
 
 #endif /* __LINUX_REG_PCA9450_H__ */

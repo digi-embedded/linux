@@ -30,6 +30,20 @@
 #define MQS_CLK_DIV_MASK		(0xFF << 0)
 #define MQS_CLK_DIV_SHIFT		(0)
 
+/**
+ * struct fsl_mqs_soc_data - soc specific data
+ *
+ * @use_gpr: control register is in General Purpose Register group
+ * @ctrl_off: control register offset
+ * @en_mask: enable bit mask
+ * @en_shift: enable bit shift
+ * @rst_mask: reset bit mask
+ * @rst_shift: reset bit shift
+ * @osr_mask: oversample bit mask
+ * @osr_shift: oversample bit shift
+ * @div_mask: clock divider mask
+ * @div_shift: clock divider bit shift
+ */
 struct fsl_mqs_soc_data {
 	bool use_gpr;
 	int  ctrl_off;
@@ -107,8 +121,8 @@ static int fsl_mqs_set_dai_fmt(struct snd_soc_dai *dai, unsigned int fmt)
 		return -EINVAL;
 	}
 
-	switch (fmt & SND_SOC_DAIFMT_MASTER_MASK) {
-	case SND_SOC_DAIFMT_CBS_CFS:
+	switch (fmt & SND_SOC_DAIFMT_CLOCK_PROVIDER_MASK) {
+	case SND_SOC_DAIFMT_CBC_CFC:
 		break;
 	default:
 		return -EINVAL;
@@ -141,7 +155,6 @@ static void fsl_mqs_shutdown(struct snd_pcm_substream *substream,
 
 static const struct snd_soc_component_driver soc_codec_fsl_mqs = {
 	.idle_bias_on = 1,
-	.non_legacy_dai_naming	= 1,
 };
 
 static const struct snd_soc_dai_ops fsl_mqs_dai_ops = {
@@ -300,15 +313,15 @@ static const struct dev_pm_ops fsl_mqs_pm_ops = {
 
 static const struct fsl_mqs_soc_data fsl_mqs_imx8qm_data = {
 	.use_gpr = false,
-	.ctrl_off = 0x0,
-	.en_mask  = BIT(28),
-	.en_shift = 28,
-	.rst_mask = BIT(24),
-	.rst_shift = 24,
-	.osr_mask = BIT(20),
-	.osr_shift = 20,
-	.div_mask = 0xFF,
-	.div_shift = 0,
+	.ctrl_off = REG_MQS_CTRL,
+	.en_mask  = MQS_EN_MASK,
+	.en_shift = MQS_EN_SHIFT,
+	.rst_mask = MQS_SW_RST_MASK,
+	.rst_shift = MQS_SW_RST_SHIFT,
+	.osr_mask = MQS_OVERSAMPLE_MASK,
+	.osr_shift = MQS_OVERSAMPLE_SHIFT,
+	.div_mask = MQS_CLK_DIV_MASK,
+	.div_shift = MQS_CLK_DIV_SHIFT,
 };
 
 static const struct fsl_mqs_soc_data fsl_mqs_imx6sx_data = {

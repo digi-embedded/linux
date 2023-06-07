@@ -30,7 +30,7 @@
 
 #include "lcdif-regs.h"
 
-#define DRIVER_NAME "imx-lcdif"
+#define DRIVER_NAME "imx8mm-lcdif"
 
 struct lcdif_soc {
 	struct device *dev;
@@ -670,7 +670,7 @@ static int lcdif_of_parse_resets(struct lcdif_soc *lcdif)
 	ret = of_parse_phandle_with_args(np, "resets", "#reset-cells",
 					 0, &args);
 	if (ret)
-		return ret;
+		return ret == -ENOENT ? 0 : ret;
 
 	parent = args.np;
 	for_each_child_of_node(parent, child) {
@@ -832,7 +832,7 @@ static int imx_lcdif_runtime_resume(struct device *dev)
 #endif
 
 static const struct dev_pm_ops imx_lcdif_pm_ops = {
-	SET_SYSTEM_SLEEP_PM_OPS(imx_lcdif_suspend, imx_lcdif_resume)
+	SET_LATE_SYSTEM_SLEEP_PM_OPS(imx_lcdif_suspend, imx_lcdif_resume)
 	SET_RUNTIME_PM_OPS(imx_lcdif_runtime_suspend,
 			   imx_lcdif_runtime_resume, NULL)
 };

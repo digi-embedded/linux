@@ -5,6 +5,7 @@
 
 /dts-v1/;
 
+#include <dt-bindings/phy/phy-imx8-pcie.h>
 #include <dt-bindings/usb/pd.h>
 #include "imx8mp.dtsi"
 
@@ -34,6 +35,12 @@
 		      <0x1 0x00000000 0 0xc0000000>;
 	};
 
+	pcie0_refclk: pcie0-refclk {
+		compatible = "fixed-clock";
+			#clock-cells = <0>;
+			clock-frequency = <100000000>;
+	};
+
 	reg_can1_stby: regulator-can1-stby {
 		compatible = "regulator-fixed";
 		regulator-name = "can1-stby";
@@ -54,6 +61,18 @@
 		regulator-max-microvolt = <3300000>;
 		gpio = <&gpio4 27 GPIO_ACTIVE_HIGH>;
 		enable-active-high;
+	};
+
+	reg_pcie0: regulator-pcie {
+		compatible = "regulator-fixed";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_pcie0_reg>;
+		regulator-name = "MPCIE_3V3";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		gpio = <&gpio2 6 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		regulator-always-on;
 	};
 
 	reg_usdhc2_vmmc: regulator-usdhc2 {
@@ -160,7 +179,7 @@
 
 	lvds_backlight: lvds_backlight {
 		compatible = "pwm-backlight";
-		pwms = <&pwm2 0 100000>;
+		pwms = <&pwm2 0 100000 0>;
 		status = "okay";
 
 		brightness-levels = < 0  1  2  3  4  5  6  7  8  9
@@ -206,21 +225,6 @@
 		spi-tx-bus-width = <1>;
 		spi-rx-bus-width = <4>;
 	};
-};
-
-&flexcan1 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_flexcan1>;
-	xceiver-supply = <&reg_can1_stby>;
-	status = "okay";
-};
-
-&flexcan2 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_flexcan2>;
-	xceiver-supply = <&reg_can2_stby>;
-	pinctrl-assert-gpios = <&pca6416 3 GPIO_ACTIVE_HIGH>;
-	status = "disabled";/* can2 pin conflict with pdm */
 };
 
 &A53_0 {
@@ -300,6 +304,9 @@
 			compatible = "ethernet-phy-ieee802.3-c22";
 			reg = <1>;
 			eee-broken-1000t;
+			reset-gpios = <&gpio4 22 GPIO_ACTIVE_LOW>;
+			reset-assert-us = <10000>;
+			reset-deassert-us = <80000>;
 			realtek,clkout-disable;
 		};
 	};
@@ -307,50 +314,61 @@
 	mtl_tx_setup: tx-queues-config {
 		snps,tx-queues-to-use = <5>;
 		snps,tx-sched-sp;
+
 		queue0 {
 			snps,dcb-algorithm;
 			snps,priority = <0x1>;
 		};
+
 		queue1 {
 			snps,dcb-algorithm;
 			snps,priority = <0x2>;
 		};
+
 		queue2 {
 			snps,dcb-algorithm;
 			snps,priority = <0x4>;
 		};
+
 		queue3 {
 			snps,dcb-algorithm;
 			snps,priority = <0x8>;
 		};
+
 		queue4 {
 			snps,dcb-algorithm;
 			snps,priority = <0xf0>;
 		};
 	};
+
 	mtl_rx_setup: rx-queues-config {
 		snps,rx-queues-to-use = <5>;
 		snps,rx-sched-sp;
+
 		queue0 {
 			snps,dcb-algorithm;
 			snps,priority = <0x1>;
 			snps,map-to-dma-channel = <0>;
 		};
+
 		queue1 {
 			snps,dcb-algorithm;
 			snps,priority = <0x2>;
 			snps,map-to-dma-channel = <1>;
 		};
+
 		queue2 {
 			snps,dcb-algorithm;
 			snps,priority = <0x4>;
 			snps,map-to-dma-channel = <2>;
 		};
+
 		queue3 {
 			snps,dcb-algorithm;
 			snps,priority = <0x8>;
 			snps,map-to-dma-channel = <3>;
 		};
+
 		queue4 {
 			snps,dcb-algorithm;
 			snps,priority = <0xf0>;
@@ -382,6 +400,21 @@
 			realtek,clkout-disable;
 		};
 	};
+};
+
+&flexcan1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_flexcan1>;
+	xceiver-supply = <&reg_can1_stby>;
+	status = "okay";
+};
+
+&flexcan2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_flexcan2>;
+	xceiver-supply = <&reg_can2_stby>;
+	pinctrl-assert-gpios = <&pca6416 3 GPIO_ACTIVE_HIGH>;
+	status = "disabled";/* can2 pin conflict with pdm */
 };
 
 &i2c1 {
@@ -597,6 +630,28 @@
 		reg = <0x20>;
 		gpio-controller;
 		#gpio-cells = <2>;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_pca6416_int>;
+		interrupt-parent = <&gpio1>;
+		interrupts = <12 IRQ_TYPE_LEVEL_LOW>;
+		gpio-line-names = "EXT_PWREN1",
+			"EXT_PWREN2",
+			"CAN1/I2C5_SEL",
+			"PDM/CAN2_SEL",
+			"FAN_EN",
+			"PWR_MEAS_IO1",
+			"PWR_MEAS_IO2",
+			"EXP_P0_7",
+			"EXP_P1_0",
+			"EXP_P1_1",
+			"EXP_P1_2",
+			"EXP_P1_3",
+			"EXP_P1_4",
+			"EXP_P1_5",
+			"EXP_P1_6",
+			"EXP_P1_7";
 	};
 
 	codec: wm8960@1a {
@@ -636,6 +691,21 @@
 			};
 		};
 	};
+};
+
+/* I2C on expansion connector J22. */
+&i2c5 {
+	clock-frequency = <100000>; /* Lower clock speed for external bus. */
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_i2c5>;
+	status = "disabled"; /* can1 pins conflict with i2c5 */
+
+	/* GPIO 2 of PCA6416 is used to switch between CAN1 and I2C5 functions:
+	 *     LOW:  CAN1 (default, pull-down)
+	 *     HIGH: I2C5
+	 * You need to set it to high to enable I2C5 (for example, add gpio-hog
+	 * in pca6416 node).
+	 */
 };
 
 &irqsteer_hdmi {
@@ -706,6 +776,60 @@
 	};
 };
 
+&pcie_phy {
+	fsl,refclk-pad-mode = <IMX8_PCIE_REFCLK_PAD_INPUT>;
+	clocks = <&pcie0_refclk>;
+	clock-names = "ref";
+	status = "okay";
+};
+
+&pcie {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pcie0>;
+	reset-gpio = <&gpio2 7 GPIO_ACTIVE_LOW>;
+	clocks = <&clk IMX8MP_CLK_HSIO_ROOT>,
+		 <&clk IMX8MP_CLK_PCIE_ROOT>,
+		 <&clk IMX8MP_CLK_HSIO_AXI>;
+	clock-names = "pcie", "pcie_aux", "pcie_bus";
+	assigned-clocks = <&clk IMX8MP_CLK_PCIE_AUX>;
+	assigned-clock-rates = <10000000>;
+	assigned-clock-parents = <&clk IMX8MP_SYS_PLL2_50M>;
+	vpcie-supply = <&reg_pcie0>;
+	status = "okay";
+
+	wifi_wake_host {
+		compatible = "nxp,wifi-wake-host";
+		interrupt-parent = <&gpio5>;
+		interrupts = <21 IRQ_TYPE_LEVEL_LOW>;
+		interrupt-names = "host-wake";
+	};
+};
+
+&pcie_ep{
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pcie0>;
+	clocks = <&clk IMX8MP_CLK_HSIO_ROOT>,
+		 <&clk IMX8MP_CLK_PCIE_ROOT>,
+		 <&clk IMX8MP_CLK_HSIO_AXI>;
+	clock-names = "pcie", "pcie_aux", "pcie_bus";
+	assigned-clocks = <&clk IMX8MP_CLK_HSIO_AXI>,
+			  <&clk IMX8MP_CLK_PCIE_AUX>;
+	assigned-clock-rates = <500000000>, <10000000>;
+	assigned-clock-parents = <&clk IMX8MP_SYS_PLL2_500M>,
+				 <&clk IMX8MP_SYS_PLL2_50M>;
+	status = "disabled";
+};
+
+&sai2 {
+	#sound-dai-cells = <0>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_sai2>;
+	assigned-clocks = <&clk IMX8MP_CLK_SAI2>;
+	assigned-clock-parents = <&clk IMX8MP_AUDIO_PLL1_OUT>;
+	assigned-clock-rates = <12288000>;
+	status = "okay";
+};
+
 &snvs_pwrkey {
 	status = "okay";
 };
@@ -722,65 +846,6 @@
 	assigned-clocks = <&clk IMX8MP_CLK_PDM>;
 	assigned-clock-parents = <&clk IMX8MP_AUDIO_PLL1_OUT>;
 	assigned-clock-rates = <196608000>;
-	status = "okay";
-};
-
-&pcie{
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_pcie>;
-	disable-gpio = <&gpio2 6 GPIO_ACTIVE_LOW>;
-	reset-gpio = <&gpio2 7 GPIO_ACTIVE_LOW>;
-	ext_osc = <1>;
-	clocks = <&clk IMX8MP_CLK_HSIO_ROOT>,
-		 <&clk IMX8MP_CLK_PCIE_AUX>,
-		 <&clk IMX8MP_CLK_HSIO_AXI>,
-		 <&clk IMX8MP_CLK_PCIE_ROOT>;
-	clock-names = "pcie", "pcie_aux", "pcie_phy", "pcie_bus";
-	assigned-clocks = <&clk IMX8MP_CLK_HSIO_AXI>,
-			  <&clk IMX8MP_CLK_PCIE_AUX>;
-	assigned-clock-rates = <500000000>, <10000000>;
-	assigned-clock-parents = <&clk IMX8MP_SYS_PLL2_500M>,
-				 <&clk IMX8MP_SYS_PLL2_50M>;
-	l1ss-disabled;
-	status = "okay";
-
-	wifi_wake_host {
-		compatible = "nxp,wifi-wake-host";
-		interrupt-parent = <&gpio5>;
-		interrupts = <21 IRQ_TYPE_LEVEL_LOW>;
-		interrupt-names = "host-wake";
-	};
-};
-
-&pcie_ep{
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_pcie>;
-	ext_osc = <1>;
-	clocks = <&clk IMX8MP_CLK_HSIO_ROOT>,
-		 <&clk IMX8MP_CLK_PCIE_AUX>,
-		 <&clk IMX8MP_CLK_HSIO_AXI>,
-		 <&clk IMX8MP_CLK_PCIE_ROOT>;
-	clock-names = "pcie", "pcie_aux", "pcie_phy", "pcie_bus";
-	assigned-clocks = <&clk IMX8MP_CLK_HSIO_AXI>,
-			  <&clk IMX8MP_CLK_PCIE_AUX>;
-	assigned-clock-rates = <500000000>, <10000000>;
-	assigned-clock-parents = <&clk IMX8MP_SYS_PLL2_500M>,
-				 <&clk IMX8MP_SYS_PLL2_50M>;
-	status = "disabled";
-};
-
-&pcie_phy{
-	ext_osc = <1>;
-	status = "okay";
-};
-
-&sai2 {
-	#sound-dai-cells = <0>;
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_sai2>;
-	assigned-clocks = <&clk IMX8MP_CLK_SAI2>;
-	assigned-clock-parents = <&clk IMX8MP_AUDIO_PLL1_OUT>;
-	assigned-clock-rates = <12288000>;
 	status = "okay";
 };
 
@@ -824,7 +889,6 @@
 };
 
 &usb3_phy0 {
-	vbus-power-supply = <&ptn5110>;
 	fsl,phy-tx-vref-tune = <0xe>;
 	fsl,phy-tx-preemp-amp-tune = <3>;
 	fsl,phy-tx-vboost-level = <5>;
@@ -1068,24 +1132,42 @@
 		>;
 	};
 
+	pinctrl_i2c5: i2c5grp {
+		fsl,pins = <
+			MX8MP_IOMUXC_SPDIF_RX__I2C5_SDA         0x400001c2
+			MX8MP_IOMUXC_SPDIF_TX__I2C5_SCL         0x400001c2
+		>;
+	};
+
 	pinctrl_mipi_dsi_en: mipi_dsi_en {
 		fsl,pins = <
 			MX8MP_IOMUXC_GPIO1_IO08__GPIO1_IO08	0x16
 		>;
 	};
 
-	pinctrl_pcie: pciegrp {
+	pinctrl_pcie0: pcie0grp {
 		fsl,pins = <
-			MX8MP_IOMUXC_I2C4_SCL__PCIE_CLKREQ_B		0x60 /* open drain, pull up */
-			MX8MP_IOMUXC_SD1_DATA4__GPIO2_IO06		0x40
-			MX8MP_IOMUXC_SD1_DATA5__GPIO2_IO07		0x40
-			MX8MP_IOMUXC_I2C4_SDA__GPIO5_IO21		0x1c4
+			MX8MP_IOMUXC_I2C4_SCL__PCIE_CLKREQ_B	0x60 /* open drain, pull up */
+			MX8MP_IOMUXC_SD1_DATA5__GPIO2_IO07	0x40
+			MX8MP_IOMUXC_I2C4_SDA__GPIO5_IO21	0x1c4
+		>;
+	};
+
+	pinctrl_pcie0_reg: pcie0reggrp {
+		fsl,pins = <
+			MX8MP_IOMUXC_SD1_DATA4__GPIO2_IO06	0x40
 		>;
 	};
 
 	pinctrl_pmic: pmicgrp {
 		fsl,pins = <
 			MX8MP_IOMUXC_GPIO1_IO03__GPIO1_IO03	0x000001c0
+		>;
+	};
+
+	pinctrl_pca6416_int: pca6416_int_grp {
+		fsl,pins = <
+			MX8MP_IOMUXC_GPIO1_IO12__GPIO1_IO12	0x146 /* Input pull-up. */
 		>;
 	};
 

@@ -104,6 +104,7 @@
 struct mma8452_data {
 	struct i2c_client *client;
 	struct mutex lock;
+	struct iio_mount_matrix orientation;
 	u8 ctrl_reg1;
 	u8 data_cfg;
 	const struct mma_chip_info *chip_info;
@@ -165,6 +166,7 @@ static const struct mma8452_event_regs trans_ev_regs = {
 
 /**
  * struct mma_chip_info - chip specific data
+ * @name:			part number of device reported via 'name' attr
  * @chip_id:			WHO_AM_I register's value
  * @channels:			struct iio_chan_spec matching the device's
  *				capabilities
@@ -1054,7 +1056,7 @@ static irqreturn_t mma8452_interrupt(int irq, void *p)
 {
 	struct iio_dev *indio_dev = p;
 	struct mma8452_data *data = iio_priv(indio_dev);
-	int ret = IRQ_NONE;
+	irqreturn_t ret = IRQ_NONE;
 	int src;
 
 	src = i2c_smbus_read_byte_data(data->client, MMA8452_INT_SRC);
@@ -1190,6 +1192,20 @@ static const struct attribute_group mma8452_event_attribute_group = {
 	.attrs = mma8452_event_attributes,
 };
 
+static const struct iio_mount_matrix *
+mma8452_get_mount_matrix(const struct iio_dev *indio_dev,
+			   const struct iio_chan_spec *chan)
+{
+	struct mma8452_data *data = iio_priv(indio_dev);
+
+	return &data->orientation;
+}
+
+static const struct iio_chan_spec_ext_info mma8452_ext_info[] = {
+	IIO_MOUNT_MATRIX(IIO_SHARED_BY_TYPE, mma8452_get_mount_matrix),
+	{ }
+};
+
 #define MMA8452_FREEFALL_CHANNEL(modifier) { \
 	.type = IIO_ACCEL, \
 	.modified = 1, \
@@ -1228,6 +1244,7 @@ static const struct attribute_group mma8452_event_attribute_group = {
 	}, \
 	.event_spec = mma8452_transient_event, \
 	.num_event_specs = ARRAY_SIZE(mma8452_transient_event), \
+	.ext_info = mma8452_ext_info, \
 }
 
 #define MMA8652_CHANNEL(axis, idx, bits) { \
@@ -1249,6 +1266,7 @@ static const struct attribute_group mma8452_event_attribute_group = {
 	}, \
 	.event_spec = mma8452_motion_event, \
 	.num_event_specs = ARRAY_SIZE(mma8452_motion_event), \
+	.ext_info = mma8452_ext_info, \
 }
 
 static const struct iio_chan_spec mma8451_channels[] = {
@@ -1488,7 +1506,6 @@ static void mma8452_trigger_cleanup(struct iio_dev *indio_dev)
 		iio_trigger_unregister(indio_dev->trig);
 }
 
-#if 0
 static int mma8452_reset(struct i2c_client *client)
 {
 	int i;
@@ -1516,7 +1533,6 @@ static int mma8452_reset(struct i2c_client *client)
 
 	return -ETIMEDOUT;
 }
-#endif
 
 static const struct of_device_id mma8452_dt_ids[] = {
 	{ .compatible = "fsl,mma8451", .data = &mma_chip_info_table[mma8451] },
@@ -1553,6 +1569,10 @@ static int mma8452_probe(struct i2c_client *client,
 			return -ENODEV;
 		}
 	}
+
+	ret = iio_read_mount_matrix(&client->dev, &data->orientation);
+	if (ret)
+		return ret;
 
 	data->vdd_reg = devm_regulator_get(&client->dev, "vdd");
 	if (IS_ERR(data->vdd_reg))
@@ -1607,17 +1627,17 @@ static int mma8452_probe(struct i2c_client *client,
 	indio_dev->available_scan_masks = mma8452_scan_masks;
 
 	/*
-	 * Remove this reset operation, we find for fxls8471/mma8452,
-	 * once config this reset bit through I2C, sensor can’t give
-	 * back an I2C ack. Though sensor datasheet define this reset
-	 * bit, but seems it do not behavior as the doc expect. So here
-	 * remove this reset oparation as a workaround.
+	 * the fxls8471 reset bit has issue, after set this
+	 * bit, no i2c ack, and even worse, the following
+	 * i2c command all has no response. This is just
+	 * a workaround to avoid the reset operation on
+	 * fxls8471.
 	 */
-#if 0
-	ret = mma8452_reset(client);
-	if (ret < 0)
-		goto disable_regulators;
-#endif
+	if ( ret != FXLS8471_DEVICE_ID) {
+		ret = mma8452_reset(client);
+		if (ret < 0)
+			goto disable_regulators;
+	}
 
 	data->data_cfg = MMA8452_DATA_CFG_FS_2G;
 	ret = i2c_smbus_write_byte_data(client, MMA8452_DATA_CFG,
@@ -1724,7 +1744,7 @@ disable_regulator_vdd:
 	return ret;
 }
 
-static int mma8452_remove(struct i2c_client *client)
+static void mma8452_remove(struct i2c_client *client)
 {
 	struct iio_dev *indio_dev = i2c_get_clientdata(client);
 	struct mma8452_data *data = iio_priv(indio_dev);
@@ -1740,8 +1760,6 @@ static int mma8452_remove(struct i2c_client *client)
 
 	regulator_disable(data->vddio_reg);
 	regulator_disable(data->vdd_reg);
-
-	return 0;
 }
 
 #ifdef CONFIG_PM

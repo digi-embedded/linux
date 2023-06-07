@@ -19,7 +19,7 @@
 #include <linux/delay.h>
 #include <linux/dma-mapping.h>
 #include <linux/mfd/mxc-hdmi-core.h>
-#include <linux/platform_data/dma-imx.h>
+#include <linux/dma/imx-dma.h>
 
 #include <video/mxc_hdmi.h>
 

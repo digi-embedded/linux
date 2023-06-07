@@ -98,7 +98,7 @@ static const struct of_device_id ahci_qoriq_of_match[] = {
 	{ .compatible = "fsl,ls1088a-ahci", .data = (void *)AHCI_LS1088A},
 	{ .compatible = "fsl,ls2088a-ahci", .data = (void *)AHCI_LS2088A},
 	{ .compatible = "fsl,lx2160a-ahci", .data = (void *)AHCI_LX2160A},
-	{},
+	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, ahci_qoriq_of_match);
 
@@ -245,8 +245,6 @@ static int ahci_qoriq_hardreset(struct ata_link *link, unsigned int *class,
 	bool ls1021a_workaround = (qoriq_priv->type == AHCI_LS1021A);
 	bool lx2160a_workaround = (qoriq_priv->type == AHCI_LX2160A);
 
-	DPRINTK("ENTER\n");
-
 	hpriv->stop_engine(ap);
 
 	/*
@@ -267,7 +265,7 @@ static int ahci_qoriq_hardreset(struct ata_link *link, unsigned int *class,
 
 	/* clear D2H reception area to properly wait for D2H FIS */
 	ata_tf_init(link->device, &tf);
-	tf.command = ATA_BUSY;
+	tf.status = ATA_BUSY;
 	ata_tf_to_fis(&tf, 0, 0, d2h_fis);
 
 	fsl_sata_errata_379364(lx2160a_workaround);
@@ -290,8 +288,6 @@ static int ahci_qoriq_hardreset(struct ata_link *link, unsigned int *class,
 
 	if (online)
 		*class = ahci_dev_classify(ap);
-
-	DPRINTK("EXIT, rc=%d, class=%u\n", rc, *class);
 	return rc;
 }
 
@@ -428,7 +424,7 @@ static int ahci_qoriq_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	if (of_id)
-		qoriq_priv->type = (enum ahci_qoriq_type)of_id->data;
+		qoriq_priv->type = (unsigned long)of_id->data;
 	else
 		qoriq_priv->type = (enum ahci_qoriq_type)acpi_id->driver_data;
 

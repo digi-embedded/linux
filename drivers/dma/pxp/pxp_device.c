@@ -15,7 +15,7 @@
 #include <linux/pxp_device.h>
 #include <linux/atomic.h>
 #include <linux/dma-buf.h>
-#include <linux/platform_data/dma-imx.h>
+#include <linux/dma/imx-dma.h>
 
 #define BUFFER_HASH_ORDER 4
 
@@ -726,11 +726,11 @@ pxp_dmabuf_ops_end_cpu_access(struct dma_buf *dbuf,
 	return 0;
 }
 
-static int pxp_dmabuf_ops_vmap(struct dma_buf *dbuf, struct dma_buf_map *map)
+static int pxp_dmabuf_ops_vmap(struct dma_buf *dbuf, struct iosys_map *map)
 {
 	struct pxp_buf_obj *obj = dbuf->priv;
 
-	dma_buf_map_set_vaddr(map, obj->virtual);
+	iosys_map_set_vaddr(map, obj->virtual);
 
 	return 0;
 }

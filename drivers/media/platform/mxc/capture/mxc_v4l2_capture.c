@@ -493,7 +493,7 @@ static int mxc_enc_disable(cam_data *cam)
 	 * 3. disable idmac
 	 * 4. disable smfc (CSI--MEM channel)
 	 */
-	if (mxc_capture_inputs[cam->current_input].name != NULL) {
+	if (mxc_capture_inputs[cam->current_input].name[0] != '\0') {
 		if (cam->enc_disable_csi) {
 			err = cam->enc_disable_csi(cam);
 			if (err != 0)
@@ -505,6 +505,7 @@ static int mxc_enc_disable(cam_data *cam)
 				return err;
 		}
 	}
+
 	return err;
 }
 
@@ -632,7 +633,6 @@ static int verify_preview(cam_data *cam, struct v4l2_window *win)
 			" too small.\n");
 		return -EINVAL;
 	}
-
 
 	if (cam->crop_bounds.width / *width >= 8) {
 		/* The IPU fails with IPU_CHECK_ERR_W_DOWNSIZE_OVER for widths
@@ -2869,7 +2869,6 @@ static int mxc_v4l2_probe(struct platform_device *pdev)
 	ret = init_camera_struct(cam, pdev);
 	if (ret)
 		return ret;
-
 	pdev->dev.release = camera_platform_release;
 
 	cam->dev = &pdev->dev;

@@ -425,19 +425,12 @@ static int vdoa_probe(struct platform_device *pdev)
 	int ret;
 	struct vdoa_info *vdoa;
 	struct resource *res;
-	struct resource *res_irq;
 	struct device	*dev = &pdev->dev;
 	struct device_node *np = pdev->dev.of_node;
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!res) {
 		dev_err(dev, "can't get device resources\n");
-		return -ENOENT;
-	}
-
-	res_irq = platform_get_resource(pdev, IORESOURCE_IRQ, 0);
-	if (!res_irq) {
-		dev_err(dev, "failed to get irq resource\n");
 		return -ENOENT;
 	}
 
@@ -450,7 +443,12 @@ static int vdoa_probe(struct platform_device *pdev)
 	if (!vdoa->reg_base)
 		return -EBUSY;
 
-	vdoa->irq = res_irq->start;
+	vdoa->irq = platform_get_irq(pdev, 0);
+	if (vdoa->irq < 0) {
+		dev_err(dev, "failed to get irq: %d\n", vdoa->irq);
+		return vdoa->irq;
+	}
+
 	ret = devm_request_irq(dev, vdoa->irq, vdoa_irq_handler, 0,
 				"vdoa", vdoa);
 	if (ret) {

@@ -20,7 +20,9 @@
 #include <linux/delay.h>
 #include <linux/gcd.h>
 #include <linux/log2.h>
+#include <linux/media-bus-format.h>
 #include <linux/module.h>
+#include <linux/of.h>
 #include <linux/of_graph.h>
 #include <linux/pm_runtime.h>
 #include <drm/bridge/sec_mipi_dsim.h>
@@ -452,9 +454,9 @@ static int sec_mipi_dsim_host_attach(struct mipi_dsi_host *host,
 	if (dsim->channel)
 		return -EINVAL;
 
-	if ((dsi->mode_flags & MIPI_DSI_MODE_VIDEO)		&&
-	    !((dsi->mode_flags & MIPI_DSI_MODE_VIDEO_BURST)	||
-	      (dsi->mode_flags & MIPI_DSI_MODE_VIDEO_SYNC_PULSE))) {
+	if (dsi->mode_flags & MIPI_DSI_MODE_VIDEO &&
+	    dsi->mode_flags & MIPI_DSI_MODE_VIDEO_BURST &&
+	    dsi->mode_flags & MIPI_DSI_MODE_VIDEO_SYNC_PULSE) {
 		dev_err(dev, "unsupported dsi mode\n");
 		return -EINVAL;
 	}

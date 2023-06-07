@@ -66,7 +66,6 @@
 	pinctrl-0 = <&pinctrl_sai3>;
 
 	power-domains = <&audiomix_pd>;
-	audiomix-dsp-regmap = <&audio_blk_ctrl>;
 
 	assigned-clocks = <&clk IMX8MP_CLK_SAI3>;
 	assigned-clock-parents = <&clk IMX8MP_AUDIO_PLL1_OUT>;

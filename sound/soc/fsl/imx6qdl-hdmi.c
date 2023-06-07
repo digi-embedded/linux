@@ -50,7 +50,7 @@ static int imx_hdmi_audio_probe(struct platform_device *pdev)
 
 	if (!hdmi_get_registered()) {
 		dev_err(&pdev->dev, "initialize HDMI-audio failed. load HDMI-video first!\n");
-		return -ENODEV;
+		return -EPROBE_DEFER;
 	}
 
 	hdmi_np = of_parse_phandle(np, "hdmi-controller", 0);

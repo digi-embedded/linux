@@ -78,7 +78,6 @@ snd-soc-imx-audmix-objs := imx-audmix.o
 snd-soc-imx-hdmi-objs := imx-hdmi.o
 snd-soc-imx-rpmsg-objs := imx-rpmsg.o
 snd-soc-imx-card-objs := imx-card.o
-snd-soc-imx-pdm-objs := imx-pdm.o
 snd-soc-imx-pcm512x-objs := imx-pcm512x.o
 snd-soc-imx6qdl-hdmi-objs := imx6qdl-hdmi.o
 
@@ -91,7 +90,6 @@ obj-$(CONFIG_SND_SOC_IMX_AUDMIX) += snd-soc-imx-audmix.o
 obj-$(CONFIG_SND_SOC_IMX_HDMI) += snd-soc-imx-hdmi.o
 obj-$(CONFIG_SND_SOC_IMX_RPMSG) += snd-soc-imx-rpmsg.o
 obj-$(CONFIG_SND_SOC_IMX_CARD) += snd-soc-imx-card.o
-obj-$(CONFIG_SND_SOC_IMX_PDM_MIC) += snd-soc-imx-pdm.o
 obj-$(CONFIG_SND_SOC_IMX_PCM512X) += snd-soc-imx-pcm512x.o
 obj-$(CONFIG_SND_SOC_IMX6QDL_HDMI) += snd-soc-imx6qdl-hdmi.o
 

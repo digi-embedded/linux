@@ -2148,6 +2148,9 @@ static int mxc_vout_setup_output(struct mxc_vout_dev *dev)
 	struct mxc_vout_output *vout;
 	int i, ret = 0;
 
+	if (num_registered_fb == 0)
+		return -EPROBE_DEFER;
+
 	update_display_setting();
 
 	/* all output/overlay based on fb */

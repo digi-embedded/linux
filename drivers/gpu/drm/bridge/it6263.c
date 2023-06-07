@@ -22,6 +22,7 @@
 #include <drm/drm_print.h>
 #include <linux/gpio/consumer.h>
 #include <linux/i2c.h>
+#include <linux/media-bus-format.h>
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/of_graph.h>
@@ -1001,15 +1002,13 @@ of_reconfig:
 	return ret;
 }
 
-static int it6263_remove(struct i2c_client *client)
+static void it6263_remove(struct i2c_client *client)
 
 {
 	struct it6263 *it6263 = i2c_get_clientdata(client);
 
 	drm_bridge_remove(&it6263->bridge);
 	i2c_unregister_device(it6263->lvds_i2c);
-
-	return 0;
 }
 
 static const struct of_device_id it6263_dt_ids[] = {

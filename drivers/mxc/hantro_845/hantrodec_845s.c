@@ -179,10 +179,10 @@ typedef struct {
 	atomic_t irq_rx;
 	atomic_t irq_tx;
 	struct device *dev;
-	struct mutex dev_mutex;
 	int thermal_cur;
 	int thermal_event;
 	struct thermal_cooling_device *cooling;
+	bool skip_blkctrl;
 } hantrodec_t;
 
 static hantrodec_t hantrodec_data[HXDEC_MAX_CORES]; /* dynamic allocation? */
@@ -265,6 +265,9 @@ static int hantro_ctrlblk_reset(hantrodec_t *dev)
 	volatile u8 *iobase;
 	u32 val;
 
+	if (dev->skip_blkctrl)
+		return 0;
+
 	//config G1/G2
 	hantro_clk_enable(&dev->clk);
 	iobase = (volatile u8 *)ioremap(BLK_CTL_BASE, 0x10000);
@@ -303,13 +306,7 @@ static int hantro_ctrlblk_reset(hantrodec_t *dev)
 
 static int hantro_power_on_disirq(hantrodec_t *hantrodev)
 {
-	//spin_lock_irq(&owner_lock);
-	mutex_lock(&hantrodev->dev_mutex);
-	disable_irq(hantrodev->irq);
 	pm_runtime_get_sync(hantrodev->dev);
-	enable_irq(hantrodev->irq);
-	mutex_unlock(&hantrodev->dev_mutex);
-	//spin_unlock_irq(&owner_lock);
 	return 0;
 }
 
@@ -1358,15 +1355,9 @@ static long hantrodec_ioctl(struct file *filp, unsigned int cmd, unsigned long a
 			return -EFAULT;
 		if (ctx->core_id == HANTRO_CORE_ID_INVALID) {
 			ctx->core_id = id;
-			if (id == 0 && cores > 1) {
-				/*power off g2*/
-				pm_runtime_put_sync(hantrodec_data[1].dev);
-				hantro_clk_disable(&hantrodec_data[1].clk);
-			} else if (id == 1) {
-				/*power off g1*/
-				pm_runtime_put_sync(hantrodec_data[0].dev);
-				hantro_clk_disable(&hantrodec_data[0].clk);
-			}
+			/*power on decoder core*/
+			hantro_clk_enable(&hantrodec_data[id].clk);
+			hantro_power_on_disirq(&hantrodec_data[id]);
 		}
 		return id;
 	}
@@ -1431,11 +1422,9 @@ static int put_hantro_core_desc32(struct core_desc *kp, struct core_desc_32 __us
 static long hantrodec_ioctl32(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 #define HANTRO_IOCTL32(err, filp, cmd, arg) { \
-		mm_segment_t old_fs = force_uaccess_begin(); \
 		err = hantrodec_ioctl(filp, cmd, arg); \
 		if (err) \
 			return err; \
-		force_uaccess_end(old_fs); \
 	}
 
 	union {
@@ -1496,7 +1485,6 @@ static long hantrodec_ioctl32(struct file *filp, unsigned int cmd, unsigned long
  */
 static int hantrodec_open(struct inode *inode, struct file *filp)
 {
-	int i;
 	int idx;
 
 	idx = hantro_new_instance();
@@ -1508,11 +1496,6 @@ static int hantrodec_open(struct inode *inode, struct file *filp)
 	hantrodec_ctx[idx].inst_id = idx;
 	filp->private_data = (void *)(&hantrodec_ctx[idx]);
 
-	/*not yet know which core id, so power on both g1 and g2 firstly*/
-	for (i = 0; i < cores; i++) {
-		hantro_clk_enable(&hantrodec_data[i].clk);
-		hantro_power_on_disirq(&hantrodec_data[i]);
-	}
 	return 0;
 }
 
@@ -1542,12 +1525,7 @@ static int hantrodec_release(struct inode *inode, struct file *filp)
 		}
 	}
 
-	if (ctx->core_id == HANTRO_CORE_ID_INVALID) {
-		for (n = 0; n < cores; n++) {
-			pm_runtime_put_sync(hantrodec_data[n].dev);
-			hantro_clk_disable(&hantrodec_data[n].clk);
-		}
-	} else if (ctx->core_id < HXDEC_MAX_CORES) {
+	if (ctx->core_id != HANTRO_CORE_ID_INVALID && ctx->core_id < HXDEC_MAX_CORES) {
 		pm_runtime_put_sync(hantrodec_data[ctx->core_id].dev);
 		hantro_clk_disable(&hantrodec_data[ctx->core_id].clk);
 	}
@@ -1662,7 +1640,7 @@ static int hantrodec_init(struct platform_device *pdev, int id)
 	irq = platform_get_irq_byname(pdev, "irq_hantro");
 	if (irq > 0) {
 		hantrodec_data[id].irq = irq;
-		result = request_irq(irq, hantrodec_isr, IRQF_SHARED,
+		result = request_irq(irq, hantrodec_isr, 0,
 				"hantrodec", (void *) &hantrodec_data[id]);
 
 		if (result != 0) {
@@ -1840,17 +1818,17 @@ static irqreturn_t hantrodec_isr(int irq, void *dev_id)
 
 	spin_lock_irqsave(&owner_lock, flags);
 
-	//for (i = 0; i < cores; i++) {
-		hwregs = dev->hwregs;
+	hwregs = dev->hwregs;
 
-		/* interrupt status register read */
-		irq_status_dec = ioread32(hwregs + HANTRODEC_IRQ_STAT_DEC_OFF);
+	/* interrupt status register read */
+	irq_status_dec = ioread32(hwregs + HANTRODEC_IRQ_STAT_DEC_OFF);
 
-		if (irq_status_dec & HANTRODEC_DEC_IRQ) {
-			/* clear dec IRQ */
-			irq_status_dec &= (~HANTRODEC_DEC_IRQ);
-			iowrite32(irq_status_dec, hwregs + HANTRODEC_IRQ_STAT_DEC_OFF);
+	if (irq_status_dec & HANTRODEC_DEC_IRQ) {
+		/* clear dec IRQ */
+		irq_status_dec &= (~HANTRODEC_DEC_IRQ);
+		iowrite32(irq_status_dec, hwregs + HANTRODEC_IRQ_STAT_DEC_OFF);
 
+		if (irq_status_dec & HANTRODEC_DEC_DONE) {
 			PDEBUG("decoder IRQ received! Core %d\n", dev->core_id);
 			dev->hw_active = 0;
 
@@ -1860,9 +1838,9 @@ static irqreturn_t hantrodec_isr(int irq, void *dev_id)
 
 			//wake_up_interruptible_all(&dec_wait_queue);
 			wake_up_all(&dec_wait_queue);
-			handled++;
 		}
-	//}
+		handled++;
+	}
 
 	spin_unlock_irqrestore(&owner_lock, flags);
 
@@ -1934,6 +1912,7 @@ static int hantro_dev_probe(struct platform_device *pdev)
 	int err = 0;
 	struct resource *res;
 	int id;
+	struct device_node *node;
 
 	id = hantro_device_id(&pdev->dev);
 	if (id == HANTRO_CORE_ID_INVALID || id >= HXDEC_MAX_CORES) {
@@ -1960,7 +1939,19 @@ static int hantro_dev_probe(struct platform_device *pdev)
 	pr_debug("hantro: dec, bus clock: 0x%lX, 0x%lX\n", clk_get_rate(hantrodec_data[id].clk.dec),
 				clk_get_rate(hantrodec_data[id].clk.bus));
 
+	/*
+	 * If integrate power-domains into blk-ctrl driver, vpu driver don't
+	 * need handle it again.
+	 */
+	node = of_parse_phandle(pdev->dev.of_node, "power-domains", 0);
+	if (!strcmp(node->name, "blk-ctl") || !strcmp(node->name, "blk-ctrl"))
+		hantrodec_data[id].skip_blkctrl = 1;
+	else
+		hantrodec_data[id].skip_blkctrl = 0;
+	of_node_put(node);
+
 	pm_runtime_enable(&pdev->dev);
+	hantro_clk_enable(&hantrodec_data[id].clk);
 
 	err = hantrodec_init(pdev, id);
 	if (err != 0) {
@@ -1978,7 +1969,6 @@ static int hantro_dev_probe(struct platform_device *pdev)
 	hantrodec_data[id].thermal_cur = 0;
 #endif
 	hantrodec_data[id].timeout = 0;
-	mutex_init(&hantrodec_data[id].dev_mutex);
 	instance_mask = 0;
 	cores += 1;
 
@@ -1987,6 +1977,7 @@ static int hantro_dev_probe(struct platform_device *pdev)
 error:
 	pr_err("hantro probe failed\n");
 out:
+	hantro_clk_disable(&hantrodec_data[id].clk);
 	return err;
 }
 

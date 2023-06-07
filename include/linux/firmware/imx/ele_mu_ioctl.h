@@ -47,5 +47,4 @@ struct ele_mu_ioctl_signed_message {
 					struct ele_mu_ioctl_get_mu_info)
 #define ELE_MU_IOCTL_SIGNED_MESSAGE	_IOWR(ELE_MU_IOCTL, 0x05, \
 					struct ele_mu_ioctl_signed_message)
-
 #endif

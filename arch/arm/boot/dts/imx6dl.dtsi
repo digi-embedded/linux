@@ -98,7 +98,7 @@
                 };
         };
 
-	soc {
+	soc: soc {
 		busfreq {
 			compatible = "fsl,imx_busfreq";
 			clocks = <&clks IMX6QDL_CLK_PLL2_BUS>, <&clks IMX6QDL_CLK_PLL2_PFD2_396M>,
@@ -120,6 +120,9 @@
 		ocram: sram@905000 {
 			compatible = "mmio-sram";
 			reg = <0x905000 0x1B000>;
+			ranges = <0 0x905000 0x1B000>;
+			#address-cells = <1>;
+			#size-cells = <1>;
 			clocks = <&clks IMX6QDL_CLK_OCRAM>;
 		};
 

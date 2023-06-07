@@ -424,7 +424,7 @@ static int br_mdb_dump(struct sk_buff *skb, struct netlink_callback *cb)
 	cb->seq = net->dev_base_seq;
 
 	for_each_netdev_rcu(net, dev) {
-		if (dev->priv_flags & IFF_EBRIDGE) {
+		if (netif_is_bridge_master(dev)) {
 			struct net_bridge *br = netdev_priv(dev);
 			struct br_port_msg *bpm;
 
@@ -782,7 +782,7 @@ static int br_mdb_parse(struct sk_buff *skb, struct nlmsghdr *nlh,
 		return -ENODEV;
 	}
 
-	if (!(dev->priv_flags & IFF_EBRIDGE)) {
+	if (!netif_is_bridge_master(dev)) {
 		NL_SET_ERR_MSG_MOD(extack, "Device is not a bridge");
 		return -EOPNOTSUPP;
 	}
@@ -1025,8 +1025,8 @@ static int br_mdb_add(struct sk_buff *skb, struct nlmsghdr *nlh,
 			NL_SET_ERR_MSG_MOD(extack, "Port belongs to a different bridge device");
 			return -EINVAL;
 		}
-		if (p->state == BR_STATE_DISABLED) {
-			NL_SET_ERR_MSG_MOD(extack, "Port is in disabled state");
+		if (p->state == BR_STATE_DISABLED && entry->state != MDB_PERMANENT) {
+			NL_SET_ERR_MSG_MOD(extack, "Port is in disabled state and entry is not permanent");
 			return -EINVAL;
 		}
 		vg = nbp_vlan_group(p);
@@ -1086,9 +1086,6 @@ static int __br_mdb_del(struct net_bridge *br, struct br_mdb_entry *entry,
 		if (!p->key.port || p->key.port->dev->ifindex != entry->ifindex)
 			continue;
 
-		if (p->key.port->state == BR_STATE_DISABLED)
-			goto unlock;
-
 		br_multicast_del_pg(mp, p, pp);
 		err = 0;
 		break;
@@ -1124,8 +1121,14 @@ static int br_mdb_del(struct sk_buff *skb, struct nlmsghdr *nlh,
 			return -ENODEV;
 
 		p = br_port_get_rtnl(pdev);
-		if (!p || p->br != br || p->state == BR_STATE_DISABLED)
+		if (!p) {
+			NL_SET_ERR_MSG_MOD(extack, "Net device is not a bridge port");
 			return -EINVAL;
+		}
+		if (p->br != br) {
+			NL_SET_ERR_MSG_MOD(extack, "Port belongs to a different bridge device");
+			return -EINVAL;
+		}
 		vg = nbp_vlan_group(p);
 	} else {
 		vg = br_vlan_group(br);

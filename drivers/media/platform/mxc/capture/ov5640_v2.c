@@ -592,7 +592,7 @@ static struct regulator *analog_regulator;
 
 static int ov5640_probe(struct i2c_client *adapter,
 				const struct i2c_device_id *device_id);
-static int ov5640_remove(struct i2c_client *client);
+static void ov5640_remove(struct i2c_client *client);
 
 static s32 ov5640_read_reg(u16 reg, u8 *val);
 static s32 ov5640_write_reg(u16 reg, u8 val);
@@ -1893,7 +1893,7 @@ static int ov5640_probe(struct i2c_client *client,
  * @param client            struct i2c_client *
  * @return  Error code indicating success or failure
  */
-static int ov5640_remove(struct i2c_client *client)
+static void ov5640_remove(struct i2c_client *client)
 {
 	struct v4l2_subdev *sd = i2c_get_clientdata(client);
 
@@ -1904,8 +1904,6 @@ static int ov5640_remove(struct i2c_client *client)
 	ov5640_power_down(1);
 
 	ov5640_regualtor_disable();
-
-	return 0;
 }
 
 module_i2c_driver(ov5640_i2c_driver);

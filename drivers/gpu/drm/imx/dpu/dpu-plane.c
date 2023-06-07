@@ -17,10 +17,11 @@
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_blend.h>
 #include <drm/drm_color_mgmt.h>
-#include <drm/drm_fb_cma_helper.h>
+#include <drm/drm_fb_dma_helper.h>
 #include <drm/drm_fourcc.h>
+#include <drm/drm_framebuffer.h>
 #include <drm/drm_gem_atomic_helper.h>
-#include <drm/drm_gem_cma_helper.h>
+#include <drm/drm_gem_dma_helper.h>
 #include <drm/drm_plane_helper.h>
 #include <video/dpu.h>
 #include <video/imx8-prefetch.h>
@@ -182,22 +183,22 @@ static inline dma_addr_t
 drm_plane_state_to_baseaddr(struct drm_plane_state *state, bool aux_source)
 {
 	struct drm_framebuffer *fb = state->fb;
-	struct drm_gem_cma_object *cma_obj;
+	struct drm_gem_dma_object *dma_obj;
 	struct dpu_plane_state *dpstate = to_dpu_plane_state(state);
 	unsigned int x = (state->src.x1 >> 16) +
 				(aux_source ? dpstate->left_src_w : 0);
 	unsigned int y = state->src.y1 >> 16;
 
-	cma_obj = drm_fb_cma_get_gem_obj(fb, 0);
-	BUG_ON(!cma_obj);
+	dma_obj = drm_fb_dma_get_gem_obj(fb, 0);
+	BUG_ON(!dma_obj);
 
 	if (fb->modifier)
-		return cma_obj->paddr + fb->offsets[0];
+		return dma_obj->dma_addr + fb->offsets[0];
 
 	if (fb->flags & DRM_MODE_FB_INTERLACED)
 		y /= 2;
 
-	return cma_obj->paddr + fb->offsets[0] + fb->pitches[0] * y +
+	return dma_obj->dma_addr + fb->offsets[0] + fb->pitches[0] * y +
 	       fb->format->cpp[0] * x;
 }
 
@@ -205,16 +206,16 @@ static inline dma_addr_t
 drm_plane_state_to_uvbaseaddr(struct drm_plane_state *state, bool aux_source)
 {
 	struct drm_framebuffer *fb = state->fb;
-	struct drm_gem_cma_object *cma_obj;
+	struct drm_gem_dma_object *dma_obj;
 	struct dpu_plane_state *dpstate = to_dpu_plane_state(state);
 	int x = (state->src.x1 >> 16) + (aux_source ? dpstate->left_src_w : 0);
 	int y = state->src.y1 >> 16;
 
-	cma_obj = drm_fb_cma_get_gem_obj(fb, 1);
-	BUG_ON(!cma_obj);
+	dma_obj = drm_fb_dma_get_gem_obj(fb, 1);
+	BUG_ON(!dma_obj);
 
 	if (fb->modifier)
-		return cma_obj->paddr + fb->offsets[1];
+		return dma_obj->dma_addr + fb->offsets[1];
 
 	x /= fb->format->hsub;
 	y /= fb->format->vsub;
@@ -222,7 +223,7 @@ drm_plane_state_to_uvbaseaddr(struct drm_plane_state *state, bool aux_source)
 	if (fb->flags & DRM_MODE_FB_INTERLACED)
 		y /= 2;
 
-	return cma_obj->paddr + fb->offsets[1] + fb->pitches[1] * y +
+	return dma_obj->dma_addr + fb->offsets[1] + fb->pitches[1] * y +
 	       fb->format->cpp[1] * x;
 }
 
@@ -303,10 +304,10 @@ static int dpu_plane_atomic_check(struct drm_plane *plane,
 
 	min_scale = dplane->grp->has_vproc ?
 				FRAC_16_16(min(src_w, src_h), 8192) :
-				DRM_PLANE_HELPER_NO_SCALING;
+				DRM_PLANE_NO_SCALING;
 	ret = drm_atomic_helper_check_plane_state(new_plane_state, crtc_state,
 						  min_scale,
-						  DRM_PLANE_HELPER_NO_SCALING,
+						  DRM_PLANE_NO_SCALING,
 						  true, false);
 	if (ret) {
 		DRM_DEBUG_KMS("[PLANE:%d:%s] failed to check plane state\n",

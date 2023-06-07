@@ -121,7 +121,7 @@ struct dpni_cmd_open {
 #define DPNI_BACKUP_POOL(val, order)	(((val) & 0x1) << (order))
 
 struct dpni_cmd_pool {
-	u16 dpbp_id;
+	__le16 dpbp_id;
 	u8 priority_mask;
 	u8 pad;
 };

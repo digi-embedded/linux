@@ -72,14 +72,12 @@ error:
 	return ret;
 }
 
-static int fsl_qixis_i2c_remove(struct i2c_client *client)
+static void fsl_qixis_i2c_remove(struct i2c_client *client)
 {
 	struct qixis_priv *priv;
 
 	priv = i2c_get_clientdata(client);
 	regmap_exit(priv->regmap);
-
-	return 0;
 }
 
 static const struct of_device_id fsl_qixis_i2c_of_match[] = {

@@ -90,7 +90,7 @@ EXPORT_SYMBOL_GPL(mxc_dispdrv_unregister);
 struct mxc_dispdrv_handle *mxc_dispdrv_gethandle(char *name,
 	struct mxc_dispdrv_setting *setting)
 {
-	int ret = -ENODEV, found = 0;
+	int ret = -EPROBE_DEFER, found = 0;
 	struct mxc_dispdrv_entry *entry;
 
 	mutex_lock(&dispdrv_lock);

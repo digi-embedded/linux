@@ -1,7 +1,7 @@
 /*******************************************************************
  * This file is part of the Emulex Linux Device Driver for         *
  * Fibre Channel Host Bus Adapters.                                *
- * Copyright (C) 2017-2021 Broadcom. All Rights Reserved. The term *
+ * Copyright (C) 2017-2022 Broadcom. All Rights Reserved. The term *
  * “Broadcom” refers to Broadcom Inc. and/or its subsidiaries.     *
  * Copyright (C) 2004-2016 Emulex.  All rights reserved.           *
  * EMULEX and SLI are trademarks of Emulex.                        *
@@ -87,14 +87,6 @@ static void
 lpfc_release_scsi_buf_s3(struct lpfc_hba *phba, struct lpfc_io_buf *psb);
 static int
 lpfc_prot_group_type(struct lpfc_hba *phba, struct scsi_cmnd *sc);
-static void
-lpfc_put_vmid_in_hashtable(struct lpfc_vport *vport, u32 hash,
-			   struct lpfc_vmid *vmp);
-static void lpfc_vmid_update_entry(struct lpfc_vport *vport, struct scsi_cmnd
-				   *cmd, struct lpfc_vmid *vmp,
-				   union lpfc_vmid_io_tag *tag);
-static void lpfc_vmid_assign_cs_ctl(struct lpfc_vport *vport,
-				    struct lpfc_vmid *vmid);
 
 /**
  * lpfc_sli4_set_rsp_sgl_last - Set the last bit in the response sge.
@@ -118,62 +110,6 @@ lpfc_sli4_set_rsp_sgl_last(struct lpfc_hba *phba,
 }
 
 #define LPFC_INVALID_REFTAG ((u32)-1)
-
-/**
- * lpfc_update_stats - Update statistical data for the command completion
- * @vport: The virtual port on which this call is executing.
- * @lpfc_cmd: lpfc scsi command object pointer.
- *
- * This function is called when there is a command completion and this
- * function updates the statistical data for the command completion.
- **/
-static void
-lpfc_update_stats(struct lpfc_vport *vport, struct lpfc_io_buf *lpfc_cmd)
-{
-	struct lpfc_hba *phba = vport->phba;
-	struct lpfc_rport_data *rdata;
-	struct lpfc_nodelist *pnode;
-	struct scsi_cmnd *cmd = lpfc_cmd->pCmd;
-	unsigned long flags;
-	struct Scsi_Host *shost = lpfc_shost_from_vport(vport);
-	unsigned long latency;
-	int i;
-
-	if (!vport->stat_data_enabled ||
-	    vport->stat_data_blocked ||
-	    (cmd->result))
-		return;
-
-	latency = jiffies_to_msecs((long)jiffies - (long)lpfc_cmd->start_time);
-	rdata = lpfc_cmd->rdata;
-	pnode = rdata->pnode;
-
-	spin_lock_irqsave(shost->host_lock, flags);
-	if (!pnode ||
-	    !pnode->lat_data ||
-	    (phba->bucket_type == LPFC_NO_BUCKET)) {
-		spin_unlock_irqrestore(shost->host_lock, flags);
-		return;
-	}
-
-	if (phba->bucket_type == LPFC_LINEAR_BUCKET) {
-		i = (latency + phba->bucket_step - 1 - phba->bucket_base)/
-			phba->bucket_step;
-		/* check array subscript bounds */
-		if (i < 0)
-			i = 0;
-		else if (i >= LPFC_MAX_BUCKET_COUNT)
-			i = LPFC_MAX_BUCKET_COUNT - 1;
-	} else {
-		for (i = 0; i < LPFC_MAX_BUCKET_COUNT-1; i++)
-			if (latency <= (phba->bucket_base +
-				((1<<i)*phba->bucket_step)))
-				break;
-	}
-
-	pnode->lat_data[i].cmd_count++;
-	spin_unlock_irqrestore(shost->host_lock, flags);
-}
 
 /**
  * lpfc_rampdown_queue_depth - Post RAMP_DOWN_QUEUE event to worker thread
@@ -433,7 +369,7 @@ lpfc_new_scsi_buf_s3(struct lpfc_vport *vport, int num_to_alloc)
 		iocb->ulpClass = CLASS3;
 		psb->status = IOSTAT_SUCCESS;
 		/* Put it back into the SCSI buffer list */
-		psb->cur_iocbq.context1  = psb;
+		psb->cur_iocbq.io_buf = psb;
 		spin_lock_init(&psb->buf_lock);
 		lpfc_release_scsi_buf_s3(phba, psb);
 
@@ -564,7 +500,7 @@ lpfc_sli4_io_xri_aborted(struct lpfc_hba *phba,
 				 * scsi_done upcall.
 				 */
 				if (cmd)
-					cmd->scsi_done(cmd);
+					scsi_done(cmd);
 
 				/*
 				 * We expect there is an abort thread waiting
@@ -894,7 +830,7 @@ lpfc_scsi_prep_dma_buf_s3(struct lpfc_hba *phba, struct lpfc_io_buf *lpfc_cmd)
 	bpl += 2;
 	if (scsi_sg_count(scsi_cmnd)) {
 		/*
-		 * The driver stores the segment count returned from pci_map_sg
+		 * The driver stores the segment count returned from dma_map_sg
 		 * because this a count of dma-mappings used to map the use_sg
 		 * pages.  They are not guaranteed to be the same for those
 		 * architectures that implement an IOMMU.
@@ -2589,7 +2525,7 @@ lpfc_bg_scsi_prep_dma_buf_s3(struct lpfc_hba *phba,
 	bpl += 2;
 	if (scsi_sg_count(scsi_cmnd)) {
 		/*
-		 * The driver stores the segment count returned from pci_map_sg
+		 * The driver stores the segment count returned from dma_map_sg
 		 * because this a count of dma-mappings used to map the use_sg
 		 * pages.  They are not guaranteed to be the same for those
 		 * architectures that implement an IOMMU.
@@ -3133,7 +3069,6 @@ lpfc_scsi_prep_dma_buf_s4(struct lpfc_hba *phba, struct lpfc_io_buf *lpfc_cmd)
 	struct lpfc_vport *vport = phba->pport;
 	union lpfc_wqe128 *wqe = &pwqeq->wqe;
 	dma_addr_t physaddr;
-	uint32_t num_bde = 0;
 	uint32_t dma_len;
 	uint32_t dma_offset = 0;
 	int nseg, i, j;
@@ -3149,7 +3084,7 @@ lpfc_scsi_prep_dma_buf_s4(struct lpfc_hba *phba, struct lpfc_io_buf *lpfc_cmd)
 	 */
 	if (scsi_sg_count(scsi_cmnd)) {
 		/*
-		 * The driver stores the segment count returned from pci_map_sg
+		 * The driver stores the segment count returned from dma_map_sg
 		 * because this a count of dma-mappings used to map the use_sg
 		 * pages.  They are not guaranteed to be the same for those
 		 * architectures that implement an IOMMU.
@@ -3195,7 +3130,7 @@ lpfc_scsi_prep_dma_buf_s4(struct lpfc_hba *phba, struct lpfc_io_buf *lpfc_cmd)
 		j = 2;
 		for (i = 0; i < nseg; i++) {
 			sgl->word2 = 0;
-			if ((num_bde + 1) == nseg) {
+			if (nseg == 1) {
 				bf_set(lpfc_sli4_sge_last, sgl, 1);
 				bf_set(lpfc_sli4_sge_type, sgl,
 				       LPFC_SGE_TYPE_DATA);
@@ -3264,13 +3199,15 @@ lpfc_scsi_prep_dma_buf_s4(struct lpfc_hba *phba, struct lpfc_io_buf *lpfc_cmd)
 
 			j++;
 		}
-		/*
-		 * Setup the first Payload BDE. For FCoE we just key off
-		 * Performance Hints, for FC we use lpfc_enable_pbde.
-		 * We populate words 13-15 of IOCB/WQE.
+
+		/* PBDE support for first data SGE only.
+		 * For FCoE, we key off Performance Hints.
+		 * For FC, we key off lpfc_enable_pbde.
 		 */
-		if ((phba->sli3_options & LPFC_SLI4_PERFH_ENABLED) ||
-		    phba->cfg_enable_pbde) {
+		if (nseg == 1 &&
+		    ((phba->sli3_options & LPFC_SLI4_PERFH_ENABLED) ||
+		     phba->cfg_enable_pbde)) {
+			/* Words 13-15 */
 			bde = (struct ulp_bde64 *)
 				&wqe->words[13];
 			bde->addrLow = first_data_sgl->addr_lo;
@@ -3280,12 +3217,15 @@ lpfc_scsi_prep_dma_buf_s4(struct lpfc_hba *phba, struct lpfc_io_buf *lpfc_cmd)
 			bde->tus.f.bdeFlags = BUFF_TYPE_BDE_64;
 			bde->tus.w = cpu_to_le32(bde->tus.w);
 
+			/* Word 11 - set PBDE bit */
+			bf_set(wqe_pbde, &wqe->generic.wqe_com, 1);
 		} else {
 			memset(&wqe->words[13], 0, (sizeof(uint32_t) * 3));
+			/* Word 11 - PBDE bit disabled by default template */
 		}
 	} else {
 		sgl += 1;
-		/* clear the last flag in the fcp_rsp map entry */
+		/* set the last flag in the fcp_rsp map entry */
 		sgl->word2 = le32_to_cpu(sgl->word2);
 		bf_set(lpfc_sli4_sge_last, sgl, 1);
 		sgl->word2 = cpu_to_le32(sgl->word2);
@@ -3297,10 +3237,6 @@ lpfc_scsi_prep_dma_buf_s4(struct lpfc_hba *phba, struct lpfc_io_buf *lpfc_cmd)
 			memset(bde, 0, (sizeof(uint32_t) * 3));
 		}
 	}
-
-	/* Word 11 */
-	if (phba->cfg_enable_pbde)
-		bf_set(wqe_pbde, &wqe->generic.wqe_com, 1);
 
 	/*
 	 * Finish initializing those IOCB fields that are dependent on the
@@ -3387,7 +3323,7 @@ lpfc_bg_scsi_prep_dma_buf_s4(struct lpfc_hba *phba,
 	 */
 	if (scsi_sg_count(scsi_cmnd)) {
 		/*
-		 * The driver stores the segment count returned from pci_map_sg
+		 * The driver stores the segment count returned from dma_map_sg
 		 * because this a count of dma-mappings used to map the use_sg
 		 * pages.  They are not guaranteed to be the same for those
 		 * architectures that implement an IOMMU.
@@ -3859,7 +3795,8 @@ lpfc_update_cmf_cmd(struct lpfc_hba *phba, uint32_t size)
 	int cpu;
 
 	/* At this point we are either LPFC_CFG_MANAGED or LPFC_CFG_MONITOR */
-	if (phba->cmf_active_mode == LPFC_CFG_MANAGED) {
+	if (phba->cmf_active_mode == LPFC_CFG_MANAGED &&
+	    phba->cmf_max_bytes_per_interval) {
 		total = 0;
 		for_each_present_cpu(cpu) {
 			cgs = per_cpu_ptr(phba->cmf_stat, cpu);
@@ -4081,8 +4018,7 @@ static void
 lpfc_fcp_io_cmd_wqe_cmpl(struct lpfc_hba *phba, struct lpfc_iocbq *pwqeIn,
 			 struct lpfc_iocbq *pwqeOut)
 {
-	struct lpfc_io_buf *lpfc_cmd =
-		(struct lpfc_io_buf *)pwqeIn->context1;
+	struct lpfc_io_buf *lpfc_cmd = pwqeIn->io_buf;
 	struct lpfc_wcqe_complete *wcqe = &pwqeOut->wcqe_cmpl;
 	struct lpfc_vport *vport = pwqeIn->vport;
 	struct lpfc_rport_data *rdata;
@@ -4275,8 +4211,10 @@ lpfc_fcp_io_cmd_wqe_cmpl(struct lpfc_hba *phba, struct lpfc_iocbq *pwqeIn,
 			break;
 		}
 		if (lpfc_cmd->result == IOERR_INVALID_RPI ||
+		    lpfc_cmd->result == IOERR_LINK_DOWN ||
 		    lpfc_cmd->result == IOERR_NO_RESOURCES ||
 		    lpfc_cmd->result == IOERR_ABORT_REQUESTED ||
+		    lpfc_cmd->result == IOERR_RPI_SUSPENDED ||
 		    lpfc_cmd->result == IOERR_SLER_CMD_RCV_FAILURE) {
 			cmd->result = DID_TRANSPORT_DISRUPTED << 16;
 			break;
@@ -4334,13 +4272,12 @@ lpfc_fcp_io_cmd_wqe_cmpl(struct lpfc_hba *phba, struct lpfc_iocbq *pwqeIn,
 
 		lpfc_printf_vlog(vport, KERN_INFO, LOG_FCP,
 				 "9039 Iodone <%d/%llu> cmd x%px, error "
-				 "x%x SNS x%x x%x Data: x%x x%x\n",
+				 "x%x SNS x%x x%x LBA x%llx Data: x%x x%x\n",
 				 cmd->device->id, cmd->device->lun, cmd,
-				 cmd->result, *lp, *(lp + 3), cmd->retries,
-				 scsi_get_resid(cmd));
+				 cmd->result, *lp, *(lp + 3),
+				 (u64)scsi_get_lba(cmd),
+				 cmd->retries, scsi_get_resid(cmd));
 	}
-
-	lpfc_update_stats(vport, lpfc_cmd);
 
 	if (vport->cfg_max_scsicmpl_time &&
 	    time_after(jiffies, lpfc_cmd->start_time +
@@ -4387,7 +4324,7 @@ lpfc_fcp_io_cmd_wqe_cmpl(struct lpfc_hba *phba, struct lpfc_iocbq *pwqeIn,
 		goto out;
 
 	/* The sdev is not guaranteed to be valid post scsi_done upcall. */
-	cmd->scsi_done(cmd);
+	scsi_done(cmd);
 
 	/*
 	 * If there is an abort thread waiting for command completion
@@ -4417,7 +4354,7 @@ lpfc_scsi_cmd_iocb_cmpl(struct lpfc_hba *phba, struct lpfc_iocbq *pIocbIn,
 			struct lpfc_iocbq *pIocbOut)
 {
 	struct lpfc_io_buf *lpfc_cmd =
-		(struct lpfc_io_buf *) pIocbIn->context1;
+		(struct lpfc_io_buf *) pIocbIn->io_buf;
 	struct lpfc_vport      *vport = pIocbIn->vport;
 	struct lpfc_rport_data *rdata = lpfc_cmd->rdata;
 	struct lpfc_nodelist *pnode = rdata->pnode;
@@ -4622,7 +4559,6 @@ lpfc_scsi_cmd_iocb_cmpl(struct lpfc_hba *phba, struct lpfc_iocbq *pIocbIn,
 				 scsi_get_resid(cmd));
 	}
 
-	lpfc_update_stats(vport, lpfc_cmd);
 	if (vport->cfg_max_scsicmpl_time &&
 	   time_after(jiffies, lpfc_cmd->start_time +
 		msecs_to_jiffies(vport->cfg_max_scsicmpl_time))) {
@@ -4656,7 +4592,7 @@ lpfc_scsi_cmd_iocb_cmpl(struct lpfc_hba *phba, struct lpfc_iocbq *pIocbIn,
 #endif
 
 	/* The sdev is not guaranteed to be valid post scsi_done upcall. */
-	cmd->scsi_done(cmd);
+	scsi_done(cmd);
 
 	/*
 	 * If there is an abort thread waiting for command completion
@@ -4740,7 +4676,7 @@ static int lpfc_scsi_prep_cmnd_buf_s3(struct lpfc_vport *vport,
 		piocbq->iocb.ulpFCP2Rcvy = 0;
 
 	piocbq->iocb.ulpClass = (pnode->nlp_fcp_info & 0x0f);
-	piocbq->context1  = lpfc_cmd;
+	piocbq->io_buf  = lpfc_cmd;
 	if (!piocbq->cmd_cmpl)
 		piocbq->cmd_cmpl = lpfc_scsi_cmd_iocb_cmpl;
 	piocbq->iocb.ulpTimeout = tmo;
@@ -4852,8 +4788,7 @@ static int lpfc_scsi_prep_cmnd_buf_s4(struct lpfc_vport *vport,
 	bf_set(wqe_reqtag, &wqe->generic.wqe_com, pwqeq->iotag);
 
 	pwqeq->vport = vport;
-	pwqeq->vport = vport;
-	pwqeq->context1 = lpfc_cmd;
+	pwqeq->io_buf = lpfc_cmd;
 	pwqeq->hba_wqidx = lpfc_cmd->hdwq_no;
 	pwqeq->cmd_cmpl = lpfc_fcp_io_cmd_wqe_cmpl;
 
@@ -5070,7 +5005,7 @@ lpfc_scsi_api_table_setup(struct lpfc_hba *phba, uint8_t dev_grp)
 					lpfc_scsi_prep_task_mgmt_cmd_s4;
 		break;
 	default:
-		lpfc_printf_log(phba, KERN_ERR, LOG_TRACE_EVENT,
+		lpfc_printf_log(phba, KERN_ERR, LOG_INIT,
 				"1418 Invalid HBA PCI-device group: 0x%x\n",
 				dev_grp);
 		return -ENODEV;
@@ -5094,8 +5029,7 @@ lpfc_tskmgmt_def_cmpl(struct lpfc_hba *phba,
 			struct lpfc_iocbq *cmdiocbq,
 			struct lpfc_iocbq *rspiocbq)
 {
-	struct lpfc_io_buf *lpfc_cmd =
-		(struct lpfc_io_buf *) cmdiocbq->context1;
+	struct lpfc_io_buf *lpfc_cmd = cmdiocbq->io_buf;
 	if (lpfc_cmd)
 		lpfc_release_scsi_buf(phba, lpfc_cmd);
 	return;
@@ -5270,253 +5204,6 @@ void lpfc_poll_timeout(struct timer_list *t)
 }
 
 /*
- * lpfc_get_vmid_from_hashtable - search the UUID in the hash table
- * @vport: The virtual port for which this call is being executed.
- * @hash: calculated hash value
- * @buf: uuid associated with the VE
- * Return the VMID entry associated with the UUID
- * Make sure to acquire the appropriate lock before invoking this routine.
- */
-struct lpfc_vmid *lpfc_get_vmid_from_hashtable(struct lpfc_vport *vport,
-					      u32 hash, u8 *buf)
-{
-	struct lpfc_vmid *vmp;
-
-	hash_for_each_possible(vport->hash_table, vmp, hnode, hash) {
-		if (memcmp(&vmp->host_vmid[0], buf, 16) == 0)
-			return vmp;
-	}
-	return NULL;
-}
-
-/*
- * lpfc_put_vmid_in_hashtable - put the VMID in the hash table
- * @vport: The virtual port for which this call is being executed.
- * @hash - calculated hash value
- * @vmp: Pointer to a VMID entry representing a VM sending I/O
- *
- * This routine will insert the newly acquired VMID entity in the hash table.
- * Make sure to acquire the appropriate lock before invoking this routine.
- */
-static void
-lpfc_put_vmid_in_hashtable(struct lpfc_vport *vport, u32 hash,
-			   struct lpfc_vmid *vmp)
-{
-	hash_add(vport->hash_table, &vmp->hnode, hash);
-}
-
-/*
- * lpfc_vmid_hash_fn - create a hash value of the UUID
- * @vmid: uuid associated with the VE
- * @len: length of the VMID string
- * Returns the calculated hash value
- */
-int lpfc_vmid_hash_fn(const char *vmid, int len)
-{
-	int c;
-	int hash = 0;
-
-	if (len == 0)
-		return 0;
-	while (len--) {
-		c = *vmid++;
-		if (c >= 'A' && c <= 'Z')
-			c += 'a' - 'A';
-
-		hash = (hash + (c << LPFC_VMID_HASH_SHIFT) +
-			(c >> LPFC_VMID_HASH_SHIFT)) * 19;
-	}
-
-	return hash & LPFC_VMID_HASH_MASK;
-}
-
-/*
- * lpfc_vmid_update_entry - update the vmid entry in the hash table
- * @vport: The virtual port for which this call is being executed.
- * @cmd: address of scsi cmd descriptor
- * @vmp: Pointer to a VMID entry representing a VM sending I/O
- * @tag: VMID tag
- */
-static void lpfc_vmid_update_entry(struct lpfc_vport *vport, struct scsi_cmnd
-				   *cmd, struct lpfc_vmid *vmp,
-				   union lpfc_vmid_io_tag *tag)
-{
-	u64 *lta;
-
-	if (vport->vmid_priority_tagging)
-		tag->cs_ctl_vmid = vmp->un.cs_ctl_vmid;
-	else
-		tag->app_id = vmp->un.app_id;
-
-	if (cmd->sc_data_direction == DMA_TO_DEVICE)
-		vmp->io_wr_cnt++;
-	else
-		vmp->io_rd_cnt++;
-
-	/* update the last access timestamp in the table */
-	lta = per_cpu_ptr(vmp->last_io_time, raw_smp_processor_id());
-	*lta = jiffies;
-}
-
-static void lpfc_vmid_assign_cs_ctl(struct lpfc_vport *vport,
-				    struct lpfc_vmid *vmid)
-{
-	u32 hash;
-	struct lpfc_vmid *pvmid;
-
-	if (vport->port_type == LPFC_PHYSICAL_PORT) {
-		vmid->un.cs_ctl_vmid = lpfc_vmid_get_cs_ctl(vport);
-	} else {
-		hash = lpfc_vmid_hash_fn(vmid->host_vmid, vmid->vmid_len);
-		pvmid =
-		    lpfc_get_vmid_from_hashtable(vport->phba->pport, hash,
-						vmid->host_vmid);
-		if (pvmid)
-			vmid->un.cs_ctl_vmid = pvmid->un.cs_ctl_vmid;
-		else
-			vmid->un.cs_ctl_vmid = lpfc_vmid_get_cs_ctl(vport);
-	}
-}
-
-/*
- * lpfc_vmid_get_appid - get the VMID associated with the UUID
- * @vport: The virtual port for which this call is being executed.
- * @uuid: UUID associated with the VE
- * @cmd: address of scsi_cmd descriptor
- * @tag: VMID tag
- * Returns status of the function
- */
-static int lpfc_vmid_get_appid(struct lpfc_vport *vport, char *uuid, struct
-			       scsi_cmnd * cmd, union lpfc_vmid_io_tag *tag)
-{
-	struct lpfc_vmid *vmp = NULL;
-	int hash, len, rc, i;
-
-	/* check if QFPA is complete */
-	if (lpfc_vmid_is_type_priority_tag(vport) && !(vport->vmid_flag &
-	      LPFC_VMID_QFPA_CMPL)) {
-		vport->work_port_events |= WORKER_CHECK_VMID_ISSUE_QFPA;
-		return -EAGAIN;
-	}
-
-	/* search if the UUID has already been mapped to the VMID */
-	len = strlen(uuid);
-	hash = lpfc_vmid_hash_fn(uuid, len);
-
-	/* search for the VMID in the table */
-	read_lock(&vport->vmid_lock);
-	vmp = lpfc_get_vmid_from_hashtable(vport, hash, uuid);
-
-	/* if found, check if its already registered  */
-	if (vmp  && vmp->flag & LPFC_VMID_REGISTERED) {
-		read_unlock(&vport->vmid_lock);
-		lpfc_vmid_update_entry(vport, cmd, vmp, tag);
-		rc = 0;
-	} else if (vmp && (vmp->flag & LPFC_VMID_REQ_REGISTER ||
-			   vmp->flag & LPFC_VMID_DE_REGISTER)) {
-		/* else if register or dereg request has already been sent */
-		/* Hence VMID tag will not be added for this I/O */
-		read_unlock(&vport->vmid_lock);
-		rc = -EBUSY;
-	} else {
-		/* The VMID was not found in the hashtable. At this point, */
-		/* drop the read lock first before proceeding further */
-		read_unlock(&vport->vmid_lock);
-		/* start the process to obtain one as per the */
-		/* type of the VMID indicated */
-		write_lock(&vport->vmid_lock);
-		vmp = lpfc_get_vmid_from_hashtable(vport, hash, uuid);
-
-		/* while the read lock was released, in case the entry was */
-		/* added by other context or is in process of being added */
-		if (vmp && vmp->flag & LPFC_VMID_REGISTERED) {
-			lpfc_vmid_update_entry(vport, cmd, vmp, tag);
-			write_unlock(&vport->vmid_lock);
-			return 0;
-		} else if (vmp && vmp->flag & LPFC_VMID_REQ_REGISTER) {
-			write_unlock(&vport->vmid_lock);
-			return -EBUSY;
-		}
-
-		/* else search and allocate a free slot in the hash table */
-		if (vport->cur_vmid_cnt < vport->max_vmid) {
-			for (i = 0; i < vport->max_vmid; i++) {
-				vmp = vport->vmid + i;
-				if (vmp->flag == LPFC_VMID_SLOT_FREE)
-					break;
-			}
-			if (i == vport->max_vmid)
-				vmp = NULL;
-		} else {
-			vmp = NULL;
-		}
-
-		if (!vmp) {
-			write_unlock(&vport->vmid_lock);
-			return -ENOMEM;
-		}
-
-		/* Add the vmid and register */
-		lpfc_put_vmid_in_hashtable(vport, hash, vmp);
-		vmp->vmid_len = len;
-		memcpy(vmp->host_vmid, uuid, vmp->vmid_len);
-		vmp->io_rd_cnt = 0;
-		vmp->io_wr_cnt = 0;
-		vmp->flag = LPFC_VMID_SLOT_USED;
-
-		vmp->delete_inactive =
-			vport->vmid_inactivity_timeout ? 1 : 0;
-
-		/* if type priority tag, get next available VMID */
-		if (lpfc_vmid_is_type_priority_tag(vport))
-			lpfc_vmid_assign_cs_ctl(vport, vmp);
-
-		/* allocate the per cpu variable for holding */
-		/* the last access time stamp only if VMID is enabled */
-		if (!vmp->last_io_time)
-			vmp->last_io_time = __alloc_percpu(sizeof(u64),
-							   __alignof__(struct
-							   lpfc_vmid));
-		if (!vmp->last_io_time) {
-			hash_del(&vmp->hnode);
-			vmp->flag = LPFC_VMID_SLOT_FREE;
-			write_unlock(&vport->vmid_lock);
-			return -EIO;
-		}
-
-		write_unlock(&vport->vmid_lock);
-
-		/* complete transaction with switch */
-		if (lpfc_vmid_is_type_priority_tag(vport))
-			rc = lpfc_vmid_uvem(vport, vmp, true);
-		else
-			rc = lpfc_vmid_cmd(vport, SLI_CTAS_RAPP_IDENT, vmp);
-		if (!rc) {
-			write_lock(&vport->vmid_lock);
-			vport->cur_vmid_cnt++;
-			vmp->flag |= LPFC_VMID_REQ_REGISTER;
-			write_unlock(&vport->vmid_lock);
-		} else {
-			write_lock(&vport->vmid_lock);
-			hash_del(&vmp->hnode);
-			vmp->flag = LPFC_VMID_SLOT_FREE;
-			free_percpu(vmp->last_io_time);
-			write_unlock(&vport->vmid_lock);
-			return -EIO;
-		}
-
-		/* finally, enable the idle timer once */
-		if (!(vport->phba->pport->vmid_flag & LPFC_VMID_TIMER_ENBLD)) {
-			mod_timer(&vport->phba->inactive_vmid_poll,
-				  jiffies +
-				  msecs_to_jiffies(1000 * LPFC_VMID_TIMER));
-			vport->phba->pport->vmid_flag |= LPFC_VMID_TIMER_ENBLD;
-		}
-	}
-	return rc;
-}
-
-/*
  * lpfc_is_command_vm_io - get the UUID from blk cgroup
  * @cmd: Pointer to scsi_cmnd data structure
  * Returns UUID if present, otherwise NULL
@@ -5525,7 +5212,9 @@ static char *lpfc_is_command_vm_io(struct scsi_cmnd *cmd)
 {
 	struct bio *bio = scsi_cmd_to_rq(cmd)->bio;
 
-	return bio ? blkcg_get_fc_appid(bio) : NULL;
+	if (!IS_ENABLED(CONFIG_BLK_CGROUP_FC_APPID) || !bio)
+		return NULL;
+	return blkcg_get_fc_appid(bio);
 }
 
 /**
@@ -5700,9 +5389,10 @@ lpfc_queuecommand(struct Scsi_Host *shost, struct scsi_cmnd *cmnd)
 		uuid = lpfc_is_command_vm_io(cmnd);
 
 		if (uuid) {
-			err = lpfc_vmid_get_appid(vport, uuid, cmnd,
-				(union lpfc_vmid_io_tag *)
-					&cur_iocbq->vmid_tag);
+			err = lpfc_vmid_get_appid(vport, uuid,
+					cmnd->sc_data_direction,
+					(union lpfc_vmid_io_tag *)
+						&cur_iocbq->vmid_tag);
 			if (!err)
 				cur_iocbq->cmd_flag |= LPFC_IO_VMID;
 		}
@@ -5796,7 +5486,7 @@ lpfc_queuecommand(struct Scsi_Host *shost, struct scsi_cmnd *cmnd)
 			     shost);
 
  out_fail_command:
-	cmnd->scsi_done(cmnd);
+	scsi_done(cmnd);
 	return 0;
 }
 
@@ -5840,6 +5530,7 @@ static int
 lpfc_abort_handler(struct scsi_cmnd *cmnd)
 {
 	struct Scsi_Host  *shost = cmnd->device->host;
+	struct fc_rport *rport = starget_to_rport(scsi_target(cmnd->device));
 	struct lpfc_vport *vport = (struct lpfc_vport *) shost->hostdata;
 	struct lpfc_hba   *phba = vport->phba;
 	struct lpfc_iocbq *iocb;
@@ -5851,7 +5542,7 @@ lpfc_abort_handler(struct scsi_cmnd *cmnd)
 	unsigned long flags;
 	DECLARE_WAIT_QUEUE_HEAD_ONSTACK(waitq);
 
-	status = fc_block_scsi_eh(cmnd);
+	status = fc_block_rport(rport);
 	if (status != 0 && status != SUCCESS)
 		return status;
 
@@ -5910,7 +5601,7 @@ lpfc_abort_handler(struct scsi_cmnd *cmnd)
 		goto out_unlock_ring;
 	}
 
-	BUG_ON(iocb->context1 != lpfc_cmd);
+	WARN_ON(iocb->io_buf != lpfc_cmd);
 
 	/* abort issued in recovery is still in progress */
 	if (iocb->cmd_flag & LPFC_DRIVER_ABORTED) {
@@ -5927,7 +5618,7 @@ lpfc_abort_handler(struct scsi_cmnd *cmnd)
 	if (phba->sli_rev == LPFC_SLI_REV4) {
 		spin_unlock(&pring_s4->ring_lock);
 		ret_val = lpfc_sli4_issue_abort_iotag(phba, iocb,
-						      lpfc_sli4_abort_fcp_cmpl);
+						      lpfc_sli_abort_fcp_cmpl);
 	} else {
 		pring = &phba->sli.sli3_ring[LPFC_FCP_RING];
 		ret_val = lpfc_sli_issue_abort_iotag(phba, pring, iocb,
@@ -6090,7 +5781,7 @@ lpfc_check_fcp_rsp(struct lpfc_vport *vport, struct lpfc_io_buf *lpfc_cmd)
 /**
  * lpfc_send_taskmgmt - Generic SCSI Task Mgmt Handler
  * @vport: The virtual port for which this call is being executed.
- * @cmnd: Pointer to scsi_cmnd data structure.
+ * @rport: Pointer to remote port
  * @tgt_id: Target ID of remote device.
  * @lun_id: Lun number for the TMF
  * @task_mgmt_cmd: type of TMF to send
@@ -6103,7 +5794,7 @@ lpfc_check_fcp_rsp(struct lpfc_vport *vport, struct lpfc_io_buf *lpfc_cmd)
  *   0x2002 - Success.
  **/
 static int
-lpfc_send_taskmgmt(struct lpfc_vport *vport, struct scsi_cmnd *cmnd,
+lpfc_send_taskmgmt(struct lpfc_vport *vport, struct fc_rport *rport,
 		   unsigned int tgt_id, uint64_t lun_id,
 		   uint8_t task_mgmt_cmd)
 {
@@ -6116,7 +5807,7 @@ lpfc_send_taskmgmt(struct lpfc_vport *vport, struct scsi_cmnd *cmnd,
 	int ret;
 	int status;
 
-	rdata = lpfc_rport_data_from_scsi_device(cmnd->device);
+	rdata = rport->dd_data;
 	if (!rdata || !rdata->pnode)
 		return FAILED;
 	pnode = rdata->pnode;
@@ -6126,7 +5817,7 @@ lpfc_send_taskmgmt(struct lpfc_vport *vport, struct scsi_cmnd *cmnd,
 		return FAILED;
 	lpfc_cmd->timeout = phba->cfg_task_mgmt_tmo;
 	lpfc_cmd->rdata = rdata;
-	lpfc_cmd->pCmd = cmnd;
+	lpfc_cmd->pCmd = NULL;
 	lpfc_cmd->ndlp = pnode;
 
 	status = phba->lpfc_scsi_prep_task_mgmt_cmd(vport, lpfc_cmd, lun_id,
@@ -6195,7 +5886,7 @@ lpfc_send_taskmgmt(struct lpfc_vport *vport, struct scsi_cmnd *cmnd,
 /**
  * lpfc_chk_tgt_mapped -
  * @vport: The virtual port to check on
- * @cmnd: Pointer to scsi_cmnd data structure.
+ * @rport: Pointer to fc_rport data structure.
  *
  * This routine delays until the scsi target (aka rport) for the
  * command exists (is present and logged in) or we declare it non-existent.
@@ -6205,19 +5896,20 @@ lpfc_send_taskmgmt(struct lpfc_vport *vport, struct scsi_cmnd *cmnd,
  *  0x2002 - Success
  **/
 static int
-lpfc_chk_tgt_mapped(struct lpfc_vport *vport, struct scsi_cmnd *cmnd)
+lpfc_chk_tgt_mapped(struct lpfc_vport *vport, struct fc_rport *rport)
 {
 	struct lpfc_rport_data *rdata;
-	struct lpfc_nodelist *pnode;
+	struct lpfc_nodelist *pnode = NULL;
 	unsigned long later;
 
-	rdata = lpfc_rport_data_from_scsi_device(cmnd->device);
+	rdata = rport->dd_data;
 	if (!rdata) {
 		lpfc_printf_vlog(vport, KERN_INFO, LOG_FCP,
 			"0797 Tgt Map rport failure: rdata x%px\n", rdata);
 		return FAILED;
 	}
 	pnode = rdata->pnode;
+
 	/*
 	 * If target is not in a MAPPED state, delay until
 	 * target is rediscovered or devloss timeout expires.
@@ -6229,7 +5921,7 @@ lpfc_chk_tgt_mapped(struct lpfc_vport *vport, struct scsi_cmnd *cmnd)
 		if (pnode->nlp_state == NLP_STE_MAPPED_NODE)
 			return SUCCESS;
 		schedule_timeout_uninterruptible(msecs_to_jiffies(500));
-		rdata = lpfc_rport_data_from_scsi_device(cmnd->device);
+		rdata = rport->dd_data;
 		if (!rdata)
 			return FAILED;
 		pnode = rdata->pnode;
@@ -6300,6 +5992,7 @@ static int
 lpfc_device_reset_handler(struct scsi_cmnd *cmnd)
 {
 	struct Scsi_Host  *shost = cmnd->device->host;
+	struct fc_rport *rport = starget_to_rport(scsi_target(cmnd->device));
 	struct lpfc_vport *vport = (struct lpfc_vport *) shost->hostdata;
 	struct lpfc_rport_data *rdata;
 	struct lpfc_nodelist *pnode;
@@ -6309,7 +6002,10 @@ lpfc_device_reset_handler(struct scsi_cmnd *cmnd)
 	int status;
 	u32 logit = LOG_FCP;
 
-	rdata = lpfc_rport_data_from_scsi_device(cmnd->device);
+	if (!rport)
+		return FAILED;
+
+	rdata = rport->dd_data;
 	if (!rdata || !rdata->pnode) {
 		lpfc_printf_vlog(vport, KERN_ERR, LOG_TRACE_EVENT,
 				 "0798 Device Reset rdata failure: rdata x%px\n",
@@ -6317,11 +6013,11 @@ lpfc_device_reset_handler(struct scsi_cmnd *cmnd)
 		return FAILED;
 	}
 	pnode = rdata->pnode;
-	status = fc_block_scsi_eh(cmnd);
+	status = fc_block_rport(rport);
 	if (status != 0 && status != SUCCESS)
 		return status;
 
-	status = lpfc_chk_tgt_mapped(vport, cmnd);
+	status = lpfc_chk_tgt_mapped(vport, rport);
 	if (status == FAILED) {
 		lpfc_printf_vlog(vport, KERN_ERR, LOG_TRACE_EVENT,
 			"0721 Device Reset rport failure: rdata x%px\n", rdata);
@@ -6337,7 +6033,7 @@ lpfc_device_reset_handler(struct scsi_cmnd *cmnd)
 	fc_host_post_vendor_event(shost, fc_get_event_number(),
 		sizeof(scsi_event), (char *)&scsi_event, LPFC_NL_VENDOR_ID);
 
-	status = lpfc_send_taskmgmt(vport, cmnd, tgt_id, lun_id,
+	status = lpfc_send_taskmgmt(vport, rport, tgt_id, lun_id,
 						FCP_LUN_RESET);
 	if (status != SUCCESS)
 		logit =  LOG_TRACE_EVENT;
@@ -6374,6 +6070,7 @@ static int
 lpfc_target_reset_handler(struct scsi_cmnd *cmnd)
 {
 	struct Scsi_Host  *shost = cmnd->device->host;
+	struct fc_rport *rport = starget_to_rport(scsi_target(cmnd->device));
 	struct lpfc_vport *vport = (struct lpfc_vport *) shost->hostdata;
 	struct lpfc_rport_data *rdata;
 	struct lpfc_nodelist *pnode;
@@ -6386,7 +6083,10 @@ lpfc_target_reset_handler(struct scsi_cmnd *cmnd)
 	unsigned long flags;
 	DECLARE_WAIT_QUEUE_HEAD_ONSTACK(waitq);
 
-	rdata = lpfc_rport_data_from_scsi_device(cmnd->device);
+	if (!rport)
+		return FAILED;
+
+	rdata = rport->dd_data;
 	if (!rdata || !rdata->pnode) {
 		lpfc_printf_vlog(vport, KERN_ERR, LOG_TRACE_EVENT,
 				 "0799 Target Reset rdata failure: rdata x%px\n",
@@ -6394,11 +6094,11 @@ lpfc_target_reset_handler(struct scsi_cmnd *cmnd)
 		return FAILED;
 	}
 	pnode = rdata->pnode;
-	status = fc_block_scsi_eh(cmnd);
+	status = fc_block_rport(rport);
 	if (status != 0 && status != SUCCESS)
 		return status;
 
-	status = lpfc_chk_tgt_mapped(vport, cmnd);
+	status = lpfc_chk_tgt_mapped(vport, rport);
 	if (status == FAILED) {
 		lpfc_printf_vlog(vport, KERN_ERR, LOG_TRACE_EVENT,
 			"0722 Target Reset rport failure: rdata x%px\n", rdata);
@@ -6422,7 +6122,7 @@ lpfc_target_reset_handler(struct scsi_cmnd *cmnd)
 	fc_host_post_vendor_event(shost, fc_get_event_number(),
 		sizeof(scsi_event), (char *)&scsi_event, LPFC_NL_VENDOR_ID);
 
-	status = lpfc_send_taskmgmt(vport, cmnd, tgt_id, lun_id,
+	status = lpfc_send_taskmgmt(vport, rport, tgt_id, lun_id,
 					FCP_TARGET_RESET);
 	if (status != SUCCESS) {
 		logit = LOG_TRACE_EVENT;
@@ -6478,95 +6178,6 @@ lpfc_target_reset_handler(struct scsi_cmnd *cmnd)
 		status = lpfc_reset_flush_io_context(vport, tgt_id, lun_id,
 					  LPFC_CTX_TGT);
 	return status;
-}
-
-/**
- * lpfc_bus_reset_handler - scsi_host_template eh_bus_reset_handler entry point
- * @cmnd: Pointer to scsi_cmnd data structure.
- *
- * This routine does target reset to all targets on @cmnd->device->host.
- * This emulates Parallel SCSI Bus Reset Semantics.
- *
- * Return code :
- *  0x2003 - Error
- *  0x2002 - Success
- **/
-static int
-lpfc_bus_reset_handler(struct scsi_cmnd *cmnd)
-{
-	struct Scsi_Host  *shost = cmnd->device->host;
-	struct lpfc_vport *vport = (struct lpfc_vport *) shost->hostdata;
-	struct lpfc_nodelist *ndlp = NULL;
-	struct lpfc_scsi_event_header scsi_event;
-	int match;
-	int ret = SUCCESS, status, i;
-	u32 logit = LOG_FCP;
-
-	scsi_event.event_type = FC_REG_SCSI_EVENT;
-	scsi_event.subcategory = LPFC_EVENT_BUSRESET;
-	scsi_event.lun = 0;
-	memcpy(scsi_event.wwpn, &vport->fc_portname, sizeof(struct lpfc_name));
-	memcpy(scsi_event.wwnn, &vport->fc_nodename, sizeof(struct lpfc_name));
-
-	fc_host_post_vendor_event(shost, fc_get_event_number(),
-		sizeof(scsi_event), (char *)&scsi_event, LPFC_NL_VENDOR_ID);
-
-	status = fc_block_scsi_eh(cmnd);
-	if (status != 0 && status != SUCCESS)
-		return status;
-
-	/*
-	 * Since the driver manages a single bus device, reset all
-	 * targets known to the driver.  Should any target reset
-	 * fail, this routine returns failure to the midlayer.
-	 */
-	for (i = 0; i < LPFC_MAX_TARGET; i++) {
-		/* Search for mapped node by target ID */
-		match = 0;
-		spin_lock_irq(shost->host_lock);
-		list_for_each_entry(ndlp, &vport->fc_nodes, nlp_listp) {
-
-			if (vport->phba->cfg_fcp2_no_tgt_reset &&
-			    (ndlp->nlp_fcp_info & NLP_FCP_2_DEVICE))
-				continue;
-			if (ndlp->nlp_state == NLP_STE_MAPPED_NODE &&
-			    ndlp->nlp_sid == i &&
-			    ndlp->rport &&
-			    ndlp->nlp_type & NLP_FCP_TARGET) {
-				match = 1;
-				break;
-			}
-		}
-		spin_unlock_irq(shost->host_lock);
-		if (!match)
-			continue;
-
-		status = lpfc_send_taskmgmt(vport, cmnd,
-					i, 0, FCP_TARGET_RESET);
-
-		if (status != SUCCESS) {
-			lpfc_printf_vlog(vport, KERN_ERR, LOG_TRACE_EVENT,
-					 "0700 Bus Reset on target %d failed\n",
-					 i);
-			ret = FAILED;
-		}
-	}
-	/*
-	 * We have to clean up i/o as : they may be orphaned by the TMFs
-	 * above; or if any of the TMFs failed, they may be in an
-	 * indeterminate state.
-	 * We will report success if all the i/o aborts successfully.
-	 */
-
-	status = lpfc_reset_flush_io_context(vport, 0, 0, LPFC_CTX_HOST);
-	if (status != SUCCESS)
-		ret = FAILED;
-	if (ret == FAILED)
-		logit =  LOG_TRACE_EVENT;
-
-	lpfc_printf_vlog(vport, KERN_ERR, logit,
-			 "0714 SCSI layer issued Bus Reset Data: x%x\n", ret);
-	return ret;
 }
 
 /**
@@ -7135,12 +6746,6 @@ lpfc_no_command(struct Scsi_Host *shost, struct scsi_cmnd *cmnd)
 }
 
 static int
-lpfc_no_handler(struct scsi_cmnd *cmnd)
-{
-	return FAILED;
-}
-
-static int
 lpfc_no_slave(struct scsi_device *sdev)
 {
 	return -ENODEV;
@@ -7152,18 +6757,13 @@ struct scsi_host_template lpfc_template_nvme = {
 	.proc_name		= LPFC_DRIVER_NAME,
 	.info			= lpfc_info,
 	.queuecommand		= lpfc_no_command,
-	.eh_abort_handler	= lpfc_no_handler,
-	.eh_device_reset_handler = lpfc_no_handler,
-	.eh_target_reset_handler = lpfc_no_handler,
-	.eh_bus_reset_handler	= lpfc_no_handler,
-	.eh_host_reset_handler  = lpfc_no_handler,
 	.slave_alloc		= lpfc_no_slave,
 	.slave_configure	= lpfc_no_slave,
 	.scan_finished		= lpfc_scan_finished,
 	.this_id		= -1,
 	.sg_tablesize		= 1,
 	.cmd_per_lun		= 1,
-	.shost_attrs		= lpfc_hba_attrs,
+	.shost_groups		= lpfc_hba_groups,
 	.max_sectors		= 0xFFFFFFFF,
 	.vendor_id		= LPFC_NL_VENDOR_ID,
 	.track_queue_depth	= 0,
@@ -7180,7 +6780,6 @@ struct scsi_host_template lpfc_template = {
 	.eh_abort_handler	= lpfc_abort_handler,
 	.eh_device_reset_handler = lpfc_device_reset_handler,
 	.eh_target_reset_handler = lpfc_target_reset_handler,
-	.eh_bus_reset_handler	= lpfc_bus_reset_handler,
 	.eh_host_reset_handler  = lpfc_host_reset_handler,
 	.slave_alloc		= lpfc_slave_alloc,
 	.slave_configure	= lpfc_slave_configure,
@@ -7189,9 +6788,36 @@ struct scsi_host_template lpfc_template = {
 	.this_id		= -1,
 	.sg_tablesize		= LPFC_DEFAULT_SG_SEG_CNT,
 	.cmd_per_lun		= LPFC_CMD_PER_LUN,
-	.shost_attrs		= lpfc_hba_attrs,
+	.shost_groups		= lpfc_hba_groups,
 	.max_sectors		= 0xFFFFFFFF,
 	.vendor_id		= LPFC_NL_VENDOR_ID,
+	.change_queue_depth	= scsi_change_queue_depth,
+	.track_queue_depth	= 1,
+};
+
+struct scsi_host_template lpfc_vport_template = {
+	.module			= THIS_MODULE,
+	.name			= LPFC_DRIVER_NAME,
+	.proc_name		= LPFC_DRIVER_NAME,
+	.info			= lpfc_info,
+	.queuecommand		= lpfc_queuecommand,
+	.eh_timed_out		= fc_eh_timed_out,
+	.eh_should_retry_cmd    = fc_eh_should_retry_cmd,
+	.eh_abort_handler	= lpfc_abort_handler,
+	.eh_device_reset_handler = lpfc_device_reset_handler,
+	.eh_target_reset_handler = lpfc_target_reset_handler,
+	.eh_bus_reset_handler	= NULL,
+	.eh_host_reset_handler	= NULL,
+	.slave_alloc		= lpfc_slave_alloc,
+	.slave_configure	= lpfc_slave_configure,
+	.slave_destroy		= lpfc_slave_destroy,
+	.scan_finished		= lpfc_scan_finished,
+	.this_id		= -1,
+	.sg_tablesize		= LPFC_DEFAULT_SG_SEG_CNT,
+	.cmd_per_lun		= LPFC_CMD_PER_LUN,
+	.shost_groups		= lpfc_vport_groups,
+	.max_sectors		= 0xFFFFFFFF,
+	.vendor_id		= 0,
 	.change_queue_depth	= scsi_change_queue_depth,
 	.track_queue_depth	= 1,
 };

@@ -331,6 +331,18 @@ static int ldb_init(struct mxc_dispdrv_handle *mddh,
 	return 0;
 }
 
+static void ldb_deinit(struct mxc_dispdrv_handle *mddh)
+{
+	struct ldb_data *ldb = mxc_dispdrv_getdata(mddh);
+	struct ldb_chan *chan;
+	int i;
+
+	for (i = 0; i < 2; i++) {
+		chan = &ldb->chan[i];
+		chan->is_used = false;
+	}
+}
+
 static int get_di_clk_id(struct ldb_chan chan, int *id)
 {
 	struct ldb_data *ldb = chan.ldb;
@@ -575,6 +587,7 @@ static void ldb_disable(struct mxc_dispdrv_handle *mddh,
 static struct mxc_dispdrv_driver ldb_drv = {
 	.name		= DRIVER_NAME,
 	.init		= ldb_init,
+	.deinit		= ldb_deinit,
 	.setup		= ldb_setup,
 	.enable		= ldb_enable,
 	.disable	= ldb_disable

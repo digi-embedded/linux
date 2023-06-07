@@ -3,7 +3,6 @@
  * Copyright 2022 NXP
  */
 
-#include <linux/firmware/imx/ele_base_msg.h>
 #include <linux/module.h>
 #include <linux/nvmem-consumer.h>
 #include <linux/kernel.h>
@@ -95,12 +94,10 @@ static int imx9_init_soc_probe(struct platform_device *pdev)
         int ret;
 
 	ret = imx9_soc_device_register(&pdev->dev);
-	if (ret) {
-		pr_err("failed to register SoC device: %d\n", ret);
-		return ret;
-	}
+	if (ret)
+		return dev_err_probe(&pdev->dev, ret, "failed to register SoC device\n");
 
-	return 0;
+        return ret;
 }
 
 static const struct of_device_id imx9_soc_of_match[] = {

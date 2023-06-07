@@ -48,6 +48,10 @@ struct flow_match_ports {
 	struct flow_dissector_key_ports *key, *mask;
 };
 
+struct flow_match_ports_range {
+	struct flow_dissector_key_ports_range *key, *mask;
+};
+
 struct flow_match_icmp {
 	struct flow_dissector_key_icmp *key, *mask;
 };
@@ -72,6 +76,14 @@ struct flow_match_ct {
 	struct flow_dissector_key_ct *key, *mask;
 };
 
+struct flow_match_pppoe {
+	struct flow_dissector_key_pppoe *key, *mask;
+};
+
+struct flow_match_l2tpv3 {
+	struct flow_dissector_key_l2tpv3 *key, *mask;
+};
+
 struct flow_rule;
 
 void flow_rule_match_meta(const struct flow_rule *rule,
@@ -94,6 +106,8 @@ void flow_rule_match_ip(const struct flow_rule *rule,
 			struct flow_match_ip *out);
 void flow_rule_match_ports(const struct flow_rule *rule,
 			   struct flow_match_ports *out);
+void flow_rule_match_ports_range(const struct flow_rule *rule,
+				 struct flow_match_ports_range *out);
 void flow_rule_match_tcp(const struct flow_rule *rule,
 			 struct flow_match_tcp *out);
 void flow_rule_match_icmp(const struct flow_rule *rule,
@@ -116,6 +130,10 @@ void flow_rule_match_enc_opts(const struct flow_rule *rule,
 			      struct flow_match_enc_opts *out);
 void flow_rule_match_ct(const struct flow_rule *rule,
 			struct flow_match_ct *out);
+void flow_rule_match_pppoe(const struct flow_rule *rule,
+			   struct flow_match_pppoe *out);
+void flow_rule_match_l2tpv3(const struct flow_rule *rule,
+			    struct flow_match_l2tpv3 *out);
 
 enum flow_action_id {
 	FLOW_ACTION_ACCEPT		= 0,
@@ -150,6 +168,9 @@ enum flow_action_id {
 	FLOW_ACTION_PPPOE_PUSH,
 	FLOW_ACTION_JUMP,
 	FLOW_ACTION_PIPE,
+	FLOW_ACTION_VLAN_PUSH_ETH,
+	FLOW_ACTION_VLAN_POP_ETH,
+	FLOW_ACTION_CONTINUE,
 	NUM_FLOW_ACTIONS,
 };
 
@@ -211,6 +232,10 @@ struct flow_action_entry {
 			__be16		proto;
 			u8		prio;
 		} vlan;
+		struct {				/* FLOW_ACTION_VLAN_PUSH_ETH */
+			unsigned char dst[ETH_ALEN];
+			unsigned char src[ETH_ALEN];
+		} vlan_push_eth;
 		struct {				/* FLOW_ACTION_MANGLE */
 							/* FLOW_ACTION_ADD */
 			enum flow_action_mangle_base htype;

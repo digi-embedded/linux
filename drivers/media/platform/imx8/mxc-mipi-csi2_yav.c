@@ -505,7 +505,7 @@ static int mipi_csis_subdev_host(struct mxc_mipi_csi2_dev *csi2dev)
 	struct v4l2_async_subdev *asd;
 	int ret;
 
-	v4l2_async_notifier_init(&csi2dev->subdev_notifier);
+	v4l2_async_nf_init(&csi2dev->subdev_notifier);
 
 	/* Attach sensors linked to csi receivers */
 	for_each_available_child_of_node(parent, node) {
@@ -529,7 +529,7 @@ static int mipi_csis_subdev_host(struct mxc_mipi_csi2_dev *csi2dev)
 				  port->full_name);
 
 		csi2dev->fwnode = of_fwnode_handle(rem);
-		asd = v4l2_async_notifier_add_fwnode_subdev(
+		asd = v4l2_async_nf_add_fwnode(
 						&csi2dev->subdev_notifier,
 						csi2dev->fwnode,
 						struct v4l2_async_subdev);
@@ -546,7 +546,7 @@ static int mipi_csis_subdev_host(struct mxc_mipi_csi2_dev *csi2dev)
 	csi2dev->subdev_notifier.v4l2_dev = &csi2dev->v4l2_dev;
 	csi2dev->subdev_notifier.ops = &subdev_notifier_ops;
 
-	ret = v4l2_async_notifier_register(&csi2dev->v4l2_dev,
+	ret = v4l2_async_nf_register(&csi2dev->v4l2_dev,
 					   &csi2dev->subdev_notifier);
 	if (ret)
 		dev_err(dev,
@@ -643,7 +643,7 @@ static int mipi_csi2_remove(struct platform_device *pdev)
 	struct v4l2_subdev *sd = platform_get_drvdata(pdev);
 	struct mxc_mipi_csi2_dev *csi2dev = sd_to_mxc_mipi_csi2_dev(sd);
 
-	v4l2_async_notifier_cleanup(&csi2dev->subdev_notifier);
+	v4l2_async_nf_cleanup(&csi2dev->subdev_notifier);
 	mipi_csi2_clk_disable(csi2dev);
 	pm_runtime_disable(&pdev->dev);
 

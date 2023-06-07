@@ -377,14 +377,13 @@ exit:
 	return err;
 }
 
-static int pca995x_remove(struct i2c_client *client)
+static void pca995x_remove(struct i2c_client *client)
 {
 	struct pca995x *pca995x = i2c_get_clientdata(client);
 	int i;
 
 	for (i = 0; i < pca995x->n_leds; i++)
 		led_classdev_unregister(&pca995x->leds[i].led_cdev);
-	return 0;
 }
 
 static struct i2c_driver pca995x_driver = {

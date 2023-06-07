@@ -114,16 +114,6 @@ static irqreturn_t dpaa2_mac_irq_handler(int irq_num, void *arg)
 	return IRQ_HANDLED;
 }
 
-static bool dpaa2_mac_is_type_phy(struct dpaa2_mac *mac)
-{
-	if (mac &&
-	    (mac->attr.link_type == DPMAC_LINK_TYPE_PHY ||
-	     mac->attr.link_type == DPMAC_LINK_TYPE_BACKPLANE))
-		return true;
-
-	return false;
-}
-
 static int dpaa2_mac_setup_irqs(struct fsl_mc_device *mc_dev)
 {
 	struct fsl_mc_device_irq *irq;
@@ -136,7 +126,7 @@ static int dpaa2_mac_setup_irqs(struct fsl_mc_device *mc_dev)
 	}
 
 	irq = mc_dev->irqs[0];
-	err = devm_request_threaded_irq(&mc_dev->dev, irq->msi_desc->irq,
+	err = devm_request_threaded_irq(&mc_dev->dev, irq->virq,
 					NULL, &dpaa2_mac_irq_handler,
 					IRQF_NO_SUSPEND | IRQF_ONESHOT,
 					dev_name(&mc_dev->dev), &mc_dev->dev);

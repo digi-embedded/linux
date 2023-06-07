@@ -50,6 +50,10 @@
 	};
 };
 
+&vgen3_reg {
+	regulator-always-on;
+};
+
 &ov564x {
 	AVDD-supply = <&vgen6_reg>; /* 2.8v */
 	DOVDD-supply = <&sw4_reg>; /* 1.8v */
@@ -61,10 +65,6 @@
 };
 
 &pcie {
-	status = "okay";
-};
-
-&sata {
 	status = "okay";
 };
 

@@ -1298,7 +1298,8 @@ static bool tipc_data_input(struct tipc_link *l, struct sk_buff *skb,
 		return false;
 #ifdef CONFIG_TIPC_CRYPTO
 	case MSG_CRYPTO:
-		if (TIPC_SKB_CB(skb)->decrypted) {
+		if (sysctl_tipc_key_exchange_enabled &&
+		    TIPC_SKB_CB(skb)->decrypted) {
 			tipc_crypto_msg_rcv(l->net, skb);
 			return true;
 		}
@@ -2223,7 +2224,9 @@ static int tipc_link_proto_rcv(struct tipc_link *l, struct sk_buff *skb,
 	if (tipc_own_addr(l->net) > msg_prevnode(hdr))
 		l->net_plane = msg_net_plane(hdr);
 
-	skb_linearize(skb);
+	if (skb_linearize(skb))
+		goto exit;
+
 	hdr = buf_msg(skb);
 	data = msg_data(hdr);
 

@@ -1,9 +1,9 @@
-// SPDX-License-Identifier: GPL-2.0+
-
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright 2022 NXP, Peng Fan <peng.fan@nxp.com>
+ * Copyright 2022 NXP
  */
 
+#include <linux/clk.h>
 #include <linux/device.h>
 #include <linux/module.h>
 #include <linux/of_device.h>
@@ -11,14 +11,15 @@
 #include <linux/pm_domain.h>
 #include <linux/pm_runtime.h>
 #include <linux/regmap.h>
-#include <linux/clk.h>
+#include <linux/sizes.h>
 
-#include <dt-bindings/power/imx93-power.h>
+#include <dt-bindings/power/fsl,imx93-power.h>
 
 #define BLK_SFT_RSTN	0x0
 #define BLK_CLK_EN	0x4
+#define BLK_MAX_CLKS	4
 
-#define BLK_MAX_CLKS 4
+#define DOMAIN_MAX_CLKS 4
 
 #define LCDIF_QOS_REG		0xC
 #define LCDIF_DEFAULT_QOS_OFF	12
@@ -72,12 +73,9 @@ struct imx93_blk_ctrl_domain_data {
 	int num_clks;
 	u32 rst_mask;
 	u32 clk_mask;
-	u32 num_qos;
+	int num_qos;
 	struct imx93_blk_ctrl_qos qos[DOMAIN_MAX_QOS];
-	const struct regmap_access_table *reg_access_table;
 };
-
-#define DOMAIN_MAX_CLKS 4
 
 struct imx93_blk_ctrl_domain {
 	struct generic_pm_domain genpd;
@@ -88,25 +86,10 @@ struct imx93_blk_ctrl_domain {
 
 struct imx93_blk_ctrl_data {
 	const struct imx93_blk_ctrl_domain_data *domains;
-	const struct imx93_blk_ctrl_domain_data *bus;
 	int num_domains;
-};
-
-static const struct regmap_range imx93_media_blk_ctl_yes_ranges[] = {
-		regmap_reg_range(BLK_SFT_RSTN, BLK_CLK_EN),
-		regmap_reg_range(LCDIF_QOS_REG, ISI_CACHE_REG),
-		regmap_reg_range(ISI_QOS_REG, ISI_QOS_REG),
-};
-
-static const struct regmap_access_table imx93_media_blk_ctl_access_table = {
-	.yes_ranges	= imx93_media_blk_ctl_yes_ranges,
-	.n_yes_ranges	= ARRAY_SIZE(imx93_media_blk_ctl_yes_ranges),
-};
-
-static const struct imx93_blk_ctrl_domain_data imx93_media_blk_ctl_bus_data = {
-	.clk_names = (const char *[]){ "axi", "apb", "nic", },
-	.num_clks = 3,
-	.reg_access_table = &imx93_media_blk_ctl_access_table,
+	const char * const *clk_names;
+	int num_clks;
+	const struct regmap_access_table *reg_access_table;
 };
 
 static inline struct imx93_blk_ctrl_domain *
@@ -154,6 +137,7 @@ static int imx93_blk_ctrl_power_on(struct generic_pm_domain *genpd)
 
 	ret = clk_bulk_prepare_enable(data->num_clks, domain->clks);
 	if (ret) {
+		clk_bulk_disable_unprepare(bc->num_clks, bc->clks);
 		dev_err(bc->dev, "failed to enable clocks\n");
 		return ret;
 	}
@@ -180,6 +164,8 @@ static int imx93_blk_ctrl_power_on(struct generic_pm_domain *genpd)
 disable_clk:
 	clk_bulk_disable_unprepare(data->num_clks, domain->clks);
 
+	clk_bulk_disable_unprepare(bc->num_clks, bc->clks);
+
 	return ret;
 }
 
@@ -203,24 +189,10 @@ static int imx93_blk_ctrl_power_off(struct generic_pm_domain *genpd)
 	return 0;
 }
 
-static struct generic_pm_domain *
-imx93_blk_ctrl_xlate(struct of_phandle_args *args, void *data)
-{
-	struct genpd_onecell_data *onecell_data = data;
-	unsigned int index = args->args[0];
-
-	if (args->args_count != 1 ||
-	    index >= onecell_data->num_domains)
-		return ERR_PTR(-EINVAL);
-
-	return onecell_data->domains[index];
-}
-
 static int imx93_blk_ctrl_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	const struct imx93_blk_ctrl_data *bc_data = of_device_get_match_data(dev);
-	const struct imx93_blk_ctrl_domain_data *bus = bc_data->bus;
 	struct imx93_blk_ctrl *bc;
 	void __iomem *base;
 	int i, ret;
@@ -229,8 +201,8 @@ static int imx93_blk_ctrl_probe(struct platform_device *pdev)
 		.reg_bits	= 32,
 		.val_bits	= 32,
 		.reg_stride	= 4,
-		.rd_table	= bus->reg_access_table,
-		.wr_table	= bus->reg_access_table,
+		.rd_table	= bc_data->reg_access_table,
+		.wr_table	= bc_data->reg_access_table,
 		.max_register   = SZ_4K,
 	};
 
@@ -249,7 +221,7 @@ static int imx93_blk_ctrl_probe(struct platform_device *pdev)
 		return dev_err_probe(dev, PTR_ERR(bc->regmap),
 				     "failed to init regmap\n");
 
-	bc->domains = devm_kcalloc(dev, bc_data->num_domains + 1,
+	bc->domains = devm_kcalloc(dev, bc_data->num_domains,
 				   sizeof(struct imx93_blk_ctrl_domain),
 				   GFP_KERNEL);
 	if (!bc->domains) {
@@ -258,7 +230,6 @@ static int imx93_blk_ctrl_probe(struct platform_device *pdev)
 	}
 
 	bc->onecell_data.num_domains = bc_data->num_domains;
-	bc->onecell_data.xlate = imx93_blk_ctrl_xlate;
 	bc->onecell_data.domains =
 		devm_kcalloc(dev, bc_data->num_domains,
 			     sizeof(struct generic_pm_domain *), GFP_KERNEL);
@@ -267,9 +238,9 @@ static int imx93_blk_ctrl_probe(struct platform_device *pdev)
 		goto free_regmap;
 	}
 
-	for (i = 0; i < bus->num_clks; i++)
-		bc->clks[i].id = bus->clk_names[i];
-	bc->num_clks = bus->num_clks;
+	for (i = 0; i < bc_data->num_clks; i++)
+		bc->clks[i].id = bc_data->clk_names[i];
+	bc->num_clks = bc_data->num_clks;
 
 	ret = devm_clk_bulk_get(dev, bc->num_clks, bc->clks);
 	if (ret) {
@@ -314,7 +285,6 @@ static int imx93_blk_ctrl_probe(struct platform_device *pdev)
 		dev_err_probe(dev, ret, "failed to add power domain provider\n");
 		goto cleanup_pds;
 	}
-
 
 	dev_set_drvdata(dev, bc);
 
@@ -431,10 +401,23 @@ static const struct imx93_blk_ctrl_domain_data imx93_media_blk_ctl_domain_data[]
 	},
 };
 
+static const struct regmap_range imx93_media_blk_ctl_yes_ranges[] = {
+	regmap_reg_range(BLK_SFT_RSTN, BLK_CLK_EN),
+	regmap_reg_range(LCDIF_QOS_REG, ISI_CACHE_REG),
+	regmap_reg_range(ISI_QOS_REG, ISI_QOS_REG),
+};
+
+static const struct regmap_access_table imx93_media_blk_ctl_access_table = {
+	.yes_ranges = imx93_media_blk_ctl_yes_ranges,
+	.n_yes_ranges = ARRAY_SIZE(imx93_media_blk_ctl_yes_ranges),
+};
+
 static const struct imx93_blk_ctrl_data imx93_media_blk_ctl_dev_data = {
 	.domains = imx93_media_blk_ctl_domain_data,
-	.bus = &imx93_media_blk_ctl_bus_data,
 	.num_domains = ARRAY_SIZE(imx93_media_blk_ctl_domain_data),
+	.clk_names = (const char *[]){ "axi", "apb", "nic", },
+	.num_clks = 3,
+	.reg_access_table = &imx93_media_blk_ctl_access_table,
 };
 
 static const struct of_device_id imx93_blk_ctrl_of_match[] = {
@@ -456,3 +439,7 @@ static struct platform_driver imx93_blk_ctrl_driver = {
 	},
 };
 module_platform_driver(imx93_blk_ctrl_driver);
+
+MODULE_AUTHOR("Peng Fan <peng.fan@nxp.com>");
+MODULE_DESCRIPTION("i.MX93 BLK CTRL driver");
+MODULE_LICENSE("GPL");

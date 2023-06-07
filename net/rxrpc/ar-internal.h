@@ -15,14 +15,6 @@
 #include <keys/rxrpc-type.h>
 #include "protocol.h"
 
-#if 0
-#define CHECK_SLAB_OKAY(X)				     \
-	BUG_ON(atomic_read((X)) >> (sizeof(atomic_t) - 2) == \
-	       (POISON_FREE << 8 | POISON_FREE))
-#else
-#define CHECK_SLAB_OKAY(X) do {} while (0)
-#endif
-
 #define FCRYPT_BSIZE 8
 struct rxrpc_crypt {
 	union {
@@ -88,7 +80,7 @@ struct rxrpc_net {
 	struct work_struct	client_conn_reaper;
 	struct timer_list	client_conn_reap_timer;
 
-	struct list_head	local_endpoints;
+	struct hlist_head	local_endpoints;
 	struct mutex		local_mutex;	/* Lock for ->local_endpoints */
 
 	DECLARE_HASHTABLE	(peer_hash, 10);
@@ -279,9 +271,9 @@ struct rxrpc_security {
 struct rxrpc_local {
 	struct rcu_head		rcu;
 	atomic_t		active_users;	/* Number of users of the local endpoint */
-	atomic_t		usage;		/* Number of references to the structure */
+	refcount_t		ref;		/* Number of references to the structure */
 	struct rxrpc_net	*rxnet;		/* The network ns in which this resides */
-	struct list_head	link;
+	struct hlist_node	link;
 	struct socket		*socket;	/* my UDP socket */
 	struct work_struct	processor;
 	struct rxrpc_sock __rcu	*service;	/* Service(s) listening on this endpoint */
@@ -304,7 +296,7 @@ struct rxrpc_local {
  */
 struct rxrpc_peer {
 	struct rcu_head		rcu;		/* This must be first */
-	atomic_t		usage;
+	refcount_t		ref;
 	unsigned long		hash_key;
 	struct hlist_node	hash_link;
 	struct rxrpc_local	*local;
@@ -406,7 +398,8 @@ enum rxrpc_conn_proto_state {
  */
 struct rxrpc_bundle {
 	struct rxrpc_conn_parameters params;
-	atomic_t		usage;
+	refcount_t		ref;
+	atomic_t		active;		/* Number of active users */
 	unsigned int		debug_id;
 	bool			try_upgrade;	/* True if the bundle is attempting upgrade */
 	bool			alloc_conn;	/* True if someone's getting a conn */
@@ -427,7 +420,7 @@ struct rxrpc_connection {
 	struct rxrpc_conn_proto	proto;
 	struct rxrpc_conn_parameters params;
 
-	atomic_t		usage;
+	refcount_t		ref;
 	struct rcu_head		rcu;
 	struct list_head	cache_link;
 
@@ -609,7 +602,7 @@ struct rxrpc_call {
 	int			error;		/* Local error incurred */
 	enum rxrpc_call_state	state;		/* current state of call */
 	enum rxrpc_call_completion completion;	/* Call completion condition */
-	atomic_t		usage;
+	refcount_t		ref;
 	u16			service_id;	/* service ID */
 	u8			security_ix;	/* Security type */
 	enum rxrpc_interruptibility interruptibility; /* At what point call may be interrupted */
@@ -790,7 +783,6 @@ void rxrpc_delete_call_timer(struct rxrpc_call *call);
  */
 extern const char *const rxrpc_call_states[];
 extern const char *const rxrpc_call_completions[];
-extern unsigned int rxrpc_max_call_lifetime;
 extern struct kmem_cache *rxrpc_call_jar;
 
 struct rxrpc_call *rxrpc_find_call_by_user_ID(struct rxrpc_sock *, unsigned long);
@@ -1016,6 +1008,7 @@ void rxrpc_put_peer_locked(struct rxrpc_peer *);
 extern const struct seq_operations rxrpc_call_seq_ops;
 extern const struct seq_operations rxrpc_connection_seq_ops;
 extern const struct seq_operations rxrpc_peer_seq_ops;
+extern const struct seq_operations rxrpc_local_seq_ops;
 
 /*
  * recvmsg.c

@@ -1015,7 +1015,7 @@ static int vsi_v4l2_enc_g_volatile_ctrl(struct v4l2_ctrl *ctrl)
 	return 0;
 }
 /********* for ext ctrl *************/
-static bool vsi_enc_ctrl_equal(const struct v4l2_ctrl *ctrl, u32 idx,
+static bool vsi_enc_ctrl_equal(const struct v4l2_ctrl *ctrl,
 		      union v4l2_ctrl_ptr ptr1,
 		      union v4l2_ctrl_ptr ptr2)
 {
@@ -1023,12 +1023,12 @@ static bool vsi_enc_ctrl_equal(const struct v4l2_ctrl *ctrl, u32 idx,
 	return 0;
 }
 
-static void vsi_enc_ctrl_init(const struct v4l2_ctrl *ctrl, u32 idx,
-		     union v4l2_ctrl_ptr ptr)
+static void vsi_enc_ctrl_init(const struct v4l2_ctrl *ctrl, u32 from_idx,
+			      union v4l2_ctrl_ptr ptr)
 {
-	void *p = ptr.p + idx * ctrl->elem_size;
+	void *p = ptr.p + from_idx * ctrl->elem_size;
 
-	memset(p, 0, ctrl->elem_size);
+	memset(p, 0, (ctrl->elems - from_idx) * ctrl->elem_size);
 }
 
 static void vsi_enc_ctrl_log(const struct v4l2_ctrl *ctrl)
@@ -1036,7 +1036,7 @@ static void vsi_enc_ctrl_log(const struct v4l2_ctrl *ctrl)
 	//do nothing now
 }
 
-static int vsi_enc_ctrl_validate(const struct v4l2_ctrl *ctrl, u32 idx,
+static int vsi_enc_ctrl_validate(const struct v4l2_ctrl *ctrl,
 			union v4l2_ctrl_ptr ptr)
 {
 	//always true

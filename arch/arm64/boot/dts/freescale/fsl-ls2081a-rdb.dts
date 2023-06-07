@@ -42,10 +42,6 @@
 	status = "okay";
 };
 
-&ifc {
-	status = "disabled";
-};
-
 &i2c0 {
 	status = "okay";
 
@@ -58,7 +54,8 @@
 		i2c@1 {
 			#address-cells = <1>;
 			#size-cells = <0>;
-			reg = <0x01>;
+			reg = <0x1>;
+
 			rtc@51 {
 				compatible = "nxp,pcf2129";
 				reg = <0x51>;
@@ -68,7 +65,7 @@
 		i2c@2 {
 			#address-cells = <1>;
 			#size-cells = <0>;
-			reg = <0x02>;
+			reg = <0x2>;
 
 			ina220@40 {
 				compatible = "ti,ina220";
@@ -88,6 +85,10 @@
 			};
 		};
 	};
+};
+
+&ifc {
+	status = "disabled";
 };
 
 &qspi {

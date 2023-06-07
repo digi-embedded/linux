@@ -19,6 +19,7 @@
 #include <linux/of_platform.h>
 #include <linux/psci.h>
 #include <linux/regmap.h>
+#include <linux/regulator/machine.h>
 #include <linux/slab.h>
 #include <linux/suspend.h>
 #include <asm/cacheflush.h>
@@ -27,7 +28,6 @@
 #include <asm/proc-fns.h>
 #include <asm/suspend.h>
 #include <asm/tlb.h>
-#include <linux/regulator/machine.h>
 
 #include <uapi/linux/psci.h>
 

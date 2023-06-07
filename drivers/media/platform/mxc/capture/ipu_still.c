@@ -40,11 +40,10 @@ static int callback_flag;
 static irqreturn_t prp_csi_eof_callback(int irq, void *dev_id)
 {
 	cam_data *cam = devid;
-	ipu_select_buffer(cam->ipu, MXC_V4L2_GET_IPU_CHAN(cam->csi),
-		IPU_OUTPUT_BUFFER, callback_flag%2 ? 1 : 0);
+	ipu_select_buffer(cam->ipu, MXC_V4L2_GET_IPU_CHAN(cam->csi), IPU_OUTPUT_BUFFER,
+			  callback_flag%2 ? 1 : 0);
 	if (callback_flag == 0)
-		ipu_enable_channel(cam->ipu,
-			MXC_V4L2_GET_IPU_CHAN(cam->csi));
+		ipu_enable_channel(cam->ipu, MXC_V4L2_GET_IPU_CHAN(cam->csi);
 
 	callback_flag++;
 	return IRQ_HANDLED;
@@ -118,14 +117,11 @@ static int prp_still_start(void *private)
 
 	memset(&params, 0, sizeof(params));
 	params.csi_mem.csi = cam->csi;
-	err = ipu_init_channel(cam->ipu, MXC_V4L2_GET_IPU_CHAN(cam->csi),
-		&params);
+	err = ipu_init_channel(cam->ipu, MXC_V4L2_GET_IPU_CHAN(cam->csi), &params);
 	if (err != 0)
 		return err;
 
-	err = ipu_init_channel_buffer(cam->ipu,
-				      MXC_V4L2_GET_IPU_CHAN(cam->csi),
-				      IPU_OUTPUT_BUFFER,
+	err = ipu_init_channel_buffer(cam->ipu, MXC_V4L2_GET_IPU_CHAN(cam->csi), IPU_OUTPUT_BUFFER,
 				      pixel_fmt, cam->v2f.fmt.pix.width,
 				      cam->v2f.fmt.pix.height,
 				      cam->v2f.fmt.pix.width, IPU_ROTATE_NONE,
@@ -164,8 +160,7 @@ static int prp_still_start(void *private)
 		return err;
 	}
 
-	ipu_select_buffer(cam->ipu, MXC_V4L2_GET_IPU_CHAN(cam->csi),
-		IPU_OUTPUT_BUFFER, 0);
+	ipu_select_buffer(cam->ipu, MXC_V4L2_GET_IPU_CHAN(cam->csi), IPU_OUTPUT_BUFFER, 0);
 	ipu_enable_channel(cam->ipu, MXC_V4L2_GET_IPU_CHAN(cam->csi));
 	ipu_enable_csi(cam->ipu, cam->csi);
 #endif

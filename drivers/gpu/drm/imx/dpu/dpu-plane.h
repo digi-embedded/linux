@@ -15,6 +15,7 @@
 #ifndef __DPU_PLANE_H__
 #define __DPU_PLANE_H__
 
+#include <drm/drm_fourcc.h>
 #include <video/dpu.h>
 #include "../imx-drm.h"
 

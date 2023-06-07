@@ -193,7 +193,7 @@ static int mxc_md_do_clean(struct mxc_md *mxc_md, struct media_pad *pad)
 	if (!pad->entity->num_links)
 		return 0;
 
-	remote_pad = media_entity_remote_pad(pad);
+	remote_pad = media_pad_remote_pad_first(pad);
 	if (remote_pad == NULL) {
 		dev_err(dev, "%s get remote pad fail\n", __func__);
 		return -ENODEV;
@@ -973,7 +973,7 @@ static int register_sensor_entities(struct mxc_md *mxc_md)
 
 		if (!of_node_cmp(node->name, HDMI_RX_OF_NODE_NAME)) {
 			mxc_md->sensor[index].fwnode = of_fwnode_handle(node);
-				v4l2_async_notifier_add_fwnode_subdev(
+				v4l2_async_nf_add_fwnode(
 						&mxc_md->subdev_notifier,
 						mxc_md->sensor[index].fwnode,
 						struct v4l2_async_subdev);
@@ -1034,7 +1034,7 @@ static int register_sensor_entities(struct mxc_md *mxc_md)
 		}
 
 		mxc_md->sensor[index].fwnode = of_fwnode_handle(rem);
-		asd = v4l2_async_notifier_add_fwnode_subdev(
+		asd = v4l2_async_nf_add_fwnode(
 						&mxc_md->subdev_notifier,
 						mxc_md->sensor[index].fwnode,
 						struct v4l2_async_subdev);
@@ -1088,7 +1088,7 @@ static int mxc_md_probe(struct platform_device *pdev)
 		goto clean_md;
 	}
 
-	v4l2_async_notifier_init(&mxc_md->subdev_notifier);
+	v4l2_async_nf_init(&mxc_md->subdev_notifier);
 	ret = mxc_md_register_platform_entities(mxc_md, dev->of_node);
 	if (ret < 0)
 		goto clean_v4l2;
@@ -1102,7 +1102,7 @@ static int mxc_md_probe(struct platform_device *pdev)
 		mxc_md->valid_num_sensors = 0;
 		mxc_md->link_status = 0;
 
-		ret = v4l2_async_notifier_register(&mxc_md->v4l2_dev,
+		ret = v4l2_async_nf_register(&mxc_md->v4l2_dev,
 						   &mxc_md->subdev_notifier);
 		if (ret < 0) {
 			dev_warn(&mxc_md->pdev->dev, "Sensor register failed\n");
@@ -1119,7 +1119,7 @@ static int mxc_md_probe(struct platform_device *pdev)
 			} else {
 				/* no sensors connected */
 				mxc_md_unregister_all(mxc_md);
-				v4l2_async_notifier_unregister(&mxc_md->subdev_notifier);
+				v4l2_async_nf_unregister(&mxc_md->subdev_notifier);
 			}
 		}
 	}
@@ -1142,8 +1142,8 @@ static int mxc_md_remove(struct platform_device *pdev)
 	if (!mxc_md)
 		return 0;
 
-	v4l2_async_notifier_cleanup(&mxc_md->subdev_notifier);
-	v4l2_async_notifier_unregister(&mxc_md->subdev_notifier);
+	v4l2_async_nf_cleanup(&mxc_md->subdev_notifier);
+	v4l2_async_nf_unregister(&mxc_md->subdev_notifier);
 
 	v4l2_device_unregister(&mxc_md->v4l2_dev);
 	mxc_md_unregister_entities(mxc_md);

@@ -12,6 +12,7 @@
 #include <dt-bindings/clock/fsl,qoriq-clockgen.h>
 #include <dt-bindings/thermal/thermal.h>
 #include <dt-bindings/interrupt-controller/arm-gic.h>
+#include <dt-bindings/gpio/gpio.h>
 
 / {
 	compatible = "fsl,ls2080a";
@@ -73,7 +74,7 @@
 	};
 
 	reboot {
-		compatible ="syscon-reboot";
+		compatible = "syscon-reboot";
 		regmap = <&rstcr>;
 		offset = <0x0>;
 		mask = <0x2>;
@@ -277,6 +278,14 @@
 			little-endian;
 		};
 
+		sfp: efuse@1e80000 {
+			compatible = "fsl,ls1028a-sfp";
+			reg = <0x0 0x1e80000 0x0 0x10000>;
+			clocks = <&clockgen QORIQ_CLK_PLATFORM_PLL
+					    QORIQ_CLK_PLL_DIV(4)>;
+			clock-names = "sfp";
+		};
+
 		isc: syscon@1f70000 {
 			compatible = "fsl,ls2080a-isc", "syscon";
 			reg = <0x0 0x1f70000 0x0 0x10000>;
@@ -304,7 +313,7 @@
 					<9 0 &gic GIC_SPI 9 IRQ_TYPE_LEVEL_HIGH>,
 					<10 0 &gic GIC_SPI 10 IRQ_TYPE_LEVEL_HIGH>,
 					<11 0 &gic GIC_SPI 11 IRQ_TYPE_LEVEL_HIGH>;
-				interrupt-map-mask = <0xffffffff 0x0>;
+				interrupt-map-mask = <0xf 0x0>;
 			};
 		};
 
@@ -478,28 +487,28 @@
 			sec_jr0: jr@10000 {
 				compatible = "fsl,sec-v5.0-job-ring",
 					     "fsl,sec-v4.0-job-ring";
-				reg	   = <0x10000 0x10000>;
+				reg = <0x10000 0x10000>;
 				interrupts = <GIC_SPI 140 IRQ_TYPE_LEVEL_HIGH>;
 			};
 
 			sec_jr1: jr@20000 {
 				compatible = "fsl,sec-v5.0-job-ring",
 					     "fsl,sec-v4.0-job-ring";
-				reg	   = <0x20000 0x10000>;
+				reg = <0x20000 0x10000>;
 				interrupts = <GIC_SPI 141 IRQ_TYPE_LEVEL_HIGH>;
 			};
 
 			sec_jr2: jr@30000 {
 				compatible = "fsl,sec-v5.0-job-ring",
 					     "fsl,sec-v4.0-job-ring";
-				reg	   = <0x30000 0x10000>;
+				reg = <0x30000 0x10000>;
 				interrupts = <GIC_SPI 142 IRQ_TYPE_LEVEL_HIGH>;
 			};
 
 			sec_jr3: jr@40000 {
 				compatible = "fsl,sec-v5.0-job-ring",
 					     "fsl,sec-v4.0-job-ring";
-				reg	   = <0x40000 0x10000>;
+				reg = <0x40000 0x10000>;
 				interrupts = <GIC_SPI 143 IRQ_TYPE_LEVEL_HIGH>;
 			};
 		};
@@ -995,7 +1004,7 @@
 
 		i2c0: i2c@2000000 {
 			status = "disabled";
-			compatible = "fsl,vf610-i2c", "fsl,ls208xa-vf610-i2c";
+			compatible = "fsl,ls208xa-i2c", "fsl,vf610-i2c";
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <0x0 0x2000000 0x0 0x10000>;
@@ -1003,12 +1012,11 @@
 			clock-names = "i2c";
 			clocks = <&clockgen QORIQ_CLK_PLATFORM_PLL
 					    QORIQ_CLK_PLL_DIV(4)>;
-			scl-gpios = <&gpio3 10 0>;
 		};
 
 		i2c1: i2c@2010000 {
 			status = "disabled";
-			compatible = "fsl,vf610-i2c";
+			compatible = "fsl,ls208xa-i2c", "fsl,vf610-i2c";
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <0x0 0x2010000 0x0 0x10000>;
@@ -1016,11 +1024,12 @@
 			clock-names = "i2c";
 			clocks = <&clockgen QORIQ_CLK_PLATFORM_PLL
 					    QORIQ_CLK_PLL_DIV(4)>;
+			scl-gpios = <&gpio2 12 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
 		};
 
 		i2c2: i2c@2020000 {
 			status = "disabled";
-			compatible = "fsl,vf610-i2c";
+			compatible = "fsl,ls208xa-i2c", "fsl,vf610-i2c";
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <0x0 0x2020000 0x0 0x10000>;
@@ -1028,11 +1037,12 @@
 			clock-names = "i2c";
 			clocks = <&clockgen QORIQ_CLK_PLATFORM_PLL
 					    QORIQ_CLK_PLL_DIV(4)>;
+			scl-gpios = <&gpio3 0 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
 		};
 
 		i2c3: i2c@2030000 {
 			status = "disabled";
-			compatible = "fsl,vf610-i2c";
+			compatible = "fsl,ls208xa-i2c", "fsl,vf610-i2c";
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <0x0 0x2030000 0x0 0x10000>;
@@ -1040,6 +1050,7 @@
 			clock-names = "i2c";
 			clocks = <&clockgen QORIQ_CLK_PLATFORM_PLL
 					    QORIQ_CLK_PLL_DIV(4)>;
+			scl-gpios = <&gpio3 2 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
 		};
 
 		ifc: memory-controller@2240000 {
@@ -1074,7 +1085,7 @@
 		pcie1: pcie@3400000 {
 			compatible = "fsl,ls2080a-pcie", "fsl,ls2085a-pcie";
 			reg-names = "regs", "config";
-			interrupts = <0 108 0x4>; /* aer interrupt */
+			interrupts = <0 108 IRQ_TYPE_LEVEL_HIGH>;
 			interrupt-names = "aer";
 			#address-cells = <3>;
 			#size-cells = <2>;
@@ -1096,7 +1107,7 @@
 		pcie2: pcie@3500000 {
 			compatible = "fsl,ls2080a-pcie", "fsl,ls2085a-pcie";
 			reg-names = "regs", "config";
-			interrupts = <0 113 0x4>; /* aer interrupt */
+			interrupts = <0 113 IRQ_TYPE_LEVEL_HIGH>;
 			interrupt-names = "aer";
 			#address-cells = <3>;
 			#size-cells = <2>;
@@ -1118,7 +1129,7 @@
 		pcie3: pcie@3600000 {
 			compatible = "fsl,ls2080a-pcie", "fsl,ls2085a-pcie";
 			reg-names = "regs", "config";
-			interrupts = <0 118 0x4>; /* aer interrupt */
+			interrupts = <0 118 IRQ_TYPE_LEVEL_HIGH>;
 			interrupt-names = "aer";
 			#address-cells = <3>;
 			#size-cells = <2>;
@@ -1140,7 +1151,7 @@
 		pcie4: pcie@3700000 {
 			compatible = "fsl,ls2080a-pcie", "fsl,ls2085a-pcie";
 			reg-names = "regs", "config";
-			interrupts = <0 123 0x4>; /* aer interrupt */
+			interrupts = <0 123 IRQ_TYPE_LEVEL_HIGH>;
 			interrupt-names = "aer";
 			#address-cells = <3>;
 			#size-cells = <2>;

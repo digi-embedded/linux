@@ -55,10 +55,8 @@ static int trusted_caam_init(void)
 	int ret;
 
 	blobifier = caam_blob_gen_init();
-	if (IS_ERR(blobifier)) {
-		pr_err("Job Ring Device allocation for transform failed\n");
+	if (IS_ERR(blobifier))
 		return PTR_ERR(blobifier);
-	}
 
 	ret = register_key_type(&key_type_trusted);
 	if (ret)

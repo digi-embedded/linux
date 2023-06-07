@@ -3,7 +3,7 @@
  * Device Tree Include file for Freescale Layerscape-1043A family SoC.
  *
  * Copyright 2014-2015 Freescale Semiconductor, Inc.
- * Copyright 2018-2019 NXP
+ * Copyright 2018-2021 NXP
  *
  * Mingkai Hu <Mingkai.hu@freescale.com>
  */
@@ -211,7 +211,7 @@
 };
 
 &fpga {
-	mdio-mux-emi1 {
+	mdio-mux-emi1@54 {
 		compatible = "mdio-mux-mmioreg", "mdio-mux";
 		mdio-parent-bus = <&mdio0>;
 		#address-cells = <1>;
@@ -231,7 +231,7 @@
 		};
 
 		/* On-board RGMII2 PHY */
-		ls1043mdio1: mdio@1 {
+		ls1043mdio1: mdio@20 {
 			reg = <0x20>;
 			#address-cells = <1>;
 			#size-cells = <0>;
@@ -242,7 +242,7 @@
 		};
 
 		/* Slot 1 */
-		ls1043mdio_s1: mdio@2 {
+		ls1043mdio_s1: mdio@40 {
 			reg = <0x40>;
 			#address-cells = <1>;
 			#size-cells = <0>;
@@ -270,7 +270,7 @@
 		};
 
 		/* Slot 2 */
-		ls1043mdio_s2: mdio@3 {
+		ls1043mdio_s2: mdio@60 {
 			reg = <0x60>;
 			#address-cells = <1>;
 			#size-cells = <0>;
@@ -298,7 +298,7 @@
 		};
 
 		/* Slot 3 */
-		ls1043mdio_s3: mdio@4 {
+		ls1043mdio_s3: mdio@80 {
 			reg = <0x80>;
 			#address-cells = <1>;
 			#size-cells = <0>;
@@ -310,7 +310,7 @@
 		};
 
 		/* Slot 4 */
-		ls1043mdio_s4: mdio@5 {
+		ls1043mdio_s4: mdio@a0 {
 			reg = <0xa0>;
 			#address-cells = <1>;
 			#size-cells = <0>;

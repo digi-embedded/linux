@@ -477,6 +477,9 @@ static const struct snd_kcontrol_new max98088_snd_controls[] = {
                        max98088_mic2pre_get, max98088_mic2pre_set,
                        max98088_micboost_tlv),
 
+        SOC_SINGLE("Noise Gate Threshold", M98088_REG_40_MICAGC_THRESH,
+               4, 15, 0),
+
        SOC_SINGLE("INA Volume", M98088_REG_37_LVL_INA, 0, 7, 1),
        SOC_SINGLE("INB Volume", M98088_REG_38_LVL_INB, 0, 7, 1),
 
@@ -1121,8 +1124,8 @@ static int max98088_dai_set_sysclk(struct snd_soc_dai *dai,
 
        /* Setup clocks for slave mode, and using the PLL
         * PSCLK = 0x01 (when master clk is 10MHz to 20MHz)
-        *         0x02 (when master clk is 20MHz to 40MHz)..
-	*         0x04 (when master clk is 40MHz to 60MHz)..
+        *         0x02 (when master clk is 20MHz to 40MHz)
+        *         0x04 (when master clk is 40MHz to 60MHz)
         */
        if ((freq >= 10000000) && (freq < 20000000)) {
                snd_soc_component_write(component, M98088_REG_10_SYS_CLK, 0x10);
@@ -1130,9 +1133,9 @@ static int max98088_dai_set_sysclk(struct snd_soc_dai *dai,
        } else if ((freq >= 20000000) && (freq < 40000000)) {
                snd_soc_component_write(component, M98088_REG_10_SYS_CLK, 0x20);
                max98088->mclk_prescaler = 2;
-	} else if ((freq >= 40000000) && (freq < 60000000)) {
-		snd_soc_component_write(component, M98088_REG_10_SYS_CLK, 0x30);
-		max98088->mclk_prescaler = 4;
+       } else if ((freq >= 40000000) && (freq < 60000000)) {
+               snd_soc_component_write(component, M98088_REG_10_SYS_CLK, 0x30);
+               max98088->mclk_prescaler = 4;
        } else {
                dev_err(component->dev, "Invalid master clock frequency\n");
                return -EINVAL;
@@ -1145,8 +1148,8 @@ static int max98088_dai_set_sysclk(struct snd_soc_dai *dai,
                        M98088_SHDNRUN, M98088_SHDNRUN);
        }
 
-	dev_dbg(dai->dev, "Clock source is %d, freq=%uHz, prescaler:%u\n",
-		clk_id, freq, max98088->mclk_prescaler);
+       dev_dbg(dai->dev, "Clock source is %d, freq=%uHz, prescaler:%u\n",
+               clk_id, freq, max98088->mclk_prescaler);
 
        max98088->sysclk = freq;
        return 0;
@@ -1166,20 +1169,18 @@ static int max98088_dai1_set_fmt(struct snd_soc_dai *codec_dai,
        if (fmt != cdata->fmt) {
                cdata->fmt = fmt;
 
-               switch (fmt & SND_SOC_DAIFMT_MASTER_MASK) {
-               case SND_SOC_DAIFMT_CBS_CFS:
-                       /* Slave mode PLL */
+               switch (fmt & SND_SOC_DAIFMT_CLOCK_PROVIDER_MASK) {
+               case SND_SOC_DAIFMT_CBC_CFC:
+                       /* Consumer mode PLL */
                        snd_soc_component_write(component, M98088_REG_12_DAI1_CLKCFG_HI,
                                0x80);
                        snd_soc_component_write(component, M98088_REG_13_DAI1_CLKCFG_LO,
                                0x00);
                        break;
-               case SND_SOC_DAIFMT_CBM_CFM:
-                       /* Set to master mode */
+               case SND_SOC_DAIFMT_CBP_CFP:
+                       /* Set to provider mode */
                        reg14val |= M98088_DAI_MAS;
                        break;
-               case SND_SOC_DAIFMT_CBS_CFM:
-               case SND_SOC_DAIFMT_CBM_CFS:
                default:
                        dev_err(component->dev, "Clock mode unsupported");
                        return -EINVAL;
@@ -1237,20 +1238,18 @@ static int max98088_dai2_set_fmt(struct snd_soc_dai *codec_dai,
        if (fmt != cdata->fmt) {
                cdata->fmt = fmt;
 
-               switch (fmt & SND_SOC_DAIFMT_MASTER_MASK) {
-               case SND_SOC_DAIFMT_CBS_CFS:
-                       /* Slave mode PLL */
+               switch (fmt & SND_SOC_DAIFMT_CLOCK_PROVIDER_MASK) {
+               case SND_SOC_DAIFMT_CBC_CFC:
+                       /* Consumer mode PLL */
                        snd_soc_component_write(component, M98088_REG_1A_DAI2_CLKCFG_HI,
                                0x80);
                        snd_soc_component_write(component, M98088_REG_1B_DAI2_CLKCFG_LO,
                                0x00);
                        break;
-               case SND_SOC_DAIFMT_CBM_CFM:
-                       /* Set to master mode */
+               case SND_SOC_DAIFMT_CBP_CFP:
+                       /* Set to provider mode */
                        reg1Cval |= M98088_DAI_MAS;
                        break;
-               case SND_SOC_DAIFMT_CBS_CFM:
-               case SND_SOC_DAIFMT_CBM_CFS:
                default:
                        dev_err(component->dev, "Clock mode unsupported");
                        return -EINVAL;
@@ -1748,7 +1747,6 @@ static const struct snd_soc_component_driver soc_component_dev_max98088 = {
 	.idle_bias_on		= 1,
 	.use_pmdown_time	= 1,
 	.endianness		= 1,
-	.non_legacy_dai_naming	= 1,
 };
 
 #ifdef CONFIG_PM
@@ -1814,16 +1812,23 @@ static SIMPLE_DEV_PM_OPS(max98088_pm_ops, max98088_i2c_suspend,
 			 max98088_i2c_resume);
 #endif
 
-static int max98088_i2c_probe(struct i2c_client *i2c,
-			      const struct i2c_device_id *id)
-{
-       struct max98088_priv *max98088;
-       int ret;
+static const struct i2c_device_id max98088_i2c_id[] = {
+       { "max98088", MAX98088 },
+       { "max98089", MAX98089 },
+       { }
+};
+MODULE_DEVICE_TABLE(i2c, max98088_i2c_id);
 
-       max98088 = devm_kzalloc(&i2c->dev, sizeof(struct max98088_priv),
-			       GFP_KERNEL);
-       if (max98088 == NULL)
-               return -ENOMEM;
+static int max98088_i2c_probe(struct i2c_client *i2c)
+{
+	struct max98088_priv *max98088;
+	const struct i2c_device_id *id;
+	int ret;
+
+	max98088 = devm_kzalloc(&i2c->dev, sizeof(struct max98088_priv),
+				GFP_KERNEL);
+	if (max98088 == NULL)
+		return -ENOMEM;
 
 	max98088->vcc = devm_regulator_get_optional(&i2c->dev, "vcc");
 	if (IS_ERR(max98088->vcc)) {
@@ -1861,36 +1866,29 @@ static int max98088_i2c_probe(struct i2c_client *i2c,
 		}
 	}
 
-       max98088->regmap = devm_regmap_init_i2c(i2c, &max98088_regmap);
-       if (IS_ERR(max98088->regmap))
-	       return PTR_ERR(max98088->regmap);
+	max98088->regmap = devm_regmap_init_i2c(i2c, &max98088_regmap);
+	if (IS_ERR(max98088->regmap))
+		return PTR_ERR(max98088->regmap);
 
 	max98088->mclk = devm_clk_get(&i2c->dev, "mclk");
 	if (IS_ERR(max98088->mclk))
 		if (PTR_ERR(max98088->mclk) == -EPROBE_DEFER)
 			return PTR_ERR(max98088->mclk);
 
-       max98088->devtype = id->driver_data;
+	id = i2c_match_id(max98088_i2c_id, i2c);
+	max98088->devtype = id->driver_data;
 
-       i2c_set_clientdata(i2c, max98088);
-       max98088->pdata = i2c->dev.platform_data;
+	i2c_set_clientdata(i2c, max98088);
+	max98088->pdata = i2c->dev.platform_data;
 
-       ret = devm_snd_soc_register_component(&i2c->dev,
-                       &soc_component_dev_max98088, &max98088_dai[0], 2);
-       return ret;
+	return devm_snd_soc_register_component(&i2c->dev, &soc_component_dev_max98088,
+					      &max98088_dai[0], 2);
 
 free_mem:
 	kfree(max98088);
 
-       return ret;
+	return ret;
 }
-
-static const struct i2c_device_id max98088_i2c_id[] = {
-       { "max98088", MAX98088 },
-       { "max98089", MAX98089 },
-       { }
-};
-MODULE_DEVICE_TABLE(i2c, max98088_i2c_id);
 
 #if defined(CONFIG_OF)
 static const struct of_device_id max98088_of_match[] = {
@@ -1909,7 +1907,7 @@ static struct i2c_driver max98088_i2c_driver = {
 #endif
 		.of_match_table = of_match_ptr(max98088_of_match),
 	},
-	.probe  = max98088_i2c_probe,
+	.probe_new = max98088_i2c_probe,
 	.id_table = max98088_i2c_id,
 };
 

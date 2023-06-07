@@ -934,10 +934,10 @@ cpuhp_instance_err:
 	cpuhp_remove_multi_state(pmu->cpuhp_state);
 cpuhp_state_err:
 	if (pmu->devtype_data->type & DDR_PERF_TYPE)
-		ida_simple_remove(&ddr_ida, pmu->id);
+		ida_free(&ddr_ida, pmu->id);
 	else {
 		ddr_perf_clks_disable(pmu);
-		ida_simple_remove(&db_ida, pmu->id);
+		ida_free(&db_ida, pmu->id);
 	}
 
 	dev_warn(&pdev->dev, "i.MX8 DDR Perf PMU failed (%d), disabled\n", ret);
@@ -954,10 +954,10 @@ static int ddr_perf_remove(struct platform_device *pdev)
 	perf_pmu_unregister(&pmu->pmu);
 
 	if (pmu->devtype_data->type & DDR_PERF_TYPE)
-		ida_simple_remove(&ddr_ida, pmu->id);
+		ida_free(&ddr_ida, pmu->id);
 	else {
 		ddr_perf_clks_disable(pmu);
-		ida_simple_remove(&db_ida, pmu->id);
+		ida_free(&db_ida, pmu->id);
 	}
 
 	return 0;

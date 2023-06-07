@@ -181,9 +181,6 @@ static int pcie_init_service_irqs(struct pci_dev *dev, int *irqs, int mask)
 	int ret, i;
 	int irq = -1;
 
-	for (i = 0; i < PCIE_PORT_DEVICE_MAXSERVICES; i++)
-		irqs[i] = -1;
-
 	/* Check if some platforms owns independent irq pins for AER/PME etc.
 	 * Some platforms may own independent AER/PME interrupts and set
 	 * them in the device tree file.
@@ -197,6 +194,9 @@ static int pcie_init_service_irqs(struct pci_dev *dev, int *irqs, int mask)
 				irqs[i] = irq;
 		return 0;
 	}
+
+	for (i = 0; i < PCIE_PORT_DEVICE_MAXSERVICES; i++)
+		irqs[i] = -1;
 
 	/*
 	 * If we support PME but can't use MSI/MSI-X for it, we have to
@@ -251,15 +251,8 @@ static int get_port_device_capability(struct pci_dev *dev)
 
 #ifdef CONFIG_PCIEAER
 	if (dev->aer_cap && pci_aer_available() &&
-	    (pcie_ports_native || host->native_aer)) {
+	    (pcie_ports_native || host->native_aer))
 		services |= PCIE_PORT_SERVICE_AER;
-
-		/*
-		 * Disable AER on this port in case it's been enabled by the
-		 * BIOS (the AER service driver will enable it when necessary).
-		 */
-		pci_disable_pcie_error_reporting(dev);
-	}
 #endif
 
 	/* Root Ports and Root Complex Event Collectors may generate PMEs */

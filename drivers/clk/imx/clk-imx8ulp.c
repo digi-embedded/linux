@@ -4,13 +4,9 @@
  */
 
 #include <dt-bindings/clock/imx8ulp-clock.h>
-#include <linux/clk.h>
 #include <linux/err.h>
-#include <linux/init.h>
 #include <linux/io.h>
 #include <linux/module.h>
-#include <linux/of.h>
-#include <linux/of_address.h>
 #include <linux/of_device.h>
 #include <linux/platform_device.h>
 #include <linux/reset-controller.h>
@@ -57,6 +53,7 @@ struct pcc_reset_dev {
 	void __iomem *base;
 	struct reset_controller_dev rcdev;
 	const u32 *resets;
+	/* Set to imx_ccm_lock to protect register access shared with clock control */
 	spinlock_t *lock;
 };
 
@@ -85,7 +82,7 @@ static const u32 pcc5_resets[] = {
 static int imx8ulp_pcc_assert(struct reset_controller_dev *rcdev, unsigned long id)
 {
 	struct pcc_reset_dev *pcc_reset = to_pcc_reset_dev(rcdev);
-	u8 offset = pcc_reset->resets[id];
+	u32 offset = pcc_reset->resets[id];
 	unsigned long flags;
 	u32 val;
 
@@ -103,7 +100,7 @@ static int imx8ulp_pcc_assert(struct reset_controller_dev *rcdev, unsigned long 
 static int imx8ulp_pcc_deassert(struct reset_controller_dev *rcdev, unsigned long id)
 {
 	struct pcc_reset_dev *pcc_reset = to_pcc_reset_dev(rcdev);
-	u8 offset = pcc_reset->resets[id];
+	u32 offset = pcc_reset->resets[id];
 	unsigned long flags;
 	u32 val;
 
@@ -147,7 +144,6 @@ static int imx8ulp_pcc_reset_init(struct platform_device *pdev, void __iomem *ba
 
 static int imx8ulp_clk_cgc1_init(struct platform_device *pdev)
 {
-	struct device_node *np = pdev->dev.of_node;
 	struct device *dev = &pdev->dev;
 	struct clk_hw_onecell_data *clk_data;
 	struct clk_hw **clks;
@@ -163,14 +159,10 @@ static int imx8ulp_clk_cgc1_init(struct platform_device *pdev)
 
 	clks[IMX8ULP_CLK_DUMMY] = imx_clk_hw_fixed("dummy", 0);
 
-	clks[IMX8ULP_CLK_FROSC] = imx_obtain_fixed_clk_hw(np, "frosc");
-	clks[IMX8ULP_CLK_LPOSC] = imx_obtain_fixed_clk_hw(np, "lposc");
-	clks[IMX8ULP_CLK_ROSC] = imx_obtain_fixed_clk_hw(np, "rosc");
-	clks[IMX8ULP_CLK_SOSC] = imx_obtain_fixed_clk_hw(np, "sosc");
-
 	/* CGC1 */
-	base = of_iomap(np, 0);
-	WARN_ON(!base);
+	base = devm_platform_ioremap_resource(pdev, 0);
+	if (WARN_ON(IS_ERR(base)))
+		return PTR_ERR(base);
 
 	clks[IMX8ULP_CLK_SPLL2_PRE_SEL]	= imx_clk_hw_mux_flags("spll2_pre_sel", base + 0x510, 0, 1, pll_pre_sels, ARRAY_SIZE(pll_pre_sels), CLK_SET_PARENT_GATE);
 	clks[IMX8ULP_CLK_SPLL3_PRE_SEL]	= imx_clk_hw_mux_flags("spll3_pre_sel", base + 0x610, 0, 1, pll_pre_sels, ARRAY_SIZE(pll_pre_sels), CLK_SET_PARENT_GATE);
@@ -236,7 +228,6 @@ static int imx8ulp_clk_cgc1_init(struct platform_device *pdev)
 
 static int imx8ulp_clk_cgc2_init(struct platform_device *pdev)
 {
-	struct device_node *np = pdev->dev.of_node;
 	struct device *dev = &pdev->dev;
 	struct clk_hw_onecell_data *clk_data;
 	struct clk_hw **clks;
@@ -251,8 +242,9 @@ static int imx8ulp_clk_cgc2_init(struct platform_device *pdev)
 	clks = clk_data->hws;
 
 	/* CGC2 */
-	base = of_iomap(np, 0);
-	WARN_ON(!base);
+	base = devm_platform_ioremap_resource(pdev, 0);
+	if (WARN_ON(IS_ERR(base)))
+		return PTR_ERR(base);
 
 	clks[IMX8ULP_CLK_PLL4_PRE_SEL] = imx_clk_hw_mux_flags("pll4_pre_sel", base + 0x610, 0, 1, pll_pre_sels, ARRAY_SIZE(pll_pre_sels), CLK_SET_PARENT_GATE);
 
@@ -318,7 +310,6 @@ static int imx8ulp_clk_cgc2_init(struct platform_device *pdev)
 
 static int imx8ulp_clk_pcc3_init(struct platform_device *pdev)
 {
-	struct device_node *np = pdev->dev.of_node;
 	struct device *dev = &pdev->dev;
 	struct clk_hw_onecell_data *clk_data;
 	struct clk_hw **clks;
@@ -334,8 +325,9 @@ static int imx8ulp_clk_pcc3_init(struct platform_device *pdev)
 	clks = clk_data->hws;
 
 	/* PCC3 */
-	base = of_iomap(np, 0);
-	WARN_ON(!base);
+	base = devm_platform_ioremap_resource(pdev, 0);
+	if (WARN_ON(IS_ERR(base)))
+		return PTR_ERR(base);
 
 	clks[IMX8ULP_CLK_WDOG3] = imx8ulp_clk_hw_composite("wdog3", pcc3_periph_bus_sels, ARRAY_SIZE(pcc3_periph_bus_sels), true, true, true, base + 0xa8, 1);
 	clks[IMX8ULP_CLK_WDOG4] = imx8ulp_clk_hw_composite("wdog4", pcc3_periph_bus_sels, ARRAY_SIZE(pcc3_periph_bus_sels), true, true, true, base + 0xac, 1);
@@ -401,7 +393,6 @@ static int imx8ulp_clk_pcc3_init(struct platform_device *pdev)
 
 static int imx8ulp_clk_pcc4_init(struct platform_device *pdev)
 {
-	struct device_node *np = pdev->dev.of_node;
 	struct device *dev = &pdev->dev;
 	struct clk_hw_onecell_data *clk_data;
 	struct clk_hw **clks;
@@ -417,8 +408,9 @@ static int imx8ulp_clk_pcc4_init(struct platform_device *pdev)
 	clks = clk_data->hws;
 
 	/* PCC4 */
-	base = of_iomap(np, 0);
-	WARN_ON(!base);
+	base = devm_platform_ioremap_resource(pdev, 0);
+	if (WARN_ON(IS_ERR(base)))
+		return PTR_ERR(base);
 
 	clks[IMX8ULP_CLK_FLEXSPI2] = imx8ulp_clk_hw_composite("flexspi2", pcc4_periph_plat_sels, ARRAY_SIZE(pcc4_periph_plat_sels), true, true, true, base + 0x4, 1);
 	clks[IMX8ULP_CLK_TPM6] = imx8ulp_clk_hw_composite("tpm6", pcc4_periph_bus_sels, ARRAY_SIZE(pcc4_periph_bus_sels), true, true, true, base + 0x8, 1);
@@ -456,7 +448,6 @@ static int imx8ulp_clk_pcc4_init(struct platform_device *pdev)
 
 static int imx8ulp_clk_pcc5_init(struct platform_device *pdev)
 {
-	struct device_node *np = pdev->dev.of_node;
 	struct device *dev = &pdev->dev;
 	struct clk_hw_onecell_data *clk_data;
 	struct clk_hw **clks;
@@ -472,8 +463,9 @@ static int imx8ulp_clk_pcc5_init(struct platform_device *pdev)
 	clks = clk_data->hws;
 
 	/* PCC5 */
-	base = of_iomap(np, 0);
-	WARN_ON(!base);
+	base = devm_platform_ioremap_resource(pdev, 0);
+	if (WARN_ON(IS_ERR(base)))
+		return PTR_ERR(base);
 
 	clks[IMX8ULP_CLK_DMA2_MP] = imx_clk_hw_gate("pcc_dma2_mp", "lpav_axi_div", base + 0x0, 30);
 	clks[IMX8ULP_CLK_DMA2_CH0] = imx_clk_hw_gate("pcc_dma2_ch0", "lpav_axi_div", base + 0x4, 30);
@@ -567,6 +559,7 @@ static struct platform_driver imx8ulp_clk_driver = {
 	.probe	= imx8ulp_clk_probe,
 	.driver = {
 		.name		= KBUILD_MODNAME,
+		.suppress_bind_attrs = true,
 		.of_match_table	= imx8ulp_clk_dt_ids,
 	},
 };

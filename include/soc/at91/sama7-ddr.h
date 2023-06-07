@@ -13,11 +13,11 @@
 
 /* DDR3PHY */
 #define DDR3PHY_PIR				(0x04)		/* DDR3PHY PHY Initialization Register	*/
-#define	DDR3PHY_PIR_DLLBYP		(1 << 17)	/* DLL Bypass */
+#define	DDR3PHY_PIR_DLLBYP			(1 << 17)	/* DLL Bypass */
 #define		DDR3PHY_PIR_ITMSRST		(1 << 4)	/* Interface Timing Module Soft Reset */
-#define	DDR3PHY_PIR_DLLLOCK		(1 << 2)	/* DLL Lock */
+#define	DDR3PHY_PIR_DLLLOCK			(1 << 2)	/* DLL Lock */
 #define		DDR3PHY_PIR_DLLSRST		(1 << 1)	/* DLL Soft Rest */
-#define	DDR3PHY_PIR_INIT		(1 << 0)	/* Initialization Trigger */
+#define	DDR3PHY_PIR_INIT			(1 << 0)	/* Initialization Trigger */
 
 #define DDR3PHY_PGCR				(0x08)		/* DDR3PHY PHY General Configuration Register */
 #define		DDR3PHY_PGCR_CKDV1		(1 << 13)	/* CK# Disable Value */
@@ -26,7 +26,10 @@
 #define	DDR3PHY_PGSR				(0x0C)		/* DDR3PHY PHY General Status Register */
 #define		DDR3PHY_PGSR_IDONE		(1 << 0)	/* Initialization Done */
 
-#define DDR3PHY_ACIOCR				(0x24)		/*  DDR3PHY AC I/O Configuration Register */
+#define	DDR3PHY_ACDLLCR				(0x14)		/* DDR3PHY AC DLL Control Register */
+#define		DDR3PHY_ACDLLCR_DLLSRST		(1 << 30)	/* DLL Soft Reset */
+
+#define DDR3PHY_ACIOCR				(0x24)		/* DDR3PHY AC I/O Configuration Register */
 #define		DDR3PHY_ACIOCR_CSPDD_CS0	(1 << 18)	/* CS#[0] Power Down Driver */
 #define		DDR3PHY_ACIOCR_CKPDD_CK0	(1 << 8)	/* CK[0] Power Down Driver */
 #define		DDR3PHY_ACIORC_ACPDD		(1 << 3)	/* AC Power Down Driver */
@@ -61,7 +64,8 @@
 #define		UDDRC_STAT_OPMODE_MSK		(0x7 << 0)	/* Operating mode mask */
 
 #define UDDRC_PWRCTL				(0x30)		/* UDDRC Low Power Control Register */
-#define		UDDRC_PWRCTRL_SELFREF_SW	(1 << 5)	/* Software self-refresh */
+#define		UDDRC_PWRCTL_SELFREF_EN		(1 << 0)	/* Automatic self-refresh */
+#define		UDDRC_PWRCTL_SELFREF_SW		(1 << 5)	/* Software self-refresh */
 
 #define UDDRC_DFIMISC				(0x1B0)		/* UDDRC DFI Miscellaneous Control Register */
 #define		UDDRC_DFIMISC_DFI_INIT_COMPLETE_EN (1 << 0)	/* PHY initialization complete enable signal */
@@ -73,7 +77,7 @@
 #define		UDDRC_SWSTAT_SW_DONE_ACK	(1 << 0)	/* Register programming done */
 
 #define UDDRC_PSTAT				(0x3FC)		/* UDDRC Port Status Register */
-#define	UDDRC_PSTAT_ALL_PORTS		(0x1F001F)	/* Read + writes outstanding transactions on all ports */
+#define	UDDRC_PSTAT_ALL_PORTS			(0x1F001F)	/* Read + writes outstanding transactions on all ports */
 
 #define UDDRC_PCTRL_0				(0x490)		/* UDDRC Port 0 Control Register */
 #define UDDRC_PCTRL_1				(0x540)		/* UDDRC Port 1 Control Register */

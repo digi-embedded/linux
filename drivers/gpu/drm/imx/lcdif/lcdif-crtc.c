@@ -15,10 +15,12 @@
 #include <linux/component.h>
 #include <linux/device.h>
 #include <linux/interrupt.h>
+#include <linux/media-bus-format.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <drm/drm_atomic.h>
+#include <drm/drm_edid.h>
 #include <drm/drm_vblank.h>
 #include <drm/drm_atomic.h>
 #include <drm/drm_atomic_helper.h>

@@ -828,10 +828,7 @@ static bool enetc_clean_tx_ring(struct enetc_bdr *tx_ring, int napi_budget,
 		bool is_eof = tx_swbd->is_eof;
 
 		if (unlikely(tx_swbd->check_wb)) {
-			struct enetc_ndev_priv *priv = netdev_priv(ndev);
-			union enetc_tx_bd *txbd;
-
-			txbd = ENETC_TXBD(*tx_ring, i);
+			union enetc_tx_bd *txbd = ENETC_TXBD(*tx_ring, i);
 
 			if (txbd->flags & ENETC_TXBD_FLAGS_W &&
 			    tx_swbd->do_twostep_tstamp) {
@@ -857,8 +854,7 @@ static bool enetc_clean_tx_ring(struct enetc_bdr *tx_ring, int napi_budget,
 		if (xdp_frame) {
 			xdp_return_frame(xdp_frame);
 		} else if (skb) {
-			if (unlikely(tx_swbd->skb->cb[0] &
-				     ENETC_F_TX_ONESTEP_SYNC_TSTAMP)) {
+			if (unlikely(skb->cb[0] & ENETC_F_TX_ONESTEP_SYNC_TSTAMP)) {
 				/* Start work to release lock for next one-step
 				 * timestamping packet. And send one skb in
 				 * tx_skbs queue if has.
@@ -1127,7 +1123,9 @@ static void enetc_flip_rx_buff(struct enetc_bdr *rx_ring,
 
 		enetc_put_rx_buff(rx_ring, rx_swbd);
 	} else {
-		enetc_free_rx_swbd(rx_ring, rx_swbd);
+		dma_unmap_page(rx_ring->dev, rx_swbd->dma, PAGE_SIZE,
+			       rx_swbd->dir);
+		rx_swbd->page = NULL;
 	}
 }
 
@@ -1644,7 +1642,7 @@ static bool enetc_xsk_xdp_tx(struct enetc_bdr *tx_ring,
 {
 	struct enetc_tx_swbd tx_swbd = {
 		.dma = xsk_buff_xdp_get_dma(xsk_buff),
-		.len = xsk_buff->data_end - xsk_buff->data,
+		.len = xdp_get_buff_len(xsk_buff),
 		.is_xdp_tx = true,
 		.is_xsk = true,
 		.is_eof = true,
@@ -1723,7 +1721,7 @@ static int enetc_clean_rx_ring_xdp(struct enetc_bdr *rx_ring,
 
 		switch (xdp_act) {
 		default:
-			bpf_warn_invalid_xdp_action(xdp_act);
+			bpf_warn_invalid_xdp_action(rx_ring->ndev, prog, xdp_act);
 			fallthrough;
 		case XDP_ABORTED:
 			trace_xdp_exception(rx_ring->ndev, prog, xdp_act);
@@ -1829,7 +1827,7 @@ static void enetc_xsk_buff_to_skb(struct xdp_buff *xsk_buff,
 				  union enetc_rx_bd *rxbd,
 				  struct napi_struct *napi)
 {
-	size_t len = xsk_buff->data_end - xsk_buff->data;
+	size_t len = xdp_get_buff_len(xsk_buff);
 	struct sk_buff *skb;
 
 	skb = napi_alloc_skb(napi, len);
@@ -1904,7 +1902,7 @@ static int enetc_clean_rx_ring_xsk(struct enetc_bdr *rx_ring,
 		xdp_act = bpf_prog_run_xdp(prog, xsk_buff);
 		switch (xdp_act) {
 		default:
-			bpf_warn_invalid_xdp_action(xdp_act);
+			bpf_warn_invalid_xdp_action(ndev, prog, xdp_act);
 			fallthrough;
 		case XDP_ABORTED:
 			trace_xdp_exception(ndev, prog, xdp_act);
@@ -2077,20 +2075,17 @@ void enetc_get_si_caps(struct enetc_si *si)
 
 static int enetc_dma_alloc_bdr(struct enetc_bdr *r, size_t bd_size)
 {
-	size_t size = r->bd_count * bd_size;
-
-	r->bd_base = dma_alloc_coherent(r->dev, size, &r->bd_dma_base,
-					GFP_KERNEL);
+	r->bd_base = dma_alloc_coherent(r->dev, r->bd_count * bd_size,
+					&r->bd_dma_base, GFP_KERNEL);
 	if (!r->bd_base)
 		return -ENOMEM;
 
 	/* h/w requires 128B alignment */
 	if (!IS_ALIGNED(r->bd_dma_base, 128)) {
-		dma_free_coherent(r->dev, size, r->bd_base, r->bd_dma_base);
+		dma_free_coherent(r->dev, r->bd_count * bd_size, r->bd_base,
+				  r->bd_dma_base);
 		return -EINVAL;
 	}
-
-	memset(r->bd_base, 0, size);
 
 	return 0;
 }
@@ -2388,7 +2383,7 @@ static void enetc_setup_txbdr(struct enetc_hw *hw, struct enetc_bdr *tx_ring)
 	/* enable Tx ints by setting pkt thr to 1 */
 	enetc_txbdr_wr(hw, idx, ENETC_TBICR0, ENETC_TBICR0_ICEN | 0x1);
 
-	tbmr = ENETC_TBMR_EN;
+	tbmr = ENETC_TBMR_EN | ENETC_TBMR_SET_PRIO(tx_ring->prio);
 	if (tx_ring->ndev->features & NETIF_F_HW_VLAN_CTAG_TX)
 		tbmr |= ENETC_TBMR_VIH;
 
@@ -2454,13 +2449,14 @@ static void enetc_setup_rxbdr(struct enetc_hw *hw, struct enetc_bdr *rx_ring)
 
 static void enetc_setup_bdrs(struct enetc_ndev_priv *priv)
 {
+	struct enetc_hw *hw = &priv->si->hw;
 	int i;
 
 	for (i = 0; i < priv->num_tx_rings; i++)
-		enetc_setup_txbdr(&priv->si->hw, priv->tx_ring[i]);
+		enetc_setup_txbdr(hw, priv->tx_ring[i]);
 
 	for (i = 0; i < priv->num_rx_rings; i++)
-		enetc_setup_rxbdr(&priv->si->hw, priv->rx_ring[i]);
+		enetc_setup_rxbdr(hw, priv->rx_ring[i]);
 }
 
 static void enetc_clear_rxbdr(struct enetc_hw *hw, struct enetc_bdr *rx_ring)
@@ -2493,13 +2489,14 @@ static void enetc_clear_txbdr(struct enetc_hw *hw, struct enetc_bdr *tx_ring)
 
 static void enetc_clear_bdrs(struct enetc_ndev_priv *priv)
 {
+	struct enetc_hw *hw = &priv->si->hw;
 	int i;
 
 	for (i = 0; i < priv->num_tx_rings; i++)
-		enetc_clear_txbdr(&priv->si->hw, priv->tx_ring[i]);
+		enetc_clear_txbdr(hw, priv->tx_ring[i]);
 
 	for (i = 0; i < priv->num_rx_rings; i++)
-		enetc_clear_rxbdr(&priv->si->hw, priv->rx_ring[i]);
+		enetc_clear_rxbdr(hw, priv->rx_ring[i]);
 
 	udelay(1);
 }
@@ -2507,13 +2504,13 @@ static void enetc_clear_bdrs(struct enetc_ndev_priv *priv)
 static int enetc_setup_irqs(struct enetc_ndev_priv *priv)
 {
 	struct pci_dev *pdev = priv->si->pdev;
+	struct enetc_hw *hw = &priv->si->hw;
 	int i, j, err;
 
 	for (i = 0; i < priv->bdr_int_num; i++) {
 		int irq = pci_irq_vector(pdev, ENETC_BDR_INT_BASE_IDX + i);
 		struct enetc_int_vector *v = priv->int_vector[i];
 		int entry = ENETC_BDR_INT_BASE_IDX + i;
-		struct enetc_hw *hw = &priv->si->hw;
 
 		snprintf(v->name, sizeof(v->name), "%s-rxtx%d",
 			 priv->ndev->name, i);
@@ -2601,13 +2598,14 @@ static void enetc_setup_interrupts(struct enetc_ndev_priv *priv)
 
 static void enetc_clear_interrupts(struct enetc_ndev_priv *priv)
 {
+	struct enetc_hw *hw = &priv->si->hw;
 	int i;
 
 	for (i = 0; i < priv->num_tx_rings; i++)
-		enetc_txbdr_wr(&priv->si->hw, i, ENETC_TBIER, 0);
+		enetc_txbdr_wr(hw, i, ENETC_TBIER, 0);
 
 	for (i = 0; i < priv->num_rx_rings; i++)
-		enetc_rxbdr_wr(&priv->si->hw, i, ENETC_RBIER, 0);
+		enetc_rxbdr_wr(hw, i, ENETC_RBIER, 0);
 }
 
 static int enetc_phylink_connect(struct net_device *ndev)
@@ -2851,6 +2849,7 @@ int enetc_setup_tc_mqprio(struct net_device *ndev, void *type_data)
 {
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
 	struct tc_mqprio_qopt *mqprio = type_data;
+	struct enetc_hw *hw = &priv->si->hw;
 	struct enetc_bdr *tx_ring;
 	int num_stack_tx_queues;
 	u8 num_tc;
@@ -2867,7 +2866,8 @@ int enetc_setup_tc_mqprio(struct net_device *ndev, void *type_data)
 		/* Reset all ring priorities to 0 */
 		for (i = 0; i < priv->num_tx_rings; i++) {
 			tx_ring = priv->tx_ring[i];
-			enetc_set_bdr_prio(&priv->si->hw, tx_ring->index, 0);
+			tx_ring->prio = 0;
+			enetc_set_bdr_prio(hw, tx_ring->index, tx_ring->prio);
 		}
 
 		return 0;
@@ -2886,7 +2886,8 @@ int enetc_setup_tc_mqprio(struct net_device *ndev, void *type_data)
 	 */
 	for (i = 0; i < num_tc; i++) {
 		tx_ring = priv->tx_ring[i];
-		enetc_set_bdr_prio(&priv->si->hw, tx_ring->index, i);
+		tx_ring->prio = i;
+		enetc_set_bdr_prio(hw, tx_ring->index, tx_ring->prio);
 	}
 
 	/* Reset the number of netdev queues based on the TC count */
@@ -3122,19 +3123,21 @@ static int enetc_set_rss(struct net_device *ndev, int en)
 static void enetc_enable_rxvlan(struct net_device *ndev, bool en)
 {
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
+	struct enetc_hw *hw = &priv->si->hw;
 	int i;
 
 	for (i = 0; i < priv->num_rx_rings; i++)
-		enetc_bdr_enable_rxvlan(&priv->si->hw, i, en);
+		enetc_bdr_enable_rxvlan(hw, i, en);
 }
 
 static void enetc_enable_txvlan(struct net_device *ndev, bool en)
 {
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
+	struct enetc_hw *hw = &priv->si->hw;
 	int i;
 
 	for (i = 0; i < priv->num_tx_rings; i++)
-		enetc_bdr_enable_txvlan(&priv->si->hw, i, en);
+		enetc_bdr_enable_txvlan(hw, i, en);
 }
 
 void enetc_set_features(struct net_device *ndev, netdev_features_t features)
@@ -3283,8 +3286,7 @@ int enetc_alloc_msix(struct enetc_ndev_priv *priv)
 			v->rx_dim_en = true;
 		}
 		INIT_WORK(&v->rx_dim.work, enetc_rx_dim_work);
-		netif_napi_add(priv->ndev, &v->napi, enetc_poll,
-			       NAPI_POLL_WEIGHT);
+		netif_napi_add(priv->ndev, &v->napi, enetc_poll);
 		v->count_tx_rings = v_tx_rings;
 
 		for (j = 0; j < v_tx_rings; j++) {
@@ -3369,20 +3371,14 @@ int enetc_pci_probe(struct pci_dev *pdev, const char *name, int sizeof_priv)
 
 	pcie_flr(pdev);
 	err = pci_enable_device_mem(pdev);
-	if (err) {
-		dev_err(&pdev->dev, "device enable failed\n");
-		return err;
-	}
+	if (err)
+		return dev_err_probe(&pdev->dev, err, "device enable failed\n");
 
 	/* set up for high or low dma */
 	err = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64));
 	if (err) {
-		err = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32));
-		if (err) {
-			dev_err(&pdev->dev,
-				"DMA configuration failed: 0x%x\n", err);
-			goto err_dma;
-		}
+		dev_err(&pdev->dev, "DMA configuration failed: 0x%x\n", err);
+		goto err_dma;
 	}
 
 	err = pci_request_mem_regions(pdev, name);

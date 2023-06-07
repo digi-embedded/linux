@@ -4,6 +4,8 @@
  * Copyright (C) 2021 Pengutronix, Ahmad Fatoum <kernel@pengutronix.de>
  */
 
+#define pr_fmt(fmt) "caam blob_gen: " fmt
+
 #include <linux/device.h>
 #include <soc/fsl/caam-blob.h>
 
@@ -24,7 +26,7 @@
 	 CAAM_CMD_SZ + CAAM_PTR_SZ_MAX +				\
 	/* Command to include output key + pointer to the output key */	\
 	 CAAM_CMD_SZ + CAAM_PTR_SZ_MAX +				\
-	/* Command describing the Operation to perform */		\
+	/* Command describing the operation to perform */		\
 	 CAAM_CMD_SZ)
 
 struct caam_blob_priv {
@@ -147,11 +149,27 @@ EXPORT_SYMBOL(caam_process_blob);
 
 struct caam_blob_priv *caam_blob_gen_init(void)
 {
+	struct caam_drv_private *ctrlpriv;
 	struct device *jrdev;
 
+	/*
+	 * caam_blob_gen_init() may expectedly fail with -ENODEV, e.g. when
+	 * CAAM driver didn't probe or when SoC lacks BLOB support. An
+	 * error would be harsh in this case, so we stick to info level.
+	 */
+
 	jrdev = caam_jr_alloc();
-	if (IS_ERR(jrdev))
-		return ERR_CAST(jrdev);
+	if (IS_ERR(jrdev)) {
+		pr_info("job ring requested, but none currently available\n");
+		return ERR_PTR(-ENODEV);
+	}
+
+	ctrlpriv = dev_get_drvdata(jrdev->parent);
+	if (!ctrlpriv->blob_present) {
+		dev_info(jrdev, "no hardware blob generation support\n");
+		caam_jr_free(jrdev);
+		return ERR_PTR(-ENODEV);
+	}
 
 	return container_of(jrdev, struct caam_blob_priv, jrdev);
 }

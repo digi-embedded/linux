@@ -30,8 +30,8 @@ struct resources {
  * @page_size:                The size, in bytes, of a physical page, including
  *                            both data and OOB.
  * @metadata_size:            The size, in bytes, of the metadata.
- * @ecc_chunk0_size:          The size, in bytes, of a first ECC chunk.
- * @ecc_chunkn_size:          The size, in bytes, of a single ECC chunk after
+ * @ecc0_chunk_size:          The size, in bytes, of a first ECC chunk.
+ * @eccn_chunk_size:          The size, in bytes, of a single ECC chunk after
  *                            the first chunk in the page.
  * @ecc_chunk_count:          The number of ECC chunks in the page,
  * @payload_size:             The size, in bytes, of the payload buffer.
@@ -50,8 +50,8 @@ struct bch_geometry {
 	unsigned int  ecc_strength;
 	unsigned int  page_size;
 	unsigned int  metadata_size;
-	unsigned int  ecc_chunk0_size;
-	unsigned int  ecc_chunkn_size;
+	unsigned int  ecc0_chunk_size;
+	unsigned int  eccn_chunk_size;
 	unsigned int  ecc_chunk_count;
 	unsigned int  payload_size;
 	unsigned int  auxiliary_size;

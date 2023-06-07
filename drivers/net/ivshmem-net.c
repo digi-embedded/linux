@@ -558,7 +558,9 @@ static void ivshm_net_run(struct net_device *ndev)
 
 	netif_start_queue(ndev);
 	napi_enable(&in->napi);
+	local_bh_disable();
 	napi_schedule(&in->napi);
+	local_bh_enable();
 	ivshm_net_set_state(in, IVSHM_NET_STATE_RUN);
 }
 
@@ -853,6 +855,7 @@ static int ivshm_net_probe(struct pci_dev *pdev,
 	int vendor_cap;
 	u32 id, dword;
 	int ret;
+	char dev_addr[6];
 
 	ret = pcim_enable_device(pdev);
 	if (ret) {
@@ -976,7 +979,8 @@ static int ivshm_net_probe(struct pci_dev *pdev,
 
 	INIT_WORK(&in->state_work, ivshm_net_state_change);
 
-	eth_random_addr(ndev->dev_addr);
+	eth_random_addr(dev_addr);
+	dev_addr_set(ndev, dev_addr);
 	ndev->netdev_ops = &ivshm_net_ops;
 	ndev->ethtool_ops = &ivshm_net_ethtool_ops;
 	ndev->mtu = min_t(u32, IVSHM_NET_MTU_DEF, in->qsize / 16);
@@ -986,7 +990,7 @@ static int ivshm_net_probe(struct pci_dev *pdev,
 	ndev->features = ndev->hw_features;
 
 	netif_carrier_off(ndev);
-	netif_napi_add(ndev, &in->napi, ivshm_net_poll, NAPI_POLL_WEIGHT);
+	netif_napi_add(ndev, &in->napi, ivshm_net_poll);
 
 	ret = register_netdev(ndev);
 	if (ret)

@@ -14,6 +14,7 @@
 #include <linux/firmware/imx/sci.h>
 #include <linux/math64.h>
 #include <linux/mfd/syscon.h>
+#include <linux/media-bus-format.h>
 #include <linux/module.h>
 #include <linux/mux/consumer.h>
 #include <linux/of.h>
@@ -29,7 +30,6 @@
 #include <drm/drm_bridge.h>
 #include <drm/drm_mipi_dsi.h>
 #include <drm/drm_of.h>
-#include <drm/drm_panel.h>
 #include <drm/drm_print.h>
 
 #include <dt-bindings/firmware/imx/rsrc.h>
@@ -459,17 +459,13 @@ static int nwl_dsi_config_dpi(struct nwl_dsi *dsi)
 
 static int nwl_dsi_init_interrupts(struct nwl_dsi *dsi)
 {
-	u32 irq_enable;
-
-	nwl_dsi_write(dsi, NWL_DSI_IRQ_MASK, 0xffffffff);
-	nwl_dsi_write(dsi, NWL_DSI_IRQ_MASK2, 0x7);
-
-	irq_enable = ~(u32)(NWL_DSI_TX_PKT_DONE_MASK |
-			    NWL_DSI_RX_PKT_HDR_RCVD_MASK |
-			    NWL_DSI_TX_FIFO_OVFLW_MASK |
-			    dsi->pdata->bit_hs_tx_timeout);
+	u32 irq_enable = ~(u32)(NWL_DSI_TX_PKT_DONE_MASK |
+				NWL_DSI_RX_PKT_HDR_RCVD_MASK |
+				NWL_DSI_TX_FIFO_OVFLW_MASK |
+				dsi->pdata->bit_hs_tx_timeout);
 
 	nwl_dsi_write(dsi, NWL_DSI_IRQ_MASK, irq_enable);
+	nwl_dsi_write(dsi, NWL_DSI_IRQ_MASK2, 0x7);
 
 	return nwl_dsi_clear_error(dsi);
 }
@@ -808,6 +804,12 @@ static int nwl_dsi_enable(struct nwl_dsi *dsi)
 	if (ret < 0) {
 		DRM_DEV_ERROR(dev, "Failed to init DSI phy: %d\n", ret);
 		return ret;
+	}
+
+	ret = phy_set_mode(dsi->phy, PHY_MODE_MIPI_DPHY);
+	if (ret < 0) {
+		DRM_DEV_ERROR(dev, "Failed to set DSI phy mode: %d\n", ret);
+		goto uninit_phy;
 	}
 
 	ret = phy_configure(dsi->phy, phy_cfg);
@@ -1374,26 +1376,13 @@ static int nwl_dsi_bridge_attach(struct drm_bridge *bridge,
 				 enum drm_bridge_attach_flags flags)
 {
 	struct nwl_dsi *dsi = bridge_to_dsi(bridge);
-	struct drm_bridge *panel_bridge;
-	struct drm_panel *panel;
 	struct clk *phy_parent;
 	int ret;
 
-	ret = drm_of_find_panel_or_bridge(dsi->dev->of_node, 1, 0, &panel,
-					  &panel_bridge);
-	if (ret)
-		return ret;
-
-	if (panel) {
-		panel_bridge = drm_panel_bridge_add_typed(panel,
-						DRM_MODE_CONNECTOR_DSI);
-		if (IS_ERR(panel_bridge))
-			return PTR_ERR(panel_bridge);
-	}
-	dsi->panel_bridge = panel_bridge;
-
-	if (!dsi->panel_bridge)
-		return -EPROBE_DEFER;
+	dsi->panel_bridge = devm_drm_of_get_bridge(dsi->dev, dsi->dev->of_node,
+						   1, 0);
+	if (IS_ERR(dsi->panel_bridge))
+		return PTR_ERR(dsi->panel_bridge);
 
 	phy_parent = devm_clk_get(dsi->dev, "phy_parent");
 	if (!IS_ERR_OR_NULL(phy_parent)) {
@@ -1418,12 +1407,6 @@ static int nwl_dsi_bridge_attach(struct drm_bridge *bridge,
 
 	return drm_bridge_attach(bridge->encoder, dsi->panel_bridge, bridge,
 				 flags);
-}
-
-static void nwl_dsi_bridge_detach(struct drm_bridge *bridge)
-{	struct nwl_dsi *dsi = bridge_to_dsi(bridge);
-
-	drm_of_panel_bridge_remove(dsi->dev->of_node, 1, 0);
 }
 
 static u32 *nwl_bridge_atomic_get_input_bus_fmts(struct drm_bridge *bridge,
@@ -1472,7 +1455,6 @@ static const struct drm_bridge_funcs nwl_dsi_bridge_funcs = {
 	.mode_set		= nwl_dsi_bridge_mode_set,
 	.mode_valid		= nwl_dsi_bridge_mode_valid,
 	.attach			= nwl_dsi_bridge_attach,
-	.detach			= nwl_dsi_bridge_detach,
 };
 
 static void nwl_dsi_encoder_destroy(struct drm_encoder *encoder)
@@ -1961,7 +1943,7 @@ MODULE_DEVICE_TABLE(of, nwl_dsi_dt_ids);
 static const struct soc_device_attribute nwl_dsi_quirks_match[] = {
 	{ .soc_id = "i.MX8MQ", .revision = "2.0",
 	  .data = (void *)E11418_HS_MODE_QUIRK },
-	{ /* sentinel. */ },
+	{ /* sentinel. */ }
 };
 
 static int nwl_dsi_encoder_atomic_check(struct drm_encoder *encoder,

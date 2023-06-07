@@ -34,7 +34,7 @@ static const struct snd_dmaengine_pcm_config imx_dmaengine_pcm_config = {
 	.compat_filter_fn = filter,
 };
 
-int imx_pcm_dma_init(struct platform_device *pdev, size_t size)
+int imx_pcm_dma_init(struct platform_device *pdev)
 {
 	struct snd_dmaengine_pcm_config *config;
 
@@ -43,9 +43,6 @@ int imx_pcm_dma_init(struct platform_device *pdev, size_t size)
 	if (!config)
 		return -ENOMEM;
 	*config = imx_dmaengine_pcm_config;
-
-	if (size)
-		config->prealloc_buffer_size = size;
 
 	return devm_snd_dmaengine_pcm_register(&pdev->dev,
 		config,

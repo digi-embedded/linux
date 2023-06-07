@@ -64,7 +64,7 @@
 };
 
 / {
-	soc {
+	soc: soc {
 		busfreq {
 			compatible = "fsl,imx_busfreq";
 			clocks = <&clks IMX6UL_CLK_PLL2_PFD2>, <&clks IMX6UL_CLK_PLL2_198M>,

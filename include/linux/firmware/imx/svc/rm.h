@@ -59,10 +59,10 @@ enum imx_sc_rm_func {
 
 #if IS_ENABLED(CONFIG_IMX_SCU)
 bool imx_sc_rm_is_resource_owned(struct imx_sc_ipc *ipc, u16 resource);
+int imx_sc_rm_get_resource_owner(struct imx_sc_ipc *ipc, u16 resource, u8 *pt);
 int imx_sc_rm_get_partition(struct imx_sc_ipc *ipc, u8 *pt);
 int imx_sc_rm_find_memreg(struct imx_sc_ipc *ipc, u8 *mr, u64 addr_start,
 			  u64 addr_end);
-int imx_sc_rm_get_resource_owner(struct imx_sc_ipc *ipc, u16 resource, u8 *pt);
 int imx_sc_rm_set_memreg_permissions(struct imx_sc_ipc *ipc, u8 mr,
 				     u8 pt, u8 perm);
 int imx_sc_rm_get_did(struct imx_sc_ipc *ipc, u8 *did);
@@ -72,7 +72,10 @@ imx_sc_rm_is_resource_owned(struct imx_sc_ipc *ipc, u16 resource)
 {
 	return true;
 }
-
+static inline int imx_sc_rm_get_resource_owner(struct imx_sc_ipc *ipc, u16 resource, u8 *pt)
+{
+	return -EOPNOTSUPP;
+}
 static inline int imx_sc_rm_get_partition(struct imx_sc_ipc *ipc, u8 *pt)
 {
 	return -ENOENT;
@@ -81,12 +84,6 @@ static inline int imx_sc_rm_get_partition(struct imx_sc_ipc *ipc, u8 *pt)
 static inline
 int imx_sc_rm_find_memreg(struct imx_sc_ipc *ipc, u8 *mr, u64 addr_start,
 			  u64 addr_end)
-{
-	return -EOPNOTSUPP;
-}
-
-static inline
-int imx_sc_rm_get_resource_owner(struct imx_sc_ipc *ipc, u16 resource, u8 *pt)
 {
 	return -EOPNOTSUPP;
 }

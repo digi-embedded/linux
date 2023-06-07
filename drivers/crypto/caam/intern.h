@@ -122,6 +122,7 @@ struct caam_drv_private {
 	 */
 	u8 total_jobrs;		/* Total Job Rings in device */
 	u8 qi_present;		/* Nonzero if QI present in device */
+	u8 blob_present;	/* Nonzero if BLOB support present in device */
 	u8 sm_present;		/* Nonzero if Secure Memory is supported */
 	u8 mc_en;		/* Nonzero if MC f/w is active */
 	u8 scu_en;		/* Nonzero if SCU f/w is active */

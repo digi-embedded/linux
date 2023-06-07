@@ -27,7 +27,7 @@
 #include <linux/dmaengine.h>
 #include <linux/pxp_dma.h>
 #include <linux/ipu-v3.h>
-#include <linux/platform_data/dma-imx.h>
+#include <linux/dma/imx-dma.h>
 
 #include <media/v4l2-dev.h>
 #include "v4l2-int-device.h"

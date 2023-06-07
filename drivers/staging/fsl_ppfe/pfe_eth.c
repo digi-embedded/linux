@@ -1931,7 +1931,7 @@ static int pfe_eth_set_mac_address(struct net_device *ndev, void *addr)
 	if (!is_valid_ether_addr(sa->sa_data))
 		return -EADDRNOTAVAIL;
 
-	memcpy(ndev->dev_addr, sa->sa_data, ETH_ALEN);
+	dev_addr_set(ndev, sa->sa_data);
 
 	gemac_set_laddrN(priv->EMAC_baseaddr,
 			 (struct pfe_mac_addr *)ndev->dev_addr, 1);
@@ -2398,7 +2398,7 @@ static int pfe_eth_init_one(struct pfe *pfe,
 	pfe_eth_fast_tx_timeout_init(priv);
 
 	/* Copy the station address into the dev structure, */
-	memcpy(ndev->dev_addr, einfo[id].mac_addr, ETH_ALEN);
+	dev_addr_set(ndev, einfo[id].mac_addr);
 
 	if (us)
 		goto phy_init;
@@ -2434,12 +2434,9 @@ static int pfe_eth_init_one(struct pfe *pfe,
 	priv->msg_enable = NETIF_MSG_IFUP | NETIF_MSG_IFDOWN | NETIF_MSG_LINK |
 				NETIF_MSG_PROBE;
 
-	netif_napi_add(ndev, &priv->low_napi, pfe_eth_low_poll,
-		       HIF_RX_POLL_WEIGHT - 16);
-	netif_napi_add(ndev, &priv->high_napi, pfe_eth_high_poll,
-		       HIF_RX_POLL_WEIGHT - 16);
-	netif_napi_add(ndev, &priv->lro_napi, pfe_eth_lro_poll,
-		       HIF_RX_POLL_WEIGHT - 16);
+	netif_napi_add(ndev, &priv->low_napi, pfe_eth_low_poll);
+	netif_napi_add(ndev, &priv->high_napi, pfe_eth_high_poll);
+	netif_napi_add(ndev, &priv->lro_napi, pfe_eth_lro_poll);
 
 	err = register_netdev(ndev);
 	if (err) {
@@ -2455,7 +2452,7 @@ static int pfe_eth_init_one(struct pfe *pfe,
 	}
 
 phy_init:
-	device_init_wakeup(&ndev->dev, WAKE_MAGIC);
+	device_init_wakeup(&ndev->dev, true);
 
 	err = pfe_phy_init(ndev);
 	if (err) {

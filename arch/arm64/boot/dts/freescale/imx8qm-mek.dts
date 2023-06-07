@@ -22,14 +22,6 @@
 		reg = <0x00000000 0x80000000 0 0x40000000>;
 	};
 
-	brcmfmac: brcmfmac {
-		compatible = "cypress,brcmfmac";
-		pinctrl-names = "init", "idle", "default";
-		pinctrl-0 = <&pinctrl_wifi_init>;
-		pinctrl-1 = <&pinctrl_wifi_init>;
-		pinctrl-2 = <&pinctrl_wifi>;
-	};
-
 	lvds_backlight0: lvds_backlight@0 {
 		compatible = "pwm-backlight";
 		pwms = <&pwm_lvds0 0 100000 0>;
@@ -97,24 +89,24 @@
 		#size-cells = <2>;
 		ranges;
 
-		gpu_reserved: gpu_reserved@0x8800000000 {
+		gpu_reserved: gpu_reserved@8800000000 {
 			no-map;
 			reg = <0x8 0x80000000 0 0x10000000>;
 		};
 
-		decoder_boot: decoder_boot@0x84000000 {
+		decoder_boot: decoder_boot@84000000 {
 			no-map;
 			reg = <0 0x84000000 0 0x2000000>;
 		};
-		encoder1_boot: encoder1_boot@0x86000000 {
+		encoder1_boot: encoder1_boot@86000000 {
 			no-map;
 			reg = <0 0x86000000 0 0x200000>;
 		};
-		encoder2_boot: encoder2_boot@0x86200000 {
+		encoder2_boot: encoder2_boot@86200000 {
 			no-map;
 			reg = <0 0x86200000 0 0x200000>;
 		};
-		decoder_rpc: decoder_rpc@0x92000000 {
+		decoder_rpc: decoder_rpc@92000000 {
 			no-map;
 			reg = <0 0x92000000 0 0x100000>;
 		};
@@ -139,11 +131,11 @@
 			reg = <0 0x94300000 0 0x100000>;
 			no-map;
 		};
-		encoder1_rpc: encoder1_rpc@0x94400000 {
+		encoder1_rpc: encoder1_rpc@94400000 {
 			no-map;
 			reg = <0 0x94400000 0 0x700000>;
 		};
-		encoder2_rpc: encoder2_rpc@0x94b00000 {
+		encoder2_rpc: encoder1_rpc@94b00000 {
 			no-map;
 			reg = <0 0x94b00000 0 0x700000>;
 		};
@@ -159,18 +151,6 @@
 
 	};
 
-	epdev_on: fixedregulator@100 {
-		compatible = "regulator-fixed";
-		pinctrl-names = "default", "sleep";
-		pinctrl-0 = <&pinctrl_wlreg_on>;
-		pinctrl-1 = <&pinctrl_wlreg_on_sleep>;
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
-		regulator-name = "epdev_on";
-		gpio = <&lsio_gpio1 13 0>;
-		enable-active-high;
-	};
-
 	reg_fec2_supply: fec2_nvcc {
 		compatible = "regulator-fixed";
 		regulator-name = "fec2_nvcc";
@@ -178,6 +158,18 @@
 		regulator-max-microvolt = <1800000>;
 		gpio = <&max7322 0 GPIO_ACTIVE_HIGH>;
 		enable-active-high;
+	};
+
+	reg_pciea: regulator-pcie {
+		compatible = "regulator-fixed";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_pciea_reg>;
+		regulator-name = "mpcie_3v3";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		gpio = <&lsio_gpio1 13 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		regulator-always-on;
 	};
 
 	reg_usb_otg1_vbus: regulator-usbotg1-vbus {
@@ -317,38 +309,42 @@
 			"Mic Jack", "MICB";
 	};
 
-	imx8qm_cm40: imx8qm_cm4@0 {
-		compatible = "fsl,imx8qm-cm4";
-		rsc-da = <0x90000000>;
-		mbox-names = "tx", "rx", "rxdb";
-		mboxes = <&lsio_mu5 0 1
-			  &lsio_mu5 1 1
-			  &lsio_mu5 3 1>;
-		mub-partition = <3>;
-		memory-region = <&vdevbuffer>, <&vdev0vring0>, <&vdev0vring1>,
-				<&vdev1vring0>, <&vdev1vring1>, <&rsc_table0>;
-		core-index = <0>;
-		core-id = <IMX_SC_R_M4_0_PID0>;
-		status = "okay";
-		power-domains = <&pd IMX_SC_R_M4_0_PID0>,
-				<&pd IMX_SC_R_M4_0_MU_1A>;
-	};
+	cm4 {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		compatible = "simple-bus";
 
-	imx8qm_cm41: imx8x_cm4@1 {
-		compatible = "fsl,imx8qm-cm4";
-		rsc-da = <0x90100000>;
-		mbox-names = "tx", "rx", "rxdb";
-		mboxes = <&lsio_mu6 0 1
-			  &lsio_mu6 1 1
-			  &lsio_mu6 3 1>;
-		mub-partition = <4>;
-		memory-region = <&vdevbuffer>, <&vdev2vring0>, <&vdev2vring1>,
-				<&vdev3vring0>, <&vdev3vring1>, <&rsc_table1>;
-		core-index = <1>;
-		core-id = <IMX_SC_R_M4_1_PID0>;
-		status = "okay";
-		power-domains = <&pd IMX_SC_R_M4_1_PID0>,
-				<&pd IMX_SC_R_M4_1_MU_1A>;
+		imx8qm_cm40: imx8qm_cm4@0 {
+			compatible = "fsl,imx8qm-cm4";
+			rsc-da = <0x90000000>;
+			mbox-names = "tx", "rx", "rxdb";
+			mboxes = <&lsio_mu5 0 1
+				  &lsio_mu5 1 1
+				  &lsio_mu5 3 1>;
+			memory-region = <&vdevbuffer>, <&vdev0vring0>, <&vdev0vring1>,
+					<&vdev1vring0>, <&vdev1vring1>, <&rsc_table0>;
+			fsl,resource-id = <IMX_SC_R_M4_0_PID0>;
+			fsl,entry-address = <0x34fe0000>;
+			status = "okay";
+			power-domains = <&pd IMX_SC_R_M4_0_PID0>,
+					<&pd IMX_SC_R_M4_0_MU_1A>;
+		};
+
+		imx8qm_cm41: imx8x_cm4@1 {
+			compatible = "fsl,imx8qm-cm4";
+			rsc-da = <0x90100000>;
+			mbox-names = "tx", "rx", "rxdb";
+			mboxes = <&lsio_mu6 0 1
+				  &lsio_mu6 1 1
+				  &lsio_mu6 3 1>;
+			memory-region = <&vdevbuffer>, <&vdev2vring0>, <&vdev2vring1>,
+					<&vdev3vring0>, <&vdev3vring1>, <&rsc_table1>;
+			fsl,resource-id = <IMX_SC_R_M4_1_PID0>;
+			fsl,entry-address = <0x38fe0000>;
+			status = "okay";
+			power-domains = <&pd IMX_SC_R_M4_1_PID0>,
+					<&pd IMX_SC_R_M4_1_MU_1A>;
+		};
 	};
 
 	reserved-memory {
@@ -376,7 +372,7 @@
 			no-map;
 		};
 
-		rsc_table0: rsc_table0@900ff000 {
+		rsc_table0: rsc-table@900ff000 {
 			reg = <0 0x900ff000 0 0x1000>;
 			no-map;
 		};
@@ -407,11 +403,19 @@
 			no-map;
 		};
 
-		rsc_table1: rsc_table1@901ff000 {
+		rsc_table1: rsc-table@901ff000 {
 			reg = <0 0x901ff000 0 0x1000>;
 			no-map;
 		};
 	};
+};
+
+&lsio_mu5 {
+	status = "okay";
+};
+
+&lsio_mu6 {
+	status = "okay";
 };
 
 &adc0 {
@@ -1010,9 +1014,8 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_pciea>;
 	reset-gpio = <&lsio_gpio4 29 GPIO_ACTIVE_LOW>;
-	disable-gpio = <&lsio_gpio4 9 GPIO_ACTIVE_LOW>;
 	ext_osc = <1>;
-	epdev_on-supply = <&epdev_on>;
+	vpcie-supply = <&reg_pciea>;
 	status = "okay";
 };
 
@@ -1610,7 +1613,13 @@
 		fsl,pins = <
 			IMX8QM_PCIE_CTRL0_WAKE_B_LSIO_GPIO4_IO28		0x04000021
 			IMX8QM_PCIE_CTRL0_PERST_B_LSIO_GPIO4_IO29		0x06000021
-			IMX8QM_USDHC2_RESET_B_LSIO_GPIO4_IO09			0x06000021
+			IMX8QM_SCU_GPIO0_07_SCU_DSC_RTC_CLOCK_OUTPUT_32K	0x20
+		>;
+	};
+
+	pinctrl_pciea_reg: pcieareggrp {
+		fsl,pins = <
+			IMX8QM_LVDS1_I2C0_SDA_LSIO_GPIO1_IO13			0x06000021
 		>;
 	};
 
@@ -1741,30 +1750,6 @@
 		fsl,pins = <
 			IMX8QM_LVDS1_I2C1_SCL_LVDS1_I2C1_SCL	0xc600004c
 			IMX8QM_LVDS1_I2C1_SDA_LVDS1_I2C1_SDA	0xc600004c
-		>;
-	};
-
-	pinctrl_wifi: wifigrp{
-		fsl,pins = <
-			IMX8QM_SCU_GPIO0_07_SCU_DSC_RTC_CLOCK_OUTPUT_32K	0x20
-		>;
-	};
-
-	pinctrl_wifi_init: wifi_initgrp{
-		fsl,pins = <
-			/* reserve pin init/idle_state to support multiple wlan cards */
-		>;
-	};
-
-	pinctrl_wlreg_on: wlregongrp{
-		fsl,pins = <
-			IMX8QM_LVDS1_I2C0_SDA_LSIO_GPIO1_IO13		0x06000000
-		>;
-	};
-
-	pinctrl_wlreg_on_sleep: wlregon_sleepgrp{
-		fsl,pins = <
-			IMX8QM_LVDS1_I2C0_SDA_LSIO_GPIO1_IO13		0x07800000
 		>;
 	};
 

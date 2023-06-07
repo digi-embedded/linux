@@ -510,7 +510,7 @@ mxc_pcsi_get_remote_sensor_pad(struct mxc_parallel_csi_dev *pcsidev)
 			sink_pad = &subdev->entity.pads[i];
 
 			if (sink_pad->flags & MEDIA_PAD_FL_SINK) {
-				source_pad = media_entity_remote_pad(sink_pad);
+				source_pad = media_pad_remote_pad_first(sink_pad);
 				if (source_pad)
 					break;
 			}
@@ -657,6 +657,7 @@ static int mxc_pcsi_set_fmt(struct v4l2_subdev *sd,
 	}
 
 	fmt->pad = source_pad->index;
+	fmt->format.code = MEDIA_BUS_FMT_UYVY8_2X8;
 	ret = v4l2_subdev_call(sen_sd, pad, set_fmt, NULL, fmt);
 	if (ret < 0 && ret != -ENOIOCTLCMD)
 		return ret;

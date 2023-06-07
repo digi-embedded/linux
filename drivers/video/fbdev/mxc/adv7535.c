@@ -35,7 +35,7 @@ struct adv7535_info {
 
 static int adv7535_probe(struct i2c_client *client,
 			 const struct i2c_device_id *id);
-static int adv7535_remove(struct i2c_client *client);
+static void adv7535_remove(struct i2c_client *client);
 static int adv7535_detect(struct i2c_client *client,
 			  struct i2c_board_info *info);
 
@@ -330,7 +330,7 @@ err1:
 	return ret;
 }
 
-static int adv7535_remove(struct i2c_client *client)
+static void adv7535_remove(struct i2c_client *client)
 {
 	struct adv7535_info *info;
 
@@ -345,8 +345,6 @@ static int adv7535_remove(struct i2c_client *client)
 
 	kfree(info->fb_vmode);
 	kfree(info);
-
-	return 0;
 }
 
 static __init int adv7535_init(void)

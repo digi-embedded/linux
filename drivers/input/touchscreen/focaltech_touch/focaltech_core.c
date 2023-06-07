@@ -1212,7 +1212,7 @@ free_gpio:
 *  Output:
 *  Return:
 *****************************************************************************/
-static int fts_ts_remove(struct i2c_client *client)
+static void fts_ts_remove(struct i2c_client *client)
 {
 	struct fts_ts_data *data = i2c_get_clientdata(client);
 
@@ -1254,7 +1254,6 @@ static int fts_ts_remove(struct i2c_client *client)
 #endif
 
 	FTS_FUNC_EXIT();
-	return 0;
 }
 
 /*****************************************************************************

@@ -28,6 +28,14 @@
 		reg = <0x0 0x40000000 0 0x80000000>;
 	};
 
+	ir_recv: ir-receiver {
+		compatible = "gpio-ir-receiver";
+		gpios = <&gpio1 13 GPIO_ACTIVE_LOW>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_ir_recv>;
+		linux,autosuspend-period = <125>;
+	};
+
 	usdhc1_pwrseq: usdhc1_pwrseq {
 		compatible = "mmc-pwrseq-simple";
 		pinctrl-names = "default";
@@ -66,11 +74,10 @@
 		regulator-always-on;
 	};
 
-	bt_sco_codec: bt_sco_codec {
-		#sound-dai-cells = <1>;
+	audio_codec_bt_sco: audio-codec-bt-sco {
 		compatible = "linux,bt-sco";
+		#sound-dai-cells = <1>;
 	};
-
 
 	wm8524: audio-codec {
 		#sound-dai-cells = <0>;
@@ -97,7 +104,7 @@
 		};
 
 		simple-audio-card,codec {
-			sound-dai = <&bt_sco_codec 1>;
+			sound-dai = <&audio_codec_bt_sco 1>;
 		};
 	};
 
@@ -175,7 +182,7 @@
 
 &easrc {
 	#sound-dai-cells = <0>;
-	fsl,asrc-rate  = <48000>;
+	fsl,asrc-rate = <48000>;
 	status = "okay";
 };
 
@@ -194,6 +201,11 @@
 		ethphy0: ethernet-phy@0 {
 			compatible = "ethernet-phy-ieee802.3-c22";
 			reg = <0>;
+			reset-gpios = <&gpio4 22 GPIO_ACTIVE_LOW>;
+			reset-assert-us = <10000>;
+			reset-deassert-us = <80000>;
+			realtek,aldps-enable;
+			realtek,clkout-disable;
 			qca,disable-smarteee;
 			vddio-supply = <&vddio>;
 
@@ -207,15 +219,15 @@
 
 &flexspi {
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_flexspi0>;
+	pinctrl-0 = <&pinctrl_flexspi>;
 	status = "okay";
 
-	flash0: mt25qu256aba@0 {
+	flash0: flash@0 {
+		compatible = "jedec,spi-nor";
 		reg = <0>;
 		#address-cells = <1>;
 		#size-cells = <1>;
-		compatible = "jedec,spi-nor";
-		spi-max-frequency = <80000000>;
+		spi-max-frequency = <166000000>;
 		spi-tx-bus-width = <1>;
 		spi-rx-bus-width = <4>;
 	};
@@ -490,7 +502,7 @@
 	pinctrl-0 = <&pinctrl_uart3>;
 	assigned-clocks = <&clk IMX8MN_CLK_UART3>;
 	assigned-clock-parents = <&clk IMX8MN_SYS_PLL1_80M>;
-	fsl,uart-has-rtscts;
+	uart-has-rtscts;
 	status = "okay";
 };
 
@@ -582,6 +594,12 @@
 		>;
 	};
 
+	pinctrl_ir_recv: ir-recv {
+		fsl,pins = <
+			MX8MN_IOMUXC_GPIO1_IO13_GPIO1_IO13		0x4f
+		>;
+	};
+
 	pinctrl_fec1: fec1grp {
 		fsl,pins = <
 			MX8MN_IOMUXC_ENET_MDC_ENET1_MDC		0x3
@@ -602,14 +620,14 @@
 		>;
 	};
 
-	pinctrl_flexspi0: flexspi0grp {
+	pinctrl_flexspi: flexspigrp {
 		fsl,pins = <
-			MX8MN_IOMUXC_NAND_ALE_QSPI_A_SCLK		0x1c4
-			MX8MN_IOMUXC_NAND_CE0_B_QSPI_A_SS0_B		0x84
-			MX8MN_IOMUXC_NAND_DATA00_QSPI_A_DATA0		0x84
-			MX8MN_IOMUXC_NAND_DATA01_QSPI_A_DATA1		0x84
-			MX8MN_IOMUXC_NAND_DATA02_QSPI_A_DATA2		0x84
-			MX8MN_IOMUXC_NAND_DATA03_QSPI_A_DATA3		0x84
+			MX8MN_IOMUXC_NAND_ALE_QSPI_A_SCLK               0x1c2
+			MX8MN_IOMUXC_NAND_CE0_B_QSPI_A_SS0_B            0x82
+			MX8MN_IOMUXC_NAND_DATA00_QSPI_A_DATA0           0x82
+			MX8MN_IOMUXC_NAND_DATA01_QSPI_A_DATA1           0x82
+			MX8MN_IOMUXC_NAND_DATA02_QSPI_A_DATA2           0x82
+			MX8MN_IOMUXC_NAND_DATA03_QSPI_A_DATA3           0x82
 		>;
 	};
 
@@ -765,7 +783,7 @@
 		fsl,pins = <
 			MX8MN_IOMUXC_ECSPI1_SCLK_UART3_DCE_RX		0x140
 			MX8MN_IOMUXC_ECSPI1_MOSI_UART3_DCE_TX		0x140
-			MX8MN_IOMUXC_ECSPI1_SS0_UART3_DCE_RTS_B		0x140
+			MX8MN_IOMUXC_ECSPI1_SS0_UART3_DCE_RTS_B	0x140
 			MX8MN_IOMUXC_ECSPI1_MISO_UART3_DCE_CTS_B	0x140
 		>;
 	};

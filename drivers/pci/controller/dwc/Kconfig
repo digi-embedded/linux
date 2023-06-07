@@ -8,22 +8,20 @@ config PCIE_DW
 
 config PCIE_DW_HOST
 	bool
-	depends on PCI_MSI_IRQ_DOMAIN
 	select PCIE_DW
 
 config PCIE_DW_EP
 	bool
-	depends on PCI_ENDPOINT
 	select PCIE_DW
 
 config PCI_DRA7XX
-	bool
+	tristate
 
 config PCI_DRA7XX_HOST
-	bool "TI DRA7xx PCIe controller Host Mode"
+	tristate "TI DRA7xx PCIe controller Host Mode"
 	depends on SOC_DRA7XX || COMPILE_TEST
-	depends on PCI_MSI_IRQ_DOMAIN
 	depends on OF && HAS_IOMEM && TI_PIPE3
+	depends on PCI_MSI_IRQ_DOMAIN
 	select PCIE_DW_HOST
 	select PCI_DRA7XX
 	default y if SOC_DRA7XX
@@ -36,10 +34,10 @@ config PCI_DRA7XX_HOST
 	  This uses the DesignWare core.
 
 config PCI_DRA7XX_EP
-	bool "TI DRA7xx PCIe controller Endpoint Mode"
+	tristate "TI DRA7xx PCIe controller Endpoint Mode"
 	depends on SOC_DRA7XX || COMPILE_TEST
-	depends on PCI_ENDPOINT
 	depends on OF && HAS_IOMEM && TI_PIPE3
+	depends on PCI_ENDPOINT
 	select PCIE_DW_EP
 	select PCI_DRA7XX
 	help
@@ -55,7 +53,7 @@ config PCIE_DW_PLAT
 
 config PCIE_DW_PLAT_HOST
 	bool "Platform bus based DesignWare PCIe Controller - Host mode"
-	depends on PCI && PCI_MSI_IRQ_DOMAIN
+	depends on PCI_MSI_IRQ_DOMAIN
 	select PCIE_DW_HOST
 	select PCIE_DW_PLAT
 	help
@@ -94,7 +92,7 @@ config PCI_EXYNOS
 	  functions to implement the driver.
 
 config PCI_IMX6
-	tristate "Freescale i.MX6/7/8 PCIe driver"
+	bool
 
 config PCI_IMX6_HOST
 	bool "Freescale i.MX6/7/8 PCIe controller host mode"
@@ -103,8 +101,11 @@ config PCI_IMX6_HOST
 	select PCIE_DW_HOST
 	select PCI_IMX6
 	help
-	  Enables support for the PCIe controller host mode in the
-	  iMX6/7/8 SoCs to work in endpoint mode.
+	  Enables support for the PCIe controller Root Complex mode in the
+	  iMX6/7/8 SoCs.
+	  This controller can work either as EP or RC. In order to enable
+	  host-specific features PCIE_DW_HOST must be selected and in order
+	  to enable device-specific features PCIE_DW_EP must be selected.
 
 config PCI_IMX6_EP
 	bool "Freescale i.MX6/7/8 PCIe controller endpoint mode"
@@ -114,7 +115,10 @@ config PCI_IMX6_EP
 	select PCI_IMX6
 	help
 	  Enables support for the PCIe controller endpoint mode in the
-	  iMX6/7/8 SoCs to work in endpoint mode.
+	  iMX6/7/8 SoCs.
+	  This controller can work either as EP or RC. In order to enable
+	  host-specific features PCIE_DW_HOST must be selected and in order
+	  to enable device-specific features PCIE_DW_EP must be selected.
 
 config PCIE_SPEAR13XX
 	bool "STMicroelectronics SPEAr PCIe controller"
@@ -155,8 +159,8 @@ config PCI_LAYERSCAPE
 	bool "Freescale Layerscape PCIe controller - Host mode"
 	depends on OF && (ARM || ARCH_LAYERSCAPE || COMPILE_TEST)
 	depends on PCI_MSI_IRQ_DOMAIN
-	select MFD_SYSCON
 	select PCIE_DW_HOST
+	select MFD_SYSCON
 	help
 	  Say Y here if you want to enable PCIe controller support on Layerscape
 	  SoCs to work in Host mode.
@@ -196,6 +200,16 @@ config PCIE_QCOM
 	  Say Y here to enable PCIe controller support on Qualcomm SoCs. The
 	  PCIe controller uses the DesignWare core plus Qualcomm-specific
 	  hardware wrappers.
+
+config PCIE_QCOM_EP
+	tristate "Qualcomm PCIe controller - Endpoint mode"
+	depends on OF && (ARCH_QCOM || COMPILE_TEST)
+	depends on PCI_ENDPOINT
+	select PCIE_DW_EP
+	help
+	  Say Y here to enable support for the PCIe controllers on Qualcomm SoCs
+	  to work in endpoint mode. The PCIe controller uses the DesignWare core
+	  plus Qualcomm-specific hardware wrappers.
 
 config PCIE_ARMADA_8K
 	bool "Marvell Armada-8K PCIe controller"
@@ -283,7 +297,7 @@ config PCIE_KEEMBAY_EP
 
 config PCIE_KIRIN
 	depends on OF && (ARM64 || COMPILE_TEST)
-	bool "HiSilicon Kirin series SoCs PCIe controllers"
+	tristate "HiSilicon Kirin series SoCs PCIe controllers"
 	depends on PCI_MSI_IRQ_DOMAIN
 	select PCIE_DW_HOST
 	help
@@ -300,8 +314,8 @@ config PCIE_HISI_STB
 
 config PCI_MESON
 	tristate "MESON PCIe controller"
-	depends on PCI_MSI_IRQ_DOMAIN
 	default m if ARCH_MESON
+	depends on PCI_MSI_IRQ_DOMAIN
 	select PCIE_DW_HOST
 	help
 	  Say Y here if you want to enable PCI controller support on Amlogic

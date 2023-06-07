@@ -672,8 +672,8 @@ nomenclature that instead use the order of components as seen in a 24- or
       - ``V4L2_PIX_FMT_BGR24``
       - 'BGR3'
 
-      - G\ :sub:`7-0`
       - B\ :sub:`7-0`
+      - G\ :sub:`7-0`
       - R\ :sub:`7-0`
       -
     * .. _V4L2-PIX-FMT-RGB24:
@@ -762,6 +762,50 @@ nomenclature that instead use the order of components as seen in a 24- or
 
     \normalsize
 
+
+More Than 8 Bits Per Component
+==============================
+
+These formats store an RGB triplet in six or eighth bytes, with more than 8 bits per component.
+expand the bits per component to 16 bits, data in the high bits, zeros in the low bits,
+arranged in little endian order.
+
+.. raw:: latex
+
+    \small
+
+.. flat-table:: RGB Formats With More Than 8 Bits Per Component
+    :header-rows:  1
+    :stub-columns: 0
+
+    * - Identifier
+      - Code
+      - Byte 1-0
+      - Byte 3-2
+      - Byte 5-4
+      - Byte 7-6
+    * .. _V4L2-PIX-FMT-B312:
+
+      - ``V4L2_PIX_FMT_B312``
+      - 'B312'
+
+      - B\ :sub:`15-4`
+      - G\ :sub:`15-4`
+      - R\ :sub:`15-4`
+      -
+    * .. _V4L2-PIX-FMT-B412:
+
+      - ``V4L2_PIX_FMT_B412``
+      - 'B412'
+
+      - B\ :sub:`15-4`
+      - G\ :sub:`15-4`
+      - R\ :sub:`15-4`
+      - A\ :sub:`15-4`
+
+.. raw:: latex
+
+    \normalsize
 
 Deprecated RGB Formats
 ======================

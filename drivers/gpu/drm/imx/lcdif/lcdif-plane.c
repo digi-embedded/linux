@@ -17,9 +17,10 @@
 #include <drm/drm_fourcc.h>
 #include <drm/drm_atomic.h>
 #include <drm/drm_atomic_helper.h>
-#include <drm/drm_fb_cma_helper.h>
+#include <drm/drm_blend.h>
+#include <drm/drm_fb_dma_helper.h>
 #include <drm/drm_framebuffer.h>
-#include <drm/drm_gem_cma_helper.h>
+#include <drm/drm_gem_dma_helper.h>
 #include <drm/drm_plane.h>
 #include <drm/drm_plane_helper.h>
 #include <drm/drm_rect.h>
@@ -77,8 +78,8 @@ static int lcdif_plane_atomic_check(struct drm_plane *plane,
 	clip.y2 = mode->vdisplay;
 
 	ret = drm_atomic_helper_check_plane_state(plane_state, crtc_state,
-						  DRM_PLANE_HELPER_NO_SCALING,
-						  DRM_PLANE_HELPER_NO_SCALING,
+						  DRM_PLANE_NO_SCALING,
+						  DRM_PLANE_NO_SCALING,
 						  false, true);
 
 	if (ret)
@@ -121,7 +122,7 @@ static void lcdif_plane_atomic_update(struct drm_plane *plane,
 	struct drm_plane_state *new_plane_state = drm_atomic_get_new_plane_state(state,
 										 plane);
 	struct drm_framebuffer *fb = new_plane_state->fb;
-	struct drm_gem_cma_object *gem_obj = NULL;
+	struct drm_gem_dma_object *gem_obj = NULL;
 	u32 fb_addr, src_off, src_w, fb_idx, cpp, stride;
 	bool crop;
 	bool use_i80 = lcdif_drm_connector_is_self_refresh_aware(state);
@@ -137,10 +138,10 @@ static void lcdif_plane_atomic_update(struct drm_plane *plane,
 	switch (plane->type) {
 	case DRM_PLANE_TYPE_PRIMARY:
 		/* TODO: only support RGB */
-		gem_obj = drm_fb_cma_get_gem_obj(fb, 0);
+		gem_obj = drm_fb_dma_get_gem_obj(fb, 0);
 		src_off = (new_plane_state->src_y >> 16) * fb->pitches[0] +
 			  (new_plane_state->src_x >> 16) * fb->format->cpp[0];
-		fb_addr = gem_obj->paddr + fb->offsets[0] + src_off;
+		fb_addr = gem_obj->dma_addr + fb->offsets[0] + src_off;
 		fb_idx  = 0;
 		break;
 	default:
@@ -221,7 +222,9 @@ struct lcdif_plane *lcdif_plane_init(struct drm_device *dev,
 	struct lcdif_plane *lcdif_plane;
 
 	/* lcdif doesn't support fb modifiers */
-	if (zpos || dev->mode_config.allow_fb_modifiers)
+	dev->mode_config.fb_modifiers_not_supported = true;
+
+	if (zpos)
 		return ERR_PTR(-EINVAL);
 
 	lcdif_plane = kzalloc(sizeof(*lcdif_plane), GFP_KERNEL);

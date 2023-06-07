@@ -9,6 +9,7 @@
 #include <linux/completion.h>
 #include <linux/clk.h>
 #include <linux/err.h>
+#include <linux/of.h>
 #include <linux/platform_device.h>
 #include <linux/interrupt.h>
 #include <linux/iio/iio.h>

@@ -520,21 +520,21 @@ static int mxc_isi_imx8mp_gclk_get(struct mxc_isi_dev *mxc_isi)
 {
 	struct device *dev = &mxc_isi->pdev->dev;
 
-	mxc_isi->isi_proc = devm_clk_get(dev, "media_blk_isi_proc");
+	mxc_isi->isi_proc = devm_clk_get_optional(dev, "media_blk_isi_proc");
 	if (IS_ERR(mxc_isi->isi_proc)) {
 		if (PTR_ERR(mxc_isi->isi_proc) != -EPROBE_DEFER)
 			dev_err(dev, "Failed to get media isi proc clock\n");
 		return -ENODEV;
 	}
 
-	mxc_isi->isi_apb = devm_clk_get(dev, "media_blk_isi_apb");
+	mxc_isi->isi_apb = devm_clk_get_optional(dev, "media_blk_isi_apb");
 	if (IS_ERR(mxc_isi->isi_apb)) {
 		if (PTR_ERR(mxc_isi->isi_apb) != -EPROBE_DEFER)
 			dev_err(dev, "Failed to get media isi apb clock\n");
 		return -ENODEV;
 	}
 
-	mxc_isi->isi_bus = devm_clk_get(dev, "media_blk_bus");
+	mxc_isi->isi_bus = devm_clk_get_optional(dev, "media_blk_bus");
 	if (IS_ERR(mxc_isi->isi_bus)) {
 		if (PTR_ERR(mxc_isi->isi_bus) != -EPROBE_DEFER)
 			dev_err(dev, "Failed to get media bus clock\n");
@@ -770,12 +770,14 @@ static int mxc_isi_probe(struct platform_device *pdev)
 
 	mxc_isi_clean_registers(mxc_isi);
 
-	res = platform_get_resource(pdev, IORESOURCE_IRQ, 0);
-	if (!res) {
+	ret = platform_get_irq(pdev, 0);
+	if (ret < 0) {
 		dev_err(dev, "Failed to get IRQ resource\n");
 		goto err;
 	}
-	ret = devm_request_irq(dev, res->start, mxc_isi_irq_handler,
+	mxc_isi->irq = ret;
+
+	ret = devm_request_irq(dev, mxc_isi->irq, mxc_isi_irq_handler,
 			       0, dev_name(dev), mxc_isi);
 	if (ret < 0) {
 		dev_err(dev, "failed to install irq (%d)\n", ret);

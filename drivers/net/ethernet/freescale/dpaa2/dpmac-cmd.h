@@ -83,6 +83,15 @@ struct dpmac_rsp_get_counter {
 	__le64 counter;
 };
 
+struct dpmac_rsp_get_api_version {
+	__le16 major;
+	__le16 minor;
+};
+
+struct dpmac_cmd_set_protocol {
+	u8 eth_if;
+};
+
 struct dpmac_cmd_set_irq_enable {
 	u8 enable;
 	u8 pad[3];
@@ -133,12 +142,4 @@ struct dpmac_rsp_get_link_cfg {
 	u64 advertising;
 };
 
-struct dpmac_rsp_get_api_version {
-	__le16 major;
-	__le16 minor;
-};
-
-struct dpmac_cmd_set_protocol {
-	u8 eth_if;
-};
 #endif /* _FSL_DPMAC_CMD_H */

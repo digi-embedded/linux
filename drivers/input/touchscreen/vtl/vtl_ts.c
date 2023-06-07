@@ -275,7 +275,7 @@ static void vtl_ts_early_resume(struct early_suspend *handler)
 }
 #endif
 
-int  vtl_ts_remove(struct i2c_client *client)
+void vtl_ts_remove(struct i2c_client *client)
 {
 	struct ts_info *ts;
 
@@ -299,8 +299,6 @@ int  vtl_ts_remove(struct i2c_client *client)
 
 	if (ts->driver->proc_entry != NULL)
 		remove_proc_entry(DRIVER_NAME, NULL);
-
-	return 0;
 }
 
 static int init_input_dev(struct ts_info *ts)

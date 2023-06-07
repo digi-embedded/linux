@@ -449,6 +449,13 @@ static int ak4458_hw_params(struct snd_pcm_substream *substream,
 	snd_soc_component_update_bits(component, AK4458_0B_CONTROL7,
 				      AK4458_DCHAIN_MASK, dchn);
 
+	if (ak4458->drvdata->type == AK4497) {
+		ret = snd_soc_component_update_bits(component, AK4458_09_DSD2,
+						    0x4, (ak4458->dsd_path << 2));
+		if (ret < 0)
+			return ret;
+	}
+
 	ret = ak4458_rstn_control(component, 0);
 	if (ret)
 		return ret;
@@ -466,14 +473,14 @@ static int ak4458_set_dai_fmt(struct snd_soc_dai *dai, unsigned int fmt)
 	struct ak4458_priv *ak4458 = snd_soc_component_get_drvdata(component);
 	int ret;
 
-	switch (fmt & SND_SOC_DAIFMT_MASTER_MASK) {
-	case SND_SOC_DAIFMT_CBS_CFS: /* Slave Mode */
+	switch (fmt & SND_SOC_DAIFMT_CLOCK_PROVIDER_MASK) {
+	case SND_SOC_DAIFMT_CBC_CFC: /* Consumer Mode */
 		break;
-	case SND_SOC_DAIFMT_CBM_CFM: /* Master Mode is not supported */
-	case SND_SOC_DAIFMT_CBS_CFM:
-	case SND_SOC_DAIFMT_CBM_CFS:
+	case SND_SOC_DAIFMT_CBP_CFP: /* Provider Mode is not supported */
+	case SND_SOC_DAIFMT_CBC_CFP:
+	case SND_SOC_DAIFMT_CBP_CFC:
 	default:
-		dev_err(component->dev, "Master mode unsupported\n");
+		dev_err(component->dev, "Clock provider mode unsupported\n");
 		return -EINVAL;
 	}
 
@@ -688,7 +695,6 @@ static const struct snd_soc_component_driver soc_codec_dev_ak4458 = {
 	.idle_bias_on		= 1,
 	.use_pmdown_time	= 1,
 	.endianness		= 1,
-	.non_legacy_dai_naming	= 1,
 };
 
 static const struct snd_soc_component_driver soc_codec_dev_ak4497 = {
@@ -701,7 +707,6 @@ static const struct snd_soc_component_driver soc_codec_dev_ak4497 = {
 	.idle_bias_on		= 1,
 	.use_pmdown_time	= 1,
 	.endianness		= 1,
-	.non_legacy_dai_naming	= 1,
 };
 
 static const struct regmap_config ak4458_regmap = {
@@ -736,6 +741,7 @@ static int ak4458_i2c_probe(struct i2c_client *i2c)
 {
 	struct ak4458_priv *ak4458;
 	int ret, i;
+	int reg;
 
 	ak4458 = devm_kzalloc(&i2c->dev, sizeof(*ak4458), GFP_KERNEL);
 	if (!ak4458)
@@ -777,67 +783,35 @@ static int ak4458_i2c_probe(struct i2c_client *i2c)
 		return ret;
 	}
 
-	ret = regulator_bulk_enable(ARRAY_SIZE(ak4458->supplies),
-				    ak4458->supplies);
-	if (ret != 0) {
-		dev_err(ak4458->dev, "Failed to enable supplies: %d\n", ret);
-		return ret;
-	}
-
-	ak4458->fs = 48000;
-
-	/* External Mute ON */
-	if (ak4458->mute_gpiod)
-		gpiod_set_value_cansleep(ak4458->mute_gpiod, 1);
-
-	ak4458_reset(ak4458, false);
-
-	ret = regmap_update_bits(ak4458->regmap, AK4458_00_CONTROL1,
-				 0x80, 0x80);   /* ACKS bit = 1; 10000000 */
-	if (ret < 0) {
-		dev_err(ak4458->dev, "Failed to set acks: %d\n", ret);
-		goto err_init;
-	}
-
-	if (ak4458->drvdata->type == AK4497) {
-		ret = regmap_update_bits(ak4458->regmap, AK4458_09_DSD2,
-					 0x4, (ak4458->dsd_path << 2));
-		if (ret < 0) {
-			dev_err(ak4458->dev, "Failed to set dsd path: %d\n", ret);
-			goto err_init;
-		}
-	}
-
-	ret = regmap_update_bits(ak4458->regmap, AK4458_00_CONTROL1,
-				 AK4458_RSTN_MASK, 0x1);
-	if (ret < 0) {
-		dev_err(ak4458->dev, "Failed to set rstn: %d\n", ret);
-		goto err_init;
-	}
-
 	ret = devm_snd_soc_register_component(ak4458->dev,
 					      ak4458->drvdata->comp_drv,
 					      ak4458->drvdata->dai_drv, 1);
 	if (ret < 0) {
 		dev_err(ak4458->dev, "Failed to register CODEC: %d\n", ret);
-		goto err_init;
+		return ret;
 	}
 
 	pm_runtime_enable(&i2c->dev);
 	regcache_cache_only(ak4458->regmap, true);
+	ak4458_reset(ak4458, false);
 
-err_init:
-	ak4458_reset(ak4458, true);
-	regulator_bulk_disable(ARRAY_SIZE(ak4458->supplies), ak4458->supplies);
-
-	return ret;
-}
-
-static int ak4458_i2c_remove(struct i2c_client *i2c)
-{
-	pm_runtime_disable(&i2c->dev);
+	/* Check if first register can be read or not */
+	reg = i2c_smbus_read_byte_data(i2c, AK4458_00_CONTROL1);
+	if (reg < 0) {
+		ak4458_reset(ak4458, true);
+		pm_runtime_disable(&i2c->dev);
+		return -ENODEV;
+	}
 
 	return 0;
+}
+
+static void ak4458_i2c_remove(struct i2c_client *i2c)
+{
+	struct ak4458_priv *ak4458 = i2c_get_clientdata(i2c);
+
+	ak4458_reset(ak4458, true);
+	pm_runtime_disable(&i2c->dev);
 }
 
 static const struct of_device_id ak4458_of_match[] = {

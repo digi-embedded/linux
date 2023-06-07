@@ -113,18 +113,19 @@ static int imx8mp_tmu_get_temp(void *data, int *temp)
 	return 0;
 }
 
-static int tmu_get_temp(void *data, int *temp)
+static int tmu_get_temp(struct thermal_zone_device *tz, int *temp)
 {
-	struct tmu_sensor *sensor = data;
+	struct tmu_sensor *sensor = tz->devdata;
 	struct imx8mm_tmu *tmu = sensor->priv;
 
-	return tmu->socdata->get_temp(data, temp);
+	return tmu->socdata->get_temp(sensor, temp);
 }
 
-static int tmu_get_trend(void *p, int trip, enum thermal_trend *trend)
+static int tmu_get_trend(struct thermal_zone_device *tz, int trip,
+			 enum thermal_trend *trend)
 {
+	struct tmu_sensor *sensor = tz->devdata;
 	int trip_temp;
-	struct tmu_sensor *sensor = p;
 
 	if (!sensor->tzd)
 		return 0;
@@ -132,16 +133,17 @@ static int tmu_get_trend(void *p, int trip, enum thermal_trend *trend)
 	trip_temp = (trip == IMX_TRIP_PASSIVE) ? sensor->temp_passive : sensor->temp_critical;
 
 	if (sensor->tzd->temperature >= (trip_temp - IMX_TEMP_PASSIVE_COOL_DELTA))
-		*trend = THERMAL_TREND_RAISE_FULL;
+		*trend = THERMAL_TREND_RAISING;
 	else
-		*trend = THERMAL_TREND_DROP_FULL;
+		*trend = THERMAL_TREND_DROPPING;
 
 	return 0;
 }
 
-static int tmu_set_trip_temp(void *p, int trip, int temp)
+static int tmu_set_trip_temp(struct thermal_zone_device *tz, int trip, int temp)
+
 {
-	struct tmu_sensor *sensor = p;
+	struct tmu_sensor *sensor = tz->devdata;
 
 	if (trip == IMX_TRIP_CRITICAL)
 		sensor->temp_critical = temp;
@@ -152,7 +154,7 @@ static int tmu_set_trip_temp(void *p, int trip, int temp)
 	return 0;
 }
 
-static struct thermal_zone_of_device_ops tmu_tz_ops = {
+static const struct thermal_zone_device_ops tmu_tz_ops = {
 	.get_temp = tmu_get_temp,
 	.get_trend = tmu_get_trend,
 	.set_trip_temp = tmu_set_trip_temp,
@@ -216,9 +218,9 @@ static int imx8mm_tmu_probe(struct platform_device *pdev)
 	for (i = 0; i < data->num_sensors; i++) {
 		tmu->sensors[i].priv = tmu;
 		tmu->sensors[i].tzd =
-			devm_thermal_zone_of_sensor_register(&pdev->dev, i,
-							     &tmu->sensors[i],
-							     &tmu_tz_ops);
+			devm_thermal_of_zone_register(&pdev->dev, i,
+						      &tmu->sensors[i],
+						      &tmu_tz_ops);
 		if (IS_ERR(tmu->sensors[i].tzd)) {
 			ret = PTR_ERR(tmu->sensors[i].tzd);
 			dev_err(&pdev->dev,

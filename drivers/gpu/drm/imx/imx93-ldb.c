@@ -5,6 +5,7 @@
 
 #include <linux/clk.h>
 #include <linux/component.h>
+#include <linux/media-bus-format.h>
 #include <linux/module.h>
 #include <linux/of_device.h>
 #include <linux/phy/phy.h>
@@ -175,7 +176,7 @@ imx93_ldb_bind(struct device *dev, struct device *master, void *data)
 	struct ldb *ldb = &imx93_ldb->base;
 	struct imx93_ldb_channel *imx93_ldb_ch = &imx93_ldb->channel;
 	struct ldb_channel *ldb_ch = &imx93_ldb_ch->base;
-	struct drm_encoder *encoder[0];
+	struct drm_encoder *encoder[1];
 	int ret;
 	int i;
 

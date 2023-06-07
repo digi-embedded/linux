@@ -383,7 +383,7 @@ struct fsl_esai_soc_data {
  * @sck_rate: clock rate of desired SCKx clock
  * @hck_dir: the direction of HCKx pads
  * @sck_div: if using PSR/PM dividers for SCKx clock
- * @slave_mode: if fully using DAI slave mode
+ * @consumer_mode: if fully using DAI slave mode
  * @synchronous: if using tx/rx synchronous mode
  * @name: driver name
  */
@@ -410,7 +410,7 @@ struct fsl_esai {
 	u32 sck_rate[2];
 	bool hck_dir[2];
 	bool sck_div[2];
-	bool slave_mode[2];
+	bool consumer_mode[2];
 	bool synchronous;
 	bool sw_mix;
 	char name[32];

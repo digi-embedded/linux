@@ -146,7 +146,7 @@ typedef struct {
 	struct fasync_struct *async_queue;
 	unsigned int mirror_regs[512];
 	struct device *dev;
-	struct mutex dev_mutex;
+	bool skip_blkctrl;
 } hx280enc_t;
 
 /* dynamic allocation? */
@@ -191,6 +191,9 @@ static int hantro_h1_ctrlblk_reset(struct device *dev)
 	volatile u8 *iobase;
 	u32 val;
 
+	if (hx280enc_data.skip_blkctrl)
+		return 0;
+
 	//config H1
 	hantro_h1_clk_enable(dev);
 	iobase = (volatile u8 *)ioremap(BLK_CTL_BASE, 0x10000);
@@ -216,13 +219,7 @@ static int hantro_h1_ctrlblk_reset(struct device *dev)
 
 static int hantro_h1_power_on_disirq(hx280enc_t *hx280enc)
 {
-	//spin_lock_irq(&owner_lock);
-	mutex_lock(&hx280enc->dev_mutex);
-	disable_irq(hx280enc->irq);
 	pm_runtime_get_sync(hx280enc->dev);
-	enable_irq(hx280enc->irq);
-	mutex_unlock(&hx280enc->dev_mutex);
-	//spin_unlock_irq(&owner_lock);
 	return 0;
 }
 
@@ -287,6 +284,7 @@ unsigned int WaitEncReady(hx280enc_t *dev)
 
 		pr_err("%s: wait_event_timeout() timeout !\n", __func__);
 		writel(reg14 & (~1), dev->hwregs + 14*4);
+		up(&hx280enc_data.core_suspend_sem);
 	}
 
 	/* read register to mirror */
@@ -573,11 +571,9 @@ static long hx280enc_ioctl32(struct file *filp, unsigned int cmd, unsigned long 
 {
     long err = 0;
 #define HX280ENC_IOCTL32(err, filp, cmd, arg) { \
-	mm_segment_t old_fs = force_uaccess_begin(); \
 	err = hx280enc_ioctl(filp, cmd, arg); \
 	if (err) \
 	return err; \
-	force_uaccess_end(old_fs); \
 }
 
 union {
@@ -682,7 +678,7 @@ static int __init hx280enc_init(void)
 					SA_INTERRUPT | SA_SHIRQ,
 #else
 				//IRQF_DISABLED | IRQF_SHARED,
-				IRQF_SHARED,
+				0,
 #endif
 					"hx280enc", (void *) &hx280enc_data);
 		if (result == -EINVAL) {
@@ -863,6 +859,7 @@ static int hantro_h1_probe(struct platform_device *pdev)
 	struct device *temp_class;
 	struct resource *res;
 	unsigned long reg_base;
+	struct device_node *node;
 
 	hantro_h1_dev = &pdev->dev;
 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "regs_hantro_h1");
@@ -897,6 +894,17 @@ static int hantro_h1_probe(struct platform_device *pdev)
 
 	PDEBUG("hantro: h1 clock: 0x%lX, 0x%lX\n", clk_get_rate(hantro_clk_h1), clk_get_rate(hantro_clk_h1_bus));
 
+	/*
+	 * If integrate power-domains into blk-ctrl driver, vpu driver don't
+	 * need handle it again.
+	 */
+	node = of_parse_phandle(pdev->dev.of_node, "power-domains", 0);
+	if (!strcmp(node->name, "blk-ctl") || !strcmp(node->name, "blk-ctrl"))
+		hx280enc_data.skip_blkctrl = 1;
+	else
+		hx280enc_data.skip_blkctrl = 0;
+	of_node_put(node);
+
 	hantro_h1_clk_enable(&pdev->dev);
 	pm_runtime_enable(&pdev->dev);
 	pm_runtime_get_sync(&pdev->dev);
@@ -920,7 +928,6 @@ static int hantro_h1_probe(struct platform_device *pdev)
 	}
 	hx280enc_data.dev = &pdev->dev;
 	platform_set_drvdata(pdev, &hx280enc_data);
-	mutex_init(&hx280enc_data.dev_mutex);
 
 	goto out;
 

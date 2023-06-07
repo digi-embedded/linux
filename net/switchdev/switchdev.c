@@ -28,6 +28,7 @@ typedef void switchdev_deferred_func_t(struct net_device *dev,
 struct switchdev_deferred_item {
 	struct list_head list;
 	struct net_device *dev;
+	netdevice_tracker dev_tracker;
 	switchdev_deferred_func_t *func;
 	unsigned long data[];
 };
@@ -63,7 +64,7 @@ void switchdev_deferred_process(void)
 
 	while ((dfitem = switchdev_deferred_dequeue())) {
 		dfitem->func(dfitem->dev, dfitem->data);
-		dev_put(dfitem->dev);
+		netdev_put(dfitem->dev, &dfitem->dev_tracker);
 		kfree(dfitem);
 	}
 }
@@ -84,13 +85,13 @@ static int switchdev_deferred_enqueue(struct net_device *dev,
 {
 	struct switchdev_deferred_item *dfitem;
 
-	dfitem = kmalloc(sizeof(*dfitem) + data_len, GFP_ATOMIC);
+	dfitem = kmalloc(struct_size(dfitem, data, data_len), GFP_ATOMIC);
 	if (!dfitem)
 		return -ENOMEM;
 	dfitem->dev = dev;
 	dfitem->func = func;
 	memcpy(dfitem->data, data, data_len);
-	dev_hold(dev);
+	netdev_hold(dev, &dfitem->dev_tracker, GFP_ATOMIC);
 	spin_lock_bh(&deferred_lock);
 	list_add_tail(&dfitem->list, &deferred);
 	spin_unlock_bh(&deferred_lock);

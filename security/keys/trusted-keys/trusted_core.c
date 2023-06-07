@@ -34,16 +34,16 @@ module_param_named(source, trusted_key_source, charp, 0);
 MODULE_PARM_DESC(source, "Select trusted keys source (tpm, tee, caam or dcp)");
 
 static const struct trusted_key_source trusted_key_sources[] = {
-#if IS_REACHABLE(CONFIG_TRUSTED_KEYS_TPM)
+#if defined(CONFIG_TRUSTED_KEYS_TPM)
 	{ "tpm", &trusted_key_tpm_ops },
 #endif
-#if IS_REACHABLE(CONFIG_TRUSTED_KEYS_TEE)
+#if defined(CONFIG_TRUSTED_KEYS_TEE)
 	{ "tee", &trusted_key_tee_ops },
 #endif
-#if IS_REACHABLE(CONFIG_TRUSTED_KEYS_CAAM)
+#if defined(CONFIG_TRUSTED_KEYS_CAAM)
 	{ "caam", &trusted_key_caam_ops },
 #endif
-#if IS_REACHABLE(CONFIG_TRUSTED_KEYS_DCP)
+#if defined(CONFIG_TRUSTED_KEYS_DCP)
 	{ "dcp", &trusted_key_dcp_ops },
 #endif
 };

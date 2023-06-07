@@ -697,6 +697,7 @@ static void disp_mix_gasket_config(struct dwc_mipi_csi2_host *csi2h)
 	case MEDIA_BUS_FMT_YUYV8_2X8:
 	case MEDIA_BUS_FMT_YVYU8_2X8:
 	case MEDIA_BUS_FMT_UYVY8_2X8:
+	case MEDIA_BUS_FMT_UYVY8_1X16:
 	case MEDIA_BUS_FMT_VYUY8_2X8:
 		fmt_val = DT_YUV422_8;
 		break;
@@ -940,7 +941,7 @@ static struct media_pad *dwc_csi2_get_remote_sensor_pad(struct dwc_mipi_csi2_hos
 			sink_pad = &subdev->entity.pads[i];
 
 			if (sink_pad->flags & MEDIA_PAD_FL_SINK) {
-				source_pad = media_entity_remote_pad(sink_pad);
+				source_pad = media_pad_remote_pad_first(sink_pad);
 				if (source_pad)
 					break;
 			}

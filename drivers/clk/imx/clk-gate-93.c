@@ -101,6 +101,7 @@ out:
 static int imx93_clk_gate_reg_is_enabled(struct imx93_clk_gate *gate)
 {
 	u32 val = readl(gate->reg + AUTHEN_OFFSET);
+
 	if (val & CPULPM_EN) {
 		val = readl(gate->reg + LPM_CUR_OFFSET);
 		if (val == LPM_SETTING_ON)

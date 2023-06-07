@@ -34,7 +34,7 @@ static ssize_t rproc_cdev_write(struct file *filp, const char __user *buf, size_
 	if (!strncmp(cmd, "start", len)) {
 		ret = rproc_boot(rproc);
 	} else if (!strncmp(cmd, "stop", len)) {
-		rproc_shutdown(rproc);
+		ret = rproc_shutdown(rproc);
 	} else if (!strncmp(cmd, "detach", len)) {
 		ret = rproc_detach(rproc);
 	} else {

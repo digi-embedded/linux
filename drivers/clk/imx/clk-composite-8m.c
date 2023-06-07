@@ -171,7 +171,7 @@ static const struct clk_ops imx8m_clk_composite_mux_ops = {
 	.determine_rate = imx8m_clk_composite_mux_determine_rate,
 };
 
-struct clk_hw *imx8m_clk_hw_composite_flags(const char *name,
+struct clk_hw *__imx8m_clk_hw_composite(const char *name,
 					const char * const *parent_names,
 					int num_parents, void __iomem *reg,
 					u32 composite_flags,
@@ -224,9 +224,7 @@ struct clk_hw *imx8m_clk_hw_composite_flags(const char *name,
 	div->flags = CLK_DIVIDER_ROUND_CLOSEST;
 
 	/* skip registering the gate ops if M4 is enabled */
-	if (imx_src_is_m4_enabled() || mcore_booted) {
-		gate_hw = NULL;
-	} else {
+	if (!mcore_booted) {
 		gate = kzalloc(sizeof(*gate), GFP_KERNEL);
 		if (!gate)
 			goto fail;
@@ -251,4 +249,4 @@ fail:
 	kfree(mux);
 	return ERR_CAST(hw);
 }
-EXPORT_SYMBOL_GPL(imx8m_clk_hw_composite_flags);
+EXPORT_SYMBOL_GPL(__imx8m_clk_hw_composite);

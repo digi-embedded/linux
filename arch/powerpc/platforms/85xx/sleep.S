@@ -1098,7 +1098,7 @@ _GLOBAL(fsl_booke_deep_sleep_resume)
 
 #define ENTRY_DEEPSLEEP_SETUP
 #define ENTRY_MAPPING_BOOT_SETUP
-#include <../../kernel/fsl_booke_entry_mapping.S>
+#include <../../kernel/85xx_entry_mapping.S>
 #undef ENTRY_DEEPSLEEP_SETUP
 #undef ENTRY_MAPPING_BOOT_SETUP
 

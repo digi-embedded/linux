@@ -552,7 +552,7 @@ struct dpcon_cmd_set_notification {
 #define OBJ_CMDID_CLOSE		OBJ_CMD(0x800)
 #define OBJ_CMDID_RESET		OBJ_CMD(0x005)
 
-struct obj_cmd_open {
+struct fsl_mc_obj_cmd_open {
 	__le32 obj_id;
 };
 

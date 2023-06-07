@@ -41,7 +41,7 @@
 #include <linux/fsl_devices.h>
 #include <linux/bitops.h>
 #include <linux/pinctrl/consumer.h>
-#include <linux/platform_data/dma-imx.h>
+#include <linux/dma/imx-dma.h>
 #include <asm/cacheflush.h>
 
 #include "epdc_v2_regs.h"

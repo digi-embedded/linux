@@ -991,7 +991,7 @@ static int mipi_csis_subdev_host(struct csi_state *state)
 	struct v4l2_async_subdev *asd;
 	int ret;
 
-	v4l2_async_notifier_init(&state->subdev_notifier);
+	v4l2_async_nf_init(&state->subdev_notifier);
 
 	/* Attach sensors linked to csi receivers */
 	for_each_available_child_of_node(parent, node) {
@@ -1012,7 +1012,7 @@ static int mipi_csis_subdev_host(struct csi_state *state)
 		}
 
 		state->fwnode = of_fwnode_handle(rem);
-		asd = v4l2_async_notifier_add_fwnode_subdev(
+		asd = v4l2_async_nf_add_fwnode(
 						&state->subdev_notifier,
 						state->fwnode,
 						struct v4l2_async_subdev);
@@ -1030,7 +1030,7 @@ static int mipi_csis_subdev_host(struct csi_state *state)
 	state->subdev_notifier.v4l2_dev = &state->v4l2_dev;
 	state->subdev_notifier.ops = &mxc_mipi_csi_subdev_ops;
 
-	ret = v4l2_async_notifier_register(&state->v4l2_dev,
+	ret = v4l2_async_nf_register(&state->v4l2_dev,
 					&state->subdev_notifier);
 	if (ret)
 		dev_err(state->dev,
@@ -1171,7 +1171,7 @@ static int mipi_csis_probe(struct platform_device *pdev)
 	return 0;
 
 e_sd_host:
-	v4l2_async_notifier_unregister(&state->subdev_notifier);
+	v4l2_async_nf_unregister(&state->subdev_notifier);
 	v4l2_device_unregister(&state->v4l2_dev);
 e_sd_mipi:
 	v4l2_async_unregister_subdev(&state->mipi_sd);
@@ -1273,8 +1273,8 @@ static int mipi_csis_remove(struct platform_device *pdev)
 	struct csi_state *state = platform_get_drvdata(pdev);
 
 	v4l2_async_unregister_subdev(&state->mipi_sd);
-	v4l2_async_notifier_cleanup(&state->subdev_notifier);
-	v4l2_async_notifier_unregister(&state->subdev_notifier);
+	v4l2_async_nf_cleanup(&state->subdev_notifier);
+	v4l2_async_nf_unregister(&state->subdev_notifier);
 	v4l2_device_unregister(&state->v4l2_dev);
 
 	pm_runtime_disable(&pdev->dev);

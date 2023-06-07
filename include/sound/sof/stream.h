@@ -87,11 +87,10 @@ struct sof_ipc_stream_params {
 	uint16_t no_stream_position; /**< 1 means don't send stream position */
 	uint8_t cont_update_posn; /**< 1 means continuous update stream position */
 	uint8_t reserved0;
-	uint16_t ext_data_length; /**< 0 means no extended data */
-
+	int16_t ext_data_length; /**< 0, means no extended data */
 	uint8_t reserved[2];
 	uint16_t chmap[SOF_IPC_MAX_CHANNELS];	/**< channel map - SOF_CHMAP_ */
-	int8_t data[]; /**< extended data */
+	uint8_t ext_data[]; /**< extended data */
 } __packed;
 
 /* PCM params info - SOF_IPC_STREAM_PCM_PARAMS */

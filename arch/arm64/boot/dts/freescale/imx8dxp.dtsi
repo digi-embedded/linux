@@ -9,7 +9,7 @@
 #include "imx8qxp.dtsi"
 
 &thermal_zones {
-	cpu-thermal0 {
+	cpu0-thermal {
 		cooling-maps {
 			map0 {
 				cooling-device =

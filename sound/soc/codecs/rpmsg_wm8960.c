@@ -1362,6 +1362,7 @@ const struct snd_soc_component_driver rpmsg_wm8960_component = {
 	.probe = rpmsg_wm8960_probe,
 	.set_bias_level = wm8960_set_bias_level,
 	.suspend_bias_off = 1,
+	.legacy_dai_naming = 1,
 };
 EXPORT_SYMBOL(rpmsg_wm8960_component);
 

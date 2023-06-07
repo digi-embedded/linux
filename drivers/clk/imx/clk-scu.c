@@ -530,7 +530,7 @@ static int imx_clk_scu_probe(struct platform_device *pdev)
 		pm_runtime_use_autosuspend(&pdev->dev);
 		pm_runtime_enable(dev);
 
-		ret = pm_runtime_get_sync(dev);
+		ret = pm_runtime_resume_and_get(dev);
 		if (ret) {
 			pm_genpd_remove_device(dev);
 			pm_runtime_disable(dev);
@@ -714,14 +714,23 @@ struct clk_hw *imx_clk_scu_alloc_dev(const char *name,
 		return ERR_PTR(ret);
 	}
 
-	pdev->driver_override = "imx-scu-clk";
+	ret = driver_set_override(&pdev->dev, &pdev->driver_override,
+				  "imx-scu-clk", strlen("imx-scu-clk"));
+	if (ret) {
+		platform_device_put(pdev);
+		return ERR_PTR(ret);
+	}
 
 	ret = imx_clk_scu_attach_pd(&pdev->dev, rsrc_id);
 	if (ret)
 		pr_warn("%s: failed to attached the power domain %d\n",
 			name, ret);
 
-	platform_device_add(pdev);
+	ret = platform_device_add(pdev);
+	if (ret) {
+		platform_device_put(pdev);
+		return ERR_PTR(ret);
+	}
 
 	/* For API backwards compatiblilty, simply return NULL for success */
 	return NULL;
@@ -864,12 +873,14 @@ struct clk_hw *__imx_clk_gpr_scu(const char *name, const char * const *parent_na
 	if (rsrc_id >= IMX_SC_R_LAST || gpr_id >= IMX_SC_C_LAST)
 		return ERR_PTR(-EINVAL);
 
-	if (!imx_scu_clk_is_valid(rsrc_id))
-		return ERR_PTR(-EINVAL);
-
 	clk_node = kzalloc(sizeof(*clk_node), GFP_KERNEL);
 	if (!clk_node)
 		return ERR_PTR(-ENOMEM);
+
+	if (!imx_scu_clk_is_valid(rsrc_id)) {
+		kfree(clk_node);
+		return ERR_PTR(-EINVAL);
+	}
 
 	clk = kzalloc(sizeof(*clk), GFP_KERNEL);
 	if (!clk) {

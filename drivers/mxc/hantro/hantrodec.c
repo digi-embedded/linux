@@ -49,7 +49,7 @@
 #include <linux/pm_runtime.h>
 #include <linux/clk.h>
 #include <linux/compat.h>
-//#include <linux/busfreq-imx.h>
+#include <linux/busfreq-imx.h>
 
 #ifdef CONFIG_DEVICE_THERMAL
 #include <linux/thermal.h>
@@ -146,7 +146,7 @@ static struct device *hantro_dev;
 static struct clk *hantro_clk_g1;
 static struct clk *hantro_clk_g2;
 static struct clk *hantro_clk_bus;
-//static struct regulator *hantro_regulator;
+static struct regulator *hantro_regulator;
 
 static int hantro_dbg = -1;
 module_param(hantro_dbg, int, 0644);
@@ -173,6 +173,7 @@ typedef struct {
 	struct fasync_struct *async_queue_dec;
 	struct fasync_struct *async_queue_pp;
 	struct thermal_cooling_device *cooling;
+	bool skip_blkctrl;
 } hantrodec_t;
 
 static hantrodec_t hantrodec_data; /* dynamic allocation? */
@@ -227,7 +228,6 @@ DECLARE_WAIT_QUEUE_HEAD(hw_queue);
 static u32 cfg[HXDEC_MAX_CORES];
 static u32 timeout;
 
-#if 0
 static int hantro_update_voltage(struct device *dev)
 {
 	unsigned long new_vol, old_vol;
@@ -255,7 +255,6 @@ static int hantro_update_voltage(struct device *dev)
 	}
 	return 0;
 }
-#endif
 
 static int hantro_clk_enable(struct device *dev)
 {
@@ -288,6 +287,9 @@ static int hantro_clk_disable(struct device *dev)
 static int hantro_ctrlblk_reset(struct device *dev)
 {
 	volatile u8 *iobase;
+
+	if (hantrodec_data.skip_blkctrl)
+		return 0;
 
 	//config G1/G2
 	hantro_clk_enable(dev);
@@ -332,7 +334,7 @@ static int hantro_thermal_check(struct device *dev)
 	}
 	pr_info("hantro: event(%d), g1, g2, bus clock: %ld, %ld, %ld\n", thermal_cur,
 		clk_get_rate(hantro_clk_g1),	clk_get_rate(hantro_clk_g2), clk_get_rate(hantro_clk_bus));
-	//hantro_update_voltage(dev);
+	hantro_update_voltage(dev);
 	return 0;
 }
 
@@ -899,6 +901,7 @@ long WaitDecReadyAndRefreshRegs(hantrodec_t *dev, struct core_desc *Core)
 	} else if (ret == 0) {
 		pr_err("DEC[%d]  wait_event timeout\n", id);
 		timeout = 1;
+		up(&core_suspend_sem[id]);
 	}
 
 	atomic_inc(&irq_tx);
@@ -1361,11 +1364,9 @@ static int put_hantro_core_desc32(struct core_desc *kp, struct core_desc_32 __us
 static long hantrodec_ioctl32(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 #define HANTRO_IOCTL32(err, filp, cmd, arg) { \
-		mm_segment_t old_fs = force_uaccess_begin(); \
 		err = hantrodec_ioctl(filp, cmd, arg); \
 		if (err) \
 			return err; \
-		force_uaccess_end(old_fs); \
 	}
 
 	union {
@@ -1554,7 +1555,7 @@ int hantrodec_init(struct platform_device *pdev)
 	irq_0 = platform_get_irq_byname(pdev, "irq_hantro_g1");
 	if (irq_0 > 0) {
 		hantrodec_data.irq[0] = irq_0;
-		result = request_irq(irq_0, hantrodec_isr, IRQF_SHARED,
+		result = request_irq(irq_0, hantrodec_isr, 0,
 				"hantrodec", (void *) &hantrodec_data);
 
 		if (result != 0) {
@@ -1575,7 +1576,7 @@ int hantrodec_init(struct platform_device *pdev)
 	irq_1 = platform_get_irq_byname(pdev, "irq_hantro_g2");
 	if (irq_1 > 0) {
 		hantrodec_data.irq[1] = irq_1;
-		result = request_irq(irq_1, hantrodec_isr, IRQF_SHARED,
+		result = request_irq(irq_1, hantrodec_isr, 0,
 				"hantrodec", (void *) &hantrodec_data);
 
 		if (result != 0) {
@@ -1843,6 +1844,7 @@ static int hantro_dev_probe(struct platform_device *pdev)
 	struct device *temp_class;
 	struct resource *res;
 	unsigned long reg_base;
+	struct device_node *node;
 
 	hantro_dev = &pdev->dev;
 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "regs_hantro");
@@ -1866,14 +1868,28 @@ static int hantro_dev_probe(struct platform_device *pdev)
 	pr_debug("hantro: g1, g2, bus clock: 0x%lX, 0x%lX, 0x%lX\n", clk_get_rate(hantro_clk_g1),
 				clk_get_rate(hantro_clk_g2), clk_get_rate(hantro_clk_bus));
 
-#if 0
-	hantro_regulator = regulator_get(&pdev->dev, "regulator");
+	/*
+	 * If integrate power-domains into blk-ctrl driver, vpu driver don't
+	 * need handle it again.
+	 */
+	node = of_parse_phandle(pdev->dev.of_node, "power-domains", 0);
+	if (!node) {
+		pr_err("hantro: not get power-domains\n");
+		return -ENODEV;
+	}
+	if (!strcmp(node->name, "blk-ctl") || !strcmp(node->name, "blk-ctrl"))
+		hantrodec_data.skip_blkctrl = 1;
+	else
+		hantrodec_data.skip_blkctrl = 0;
+	of_node_put(node);
+
+	hantro_regulator = devm_regulator_get(&pdev->dev, "vpu");
 	if (IS_ERR(hantro_regulator)) {
 		pr_err("hantro: get regulator failed\n");
 		return -ENODEV;
 	}
 	hantro_update_voltage(&pdev->dev);
-#endif
+
 	hantro_clk_enable(&pdev->dev);
 	pm_runtime_enable(&pdev->dev);
 

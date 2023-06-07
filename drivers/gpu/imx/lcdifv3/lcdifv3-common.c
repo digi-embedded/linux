@@ -46,7 +46,6 @@ struct lcdifv3_soc_pdata {
 	bool hsync_invert;
 	bool vsync_invert;
 	bool de_invert;
-	bool hdmimix;
 };
 
 struct lcdifv3_platform_reg {
@@ -65,27 +64,18 @@ static struct lcdifv3_soc_pdata imx8mp_lcdif1_pdata = {
 	.hsync_invert = false,
 	.vsync_invert = false,
 	.de_invert    = false,
-	.hdmimix     = false,
 };
 
 static struct lcdifv3_soc_pdata imx8mp_lcdif2_pdata = {
 	.hsync_invert = false,
 	.vsync_invert = false,
 	.de_invert    = true,
-	.hdmimix      = false,
 };
 
-static struct lcdifv3_soc_pdata imx8mp_lcdif3_pdata = {
-	.hsync_invert = false,
-	.vsync_invert = false,
-	.de_invert    = false,
-	.hdmimix     = true,
-};
 static const struct of_device_id imx_lcdifv3_dt_ids[] = {
 	{ .compatible = "fsl,imx93-lcdif", },
 	{ .compatible = "fsl,imx8mp-lcdif1", .data = &imx8mp_lcdif1_pdata, },
 	{ .compatible = "fsl,imx8mp-lcdif2", .data = &imx8mp_lcdif2_pdata, },
-	{ .compatible = "fsl,imx8mp-lcdif3", .data = &imx8mp_lcdif3_pdata,},
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, imx_lcdifv3_dt_ids);
@@ -343,8 +333,7 @@ void lcdifv3_set_fb_addr(struct lcdifv3_soc *lcdifv3, int id, u32 addr)
 }
 EXPORT_SYMBOL(lcdifv3_set_fb_addr);
 
-void lcdifv3_set_fb_hcrop(struct lcdifv3_soc *lcdifv3, u32 src_w,
-			u32 pitch, bool crop)
+void lcdifv3_set_pitch(struct lcdifv3_soc *lcdifv3, unsigned int pitch)
 {
 	uint32_t ctrldescl0_3 = 0;
 
@@ -369,7 +358,7 @@ void lcdifv3_set_fb_hcrop(struct lcdifv3_soc *lcdifv3, u32 src_w,
 
 	writel(ctrldescl0_3, lcdifv3->base + LCDIFV3_CTRLDESCL0_3);
 }
-EXPORT_SYMBOL(lcdifv3_set_fb_hcrop);
+EXPORT_SYMBOL(lcdifv3_set_pitch);
 
 
 void lcdifv3_set_mode(struct lcdifv3_soc *lcdifv3, struct videomode *vmode)
@@ -522,42 +511,6 @@ long lcdifv3_pix_clk_round_rate(struct lcdifv3_soc *lcdifv3,
 }
 EXPORT_SYMBOL(lcdifv3_pix_clk_round_rate);
 
-static int hdmimix_lcdif3_setup(struct lcdifv3_soc *lcdifv3)
-{
-	struct device *dev = lcdifv3->dev;
-	int ret;
-
-	struct clk_bulk_data clocks[] = {
-		{ .id = "mix_apb" },
-		{ .id = "mix_axi" },
-		{ .id = "xtl_24m" },
-		{ .id = "mix_pix" },
-		{ .id = "lcdif_apb" },
-		{ .id = "lcdif_axi" },
-		{ .id = "lcdif_pdi" },
-		{ .id = "lcdif_pix" },
-		{ .id = "lcdif_spu" },
-		{ .id = "noc_hdmi"  },
-	};
-
-	/* power up hdmimix lcdif and nor */
-	ret = device_reset(dev);
-	if (ret)
-		dev_warn(dev, "No hdmimix sub reset found\n");
-	if (ret == -EPROBE_DEFER)
-		return ret;
-
-	/* enable lpcg of hdmimix lcdif and nor */
-	ret = devm_clk_bulk_get(dev, ARRAY_SIZE(clocks), clocks);
-	if (ret < 0)
-		return ret;
-	ret = clk_bulk_prepare_enable(ARRAY_SIZE(clocks), clocks);
-	if (ret < 0)
-		return ret;
-
-	return 0;
-}
-
 static int platform_remove_device_fn(struct device *dev, void *data)
 {
 	struct platform_device *pdev = to_platform_device(dev);
@@ -686,18 +639,8 @@ static int imx_lcdifv3_probe(struct platform_device *pdev)
 	struct device_node *np = dev->of_node;
 	struct lcdifv3_soc *lcdifv3;
 	struct resource *res;
-	const struct of_device_id *of_id;
-	const struct lcdifv3_soc_pdata *soc_pdata;
 
 	dev_dbg(dev, "%s: probe begin\n", __func__);
-
-	of_id = of_match_device(imx_lcdifv3_dt_ids, dev);
-	if (!of_id) {
-		dev_err(&pdev->dev, "OF data missing\n");
-		return -EINVAL;
-	}
-
-	soc_pdata = of_id->data;
 
 	lcdifv3 = devm_kzalloc(dev, sizeof(*lcdifv3), GFP_KERNEL);
 	if (!lcdifv3) {
@@ -745,37 +688,9 @@ static int imx_lcdifv3_probe(struct platform_device *pdev)
 
 	lcdifv3->dev = dev;
 
-	/* reset controller to avoid any conflict
-	 * with uboot splash screen settings.
-	 */
-	if (of_device_is_compatible(np, "fsl,imx8mp-lcdif1")) {
-		/* TODO: Maybe the clock enable should
-		 *	 be done in reset driver.
-		 */
-		clk_prepare_enable(lcdifv3->clk_disp_axi);
-		clk_prepare_enable(lcdifv3->clk_disp_apb);
-
-		writel(CTRL_SW_RESET, lcdifv3->base + LCDIFV3_CTRL_CLR);
-
-		ret = device_reset(dev);
-		if (ret)
-			dev_warn(dev, "lcdif1 reset failed: %d\n", ret);
-
-		clk_disable_unprepare(lcdifv3->clk_disp_axi);
-		clk_disable_unprepare(lcdifv3->clk_disp_apb);
-	}
-
 	imx_lcdifv3_of_parse_thres(lcdifv3);
 
 	platform_set_drvdata(pdev, lcdifv3);
-
-	if (soc_pdata && soc_pdata->hdmimix) {
-		ret = hdmimix_lcdif3_setup(lcdifv3);
-		if (ret < 0) {
-			dev_err(dev, "hdmimix lcdif3 setup failed\n");
-			return ret;
-		}
-	}
 
 	atomic_set(&lcdifv3->rpm_suspended, 0);
 	pm_runtime_enable(dev);

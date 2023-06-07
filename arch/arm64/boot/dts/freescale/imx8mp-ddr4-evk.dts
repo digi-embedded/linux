@@ -8,9 +8,7 @@
 / {
 	model = "NXP i.MX8MPlus DDR4 EVK board";
 
-	gpio-leds {
-		status = "disabled";
-	};
+	/delete-node/ gpio-leds;
 };
 
 &flexspi {
@@ -37,6 +35,7 @@
 	pinctrl-0 = <&pinctrl_gpmi_nand>;
 	status = "okay";
 	nand-on-flash-bbt;
+	fsl,use-minimum-ecc;
 };
 
 &gpu_2d {

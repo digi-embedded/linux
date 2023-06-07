@@ -218,6 +218,7 @@
 			reg = <0>;
 			eee-broken-1000t;
 			qca,disable-smarteee;
+			qca,disable-hibernation-mode;
 			vddio-supply = <&vddio0>;
 
 			vddio0: vddio-regulator {
@@ -306,6 +307,7 @@
 	status = "okay";
 	nand-on-flash-bbt;
 	fsl,max-nand-cs = <1>;
+	fsl,use-minimum-ecc;
 };
 
 &i2c2 {

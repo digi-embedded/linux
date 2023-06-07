@@ -621,6 +621,7 @@ static struct snd_soc_dai_driver fsl_hdmi_dai = {
 
 static const struct snd_soc_component_driver fsl_hdmi_component = {
 	.name		= "fsl-hdmi",
+	.legacy_dai_naming	= 1,
 };
 
 /* HDMI audio codec callbacks */
@@ -661,7 +662,7 @@ static int fsl_hdmi_dai_probe(struct platform_device *pdev)
 
 	if (!hdmi_get_registered()) {
 		dev_err(&pdev->dev, "failed to probe. Load HDMI-video first.\n");
-		return -ENOMEM;
+		return -EPROBE_DEFER;
 	}
 
 	hdmi_data = devm_kzalloc(&pdev->dev, sizeof(*hdmi_data), GFP_KERNEL);

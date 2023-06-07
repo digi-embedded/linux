@@ -6,6 +6,7 @@
 #ifndef _LINUX_XDP_SOCK_H
 #define _LINUX_XDP_SOCK_H
 
+#include <linux/bpf.h>
 #include <linux/workqueue.h>
 #include <linux/if_xdp.h>
 #include <linux/mutex.h>
@@ -21,7 +22,6 @@ struct xdp_umem {
 	void *addrs;
 	u64 size;
 	u32 headroom;
-	u32 tx_headroom;
 	u32 chunk_size;
 	u32 chunks;
 	u32 npgs;

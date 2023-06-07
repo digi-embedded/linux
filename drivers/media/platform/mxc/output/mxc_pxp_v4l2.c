@@ -24,7 +24,7 @@
 #include <linux/delay.h>
 #include <linux/console.h>
 #include <linux/mxcfb.h>
-#include <linux/platform_data/dma-imx.h>
+#include <linux/dma/imx-dma.h>
 
 #include <media/videobuf-dma-contig.h>
 #include <media/v4l2-common.h>

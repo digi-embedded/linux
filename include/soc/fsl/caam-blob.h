@@ -15,15 +15,15 @@
 
 struct caam_blob_priv;
 
-/** struct caam_blob_info - information for CAAM blobbing
- *
+/**
+ * struct caam_blob_info - information for CAAM blobbing
  * @input:       pointer to input buffer (must be DMAable)
  * @input_len:   length of @input buffer in bytes.
  * @output:      pointer to output buffer (must be DMAable)
  * @output_len:  length of @output buffer in bytes.
  * @key_mod:     key modifier
  * @key_mod_len: length of @key_mod in bytes.
- *	         May not exceed CAAM_BLOB_KEYMOD_LENGTH
+ *	         May not exceed %CAAM_BLOB_KEYMOD_LENGTH
  */
 struct caam_blob_info {
 	void *input;
@@ -36,39 +36,40 @@ struct caam_blob_info {
 	size_t key_mod_len;
 };
 
-/** caam_blob_gen_init - initialize blob generation
- *
- * returns either pointer to new caam_blob_priv instance
- * or error pointer
+/**
+ * caam_blob_gen_init - initialize blob generation
+ * Return: pointer to new &struct caam_blob_priv instance on success
+ * and ``ERR_PTR(-ENODEV)`` if CAAM has no hardware blobbing support
+ * or no job ring could be allocated.
  */
 struct caam_blob_priv *caam_blob_gen_init(void);
 
-/** caam_blob_gen_exit - free blob generation resources
- *
- * @priv: instance returned by caam_blob_gen_init
+/**
+ * caam_blob_gen_exit - free blob generation resources
+ * @priv: instance returned by caam_blob_gen_init()
  */
 void caam_blob_gen_exit(struct caam_blob_priv *priv);
 
-/** caam_process_blob - encapsulate or decapsulate blob
- *
- * @priv:   instance returned by caam_blob_gen_init
+/**
+ * caam_process_blob - encapsulate or decapsulate blob
+ * @priv:   instance returned by caam_blob_gen_init()
  * @info:   pointer to blobbing info describing key, blob and
  *          key modifier buffers.
  * @encap:  true for encapsulation, false for decapsulation
  *
- * returns 0 and sets info->output_len on success and returns
- * a negative error code otherwise.
+ * Return: %0 and sets ``info->output_len`` on success and a negative
+ * error code otherwise.
  */
 int caam_process_blob(struct caam_blob_priv *priv,
-		      struct caam_blob_info *info, bool blob);
+		      struct caam_blob_info *info, bool encap);
 
-/** caam_encap_blob - encapsulate blob
- *
- * @priv:   instance returned by caam_blob_gen_init
+/**
+ * caam_encap_blob - encapsulate blob
+ * @priv:   instance returned by caam_blob_gen_init()
  * @info:   pointer to blobbing info describing input key,
  *          output blob and key modifier buffers.
  *
- * returns 0 and sets info->output_len on success and returns
+ * Return: %0 and sets ``info->output_len`` on success and
  * a negative error code otherwise.
  */
 static inline int caam_encap_blob(struct caam_blob_priv *priv,
@@ -80,13 +81,13 @@ static inline int caam_encap_blob(struct caam_blob_priv *priv,
 	return caam_process_blob(priv, info, true);
 }
 
-/** caam_decap_blob - decapsulate blob
- *
- * @priv:   instance returned by caam_blob_gen_init
+/**
+ * caam_decap_blob - decapsulate blob
+ * @priv:   instance returned by caam_blob_gen_init()
  * @info:   pointer to blobbing info describing output key,
  *          input blob and key modifier buffers.
  *
- * returns 0 and sets info->output_len on success and returns
+ * Return: %0 and sets ``info->output_len`` on success and
  * a negative error code otherwise.
  */
 static inline int caam_decap_blob(struct caam_blob_priv *priv,

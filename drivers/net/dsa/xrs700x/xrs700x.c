@@ -5,6 +5,7 @@
  */
 
 #include <net/dsa.h>
+#include <linux/etherdevice.h>
 #include <linux/if_bridge.h>
 #include <linux/of_device.h>
 #include <linux/netdev_features.h>
@@ -442,36 +443,27 @@ static void xrs700x_teardown(struct dsa_switch *ds)
 	cancel_delayed_work_sync(&priv->mib_work);
 }
 
-static void xrs700x_phylink_validate(struct dsa_switch *ds, int port,
-				     unsigned long *supported,
-				     struct phylink_link_state *state)
+static void xrs700x_phylink_get_caps(struct dsa_switch *ds, int port,
+				     struct phylink_config *config)
 {
-	__ETHTOOL_DECLARE_LINK_MODE_MASK(mask) = { 0, };
-
 	switch (port) {
 	case 0:
+		__set_bit(PHY_INTERFACE_MODE_RMII,
+			  config->supported_interfaces);
+		config->mac_capabilities = MAC_10FD | MAC_100FD;
 		break;
+
 	case 1:
 	case 2:
 	case 3:
-		phylink_set(mask, 1000baseT_Full);
+		phy_interface_set_rgmii(config->supported_interfaces);
+		config->mac_capabilities = MAC_10FD | MAC_100FD | MAC_1000FD;
 		break;
+
 	default:
-		bitmap_zero(supported, __ETHTOOL_LINK_MODE_MASK_NBITS);
 		dev_err(ds->dev, "Unsupported port: %i\n", port);
-		return;
+		break;
 	}
-
-	phylink_set_port_modes(mask);
-
-	/* The switch only supports full duplex. */
-	phylink_set(mask, 10baseT_Full);
-	phylink_set(mask, 100baseT_Full);
-
-	bitmap_and(supported, supported, mask,
-		   __ETHTOOL_LINK_MODE_MASK_NBITS);
-	bitmap_and(state->advertising, state->advertising, mask,
-		   __ETHTOOL_LINK_MODE_MASK_NBITS);
 }
 
 static void xrs700x_mac_link_up(struct dsa_switch *ds, int port,
@@ -706,7 +698,7 @@ static const struct dsa_switch_ops xrs700x_ops = {
 	.setup			= xrs700x_setup,
 	.teardown		= xrs700x_teardown,
 	.port_stp_state_set	= xrs700x_port_stp_state_set,
-	.phylink_validate	= xrs700x_phylink_validate,
+	.phylink_get_caps	= xrs700x_phylink_get_caps,
 	.phylink_mac_link_up	= xrs700x_mac_link_up,
 	.get_strings		= xrs700x_get_strings,
 	.get_sset_count		= xrs700x_get_sset_count,

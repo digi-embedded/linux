@@ -344,6 +344,7 @@ static int dsa_switch_do_lag_fdb_add(struct dsa_switch *ds, struct dsa_lag *lag,
 
 	ether_addr_copy(a->addr, addr);
 	a->vid = vid;
+	a->db = db;
 	refcount_set(&a->refcount, 1);
 	list_add_tail(&a->list, &lag->fdbs);
 
@@ -397,8 +398,15 @@ static int dsa_switch_host_fdb_add(struct dsa_switch *ds,
 
 	dsa_switch_for_each_port(dp, ds) {
 		if (dsa_port_host_address_match(dp, info->dp)) {
-			err = dsa_port_do_fdb_add(dp, info->addr, info->vid,
-						  info->db);
+			if (dsa_port_is_cpu(dp) && info->dp->cpu_port_in_lag) {
+				err = dsa_switch_do_lag_fdb_add(ds, dp->lag,
+								info->addr,
+								info->vid,
+								info->db);
+			} else {
+				err = dsa_port_do_fdb_add(dp, info->addr,
+							  info->vid, info->db);
+			}
 			if (err)
 				break;
 		}
@@ -418,8 +426,15 @@ static int dsa_switch_host_fdb_del(struct dsa_switch *ds,
 
 	dsa_switch_for_each_port(dp, ds) {
 		if (dsa_port_host_address_match(dp, info->dp)) {
-			err = dsa_port_do_fdb_del(dp, info->addr, info->vid,
-						  info->db);
+			if (dsa_port_is_cpu(dp) && info->dp->cpu_port_in_lag) {
+				err = dsa_switch_do_lag_fdb_del(ds, dp->lag,
+								info->addr,
+								info->vid,
+								info->db);
+			} else {
+				err = dsa_port_do_fdb_del(dp, info->addr,
+							  info->vid, info->db);
+			}
 			if (err)
 				break;
 		}
@@ -506,12 +521,12 @@ static int dsa_switch_lag_join(struct dsa_switch *ds,
 {
 	if (info->dp->ds == ds && ds->ops->port_lag_join)
 		return ds->ops->port_lag_join(ds, info->dp->index, info->lag,
-					      info->info);
+					      info->info, info->extack);
 
 	if (info->dp->ds != ds && ds->ops->crosschip_lag_join)
 		return ds->ops->crosschip_lag_join(ds, info->dp->ds->index,
 						   info->dp->index, info->lag,
-						   info->info);
+						   info->info, info->extack);
 
 	return -EOPNOTSUPP;
 }
@@ -809,14 +824,12 @@ static int dsa_switch_change_tag_proto(struct dsa_switch *ds,
 
 	ASSERT_RTNL();
 
-	dsa_switch_for_each_cpu_port(cpu_dp, ds) {
-		err = ds->ops->change_tag_protocol(ds, cpu_dp->index,
-						   tag_ops->proto);
-		if (err)
-			return err;
+	err = ds->ops->change_tag_protocol(ds, tag_ops->proto);
+	if (err)
+		return err;
 
+	dsa_switch_for_each_cpu_port(cpu_dp, ds)
 		dsa_port_set_tag_protocol(cpu_dp, tag_ops);
-	}
 
 	/* Now that changing the tag protocol can no longer fail, let's update
 	 * the remaining bits which are "duplicated for faster access", and the
@@ -885,6 +898,18 @@ dsa_switch_disconnect_tag_proto(struct dsa_switch *ds,
 	/* No need to notify the switch, since it shouldn't have any
 	 * resources to tear down
 	 */
+	return 0;
+}
+
+static int
+dsa_switch_master_state_change(struct dsa_switch *ds,
+			       struct dsa_notifier_master_state_info *info)
+{
+	if (!ds->ops->master_state_change)
+		return 0;
+
+	ds->ops->master_state_change(ds, info->master, info->operational);
+
 	return 0;
 }
 
@@ -972,6 +997,9 @@ static int dsa_switch_event(struct notifier_block *nb,
 		break;
 	case DSA_NOTIFIER_TAG_8021Q_VLAN_DEL:
 		err = dsa_switch_tag_8021q_vlan_del(ds, info);
+		break;
+	case DSA_NOTIFIER_MASTER_STATE_CHANGE:
+		err = dsa_switch_master_state_change(ds, info);
 		break;
 	default:
 		err = -EOPNOTSUPP;

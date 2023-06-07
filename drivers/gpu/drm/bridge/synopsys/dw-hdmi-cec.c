@@ -18,8 +18,6 @@
 
 #include "dw-hdmi-cec.h"
 
-static u8 cec_saved_regs[5];
-
 enum {
 	HDMI_IH_CEC_STAT0	= 0x0106,
 	HDMI_IH_MUTE_CEC_STAT0	= 0x0186,
@@ -64,6 +62,10 @@ struct dw_hdmi_cec {
 	bool rx_done;
 	struct cec_notifier *notify;
 	int irq;
+
+	u8 regs_polarity;
+	u8 regs_mask;
+	u8 regs_mute_stat0;
 };
 
 static void dw_hdmi_write(struct dw_hdmi_cec *cec, u8 val, int offset)
@@ -267,11 +269,9 @@ static int dw_hdmi_cec_probe(struct platform_device *pdev)
 	/* override the module pointer */
 	cec->adap->owner = THIS_MODULE;
 
-	ret = devm_add_action(&pdev->dev, dw_hdmi_cec_del, cec);
-	if (ret) {
-		cec_delete_adapter(cec->adap);
+	ret = devm_add_action_or_reset(&pdev->dev, dw_hdmi_cec_del, cec);
+	if (ret)
 		return ret;
-	}
 
 	ret = devm_request_threaded_irq(&pdev->dev, cec->irq,
 					dw_hdmi_cec_hardirq,
@@ -314,12 +314,14 @@ static int __maybe_unused dw_hdmi_cec_resume(struct device *dev)
 {
 	struct dw_hdmi_cec *cec = dev_get_drvdata(dev);
 
-	/* Restore logical address and interrupt status/mask register */
-	dw_hdmi_write(cec, cec_saved_regs[0], HDMI_CEC_ADDR_L);
-	dw_hdmi_write(cec, cec_saved_regs[1], HDMI_CEC_ADDR_H);
-	dw_hdmi_write(cec, cec_saved_regs[2], HDMI_CEC_POLARITY);
-	dw_hdmi_write(cec, cec_saved_regs[3], HDMI_CEC_MASK);
-	dw_hdmi_write(cec, cec_saved_regs[4], HDMI_IH_MUTE_CEC_STAT0);
+	/* Restore logical address */
+	dw_hdmi_write(cec, cec->addresses & 255, HDMI_CEC_ADDR_L);
+	dw_hdmi_write(cec, cec->addresses >> 8, HDMI_CEC_ADDR_H);
+
+	/* Restore interrupt status/mask register */
+	dw_hdmi_write(cec, cec->regs_polarity, HDMI_CEC_POLARITY);
+	dw_hdmi_write(cec, cec->regs_mask, HDMI_CEC_MASK);
+	dw_hdmi_write(cec, cec->regs_mute_stat0, HDMI_IH_MUTE_CEC_STAT0);
 
 	return 0;
 }
@@ -328,12 +330,10 @@ static int __maybe_unused dw_hdmi_cec_suspend(struct device *dev)
 {
 	struct dw_hdmi_cec *cec = dev_get_drvdata(dev);
 
-	/* store logical address and interrupt status/mask register */
-	cec_saved_regs[0] = dw_hdmi_read(cec, HDMI_CEC_ADDR_L);
-	cec_saved_regs[1] = dw_hdmi_read(cec, HDMI_CEC_ADDR_H);
-	cec_saved_regs[2] = dw_hdmi_read(cec, HDMI_CEC_POLARITY);
-	cec_saved_regs[3] = dw_hdmi_read(cec, HDMI_CEC_MASK);
-	cec_saved_regs[4] = dw_hdmi_read(cec, HDMI_IH_MUTE_CEC_STAT0);
+	/* store interrupt status/mask register */
+	 cec->regs_polarity = dw_hdmi_read(cec, HDMI_CEC_POLARITY);
+	 cec->regs_mask = dw_hdmi_read(cec, HDMI_CEC_MASK);
+	 cec->regs_mute_stat0 = dw_hdmi_read(cec, HDMI_IH_MUTE_CEC_STAT0);
 
 	return 0;
 }

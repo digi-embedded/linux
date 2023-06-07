@@ -819,6 +819,85 @@ int dpaa2_io_query_bp_count(struct dpaa2_io *d, u16 bpid, u32 *num)
 EXPORT_SYMBOL_GPL(dpaa2_io_query_bp_count);
 
 /**
+ * dpaa2_io_set_irq_coalescing() - Set new IRQ coalescing values
+ * @d: the given DPIO object
+ * @irq_holdoff: interrupt holdoff (timeout) period in us
+ *
+ * Return 0 for success, or negative error code on error.
+ */
+int dpaa2_io_set_irq_coalescing(struct dpaa2_io *d, u32 irq_holdoff)
+{
+	struct qbman_swp *swp = d->swp;
+
+	return qbman_swp_set_irq_coalescing(swp, swp->dqrr.dqrr_size - 1,
+					    irq_holdoff);
+}
+EXPORT_SYMBOL(dpaa2_io_set_irq_coalescing);
+
+/**
+ * dpaa2_io_get_irq_coalescing() - Get the current IRQ coalescing parameters
+ * @d: the given DPIO object
+ * @irq_holdoff: interrupt holdoff (timeout) period in us
+ */
+void dpaa2_io_get_irq_coalescing(struct dpaa2_io *d, u32 *irq_holdoff)
+{
+	struct qbman_swp *swp = d->swp;
+
+	qbman_swp_get_irq_coalescing(swp, NULL, irq_holdoff);
+}
+EXPORT_SYMBOL(dpaa2_io_get_irq_coalescing);
+
+/**
+ * dpaa2_io_set_adaptive_coalescing() - Enable/disable adaptive coalescing
+ * @d: the given DPIO object
+ * @use_adaptive_rx_coalesce: adaptive coalescing state
+ */
+void dpaa2_io_set_adaptive_coalescing(struct dpaa2_io *d,
+				      int use_adaptive_rx_coalesce)
+{
+	d->swp->use_adaptive_rx_coalesce = use_adaptive_rx_coalesce;
+}
+EXPORT_SYMBOL(dpaa2_io_set_adaptive_coalescing);
+
+/**
+ * dpaa2_io_get_adaptive_coalescing() - Query adaptive coalescing state
+ * @d: the given DPIO object
+ *
+ * Return 1 when adaptive coalescing is enabled on the DPIO object and 0
+ * otherwise.
+ */
+int dpaa2_io_get_adaptive_coalescing(struct dpaa2_io *d)
+{
+	return d->swp->use_adaptive_rx_coalesce;
+}
+EXPORT_SYMBOL(dpaa2_io_get_adaptive_coalescing);
+
+/**
+ * dpaa2_io_update_net_dim() - Update Net DIM
+ * @d: the given DPIO object
+ * @frames: how many frames have been dequeued by the user since the last call
+ * @bytes: how many bytes have been dequeued by the user since the last call
+ */
+void dpaa2_io_update_net_dim(struct dpaa2_io *d, __u64 frames, __u64 bytes)
+{
+	struct dim_sample dim_sample = {};
+
+	if (!d->swp->use_adaptive_rx_coalesce)
+		return;
+
+	spin_lock(&d->dim_lock);
+
+	d->bytes += bytes;
+	d->frames += frames;
+
+	dim_update_sample(d->event_ctr, d->frames, d->bytes, &dim_sample);
+	net_dim(&d->rx_dim, dim_sample);
+
+	spin_unlock(&d->dim_lock);
+}
+EXPORT_SYMBOL(dpaa2_io_update_net_dim);
+
+/**
  * dpaa2_io_service_enqueue_orp_fq() - Enqueue a frame to a frame queue with
  * order restoration
  * @d: the given DPIO service.
@@ -932,82 +1011,3 @@ int dpaa2_io_service_orp_seqnum_drop(struct dpaa2_io *d, u16 orpid, u16 seqnum)
 	return qbman_swp_enqueue(d->swp, &ed, &fd);
 }
 EXPORT_SYMBOL_GPL(dpaa2_io_service_orp_seqnum_drop);
-
-/**
- * dpaa2_io_set_irq_coalescing() - Set new IRQ coalescing values
- * @d: the given DPIO object
- * @irq_holdoff: interrupt holdoff (timeout) period in us
- *
- * Return 0 for success, or negative error code on error.
- */
-int dpaa2_io_set_irq_coalescing(struct dpaa2_io *d, u32 irq_holdoff)
-{
-	struct qbman_swp *swp = d->swp;
-
-	return qbman_swp_set_irq_coalescing(swp, swp->dqrr.dqrr_size - 1,
-					    irq_holdoff);
-}
-EXPORT_SYMBOL(dpaa2_io_set_irq_coalescing);
-
-/**
- * dpaa2_io_get_irq_coalescing() - Get the current IRQ coalescing parameters
- * @d: the given DPIO object
- * @irq_holdoff: interrupt holdoff (timeout) period in us
- */
-void dpaa2_io_get_irq_coalescing(struct dpaa2_io *d, u32 *irq_holdoff)
-{
-	struct qbman_swp *swp = d->swp;
-
-	qbman_swp_get_irq_coalescing(swp, NULL, irq_holdoff);
-}
-EXPORT_SYMBOL(dpaa2_io_get_irq_coalescing);
-
-/**
- * dpaa2_io_set_adaptive_coalescing() - Enable/disable adaptive coalescing
- * @d: the given DPIO object
- * @use_adaptive_rx_coalesce: adaptive coalescing state
- */
-void dpaa2_io_set_adaptive_coalescing(struct dpaa2_io *d,
-				      int use_adaptive_rx_coalesce)
-{
-	d->swp->use_adaptive_rx_coalesce = use_adaptive_rx_coalesce;
-}
-EXPORT_SYMBOL(dpaa2_io_set_adaptive_coalescing);
-
-/**
- * dpaa2_io_get_adaptive_coalescing() - Query adaptive coalescing state
- * @d: the given DPIO object
- *
- * Return 1 when adaptive coalescing is enabled on the DPIO object and 0
- * otherwise.
- */
-int dpaa2_io_get_adaptive_coalescing(struct dpaa2_io *d)
-{
-	return d->swp->use_adaptive_rx_coalesce;
-}
-EXPORT_SYMBOL(dpaa2_io_get_adaptive_coalescing);
-
-/**
- * dpaa2_io_update_net_dim() - Update Net DIM
- * @d: the given DPIO object
- * @frames: how many frames have been dequeued by the user since the last call
- * @bytes: how many bytes have been dequeued by the user since the last call
- */
-void dpaa2_io_update_net_dim(struct dpaa2_io *d, __u64 frames, __u64 bytes)
-{
-	struct dim_sample dim_sample = {};
-
-	if (!d->swp->use_adaptive_rx_coalesce)
-		return;
-
-	spin_lock(&d->dim_lock);
-
-	d->bytes += bytes;
-	d->frames += frames;
-
-	dim_update_sample(d->event_ctr, d->frames, d->bytes, &dim_sample);
-	net_dim(&d->rx_dim, dim_sample);
-
-	spin_unlock(&d->dim_lock);
-}
-EXPORT_SYMBOL(dpaa2_io_update_net_dim);

@@ -22,6 +22,7 @@
 #include <linux/slab.h>
 #include <linux/memblock.h>
 #include <linux/kmemleak.h>
+#include <linux/cma.h>
 
 #include "of_private.h"
 
@@ -54,7 +55,7 @@ static int __init early_init_dt_alloc_reserved_memory_arch(unsigned long node,
 	    && of_flat_dt_is_compatible(node, "shared-dma-pool")
 	    && of_get_flat_dt_prop(node, "reusable", NULL) && !nomap) {
 		if (base < highmem_start && (base + size) > highmem_start) {
-			memblock_free(base, size);
+			memblock_phys_free(base, size);
 			base = memblock_phys_alloc_range(size, align, start,
 							 highmem_start);
 			if (!base)
@@ -66,7 +67,7 @@ static int __init early_init_dt_alloc_reserved_memory_arch(unsigned long node,
 	if (nomap) {
 		err = memblock_mark_nomap(base, size);
 		if (err)
-			memblock_free(base, size);
+			memblock_phys_free(base, size);
 		kmemleak_ignore_phys(base);
 	}
 
@@ -120,7 +121,6 @@ static int __init __reserved_mem_alloc_size(unsigned long node,
 	}
 
 	prop = of_get_flat_dt_prop(node, "digi,size-table", &len);
-
 	if (prop) {
 		struct memblock_region *reg;
 		unsigned long total_pages = 0, system_memory;
@@ -173,12 +173,8 @@ static int __init __reserved_mem_alloc_size(unsigned long node,
 	if (IS_ENABLED(CONFIG_CMA)
 	    && of_flat_dt_is_compatible(node, "shared-dma-pool")
 	    && of_get_flat_dt_prop(node, "reusable", NULL)
-	    && !nomap) {
-		unsigned long order =
-			max_t(unsigned long, MAX_ORDER - 1, pageblock_order);
-
-		align = max(align, (phys_addr_t)PAGE_SIZE << order);
-	}
+	    && !nomap)
+		align = max_t(phys_addr_t, align, CMA_MIN_ALIGNMENT_BYTES);
 
 	prop = of_get_flat_dt_prop(node, "alloc-ranges", &len);
 	if (prop) {
@@ -216,7 +212,8 @@ static int __init __reserved_mem_alloc_size(unsigned long node,
 	}
 
 	if (base == 0) {
-		pr_info("failed to allocate memory for node '%s'\n", uname);
+		pr_err("failed to allocate memory for node '%s': size %lu MiB\n",
+		       uname, (unsigned long)(size / SZ_1M));
 		return -ENOMEM;
 	}
 
@@ -341,7 +338,8 @@ void __init fdt_init_reserved_mem(void)
 				if (nomap)
 					memblock_clear_nomap(rmem->base, rmem->size);
 				else
-					memblock_free(rmem->base, rmem->size);
+					memblock_phys_free(rmem->base,
+							   rmem->size);
 			}
 		}
 	}

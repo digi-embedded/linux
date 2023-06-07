@@ -412,7 +412,7 @@ static int usdpaa_open(struct inode *inode, struct file *filp)
 
 
 /* Invalidate a portal */
-void dbci_portal(void *addr)
+static void dbci_portal(void *addr)
 {
 	int i;
 
@@ -879,28 +879,30 @@ static unsigned long usdpaa_get_unmapped_area(struct file *file,
 {
 	struct vm_area_struct *vma;
 
+	/* Need to align the address to the largest pagesize of the mapping
+	 * because the MMU requires the virtual address to have the same
+	 * alignment as the physical address
+	 */
+	unsigned long align_addr = USDPAA_MEM_ROUNDUP(addr,
+						      largest_page_size(len));
+	VMA_ITERATOR(vmi, current->mm, align_addr);
+
 	if (len % PAGE_SIZE)
 		return -EINVAL;
 	if (!len)
 		return -EINVAL;
 
-	/* Need to align the address to the largest pagesize of the mapping
-	 * because the MMU requires the virtual address to have the same
-	 * alignment as the physical address */
-	addr = USDPAA_MEM_ROUNDUP(addr, largest_page_size(len));
-	vma = find_vma(current->mm, addr);
 	/* Keep searching until we reach the end of currently-used virtual
 	 * address-space or we find a big enough gap. */
-	while (vma) {
-		if ((addr + len) < vma->vm_start)
-			return addr;
+	for_each_vma(vmi, vma) {
+		if ((align_addr + len) < vma->vm_start)
+			return align_addr;
 
-		addr = USDPAA_MEM_ROUNDUP(vma->vm_end,  largest_page_size(len));
-		vma = vma->vm_next;
+		align_addr = USDPAA_MEM_ROUNDUP(vma->vm_end, largest_page_size(len));
 	}
-	if ((TASK_SIZE - len) < addr)
+	if ((TASK_SIZE - len) < align_addr)
 		return -ENOMEM;
-	return addr;
+	return align_addr;
 }
 
 static long ioctl_id_alloc(struct ctx *ctx, void __user *arg)
@@ -1179,8 +1181,8 @@ do_map:
 	if (i->did_create) {
 		size_t name_len = 0;
 		start_frag->flags = i->flags;
-		memset(start_frag->name, '\0', USDPAA_DMA_NAME_MAX);
-		strncpy(start_frag->name, i->name, USDPAA_DMA_NAME_MAX - 1);
+		strncpy(start_frag->name, i->name, USDPAA_DMA_NAME_MAX);
+		start_frag->name[USDPAA_DMA_NAME_MAX - 1] = '\0';
 		name_len = strnlen(start_frag->name, USDPAA_DMA_NAME_MAX);
 		if (name_len >= USDPAA_DMA_NAME_MAX) {
 			ret = -EFAULT;
@@ -2351,7 +2353,8 @@ static long usdpaa_ioctl_compat(struct file *fp, unsigned int cmd,
 		converted.len = input.len;
 		converted.flags = input.flags;
 		memset(converted.name, '\0', USDPAA_DMA_NAME_MAX);
-		strncpy(converted.name, input.name, USDPAA_DMA_NAME_MAX - 1);
+		strncpy(converted.name, input.name, USDPAA_DMA_NAME_MAX);
+		converted.name[USDPAA_DMA_NAME_MAX - 1] = '\0';
 		converted.has_locking = input.has_locking;
 		converted.did_create = input.did_create;
 
@@ -2361,7 +2364,8 @@ static long usdpaa_ioctl_compat(struct file *fp, unsigned int cmd,
 		input.len = converted.len;
 		input.flags = converted.flags;
 		memset(input.name, '\0', USDPAA_DMA_NAME_MAX);
-		strncpy(input.name, converted.name, USDPAA_DMA_NAME_MAX - 1);
+		strncpy(input.name, converted.name, USDPAA_DMA_NAME_MAX);
+		input.name[USDPAA_DMA_NAME_MAX - 1] = '\0';
 		input.has_locking = converted.has_locking;
 		input.did_create = converted.did_create;
 		if (copy_to_user(a, &input, sizeof(input)))

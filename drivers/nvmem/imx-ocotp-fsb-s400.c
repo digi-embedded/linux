@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright 2021 NXP
- * Author: Alice Guo <alice.guo@nxp.com>
  */
 
 #include <linux/dev_printk.h>
@@ -139,6 +138,29 @@ static int fsb_s400_fuse_read(void *priv, unsigned int offset, void *val,
 				if (err)
 					goto ret;
 				break;
+			case 25:
+			case 26:
+			case 27:
+				err = read_words_via_s400_api(&buf[200], 200, 24);
+				if (err)
+					goto ret;
+				break;
+			case 32:
+			case 33:
+			case 34:
+			case 35:
+			case 36:
+				err = read_words_via_s400_api(&buf[256], 256, 40);
+				if (err)
+					goto ret;
+				break;
+			case 49:
+			case 50:
+			case 51:
+				err = read_words_via_s400_api(&buf[392], 392, 24);
+				if (err)
+					goto ret;
+				break;
 			default:
 				err = read_words_via_fsb(priv, bank, &buf[bank * 8]);
 				break;
@@ -199,15 +221,14 @@ static int imx_fsb_s400_fuse_probe(struct platform_device *pdev)
 	fuse->config.size = 2048; /* 64 Banks */
 	fuse->config.reg_read = fsb_s400_fuse_read;
 	fuse->config.priv = fuse;
+	mutex_init(&fuse->lock);
+	fuse->hw = of_device_get_match_data(&pdev->dev);
 
 	nvmem = devm_nvmem_register(&pdev->dev, &fuse->config);
 	if (IS_ERR(nvmem)) {
 		dev_err(&pdev->dev, "failed to register fuse nvmem device\n");
 		return PTR_ERR(nvmem);
 	}
-
-	mutex_init(&fuse->lock);
-	fuse->hw = of_device_get_match_data(&pdev->dev);
 
 	dev_dbg(&pdev->dev, "fuse nvmem device registered successfully\n");
 
@@ -264,6 +285,6 @@ static struct platform_driver imx_fsb_s400_fuse_driver = {
 MODULE_DEVICE_TABLE(of, imx_fsb_s400_fuse_match);
 module_platform_driver(imx_fsb_s400_fuse_driver);
 
-MODULE_AUTHOR("Alice Guo <alice.guo@nxp.com>");
+MODULE_AUTHOR("NXP");
 MODULE_DESCRIPTION("i.MX FSB/S400-API ocotp fuse box driver");
 MODULE_LICENSE("GPL v2");

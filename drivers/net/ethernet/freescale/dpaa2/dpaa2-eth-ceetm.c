@@ -376,9 +376,12 @@ static int dpaa2_ceetm_dump(struct Qdisc *sch, struct sk_buff *skb)
 
 		for (ntx = 0; ntx < dev->num_tx_queues; ntx++) {
 			qdisc = netdev_get_tx_queue(dev, ntx)->qdisc_sleeping;
+
+			_bstats_update(&sch->bstats,
+				       u64_stats_read(&qdisc->bstats.bytes),
+				       u64_stats_read(&qdisc->bstats.packets));
+
 			sch->q.qlen		+= qdisc->q.qlen;
-			sch->bstats.bytes	+= qdisc->bstats.bytes;
-			sch->bstats.packets	+= qdisc->bstats.packets;
 			sch->qstats.qlen	+= qdisc->qstats.qlen;
 			sch->qstats.backlog	+= qdisc->qstats.backlog;
 			sch->qstats.drops	+= qdisc->qstats.drops;
@@ -859,7 +862,6 @@ static int dpaa2_ceetm_cls_change(struct Qdisc *sch, u32 classid, u32 parentid,
 				  struct nlattr **tca, unsigned long *arg,
 				  struct netlink_ext_ack *extack)
 {
-	struct dpaa2_ceetm_qdisc *priv;
 	struct dpaa2_ceetm_class *cl = (struct dpaa2_ceetm_class *)*arg;
 	struct nlattr *opt = tca[TCA_OPTIONS];
 	struct nlattr *tb[DPAA2_CEETM_TCA_MAX];
@@ -874,8 +876,6 @@ static int dpaa2_ceetm_cls_change(struct Qdisc *sch, u32 classid, u32 parentid,
 		pr_err("CEETM: a ceetm class can not be attached to other qdisc/class types\n");
 		return -EINVAL;
 	}
-
-	priv = qdisc_priv(sch);
 
 	if (!opt) {
 		pr_err(KBUILD_BASENAME " : %s : tc error NULL opt\n", __func__);
@@ -1051,7 +1051,6 @@ static int dpaa2_ceetm_cls_dump_stats(struct Qdisc *sch, unsigned long arg,
 				      struct gnet_dump *d)
 {
 	struct dpaa2_ceetm_class *cl = (struct dpaa2_ceetm_class *)arg;
-	struct gnet_stats_basic_packed tmp_bstats;
 	struct dpaa2_ceetm_tc_xstats xstats;
 	union dpni_statistics dpni_stats;
 	struct net_device *dev = qdisc_dev(sch);
@@ -1060,7 +1059,6 @@ static int dpaa2_ceetm_cls_dump_stats(struct Qdisc *sch, unsigned long arg,
 	int err;
 
 	memset(&xstats, 0, sizeof(xstats));
-	memset(&tmp_bstats, 0, sizeof(tmp_bstats));
 
 	if (cl->type == CEETM_ROOT)
 		return 0;

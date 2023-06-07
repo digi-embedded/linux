@@ -13,7 +13,7 @@
 		#size-cells = <2>;
 		ranges;
 
-		m4_reserved: m4@0x80000000 {
+		m4_reserved: m4@80000000 {
 			reg = <0 0x80000000 0 0x0101E400>;
 			no-map;
 		};

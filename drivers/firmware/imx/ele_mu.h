@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0+ */
 /*
- * Copyright 2021 NXP
+ * Copyright 2021-2022 NXP
  */
 
 #ifndef ELE_MU_H
@@ -54,6 +54,12 @@
 #define SECO_MU_IO_FLAGS_IS_INPUT	(0x01u)
 #define SECO_MU_IO_FLAGS_USE_SEC_MEM	(0x02u)
 #define SECO_MU_IO_FLAGS_USE_SHORT_ADDR	(0x04u)
+
+struct ele_imem_buf {
+	u8 *buf;
+	phys_addr_t phyaddr;
+	u32 size;
+};
 
 struct ele_obuf_desc {
 	u8 *out_ptr;
@@ -135,6 +141,13 @@ struct ele_mu_priv {
 	struct ele_api_msg tx_msg, rx_msg;
 	struct completion done;
 	spinlock_t lock;
+	/* Flag to retain the state of initialization done at
+	 * the time of ele-mu probe.
+	 */
+	int flags;
+	int max_dev_ctx;
+	struct ele_mu_device_ctx **ctxs;
+	struct ele_imem_buf imem;
 };
 
 int get_ele_mu_priv(struct ele_mu_priv **export);

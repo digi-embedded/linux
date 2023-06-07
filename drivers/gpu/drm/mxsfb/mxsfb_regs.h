@@ -33,6 +33,7 @@
 #define LCDC_DVICTRL3			0xf0
 #define LCDC_DVICTRL4			0x100
 #define LCDC_V4_DATA			0x180
+#define LCDC_V4_CRC_STAT		0x1a0
 #define LCDC_V3_DATA			0x1b0
 #define LCDC_V4_DEBUG0			0x1d0
 #define LCDC_V3_DEBUG0			0x1f0

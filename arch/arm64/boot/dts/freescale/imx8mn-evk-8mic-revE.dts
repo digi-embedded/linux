@@ -124,7 +124,6 @@
 		status = "okay";
 	};
 
-
 	pca995btw: pca9955btw@7 {
 		#address-cells = <1>;
 		#size-cells = <0>;
@@ -201,10 +200,7 @@
 			linux,default-trigger = "none";
 			reg = <11>;
 		};
-
 	};
-
-
 };
 
 &uart3 {

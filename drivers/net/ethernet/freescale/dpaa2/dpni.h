@@ -92,6 +92,9 @@ int dpni_close(struct fsl_mc_io	*mc_io,
 	       u32		cmd_flags,
 	       u16		token);
 
+#define DPNI_POOL_ASSOC_QPRI	0
+#define DPNI_POOL_ASSOC_QDBIN	1
+
 /**
  * struct dpni_pools_cfg - Structure representing buffer pools configuration
  * @num_dpbp: Number of DPBPs
@@ -105,10 +108,6 @@ int dpni_close(struct fsl_mc_io	*mc_io,
  * @pools.buffer_size: Buffer size
  * @pools.backup_pool: Backup pool
  */
-
-#define DPNI_POOL_ASSOC_QPRI	0
-#define DPNI_POOL_ASSOC_QDBIN	1
-
 struct dpni_pools_cfg {
 	u8		num_dpbp;
 	u8		pool_options;

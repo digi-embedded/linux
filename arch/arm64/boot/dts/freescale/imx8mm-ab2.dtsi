@@ -396,7 +396,7 @@
 };
 
 &sai1 {
-	fsl,dataline = <8 0xff 0xff>;
+	fsl,dataline = <0 0xff 0xff>;
 };
 
 &sai3 {

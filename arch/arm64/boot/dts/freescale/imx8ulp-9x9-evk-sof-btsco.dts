@@ -90,7 +90,7 @@
 			<&pcc5 IMX8ULP_CLK_DMA2_CH2>, <&pcc5 IMX8ULP_CLK_DMA2_CH3>,
 			<&pcc5 IMX8ULP_CLK_DMA2_CH4>, <&pcc5 IMX8ULP_CLK_DMA2_CH5>,
 			<&pcc5 IMX8ULP_CLK_DMA2_CH6>, <&pcc5 IMX8ULP_CLK_DMA2_CH7>;
-	clock-names = "core", "pbclk", "nic", "mu_b",
+	clock-names = "core", "ipg", "ocram", "mu",
 				"bus", "mclk0", "mclk1",
 				"edma-mp-clk",
 						"edma2-chan0-clk", "edma2-chan1-clk",

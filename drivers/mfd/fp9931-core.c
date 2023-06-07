@@ -111,11 +111,9 @@ static int fp9931_probe(struct i2c_client *client,
 	return 0;
 }
 
-static int fp9931_remove(struct i2c_client *i2c)
+static void fp9931_remove(struct i2c_client *i2c)
 {
 	/* nothing needs to be done */
-
-	return 0;
 }
 
 static const struct i2c_device_id fp9931_id[] = {

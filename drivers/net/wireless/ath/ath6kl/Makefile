@@ -37,6 +37,11 @@ ath6kl_core-y += core.o
 ath6kl_core-y += recovery.o
 ath6kl_core-y += softmac.o
 
+# FIXME: temporarily silence -Wdangling-pointer on non W=1+ builds
+ifndef KBUILD_EXTRA_WARN
+CFLAGS_htc_mbox.o += $(call cc-disable-warning, dangling-pointer)
+endif
+
 ath6kl_core-$(CONFIG_NL80211_TESTMODE) += testmode.o
 ath6kl_core-$(CONFIG_ATH6KL_TRACING) += trace.o
 

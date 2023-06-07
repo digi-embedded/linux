@@ -230,12 +230,9 @@ int usb_phy_gen_create_phy(struct device *dev, struct usb_phy_generic *nop)
 		err = PTR_ERR_OR_ZERO(nop->gpiod_vbus);
 	}
 
-	if (err == -EPROBE_DEFER)
-		return -EPROBE_DEFER;
-	if (err) {
-		dev_err(dev, "Error requesting RESET or VBUS GPIO\n");
-		return err;
-	}
+	if (err)
+		return dev_err_probe(dev, err,
+				     "Error requesting RESET or VBUS GPIO\n");
 	if (nop->gpiod_reset)
 		gpiod_direction_output(nop->gpiod_reset, 1);
 
@@ -293,6 +290,7 @@ EXPORT_SYMBOL_GPL(usb_phy_gen_create_phy);
 static int usb_phy_generic_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
+	struct device_node *dn = dev->of_node;
 	struct usb_phy_generic	*nop;
 	int err;
 
@@ -329,6 +327,9 @@ static int usb_phy_generic_probe(struct platform_device *pdev)
 	}
 
 	platform_set_drvdata(pdev, nop);
+
+	device_set_wakeup_capable(&pdev->dev,
+				  of_property_read_bool(dn, "wakeup-source"));
 
 	return 0;
 }

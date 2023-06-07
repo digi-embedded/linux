@@ -83,8 +83,8 @@ static struct linux_binfmt elf_fdpic_format = {
 	.load_binary	= load_elf_fdpic_binary,
 #ifdef CONFIG_ELF_CORE
 	.core_dump	= elf_fdpic_core_dump,
-#endif
 	.min_coredump	= ELF_EXEC_PAGESIZE,
+#endif
 };
 
 static int __init init_elf_fdpic_binfmt(void)
@@ -1489,7 +1489,7 @@ static int elf_fdpic_core_dump(struct coredump_params *cprm)
 	if (!psinfo)
 		goto end_coredump;
 
-	for (ct = current->mm->core_state->dumper.next;
+	for (ct = current->signal->core_state->dumper.next;
 					ct; ct = ct->next) {
 		tmp = elf_dump_thread_status(cprm->siginfo->si_signo,
 					     ct->task, &thread_status_size);

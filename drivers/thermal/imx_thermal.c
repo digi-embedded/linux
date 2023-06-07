@@ -387,6 +387,8 @@ static int imx_set_trip_temp(struct thermal_zone_device *tz, int trip,
 		imx_set_alarm_temp(data, temp);
 	}
 
+	pm_runtime_put(data->dev);
+
 	return 0;
 }
 
@@ -401,9 +403,9 @@ static int imx_get_trend(struct thermal_zone_device *tz,
 		return ret;
 
 	if (tz->temperature >= (trip_temp - IMX_TEMP_PASSIVE_COOL_DELTA))
-		*trend = THERMAL_TREND_RAISE_FULL;
+		*trend = THERMAL_TREND_RAISING;
 	else
-		*trend = THERMAL_TREND_DROP_FULL;
+		*trend = THERMAL_TREND_DROPPING;
 
 	return 0;
 }

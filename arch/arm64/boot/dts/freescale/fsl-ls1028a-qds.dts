@@ -93,7 +93,7 @@
 		compatible = "mdio-mux-multiplexer";
 		mux-controls = <&mux 0>;
 		mdio-parent-bus = <&enetc_mdio_pf3>;
-		#address-cells=<1>;
+		#address-cells = <1>;
 		#size-cells = <0>;
 
 		/* on-board RGMII PHY */
@@ -237,7 +237,7 @@
 
 &enetc_port1 {
 	phy-handle = <&qds_phy1>;
-	phy-connection-type = "rgmii-id";
+	phy-mode = "rgmii-id";
 	status = "okay";
 };
 
@@ -383,5 +383,15 @@
 };
 
 &sata {
+	status = "okay";
+};
+
+&usb0 {
+	dr_mode = "host";
+	status = "okay";
+};
+
+&usb1 {
+	dr_mode = "host";
 	status = "okay";
 };

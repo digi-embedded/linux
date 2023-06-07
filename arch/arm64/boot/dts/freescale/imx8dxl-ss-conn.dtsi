@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Copyright 2019~2020 NXP
+ * Copyright 2019~2020, 2022 NXP
  */
 
 /delete-node/ &enet1_lpcg;
@@ -45,9 +45,9 @@
 		fsl,usbphy = <&usbphy2>;
 		fsl,usbmisc = <&usbmisc2 0>;
 		/*
-		 * usbotg1 and usbotg2 share one clcok
-		 * scfw disable clock access and keep it always on
-		 * in case other core (M4) use one of these.
+		 * usbotg1 and usbotg2 share one clcok.
+		 * scu firmware disables the access to the clock and keeps
+		 * it always on in case other core (M4) uses one of these.
 		 */
 		clocks = <&clk_dummy>;
 		ahb-burst-config = <0x0>;
@@ -56,6 +56,13 @@
 		#stream-id-cells = <1>;
 		power-domains = <&pd IMX_SC_R_USB_1>;
 		status = "disabled";
+
+		clk_dummy: clock-dummy {
+			compatible = "fixed-clock";
+			#clock-cells = <0>;
+			clock-frequency = <0>;
+			clock-output-names = "clk_dummy";
+		};
 	};
 
 	usbmisc2: usbmisc@5b0e0200 {
@@ -64,7 +71,7 @@
 		reg = <0x5b0e0200 0x200>;
 	};
 
-	usbphy2: usbphy@0x5b110000 {
+	usbphy2: usbphy@5b110000 {
 		compatible = "fsl,imx8dxl-usbphy", "fsl,imx7ulp-usbphy";
 		reg = <0x5b110000 0x1000>;
 		clocks = <&usb2_2_lpcg 0>;
@@ -94,7 +101,6 @@
 		compatible = "fsl,imx8qxp-lpcg";
 		reg = <0x5b280000 0x10000>;
 		#clock-cells = <1>;
-
 		bit-offset = <28>;
 		clocks = <&conn_ipg_clk>;
 		clock-output-names = "usboh3_2_phy_ipg_clk";

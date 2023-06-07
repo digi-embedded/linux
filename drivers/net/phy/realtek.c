@@ -79,12 +79,8 @@ MODULE_LICENSE("GPL");
 struct rtl821x_priv {
 	u16 phycr1;
 	u16 phycr2;
+	bool has_phycr2;
 };
-
-static bool is_rtl8211fvd(u32 phy_id)
-{
-	return phy_id == RTL_8211FVD_PHYID;
-}
 
 static int rtl821x_read_page(struct phy_device *phydev)
 {
@@ -115,7 +111,8 @@ static int rtl821x_probe(struct phy_device *phydev)
 	if (of_property_read_bool(dev->of_node, "realtek,aldps-enable"))
 		priv->phycr1 |= RTL8211F_ALDPS_PLL_OFF | RTL8211F_ALDPS_ENABLE | RTL8211F_ALDPS_XTAL_OFF;
 
-	if (!is_rtl8211fvd(phy_id)) {
+	priv->has_phycr2 = !(phy_id == RTL_8211FVD_PHYID);
+	if (priv->has_phycr2) {
 		ret = phy_read_paged(phydev, 0xa43, RTL8211F_PHYCR2);
 		if (ret < 0)
 			return ret;
@@ -342,7 +339,6 @@ static int rtl8211f_config_init(struct phy_device *phydev)
 {
 	struct rtl821x_priv *priv = phydev->priv;
 	struct device *dev = &phydev->mdio.dev;
-	u32 phy_id = phydev->drv->phy_id;
 	u16 val_txdly, val_rxdly;
 	int ret;
 
@@ -410,9 +406,9 @@ static int rtl8211f_config_init(struct phy_device *phydev)
 			val_rxdly ? "enabled" : "disabled");
 	}
 
-	if (!is_rtl8211fvd(phy_id)) {
+	if (priv->has_phycr2) {
 		ret = phy_modify_paged(phydev, 0xa43, RTL8211F_PHYCR2,
-				RTL8211F_CLKOUT_EN, priv->phycr2);
+				       RTL8211F_CLKOUT_EN, priv->phycr2);
 		if (ret < 0) {
 			dev_err(dev, "clkout configuration failed: %pe\n",
 				ERR_PTR(ret));

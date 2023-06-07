@@ -24,6 +24,10 @@
 	assigned-clock-rates = <150000000>, <30000000>, <400000000>, <133333333>;
 };
 
+&media_blk_ctrl {
+	status = "okay";
+};
+
 &parallel_disp_fmt {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_lcdif>;

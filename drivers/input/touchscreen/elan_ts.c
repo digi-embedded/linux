@@ -384,7 +384,7 @@ fail:
 	return err;
 }
 
-static int elan_touch_remove(struct i2c_client *client)
+static void elan_touch_remove(struct i2c_client *client)
 {
 	if (elan_wq)
 		destroy_workqueue(elan_wq);
@@ -395,7 +395,6 @@ static int elan_touch_remove(struct i2c_client *client)
 		free_irq(client->irq, client);
 	else
 		hrtimer_cancel(&elan_touch_data.timer);
-	return 0;
 }
 
 /* -------------------------------------------------------------------- */

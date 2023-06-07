@@ -53,6 +53,9 @@ int imx_sc_misc_set_control(struct imx_sc_ipc *ipc, u32 resource,
 int imx_sc_misc_set_dma_group(struct imx_sc_ipc *ipc, u32 resource,
 			    u32 val);
 
+int imx_sc_misc_set_dma_group(struct imx_sc_ipc *ipc, u32 resource,
+			    u32 val);
+
 int imx_sc_misc_get_control(struct imx_sc_ipc *ipc, u32 resource,
 			    u32 ctrl, u32 *val);
 

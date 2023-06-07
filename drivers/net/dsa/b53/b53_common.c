@@ -972,7 +972,7 @@ void b53_get_strings(struct dsa_switch *ds, int port, u32 stringset,
 
 	if (stringset == ETH_SS_STATS) {
 		for (i = 0; i < mib_size; i++)
-			strlcpy(data + i * ETH_GSTRING_LEN,
+			strscpy(data + i * ETH_GSTRING_LEN,
 				mibs[i].name, ETH_GSTRING_LEN);
 	} else if (stringset == ETH_SS_PHY_STATS) {
 		phydev = b53_get_phy_device(ds, port);
@@ -1222,7 +1222,7 @@ static void b53_adjust_link(struct dsa_switch *ds, int port,
 		return;
 
 	/* Enable flow control on BCM5301x's CPU port */
-	if (is5301x(dev) && port == dev->cpu_port)
+	if (is5301x(dev) && dsa_is_cpu_port(ds, port))
 		tx_pause = rx_pause = true;
 
 	if (phydev->pause) {
@@ -1291,12 +1291,6 @@ static void b53_adjust_link(struct dsa_switch *ds, int port,
 				return;
 			}
 		}
-	} else if (is5301x(dev)) {
-		if (port != dev->cpu_port) {
-			b53_force_port_config(dev, dev->cpu_port, 2000,
-					      DUPLEX_FULL, true, true);
-			b53_force_link(dev, dev->cpu_port, 1);
-		}
 	}
 
 	/* Re-negotiate EEE if it was enabled already */
@@ -1315,88 +1309,69 @@ void b53_port_event(struct dsa_switch *ds, int port)
 }
 EXPORT_SYMBOL(b53_port_event);
 
-void b53_phylink_validate(struct dsa_switch *ds, int port,
-			  unsigned long *supported,
-			  struct phylink_link_state *state)
+static void b53_phylink_get_caps(struct dsa_switch *ds, int port,
+				 struct phylink_config *config)
 {
 	struct b53_device *dev = ds->priv;
-	__ETHTOOL_DECLARE_LINK_MODE_MASK(mask) = { 0, };
 
-	if (dev->ops->serdes_phylink_validate)
-		dev->ops->serdes_phylink_validate(dev, port, mask, state);
+	/* Internal ports need GMII for PHYLIB */
+	__set_bit(PHY_INTERFACE_MODE_GMII, config->supported_interfaces);
 
-	/* Allow all the expected bits */
-	phylink_set(mask, Autoneg);
-	phylink_set_port_modes(mask);
-	phylink_set(mask, Pause);
-	phylink_set(mask, Asym_Pause);
-
-	/* With the exclusion of 5325/5365, MII, Reverse MII and 802.3z, we
-	 * support Gigabit, including Half duplex.
+	/* These switches appear to support MII and RevMII too, but beyond
+	 * this, the code gives very few clues. FIXME: We probably need more
+	 * interface modes here.
+	 *
+	 * According to b53_srab_mux_init(), ports 3..5 can support:
+	 *  SGMII, MII, GMII, RGMII or INTERNAL depending on the MUX setting.
+	 * However, the interface mode read from the MUX configuration is
+	 * not passed back to DSA, so phylink uses NA.
+	 * DT can specify RGMII for ports 0, 1.
+	 * For MDIO, port 8 can be RGMII_TXID.
 	 */
-	if (state->interface != PHY_INTERFACE_MODE_MII &&
-	    state->interface != PHY_INTERFACE_MODE_REVMII &&
-	    !phy_interface_mode_is_8023z(state->interface) &&
-	    !(is5325(dev) || is5365(dev))) {
-		phylink_set(mask, 1000baseT_Full);
-		phylink_set(mask, 1000baseT_Half);
-	}
+	__set_bit(PHY_INTERFACE_MODE_MII, config->supported_interfaces);
+	__set_bit(PHY_INTERFACE_MODE_REVMII, config->supported_interfaces);
 
-	if (!phy_interface_mode_is_8023z(state->interface)) {
-		phylink_set(mask, 10baseT_Half);
-		phylink_set(mask, 10baseT_Full);
-		phylink_set(mask, 100baseT_Half);
-		phylink_set(mask, 100baseT_Full);
-	}
+	config->mac_capabilities = MAC_ASYM_PAUSE | MAC_SYM_PAUSE |
+		MAC_10 | MAC_100;
 
-	bitmap_and(supported, supported, mask,
-		   __ETHTOOL_LINK_MODE_MASK_NBITS);
-	bitmap_and(state->advertising, state->advertising, mask,
-		   __ETHTOOL_LINK_MODE_MASK_NBITS);
+	/* 5325/5365 are not capable of gigabit speeds, everything else is.
+	 * Note: the original code also exclulded Gigagbit for MII, RevMII
+	 * and 802.3z modes. MII and RevMII are not able to work above 100M,
+	 * so will be excluded by the generic validator implementation.
+	 * However, the exclusion of Gigabit for 802.3z just seems wrong.
+	 */
+	if (!(is5325(dev) || is5365(dev)))
+		config->mac_capabilities |= MAC_1000;
 
-	phylink_helper_basex_speed(state);
+	/* Get the implementation specific capabilities */
+	if (dev->ops->phylink_get_caps)
+		dev->ops->phylink_get_caps(dev, port, config);
+
+	/* This driver does not make use of the speed, duplex, pause or the
+	 * advertisement in its mac_config, so it is safe to mark this driver
+	 * as non-legacy.
+	 */
+	config->legacy_pre_march2020 = false;
 }
-EXPORT_SYMBOL(b53_phylink_validate);
 
-int b53_phylink_mac_link_state(struct dsa_switch *ds, int port,
-			       struct phylink_link_state *state)
+static struct phylink_pcs *b53_phylink_mac_select_pcs(struct dsa_switch *ds,
+						      int port,
+						      phy_interface_t interface)
 {
 	struct b53_device *dev = ds->priv;
-	int ret = -EOPNOTSUPP;
 
-	if ((phy_interface_mode_is_8023z(state->interface) ||
-	     state->interface == PHY_INTERFACE_MODE_SGMII) &&
-	     dev->ops->serdes_link_state)
-		ret = dev->ops->serdes_link_state(dev, port, state);
+	if (!dev->ops->phylink_mac_select_pcs)
+		return NULL;
 
-	return ret;
+	return dev->ops->phylink_mac_select_pcs(dev, port, interface);
 }
-EXPORT_SYMBOL(b53_phylink_mac_link_state);
 
 void b53_phylink_mac_config(struct dsa_switch *ds, int port,
 			    unsigned int mode,
 			    const struct phylink_link_state *state)
 {
-	struct b53_device *dev = ds->priv;
-
-	if (mode == MLO_AN_PHY || mode == MLO_AN_FIXED)
-		return;
-
-	if ((phy_interface_mode_is_8023z(state->interface) ||
-	     state->interface == PHY_INTERFACE_MODE_SGMII) &&
-	     dev->ops->serdes_config)
-		dev->ops->serdes_config(dev, port, mode, state);
 }
 EXPORT_SYMBOL(b53_phylink_mac_config);
-
-void b53_phylink_mac_an_restart(struct dsa_switch *ds, int port)
-{
-	struct b53_device *dev = ds->priv;
-
-	if (dev->ops->serdes_an_restart)
-		dev->ops->serdes_an_restart(dev, port);
-}
-EXPORT_SYMBOL(b53_phylink_mac_an_restart);
 
 void b53_phylink_mac_link_down(struct dsa_switch *ds, int port,
 			       unsigned int mode,
@@ -1628,12 +1603,8 @@ static int b53_arl_read(struct b53_device *dev, u64 mac,
 		return 0;
 	}
 
-	if (bitmap_weight(free_bins, dev->num_arl_bins) == 0)
-		return -ENOSPC;
-
 	*idx = find_first_bit(free_bins, dev->num_arl_bins);
-
-	return -ENOENT;
+	return *idx >= dev->num_arl_bins ? -ENOSPC : -ENOENT;
 }
 
 static int b53_arl_op(struct b53_device *dev, int op, int port,
@@ -2199,7 +2170,7 @@ int b53_eee_init(struct dsa_switch *ds, int port, struct phy_device *phy)
 {
 	int ret;
 
-	ret = phy_init_eee(phy, 0);
+	ret = phy_init_eee(phy, false);
 	if (ret)
 		return 0;
 
@@ -2272,10 +2243,9 @@ static const struct dsa_switch_ops b53_switch_ops = {
 	.phy_read		= b53_phy_read16,
 	.phy_write		= b53_phy_write16,
 	.adjust_link		= b53_adjust_link,
-	.phylink_validate	= b53_phylink_validate,
-	.phylink_mac_link_state	= b53_phylink_mac_link_state,
+	.phylink_get_caps	= b53_phylink_get_caps,
+	.phylink_mac_select_pcs	= b53_phylink_mac_select_pcs,
 	.phylink_mac_config	= b53_phylink_mac_config,
-	.phylink_mac_an_restart	= b53_phylink_mac_an_restart,
 	.phylink_mac_link_down	= b53_phylink_mac_link_down,
 	.phylink_mac_link_up	= b53_phylink_mac_link_up,
 	.port_enable		= b53_enable_port,
@@ -2329,33 +2299,30 @@ static const struct b53_chip_data b53_switch_chips[] = {
 		.chip_id = BCM5325_DEVICE_ID,
 		.dev_name = "BCM5325",
 		.vlans = 16,
-		.enabled_ports = 0x1f,
+		.enabled_ports = 0x3f,
 		.arl_bins = 2,
 		.arl_buckets = 1024,
 		.imp_port = 5,
-		.cpu_port = B53_CPU_PORT_25,
 		.duplex_reg = B53_DUPLEX_STAT_FE,
 	},
 	{
 		.chip_id = BCM5365_DEVICE_ID,
 		.dev_name = "BCM5365",
 		.vlans = 256,
-		.enabled_ports = 0x1f,
+		.enabled_ports = 0x3f,
 		.arl_bins = 2,
 		.arl_buckets = 1024,
 		.imp_port = 5,
-		.cpu_port = B53_CPU_PORT_25,
 		.duplex_reg = B53_DUPLEX_STAT_FE,
 	},
 	{
 		.chip_id = BCM5389_DEVICE_ID,
 		.dev_name = "BCM5389",
 		.vlans = 4096,
-		.enabled_ports = 0x1f,
+		.enabled_ports = 0x11f,
 		.arl_bins = 4,
 		.arl_buckets = 1024,
 		.imp_port = 8,
-		.cpu_port = B53_CPU_PORT,
 		.vta_regs = B53_VTA_REGS,
 		.duplex_reg = B53_DUPLEX_STAT_GE,
 		.jumbo_pm_reg = B53_JUMBO_PORT_MASK,
@@ -2365,11 +2332,10 @@ static const struct b53_chip_data b53_switch_chips[] = {
 		.chip_id = BCM5395_DEVICE_ID,
 		.dev_name = "BCM5395",
 		.vlans = 4096,
-		.enabled_ports = 0x1f,
+		.enabled_ports = 0x11f,
 		.arl_bins = 4,
 		.arl_buckets = 1024,
 		.imp_port = 8,
-		.cpu_port = B53_CPU_PORT,
 		.vta_regs = B53_VTA_REGS,
 		.duplex_reg = B53_DUPLEX_STAT_GE,
 		.jumbo_pm_reg = B53_JUMBO_PORT_MASK,
@@ -2379,11 +2345,10 @@ static const struct b53_chip_data b53_switch_chips[] = {
 		.chip_id = BCM5397_DEVICE_ID,
 		.dev_name = "BCM5397",
 		.vlans = 4096,
-		.enabled_ports = 0x1f,
+		.enabled_ports = 0x11f,
 		.arl_bins = 4,
 		.arl_buckets = 1024,
 		.imp_port = 8,
-		.cpu_port = B53_CPU_PORT,
 		.vta_regs = B53_VTA_REGS_9798,
 		.duplex_reg = B53_DUPLEX_STAT_GE,
 		.jumbo_pm_reg = B53_JUMBO_PORT_MASK,
@@ -2393,11 +2358,10 @@ static const struct b53_chip_data b53_switch_chips[] = {
 		.chip_id = BCM5398_DEVICE_ID,
 		.dev_name = "BCM5398",
 		.vlans = 4096,
-		.enabled_ports = 0x7f,
+		.enabled_ports = 0x17f,
 		.arl_bins = 4,
 		.arl_buckets = 1024,
 		.imp_port = 8,
-		.cpu_port = B53_CPU_PORT,
 		.vta_regs = B53_VTA_REGS_9798,
 		.duplex_reg = B53_DUPLEX_STAT_GE,
 		.jumbo_pm_reg = B53_JUMBO_PORT_MASK,
@@ -2407,12 +2371,11 @@ static const struct b53_chip_data b53_switch_chips[] = {
 		.chip_id = BCM53115_DEVICE_ID,
 		.dev_name = "BCM53115",
 		.vlans = 4096,
-		.enabled_ports = 0x1f,
+		.enabled_ports = 0x11f,
 		.arl_bins = 4,
 		.arl_buckets = 1024,
 		.vta_regs = B53_VTA_REGS,
 		.imp_port = 8,
-		.cpu_port = B53_CPU_PORT,
 		.duplex_reg = B53_DUPLEX_STAT_GE,
 		.jumbo_pm_reg = B53_JUMBO_PORT_MASK,
 		.jumbo_size_reg = B53_JUMBO_MAX_SIZE,
@@ -2421,11 +2384,10 @@ static const struct b53_chip_data b53_switch_chips[] = {
 		.chip_id = BCM53125_DEVICE_ID,
 		.dev_name = "BCM53125",
 		.vlans = 4096,
-		.enabled_ports = 0xff,
+		.enabled_ports = 0x1ff,
 		.arl_bins = 4,
 		.arl_buckets = 1024,
 		.imp_port = 8,
-		.cpu_port = B53_CPU_PORT,
 		.vta_regs = B53_VTA_REGS,
 		.duplex_reg = B53_DUPLEX_STAT_GE,
 		.jumbo_pm_reg = B53_JUMBO_PORT_MASK,
@@ -2439,7 +2401,6 @@ static const struct b53_chip_data b53_switch_chips[] = {
 		.arl_bins = 4,
 		.arl_buckets = 1024,
 		.imp_port = 8,
-		.cpu_port = B53_CPU_PORT,
 		.vta_regs = B53_VTA_REGS,
 		.duplex_reg = B53_DUPLEX_STAT_GE,
 		.jumbo_pm_reg = B53_JUMBO_PORT_MASK,
@@ -2453,7 +2414,6 @@ static const struct b53_chip_data b53_switch_chips[] = {
 		.arl_bins = 4,
 		.arl_buckets = 1024,
 		.imp_port = 8,
-		.cpu_port = B53_CPU_PORT,
 		.vta_regs = B53_VTA_REGS_63XX,
 		.duplex_reg = B53_DUPLEX_STAT_63XX,
 		.jumbo_pm_reg = B53_JUMBO_PORT_MASK_63XX,
@@ -2463,11 +2423,10 @@ static const struct b53_chip_data b53_switch_chips[] = {
 		.chip_id = BCM53010_DEVICE_ID,
 		.dev_name = "BCM53010",
 		.vlans = 4096,
-		.enabled_ports = 0x1f,
+		.enabled_ports = 0x1bf,
 		.arl_bins = 4,
 		.arl_buckets = 1024,
 		.imp_port = 8,
-		.cpu_port = B53_CPU_PORT_25, /* TODO: auto detect */
 		.vta_regs = B53_VTA_REGS,
 		.duplex_reg = B53_DUPLEX_STAT_GE,
 		.jumbo_pm_reg = B53_JUMBO_PORT_MASK,
@@ -2481,7 +2440,6 @@ static const struct b53_chip_data b53_switch_chips[] = {
 		.arl_bins = 4,
 		.arl_buckets = 1024,
 		.imp_port = 8,
-		.cpu_port = B53_CPU_PORT_25, /* TODO: auto detect */
 		.vta_regs = B53_VTA_REGS,
 		.duplex_reg = B53_DUPLEX_STAT_GE,
 		.jumbo_pm_reg = B53_JUMBO_PORT_MASK,
@@ -2495,7 +2453,6 @@ static const struct b53_chip_data b53_switch_chips[] = {
 		.arl_bins = 4,
 		.arl_buckets = 1024,
 		.imp_port = 8,
-		.cpu_port = B53_CPU_PORT_25, /* TODO: auto detect */
 		.vta_regs = B53_VTA_REGS,
 		.duplex_reg = B53_DUPLEX_STAT_GE,
 		.jumbo_pm_reg = B53_JUMBO_PORT_MASK,
@@ -2505,11 +2462,10 @@ static const struct b53_chip_data b53_switch_chips[] = {
 		.chip_id = BCM53018_DEVICE_ID,
 		.dev_name = "BCM53018",
 		.vlans = 4096,
-		.enabled_ports = 0x1f,
+		.enabled_ports = 0x1bf,
 		.arl_bins = 4,
 		.arl_buckets = 1024,
 		.imp_port = 8,
-		.cpu_port = B53_CPU_PORT_25, /* TODO: auto detect */
 		.vta_regs = B53_VTA_REGS,
 		.duplex_reg = B53_DUPLEX_STAT_GE,
 		.jumbo_pm_reg = B53_JUMBO_PORT_MASK,
@@ -2519,11 +2475,10 @@ static const struct b53_chip_data b53_switch_chips[] = {
 		.chip_id = BCM53019_DEVICE_ID,
 		.dev_name = "BCM53019",
 		.vlans = 4096,
-		.enabled_ports = 0x1f,
+		.enabled_ports = 0x1bf,
 		.arl_bins = 4,
 		.arl_buckets = 1024,
 		.imp_port = 8,
-		.cpu_port = B53_CPU_PORT_25, /* TODO: auto detect */
 		.vta_regs = B53_VTA_REGS,
 		.duplex_reg = B53_DUPLEX_STAT_GE,
 		.jumbo_pm_reg = B53_JUMBO_PORT_MASK,
@@ -2537,7 +2492,6 @@ static const struct b53_chip_data b53_switch_chips[] = {
 		.arl_bins = 4,
 		.arl_buckets = 1024,
 		.imp_port = 8,
-		.cpu_port = B53_CPU_PORT,
 		.vta_regs = B53_VTA_REGS,
 		.duplex_reg = B53_DUPLEX_STAT_GE,
 		.jumbo_pm_reg = B53_JUMBO_PORT_MASK,
@@ -2551,7 +2505,6 @@ static const struct b53_chip_data b53_switch_chips[] = {
 		.arl_bins = 4,
 		.arl_buckets = 1024,
 		.imp_port = 8,
-		.cpu_port = B53_CPU_PORT,
 		.vta_regs = B53_VTA_REGS,
 		.duplex_reg = B53_DUPLEX_STAT_GE,
 		.jumbo_pm_reg = B53_JUMBO_PORT_MASK,
@@ -2566,7 +2519,6 @@ static const struct b53_chip_data b53_switch_chips[] = {
 		.arl_bins = 4,
 		.arl_buckets = 256,
 		.imp_port = 8,
-		.cpu_port = 8, /* TODO: ports 4, 5, 8 */
 		.vta_regs = B53_VTA_REGS,
 		.duplex_reg = B53_DUPLEX_STAT_GE,
 		.jumbo_pm_reg = B53_JUMBO_PORT_MASK,
@@ -2580,7 +2532,6 @@ static const struct b53_chip_data b53_switch_chips[] = {
 		.arl_bins = 4,
 		.arl_buckets = 1024,
 		.imp_port = 8,
-		.cpu_port = B53_CPU_PORT,
 		.vta_regs = B53_VTA_REGS,
 		.duplex_reg = B53_DUPLEX_STAT_GE,
 		.jumbo_pm_reg = B53_JUMBO_PORT_MASK,
@@ -2594,7 +2545,6 @@ static const struct b53_chip_data b53_switch_chips[] = {
 		.arl_bins = 4,
 		.arl_buckets = 256,
 		.imp_port = 8,
-		.cpu_port = B53_CPU_PORT,
 		.vta_regs = B53_VTA_REGS,
 		.duplex_reg = B53_DUPLEX_STAT_GE,
 		.jumbo_pm_reg = B53_JUMBO_PORT_MASK,
@@ -2620,7 +2570,6 @@ static int b53_switch_init(struct b53_device *dev)
 			dev->vta_regs[2] = chip->vta_regs[2];
 			dev->jumbo_pm_reg = chip->jumbo_pm_reg;
 			dev->imp_port = chip->imp_port;
-			dev->cpu_port = chip->cpu_port;
 			dev->num_vlans = chip->vlans;
 			dev->num_arl_bins = chip->arl_bins;
 			dev->num_arl_buckets = chip->arl_buckets;
@@ -2652,16 +2601,8 @@ static int b53_switch_init(struct b53_device *dev)
 			break;
 #endif
 		}
-	} else if (dev->chip_id == BCM53115_DEVICE_ID) {
-		u64 strap_value;
-
-		b53_read48(dev, B53_STAT_PAGE, B53_STRAP_VALUE, &strap_value);
-		/* use second IMP port if GMII is enabled */
-		if (strap_value & SV_GMII_CTRL_115)
-			dev->cpu_port = 5;
 	}
 
-	dev->enabled_ports |= BIT(dev->cpu_port);
 	dev->num_ports = fls(dev->enabled_ports);
 
 	dev->ds->num_ports = min_t(unsigned int, dev->num_ports, DSA_MAX_PORTS);

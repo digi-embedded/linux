@@ -142,7 +142,7 @@
 		interrupts = <GIC_SPI 94 IRQ_TYPE_LEVEL_HIGH>;
 	};
 
-	soc {
+	soc: soc {
 		#address-cells = <1>;
 		#size-cells = <1>;
 		compatible = "simple-bus";
@@ -180,6 +180,9 @@
 		ocram: sram@905000 {
 			compatible = "mmio-sram";
 			reg = <0x00905000 0x1B000>;
+			ranges = <0 0x00900000 0x20000>;
+			#address-cells = <1>;
+			#size-cells = <1>;
 		};
 
 		ocram_optee: sram@918000 {
@@ -585,6 +588,7 @@
 				fsl,num-rx-queues = <1>;
 				fsl,stop-mode = <&gpr 0x10 4>;
 				fsl,magic-packet;
+				fsl,wakeup_irq = <0>;
 				status = "disabled";
 			};
 
@@ -804,7 +808,7 @@
 				status = "disabled";
 			};
 
-			sdma: sdma@20ec000 {
+			sdma: dma-controller@20ec000 {
 				compatible = "fsl,imx6ul-sdma", "fsl,imx6q-sdma",
 					     "fsl,imx35-sdma";
 				reg = <0x020ec000 0x4000>;
@@ -948,6 +952,7 @@
 				fsl,num-rx-queues = <1>;
 				fsl,stop-mode = <&gpr 0x10 3>;
 				fsl,magic-packet;
+				fsl,wakeup_irq = <0>;
 				status = "disabled";
 			};
 
@@ -991,7 +996,6 @@
 				reg = <0x02198000 0x4000>;
 				interrupts = <GIC_SPI 100 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&clks IMX6UL_CLK_ADC1>;
-				num-channels = <2>;
 				clock-names = "adc";
 				fsl,adck-max-frequency = <30000000>, <40000000>,
 							 <20000000>;

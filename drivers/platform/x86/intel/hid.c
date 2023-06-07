@@ -27,6 +27,9 @@ static const struct acpi_device_id intel_hid_ids[] = {
 	{"INTC1051", 0},
 	{"INTC1054", 0},
 	{"INTC1070", 0},
+	{"INTC1076", 0},
+	{"INTC1077", 0},
+	{"INTC1078", 0},
 	{"", 0},
 };
 MODULE_DEVICE_TABLE(acpi, intel_hid_ids);
@@ -97,13 +100,6 @@ static const struct dmi_system_id button_array_table[] = {
 		.matches = {
 			DMI_MATCH(DMI_SYS_VENDOR, "LENOVO"),
 			DMI_MATCH(DMI_PRODUCT_FAMILY, "ThinkPad X1 Tablet Gen 2"),
-		},
-	},
-	{
-		.ident = "Microsoft Surface Go 3",
-		.matches = {
-			DMI_MATCH(DMI_SYS_VENDOR, "Microsoft Corporation"),
-			DMI_MATCH(DMI_PRODUCT_NAME, "Surface Go 3"),
 		},
 	},
 	{
@@ -739,12 +735,9 @@ static acpi_status __init
 check_acpi_dev(acpi_handle handle, u32 lvl, void *context, void **rv)
 {
 	const struct acpi_device_id *ids = context;
-	struct acpi_device *dev;
+	struct acpi_device *dev = acpi_fetch_acpi_dev(handle);
 
-	if (acpi_bus_get_device(handle, &dev) != 0)
-		return AE_OK;
-
-	if (acpi_match_device_ids(dev, ids) == 0)
+	if (dev && acpi_match_device_ids(dev, ids) == 0)
 		if (!IS_ERR_OR_NULL(acpi_create_platform_device(dev, NULL)))
 			dev_info(&dev->dev,
 				 "intel-hid: created platform device\n");

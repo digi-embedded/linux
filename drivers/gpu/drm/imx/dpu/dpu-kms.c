@@ -17,6 +17,8 @@
 #include <drm/drm_print.h>
 #include <drm/drm_atomic.h>
 #include <drm/drm_atomic_helper.h>
+#include <drm/drm_blend.h>
+#include <drm/drm_framebuffer.h>
 #include <drm/drm_gem_framebuffer_helper.h>
 #include <linux/sort.h>
 #include <video/dpu.h>
@@ -126,6 +128,17 @@ dpu_atomic_set_top_plane_per_crtc(struct drm_plane_state **states, int n,
 	}
 }
 
+static int get_total_asrc_num(unsigned long src_a_mask)
+{
+	int num = 0;
+	int bit;
+
+	for_each_set_bit(bit, &src_a_mask, 32)
+		num++;
+
+	return num;
+}
+
 static inline bool dpu_atomic_source_pos_is_available(int pos, u32 src_a_mask)
 {
 	return !!((1 << pos) & src_a_mask);
@@ -170,7 +183,6 @@ dpu_atomic_assign_plane_source_per_crtc(struct drm_plane_state **states,
 	dpu_block_id_t blend;
 	unsigned int sid, src_sid;
 	unsigned int num_planes;
-	int bit;
 	int i, j, k = 0, m;
 	int total_asrc_num;
 	int s0_layer_cnt = 0, s1_layer_cnt = 0;
@@ -218,14 +230,12 @@ again:
 		need_hscaler = (states[i]->src_w >> 16 != states[i]->crtc_w);
 		need_vscaler = (states[i]->src_h >> 16 != states[i]->crtc_h);
 
-		total_asrc_num = 0;
 		src_a_mask = grp->src_a_mask;
 		fe_mask = 0;
 		hs_mask = 0;
 		vs_mask = 0;
 
-		for_each_set_bit(bit, (unsigned long *)&src_a_mask, 32)
-			total_asrc_num++;
+		total_asrc_num = get_total_asrc_num(src_a_mask);
 
 		current_source = alloc_aux_source ?
 				 dpstate->aux_source : dpstate->source;

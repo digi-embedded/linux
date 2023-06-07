@@ -20,8 +20,8 @@
 struct imx_rpmsg {
 	struct snd_soc_dai_link dai;
 	struct snd_soc_card card;
+	unsigned long sysclk;
 	struct asoc_simple_jack hp_jack;
-	unsigned int sysclk;
 };
 
 static const struct snd_soc_dapm_widget imx_rpmsg_dapm_widgets[] = {
@@ -40,12 +40,13 @@ static int imx_rpmsg_late_probe(struct snd_soc_card *card)
 	struct device *dev = card->dev;
 	int ret;
 
-	if (data->sysclk) {
-		ret = snd_soc_dai_set_sysclk(codec_dai, 0, data->sysclk, SND_SOC_CLOCK_IN);
-		if (ret && ret != -ENOTSUPP) {
-			dev_err(dev, "failed to set sysclk in %s\n", __func__);
-			return ret;
-		}
+	if (!data->sysclk)
+		return 0;
+
+	ret = snd_soc_dai_set_sysclk(codec_dai, 0, data->sysclk, SND_SOC_CLOCK_IN);
+	if (ret && ret != -ENOTSUPP) {
+		dev_err(dev, "failed to set sysclk in %s\n", __func__);
+		return ret;
 	}
 
 	return 0;
@@ -89,7 +90,7 @@ static int imx_rpmsg_probe(struct platform_device *pdev)
 	data->dai.stream_name = "rpmsg hifi";
 	data->dai.dai_fmt = SND_SOC_DAIFMT_I2S |
 			    SND_SOC_DAIFMT_NB_NF |
-			    SND_SOC_DAIFMT_CBS_CFS;
+			    SND_SOC_DAIFMT_CBC_CFC;
 
 	/* Optional codec node */
 	of_property_read_string(np, "model", &model_string);
@@ -176,8 +177,8 @@ static int imx_rpmsg_probe(struct platform_device *pdev)
 
 	data->hp_jack.pin.pin = "Headphone Jack";
 	data->hp_jack.pin.mask = SND_JACK_HEADPHONE;
-	snd_soc_card_jack_new(&data->card, "Headphone Jack", SND_JACK_HEADPHONE,
-			      &data->hp_jack.jack, &data->hp_jack.pin, 1);
+	snd_soc_card_jack_new_pins(&data->card, "Headphone Jack", SND_JACK_HEADPHONE,
+				   &data->hp_jack.jack, &data->hp_jack.pin, 1);
 	snd_soc_jack_report(&data->hp_jack.jack, SND_JACK_HEADPHONE, SND_JACK_HEADPHONE);
 fail:
 	pdev->dev.of_node = NULL;

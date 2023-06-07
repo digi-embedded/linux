@@ -177,7 +177,7 @@
                 };
         };
 
-	soc {
+	soc: soc {
 		busfreq: busfreq {
 			compatible = "fsl,imx_busfreq";
 			clocks = <&clks 171>, <&clks 6>, <&clks 11>, <&clks 104>, <&clks 172>, <&clks 58>,
@@ -192,6 +192,9 @@
 		ocram: sram@905000 {
 			compatible = "mmio-sram";
 			reg = <0x905000 0x3B000>;
+			ranges = <0 0x905000 0x3B000>;
+			#address-cells = <1>;
+			#size-cells = <1>;
 			clocks = <&clks IMX6QDL_CLK_OCRAM>;
 		};
 
@@ -201,7 +204,7 @@
 			overw_reg = <&ocram 0x905000 0x33000>;
 		};
 
-		bus@2000000 { /* AIPS1 */
+		aips1: bus@2000000 { /* AIPS1 */
 			spba-bus@2000000 {
 				ecspi5: spi@2018000 {
 					#address-cells = <1>;
@@ -296,7 +299,7 @@
 				      "di0_sel", "di1_sel",
 				      "ldb_di0", "ldb_di1";
 			resets = <&src 4>;
-			bypass_reset = <1>;
+			bypass_reset = <0>;
 
 			ipu2_csi0: port@0 {
 				reg = <0>;

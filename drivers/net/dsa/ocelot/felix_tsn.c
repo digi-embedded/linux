@@ -15,6 +15,7 @@
 #include <linux/pcs-lynx.h>
 #include <linux/io.h>
 #include <net/dsa.h>
+#include <net/pkt_sched.h>
 #include <net/tsn.h>
 #include "felix_tsn.h"
 #include "felix.h"
@@ -28,11 +29,6 @@
 
 struct felix_switch_capa {
 	u8 num_tas_gcl;
-	u32 tas_ct_min;
-	u32 tas_ct_max;
-	u32 tas_cte_max;
-	u32 tas_it_max;
-	u32 tas_it_min;
 	u8 num_hsch;
 	u8 num_psfp_sfid;
 	u8 num_frer_ssid;
@@ -69,11 +65,6 @@ static int hsch_bw[FELIX_QSYS_HSCH_NUM] = {0};
 
 static const struct felix_switch_capa capa = {
 	.num_tas_gcl	= 64,
-	.tas_ct_min	= 100,
-	.tas_ct_max	= 1000000000,
-	.tas_cte_max	= 999999999,
-	.tas_it_max	= 999999999,
-	.tas_it_min	= 1000,
 	.num_hsch	= 72,
 	.num_psfp_sfid	= FELIX_PSFP_SFID_NUM,
 	.num_psfp_sgid	= 184,
@@ -104,203 +95,87 @@ static u32 felix_tsn_get_cap(struct net_device *ndev)
 	       TSN_CAP_CB | TSN_CAP_TBS | TSN_CAP_CTH;
 }
 
-static void felix_get_basetime(struct ocelot *ocelot, ptptime_t basetime,
-			       u64 cycle_time, struct timespec64 *ts_base)
+static struct tc_taprio_qopt_offload *
+tsn_qbv_conf_to_taprio(const struct tsn_qbv_conf *shaper_config)
 {
-	ptptime_t new_basetime;
-	ptptime_t cur_time;
+	const struct tsn_qbv_basic *admin_basic = &shaper_config->admin;
+	int i, num_entries = admin_basic->control_list_length;
+	struct tc_taprio_qopt_offload *taprio;
 
-	ocelot_ptp_gettime64(&ocelot->ptp_info, ts_base);
-	cur_time = ts_base->tv_sec * NSEC_PER_SEC + ts_base->tv_nsec;
+	taprio = taprio_offload_alloc(num_entries);
+	if (!taprio)
+		return NULL;
 
-	new_basetime = basetime;
-	if (cur_time > basetime) {
-		u64 nr_of_cycles = cur_time - basetime;
+	taprio->base_time = admin_basic->base_time;
+	taprio->cycle_time = admin_basic->cycle_time;
+	taprio->cycle_time_extension = admin_basic->cycle_time_extension;
+	taprio->enable = shaper_config->gate_enabled;
+	taprio->num_entries = num_entries;
 
-		do_div(nr_of_cycles, cycle_time);
-		new_basetime += cycle_time * (nr_of_cycles + 1);
+	for (i = 0; i < num_entries; i++) {
+		struct tsn_qbv_entry *entry = &admin_basic->control_list[i];
+		struct tc_taprio_sched_entry *e = &taprio->entries[i];
+
+		e->command = TC_TAPRIO_CMD_SET_GATES;
+		e->interval = entry->time_interval;
+		e->gate_mask = entry->gate_state;
 	}
 
-	ts_base->tv_sec = new_basetime / NSEC_PER_SEC;
-	ts_base->tv_nsec = new_basetime % NSEC_PER_SEC;
-}
-
-static int felix_tas_gcl_set(struct ocelot *ocelot, const u8 gcl_ix,
-			     struct tsn_qbv_entry *control_list)
-{
-	if (gcl_ix >= capa.num_tas_gcl) {
-		dev_err(ocelot->dev, "Invalid gcl ix %u\n", gcl_ix);
-		return -EINVAL;
-	}
-	if (control_list->time_interval < capa.tas_it_min ||
-	    control_list->time_interval > capa.tas_it_max) {
-		dev_err(ocelot->dev, "Invalid time_interval %u\n",
-			control_list->time_interval);
-
-		return -EINVAL;
-	}
-
-	ocelot_write(ocelot,
-		     QSYS_GCL_CFG_REG_1_GCL_ENTRY_NUM(gcl_ix) |
-		     QSYS_GCL_CFG_REG_1_GATE_STATE(control_list->gate_state),
-		     QSYS_GCL_CFG_REG_1);
-
-	ocelot_write(ocelot,
-		     control_list->time_interval,
-		     QSYS_GCL_CFG_REG_2);
-
-	return 0;
-}
-
-static u32 felix_tas_read_status(struct ocelot *ocelot)
-{
-	return ocelot_read(ocelot, QSYS_TAS_PARAM_CFG_CTRL);
+	return taprio;
 }
 
 static int felix_qbv_set(struct net_device *ndev,
 			 struct tsn_qbv_conf *shaper_config)
 {
-	struct tsn_qbv_basic *admin_basic = &shaper_config->admin;
-	struct tsn_qbv_entry *control_list = admin_basic->control_list;
+	struct dsa_port *dp = dsa_port_from_netdev(ndev);
+	struct tc_taprio_qopt_offload *taprio;
+	struct ocelot *ocelot = dp->ds->priv;
 	struct ocelot_port *ocelot_port;
-	struct timespec64 ts_base;
-	struct ocelot *ocelot;
-	struct dsa_port *dp;
-	int ret = 0;
-	int i, port;
-	u32 val;
-
-	dp = dsa_port_from_netdev(ndev);
-	ocelot = dp->ds->priv;
-	port = dp->index;
-
-	if (admin_basic->control_list_length > capa.num_tas_gcl) {
-		dev_err(ocelot->dev,
-			"Invalid admin_control_list_length %u\n",
-			admin_basic->control_list_length);
-		return -EINVAL;
-	}
-
-	if ((admin_basic->cycle_time < capa.tas_ct_min ||
-	     admin_basic->cycle_time > capa.tas_ct_max) &&
-	    shaper_config->gate_enabled) {
-		dev_err(ocelot->dev, "Invalid admin_cycle_time %u ns\n",
-			admin_basic->cycle_time);
-		return -EINVAL;
-	}
-	if (admin_basic->cycle_time_extension > capa.tas_cte_max) {
-		dev_err(ocelot->dev,
-			"Invalid admin_cycle_time_extension %u\n",
-			admin_basic->cycle_time_extension);
-		return -EINVAL;
-	}
+	int port = dp->index;
+	int err = 0;
 
 	ocelot_port = ocelot->ports[port];
-	ocelot_port->base_time = admin_basic->base_time;
 
-	mutex_lock(&ocelot->tas_lock);
+	taprio = tsn_qbv_conf_to_taprio(shaper_config);
+	if (!taprio)
+		return -ENOMEM;
 
-	felix_get_basetime(ocelot, admin_basic->base_time,
-			   admin_basic->cycle_time, &ts_base);
+	/* block concurrent tc-taprio attempts */
+	rtnl_lock();
 
-	/* Select port */
-	ocelot_rmw(ocelot,
-		   QSYS_TAS_PARAM_CFG_CTRL_PORT_NUM(port),
-		   QSYS_TAS_PARAM_CFG_CTRL_ALWAYS_GUARD_BAND_SCH_Q |
-		   QSYS_TAS_PARAM_CFG_CTRL_PORT_NUM_M,
-		   QSYS_TAS_PARAM_CFG_CTRL);
+	/* Do nothing if requested to disable something
+	 * that was never enabled
+	 */
+	if (!taprio->enable && !ocelot_port->taprio)
+		goto done;
 
-	val = ocelot_read(ocelot, QSYS_PARAM_STATUS_REG_8);
-	if (val & QSYS_PARAM_STATUS_REG_8_CONFIG_PENDING) {
-		ocelot_rmw_rix(ocelot, 0, QSYS_TAG_CONFIG_ENABLE,
-			       QSYS_TAG_CONFIG, port);
+	/* If offload is already enabled, disable the current one first */
+	if (taprio->enable && ocelot_port->taprio) {
+		taprio->enable = false;
+		ndev->netdev_ops->ndo_setup_tc(ndev, TC_SETUP_QDISC_TAPRIO,
+					       taprio);
+		taprio->enable = true;
 	}
 
-	if (!shaper_config->gate_enabled)
-		admin_basic->gate_states = 0xff;
+	/* Call felix_port_setup_tc() */
+	err = ndev->netdev_ops->ndo_setup_tc(ndev, TC_SETUP_QDISC_TAPRIO,
+					     taprio);
+done:
+	rtnl_unlock();
+	taprio_offload_free(taprio);
 
-	ocelot_rmw_rix(ocelot,
-		       (shaper_config->gate_enabled ? QSYS_TAG_CONFIG_ENABLE : 0) |
-		       QSYS_TAG_CONFIG_INIT_GATE_STATE(admin_basic->gate_states) |
-		       QSYS_TAG_CONFIG_SCH_TRAFFIC_QUEUES(0xff),
-		       QSYS_TAG_CONFIG_ENABLE |
-		       QSYS_TAG_CONFIG_INIT_GATE_STATE_M |
-		       QSYS_TAG_CONFIG_SCH_TRAFFIC_QUEUES_M,
-		       QSYS_TAG_CONFIG,
-		       port);
-
-	if (shaper_config->maxsdu) {
-		ocelot_write_rix(ocelot, shaper_config->maxsdu,
-				 QSYS_QMAXSDU_CFG_0, port);
-		ocelot_write_rix(ocelot, shaper_config->maxsdu,
-				 QSYS_QMAXSDU_CFG_1, port);
-		ocelot_write_rix(ocelot, shaper_config->maxsdu,
-				 QSYS_QMAXSDU_CFG_2, port);
-		ocelot_write_rix(ocelot, shaper_config->maxsdu,
-				 QSYS_QMAXSDU_CFG_3, port);
-		ocelot_write_rix(ocelot, shaper_config->maxsdu,
-				 QSYS_QMAXSDU_CFG_4, port);
-		ocelot_write_rix(ocelot, shaper_config->maxsdu,
-				 QSYS_QMAXSDU_CFG_5, port);
-		ocelot_write_rix(ocelot, shaper_config->maxsdu,
-				 QSYS_QMAXSDU_CFG_6, port);
-		ocelot_write_rix(ocelot, shaper_config->maxsdu,
-				 QSYS_QMAXSDU_CFG_7, port);
-	}
-
-	if (shaper_config->gate_enabled) {
-		ocelot_write(ocelot, ts_base.tv_nsec,
-			     QSYS_PARAM_CFG_REG_1);
-
-		ocelot_write(ocelot, lower_32_bits(ts_base.tv_sec),
-			     QSYS_PARAM_CFG_REG_2);
-
-		val = upper_32_bits(ts_base.tv_sec);
-		ocelot_write(ocelot,
-			     QSYS_PARAM_CFG_REG_3_BASE_TIME_SEC_MSB(val) |
-			     QSYS_PARAM_CFG_REG_3_LIST_LENGTH(admin_basic->control_list_length),
-			     QSYS_PARAM_CFG_REG_3);
-
-		ocelot_write(ocelot, admin_basic->cycle_time,
-			     QSYS_PARAM_CFG_REG_4);
-
-		ocelot_write(ocelot, admin_basic->cycle_time_extension,
-			     QSYS_PARAM_CFG_REG_5);
-
-		for (i = 0; i < admin_basic->control_list_length; i++) {
-			felix_tas_gcl_set(ocelot, i, control_list);
-			control_list++;
-		}
-
-		/* Start configuration change */
-		ocelot_rmw(ocelot,
-			   QSYS_TAS_PARAM_CFG_CTRL_CONFIG_CHANGE,
-			   QSYS_TAS_PARAM_CFG_CTRL_CONFIG_CHANGE,
-			   QSYS_TAS_PARAM_CFG_CTRL);
-
-		ret = readx_poll_timeout(felix_tas_read_status, ocelot, val,
-					 !(QSYS_TAS_PARAM_CFG_CTRL_CONFIG_CHANGE
-					 & val), 10, 100000);
-	}
-
-	mutex_unlock(&ocelot->tas_lock);
-
-	return ret;
+	return err;
 }
 
 static int felix_qbv_get(struct net_device *ndev, struct tsn_qbv_conf *shaper_config)
 {
 	struct tsn_qbv_basic *admin = &shaper_config->admin;
+	struct dsa_port *dp = dsa_port_from_netdev(ndev);
+	struct ocelot *ocelot = dp->ds->priv;
 	struct tsn_qbv_entry *list;
 	u32 base_timel, base_timeh;
-	struct ocelot *ocelot;
-	struct dsa_port *dp;
+	int i, port = dp->index;
 	u32 val, reg;
-	int i, port;
-
-	dp = dsa_port_from_netdev(ndev);
-	ocelot = dp->ds->priv;
-	port = dp->index;
 
 	mutex_lock(&ocelot->tas_lock);
 
@@ -321,7 +196,7 @@ static int felix_qbv_get(struct net_device *ndev, struct tsn_qbv_conf *shaper_co
 	admin->base_time = base_timeh |
 		(((u64)QSYS_PARAM_CFG_REG_3_BASE_TIME_SEC_MSB(reg)) << 32);
 
-	admin->base_time = (admin->base_time * 1000000000) + base_timel;
+	admin->base_time = (admin->base_time * NSEC_PER_SEC) + base_timel;
 
 	admin->control_list_length =
 		QSYS_PARAM_CFG_REG_3_LIST_LENGTH_X(reg);
@@ -362,10 +237,10 @@ static int felix_qbv_get(struct net_device *ndev, struct tsn_qbv_conf *shaper_co
 static int felix_qbv_get_gatelist(struct ocelot *ocelot,
 				  struct tsn_qbv_basic *oper)
 {
+	struct tsn_qbv_entry *glist;
 	u32 base_timel;
 	u32 base_timeh;
 	u32 val;
-	struct tsn_qbv_entry *glist;
 	int i;
 
 	base_timel = ocelot_read(ocelot, QSYS_PARAM_STATUS_REG_1);
@@ -375,7 +250,7 @@ static int felix_qbv_get_gatelist(struct ocelot *ocelot,
 	oper->base_time +=
 		((u64)QSYS_PARAM_STATUS_REG_3_BASE_TIME_SEC_MSB(val)) <<
 		32;
-	oper->base_time = (oper->base_time * 1000000000) + base_timel;
+	oper->base_time = (oper->base_time * NSEC_PER_SEC) + base_timel;
 
 	oper->control_list_length =
 		QSYS_PARAM_STATUS_REG_3_LIST_LENGTH_X(val);
@@ -415,17 +290,13 @@ static int felix_qbv_get_gatelist(struct ocelot *ocelot,
 static int felix_qbv_get_status(struct net_device *ndev,
 				struct tsn_qbv_status *qbvstatus)
 {
+	struct dsa_port *dp = dsa_port_from_netdev(ndev);
 	struct tsn_qbv_basic *oper = &qbvstatus->oper;
-	struct ocelot *ocelot;
+	struct ocelot *ocelot = dp->ds->priv;
 	struct timespec64 ts;
-	struct dsa_port *dp;
+	int port = dp->index;
 	ptptime_t cur_time;
-	int port;
 	u32 val;
-
-	dp = dsa_port_from_netdev(ndev);
-	ocelot = dp->ds->priv;
-	port = dp->index;
 
 	mutex_lock(&ocelot->tas_lock);
 
@@ -448,7 +319,7 @@ static int felix_qbv_get_status(struct net_device *ndev,
 		32;
 
 	qbvstatus->config_change_time =
-		(qbvstatus->config_change_time * 1000000000) +
+		(qbvstatus->config_change_time * NSEC_PER_SEC) +
 		ocelot_read(ocelot, QSYS_PARAM_STATUS_REG_6);
 
 	qbvstatus->config_change_error =
@@ -467,14 +338,10 @@ static int felix_qbv_get_status(struct net_device *ndev,
 
 static int felix_qbu_set(struct net_device *ndev, u8 preemptible)
 {
+	struct dsa_port *dp = dsa_port_from_netdev(ndev);
+	struct ocelot *ocelot = dp->ds->priv;
 	struct ocelot_port *ocelot_port;
-	struct ocelot *ocelot;
-	struct dsa_port *dp;
-	int port;
-
-	dp = dsa_port_from_netdev(ndev);
-	ocelot = dp->ds->priv;
-	port = dp->index;
+	int port = dp->index;
 
 	ocelot_port = ocelot->ports[port];
 
@@ -509,15 +376,11 @@ static int felix_qbu_set(struct net_device *ndev, u8 preemptible)
 
 static int felix_qbu_get(struct net_device *ndev, struct tsn_preempt_status *c)
 {
+	struct dsa_port *dp = dsa_port_from_netdev(ndev);
+	struct ocelot *ocelot = dp->ds->priv;
 	struct ocelot_port *ocelot_port;
-	struct ocelot *ocelot;
-	struct dsa_port *dp;
-	int port;
+	int port = dp->index;
 	u32 val;
-
-	dp = dsa_port_from_netdev(ndev);
-	ocelot = dp->ds->priv;
-	port = dp->index;
 
 	ocelot_port = ocelot->ports[port];
 
@@ -610,19 +473,15 @@ static int felix_streamid_force_forward_clear(struct ocelot *ocelot, u8 port)
 static int felix_cb_streamid_set(struct net_device *ndev, u32 index, bool enable,
 				 struct tsn_cb_streamid *streamid)
 {
+	struct dsa_port *dp = dsa_port_from_netdev(ndev);
+	struct ocelot *ocelot = dp->ds->priv;
+	int sfid, ssid, port = dp->index;
 	enum macaccess_entry_type type;
 	struct stream_filter *stream;
 	unsigned char mac[ETH_ALEN];
-	struct ocelot *ocelot;
-	int sfid, ssid, port;
-	struct dsa_port *dp;
 	u32 dst_idx;
 	u16 vid;
 	int ret;
-
-	dp = dsa_port_from_netdev(ndev);
-	ocelot = dp->ds->priv;
-	port = dp->index;
 
 	if (index >= FELIX_STREAM_NUM) {
 		dev_err(ocelot->dev, "Invalid index %u, maximum:%u\n",
@@ -695,15 +554,12 @@ static int felix_cb_streamid_set(struct net_device *ndev, u32 index, bool enable
 static int felix_cb_streamid_get(struct net_device *ndev, u32 index,
 				 struct tsn_cb_streamid *streamid)
 {
+	struct dsa_port *dp = dsa_port_from_netdev(ndev);
+	struct ocelot *ocelot = dp->ds->priv;
 	enum macaccess_entry_type type;
 	struct stream_filter *stream;
-	struct ocelot *ocelot;
-	struct dsa_port *dp;
 	u32 dst, fwdmask;
 	int ret;
-
-	dp = dsa_port_from_netdev(ndev);
-	ocelot = dp->ds->priv;
 
 	if (index >= FELIX_STREAM_NUM) {
 		dev_err(ocelot->dev,
@@ -746,16 +602,12 @@ static int felix_qci_sfi_set(struct net_device *ndev, u32 index, bool enable,
 	u16 sgid  = sfi->stream_gate_instance_id;
 	int fmid = sfi->stream_filter.flow_meter_instance_id;
 	u16 max_sdu_len = sfi->stream_filter.maximum_sdu_size;
-	struct ocelot *ocelot;
-	struct dsa_port *dp;
+	struct dsa_port *dp = dsa_port_from_netdev(ndev);
+	struct ocelot *ocelot = dp->ds->priv;
+	int i, port = dp->index;
 	int sfid = index;
-	int i, port;
 	u16 pol_idx;
 	u32 val;
-
-	dp = dsa_port_from_netdev(ndev);
-	ocelot = dp->ds->priv;
-	port = dp->index;
 
 	if (fmid == -1)
 		pol_idx = capa.psfp_fmi_max;
@@ -820,16 +672,12 @@ static int felix_qci_sfi_set(struct net_device *ndev, u32 index, bool enable,
 static int felix_qci_sfi_get(struct net_device *ndev, u32 index,
 			     struct tsn_qci_psfp_sfi_conf *sfi)
 {
+	struct dsa_port *dp = dsa_port_from_netdev(ndev);
+	struct ocelot *ocelot = dp->ds->priv;
 	u32 val, reg, fmeter_id, max_sdu;
-	struct ocelot *ocelot;
-	struct dsa_port *dp;
+	int i, port = dp->index;
 	u32 sfid = index;
 	int enable = 1;
-	int i, port;
-
-	dp = dsa_port_from_netdev(ndev);
-	ocelot = dp->ds->priv;
-	port = dp->index;
 
 	if (sfid >= capa.num_psfp_sfid) {
 		dev_err(ocelot->dev, "Invalid index %u, maximum:%u\n",
@@ -881,13 +729,10 @@ static int felix_qci_sfi_get(struct net_device *ndev, u32 index,
 static int felix_qci_sfi_counters_get(struct net_device *ndev, u32 index,
 				      struct tsn_qci_psfp_sfi_counters *sfi_cnt)
 {
+	struct dsa_port *dp = dsa_port_from_netdev(ndev);
 	u32 match, not_pass, not_pass_sdu, red;
-	struct ocelot *ocelot;
-	struct dsa_port *dp;
+	struct ocelot *ocelot = dp->ds->priv;
 	u32 sfid = index;
-
-	dp = dsa_port_from_netdev(ndev);
-	ocelot = dp->ds->priv;
 
 	if (sfid >= capa.num_psfp_sfid) {
 		dev_err(ocelot->dev, "Invalid index %u, maximum:%u\n",
@@ -895,20 +740,24 @@ static int felix_qci_sfi_counters_get(struct net_device *ndev, u32 index,
 		return -EINVAL;
 	}
 
+	mutex_lock(&ocelot->stat_view_lock);
+
 	ocelot_rmw(ocelot,
 		   SYS_STAT_CFG_STAT_VIEW(sfid),
 		   SYS_STAT_CFG_STAT_VIEW_M,
 		   SYS_STAT_CFG);
 
-	match = ocelot_read_gix(ocelot, SYS_CNT, 0x200);
-	not_pass = ocelot_read_gix(ocelot, SYS_CNT, 0x201);
-	not_pass_sdu = ocelot_read_gix(ocelot, SYS_CNT, 0x202);
-	red = ocelot_read_gix(ocelot, SYS_CNT, 0x203);
+	match = ocelot_read(ocelot, SYS_COUNT_SF_MATCHING_FRAMES);
+	not_pass = ocelot_read(ocelot, SYS_COUNT_SF_NOT_PASSING_FRAMES);
+	not_pass_sdu = ocelot_read(ocelot, SYS_COUNT_SF_NOT_PASSING_SDU);
+	red = ocelot_read(ocelot, SYS_COUNT_SF_RED_FRAMES);
+
+	mutex_unlock(&ocelot->stat_view_lock);
 
 	sfi_cnt->matching_frames_count = match;
 	sfi_cnt->not_passing_frames_count = not_pass;
 	sfi_cnt->not_passing_sdu_count = not_pass_sdu;
-	sfi_cnt->red_frames_count  =  red;
+	sfi_cnt->red_frames_count = red;
 
 	sfi_cnt->passing_frames_count = match - not_pass;
 	sfi_cnt->passing_sdu_count = match - not_pass - not_pass_sdu;
@@ -968,15 +817,12 @@ static int felix_qci_sgi_set(struct net_device *ndev, u32 index,
 	u32 list_length = sgi_conf->admin.control_list_length;
 	u32 cycle_time = sgi_conf->admin.cycle_time;
 	u32 cycle_time_ex = sgi_conf->admin.cycle_time_extension;
+	struct dsa_port *dp = dsa_port_from_netdev(ndev);
+	struct ocelot *ocelot = dp->ds->priv;
 	struct timespec64 ts_base;
-	struct ocelot *ocelot;
-	struct dsa_port *dp;
 	u32 sgid = index;
 	int ret;
 	u32 val;
-
-	dp = dsa_port_from_netdev(ndev);
-	ocelot = dp->ds->priv;
 
 	if (sgid >= capa.num_psfp_sgid) {
 		dev_err(ocelot->dev, "Invalid sgid %u, maximum:%u\n",
@@ -1019,8 +865,8 @@ static int felix_qci_sgi_set(struct net_device *ndev, u32 index,
 		return 0;
 	}
 
-	felix_get_basetime(ocelot, sgi_conf->admin.base_time,
-			   sgi_conf->admin.cycle_time, &ts_base);
+	vsc9959_new_base_time(ocelot, sgi_conf->admin.base_time,
+			      sgi_conf->admin.cycle_time, &ts_base);
 
 	ocelot_write(ocelot, ts_base.tv_nsec, ANA_SG_CONFIG_REG_1);
 	ocelot_write(ocelot, lower_32_bits(ts_base.tv_sec),
@@ -1093,13 +939,10 @@ static int felix_qci_sgi_get(struct net_device *ndev, u32 index,
 			     struct tsn_qci_psfp_sgi_conf *sgi_conf)
 {
 	struct tsn_qci_sg_control *admin  = &sgi_conf->admin;
+	struct dsa_port *dp = dsa_port_from_netdev(ndev);
+	struct ocelot *ocelot = dp->ds->priv;
 	struct tsn_qci_psfp_gcl *glist;
 	u32 val, reg, list_num;
-	struct ocelot *ocelot;
-	struct dsa_port *dp;
-
-	dp = dsa_port_from_netdev(ndev);
-	ocelot = dp->ds->priv;
 
 	if (index >= capa.num_psfp_sgid) {
 		dev_err(ocelot->dev, "Invalid sgid %u, maximum:%u\n",
@@ -1125,7 +968,7 @@ static int felix_qci_sgi_get(struct net_device *ndev, u32 index,
 	admin->base_time +=
 		ANA_SG_CONFIG_REG_3_BASE_TIME_SEC_MSB(val) << 32;
 
-	admin->base_time = admin->base_time * 1000000000 + reg;
+	admin->base_time = admin->base_time * NSEC_PER_SEC + reg;
 
 	if (val & ANA_SG_CONFIG_REG_3_IPV_VALID)
 		admin->init_ipv = ANA_SG_CONFIG_REG_3_INIT_IPV_X(val);
@@ -1152,12 +995,9 @@ static int felix_qci_sgi_get(struct net_device *ndev, u32 index,
 static int felix_qci_sgi_status_get(struct net_device *ndev, u16 index,
 				    struct tsn_psfp_sgi_status *sgi_status)
 {
-	struct ocelot *ocelot;
-	struct dsa_port *dp;
+	struct dsa_port *dp = dsa_port_from_netdev(ndev);
+	struct ocelot *ocelot = dp->ds->priv;
 	u32 val, reg;
-
-	dp = dsa_port_from_netdev(ndev);
-	ocelot = dp->ds->priv;
 
 	if (index >= capa.num_psfp_sgid) {
 		dev_err(ocelot->dev, "Invalid sgid %u, maximum:%u\n",
@@ -1178,7 +1018,7 @@ static int felix_qci_sgi_status_get(struct net_device *ndev, u16 index,
 	sgi_status->config_change_time +=
 		ANA_SG_STATUS_REG_3_CFG_CHG_TIME_SEC_MSB(val) << 32;
 	sgi_status->config_change_time =
-		sgi_status->config_change_time * 1000000000 + reg;
+		sgi_status->config_change_time * NSEC_PER_SEC + reg;
 
 	if (val & ANA_SG_STATUS_REG_3_CONFIG_PENDING)
 		sgi_status->config_pending  = 1;
@@ -1201,15 +1041,12 @@ static int felix_qci_sgi_status_get(struct net_device *ndev, u16 index,
 static int felix_qci_fmi_set(struct net_device *ndev, u32 index,
 			     bool enable, struct tsn_qci_psfp_fmi *fmi)
 {
+	struct dsa_port *dp = dsa_port_from_netdev(ndev);
 	u32 cir = 0, cbs = 0, pir = 0, pbs = 0;
 	bool cir_discard = 0, pir_discard = 0;
+	struct ocelot *ocelot = dp->ds->priv;
 	u32 pbs_max = 0, cbs_max = 0;
-	struct ocelot *ocelot;
-	struct dsa_port *dp;
 	u32 cir_ena = 0;
-
-	dp = dsa_port_from_netdev(ndev);
-	ocelot = dp->ds->priv;
 
 	if (index > capa.qos_pol_max) {
 		dev_err(ocelot->dev, "Invalid pol_idx %u, maximum: %u\n",
@@ -1290,12 +1127,9 @@ static int felix_qci_fmi_get(struct net_device *ndev, u32 index,
 			     struct tsn_qci_psfp_fmi *fmi,
 			     struct tsn_qci_psfp_fmi_counters *counters)
 {
-	struct ocelot *ocelot;
-	struct dsa_port *dp;
+	struct dsa_port *dp = dsa_port_from_netdev(ndev);
+	struct ocelot *ocelot = dp->ds->priv;
 	u32 val, reg;
-
-	dp = dsa_port_from_netdev(ndev);
-	ocelot = dp->ds->priv;
 
 	if (index > capa.qos_pol_max) {
 		dev_err(ocelot->dev, "Invalid pol_idx %u, maximum: %u\n",
@@ -1389,32 +1223,21 @@ static int felix_qos_shaper_conf_set(struct ocelot *ocelot, int idx,
 
 static int felix_cbs_set(struct net_device *ndev, u8 tc, u8 bw)
 {
+	struct dsa_port *dp = dsa_port_from_netdev(ndev);
+	struct ocelot *ocelot = dp->ds->priv;
 	struct ocelot_port *ocelot_port;
-	struct phylink_link_state state;
-	struct phylink_pcs *pcs;
-	struct ocelot *ocelot;
+	int port = dp->index;
 	struct felix *felix;
-	struct dsa_port *dp;
-	int port, speed;
-
-	dp = dsa_port_from_netdev(ndev);
-	ocelot = dp->ds->priv;
-	port = dp->index;
-	ocelot_port = ocelot->ports[port];
+	int speed;
 
 	if (tc > capa.qos_cos_max) {
 		dev_err(ocelot->dev, "Invalid tc: %u\n", tc);
 		return -EINVAL;
 	}
 
-	memset(&state, 0, sizeof(state));
-	state.interface = ocelot_port->phy_mode;
-
+	ocelot_port = ocelot->ports[port];
 	felix = ocelot_to_felix(ocelot);
-	pcs = felix->pcs[port];
-	pcs->ops->pcs_get_state(pcs, &state);
-
-	speed = state.speed;
+	speed = ocelot_port->speed;
 
 	felix_qos_shaper_conf_set(ocelot, port * 8 + tc, bw, speed);
 
@@ -1443,13 +1266,9 @@ void felix_cbs_reset(struct ocelot *ocelot, int port, int speed)
 
 static int felix_cbs_get(struct net_device *ndev, u8 tc)
 {
-	struct ocelot *ocelot;
-	struct dsa_port *dp;
-	int port;
-
-	dp = dsa_port_from_netdev(ndev);
-	ocelot = dp->ds->priv;
-	port = dp->index;
+	struct dsa_port *dp = dsa_port_from_netdev(ndev);
+	struct ocelot *ocelot = dp->ds->priv;
+	int port = dp->index;
 
 	if (tc > capa.qos_cos_max) {
 		dev_err(ocelot->dev, "Invalid tc: %u\n", tc);
@@ -1461,14 +1280,11 @@ static int felix_cbs_get(struct net_device *ndev, u8 tc)
 
 static int felix_cut_thru_set(struct net_device *ndev, u8 cut_thru)
 {
+	struct dsa_port *dp = dsa_port_from_netdev(ndev);
+	struct ocelot *ocelot = dp->ds->priv;
 	struct ocelot_port *ocelot_port;
-	struct ocelot *ocelot;
-	struct dsa_port *dp;
-	int port;
+	int port = dp->index;
 
-	dp = dsa_port_from_netdev(ndev);
-	ocelot = dp->ds->priv;
-	port = dp->index;
 	ocelot_port = ocelot->ports[port];
 
 	mutex_lock(&ocelot->fwd_domain_lock);
@@ -1517,16 +1333,13 @@ static int felix_rtag_parse_enable(struct ocelot *ocelot, u8 port)
 static int felix_seq_gen_set(struct net_device *ndev, u32 index,
 			     struct tsn_seq_gen_conf *sg_conf)
 {
+	struct dsa_port *dp = dsa_port_from_netdev(ndev);
+	struct ocelot *ocelot = dp->ds->priv;
 	u8 iport_mask = sg_conf->iport_mask;
 	u8 split_mask = sg_conf->split_mask;
 	u8 seq_len = sg_conf->seq_len;
 	u32 seq_num = sg_conf->seq_num;
 	struct stream_filter *tmp;
-	struct ocelot *ocelot;
-	struct dsa_port *dp;
-
-	dp = dsa_port_from_netdev(ndev);
-	ocelot = dp->ds->priv;
 
 	if (index >= capa.num_frer_ssid) {
 		dev_err(ocelot->dev, "Invalid SSID %u, maximum:%u\n",
@@ -1571,14 +1384,11 @@ static int felix_seq_gen_set(struct net_device *ndev, u32 index,
 static int felix_seq_rec_set(struct net_device *ndev, u32 index,
 			     struct tsn_seq_rec_conf *sr_conf)
 {
+	struct dsa_port *dp = dsa_port_from_netdev(ndev);
+	struct ocelot *ocelot = dp->ds->priv;
 	u8 seq_len = sr_conf->seq_len;
 	u8 hislen = sr_conf->his_len;
-	struct ocelot *ocelot;
-	struct dsa_port *dp;
 	int i;
-
-	dp = dsa_port_from_netdev(ndev);
-	ocelot = dp->ds->priv;
 
 	if (index >= capa.num_frer_ssid) {
 		dev_err(ocelot->dev, "Invalid SSID %u, maximum:%u\n",
@@ -1629,12 +1439,9 @@ static int felix_seq_rec_set(struct net_device *ndev, u32 index,
 static int felix_cb_get(struct net_device *ndev, u32 index,
 			struct tsn_cb_status *c)
 {
-	struct ocelot *ocelot;
-	struct dsa_port *dp;
+	struct dsa_port *dp = dsa_port_from_netdev(ndev);
+	struct ocelot *ocelot = dp->ds->priv;
 	u32 val;
-
-	dp = dsa_port_from_netdev(ndev);
-	ocelot = dp->ds->priv;
 
 	if (index >= capa.num_frer_ssid) {
 		dev_err(ocelot->dev, "Invalid SSID %u, maximum:%u\n",
@@ -1671,15 +1478,11 @@ static int felix_cb_get(struct net_device *ndev, u32 index,
 static int felix_dscp_set(struct net_device *ndev, bool enable, const u8 dscp_ix,
 			  struct tsn_qos_switch_dscp_conf *c)
 {
-	struct ocelot *ocelot;
-	struct dsa_port *dp;
+	struct dsa_port *dp = dsa_port_from_netdev(ndev);
+	struct ocelot *ocelot = dp->ds->priv;
+	int port = dp->index;
 	u32 ri = dscp_ix;
 	u32 val;
-	int port;
-
-	dp = dsa_port_from_netdev(ndev);
-	ocelot = dp->ds->priv;
-	port = dp->index;
 
 	c->dscp = 0;
 	c->trust = 1;
@@ -1713,6 +1516,31 @@ static int felix_dscp_set(struct net_device *ndev, bool enable, const u8 dscp_ix
 	       (c->remark ? ANA_DSCP_CFG_DSCP_REWR_ENA : 0);
 
 	ocelot_write_rix(ocelot, val, ANA_DSCP_CFG, ri);
+
+	return 0;
+}
+
+static int felix_pcpmap_set(struct net_device *ndev,
+			    struct tsn_qos_switch_pcp_conf *c)
+{
+	struct ocelot *ocelot;
+	struct dsa_port *dp;
+	int index;
+	int port;
+
+	dp = dsa_port_from_netdev(ndev);
+	ocelot = dp->ds->priv;
+	port = dp->index;
+
+	index = (c->pcp & GENMASK(2, 0)) * ((c->dei & BIT(0)) + 1);
+
+	ocelot_rmw_ix(ocelot,
+		     (ANA_PORT_PCP_DEI_MAP_DP_PCP_DEI_VAL & (c->dpl << 3)) |
+		     ANA_PORT_PCP_DEI_MAP_QOS_PCP_DEI_VAL(c->cos),
+		     ANA_PORT_PCP_DEI_MAP_DP_PCP_DEI_VAL |
+		     ANA_PORT_PCP_DEI_MAP_QOS_PCP_DEI_VAL_M,
+		     ANA_PORT_PCP_DEI_MAP,
+		     port, index);
 
 	return 0;
 }
@@ -1756,22 +1584,16 @@ static const struct tsn_ops felix_tsn_ops = {
 	.cbrec_set			= felix_seq_rec_set,
 	.cb_get				= felix_cb_get,
 	.dscp_set			= felix_dscp_set,
+	.pcpmap_set			= felix_pcpmap_set,
 };
 
 int felix_tsn_enable(struct dsa_switch *ds)
 {
-	struct net_device *dev;
 	struct dsa_port *dp;
-	int port;
 
-	for (port = 0; port < ds->num_ports; port++) {
-		dp = dsa_to_port(ds, port);
-		if (dp->type == DSA_PORT_TYPE_USER) {
-			dev = dp->slave;
-			tsn_port_register(dev, (struct tsn_ops *)&felix_tsn_ops,
-					  GROUP_OFFSET_SWITCH);
-		}
-	}
+	dsa_switch_for_each_user_port(dp, ds)
+		tsn_port_register(dp->slave, (struct tsn_ops *)&felix_tsn_ops,
+				  GROUP_OFFSET_SWITCH);
 
 	INIT_LIST_HEAD(&streamtable);
 

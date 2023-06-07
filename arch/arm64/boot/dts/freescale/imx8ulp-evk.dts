@@ -29,7 +29,7 @@
 		};
 	};
 
-	memory@40000000 {
+	memory@80000000 {
 		device_type = "memory";
 		reg = <0x0 0x80000000 0 0x80000000>;
 	};
@@ -62,7 +62,7 @@
 			linux,cma-default;
 		};
 
-		rsc_table: rsc_table@1fff8000{
+		rsc_table: rsc-table@1fff8000{
 			reg = <0 0x1fff8000 0 0x1000>;
 			no-map;
 		};
@@ -86,6 +86,12 @@
 		dsp_vdev0buffer: vdev0buffer@8ff00000 {
 			compatible = "shared-dma-pool";
 			reg = <0 0x8ff00000 0 0x100000>;
+			no-map;
+		};
+
+		ele_reserved: ele-reserved@90000000 {
+			compatible = "shared-dma-pool";
+			reg = <0 0x90000000 0 0x100000>;
 			no-map;
 		};
 
@@ -115,7 +121,7 @@
 			no-map;
 		};
 
-		audio_reserved: audio@0xa8500000 {
+		audio_reserved: audio@a8500000 {
 			compatible = "shared-dma-pool";
 			no-map;
 			reg = <0 0xa8500000 0 0x100000>;
@@ -125,6 +131,21 @@
 			no-map;
 			reg = <0 0xa8600000 0 0x1000000>;
 		};
+	};
+
+	clock_ext_rmii: clock-ext-rmii {
+		compatible = "fixed-clock";
+		clock-frequency = <50000000>;
+		clock-output-names = "ext_rmii_clk";
+		#clock-cells = <0>;
+	};
+
+	clock_ext_ts: clock-ext-ts {
+		compatible = "fixed-clock";
+		/* External ts clock is 50MHZ from PHY on EVK board. */
+		clock-frequency = <50000000>;
+		clock-output-names = "ext_ts_clk";
+		#clock-cells = <0>;
 	};
 
 	reg_5v: regulator-5v {
@@ -187,11 +208,6 @@
 	};
 };
 
-&clock_ext_ts {
-	/* External ts clock is 50MHZ from PHY on EVK board. */
-	clock-frequency = <50000000>;
-};
-
 &dcnano {
 	status = "okay";
 };
@@ -218,27 +234,6 @@
 	memory-region = <&dsp_vdev0buffer>, <&dsp_vdev0vring0>,
 			<&dsp_vdev0vring1>, <&dsp_reserved>;
 	status = "okay";
-};
-
-&fec {
-	pinctrl-names = "default", "sleep";
-	pinctrl-0 = <&pinctrl_enet>;
-	pinctrl-1 = <&pinctrl_enet>;
-	assigned-clocks = <&cgc1 IMX8ULP_CLK_ENET_TS_SEL>;
-	assigned-clock-parents = <&clock_ext_ts>;
-	phy-mode = "rmii";
-	phy-handle = <&ethphy>;
-	status = "okay";
-
-	mdio {
-		#address-cells = <1>;
-		#size-cells = <0>;
-
-		ethphy: ethernet-phy@1 {
-			reg = <1>;
-			micrel,led-mode = <1>;
-		};
-	};
 };
 
 &flexspi2 {
@@ -407,7 +402,7 @@
 	pinctrl-1 = <&pinctrl_sai5>;
 	assigned-clocks = <&cgc1 IMX8ULP_CLK_SAI5_SEL>;
 	assigned-clock-parents = <&cgc1 IMX8ULP_CLK_SPLL3_PFD1_DIV1>;
-	fsl,dataline = <0 0x08 0x01>;
+	fsl,dataline = <1 0x08 0x01>;
 	status = "okay";
 };
 
@@ -498,6 +493,36 @@
 	};
 };
 
+&ele_mu {
+	memory-region = <&ele_reserved>;
+};
+
+&fec {
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&pinctrl_enet>;
+	pinctrl-1 = <&pinctrl_enet>;
+	clocks = <&cgc1 IMX8ULP_CLK_XBAR_DIVBUS>,
+		 <&pcc4 IMX8ULP_CLK_ENET>,
+		 <&cgc1 IMX8ULP_CLK_ENET_TS_SEL>,
+		 <&clock_ext_rmii>;
+	clock-names = "ipg", "ahb", "ptp", "enet_clk_ref";
+	assigned-clocks = <&cgc1 IMX8ULP_CLK_ENET_TS_SEL>;
+	assigned-clock-parents = <&clock_ext_ts>;
+	phy-mode = "rmii";
+	phy-handle = <&ethphy>;
+	status = "okay";
+
+	mdio {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		ethphy: ethernet-phy@1 {
+			reg = <1>;
+			micrel,led-mode = <1>;
+		};
+	};
+};
+
 &iomuxc1 {
 	pinctrl_dsi: dsigrp {
 		fsl,pins = <
@@ -546,10 +571,10 @@
 
 	pinctrl_lpspi5: lpspi5grp {
 		fsl,pins = <
-			MX8ULP_PAD_PTF16__LPSPI5_SIN	0x3
-			MX8ULP_PAD_PTF17__LPSPI5_SOUT	0x3
-			MX8ULP_PAD_PTF18__LPSPI5_SCK	0x3
-			MX8ULP_PAD_PTF19__PTF19		0x3
+			MX8ULP_PAD_PTF16__LPSPI5_SIN	0x43
+			MX8ULP_PAD_PTF17__LPSPI5_SOUT	0x43
+			MX8ULP_PAD_PTF18__LPSPI5_SCK	0x43
+			MX8ULP_PAD_PTF19__PTF19		0x43
 		>;
 	};
 

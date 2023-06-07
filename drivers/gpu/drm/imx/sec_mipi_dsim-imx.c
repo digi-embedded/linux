@@ -46,6 +46,7 @@ struct imx_sec_dsim_device {
 	int irq;
 	struct clk *clk_cfg;
 	struct clk *clk_pllref;
+	struct clk *clk_apb;
 	struct drm_encoder encoder;
 
 	struct reset_control *soft_resetn;
@@ -291,19 +292,10 @@ static int sec_dsim_of_parse_resets(struct imx_sec_dsim_device *dsim)
 	const char *compat;
 	uint32_t len, rstc_num = 0;
 
-	/* TODO: bypass resets for imx8mp platform */
-	compat = of_get_property(np, "compatible", NULL);
-	if (unlikely(!compat))
-		return -ENODEV;
-
-	len = strlen(compat);
-	if (!of_compat_cmp(compat, "fsl,imx8mp-mipi-dsim", len))
-		return 0;
-
 	ret = of_parse_phandle_with_args(np, "resets", "#reset-cells",
 					 0, &args);
 	if (ret)
-		return ret;
+		return ret == -ENOENT ? 0 : ret;
 
 	parent = args.np;
 	for_each_child_of_node(parent, child) {
@@ -448,6 +440,10 @@ static int imx_sec_dsim_probe(struct platform_device *pdev)
 	if (IS_ERR(dsim_dev->clk_pllref))
 		return PTR_ERR(dsim_dev->clk_pllref);
 
+	dsim_dev->clk_apb = devm_clk_get(dev, "apb-root");
+	if (IS_ERR(dsim_dev->clk_apb))
+		return PTR_ERR(dsim_dev->clk_apb);
+
 	ret = sec_dsim_of_parse_resets(dsim_dev);
 	if (ret)
 		return ret;
@@ -501,6 +497,7 @@ static int imx_sec_dsim_runtime_suspend(struct device *dev)
 
 	clk_disable_unprepare(dsim_dev->clk_cfg);
 	clk_disable_unprepare(dsim_dev->clk_pllref);
+	clk_disable_unprepare(dsim_dev->clk_apb);
 
 	release_bus_freq(BUS_FREQ_HIGH);
 
@@ -531,6 +528,10 @@ static int imx_sec_dsim_runtime_resume(struct device *dev)
 		return ret;
 
 	ret = clk_prepare_enable(dsim_dev->clk_cfg);
+	if (WARN_ON(unlikely(ret)))
+		return ret;
+
+	ret = clk_prepare_enable(dsim_dev->clk_apb);
 	if (WARN_ON(unlikely(ret)))
 		return ret;
 

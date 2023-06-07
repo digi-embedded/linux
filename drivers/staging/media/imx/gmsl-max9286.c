@@ -3301,7 +3301,7 @@ static int max9286_probe(struct i2c_client *client, const struct i2c_device_id *
  * @param client            struct i2c_client *
  * @return  Error code indicating success or failure
  */
-static int max9286_remove(struct i2c_client *client)
+static void max9286_remove(struct i2c_client *client)
 {
 	struct v4l2_subdev *sd = i2c_get_clientdata(client);
 	struct sensor_data *max9286_data = subdev_to_sensor_data(sd);
@@ -3310,8 +3310,6 @@ static int max9286_remove(struct i2c_client *client)
 	device_remove_file(&client->dev, &dev_attr_analog_test_pattern);
 	media_entity_cleanup(&sd->entity);
 	v4l2_async_unregister_subdev(sd);
-
-	return 0;
 }
 
 static const struct i2c_device_id max9286_id[] = {

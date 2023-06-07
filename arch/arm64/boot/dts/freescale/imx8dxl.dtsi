@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Copyright 2019~2020 NXP
+ * Copyright 2019~2020, 2022 NXP
  */
 
 #include <dt-bindings/clock/imx8-clock.h>
@@ -92,19 +92,24 @@
 		};
 	};
 
-	imx8dxl_cm4: imx8dxl_cm4@0 {
-		compatible = "fsl,imx8qxp-cm4";
-		rsc-da = <0x90000000>;
-		mbox-names = "tx", "rx", "rxdb";
-		mboxes = <&lsio_mu5 0 1
-			  &lsio_mu5 1 1
-			  &lsio_mu5 3 1>;
-		mub-partition = <3>;
-		core-index = <0>;
-		core-id = <IMX_SC_R_M4_0_PID0>;
-		status = "disabled";
-		power-domains = <&pd IMX_SC_R_M4_0_PID0>,
-				<&pd IMX_SC_R_M4_0_MU_1A>;
+	cm4 {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		compatible = "simple-bus";
+
+		imx8dxl_cm4: imx8dxl_cm4@0 {
+			compatible = "fsl,imx8qxp-cm4";
+			rsc-da = <0x90000000>;
+			mbox-names = "tx", "rx", "rxdb";
+			mboxes = <&lsio_mu5 0 1
+				  &lsio_mu5 1 1
+				  &lsio_mu5 3 1>;
+			fsl,resource-id = <IMX_SC_R_M4_0_PID0>;
+			fsl,entry-address = <0x34fe0000>;
+			status = "disabled";
+			power-domains = <&pd IMX_SC_R_M4_0_PID0>,
+					<&pd IMX_SC_R_M4_0_MU_1A>;
+		};
 	};
 
 	gic: interrupt-controller@51a00000 {
@@ -114,6 +119,17 @@
 		#interrupt-cells = <3>;
 		interrupt-controller;
 		interrupts = <GIC_PPI 9 IRQ_TYPE_LEVEL_HIGH>;
+	};
+
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		dsp_reserved: dsp@92400000 {
+			reg = <0 0x92400000 0 0x2000000>;
+			no-map;
+		};
 	};
 
 	pmu {
@@ -126,7 +142,7 @@
 		method = "smc";
 	};
 
-	scu {
+	system-controller {
 		compatible = "fsl,imx-scu";
 		mbox-names = "tx0",
 			     "rx0",
@@ -135,8 +151,8 @@
 			  &lsio_mu1 1 0
 			  &lsio_mu1 3 3>;
 
-		pd: imx8dxl-pd {
-			compatible = "fsl,imx8dxl-scu-pd", "fsl,scu-pd";
+		pd: power-controller {
+			compatible = "fsl,scu-pd";
 			#power-domain-cells = <1>;
 			wakeup-irq = <160 163 235 236 237 228 229 230 231 238
 				     239 240 166 169>;
@@ -145,15 +161,13 @@
 		clk: clock-controller {
 			compatible = "fsl,imx8dxl-clk", "fsl,scu-clk";
 			#clock-cells = <2>;
-			clocks = <&xtal32k &xtal24m>;
-			clock-names = "xtal_32KHz", "xtal_24Mhz";
 		};
 
 		iomuxc: pinctrl {
 			compatible = "fsl,imx8dxl-iomuxc";
 		};
 
-		ocotp: imx8qx-ocotp {
+		ocotp: ocotp {
 			compatible = "fsl,imx8dxl-scu-ocotp", "fsl,imx8qxp-scu-ocotp";
 			#address-cells = <1>;
 			#size-cells = <1>;
@@ -168,7 +182,13 @@
 		};
 
 		rtc: rtc {
-			compatible = "fsl,imx8dxl-sc-rtc", "fsl,imx8qxp-sc-rtc";
+			compatible = "fsl,imx8qxp-sc-rtc";
+		};
+
+		sc_pwrkey: keys {
+			compatible = "fsl,imx8qxp-sc-key", "fsl,imx-sc-key";
+			linux,keycodes = <KEY_POWER>;
+			wakeup-source;
 		};
 
 		watchdog {
@@ -208,6 +228,7 @@
 					type = "critical";
 				};
 			};
+
 			cooling-maps {
 				map0 {
 					trip = <&cpu_alert0>;
@@ -219,13 +240,7 @@
 		};
 	};
 
-	clk_dummy: clock-dummy {
-		compatible = "fixed-clock";
-		#clock-cells = <0>;
-		clock-frequency = <0>;
-		clock-output-names = "clk_dummy";
-	};
-
+	/* The two values below cannot be changed by the board */
 	xtal32k: clock-xtal32k {
 		compatible = "fixed-clock";
 		#clock-cells = <0>;
@@ -243,12 +258,6 @@
 	imx_ion {
 		compatible = "fsl,mxc-ion";
 		fsl,heap-id = <0>;
-	};
-
-	sc_pwrkey: sc-powerkey {
-		compatible = "fsl,imx8-pwrkey";
-		linux,keycode = <KEY_POWER>;
-		wakeup-source;
 	};
 
 	/* sorted in register address */

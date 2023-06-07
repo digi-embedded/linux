@@ -1,3 +1,3 @@
-obj-$(CONFIG_IMX_LCDIF_CORE) += imx-lcdif-core.o
+obj-$(CONFIG_IMX8MM_LCDIF_CORE) += imx8mm-lcdif-core.o
 
-imx-lcdif-core-objs := lcdif-common.o
+imx8mm-lcdif-core-objs := lcdif-common.o

@@ -29,6 +29,3 @@ examples:
     rpmsg_sensor:rpmsg-sensor {
         compatible = "nxp,rpmsg-iio-pedometer";
     };
-
-
-

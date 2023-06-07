@@ -129,6 +129,14 @@ check_ethtool_lanes_support()
 	fi
 }
 
+check_locked_port_support()
+{
+	if ! bridge -d link show | grep -q " locked"; then
+		echo "SKIP: iproute2 too old; Locked port feature not supported."
+		return $ksft_skip
+	fi
+}
+
 if [[ "$(id -u)" -ne 0 ]]; then
 	echo "SKIP: need root privileges"
 	exit $ksft_skip
@@ -325,6 +333,15 @@ log_test()
 	fi
 
 	printf "TEST: %-60s  [ OK ]\n" "$test_name $opt_str"
+	return 0
+}
+
+log_test_skip()
+{
+	local test_name=$1
+	local opt_str=$2
+
+	printf "TEST: %-60s  [SKIP]\n" "$test_name $opt_str"
 	return 0
 }
 
@@ -809,6 +826,17 @@ ipv6_stats_get()
 	local stat=$1; shift
 
 	cat /proc/net/dev_snmp6/$dev | grep "^$stat" | cut -f2
+}
+
+hw_stats_get()
+{
+	local suite=$1; shift
+	local if_name=$1; shift
+	local dir=$1; shift
+	local stat=$1; shift
+
+	ip -j stats show dev $if_name group offload subgroup $suite |
+		jq ".[0].stats64.$dir.$stat"
 }
 
 humanize()
@@ -1362,25 +1390,40 @@ flood_test()
 
 __start_traffic()
 {
+	local pktsize=$1; shift
 	local proto=$1; shift
 	local h_in=$1; shift    # Where the traffic egresses the host
 	local sip=$1; shift
 	local dip=$1; shift
 	local dmac=$1; shift
 
-	$MZ $h_in -p 8000 -A $sip -B $dip -c 0 \
+	$MZ $h_in -p $pktsize -A $sip -B $dip -c 0 \
 		-a own -b $dmac -t "$proto" -q "$@" &
 	sleep 1
 }
 
+start_traffic_pktsize()
+{
+	local pktsize=$1; shift
+
+	__start_traffic $pktsize udp "$@"
+}
+
+start_tcp_traffic_pktsize()
+{
+	local pktsize=$1; shift
+
+	__start_traffic $pktsize tcp "$@"
+}
+
 start_traffic()
 {
-	__start_traffic udp "$@"
+	start_traffic_pktsize 8000 "$@"
 }
 
 start_tcp_traffic()
 {
-	__start_traffic tcp "$@"
+	start_tcp_traffic_pktsize 8000 "$@"
 }
 
 stop_traffic()
@@ -1580,4 +1623,64 @@ mc_send()
 
 	ip vrf exec $vrf_name \
 		msend -g $groups -I $if_name -c 1 > /dev/null 2>&1
+}
+
+start_ip_monitor()
+{
+	local mtype=$1; shift
+	local ip=${1-ip}; shift
+
+	# start the monitor in the background
+	tmpfile=`mktemp /var/run/nexthoptestXXX`
+	mpid=`($ip monitor $mtype > $tmpfile & echo $!) 2>/dev/null`
+	sleep 0.2
+	echo "$mpid $tmpfile"
+}
+
+stop_ip_monitor()
+{
+	local mpid=$1; shift
+	local tmpfile=$1; shift
+	local el=$1; shift
+	local what=$1; shift
+
+	sleep 0.2
+	kill $mpid
+	local lines=`grep '^\w' $tmpfile | wc -l`
+	test $lines -eq $el
+	check_err $? "$what: $lines lines of events, expected $el"
+	rm -rf $tmpfile
+}
+
+hw_stats_monitor_test()
+{
+	local dev=$1; shift
+	local type=$1; shift
+	local make_suitable=$1; shift
+	local make_unsuitable=$1; shift
+	local ip=${1-ip}; shift
+
+	RET=0
+
+	# Expect a notification about enablement.
+	local ipmout=$(start_ip_monitor stats "$ip")
+	$ip stats set dev $dev ${type}_stats on
+	stop_ip_monitor $ipmout 1 "${type}_stats enablement"
+
+	# Expect a notification about offload.
+	local ipmout=$(start_ip_monitor stats "$ip")
+	$make_suitable
+	stop_ip_monitor $ipmout 1 "${type}_stats installation"
+
+	# Expect a notification about loss of offload.
+	local ipmout=$(start_ip_monitor stats "$ip")
+	$make_unsuitable
+	stop_ip_monitor $ipmout 1 "${type}_stats deinstallation"
+
+	# Expect a notification about disablement
+	local ipmout=$(start_ip_monitor stats "$ip")
+	$ip stats set dev $dev ${type}_stats off
+	stop_ip_monitor $ipmout 1 "${type}_stats disablement"
+
+	log_test "${type}_stats notifications"
 }

@@ -45,7 +45,7 @@ static uint64_t __calc_target_rate(struct cached_dev *dc)
 	 * backing volume uses about 2% of the cache for dirty data.
 	 */
 	uint32_t bdev_share =
-		div64_u64(bdev_sectors(dc->bdev) << WRITEBACK_SHARE_SHIFT,
+		div64_u64(bdev_nr_sectors(dc->bdev) << WRITEBACK_SHARE_SHIFT,
 				c->cached_dev_sectors);
 
 	uint64_t cache_dirty_target =
@@ -157,6 +157,53 @@ static void __update_writeback_rate(struct cached_dev *dc)
 	dc->writeback_rate_target = target;
 }
 
+static bool idle_counter_exceeded(struct cache_set *c)
+{
+	int counter, dev_nr;
+
+	/*
+	 * If c->idle_counter is overflow (idel for really long time),
+	 * reset as 0 and not set maximum rate this time for code
+	 * simplicity.
+	 */
+	counter = atomic_inc_return(&c->idle_counter);
+	if (counter <= 0) {
+		atomic_set(&c->idle_counter, 0);
+		return false;
+	}
+
+	dev_nr = atomic_read(&c->attached_dev_nr);
+	if (dev_nr == 0)
+		return false;
+
+	/*
+	 * c->idle_counter is increased by writeback thread of all
+	 * attached backing devices, in order to represent a rough
+	 * time period, counter should be divided by dev_nr.
+	 * Otherwise the idle time cannot be larger with more backing
+	 * device attached.
+	 * The following calculation equals to checking
+	 *	(counter / dev_nr) < (dev_nr * 6)
+	 */
+	if (counter < (dev_nr * dev_nr * 6))
+		return false;
+
+	return true;
+}
+
+/*
+ * Idle_counter is increased every time when update_writeback_rate() is
+ * called. If all backing devices attached to the same cache set have
+ * identical dc->writeback_rate_update_seconds values, it is about 6
+ * rounds of update_writeback_rate() on each backing device before
+ * c->at_max_writeback_rate is set to 1, and then max wrteback rate set
+ * to each dc->writeback_rate.rate.
+ * In order to avoid extra locking cost for counting exact dirty cached
+ * devices number, c->attached_dev_nr is used to calculate the idle
+ * throushold. It might be bigger if not all cached device are in write-
+ * back mode, but it still works well with limited extra rounds of
+ * update_writeback_rate().
+ */
 static bool set_at_max_writeback_rate(struct cache_set *c,
 				       struct cached_dev *dc)
 {
@@ -167,21 +214,8 @@ static bool set_at_max_writeback_rate(struct cache_set *c,
 	/* Don't set max writeback rate if gc is running */
 	if (!c->gc_mark_valid)
 		return false;
-	/*
-	 * Idle_counter is increased everytime when update_writeback_rate() is
-	 * called. If all backing devices attached to the same cache set have
-	 * identical dc->writeback_rate_update_seconds values, it is about 6
-	 * rounds of update_writeback_rate() on each backing device before
-	 * c->at_max_writeback_rate is set to 1, and then max wrteback rate set
-	 * to each dc->writeback_rate.rate.
-	 * In order to avoid extra locking cost for counting exact dirty cached
-	 * devices number, c->attached_dev_nr is used to calculate the idle
-	 * throushold. It might be bigger if not all cached device are in write-
-	 * back mode, but it still works well with limited extra rounds of
-	 * update_writeback_rate().
-	 */
-	if (atomic_inc_return(&c->idle_counter) <
-	    atomic_read(&c->attached_dev_nr) * 6)
+
+	if (!idle_counter_exceeded(c))
 		return false;
 
 	if (atomic_read(&c->at_max_writeback_rate) != 1)
@@ -195,13 +229,10 @@ static bool set_at_max_writeback_rate(struct cache_set *c,
 	dc->writeback_rate_change = 0;
 
 	/*
-	 * Check c->idle_counter and c->at_max_writeback_rate agagain in case
-	 * new I/O arrives during before set_at_max_writeback_rate() returns.
-	 * Then the writeback rate is set to 1, and its new value should be
-	 * decided via __update_writeback_rate().
+	 * In case new I/O arrives during before
+	 * set_at_max_writeback_rate() returns.
 	 */
-	if ((atomic_read(&c->idle_counter) <
-	     atomic_read(&c->attached_dev_nr) * 6) ||
+	if (!idle_counter_exceeded(c) ||
 	    !atomic_read(&c->at_max_writeback_rate))
 		return false;
 
@@ -235,19 +266,27 @@ static void update_writeback_rate(struct work_struct *work)
 		return;
 	}
 
-	if (atomic_read(&dc->has_dirty) && dc->writeback_percent) {
-		/*
-		 * If the whole cache set is idle, set_at_max_writeback_rate()
-		 * will set writeback rate to a max number. Then it is
-		 * unncessary to update writeback rate for an idle cache set
-		 * in maximum writeback rate number(s).
-		 */
-		if (!set_at_max_writeback_rate(c, dc)) {
-			down_read(&dc->writeback_lock);
+	/*
+	 * If the whole cache set is idle, set_at_max_writeback_rate()
+	 * will set writeback rate to a max number. Then it is
+	 * unncessary to update writeback rate for an idle cache set
+	 * in maximum writeback rate number(s).
+	 */
+	if (atomic_read(&dc->has_dirty) && dc->writeback_percent &&
+	    !set_at_max_writeback_rate(c, dc)) {
+		do {
+			if (!down_read_trylock((&dc->writeback_lock))) {
+				dc->rate_update_retry++;
+				if (dc->rate_update_retry <=
+				    BCH_WBRATE_UPDATE_MAX_SKIPS)
+					break;
+				down_read(&dc->writeback_lock);
+				dc->rate_update_retry = 0;
+			}
 			__update_writeback_rate(dc);
 			update_gc_after_writeback(c);
 			up_read(&dc->writeback_lock);
-		}
+		} while (0);
 	}
 
 
@@ -292,8 +331,8 @@ static void dirty_init(struct keybuf_key *w)
 	struct dirty_io *io = w->private;
 	struct bio *bio = &io->bio;
 
-	bio_init(bio, bio->bi_inline_vecs,
-		 DIV_ROUND_UP(KEY_SIZE(&w->key), PAGE_SECTORS));
+	bio_init(bio, NULL, bio->bi_inline_vecs,
+		 DIV_ROUND_UP(KEY_SIZE(&w->key), PAGE_SECTORS), 0);
 	if (!io->dc->writeback_percent)
 		bio_set_prio(bio, IOPRIO_PRIO_VALUE(IOPRIO_CLASS_IDLE, 0));
 
@@ -585,10 +624,13 @@ void bcache_dev_sectors_dirty_add(struct cache_set *c, unsigned int inode,
 
 		sectors_dirty = atomic_add_return(s,
 					d->stripe_sectors_dirty + stripe);
-		if (sectors_dirty == d->stripe_size)
-			set_bit(stripe, d->full_dirty_stripes);
-		else
-			clear_bit(stripe, d->full_dirty_stripes);
+		if (sectors_dirty == d->stripe_size) {
+			if (!test_bit(stripe, d->full_dirty_stripes))
+				set_bit(stripe, d->full_dirty_stripes);
+		} else {
+			if (test_bit(stripe, d->full_dirty_stripes))
+				clear_bit(stripe, d->full_dirty_stripes);
+		}
 
 		nr_sectors -= s;
 		stripe_offset = 0;
@@ -790,10 +832,9 @@ static int bch_writeback_thread(void *arg)
 		}
 	}
 
-	if (dc->writeback_write_wq) {
-		flush_workqueue(dc->writeback_write_wq);
+	if (dc->writeback_write_wq)
 		destroy_workqueue(dc->writeback_write_wq);
-	}
+
 	cached_dev_put(dc);
 	wait_for_kthread_stop();
 
@@ -1002,6 +1043,9 @@ void bch_cached_dev_writeback_init(struct cached_dev *dc)
 	dc->writeback_rate_fp_term_mid = 10;
 	dc->writeback_rate_fp_term_high = 1000;
 	dc->writeback_rate_i_term_inverse = 10000;
+
+	/* For dc->writeback_lock contention in update_writeback_rate() */
+	dc->rate_update_retry = 0;
 
 	WARN_ON(test_and_clear_bit(BCACHE_DEV_WB_RUNNING, &dc->disk.flags));
 	INIT_DELAYED_WORK(&dc->writeback_rate_update, update_writeback_rate);

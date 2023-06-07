@@ -735,6 +735,7 @@ static void mxsfb_enable_controller(struct fb_info *fb_info)
 						"lcd regulator disable failed: %d\n",
 						ret);
 			}
+
 			if (host->reg_aux) {
 				ret = regulator_disable(host->reg_aux);
 				if (ret)

@@ -19,16 +19,8 @@
 #include "msm_drv.h"
 #include "hdmi.xml.h"
 
-#define HDMI_MAX_NUM_GPIO	6
-
 struct hdmi_phy;
 struct hdmi_platform_config;
-
-struct hdmi_gpio_data {
-	struct gpio_desc *gpiod;
-	bool output;
-	int value;
-};
 
 struct hdmi_audio {
 	bool enabled;
@@ -56,10 +48,12 @@ struct hdmi {
 	void __iomem *qfprom_mmio;
 	phys_addr_t mmio_phy_addr;
 
-	struct regulator **hpd_regs;
-	struct regulator **pwr_regs;
+	struct regulator_bulk_data *hpd_regs;
+	struct regulator_bulk_data *pwr_regs;
 	struct clk **hpd_clks;
 	struct clk **pwr_clks;
+
+	struct gpio_desc *hpd_gpiod;
 
 	struct hdmi_phy *phy;
 	struct device *phy_dev;
@@ -67,6 +61,8 @@ struct hdmi {
 	struct i2c_adapter *i2c;
 	struct drm_connector *connector;
 	struct drm_bridge *bridge;
+
+	struct drm_bridge *next_bridge;
 
 	/* the encoder we are hooked to (outside of hdmi block) */
 	struct drm_encoder *encoder;
@@ -109,9 +105,6 @@ struct hdmi_platform_config {
 	/* clks that need to be on for screen pwr (ie pixel clk): */
 	const char **pwr_clk_names;
 	int pwr_clk_cnt;
-
-	/* gpio's: */
-	struct hdmi_gpio_data gpios[HDMI_MAX_NUM_GPIO];
 };
 
 struct hdmi_bridge {
@@ -170,7 +163,7 @@ struct hdmi_phy {
 	void __iomem *mmio;
 	struct hdmi_phy_cfg *cfg;
 	const struct hdmi_phy_funcs *funcs;
-	struct regulator **regs;
+	struct regulator_bulk_data *regs;
 	struct clk **clks;
 };
 

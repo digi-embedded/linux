@@ -80,21 +80,6 @@ static inline void set_fs(mm_segment_t fs)
 #define uaccess_kernel()	(get_fs() == KERNEL_DS)
 
 /*
- * We use 33-bit arithmetic here.  Success returns zero, failure returns
- * addr_limit.  We take advantage that addr_limit will be zero for KERNEL_DS,
- * so this will always return success in that case.
- */
-#define __range_ok(addr, size) ({ \
-	unsigned long flag, roksum; \
-	__chk_user_ptr(addr);	\
-	__asm__(".syntax unified\n" \
-		"adds %1, %2, %3; sbcscc %1, %1, %0; movcc %0, #0" \
-		: "=&r" (flag), "=&r" (roksum) \
-		: "r" (addr), "Ir" (size), "0" (current_thread_info()->addr_limit) \
-		: "cc"); \
-	flag; })
-
-/*
  * This is a type: either unsigned long, if the argument fits into
  * that type, or otherwise unsigned long long.
  */
@@ -271,8 +256,6 @@ extern int __put_user_8(void *, unsigned long long);
 #define USER_DS			KERNEL_DS
 
 #define uaccess_kernel()	(true)
-#define __addr_ok(addr)		((void)(addr), 1)
-#define __range_ok(addr, size)	((void)(addr), 0)
 #define get_fs()		(KERNEL_DS)
 
 static inline void set_fs(mm_segment_t fs)
@@ -284,7 +267,7 @@ static inline void set_fs(mm_segment_t fs)
 
 #endif /* CONFIG_MMU */
 
-#define access_ok(addr, size)	(__range_ok(addr, size) == 0)
+#include <asm-generic/access_ok.h>
 
 #define user_addr_max() \
 	(uaccess_kernel() ? ~0UL : get_fs())
@@ -513,8 +496,6 @@ do {									\
 	: "+r" (err), "+r" (__pu_addr)				\
 	: "r" (x), "i" (-EFAULT)				\
 	: "cc")
-
-#define HAVE_GET_KERNEL_NOFAULT
 
 #define __get_kernel_nofault(dst, src, type, err_label)			\
 do {									\

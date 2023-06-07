@@ -1,10 +1,8 @@
-// SPDX-License-Identifier: GPL-2.0-only
-// Copyright 2020 NXP
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 /*
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
+ * dw-hdmi-gp-audio.c
  *
+ * Copyright 2020-2022 NXP
  */
 #include <linux/io.h>
 #include <linux/interrupt.h>
@@ -79,7 +77,6 @@ static int audio_hw_params(struct device *dev,  void *data,
 			   struct hdmi_codec_params *params)
 {
 	struct snd_dw_hdmi *dw = dev_get_drvdata(dev);
-	int ret = 0;
 	u8 ca;
 
 	dw_hdmi_set_sample_rate(dw->data.hdmi, params->sample_rate);
@@ -93,7 +90,7 @@ static int audio_hw_params(struct device *dev,  void *data,
 				   params->iec.status[0] & IEC958_AES0_NONAUDIO);
 	dw_hdmi_set_sample_width(dw->data.hdmi, params->sample_width);
 
-	return ret;
+	return 0;
 }
 
 static void audio_shutdown(struct device *dev, void *data)
@@ -101,17 +98,16 @@ static void audio_shutdown(struct device *dev, void *data)
 }
 
 static int audio_mute_stream(struct device *dev, void *data,
-			      bool enable, int direction)
+			     bool enable, int direction)
 {
 	struct snd_dw_hdmi *dw = dev_get_drvdata(dev);
-	int ret = 0;
 
 	if (!enable)
 		dw_hdmi_audio_enable(dw->data.hdmi);
 	else
 		dw_hdmi_audio_disable(dw->data.hdmi);
 
-	return ret;
+	return 0;
 }
 
 static int audio_get_eld(struct device *dev, void *data,
@@ -149,15 +145,15 @@ static const struct hdmi_codec_ops audio_codec_ops = {
 
 static int snd_dw_hdmi_probe(struct platform_device *pdev)
 {
-	const struct dw_hdmi_audio_data *data = pdev->dev.platform_data;
+	struct dw_hdmi_audio_data *data = pdev->dev.platform_data;
 	struct snd_dw_hdmi *dw;
 
-	struct hdmi_codec_pdata codec_data = {
+	const struct hdmi_codec_pdata codec_data = {
 		.i2s = 1,
 		.spdif = 0,
 		.ops = &audio_codec_ops,
 		.max_i2s_channels = 8,
-		.data = (void *)data,
+		.data = data,
 	};
 
 	dw = devm_kzalloc(&pdev->dev, sizeof(*dw), GFP_KERNEL);
@@ -196,6 +192,6 @@ static struct platform_driver snd_dw_hdmi_driver = {
 module_platform_driver(snd_dw_hdmi_driver);
 
 MODULE_AUTHOR("Shengjiu Wang <shengjiu.wang@nxp.com>");
-MODULE_DESCRIPTION("Synopsis Designware HDMI GPA ALSA interface");
-MODULE_LICENSE("GPL v2");
+MODULE_DESCRIPTION("Synopsys Designware HDMI GPA ALSA interface");
+MODULE_LICENSE("GPL");
 MODULE_ALIAS("platform:" DRIVER_NAME);

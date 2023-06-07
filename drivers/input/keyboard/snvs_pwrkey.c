@@ -94,6 +94,10 @@ static irqreturn_t imx_snvs_pwrkey_interrupt(int irq, void *dev_id)
 	if (pdata->clk)
 		clk_enable(pdata->clk);
 
+	/*
+	 * Directly report press event in interrupt handler after suspend
+	 * to ensure no press event miss.
+	 */
 	if (pdata->suspended) {
 		pdata->keystate = 1;
 		input_event(input, EV_KEY, pdata->keycode, 1);

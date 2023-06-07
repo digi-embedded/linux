@@ -2,7 +2,7 @@
 *
 *    The MIT License (MIT)
 *
-*    Copyright (c) 2014 - 2020 Vivante Corporation
+*    Copyright (c) 2014 - 2022 Vivante Corporation
 *
 *    Permission is hereby granted, free of charge, to any person obtaining a
 *    copy of this software and associated documentation files (the "Software"),
@@ -26,7 +26,7 @@
 *
 *    The GPL License (GPL)
 *
-*    Copyright (C) 2014 - 2020 Vivante Corporation
+*    Copyright (C) 2014 - 2022 Vivante Corporation
 *
 *    This program is free software; you can redistribute it and/or
 *    modify it under the terms of the GNU General Public License
@@ -313,6 +313,7 @@ static int devfreq_cooling_handle_event_change(unsigned long event)
     gctUINT curFscale, minFscale, maxFscale;
     gckHARDWARE hardware;
     gckGALDEVICE galDevice;
+    gckDEVICE device;
     gctUINT FscaleVal = orgFscale;
     gctUINT core = gcvCORE_MAJOR;
 
@@ -323,12 +324,13 @@ static int devfreq_cooling_handle_event_change(unsigned long event)
         return NOTIFY_OK;
     }
 
-    if (!galDevice->kernels[gcvCORE_MAJOR])
+    device = galDevice->devices[0];
+    if (!device->kernels[gcvCORE_MAJOR])
     {
         return NOTIFY_OK;
     }
 
-    hardware = galDevice->kernels[gcvCORE_MAJOR]->hardware;
+    hardware = device->kernels[gcvCORE_MAJOR]->hardware;
 
     if (!hardware)
     {
@@ -366,9 +368,9 @@ static int devfreq_cooling_handle_event_change(unsigned long event)
             break;
     }
 
-    while (galDevice->kernels[core] && core <= gcvCORE_3D_MAX)
+    while (device->kernels[core] && core <= gcvCORE_3D_MAX)
     {
-        gckHARDWARE_SetFscaleValue(galDevice->kernels[core++]->hardware, FscaleVal, ~0U);
+        gckHARDWARE_SetFscaleValue(device->kernels[core++]->hardware, FscaleVal, ~0U);
     }
 
     return NOTIFY_OK;
@@ -497,12 +499,14 @@ static ssize_t gpu3DMinClock_show(struct device_driver *dev, char *buf)
 {
     gctUINT currentf = 0, minf = 0, maxf = 0;
     gckGALDEVICE galDevice;
+    gckDEVICE device;
 
     galDevice = platform_get_drvdata(pdevice);
 
-    if (galDevice->kernels[gcvCORE_MAJOR])
+    device = galDevice->devices[0];
+    if (device->kernels[gcvCORE_MAJOR])
     {
-         gckHARDWARE_GetFscaleValue(galDevice->kernels[gcvCORE_MAJOR]->hardware,
+         gckHARDWARE_GetFscaleValue(device->kernels[gcvCORE_MAJOR]->hardware,
             &currentf, &minf, &maxf);
     }
 
@@ -516,20 +520,23 @@ static ssize_t gpu3DMinClock_store(struct device_driver *dev, const char *buf, s
     gctINT fields;
     gctUINT MinFscaleValue;
     gckGALDEVICE galDevice;
+    gckDEVICE device;
     gctUINT core = gcvCORE_MAJOR;
 
     galDevice = platform_get_drvdata(pdevice);
     if (!galDevice)
          return -EINVAL;
 
+    device = galDevice->devices[0];
+
     fields = sscanf(buf, "%d", &MinFscaleValue);
 
     if (fields < 1)
          return -EINVAL;
 
-    while (galDevice->kernels[core] && core <= gcvCORE_3D_MAX)
+    while (device->kernels[core] && core <= gcvCORE_3D_MAX)
     {
-         gckHARDWARE_SetMinFscaleValue(galDevice->kernels[core++]->hardware,MinFscaleValue);
+         gckHARDWARE_SetMinFscaleValue(device->kernels[core++]->hardware,MinFscaleValue);
     }
 
     return count;
@@ -545,12 +552,14 @@ static ssize_t gpu3DClockScale_show(struct device_driver *dev, char *buf)
 {
     gctUINT currentf = 0, minf = 0, maxf = 0;
     gckGALDEVICE galDevice;
+    gckDEVICE device;
 
     galDevice = platform_get_drvdata(pdevice);
 
-    if (galDevice->kernels[gcvCORE_MAJOR])
+    device = galDevice->devices[0];
+    if (device->kernels[gcvCORE_MAJOR])
     {
-         gckHARDWARE_GetFscaleValue(galDevice->kernels[gcvCORE_MAJOR]->hardware,
+         gckHARDWARE_GetFscaleValue(device->kernels[gcvCORE_MAJOR]->hardware,
             &currentf, &minf, &maxf);
     }
 
@@ -564,20 +573,23 @@ static ssize_t gpu3DClockScale_store(struct device_driver *dev, const char *buf,
     gctINT fields;
     gctUINT FscaleValue;
     gckGALDEVICE galDevice;
+    gckDEVICE device;
     gctUINT core = gcvCORE_MAJOR;
 
     galDevice = platform_get_drvdata(pdevice);
     if (!galDevice)
          return -EINVAL;
 
+    device = galDevice->devices[0];
+
     fields = sscanf(buf, "%d", &FscaleValue);
 
     if (fields < 1)
          return -EINVAL;
 
-    while (galDevice->kernels[core] && core <= gcvCORE_3D_MAX)
+    while (device->kernels[core] && core <= gcvCORE_3D_MAX)
     {
-         gckHARDWARE_SetFscaleValue(galDevice->kernels[core++]->hardware,FscaleValue,FscaleValue);
+         gckHARDWARE_SetFscaleValue(device->kernels[core++]->hardware,FscaleValue,FscaleValue);
     }
 
     return count;
@@ -712,14 +724,6 @@ static ssize_t gpu_govern_store(struct device_driver *dev, const char *buf, size
     struct imx_priv *priv = &imxPriv;
     int core = gcvCORE_MAJOR;
     int i;
-    gckGALDEVICE device = platform_get_drvdata(pdevice);
-    gctBOOL mutex_acquired = gcvFALSE;
-    gceSTATUS status;
-
-    if (!device)
-    {
-        return count;
-    }
 
     for (i = 0; i < GOVERN_COUNT; i++)
     {
@@ -733,14 +737,6 @@ static ssize_t gpu_govern_store(struct device_driver *dev, const char *buf, size
     {
         return count;
     }
-
-    /* Get the device commit mutex. */
-    gcmkONERROR(gckOS_AcquireMutex(device->os, device->device->commitMutex,
-            gcvINFINITE));
-    mutex_acquired = gcvTRUE;
-
-    /* Suspend the GPU. */
-    gcmkONERROR(gckGALDEVICE_Suspend(device, gcvPOWER_SUSPEND));
 
     core_freq   = priv->imx_gpu_govern.core_clk_freq[i];
     shader_freq = priv->imx_gpu_govern.shader_clk_freq[i];
@@ -763,17 +759,6 @@ static ssize_t gpu_govern_store(struct device_driver *dev, const char *buf, size
             pm_runtime_put_sync(priv->pmdev[core]);
 #endif
         }
-    }
-
-    /* Resume GPU to previous state. */
-    gcmkVERIFY_OK(gckGALDEVICE_Resume(device));
-
-OnError:
-    /* Release the commit mutex. */
-    if (mutex_acquired)
-    {
-        gcmkVERIFY_OK(gckOS_ReleaseMutex(device->os,
-                device->device->commitMutex));
     }
 
     return count;
@@ -1021,9 +1006,15 @@ static int patch_param_imx8_subsystem(struct platform_device *pdev,
         while(!priv->pmdev[core] && core < (gcvCORE_COUNT-1))
             core++;
 
-        args->irqs[core] = irqLine;
-        args->registerBases[core] = res->start;
-        args->registerSizes[core] = res->end - res->start + 1;
+        if (core == gcvCORE_2D) {
+            args->irq2Ds[0] = irqLine;
+            args->register2DBases[0] = res->start;
+            args->register2DSizes[0] = res->end - res->start + 1;
+        } else {
+            args->irqs[core] = irqLine;
+            args->registerBases[core] = res->start;
+            args->registerSizes[core] = res->end - res->start + 1;
+        }
 
         of_node_put(core_node);
         ++core;
@@ -1169,11 +1160,14 @@ static int patch_param_imx6(struct platform_device *pdev,
                 gcsMODULE_PARAMETERS *args)
 {
     struct resource* res;
+    int irqLine = -1;
 
-    res = platform_get_resource_byname(pdev, IORESOURCE_IRQ, "irq_3d");
+    irqLine = platform_get_irq_byname(pdev, "irq_3d");
 
-    if (res)
-        args->irqs[gcvCORE_MAJOR] = res->start;
+    if (irqLine > 0)
+        args->irqs[gcvCORE_MAJOR] = irqLine;
+    else
+        dev_dbg(&pdev->dev, "no irq_3d ret=%d", irqLine);
 
     res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "iobase_3d");
 
@@ -1182,28 +1176,40 @@ static int patch_param_imx6(struct platform_device *pdev,
         args->registerSizes[gcvCORE_MAJOR] = res->end - res->start + 1;
     }
 
-    res = platform_get_resource_byname(pdev, IORESOURCE_IRQ, "irq_2d");
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0)
+    irqLine = platform_get_irq_byname_optional(pdev, "irq_2d");
+#else
+    irqLine = platform_get_irq_byname(pdev, "irq_2d");
+#endif
 
-    if (res)
-        args->irqs[gcvCORE_2D] = res->start;
+    if (irqLine > 0)
+        args->irq2Ds[0] = irqLine;
+    else
+        dev_dbg(&pdev->dev, "no irq_2d ret=%d", irqLine);
 
     res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "iobase_2d");
 
     if (res) {
-        args->registerBases[gcvCORE_2D] = res->start;
-        args->registerSizes[gcvCORE_2D] = res->end - res->start + 1;
+        args->register2DBases[0] = res->start;
+        args->register2DSizes[0] = res->end - res->start + 1;
     }
 
-    res = platform_get_resource_byname(pdev, IORESOURCE_IRQ, "irq_vg");
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0)
+    irqLine = platform_get_irq_byname_optional(pdev, "irq_vg");
+#else
+    irqLine = platform_get_irq_byname(pdev, "irq_vg");
+#endif
 
-    if (res)
-        args->irqs[gcvCORE_VG] = res->start;
+    if (irqLine > 0)
+        args->irqVG = irqLine;
+    else
+        dev_dbg(&pdev->dev, "no irq_vg ret=%d", irqLine);
 
     res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "iobase_vg");
 
     if (res) {
-        args->registerBases[gcvCORE_VG] = res->start;
-        args->registerSizes[gcvCORE_VG] = res->end - res->start + 1;
+        args->registerVGBase = res->start;
+        args->registerVGSize = res->end - res->start + 1;
     }
 
     return 0;
@@ -1258,7 +1264,7 @@ static int patch_param(struct platform_device *pdev,
 #endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,1,0)
-	struct property *contiguous_table;
+    struct property *contiguous_table;
 #endif
 
     pdevice = pdev;
@@ -1319,34 +1325,32 @@ static int patch_param(struct platform_device *pdev,
             args->contiguousSize = res->end - res->start + 1;
     }
 
-	contiguous_table = of_find_property(pdev->dev.of_node, "digi,contiguous-size-table", NULL);
+    contiguous_table = of_find_property(pdev->dev.of_node, "digi,contiguous-size-table", NULL);
+    if (contiguous_table && contiguous_table->value) {
+        unsigned long entries = contiguous_table->length / sizeof(u32);
+        __be32 *val = contiguous_table->value;
 
-	if (contiguous_table && contiguous_table->value) {
-		unsigned long entries = contiguous_table->length / sizeof(u32);
-		__be32 *val = contiguous_table->value;
+        /* Only iterate through table if it has an even number of entries */
+        if (entries % 2 == 0) {
+            unsigned long system_memory = memblock_phys_mem_size();
+            int i;
 
-		/* Only iterate through table if it has an even number of entries */
-		if (entries % 2 == 0) {
-			unsigned long system_memory = memblock_phys_mem_size();
-			int i;
+            /*
+            * Iterate through each row, assuming the rows are ordered by
+            * mem_threshold.
+            */
+            for (i = 0; i < entries / 2; i++) {
+                unsigned long mem_threshold = be32_to_cpup(val++);
+                args->contiguousSize = be32_to_cpup(val++);
 
-			/*
-			 * Iterate through each row, assuming the rows are ordered by
-			 * mem_threshold.
-			 */
-			for (i = 0; i < entries / 2; i++) {
-				unsigned long mem_threshold = be32_to_cpup(val++);
-				args->contiguousSize = be32_to_cpup(val++);
-
-				if (system_memory <= mem_threshold)
-					break;
-			}
-		}
-		else {
-			printk("galcore: contiguous size table has odd number of entries, "
-			       "using contiguous_mem range instead\n");
-		}
-	}
+                if (system_memory <= mem_threshold)
+                    break;
+            }
+        } else {
+            printk("galcore: contiguous size table has odd number of entries, "
+                "using contiguous_mem range instead\n");
+        }
+    }
 
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
     args->contiguousBase = 0;
@@ -1614,6 +1618,27 @@ static inline int get_power(struct device *pdev)
     return 0;
 }
 
+static inline int get_power_ls(struct device *pdev)
+{
+#if gcdENABLE_FSCALE_VAL_ADJUST && (defined(CONFIG_DEVICE_THERMAL) || defined(CONFIG_DEVICE_THERMAL_MODULE))
+    int ret;
+
+    REG_THERMAL_NOTIFIER(&thermal_hot_pm_notifier);
+
+    ret = driver_create_file(pdev->driver, &driver_attr_gpu3DMinClock);
+
+    if (ret)
+        dev_err(pdev, "create gpu3DMinClock attr failed (%d)\n", ret);
+
+    ret = driver_create_file(pdev->driver, &driver_attr_gpu3DClockScale);
+
+    if (ret)
+        dev_err(pdev, "create gpu3DClockScale attr failed (%d)\n", ret);
+#endif
+
+    return 0;
+}
+
 static inline void put_power(void)
 {
     int core = 0;
@@ -1680,6 +1705,17 @@ static inline void put_power(void)
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(5,0,0)) && defined(IMX8_SCU_CONTROL)
     if (gpu_ipcHandle)
         sc_ipc_close(gpu_ipcHandle);
+#endif
+}
+
+static inline void put_power_ls(void)
+{
+#if gcdENABLE_FSCALE_VAL_ADJUST && (defined(CONFIG_DEVICE_THERMAL) || defined(CONFIG_DEVICE_THERMAL_MODULE))
+    UNREG_THERMAL_NOTIFIER(&thermal_hot_pm_notifier);
+
+    driver_remove_file(pdevice->dev.driver, &driver_attr_gpu3DMinClock);
+
+    driver_remove_file(pdevice->dev.driver, &driver_attr_gpu3DClockScale);
 #endif
 }
 
@@ -1955,7 +1991,12 @@ _GetPower(
     gcsPLATFORM * Platform
     )
 {
-    int ret = get_power(&Platform->device->dev);
+    int ret;
+
+    if (is_layerscape)
+        ret = get_power_ls(&Platform->device->dev);
+    else
+        ret = get_power(&Platform->device->dev);
 
     if (ret)
         return gcvSTATUS_GENERIC_IO;
@@ -1968,7 +2009,11 @@ _PutPower(
     gcsPLATFORM * Platform
     )
 {
-    put_power();
+    if (is_layerscape)
+        put_power_ls();
+    else
+        put_power();
+
     return gcvSTATUS_OK;
 }
 
@@ -1976,6 +2021,7 @@ _PutPower(
 static gceSTATUS
 _SetPower(
     gcsPLATFORM * Platform,
+    gctUINT32 DevIndex,
     gceCORE GPU,
     gctBOOL Enable
     )
@@ -1987,6 +2033,7 @@ _SetPower(
 static gceSTATUS
 _SetClock(
     gcsPLATFORM * Platform,
+    gctUINT32 DevIndex,
     gceCORE GPU,
     gctBOOL Enable
     )
@@ -1998,6 +2045,7 @@ _SetClock(
 static gceSTATUS
 _Reset(
     gcsPLATFORM * Platform,
+    gctUINT32 DevIndex,
     gceCORE GPU
     )
 {
@@ -2039,6 +2087,8 @@ static const struct of_device_id gpu_match[] = {
 
 struct _gcsPLATFORM_OPERATIONS ls_platform_ops = {
     .adjustParam  = _AdjustParam,
+    .getPower     = _GetPower,
+    .putPower     = _PutPower,
 };
 
 static struct _gcsPLATFORM ls_platform = {

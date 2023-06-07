@@ -871,7 +871,7 @@ static void xgene_enet_timeout(struct net_device *ndev, unsigned int txqueue)
 
 	for (i = 0; i < pdata->txq_cnt; i++) {
 		txq = netdev_get_tx_queue(ndev, i);
-		txq->trans_start = jiffies;
+		txq_trans_cond_update(txq);
 		netif_tx_start_queue(txq);
 	}
 }
@@ -1004,8 +1004,10 @@ static int xgene_enet_open(struct net_device *ndev)
 
 	xgene_enet_napi_enable(pdata);
 	ret = xgene_enet_register_irq(ndev);
-	if (ret)
+	if (ret) {
+		xgene_enet_napi_disable(pdata);
 		return ret;
+	}
 
 	if (ndev->phydev) {
 		phy_start(ndev->phydev);
@@ -1733,7 +1735,7 @@ static int xgene_enet_get_resources(struct xgene_enet_pdata *pdata)
 		xgene_get_port_id_acpi(dev, pdata);
 #endif
 
-	if (!device_get_mac_address(dev, ndev->dev_addr, ETH_ALEN))
+	if (device_get_ethdev_address(dev, ndev))
 		eth_hw_addr_random(ndev);
 
 	memcpy(ndev->perm_addr, ndev->dev_addr, ndev->addr_len);
@@ -1977,14 +1979,12 @@ static void xgene_enet_napi_add(struct xgene_enet_pdata *pdata)
 
 	for (i = 0; i < pdata->rxq_cnt; i++) {
 		napi = &pdata->rx_ring[i]->napi;
-		netif_napi_add(pdata->ndev, napi, xgene_enet_napi,
-			       NAPI_POLL_WEIGHT);
+		netif_napi_add(pdata->ndev, napi, xgene_enet_napi);
 	}
 
 	for (i = 0; i < pdata->cq_cnt; i++) {
 		napi = &pdata->tx_ring[i]->cp_ring->napi;
-		netif_napi_add(pdata->ndev, napi, xgene_enet_napi,
-			       NAPI_POLL_WEIGHT);
+		netif_napi_add(pdata->ndev, napi, xgene_enet_napi);
 	}
 }
 

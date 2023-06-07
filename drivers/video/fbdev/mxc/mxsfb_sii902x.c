@@ -497,12 +497,10 @@ static int sii902x_probe(struct i2c_client *client,
 	return 0;
 }
 
-static int sii902x_remove(struct i2c_client *client)
+static void sii902x_remove(struct i2c_client *client)
 {
 	fb_unregister_client(&nb);
 	sii902x_poweroff();
-
-	return 0;
 }
 
 static void sii902x_poweron(void)

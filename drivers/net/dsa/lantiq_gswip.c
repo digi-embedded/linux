@@ -213,6 +213,7 @@
 #define  GSWIP_MAC_CTRL_0_GMII_MII	0x0001
 #define  GSWIP_MAC_CTRL_0_GMII_RGMII	0x0002
 #define GSWIP_MAC_CTRL_2p(p)		(0x905 + ((p) * 0xC))
+#define GSWIP_MAC_CTRL_2_LCHKL		BIT(2) /* Frame Length Check Long Enable */
 #define GSWIP_MAC_CTRL_2_MLEN		BIT(3) /* Maximum Untagged Frame Lnegth */
 
 /* Ethernet Switch Fetch DMA Port Control Register */
@@ -238,6 +239,15 @@
 #define  GSWIP_TABLE_MAC_BRIDGE_STATIC	0x01	/* Static not, aging entry */
 
 #define XRX200_GPHY_FW_ALIGN	(16 * 1024)
+
+/* Maximum packet size supported by the switch. In theory this should be 10240,
+ * but long packets currently cause lock-ups with an MTU of over 2526. Medium
+ * packets are sometimes dropped (e.g. TCP over 2477, UDP over 2516-2519, ICMP
+ * over 2526), hence an MTU value of 2400 seems safe. This issue only affects
+ * packet reception. This is probably caused by the PPA engine, which is on the
+ * RX part of the device. Packet transmission works properly up to 10240.
+ */
+#define GSWIP_MAX_PACKET_LENGTH	2400
 
 struct gswip_hw_info {
 	int max_ports;
@@ -863,10 +873,6 @@ static int gswip_setup(struct dsa_switch *ds)
 	gswip_switch_mask(priv, 0, GSWIP_PCE_PCTRL_0_INGRESS,
 			  GSWIP_PCE_PCTRL_0p(cpu_port));
 
-	gswip_switch_mask(priv, 0, GSWIP_MAC_CTRL_2_MLEN,
-			  GSWIP_MAC_CTRL_2p(cpu_port));
-	gswip_switch_w(priv, VLAN_ETH_FRAME_LEN + 8 + ETH_FCS_LEN,
-		       GSWIP_MAC_FLEN);
 	gswip_switch_mask(priv, 0, GSWIP_BM_QUEUE_GCTRL_GL_MOD,
 			  GSWIP_BM_QUEUE_GCTRL);
 
@@ -882,6 +888,8 @@ static int gswip_setup(struct dsa_switch *ds)
 		dev_err(priv->dev, "MAC flushing didn't finish\n");
 		return err;
 	}
+
+	ds->mtu_enforcement_ingress = true;
 
 	gswip_port_enable(ds, cpu_port, NULL);
 
@@ -1352,7 +1360,7 @@ static int gswip_port_fdb(struct dsa_switch *ds, int port,
 	struct net_device *bridge = dsa_port_bridge_dev_get(dsa_to_port(ds, port));
 	struct gswip_priv *priv = ds->priv;
 	struct gswip_pce_table_entry mac_bridge = {0,};
-	unsigned int cpu_port = priv->hw_info->cpu_port;
+	unsigned int max_ports = priv->hw_info->max_ports;
 	int fid = -1;
 	int i;
 	int err;
@@ -1360,7 +1368,7 @@ static int gswip_port_fdb(struct dsa_switch *ds, int port,
 	if (!bridge)
 		return -EINVAL;
 
-	for (i = cpu_port; i < ARRAY_SIZE(priv->vlans); i++) {
+	for (i = max_ports; i < ARRAY_SIZE(priv->vlans); i++) {
 		if (priv->vlans[i].bridge == bridge) {
 			fid = priv->vlans[i].fid;
 			break;
@@ -1418,8 +1426,9 @@ static int gswip_port_fdb_dump(struct dsa_switch *ds, int port,
 
 		err = gswip_pce_table_entry_read(priv, &mac_bridge);
 		if (err) {
-			dev_err(priv->dev, "failed to write mac bridge: %d\n",
-				err);
+			dev_err(priv->dev,
+				"failed to read mac bridge entry %d: %d\n",
+				i, err);
 			return err;
 		}
 
@@ -1449,116 +1458,103 @@ static int gswip_port_fdb_dump(struct dsa_switch *ds, int port,
 	return 0;
 }
 
-static void gswip_phylink_set_capab(unsigned long *supported,
-				    struct phylink_link_state *state)
+static int gswip_port_max_mtu(struct dsa_switch *ds, int port)
 {
-	__ETHTOOL_DECLARE_LINK_MODE_MASK(mask) = { 0, };
+	/* Includes 8 bytes for special header. */
+	return GSWIP_MAX_PACKET_LENGTH - VLAN_ETH_HLEN - ETH_FCS_LEN;
+}
 
-	/* Allow all the expected bits */
-	phylink_set(mask, Autoneg);
-	phylink_set_port_modes(mask);
-	phylink_set(mask, Pause);
-	phylink_set(mask, Asym_Pause);
+static int gswip_port_change_mtu(struct dsa_switch *ds, int port, int new_mtu)
+{
+	struct gswip_priv *priv = ds->priv;
+	int cpu_port = priv->hw_info->cpu_port;
 
-	/* With the exclusion of MII, Reverse MII and Reduced MII, we
-	 * support Gigabit, including Half duplex
+	/* CPU port always has maximum mtu of user ports, so use it to set
+	 * switch frame size, including 8 byte special header.
 	 */
-	if (state->interface != PHY_INTERFACE_MODE_MII &&
-	    state->interface != PHY_INTERFACE_MODE_REVMII &&
-	    state->interface != PHY_INTERFACE_MODE_RMII) {
-		phylink_set(mask, 1000baseT_Full);
-		phylink_set(mask, 1000baseT_Half);
+	if (port == cpu_port) {
+		new_mtu += 8;
+		gswip_switch_w(priv, VLAN_ETH_HLEN + new_mtu + ETH_FCS_LEN,
+			       GSWIP_MAC_FLEN);
 	}
 
-	phylink_set(mask, 10baseT_Half);
-	phylink_set(mask, 10baseT_Full);
-	phylink_set(mask, 100baseT_Half);
-	phylink_set(mask, 100baseT_Full);
+	/* Enable MLEN for ports with non-standard MTUs, including the special
+	 * header on the CPU port added above.
+	 */
+	if (new_mtu != ETH_DATA_LEN)
+		gswip_switch_mask(priv, 0, GSWIP_MAC_CTRL_2_MLEN,
+				  GSWIP_MAC_CTRL_2p(port));
+	else
+		gswip_switch_mask(priv, GSWIP_MAC_CTRL_2_MLEN, 0,
+				  GSWIP_MAC_CTRL_2p(port));
 
-	bitmap_and(supported, supported, mask,
-		   __ETHTOOL_LINK_MODE_MASK_NBITS);
-	bitmap_and(state->advertising, state->advertising, mask,
-		   __ETHTOOL_LINK_MODE_MASK_NBITS);
+	return 0;
 }
 
-static void gswip_xrx200_phylink_validate(struct dsa_switch *ds, int port,
-					  unsigned long *supported,
-					  struct phylink_link_state *state)
+static void gswip_xrx200_phylink_get_caps(struct dsa_switch *ds, int port,
+					  struct phylink_config *config)
 {
 	switch (port) {
 	case 0:
 	case 1:
-		if (!phy_interface_mode_is_rgmii(state->interface) &&
-		    state->interface != PHY_INTERFACE_MODE_MII &&
-		    state->interface != PHY_INTERFACE_MODE_REVMII &&
-		    state->interface != PHY_INTERFACE_MODE_RMII)
-			goto unsupported;
+		phy_interface_set_rgmii(config->supported_interfaces);
+		__set_bit(PHY_INTERFACE_MODE_MII,
+			  config->supported_interfaces);
+		__set_bit(PHY_INTERFACE_MODE_REVMII,
+			  config->supported_interfaces);
+		__set_bit(PHY_INTERFACE_MODE_RMII,
+			  config->supported_interfaces);
 		break;
+
 	case 2:
 	case 3:
 	case 4:
-		if (state->interface != PHY_INTERFACE_MODE_INTERNAL)
-			goto unsupported;
+		__set_bit(PHY_INTERFACE_MODE_INTERNAL,
+			  config->supported_interfaces);
 		break;
+
 	case 5:
-		if (!phy_interface_mode_is_rgmii(state->interface) &&
-		    state->interface != PHY_INTERFACE_MODE_INTERNAL)
-			goto unsupported;
+		phy_interface_set_rgmii(config->supported_interfaces);
+		__set_bit(PHY_INTERFACE_MODE_INTERNAL,
+			  config->supported_interfaces);
 		break;
-	default:
-		bitmap_zero(supported, __ETHTOOL_LINK_MODE_MASK_NBITS);
-		dev_err(ds->dev, "Unsupported port: %i\n", port);
-		return;
 	}
 
-	gswip_phylink_set_capab(supported, state);
-
-	return;
-
-unsupported:
-	bitmap_zero(supported, __ETHTOOL_LINK_MODE_MASK_NBITS);
-	dev_err(ds->dev, "Unsupported interface '%s' for port %d\n",
-		phy_modes(state->interface), port);
+	config->mac_capabilities = MAC_ASYM_PAUSE | MAC_SYM_PAUSE |
+		MAC_10 | MAC_100 | MAC_1000;
 }
 
-static void gswip_xrx300_phylink_validate(struct dsa_switch *ds, int port,
-					  unsigned long *supported,
-					  struct phylink_link_state *state)
+static void gswip_xrx300_phylink_get_caps(struct dsa_switch *ds, int port,
+					  struct phylink_config *config)
 {
 	switch (port) {
 	case 0:
-		if (!phy_interface_mode_is_rgmii(state->interface) &&
-		    state->interface != PHY_INTERFACE_MODE_GMII &&
-		    state->interface != PHY_INTERFACE_MODE_RMII)
-			goto unsupported;
+		phy_interface_set_rgmii(config->supported_interfaces);
+		__set_bit(PHY_INTERFACE_MODE_GMII,
+			  config->supported_interfaces);
+		__set_bit(PHY_INTERFACE_MODE_RMII,
+			  config->supported_interfaces);
 		break;
+
 	case 1:
 	case 2:
 	case 3:
 	case 4:
-		if (state->interface != PHY_INTERFACE_MODE_INTERNAL)
-			goto unsupported;
+		__set_bit(PHY_INTERFACE_MODE_INTERNAL,
+			  config->supported_interfaces);
 		break;
+
 	case 5:
-		if (!phy_interface_mode_is_rgmii(state->interface) &&
-		    state->interface != PHY_INTERFACE_MODE_INTERNAL &&
-		    state->interface != PHY_INTERFACE_MODE_RMII)
-			goto unsupported;
+		phy_interface_set_rgmii(config->supported_interfaces);
+		__set_bit(PHY_INTERFACE_MODE_INTERNAL,
+			  config->supported_interfaces);
+		__set_bit(PHY_INTERFACE_MODE_RMII,
+			  config->supported_interfaces);
 		break;
-	default:
-		bitmap_zero(supported, __ETHTOOL_LINK_MODE_MASK_NBITS);
-		dev_err(ds->dev, "Unsupported port: %i\n", port);
-		return;
 	}
 
-	gswip_phylink_set_capab(supported, state);
-
-	return;
-
-unsupported:
-	bitmap_zero(supported, __ETHTOOL_LINK_MODE_MASK_NBITS);
-	dev_err(ds->dev, "Unsupported interface '%s' for port %d\n",
-		phy_modes(state->interface), port);
+	config->mac_capabilities = MAC_ASYM_PAUSE | MAC_SYM_PAUSE |
+		MAC_10 | MAC_100 | MAC_1000;
 }
 
 static void gswip_port_set_link(struct gswip_priv *priv, int port, bool link)
@@ -1837,7 +1833,9 @@ static const struct dsa_switch_ops gswip_xrx200_switch_ops = {
 	.port_fdb_add		= gswip_port_fdb_add,
 	.port_fdb_del		= gswip_port_fdb_del,
 	.port_fdb_dump		= gswip_port_fdb_dump,
-	.phylink_validate	= gswip_xrx200_phylink_validate,
+	.port_change_mtu	= gswip_port_change_mtu,
+	.port_max_mtu		= gswip_port_max_mtu,
+	.phylink_get_caps	= gswip_xrx200_phylink_get_caps,
 	.phylink_mac_config	= gswip_phylink_mac_config,
 	.phylink_mac_link_down	= gswip_phylink_mac_link_down,
 	.phylink_mac_link_up	= gswip_phylink_mac_link_up,
@@ -1861,7 +1859,9 @@ static const struct dsa_switch_ops gswip_xrx300_switch_ops = {
 	.port_fdb_add		= gswip_port_fdb_add,
 	.port_fdb_del		= gswip_port_fdb_del,
 	.port_fdb_dump		= gswip_port_fdb_dump,
-	.phylink_validate	= gswip_xrx300_phylink_validate,
+	.port_change_mtu	= gswip_port_change_mtu,
+	.port_max_mtu		= gswip_port_max_mtu,
+	.phylink_get_caps	= gswip_xrx300_phylink_get_caps,
 	.phylink_mac_config	= gswip_phylink_mac_config,
 	.phylink_mac_link_down	= gswip_phylink_mac_link_down,
 	.phylink_mac_link_up	= gswip_phylink_mac_link_up,
@@ -1989,11 +1989,9 @@ static int gswip_gphy_fw_probe(struct gswip_priv *priv,
 	}
 
 	gphy_fw->reset = of_reset_control_array_get_exclusive(gphy_fw_np);
-	if (IS_ERR(gphy_fw->reset)) {
-		if (PTR_ERR(gphy_fw->reset) != -EPROBE_DEFER)
-			dev_err(dev, "Failed to lookup gphy reset\n");
-		return PTR_ERR(gphy_fw->reset);
-	}
+	if (IS_ERR(gphy_fw->reset))
+		return dev_err_probe(dev, PTR_ERR(gphy_fw->reset),
+				     "Failed to lookup gphy reset\n");
 
 	return gswip_gphy_fw_load(priv, gphy_fw);
 }
@@ -2230,8 +2228,6 @@ static int gswip_remove(struct platform_device *pdev)
 
 	for (i = 0; i < priv->num_gphy_fw; i++)
 		gswip_gphy_fw_remove(priv, &priv->gphy_fw[i]);
-
-	platform_set_drvdata(pdev, NULL);
 
 	return 0;
 }

@@ -53,6 +53,7 @@
 #include <linux/vmalloc.h>
 #include <linux/timer.h>
 #include <linux/compat.h>
+#include <linux/of.h>
 
 /* our own stuff */
 #include "hx280enc.h"
@@ -66,9 +67,9 @@
 static struct device *hantro_vc8000e_dev;
 static struct clk *hantro_clk_vc8000e;
 static struct clk *hantro_clk_vc8000e_bus;
+static bool hantro_skip_blkctrl;
 #define BLK_CTL_BASE        0x38330000
 #endif
-
 
 /********variables declaration related with race condition**********/
 
@@ -120,7 +121,6 @@ typedef struct {
 	struct fasync_struct *async_queue;
 #ifndef VSI
 	struct device *dev;
-	struct mutex dev_mutex;
 #endif
 } hantroenc_t;
 
@@ -181,6 +181,9 @@ static int hantro_vc8000e_ctrlblk_reset(struct device *dev)
 	volatile u8 *iobase;
 	u32 val;
 
+	if (hantro_skip_blkctrl)
+		return 0;
+
 	//config vc8000e
 	hantro_vc8000e_clk_enable(dev);
 	iobase = (volatile u8 *)ioremap(BLK_CTL_BASE, 0x10000);
@@ -206,13 +209,7 @@ static int hantro_vc8000e_ctrlblk_reset(struct device *dev)
 
 static int hantro_vc8000e_power_on_disirq(hantroenc_t *hx280enc)
 {
-	//spin_lock_irq(&owner_lock);
-	mutex_lock(&hx280enc->dev_mutex);
-	//disable_irq(hx280enc->irq);
 	pm_runtime_get_sync(hx280enc->dev);
-	//enable_irq(hx280enc->irq);
-	mutex_unlock(&hx280enc->dev_mutex);
-	//spin_unlock_irq(&owner_lock);
 	return 0;
 }
 
@@ -274,6 +271,7 @@ static int WaitEncReady(hantroenc_t *dev, u32 *core_info, u32 *irq_status)
 	if (wait_event_timeout(enc_wait_queue,
 		CheckEncIrq(dev, core_info, irq_status), msecs_to_jiffies(200)) == 0)	{
 		pr_err("%s: wait interrupt timeout !\n", __func__);
+		up(&hantroenc_data[dev->core_id].core_suspend_sem);
 		return -1;
 	}
 
@@ -701,11 +699,9 @@ static long hantroenc_ioctl32(struct file *filp, unsigned int cmd, unsigned long
 	long err = 0;
 
 #define HX280ENC_IOCTL32(err, filp, cmd, arg) { \
-	mm_segment_t old_fs = force_uaccess_begin(); \
 	err = hantroenc_ioctl(filp, cmd, arg); \
 	if (err) \
 		return err; \
-	force_uaccess_end(old_fs); \
 }
 #endif
 
@@ -935,7 +931,7 @@ static int __init hantroenc_init(void)
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 18))
 				SA_INTERRUPT | SA_SHIRQ,
 #else
-				IRQF_SHARED,
+				0,
 #endif
 				"hx280enc", (void *) &hantroenc_data[i]);
 			if (result == -EINVAL) {
@@ -1180,6 +1176,7 @@ static int hantro_vc8000e_probe(struct platform_device *pdev)
 {
 	int err = 0;
 	struct resource *res;
+	struct device_node *node;
 
 	hantro_vc8000e_dev = &pdev->dev;
 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "regs_hantro_vc8000e");
@@ -1205,6 +1202,21 @@ static int hantro_vc8000e_probe(struct platform_device *pdev)
 
 	PDEBUG("hantro: vc8000e clock: 0x%lX, 0x%lX\n", clk_get_rate(hantro_clk_vc8000e), clk_get_rate(hantro_clk_vc8000e_bus));
 
+	/*
+	 * If integrate power-domains into blk-ctrl driver, vpu driver don't
+	 * need handle it again.
+	 */
+	node = of_parse_phandle(pdev->dev.of_node, "power-domains", 0);
+	if (!node) {
+		pr_err("hantro vc8000e: not get power-domains\n");
+		return -ENODEV;
+	}
+	if (!strcmp(node->name, "blk-ctl") || !strcmp(node->name, "blk-ctrl"))
+		hantro_skip_blkctrl = 1;
+	else
+		hantro_skip_blkctrl = 0;
+	of_node_put(node);
+
 	hantro_vc8000e_clk_enable(&pdev->dev);
 	pm_runtime_enable(&pdev->dev);
 	pm_runtime_get_sync(&pdev->dev);
@@ -1218,7 +1230,6 @@ static int hantro_vc8000e_probe(struct platform_device *pdev)
 
 	hantroenc_data->dev = &pdev->dev;
 	platform_set_drvdata(pdev, hantroenc_data);
-	mutex_init(&hantroenc_data->dev_mutex);
 
 	goto out;
 

@@ -7,10 +7,11 @@
 #include <drm/drm_atomic.h>
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_atomic_state_helper.h>
-#include <drm/drm_fb_cma_helper.h>
+#include <drm/drm_fb_dma_helper.h>
 #include <drm/drm_fourcc.h>
+#include <drm/drm_framebuffer.h>
 #include <drm/drm_gem_atomic_helper.h>
-#include <drm/drm_gem_cma_helper.h>
+#include <drm/drm_gem_dma_helper.h>
 #include <drm/drm_plane_helper.h>
 #include <drm/drm_print.h>
 #include <drm/drm_rect.h>
@@ -42,13 +43,13 @@ static inline dma_addr_t
 drm_plane_state_to_baseaddr(struct drm_plane_state *state)
 {
 	struct drm_framebuffer *fb = state->fb;
-	struct drm_gem_cma_object *cma_obj;
+	struct drm_gem_dma_object *dma_obj;
 	unsigned int x = state->src.x1 >> 16;
 	unsigned int y = state->src.y1 >> 16;
 
-	cma_obj = drm_fb_cma_get_gem_obj(fb, 0);
+	dma_obj = drm_fb_dma_get_gem_obj(fb, 0);
 
-	return cma_obj->paddr + fb->offsets[0] + fb->pitches[0] * y +
+	return dma_obj->dma_addr + fb->offsets[0] + fb->pitches[0] * y +
 	       fb->format->cpp[0] * x;
 }
 
@@ -80,8 +81,8 @@ static int dcnano_primary_plane_atomic_check(struct drm_plane *plane,
 		return -EINVAL;
 
 	ret = drm_atomic_helper_check_plane_state(new_state, crtc_state,
-						  DRM_PLANE_HELPER_NO_SCALING,
-						  DRM_PLANE_HELPER_NO_SCALING,
+						  DRM_PLANE_NO_SCALING,
+						  DRM_PLANE_NO_SCALING,
 						  false, true);
 	if (ret)
 		return ret;

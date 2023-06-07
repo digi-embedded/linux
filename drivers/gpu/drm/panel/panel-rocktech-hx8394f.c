@@ -373,14 +373,12 @@ static int hx8394f_probe(struct mipi_dsi_device *dsi)
 	return 0;
 }
 
-static int hx8394f_remove(struct mipi_dsi_device *dsi)
+static void hx8394f_remove(struct mipi_dsi_device *dsi)
 {
 	struct hx8394f *ctx = mipi_dsi_get_drvdata(dsi);
 
 	mipi_dsi_detach(dsi);
 	drm_panel_remove(&ctx->panel);
-
-	return 0;
 }
 
 static const struct of_device_id hx8394f_of_match[] = {

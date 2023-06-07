@@ -614,14 +614,16 @@ static int ceetm_dump(struct Qdisc *sch, struct sk_buff *skb)
 	case CEETM_ROOT:
 		/* Gather statistics from the underlying pfifo qdiscs */
 		sch->q.qlen = 0;
-		memset(&sch->bstats, 0, sizeof(sch->bstats));
+		gnet_stats_basic_sync_init(&sch->bstats);
 		memset(&sch->qstats, 0, sizeof(sch->qstats));
 
 		for (ntx = 0; ntx < dev->num_tx_queues; ntx++) {
 			qdisc = netdev_get_tx_queue(dev, ntx)->qdisc_sleeping;
 			sch->q.qlen		+= qdisc->q.qlen;
-			sch->bstats.bytes	+= qdisc->bstats.bytes;
-			sch->bstats.packets	+= qdisc->bstats.packets;
+			u64_stats_add(&sch->bstats.bytes,
+				      u64_stats_read(&qdisc->bstats.bytes));
+			u64_stats_add(&sch->bstats.packets,
+				      u64_stats_read(&qdisc->bstats.packets));
 			sch->qstats.qlen	+= qdisc->qstats.qlen;
 			sch->qstats.backlog	+= qdisc->qstats.backlog;
 			sch->qstats.drops	+= qdisc->qstats.drops;
@@ -819,7 +821,8 @@ static int ceetm_init_prio(struct Qdisc *sch, struct ceetm_qdisc *priv,
 	struct ceetm_class *parent_cl, *child_cl;
 	struct net_device *dev = qdisc_dev(sch);
 	struct Qdisc *root_qdisc = dev->qdisc;
-	unsigned int i;
+	struct ceetm_class_stats *cstats;
+	unsigned int i, j;
 	int err;
 
 	pr_debug(KBUILD_BASENAME " : %s : qdisc %X\n", __func__, sch->handle);
@@ -868,6 +871,11 @@ static int ceetm_init_prio(struct Qdisc *sch, struct ceetm_qdisc *priv,
 			goto err_init_prio_cls;
 		}
 
+		for_each_online_cpu(j) {
+			cstats = per_cpu_ptr(child_cl->prio.cstats, j);
+			gnet_stats_basic_sync_init(&cstats->bstats);
+		}
+
 		child_cl->common.classid = TC_H_MAKE(sch->handle, (i + 1));
 		child_cl->parent = sch;
 		child_cl->type = CEETM_PRIO;
@@ -911,7 +919,8 @@ static int ceetm_init_wbfs(struct Qdisc *sch, struct ceetm_qdisc *priv,
 	struct ceetm_class *parent_cl, *child_cl, *tmp_cl, *root_cl = NULL;
 	struct Qdisc *root_qdisc, *parent_qdisc = NULL;
 	struct net_device *dev = qdisc_dev(sch);
-	unsigned int i, id, prio_a, prio_b;
+	unsigned int i, j, id, prio_a, prio_b;
+	struct ceetm_class_stats *cstats;
 	int err, group_b, small_group;
 	struct ceetm_qdisc *root_priv;
 
@@ -1081,6 +1090,11 @@ static int ceetm_init_wbfs(struct Qdisc *sch, struct ceetm_qdisc *priv,
 			       __func__);
 			err = -ENOMEM;
 			goto err_init_wbfs_cls;
+		}
+
+		for_each_online_cpu(j) {
+			cstats = per_cpu_ptr(child_cl->wbfs.cstats, j);
+			gnet_stats_basic_sync_init(&cstats->bstats);
 		}
 
 		child_cl->common.classid = TC_H_MAKE(sch->handle, (i + 1));
@@ -1822,14 +1836,14 @@ static int ceetm_cls_dump_stats(struct Qdisc *sch, unsigned long arg,
 				struct gnet_dump *d)
 {
 	struct ceetm_class *cl = (struct ceetm_class *)arg;
-	struct gnet_stats_basic_packed tmp_bstats;
+	struct gnet_stats_basic_sync tmp_bstats;
 	struct ceetm_class_stats *cstats = NULL;
 	struct qm_ceetm_cq *cq = NULL;
 	struct tc_ceetm_xstats xstats;
 	unsigned int i;
 
 	memset(&xstats, 0, sizeof(xstats));
-	memset(&tmp_bstats, 0, sizeof(tmp_bstats));
+	gnet_stats_basic_sync_init(&tmp_bstats);
 
 	switch (cl->type) {
 	case CEETM_ROOT:
@@ -1855,13 +1869,14 @@ static int ceetm_cls_dump_stats(struct Qdisc *sch, unsigned long arg,
 		if (cstats) {
 			xstats.ern_drop_count += cstats->ern_drop_count;
 			xstats.congested_count += cstats->congested_count;
-			tmp_bstats.bytes += cstats->bstats.bytes;
-			tmp_bstats.packets += cstats->bstats.packets;
+			u64_stats_add(&tmp_bstats.bytes,
+				      u64_stats_read(&cstats->bstats.bytes));
+			u64_stats_add(&tmp_bstats.packets,
+				      u64_stats_read(&cstats->bstats.packets));
 		}
 	}
 
-	if (gnet_stats_copy_basic(qdisc_root_sleeping_running(sch),
-				  d, NULL, &tmp_bstats) < 0)
+	if (gnet_stats_copy_basic(d, NULL, &tmp_bstats, true))
 		return -1;
 
 	if (cq && qman_ceetm_cq_get_dequeue_statistics(cq, 0,
@@ -1950,7 +1965,7 @@ static struct ceetm_class *ceetm_classify(struct sk_buff *skb,
 		case TC_ACT_STOLEN:
 		case TC_ACT_TRAP:
 			*qerr = NET_XMIT_SUCCESS | __NET_XMIT_STOLEN;
-			/* fall through */
+			fallthrough;
 		case TC_ACT_SHOT:
 			/* No valid class found due to action */
 			*act_drop = true;

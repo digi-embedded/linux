@@ -69,6 +69,7 @@ struct imx7ulp_wdt_device {
 static int imx7ulp_wdt_wait_ulk(void __iomem *base)
 {
 	u32 val = readl(base + WDOG_CS);
+
 	if (!(val & WDOG_CS_ULK) &&
 	    readl_poll_timeout_atomic(base + WDOG_CS, val,
 				      val & WDOG_CS_ULK, 0,
@@ -88,7 +89,7 @@ static int imx7ulp_wdt_wait_rcs(struct imx7ulp_wdt_device *wdt)
 		WDOG_RCS_POST_WAIT * 256 : WDOG_RCS_POST_WAIT;
 
 	if (!(val & WDOG_CS_RCS) &&
-	    readl_poll_timeout(wdt->base + WDOG_CS, val, val & WDOG_CS_RCS, 0,
+	    readl_poll_timeout(wdt->base + WDOG_CS, val, val & WDOG_CS_RCS, 100,
 			       timeout))
 		ret = -ETIMEDOUT;
 

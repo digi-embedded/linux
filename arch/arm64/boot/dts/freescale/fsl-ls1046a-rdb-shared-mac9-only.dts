@@ -15,26 +15,6 @@
 };
 
 &soc {
-	chosen {
-		name = "chosen";
-		dpaa-extended-args {
-			fman0-extd-args {
-
-				cell-index = <0>;
-				compatible = "fsl,fman-extended-args";
-				dma-aid-mode = "port";
-
-				fman0_rxt0-extd-args {
-					cell-index = <0>;
-					compatible = "fsl,fman-port-10g-rx-extended-args";
-					/* Define Virtual storage profile */
-					/* <number of profiles, default profile id> */
-					vsp-window = <2 0>;
-				};
-			};
-		};
-	};
-
 	bp7: buffer-pool@7 {
 		compatible = "fsl,ls1046a-bpool", "fsl,bpool";
 		fsl,bpid = <7>;
@@ -79,7 +59,28 @@
 		};
 	};
 };
+
 / {
+	chosen {
+		name = "chosen";
+		dpaa-extended-args {
+			fman0-extd-args {
+
+				cell-index = <0>;
+				compatible = "fsl,fman-extended-args";
+				dma-aid-mode = "port";
+
+				fman0_rxt0-extd-args {
+					cell-index = <0>;
+					compatible = "fsl,fman-port-10g-rx-extended-args";
+					/* Define Virtual storage profile */
+					/* <number of profiles, default profile id> */
+					vsp-window = <2 0>;
+				};
+			};
+		};
+	};
+
 	reserved-memory {
 		#address-cells = <2>;
 		#size-cells = <2>;

@@ -814,6 +814,7 @@ int qbman_swp_enqueue_multiple_mem_back(struct qbman_swp *s,
 	for (i = 0; i < num_enqueued; i++) {
 		p = (s->addr_cena + QBMAN_CENA_SWP_EQCR(eqcr_pi & half_mask));
 		/* Skip copying the verb */
+
 		memcpy_toio(&p[1], &cl[1], EQ_DESC_SIZE_WITHOUT_FD - 1);
 		memcpy_toio(&p[EQ_DESC_SIZE_FD_START/sizeof(uint32_t)],
 		       &fd[i], sizeof(*fd));
@@ -1855,57 +1856,6 @@ u32 qbman_bp_info_num_free_bufs(struct qbman_bp_query_rslt *a)
 	return le32_to_cpu(a->fill);
 }
 
-struct qbman_orp_cmd_desc {
-	u8 verb;
-	u8 reserved;
-	u8 cid;
-	u8 reserved2;
-	u16 orpid;
-	u16 seqnum;
-	u8 reserved3[56];
-};
-
-struct qbman_orp_cmd_rslt {
-	u8 verb;
-	u8 rslt;
-	u8 cid;
-	u8 reserved1[61];
-};
-
-int qbman_orp_drop(struct qbman_swp *s, u16 orpid, u16 seqnum)
-{
-	struct qbman_orp_cmd_desc *p;
-	struct qbman_orp_cmd_rslt *r;
-	void *resp;
-
-	p = (struct qbman_orp_cmd_desc *)qbman_swp_mc_start(s);
-	if (!p)
-		return -EBUSY;
-
-	p->cid = 0x7;
-	p->orpid = cpu_to_le16(orpid);
-	p->seqnum = cpu_to_le16(seqnum);
-
-	resp = qbman_swp_mc_complete(s, p, QBMAN_MC_ORP);
-	if (!resp) {
-		pr_err("qbman: Drop sequence num %d orpid 0x%x failed, no response\n",
-		       seqnum, orpid);
-		return -EIO;
-	}
-	r = (struct qbman_orp_cmd_rslt *)resp;
-	/* Decode the outcome */
-	WARN_ON((r->verb & QBMAN_RESPONSE_VERB_MASK) != QBMAN_MC_ORP);
-
-	/* Determine success or failure */
-	if (r->rslt != QBMAN_MC_RSLT_OK) {
-		pr_err("Drop seqnum %d of prpid 0x%x failed, code=0x%02x\n",
-		       seqnum, orpid, r->rslt);
-		return -EIO;
-	}
-
-	return 0;
-}
-
 /**
  * qbman_swp_set_irq_coalescing() - Set new IRQ coalescing values
  * @p: the software portal object
@@ -1957,4 +1907,55 @@ void qbman_swp_get_irq_coalescing(struct qbman_swp *p, u32 *irq_threshold,
 		*irq_threshold = p->irq_threshold;
 	if (irq_holdoff)
 		*irq_holdoff = p->irq_holdoff;
+}
+
+struct qbman_orp_cmd_desc {
+	u8 verb;
+	u8 reserved;
+	u8 cid;
+	u8 reserved2;
+	u16 orpid;
+	u16 seqnum;
+	u8 reserved3[56];
+};
+
+struct qbman_orp_cmd_rslt {
+	u8 verb;
+	u8 rslt;
+	u8 cid;
+	u8 reserved1[61];
+};
+
+int qbman_orp_drop(struct qbman_swp *s, u16 orpid, u16 seqnum)
+{
+	struct qbman_orp_cmd_desc *p;
+	struct qbman_orp_cmd_rslt *r;
+	void *resp;
+
+	p = (struct qbman_orp_cmd_desc *)qbman_swp_mc_start(s);
+	if (!p)
+		return -EBUSY;
+
+	p->cid = 0x7;
+	p->orpid = cpu_to_le16(orpid);
+	p->seqnum = cpu_to_le16(seqnum);
+
+	resp = qbman_swp_mc_complete(s, p, QBMAN_MC_ORP);
+	if (!resp) {
+		pr_err("qbman: Drop sequence num %d orpid 0x%x failed, no response\n",
+		       seqnum, orpid);
+		return -EIO;
+	}
+	r = (struct qbman_orp_cmd_rslt *)resp;
+	/* Decode the outcome */
+	WARN_ON((r->verb & QBMAN_RESPONSE_VERB_MASK) != QBMAN_MC_ORP);
+
+	/* Determine success or failure */
+	if (r->rslt != QBMAN_MC_RSLT_OK) {
+		pr_err("Drop seqnum %d of prpid 0x%x failed, code=0x%02x\n",
+		       seqnum, orpid, r->rslt);
+		return -EIO;
+	}
+
+	return 0;
 }

@@ -10,6 +10,7 @@
 #include <linux/delay.h>
 #include <linux/err.h>
 #include <linux/hdmi.h>
+#include <linux/i2c.h>
 #include <linux/irq.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
@@ -25,14 +26,14 @@
 #include <uapi/linux/videodev2.h>
 
 #include <drm/bridge/dw_hdmi.h>
+#include <drm/display/drm_hdmi_helper.h>
+#include <drm/display/drm_scdc_helper.h>
 #include <drm/drm_atomic.h>
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_bridge.h>
-#include <drm/drm_edid.h>
 #include <drm/drm_of.h>
 #include <drm/drm_print.h>
 #include <drm/drm_probe_helper.h>
-#include <drm/drm_scdc_helper.h>
 
 #include "dw-hdmi-audio.h"
 #include "dw-hdmi-cec.h"
@@ -668,7 +669,7 @@ static void hdmi_set_clk_regenerator(struct dw_hdmi *hdmi,
 
 	config3 = hdmi_readb(hdmi, HDMI_CONFIG3_ID);
 
-	/* Only compute CTS when using internal AHB audio */
+	/* Compute CTS when using internal AHB audio or General Parallel audio*/
 	if ((config3 & HDMI_CONFIG3_AHBAUDDMA) || (config3 & HDMI_CONFIG3_GPAUD)) {
 		/*
 		 * Compute the CTS value from the N value.  Note that CTS and N
@@ -783,8 +784,17 @@ static void hdmi_enable_audio_clk(struct dw_hdmi *hdmi, bool enable)
 	hdmi_writeb(hdmi, hdmi->mc_clkdis, HDMI_MC_CLKDIS);
 }
 
+static u8 *hdmi_audio_get_eld(struct dw_hdmi *hdmi)
+{
+	if (!hdmi->curr_conn)
+		return NULL;
+
+	return hdmi->curr_conn->eld;
+}
+
 static void dw_hdmi_gp_audio_enable(struct dw_hdmi *hdmi)
 {
+	const struct dw_hdmi_plat_data *pdata = hdmi->plat_data;
 	int sample_freq = 0x2, org_sample_freq = 0xD;
 	int ch_mask = BIT(hdmi->channels) - 1;
 
@@ -819,7 +829,7 @@ static void dw_hdmi_gp_audio_enable(struct dw_hdmi *hdmi)
 		break;
 	default:
 		break;
-        }
+	}
 
 	hdmi_set_cts_n(hdmi, hdmi->audio_cts, hdmi->audio_n);
 	hdmi_enable_audio_clk(hdmi, true);
@@ -841,12 +851,11 @@ static void dw_hdmi_gp_audio_enable(struct dw_hdmi *hdmi)
 
 	/* hbr */
 	if (hdmi->sample_rate == 192000 && hdmi->channels == 8 &&
-	    hdmi->sample_width == 32 && hdmi->sample_non_pcm) {
+	    hdmi->sample_width == 32 && hdmi->sample_non_pcm)
 		hdmi_modb(hdmi, 0x01, 0x01, HDMI_GP_CONF2);
-	}
 
-	if (hdmi->phy.ops->enable_audio)
-		hdmi->phy.ops->enable_audio(hdmi, hdmi->phy.data,
+	if (pdata->enable_audio)
+		pdata->enable_audio(hdmi,
 					    hdmi->channels,
 					    hdmi->sample_width,
 					    hdmi->sample_rate,
@@ -855,21 +864,15 @@ static void dw_hdmi_gp_audio_enable(struct dw_hdmi *hdmi)
 
 static void dw_hdmi_gp_audio_disable(struct dw_hdmi *hdmi)
 {
+	const struct dw_hdmi_plat_data *pdata = hdmi->plat_data;
+
 	hdmi_set_cts_n(hdmi, hdmi->audio_cts, 0);
 
 	hdmi_modb(hdmi,  0, 0x3, HDMI_FC_DATAUTO3);
-	if (hdmi->phy.ops->disable_audio)
-		hdmi->phy.ops->disable_audio(hdmi, hdmi->phy.data);
+	if (pdata->disable_audio)
+		pdata->disable_audio(hdmi);
 
 	hdmi_enable_audio_clk(hdmi, false);
-}
-
-static u8 *hdmi_audio_get_eld(struct dw_hdmi *hdmi)
-{
-	if (!hdmi->curr_conn)
-		return NULL;
-
-	return hdmi->curr_conn->eld;
 }
 
 static void dw_hdmi_ahb_audio_enable(struct dw_hdmi *hdmi)
@@ -1215,6 +1218,8 @@ static void hdmi_video_packetize(struct dw_hdmi *hdmi)
 	unsigned int output_select = HDMI_VP_CONF_OUTPUT_SELECTOR_PP;
 	struct hdmi_data_info *hdmi_data = &hdmi->hdmi_data;
 	u8 val, vp_conf;
+	u8 clear_gcp_auto = 0;
+
 
 	if (hdmi_bus_fmt_is_rgb(hdmi->hdmi_data.enc_out_bus_format) ||
 	    hdmi_bus_fmt_is_yuv444(hdmi->hdmi_data.enc_out_bus_format) ||
@@ -1224,6 +1229,7 @@ static void hdmi_video_packetize(struct dw_hdmi *hdmi)
 		case 8:
 			color_depth = 4;
 			output_select = HDMI_VP_CONF_OUTPUT_SELECTOR_BYPASS;
+			clear_gcp_auto = 1;
 			break;
 		case 10:
 			color_depth = 5;
@@ -1243,6 +1249,7 @@ static void hdmi_video_packetize(struct dw_hdmi *hdmi)
 		case 0:
 		case 8:
 			remap_size = HDMI_VP_REMAP_YCC422_16bit;
+			clear_gcp_auto = 1;
 			break;
 		case 10:
 			remap_size = HDMI_VP_REMAP_YCC422_20bit;
@@ -1267,12 +1274,17 @@ static void hdmi_video_packetize(struct dw_hdmi *hdmi)
 		HDMI_VP_PR_CD_DESIRED_PR_FACTOR_MASK);
 	hdmi_writeb(hdmi, val, HDMI_VP_PR_CD);
 
+	/* HDMI1.4b specification section 6.5.3:
+	 * Source shall only send GCPs with non-zero CD to sinks
+	 * that indicate support for Deep Color.
+	 * GCP only transmit CD and do not handle AVMUTE, PP norDefault_Phase (yet).
+	 * Disable Auto GCP when 24-bit color for sinks that not support Deep Color.
+	 */
 	val = hdmi_readb(hdmi, HDMI_FC_DATAUTO3);
-	if (color_depth == 4)
-		/* disable Auto GCP when bpp 24 */
-		val &= ~0x4;
+	if (clear_gcp_auto == 1)
+		val &= ~HDMI_FC_DATAUTO3_GCP_AUTO;
 	else
-		val |= 0x4;
+		val |= HDMI_FC_DATAUTO3_GCP_AUTO;
 	hdmi_writeb(hdmi, val, HDMI_FC_DATAUTO3);
 
 	hdmi_modb(hdmi, HDMI_VP_STUFF_PR_STUFFING_STUFFING_MODE,
@@ -1472,13 +1484,13 @@ static void dw_hdmi_phy_sel_interface_control(struct dw_hdmi *hdmi, u8 enable)
 			 HDMI_PHY_CONF0_SELDIPIF_MASK);
 }
 
-void dw_hdmi_phy_reset(struct dw_hdmi *hdmi)
+void dw_hdmi_phy_gen1_reset(struct dw_hdmi *hdmi)
 {
-	/* PHY reset. The reset signal is active high on Gen1 PHYs. */
+	/* PHY reset. The reset signal is active low on Gen1 PHYs. */
 	hdmi_writeb(hdmi, 0, HDMI_MC_PHYRSTZ);
 	hdmi_writeb(hdmi, HDMI_MC_PHYRSTZ_PHYRSTZ, HDMI_MC_PHYRSTZ);
 }
-EXPORT_SYMBOL_GPL(dw_hdmi_phy_reset);
+EXPORT_SYMBOL_GPL(dw_hdmi_phy_gen1_reset);
 
 void dw_hdmi_phy_gen2_reset(struct dw_hdmi *hdmi)
 {
@@ -2209,31 +2221,21 @@ static void dw_hdmi_clear_overflow(struct dw_hdmi *hdmi)
 	 * then write one of the FC registers several times.
 	 *
 	 * The number of iterations matters and depends on the HDMI TX revision
-	 * (and possibly on the platform). So far i.MX6Q (v1.30a), i.MX6DL
-	 * (v1.31a), iMX865(v2.13a) and multiple Allwinner SoCs (v1.32a)
-	 * have been identified as needing the workaround,
-	 * with 4 iterations for v1.30a and 1 iteration for others.
-	 * The Amlogic Meson GX SoCs (v2.01a) have been identified as needing
-	 * the workaround with a single iteration.
-	 * The Rockchip RK3288 SoC (v2.00a) and RK3328/RK3399 SoCs (v2.11a) have
-	 * been identified as needing the workaround with a single iteration.
+	 * (and possibly on the platform).
+	 * 4 iterations for i.MX6Q(v1.30a) and 1 iteration for others.
+	 * i.MX6DL (v1.31a), Allwinner SoCs (v1.32a), Rockchip RK3288 SoC (v2.00a),
+	 * Amlogic Meson GX SoCs (v2.01a), RK3328/RK3399 SoCs (v2.11a)
+	 * and i.MX8MPlus (v2.13a) have been identified as needing the workaround
+	 * with a single iteration.
 	 */
 
 	switch (hdmi->version) {
 	case 0x130a:
 		count = 4;
 		break;
-	case 0x131a:
-	case 0x132a:
-	case 0x200a:
-	case 0x201a:
-	case 0x211a:
-	case 0x212a:
-	case 0x213a:
+	default:
 		count = 1;
 		break;
-	default:
-		return;
 	}
 
 	/* TMDS software reset */
@@ -2664,7 +2666,7 @@ static u32 *dw_hdmi_bridge_atomic_get_output_bus_fmts(struct drm_bridge *bridge,
 	struct drm_display_mode *mode = &crtc_state->mode;
 	u8 max_bpc = conn_state->max_requested_bpc;
 	bool is_hdmi2_sink = info->hdmi.scdc.supported ||
-			     (info->color_formats & DRM_COLOR_FORMAT_YCRCB420);
+			     (info->color_formats & DRM_COLOR_FORMAT_YCBCR420);
 	u32 *output_fmts;
 	unsigned int i = 0;
 
@@ -2718,41 +2720,41 @@ static u32 *dw_hdmi_bridge_atomic_get_output_bus_fmts(struct drm_bridge *bridge,
 	 * if supported. In any case the default RGB888 format is added
 	 */
 
+	/* Default 8bit RGB fallback */
+	output_fmts[i++] = MEDIA_BUS_FMT_RGB888_1X24;
+
 	if (max_bpc >= 16 && info->bpc == 16) {
-		if (info->color_formats & DRM_COLOR_FORMAT_YCRCB444)
+		if (info->color_formats & DRM_COLOR_FORMAT_YCBCR444)
 			output_fmts[i++] = MEDIA_BUS_FMT_YUV16_1X48;
 
 		output_fmts[i++] = MEDIA_BUS_FMT_RGB161616_1X48;
 	}
 
 	if (max_bpc >= 12 && info->bpc >= 12) {
-		if (info->color_formats & DRM_COLOR_FORMAT_YCRCB422)
+		if (info->color_formats & DRM_COLOR_FORMAT_YCBCR422)
 			output_fmts[i++] = MEDIA_BUS_FMT_UYVY12_1X24;
 
-		if (info->color_formats & DRM_COLOR_FORMAT_YCRCB444)
+		if (info->color_formats & DRM_COLOR_FORMAT_YCBCR444)
 			output_fmts[i++] = MEDIA_BUS_FMT_YUV12_1X36;
 
 		output_fmts[i++] = MEDIA_BUS_FMT_RGB121212_1X36;
 	}
 
 	if (max_bpc >= 10 && info->bpc >= 10) {
-		if (info->color_formats & DRM_COLOR_FORMAT_YCRCB422)
+		if (info->color_formats & DRM_COLOR_FORMAT_YCBCR422)
 			output_fmts[i++] = MEDIA_BUS_FMT_UYVY10_1X20;
 
-		if (info->color_formats & DRM_COLOR_FORMAT_YCRCB444)
+		if (info->color_formats & DRM_COLOR_FORMAT_YCBCR444)
 			output_fmts[i++] = MEDIA_BUS_FMT_YUV10_1X30;
 
 		output_fmts[i++] = MEDIA_BUS_FMT_RGB101010_1X30;
 	}
 
-	if (info->color_formats & DRM_COLOR_FORMAT_YCRCB422)
+	if (info->color_formats & DRM_COLOR_FORMAT_YCBCR422)
 		output_fmts[i++] = MEDIA_BUS_FMT_UYVY8_1X16;
 
-	if (info->color_formats & DRM_COLOR_FORMAT_YCRCB444)
+	if (info->color_formats & DRM_COLOR_FORMAT_YCBCR444)
 		output_fmts[i++] = MEDIA_BUS_FMT_YUV8_1X24;
-
-	/* Default 8bit RGB fallback */
-	output_fmts[i++] = MEDIA_BUS_FMT_RGB888_1X24;
 
 	*num_output_fmts = i;
 
@@ -2954,7 +2956,7 @@ static void dw_hdmi_bridge_mode_set(struct drm_bridge *bridge,
 	mutex_lock(&hdmi->mutex);
 
 	/* Store the display mode for plugin/DKMS poweron events */
-	memcpy(&hdmi->previous_mode, mode, sizeof(hdmi->previous_mode));
+	drm_mode_copy(&hdmi->previous_mode, mode);
 
 	mutex_unlock(&hdmi->mutex);
 }
@@ -3102,6 +3104,7 @@ static irqreturn_t dw_hdmi_irq(int irq, void *dev_id)
 {
 	struct dw_hdmi *hdmi = dev_id;
 	u8 intr_stat, phy_int_pol, phy_pol_mask, phy_stat;
+	enum drm_connector_status status = connector_status_unknown;
 
 	intr_stat = hdmi_readb(hdmi, HDMI_IH_PHY_STAT0);
 	phy_int_pol = hdmi_readb(hdmi, HDMI_PHY_POL0);
@@ -3140,13 +3143,15 @@ static irqreturn_t dw_hdmi_irq(int irq, void *dev_id)
 			cec_notifier_phys_addr_invalidate(hdmi->cec_notifier);
 			mutex_unlock(&hdmi->cec_notifier_mutex);
 		}
+
+		if (phy_stat & HDMI_PHY_HPD)
+			status = connector_status_connected;
+
+		if (!(phy_stat & (HDMI_PHY_HPD | HDMI_PHY_RX_SENSE)))
+			status = connector_status_disconnected;
 	}
 
-	if (intr_stat & HDMI_IH_PHY_STAT0_HPD) {
-		enum drm_connector_status status = phy_int_pol & HDMI_PHY_HPD
-						 ? connector_status_connected
-						 : connector_status_disconnected;
-
+	if (status != connector_status_unknown) {
 		dev_dbg(hdmi->dev, "EVENT=%s\n",
 			status == connector_status_connected ?
 			"plugin" : "plugout");
@@ -3555,6 +3560,7 @@ struct dw_hdmi *dw_hdmi_probe(struct platform_device *pdev,
 	hdmi->bridge.funcs = &dw_hdmi_bridge_funcs;
 	hdmi->bridge.ops = DRM_BRIDGE_OP_DETECT | DRM_BRIDGE_OP_EDID
 			 | DRM_BRIDGE_OP_HPD;
+	hdmi->bridge.interlace_allowed = true;
 #ifdef CONFIG_OF
 	hdmi->bridge.of_node = pdev->dev.of_node;
 #endif

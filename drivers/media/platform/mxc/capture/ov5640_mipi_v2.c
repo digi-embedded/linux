@@ -424,7 +424,7 @@ static DEFINE_MUTEX(ov5640_mutex);
 
 static int ov5640_probe(struct i2c_client *adapter,
 				const struct i2c_device_id *device_id);
-static int ov5640_remove(struct i2c_client *client);
+static void ov5640_remove(struct i2c_client *client);
 
 static s32 ov5640_read_reg(struct ov5640 *sensor, u16 reg, u8 *val);
 static s32 ov5640_write_reg(struct ov5640 *sensor, u16 reg, u8 val);
@@ -1838,7 +1838,7 @@ static int ov5640_probe(struct i2c_client *client,
  * @param client            struct i2c_client *
  * @return  Error code indicating success or failure
  */
-static int ov5640_remove(struct i2c_client *client)
+static void ov5640_remove(struct i2c_client *client)
 {
 	struct v4l2_subdev *sd = i2c_get_clientdata(client);
 	struct ov5640 *sensor = to_ov5640(client);
@@ -1850,8 +1850,6 @@ static int ov5640_remove(struct i2c_client *client)
 	ov5640_power_down(sensor, 1);
 
 	ov5640_regualtor_disable();
-
-	return 0;
 }
 
 module_i2c_driver(ov5640_i2c_driver);

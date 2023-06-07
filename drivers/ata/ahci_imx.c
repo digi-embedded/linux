@@ -427,7 +427,7 @@ static int read_adc_sum(void *dev, u16 rtune_ctl_reg, void __iomem * mmio)
 }
 
 /* SATA AHCI temperature monitor */
-static int sata_ahci_read_temperature(void *dev, int *temp)
+static int __sata_ahci_read_temperature(void *dev, int *temp)
 {
 	u16 mpll_test_reg, rtune_ctl_reg, dac_ctl_reg, read_sum;
 	u32 str1, str2, str3, str4;
@@ -516,6 +516,11 @@ static int sata_ahci_read_temperature(void *dev, int *temp)
 	return 0;
 }
 
+static int sata_ahci_read_temperature(struct thermal_zone_device *tz, int *temp)
+{
+	return __sata_ahci_read_temperature(tz->devdata, temp);
+}
+
 static ssize_t sata_ahci_show_temp(struct device *dev,
 				   struct device_attribute *da,
 				   char *buf)
@@ -523,14 +528,14 @@ static ssize_t sata_ahci_show_temp(struct device *dev,
 	unsigned int temp = 0;
 	int err;
 
-	err = sata_ahci_read_temperature(dev, &temp);
+	err = __sata_ahci_read_temperature(dev, &temp);
 	if (err < 0)
 		return err;
 
 	return sprintf(buf, "%u\n", temp);
 }
 
-static const struct thermal_zone_of_device_ops fsl_sata_ahci_of_thermal_ops = {
+static const struct thermal_zone_device_ops fsl_sata_ahci_of_thermal_ops = {
 	.get_temp = sata_ahci_read_temperature,
 };
 
@@ -1068,7 +1073,7 @@ static const struct of_device_id imx_ahci_of_match[] = {
 	{ .compatible = "fsl,imx6q-ahci", .data = (void *)AHCI_IMX6Q },
 	{ .compatible = "fsl,imx6qp-ahci", .data = (void *)AHCI_IMX6QP },
 	{ .compatible = "fsl,imx8qm-ahci", .data = (void *)AHCI_IMX8QM },
-	{},
+	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, imx_ahci_of_match);
 
@@ -1469,7 +1474,7 @@ static int imx_ahci_probe(struct platform_device *pdev)
 	imxpriv->ahci_pdev = pdev;
 	imxpriv->no_device = false;
 	imxpriv->first_time = true;
-	imxpriv->type = (enum ahci_imx_type)of_id->data;
+	imxpriv->type = (unsigned long)of_id->data;
 
 	imxpriv->sata_clk = devm_clk_get(dev, "sata");
 	if (IS_ERR(imxpriv->sata_clk)) {
@@ -1532,8 +1537,8 @@ static int imx_ahci_probe(struct platform_device *pdev)
 			ret = PTR_ERR(hwmon_dev);
 			goto disable_clk;
 		}
-		devm_thermal_zone_of_sensor_register(hwmon_dev, 0, hwmon_dev,
-					     &fsl_sata_ahci_of_thermal_ops);
+		devm_thermal_of_zone_register(hwmon_dev, 0, hwmon_dev,
+					      &fsl_sata_ahci_of_thermal_ops);
 		dev_info(dev, "%s: sensor 'sata_ahci'\n", dev_name(hwmon_dev));
 	}
 
@@ -1571,24 +1576,6 @@ static int imx_ahci_probe(struct platform_device *pdev)
 		writel(reg_val, hpriv->mmio + IMX_TIMER1MS);
 	}
 
-	/*
-	 * Due to IP bug on the Synopsis 3.00 SATA version,
-	 * which is present on mx6q, and not on mx53,
-	 * we should use sg_tablesize = 1 for reliable operation
-	 */
-	if (imxpriv->type == AHCI_IMX6Q || imxpriv->type == AHCI_IMX6QP) {
-		dma_addr_t dma;
-
-		ahci_platform_sht.sg_tablesize = 1;
-
-		sg_io_buffer_hack = dma_alloc_coherent(dev, 0x10000,
-				&dma, GFP_KERNEL);
-		if (!sg_io_buffer_hack) {
-			ret = -ENOMEM;
-			goto disable_sata;
-		}
-	}
-
 	if (imxpriv->type == AHCI_IMX8QM && bist_enable) {
 		dev_info(dev, "AHCI SATA compliance test patterns.\n");
 		ret = clk_prepare_enable(imxpriv->phy_pclk0);
@@ -1607,6 +1594,23 @@ static int imx_ahci_probe(struct platform_device *pdev)
 			ret = -EINVAL;
 		dev_info(dev, "Register AHCI SATA BIST sysfile callback.\n");
 	} else {
+		/*
+		 * Due to IP bug on the Synopsis 3.00 SATA version,
+		 * which is present on mx6q, and not on mx53,
+		 * we should use sg_tablesize = 1 for reliable operation
+		 */
+		if (imxpriv->type == AHCI_IMX6Q || imxpriv->type == AHCI_IMX6QP) {
+			dma_addr_t dma;
+
+			ahci_platform_sht.sg_tablesize = 1;
+
+			sg_io_buffer_hack = dma_alloc_coherent(dev, 0x10000,
+					&dma, GFP_KERNEL);
+			if (!sg_io_buffer_hack) {
+				ret = -ENOMEM;
+				goto disable_sata;
+			}
+		}
 
 		ret = ahci_platform_init_host(pdev, hpriv, &ahci_imx_port_info,
 					      &ahci_platform_sht);
@@ -1693,4 +1697,4 @@ device_initcall(imx_ahci_init);
 MODULE_DESCRIPTION("Freescale i.MX AHCI SATA platform driver");
 MODULE_AUTHOR("Richard Zhu <Hong-Xing.Zhu@freescale.com>");
 MODULE_LICENSE("GPL");
-MODULE_ALIAS("ahci:imx");
+MODULE_ALIAS("platform:" DRV_NAME);

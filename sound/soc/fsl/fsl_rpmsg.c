@@ -137,7 +137,8 @@ static struct snd_soc_dai_driver fsl_rpmsg_dai = {
 };
 
 static const struct snd_soc_component_driver fsl_component = {
-	.name           = "fsl-rpmsg",
+	.name			= "fsl-rpmsg",
+	.legacy_dai_naming	= 1,
 };
 
 static const struct fsl_rpmsg_soc_data imx7ulp_data = {
@@ -199,6 +200,7 @@ static int fsl_rpmsg_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	rpmsg->soc_data = of_device_get_match_data(&pdev->dev);
+
 	if (rpmsg->soc_data) {
 		dai_drv->playback.rates = rpmsg->soc_data->rates;
 		dai_drv->capture.rates = rpmsg->soc_data->rates;

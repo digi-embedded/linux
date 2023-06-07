@@ -10,6 +10,7 @@
 #include <linux/interrupt.h>
 #include <linux/platform_device.h>
 #include <drm/drm_fourcc.h>
+#include <drm/drm_framebuffer.h>
 #include <drm/drm_rect.h>
 
 #include "dcss-dev.h"

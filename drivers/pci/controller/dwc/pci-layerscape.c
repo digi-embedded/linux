@@ -3,7 +3,7 @@
  * PCIe host controller driver for Freescale Layerscape SoCs
  *
  * Copyright (C) 2014 Freescale Semiconductor.
- * Copyright 2020 NXP
+ * Copyright 2021 NXP
  *
  * Author: Minghuan Lian <Minghuan.Lian@freescale.com>
  */
@@ -66,7 +66,6 @@ struct ls_pcie_host_pm_ops {
 struct ls_pcie_drvdata {
 	const u32 pf_off;
 	const u32 lut_off;
-	const struct dw_pcie_host_ops *ops;
 	const struct ls_pcie_host_pm_ops *pm_ops;
 };
 
@@ -328,7 +327,7 @@ static void ls_pcie_set_dstate(struct ls_pcie *pcie, u32 dstate)
 	dw_pcie_writew_dbi(pci, offset + PCI_PM_CTRL, val);
 }
 
-static int ls_pcie_host_init(struct pcie_port *pp)
+static int ls_pcie_host_init(struct dw_pcie_rp *pp)
 {
 	struct dw_pcie *pci = to_dw_pcie_from_pp(pp);
 	struct ls_pcie *pcie = to_ls_pcie(pci);
@@ -340,6 +339,15 @@ static int ls_pcie_host_init(struct pcie_port *pp)
 	dw_pcie_dbi_ro_wr_dis(pci);
 
 	ls_pcie_drop_msg_tlp(pcie);
+
+	if (dw_pcie_link_up(pci)) {
+		dev_dbg(pci->dev, "Endpoint is present\n");
+		pcie->ep_presence = true;
+	}
+
+	if (pcie->drvdata->pm_ops && pcie->drvdata->pm_ops->pm_init &&
+	    !pcie->drvdata->pm_ops->pm_init(pcie))
+		pcie->pm_support = true;
 
 	return 0;
 }
@@ -367,18 +375,15 @@ static const struct dw_pcie_host_ops ls_pcie_host_ops = {
 };
 
 static const struct ls_pcie_drvdata ls1021a_drvdata = {
-	.ops = &ls_pcie_host_ops,
 	.pm_ops = &ls1021a_pcie_host_pm_ops,
 };
 
 static const struct ls_pcie_drvdata ls1043a_drvdata = {
-	.ops = &ls_pcie_host_ops,
 	.lut_off = 0x10000,
 	.pm_ops = &ls1043a_pcie_host_pm_ops,
 };
 
 static const struct ls_pcie_drvdata layerscape_drvdata = {
-	.ops = &ls_pcie_host_ops,
 	.lut_off = 0x80000,
 	.pf_off = 0xc0000,
 	.pm_ops = &ls_pcie_host_pm_ops,
@@ -403,7 +408,6 @@ static int ls_pcie_probe(struct platform_device *pdev)
 	struct dw_pcie *pci;
 	struct ls_pcie *pcie;
 	struct resource *dbi_base;
-	int ret;
 
 	pcie = devm_kzalloc(dev, sizeof(*pcie), GFP_KERNEL);
 	if (!pcie)
@@ -416,7 +420,7 @@ static int ls_pcie_probe(struct platform_device *pdev)
 	pcie->drvdata = of_device_get_match_data(dev);
 
 	pci->dev = dev;
-	pci->pp.ops = pcie->drvdata->ops;
+	pci->pp.ops = &ls_pcie_host_ops;
 
 	pcie->pci = pci;
 
@@ -438,20 +442,7 @@ static int ls_pcie_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, pcie);
 
-	ret = dw_pcie_host_init(&pci->pp);
-	if (ret)
-		return ret;
-
-	if (dw_pcie_link_up(pci)) {
-		dev_dbg(pci->dev, "Endpoint is present\n");
-		pcie->ep_presence = true;
-	}
-
-	if (pcie->drvdata->pm_ops && pcie->drvdata->pm_ops->pm_init &&
-	    !pcie->drvdata->pm_ops->pm_init(pcie))
-		pcie->pm_support = true;
-
-	return 0;
+	return dw_pcie_host_init(&pci->pp);
 }
 
 static bool ls_pcie_pm_check(struct ls_pcie *pcie)
@@ -506,7 +497,7 @@ static int ls_pcie_resume_noirq(struct device *dev)
 
 	pcie->drvdata->pm_ops->exit_from_l2(pcie);
 
-	/* delay 10ms to access EP */
+	/* delay 10 ms to access EP */
 	mdelay(10);
 
 	ret = ls_pcie_host_init(&pci->pp);

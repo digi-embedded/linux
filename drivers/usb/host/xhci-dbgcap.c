@@ -988,7 +988,7 @@ xhci_alloc_dbc(struct device *dev, void __iomem *base, const struct dbc_driver *
 	dbc->driver = driver;
 
 	if (readl(&dbc->regs->control) & DBC_CTRL_DBC_ENABLE)
-		return NULL;
+		goto err;
 
 	INIT_DELAYED_WORK(&dbc->event_work, xhci_dbc_handle_events);
 	spin_lock_init(&dbc->lock);
@@ -1087,3 +1087,13 @@ int xhci_dbc_resume(struct xhci_hcd *xhci)
 	return ret;
 }
 #endif /* CONFIG_PM */
+
+int xhci_dbc_init(void)
+{
+	return dbc_tty_init();
+}
+
+void xhci_dbc_exit(void)
+{
+	dbc_tty_exit();
+}

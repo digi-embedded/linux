@@ -2,7 +2,7 @@
  *
  * Felix Switch TSN driver
  *
- * Copyright 2020-2021 NXP Semiconductors
+ * Copyright 2020-2022 NXP
  */
 
 #ifndef _MSCC_FELIX_SWITCH_TSN_H_

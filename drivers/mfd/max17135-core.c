@@ -180,7 +180,7 @@ err1:
 }
 
 
-static int max17135_remove(struct i2c_client *i2c)
+static void max17135_remove(struct i2c_client *i2c)
 {
 	struct max17135 *max17135 = i2c_get_clientdata(i2c);
 
@@ -188,8 +188,6 @@ static int max17135_remove(struct i2c_client *i2c)
 
 	if (!IS_ERR(gpio_regulator))
 		regulator_disable(gpio_regulator);
-
-	return 0;
 }
 
 /* Return 0 if detection is successful, -ENODEV otherwise */

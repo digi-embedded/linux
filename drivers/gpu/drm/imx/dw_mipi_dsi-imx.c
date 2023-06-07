@@ -5,6 +5,7 @@
 
 #include <linux/clk.h>
 #include <linux/component.h>
+#include <linux/media-bus-format.h>
 #include <linux/module.h>
 #include <linux/of_device.h>
 #include <linux/phy/phy.h>
@@ -77,7 +78,9 @@ __dw_mipi_dsi_imx_mode_valid(void *priv_data,
 
 static enum drm_mode_status
 dw_mipi_dsi_imx_mode_valid(void *priv_data,
-			   const struct drm_display_mode *mode)
+			   const struct drm_display_mode *mode,
+			   unsigned long mode_flags,
+			   u32 lanes, u32 format)
 {
 	union phy_configure_opts phy_cfg;
 

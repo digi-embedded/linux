@@ -461,7 +461,6 @@ static int imx_rpmsg_gpio_probe(struct platform_device *pdev)
 	/* generate one new irq domain */
 	port->chip = imx_rpmsg_irq_chip;
 	port->chip.name = kasprintf(GFP_KERNEL, "rpmsg-irq-port-%d", port->idx);
-	port->chip.parent_device = NULL;
 
 	irq_base = irq_alloc_descs(-1, 0, IMX_RPMSG_GPIO_PER_PORT,
 				   numa_node_id());

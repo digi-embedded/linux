@@ -62,7 +62,7 @@
 		<&clk IMX8MP_AUDIO_PLL2_OUT>;
 	clock-names = "bus", "mclk0", "mclk1", "mclk2", "mclk3", "pll8k", "pll11k";
 	fsl,sai-asynchronous;
-	fsl,dataline,dsd = <4 0xf 0xf>;
+	fsl,dataline = <2 0xf 0xf>;
 	status = "okay";
 };
 
