@@ -8,3 +8,8 @@
 
 / {
 };
+
+&i2c8 {
+	/delete-property/dmas;
+	/delete-property/dma-names;
+};
