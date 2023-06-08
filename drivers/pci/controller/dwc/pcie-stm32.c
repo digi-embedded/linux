@@ -274,6 +274,51 @@ static struct platform_driver stm32_pcie_driver = {
 	},
 };
 
+static bool is_stm32_pcie_driver(struct device *dev)
+{
+	/* PCI bridge */
+	dev = get_device(dev);
+
+	/* Platform driver */
+	dev = get_device(dev->parent);
+
+	return (dev->driver == &stm32_pcie_driver.driver);
+}
+
+static void quirk_stm32_pcie_limit_mrrs(struct pci_dev *pci)
+{
+	struct pci_dev *root_port;
+	struct pci_bus *bus = pci->bus;
+	int readrq;
+	int mps;
+
+	if (pci_is_root_bus(bus))
+		return;
+
+	root_port = pcie_find_root_port(pci);
+
+	if (WARN_ON(!root_port) || !is_stm32_pcie_driver(root_port->dev.parent))
+		return;
+
+	mps = pcie_get_mps(root_port);
+
+	/*
+	 * STM32 PCI controller has a h/w performance limitation on the AXI DDR requests.
+	 * Limit the maximum read request size to 256B on all downstream devices.
+	 */
+	readrq = pcie_get_readrq(pci);
+	if (readrq > 256) {
+		int mrrs = min(mps, 256);
+
+		pcie_set_readrq(pci, mrrs);
+
+		pci_info(pci, "Max Read Rq set to %4d (was %4d)\n", mrrs, readrq);
+	}
+}
+
+DECLARE_PCI_FIXUP_HEADER(PCI_ANY_ID, PCI_ANY_ID,
+			 quirk_stm32_pcie_limit_mrrs);
+
 module_platform_driver(stm32_pcie_driver);
 MODULE_DESCRIPTION("STM32MP25 PCIe Controller driver");
 MODULE_LICENSE("GPL");
