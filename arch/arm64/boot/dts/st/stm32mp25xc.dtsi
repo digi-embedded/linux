@@ -5,9 +5,17 @@
  */
 #include <dt-bindings/bus/stm32mp25_sys_bus.h>
 
-/ {
-	soc {
-		rifsc: rifsc@42080000 {
-		};
+&rifsc {
+	cryp1: crypto@42030000 {
+		compatible = "st,stm32mp1-cryp";
+		reg = <0x42030000 0x1000>;
+		interrupts = <GIC_SPI 144 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&rcc CK_BUS_CRYP1>;
+		resets = <&rcc CRYP1_R>;
+		dmas = <&hpdma 4 0x40 0x3021 0x0>,
+		       <&hpdma 5 0x43 0x3012 0x0>;
+		dma-names = "in", "out";
+		feature-domains = <&rifsc STM32MP25_RIFSC_CRYP1_ID>;
+		status = "disabled";
 	};
 };
