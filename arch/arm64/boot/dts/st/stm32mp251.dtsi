@@ -2308,7 +2308,7 @@
 		};
 
 		rtc: rtc@46000000 {
-			compatible = "st,stm32mp1-rtc";
+			compatible = "st,stm32mp25-rtc";
 			reg = <0x46000000 0x400>;
 			clocks = <&scmi_clk CK_SCMI_RTC>,
 				 <&scmi_clk CK_SCMI_RTCCK>;
