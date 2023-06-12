@@ -160,7 +160,7 @@ properties:
       - items:
           - enum:
               - st,stm32mp257f-dk
-              - st,stm32mp257f-ev
+              - st,stm32mp257f-ev1
               - st,stm32mp257f-ev-revB
           - enum:
               - st,stm32mp257
