@@ -5,5 +5,5 @@ dtb-$(CONFIG_ARCH_STM32) += \
 
 ifeq ($(CONFIG_STM32MP25_REVA), y)
 	dtb-$(CONFIG_ARCH_STM32) += \
-		stm32mp257f-ev-revB.dtb
+		stm32mp257f-ev1-revB.dtb
 endif

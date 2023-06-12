@@ -14,11 +14,11 @@
 #include "stm32mp25xf.dtsi"
 #include "stm32mp25-pinctrl.dtsi"
 #include "stm32mp25xxai-pinctrl.dtsi"
-#include "stm32mp257f-ev-ca35tdcid-resmem.dtsi"
+#include "stm32mp257f-ev1-ca35tdcid-resmem.dtsi"
 
 / {
-	model = "STMicroelectronics STM32MP257F-EV-revB Evaluation Board";
-	compatible = "st,stm32mp257f-ev-revB", "st,stm32mp257-revA";
+	model = "STMicroelectronics STM32MP257F-EV1-revB Evaluation Board";
+	compatible = "st,stm32mp257f-ev1-revB", "st,stm32mp257-revA";
 
 	aliases {
 		ethernet0 = &eth2;
