@@ -218,6 +218,10 @@
 	pinctrl-0 = <&pinctrl_enet>;
 	phy-mode = "rgmii";
 	phy-reset-gpios = <&gpio1 25 GPIO_ACTIVE_HIGH>;
+	rxc-skew-ps = <1800>;
+	rxdv-skew-ps = <0>;
+	txc-skew-ps = <1800>;
+	txen-skew-ps = <0>;
 	phy-reset-duration = <10>;
 	phy-reset-wait = <1>;
 	phy-supply = <&ldo4>;
