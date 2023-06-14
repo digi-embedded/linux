@@ -4959,6 +4959,8 @@ static void brcmf_sdio_firmware_callback(struct device *dev, int err,
 					   CY_4373_MESBUSYCTRL, &err);
 			break;
 		case SDIO_DEVICE_ID_BROADCOM_CYPRESS_43012:
+		case SDIO_DEVICE_ID_BROADCOM_CYPRESS_43022:
+		case SDIO_DEVICE_ID_CYPRESS_43022:
 			brcmf_dbg(INFO, "set F2 watermark to 0x%x*4 bytes\n",
 				  CY_43012_F2_WATERMARK);
 			brcmf_sdiod_writeb(sdiod, SBSDIO_WATERMARK,
@@ -5110,7 +5112,9 @@ static void brcmf_sdio_firmware_callback(struct device *dev, int err,
 	}
 
 	/* Register for ULP events */
-	if (sdiod->func1->device == SDIO_DEVICE_ID_BROADCOM_CYPRESS_43012)
+	if (sdiod->func1->device == SDIO_DEVICE_ID_BROADCOM_CYPRESS_43012 ||
+	    sdiod->func1->device == SDIO_DEVICE_ID_BROADCOM_CYPRESS_43022 ||
+	    sdiod->func1->device == SDIO_DEVICE_ID_CYPRESS_43022)
 		brcmf_fweh_register(bus_if->drvr, BRCMF_E_ULP,
 				    brcmf_ulp_event_notify);
 
