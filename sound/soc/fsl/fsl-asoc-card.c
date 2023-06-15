@@ -28,6 +28,7 @@
 #include "../codecs/wm8960.h"
 #include "../codecs/wm8994.h"
 #include "../codecs/tlv320aic31xx.h"
+#include "../codecs/max98088.h"
 
 #define CS427x_SYSCLK_MCLK 0
 
@@ -49,6 +50,7 @@ enum fsl_asoc_card_type {
 	CARD_WM8524,
 	CARD_SI476X,
 	CARD_WM8958,
+	CARD_MAX98088,
 };
 
 /**
@@ -380,7 +382,8 @@ static int fsl_asoc_card_startup(struct snd_pcm_substream *substream)
 
 	if ((priv->card_type == CARD_WM8960 ||
 	     priv->card_type == CARD_WM8962 ||
-	     priv->card_type == CARD_WM8958)
+	     priv->card_type == CARD_WM8958 ||
+	     priv->card_type == CARD_MAX98088)
 	    && !priv->is_codec_master) {
 		support_rates[0] = 8000;
 		support_rates[1] = 16000;
@@ -870,6 +873,12 @@ static int fsl_asoc_card_probe(struct platform_device *pdev)
 		priv->card.dapm_routes = NULL;
 		priv->card.num_dapm_routes = 0;
 		priv->card_type = CARD_WM8958;
+	} else if (of_device_is_compatible(np, "fsl,imx-audio-max98088")) {
+		codec_dai_name = "HiFi";
+		priv->dai_fmt |= SND_SOC_DAIFMT_CBC_CFC;
+		priv->card.dapm_routes = NULL;
+		priv->card.num_dapm_routes = 0;
+		priv->card_type = CARD_MAX98088;
 	} else {
 		dev_err(&pdev->dev, "unknown Device Tree compatible\n");
 		ret = -EINVAL;
@@ -1194,6 +1203,7 @@ static const struct of_device_id fsl_asoc_card_dt_ids[] = {
 	{ .compatible = "fsl,imx-audio-wm8524", },
 	{ .compatible = "fsl,imx-audio-si476x", },
 	{ .compatible = "fsl,imx-audio-wm8958", },
+	{ .compatible = "fsl,imx-audio-max98088", },
 	{}
 };
 MODULE_DEVICE_TABLE(of, fsl_asoc_card_dt_ids);
