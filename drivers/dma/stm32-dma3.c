@@ -1391,10 +1391,6 @@ static int stm32_dma3_alloc_chan_resources(struct dma_chan *c)
 	u32 id = chan->id, csemcr, ccid;
 	int ret;
 
-	/* Check if chan is reserved (Secure or !CID-filtered or CID-filtered != CID1) */
-	if (ddata->chan_reserved & BIT(chan->id))
-		return -EPERM;
-
 	ret = pm_runtime_resume_and_get(ddata->dma_dev.dev);
 	if (ret < 0)
 		return ret;
@@ -1954,10 +1950,6 @@ static bool stm32_dma3_filter_fn(struct dma_chan *c, void *fn_param)
 	dev_dbg(c->device->dev, "%s(%s): req_line=%d ch_conf=%08x tr_conf=%08x tr_conf_ext=%08x\n",
 		__func__, dma_chan_name(c),
 		conf->req_line, conf->ch_conf, conf->tr_conf, conf->tr_conf_ext);
-
-	/* Check if chan is reserved (Secure or !CID-filtered or CID-filtered != CID1) */
-	if (ddata->chan_reserved & BIT(chan->id))
-		return false;
 
 	if (!of_property_read_u32(c->device->dev->of_node, "dma-channel-mask", &mask))
 		if (!(mask & BIT(chan->id)))
