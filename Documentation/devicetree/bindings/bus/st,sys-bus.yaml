@@ -70,6 +70,11 @@ examples:
     // - same goes for rng1.
     // Access rights are verified before creating devices.
 
+    #include <dt-bindings/interrupt-controller/arm-gic.h>
+    #include <dt-bindings/clock/stm32mp1-clks.h>
+    #include <dt-bindings/reset/stm32mp1-resets.h>
+    #include <dt-bindings/bus/stm32mp15_sys_bus.h>
+
     etzpc: etzpc@0x5C007000 {
         compatible = "st,stm32mp15-sys-bus";
         reg = <0x5c007000 0x400>;
