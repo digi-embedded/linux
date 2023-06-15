@@ -107,7 +107,9 @@ examples:
         reg = <0x5000d000 0x400>;
     };
 
+  - |
     //Example 2
+    #include <dt-bindings/interrupt-controller/arm-gic.h>
     exti2: interrupt-controller@5000d000 {
         compatible = "st,stm32mp1-exti", "syscon";
         interrupt-controller;
@@ -125,6 +127,7 @@ examples:
         };
     };
 
+  - |
     //Example 3
     exti3: interrupt-controller@40013c00 {
         compatible = "st,stm32-exti";
