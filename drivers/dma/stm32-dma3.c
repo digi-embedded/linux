@@ -2309,6 +2309,13 @@ err_clk_disable:
 	return ret;
 }
 
+static int stm32_dma3_remove(struct platform_device *pdev)
+{
+	pm_runtime_disable(&pdev->dev);
+
+	return 0;
+}
+
 static int __maybe_unused stm32_dma3_runtime_suspend(struct device *dev)
 {
 	struct stm32_dma3_ddata *ddata = dev_get_drvdata(dev);
@@ -2343,6 +2350,7 @@ static const struct dev_pm_ops stm32_dma3_pm_ops = {
 
 static struct platform_driver stm32_dma3_driver = {
 	.probe = stm32_dma3_probe,
+	.remove = stm32_dma3_remove,
 	.driver = {
 		.name = "stm32-dma3",
 		.of_match_table = stm32_dma3_of_match,
