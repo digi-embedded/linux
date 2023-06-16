@@ -399,7 +399,6 @@ struct stm32_dma3_ddata {
 	struct stm32_dma3_chan *chans;
 	u32 dma_channels;
 	u32 dma_requests;
-	u32 chan_reserved;
 #ifdef CONFIG_STM32MP25_REVA
 	u32 max_burst_length;
 #endif
@@ -2021,12 +2020,12 @@ static struct dma_chan *stm32_dma3_of_xlate(struct of_phandle_args *dma_spec, st
 	return c;
 }
 
-static void stm32_dma3_check_rif(struct stm32_dma3_ddata *ddata)
+static u32 stm32_dma3_check_rif(struct stm32_dma3_ddata *ddata)
 {
-	u32 mask = 0, i, ccidcfgr, invalid_cid = 0;
+	u32 chan_reserved, mask = 0, i, ccidcfgr, invalid_cid = 0;
 
 	/* reserve Secure channels */
-	ddata->chan_reserved = readl_relaxed(ddata->base + STM32_DMA3_SECCFGR);
+	chan_reserved = readl_relaxed(ddata->base + STM32_DMA3_SECCFGR);
 
 	of_property_read_u32(ddata->dma_dev.dev->of_node, "dma-channel-mask", &mask);
 
@@ -2042,27 +2041,29 @@ static void stm32_dma3_check_rif(struct stm32_dma3_ddata *ddata)
 		if (!(ccidcfgr & CCIDCFGR_CFEN)) { /* !CID-filtered */
 			invalid_cid |= BIT(i);
 			if (!(mask & BIT(i)))
-				ddata->chan_reserved |= BIT(i);
+				chan_reserved |= BIT(i);
 		} else { /* CID-filtered */
 			if (!(ccidcfgr & CCIDCFGR_SEM_EN)) { /* Static CID mode */
 				if (FIELD_GET(CCIDCFGR_SCID, ccidcfgr) != CCIDCFGR_CID1)
-					ddata->chan_reserved |= BIT(i);
+					chan_reserved |= BIT(i);
 			} else { /* Semaphore mode */
 				if (!FIELD_GET(CCIDCFGR_SEM_WLIST_CID1, ccidcfgr))
-					ddata->chan_reserved |= BIT(i);
+					chan_reserved |= BIT(i);
 				ddata->chans[i].semaphore_mode = true;
 			}
 		}
 		dev_dbg(ddata->dma_dev.dev, "chan%d: %s mode, %s\n", i,
 			!(ccidcfgr & CCIDCFGR_CFEN) ? "!CID-filtered" :
 			ddata->chans[i].semaphore_mode ? "Semaphore" : "Static CID",
-			(ddata->chan_reserved & BIT(i)) ? "denied" :
+			(chan_reserved & BIT(i)) ? "denied" :
 			mask & BIT(i) ? "force allowed" : "allowed");
 	}
 
 	if (invalid_cid)
 		dev_warn(ddata->dma_dev.dev, "chan%*pbl have invalid CID configuration\n",
 			 ddata->dma_channels, &invalid_cid);
+
+	return chan_reserved;
 }
 
 static const struct of_device_id stm32_dma3_of_match[] = {
@@ -2079,7 +2080,7 @@ static int stm32_dma3_probe(struct platform_device *pdev)
 	struct stm32_dma3_chan *chan;
 	struct dma_device *dma_dev;
 	struct resource *res;
-	u32 i, j, hwcfgr[4], verr;
+	u32 chan_reserved, i, j, hwcfgr[4], verr;
 	int ret;
 
 	ddata = devm_kzalloc(&pdev->dev, sizeof(*ddata), GFP_KERNEL);
@@ -2211,9 +2212,9 @@ static int stm32_dma3_probe(struct platform_device *pdev)
 		goto err_clk_disable;
 	}
 
-	stm32_dma3_check_rif(ddata);
+	chan_reserved = stm32_dma3_check_rif(ddata);
 
-	if (ddata->chan_reserved == GENMASK(ddata->dma_channels - 1, 0)) {
+	if (chan_reserved == GENMASK(ddata->dma_channels - 1, 0)) {
 		dev_err(&pdev->dev, "No channel available, abort registration\n");
 		ret = -ENODEV;
 		goto err_clk_disable;
@@ -2254,7 +2255,7 @@ static int stm32_dma3_probe(struct platform_device *pdev)
 
 		chan = &ddata->chans[i];
 
-		if (ddata->chan_reserved & BIT(i))
+		if (chan_reserved & BIT(i))
 			continue;
 
 		chan->vchan.desc_free = stm32_dma3_chan_vdesc_free;
