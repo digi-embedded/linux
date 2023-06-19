@@ -107,7 +107,7 @@
 
 /* Sleep & timeout for pll lock/unlock */
 #define SLEEP_US	1000
-#define TIMEOUT_US	20000000
+#define TIMEOUT_US	200000
 
 #define PHY_SLV_OFS	0x100
 
