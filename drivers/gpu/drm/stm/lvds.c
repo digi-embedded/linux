@@ -19,6 +19,7 @@
 #include <linux/media-bus-format.h>
 #include <linux/module.h>
 #include <linux/of_device.h>
+#include <linux/reset.h>
 
 /* LVDS Host registers */
 #define LVDS_CR		0x0000  /* configuration register */
@@ -1069,6 +1070,7 @@ static int lvds_probe(struct platform_device *pdev)
 	struct device_node *port1, *port2, *remote;
 	struct stm_lvds *lvds;
 	int ret, dual_link;
+	struct reset_control *rstc;
 
 	DRM_DEBUG_DRIVER("Probing LVDS driver...\n");
 
@@ -1104,6 +1106,17 @@ static int lvds_probe(struct platform_device *pdev)
 		DRM_ERROR("%s: Failed to enable peripheral clk\n", __func__);
 		goto err_lvds_probe;
 	}
+
+	rstc = devm_reset_control_get_exclusive(dev, NULL);
+
+	if (IS_ERR(rstc)) {
+		ret = PTR_ERR(rstc);
+		goto err_lvds_probe;
+	}
+
+	reset_control_assert(rstc);
+	usleep_range(10, 20);
+	reset_control_deassert(rstc);
 
 	port1 = of_graph_get_port_by_id(dev->of_node, 1);
 	port2 = of_graph_get_port_by_id(dev->of_node, 2);
