@@ -1188,12 +1188,6 @@ static int lvds_probe(struct platform_device *pdev)
 		goto err_lvds_probe;
 	}
 
-	ret = clk_prepare_enable(lvds->lvds_ck_px.clk);
-	if (ret) {
-		DRM_ERROR("%s: Failed to enable reference clk\n", __func__);
-		goto err_lvds_probe;
-	}
-
 	lvds->lvds_bridge.funcs = &lvds_bridge_funcs;
 	lvds->lvds_bridge.of_node = dev->of_node;
 
@@ -1203,7 +1197,6 @@ static int lvds_probe(struct platform_device *pdev)
 
 
 err_lvds_probe:
-	clk_disable_unprepare(lvds->lvds_ck_px.clk);
 	clk_disable_unprepare(lvds->pclk);
 
 	return ret;
