@@ -1,4 +1,3 @@
-ifdef 0
 dtb-$(CONFIG_ARCH_MXC) += ccimx8x-mfg-interim.dtb \
 			  ccimx8x-mfg-functional.dtb \
 			  ccimx8x-mfg-functional-wb.dtb \
@@ -24,8 +23,6 @@ dtb-$(CONFIG_ARCH_MXC) += _ov_board_flexcan1_ccimx8x-sbc-pro.dtbo \
 			  _ov_som_mfg-functional_ccimx8x.dtbo \
 			  _ov_som_quad_ccimx8x.dtbo \
 			  _ov_som_wifi_ccimx8x.dtbo \
-
-endif
 
 ccimx8m_som_overlays := _ov_som_bt_ccimx8m.dtbo \
 			_ov_som_mca-keypad_ccimx8m.dtbo \
