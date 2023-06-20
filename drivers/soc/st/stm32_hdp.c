@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) STMicroelectronics 2018 - All Rights Reserved
- * Author: Christophe Roullier <christophe.roullier@st.com>
+ * Copyright (C) STMicroelectronics 2018-2023 - All Rights Reserved
+ * Author: Christophe Roullier <christophe.roullier@foss.st.com>
  * for STMicroelectronics.
  */
 
@@ -240,3 +240,7 @@ static struct platform_driver hdp_driver = {
 };
 
 module_platform_driver(hdp_driver);
+
+MODULE_AUTHOR("Christophe Roullier <christophe.roullier@foss.st.com>");
+MODULE_DESCRIPTION("STM32 Hardware Debug Port (HDP) pin control");
+MODULE_LICENSE("GPL");
