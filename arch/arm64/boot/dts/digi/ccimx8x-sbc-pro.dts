@@ -421,6 +421,10 @@
 };
 
 /* USB_OTG2/USB_SS3 */
+&usbotg3_cdns3 {
+	status = "okay";
+};
+
 &usbotg3 {
 	status = "okay";
 };
@@ -429,7 +433,7 @@
 	status = "okay";
 };
 
-&usb3phynop1 {
+&usb3_phy {
 	status = "okay";
 };
 

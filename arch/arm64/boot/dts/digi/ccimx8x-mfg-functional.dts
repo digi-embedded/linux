@@ -424,13 +424,17 @@
 	status = "okay";
 };
 
-&usb3phynop1 {
+&usb3_phy {
+	status = "okay";
+};
+
+&usbotg3_cdns3 {
+	dr_mode = "host";
+	disable-over-current;
 	status = "okay";
 };
 
 &usbotg3 {
-	dr_mode = "host";
-	disable-over-current;
 	status = "okay";
 };
 
