@@ -19730,6 +19730,7 @@ STM32 TAMP DRIVERS
 M:	Siméon Marijon <simeon.marijon@foss.st.com>
 S:	Maintained
 F:	Documentation/devicetree/bindings/nvmem/st,stm32-tamp-nvram.yaml
+F:	drivers/nvmem/stm32-tamp-nvram.c
 
 STM32 TIMER/LPTIMER DRIVERS
 M:	Fabrice Gasnier <fabrice.gasnier@foss.st.com>
