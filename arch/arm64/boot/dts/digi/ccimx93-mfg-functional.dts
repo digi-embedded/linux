@@ -49,36 +49,6 @@
 		clock-frequency = <24000000>;
 		clock-output-names = "xtal_24MHz";
 	};
-
-	lvds_panel: lvds_panel {
-		compatible = "panel-lvds";
-		status = "okay";
-		data-mapping = "jeida-24";
-		de-high;
-		width-mm = <216>;
-		height-mm = <135>;
-
-		/* AUO G101EVN01.0 */
-		panel-timing {
-			clock-frequency = <68930000>;
-			hactive = <1280>;
-			vactive = <800>;
-			hfront-porch = <120>;
-			hback-porch = <2>;
-			hsync-len = <8>;
-			vback-porch = <10>;
-			vfront-porch = <2>;
-			vsync-len = <6>;
-			hsync-active = <1>;
-			vsync-active = <1>;
-		};
-
-		port {
-			panel_lvds_in: endpoint {
-				remote-endpoint = <&lvds_out>;
-			};
-		};
-	};
 };
 
 /* ADC - 4 channels */
@@ -118,26 +88,41 @@
 	};
 };
 
-/* LVDS interface */
-&ldb {
+/* MIPI DSI PHY */
+&dphy {
 	status = "okay";
+};
 
-	lvds-channel@0 {
+&dsi {
+	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	panel@0 {
+		compatible = "dlc,dlc0200cc904df";
 		status = "okay";
+		reg = <0>;
+		VCC-supply = <&buck4>;
+		IOVCC-supply = <&buck4>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_mipi_display>;
+		reset-gpios = <&gpio2 17 GPIO_ACTIVE_HIGH>;
 
-		port@1 {
-			reg = <1>;
-
-			lvds_out: endpoint {
-				remote-endpoint = <&panel_lvds_in>;
+		port {
+			mipi_dsi_panel_in: endpoint {
+				remote-endpoint = <&mipi_dsi_panel_out>;
 			};
 		};
 	};
-};
 
-/* LVDS PHY */
-&ldb_phy {
-	status = "okay";
+	ports {
+		port@1 {
+			reg = <1>;
+			mipi_dsi_panel_out: endpoint {
+				remote-endpoint = <&mipi_dsi_panel_in>;
+			};
+		};
+	};
 };
 
 &epxp {
@@ -146,7 +131,7 @@
 
 &lcdif {
 	status = "okay";
-	assigned-clock-rates = <498000000>, <68930000>, <400000000>, <133333333>;
+	assigned-clock-rates = <300000000>, <50000000>, <400000000>, <133333333>;
 };
 
 /* I2C3 connected to MIPI Camera connector */
@@ -400,6 +385,14 @@
 		fsl,pins = <
 			MX93_PAD_GPIO_IO02__LPI2C4_SDA				0x40000b9e
 			MX93_PAD_GPIO_IO03__LPI2C4_SCL				0x40000b9e
+		>;
+	};
+
+	/* MIPI display */
+	pinctrl_mipi_display: mipidisplay {
+		fsl,pins = <
+			/* MIPI_DSI_RESET */
+			MX93_PAD_GPIO_IO17__GPIO2_IO17				0x31e
 		>;
 	};
 
