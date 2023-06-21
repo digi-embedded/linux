@@ -2325,6 +2325,12 @@
 				boot_mode: tamp-bkp@180 {
 					reg = <0x180 0x4>;
 				};
+				rsc_tbl_addr: tamp-bkp@184 {
+					reg = <0x184 0x4>;
+				};
+				rsc_tbl_size: tamp-bkp@188 {
+					reg = <0x188 0x4>;
+				};
 			};
 
 			reboot_mode: reboot-mode {
@@ -2618,6 +2624,8 @@
 			st,syscfg-cm-state = <&power 0x204 0x0000000c>;
 			interrupt-parent = <&intc>;
 			interrupts = <GIC_SPI 4 IRQ_TYPE_LEVEL_HIGH>;
+			nvmem-cells = <&rsc_tbl_addr>, <&rsc_tbl_size>;
+			nvmem-cell-names = "rsc-tbl-addr", "rsc-tbl-size";
 
 			status = "disabled";
 		};
