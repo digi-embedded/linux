@@ -134,23 +134,26 @@
 	assigned-clock-rates = <300000000>, <50000000>, <400000000>, <133333333>;
 };
 
-/* I2C3 connected to MIPI Camera connector */
-&lpi2c3 {
+/* I2C4 connected to MIPI Camera connector */
+&lpi2c4 {
 	#address-cells = <1>;
 	#size-cells = <0>;
 	clock-frequency = <400000>;
 	pinctrl-names = "default", "sleep";
-	pinctrl-0 = <&pinctrl_lpi2c3>;
-	pinctrl-1 = <&pinctrl_lpi2c3>;
+	pinctrl-0 = <&pinctrl_lpi2c4>;
+	pinctrl-1 = <&pinctrl_lpi2c4>;
 	status = "okay";
 
 	/* MIPI-CSI camera */
 	ov5640_mipi: ov5640_mipi@3c {
 		compatible = "ovti,ov5640";
 		reg = <0x3c>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_mipi_camera>;
 		clocks = <&mipi_csi_xtal24m>;
 		clock-names = "xclk";
 		csi_id = <0>;
+		reset-gpios = <&gpio2 21 GPIO_ACTIVE_LOW>;
 		mclk = <24000000>;
 		mclk_source = <0>;
 		mipi_csi;
@@ -163,17 +166,6 @@
 			};
 		};
 	};
-};
-
-/* I2C4 - Audio codec and HDMI bridge */
-&lpi2c4 {
-	#address-cells = <1>;
-	#size-cells = <0>;
-	clock-frequency = <400000>;
-	pinctrl-names = "default", "sleep";
-	pinctrl-0 = <&pinctrl_lpi2c4>;
-	pinctrl-1 = <&pinctrl_lpi2c4>;
-	status = "okay";
 };
 
 &lpuart6 { /* console */
@@ -324,19 +316,19 @@
 		>;
 	};
 
-	/* I2C3 */
-	pinctrl_lpi2c3: lpi2c3grp {
-		fsl,pins = <
-			MX93_PAD_GPIO_IO00__LPI2C3_SDA				0x40000b9e
-			MX93_PAD_GPIO_IO01__LPI2C3_SCL				0x40000b9e
-		>;
-	};
-
 	/* I2C4 */
 	pinctrl_lpi2c4: lpi2c4grp {
 		fsl,pins = <
 			MX93_PAD_GPIO_IO02__LPI2C4_SDA				0x40000b9e
 			MX93_PAD_GPIO_IO03__LPI2C4_SCL				0x40000b9e
+		>;
+	};
+
+	/* MIPI camera */
+	pinctrl_mipi_camera: mipicamera {
+		fsl,pins = <
+			/* MIPI_CSI_RESET */
+			MX93_PAD_GPIO_IO21__GPIO2_IO21				0x31e
 		>;
 	};
 
