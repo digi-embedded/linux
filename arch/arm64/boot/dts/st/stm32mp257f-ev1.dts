@@ -182,7 +182,7 @@
 		port@0 {
 			reg = <0>;
 			dsi_in: endpoint {
-				remote-endpoint = <&ltdc_ep1_out>;
+				remote-endpoint = <&ltdc_ep0_out>;
 			};
 		};
 
@@ -379,12 +379,12 @@
 
 		ltdc_ep0_out: endpoint@0 {
 			reg = <0>;
-			remote-endpoint = <&lvds_in>;
+			remote-endpoint = <&dsi_in>;
 		};
 
 		ltdc_ep1_out: endpoint@1 {
 			reg = <1>;
-			remote-endpoint = <&dsi_in>;
+			remote-endpoint = <&lvds_in>;
 		};
 	};
 };
@@ -399,7 +399,7 @@
 		port@0 {
 			reg = <0>;
 			lvds_in: endpoint {
-				remote-endpoint = <&ltdc_ep0_out>;
+				remote-endpoint = <&ltdc_ep1_out>;
 			};
 		};
 
