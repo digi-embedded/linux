@@ -288,6 +288,7 @@ struct brcmf_cfg80211_connect_info {
 struct brcmf_cfg80211_assoc_ielen_le {
 	__le32 req_len;
 	__le32 resp_len;
+	__le32 flags;
 };
 
 struct brcmf_cfg80211_edcf_acparam {
