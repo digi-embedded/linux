@@ -314,6 +314,12 @@
 		status = "disabled";
 		adi,dsi-lanes = <4>;
 		reset-gpios = <&gpiog 14 GPIO_ACTIVE_LOW>;
+		avdd-supply = <&scmi_v3v3>;
+		dvdd-supply = <&scmi_v3v3>;
+		pvdd-supply = <&scmi_v3v3>;
+		a2vdd-supply = <&scmi_v3v3>;
+		v3p3-supply = <&scmi_v3v3>;
+		v1p2-supply = <&scmi_v3v3>;
 
 		port {
 			adv7535_in: endpoint {
