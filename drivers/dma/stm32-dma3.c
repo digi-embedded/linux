@@ -574,6 +574,8 @@ static int stm32_dma3_lli_pool_create(struct platform_device *pdev, struct stm32
 	struct device_node *rmem_np;
 	struct reserved_mem *rmem;
 	void *rmem_va;
+	phys_addr_t base;
+	size_t size;
 	int ret;
 
 	/* Check if a specific pool is specified in device tree for Linked-List Items */
@@ -585,13 +587,37 @@ static int stm32_dma3_lli_pool_create(struct platform_device *pdev, struct stm32
 	if (!rmem)
 		goto no_specific_pool;
 
+	base = rmem->base;
+	size = rmem->size;
+	if  (((base + size - 1) & CLBAR_LBA) != (base & CLBAR_LBA)) {
+		phys_addr_t new_base;
+		size_t boundary, size_before, size_after;
+
+		/* Check if the size is bigger before the first 64KiB boundary or after */
+		boundary = min_t(size_t, size, SZ_64K);
+		new_base = (base + boundary - 1) & CLBAR_LBA;
+		size_before = new_base - base;
+		size_after = size - size_before;
+		if (size_after > size_before) {
+			size = min_t(size_t, size_after, SZ_64K);
+			base = new_base;
+		} else {
+			size = size_before;
+			/* Keep original base */
+		}
+
+		dev_warn(&pdev->dev,
+			 "LLI gen_pool needs to be truncated (%ldKiB instead of %lldKiB)\n",
+			 size / SZ_1K, rmem->size / SZ_1K);
+	}
+
 	ddata->gen_pool = devm_gen_pool_create(&pdev->dev, ilog2(sizeof(struct stm32_dma3_hwdesc)),
 					       dev_to_node(&pdev->dev),	dev_name(&pdev->dev));
 	if (!ddata->gen_pool)
 		goto no_specific_pool;
 
-	rmem_va = devm_memremap(&pdev->dev, rmem->base, rmem->size, MEMREMAP_WC);
-	ret = gen_pool_add_virt(ddata->gen_pool, (unsigned long)rmem_va, rmem->base, rmem->size,
+	rmem_va = devm_memremap(&pdev->dev, base, size, MEMREMAP_WC);
+	ret = gen_pool_add_virt(ddata->gen_pool, (unsigned long)rmem_va, base, size,
 				dev_to_node(&pdev->dev));
 	if (ret) {
 		gen_pool_destroy(ddata->gen_pool);
@@ -599,8 +625,8 @@ static int stm32_dma3_lli_pool_create(struct platform_device *pdev, struct stm32
 		goto no_specific_pool;
 	}
 
-	dev_dbg(&pdev->dev, "LLI gen_pool %s (%ldKiB)\n",
-		rmem->name, gen_pool_size(ddata->gen_pool) / SZ_1K);
+	dev_info(&pdev->dev, "created LLI gen_pool at %pap, size %ldKiB\n",
+		 &base, gen_pool_size(ddata->gen_pool) / SZ_1K);
 
 no_specific_pool:
 	of_node_put(rmem_np);
@@ -608,7 +634,7 @@ no_specific_pool:
 	/* Fallback pool */
 	ddata->dma_pool = dmam_pool_create(dev_name(&pdev->dev), &pdev->dev,
 					   sizeof(struct stm32_dma3_hwdesc),
-					   __alignof__(struct stm32_dma3_hwdesc), 0);
+					   __alignof__(struct stm32_dma3_hwdesc), SZ_64K);
 	if (!ddata->gen_pool && !ddata->dma_pool)
 		return -ENOMEM;
 
