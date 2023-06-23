@@ -1592,39 +1592,57 @@
 				clocks = <&rcc CK_KER_MDF1>;
 				clock-names = "ker_ck";
 				clock-ranges;
+				resets = <&rcc MDF1_R>;
+				reset-names = "mdf";
 				feature-domains = <&rifsc STM32MP25_RIFSC_MDF1_ID>;
 				status = "disabled";
 
 				sitf0: sitf@80 {
+					compatible = "st,stm32mp25-sitf-mdf";
 					reg = <0x80 0x4>;
+					status = "disabled";
 				};
 
 				sitf1: sitf@100 {
+					compatible = "st,stm32mp25-sitf-mdf";
 					reg = <0x100 0x4>;
+					status = "disabled";
 				};
 
 				sitf2: sitf@180 {
+					compatible = "st,stm32mp25-sitf-mdf";
 					reg = <0x180 0x4>;
+					status = "disabled";
 				};
 
 				sitf3: sitf@200 {
+					compatible = "st,stm32mp25-sitf-mdf";
 					reg = <0x200 0x4>;
+					status = "disabled";
 				};
 
 				sitf4: sitf@280 {
+					compatible = "st,stm32mp25-sitf-mdf";
 					reg = <0x280 0x4>;
+					status = "disabled";
 				};
 
 				sitf5: sitf@300 {
+					compatible = "st,stm32mp25-sitf-mdf";
 					reg = <0x300 0x4>;
+					status = "disabled";
 				};
 
 				sitf6: sitf@380 {
+					compatible = "st,stm32mp25-sitf-mdf";
 					reg = <0x380 0x4>;
+					status = "disabled";
 				};
 
 				sitf7: sitf@400 {
+					compatible = "st,stm32mp25-sitf-mdf";
 					reg = <0x400 0x4>;
+					status = "disabled";
 				};
 
 				filter0: filter@84 {
