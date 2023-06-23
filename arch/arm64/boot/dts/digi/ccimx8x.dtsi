@@ -505,7 +505,7 @@
 	pmic-thermal0 {
 		polling-delay-passive = <250>;
 		polling-delay = <2000>;
-		thermal-sensors = <&tsens 497>;
+		thermal-sensors = <&tsens IMX_SC_R_PMIC_0>;
 		trips {
 			pmic_alert0: trip0 {
 				temperature = <85000>;
