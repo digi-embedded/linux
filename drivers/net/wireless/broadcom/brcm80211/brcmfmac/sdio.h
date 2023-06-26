@@ -10,8 +10,8 @@
 #include <linux/firmware.h>
 #include "firmware.h"
 
-#if LINUX_VERSION_IS_LESS(5, 15, 58)
-#if LINUX_VERSION_IS_GEQ(4, 11, 0)
+#if (LINUX_VERSION_CODE <= KERNEL_VERSION(5, 15, 58))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0))
 #include <uapi/linux/sched/types.h>
 #endif /* kernel 4.11.0 */
 #endif /* kernel 5.15.58 */

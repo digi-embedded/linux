@@ -4729,7 +4729,7 @@ brcmf_sdio_rxf_thread(void *data)
 	 */
 	memset(&param, 0, sizeof(struct sched_param));
 	param.sched_priority = 1;
-#if LINUX_VERSION_IS_GEQ(5, 9, 0)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0))
 	if (param.sched_priority >= MAX_RT_PRIO / 2)
 		/* If the priority is MAX_RT_PRIO/2 or higher,
 		 * it is considered as high priority.
