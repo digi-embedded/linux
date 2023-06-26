@@ -131,6 +131,17 @@ properties:
           - description: The offset of the tamp register
           - description: The field mask of the Cortex-M4 resource table address
 
+  nvmem-cells:
+    maxItems: 2
+    description: |
+      Specify the resource table address and size for firmware started by
+      the boot loader.
+
+  nvmem-cell-names:
+    items:
+      - const: rsc-tbl-addr
+      - const: rsc-tbl-size
+
   st,auto-boot:
     $ref: /schemas/types.yaml#/definitions/flag
     description:
