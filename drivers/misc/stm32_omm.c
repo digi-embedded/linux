@@ -12,6 +12,7 @@
 #include <linux/of_address.h>
 #include <linux/of_platform.h>
 #include <linux/pinctrl/consumer.h>
+#include <linux/pm_runtime.h>
 #include <linux/regmap.h>
 #include <linux/reset.h>
 #include <memory/stm32-omi.h>
@@ -142,11 +143,9 @@ static int stm32_omm_configure(struct platform_device *pdev)
 		return PTR_ERR(omm->clk);
 	}
 
-	ret = clk_prepare_enable(omm->clk);
-	if (ret) {
-		dev_err(dev, "Failed to enable OMM clock (%d)\n", ret);
+	ret = pm_runtime_resume_and_get(dev);
+	if (ret < 0)
 		return ret;
-	}
 
 	/* parse children's clock */
 	for_each_available_child_of_node(dev->of_node, child) {
@@ -157,7 +156,7 @@ static int stm32_omm_configure(struct platform_device *pdev)
 		if (!clk_rate) {
 			dev_err(dev, "Invalid clock rate\n");
 			of_node_put(child);
-			return -EINVAL;
+			goto err_clk_disable;
 		}
 
 		if (clk_rate > clk_rate_max)
@@ -212,7 +211,7 @@ static int stm32_omm_configure(struct platform_device *pdev)
 	ret = stm32_omm_set_amcr(dev, true);
 
 err_clk_disable:
-	clk_disable_unprepare(omm->clk);
+	pm_runtime_put_sync_suspend(dev);
 
 	return ret;
 }
@@ -314,12 +313,14 @@ static int stm32_omm_probe(struct platform_device *pdev)
 		omm->nb_child++;
 	}
 
+	platform_set_drvdata(pdev, omm);
+
+	pm_runtime_enable(dev);
+
 	/* check if OMM's resource access is granted */
 	ret = stm32_omm_check_access(dev, dev->of_node);
 	if (ret < 0 && ret != -EACCES)
 		return ret;
-
-	platform_set_drvdata(pdev, omm);
 
 	if (!ret) {
 		/* All child's access are granted ? */
@@ -379,6 +380,8 @@ static int stm32_omm_remove(struct platform_device *pdev)
 		if (omm->child_dev[i])
 			of_platform_device_destroy(omm->child_dev[i], NULL);
 
+	pm_runtime_disable(&pdev->dev);
+
 	return 0;
 }
 
@@ -388,6 +391,22 @@ static const struct of_device_id stm32_omm_of_match[] = {
 };
 MODULE_DEVICE_TABLE(of, stm32_omm_of_match);
 
+static int __maybe_unused stm32_omm_runtime_suspend(struct device *dev)
+{
+	struct stm32_omm *omm = dev_get_drvdata(dev);
+
+	clk_disable_unprepare(omm->clk);
+
+	return 0;
+}
+
+static int __maybe_unused stm32_omm_runtime_resume(struct device *dev)
+{
+	struct stm32_omm *omm = dev_get_drvdata(dev);
+
+	return clk_prepare_enable(omm->clk);
+}
+
 static int __maybe_unused stm32_omm_suspend(struct device *dev)
 {
 	return pinctrl_pm_select_sleep_state(dev);
@@ -396,20 +415,26 @@ static int __maybe_unused stm32_omm_suspend(struct device *dev)
 static int __maybe_unused stm32_omm_resume(struct device *dev)
 {
 	struct stm32_omm *omm = dev_get_drvdata(dev);
+	int ret;
 
 	pinctrl_pm_select_default_state(dev);
 
 	if (!omm->restore_cr)
 		return 0;
 
-	clk_prepare_enable(omm->clk);
+	ret = pm_runtime_resume_and_get(dev);
+	if (ret < 0)
+		return ret;
+
 	writel_relaxed(omm->cr, omm->io_base + OMM_CR);
-	clk_disable_unprepare(omm->clk);
+	pm_runtime_put_sync_suspend(dev);
 
 	return 0;
 }
 
 static const struct dev_pm_ops stm32_omm_pm_ops = {
+	SET_RUNTIME_PM_OPS(stm32_omm_runtime_suspend,
+			   stm32_omm_runtime_resume, NULL)
 	SET_SYSTEM_SLEEP_PM_OPS(stm32_omm_suspend, stm32_omm_resume)
 };
 
