@@ -3270,29 +3270,28 @@ static void brcmf_sdio_dpc(struct brcmf_sdio *bus)
 
 	brcmf_sdio_clrintr(bus);
 
-	if (bus->ctrl_frame_stat && (bus->clkstate == CLK_AVAIL) &&
-	    txctl_ok(bus) && brcmf_sdio_f2_ready(bus)) {
-		sdio_claim_host(bus->sdiodev->func1);
-		if (bus->ctrl_frame_stat) {
-			err = brcmf_sdio_tx_ctrlframe(bus,  bus->ctrl_frame_buf,
-						      bus->ctrl_frame_len);
-			bus->ctrl_frame_err = err;
-			wmb();
-			bus->ctrl_frame_stat = false;
-			if (err)
-				brcmf_err("sdio ctrlframe tx failed err=%d\n",
-					  err);
+	if (bus->clkstate == CLK_AVAIL && brcmf_sdio_f2_ready(bus)) {
+		if (bus->ctrl_frame_stat && txctl_ok(bus)) {
+			sdio_claim_host(bus->sdiodev->func1);
+			if (bus->ctrl_frame_stat) {
+				err = brcmf_sdio_tx_ctrlframe(bus, bus->ctrl_frame_buf,
+							      bus->ctrl_frame_len);
+				bus->ctrl_frame_err = err;
+				wmb(); /*Ensure tx ctrlframe cache line entry is flushed*/
+				bus->ctrl_frame_stat = false;
+				if (err)
+					brcmf_err("sdio ctrlframe tx failed err=%d\n", err);
+			}
+			sdio_release_host(bus->sdiodev->func1);
+			brcmf_sdio_wait_event_wakeup(bus);
 		}
-		sdio_release_host(bus->sdiodev->func1);
-		brcmf_sdio_wait_event_wakeup(bus);
-	}
-	/* Send queued frames (limit 1 if rx may still be pending) */
-	if ((bus->clkstate == CLK_AVAIL) && !atomic_read(&bus->fcstate) &&
-	    brcmu_pktq_mlen(&bus->txq, ~bus->flowcontrol) && txlimit &&
-	    data_ok(bus)) {
-		framecnt = bus->rxpending ? min(txlimit, bus->txminmax) :
-					    txlimit;
-		brcmf_sdio_sendfromq(bus, framecnt);
+		/* Send queued frames (limit 1 if rx may still be pending) */
+		if (!atomic_read(&bus->fcstate) && data_ok(bus) &&
+		    brcmu_pktq_mlen(&bus->txq, ~bus->flowcontrol) && txlimit) {
+			framecnt = bus->rxpending ? min(txlimit, bus->txminmax) :
+							txlimit;
+			brcmf_sdio_sendfromq(bus, framecnt);
+		}
 	}
 
 	if ((bus->sdiodev->state != BRCMF_SDIOD_DATA) || (err != 0)) {
