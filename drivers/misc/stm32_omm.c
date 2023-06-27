@@ -35,6 +35,7 @@ struct stm32_omm {
 	void __iomem *io_base;
 	u32 cr;
 	u8 nb_child;
+	bool restore_cr;
 };
 
 static int stm32_omm_set_amcr(struct device *dev, bool set)
@@ -205,6 +206,7 @@ static int stm32_omm_configure(struct platform_device *pdev)
 		omm->cr |= CR_CSSEL_OVR_EN;
 	}
 
+	omm->restore_cr = true;
 	writel_relaxed(omm->cr, omm->io_base + OMM_CR);
 
 	ret = stm32_omm_set_amcr(dev, true);
@@ -277,8 +279,6 @@ static int stm32_omm_probe(struct platform_device *pdev)
 	omm = devm_kzalloc(&pdev->dev, sizeof(*omm), GFP_KERNEL);
 	if (!omm)
 		return -ENOMEM;
-
-	omm->nb_child = 0;
 
 	omm->io_base = devm_platform_ioremap_resource_byname(pdev, "omm");
 	if (IS_ERR(omm->io_base))
@@ -397,8 +397,12 @@ static int __maybe_unused stm32_omm_resume(struct device *dev)
 {
 	struct stm32_omm *omm = dev_get_drvdata(dev);
 
-	clk_prepare_enable(omm->clk);
 	pinctrl_pm_select_default_state(dev);
+
+	if (!omm->restore_cr)
+		return 0;
+
+	clk_prepare_enable(omm->clk);
 	writel_relaxed(omm->cr, omm->io_base + OMM_CR);
 	clk_disable_unprepare(omm->clk);
 
