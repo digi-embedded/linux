@@ -62,6 +62,7 @@
 #define RSN_AKM_SHA256_1X		5	/* SHA256, 802.1X */
 #define RSN_AKM_SHA256_PSK		6	/* SHA256, Pre-shared Key */
 #define RSN_AKM_SAE			8	/* SAE */
+#define RSN_AKM_OWE			18	/* OWE */
 #define RSN_CAP_LEN			2	/* Length of RSN capabilities */
 #define RSN_CAP_PTK_REPLAY_CNTR_MASK	(BIT(2) | BIT(3))
 #define RSN_CAP_MFPR_MASK		BIT(6)
@@ -355,6 +356,15 @@ struct dot11_assoc_resp {
 	u16	aid;		/* association ID */
 };
 
+struct brcmf_owe_info_buf {
+	u8 peer_mac[ETH_ALEN];
+	__le16 status_le16;/* hostapd gives status of Assoc Resp */
+	bool with_pmkid;
+	u8 pmkid[WLAN_PMKID_LEN];
+	bool with_ecdh;/* if doing PMK Caching, might not have ECDH IE. */
+	u8 ecdh_ie_info[0];
+};
+
 #define WLC_E_IF_ROLE_STA		0	/* Infra STA */
 #define WLC_E_IF_ROLE_AP		1	/* Access Point */
 
@@ -415,6 +425,7 @@ struct wl_wsec_info {
 	struct wl_wsec_info_tlv tlvs[1]; /* tlv data follows */
 };
 
+static bool brcmf_has_pmkid(const u8 *parse, u32 len, u32 *offset_in_ie);
 static int brcmf_setup_wiphybands(struct brcmf_cfg80211_info *cfg);
 static bool
 wl_cfgoce_has_ie(const u8 *ie, const u8 **tlvs, u32 *tlvs_len,
@@ -5078,6 +5089,10 @@ brcmf_configure_wpaie(struct brcmf_if *ifp,
 				brcmf_dbg(TRACE, "RSN_AKM_SAE\n");
 				wpa_auth |= WPA3_AUTH_SAE_PSK;
 				break;
+			case RSN_AKM_OWE:
+				brcmf_dbg(TRACE, "RSN_AKM_OWE\n");
+				wpa_auth |= WPA3_AUTH_OWE;
+				break;
 			default:
 				bphy_err(drvr, "Invalid key mgmt info\n");
 			}
@@ -5106,7 +5121,8 @@ brcmf_configure_wpaie(struct brcmf_if *ifp,
 				if (!(wpa_auth & (WPA2_AUTH_PSK_SHA256 |
 						  WPA2_AUTH_1X_SHA256 |
 						  WFA_AUTH_DPP |
-						  WPA3_AUTH_SAE_PSK))) {
+						  WPA3_AUTH_SAE_PSK |
+						  WPA3_AUTH_OWE))) {
 					err = -EINVAL;
 					goto exit;
 				}
@@ -5549,7 +5565,8 @@ s32 brcmf_vif_clear_mgmt_ies(struct brcmf_cfg80211_vif *vif)
 	static const s32 pktflags[] = {
 		BRCMF_VNDR_IE_PRBREQ_FLAG,
 		BRCMF_VNDR_IE_PRBRSP_FLAG,
-		BRCMF_VNDR_IE_BEACON_FLAG
+		BRCMF_VNDR_IE_BEACON_FLAG,
+		BRCMF_VNDR_IE_ASSOCRSP_FLAG
 	};
 	int i;
 
@@ -5980,6 +5997,7 @@ brcmf_cfg80211_start_ap(struct wiphy *wiphy, struct net_device *ndev,
 			brcmf_err("set he bss_color error:%d\n", err);
 	}
 
+	brcmf_vif_clear_mgmt_ies(ifp->vif);
 	brcmf_config_ap_mgmt_ie(ifp->vif, &settings->beacon);
 	set_bit(BRCMF_VIF_STATUS_AP_CREATED, &ifp->vif->sme_state);
 	brcmf_net_setcarrier(ifp, true);
@@ -6909,6 +6927,108 @@ brcmf_cfg80211_set_cqm_rssi_config(struct wiphy *wiphy, struct net_device *dev,
 	return err;
 }
 
+int brcmf_cfg80211_update_owe_info(struct wiphy *wiphy, struct net_device *dev,
+				   struct cfg80211_update_owe_info *owe_info)
+{
+	struct brcmf_cfg80211_info *cfg = wiphy_to_cfg(wiphy);
+	struct brcmf_if *ifp;
+	int err = 0;
+	struct brcmf_owe_info_buf *owe_info_buf;
+	u8  *curr_ie_buf;
+	struct parsed_extension_ies owe_ecdh_ie;
+	struct parsed_ext_ie_info *extie_info;
+	u32 del_add_ie_buf_len = 0;
+	u32 total_owe_info_len = 0;
+	u32 pmkid_offset = 0;
+
+	ifp = netdev_priv(dev);
+	if (owe_info) {
+		owe_info_buf = kzalloc(WL_EXTRA_BUF_MAX, GFP_KERNEL);
+		if (!owe_info_buf)
+			return -ENOMEM;
+
+		curr_ie_buf = owe_info_buf->ecdh_ie_info;
+
+		memcpy(owe_info_buf->peer_mac, owe_info->peer, ETH_ALEN);
+		owe_info_buf->status_le16 = cpu_to_le16(owe_info->status);
+
+		owe_info_buf->with_ecdh = false;
+		if (owe_info->ie) {
+			if (brcmf_has_pmkid(owe_info->ie,
+					    owe_info->ie_len,
+					    &pmkid_offset)) {
+				u32 npmk, i;
+				struct brcmf_pmksa *pmk = &cfg->pmk_list.pmk[0];
+
+				if (!check_vif_up(ifp->vif))
+					return -EIO;
+
+				npmk = le32_to_cpu(cfg->pmk_list.npmk);
+				for (i = 0; i < npmk; i++) {
+					if (!memcmp(owe_info_buf->peer_mac,
+						    pmk[i].bssid, ETH_ALEN))
+						break;
+				}
+				if (i < BRCMF_MAXPMKID) {
+					memcpy(pmk[i].bssid,
+					       owe_info_buf->peer_mac,
+					       ETH_ALEN);
+					memcpy(pmk[i].pmkid,
+					       owe_info->ie + pmkid_offset,
+					       WLAN_PMKID_LEN);
+					if (i == npmk) {
+						npmk++;
+						cfg->pmk_list.npmk = cpu_to_le32(npmk);
+					}
+				} else {
+					brcmf_err("Too many PMKSA entries cached %d\n", npmk);
+					return -EINVAL;
+				}
+
+				err = brcmf_update_pmklist(cfg, ifp);
+				if (err < 0) {
+					brcmf_err("%s: set pmkid failed:%d\n", __func__, err);
+					return err;
+				}
+
+				owe_info_buf->with_pmkid = true;
+				memcpy(owe_info_buf->pmkid,
+				       owe_info->ie + pmkid_offset,
+				       WLAN_PMKID_LEN);
+			}
+
+			brcmf_parse_extension_ies(owe_info->ie, owe_info->ie_len, &owe_ecdh_ie);
+			if (owe_ecdh_ie.count > 1) {
+				brcmf_err("more ecdh_cnt found in info: %d\n", owe_ecdh_ie.count);
+				return -EINVAL;
+			}
+
+			if (owe_ecdh_ie.count == 1) {
+				owe_info_buf->with_ecdh = true;
+				extie_info = &owe_ecdh_ie.ie_info[0];
+
+				del_add_ie_buf_len = brcmf_vndr_ie(curr_ie_buf,
+								   BRCMF_VNDR_IE_ASSOCRSP_FLAG |
+								   BRCMF_VNDR_IE_CUSTOM_FLAG,
+								   extie_info->ie_ptr,
+								   extie_info->ie_len,
+								   "add");
+			}
+		}
+
+		total_owe_info_len = sizeof(struct brcmf_owe_info_buf) + del_add_ie_buf_len;
+		err = brcmf_fil_bsscfg_data_set(ifp, "owe_info", owe_info_buf,
+						total_owe_info_len);
+
+		kfree(owe_info_buf);
+	}
+
+	if (err)
+		brcmf_err("update owe_info error :%d\n", err);
+
+	return err;
+}
+
 static struct cfg80211_ops brcmf_cfg80211_ops = {
 	.add_virtual_intf = brcmf_cfg80211_add_iface,
 	.del_virtual_intf = brcmf_cfg80211_del_iface,
@@ -6960,6 +7080,7 @@ static struct cfg80211_ops brcmf_cfg80211_ops = {
 	.change_bss = brcmf_cfg80211_change_bss,
 	.external_auth = brcmf_cfg80211_external_auth,
 	.set_cqm_rssi_config = brcmf_cfg80211_set_cqm_rssi_config,
+	.update_owe_info = brcmf_cfg80211_update_owe_info,
 };
 
 struct cfg80211_ops *brcmf_cfg80211_get_ops(struct brcmf_mp_device *settings)
@@ -7342,7 +7463,7 @@ static s32 brcmf_get_assoc_ies(struct brcmf_cfg80211_info *cfg,
 }
 
 static bool
-brcmf_has_pmkid(const u8 *parse, u32 len)
+brcmf_has_pmkid(const u8 *parse, u32 len, u32 *offset_in_ie)
 {
 	const struct brcmf_tlv *rsn_ie;
 	const u8 *ie;
@@ -7375,10 +7496,15 @@ brcmf_has_pmkid(const u8 *parse, u32 len)
 		goto done;
 	/* Extract PMKID count */
 	count = ie[offset] + (ie[offset + 1] << 8);
-	if (count)
+	if (count) {
+		if (offset_in_ie)
+			*offset_in_ie = offset + RSN_PMKID_COUNT_LEN;
 		return true;
+	}
 
 done:
+	if (offset_in_ie)
+		*offset_in_ie = 0;
 	return false;
 }
 
@@ -7444,7 +7570,7 @@ done:
 
 	if ((profile->use_fwsup == BRCMF_PROFILE_FWSUP_1X ||
 	    profile->use_fwsup == BRCMF_PROFILE_FWSUP_ROAM) &&
-	    (brcmf_has_pmkid(roam_info.req_ie, roam_info.req_ie_len) ||
+	    (brcmf_has_pmkid(roam_info.req_ie, roam_info.req_ie_len, NULL) ||
 	     profile->is_ft || profile->is_okc))
 		roam_info.authorized = true;
 
@@ -7492,7 +7618,7 @@ brcmf_bss_connect_done(struct brcmf_cfg80211_info *cfg,
 		conn_params.resp_ie_len = conn_info->resp_ie_len;
 
 		if (profile->use_fwsup == BRCMF_PROFILE_FWSUP_1X &&
-		    brcmf_has_pmkid(conn_params.req_ie, conn_params.req_ie_len))
+		    brcmf_has_pmkid(conn_params.req_ie, conn_params.req_ie_len, NULL))
 			conn_params.authorized = true;
 
 		cfg80211_connect_done(ndev, &conn_params, GFP_KERNEL);
@@ -7971,6 +8097,51 @@ brcmf_notify_beacon_loss(struct brcmf_if *ifp,
 	return 0;
 }
 
+static s32
+brcmf_notify_ext_assoc_frame_rx(struct brcmf_if *ifp,
+				const struct brcmf_event_msg *e, void *data)
+{
+	struct brcmf_pub *drvr = ifp->drvr;
+	struct net_device *ndev = ifp->ndev;
+	u32 mgmt_frame_len = e->datalen - sizeof(struct brcmf_rx_mgmt_data);
+	struct brcmf_rx_mgmt_data *rxframe = (struct brcmf_rx_mgmt_data *)data;
+	u8 *frame = (u8 *)(rxframe + 1);
+	struct cfg80211_update_owe_info owe_info;
+	struct ieee80211_mgmt *mgmt_frame = (struct ieee80211_mgmt *)frame;
+
+	brcmf_dbg(INFO, "Enter: event %s (%d) received\n",
+		  brcmf_fweh_event_name(e->event_code), e->event_code);
+
+	if (e->datalen < sizeof(*rxframe)) {
+		bphy_err(drvr, "Event %s (%d) data too small. Ignore\n",
+			 brcmf_fweh_event_name(e->event_code), e->event_code);
+		return -EINVAL;
+	}
+
+	memset(&owe_info, 0, sizeof(struct cfg80211_update_owe_info));
+	owe_info.ie_len = mgmt_frame_len - offsetof(struct ieee80211_mgmt, u);
+	memcpy(owe_info.peer, e->addr, ETH_ALEN);
+	owe_info.ie = kzalloc(owe_info.ie_len, GFP_KERNEL);
+
+	if (!owe_info.ie)
+		return -ENOMEM;
+
+	if (ieee80211_is_assoc_req(mgmt_frame->frame_control)) {
+		frame += offsetof(struct ieee80211_mgmt, u.assoc_req.variable);
+	} else if (ieee80211_is_reassoc_req(mgmt_frame->frame_control)) {
+		frame += offsetof(struct ieee80211_mgmt, u.reassoc_req.variable);
+	} else {
+		bphy_err(drvr, "unexpected FC:0x%x\n", mgmt_frame->frame_control);
+		return -EINVAL;
+	}
+
+	memcpy(owe_info.ie, frame, owe_info.ie_len);
+	cfg80211_update_owe_info_event(ndev, &owe_info, GFP_KERNEL);
+
+	kfree(owe_info.ie);
+	return 0;
+}
+
 static void brcmf_init_conf(struct brcmf_cfg80211_conf *conf)
 {
 	conf->frag_threshold = (u32)-1;
@@ -8050,6 +8221,8 @@ static void brcmf_register_event_handlers(struct brcmf_cfg80211_info *cfg)
 		brcmf_fweh_register(cfg->pub, BRCMF_E_TWT_TEARDOWN,
 				    brcmf_notify_twt_event);
 	}
+	brcmf_fweh_register(cfg->pub, BRCMF_E_EXT_ASSOC_FRAME_RX,
+			    brcmf_notify_ext_assoc_frame_rx);
 }
 
 static void brcmf_deinit_priv_mem(struct brcmf_cfg80211_info *cfg)
