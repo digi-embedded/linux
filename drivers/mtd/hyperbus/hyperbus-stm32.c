@@ -7,6 +7,8 @@
 #include <linux/mtd/cfi.h>
 #include <memory/stm32-omi.h>
 
+#define STM32_AUTOSUSPEND_DELAY -1
+
 struct stm32_hyperbus {
 	struct device *dev;
 	struct hyperbus_ctlr ctlr;
@@ -26,7 +28,12 @@ static void stm32_hyperbus_copy_from(struct hyperbus_device *hbdev, void *to,
 		container_of(hbdev, struct stm32_hyperbus, hbdev);
 	struct stm32_omi *omi = hyperbus->omi;
 
+	pm_runtime_resume_and_get(omi->dev);
+
 	memcpy_fromio(to, omi->mm_base + from, len);
+
+	pm_runtime_mark_last_busy(omi->dev);
+	pm_runtime_put_autosuspend(omi->dev);
 }
 
 static void stm32_hyperbus_set_mode(struct stm32_hyperbus *hyperbus, u8 mode)
@@ -56,6 +63,8 @@ static u16 stm32_hyperbus_read16(struct hyperbus_device *hbdev, unsigned long ad
 	void __iomem *regs_base = omi->regs_base;
 	u16 data;
 
+	pm_runtime_resume_and_get(omi->dev);
+
 	stm32_hyperbus_set_mode(hyperbus, CR_FMODE_INDR);
 	writel(addr, regs_base + OSPI_AR);
 	stm32_omi_tx_poll(omi, (u8 *)&data, 2, true);
@@ -68,6 +77,9 @@ static u16 stm32_hyperbus_read16(struct hyperbus_device *hbdev, unsigned long ad
 
 	stm32_hyperbus_set_mode(hyperbus, CR_FMODE_MM);
 
+	pm_runtime_mark_last_busy(omi->dev);
+	pm_runtime_put_autosuspend(omi->dev);
+
 	return data;
 }
 
@@ -78,6 +90,8 @@ static void stm32_hyperbus_write16(struct hyperbus_device *hbdev,
 		container_of(hbdev, struct stm32_hyperbus, hbdev);
 	struct stm32_omi *omi = hyperbus->omi;
 	void __iomem *regs_base = omi->regs_base;
+
+	pm_runtime_resume_and_get(omi->dev);
 
 	stm32_hyperbus_set_mode(hyperbus, CR_FMODE_INDW);
 	writel(addr, regs_base + OSPI_AR);
@@ -90,6 +104,9 @@ static void stm32_hyperbus_write16(struct hyperbus_device *hbdev,
 		__func__, data, addr >> 1);
 
 	stm32_hyperbus_set_mode(hyperbus, CR_FMODE_MM);
+
+	pm_runtime_mark_last_busy(omi->dev);
+	pm_runtime_put_autosuspend(omi->dev);
 }
 
 static int stm32_hyperbus_check_transfert(struct stm32_omi *omi)
@@ -211,13 +228,15 @@ static int __maybe_unused stm32_hyperbus_suspend(struct device *dev)
 	void __iomem *regs_base = omi->regs_base;
 	u32 cr;
 
+	pm_runtime_resume_and_get(omi->dev);
+
 	cr = readl_relaxed(regs_base + OSPI_CR);
 	cr &= ~CR_EN;
 	writel_relaxed(cr, regs_base + OSPI_CR);
 
-	clk_disable_unprepare(omi->clk);
+	pinctrl_pm_select_sleep_state(dev);
 
-	return pinctrl_pm_select_sleep_state(dev);
+	return pm_runtime_force_suspend(omi->dev);
 }
 
 static int __maybe_unused stm32_hyperbus_resume(struct device *dev)
@@ -226,12 +245,15 @@ static int __maybe_unused stm32_hyperbus_resume(struct device *dev)
 	struct stm32_omi *omi = hyperbus->omi;
 	int ret;
 
-	ret = clk_prepare_enable(omi->clk);
-	if (ret)
+	ret = pm_runtime_force_resume(omi->dev);
+	if (ret < 0)
 		return ret;
 
 	pinctrl_pm_select_default_state(dev);
 	stm32_hyperbus_init(hyperbus);
+
+	pm_runtime_mark_last_busy(omi->dev);
+	pm_runtime_put_autosuspend(omi->dev);
 
 	return 0;
 }
@@ -255,8 +277,10 @@ static int stm32_hyperbus_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	hyperbus->omi = omi;
-	omi->check_transfer = stm32_hyperbus_check_transfert;
 	hyperbus->dev = dev;
+	platform_set_drvdata(pdev, hyperbus);
+
+	omi->check_transfer = stm32_hyperbus_check_transfert;
 
 	/* mandatory for HyperFlash */
 	if (!omi->mm_size) {
@@ -270,11 +294,13 @@ static int stm32_hyperbus_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
-	ret = clk_prepare_enable(omi->clk);
-	if (ret) {
-		dev_err(dev, "Can not enable hyperbus clock\n");
+	pm_runtime_enable(omi->dev);
+	pm_runtime_set_autosuspend_delay(omi->dev, STM32_AUTOSUSPEND_DELAY);
+	pm_runtime_use_autosuspend(omi->dev);
+
+	ret = pm_runtime_resume_and_get(omi->dev);
+	if (ret < 0)
 		return ret;
-	}
 
 	if (omi->rstc) {
 		reset_control_assert(omi->rstc);
@@ -285,19 +311,19 @@ static int stm32_hyperbus_probe(struct platform_device *pdev)
 	flash = of_get_next_child(parent->of_node, NULL);
 	if (!flash) {
 		dev_warn(&pdev->dev, "No flash node found\n");
-		goto err_clk_disable;
+		goto err_pm_disable;
 	}
 
 	ret = of_property_read_u32(flash, "reg", &hyperbus->cs);
 	if (ret) {
 		dev_err(&pdev->dev, "Can't find reg property\n");
-		goto err_clk_disable;
+		goto err_pm_disable;
 	}
 
 	ret = of_property_read_u32(flash, "st,max-frequency", &value);
 	if (ret) {
 		dev_err(&pdev->dev, "Can't find st,max-frequency property\n");
-		goto err_clk_disable;
+		goto err_pm_disable;
 	}
 	hyperbus->flash_freq = value;
 
@@ -308,23 +334,31 @@ static int stm32_hyperbus_probe(struct platform_device *pdev)
 
 	hyperbus->wzl = of_property_read_bool(flash, "st,wzl");
 
-	stm32_hyperbus_init(hyperbus);
-
-	platform_set_drvdata(pdev, hyperbus);
-
 	hyperbus->hbdev.map.size = omi->mm_size;
 	hyperbus->hbdev.map.virt = omi->mm_base;
 
-	hyperbus->dev = dev;
 	hyperbus->ctlr.dev = dev;
 	hyperbus->ctlr.ops = &stm32_hyperbus_ops;
 	hyperbus->hbdev.ctlr = &hyperbus->ctlr;
 	hyperbus->hbdev.np = of_get_next_child(parent->of_node, NULL);
 
-	return hyperbus_register_device(&hyperbus->hbdev);
+	stm32_hyperbus_init(hyperbus);
 
-err_clk_disable:
-	clk_disable_unprepare(omi->clk);
+	ret = hyperbus_register_device(&hyperbus->hbdev);
+	if (ret) {
+		/* disable ospi */
+		writel_relaxed(0, omi->regs_base + OSPI_CR);
+		goto err_pm_disable;
+	}
+
+	pm_runtime_mark_last_busy(omi->dev);
+	pm_runtime_put_autosuspend(omi->dev);
+
+	return ret;
+
+err_pm_disable:
+	pm_runtime_put_sync_suspend(omi->dev);
+	pm_runtime_disable(omi->dev);
 
 	return ret;
 }
@@ -333,9 +367,18 @@ static int stm32_hyperbus_remove(struct platform_device *pdev)
 {
 	struct stm32_hyperbus *hyperbus = platform_get_drvdata(pdev);
 	struct stm32_omi *omi = hyperbus->omi;
+	int ret;
+
+	ret = pm_runtime_resume_and_get(omi->dev);
+	if (ret < 0)
+		return ret;
 
 	hyperbus_unregister_device(&hyperbus->hbdev);
-	clk_disable_unprepare(omi->clk);
+	writel_relaxed(0, &omi->regs_base + OSPI_CR);
+	stm32_omi_dlyb_stop(omi);
+
+	pm_runtime_put_sync_suspend(omi->dev);
+	pm_runtime_disable(omi->dev);
 
 	return 0;
 }
