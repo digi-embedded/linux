@@ -374,6 +374,7 @@
 };
 
 &ltdc {
+	rotation-memory = <&ltdc_sec_rotation>;
 	status = "okay";
 
 	port {
