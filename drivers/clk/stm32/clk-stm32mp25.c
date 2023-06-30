@@ -1313,10 +1313,31 @@ static int stm32mp25_rcc_clocks_remove(struct platform_device *pdev)
 	return 0;
 }
 
+#ifdef CONFIG_PM_SLEEP
+static int stm32_rcc_suspend(struct device *dev)
+{
+	clk_save_context();
+
+	return 0;
+}
+
+static int stm32_rcc_resume(struct device *dev)
+{
+	clk_restore_context();
+
+	return 0;
+}
+#endif /* CONFIG_PM_SLEEP */
+
+static const struct dev_pm_ops stm32_rcc_pm_ops = {
+	SET_SYSTEM_SLEEP_PM_OPS(stm32_rcc_suspend, stm32_rcc_resume)
+};
+
 static struct platform_driver stm32mp25_rcc_clocks_driver = {
 	.driver	= {
 		.name = "stm32mp25_rcc",
 		.of_match_table = stm32mp25_match_data,
+		.pm = &stm32_rcc_pm_ops,
 	},
 	.probe = stm32mp25_rcc_clocks_probe,
 	.remove = stm32mp25_rcc_clocks_remove,
