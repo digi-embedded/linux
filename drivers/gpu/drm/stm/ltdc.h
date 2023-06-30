@@ -30,6 +30,7 @@ struct ltdc_caps {
 	bool crc;		/* cyclic redundancy check supported */
 	bool dynamic_zorder;	/* dynamic z-order */
 	bool plane_rotation;	/* plane rotation */
+	bool crtc_rotation;	/* crtc rotation */
 	bool fifo_threshold;	/* fifo underrun threshold supported */
 };
 
@@ -50,6 +51,7 @@ struct ltdc_device {
 	u32 irq_status;
 	u32 fifo_err;		/* fifo underrun error counter */
 	u32 fifo_warn;		/* fifo underrun warning counter */
+	u32 fifo_rot;		/* fifo underrun rotation counter */
 	u32 fifo_threshold;	/* fifo underrun threshold */
 	u32 transfer_err;	/* transfer error counter */
 	struct fps_info plane_fpsi[LTDC_MAX_LAYER];
@@ -57,6 +59,8 @@ struct ltdc_device {
 	int crc_skip_count;
 	bool crc_active;
 	u32 max_burst_length;
+	struct reserved_mem *rot_mem;
+	int output_rotation;
 };
 
 int ltdc_load(struct drm_device *ddev);

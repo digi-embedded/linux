@@ -16,6 +16,7 @@
 #include <linux/module.h>
 #include <linux/of_address.h>
 #include <linux/of_graph.h>
+#include <linux/of_reserved_mem.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
@@ -34,6 +35,8 @@
 #include <drm/drm_gem_atomic_helper.h>
 #include <drm/drm_gem_dma_helper.h>
 #include <drm/drm_of.h>
+#include <drm/drm_panel.h>
+#include <drm/drm_plane_helper.h>
 #include <drm/drm_probe_helper.h>
 #include <drm/drm_simple_kms_helper.h>
 #include <drm/drm_vblank.h>
@@ -81,6 +84,10 @@
 #define LTDC_CDSR	0x0048		/* Current Display Status */
 #define LTDC_EDCR	0x0060		/* External Display Control */
 #define LTDC_CCRCR	0x007C		/* Computed CRC value */
+#define LTDC_RB0AR	0x0080		/* Rotation Buffer 0 address */
+#define LTDC_RB1AR	0x0084		/* Rotation Buffer 1 address */
+#define LTDC_RBPR	0x0088		/* Rotation Buffer Pitch */
+#define LTDC_RIFCR	0x008C		/* Rotation Intermediate Frame Color */
 #define LTDC_FUT	0x0090		/* Fifo underrun Threshold */
 
 /* Layer register offsets */
@@ -124,6 +131,7 @@
 #define TWCR_TOTALW	GENMASK(27, 16)	/* TOTAL Width */
 
 #define GCR_LTDCEN	BIT(0)		/* LTDC ENable */
+#define GCR_ROTEN	BIT(2)		/* ROTation ENable */
 #define GCR_DEN		BIT(16)		/* Dither ENable */
 #define GCR_CRCEN	BIT(19)		/* CRC ENable */
 #define GCR_PCPOL	BIT(28)		/* Pixel Clock POLarity-Inverted */
@@ -154,6 +162,7 @@
 #define GC2R_DPAEN	BIT(3)		/* Dual-Port Ability ENabled */
 #define GC2R_BW		GENMASK(6, 4)	/* Bus Width (log2 of nb of bytes) */
 #define GC2R_EDCEN	BIT(7)		/* External Display Control ENabled */
+#define GC2R_ROTA	BIT(10)		/* ROTAtion support ability */
 
 #define SRCR_IMR	BIT(0)		/* IMmediate Reload */
 #define SRCR_VBR	BIT(1)		/* Vertical Blanking Reload */
@@ -170,6 +179,7 @@
 #define IER_RRIE	BIT(3)		/* Register Reload Interrupt Enable */
 #define IER_FUEIE	BIT(6)		/* Fifo Underrun Error Interrupt Enable */
 #define IER_CRCIE	BIT(7)		/* CRC Error Interrupt Enable */
+#define IER_FURIE	BIT(8)		/* Fifo Underrun Rotation Interrupt Enable */
 
 #define CPSR_CYPOS	GENMASK(15, 0)	/* Current Y position */
 
@@ -179,6 +189,7 @@
 #define ISR_RRIF	BIT(3)		/* Register Reload Interrupt Flag */
 #define ISR_FUEIF	BIT(6)		/* Fifo Underrun Error Interrupt Flag */
 #define ISR_CRCIF	BIT(7)		/* CRC Error Interrupt Flag */
+#define ISR_FURIF	BIT(8)		/* Fifo Underrun Rotation Interrupt Flag */
 
 #define EDCR_OCYEN	BIT(25)		/* Output Conversion to YCbCr 422: ENable */
 #define EDCR_OCYSEL	BIT(26)		/* Output Conversion to YCbCr 422: SELection of the CCIR */
@@ -727,6 +738,8 @@ static irqreturn_t ltdc_irq_thread(int irq, void *arg)
 		ldev->fifo_err++;
 	if (ldev->irq_status & ISR_FUWIF)
 		ldev->fifo_warn++;
+	if (ldev->irq_status & ISR_FURIF)
+		ldev->fifo_rot++;
 	mutex_unlock(&ldev->err_lock);
 
 	return IRQ_HANDLED;
@@ -792,7 +805,12 @@ static void ltdc_crtc_atomic_enable(struct drm_crtc *crtc,
 	regmap_write(ldev->regmap, LTDC_BCCR, BCCR_BCBLACK);
 
 	/* Enable IRQ */
-	regmap_set_bits(ldev->regmap, LTDC_IER, IER_FUWIE | IER_FUEIE | IER_RRIE | IER_TERRIE);
+	if (ldev->caps.crtc_rotation)
+		regmap_set_bits(ldev->regmap, LTDC_IER, IER_FUWIE | IER_FUEIE |
+			        IER_RRIE | IER_TERRIE | IER_FURIE);
+	else
+		regmap_set_bits(ldev->regmap, LTDC_IER, IER_FUWIE | IER_FUEIE |
+			        IER_RRIE | IER_TERRIE);
 
 	/* Commit shadow registers = update planes at next vblank */
 	if (!ldev->caps.plane_reg_shadow)
@@ -818,7 +836,12 @@ static void ltdc_crtc_atomic_disable(struct drm_crtc *crtc,
 				  LXCR_CLUTEN | LXCR_LEN, 0);
 
 	/* disable IRQ */
-	regmap_clear_bits(ldev->regmap, LTDC_IER, IER_FUWIE | IER_FUEIE | IER_RRIE | IER_TERRIE);
+	if (ldev->caps.crtc_rotation)
+		regmap_clear_bits(ldev->regmap, LTDC_IER, IER_FUWIE | IER_FUEIE |
+				  IER_RRIE | IER_TERRIE | IER_FURIE);
+	else
+		regmap_clear_bits(ldev->regmap, LTDC_IER, IER_FUWIE | IER_FUEIE |
+				  IER_RRIE | IER_TERRIE);
 
 	/* immediately commit disable of layers before switching off LTDC */
 	if (!ldev->caps.plane_reg_shadow)
@@ -831,6 +854,7 @@ static void ltdc_crtc_atomic_disable(struct drm_crtc *crtc,
 	ldev->transfer_err = 0;
 	ldev->fifo_err = 0;
 	ldev->fifo_warn = 0;
+	ldev->fifo_rot = 0;
 	mutex_unlock(&ldev->err_lock);
 }
 
@@ -908,6 +932,7 @@ static void ltdc_crtc_mode_set_nofb(struct drm_crtc *crtc)
 	u32 total_width, total_height;
 	u32 bus_formats = MEDIA_BUS_FMT_RGB888_1X24;
 	u32 bus_flags = 0;
+	u32 pitch, rota0_buf, rota1_buf;
 	u32 val;
 	int ret;
 
@@ -991,23 +1016,44 @@ static void ltdc_crtc_mode_set_nofb(struct drm_crtc *crtc)
 	regmap_update_bits(ldev->regmap, LTDC_GCR,
 			   GCR_HSPOL | GCR_VSPOL | GCR_DEPOL | GCR_PCPOL | GCR_DEN, val);
 
-	/* Set Synchronization size */
-	val = (hsync << 16) | vsync;
-	regmap_update_bits(ldev->regmap, LTDC_SSCR, SSCR_VSH | SSCR_HSW, val);
+	/* check that an output rotation is required */
+	if (ldev->caps.crtc_rotation && (ldev->output_rotation == 90 || ldev->output_rotation == 270)) {
+		/* Set Synchronization size */
+		val = (vsync << 16) | hsync;
+		regmap_update_bits(ldev->regmap, LTDC_SSCR, SSCR_VSH | SSCR_HSW, val);
 
-	/* Set Accumulated Back porch */
-	val = (accum_hbp << 16) | accum_vbp;
-	regmap_update_bits(ldev->regmap, LTDC_BPCR, BPCR_AVBP | BPCR_AHBP, val);
+		/* Set Accumulated Back porch */
+		val = (accum_vbp << 16) | accum_hbp;
+		regmap_update_bits(ldev->regmap, LTDC_BPCR, BPCR_AVBP | BPCR_AHBP, val);
 
-	/* Set Accumulated Active Width */
-	val = (accum_act_w << 16) | accum_act_h;
-	regmap_update_bits(ldev->regmap, LTDC_AWCR, AWCR_AAW | AWCR_AAH, val);
+		/* Set Accumulated Active Width */
+		val = (accum_act_h << 16) | accum_act_w;
+		regmap_update_bits(ldev->regmap, LTDC_AWCR, AWCR_AAW | AWCR_AAH, val);
 
-	/* Set total width & height */
-	val = (total_width << 16) | total_height;
-	regmap_update_bits(ldev->regmap, LTDC_TWCR, TWCR_TOTALH | TWCR_TOTALW, val);
+		/* Set total width & height */
+		val = (total_height << 16) | total_width;
+		regmap_update_bits(ldev->regmap, LTDC_TWCR, TWCR_TOTALH | TWCR_TOTALW, val);
 
-	regmap_write(ldev->regmap, LTDC_LIPCR, (accum_act_h + 1));
+		regmap_write(ldev->regmap, LTDC_LIPCR, (accum_act_w + 1));
+	} else {
+		/* Set Synchronization size */
+		val = (hsync << 16) | vsync;
+		regmap_update_bits(ldev->regmap, LTDC_SSCR, SSCR_VSH | SSCR_HSW, val);
+
+		/* Set Accumulated Back porch */
+		val = (accum_hbp << 16) | accum_vbp;
+		regmap_update_bits(ldev->regmap, LTDC_BPCR, BPCR_AVBP | BPCR_AHBP, val);
+
+		/* Set Accumulated Active Width */
+		val = (accum_act_w << 16) | accum_act_h;
+		regmap_update_bits(ldev->regmap, LTDC_AWCR, AWCR_AAW | AWCR_AAH, val);
+
+		/* Set total width & height */
+		val = (total_width << 16) | total_height;
+		regmap_update_bits(ldev->regmap, LTDC_TWCR, TWCR_TOTALH | TWCR_TOTALW, val);
+
+		regmap_write(ldev->regmap, LTDC_LIPCR, (accum_act_h + 1));
+	}
 
 	/* Configure the output format (hw version dependent) */
 	if (ldev->caps.ycbcr_output) {
@@ -1037,6 +1083,30 @@ static void ltdc_crtc_mode_set_nofb(struct drm_crtc *crtc)
 			regmap_write(ldev->regmap, LTDC_EDCR, 0);
 			break;
 		}
+	}
+
+	if (ldev->caps.crtc_rotation) {
+		rota0_buf = (u32)ldev->rot_mem->base;
+		rota1_buf = (u32)ldev->rot_mem->base + (ldev->rot_mem->size >> 1);
+
+		regmap_write(ldev->regmap, LTDC_RB0AR, rota0_buf);
+		regmap_write(ldev->regmap, LTDC_RB1AR, rota1_buf);
+
+		/* LTDC_RBPR register is used define the pitch (line-to-line address increment)
+		   of the stored rotation buffer. The pitch is proportional to the width of the
+		   composed display (before rotation) and,(after rotation) proportional to the
+		   non-raster dimension of the display panel. */
+		pitch = ((mode->hdisplay + 9) / 10) * 64;
+		regmap_write(ldev->regmap, LTDC_RBPR, pitch);
+
+		DRM_DEBUG_DRIVER("Rotation buffer0 address %x\n", rota0_buf);
+		DRM_DEBUG_DRIVER("Rotation buffer1 address %x\n", rota1_buf);
+		DRM_DEBUG_DRIVER("Rotation buffer picth %x\n", pitch);
+
+		if (ldev->output_rotation == 90 || ldev->output_rotation == 270)
+			regmap_set_bits(ldev->regmap, LTDC_GCR, GCR_ROTEN);
+		else
+			regmap_clear_bits(ldev->regmap, LTDC_GCR, GCR_ROTEN);
 	}
 }
 
@@ -1219,6 +1289,7 @@ static void ltdc_crtc_atomic_print_state(struct drm_printer *p,
 	drm_printf(p, "\ttransfer_error=%d\n", ldev->transfer_err);
 	drm_printf(p, "\tfifo_underrun_error=%d\n", ldev->fifo_err);
 	drm_printf(p, "\tfifo_underrun_warning=%d\n", ldev->fifo_warn);
+	drm_printf(p, "\tfifo_underrun_rotation=%d\n", ldev->fifo_rot);
 	drm_printf(p, "\tfifo_underrun_threshold=%d\n", ldev->fifo_threshold);
 }
 
@@ -1298,6 +1369,7 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 	u32 val, pitch_in_bytes, line_length, line_number, ahbp, avbp, bpcr;
 	u32 paddr, paddr1, paddr2;
 	enum ltdc_pix_fmt pf;
+	unsigned int plane_rotation = newstate->rotation;
 
 	if (!newstate->crtc || !fb) {
 		DRM_DEBUG_DRIVER("fb or crtc NULL");
@@ -1321,18 +1393,63 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 
 	regmap_read(ldev->regmap, LTDC_BPCR, &bpcr);
 
-	ahbp = (bpcr & BPCR_AHBP) >> 16;
-	avbp = bpcr & BPCR_AVBP;
+	if (ldev->caps.crtc_rotation && (ldev->output_rotation == 90 || ldev->output_rotation == 270)) {
+		avbp = (bpcr & BPCR_AHBP) >> 16;
+		ahbp = bpcr & BPCR_AVBP;
 
-	/* Configures the horizontal start and stop position */
-	val = ((x1 + 1 + ahbp) << 16) + (x0 + 1 + ahbp);
-	regmap_write_bits(ldev->regmap, LTDC_L1WHPCR + lofs,
-			  LXWHPCR_WHSTPOS | LXWHPCR_WHSPPOS, val);
+		/* Configures the horizontal start and stop position */
+		val = (x0 + 1 + ahbp) + ((x1 + 1 + ahbp) << 16);
+		regmap_write_bits(ldev->regmap, LTDC_L1WHPCR + lofs,
+				  LXWHPCR_WHSTPOS | LXWHPCR_WHSPPOS, val);
 
-	/* Configures the vertical start and stop position */
-	val = ((y1 + 1 + avbp) << 16) + (y0 + 1 + avbp);
-	regmap_write_bits(ldev->regmap, LTDC_L1WVPCR + lofs,
-			  LXWVPCR_WVSTPOS | LXWVPCR_WVSPPOS, val);
+		/* Configures the vertical start and stop position */
+		val = (y0 + 1 + avbp) + ((y1 + 1 + avbp) << 16);
+		regmap_write_bits(ldev->regmap, LTDC_L1WVPCR + lofs,
+				  LXWVPCR_WVSTPOS | LXWVPCR_WVSPPOS, val);
+
+		/* need to mirroring on X (rotation will switch lines & columns,
+		   not a real rotate */
+		if (ldev->output_rotation == 90) {
+			if (plane_rotation & DRM_MODE_REFLECT_X)
+				plane_rotation &= ~DRM_MODE_REFLECT_X;
+			else
+				plane_rotation |= DRM_MODE_REFLECT_X;
+		}
+
+		/* need to mirroring on Y (rotation will switch lines & columns,
+		   not a real rotate */
+		if (ldev->output_rotation == 270) {
+			if (plane_rotation & DRM_MODE_REFLECT_Y)
+				plane_rotation &= ~DRM_MODE_REFLECT_Y;
+			else
+				plane_rotation |= DRM_MODE_REFLECT_Y;
+		}
+	} else {
+		ahbp = (bpcr & BPCR_AHBP) >> 16;
+		avbp = bpcr & BPCR_AVBP;
+
+		/* Configures the horizontal start and stop position */
+		val = ((x1 + 1 + ahbp) << 16) + (x0 + 1 + ahbp);
+		regmap_write_bits(ldev->regmap, LTDC_L1WHPCR + lofs,
+				  LXWHPCR_WHSTPOS | LXWHPCR_WHSPPOS, val);
+
+		/* Configures the vertical start and stop position */
+		val = ((y1 + 1 + avbp) << 16) + (y0 + 1 + avbp);
+		regmap_write_bits(ldev->regmap, LTDC_L1WVPCR + lofs,
+				  LXWVPCR_WVSTPOS | LXWVPCR_WVSPPOS, val);
+
+		if (ldev->output_rotation == 180) {
+			if (plane_rotation & DRM_MODE_REFLECT_X)
+				plane_rotation &= ~DRM_MODE_REFLECT_X;
+			else
+				plane_rotation |= DRM_MODE_REFLECT_X;
+
+			if (plane_rotation & DRM_MODE_REFLECT_Y)
+				plane_rotation &= ~DRM_MODE_REFLECT_Y;
+			else
+				plane_rotation |= DRM_MODE_REFLECT_Y;
+		}
+	}
 
 	/* Specifies the pixel format */
 	pf = to_ltdc_pixelformat(fb->format->format);
@@ -1377,10 +1494,10 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 	/* Sets the FB address */
 	paddr = (u32)drm_fb_dma_get_gem_addr(fb, newstate, 0);
 
-	if (newstate->rotation & DRM_MODE_REFLECT_X)
+	if (plane_rotation & DRM_MODE_REFLECT_X)
 		paddr += (fb->format->cpp[0] * (x1 - x0 + 1)) - 1;
 
-	if (newstate->rotation & DRM_MODE_REFLECT_Y)
+	if (plane_rotation & DRM_MODE_REFLECT_Y)
 		paddr += (fb->pitches[0] * (y1 - y0));
 
 	DRM_DEBUG_DRIVER("fb: phys 0x%08x", paddr);
@@ -1390,7 +1507,7 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 	line_length = fb->format->cpp[0] *
 		      (x1 - x0 + 1) + (ldev->caps.bus_width >> 3) - 1;
 
-	if (newstate->rotation & DRM_MODE_REFLECT_Y)
+	if (plane_rotation & DRM_MODE_REFLECT_Y)
 		/* Compute negative value (signed on 16 bits) for the picth */
 		pitch_in_bytes = 0x10000 - fb->pitches[0];
 	else
@@ -1411,10 +1528,10 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 			/* Configure the auxiliary frame buffer address 0 */
 			paddr1 = (u32)drm_fb_dma_get_gem_addr(fb, newstate, 1);
 
-			if (newstate->rotation & DRM_MODE_REFLECT_X)
+			if (plane_rotation & DRM_MODE_REFLECT_X)
 				paddr1 += ((fb->format->cpp[1] * (x1 - x0 + 1)) >> 1) - 1;
 
-			if (newstate->rotation & DRM_MODE_REFLECT_Y)
+			if (plane_rotation & DRM_MODE_REFLECT_Y)
 				paddr1 += (fb->pitches[1] * (y1 - y0 - 1)) >> 1;
 
 			regmap_write(ldev->regmap, LTDC_L1AFBA0R + lofs, paddr1);
@@ -1424,12 +1541,12 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 			paddr1 = (u32)drm_fb_dma_get_gem_addr(fb, newstate, 1);
 			paddr2 = (u32)drm_fb_dma_get_gem_addr(fb, newstate, 2);
 
-			if (newstate->rotation & DRM_MODE_REFLECT_X) {
+			if (plane_rotation & DRM_MODE_REFLECT_X) {
 				paddr1 += ((fb->format->cpp[1] * (x1 - x0 + 1)) >> 1) - 1;
 				paddr2 += ((fb->format->cpp[2] * (x1 - x0 + 1)) >> 1) - 1;
 			}
 
-			if (newstate->rotation & DRM_MODE_REFLECT_Y) {
+			if (plane_rotation & DRM_MODE_REFLECT_Y) {
 				paddr1 += (fb->pitches[1] * (y1 - y0 - 1)) >> 1;
 				paddr2 += (fb->pitches[2] * (y1 - y0 - 1)) >> 1;
 			}
@@ -1442,12 +1559,12 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 			paddr1 = (u32)drm_fb_dma_get_gem_addr(fb, newstate, 2);
 			paddr2 = (u32)drm_fb_dma_get_gem_addr(fb, newstate, 1);
 
-			if (newstate->rotation & DRM_MODE_REFLECT_X) {
+			if (plane_rotation & DRM_MODE_REFLECT_X) {
 				paddr1 += ((fb->format->cpp[1] * (x1 - x0 + 1)) >> 1) - 1;
 				paddr2 += ((fb->format->cpp[2] * (x1 - x0 + 1)) >> 1) - 1;
 			}
 
-			if (newstate->rotation & DRM_MODE_REFLECT_Y) {
+			if (plane_rotation & DRM_MODE_REFLECT_Y) {
 				paddr1 += (fb->pitches[1] * (y1 - y0 - 1)) >> 1;
 				paddr2 += (fb->pitches[2] * (y1 - y0 - 1)) >> 1;
 			}
@@ -1462,7 +1579,7 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 			 * buffers if the framebuffer contains more than one plane.
 			 */
 			if (fb->format->num_planes > 1) {
-				if (newstate->rotation & DRM_MODE_REFLECT_Y)
+				if (plane_rotation & DRM_MODE_REFLECT_Y)
 					/*
 					 * Compute negative value (signed on 16 bits)
 					 * for the picth
@@ -1502,7 +1619,7 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 	val |= LXCR_LEN;
 
 	/* Enable horizontal mirroring if requested */
-	if (newstate->rotation & DRM_MODE_REFLECT_X)
+	if (plane_rotation & DRM_MODE_REFLECT_X)
 		val |= LXCR_HMEN;
 
 	regmap_write_bits(ldev->regmap, LTDC_L1CR + lofs, LXCR_LEN | LXCR_CLUTEN | LXCR_HMEN, val);
@@ -1518,6 +1635,11 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 	if (ldev->transfer_err) {
 		DRM_WARN("ltdc transfer error: %d\n", ldev->transfer_err);
 		ldev->transfer_err = 0;
+	}
+
+	if (ldev->fifo_rot) {
+		DRM_WARN("ltdc fifo rotation error\n");
+		ldev->fifo_rot = 0;
 	}
 
 	if (ldev->caps.fifo_threshold) {
@@ -1890,6 +2012,7 @@ static int ltdc_get_caps(struct drm_device *ddev)
 		ldev->caps.crc = false;
 		ldev->caps.dynamic_zorder = false;
 		ldev->caps.plane_rotation = false;
+		ldev->caps.crtc_rotation = false;
 		ldev->caps.fifo_threshold = false;
 		break;
 	case HWVER_20101:
@@ -1908,6 +2031,7 @@ static int ltdc_get_caps(struct drm_device *ddev)
 		ldev->caps.crc = false;
 		ldev->caps.dynamic_zorder = false;
 		ldev->caps.plane_rotation = false;
+		ldev->caps.crtc_rotation = false;
 		ldev->caps.fifo_threshold = false;
 		break;
 	case HWVER_40100:
@@ -1930,6 +2054,11 @@ static int ltdc_get_caps(struct drm_device *ddev)
 		ldev->caps.crc = true;
 		ldev->caps.dynamic_zorder = true;
 		ldev->caps.plane_rotation = true;
+		/* check if the outuput rotaion is available */
+		if (gc2r & GC2R_ROTA)
+			ldev->caps.crtc_rotation = true;
+		else
+			ldev->caps.crtc_rotation = false;
 		ldev->caps.fifo_threshold = true;
 		break;
 	default:
@@ -2051,12 +2180,27 @@ int ltdc_load(struct drm_device *ddev)
 		}
 
 		if (bridge) {
+			/* get panel connected to the bridge */
+			ret = drm_of_find_panel_or_bridge(bridge->of_node, 1, 0, &panel, NULL);
+			if (ret && panel) {
+				if (ret != -EPROBE_DEFER)
+					DRM_ERROR("find a panel %d\n", ret);
+				goto err;
+			}
+
 			ret = ltdc_encoder_init(ddev, bridge);
 			if (ret) {
 				if (ret != -EPROBE_DEFER)
 					DRM_ERROR("init encoder endpoint %d\n", i);
 				goto err;
 			}
+		}
+
+		if (panel) {
+			ret = of_property_read_u32(panel->dev->of_node, "rotation",
+						   &ldev->output_rotation);
+			if (ret == -EINVAL)
+				ldev->output_rotation = 0;
 		}
 	}
 
@@ -2097,7 +2241,7 @@ int ltdc_load(struct drm_device *ddev)
 				  IER_TERRIE);
 	else
 		regmap_clear_bits(ldev->regmap, LTDC_IER, IER_LIE | IER_RRIE | IER_FUWIE |
-				  IER_TERRIE | IER_FUEIE);
+				  IER_TERRIE | IER_FUEIE | IER_FURIE);
 
 	DRM_DEBUG_DRIVER("ltdc hw version 0x%08x\n", ldev->caps.hw_version);
 
@@ -2105,6 +2249,7 @@ int ltdc_load(struct drm_device *ddev)
 	ldev->transfer_err = 0;
 	ldev->fifo_err = 0;
 	ldev->fifo_warn = 0;
+	ldev->fifo_rot = 0;
 	ldev->fifo_threshold = FUT_DFT;
 
 	for (i = 0; i < ldev->caps.nb_irq; i++) {
@@ -2150,8 +2295,19 @@ int ltdc_load(struct drm_device *ddev)
 
 	pm_runtime_enable(ddev->dev);
 
+	/* Get the secure rotation buffer memory resource */
+	np = of_parse_phandle(dev->of_node, "rotation-memory", 0);
+	if (np)
+		ldev->rot_mem = of_reserved_mem_lookup(np);
+
+	/* fail to get reserved memory for rotation */
+	if (!ldev->rot_mem)
+		ldev->caps.crtc_rotation = false;
+
 	return 0;
 err:
+	of_reserved_mem_device_release(dev);
+
 	for (i = 0; i < nb_endpoints; i++)
 		drm_of_panel_bridge_remove(ddev->dev->of_node, 0, i);
 
