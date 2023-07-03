@@ -65,6 +65,7 @@ struct stm32_pinctrl_match_data {
 	const unsigned int npins;
 	bool secure_control;
 	bool io_sync_control;
+	bool rif_control;
 };
 
 struct stm32_gpio_bank;
