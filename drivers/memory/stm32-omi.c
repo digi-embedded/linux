@@ -419,10 +419,10 @@ static int stm32_omi_probe(struct platform_device *pdev)
 	struct reserved_mem *rmem = NULL;
 	struct device_node *node;
 	const char *name;
+	int ret;
 	u8 hyperflash_count = 0;
 	u8 spi_flash_count = 0;
 	u8 child_count = 0;
-	int ret;
 
 	/*
 	 * Flash subnodes sanity check:
@@ -604,6 +604,27 @@ static int stm32_omi_remove(struct platform_device *pdev)
 	return 0;
 }
 
+static int __maybe_unused stm32_omi_runtime_suspend(struct device *dev)
+{
+	struct stm32_omi *omi = dev_get_drvdata(dev);
+
+	clk_disable_unprepare(omi->clk);
+
+	return 0;
+}
+
+static int __maybe_unused stm32_omi_runtime_resume(struct device *dev)
+{
+	struct stm32_omi *omi = dev_get_drvdata(dev);
+
+	return clk_prepare_enable(omi->clk);
+}
+
+static const struct dev_pm_ops stm32_omi_pm_ops = {
+	SET_RUNTIME_PM_OPS(stm32_omi_runtime_suspend,
+			   stm32_omi_runtime_resume, NULL)
+};
+
 static const struct of_device_id stm32_omi_of_match[] = {
 	{ .compatible = "st,stm32mp25-omi", },
 	{},
@@ -616,6 +637,7 @@ static struct platform_driver stm32_omi_driver = {
 	.driver = {
 		.name =	"stm32-omi",
 		.of_match_table = stm32_omi_of_match,
+		.pm = &stm32_omi_pm_ops,
 	},
 };
 module_platform_driver(stm32_omi_driver);
