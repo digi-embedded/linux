@@ -1035,6 +1035,8 @@ static int stm32_dma3_chan_prep_hw(struct stm32_dma3_chan *chan, enum dma_transf
 		sbl_max = stm32_dma3_get_max_burst(len, sdw, chan->max_burst, src_max_burst);
 		if (chan->config_set & STM32_DMA3_CFG_SET_DMA) {
 			sdw = min_t(u32, init_dw, sdw);
+			sbl_max = stm32_dma3_get_max_burst(len, sdw, chan->max_burst,
+							   src_max_burst);
 			sbl_max = min_t(u32, init_bl_max, sbl_max);
 		}
 
@@ -1045,6 +1047,8 @@ static int stm32_dma3_chan_prep_hw(struct stm32_dma3_chan *chan, enum dma_transf
 		dbl_max = stm32_dma3_get_max_burst(len, ddw, chan->max_burst, dst_max_burst);
 		if (chan->config_set & STM32_DMA3_CFG_SET_DMA) {
 			ddw = min_t(u32, init_dw, ddw);
+			dbl_max = stm32_dma3_get_max_burst(len, ddw, chan->max_burst,
+							   dst_max_burst);
 			dbl_max = min_t(u32, init_bl_max, dbl_max);
 		}
 
