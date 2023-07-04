@@ -48,10 +48,10 @@
 	gpio-keys {
 		compatible = "gpio-keys";
 
-		button-user-2 {
-			label = "User-2";
-			linux,code = <BTN_2>;
-			gpios = <&gpiog 8 GPIO_ACTIVE_HIGH>;
+		button-user-1 {
+			label = "User-1";
+			linux,code = <BTN_1>;
+			gpios = <&gpiod 2 GPIO_ACTIVE_HIGH>;
 			status = "okay";
 		};
 	};
