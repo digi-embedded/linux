@@ -898,12 +898,14 @@ static int stm32_dma3_chan_prep_hw(struct stm32_dma3_chan *chan, enum dma_transf
 
 	sdw = chan->dma_config.src_addr_width;
 	if (sdw == DMA_SLAVE_BUSWIDTH_UNDEFINED) /* Can be the case if DMA_MEM_TO_DEV */
-		sdw = chan->max_burst < DMA_SLAVE_BUSWIDTH_8_BYTES ?
-		      DMA_SLAVE_BUSWIDTH_4_BYTES : DMA_SLAVE_BUSWIDTH_8_BYTES;
+		sdw = (chan->max_burst < DMA_SLAVE_BUSWIDTH_8_BYTES ||
+		       FIELD_GET(STM32_DMA3_DT_SAP, tr_conf)) ? DMA_SLAVE_BUSWIDTH_4_BYTES :
+								DMA_SLAVE_BUSWIDTH_8_BYTES;
 	ddw = chan->dma_config.dst_addr_width;
 	if (ddw == DMA_SLAVE_BUSWIDTH_UNDEFINED) /* Can be the case if DMA_DEV_TO_MEM */
-		ddw = chan->max_burst < DMA_SLAVE_BUSWIDTH_8_BYTES ?
-		      DMA_SLAVE_BUSWIDTH_4_BYTES : DMA_SLAVE_BUSWIDTH_8_BYTES;
+		ddw = (chan->max_burst < DMA_SLAVE_BUSWIDTH_8_BYTES ||
+		       FIELD_GET(STM32_DMA3_DT_DAP, tr_conf)) ? DMA_SLAVE_BUSWIDTH_4_BYTES :
+								DMA_SLAVE_BUSWIDTH_8_BYTES;
 
 	if (!(dma_device.src_addr_widths & BIT(sdw)) || !(dma_device.dst_addr_widths & BIT(ddw))) {
 		dev_err(chan2dev(chan), "Bus width (src=%u, dst=%u) not supported\n", sdw, ddw);
@@ -1518,9 +1520,7 @@ static u32 stm32_dma3_get_ll_count(struct stm32_dma3_chan *chan, size_t len, boo
 static void stm32_dma3_init_chan_config_for_memcpy(struct stm32_dma3_chan *chan,
 						   dma_addr_t dst, dma_addr_t src)
 {
-	u32 dw = chan->max_burst < DMA_SLAVE_BUSWIDTH_8_BYTES ? DMA_SLAVE_BUSWIDTH_4_BYTES :
-								DMA_SLAVE_BUSWIDTH_8_BYTES;
-	u32 burst = chan->max_burst / dw;
+	u32 sdw, ddw, sburst, dburst;
 
 	/* Initialize dt_config if channel not pre-configured through DT */
 	if (!(chan->config_set & STM32_DMA3_CFG_SET_DT)) {
@@ -1536,15 +1536,28 @@ static void stm32_dma3_init_chan_config_for_memcpy(struct stm32_dma3_chan *chan,
 
 	/* Initialize dma_config if dmaengine_slave_config() not used */
 	if (!(chan->config_set & STM32_DMA3_CFG_SET_DMA)) {
-		chan->dma_config.src_addr_width = dw;
-		chan->dma_config.dst_addr_width = dw;
-		chan->dma_config.src_maxburst = burst;
-		chan->dma_config.dst_maxburst = burst;
+		/* Data width and burst depends on the channel fifo size and on allocated port */
+		sdw = DMA_SLAVE_BUSWIDTH_8_BYTES;
+		if (chan->max_burst < DMA_SLAVE_BUSWIDTH_8_BYTES ||
+		    FIELD_GET(STM32_DMA3_DT_SAP, chan->dt_config.tr_conf))
+			sdw = DMA_SLAVE_BUSWIDTH_4_BYTES;
+		ddw = DMA_SLAVE_BUSWIDTH_8_BYTES;
+		if (chan->max_burst < DMA_SLAVE_BUSWIDTH_8_BYTES ||
+		    FIELD_GET(STM32_DMA3_DT_DAP, chan->dt_config.tr_conf))
+			sdw = DMA_SLAVE_BUSWIDTH_4_BYTES;
+		sburst = chan->max_burst / sdw;
+		dburst = chan->max_burst / ddw;
+
+		chan->dma_config.src_addr_width = sdw;
+		chan->dma_config.dst_addr_width = ddw;
+		chan->dma_config.src_maxburst = sburst;
+		chan->dma_config.dst_maxburst = dburst;
 		chan->dma_config.src_addr = src;
 		chan->dma_config.dst_addr = dst;
 
-		dev_dbg(chan2dev(chan), "%s: dma_config.*_addr_width=%d .*_max_burst=%d\n",
-			__func__, dw, burst);
+		dev_dbg(chan2dev(chan),
+			"%s: dma_config.src/dst_addr_width=%d/%d .src/dst_max_burst=%d/%d\n",
+			__func__, sdw, ddw, sburst, dburst);
 	}
 }
 
