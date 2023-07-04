@@ -16,11 +16,12 @@
 #include <linux/reset.h>
 #include <linux/slab.h>
 
-#define RNG_CR		0x00
-#define RNG_CR_RNGEN	BIT(2)
-#define RNG_CR_CED	BIT(5)
-#define RNG_CR_CONDRST	BIT(30)
-#define RNG_CR_CONFLOCK	BIT(31)
+#define RNG_CR			0x00
+#define RNG_CR_RNGEN		BIT(2)
+#define RNG_CR_CED		BIT(5)
+#define RNG_CR_CLKDIV_SHIFT	16
+#define RNG_CR_CONDRST		BIT(30)
+#define RNG_CR_CONFLOCK		BIT(31)
 
 #define RNG_SR		0x04
 #define RNG_SR_SEIS	BIT(6)
@@ -135,7 +136,8 @@ static int stm32_rng_init(struct hwrng *rng)
 		uint clock_div = stm32_rng_clock_freq_restrain(rng);
 
 		reg &= ~RNG_NIST_CONFIG_MASK;
-		reg |= RNG_CR_CONDRST | RNG_NIST_CONFIG_B | clock_div;
+		reg |= RNG_CR_CONDRST | RNG_NIST_CONFIG_B |
+		       (clock_div << RNG_CR_CLKDIV_SHIFT);
 		writel_relaxed(reg, priv->base + RNG_CR);
 		reg &= ~RNG_CR_CONDRST;
 		reg |= RNG_CR_CONFLOCK;
