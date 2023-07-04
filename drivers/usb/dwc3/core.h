@@ -984,8 +984,6 @@ struct dwc3_scratchpad_array {
 struct dwc3_platform_data {
 	struct xhci_plat_priv *xhci_priv;
 	void	(*set_role_post)(struct dwc3 *dwc, u32 role);
-	unsigned long long quirks;
-#define DWC3_SOFT_ITP_SYNC	BIT(0)
 };
 
 /**
@@ -1143,6 +1141,7 @@ struct dwc3_platform_data {
  *		     address.
  * @num_ep_resized: carries the current number endpoints which have had its tx
  *		    fifo resized.
+ * @debug_root: root debugfs directory for this device to put its files in.
  */
 struct dwc3 {
 	struct work_struct	drd_work;
@@ -1360,6 +1359,7 @@ struct dwc3 {
 	int			max_cfg_eps;
 	int			last_fifo_depth;
 	int			num_ep_resized;
+	struct dentry		*debug_root;
 };
 
 #define INCRX_BURST_MODE 0

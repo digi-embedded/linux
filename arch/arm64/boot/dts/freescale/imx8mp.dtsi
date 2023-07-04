@@ -248,12 +248,6 @@
 			reg = <0 0x94300000 0 0x100000>;
 			no-map;
 		};
-
-		/* used only by tuning tool, can be removed for normal case */
-		isp0_reserved: isp0@94400000 {
-			no-map;
-			reg = <0 0x94400000 0 0x10000000>;
-		};
 	};
 
 	osc_32k: clock-osc-32k {
@@ -593,7 +587,7 @@
 				#address-cells = <1>;
 				#size-cells = <1>;
 
-				imx8mp_uid: unique-id@420 {
+				imx8mp_uid: unique-id@8 {
 					reg = <0x8 0x8>;
 				};
 
@@ -716,6 +710,7 @@
 				compatible = "fsl,imx8mp-gpc";
 				reg = <0x303a0000 0x1000>;
 				interrupt-parent = <&gic>;
+				interrupts = <GIC_SPI 87 IRQ_TYPE_LEVEL_HIGH>;
 				interrupt-controller;
 				#interrupt-cells = <3>;
 
@@ -804,7 +799,7 @@
 						reg = <IMX8MP_POWER_DOMAIN_MIPI_PHY2>;
 					};
 
-					pgc_hsiomix: power-domains@17 {
+					pgc_hsiomix: power-domain@17 {
 						#power-domain-cells = <0>;
 						reg = <IMX8MP_POWER_DOMAIN_HSIOMIX>;
 						clocks = <&clk IMX8MP_CLK_HSIO_AXI>,
@@ -1651,7 +1646,6 @@
 							<&media_blk_ctrl IMX8MP_MEDIABLK_PD_ISP>;
 					id = <0>;
 					gpr = <&media_blk_ctrl>;
-					memory-region = <&isp0_reserved>;
 					status = "disabled";
 				};
 
@@ -2197,6 +2191,7 @@
 				phys = <&usb3_phy0>, <&usb3_phy0>;
 				phy-names = "usb2-phy", "usb3-phy";
 				snps,gfladj-refclk-lpm-sel-quirk;
+				snps,parkmode-disable-ss-quirk;
 			};
 
 		};
@@ -2239,6 +2234,7 @@
 				phys = <&usb3_phy1>, <&usb3_phy1>;
 				phy-names = "usb2-phy", "usb3-phy";
 				snps,gfladj-refclk-lpm-sel-quirk;
+				snps,parkmode-disable-ss-quirk;
 			};
 		};
 	};

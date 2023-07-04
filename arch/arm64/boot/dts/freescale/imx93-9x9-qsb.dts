@@ -153,7 +153,7 @@
 
 	sound-micfil {
 		compatible = "fsl,imx-audio-card";
-		model = "imx-audio-micfil";
+		model = "micfil-audio";
 		pri-dai-link {
 			link-name = "micfil hifi";
 			format = "i2s";
@@ -212,6 +212,11 @@
 			eee-broken-1000t;
 		};
 	};
+};
+
+&lpm {
+	soc-supply = <&buck1>;
+	status = "okay";
 };
 
 &lpi2c1 {
@@ -291,13 +296,13 @@
 		compatible = "nxp,pca9451a";
 		reg = <0x25>;
 		interrupt-parent = <&pcal6524>;
-		interrupts = <11 IRQ_TYPE_LEVEL_LOW>;
+		interrupts = <11 IRQ_TYPE_EDGE_FALLING>;
 
 		regulators {
 			buck1: BUCK1 {
 				regulator-name = "BUCK1";
-				regulator-min-microvolt = <600000>;
-				regulator-max-microvolt = <2187500>;
+				regulator-min-microvolt = <650000>;
+				regulator-max-microvolt = <2237500>;
 				regulator-boot-on;
 				regulator-always-on;
 				regulator-ramp-delay = <3125>;
@@ -339,22 +344,6 @@
 			ldo1: LDO1 {
 				regulator-name = "LDO1";
 				regulator-min-microvolt = <1600000>;
-				regulator-max-microvolt = <3300000>;
-				regulator-boot-on;
-				regulator-always-on;
-			};
-
-			ldo2: LDO2 {
-				regulator-name = "LDO2";
-				regulator-min-microvolt = <800000>;
-				regulator-max-microvolt = <1150000>;
-				regulator-boot-on;
-				regulator-always-on;
-			};
-
-			ldo3: LDO3 {
-				regulator-name = "LDO3";
-				regulator-min-microvolt = <800000>;
 				regulator-max-microvolt = <3300000>;
 				regulator-boot-on;
 				regulator-always-on;
@@ -404,6 +393,10 @@
 	pinctrl-0 = <&pinctrl_uart5>;
 	pinctrl-assert-gpios = <&pcal6524 19 GPIO_ACTIVE_HIGH>;
 	status = "okay";
+
+	bluetooth {
+		compatible = "nxp,88w8987-bt";
+	};
 };
 
 &micfil {

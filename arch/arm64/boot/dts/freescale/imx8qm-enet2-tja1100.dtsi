@@ -27,8 +27,8 @@
 
 		ethphy2: ethernet-phy@2 {
 			compatible = "ethernet-phy-ieee802.3-c22";
-			reg = <2>;
-			tja110x,refclk_in;
+			reg = <5>;
+			nxp,rmii-refclk-in;
 			/delete-property/ qca,disable-smarteee;
 			/delete-property/ vddio-supply;
 		};

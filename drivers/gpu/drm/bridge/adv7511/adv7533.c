@@ -130,6 +130,26 @@ void adv7533_dsi_power_off(struct adv7511 *adv)
 	regmap_write(adv->regmap_cec, 0x27, 0x0b);
 }
 
+enum drm_mode_status adv7533_mode_valid(struct adv7511 *adv,
+					const struct drm_display_mode *mode)
+{
+	unsigned long max_lane_freq;
+	struct mipi_dsi_device *dsi = adv->dsi;
+	u8 bpp = mipi_dsi_pixel_format_to_bpp(dsi->format);
+
+	/* Check max clock for either 7533 or 7535 */
+	if (mode->clock > (adv->type == ADV7533 ? 80000 : 148500))
+		return MODE_CLOCK_HIGH;
+
+	/* Check max clock for each lane */
+	max_lane_freq = (adv->type == ADV7533 ? 800000 : 891000);
+
+	if (mode->clock * bpp > max_lane_freq * adv->num_dsi_lanes)
+		return MODE_CLOCK_HIGH;
+
+	return MODE_OK;
+}
+
 int adv7533_patch_registers(struct adv7511 *adv)
 {
 	return regmap_register_patch(adv->regmap,

@@ -1844,10 +1844,9 @@ int phylink_fwnode_phy_connect(struct phylink *pl,
 
 	ret = phy_attach_direct(pl->netdev, phy_dev, flags,
 				pl->link_interface);
-	if (ret) {
-		phy_device_free(phy_dev);
+	phy_device_free(phy_dev);
+	if (ret)
 		return ret;
-	}
 
 	ret = phylink_bringup_phy(pl, phy_dev, pl->link_config.interface);
 	if (ret)
@@ -3504,7 +3503,10 @@ void phylink_mii_c45_pcs_get_state(struct mdio_device *pcs,
 		state->speed = SPEED_10000;
 		state->duplex = DUPLEX_FULL;
 		break;
-
+	case PHY_INTERFACE_MODE_25GBASER:
+		state->speed = SPEED_25000;
+		state->duplex = DUPLEX_FULL;
+		break;
 	default:
 		break;
 	}

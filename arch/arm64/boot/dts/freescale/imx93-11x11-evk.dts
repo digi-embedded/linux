@@ -221,7 +221,7 @@
 
 	sound-micfil {
 		compatible = "fsl,imx-audio-card";
-		model = "imx-audio-micfil";
+		model = "micfil-audio";
 		pri-dai-link {
 			link-name = "micfil hifi";
 			format = "i2s";
@@ -465,13 +465,13 @@
 		compatible = "nxp,pca9451a";
 		reg = <0x25>;
 		interrupt-parent = <&pcal6524>;
-		interrupts = <11 IRQ_TYPE_LEVEL_LOW>;
+		interrupts = <11 IRQ_TYPE_EDGE_FALLING>;
 
 		regulators {
 			buck1: BUCK1 {
 				regulator-name = "BUCK1";
-				regulator-min-microvolt = <600000>;
-				regulator-max-microvolt = <2187500>;
+				regulator-min-microvolt = <650000>;
+				regulator-max-microvolt = <2237500>;
 				regulator-boot-on;
 				regulator-always-on;
 				regulator-ramp-delay = <3125>;
@@ -579,7 +579,7 @@
 			compatible = "nxp,pcf2131";
 			reg = <0x53>;
 			interrupt-parent = <&pcal6524>;
-			interrupts = <1 IRQ_TYPE_LEVEL_HIGH>;
+			interrupts = <1 IRQ_TYPE_EDGE_FALLING>;
 			status = "okay";
 	};
 
@@ -684,6 +684,10 @@
 	pinctrl-assert-gpios = <&pcal6524 19 GPIO_ACTIVE_HIGH>;
 	pinctrl-0 = <&pinctrl_uart5>;
 	status = "okay";
+
+	bluetooth {
+		compatible = "nxp,88w8987-bt";
+	};
 };
 
 &media_blk_ctrl {

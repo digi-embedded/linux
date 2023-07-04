@@ -1864,10 +1864,12 @@ static struct sdma_desc *sdma_transfer_init(struct sdma_channel *sdmac,
 	}
 
 	if (sdma_load_context(sdmac))
-		goto err_desc_out;
+		goto err_bd_out;
 
 	return desc;
 
+err_bd_out:
+	sdma_free_bd(desc);
 err_desc_out:
 	kfree(desc);
 err_out:
@@ -2125,8 +2127,8 @@ static int sdma_config_write(struct dma_chan *chan,
 	sdmac->watermark_level = 0;
 	sdma_get_pc(sdmac, sdmac->peripheral_type);
 
-	if (!sdmac->sdma->fw_loaded && sdmac->is_ram_script) {
-		dev_warn_once(sdmac->sdma->dev, "sdma firmware not ready!\n");
+	if (!sdmac->sdma->is_on || (!sdmac->sdma->fw_loaded && sdmac->is_ram_script)) {
+		dev_warn_once(sdmac->sdma->dev, "sdma or sdma firmware not ready!\n");
 		return -EPERM;
 	}
 

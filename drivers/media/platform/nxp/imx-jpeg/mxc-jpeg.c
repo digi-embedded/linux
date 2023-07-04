@@ -89,7 +89,7 @@ static const struct mxc_jpeg_fmt mxc_formats[] = {
 	},
 	{
 		.name		= "BGR 12bit", /*12-bit BGR packed format*/
-		.fourcc		= V4L2_PIX_FMT_B312,
+		.fourcc		= V4L2_PIX_FMT_BGR48_12,
 		.subsampling	= V4L2_JPEG_CHROMA_SUBSAMPLING_444,
 		.nc		= 3,
 		.depth		= 36,
@@ -117,7 +117,7 @@ static const struct mxc_jpeg_fmt mxc_formats[] = {
 	},
 	{
 		.name		= "ABGR 12bit", /* 12-bit ABGR packed format */
-		.fourcc		= V4L2_PIX_FMT_B412,
+		.fourcc		= V4L2_PIX_FMT_ABGR64_12,
 		.subsampling	= V4L2_JPEG_CHROMA_SUBSAMPLING_444,
 		.nc		= 4,
 		.depth		= 48,
@@ -222,7 +222,7 @@ static const struct mxc_jpeg_fmt mxc_formats[] = {
 	},
 	{
 		.name		= "YUV444 12bit", /* YUVYUV */
-		.fourcc		= V4L2_PIX_FMT_Y312,
+		.fourcc		= V4L2_PIX_FMT_YUV48_12,
 		.subsampling	= V4L2_JPEG_CHROMA_SUBSAMPLING_444,
 		.nc		= 3,
 		.depth		= 36,
@@ -675,13 +675,13 @@ static enum mxc_jpeg_image_format mxc_jpeg_fourcc_to_imgfmt(u32 fourcc)
 	case V4L2_PIX_FMT_P012M:
 		return MXC_JPEG_YUV420;
 	case V4L2_PIX_FMT_YUV24:
-	case V4L2_PIX_FMT_Y312:
+	case V4L2_PIX_FMT_YUV48_12:
 		return MXC_JPEG_YUV444;
 	case V4L2_PIX_FMT_BGR24:
-	case V4L2_PIX_FMT_B312:
+	case V4L2_PIX_FMT_BGR48_12:
 		return MXC_JPEG_BGR;
 	case V4L2_PIX_FMT_ABGR32:
-	case V4L2_PIX_FMT_B412:
+	case V4L2_PIX_FMT_ABGR64_12:
 		return MXC_JPEG_ABGR;
 	default:
 		return MXC_JPEG_INVALID;
@@ -1032,14 +1032,14 @@ static int mxc_jpeg_fixup_sof(struct mxc_jpeg_sof *sof,
 		sof->comp[0].h = 0x2;
 		break;
 	case V4L2_PIX_FMT_YUV24:
-	case V4L2_PIX_FMT_Y312:
+	case V4L2_PIX_FMT_YUV48_12:
 	case V4L2_PIX_FMT_BGR24:
-	case V4L2_PIX_FMT_B312:
+	case V4L2_PIX_FMT_BGR48_12:
 	default:
 		sof->components_no = 3;
 		break;
 	case V4L2_PIX_FMT_ABGR32:
-	case V4L2_PIX_FMT_B412:
+	case V4L2_PIX_FMT_ABGR64_12:
 		sof->components_no = 4;
 		break;
 	case V4L2_PIX_FMT_GREY:
@@ -1072,14 +1072,14 @@ static int mxc_jpeg_fixup_sos(struct mxc_jpeg_sos *sos,
 		sos->components_no = 3;
 		break;
 	case V4L2_PIX_FMT_YUV24:
-	case V4L2_PIX_FMT_Y312:
+	case V4L2_PIX_FMT_YUV48_12:
 	case V4L2_PIX_FMT_BGR24:
-	case V4L2_PIX_FMT_B312:
+	case V4L2_PIX_FMT_BGR48_12:
 	default:
 		sos->components_no = 3;
 		break;
 	case V4L2_PIX_FMT_ABGR32:
-	case V4L2_PIX_FMT_B412:
+	case V4L2_PIX_FMT_ABGR64_12:
 		sos->components_no = 4;
 		break;
 	case V4L2_PIX_FMT_GREY:
@@ -2763,19 +2763,12 @@ static int mxc_jpeg_probe(struct platform_device *pdev)
 	jpeg->mode = mode;
 
 	/* Get clocks */
-	jpeg->clk_ipg = devm_clk_get(dev, "ipg");
-	if (IS_ERR(jpeg->clk_ipg)) {
-		dev_err(dev, "failed to get clock: ipg\n");
-		ret = PTR_ERR(jpeg->clk_ipg);
+	ret = devm_clk_bulk_get_all(&pdev->dev, &jpeg->clks);
+	if (ret < 0) {
+		dev_err(dev, "failed to get clock\n");
 		goto err_clk;
 	}
-
-	jpeg->clk_per = devm_clk_get(dev, "per");
-	if (IS_ERR(jpeg->clk_per)) {
-		dev_err(dev, "failed to get clock: per\n");
-		ret = PTR_ERR(jpeg->clk_per);
-		goto err_clk;
-	}
+	jpeg->num_clks = ret;
 
 	ret = mxc_jpeg_attach_pm_domains(jpeg);
 	if (ret < 0) {
@@ -2872,32 +2865,20 @@ static int mxc_jpeg_runtime_resume(struct device *dev)
 	struct mxc_jpeg_dev *jpeg = dev_get_drvdata(dev);
 	int ret;
 
-	ret = clk_prepare_enable(jpeg->clk_ipg);
+	ret = clk_bulk_prepare_enable(jpeg->num_clks, jpeg->clks);
 	if (ret < 0) {
-		dev_err(dev, "failed to enable clock: ipg\n");
-		goto err_ipg;
-	}
-
-	ret = clk_prepare_enable(jpeg->clk_per);
-	if (ret < 0) {
-		dev_err(dev, "failed to enable clock: per\n");
-		goto err_per;
+		dev_err(dev, "failed to enable clock\n");
+		return ret;
 	}
 
 	return 0;
-
-err_per:
-	clk_disable_unprepare(jpeg->clk_ipg);
-err_ipg:
-	return ret;
 }
 
 static int mxc_jpeg_runtime_suspend(struct device *dev)
 {
 	struct mxc_jpeg_dev *jpeg = dev_get_drvdata(dev);
 
-	clk_disable_unprepare(jpeg->clk_ipg);
-	clk_disable_unprepare(jpeg->clk_per);
+	clk_bulk_disable_unprepare(jpeg->num_clks, jpeg->clks);
 
 	return 0;
 }

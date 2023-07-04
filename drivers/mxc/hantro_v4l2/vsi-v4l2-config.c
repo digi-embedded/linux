@@ -112,7 +112,7 @@ static s32 leveltbl_h264[][3] = {
 };
 
 static const u8 colorprimaries[] = {
-	0,
+	V4L2_COLORSPACE_LAST,
 	V4L2_COLORSPACE_REC709,        /*Rec. ITU-R BT.709-6*/
 	0,
 	0,
@@ -126,7 +126,7 @@ static const u8 colorprimaries[] = {
 };
 
 static const u8 colortransfers[] = {
-	0,
+	V4L2_XFER_FUNC_LAST,
 	V4L2_XFER_FUNC_709,      /*Rec. ITU-R BT.709-6*/
 	0,
 	0,
@@ -148,7 +148,7 @@ static const u8 colortransfers[] = {
 };
 
 static const u8 colormatrixcoefs[] = {
-	0,
+	V4L2_YCBCR_ENC_LAST,
 	V4L2_YCBCR_ENC_709,             /*Rec. ITU-R BT.709-6*/
 	0,
 	0,
@@ -606,6 +606,7 @@ static struct vsi_video_fmt vsi_coded_fmt[] = {
 		.flag = (V4L2_FMT_FLAG_DYN_RESOLUTION | V4L2_FMT_FLAG_COMPRESSED),
 		.num_planes = 1,
 		.comp_planes = 1,
+		.mask = BIT(0),
 	},
 	{
 		.fourcc = V4L2_PIX_FMT_H264,
@@ -614,6 +615,7 @@ static struct vsi_video_fmt vsi_coded_fmt[] = {
 		.flag = (V4L2_FMT_FLAG_DYN_RESOLUTION | V4L2_FMT_FLAG_COMPRESSED),
 		.num_planes = 1,
 		.comp_planes = 1,
+		.mask = BIT(1),
 	},
 	{
 		.fourcc = V4L2_PIX_FMT_JPEG,
@@ -622,6 +624,7 @@ static struct vsi_video_fmt vsi_coded_fmt[] = {
 		.flag = (V4L2_FMT_FLAG_DYN_RESOLUTION | V4L2_FMT_FLAG_COMPRESSED),
 		.num_planes = 1,
 		.comp_planes = 1,
+		.mask = BIT(2),
 	},
 	{
 		.fourcc = V4L2_PIX_FMT_VP8,
@@ -630,6 +633,7 @@ static struct vsi_video_fmt vsi_coded_fmt[] = {
 		.flag = (V4L2_FMT_FLAG_DYN_RESOLUTION | V4L2_FMT_FLAG_COMPRESSED),
 		.num_planes = 1,
 		.comp_planes = 1,
+		.mask = BIT(3),
 	},
 	{
 		.fourcc = V4L2_PIX_FMT_VP9,
@@ -638,6 +642,7 @@ static struct vsi_video_fmt vsi_coded_fmt[] = {
 		.flag = (V4L2_FMT_FLAG_DYN_RESOLUTION | V4L2_FMT_FLAG_COMPRESSED),
 		.num_planes = 1,
 		.comp_planes = 1,
+		.mask = BIT(4),
 	},
 	{
 		.name = "av1",
@@ -647,6 +652,7 @@ static struct vsi_video_fmt vsi_coded_fmt[] = {
 		.flag = (V4L2_FMT_FLAG_DYN_RESOLUTION | V4L2_FMT_FLAG_COMPRESSED),
 		.num_planes = 1,
 		.comp_planes = 1,
+		.mask = BIT(5),
 	},
 	{
 		.fourcc = V4L2_PIX_FMT_MPEG2,
@@ -655,6 +661,7 @@ static struct vsi_video_fmt vsi_coded_fmt[] = {
 		.flag = (V4L2_FMT_FLAG_DYN_RESOLUTION | V4L2_FMT_FLAG_COMPRESSED),
 		.num_planes = 1,
 		.comp_planes = 1,
+		.mask = BIT(6),
 	},
 	{
 		.fourcc = V4L2_PIX_FMT_MPEG4,
@@ -663,6 +670,7 @@ static struct vsi_video_fmt vsi_coded_fmt[] = {
 		.flag = (V4L2_FMT_FLAG_DYN_RESOLUTION | V4L2_FMT_FLAG_COMPRESSED),
 		.num_planes = 1,
 		.comp_planes = 1,
+		.mask = BIT(7),
 	},
 	{
 		.fourcc = V4L2_PIX_FMT_H263,
@@ -671,6 +679,7 @@ static struct vsi_video_fmt vsi_coded_fmt[] = {
 		.flag = (V4L2_FMT_FLAG_DYN_RESOLUTION | V4L2_FMT_FLAG_COMPRESSED),
 		.num_planes = 1,
 		.comp_planes = 1,
+		.mask = BIT(8),
 	},
 	{
 		.fourcc = V4L2_PIX_FMT_VC1_ANNEX_G,
@@ -679,6 +688,7 @@ static struct vsi_video_fmt vsi_coded_fmt[] = {
 		.flag = (V4L2_FMT_FLAG_DYN_RESOLUTION | V4L2_FMT_FLAG_COMPRESSED),
 		.num_planes = 1,
 		.comp_planes = 1,
+		.mask = BIT(9),
 	},
 	{
 		.fourcc = V4L2_PIX_FMT_VC1_ANNEX_L,
@@ -687,15 +697,27 @@ static struct vsi_video_fmt vsi_coded_fmt[] = {
 		.flag = (V4L2_FMT_FLAG_DYN_RESOLUTION | V4L2_FMT_FLAG_COMPRESSED),
 		.num_planes = 1,
 		.comp_planes = 1,
+		.mask = BIT(10),
 	},
 	{
-		.name = "rv",
-		.fourcc = V4L2_PIX_FMT_RV,
+		.name = "rv30",
+		.fourcc = V4L2_PIX_FMT_RV30,
 		.enc_fmt = V4L2_DAEMON_CODEC_UNKNOW_TYPE,
 		.dec_fmt = V4L2_DAEMON_CODEC_DEC_RV,
 		.flag = (V4L2_FMT_FLAG_DYN_RESOLUTION | V4L2_FMT_FLAG_COMPRESSED),
 		.num_planes = 1,
 		.comp_planes = 1,
+		.mask = BIT(11),
+	},
+	{
+		.name = "rv40",
+		.fourcc = V4L2_PIX_FMT_RV40,
+		.enc_fmt = V4L2_DAEMON_CODEC_UNKNOW_TYPE,
+		.dec_fmt = V4L2_DAEMON_CODEC_DEC_RV,
+		.flag = (V4L2_FMT_FLAG_DYN_RESOLUTION | V4L2_FMT_FLAG_COMPRESSED),
+		.num_planes = 1,
+		.comp_planes = 1,
+		.mask = BIT(11),
 	},
 	{
 		.name = "avs",
@@ -705,6 +727,7 @@ static struct vsi_video_fmt vsi_coded_fmt[] = {
 		.flag = (V4L2_FMT_FLAG_DYN_RESOLUTION | V4L2_FMT_FLAG_COMPRESSED),
 		.num_planes = 1,
 		.comp_planes = 1,
+		.mask = BIT(12),
 	},
 	{
 		.fourcc = V4L2_PIX_FMT_XVID,
@@ -713,6 +736,7 @@ static struct vsi_video_fmt vsi_coded_fmt[] = {
 		.flag = (V4L2_FMT_FLAG_DYN_RESOLUTION | V4L2_FMT_FLAG_COMPRESSED),
 		.num_planes = 1,
 		.comp_planes = 1,
+		.mask = BIT(13),
 	},
 };
 
@@ -1080,9 +1104,9 @@ static void vsi_set_default_parameter_enc(
 	enc_params->specific.enc_h26x_cmd.tc_Offset = -2;
 	enc_params->specific.enc_h26x_cmd.beta_Offset = 5;
 	enc_params->specific.enc_h26x_cmd.ssim = 1;
-	enc_params->specific.enc_h26x_cmd.userData = NULL;
+	enc_params->specific.enc_h26x_cmd.userData = (kaddr_t)NULL;
 	enc_params->specific.enc_h26x_cmd.gopSize = DEFAULT_GOP_SIZE;
-	enc_params->specific.enc_h26x_cmd.gopCfg = NULL;
+	enc_params->specific.enc_h26x_cmd.gopCfg = (kaddr_t)NULL;
 	enc_params->specific.enc_h26x_cmd.outReconFrame = 1;
 	enc_params->specific.enc_h26x_cmd.ltrInterval = -1;
 	enc_params->specific.enc_h26x_cmd.bitDepthLuma = 8;
@@ -1160,7 +1184,7 @@ void vsiv4l2_initcfg(struct vsi_v4l2_ctx *ctxp)
 	u32 enc_fmt_fourcc = 0;
 	u32 dec_fmt_fourcc = 0;
 
-	v4l2_klog(LOGLVL_CONFIG, "%lx:%s default enc_fmt:%d, dec_fmt:%d\n",
+	v4l2_klog(LOGLVL_CONFIG, "%llx:%s default enc_fmt:%d, dec_fmt:%d\n",
 		  ctxp->ctxid, __func__, enc_fmt, dec_fmt);
 
 	if (isencoder(ctxp)) {
@@ -1320,8 +1344,10 @@ static void verifyPlanesize(u32 psize[], int braw, int pixelformat, int width, i
 	//for coded format we support 1 plane only
 	//except certain header the CR data can be any small
 	//so just make it page aligned.
-	if (!braw)
-		psize[0] = max_t(int, basesize, psize[0]);
+	if (!braw && psize[0])
+		psize[0] = clamp_val(psize[0], SZ_128K, SZ_8M);
+	else if (!braw)
+		psize[0] = clamp_val(basesize, SZ_128K, SZ_8M);
 	else
 		psize[0] = basesize;
 	psize[1] = chromausize;
@@ -1983,19 +2009,18 @@ static int vsiv4l2_getfmt_dec(struct vsi_v4l2_ctx *ctx, struct v4l2_format *fmt)
 {
 	struct vsi_v4l2_mediacfg *pcfg = &ctx->mediacfg;
 	struct v4l2_pix_format *pix = &fmt->fmt.pix;
-	int braw = brawfmt(ctx->flag, fmt->type);
 	int *psize = (binputqueue(fmt->type) ? pcfg->sizeimagesrc : pcfg->sizeimagedst);
 
 	if (binputqueue(fmt->type)) {
 		pix->width = pcfg->decparams.dec_info.io_buffer.srcwidth;
 		pix->height = pcfg->decparams.dec_info.io_buffer.srcheight;
-		pix->pixelformat = find_local_dec_format(pcfg->decparams.dec_info.io_buffer.inputFormat, braw);
+		pix->pixelformat = pcfg->infmt_fourcc;
 		pix->bytesperline = pix->width;
 	} else {
 		pix->width = pcfg->decparams.dec_info.io_buffer.output_width;
 		pix->height = pcfg->decparams.dec_info.io_buffer.output_height;
 		pix->bytesperline = pcfg->bytesperline;
-		pix->pixelformat = find_local_dec_format(pcfg->decparams.dec_info.io_buffer.outBufFormat, braw);
+		pix->pixelformat = pcfg->outfmt_fourcc;
 	}
 	pix->field = pcfg->field;
 	pix->sizeimage = get_plane_size(psize, 0, 1);
@@ -2078,7 +2103,7 @@ int vsiv4l2_buffer_config(
 			*nbuffers = ctx->mediacfg.minbuf_4capture - vq->num_buffers;
 	}
 
-	v4l2_klog(LOGLVL_BRIEF, "%lx:%d::%s:%d:%d:%d:%d:%d", ctx->ctxid, vq->type, __func__,
+	v4l2_klog(LOGLVL_BRIEF, "%llx:%d::%s:%d:%d:%d:%d:%d", ctx->ctxid, vq->type, __func__,
 		*nbuffers, *nplanes, sizes[0], sizes[1], sizes[2]);
 	return 0;
 }
@@ -2088,12 +2113,12 @@ void vsiv4l2_set_hwinfo(struct vsi_v4l2_dev_info *hwinfo)
 	int i, j;
 
 	vsi_v4l2_hwconfig = *hwinfo;
-	v4l2_klog(LOGLVL_BRIEF, "%s::%d:%d:%lx:%lx", __func__,
+	v4l2_klog(LOGLVL_BRIEF, "%s::%d:%d:%llx:%llx", __func__,
 		hwinfo->enc_isH1, hwinfo->max_dec_resolution, hwinfo->encformat, hwinfo->decformat);
 	for (i = 0; i < ARRAY_SIZE(vsi_coded_fmt); i++) {
-		if (((1 << i) & hwinfo->encformat) == 0)
+		if ((vsi_coded_fmt[i].mask & hwinfo->encformat) == 0)
 			vsi_coded_fmt[i].enc_fmt = V4L2_DAEMON_CODEC_UNKNOW_TYPE;
-		if (((1 << i) & hwinfo->decformat) == 0) {
+		if ((vsi_coded_fmt[i].mask & hwinfo->decformat) == 0) {
 			//disable all jpg only output fmt
 			if (vsi_coded_fmt[i].dec_fmt == V4L2_DAEMON_CODEC_DEC_JPEG) {
 				for (j = 0; j < ARRAY_SIZE(vsi_raw_fmt); j++) {
