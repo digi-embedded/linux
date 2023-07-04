@@ -542,19 +542,16 @@
 	status = "okay";
 };
 
-&vpu_decoder {
-	boot-region = <&decoder_boot>;
-	rpc-region = <&decoder_rpc>;
-	reg-csr = <0x2d040000>;
-	core_type = <1>;
+/* VPU decoder and encoder */
+&vpu_core0 {
+	reg = <0x2d040000 0x10000>;
+	memory-region = <&decoder_boot>, <&decoder_rpc>;
 	status = "disabled";
 };
 
-&vpu_encoder {
-	boot-region = <&encoder_boot>;
-	rpc-region = <&encoder_rpc>;
-	reserved-region = <&encoder_reserved>;
-	reg-rpc-system = <0x40000000>;
+&vpu_core1 {
+	memory-region = <&encoder_boot>, <&encoder_rpc>;
+	reg = <0x2d050000 0x10000>;
 	resolution-max = <1920 1080>;
 	mbox-names = "enc1_tx0", "enc1_tx1", "enc1_rx";
 	mboxes = <&mu1_m0 0 0
