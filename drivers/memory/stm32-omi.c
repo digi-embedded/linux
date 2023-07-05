@@ -470,10 +470,8 @@ static u32 stm32_omi_find_byp_cmd(u16 period_ps)
 
 void stm32_omi_dlyb_stop(struct stm32_omi *omi)
 {
-	/* disable delay block and bypass mode */
-	regmap_update_bits(omi->regmap,
-				 omi->dlyb_base + SYSCFG_DLYBOS_CR,
-				 DLYBOS_CR_EN | DLYBOS_BYP_EN, 0);
+	/* disable delay block */
+	regmap_write(omi->regmap, omi->dlyb_base + SYSCFG_DLYBOS_CR, 0x0);
 }
 EXPORT_SYMBOL(stm32_omi_dlyb_stop);
 
