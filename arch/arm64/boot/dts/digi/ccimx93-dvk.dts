@@ -314,7 +314,7 @@
 		clocks = <&mipi_csi_xtal24m>;
 		clock-names = "xclk";
 		csi_id = <0>;
-		reset-gpios = <&gpio2 22 GPIO_ACTIVE_LOW>;
+		powerdown-gpios = <&gpio2 22 GPIO_ACTIVE_LOW>;
 		mclk = <24000000>;
 		mclk_source = <0>;
 		mipi_csi;
