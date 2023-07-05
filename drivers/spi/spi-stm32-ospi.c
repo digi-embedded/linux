@@ -13,6 +13,7 @@ struct stm32_ospi_flash {
 	u32 cs;
 	u32 presc;
 	u32 dlyb_cr;
+	u64 idcode;
 	bool calibrated;
 };
 
@@ -25,7 +26,7 @@ struct stm32_ospi {
 
 	u32 cr_reg;
 	u32 dcr_reg;
-	u64 idcode;
+	u64 id_buf;
 	int last_cs;
 	unsigned long status_timeout;
 
@@ -473,12 +474,13 @@ static int stm32_ospi_readid(struct stm32_omi *omi)
 	struct stm32_ospi *ospi =
 		container_of(omi, struct stm32_ospi, omi);
 	struct spi_device *spi = ospi->spi;
-	u64 rx_buf;
+	struct stm32_ospi_flash *flash = &ospi->flash[spi->chip_select];
+	u64 *rx_buf = &ospi->id_buf;
 	const struct spi_mem_op readid_op =
 		SPI_MEM_OP(SPI_MEM_OP_CMD(0x9F, 1),
 			   SPI_MEM_OP_NO_ADDR,
 			   SPI_MEM_OP_NO_DUMMY,
-			   SPI_MEM_OP_DATA_IN(sizeof(rx_buf), (u8 *)&rx_buf, 1));
+			   SPI_MEM_OP_DATA_IN(sizeof(*rx_buf), (u8 *)rx_buf, 1));
 	int ret;
 
 	omi->fmode = CR_FMODE_INDR;
@@ -494,20 +496,20 @@ static int stm32_ospi_readid(struct stm32_omi *omi)
 	if (ret)
 		return ret;
 
-	dev_dbg(ospi->dev, "Flash ID 0x%08llx\n", rx_buf);
+	dev_dbg(ospi->dev, "Flash ID 0x%08llx\n", *rx_buf);
 
 	/*
 	 * In case of SNAND, the first byte is a dummy byte. Depending of
 	 * memory device, its value can be different in function of frequency.
 	 * Ignore this byte and force its value to 0.
 	 */
-	rx_buf &= 0xffffffffffffff00;
+	*rx_buf &= 0xffffffffffffff00;
 
 	/* On stm32_ospi_readid() first execution, save the golden READID command's answer */
-	if (ospi->idcode == 0)
-		ospi->idcode = rx_buf;
+	if (!flash->idcode)
+		flash->idcode = *rx_buf;
 
-	if (rx_buf == ospi->idcode)
+	if (*rx_buf == flash->idcode)
 		return 0;
 
 	return -EIO;
@@ -532,7 +534,6 @@ static int stm32_ospi_calibration(struct spi_device *spi, u32 freq)
 	 */
 	flash->presc = DIV_ROUND_UP(ospi->omi.clk_rate,
 				    STM32_DLYB_FREQ_THRESHOLD) - 1;
-	ospi->idcode = 0;
 	ret = stm32_ospi_readid(omi);
 	if (ret)
 		return ret;
