@@ -32,6 +32,9 @@
 		target = <&lpuart1>;
 		__overlay__ {
 			status = "okay";
+			bluetooth {
+				compatible = "nxp,88w8987-bt";
+			};
 		};
 	};
 };
