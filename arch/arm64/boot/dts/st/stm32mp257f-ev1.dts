@@ -450,6 +450,13 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 		status = "okay";
+
+		typec@35 {
+			compatible = "st,stm32mp25-typec";
+			reg = <0x35>;
+			interrupts-extended = <&intc_rpmsg 0>;
+			status = "okay";
+		};
 	};
 };
 
