@@ -456,6 +456,16 @@
 			reg = <0x35>;
 			interrupts-extended = <&intc_rpmsg 0>;
 			status = "okay";
+			connector {
+				compatible = "usb-c-connector";
+				label = "USB-C";
+
+				port {
+					typec_ep: endpoint {
+						remote-endpoint = <&dwc3_ep>;
+					};
+				};
+			};
 		};
 	};
 };
@@ -627,6 +637,11 @@
 
 	dwc3: usb@48300000 {
 		maximum-speed = "high-speed";
-		dr_mode = "peripheral";
+		usb-role-switch;
+		port {
+			dwc3_ep: endpoint {
+				remote-endpoint = <&typec_ep>;
+			};
+		};
 	};
 };
