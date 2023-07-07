@@ -144,6 +144,10 @@ properties:
     maximum: 1
     default: 0
 
+  st,internal-vbus-comp:
+    type: boolean
+    description: Internal VBUS Comparator is used
+
 required:
   - compatible
   - "#phy-cells"
