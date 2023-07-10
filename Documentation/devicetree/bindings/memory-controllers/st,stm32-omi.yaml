@@ -4,7 +4,7 @@
 $id: http://devicetree.org/schemas/memory-controllers/st,stm32-omi.yaml#
 $schema: http://devicetree.org/meta-schemas/core.yaml#
 
-title: STM32 OSPI Memory Interface (OMI) bindings
+title: STM32 OSPI Memory Interface (OMI)
 
 maintainers:
   - Patrice Chotard <patrice.chotard@foss.st.com>
@@ -28,10 +28,10 @@ properties:
   reg:
     description: registers
 
-  '#address-cells':
+  "#address-cells":
     enum: [1, 2]
 
-  '#size-cells':
+  "#size-cells":
     enum: [0, 1]
 
   memory-region:
@@ -79,8 +79,8 @@ properties:
 required:
   - compatible
   - reg
-  - '#address-cells'
-  - '#size-cells'
+  - "#address-cells"
+  - "#size-cells"
   - clocks
   - interrupts
 
@@ -98,45 +98,46 @@ patternProperties:
               - jedec,spi-nor
               - spi-nand
 
-      st,max-frequency:
-        $ref: /schemas/types.yaml#/definitions/uint32
-        description:
-          Maximum clocking speed of the device in Hz.
+    allOf:
+      - if:
+          properties:
+            compatible:
+              enum:
+                - jedec,spi-nor
+                - spi-nand
 
-      st,tacc-ns:
-        description:
-          Device initial access time.
+        then:
+          $ref: "/schemas/spi/spi-controller.yaml#"
 
-      st,wzl:
-        $ref: /schemas/types.yaml#/definitions/string
-        description:
-          Enable write zero latency
+      - if:
+          properties:
+            compatible:
+              contains:
+                enum:
+                  - cfi-flash
 
-anyOf:
-  - if:
-      properties:
-        compatible:
-          enum:
-            - const: jedec,spi-nor
-            - const: spi-nand
+        then:
+          $ref: "/schemas/mtd/mtd-physmap.yaml#"
 
-    then:
-      $ref: "/schemas/spi/spi-controller.yaml#"
+          properties:
+            st,max-frequency:
+              $ref: /schemas/types.yaml#/definitions/uint32
+              description:
+                Maximum clocking speed of the device in Hz.
 
-  - if:
-      properties:
-        compatible:
-          contains:
-            enum:
-              - cfi-flash
+            st,tacc-ns:
+              description:
+                Device initial access time.
 
-    then:
-      $ref: "/schemas/mtd/mtd-physmap.yaml#"
+            st,wzl:
+              $ref: /schemas/types.yaml#/definitions/flag
+              description:
+                Enable write zero latency
 
-      required:
-        - st,max-frequency
-        - st,tacc-ns
-        - st,wzl
+          required:
+            - st,max-frequency
+            - st,tacc-ns
+            - st,wzl
 
 additionalProperties: false
 
@@ -151,8 +152,8 @@ examples:
       reg = <0x40430000 0x400>;
       memory-region = <&mm_ospi1>;
       interrupts = <GIC_SPI 163 IRQ_TYPE_LEVEL_HIGH>;
-      dmas = <&hpdma 2 0x22 0x00003121 0x0>,
-             <&hpdma 2 0x22 0x00003112 0x0>;
+      dmas = <&hpdma 2 0x62 0x00003121 0x0>,
+             <&hpdma 2 0x42 0x00003112 0x0>;
       dma-names = "tx", "rx";
       clocks = <&scmi_clk CK_SCMI_OSPI1>;
       resets = <&scmi_reset RST_SCMI_OSPI1DLL>, <&scmi_reset RST_SCMI_OSPI1DLL>;
@@ -179,7 +180,7 @@ examples:
       reg = <0x40430000 0x400>;
       memory-region = <&mm_ospi1>;
       interrupts = <GIC_SPI 163 IRQ_TYPE_LEVEL_HIGH>;
-      dmas = <&hpdma 2 0x63 0x00003011 0x0>;
+      dmas = <&hpdma 2 0x22 0x00003011 0x0>;
       dma-names = "rx";
       st,syscfg-dlyb = <&syscfg 0x1000>;
       clocks = <&scmi_clk CK_SCMI_OSPI1>;
@@ -194,5 +195,6 @@ examples:
         reg = <0x2 0x0 0x4000000>;
         st,max-frequency = <100000000>;
         st,tacc-ns = <48>;
+        st,wzl;
       };
     };
