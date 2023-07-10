@@ -279,14 +279,17 @@
 
 &hpdma {
 	st,burstlen = <32>;
+	memory-region = <&hpdma1_lli>;
 };
 
 &hpdma2 {
 	st,burstlen = <32>;
+	memory-region = <&hpdma2_lli>;
 };
 
 &hpdma3 {
 	st,burstlen = <32>;
+	memory-region = <&hpdma3_lli>;
 };
 
 &i2c2 {
