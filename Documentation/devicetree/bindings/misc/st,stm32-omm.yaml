@@ -4,7 +4,7 @@
 $id: http://devicetree.org/schemas/misc/st,stm32-omm.yaml#
 $schema: http://devicetree.org/meta-schemas/core.yaml#
 
-title: STM32 Octo Memory Manager (OMM) bindings
+title: STM32 Octo Memory Manager (OMM)
 
 maintainers:
   - Patrice Chotard <patrice.chotard@foss.st.com>
@@ -58,7 +58,7 @@ properties:
     items:
       - description: Octo Memory Manager reset
 
-  st,access:
+  feature-domains:
     $ref: /schemas/types.yaml#/definitions/phandle-array
     description: |
       Phandle to the rifsc device to check access right.
@@ -105,9 +105,11 @@ properties:
 patternProperties:
   "^spi@[a-f0-9]+$":
     type: object
+    $ref: "/schemas/memory-controllers/st,stm32-omi.yaml#"
 
   "^memory-controller@[a-f0-9]+$":
     type: object
+    $ref: "/schemas/memory-controllers/st,stm32-omi.yaml#"
 
 required:
   - compatible
@@ -139,7 +141,7 @@ examples:
       st,omm-req2ack-ns = <0x0>;
       st,omm-mux = <0x0>;
       st,omm-cssel-ovr = <0x0>;
-      st,access = <&rifsc STM32MP25_RIFSC_OCTOSPIM_ID>;
+      feature-domains = <&rifsc STM32MP25_RIFSC_OCTOSPIM_ID>;
 
       ranges = <0 0 0x40430000 0x400>,
                <1 0 0x40440000 0x400>;
@@ -150,13 +152,13 @@ examples:
         compatible = "st,stm32mp25-omi";
         reg = <0 0 0x400>;
         interrupts = <GIC_SPI 163 IRQ_TYPE_LEVEL_HIGH>;
-        dmas = <&hpdma 2 0x22 0x00003121 0x0>,
-               <&hpdma 2 0x22 0x00003112 0x0>;
+        dmas = <&hpdma 2 0x62 0x00003121 0x0>,
+               <&hpdma 2 0x42 0x00003112 0x0>;
         dma-names = "tx", "rx";
         st,syscfg-dlyb = <&syscfg 0x1000>;
         clocks = <&rcc CK_KER_OSPI1>;
         resets = <&rcc OSPI1_R>, <&rcc OSPI1DLL_R>;
-        st,access = <&rifsc STM32MP25_RIFSC_OCTOSPI1_ID>;
+        feature-domains = <&rifsc STM32MP25_RIFSC_OCTOSPI1_ID>;
       };
 
       memory-controller@40440000 {
@@ -165,12 +167,12 @@ examples:
         compatible = "st,stm32mp25-omi";
         reg = <1 0 0x400>;
         interrupts = <GIC_SPI 164 IRQ_TYPE_LEVEL_HIGH>;
-        dmas = <&hpdma 3 0x22 0x00003121 0x0>,
-               <&hpdma 3 0x22 0x00003112 0x0>;
+        dmas = <&hpdma 3 0x62 0x00003121 0x0>,
+               <&hpdma 3 0x42 0x00003112 0x0>;
         dma-names = "tx", "rx";
         st,syscfg-dlyb = <&syscfg 0x1400>;
         clocks = <&rcc CK_KER_OSPI2>;
         resets = <&rcc OSPI2_R>, <&rcc OSPI2DLL_R>;
-        st,access = <&rifsc STM32MP25_RIFSC_OCTOSPI2_ID>;
+        feature-domains = <&rifsc STM32MP25_RIFSC_OCTOSPI2_ID>;
       };
     };
