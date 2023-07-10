@@ -939,7 +939,6 @@
 &usbotg3_cdns3 {
 	dr_mode = "otg";
 	usb-role-switch;
-	status = "okay";
 
 	port {
 		usb3_drd_sw: endpoint {

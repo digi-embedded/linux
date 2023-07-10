@@ -420,16 +420,16 @@
 	status = "okay";
 };
 
-/* USB_OTG2/USB_SS3 */
-&usbotg3_cdns3 {
+&usbphy1 {
 	status = "okay";
 };
 
+/* USB_OTG2/USB_SS3 */
 &usbotg3 {
 	status = "okay";
 };
 
-&usbphy1 {
+&usbotg3_cdns3 {
 	status = "okay";
 };
 
