@@ -115,6 +115,7 @@ static int stm32_hyperbus_calibrate(struct hyperbus_device *hbdev)
 	void __iomem *regs_base = omi->regs_base;
 	u32 prescaler;
 	u16 period_ps = 0;
+	u8 window_len = 0;
 	int ret;
 	bool bypass_mode = false;
 
@@ -136,10 +137,10 @@ static int stm32_hyperbus_calibrate(struct hyperbus_device *hbdev)
 
 	if (bypass_mode || prescaler)
 		/* perform only RX TAP selection */
-		ret = stm32_omi_dlyb_find_tap(omi, true);
+		ret = stm32_omi_dlyb_find_tap(omi, true, &window_len);
 	else
 		/* perform RX/TX TAP selection */
-		ret = stm32_omi_dlyb_find_tap(omi, false);
+		ret = stm32_omi_dlyb_find_tap(omi, false, &window_len);
 
 	if (ret) {
 		dev_err(omi->dev, "Calibration failed\n");

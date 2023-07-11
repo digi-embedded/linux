@@ -305,7 +305,7 @@ static int stm32_omi_dlyb_set_tap(struct stm32_omi *omi, u8 tap, bool rx_tap)
 	return ret;
 }
 
-int stm32_omi_dlyb_find_tap(struct stm32_omi *omi, bool rx_only)
+int stm32_omi_dlyb_find_tap(struct stm32_omi *omi, bool rx_only, u8 *window_len)
 {
 	struct stm32_tap_window rx_tap_w[DLYBOS_TAPSEL_NB];
 	int ret;
@@ -371,6 +371,7 @@ int stm32_omi_dlyb_find_tap(struct stm32_omi *omi, bool rx_only)
 		}
 
 		rx_tap = rx_window_end - rx_window_len / 2;
+		*window_len = rx_window_len;
 		dev_dbg(omi->dev, "RX_TAP_SEL set to %d\n", rx_tap);
 
 		return stm32_omi_dlyb_set_tap(omi, rx_tap, true);
@@ -402,7 +403,7 @@ int stm32_omi_dlyb_find_tap(struct stm32_omi *omi, bool rx_only)
 }
 EXPORT_SYMBOL(stm32_omi_dlyb_find_tap);
 
-int stm32_omi_dlyb_restore(struct stm32_omi *omi, u32 dlyb_cr)
+int stm32_omi_dlyb_set_cr(struct stm32_omi *omi, u32 dlyb_cr)
 {
 	bool bypass_mode = false;
 	int ret;
@@ -426,13 +427,13 @@ int stm32_omi_dlyb_restore(struct stm32_omi *omi, u32 dlyb_cr)
 	tx_tap = FIELD_GET(DLYBOS_CR_TXTAPSEL_MASK, dlyb_cr);
 	return stm32_omi_dlyb_set_tap(omi, tx_tap, false);
 }
-EXPORT_SYMBOL(stm32_omi_dlyb_restore);
+EXPORT_SYMBOL(stm32_omi_dlyb_set_cr);
 
-void stm32_omi_dlyb_save(struct stm32_omi *omi, u32 *dlyb_cr)
+void stm32_omi_dlyb_get_cr(struct stm32_omi *omi, u32 *dlyb_cr)
 {
 	regmap_read(omi->regmap, omi->dlyb_base + SYSCFG_DLYBOS_CR, dlyb_cr);
 }
-EXPORT_SYMBOL(stm32_omi_dlyb_save);
+EXPORT_SYMBOL(stm32_omi_dlyb_get_cr);
 
 /* ½ memory clock period in pico second */
 static const u16 dlybos_delay_ps[STM32_DLYBOS_DELAY_NB] = {

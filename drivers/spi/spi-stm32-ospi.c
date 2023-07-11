@@ -16,6 +16,7 @@ struct stm32_ospi_flash {
 	u32 dcr_reg;
 	u64 idcode;
 	bool calibrated;
+	bool sample_later;
 };
 
 struct stm32_ospi {
@@ -185,7 +186,7 @@ static int stm32_ospi_send(struct spi_device *spi, const struct spi_mem_op *op)
 	struct stm32_ospi_flash *flash = &ospi->flash[spi->chip_select];
 	void __iomem *regs_base = ospi->omi.regs_base;
 	struct stm32_omi *omi = &ospi->omi;
-	u32 ccr, cr, tcr;
+	u32 ccr, cr, tcr = 0;
 	int timeout, err = 0, err_poll_status = 0;
 	int ret;
 
@@ -203,7 +204,7 @@ static int stm32_ospi_send(struct spi_device *spi, const struct spi_mem_op *op)
 		stm32_ospi_set_prescaler(ospi, flash->presc);
 
 		if (flash->calibrated) {
-			ret = stm32_omi_dlyb_restore(omi, flash->dlyb_cr);
+			ret = stm32_omi_dlyb_set_cr(omi, flash->dlyb_cr);
 			if (ret)
 				return ret;
 		}
@@ -227,7 +228,9 @@ static int stm32_ospi_send(struct spi_device *spi, const struct spi_mem_op *op)
 		ccr |= FIELD_PREP(CCR_ADSIZE_MASK, op->addr.nbytes - 1);
 	}
 
-	tcr = TCR_SSHIFT;
+	if (flash->sample_later)
+		tcr |= TCR_SSHIFT;
+
 	if (op->dummy.buswidth && op->dummy.nbytes) {
 		tcr |= FIELD_PREP(TCR_DCYC_MASK,
 				  op->dummy.nbytes * 8 / op->dummy.buswidth);
@@ -534,7 +537,8 @@ static int stm32_ospi_calibration(struct stm32_ospi *ospi)
 	struct stm32_ospi_flash *flash = &ospi->flash[ospi->last_cs];
 	struct spi_device *spi = flash->spi;
 	void __iomem *regs_base = ospi->omi.regs_base;
-	int ret;
+	u8 window_len_tcr0 = 0, window_len_tcr1 = 0;
+	int ret, ret_tcr0, ret_tcr1;
 
 	/*
 	 * set memory device at low frequency (50MHz) and sent
@@ -567,18 +571,38 @@ static int stm32_ospi_calibration(struct stm32_ospi *ospi)
 	 * when DTR support will be added, Rx/Tx TAP selection will have to
 	 * be performed
 	 */
-	ret = stm32_omi_dlyb_find_tap(omi, true);
-	if (ret) {
-		dev_info(ospi->dev, "Calibration phase failed\n");
+	ret_tcr0 = stm32_omi_dlyb_find_tap(omi, true, &window_len_tcr0);
+	if (!ret_tcr0)
+		/*
+		 * save flash delay block configuration, will be restored
+		 * each time this flash is addressed
+		 */
+		stm32_omi_dlyb_get_cr(omi, &flash->dlyb_cr);
+
+	stm32_omi_dlyb_stop(omi);
+	ret = stm32_omi_dlyb_init(omi, false, 0);
+	if (ret)
 		return ret;
+
+	flash->sample_later = true;
+	ret_tcr1 = stm32_omi_dlyb_find_tap(omi, true, &window_len_tcr1);
+	if (ret_tcr0 && ret_tcr1) {
+		dev_info(ospi->dev, "Calibration phase failed\n");
+		return ret_tcr0;
 	}
 
-	/*
-	 * save flash delay block configuration, will be restored
-	 * each time this flash is addressed
-	 */
+	if (window_len_tcr0 >= window_len_tcr1) {
+		flash->sample_later = false;
+		stm32_omi_dlyb_stop(omi);
+
+		ret = stm32_omi_dlyb_set_cr(omi, flash->dlyb_cr);
+		if (ret)
+			return ret;
+	} else {
+		stm32_omi_dlyb_get_cr(omi, &flash->dlyb_cr);
+	}
+
 	flash->calibrated = true;
-	stm32_omi_dlyb_save(omi, &flash->dlyb_cr);
 
 	return 0;
 }
@@ -636,6 +660,7 @@ static int stm32_ospi_setup(struct spi_device *spi)
 
 			/* stop the DLL */
 			stm32_omi_dlyb_stop(omi);
+			flash->sample_later = false;
 
 			flash->presc = DIV_ROUND_UP(omi->clk_rate,
 						    STM32_DLYB_FREQ_THRESHOLD) - 1;
