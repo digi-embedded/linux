@@ -137,7 +137,6 @@ patternProperties:
           required:
             - st,max-frequency
             - st,tacc-ns
-            - st,wzl
 
 additionalProperties: false
 
@@ -195,6 +194,5 @@ examples:
         reg = <0x2 0x0 0x4000000>;
         st,max-frequency = <100000000>;
         st,tacc-ns = <48>;
-        st,wzl;
       };
     };
