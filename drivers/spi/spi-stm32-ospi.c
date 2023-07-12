@@ -167,13 +167,25 @@ static int stm32_ospi_get_mode(u8 buswidth)
 	}
 }
 
+static void stm32_ospi_set_prescaler(struct stm32_ospi *ospi, u32 presc)
+{
+	void __iomem *regs_base = ospi->omi.regs_base;
+	u32 dcr2;
+
+	/* set prescaler */
+	dcr2 = readl_relaxed(regs_base + OSPI_DCR2);
+	dcr2 &= ~DCR2_PRESC_MASK;
+	dcr2 |= FIELD_PREP(DCR2_PRESC_MASK, presc);
+	writel_relaxed(dcr2, regs_base + OSPI_DCR2);
+}
+
 static int stm32_ospi_send(struct spi_device *spi, const struct spi_mem_op *op)
 {
 	struct stm32_ospi *ospi = spi_controller_get_devdata(spi->master);
 	struct stm32_ospi_flash *flash = &ospi->flash[spi->chip_select];
 	void __iomem *regs_base = ospi->omi.regs_base;
 	struct stm32_omi *omi = &ospi->omi;
-	u32 ccr, cr, dcr2, tcr;
+	u32 ccr, cr, tcr;
 	int timeout, err = 0, err_poll_status = 0;
 	int ret;
 
@@ -188,11 +200,7 @@ static int stm32_ospi_send(struct spi_device *spi, const struct spi_mem_op *op)
 		stm32_omi_dlyb_stop(omi);
 		writel_relaxed(flash->dcr_reg, regs_base + OSPI_DCR1);
 
-		/* set prescaler */
-		dcr2 = readl_relaxed(regs_base + OSPI_DCR2);
-		dcr2 &= ~DCR2_PRESC_MASK;
-		dcr2 |= FIELD_PREP(DCR2_PRESC_MASK, flash->presc);
-		writel_relaxed(dcr2, regs_base + OSPI_DCR2);
+		stm32_ospi_set_prescaler(ospi, flash->presc);
 
 		if (flash->calibrated) {
 			ret = stm32_omi_dlyb_restore(omi, flash->dlyb_cr);
@@ -526,7 +534,6 @@ static int stm32_ospi_calibration(struct stm32_ospi *ospi)
 	struct stm32_ospi_flash *flash = &ospi->flash[ospi->last_cs];
 	struct spi_device *spi = flash->spi;
 	void __iomem *regs_base = ospi->omi.regs_base;
-	u32 dcr2;
 	int ret;
 
 	/*
@@ -535,10 +542,7 @@ static int stm32_ospi_calibration(struct stm32_ospi *ospi)
 	 */
 	flash->presc = DIV_ROUND_UP(ospi->omi.clk_rate,
 				    STM32_DLYB_FREQ_THRESHOLD) - 1;
-	dcr2 = readl_relaxed(regs_base + OSPI_DCR2);
-	dcr2 &= ~DCR2_PRESC_MASK;
-	dcr2 |= FIELD_PREP(DCR2_PRESC_MASK, flash->presc);
-	writel_relaxed(dcr2, regs_base + OSPI_DCR2);
+	stm32_ospi_set_prescaler(ospi, flash->presc);
 
 	ret = stm32_ospi_readid(omi);
 	if (ret)
@@ -549,10 +553,7 @@ static int stm32_ospi_calibration(struct stm32_ospi *ospi)
 	 * prescaler should be set befor locking the DLL
 	 */
 	flash->presc = DIV_ROUND_UP(ospi->omi.clk_rate, spi->max_speed_hz) - 1;
-	dcr2 = readl_relaxed(regs_base + OSPI_DCR2);
-	dcr2 &= ~DCR2_PRESC_MASK;
-	dcr2 |= FIELD_PREP(DCR2_PRESC_MASK, flash->presc);
-	writel_relaxed(dcr2, regs_base + OSPI_DCR2);
+	stm32_ospi_set_prescaler(ospi, flash->presc);
 
 	flash->dcr_reg &= ~DCR1_DLYBYP;
 	writel_relaxed(flash->dcr_reg, regs_base + OSPI_DCR1);
@@ -589,7 +590,7 @@ static int stm32_ospi_setup(struct spi_device *spi)
 	struct stm32_omi *omi = &ospi->omi;
 	struct stm32_ospi_flash *flash;
 	void __iomem *regs_base = ospi->omi.regs_base;
-	u32 bus_freq, dcr2;
+	u32 bus_freq;
 	int ret;
 
 	if (ctrl->busy)
@@ -621,11 +622,7 @@ static int stm32_ospi_setup(struct spi_device *spi)
 	flash->dcr_reg = DCR1_DEVSIZE_MASK | DCR1_DLYBYP;
 	writel_relaxed(flash->dcr_reg, regs_base + OSPI_DCR1);
 
-	/* set prescaler */
-	dcr2 = readl_relaxed(regs_base + OSPI_DCR2);
-	dcr2 &= ~DCR2_PRESC_MASK;
-	dcr2 |= FIELD_PREP(DCR2_PRESC_MASK, flash->presc);
-	writel_relaxed(dcr2, regs_base + OSPI_DCR2);
+	stm32_ospi_set_prescaler(ospi, flash->presc);
 
 	ospi->last_cs = spi->chip_select;
 
@@ -642,10 +639,7 @@ static int stm32_ospi_setup(struct spi_device *spi)
 
 			flash->presc = DIV_ROUND_UP(omi->clk_rate,
 						    STM32_DLYB_FREQ_THRESHOLD) - 1;
-			dcr2 = readl_relaxed(regs_base + OSPI_DCR2);
-			dcr2 &= ~DCR2_PRESC_MASK;
-			dcr2 |= FIELD_PREP(DCR2_PRESC_MASK, flash->presc);
-			writel_relaxed(dcr2, regs_base + OSPI_DCR2);
+			stm32_ospi_set_prescaler(ospi, flash->presc);
 
 			flash->dcr_reg |= DCR1_DLYBYP;
 			writel_relaxed(flash->dcr_reg, regs_base + OSPI_DCR1);
