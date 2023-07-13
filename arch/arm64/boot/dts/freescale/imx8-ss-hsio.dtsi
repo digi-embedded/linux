@@ -21,13 +21,13 @@ hsio_subsys: bus@5f000000 {
 	};
 
 	hsio_refa_clk: clock-hsio-refa {
-		compatible = "gpio-gate-clock";
+		compatible = "fixed-clock";
 		clocks = <&xtal100m>;
 		#clock-cells = <0>;
 	};
 
 	hsio_refb_clk: clock-hsio-refb {
-		compatible = "gpio-gate-clock";
+		compatible = "fixed-clock";
 		clocks = <&xtal100m>;
 		#clock-cells = <0>;
 	};
