@@ -318,11 +318,8 @@ _ConvertLogical2Physical(
     OUT gctPHYS_ADDR_T * Physical
     );
 
-gctBOOL
-_QuerySignal(
-    IN gckOS Os,
-    IN gctSIGNAL Signal
-    );
+gceSTATUS
+_QuerySignal(IN gckOS Os, IN gctSIGNAL Signal);
 
 static inline gctINT
 _GetProcessID(
