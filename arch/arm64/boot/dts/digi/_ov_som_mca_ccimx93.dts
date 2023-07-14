@@ -40,7 +40,7 @@
 		};
 	};
 
-	/* Configure PMIC IRQ to be sahred with MCA */
+	/* Configure PMIC IRQ to be shared with MCA */
 	fragment@3 {
 		target = <&pmic_cc93>;
 		__overlay__ {
