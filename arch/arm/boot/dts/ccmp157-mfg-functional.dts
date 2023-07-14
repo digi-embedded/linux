@@ -176,6 +176,7 @@
 		reg = <0>;
 		VCC-supply = <&v3v3>;
 		IOVCC-supply = <&v3v3>;
+		reset-gpios = <&gpioi 11 GPIO_ACTIVE_HIGH>; /* LTDC_G6 */
 		status = "okay";
 
 		port {
