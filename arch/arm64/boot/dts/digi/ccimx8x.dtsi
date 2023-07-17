@@ -35,6 +35,10 @@
 	};
 
 	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
 		linux,cma {
 			compatible = "shared-dma-pool";
 			reusable;
