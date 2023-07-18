@@ -61,13 +61,36 @@
 			>;
 		};
 
+		dsp_reserved: dsp@92400000 {
+			reg = <0 0x92400000 0 0x1000000>;
+			no-map;
+		};
+		dsp_reserved_heap: dsp_reserved_heap {
+			reg = <0 0x93400000 0 0xef0000>;
+			no-map;
+		};
+		dsp_vdev0vring0: vdev0vring0@942f0000 {
+			reg = <0 0x942f0000 0 0x8000>;
+			no-map;
+		};
+
+		dsp_vdev0vring1: vdev0vring1@942f8000 {
+			reg = <0 0x942f8000 0 0x8000>;
+			no-map;
+		};
+
+		dsp_vdev0buffer: vdev0buffer@94300000 {
+			compatible = "shared-dma-pool";
+			reg = <0 0x94300000 0 0x100000>;
+			no-map;
+		};
 		decoder_boot: decoder-boot@84000000 {
 			reg = <0 0x84000000 0 0x2000000>;
 			no-map;
 		};
 
 		decoder_rpc: decoder-rpc@0x92000000 {
-			reg = <0 0x92000000 0 0x200000>;
+			reg = <0 0x92000000 0 0x100000>;
 			no-map;
 		};
 
@@ -76,14 +99,9 @@
 			no-map;
 		};
 
-		encoder_rpc: encoder-rpc@0x92200000 {
-			reg = <0 0x92200000 0 0x200000>;
+		encoder_rpc: encoder-rpc@0x94400000 {
+			reg = <0 0x94400000 0 0x700000>;
 			no-map;
-		};
-
-		encoder_reserved: encoder_reserved@94400000 {
-			no-map;
-			reg = <0 0x94400000 0 0x800000>;
 		};
 	};
 
@@ -268,6 +286,11 @@
 &adc0 {
 	vref-supply = <&reg_1v8_adc_vref>;
 	digi,max-channel = <5>;
+};
+
+&dsp {
+	memory-region = <&dsp_vdev0buffer>, <&dsp_vdev0vring0>,
+			<&dsp_vdev0vring1>, <&dsp_reserved>;
 };
 
 /* I2C0 connected to MCA and crypto chip */
