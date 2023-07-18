@@ -164,9 +164,6 @@ struct stm32_dcmi {
 	int				overrun_count;
 	int				buffers_count;
 
-	/* Ensure DMA operations atomicity */
-	struct mutex			dma_lock;
-
 	struct media_device		mdev;
 	struct media_pad		vid_cap_pad;
 	struct media_pipeline		pipeline;
@@ -924,9 +921,7 @@ static void dcmi_stop_streaming(struct vb2_queue *vq)
 	spin_unlock_irq(&dcmi->irqlock);
 
 	/* Stop all pending DMA operations */
-	mutex_lock(&dcmi->dma_lock);
 	dmaengine_terminate_sync(dcmi->dma_chan);
-	mutex_unlock(&dcmi->dma_lock);
 
 	pm_runtime_put(dcmi->dev);
 
@@ -2049,7 +2044,6 @@ static int dcmi_probe(struct platform_device *pdev)
 
 	spin_lock_init(&dcmi->irqlock);
 	mutex_init(&dcmi->lock);
-	mutex_init(&dcmi->dma_lock);
 	init_completion(&dcmi->complete);
 	INIT_LIST_HEAD(&dcmi->buffers);
 
