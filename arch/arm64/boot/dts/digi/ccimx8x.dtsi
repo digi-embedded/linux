@@ -50,13 +50,14 @@
 			 * be parsed for whatever reason.
 			 */
 			size = <0 0x6000000>;
-			alloc-ranges = <0 0x96000000 0 0x28000000>;
+			alloc-ranges = <0 0x96000000 0 0x50000000>;
 			linux,cma-default;
 			digi,size-table = <
 				/* RAM         CMA*/
 				0 0x20000000 0 0x6000000	/* 512 MB variants -> 96 MB of CMA */
 				0 0x40000000 0 0x14000000	/* 1 GB variants   -> 320 MB of CMA */
 				0 0x80000000 0 0x28000000	/* 2 GB variants   -> 640 MB of CMA */
+				0 0xFFFFFFFF 0 0x50000000	/* 4 GB variants   -> 1280 MB of CMA */
 			>;
 		};
 
@@ -457,6 +458,7 @@
 		0x20000000 0x2000000	/* 512 MB variants -> 32 MB of GPU CMA */
 		0x40000000 0x8000000	/* 1 GB variants   -> 128 MB of GPU CMA */
 		0x80000000 0x10000000	/* 2 GB variants   -> 256 MB of GPU CMA */
+		0xFFFFFFFF 0x20000000	/* 4 GB variants   -> 512 MB of GPU CMA */
 	>;
 };
 
