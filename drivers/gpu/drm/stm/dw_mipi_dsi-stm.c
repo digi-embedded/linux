@@ -255,40 +255,6 @@ static int dsi_pll_get_params(struct dw_mipi_dsi_stm *dsi,
 	return 0;
 }
 
-static int dsi_phy_141_pll_get_params(struct dw_mipi_dsi_stm *dsi,
-				      int clkin_khz, int clkout_khz,
-				      int *idf, int *ndiv, int *odf)
-{
-	int i, n;
-	int delta, best_delta; /* all in khz */
-
-	/* Early checks preventing division by 0 & odd results */
-	if (clkin_khz <= 0 || clkout_khz <= 0)
-		return -EINVAL;
-
-	best_delta = 1000000; /* big started value (1000000khz) */
-
-	for (i = IDF_PHY_141_MIN; i <= IDF_PHY_141_MAX; i++) {
-		for (n = NDIV_PHY_141_MIN; n <= NDIV_PHY_141_MAX; n++) {
-			/* Check if new delta is better & saves parameters */
-			delta = dsi_pll_get_clkout_khz(clkin_khz, i, n, *odf) - clkout_khz;
-
-			if (delta < 0)
-				delta = -delta;
-			if (delta < best_delta) {
-				*idf = i;
-				*ndiv = n;
-				best_delta = delta;
-			}
-			/* fast return in case of "perfect result" */
-			if (!delta)
-				return 0;
-		}
-	}
-
-	return 0;
-}
-
 struct dphy_pll_parameter_map {
 	u32 data_rate;	/* upper margin of frequency range */
 	u8 hs_freq;	/* hsfreqrange */
@@ -363,12 +329,62 @@ static const struct dphy_pll_parameter_map dppa_map[] = {
 	{2500, 0x49, 0x00, 0x01, 0x0C}
 };
 
+static int dsi_phy_141_pll_get_params(struct dw_mipi_dsi_stm *dsi,
+				      int clkin_khz, int clkout_khz,
+				      int *idf, int *ndiv, int *odf, int *index)
+{
+	int i, n;
+	int delta, best_delta; /* all in khz */
+
+	/* Early checks preventing division by 0 & odd results */
+	if (clkin_khz <= 0 || clkout_khz <= 0)
+		return -EINVAL;
+
+	/* find frequency mapping */
+	for (i = 0; i < ARRAY_SIZE(dppa_map); i++) {
+		if (dsi->lane_mbps < dppa_map[i].data_rate) {
+			if (i == ARRAY_SIZE(dppa_map) - 1)
+				DRM_WARN("Could not find frequency mapped index\n");
+			i--;
+			break;
+		}
+	}
+
+	/* Save index only if reference exists */
+	if (index)
+		*index = i;
+
+	*odf = int_pow(2, ((dppa_map[i].odf & WRPCR1_ODF) >> 28));
+
+	best_delta = 1000000; /* big started value (1000000khz) */
+
+	for (i = IDF_PHY_141_MIN; i <= IDF_PHY_141_MAX; i++) {
+		for (n = NDIV_PHY_141_MIN; n <= NDIV_PHY_141_MAX; n++) {
+			/* Check if new delta is better & saves parameters */
+			delta = dsi_pll_get_clkout_khz(clkin_khz, i, n, *odf) - clkout_khz;
+
+			if (delta < 0)
+				delta = -delta;
+			if (delta < best_delta) {
+				*idf = i;
+				*ndiv = n;
+				best_delta = delta;
+			}
+			/* fast return in case of "perfect result" */
+			if (!delta)
+				return 0;
+		}
+	}
+
+	return 0;
+}
+
 static int dw_mipi_dsi_phy_141_init(void *priv_data)
 {
 	struct dw_mipi_dsi_stm *dsi = priv_data;
 	u32 val, ccf, prop, gmp, int1, bias, vco, ndiv, odf, idf;
 	unsigned int pll_in_khz, pll_out_khz, hsfreq;
-	int ret, i;
+	int ret, dppa_index;
 
 	DRM_DEBUG_DRIVER("\n");
 
@@ -399,40 +415,16 @@ static int dw_mipi_dsi_phy_141_init(void *priv_data)
 	pll_out_khz = dsi->lane_mbps * 1000 / 2;
 	pll_in_khz = (unsigned int)(clk_get_rate(dsi->pllref_clk) / 1000);
 
-	/* find frequency mapping */
-	for (i = 0; i < ARRAY_SIZE(dppa_map); i++) {
-		if (dsi->lane_mbps < dppa_map[i].data_rate) {
-			i--;
-			break;
-		}
-	}
-
-	/* TODO check odf value */
-	switch (dppa_map[i].odf) {
-	case(3):
-		odf = 8;
-		break;
-	case(2):
-		odf = 4;
-		break;
-	case(1):
-		odf = 2;
-		break;
-	default:
-		odf = 1;
-		break;
-	}
-
-	dsi_phy_141_pll_get_params(dsi, pll_in_khz, pll_out_khz, &idf, &ndiv, &odf);
+	dsi_phy_141_pll_get_params(dsi, pll_in_khz, pll_out_khz, &idf, &ndiv, &odf, &dppa_index);
 
 	ccf = ((pll_in_khz / 1000 - 17)) * 4;
-	hsfreq = dppa_map[i].hs_freq;
+	hsfreq = dppa_map[dppa_index].hs_freq;
 
-	vco = dppa_map[i].vco;
+	vco = dppa_map[dppa_index].vco;
 	bias = 0x10;
 	int1 = 0x00;
 	gmp = 0x01;
-	prop = dppa_map[i].prop;
+	prop = dppa_map[dppa_index].prop;
 
 	/* set DLD, HSFR & CCF */
 	val = (hsfreq << 8) | ccf;
@@ -478,7 +470,7 @@ dw_mipi_dsi_phy_141_get_lane_mbps(void *priv_data,
 	struct dw_mipi_dsi_stm *dsi = priv_data;
 	unsigned int pll_out_khz, pll_in_khz;
 	u32 ndiv, odf, idf;
-	int bpp, i;
+	int bpp;
 
 	/* Compute requested pll out */
 	dsi->format = format;
@@ -500,31 +492,7 @@ dw_mipi_dsi_phy_141_get_lane_mbps(void *priv_data,
 
 	pll_in_khz = (unsigned int)(clk_get_rate(dsi->pllref_clk) / 1000);
 
-	/* find frequency mapping */
-	for (i = 0; i < ARRAY_SIZE(dppa_map); i++) {
-		if (dsi->lane_mbps < dppa_map[i].data_rate) {
-			i--;
-			break;
-		}
-	}
-
-	/* TODO check odf value */
-	switch (dppa_map[i].odf) {
-	case(3):
-		odf = 8;
-		break;
-	case(2):
-		odf = 4;
-		break;
-	case(1):
-		odf = 2;
-		break;
-	default:
-		odf = 1;
-		break;
-	}
-
-	dsi_phy_141_pll_get_params(dsi, pll_in_khz, pll_out_khz, &idf, &ndiv, &odf);
+	dsi_phy_141_pll_get_params(dsi, pll_in_khz, pll_out_khz, &idf, &ndiv, &odf, NULL);
 
 	/* Get the adjusted lane data rate value, lane data rate = 2 * pll output */
 	*lane_mbps = 2 * dsi_pll_get_clkout_khz(pll_in_khz, idf, ndiv, odf) / 1000;
