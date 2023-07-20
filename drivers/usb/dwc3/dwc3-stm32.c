@@ -87,6 +87,7 @@ static int stm32_dwc3_probe(struct platform_device *pdev)
 	struct device_node *node = dev->of_node, *child;
 	struct regmap *regmap;
 	int ret;
+	struct reset_control *reset;
 
 	dwc3_data = devm_kzalloc(dev, sizeof(*dwc3_data), GFP_KERNEL);
 	if (!dwc3_data)
@@ -119,6 +120,25 @@ static int stm32_dwc3_probe(struct platform_device *pdev)
 	child = of_get_child_by_name(node, "usb");
 	if (!child)
 		return dev_err_probe(dev, -ENODEV, "failed to find dwc3 core node\n");
+
+	/*
+	 * Reset DWC3 IP required to clear the usb2only settings inside the ctrl
+	 * since if any other module (loaded before linux) uses dwc3 in usb2only mode
+	 * then there is an issue inside ctrl unless reset is asserted. Dwc3 core
+	 * deasserts the reset line during probe which is not enough since if reset
+	 * is already deasserted by some bootloader module then no reset is performed
+	 * on dwc3 ctrl, hence here we forcefully assert the ctrl reset line
+	 */
+	reset = of_reset_control_array_get_exclusive(child);
+	if (IS_ERR(reset))
+		return dev_err_probe(dev, PTR_ERR(reset), "failed to get reset handle\n");
+
+	ret = reset_control_assert(reset);
+	reset_control_put(reset);
+	if (ret) {
+		dev_err(dev, "failed to assert reset (%d)\n", ret);
+		return ret;
+	}
 
 	/* check if usb3-phy present, means NO usb2only mode */
 	dwc3_data->usb2only_conf = true;
