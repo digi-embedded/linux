@@ -1325,8 +1325,16 @@ static size_t stm32_mdma_desc_residue(struct stm32_mdma_chan *chan,
 {
 	struct stm32_mdma_device *dmadev = stm32_mdma_get_dev(chan);
 	struct stm32_mdma_hwdesc *hwdesc;
-	u32 cbndtr, residue, modulo, burst_size;
+	u32 cisr, cbndtr, residue, modulo, burst_size;
 	int i;
+
+	cisr = stm32_mdma_read(dmadev, STM32_MDMA_CISR(chan->id));
+	/* Check if Block Transfer Complete is pending, curr_hwdesc not yet updated */
+	if (cisr & STM32_MDMA_CISR_BTIF) {
+		curr_hwdesc++;
+		if(desc->cyclic && curr_hwdesc == desc->count)
+			curr_hwdesc = 0;
+	}
 
 	residue = 0;
 	for (i = curr_hwdesc + 1; i < desc->count; i++) {
