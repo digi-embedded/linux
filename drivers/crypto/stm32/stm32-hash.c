@@ -74,7 +74,7 @@
 
 /* Context swap register */
 #define HASH_CSR_NB_SHA256_HMAC		54
-#define HASH_CSR_NB_SHA256		22
+#define HASH_CSR_NB_SHA256		38
 #define HASH_CSR_NB_SHA512_HMAC		103
 #define HASH_CSR_NB_SHA512		91
 #define HASH_CSR_NB_SHA3_HMAC		88
