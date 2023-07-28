@@ -269,7 +269,6 @@ static int stm32_omm_probe(struct platform_device *pdev)
 	struct device_node *child;
 	struct device_node *child_node[OMM_CHILD_NB];
 	struct stm32_omm *omm;
-	struct resource *res;
 	int ret;
 	u8 child_access_granted = 0;
 	u8 i, j;
@@ -281,8 +280,7 @@ static int stm32_omm_probe(struct platform_device *pdev)
 
 	omm->nb_child = 0;
 
-	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "omm");
-	omm->io_base = devm_ioremap_resource(dev, res);
+	omm->io_base = devm_platform_ioremap_resource_byname(pdev, "omm");
 	if (IS_ERR(omm->io_base))
 		return PTR_ERR(omm->io_base);
 
@@ -297,7 +295,6 @@ static int stm32_omm_probe(struct platform_device *pdev)
 		}
 
 		if (!of_device_is_compatible(child, "st,stm32mp25-omi")) {
-			of_node_put(child);
 			continue;
 		}
 
