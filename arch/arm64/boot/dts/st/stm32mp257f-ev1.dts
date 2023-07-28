@@ -117,6 +117,13 @@
 		default-brightness-level = <0>;
 		status = "okay";
 	};
+
+	sound: sound {
+		compatible = "audio-graph-card";
+		label = "STM32MP25-EV1";
+		dais = <&i2s2_port>;
+		status = "disabled";
+	};
 };
 
 &a35ssc_m33 {
@@ -342,9 +349,22 @@
 		v3p3-supply = <&scmi_v3v3>;
 		v1p2-supply = <&scmi_v3v3>;
 
-		port {
-			adv7535_in: endpoint {
-				remote-endpoint = <&dsi_out2>;
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port@0 {
+				reg = <0>;
+				adv7535_in: endpoint {
+					remote-endpoint = <&dsi_out2>;
+				};
+			};
+
+			port@2 {
+				reg = <2>;
+				adv7535_tx_endpoint: endpoint {
+					remote-endpoint = <&i2s2_endpoint>;
+				};
 			};
 		};
 	};
@@ -367,6 +387,21 @@
 		interrupt-parent = <&gpioi>;
 		interrupts = <13 IRQ_TYPE_EDGE_FALLING>;
 		status = "disabled";
+	};
+};
+
+&i2s2 {
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&i2s2_pins_a>;
+	pinctrl-1 = <&i2s2_sleep_pins_a>;
+	status = "disabled";
+
+	i2s2_port: port {
+		i2s2_endpoint: endpoint {
+			remote-endpoint = <&adv7535_tx_endpoint>;
+			format = "i2s";
+			mclk-fs = <256>;
+		};
 	};
 };
 
