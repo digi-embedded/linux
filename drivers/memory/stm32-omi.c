@@ -111,7 +111,15 @@ out:
 }
 EXPORT_SYMBOL(stm32_omi_wait_cmd);
 
-irqreturn_t stm32_omi_irq(int irq, void *dev_id)
+void stm32_omi_dma_callback(void *arg)
+{
+	struct completion *dma_completion = arg;
+
+	complete(dma_completion);
+}
+EXPORT_SYMBOL(stm32_omi_dma_callback);
+
+static irqreturn_t stm32_omi_irq(int irq, void *dev_id)
 {
 	struct stm32_omi *omi = (struct stm32_omi *)dev_id;
 	void __iomem *regs_base = omi->regs_base;
@@ -139,140 +147,29 @@ irqreturn_t stm32_omi_irq(int irq, void *dev_id)
 
 	return IRQ_HANDLED;
 }
-EXPORT_SYMBOL(stm32_omi_irq);
 
-void stm32_omi_dma_callback(void *arg)
+void stm32_omi_dma_setup(struct stm32_omi *omi,
+			 struct dma_slave_config *dma_cfg)
 {
-	struct completion *dma_completion = arg;
-
-	complete(dma_completion);
-}
-EXPORT_SYMBOL(stm32_omi_dma_callback);
-
-void stm32_omi_dma_free(struct stm32_omi *omi)
-{
-	if (omi->dma_chtx)
-		dma_release_channel(omi->dma_chtx);
-	if (omi->dma_chrx)
-		dma_release_channel(omi->dma_chrx);
-}
-EXPORT_SYMBOL(stm32_omi_dma_free);
-
-int stm32_omi_dma_setup(struct stm32_omi *omi, struct device *dev,
-			       struct dma_slave_config *dma_cfg)
-{
-	int ret = 0;
-
-	omi->dma_chrx = dma_request_chan(dev, "rx");
-	if (IS_ERR(omi->dma_chrx)) {
-		ret = PTR_ERR(omi->dma_chrx);
-		omi->dma_chrx = NULL;
-		if (ret == -EPROBE_DEFER)
-			goto out;
-	} else if (dma_cfg) {
+	if (dma_cfg && omi->dma_chrx) {
 		if (dmaengine_slave_config(omi->dma_chrx, dma_cfg)) {
-			dev_err(dev, "dma rx config failed\n");
+			dev_err(omi->dev, "dma rx config failed\n");
 			dma_release_channel(omi->dma_chrx);
 			omi->dma_chrx = NULL;
 		}
 	}
 
-	omi->dma_chtx = dma_request_chan(dev, "tx");
-	if (IS_ERR(omi->dma_chtx)) {
-		ret = PTR_ERR(omi->dma_chtx);
-		omi->dma_chtx = NULL;
-	} else if (dma_cfg) {
+	if (dma_cfg && omi->dma_chtx) {
 		if (dmaengine_slave_config(omi->dma_chtx, dma_cfg)) {
-			dev_err(dev, "dma tx config failed\n");
+			dev_err(omi->dev, "dma tx config failed\n");
 			dma_release_channel(omi->dma_chtx);
 			omi->dma_chtx = NULL;
 		}
 	}
 
 	init_completion(&omi->dma_completion);
-out:
-	if (ret != -EPROBE_DEFER)
-		ret = 0;
-
-	return ret;
 }
 EXPORT_SYMBOL(stm32_omi_dma_setup);
-
-int stm32_omi_get_resources(struct stm32_omi *omi, struct device *dev)
-{
-	struct platform_device *pdev = to_platform_device(dev);
-	struct device_node *np = dev->of_node;
-	struct resource res;
-	struct reserved_mem *rmem = NULL;
-	struct device_node *node;
-	int ret = 0;
-
-	omi->clk = devm_clk_get(dev, NULL);
-	if (IS_ERR(omi->clk))
-		return dev_err_probe(dev, PTR_ERR(omi->clk),
-				     "Can't get clock\n");
-
-	omi->irq = platform_get_irq(pdev, 0);
-	if (omi->irq < 0) {
-		dev_err(dev, "Can't get irq %d\n", omi->irq);
-		return omi->irq;
-	}
-
-	omi->rstc = devm_reset_control_array_get(dev, false, true);
-	if (IS_ERR(omi->rstc))
-		return dev_err_probe(dev, PTR_ERR(omi->rstc),
-				     "Can't get reset\n");
-
-	omi->regmap = syscon_regmap_lookup_by_phandle(np, "st,syscfg-dlyb");
-	if (IS_ERR(omi->regmap)) {
-		/* Optional */
-		omi->regmap = NULL;
-		omi->dlyb_base = 0;
-	} else {
-		ret = of_property_read_u32_index(np, "st,syscfg-dlyb", 1,
-						 &omi->dlyb_base);
-		if (ret) {
-			dev_err(dev, "Can't read delay block base address\n");
-			return ret;
-		}
-	}
-
-	ret = of_address_to_resource(np, 0, &res);
-	if (ret)
-		return ret;
-
-	omi->regs_base = ioremap(res.start, resource_size(&res));
-	if (IS_ERR(omi->regs_base))
-		return PTR_ERR(omi->regs_base);
-
-	omi->regs_phys_base = res.start;
-
-	node = of_parse_phandle(dev->of_node, "memory-region", 0);
-	if (node)
-		rmem = of_reserved_mem_lookup(node);
-
-	of_node_put(node);
-	if (rmem) {
-		omi->mm_phys_base = rmem->base;
-		omi->mm_size = rmem->size;
-		omi->mm_base = devm_ioremap(dev, rmem->base, rmem->size);
-		if (IS_ERR(omi->mm_base)) {
-			dev_err(dev, "unable to map memory region: %pa+%pa\n",
-				&rmem->base, &rmem->size);
-			ret = PTR_ERR(omi->mm_base);
-		}
-
-		if (omi->mm_size > STM32_OMI_MAX_MMAP_SZ) {
-			dev_err(dev, "Memory map size outsize bounds\n");
-			ret = -EINVAL;
-		}
-	} else {
-		dev_info(dev, "No memory-map region found\n");
-	}
-
-	return ret;
-}
-EXPORT_SYMBOL(stm32_omi_get_resources);
 
 static int stm32_omi_dlyb_set_tap(struct stm32_omi *omi, u8 tap, bool rx_tap)
 {
@@ -517,10 +414,15 @@ static int stm32_omi_probe(struct platform_device *pdev)
 	struct platform_device *vdev;
 	struct device *dev = &pdev->dev;
 	struct device_node *child;
+	struct stm32_omi *omi;
+	struct resource *res;
+	struct reserved_mem *rmem = NULL;
+	struct device_node *node;
 	const char *name;
 	u8 hyperflash_count = 0;
 	u8 spi_flash_count = 0;
 	u8 child_count = 0;
+	int ret;
 
 	/*
 	 * Flash subnodes sanity check:
@@ -561,21 +463,143 @@ static int stm32_omi_probe(struct platform_device *pdev)
 	else
 		name = "stm32-hyperflash";
 
-	vdev = platform_device_alloc(name, PLATFORM_DEVID_AUTO);
-	if (!vdev)
+	omi = devm_kzalloc(dev, sizeof(*omi), GFP_KERNEL);
+	if (!omi)
 		return -ENOMEM;
 
-	vdev->dev.parent = dev;
-	platform_set_drvdata(pdev, vdev);
+	omi->regs_base = devm_platform_get_and_ioremap_resource(pdev, 0, &res);
+	if (IS_ERR(omi->regs_base))
+		return PTR_ERR(omi->regs_base);
 
-	return platform_device_add(vdev);
+	omi->regs_phys_base = res->start;
+
+	omi->clk = devm_clk_get(dev, NULL);
+	if (IS_ERR(omi->clk))
+		return dev_err_probe(dev, PTR_ERR(omi->clk),
+				     "Can't get clock\n");
+
+	omi->clk_rate = clk_get_rate(omi->clk);
+	if (!omi->clk_rate) {
+		dev_err(dev, "Invalid clock rate\n");
+		return -EINVAL;
+	}
+
+	omi->irq = platform_get_irq(pdev, 0);
+	if (omi->irq < 0) {
+		dev_err(dev, "Can't get irq %d\n", omi->irq);
+		return omi->irq;
+	}
+
+	ret = devm_request_irq(dev, omi->irq, stm32_omi_irq, 0,
+			       dev_name(dev), omi);
+	if (ret) {
+		dev_err(dev, "Failed to request irq\n");
+		return ret;
+	}
+
+	omi->rstc = devm_reset_control_array_get(dev, false, true);
+	if (IS_ERR(omi->rstc))
+		return dev_err_probe(dev, PTR_ERR(omi->rstc),
+				     "Can't get reset\n");
+
+	omi->regmap = syscon_regmap_lookup_by_phandle(dev->of_node,
+						      "st,syscfg-dlyb");
+	if (IS_ERR(omi->regmap)) {
+		/* Optional */
+		omi->regmap = NULL;
+		omi->dlyb_base = 0;
+	} else {
+		ret = of_property_read_u32_index(dev->of_node, "st,syscfg-dlyb",
+						 1, &omi->dlyb_base);
+		if (ret) {
+			dev_err(dev, "Can't read delay block base address\n");
+			return ret;
+		}
+	}
+
+	omi->dma_chrx = dma_request_chan(dev, "rx");
+	if (IS_ERR(omi->dma_chrx)) {
+		ret = PTR_ERR(omi->dma_chrx);
+		omi->dma_chrx = NULL;
+		if (ret == -EPROBE_DEFER)
+			goto err_dma;
+	}
+
+	omi->dma_chtx = dma_request_chan(dev, "tx");
+	if (IS_ERR(omi->dma_chtx)) {
+		ret = PTR_ERR(omi->dma_chtx);
+		omi->dma_chtx = NULL;
+		if (ret == -EPROBE_DEFER)
+			goto err_dma;
+	}
+
+	node = of_parse_phandle(dev->of_node, "memory-region", 0);
+	if (node)
+		rmem = of_reserved_mem_lookup(node);
+	of_node_put(node);
+
+	if (rmem) {
+		omi->mm_phys_base = rmem->base;
+		omi->mm_size = rmem->size;
+		omi->mm_base = devm_ioremap(dev, rmem->base, rmem->size);
+		if (IS_ERR(omi->mm_base)) {
+			dev_err(dev, "unable to map memory region: %pa+%pa\n",
+				&rmem->base, &rmem->size);
+			ret = PTR_ERR(omi->mm_base);
+			goto err_dma;
+		}
+
+		if (omi->mm_size > STM32_OMI_MAX_MMAP_SZ) {
+			dev_err(dev, "Memory map size outsize bounds\n");
+			ret = -EINVAL;
+			goto err_dma;
+		}
+	} else {
+		dev_info(dev, "No memory-map region found\n");
+	}
+
+	init_completion(&omi->data_completion);
+	init_completion(&omi->match_completion);
+
+	vdev = platform_device_alloc(name, PLATFORM_DEVID_AUTO);
+	if (!vdev) {
+		ret = -ENOMEM;
+		goto err_dma;
+	}
+
+	vdev->dev.parent = dev;
+
+	omi->dev = dev;
+	omi->vdev = vdev;
+	platform_set_drvdata(pdev, omi);
+
+	ret = platform_device_add(vdev);
+	if (ret) {
+		platform_device_put(vdev);
+		goto err_dma;
+	}
+
+	return 0;
+
+err_dma:
+	if (omi->dma_chtx)
+		dma_release_channel(omi->dma_chtx);
+	if (omi->dma_chrx)
+		dma_release_channel(omi->dma_chrx);
+
+	return ret;
 }
 
 static int stm32_omi_remove(struct platform_device *pdev)
 {
-	struct platform_device *vdev = platform_get_drvdata(pdev);
+	struct stm32_omi *omi = platform_get_drvdata(pdev);
 
-	platform_device_unregister(vdev);
+	platform_device_unregister(omi->vdev);
+
+	if (omi->dma_chtx)
+		dma_release_channel(omi->dma_chtx);
+	if (omi->dma_chrx)
+		dma_release_channel(omi->dma_chrx);
 
 	return 0;
 }

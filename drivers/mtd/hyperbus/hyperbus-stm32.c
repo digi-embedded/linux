@@ -11,7 +11,7 @@ struct stm32_hyperbus {
 	struct device *dev;
 	struct hyperbus_ctlr ctlr;
 	struct hyperbus_device hbdev;
-	struct stm32_omi omi;
+	struct stm32_omi *omi;
 	u32 flash_freq;		/* flash max supported frequency */
 	u32 real_flash_freq;	/* real flash freq = bus_freq x prescaler */
 	u32 tacc;
@@ -24,14 +24,14 @@ static void stm32_hyperbus_copy_from(struct hyperbus_device *hbdev, void *to,
 {
 	struct stm32_hyperbus *hyperbus =
 		container_of(hbdev, struct stm32_hyperbus, hbdev);
-	void __iomem *mm_base = hyperbus->omi.mm_base;
+	struct stm32_omi *omi = hyperbus->omi;
 
 	memcpy_fromio(to, omi->mm_base + from, len);
 }
 
 static void stm32_hyperbus_set_mode(struct stm32_hyperbus *hyperbus, u8 mode)
 {
-	struct stm32_omi *omi = &hyperbus->omi;
+	struct stm32_omi *omi = hyperbus->omi;
 	void __iomem *regs_base = omi->regs_base;
 	u32 cr;
 
@@ -52,15 +52,16 @@ static u16 stm32_hyperbus_read16(struct hyperbus_device *hbdev, unsigned long ad
 {
 	struct stm32_hyperbus *hyperbus =
 		container_of(hbdev, struct stm32_hyperbus, hbdev);
-	void __iomem *regs_base = hyperbus->omi.regs_base;
+	struct stm32_omi *omi = hyperbus->omi;
+	void __iomem *regs_base = omi->regs_base;
 	u16 data;
 
 	stm32_hyperbus_set_mode(hyperbus, CR_FMODE_INDR);
 	writel(addr, regs_base + OSPI_AR);
-	stm32_omi_tx_poll(&hyperbus->omi, (u8 *)&data, 2, true);
+	stm32_omi_tx_poll(omi, (u8 *)&data, 2, true);
 
 	/* Wait end of tx in indirect mode */
-	stm32_omi_wait_cmd(&hyperbus->omi);
+	stm32_omi_wait_cmd(omi);
 
 	dev_dbg(hyperbus->dev, "%s: read 0x%x @ 0x%lx\n",
 		__func__, data, addr >> 1);
@@ -75,14 +76,15 @@ static void stm32_hyperbus_write16(struct hyperbus_device *hbdev,
 {
 	struct stm32_hyperbus *hyperbus =
 		container_of(hbdev, struct stm32_hyperbus, hbdev);
-	void __iomem *regs_base = hyperbus->omi.regs_base;
+	struct stm32_omi *omi = hyperbus->omi;
+	void __iomem *regs_base = omi->regs_base;
 
 	stm32_hyperbus_set_mode(hyperbus, CR_FMODE_INDW);
 	writel(addr, regs_base + OSPI_AR);
-	stm32_omi_tx_poll(&hyperbus->omi, (u8 *)&data, 2, false);
+	stm32_omi_tx_poll(omi, (u8 *)&data, 2, false);
 
 	/* Wait end of tx in indirect mode */
-	stm32_omi_wait_cmd(&hyperbus->omi);
+	stm32_omi_wait_cmd(omi);
 
 	dev_dbg(hyperbus->dev, "%s: write 0x%x @ 0x%lx\n",
 		__func__, data, addr >> 1);
@@ -92,8 +94,7 @@ static void stm32_hyperbus_write16(struct hyperbus_device *hbdev,
 
 static int stm32_hyperbus_check_transfert(struct stm32_omi *omi)
 {
-	struct stm32_hyperbus *hyperbus =
-		container_of(omi, struct stm32_hyperbus, omi);
+	struct stm32_hyperbus *hyperbus = platform_get_drvdata(omi->vdev);
 	struct map_info *map = &hyperbus->hbdev.map;
 	struct cfi_private cfi;
 	int ret;
@@ -111,7 +112,7 @@ static int stm32_hyperbus_calibrate(struct hyperbus_device *hbdev)
 {
 	struct stm32_hyperbus *hyperbus =
 		container_of(hbdev, struct stm32_hyperbus, hbdev);
-	struct stm32_omi *omi = &hyperbus->omi;
+	struct stm32_omi *omi = hyperbus->omi;
 	void __iomem *regs_base = omi->regs_base;
 	u32 prescaler;
 	u16 period_ps = 0;
@@ -161,7 +162,7 @@ static const struct hyperbus_ops stm32_hyperbus_ops = {
 
 static void stm32_hyperbus_init(struct stm32_hyperbus *hyperbus)
 {
-	struct stm32_omi *omi = &hyperbus->omi;
+	struct stm32_omi *omi = hyperbus->omi;
 	void __iomem *regs_base = omi->regs_base;
 	unsigned long period;
 	u32 cr, dcr1, hlcr, ccr;
@@ -206,7 +207,7 @@ static void stm32_hyperbus_init(struct stm32_hyperbus *hyperbus)
 static int __maybe_unused stm32_hyperbus_suspend(struct device *dev)
 {
 	struct stm32_hyperbus *hyperbus = dev_get_drvdata(dev);
-	struct stm32_omi *omi = &hyperbus->omi;
+	struct stm32_omi *omi = hyperbus->omi;
 	void __iomem *regs_base = omi->regs_base;
 	u32 cr;
 
@@ -222,7 +223,7 @@ static int __maybe_unused stm32_hyperbus_suspend(struct device *dev)
 static int __maybe_unused stm32_hyperbus_resume(struct device *dev)
 {
 	struct stm32_hyperbus *hyperbus = dev_get_drvdata(dev);
-	struct stm32_omi *omi = &hyperbus->omi;
+	struct stm32_omi *omi = hyperbus->omi;
 	int ret;
 
 	ret = clk_prepare_enable(omi->clk);
@@ -241,25 +242,21 @@ static const struct dev_pm_ops stm32_hyperbus_pm_ops = {
 
 static int stm32_hyperbus_probe(struct platform_device *pdev)
 {
-	struct device *dev = pdev->dev.parent;
+	struct device *parent = pdev->dev.parent;
+	struct device *dev = &pdev->dev;
 	struct stm32_hyperbus *hyperbus;
-	struct stm32_omi *omi;
+	struct stm32_omi *omi = dev_get_drvdata(parent);
 	struct device_node *flash;
 	u32 value;
 	int ret;
 
-	hyperbus = devm_kzalloc(&pdev->dev, sizeof(*hyperbus), GFP_KERNEL);
+	hyperbus = devm_kzalloc(dev, sizeof(*hyperbus), GFP_KERNEL);
 	if (!hyperbus)
 		return -ENOMEM;
 
-	omi = &hyperbus->omi;
-	omi->dev = &pdev->dev;
-	omi->calibration = false;
+	hyperbus->omi = omi;
+	omi->check_transfer = stm32_hyperbus_check_transfert;
 	hyperbus->dev = dev;
-
-	ret = stm32_omi_get_resources(omi, dev);
-	if (ret)
-		return ret;
 
 	/* mandatory for HyperFlash */
 	if (!omi->mm_size) {
@@ -270,12 +267,6 @@ static int stm32_hyperbus_probe(struct platform_device *pdev)
 	/* mandatory for HyperFlash */
 	if (!omi->dlyb_base) {
 		dev_err(dev, "Incorrect delay block base address\n");
-		return -EINVAL;
-	}
-
-	omi->clk_rate = clk_get_rate(omi->clk);
-	if (!omi->clk_rate) {
-		dev_err(dev, "Invalid clock rate\n");
 		return -EINVAL;
 	}
 
@@ -291,14 +282,7 @@ static int stm32_hyperbus_probe(struct platform_device *pdev)
 		reset_control_deassert(omi->rstc);
 	}
 
-	ret = devm_request_irq(dev, omi->irq, stm32_omi_irq, 0,
-			       dev_name(dev), omi);
-	if (ret) {
-		dev_err(dev, "Failed to request irq\n");
-		goto err_clk_disable;
-	}
-
-	flash = of_get_next_child(dev->of_node, NULL);
+	flash = of_get_next_child(parent->of_node, NULL);
 	if (!flash) {
 		dev_warn(&pdev->dev, "No flash node found\n");
 		goto err_clk_disable;
@@ -324,9 +308,6 @@ static int stm32_hyperbus_probe(struct platform_device *pdev)
 
 	hyperbus->wzl = of_property_read_bool(flash, "st,wzl");
 
-	init_completion(&omi->data_completion);
-	omi->check_transfer = stm32_hyperbus_check_transfert;
-
 	stm32_hyperbus_init(hyperbus);
 
 	platform_set_drvdata(pdev, hyperbus);
@@ -334,11 +315,11 @@ static int stm32_hyperbus_probe(struct platform_device *pdev)
 	hyperbus->hbdev.map.size = omi->mm_size;
 	hyperbus->hbdev.map.virt = omi->mm_base;
 
-	hyperbus->dev = &pdev->dev;
-	hyperbus->ctlr.dev = &pdev->dev;
+	hyperbus->dev = dev;
+	hyperbus->ctlr.dev = dev;
 	hyperbus->ctlr.ops = &stm32_hyperbus_ops;
 	hyperbus->hbdev.ctlr = &hyperbus->ctlr;
-	hyperbus->hbdev.np = of_get_next_child(dev->of_node, NULL);
+	hyperbus->hbdev.np = of_get_next_child(parent->of_node, NULL);
 
 	return hyperbus_register_device(&hyperbus->hbdev);
 
@@ -351,10 +332,10 @@ err_clk_disable:
 static int stm32_hyperbus_remove(struct platform_device *pdev)
 {
 	struct stm32_hyperbus *hyperbus = platform_get_drvdata(pdev);
+	struct stm32_omi *omi = hyperbus->omi;
 
 	hyperbus_unregister_device(&hyperbus->hbdev);
-	stm32_omi_dma_free(&hyperbus->omi);
-	clk_disable_unprepare(hyperbus->omi.clk);
+	clk_disable_unprepare(omi->clk);
 
 	return 0;
 }
