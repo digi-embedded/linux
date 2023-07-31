@@ -755,8 +755,10 @@ static void lvds_config_data_mapping(struct stm_lvds *lvds)
 	int i;
 
 	info = &(&lvds->connector)->display_info;
-	if (!info->num_bus_formats || !info->bus_formats)
+	if (!info->num_bus_formats || !info->bus_formats) {
 		dev_warn(lvds->dev, "No LVDS bus format reported\n");
+		return;
+	}
 
 /*      Mode mirror : TODO
  *      info->bus_flags & DRM_BUS_FLAG_DATA_LSB_TO_MSB
@@ -814,6 +816,8 @@ static int lvds_config_mode(struct stm_lvds *lvds)
 	u32 bus_flags, lvds_cr, lvds_cdl1cr, lvds_cdl2cr;
 
 	lvds_cr = 0;
+	lvds_cdl1cr = 0;
+	lvds_cdl2cr = 0;
 
 	connector = &lvds->connector;
 	if (!connector)
@@ -1205,7 +1209,6 @@ err_lvds_probe:
 static int lvds_remove(struct platform_device *pdev)
 {
 	struct stm_lvds *lvds = platform_get_drvdata(pdev);
-
 
 	lvds_pixel_clk_unregister(lvds);
 
