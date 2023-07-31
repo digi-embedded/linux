@@ -2844,7 +2844,11 @@ brcmf_cfg80211_connect(struct wiphy *wiphy, struct net_device *ndev,
 			sme->crypto.psk)
 			err = brcmf_set_pmk(ifp, sme->crypto.psk,
 					    BRCMF_WSEC_MAX_PSK_LEN);
-		else if (profile->use_fwsup == BRCMF_PROFILE_FWSUP_SAE) {
+
+		/* if upper layer has passed sae_password,
+		 * set it to firmware for the potential transit up roaming use.
+		 */
+		if (sme->crypto.sae_pwd && brcmf_feat_is_enabled(ifp, BRCMF_FEAT_SAE)) {
 			/* clean up user-space RSNE */
 			if (brcmf_fil_iovar_data_set(ifp, "wpaie", NULL, 0)) {
 				bphy_err(drvr, "failed to clean up user-space RSNE\n");
