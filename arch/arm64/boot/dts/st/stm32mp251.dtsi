@@ -698,6 +698,7 @@
 				dmas = <&hpdma 51 0x43 0x12 0>,
 					<&hpdma 52 0x43 0x21 0>;
 				dma-names = "rx", "tx";
+				feature-domains = <&rifsc STM32MP25_RIFSC_SPI2_ID>;
 				power-domains = <&RET_PD>;
 				status = "disabled";
 			};
@@ -729,6 +730,7 @@
 				dmas = <&hpdma 53 0x43 0x12 0>,
 					<&hpdma 54 0x43 0x21 0>;
 				dma-names = "rx", "tx";
+				feature-domains = <&rifsc STM32MP25_RIFSC_SPI3_ID>;
 				power-domains = <&RET_PD>;
 				status = "disabled";
 			};
@@ -1113,6 +1115,7 @@
 				dmas = <&hpdma 49 0x43 0x12 0>,
 					<&hpdma 50 0x43 0x21 0>;
 				dma-names = "rx", "tx";
+				feature-domains = <&rifsc STM32MP25_RIFSC_SPI1_ID>;
 				power-domains = <&RET_PD>;
 				status = "disabled";
 			};
