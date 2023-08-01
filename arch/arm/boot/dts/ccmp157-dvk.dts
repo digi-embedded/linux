@@ -486,6 +486,7 @@
 &usbotg_hs {
 	pinctrl-0 = <&usbotg_hs_pins_a>;
 	pinctrl-names = "default";
+	dr_mode = "otg";
 	phy-names = "usb2-phy";
 	phys = <&usbphyc_port1 0>;
 	status = "okay";
