@@ -298,11 +298,9 @@ static int stm32_ospi_poll_status(struct spi_mem *mem,
 	void __iomem *regs_base = omi->regs_base;
 	int ret;
 
-	ret = pm_runtime_get_sync(ospi->dev);
-	if (ret < 0) {
-		pm_runtime_put_noidle(ospi->dev);
+	ret = pm_runtime_resume_and_get(omi->dev);
+	if (ret < 0)
 		return ret;
-	}
 
 	mutex_lock(&ospi->lock);
 
@@ -314,8 +312,8 @@ static int stm32_ospi_poll_status(struct spi_mem *mem,
 	ret = stm32_ospi_send(mem->spi, op);
 	mutex_unlock(&ospi->lock);
 
-	pm_runtime_mark_last_busy(ospi->dev);
-	pm_runtime_put_autosuspend(ospi->dev);
+	pm_runtime_mark_last_busy(omi->dev);
+	pm_runtime_put_autosuspend(omi->dev);
 
 	return ret;
 }
@@ -326,11 +324,9 @@ static int stm32_ospi_exec_op(struct spi_mem *mem, const struct spi_mem_op *op)
 	struct stm32_omi *omi = ospi->omi;
 	int ret;
 
-	ret = pm_runtime_get_sync(ospi->dev);
-	if (ret < 0) {
-		pm_runtime_put_noidle(ospi->dev);
+	ret = pm_runtime_resume_and_get(omi->dev);
+	if (ret < 0)
 		return ret;
-	}
 
 	mutex_lock(&ospi->lock);
 	if (op->data.dir == SPI_MEM_DATA_IN && op->data.nbytes)
@@ -341,8 +337,8 @@ static int stm32_ospi_exec_op(struct spi_mem *mem, const struct spi_mem_op *op)
 	ret = stm32_ospi_send(mem->spi, op);
 	mutex_unlock(&ospi->lock);
 
-	pm_runtime_mark_last_busy(ospi->dev);
-	pm_runtime_put_autosuspend(ospi->dev);
+	pm_runtime_mark_last_busy(omi->dev);
+	pm_runtime_put_autosuspend(omi->dev);
 
 	return ret;
 }
@@ -374,11 +370,9 @@ static ssize_t stm32_ospi_dirmap_read(struct spi_mem_dirmap_desc *desc,
 	u32 addr_max;
 	int ret;
 
-	ret = pm_runtime_get_sync(ospi->dev);
-	if (ret < 0) {
-		pm_runtime_put_noidle(ospi->dev);
+	ret = pm_runtime_resume_and_get(omi->dev);
+	if (ret < 0)
 		return ret;
-	}
 
 	mutex_lock(&ospi->lock);
 	/* make a local copy of desc op_tmpl and complete dirmap rdesc
@@ -401,8 +395,8 @@ static ssize_t stm32_ospi_dirmap_read(struct spi_mem_dirmap_desc *desc,
 	ret = stm32_ospi_send(desc->mem->spi, &op);
 	mutex_unlock(&ospi->lock);
 
-	pm_runtime_mark_last_busy(ospi->dev);
-	pm_runtime_put_autosuspend(ospi->dev);
+	pm_runtime_mark_last_busy(omi->dev);
+	pm_runtime_put_autosuspend(omi->dev);
 
 	return ret ?: len;
 }
@@ -420,7 +414,7 @@ static int stm32_ospi_transfer_one_message(struct spi_controller *ctrl,
 	if (!spi->cs_gpiod)
 		return -EOPNOTSUPP;
 
-	ret = pm_runtime_resume_and_get(ospi->dev);
+	ret = pm_runtime_resume_and_get(omi->dev);
 	if (ret < 0)
 		return ret;
 
@@ -486,8 +480,8 @@ end_of_transfer:
 	msg->status = ret;
 	spi_finalize_current_message(ctrl);
 
-	pm_runtime_mark_last_busy(ospi->dev);
-	pm_runtime_put_autosuspend(ospi->dev);
+	pm_runtime_mark_last_busy(omi->dev);
+	pm_runtime_put_autosuspend(omi->dev);
 
 	return ret;
 }
@@ -629,11 +623,9 @@ static int stm32_ospi_setup(struct spi_device *spi)
 	if (!spi->max_speed_hz)
 		return -EINVAL;
 
-	ret = pm_runtime_get_sync(ospi->dev);
-	if (ret < 0) {
-		pm_runtime_put_noidle(ospi->dev);
+	ret = pm_runtime_resume_and_get(omi->dev);
+	if (ret < 0)
 		return ret;
-	}
 
 	flash = &ospi->flash[spi->chip_select];
 	flash->cs = spi->chip_select;
@@ -678,8 +670,8 @@ static int stm32_ospi_setup(struct spi_device *spi)
 	}
 	mutex_unlock(&ospi->lock);
 
-	pm_runtime_mark_last_busy(ospi->dev);
-	pm_runtime_put_autosuspend(ospi->dev);
+	pm_runtime_mark_last_busy(omi->dev);
+	pm_runtime_put_autosuspend(omi->dev);
 
 	return 0;
 }
@@ -714,19 +706,7 @@ static int stm32_ospi_probe(struct platform_device *pdev)
 	ospi->omi = omi;
 	omi->check_transfer = stm32_ospi_readid;
 
-	ret = clk_prepare_enable(omi->clk);
-	if (ret) {
-		dev_err(dev, "Can not enable clock\n");
-		return ret;
-	}
-
-	if (omi->rstc) {
-		reset_control_assert(omi->rstc);
-		udelay(2);
-		reset_control_deassert(omi->rstc);
-	}
-
-	ospi->dev = dev;
+	ospi->dev = &pdev->dev;
 	platform_set_drvdata(pdev, ospi);
 
 	memset(&dma_cfg, 0, sizeof(dma_cfg));
@@ -751,31 +731,34 @@ static int stm32_ospi_probe(struct platform_device *pdev)
 	ctrl->num_chipselect = STM32_OMI_MAX_NORCHIP;
 	ctrl->dev.of_node = parent->of_node;
 
-	pm_runtime_set_autosuspend_delay(dev, STM32_AUTOSUSPEND_DELAY);
-	pm_runtime_use_autosuspend(dev);
-	pm_runtime_set_active(dev);
-	pm_runtime_enable(dev);
-	pm_runtime_get_noresume(dev);
+	pm_runtime_enable(omi->dev);
+	pm_runtime_set_autosuspend_delay(omi->dev, STM32_AUTOSUSPEND_DELAY);
+	pm_runtime_use_autosuspend(omi->dev);
+
+	ret = pm_runtime_resume_and_get(omi->dev);
+	if (ret < 0)
+		return ret;
+
+	if (omi->rstc) {
+		reset_control_assert(omi->rstc);
+		udelay(2);
+		reset_control_deassert(omi->rstc);
+	}
 
 	ret = spi_register_master(ctrl);
 	if (ret)
-		goto err_pm_runtime_free;
+		goto err_spi_register;
 
-	pm_runtime_mark_last_busy(dev);
-	pm_runtime_put_autosuspend(dev);
+	pm_runtime_mark_last_busy(omi->dev);
+	pm_runtime_put_autosuspend(omi->dev);
 
 	return 0;
 
-err_pm_runtime_free:
-	pm_runtime_get_sync(dev);
+err_spi_register:
 	/* disable ospi */
 	writel_relaxed(0, omi->regs_base + OSPI_CR);
 	mutex_destroy(&ospi->lock);
-	pm_runtime_put_noidle(dev);
-	pm_runtime_disable(dev);
-	pm_runtime_set_suspended(dev);
-	pm_runtime_dont_use_autosuspend(dev);
-	clk_disable_unprepare(omi->clk);
+	pm_runtime_put_sync_suspend(omi->dev);
 
 	return ret;
 }
@@ -784,45 +767,31 @@ static int stm32_ospi_remove(struct platform_device *pdev)
 {
 	struct stm32_ospi *ospi = platform_get_drvdata(pdev);
 	struct stm32_omi *omi = ospi->omi;
+	int ret;
 
-	pm_runtime_get_sync(ospi->dev);
+	ret = pm_runtime_resume_and_get(omi->dev);
+	if (ret < 0)
+		return ret;
+
 	spi_unregister_master(ospi->ctrl);
 	/* disable ospi */
 	writel_relaxed(0, omi->regs_base + OSPI_CR);
 	stm32_omi_dlyb_stop(omi);
 	mutex_destroy(&ospi->lock);
-	pm_runtime_put_noidle(ospi->dev);
-	pm_runtime_disable(ospi->dev);
-	pm_runtime_set_suspended(ospi->dev);
-	pm_runtime_dont_use_autosuspend(ospi->dev);
-	clk_disable_unprepare(omi->clk);
+	pm_runtime_put_sync_suspend(omi->dev);
+	pm_runtime_disable(omi->dev);
 
 	return 0;
-}
-
-static int __maybe_unused stm32_ospi_runtime_suspend(struct device *dev)
-{
-	struct stm32_ospi *ospi = dev_get_drvdata(dev);
-	struct stm32_omi *omi = ospi->omi;
-
-	clk_disable_unprepare(omi->clk);
-
-	return 0;
-}
-
-static int __maybe_unused stm32_ospi_runtime_resume(struct device *dev)
-{
-	struct stm32_ospi *ospi = dev_get_drvdata(dev);
-	struct stm32_omi *omi = ospi->omi;
-
-	return clk_prepare_enable(omi->clk);
 }
 
 static int __maybe_unused stm32_ospi_suspend(struct device *dev)
 {
+	struct stm32_ospi *ospi = dev_get_drvdata(dev);
+	struct stm32_omi *omi = ospi->omi;
+
 	pinctrl_pm_select_sleep_state(dev);
 
-	return pm_runtime_force_suspend(dev);
+	return pm_runtime_force_suspend(omi->dev);
 }
 
 static int __maybe_unused stm32_ospi_resume(struct device *dev)
@@ -832,27 +801,21 @@ static int __maybe_unused stm32_ospi_resume(struct device *dev)
 	void __iomem *regs_base = omi->regs_base;
 	int ret;
 
-	ret = pm_runtime_force_resume(dev);
+	ret = pm_runtime_force_resume(omi->dev);
 	if (ret < 0)
 		return ret;
 
 	pinctrl_pm_select_default_state(dev);
 
-	ret = pm_runtime_resume_and_get(dev);
-	if (ret < 0)
-		return ret;
-
 	writel_relaxed(ospi->cr_reg, regs_base + OSPI_CR);
 	ospi->last_cs = -1;
-	pm_runtime_mark_last_busy(dev);
-	pm_runtime_put_autosuspend(dev);
+	pm_runtime_mark_last_busy(omi->dev);
+	pm_runtime_put_autosuspend(omi->dev);
 
 	return 0;
 }
 
 static const struct dev_pm_ops stm32_ospi_pm_ops = {
-	SET_RUNTIME_PM_OPS(stm32_ospi_runtime_suspend,
-			   stm32_ospi_runtime_resume, NULL)
 	SET_SYSTEM_SLEEP_PM_OPS(stm32_ospi_suspend, stm32_ospi_resume)
 };
 
