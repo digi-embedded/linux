@@ -341,5 +341,8 @@ bool brcmf_feat_is_6ghz_enabled(struct brcmf_if *ifp)
 
 bool brcmf_feat_is_sdio_rxf_in_kthread(struct brcmf_pub *drvr)
 {
-	return drvr->settings->sdio_rxf_in_kthread_enabled;
+	if (drvr)
+		return drvr->settings->sdio_rxf_in_kthread_enabled;
+	else
+		return false;
 }
