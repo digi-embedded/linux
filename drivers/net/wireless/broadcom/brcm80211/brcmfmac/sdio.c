@@ -1683,10 +1683,10 @@ static u8 brcmf_sdio_rxglom(struct brcmf_sdio *bus, u8 rxseq)
 	u16 sublen;
 	struct sk_buff *pfirst, *pnext;
 	struct sk_buff *skb_head = NULL, *skb_prev = NULL, *skb_to_rxfq = NULL;
-	struct brcmf_bus *bus_if = dev_get_drvdata(bus->sdiodev->dev);
 	int errcode;
 	u8 doff;
 	struct brcmf_sdio_hdrinfo rd_new;
+	struct brcmf_mp_device *settings = bus->sdiodev->settings;
 
 	/* If packets, issue read(s) and send up packet chain */
 	/* Return sequence numbers consumed? */
@@ -1887,7 +1887,7 @@ static u8 brcmf_sdio_rxglom(struct brcmf_sdio *bus, u8 rxseq)
 							     false, false);
 			}
 
-			if (brcmf_feat_is_sdio_rxf_in_kthread(bus_if->drvr) && skb_to_rxfq) {
+			if (settings && settings->sdio_rxf_in_kthread_enabled && skb_to_rxfq) {
 				if (!skb_head)
 					skb_head = skb_to_rxfq;
 				else
@@ -1901,7 +1901,7 @@ static u8 brcmf_sdio_rxglom(struct brcmf_sdio *bus, u8 rxseq)
 		bus->sdcnt.rxglomframes++;
 	}
 
-	if (brcmf_feat_is_sdio_rxf_in_kthread(bus_if->drvr) && skb_head)
+	if (settings && settings->sdio_rxf_in_kthread_enabled && skb_head)
 		brcmf_sched_rxf(bus, skb_head);
 
 	return num;
@@ -2055,7 +2055,7 @@ static uint brcmf_sdio_readframes(struct brcmf_sdio *bus, uint maxframes)
 	struct brcmf_sdio_hdrinfo *rd = &bus->cur_read, rd_new;
 	u8 head_read = 0;
 	struct sk_buff *skb_to_rxfq = NULL, *skb_head = NULL, *skb_prev = NULL;
-	struct brcmf_bus *bus_if = dev_get_drvdata(bus->sdiodev->dev);
+	struct brcmf_mp_device *settings = bus->sdiodev->settings;
 
 	brcmf_dbg(SDIO, "Enter\n");
 
@@ -2249,7 +2249,7 @@ static uint brcmf_sdio_readframes(struct brcmf_sdio *bus, uint maxframes)
 						     false, false);
 		}
 
-		if (brcmf_feat_is_sdio_rxf_in_kthread(bus_if->drvr) && skb_to_rxfq) {
+		if (settings && settings->sdio_rxf_in_kthread_enabled && skb_to_rxfq) {
 			if (!skb_head)
 				skb_head = skb_to_rxfq;
 			else
@@ -2265,7 +2265,7 @@ static uint brcmf_sdio_readframes(struct brcmf_sdio *bus, uint maxframes)
 		rd->channel = SDPCM_EVENT_CHANNEL;
 	}
 
-	if (brcmf_feat_is_sdio_rxf_in_kthread(bus_if->drvr) && skb_head)
+	if (settings && settings->sdio_rxf_in_kthread_enabled && skb_head)
 		brcmf_sched_rxf(bus, skb_head);
 
 	rxcount = maxframes - rxleft;
