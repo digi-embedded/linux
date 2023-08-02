@@ -1073,8 +1073,9 @@ static int lvds_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct device_node *port1, *port2, *remote;
 	struct stm_lvds *lvds;
-	int ret, dual_link;
 	struct reset_control *rstc;
+	struct clk *pixel_clk;
+	int ret, dual_link;
 
 	DRM_DEBUG_DRIVER("Probing LVDS driver...\n");
 
@@ -1192,6 +1193,19 @@ static int lvds_probe(struct platform_device *pdev)
 		goto err_lvds_probe;
 	}
 
+	pixel_clk = devm_clk_get(lvds->dev, "pixclk");
+	if (IS_ERR(pixel_clk)) {
+		ret = PTR_ERR(pixel_clk);
+		DRM_ERROR("Unable to get pix clock: %d\n", ret);
+		goto err_lvds_probe;
+	}
+
+	ret = clk_set_parent(pixel_clk, lvds->lvds_ck_px.clk);
+	if (ret) {
+		DRM_ERROR("Could not set parent clock: %d\n", ret);
+		goto err_lvds_clk_parent;
+	}
+
 	lvds->lvds_bridge.funcs = &lvds_bridge_funcs;
 	lvds->lvds_bridge.of_node = dev->of_node;
 
@@ -1199,7 +1213,10 @@ static int lvds_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, lvds);
 
+	return 0;
 
+err_lvds_clk_parent:
+	lvds_pixel_clk_unregister(lvds);
 err_lvds_probe:
 	clk_disable_unprepare(lvds->pclk);
 
