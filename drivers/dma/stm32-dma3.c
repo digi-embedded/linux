@@ -1209,7 +1209,7 @@ static void stm32_dma3_chan_set_residue(struct stm32_dma3_chan *chan,
 	struct stm32_dma3_ddata *ddata = to_stm32_dma3_ddata(&chan->vchan.chan);
 	struct device *dev = chan2dev(chan);
 	struct stm32_dma3_hwdesc *hwdesc;
-	u32 residue, ccr, csr, cdar, cbr1, cllr, bndt, fifol;
+	u32 residue, ccr = 0, csr, cdar, cbr1, cllr, bndt, fifol;
 	bool pack_unpack;
 	u32 i, _curr_lli;
 	int ret;
@@ -1219,8 +1219,8 @@ static void stm32_dma3_chan_set_residue(struct stm32_dma3_chan *chan,
 	csr = readl_relaxed(ddata->base + STM32_DMA3_CSR(chan->id));
 	if (!(csr & CSR_IDLEF) && chan->dma_status != DMA_PAUSED) {
 		/* Suspend current transfer to read registers for a snapshot */
-		ccr = readl_relaxed(ddata->base + STM32_DMA3_CCR(chan->id));
-		writel_relaxed(ccr | CCR_SUSP, ddata->base + STM32_DMA3_CCR(chan->id));
+		ccr = readl_relaxed(ddata->base + STM32_DMA3_CCR(chan->id)) | CCR_SUSP;
+		writel_relaxed(ccr, ddata->base + STM32_DMA3_CCR(chan->id));
 		ret = readl_relaxed_poll_timeout_atomic(ddata->base + STM32_DMA3_CSR(chan->id), csr,
 							csr & CSR_SUSPF, 10, USEC_PER_SEC);
 		if (ret < 0) {
@@ -1244,7 +1244,7 @@ static void stm32_dma3_chan_set_residue(struct stm32_dma3_chan *chan,
 	cbr1 = readl_relaxed(ddata->base + STM32_DMA3_CBR1(chan->id));
 	cllr = readl_relaxed(ddata->base + STM32_DMA3_CLLR(chan->id));
 
-	if ((csr & CSR_SUSPF) && chan->dma_status != DMA_PAUSED) {
+	if ((csr & CSR_SUSPF) && (ccr & CCR_SUSP) && chan->dma_status != DMA_PAUSED) {
 		/* Resume current transfer */
 		writel_relaxed(CFCR_SUSPF, ddata->base + STM32_DMA3_CFCR(chan->id));
 		writel_relaxed(ccr & ~CCR_SUSP, ddata->base + STM32_DMA3_CCR(chan->id));
