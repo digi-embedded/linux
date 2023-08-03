@@ -369,6 +369,7 @@
 	phy-names = "usb2-phy";
 	phys = <&usbphyc_port1 0>;
 	status = "okay";
+	vbus-supply = <&scmi_vbus_otg>;
 };
 
 &usbphyc {
