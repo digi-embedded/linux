@@ -647,6 +647,11 @@
 				feature-domains = <&etzpc STM32MP1_ETZPC_TIM6_ID>;
 				status = "disabled";
 
+				counter {
+					compatible = "st,stm32-timer-counter";
+					status = "disabled";
+				};
+
 				timer@5 {
 					compatible = "st,stm32h7-timer-trigger";
 					reg = <5>;
@@ -668,6 +673,11 @@
 				feature-domains = <&etzpc STM32MP1_ETZPC_TIM7_ID>;
 				status = "disabled";
 
+				counter {
+					compatible = "st,stm32-timer-counter";
+					status = "disabled";
+				};
+
 				timer@6 {
 					compatible = "st,stm32h7-timer-trigger";
 					reg = <6>;
@@ -686,6 +696,11 @@
 				clock-names = "int";
 				feature-domains = <&etzpc STM32MP1_ETZPC_TIM12_ID>;
 				status = "disabled";
+
+				counter {
+					compatible = "st,stm32-timer-counter";
+					status = "disabled";
+				};
 
 				pwm {
 					compatible = "st,stm32-pwm";
@@ -712,6 +727,11 @@
 				feature-domains = <&etzpc STM32MP1_ETZPC_TIM13_ID>;
 				status = "disabled";
 
+				counter {
+					compatible = "st,stm32-timer-counter";
+					status = "disabled";
+				};
+
 				pwm {
 					compatible = "st,stm32-pwm";
 					#pwm-cells = <3>;
@@ -736,6 +756,11 @@
 				clock-names = "int";
 				feature-domains = <&etzpc STM32MP1_ETZPC_TIM14_ID>;
 				status = "disabled";
+
+				counter {
+					compatible = "st,stm32-timer-counter";
+					status = "disabled";
+				};
 
 				pwm {
 					compatible = "st,stm32-pwm";
@@ -1214,6 +1239,11 @@
 				feature-domains = <&etzpc STM32MP1_ETZPC_TIM15_ID>;
 				status = "disabled";
 
+				counter {
+					compatible = "st,stm32-timer-counter";
+					status = "disabled";
+				};
+
 				pwm {
 					compatible = "st,stm32-pwm";
 					#pwm-cells = <3>;
@@ -1242,11 +1272,17 @@
 				feature-domains = <&etzpc STM32MP1_ETZPC_TIM16_ID>;
 				status = "disabled";
 
+				counter {
+					compatible = "st,stm32-timer-counter";
+					status = "disabled";
+				};
+
 				pwm {
 					compatible = "st,stm32-pwm";
 					#pwm-cells = <3>;
 					status = "disabled";
 				};
+
 				timer@15 {
 					compatible = "st,stm32h7-timer-trigger";
 					reg = <15>;
@@ -1268,6 +1304,11 @@
 				dma-names = "ch1", "up";
 				feature-domains = <&etzpc STM32MP1_ETZPC_TIM17_ID>;
 				status = "disabled";
+
+				counter {
+					compatible = "st,stm32-timer-counter";
+					status = "disabled";
+				};
 
 				pwm {
 					compatible = "st,stm32-pwm";
