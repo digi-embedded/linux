@@ -15,6 +15,8 @@
 #include "fwil_types.h"
 #include "feature.h"
 #include "common.h"
+#include "xtlv.h"
+#include "twt.h"
 
 
 /*
@@ -178,6 +180,30 @@ static void brcmf_feat_iovar_data_set(struct brcmf_if *ifp,
 	ifp->fwil_fwerr = false;
 }
 
+static void brcmf_feat_iovar_enab_get(struct brcmf_if *ifp,
+					enum brcmf_feat_id id, char *name,
+					u16 subcmd_id)
+{
+	int err;
+	u8 val;
+
+	/* we need to know firmware error */
+	ifp->fwil_fwerr = true;
+
+	err = brcmf_fil_xtlv_data_get(ifp, name, subcmd_id,
+				      (void *)&val, sizeof(val));
+
+	if (!err) {
+		brcmf_dbg(INFO, "enabling feature: %s\n", brcmf_feat_names[id]);
+		ifp->drvr->feat_flags |= BIT(id);
+	} else {
+		brcmf_dbg(TRACE, "%s feature check failed: %d\n",
+			  brcmf_feat_names[id], err);
+	}
+
+	ifp->fwil_fwerr = false;
+}
+
 #define MAX_CAPS_BUFFER_SIZE	768
 static void brcmf_feat_firmware_capabilities(struct brcmf_if *ifp)
 {
@@ -293,7 +319,7 @@ void brcmf_feat_attach(struct brcmf_pub *drvr)
 		ifp->drvr->feat_flags |= BIT(BRCMF_FEAT_SCAN_RANDOM_MAC);
 
 	brcmf_feat_iovar_int_get(ifp, BRCMF_FEAT_FWSUP, "sup_wpa");
-	brcmf_feat_iovar_int_get(ifp, BRCMF_FEAT_TWT, "twt");
+	brcmf_feat_iovar_enab_get(ifp, BRCMF_FEAT_TWT, "twt", BRCMF_TWT_CMD_ENAB);
 
 	if (drvr->settings->feature_disable) {
 		brcmf_dbg(INFO, "Features: 0x%02x, disable: 0x%02x\n",
