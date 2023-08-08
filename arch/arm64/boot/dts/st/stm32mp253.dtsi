@@ -68,8 +68,9 @@
 				#clock-cells = <0>;
 				compatible = "st,stm32-lvds";
 				reg = <0x48060000 0x2000>;
-				clocks = <&rcc CK_BUS_LVDS>, <&rcc CK_KER_LVDSPHY>;
-				clock-names = "pclk", "ref";
+				clocks = <&rcc CK_BUS_LVDS>, <&rcc CK_KER_LVDSPHY>,
+					 <&syscfg 0>;
+				clock-names = "pclk", "ref", "pixclk";
 				resets = <&rcc LVDS_R>;
 				feature-domains = <&rifsc STM32MP25_RIFSC_LVDS_ID>;
 				power-domains = <&CLUSTER_PD>;
@@ -129,7 +130,13 @@
 	};
 };
 
+&dsi {
+	clocks = <&rcc CK_BUS_DSI>, <&rcc CK_KER_DSIPHY>,
+		 <&rcc CK_KER_LTDC>, <&syscfg 0>;
+	clock-names = "pclk", "ref", "px_clk", "pixclk";
+};
+
 &ltdc {
-	clocks = <&rcc CK_BUS_LTDC>, <&rcc CK_KER_LTDC>, <&lvds 0>;
-	clock-names = "bus", "lcd", "lvds";
+	clocks = <&rcc CK_BUS_LTDC>, <&syscfg 0>;
+	clock-names = "bus", "lcd";
 };
