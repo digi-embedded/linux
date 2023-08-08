@@ -5,6 +5,7 @@
  * Author:  Maxime Coquelin <mcoquelin.stm32@gmail.com>
  */
 
+#include <linux/bitfield.h>
 #include <linux/bitops.h>
 #include <linux/delay.h>
 #include <linux/hwspinlock.h>
@@ -25,7 +26,16 @@
 
 #define IRQS_PER_BANK			32
 
+#define STM32_GPIO_IRQ_LINES		16
+
+/* to receive bank_ioport_nr from GPIO in struct irq_fwspec::param[1] */
+#define STM32_GPIO_BANK_MASK		GENMASK(23, 16)
+
 #define HWSPNLCK_TIMEOUT		1000 /* usec */
+
+#define EXTI_CR(n)			(0x060 + ((n) / 4) * 4)
+#define EXTI_CR_SHIFT(n)		(((n) % 4) * 8)
+#define EXTI_CR_MASK(n)			(GENMASK(7, 0) << EXTI_CR_SHIFT(n))
 
 #define EXTI_EnCIDCFGR(n)		(0x180 + (n) * 4)
 #define EXTI_HWCFGR1			0x3f0
@@ -79,6 +89,9 @@ struct stm32_exti_host_data {
 	const struct stm32_exti_drv_data *drv_data;
 	struct hwspinlock *hwlock;
 	struct device_node *irq_map_node;
+	bool has_syscon; /* using old DT; keep backward compatibility */
+	DECLARE_BITMAP(gpio_mux_used, STM32_GPIO_IRQ_LINES);
+	u8 gpio_mux_pos[STM32_GPIO_IRQ_LINES];
 };
 
 static LIST_HEAD(stm32_host_data_list);
@@ -676,6 +689,26 @@ static int stm32_exti_h_suspend(void)
 	return 0;
 }
 
+static void stm32_exti_h_resume_gpio_mux(struct stm32_exti_host_data *host_data)
+{
+	bool write_cr = false;
+	unsigned int i;
+	u32 cr = 0;
+
+	for (i = 0; i < STM32_GPIO_IRQ_LINES; i++) {
+		if (test_bit(i, host_data->gpio_mux_used)) {
+			write_cr = true;
+			cr |= (host_data->gpio_mux_pos[i] << EXTI_CR_SHIFT(i)) & EXTI_CR_MASK(i);
+		}
+
+		if ((i % 4) == 3 && write_cr) {
+			writel_relaxed(cr, host_data->base + EXTI_CR(i));
+			write_cr = false;
+			cr = 0;
+		}
+	}
+}
+
 static void stm32_exti_h_resume(void)
 {
 	struct stm32_exti_chip_data *chip_data;
@@ -686,6 +719,8 @@ static void stm32_exti_h_resume(void)
 		for (i = 0; i < host_data->drv_data->bank_nr; i++) {
 			chip_data = &host_data->chips_data[i];
 			raw_spin_lock(&chip_data->rlock);
+			if (i == 0)
+				stm32_exti_h_resume_gpio_mux(host_data);
 			stm32_chip_resume(chip_data, chip_data->mask_cache);
 			raw_spin_unlock(&chip_data->rlock);
 		}
@@ -761,6 +796,20 @@ static struct irq_chip stm32_exti_h_chip_direct = {
 	.irq_set_affinity	= IS_ENABLED(CONFIG_SMP) ? irq_chip_set_affinity_parent : NULL,
 };
 
+static bool stm32_exti_h_test_gpio_mux_available(struct stm32_exti_host_data *host_data,
+						 unsigned int bank_nr,
+						 unsigned int gpio_nr)
+{
+	if (gpio_nr >= STM32_GPIO_IRQ_LINES)
+		return false;
+
+	if (!test_bit(gpio_nr, host_data->gpio_mux_used) ||
+	    bank_nr == host_data->gpio_mux_pos[gpio_nr])
+		return true;
+
+	return false;
+}
+
 static int stm32_exti_h_domain_match(struct irq_domain *dm,
 				     struct device_node *node,
 				     enum irq_domain_bus_token bus_token)
@@ -787,7 +836,9 @@ static int stm32_exti_h_domain_select(struct irq_domain *dm,
 {
 	struct fwnode_handle *fwnode = fwspec->fwnode;
 	struct stm32_exti_host_data *host_data = dm->host_data;
+	irq_hw_number_t hwirq = fwspec->param[0];
 	struct of_phandle_args out_irq;
+	u32 gpio_bank;
 	int ret;
 
 	if (!fwnode ||
@@ -800,16 +851,83 @@ static int stm32_exti_h_domain_select(struct irq_domain *dm,
 	if (fwnode != of_node_to_fwnode(host_data->irq_map_node->parent))
 		return 0;
 
+	gpio_bank = FIELD_GET(STM32_GPIO_BANK_MASK, fwspec->param[1]);
+
+	if (hwirq < STM32_GPIO_IRQ_LINES && !host_data->has_syscon &&
+	    ((host_data->chips_data[0].event_reserved & BIT(hwirq)) ||
+	     !stm32_exti_h_test_gpio_mux_available(host_data, gpio_bank, hwirq)))
+		return 0;
+
 	out_irq.np = host_data->irq_map_node;
 	out_irq.args_count = 2;
 	out_irq.args[0] = fwspec->param[0];
-	out_irq.args[1] = fwspec->param[1];
+	out_irq.args[1] = fwspec->param[1] & IRQ_TYPE_SENSE_MASK;
 
 	ret = of_irq_parse_raw(NULL, &out_irq);
 	if (ret)
 		return 0;
 
 	return (dm->parent->fwnode == of_node_to_fwnode(out_irq.np));
+}
+
+static int stm32_exti_h_gpio_bank_alloc(struct irq_domain *dm, struct irq_fwspec *fwspec)
+{
+	struct stm32_exti_host_data *host_data = dm->host_data;
+	struct hwspinlock *hwlock = host_data->hwlock;
+	irq_hw_number_t hwirq = fwspec->param[0];
+	void __iomem *base = host_data->base;
+	u32 cr, gpio_bank;
+	int ret;
+
+	if (host_data->has_syscon)
+		return 0;
+
+	if (hwirq >= STM32_GPIO_IRQ_LINES)
+		return 0;
+
+	gpio_bank = FIELD_GET(STM32_GPIO_BANK_MASK, fwspec->param[1]);
+
+	if (!stm32_exti_h_test_gpio_mux_available(host_data, gpio_bank, hwirq)) {
+		pr_debug("GPIO IRQ %ld already in use\n", hwirq);
+		return -EBUSY;
+	}
+
+	raw_spin_lock(&host_data->chips_data[0].rlock);
+
+	if (hwlock) {
+		ret = hwspin_lock_timeout_in_atomic(hwlock, HWSPNLCK_TIMEOUT);
+		if (ret) {
+			pr_err("%s can't get hwspinlock (%d)\n", __func__, ret);
+			raw_spin_unlock(&host_data->chips_data[0].rlock);
+			return ret;
+		}
+	}
+
+	cr = readl_relaxed(base + EXTI_CR(hwirq));
+	cr &= ~EXTI_CR_MASK(hwirq);
+	cr |= (gpio_bank << EXTI_CR_SHIFT(hwirq)) & EXTI_CR_MASK(hwirq);
+	writel_relaxed(cr, base + EXTI_CR(hwirq));
+
+	if (hwlock)
+		hwspin_unlock_in_atomic(hwlock);
+
+	raw_spin_unlock(&host_data->chips_data[0].rlock);
+
+	set_bit(hwirq, host_data->gpio_mux_used);
+	host_data->gpio_mux_pos[hwirq] = gpio_bank;
+
+	return 0;
+}
+
+static void stm32_exti_h_gpio_bank_free(struct irq_domain *dm, irq_hw_number_t hwirq)
+{
+	struct stm32_exti_host_data *host_data = dm->host_data;
+
+	if (host_data->has_syscon)
+		return;
+
+	if (hwirq < STM32_GPIO_IRQ_LINES)
+		clear_bit(hwirq, host_data->gpio_mux_used);
 }
 
 static int stm32_exti_h_domain_alloc(struct irq_domain *dm,
@@ -840,6 +958,10 @@ static int stm32_exti_h_domain_alloc(struct irq_domain *dm,
 		return -EPERM;
 	}
 
+	ret = stm32_exti_h_gpio_bank_alloc(dm, fwspec);
+	if (ret)
+		return ret;
+
 	event_trg = readl_relaxed(host_data->base + chip_data->reg_bank->trg_ofst);
 	chip = (event_trg & BIT(hwirq % IRQS_PER_BANK)) ?
 	       &stm32_exti_h_chip : &stm32_exti_h_chip_direct;
@@ -850,20 +972,28 @@ static int stm32_exti_h_domain_alloc(struct irq_domain *dm,
 		out_irq.np = host_data->irq_map_node;
 		out_irq.args_count = 2;
 		out_irq.args[0] = fwspec->param[0];
-		out_irq.args[1] = fwspec->param[1];
+		out_irq.args[1] = fwspec->param[1] & IRQ_TYPE_SENSE_MASK;
 
 		ret = of_irq_parse_raw(NULL, &out_irq);
-		if (ret)
+		if (ret) {
+			stm32_exti_h_gpio_bank_free(dm, fwspec->param[0]);
 			return ret;
+		}
 
 		of_phandle_args_to_fwspec(out_irq.np, out_irq.args,
 					  out_irq.args_count, &p_fwspec);
 
-		return irq_domain_alloc_irqs_parent(dm, virq, 1, &p_fwspec);
+		ret = irq_domain_alloc_irqs_parent(dm, virq, 1, &p_fwspec);
+		if (ret)
+			stm32_exti_h_gpio_bank_free(dm, fwspec->param[0]);
+
+		return ret;
 	}
 
-	if (!host_data->drv_data->desc_irqs)
+	if (!host_data->drv_data->desc_irqs) {
+		stm32_exti_h_gpio_bank_free(dm, fwspec->param[0]);
 		return -EINVAL;
+	}
 
 	desc_irq = host_data->drv_data->desc_irqs[hwirq];
 	if (desc_irq != EXTI_INVALID_IRQ) {
@@ -873,10 +1003,24 @@ static int stm32_exti_h_domain_alloc(struct irq_domain *dm,
 		p_fwspec.param[1] = desc_irq;
 		p_fwspec.param[2] = IRQ_TYPE_LEVEL_HIGH;
 
-		return irq_domain_alloc_irqs_parent(dm, virq, 1, &p_fwspec);
+		ret = irq_domain_alloc_irqs_parent(dm, virq, 1, &p_fwspec);
+		if (ret)
+			stm32_exti_h_gpio_bank_free(dm, fwspec->param[0]);
+
+		return ret;
 	}
 
 	return 0;
+}
+
+static void stm32_exti_h_domain_free(struct irq_domain *dm, unsigned int virq,
+				     unsigned int nr_irqs)
+{
+	struct irq_data *irq_data = irq_domain_get_irq_data(dm, virq);
+
+	stm32_exti_h_gpio_bank_free(dm, irq_data->hwirq);
+
+	irq_domain_free_irqs_common(dm, virq, nr_irqs);
 }
 
 static struct
@@ -1022,7 +1166,7 @@ static const struct irq_domain_ops stm32_exti_h_domain_ops = {
 	.match	= stm32_exti_h_domain_match,
 	.select = stm32_exti_h_domain_select,
 	.alloc	= stm32_exti_h_domain_alloc,
-	.free	= irq_domain_free_irqs_common,
+	.free	= stm32_exti_h_domain_free,
 	.xlate = irq_domain_xlate_twocell,
 };
 
@@ -1083,6 +1227,9 @@ static int stm32_exti_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, host_data);
 	host_data->dev = dev;
+
+	if (of_device_is_compatible(np, "syscon"))
+		host_data->has_syscon = true;
 
 	/* check for optional hwspinlock which may be not available yet */
 	ret = of_hwspin_lock_get_id(np, 0);
