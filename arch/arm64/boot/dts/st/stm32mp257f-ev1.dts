@@ -453,6 +453,36 @@
 	};
 };
 
+&ommanager {
+	memory-region = <&mm_ospi1>;
+	memory-region-names = "mm_ospi1";
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&ospi1_clk_pins_a
+		     &ospi1_io03_pins_a
+		     &ospi1_cs0_pins_a>;
+
+	pinctrl-1 = <&ospi1_clk_sleep_pins_a
+		     &ospi1_io03_sleep_pins_a
+		     &ospi1_cs0_sleep_pins_a>;
+
+	status = "okay";
+
+	spi@40430000 {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		memory-region = <&mm_ospi1>;
+		status = "okay";
+
+		flash0: flash@0 {
+			compatible = "jedec,spi-nor";
+			reg = <0>;
+			spi-rx-bus-width = <4>;
+			spi-tx-bus-width = <4>;
+			spi-max-frequency = <133000000>;
+		};
+	};
+};
+
 &pcie_rc {
 	pinctrl-names = "default", "init";
 	pinctrl-0 = <&pcie_pins_a>;
