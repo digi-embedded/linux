@@ -240,7 +240,7 @@
 		};
 
 		exti: interrupt-controller@5000d000 {
-			compatible = "st,stm32mp1-exti", "syscon";
+			compatible = "st,stm32mp1-exti";
 			interrupt-controller;
 			#interrupt-cells = <2>;
 			#address-cells = <0>;
@@ -2057,7 +2057,6 @@
 			compatible = "st,stm32mp157-pinctrl";
 			ranges = <0 0x50002000 0xa400>;
 			interrupt-parent = <&exti>;
-			st,syscfg = <&exti 0x60 0xff>;
 			hwlocks = <&hsem 0 1>;
 			pins-are-numbered;
 
@@ -2190,7 +2189,6 @@
 			ranges = <0 0x54004000 0x400>;
 			pins-are-numbered;
 			interrupt-parent = <&exti>;
-			st,syscfg = <&exti 0x60 0xff>;
 			hwlocks = <&hsem 0 1>;
 
 			gpioz: gpio@54004000 {
