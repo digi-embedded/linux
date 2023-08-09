@@ -1579,4 +1579,9 @@ void hantro_h1_vp8_enc_done(struct hantro_ctx *ctx)
 
 	ctx->vp8_enc.last_intra = is_intra(ctx);
 	++ctx->vp8_enc.frame_counter;
+
+	if (is_intra(ctx))
+		dst_buf->flags |= V4L2_BUF_FLAG_KEYFRAME;
+	else
+		dst_buf->flags |= V4L2_BUF_FLAG_PFRAME;
 }
