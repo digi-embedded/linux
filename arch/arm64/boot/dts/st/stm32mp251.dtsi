@@ -2261,7 +2261,7 @@
 		};
 
 		exti1: interrupt-controller@44220000 {
-			compatible = "st,stm32mp1-exti", "syscon";
+			compatible = "st,stm32mp1-exti";
 			interrupt-controller;
 			#interrupt-cells = <2>;
 			#address-cells = <0>;
@@ -2389,7 +2389,7 @@
 		};
 
 		exti2: interrupt-controller@46230000 {
-			compatible = "st,stm32mp1-exti", "syscon";
+			compatible = "st,stm32mp1-exti";
 			interrupt-controller;
 			#interrupt-cells = <2>;
 			#address-cells = <0>;
@@ -2442,7 +2442,6 @@
 			compatible = "st,stm32mp257-pinctrl";
 			ranges = <0 0x44240000 0xa0400>;
 			interrupt-parent = <&exti1>;
-			st,syscfg = <&exti1 0x60 0xff>;
 			pins-are-numbered;
 
 			gpioa: gpio@44240000 {
@@ -2583,7 +2582,6 @@
 			compatible = "st,stm32mp257-z-pinctrl";
 			ranges = <0 0x46200000 0x400>;
 			interrupt-parent = <&exti1>;
-			st,syscfg = <&exti1 0x60 0xff>;
 			pins-are-numbered;
 
 			gpioz: gpio@46200000 {
