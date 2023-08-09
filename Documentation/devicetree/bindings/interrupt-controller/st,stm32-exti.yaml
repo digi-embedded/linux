@@ -46,8 +46,7 @@ properties:
 
   wakeup-parent: true
 
-patternProperties:
-  '^exti-interrupt-map$':
+  exti-interrupt-map:
     type: object
     properties:
       interrupt-map: true
