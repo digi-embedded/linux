@@ -221,6 +221,8 @@ struct hantro_dev {
  * @fh:			V4L2 file handler.
  * @is_encoder:		Decoder or encoder context?
  *
+ * @str:		Placeholder for debug string
+ *
  * @sequence_cap:       Sequence counter for capture queue
  * @sequence_out:       Sequence counter for output queue
  *
@@ -246,6 +248,8 @@ struct hantro_ctx {
 	struct hantro_dev *dev;
 	struct v4l2_fh fh;
 	bool is_encoder;
+
+	char str[400];
 
 	u32 sequence_cap;
 	u32 sequence_out;

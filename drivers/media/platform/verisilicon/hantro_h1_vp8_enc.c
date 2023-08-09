@@ -1403,6 +1403,55 @@ static void hantro_h1_vp8_enc_set_params(struct hantro_dev *vpu, struct hantro_c
 	}
 }
 
+static char *encode_params_str(struct v4l2_ctrl_vp8_encode_params *p,
+			       char *str,
+			       unsigned int len)
+{
+	if (!p)
+		return NULL;
+
+	snprintf(str, len,
+		 "v4l2_ctrl_vp8_encode_params\n"
+		 " flags:\t\t\t %s %s %s %s %s %s\n"
+		 " frame_type:\t\t%s\n"
+		 " color_space:\t\t%s\n"
+		 " clamping_type:\t\t%s\n"
+		 " loop_filter_type:\t%s\n"
+		 " loop_filter_level:\t%d\n"
+		 " sharpness_level:\t%d\n"
+		 " log2_nbr_of_dct_parts:\t%s\n"
+		 " prob_intra:\t\t%d\n"
+		 " prob_last:\t\t%d\n"
+		 " prob_gf:\t\t%d\n"
+		 " copy_to_golden:\t\t%d\n"
+		 " copy_to_alternate:\t%d\n"
+		 " reference_type:\t\t%s\n",
+		 (p->flags & V4L2_VP8_FRAME_FLAG_SHOWFRAME) ? "SHOW" : "",
+		 (p->flags & V4L2_VP8_FRAME_FLAG_GOLDEN_REFRESH) ? "GOLDEN" : "",
+		 (p->flags & V4L2_VP8_FRAME_FLAG_ALTREF_REFRESH) ? "ALTREF" : "",
+		 (p->flags & V4L2_VP8_FRAME_FLAG_SEGMENT_ENABLED) ? "SEGMENT" : "",
+		 (p->flags & V4L2_VP8_FRAME_FLAG_LOOP_FILTER_ADJ_ENABLED) ? "LOOPFILTER" : "",
+		 (p->flags & V4L2_VP8_FRAME_FLAG_REFRESH_ENTROPY_PROBS) ? "REFRESH_ENTROPY" : "",
+		 (p->frame_type == V4L2_VP8_FRAME_TYPE_KEYFRAME) ? "KEYFRAME" : "INTER",
+		 (p->color_space == V4L2_VP8_FRAME_COLOR_SPACE_YUV) ? "YUV" : "RESERVED",
+		 (p->clamping_type == V4L2_VP8_FRAME_CLAMPING_REQUIRED) ? "REQ" : "NO",
+		 (p->loop_filter_type == V4L2_VP8_FRAME_FILTER_TYPE_NORMAL) ? "NORMAL" : "SIMPLE",
+		 p->loop_filter_level,
+		 p->sharpness_level,
+		 (p->log2_nbr_of_dct_partitions == V4L2_VP8_FRAME_NBR_DCT_PARTITIONS_1) ? "1" :
+		 (p->log2_nbr_of_dct_partitions == V4L2_VP8_FRAME_NBR_DCT_PARTITIONS_2) ? "2" :
+		 (p->log2_nbr_of_dct_partitions == V4L2_VP8_FRAME_NBR_DCT_PARTITIONS_4) ? "4" : "8",
+		 p->prob_intra,
+		 p->prob_last,
+		 p->prob_gf,
+		 p->copy_buffer_to_golden,
+		 p->copy_buffer_to_alternate,
+		 (p->reference_type == V4L2_VP8_FRAME_REF_LAST) ? "LAST" :
+		 (p->reference_type == V4L2_VP8_FRAME_REF_GOLDEN) ? "GOLDEN" : "ALT");
+
+	return str;
+}
+
 int hantro_h1_vp8_enc_run(struct hantro_ctx *ctx)
 {
 	struct hantro_dev *vpu = ctx->dev;
@@ -1416,6 +1465,8 @@ int hantro_h1_vp8_enc_run(struct hantro_ctx *ctx)
 	params = hantro_get_ctrl(ctx, V4L2_CID_STATELESS_VP8_ENCODE_PARAMS);
 	if (WARN_ON(!params))
 		return -EINVAL;
+
+	vpu_debug(1, "%s\n", encode_params_str(params, ctx->str, sizeof(ctx->str)));
 
 	if (params->flags & V4L2_VP8_FRAME_FLAG_SEGMENT_ENABLED)
 		return -EINVAL;
