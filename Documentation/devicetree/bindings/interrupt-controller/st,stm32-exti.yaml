@@ -25,6 +25,8 @@ properties:
 
   "#interrupt-cells":
     const: 2
+  "#address-cells":
+    const: 0
 
   reg:
     maxItems: 1
