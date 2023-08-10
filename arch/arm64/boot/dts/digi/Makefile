@@ -6,7 +6,8 @@ dtb-$(CONFIG_ARCH_MXC) += ccimx8x-mfg-interim.dtb \
 			  ccimx8x-sbc-pro-mfg.dtb \
 			  ccimx8x-sbc-pro.dtb \
 
-dtb-$(CONFIG_ARCH_MXC) += _ov_board_flexcan1_ccimx8x-sbc-pro.dtbo \
+dtb-$(CONFIG_ARCH_MXC) += _ov_board_cm40_ccimx8x-sbc-pro.dtbo \
+			  _ov_board_flexcan1_ccimx8x-sbc-pro.dtbo \
 			  _ov_board_flexspi_ccimx8x-sbc-pro.dtbo \
 			  _ov_board_gpio-watchdog_ccimx8x-sbc-pro.dtbo \
 			  _ov_board_hsd101pfw2-lvds_ccimx8x-sbc-pro.dtbo \
