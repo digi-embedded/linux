@@ -179,7 +179,7 @@ examples:
       reg = <0x40430000 0x400>;
       memory-region = <&mm_ospi1>;
       interrupts = <GIC_SPI 163 IRQ_TYPE_LEVEL_HIGH>;
-      dmas = <&hpdma 2 0x22 0x00003011 0x0>;
+      dmas = <&hpdma 2 0x42 0x00003013 0x0>;
       dma-names = "rx";
       st,syscfg-dlyb = <&syscfg 0x1000>;
       clocks = <&scmi_clk CK_SCMI_OSPI1>;
