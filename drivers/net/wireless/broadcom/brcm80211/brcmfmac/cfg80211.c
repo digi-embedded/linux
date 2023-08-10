@@ -6479,6 +6479,58 @@ static int brcmf_cfg80211_get_channel(struct wiphy *wiphy,
 	return 0;
 }
 
+static s32
+brcmf_notify_csa_completion_ind(struct brcmf_if *ifp,
+				const struct brcmf_event_msg *e, void *data)
+{
+	struct brcmf_cfg80211_info *cfg;
+	struct net_device *ndev;
+	struct wiphy *wiphy;
+	struct cfg80211_chan_def chandef;
+	struct wireless_dev *wdev;
+
+	int error = 0;
+
+	brcmf_dbg(TRACE, "Enter\n");
+
+	if (unlikely(e->status)) {
+		brcmf_err("status:0x%x\n", e->status);
+		return -EINVAL;
+	}
+
+	if (!ifp)
+		return -EINVAL;
+	else if (!ifp->drvr)
+		return -EINVAL;
+
+	cfg = ifp->drvr->config;
+	ndev = cfg_to_ndev(cfg);
+	wiphy = cfg_to_wiphy(cfg);
+
+	if (!cfg || !ndev || !wiphy)
+		return -EINVAL;
+
+	wdev = ndev->ieee80211_ptr;
+	if (!wdev)
+		return -EINVAL;
+
+	memset(&chandef, 0, sizeof(chandef));
+	/* Reuse cfg80211 call to get chandef */
+	error = brcmf_cfg80211_get_channel(wiphy, wdev, 0, &chandef);
+	if (unlikely(error)) {
+		brcmf_err("Get chandef error: %d \n", error);
+		return -EINVAL;
+	}
+
+	/* Send channel switch notification only for STA mode */
+	if (wdev->iftype == NL80211_IFTYPE_STATION) {
+		cfg80211_ch_switch_notify(ndev, &chandef, 0);
+		brcmf_dbg(TRACE, "CSA sent upstream\n");
+	}
+
+	return 0;
+}
+
 static int brcmf_cfg80211_crit_proto_start(struct wiphy *wiphy,
 					   struct wireless_dev *wdev,
 					   enum nl80211_crit_proto_id proto,
@@ -7959,6 +8011,8 @@ static void brcmf_register_event_handlers(struct brcmf_cfg80211_info *cfg)
 			    brcmf_notify_connect_status);
 	brcmf_fweh_register(cfg->pub, BRCMF_E_PFN_NET_FOUND,
 			    brcmf_notify_sched_scan_results);
+	brcmf_fweh_register(cfg->pub, BRCMF_E_SA_COMPLETE_IND,
+			    brcmf_notify_csa_completion_ind);
 	brcmf_fweh_register(cfg->pub, BRCMF_E_IF,
 			    brcmf_notify_vif_event);
 	brcmf_fweh_register(cfg->pub, BRCMF_E_P2P_PROBEREQ_MSG,
