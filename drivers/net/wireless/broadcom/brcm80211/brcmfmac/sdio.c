@@ -3225,8 +3225,13 @@ static void brcmf_sdio_dpc(struct brcmf_sdio *bus)
 		u32 hmb_data = 0;
 		intstatus &= ~I_HMB_HOST_INT;
 		intstatus |= brcmf_sdio_hostmail(bus, &hmb_data);
-		if (brcmf_sdio_ulp_pre_redownload_check(bus, hmb_data))
+		if (brcmf_sdio_ulp_pre_redownload_check(bus, hmb_data)) {
+			/* Will toggle redownload_fw, after F2 enabled and
+			 * register IRQ.
+			 */
+			sdiod->redownload_fw = true;
 			brcmf_sdio_ulp_reinit_fw(bus);
+		}
 	}
 
 	sdio_release_host(bus->sdiodev->func1);
@@ -3258,7 +3263,8 @@ static void brcmf_sdio_dpc(struct brcmf_sdio *bus)
 		intstatus &= ~I_HMB_FRAME_IND;
 
 	/* On frame indication, read available frames */
-	if ((intstatus & I_HMB_FRAME_IND) && (bus->clkstate == CLK_AVAIL)) {
+	if ((intstatus & I_HMB_FRAME_IND) && bus->clkstate == CLK_AVAIL &&
+	    !sdiod->redownload_fw) {
 		brcmf_sdio_readframes(bus, bus->rxbound);
 		if (!bus->rxpending)
 			intstatus &= ~I_HMB_FRAME_IND;
@@ -5247,6 +5253,7 @@ static void brcmf_sdio_firmware_callback(struct device *dev, int err,
 		err = brcmf_sdiod_intr_register(sdiod);
 		if (err != 0)
 			brcmf_err("intr register failed:%d\n", err);
+		bus->sdiodev->redownload_fw = false;
 	}
 
 	/* If we didn't come up, turn off backplane clock */
