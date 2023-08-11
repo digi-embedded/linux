@@ -682,6 +682,8 @@ static int brcmf_rx_hdrpull(struct brcmf_pub *drvr, struct sk_buff *skb,
 	}
 
 	skb->protocol = eth_type_trans(skb, (*ifp)->ndev);
+	brcmf_dbg(DATA, "protocol: 0x%04X\n", skb->protocol);
+
 	return 0;
 }
 
