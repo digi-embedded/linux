@@ -264,6 +264,7 @@ struct brcmf_sdio_dev {
 	const struct firmware *clm_fw;
 	struct brcmf_ulp fmac_ulp;
 	bool ulp;
+	bool redownload_fw;
 };
 
 /* sdio core registers */
