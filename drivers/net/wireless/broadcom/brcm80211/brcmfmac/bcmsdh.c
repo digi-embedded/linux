@@ -110,25 +110,27 @@ int brcmf_sdiod_intr_register(struct brcmf_sdio_dev *sdiodev)
 	if (pdata->oob_irq_supported) {
 		brcmf_dbg(SDIO, "Enter, register OOB IRQ %d\n",
 			  pdata->oob_irq_nr);
-		spin_lock_init(&sdiodev->irq_en_lock);
-		sdiodev->irq_en = true;
+		if (!sdiodev->oob_irq_requested) {
+			spin_lock_init(&sdiodev->irq_en_lock);
+			sdiodev->irq_en = true;
 
-		ret = request_irq(pdata->oob_irq_nr, brcmf_sdiod_oob_irqhandler,
+			ret = request_irq(pdata->oob_irq_nr,
+					  brcmf_sdiod_oob_irqhandler,
 				  pdata->oob_irq_flags, "brcmf_oob_intr",
 				  &sdiodev->func1->dev);
-		if (ret != 0) {
-			brcmf_err("request_irq failed %d\n", ret);
-			return ret;
-		}
-		sdiodev->oob_irq_requested = true;
+			if (ret != 0) {
+				brcmf_err("request_irq failed %d\n", ret);
+				return ret;
+			}
+			sdiodev->oob_irq_requested = true;
 
-		ret = enable_irq_wake(pdata->oob_irq_nr);
-		if (ret != 0) {
-			brcmf_err("enable_irq_wake failed %d\n", ret);
-			return ret;
+			ret = enable_irq_wake(pdata->oob_irq_nr);
+			if (ret != 0) {
+				brcmf_err("enable_irq_wake failed %d\n", ret);
+				return ret;
+			}
+			disable_irq_wake(pdata->oob_irq_nr);
 		}
-		disable_irq_wake(pdata->oob_irq_nr);
-
 		sdio_claim_host(sdiodev->func1);
 
 		if (sdiodev->bus_if->chip == BRCM_CC_43362_CHIP_ID) {
