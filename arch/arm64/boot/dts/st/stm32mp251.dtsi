@@ -1942,6 +1942,7 @@
 			dsi: dsi@48000000 {
 				compatible = "st,stm32-dsi";
 				reg = <0x48000000 0x800>;
+				#clock-cells = <0>;
 				clocks = <&rcc CK_BUS_DSI>, <&rcc CK_KER_DSIPHY>,
 					 <&rcc CK_KER_LTDC>;
 				clock-names = "pclk", "ref", "px_clk";
