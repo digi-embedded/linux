@@ -382,9 +382,7 @@ static int dsi_phy_141_pll_get_params(struct dw_mipi_dsi_stm *dsi,
 static int dw_mipi_dsi_phy_141_init(void *priv_data)
 {
 	struct dw_mipi_dsi_stm *dsi = priv_data;
-	u32 val, ccf, prop, gmp, int1, bias, vco, ndiv, odf, idf;
-	unsigned int pll_in_khz, pll_out_khz, hsfreq;
-	int ret, dppa_index;
+	int ret;
 
 	DRM_DEBUG_DRIVER("\n");
 
@@ -411,54 +409,13 @@ static int dw_mipi_dsi_phy_141_init(void *priv_data)
 	dsi_clear(dsi, DSI_PTCR0, PTCR0_TRSEN);
 	mdelay(1);
 
-	/* Compute requested pll out, pll out is the half of the lane data rate */
-	pll_out_khz = dsi->lane_mbps * 1000 / 2;
-	pll_in_khz = (unsigned int)(clk_get_rate(dsi->pllref_clk) / 1000);
-
-	dsi_phy_141_pll_get_params(dsi, pll_in_khz, pll_out_khz, &idf, &ndiv, &odf, &dppa_index);
-
-	ccf = ((pll_in_khz / 1000 - 17)) * 4;
-	hsfreq = dppa_map[dppa_index].hs_freq;
-
-	vco = dppa_map[dppa_index].vco;
-	bias = 0x10;
-	int1 = 0x00;
-	gmp = 0x01;
-	prop = dppa_map[dppa_index].prop;
-
-	/* set DLD, HSFR & CCF */
-	val = (hsfreq << 8) | ccf;
-	dsi_write(dsi, DSI_WPCR1, val);
-
-	val = ((ndiv - 2) << 4) | (idf - 1);
-	dsi_write(dsi, DSI_WRPCR0, val);
-
-	val = ((odf - 1) << 28) | (vco << 24) | (bias << 16) | (int1 << 8) | (gmp << 6) | prop;
-	dsi_write(dsi, DSI_WRPCR1, val);
-
-	dsi_write(dsi, DSI_PCTLR, PCTLR_CKEN);
-
-	dsi_update_bits(dsi, DSI_WRPCR2, WRPCR2_SEL, 0x01);
-
-	dsi_set(dsi, DSI_WRPCR2, WRPCR2_UPD);
-	mdelay(1);
-
-	dsi_clear(dsi, DSI_WRPCR2, WRPCR2_UPD);
-	mdelay(1);
-
-	dsi_set(dsi, DSI_PCTLR, PCTLR_PWEN | PCTLR_DEN);
-
-	ret = readl_poll_timeout(dsi->base + DSI_PSR, val, val & PSR_PSSC,
-				 SLEEP_US, TIMEOUT_US);
+	ret = clk_set_rate(dsi->txbyte_clk.clk, dsi->lane_mbps * 1000000 / 2);
 	if (ret)
-		DRM_ERROR("!TIMEOUT! waiting PLL, let's continue\n");
+		return ret;
 
-	DRM_DEBUG_DRIVER("IDF %d ODF %d NDIV %d\n", idf, odf, ndiv);
-	DRM_DEBUG_DRIVER("VCO %d BIAS %d INT %d GMP %d PROP %d\n", vco, bias, int1, gmp, prop);
+	ret = clk_prepare_enable(dsi->txbyte_clk.clk);
 
-	dsi_set(dsi, DSI_WRPCR2, WRPCR2_PLLEN);
-
-	return 0;
+	return ret;
 }
 
 static int
@@ -512,11 +469,16 @@ static void dw_mipi_dsi_clk_disable(struct clk_hw *clk)
 
 	DRM_DEBUG_DRIVER("\n");
 
-	/* Disable the DSI PLL */
-	dsi_clear(dsi, DSI_WRPCR, WRPCR_PLLEN);
+	if (dsi->hw_version == HWVER_141) {
+		/* Disable the DSI PLL */
+		dsi_clear(dsi, DSI_WRPCR2, WRPCR2_PLLEN);
+	} else {
+		/* Disable the DSI PLL */
+		dsi_clear(dsi, DSI_WRPCR, WRPCR_PLLEN);
 
-	/* Disable the regulator */
-	dsi_clear(dsi, DSI_WRPCR, WRPCR_REGEN | WRPCR_BGREN);
+		/* Disable the regulator */
+		dsi_clear(dsi, DSI_WRPCR, WRPCR_REGEN | WRPCR_BGREN);
+	}
 }
 
 static int dw_mipi_dsi_clk_enable(struct clk_hw *clk)
@@ -527,19 +489,28 @@ static int dw_mipi_dsi_clk_enable(struct clk_hw *clk)
 
 	DRM_DEBUG_DRIVER("\n");
 
-	/* Enable the regulator */
-	dsi_set(dsi, DSI_WRPCR, WRPCR_REGEN | WRPCR_BGREN);
-	ret = readl_poll_timeout_atomic(dsi->base + DSI_WISR, val, val & WISR_RRS,
-					SLEEP_US, TIMEOUT_US);
-	if (ret)
-		DRM_DEBUG_DRIVER("!TIMEOUT! waiting REGU, let's continue\n");
+	if (dsi->hw_version == HWVER_141) {
+		ret = readl_poll_timeout_atomic(dsi->base + DSI_PSR, val, val & PSR_PSSC,
+						SLEEP_US, TIMEOUT_US);
+		if (ret)
+			DRM_ERROR("!TIMEOUT! waiting PLL, let's continue\n");
 
-	/* Enable the DSI PLL & wait for its lock */
-	dsi_set(dsi, DSI_WRPCR, WRPCR_PLLEN);
-	ret = readl_poll_timeout_atomic(dsi->base + DSI_WISR, val, val & WISR_PLLLS,
-					SLEEP_US, TIMEOUT_US);
-	if (ret)
-		DRM_DEBUG_DRIVER("!TIMEOUT! waiting PLL, let's continue\n");
+		dsi_set(dsi, DSI_WRPCR2, WRPCR2_PLLEN);
+	} else {
+		/* Enable the regulator */
+		dsi_set(dsi, DSI_WRPCR, WRPCR_REGEN | WRPCR_BGREN);
+		ret = readl_poll_timeout_atomic(dsi->base + DSI_WISR, val, val & WISR_RRS,
+						SLEEP_US, TIMEOUT_US);
+		if (ret)
+			DRM_DEBUG_DRIVER("!TIMEOUT! waiting REGU, let's continue\n");
+
+		/* Enable the DSI PLL & wait for its lock */
+		dsi_set(dsi, DSI_WRPCR, WRPCR_PLLEN);
+		ret = readl_poll_timeout_atomic(dsi->base + DSI_WISR, val, val & WISR_PLLLS,
+						SLEEP_US, TIMEOUT_US);
+		if (ret)
+			DRM_DEBUG_DRIVER("!TIMEOUT! waiting PLL, let's continue\n");
+	}
 
 	return 0;
 }
@@ -548,7 +519,10 @@ static int dw_mipi_dsi_clk_is_enabled(struct clk_hw *hw)
 {
 	struct dw_mipi_dsi_stm *dsi = clk_to_dw_mipi_dsi_stm(hw);
 
-	return dsi_read(dsi, DSI_WRPCR) & WRPCR_PLLEN;
+	if (dsi->hw_version == HWVER_141)
+		return dsi_read(dsi, DSI_WRPCR2) & WRPCR2_PLLEN;
+	else
+		return dsi_read(dsi, DSI_WRPCR) & WRPCR_PLLEN;
 }
 
 static unsigned long dw_mipi_dsi_clk_recalc_rate(struct clk_hw *hw,
@@ -562,13 +536,24 @@ static unsigned long dw_mipi_dsi_clk_recalc_rate(struct clk_hw *hw,
 
 	pll_in_khz = (unsigned int)(parent_rate / 1000);
 
-	val = dsi_read(dsi, DSI_WRPCR);
+	if (dsi->hw_version == HWVER_141) {
+		val = dsi_read(dsi, DSI_WRPCR0);
 
-	idf = (val & WRPCR_IDF) >> 11;
-	if (!idf)
-		idf = 1;
-	ndiv = (val & WRPCR_NDIV) >> 2;
-	odf = int_pow(2, (val & WRPCR_ODF) >> 16);
+		idf = (val & WRPCR0_IDF) + 1;
+		ndiv = ((val & WRPCR0_NDIV) >> 4) + 2;
+
+		val = dsi_read(dsi, DSI_WRPCR1);
+
+		odf = int_pow(2, (val & WRPCR1_ODF) >> 28);
+	} else {
+		val = dsi_read(dsi, DSI_WRPCR);
+
+		idf = (val & WRPCR_IDF) >> 11;
+		if (!idf)
+			idf = 1;
+		ndiv = (val & WRPCR_NDIV) >> 2;
+		odf = int_pow(2, (val & WRPCR_ODF) >> 16);
+	}
 
 	/* Get the adjusted pll out value */
 	pll_out_khz = dsi_pll_get_clkout_khz(pll_in_khz, idf, ndiv, odf);
@@ -592,8 +577,12 @@ static long dw_mipi_dsi_clk_round_rate(struct clk_hw *hw, unsigned long rate,
 	ndiv = 0;
 	odf = 0;
 
-	ret = dsi_pll_get_params(dsi, pll_in_khz, rate / 1000,
-				 &idf, &ndiv, &odf);
+	if (dsi->hw_version == HWVER_141)
+		ret = dsi_phy_141_pll_get_params(dsi, pll_in_khz, rate / 1000,
+						 &idf, &ndiv, &odf, NULL);
+	else
+		ret = dsi_pll_get_params(dsi, pll_in_khz, rate / 1000,
+					 &idf, &ndiv, &odf);
 	if (ret)
 		DRM_WARN("Warning dsi_pll_get_params(): bad params\n");
 
@@ -607,9 +596,9 @@ static int dw_mipi_dsi_clk_set_rate(struct clk_hw *hw, unsigned long rate,
 				    unsigned long parent_rate)
 {
 	struct dw_mipi_dsi_stm *dsi = clk_to_dw_mipi_dsi_stm(hw);
-	unsigned int idf, ndiv, odf, pll_in_khz, pll_out_khz;
-	int ret;
-	u32 val;
+	u32 val, ccf, prop, gmp, int1, bias, vco;
+	unsigned int idf, ndiv, odf, pll_in_khz, pll_out_khz, hsfreq;
+	int ret, dppa_index;
 
 	DRM_DEBUG_DRIVER("\n");
 
@@ -620,20 +609,63 @@ static int dw_mipi_dsi_clk_set_rate(struct clk_hw *hw, unsigned long rate,
 	ndiv = 0;
 	odf = 0;
 
-	ret = dsi_pll_get_params(dsi, pll_in_khz, rate / 1000, &idf, &ndiv, &odf);
-	if (ret)
-		DRM_WARN("Warning dsi_pll_get_params(): bad params\n");
+	if (dsi->hw_version == HWVER_141) {
+		/* Compute requested pll out, pll out is the half of the lane data rate */
+		pll_out_khz = dsi->lane_mbps * 1000 / 2;
 
-	/* Get the adjusted pll out value */
-	pll_out_khz = dsi_pll_get_clkout_khz(pll_in_khz, idf, ndiv, odf);
+		ret = dsi_phy_141_pll_get_params(dsi, pll_in_khz, pll_out_khz,
+						 &idf, &ndiv, &odf, &dppa_index);
+		if (ret)
+			DRM_WARN("Warning dsi_pll_get_params(): bad params\n");
 
-	/* Set the PLL division factors */
-	dsi_update_bits(dsi, DSI_WRPCR,	WRPCR_NDIV | WRPCR_IDF | WRPCR_ODF,
-			(ndiv << 2) | (idf << 11) | ((ffs(odf) - 1) << 16));
+		ccf = ((pll_in_khz / 1000 - 17)) * 4;
+		hsfreq = dppa_map[dppa_index].hs_freq;
 
-	/* Compute uix4 & set the bit period in high-speed mode */
-	val = 4000000 / pll_out_khz;
-	dsi_update_bits(dsi, DSI_WPCR0, WPCR0_UIX4, val);
+		vco = dppa_map[dppa_index].vco;
+		bias = 0x10;
+		int1 = 0x00;
+		gmp = 0x01;
+		prop = dppa_map[dppa_index].prop;
+
+		/* set DLD, HSFR & CCF */
+		val = (hsfreq << 8) | ccf;
+		dsi_write(dsi, DSI_WPCR1, val);
+
+		val = ((ndiv - 2) << 4) | (idf - 1);
+		dsi_write(dsi, DSI_WRPCR0, val);
+
+		val = ((odf - 1) << 28) | (vco << 24) | (bias << 16)
+		       | (int1 << 8) | (gmp << 6) | prop;
+		dsi_write(dsi, DSI_WRPCR1, val);
+
+		dsi_write(dsi, DSI_PCTLR, PCTLR_CKEN);
+
+		dsi_update_bits(dsi, DSI_WRPCR2, WRPCR2_SEL, 0x01);
+
+		dsi_set(dsi, DSI_WRPCR2, WRPCR2_UPD);
+		mdelay(1);
+
+		dsi_clear(dsi, DSI_WRPCR2, WRPCR2_UPD);
+		mdelay(1);
+
+		dsi_set(dsi, DSI_PCTLR, PCTLR_PWEN | PCTLR_DEN);
+	} else {
+		ret = dsi_pll_get_params(dsi, pll_in_khz, rate / 1000,
+					 &idf, &ndiv, &odf);
+		if (ret)
+			DRM_WARN("Warning dsi_pll_get_params(): bad params\n");
+
+		/* Get the adjusted pll out value */
+		pll_out_khz = dsi_pll_get_clkout_khz(pll_in_khz, idf, ndiv, odf);
+
+		/* Set the PLL division factors */
+		dsi_update_bits(dsi, DSI_WRPCR, WRPCR_NDIV | WRPCR_IDF | WRPCR_ODF,
+				(ndiv << 2) | (idf << 11) | ((ffs(odf) - 1) << 16));
+
+		/* Compute uix4 & set the bit period in high-speed mode */
+		val = 4000000 / pll_out_khz;
+		dsi_update_bits(dsi, DSI_WPCR0, WPCR0_UIX4, val);
+	}
 
 	return 0;
 }
@@ -664,6 +696,13 @@ static struct clk_init_data cdata_init = {
 	.num_parents = 1,
 };
 
+static struct clk_init_data cdata_init_141 = {
+	.name = "clk_phy_dsi",
+	.ops = &dw_mipi_dsi_stm_clk_ops,
+	.parent_names = (const char * []) {"ck_ker_dsiphy"},
+	.num_parents = 1,
+};
+
 static int dw_mipi_dsi_clk_register(struct dw_mipi_dsi_stm *dsi,
 				    struct device *dev)
 {
@@ -672,7 +711,14 @@ static int dw_mipi_dsi_clk_register(struct dw_mipi_dsi_stm *dsi,
 
 	DRM_DEBUG_DRIVER("Registering clk\n");
 
-	dsi->txbyte_clk.init = &cdata_init;
+	if (dsi->hw_version == HWVER_131 || dsi->hw_version == HWVER_130) {
+		dsi->txbyte_clk.init = &cdata_init;
+	} else if (dsi->hw_version == HWVER_141) {
+		dsi->txbyte_clk.init = &cdata_init_141;
+	} else {
+		DRM_ERROR("Version hw_clk not supported\n");
+		return -ENODEV;
+	}
 
 	ret = clk_hw_register(dev, &dsi->txbyte_clk);
 	if (ret)
