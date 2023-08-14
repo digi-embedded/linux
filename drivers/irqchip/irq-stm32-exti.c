@@ -807,7 +807,7 @@ static int stm32_exti_h_domain_select(struct irq_domain *dm,
 
 	ret = of_irq_parse_raw(NULL, &out_irq);
 	if (ret)
-		return ret;
+		return 0;
 
 	return (dm->parent->fwnode == of_node_to_fwnode(out_irq.np));
 }
