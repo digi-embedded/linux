@@ -1,0 +1,56 @@
+/*
+ * Copyright 2022, 2023 Digi International, Inc.
+ *
+ * The code contained herein is licensed under the GNU General Public
+ * License. You may obtain a copy of the GNU General Public License
+ * Version 2 or later at the following locations:
+ *
+ * http://www.opensource.org/licenses/gpl-license.html
+ * http://www.gnu.org/copyleft/gpl.html
+ */
+
+#include <dt-bindings/rtc/rtc-stm32.h>
+/* Digi ConnectCore MP13 non-wireless FCT */
+#include "ccmp133-mfg-functional.dts"
+
+/ {
+	bluetooth {
+		/* U-Boot will fill in the MAC address here */
+	};
+
+	wireless {
+		/* U-Boot will fill in the MAC address here */
+	};
+};
+
+/* Enable the RF regulator */
+&reg_3v3_rf{
+	status = "okay";
+};
+
+/* Enable the WL regulator */
+&reg_rf_wl_en{
+	status = "okay";
+};
+
+&rtc{
+	st,lsco = <RTC_OUT2_RMP>;
+	pinctrl-0 = <&ccmp13_rtc_out1_pins_a &rtc_out2_rmp_pins_a>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+
+/* Enable SDMMC2 (Wireless) */
+&sdmmc2{
+	status = "okay";
+};
+
+/* Enable USART2 (Bluetooth) */
+&usart2{
+	status = "okay";
+};
+
+/* Enable CYW4373 Bluetooth node */
+&cyw4373_bt{
+	status = "okay";
+};

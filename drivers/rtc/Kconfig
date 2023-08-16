@@ -1183,6 +1183,16 @@ config RTC_DRV_M48T59
 	  This driver can also be built as a module, if so, the module
 	  will be called "rtc-m48t59".
 
+config RTC_DRV_MCA
+	tristate "Digi ConnectCore SOMs Micro Controller Assist RTC"
+	select MFD_MCA
+	help
+	  If you say Y here you will get support for the RTC in the
+	  Micro Controller Assist of Digi ConnectCore system-on-modules.
+
+	  This driver can also be built as a module, if so, the module
+	  will be called "rtc-mca".
+
 config RTC_DRV_MSM6242
 	tristate "Oki MSM6242"
 	depends on HAS_IOMEM

@@ -1,0 +1,60 @@
+ /*
+ * Copyright 2022, 2023 Digi International Inc.
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+#include <dt-bindings/rtc/rtc-stm32.h>
+/* Digi ConnectCore MP15 non-wireless FCT */
+#include "ccmp157-mfg-functional.dts"
+
+/ {
+	bluetooth {
+		/* U-Boot will fill in the MAC address here */
+	};
+
+	wireless {
+		/* U-Boot will fill in the MAC address here */
+	};
+};
+
+/* Enable the RF regulator */
+&reg_3v3_rf{
+	status = "okay";
+};
+
+/* Enable the WL regulator */
+&reg_rf_wl_en{
+	status = "okay";
+};
+
+&rtc{
+	st,lsco = <RTC_OUT2_RMP>;
+	pinctrl-0 = <&ccmp15_rtc_out1_pins_a &rtc_out2_rmp_pins_a>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+
+/* Enable SDMMC3 (Wireless) */
+&sdmmc3{
+	status = "okay";
+};
+
+/* Enable USART1 (Bluetooth) */
+&usart1{
+	status = "okay";
+};
+
+/* Enable CYW4373 Bluetooth node */
+&cyw4373_bt{
+	status = "okay";
+};

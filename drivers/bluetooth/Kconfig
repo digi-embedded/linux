@@ -3,6 +3,14 @@
 menu "Bluetooth device drivers"
 	depends on BT
 
+config BT_DIGI
+	tristate "Bluetooth Digi support"
+	depends on BT_HCIUART_H4
+	help
+	  Bluetooth Digi support.
+	  This driver is required if you want to use Bluetooth with
+	  the Digi devices.
+
 config BT_INTEL
 	tristate
 	select REGMAP

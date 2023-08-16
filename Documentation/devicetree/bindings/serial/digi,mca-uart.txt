@@ -1,0 +1,65 @@
+* Digi MCA UART device tree bindings
+
+The MCA UART driver exposes extra TTY devices through the Micro Controller
+Assistant. These UARTs can be used to wake the system from low power modes.
+Notice the MCA UART has limited capabilities compared to CPU's UARTs.
+Check the documentation for a list of capabilities.
+
+Required properties:
+- compatible: must be "digi,mca-uart".
+	      cc6ul requires MCA version 1.19 or higher.
+- #address-cells: must be 1
+- #size-cells: must be 0
+
+Subcomponents:
+
+Required properties:
+- reg: UART base address
+- index: UART index
+- iopins-names: "rx", "tx". Optionally also "cts", "rts".
+- iopins: the MCA I/O pins associated to 'iopins-names'.
+	  NOTE: Not all I/O pins can be used for any functionality on any UART.
+	  Refer to the documentation to map appropriate pins and functions.
+
+
+Example:
+
+mca_uart: uart {
+	compatible = "digi,mca-uart";
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	mca_uart0: serial@0x900 {
+		reg = <0x900>;
+		index = <0>;
+		iopins-names = "rx", "tx";
+		iopins = <9 10>;
+	};
+
+	mca_uart1: serial@0x920 {
+		reg = <0x920>;
+		index = <1>;
+		iopins-names = "rx", "tx";
+		iopins = <11 16>;
+	};
+
+	mca_uart2: serial@940 {
+		reg = <0x940>;
+		index = <2>;
+		iopins-names = "rx", "tx", "cts", "rts";
+		iopins = <2 1 3 4>;
+	};
+};
+
+mca_uart: uart {
+	compatible = "digi,mca-uart";
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	mca_uart0: serial@0x900 {
+		reg = <0x900>;
+		index = <0>;
+		iopins-names = "rx", "tx";
+		iopins = <2 1>;
+	};
+};

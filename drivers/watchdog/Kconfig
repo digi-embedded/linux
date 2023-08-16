@@ -263,6 +263,20 @@ config MENZ069_WATCHDOG
 	  This driver can also be built as a module. If so the module
 	  will be called menz069_wdt.
 
+config MCA_WATCHDOG
+	tristate "Digi ConnectCore SOMs Micro Controller Assist software-refreshed Watchdog"
+	select WATCHDOG_CORE
+	select MFD_MCA
+	help
+	  If you say yes here you will get support for the software-refreshed watchdog in the Micro Controller Assist of Digi ConnectCore system-on-modules.
+
+config MCA_GPIO_WATCHDOG
+	tristate "Digi ConnectCore SOMs Micro Controller Assist GPIO-refreshed Watchdog"
+	select WATCHDOG_CORE
+	select MFD_MCA
+	help
+	  If you say yes here you will get support for the GPIO-refreshed watchdog in the Micro Controller Assist of Digi ConnectCore system-on-modules.
+
 config WDAT_WDT
 	tristate "ACPI Watchdog Action Table (WDAT)"
 	depends on ACPI

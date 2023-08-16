@@ -1,0 +1,59 @@
+* Digi MCA ADCs of ConnectCore SOMs device tree bindings
+
+The MCA ADC driver allows to read voltages from the MCA IOs that are ADC
+capable. Check the MCA ADC-capable IOs on the specific ConnectCore SOM Hardware
+Reference Manual.
+
+Also, the ADC inputs can be configured as analog comparators. In this mode the
+input is sampled periodically and an interrupt is generated based on the
+comparison of the value with two thresholds. See the documentation for more
+information on this feature.
+
+Required properties:
+- compatible : must be one of
+    - "digi,mca-adc", for the ConnectCore internal MCA
+    - "digi,mca-ioexp-adc", for the ConnectCore 6UL SBC Pro I/O Expander chip
+
+Optional properties:
+- digi,adc-ch-list: list of MCA IOs to be enabled as ADCs
+- digi,comparator-ch-list: list of MCA IOs to be enabled as Analog Comparators
+- digi,adc-vref: ADC reference voltage in uV, corresponds with the VCC_MCA
+  voltage.
+- digi,internal-vref:
+  If this property is set:
+     - Internal 1.2 V reference will be used.
+     - The value in 'digi,adc-vref' will be ignored.
+     - On the ConnectCore 8X, this will force MCA_VREF_OUT pin to be configured as a
+       1.2 V output.
+     - On the ConnectCore 6UL, this will force MCA_IO2/EXT_VREF pin to be
+       configured as a 1.2 V output and a 100 nF capacitor must be placed between
+       MCA_IO2/EXT_VREF line and GND for it to work properly.
+
+Example:
+
+	mca_cc6ul: mca@7e {
+		mca_adc: adc {
+			compatible = "digi,mca-adc";
+			digi,adc-ch-list = <0 4>;
+			digi,comparator-ch-list = <3>;
+			digi,adc-vref = <3000000>;
+		};
+	};
+
+	mca_cc8x: mca@63 {
+		mca_adc: adc {
+			compatible = "digi,mca-adc";
+			digi,adc-ch-list = <0 4>;
+			digi,comparator-ch-list = <3>;
+			digi,adc-vref = <3000000>;
+		};
+	};
+
+	mca_cc8m: mca@63 {
+		mca_adc: adc {
+			compatible = "digi,mca-adc";
+			digi,adc-ch-list = <0 4>;
+			digi,comparator-ch-list = <3>;
+			digi,adc-vref = <3000000>;
+		};
+	};

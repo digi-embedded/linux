@@ -1700,6 +1700,7 @@ static int stm32_fmc2_nfc_attach_chip(struct nand_chip *chip)
 {
 	struct stm32_fmc2_nfc *nfc = to_stm32_nfc(chip->controller);
 	struct mtd_info *mtd = nand_to_mtd(chip);
+	struct nand_device *nand = mtd_to_nanddev(nand_to_mtd(chip));
 	int ret;
 
 	/*
@@ -1713,6 +1714,13 @@ static int stm32_fmc2_nfc_attach_chip(struct nand_chip *chip)
 		dev_err(nfc->dev,
 			"nand_ecc_engine_type is not well defined in the DT\n");
 		return -EINVAL;
+	}
+
+	/* Use the ECC strength reported by the NAND via ONFI if available */
+	if (nand->ecc.requirements.strength > 0) {
+		chip->ecc.strength = nand->ecc.requirements.strength;
+		chip->ecc.size = nand->ecc.requirements.step_size;
+		stm32_fmc2_nfc_select_chip(chip, chip->cur_cs);
 	}
 
 	/* Default ECC settings in case they are not set in the device tree */

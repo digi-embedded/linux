@@ -86,6 +86,8 @@
 #define DSI_MIPISET1_EOT_EN		BIT(3)
 #define DSI_CMD2_BK1_MIPISET1_SET	(BIT(7) | DSI_MIPISET1_EOT_EN)
 
+struct st7701;
+
 struct st7701_panel_desc {
 	const struct drm_display_mode *mode;
 	unsigned int lanes;
@@ -94,6 +96,7 @@ struct st7701_panel_desc {
 	const char *const *supply_names;
 	unsigned int num_supplies;
 	unsigned int panel_sleep_delay;
+	void (*init_sequence)(struct st7701 *st7701);
 };
 
 struct st7701 {
@@ -122,6 +125,36 @@ static inline int st7701_dsi_write(struct st7701 *st7701, const void *seq,
 		const u8 d[] = { seq };				\
 		st7701_dsi_write(st7701, d, ARRAY_SIZE(d));	\
 	}
+
+static int st7701_read_id(struct st7701 *st7701)
+{
+	u8 id1, id2, id3;
+	int ret;
+
+	ret = mipi_dsi_dcs_read(st7701->dsi, 0xDA, &id1, 1);
+	if (ret < 0) {
+		dev_err(&st7701->dsi->dev, "could not read ID1\n");
+		return ret;
+	}
+
+	ret = mipi_dsi_dcs_read(st7701->dsi, 0xDB, &id2, 1);
+	if (ret < 0) {
+		dev_err(&st7701->dsi->dev, "could not read ID2\n");
+		return ret;
+	}
+
+	ret = mipi_dsi_dcs_read(st7701->dsi, 0xDC, &id3, 1);
+	if (ret < 0) {
+		dev_err(&st7701->dsi->dev, "could not read ID3\n");
+		return ret;
+	}
+
+	dev_info(&st7701->dsi->dev,
+		     "manufacturer: %02x version: %02x driver: %02x\n",
+		     id1, id2, id3);
+
+	return 0;
+}
 
 static void st7701_init_sequence(struct st7701 *st7701)
 {
@@ -194,6 +227,82 @@ static void st7701_init_sequence(struct st7701 *st7701)
 		   0x77, 0x01, 0x00, 0x00, DSI_CMD2BKX_SEL_NONE);
 }
 
+static void dlc0200cc904df_init_sequence(struct st7701 *st7701)
+{
+	ST7701_DSI(st7701, MIPI_DCS_SOFT_RESET, 0x00);
+
+	/* We need to wait 5ms before sending new commands */
+	msleep(5);
+
+	ST7701_DSI(st7701, MIPI_DCS_EXIT_SLEEP_MODE, 0x00);
+
+	msleep(st7701->sleep_delay);
+
+	/* Command2, BK3 */
+	ST7701_DSI(st7701, 0xFF, 0x77, 0x01, 0x00, 0x00, 0x13);
+	ST7701_DSI(st7701, 0xEF, 0x08);
+
+	/* Command2, BK0 */
+	ST7701_DSI(st7701, 0xFF, 0x77, 0x01, 0x00, 0x00, 0x10);
+	ST7701_DSI(st7701, 0xC0, 0x2C, 0x00);
+	ST7701_DSI(st7701, 0xC1, 0x0D, 0x02);
+	ST7701_DSI(st7701, 0xC2, 0x07, 0x05);
+	ST7701_DSI(st7701, 0xCC, 0x10);
+	ST7701_DSI(st7701, 0xB0, 0x0A, 0x14, 0x1B, 0x0D, 0x10, 0x05, 0x07,
+			   0x08, 0x06, 0x22, 0x03, 0x11, 0x10, 0xAD, 0x31,
+			   0x1B);
+	ST7701_DSI(st7701, 0xB1, 0x0A, 0x14, 0x1B, 0x0D, 0x10, 0x05, 0x07,
+			   0x08, 0x06, 0x22, 0x03, 0x11, 0x10, 0xAD, 0x31,
+			   0x1B);
+
+	/* Command2, BK1 */
+	ST7701_DSI(st7701, 0xFF, 0x77, 0x01, 0x00, 0x00, 0x11);
+	ST7701_DSI(st7701, 0xB0, 0x50);
+	ST7701_DSI(st7701, 0xB1, 0x57);
+	ST7701_DSI(st7701, 0xB2, 0x87);
+	ST7701_DSI(st7701, 0xB3, 0x80);
+	ST7701_DSI(st7701, 0xB5, 0x47);
+	ST7701_DSI(st7701, 0xB7, 0x85);
+	ST7701_DSI(st7701, 0xB8, 0x21);
+	ST7701_DSI(st7701, 0xC1, 0x78);
+	ST7701_DSI(st7701, 0xC2, 0x78);
+	ST7701_DSI(st7701, 0xD0, 0x88);
+	ST7701_DSI(st7701, 0xE0, 0x00, 0x1B, 0x02);
+	ST7701_DSI(st7701, 0xE1, 0x08, 0xA0, 0x00, 0x00, 0x07, 0xA0, 0x00,
+			   0x00, 0x00, 0x44, 0x44);
+	ST7701_DSI(st7701, 0xE2, 0x11, 0x11, 0x44, 0x44, 0x75, 0xA0, 0x00,
+			   0x00, 0x74, 0xA0, 0x00, 0x00);
+	ST7701_DSI(st7701, 0xE3, 0x00, 0x00, 0x11, 0x11);
+	ST7701_DSI(st7701, 0xE4, 0x44, 0x44);
+	ST7701_DSI(st7701, 0xE5, 0x0A, 0x71, 0xD8, 0xA0, 0x0C, 0x73, 0xD8,
+			   0xA0, 0x0E, 0x75, 0xD8, 0xA0, 0x10, 0x77, 0xD8,
+			   0xA0);
+	ST7701_DSI(st7701, 0xE6, 0x00, 0x00, 0x11, 0x11);
+	ST7701_DSI(st7701, 0xE7, 0x44, 0x44);
+	ST7701_DSI(st7701, 0xE8, 0x09, 0x70, 0xD8, 0xA0, 0x0B, 0x72, 0xD8,
+			   0xA0, 0x0D, 0x74, 0xD8, 0xA0, 0x0F, 0x76, 0xD8,
+			   0xA0);
+	ST7701_DSI(st7701, 0xEB, 0x02, 0x00, 0xE4, 0xE4, 0x88, 0x00, 0x40);
+	ST7701_DSI(st7701, 0xEC, 0x3C, 0x00);
+	ST7701_DSI(st7701, 0xED, 0xAB, 0x89, 0x76, 0x54, 0x02, 0xFF, 0xFF,
+			   0xFF, 0xFF, 0xFF, 0xFF, 0x20, 0x45, 0x67, 0x98,
+			   0xBA);
+	ST7701_DSI(st7701, 0xEF, 0x08, 0x0F, 0x08, 0x45, 0x3F, 0x54);
+
+	/* Command2, BK3 */
+	ST7701_DSI(st7701, 0xFF, 0x77, 0x01, 0x00, 0x00, 0x13);
+	ST7701_DSI(st7701, 0xE8, 0x00, 0x0E);
+	ST7701_DSI(st7701, 0x11);
+	msleep(150);
+	ST7701_DSI(st7701, 0xE8, 0x00, 0x0C);
+	msleep(10);
+	ST7701_DSI(st7701, 0xE8, 0x00, 0x00);
+	ST7701_DSI(st7701, 0xFF, 0x77, 0x01, 0x00, 0x00, 0x00);
+
+	/*ST7701_DSI(st7701, 0x29);
+	msleep(20);*/
+}
+
 static int st7701_prepare(struct drm_panel *panel)
 {
 	struct st7701 *st7701 = panel_to_st7701(panel);
@@ -210,7 +319,8 @@ static int st7701_prepare(struct drm_panel *panel)
 	gpiod_set_value(st7701->reset, 1);
 	msleep(150);
 
-	st7701_init_sequence(st7701);
+	st7701_read_id(st7701);
+	st7701->desc->init_sequence(st7701);
 
 	return 0;
 }
@@ -323,6 +433,42 @@ static const struct st7701_panel_desc ts8550b_desc = {
 	.supply_names = ts8550b_supply_names,
 	.num_supplies = ARRAY_SIZE(ts8550b_supply_names),
 	.panel_sleep_delay = 80, /* panel need extra 80ms for sleep out cmd */
+	.init_sequence = st7701_init_sequence,
+};
+
+static const struct drm_display_mode dlc0200cc904df_mode = {
+	.clock		= 25000,
+
+	.hdisplay	= 480,
+	.hsync_start	= 480 + 240,
+	.hsync_end	= 480 + 240 + 50,
+	.htotal		= 480 + 240 + 50 + 240,
+
+	.vdisplay	= 360,
+	.vsync_start	= 360 + 20,
+	.vsync_end	= 360 + 20 + 8,
+	.vtotal		= 360 + 20 + 8 + 20,
+
+	.width_mm	= 41,
+	.height_mm	= 31,
+
+	.type = DRM_MODE_TYPE_DRIVER | DRM_MODE_TYPE_PREFERRED,
+};
+
+static const char * const dlc0200cc904df_supply_names[] = {
+	"VCC",
+	"IOVCC",
+};
+
+static const struct st7701_panel_desc dlc0200cc904df_desc = {
+	.mode = &dlc0200cc904df_mode,
+	.lanes = 2,
+	.flags = (MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_LPM),
+	.format = MIPI_DSI_FMT_RGB888,
+	.supply_names = dlc0200cc904df_supply_names,
+	.num_supplies = ARRAY_SIZE(dlc0200cc904df_supply_names),
+	.panel_sleep_delay = 0,
+	.init_sequence = dlc0200cc904df_init_sequence,
 };
 
 static int st7701_dsi_probe(struct mipi_dsi_device *dsi)
@@ -357,7 +503,7 @@ static int st7701_dsi_probe(struct mipi_dsi_device *dsi)
 	st7701->reset = devm_gpiod_get(&dsi->dev, "reset", GPIOD_OUT_LOW);
 	if (IS_ERR(st7701->reset)) {
 		dev_err(&dsi->dev, "Couldn't get our reset GPIO\n");
-		return PTR_ERR(st7701->reset);
+		st7701->reset = NULL;
 	}
 
 	drm_panel_init(&st7701->panel, &dsi->dev, &st7701_funcs,
@@ -407,6 +553,7 @@ static int st7701_dsi_remove(struct mipi_dsi_device *dsi)
 
 static const struct of_device_id st7701_of_match[] = {
 	{ .compatible = "techstar,ts8550b", .data = &ts8550b_desc },
+	{ .compatible = "dlc,dlc0200cc904df", .data = &dlc0200cc904df_desc },
 	{ }
 };
 MODULE_DEVICE_TABLE(of, st7701_of_match);

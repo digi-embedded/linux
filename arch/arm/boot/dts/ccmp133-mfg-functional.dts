@@ -1,0 +1,180 @@
+/*
+ * Copyright 2022 Digi International, Inc.
+ *
+ * The code contained herein is licensed under the GNU General Public
+ * License. You may obtain a copy of the GNU General Public License
+ * Version 2 or later at the following locations:
+ *
+ * http://www.opensource.org/licenses/gpl-license.html
+ * http://www.gnu.org/copyleft/gpl.html
+ */
+
+/dts-v1/;
+
+//#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/input/input.h>
+#include <dt-bindings/leds/common.h>
+#include <dt-bindings/rtc/rtc-stm32.h>
+#include "ccmp13.dtsi"
+#include "stm32mp13xc.dtsi"
+#include "stm32mp13-pinctrl.dtsi"
+
+/ {
+	model = "Digi International ConnectCore MP13 DVK.";
+	compatible = "digi,ccmp13-dvk", "digi,ccmp13", "digi,ccmp1", "st,stm32mp133";
+	digi,machine,name = "ccmp133-dvk";
+
+	aliases {
+		ethernet0 = &eth1;
+		ethernet1 = &eth2;
+		mmc1 = &sdmmc1; /* Micro SD */
+		serial0 = &uart5;
+		serial1 = &usart1;
+		serial2 = &uart8;
+		serial3 = &usart2;
+	};
+
+	chosen {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+		stdout-path = "serial0:115200n8";
+	};
+};
+
+/* 10/100/1000 Ethernet */
+&eth1 {
+	status = "disabled";
+	pinctrl-0 = <&eth1_rmii_pins_a>;
+	pinctrl-1 = <&eth1_rmii_sleep_pins_a>;
+	pinctrl-names = "default", "sleep";
+	phy-mode = "rmii";
+	max-speed = <100>;
+	phy-handle = <&phy0>;
+	st,eth-ref-clk-sel = <1>;
+	st,ext-phyclk = <1>;
+
+	mdio1 {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		compatible = "snps,dwmac-mdio";
+
+		phy0: ethernet-phy@0 {
+			reg = <0>;
+			compatible = "ethernet-phy-id0007.c0f0"; /* PHY ID for SMSC LAN8720Ai */
+			smsc,disable-energy-detect;
+		};
+	};
+};
+
+&scmi_ldo2 {
+	regulator-min-microvolt = <2800000>;
+	regulator-max-microvolt = <2800000>;
+	regulator-always-on;
+};
+
+&scmi_ldo6 {
+	regulator-min-microvolt = <1800000>;
+	regulator-max-microvolt = <1800000>;
+	regulator-always-on;
+};
+
+&scmi_vbus_otg {
+	regulator-min-microvolt = <5200000>;
+	regulator-max-microvolt = <5200000>;
+	regulator-always-on;
+};
+
+&scmi_vbus_sw {
+	regulator-min-microvolt = <5200000>;
+	regulator-max-microvolt = <5200000>;
+	regulator-always-on;
+};
+
+&scmi_vdd {
+	regulator-min-microvolt = <3300000>;
+	regulator-max-microvolt = <3300000>;
+	regulator-always-on;
+};
+
+&scmi_vdd_sd {
+	regulator-min-microvolt = <3300000>;
+	regulator-max-microvolt = <3300000>;
+	regulator-always-on;
+};
+
+/* Console on UART5 */
+&uart5 {
+	pinctrl-names = "default", "sleep", "idle";
+	pinctrl-0 = <&ccmp13_uart5_pins_a>;
+	pinctrl-1 = <&ccmp13_uart5_sleep_pins_a>;
+	pinctrl-2 = <&ccmp13_uart5_idle_pins_a>;
+	/delete-property/dmas;
+	/delete-property/dma-names;
+	status = "okay";
+};
+
+&usbh_ehci {
+	phys = <&usbphyc_port0>;
+	status = "okay";
+};
+
+&usbphyc {
+	status = "okay";
+};
+
+&usbphyc_port0 {
+	phy-supply = <&scmi_vdd_usb>;
+	st,current-boost-microamp = <1000>;
+	st,decrease-hs-slew-rate;
+	st,tune-hs-dc-level = <2>;
+	st,enable-hs-rftime-reduction;
+	st,trim-hs-current = <11>;
+	st,trim-hs-impedance = <2>;
+	st,tune-squelch-level = <1>;
+	st,enable-hs-rx-gain-eq;
+	st,no-hs-ftime-ctrl;
+	st,no-lsfs-sc;
+
+	/*
+	 * Hack to keep hub active if wakeup source is enabled
+	 * otherwise the hub will wakeup the port0 as soon as the vbus_sw is disabled
+	 */
+	connector {
+		compatible = "usb-a-connector";
+		vbus-supply = <&scmi_vbus_sw>;
+	};
+};
+
+&pinctrl {
+
+	ccmp13_uart5_pins_a: ccmp13_uart5-0 {
+		pins1 {
+			pinmux = <STM32_PINMUX('A', 0, AF8)>; /* UART5_TX */
+			bias-disable;
+			drive-push-pull;
+			slew-rate = <0>;
+		};
+		pins2 {
+			pinmux = <STM32_PINMUX('F', 13, AF8)>; /* UART5_RX */
+			bias-disable;
+		};
+	};
+
+	ccmp13_uart5_idle_pins_a: ccmp13_uart5-idle-0 {
+		pins1 {
+			pinmux = <STM32_PINMUX('A', 0, ANALOG)>; /* UART5_TX */
+		};
+		pins2 {
+			pinmux = <STM32_PINMUX('F', 13, AF8)>; /* UART5_RX */
+			bias-disable;
+		};
+	};
+
+	ccmp13_uart5_sleep_pins_a: ccmp13_uart5-sleep-0 {
+		pins {
+			pinmux = <STM32_PINMUX('A', 0, ANALOG)>, /* UART5_TX */
+				 <STM32_PINMUX('F', 13, ANALOG)>; /* UART5_RX */
+		};
+	};
+};

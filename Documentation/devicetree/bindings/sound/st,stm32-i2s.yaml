@@ -58,6 +58,10 @@ properties:
     description: Configure the I2S device as MCLK clock provider.
     const: 0
 
+  digi,i2s-master:
+    description: Configure the I2S interface as master.
+    type: boolean
+
 required:
   - compatible
   - "#sound-dai-cells"

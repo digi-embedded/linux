@@ -253,6 +253,11 @@ obj-$(CONFIG_MFD_ALTERA_SYSMGR) += altera-sysmgr.o
 obj-$(CONFIG_MFD_STPMIC1)	+= stpmic1.o
 obj-$(CONFIG_MFD_SUN4I_GPADC)	+= sun4i-gpadc.o
 
+obj-$(CONFIG_MFD_MCA)		+= mca-core.o mca-irq.o mca-i2c.o
+obj-$(CONFIG_MFD_MCA_CC8X)	+= mca-cc8x-irq.o
+mca-ioexp-objs			:= mca-ioexp-core.o mca-ioexp-irq.o mca-ioexp-i2c.o
+obj-$(CONFIG_MFD_MCA_IOEXP)	+= mca-ioexp.o
+
 obj-$(CONFIG_MFD_STM32_LPTIMER)	+= stm32-lptimer.o
 obj-$(CONFIG_MFD_STM32_TIMERS) 	+= stm32-timers.o
 obj-$(CONFIG_MFD_STM32MP1_PWR)	+= stm32-pwr.o

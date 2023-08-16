@@ -1,0 +1,37 @@
+* MCA matrix keypad device tree bindings
+
+The MCA keypad controller is designed to interface with a matrix keypad with
+2-point contact keys. The keypad subsystem is capable of detecting, debouncing
+and decoding one or multiple keys pressed simultaneously. Key release events
+are also detected.
+
+Required Properties:
+- compatible:		Should be "digi,mca-keypad"
+- rows-io-list:		List of MCA IOs used as row lines.
+- cols-io-list:		List of MCA IOs used as column lines.
+- linux,keymap:		The definition can be found at
+			bindings/input/matrix-keymap.txt
+
+Optional Properties:
+- debounce-ms:		debounce filter in ms.
+- pwr-off-wakeup:	Enable wake up from power off through keypad events.
+- autorepeat:		Boolean, enable auto repeat feature of Linux input
+			subsystem.
+
+Example:
+
+	&mca_keypad {
+		rows-io-list = <7 9>;
+		cols-io-list = <5 17 6 8>;
+		pwr-off-wakeup;
+		debounce-ms = <10>;
+
+		linux,keymap = <MATRIX_KEY(0, 0, KEY_UP)
+				MATRIX_KEY(0, 1, KEY_DOWN)
+				MATRIX_KEY(0, 2, KEY_VOLUMEDOWN)
+				MATRIX_KEY(0, 3, KEY_HOME)
+				MATRIX_KEY(1, 0, KEY_RIGHT)
+				MATRIX_KEY(1, 1, KEY_LEFT)
+				MATRIX_KEY(1, 2, KEY_ENTER)
+				MATRIX_KEY(1, 3, KEY_VOLUMEUP)>;
+	};
