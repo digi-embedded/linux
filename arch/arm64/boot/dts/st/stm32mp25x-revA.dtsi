@@ -70,6 +70,10 @@
 	st,burstlen = <32>;
 };
 
+&pcie_ep {
+	resets = <&scmi_reset RST_SCMI_PCIE>;
+};
+
 &pcie_rc {
 	resets = <&scmi_reset RST_SCMI_PCIE>;
 };
