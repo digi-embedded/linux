@@ -988,7 +988,7 @@ static int stm32mp25_check_security(void __iomem *base,
 		u32 index = (u32)cfg->sec_id;
 
 		if (index & SEC_RIFSC_FLAG)
-			ret = stm32_rifsc_get_access_by_id(index & ~SEC_RIFSC_FLAG);
+			ret = stm32_rifsc_check_access_by_id(index & ~SEC_RIFSC_FLAG);
 		else
 			ret = stm32_rcc_get_access(base, cfg->sec_id & ~SEC_RIFSC_FLAG);
 	}
