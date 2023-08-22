@@ -166,10 +166,64 @@ static int stm32_rifsc_get_access_by_node(struct sys_bus_data *pdata, struct dev
 	return stm32_rifsc_get_access_by_id(id);
 }
 
-int stm32_rifsc_get_access_by_id(u32 id)
+int stm32_rifsc_check_access_by_id(u32 id)
 {
 	struct sys_bus_data *pdata = bus_data;
+	u32 reg_offset, reg_id, sec_reg_value, cid_reg_value;
+	void __iomem *addr;
+
+	if (id >= STM32MP25_RIFSC_ENTRIES)
+		return -EINVAL;
+
+	/*
+	 * RIFSC_RISC_PRIVCFGRx and RIFSC_RISC_SECCFGRx both handle configuration access for
+	 * 32 peripherals. On the other hand, there is one _RIFSC_RISC_PERx_CIDCFGR register
+	 * per peripheral
+	 */
+	reg_id = id / IDS_PER_RISC_SEC_PRIV_REGS;
+	reg_offset = id % IDS_PER_RISC_SEC_PRIV_REGS;
+	sec_reg_value = readl(pdata->sys_bus_base + RIFSC_RISC_SECCFGR0 + 0x4 * reg_id);
+	cid_reg_value = readl(pdata->sys_bus_base + RIFSC_RISC_PER0_CIDCFGR + 0x8 * id);
+
+	/* Check security configuration */
+	if (sec_reg_value & BIT(reg_offset)) {
+		dev_dbg(pdata->dev, "Invalid security configuration for peripheral: %d\n", id);
+		return -EACCES;
+	}
+
+	/*
+	 * Skip cid check if CID filtering isn't enabled or filtering is enabled on CID0, which
+	 * corresponds to whatever CID.
+	 */
+	if (!(cid_reg_value & CIDCFGR_CFEN))
+		return 0;
+
+	if ((!(cid_reg_value & CIDCFGR_SEMEN)) &&
+	    (FIELD_GET(RIFSC_RISC_SCID_MASK, cid_reg_value) == RIF_CID0 ||
+	     FIELD_GET(RIFSC_RISC_SCID_MASK, cid_reg_value) == RIF_CID1))
+		return 0;
+
+	/*
+	 * First check conditions for semaphore mode, which doesn't take into account static CID.
+	 * CID for Cortex A35 is RIF_CID1.
+	 */
+	if (cid_reg_value & CIDCFGR_SEMEN) {
+		addr = pdata->sys_bus_base + RIFSC_RISC_PER0_SEMCR + 0x8 * id;
+
+		/* Check that CID1 has the semaphore */
+		if (!stm32_rif_is_semaphore_available(addr) &&
+		    (FIELD_GET(RIFSC_RISC_SCID_MASK, readl(addr)) == RIF_CID1)) {
+			return 0;
+		}
+	}
+
+	return -EACCES;
+}
+
+int stm32_rifsc_get_access_by_id(u32 id)
+{
 	int err;
+	struct sys_bus_data *pdata = bus_data;
 	u32 reg_offset, reg_id, sec_reg_value, cid_reg_value;
 
 	if (id >= STM32MP25_RIFSC_ENTRIES)

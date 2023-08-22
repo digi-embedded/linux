@@ -8,5 +8,6 @@
 #include <linux/types.h>
 
 int stm32_rifsc_get_access_by_id(u32 id);
+int stm32_rifsc_check_access_by_id(u32 id);
 
 #endif /* __ARCH_ARM_MACH_STM32MP25_SYSTEM_BUS */
