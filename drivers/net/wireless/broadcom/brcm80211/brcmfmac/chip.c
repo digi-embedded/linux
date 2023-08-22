@@ -240,13 +240,20 @@ struct sbsocramregs {
 #define CYW55572_RAM_BASE	(0x370000 + \
 				 CYW55572_TCAM_SIZE + CYW55572_TRXHDR_SIZE)
 
-/* 55500, Dedicated sapce for TCAM_PATCH and TRX HDR area at RAMSTART */
+/* 55500-A0, Dedicated sapce for TCAM_PATCH and TRX HDR area at RAMSTART */
 #define CYW55500_RAM_START	(0x3a0000)
 #define CYW55500_TCAM_SIZE	(0x800)
 #define CYW55500_TRXHDR_SIZE	(0x2b4)
 
 #define CYW55500_RAM_BASE	(CYW55500_RAM_START + CYW55500_TCAM_SIZE + \
 				 CYW55500_TRXHDR_SIZE)
+
+/* 55500-A1, Dedicated sapce for TCAM_PATCH and TRX HDR area at RAMSTART */
+#define CYW55500_A1_TCAM_SIZE	(0x1000)
+#define CYW55500_A1_TRXHDR_SIZE	(0x20)
+
+#define CYW55500_A1_RAM_BASE	(CYW55500_RAM_START + CYW55500_A1_TCAM_SIZE + \
+				 CYW55500_A1_TRXHDR_SIZE)
 
 #define BRCMF_BLHS_POLL_INTERVAL			10	/* msec */
 #define BRCMF_BLHS_D2H_READY_TIMEOUT			100	/* msec */
@@ -825,10 +832,10 @@ static u32 brcmf_chip_tcm_rambase(struct brcmf_chip_priv *ci)
 		return 0x352000;
 	case BRCM_CC_4387_CHIP_ID:
 		return 0x740000;
+	case CY_CC_55500_CHIP_ID:
+		return ((ci->pub.chiprev == 0) ? CYW55500_RAM_BASE : CYW55500_A1_RAM_BASE);
 	case CY_CC_55572_CHIP_ID:
 		return CYW55572_RAM_BASE;
-	case CY_CC_55500_CHIP_ID:
-		return CYW55500_RAM_BASE;
 	default:
 		brcmf_err("unknown chip: %s\n", ci->pub.name);
 		break;
@@ -848,9 +855,14 @@ int brcmf_chip_get_raminfo(struct brcmf_chip *pub)
 		mem_core = container_of(mem, struct brcmf_core_priv, pub);
 		ci->pub.ramsize = brcmf_chip_tcm_ramsize(mem_core);
 
-		if (ci->pub.chip == CY_CC_55500_CHIP_ID)
-			ci->pub.ramsize -= (CYW55500_TCAM_SIZE +
-					    CYW55500_TRXHDR_SIZE);
+		if (ci->pub.chip == CY_CC_55500_CHIP_ID) {
+			if (ci->pub.chiprev == 0)
+				ci->pub.ramsize -= (CYW55500_TCAM_SIZE +
+						CYW55500_TRXHDR_SIZE);
+			else
+				ci->pub.ramsize -= (CYW55500_A1_TCAM_SIZE +
+						CYW55500_A1_TRXHDR_SIZE);
+		}
 
 		if (ci->pub.chip == CY_CC_55572_CHIP_ID)
 			ci->pub.ramsize -= (CYW55572_TCAM_SIZE +

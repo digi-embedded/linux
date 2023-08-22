@@ -3991,7 +3991,10 @@ static int brcmf_sdio_download_code_file(struct brcmf_sdio *bus,
 			err = -EIO;
 	} else {
 		if (trx->magic == cpu_to_le32(TRX_MAGIC)) {
-			address -= sizeof(struct trx_header_le);
+			if ((trx->flag_version >> 16) == TRX_VERSION5)
+				address -= sizeof(struct trxv5_header_le);
+			else
+				address -= sizeof(struct trx_header_le);
 			fw_size = le32_to_cpu(trx->len);
 		}
 
