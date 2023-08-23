@@ -289,6 +289,11 @@ static int tcpci_set_polarity(struct tcpc_dev *tcpc,
 		reg |= TCPC_ROLE_CTRL_CC_OPEN << TCPC_ROLE_CTRL_CC1_SHIFT;
 	else
 		reg |= TCPC_ROLE_CTRL_CC_OPEN << TCPC_ROLE_CTRL_CC2_SHIFT;
+
+	/* wait a bit to avoid a timing race condition due to
+	 * previous TCPC_ROLE_CTRL read.
+	 */
+	msleep(2);
 	ret = regmap_write(tcpci->regmap, TCPC_ROLE_CTRL, reg);
 	if (ret < 0)
 		return ret;
