@@ -142,6 +142,13 @@ bool adv7533_mode_fixup(struct adv7511 *adv,
 		}
 	}
 
+	/* dirty hack to get specific timings for 1080P60 */
+	if (mode->hdisplay == 1920 && mode->hsync_start == 2008 &&
+	    mode->hsync_end == 2052 && mode->htotal == 2200) {
+		adjusted_mode->hsync_start = mode->hsync_start - 32;
+		adjusted_mode->hsync_end = mode->hsync_end - 64;
+	}
+
 	return true;
 }
 
