@@ -841,21 +841,20 @@ dw_mipi_dsi_stm_mode_valid(void *priv_data,
 
 		lane_mbps = pll_out_khz / 1000;
 
-		if (dsi->hw_version == HWVER_141)
-			ret = dw_mipi_dsi_phy_141_get_timing(priv_data, lane_mbps, &dphy_timing);
-		else
+		if (dsi->hw_version < HWVER_141) {
 			ret = dw_mipi_dsi_phy_get_timing(priv_data, lane_mbps, &dphy_timing);
-		if (ret)
-			return MODE_ERROR;
-		/*
-		 * In non-burst mode DSI has to enter in LP during HFP
-		 * (horizontal front porch) or HBP (horizontal back porch) to
-		 * resync with LTDC pixel clock.
-		 */
-		delay_to_lp = DIV_ROUND_UP((dphy_timing.data_hs2lp + dphy_timing.data_lp2hs) *
-					   lanes * BITS_PER_BYTE, bpp);
-		if (hfp < delay_to_lp && hbp < delay_to_lp)
-			return MODE_HSYNC;
+			if (ret)
+				return MODE_ERROR;
+			/*
+			 * In non-burst mode DSI has to enter in LP during HFP
+			 * (horizontal front porch) or HBP (horizontal back porch) to
+			 * resync with LTDC pixel clock.
+			 */
+			delay_to_lp = DIV_ROUND_UP((dphy_timing.data_hs2lp + dphy_timing.data_lp2hs)
+						   * lanes * BITS_PER_BYTE, bpp);
+			if (hfp < delay_to_lp && hbp < delay_to_lp)
+				return MODE_HSYNC;
+		}
 	}
 
 	return MODE_OK;
