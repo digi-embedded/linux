@@ -330,8 +330,11 @@ static int imx93_adc_probe(struct platform_device *pdev)
 	}
 
 	ret = imx93_adc_calibration(adc);
-	if (ret < 0)
+	if (ret < 0) {
+		if (ret == -EAGAIN)
+			ret = -EPROBE_DEFER;
 		goto error_ipg_clk_disable;
+	}
 
 	imx93_adc_config_ad_clk(adc);
 
