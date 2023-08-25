@@ -21,6 +21,7 @@ properties:
               - st,stm32-syscfg
               - st,stm32-power-config
               - st,stm32-tamp
+              - st,stm32mp25-tamp
               - st,stm32mp25-a35ssc-m33
           - const: syscon
       - items:
