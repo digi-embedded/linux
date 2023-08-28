@@ -95,7 +95,7 @@
 	power-off-time-sec = <10>;
 };
 
-/* I2C bus conneccted to MCA and PMIC */
+/* LPI2C1 bus connected to MCA and PMIC */
 &lpi2c1 {
 	#address-cells = <1>;
 	#size-cells = <0>;
@@ -376,7 +376,7 @@
 
 /* IOMUX */
 &iomuxc {
-	/* Internal I2C (MCA, PMIC) */
+	/* Internal LPI2C1 (MCA, PMIC) */
 	pinctrl_lpi2c1: lpi2c1grp {
 		fsl,pins = <
 			MX93_PAD_I2C1_SCL__LPI2C1_SCL			0x40000b9e

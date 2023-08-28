@@ -149,7 +149,7 @@
 	assigned-clock-rates = <498000000>, <68930000>, <400000000>, <133333333>;
 };
 
-/* I2C3 connected to MIPI Camera connector */
+/* LPI2C3 connected to MIPI Camera connector */
 &lpi2c3 {
 	#address-cells = <1>;
 	#size-cells = <0>;
@@ -180,7 +180,7 @@
 	};
 };
 
-/* I2C4 - Audio codec and HDMI bridge */
+/* LPI2C4 - Audio codec and HDMI bridge */
 &lpi2c4 {
 	#address-cells = <1>;
 	#size-cells = <0>;
@@ -347,7 +347,7 @@
 		>;
 	};
 
-	/* I2C3 */
+	/* LPI2C3 */
 	pinctrl_lpi2c3: lpi2c3grp {
 		fsl,pins = <
 			MX93_PAD_GPIO_IO00__LPI2C3_SDA				0x40000b9e
@@ -355,7 +355,7 @@
 		>;
 	};
 
-	/* I2C4 */
+	/* LPI2C4 */
 	pinctrl_lpi2c4: lpi2c4grp {
 		fsl,pins = <
 			MX93_PAD_GPIO_IO02__LPI2C4_SDA				0x40000b9e
