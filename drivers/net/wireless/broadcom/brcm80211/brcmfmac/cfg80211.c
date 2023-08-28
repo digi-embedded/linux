@@ -357,11 +357,11 @@ struct dot11_assoc_resp {
 };
 
 struct brcmf_owe_info_buf {
-	u8 peer_mac[ETH_ALEN];
-	__le16 status_le16;/* hostapd gives status of Assoc Resp */
 	bool with_pmkid;
-	u8 pmkid[WLAN_PMKID_LEN];
 	bool with_ecdh;/* if doing PMK Caching, might not have ECDH IE. */
+	__le16 status_le16;/* hostapd gives status of Assoc Resp */
+	u8 peer_mac[ETH_ALEN];
+	u8 pmkid[WLAN_PMKID_LEN];
 	u8 ecdh_ie_info[0];
 };
 
