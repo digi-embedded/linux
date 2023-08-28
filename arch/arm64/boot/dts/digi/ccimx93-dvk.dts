@@ -356,8 +356,7 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_lt8912>;
 		reset-gpios = <&gpio1 3 GPIO_ACTIVE_LOW>;
-		hpd-gpios = <&gpio1 12 GPIO_ACTIVE_HIGH>;
-		// no-hpd;
+		no-hpd;
 		digi,dsi-lanes = <4>;
 		vdd1-supply = <&reg_5v_board>;
 		no-edid;
@@ -717,8 +716,6 @@
 		fsl,pins = <
 			/* Reset */
 			MX93_PAD_I2C2_SDA__GPIO1_IO03				0x31e
-			/* HPD Interrupt */
-			MX93_PAD_SAI1_TXC__GPIO1_IO12				0x31e
 		>;
 	};
 
