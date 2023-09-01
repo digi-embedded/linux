@@ -18,6 +18,7 @@ properties:
     enum:
       - st,stm32-rng
       - st,stm32mp13-rng
+      - st,stm32mp25-rng
 
   reg:
     maxItems: 1
@@ -44,6 +45,7 @@ allOf:
           contains:
             enum:
               - st,stm32mp13-rng
+              - st,stm32mp25-rng
     then:
       properties:
         st,rng-lock-conf:
