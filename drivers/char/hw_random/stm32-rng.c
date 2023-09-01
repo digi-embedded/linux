@@ -44,11 +44,10 @@
 
 #define RNG_HTCR	0x10
 
-#define RNG_MAX_NOISE_CLK_FREQ	3000000
-
 #define RNG_NB_RECOVER_TRIES	3
 
 struct stm32_rng_data {
+	uint	max_clock_rate;
 	u32	cr;
 	u32	nscr;
 	u32	htcr;
@@ -267,7 +266,7 @@ static uint stm32_rng_clock_freq_restrain(struct hwrng *rng)
 	 * No need to handle the case when clock-div > 0xF as it is physically
 	 * impossible
 	 */
-	while ((clock_rate >> clock_div) > RNG_MAX_NOISE_CLK_FREQ)
+	while ((clock_rate >> clock_div) > priv->data->max_clock_rate)
 		clock_div++;
 
 	pr_debug("RNG clk rate : %lu\n", clk_get_rate(priv->clk) >> clock_div);
@@ -479,6 +478,7 @@ static const struct dev_pm_ops stm32_rng_pm_ops = {
 
 static const struct stm32_rng_data stm32mp13_rng_data = {
 	.has_cond_reset = true,
+	.max_clock_rate = 48000000,
 	.cr = 0x00F00D00,
 	.nscr = 0x2B5BB,
 	.htcr = 0x969D,
@@ -486,6 +486,7 @@ static const struct stm32_rng_data stm32mp13_rng_data = {
 
 static const struct stm32_rng_data stm32_rng_data = {
 	.has_cond_reset = false,
+	.max_clock_rate = 3000000,
 };
 
 static const struct of_device_id stm32_rng_match[] = {
