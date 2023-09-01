@@ -37,6 +37,20 @@ required:
   - reg
   - clocks
 
+allOf:
+  - if:
+      properties:
+        compatible:
+          contains:
+            enum:
+              - st,stm32mp13-rng
+    then:
+      properties:
+        st,rng-lock-conf:
+          type: boolean
+          description: If set, the RNG configuration in RNG_CR, RNG_HTCR and
+                       RNG_NSCR will be locked.
+
 additionalProperties: false
 
 examples:
