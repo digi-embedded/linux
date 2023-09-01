@@ -1051,6 +1051,22 @@ int gether_set_ifname(struct net_device *net, const char *name, int len)
 EXPORT_SYMBOL_GPL(gether_set_ifname);
 
 /*
+ * gether_unregister_netdev - unregister Ethernet-over-USB device
+ * Context: may sleep
+ *
+ * This is called to unregister all resources allocated by @gether_register_netdev().
+ */
+void gether_unregister_netdev(struct eth_dev *dev)
+{
+	if (!dev)
+		return;
+
+	unregister_netdev(dev->net);
+	flush_work(&dev->work);
+}
+EXPORT_SYMBOL_GPL(gether_unregister_netdev);
+
+/*
  * gether_cleanup - remove Ethernet-over-USB device
  * Context: may sleep
  *
@@ -1061,8 +1077,7 @@ void gether_cleanup(struct eth_dev *dev)
 	if (!dev)
 		return;
 
-	unregister_netdev(dev->net);
-	flush_work(&dev->work);
+	gether_unregister_netdev(dev);
 	free_netdev(dev->net);
 }
 EXPORT_SYMBOL_GPL(gether_cleanup);
