@@ -24,7 +24,7 @@ properties:
     maxItems: 1
 
   clocks:
-    maxItems: 1
+    minItems: 1
 
   resets:
     maxItems: 1
@@ -52,6 +52,24 @@ allOf:
           type: boolean
           description: If set, the RNG configuration in RNG_CR, RNG_HTCR and
                        RNG_NSCR will be locked.
+
+  - if:
+      properties:
+        compatible:
+          contains:
+            const: st,stm32mp25-rng
+    then:
+      properties:
+        clocks:
+          minItems: 2
+
+        clock-names:
+          items:
+            - const: rng_clk  # RNG kernel clock
+            - const: rng_hclk # RNG bus clock
+
+      required:
+        - clock-names
 
 additionalProperties: false
 
