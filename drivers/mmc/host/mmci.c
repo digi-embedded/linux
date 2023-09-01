@@ -328,6 +328,7 @@ static struct variant_data variant_stm32_sdmmcv3 = {
 	.datactrl_mask_sdio	= MCI_DPSM_ST_SDIOEN,
 	.stm32_idmabsize_mask	= GENMASK(16, 6),
 	.stm32_idmabsize_align	= BIT(6),
+	.use_sdio_irq		= true,
 	.dma_lli		= true,
 	.busy_timeout		= true,
 	.busy_detect		= true,
