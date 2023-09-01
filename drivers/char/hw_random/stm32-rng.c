@@ -19,9 +19,16 @@
 #define RNG_CR			0x00
 #define RNG_CR_RNGEN		BIT(2)
 #define RNG_CR_CED		BIT(5)
+#define RNG_CR_CONFIG1		GENMASK(11, 8)
+#define RNG_CR_NISTC		BIT(12)
+#define RNG_CR_CONFIG2		GENMASK(15, 13)
 #define RNG_CR_CLKDIV_SHIFT	16
+#define RNG_CR_CLKDIV		GENMASK(19, 16)
+#define RNG_CR_CONFIG3		GENMASK(25, 20)
 #define RNG_CR_CONDRST		BIT(30)
 #define RNG_CR_CONFLOCK		BIT(31)
+#define RNG_CR_ENTROPY_SRC_MASK	(RNG_CR_CONFIG1 | RNG_CR_NISTC | RNG_CR_CONFIG2 | RNG_CR_CONFIG3)
+#define RNG_CR_CONFIG_MASK	(RNG_CR_ENTROPY_SRC_MASK | RNG_CR_CED | RNG_CR_CLKDIV)
 
 #define RNG_SR			0x04
 #define RNG_SR_DRDY		BIT(0)
@@ -32,15 +39,19 @@
 
 #define RNG_DR		0x08
 
-#define RNG_NIST_CONFIG_A	0x0F00D00
-#define RNG_NIST_CONFIG_B	0x1801000
-#define RNG_NIST_CONFIG_MASK	GENMASK(25, 8)
+#define RNG_NSCR		0x0C
+#define RNG_NSCR_MASK		GENMASK(17, 0)
+
+#define RNG_HTCR	0x10
 
 #define RNG_MAX_NOISE_CLK_FREQ	3000000
 
 #define RNG_NB_RECOVER_TRIES	3
 
 struct stm32_rng_data {
+	u32	cr;
+	u32	nscr;
+	u32	htcr;
 	bool	has_cond_reset;
 };
 
@@ -262,23 +273,37 @@ static int stm32_rng_init(struct hwrng *rng)
 	if (err)
 		return err;
 
+	/* clear error indicators */
+	writel_relaxed(0, priv->base + RNG_SR);
+
 	reg = readl_relaxed(priv->base + RNG_CR);
 
-	if (!priv->ced)
-		reg |= RNG_CR_CED;
-
-	if (priv->data->has_cond_reset) {
+	/*
+	 * Keep default RNG configuration if none was specified.
+	 * 0 is an invalid value as it disables all entropy sources.
+	 */
+	if (priv->data->has_cond_reset && priv->data->cr) {
 		uint clock_div = stm32_rng_clock_freq_restrain(rng);
 
-		reg &= ~RNG_NIST_CONFIG_MASK;
-		reg |= RNG_CR_CONDRST | RNG_NIST_CONFIG_B |
+		reg &= ~RNG_CR_CONFIG_MASK;
+		reg |= RNG_CR_CONDRST | (priv->data->cr & RNG_CR_ENTROPY_SRC_MASK) |
 		       (clock_div << RNG_CR_CLKDIV_SHIFT);
+		if (priv->ced)
+			reg &= ~RNG_CR_CED;
+		else
+			reg |= RNG_CR_CED;
 		writel_relaxed(reg, priv->base + RNG_CR);
+
+		/* Health tests and noise control registers */
+		writel_relaxed(priv->data->htcr, priv->base + RNG_HTCR);
+		writel_relaxed(priv->data->nscr & RNG_NSCR_MASK, priv->base + RNG_NSCR);
+
 		reg &= ~RNG_CR_CONDRST;
+		reg |= RNG_CR_RNGEN;
 		if (priv->lock_conf)
 			reg |= RNG_CR_CONFLOCK;
-
 		writel_relaxed(reg, priv->base + RNG_CR);
+
 		err = readl_relaxed_poll_timeout_atomic(priv->base + RNG_CR, reg,
 							(!(reg & RNG_CR_CONDRST)),
 							10, 50000);
@@ -287,13 +312,28 @@ static int stm32_rng_init(struct hwrng *rng)
 				"%s: timeout %x!\n", __func__, reg);
 			return -EINVAL;
 		}
+	} else {
+		/* Handle all RNG versions by checking if conditional reset should be set */
+		if (priv->data->has_cond_reset)
+			reg |= RNG_CR_CONDRST;
+
+		if (priv->ced)
+			reg &= ~RNG_CR_CED;
+		else
+			reg |= RNG_CR_CED;
+
+		writel_relaxed(reg, priv->base + RNG_CR);
+
+		if (priv->data->has_cond_reset)
+			reg &= ~RNG_CR_CONDRST;
+
+		if (priv->lock_conf)
+			reg |= RNG_CR_CONFLOCK;
+
+		reg |= RNG_CR_RNGEN;
+
+		writel_relaxed(reg, priv->base + RNG_CR);
 	}
-
-	/* clear error indicators */
-	writel_relaxed(0, priv->base + RNG_SR);
-
-	reg |= RNG_CR_RNGEN;
-	writel_relaxed(reg, priv->base + RNG_CR);
 
 	err = readl_relaxed_poll_timeout_atomic(priv->base + RNG_SR, reg,
 						reg & RNG_SR_DRDY,
@@ -372,6 +412,9 @@ static const struct dev_pm_ops stm32_rng_pm_ops = {
 
 static const struct stm32_rng_data stm32mp13_rng_data = {
 	.has_cond_reset = true,
+	.cr = 0x00F00D00,
+	.nscr = 0x2B5BB,
+	.htcr = 0x969D,
 };
 
 static const struct stm32_rng_data stm32_rng_data = {
