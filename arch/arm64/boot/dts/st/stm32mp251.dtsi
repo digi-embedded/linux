@@ -1763,9 +1763,10 @@
 			};
 
 			rng: rng@42020000 {
-				compatible = "st,stm32mp13-rng";
+				compatible = "st,stm32mp25-rng";
 				reg = <0x42020000 0x400>;
-				clocks = <&rcc CK_BUS_RNG>;
+				clocks = <&clk_rcbsec>, <&rcc CK_BUS_RNG>;
+				clock-names = "rng_clk", "rng_hclk";
 				resets = <&rcc RNG_R>;
 				feature-domains = <&rifsc STM32MP25_RIFSC_RNG_ID>;
 				power-domains = <&CLUSTER_PD>;
