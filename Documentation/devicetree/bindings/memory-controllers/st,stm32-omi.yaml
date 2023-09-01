@@ -136,7 +136,6 @@ patternProperties:
 
           required:
             - st,max-frequency
-            - st,tacc-ns
 
 additionalProperties: false
 
