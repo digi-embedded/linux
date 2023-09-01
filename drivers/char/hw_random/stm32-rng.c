@@ -52,6 +52,7 @@ struct stm32_rng_private {
 	const struct stm32_rng_data *data;
 	u32 pm_cr;
 	bool ced;
+	bool lock_conf;
 };
 
 /*
@@ -274,7 +275,9 @@ static int stm32_rng_init(struct hwrng *rng)
 		       (clock_div << RNG_CR_CLKDIV_SHIFT);
 		writel_relaxed(reg, priv->base + RNG_CR);
 		reg &= ~RNG_CR_CONDRST;
-		reg |= RNG_CR_CONFLOCK;
+		if (priv->lock_conf)
+			reg |= RNG_CR_CONFLOCK;
+
 		writel_relaxed(reg, priv->base + RNG_CR);
 		err = readl_relaxed_poll_timeout_atomic(priv->base + RNG_CR, reg,
 							(!(reg & RNG_CR_CONDRST)),
@@ -416,6 +419,7 @@ static int stm32_rng_probe(struct platform_device *ofdev)
 	}
 
 	priv->ced = of_property_read_bool(np, "clock-error-detect");
+	priv->lock_conf = of_property_read_bool(np, "st,rng-lock-conf");
 
 	match = of_match_device(of_match_ptr(stm32_rng_match), dev);
 	if (!match) {
