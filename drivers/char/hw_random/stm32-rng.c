@@ -55,13 +55,26 @@ struct stm32_rng_data {
 	bool	has_cond_reset;
 };
 
+/**
+ * struct stm32_rng_config - RNG configuration data
+ *
+ * @cr:			RNG configuration. 0 means default hardware RNG configuration
+ * @nscr:		Noise sources control configuration.
+ * @htcr:		Health tests configuration.
+ */
+struct stm32_rng_config {
+	u32 cr;
+	u32 nscr;
+	u32 htcr;
+};
+
 struct stm32_rng_private {
 	struct hwrng rng;
 	void __iomem *base;
 	struct clk *clk;
 	struct reset_control *rst;
+	struct stm32_rng_config pm_conf;
 	const struct stm32_rng_data *data;
-	u32 pm_cr;
 	bool ced;
 	bool lock_conf;
 };
@@ -358,13 +371,31 @@ static int stm32_rng_remove(struct platform_device *ofdev)
 #ifdef CONFIG_PM
 static int stm32_rng_runtime_suspend(struct device *dev)
 {
-	u32 reg;
 	struct stm32_rng_private *priv = dev_get_drvdata(dev);
+	u32 reg;
 
 	reg = readl_relaxed(priv->base + RNG_CR);
 	reg &= ~RNG_CR_RNGEN;
-	priv->pm_cr = reg;
 	writel_relaxed(reg, priv->base + RNG_CR);
+	clk_disable_unprepare(priv->clk);
+
+	return 0;
+}
+
+static int stm32_rng_suspend(struct device *dev)
+{
+	struct stm32_rng_private *priv = dev_get_drvdata(dev);
+
+	if (priv->data->has_cond_reset) {
+		priv->pm_conf.nscr = readl_relaxed(priv->base + RNG_NSCR);
+		priv->pm_conf.htcr = readl_relaxed(priv->base + RNG_HTCR);
+	}
+
+	/* Do not save that RNG is enabled as it will be handled at resume */
+	priv->pm_conf.cr = readl_relaxed(priv->base + RNG_CR) & ~RNG_CR_RNGEN;
+
+	writel_relaxed(priv->pm_conf.cr, priv->base + RNG_CR);
+
 	clk_disable_unprepare(priv->clk);
 
 	return 0;
@@ -372,10 +403,33 @@ static int stm32_rng_runtime_suspend(struct device *dev)
 
 static int stm32_rng_runtime_resume(struct device *dev)
 {
-	u32 reg;
 	struct stm32_rng_private *priv = dev_get_drvdata(dev);
+	int err;
+	u32 reg;
 
-	clk_prepare_enable(priv->clk);
+	err = clk_prepare_enable(priv->clk);
+	if (err)
+		return err;
+
+	/* Clean error indications */
+	writel_relaxed(0, priv->base + RNG_SR);
+
+	reg = readl_relaxed(priv->base + RNG_CR);
+	reg |= RNG_CR_RNGEN;
+	writel_relaxed(reg, priv->base + RNG_CR);
+
+	return 0;
+}
+
+static int stm32_rng_resume(struct device *dev)
+{
+	struct stm32_rng_private *priv = dev_get_drvdata(dev);
+	int err;
+	u32 reg;
+
+	err = clk_prepare_enable(priv->clk);
+	if (err)
+		return err;
 
 	/* Clean error indications */
 	writel_relaxed(0, priv->base + RNG_SR);
@@ -387,27 +441,40 @@ static int stm32_rng_runtime_resume(struct device *dev)
 		 * not taken into account. CONFIGLOCK bit must also be unset but
 		 * it is not handled at the moment.
 		 */
-		writel_relaxed(priv->pm_cr | RNG_CR_CONDRST, priv->base + RNG_CR);
+		writel_relaxed(priv->pm_conf.cr | RNG_CR_CONDRST, priv->base + RNG_CR);
+
+		writel_relaxed(priv->pm_conf.nscr, priv->base + RNG_NSCR);
+		writel_relaxed(priv->pm_conf.htcr, priv->base + RNG_HTCR);
 
 		reg = readl_relaxed(priv->base + RNG_CR);
 		reg |= RNG_CR_RNGEN;
 		reg &= ~RNG_CR_CONDRST;
 		writel_relaxed(reg, priv->base + RNG_CR);
+
+		err = readl_relaxed_poll_timeout_atomic(priv->base + RNG_CR, reg,
+							reg & ~RNG_CR_CONDRST, 10, 100000);
+
+		if (err) {
+			clk_disable_unprepare(priv->clk);
+			dev_err((struct device *)priv->rng.priv,
+				"%s: timeout:%x CR: %x!\n", __func__, err, reg);
+			return -EINVAL;
+		}
 	} else {
-		reg = readl_relaxed(priv->base + RNG_CR);
+		reg = priv->pm_conf.cr;
 		reg |= RNG_CR_RNGEN;
 		writel_relaxed(reg, priv->base + RNG_CR);
 	}
 
 	return 0;
 }
-#endif
+#endif /* CONFIG_PM */
 
 static const struct dev_pm_ops stm32_rng_pm_ops = {
 	SET_RUNTIME_PM_OPS(stm32_rng_runtime_suspend,
 			   stm32_rng_runtime_resume, NULL)
-	SET_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend,
-				pm_runtime_force_resume)
+	SET_SYSTEM_SLEEP_PM_OPS(stm32_rng_suspend,
+				stm32_rng_resume)
 };
 
 static const struct stm32_rng_data stm32mp13_rng_data = {
