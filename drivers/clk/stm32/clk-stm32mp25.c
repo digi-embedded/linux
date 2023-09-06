@@ -77,7 +77,7 @@ static const char * const usb3pciphy_src[] = {
 };
 
 static const char * const dsiblane_src[] = {
-	"ck_dsi_phy", "ck_flexgen_27"
+	"clk_phy_dsi", "ck_flexgen_27"
 };
 
 static const char * const dsiphy_src[] = {
