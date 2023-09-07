@@ -92,15 +92,10 @@
 	};
 
 	power_button {
-		compatible = "gpio-keys";
+		compatible = "digi,stpmic1-pwrkey";
+		interrupts-extended = <&optee 0>, <&optee 1>;
+		interrupt-names = "stpmic1_pwrkey_fall", "stpmic1_pwrkey_rise";
 		status = "okay";
-
-		button {
-			label = "power_button";
-			linux,code = <KEY_POWER>;
-			interrupts-extended = <&optee 0>;
-			status = "okay";
-		};
 	};
 };
 

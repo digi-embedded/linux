@@ -330,7 +330,7 @@ config INPUT_CPCAP_PWRBUTTON
 
 config INPUT_WISTRON_BTNS
 	tristate "x86 Wistron laptop button interface"
-	depends on X86_32
+	depends on X86_32 && !UML
 	select INPUT_SPARSEKMAP
 	select NEW_LEDS
 	select LEDS_CLASS
@@ -891,6 +891,14 @@ config INPUT_STPMIC1_ONKEY
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called stpmic1_onkey.
+
+config INPUT_STPMIC1_PWRKEY
+	tristate "STPMIC1 PMIC Power key support"
+	depends on MFD_STPMIC1
+	help
+	  Say Y to enable support of power key embedded into STPMIC1 PMIC. Power key
+	  can be used to enter and wakeup from low power modes and force a shut-down
+	  on long press.
 
 config INPUT_MCA_PWRKEY
 	tristate "Digi ConnectCore SOMs Micro Controller Assist Power key"

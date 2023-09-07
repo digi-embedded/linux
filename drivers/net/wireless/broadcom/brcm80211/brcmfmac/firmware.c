@@ -22,6 +22,15 @@
 #define BRCMF_FW_NVRAM_PCIEDEV_LEN		10	/* pcie/1/4/ + \0 */
 #define BRCMF_FW_DEFAULT_BOARDREV		"boardrev=0xff"
 
+static int brcmf_testmode = 0;
+module_param_named(testmode, brcmf_testmode, int, 0444);
+MODULE_PARM_DESC(testmode, "Enable Test Mode Operation");
+
+#define MAX_REGDMN_LEN					10
+static char brcmf_regdmn[MAX_REGDMN_LEN] = "US";
+module_param_string(regdmn, brcmf_regdmn, MAX_REGDMN_LEN, 0444);
+MODULE_PARM_DESC(regdmn, "Regulatory domain");
+
 enum nvram_parser_state {
 	IDLE,
 	KEY,
@@ -762,6 +771,11 @@ brcmf_fw_alloc_request(u32 chip, u32 chiprev,
 	u32 i, j;
 	char end = '\0';
 
+	if (chiprev >= BITS_PER_TYPE(u32)) {
+		brcmf_err("Invalid chip revision %u\n", chiprev);
+		return NULL;
+	}
+
 	for (i = 0; i < table_size; i++) {
 		if (mapping_table[i].chipid == chip &&
 		    mapping_table[i].revmask & BIT(chiprev))
@@ -804,6 +818,23 @@ brcmf_fw_alloc_request(u32 chip, u32 chiprev,
 		}
 		strlcat(fwnames[j].path, mapping_table[i].fw_base,
 			BRCMF_FW_NAME_LEN);
+
+		/* If brcmfmac.testmode=1, load '_mfgtest' binary instead */
+		if (!strcmp(fwnames[j].extension, ".bin")) {
+			if (brcmf_testmode) {
+				brcmf_info("loading 'mfgtest' firmware\n");
+				strlcat(fwnames[j].path, "_mfgtest", BRCMF_FW_NAME_LEN);
+			}
+		}
+		/* If brcmfmac.regdmn=XX, load a specific CLM blob file (default: US) */
+		else if (!strcmp(fwnames[j].extension, ".clm_blob")) {
+			char regdmn_suffix[MAX_REGDMN_LEN+1];
+
+			brcmf_info("loading '%s' CLM blob file\n", brcmf_regdmn);
+			snprintf(regdmn_suffix, MAX_REGDMN_LEN+1, "_%s", brcmf_regdmn);
+			strlcat(fwnames[j].path, regdmn_suffix, BRCMF_FW_NAME_LEN);
+		}
+
 		strlcat(fwnames[j].path, fwnames[j].extension,
 			BRCMF_FW_NAME_LEN);
 		fwreq->items[j].path = fwnames[j].path;

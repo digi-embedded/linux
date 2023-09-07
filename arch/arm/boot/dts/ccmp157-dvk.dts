@@ -181,7 +181,8 @@
 	disable-wp;
 	st,neg-edge;
 	bus-width = <4>;
-	vmmc-supply = <&v3v3>;
+	no-1-8-v;
+	vmmc-supply = <&vdd>;
 	status = "okay";
 };
 
