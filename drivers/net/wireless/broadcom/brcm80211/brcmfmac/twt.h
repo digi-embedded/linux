@@ -264,6 +264,7 @@ struct brcmf_twt_setup_oper {
 	struct ether_addr peer;
 	u8 pad[2];
 	struct brcmf_twt_sdesc sdesc;
+	u16 dialog;
 };
 
 /**
