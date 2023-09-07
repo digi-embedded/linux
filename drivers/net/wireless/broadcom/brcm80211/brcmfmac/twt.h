@@ -95,7 +95,7 @@ enum brcmf_twt_flow_flag {
  *	because either the TWT peer did not send a response, or sent a Reject
  *	response driver received a Reject Setup event from the Firmware.
  * @BRCMF_TWT_SESS_STATE_SETUP_COMPLETE: TWT session setup is complete and received
- * 	setup event from the Firmweare.
+ *	setup event from the Firmware.
  * @BRCMF_TWT_SESS_STATE_TEARDOWN_INPROGRESS: TWT session teardown request was sent
  *	to the Firmware.
  * @BRCMF_TWT_SESS_STATE_TEARDOWN_INCOMPLETE: TWT session teardown event timed out.
