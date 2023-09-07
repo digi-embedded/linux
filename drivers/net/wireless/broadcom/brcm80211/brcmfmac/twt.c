@@ -493,6 +493,66 @@ exit:
 }
 
 /**
+ * brcmf_twt_event_timeout_handler - Iterate the session list and handle stale
+ *	TWT session entries which are failed to move to next state in FSM.
+ *
+ * @t: timer instance.
+ */
+void brcmf_twt_event_timeout_handler(struct timer_list *t)
+{
+	struct brcmf_if *ifp = from_timer(ifp, t, twt_evt_timeout);
+	struct brcmf_twt_session *twt_sess = NULL, *next = NULL;
+	unsigned long curr_ts = jiffies;
+	s32 ret = 0;
+
+	list_for_each_entry_safe(twt_sess, next, &ifp->twt_sess_list, list) {
+		/* For this session entry, Skip if the time since the TWT cmd sent to the
+		 * Firmware does not exceed the Event timeout configured.
+		 */
+		if (time_after(twt_sess->oper_start_ts + BRCMF_TWT_EVENT_TIMEOUT, curr_ts))
+			continue;
+
+		switch (twt_sess->state) {
+		case BRCMF_TWT_SESS_STATE_SETUP_INPROGRESS:
+			ret = brcmf_twt_update_session_state(ifp, twt_sess,
+							     BRCMF_TWT_SESS_STATE_SETUP_INCOMPLETE);
+			if (ret) {
+				brcmf_err("TWT: Failed to update session(%u) with state(%s)",
+					  twt_sess->twt_params.flow_id,
+					  brcmf_twt_session_state_str[BRCMF_TWT_SESS_STATE_SETUP_INCOMPLETE]);
+				continue;
+			}
+
+			break;
+		case BRCMF_TWT_SESS_STATE_TEARDOWN_INPROGRESS:
+			ret = brcmf_twt_update_session_state(ifp, twt_sess,
+							     BRCMF_TWT_SESS_STATE_TEARDOWN_INCOMPLETE);
+			if (ret) {
+				brcmf_err("TWT: Failed to update session(%u) with state(%s)",
+					  twt_sess->twt_params.flow_id,
+					  brcmf_twt_session_state_str[BRCMF_TWT_SESS_STATE_TEARDOWN_INCOMPLETE]);
+				continue;
+			}
+
+			break;
+		default:
+			continue;
+		}
+
+		ret = brcmf_twt_del_session(ifp, twt_sess);
+		if (ret) {
+			brcmf_err("TWT: Failed to Delete session(%u) from list",
+				  twt_sess->twt_params.flow_id);
+			break;
+		}
+
+		brcmf_dbg(TWT, "TWT: Cleared stale session(%u) with peer %pM, state(%s)",
+			  twt_sess->twt_params.flow_id, twt_sess->peer_addr.octet,
+			  brcmf_twt_session_state_str[twt_sess->state]);
+	}
+}
+
+/**
  * brcmf_twt_setup_event_handler() - Handle the TWT Setup Event notification from Firmware.
  *
  * @ifp: interface instatnce.
@@ -935,6 +995,8 @@ brcmf_twt_setup_oper_handler(struct brcmf_if *ifp, struct brcmf_twt_params twt_p
 		goto exit;
 	}
 
+	/* Schedule the Cleanup timer to handle Setup Completion timeout */
+	mod_timer(&ifp->twt_evt_timeout, jiffies + BRCMF_TWT_EVENT_TIMEOUT);
 
 	brcmf_dbg(TWT, "TWT: Setup REQ: Session Setup In Progress\n"
 		  "Dialog Token		: %u\n"
@@ -1066,6 +1128,9 @@ brcmf_twt_teardown_oper_handler(struct brcmf_if *ifp, struct brcmf_twt_params tw
 			goto exit;
 		}
 	}
+
+	/* Schedule the Cleanup timer to handle Teardown Completion timeout */
+	mod_timer(&ifp->twt_evt_timeout, jiffies + BRCMF_TWT_EVENT_TIMEOUT);
 
 	brcmf_dbg(TWT, "TWT: Teardown REQ: Session Teardown In Progress\n"
 		  "Flow ID		: %u\n"
