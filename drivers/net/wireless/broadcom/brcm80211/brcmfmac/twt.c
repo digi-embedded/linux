@@ -1044,8 +1044,29 @@ brcmf_twt_teardown_oper_handler(struct brcmf_if *ifp, struct brcmf_twt_params tw
 		goto exit;
 	}
 
-	brcmf_twt_update_session_state(ifp, twt_sess,
-				       BRCMF_TWT_SESS_STATE_TEARDOWN_INPROGRESS);
+	list_for_each_entry(twt_sess, &ifp->twt_sess_list, list) {
+		/* Skip updating the state of this session to "Teardown inprogress"
+		 * on one of the following cases
+		 *	1. The "Teardown all" session action is not requested by userspace.
+		 *	2. This session's Flow ID is not explcitly requested for Teardown.
+		 *	3. This session's state is not "setup complete".
+		 *	   i.e, it is not already active to teardown.
+		 */
+		if (!twt_params.teardown_all_twt ||
+		    twt_params.flow_id != twt_sess->twt_params.flow_id ||
+		    twt_sess->state != BRCMF_TWT_SESS_STATE_SETUP_COMPLETE)
+			continue;
+
+		ret = brcmf_twt_update_session_state(ifp, twt_sess,
+						     BRCMF_TWT_SESS_STATE_TEARDOWN_INPROGRESS);
+		if (ret) {
+			brcmf_err("TWT: Teardown REQ: Failed to update session(%u) with state(%s)",
+				  twt_params.flow_id,
+				  brcmf_twt_session_state_str[BRCMF_TWT_SESS_STATE_TEARDOWN_INPROGRESS]);
+			goto exit;
+		}
+	}
+
 	brcmf_dbg(TWT, "TWT: Teardown REQ: Session Teardown In Progress\n"
 		  "Flow ID		: %u\n"
 		  "Broadcast TWT ID	: %u\n"
