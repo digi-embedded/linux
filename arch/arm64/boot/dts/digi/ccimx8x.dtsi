@@ -34,7 +34,26 @@
 		compatible = "fsl,sec-v4.0-keyblob";
 	};
 
+	imx8x_cm4: imx8x_cm4@0 {
+		compatible = "fsl,imx8qxp-cm4";
+		rsc-da = <0x90000000>;
+		mbox-names = "tx", "rx", "rxdb";
+		mboxes = <&lsio_mu5 0 1
+			  &lsio_mu5 1 1
+			  &lsio_mu5 3 1>;
+		mub-partition = <3>;
+		core-index = <0>;
+		core-id = <IMX_SC_R_M4_0_PID0>;
+		power-domains = <&pd IMX_SC_R_M4_0_PID0>,
+				<&pd IMX_SC_R_M4_0_MU_1A>;
+		status = "disabled";
+	};
+
 	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
 		linux,cma {
 			compatible = "shared-dma-pool";
 			reusable;
@@ -46,23 +65,47 @@
 			 * be parsed for whatever reason.
 			 */
 			size = <0 0x6000000>;
-			alloc-ranges = <0 0x96000000 0 0x28000000>;
+			alloc-ranges = <0 0x96000000 0 0x50000000>;
 			linux,cma-default;
 			digi,size-table = <
 				/* RAM         CMA*/
 				0 0x20000000 0 0x6000000	/* 512 MB variants -> 96 MB of CMA */
 				0 0x40000000 0 0x14000000	/* 1 GB variants   -> 320 MB of CMA */
 				0 0x80000000 0 0x28000000	/* 2 GB variants   -> 640 MB of CMA */
+				0 0xFFFFFFFF 0 0x50000000	/* 4 GB variants   -> 1280 MB of CMA */
 			>;
 		};
 
+		dsp_reserved: dsp@92400000 {
+			reg = <0 0x92400000 0 0x1000000>;
+			no-map;
+		};
+		dsp_reserved_heap: dsp_reserved_heap {
+			reg = <0 0x93400000 0 0xef0000>;
+			no-map;
+		};
+		dsp_vdev0vring0: vdev0vring0@942f0000 {
+			reg = <0 0x942f0000 0 0x8000>;
+			no-map;
+		};
+
+		dsp_vdev0vring1: vdev0vring1@942f8000 {
+			reg = <0 0x942f8000 0 0x8000>;
+			no-map;
+		};
+
+		dsp_vdev0buffer: vdev0buffer@94300000 {
+			compatible = "shared-dma-pool";
+			reg = <0 0x94300000 0 0x100000>;
+			no-map;
+		};
 		decoder_boot: decoder-boot@84000000 {
 			reg = <0 0x84000000 0 0x2000000>;
 			no-map;
 		};
 
 		decoder_rpc: decoder-rpc@0x92000000 {
-			reg = <0 0x92000000 0 0x200000>;
+			reg = <0 0x92000000 0 0x100000>;
 			no-map;
 		};
 
@@ -71,14 +114,9 @@
 			no-map;
 		};
 
-		encoder_rpc: encoder-rpc@0x92200000 {
-			reg = <0 0x92200000 0 0x200000>;
+		encoder_rpc: encoder-rpc@0x94400000 {
+			reg = <0 0x94400000 0 0x700000>;
 			no-map;
-		};
-
-		encoder_reserved: encoder_reserved@94400000 {
-			no-map;
-			reg = <0 0x94400000 0 0x800000>;
 		};
 	};
 
@@ -263,6 +301,11 @@
 &adc0 {
 	vref-supply = <&reg_1v8_adc_vref>;
 	digi,max-channel = <5>;
+};
+
+&dsp {
+	memory-region = <&dsp_vdev0buffer>, <&dsp_vdev0vring0>,
+			<&dsp_vdev0vring1>, <&dsp_reserved>;
 };
 
 /* I2C0 connected to MCA and crypto chip */
@@ -453,6 +496,7 @@
 		0x20000000 0x2000000	/* 512 MB variants -> 32 MB of GPU CMA */
 		0x40000000 0x8000000	/* 1 GB variants   -> 128 MB of GPU CMA */
 		0x80000000 0x10000000	/* 2 GB variants   -> 256 MB of GPU CMA */
+		0xFFFFFFFF 0x20000000	/* 4 GB variants   -> 512 MB of GPU CMA */
 	>;
 };
 
@@ -471,15 +515,6 @@
 	ext_osc = <1>;
 	reset-gpio = <&lsio_gpio4 0 GPIO_ACTIVE_LOW>;
 	status = "disabled";
-};
-
-&rpmsg{
-	/*
-	 * 64K for one rpmsg instance:
-	 */
-	vdev-nums = <2>;
-	reg = <0x0 0x90000000 0x0 0x20000>;
-	status = "okay";
 };
 
 &tsens {
@@ -505,7 +540,7 @@
 	pmic-thermal0 {
 		polling-delay-passive = <250>;
 		polling-delay = <2000>;
-		thermal-sensors = <&tsens 497>;
+		thermal-sensors = <&tsens IMX_SC_R_PMIC_0>;
 		trips {
 			pmic_alert0: trip0 {
 				temperature = <85000>;
@@ -542,19 +577,16 @@
 	status = "okay";
 };
 
-&vpu_decoder {
-	boot-region = <&decoder_boot>;
-	rpc-region = <&decoder_rpc>;
-	reg-csr = <0x2d040000>;
-	core_type = <1>;
+/* VPU decoder and encoder */
+&vpu_core0 {
+	reg = <0x2d040000 0x10000>;
+	memory-region = <&decoder_boot>, <&decoder_rpc>;
 	status = "disabled";
 };
 
-&vpu_encoder {
-	boot-region = <&encoder_boot>;
-	rpc-region = <&encoder_rpc>;
-	reserved-region = <&encoder_reserved>;
-	reg-rpc-system = <0x40000000>;
+&vpu_core1 {
+	memory-region = <&encoder_boot>, <&encoder_rpc>;
+	reg = <0x2d050000 0x10000>;
 	resolution-max = <1920 1080>;
 	mbox-names = "enc1_tx0", "enc1_tx1", "enc1_rx";
 	mboxes = <&mu1_m0 0 0
@@ -621,7 +653,7 @@
 	pinctrl_pcieb: pcieagrp {
 		fsl,pins = <
 			IMX8QXP_PCIE_CTRL0_PERST_B_LSIO_GPIO4_IO00		0x06000021
-			IMX8QXP_PCIE_CTRL0_CLKREQ_B_LSIO_GPIO4_IO01	0x06000021
+			IMX8QXP_PCIE_CTRL0_CLKREQ_B_LSIO_GPIO4_IO01		0x46000021
 			IMX8QXP_PCIE_CTRL0_WAKE_B_LSIO_GPIO4_IO02		0x06000021
 		>;
 	};

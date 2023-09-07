@@ -325,6 +325,16 @@ static int mca_i2c_remove(struct i2c_client *i2c)
 	return 0;
 }
 
+/*
+ * Empty shutdown routine to prevent i2c_device_shutdown() from disabling the
+ * MCA's IRQ. This IRQ is shared with lsio_mu1, which is used for IPC with the
+ * SCU during shutdown of devices such as the eMMC.
+ */
+static void mca_i2c_shutdown(struct i2c_client *i2c)
+{
+	return;
+}
+
 #ifdef CONFIG_PM
 static int mca_i2c_suspend(struct device *dev)
 {
@@ -362,6 +372,7 @@ static struct i2c_driver mca_i2c_driver = {
 	},
 	.probe    = mca_i2c_probe,
 	.remove   = mca_i2c_remove,
+	.shutdown = mca_i2c_shutdown,
 	.id_table = mca_i2c_id,
 };
 

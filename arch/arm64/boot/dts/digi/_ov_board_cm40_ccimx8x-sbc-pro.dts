@@ -20,31 +20,48 @@
 	fragment@0 {
 		target-path = "/";
 		__overlay__ {
-			overlay-description = "SOM: MCA";
+			overlay-description = "CM40: add Cortex-M4 support";
+			reserved-memory {
+				vdev0vring0: vdev0vring0@90000000 {
+					reg = <0 0x90000000 0 0x8000>;
+					no-map;
+				};
+
+				vdev0vring1: vdev0vring1@90008000 {
+					reg = <0 0x90008000 0 0x8000>;
+					no-map;
+				};
+
+				vdev1vring0: vdev1vring0@90010000 {
+					reg = <0 0x90010000 0 0x8000>;
+					no-map;
+				};
+
+				vdev1vring1: vdev1vring1@90018000 {
+					reg = <0 0x90018000 0 0x8000>;
+					no-map;
+				};
+
+				rsc_table: rsc_table@900ff000 {
+					reg = <0 0x900ff000 0 0x1000>;
+					no-map;
+				};
+
+				vdevbuffer: vdevbuffer {
+					compatible = "shared-dma-pool";
+					reg = <0 0x90400000 0 0x100000>;
+					no-map;
+				};
+			};
 		};
 	};
 
-	/* Enable Micro Controller Assit */
 	fragment@1 {
-		target = <&mca_cc93>;
+		target = <&imx8x_cm4>;
 		__overlay__ {
+			memory-region = <&vdevbuffer>, <&vdev0vring0>, <&vdev0vring1>,
+				<&vdev1vring0>, <&vdev1vring1>, <&rsc_table>;
 			status = "okay";
-		};
-	};
-
-	/* Disable cpu power key */
-	fragment@2 {
-		target = <&bbnsm_pwrkey>;
-		__overlay__ {
-			status = "disabled";
-		};
-	};
-
-	/* Configure PMIC IRQ to be shared with MCA */
-	fragment@3 {
-		target = <&pmic_cc93>;
-		__overlay__ {
-			interrupt-flags = <0x00002088>;
 		};
 	};
 };

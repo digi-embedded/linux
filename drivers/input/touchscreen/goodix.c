@@ -1376,6 +1376,10 @@ static int __maybe_unused goodix_resume(struct device *dev)
 		usleep_range(2000, 5000);
 	}
 
+	error = goodix_int_sync(ts);
+	if (error)
+		return error;
+
 	error = goodix_i2c_read(ts->client, ts->chip->config_addr,
 				&config_ver, 1);
 	if (error)
