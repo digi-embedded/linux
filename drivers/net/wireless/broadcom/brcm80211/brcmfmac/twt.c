@@ -146,6 +146,22 @@ brcmf_twt_float_to_u32(u8 exponent, u16 mantissa)
 }
 
 /**
+ * brcmf_twt_get_next_dialog_token() - Return the next avaialable Dialog token.
+ *
+ * return: Dialog token in u8.
+ */
+static inline u8
+brcmf_twt_get_next_dialog_token(void)
+{
+	static u8 dialog_token;
+
+	/* Continuous iteratation in the range 1-255 */
+	dialog_token = ((dialog_token + 0x1) % 0x100) ? : 1;
+
+	return dialog_token;
+}
+
+/**
  * brcmf_twt_stats_read() - Read the contents of the debugfs file "twt_stats".
  *
  * @seq: sequence for debugfs entry.
@@ -190,11 +206,11 @@ brcmf_twt_stats_read(struct seq_file *seq, void *data)
 							  twt_params->mantissa);
 
 			if (twt_params->negotiation_type == IFX_TWT_PARAM_NEGO_TYPE_ITWT)
-				seq_printf(seq, "\tiTWT Session, Flow ID: %u\n",
-					   twt_params->flow_id);
+				seq_printf(seq, "\tiTWT, Flow ID: %u, Dialog Token: %u\n",
+					   twt_params->flow_id, twt_params->dialog_token);
 			else if (twt_params->negotiation_type == IFX_TWT_PARAM_NEGO_TYPE_BTWT)
-				seq_printf(seq, "\tbTWT Session, Bcast TWT ID: %u\n",
-					   twt_params->bcast_twt_id);
+				seq_printf(seq, "\tbTWT, Bcast TWT ID: %u, Dialog Token: %u\n",
+					   twt_params->bcast_twt_id, twt_params->dialog_token);
 			else
 				continue;
 
@@ -208,8 +224,6 @@ brcmf_twt_stats_read(struct seq_file *seq, void *data)
 				   wake_dur);
 			seq_printf(seq, "\t\tWake Interval       : %u uS\n",
 				   wake_int);
-			seq_printf(seq, "\t\tDialog_token        : %u\n",
-				   twt_params->dialog_token);
 			seq_printf(seq, "\t\tSession type        : %s, %s, %s\n\n",
 				   twt_params->implicit ? "Implicit" : "Explicit",
 				   twt_params->trigger ? "Trigger based" : "Non-Trigger based",
@@ -261,6 +275,30 @@ brcmf_twt_cleanup_sessions(struct brcmf_if *ifp)
 	spin_unlock(&ifp->twt_sess_list_lock);
 
 	return ret;
+}
+
+/**
+ * brcmf_twt_lookup_session_by_dialog_token() - Lookup a TWT sesssion information from
+ *	the driver list based on the Dialog Token.
+ *
+ * @ifp: interface instance
+ * @dialog_token: TWT session Dialog Token
+ *
+ * return: Pointer to a TWT session instance if lookup is successful, NULL on failure.
+ */
+static struct brcmf_twt_session *
+brcmf_twt_lookup_session_by_dialog_token(struct brcmf_if *ifp, u8 dialog_token)
+{
+	struct brcmf_twt_session *iter = NULL;
+
+	if (list_empty(&ifp->twt_sess_list))
+		return NULL;
+
+	list_for_each_entry(iter, &ifp->twt_sess_list, list)
+		if (iter->twt_params.dialog_token == dialog_token)
+			return iter;
+
+	return NULL;
 }
 
 /**
@@ -481,6 +519,9 @@ brcmf_twt_setup_event_handler(struct brcmf_if *ifp, const struct brcmf_event_msg
 	/* TWT Negotiation_type */
 	twt_params.negotiation_type = setup_desc->negotiation_type;
 
+	/* Dialog Token */
+	twt_params.dialog_token = setup_event->dialog;
+
 	switch (twt_params.negotiation_type) {
 		case IFX_TWT_PARAM_NEGO_TYPE_ITWT:
 			/* Flow ID */
@@ -488,6 +529,9 @@ brcmf_twt_setup_event_handler(struct brcmf_if *ifp, const struct brcmf_event_msg
 
 			/* Lookup the session list for the flow ID in the Setup Response */
 			twt_sess = brcmf_itwt_lookup_session_by_flowid(ifp, twt_params.flow_id);
+			if (!twt_sess)
+				twt_sess = brcmf_twt_lookup_session_by_dialog_token(ifp,
+										    twt_params.dialog_token);
 
 			/* If this device requested for session setup, a session entry with
 			 * state(setup inprogess) would be already available, else this is an
@@ -512,9 +556,6 @@ brcmf_twt_setup_event_handler(struct brcmf_if *ifp, const struct brcmf_event_msg
 
 	/* Setup Event */
 	twt_params.setup_cmd = setup_desc->setup_cmd;
-
-	/* Dialog Token */
-	twt_params.dialog_token = setup_event->dialog;
 
 	/* Flowflags */
 	twt_params.implicit = (setup_desc->flow_flags & BRCMF_TWT_FLOW_FLAG_IMPLICIT) ? 1 : 0;
@@ -597,6 +638,7 @@ brcmf_twt_setup_event_handler(struct brcmf_if *ifp, const struct brcmf_event_msg
 	}
 
 	brcmf_dbg(TWT, "TWT: Setup EVENT: Session Setup Complete\n"
+		  "Dialog Token		: %u\n"
 		  "Setup command	: %u\n"
 		  "Flow flags		: 0x %02x\n"
 		  "Flow ID		: %u\n"
@@ -606,6 +648,7 @@ brcmf_twt_setup_event_handler(struct brcmf_if *ifp, const struct brcmf_event_msg
 		  "Wake Duration	: %u uS\n"
 		  "Wake Interval	: %u uS\n"
 		  "Negotiation type	: %u\n",
+		  setup_event->dialog,
 		  setup_desc->setup_cmd,
 		  setup_desc->flow_flags,
 		  setup_desc->flow_id,
@@ -871,6 +914,10 @@ brcmf_twt_setup_oper_handler(struct brcmf_if *ifp, struct brcmf_twt_params twt_p
 	val.sdesc.wake_int = cpu_to_le32(brcmf_twt_float_to_u32(twt_params.exponent,
 							       twt_params.mantissa));
 
+	/* Override Dialog Token passed from userpace with next available value in Driver */
+	twt_params.dialog_token = brcmf_twt_get_next_dialog_token();
+	val.dialog = cpu_to_le16((u16)twt_params.dialog_token);
+
 	/* Send the TWT Setup request to Firmware */
 	ret = brcmf_fil_xtlv_data_set(ifp, "twt", BRCMF_TWT_CMD_SETUP,
 				      (void *)&val, sizeof(val));
@@ -879,19 +926,18 @@ brcmf_twt_setup_oper_handler(struct brcmf_if *ifp, struct brcmf_twt_params twt_p
 		goto exit;
 	}
 
-	/* Add an entry setup with progress state if flow ID is specified */
-	if (twt_params.flow_id != 0xFF) {
-		ret = brcmf_twt_add_session(ifp, vif->profile.bssid,
-					    BRCMF_TWT_SESS_STATE_SETUP_INPROGRESS,
-					    &twt_params);
-		if (ret < 0) {
-			brcmf_err("TWT: Setup EVENT: Failed to add session");
-			goto exit;
-		}
+	/* Add an entry setup with progress state */
+	ret = brcmf_twt_add_session(ifp, vif->profile.bssid,
+				    BRCMF_TWT_SESS_STATE_SETUP_INPROGRESS,
+				    &twt_params);
+	if (ret < 0) {
+		brcmf_err("TWT: Setup EVENT: Failed to add session");
+		goto exit;
 	}
 
 
 	brcmf_dbg(TWT, "TWT: Setup REQ: Session Setup In Progress\n"
+		  "Dialog Token		: %u\n"
 		  "Setup command	: %u\n"
 		  "Flow flags		: 0x %02x\n"
 		  "Flow ID		: %u\n"
@@ -901,6 +947,7 @@ brcmf_twt_setup_oper_handler(struct brcmf_if *ifp, struct brcmf_twt_params twt_p
 		  "Wake Duration	: %u uS\n"
 		  "Wake Interval	: %u uS\n"
 		  "Negotiation type	: %u\n",
+		  val.dialog,
 		  val.sdesc.setup_cmd,
 		  val.sdesc.flow_flags,
 		  val.sdesc.flow_id,
