@@ -1209,6 +1209,8 @@ struct brcmf_if *brcmf_add_if(struct brcmf_pub *drvr, s32 bsscfgidx, s32 ifidx,
 	spin_lock_init(&ifp->twt_sess_list_lock);
 	 /* Initialize TWT Session list */
 	INIT_LIST_HEAD(&ifp->twt_sess_list);
+	/* Setup the aperiodic TWT Session cleanup activity */
+	timer_setup(&ifp->twt_evt_timeout, brcmf_twt_event_timeout_handler, 0);
 
 	if (mac_addr != NULL)
 		memcpy(ifp->mac_addr, mac_addr, ETH_ALEN);
@@ -1233,6 +1235,10 @@ static void brcmf_del_if(struct brcmf_pub *drvr, s32 bsscfgidx,
 	brcmf_dbg(TRACE, "Enter, bsscfgidx=%d, ifidx=%d\n", bsscfgidx,
 		  ifp->ifidx);
 	ifidx = ifp->ifidx;
+
+	/* Stop the aperiodic TWT Session cleanup activity */
+	if (timer_pending(&ifp->twt_evt_timeout))
+		del_timer_sync(&ifp->twt_evt_timeout);
 
 	if (ifp->ndev) {
 		if (bsscfgidx == 0) {

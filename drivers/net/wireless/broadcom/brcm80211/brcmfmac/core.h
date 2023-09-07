@@ -205,6 +205,7 @@ struct brcmf_if {
 	spinlock_t sta_list_lock;
 	struct list_head twt_sess_list;         /* dll of TWT sessions */
 	spinlock_t twt_sess_list_lock;
+	struct timer_list twt_evt_timeout;	/* TWT event timeout */
 	bool fmac_pkt_fwd_en;
 };
 
