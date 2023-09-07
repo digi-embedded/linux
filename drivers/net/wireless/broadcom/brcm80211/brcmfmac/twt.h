@@ -88,10 +88,14 @@ enum brcmf_twt_flow_flag {
  * @BRCMF_TWT_SESS_STATE_UNSPEC: Reserved value 0.
  * @BRCMF_TWT_SESS_STATE_SETUP_INPROGRESS: TWT session setup request was sent
  *	to the Firmware.
+ * @BRCMF_TWT_SESS_STATE_SETUP_INCOMPLETE: TWT session setup is incomplete,
+ *	because either the TWT peer did not send a response, or sent a Reject
+ *	response driver received a Reject Setup event from the Firmware.
  * @BRCMF_TWT_SESS_STATE_SETUP_COMPLETE: TWT session setup is complete and received
  * 	setup event from the Firmweare.
  * @BRCMF_TWT_SESS_STATE_TEARDOWN_INPROGRESS: TWT session teardown request was sent
  *	to the Firmware.
+ * @BRCMF_TWT_SESS_STATE_TEARDOWN_INCOMPLETE: TWT session teardown event timed out.
  * @BRCMF_TWT_SESS_STATE_TEARDOWN_COMPLETE: TWT session teardown is complete and
  *	received Teardown event from the Firmware.
  * @BRCMF_TWT_SESS_STATE_MAX: This acts as a the tail of state list.
@@ -100,8 +104,10 @@ enum brcmf_twt_flow_flag {
 enum brcmf_twt_session_state {
 	BRCMF_TWT_SESS_STATE_UNSPEC,
 	BRCMF_TWT_SESS_STATE_SETUP_INPROGRESS,
+	BRCMF_TWT_SESS_STATE_SETUP_INCOMPLETE,
 	BRCMF_TWT_SESS_STATE_SETUP_COMPLETE,
 	BRCMF_TWT_SESS_STATE_TEARDOWN_INPROGRESS,
+	BRCMF_TWT_SESS_STATE_TEARDOWN_INCOMPLETE,
 	BRCMF_TWT_SESS_STATE_TEARDOWN_COMPLETE,
 	BRCMF_TWT_SESS_STATE_MAX
 };

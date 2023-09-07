@@ -42,8 +42,10 @@
 const char* brcmf_twt_session_state_str[BRCMF_TWT_SESS_STATE_MAX] = {
 	"Unspec",
 	"Setup inprogress",
+	"Setup incomplete",
 	"Setup complete",
-	"Teardown inprogres",
+	"Teardown inprogress",
+	"Teardown incomplete",
 	"Teardown complete"
 };
 
@@ -469,7 +471,8 @@ brcmf_twt_setup_event_handler(struct brcmf_if *ifp, const struct brcmf_event_msg
 	struct brcmf_twt_sdesc *setup_desc;
 	struct brcmf_twt_session *twt_sess = NULL;
 	struct brcmf_twt_params twt_params;
-	s32 ret = -1;
+	bool unsolicited_setup = false;
+	s32 ret = 0;
 
 	setup_event = (struct brcmf_twt_setup_event *)data;
 	setup_desc = (struct brcmf_twt_sdesc *)
@@ -482,6 +485,17 @@ brcmf_twt_setup_event_handler(struct brcmf_if *ifp, const struct brcmf_event_msg
 		case IFX_TWT_PARAM_NEGO_TYPE_ITWT:
 			/* Flow ID */
 			twt_params.flow_id = setup_desc->flow_id;
+
+			/* Lookup the session list for the flow ID in the Setup Response */
+			twt_sess = brcmf_itwt_lookup_session_by_flowid(ifp, twt_params.flow_id);
+
+			/* If this device requested for session setup, a session entry with
+			 * state(setup inprogess) would be already available, else this is an
+			 * Unsolicited Setup Response from the peer TWT device.
+			 */
+			if (!twt_sess || twt_sess->state != BRCMF_TWT_SESS_STATE_SETUP_INPROGRESS)
+				unsolicited_setup = true;
+
 			break;
 		case IFX_TWT_PARAM_NEGO_TYPE_BTWT:
 			/* Broadcast TWT ID */
@@ -497,10 +511,6 @@ brcmf_twt_setup_event_handler(struct brcmf_if *ifp, const struct brcmf_event_msg
 	}
 
 	/* Setup Event */
-	if (setup_desc->setup_cmd != IFX_TWT_OPER_SETUP_CMD_TYPE_ACCEPT) {
-		brcmf_err("TWT: Setup EVENT: Request not accepted by the AP");
-		goto exit;
-	}
 	twt_params.setup_cmd = setup_desc->setup_cmd;
 
 	/* Dialog Token */
@@ -527,19 +537,62 @@ brcmf_twt_setup_event_handler(struct brcmf_if *ifp, const struct brcmf_event_msg
 	brcmf_twt_u32_to_float(le32_to_cpu(setup_desc->wake_int),
 			       &twt_params.exponent, &twt_params.mantissa);
 
-	/* Lookup the session list for the received flow ID */
-	twt_sess = brcmf_itwt_lookup_session_by_flowid(ifp, twt_params.flow_id);
-	if (twt_sess)
-		ret = brcmf_twt_update_session(ifp, twt_sess, e->addr,
-					       BRCMF_TWT_SESS_STATE_SETUP_COMPLETE,
-					       &twt_params);
-	else
-		ret = brcmf_twt_add_session(ifp, e->addr,
-					    BRCMF_TWT_SESS_STATE_SETUP_COMPLETE,
-					    &twt_params);
+	brcmf_dbg(TWT, "TWT: Setup EVENT: %sResponse with cmd(%u) from peer %pM",
+		  unsolicited_setup ? "Un-Solicited " : "",
+		  setup_desc->setup_cmd, e->addr);
+
+	switch (setup_desc->setup_cmd) {
+	case TWT_SETUP_CMD_REQUEST:
+		fallthrough;
+	case TWT_SETUP_CMD_SUGGEST:
+		fallthrough;
+	case TWT_SETUP_CMD_DEMAND:
+		fallthrough;
+	case TWT_SETUP_CMD_GROUPING:
+		ret = -EOPNOTSUPP;
+		goto exit;
+	case TWT_SETUP_CMD_ACCEPT:
+		if (!twt_sess)
+			ret = brcmf_twt_add_session(ifp, e->addr,
+						    BRCMF_TWT_SESS_STATE_SETUP_COMPLETE,
+						    &twt_params);
+		else
+			ret = brcmf_twt_update_session(ifp, twt_sess, e->addr,
+						       BRCMF_TWT_SESS_STATE_SETUP_COMPLETE,
+						       &twt_params);
+		break;
+	case TWT_SETUP_CMD_ALTERNATE:
+		fallthrough;
+	case TWT_SETUP_CMD_DICTATE:
+		ret = -EOPNOTSUPP;
+		goto exit;
+	case TWT_SETUP_CMD_REJECT:
+		if (!twt_sess)
+			/* Bail out, since nothing to handle on receiving Un-Solicited
+			 * Reject from the TWT peer for an un-available TWT session.
+			 */
+			break;
+
+		ret = brcmf_twt_update_session_state(ifp, twt_sess,
+						     BRCMF_TWT_SESS_STATE_SETUP_INCOMPLETE);
+		if (ret) {
+			brcmf_err("TWT: Setup EVENT: Failed to update session(%u) with state(%s)",
+				  twt_params.flow_id,
+				  brcmf_twt_session_state_str[BRCMF_TWT_SESS_STATE_SETUP_INCOMPLETE]);
+			goto exit;
+		}
+
+		ret = brcmf_twt_del_session(ifp, twt_sess);
+
+		break;
+	default:
+		ret = -EOPNOTSUPP;
+		goto exit;
+	}
 
 	if (ret) {
-		brcmf_err("TWT: Setup EVENT: Failed to update session");
+		brcmf_err("TWT: Setup EVENT: Failed to add/del/update peer %pM session from list",
+			  e->addr);
 		goto exit;
 	}
 
@@ -584,7 +637,8 @@ brcmf_twt_teardown_event_handler(struct brcmf_if *ifp, const struct brcmf_event_
 	struct brcmf_twt_teardesc *teardown_desc;
 	struct brcmf_twt_session *twt_sess = NULL;
 	struct brcmf_twt_params twt_params;
-	s32 ret;
+	bool unsolicited_teardown = false;
+	s32 ret = 0;
 
 	teardown_event = (struct brcmf_twt_teardown_event *)data;
 	teardown_desc = (struct brcmf_twt_teardesc *)
@@ -607,24 +661,14 @@ brcmf_twt_teardown_event_handler(struct brcmf_if *ifp, const struct brcmf_event_
 
 		/* Lookup the session list for the received flow ID */
 		twt_sess = brcmf_itwt_lookup_session_by_flowid(ifp, twt_params.flow_id);
-		if (twt_sess) {
-			ret = brcmf_twt_update_session_state(ifp, twt_sess,
-							     BRCMF_TWT_SESS_STATE_TEARDOWN_COMPLETE);
-			if (ret) {
-				brcmf_err("TWT: Failed to update session state");
-				goto exit;
-			}
 
-			ret = brcmf_twt_del_session(ifp, twt_sess);
-			if (ret) {
-				brcmf_err("TWT: Failed to Delete session from list");
-				goto exit;
-			}
-		} else {
-			brcmf_dbg(TWT, "TWT: session is not available to delete");
-			ret = -EINVAL;
-			goto exit;
-		}
+		/* If this device requested for session Teardown, a session entry with
+		 * state(setup inprogess) would be already available, else this is an
+		 * Unsolicited Teardown Response from the peer TWT device.
+		 */
+		if (!twt_sess || twt_sess->state != BRCMF_TWT_SESS_STATE_SETUP_INPROGRESS)
+			unsolicited_teardown = true;
+
 		break;
 	case IFX_TWT_PARAM_NEGO_TYPE_BTWT:
 		/* Broadcast TWT ID */
@@ -635,6 +679,30 @@ brcmf_twt_teardown_event_handler(struct brcmf_if *ifp, const struct brcmf_event_
 	default:
 		brcmf_err("TWT: Negotiation Type not handled\n");
 		ret = -EOPNOTSUPP;
+		goto exit;
+	}
+
+	brcmf_dbg(TWT, "TWT: Teardown EVENT: %sResponse from peer %pM",
+		  unsolicited_teardown ? "Un-Solicited " : "", e->addr);
+
+	if (!twt_sess) {
+		brcmf_dbg(TWT, "TWT: Teardown EVENT: Un-available session(%u) for deletion",
+			  twt_params.flow_id);
+		ret = -EINVAL;
+		goto exit;
+	}
+
+	ret = brcmf_twt_update_session_state(ifp, twt_sess, BRCMF_TWT_SESS_STATE_TEARDOWN_COMPLETE);
+	if (ret) {
+		brcmf_err("TWT: Teardown EVENT: Failed to update session(%u) with state(%s)",
+			  twt_params.flow_id,
+			  brcmf_twt_session_state_str[BRCMF_TWT_SESS_STATE_TEARDOWN_COMPLETE]);
+		goto exit;
+	}
+
+	ret = brcmf_twt_del_session(ifp, twt_sess);
+	if (ret) {
+		brcmf_err("TWT: Teardown EVENT: Failed to Delete session from list");
 		goto exit;
 	}
 
