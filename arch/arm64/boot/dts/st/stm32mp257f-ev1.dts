@@ -386,6 +386,8 @@
 		panel = <&panel_dsi>;
 		interrupt-parent = <&gpioi>;
 		interrupts = <13 IRQ_TYPE_EDGE_FALLING>;
+		AVDD28-supply = <&scmi_v3v3>;
+		VDDIO-supply = <&scmi_v3v3>;
 		status = "disabled";
 	};
 };
