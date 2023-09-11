@@ -257,7 +257,7 @@
 				     "ethernet-phy-ieee802.3-c22";
 			reset-gpios =  <&gpioj 9 GPIO_ACTIVE_LOW>;
 			reset-assert-us = <10000>;
-			reset-deassert-us = <300>;
+			reset-deassert-us = <80000>;
 			realtek,eee-disable;
 			reg = <5>;
 		};
@@ -281,7 +281,7 @@
 			compatible = "ethernet-phy-id001c.c916";
 			reset-gpios =  <&gpiog 6 GPIO_ACTIVE_LOW>;
 			reset-assert-us = <10000>;
-			reset-deassert-us = <300>;
+			reset-deassert-us = <80000>;
 			realtek,eee-disable;
 			reg = <1>;
 		};
