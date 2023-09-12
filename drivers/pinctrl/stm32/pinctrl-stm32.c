@@ -49,14 +49,14 @@
 #define STM32_GPIO_AFRH		0x24
 #define STM32_GPIO_SECCFGR	0x30
 #define STM32_GPIO_DELAYRL	0x40
-#define STM32_GPIO_PIOCFGRL	0x48
+#define STM32_GPIO_ADVCFGRL	0x48
 #define STM32_GPIO_CIDCFGR(x)	(0x50 + (0x8 * (x)))
 #define STM32_GPIO_SEMCR(x)	(0x54 + (0x8 * (x)))
 
-#define STM32_GPIO_PIOCFGR_DELAY_PATH_POS	0
-#define STM32_GPIO_PIOCFGR_CLK_EDGE_POS		1
-#define STM32_GPIO_PIOCFGR_CLK_TYPE_POS		2
-#define STM32_GPIO_PIOCFGR_RETIME_POS		3
+#define STM32_GPIO_ADVCFGR_DLYPATH_POS		0
+#define STM32_GPIO_ADVCFGR_DE_POS		1
+#define STM32_GPIO_ADVCFGR_INVCLK_POS		2
+#define STM32_GPIO_ADVCFGR_RET_POS		3
 
 #define STM32_GPIO_CIDCFGR_CFEN		BIT(0)
 #define STM32_GPIO_CIDCFGR_SEMEN	BIT(1)
@@ -77,8 +77,8 @@
 #define STM32_GPIO_BKP_PUPD_MASK	GENMASK(9, 8)
 #define STM32_GPIO_BKP_TYPE		10
 #define STM32_GPIO_BKP_VAL		11
-#define STM32_GPIO_BKP_PIOCFG_SHIFT	12
-#define STM32_GPIO_BKP_PIOCFG_MASK	GENMASK(15, 12)
+#define STM32_GPIO_BKP_ADVCFG_SHIFT	12
+#define STM32_GPIO_BKP_ADVCFG_MASK	GENMASK(15, 12)
 #define STM32_GPIO_BKP_DELAY_SHIFT	16
 #define STM32_GPIO_BKP_DELAY_MASK	GENMASK(19, 16)
 
@@ -232,10 +232,10 @@ static void stm32_gpio_backup_bias(struct stm32_gpio_bank *bank, u32 offset,
 	bank->pin_backup[offset] |= bias << STM32_GPIO_BKP_PUPD_SHIFT;
 }
 
-static void stm32_gpio_backup_piocfg(struct stm32_gpio_bank *bank, u32 offset, u32 bpos, u32 bval)
+static void stm32_gpio_backup_advcfg(struct stm32_gpio_bank *bank, u32 offset, u32 bpos, u32 bval)
 {
-	bank->pin_backup[offset] &= ~BIT(STM32_GPIO_BKP_PIOCFG_SHIFT + bpos);
-	bank->pin_backup[offset] |= bval << (STM32_GPIO_BKP_PIOCFG_SHIFT + bpos);
+	bank->pin_backup[offset] &= ~BIT(STM32_GPIO_BKP_ADVCFG_SHIFT + bpos);
+	bank->pin_backup[offset] |= bval << (STM32_GPIO_BKP_ADVCFG_SHIFT + bpos);
 }
 
 static void stm32_gpio_backup_delay(struct stm32_gpio_bank *bank, u32 offset, u32 delay)
@@ -1213,11 +1213,11 @@ static u32 stm32_pconf_get_bias(struct stm32_gpio_bank *bank,
 	return (val >> (offset * 2));
 }
 
-static int stm32_pconf_set_piocfgr(struct stm32_gpio_bank *bank, int offset, u32 bpos, u32 bval)
+static int stm32_pconf_set_advcfgr(struct stm32_gpio_bank *bank, int offset, u32 bpos, u32 bval)
 {
 	struct stm32_pinctrl *pctl = dev_get_drvdata(bank->gpio_chip.parent);
-	int piocfgr_offset = STM32_GPIO_PIOCFGRL + (offset / 8) * 4;
-	int piocfgr_bit = bpos + (offset % 8) * 4;
+	int advcfgr_offset = STM32_GPIO_ADVCFGRL + (offset / 8) * 4;
+	int advcfgr_bit = bpos + (offset % 8) * 4;
 	unsigned long flags;
 	int err = 0;
 	u32 val;
@@ -1235,15 +1235,15 @@ static int stm32_pconf_set_piocfgr(struct stm32_gpio_bank *bank, int offset, u32
 		}
 	}
 
-	val = readl_relaxed(bank->base + piocfgr_offset);
-	val &= ~BIT(piocfgr_bit);
-	val |= bval << piocfgr_bit;
-	writel_relaxed(val, bank->base + piocfgr_offset);
+	val = readl_relaxed(bank->base + advcfgr_offset);
+	val &= ~BIT(advcfgr_bit);
+	val |= bval << advcfgr_bit;
+	writel_relaxed(val, bank->base + advcfgr_offset);
 
 	if (pctl->hwlock)
 		hwspin_unlock_in_atomic(pctl->hwlock);
 
-	stm32_gpio_backup_piocfg(bank, offset, bpos, bval);
+	stm32_gpio_backup_advcfg(bank, offset, bpos, bval);
 
 unlock:
 	spin_unlock_irqrestore(&bank->lock, flags);
@@ -1251,20 +1251,20 @@ unlock:
 	return err;
 }
 
-static u32 stm32_pconf_get_piocfgr(struct stm32_gpio_bank *bank, int offset, u32 bpos)
+static u32 stm32_pconf_get_advcfgr(struct stm32_gpio_bank *bank, int offset, u32 bpos)
 {
-	int piocfgr_offset = STM32_GPIO_PIOCFGRL + (offset / 8) * 4;
-	int piocfgr_bit = bpos + (offset % 8) * 4;
+	int advcfgr_offset = STM32_GPIO_ADVCFGRL + (offset / 8) * 4;
+	int advcfgr_bit = bpos + (offset % 8) * 4;
 	unsigned long flags;
 	u32 val;
 
 	spin_lock_irqsave(&bank->lock, flags);
 
-	val = readl_relaxed(bank->base + piocfgr_offset);
-	val &= BIT(piocfgr_bit);
+	val = readl_relaxed(bank->base + advcfgr_offset);
+	val &= BIT(advcfgr_bit);
 
 	spin_unlock_irqrestore(&bank->lock, flags);
-	return (val >> piocfgr_bit);
+	return (val >> advcfgr_bit);
 }
 
 static int stm32_pconf_set_delay(struct stm32_gpio_bank *bank, int offset, u32 delay)
@@ -1388,20 +1388,20 @@ static int stm32_pconf_parse_conf(struct pinctrl_dev *pctldev,
 		ret = stm32_pmx_gpio_set_direction(pctldev, range, pin, false);
 		break;
 	case STM32_GPIO_PIN_CONFIG_DELAY_PATH:
-		ret = stm32_pconf_set_piocfgr(bank, offset,
-					      STM32_GPIO_PIOCFGR_DELAY_PATH_POS, arg);
+		ret = stm32_pconf_set_advcfgr(bank, offset,
+					      STM32_GPIO_ADVCFGR_DLYPATH_POS, arg);
 		break;
 	case STM32_GPIO_PIN_CONFIG_CLK_EDGE:
-		ret = stm32_pconf_set_piocfgr(bank, offset,
-					      STM32_GPIO_PIOCFGR_CLK_EDGE_POS, arg);
+		ret = stm32_pconf_set_advcfgr(bank, offset,
+					      STM32_GPIO_ADVCFGR_DE_POS, arg);
 		break;
 	case STM32_GPIO_PIN_CONFIG_CLK_TYPE:
-		ret = stm32_pconf_set_piocfgr(bank, offset,
-					      STM32_GPIO_PIOCFGR_CLK_TYPE_POS, arg);
+		ret = stm32_pconf_set_advcfgr(bank, offset,
+					      STM32_GPIO_ADVCFGR_INVCLK_POS, arg);
 		break;
 	case STM32_GPIO_PIN_CONFIG_RETIME:
-		ret = stm32_pconf_set_piocfgr(bank, offset,
-					      STM32_GPIO_PIOCFGR_RETIME_POS, arg);
+		ret = stm32_pconf_set_advcfgr(bank, offset,
+					      STM32_GPIO_ADVCFGR_RET_POS, arg);
 		break;
 	case STM32_GPIO_PIN_CONFIG_DELAY:
 		ret = stm32_pconf_set_delay(bank, offset, arg);
@@ -1556,14 +1556,14 @@ static void stm32_pconf_dbg_show(struct pinctrl_dev *pctldev,
 	if (bank->io_sync_control) {
 		u32 retime, clk_type, clk_edge, delay_path, delay;
 
-		retime = stm32_pconf_get_piocfgr(bank, offset,
-						 STM32_GPIO_PIOCFGR_RETIME_POS);
-		clk_type = stm32_pconf_get_piocfgr(bank, offset,
-						   STM32_GPIO_PIOCFGR_CLK_TYPE_POS);
-		clk_edge = stm32_pconf_get_piocfgr(bank, offset,
-						   STM32_GPIO_PIOCFGR_CLK_EDGE_POS);
-		delay_path = stm32_pconf_get_piocfgr(bank, offset,
-						     STM32_GPIO_PIOCFGR_DELAY_PATH_POS);
+		retime = stm32_pconf_get_advcfgr(bank, offset,
+						 STM32_GPIO_ADVCFGR_RET_POS);
+		clk_type = stm32_pconf_get_advcfgr(bank, offset,
+						   STM32_GPIO_ADVCFGR_INVCLK_POS);
+		clk_edge = stm32_pconf_get_advcfgr(bank, offset,
+						   STM32_GPIO_ADVCFGR_DE_POS);
+		delay_path = stm32_pconf_get_advcfgr(bank, offset,
+						     STM32_GPIO_ADVCFGR_DLYPATH_POS);
 		delay = stm32_pconf_get_delay(bank, offset);
 
 		if (retime || clk_type || clk_edge || delay_path || delay)
@@ -1977,14 +1977,14 @@ int stm32_pctl_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static int __maybe_unused stm32_pinctrl_restore_piocfgr(struct stm32_gpio_bank *bank,
+static int __maybe_unused stm32_pinctrl_restore_advcfgr(struct stm32_gpio_bank *bank,
 							int offset, u32 bpos)
 {
 	u32 val;
 
-	val = bank->pin_backup[offset] & BIT(STM32_GPIO_BKP_PIOCFG_SHIFT + bpos);
-	val >>= (STM32_GPIO_BKP_PIOCFG_SHIFT + bpos);
-	return stm32_pconf_set_piocfgr(bank, offset, bpos, val);
+	val = bank->pin_backup[offset] & BIT(STM32_GPIO_BKP_ADVCFG_SHIFT + bpos);
+	val >>= (STM32_GPIO_BKP_ADVCFG_SHIFT + bpos);
+	return stm32_pconf_set_advcfgr(bank, offset, bpos, val);
 }
 
 static int __maybe_unused stm32_pinctrl_restore_gpio_regs(
@@ -2045,23 +2045,23 @@ static int __maybe_unused stm32_pinctrl_restore_gpio_regs(
 		return ret;
 
 	if (bank->io_sync_control) {
-		ret = stm32_pinctrl_restore_piocfgr(bank, offset,
-						    STM32_GPIO_PIOCFGR_DELAY_PATH_POS);
+		ret = stm32_pinctrl_restore_advcfgr(bank, offset,
+						    STM32_GPIO_ADVCFGR_DLYPATH_POS);
 		if (ret)
 			return ret;
 
-		ret = stm32_pinctrl_restore_piocfgr(bank, offset,
-						    STM32_GPIO_PIOCFGR_CLK_EDGE_POS);
+		ret = stm32_pinctrl_restore_advcfgr(bank, offset,
+						    STM32_GPIO_ADVCFGR_DE_POS);
 		if (ret)
 			return ret;
 
-		ret = stm32_pinctrl_restore_piocfgr(bank, offset,
-						    STM32_GPIO_PIOCFGR_CLK_TYPE_POS);
+		ret = stm32_pinctrl_restore_advcfgr(bank, offset,
+						    STM32_GPIO_ADVCFGR_INVCLK_POS);
 		if (ret)
 			return ret;
 
-		ret = stm32_pinctrl_restore_piocfgr(bank, offset,
-						    STM32_GPIO_PIOCFGR_RETIME_POS);
+		ret = stm32_pinctrl_restore_advcfgr(bank, offset,
+						    STM32_GPIO_ADVCFGR_RET_POS);
 		if (ret)
 			return ret;
 
