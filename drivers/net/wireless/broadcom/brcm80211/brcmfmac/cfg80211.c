@@ -7575,7 +7575,6 @@ brcmf_bss_roaming_done(struct brcmf_cfg80211_info *cfg,
 	struct cfg80211_roam_info roam_info = {};
 	u32 freq;
 	s32 err = 0;
-	u8 *buf;
 
 	brcmf_dbg(TRACE, "Enter\n");
 
@@ -7597,7 +7596,6 @@ brcmf_bss_roaming_done(struct brcmf_cfg80211_info *cfg,
 		err = -EINVAL;
 
 done:
-	kfree(buf);
 
 	roam_info.links[0].channel = notify_channel;
 	roam_info.links[0].bssid = profile->bssid;
@@ -8180,7 +8178,7 @@ brcmf_notify_ext_assoc_frame_rx(struct brcmf_if *ifp,
 		return -EINVAL;
 	}
 
-	memcpy(owe_info.ie, frame, owe_info.ie_len);
+	memcpy((u8 *)owe_info.ie, frame, owe_info.ie_len);
 	cfg80211_update_owe_info_event(ndev, &owe_info, GFP_KERNEL);
 
 	kfree(owe_info.ie);
