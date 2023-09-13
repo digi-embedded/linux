@@ -5,6 +5,7 @@
 
 #include <linux/bitfield.h>
 #include <linux/bits.h>
+#include <linux/debugfs.h>
 #include <linux/device.h>
 #include <linux/err.h>
 #include <linux/io.h>
@@ -76,15 +77,321 @@ struct stm32_sys_bus_match_data {
 	const u32 *map_table;
 	unsigned int max_entries;
 	int (*sys_bus_get_access)(struct sys_bus_data *pdata, struct device_node *np);
+#ifdef CONFIG_DEBUG_FS
+	const char *bus_name;
+#endif
 };
 
 struct sys_bus_data {
 	struct stm32_sys_bus_match_data *pconf;
 	void __iomem *sys_bus_base;
 	struct device *dev;
+#ifdef CONFIG_DEBUG_FS
+	struct rifsc_master_debug_data *m_dbg_data;
+	struct rifsc_dev_debug_data *d_dbg_data;
+#endif
 };
 
 static struct sys_bus_data *bus_data;
+
+#ifdef CONFIG_DEBUG_FS
+#define STM32MP25_RIFSC_NAWARE_ENTRIES	128
+#define STM32MP25_RIFSC_MASTER_ENTRIES	16
+
+#define RIFSC_RIMC_ATTR0	0xC10
+
+#define RIFSC_RIMC_CIDSEL	BIT(2)
+#define RIFSC_RIMC_MCID_MASK	GENMASK(6, 4)
+#define RIFSC_RIMC_MSEC		BIT(8)
+#define RIFSC_RIMC_MPRIV	BIT(9)
+
+static const char *stm32mp25_rif_master_names[STM32MP25_RIFSC_MASTER_ENTRIES] = {
+	"ETR",
+	"SDMMC1",
+	"SDMMC2",
+	"SDMMC3",
+	"USB3DR",
+	"USBH",
+	"ETH1",
+	"ETH2",
+	"PCIE",
+	"GPU",
+	"DMCIPP",
+	"LTDC_L1/L2",
+	"LTDC_L3",
+	"LTDC_ROT",
+	"VDEC",
+	"VENC"
+};
+
+static const char *stm32mp25_rif_dev_names[STM32MP25_RIFSC_NAWARE_ENTRIES] = {
+	"TIM1",
+	"TIM2",
+	"TIM3",
+	"TIM4",
+	"TIM5",
+	"TIM6",
+	"TIM7",
+	"TIM8",
+	"TIM10",
+	"TIM11",
+	"TIM12",
+	"TIM13",
+	"TIM14",
+	"TIM15",
+	"TIM16",
+	"TIM17",
+	"TIM20",
+	"LPTIM1",
+	"LPTIM2",
+	"LPTIM3",
+	"LPTIM4",
+	"LPTIM5",
+	"SPI1",
+	"SPI2",
+	"SPI3",
+	"SPI4",
+	"SPI5",
+	"SPI6",
+	"SPI7",
+	"SPI8",
+	"SPDIFRX",
+	"USART1",
+	"USART2",
+	"USART3",
+	"UART4",
+	"UART5",
+	"USART6",
+	"UART7",
+	"UART8",
+	"UART9",
+	"LPUART1",
+	"I2C1",
+	"I2C2",
+	"I2C3",
+	"I2C4",
+	"I2C5",
+	"I2C6",
+	"I2C7",
+	"I2C8",
+	"SAI1",
+	"SAI2",
+	"SAI3",
+	"SAI4",
+	"RESERVED",
+	"MDF1",
+	"ADF1",
+	"FDCAN",
+	"HDP",
+	"ADC12",
+	"ADC3",
+	"ETH1",
+	"ETH2",
+	"RESERVED",
+	"USBH",
+	"RESERVED",
+	"RESERVED",
+	"USB3DR",
+	"COMBOPHY",
+	"PCIE",
+	"UCPD1",
+	"ETHSW_DEIP",
+	"ETHSW_ACM_CF",
+	"ETHSW_ACM_MSGBU",
+	"STGEN",
+	"OCTOSPI1",
+	"OCTOSPI2",
+	"SDMMC1",
+	"SDMMC2",
+	"SDMMC3",
+	"GPU",
+	"LTDC_CMN",
+	"DSI_CMN",
+	"RESERVED",
+	"RESERVED",
+	"LVDS",
+	"RESERVED",
+	"CSI",
+	"DCMIPP",
+	"DCMI_PSSI",
+	"VDEC",
+	"VENC",
+	"RESERVED",
+	"RNG",
+	"PKA",
+	"SAES",
+	"HASH",
+	"CRYP1",
+	"CRYP2",
+	"IWDG1",
+	"IWDG2",
+	"IWDG3",
+	"IWDG4",
+	"IWDG5",
+	"WWDG1",
+	"WWDG2",
+	"RESERVED",
+	"VREFBUF",
+	"DTS",
+	"RAMCFG",
+	"CRC",
+	"SERC",
+	"OCTOSPIM",
+	"GICV2M",
+	"RESERVED",
+	"I3C1",
+	"I3C2",
+	"I3C3",
+	"I3C4",
+	"ICACHE_DCACHE",
+	"LTDC_L0L1",
+	"LTDC_L2",
+	"LTDC_ROT",
+	"DSI_TRIG",
+	"DSI_RDFIFO",
+	"RESERVED",
+	"OTFDEC1",
+	"OTFDEC2",
+	"IAC",
+};
+
+struct rifsc_dev_debug_data {
+	char dev_name[15];
+	u8 dev_cid;
+	u8 dev_sem_cids;
+	u8 dev_id;
+	bool dev_cid_filt_en;
+	bool dev_sem_en;
+	bool dev_priv;
+	bool dev_sec;
+};
+
+struct rifsc_master_debug_data {
+	char m_name[11];
+	u8 m_cid;
+	bool cidsel;
+	bool m_sec;
+	bool m_priv;
+};
+
+static void stm32_rifsc_fill_master_dbg_entry(struct sys_bus_data *pdata,
+					      struct rifsc_master_debug_data *dbg_entry,
+					      int i)
+{
+	u32 rimc_attr = readl_relaxed(pdata->sys_bus_base + RIFSC_RIMC_ATTR0 + 0x4 * i);
+
+	snprintf(dbg_entry->m_name, sizeof(dbg_entry->m_name), "%s", stm32mp25_rif_master_names[i]);
+	dbg_entry->m_cid = FIELD_GET(RIFSC_RIMC_MCID_MASK, rimc_attr);
+	dbg_entry->cidsel = rimc_attr & RIFSC_RIMC_CIDSEL;
+	dbg_entry->m_sec = rimc_attr & RIFSC_RIMC_MSEC;
+	dbg_entry->m_priv = rimc_attr & RIFSC_RIMC_MPRIV;
+}
+
+static void stm32_rifsc_fill_dev_dbg_entry(struct sys_bus_data *pdata,
+					   struct rifsc_dev_debug_data *dbg_entry,
+					   int i)
+{
+	u32 cid_cfgr, sec_cfgr, priv_cfgr;
+	u8 reg_id = i / IDS_PER_RISC_SEC_PRIV_REGS;
+	u8 reg_offset = i % IDS_PER_RISC_SEC_PRIV_REGS;
+
+	cid_cfgr = readl_relaxed(pdata->sys_bus_base + RIFSC_RISC_PER0_CIDCFGR + 0x8 * i);
+	sec_cfgr = readl_relaxed(pdata->sys_bus_base + RIFSC_RISC_SECCFGR0 + 0x4 * reg_id);
+	priv_cfgr = readl_relaxed(pdata->sys_bus_base + RIFSC_RISC_PRIVCFGR0 + 0x4 * reg_id);
+
+	snprintf(dbg_entry->dev_name, sizeof(dbg_entry->dev_name), "%s",
+		 stm32mp25_rif_dev_names[i]);
+	dbg_entry->dev_id = i;
+	dbg_entry->dev_cid_filt_en = cid_cfgr & CIDCFGR_CFEN;
+	dbg_entry->dev_sem_en = cid_cfgr & CIDCFGR_SEMEN;
+	dbg_entry->dev_cid = FIELD_GET(RIFSC_RISC_SCID_MASK, cid_cfgr);
+	dbg_entry->dev_sem_cids = FIELD_GET(RIFSC_RISC_SEMWL_MASK, cid_cfgr);
+	dbg_entry->dev_sec = sec_cfgr & BIT(reg_offset) ?  true : false;
+	dbg_entry->dev_priv = priv_cfgr & BIT(reg_offset) ?  true : false;
+}
+
+static int stm32_rifsc_conf_dump_show(struct seq_file *s, void *data)
+{
+	struct sys_bus_data *debug_data = (struct sys_bus_data *)s->private;
+	int i;
+
+	seq_puts(s, "\n=============================================\n");
+	seq_puts(s, "                 RIFSC dump\n");
+	seq_puts(s, "=============================================\n\n");
+
+	seq_puts(s, "\n=============================================\n");
+	seq_puts(s, "                 RISUP dump\n");
+	seq_puts(s, "=============================================\n");
+
+	seq_printf(s, "\n| %-15s |", "Peripheral name");
+	seq_puts(s, "| Firewall ID |");
+	seq_puts(s, "| N/SECURE |");
+	seq_puts(s, "| N/PRIVILEGED |");
+	seq_puts(s, "| CID filtering |");
+	seq_puts(s, "| Semaphore mode |");
+	seq_puts(s, "| SCID |");
+	seq_printf(s, "| %7s |\n", "SEMWL");
+
+	for (i = 0; i < STM32MP25_RIFSC_NAWARE_ENTRIES; i++) {
+		struct rifsc_dev_debug_data d_dbg_entry;
+
+		stm32_rifsc_fill_dev_dbg_entry(debug_data, &d_dbg_entry, i);
+
+		seq_printf(s, "| %-15s |", d_dbg_entry.dev_name);
+		seq_printf(s, "| %-11d |", d_dbg_entry.dev_id);
+		seq_printf(s, "| %-8s |", d_dbg_entry.dev_sec ? "SEC" : "NSEC");
+		seq_printf(s, "| %-12s |", d_dbg_entry.dev_priv ? "PRIV" : "NPRIV");
+		seq_printf(s, "| %-13s |",
+			   d_dbg_entry.dev_cid_filt_en ? "enabled" : "disabled");
+		seq_printf(s, "| %-14s |",
+			   d_dbg_entry.dev_sem_en ? "enabled" : "disabled");
+		seq_printf(s, "| %-4d |", d_dbg_entry.dev_cid);
+		seq_printf(s, "| %#-7x |\n", d_dbg_entry.dev_sem_cids);
+	}
+
+	seq_puts(s, "\n=============================================\n");
+	seq_puts(s, "                  RIMU dump\n");
+	seq_puts(s, "=============================================\n");
+
+	seq_puts(s, "| Master name |");
+	seq_puts(s, "| CIDSEL |");
+	seq_puts(s, "| MCID |");
+	seq_puts(s, "| N/SECURE |");
+	seq_puts(s, "| N/PRIVILEGED |\n");
+
+	for (i = 0; i < STM32MP25_RIFSC_MASTER_ENTRIES; i++) {
+		struct rifsc_master_debug_data m_dbg_entry;
+
+		stm32_rifsc_fill_master_dbg_entry(debug_data, &m_dbg_entry, i);
+
+		seq_printf(s, "| %-11s |", m_dbg_entry.m_name);
+		seq_printf(s, "| %-6s |", m_dbg_entry.cidsel ? "CIDSEL" : "");
+		seq_printf(s, "| %-4d |", m_dbg_entry.m_cid);
+		seq_printf(s, "| %-8s |", m_dbg_entry.m_sec ? "SEC" : "NSEC");
+		seq_printf(s, "| %-12s |\n", m_dbg_entry.m_priv ? "PRIV" : "NPRIV");
+	}
+
+	return 0;
+}
+DEFINE_SHOW_ATTRIBUTE(stm32_rifsc_conf_dump);
+
+static int stm32_sys_bus_register_debugfs(struct sys_bus_data *pdata)
+{
+	struct dentry *root = NULL;
+
+	/* Only supported for RIFSC at the moment */
+	if (strcmp(pdata->pconf->bus_name, "rifsc"))
+		return 0;
+
+	root = debugfs_create_dir("stm32_firewall", NULL);
+	if (IS_ERR(root))
+		return PTR_ERR(root);
+
+	debugfs_create_file("rifsc", 0444, root, pdata, &stm32_rifsc_conf_dump_fops);
+
+	return 0;
+}
+#endif /* CONFIG_DEBUG_FS */
 
 static int stm32_sys_bus_get_periph_id(struct sys_bus_data *pdata, struct device_node *np, u32 *id)
 {
@@ -342,6 +649,10 @@ static int stm32_sys_bus_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, pdata);
 
+#ifdef CONFIG_DEBUG_FS
+	stm32_sys_bus_register_debugfs(pdata);
+#endif
+
 	stm32_sys_bus_populate(pdata);
 
 	/* Populate all available nodes */
@@ -351,16 +662,25 @@ static int stm32_sys_bus_probe(struct platform_device *pdev)
 static const struct stm32_sys_bus_match_data stm32mp15_sys_bus_data = {
 	.max_entries = STM32MP15_ETZPC_ENTRIES,
 	.sys_bus_get_access = stm32_etzpc_get_access,
+#ifdef CONFIG_DEBUG_FS
+	.bus_name = "etzpc"
+#endif
 };
 
 static const struct stm32_sys_bus_match_data stm32mp13_sys_bus_data = {
 	.max_entries = STM32MP13_ETZPC_ENTRIES,
 	.sys_bus_get_access = stm32_etzpc_get_access,
+#ifdef CONFIG_DEBUG_FS
+	.bus_name = "etzpc"
+#endif
 };
 
 static const struct stm32_sys_bus_match_data stm32mp25_sys_bus_data = {
 	.max_entries = STM32MP25_RIFSC_ENTRIES,
 	.sys_bus_get_access = stm32_rifsc_get_access_by_node,
+#ifdef CONFIG_DEBUG_FS
+	.bus_name = "rifsc"
+#endif
 };
 
 static const struct of_device_id stm32_sys_bus_of_match[] = {
