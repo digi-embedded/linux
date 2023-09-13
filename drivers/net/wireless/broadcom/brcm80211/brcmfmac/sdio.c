@@ -779,15 +779,12 @@ brcmf_sdio_kso_control(struct brcmf_sdio *bus, bool on)
 	/* 1st KSO write goes to AOS wake up core if device is asleep  */
 	brcmf_sdiod_writeb(bus->sdiodev, SBSDIO_FUNC1_SLEEPCSR, wr_val, &err);
 
-	/* In case of 43012 chip, the chip could go down immediately after
+	/* The chip could go down immediately after
 	 * KSO bit is cleared. So the further reads of KSO register could
 	 * fail. Thereby just bailing out immediately after clearing KSO
 	 * bit, to avoid polling of KSO bit.
 	 */
-	if (!on && ((bus->ci->chip == CY_CC_43012_CHIP_ID) ||
-		    (bus->ci->chip == CY_CC_55500_CHIP_ID) ||
-		    (bus->ci->chip == CY_CC_43022_CHIP_ID) ||
-		    (bus->ci->chip == CY_CC_55572_CHIP_ID)))
+	if (!on)
 		return err;
 
 	if (on) {
