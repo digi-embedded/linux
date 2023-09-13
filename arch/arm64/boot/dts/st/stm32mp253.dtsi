@@ -137,6 +137,6 @@
 };
 
 &ltdc {
-	clocks = <&rcc CK_BUS_LTDC>, <&syscfg 0>;
-	clock-names = "bus", "lcd";
+	clocks = <&rcc CK_BUS_LTDC>, <&rcc CK_KER_LTDC>, <&syscfg 0>;
+	clock-names = "bus", "ref", "lcd";
 };
