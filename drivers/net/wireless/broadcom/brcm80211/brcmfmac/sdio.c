@@ -772,6 +772,10 @@ brcmf_sdio_kso_control(struct brcmf_sdio *bus, bool on)
 	/* Start time of kso_sequence */
 	start_jiffy = jiffies;
 
+	/* Change bus width to 1-bit mode before kso 0 */
+	if (!on)
+		brcmf_sdio_set_sdbus_clk_width(bus, SDIO_SDMODE_1BIT);
+
 	/* 1st KSO write goes to AOS wake up core if device is asleep  */
 	brcmf_sdiod_writeb(bus->sdiodev, SBSDIO_FUNC1_SLEEPCSR, wr_val, &err);
 
@@ -859,9 +863,11 @@ brcmf_sdio_kso_control(struct brcmf_sdio *bus, bool on)
 		brcmf_dbg(SDIO, "INFO: KSO=%d try_cnt=%d err_cnt=%d kso_seq_time=%uus rd_val=0x%x err=%d\n",
 			  on, try_cnt, err_cnt, kso_loop_time, rd_val, err);
 
-	if (on)
+	if (on) {
+		/* Change the bus width to 4-bit mode on kso 1 */
+		brcmf_sdio_set_sdbus_clk_width(bus, SDIO_SDMODE_4BIT);
 		sdio_retune_release(bus->sdiodev->func1);
-
+	}
 	sdio_retune_crc_enable(bus->sdiodev->func1);
 
 	return err;
@@ -1056,7 +1062,7 @@ static int brcmf_sdio_sdclk(struct brcmf_sdio *bus, bool on)
 }
 
 /* Transition SD and backplane clock readiness */
-static int brcmf_sdio_clkctl(struct brcmf_sdio *bus, uint target, bool pendok)
+int brcmf_sdio_clkctl(struct brcmf_sdio *bus, uint target, bool pendok)
 {
 #ifdef DEBUG
 	uint oldstate = bus->clkstate;
@@ -1198,10 +1204,6 @@ brcmf_sdio_bus_sleep(struct brcmf_sdio *bus, bool sleep, bool pendok)
 						   SBSDIO_ALP_AVAIL_REQ, &err);
 			}
 
-			if (bus->idleclock == BRCMF_IDLE_STOP)
-				brcmf_sdio_set_sdbus_clk_width(bus,
-							       SDIO_SDMODE_1BIT);
-
 			err = brcmf_sdio_kso_control(bus, false);
 
 			if (bus->idleclock == BRCMF_IDLE_STOP)
@@ -1211,10 +1213,6 @@ brcmf_sdio_bus_sleep(struct brcmf_sdio *bus, bool sleep, bool pendok)
 				brcmf_sdio_clkctl(bus, CLK_SDONLY, false);
 
 			err = brcmf_sdio_kso_control(bus, true);
-
-			if (bus->idleclock == BRCMF_IDLE_STOP)
-				brcmf_sdio_set_sdbus_clk_width(bus,
-							       SDIO_SDMODE_4BIT);
 		}
 		if (err) {
 			brcmf_err("error while changing bus sleep state %d\n",
