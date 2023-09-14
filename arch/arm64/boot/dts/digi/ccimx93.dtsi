@@ -119,6 +119,7 @@
 	pmic_cc93: pmic@25 {
 		compatible = "nxp,pca9451a";
 		reg = <0x25>;
+		digi,wdog_b-disabled;
 
 		interrupt-parent = <&gpio2>;
 		interrupts = <29 IRQ_TYPE_LEVEL_LOW>;
@@ -149,6 +150,9 @@
 				regulator-max-microvolt = <3400000>;
 				regulator-boot-on;
 				regulator-always-on;
+				regulator-state-mem {
+					regulator-off-in-suspend;
+				};
 			};
 
 			/* VDD_1V8 */
