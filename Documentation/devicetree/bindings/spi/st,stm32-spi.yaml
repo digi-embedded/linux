@@ -26,7 +26,6 @@ allOf:
 
     then:
       properties:
-        st,spi-midi-ns: false
         sram: false
         dmas:
           maxItems: 2
@@ -98,17 +97,6 @@ properties:
   access-controllers:
     minItems: 1
     maxItems: 2
-
-patternProperties:
-  "^[a-zA-Z][a-zA-Z0-9,+\\-._]{0,63}@[0-9a-f]+$":
-    type: object
-    # SPI slave nodes must be children of the SPI master node and can
-    # contain the following properties.
-    properties:
-      st,spi-midi-ns:
-        description: |
-          Only for STM32H7, (Master Inter-Data Idleness) minimum time
-          delay in nanoseconds inserted between two consecutive data frames.
 
 required:
   - compatible
