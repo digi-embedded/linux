@@ -1138,7 +1138,9 @@ static int pca9450_i2c_probe(struct i2c_client *i2c,
 		return ret;
 	}
 
-	if (of_property_read_bool(i2c->dev.of_node, "nxp,wdog_b-warm-reset"))
+	if (of_property_read_bool(i2c->dev.of_node, "digi,wdog_b-disabled"))
+		reset_ctrl = WDOG_B_CFG_NONE;
+	else if (of_property_read_bool(i2c->dev.of_node, "nxp,wdog_b-warm-reset"))
 		reset_ctrl = WDOG_B_CFG_WARM;
 	else
 		reset_ctrl = WDOG_B_CFG_COLD_LDO12;

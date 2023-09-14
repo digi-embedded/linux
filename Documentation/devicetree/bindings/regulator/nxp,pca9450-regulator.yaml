@@ -94,6 +94,11 @@ properties:
       When WDOG_B signal is asserted a warm reset will be done instead of cold
       reset.
 
+  digi,wdog_b-disabled:
+    type: boolean
+    description:
+      PMIC's reset using WDOG_B pin is disabled (WDOG_B signal is ignored)
+
 required:
   - compatible
   - reg
