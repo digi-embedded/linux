@@ -112,10 +112,16 @@
 #define LTDC_L1AFBLR	(ldev->caps.layer_regs[18])	/* L1 auxiliary frame buffer length */
 #define LTDC_L1AFBLNR	(ldev->caps.layer_regs[19])	/* L1 auxiliary frame buffer line number */
 #define LTDC_L1CLUTWR	(ldev->caps.layer_regs[20])	/* L1 CLUT write */
-#define LTDC_L1CYR0R	(ldev->caps.layer_regs[21])	/* L1 Conversion YCbCr RGB 0 */
-#define LTDC_L1CYR1R	(ldev->caps.layer_regs[22])	/* L1 Conversion YCbCr RGB 1 */
-#define LTDC_L1FPF0R	(ldev->caps.layer_regs[23])	/* L1 Flexible Pixel Format 0 */
-#define LTDC_L1FPF1R	(ldev->caps.layer_regs[24])	/* L1 Flexible Pixel Format 1 */
+#define LTDC_L1SISR	(ldev->caps.layer_regs[21])	/* L1 scaler input size */
+#define LTDC_L1SOSR	(ldev->caps.layer_regs[22])	/* L1 scaler output size */
+#define LTDC_L1SVSFR	(ldev->caps.layer_regs[23])	/* L1 scaler vertical scaling factor */
+#define LTDC_L1SVSPR	(ldev->caps.layer_regs[24])	/* L1 scaler vertical scaling phase */
+#define LTDC_L1SHSFR	(ldev->caps.layer_regs[25])	/* L1 scaler horizontal scaling factor */
+#define LTDC_L1SHSPR	(ldev->caps.layer_regs[26])	/* L1 scaler horizontal scaling phase */
+#define LTDC_L1CYR0R	(ldev->caps.layer_regs[27])	/* L1 Conversion YCbCr RGB 0 */
+#define LTDC_L1CYR1R	(ldev->caps.layer_regs[28])	/* L1 Conversion YCbCr RGB 1 */
+#define LTDC_L1FPF0R	(ldev->caps.layer_regs[29])	/* L1 Flexible Pixel Format 0 */
+#define LTDC_L1FPF1R	(ldev->caps.layer_regs[30])	/* L1 Flexible Pixel Format 1 */
 
 /* Bit definitions */
 #define SSCR_VSH	GENMASK(10, 0)	/* Vertical Synchronization Height */
@@ -199,7 +205,8 @@
 #define LXCR_COLKEN	BIT(1)		/* Color Keying Enable */
 #define LXCR_CLUTEN	BIT(4)		/* Color Look-Up Table ENable */
 #define LXCR_HMEN	BIT(8)		/* Horizontal Mirroring ENable */
-#define LXCR_MASK (LXCR_LEN | LXCR_COLKEN | LXCR_CLUTEN | LXCR_HMEN)
+#define LXCR_SCEN	BIT(10)		/* SCaler ENable */
+#define LXCR_MASK (LXCR_LEN | LXCR_COLKEN | LXCR_CLUTEN | LXCR_HMEN | LXCR_SCEN)
 
 #define LXWHPCR_WHSTPOS	GENMASK(11, 0)	/* Window Horizontal StarT POSition */
 #define LXWHPCR_WHSPPOS	GENMASK(27, 16)	/* Window Horizontal StoP POSition */
@@ -401,6 +408,12 @@ static const u32 ltdc_layer_regs_a0[] = {
 	0x00,	/* not available */
 	0x00,	/* not available */
 	0x00,	/* not available */
+	0x00,	/* not available */
+	0x00,	/* not available */
+	0x00,	/* not available */
+	0x00,	/* not available */
+	0x00,	/* not available */
+	0x00,	/* not available */
 	0x00	/* not available */
 };
 
@@ -429,6 +442,12 @@ static const u32 ltdc_layer_regs_a1[] = {
 	0x00,	/* not available */
 	0x00,	/* not available */
 	0x00,	/* not available */
+	0x00,	/* not available */
+	0x00,	/* not available */
+	0x00,	/* not available */
+	0x00,	/* not available */
+	0x00,	/* not available */
+	0x00,	/* not available */
 	0x00	/* not available */
 };
 
@@ -454,6 +473,12 @@ static const u32 ltdc_layer_regs_a2[] = {
 	0x148,	/* L1 auxiliary frame buffer length */
 	0x14c,	/* L1 auxiliary frame buffer line number */
 	0x150,	/* L1 CLUT write */
+	0x154,	/* L1 scaler input size */
+	0x158,	/* L1 scaler output size */
+	0x15c,	/* L1 scaler vertical scaling factor */
+	0x160,	/* L1 scaler vertical scaling phase */
+	0x164,	/* L1 scaler horizontal scaling factor */
+	0x168,	/* L1 scaler horizontal scaling phase */
 	0x16c,	/* L1 Conversion YCbCr RGB 0 */
 	0x170,	/* L1 Conversion YCbCr RGB 1 */
 	0x174,	/* L1 Flexible Pixel Format 0 */
@@ -1328,10 +1353,10 @@ static const struct drm_crtc_funcs ltdc_crtc_with_crc_support_funcs = {
 static int ltdc_plane_atomic_check(struct drm_plane *plane,
 				   struct drm_atomic_state *state)
 {
-	struct drm_plane_state *new_plane_state = drm_atomic_get_new_plane_state(state,
-										 plane);
+	struct drm_plane_state *new_plane_state = drm_atomic_get_new_plane_state(state, plane);
 	struct drm_framebuffer *fb = new_plane_state->fb;
-	u32 src_w, src_h;
+	struct ltdc_device *ldev = plane_to_ltdc(plane);
+	u32 src_w, src_h, crtc_w, crtc_h;
 
 	DRM_DEBUG_DRIVER("\n");
 
@@ -1341,15 +1366,41 @@ static int ltdc_plane_atomic_check(struct drm_plane *plane,
 	/* convert src_ from 16:16 format */
 	src_w = new_plane_state->src_w >> 16;
 	src_h = new_plane_state->src_h >> 16;
+	crtc_w = new_plane_state->crtc_w;
+	crtc_h = new_plane_state->crtc_h;
 
-	/* Reject scaling */
-	if (src_w != new_plane_state->crtc_w || src_h != new_plane_state->crtc_h) {
-		DRM_DEBUG_DRIVER("Scaling is not supported");
+	if (ldev->caps.plane_scaling[plane->index]) {
+		if (fb->format->is_yuv) {
+			if (src_w != crtc_w || src_h != crtc_h) {
+				DRM_DEBUG_DRIVER("Scaling is not supported with yuv pixel format");
+				return -EINVAL;
+			}
+		}
 
-		return -EINVAL;
+		if (src_w > crtc_w || src_h > crtc_h) {
+			DRM_DEBUG_DRIVER("Downscaling is not supported");
+			return -EINVAL;
+		}
+	} else {
+		if (src_w != crtc_w || src_h != crtc_h) {
+			DRM_DEBUG_DRIVER("Scaling is not supported on layer %d", plane->index);
+			return -EINVAL;
+		}
 	}
 
 	return 0;
+}
+
+#define SCALER_FRACTION 12
+
+static u32 calculateScalingFactor(u32 in, u32 out)
+{
+	u32 factor = 0x1000;
+
+	if (out != 1)
+		factor = ((in - 1) << SCALER_FRACTION) / (out - 1);
+
+	return factor & 0xFFFF;
 }
 
 static void ltdc_plane_atomic_update(struct drm_plane *plane,
@@ -1362,7 +1413,7 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 	struct drm_framebuffer *fb = newstate->fb;
 	u32 lofs = plane->index * LAY_OFS;
 	u32 val, pitch_in_bytes, line_length, line_number, ahbp, avbp, bpcr;
-	u32 paddr, paddr1, paddr2;
+	u32 paddr, paddr1, paddr2, lxcr;
 	enum ltdc_pix_fmt pf;
 	unsigned int plane_rotation = newstate->rotation;
 	struct drm_rect dst, src;
@@ -1608,14 +1659,42 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 	regmap_write(ldev->regmap, LTDC_L1BLCR + lofs, ldev->max_burst_length);
 
 	/* Enable layer and CLUT if needed */
-	val = fb->format->format == DRM_FORMAT_C8 ? LXCR_CLUTEN : 0;
-	val |= LXCR_LEN;
+	lxcr = fb->format->format == DRM_FORMAT_C8 ? LXCR_CLUTEN : 0;
+	lxcr |= LXCR_LEN;
 
 	/* Enable horizontal mirroring if requested */
 	if (plane_rotation & DRM_MODE_REFLECT_X)
-		val |= LXCR_HMEN;
+		lxcr |= LXCR_HMEN;
 
-	regmap_write_bits(ldev->regmap, LTDC_L1CR + lofs, LXCR_MASK, val);
+	if (ldev->caps.plane_scaling[plane->index] &&
+	    (drm_rect_width(&src) != drm_rect_width(&dst) ||
+	     drm_rect_height(&src) != drm_rect_height(&dst))) {
+		lxcr |= LXCR_SCEN;
+
+		/* Configure the scaler input size */
+		val = (drm_rect_height(&src) << 16U) | drm_rect_width(&src);
+		regmap_write(ldev->regmap, LTDC_L1SISR + lofs, val);
+
+		/* Configure the scaler output size */
+		val = (drm_rect_height(&dst) << 16U) | drm_rect_width(&dst);
+		regmap_write(ldev->regmap, LTDC_L1SOSR + lofs, val);
+
+		/* Configure the vertical scaling factor */
+		val = calculateScalingFactor(drm_rect_height(&src), drm_rect_height(&dst));
+		regmap_write(ldev->regmap, LTDC_L1SVSFR + lofs, val);
+
+		/* Configure the vertical scaling phase */
+		regmap_write(ldev->regmap, LTDC_L1SHSPR + lofs, val);
+
+		/* Configure the horizontal scaling factor */
+		val = calculateScalingFactor(drm_rect_width(&src), drm_rect_width(&dst));
+		regmap_write(ldev->regmap, LTDC_L1SHSFR + lofs, val);
+
+		/* Configure the vertical scaling phase */
+		regmap_write(ldev->regmap, LTDC_L1SVSPR + lofs, val + (1 << SCALER_FRACTION));
+	}
+
+	regmap_write_bits(ldev->regmap, LTDC_L1CR + lofs, LXCR_MASK, lxcr);
 
 	/* Commit shadow registers = update plane at next vblank */
 	if (ldev->caps.plane_reg_shadow)
@@ -1962,7 +2041,7 @@ static int ltdc_encoder_init(struct drm_device *ddev, struct drm_bridge *bridge)
 static int ltdc_get_caps(struct drm_device *ddev)
 {
 	struct ltdc_device *ldev = ddev->dev_private;
-	u32 bus_width_log2, lcr, gc2r;
+	u32 bus_width_log2, lcr, gc2r, lxc1r;
 
 	/*
 	 * at least 1 layer must be managed & the number of layers
@@ -2053,6 +2132,16 @@ static int ltdc_get_caps(struct drm_device *ddev)
 		else
 			ldev->caps.crtc_rotation = false;
 		ldev->caps.fifo_threshold = true;
+
+		for (int i = 0; i < lcr; i++) {
+			/* read 1st register of layer's configuration */
+			regmap_read(ldev->regmap, LTDC_L1C1R + i * LAY_OFS, &lxc1r);
+
+			if (lxc1r & LXCR_C1R_SCA)
+				ldev->caps.plane_scaling[i] = true;
+			else
+				ldev->caps.plane_scaling[i] = false;
+		}
 		break;
 	default:
 		return -ENODEV;
