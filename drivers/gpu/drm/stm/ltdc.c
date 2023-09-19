@@ -1361,15 +1361,11 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 									  plane);
 	struct drm_framebuffer *fb = newstate->fb;
 	u32 lofs = plane->index * LAY_OFS;
-	u32 x0 = newstate->crtc_x;
-	u32 x1 = newstate->crtc_x + newstate->crtc_w - 1;
-	u32 y0 = newstate->crtc_y;
-	u32 y1 = newstate->crtc_y + newstate->crtc_h - 1;
-	u32 src_x, src_y, src_w, src_h;
 	u32 val, pitch_in_bytes, line_length, line_number, ahbp, avbp, bpcr;
 	u32 paddr, paddr1, paddr2;
 	enum ltdc_pix_fmt pf;
 	unsigned int plane_rotation = newstate->rotation;
+	struct drm_rect dst, src;
 
 	if (!newstate->crtc || !fb) {
 		DRM_DEBUG_DRIVER("fb or crtc NULL");
@@ -1377,16 +1373,14 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 	}
 
 	/* convert src_ from 16:16 format */
-	src_x = newstate->src_x >> 16;
-	src_y = newstate->src_y >> 16;
-	src_w = newstate->src_w >> 16;
-	src_h = newstate->src_h >> 16;
+	drm_rect_init(&src, newstate->src_x >> 16, newstate->src_y >> 16,
+		      newstate->src_w >> 16, newstate->src_h >> 16);
 
-	DRM_DEBUG_DRIVER("plane:%d fb:%d (%dx%d)@(%d,%d) -> (%dx%d)@(%d,%d)\n",
-			 plane->base.id, fb->base.id,
-			 src_w, src_h, src_x, src_y,
-			 newstate->crtc_w, newstate->crtc_h,
-			 newstate->crtc_x, newstate->crtc_y);
+	drm_rect_init(&dst, newstate->crtc_x, newstate->crtc_y,
+		      newstate->crtc_w, newstate->crtc_h);
+
+	DRM_DEBUG_DRIVER("plane:%d fb:%d src: " DRM_RECT_FMT " -> crtc: " DRM_RECT_FMT "\n",
+			 plane->base.id, fb->base.id, DRM_RECT_ARG(&src), DRM_RECT_ARG(&dst));
 
 	if (!pm_runtime_active(ddev->dev))
 		return;
@@ -1398,12 +1392,12 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 		ahbp = bpcr & BPCR_AVBP;
 
 		/* Configures the horizontal start and stop position */
-		val = (x0 + 1 + ahbp) + ((x1 + 1 + ahbp) << 16);
+		val = (dst.x1 + 1 + ahbp) + ((dst.x2 + ahbp) << 16);
 		regmap_write_bits(ldev->regmap, LTDC_L1WHPCR + lofs,
 				  LXWHPCR_WHSTPOS | LXWHPCR_WHSPPOS, val);
 
 		/* Configures the vertical start and stop position */
-		val = (y0 + 1 + avbp) + ((y1 + 1 + avbp) << 16);
+		val = (dst.y1 + 1 + avbp) + ((dst.y2 + avbp) << 16);
 		regmap_write_bits(ldev->regmap, LTDC_L1WVPCR + lofs,
 				  LXWVPCR_WVSTPOS | LXWVPCR_WVSPPOS, val);
 
@@ -1429,12 +1423,12 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 		avbp = bpcr & BPCR_AVBP;
 
 		/* Configures the horizontal start and stop position */
-		val = ((x1 + 1 + ahbp) << 16) + (x0 + 1 + ahbp);
+		val = ((dst.x2 + ahbp) << 16) + (dst.x1 + 1 + ahbp);
 		regmap_write_bits(ldev->regmap, LTDC_L1WHPCR + lofs,
 				  LXWHPCR_WHSTPOS | LXWHPCR_WHSPPOS, val);
 
 		/* Configures the vertical start and stop position */
-		val = ((y1 + 1 + avbp) << 16) + (y0 + 1 + avbp);
+		val = ((dst.y2 + avbp) << 16) + (dst.y1 + 1 + avbp);
 		regmap_write_bits(ldev->regmap, LTDC_L1WVPCR + lofs,
 				  LXWVPCR_WVSTPOS | LXWVPCR_WVSPPOS, val);
 
@@ -1495,17 +1489,16 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 	paddr = (u32)drm_fb_dma_get_gem_addr(fb, newstate, 0);
 
 	if (plane_rotation & DRM_MODE_REFLECT_X)
-		paddr += (fb->format->cpp[0] * (x1 - x0 + 1)) - 1;
+		paddr += (fb->format->cpp[0] * drm_rect_width(&src)) - 1;
 
 	if (plane_rotation & DRM_MODE_REFLECT_Y)
-		paddr += (fb->pitches[0] * (y1 - y0));
+		paddr += (fb->pitches[0] * (drm_rect_height(&src) - 1));
 
 	DRM_DEBUG_DRIVER("fb: phys 0x%08x", paddr);
 	regmap_write(ldev->regmap, LTDC_L1CFBAR + lofs, paddr);
 
 	/* Configures the color frame buffer pitch in bytes & line length */
-	line_length = fb->format->cpp[0] *
-		      (x1 - x0 + 1) + (ldev->caps.bus_width >> 3) - 1;
+	line_length = fb->format->cpp[0] * drm_rect_width(&src) + (ldev->caps.bus_width >> 3) - 1;
 
 	if (plane_rotation & DRM_MODE_REFLECT_Y)
 		/* Compute negative value (signed on 16 bits) for the picth */
@@ -1517,7 +1510,7 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 	regmap_write_bits(ldev->regmap, LTDC_L1CFBLR + lofs, LXCFBLR_CFBLL | LXCFBLR_CFBP, val);
 
 	/* Configures the frame buffer line number */
-	line_number = y1 - y0 + 1;
+	line_number = drm_rect_height(&src);
 	regmap_write_bits(ldev->regmap, LTDC_L1CFBLNR + lofs, LXCFBLNR_CFBLN, line_number);
 
 	if (ldev->caps.ycbcr_input) {
@@ -1529,10 +1522,10 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 			paddr1 = (u32)drm_fb_dma_get_gem_addr(fb, newstate, 1);
 
 			if (plane_rotation & DRM_MODE_REFLECT_X)
-				paddr1 += ((fb->format->cpp[1] * (x1 - x0 + 1)) >> 1) - 1;
+				paddr1 += ((fb->format->cpp[1] * drm_rect_width(&src)) >> 1) - 1;
 
 			if (plane_rotation & DRM_MODE_REFLECT_Y)
-				paddr1 += (fb->pitches[1] * (y1 - y0 - 1)) >> 1;
+				paddr1 += (fb->pitches[1] * (drm_rect_height(&src) - 1)) >> 1;
 
 			regmap_write(ldev->regmap, LTDC_L1AFBA0R + lofs, paddr1);
 			break;
@@ -1542,13 +1535,13 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 			paddr2 = (u32)drm_fb_dma_get_gem_addr(fb, newstate, 2);
 
 			if (plane_rotation & DRM_MODE_REFLECT_X) {
-				paddr1 += ((fb->format->cpp[1] * (x1 - x0 + 1)) >> 1) - 1;
-				paddr2 += ((fb->format->cpp[2] * (x1 - x0 + 1)) >> 1) - 1;
+				paddr1 += ((fb->format->cpp[1] * drm_rect_width(&src)) >> 1) - 1;
+				paddr2 += ((fb->format->cpp[2] * drm_rect_width(&src)) >> 1) - 1;
 			}
 
 			if (plane_rotation & DRM_MODE_REFLECT_Y) {
-				paddr1 += (fb->pitches[1] * (y1 - y0 - 1)) >> 1;
-				paddr2 += (fb->pitches[2] * (y1 - y0 - 1)) >> 1;
+				paddr1 += (fb->pitches[1] * (drm_rect_height(&src) - 1)) >> 1;
+				paddr2 += (fb->pitches[2] * (drm_rect_height(&src) - 1)) >> 1;
 			}
 
 			regmap_write(ldev->regmap, LTDC_L1AFBA0R + lofs, paddr1);
@@ -1560,13 +1553,13 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 			paddr2 = (u32)drm_fb_dma_get_gem_addr(fb, newstate, 1);
 
 			if (plane_rotation & DRM_MODE_REFLECT_X) {
-				paddr1 += ((fb->format->cpp[1] * (x1 - x0 + 1)) >> 1) - 1;
-				paddr2 += ((fb->format->cpp[2] * (x1 - x0 + 1)) >> 1) - 1;
+				paddr1 += ((fb->format->cpp[1] * drm_rect_width(&src)) >> 1) - 1;
+				paddr2 += ((fb->format->cpp[2] * drm_rect_width(&src)) >> 1) - 1;
 			}
 
 			if (plane_rotation & DRM_MODE_REFLECT_Y) {
-				paddr1 += (fb->pitches[1] * (y1 - y0 - 1)) >> 1;
-				paddr2 += (fb->pitches[2] * (y1 - y0 - 1)) >> 1;
+				paddr1 += (fb->pitches[1] * (drm_rect_height(&src) - 1)) >> 1;
+				paddr2 += (fb->pitches[2] * (drm_rect_height(&src) - 1)) >> 1;
 			}
 
 			regmap_write(ldev->regmap, LTDC_L1AFBA0R + lofs, paddr1);
@@ -1588,7 +1581,7 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 				else
 					pitch_in_bytes = fb->pitches[1];
 
-				line_length = ((fb->format->cpp[1] * (x1 - x0 + 1)) >> 1) +
+				line_length = ((fb->format->cpp[1] * drm_rect_width(&src)) >> 1) +
 					      (ldev->caps.bus_width >> 3) - 1;
 
 				/* Configure the auxiliary buffer length */
