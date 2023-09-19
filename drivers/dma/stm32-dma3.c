@@ -2160,8 +2160,7 @@ static int stm32_dma3_probe(struct platform_device *pdev)
 		if (ret == -EPROBE_DEFER)
 			goto err_clk_disable;
 	} else {
-		reset_control_assert(reset);
-		reset_control_deassert(reset);
+		reset_control_reset(reset);
 	}
 
 	INIT_LIST_HEAD(&dma_dev->channels);
