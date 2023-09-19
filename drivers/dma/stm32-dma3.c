@@ -2147,18 +2147,12 @@ static int stm32_dma3_probe(struct platform_device *pdev)
 		return PTR_ERR(ddata->base);
 
 	ddata->clk = devm_clk_get(&pdev->dev, NULL);
-	if (IS_ERR(ddata->clk)) {
-		ret = PTR_ERR(ddata->clk);
-		if (ret != -EPROBE_DEFER)
-			dev_err(&pdev->dev, "Failed to get clk: %d\n", ret);
-		return ret;
-	}
+	if (IS_ERR(ddata->clk))
+		return dev_err_probe(&pdev->dev, PTR_ERR(ddata->clk), "Failed to get clk\n");
 
 	ret = clk_prepare_enable(ddata->clk);
-	if (ret) {
-		dev_err(&pdev->dev, "Failed to enable clk: %d\n", ret);
-		return ret;
-	}
+	if (ret)
+		return dev_err_probe(&pdev->dev, ret, "Failed to enable clk\n");
 
 	reset = devm_reset_control_get(&pdev->dev, NULL);
 	if (IS_ERR(reset)) {
