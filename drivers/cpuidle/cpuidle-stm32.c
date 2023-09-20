@@ -74,7 +74,7 @@ static int stm32_enter_idle(struct cpuidle_device *dev,
 	return index;
 }
 
-static const struct of_device_id stm32_idle_state_match[] __initconst = {
+static const struct of_device_id stm32_idle_state_match[] = {
 	{ .compatible = "arm,idle-state",
 	  .data = stm32_enter_idle },
 	{ },
