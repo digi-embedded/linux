@@ -136,13 +136,6 @@
 		};
 	};
 
-	goodix_pins_a: goodix-0 {
-		pins {
-			pinmux = <STM32_PINMUX('I', 13, GPIO)>;
-			bias-pull-down;
-		};
-	};
-
 	i2c2_pins_a: i2c2-0 {
 		pins {
 			pinmux = <STM32_PINMUX('B', 5, AF9)>, /* I2C2_SCL */
