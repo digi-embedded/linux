@@ -2674,8 +2674,7 @@
 		compatible = "st,mlahb", "simple-bus";
 		#address-cells = <1>;
 		#size-cells = <1>;
-		ranges;
-		dma-ranges;
+		ranges = <0x0 0x0 0x0 0>;
 
 		m33_rproc: m33@a040000 {
 			compatible = "st,stm32mp2-m33";
