@@ -200,28 +200,7 @@
 		port@1 {
 			reg = <1>;
 			dsi_out1: endpoint {
-				remote-endpoint = <&panel_in_dsi>;
-			};
-		};
-
-		port@2 {
-			reg = <2>;
-			dsi_out2: endpoint {
 				remote-endpoint = <&adv7535_in>;
-			};
-		};
-	};
-
-	panel_dsi: panel-dsi@0 {
-		compatible = "raydium,rm68200";
-		reg = <0>;
-		reset-gpios = <&gpiog 14 GPIO_ACTIVE_LOW>;
-		backlight = <&panel_dsi_backlight >;
-		status = "disabled";
-
-		port {
-			panel_in_dsi: endpoint {
-				remote-endpoint = <&dsi_out1>;
 			};
 		};
 	};
@@ -356,7 +335,7 @@
 			port@0 {
 				reg = <0>;
 				adv7535_in: endpoint {
-					remote-endpoint = <&dsi_out2>;
+					remote-endpoint = <&dsi_out1>;
 				};
 			};
 
@@ -376,19 +355,6 @@
 		interrupts = <13 IRQ_TYPE_EDGE_FALLING>;
 		reset-gpios = <&gpiog 14 GPIO_ACTIVE_LOW>;
 		status = "okay";
-	};
-
-	gt9147: goodix-ts@5d {
-		compatible = "goodix,gt9147";
-		reg = <0x5d>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&goodix_pins_a>;
-		panel = <&panel_dsi>;
-		interrupt-parent = <&gpioi>;
-		interrupts = <13 IRQ_TYPE_EDGE_FALLING>;
-		AVDD28-supply = <&scmi_v3v3>;
-		VDDIO-supply = <&scmi_v3v3>;
-		status = "disabled";
 	};
 };
 
