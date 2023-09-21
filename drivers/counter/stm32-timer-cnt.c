@@ -11,6 +11,7 @@
 #include <linux/mfd/stm32-timers.h>
 #include <linux/mod_devicetable.h>
 #include <linux/module.h>
+#include <linux/of.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/platform_device.h>
 #include <linux/types.h>
@@ -24,6 +25,8 @@
 #define STM32_CLOCK_SIG		0
 #define STM32_CH1_SIG		1
 #define STM32_CH2_SIG		2
+#define STM32_CH3_SIG		3
+#define STM32_CH4_SIG		4
 
 struct stm32_timer_regs {
 	u32 cr1;
@@ -38,6 +41,9 @@ struct stm32_timer_cnt {
 	u32 max_arr;
 	bool enabled;
 	struct stm32_timer_regs bak;
+	bool has_encoder;
+	u32 idx;
+	unsigned int nchannels;
 };
 
 static const enum counter_function stm32_count_functions[] = {
@@ -268,6 +274,10 @@ static const enum counter_synapse_action stm32_synapse_actions[] = {
 	COUNTER_SYNAPSE_ACTION_BOTH_EDGES
 };
 
+static const enum counter_synapse_action stm32_synapse_ch_actions[] = {
+	COUNTER_SYNAPSE_ACTION_NONE,
+};
+
 static int stm32_action_read(struct counter_device *counter,
 			     struct counter_count *count,
 			     struct counter_synapse *synapse,
@@ -350,10 +360,19 @@ static struct counter_signal stm32_signals[] = {
 	{
 		.id = STM32_CH2_SIG,
 		.name = "Channel 2"
+	},
+	{
+		.id = STM32_CH3_SIG,
+		.name = "Channel 3"
+	},
+	{
+		.id = STM32_CH4_SIG,
+		.name = "Channel 4"
 	}
 };
 
-static struct counter_synapse stm32_count_synapses[] = {
+/* STM32 Timer with 4 capture channels and quadrature encoder */
+static struct counter_synapse stm32_count_synapses_4ch_enc[] = {
 	{
 		.actions_list = stm32_clock_synapse_actions,
 		.num_actions = ARRAY_SIZE(stm32_clock_synapse_actions),
@@ -368,19 +387,158 @@ static struct counter_synapse stm32_count_synapses[] = {
 		.actions_list = stm32_synapse_actions,
 		.num_actions = ARRAY_SIZE(stm32_synapse_actions),
 		.signal = &stm32_signals[STM32_CH2_SIG]
-	}
+	},
+	{
+		.actions_list = stm32_synapse_ch_actions,
+		.num_actions = ARRAY_SIZE(stm32_synapse_ch_actions),
+		.signal = &stm32_signals[STM32_CH3_SIG]
+	},
+	{
+		.actions_list = stm32_synapse_ch_actions,
+		.num_actions = ARRAY_SIZE(stm32_synapse_ch_actions),
+		.signal = &stm32_signals[STM32_CH4_SIG]
+	},
+};
+
+static struct counter_count stm32_counts_enc_4ch = {
+	.id = 0,
+	.name = "STM32 Timer Counter",
+	.functions_list = stm32_count_functions,
+	.num_functions = ARRAY_SIZE(stm32_count_functions),
+	.synapses = stm32_count_synapses_4ch_enc,
+	.num_synapses = ARRAY_SIZE(stm32_count_synapses_4ch_enc),
+	.ext = stm32_count_ext,
+	.num_ext = ARRAY_SIZE(stm32_count_ext)
+};
+
+/* STM32 Timer with up to 4 capture channels */
+static struct counter_synapse stm32_count_synapses[] = {
+	{
+		.actions_list = stm32_clock_synapse_actions,
+		.num_actions = ARRAY_SIZE(stm32_clock_synapse_actions),
+		.signal = &stm32_signals[STM32_CLOCK_SIG]
+	},
+	{
+		.actions_list = stm32_synapse_ch_actions,
+		.num_actions = ARRAY_SIZE(stm32_synapse_ch_actions),
+		.signal = &stm32_signals[STM32_CH1_SIG]
+	},
+	{
+		.actions_list = stm32_synapse_ch_actions,
+		.num_actions = ARRAY_SIZE(stm32_synapse_ch_actions),
+		.signal = &stm32_signals[STM32_CH2_SIG]
+	},
+	{
+		.actions_list = stm32_synapse_ch_actions,
+		.num_actions = ARRAY_SIZE(stm32_synapse_ch_actions),
+		.signal = &stm32_signals[STM32_CH3_SIG]
+	},
+	{
+		.actions_list = stm32_synapse_ch_actions,
+		.num_actions = ARRAY_SIZE(stm32_synapse_ch_actions),
+		.signal = &stm32_signals[STM32_CH4_SIG]
+	},
+};
+
+static struct counter_count stm32_counts_4ch = {
+	.id = 0,
+	.name = "STM32 Timer Counter",
+	.functions_list = stm32_count_functions,
+	.num_functions = 1, /* increase */
+	.synapses = stm32_count_synapses,
+	.num_synapses = ARRAY_SIZE(stm32_count_synapses),
+	.ext = stm32_count_ext,
+	.num_ext = ARRAY_SIZE(stm32_count_ext)
+};
+
+static struct counter_count stm32_counts_2ch = {
+	.id = 0,
+	.name = "STM32 Timer Counter",
+	.functions_list = stm32_count_functions,
+	.num_functions = 1, /* increase */
+	.synapses = stm32_count_synapses,
+	.num_synapses = 3, /* clock, ch1 and ch2 */
+	.ext = stm32_count_ext,
+	.num_ext = ARRAY_SIZE(stm32_count_ext)
+};
+
+static struct counter_count stm32_counts_1ch = {
+	.id = 0,
+	.name = "STM32 Timer Counter",
+	.functions_list = stm32_count_functions,
+	.num_functions = 1, /* increase */
+	.synapses = stm32_count_synapses,
+	.num_synapses = 2, /* clock, ch1 */
+	.ext = stm32_count_ext,
+	.num_ext = ARRAY_SIZE(stm32_count_ext)
 };
 
 static struct counter_count stm32_counts = {
 	.id = 0,
 	.name = "STM32 Timer Counter",
 	.functions_list = stm32_count_functions,
-	.num_functions = ARRAY_SIZE(stm32_count_functions),
+	.num_functions = 1, /* increase */
 	.synapses = stm32_count_synapses,
-	.num_synapses = ARRAY_SIZE(stm32_count_synapses),
+	.num_synapses = 1, /* clock only */
 	.ext = stm32_count_ext,
 	.num_ext = ARRAY_SIZE(stm32_count_ext)
 };
+
+static void stm32_timer_cnt_detect_channels(struct platform_device *pdev,
+					    struct stm32_timer_cnt *priv)
+{
+	u32 ccer, ccer_backup;
+
+	regmap_read(priv->regmap, TIM_CCER, &ccer_backup);
+	regmap_set_bits(priv->regmap, TIM_CCER, TIM_CCER_CCXE);
+	regmap_read(priv->regmap, TIM_CCER, &ccer);
+	regmap_write(priv->regmap, TIM_CCER, ccer_backup);
+	priv->nchannels = hweight32(ccer & TIM_CCER_CCXE);
+
+	dev_dbg(&pdev->dev, "has %d cc channels\n", priv->nchannels);
+}
+
+/* encoder supported on TIM1 TIM2 TIM3 TIM4 TIM5 TIM8 */
+#define STM32_TIM_ENCODER_SUPPORTED	(BIT(0) | BIT(1) | BIT(2) | BIT(3) | BIT(4) | BIT(7))
+
+static const char * const stm32_timer_trigger_compat[] = {
+	"st,stm32-timer-trigger",
+	"st,stm32h7-timer-trigger",
+};
+
+static int stm32_timer_cnt_probe_encoder(struct platform_device *pdev,
+					 struct stm32_timer_cnt *priv)
+{
+	struct device *parent = pdev->dev.parent;
+	struct device_node *tnode = NULL, *pnode = parent->of_node;
+	int i, ret;
+
+	/*
+	 * Need to retrieve the trigger node index from DT, to be able
+	 * to determine if the counter supports encoder mode. It also
+	 * enforce backward compatibility, and allow to support other
+	 * counter modes in this driver (when the timer doesn't support
+	 * encoder).
+	 */
+	for (i = 0; i < ARRAY_SIZE(stm32_timer_trigger_compat) && !tnode; i++)
+		tnode = of_get_compatible_child(pnode, stm32_timer_trigger_compat[i]);
+	if (!tnode) {
+		dev_err(&pdev->dev, "Can't find trigger node\n");
+		return -ENODATA;
+	}
+
+	ret = of_property_read_u32(tnode, "reg", &priv->idx);
+	if (ret) {
+		dev_err(&pdev->dev, "Can't get index (%d)\n", ret);
+		return ret;
+	}
+
+	priv->has_encoder = !!(STM32_TIM_ENCODER_SUPPORTED & BIT(priv->idx));
+
+	dev_dbg(&pdev->dev, "encoder support: %s\n", priv->has_encoder ? "yes" : "no");
+
+	return 0;
+}
 
 static int stm32_timer_cnt_probe(struct platform_device *pdev)
 {
@@ -403,13 +561,47 @@ static int stm32_timer_cnt_probe(struct platform_device *pdev)
 	priv->clk = ddata->clk;
 	priv->max_arr = ddata->max_arr;
 
+	ret = stm32_timer_cnt_probe_encoder(pdev, priv);
+	if (ret)
+		return ret;
+
+	stm32_timer_cnt_detect_channels(pdev, priv);
+
 	counter->name = dev_name(dev);
 	counter->parent = dev;
 	counter->ops = &stm32_timer_cnt_ops;
-	counter->counts = &stm32_counts;
 	counter->num_counts = 1;
-	counter->signals = stm32_signals;
-	counter->num_signals = ARRAY_SIZE(stm32_signals);
+
+	/*
+	 * Handle diversity for stm32 timers features. For now encoder is found with
+	 * advanced timers or gp timers with 4 channels. Timers with less channels
+	 * doesn't support encoder.
+	 */
+	switch (priv->nchannels) {
+	case 4:
+		if (priv->has_encoder)
+			counter->counts = &stm32_counts_enc_4ch;
+		else
+			counter->counts = &stm32_counts_4ch;
+		counter->signals = stm32_signals;
+		counter->num_signals = ARRAY_SIZE(stm32_signals);
+		break;
+	case 2:
+		counter->counts = &stm32_counts_2ch;
+		counter->signals = stm32_signals;
+		counter->num_signals = 3; /* clock, ch1 and ch2 */
+		break;
+	case 1:
+		counter->counts = &stm32_counts_1ch;
+		counter->signals = stm32_signals;
+		counter->num_signals = 2; /* clock, ch1 */
+		break;
+	default:
+		counter->counts = &stm32_counts;
+		counter->signals = stm32_signals;
+		counter->num_signals = 1; /* clock */
+		break;
+	}
 
 	platform_set_drvdata(pdev, priv);
 
