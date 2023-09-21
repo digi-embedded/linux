@@ -102,6 +102,9 @@ properties:
     minItems: 4
     maxItems: 16
 
+  power-domains:
+    maxItems: 1
+
   memory-region:
     description: |
       Phandle to a /reserved-memory child node assigned to STM32 DMA3 for linked-list items
