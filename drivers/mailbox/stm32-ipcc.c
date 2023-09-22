@@ -311,7 +311,7 @@ static int stm32_ipcc_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct device_node *np = dev->of_node;
 	struct stm32_ipcc *ipcc;
-	u32 ip_ver, hwcfg, cidcfgr, cid, cid_mask;
+	u32 ip_ver, hwcfg, cidcfgr, cid, cid_mask, cfen;
 	unsigned long i;
 	int ret;
 
@@ -381,7 +381,8 @@ static int stm32_ipcc_probe(struct platform_device *pdev)
 	if (cid_mask) {
 		cidcfgr = readl(ipcc->reg_base + IPCC_CIDCFGR(ipcc->proc_id));
 		cid = FIELD_GET(IPCC_CIDCFGR_SCID_MASK, cidcfgr);
-		if ((cid & cid_mask) != IPCC_CORE_ID) {
+		cfen = FIELD_GET(IPCC_CIDCFGR_CFEN_MASK, cidcfgr);
+		if (cfen && ((cid & cid_mask) != IPCC_CORE_ID)) {
 			dev_err(dev, "Unexpected CID%u, no access right\n", cid & cid_mask);
 			ret = -EPERM;
 			goto err_init_wkp;
