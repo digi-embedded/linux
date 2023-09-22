@@ -456,6 +456,7 @@ void brcmf_sdio_wowl_config(struct device *dev, bool enabled);
 int brcmf_sdio_sleep(struct brcmf_sdio *bus, bool sleep);
 int brcmf_sdio_set_sdbus_clk_width(struct brcmf_sdio *bus, unsigned int flags);
 int brcmf_sdio_clkctl(struct brcmf_sdio *bus, uint target, bool pendok);
+bool brcmf_sdio_bus_sleep_state(struct brcmf_sdio *bus);
 void brcmf_sdio_trigger_dpc(struct brcmf_sdio *bus);
 u32 brcmf_sdio_get_enum_addr(struct brcmf_sdio *bus);
 
