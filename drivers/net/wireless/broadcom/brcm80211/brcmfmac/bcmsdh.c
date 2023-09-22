@@ -233,6 +233,10 @@ static int brcmf_sdiod_set_backplane_window(struct brcmf_sdio_dev *sdiodev,
 	u32 v, bar0 = addr & SBSDIO_SBWINDOW_MASK;
 	int err = 0, i;
 
+	if (brcmf_sdio_bus_sleep_state(sdiodev->bus)) {
+		brcmf_err("WARN: Write operation when bus is in sleep state\n");
+	}
+
 	if (bar0 == sdiodev->sbwad)
 		return 0;
 
@@ -252,6 +256,10 @@ u32 brcmf_sdiod_readl(struct brcmf_sdio_dev *sdiodev, u32 addr, int *ret)
 {
 	u32 data = 0;
 	int retval;
+
+	if (brcmf_sdio_bus_sleep_state(sdiodev->bus)) {
+		brcmf_err("WARN: Read operation when bus is in sleep state\n");
+	}
 
 	retval = brcmf_sdiod_set_backplane_window(sdiodev, addr);
 	if (retval)
@@ -277,6 +285,10 @@ void brcmf_sdiod_writel(struct brcmf_sdio_dev *sdiodev, u32 addr,
 {
 	int retval;
 
+	if (brcmf_sdio_bus_sleep_state(sdiodev->bus)) {
+		brcmf_err("WARN: Write operation when bus is in sleep state\n");
+	}
+
 	retval = brcmf_sdiod_set_backplane_window(sdiodev, addr);
 	if (retval)
 		goto out;
@@ -299,6 +311,10 @@ static int brcmf_sdiod_skbuff_read(struct brcmf_sdio_dev *sdiodev,
 {
 	unsigned int req_sz;
 	int err;
+
+	if (brcmf_sdio_bus_sleep_state(sdiodev->bus)) {
+		brcmf_err("WARN: Read operation when bus is in sleep state\n");
+	}
 
 	/* Single skb use the standard mmc interface */
 	req_sz = skb->len + 3;
@@ -332,6 +348,10 @@ static int brcmf_sdiod_skbuff_write(struct brcmf_sdio_dev *sdiodev,
 	unsigned int req_sz;
 	int err;
 
+	if (brcmf_sdio_bus_sleep_state(sdiodev->bus)) {
+		brcmf_err("WARN: Write operation when bus is in sleep state\n");
+	}
+
 	/* Single skb use the standard mmc interface */
 	req_sz = skb->len + 3;
 	req_sz &= (uint)~3;
@@ -356,6 +376,11 @@ static int mmc_submit_one(struct mmc_data *md, struct mmc_request *mr,
 			  struct sdio_func *func, int write)
 {
 	int ret;
+
+	if (brcmf_sdio_bus_sleep_state(sdiodev->bus)) {
+		brcmf_err("WARN: %s operation when bus is in sleep state\n",
+			write ? "Write" : "Read");
+	}
 
 	md->sg_len = sg_cnt;
 	md->blocks = req_sz / func_blk_sz;
