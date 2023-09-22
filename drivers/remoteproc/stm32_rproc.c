@@ -84,6 +84,7 @@ struct stm32_rproc_mem {
 struct stm32_rproc_data {
 	int fw_id;
 	int (*get_info)(struct rproc *rproc);
+	bool dma_ranges;
 };
 
 struct stm32_rproc_mem_ranges {
@@ -229,16 +230,18 @@ static int stm32_rproc_of_memory_translations(struct platform_device *pdev,
 	struct device_node *np;
 	struct stm32_rproc_mem *p_mems;
 	struct stm32_rproc_mem_ranges *mem_range;
-	int cnt, array_size, i, ret = 0;
+	int cnt = 0, array_size, i, ret = 0;
 
 	parent = dev->parent;
 	np = parent->of_node;
 
-	cnt = of_property_count_elems_of_size(np, "dma-ranges",
-					      sizeof(*mem_range));
-	if (cnt < 0) {
-		dev_err(dev, "%s: dma-ranges property not defined\n", __func__);
-		return -EINVAL;
+	if (ddata->desc->dma_ranges) {
+		cnt = of_property_count_elems_of_size(np, "dma-ranges",
+						      sizeof(*mem_range));
+		if (cnt < 0) {
+			dev_err(dev, "dma-ranges property not defined\n");
+			return -EINVAL;
+		}
 	}
 
 	if (!cnt) {
@@ -960,11 +963,13 @@ static int stm32_rproc_get_m33_info(struct rproc *rproc)
 static const struct stm32_rproc_data stm32_rproc_stm32pm15 = {
 	.fw_id = STM32_MP1_FW_ID,
 	.get_info = stm32_rproc_get_m4_info,
+	.dma_ranges = true,
 };
 
 static const struct stm32_rproc_data stm32_rproc_stm32pm25 = {
 	.fw_id = STM32_MP2_FW_ID,
 	.get_info = stm32_rproc_get_m33_info,
+	.dma_ranges = false,
 };
 
 static const struct of_device_id stm32_rproc_match[] = {
