@@ -1048,6 +1048,11 @@ int ifx_cfg80211_vndr_cmds_config_pfn(struct wiphy *wiphy,
 	cfg->pfn_data.pfn_config = pfn_data->pfn_config;
 	cfg->pfn_data.count = pfn_data->count;
 
+	if (cfg->pfn_data.count > BRCMF_PNO_MAX_PFN_COUNT) {
+		brcmf_dbg(TRACE, "Not in range. Max 16 ssids allowed to add in pfn list");
+		cfg->pfn_data.count = BRCMF_PNO_MAX_PFN_COUNT;
+	}
+
 	buflen = cfg->pfn_data.count * sizeof(struct network_blob);
 	cfg->pfn_data.network_blob_data = (struct network_blob *)kmalloc(buflen, GFP_KERNEL);
 	memset(cfg->pfn_data.network_blob_data, '\0', buflen);
