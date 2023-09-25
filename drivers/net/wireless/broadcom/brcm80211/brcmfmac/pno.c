@@ -606,6 +606,7 @@ int pfn_send_network_blob_fw(struct wiphy *wiphy,
 	brcm_pfn_param_t pfn_param;
 	struct brcm_pfn *pfn_list_buffer, *pssidnet;
 	int brcm_pfn_length = 0;
+	uint32_t offset;
 
 	struct brcmf_cfg80211_info *cfg = wiphy_to_cfg(wiphy);
 	vif = container_of(wdev, struct brcmf_cfg80211_vif, wdev);
@@ -723,7 +724,29 @@ int pfn_send_network_blob_fw(struct wiphy *wiphy,
 		network_blob_data++;
 	}
 
-	ret = brcmf_fil_iovar_data_set(ifp, "pfn_add", (void *)pfn_list_buffer, brcm_pfn_length);
+	/* There is a limit in len of data that we can send to fw using an iovar at a time.
+	 * Here max value of cfg->pfn_data.count could be 16 which is exceeding the limit,
+	 * so sending it two times.  */
+	if (cfg->pfn_data.count > (BRCMF_PNO_MAX_PFN_COUNT/2)) {
+		offset = sizeof(struct brcm_pfn) * (BRCMF_PNO_MAX_PFN_COUNT/2);
+		ret = brcmf_fil_iovar_data_set(ifp, "pfn_add", (void *)pfn_list_buffer,
+						offset);
+		if (ret) {
+			brcmf_err("set pfnadd enable error:%d\n", ret);
+			return -1;
+		}
+
+		ret = brcmf_fil_iovar_data_set(ifp, "pfn_add", (void *)pfn_list_buffer + offset,
+						brcm_pfn_length - offset);
+		if (ret) {
+			brcmf_err("set pfnadd enable error:%d\n", ret);
+			return -1;
+		}
+
+	} else {
+		ret = brcmf_fil_iovar_data_set(ifp, "pfn_add", (void *)pfn_list_buffer, brcm_pfn_length);
+	}
+
 	if (ret) {
 		brcmf_err("set pfnadd enable error:%d\n", ret);
 		return -1;
