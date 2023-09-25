@@ -264,6 +264,7 @@ struct stm_lvds {
 	struct device *dev;
 	struct clk *pclk;		/* APB bus clock */
 	struct clk *pllref_clk;		/* HSE / Flexclkgen */
+	struct clk *pixel_clk;
 	struct clk_hw lvds_ck_px;	/* Pixel clock */
 	u32 pixel_clock_rate;		/* Pixel clock rate */
 	struct {
@@ -1025,6 +1026,13 @@ static void lvds_atomic_enable(struct drm_bridge *bridge,
 		return;
 	}
 
+	/* Switch pixel clock parent to own clock */
+	ret = clk_set_parent(lvds->pixel_clk, lvds->lvds_ck_px.clk);
+	if (ret) {
+		DRM_ERROR("Could not set parent clock: %d\n", ret);
+		return;
+	}
+
 	connector = drm_atomic_get_new_connector_for_encoder(state,
 							     bridge->encoder);
 	crtc = drm_atomic_get_new_connector_state(state, connector)->crtc;
@@ -1074,7 +1082,6 @@ static int lvds_probe(struct platform_device *pdev)
 	struct device_node *port1, *port2, *remote;
 	struct stm_lvds *lvds;
 	struct reset_control *rstc;
-	struct clk *pixel_clk;
 	int ret, dual_link;
 
 	DRM_DEBUG_DRIVER("Probing LVDS driver...\n");
@@ -1193,14 +1200,14 @@ static int lvds_probe(struct platform_device *pdev)
 		goto err_lvds_probe;
 	}
 
-	pixel_clk = devm_clk_get(lvds->dev, "pixclk");
-	if (IS_ERR(pixel_clk)) {
-		ret = PTR_ERR(pixel_clk);
+	lvds->pixel_clk = devm_clk_get(lvds->dev, "pixclk");
+	if (IS_ERR(lvds->pixel_clk)) {
+		ret = PTR_ERR(lvds->pixel_clk);
 		DRM_ERROR("Unable to get pix clock: %d\n", ret);
 		goto err_lvds_probe;
 	}
 
-	ret = clk_set_parent(pixel_clk, lvds->lvds_ck_px.clk);
+	ret = clk_set_parent(lvds->pixel_clk, lvds->lvds_ck_px.clk);
 	if (ret) {
 		DRM_ERROR("Could not set parent clock: %d\n", ret);
 		goto err_lvds_clk_parent;
