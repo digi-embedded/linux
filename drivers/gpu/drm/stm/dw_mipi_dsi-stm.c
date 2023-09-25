@@ -134,6 +134,8 @@ struct dw_mipi_dsi_stm {
 	struct device *dev;
 	struct clk *pllref_clk;
 	struct clk *pclk;
+	struct clk *px_clk;
+	struct clk *ltdc_clk;
 	struct clk_hw txbyte_clk;
 	struct dw_mipi_dsi *dsi;
 	u32 hw_version;
@@ -385,6 +387,13 @@ static int dw_mipi_dsi_phy_141_init(void *priv_data)
 	int ret;
 
 	DRM_DEBUG_DRIVER("\n");
+
+	/* Switch pixel clock parent to ref clock */
+	ret = clk_set_parent(dsi->ltdc_clk, dsi->px_clk);
+	if (ret) {
+		DRM_ERROR("Could not set pixel clock parent: %d\n", ret);
+		return ret;
+	}
 
 	/* Select video mode by resetting DSIM bit */
 	dsi_clear(dsi, DSI_WCFGR, WCFGR_DSIM);
@@ -1180,6 +1189,18 @@ static int dw_mipi_dsi_stm_probe(struct platform_device *pdev)
 	if (ret) {
 		DRM_ERROR("Failed to register DSI pixel clock: %d\n", ret);
 		goto err_dsi_probe;
+	}
+
+	dsi->px_clk = devm_clk_get(dev, "px_clk");
+	/* No need to return since only MP25 has it */
+	if (IS_ERR(dsi->px_clk))
+		dev_err_probe(dev, PTR_ERR(dsi->px_clk), "Unable to get px_clk clock\n");
+
+	if (dsi->hw_version == HWVER_141) {
+		dsi->ltdc_clk = devm_clk_get(dev, "pixclk");
+		/* No need to return since only MP25 has it */
+		if (IS_ERR(dsi->ltdc_clk))
+			dev_err_probe(dev, PTR_ERR(dsi->ltdc_clk), "Unable to get pixclk clock\n");
 	}
 
 	clk_disable_unprepare(dsi->pclk);
