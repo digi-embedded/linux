@@ -1477,7 +1477,7 @@ override dtstree := arch/$(SRCARCH)/boot/dts/st
 endif #TARGET_ARM64
 
 # Default path for external device trees
-KBUILD_EXTDTS ?= $(dtstree)/external-dt/linux
+KBUILD_EXTDTS ?= $(realpath $(srctree))/$(dtstree)/external-dt/linux
 ifneq ($(wildcard $(KBUILD_EXTDTS)),)
 export DTS_INCLUDE := $(srctree)/$(dtstree)
 endif
@@ -1494,8 +1494,7 @@ endif
 	$(Q)$(MAKE) $(build)=$(dtstree) $(dtstree)/$@ || ( \
 	test ! -e $(dtstree)/$@ -a $(KBUILD_EXTDTB) -eq 1  && ( \
 		echo "Looking for device trees into $(KBUILD_EXTDTS)"; \
-		$(MAKE) $(build)=$(KBUILD_EXTDTS) $(KBUILD_EXTDTS)/$@ && \
-		cp $(KBUILD_EXTDTS)/$@ $(dtstree) || \
+		$(MAKE) $(build)=$(dtstree) src=$(KBUILD_EXTDTS) $(dtstree)/$@ || \
 		/bin/true) || /bin/true)
 
 %.dtbo: dtbs_prepare
@@ -1506,8 +1505,7 @@ dtbs: dtbs_prepare
 	$(Q)$(MAKE) $(build)=$(dtstree)
 	$(Q)test $(KBUILD_EXTDTB) -eq 1 && ( \
 		echo "Looking for device trees into $(KBUILD_EXTDTS)"; \
-		$(MAKE) $(build)=$(KBUILD_EXTDTS) && \
-		cp $(KBUILD_EXTDTS)/*.dtb $(dtstree) || \
+		$(MAKE) $(build)=$(dtstree) src=$(KBUILD_EXTDTS) || \
 		/bin/true) || /bin/true
 
 # include/config/kernel.release is actually needed when installing DTBs because
