@@ -39,6 +39,10 @@
 /* Enable LPUART1 (Bluetooth) */
 &lpuart1 {
 	status = "okay";
+
+	bluetooth {
+		compatible = "nxp,88w8987-bt";
+	};
 };
 
 /* IOMUX */
