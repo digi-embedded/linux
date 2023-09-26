@@ -1,5 +1,5 @@
 /*
- * Copyright 2014 Digi International, Inc.
+ * Copyright 2014-2023 Digi International, Inc.
  *
  * The code contained herein is licensed under the GNU General Public
  * License. You may obtain a copy of the GNU General Public License
@@ -113,8 +113,7 @@
 	};
 
 	sound_hdmi: sound-hdmi {
-		compatible = "fsl,imx6q-audio-hdmi",
-			     "fsl,imx-audio-hdmi";
+		compatible = "fsl,imx6qdl-audio-hdmi";
 		model = "imx-audio-hdmi";
 		hdmi-controller = <&hdmi_audio>;
 		status = "disabled";
@@ -177,6 +176,10 @@
 	pinctrl-0 = <&pinctrl_enet>;
 	phy-mode = "rgmii";
 	phy-reset-gpios = <&gpio1 25 GPIO_ACTIVE_HIGH>;
+	rxc-skew-ps = <1800>;
+	rxdv-skew-ps = <0>;
+	txc-skew-ps = <1800>;
+	txen-skew-ps = <0>;
 	phy-reset-duration = <10>;
 	phy-reset-wait = <1>;
 	phy-supply = <&ldo4>;

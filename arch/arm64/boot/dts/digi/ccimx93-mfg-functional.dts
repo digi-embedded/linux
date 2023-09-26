@@ -49,36 +49,6 @@
 		clock-frequency = <24000000>;
 		clock-output-names = "xtal_24MHz";
 	};
-
-	lvds_panel: lvds_panel {
-		compatible = "panel-lvds";
-		status = "okay";
-		data-mapping = "jeida-24";
-		de-high;
-		width-mm = <216>;
-		height-mm = <135>;
-
-		/* AUO G101EVN01.0 */
-		panel-timing {
-			clock-frequency = <68930000>;
-			hactive = <1280>;
-			vactive = <800>;
-			hfront-porch = <120>;
-			hback-porch = <2>;
-			hsync-len = <8>;
-			vback-porch = <10>;
-			vfront-porch = <2>;
-			vsync-len = <6>;
-			hsync-active = <1>;
-			vsync-active = <1>;
-		};
-
-		port {
-			panel_lvds_in: endpoint {
-				remote-endpoint = <&lvds_out>;
-			};
-		};
-	};
 };
 
 /* ADC - 4 channels */
@@ -118,26 +88,41 @@
 	};
 };
 
-/* LVDS interface */
-&ldb {
+/* MIPI DSI PHY */
+&dphy {
 	status = "okay";
+};
 
-	lvds-channel@0 {
+&dsi {
+	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	panel@0 {
+		compatible = "dlc,dlc0200cc904df";
 		status = "okay";
+		reg = <0>;
+		VCC-supply = <&buck4>;
+		IOVCC-supply = <&buck4>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_mipi_display>;
+		reset-gpios = <&gpio2 17 GPIO_ACTIVE_HIGH>;
 
-		port@1 {
-			reg = <1>;
-
-			lvds_out: endpoint {
-				remote-endpoint = <&panel_lvds_in>;
+		port {
+			mipi_dsi_panel_in: endpoint {
+				remote-endpoint = <&mipi_dsi_panel_out>;
 			};
 		};
 	};
-};
 
-/* LVDS PHY */
-&ldb_phy {
-	status = "okay";
+	ports {
+		port@1 {
+			reg = <1>;
+			mipi_dsi_panel_out: endpoint {
+				remote-endpoint = <&mipi_dsi_panel_in>;
+			};
+		};
+	};
 };
 
 &epxp {
@@ -146,26 +131,29 @@
 
 &lcdif {
 	status = "okay";
-	assigned-clock-rates = <498000000>, <68930000>, <400000000>, <133333333>;
+	assigned-clock-rates = <300000000>, <50000000>, <400000000>, <133333333>;
 };
 
-/* LPI2C3 connected to MIPI Camera connector */
-&lpi2c3 {
+/* LPI2C4 connected to MIPI Camera connector */
+&lpi2c4 {
 	#address-cells = <1>;
 	#size-cells = <0>;
 	clock-frequency = <400000>;
 	pinctrl-names = "default", "sleep";
-	pinctrl-0 = <&pinctrl_lpi2c3>;
-	pinctrl-1 = <&pinctrl_lpi2c3>;
+	pinctrl-0 = <&pinctrl_lpi2c4>;
+	pinctrl-1 = <&pinctrl_lpi2c4>;
 	status = "okay";
 
 	/* MIPI-CSI camera */
 	ov5640_mipi: ov5640_mipi@3c {
 		compatible = "ovti,ov5640";
 		reg = <0x3c>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_mipi_camera>;
 		clocks = <&mipi_csi_xtal24m>;
 		clock-names = "xclk";
 		csi_id = <0>;
+		reset-gpios = <&gpio2 21 GPIO_ACTIVE_LOW>;
 		mclk = <24000000>;
 		mclk_source = <0>;
 		mipi_csi;
@@ -180,44 +168,11 @@
 	};
 };
 
-/* LPI2C4 - Audio codec and HDMI bridge */
-&lpi2c4 {
-	#address-cells = <1>;
-	#size-cells = <0>;
-	clock-frequency = <400000>;
-	pinctrl-names = "default", "sleep";
-	pinctrl-0 = <&pinctrl_lpi2c4>;
-	pinctrl-1 = <&pinctrl_lpi2c4>;
-	status = "okay";
-};
-
 &lpuart6 { /* console */
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_uart6>;
 	status = "okay";
 };
-
-/* Ethernet EQoS */
-&eqos {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_eqos>, <&pinctrl_eqos_mdio>;
-	phy-mode = "rgmii-id";
-	phy-handle = <&ethphy0>;
-	status = "okay";
-
-	mdio {
-		compatible = "snps,dwmac-mdio";
-		#address-cells = <1>;
-		#size-cells = <0>;
-		clock-frequency = <5000000>;
-
-		ethphy0: ethernet-phy@1 {
-			compatible = "ethernet-phy-ieee802.3-c22";
-			reg = <1>;
-		};
-	};
-};
-
 
 /* USB_OTG2 connected to usb hub */
 &usbotg2 {
@@ -231,127 +186,133 @@
 	pinctrl-0 = <&pinctrl_hog_common>, <&pinctrl_hog_non_wb>;
 	pinctrl_hog_common: hoggrpcommon {
 		fsl,pins = <
-			/* COMMON PAIRS */
-/* B24 */		MX93_PAD_GPIO_IO17__GPIO2_IO17				0x31e
-/* C18 */		MX93_PAD_SAI1_TXC__GPIO1_IO12				0x31e
+			/* 3.3V pairs */
+			MX93_PAD_SD2_RESET_B__GPIO3_IO07			0x31e
+			MX93_PAD_SD2_CD_B__GPIO3_IO00				0x31e
 
-/* C17 */		MX93_PAD_SAI1_TXFS__GPIO1_IO11				0x31e
-/* C19 */		MX93_PAD_GPIO_IO26__GPIO2_IO26				0x31e
+			MX93_PAD_SD2_DATA0__GPIO3_IO03				0x31e
+			MX93_PAD_GPIO_IO00__GPIO2_IO00				0x31e
 
-/* C24 */		MX93_PAD_GPIO_IO24__GPIO2_IO24				0x31e
-/* D17 */		MX93_PAD_GPIO_IO15__GPIO2_IO15				0x31e
+			MX93_PAD_SD2_DATA1__GPIO3_IO04				0x31e
+			MX93_PAD_I2C2_SCL__GPIO1_IO02				0x31e
 
-/* E3 */		MX93_PAD_GPIO_IO19__GPIO2_IO19				0x31e
-/* D18 */		MX93_PAD_SAI1_RXD0__GPIO1_IO14				0x31e
+			MX93_PAD_SD2_DATA3__GPIO3_IO06				0x31e
+			MX93_PAD_GPIO_IO01__GPIO2_IO01				0x31e
 
-/* E4 */		MX93_PAD_SD2_RESET_B__GPIO3_IO07			0x31e
-/* E22 */		MX93_PAD_GPIO_IO13__GPIO2_IO13				0x31e
+			MX93_PAD_GPIO_IO08__GPIO2_IO08				0x31e
+			MX93_PAD_PDM_BIT_STREAM0__GPIO1_IO09			0x31e
 
-/* E27 */		MX93_PAD_GPIO_IO23__GPIO2_IO23				0x31e
-/* E18 */		MX93_PAD_GPIO_IO14__GPIO2_IO14				0x31e
+			MX93_PAD_GPIO_IO09__GPIO2_IO09				0x31e
+			MX93_PAD_GPIO_IO27__GPIO2_IO27				0x31e
 
-/* E28 */		MX93_PAD_GPIO_IO22__GPIO2_IO22				0x31e
-/* E19 */		MX93_PAD_GPIO_IO12__GPIO2_IO12				0x31e
+			MX93_PAD_GPIO_IO10__GPIO2_IO10				0x31e
+			MX93_PAD_GPIO_IO25__GPIO2_IO25				0x31e
 
-/* F1 */		MX93_PAD_SD2_CMD__GPIO3_IO02				0x31e
-/* E17 */		MX93_PAD_SAI1_TXD0__GPIO1_IO13				0x31e
+			MX93_PAD_SD2_CMD__GPIO3_IO02				0x31e
+			MX93_PAD_I2C2_SDA__GPIO1_IO03				0x31e
 
-/* G1 */		MX93_PAD_SD2_DATA0__GPIO3_IO03				0x31e
-/* E20 */		MX93_PAD_GPIO_IO21__GPIO2_IO21				0x31e
+			MX93_PAD_SD2_DATA2__GPIO3_IO05				0x31e
+			MX93_PAD_GPIO_IO14__GPIO2_IO14				0x31e
 
-/* G2 */		MX93_PAD_SD2_CD_B__GPIO3_IO00				0x31e
-/* E21 */		MX93_PAD_GPIO_IO20__GPIO2_IO20				0x31e
+			MX93_PAD_SD2_CLK__GPIO3_IO01				0x31e
+			MX93_PAD_GPIO_IO12__GPIO2_IO12				0x31e
 
-/* E23 */		MX93_PAD_GPIO_IO16__GPIO2_IO16				0x31e
-/* D25 */		MX93_PAD_CCM_CLKO2__GPIO3_IO27				0x31e
+			MX93_PAD_GPIO_IO11__GPIO2_IO11				0x31e
+			MX93_PAD_PDM_CLK__GPIO1_IO08				0x31e
 
-/* H1 */		MX93_PAD_SD2_DATA1__GPIO3_IO04				0x31e
-/* J1 */		MX93_PAD_SD2_DATA2__GPIO3_IO05				0x31e
+			MX93_PAD_PDM_BIT_STREAM1__GPIO1_IO10			0x31e
+			MX93_PAD_SAI1_RXD0__GPIO1_IO14				0x31e
 
-/* K1 */		MX93_PAD_SD2_DATA3__GPIO3_IO06				0x31e
-/* U29 */		MX93_PAD_PDM_BIT_STREAM0__GPIO1_IO09			0x31e
+			MX93_PAD_GPIO_IO18__GPIO2_IO18				0x31e
+			MX93_PAD_SAI1_TXFS__GPIO1_IO11				0x31e
 
-/* L1 */		MX93_PAD_SD2_CLK__GPIO3_IO01				0x31e
-/* T29 */		MX93_PAD_PDM_CLK__GPIO1_IO08				0x31e
+			MX93_PAD_GPIO_IO22__GPIO2_IO22				0x31e
+			MX93_PAD_GPIO_IO15__GPIO2_IO15				0x31e
 
-/* N29 */		MX93_PAD_GPIO_IO11__GPIO2_IO11				0x31e
-/* M29 */		MX93_PAD_GPIO_IO10__GPIO2_IO10				0x31e
+			MX93_PAD_GPIO_IO24__GPIO2_IO24				0x31e
+			MX93_PAD_GPIO_IO13__GPIO2_IO13				0x31e
 
-/* R1 */		MX93_PAD_GPIO_IO09__GPIO2_IO09				0x31e
-/* AF1 */		MX93_PAD_ENET2_MDC__GPIO4_IO14				0x31e
+			MX93_PAD_GPIO_IO06__GPIO2_IO06				0x31e
+			MX93_PAD_SAI1_TXD0__GPIO1_IO13				0x31e
 
-/* Y1 */		MX93_PAD_PDM_BIT_STREAM1__GPIO1_IO10			0x31e
-/* AG1 */		MX93_PAD_ENET2_MDIO__GPIO4_IO15				0x31e
+			MX93_PAD_GPIO_IO19__GPIO2_IO19				0x31e
+			MX93_PAD_SAI1_TXC__GPIO1_IO12				0x31e
 
-/* P1 */		MX93_PAD_GPIO_IO08__GPIO2_IO08				0x31e
-/* AL20 */		MX93_PAD_GPIO_IO28__GPIO2_IO28				0x31e
+			MX93_PAD_GPIO_IO16__GPIO2_IO16				0x31e
+			MX93_PAD_GPIO_IO20__GPIO2_IO20				0x31e
 
-/* AN5 */		MX93_PAD_SD2_VSELECT__GPIO3_IO19			0x31e
-/* AL18 */		MX93_PAD_CCM_CLKO1__GPIO3_IO26				0x31e
+			MX93_PAD_SD2_VSELECT__GPIO3_IO19			0x31e
+			MX93_PAD_GPIO_IO26__GPIO2_IO26				0x31e
 
-/* AG28 */		MX93_PAD_CCM_CLKO4__GPIO4_IO29				0x31e
-/* AG25 */		MX93_PAD_CCM_CLKO3__GPIO4_IO28				0x31e
+			/* 1.8V pairs */
+			MX93_PAD_ENET2_MDIO__GPIO4_IO15				0x31e
+			MX93_PAD_CCM_CLKO1__GPIO3_IO26				0x31e
 
-/* V1 */		MX93_PAD_I2C2_SCL__GPIO1_IO02				0x31e
-/* W1 */		MX93_PAD_I2C2_SDA__GPIO1_IO03				0x31e
+			MX93_PAD_CCM_CLKO4__GPIO4_IO29				0x31e
+			MX93_PAD_ENET2_MDC__GPIO4_IO14				0x31e
 
-/* AN4 (LED test) */	MX93_PAD_GPIO_IO18__GPIO2_IO18				0x31e
+			MX93_PAD_CCM_CLKO3__GPIO4_IO28				0x31e
+			MX93_PAD_CCM_CLKO2__GPIO3_IO27				0x31e
+
+			MX93_PAD_ENET1_MDC__GPIO4_IO00				0x31e
+			MX93_PAD_ENET1_MDIO__GPIO4_IO01				0x31e
+
+			MX93_PAD_ENET1_TXC__GPIO4_IO07				0x31e
+			MX93_PAD_ENET2_TXC__GPIO4_IO21				0x31e
+
+			MX93_PAD_ENET1_RXC__GPIO4_IO09				0x31e
+			MX93_PAD_ENET2_RXC__GPIO4_IO23				0x31e
+
+			MX93_PAD_ENET1_TX_CTL__GPIO4_IO06			0x31e
+			MX93_PAD_ENET2_TX_CTL__GPIO4_IO20			0x31e
+
+			MX93_PAD_ENET1_TD1__GPIO4_IO04				0x31e
+			MX93_PAD_ENET2_TD1__GPIO4_IO18				0x31e
+
+			MX93_PAD_ENET1_TD3__GPIO4_IO02				0x31e
+			MX93_PAD_ENET2_TD3__GPIO4_IO16				0x31e
+
+			MX93_PAD_ENET1_RD0__GPIO4_IO10				0x31e
+			MX93_PAD_ENET2_RD0__GPIO4_IO24				0x31e
+
+			MX93_PAD_ENET1_RD2__GPIO4_IO12				0x31e
+			MX93_PAD_ENET2_RD2__GPIO4_IO26				0x31e
+
+			MX93_PAD_ENET1_RX_CTL__GPIO4_IO08			0x31e
+			MX93_PAD_ENET2_RX_CTL__GPIO4_IO22			0x31e
+
+			MX93_PAD_ENET1_TD0__GPIO4_IO05				0x31e
+			MX93_PAD_ENET2_TD0__GPIO4_IO19				0x31e
+
+			MX93_PAD_ENET1_TD2__GPIO4_IO03				0x31e
+			MX93_PAD_ENET2_TD2__GPIO4_IO17				0x31e
+
+			MX93_PAD_ENET1_RD1__GPIO4_IO11				0x31e
+			MX93_PAD_ENET2_RD1__GPIO4_IO25				0x31e
+
+			MX93_PAD_ENET1_RD3__GPIO4_IO13				0x31e
+			MX93_PAD_ENET2_RD3__GPIO4_IO27				0x31e
 		>;
 	};
 
 	pinctrl_hog_non_wb: hoggrpnonwb {
 		fsl,pins = <
-			/* COMMON NON-WIRELESS PAIRS */
 			/* Wifi */
-/* D12 */		MX93_PAD_SD3_CLK__GPIO3_IO20				0x31e
-/* D6 */		MX93_PAD_SD3_DATA2__GPIO3_IO24				0x31e
+			MX93_PAD_SD3_DATA1__GPIO3_IO23				0x31e
+			MX93_PAD_SD3_CLK__GPIO3_IO20				0x31e
 
-/* D11 */		MX93_PAD_SD3_CMD__GPIO3_IO21				0x31e
-/* D5 */		MX93_PAD_SD3_DATA3__GPIO3_IO25				0x31e
+			MX93_PAD_SD3_DATA2__GPIO3_IO24				0x31e
+			MX93_PAD_SD3_CMD__GPIO3_IO21				0x31e
 
-/* D9 */		MX93_PAD_SD3_DATA0__GPIO3_IO22				0x31e
-/* D8 */		MX93_PAD_SD3_DATA1__GPIO3_IO23				0x31e
+			MX93_PAD_SD3_DATA3__GPIO3_IO25				0x31e
+			MX93_PAD_SD3_DATA0__GPIO3_IO22				0x31e
 
 			/* BT uart */
-/* E13 */		MX93_PAD_UART1_TXD__GPIO1_IO05				0x31e
-/* E12 */		MX93_PAD_UART1_RXD__GPIO1_IO04				0x31e
+			MX93_PAD_UART1_TXD__GPIO1_IO05				0x31e
+			MX93_PAD_UART1_RXD__GPIO1_IO04				0x31e
 
-/* F11 */		MX93_PAD_UART2_TXD__GPIO1_IO07				0x31e
-/* F11 */		MX93_PAD_UART2_RXD__GPIO1_IO06				0x31e
-		>;
-	};
-
-	/* EQoS RGMII */
-	pinctrl_eqos: eqosgrp {
-		fsl,pins = <
-			MX93_PAD_ENET1_RD0__ENET_QOS_RGMII_RD0			0x57e
-			MX93_PAD_ENET1_RD1__ENET_QOS_RGMII_RD1			0x57e
-			MX93_PAD_ENET1_RD2__ENET_QOS_RGMII_RD2			0x57e
-			MX93_PAD_ENET1_RD3__ENET_QOS_RGMII_RD3			0x57e
-			MX93_PAD_ENET1_RXC__CCM_ENET_QOS_CLOCK_GENERATE_RX_CLK	0x5fe
-			MX93_PAD_ENET1_RX_CTL__ENET_QOS_RGMII_RX_CTL		0x57e
-			MX93_PAD_ENET1_TD0__ENET_QOS_RGMII_TD0			0x57e
-			MX93_PAD_ENET1_TD1__ENET_QOS_RGMII_TD1			0x57e
-			MX93_PAD_ENET1_TD2__ENET_QOS_RGMII_TD2			0x57e
-			MX93_PAD_ENET1_TD3__ENET_QOS_RGMII_TD3			0x57e
-			MX93_PAD_ENET1_TXC__CCM_ENET_QOS_CLOCK_GENERATE_TX_CLK	0x5fe
-			MX93_PAD_ENET1_TX_CTL__ENET_QOS_RGMII_TX_CTL		0x57e
-		>;
-	};
-
-	/* EQoS MDIO */
-	pinctrl_eqos_mdio: ethmdio {
-		fsl,pins = <
-			MX93_PAD_ENET1_MDC__ENET_QOS_MDC			0x57e
-			MX93_PAD_ENET1_MDIO__ENET_QOS_MDIO			0x57e
-		>;
-	};
-
-	/* LPI2C3 */
-	pinctrl_lpi2c3: lpi2c3grp {
-		fsl,pins = <
-			MX93_PAD_GPIO_IO00__LPI2C3_SDA				0x40000b9e
-			MX93_PAD_GPIO_IO01__LPI2C3_SCL				0x40000b9e
+			MX93_PAD_UART2_TXD__GPIO1_IO07				0x31e
+			MX93_PAD_UART2_RXD__GPIO1_IO06				0x31e
 		>;
 	};
 
@@ -360,6 +321,22 @@
 		fsl,pins = <
 			MX93_PAD_GPIO_IO02__LPI2C4_SDA				0x40000b9e
 			MX93_PAD_GPIO_IO03__LPI2C4_SCL				0x40000b9e
+		>;
+	};
+
+	/* MIPI camera */
+	pinctrl_mipi_camera: mipicamera {
+		fsl,pins = <
+			/* MIPI_CSI_RESET */
+			MX93_PAD_GPIO_IO21__GPIO2_IO21				0x31e
+		>;
+	};
+
+	/* MIPI display */
+	pinctrl_mipi_display: mipidisplay {
+		fsl,pins = <
+			/* MIPI_DSI_RESET */
+			MX93_PAD_GPIO_IO17__GPIO2_IO17				0x31e
 		>;
 	};
 

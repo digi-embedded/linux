@@ -266,7 +266,7 @@
 };
 
 /* USB_OTG2/USB_SS3 */
-&usbotg3 {
+&usbotg3_cdns3 {
 	status = "okay";
 };
 
