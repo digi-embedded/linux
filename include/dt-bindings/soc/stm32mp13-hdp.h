@@ -1,7 +1,7 @@
-/* SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause) */
+/* SPDX-License-Identifier: (GPL-2.0-only OR BSD-3-Clause) */
 /*
- * Copyright (C) STMicroelectronics 2018 - All Rights Reserved
- * Author: Roullier Christophe <christophe.roullier@st.com>
+ * Copyright (C) STMicroelectronics 2018-2023 - All Rights Reserved
+ * Author: Roullier Christophe <christophe.roullier@foss.st.com>
  * for STMicroelectronics.
  */
 
@@ -10,10 +10,10 @@
 
 #define STM32_HDP(port, value) ((value) << ((port) * 4))
 
-/* define HDP Pins number*/
+/* define HDP Pins number */
 #define HDP0_PWR_PWRWAKE_SYS			0
 #define HDP0_PWR_STOP_FORBIDDEN			1
-#define HDP0_PWR_STDBY_WKUP			2
+#define HDP0_PWR_STDBY_WAKEUP			2
 #define HDP0_PWR_ENCOMP_VDDCORE			3
 #define HDP0_BSEC_OUT_SEC_NIDEN			4
 #define HDP0_AIEC_SYS_WAKEUP			5
@@ -38,7 +38,7 @@
 
 #define HDP2_PWR_PWRWAKE_MPU			0
 #define HDP2_PWR_MPU_CLOCK_DISABLE_ACK		1
-#define HDP2_CA7_NDGBRESET_I			2
+#define HDP2_CA7_NDBGRESET_I			2
 #define HDP2_BSEC_IN_RSTCORE_N			4
 #define HDP2_BSEC_OUT_SEC_BSC_DIS		5
 #define HDP2_DDRCTRL_DFI_INIT_COMPLETE		8
@@ -48,7 +48,7 @@
 #define HDP2_NIC400_S0_BVALID			13
 #define HDP2_GPOVAL_2				15
 
-#define HDP3_PWR_SEL_VTH_VDD_CORE		0
+#define HDP3_PWR_SEL_VTH_VDDCORE		0
 #define HDP3_PWR_MPU_CLOCK_DISABLE_REQ		1
 #define HDP3_CA7_NPMUIRQ0			2
 #define HDP3_CA7_NFIQOUT0			3
@@ -56,7 +56,7 @@
 #define HDP3_BSEC_OUT_SEC_JTAG_DIS		5
 #define HDP3_RCC_PWRDS_SYS			6
 #define HDP3_SRAM3CTRL_TAMP_ERASE_REQ		7
-#define HDP3_DDRCTRL_STAT_DDRC_REG_SELREF_TYPE0	8
+#define HDP3_DDRCTRL_STAT_DDRC_REG_SELFREF_TYPE0	8
 #define HDP3_DTS_VALOBUS1_0			10
 #define HDP3_DTS_VALOBUS2_0			11
 #define HDP3_TAMP_POTENTIAL_TAMP_ERFCFG		12
@@ -65,13 +65,13 @@
 #define HDP3_GPOVAL_3				15
 
 #define HDP4_PWR_STOP2_ACTIVE			1
-#define HDP4_CA7_NL2RESET1			2
+#define HDP4_CA7_NL2RESET_I			2
 #define HDP4_CA7_NPORESET_VARM_I		3
 #define HDP4_BSEC_OUT_SEC_DFTEN			4
 #define HDP4_BSEC_OUT_SEC_DBGSWENABLE		5
 #define HDP4_ETH1_OUT_PMT_INTR_O		6
 #define HDP4_ETH2_OUT_PMT_INTR_O		7
-#define HDP4_DDRCTRL_STAT_DDRC_REG_SELREF_TYPE1	8
+#define HDP4_DDRCTRL_STAT_DDRC_REG_SELFREF_TYPE1	8
 #define HDP4_DDRCTRL_CACTIVE_0			9
 #define HDP4_DTS_VALOBUS1_1			10
 #define HDP4_DTS_VALOBUS2_1			11
@@ -99,7 +99,7 @@
 
 #define HDP6_CA7_STANDBYWFE0			0
 #define HDP6_PWR_VTH_VDDCPU_ACK			1
-#define HDP6_CA7_EVENT0				2
+#define HDP6_CA7_EVENTO				2
 #define HDP6_BSEC_IN_TAMPER_DET			4
 #define HDP6_BSEC_OUT_SEC_SPNIDEN		5
 #define HDP6_ETH1_OUT_MAC_SPEED_O1		6
@@ -126,8 +126,8 @@
 #define HDP7_DTS_VALOBUS1_4			10
 #define HDP7_DTS_VALOBUS2_4			11
 #define HDP7_RNG_TAMPER_OUT			12
-#define HDP7_NIC400_S0_AWVALID			13
-#define HDP7_NIC400_S0_ARVALID			14
+#define HDP7_NIC400_S0_AWAVALID			13
+#define HDP7_NIC400_S0_ARAVALID			14
 #define HDP7_GPOVAL_7				15
 
 #endif /* _DT_BINDINGS_STM32_HDP_H */
