@@ -784,8 +784,10 @@ brcmf_sdio_kso_control(struct brcmf_sdio *bus, bool on)
 	 * fail. Thereby just bailing out immediately after clearing KSO
 	 * bit, to avoid polling of KSO bit.
 	 */
-	if (!on)
+	if (!on) {
+		bus->sdiodev->sbwad_valid = 0;
 		return err;
+	}
 
 	if (on) {
 		/* device WAKEUP through KSO:
