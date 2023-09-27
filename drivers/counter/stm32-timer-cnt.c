@@ -8,6 +8,7 @@
  *
  */
 #include <linux/counter.h>
+#include <linux/interrupt.h>
 #include <linux/mfd/stm32-timers.h>
 #include <linux/mod_devicetable.h>
 #include <linux/module.h>
@@ -37,6 +38,7 @@ struct stm32_timer_regs {
 
 struct stm32_timer_cnt {
 	struct regmap *regmap;
+	atomic_t nb_ovf;
 	struct clk *clk;
 	u32 max_arr;
 	bool enabled;
@@ -44,6 +46,8 @@ struct stm32_timer_cnt {
 	bool has_encoder;
 	u32 idx;
 	unsigned int nchannels;
+	unsigned int nr_irqs;
+	u32 *irq;
 };
 
 static const enum counter_function stm32_count_functions[] = {
@@ -256,6 +260,60 @@ static int stm32_count_prescaler_write(struct counter_device *counter,
 	return regmap_write(priv->regmap, TIM_PSC, psc);
 }
 
+static int stm32_count_cap_read(struct counter_device *counter,
+				struct counter_count *count,
+				size_t ch, u64 *cap)
+{
+	struct stm32_timer_cnt *const priv = counter_priv(counter);
+	u32 ccrx;
+
+	switch (ch) {
+	case 0:
+		regmap_read(priv->regmap, TIM_CCR1, &ccrx);
+		break;
+	case 1:
+		regmap_read(priv->regmap, TIM_CCR2, &ccrx);
+		break;
+	case 2:
+		regmap_read(priv->regmap, TIM_CCR3, &ccrx);
+		break;
+	case 3:
+		regmap_read(priv->regmap, TIM_CCR4, &ccrx);
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	dev_dbg(counter->parent, "CCR%zu: 0x%08x\n", ch, ccrx);
+
+	*cap = ccrx;
+
+	return 0;
+}
+
+static int stm32_count_nb_ovf_read(struct counter_device *counter,
+				   struct counter_count *count, u64 *val)
+{
+	struct stm32_timer_cnt *const priv = counter_priv(counter);
+
+	*val = atomic_read(&priv->nb_ovf);
+
+	return 0;
+}
+
+static int stm32_count_nb_ovf_write(struct counter_device *counter,
+				    struct counter_count *count, u64 val)
+{
+	struct stm32_timer_cnt *const priv = counter_priv(counter);
+
+	if (val > U32_MAX)
+		return -ERANGE;
+
+	atomic_set(&priv->nb_ovf, val);
+
+	return 0;
+}
+
 static struct counter_comp stm32_count_ext[] = {
 	COUNTER_COMP_DIRECTION(stm32_count_direction_read),
 	COUNTER_COMP_ENABLE(stm32_count_enable_read, stm32_count_enable_write),
@@ -263,6 +321,43 @@ static struct counter_comp stm32_count_ext[] = {
 			     stm32_count_ceiling_write),
 	COUNTER_COMP_COUNT_U64("prescaler", stm32_count_prescaler_read,
 			       stm32_count_prescaler_write),
+	COUNTER_COMP_COUNT_U64("num_overflows", stm32_count_nb_ovf_read, stm32_count_nb_ovf_write),
+};
+
+static DEFINE_COUNTER_ARRAY_CAPTURE(stm32_count_cap_array_4ch, 4);
+static struct counter_comp stm32_count_4ch_ext[] = {
+	COUNTER_COMP_DIRECTION(stm32_count_direction_read),
+	COUNTER_COMP_ENABLE(stm32_count_enable_read, stm32_count_enable_write),
+	COUNTER_COMP_CEILING(stm32_count_ceiling_read,
+			     stm32_count_ceiling_write),
+	COUNTER_COMP_COUNT_U64("prescaler", stm32_count_prescaler_read,
+			       stm32_count_prescaler_write),
+	COUNTER_COMP_ARRAY_CAPTURE(stm32_count_cap_read, NULL, stm32_count_cap_array_4ch),
+	COUNTER_COMP_COUNT_U64("num_overflows", stm32_count_nb_ovf_read, stm32_count_nb_ovf_write),
+};
+
+static DEFINE_COUNTER_ARRAY_CAPTURE(stm32_count_cap_array_2ch, 2);
+static struct counter_comp stm32_count_2ch_ext[] = {
+	COUNTER_COMP_DIRECTION(stm32_count_direction_read),
+	COUNTER_COMP_ENABLE(stm32_count_enable_read, stm32_count_enable_write),
+	COUNTER_COMP_CEILING(stm32_count_ceiling_read,
+			     stm32_count_ceiling_write),
+	COUNTER_COMP_COUNT_U64("prescaler", stm32_count_prescaler_read,
+			       stm32_count_prescaler_write),
+	COUNTER_COMP_ARRAY_CAPTURE(stm32_count_cap_read, NULL, stm32_count_cap_array_2ch),
+	COUNTER_COMP_COUNT_U64("num_overflows", stm32_count_nb_ovf_read, stm32_count_nb_ovf_write),
+};
+
+static DEFINE_COUNTER_ARRAY_CAPTURE(stm32_count_cap_array_1ch, 1);
+static struct counter_comp stm32_count_1ch_ext[] = {
+	COUNTER_COMP_DIRECTION(stm32_count_direction_read),
+	COUNTER_COMP_ENABLE(stm32_count_enable_read, stm32_count_enable_write),
+	COUNTER_COMP_CEILING(stm32_count_ceiling_read,
+			     stm32_count_ceiling_write),
+	COUNTER_COMP_COUNT_U64("prescaler", stm32_count_prescaler_read,
+			       stm32_count_prescaler_write),
+	COUNTER_COMP_ARRAY_CAPTURE(stm32_count_cap_read, NULL, stm32_count_cap_array_1ch),
+	COUNTER_COMP_COUNT_U64("num_overflows", stm32_count_nb_ovf_read, stm32_count_nb_ovf_write),
 };
 
 static const enum counter_synapse_action stm32_clock_synapse_actions[] = {
@@ -324,12 +419,145 @@ static int stm32_action_read(struct counter_device *counter,
 	}
 }
 
+struct stm32_count_cc_regs {
+	u32 ccmr_reg;
+	u32 ccmr_mask;
+	u32 ccmr_bits;
+	u32 ccer_bits;
+};
+
+static const struct stm32_count_cc_regs stm32_cc[] = {
+	{ TIM_CCMR1, TIM_CCMR_CC1S, TIM_CCMR_CC1S_TI1,
+		TIM_CCER_CC1E | TIM_CCER_CC1P | TIM_CCER_CC1NP },
+	{ TIM_CCMR1, TIM_CCMR_CC2S, TIM_CCMR_CC2S_TI2,
+		TIM_CCER_CC2E | TIM_CCER_CC2P | TIM_CCER_CC2NP },
+	{ TIM_CCMR2, TIM_CCMR_CC3S, TIM_CCMR_CC3S_TI3,
+		TIM_CCER_CC3E | TIM_CCER_CC3P | TIM_CCER_CC3NP },
+	{ TIM_CCMR2, TIM_CCMR_CC4S, TIM_CCMR_CC4S_TI4,
+		TIM_CCER_CC4E | TIM_CCER_CC4P | TIM_CCER_CC4NP },
+};
+
+struct stm32_count_ipsc_regs {
+	u32 reg;
+	u32 mask;
+};
+
+static const struct stm32_count_ipsc_regs stm32_ipsc[] = {
+	{ TIM_CCMR1, TIM_CCMR_IC1PSC },
+	{ TIM_CCMR1, TIM_CCMR_IC2PSC },
+	{ TIM_CCMR2, TIM_CCMR_IC1PSC },
+	{ TIM_CCMR2, TIM_CCMR_IC2PSC },
+};
+
+static int stm32_count_capture_configure(struct counter_device *counter, unsigned int ch,
+					 bool enable)
+{
+	struct stm32_timer_cnt *const priv = counter_priv(counter);
+	u32 ccmr, ccer, sr;
+
+	if (ch >= ARRAY_SIZE(stm32_cc)) {
+		dev_err(counter->parent, "invalid ch: %d\n", ch);
+		return -EINVAL;
+	}
+
+	/*
+	 * configure channel in input capture mode, map channel 1 on TI1, channel2 on TI2...
+	 * Select both edges / non-inverted to trigger a capture.
+	 */
+	if (enable) {
+		/* first clear possibly latched capture flag upon enabling */
+		regmap_read(priv->regmap, TIM_CCER, &ccer);
+		if (!(ccer & stm32_cc[ch].ccer_bits)) {
+			sr = ~TIM_SR_CC_IF(ch);
+			regmap_write(priv->regmap, TIM_SR, sr);
+			/* also clear input prescaler */
+			regmap_clear_bits(priv->regmap, stm32_ipsc[ch].reg, stm32_ipsc[ch].mask);
+		}
+		regmap_update_bits(priv->regmap, stm32_cc[ch].ccmr_reg, stm32_cc[ch].ccmr_mask,
+				   stm32_cc[ch].ccmr_bits);
+		regmap_set_bits(priv->regmap, TIM_CCER, stm32_cc[ch].ccer_bits);
+	} else {
+		regmap_clear_bits(priv->regmap, TIM_CCER, stm32_cc[ch].ccer_bits);
+		regmap_clear_bits(priv->regmap, stm32_cc[ch].ccmr_reg, stm32_cc[ch].ccmr_mask);
+	}
+
+	regmap_read(priv->regmap, stm32_cc[ch].ccmr_reg, &ccmr);
+	regmap_read(priv->regmap, TIM_CCER, &ccer);
+	dev_dbg(counter->parent, "%s(%s) ch%d 0x%08x 0x%08x\n", __func__, enable ? "ena" : "dis",
+		ch, ccmr, ccer);
+
+	return 0;
+}
+
+static int stm32_count_events_configure(struct counter_device *counter)
+{
+	struct stm32_timer_cnt *const priv = counter_priv(counter);
+	struct counter_event_node *event_node;
+	int i, ret;
+	u32 val, dier = 0;
+
+	list_for_each_entry(event_node, &counter->events_list, l) {
+		switch (event_node->event) {
+		case COUNTER_EVENT_OVERFLOW_UNDERFLOW:
+			/* first clear possibly latched UIF before enabling */
+			regmap_read(priv->regmap, TIM_DIER, &val);
+			if (!(val & TIM_DIER_UIE))
+				regmap_write(priv->regmap, TIM_SR, (u32)~TIM_SR_UIF);
+			dier |= TIM_DIER_UIE;
+			break;
+		case COUNTER_EVENT_CAPTURE:
+			ret = stm32_count_capture_configure(counter, event_node->channel, true);
+			if (ret)
+				return ret;
+			dier |= TIM_DIER_CC_IE(event_node->channel);
+			break;
+		default:
+			/* should never reach this path */
+			return -EINVAL;
+		}
+	}
+
+	regmap_write(priv->regmap, TIM_DIER, dier);
+
+	/* check for disabled capture events */
+	for (i = 0 ; i < priv->nchannels; i++) {
+		if (!(dier & TIM_DIER_CC_IE(i))) {
+			ret = stm32_count_capture_configure(counter, i, false);
+			if (ret)
+				return ret;
+		}
+	}
+
+	return 0;
+}
+
+static int stm32_count_watch_validate(struct counter_device *counter,
+				      const struct counter_watch *watch)
+{
+	struct stm32_timer_cnt *const priv = counter_priv(counter);
+
+	switch (watch->event) {
+	case COUNTER_EVENT_CAPTURE:
+		if (watch->channel >= priv->nchannels) {
+			dev_err(counter->parent, "Invalid channel %d\n", watch->channel);
+			return -EINVAL;
+		}
+		return 0;
+	case COUNTER_EVENT_OVERFLOW_UNDERFLOW:
+		return 0;
+	default:
+		return -EINVAL;
+	}
+}
+
 static const struct counter_ops stm32_timer_cnt_ops = {
 	.count_read = stm32_count_read,
 	.count_write = stm32_count_write,
 	.function_read = stm32_count_function_read,
 	.function_write = stm32_count_function_write,
 	.action_read = stm32_action_read,
+	.events_configure = stm32_count_events_configure,
+	.watch_validate = stm32_count_watch_validate,
 };
 
 static int stm32_count_clk_get_freq(struct counter_device *counter,
@@ -407,8 +635,8 @@ static struct counter_count stm32_counts_enc_4ch = {
 	.num_functions = ARRAY_SIZE(stm32_count_functions),
 	.synapses = stm32_count_synapses_4ch_enc,
 	.num_synapses = ARRAY_SIZE(stm32_count_synapses_4ch_enc),
-	.ext = stm32_count_ext,
-	.num_ext = ARRAY_SIZE(stm32_count_ext)
+	.ext = stm32_count_4ch_ext,
+	.num_ext = ARRAY_SIZE(stm32_count_4ch_ext)
 };
 
 /* STM32 Timer with up to 4 capture channels */
@@ -447,8 +675,8 @@ static struct counter_count stm32_counts_4ch = {
 	.num_functions = 1, /* increase */
 	.synapses = stm32_count_synapses,
 	.num_synapses = ARRAY_SIZE(stm32_count_synapses),
-	.ext = stm32_count_ext,
-	.num_ext = ARRAY_SIZE(stm32_count_ext)
+	.ext = stm32_count_4ch_ext,
+	.num_ext = ARRAY_SIZE(stm32_count_4ch_ext)
 };
 
 static struct counter_count stm32_counts_2ch = {
@@ -458,8 +686,8 @@ static struct counter_count stm32_counts_2ch = {
 	.num_functions = 1, /* increase */
 	.synapses = stm32_count_synapses,
 	.num_synapses = 3, /* clock, ch1 and ch2 */
-	.ext = stm32_count_ext,
-	.num_ext = ARRAY_SIZE(stm32_count_ext)
+	.ext = stm32_count_2ch_ext,
+	.num_ext = ARRAY_SIZE(stm32_count_2ch_ext)
 };
 
 static struct counter_count stm32_counts_1ch = {
@@ -469,8 +697,8 @@ static struct counter_count stm32_counts_1ch = {
 	.num_functions = 1, /* increase */
 	.synapses = stm32_count_synapses,
 	.num_synapses = 2, /* clock, ch1 */
-	.ext = stm32_count_ext,
-	.num_ext = ARRAY_SIZE(stm32_count_ext)
+	.ext = stm32_count_1ch_ext,
+	.num_ext = ARRAY_SIZE(stm32_count_1ch_ext)
 };
 
 static struct counter_count stm32_counts = {
@@ -482,6 +710,42 @@ static struct counter_count stm32_counts = {
 	.num_synapses = 1, /* clock only */
 	.ext = stm32_count_ext,
 	.num_ext = ARRAY_SIZE(stm32_count_ext)
+};
+
+static irqreturn_t stm32_timer_cnt_isr(int irq, void *ptr)
+{
+	struct counter_device *counter = ptr;
+	struct stm32_timer_cnt *const priv = counter_priv(counter);
+	u32 clr = GENMASK(31, 0); /* SR flags can be cleared by writing 0 (wr 1 has no effect) */
+	u32 sr, dier;
+	int i;
+
+	regmap_read(priv->regmap, TIM_SR, &sr);
+	regmap_read(priv->regmap, TIM_DIER, &dier);
+	/* Only take care of enabled IRQs */
+	dier &= (TIM_DIER_UIE | TIM_DIER_CC1IE | TIM_DIER_CC2IE | TIM_DIER_CC3IE | TIM_DIER_CC4IE);
+	sr &= dier;
+
+	if (sr & TIM_SR_UIF) {
+		atomic_inc(&priv->nb_ovf);
+		counter_push_event(counter, COUNTER_EVENT_OVERFLOW_UNDERFLOW, 0);
+		dev_dbg(counter->parent, "COUNTER_EVENT_OVERFLOW_UNDERFLOW\n");
+		/* SR flags can be cleared by writing 0, only clear relevant flag */
+		clr &= ~TIM_SR_UIF;
+	}
+
+	/* Check capture events */
+	for (i = 0 ; i < priv->nchannels; i++) {
+		if (sr & TIM_SR_CC_IF(i)) {
+			counter_push_event(counter, COUNTER_EVENT_CAPTURE, i);
+			clr &= ~TIM_SR_CC_IF(i);
+			dev_dbg(counter->parent, "COUNTER_EVENT_CAPTURE, %d\n", i);
+		}
+	}
+
+	regmap_write(priv->regmap, TIM_SR, clr);
+
+	return IRQ_HANDLED;
 };
 
 static void stm32_timer_cnt_detect_channels(struct platform_device *pdev,
@@ -546,7 +810,7 @@ static int stm32_timer_cnt_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct stm32_timer_cnt *priv;
 	struct counter_device *counter;
-	int ret;
+	int i, ret;
 
 	if (IS_ERR_OR_NULL(ddata))
 		return -EINVAL;
@@ -560,6 +824,8 @@ static int stm32_timer_cnt_probe(struct platform_device *pdev)
 	priv->regmap = ddata->regmap;
 	priv->clk = ddata->clk;
 	priv->max_arr = ddata->max_arr;
+	priv->nr_irqs = ddata->nr_irqs;
+	priv->irq = ddata->irq;
 
 	ret = stm32_timer_cnt_probe_encoder(pdev, priv);
 	if (ret)
@@ -604,6 +870,16 @@ static int stm32_timer_cnt_probe(struct platform_device *pdev)
 	}
 
 	platform_set_drvdata(pdev, priv);
+
+	for (i = 0; i < priv->nr_irqs; i++) {
+		ret = devm_request_irq(&pdev->dev, priv->irq[i], stm32_timer_cnt_isr,
+				       0, dev_name(dev), counter);
+		if (ret) {
+			dev_err(dev, "Failed to request irq %d (err %d)\n",
+				priv->irq[i], ret);
+			return ret;
+		}
+	}
 
 	/* Reset input selector to its default input */
 	regmap_write(priv->regmap, TIM_TISEL, 0x0);
