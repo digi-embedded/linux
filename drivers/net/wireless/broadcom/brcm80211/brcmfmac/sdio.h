@@ -241,6 +241,7 @@ struct brcmf_sdio_dev {
 	struct sdio_func *func3;
 #endif /* CONFIG_IFX_BT_SHARED_SDIO */
 	u32 sbwad;			/* Save backplane window address */
+	bool sbwad_valid;			/* Save backplane window address */
 	struct brcmf_core *cc_core;	/* chipcommon core info struct */
 	struct brcmf_sdio *bus;
 	struct device *dev;
