@@ -237,7 +237,7 @@ static int brcmf_sdiod_set_backplane_window(struct brcmf_sdio_dev *sdiodev,
 		brcmf_err("WARN: Write operation when bus is in sleep state\n");
 	}
 
-	if (bar0 == sdiodev->sbwad)
+	if (sdiodev->sbwad_valid && (bar0 == sdiodev->sbwad))
 		return 0;
 
 	v = bar0 >> 8;
@@ -246,8 +246,10 @@ static int brcmf_sdiod_set_backplane_window(struct brcmf_sdio_dev *sdiodev,
 		brcmf_sdiod_writeb(sdiodev, SBSDIO_FUNC1_SBADDRLOW + i,
 				   v & 0xff, &err);
 
-	if (!err)
+	if (!err) {
+		sdiodev->sbwad_valid = 1;
 		sdiodev->sbwad = bar0;
+	}
 
 	return err;
 }
@@ -968,6 +970,7 @@ int brcmf_sdiod_remove(struct brcmf_sdio_dev *sdiodev)
 
 	sg_free_table(&sdiodev->sgtable);
 	sdiodev->sbwad = 0;
+	sdiodev->sbwad_valid = 0;
 
 	pm_runtime_allow(sdiodev->func1->card->host->parent);
 	return 0;
