@@ -2004,10 +2004,57 @@ static void ltdc_encoder_mode_set(struct drm_encoder *encoder,
 		pinctrl_pm_select_default_state(ddev->dev);
 }
 
+static enum drm_mode_status ltdc_encoder_mode_valid(struct drm_encoder *encoder,
+						    const struct drm_display_mode *mode)
+{
+	struct drm_device *ddev = encoder->dev;
+	struct ltdc_device *ldev = ddev->dev_private;
+	int ret;
+
+	DRM_DEBUG_DRIVER("\n");
+
+	if (encoder->encoder_type != DRM_MODE_ENCODER_LVDS) {
+		if (ldev->lb_clk) {
+			ret = clk_set_parent(ldev->pixel_clk, ldev->lb_clk);
+			if (ret) {
+				DRM_ERROR("Could not set parent clock: %d\n", ret);
+				return MODE_BAD;
+			}
+		}
+	}
+
+	return MODE_OK;
+}
+
+static bool ltdc_encoder_mode_fixup(struct drm_encoder *encoder,
+				    const struct drm_display_mode *mode,
+				    struct drm_display_mode *adjusted_mode)
+{
+	struct drm_device *ddev = encoder->dev;
+	struct ltdc_device *ldev = ddev->dev_private;
+	int ret;
+
+	DRM_DEBUG_DRIVER("\n");
+
+	if (encoder->encoder_type != DRM_MODE_ENCODER_LVDS) {
+		if (ldev->lb_clk) {
+			ret = clk_set_parent(ldev->pixel_clk, ldev->lb_clk);
+			if (ret) {
+				DRM_ERROR("Could not set parent clock: %d\n", ret);
+				return false;
+			}
+		}
+	}
+
+	return true;
+}
+
 static const struct drm_encoder_helper_funcs ltdc_encoder_helper_funcs = {
 	.disable = ltdc_encoder_disable,
 	.enable = ltdc_encoder_enable,
 	.mode_set = ltdc_encoder_mode_set,
+	.mode_fixup = ltdc_encoder_mode_fixup,
+	.mode_valid = ltdc_encoder_mode_valid,
 };
 
 static int ltdc_encoder_init(struct drm_device *ddev, struct drm_bridge *bridge)
@@ -2223,6 +2270,23 @@ int ltdc_load(struct drm_device *ddev)
 		if (PTR_ERR(ldev->bus_clk) != -EPROBE_DEFER)
 			DRM_DEBUG_DRIVER("Unable to get bus clock\n");
 		ldev->bus_clk = NULL;
+	}
+
+	ldev->lb_clk = devm_clk_get(dev, "ref");
+	if (IS_ERR(ldev->lb_clk)) {
+		if (PTR_ERR(ldev->pixel_clk) != -EPROBE_DEFER)
+			DRM_DEBUG_DRIVER("Unable to get loopback clock\n");
+		ldev->lb_clk = NULL;
+	}
+
+	/* Set CK_KER_LTDC by default, for now */
+	if (ldev->lb_clk) {
+		if (IS_ERR(ldev->lb_clk))
+			return PTR_ERR(ldev->lb_clk);
+
+		ret = clk_set_parent(ldev->pixel_clk, ldev->lb_clk);
+		if (ret)
+			DRM_ERROR("Could not set parent clock: %d\n", ret);
 	}
 
 	if (clk_prepare_enable(ldev->pixel_clk)) {
