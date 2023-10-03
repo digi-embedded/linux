@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: GPL-2.0
 VERSION = 6
 PATCHLEVEL = 1
-SUBLEVEL = 22
+SUBLEVEL = 36
 EXTRAVERSION =
-NAME = Hurr durr I'ma ninja sloth
+NAME = Curry Ramen
 
 # indicate that change "Kbuild: Support nested composite objects" is
 # present in the kernel so that out-of-tree modules can act upon it
