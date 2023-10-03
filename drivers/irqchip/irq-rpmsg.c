@@ -75,7 +75,7 @@ static int irq_rpmsg_map(struct irq_domain *d,
 	struct rpmsg_irq_dev *rirq_dev = d->host_data;
 
 	if (!atomic_read(&rirq_dev->initialized))
-		return -EINVAL;
+		return -EPROBE_DEFER;
 
 	irq_set_status_flags(virq, IRQ_LEVEL);
 	irq_set_chip_and_handler(virq, &irq_rpmsg_chip, handle_level_irq);
@@ -169,25 +169,19 @@ static void irq_rpmsg_setup_work(struct work_struct *ws)
 		goto err;
 	}
 
-	rirq_dev->banks = devm_kcalloc(&rpdev->dev, rirq_dev->nb_bank,
-				       sizeof(struct rpmsg_intc_bank),
-				       GFP_KERNEL);
-	if (!rirq_dev->banks) {
-		dev_err(&rpdev->dev, "no-mem\n");
-		goto err;
-	}
-
-	rirq_dev->irqd = irq_domain_create_linear(rpdev->dev.fwnode,
-						  rirq_dev->nb_bank * IRQS_PER_BANK,
-						  &irq_rpmsg_domain_ops,
-						  rirq_dev);
-
-	if (!rirq_dev->irqd) {
-		dev_err(&rpdev->dev, "Failed to create IRQ domain\n");
+	/*
+	 * Workaround
+	 * we can't manage IRQ domain creation here, this would leads to crash on remove.
+	 * There is no devlink between the IRQ domain client and the rpmsg device, so the IRQ domain
+	 * can be removed before the IRQs are freed.
+	 */
+	if (rirq_dev->nb_bank > 1) {
+		dev_err(&rpdev->dev, "only one IRQ bank supported\n");
 		goto err;
 	}
 
 	atomic_set(&rirq_dev->initialized, 1);
+
 	return;
 
 err:
@@ -229,8 +223,6 @@ static void irq_rpmsg_remove(struct rpmsg_device *rpdev)
 	struct rpmsg_irq_dev *rirq_dev = dev_get_drvdata(&rpdev->dev);
 
 	cancel_work_sync(&rirq_dev->irqrpmsg_work);
-	if (rirq_dev->irqd)
-		irq_domain_remove(rirq_dev->irqd);
 
 	atomic_set(&rirq_dev->initialized, 0);
 }
@@ -262,9 +254,23 @@ static int irq_rpmsg_plat_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, rirq_dev);
 
 	rirq_dev->rpdrv = rpmsg_irq_drv;
+
+	rirq_dev->banks = devm_kmalloc(dev, sizeof(struct rpmsg_intc_bank), GFP_KERNEL);
+	if (!rirq_dev->banks)
+		return -ENOMEM;
+
+	rirq_dev->irqd = irq_domain_create_linear(dev->fwnode, IRQS_PER_BANK, &irq_rpmsg_domain_ops,
+						  rirq_dev);
+	if (!rirq_dev->irqd) {
+		dev_err(dev, "Failed to create IRQ domain\n");
+		return -EINVAL;
+	}
+
 	ret = register_rpmsg_driver(&rirq_dev->rpdrv);
 	if (ret) {
 		dev_err_probe(dev, ret, "failed to register rpmsg drv\n");
+		irq_domain_remove(rirq_dev->irqd);
+
 		return ret;
 	}
 
@@ -276,6 +282,8 @@ static int irq_rpmsg_plat_remove(struct platform_device *pdev)
 	struct rpmsg_irq_dev *rirq_dev = platform_get_drvdata(pdev);
 
 	unregister_rpmsg_driver(&rirq_dev->rpdrv);
+
+	irq_domain_remove(rirq_dev->irqd);
 
 	return 0;
 }
