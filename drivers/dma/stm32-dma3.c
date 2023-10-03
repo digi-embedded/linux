@@ -840,12 +840,13 @@ static int stm32_dma3_chan_prep_hwdesc(struct stm32_dma3_chan *chan,
 	return stm32_dma3_check_user_setting(hwdesc);
 }
 
-static enum dma_slave_buswidth stm32_dma3_get_max_dw(u32 len, dma_addr_t addr, u32 chan_max_burst)
+static enum dma_slave_buswidth stm32_dma3_get_max_dw(u32 len, dma_addr_t addr, u32 chan_max_burst,
+						     enum stm32_dma3_ap port)
 {
 	enum dma_slave_buswidth max_dw = DMA_SLAVE_BUSWIDTH_16_BYTES;
 
-	/* If chan_max_burst is 0, it means the channel has no FIFO */
-	if (!chan_max_burst)
+	/* If chan_max_burst is 0, it means the channel has no FIFO; Dword is forbidden on AHB */
+	if (!chan_max_burst || port == AP_AHB)
 		max_dw = DMA_SLAVE_BUSWIDTH_8_BYTES;
 
 	/* len and addr must be a multiple of dw */
@@ -892,6 +893,7 @@ static int stm32_dma3_chan_prep_hw(struct stm32_dma3_chan *chan, enum dma_transf
 	u32 _ccr, _ctr1 = 0, _ctr2 = 0, _ctr3 = 0;
 	u32 ch_conf = chan->dt_config.ch_conf;
 	u32 tr_conf = chan->dt_config.tr_conf;
+	enum stm32_dma3_ap port;
 
 	dev_dbg(chan2dev(chan),	"%s: %s src_addr=%pad dst_addr=%pad\n",
 		__func__, dmaengine_get_direction_text(dir), &src_addr, &dst_addr);
@@ -955,7 +957,8 @@ static int stm32_dma3_chan_prep_hw(struct stm32_dma3_chan *chan, enum dma_transf
 	switch (dir) {
 	case DMA_MEM_TO_DEV:
 		/* Set destination (device) data width and burst */
-		ddw = min_t(u32, ddw, stm32_dma3_get_max_dw(len, dst_addr, chan->max_burst));
+		port = FIELD_GET(STM32_DMA3_DT_DAP, tr_conf);
+		ddw = min_t(u32, ddw, stm32_dma3_get_max_dw(len, dst_addr, chan->max_burst, port));
 		dbl_max = min_t(u32, dbl_max, stm32_dma3_get_max_burst(len, ddw, chan->max_burst,
 								       dst_max_burst));
 
@@ -964,7 +967,8 @@ static int stm32_dma3_chan_prep_hw(struct stm32_dma3_chan *chan, enum dma_transf
 			sdw = ddw;
 			sbl_max = dbl_max;
 		} else {
-			sdw = stm32_dma3_get_max_dw(len, src_addr, chan->max_burst);
+			port = FIELD_GET(STM32_DMA3_DT_SAP, tr_conf);
+			sdw = stm32_dma3_get_max_dw(len, src_addr, chan->max_burst, port);
 			sbl_max = stm32_dma3_get_max_burst(len, sdw, chan->max_burst,
 							   src_max_burst);
 		}
@@ -992,7 +996,8 @@ static int stm32_dma3_chan_prep_hw(struct stm32_dma3_chan *chan, enum dma_transf
 
 	case DMA_DEV_TO_MEM:
 		/* Set source (device) data width and burst */
-		sdw = min_t(u32, sdw, stm32_dma3_get_max_dw(len, src_addr, chan->max_burst));
+		port = FIELD_GET(STM32_DMA3_DT_SAP, tr_conf);
+		sdw = min_t(u32, sdw, stm32_dma3_get_max_dw(len, src_addr, chan->max_burst, port));
 		sbl_max = min_t(u32, sbl_max, stm32_dma3_get_max_burst(len, sdw, chan->max_burst,
 								       src_max_burst));
 
@@ -1001,7 +1006,8 @@ static int stm32_dma3_chan_prep_hw(struct stm32_dma3_chan *chan, enum dma_transf
 			ddw = sdw;
 			dbl_max = sbl_max;
 		} else {
-			ddw = stm32_dma3_get_max_dw(len, dst_addr, chan->max_burst);
+			port = FIELD_GET(STM32_DMA3_DT_DAP, tr_conf);
+			ddw = stm32_dma3_get_max_dw(len, dst_addr, chan->max_burst, port);
 			dbl_max = stm32_dma3_get_max_burst(len, ddw, chan->max_burst,
 							   dst_max_burst);
 		}
@@ -1031,7 +1037,8 @@ static int stm32_dma3_chan_prep_hw(struct stm32_dma3_chan *chan, enum dma_transf
 		/* Set source (memory) data width and burst */
 		init_dw = sdw;
 		init_bl_max = sbl_max;
-		sdw = stm32_dma3_get_max_dw(len, src_addr, chan->max_burst);
+		port = FIELD_GET(STM32_DMA3_DT_SAP, tr_conf);
+		sdw = stm32_dma3_get_max_dw(len, src_addr, chan->max_burst, port);
 		sbl_max = stm32_dma3_get_max_burst(len, sdw, chan->max_burst, src_max_burst);
 		if (chan->config_set & STM32_DMA3_CFG_SET_DMA) {
 			sdw = min_t(u32, init_dw, sdw);
@@ -1043,7 +1050,8 @@ static int stm32_dma3_chan_prep_hw(struct stm32_dma3_chan *chan, enum dma_transf
 		/* Set destination (memory) data width and burst */
 		init_dw = ddw;
 		init_bl_max = dbl_max;
-		ddw = stm32_dma3_get_max_dw(len, dst_addr, chan->max_burst);
+		port = FIELD_GET(STM32_DMA3_DT_DAP, tr_conf);
+		ddw = stm32_dma3_get_max_dw(len, dst_addr, chan->max_burst, port);
 		dbl_max = stm32_dma3_get_max_burst(len, ddw, chan->max_burst, dst_max_burst);
 		if (chan->config_set & STM32_DMA3_CFG_SET_DMA) {
 			ddw = min_t(u32, init_dw, ddw);
