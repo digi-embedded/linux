@@ -418,6 +418,9 @@ static int dw_mipi_dsi_phy_141_init(void *priv_data)
 	dsi_clear(dsi, DSI_PTCR0, PTCR0_TRSEN);
 	mdelay(1);
 
+	/* dummy set rate ... */
+	clk_set_rate(dsi->txbyte_clk.clk, dsi->lane_mbps * 1000000);
+
 	ret = clk_set_rate(dsi->txbyte_clk.clk, dsi->lane_mbps * 1000000 / 2);
 	if (ret)
 		return ret;
