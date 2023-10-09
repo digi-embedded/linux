@@ -620,7 +620,7 @@
 		};
 		pins2 {
 			pinmux = <STM32_PINMUX('F', 13, AF8)>; /* UART5_RX */
-			bias-disable;
+			bias-pull-up;
 		};
 	};
 
@@ -630,7 +630,7 @@
 		};
 		pins2 {
 			pinmux = <STM32_PINMUX('F', 13, AF8)>; /* UART5_RX */
-			bias-disable;
+			bias-pull-up;
 		};
 	};
 
