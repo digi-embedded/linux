@@ -576,6 +576,12 @@ static int lvds_pixel_clk_enable(struct clk_hw *hw)
 		return ret;
 	}
 
+	ret = clk_prepare_enable(lvds->pllref_clk);
+	if (ret) {
+		DRM_ERROR("Failed to enable lvds reference clk\n");
+		return ret;
+	}
+
 	/*
 	 * In case we are operating in dual link, PHY Slv is set before PHY
 	 * Mst.
@@ -628,6 +634,7 @@ static void lvds_pixel_clk_disable(struct clk_hw *hw)
 		lvds_clear(lvds, lvds->phy_slave->base + lvds->phy_slave->ofs.PxGCR,
 			   PHY_GCR_DIV_RSTN | PHY_GCR_RSTZ);
 
+	clk_disable_unprepare(lvds->pllref_clk);
 	clk_disable_unprepare(lvds->pclk);
 }
 
@@ -1026,13 +1033,6 @@ static void lvds_atomic_enable(struct drm_bridge *bridge,
 		return;
 	}
 
-	/* Switch pixel clock parent to own clock */
-	ret = clk_set_parent(lvds->pixel_clk, lvds->lvds_ck_px.clk);
-	if (ret) {
-		DRM_ERROR("Could not set parent clock: %d\n", ret);
-		return;
-	}
-
 	connector = drm_atomic_get_new_connector_for_encoder(state,
 							     bridge->encoder);
 	crtc = drm_atomic_get_new_connector_state(state, connector)->crtc;
@@ -1065,9 +1065,27 @@ static void lvds_atomic_disable(struct drm_bridge *bridge,
 	clk_disable_unprepare(lvds->pclk);
 }
 
+static bool lvds_mode_fixup(struct drm_bridge *bridge,
+				   const struct drm_display_mode *mode,
+				   struct drm_display_mode *adjusted_mode)
+{
+	struct stm_lvds *lvds = bridge_to_stm_lvds(bridge);
+	int ret;
+
+	/* Switch pixel clock parent to own clock */
+	ret = clk_set_parent(lvds->pixel_clk, lvds->lvds_ck_px.clk);
+	if (ret) {
+		DRM_ERROR("Could not set parent clock: %d\n", ret);
+		return false;
+	}
+
+	return true;
+}
+
 static const struct drm_bridge_funcs lvds_bridge_funcs = {
 	.attach = lvds_attach,
 	.detach = lvds_detach,
+	.mode_fixup = lvds_mode_fixup,
 	.atomic_enable = lvds_atomic_enable,
 	.atomic_disable = lvds_atomic_disable,
 	.atomic_duplicate_state = drm_atomic_helper_bridge_duplicate_state,
@@ -1110,13 +1128,13 @@ static int lvds_probe(struct platform_device *pdev)
 	if (IS_ERR(lvds->pclk)) {
 		ret = PTR_ERR(lvds->pclk);
 		DRM_ERROR("Unable to get peripheral clock: %d\n", ret);
-		goto err_lvds_probe;
+		return ret;
 	}
 
 	ret = clk_prepare_enable(lvds->pclk);
 	if (ret) {
 		DRM_ERROR("%s: Failed to enable peripheral clk\n", __func__);
-		goto err_lvds_probe;
+		return ret;
 	}
 
 	rstc = devm_reset_control_get_exclusive(dev, NULL);
@@ -1204,12 +1222,6 @@ static int lvds_probe(struct platform_device *pdev)
 	if (IS_ERR(lvds->pixel_clk)) {
 		ret = PTR_ERR(lvds->pixel_clk);
 		DRM_ERROR("Unable to get pix clock: %d\n", ret);
-		goto err_lvds_probe;
-	}
-
-	ret = clk_set_parent(lvds->pixel_clk, lvds->lvds_ck_px.clk);
-	if (ret) {
-		DRM_ERROR("Could not set parent clock: %d\n", ret);
 		goto err_lvds_clk_parent;
 	}
 
@@ -1219,6 +1231,8 @@ static int lvds_probe(struct platform_device *pdev)
 	drm_bridge_add(&lvds->lvds_bridge);
 
 	platform_set_drvdata(pdev, lvds);
+
+	clk_disable_unprepare(lvds->pclk);
 
 	return 0;
 
