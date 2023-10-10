@@ -458,11 +458,18 @@ static void brcmf_p2p_print_actframe(bool tx, void *frame, u32 frame_len)
 static int brcmf_p2p_set_firmware(struct brcmf_if *ifp, u8 *p2p_mac)
 {
 	struct brcmf_pub *drvr = ifp->drvr;
-	s32 ret = 0;
+	s32 ret = 0, apsta = 0;
 
-	brcmf_fil_cmd_int_set(ifp, BRCMF_C_DOWN, 1);
-	brcmf_fil_iovar_int_set(ifp, "apsta", 1);
-	brcmf_fil_cmd_int_set(ifp, BRCMF_C_UP, 1);
+	ret = brcmf_fil_iovar_int_get(ifp, "apsta", &apsta);
+	if (ret) {
+		bphy_err(drvr, "failed to query apsta IOVAR");
+	} else if (!apsta) {
+		if (brcmf_fil_cmd_int_set(ifp, BRCMF_C_DOWN, 1) ||
+		    brcmf_fil_iovar_int_set(ifp, "apsta", 1) ||
+		    brcmf_fil_cmd_int_set(ifp, BRCMF_C_UP, 1)) {
+			bphy_err(drvr, "failed to set apsta IOVAR");
+		}
+	}
 
 	/* In case of COB type, firmware has default mac address
 	 * After Initializing firmware, we have to set current mac address to
