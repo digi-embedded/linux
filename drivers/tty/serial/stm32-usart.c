@@ -464,7 +464,7 @@ deinit_iso7816_config:
 static bool stm32_usart_iso7816_enabled(struct stm32_port *stm32_port)
 {
 	return stm32_port->port.iso7816.flags &&
-		(stm32_port->port.iso7816.flags && SER_ISO7816_ENABLED);
+		(stm32_port->port.iso7816.flags & SER_ISO7816_ENABLED);
 }
 
 static bool stm32_usart_rx_dma_started(struct stm32_port *stm32_port)
