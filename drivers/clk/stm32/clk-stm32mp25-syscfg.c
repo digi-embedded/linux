@@ -16,13 +16,47 @@ static const char * const clk_pix_ltdc_src[] = {
 	"clk_phy_dsi", "clk_pix_lvds", "ck_ker_ltdc"
 };
 
+static u8 clk_regmap_mux_get_parent(struct clk_hw *hw)
+{
+	return clk_regmap_mux_ops.get_parent(hw);
+}
+
+static int clk_regmap_mux_set_parent(struct clk_hw *hw, u8 index)
+{
+	return clk_regmap_mux_ops.set_parent(hw, index);
+}
+
+static int clk_regmap_mux_determine_rate(struct clk_hw *hw,
+					 struct clk_rate_request *req)
+{
+	return clk_regmap_mux_ops.determine_rate(hw, req);
+}
+
+#ifdef CONFIG_PM_SLEEP
+static void clk_regmap_mux_pm_restore(struct clk_hw *hw)
+{
+	int index = clk_hw_get_parent_index(hw);
+
+	clk_regmap_mux_set_parent(hw, index);
+}
+#endif
+
+static const struct clk_ops clk_syscfg_mux_ops = {
+	.get_parent = clk_regmap_mux_get_parent,
+	.set_parent = clk_regmap_mux_set_parent,
+	.determine_rate = clk_regmap_mux_determine_rate,
+#ifdef CONFIG_PM_SLEEP
+	.restore_context = clk_regmap_mux_pm_restore,
+#endif
+};
+
 static struct clk_regmap clk_pix_ltdc = {
 	.data = &(struct clk_regmap_mux_data){
 		.offset = SYSCFG_DISPLAYCLKCR,
 		.mask = 0x3,
 		.shift = 0,
 	},
-	.hw.init = CLK_HW_INIT_PARENTS("clk_pix_ltdc", clk_pix_ltdc_src, &clk_regmap_mux_ops,
+	.hw.init = CLK_HW_INIT_PARENTS("clk_pix_ltdc", clk_pix_ltdc_src, &clk_syscfg_mux_ops,
 				       CLK_SET_RATE_PARENT | CLK_SET_RATE_NO_REPARENT),
 };
 
