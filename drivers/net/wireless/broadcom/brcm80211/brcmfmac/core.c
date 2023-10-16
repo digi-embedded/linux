@@ -31,6 +31,7 @@
 #include "pcie.h"
 #include "common.h"
 #include "twt.h"
+#include "bt_shared_sdio_ifx.h"
 
 #define MAX_WAIT_FOR_8021X_TX			msecs_to_jiffies(950)
 
@@ -1657,6 +1658,7 @@ static int brcmf_bus_started(struct brcmf_pub *drvr, struct cfg80211_ops *ops)
 	brcmf_proto_debugfs_create(drvr);
 	brcmf_bus_debugfs_create(bus_if);
 	brcmf_twt_debugfs_create(drvr);
+	ifx_btsdio_debugfs_create(drvr);
 
 	return 0;
 
