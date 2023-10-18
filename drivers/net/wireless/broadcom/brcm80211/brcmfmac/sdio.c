@@ -785,7 +785,7 @@ brcmf_sdio_kso_control(struct brcmf_sdio *bus, bool on)
 	 * bit, to avoid polling of KSO bit.
 	 */
 	if (!on) {
-		sdiodev->sbwad_valid = 0;
+		bus->sdiodev->sbwad_valid = 0;
 		return err;
 	}
 
