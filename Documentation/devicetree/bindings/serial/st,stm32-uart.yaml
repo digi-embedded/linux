@@ -82,6 +82,14 @@ properties:
     enum: [1, 2, 4, 8, 12, 14, 16]
     default: 8
 
+  digi,long-break:
+    type: boolean
+    description:
+      If this property is present, the ioctl that sends a BREAK condition (TIOCSBRK)
+      will pull TX low (BREAK condition) until there is an ioctl that clears it
+      (TIOCCBRK). The default behavior of the UART (without this property) is to
+      only send one BREAK character.
+
 allOf:
   - $ref: rs485.yaml#
   - $ref: serial.yaml#
@@ -133,6 +141,31 @@ examples:
       rx-threshold = <4>;
       tx-threshold = <4>;
       rs485-rts-active-low;
+    };
+
+  - |
+    /* UART with support to custom long break that uses gpio pinctrl */
+    &uart7 {
+      pinctrl-names = "default", "gpio";
+      pinctrl-0 = <&ccmp15_uart7_pins_a>;
+      pinctrl-1 = <&ccmp15_uart7_gpio_pins_a>;
+      digi,long-break;
+      status = "okay";
+    };
+
+    &pinctrl {
+        ccmp15_uart7_gpio_pins_a: ccmp15-uart7-gpio-0 {
+            pins1 {
+                pinmux = <STM32_PINMUX('F', 7, GPIO)>; /* UART7_TX */
+                drive-push-pull;
+                output-low;
+                slew-rate = <0>;
+            };
+            pins2 {
+                pinmux = <STM32_PINMUX('F', 6, GPIO)>; /* UART7_RX */
+                bias-disable;
+            };
+        };
     };
 
 ...
