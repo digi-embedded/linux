@@ -286,7 +286,6 @@ enum enum_gate_cfg {
 	GATE_CRC,
 	GATE_SERC,
 	GATE_OSPIIOM,
-	GATE_GICV2M,
 	GATE_I3C1,
 	GATE_I3C2,
 	GATE_I3C3,
@@ -358,6 +357,7 @@ enum enum_gate_cfg {
 	GATE_RTC,
 	GATE_SYSCPU1,
 	GATE_BSEC,
+	GATE_GICV2M,
 #endif
 	GATE_NB
 };
@@ -490,7 +490,6 @@ static const struct stm32_gate_cfg stm32mp25_gates[GATE_NB] = {
 	GATE_CFG(GATE_CRC,		RCC_CRCCFGR,		1,	0),
 	GATE_CFG(GATE_SERC,		RCC_SERCCFGR,		1,	0),
 	GATE_CFG(GATE_OSPIIOM,		RCC_OSPIIOMCFGR,	1,	0),
-	GATE_CFG(GATE_GICV2M,		RCC_GICV2MCFGR,		1,	0),
 	GATE_CFG(GATE_I3C1,		RCC_I3C1CFGR,		1,	0),
 	GATE_CFG(GATE_I3C2,		RCC_I3C2CFGR,		1,	0),
 	GATE_CFG(GATE_I3C3,		RCC_I3C3CFGR,		1,	0),
@@ -562,6 +561,7 @@ static const struct stm32_gate_cfg stm32mp25_gates[GATE_NB] = {
 	GATE_CFG(GATE_RTC,		RCC_RTCCFGR,		1,	0),
 	GATE_CFG(GATE_SYSCPU1,		RCC_SYSCPU1CFGR,	1,	0),
 	GATE_CFG(GATE_BSEC,		RCC_BSECCFGR,		1,	0),
+	GATE_CFG(GATE_GICV2M,		RCC_GICV2MCFGR,		1,	0),
 #endif
 };
 
@@ -707,9 +707,6 @@ static CLK_STM32_GATE(ck_icn_p_ethsw_acm_msg, "ck_icn_ls_mcu", 0, GATE_ETHSWACMM
 /* FDCAN */
 static CLK_STM32_GATE(ck_icn_p_fdcan, "ck_icn_apb2", 0, GATE_FDCAN);
 static CLK_STM32_GATE(ck_ker_fdcan, "ck_flexgen_26", 0, GATE_FDCAN);
-
-/* GICV2M */
-static CLK_STM32_GATE(ck_icn_p_gicv2m, "ck_icn_apb4", CLK_IS_CRITICAL, GATE_GICV2M);
 
 /* GPU */
 static CLK_STM32_GATE(ck_icn_m_gpu, "ck_flexgen_59", 0, GATE_GPU);
@@ -1094,7 +1091,6 @@ static const struct clock_config stm32mp25_clock_cfg[] = {
 	STM32_GATE_CFG(CK_BUS_CSI, ck_icn_p_csi, SEC_RIFSC(CSI)),
 	STM32_GATE_CFG(CK_BUS_DCMIPP, ck_icn_p_dcmipp, SEC_RIFSC(DCMIPP)),
 	STM32_GATE_CFG(CK_BUS_LVDS, ck_icn_p_lvds, SEC_RIFSC(LVDS)),
-	STM32_GATE_CFG(CK_BUS_GICV2M, ck_icn_p_gicv2m, SEC_RIFSC(GICV2M)),
 	STM32_GATE_CFG(CK_BUS_USBTC, ck_icn_p_usbtc, SEC_RIFSC(UCPD1)),
 	STM32_GATE_CFG(CK_BUS_USB3PCIEPHY, ck_icn_p_usb3pciephy, SEC_RIFSC(USB3DR)),
 	STM32_GATE_CFG(CK_BUS_VDEC, ck_icn_p_vdec, SEC_RIFSC(VDEC)),
