@@ -106,6 +106,11 @@ int tee_rproc_load_fw(struct tee_rproc *trproc, const struct firmware *fw)
 	int ret;
 
 	fw_shm = tee_shm_register_kernel_buf(pvt_data.ctx, (void *)fw->data, fw->size);
+	if (IS_ERR(fw_shm)) {
+		dev_err(pvt_data.dev, "Failed to register kernel buffer in tee: %ld\n",
+			PTR_ERR(fw_shm));
+		return PTR_ERR(fw_shm);
+	}
 
 	prepare_args(trproc, TA_RPROC_FW_CMD_LOAD_FW, &arg, param, 1);
 
