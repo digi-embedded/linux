@@ -2419,11 +2419,14 @@ brcmf_set_key_mgmt(struct net_device *ndev, struct cfg80211_connect_params *sme)
 			}
 			break;
 		case WLAN_AKM_SUITE_FT_OVER_SAE:
-			val = WPA3_AUTH_SAE_PSK | WPA2_AUTH_FT;
+			val = WPA3_AUTH_SAE_FBT;
 			profile->is_ft = true;
 			if (sme->crypto.sae_pwd) {
 				brcmf_dbg(INFO, "using SAE offload\n");
 				profile->use_fwsup = BRCMF_PROFILE_FWSUP_SAE;
+			}
+			else {
+				profile->use_fwsup = BRCMF_PROFILE_FWSUP_ROAM;
 			}
 			break;
 		default:
