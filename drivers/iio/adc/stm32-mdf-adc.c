@@ -646,7 +646,7 @@ static int stm32_mdf_compute_scale(struct device *dev, unsigned int decim,
 {
 	unsigned long max = ARRAY_SIZE(stm32_mdf_log_table);
 	unsigned int prime_factors[16];
-	unsigned int num, div, logd;
+	unsigned int num, div, logd = 0;
 	int i, j, scale;
 
 	/* Decompose decimation ratio D, as prime number factors, to compute log10(D) */
