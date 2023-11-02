@@ -36,7 +36,7 @@
 			phy-mode = "rmii";
 			max-speed = <100>;
 			phy-handle = <&phy0>;
-			phy-supply = <&reg_3v3_eth_pwr>;
+			phy-supply = <&v3v3>;
 			st,eth-ref-clk-sel = <1>;
 			st,ext-phyclk = <1>;
 

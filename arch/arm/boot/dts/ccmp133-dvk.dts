@@ -47,10 +47,10 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 
-		reg_3v3_eth_pwr: regulator@1 {
+		reg_3v3_board: regulator@1 {
 			compatible = "regulator-fixed";
 			reg = <1>;
-			regulator-name = "3v3_eth_pwr";
+			regulator-name = "3v3_board";
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
 			regulator-always-on;
@@ -125,7 +125,7 @@
 	phy-mode = "rgmii-id";
 	max-speed = <1000>;
 	phy-handle = <&phy0_eth1>;
-	phy-supply = <&reg_3v3_eth_pwr>;
+	phy-supply = <&reg_3v3_board>;
 
 	mdio1 {
 		#address-cells = <1>;
@@ -160,7 +160,7 @@
 	max-speed = <100>;
 	phy-handle = <&phy0_eth2>;
 	st,ext-phyclk;
-	phy-supply = <&reg_3v3_eth_pwr>;
+	phy-supply = <&reg_3v3_board>;
 };
 
 &i2c2 {

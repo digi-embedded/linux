@@ -53,17 +53,6 @@
 			enable-active-high;
 			status = "okay";
 		};
-
-		reg_3v3_eth_pwr: regulator@2 {
-			compatible = "regulator-fixed";
-			reg = <2>;
-			regulator-name = "3v3_eth_pwr";
-			regulator-min-microvolt = <3300000>;
-			regulator-max-microvolt = <3300000>;
-			gpio = <&gpioc 9 GPIO_ACTIVE_HIGH>;
-			enable-active-high;
-			status = "okay";
-		};
 	};
 
 	clocks {
@@ -195,7 +184,7 @@
 	phy-mode = "rgmii-id";
 	max-speed = <1000>;
 	phy-handle = <&phy0>;
-	phy-supply = <&reg_3v3_eth_pwr>;
+	phy-supply = <&v3v3>;
 
 	mdio0 {
 		#address-cells = <1>;
