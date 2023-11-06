@@ -114,6 +114,21 @@
 			sound-dai = <&max98089>;
 		};
 	};
+
+	usb-b-connector {
+		compatible = "gpio-usb-b-connector", "usb-b-connector";
+		label = "micro-USB";
+		type = "micro";
+		id-gpios = <&gpioa 10 (GPIO_ACTIVE_HIGH | GPIO_PULL_UP)>; /* USB_OTG_ID */
+		vbus-gpios = <&gpioc 8 GPIO_ACTIVE_HIGH>; /* VBUS_SENSE */
+		vbus-supply = <&vbus_otg>;
+
+		port {
+			con_usbotg_hs_ep: endpoint {
+				remote-endpoint = <&usbotg_hs_ep>;
+			};
+		};
+	};
 };
 
 /*
@@ -473,13 +488,16 @@
 };
 
 &usbotg_hs {
-	pinctrl-0 = <&usbotg_hs_pins_a>;
-	pinctrl-names = "default";
-	dr_mode = "otg";
-	phy-names = "usb2-phy";
 	phys = <&usbphyc_port1 0>;
+	phy-names = "usb2-phy";
+	usb-role-switch;
 	status = "okay";
-	vbus-supply = <&vbus_otg>;
+
+	port {
+		usbotg_hs_ep: endpoint {
+			remote-endpoint = <&con_usbotg_hs_ep>;
+		};
+	};
 };
 
 &usbphyc {
