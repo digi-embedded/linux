@@ -7201,7 +7201,8 @@ static bool brcmf_is_linkup(struct brcmf_cfg80211_vif *vif,
 		set_bit(BRCMF_VIF_STATUS_EAP_SUCCESS, &vif->sme_state);
 	if ((event == BRCMF_E_SET_SSID && status == BRCMF_E_STATUS_SUCCESS) ||
 	    (event == BRCMF_E_LINK && status == BRCMF_E_STATUS_SUCCESS &&
-	    (e->flags & BRCMF_EVENT_MSG_LINK))) {
+	    ((e->reason != BRCMF_E_REASON_INITIAL_ASSOC) &&
+	    (e->flags & BRCMF_EVENT_MSG_LINK)))) {
 		brcmf_dbg(CONN, "Processing set ssid\n");
 		memcpy(vif->profile.bssid, e->addr, ETH_ALEN);
 		if (vif->profile.use_fwsup != BRCMF_PROFILE_FWSUP_PSK &&
