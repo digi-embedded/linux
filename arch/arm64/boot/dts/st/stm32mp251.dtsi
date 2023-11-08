@@ -85,45 +85,45 @@
 					#address-cells = <1>;
 					#size-cells = <0>;
 
-					scmi_vdd33ucpd: voltd-vdd33ucpd {
-						voltd-name = "vdd33ucpd";
-						reg = <VOLTD_SCMI_UCPD>;
-						regulator-name = "vdd33ucpd";
-					};
-					scmi_vdd33usb: voltd-vdd33usb {
-						voltd-name = "vdd33usb";
-						reg = <VOLTD_SCMI_USB33>;
-						regulator-name = "vdd33usb";
-					};
-					scmi_vdda18adc: voltd-vdda18adc {
-						voltd-name = "vdda18adc";
-						reg = <VOLTD_SCMI_ADC>;
-						regulator-name = "vdda18adc";
-					};
-					scmi_vddgpu: voltd-vddgpu {
-						voltd-name = "vddgpu";
-						reg = <VOLTD_SCMI_GPU>;
-						regulator-name = "vddgpu";
-					};
-					scmi_vddio1: voltd-vddio1 {
+					scmi_vddio1: regulator@0 {
 						voltd-name = "vddio1";
 						reg = <VOLTD_SCMI_VDDIO1>;
 						regulator-name = "vddio1";
 					};
-					scmi_vddio2: voltd-vddio2 {
+					scmi_vddio2: regulator@1 {
 						voltd-name = "vddio2";
 						reg = <VOLTD_SCMI_VDDIO2>;
 						regulator-name = "vddio2";
 					};
-					scmi_vddio3: voltd-vddio3 {
+					scmi_vddio3: regulator@2 {
 						voltd-name = "vddio3";
 						reg = <VOLTD_SCMI_VDDIO3>;
 						regulator-name = "vddio3";
 					};
-					scmi_vddio4: voltd-vddio4 {
+					scmi_vddio4: regulator@3 {
 						voltd-name = "vddio4";
 						reg = <VOLTD_SCMI_VDDIO4>;
 						regulator-name = "vddio4";
+					};
+					scmi_vdd33ucpd: regulator@5 {
+						voltd-name = "vdd33ucpd";
+						reg = <VOLTD_SCMI_UCPD>;
+						regulator-name = "vdd33ucpd";
+					};
+					scmi_vdd33usb: regulator@6 {
+						voltd-name = "vdd33usb";
+						reg = <VOLTD_SCMI_USB33>;
+						regulator-name = "vdd33usb";
+					};
+					scmi_vdda18adc: regulator@7 {
+						voltd-name = "vdda18adc";
+						reg = <VOLTD_SCMI_ADC>;
+						regulator-name = "vdda18adc";
+					};
+					scmi_vddgpu: regulator@8 {
+						voltd-name = "vddgpu";
+						reg = <VOLTD_SCMI_GPU>;
+						regulator-name = "vddgpu";
 					};
 				};
 			};
