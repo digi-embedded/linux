@@ -536,21 +536,21 @@
 };
 
 &scmi_regu {
-	scmi_v3v3: voltd-v3v3 {
+	scmi_vddio1: regulator@0 {
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <3300000>;
+	};
+	scmi_v3v3: regulator@16 {
 		reg = <VOLTD_SCMI_STPMIC2_BUCK7>;
 		regulator-name = "v3v3";
 	};
-	scmi_vdd_emmc: voltd-vdd-emmc {
+	scmi_vdd_emmc: regulator@18 {
 		reg = <VOLTD_SCMI_STPMIC2_LDO2>;
 		regulator-name = "vdd_emmc";
 	};
-	scmi_vdd_sdcard: voltd-vdd-sdcard {
+	scmi_vdd_sdcard: regulator@23 {
 		reg = <VOLTD_SCMI_STPMIC2_LDO7>;
 		regulator-name = "vdd_sdcard";
-	};
-	scmi_vddio1: voltd-vddio1 {
-		regulator-min-microvolt = <1800000>;
-		regulator-max-microvolt = <3300000>;
 	};
 };
 
