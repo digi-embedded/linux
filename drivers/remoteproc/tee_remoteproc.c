@@ -162,6 +162,9 @@ int rproc_tee_get_rsc_table(struct tee_rproc *trproc)
 
 	rsc_size = param[2].u.value.a;
 
+	if (rsc_size == 0)
+		return -EOPNOTSUPP;
+
 	/*
 	 * Store the resource table address that would be updated by the remote
 	 * core and the virtio.
