@@ -1652,6 +1652,7 @@ static int brcmf_bus_started(struct brcmf_pub *drvr, struct cfg80211_ops *ops)
 
 	/* populate debugfs */
 	brcmf_debugfs_add_entry(drvr, "revinfo", brcmf_revinfo_read);
+	brcmf_debugfs_add_entry(drvr, "parameter", brcmf_debugfs_param_read);
 	debugfs_create_file("reset", 0600, brcmf_debugfs_get_devdir(drvr), drvr,
 			    &bus_reset_fops);
 	brcmf_feat_debugfs_create(drvr);

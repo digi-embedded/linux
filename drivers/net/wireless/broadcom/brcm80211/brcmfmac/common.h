@@ -81,6 +81,7 @@ void brcmf_c_set_joinpref_default(struct brcmf_if *ifp);
 struct brcmf_mp_device *brcmf_get_module_param(struct device *dev,
 					       enum brcmf_bus_type bus_type,
 					       u32 chip, u32 chiprev);
+int brcmf_debugfs_param_read(struct seq_file *s, void *data);
 void brcmf_release_module_param(struct brcmf_mp_device *module_param);
 
 /* Sets dongle media info (drv_version, mac address). */
