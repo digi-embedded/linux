@@ -655,6 +655,33 @@ static void brcmf_mp_attach(void)
 	}
 }
 
+int brcmf_debugfs_param_read(struct seq_file *s, void *data)
+{
+	seq_printf(s, "%-20s: %s\n", "Name", "Value");
+	seq_printf(s, "%-20s: 0x%x\n", "debug", brcmf_msg_level);
+	seq_printf(s, "%-20s: %s\n", "alternative_fw_path", brcmf_firmware_path);
+	seq_printf(s, "%-20s: %d\n", "p2pon", !!brcmf_p2p_enable);
+	seq_printf(s, "%-20s: %d\n", "feature_disable", brcmf_feature_disable);
+	seq_printf(s, "%-20s: %d\n", "fcmode", brcmf_fcmode);
+	seq_printf(s, "%-20s: %d\n", "roamoff", !!brcmf_roamoff);
+	seq_printf(s, "%-20s: %d\n", "iapp", !!brcmf_iapp_enable);
+	seq_printf(s, "%-20s: %d\n", "eap_restrict", !!brcmf_eap_restrict);
+	seq_printf(s, "%-20s: %d\n", "max_pm", !!brcmf_max_pm);
+#ifdef DEBUG
+	seq_printf(s, "%-20s: %d\n", "ignore_probe_fail", !!brcmf_ignore_probe_fail);
+#endif
+	seq_printf(s, "%-20s: %d\n", "fw_ap_select", !!brcmf_fw_ap_select);
+	seq_printf(s, "%-20s: %d\n", "disable_6ghz", !!brcmf_disable_6ghz);
+	seq_printf(s, "%-20s: %d\n", "sdio_in_isr", !!brcmf_sdio_in_isr);
+	seq_printf(s, "%-20s: %d\n", "pkt_prio", !!brcmf_pkt_prio_enable);
+	seq_printf(s, "%-20s: %d\n", "sdio_rxf_thread", !!brcmf_sdio_rxf_in_kthread);
+	seq_printf(s, "%-20s: %d\n", "offload_prof", brcmf_offload_prof);
+	seq_printf(s, "%-20s: 0x%x\n", "offload_feat", brcmf_offload_feat);
+	seq_printf(s, "%-20s: %d\n", "txglomsz", brcmf_sdiod_txglomsz);
+
+	return 0;
+}
+
 struct brcmf_mp_device *brcmf_get_module_param(struct device *dev,
 					       enum brcmf_bus_type bus_type,
 					       u32 chip, u32 chiprev)
@@ -671,22 +698,38 @@ struct brcmf_mp_device *brcmf_get_module_param(struct device *dev,
 		return NULL;
 
 	/* start by using the module parameters */
+	brcmf_dbg(INFO, "debug: 0x%x\n", brcmf_msg_level);
+	brcmf_dbg(INFO, "alternative_fw_path: %s\n", brcmf_firmware_path);
 	settings->p2p_enable = !!brcmf_p2p_enable;
+	brcmf_dbg(INFO, "p2pon: %d\n", settings->p2p_enable);
 	settings->feature_disable = brcmf_feature_disable;
+	brcmf_dbg(INFO, "feature_disable: %d\n", settings->feature_disable);
 	settings->fcmode = brcmf_fcmode;
+	brcmf_dbg(INFO, "fcmode: %d\n", settings->fcmode);
 	settings->roamoff = !!brcmf_roamoff;
+	brcmf_dbg(INFO, "roamoff: %d\n", settings->roamoff);
 	settings->iapp = !!brcmf_iapp_enable;
+	brcmf_dbg(INFO, "iapp: %d\n", settings->iapp);
 	settings->eap_restrict = !!brcmf_eap_restrict;
+	brcmf_dbg(INFO, "eap_restrict: %d\n", settings->eap_restrict);
 	settings->default_pm = !!brcmf_max_pm ? PM_MAX : PM_FAST;
+	brcmf_dbg(INFO, "max_pm: %d\n", !!brcmf_max_pm);
 #ifdef DEBUG
 	settings->ignore_probe_fail = !!brcmf_ignore_probe_fail;
+	brcmf_dbg(INFO, "ignore_probe_fail: %d\n", settings->ignore_probe_fail);
 #endif
 	settings->fw_ap_select = !!brcmf_fw_ap_select;
+	brcmf_dbg(INFO, "fw_ap_select: %d\n", settings->fw_ap_select);
 	settings->disable_6ghz = !!brcmf_disable_6ghz;
+	brcmf_dbg(INFO, "disable_6ghz: %d\n", settings->disable_6ghz);
 	settings->sdio_in_isr = !!brcmf_sdio_in_isr;
+	brcmf_dbg(INFO, "sdio_in_isr: %d\n", settings->sdio_in_isr);
 	settings->pkt_prio = !!brcmf_pkt_prio_enable;
+	brcmf_dbg(INFO, "pkt_prio: %d\n", settings->pkt_prio);
 	settings->sdio_rxf_in_kthread_enabled = !!brcmf_sdio_rxf_in_kthread;
+	brcmf_dbg(INFO, "sdio_rxf_thread: %d\n", settings->sdio_rxf_in_kthread_enabled);
 
+	brcmf_dbg(INFO, "offload_prof: %d\n", brcmf_offload_prof);
 	if (brcmf_offload_prof >= BRCMF_OL_PROF_TYPE_MAX) {
 		brcmf_err("Invalid Offload power profile %u, using default profile 1",
 			  brcmf_offload_prof);
@@ -694,9 +737,12 @@ struct brcmf_mp_device *brcmf_get_module_param(struct device *dev,
 	}
 	settings->offload_prof = brcmf_offload_prof;
 	settings->offload_feat = brcmf_offload_feat;
+	brcmf_dbg(INFO, "offload_feat: 0x%x\n", settings->offload_feat);
 
-	if (bus_type == BRCMF_BUSTYPE_SDIO)
+	if (bus_type == BRCMF_BUSTYPE_SDIO) {
 		settings->bus.sdio.txglomsz = brcmf_sdiod_txglomsz;
+		brcmf_dbg(INFO, "txglomsz: %d\n", settings->bus.sdio.txglomsz);
+	}
 
 	/* See if there is any device specific platform data configured */
 	found = false;
