@@ -419,6 +419,26 @@ static void quirk_stm32_pcie_limit_mrrs(struct pci_dev *pci)
 DECLARE_PCI_FIXUP_HEADER(PCI_ANY_ID, PCI_ANY_ID,
 			 quirk_stm32_pcie_limit_mrrs);
 
+static int stm32_dma_limit(struct pci_dev *pdev, void *data)
+{
+	dev_info(&pdev->dev, "set bus_dma_limit");
+
+	pdev->dev.bus_dma_limit = DMA_BIT_MASK(32);
+
+	return 0;
+}
+
+static void quirk_stm32_dma_mask(struct pci_dev *pci)
+{
+	struct pci_dev *root_port;
+
+	root_port = pcie_find_root_port(pci);
+
+	if (root_port && is_stm32_pcie_driver(root_port->dev.parent))
+		pci_walk_bus(pci->bus, stm32_dma_limit, NULL);
+}
+DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_SYNOPSYS, 0x0550, quirk_stm32_dma_mask);
+
 module_platform_driver(stm32_pcie_driver);
 MODULE_DESCRIPTION("STM32MP25 PCIe Controller driver");
 MODULE_LICENSE("GPL");
