@@ -1918,9 +1918,15 @@ static void brcmf_link_down(struct brcmf_cfg80211_vif *vif, u16 reason,
 			brcmf_dbg(INFO, "Call WLC_DISASSOC to stop excess roaming\n");
 			err = brcmf_fil_cmd_data_set(vif->ifp,
 						     BRCMF_C_DISASSOC, NULL, 0);
-			if (err)
+			if (err) {
 				bphy_err(drvr, "WLC_DISASSOC failed (%d)\n",
-					 err);
+						err);
+			} else {
+				if (brcmf_feat_is_enabled(vif->ifp, BRCMF_FEAT_TWT)) {
+					/* Cleanup TWT Session list */
+					brcmf_twt_cleanup_sessions(vif->ifp);
+				}
+			}
 		}
 
 		if ((vif->wdev.iftype == NL80211_IFTYPE_STATION) ||
