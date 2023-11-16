@@ -2237,7 +2237,12 @@ static s32 brcmf_set_wpa_version(struct net_device *ndev,
 		else
 			val = WPA2_AUTH_PSK | WPA2_AUTH_UNSPECIFIED;
 	} else if (sme->crypto.wpa_versions & NL80211_WPA_VERSION_3) {
-		val = WPA3_AUTH_SAE_PSK;
+		if (sme->crypto.akm_suites[0] == WLAN_AKM_SUITE_FT_OVER_SAE)
+			val = WPA3_AUTH_SAE_FBT;
+		else if (sme->crypto.akm_suites[0] == WLAN_AKM_SUITE_FT_8021X_SHA384)
+			val = WPA3_AUTH_SAE_FT_1X;
+		else
+			val = WPA3_AUTH_SAE_PSK;
 	} else {
 		val = WPA_AUTH_DISABLED;
 	}
@@ -2863,6 +2868,24 @@ brcmf_cfg80211_connect(struct wiphy *wiphy, struct net_device *ndev,
 
 		if (sme->bssid_hint)
 			sme->bssid = sme->bssid_hint;
+	}
+
+	/* FT Cert: Handling the roam request from supplicant for FT roaming */
+	if (sme->prev_bssid && sme->bssid &&
+	    brcmf_feat_is_enabled(ifp, BRCMF_FEAT_FBT) &&
+	    wpa_akm_ft(sme->crypto.akm_suites[0])) {
+		/* Only reassoc IOVAR required for Roam skip additional IOVAR */
+		struct brcmf_assoc_params_le ext_roam_params;
+
+		brcmf_dbg(CONN, "Trying to REASSOC For FT\n");
+		memset(&ext_roam_params, 0, sizeof(ext_roam_params));
+		memcpy(&ext_roam_params.bssid, sme->bssid, ETH_ALEN);
+		set_bit(BRCMF_VIF_STATUS_CONNECTING, &ifp->vif->sme_state);
+
+		err = brcmf_fil_cmd_data_set(ifp, BRCMF_C_REASSOC,
+					     &ext_roam_params,
+					     sizeof(ext_roam_params));
+		goto done;
 	}
 
 	if (ifp->vif == cfg->p2p.bss_idx[P2PAPI_BSSCFG_PRIMARY].vif) {
