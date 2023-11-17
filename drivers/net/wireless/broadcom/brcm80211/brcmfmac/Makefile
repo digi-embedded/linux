@@ -5,6 +5,9 @@
 # Copyright (c) 2010 Broadcom Corporation
 #
 
+subdir-ccflags-y += -DBCM_TAG_STR=\"$(shell git describe --abbrev=4 --dirty --always --tags)\"
+subdir-ccflags-y += -DBCM_SHAID_STR=\"$(shell git rev-parse --short HEAD)\"
+
 ccflags-y += \
 	-I $(srctree)/$(src) \
 	-I $(srctree)/$(src)/../include
