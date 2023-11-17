@@ -774,6 +774,8 @@ static int __init brcmfmac_module_init(void)
 {
 	int err;
 
+	brcmf_dbg(INFO, "Loading RPI modules form version %s-%s\n", BCM_TAG_STR, BCM_SHAID_STR);
+
 	/* Get the platform data (if available) for our devices */
 	err = platform_driver_probe(&brcmf_pd, brcmf_common_pd_probe);
 	if (err == -ENODEV)
