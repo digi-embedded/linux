@@ -22,6 +22,9 @@
 		__overlay__ {
 			overlay-description = "CM40: add Cortex-M4 support";
 			reserved-memory {
+				#address-cells = <2>;
+				#size-cells = <2>;
+
 				vdev0vring0: vdev0vring0@90000000 {
 					reg = <0 0x90000000 0 0x8000>;
 					no-map;
