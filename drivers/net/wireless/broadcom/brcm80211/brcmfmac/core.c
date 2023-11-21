@@ -747,7 +747,7 @@ void brcmf_txfinalize(struct brcmf_if *ifp, struct sk_buff *txp, bool success)
 			wake_up(&ifp->pend_8021x_wait);
 	}
 
-	if (!success)
+	if (!success && ifp->ndev)
 		ifp->ndev->stats.tx_errors++;
 
 	brcmu_pkt_buf_free_skb(txp);
