@@ -37,7 +37,8 @@ ccimx8m_dvk_overlays := _ov_board_flexspi_ccimx8m-dvk.dtbo \
 
 ccimx8mm-dtbs := 	ccimx8mm-dvk.dtb \
 			$(ccimx8m_dvk_overlays) \
-			$(ccimx8m_som_overlays)
+			$(ccimx8m_som_overlays) \
+			_ov_som_cm4_ccimx8mm.dtbo
 
 ccimx8mn-dtbs :=	ccimx8mn-dvk.dtb \
 			$(ccimx8m_dvk_overlays) \
