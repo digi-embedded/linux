@@ -42,6 +42,7 @@ ccimx8mm-dtbs := 	ccimx8mm-dvk.dtb \
 ccimx8mn-dtbs :=	ccimx8mn-dvk.dtb \
 			$(ccimx8m_dvk_overlays) \
 			$(ccimx8m_som_overlays) \
+			_ov_som_cm7_ccimx8mn.dtbo \
 			_ov_board_v1-v2_ccimx8mn-dvk.dtbo \
 			_ov_som_v1_ccimx8mn.dtbo
 
