@@ -20,7 +20,7 @@
 	fragment@0 {
 		target-path = "/";
 		__overlay__ {
-			overlay-description = "CM40: add Cortex-M4 support";
+			overlay-description = "SOM: add Cortex-M4 support";
 			reserved-memory {
 				#address-cells = <2>;
 				#size-cells = <2>;
