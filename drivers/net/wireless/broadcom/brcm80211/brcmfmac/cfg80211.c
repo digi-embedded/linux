@@ -8190,29 +8190,44 @@ brcmf_notify_beacon_loss(struct brcmf_if *ifp,
 	struct brcmf_cfg80211_info *cfg = ifp->drvr->config;
 	struct brcmf_cfg80211_profile *profile = &ifp->vif->profile;
 	struct cfg80211_bss *bss;
+	struct net_device *ndev = ifp->ndev;
 
 	brcmf_dbg(INFO, "Enter: event %s (%d), status=%d\n",
 		  brcmf_fweh_event_name(e->event_code), e->event_code,
 		  e->status);
 
-	if (!ifp->drvr->settings->roamoff)
-		return 0;
+	switch (ifp->drvr->settings->roamoff) {
+	case BRCMF_ROAMOFF_EN_BCNLOST_MSG:
+		/* On beacon loss event, Supplicant triggers new scan request
+		 * with NL80211_SCAN_FLAG_FLUSH Flag set, but lost AP bss entry
+		 * still remained as it is held by cfg as associated. Unlinking this
+		 * current BSS from cfg cached bss list on beacon loss event here,
+		 * would allow supplicant to receive new scanned entries
+		 * without current bss and select new bss to trigger roam.
+		 */
+		bss = cfg80211_get_bss(cfg->wiphy, NULL, profile->bssid, 0, 0,
+				       IEEE80211_BSS_TYPE_ANY, IEEE80211_PRIVACY_ANY);
+		if (bss) {
+			cfg80211_unlink_bss(cfg->wiphy, bss);
+			cfg80211_put_bss(cfg->wiphy, bss);
+		}
 
-	/* On beacon loss event, Supplicant triggers new scan request
-	 * with NL80211_SCAN_FLAG_FLUSH Flag set, but lost AP bss entry
-	 * still remained as it is held by cfg as associated. Unlinking this
-	 * current BSS from cfg cached bss list on beacon loss event here,
-	 * would allow supplicant to receive new scanned entries
-	 * without current bss and select new bss to trigger roam.
-	 */
-	bss = cfg80211_get_bss(cfg->wiphy, NULL, profile->bssid, 0, 0,
-			       IEEE80211_BSS_TYPE_ANY, IEEE80211_PRIVACY_ANY);
-	if (bss) {
-		cfg80211_unlink_bss(cfg->wiphy, bss);
-		cfg80211_put_bss(cfg->wiphy, bss);
+		cfg80211_cqm_beacon_loss_notify(cfg_to_ndev(cfg), GFP_KERNEL);
+		break;
+	case BRCMF_ROAMOFF_EN_DISCONNECT_EVT:
+		brcmf_link_down(ifp->vif,
+				WLAN_REASON_UNSPECIFIED,
+				true);
+		brcmf_init_prof(ndev_to_prof(ndev));
+		if (ndev != cfg_to_ndev(cfg))
+			complete(&cfg->vif_disabled);
+		brcmf_net_setcarrier(ifp, false);
+		break;
+
+	case BRCMF_ROAMOFF_DISABLE:
+	default:
+		break;
 	}
-
-	cfg80211_cqm_beacon_loss_notify(cfg_to_ndev(cfg), GFP_KERNEL);
 
 	return 0;
 }
@@ -8515,6 +8530,14 @@ static s32 brcmf_dongle_roam(struct brcmf_if *ifp)
 	__le32 roam_delta[2];
 
 	/* Configure beacon timeout value based upon roaming setting */
+	if (ifp->drvr->settings->roamoff < BRCMF_ROAMOFF_DISABLE ||
+	    ifp->drvr->settings->roamoff >= BRCMF_ROAMOFF_MAX) {
+		bphy_err(drvr,
+			 "roamoff setting is incorrect (%d), reset it\n",
+			 ifp->drvr->settings->roamoff);
+		ifp->drvr->settings->roamoff = BRCMF_ROAMOFF_DISABLE;
+	}
+
 	if (ifp->drvr->settings->roamoff)
 		bcn_timeout = BRCMF_DEFAULT_BCN_TIMEOUT_ROAM_OFF;
 	else
@@ -8528,10 +8551,10 @@ static s32 brcmf_dongle_roam(struct brcmf_if *ifp)
 	/* Enable/Disable built-in roaming to allow supplicant to take care of
 	 * roaming.
 	 */
-	brcmf_dbg(INFO, "Internal Roaming = %s\n",
-		  ifp->drvr->settings->roamoff ? "Off" : "On");
+	brcmf_dbg(INFO, "Internal Roaming = %s, Mode:%d\n",
+		  ifp->drvr->settings->roamoff ? "Off" : "On", ifp->drvr->settings->roamoff);
 	err = brcmf_fil_iovar_int_set(ifp, "roam_off",
-				      ifp->drvr->settings->roamoff);
+				      ifp->drvr->settings->roamoff ? 1 : 0);
 	if (err) {
 		bphy_err(drvr, "roam_off error (%d)\n", err);
 		goto roam_setup_done;
@@ -9523,7 +9546,7 @@ static int brcmf_setup_wiphy(struct wiphy *wiphy, struct brcmf_if *ifp)
 
 	if (brcmf_feat_is_enabled(ifp, BRCMF_FEAT_TDLS))
 		wiphy->flags |= WIPHY_FLAG_SUPPORTS_TDLS;
-	if (!ifp->drvr->settings->roamoff)
+	if (ifp->drvr->settings->roamoff == BRCMF_ROAMOFF_DISABLE)
 		wiphy->flags |= WIPHY_FLAG_SUPPORTS_FW_ROAM;
 	if (brcmf_feat_is_enabled(ifp, BRCMF_FEAT_FWSUP)) {
 		wiphy_ext_feature_set(wiphy,

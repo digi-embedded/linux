@@ -67,7 +67,8 @@ MODULE_PARM_DESC(fcmode, "Mode of firmware signalled flow control");
 
 static int brcmf_roamoff;
 module_param_named(roamoff, brcmf_roamoff, int, 0400);
-MODULE_PARM_DESC(roamoff, "Do not use internal roaming engine");
+MODULE_PARM_DESC(roamoff,
+		 "Do not use fw roaming engine: 0=use fw_roam, 1=fw_roam off & report BCNLOST_MSG, 2=fw_roam off & report DISCONNECTED");
 
 static int brcmf_iapp_enable;
 module_param_named(iapp, brcmf_iapp_enable, int, 0);
@@ -711,7 +712,7 @@ struct brcmf_mp_device *brcmf_get_module_param(struct device *dev,
 	brcmf_dbg(INFO, "feature_disable: %d\n", settings->feature_disable);
 	settings->fcmode = brcmf_fcmode;
 	brcmf_dbg(INFO, "fcmode: %d\n", settings->fcmode);
-	settings->roamoff = !!brcmf_roamoff;
+	settings->roamoff = brcmf_roamoff;
 	brcmf_dbg(INFO, "roamoff: %d\n", settings->roamoff);
 	settings->iapp = !!brcmf_iapp_enable;
 	brcmf_dbg(INFO, "iapp: %d\n", settings->iapp);
