@@ -54,7 +54,7 @@ struct brcmf_mp_device {
 	bool		p2p_enable;
 	unsigned int	feature_disable;
 	int		fcmode;
-	bool		roamoff;
+	unsigned int	roamoff;
 	bool		iapp;
 	bool		eap_restrict;
 	int		default_pm;
@@ -75,6 +75,25 @@ struct brcmf_mp_device {
 		struct brcmfmac_sdio_pd sdio;
 	} bus;
 	bool		pkt_prio;
+};
+
+/**
+ * enum brcmf_roamoff_mode - using fw roaming and report event mode if not use it.
+ *
+ * @BRCMF_ROAMOFF_DISABLE: use firmware roaming engine
+ * @BRCMF_ROAMOFF_EN_BCNLOST_MSG:
+ *	don't use firmware roaming engine, and report to cfg80211 layer by BCNLOST_MSG event
+ * @BRCMF_ROAMOFF_EN_DISCONNECT_EVT:
+ *	don't use firmware roaming engine, and report to cfg80211 layer by DISCONNECT event
+ * @BRCMF_ROAMOFF_MAX:
+ *	for sanity checking purpose.
+ */
+
+enum brcmf_roamoff_mode {
+	BRCMF_ROAMOFF_DISABLE = 0,
+	BRCMF_ROAMOFF_EN_BCNLOST_MSG = 1,
+	BRCMF_ROAMOFF_EN_DISCONNECT_EVT = 2,
+	BRCMF_ROAMOFF_MAX
 };
 
 void brcmf_c_set_joinpref_default(struct brcmf_if *ifp);
