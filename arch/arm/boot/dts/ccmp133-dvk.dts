@@ -333,13 +333,13 @@
 	status = "okay";
 };
 
+/* XBee UART */
 &uart8 {
 	pinctrl-names = "default", "sleep", "idle";
 	pinctrl-0 = <&ccmp13_uart8_pins_a>;
 	pinctrl-1 = <&ccmp13_uart8_sleep_pins_a>;
 	pinctrl-2 = <&ccmp13_uart8_idle_pins_a>;
-	/delete-property/dmas;
-	/delete-property/dma-names;
+	uart-has-rtscts;
 	status = "okay";
 };
 
@@ -643,31 +643,42 @@
 
 	ccmp13_uart8_pins_a: uart8-0 {
 		pins1 {
-			pinmux = <STM32_PINMUX('E', 4, AF8)>; /* UART8_TX */
+			pinmux = <STM32_PINMUX('E', 4, AF8)>, /* UART8_TX */
+				 <STM32_PINMUX('E', 14, AF8)>; /* UART8_RTS */
 			bias-disable;
 			drive-push-pull;
 			slew-rate = <0>;
 		};
 		pins2 {
-			pinmux = <STM32_PINMUX('E', 0, AF8)>; /* UART8_RX */
-			bias-pull-up;
+			pinmux = <STM32_PINMUX('E', 0, AF8)>, /* UART8_RX */
+				 <STM32_PINMUX('G', 10, AF8)>; /* UART8_CTS */
+			bias-disable;
 		};
 	};
 
 	ccmp13_uart8_idle_pins_a: uart8-idle-0 {
 		pins1 {
-			pinmux = <STM32_PINMUX('E', 4, ANALOG)>; /* UART8_TX */
+			pinmux = <STM32_PINMUX('E', 4, ANALOG)>, /* UART8_TX */
+				 <STM32_PINMUX('G', 10, ANALOG)>; /* UART8_CTS */
 		};
 		pins2 {
+			pinmux = <STM32_PINMUX('E', 14, AF8)>; /* USART8_RTS */
+			bias-disable;
+			drive-push-pull;
+			slew-rate = <0>;
+		};
+		pins3 {
 			pinmux = <STM32_PINMUX('E', 0, AF8)>; /* UART8_RX */
-			bias-pull-up;
+			bias-disable;
 		};
 	};
 
 	ccmp13_uart8_sleep_pins_a: uart8-sleep-0 {
 		pins {
 			pinmux = <STM32_PINMUX('E', 4, ANALOG)>, /* UART8_TX */
-				 <STM32_PINMUX('E', 0, ANALOG)>; /* UART8_RX */
+				 <STM32_PINMUX('E', 0, ANALOG)>, /* UART8_RX */
+				 <STM32_PINMUX('E', 14, ANALOG)>, /* UART8_RTS */
+				 <STM32_PINMUX('G', 10, ANALOG)>; /* UART8_CTS */
 		};
 	};
 
