@@ -46,6 +46,7 @@
 
 /* Enable SDMMC3 (Wireless) */
 &sdmmc3{
+	max-frequency = <1000000>;
 	status = "okay";
 };
 
