@@ -157,6 +157,7 @@ enum {
 };
 
 #define MAX_PKTFILTER_PATTERN_SIZE		16
+#define MAX_PKTFILTER_PATTERN_FILL_SIZE	(MAX_PKTFILTER_PATTERN_SIZE * 2)
 
 #define BRCMF_COUNTRY_BUF_SZ		4
 #define BRCMF_ANT_MAX			4
@@ -345,7 +346,7 @@ struct brcmf_pkt_filter_pattern_le {
 	 * Variable length mask and pattern data. mask starts at offset 0.
 	 * Pattern immediately follows mask.
 	 */
-	u8 mask_and_pattern[1];
+	u8 mask_and_pattern[MAX_PKTFILTER_PATTERN_FILL_SIZE];
 };
 
 /* IOVAR "pkt_filter_add" parameter. Used to install packet filters. */

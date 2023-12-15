@@ -1966,7 +1966,7 @@ brcmf_pktfilter_add_remove(struct net_device *ndev, int filter_num, bool add)
 		  (add ? "add" : "remove"), filter_num);
 
 	pkt_filter = kzalloc(sizeof(*pkt_filter) +
-			(MAX_PKTFILTER_PATTERN_SIZE * 2), GFP_ATOMIC);
+			(MAX_PKTFILTER_PATTERN_FILL_SIZE), GFP_ATOMIC);
 	if (!pkt_filter)
 		return -ENOMEM;
 
