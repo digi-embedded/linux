@@ -469,13 +469,13 @@ static const struct brcmf_pcie_reginfo brcmf_reginfo_default = {
 };
 
 static const struct brcmf_pcie_reginfo brcmf_reginfo_64 = {
-	.intmask = BRCMF_PCIE_64_PCIE2REG_INTMASK,
+	.intmask = BRCMF_PCIE_PCIE2REG_INTMASK,
 	.mailboxint = BRCMF_PCIE_64_PCIE2REG_MAILBOXINT,
 	.mailboxmask = BRCMF_PCIE_64_PCIE2REG_MAILBOXMASK,
-	.h2d_mailbox_0 = BRCMF_PCIE_64_PCIE2REG_H2D_MAILBOX_0,
-	.h2d_mailbox_1 = BRCMF_PCIE_64_PCIE2REG_H2D_MAILBOX_1,
-	.int_d2h_db = BRCMF_PCIE_64_MB_INT_D2H_DB,
-	.int_fn0 = 0,
+	.h2d_mailbox_0 = BRCMF_PCIE_PCIE2REG_H2D_MAILBOX_0,
+	.h2d_mailbox_1 = BRCMF_PCIE_PCIE2REG_H2D_MAILBOX_1,
+        .int_d2h_db = BRCMF_PCIE_64_MB_INT_D2H_DB,
+	.int_fn0 = BRCMF_PCIE_MB_INT_FN0,
 };
 
 static void brcmf_pcie_setup(struct device *dev, int ret,
