@@ -119,7 +119,7 @@
 	pmic_cc93: pmic@25 {
 		compatible = "nxp,pca9451a";
 		reg = <0x25>;
-		digi,wdog_b-disabled;
+		digi,wdog_b-disabled-in-suspend;
 
 		interrupt-parent = <&gpio2>;
 		interrupts = <29 IRQ_TYPE_LEVEL_LOW>;

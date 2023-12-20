@@ -39,6 +39,9 @@ struct pca9450 {
 	int irq;
 };
 
+static bool wdog_disabled_in_suspend = false;
+static unsigned int reset_ctrl;
+
 static const struct regmap_range pca9450_status_range = {
 	.range_min = PCA9450_REG_INT1,
 	.range_max = PCA9450_REG_PWRON_STAT,
@@ -114,8 +117,35 @@ static int pca9450_buck_suspend_enable(struct regulator_dev *rdev)
 	return pca9450_buck_suspend_do_enable(rdev, true);
 }
 
+static int pca9450_buck_resume(struct regulator_dev *rdev) {
+	int ret = 0;
+
+	if (rdev->desc->id == PCA9450_BUCK4 && wdog_disabled_in_suspend) {
+		dev_dbg(rdev_get_dev(rdev), "Restoring WDOG_B mask\n");
+		/* Disable reset behavior on assertion of WDOG_B signal */
+		ret = regmap_update_bits(rdev->regmap, PCA9450_REG_RESET_CTRL,
+					 WDOG_B_CFG_MASK, reset_ctrl);
+		if (ret)
+			dev_err(rdev_get_dev(rdev), "Error (%d) restoring WDOG_B mask\n", ret);
+	}
+
+	return ret;
+}
+
 static int pca9450_buck_suspend_disable(struct regulator_dev *rdev)
 {
+
+	int ret;
+
+	if (rdev->desc->id == PCA9450_BUCK4 && wdog_disabled_in_suspend) {
+		dev_dbg(rdev_get_dev(rdev), "Ignoring WDOG_B mask before disabling BUCK4\n");
+		/* Disable reset behavior on assertion of WDOG_B signal */
+		ret = regmap_update_bits(rdev->regmap, PCA9450_REG_RESET_CTRL,
+					 WDOG_B_CFG_MASK, WDOG_B_CFG_NONE);
+		if (ret)
+			dev_err(rdev_get_dev(rdev), "Error (%d) disabling WDOG_B mask\n", ret);
+	}
+
 	return pca9450_buck_suspend_do_enable(rdev, false);
 }
 
@@ -142,6 +172,7 @@ static const struct regulator_ops pca9450_buck_regulator_ops = {
 	.set_voltage_time_sel = regulator_set_voltage_time_sel,
 	.set_suspend_enable = pca9450_buck_suspend_enable,
 	.set_suspend_disable = pca9450_buck_suspend_disable,
+	.resume = pca9450_buck_resume,
 };
 
 static const struct regulator_ops pca9450_ldo_regulator_ops = {
@@ -1005,7 +1036,6 @@ static int pca9450_i2c_probe(struct i2c_client *i2c,
 	struct pca9450 *pca9450;
 	unsigned int device_id, i, val;
 	unsigned int irq_flags = IRQF_TRIGGER_FALLING | IRQF_ONESHOT;
-	unsigned int reset_ctrl;
 	bool pmic_trim = false;
 	int ret;
 
@@ -1138,9 +1168,7 @@ static int pca9450_i2c_probe(struct i2c_client *i2c,
 		return ret;
 	}
 
-	if (of_property_read_bool(i2c->dev.of_node, "digi,wdog_b-disabled"))
-		reset_ctrl = WDOG_B_CFG_NONE;
-	else if (of_property_read_bool(i2c->dev.of_node, "nxp,wdog_b-warm-reset"))
+	if (of_property_read_bool(i2c->dev.of_node, "nxp,wdog_b-warm-reset"))
 		reset_ctrl = WDOG_B_CFG_WARM;
 	else
 		reset_ctrl = WDOG_B_CFG_COLD_LDO12;
@@ -1152,6 +1180,9 @@ static int pca9450_i2c_probe(struct i2c_client *i2c,
 		dev_err(&i2c->dev, "Failed to set WDOG_B reset behavior\n");
 		return ret;
 	}
+
+	if (of_property_read_bool(i2c->dev.of_node, "digi,wdog_b-disabled-in-suspend"))
+		wdog_disabled_in_suspend = true;
 
 	if (of_property_read_bool(i2c->dev.of_node, "nxp,i2c-lt-enable")) {
 		/* Enable I2C Level Translator */
