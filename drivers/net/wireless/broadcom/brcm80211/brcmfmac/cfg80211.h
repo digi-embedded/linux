@@ -253,7 +253,6 @@ struct vif_saved_ie {
  * @sme_state: SME state using enum brcmf_vif_status bits.
  * @list: linked list.
  * @mgmt_rx_reg: registered rx mgmt frame types.
- * @mbss: Multiple BSS type, set if not first AP (not relevant for P2P).
  * @cqm_rssi_low: Lower RSSI limit for CQM monitoring
  * @cqm_rssi_high: Upper RSSI limit for CQM monitoring
  * @cqm_rssi_last: Last RSSI reading for CQM monitoring
@@ -269,7 +268,6 @@ struct brcmf_cfg80211_vif {
 	unsigned long mgmt_tx_status;
 	u32 mgmt_tx_id;
 	u16 mgmt_rx_reg;
-	bool mbss;
 	int is_11d;
 	s32 cqm_rssi_low;
 	s32 cqm_rssi_high;
