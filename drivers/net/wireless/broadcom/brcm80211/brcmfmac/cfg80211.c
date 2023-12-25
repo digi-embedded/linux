@@ -424,6 +424,11 @@ struct wl_interface_create_v3 {
 	u8 data[];			/* Optional for specific data */
 };
 
+#define WL_IOV_OP_BSSCFG_DISABLE		0
+#define WL_IOV_OP_BSSCFG_ENABLE			1
+#define WL_IOV_OP_MANUAL_STA_BSSCFG_CREATE	2
+#define WL_IOV_OP_MANUAL_AP_BSSCFG_CREATE	3
+
 /* tlv used to return wl_wsec_info properties */
 struct wl_wsec_info_tlv {
 	u16 type;
@@ -5920,6 +5925,17 @@ brcmf_cfg80211_start_ap(struct wiphy *wiphy, struct net_device *ndev,
 		if ((brcmf_feat_is_enabled(ifp, BRCMF_FEAT_MBSS)) && (!mbss))
 			brcmf_fil_iovar_int_set(ifp, "mbss", 1);
 
+		if (!test_bit(BRCMF_VIF_STATUS_AP_CREATED, &ifp->vif->sme_state)) {
+			bss_enable.bsscfgidx = cpu_to_le32(ifp->bsscfgidx);
+			bss_enable.enable = cpu_to_le32(WL_IOV_OP_MANUAL_AP_BSSCFG_CREATE);
+			err = brcmf_fil_iovar_data_set(ifp, "bss", &bss_enable,
+						       sizeof(bss_enable));
+			if (err < 0) {
+				bphy_err(drvr, "bss_enable config failed %d\n", err);
+				goto exit;
+			}
+		}
+
 		err = brcmf_fil_cmd_int_set(ifp, BRCMF_C_SET_AP, 1);
 		if (err < 0) {
 			bphy_err(drvr, "setting AP mode failed %d\n",
@@ -6018,7 +6034,7 @@ brcmf_cfg80211_start_ap(struct wiphy *wiphy, struct net_device *ndev,
 			goto exit;
 		}
 		bss_enable.bsscfgidx = cpu_to_le32(ifp->bsscfgidx);
-		bss_enable.enable = cpu_to_le32(1);
+		bss_enable.enable = cpu_to_le32(WL_IOV_OP_BSSCFG_ENABLE);
 		err = brcmf_fil_iovar_data_set(ifp, "bss", &bss_enable,
 					       sizeof(bss_enable));
 		if (err < 0) {
@@ -6092,7 +6108,7 @@ static int brcmf_cfg80211_stop_ap(struct wiphy *wiphy, struct net_device *ndev,
 
 		/* Clear bss configuration and SSID */
 		bss_enable.bsscfgidx = cpu_to_le32(ifp->bsscfgidx);
-		bss_enable.enable = cpu_to_le32(0);
+		bss_enable.enable = cpu_to_le32(WL_IOV_OP_BSSCFG_DISABLE);
 		err = brcmf_fil_iovar_data_set(ifp, "bss", &bss_enable,
 					       sizeof(bss_enable));
 		if (err < 0)
@@ -6137,7 +6153,7 @@ static int brcmf_cfg80211_stop_ap(struct wiphy *wiphy, struct net_device *ndev,
 		brcmf_vif_clear_mgmt_ies(ifp->vif);
 	} else {
 		bss_enable.bsscfgidx = cpu_to_le32(ifp->bsscfgidx);
-		bss_enable.enable = cpu_to_le32(0);
+		bss_enable.enable = cpu_to_le32(WL_IOV_OP_BSSCFG_DISABLE);
 		err = brcmf_fil_iovar_data_set(ifp, "bss", &bss_enable,
 					       sizeof(bss_enable));
 		if (err < 0)
