@@ -241,7 +241,7 @@
 	};
 };
 
-/*&m4_rproc {
+&m4_rproc {
 	memory-region = <&retram>, <&mcuram>, <&mcuram2>, <&vdev0vring0>,
 			<&vdev0vring1>, <&vdev0buffer>, <&mcu_rsc_table>;
 	mboxes = <&ipcc 0>, <&ipcc 1>, <&ipcc 2>;
@@ -249,8 +249,8 @@
 	interrupt-parent = <&exti>;
 	interrupts = <68 1>;
 	wakeup-source;
-	status = "okay";
-};*/
+	status = "disabled";
+};
 
 &vrefbuf {
 	vdda-supply = <&vdda>;

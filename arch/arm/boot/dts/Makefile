@@ -1172,6 +1172,7 @@ dtb-$(CONFIG_ARCH_STM32) += \
 	_ov_som_bt_ccmp15.dtbo \
 	_ov_som_bt_test_ccmp13.dtbo \
 	_ov_som_bt_test_ccmp15.dtbo \
+	_ov_som_m4_ccmp15.dtbo \
 	_ov_som_mca_ccmp15.dtbo \
 	_ov_som_wifi_ccmp13.dtbo \
 	_ov_som_wifi_ccmp15.dtbo \
