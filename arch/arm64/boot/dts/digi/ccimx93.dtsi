@@ -1,5 +1,5 @@
 /*
- * Copyright 2022, Digi International Inc.
+ * Copyright 2022-2024, Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -219,128 +219,6 @@
 			};
 		};
 	};
-
-	mca_cc93: mca@63 {
-		compatible = "digi,mca-kl17";
-		reg = <0x63>;
-		interrupt-parent = <&gpio2>;
-		interrupts = <29 IRQ_TYPE_LEVEL_LOW>;
-		interrupt-controller;
-		#interrupt-cells = <2>;
-		fw-update-gpio = <&gpio2 28 GPIO_ACTIVE_LOW>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_mca_cc93>;
-		status = "disabled";
-
-		mca_adc: adc {
-			compatible = "digi,mca-adc";
-			digi,adc-vref = <3000000>;
-		};
-
-		mca_gpio: gpio {
-			compatible = "digi,mca-gpio";
-			gpio-controller;
-			#gpio-cells = <2>;
-
-			interrupt-parent = <&mca_cc93>;
-			interrupt-controller;
-			#interrupt-cells = <2>;
-
-			/* Disable all mca GPIOs as power off wake up sources */
-			pwroff-wakeup-capable-ios = <>;
-		};
-
-		mca_pwrkey: mca-pwrkey {
-			compatible = "digi,mca-pwrkey";
-			digi,key-power;
-			digi,key-power-up;
-			digi,key-sleep;
-			digi,debounce-ms = <100>;
-			digi,pwroff-delay-sec = <6>;
-			digi,pwroff-guard-sec = <30>;
-		};
-
-		mca_rtc: mca-rtc {
-			compatible = "digi,mca-rtc";
-		};
-
-		wdt {
-			compatible = "digi,mca-wdt";
-			digi,full-reset;
-		};
-
-		gpio_wdt: gpio-wdt {
-			compatible = "digi,mca-gpio-wdt";
-			status = "disabled";
-
-			gpio_wdt0: gpio-wdt@210 {
-				status = "disabled";
-			};
-
-			gpio_wdt1: gpio-wdt@220 {
-				status = "disabled";
-			};
-
-			gpio_wdt2: gpio-wdt@230 {
-				status = "disabled";
-			};
-
-			gpio_wdt3: gpio-wdt@240 {
-				status = "disabled";
-			};
-		};
-
-		pwms {
-			compatible = "digi,mca-pwm";
-			#address-cells = <1>;
-			#size-cells = <0>;
-
-			mca_pwm0: pwm@0 {
-				reg = <0>;
-				pwm-channels = <6>;
-				#pwm-cells = <3>;
-			};
-		};
-
-		mca_tamper: tamper {
-			compatible = "digi,mca-tamper";
-		};
-
-		mca_uart: uart {
-			compatible = "digi,mca-uart";
-			#address-cells = <1>;
-			#size-cells = <0>;
-			status = "disabled";
-
-			mca_uart0: serial@900 {
-				reg = <0x900>;
-				index = <0>;
-				status = "disabled";
-			};
-
-			mca_uart1: serial@920 {
-				reg = <0x920>;
-				index = <1>;
-				status = "disabled";
-			};
-
-			mca_uart2: serial@940 {
-				reg = <0x940>;
-				index = <2>;
-				status = "disabled";
-			};
-		};
-
-		mca_keypad: keypad {
-			compatible = "digi,mca-keypad";
-			status = "disabled";
-		};
-
-		mca_led: led {
-			compatible = "digi,mca-led";
-			status = "disabled";
-		};
-	};
 };
 
 /* Bluetooth UART */
@@ -499,16 +377,6 @@
 		fsl,pins = <
 			/* WLAN_PDn */
 			MX93_PAD_GPIO_IO07__GPIO2_IO07			0x31e
-		>;
-	};
-
-	/* MCA pinctrl */
-	pinctrl_mca_cc93: mcagrp {
-		fsl,pins = <
-			/* MCA_nINT */
-			MX93_PAD_GPIO_IO29__GPIO2_IO29			0x31e
-			/* MCA_FW_UPDATE */
-			MX93_PAD_GPIO_IO28__GPIO2_IO28			0x31e
 		>;
 	};
 };
