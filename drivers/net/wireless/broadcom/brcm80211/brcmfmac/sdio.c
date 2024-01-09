@@ -3511,6 +3511,14 @@ static int brcmf_sdio_readconsole(struct brcmf_sdio *bus)
 
 	/* Read the console buffer */
 	addr = le32_to_cpu(c->log_le.buf);
+
+	/* During FW Control Switch from Bootloader to Ram
+	 * Console address read will return all 0's which is not a valid.
+	 * when we try to access 0 ram address we are getting SDIO error.
+	 */
+	if (addr == 0)
+		return 0;
+
 	rv = brcmf_sdiod_ramrw(bus->sdiodev, false, addr, c->buf, c->bufsize);
 	if (rv < 0)
 		return rv;
