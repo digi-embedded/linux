@@ -30,6 +30,7 @@
  * SAE: simultaneous authentication of equals
  * FWAUTH: Firmware authenticator
  * DUMP_OBSS: Firmware has capable to dump obss info to support ACS
+ * SURVEY_DUMP: Firmware has capable to survey dump info
  * SAE_EXT: SAE be handled by userspace supplicant
  * GCMP: firmware has defined GCMP or not.
  * TWT: Firmware has the TWT Module Support.
@@ -62,6 +63,7 @@
 	BRCMF_FEAT_DEF(SAE) \
 	BRCMF_FEAT_DEF(FWAUTH) \
 	BRCMF_FEAT_DEF(DUMP_OBSS) \
+	BRCMF_FEAT_DEF(SURVEY_DUMP) \
 	BRCMF_FEAT_DEF(SAE_EXT) \
 	BRCMF_FEAT_DEF(FBT) \
 	BRCMF_FEAT_DEF(OKC) \
