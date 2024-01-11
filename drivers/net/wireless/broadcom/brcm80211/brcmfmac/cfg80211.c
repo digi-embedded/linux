@@ -141,6 +141,29 @@ struct cca_msrmnt_query {
 	u32 time_req;
 };
 
+enum cca_survey_config {
+        CCA_SURVEY_READ_CLEAR = 1,      /* previous data only */
+        CCA_SURVEY_READ = 2,            /* sum for each of data */
+        CCA_SURVEY_RESET = 3,           /* Set for each of data */
+};
+
+struct cca_survey {
+        u32 usecs;   /**< millisecs spent sampling this channel */
+        u32 ibss;    /**< millisecs spent ibss */
+        u32 obss;    /**< millisecs spent obss */
+        u32 txdur;   /**< millisecs spent txdur */
+        u32 noctg;   /**< millisecs spent 802.11 of unknown type */
+        u32 nopkt;   /**< millisecs spent non 802.11 */
+        u32 PM;      /**< usecs MAC spent in doze mode for PM */
+};
+
+struct cca_survey_req {
+        u16 chanspec;    /**< Which channel? */
+        u16 num_secs;        /**< How many secs worth of data */
+        struct cca_survey  secs[1];  /**< Data */
+        enum cca_survey_config config;     /**< enum */
+};
+
 /* algo bit vector */
 #define KEY_ALGO_MASK(_algo)	(1 << (_algo))
 /* version of the wl_wsec_info structure */
@@ -10167,6 +10190,111 @@ exit:
 	return err;
 }
 
+static int
+brcmf_cfg80211_dump_survey_2(struct wiphy *wiphy, struct net_device *ndev,
+			   int idx, struct survey_info *info)
+{
+	struct brcmf_cfg80211_info *cfg = wiphy_to_cfg(wiphy);
+	struct brcmf_if *ifp = netdev_priv(cfg_to_ndev(cfg));
+	struct ieee80211_supported_band *band;
+	struct ieee80211_channel *chan;
+	struct cca_survey_req *survey = NULL;
+	struct cca_survey  *secs;
+	struct cfg80211_chan_def chandef;
+	struct wireless_dev *wdev;
+	int err = 0;
+	u32 noise;
+
+	brcmf_dbg(TRACE, "Enter: channel idx=%d\n", idx);
+
+	/* Do not run survey when VIF in CONNECTING / CONNECTED states */
+	if ((test_bit(BRCMF_VIF_STATUS_CONNECTING, &ifp->vif->sme_state))) {
+		return -EBUSY;
+	}
+
+	band = wiphy->bands[NL80211_BAND_2GHZ];
+	if (band && idx >= band->n_channels) {
+		idx -= band->n_channels;
+		band = NULL;
+	}
+
+	if (!band || idx >= band->n_channels) {
+		band = wiphy->bands[NL80211_BAND_5GHZ];
+		if (idx >= band->n_channels) {
+			brcmf_dbg(TRACE, "not support channel idx=%d\n", idx);
+			return -ENOENT;
+		}
+	}
+
+	/* Getting target channel */
+	chan = &band->channels[idx];
+
+	/* Set interface up, explicitly. */
+	err = brcmf_fil_cmd_int_set(ifp, BRCMF_C_UP, 1);
+	if (err) {
+		brcmf_err("set interface up failed, err = %d\n", err);
+		return err;
+	}
+
+	/* Get noise value */
+	err = brcmf_fil_cmd_int_get(ifp, BRCMF_C_GET_PHY_NOISE, &noise);
+	if (err) {
+		brcmf_err("Get Phy Noise failed, use dummy value\n");
+		noise = CHAN_NOISE_DUMMY;
+	}
+
+	survey = kzalloc(sizeof(struct cca_survey_req), GFP_KERNEL);
+	if (!survey)
+		return -ENOMEM;
+
+	survey->chanspec = channel_to_chanspec(&cfg->d11inf, chan);
+	err = brcmf_fil_iovar_data_get(ifp, "cca_survey_dump",
+				       survey, sizeof(struct cca_survey_req));
+	if (err) {
+		brcmf_err("cca_survey_dump error (%d)\n", err);
+		err = -EINVAL;
+		goto exit;
+	}
+
+	secs = &survey->secs[0];
+
+	info->channel = chan;
+	info->noise = noise;
+	info->time = secs->usecs;
+	info->time_busy = secs->ibss + secs->txdur + secs->obss
+	       + secs->noctg+secs->nopkt;
+	info->time_rx = secs->obss + secs->ibss + secs->noctg
+	       + secs->nopkt;
+	info->time_tx = secs->txdur;
+	info->time_bss_rx = secs->ibss;
+
+	info->filled = SURVEY_INFO_NOISE_DBM | SURVEY_INFO_TIME |
+		SURVEY_INFO_TIME_BUSY | SURVEY_INFO_TIME_RX |
+		SURVEY_INFO_TIME_TX | SURVEY_INFO_TIME_BSS_RX;
+
+	wdev = ndev->ieee80211_ptr;
+	memset(&chandef, 0, sizeof(chandef));
+	err = brcmf_cfg80211_get_channel(wiphy, wdev, 0, &chandef);
+	if (unlikely(err)) {
+		brcmf_err("Get chandef error: %d \n", err);
+		err = -EINVAL;
+		goto exit;
+	}
+	if (chandef.chan->center_freq == chan->center_freq) {
+		info->filled = info->filled | SURVEY_INFO_IN_USE;
+	}
+
+	brcmf_dbg(INFO, "survey dump: channel %d: survey duration %llu\n",
+		  ieee80211_frequency_to_channel(chan->center_freq),
+		  info->time);
+	brcmf_dbg(INFO, "noise(%d) busy(%llu) rx(%llu) tx(%llu)\n",
+		  info->noise, info->time_busy, info->time_rx, info->time_tx);
+
+exit:
+	kfree(survey);
+	return err;
+}
+
 static void brcmf_cfg80211_reg_notifier(struct wiphy *wiphy,
 					struct regulatory_request *req)
 {
@@ -10327,6 +10455,8 @@ struct brcmf_cfg80211_info *brcmf_cfg80211_attach(struct brcmf_pub *drvr,
 #endif
 	if (brcmf_feat_is_enabled(ifp, BRCMF_FEAT_DUMP_OBSS))
 		ops->dump_survey = brcmf_cfg80211_dump_survey;
+	else if (brcmf_feat_is_enabled(ifp, BRCMF_FEAT_SURVEY_DUMP))
+		ops->dump_survey = brcmf_cfg80211_dump_survey_2;
 	else
 		ops->dump_survey = NULL;
 
