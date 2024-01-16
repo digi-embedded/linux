@@ -6,7 +6,7 @@ dtb-$(CONFIG_ARCH_MXC) += ccimx8x-mfg-interim.dtb \
 			  ccimx8x-sbc-pro-mfg.dtb \
 			  ccimx8x-sbc-pro.dtb \
 
-dtb-$(CONFIG_ARCH_MXC) += _ov_board_cm40_ccimx8x-sbc-pro.dtbo \
+dtb-$(CONFIG_ARCH_MXC) += _ov_som_cm4_ccimx8x.dtbo \
 			  _ov_board_flexcan1_ccimx8x-sbc-pro.dtbo \
 			  _ov_board_flexspi_ccimx8x-sbc-pro.dtbo \
 			  _ov_board_gpio-watchdog_ccimx8x-sbc-pro.dtbo \
@@ -37,11 +37,13 @@ ccimx8m_dvk_overlays := _ov_board_flexspi_ccimx8m-dvk.dtbo \
 
 ccimx8mm-dtbs := 	ccimx8mm-dvk.dtb \
 			$(ccimx8m_dvk_overlays) \
-			$(ccimx8m_som_overlays)
+			$(ccimx8m_som_overlays) \
+			_ov_som_cm4_ccimx8mm.dtbo
 
 ccimx8mn-dtbs :=	ccimx8mn-dvk.dtb \
 			$(ccimx8m_dvk_overlays) \
 			$(ccimx8m_som_overlays) \
+			_ov_som_cm7_ccimx8mn.dtbo \
 			_ov_board_v1-v2_ccimx8mn-dvk.dtbo \
 			_ov_som_v1_ccimx8mn.dtbo
 

@@ -20,39 +20,34 @@
 	fragment@0 {
 		target-path = "/";
 		__overlay__ {
-			overlay-description = "CM40: add Cortex-M4 support";
+			overlay-description = "SOM: add Cortex-M7 support";
 			reserved-memory {
 				#address-cells = <2>;
 				#size-cells = <2>;
 
-				vdev0vring0: vdev0vring0@90000000 {
-					reg = <0 0x90000000 0 0x8000>;
+				m_core_reserved: m_core@0x80000000 {
+					no-map;
+					reg = <0 0x80000000 0 0x1000000>;
+				};
+
+				vdev0vring0: vdev0vring0@b8000000 {
+					reg = <0 0xb8000000 0 0x8000>;
 					no-map;
 				};
 
-				vdev0vring1: vdev0vring1@90008000 {
-					reg = <0 0x90008000 0 0x8000>;
+				vdev0vring1: vdev0vring1@b8008000 {
+					reg = <0 0xb8008000 0 0x8000>;
 					no-map;
 				};
 
-				vdev1vring0: vdev1vring0@90010000 {
-					reg = <0 0x90010000 0 0x8000>;
+				rsc_table: rsc_table@b80ff000 {
+					reg = <0 0xb80ff000 0 0x1000>;
 					no-map;
 				};
 
-				vdev1vring1: vdev1vring1@90018000 {
-					reg = <0 0x90018000 0 0x8000>;
-					no-map;
-				};
-
-				rsc_table: rsc_table@900ff000 {
-					reg = <0 0x900ff000 0 0x1000>;
-					no-map;
-				};
-
-				vdevbuffer: vdevbuffer {
+				vdevbuffer: vdevbuffer@b8400000 {
 					compatible = "shared-dma-pool";
-					reg = <0 0x90400000 0 0x100000>;
+					reg = <0 0xb8400000 0 0x100000>;
 					no-map;
 				};
 			};
@@ -60,10 +55,10 @@
 	};
 
 	fragment@1 {
-		target = <&imx8x_cm4>;
+		target = <&imx8mn_cm7>;
 		__overlay__ {
 			memory-region = <&vdevbuffer>, <&vdev0vring0>, <&vdev0vring1>,
-				<&vdev1vring0>, <&vdev1vring1>, <&rsc_table>;
+				<&rsc_table>;
 			status = "okay";
 		};
 	};
