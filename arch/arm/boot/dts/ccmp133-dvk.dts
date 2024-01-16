@@ -47,10 +47,10 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 
-		reg_3v3_eth_pwr: regulator@1 {
+		reg_3v3_board: regulator@1 {
 			compatible = "regulator-fixed";
 			reg = <1>;
-			regulator-name = "3v3_eth_pwr";
+			regulator-name = "3v3_board";
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
 			regulator-always-on;
@@ -91,6 +91,21 @@
 		};
 	};
 
+	usb-b-connector {
+		compatible = "gpio-usb-b-connector", "usb-b-connector";
+		label = "micro-USB";
+		type = "micro";
+		id-gpios = <&gpioa 10 (GPIO_ACTIVE_HIGH | GPIO_PULL_UP)>; /* USB_OTG_ID */
+		vbus-gpios = <&gpioe 6 GPIO_ACTIVE_HIGH>; /* VBUS_SENSE */
+		vbus-supply = <&scmi_vbus_otg>;
+
+		port {
+			con_usbotg_hs_ep: endpoint {
+				remote-endpoint = <&usbotg_hs_ep>;
+			};
+		};
+	};
+
 	power_button {
 		compatible = "digi,stpmic1-pwrkey";
 		interrupts-extended = <&optee 0>, <&optee 1>;
@@ -125,7 +140,7 @@
 	phy-mode = "rgmii-id";
 	max-speed = <1000>;
 	phy-handle = <&phy0_eth1>;
-	phy-supply = <&reg_3v3_eth_pwr>;
+	phy-supply = <&reg_3v3_board>;
 
 	mdio1 {
 		#address-cells = <1>;
@@ -160,7 +175,7 @@
 	max-speed = <100>;
 	phy-handle = <&phy0_eth2>;
 	st,ext-phyclk;
-	phy-supply = <&reg_3v3_eth_pwr>;
+	phy-supply = <&reg_3v3_board>;
 };
 
 &i2c2 {
@@ -358,13 +373,16 @@
 };
 
 &usbotg_hs {
-	pinctrl-0 = <&ccmp13_usbotg_hs_pins>;
-	pinctrl-names = "default";
-	dr_mode = "otg";
-	phy-names = "usb2-phy";
 	phys = <&usbphyc_port1 0>;
+	phy-names = "usb2-phy";
+	usb-role-switch;
 	status = "okay";
-	vbus-supply = <&scmi_vbus_otg>;
+
+	port {
+		usbotg_hs_ep: endpoint {
+			remote-endpoint = <&con_usbotg_hs_ep>;
+		};
+	};
 };
 
 &usbphyc {
@@ -714,12 +732,6 @@
 				 <STM32_PINMUX('G', 4, ANALOG)>, /* USART3_RX */
 				 <STM32_PINMUX('G', 8, ANALOG)>, /* USART3_RTS */
 				 <STM32_PINMUX('G', 12, ANALOG)>; /* USART3_CTS */
-		};
-	};
-
-	ccmp13_usbotg_hs_pins: ccmp13_usbotg-hs-0 {
-		pins {
-			pinmux = <STM32_PINMUX('A', 10, ANALOG)>; /* OTG_ID */
 		};
 	};
 

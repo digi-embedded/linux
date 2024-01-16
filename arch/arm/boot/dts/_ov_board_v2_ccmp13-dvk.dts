@@ -14,8 +14,9 @@
  */
 
 #include <dt-bindings/interrupt-controller/arm-gic.h>
-#include <dt-bindings/clock/stm32mp1-clks.h>
-#include <dt-bindings/reset/stm32mp1-resets.h>
+#include <dt-bindings/clock/stm32mp13-clks.h>
+#include <dt-bindings/reset/stm32mp13-resets.h>
+#include <dt-bindings/pinctrl/stm32-pinfunc.h>
 
 /dts-v1/;
 /plugin/;
@@ -24,7 +25,7 @@
 	fragment@0 {
 		target-path = "/";
 		__overlay__ {
-			overlay-description = "DVK: version 1";
+			overlay-description = "DVK: version 2";
 
 			/* Disable USB OTG connector based on GPIO lines */
 			usb-b-connector {
@@ -38,9 +39,9 @@
 
 				usbotg_hs_native_vbus: usb-otg-native-vbus@49000000 {
 					compatible = "st,stm32mp15-hsotg", "snps,dwc2";
-					reg = <0x49000000 0x10000>;
-					clocks = <&rcc USBO_K>, <&usbphyc>;
-					clock-names = "otg", "utmi";
+					reg = <0x49000000 0x40000>;
+					clocks = <&rcc USBO_K>;
+					clock-names = "otg";
 					resets = <&rcc USBO_R>;
 					reset-names = "dwc2";
 					interrupts-extended = <&exti 44 IRQ_TYPE_LEVEL_HIGH>;
@@ -49,37 +50,59 @@
 					g-tx-fifo-size = <256 16 16 16 16 16 16 16>;
 					dr_mode = "otg";
 					otg-rev = <0x200>;
-					usb33d-supply = <&usb33>;
+					usb33d-supply = <&scmi_usb33>;
 					power-domains = <&pd_core>;
 					wakeup-source;
-					pinctrl-0 = <&usbotg_hs_pins_a>;
+					pinctrl-0 = <&ccmp13_usbotg_hs_pins>;
 					pinctrl-names = "default";
 					phys = <&usbphyc_port1 0>;
 					phy-names = "usb2-phy";
-					vbus-supply = <&vbus_otg>;
+					vbus-supply = <&scmi_vbus_otg>;
 				};
 			};
 		};
 	};
 
-	fragment@1 {
-		target = <&lt_bridge>;
-		__overlay__ {
-			/*
-			 * By default, on the DVKv1, the hot plug detect (HPD) line is not
-			 * used because this line is shared with the LCD/LVDS touch
-			 * controller interrupt line, so the hpd-gpios device tree property
-			 * should be also removed
-			 */
-			no-hpd;
-		};
-	};
-
 	/* Disable USB OTG node based on GPIO lines */
-	fragment@2 {
+	fragment@1 {
 		target = <&usbotg_hs>;
 		__overlay__ {
 			status = "disabled";
+		};
+	};
+
+	/* Add pinctrl to native USB OTG ID */
+	fragment@2 {
+		target = <&pinctrl>;
+		__overlay__ {
+			ccmp13_usbotg_hs_pins: ccmp13_usbotg-hs-0 {
+				pins {
+					pinmux = <STM32_PINMUX('A', 10, ANALOG)>; /* OTG_ID */
+				};
+			};
+		};
+	};
+
+	/* Disable 3V3 power regulator, does not exist in DVK v2 */
+	fragment@3 {
+		target = <&reg_3v3_board>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	/* Ethernet PHYs are supplied by the main VDD power rail */
+	fragment@4 {
+		target = <&eth1>;
+		__overlay__ {
+			phy-supply = <&scmi_vdd>;
+		};
+	};
+
+	fragment@5 {
+		target = <&eth2>;
+		__overlay__ {
+			phy-supply = <&scmi_vdd>;
 		};
 	};
 };

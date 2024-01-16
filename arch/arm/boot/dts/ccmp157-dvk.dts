@@ -53,17 +53,6 @@
 			enable-active-high;
 			status = "okay";
 		};
-
-		reg_3v3_eth_pwr: regulator@2 {
-			compatible = "regulator-fixed";
-			reg = <2>;
-			regulator-name = "3v3_eth_pwr";
-			regulator-min-microvolt = <3300000>;
-			regulator-max-microvolt = <3300000>;
-			gpio = <&gpioc 9 GPIO_ACTIVE_HIGH>;
-			enable-active-high;
-			status = "okay";
-		};
 	};
 
 	clocks {
@@ -123,6 +112,21 @@
 
 		codec_dai: simple-audio-card,codec {
 			sound-dai = <&max98089>;
+		};
+	};
+
+	usb-b-connector {
+		compatible = "gpio-usb-b-connector", "usb-b-connector";
+		label = "micro-USB";
+		type = "micro";
+		id-gpios = <&gpioa 10 (GPIO_ACTIVE_HIGH | GPIO_PULL_UP)>; /* USB_OTG_ID */
+		vbus-gpios = <&gpioc 8 GPIO_ACTIVE_HIGH>; /* VBUS_SENSE */
+		vbus-supply = <&vbus_otg>;
+
+		port {
+			con_usbotg_hs_ep: endpoint {
+				remote-endpoint = <&usbotg_hs_ep>;
+			};
 		};
 	};
 };
@@ -195,7 +199,7 @@
 	phy-mode = "rgmii-id";
 	max-speed = <1000>;
 	phy-handle = <&phy0>;
-	phy-supply = <&reg_3v3_eth_pwr>;
+	phy-supply = <&v3v3>;
 
 	mdio0 {
 		#address-cells = <1>;
@@ -484,13 +488,16 @@
 };
 
 &usbotg_hs {
-	pinctrl-0 = <&usbotg_hs_pins_a>;
-	pinctrl-names = "default";
-	dr_mode = "otg";
-	phy-names = "usb2-phy";
 	phys = <&usbphyc_port1 0>;
+	phy-names = "usb2-phy";
+	usb-role-switch;
 	status = "okay";
-	vbus-supply = <&vbus_otg>;
+
+	port {
+		usbotg_hs_ep: endpoint {
+			remote-endpoint = <&con_usbotg_hs_ep>;
+		};
+	};
 };
 
 &usbphyc {

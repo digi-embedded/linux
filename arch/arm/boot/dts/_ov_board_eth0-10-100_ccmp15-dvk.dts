@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Digi International Inc.
+ * Copyright 2022,2023 Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -36,7 +36,7 @@
 			phy-mode = "rmii";
 			max-speed = <100>;
 			phy-handle = <&phy0>;
-			phy-supply = <&reg_3v3_eth_pwr>;
+			phy-supply = <&v3v3>;
 			st,eth-ref-clk-sel = <1>;
 			st,ext-phyclk = <1>;
 
@@ -52,8 +52,8 @@
 					reset-gpios = <&gpiog 0 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
 					reset-assert-us = <1000>;
 					reset-deassert-us = <2000>;
-					interrupt-parent = <&gpiog>;
-					interrupts = <5 IRQ_TYPE_LEVEL_LOW>;
+					interrupt-parent = <&gpioc>;
+					interrupts = <12 IRQ_TYPE_LEVEL_LOW>;
 				};
 			};
 		};

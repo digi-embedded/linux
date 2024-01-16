@@ -24,7 +24,7 @@
 	fragment@0 {
 		target-path = "/";
 		__overlay__ {
-			overlay-description = "DVK: version 1";
+			overlay-description = "DVK: version 2";
 
 			/* Disable USB OTG connector based on GPIO lines */
 			usb-b-connector {
@@ -62,21 +62,8 @@
 		};
 	};
 
-	fragment@1 {
-		target = <&lt_bridge>;
-		__overlay__ {
-			/*
-			 * By default, on the DVKv1, the hot plug detect (HPD) line is not
-			 * used because this line is shared with the LCD/LVDS touch
-			 * controller interrupt line, so the hpd-gpios device tree property
-			 * should be also removed
-			 */
-			no-hpd;
-		};
-	};
-
 	/* Disable USB OTG node based on GPIO lines */
-	fragment@2 {
+	fragment@1 {
 		target = <&usbotg_hs>;
 		__overlay__ {
 			status = "disabled";

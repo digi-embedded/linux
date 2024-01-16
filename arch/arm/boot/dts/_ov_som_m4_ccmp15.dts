@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Digi International Inc.
+ * Copyright 2024 Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -20,13 +20,13 @@
 	fragment@0 {
 		target-path = "/";
 		__overlay__ {
-			overlay-description = "SOM: MCA";
+			overlay-description = "SOM: Cortex-M4 RemoteProc";
 		};
 	};
 
-	/* Enable Micro Controller Assist */
+	/* Enable RemoteProc framework for intercommunication with Cortex-M4 cpu */
 	fragment@1 {
-		target = <&mca_ccmp1>;
+		target = <&m4_rproc>;
 		__overlay__ {
 			status = "okay";
 		};

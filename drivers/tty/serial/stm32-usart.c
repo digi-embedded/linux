@@ -961,13 +961,29 @@ static void stm32_usart_break_ctl(struct uart_port *port, int break_state)
 	struct stm32_port *stm32_port = to_stm32_port(port);
 	const struct stm32_usart_offsets *ofs = &stm32_port->info->ofs;
 	unsigned long flags;
+	bool long_break = false;
+	struct pinctrl *pinctrl;
+	struct device_node *np = port->dev->of_node;
+
+	if (of_get_property(np, "digi,long-break", NULL))
+		long_break = true;
 
 	spin_lock_irqsave(&port->lock, flags);
 
-	if (break_state)
-		stm32_usart_set_bits(port, ofs->rqr, USART_RQR_SBKRQ);
-	else
-		stm32_usart_clr_bits(port, ofs->rqr, USART_RQR_SBKRQ);
+	if (break_state) {
+		if (long_break) {
+			pinctrl = devm_pinctrl_get_select(port->dev, "gpio");
+			if (IS_ERR(pinctrl))
+				dev_err(port->dev, "Failed to set pinmux to GPIO\n");
+		} else {
+			stm32_usart_set_bits(port, ofs->rqr, USART_RQR_SBKRQ);
+		}
+	} else {
+		if (long_break)
+			pinctrl_pm_select_default_state(port->dev);
+		else
+			stm32_usart_clr_bits(port, ofs->rqr, USART_RQR_SBKRQ);
+	}
 
 	spin_unlock_irqrestore(&port->lock, flags);
 }
