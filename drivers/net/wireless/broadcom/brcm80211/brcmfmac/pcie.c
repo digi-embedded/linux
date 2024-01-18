@@ -485,7 +485,7 @@ static const struct brcmf_pcie_reginfo brcmf_reginfo_default = {
 };
 
 static const struct brcmf_pcie_reginfo brcmf_reginfo_64 = {
-	.intmask = BRCMF_PCIE_PCIE2REG_INTMASK,
+	.intmask = BRCMF_PCIE_64_PCIE2REG_INTMASK,
 	.mailboxint = BRCMF_PCIE_64_PCIE2REG_MAILBOXINT,
 	.mailboxmask = BRCMF_PCIE_64_PCIE2REG_MAILBOXMASK,
 	.h2d_mailbox_0 = BRCMF_PCIE_PCIE2REG_H2D_MAILBOX_0,
