@@ -199,6 +199,7 @@ open_err:
 	snd_soc_dai_compr_shutdown(cpu_dai, cstream, 1);
 out:
 	dpcm_path_put(&list);
+	mutex_unlock(&fe->card->pcm_mutex);
 be_err:
 	fe->dpcm[stream].runtime_update = SND_SOC_DPCM_UPDATE_NO;
 	mutex_unlock(&fe->card->mutex);
@@ -621,6 +622,9 @@ int snd_soc_new_compress(struct snd_soc_pcm_runtime *rtd, int num)
 				rtd->dai_link->name, ret);
 			return ret;
 		}
+
+		/* inherit atomicity from DAI link */
+		be_pcm->nonatomic = rtd->dai_link->nonatomic;
 
 		rtd->pcm = be_pcm;
 		rtd->fe_compr = 1;

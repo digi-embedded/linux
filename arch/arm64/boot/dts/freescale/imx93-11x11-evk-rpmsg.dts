@@ -42,6 +42,14 @@
 		status = "disabled";
 	};
 
+	sound-bt-sco {
+		status = "disabled";
+	};
+
+	sound-xcvr {
+		status = "disabled";
+	};
+
 	rpmsg_audio: rpmsg_audio {
 		compatible = "fsl,imx93-rpmsg-audio";
 		model = "wm8962-audio";
@@ -87,7 +95,7 @@
 	};
 
 	i2c_rpbus_1: i2c-rpbus-1 {
-		compatible = "fsl,i2c-rpbus";
+		compatible = "fsl,i2c-rpbus-v2";
 		#address-cells = <1>;
 		#size-cells = <0>;
 		status = "okay";
@@ -157,5 +165,13 @@
 };
 
 &edma2{
+	status = "disabled";
+};
+
+&sai1 {
+	status = "disabled";
+};
+
+&xcvr {
 	status = "disabled";
 };

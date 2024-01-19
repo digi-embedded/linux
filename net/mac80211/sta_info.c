@@ -1242,7 +1242,8 @@ static int __must_check __sta_info_destroy_part1(struct sta_info *sta)
 	list_del_rcu(&sta->list);
 	sta->removed = true;
 
-	drv_sta_pre_rcu_remove(local, sta->sdata, sta);
+	if (sta->uploaded)
+		drv_sta_pre_rcu_remove(local, sta->sdata, sta);
 
 	if (sdata->vif.type == NL80211_IFTYPE_AP_VLAN &&
 	    rcu_access_pointer(sdata->u.vlan.sta) == sta)
@@ -2859,6 +2860,8 @@ int ieee80211_sta_activate_link(struct sta_info *sta, unsigned int link_id)
 
 	if (!test_sta_flag(sta, WLAN_STA_INSERTED))
 		goto hash;
+
+	ieee80211_recalc_min_chandef(sdata, link_id);
 
 	/* Ensure the values are updated for the driver,
 	 * redone by sta_remove_link on failure.

@@ -121,6 +121,7 @@ int phy_interface_num_ports(phy_interface_t interface)
 	case PHY_INTERFACE_MODE_RTBI:
 	case PHY_INTERFACE_MODE_XGMII:
 	case PHY_INTERFACE_MODE_XLGMII:
+	case PHY_INTERFACE_MODE_40GKR4:
 	case PHY_INTERFACE_MODE_MOCA:
 	case PHY_INTERFACE_MODE_TRGMII:
 	case PHY_INTERFACE_MODE_USXGMII:
@@ -131,6 +132,7 @@ int phy_interface_num_ports(phy_interface_t interface)
 	case PHY_INTERFACE_MODE_5GBASER:
 	case PHY_INTERFACE_MODE_10GBASER:
 	case PHY_INTERFACE_MODE_25GBASER:
+	case PHY_INTERFACE_MODE_25GKR:
 	case PHY_INTERFACE_MODE_10GKR:
 	case PHY_INTERFACE_MODE_100BASEX:
 	case PHY_INTERFACE_MODE_RXAUI:
@@ -140,6 +142,7 @@ int phy_interface_num_ports(phy_interface_t interface)
 		return 1;
 	case PHY_INTERFACE_MODE_QSGMII:
 	case PHY_INTERFACE_MODE_QUSGMII:
+	case PHY_INTERFACE_MODE_10G_QXGMII:
 		return 4;
 	case PHY_INTERFACE_MODE_MAX:
 		WARN_ONCE(1, "PHY_INTERFACE_MODE_MAX isn't a valid interface mode");

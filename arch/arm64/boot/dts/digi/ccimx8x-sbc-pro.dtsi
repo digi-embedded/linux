@@ -459,6 +459,12 @@
 		interrupts = <4 IRQ_TYPE_LEVEL_LOW>;
 		status = "okay";
 
+		port {
+			typec_dr_sw: endpoint {
+				remote-endpoint = <&usb3_drd_sw>;
+			};
+		};
+
 		usb_con1: connector {
 			compatible = "usb-c-connector";
 			label = "USB-C";
@@ -930,15 +936,19 @@
 	status = "disabled";
 };
 
-/* USB_OTG2/USB_SS3 */
-&usbotg3 {
+&usbotg3_cdns3 {
 	dr_mode = "otg";
-	extcon = <&typec_ptn5110>;
-	status = "disabled";
+	usb-role-switch;
+
+	port {
+		usb3_drd_sw: endpoint {
+			remote-endpoint = <&typec_dr_sw>;
+		};
+	};
 };
 
 /* usbotg3 phy */
-&usb3phynop1 {
+&usb3_phy {
 	/*
 	 * USB 3.0 on TypeC connector only works on SBC Pro versions >= 3.
 	 * If using an earlier version of the SBC Pro, comment this line

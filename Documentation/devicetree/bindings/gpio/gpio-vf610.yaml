@@ -61,6 +61,12 @@ properties:
   gpio-ranges:
     maxItems: 1
 
+  ngpios:
+    description: The number of GPIO pins of the port
+    minimum: 1
+    maximum: 32
+    default: 32
+
 required:
   - compatible
   - reg

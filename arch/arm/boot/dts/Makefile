@@ -331,6 +331,7 @@ dtb-$(CONFIG_MACH_KIRKWOOD) += \
 	kirkwood-iconnect.dtb \
 	kirkwood-iomega_ix2_200.dtb \
 	kirkwood-is2.dtb \
+	kirkwood-km_fixedeth.dtb \
 	kirkwood-km_kirkwood.dtb \
 	kirkwood-l-50.dtb \
 	kirkwood-laplug.dtb \
@@ -837,37 +838,37 @@ dtb-$(CONFIG_SOC_IMX6UL) += \
 	imx6ulz-14x14-evk-gpmi-weim.dtb \
 	imx6ulz-bsh-smm-m2.dtb
 
-imx6ul-14x14-evk-revd-dtbs := imx6ul-14x14-evk.dtb imx6ul-14x14-evk-revd.dtbo
-imx6ul-14x14-evk-revd-csi-dtbs := imx6ul-14x14-evk-csi.dtb imx6ul-14x14-evk-revd.dtbo
-imx6ul-14x14-evk-revd-emmc-dtbs := imx6ul-14x14-evk-emmc.dtb imx6ul-14x14-evk-revd.dtbo
-imx6ul-14x14-evk-revd-btwifi-dtbs := imx6ul-14x14-evk-btwifi.dtb imx6ul-14x14-evk-revd.dtbo
-imx6ul-14x14-evk-revd-ecspi-slave-dtbs := imx6ul-14x14-evk-ecspi-slave.dtb imx6ul-14x14-evk-revd.dtbo
-imx6ul-14x14-evk-revd-ecspi-dtbs := imx6ul-14x14-evk-ecspi.dtb imx6ul-14x14-evk-revd.dtbo
-imx6ul-14x14-evk-revd-gpmi-weim-dtbs := imx6ul-14x14-evk-gpmi-weim.dtb imx6ul-14x14-evk-revd.dtbo
-imx6ull-14x14-evk-revd-dtbs := imx6ull-14x14-evk.dtb imx6ul-14x14-evk-revd.dtbo
-imx6ull-14x14-evk-revd-emmc-dtbs := imx6ull-14x14-evk-emmc.dtb imx6ul-14x14-evk-revd.dtbo
-imx6ull-14x14-evk-revd-btwifi-dtbs := imx6ull-14x14-evk-btwifi.dtb imx6ul-14x14-evk-revd.dtbo
-imx6ull-14x14-evk-revd-gpmi-weim-dtbs := imx6ull-14x14-evk-gpmi-weim.dtb imx6ul-14x14-evk-revd.dtbo
-imx6ulz-14x14-evk-revd-dtbs := imx6ulz-14x14-evk.dtb imx6ul-14x14-evk-revd.dtbo
-imx6ulz-14x14-evk-revd-btwifi-dtbs := imx6ulz-14x14-evk-btwifi.dtb imx6ul-14x14-evk-revd.dtbo
-imx6ulz-14x14-evk-revd-emmc-dtbs := imx6ulz-14x14-evk-emmc.dtb imx6ul-14x14-evk-revd.dtbo
-imx6ulz-14x14-evk-revd-gpmi-weim-dtbs := imx6ulz-14x14-evk-gpmi-weim.dtb imx6ul-14x14-evk-revd.dtbo
+imx6ul-14x14-evk-reve-dtbs := imx6ul-14x14-evk.dtb imx6ul-14x14-evk-reve.dtbo
+imx6ul-14x14-evk-reve-csi-dtbs := imx6ul-14x14-evk-csi.dtb imx6ul-14x14-evk-reve.dtbo
+imx6ul-14x14-evk-reve-emmc-dtbs := imx6ul-14x14-evk-emmc.dtb imx6ul-14x14-evk-reve.dtbo
+imx6ul-14x14-evk-reve-btwifi-dtbs := imx6ul-14x14-evk-btwifi.dtb imx6ul-14x14-evk-reve.dtbo
+imx6ul-14x14-evk-reve-ecspi-slave-dtbs := imx6ul-14x14-evk-ecspi-slave.dtb imx6ul-14x14-evk-reve.dtbo
+imx6ul-14x14-evk-reve-ecspi-dtbs := imx6ul-14x14-evk-ecspi.dtb imx6ul-14x14-evk-reve.dtbo
+imx6ul-14x14-evk-reve-gpmi-weim-dtbs := imx6ul-14x14-evk-gpmi-weim.dtb imx6ul-14x14-evk-reve.dtbo
+imx6ull-14x14-evk-reve-dtbs := imx6ull-14x14-evk.dtb imx6ul-14x14-evk-reve.dtbo
+imx6ull-14x14-evk-reve-emmc-dtbs := imx6ull-14x14-evk-emmc.dtb imx6ul-14x14-evk-reve.dtbo
+imx6ull-14x14-evk-reve-btwifi-dtbs := imx6ull-14x14-evk-btwifi.dtb imx6ul-14x14-evk-reve.dtbo
+imx6ull-14x14-evk-reve-gpmi-weim-dtbs := imx6ull-14x14-evk-gpmi-weim.dtb imx6ul-14x14-evk-reve.dtbo
+imx6ulz-14x14-evk-reve-dtbs := imx6ulz-14x14-evk.dtb imx6ul-14x14-evk-reve.dtbo
+imx6ulz-14x14-evk-reve-btwifi-dtbs := imx6ulz-14x14-evk-btwifi.dtb imx6ul-14x14-evk-reve.dtbo
+imx6ulz-14x14-evk-reve-emmc-dtbs := imx6ulz-14x14-evk-emmc.dtb imx6ul-14x14-evk-reve.dtbo
+imx6ulz-14x14-evk-reve-gpmi-weim-dtbs := imx6ulz-14x14-evk-gpmi-weim.dtb imx6ul-14x14-evk-reve.dtbo
 dtb-$(CONFIG_SOC_IMX6UL) += \
-	imx6ul-14x14-evk-revd.dtb \
-	imx6ul-14x14-evk-revd-csi.dtb \
-	imx6ul-14x14-evk-revd-emmc.dtb \
-	imx6ul-14x14-evk-revd-btwifi.dtb \
-	imx6ul-14x14-evk-revd-ecspi-slave.dtb \
-	imx6ul-14x14-evk-revd-ecspi.dtb \
-	imx6ul-14x14-evk-revd-gpmi-weim.dtb \
-	imx6ull-14x14-evk-revd.dtb \
-	imx6ull-14x14-evk-revd-emmc.dtb \
-	imx6ull-14x14-evk-revd-btwifi.dtb \
-	imx6ull-14x14-evk-revd-gpmi-weim.dtb \
-	imx6ulz-14x14-evk-revd.dtb \
-	imx6ulz-14x14-evk-revd-btwifi.dtb \
-	imx6ulz-14x14-evk-revd-emmc.dtb \
-	imx6ulz-14x14-evk-revd-gpmi-weim.dtb
+	imx6ul-14x14-evk-reve.dtb \
+	imx6ul-14x14-evk-reve-csi.dtb \
+	imx6ul-14x14-evk-reve-emmc.dtb \
+	imx6ul-14x14-evk-reve-btwifi.dtb \
+	imx6ul-14x14-evk-reve-ecspi-slave.dtb \
+	imx6ul-14x14-evk-reve-ecspi.dtb \
+	imx6ul-14x14-evk-reve-gpmi-weim.dtb \
+	imx6ull-14x14-evk-reve.dtb \
+	imx6ull-14x14-evk-reve-emmc.dtb \
+	imx6ull-14x14-evk-reve-btwifi.dtb \
+	imx6ull-14x14-evk-reve-gpmi-weim.dtb \
+	imx6ulz-14x14-evk-reve.dtb \
+	imx6ulz-14x14-evk-reve-btwifi.dtb \
+	imx6ulz-14x14-evk-reve-emmc.dtb \
+	imx6ulz-14x14-evk-reve-gpmi-weim.dtb
 
 dtb-$(CONFIG_SOC_IMX7D) += \
 	imx7d-cl-som-imx7.dtb \
@@ -1003,7 +1004,10 @@ dtb-$(CONFIG_ARCH_OMAP3) += \
 	am3517-craneboard.dtb \
 	am3517-evm.dtb \
 	am3517_mt_ventoux.dtb \
+	logicpd-torpedo-35xx-devkit.dtb \
 	logicpd-torpedo-37xx-devkit.dtb \
+	logicpd-torpedo-37xx-devkit-28.dtb \
+	logicpd-som-lv-35xx-devkit.dtb \
 	logicpd-som-lv-37xx-devkit.dtb \
 	omap3430-sdp.dtb \
 	omap3-beagle.dtb \
@@ -1669,6 +1673,8 @@ dtb-$(CONFIG_MACH_ARMADA_38X) += \
 	armada-388-helios4.dtb \
 	armada-388-rd.dtb
 dtb-$(CONFIG_MACH_ARMADA_39X) += \
+	armada-390-db.dtb \
+	armada-395-gp.dtb \
 	armada-398-db.dtb
 dtb-$(CONFIG_MACH_ARMADA_XP) += \
 	armada-xp-axpwifiap.dtb \
@@ -1698,6 +1704,7 @@ dtb-$(CONFIG_MACH_DOVE) += \
 dtb-$(CONFIG_ARCH_MEDIATEK) += \
 	mt2701-evb.dtb \
 	mt6580-evbp1.dtb \
+	mt6582-prestigio-pmt5008-3g.dtb \
 	mt6589-aquaris5.dtb \
 	mt6589-fairphone-fp1.dtb \
 	mt6592-evb.dtb \
@@ -1750,6 +1757,7 @@ dtb-$(CONFIG_ARCH_ASPEED) += \
 	aspeed-bmc-intel-s2600wf.dtb \
 	aspeed-bmc-inspur-fp5280g2.dtb \
 	aspeed-bmc-inspur-nf5280m6.dtb \
+	aspeed-bmc-inspur-on5263m5.dtb \
 	aspeed-bmc-lenovo-hr630.dtb \
 	aspeed-bmc-lenovo-hr855xg2.dtb \
 	aspeed-bmc-microsoft-olympus.dtb \

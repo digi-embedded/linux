@@ -23,6 +23,7 @@
 #define PHY_ID_AQCS109	0x03a1b5c2
 #define PHY_ID_AQR405	0x03a1b4b0
 #define PHY_ID_AQR113C	0x31c31c12
+#define PHY_ID_AQR115	0x31c31c63
 #define PHY_ID_AQR112	0x03a1b662
 #define PHY_ID_AQR412	0x03a1b712
 
@@ -509,6 +510,20 @@ static int aqr107_read_status(struct phy_device *phydev)
 	if (!phydev->link || phydev->autoneg == AUTONEG_DISABLE)
 		return 0;
 
+	/* Quad port PHYs like AQR412 have 4 system interfaces, but they can
+	 * also be used with a single system interface over which all 4 ports
+	 * are multiplexed (10G-QXGMII). To the MDIO registers, this mode is
+	 * indistinguishable from USXGMII (which implies a single 10G port),
+	 * which is problematic because the detection logic below would
+	 * overwrite phydev->interface with a wrong value. If the device tree
+	 * is configured for "10g-qxgmii", always trust that value, since it is
+	 * very unlikely that the PHY firmware was configured for protocol
+	 * switching depending on link speed (all USXGMII variants are capable
+	 * of symbol replication).
+	 */
+	if (phydev->interface == PHY_INTERFACE_MODE_10G_QXGMII)
+		goto skip_iface_detection;
+
 	val = phy_read_mmd(phydev, MDIO_MMD_PHYXS, MDIO_PHYXS_VEND_IF_STATUS);
 	if (val < 0)
 		return val;
@@ -543,6 +558,7 @@ static int aqr107_read_status(struct phy_device *phydev)
 		break;
 	}
 
+skip_iface_detection:
 	/* Read possibly downshifted rate from vendor register */
 	return aqr107_read_rate(phydev);
 }
@@ -903,6 +919,25 @@ static struct phy_driver aqr_driver[] = {
 	.link_change_notify = aqr107_link_change_notify,
 },
 {
+	PHY_ID_MATCH_MODEL(PHY_ID_AQR115),
+	.name		= "Aquantia AQR115",
+	.probe		= aqr107_probe,
+	.get_rate_matching = aqr107_get_rate_matching,
+	.config_init	= aqcs109_config_init,
+	.config_aneg	= aqr_config_aneg,
+	.config_intr	= aqr_config_intr,
+	.handle_interrupt = aqr_handle_interrupt,
+	.read_status	= aqr107_read_status,
+	.get_tunable    = aqr107_get_tunable,
+	.set_tunable    = aqr107_set_tunable,
+	.suspend	= aqr107_suspend,
+	.resume		= aqr107_resume,
+	.get_sset_count	= aqr107_get_sset_count,
+	.get_strings	= aqr107_get_strings,
+	.get_stats	= aqr107_get_stats,
+	.link_change_notify = aqr107_link_change_notify,
+},
+{
 	PHY_ID_MATCH_MODEL(PHY_ID_AQR112),
 	.name		= "Aquantia AQR112",
 	.config_aneg    = aqr_config_aneg_set_prot,
@@ -931,6 +966,7 @@ static struct mdio_device_id __maybe_unused aqr_tbl[] = {
 	{ PHY_ID_MATCH_MODEL(PHY_ID_AQCS109) },
 	{ PHY_ID_MATCH_MODEL(PHY_ID_AQR405) },
 	{ PHY_ID_MATCH_MODEL(PHY_ID_AQR113C) },
+	{ PHY_ID_MATCH_MODEL(PHY_ID_AQR115) },
 	{ PHY_ID_MATCH_MODEL(PHY_ID_AQR112) },
 	{ PHY_ID_MATCH_MODEL(PHY_ID_AQR412) },
 	{ }

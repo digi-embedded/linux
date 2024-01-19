@@ -2,7 +2,7 @@
 *
 *    The MIT License (MIT)
 *
-*    Copyright (c) 2014 - 2022 Vivante Corporation
+*    Copyright (c) 2014 - 2023 Vivante Corporation
 *
 *    Permission is hereby granted, free of charge, to any person obtaining a
 *    copy of this software and associated documentation files (the "Software"),
@@ -26,7 +26,7 @@
 *
 *    The GPL License (GPL)
 *
-*    Copyright (C) 2014 - 2022 Vivante Corporation
+*    Copyright (C) 2014 - 2023 Vivante Corporation
 *
 *    This program is free software; you can redistribute it and/or
 *    modify it under the terms of the GNU General Public License
@@ -5516,6 +5516,10 @@ gckDEVICE_Profiler_Dispatch(IN gckDEVICE                     Device,
     gckKERNEL kernel;
     gctUINT32 coreIndex = Interface->coreIndex;
 
+    gcmkHEADER_ARG("Device=%p Interface=%p", Device, Interface);
+
+    gcmkVERIFY_ARGUMENT(coreIndex < gcvCORE_COUNT);
+
     kernel = Device->kernels[coreIndex];
 
     /* Dispatch on profiler command. */
@@ -5590,6 +5594,8 @@ gckDEVICE_Profiler_Dispatch(IN gckDEVICE                     Device,
 OnError:
     /* Save status. */
     Interface->status = status;
+
+    gcmkFOOTER();
 
     /* Return the status. */
     return status;

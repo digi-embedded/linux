@@ -420,16 +420,20 @@
 	status = "okay";
 };
 
+&usbphy1 {
+	status = "okay";
+};
+
 /* USB_OTG2/USB_SS3 */
 &usbotg3 {
 	status = "okay";
 };
 
-&usbphy1 {
+&usbotg3_cdns3 {
 	status = "okay";
 };
 
-&usb3phynop1 {
+&usb3_phy {
 	status = "okay";
 };
 
@@ -438,11 +442,16 @@
 	status = "okay";
 };
 
-&vpu_decoder {
+&vpu {
+	compatible = "nxp,imx8qxp-vpu";
 	status = "okay";
 };
 
-&vpu_encoder {
+&vpu_core0 {
+	status = "okay";
+};
+
+&vpu_core1 {
 	status = "okay";
 };
 
