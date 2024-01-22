@@ -826,7 +826,7 @@ static void brcmf_msgbuf_rx(struct brcmf_msgbuf *msgbuf)
 
 	while ((skb = skb_dequeue(&msgbuf->rx_data_q))) {
 		ifp = netdev_priv(skb->dev);
-		if (!ifp)
+		if (ifp)
 			brcmf_netif_rx(ifp, skb);
 	}
 }
