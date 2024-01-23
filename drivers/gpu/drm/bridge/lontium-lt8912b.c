@@ -436,8 +436,8 @@ static int lt8912_connector_get_modes(struct drm_connector *connector)
 	u32 bus_format = MEDIA_BUS_FMT_RGB888_1X24;
 
 	edid = drm_bridge_get_edid(lt->hdmi_port, connector);
+	drm_connector_update_edid_property(connector, edid);
 	if (edid) {
-		drm_connector_update_edid_property(connector, edid);
 		num = drm_add_edid_modes(connector, edid);
 	} else {
 		return ret;
