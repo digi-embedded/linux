@@ -344,10 +344,6 @@
 		reg = <0x10>;
 		clocks = <&clk IMX93_CLK_SAI3_GATE>;
 		clock-names = "mclk";
-		// TODO
-		// Add regulators when defined for the DVK
-		// vcc-supply = <&reg_3v3_audio>;
-		// dvdd-supply = <&reg_1v8_ext>;
 	};
 
 	lt_bridge: lt8912@48 {
