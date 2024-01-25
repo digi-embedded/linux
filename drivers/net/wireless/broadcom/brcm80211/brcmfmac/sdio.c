@@ -5493,14 +5493,23 @@ brcmf_sdio_prepare_fw_request(struct brcmf_sdio *bus)
 	struct brcmf_fw_request *fwreq;
 	struct brcmf_fw_name fwnames[3];
 
-	if (bus->ci->blhs && bus->ci->chip == CY_CC_43022_CHIP_ID) {
+	if (bus->ci->blhs) {
 		/* 43022 : secure-mode supports .trxs image only */
-		fwnames[0].extension = ".trxs";
-		fwnames[0].path = bus->sdiodev->fw_name;
+		if (bus->ci->chip == CY_CC_43022_CHIP_ID)
+			fwnames[0].extension = ".trxs";
+		else if ((bus->ci->chip == CY_CC_55500_CHIP_ID) ||
+			(bus->ci->chip == CY_CC_55572_CHIP_ID))
+			fwnames[0].extension = ".trxse";
+		else
+			brcmf_err("unexpected chip 0x%x with blhs\n", bus->ci->chip);
 	} else {
-		fwnames[0].extension = ".bin";
-		fwnames[0].path = bus->sdiodev->fw_name;
+		if ((bus->ci->chip == CY_CC_55500_CHIP_ID) ||
+			(bus->ci->chip == CY_CC_55572_CHIP_ID))
+			fwnames[0].extension = ".trx";
+		else
+			fwnames[0].extension = ".bin";
 	}
+	fwnames[0].path = bus->sdiodev->fw_name;
 	fwnames[1].extension = ".txt";
 	fwnames[1].path = bus->sdiodev->nvram_name;
 
