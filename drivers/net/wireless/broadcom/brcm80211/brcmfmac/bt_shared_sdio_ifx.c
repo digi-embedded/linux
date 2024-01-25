@@ -142,21 +142,6 @@ bool ifx_btsdio_inited(struct brcmf_bus *bus_if)
 	return true;
 }
 
-// wait for next commit to recoed command
-#if 0
-static void _btsdio_record_cmd(struct brcmf_sdio_cmd_info *cmd,
-			       struct timespec64 ts_start)
-{
-	struct timespec64 ts_end, ts_delta;
-
-	ktime_get_ts64(&ts_end);
-	ts_delta = timespec64_sub(ts_end, ts_start);
-
-	cmd->num++;
-	cmd->time += timespec64_to_ns(&ts_delta);
-}
-#endif
-
 static char *_btsdio_err_char(enum bts_err_type type)
 {
 	switch (type) {
@@ -579,7 +564,6 @@ u8 ifx_bus_reg_readb(struct brcmf_bus *bus_if, u8 fn, u32 addr, int *err)
 {
 	struct brcmf_sdio_dev *sdiodev = NULL;
 	struct sdio_func *func = NULL;
-	struct timespec64 ts_start;
 	u8 val = 0;
 
 	if (!bus_if || !err) {
@@ -603,13 +587,10 @@ u8 ifx_bus_reg_readb(struct brcmf_bus *bus_if, u8 fn, u32 addr, int *err)
 	}
 
 	sdio_claim_host(sdiodev->func1);
-	ktime_get_ts64(&ts_start);
 	if (fn == SDIO_FUNC_0)
 		val = brcmf_sdiod_func0_rb(sdiodev, addr, err);
 	else
 		val = brcmf_sdiod_func_rb(func, addr, err);
-	// wait for next commit to recoed command
-	//_btsdio_record_cmd(&sdiodev->sdcnt.bt_reg_rb[fn], ts_start);
 	sdio_release_host(sdiodev->func1);
 
 	brcmf_dbg(SDIO, "F%d addr: 0x%08x, val: 0x%02x, err: %d\n", fn, addr, val, *err);
@@ -625,7 +606,6 @@ void ifx_bus_reg_writeb(struct brcmf_bus *bus_if, u8 fn, u32 addr, u8 val, int *
 {
 	struct brcmf_sdio_dev *sdiodev = NULL;
 	struct sdio_func *func = NULL;
-	struct timespec64 ts_start;
 
 	if (!bus_if || !err) {
 		brcmf_err("bus_if(%p) or err(%p) is null\n", bus_if, err);
@@ -648,13 +628,10 @@ void ifx_bus_reg_writeb(struct brcmf_bus *bus_if, u8 fn, u32 addr, u8 val, int *
 	}
 
 	sdio_claim_host(sdiodev->func1);
-	ktime_get_ts64(&ts_start);
 	if (fn == SDIO_FUNC_0)
 		brcmf_sdiod_func0_wb(sdiodev, addr, val, err);
 	else
 		brcmf_sdiod_func_wb(func, addr, val, err);
-	// wait for next commit to recoed command
-	//_btsdio_record_cmd(&sdiodev->sdcnt.bt_reg_wb[fn], ts_start);
 	sdio_release_host(sdiodev->func1);
 
 	brcmf_dbg(SDIO, "F%d addr: 0x%08x, val: 0x%02x, err: %d\n", fn, addr, val, *err);
@@ -667,7 +644,6 @@ EXPORT_SYMBOL(ifx_bus_reg_writeb);
 u32 ifx_bus_reg_readl(struct brcmf_bus *bus_if, u32 addr, int *err)
 {
 	struct brcmf_sdio_dev *sdiodev = NULL;
-	struct timespec64 ts_start;
 	u32 val = 0;
 
 	if (!bus_if || !err) {
@@ -684,10 +660,7 @@ u32 ifx_bus_reg_readl(struct brcmf_bus *bus_if, u32 addr, int *err)
 	sdiodev = bus_if->bus_priv.sdio;
 
 	sdio_claim_host(sdiodev->func1);
-	ktime_get_ts64(&ts_start);
 	val = brcmf_sdiod_readl(sdiodev, addr, err);
-	// wait for next commit to recoed command
-	//_btsdio_record_cmd(&sdiodev->sdcnt.bt_reg_rl, ts_start);
 	sdio_release_host(sdiodev->func1);
 
 	brcmf_dbg(SDIO, "addr: 0x%08x, val: 0x%02x, err: %d\n", addr, val, *err);
@@ -702,7 +675,6 @@ EXPORT_SYMBOL(ifx_bus_reg_readl);
 void ifx_bus_reg_writel(struct brcmf_bus *bus_if, u32 addr, u32 val, int *err)
 {
 	struct brcmf_sdio_dev *sdiodev = NULL;
-	struct timespec64 ts_start;
 
 	if (!bus_if || !err) {
 		brcmf_err("bus_if(%p) or err(%p) is null\n", bus_if, err);
@@ -718,10 +690,7 @@ void ifx_bus_reg_writel(struct brcmf_bus *bus_if, u32 addr, u32 val, int *err)
 	sdiodev = bus_if->bus_priv.sdio;
 
 	sdio_claim_host(sdiodev->func1);
-	ktime_get_ts64(&ts_start);
 	brcmf_sdiod_writel(sdiodev, addr, val, err);
-	// wait for next commit to recoed command
-	//_btsdio_record_cmd(&sdiodev->sdcnt.bt_reg_wl, ts_start);
 	sdio_release_host(sdiodev->func1);
 
 	brcmf_dbg(SDIO, "addr: 0x%08x, val: 0x%08x, err: %d\n", addr, val, *err);
@@ -938,16 +907,28 @@ static bool _btsdio_is_over_sdio(struct brcmf_bus *bus_if)
 	ifp = brcmf_get_ifp(drvr, 0);
 	sdiodev = bus_if->bus_priv.sdio;
 
-	if (sdiodev->func1->device == SDIO_DEVICE_ID_CYPRESS_55500) {
+	switch (sdiodev->func1->device) {
+	case SDIO_DEVICE_ID_BROADCOM_CYPRESS_43012:
+	case SDIO_DEVICE_ID_BROADCOM_CYPRESS_43022:
+		/* cannot config in OTP */
+		bt_over_sdio_hw = 1;
+		break;
+	case SDIO_DEVICE_ID_CYPRESS_55500:
+		/* should enable feature in OTP */
 		err = brcmf_fil_iovar_int_get(ifp, "bt_over_sdio", &bt_over_sdio_hw);
 		if (err < 0) {
 			bt_over_sdio_hw = 0;
 			brcmf_err("failed to get bt_over_sdio\n");
 		}
+		break;
+	default:
+		bt_over_sdio_hw = 0;
+		break;
 	}
 
-	brcmf_dbg(INFO, "SW: %d, HW: %d\n",
-		  sdiodev->settings->bt_over_sdio, bt_over_sdio_hw);
+	brcmf_dbg(INFO, "Device: %d (SW: %d, HW: %d)\n",
+		  sdiodev->func1->device, sdiodev->settings->bt_over_sdio,
+		  bt_over_sdio_hw);
 
 	if (sdiodev->settings->bt_over_sdio & bt_over_sdio_hw)
 		return true;
