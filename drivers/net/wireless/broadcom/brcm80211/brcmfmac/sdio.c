@@ -4029,7 +4029,7 @@ static int brcmf_sdio_download_nvram(struct brcmf_sdio *bus,
 	return err;
 }
 
-static int brcmf_sdio_download_firmware(struct brcmf_sdio *bus,
+static int brcmf_sdio_download_firmware_43022(struct brcmf_sdio *bus,
 					const struct firmware *fw,
 					void *nvram, u32 nvlen)
 {
@@ -4042,7 +4042,7 @@ static int brcmf_sdio_download_firmware(struct brcmf_sdio *bus,
 	rstvec = get_unaligned_le32(fw->data);
 	brcmf_dbg(SDIO, "firmware rstvec: %x\n", rstvec);
 
-	if (bus->ci->blhs && bus->ci->chip == CY_CC_43022_CHIP_ID) {
+	if (bus->ci->blhs) {
 		bcmerror = bus->ci->blhs->pre_nvramdl(bus->ci);
 		if (bcmerror) {
 			brcmf_err("NVRAM download preparation failed\n");
@@ -4083,7 +4083,48 @@ static int brcmf_sdio_download_firmware(struct brcmf_sdio *bus,
 			brcmf_fw_nvram_free(nvram);
 			goto err;
 		}
-	} else if (bus->ci->blhs) {
+	} else {
+		bcmerror = brcmf_sdio_download_code_file(bus, fw);
+		release_firmware(fw);
+		if (bcmerror) {
+			brcmf_err("dongle image file download failed\n");
+			brcmf_fw_nvram_free(nvram);
+			goto err;
+		}
+
+		bcmerror = brcmf_sdio_download_nvram(bus, nvram, nvlen);
+		brcmf_fw_nvram_free(nvram);
+		if (bcmerror) {
+			brcmf_err("dongle nvram file download failed\n");
+			goto err;
+		}
+
+		/* Take arm out of reset */
+		if (!brcmf_chip_set_active(bus->ci, rstvec)) {
+			brcmf_err("error getting out of ARM core reset\n");
+			goto err;
+		}
+	}
+err:
+	brcmf_sdio_clkctl(bus, CLK_SDONLY, false);
+	sdio_release_host(bus->sdiodev->func1);
+	return bcmerror;
+}
+
+static int brcmf_sdio_download_firmware(struct brcmf_sdio *bus,
+					const struct firmware *fw,
+					void *nvram, u32 nvlen)
+{
+	int bcmerror;
+	u32 rstvec;
+
+	sdio_claim_host(bus->sdiodev->func1);
+	brcmf_sdio_clkctl(bus, CLK_AVAIL, false);
+
+	rstvec = get_unaligned_le32(fw->data);
+	brcmf_dbg(SDIO, "firmware rstvec: %x\n", rstvec);
+
+	if (bus->ci->blhs) {
 		bcmerror = bus->ci->blhs->prep_fwdl(bus->ci);
 		if (bcmerror) {
 			brcmf_err("FW download preparation failed\n");
@@ -4093,17 +4134,15 @@ static int brcmf_sdio_download_firmware(struct brcmf_sdio *bus,
 		}
 	}
 
-	if (!(bus->ci->blhs)) {
-		bcmerror = brcmf_sdio_download_code_file(bus, fw);
-		release_firmware(fw);
-		if (bcmerror) {
-			brcmf_err("dongle image file download failed\n");
-			brcmf_fw_nvram_free(nvram);
-			goto err;
-		}
+	bcmerror = brcmf_sdio_download_code_file(bus, fw);
+	release_firmware(fw);
+	if (bcmerror) {
+		brcmf_err("dongle image file download failed\n");
+		brcmf_fw_nvram_free(nvram);
+		goto err;
 	}
 
-	if (bus->ci->blhs && (!(bus->ci->chip == CY_CC_43022_CHIP_ID))) {
+	if (bus->ci->blhs) {
 		bcmerror = bus->ci->blhs->post_fwdl(bus->ci);
 		if (bcmerror) {
 			brcmf_err("FW download failed, err=%d\n", bcmerror);
@@ -4118,18 +4157,15 @@ static int brcmf_sdio_download_firmware(struct brcmf_sdio *bus,
 			goto err;
 		}
 	}
-	if (!(bus->ci->blhs)) {
-		bcmerror = brcmf_sdio_download_nvram(bus, nvram, nvlen);
-		brcmf_fw_nvram_free(nvram);
-		if (bcmerror) {
-			brcmf_err("dongle nvram file download failed\n");
-			goto err;
-		}
+
+	bcmerror = brcmf_sdio_download_nvram(bus, nvram, nvlen);
+	brcmf_fw_nvram_free(nvram);
+	if (bcmerror) {
+		brcmf_err("dongle nvram file download failed\n");
+		goto err;
 	}
 
-	if (bus->ci->blhs && bus->ci->chip == CY_CC_43022_CHIP_ID) {
-		brcmf_err("Avoid resetting ARM in 43022 secured chip\n");
-	} else if (bus->ci->blhs && (!(bus->ci->chip == CY_CC_43022_CHIP_ID))) {
+	if (bus->ci->blhs) {
 		bus->ci->blhs->post_nvramdl(bus->ci);
 	} else {
 		/* Take arm out of reset */
@@ -4138,11 +4174,13 @@ static int brcmf_sdio_download_firmware(struct brcmf_sdio *bus,
 			goto err;
 		}
 	}
+
 err:
 	brcmf_sdio_clkctl(bus, CLK_SDONLY, false);
 	sdio_release_host(bus->sdiodev->func1);
 	return bcmerror;
 }
+
 
 static bool brcmf_sdio_aos_no_decode(struct brcmf_sdio *bus)
 {
@@ -5224,7 +5262,11 @@ static void brcmf_sdio_firmware_callback(struct device *dev, int err,
 
 	/* try to download image and nvram to the dongle */
 	bus->alp_only = true;
-	err = brcmf_sdio_download_firmware(bus, code, nvram, nvram_len);
+	if (bus->ci->chip == CY_CC_43022_CHIP_ID) {
+		err = brcmf_sdio_download_firmware_43022(bus, code, nvram, nvram_len);
+	} else {
+		err = brcmf_sdio_download_firmware(bus, code, nvram, nvram_len);
+	}
 	if (err)
 		goto fail;
 	bus->alp_only = false;
