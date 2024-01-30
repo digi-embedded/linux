@@ -32,6 +32,7 @@
 #include "common.h"
 #include "twt.h"
 #include "bt_shared_sdio_ifx.h"
+#include "sdio.h"
 
 #define MAX_WAIT_FOR_8021X_TX			msecs_to_jiffies(950)
 
@@ -1592,6 +1593,10 @@ static int brcmf_bus_started(struct brcmf_pub *drvr, struct cfg80211_ops *ops)
 		goto fail;
 
 	brcmf_feat_attach(drvr);
+	ret = brcmf_bus_set_fcmode(bus_if);
+	/* Set fcmode = 0 for PCIe/USB */
+	if (ret < 0)
+		drvr->settings->fcmode = 0;
 
 	ret = brcmf_proto_init_done(drvr);
 	if (ret < 0)

@@ -95,6 +95,7 @@ struct brcmf_bus_ops {
 			enum brcmf_blob_type type);
 	void (*debugfs_create)(struct device *dev);
 	int (*reset)(struct device *dev);
+	int (*set_fcmode)(struct device *dev);
 };
 
 
@@ -280,6 +281,15 @@ int brcmf_bus_reset(struct brcmf_bus *bus)
 		return -EOPNOTSUPP;
 
 	return bus->ops->reset(bus->dev);
+}
+
+static inline
+int brcmf_bus_set_fcmode(struct brcmf_bus *bus)
+{
+	if (!bus->ops->set_fcmode)
+		return -EOPNOTSUPP;
+
+	return bus->ops->set_fcmode(bus->dev);
 }
 
 /*

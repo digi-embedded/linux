@@ -26,6 +26,7 @@
 #include <linux/reboot.h>
 #include <linux/notifier.h>
 #include "pcie.h"
+#include "sdio.h"
 
 MODULE_AUTHOR("Broadcom Corporation");
 MODULE_DESCRIPTION("Broadcom 802.11 wireless LAN fullmac driver.");
@@ -61,7 +62,7 @@ module_param_string(alternative_fw_path, brcmf_firmware_path,
 		    BRCMF_FW_ALTPATH_LEN, 0400);
 MODULE_PARM_DESC(alternative_fw_path, "Alternative firmware path");
 
-static int brcmf_fcmode;
+static int brcmf_fcmode = 2;
 module_param_named(fcmode, brcmf_fcmode, int, 0);
 MODULE_PARM_DESC(fcmode, "Mode of firmware signalled flow control");
 
@@ -666,12 +667,14 @@ static void brcmf_mp_attach(void)
 
 int brcmf_debugfs_param_read(struct seq_file *s, void *data)
 {
+	struct brcmf_bus *bus_if = dev_get_drvdata(s->private);
+
 	seq_printf(s, "%-20s: %s\n", "Name", "Value");
 	seq_printf(s, "%-20s: 0x%x\n", "debug", brcmf_msg_level);
 	seq_printf(s, "%-20s: %s\n", "alternative_fw_path", brcmf_firmware_path);
 	seq_printf(s, "%-20s: %d\n", "p2pon", !!brcmf_p2p_enable);
 	seq_printf(s, "%-20s: %d\n", "feature_disable", brcmf_feature_disable);
-	seq_printf(s, "%-20s: %d\n", "fcmode", brcmf_fcmode);
+	seq_printf(s, "%-20s: %d\n", "fcmode", bus_if->drvr->settings->fcmode);
 	seq_printf(s, "%-20s: %d\n", "roamoff", !!brcmf_roamoff);
 	seq_printf(s, "%-20s: %d\n", "iapp", !!brcmf_iapp_enable);
 	seq_printf(s, "%-20s: %d\n", "eap_restrict", !!brcmf_eap_restrict);
