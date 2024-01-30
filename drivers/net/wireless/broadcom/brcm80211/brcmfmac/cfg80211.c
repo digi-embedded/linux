@@ -7730,9 +7730,11 @@ brcmf_bss_connect_done(struct brcmf_cfg80211_info *cfg,
 		conn_params.resp_ie = conn_info->resp_ie;
 		conn_params.resp_ie_len = conn_info->resp_ie_len;
 
-		if (profile->use_fwsup == BRCMF_PROFILE_FWSUP_1X &&
-		    brcmf_has_pmkid(conn_params.req_ie, conn_params.req_ie_len, NULL))
-			conn_params.authorized = true;
+		if ((profile->use_fwsup == BRCMF_PROFILE_FWSUP_1X &&
+		     brcmf_has_pmkid(conn_params.req_ie, conn_params.req_ie_len, NULL)) ||
+		     profile->use_fwsup == BRCMF_PROFILE_FWSUP_PSK ||
+		     profile->use_fwsup == BRCMF_PROFILE_FWSUP_SAE)
+			conn_params.authorized = completed;
 
 		cfg80211_connect_done(ndev, &conn_params, GFP_KERNEL);
 		brcmf_dbg(CONN, "Report connect result - connection %s\n",
