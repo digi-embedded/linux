@@ -51,6 +51,7 @@ static const struct brcmf_feat_fwcap brcmf_fwcap_map[] = {
 	{ BRCMF_FEAT_GCMP, "gcmp" },
 	{ BRCMF_FEAT_OFFLOADS, "offloads" },
 	{ BRCMF_FEAT_ULP, "ulp" },
+	{ BRCMF_FEAT_PROPTXSTATUS, "proptxstatus" },
 };
 
 #ifdef DEBUG

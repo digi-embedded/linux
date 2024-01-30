@@ -108,6 +108,7 @@ struct brcmf_bus_ops {
 	void (*debugfs_create)(struct device *dev);
 	int (*reset)(struct device *dev);
 	void (*remove)(struct device *dev);
+	int (*set_fcmode)(struct device *dev);
 };
 
 
@@ -310,6 +311,15 @@ static inline void brcmf_bus_remove(struct brcmf_bus *bus)
 	}
 
 	bus->ops->remove(bus->dev);
+}
+
+static inline
+int brcmf_bus_set_fcmode(struct brcmf_bus *bus)
+{
+	if (!bus->ops->set_fcmode)
+		return -EOPNOTSUPP;
+
+	return bus->ops->set_fcmode(bus->dev);
 }
 
 /*
