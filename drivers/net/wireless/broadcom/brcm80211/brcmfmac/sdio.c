@@ -5218,6 +5218,7 @@ static int brcmf_sdio_bus_reset(struct device *dev)
 	return 0;
 }
 
+
 static void brcmf_sdio_bus_remove(struct device *dev)
 {
 	struct brcmf_bus *bus_if = dev_get_drvdata(dev);
@@ -5225,6 +5226,20 @@ static void brcmf_sdio_bus_remove(struct device *dev)
 
 	device_release_driver(&sdiod->func2->dev);
 	device_release_driver(&sdiod->func1->dev);
+}
+
+static int brcmf_sdio_bus_set_fcmode(struct device *dev)
+{
+	struct brcmf_bus *bus_if = dev_get_drvdata(dev);
+	struct brcmf_sdio_dev *sdiodev = bus_if->bus_priv.sdio;
+
+	if (!brcmf_feat_is_enabled(bus_if->drvr->iflist[0], BRCMF_FEAT_PROPTXSTATUS)) {
+		bus_if->drvr->settings->fcmode = 0;
+		sdiodev->settings->fcmode = bus_if->drvr->settings->fcmode;
+		brcmf_dbg(INFO, "Set fcmode = %d\n", sdiodev->settings->fcmode);
+	}
+
+	return sdiodev->settings->fcmode;
 }
 
 static const struct brcmf_bus_ops brcmf_sdio_bus_ops = {
@@ -5241,6 +5256,7 @@ static const struct brcmf_bus_ops brcmf_sdio_bus_ops = {
 	.debugfs_create = brcmf_sdio_debugfs_create,
 	.reset = brcmf_sdio_bus_reset,
 	.remove = brcmf_sdio_bus_remove,
+	.set_fcmode = brcmf_sdio_bus_set_fcmode
 };
 
 #define BRCMF_SDIO_FW_CODE	0
