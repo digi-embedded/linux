@@ -5217,6 +5217,20 @@ static int brcmf_sdio_bus_reset(struct device *dev)
 	return 0;
 }
 
+static int brcmf_sdio_bus_set_fcmode(struct device *dev)
+{
+	struct brcmf_bus *bus_if = dev_get_drvdata(dev);
+	struct brcmf_sdio_dev *sdiodev = bus_if->bus_priv.sdio;
+
+	if (!brcmf_feat_is_enabled(bus_if->drvr->iflist[0], BRCMF_FEAT_PROPTXSTATUS)) {
+		bus_if->drvr->settings->fcmode = 0;
+		sdiodev->settings->fcmode = bus_if->drvr->settings->fcmode;
+		brcmf_dbg(INFO, "Set fcmode = %d\n", sdiodev->settings->fcmode);
+	}
+
+	return sdiodev->settings->fcmode;
+}
+
 static const struct brcmf_bus_ops brcmf_sdio_bus_ops = {
 	.stop = brcmf_sdio_bus_stop,
 	.preinit = brcmf_sdio_bus_preinit,
@@ -5229,7 +5243,8 @@ static const struct brcmf_bus_ops brcmf_sdio_bus_ops = {
 	.get_memdump = brcmf_sdio_bus_get_memdump,
 	.get_blob = brcmf_sdio_get_blob,
 	.debugfs_create = brcmf_sdio_debugfs_create,
-	.reset = brcmf_sdio_bus_reset
+	.reset = brcmf_sdio_bus_reset,
+	.set_fcmode = brcmf_sdio_bus_set_fcmode
 };
 
 #define BRCMF_SDIO_FW_CODE	0
