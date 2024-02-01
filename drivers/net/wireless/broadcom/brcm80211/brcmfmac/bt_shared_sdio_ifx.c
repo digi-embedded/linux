@@ -238,7 +238,7 @@ static void _btsdio_err_reg_record(struct ifx_bt_if *bt_if,
 	reg->addr = addr;
 	reg->val = val;
 	brcmf_err("[%5lld.%06ld] %8s err: %d\taddr: 0x%x\tval: 0x%x\n",
-		  cmd->time.tv_sec, cmd->time.tv_nsec / NSEC_PER_USEC,
+		  (long long)cmd->time.tv_sec, cmd->time.tv_nsec / NSEC_PER_USEC,
 		  _btsdio_err_char(cmd->type), err, addr, val);
 
 	_btsdio_err_enq(bt_if, cmd);
@@ -261,7 +261,7 @@ static void _btsdio_err_buf_record(struct ifx_bt_if *bt_if,
 	buf = &cmd->u.buf;
 	buf->nbytes = nbytes;
 	brcmf_err("[%5lld.%06ld] %8s err: %d\tnbytes: %d\n",
-		  cmd->time.tv_sec, cmd->time.tv_nsec / NSEC_PER_USEC,
+		  (long long)cmd->time.tv_sec, cmd->time.tv_nsec / NSEC_PER_USEC,
 		  _btsdio_err_char(cmd->type), err, nbytes);
 
 	_btsdio_err_enq(bt_if, cmd);
@@ -285,7 +285,7 @@ static void _btsdio_err_mem_record(struct ifx_bt_if *bt_if, int err, bool set, u
 	mem->addr = addr;
 	mem->size = size;
 	brcmf_err("[%5lld.%06ld] %8s err: %d\tset: %d\taddr: 0x%x\tsize: %d\n",
-		  cmd->time.tv_sec, cmd->time.tv_nsec / NSEC_PER_USEC,
+		  (long long)cmd->time.tv_sec, cmd->time.tv_nsec / NSEC_PER_USEC,
 		  _btsdio_err_char(cmd->type), err, set, addr, size);
 
 	_btsdio_err_enq(bt_if, cmd);
@@ -310,7 +310,7 @@ static void _btsdio_err_dump(struct seq_file *seq, struct ifx_bt_if *bt_if)
 	spin_lock(&bt_if->err_list_lock);
 	list_for_each_entry(cmd, &bt_if->err_list, list) {
 		seq_printf(seq, "%3d: [%5lld.%06ld] %8s err: %d\t",
-			   ++idx, cmd->time.tv_sec, cmd->time.tv_nsec / NSEC_PER_USEC,
+			   ++idx, (long long)cmd->time.tv_sec, cmd->time.tv_nsec / NSEC_PER_USEC,
 			   _btsdio_err_char(cmd->type), cmd->err);
 		switch (cmd->type) {
 		case ERR_REG_RB:
