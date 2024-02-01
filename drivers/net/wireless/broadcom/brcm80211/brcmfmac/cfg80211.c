@@ -5313,7 +5313,11 @@ next:
 static u32
 brcmf_vndr_ie(u8 *iebuf, s32 pktflag, u8 *ie_ptr, u32 ie_len, s8 *add_del_cmd)
 {
-	strscpy(iebuf, add_del_cmd, VNDR_IE_CMD_LEN);
+	int str_num;
+
+	str_num = strscpy(iebuf, add_del_cmd, VNDR_IE_CMD_LEN);
+	if(str_num <= 0)
+		brcmf_err("string length copy error %d\n", str_num);
 
 	put_unaligned_le32(1, &iebuf[VNDR_IE_COUNT_OFFSET]);
 
