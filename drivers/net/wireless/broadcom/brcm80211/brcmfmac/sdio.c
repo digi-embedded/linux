@@ -836,7 +836,7 @@ brcmf_sdio_kso_control(struct brcmf_sdio *bus, bool on)
 			 * already up and ready, leading to more power consumptions of both
 			 * host and device, as well as overall increased response delays
 			 */
-			usleep_range(1000, 1500);
+			usleep_range(2500, 3000);
 		} else {
 			/* Initial delay is done, now do continuous KSO wr-rd-check
 			 * sequence with some small delay
