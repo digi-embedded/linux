@@ -2272,11 +2272,6 @@ static int imx_uart_probe(struct platform_device *pdev)
 	rs485conf = &sport->port.rs485;
 	rs485conf->flags = 0;
 
-	if (of_property_read_bool(np, "rs485-rts-active-high"))
-		rs485conf->flags |= SER_RS485_RTS_ON_SEND;
-	else
-		rs485conf->flags |= SER_RS485_RTS_AFTER_SEND;
-
 	if (of_property_read_u32_array(np, "rs485-rts-delay",
 				       rs485_delay, 2) == 0) {
 		rs485conf->delay_rts_before_send = rs485_delay[0];

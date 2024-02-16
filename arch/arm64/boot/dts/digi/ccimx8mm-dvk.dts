@@ -675,7 +675,6 @@
 	/* RS-485 mode (comment these lines to use this UART in RS232 mode) */
 	pinctrl-0 = <&pinctrl_uart3_rs485>, <&pinctrl_uart3_rs485_re>;
 	linux,rs485-enabled-at-boot-time;
-	rs485-rts-active-high;
 	rts-gpios = <&gpio5 8 GPIO_ACTIVE_HIGH>;
 	/* Disable DMA on this port when using rs485 */
 	/delete-property/dmas;
