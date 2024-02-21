@@ -350,9 +350,9 @@
 		reg = <VOLTD_SCMI_STPMIC2_LDO4>;
 		regulator-name = "vdd3v3_usb";
 	};
-	scmi_vdd_sdcard: regulator@23 {
-		reg = <VOLTD_SCMI_STPMIC2_LDO7>;
-		regulator-name = "vdd_sdcard";
+	scmi_vddio_sdcard: regulator@24 {
+		reg = <VOLTD_SCMI_STPMIC2_LDO8>;
+		regulator-name = "vddio_sdcard";
 	};
 };
 
