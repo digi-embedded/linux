@@ -486,6 +486,7 @@
 	status = "okay";
 };
 
+/* Micro SD */
 &sdmmc1 {
 	pinctrl-names = "default", "opendrain", "sleep";
 	pinctrl-0 = <&sdmmc1_b4_pins_a>;
@@ -495,8 +496,8 @@
 	disable-wp;
 	st,neg-edge;
 	bus-width = <4>;
-	vmmc-supply = <&scmi_vdd_sdcard>;
-	vqmmc-supply = <&scmi_vddio1>;
+	vmmc-supply = <&reg_3v3_board>; /* card's VDD pin */
+	vqmmc-supply = <&scmi_vddio_sdcard>; /* voltage used to pull up signal lines */
 	sd-uhs-sdr12;
 	sd-uhs-sdr25;
 	sd-uhs-sdr50;
