@@ -35,20 +35,7 @@
 			status = "disabled";
 		};
 
-		reg_rf_bt_en: regulator-som@2 {
-			compatible = "regulator-fixed";
-			reg = <2>;
-			regulator-name = "rf_bt_en";
-			regulator-min-microvolt = <3300000>;
-			regulator-max-microvolt = <3300000>;
-			gpio = <&gpioz 5 GPIO_ACTIVE_HIGH>; /* BT_REG_EN */
-			enable-active-high;
-			startup-delay-us = <100>;
-			vin-supply = <&reg_3v3_rf>;
-			status = "disabled";
-		};
-
-		reg_rf_wl_en: regulator-som@3 {
+		reg_rf_wl_en: regulator-som@2 {
 			compatible = "regulator-fixed";
 			reg = <2>;
 			regulator-name = "rf_wl_en";
@@ -358,6 +345,15 @@
 	pinctrl-2 = <&ccmp25_usart1_sleep_pins>;
 	uart-has-rtscts;
 	status = "disabled";
+
+	cyw4373_bt: cyw4373-bt {
+		shutdown-gpios = <&gpioz 5 GPIO_ACTIVE_HIGH>; /* BT_REG_EN */
+		compatible = "brcm,bcm43438-bt";
+		max-speed = <3000000>;
+		vbat-supply = <&scmi_v3v3>;
+		vddio-supply = <&reg_3v3_rf>;
+		status = "disabled";
+	};
 };
 
 &pinctrl {
@@ -366,6 +362,13 @@
 			pinmux = <STM32_PINMUX('C', 13, ANALOG)>; /* RTC_OUT1 */
 		};
 	};
+
+	ccmp25_rtc_out2_pins: ccmp25_rtc-out2-pins-0 {
+		pins {
+			pinmux = <STM32_PINMUX('I', 8, ANALOG)>; /* RTC_OUT2 */
+		};
+	};
+
 	ccmp25_usart1_pins: ccmp25-usart1-0 {
 		pins1 {
 			pinmux = <STM32_PINMUX('G', 14, AF6)>, /* BT_USART1_TX */
