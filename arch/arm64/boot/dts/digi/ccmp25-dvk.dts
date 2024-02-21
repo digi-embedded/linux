@@ -36,8 +36,9 @@
 	aliases {
 		ethernet0 = &eth2;
 		ethernet1 = &eth1;
-		serial0 = &usart2;
-		serial1 = &usart6;
+		serial2 = &uart5; /* Console M33 / XBEE */
+		serial3 = &usart6; /* Connector J41 */
+		serial4 = &uart7; /* MikroBus UART */
 	};
 
 	chosen {
@@ -528,6 +529,7 @@
 	st,ethsw-internal-125;
 };
 
+/* Console A35 */
 &usart2 {
 	pinctrl-names = "default", "idle", "sleep";
 	pinctrl-0 = <&usart2_pins_a>;
@@ -538,6 +540,17 @@
 	status = "okay";
 };
 
+/* Console M33 / XBEE */
+&uart5 {
+	pinctrl-names = "default", "idle", "sleep";
+	pinctrl-0 = <&ccmp25_uart5_pins &ccmp25_uart5_rtscts_pins>;
+	pinctrl-1 = <&ccmp25_uart5_idle_pins &ccmp25_uart5_rtscts_idle_pins>;
+	pinctrl-2 = <&ccmp25_uart5_sleep_pins &ccmp25_uart5_rtscts_sleep_pins>;
+	uart-has-rtscts;
+	status = "okay";
+};
+
+/* Connector J8 */
 &usart6 {
 	pinctrl-names = "default", "idle", "sleep";
 	pinctrl-0 = <&usart6_pins_a>;
@@ -545,6 +558,17 @@
 	pinctrl-2 = <&usart6_sleep_pins_a>;
 	uart-has-rtscts;
 	status = "disabled";
+};
+
+/* MikroBus UART */
+&uart7 {
+	pinctrl-names = "default", "idle", "sleep";
+	pinctrl-0 = <&ccmp25_uart7_pins>;
+	pinctrl-1 = <&ccmp25_uart7_idle_pins>;
+	pinctrl-2 = <&ccmp25_uart7_sleep_pins>;
+	/delete-property/dmas;
+	/delete-property/dma-names;
+	status = "okay";
 };
 
 &usb2_phy1 {
@@ -573,6 +597,100 @@
 			dwc3_ep: endpoint {
 				remote-endpoint = <&typec_ep>;
 			};
+		};
+	};
+};
+
+&pinctrl {
+	ccmp25_uart5_pins: ccmp25-uart5-0 {
+		pins1 {
+			pinmux = <STM32_PINMUX('G', 9, AF5)>; /* UART5_TX */
+			bias-disable;
+			drive-push-pull;
+			slew-rate = <0>;
+		};
+		pins2 {
+			pinmux = <STM32_PINMUX('G', 10, AF5)>; /* UART5_RX */
+			bias-disable;
+		};
+	};
+
+	ccmp25_uart5_idle_pins: ccmp25-uart5-idle-0 {
+		pins1 {
+			pinmux = <STM32_PINMUX('G', 9, ANALOG)>; /* UART5_TX */
+		};
+		pins2 {
+			pinmux = <STM32_PINMUX('G', 10, AF5)>; /* UART5_RX */
+			bias-disable;
+		};
+	};
+
+	ccmp25_uart5_sleep_pins: ccmp25-uart5-sleep-0 {
+		pins {
+			pinmux = <STM32_PINMUX('G', 9, ANALOG)>, /* UART5_TX */
+				 <STM32_PINMUX('G', 10, ANALOG)>; /* UART5_RX */
+		};
+	};
+
+	ccmp25_uart5_rtscts_pins: ccmp25-uart5-rtscts-0 {
+		pins1 {
+			pinmux = <STM32_PINMUX('G', 8, AF5)>;  /* UART5_RTS */
+			bias-disable;
+			drive-push-pull;
+			slew-rate = <0>;
+		};
+		pins2 {
+			pinmux = <STM32_PINMUX('I', 5, AF5)>; /* UART5_CTS */
+			bias-pull-up;
+		};
+	};
+
+	ccmp25_uart5_rtscts_idle_pins: ccmp25-uart5-rtscts-idle-0 {
+		pins1 {
+			pinmux = <STM32_PINMUX('I', 5, ANALOG)>; /* UART5_CTS */
+		};
+		pins2 {
+			pinmux = <STM32_PINMUX('G', 8, AF5)>; /* UART5_RTS */
+			bias-disable;
+			drive-push-pull;
+			slew-rate = <0>;
+		};
+	};
+
+	ccmp25_uart5_rtscts_sleep_pins: ccmp25-uart5-rtscts-sleep-0 {
+		pins {
+			pinmux = <STM32_PINMUX('G', 8, ANALOG)>, /* UART5_RTS */
+				 <STM32_PINMUX('I', 5, ANALOG)>; /* UART5_CTS */
+		};
+	};
+
+	ccmp25_uart7_pins: ccmp25-uart7-0 {
+		pins1 {
+			pinmux = <STM32_PINMUX('D', 3, AF6)>; /* UART7_TX */
+			bias-disable;
+			drive-push-pull;
+			slew-rate = <0>;
+		};
+		pins2 {
+			pinmux = <STM32_PINMUX('D', 0, AF6)>; /* UART7_RX */
+			bias-disable;
+		};
+	};
+
+	ccmp25_uart7_idle_pins: ccmp25-uart7-idle-0 {
+		pins1 {
+			pinmux = <STM32_PINMUX('D', 3, ANALOG)>; /* UART7_TX */
+		};
+		pins2 {
+			pinmux = <STM32_PINMUX('D', 0, AF6)>; /* UART7_RX */
+			bias-disable;
+		};
+	};
+
+	ccmp25_uart7_sleep_pins: ccmp25-uart7-sleep-0 {
+		pins {
+			pinmux = <STM32_PINMUX('D', 3, ANALOG)>, /* UART7_TX */
+				 <STM32_PINMUX('D', 0, ANALOG)>; /* UART7_RX */
 		};
 	};
 };

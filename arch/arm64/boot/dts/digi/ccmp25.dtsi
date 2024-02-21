@@ -21,6 +21,8 @@
 		mmc0 = &sdmmc2; /* eMMC */
 		mmc1 = &sdmmc1; /* Micro SD */
 		mmc2 = &sdmmc3; /* Wireless */
+		serial0 = &usart2; /* Console A35 */
+		serial1 = &usart1; /* Bluetooth */
 	};
 
 	/* Wifi/Bluetooth regulators, disabled by default */
