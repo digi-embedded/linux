@@ -14,6 +14,7 @@
  */
 
 #include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/rtc/rtc-stm32.h>
 
 / {
 	/* Wifi/Bluetooth regulators, disabled by default */
@@ -280,6 +281,9 @@
 };
 
 &rtc {
+	st,alarm = <RTC_OUT1>;
+	pinctrl-0 = <&ccmp25_rtc_out1_pins>;
+	pinctrl-names = "default";
 	status = "okay";
 };
 
@@ -357,6 +361,11 @@
 };
 
 &pinctrl {
+	ccmp25_rtc_out1_pins: ccmp25_rtc-out1-pins-0 {
+		pins {
+			pinmux = <STM32_PINMUX('C', 13, ANALOG)>; /* RTC_OUT1 */
+		};
+	};
 	ccmp25_usart1_pins: ccmp25-usart1-0 {
 		pins1 {
 			pinmux = <STM32_PINMUX('G', 14, AF6)>, /* BT_USART1_TX */
