@@ -150,7 +150,7 @@
 		port@0 {
 			reg = <0>;
 			csi2host_sink: endpoint {
-				remote-endpoint = <&imx335_ep>;
+				/*remote-endpoint = <&imx335_ep>;*/
 				data-lanes = <0 1>;
 				bus-type = <4>;
 			};
@@ -193,7 +193,7 @@
 		port@1 {
 			reg = <1>;
 			dsi_out1: endpoint {
-				remote-endpoint = <&adv7535_in>;
+				/*remote-endpoint = <&adv7535_in>;*/
 			};
 		};
 	};
@@ -260,6 +260,21 @@
 	};
 };
 
+/* Peripheral I2C bus */
+&i2c1 {
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&ccmp25_i2c1_pins>;
+	pinctrl-1 = <&ccmp25_i2c1_sleep_pins>;
+	i2c-scl-rising-time-ns = <185>;
+	i2c-scl-falling-time-ns = <20>;
+	clock-frequency = <100000>;
+	status = "okay";
+	/* spare dmas for other usage */
+	/delete-property/dmas;
+	/delete-property/dma-names;
+};
+
+/* J34 Connector */
 &i2c2 {
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&i2c2_pins_a>;
@@ -271,67 +286,6 @@
 	/* spare dmas for other usage */
 	/delete-property/dmas;
 	/delete-property/dma-names;
-
-	imx335: imx335@1a {
-		compatible = "sony,imx335";
-		reg = <0x1a>;
-		clocks = <&clk_ext_camera>;
-		reset-gpios = <&gpioi 7 (GPIO_ACTIVE_HIGH | GPIO_PUSH_PULL)>;
-		powerdown-gpios = <&gpioi 0 (GPIO_ACTIVE_HIGH | GPIO_PUSH_PULL)>;
-		status = "okay";
-
-		port {
-			imx335_ep: endpoint {
-				remote-endpoint = <&csi2host_sink>;
-				clock-lanes = <0>;
-				data-lanes = <1 2>;
-				link-frequencies = /bits/ 64 <594000000>;
-			};
-		};
-	};
-
-	adv7535: hdmi@3d {
-		compatible = "adi,adv7535";
-		reg = <0x3d>, <0x3c>, <0x3f>, <0x38>;
-		reg-names = "main", "cec", "edid", "packet";
-		status = "disabled";
-		adi,dsi-lanes = <4>;
-		reset-gpios = <&gpiog 14 GPIO_ACTIVE_LOW>;
-		avdd-supply = <&scmi_v3v3>;
-		dvdd-supply = <&scmi_v3v3>;
-		pvdd-supply = <&scmi_v3v3>;
-		a2vdd-supply = <&scmi_v3v3>;
-		v3p3-supply = <&scmi_v3v3>;
-		v1p2-supply = <&scmi_v3v3>;
-
-		ports {
-			#address-cells = <1>;
-			#size-cells = <0>;
-
-			port@0 {
-				reg = <0>;
-				adv7535_in: endpoint {
-					remote-endpoint = <&dsi_out1>;
-				};
-			};
-
-			port@2 {
-				reg = <2>;
-				adv7535_tx_endpoint: endpoint {
-					remote-endpoint = <&i2s2_endpoint>;
-				};
-			};
-		};
-	};
-
-	ili2511: ili2511@41 {
-		compatible = "ilitek,ili251x";
-		reg = <0x41>;
-		interrupt-parent = <&gpioi>;
-		interrupts = <13 IRQ_TYPE_EDGE_FALLING>;
-		reset-gpios = <&gpiog 14 GPIO_ACTIVE_LOW>;
-		status = "okay";
-	};
 };
 
 &i2s2 {
@@ -342,7 +296,7 @@
 
 	i2s2_port: port {
 		i2s2_endpoint: endpoint {
-			remote-endpoint = <&adv7535_tx_endpoint>;
+			/*remote-endpoint = <&adv7535_tx_endpoint>;*/
 			format = "i2s";
 			mclk-fs = <256>;
 		};
@@ -603,6 +557,23 @@
 };
 
 &pinctrl {
+	ccmp25_i2c1_pins: ccmp25-i2c1-0 {
+		pins {
+			pinmux = <STM32_PINMUX('G', 13, AF9)>, /* I2C1_SCL */
+				 <STM32_PINMUX('I', 1, AF9)>; /* I2C1_SDA */
+			bias-disable;
+			drive-open-drain;
+			slew-rate = <0>;
+		};
+	};
+
+	ccmp25_i2c1_sleep_pins: ccmp25-i2c1-sleep-0 {
+		pins {
+			pinmux = <STM32_PINMUX('G', 13, ANALOG)>, /* I2C1_SCL */
+				 <STM32_PINMUX('I', 1, ANALOG)>; /* I2C1_SDA */
+		};
+	};
+
 	ccmp25_uart5_pins: ccmp25-uart5-0 {
 		pins1 {
 			pinmux = <STM32_PINMUX('G', 9, AF5)>; /* UART5_TX */
