@@ -407,21 +407,13 @@
 		     &ospi1_io03_sleep_pins_a
 		     &ospi1_cs0_sleep_pins_a>;
 
-	status = "okay";
+	status = "disabled";
 
-	spi@40430000 {
+	ospi1: spi@40430000 {
 		#address-cells = <1>;
 		#size-cells = <0>;
 		memory-region = <&mm_ospi1>;
-		status = "okay";
-
-		flash0: flash@0 {
-			compatible = "jedec,spi-nor";
-			reg = <0>;
-			spi-rx-bus-width = <4>;
-			spi-tx-bus-width = <4>;
-			spi-max-frequency = <84000000>;
-		};
+		status = "disabled";
 	};
 };
 
@@ -461,18 +453,13 @@
 	status = "okay";
 };
 
+/* MikroBus SPI */
 &spi3 {
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&spi3_pins_a>;
 	pinctrl-1 = <&spi3_sleep_pins_a>;
-	status = "disabled";
-};
-
-&spi8 {
-	pinctrl-names = "default", "sleep";
-	pinctrl-0 = <&spi8_pins_a>;
-	pinctrl-1 = <&spi8_sleep_pins_a>;
-	status = "disabled";
+	cs-gpios = <&gpiob 1 0>; /* SPI3_SS */
+	status = "okay";
 };
 
 /* ETH1 and ETH3 */
