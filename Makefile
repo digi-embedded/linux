@@ -1473,7 +1473,7 @@ export TARGET_ARM64=y
 endif
 
 ifdef TARGET_ARM64
-override dtstree := arch/$(SRCARCH)/boot/dts/st
+override dtstree := arch/$(SRCARCH)/boot/dts/digi
 endif #TARGET_ARM64
 
 # Default path for external device trees
@@ -1486,9 +1486,9 @@ endif #ARCH_STM32
 ifneq ($(dtstree),)
 
 KBUILD_EXTDTB := 0
-ifneq ($(KBUILD_EXTDTS),)
-KBUILD_EXTDTB := 1
-endif
+# ifneq ($(KBUILD_EXTDTS),)
+# KBUILD_EXTDTB := 1
+# endif
 
 %.dtb: dtbs_prepare
 	$(Q)$(MAKE) $(build)=$(dtstree) $(dtstree)/$@ || ( \
