@@ -295,6 +295,14 @@
 		reg = <VOLTD_SCMI_STPMIC2_LDO2>;
 		regulator-name = "vdd_emmc";
 	};
+	scmi_ldo6: regulator@22 {
+		reg = <VOLTD_SCMI_STPMIC2_LDO6>;
+		regulator-name = "ldo6";
+	};
+	scmi_ldo7: regulator@23 {
+		reg = <VOLTD_SCMI_STPMIC2_LDO7>;
+		regulator-name = "ldo7";
+	};
 	scmi_vddio_sdcard: regulator@24 {
 		reg = <VOLTD_SCMI_STPMIC2_LDO8>;
 		regulator-name = "vddio_sdcard";
