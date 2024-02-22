@@ -28,7 +28,7 @@
 
 	/* Enable backlight support */
 	fragment@1 {
-		target = <&panel_lvds_backlight>;
+		target = <&display_bl>;
 		__overlay__ {
 			status = "okay";
 		};
