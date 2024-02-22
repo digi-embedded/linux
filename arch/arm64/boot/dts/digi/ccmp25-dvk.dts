@@ -91,25 +91,25 @@
 	};
 
 	panel_lvds: panel-lvds {
-		compatible = "edt,etml0700z9ndha", "panel-lvds";
-		enable-gpios = <&gpiog 15 GPIO_ACTIVE_HIGH>;
+		compatible = "auo,g101evn010", "panel-lvds";
+		power-supply = <&reg_5v_board>;
 		backlight = <&panel_lvds_backlight>;
 		status = "okay";
 
-		width-mm = <156>;
-		height-mm = <92>;
-		data-mapping = "vesa-24";
+		width-mm = <216>;
+		height-mm = <135>;
+		data-mapping = "jeida-24";
 
 		panel-timing {
 			clock-frequency = <54000000>;
-			hactive = <1024>;
-			vactive = <600>;
-			hfront-porch = <150>;
-			hback-porch = <150>;
-			hsync-len = <21>;
-			vfront-porch = <24>;
-			vback-porch = <24>;
-			vsync-len = <21>;
+			hactive = <1280>;
+			vactive = <800>;
+			hfront-porch = <82>;
+			hback-porch = <84>;
+			hsync-len = <2>;
+			vfront-porch = <8>;
+			vback-porch = <6>;
+			vsync-len = <2>;
 		};
 
 		port {
@@ -121,10 +121,38 @@
 
 	panel_lvds_backlight: panel-lvds-backlight {
 		compatible = "gpio-backlight";
-		gpios = <&gpioi 5 GPIO_ACTIVE_HIGH>;
+		gpios = <&gpiob 0 GPIO_ACTIVE_HIGH>; /* LVDS_BCKL_PWM */
 		default-on;
 		default-brightness-level = <0>;
-		status = "okay";
+		status = "disabled";
+	};
+
+	regulators {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		reg_3v3_board: regulator-board@1 {
+			compatible = "regulator-fixed";
+			reg = <1>;
+			regulator-name = "3v3_board";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			gpio = <&gpioa 12 GPIO_ACTIVE_HIGH>; /* 3V3_DVK_EN */
+			enable-active-high;
+			status = "okay";
+		};
+
+		reg_5v_board: regulator-board@2 {
+			compatible = "regulator-fixed";
+			reg = <2>;
+			regulator-name = "5v_board";
+			regulator-min-microvolt = <5000000>;
+			regulator-max-microvolt = <5000000>;
+			gpio = <&gpiob 2 GPIO_ACTIVE_HIGH>; /* 5V_EN */
+			enable-active-high;
+			status = "okay";
+		};
 	};
 
 	sound: sound {
@@ -272,6 +300,25 @@
 	/* spare dmas for other usage */
 	/delete-property/dmas;
 	/delete-property/dma-names;
+
+	/* Touch */
+	goodix_touch: goodix_touch@14 {
+		compatible = "goodix,gt9271";
+		reg = <0x14>;
+		interrupt-parent = <&gpiod>;
+		interrupts = <5 IRQ_TYPE_EDGE_RISING>;
+		irq-gpios = <&gpiod 5 GPIO_ACTIVE_HIGH>; /* LVDS_IRQ */
+		status = "disabled";
+	};
+
+	goodix_touch2: goodix_touch2@5d {
+		compatible = "goodix,gt9271";
+		reg = <0x5d>;
+		interrupt-parent = <&gpiod>;
+		interrupts = <5 IRQ_TYPE_EDGE_RISING>;
+		irq-gpios = <&gpiod 5 GPIO_ACTIVE_HIGH>; /* LVDS_IRQ */
+		status = "disabled";
+	};
 };
 
 /* J34 Connector */
@@ -324,7 +371,7 @@
 };
 
 &lvds {
-	status = "okay";
+	status = "disabled";
 
 	ports {
 		#address-cells = <1>;
