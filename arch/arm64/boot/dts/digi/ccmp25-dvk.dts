@@ -212,26 +212,26 @@
 		full-duplex;
 	};
 
+	/* ETH1 and ETH3 shared the mdio bus ETH1_MDIO */
 	mdio1 {
 		#address-cells = <1>;
 		#size-cells = <0>;
 		compatible = "snps,dwmac-mdio";
 
-		phy1_eth1: ethernet-phy@4 {
-			compatible = "ethernet-phy-id001c.c916",
-				     "ethernet-phy-ieee802.3-c22";
-			realtek,eee-disable;
-			reg = <4>;
+		phy1_eth1: ethernet-phy@0 {
+			compatible = "ethernet-phy-id0141.0dd0"; /* PHY ID for Marvell 88E1512 */
+			reset-gpios =  <&gpiob 3 GPIO_ACTIVE_LOW>; /* ETH1_RST */
+			reset-assert-us = <1000>;
+			reset-deassert-us = <2000>;
+			reg = <0>;
 		};
 
-		phy2_eth1: ethernet-phy@5 {
-			compatible = "ethernet-phy-id001c.c916",
-				     "ethernet-phy-ieee802.3-c22";
-			reset-gpios =  <&gpioj 9 GPIO_ACTIVE_LOW>;
-			reset-assert-us = <10000>;
-			reset-deassert-us = <80000>;
-			realtek,eee-disable;
-			reg = <5>;
+		phy2_eth1: ethernet-phy@2 {
+			compatible = "ethernet-phy-id0141.0dd0"; /* PHY ID for Marvell 88E1512 */
+			reset-gpios =  <&gpiob 15 GPIO_ACTIVE_LOW>; /* ETH3_RST */
+			reset-assert-us = <1000>;
+			reset-deassert-us = <2000>;
+			reg = <2>;
 		};
 	};
 };
@@ -245,16 +245,16 @@
 	phy-handle = <&phy1_eth2>;
 	st,eth-ptp-from-rcc;
 
+	/* ETH2 connected to mdio bus ETH2_MDIO */
 	mdio1 {
 		#address-cells = <1>;
 		#size-cells = <0>;
 		compatible = "snps,dwmac-mdio";
 		phy1_eth2: ethernet-phy@1 {
-			compatible = "ethernet-phy-id001c.c916";
-			reset-gpios =  <&gpiog 6 GPIO_ACTIVE_LOW>;
-			reset-assert-us = <10000>;
-			reset-deassert-us = <80000>;
-			realtek,eee-disable;
+			compatible = "ethernet-phy-id0141.0dd0"; /* PHY ID for Marvell 88E1512 */
+			reset-gpios =  <&gpiob 6 GPIO_ACTIVE_LOW>; /* ETH2_RST */
+			reset-assert-us = <1000>;
+			reset-deassert-us = <2000>;
 			reg = <1>;
 		};
 	};
@@ -521,6 +521,7 @@
 	status = "disabled";
 };
 
+/* ETH1 and ETH3 */
 &switch0 {
 	status = "okay";
 	pinctrl-0 = <&eth1_rgmii_pins_a>, <&eth3_rgmii_pins_a>;
