@@ -155,11 +155,36 @@
 		};
 	};
 
-	sound: sound {
-		compatible = "audio-graph-card";
-		label = "STM32MP25-EV1";
-		dais = <&i2s2_port>;
-		status = "disabled";
+	/* AUDIO */
+	sound_max98089: sound-max98089 {
+		compatible = "simple-audio-card";
+		simple-audio-card,name = "stm32max98088";
+		simple-audio-card,format = "i2s";
+		/*simple-audio-card,bitclock-master = <&cpu_dai>;
+		simple-audio-card,frame-master = <&cpu_dai>;*/
+		routing =
+			"Headphone Jack", "HPL",
+			"Headphone Jack", "HPR",
+			"Ext Spk", "SPKL",
+			"Ext Spk", "SPKR",
+			"LineOut", "RECL",
+			"LineOut", "RECR",
+			"Mic1", "MIC1",
+			"Mic2", "MIC2",
+			"LineInA", "INA1",
+			"LineInA", "INA2",
+			"LineInB", "INB1",
+			"LineInB", "INB2";
+
+		/*cpu_dai: simple-audio-card,cpu {
+			sound-dai = <&i2s2>;
+			system-clock-direction-out;
+			clocks = <&rcc SPI2_K>;
+		};*/
+
+		codec_dai: simple-audio-card,codec {
+			sound-dai = <&max98089>;
+		};
 	};
 };
 
@@ -397,6 +422,16 @@
 			};
 		};
 	};
+
+	max98089: codec@10 {
+		compatible = "maxim,max98089";
+		reg = <0x10>;
+		/*clocks = <&rcc SPI2_K>;*/
+		clock-names = "mclk";
+		#sound-dai-cells = <0>;
+		#clock-cells = <0>;
+		status = "okay";
+	};
 };
 
 /* J34 Connector */
@@ -560,6 +595,31 @@
 	status = "okay";
 };
 
+&sai4 {
+	status = "okay";
+
+	sai4b: audio-controller@40340024 {
+		pinctrl-names = "default", "sleep";
+		pinctrl-0 = <&ccmp25_sai4a_pins>, <&ccmp25_sai4b_pins>;
+		pinctrl-1 = <&ccmp25_sai4a_sleep_pins>, <&ccmp25_sai4b_sleep_pins>;
+		status = "okay";
+
+		/*sai4a_port: port {
+			sai4a_endpoint: endpoint {
+				remote-endpoint = <&spdif_in_endpoint>;
+			};
+		};*/
+
+		/*sai4b_port: port {
+			sai4b_endpoint: endpoint {
+				remote-endpoint = <&spdif_out_endpoint>;
+			};
+		};*/
+
+		/* See https://wiki.st.com/stm32mpu/wiki/SAI_device_tree_configuration */
+	};
+};
+
 /* Micro SD */
 &sdmmc1 {
 	pinctrl-names = "default", "opendrain", "sleep";
@@ -705,6 +765,43 @@
 		pins {
 			pinmux = <STM32_PINMUX('I', 9, ANALOG)>, /* FDCAN2_TX */
 				 <STM32_PINMUX('I', 10, ANALOG)>; /* FDCAN2_RX */
+		};
+	};
+
+	ccmp25_sai4a_pins: ccmp25-sai4a-1 {
+		pins {
+			pinmux = <STM32_PINMUX('D', 1, AF5)>; /* SAI4_SD_A */
+			bias-disable;
+		};
+	};
+
+	ccmp25_sai4a_sleep_pins: ccmp25-sai4a-sleep-1 {
+		pins {
+			pinmux = <STM32_PINMUX('D', 1, ANALOG)>; /* SAI4_SD_A */
+		};
+	};
+
+	ccmp25_sai4b_pins: ccmp25-sai2b-0 {
+		pins1 {
+			pinmux = <STM32_PINMUX('I', 2, AF4)>, /* SAI4_SCK_B */
+				 <STM32_PINMUX('I', 4, AF4)>, /* SAI4_FS_B */
+				 <STM32_PINMUX('I', 0, AF4)>; /* SAI4_MCLK_B */
+			slew-rate = <0>;
+			drive-push-pull;
+			bias-disable;
+		};
+		pins2 {
+			pinmux = <STM32_PINMUX('I', 3, AF4)>; /* SAI4_SD_B */
+			bias-disable;
+		};
+	};
+
+	ccmp25_sai4b_sleep_pins: ccmp25-sai2b-sleep-0 {
+		pins {
+			pinmux = <STM32_PINMUX('I', 3, ANALOG)>, /* SAI4_SDO_B */
+				 <STM32_PINMUX('I', 2, ANALOG)>, /* SAI4_SCK_B */
+				 <STM32_PINMUX('I', 4, ANALOG)>, /* SAI4_FS_B */
+				 <STM32_PINMUX('I', 0, ANALOG)>; /* SAI4_MCLK_B */
 		};
 	};
 
