@@ -178,7 +178,7 @@
 		port@0 {
 			reg = <0>;
 			csi2host_sink: endpoint {
-				/*remote-endpoint = <&imx335_ep>;*/
+				remote-endpoint = <&ov5640_mipi_ep>;
 				data-lanes = <0 1>;
 				bus-type = <4>;
 			};
@@ -373,6 +373,27 @@
 				vsync-active = <0>;
 				de-active = <0>;
 				pixelclk-active = <0>;
+			};
+		};
+	};
+
+	/* MIPI-CSI camera */
+	ov5640_mipi: ov5640_mipi@3c {
+		compatible = "ovti,ov5640";
+		reg = <0x3c>;
+		clocks = <&clk_ext_camera>;
+		clock-names = "xclk";
+		csi_id = <0>;
+		DOVDD-supply = <&reg_3v3_board>;
+		reset-gpios = <&gpiog 7 (GPIO_ACTIVE_LOW | GPIO_PUSH_PULL)>; /* CSI_RESET */
+		status = "okay";
+
+		port {
+			ov5640_mipi_ep: endpoint {
+				remote-endpoint = <&csi2host_sink>;
+				clock-lanes = <0>;
+				data-lanes = <1 2>;
+				link-frequencies = /bits/ 64 <594000000>;
 			};
 		};
 	};
