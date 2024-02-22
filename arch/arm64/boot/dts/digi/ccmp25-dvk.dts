@@ -592,19 +592,19 @@
 };
 
 &pcie_ep {
-	pinctrl-names = "default", "init";
-	pinctrl-0 = <&pcie_pins_a>;
-	pinctrl-1 = <&pcie_init_pins_a>;
-	reset-gpios = <&gpioj 8 GPIO_ACTIVE_LOW>;
+	reset-gpios = <&gpioh 5 GPIO_ACTIVE_LOW>;
 	status = "disabled";
+	/* DIGI - Not supported by ST driver */
+	/*disable-gpio = <&gpioh 4 GPIO_ACTIVE_LOW>;*/
+	/*wake-gpio = <&gpioa 1 GPIO_ACTIVE_LOW>;*/
 };
 
 &pcie_rc {
-	pinctrl-names = "default", "init";
-	pinctrl-0 = <&pcie_pins_a>;
-	pinctrl-1 = <&pcie_init_pins_a>;
-	reset-gpios = <&gpioj 8 GPIO_ACTIVE_LOW>;
+	reset-gpios = <&gpioh 5 GPIO_ACTIVE_LOW>;
 	status = "okay";
+	/* DIGI - Not supported by ST driver */
+	/*disable-gpio = <&gpioh 4 GPIO_ACTIVE_LOW>;*/
+	/*wake-gpio = <&gpioa 1 GPIO_ACTIVE_LOW>;*/
 };
 
 &sai4 {
