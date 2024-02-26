@@ -107,6 +107,8 @@ struct bcm_iov_buf {
  * @IFX_VENDOR_SCMD_WNM: Configure the Wireless Network Management (WNM) 802.11v functionaltiy
  *	related parameters.
  *
+ * @IFX_VENDOR_SCMD_HWCAPS: Get device's capability.
+ *
  * @IFX_VENDOR_SCMD_MAX: This acts as a the tail of cmds list.
  *      Make sure it located at the end of the list.
  */
@@ -137,7 +139,8 @@ enum ifx_nl80211_vendor_subcmds {
 	SCMD(RSV22)		= 23,
 	SCMD(RSV24)		= 24,
 	SCMD(WNM)		= 25,
-	SCMD(MAX)		= 26
+	SCMD(HWCAPS)		= 26,
+	SCMD(MAX)		= 27
 };
 
 /*
@@ -631,6 +634,15 @@ enum ifx_vendor_attr_wnm {
 	IFX_VENDOR_ATTR_WNM_MAX
 };
 
+enum ifx_vendor_hw_caps {
+	IFX_VENDOR_HW_CAPS_REPLAYCNTS,
+	IFX_VENDOR_HW_CAPS_MAX
+};
+
+static const char * const hw_caps_name[] = {
+	[IFX_VENDOR_HW_CAPS_REPLAYCNTS] = "replay counters"
+};
+
 static const struct nla_policy ifx_vendor_attr_wnm_policy[IFX_VENDOR_ATTR_WNM_MAX + 1] = {
 	[IFX_VENDOR_ATTR_WNM_UNSPEC] = {.type = NLA_U8},
 	[IFX_VENDOR_ATTR_WNM_CMD] = {.type = NLA_U8},
@@ -714,6 +726,9 @@ int ifx_cfg80211_vndr_cmds_giantrx(struct wiphy *wiphy,
 int ifx_cfg80211_vndr_cmds_wnm(struct wiphy *wiphy,
 			       struct wireless_dev *wdev,
 			       const void *data, int len);
+int ifx_cfg80211_vndr_cmds_hwcaps(struct wiphy *wiphy,
+				  struct wireless_dev *wdev,
+				  const void *data, int len);
 
 #endif /* IFX_VENDOR_H */
 

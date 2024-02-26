@@ -30,6 +30,7 @@
  */
 
 #include <net/netlink.h>
+#include <brcm_hw_ids.h>
 #include "core.h"
 #include "cfg80211.h"
 #include "debug.h"
@@ -37,6 +38,7 @@
 #include "vendor_ifx.h"
 #include "xtlv.h"
 #include "twt.h"
+#include "bus.h"
 
 static int ifx_cfg80211_vndr_send_cmd_reply(struct wiphy *wiphy,
 					    const void  *data, int len)
@@ -705,6 +707,36 @@ int ifx_cfg80211_vndr_cmds_wnm(struct wiphy *wiphy,
 
 	if (ret)
 		brcmf_err("wnm %s error:%d\n", get_info?"get":"set", ret);
+
+	return ret;
+}
+
+int ifx_cfg80211_vndr_cmds_hwcaps(struct wiphy *wiphy,
+				  struct wireless_dev *wdev,
+				  const void *data, int len)
+{
+	int ret = 0, i;
+	struct brcmf_cfg80211_vif *vif;
+	struct brcmf_if *ifp;
+	struct brcmf_bus *bus_if;
+	s32 buf[IFX_VENDOR_HW_CAPS_MAX] = {0};
+
+	vif = container_of(wdev, struct brcmf_cfg80211_vif, wdev);
+	ifp = vif->ifp;
+	bus_if = ifp->drvr->bus_if;
+
+	if (bus_if->chip == CY_CC_43022_CHIP_ID)
+		buf[IFX_VENDOR_HW_CAPS_REPLAYCNTS] = 4;
+	else
+		buf[IFX_VENDOR_HW_CAPS_REPLAYCNTS] = 16;
+
+	ret = ifx_cfg80211_vndr_send_cmd_reply(wiphy, buf, sizeof(int));
+	if (ret) {
+		brcmf_dbg(INFO, "get HW capability error %d\n", ret);
+	} else {
+		for (i = 0; i < IFX_VENDOR_HW_CAPS_MAX; i++)
+			brcmf_dbg(INFO, "get %s: %d\n", hw_caps_name[i], buf[i]);
+	}
 
 	return ret;
 }
