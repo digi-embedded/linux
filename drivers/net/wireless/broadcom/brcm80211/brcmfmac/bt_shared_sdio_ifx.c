@@ -58,6 +58,7 @@ struct bt_shared_info {
 
 	/* wlan info */
 	void *wlan_bus_if;
+	u16 device_id;
 	u32 enum_addr;
 };
 
@@ -526,6 +527,7 @@ int inf_bus_attach(u32 ver, void *info)
 
 	/* Provide wlan info to bt dev */
 	bts_info->wlan_bus_if = glob_bus_if;
+	bts_info->device_id = sdiodev->func1->device;
 	bts_info->enum_addr = brcmf_sdio_get_enum_addr(sdiodev->bus);
 
 	bt_if->cnt_attach++;
