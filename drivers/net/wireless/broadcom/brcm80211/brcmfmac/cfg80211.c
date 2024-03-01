@@ -121,6 +121,11 @@
 				BSS_MEMBERSHIP_SELECTOR_SET)
 
 
+enum brcmf_pmksa_action {
+	PMKSA_SET = 0,
+	PMKSA_DELETE = 1
+};
+
 struct brcmf_dump_survey {
 	u32 obss;
 	u32 ibss;
@@ -4860,41 +4865,92 @@ brcmf_update_pmklist(struct brcmf_cfg80211_info *cfg, struct brcmf_if *ifp)
 			sizeof(*pmk_list));
 }
 
+static s32 
+brcmf_update_pmksa(struct brcmf_cfg80211_info *cfg,
+		   struct brcmf_if *ifp,
+		   const u8 *bssid,
+		   const u8 *pmkid,
+		   enum brcmf_pmksa_action action)
+{
+	struct brcmf_pmksa *pmk = &cfg->pmk_list.pmk[0];
+	struct brcmf_pub *drvr = cfg->pub;
+	s32 err;
+	u32 npmk, i;
+
+	if (!check_vif_up(ifp->vif))
+		return -EIO;
+
+	switch (action) {
+	case PMKSA_SET:
+		npmk = le32_to_cpu(cfg->pmk_list.npmk);
+		for (i = 0; i < npmk; i++)
+			if (!memcmp(bssid, pmk[i].bssid, ETH_ALEN))
+				break;
+		if (i < BRCMF_MAXPMKID) {
+			memcpy(pmk[i].bssid, bssid, ETH_ALEN);
+			memcpy(pmk[i].pmkid, pmkid, WLAN_PMKID_LEN);
+			if (i == npmk) {
+				npmk++;
+				cfg->pmk_list.npmk = cpu_to_le32(npmk);
+			}
+		} else {
+			bphy_err(drvr, "Too many PMKSA entries cached %d\n", npmk);
+			return -EINVAL;
+		}
+
+		brcmf_dbg(CONN, "set_pmksa - PMK bssid: %pM =\n", pmk[i].bssid);
+		brcmf_dbg(CONN, "%*ph\n", WLAN_PMKID_LEN, pmk[i].pmkid);
+
+		err = brcmf_update_pmklist(cfg, ifp);
+		break;
+	case PMKSA_DELETE:
+		npmk = le32_to_cpu(cfg->pmk_list.npmk);
+		for (i = 0; i < npmk; i++)
+			if (!memcmp(bssid, pmk[i].bssid, ETH_ALEN))
+				break;
+
+		if (npmk > 0 && i < npmk) {
+			for (; i < (npmk - 1); i++) {
+				memcpy(&pmk[i].bssid, &pmk[i + 1].bssid, ETH_ALEN);
+				memcpy(&pmk[i].pmkid, &pmk[i + 1].pmkid,
+				       WLAN_PMKID_LEN);
+			}
+			memset(&pmk[i], 0, sizeof(*pmk));
+			cfg->pmk_list.npmk = cpu_to_le32(npmk - 1);
+		} else {
+			bphy_err(drvr, "Cache entry not found\n");
+			return -EINVAL;
+		}
+
+		err = brcmf_update_pmklist(cfg, ifp);
+		break;
+	default:
+		err = -EINVAL;
+	}
+
+	return err;
+}
+
 static s32
 brcmf_cfg80211_set_pmksa(struct wiphy *wiphy, struct net_device *ndev,
 			 struct cfg80211_pmksa *pmksa)
 {
 	struct brcmf_cfg80211_info *cfg = wiphy_to_cfg(wiphy);
 	struct brcmf_if *ifp = netdev_priv(ndev);
-	struct brcmf_pmksa *pmk = &cfg->pmk_list.pmk[0];
 	struct brcmf_pub *drvr = cfg->pub;
 	s32 err;
-	u32 npmk, i;
 
 	brcmf_dbg(TRACE, "Enter\n");
 	if (!check_vif_up(ifp->vif))
 		return -EIO;
 
-	npmk = le32_to_cpu(cfg->pmk_list.npmk);
-	for (i = 0; i < npmk; i++)
-		if (!memcmp(pmksa->bssid, pmk[i].bssid, ETH_ALEN))
-			break;
-	if (i < BRCMF_MAXPMKID) {
-		memcpy(pmk[i].bssid, pmksa->bssid, ETH_ALEN);
-		memcpy(pmk[i].pmkid, pmksa->pmkid, WLAN_PMKID_LEN);
-		if (i == npmk) {
-			npmk++;
-			cfg->pmk_list.npmk = cpu_to_le32(npmk);
-		}
-	} else {
-		bphy_err(drvr, "Too many PMKSA entries cached %d\n", npmk);
-		return -EINVAL;
+	err = brcmf_update_pmksa(cfg, ifp, pmksa->bssid, pmksa->pmkid, PMKSA_SET);
+	if (err < 0) {
+		bphy_err(drvr,
+			 "PMKSA_SET brcmf_update_pmksa failed: ret=%d\n",
+			 err);
+		goto exit;
 	}
-
-	brcmf_dbg(CONN, "set_pmksa - PMK bssid: %pM =\n", pmk[i].bssid);
-	brcmf_dbg(CONN, "%*ph\n", WLAN_PMKID_LEN, pmk[i].pmkid);
-
-	err = brcmf_update_pmklist(cfg, ifp);
 
 	if (pmksa->pmk_len && pmksa->pmk_len < BRCMF_WSEC_PMK_LEN_SUITEB_192) {
 		/* external supplicant stores SUITEB-192 PMK */
@@ -4908,6 +4964,7 @@ brcmf_cfg80211_set_pmksa(struct wiphy *wiphy, struct net_device *ndev,
 		}
 	}
 
+exit:
 	brcmf_dbg(TRACE, "Exit\n");
 	return err;
 }
@@ -4918,40 +4975,24 @@ brcmf_cfg80211_del_pmksa(struct wiphy *wiphy, struct net_device *ndev,
 {
 	struct brcmf_cfg80211_info *cfg = wiphy_to_cfg(wiphy);
 	struct brcmf_if *ifp = netdev_priv(ndev);
-	struct brcmf_pmksa *pmk = &cfg->pmk_list.pmk[0];
 	struct brcmf_pub *drvr = cfg->pub;
 	s32 err;
-	u32 npmk, i;
 
 	brcmf_dbg(TRACE, "Enter\n");
 	if (!check_vif_up(ifp->vif))
 		return -EIO;
 
 	brcmf_dbg(CONN, "del_pmksa - PMK bssid = %pM\n", pmksa->bssid);
-
-	npmk = le32_to_cpu(cfg->pmk_list.npmk);
-	for (i = 0; i < npmk; i++)
-		if (!memcmp(pmksa->bssid, pmk[i].bssid, ETH_ALEN))
-			break;
-
-	if ((npmk > 0) && (i < npmk)) {
-		for (; i < (npmk - 1); i++) {
-			memcpy(&pmk[i].bssid, &pmk[i + 1].bssid, ETH_ALEN);
-			memcpy(&pmk[i].pmkid, &pmk[i + 1].pmkid,
-			       WLAN_PMKID_LEN);
-		}
-		memset(&pmk[i], 0, sizeof(*pmk));
-		cfg->pmk_list.npmk = cpu_to_le32(npmk - 1);
-	} else {
-		bphy_err(drvr, "Cache entry not found\n");
-		return -EINVAL;
+	err = brcmf_update_pmksa(cfg, ifp, pmksa->bssid, pmksa->pmkid, PMKSA_DELETE);
+	if (err < 0) {
+		bphy_err(drvr,
+			 "PMKSA_DELETE brcmf_update_pmksa failed: ret=%d\n",
+			 err);
+		return err;
 	}
-
-	err = brcmf_update_pmklist(cfg, ifp);
 
 	brcmf_dbg(TRACE, "Exit\n");
 	return err;
-
 }
 
 static s32
@@ -4970,7 +5011,6 @@ brcmf_cfg80211_flush_pmksa(struct wiphy *wiphy, struct net_device *ndev)
 
 	brcmf_dbg(TRACE, "Exit\n");
 	return err;
-
 }
 
 static s32 brcmf_configure_opensecurity(struct brcmf_if *ifp)
@@ -6923,6 +6963,7 @@ brcmf_cfg80211_external_auth(struct wiphy *wiphy, struct net_device *dev,
 	struct brcmf_pub *drvr;
 	struct brcmf_auth_req_status_le auth_status;
 	int ret = 0;
+	struct brcmf_cfg80211_info *cfg = wiphy_to_cfg(wiphy);
 
 	brcmf_dbg(TRACE, "Enter\n");
 
@@ -6948,6 +6989,19 @@ brcmf_cfg80211_external_auth(struct wiphy *wiphy, struct net_device *dev,
 				       sizeof(auth_status));
 	if (ret < 0)
 		bphy_err(drvr, "auth_status iovar failed: ret=%d\n", ret);
+
+	if (params->pmkid) {
+		ret = brcmf_update_pmksa(cfg,
+					 ifp,
+					 params->bssid,
+					 params->pmkid,
+					 PMKSA_SET);
+		if (ret < 0) {
+			bphy_err(drvr,
+				 "PMKSA_SET brcmf_update_pmksa failed: ret=%d\n",
+				 ret);
+		}
+	}
 
 	return ret;
 }
@@ -7076,6 +7130,7 @@ int brcmf_cfg80211_update_owe_info(struct wiphy *wiphy, struct net_device *dev,
 	u32 del_add_ie_buf_len = 0;
 	u32 total_owe_info_len = 0;
 	u32 pmkid_offset = 0;
+	struct brcmf_pub *drvr;
 
 	ifp = netdev_priv(dev);
 	if (owe_info) {
@@ -7090,40 +7145,19 @@ int brcmf_cfg80211_update_owe_info(struct wiphy *wiphy, struct net_device *dev,
 
 		owe_info_buf->with_ecdh = false;
 		if (owe_info->ie) {
+			drvr = ifp->drvr;
 			if (brcmf_has_pmkid(owe_info->ie,
 					    owe_info->ie_len,
 					    &pmkid_offset)) {
-				u32 npmk, i;
-				struct brcmf_pmksa *pmk = &cfg->pmk_list.pmk[0];
-
-				if (!check_vif_up(ifp->vif))
-					return -EIO;
-
-				npmk = le32_to_cpu(cfg->pmk_list.npmk);
-				for (i = 0; i < npmk; i++) {
-					if (!memcmp(owe_info_buf->peer_mac,
-						    pmk[i].bssid, ETH_ALEN))
-						break;
-				}
-				if (i < BRCMF_MAXPMKID) {
-					memcpy(pmk[i].bssid,
-					       owe_info_buf->peer_mac,
-					       ETH_ALEN);
-					memcpy(pmk[i].pmkid,
-					       owe_info->ie + pmkid_offset,
-					       WLAN_PMKID_LEN);
-					if (i == npmk) {
-						npmk++;
-						cfg->pmk_list.npmk = cpu_to_le32(npmk);
-					}
-				} else {
-					brcmf_err("Too many PMKSA entries cached %d\n", npmk);
-					return -EINVAL;
-				}
-
-				err = brcmf_update_pmklist(cfg, ifp);
+				err = brcmf_update_pmksa(cfg,
+							 ifp,
+							 owe_info_buf->peer_mac,
+							 owe_info->ie + pmkid_offset,
+							 PMKSA_SET);
 				if (err < 0) {
-					brcmf_err("%s: set pmkid failed:%d\n", __func__, err);
+					bphy_err(drvr,
+						 "PMKSA_SET brcmf_update_pmksa failed: ret=%d\n",
+						 err);
 					return err;
 				}
 
