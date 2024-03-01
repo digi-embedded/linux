@@ -773,7 +773,7 @@ brcmf_sdio_kso_control(struct brcmf_sdio *bus, bool on)
 	start_jiffy = jiffies;
 
 	/* Change bus width to 1-bit mode before kso 0 */
-	if (!on)
+	if (!on && bus->idleclock == BRCMF_IDLE_STOP)
 		brcmf_sdio_set_sdbus_clk_width(bus, SDIO_SDMODE_1BIT);
 
 	/* 1st KSO write goes to AOS wake up core if device is asleep  */
@@ -860,7 +860,7 @@ brcmf_sdio_kso_control(struct brcmf_sdio *bus, bool on)
 		brcmf_dbg(SDIO, "INFO: KSO=%d try_cnt=%d err_cnt=%d kso_seq_time=%uus rd_val=0x%x err=%d\n",
 			  on, try_cnt, err_cnt, kso_loop_time, rd_val, err);
 
-	if (on) {
+	if (on && bus->idleclock == BRCMF_IDLE_STOP) {
 		/* Change the bus width to 4-bit mode on kso 1 */
 		brcmf_sdio_set_sdbus_clk_width(bus, SDIO_SDMODE_4BIT);
 		sdio_retune_release(bus->sdiodev->func1);
