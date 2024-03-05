@@ -6698,7 +6698,7 @@ brcmf_notify_csa_completion_ind(struct brcmf_if *ifp,
 		return -EINVAL;
 
 	cfg = ifp->drvr->config;
-	ndev = cfg_to_ndev(cfg);
+	ndev = ifp->ndev;
 	wiphy = cfg_to_wiphy(cfg);
 
 	if (!cfg || !ndev || !wiphy)
