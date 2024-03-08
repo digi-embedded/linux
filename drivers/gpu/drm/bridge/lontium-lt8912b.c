@@ -430,23 +430,21 @@ lt8912_connector_mode_valid(struct drm_connector *connector,
 static int lt8912_connector_get_modes(struct drm_connector *connector)
 {
 	struct edid *edid;
-	int ret = -1;
-	int num = 0;
 	struct lt8912 *lt = connector_to_lt8912(connector);
 	u32 bus_format = MEDIA_BUS_FMT_RGB888_1X24;
+	int ret, num;
 
 	edid = drm_bridge_get_edid(lt->hdmi_port, connector);
 	drm_connector_update_edid_property(connector, edid);
-	if (edid) {
-		num = drm_add_edid_modes(connector, edid);
-	} else {
-		return ret;
-	}
+	if (!edid)
+		return 0;
+
+	num = drm_add_edid_modes(connector, edid);
 
 	ret = drm_display_info_set_bus_formats(&connector->display_info,
 					       &bus_format, 1);
-	if (ret)
-		num = ret;
+	if (ret < 0)
+		num = 0;
 
 	kfree(edid);
 	return num;
