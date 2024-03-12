@@ -977,8 +977,6 @@ void ifx_btsdio_init(struct brcmf_bus *bus_if)
 		bt_if->set_bt_reset = true;
 
 	sdio_claim_host(sdiodev->func1);
-	/* drvdata used for irqhandler */
-	dev_set_drvdata(&sdiodev->func3->dev, bus_if);
 	/* register interrupt */
 	if (!pdata->oob_irq_supported) {
 		brcmf_dbg(INFO, "register F3 ib irq\n");
@@ -1014,7 +1012,6 @@ void ifx_btsdio_deinit(struct brcmf_bus *bus_if)
 		brcmf_dbg(INFO, "release F3 ib irq\n");
 		sdio_release_irq(sdiodev->func3);
 	}
-	dev_set_drvdata(&sdiodev->func3->dev, NULL);
 	sdio_release_host(sdiodev->func1);
 
 	ifx_bus_detach(bus_if);
