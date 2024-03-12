@@ -1161,6 +1161,10 @@ static int brcmf_ops_sdio_probe(struct sdio_func *func,
 	dev_set_drvdata(&sdiodev->func1->dev, bus_if);
 	sdiodev->dev = &sdiodev->func1->dev;
 	dev_set_drvdata(&sdiodev->func2->dev, bus_if);
+	if (sdiodev->func3) {
+		brcmf_dbg(SDIO, "Set F3 dev\n");
+		dev_set_drvdata(&sdiodev->func3->dev, bus_if);
+	}
 
 	brcmf_sdiod_acpi_save_power_manageable(sdiodev);
 	brcmf_sdiod_change_state(sdiodev, BRCMF_SDIOD_DOWN);
@@ -1209,6 +1213,10 @@ static void brcmf_ops_sdio_remove(struct sdio_func *func)
 
 		dev_set_drvdata(&sdiodev->func1->dev, NULL);
 		dev_set_drvdata(&sdiodev->func2->dev, NULL);
+		if (sdiodev->func3) {
+			brcmf_dbg(SDIO, "Remove F3 dev\n");
+			dev_set_drvdata(&sdiodev->func3->dev, NULL);
+		}
 
 		kfree(bus_if);
 		kfree(sdiodev);
