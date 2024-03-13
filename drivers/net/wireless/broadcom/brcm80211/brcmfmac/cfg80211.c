@@ -4039,6 +4039,7 @@ brcmf_update_bss_info(struct brcmf_cfg80211_info *cfg, struct brcmf_if *ifp)
 	struct brcmf_pub *drvr = cfg->pub;
 	struct brcmf_bss_info_le *bi = NULL;
 	s32 err = 0;
+	u8 null_mac[6] = {0};
 
 	brcmf_dbg(TRACE, "Enter\n");
 	if (brcmf_is_ibssmode(ifp->vif))
@@ -4052,6 +4053,12 @@ brcmf_update_bss_info(struct brcmf_cfg80211_info *cfg, struct brcmf_if *ifp)
 		goto update_bss_info_out;
 	}
 	bi = (struct brcmf_bss_info_le *)(cfg->extra_buf + 4);
+
+	if (!memcmp(null_mac, bi->BSSID, ETH_ALEN)) {
+		bphy_err(drvr, "NULL mac, don't update bss\n");
+		goto update_bss_info_out;
+	}
+
 	err = brcmf_inform_single_bss(cfg, bi);
 
 	brcmf_dbg(TRACE, "Exit");
