@@ -1787,6 +1787,21 @@ bool brcmf_p2p_send_action_frame(struct brcmf_cfg80211_info *cfg,
 
 	brcmf_p2p_print_actframe(true, action_frame->data, action_frame_len);
 
+	/*
+	 * If p2p_find is not issued before creating AGO group,
+	 * my_listen_chan remains uninitialized causing KERNEL WARNING.
+	 */
+	if (afx_hdl->my_listen_chan == P2P_INVALID_CHANSPEC) {
+		struct brcmu_chan ch_inf;
+
+		ch_inf.band = BRCMU_CHAN_BAND_2G;
+		ch_inf.bw = BRCMU_CHAN_BW_20;
+		ch_inf.sb = BRCMU_CHAN_SB_NONE;
+		ch_inf.chnum = BRCMF_P2P_TEMP_CHAN;
+		p2p->cfg->d11inf.encchspec(&ch_inf);
+		p2p->afx_hdl.my_listen_chan = ch_inf.chspec;
+	}
+
 	/* Add the default dwell time. Dwell time to stay off-channel */
 	/* to wait for a response action frame after transmitting an  */
 	/* GO Negotiation action frame                                */
