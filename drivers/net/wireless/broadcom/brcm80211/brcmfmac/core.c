@@ -594,7 +594,7 @@ void brcmf_txflowblock_if(struct brcmf_if *ifp,
 	spin_unlock_irqrestore(&ifp->netif_stop_lock, flags);
 }
 
-void brcmf_netif_rx(struct brcmf_if *ifp, struct sk_buff *skb)
+void brcmf_netif_rx(struct brcmf_if *ifp, struct sk_buff *skb, bool inirq)
 {
 	/* Most of Broadcom's firmwares send 802.11f ADD frame every time a new
 	 * STA connects to the AP interface. This is an obsoleted standard most
@@ -617,7 +617,15 @@ void brcmf_netif_rx(struct brcmf_if *ifp, struct sk_buff *skb)
 	ifp->ndev->stats.rx_packets++;
 
 	brcmf_dbg(DATA, "rx proto=0x%X\n", ntohs(skb->protocol));
-	netif_rx(skb);
+	if (inirq) {
+		netif_rx(skb);
+	} else {
+		/* If the receive is not processed inside an ISR,
+		 * the softirqd must be woken explicitly to service
+		 * the NET_RX_SOFTIRQ.  This is handled by netif_rx_ni().
+		 */
+		netif_rx_ni(skb);
+	}
 }
 
 void brcmf_netif_mon_rx(struct brcmf_if *ifp, struct sk_buff *skb)
@@ -666,7 +674,7 @@ void brcmf_netif_mon_rx(struct brcmf_if *ifp, struct sk_buff *skb)
 	skb->pkt_type = PACKET_OTHERHOST;
 	skb->protocol = htons(ETH_P_802_2);
 
-	brcmf_netif_rx(ifp, skb);
+	brcmf_netif_rx(ifp, skb, false);
 }
 
 static int brcmf_rx_hdrpull(struct brcmf_pub *drvr, struct sk_buff *skb,
@@ -701,7 +709,7 @@ struct sk_buff *brcmf_rx_frame(struct device *dev, struct sk_buff *skb, bool han
 		return NULL;
 
 	if (brcmf_proto_is_reorder_skb(skb)) {
-		brcmf_proto_rxreorder(ifp, skb);
+		brcmf_proto_rxreorder(ifp, skb, inirq);
 	} else {
 		/* Process special event packets */
 		if (handle_event) {
@@ -715,7 +723,7 @@ struct sk_buff *brcmf_rx_frame(struct device *dev, struct sk_buff *skb, bool han
 		if (brcmf_feat_is_sdio_rxf_in_kthread(drvr))
 			return skb;
 		else
-			brcmf_netif_rx(ifp, skb);
+			brcmf_netif_rx(ifp, skb, inirq);
 	}
 	return NULL;
 }
