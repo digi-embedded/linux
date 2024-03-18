@@ -4426,19 +4426,19 @@ void brcmf_sdio_isr(struct brcmf_sdio *bus, bool in_isr)
 		return;
 	}
 
-	/* Wake up the bus if in sleep */
-	if (brcmf_sdio_bus_sleep_state(bus)) {
-		brcmf_sdio_bus_sleep(bus, false, false);
-	}
-
 	/* Count the interrupt call */
 	bus->sdcnt.intrcount++;
 	if (in_isr)
 		atomic_set(&bus->ipend, 1);
-	else
+	else {
+		/* Wake up the bus if in sleep */
+		if (brcmf_sdio_bus_sleep_state(bus))
+			brcmf_sdio_bus_sleep(bus, false, false);
+
 		if (brcmf_sdio_intr_rstatus(bus)) {
 			brcmf_err("failed backplane access\n");
 		}
+	}
 
 	/* Disable additional interrupts (is this needed now)? */
 	if (!bus->intr)
