@@ -98,6 +98,8 @@
 				st,syscon = <&syscfg 0x3400 0xffffffff>;
 				snps,mixed-burst;
 				snps,pbl = <2>;
+				snps,txqos = <7>;
+				snps,rxqos = <7>;
 				snps,axi-config = <&stmmac_axi_config_2>;
 				snps,tso;
 				feature-domains = <&rifsc STM32MP25_RIFSC_ETH2_ID>;
