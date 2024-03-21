@@ -5017,6 +5017,14 @@ brcmf_sdio_probe_attach(struct brcmf_sdio *bus)
 		brcmf_err("Failed to get device parameters\n");
 		goto fail;
 	}
+
+	if (sdiodev->settings->bus.sdio.oob_irq_supported) {
+		/*Below Module Params are not supported in OOB mode*/
+		sdiodev->settings->sdio_in_isr = 0;
+		sdiodev->settings->sdio_rxf_in_kthread_enabled = 0;
+		brcmf_dbg(TRACE, "OOB Enabled, Disable sdio_in_isr\n");
+	}
+
 	/* platform specific configuration:
 	 *   alignments must be at least 4 bytes for ADMA
 	 */
