@@ -155,7 +155,7 @@ static void mca_uart_break_ctl(struct uart_port *port, int break_state)
 
 static void mca_uart_set_termios(struct uart_port *port,
 				  struct ktermios *termios,
-				  struct ktermios *old)
+				  const struct ktermios *old)
 {
 	struct mca_uart *mca_uart = to_mca_uart(port, port);
 	struct regmap *regmap = mca_uart->mca->regmap;
@@ -384,6 +384,7 @@ static void mca_uart_flush_buffer(struct uart_port *port)
 }
 
 static int mca_uart_rs485_config(struct uart_port *port,
+				 struct ktermios *termios,
 				 struct serial_rs485 *rs485conf)
 {
 	struct mca_uart *mca_uart = to_mca_uart(port, port);

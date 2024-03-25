@@ -126,14 +126,12 @@ err_regmap:
 	return ret;
 }
 
-static int mca_ioexp_i2c_remove(struct i2c_client *i2c)
+static void mca_ioexp_i2c_remove(struct i2c_client *i2c)
 {
 	struct mca_ioexp *ioexp = i2c_get_clientdata(i2c);
 
 	mca_ioexp_device_exit(ioexp);
 	devm_kfree(ioexp->dev, ioexp);
-
-	return 0;
 }
 
 static void mca_ioexp_i2c_shutdown(struct i2c_client *i2c)
