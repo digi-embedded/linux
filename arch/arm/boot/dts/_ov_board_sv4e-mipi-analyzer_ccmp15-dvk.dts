@@ -1,0 +1,61 @@
+/*
+ * Copyright 2024 Digi International Inc.
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+/dts-v1/;
+/plugin/;
+
+/ {
+	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			overlay-description = "DVK: SV4E MIPI analyzer";
+		};
+	};
+
+	/* Disable LT8912 */
+	fragment@1 {
+		target = <&lt_bridge>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	/* Add SV4E MIPI analyzer panel */
+	fragment@2 {
+		target = <&dsi>;
+		__overlay__ {
+			panel@0 {
+				compatible = "introspect,sv4e-2-lane-mipi-analyzer";
+				reg = <0>;
+				power-supply = <&v3v3>;
+				status = "okay";
+
+				port {
+					panel_in: endpoint {
+						remote-endpoint = <&dsi_out>;
+					};
+				};
+			};
+		};
+	};
+
+	/* Configure SV4E MIPI analyzer endpoint */
+	fragment@3 {
+		target = <&dsi_out>;
+		__overlay__ {
+			remote-endpoint = <&panel_in>;
+		};
+	};
+};
