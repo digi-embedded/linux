@@ -5179,7 +5179,7 @@ static const struct panel_desc_dsi osd101t2045_53ts = {
 };
 
 static const struct drm_display_mode sv4e_mipi_analyzer_mode = {
-	.clock = 31500,
+	.clock = 25000,
 	.hdisplay = 640,
 	.hsync_start = 640 + 4,	     /* hdisplay + hback */
 	.hsync_end = 640 + 4 + 2,    /* hdisplay + hback + hsync */
