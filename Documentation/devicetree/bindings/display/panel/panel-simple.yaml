@@ -184,6 +184,7 @@ properties:
       - innolux,zj070na-01p
         # Introspect SV4E MIPI Analyzer
       - introspect,sv4e-mipi-analyzer
+      - introspect,sv4e-2-lane-mipi-analyzer
         # King & Display KD116N21-30NV-A010 eDP TFT LCD panel
       - kingdisplay,kd116n21-30nv-a010
         # Kaohsiung Opto-Electronics Inc. 5.7" QVGA (320 x 240) TFT LCD panel

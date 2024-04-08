@@ -5209,6 +5209,24 @@ static const struct panel_desc_dsi sv4e_mipi_analyzer = {
 	.lanes = 4,
 };
 
+static const struct panel_desc_dsi sv4e_2_lane_mipi_analyzer = {
+	.desc = {
+		.modes = &sv4e_mipi_analyzer_mode,
+		.num_modes = 1,
+		.bpc = 8,
+		.size = {
+			.width = 107,
+			.height = 172,
+		},
+		.connector_type = DRM_MODE_CONNECTOR_DSI,
+	},
+	.flags = MIPI_DSI_MODE_VIDEO |
+		 MIPI_DSI_MODE_VIDEO_BURST |
+		 MIPI_DSI_MODE_VIDEO_SYNC_PULSE,
+	.format = MIPI_DSI_FMT_RGB888,
+	.lanes = 2,
+};
+
 static const struct of_device_id dsi_of_match[] = {
 	{
 		.compatible = "auo,b080uan01",
@@ -5234,6 +5252,9 @@ static const struct of_device_id dsi_of_match[] = {
 	}, {
 		.compatible = "introspect,sv4e-mipi-analyzer",
 		.data = &sv4e_mipi_analyzer
+	}, {
+		.compatible = "introspect,sv4e-2-lane-mipi-analyzer",
+		.data = &sv4e_2_lane_mipi_analyzer
 	}, {
 		/* sentinel */
 	}
