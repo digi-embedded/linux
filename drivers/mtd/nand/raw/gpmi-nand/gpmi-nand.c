@@ -702,37 +702,28 @@ static int common_nfc_set_geometry(struct gpmi_nand_data *this)
 	struct mtd_info *mtd = nand_to_mtd(&this->nand);
 	const struct nand_ecc_props *requirements =
 		nanddev_get_ecc_requirements(&chip->base);
-	bool use_minimun_ecc;
-	int err;
 
-	use_minimun_ecc = of_property_read_bool(this->dev->of_node,
-						"fsl,use-minimum-ecc");
-
-	/* use legacy bch geometry settings by default*/
-	if ((!use_minimun_ecc && mtd->oobsize < 1024) ||
-	    !(requirements->strength > 0 && requirements->step_size > 0)) {
-		dev_dbg(this->dev, "use legacy bch geometry\n");
-		err = legacy_set_geometry(this);
-		if (!err)
-			return 0;
+	if (requirements->strength > 0 && requirements->step_size > 0) {
+		if (mtd->oobsize > 1024
+		    || requirements->step_size < mtd->oobsize)
+			return set_geometry_for_large_oob(this);
+		else
+			return set_geometry_by_ecc_info(this,
+						requirements->strength,
+						requirements->step_size);
 	}
 
-	/* for large oob nand */
-	if (mtd->oobsize > 1024) {
-		dev_dbg(this->dev, "use large oob bch geometry\n");
-		err = set_geometry_for_large_oob(this);
-		if (!err)
-			return 0;
-	}
+	if ((of_property_read_bool(this->dev->of_node, "fsl,use-minimum-ecc"))
+				|| legacy_set_geometry(this)) {
+		if (!(requirements->strength > 0 && requirements->step_size > 0))
+			return -EINVAL;
 
-	/* otherwise use the minimum ecc nand chip required */
-	dev_dbg(this->dev, "use minimum ecc bch geometry\n");
-	err = set_geometry_by_ecc_info(this, requirements->strength,
+		return set_geometry_by_ecc_info(this,
+						requirements->strength,
 					requirements->step_size);
-	if (err)
-		dev_err(this->dev, "none of the bch geometry setting works\n");
+	}
 
-	return err;
+	return 0;
 }
 
 int bch_create_debugfs(struct gpmi_nand_data *this)
