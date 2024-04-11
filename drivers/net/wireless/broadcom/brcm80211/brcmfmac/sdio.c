@@ -4563,7 +4563,12 @@ static void brcmf_sdio_bus_watchdog(struct brcmf_sdio *bus)
 #endif
 					brcmf_sdio_wd_timer(bus, false);
 				bus->idlecount = 0;
-				brcmf_sdio_bus_sleep(bus, true, false);
+
+				if (!bus->dpc_triggered && !bus->dpc_running)
+					brcmf_sdio_bus_sleep(bus, true, false);
+				else
+					brcmf_err("DPC active Skip sleep");
+
 				sdio_release_host(bus->sdiodev->func1);
 			}
 		} else {
