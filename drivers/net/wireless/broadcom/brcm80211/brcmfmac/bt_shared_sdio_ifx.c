@@ -912,6 +912,7 @@ static bool _btsdio_is_over_sdio(struct brcmf_bus *bus_if)
 	switch (sdiodev->func1->device) {
 	case SDIO_DEVICE_ID_BROADCOM_CYPRESS_43012:
 	case SDIO_DEVICE_ID_BROADCOM_CYPRESS_43022:
+	case SDIO_DEVICE_ID_CYPRESS_43022:
 		/* cannot config in OTP */
 		bt_over_sdio_hw = 1;
 		break;
