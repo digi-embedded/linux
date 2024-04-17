@@ -26,8 +26,7 @@
 #include <linux/serial_core.h>
 #include <linux/slab.h>
 #include <linux/tty_flip.h>
-#include <linux/gpio.h>
-#include <linux/of_gpio.h>
+#include <linux/gpio/consumer.h>
 
 /* All registers are 8-bit width */
 #define UARTBDH			0x00
@@ -271,8 +270,7 @@ struct lpuart_port {
 	unsigned int		rxfifo_size;
 
 	u8			rx_watermark;
-	unsigned int		rts_gpio;
-	bool			rts_act_low;
+	struct gpio_desc 	*rts_gpio;
 	bool			lpuart_dma_tx_use;
 	bool			lpuart_dma_rx_use;
 	struct dma_chan		*dma_tx_chan;
@@ -463,8 +461,8 @@ static void lpuart32_stop_tx(struct uart_port *port)
 
 	if ((sport->port.rs485.flags & SER_RS485_ENABLED) &&
 	    (lpuart32_read(port, UARTSTAT) & UARTSTAT_TC)) {
-		if (gpio_is_valid(sport->rts_gpio))
-			gpio_set_value(sport->rts_gpio, sport->rts_act_low ? 1 : 0);
+		if (sport->rts_gpio)
+			gpiod_set_value(sport->rts_gpio, 0);
 
 		temp &= ~UARTCTRL_TCIE;
 	}
@@ -836,8 +834,8 @@ static void lpuart32_start_tx(struct uart_port *port)
 		temp = lpuart32_read(port, UARTCTRL);
 
 		if (sport->port.rs485.flags & SER_RS485_ENABLED) {
-			if (gpio_is_valid(sport->rts_gpio))
-				gpio_set_value(sport->rts_gpio, sport->rts_act_low ? 0 : 1);
+			if (sport->rts_gpio)
+				gpiod_set_value(sport->rts_gpio, 1);
 
 			temp |= UARTCTRL_TCIE;
 		}
@@ -2897,8 +2895,6 @@ static int lpuart_probe(struct platform_device *pdev)
 	struct device_node *np = pdev->dev.of_node;
 	struct lpuart_port *sport;
 	struct resource *res;
-	int init_st = GPIOF_OUT_INIT_HIGH;
-	enum of_gpio_flags flags;
 	irq_handler_t handler;
 	int ret;
 
@@ -2994,19 +2990,16 @@ static int lpuart_probe(struct platform_device *pdev)
 	if (ret)
 		goto failed_get_rs485;
 
-	sport->rts_gpio = of_get_named_gpio_flags(np, "digi,rts-gpio", 0 , &flags);
-	sport->rts_act_low = false;
-	if (gpio_is_valid(sport->rts_gpio)) {
-		if (flags & OF_GPIO_ACTIVE_LOW) {
-			sport->rts_act_low = true;
-			init_st = GPIOF_OUT_INIT_LOW;
-		}
-		ret = gpio_request_one(sport->rts_gpio, init_st, "rs485-rts-gpio");
-		if (ret < 0)
-			dev_err(&pdev->dev, "Could not assign rs485 rts gpio\n");
-		else
-			gpio_set_value(sport->rts_gpio, sport->rts_act_low ? 1 : 0);
+	sport->rts_gpio = gpiod_get_optional(&pdev->dev, "digi,rts", GPIOD_OUT_HIGH);
+	if (IS_ERR(sport->rts_gpio)) {
+		dev_err(&pdev->dev, "Could not assign rs485 rts gpio\n");
+		sport->rts_gpio = NULL;
 	}
+	if (sport->rts_gpio) {
+		gpiod_set_consumer_name(sport->rts_gpio, "rs485-rts-gpio");
+		gpiod_set_value(sport->rts_gpio, 0);
+	}
+
 
 	ret = uart_add_one_port(&lpuart_reg, &sport->port);
 	if (ret)
