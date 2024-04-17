@@ -274,7 +274,7 @@ const static u8* g_ver_product[4] = {
 	"10Z8", "70Z7", "43Z6", ""
 };
 
-static int fusion_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
+static int fusion_probe(struct i2c_client *i2c)
 {
 	int ret;
 	u8 ver_product, ver_id;
