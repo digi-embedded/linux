@@ -686,7 +686,7 @@ static struct pwm_chip *of_subnode_to_pwmchip(const struct of_phandle_args *args
 					mutex_unlock(&pwm_lock);
 					pwm_dev = chip->of_xlate(chip, args);
 					if (pwm_dev) {
-						pwm_free(pwm_dev);
+						pwm_put(pwm_dev);
 						return chip;
 					}
 					mutex_lock(&pwm_lock);
