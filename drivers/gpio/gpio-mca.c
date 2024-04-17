@@ -499,7 +499,6 @@ static int mca_gpio_probe(struct platform_device *pdev)
 						       irq_gpio_bank_name[i]);
 	}
 	gpio->gc = reference_gc;
-	gpio->gc.of_node = pdev->dev.of_node;
 	gpio->gc.parent = &pdev->dev;
 	platform_set_drvdata(pdev, gpio);
 
