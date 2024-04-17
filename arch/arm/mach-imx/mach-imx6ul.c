@@ -2,6 +2,7 @@
 /*
  * Copyright (C) 2015 Freescale Semiconductor, Inc.
  */
+#include <linux/delay.h>
 #include <linux/irqchip.h>
 #include <linux/of_address.h>
 #include <linux/gpio/consumer.h>
