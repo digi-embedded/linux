@@ -12,6 +12,7 @@
 #include <linux/irq.h>
 #include <linux/mfd/core.h>
 #include <linux/interrupt.h>
+#include <linux/of.h>
 #include <linux/regmap.h>
 #include <linux/mfd/mca-common/core.h>
 
