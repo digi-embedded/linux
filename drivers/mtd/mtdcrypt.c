@@ -210,9 +210,9 @@ out:
 	return rc;
 }
 
-static void mtdcrypt_complete(struct crypto_async_request *req, int rc)
+static void mtdcrypt_complete(void *data, int rc)
 {
-	struct mtdcrypt_result *res = req->data;
+	struct mtdcrypt_result *res = data;
 
 	if (rc == -EINPROGRESS)
 		return;
