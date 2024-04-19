@@ -66,6 +66,11 @@
 #define STM32_RTC_PRER_PRED_A_SHIFT	16
 #define STM32_RTC_PRER_PRED_A		GENMASK(22, 16)
 
+/* STM32_RTC_CALR bit fields */
+#define STM32_RTC_CALR_CALP		BIT(15)
+#define STM32_RTC_CALR_CALM_SHIFT	0
+#define STM32_RTC_CALR_CALM		GENMASK(8, 0)
+
 /* STM32_RTC_ALRMAR and STM32_RTC_ALRMBR bit fields */
 #define STM32_RTC_ALRMXR_SEC_SHIFT	0
 #define STM32_RTC_ALRMXR_SEC		GENMASK(6, 0)
@@ -120,6 +125,7 @@ struct stm32_rtc_registers {
 	u16 prer;
 	u16 alrmar;
 	u16 wpr;
+	u16 calr;
 	u16 sr;
 	u16 scr;
 	u16 cfgr;
@@ -729,6 +735,7 @@ static const struct stm32_rtc_data stm32_rtc_data = {
 		.prer = 0x10,
 		.alrmar = 0x1C,
 		.wpr = 0x24,
+		.calr = 0x28,
 		.sr = 0x0C, /* set to ISR offset to ease alarm management */
 		.scr = UNDEF_REG,
 		.cfgr = UNDEF_REG,
@@ -754,6 +761,7 @@ static const struct stm32_rtc_data stm32h7_rtc_data = {
 		.prer = 0x10,
 		.alrmar = 0x1C,
 		.wpr = 0x24,
+		.calr = 0x28,
 		.sr = 0x0C, /* set to ISR offset to ease alarm management */
 		.scr = UNDEF_REG,
 		.cfgr = UNDEF_REG,
@@ -788,6 +796,7 @@ static const struct stm32_rtc_data stm32mp1_data = {
 		.prer = 0x10,
 		.alrmar = 0x40,
 		.wpr = 0x24,
+		.calr = 0x28,
 		.sr = 0x50,
 		.scr = 0x5C,
 		.cfgr = 0x60,
@@ -812,6 +821,8 @@ static int stm32_rtc_init(struct platform_device *pdev,
 {
 	const struct stm32_rtc_registers *regs = &rtc->data->regs;
 	unsigned int prer, pred_a, pred_s, pred_a_max, pred_s_max, cr;
+	unsigned int calp, calm, calm_max;
+	u32 calr, new_calr;
 	unsigned int rate;
 	int ret;
 
@@ -820,6 +831,18 @@ static int stm32_rtc_init(struct platform_device *pdev,
 	/* Find prediv_a and prediv_s to obtain the 1Hz calendar clock */
 	pred_a_max = STM32_RTC_PRER_PRED_A >> STM32_RTC_PRER_PRED_A_SHIFT;
 	pred_s_max = STM32_RTC_PRER_PRED_S >> STM32_RTC_PRER_PRED_S_SHIFT;
+
+	/* Get calibration values from DT, if present */
+	calm_max = STM32_RTC_CALR_CALM >> STM32_RTC_CALR_CALM_SHIFT;
+	if (of_property_read_bool(pdev->dev.of_node, "digi,calib-calp"))
+		calp = 1;
+	ret = of_property_read_s32(pdev->dev.of_node, "digi,calib-calm", &calm);
+	if (!ret && calm > calm_max) {
+		dev_warn(&pdev->dev,
+			 "exceeded max value for calibration CALM; set to max\n");
+		calm = calm_max;
+	}
+	new_calr = (calp ? STM32_RTC_CALR_CALP : 0) | calm;
 
 	if (rate > (pred_a_max + 1) * (pred_s_max + 1)) {
 		dev_err(&pdev->dev, "rtc_ck rate is too high: %dHz\n", rate);
@@ -844,14 +867,15 @@ static int stm32_rtc_init(struct platform_device *pdev,
 
 	/*
 	 * Can't find a 1Hz, so give priority to RTC power consumption
-	 * by choosing the higher possible value for prediv_a
+	 * by choosing the higher possible value for prediv_a.
+	 * Also, use max prediv_a if CALP must be set (freq is slow).
 	 */
-	if (pred_s > pred_s_max || pred_a > pred_a_max) {
+	if (pred_s > pred_s_max || pred_a > pred_a_max || calp) {
 		pred_a = pred_a_max;
 		pred_s = (rate / (pred_a + 1)) - 1;
 
 		dev_warn(&pdev->dev, "rtc_ck is %s\n",
-			 (rate < ((pred_a + 1) * (pred_s + 1))) ?
+			 (rate < ((pred_a + 1) * (pred_s + 1)) && !calp) ?
 			 "fast" : "slow");
 	}
 
@@ -865,8 +889,11 @@ static int stm32_rtc_init(struct platform_device *pdev,
 	pred_a = (pred_a << STM32_RTC_PRER_PRED_A_SHIFT) &
 		 STM32_RTC_PRER_PRED_A;
 
+	calr = readl_relaxed(rtc->base + regs->calr);
+
 	/* quit if there is nothing to initialize */
-	if ((cr & STM32_RTC_CR_FMT) == 0 && prer == (pred_s | pred_a))
+	if ((cr & STM32_RTC_CR_FMT) == 0 && prer == (pred_s | pred_a) &&
+	     calr == new_calr)
 		return 0;
 
 	stm32_rtc_wpr_unlock(rtc);
@@ -880,6 +907,12 @@ static int stm32_rtc_init(struct platform_device *pdev,
 
 	writel_relaxed(pred_s, rtc->base + regs->prer);
 	writel_relaxed(pred_a | pred_s, rtc->base + regs->prer);
+
+	/* Set RTC_CALR register with given values */
+	if (calr != new_calr) {
+		writel_relaxed(new_calr, rtc->base + regs->calr);
+		dev_warn(&pdev->dev, "calibration values applied\n");
+	}
 
 	/* Force 24h time format */
 	cr &= ~STM32_RTC_CR_FMT;
