@@ -375,6 +375,8 @@ static int stm32_rng_init(struct hwrng *rng)
 		return -EINVAL;
 	}
 
+	clk_disable_unprepare(priv->clk);
+
 	return 0;
 }
 
@@ -404,6 +406,11 @@ static int __maybe_unused stm32_rng_runtime_suspend(struct device *dev)
 static int __maybe_unused stm32_rng_suspend(struct device *dev)
 {
 	struct stm32_rng_private *priv = dev_get_drvdata(dev);
+	int err;
+
+	err = clk_prepare_enable(priv->clk);
+	if (err)
+		return err;
 
 	if (priv->data->has_cond_reset) {
 		priv->pm_conf.nscr = readl_relaxed(priv->base + RNG_NSCR);
@@ -504,6 +511,8 @@ static int __maybe_unused stm32_rng_resume(struct device *dev)
 		reg |= RNG_CR_RNGEN;
 		writel_relaxed(reg, priv->base + RNG_CR);
 	}
+
+	clk_disable_unprepare(priv->clk);
 
 	return 0;
 }
