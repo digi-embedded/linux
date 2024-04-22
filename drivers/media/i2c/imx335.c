@@ -177,6 +177,7 @@ struct imx335_mode {
  * @reset_gpio: Sensor reset gpio
  * @powerdown_gpio: Sensor powerdown gpio
  * @supplies: Regulator supplies to handle power control
+ * @cci: CCI register map
  * @inclk: Sensor input clock
  * @ctrl_handler: V4L2 control handler
  * @link_freq_ctrl: Pointer to link frequency control
