@@ -529,4 +529,6 @@ bool brcmf_is_apmode_operating(struct wiphy *wiphy);
 int brcmf_set_wsec(struct brcmf_if *ifp, const u8 *key, u16 key_len, u16 flags);
 
 void brcmf_cfg80211_update_proto_addr_mode(struct wireless_dev *wdev);
+int ifx_vndr_cmdstr_hashtbl_init(void);
+void ifx_vndr_cmdstr_hashtbl_deinit(void);
 #endif /* BRCMFMAC_CFG80211_H */
