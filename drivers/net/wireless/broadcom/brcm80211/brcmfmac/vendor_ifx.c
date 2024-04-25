@@ -39,6 +39,18 @@
 #include "xtlv.h"
 #include "twt.h"
 #include "bus.h"
+#include <linux/string.h>
+#include <linux/kernel.h>
+#include <linux/jhash.h>
+#include <linux/hashtable.h>
+#include "common.h"
+
+static const struct ifx_vendor_cmdstr ifx_vndr_cmdstr[] = {
+	{ "offload_config", ifx_vndr_cmdstr_offload_config},
+	{ NULL, NULL }
+};
+
+DEFINE_HASHTABLE(vndr_cmd_hashtbl, VNDR_CMD_HASH_BITS);
 
 static int ifx_cfg80211_vndr_send_cmd_reply(struct wiphy *wiphy,
 					    const void  *data, int len)
@@ -55,6 +67,45 @@ static int ifx_cfg80211_vndr_send_cmd_reply(struct wiphy *wiphy,
 	/* Push the data to the skb */
 	nla_put_nohdr(skb, len, data);
 	return cfg80211_vendor_cmd_reply(skb);
+}
+
+int ifx_vndr_cmdstr_hashtbl_init(void)
+{
+	int i;
+	u32 jhash_key;
+
+	brcmf_dbg(TRACE, "enter\n");
+
+	hash_init(vndr_cmd_hashtbl);
+
+	/* Initializing the VENDOR CMD hashtable with all the string commmands
+	 * and func_handler in ifx_vndr_str_cmds
+	 */
+	for (i = 0; ifx_vndr_cmdstr[i].name; i++) {
+		struct ifx_vndr_cmdstr_hashtbl *vndr_hashtbl;
+
+		vndr_hashtbl = kzalloc(sizeof(*vndr_hashtbl), GFP_KERNEL);
+		if (!vndr_hashtbl)
+			return -ENOMEM;
+
+		vndr_hashtbl->vndr_cmd_addr = (struct ifx_vendor_cmdstr *)&ifx_vndr_cmdstr[i];
+		jhash_key = jhash(ifx_vndr_cmdstr[i].name, strlen(ifx_vndr_cmdstr[i].name), 0);
+		hash_add(vndr_cmd_hashtbl, &vndr_hashtbl->node, jhash_key);
+	}
+
+	return 0;
+}
+
+void ifx_vndr_cmdstr_hashtbl_deinit(void)
+{
+	struct ifx_vndr_cmdstr_hashtbl *vndr_hashtbl;
+	struct hlist_node *tmp_node;
+	int i;
+
+	hash_for_each_safe(vndr_cmd_hashtbl, i, tmp_node, vndr_hashtbl, node) {
+		hash_del(&vndr_hashtbl->node);
+		kfree(vndr_hashtbl);
+	}
 }
 
 static void
@@ -769,6 +820,127 @@ int ifx_cfg80211_vndr_cmds_wnm_wl_cap(struct wiphy *wiphy,
 		ret = brcmf_fil_iovar_int_set(ifp, "wnm", val);
 		if (ret)
 			brcmf_err("set wnm_wl_cap error:%d\n", ret);
+	}
+
+	return ret;
+}
+
+int ifx_vndr_cmdstr_offload_config(struct wiphy *wiphy, struct wireless_dev *wdev,
+				   char cmd_str[VNDR_CMD_STR_NUM][VNDR_CMD_STR_MAX_LEN],
+				   long cmd_val[VNDR_CMD_VAL_NUM])
+{
+	struct brcmf_cfg80211_vif *vif;
+	struct brcmf_if *ifp;
+	int ret = 0;
+
+	vif = container_of(wdev, struct brcmf_cfg80211_vif, wdev);
+	ifp = vif->ifp;
+
+	/* IW CMDSTR TEMPLATE.
+	 * echo 'offload_config Enable 1 ' | iw dev wlan0 vendor send 0x000319
+	 * 0x1C -
+	 *
+	 * echo 'offload_config Profile LowPwr 1 -s 0x3df ' | iw dev wlan0 vendor
+	 * send 0x000319 0x1C -
+	 *
+	 */
+	if (cmd_str[1] && (strlen(cmd_str[1]) == 6) &&
+	    (memcmp(cmd_str[1], "Enable", 6)) == 0 &&
+	    (cmd_val[0] == 0 || cmd_val[0] == 1)) {
+		brcmf_generic_offload_enable(ifp, brcmf_offload_feat, cmd_val[0]);
+	} else if (cmd_str[1] && (strlen(cmd_str[1]) == 7) &&
+		  (memcmp(cmd_str[1], "Profile", 7)) == 0) {
+		if (cmd_str[2]) {
+			unsigned int ol_prof;
+
+			if ((strlen(cmd_str[2]) == 6) &&
+			    (memcmp(cmd_str[2], "LowPwr", 6)) == 0) {
+				ol_prof = BRCMF_OL_PROF_TYPE_LOW_PWR;
+			} else if ((strlen(cmd_str[2]) == 6) &&
+				 (memcmp(cmd_str[2], "MidPwr", 6)) == 0) {
+				ol_prof = BRCMF_OL_PROF_TYPE_MID_PWR;
+			} else if ((strlen(cmd_str[2]) == 7) &&
+				 (memcmp(cmd_str[2], "HighPwr", 7)) == 0) {
+				ol_prof = BRCMF_OL_PROF_TYPE_HIGH_PWR;
+			} else {
+				brcmf_err("unknown offload_config Profile attr\n");
+				return -EINVAL;
+			}
+			if (cmd_str[3] && (strlen(cmd_str[3]) == 2) &&
+			    (memcmp(cmd_str[3], "-s", 2)) == 0)
+				brcmf_generic_offload_config(ifp, ~cmd_val[1], ol_prof, cmd_val[0]);
+			else
+				brcmf_generic_offload_config(ifp, brcmf_offload_feat, ol_prof,
+							     cmd_val[0]);
+		} else {
+			brcmf_err("unknown offload_config Profile attr\n");
+			return -EINVAL;
+		}
+	} else {
+		brcmf_err("unknown offload_config attr\n");
+		return -EINVAL;
+	}
+
+	return ret;
+}
+
+int ifx_cfg80211_vndr_cmds_str(struct wiphy *wiphy, struct wireless_dev *wdev,
+			       const void *data, int len)
+{
+	struct brcmf_cfg80211_vif *vif;
+	struct brcmf_if *ifp;
+	struct ifx_vndr_cmdstr_hashtbl *hash_entry;
+	u32 jhash_key;
+	int ret = 0, i = 0, j = 0;
+	unsigned long val;
+	char cmd_str[VNDR_CMD_STR_NUM][VNDR_CMD_STR_MAX_LEN] = {{""}};
+	long cmd_val[VNDR_CMD_VAL_NUM];
+	char *tok = NULL, *buf = NULL;
+
+	buf = (char *)data;
+	vif = container_of(wdev, struct brcmf_cfg80211_vif, wdev);
+	ifp = vif->ifp;
+
+	memset(cmd_val, -1, VNDR_CMD_VAL_NUM * sizeof(*cmd_val));
+
+	while ((tok = strsep(&buf, " ")) != NULL) {
+		if (kstrtoul(tok, 10, &val) == 0) {
+			cmd_val[j] = val;
+			j++;
+		} else if ((strncmp(tok, "0x", 2) == 0) || (strncmp(tok, "0X", 2) == 0)) {
+			if (kstrtoul(tok, 16, &val) == 0) {
+				cmd_val[j] = val;
+				j++;
+			} else {
+				brcmf_err("Failed to parse hex token\n");
+				return -EINVAL;
+			}
+		} else if (strnlen(tok, VNDR_CMD_STR_MAX_LEN) <= VNDR_CMD_STR_MAX_LEN) {
+			strncpy(cmd_str[i], tok, strnlen(tok, VNDR_CMD_STR_MAX_LEN));
+			i++;
+		} else {
+			brcmf_err("Failed to parse token\n");
+			return -EINVAL;
+		}
+	}
+
+	/* Run the user cmd string input via Jenkins hash to pass and search the entry in
+	 * vendor cmd hashtable initialized at load time.
+	 */
+	jhash_key = jhash(cmd_str[0], strlen(cmd_str[0]), 0);
+
+	/* Search the user entered vndr cmd entry in the hash table and call its corresponding
+	 * function handler.
+	 */
+	hash_for_each_possible(vndr_cmd_hashtbl, hash_entry, node, jhash_key) {
+		if (hash_entry->vndr_cmd_addr &&
+		    (strlen(cmd_str[0]) == strlen(hash_entry->vndr_cmd_addr->name)) &&
+		    memcmp(hash_entry->vndr_cmd_addr->name, cmd_str[0],
+			   strlen(hash_entry->vndr_cmd_addr->name)) == 0) {
+			ret = hash_entry->vndr_cmd_addr->func(wiphy, wdev,
+					cmd_str, cmd_val);
+			break;
+		}
 	}
 
 	return ret;

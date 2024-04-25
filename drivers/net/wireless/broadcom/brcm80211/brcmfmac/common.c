@@ -123,7 +123,8 @@ unsigned int brcmf_offload_feat = BRCMF_OL_ARP |
 				  BRCMF_OL_DLTRO |
 				  BRCMF_OL_PNO |
 				  BRCMF_OL_KEEPALIVE |
-				  BRCMF_OL_GTKOE;
+				  BRCMF_OL_GTKOE |
+				  BRCMF_OL_WOWLPF;
 module_param_named(offload_feat, brcmf_offload_feat, uint, 0400);
 MODULE_PARM_DESC(offload_feat,
 		 "Offload feat bitmap: 0:arp 1:nd 2:mdns 3:icmp 4:tcp-keepalive "

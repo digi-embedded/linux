@@ -109,6 +109,10 @@ struct bcm_iov_buf {
  *
  * @IFX_VENDOR_SCMD_HWCAPS: Get device's capability.
  *
+ * @IFX_VENDOR_SCMD_CMDSTR: New vendor string infra subcmd to handle user supplied strings.
+ *	String parsing and calling corresponding function handler for a specific command
+ *	given by user.
+ *
  * @IFX_VENDOR_SCMD_MAX: This acts as a the tail of cmds list.
  *      Make sure it located at the end of the list.
  */
@@ -141,7 +145,8 @@ enum ifx_nl80211_vendor_subcmds {
 	SCMD(WNM)		= 25,
 	SCMD(HWCAPS)		= 26,
 	SCMD(WNM_WL_CAP)	= 27,
-	SCMD(MAX)		= 28
+	SCMD(CMDSTR)		= 28,
+	SCMD(MAX)		= 29
 };
 
 /*
@@ -695,6 +700,25 @@ struct ifx_maxidle_wnm {
 	int protect;
 };
 
+/* String based vendor commands infra
+ */
+#define VNDR_CMD_STR_NUM	15
+#define VNDR_CMD_STR_MAX_LEN	20
+#define VNDR_CMD_VAL_NUM	15
+#define VNDR_CMD_HASH_BITS	4
+
+struct ifx_vendor_cmdstr {
+	const char *name;
+	int (*func)(struct wiphy *wiphy, struct wireless_dev *wdev,
+		    char cmd_str[VNDR_CMD_STR_NUM][VNDR_CMD_STR_MAX_LEN],
+		    long cmd_val[VNDR_CMD_VAL_NUM]);
+};
+
+struct ifx_vndr_cmdstr_hashtbl {
+	struct ifx_vendor_cmdstr *vndr_cmd_addr;
+	struct hlist_node node;
+};
+
 int ifx_cfg80211_vndr_cmds_twt(struct wiphy *wiphy,
 			       struct wireless_dev *wdev, const void  *data, int len);
 int ifx_cfg80211_vndr_cmds_bsscolor(struct wiphy *wiphy,
@@ -733,6 +757,11 @@ int ifx_cfg80211_vndr_cmds_hwcaps(struct wiphy *wiphy,
 int ifx_cfg80211_vndr_cmds_wnm_wl_cap(struct wiphy *wiphy,
 				      struct wireless_dev *wdev,
 				      const void *data, int len);
+int ifx_vndr_cmdstr_offload_config(struct wiphy *wiphy, struct wireless_dev *wdev,
+				   char cmd_str[VNDR_CMD_STR_NUM][VNDR_CMD_STR_MAX_LEN],
+				   long cmd_val[VNDR_CMD_VAL_NUM]);
+int ifx_cfg80211_vndr_cmds_str(struct wiphy *wiphy, struct wireless_dev *wdev,
+			       const void *data, int len);
 
 #endif /* IFX_VENDOR_H */
 

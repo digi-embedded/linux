@@ -10565,6 +10565,11 @@ struct brcmf_cfg80211_info *brcmf_cfg80211_attach(struct brcmf_pub *drvr,
 		}
 	}
 
+	err = ifx_vndr_cmdstr_hashtbl_init();
+	if (err) {
+		bphy_err(drvr, "vendor_cmd_hashtable initialisation failed (%d)\n", err);
+		goto detach;
+	}
 	/* (re-) activate FWEH event handling */
 	err = brcmf_fweh_activate_events(ifp);
 	if (err) {
@@ -10605,6 +10610,7 @@ void brcmf_cfg80211_detach(struct brcmf_cfg80211_info *cfg)
 	if (!cfg)
 		return;
 
+	ifx_vndr_cmdstr_hashtbl_deinit();
 	brcmf_pno_detach(cfg);
 	brcmf_btcoex_detach(cfg);
 	wiphy_unregister(cfg->wiphy);
