@@ -625,8 +625,9 @@ int ifx_cfg80211_vndr_cmds_giantrx(struct wiphy *wiphy,
 	return ret;
 }
 
-int ifx_cfg80211_vndr_cmds_wnm(struct wiphy *wiphy,
-			       struct wireless_dev *wdev, const void  *data, int len)
+int ifx_cfg80211_vndr_cmds_wnm_max_idle(struct wiphy *wiphy,
+					struct wireless_dev *wdev,
+					const void  *data, int len)
 {
 	int tmp, attr_type = 0, wnm_param = 0, ret = 0;
 	const struct nlattr *attr_iter, *wnm_param_iter;
@@ -638,6 +639,7 @@ int ifx_cfg80211_vndr_cmds_wnm(struct wiphy *wiphy,
 
 	vif = container_of(wdev, struct brcmf_cfg80211_vif, wdev);
 	ifp = vif->ifp;
+
 	nla_for_each_attr(attr_iter, data, len, tmp) {
 		attr_type = nla_type(attr_iter);
 
@@ -736,6 +738,37 @@ int ifx_cfg80211_vndr_cmds_hwcaps(struct wiphy *wiphy,
 	} else {
 		for (i = 0; i < IFX_VENDOR_HW_CAPS_MAX; i++)
 			brcmf_dbg(INFO, "get %s: %d\n", hw_caps_name[i], buf[i]);
+	}
+
+	return ret;
+}
+
+int ifx_cfg80211_vndr_cmds_wnm_wl_cap(struct wiphy *wiphy,
+				      struct wireless_dev *wdev,
+				      const void *data, int len)
+{
+	int ret = 0;
+	struct brcmf_cfg80211_vif *vif;
+	struct brcmf_if *ifp;
+	int val = *(s32 *)data;
+	s32 buf = 0;
+
+	vif = container_of(wdev, struct brcmf_cfg80211_vif, wdev);
+	ifp = vif->ifp;
+
+	if (val == 0xffff) {
+		ret = brcmf_fil_iovar_int_get(ifp, "wnm", &buf);
+		if (ret) {
+			brcmf_err("get wnm_wl_cap error:%d\n", ret);
+			return ret;
+		}
+
+		brcmf_dbg(INFO, "get wnm_wl_cap: %d\n", buf);
+		ifx_cfg80211_vndr_send_cmd_reply(wiphy, &buf, sizeof(int));
+	} else {
+		ret = brcmf_fil_iovar_int_set(ifp, "wnm", val);
+		if (ret)
+			brcmf_err("set wnm_wl_cap error:%d\n", ret);
 	}
 
 	return ret;
