@@ -5109,6 +5109,10 @@ static void rawnand_early_check_supported_ops(struct nand_chip *chip)
 static void rawnand_check_cont_read_support(struct nand_chip *chip)
 {
 	struct mtd_info *mtd = nand_to_mtd(chip);
+	struct device_node *dn = nand_get_flash_node(chip);
+
+	if (of_property_read_bool(dn, "digi,nand-skip-cont-read"))
+		return;
 
 	if (!chip->parameters.supports_read_cache)
 		return;
