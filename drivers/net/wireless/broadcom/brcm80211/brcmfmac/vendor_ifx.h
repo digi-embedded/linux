@@ -140,7 +140,8 @@ enum ifx_nl80211_vendor_subcmds {
 	SCMD(RSV24)		= 24,
 	SCMD(WNM)		= 25,
 	SCMD(HWCAPS)		= 26,
-	SCMD(MAX)		= 27
+	SCMD(WNM_WL_CAP)	= 27,
+	SCMD(MAX)		= 28
 };
 
 /*
@@ -723,12 +724,15 @@ int ifx_cfg80211_vndr_cmds_mpc(struct wiphy *wiphy,
 int ifx_cfg80211_vndr_cmds_giantrx(struct wiphy *wiphy,
 				   struct wireless_dev *wdev,
 				   const void *data, int len);
-int ifx_cfg80211_vndr_cmds_wnm(struct wiphy *wiphy,
-			       struct wireless_dev *wdev,
-			       const void *data, int len);
+int ifx_cfg80211_vndr_cmds_wnm_max_idle(struct wiphy *wiphy,
+					struct wireless_dev *wdev,
+					const void *data, int len);
 int ifx_cfg80211_vndr_cmds_hwcaps(struct wiphy *wiphy,
 				  struct wireless_dev *wdev,
 				  const void *data, int len);
+int ifx_cfg80211_vndr_cmds_wnm_wl_cap(struct wiphy *wiphy,
+				      struct wireless_dev *wdev,
+				      const void *data, int len);
 
 #endif /* IFX_VENDOR_H */
 
