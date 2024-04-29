@@ -36,6 +36,9 @@
 	fragment@2 {
 		target = <&dsi>;
 		__overlay__ {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
 			panel@0 {
 				compatible = "introspect,sv4e-2-lane-mipi-analyzer";
 				reg = <0>;
