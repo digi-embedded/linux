@@ -333,7 +333,7 @@ const struct wiphy_vendor_command brcmf_vendor_cmds[] = {
 			   (WIPHY_VENDOR_CMD_NEED_WDEV |
 				WIPHY_VENDOR_CMD_NEED_NETDEV),
 			ifx_vendor_attr_wnm_policy,
-			ifx_cfg80211_vndr_cmds_wnm),
+			ifx_cfg80211_vndr_cmds_wnm_max_idle),
 		.maxattr = IFX_VENDOR_ATTR_WNM_MAX
 	},
 	{
@@ -342,6 +342,13 @@ const struct wiphy_vendor_command brcmf_vendor_cmds[] = {
 				WIPHY_VENDOR_CMD_NEED_NETDEV),
 			VENDOR_CMD_RAW_DATA,
 			ifx_cfg80211_vndr_cmds_hwcaps),
+	},
+	{
+		IFX_SUBCMD(WNM_WL_CAP,
+			   (WIPHY_VENDOR_CMD_NEED_WDEV |
+			    WIPHY_VENDOR_CMD_NEED_NETDEV),
+			   VENDOR_CMD_RAW_DATA,
+			   ifx_cfg80211_vndr_cmds_wnm_wl_cap)
 	},
 };
 
