@@ -39,6 +39,14 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 
+			ports {
+				port@1 {
+					dsi_out: endpoint {
+						remote-endpoint = <&panel_in>;
+					};
+				};
+			};
+
 			panel@0 {
 				compatible = "introspect,sv4e-2-lane-mipi-analyzer";
 				reg = <0>;
@@ -51,14 +59,6 @@
 					};
 				};
 			};
-		};
-	};
-
-	/* Configure SV4E MIPI analyzer endpoint */
-	fragment@3 {
-		target = <&dsi_out>;
-		__overlay__ {
-			remote-endpoint = <&panel_in>;
 		};
 	};
 };
