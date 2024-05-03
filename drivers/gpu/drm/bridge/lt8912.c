@@ -480,7 +480,6 @@ static int lt8912_bridge_attach(struct drm_bridge *bridge,
 	drm_connector_helper_add(connector, &lt8912_connector_helper_funcs);
 	drm_connector_attach_encoder(connector, bridge->encoder);
 
-	ret = lt8912_attach_dsi(lt);
 	if (!lt->no_hpd)
 		enable_irq(lt->hpd_irq);
 
@@ -705,8 +704,14 @@ static int lt8912_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 	lt->bridge.funcs = &lt8912_bridge_funcs;
 	lt->bridge.of_node = dev->of_node;
 	drm_bridge_add(&lt->bridge);
+	ret = lt8912_attach_dsi(lt);
+	if (ret)
+		goto err_attach;
 
 	return 0;
+
+err_attach:
+	return ret;
 }
 
 static void lt8912_remove(struct i2c_client *i2c)
