@@ -700,6 +700,32 @@ struct ifx_maxidle_wnm {
 	int protect;
 };
 
+#define WL_MKEEP_ALIVE_VERSION		1
+#define WL_MKEEP_ALIVE_IMMEDIATE	0x80000000
+
+struct ifx_mkeep_alive {
+	u16 version;		/* Version for mkeep_alive */
+	u16 length;		/* length of fixed parameters in the structure */
+	u32 period_msec;	/* high bit on means immediate send */
+	u16 len_bytes;
+	u8 keep_alive_id;	/* 0 - 3 for N = 4 */
+	u8 data[1];
+};
+
+struct ifx_tko {
+	u16 subcmd_id;		/* subcommand id */
+	u16 len;		/* total length of data[] */
+	u8 data[1];		/* subcommand data */
+};
+
+/* subcommand ids */
+#define WL_TKO_SUBCMD_ENABLE		3	/* enable/disable */
+
+struct ifx_tko_enable {
+	u8 enable;		/* 1 - enable, 0 - disable */
+	u8 pad[3];		/* 4-byte struct alignment */
+};
+
 /* String based vendor commands infra
  */
 #define VNDR_CMD_STR_NUM	15
@@ -760,6 +786,12 @@ int ifx_cfg80211_vndr_cmds_wnm_wl_cap(struct wiphy *wiphy,
 int ifx_vndr_cmdstr_offload_config(struct wiphy *wiphy, struct wireless_dev *wdev,
 				   char cmd_str[VNDR_CMD_STR_NUM][VNDR_CMD_STR_MAX_LEN],
 				   long cmd_val[VNDR_CMD_VAL_NUM]);
+int ifx_vndr_cmdstr_mkeep_alive(struct wiphy *wiphy, struct wireless_dev *wdev,
+				char cmd_str[VNDR_CMD_STR_NUM][VNDR_CMD_STR_MAX_LEN],
+				long *cmd_val);
+int ifx_vndr_cmdstr_tko(struct wiphy *wiphy, struct wireless_dev *wdev,
+			char cmd_str[VNDR_CMD_STR_NUM][VNDR_CMD_STR_MAX_LEN],
+			long *cmd_val);
 int ifx_cfg80211_vndr_cmds_str(struct wiphy *wiphy, struct wireless_dev *wdev,
 			       const void *data, int len);
 

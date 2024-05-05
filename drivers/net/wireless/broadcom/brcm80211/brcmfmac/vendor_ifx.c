@@ -47,6 +47,8 @@
 
 static const struct ifx_vendor_cmdstr ifx_vndr_cmdstr[] = {
 	{ "offload_config", ifx_vndr_cmdstr_offload_config},
+	{ "mkeep_alive", ifx_vndr_cmdstr_mkeep_alive},
+	{ "tko", ifx_vndr_cmdstr_tko},
 	{ NULL, NULL }
 };
 
@@ -878,6 +880,89 @@ int ifx_vndr_cmdstr_offload_config(struct wiphy *wiphy, struct wireless_dev *wde
 		}
 	} else {
 		brcmf_err("unknown offload_config attr\n");
+		return -EINVAL;
+	}
+
+	return ret;
+}
+
+int ifx_vndr_cmdstr_mkeep_alive(struct wiphy *wiphy, struct wireless_dev *wdev,
+				char cmd_str[VNDR_CMD_STR_NUM][VNDR_CMD_STR_MAX_LEN],
+				long *cmd_val)
+{
+	struct brcmf_cfg80211_vif *vif;
+	struct brcmf_if *ifp;
+	int ret = 0;
+	struct ifx_mkeep_alive mkeep_alive = {0};
+	bool immed_flag = 0;
+
+	vif = container_of(wdev, struct brcmf_cfg80211_vif, wdev);
+	ifp = vif->ifp;
+
+	/* echo 'mkeep_alive 0 1000 ' | iw dev wlan0 vendor
+	 * send 0x000319 0x1C -
+	 */
+
+	if (cmd_val[0] < 0 || cmd_val[0] > 4 || cmd_val[1] < 0) {
+		brcmf_err("Invalid command format\n");
+		return -EINVAL;
+	}
+	if (cmd_str[1] && (strlen(cmd_str[1]) == 9) &&
+	    (memcmp(cmd_str[1], "immediate", 9)) == 0) {
+		immed_flag = 1;
+	}
+	mkeep_alive.period_msec = cmd_val[1];
+	if (mkeep_alive.period_msec & WL_MKEEP_ALIVE_IMMEDIATE) {
+		brcmf_err("Period %d too large\n", mkeep_alive.period_msec);
+		return -EINVAL;
+	}
+	if (immed_flag && mkeep_alive.period_msec)
+		mkeep_alive.period_msec |= WL_MKEEP_ALIVE_IMMEDIATE;
+
+	mkeep_alive.version = WL_MKEEP_ALIVE_VERSION;
+	mkeep_alive.length = offsetof(struct ifx_mkeep_alive, data);
+	mkeep_alive.keep_alive_id = cmd_val[0];
+	mkeep_alive.len_bytes = 0;
+
+	ret = brcmf_fil_bsscfg_data_set(ifp, "mkeep_alive", (void *)&mkeep_alive,
+					mkeep_alive.length);
+	if (ret)
+		brcmf_err("Failed to set mkeeplive params: %d\n", ret);
+
+	return ret;
+}
+
+int ifx_vndr_cmdstr_tko(struct wiphy *wiphy, struct wireless_dev *wdev,
+			char cmd_str[VNDR_CMD_STR_NUM][VNDR_CMD_STR_MAX_LEN],
+			long *cmd_val)
+{
+	struct brcmf_cfg80211_vif *vif;
+	struct brcmf_if *ifp;
+	int ret = 0;
+	struct ifx_tko tko = {0};
+	struct ifx_tko_enable *tko_enable;
+	int length;
+
+	vif = container_of(wdev, struct brcmf_cfg80211_vif, wdev);
+	ifp = vif->ifp;
+
+	/* echo 'tko enable 1 ' | iw dev wlan0 vendor
+	 * send 0x000319 0x1C -
+	 */
+	if (cmd_str[1] && (strlen(cmd_str[1]) == 6) &&
+	    (memcmp(cmd_str[1], "enable", 6) == 0) &&
+	     (cmd_val[0] == 0 || cmd_val[0] == 1)) {
+		tko_enable = (struct ifx_tko_enable *)tko.data;
+		tko.subcmd_id = WL_TKO_SUBCMD_ENABLE;
+		tko.len = sizeof(*tko_enable);
+		tko_enable->enable = cmd_val[0];
+
+		length = offsetof(struct ifx_tko, data) + tko.len;
+		ret = brcmf_fil_bsscfg_data_set(ifp, "tko", (void *)&tko, length);
+		if (ret)
+			brcmf_err("Failed to enable/disable tko: %d\n", ret);
+	} else {
+		brcmf_err("Invalid tko command format\n");
 		return -EINVAL;
 	}
 
