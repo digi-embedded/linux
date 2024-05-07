@@ -503,8 +503,7 @@ static int mxc_gpio_probe(struct platform_device *pdev)
 		sprintf(portname, "gpio%d", index);
 		port->gc.label = portname;
 	}
-	port->gc.base = (pdev->id < 0) ? of_alias_get_id(np, "gpio") * 32 :
-					     pdev->id * 32;
+	port->gc.base = -1;
 
 	err = devm_gpiochip_add_data(&pdev->dev, &port->gc, port);
 	if (err)
