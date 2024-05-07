@@ -3,7 +3,6 @@
  * Copyright 2022 NXP
  */
 
-#include <linux/firmware/imx/ele_base_msg.h>
 #include <linux/module.h>
 #include <linux/nvmem-consumer.h>
 #include <linux/kernel.h>

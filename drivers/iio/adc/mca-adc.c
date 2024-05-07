@@ -874,8 +874,6 @@ static int mca_adc_remove(struct platform_device *pdev)
 {
 	struct mca_drv *mca = dev_get_drvdata(pdev->dev.parent);
 	struct iio_dev *indio_dev = platform_get_drvdata(pdev);
-	struct iio_chan_spec *chan;
-	int i;
 	struct mca_adc *adc = iio_priv(indio_dev);
 
 	if (!mca) {
