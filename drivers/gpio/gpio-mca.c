@@ -65,7 +65,6 @@ struct mca_gpio {
 	struct regmap *regmap;
 	struct device *dev;
 	struct gpio_chip gc;
-	struct irq_chip irqchip;
 	struct mutex irq_lock;
 	uint8_t irq_cfg[MCA_MAX_IOS];
 	uint8_t irq_capable[MCA_MAX_IO_BYTES];
@@ -279,12 +278,16 @@ static void mca_gpio_irq_disable(struct irq_data *d)
 	 */
 	gpio->irq_cfg[d->hwirq] |= GPIO_CFG_UPDATE;
 	gpio->irq_cfg[d->hwirq] &= ~MCA_GPIO_IRQ_EN;
+
+	gpiochip_disable_irq(&gpio->gc, d->hwirq);
 }
 
 static void mca_gpio_irq_enable(struct irq_data *d)
 {
 	struct gpio_chip *gc = irq_data_get_irq_chip_data(d);
 	struct mca_gpio *gpio = to_mca_gpio(gc);
+
+	gpiochip_enable_irq(&gpio->gc, d->hwirq);
 
 	/*
 	 * Update the IRQ_EN bit and also set the CFG_UPDATE flag to mark what
@@ -376,6 +379,18 @@ static int mca_gpio_irq_set_wake(struct irq_data *d, unsigned int enable)
 	return 0;
 }
 
+
+static const struct irq_chip mca_gpio_irq_chip = {
+	.irq_enable =		mca_gpio_irq_enable,
+	.irq_disable =		mca_gpio_irq_disable,
+	.irq_set_wake =		mca_gpio_irq_set_wake,
+	.irq_bus_lock =		mca_gpio_irq_bus_lock,
+	.irq_bus_sync_unlock =	mca_gpio_irq_bus_sync_unlock,
+	.irq_set_type =		mca_gpio_irq_set_type,
+	.flags =		IRQCHIP_IMMUTABLE,
+	GPIOCHIP_IRQ_RESOURCE_HELPERS,
+};
+
 static int mca_gpio_irq_setup(struct mca_gpio *gpio, int nbank)
 {
 	struct gpio_irq_chip *girq;
@@ -404,16 +419,8 @@ static int mca_gpio_irq_setup(struct mca_gpio *gpio, int nbank)
 			gpio->irq_capable[GPIO_BYTE(i)] &= ~(1 << BYTE_OFFSET(i));
 	}
 
-	gpio->irqchip.name = gpio->gc.label;
-	gpio->irqchip.irq_enable = mca_gpio_irq_enable;
-	gpio->irqchip.irq_disable = mca_gpio_irq_disable;
-	gpio->irqchip.irq_set_wake = mca_gpio_irq_set_wake;
-	gpio->irqchip.irq_bus_lock = mca_gpio_irq_bus_lock;
-	gpio->irqchip.irq_bus_sync_unlock = mca_gpio_irq_bus_sync_unlock;
-	gpio->irqchip.irq_set_type = mca_gpio_irq_set_type;
-
 	girq = &gpio->gc.irq;
-	girq->chip = &gpio->irqchip;
+	gpio_irq_chip_set_chip(girq, &mca_gpio_irq_chip);
 	/* This will let us handle the parent IRQ in the driver */
 	girq->parent_handler = NULL;
 	girq->num_parents = 0;
@@ -429,7 +436,7 @@ static int mca_gpio_irq_setup(struct mca_gpio *gpio, int nbank)
 		ret = devm_request_threaded_irq(gpio->dev, gpio->irq[i],
 						NULL, mca_gpio_irq_handler,
 						IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
-						gpio->irqchip.name,
+						gpio->gc.label,
 						gpio);
 		if (ret) {
 			dev_err(gpio->dev, "Failed to request %s IRQ (%d)\n",
@@ -474,7 +481,7 @@ static int mca_gpio_probe(struct platform_device *pdev)
 	if (!mca_dev)
 		return -EPROBE_DEFER;
 
-	pr_info("GPIO driver for MCA\n");
+	pr_info("GPIO driver for MCA(%s)\n", pdev->name);
 	gpio->dev = mca_dev;
 	gpio->regmap = regmap;
 
