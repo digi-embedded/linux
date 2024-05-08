@@ -66,6 +66,7 @@ extern struct brcmf_mp_global_t brcmf_mp_global;
  * @bus: Bus specific platform data. Only SDIO at the mmoment.
  * @pkt_prio: Support customer dscp to WMM up mapping.
  * @idleclk_disable: SDIO bus clock output disable when bus is idle.
+ * @idle_time_zero: Set idle interval to zero.
  */
 struct brcmf_mp_device {
 	bool		p2p_enable;
@@ -93,6 +94,7 @@ struct brcmf_mp_device {
 	} bus;
 	bool		pkt_prio;
 	int			idleclk_disable;
+	bool		idle_time_zero;
 };
 
 /**
