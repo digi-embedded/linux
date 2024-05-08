@@ -357,7 +357,8 @@
 		compatible = "lontium,lt8912";
 		reg = <0x48>;
 		reset-gpios = <&gpiod 4 GPIO_ACTIVE_LOW>;
-		hpd-gpios = <&gpiod 2 GPIO_ACTIVE_HIGH>;
+		/*hpd-gpios = <&gpiod 2 GPIO_ACTIVE_HIGH>;*/
+		no-hpd;
 		no-edid;
 		digi,dsi-lanes = <4>;
 		vdd1-supply = <&reg_5v_board>;
