@@ -3450,7 +3450,8 @@ t_Handle FM_Config(t_FmParams *p_FmParam)
 
 #ifdef FM_AID_MODE_NO_TNUM_SW005
     if (p_Fm->p_FmStateStruct->revInfo.majorRev >= 6)
-        p_Fm->p_FmDriverParam->dma_aid_mode = e_FM_DMA_AID_OUT_PORT_ID;
+		p_Fm->p_FmDriverParam->dma_aid_mode =
+			(enum fman_dma_aid_mode)e_FM_DMA_AID_OUT_PORT_ID;
 #endif /* FM_AID_MODE_NO_TNUM_SW005 */
 #ifndef FM_QMI_NO_DEQ_OPTIONS_SUPPORT
    if (p_Fm->p_FmStateStruct->revInfo.majorRev != 4)
@@ -5129,11 +5130,7 @@ t_Error FM_CtrlMonGetCounters(t_Handle h_Fm, uint8_t fmCtrlIndex, t_FmCtrlMon *p
     effValue = (uint64_t)
             ((uint64_t)GET_UINT32(p_MonRegs->tpc2h) << 32 | GET_UINT32(p_MonRegs->tpc2l));
 
-	if (clkCnt)
-		p_Mon->percentCnt[0] = (uint8_t)div64_u64((clkCnt - utilValue) * 100, clkCnt);
-	else
-		p_Mon->percentCnt[0] = 0;
-
+    p_Mon->percentCnt[0] = (uint8_t)div64_u64((clkCnt - utilValue) * 100, clkCnt);
     if (clkCnt != utilValue)
         p_Mon->percentCnt[1] = (uint8_t)div64_u64(((clkCnt - utilValue) - effValue) * 100, clkCnt - utilValue);
     else

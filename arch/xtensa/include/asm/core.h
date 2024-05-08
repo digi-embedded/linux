@@ -6,6 +6,10 @@
 
 #include <variant/core.h>
 
+#ifndef XCHAL_HAVE_DIV32
+#define XCHAL_HAVE_DIV32 0
+#endif
+
 #ifndef XCHAL_HAVE_EXCLUSIVE
 #define XCHAL_HAVE_EXCLUSIVE 0
 #endif
@@ -24,6 +28,14 @@
 
 #ifndef XCHAL_SPANNING_WAY
 #define XCHAL_SPANNING_WAY 0
+#endif
+
+#ifndef XCHAL_HAVE_TRAX
+#define XCHAL_HAVE_TRAX 0
+#endif
+
+#ifndef XCHAL_NUM_PERF_COUNTERS
+#define XCHAL_NUM_PERF_COUNTERS 0
 #endif
 
 #if XCHAL_HAVE_WINDOWED

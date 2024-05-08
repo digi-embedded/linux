@@ -7,10 +7,12 @@
 
 #include "imx8mp-evk.dts"
 
-&pcie{
+&pcie {
 	status = "disabled";
 };
 
-&pcie_ep{
+&pcie_ep {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pcie0>;
 	status = "okay";
 };

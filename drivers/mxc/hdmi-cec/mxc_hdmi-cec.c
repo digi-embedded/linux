@@ -587,7 +587,7 @@ static int hdmi_cec_dev_probe(struct platform_device *pdev)
 		goto err_out_chrdev;
 	}
 
-	hdmi_cec_class = class_create(THIS_MODULE, "mxc_hdmi_cec");
+	hdmi_cec_class = class_create("mxc_hdmi_cec");
 	if (IS_ERR(hdmi_cec_class)) {
 		err = PTR_ERR(hdmi_cec_class);
 		goto err_out_chrdev;

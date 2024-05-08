@@ -3682,7 +3682,7 @@ int register_ipu_device(struct ipu_soc *ipu, int id)
 			goto register_cdev_fail;
 		}
 
-		ipu_class = class_create(THIS_MODULE, "mxc_ipu");
+		ipu_class = class_create("mxc_ipu");
 		if (IS_ERR(ipu_class)) {
 			ret = PTR_ERR(ipu_class);
 			goto ipu_class_fail;

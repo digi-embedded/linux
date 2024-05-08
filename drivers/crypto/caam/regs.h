@@ -3,7 +3,7 @@
  * CAAM hardware register-level view
  *
  * Copyright 2008-2011 Freescale Semiconductor, Inc.
- * Copyright 2018 NXP
+ * Copyright 2018, 2023 NXP
  */
 
 #ifndef REGS_H
@@ -435,6 +435,9 @@ struct caam_perfmon {
 	u32 faultdetail;	/* FADR - Fault Addr Detail	*/
 #define CSTA_PLEND		BIT(10)
 #define CSTA_ALT_PLEND		BIT(18)
+#define CSTA_MOO		GENMASK(9, 8)
+#define CSTA_MOO_SECURE		1
+#define CSTA_MOO_TRUSTED	2
 	u32 rsvd3;
 	u32 status;		/* CSTA - CAAM Status */
 	u32 smpart;		/* Secure Memory Partition Parameters */

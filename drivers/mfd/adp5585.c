@@ -79,8 +79,7 @@ static int adp5585_i2c_write_reg(struct adp5585_dev *adp5585, u8 reg, u8 val)
 	}
 }
 
-static int adp5585_i2c_probe(struct i2c_client *i2c,
-				const struct i2c_device_id *id)
+static int adp5585_i2c_probe(struct i2c_client *i2c)
 {
 	struct adp5585_dev *adp5585;
 	u8 reg;

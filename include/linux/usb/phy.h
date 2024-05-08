@@ -63,13 +63,6 @@ enum usb_otg_state {
 	OTG_STATE_A_VBUS_ERR,
 };
 
-/* The usb role of phy to be working with */
-enum usb_current_mode {
-	CUR_USB_MODE_NONE,
-	CUR_USB_MODE_HOST,
-	CUR_USB_MODE_DEVICE,
-};
-
 struct usb_phy;
 struct usb_otg;
 
@@ -151,6 +144,10 @@ struct usb_phy {
 	 */
 	int	(*set_wakeup)(struct usb_phy *x, bool enabled);
 
+	/* notify phy port status change */
+	int	(*notify_port_status)(struct usb_phy *x, int port,
+				      u16 portstatus, u16 portchange);
+
 	/* notify phy connect status change */
 	int	(*notify_connect)(struct usb_phy *x,
 			enum usb_device_speed speed);
@@ -167,9 +164,6 @@ struct usb_phy {
 			enum usb_device_speed speed);
 	int	(*notify_resume)(struct usb_phy *x,
 			enum usb_device_speed speed);
-
-	int	(*set_mode)(struct usb_phy *x,
-			enum usb_current_mode mode);
 
 };
 
@@ -227,15 +221,6 @@ usb_phy_vbus_off(struct usb_phy *x)
 		return 0;
 
 	return x->set_vbus(x, false);
-}
-
-static inline int
-usb_phy_set_mode(struct usb_phy *x, enum usb_current_mode mode)
-{
-	if (!x || !x->set_mode)
-		return 0;
-
-	return x->set_mode(x, mode);
 }
 
 /* for usb host and peripheral controller drivers */
@@ -337,6 +322,15 @@ usb_phy_set_wakeup(struct usb_phy *x, bool enabled)
 {
 	if (x && x->set_wakeup)
 		return x->set_wakeup(x, enabled);
+	else
+		return 0;
+}
+
+static inline int
+usb_phy_notify_port_status(struct usb_phy *x, int port, u16 portstatus, u16 portchange)
+{
+	if (x && x->notify_port_status)
+		return x->notify_port_status(x, port, portstatus, portchange);
 	else
 		return 0;
 }

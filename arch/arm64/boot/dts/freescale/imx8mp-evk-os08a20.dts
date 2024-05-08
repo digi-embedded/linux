@@ -54,7 +54,9 @@
 };
 
 &isi_0 {
-	status = "disabled";
+	cap_device {
+		status = "disabled";
+	};
 };
 
 &isi_1 {
@@ -72,7 +74,7 @@
 &mipi_csi_0 {
 	status = "okay";
 
-	port@0 {
+	port {
 		endpoint {
 			remote-endpoint = <&os08a20_mipi_0_ep>;
 			data-lanes = <4>;
@@ -82,5 +84,7 @@
 };
 
 &mipi_csi_1 {
+	/delete-property/ #address-cells;
+	/delete-property/ #size-cells;
 	/delete-node/port@1;
 };

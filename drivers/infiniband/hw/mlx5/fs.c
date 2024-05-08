@@ -127,7 +127,6 @@ static int check_mpls_supp_fields(u32 field_support, const __be32 *set_mask)
 }
 
 #define LAST_ETH_FIELD vlan_tag
-#define LAST_IB_FIELD sl
 #define LAST_IPV4_FIELD tos
 #define LAST_IPV6_FIELD traffic_class
 #define LAST_TCP_UDP_FIELD src_port
@@ -2471,8 +2470,8 @@ destroy_res:
 	mlx5_steering_anchor_destroy_res(ft_prio);
 put_flow_table:
 	put_flow_table(dev, ft_prio, true);
-	mutex_unlock(&dev->flow_db->lock);
 free_obj:
+	mutex_unlock(&dev->flow_db->lock);
 	kfree(obj);
 
 	return err;

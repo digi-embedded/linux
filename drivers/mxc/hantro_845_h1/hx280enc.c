@@ -240,7 +240,7 @@ static int hx280enc_mmap(struct file *filp, struct vm_area_struct *vm)
 	return result;
 #else
 	if (vm->vm_pgoff == (hx280enc_data.iobaseaddr >> PAGE_SHIFT)) {
-		vm->vm_flags |= VM_IO;
+		vm_flags_set(vm, VM_IO);
 		vm->vm_page_prot = pgprot_noncached(vm->vm_page_prot);
 		PDEBUG("hx280enc mmap: size=0x%lX, page off=0x%lX\n", (vm->vm_end - vm->vm_start), vm->vm_pgoff);
 		return remap_pfn_range(vm, vm->vm_start, vm->vm_pgoff, vm->vm_end - vm->vm_start,
@@ -826,11 +826,11 @@ irqreturn_t hx280enc_isr(int irq, void *dev_id)
 	/* BASE_HWFuse2 = 0x4a0; HWCFGIrqClearSupport = 0x00800000 */
 	is_write1_clr = (readl(dev->hwregs + 0x4a0) & 0x00800000);
 	if (irq_status & 0x01) {
-		/* clear enc IRQ and slice ready interrupt bit */
+		/* clear enc IRQ ,sw reset and slice ready interrupt bit */
 		if (is_write1_clr)
-			writel(irq_status & (0x101), dev->hwregs + 0x04);
+			writel(irq_status & (0x111), dev->hwregs + 0x04);
 		else
-			writel(irq_status & (~0x101), dev->hwregs + 0x04);
+			writel(irq_status & (~0x111), dev->hwregs + 0x04);
 
 		dev->statusShowReg = readl(dev->hwregs + 0x04);
 
@@ -842,12 +842,11 @@ irqreturn_t hx280enc_isr(int irq, void *dev_id)
 			return IRQ_HANDLED;
 		}
 
-		spin_lock_irqsave(&owner_lock, flags);
-		dev->irq_received = 1;
-		dev->irq_status = irq_status & (~0x01);
-		spin_unlock_irqrestore(&owner_lock, flags);
-
 		if (irq_status & 0x04) {
+			spin_lock_irqsave(&owner_lock, flags);
+			dev->irq_received = 1;
+			dev->irq_status = irq_status & (~0x01);
+			spin_unlock_irqrestore(&owner_lock, flags);
 			up(&hx280enc_data.core_suspend_sem);
 			wake_up_all(&enc_wait_queue);
 		} else {
@@ -954,7 +953,7 @@ static int hantro_h1_probe(struct platform_device *pdev)
 		goto error;
 	}
 
-	hantro_h1_class = class_create(THIS_MODULE, "mxc_hantro_h1");
+	hantro_h1_class = class_create("mxc_hantro_h1");
 	if (IS_ERR(hantro_h1_class)) {
 		err = PTR_ERR(hantro_h1_class);
 		goto error;

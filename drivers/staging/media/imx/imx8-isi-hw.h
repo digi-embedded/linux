@@ -421,6 +421,19 @@
 #define  CHNL_FLOW_CTRL_FC_NUMER_MASK		0xFF0000
 #define  CHNL_FLOW_CTRL_FC_NUMER_OFFSET		0
 
+/* The AXI limit register offset */
+#define AXI_LIMIT_CONTROL_OFFSET		0x12c
+#define AXI_LIMIT_THRESH1_OFFSET		0x134
+
+/* The AXI limit enable register config */
+#define AXI_LIMIT_LCDIF0_EN			BIT(0)
+#define AXI_LIMIT_LCDIF1_EN			BIT(1)
+#define AXI_LIMIT_ISI_EN			BIT(2)
+#define AXI_LIMIT_DEWARP_EN			BIT(3)
+
+/* The AXI isi limit thresh */
+#define AXI_LIMIT_ISI_THRESH			0x10
+
 enum isi_csi_coeff {
 	YUV2RGB = 0,
 	RGB2YUV,
@@ -430,15 +443,15 @@ int mxc_isi_config_parm(struct mxc_isi_cap_dev *isi_cap);
 
 void mxc_isi_channel_init(struct mxc_isi_dev *mxc_isi);
 void mxc_isi_channel_deinit(struct mxc_isi_dev *mxc_isi);
-void mxc_isi_channel_enable(struct mxc_isi_dev *mxc_isi, bool m2m_enabled);
-void mxc_isi_channel_disable(struct mxc_isi_dev *mxc_isi);
+void mxc_isi_channel_enable_loc(struct mxc_isi_dev *mxc_isi, bool m2m_enabled);
+void mxc_isi_channel_disable_loc(struct mxc_isi_dev *mxc_isi);
 void mxc_isi_cap_frame_write_done(struct mxc_isi_dev *mxc_isi);
 void mxc_isi_channel_set_deinterlace(struct mxc_isi_dev *mxc_isi);
 void mxc_isi_channel_sw_reset(struct mxc_isi_dev *mxc_isi);
 void mxc_isi_channel_hw_reset(struct mxc_isi_dev *mxc_isi);
 void mxc_isi_channel_source_config(struct mxc_isi_dev *mxc_isi);
-void mxc_isi_channel_set_flip(struct mxc_isi_dev *mxc_isi);
-void mxc_isi_channel_set_alpha(struct mxc_isi_dev *mxc_isi);
+void mxc_isi_channel_set_flip_loc(struct mxc_isi_dev *mxc_isi);
+void mxc_isi_channel_set_alpha_loc(struct mxc_isi_dev *mxc_isi);
 void mxc_isi_channel_set_chain_buf(struct mxc_isi_dev *mxc_isi);
 void mxc_isi_channel_set_deinterlace(struct mxc_isi_dev *mxc_isi);
 void mxc_isi_channel_set_crop(struct mxc_isi_dev *mxc_isi,
@@ -450,16 +463,16 @@ void mxc_isi_channel_set_scaling(struct mxc_isi_dev *mxc_isi,
 				 struct mxc_isi_frame *src_f,
 				 struct mxc_isi_frame *dst_f);
 
-void mxc_isi_channel_set_outbuf(struct mxc_isi_dev *mxc_isi,
-				struct mxc_isi_buffer *buf);
+void mxc_isi_channel_set_outbuf_loc(struct mxc_isi_dev *mxc_isi,
+				    struct mxc_isi_buffer *buf);
 
 void mxc_isi_channel_set_csc(struct mxc_isi_dev *mxc_isi,
 			     struct mxc_isi_frame *src_f,
 			     struct mxc_isi_frame *dst_f);
 
-void mxc_isi_channel_config(struct mxc_isi_dev *mxc_isi,
-			    struct mxc_isi_frame *src_f,
-			    struct mxc_isi_frame *dst_f);
+void mxc_isi_channel_config_loc(struct mxc_isi_dev *mxc_isi,
+				struct mxc_isi_frame *src_f,
+				struct mxc_isi_frame *dst_f);
 
 void mxc_isi_channel_set_alpha_roi0(struct mxc_isi_dev *mxc_isi,
 				    struct v4l2_rect *rect);

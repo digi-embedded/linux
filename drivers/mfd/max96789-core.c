@@ -163,9 +163,7 @@ static int max96789_get_dt_gmsl_links_params(struct max96789 *max96789)
 		max96789->gmsl_links_types[GMSL_LINK_B] = (link_types[GMSL_LINK_B] & 0x3) - 1;
 	}
 
-	if (of_get_property(dev->of_node, "maxim,gmsl2-dual-link", NULL))
-		max96789->gmsl2_dual_link = true;
-
+	max96789->gmsl2_dual_link = of_property_present(dev->of_node, "maxim,gmsl2-dual-link");
 	if (max96789->gmsl2_dual_link &&
 	    (max96789->gmsl_links_types[GMSL_LINK_A] == LINK_TYPE_GMSL1 ||
 	     max96789->gmsl_links_types[GMSL_LINK_B] == LINK_TYPE_GMSL1)) {

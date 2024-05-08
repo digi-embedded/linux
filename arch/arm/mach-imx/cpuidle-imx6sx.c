@@ -111,8 +111,8 @@ static int imx6_idle_finish(unsigned long val)
 	return 0;
 }
 
-static int imx6sx_enter_wait(struct cpuidle_device *dev,
-			    struct cpuidle_driver *drv, int index)
+static __cpuidle int imx6sx_enter_wait(struct cpuidle_device *dev,
+				       struct cpuidle_driver *drv, int index)
 {
 	int mode = get_bus_freq_mode();
 
@@ -121,15 +121,17 @@ static int imx6sx_enter_wait(struct cpuidle_device *dev,
 		index = 1;
 		cpu_do_idle();
 	} else {
-			/* Need to notify there is a cpu pm operation. */
-			cpu_pm_enter();
-			cpu_cluster_pm_enter();
+		/* Need to notify there is a cpu pm operation. */
+		cpu_pm_enter();
+		cpu_cluster_pm_enter();
 
-			cpu_suspend(0, imx6_idle_finish);
+		ct_cpuidle_enter();
+		cpu_suspend(0, imx6_idle_finish);
+		ct_cpuidle_exit();
 
-			cpu_cluster_pm_exit();
-			cpu_pm_exit();
-			imx6_enable_rbc(false);
+		cpu_cluster_pm_exit();
+		cpu_pm_exit();
+		imx6_enable_rbc(false);
 	}
 
 	imx6_set_lpm(WAIT_CLOCKED);

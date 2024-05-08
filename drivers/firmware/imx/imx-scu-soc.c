@@ -77,6 +77,23 @@ static int imx_scu_soc_id(void)
 	return msg.data.resp.id;
 }
 
+static const char *imx_scu_soc_name(u32 id)
+{
+	switch (id) {
+	case 0x1:
+		TKT340553_SW_WORKAROUND = true;
+		return "i.MX8QM";
+	case 0x2:
+		return "i.MX8QXP";
+	case 0xe:
+		return "i.MX8DXL";
+	default:
+		break;
+	}
+
+	return "NULL";
+}
+
 int imx_scu_soc_init(struct device *dev)
 {
 	struct soc_device_attribute *soc_dev_attr;
@@ -112,13 +129,7 @@ int imx_scu_soc_init(struct device *dev)
 
 	/* format soc_id value passed from SCU firmware */
 	val = id & 0x1f;
-	if (of_machine_is_compatible("fsl,imx8qm")) {
-		soc_dev_attr->soc_id = "i.MX8QM";
-		TKT340553_SW_WORKAROUND = true;
-	} else if (of_machine_is_compatible("fsl,imx8qxp"))
-		soc_dev_attr->soc_id = "i.MX8QXP";
-	else if (of_machine_is_compatible("fsl,imx8dxl"))
-		soc_dev_attr->soc_id = "i.MX8DXL";
+	soc_dev_attr->soc_id = imx_scu_soc_name(val);
 
 	/* format revision value passed from SCU firmware */
 	val = (id >> 5) & 0xf;

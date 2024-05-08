@@ -11,7 +11,6 @@
 #include <linux/media-bus-format.h>
 #include <linux/module.h>
 #include <linux/of.h>
-#include <linux/of_device.h>
 #include <linux/of_graph.h>
 #include <linux/slab.h>
 
@@ -75,25 +74,6 @@ static const uint8_t adv7511_register_defaults[] = {
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x75, 0x11, 0x00, /* f0 */
 	0x00, 0x7c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-};
-
-/*
- * TODO: Currently, filter-out unsupported modes by their clocks.
- * Need to find a better way to do this.
- * These are the pixel clocks that the converter can handle successfully.
- */
-
-static const int valid_clocks[] = {
-	148500,
-	135000,
-	132000,
-	108000,
-	78750,
-	74250,
-	65000,
-	49500,
-	40000,
-	31500,
 };
 
 static bool adv7511_register_volatile(struct device *dev, unsigned int reg)
@@ -732,20 +712,8 @@ adv7511_detect(struct adv7511 *adv7511, struct drm_connector *connector)
 static enum drm_mode_status adv7511_mode_valid(struct adv7511 *adv7511,
 			      const struct drm_display_mode *mode)
 {
-	size_t i, num_modes = ARRAY_SIZE(valid_clocks);
-	bool clock_ok = false;
-
 	if (mode->clock > 165000)
 		return MODE_CLOCK_HIGH;
-
-	for (i = 0; i < num_modes; i++)
-		if (mode->clock == valid_clocks[i]) {
-			clock_ok = true;
-			break;
-		}
-
-	if (!clock_ok)
-		return MODE_NOCLOCK;
 
 	return MODE_OK;
 }
@@ -1263,8 +1231,9 @@ static int adv7511_parse_dt(struct device_node *np,
 	return 0;
 }
 
-static int adv7511_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
+static int adv7511_probe(struct i2c_client *i2c)
 {
+	const struct i2c_device_id *id = i2c_client_get_device_id(i2c);
 	struct adv7511_link_config link_config;
 	struct adv7511 *adv7511;
 	struct device *dev = &i2c->dev;
@@ -1305,10 +1274,8 @@ static int adv7511_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 		return ret;
 
 	ret = adv7511_init_regulators(adv7511);
-	if (ret) {
-		dev_err(dev, "failed to init regulators\n");
-		return ret;
-	}
+	if (ret)
+		return dev_err_probe(dev, ret, "failed to init regulators\n");
 
 	if (adv7511->addr_cec != 0)
 		cec_i2c_addr = adv7511->addr_cec << 1;
@@ -1440,9 +1407,11 @@ uninit_regulators:
 	if (ret == -EPROBE_DEFER)
 		return ret;
 
-	endpoint = of_graph_get_next_endpoint(dev->of_node, NULL);
-	if (endpoint)
+	endpoint = of_graph_get_endpoint_by_regs(dev->of_node, 0, -1);
+	if (endpoint) {
 		remote_node = of_graph_get_remote_port_parent(endpoint);
+		of_node_put(endpoint);
+	}
 
 	if (!remote_node)
 		return ret;

@@ -4,7 +4,7 @@
  * Private/internal definitions between modules
  *
  * Copyright 2008-2011 Freescale Semiconductor, Inc.
- * Copyright 2019 NXP
+ * Copyright 2019, 2023 NXP
  */
 
 #ifndef INTERN_H
@@ -47,12 +47,10 @@ struct caam_jrentry_info {
 	u32 desc_size;	/* Stored size for postprocessing, header derived */
 };
 
-#ifdef CONFIG_PM_SLEEP
 struct caam_jr_state {
 	dma_addr_t inpbusaddr;
 	dma_addr_t outbusaddr;
 };
-#endif
 
 struct caam_jr_dequeue_params {
 	struct device *dev;
@@ -85,19 +83,15 @@ struct caam_drv_private_jr {
 	void *outring;			/* Base of output ring, DMA-safe */
 	struct crypto_engine *engine;
 
-#ifdef CONFIG_PM_SLEEP
 	struct caam_jr_state state;	/* State of the JR during PM */
-#endif
 };
 
-#ifdef CONFIG_PM_SLEEP
 struct caam_ctl_state {
 	struct masterid deco_mid[16];
 	struct masterid jr_mid[4];
 	u32 mcr;
 	u32 scfgr;
 };
-#endif
 
 /*
  * Driver-private storage for a single CAAM block instance
@@ -127,7 +121,7 @@ struct caam_drv_private {
 	u8 mc_en;		/* Nonzero if MC f/w is active */
 	u8 scu_en;		/* Nonzero if SCU f/w is active */
 	u8 optee_en;		/* Nonzero if OP-TEE f/w is active */
-	bool pr_support;	/* RNG prediction resistance available */
+	bool pr_support;        /* RNG prediction resistance available */
 	int virt_en;		/* Virtualization enabled in CAAM */
 	int era;		/* CAAM Era (internal HW revision) */
 
@@ -148,10 +142,8 @@ struct caam_drv_private {
 	struct debugfs_blob_wrapper ctl_kek_wrap, ctl_tkek_wrap, ctl_tdsk_wrap;
 #endif
 
-#ifdef CONFIG_PM_SLEEP
 	int caam_off_during_pm;		/* If the CAAM is reset after suspend */
 	struct caam_ctl_state state;	/* State of the CTL during PM */
-#endif
 };
 
 #ifdef CONFIG_CRYPTO_DEV_FSL_CAAM_CRYPTO_API

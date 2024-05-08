@@ -389,7 +389,7 @@ free_netdev:
 	return err;
 }
 
-static int dpaa2_mac_remove(struct fsl_mc_device *mc_dev)
+static void dpaa2_mac_remove(struct fsl_mc_device *mc_dev)
 {
 	struct device *dev = &mc_dev->dev;
 	struct net_device *net_dev = dev_get_drvdata(dev);
@@ -407,8 +407,6 @@ static int dpaa2_mac_remove(struct fsl_mc_device *mc_dev)
 	unregister_netdev(net_dev);
 #endif
 	free_netdev(net_dev);
-
-	return 0;
 }
 
 static const struct fsl_mc_device_id dpaa2_mac_match_id_table[] = {

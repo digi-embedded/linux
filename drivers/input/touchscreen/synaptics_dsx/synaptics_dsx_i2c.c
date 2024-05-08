@@ -3172,8 +3172,7 @@ static struct attribute_group attr_group = {
   * and creates a work queue for detection of other expansion Function
   * modules.
   */
-static int synaptics_rmi4_probe(struct i2c_client *client,
-		const struct i2c_device_id *dev_id)
+static int synaptics_rmi4_probe(struct i2c_client *client)
 {
 	int retval, ret;
 	signed char attr_count;

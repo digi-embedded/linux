@@ -62,6 +62,11 @@
 			linux,cma-default;
 		};
 
+		m33_reserved: noncacheable-section@a8600000 {
+			reg = <0 0xa8600000 0 0x1000000>;
+			no-map;
+		};
+
 		rsc_table: rsc-table@1fff8000{
 			reg = <0 0x1fff8000 0 0x1000>;
 			no-map;
@@ -71,7 +76,7 @@
 			reg = <0 0x8e000000 0 0x1000000>;
 			no-map;
 		};
-		dsp_reserved_heap: dsp_reserved_heap {
+		dsp_reserved_heap: dsp_reserved_heap@8f000000 {
 			reg = <0 0x8f000000 0 0xef0000>;
 			no-map;
 		};
@@ -125,11 +130,6 @@
 			compatible = "shared-dma-pool";
 			no-map;
 			reg = <0 0xa8500000 0 0x100000>;
-		};
-
-		m33_reserved: m33_noncacheable_section@a8600000 {
-			no-map;
-			reg = <0 0xa8600000 0 0x1000000>;
 		};
 	};
 
@@ -217,6 +217,16 @@
 	};
 };
 
+&cm33 {
+	mbox-names = "tx", "rx", "rxdb";
+	mboxes = <&mu 0 1>,
+		 <&mu 1 1>,
+		 <&mu 3 1>;
+	memory-region = <&vdevbuffer>, <&vdev0vring0>, <&vdev0vring1>,
+			<&vdev1vring0>, <&vdev1vring1>, <&rsc_table>;
+	status = "okay";
+};
+
 &dcnano {
 	status = "okay";
 };
@@ -253,10 +263,8 @@
 	status = "okay";
 
 	mx25uw51345gxdi00: flash@0 {
-		reg = <0>;
-		#address-cells = <1>;
-		#size-cells = <1>;
 		compatible = "jedec,spi-nor";
+		reg = <0>;
 		spi-max-frequency = <200000000>;
 		spi-tx-bus-width = <8>;
 		spi-rx-bus-width = <8>;
@@ -328,18 +336,6 @@
 	status = "okay";
 };
 
-&imx8ulp_cm33 {
-	ipc-only;
-	rsc-da=<0x1fff8000>;
-	mbox-names = "tx", "rx", "rxdb";
-	mboxes = <&mu 0 1
-			&mu 1 1
-			&mu 3 1>;
-	memory-region = <&vdevbuffer>, <&vdev0vring0>, <&vdev0vring1>,
-			<&vdev1vring0>, <&vdev1vring1>, <&rsc_table>;
-	status = "okay";
-};
-
 &lpspi5 {
 	fsl,spi-num-chipselects = <1>;
 	pinctrl-names = "default", "sleep";
@@ -399,14 +395,6 @@
 		gpio-controller;
 		#gpio-cells = <2>;
 	};
-};
-
-&mu {
-	status = "okay";
-};
-
-&mu3 {
-	status = "okay";
 };
 
 &sai5 {
@@ -498,8 +486,8 @@
 	bus-width = <4>;
 	keep-power-in-suspend;
 	non-removable;
-	wakeup-source;
 	fsl,sdio-async-interrupt-enabled;
+	wakeup-source;
 	status = "okay";
 
 	wifi_wake_host {
@@ -510,7 +498,7 @@
 	};
 };
 
-&ele_mu {
+&ele_fw2 {
 	memory-region = <&ele_reserved>;
 };
 
@@ -538,6 +526,14 @@
 			micrel,led-mode = <1>;
 		};
 	};
+};
+
+&mu {
+	status = "okay";
+};
+
+&mu3 {
+	status = "okay";
 };
 
 &iomuxc1 {
@@ -697,12 +693,8 @@
 };
 
 &mipi_csi0 {
-	#address-cells = <1>;
-	#size-cells = <0>;
-
 	status = "okay";
-	port@0 {
-		reg = <0>;
+	port {
 		mipi_csi0_ep: endpoint {
 			remote-endpoint = <&ov5640_mipi_ep>;
 			data-lanes = <1 2>;

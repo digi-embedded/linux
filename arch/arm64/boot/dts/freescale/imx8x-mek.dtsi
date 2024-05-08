@@ -17,7 +17,7 @@
 		pinctrl-2 = <&pinctrl_wifi>;
 	};
 
-	lvds_backlight0: lvds_backlight@0 {
+	lvds_backlight0: lvds-backlight-0 {
 		compatible = "pwm-backlight";
 		pwms = <&pwm_mipi_lvds0 0 100000 0>;
 
@@ -35,7 +35,7 @@
 		default-brightness-level = <80>;
 	};
 
-	lvds_backlight1: lvds_backlight@1 {
+	lvds_backlight1: lvds-backlight-1 {
 		compatible = "pwm-backlight";
 		pwms = <&pwm_mipi_lvds1 0 100000 0>;
 
@@ -110,7 +110,7 @@
 			reg = <0 0x92400000 0 0x1000000>;
 			no-map;
 		};
-		dsp_reserved_heap: dsp_reserved_heap {
+		dsp_reserved_heap: dsp_reserved_heap@93400000 {
 			reg = <0 0x93400000 0 0xef0000>;
 			no-map;
 		};
@@ -201,7 +201,7 @@
 		enable-active-high;
 	};
 
-	reg_audio: fixedregulator@2 {
+	reg_audio: regulator-reg-audio {
 		compatible = "regulator-fixed";
 		regulator-name = "cs42888_supply";
 		regulator-min-microvolt = <3300000>;
@@ -290,26 +290,20 @@
 			"IN1R", "AMIC";
 	};
 
-	cm4 {
-		#address-cells = <1>;
-		#size-cells = <0>;
-		compatible = "simple-bus";
-
-		imx8x_cm4: imx8x_cm4@0 {
-			compatible = "fsl,imx8qxp-cm4";
-			rsc-da = <0x90000000>;
-			mbox-names = "tx", "rx", "rxdb";
-			mboxes = <&lsio_mu5 0 1
-				  &lsio_mu5 1 1
-				  &lsio_mu5 3 1>;
-			memory-region = <&vdevbuffer>, <&vdev0vring0>, <&vdev0vring1>,
-					<&vdev1vring0>, <&vdev1vring1>, <&rsc_table>;
-			fsl,resource-id = <IMX_SC_R_M4_0_PID0>;
-			fsl,entry-address = <0x34fe0000>;
-			status = "okay";
-			power-domains = <&pd IMX_SC_R_M4_0_PID0>,
-					<&pd IMX_SC_R_M4_0_MU_1A>;
-		};
+	imx8x_cm4: imx8x-cm4-0 {
+		compatible = "fsl,imx8qxp-cm4";
+		rsc-da = <0x90000000>;
+		mbox-names = "tx", "rx", "rxdb";
+		mboxes = <&lsio_mu5 0 1
+			  &lsio_mu5 1 1
+			  &lsio_mu5 3 1>;
+		memory-region = <&vdevbuffer>, <&vdev0vring0>, <&vdev0vring1>,
+				<&vdev1vring0>, <&vdev1vring1>, <&rsc_table>;
+		fsl,resource-id = <IMX_SC_R_M4_0_PID0>;
+		fsl,entry-address = <0x34fe0000>;
+		status = "okay";
+		power-domains = <&pd IMX_SC_R_M4_0_PID0>,
+				<&pd IMX_SC_R_M4_0_MU_1A>;
 	};
 
 	reserved-memory {
@@ -342,7 +336,7 @@
 			no-map;
 		};
 
-		vdevbuffer: vdevbuffer {
+		vdevbuffer: vdevbuffer@90400000 {
                         compatible = "shared-dma-pool";
 			reg = <0 0x90400000 0 0x100000>;
 			no-map;
@@ -578,9 +572,6 @@
 	};
 
 	adv_bridge0: adv7535@3d {
-		#address-cells = <1>;
-		#size-cells = <0>;
-
 		compatible = "adi,adv7535";
 		reg = <0x3d>;
 		adi,addr-cec = <0x3b>;
@@ -590,8 +581,7 @@
 		interrupts = <28 IRQ_TYPE_LEVEL_LOW>;
 		status = "okay";
 
-		port@0 {
-			reg = <0>;
+		port {
 			adv7535_0_in: endpoint {
 				remote-endpoint = <&mipi0_adv_out>;
 			};
@@ -665,9 +655,6 @@
 	};
 
 	adv_bridge1: adv7535@3d {
-		#address-cells = <1>;
-		#size-cells = <0>;
-
 		compatible = "adi,adv7535";
 		reg = <0x3d>;
 		adi,addr-cec = <0x3b>;
@@ -677,8 +664,7 @@
 		interrupts = <0 IRQ_TYPE_LEVEL_LOW>;
 		status = "okay";
 
-		port@0 {
-			reg = <0>;
+		port {
 			adv7535_1_in: endpoint {
 				remote-endpoint = <&mipi1_adv_out>;
 			};
@@ -897,7 +883,7 @@
 	pinctrl-0 = <&pinctrl_lpi2c1 &pinctrl_ioexp_rst>;
 	status = "okay";
 
-	i2c-switch@71 {
+	i2c-mux@71 {
 		compatible = "nxp,pca9646", "nxp,pca9546";
 		#address-cells = <1>;
 		#size-cells = <0>;
@@ -957,7 +943,10 @@
 				reg = <0x68>;
 			};
 
-			/* iam20380@69 no driver yet */
+			iam20380@69 {
+				compatible = "invensense,iam20380";
+				reg = <0x69>;
+			};
 		};
 
 		i2c@3 {
@@ -1095,7 +1084,8 @@
 					<&A35_0 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
 					<&A35_1 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
 					<&A35_2 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
-					<&A35_3 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
+					<&A35_3 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+					<&imx8_gpu_ss 0 1>;
 			};
 		};
 	};
@@ -1253,14 +1243,11 @@
 
 
 &mipi_csi_0 {
-	#address-cells = <1>;
-	#size-cells = <0>;
 	virtual-channel;
 	status = "okay";
 
 	/* Camera 0  MIPI CSI-2 (CSIS0) */
-	port@0 {
-		reg = <0>;
+	port {
 		mipi_csi0_ep: endpoint {
 			remote-endpoint = <&max9286_0_ep>;
 			data-lanes = <1 2 3 4>;
@@ -1274,11 +1261,8 @@
 };
 
 &parallel_csi {
-	#address-cells = <1>;
-	#size-cells = <0>;
 	status = "okay";
-	port@0 {
-		reg = <0>;
+	port {
 		parallel_csi_ep: endpoint {
 			remote-endpoint = <&ov5640_ep>;
 		};
@@ -1458,16 +1442,16 @@
 
 	pinctrl_flexcan1: flexcan0grp {
 		fsl,pins = <
-			IMX8QXP_FLEXCAN0_TX_ADMA_FLEXCAN0_TX            0x21
-			IMX8QXP_FLEXCAN0_RX_ADMA_FLEXCAN0_RX            0x21
+			IMX8QXP_FLEXCAN0_TX_ADMA_FLEXCAN0_TX			0x21
+			IMX8QXP_FLEXCAN0_RX_ADMA_FLEXCAN0_RX			0x21
 		>;
 	};
 
 	pinctrl_flexcan2: flexcan1grp {
 		fsl,pins = <
-			IMX8QXP_FLEXCAN1_TX_ADMA_FLEXCAN1_TX            0x21
-			IMX8QXP_FLEXCAN1_RX_ADMA_FLEXCAN1_RX            0x21
-			>;
+			IMX8QXP_FLEXCAN1_TX_ADMA_FLEXCAN1_TX			0x21
+			IMX8QXP_FLEXCAN1_RX_ADMA_FLEXCAN1_RX			0x21
+		>;
 	};
 
 	pinctrl_lpuart0: lpuart0grp {
@@ -1500,7 +1484,7 @@
 		>;
 	};
 
-	pinctrl_pcieb: pcieagrp{
+	pinctrl_pcieb: pcieagrp {
 		fsl,pins = <
 			IMX8QXP_PCIE_CTRL0_PERST_B_LSIO_GPIO4_IO00		0x06000021
 			IMX8QXP_PCIE_CTRL0_CLKREQ_B_HSIO_PCIE0_CLKREQ_B 	0x06000021
@@ -1574,7 +1558,6 @@
 			IMX8QXP_USDHC1_CD_B_LSIO_GPIO4_IO22        0x00000021
 		>;
 	};
-
 
 	pinctrl_usdhc2: usdhc2grp {
 		fsl,pins = <

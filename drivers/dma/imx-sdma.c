@@ -33,7 +33,6 @@
 #include <linux/dmaengine.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
-#include <linux/of_device.h>
 #include <linux/of_dma.h>
 #include <linux/workqueue.h>
 
@@ -126,6 +125,7 @@
  */
 #define CHANGE_ENDIANNESS   0x80
 
+#define SPBA_BUS_NUM_MAX    0x4
 /*
  *  p_2_p watermark_level description
  *	Bits		Name			Description
@@ -2468,11 +2468,11 @@ static struct dma_chan *sdma_xlate(struct of_phandle_args *dma_spec,
 static int sdma_probe(struct platform_device *pdev)
 {
 	struct device_node *np = pdev->dev.of_node;
-	struct device_node *spba_bus;
+	struct device_node *spba_bus = NULL;
+	struct device_node *spba_parent_np, *sdma_parent_np;
 	const char *fw_name;
 	int ret;
 	int irq;
-	struct resource *iores;
 	struct resource spba_res;
 	int i;
 	struct sdma_engine *sdma;
@@ -2495,8 +2495,7 @@ static int sdma_probe(struct platform_device *pdev)
 	if (irq < 0)
 		return irq;
 
-	iores = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	sdma->regs = devm_ioremap_resource(&pdev->dev, iores);
+	sdma->regs = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(sdma->regs))
 		return PTR_ERR(sdma->regs);
 
@@ -2537,6 +2536,7 @@ static int sdma_probe(struct platform_device *pdev)
 	dma_cap_set(DMA_SLAVE, sdma->dma_device.cap_mask);
 	dma_cap_set(DMA_CYCLIC, sdma->dma_device.cap_mask);
 	dma_cap_set(DMA_MEMCPY, sdma->dma_device.cap_mask);
+	dma_cap_set(DMA_PRIVATE, sdma->dma_device.cap_mask);
 
 	INIT_LIST_HEAD(&sdma->dma_device.channels);
 	/* Initialize channel parameters */
@@ -2610,13 +2610,28 @@ static int sdma_probe(struct platform_device *pdev)
 			goto err_register;
 		}
 
-		spba_bus = of_find_compatible_node(NULL, NULL, "fsl,spba-bus");
-		ret = of_address_to_resource(spba_bus, 0, &spba_res);
-		if (!ret) {
-			sdma->spba_start_addr = spba_res.start;
-			sdma->spba_end_addr = spba_res.end;
+		sdma_parent_np = of_get_parent(np);
+
+		for (i = 0; i < SPBA_BUS_NUM_MAX; i++) {
+			spba_bus = of_find_compatible_node(spba_bus, NULL, "fsl,spba-bus");
+			if (!spba_bus)
+				break;
+
+			spba_parent_np = of_get_parent(spba_bus);
+			if (!strcmp(sdma_parent_np->full_name, spba_parent_np->full_name)) {
+				ret = of_address_to_resource(spba_bus, 0, &spba_res);
+				if (!ret) {
+					sdma->spba_start_addr = spba_res.start;
+					sdma->spba_end_addr = spba_res.end;
+				}
+				of_node_put(spba_bus);
+				of_node_put(spba_parent_np);
+				break;
+			}
+			of_node_put(spba_bus);
+			of_node_put(spba_parent_np);
 		}
-		of_node_put(spba_bus);
+		of_node_put(sdma_parent_np);
 	}
 
 	/*

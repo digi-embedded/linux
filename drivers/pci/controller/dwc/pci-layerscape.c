@@ -15,7 +15,6 @@
 #include <linux/iopoll.h>
 #include <linux/of_pci.h>
 #include <linux/of_platform.h>
-#include <linux/of_irq.h>
 #include <linux/of_address.h>
 #include <linux/pci.h>
 #include <linux/platform_device.h>
@@ -23,6 +22,7 @@
 #include <linux/mfd/syscon.h>
 #include <linux/regmap.h>
 
+#include "../../pci.h"
 #include "pcie-designware.h"
 
 /* PEX Internal Configuration Registers */
@@ -52,21 +52,12 @@
 
 #define PCIE_IATU_NUM		6
 
-#define LS_PCIE_IS_L2(v)	\
-	(((v) & PORT_LOGIC_LTSSM_STATE_MASK) == PORT_LOGIC_LTSSM_STATE_L2)
-
-struct ls_pcie;
-
-struct ls_pcie_host_pm_ops {
-	int (*pm_init)(struct ls_pcie *pcie);
-	void (*send_turn_off_message)(struct ls_pcie *pcie);
-	void (*exit_from_l2)(struct ls_pcie *pcie);
-};
-
 struct ls_pcie_drvdata {
 	const u32 pf_off;
 	const u32 lut_off;
-	const struct ls_pcie_host_pm_ops *pm_ops;
+	const struct dw_pcie_host_ops *ops;
+	void (*exit_from_l2)(struct dw_pcie_rp *pp);
+	bool pm_support;
 };
 
 struct ls_pcie {
@@ -74,14 +65,11 @@ struct ls_pcie {
 	const struct ls_pcie_drvdata *drvdata;
 	void __iomem *pf_base;
 	void __iomem *lut_base;
-	bool big_endian;
-	bool ep_presence;
-	bool pm_support;
 	struct regmap *scfg;
 	int index;
+	bool big_endian;
 };
 
-#define ls_pcie_lut_readl_addr(addr)	ls_pcie_lut_readl(pcie, addr)
 #define ls_pcie_pf_readl_addr(addr)	ls_pcie_pf_readl(pcie, addr)
 #define to_ls_pcie(x)	dev_get_drvdata((x)->dev)
 
@@ -123,23 +111,6 @@ static void ls_pcie_fix_error_response(struct ls_pcie *pcie)
 	iowrite32(PCIE_ABSERR_SETTING, pci->dbi_base + PCIE_ABSERR);
 }
 
-static u32 ls_pcie_lut_readl(struct ls_pcie *pcie, u32 off)
-{
-	if (pcie->big_endian)
-		return ioread32be(pcie->lut_base + off);
-
-	return ioread32(pcie->lut_base + off);
-}
-
-static void ls_pcie_lut_writel(struct ls_pcie *pcie, u32 off, u32 val)
-{
-	if (pcie->big_endian)
-		return iowrite32be(val, pcie->lut_base + off);
-
-	return iowrite32(val, pcie->lut_base + off);
-
-}
-
 static u32 ls_pcie_pf_readl(struct ls_pcie *pcie, u32 off)
 {
 	if (pcie->big_endian)
@@ -151,14 +122,32 @@ static u32 ls_pcie_pf_readl(struct ls_pcie *pcie, u32 off)
 static void ls_pcie_pf_writel(struct ls_pcie *pcie, u32 off, u32 val)
 {
 	if (pcie->big_endian)
-		return iowrite32be(val, pcie->pf_base + off);
-
-	return iowrite32(val, pcie->pf_base + off);
-
+		iowrite32be(val, pcie->pf_base + off);
+	else
+		iowrite32(val, pcie->pf_base + off);
 }
 
-static void ls_pcie_send_turnoff_msg(struct ls_pcie *pcie)
+static u32 ls_pcie_lut_readl(struct ls_pcie *pcie, u32 off)
 {
+	if (pcie->big_endian)
+		return ioread32be(pcie->lut_base + off);
+
+	return ioread32(pcie->lut_base + off);
+}
+
+static void ls_pcie_lut_writel(struct ls_pcie *pcie, u32 off, u32 val)
+{
+	if (pcie->big_endian)
+		iowrite32be(val, pcie->lut_base + off);
+	else
+		iowrite32(val, pcie->lut_base + off);
+}
+
+
+static void ls_pcie_send_turnoff_msg(struct dw_pcie_rp *pp)
+{
+	struct dw_pcie *pci = to_dw_pcie_from_pp(pp);
+	struct ls_pcie *pcie = to_ls_pcie(pci);
 	u32 val;
 	int ret;
 
@@ -167,13 +156,60 @@ static void ls_pcie_send_turnoff_msg(struct ls_pcie *pcie)
 	ls_pcie_pf_writel(pcie, LS_PCIE_PF_MCR, val);
 
 	ret = readx_poll_timeout(ls_pcie_pf_readl_addr, LS_PCIE_PF_MCR,
-				 val, !(val & PF_MCR_PTOMR), 100, 10000);
+				 val, !(val & PF_MCR_PTOMR),
+				 PCIE_PME_TO_L2_TIMEOUT_US/10,
+				 PCIE_PME_TO_L2_TIMEOUT_US);
 	if (ret)
-		dev_info(pcie->pci->dev, "poll turn off message timeout\n");
+		dev_err(pcie->pci->dev, "PME_Turn_off timeout\n");
 }
 
-static void ls1021a_pcie_send_turnoff_msg(struct ls_pcie *pcie)
+static void ls_pcie_exit_from_l2(struct dw_pcie_rp *pp)
 {
+	struct dw_pcie *pci = to_dw_pcie_from_pp(pp);
+	struct ls_pcie *pcie = to_ls_pcie(pci);
+	u32 val;
+	int ret;
+
+	/*
+	 * Set PF_MCR_EXL2S bit in LS_PCIE_PF_MCR register for the link
+	 * to exit L2 state.
+	 */
+	val = ls_pcie_pf_readl(pcie, LS_PCIE_PF_MCR);
+	val |= PF_MCR_EXL2S;
+	ls_pcie_pf_writel(pcie, LS_PCIE_PF_MCR, val);
+
+	/*
+	 * L2 exit timeout of 10ms is not defined in the specifications,
+	 * it was chosen based on empirical observations.
+	 */
+	ret = readx_poll_timeout(ls_pcie_pf_readl_addr, LS_PCIE_PF_MCR,
+				 val, !(val & PF_MCR_EXL2S),
+				 1000,
+				 10000);
+	if (ret)
+		dev_err(pcie->pci->dev, "L2 exit timeout\n");
+}
+
+static int ls_pcie_host_init(struct dw_pcie_rp *pp)
+{
+	struct dw_pcie *pci = to_dw_pcie_from_pp(pp);
+	struct ls_pcie *pcie = to_ls_pcie(pci);
+
+	ls_pcie_fix_error_response(pcie);
+
+	dw_pcie_dbi_ro_wr_en(pci);
+	ls_pcie_clear_multifunction(pcie);
+	dw_pcie_dbi_ro_wr_dis(pci);
+
+	ls_pcie_drop_msg_tlp(pcie);
+
+	return 0;
+}
+
+static void ls1021a_pcie_send_turnoff_msg(struct dw_pcie_rp *pp)
+{
+	struct dw_pcie *pci = to_dw_pcie_from_pp(pp);
+	struct ls_pcie *pcie = to_ls_pcie(pci);
 	u32 val;
 
 	if (!pcie->scfg) {
@@ -186,7 +222,8 @@ static void ls1021a_pcie_send_turnoff_msg(struct ls_pcie *pcie)
 	val |= PMXMTTURNOFF;
 	regmap_write(pcie->scfg, SCFG_PEXPMWRCR(pcie->index), val);
 
-	mdelay(10);
+	/* There are not register to check ACK, so wait PCIE_PME_TO_L2_TIMEOUT_US */
+	mdelay(PCIE_PME_TO_L2_TIMEOUT_US/1000);
 
 	/* Clear Turn_off message */
 	regmap_read(pcie->scfg, SCFG_PEXPMWRCR(pcie->index), &val);
@@ -194,8 +231,56 @@ static void ls1021a_pcie_send_turnoff_msg(struct ls_pcie *pcie)
 	regmap_write(pcie->scfg, SCFG_PEXPMWRCR(pcie->index), val);
 }
 
-static void ls1043a_pcie_send_turnoff_msg(struct ls_pcie *pcie)
+static void ls1021a_pcie_exit_from_l2(struct dw_pcie_rp *pp)
 {
+	struct dw_pcie *pci = to_dw_pcie_from_pp(pp);
+	struct ls_pcie *pcie = to_ls_pcie(pci);
+	u32 val;
+
+	regmap_read(pcie->scfg, SCFG_PEXSFTRSTCR, &val);
+	val |= PEXSR(pcie->index);
+	regmap_write(pcie->scfg, SCFG_PEXSFTRSTCR, val);
+
+	regmap_read(pcie->scfg, SCFG_PEXSFTRSTCR, &val);
+	val &= ~PEXSR(pcie->index);
+	regmap_write(pcie->scfg, SCFG_PEXSFTRSTCR, val);
+}
+
+static int ls1021a_pcie_host_init(struct dw_pcie_rp *pp)
+{
+	struct dw_pcie *pci = to_dw_pcie_from_pp(pp);
+	struct ls_pcie *pcie = to_ls_pcie(pci);
+	struct device *dev = pcie->pci->dev;
+	u32 index[2];
+	int ret;
+
+	ret = ls_pcie_host_init(pp);
+	if (ret)
+		return ret;
+
+	pcie->scfg = syscon_regmap_lookup_by_phandle(dev->of_node, "fsl,pcie-scfg");
+	if (IS_ERR(pcie->scfg)) {
+		ret = PTR_ERR(pcie->scfg);
+		dev_err(dev, "No syscfg phandle specified\n");
+		pcie->scfg = NULL;
+		return ret;
+	}
+
+	ret = of_property_read_u32_array(dev->of_node, "fsl,pcie-scfg", index, 2);
+	if (ret) {
+		pcie->scfg = NULL;
+		return ret;
+	}
+
+	pcie->index = index[1];
+
+	return ret;
+}
+
+static void ls1043a_pcie_send_turnoff_msg(struct dw_pcie_rp *pp)
+{
+	struct dw_pcie *pci = to_dw_pcie_from_pp(pp);
+	struct ls_pcie *pcie = to_ls_pcie(pci);
 	u32 val;
 
 	if (!pcie->scfg) {
@@ -208,7 +293,8 @@ static void ls1043a_pcie_send_turnoff_msg(struct ls_pcie *pcie)
 	val |= PEXPME(pcie->index);
 	regmap_write(pcie->scfg, SCFG_PEXPMECR, val);
 
-	mdelay(10);
+	/* There are not register to check ACK, so wait PCIE_PME_TO_L2_TIMEOUT_US */
+	mdelay(PCIE_PME_TO_L2_TIMEOUT_US/1000);
 
 	/* Clear Turn_off message */
 	regmap_read(pcie->scfg, SCFG_PEXPMECR, &val);
@@ -216,50 +302,10 @@ static void ls1043a_pcie_send_turnoff_msg(struct ls_pcie *pcie)
 	regmap_write(pcie->scfg, SCFG_PEXPMECR, val);
 }
 
-static void ls_pcie_exit_from_l2(struct ls_pcie *pcie)
+static void ls1043a_pcie_exit_from_l2(struct dw_pcie_rp *pp)
 {
-	u32 val;
-	int ret;
-
-	val = ls_pcie_pf_readl(pcie, LS_PCIE_PF_MCR);
-	val |= PF_MCR_EXL2S;
-	ls_pcie_pf_writel(pcie, LS_PCIE_PF_MCR, val);
-
-	ret = readx_poll_timeout(ls_pcie_pf_readl_addr, LS_PCIE_PF_MCR,
-				 val, !(val & PF_MCR_EXL2S), 100, 10000);
-	if (ret)
-		dev_info(pcie->pci->dev, "poll exit L2 state timeout\n");
-}
-
-static void ls_pcie_retrain_link(struct ls_pcie *pcie)
-{
-	struct dw_pcie *pci = pcie->pci;
-	u8 offset = dw_pcie_find_capability(pci, PCI_CAP_ID_EXP);
-	u32 val;
-
-	val = dw_pcie_readw_dbi(pci, offset + PCI_EXP_LNKCTL);
-	val |= PCI_EXP_LNKCTL_RL;
-	dw_pcie_writew_dbi(pci, offset + PCI_EXP_LNKCTL, val);
-}
-
-static void ls1021a_pcie_exit_from_l2(struct ls_pcie *pcie)
-{
-	u32 val;
-
-	regmap_read(pcie->scfg, SCFG_PEXSFTRSTCR, &val);
-	val |= PEXSR(pcie->index);
-	regmap_write(pcie->scfg, SCFG_PEXSFTRSTCR, val);
-
-	regmap_read(pcie->scfg, SCFG_PEXSFTRSTCR, &val);
-	val &= ~PEXSR(pcie->index);
-	regmap_write(pcie->scfg, SCFG_PEXSFTRSTCR, val);
-
-	mdelay(1);
-
-	ls_pcie_retrain_link(pcie);
-}
-static void ls1043a_pcie_exit_from_l2(struct ls_pcie *pcie)
-{
+	struct dw_pcie *pci = to_dw_pcie_from_pp(pp);
+	struct ls_pcie *pcie = to_ls_pcie(pci);
 	u32 val;
 
 	val = ls_pcie_lut_readl(pcie, LS_PCIE_LDBG);
@@ -277,116 +323,40 @@ static void ls1043a_pcie_exit_from_l2(struct ls_pcie *pcie)
 	val = ls_pcie_lut_readl(pcie, LS_PCIE_LDBG);
 	val &= ~LDBG_WE;
 	ls_pcie_lut_writel(pcie, LS_PCIE_LDBG, val);
-
-	mdelay(1);
-
-	ls_pcie_retrain_link(pcie);
 }
-
-static int ls1021a_pcie_pm_init(struct ls_pcie *pcie)
-{
-	struct device *dev = pcie->pci->dev;
-	u32 index[2];
-	int ret;
-
-	pcie->scfg = syscon_regmap_lookup_by_phandle(dev->of_node,
-						     "fsl,pcie-scfg");
-	if (IS_ERR(pcie->scfg)) {
-		ret = PTR_ERR(pcie->scfg);
-		dev_err(dev, "No syscfg phandle specified\n");
-		pcie->scfg = NULL;
-		return ret;
-	}
-
-	ret = of_property_read_u32_array(dev->of_node, "fsl,pcie-scfg",
-					 index, 2);
-	if (ret) {
-		pcie->scfg = NULL;
-		return ret;
-	}
-
-	pcie->index = index[1];
-
-	return 0;
-}
-
-static int ls_pcie_pm_init(struct ls_pcie *pcie)
-{
-	return 0;
-}
-
-static void ls_pcie_set_dstate(struct ls_pcie *pcie, u32 dstate)
-{
-	struct dw_pcie *pci = pcie->pci;
-	u8 offset = dw_pcie_find_capability(pci, PCI_CAP_ID_PM);
-	u32 val;
-
-	val = dw_pcie_readw_dbi(pci, offset + PCI_PM_CTRL);
-	val &= ~PCI_PM_CTRL_STATE_MASK;
-	val |= dstate;
-	dw_pcie_writew_dbi(pci, offset + PCI_PM_CTRL, val);
-}
-
-static int ls_pcie_host_init(struct dw_pcie_rp *pp)
-{
-	struct dw_pcie *pci = to_dw_pcie_from_pp(pp);
-	struct ls_pcie *pcie = to_ls_pcie(pci);
-
-	ls_pcie_fix_error_response(pcie);
-
-	dw_pcie_dbi_ro_wr_en(pci);
-	ls_pcie_clear_multifunction(pcie);
-	dw_pcie_dbi_ro_wr_dis(pci);
-
-	ls_pcie_drop_msg_tlp(pcie);
-
-	if (dw_pcie_link_up(pci)) {
-		dev_dbg(pci->dev, "Endpoint is present\n");
-		pcie->ep_presence = true;
-	}
-
-	if (pcie->drvdata->pm_ops && pcie->drvdata->pm_ops->pm_init &&
-	    !pcie->drvdata->pm_ops->pm_init(pcie))
-		pcie->pm_support = true;
-
-	return 0;
-}
-
-static struct ls_pcie_host_pm_ops ls1021a_pcie_host_pm_ops = {
-	.pm_init = &ls1021a_pcie_pm_init,
-	.send_turn_off_message = &ls1021a_pcie_send_turnoff_msg,
-	.exit_from_l2 = &ls1021a_pcie_exit_from_l2,
-};
-
-static struct ls_pcie_host_pm_ops ls1043a_pcie_host_pm_ops = {
-	.pm_init = &ls1021a_pcie_pm_init,
-	.send_turn_off_message = &ls1043a_pcie_send_turnoff_msg,
-	.exit_from_l2 = &ls1043a_pcie_exit_from_l2,
-};
-
-static struct ls_pcie_host_pm_ops ls_pcie_host_pm_ops = {
-	.pm_init = &ls_pcie_pm_init,
-	.send_turn_off_message = &ls_pcie_send_turnoff_msg,
-	.exit_from_l2 = &ls_pcie_exit_from_l2,
-};
 
 static const struct dw_pcie_host_ops ls_pcie_host_ops = {
 	.host_init = ls_pcie_host_init,
+	.pme_turn_off = ls_pcie_send_turnoff_msg,
+};
+
+static const struct dw_pcie_host_ops ls1021a_pcie_host_ops = {
+	.host_init = ls1021a_pcie_host_init,
+	.pme_turn_off = ls1021a_pcie_send_turnoff_msg,
 };
 
 static const struct ls_pcie_drvdata ls1021a_drvdata = {
-	.pm_ops = &ls1021a_pcie_host_pm_ops,
+	.pm_support = true,
+	.ops = &ls1021a_pcie_host_ops,
+	.exit_from_l2 = ls1021a_pcie_exit_from_l2,
+};
+
+static const struct dw_pcie_host_ops ls1043a_pcie_host_ops = {
+	.host_init = ls1021a_pcie_host_init, /* the same as ls1021 */
+	.pme_turn_off = ls1043a_pcie_send_turnoff_msg,
 };
 
 static const struct ls_pcie_drvdata ls1043a_drvdata = {
 	.lut_off = 0x10000,
-	.pm_ops = &ls1043a_pcie_host_pm_ops,
+	.pm_support = true,
+	.ops = &ls1043a_pcie_host_ops,
+	.exit_from_l2 = ls1043a_pcie_exit_from_l2,
 };
 
 static const struct ls_pcie_drvdata layerscape_drvdata = {
-	.lut_off = 0x80000,
 	.pf_off = 0xc0000,
-	.pm_ops = &ls_pcie_host_pm_ops,
+	.pm_support = true,
+	.exit_from_l2 = ls_pcie_exit_from_l2,
 };
 
 static const struct of_device_id ls_pcie_of_match[] = {
@@ -420,7 +390,7 @@ static int ls_pcie_probe(struct platform_device *pdev)
 	pcie->drvdata = of_device_get_match_data(dev);
 
 	pci->dev = dev;
-	pci->pp.ops = &ls_pcie_host_ops;
+	pci->pp.ops = pcie->drvdata->ops ? pcie->drvdata->ops : &ls_pcie_host_ops;
 
 	pcie->pci = pci;
 
@@ -431,11 +401,8 @@ static int ls_pcie_probe(struct platform_device *pdev)
 
 	pcie->big_endian = of_property_read_bool(dev->of_node, "big-endian");
 
-	if (pcie->drvdata->lut_off)
-		pcie->lut_base = pci->dbi_base + pcie->drvdata->lut_off;
-
-	if (pcie->drvdata->pf_off)
-		pcie->pf_base = pci->dbi_base + pcie->drvdata->pf_off;
+	pcie->pf_base = pci->dbi_base + pcie->drvdata->pf_off;
+	pcie->lut_base = pci->dbi_base + pcie->drvdata->lut_off;
 
 	if (!ls_pcie_is_bridge(pcie))
 		return -ENODEV;
@@ -445,82 +412,30 @@ static int ls_pcie_probe(struct platform_device *pdev)
 	return dw_pcie_host_init(&pci->pp);
 }
 
-static bool ls_pcie_pm_check(struct ls_pcie *pcie)
-{
-	if (!pcie->ep_presence) {
-		dev_dbg(pcie->pci->dev, "Endpoint isn't present\n");
-		return false;
-	}
-
-	if (!pcie->pm_support)
-		return false;
-
-	return true;
-}
-
-#ifdef CONFIG_PM_SLEEP
 static int ls_pcie_suspend_noirq(struct device *dev)
 {
 	struct ls_pcie *pcie = dev_get_drvdata(dev);
-	struct dw_pcie *pci = pcie->pci;
-	u32 val;
-	int ret;
 
-	if (!ls_pcie_pm_check(pcie))
+	if (!pcie->drvdata->pm_support)
 		return 0;
 
-	pcie->drvdata->pm_ops->send_turn_off_message(pcie);
-
-	/* 10ms timeout to check L2 ready */
-	ret = readl_poll_timeout(pci->dbi_base + PCIE_PORT_DEBUG0,
-				 val, LS_PCIE_IS_L2(val), 100, 10000);
-	if (ret) {
-		dev_err(dev, "PCIe link enter L2 timeout! ltssm = 0x%x\n", val);
-		return ret;
-	}
-
-	ls_pcie_set_dstate(pcie, 0x3);
-
-	return 0;
+	return dw_pcie_suspend_noirq(pcie->pci);
 }
 
 static int ls_pcie_resume_noirq(struct device *dev)
 {
 	struct ls_pcie *pcie = dev_get_drvdata(dev);
-	struct dw_pcie *pci = pcie->pci;
-	int ret;
 
-	if (!ls_pcie_pm_check(pcie))
+	if (!pcie->drvdata->pm_support)
 		return 0;
 
-	ls_pcie_set_dstate(pcie, 0x0);
+	pcie->drvdata->exit_from_l2(&pcie->pci->pp);
 
-	pcie->drvdata->pm_ops->exit_from_l2(pcie);
-
-	/* delay 10 ms to access EP */
-	mdelay(10);
-
-	ret = ls_pcie_host_init(&pci->pp);
-	if (ret) {
-		dev_err(dev, "ls_pcie_host_init failed! ret = 0x%x\n", ret);
-		return ret;
-	}
-
-	dw_pcie_setup_rc(&pci->pp);
-
-	ret = dw_pcie_wait_for_link(pci);
-	if (ret) {
-		dev_err(dev, "wait link up timeout! ret = 0x%x\n", ret);
-		return ret;
-	}
-
-	return 0;
+	return dw_pcie_resume_noirq(pcie->pci);
 }
-#endif /* CONFIG_PM_SLEEP */
 
 static const struct dev_pm_ops ls_pcie_pm_ops = {
-	SET_NOIRQ_SYSTEM_SLEEP_PM_OPS(ls_pcie_suspend_noirq,
-				      ls_pcie_resume_noirq)
+	NOIRQ_SYSTEM_SLEEP_PM_OPS(ls_pcie_suspend_noirq, ls_pcie_resume_noirq)
 };
 
 static struct platform_driver ls_pcie_driver = {

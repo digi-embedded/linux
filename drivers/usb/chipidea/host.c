@@ -31,8 +31,7 @@ struct ehci_ci_priv {
 };
 
 struct ci_hdrc_dma_aligned_buffer {
-	void *kmalloc_ptr;
-	void *old_xfer_buffer;
+	void *original_buffer;
 	u8 data[];
 };
 
@@ -426,59 +425,52 @@ static int ci_ehci_bus_suspend(struct usb_hcd *hcd)
 	return 0;
 }
 
-static void ci_hdrc_free_dma_aligned_buffer(struct urb *urb)
+static void ci_hdrc_free_dma_aligned_buffer(struct urb *urb, bool copy_back)
 {
 	struct ci_hdrc_dma_aligned_buffer *temp;
-	size_t length;
 
 	if (!(urb->transfer_flags & URB_ALIGNED_TEMP_BUFFER))
 		return;
+	urb->transfer_flags &= ~URB_ALIGNED_TEMP_BUFFER;
 
 	temp = container_of(urb->transfer_buffer,
 			    struct ci_hdrc_dma_aligned_buffer, data);
+	urb->transfer_buffer = temp->original_buffer;
 
-	if (usb_urb_dir_in(urb)) {
+	if (copy_back && usb_urb_dir_in(urb)) {
+		size_t length;
+
 		if (usb_pipeisoc(urb->pipe))
 			length = urb->transfer_buffer_length;
 		else
 			length = urb->actual_length;
 
-		memcpy(temp->old_xfer_buffer, temp->data, length);
+		memcpy(temp->original_buffer, temp->data, length);
 	}
-	urb->transfer_buffer = temp->old_xfer_buffer;
-	kfree(temp->kmalloc_ptr);
 
-	urb->transfer_flags &= ~URB_ALIGNED_TEMP_BUFFER;
+	kfree(temp);
 }
 
 static int ci_hdrc_alloc_dma_aligned_buffer(struct urb *urb, gfp_t mem_flags)
 {
-	struct ci_hdrc_dma_aligned_buffer *temp, *kmalloc_ptr;
-	const unsigned int ci_hdrc_usb_dma_align = 32;
-	size_t kmalloc_size;
+	struct ci_hdrc_dma_aligned_buffer *temp;
 
-	if (urb->num_sgs || urb->sg || urb->transfer_buffer_length == 0 ||
-	    !((uintptr_t)urb->transfer_buffer & (ci_hdrc_usb_dma_align - 1)))
+	if (urb->num_sgs || urb->sg || urb->transfer_buffer_length == 0)
+		return 0;
+	if (IS_ALIGNED((uintptr_t)urb->transfer_buffer, 4)
+	    && IS_ALIGNED(urb->transfer_buffer_length, 4))
 		return 0;
 
-	/* Allocate a buffer with enough padding for alignment */
-	kmalloc_size = urb->transfer_buffer_length +
-		       sizeof(struct ci_hdrc_dma_aligned_buffer) +
-		       ci_hdrc_usb_dma_align - 1;
-
-	kmalloc_ptr = kmalloc(kmalloc_size, mem_flags);
-	if (!kmalloc_ptr)
+	temp = kmalloc(sizeof(*temp) + ALIGN(urb->transfer_buffer_length, 4), mem_flags);
+	if (!temp)
 		return -ENOMEM;
 
-	/* Position our struct dma_aligned_buffer such that data is aligned */
-	temp = PTR_ALIGN(kmalloc_ptr + 1, ci_hdrc_usb_dma_align) - 1;
-	temp->kmalloc_ptr = kmalloc_ptr;
-	temp->old_xfer_buffer = urb->transfer_buffer;
 	if (usb_urb_dir_out(urb))
 		memcpy(temp->data, urb->transfer_buffer,
 		       urb->transfer_buffer_length);
-	urb->transfer_buffer = temp->data;
 
+	temp->original_buffer = urb->transfer_buffer;
+	urb->transfer_buffer = temp->data;
 	urb->transfer_flags |= URB_ALIGNED_TEMP_BUFFER;
 
 	return 0;
@@ -495,7 +487,7 @@ static int ci_hdrc_map_urb_for_dma(struct usb_hcd *hcd, struct urb *urb,
 
 	ret = usb_hcd_map_urb_for_dma(hcd, urb, mem_flags);
 	if (ret)
-		ci_hdrc_free_dma_aligned_buffer(urb);
+		ci_hdrc_free_dma_aligned_buffer(urb, false);
 
 	return ret;
 }
@@ -503,91 +495,20 @@ static int ci_hdrc_map_urb_for_dma(struct usb_hcd *hcd, struct urb *urb,
 static void ci_hdrc_unmap_urb_for_dma(struct usb_hcd *hcd, struct urb *urb)
 {
 	usb_hcd_unmap_urb_for_dma(hcd, urb);
-	ci_hdrc_free_dma_aligned_buffer(urb);
+	ci_hdrc_free_dma_aligned_buffer(urb, true);
 }
 
-static void ci_hdrc_host_save_for_power_lost(struct ci_hdrc *ci)
-{
-	struct ehci_hcd *ehci;
-
-	if (!ci->hcd)
-		return;
-
-	ehci = hcd_to_ehci(ci->hcd);
-	/* save EHCI registers */
-	ci->pm_usbmode = ehci_readl(ehci, &ehci->regs->usbmode);
-	ci->pm_command = ehci_readl(ehci, &ehci->regs->command);
-	ci->pm_command &= ~CMD_RUN;
-	ci->pm_status  = ehci_readl(ehci, &ehci->regs->status);
-	ci->pm_intr_enable  = ehci_readl(ehci, &ehci->regs->intr_enable);
-	ci->pm_frame_index  = ehci_readl(ehci, &ehci->regs->frame_index);
-	ci->pm_segment  = ehci_readl(ehci, &ehci->regs->segment);
-	ci->pm_frame_list  = ehci_readl(ehci, &ehci->regs->frame_list);
-	ci->pm_async_next  = ehci_readl(ehci, &ehci->regs->async_next);
-	ci->pm_configured_flag  =
-			ehci_readl(ehci, &ehci->regs->configured_flag);
-	ci->pm_portsc = ehci_readl(ehci, &ehci->regs->port_status[0]);
-}
-
-static void ci_hdrc_host_restore_from_power_lost(struct ci_hdrc *ci)
-{
-	struct ehci_hcd *ehci;
-	unsigned long   flags;
-	u32 tmp;
-	int step_ms;
-	/*
-	 * If the vbus is off during system suspend, most of devices will pull
-	 * DP up within 200ms when they see vbus, set 1000ms for safety.
-	 */
-	int timeout_ms = 1000;
-
-	if (!ci->hcd)
-		return;
-
-	hw_controller_reset(ci);
-
-	ehci = hcd_to_ehci(ci->hcd);
-	spin_lock_irqsave(&ehci->lock, flags);
-	/* Restore EHCI registers */
-	ehci_writel(ehci, ci->pm_usbmode, &ehci->regs->usbmode);
-	ehci_writel(ehci, ci->pm_portsc, &ehci->regs->port_status[0]);
-	ehci_writel(ehci, ci->pm_command, &ehci->regs->command);
-	ehci_writel(ehci, ci->pm_intr_enable, &ehci->regs->intr_enable);
-	ehci_writel(ehci, ci->pm_frame_index, &ehci->regs->frame_index);
-	ehci_writel(ehci, ci->pm_segment, &ehci->regs->segment);
-	ehci_writel(ehci, ci->pm_frame_list, &ehci->regs->frame_list);
-	ehci_writel(ehci, ci->pm_async_next, &ehci->regs->async_next);
-	ehci_writel(ehci, ci->pm_configured_flag,
-					&ehci->regs->configured_flag);
-	/* Restore the PHY's connect notifier setting */
-	if (ci->pm_portsc & PORTSC_HSP)
-		usb_phy_notify_connect(ci->usb_phy, USB_SPEED_HIGH);
-
-	tmp = ehci_readl(ehci, &ehci->regs->command);
-	tmp |= CMD_RUN;
-	ehci_writel(ehci, tmp, &ehci->regs->command);
-	spin_unlock_irqrestore(&ehci->lock, flags);
-
-	if (!(ci->pm_portsc & PORTSC_CCS))
-		return;
-
-	for (step_ms = 0; step_ms < timeout_ms; step_ms += 25) {
-		if (ehci_readl(ehci, &ehci->regs->port_status[0]) & PORTSC_CCS)
-			break;
-		msleep(25);
-	}
-}
-
+#ifdef CONFIG_PM_SLEEP
 static void ci_hdrc_host_suspend(struct ci_hdrc *ci)
 {
-	ci_hdrc_host_save_for_power_lost(ci);
+	ehci_suspend(ci->hcd, device_may_wakeup(ci->dev));
 }
 
 static void ci_hdrc_host_resume(struct ci_hdrc *ci, bool power_lost)
 {
-	if (power_lost)
-		ci_hdrc_host_restore_from_power_lost(ci);
+	ehci_resume(ci->hcd, power_lost);
 }
+#endif
 
 static int ci_ehci_bus_resume(struct usb_hcd *hcd)
 {
@@ -632,8 +553,10 @@ int ci_hdrc_host_init(struct ci_hdrc *ci)
 
 	rdrv->start	= host_start;
 	rdrv->stop	= host_stop;
+#ifdef CONFIG_PM_SLEEP
 	rdrv->suspend	= ci_hdrc_host_suspend;
 	rdrv->resume	= ci_hdrc_host_resume;
+#endif
 	rdrv->irq	= host_irq;
 	rdrv->name	= "host";
 	ci->roles[CI_ROLE_HOST] = rdrv;

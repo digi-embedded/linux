@@ -72,8 +72,8 @@ static void (*imx6sl_wfi_in_iram_fn)(void __iomem *iram_vbase,
 	 (1 << PSCI_0_2_POWER_STATE_AFFL_SHIFT) | \
 	 (PSCI_POWER_STATE_TYPE_POWER_DOWN << PSCI_0_2_POWER_STATE_TYPE_SHIFT))
 
-static int imx6sl_enter_wait(struct cpuidle_device *dev,
-			    struct cpuidle_driver *drv, int index)
+static __cpuidle int imx6sl_enter_wait(struct cpuidle_device *dev,
+				       struct cpuidle_driver *drv, int index)
 {
 	int mode = get_bus_freq_mode();
 

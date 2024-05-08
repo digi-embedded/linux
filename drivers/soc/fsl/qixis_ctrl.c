@@ -92,7 +92,7 @@ static struct i2c_driver fsl_qixis_i2c_driver = {
 		.owner	= THIS_MODULE,
 		.of_match_table = of_match_ptr(fsl_qixis_i2c_of_match),
 	},
-	.probe_new	= fsl_qixis_i2c_probe,
+	.probe		= fsl_qixis_i2c_probe,
 	.remove		= fsl_qixis_i2c_remove,
 };
 module_i2c_driver(fsl_qixis_i2c_driver);

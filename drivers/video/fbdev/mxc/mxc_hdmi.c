@@ -2821,7 +2821,7 @@ static int mxc_hdmi_probe(struct platform_device *pdev)
 		goto ealloc;
 	}
 
-	hdmi_class = class_create(THIS_MODULE, "mxc_hdmi");
+	hdmi_class = class_create("mxc_hdmi");
 	if (IS_ERR(hdmi_class)) {
 		ret = PTR_ERR(hdmi_class);
 		goto err_out_chrdev;
@@ -2946,8 +2946,7 @@ static void __exit mxc_hdmi_exit(void)
 }
 module_exit(mxc_hdmi_exit);
 
-static int mxc_hdmi_i2c_probe(struct i2c_client *client,
-		const struct i2c_device_id *id)
+static int mxc_hdmi_i2c_probe(struct i2c_client *client)
 {
 	if (!i2c_check_functionality(client->adapter,
 				I2C_FUNC_SMBUS_BYTE | I2C_FUNC_I2C))

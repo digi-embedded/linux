@@ -673,9 +673,8 @@ static int hdmi_dma_update_iec_header(struct snd_pcm_substream *substream)
  * frame bits.  So we have to copy the raw dma data from the ALSA buffer
  * to the DMA buffer, adding the frame information.
  */
-static int hdmi_dma_copy_user(struct snd_soc_component *component, struct snd_pcm_substream *substream, int channel,
-			unsigned long pos_bytes, void __user *buf,
-			unsigned long count)
+static int hdmi_dma_copy(struct snd_soc_component *component, struct snd_pcm_substream *substream, int channel,
+			 unsigned long hwoff, struct iov_iter *iter, unsigned long bytes)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct hdmi_dma_priv *priv = runtime->private_data;
@@ -684,15 +683,14 @@ static int hdmi_dma_copy_user(struct snd_soc_component *component, struct snd_pc
 	u32 pcm_data;
 
 	/* Adding frame info to pcm data from userspace and copy to hw_buffer */
-	hw_buf = (u32 *)(priv->hw_buffer.area + (pos_bytes * priv->buffer_ratio));
+	hw_buf = (u32 *)(priv->hw_buffer.area + (hwoff * priv->buffer_ratio));
 
-	while (count > 0) {
+	while (bytes > 0) {
 		for (subframe_idx = 1 ; subframe_idx <= priv->channels ; subframe_idx++) {
-			if (copy_from_user(&pcm_data, buf, priv->sample_align))
+			if (copy_from_iter(&pcm_data, priv->sample_align, iter) != priv->sample_align)
 				return -EFAULT;
 
-			buf += priv->sample_align;
-			count -= priv->sample_align;
+			bytes -= priv->sample_align;
 
 			/* Save the header info to the audio dma buffer */
 			*hw_buf++ = hdmi_dma_add_frame_info(priv, pcm_data, subframe_idx);
@@ -1089,7 +1087,7 @@ static const struct snd_soc_component_driver imx_hdmi_component = {
 	.hw_free	= hdmi_dma_hw_free,
 	.trigger	= hdmi_dma_trigger,
 	.pointer	= hdmi_dma_pointer,
-	.copy_user	= hdmi_dma_copy_user,
+	.copy		= hdmi_dma_copy,
 };
 
 static int imx_soc_platform_probe(struct platform_device *pdev)

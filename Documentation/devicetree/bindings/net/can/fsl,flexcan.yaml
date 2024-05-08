@@ -17,6 +17,7 @@ properties:
   compatible:
     oneOf:
       - enum:
+          - fsl,imx95-flexcan
           - fsl,imx93-flexcan
           - fsl,imx8qm-flexcan
           - fsl,imx8mp-flexcan
@@ -62,6 +63,9 @@ properties:
       The oscillator frequency driving the flexcan device, filled in by the
       boot loader. This property should only be used the used operating system
       doesn't support the clocks and clock-names property.
+
+  power-domains:
+    maxItems: 1
 
   xceiver-supply:
     description: Regulator that powers the CAN transceiver.

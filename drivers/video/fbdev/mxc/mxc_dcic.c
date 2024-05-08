@@ -517,7 +517,7 @@ static int dcic_probe(struct platform_device *pdev)
 		goto ealloc;
 	}
 
-	dcic->class = class_create(THIS_MODULE, name);
+	dcic->class = class_create(name);
 	if (IS_ERR(dcic->class)) {
 		ret = PTR_ERR(dcic->class);
 		goto err_out_chrdev;

@@ -2581,7 +2581,7 @@ static int mxc_mlb150_probe(struct platform_device *pdev)
 	}
 
 	/* create class and device for udev information */
-	drvdata->class = class_create(THIS_MODULE, "mlb150");
+	drvdata->class = class_create("mlb150");
 	if (IS_ERR(drvdata->class)) {
 		dev_err(&pdev->dev, "failed to create device class\n");
 		ret = -ENOMEM;

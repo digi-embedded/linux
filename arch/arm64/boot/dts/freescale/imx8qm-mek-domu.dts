@@ -49,8 +49,8 @@
 		mu2 = &lsio_mu2;
 		dphy0 = &mipi0_dphy;
 		dphy1 = &mipi1_dphy;
-		mipi_dsi0 = &mipi0_dsi_host;
-		mipi_dsi1 = &mipi1_dsi_host;
+		mipi-dsi0 = &mipi0_dsi_host;
+		mipi-dsi1 = &mipi1_dsi_host;
 	};
 
 	cpus {
@@ -116,7 +116,7 @@
 			reg = <0 0x92400000 0 0x1000000>;
 			no-map;
 		};
-		dsp_reserved_heap: dsp_reserved_heap {
+		dsp_reserved_heap: dsp_reserved_heap@93400000 {
 			reg = <0 0x93400000 0 0xef0000>;
 			no-map;
 		};
@@ -304,7 +304,7 @@
 			pinctrl-2 = <&pinctrl_wifi>;
 		};
 
-		lvds_backlight0: lvds_backlight@0 {
+		lvds_backlight0: lvds_backlight-0 {
 			compatible = "pwm-backlight";
 			pwms = <&pwm_lvds0 0 100000 0>;
 
@@ -336,7 +336,7 @@
 		xen,passthrough;
 	};
 
-	reg_audio: fixedregulator@2 {
+	reg_audio: fixedregulator-audio {
 		compatible = "regulator-fixed";
 		regulator-name = "cs42888_supply";
 		regulator-min-microvolt = <3300000>;
@@ -345,7 +345,7 @@
 		xen,passthrough;
 	};
 
-	epdev_on: fixedregulator@100 {
+	epdev_on: fixedregulator-epdev {
 		compatible = "regulator-fixed";
 		pinctrl-names = "default", "sleep";
 		pinctrl-0 = <&pinctrl_wlreg_on>;
@@ -380,14 +380,14 @@
 		xen,passthrough;
 	};
 
-	xen_i2c0: xen_i2c@0 {
+	xen_i2c0: xen_i2c-0 {
 		compatible = "xen,i2c";
 		be-adapter = "5a800000.i2c";
 		status = "okay";
 		xen,passthrough;
 	};
 
-	xen_i2c1: xen_i2c@1 {
+	xen_i2c1: xen_i2c-1 {
 		compatible = "xen,i2c";
 		be-adapter = "3b230000.i2c";
 		xen,passthrough;
@@ -473,7 +473,6 @@
 	#address-cells = <1>;
 	#size-cells = <1>;
 	ranges = <0x5a000000 0x0 0x5a000000 0x1000000>;
-
 
 	edma214: dma-controller@5a2e0000 {
 		compatible = "fsl,imx8qm-edma";
@@ -1202,9 +1201,6 @@
 	status = "okay";
 
 	adv_bridge0: adv7535@3d {
-		#address-cells = <1>;
-		#size-cells = <0>;
-
 		compatible = "adi,adv7535";
 		reg = <0x3d>;
 		adi,addr-cec = <0x3b>;
@@ -1214,8 +1210,7 @@
 		interrupts = <19 IRQ_TYPE_LEVEL_LOW>;
 		status = "okay";
 
-		port@0 {
-			reg = <0>;
+		port {
 			adv7535_0_in: endpoint {
 				remote-endpoint = <&mipi0_adv_out>;
 			};
@@ -1249,9 +1244,6 @@
 	status = "okay";
 
 	adv_bridge1: adv7535@3d {
-		#address-cells = <1>;
-		#size-cells = <0>;
-
 		compatible = "adi,adv7535";
 		reg = <0x3d>;
 		adi,addr-cec = <0x3b>;
@@ -1261,8 +1253,7 @@
 		interrupts = <23 IRQ_TYPE_LEVEL_LOW>;
 		status = "okay";
 
-		port@0 {
-			reg = <0>;
+		port {
 			adv7535_1_in: endpoint {
 				remote-endpoint = <&mipi1_adv_out>;
 			};
@@ -1364,14 +1355,11 @@
 };
 
 &mipi_csi_0 {
-	#address-cells = <1>;
-	#size-cells = <0>;
 	virtual-channel;
 	status = "okay";
 
 	/* Camera 0  MIPI CSI-2 (CSIS0) */
-	port@0 {
-		reg = <0>;
+	port {
 		mipi_csi0_ep: endpoint {
 			remote-endpoint = <&max9286_0_ep>;
 			data-lanes = <1 2 3 4>;

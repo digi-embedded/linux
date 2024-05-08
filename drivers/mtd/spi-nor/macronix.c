@@ -29,7 +29,7 @@ mx25l25635_post_bfpt_fixups(struct spi_nor *nor,
 	 * seems that the F version advertises support for Fast Read 4-4-4 in
 	 * its BFPT table.
 	 */
-	if (bfpt->dwords[BFPT_DWORD(5)] & BFPT_DWORD5_FAST_READ_4_4_4)
+	if (bfpt->dwords[SFDP_DWORD(5)] & BFPT_DWORD5_FAST_READ_4_4_4)
 		nor->flags |= SNOR_F_4B_OPCODES;
 
 	return 0;
@@ -46,7 +46,7 @@ static const struct spi_nor_fixups mx25l25635_fixups = {
  *
  * Return: 0 on success, -errno otherwise.
  */
-static int spi_nor_macronix_octal_dtr_enable(struct spi_nor *nor, bool enable)
+static int spi_nor_macronix_set_octal_dtr(struct spi_nor *nor, bool enable)
 {
 	struct spi_mem_op op;
 	u8 *buf = nor->bouncebuf, i;
@@ -111,19 +111,21 @@ static int spi_nor_macronix_octal_dtr_enable(struct spi_nor *nor, bool enable)
 
 static void octaflash_default_init(struct spi_nor *nor)
 {
-	nor->params->octal_dtr_enable = spi_nor_macronix_octal_dtr_enable;
+	nor->params->set_octal_dtr = spi_nor_macronix_set_octal_dtr;
 }
 
 static struct spi_nor_fixups octaflash_fixups = {
 	.default_init = octaflash_default_init,
 };
 
-static void mx25uw51345g_post_sfdp_fixup(struct spi_nor *nor)
+static int mx25uw51345g_post_sfdp_fixup(struct spi_nor *nor)
 {
 	nor->params->hwcaps.mask |= SNOR_HWCAPS_READ_8_8_8_DTR;
 	spi_nor_set_read_settings(&nor->params->reads[SNOR_CMD_READ_8_8_8_DTR],
 				  0, 20, SPINOR_OP_OPI_DTR_RD,
 				  SNOR_PROTO_8_8_8_DTR);
+
+	return 0;
 }
 
 static struct spi_nor_fixups mx25uw51345g_fixups = {
@@ -181,6 +183,9 @@ static const struct flash_info macronix_nor_parts[] = {
 	{ "mx25u51245g", INFO(0xc2253a, 0, 64 * 1024, 1024)
 		NO_SFDP_FLAGS(SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ)
 		FIXUP_FLAGS(SPI_NOR_4B_OPCODES) },
+	{ "mx25uw51245g", INFOB(0xc2813a, 0, 0, 0, 4)
+		PARSE_SFDP
+		FLAGS(SPI_NOR_RWW) },
 	{ "mx25v8035f",  INFO(0xc22314, 0, 64 * 1024,  16)
 		NO_SFDP_FLAGS(SECT_4K | SPI_NOR_DUAL_READ |
 			      SPI_NOR_QUAD_READ) },
@@ -329,11 +334,19 @@ static const struct flash_info macronix_nor_parts[] = {
 static void macronix_nor_default_init(struct spi_nor *nor)
 {
 	nor->params->quad_enable = spi_nor_sr1_bit6_quad_enable;
-	nor->params->set_4byte_addr_mode = spi_nor_set_4byte_addr_mode;
+}
+
+static int macronix_nor_late_init(struct spi_nor *nor)
+{
+	if (!nor->params->set_4byte_addr_mode)
+		nor->params->set_4byte_addr_mode = spi_nor_set_4byte_addr_mode_en4b_ex4b;
+
+	return 0;
 }
 
 static const struct spi_nor_fixups macronix_nor_fixups = {
 	.default_init = macronix_nor_default_init,
+	.late_init = macronix_nor_late_init,
 };
 
 const struct spi_nor_manufacturer spi_nor_macronix = {

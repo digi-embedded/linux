@@ -1,12 +1,9 @@
 // SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause)
-/* Copyright 2017-2019 NXP */
+/* Copyright 2017-2023 NXP */
 
 #include "enetc.h"
 
 #include <net/tsn.h>
-#include <linux/module.h>
-#include <linux/irqflags.h>
-#include <linux/preempt.h>
 
 static int alloc_cbdr(struct enetc_si *si, struct enetc_cbd **curr_cbd)
 {
@@ -75,182 +72,15 @@ static u16 enetc_get_max_gcl_len(struct enetc_hw *hw)
 	return enetc_rd(hw, ENETC_PTGCAPR) & ENETC_PTGCAPR_MAX_GCL_LEN_MASK;
 }
 
-void enetc_pspeed_set(struct enetc_ndev_priv *priv, int speed)
-{
-	u32 old_speed = priv->speed;
-	u32 pspeed;
-
-	if (speed == old_speed)
-		return;
-
-	switch (speed) {
-	case SPEED_1000:
-		pspeed = ENETC_PMR_PSPEED_1000M;
-		break;
-	case SPEED_2500:
-		pspeed = ENETC_PMR_PSPEED_2500M;
-		break;
-	case SPEED_100:
-		pspeed = ENETC_PMR_PSPEED_100M;
-		break;
-	case SPEED_10:
-	default:
-		pspeed = ENETC_PMR_PSPEED_10M;
-	}
-
-	priv->speed = speed;
-	enetc_port_wr(&priv->si->hw, ENETC_PMR,
-		      (enetc_port_rd(&priv->si->hw, ENETC_PMR)
-		      & (~ENETC_PMR_PSPEED_MASK))
-		      | pspeed);
-}
-
-/* CBD Class 5: Time Gated Scheduling Gate Control List configuration
- * Descriptor - Long Format
- */
 static int enetc_qbv_set(struct net_device *ndev,
 			 struct tsn_qbv_conf *admin_conf)
 {
-	struct tsn_qbv_basic *admin_basic = &admin_conf->admin;
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
-	struct enetc_hw *hw = &priv->si->hw;
-	struct tgs_gcl_conf *gcl_config;
-	struct tgs_gcl_data *gcl_data;
-	struct enetc_cbd *cbdr;
-	struct tsn_port *port;
-	struct gce *gce;
-	dma_addr_t dma;
-	u16 data_size;
-	u64 tempclock;
-	int curr_cbd;
-	u16 gcl_len;
-	u32 temp;
-	int i;
 
-	port = tsn_get_port(ndev);
-	if (!port) {
-		netdev_err(priv->si->ndev, "TSN device not registered!\n");
-		return -ENODEV;
-	}
-
-	gcl_len = admin_basic->control_list_length;
-	if (gcl_len > enetc_get_max_gcl_len(hw))
-		return -EINVAL;
-
-	temp = enetc_rd(hw, ENETC_PTGCR);
-	if (admin_conf->gate_enabled && !(temp & ENETC_PTGCR_TGE)) {
-		enetc_wr(hw, ENETC_PTGCR, temp & ~ENETC_PTGCR_TGE);
-		usleep_range(10, 20);
-		enetc_wr(hw, ENETC_PTGCR, temp | ENETC_PTGCR_TGE);
-	} else if (!admin_conf->gate_enabled) {
-		enetc_wr(hw, ENETC_PTGCR, temp & ~ENETC_PTGCR_TGE);
-		memcpy(&port->nd.ntdata, admin_conf, sizeof(*admin_conf));
-		call_tsn_notifiers(TSN_QBV_CONFIGCHANGETIME_ARRIVE,
-				   ndev, &port->nd);
-		return 0;
-	}
-
-	/* Set the maximum frame size for each traffic class index
-	 * PTCaMSDUR[MAXSDU]. The maximum frame size cannot exceed
-	 * 9,600 bytes (0x2580). Frames that exceed the limit are
-	 * discarded.
-	 */
-	if (admin_conf->maxsdu) {
-		enetc_wr(hw, ENETC_PTC0MSDUR, admin_conf->maxsdu);
-		enetc_wr(hw, ENETC_PTC1MSDUR, admin_conf->maxsdu);
-		enetc_wr(hw, ENETC_PTC2MSDUR, admin_conf->maxsdu);
-		enetc_wr(hw, ENETC_PTC3MSDUR, admin_conf->maxsdu);
-		enetc_wr(hw, ENETC_PTC4MSDUR, admin_conf->maxsdu);
-		enetc_wr(hw, ENETC_PTC5MSDUR, admin_conf->maxsdu);
-		enetc_wr(hw, ENETC_PTC6MSDUR, admin_conf->maxsdu);
-		enetc_wr(hw, ENETC_PTC7MSDUR, admin_conf->maxsdu);
-	}
-
-	/* Configure the (administrative) gate control list using the
-	 * control BD descriptor.
-	 */
-	curr_cbd = alloc_cbdr(priv->si, &cbdr);
-
-	gcl_config = &cbdr->gcl_conf;
-
-	data_size = struct_size(gcl_data, entry, gcl_len);
-
-	gcl_data = kzalloc(data_size, __GFP_DMA | GFP_KERNEL);
-	if (!gcl_data)
-		return -ENOMEM;
-
-	gce = &gcl_data->entry[0];
-
-	gcl_config->atc = admin_basic->gate_states;
-	gcl_config->acl_len = cpu_to_le16(gcl_len);
-
-	if (!admin_basic->base_time) {
-		gcl_data->btl =
-			cpu_to_le32(enetc_rd(hw, ENETC_SICTR0));
-		gcl_data->bth =
-			cpu_to_le32(enetc_rd(hw, ENETC_SICTR1));
-	} else {
-		gcl_data->btl =
-			cpu_to_le32(lower_32_bits(admin_basic->base_time));
-		gcl_data->bth =
-			cpu_to_le32(upper_32_bits(admin_basic->base_time));
-	}
-
-	gcl_data->ct = cpu_to_le32(admin_basic->cycle_time);
-	gcl_data->cte = cpu_to_le32(admin_basic->cycle_time_extension);
-
-	for (i = 0; i < gcl_len; i++) {
-		struct gce *temp_gce = gce + i;
-		struct tsn_qbv_entry *temp_entry;
-
-		temp_entry = admin_basic->control_list + i;
-
-		temp_gce->gate = temp_entry->gate_state;
-		temp_gce->period = cpu_to_le32(temp_entry->time_interval);
-	}
-
-	cbdr->length = cpu_to_le16(data_size);
-	cbdr->status_flags = 0;
-
-	dma = dma_map_single(&priv->si->pdev->dev, gcl_data,
-			     data_size, DMA_TO_DEVICE);
-	if (dma_mapping_error(&priv->si->pdev->dev, dma)) {
-		netdev_err(priv->si->ndev, "DMA mapping failed!\n");
-		kfree(gcl_data);
-		return -ENOMEM;
-	}
-
-	cbdr->addr[0] = cpu_to_le32(lower_32_bits(dma));
-	cbdr->addr[1] = cpu_to_le32(upper_32_bits(dma));
-	cbdr->cmd = 0;
-	cbdr->cls = BDCR_CMD_PORT_GCL;
-
-	/* Updated by ENETC on completion of the configuration
-	 * command. A zero value indicates success.
-	 */
-	cbdr->status_flags = 0;
-
-	xmit_cbdr(priv->si, curr_cbd);
-
-	memcpy(&port->nd.ntdata, admin_conf, sizeof(*admin_conf));
-
-	tempclock = ((u64)le32_to_cpu(gcl_config->ccth)) << 32;
-	port->nd.ntdata.qbv_notify.admin.base_time =
-		le32_to_cpu(gcl_config->cctl) + tempclock;
-
-	memset(cbdr, 0, sizeof(struct enetc_cbd));
-	dma_unmap_single(&priv->si->pdev->dev, dma, data_size, DMA_TO_DEVICE);
-	kfree(gcl_data);
-
-	call_tsn_notifiers(TSN_QBV_CONFIGCHANGETIME_ARRIVE,
-			   ndev, &port->nd);
-
-	return 0;
+	return tsn_qbv_tc_taprio_compat_set(ndev, admin_conf,
+					    priv->active_offloads & ENETC_F_QBV);
 }
 
-/* CBD Class 5: Time Gated Scheduling Gate Control List query
- * Descriptor - Long Format
- */
 static int enetc_qbv_get(struct net_device *ndev,
 			 struct tsn_qbv_conf *admin_conf)
 {
@@ -1536,29 +1366,22 @@ static int enetc_qci_fmi_get(struct net_device *ndev, u32 index,
 	return 0;
 }
 
-static int enetc_qbu_set(struct net_device *ndev, u8 ptvector)
+static int enetc_qbu_set(struct net_device *ndev, u8 preemptible_tcs)
 {
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
-	u32 temp;
-	int i;
+	struct enetc_hw *hw = &priv->si->hw;
+	u32 val;
+	int err;
 
-	temp = enetc_rd(&priv->si->hw, ENETC_PTGCR);
-	if (temp & ENETC_PTGCR_TGE)
-		enetc_wr(&priv->si->hw, ENETC_PTGCR, temp & ~ENETC_PTGCR_TGPE);
+	err = tsn_qbu_ethtool_mm_compat_set(ndev, preemptible_tcs);
+	if (err)
+		return err;
 
-	for (i = 0; i < 8; i++) {
-		/* 1 Enabled. Traffic is transmitted on the preemptive MAC. */
-		temp = enetc_port_rd(&priv->si->hw, ENETC_PTCFPR(i));
+	val = enetc_rd(hw, ENETC_PTGCR);
+	if (val & ENETC_PTGCR_TGE)
+		enetc_wr(hw, ENETC_PTGCR, val & ~ENETC_PTGCR_TGPE);
 
-		if ((ptvector >> i) & 0x1)
-			enetc_port_wr(&priv->si->hw,
-				      ENETC_PTCFPR(i),
-				      temp | ENETC_FPE);
-		else
-			enetc_port_wr(&priv->si->hw,
-				      ENETC_PTCFPR(i),
-				      temp & ~ENETC_FPE);
-	}
+	enetc_change_preemptible_tcs(priv, preemptible_tcs);
 
 	return 0;
 }
@@ -1567,43 +1390,34 @@ static int enetc_qbu_get(struct net_device *ndev,
 			 struct tsn_preempt_status *preemptstat)
 {
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
-	int i;
+	int err;
+	u32 val;
 
-	if (enetc_port_rd(&priv->si->hw, ENETC_PFPMR) & ENETC_PFPMR_PMACE) {
-		preemptstat->preemption_active = true;
-		if (enetc_rd(&priv->si->hw, ENETC_PTGCR) & ENETC_PTGCR_TGE)
-			preemptstat->hold_request = 1;
-		else
-			preemptstat->hold_request = 2;
-	} else {
-		preemptstat->preemption_active = false;
-		return 0;
-	}
+	err = tsn_qbu_ethtool_mm_compat_get(ndev, preemptstat);
+	if (err)
+		return err;
 
-	for (i = 0; i < 8; i++)
-		if (enetc_port_rd(&priv->si->hw, ENETC_PTCFPR(i)) & 0x80000000)
-			preemptstat->admin_state |= 1 << i;
+	preemptstat->admin_state = priv->preemptible_tcs;
 
-	preemptstat->hold_advance =
-		enetc_rd(&priv->si->hw, ENETC_PTGCR) & 0xFFFF;
-	preemptstat->release_advance =
-		enetc_rd(&priv->si->hw, ENETC_PTGCR) & 0xFFFF;
+	val = enetc_rd(&priv->si->hw, ENETC_PTGCR);
+	preemptstat->hold_request = !!(val & ENETC_PTGCR_TGE) ? 1 : 2;
+	preemptstat->hold_advance = val & 0xFFFF;
+	preemptstat->release_advance = preemptstat->hold_advance;
 
 	return 0;
 }
 
 static u32 __enetc_tsn_get_cap(struct enetc_si *si)
 {
-	u32 reg = enetc_port_rd(&si->hw, ENETC_PCAPR0);
 	u32 cap = TSN_CAP_CBS | TSN_CAP_TBS;
 
-	if (reg & ENETC_PCAPR0_PSFP)
+	if (si->hw_features & ENETC_SI_F_PSFP)
 		cap |= TSN_CAP_QCI;
 
-	if (reg & ENETC_PCAPR0_TSN)
+	if (si->hw_features & ENETC_SI_F_QBV)
 		cap |= TSN_CAP_QBV;
 
-	if (reg & ENETC_PCAPR0_QBU)
+	if (si->hw_features & ENETC_SI_F_QBU)
 		cap |= TSN_CAP_QBU;
 
 	return cap;
@@ -1619,7 +1433,7 @@ static u32 enetc_tsn_get_capability(struct net_device *ndev)
 static int  __enetc_get_max_cap(struct enetc_si *si,
 				struct tsn_qci_psfp_stream_param *stream_para)
 {
-	u32 reg = 0;
+	u32 reg;
 
 	/* Port stream filter capability */
 	reg = enetc_port_rd(&si->hw, ENETC_PSFCAPR);
@@ -1648,17 +1462,14 @@ static int enetc_set_cbs(struct net_device *ndev, u8 tc, u8 bw)
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
 	struct enetc_si *si = priv->si;
 	struct enetc_cbs *ecbs = si->ecbs;
-	struct cbs *cbs;
-
-	int bw_sum = 0;
-	u32 port_transmit_rate;
+	struct enetc_cbs_tc_cfg *tc_cfg;
+	u32 send_slope, hi_credit;
+	u32 max_interference_size;
 	u32 port_frame_max_size;
+	u32 port_transmit_rate;
+	int bw_sum = 0;
 	u8 tc_nums;
 	int i;
-
-	u32 max_interfrence_size;
-	u32 send_slope;
-	u32 hi_credit;
 
 	if (!ecbs)
 		return -ENOMEM;
@@ -1668,7 +1479,7 @@ static int enetc_set_cbs(struct net_device *ndev, u8 tc, u8 bw)
 		ecbs->port_transmit_rate = port_transmit_rate;
 	port_frame_max_size = ecbs->port_max_size_frame;
 	tc_nums = ecbs->tc_nums;
-	cbs = ecbs->cbs;
+	tc_cfg = ecbs->tc_cfg;
 
 	if (tc >= tc_nums) {
 		dev_err(&ndev->dev, "Make sure the TC less than %d\n", tc_nums);
@@ -1676,12 +1487,12 @@ static int enetc_set_cbs(struct net_device *ndev, u8 tc, u8 bw)
 	}
 
 	if (!bw) {
-		if (cbs[tc].enable) {
+		if (tc_cfg[tc].enable) {
 			/* Make sure the other TC that are numerically
 			 * lower than this TC have been disabled.
 			 */
 			for (i = 0; i < tc; i++) {
-				if (cbs[i].enable)
+				if (tc_cfg[i].enable)
 					break;
 			}
 			if (i < tc) {
@@ -1689,8 +1500,8 @@ static int enetc_set_cbs(struct net_device *ndev, u8 tc, u8 bw)
 					"TC%d has been disabled first\n", i);
 				return -EINVAL;
 			}
-			memset(&cbs[tc], 0, sizeof(*cbs));
-			cbs[tc].enable = false;
+			memset(&tc_cfg[tc], 0, sizeof(*tc_cfg));
+			tc_cfg[tc].enable = false;
 			enetc_port_wr(&si->hw, ENETC_PTCCBSR1(tc), 0);
 			enetc_port_wr(&si->hw, ENETC_PTCCBSR0(tc), 0);
 		}
@@ -1701,12 +1512,12 @@ static int enetc_set_cbs(struct net_device *ndev, u8 tc, u8 bw)
 	 * higher than this TC have been enabled.
 	 */
 	for (i = tc_nums - 1; i > tc; i--) {
-		if (!cbs[i].enable) {
+		if (!tc_cfg[i].enable) {
 			dev_err(&ndev->dev,
 				"TC%d has been enabled first\n", i);
 			return -EINVAL;
 		}
-		bw_sum += cbs[i].bw;
+		bw_sum += tc_cfg[i].bw;
 	}
 
 	if (bw_sum + bw >= 100) {
@@ -1715,66 +1526,65 @@ static int enetc_set_cbs(struct net_device *ndev, u8 tc, u8 bw)
 		return -EINVAL;
 	}
 
-	cbs[tc].bw = bw;
-	cbs[tc].tc_max_sized_frame = enetc_port_rd(&si->hw, ENETC_PTCMSDUR(tc));
-	cbs[tc].idle_slope = port_transmit_rate / 100 * bw;
-	cbs[tc].send_slope = port_transmit_rate - cbs[tc].idle_slope;
+	tc_cfg[tc].bw = bw;
+	tc_cfg[tc].tc_max_sized_frame = enetc_port_rd(&si->hw, ENETC_PTCMSDUR(tc));
+	tc_cfg[tc].idle_slope = port_transmit_rate / 100 * bw;
+	tc_cfg[tc].send_slope = port_transmit_rate - tc_cfg[tc].idle_slope;
 
-	/* For TC7, the max_interfrence_size is ENETC_MAC_MAXFRM_SIZE.
-	 * For TC6, the max_interfrence_size is calculated as below:
+	/* For TC7, the max_interference_size is ENETC_MAC_MAXFRM_SIZE.
+	 * For TC6, the max_interference_size is calculated as below:
 	 *
-	 *      max_interfrence_size = (M0 + Ma + Ra * M0 / (R0 - Ra))
+	 *      max_interference_size = (M0 + Ma + Ra * M0 / (R0 - Ra))
 	 *
 	 * For other traffic class, for example SR class Q:
 	 *
 	 *                            R0 * (M0 + Ma + ... + Mp)
-	 *      max_interfrence_size =  ------------------------------
+	 *      max_interference_size =  ------------------------------
 	 *                            (R0 - Ra) + ... + (R0 - Rp)
 	 *
 	 */
 
 	if (tc == tc_nums - 1) {
-		cbs[tc].max_interfrence_size = port_frame_max_size * 8;
+		tc_cfg[tc].max_interference_size = port_frame_max_size * 8;
 
 	} else if (tc == tc_nums - 2) {
-		if (!cbs[tc + 1].send_slope)
+		if (!tc_cfg[tc + 1].send_slope)
 			return -1;
 
-		cbs[tc].max_interfrence_size = (port_frame_max_size
-				+ cbs[tc + 1].tc_max_sized_frame
-				+ port_frame_max_size * (cbs[tc + 1].idle_slope
-				/ cbs[tc + 1].send_slope)) * 8;
+		tc_cfg[tc].max_interference_size = (port_frame_max_size
+				+ tc_cfg[tc + 1].tc_max_sized_frame
+				+ port_frame_max_size * (tc_cfg[tc + 1].idle_slope
+				/ tc_cfg[tc + 1].send_slope)) * 8;
 	} else {
-		max_interfrence_size = port_frame_max_size;
+		max_interference_size = port_frame_max_size;
 		send_slope = 0;
 		for (i = tc + 1; i < tc_nums; i++) {
-			send_slope += cbs[i].send_slope;
-			max_interfrence_size += cbs[i].tc_max_sized_frame;
+			send_slope += tc_cfg[i].send_slope;
+			max_interference_size += tc_cfg[i].tc_max_sized_frame;
 		}
 		if (!send_slope)
 			return -1;
 
-		max_interfrence_size = ((u64)port_transmit_rate
-				* max_interfrence_size) / send_slope;
-		cbs[tc].max_interfrence_size = max_interfrence_size * 8;
+		max_interference_size = ((u64)port_transmit_rate * max_interference_size) /
+					send_slope;
+		tc_cfg[tc].max_interference_size = max_interference_size * 8;
 	}
 
 	if (!port_transmit_rate)
 		return -1;
 
-	cbs[tc].hi_credit = cbs[tc].max_interfrence_size * cbs[tc].bw / 100;
-	cbs[tc].lo_credit = cbs[tc].tc_max_sized_frame * (cbs[tc].send_slope
-			/ port_transmit_rate);
-	cbs[tc].tc = tc;
+	tc_cfg[tc].hi_credit = tc_cfg[tc].max_interference_size * tc_cfg[tc].bw / 100;
+	tc_cfg[tc].lo_credit = tc_cfg[tc].tc_max_sized_frame *
+			    (tc_cfg[tc].send_slope / port_transmit_rate);
+	tc_cfg[tc].tc = tc;
 
-	hi_credit = (ENETC_CLK * 100L) * (u64)cbs[tc].hi_credit
-			/ port_transmit_rate;
+	hi_credit = (ENETC_CLK * 100L) * (u64)tc_cfg[tc].hi_credit / port_transmit_rate;
 	enetc_port_wr(&si->hw, ENETC_PTCCBSR1(tc), hi_credit);
 
-	/* Set bw register and enable this traffic class*/
+	/* Set bw register and enable this traffic class */
 	enetc_port_wr(&si->hw, ENETC_PTCCBSR0(tc),
-		      (cbs[tc].bw & 0x7F) | (1 << 31));
-	cbs[tc].enable = true;
+		      (tc_cfg[tc].bw & 0x7F) | (1 << 31));
+	tc_cfg[tc].enable = true;
 
 	return 0;
 }
@@ -1784,27 +1594,28 @@ static int enetc_get_cbs(struct net_device *ndev, u8 tc)
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
 	struct enetc_si *si = priv->si;
 	struct enetc_cbs *ecbs = si->ecbs;
-	struct cbs *cbs;
+	struct enetc_cbs_tc_cfg *tc_cfg;
 
 	if (!ecbs)
 		return -ENOMEM;
-	cbs = ecbs->cbs;
+
+	tc_cfg = ecbs->tc_cfg;
 	if (tc >= ecbs->tc_nums) {
 		dev_err(&ndev->dev, "The maximum of TC is %d\n", ecbs->tc_nums);
 		return -EINVAL;
 	}
 
-	return cbs[tc].bw;
+	return tc_cfg[tc].bw;
 }
 
 static int enetc_set_tsd(struct net_device *ndev, struct tsn_tsd *ttsd)
 {
-	return 0;
+	return -EOPNOTSUPP;
 }
 
 static int enetc_get_tsd(struct net_device *ndev, struct tsn_tsd_status *tts)
 {
-	return 0;
+	return -EOPNOTSUPP;
 }
 
 static void enetc_cbs_init(struct enetc_si *si)
@@ -1814,7 +1625,8 @@ static void enetc_cbs_init(struct enetc_si *si)
 
 	tc_nums = priv->num_tx_rings;
 	si->ecbs = kzalloc(sizeof(*si->ecbs) +
-			   sizeof(struct cbs) * tc_nums, GFP_KERNEL);
+			   sizeof(struct enetc_cbs_tc_cfg) * tc_nums,
+			   GFP_KERNEL);
 	if (!si->ecbs)
 		return;
 
@@ -1877,7 +1689,7 @@ static void enetc_tsn_deinit(struct net_device *ndev)
 	dev_info(&si->pdev->dev, "%s: release\n", __func__);
 }
 
-static struct tsn_ops enetc_tsn_ops_full = {
+static const struct tsn_ops enetc_tsn_ops_full = {
 	.device_init = enetc_tsn_init,
 	.device_deinit = enetc_tsn_deinit,
 	.get_capability = enetc_tsn_get_capability,
@@ -1904,7 +1716,7 @@ static struct tsn_ops enetc_tsn_ops_full = {
 	.tsd_get = enetc_get_tsd,
 };
 
-static struct tsn_ops enetc_tsn_ops_part = {
+static const struct tsn_ops enetc_tsn_ops_part = {
 	.device_init = enetc_tsn_init,
 	.device_deinit = enetc_tsn_deinit,
 	.get_capability = enetc_tsn_get_capability,

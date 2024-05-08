@@ -33,8 +33,7 @@ struct adv7535_info {
 	unsigned int bpp;
 };
 
-static int adv7535_probe(struct i2c_client *client,
-			 const struct i2c_device_id *id);
+static int adv7535_probe(struct i2c_client *client);
 static void adv7535_remove(struct i2c_client *client);
 static int adv7535_detect(struct i2c_client *client,
 			  struct i2c_board_info *info);
@@ -232,8 +231,7 @@ static int adv7535_vmode_cfg(struct adv7535_info *info)
 	return 0;
 }
 
-static int adv7535_probe(struct i2c_client *client,
-			 const struct i2c_device_id *id)
+static int adv7535_probe(struct i2c_client *client)
 {
 	u32 vmode_index;
 	int ret = 0, addr;

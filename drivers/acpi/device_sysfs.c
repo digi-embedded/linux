@@ -78,7 +78,7 @@ static void acpi_data_node_release(struct kobject *kobj)
 	complete(&dn->kobj_done);
 }
 
-static struct kobj_type acpi_data_node_ktype = {
+static const struct kobj_type acpi_data_node_ktype = {
 	.sysfs_ops = &acpi_data_node_sysfs_ops,
 	.default_groups = acpi_data_node_default_groups,
 	.release = acpi_data_node_release,
@@ -133,7 +133,7 @@ static void acpi_hide_nondev_subnodes(struct acpi_device_data *data)
  *         -EINVAL: output error
  *         -ENOMEM: output is truncated
  */
-static int create_pnp_modalias(struct acpi_device *acpi_dev, char *modalias,
+static int create_pnp_modalias(const struct acpi_device *acpi_dev, char *modalias,
 			       int size)
 {
 	int len;
@@ -158,8 +158,8 @@ static int create_pnp_modalias(struct acpi_device *acpi_dev, char *modalias,
 		return 0;
 
 	len = snprintf(modalias, size, "acpi:");
-	if (len <= 0)
-		return len;
+	if (len >= size)
+		return -ENOMEM;
 
 	size -= len;
 
@@ -191,7 +191,7 @@ static int create_pnp_modalias(struct acpi_device *acpi_dev, char *modalias,
  * only be called for devices having ACPI_DT_NAMESPACE_HID in their list of
  * ACPI/PNP IDs.
  */
-static int create_of_modalias(struct acpi_device *acpi_dev, char *modalias,
+static int create_of_modalias(const struct acpi_device *acpi_dev, char *modalias,
 			      int size)
 {
 	struct acpi_buffer buf = { ACPI_ALLOCATE_BUFFER };
@@ -212,8 +212,10 @@ static int create_of_modalias(struct acpi_device *acpi_dev, char *modalias,
 	len = snprintf(modalias, size, "of:N%sT", (char *)buf.pointer);
 	ACPI_FREE(buf.pointer);
 
-	if (len <= 0)
-		return len;
+	if (len >= size)
+		return -ENOMEM;
+
+	size -= len;
 
 	of_compatible = acpi_dev->data.of_compatible;
 	if (of_compatible->type == ACPI_TYPE_PACKAGE) {
@@ -239,7 +241,7 @@ static int create_of_modalias(struct acpi_device *acpi_dev, char *modalias,
 	return len;
 }
 
-int __acpi_device_uevent_modalias(struct acpi_device *adev,
+int __acpi_device_uevent_modalias(const struct acpi_device *adev,
 				  struct kobj_uevent_env *env)
 {
 	int len;
@@ -277,13 +279,13 @@ int __acpi_device_uevent_modalias(struct acpi_device *adev,
  * Because other buses do not support ACPI HIDs & CIDs, e.g. for a device with
  * hid:IBM0001 and cid:ACPI0001 you get: "acpi:IBM0001:ACPI0001".
  */
-int acpi_device_uevent_modalias(struct device *dev, struct kobj_uevent_env *env)
+int acpi_device_uevent_modalias(const struct device *dev, struct kobj_uevent_env *env)
 {
 	return __acpi_device_uevent_modalias(acpi_companion_match(dev), env);
 }
 EXPORT_SYMBOL_GPL(acpi_device_uevent_modalias);
 
-static int __acpi_device_modalias(struct acpi_device *adev, char *buf, int size)
+static int __acpi_device_modalias(const struct acpi_device *adev, char *buf, int size)
 {
 	int len, count;
 

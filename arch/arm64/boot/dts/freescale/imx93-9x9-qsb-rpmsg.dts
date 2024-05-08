@@ -49,7 +49,7 @@
 	rpmsg_audio: rpmsg_audio {
 		compatible = "fsl,imx93-rpmsg-audio";
 		model = "wm8962-audio";
-		fsl,platform = "rpmsg-audio-channel";
+		fsl,rpmsg-channel-name = "rpmsg-audio-channel";
 		fsl,enable-lpa;
 		fsl,rpmsg-out;
 		fsl,rpmsg-in;
@@ -76,7 +76,7 @@
 	rpmsg_micfil: rpmsg_micfil {
 		compatible = "fsl,imx93-rpmsg-audio";
 		model = "micfil-audio";
-		fsl,platform = "rpmsg-micfil-channel";
+		fsl,rpmsg-channel-name = "rpmsg-micfil-channel";
 		fsl,enable-lpa;
 		fsl,rpmsg-in;
 		assigned-clocks = <&clk IMX93_CLK_PDM>;

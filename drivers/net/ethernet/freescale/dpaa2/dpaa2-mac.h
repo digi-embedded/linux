@@ -27,11 +27,11 @@ struct dpaa2_mac {
 	struct phylink_pcs *pcs;
 	struct fwnode_handle *fw_node;
 
-	int phy_req_state;
-
 	struct phy **phys;
 	size_t num_phys;
 	size_t num_lanes;
+
+	int phy_req_state;
 };
 
 static inline bool dpaa2_mac_is_type_phy(struct dpaa2_mac *mac)

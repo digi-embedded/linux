@@ -282,6 +282,19 @@ M: G.n. Zhou <guoniu.zhou@nxp.com>
 F: Documentation/devicetree/bindings/media/imx8-parallel-csi.txt
 F: drivers/staging/media/imx/imx8-parallel-csi.c
 
+capture/neoisp
+M: Aymen SGHAIER <aymen.sghaier@nxp.com>
+M: Julien Vuillaumier <julien.vuillaumier@nxp.com>
+F: arch/arm64/boot/dts/freescale/imx95-19x19-evk-neoisp.dtso
+F: Documentation/userspace-api/media/v4l/neo-isp-hw-mapping.rst
+F: drivers/media/platform/nxp/neoisp/neoisp*
+F: include/uapi/linux/nxp_neoisp.h
+
+capture/os08a20
+M: Mirela Rabulea <mirela.rabulea@nxp.com>
+M: Alice Yuan <alice.yuan@nxp.com>
+F: drivers/media/i2c/os08a20/*
+
 clock/imx
 M: Jacky Bai <jacky.bai@nxp.com>
 M: Peng Fan <peng.fan@nxp.com>
@@ -378,6 +391,13 @@ F: Documentation/devicetree/bindings/display/imx/fsl-imx-drm.txt
 F: drivers/gpu/drm/imx/dpu/
 F: drivers/gpu/imx/dpu/
 F: include/video/dpu.h
+
+display/dpu95
+M: Ying Liu <victor.liu@nxp.com>
+M: Laurentiu Palcu <laurentiu.palcu@nxp.com>
+M: Guangliu Ding <guangliu.ding@nxp.com>
+F: Documentation/devicetree/bindings/display/imx/nxp,imx95-dpu.yaml
+F: drivers/gpu/drm/imx/dpu95/
 
 display/dpu-blit
 M: Xianzhong Li <xianzhong.li@nxp.com>
@@ -539,10 +559,6 @@ F: drivers/dma/imx-sdma.c
 F: include/linux/platform_data/dma-imx-sdma.h
 F: include/linux/dma/imx-dma.h
 
-drivers/tee/crypto
-M: Pankaj Gupta <pankaj.gupta@nxp.com>
-F: drivers/tee/crypto/*
-
 dts/imx6
 M: Dong Aisheng <aisheng.dong@nxp.com>
 F: arch/arm/boot/dts/imx*
@@ -689,7 +705,11 @@ F: include/uapi/linux/dma-buf.h
 
 mxc/gpu
 M: Xianzhong Li <xianzhong.li@nxp.com>
+M: Jiyu Yang <jiyu.yang@nxp.com>
+L: gpusw-devel@nxp.com
 F: drivers/mxc/gpu-viv/
+F: drivers/gpu/arm/*
+F: Documentation/devicetree/bindings/gpu/arm,mali-*
 
 mxc/hdmi
 M: Sandor Yu <Sandor.yu@nxp.com>
@@ -1013,7 +1033,6 @@ thermal
 M: Jacky Bai <ping.bai@nxp.com>
 M: Alice Guo <alice.guo@nxp.com>
 F: drivers/thermal/
-F: include/linux/device_cooling.h
 
 timer
 M: Jacky Bai <ping.bai@nxp.com>
@@ -1081,6 +1100,10 @@ F: drivers/watchdog/
 wifi
 M: Sherry Sun <sherry.sun@nxp.com>
 F: drivers/net/wireless/
+
+bluetooth
+M: Sherry Sun <sherry.sun@nxp.com>
+F: drivers/bluetooth/btnxpuart.c
 
 nvmem
 M: Peng Fan <peng.fan@nxp.com>

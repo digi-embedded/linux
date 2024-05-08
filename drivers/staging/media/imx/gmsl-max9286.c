@@ -3149,7 +3149,7 @@ static DEVICE_ATTR_RW(analog_test_pattern);
  * @param adapter            struct i2c_adapter *
  * @return  Error code indicating success or failure
  */
-static int max9286_probe(struct i2c_client *client, const struct i2c_device_id *id)
+static int max9286_probe(struct i2c_client *client)
 {
 	struct device *dev = &client->dev;
 	struct sensor_data *max9286_data;

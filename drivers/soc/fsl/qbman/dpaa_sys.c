@@ -47,13 +47,12 @@ int qbman_init_private_mem(struct device *dev, int idx, dma_addr_t *addr,
 	struct device_node *mem_node = NULL;
 	struct reserved_mem fw_mem;
 	struct reserved_mem *rmem;
-	struct property *prop;
 	__be32 *res_array;
 	u32 qbman_vals[4];
 	u32 *pr_value;
-	int len, err;
 	int val_cnt;
 	u32 val[2];
+	int err;
 
 	if (is_of_node(dev->fwnode)) {
 		mem_node = of_parse_phandle(dev->of_node, "memory-region", idx);
@@ -162,8 +161,9 @@ int qbman_init_private_mem(struct device *dev, int idx, dma_addr_t *addr,
 	 * size to be modified once set.
 	 */
 	if (is_of_node(dev->fwnode)) {
-		prop = of_find_property(mem_node, "reg", &len);
-		if (!prop) {
+		if (!of_property_present(mem_node, "reg")) {
+			struct property *prop;
+
 			prop = devm_kzalloc(dev, sizeof(*prop), GFP_KERNEL);
 			if (!prop)
 				return -ENOMEM;
@@ -189,8 +189,6 @@ int qbman_init_private_mem(struct device *dev, int idx, dma_addr_t *addr,
 			/* Fill properties here */
 			pr_value = devm_kzalloc(dev, sizeof(u32) * 4,
 						GFP_KERNEL);
-			if (!pr_value)
-				return -ENOMEM;
 			pr_value[0] = upper_32_bits(*addr);
 			pr_value[1] = lower_32_bits(*addr);
 			pr_value[2] = upper_32_bits(*size);

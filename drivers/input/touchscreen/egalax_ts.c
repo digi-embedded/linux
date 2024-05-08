@@ -14,17 +14,17 @@
   - auto idle mode support
 */
 
+#include <linux/err.h>
 #include <linux/module.h>
 #include <linux/i2c.h>
 #include <linux/interrupt.h>
 #include <linux/input.h>
 #include <linux/irq.h>
-#include <linux/gpio.h>
+#include <linux/gpio/consumer.h>
 #include <linux/delay.h>
 #include <linux/slab.h>
 #include <linux/bitops.h>
 #include <linux/input/mt.h>
-#include <linux/of_gpio.h>
 
 /*
  * Mouse Mode: some panel may configure the controller to mouse mode,
@@ -123,7 +123,7 @@ static int egalax_irq_request(struct egalax_ts *ts)
 
 	ret = devm_request_threaded_irq(&client->dev, client->irq, NULL,
 					egalax_ts_interrupt,
-					IRQF_TRIGGER_LOW | IRQF_ONESHOT,
+					IRQF_ONESHOT,
 					"egalax_ts", ts);
 	if (ret < 0)
 		dev_err(&client->dev, "Failed to register interrupt\n");
@@ -139,32 +139,26 @@ static void egalax_free_irq(struct egalax_ts *ts)
 /* wake up controller by an falling edge of interrupt gpio.  */
 static int egalax_wake_up_device(struct i2c_client *client)
 {
-	struct device_node *np = client->dev.of_node;
-	int gpio;
+	struct gpio_desc *gpio;
 	int ret;
 
-	if (!np)
-		return -ENODEV;
-
-	gpio = of_get_named_gpio(np, "wakeup-gpios", 0);
-	if (!gpio_is_valid(gpio))
-		return -ENODEV;
-
-	ret = gpio_request(gpio, "egalax_irq");
-	if (ret < 0) {
-		dev_err(&client->dev,
-			"request gpio failed, cannot wake up controller: %d\n",
-			ret);
+	/* wake up controller via an falling edge on IRQ gpio. */
+	gpio = gpiod_get(&client->dev, "wakeup", GPIOD_OUT_HIGH);
+	ret = PTR_ERR_OR_ZERO(gpio);
+	if (ret) {
+		if (ret != -EPROBE_DEFER)
+			dev_err(&client->dev,
+				"failed to request wakeup gpio, cannot wake up controller: %d\n",
+				ret);
 		return ret;
 	}
 
-	/* wake up controller via an falling edge on IRQ gpio. */
-	gpio_direction_output(gpio, 0);
-	gpio_set_value(gpio, 1);
+	/* release the line */
+	gpiod_set_value_cansleep(gpio, 0);
 
-	/* controller should be waken up, return irq.  */
-	gpio_direction_input(gpio);
-	gpio_free(gpio);
+	/* controller should be woken up, return irq.  */
+	gpiod_direction_input(gpio);
+	gpiod_put(gpio);
 
 	return 0;
 }
@@ -181,8 +175,7 @@ static int egalax_firmware_version(struct i2c_client *client)
 	return 0;
 }
 
-static int egalax_ts_probe(struct i2c_client *client,
-			   const struct i2c_device_id *id)
+static int egalax_ts_probe(struct i2c_client *client)
 {
 	struct egalax_ts *ts;
 	struct input_dev *input_dev;
@@ -219,10 +212,8 @@ static int egalax_ts_probe(struct i2c_client *client,
 
 	/* controller may be in sleep, wake it up. */
 	error = egalax_wake_up_device(client);
-	if (error) {
-		dev_err(&client->dev, "Failed to wake up the controller\n");
+	if (error)
 		return error;
-	}
 
 	error = egalax_firmware_version(client);
 	if (error < 0) {
@@ -264,7 +255,7 @@ static const struct i2c_device_id egalax_ts_id[] = {
 };
 MODULE_DEVICE_TABLE(i2c, egalax_ts_id);
 
-static int __maybe_unused egalax_ts_suspend(struct device *dev)
+static int egalax_ts_suspend(struct device *dev)
 {
 	static const u8 suspend_cmd[MAX_I2C_DATA_LEN] = {
 		0x3, 0x6, 0xa, 0x3, 0x36, 0x3f, 0x2, 0, 0, 0
@@ -278,7 +269,7 @@ static int __maybe_unused egalax_ts_suspend(struct device *dev)
 	return ret > 0 ? 0 : ret;
 }
 
-static int __maybe_unused egalax_ts_resume(struct device *dev)
+static int egalax_ts_resume(struct device *dev)
 {
 	struct i2c_client *client = to_i2c_client(dev);
 	struct egalax_ts *ts = i2c_get_clientdata(client);
@@ -291,7 +282,8 @@ static int __maybe_unused egalax_ts_resume(struct device *dev)
 	return ret;
 }
 
-static SIMPLE_DEV_PM_OPS(egalax_ts_pm_ops, egalax_ts_suspend, egalax_ts_resume);
+static DEFINE_SIMPLE_DEV_PM_OPS(egalax_ts_pm_ops,
+				egalax_ts_suspend, egalax_ts_resume);
 
 static const struct of_device_id egalax_ts_dt_ids[] = {
 	{ .compatible = "eeti,egalax_ts" },
@@ -302,7 +294,7 @@ MODULE_DEVICE_TABLE(of, egalax_ts_dt_ids);
 static struct i2c_driver egalax_ts_driver = {
 	.driver = {
 		.name	= "egalax_ts",
-		.pm	= &egalax_ts_pm_ops,
+		.pm	= pm_sleep_ptr(&egalax_ts_pm_ops),
 		.of_match_table	= egalax_ts_dt_ids,
 	},
 	.id_table	= egalax_ts_id,

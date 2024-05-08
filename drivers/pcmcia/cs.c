@@ -605,6 +605,7 @@ static int pccardd(void *__skt)
 		dev_warn(&skt->dev, "PCMCIA: unable to register socket\n");
 		skt->thread = NULL;
 		complete(&skt->thread_done);
+		put_device(&skt->dev);
 		return 0;
 	}
 	ret = pccard_sysfs_add_socket(&skt->dev);
@@ -810,10 +811,10 @@ int pcmcia_reset_card(struct pcmcia_socket *skt)
 EXPORT_SYMBOL(pcmcia_reset_card);
 
 
-static int pcmcia_socket_uevent(struct device *dev,
+static int pcmcia_socket_uevent(const struct device *dev,
 				struct kobj_uevent_env *env)
 {
-	struct pcmcia_socket *s = container_of(dev, struct pcmcia_socket, dev);
+	const struct pcmcia_socket *s = container_of(dev, struct pcmcia_socket, dev);
 
 	if (add_uevent_var(env, "SOCKET_NO=%u", s->sock))
 		return -ENOMEM;
@@ -824,7 +825,7 @@ static int pcmcia_socket_uevent(struct device *dev,
 
 static struct completion pcmcia_unload;
 
-static void pcmcia_release_socket_class(struct class *data)
+static void pcmcia_release_socket_class(const struct class *data)
 {
 	complete(&pcmcia_unload);
 }

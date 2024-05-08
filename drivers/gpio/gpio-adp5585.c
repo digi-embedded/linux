@@ -129,7 +129,6 @@ static int adp5585_gpio_probe(struct platform_device *pdev)
 {
 	struct adp5585_gpio_dev *adp5585_gpio;
 	struct device *dev = &pdev->dev;
-	struct device_node *np = dev->of_node;
 	struct gpio_chip *gc;
 	int i;
 
@@ -140,7 +139,6 @@ static int adp5585_gpio_probe(struct platform_device *pdev)
 	adp5585_gpio->parent = pdev->dev.parent;
 
 	gc = &adp5585_gpio->gpio_chip;
-	gc->of_node = np;
 	gc->parent = dev;
 	gc->direction_input  = adp5585_gpio_direction_input;
 	gc->direction_output = adp5585_gpio_direction_output;

@@ -269,8 +269,7 @@ static int elan_touch_register_interrupt(struct i2c_client *client)
 	return 0;
 }
 
-static int elan_touch_probe(struct i2c_client *client,
-			    const struct i2c_device_id *id)
+static int elan_touch_probe(struct i2c_client *client)
 {
 	struct device_node *np = client->dev.of_node;
 	int gpio_elan_cs, gpio_elan_rst, err = 0;

@@ -564,7 +564,7 @@ static int imx_asoc_card_parse_dt(struct snd_soc_card *card,
 			goto fail;
 		}
 
-		ret = snd_soc_of_get_dai_name(cpu_np, &link->cpus->dai_name);
+		ret = snd_soc_of_get_dai_name(cpu_np, &link->cpus->dai_name, 0);
 		if (ret) {
 			if (ret != -EPROBE_DEFER)
 				dev_err(dev, "failed to get cpu dai name\n");

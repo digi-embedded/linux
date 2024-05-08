@@ -197,10 +197,11 @@ config CRYPTO_DEV_FSL_CAAM_TK_API_TEST
 
 config CRYPTO_DEV_FSL_CAAM_RNG_TEST
 	bool "Test caam rng"
-	depends on CRYPTO_DEV_FSL_CAAM_RNG_API
+	select CRYPTO_DEV_FSL_CAAM_RNG_API
 	help
 	  Selecting this will enable a self-test to run for the
-	  caam RNG. This test is several minutes long and executes
+	  caam RNG.
+	  This test is several minutes long and executes
 	  just before the RNG is registered with the hw_random API.
 
 config CRYPTO_DEV_FSL_CAAM_SM

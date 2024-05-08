@@ -798,7 +798,7 @@ static int pxp_buf_prepare(struct videobuf_queue *q,
 		sg_init_table(sg, 3);
 
 		buf->txd = pchan->dma_chan.device->device_prep_slave_sg(
-			&pchan->dma_chan, sg, 3, DMA_FROM_DEVICE,
+			&pchan->dma_chan, sg, 3, DMA_DEV_TO_MEM,
 			DMA_PREP_INTERRUPT, NULL);
 		if (!buf->txd) {
 			ret = -EIO;

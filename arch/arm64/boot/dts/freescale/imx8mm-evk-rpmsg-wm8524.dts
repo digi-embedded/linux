@@ -64,7 +64,7 @@
 	rpmsg_audio: rpmsg_audio {
 		compatible = "fsl,imx8mm-rpmsg-audio";
 		model = "wm8524-audio";
-		fsl,platform = "rpmsg-audio-channel";
+		fsl,rpmsg-channel-name = "rpmsg-audio-channel";
 		fsl,enable-lpa;
 		fsl,rpmsg-out;
 		assigned-clocks = <&clk IMX8MM_CLK_SAI3>;
@@ -83,7 +83,7 @@
 	rpmsg_micfil: rpmsg_micfil {
 		compatible = "fsl,imx8mm-rpmsg-audio";
 		model = "micfil-audio";
-		fsl,platform = "rpmsg-micfil-channel";
+		fsl,rpmsg-channel-name = "rpmsg-micfil-channel";
 		fsl,enable-lpa;
 		fsl,rpmsg-in;
 		assigned-clocks = <&clk IMX8MM_CLK_PDM>;

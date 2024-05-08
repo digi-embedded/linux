@@ -1382,10 +1382,20 @@ static int mxsfb_init_fbinfo_dt(struct mxsfb_info *host)
 
 	ret = of_property_read_string(np, "disp-dev", &disp_dev);
 	if (!ret) {
+		if (strlen(disp_dev) > NAME_LEN) {
+			dev_err(dev, "disp-dev string overflowed.\n");
+			ret = -EINVAL;
+			goto put_display_node;
+		}
 		memcpy(host->disp_dev, disp_dev, strlen(disp_dev));
 
 		if (!of_property_read_string(np, "disp-videomode",
 					    &disp_videomode)) {
+			if (strlen(disp_videomode) > NAME_LEN) {
+				dev_err(dev, "disp-videomode string overflowed.\n");
+				ret = -EINVAL;
+				goto put_display_node;
+			}
 			memcpy(host->disp_videomode, disp_videomode,
 			       strlen(disp_videomode));
 		}
@@ -1416,6 +1426,7 @@ static int mxsfb_init_fbinfo_dt(struct mxsfb_info *host)
 		ret = videomode_from_timings(timings, &vm, i);
 		if (ret < 0)
 			goto put_timings_node;
+		memset(&fb_vm, 0, sizeof(fb_vm));
 		ret = fb_videomode_from_videomode(&vm, &fb_vm);
 		if (ret < 0)
 			goto put_timings_node;
@@ -1444,7 +1455,7 @@ static int mxsfb_init_fbinfo(struct mxsfb_info *host)
 	struct fb_modelist *modelist;
 
 	fb_info->fbops = &mxsfb_ops;
-	fb_info->flags = FBINFO_FLAG_DEFAULT | FBINFO_READS_FAST;
+	fb_info->flags = FBINFO_READS_FAST;
 	fb_info->fix.type = FB_TYPE_PACKED_PIXELS;
 	fb_info->fix.ypanstep = 1;
 	fb_info->fix.ywrapstep = 1;

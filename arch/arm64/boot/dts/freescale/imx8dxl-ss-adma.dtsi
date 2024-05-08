@@ -24,7 +24,7 @@
 /delete-node/ &spdif1_lpcg;
 
 &acm {
-	compatible = "nxp,imx8dxl-acm";
+	compatible = "fsl,imx8dxl-acm";
 	power-domains = <&pd IMX_SC_R_AUDIO_CLK_0>,
 			<&pd IMX_SC_R_AUDIO_CLK_1>,
 			<&pd IMX_SC_R_MCLK_OUT_0>,
@@ -40,16 +40,16 @@
 			<&pd IMX_SC_R_MQS_0>;
 };
 
-&adc0 {
-	interrupts = <GIC_SPI 146 IRQ_TYPE_LEVEL_HIGH>;
-};
-
 &audio_ipg_clk {
 	clock-frequency = <160000000>;
 };
 
 &dma_ipg_clk {
 	clock-frequency = <160000000>;
+};
+
+&adc0 {
+	interrupts = <GIC_SPI 146 IRQ_TYPE_LEVEL_HIGH>;
 };
 
 &edma0 {
@@ -203,26 +203,6 @@
 	dmas = <&edma3 7 0 0>, <&edma3 6 0 1>;
 };
 
-&lpspi0 {
-	compatible = "fsl,imx8dxl-spi", "fsl,imx8qxp-spi", "fsl,imx7ulp-spi";
-	interrupts = <GIC_SPI 218 IRQ_TYPE_LEVEL_HIGH>;
-};
-
-&lpspi1 {
-	compatible = "fsl,imx8dxl-spi", "fsl,imx8qxp-spi", "fsl,imx7ulp-spi";
-	interrupts = <GIC_SPI 219 IRQ_TYPE_LEVEL_HIGH>;
-};
-
-&lpspi2 {
-	compatible = "fsl,imx8dxl-spi", "fsl,imx8qxp-spi", "fsl,imx7ulp-spi";
-	interrupts = <GIC_SPI 220 IRQ_TYPE_LEVEL_HIGH>;
-};
-
-&lpspi3 {
-	compatible = "fsl,imx8dxl-spi", "fsl,imx8qxp-spi", "fsl,imx7ulp-spi";
-	interrupts = <GIC_SPI 221 IRQ_TYPE_LEVEL_HIGH>;
-};
-
 &lpuart0 {
 	compatible = "fsl,imx8dxl-lpuart", "fsl,imx8qxp-lpuart", "fsl,imx7ulp-lpuart";
 	interrupts = <GIC_SPI 228 IRQ_TYPE_LEVEL_HIGH>;
@@ -241,6 +221,22 @@
 &lpuart3 {
 	compatible = "fsl,imx8dxl-lpuart", "fsl,imx8qxp-lpuart", "fsl,imx7ulp-lpuart";
 	interrupts = <GIC_SPI 231 IRQ_TYPE_LEVEL_HIGH>;
+};
+
+&lpspi0 {
+	interrupts = <GIC_SPI 218 IRQ_TYPE_LEVEL_HIGH>;
+};
+
+&lpspi1 {
+	interrupts = <GIC_SPI 219 IRQ_TYPE_LEVEL_HIGH>;
+};
+
+&lpspi2 {
+	interrupts = <GIC_SPI 220 IRQ_TYPE_LEVEL_HIGH>;
+};
+
+&lpspi3 {
+	interrupts = <GIC_SPI 221 IRQ_TYPE_LEVEL_HIGH>;
 };
 
 &sai0 {

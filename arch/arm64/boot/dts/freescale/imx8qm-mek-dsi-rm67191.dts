@@ -15,13 +15,11 @@
 };
 
 &mipi0_dsi_host {
+	#address-cells = <1>;
+	#size-cells = <0>;
 	status = "okay";
-	fsl,clock-drop-level = <2>;
 
 	panel@0 {
-		#address-cells = <1>;
-		#size-cells = <0>;
-
 		compatible = "raydium,rm67191";
 		reg = <0>;
 		pinctrl-0 = <&pinctrl_mipi_dsi_0_1_en>;
@@ -32,8 +30,7 @@
 		width-mm = <68>;
 		height-mm = <121>;
 
-		port@0 {
-			reg = <0>;
+		port {
 			panel0_in: endpoint {
 				remote-endpoint = <&mipi0_panel_out>;
 			};
@@ -57,13 +54,11 @@
 };
 
 &mipi1_dsi_host {
+	#address-cells = <1>;
+	#size-cells = <0>;
 	status = "okay";
-	fsl,clock-drop-level = <2>;
 
 	panel@0 {
-		#address-cells = <1>;
-		#size-cells = <0>;
-
 		compatible = "raydium,rm67191";
 		reg = <0>;
 		reset-gpios = <&lsio_gpio1 7 GPIO_ACTIVE_LOW>;
@@ -72,8 +67,7 @@
 		width-mm = <68>;
 		height-mm = <121>;
 
-		port@0 {
-			reg = <0>;
+		port {
 			panel1_in: endpoint {
 				remote-endpoint = <&mipi1_panel_out>;
 			};

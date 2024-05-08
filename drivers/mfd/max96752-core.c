@@ -117,8 +117,7 @@ static int max96752_get_dt_gmsl_links_params(struct max96752 *max96752)
 	int ret;
 	int val;
 
-	if (of_get_property(dev->of_node, "maxim,gmsl2-dual-link", NULL))
-		max96752->gmsl2_dual_link = true;
+	max96752->gmsl2_dual_link = of_property_present(dev->of_node, "maxim,gmsl2-dual-link");
 
 	ret = of_property_read_s32(dev->of_node, "maxim,gmsl2-link-speed", &val);
 	if (ret < 0) {

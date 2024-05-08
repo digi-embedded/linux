@@ -54,9 +54,7 @@
 #include <linux/proc_fs.h>
 #include <linux/smp.h>
 #include <linux/of.h>
-#ifdef CONFIG_FMAN_ARM
 #include <linux/irqdomain.h>
-#endif
 
 #include <linux/workqueue.h>
 
@@ -514,6 +512,7 @@ int XX_ScheduleTask(t_TaskletHandle h_Tasklet, int immediate)
     return ans;
 }
 
+#if 0
 void XX_FlushScheduledTasks(void)
 {
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0)
@@ -522,6 +521,7 @@ void XX_FlushScheduledTasks(void)
     flush_scheduled_work();
 #endif    /* LINUX_VERSION_CODE */
 }
+#endif
 
 int XX_TaskletIsQueued(t_TaskletHandle h_Tasklet)
 {

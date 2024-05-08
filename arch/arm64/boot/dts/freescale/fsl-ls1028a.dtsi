@@ -28,6 +28,12 @@
 			reg = <0x0>;
 			enable-method = "psci";
 			clocks = <&clockgen QORIQ_CLK_CMUX 0>;
+			i-cache-size = <0xc000>;
+			i-cache-line-size = <64>;
+			i-cache-sets = <256>;
+			d-cache-size = <0x8000>;
+			d-cache-line-size = <64>;
+			d-cache-sets = <256>;
 			next-level-cache = <&l2>;
 			cpu-idle-states = <&CPU_PW20>;
 			#cooling-cells = <2>;
@@ -39,6 +45,12 @@
 			reg = <0x1>;
 			enable-method = "psci";
 			clocks = <&clockgen QORIQ_CLK_CMUX 0>;
+			i-cache-size = <0xc000>;
+			i-cache-line-size = <64>;
+			i-cache-sets = <256>;
+			d-cache-size = <0x8000>;
+			d-cache-line-size = <64>;
+			d-cache-sets = <256>;
 			next-level-cache = <&l2>;
 			cpu-idle-states = <&CPU_PW20>;
 			#cooling-cells = <2>;
@@ -46,6 +58,11 @@
 
 		l2: l2-cache {
 			compatible = "cache";
+			cache-level = <2>;
+			cache-unified;
+			cache-size = <0x100000>;
+			cache-line-size = <64>;
+			cache-sets = <1024>;
 		};
 	};
 
@@ -130,7 +147,7 @@
 		interrupt-controller;
 		interrupts = <GIC_PPI 9 (GIC_CPU_MASK_RAW(0xf) |
 					 IRQ_TYPE_LEVEL_LOW)>;
-		its: gic-its@6020000 {
+		its: msi-controller@6020000 {
 			compatible = "arm,gic-v3-its";
 			msi-controller;
 			reg = <0x0 0x06020000 0 0x20000>;/* GIC Translater */
@@ -182,7 +199,8 @@
 					trip = <&core_cluster_alert>;
 					cooling-device =
 						<&cpu0 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
-						<&cpu1 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
+						<&cpu1 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>,
+						<&gpu 0 1>;
 				};
 			};
 		};
@@ -236,6 +254,12 @@
 			ls1028a_uid: unique-id@1c {
 				reg = <0x1c 0x8>;
 			};
+		};
+
+		serdes: phy@1ea0000 {
+			compatible = "fsl,ls1028a-serdes", "fsl,lynx-10g";
+			reg = <0x00 0x1ea0000 0x0 0xffff>;
+			#phy-cells = <1>;
 		};
 
 		scfg: syscon@1fc0000 {
@@ -875,7 +899,7 @@
 		};
 */
 
-		gpu@f0c0000 {
+		gpu: gpu@f0c0000 {
 			compatible = "fsl,ls1028a-gpu";
 			reg = <0x0 0x0f0c0000 0x0 0x10000>,
 				<0x0 0x80000000 0x0 0x80000000>,
@@ -883,6 +907,9 @@
 			reg-names = "base", "phys_baseaddr",
 				"contiguous_mem";
 			interrupts = <GIC_SPI 220 IRQ_TYPE_LEVEL_HIGH>;
+
+			throttle,max_state = <1>;
+			#cooling-cells = <2>;
 		};
 
 		sai1: audio-controller@f100000 {

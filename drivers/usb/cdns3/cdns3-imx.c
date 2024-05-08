@@ -105,11 +105,11 @@ static inline void cdns_imx_writel(struct cdns_imx *data, u32 offset, u32 value)
 }
 
 static const struct clk_bulk_data imx_cdns3_core_clks[] = {
-	{ .id = "usb3_lpm_clk" },
-	{ .id = "usb3_bus_clk" },
-	{ .id = "usb3_aclk" },
-	{ .id = "usb3_ipg_clk" },
-	{ .id = "usb3_core_pclk" },
+	{ .id = "lpm" },
+	{ .id = "bus" },
+	{ .id = "aclk" },
+	{ .id = "ipg" },
+	{ .id = "core" },
 };
 
 static int cdns_imx_noncore_init(struct cdns_imx *data)
@@ -218,7 +218,7 @@ err:
 	return ret;
 }
 
-static int cdns_imx_remove(struct platform_device *pdev)
+static void cdns_imx_remove(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct cdns_imx *data = dev_get_drvdata(dev);
@@ -229,8 +229,6 @@ static int cdns_imx_remove(struct platform_device *pdev)
 	pm_runtime_disable(dev);
 	pm_runtime_put_noidle(dev);
 	platform_set_drvdata(pdev, NULL);
-
-	return 0;
 }
 
 #ifdef CONFIG_PM
@@ -383,6 +381,10 @@ static int __maybe_unused cdns_imx_system_resume(struct device *dev)
 	if (ret)
 		return ret;
 
+	ret = pm_runtime_resume_and_get(dev);
+	if (ret)
+		return ret;
+
 	if (cdns_imx_is_power_lost(data)) {
 		dev_dbg(dev, "resume from power lost\n");
 		ret = cdns_imx_noncore_init(data);
@@ -390,6 +392,7 @@ static int __maybe_unused cdns_imx_system_resume(struct device *dev)
 			cdns_imx_suspend(dev);
 	}
 
+	pm_runtime_put_autosuspend(dev);
 	return ret;
 }
 
@@ -415,7 +418,7 @@ MODULE_DEVICE_TABLE(of, cdns_imx_of_match);
 
 static struct platform_driver cdns_imx_driver = {
 	.probe		= cdns_imx_probe,
-	.remove		= cdns_imx_remove,
+	.remove_new	= cdns_imx_remove,
 	.driver		= {
 		.name	= "cdns3-imx",
 		.of_match_table	= cdns_imx_of_match,

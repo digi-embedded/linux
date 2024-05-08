@@ -21,14 +21,12 @@
 #include <linux/module.h>
 #include <linux/net_tstamp.h>
 #include <linux/of.h>
-#include <linux/of_device.h>
-#include <linux/of_irq.h>
 #include <linux/of_mdio.h>
 #include <linux/of_net.h>
+#include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <linux/slab.h>
 #include <linux/spinlock.h>
-#include <linux/sys_soc.h>
 #include <linux/reset.h>
 #include <linux/math64.h>
 
@@ -1390,11 +1388,6 @@ static void ravb_adjust_link(struct net_device *ndev)
 		phy_print_status(phydev);
 }
 
-static const struct soc_device_attribute r8a7795es10[] = {
-	{ .soc_id = "r8a7795", .revision = "ES1.0", },
-	{ /* sentinel */ }
-};
-
 /* PHY init function */
 static int ravb_phy_init(struct net_device *ndev)
 {
@@ -1432,15 +1425,6 @@ static int ravb_phy_init(struct net_device *ndev)
 		netdev_err(ndev, "failed to connect PHY\n");
 		err = -ENOENT;
 		goto err_deregister_fixed_link;
-	}
-
-	/* This driver only support 10/100Mbit speeds on R-Car H3 ES1.0
-	 * at this time.
-	 */
-	if (soc_device_match(r8a7795es10)) {
-		phy_set_max_speed(phydev, SPEED_100);
-
-		netdev_info(ndev, "limited PHY to 100Mbit/s\n");
 	}
 
 	if (!info->half_duplex) {
@@ -2183,6 +2167,8 @@ static int ravb_close(struct net_device *ndev)
 			of_phy_deregister_fixed_link(np);
 	}
 
+	cancel_work_sync(&priv->work);
+
 	if (info->multi_irqs) {
 		free_irq(priv->tx_irqs[RAVB_NC], ndev);
 		free_irq(priv->rx_irqs[RAVB_NC], ndev);
@@ -2907,8 +2893,6 @@ static int ravb_remove(struct platform_device *pdev)
 	clk_disable_unprepare(priv->gptp_clk);
 	clk_disable_unprepare(priv->refclk);
 
-	dma_free_coherent(ndev->dev.parent, priv->desc_bat_size, priv->desc_bat,
-			  priv->desc_bat_dma);
 	/* Set reset mode */
 	ravb_write(ndev, CCC_OPC_RESET, CCC);
 	unregister_netdev(ndev);
@@ -2916,6 +2900,8 @@ static int ravb_remove(struct platform_device *pdev)
 		netif_napi_del(&priv->napi[RAVB_NC]);
 	netif_napi_del(&priv->napi[RAVB_BE]);
 	ravb_mdio_release(priv);
+	dma_free_coherent(ndev->dev.parent, priv->desc_bat_size, priv->desc_bat,
+			  priv->desc_bat_dma);
 	pm_runtime_put_sync(&pdev->dev);
 	pm_runtime_disable(&pdev->dev);
 	reset_control_assert(priv->rstc);

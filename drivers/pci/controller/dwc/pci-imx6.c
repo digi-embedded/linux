@@ -18,9 +18,10 @@
 #include <linux/mfd/syscon/imx6q-iomuxc-gpr.h>
 #include <linux/mfd/syscon/imx7-iomuxc-gpr.h>
 #include <linux/module.h>
+#include <linux/of.h>
 #include <linux/of_gpio.h>
-#include <linux/of_device.h>
 #include <linux/of_address.h>
+#include <linux/of_irq.h>
 #include <linux/pci.h>
 #include <linux/platform_device.h>
 #include <linux/regmap.h>
@@ -36,6 +37,47 @@
 
 #include "pcie-designware.h"
 #include "../../pci.h"
+
+#define IMX95_PCIE2_BASE_ADDR			0x4c380000
+#define IMX95_PCIE_PHY_GEN_CTRL			0x0
+#define IMX95_PCIE_REF_USE_PAD			BIT(17)
+
+#define IMX95_PCIE_PHY_MPLLA_CTRL		0x10
+#define IMX95_PCIE_PHY_MPLL_STATE		BIT(30)
+
+#define IMX95_PCIE_SS_RW_REG_0			0xf0
+#define IMX95_PCIE_REF_CLKEN			BIT(23)
+#define IMX95_PCIE_PHY_CR_PARA_SEL		BIT(9)
+
+#define IMX95_PE0_LUT_ACSCTRL			0x1008
+#define IMX95_PEO_LUT_RWA			BIT(16)
+#define IMX95_PE0_LUT_ENLOC			GENMASK(4, 0)
+
+#define IMX95_PE0_LUT_DATA1			0x100c
+#define IMX95_PE0_LUT_VLD			BIT(31)
+#define IMX95_PE0_LUT_DAC_ID			GENMASK(10, 8)
+#define IMX95_PE0_LUT_STREAM_ID			GENMASK(5, 0)
+
+#define IMX95_PE0_LUT_DATA2			0x1010
+#define IMX95_PE0_LUT_REQID			GENMASK(31, 16)
+#define IMX95_PE0_LUT_MASK			GENMASK(15, 0)
+
+#define IMX95_PE0_GEN_CTRL_1			0x1050
+#define IMX95_PCIE_DEVICE_TYPE			GENMASK(3, 0)
+
+#define IMX95_PE0_GEN_CTRL_3			0x1058
+#define IMX95_PCIE_LTSSM_EN			BIT(0)
+
+#define IMX95_PE0_PM_CTRL			0x1060
+#define IMX95_PCIE_PME_PF_INDEX			GENMASK(4, 0)
+#define IMX95_PCIE_PM_PME_REQ			BIT(16)
+#define IMX95_PCIE_PM_READY_ENTR_L23		BIT(19)
+
+#define IMX95_PE0_PM_STS			0x1064
+#define IMX95_PCIE_PM_LINKST_IN_L2		BIT(14)
+
+#define IMX95_SID_MASK				GENMASK(5, 0)
+#define IMX95_MAX_LUT				32
 
 #define IMX8MQ_GPR_PCIE_REF_USE_PAD		BIT(9)
 #define IMX8MQ_GPR_PCIE_CLK_REQ_OVERRIDE_EN	BIT(10)
@@ -57,21 +99,26 @@ enum imx6_pcie_variants {
 	IMX7D,
 	IMX7D_EP,
 	IMX8MQ,
-	IMX8MQ_EP,
 	IMX8MM,
-	IMX8MM_EP,
 	IMX8MP,
+	IMX8MQ_EP,
+	IMX8MM_EP,
 	IMX8MP_EP,
 	IMX8QM,
 	IMX8QM_EP,
 	IMX8QXP,
 	IMX8QXP_EP,
+	IMX95,
+	IMX95_EP,
 };
 
 #define IMX6_PCIE_FLAG_IMX6_PHY			BIT(0)
 #define IMX6_PCIE_FLAG_IMX6_SPEED_CHANGE	BIT(1)
 #define IMX6_PCIE_FLAG_SUPPORTS_SUSPEND		BIT(2)
 #define IMX6_PCIE_FLAG_IMX6_CPU_ADDR_FIXUP	BIT(3)
+#define IMX6_PCIE_FLAG_SUPPORT_64BIT		BIT(8)
+
+#define imx6_check_flag(pci, val)	(pci->drvdata->flags & val)
 
 struct imx6_pcie_drvdata {
 	enum imx6_pcie_variants variant;
@@ -84,6 +131,7 @@ struct imx6_pcie_drvdata {
 struct imx6_pcie {
 	struct dw_pcie		*pci;
 	int			reset_gpio;
+	int			host_wake_irq;
 	bool			gpio_active_high;
 	bool			link_is_up;
 	struct clk		*pcie_bus;
@@ -92,6 +140,7 @@ struct imx6_pcie {
 	struct clk		*pcie;
 	struct clk		*pcie_aux;
 	struct regmap		*iomuxc_gpr;
+	u16			msi_ctrl;
 	u32			controller_id;
 	struct reset_control	*pciephy_reset;
 	struct reset_control	*apps_reset;
@@ -103,6 +152,7 @@ struct imx6_pcie {
 	u32			tx_swing_low;
 	u32			hsio_cfg;
 	u32			local_addr;
+	u32			refclk_pad_mode;
 	struct regulator	*vpcie;
 	struct regulator	*vph;
 	void __iomem		*phy_base;
@@ -177,7 +227,6 @@ struct imx6_pcie {
 #define CTRL2_PM_XMT_TURNOFF			BIT(9)
 #define STTS0_PM_LINKST_IN_L2			BIT(13)
 
-static int imx6_pcie_cz_enabled;
 static unsigned int imx6_pcie_grp_offset(const struct imx6_pcie *imx6_pcie)
 {
 	WARN_ON(imx6_pcie->drvdata->variant != IMX8MQ &&
@@ -200,6 +249,12 @@ static void imx6_pcie_configure_type(struct imx6_pcie *imx6_pcie)
 
 	addr = IOMUXC_GPR12;
 	switch (imx6_pcie->drvdata->variant) {
+	case IMX95:
+	case IMX95_EP:
+		addr = IMX95_PE0_GEN_CTRL_1;
+		mask = IMX95_PCIE_DEVICE_TYPE;
+		val = mode;
+		break;
 	case IMX8QM:
 	case IMX8QM_EP:
 	case IMX8QXP:
@@ -226,6 +281,15 @@ static void imx6_pcie_configure_type(struct imx6_pcie *imx6_pcie)
 	}
 
 	regmap_update_bits(imx6_pcie->iomuxc_gpr, addr, mask, val);
+
+	/* On i.MX95 the PCI PM needs to be enabled in order to
+	 * generate the CLKREQ output signal.
+	 */
+	if ((mode == PCI_EXP_TYPE_ROOT_PORT) &&
+	    (imx6_pcie->drvdata->variant == IMX95)) {
+		val = dw_pcie_find_ext_capability(imx6_pcie->pci, PCI_EXT_CAP_ID_L1SS);
+		dw_pcie_writel_dbi(imx6_pcie->pci, val + PCI_L1SS_CTL1, 1<<1);
+	}
 }
 
 static int pcie_phy_poll_ack(struct imx6_pcie *imx6_pcie, bool exp_val)
@@ -353,6 +417,34 @@ static int pcie_phy_write(struct imx6_pcie *imx6_pcie, int addr, u16 data)
 	return 0;
 }
 
+static void imx95_pcie_inti_phy(struct imx6_pcie *imx6_pcie)
+{
+	regmap_update_bits(imx6_pcie->iomuxc_gpr,
+			IMX95_PCIE_SS_RW_REG_0,
+			IMX95_PCIE_PHY_CR_PARA_SEL,
+			IMX95_PCIE_PHY_CR_PARA_SEL);
+	/* Different clock modes should be handled. */
+	if (imx6_pcie->refclk_pad_mode == IMX8_PCIE_REFCLK_PAD_INPUT) {
+		/* External clock mode */
+		regmap_update_bits(imx6_pcie->iomuxc_gpr,
+				   IMX95_PCIE_PHY_GEN_CTRL,
+				   IMX95_PCIE_REF_USE_PAD,
+				   IMX95_PCIE_REF_USE_PAD);
+		regmap_update_bits(imx6_pcie->iomuxc_gpr,
+				   IMX95_PCIE_SS_RW_REG_0,
+				   IMX95_PCIE_REF_CLKEN, 0);
+	} else {
+		/* Internal PLL clock mode */
+		regmap_update_bits(imx6_pcie->iomuxc_gpr,
+				   IMX95_PCIE_PHY_GEN_CTRL,
+				   IMX95_PCIE_REF_USE_PAD, 0);
+		regmap_update_bits(imx6_pcie->iomuxc_gpr,
+				   IMX95_PCIE_SS_RW_REG_0,
+				   IMX95_PCIE_REF_CLKEN,
+				   IMX95_PCIE_REF_CLKEN);
+	}
+}
+
 static void imx6_pcie_init_phy(struct imx6_pcie *imx6_pcie)
 {
 	switch (imx6_pcie->drvdata->variant) {
@@ -368,6 +460,10 @@ static void imx6_pcie_init_phy(struct imx6_pcie *imx6_pcie)
 		 * The PHY initialization had been done in the PHY
 		 * driver, break here directly.
 		 */
+		break;
+	case IMX95:
+	case IMX95_EP:
+		imx95_pcie_inti_phy(imx6_pcie);
 		break;
 	case IMX8MQ:
 	case IMX8MQ_EP:
@@ -585,22 +681,6 @@ static int imx6_pcie_attach_pd(struct device *dev)
 	return 0;
 }
 
-static void imx6_pcie_detach_pd(struct device *dev)
-{
-	struct imx6_pcie *imx6_pcie = dev_get_drvdata(dev);
-
-	if (imx6_pcie->pd_pcie_phy && !IS_ERR(imx6_pcie->pd_pcie_phy)) {
-		device_link_remove(dev, imx6_pcie->pd_pcie_phy);
-		dev_pm_domain_detach(imx6_pcie->pd_pcie_phy, true);
-		imx6_pcie->pd_pcie_phy = NULL;
-	}
-	if (imx6_pcie->pd_pcie && !IS_ERR(imx6_pcie->pd_pcie)) {
-		device_link_remove(dev, imx6_pcie->pd_pcie);
-		dev_pm_domain_detach(imx6_pcie->pd_pcie, true);
-		imx6_pcie->pd_pcie = NULL;
-	}
-}
-
 static int imx6_pcie_enable_ref_clk(struct imx6_pcie *imx6_pcie)
 {
 	struct dw_pcie *pci = imx6_pcie->pci;
@@ -672,6 +752,14 @@ static int imx6_pcie_enable_ref_clk(struct imx6_pcie *imx6_pcie)
 		if (ret) {
 			dev_err(dev, "unable to enable pcie_axi clock\n");
 			return ret;
+		}
+		break;
+	case IMX95:
+	case IMX95_EP:
+		ret = clk_prepare_enable(imx6_pcie->pcie_aux);
+		if (ret) {
+			dev_err(dev, "unable to enable pcie_aux clock\n");
+			break;
 		}
 		break;
 	}
@@ -811,6 +899,8 @@ static void imx6_pcie_assert_core_reset(struct imx6_pcie *imx6_pcie)
 		regmap_update_bits(imx6_pcie->iomuxc_gpr, IOMUXC_GPR1,
 				   IMX6Q_GPR1_PCIE_REF_CLK_EN, 0 << 16);
 		break;
+	case IMX95: /* Power on reset, nothing to do here */
+	case IMX95_EP:
 	case IMX8QM:
 	case IMX8QM_EP:
 	case IMX8QXP:
@@ -826,10 +916,20 @@ static void imx6_pcie_assert_core_reset(struct imx6_pcie *imx6_pcie)
 
 static int imx6_pcie_deassert_core_reset(struct imx6_pcie *imx6_pcie)
 {
+	u32 val;
 	struct dw_pcie *pci = imx6_pcie->pci;
 	struct device *dev = pci->dev;
 
 	switch (imx6_pcie->drvdata->variant) {
+	case IMX95:
+	case IMX95_EP:
+		/* Polling the MPLL_STATE */
+		if (regmap_read_poll_timeout(imx6_pcie->iomuxc_gpr,
+					IMX95_PCIE_PHY_MPLLA_CTRL, val,
+					val & IMX95_PCIE_PHY_MPLL_STATE,
+					10, 10000))
+			dev_err(dev, "PCIe PLL lock timeout\n");
+		break;
 	case IMX8MQ:
 	case IMX8MQ_EP:
 		reset_control_deassert(imx6_pcie->pciephy_reset);
@@ -950,6 +1050,13 @@ static void imx6_pcie_ltssm_enable(struct device *dev)
 				CTRL2_LTSSM_ENABLE,
 				CTRL2_LTSSM_ENABLE);
 		break;
+	case IMX95:
+	case IMX95_EP:
+		regmap_update_bits(imx6_pcie->iomuxc_gpr,
+				IMX95_PE0_GEN_CTRL_3,
+				IMX95_PCIE_LTSSM_EN,
+				IMX95_PCIE_LTSSM_EN);
+		break;
 	}
 }
 
@@ -989,6 +1096,12 @@ static void imx6_pcie_ltssm_disable(struct device *dev)
 				IMX8QM_PCIE_CTRL2_OFFSET,
 				CTRL2_READY_ENTR_L23, 0);
 		break;
+	case IMX95:
+	case IMX95_EP:
+		regmap_update_bits(imx6_pcie->iomuxc_gpr,
+				IMX95_PE0_GEN_CTRL_3,
+				IMX95_PCIE_LTSSM_EN, 0);
+		break;
 	}
 }
 
@@ -1005,14 +1118,12 @@ static int imx6_pcie_start_link(struct dw_pcie *pci)
 	 * started in Gen2 mode, there is a possibility the devices on the
 	 * bus will not be detected at all.  This happens with PCIe switches.
 	 */
-	if (!imx6_pcie_cz_enabled) {
-		dw_pcie_dbi_ro_wr_en(pci);
-		tmp = dw_pcie_readl_dbi(pci, offset + PCI_EXP_LNKCAP);
-		tmp &= ~PCI_EXP_LNKCAP_SLS;
-		tmp |= PCI_EXP_LNKCAP_SLS_2_5GB;
-		dw_pcie_writel_dbi(pci, offset + PCI_EXP_LNKCAP, tmp);
-		dw_pcie_dbi_ro_wr_dis(pci);
-	}
+	dw_pcie_dbi_ro_wr_en(pci);
+	tmp = dw_pcie_readl_dbi(pci, offset + PCI_EXP_LNKCAP);
+	tmp &= ~PCI_EXP_LNKCAP_SLS;
+	tmp |= PCI_EXP_LNKCAP_SLS_2_5GB;
+	dw_pcie_writel_dbi(pci, offset + PCI_EXP_LNKCAP, tmp);
+	dw_pcie_dbi_ro_wr_dis(pci);
 
 	/* Start LTSSM. */
 	imx6_pcie_ltssm_enable(dev);
@@ -1120,20 +1231,167 @@ static u64 imx6_pcie_cpu_addr_fixup(struct dw_pcie *pcie, u64 cpu_addr)
 	return (cpu_addr + imx6_pcie->local_addr - offset);
 }
 
-static void pci_imx_set_msi_en(struct dw_pcie_rp *pp)
+static int imx6_pcie_update_lut(struct imx6_pcie *imx6_pcie, int index,
+				u16 reqid, u16 mask, u8 sid)
 {
-	u16 val;
-	struct dw_pcie *pci = to_dw_pcie_from_pp(pp);
+	struct dw_pcie *pci = imx6_pcie->pci;
+	struct device *dev = pci->dev;
+	u32 data1, data2;
 
-	if (pci_msi_enabled()) {
-		u8 offset = dw_pcie_find_capability(pci, PCI_CAP_ID_MSI);
-		dw_pcie_dbi_ro_wr_en(pci);
-		val = dw_pcie_readw_dbi(pci, offset + PCI_MSI_FLAGS);
-		val |= PCI_MSI_FLAGS_ENABLE;
-		val &= ~PCI_MSI_FLAGS_64BIT;
-		dw_pcie_writew_dbi(pci, offset + PCI_MSI_FLAGS, val);
-		dw_pcie_dbi_ro_wr_dis(pci);
+	if (sid >= 64) {
+		dev_err(dev, "Too big stream id: %d\n", sid);
+		return -EINVAL;
 	}
+
+	data1 = FIELD_PREP(IMX95_PE0_LUT_DAC_ID, 0);
+	data1 |= FIELD_PREP(IMX95_PE0_LUT_STREAM_ID, sid);
+	data1 |= IMX95_PE0_LUT_VLD;
+
+	regmap_write(imx6_pcie->iomuxc_gpr, IMX95_PE0_LUT_DATA1, data1);
+
+	data2 = mask;
+	data2 |= FIELD_PREP(IMX95_PE0_LUT_REQID, reqid);
+
+	regmap_write(imx6_pcie->iomuxc_gpr, IMX95_PE0_LUT_DATA2, data2);
+
+	regmap_write(imx6_pcie->iomuxc_gpr, IMX95_PE0_LUT_ACSCTRL, index);
+
+	return 0;
+}
+
+struct imx6_of_map {
+	u32 bdf;
+	u32 phandle;
+	u32 sid;
+	u32 sid_len;
+};
+
+static int imx6_check_msi_and_smmmu(struct imx6_pcie *imx6_pcie,
+				    struct imx6_of_map *msi_map,
+				    u32 msi_size, u32 msi_map_mask,
+				    struct imx6_of_map *smmu_map,
+				    u32 smmu_size, u32 smmu_map_mask)
+{
+	struct dw_pcie *pci = imx6_pcie->pci;
+	struct device *dev = pci->dev;
+	int i;
+
+	if (msi_map && smmu_map) {
+		if (msi_size != smmu_size)
+			return -EINVAL;
+		if (msi_map_mask != smmu_map_mask)
+			return -EINVAL;
+
+		for (i = 0; i < msi_size / sizeof(*msi_map); i++) {
+			if (msi_map->bdf != smmu_map->bdf) {
+				dev_err(dev, "bdf setting is not match\n");
+				return -EINVAL;
+			}
+			if ((msi_map->sid & IMX95_SID_MASK) != smmu_map->sid) {
+				dev_err(dev, "sid setting is not match\n");
+				return -EINVAL;
+			}
+			if ((msi_map->sid_len & IMX95_SID_MASK) != smmu_map->sid_len) {
+				dev_err(dev, "sid_len setting is not match\n");
+				return -EINVAL;
+			}
+		}
+	}
+
+	return 0;
+}
+
+/*
+ * Simple static config lut according to dts settings
+ * DAC index and stream ID used as a match result of LUT.
+ * Pre-allocated and used by PCIes.
+ *
+ * Currently stream ID from 32-64 for PCIe.
+ * 32-40: first PCI bus.
+ * 40-48: second PCI bus.
+ *
+ * DAC_ID is index of TRDC.DAC index, start from 2 at iMX95.
+ * ITS [pci(2bit): streamid(6bits)]
+ *	pci 0 is 0
+ *	pci 1 is 3
+ */
+static int imx6_pcie_config_sid(struct imx6_pcie *imx6_pcie)
+{
+	struct imx6_of_map *msi_map = NULL, *smmu_map = NULL, *cur;
+	struct dw_pcie *pci = imx6_pcie->pci;
+	struct device *dev = pci->dev;
+	int i, j, lut_index, nr_map, msi_size = 0, smmu_size = 0;
+	u32 msi_map_mask = 0xffff, smmu_map_mask = 0xffff;
+	u32 mask;
+	int size;
+	int ret = 0;
+
+	of_get_property(dev->of_node, "msi-map", &msi_size);
+	if (msi_size) {
+		msi_map = devm_kzalloc(dev, msi_size, GFP_KERNEL);
+		if (!msi_map)
+			return -ENOMEM;
+
+		if (of_property_read_u32_array(dev->of_node, "msi-map",
+					       (u32 *)msi_map,
+					       msi_size / sizeof(u32)))
+			return -EINVAL;
+
+		of_property_read_u32(dev->of_node, "msi-map-mask",
+				     &msi_map_mask);
+	}
+	cur = msi_map;
+	size = msi_size;
+	mask = msi_map_mask;
+
+	of_get_property(dev->of_node, "iommu-map", &smmu_size);
+	if (smmu_size) {
+		smmu_map = devm_kzalloc(dev, smmu_size, GFP_KERNEL);
+		if (!smmu_map)
+			return -ENOMEM;
+
+		if (of_property_read_u32_array(dev->of_node, "iommu-map",
+					       (u32 *)smmu_map,
+					       smmu_size / sizeof(u32)))
+			return -EINVAL;
+
+		of_property_read_u32(dev->of_node, "smmu_map_mask",
+				     &smmu_map_mask);
+	}
+
+	if (imx6_check_msi_and_smmmu(imx6_pcie, msi_map, msi_size, msi_map_mask,
+				     smmu_map, smmu_size, smmu_map_mask))
+		return -EINVAL;
+
+	if (!cur) {
+		cur = smmu_map;
+		size = smmu_size;
+		mask = smmu_map_mask;
+	}
+
+	nr_map = size / (sizeof(*cur));
+
+	lut_index = 0;
+	for (i = 0; i < nr_map; i++) {
+		for (j = 0; j < cur->sid_len; j++) {
+			imx6_pcie_update_lut(imx6_pcie, lut_index,
+					     cur->bdf + j, mask,
+					     (cur->sid + j) & IMX95_SID_MASK);
+			lut_index++;
+		}
+		cur++;
+
+		if (lut_index >= IMX95_MAX_LUT) {
+			dev_err(dev, "its-map/iommu-map exceed HW limiation\n");
+			ret = -EINVAL;
+			break;
+		}
+	}
+
+	devm_kfree(dev, smmu_map);
+	devm_kfree(dev, msi_map);
+
+	return 0;
 }
 
 static int imx6_pcie_host_init(struct dw_pcie_rp *pp)
@@ -1186,6 +1444,12 @@ static int imx6_pcie_host_init(struct dw_pcie_rp *pp)
 
 	imx6_setup_phy_mpll(imx6_pcie);
 
+	ret = imx6_pcie_config_sid(imx6_pcie);
+	if (ret < 0) {
+		dev_err(dev, "failed to config sid:%d\n", ret);
+		goto err_phy_off;
+	}
+
 	return 0;
 
 err_phy_off:
@@ -1215,18 +1479,9 @@ static void imx6_pcie_host_exit(struct dw_pcie_rp *pp)
 		regulator_disable(imx6_pcie->vpcie);
 }
 
-static void imx6_pcie_host_deinit(struct dw_pcie_rp *pp)
-{
-	struct dw_pcie *pci = to_dw_pcie_from_pp(pp);
-	struct device *dev = pci->dev;
-
-	imx6_pcie_host_exit(pp);
-	imx6_pcie_detach_pd(dev);
-}
-
 static const struct dw_pcie_host_ops imx6_pcie_host_ops = {
 	.host_init = imx6_pcie_host_init,
-	.host_deinit = imx6_pcie_host_deinit,
+	.host_deinit = imx6_pcie_host_exit,
 };
 
 static const struct dw_pcie_ops dw_pcie_ops = {
@@ -1239,9 +1494,14 @@ static void imx6_pcie_ep_init(struct dw_pcie_ep *ep)
 {
 	enum pci_barno bar;
 	struct dw_pcie *pci = to_dw_pcie_from_ep(ep);
+	const struct pci_epc_features *epc_features;
 
 	for (bar = BAR_0; bar <= BAR_5; bar++)
 		dw_pcie_ep_reset_bar(pci, bar);
+	if (ep->ops->get_features) {
+		epc_features = ep->ops->get_features(ep);
+		ep->page_size = epc_features->align;
+	}
 }
 
 static int imx6_pcie_ep_raise_irq(struct dw_pcie_ep *ep, u8 func_no,
@@ -1288,6 +1548,12 @@ static const struct pci_epc_features imx8q_pcie_epc_features = {
 	.reserved_bar = 1 << BAR_1 | 1 << BAR_3 | 1 << BAR_5,
 };
 
+static const struct pci_epc_features imx95_pcie_epc_features = {
+	.msi_capable = true,
+	.bar_fixed_size[1] = SZ_64K,
+	.align = SZ_4K,
+};
+
 static const struct pci_epc_features*
 imx6_pcie_ep_get_features(struct dw_pcie_ep *ep)
 {
@@ -1295,6 +1561,8 @@ imx6_pcie_ep_get_features(struct dw_pcie_ep *ep)
 	struct imx6_pcie *imx6_pcie = to_imx6_pcie(pci);
 
 	switch (imx6_pcie->drvdata->variant) {
+	case IMX95_EP:
+		return &imx95_pcie_epc_features;
 	case IMX8QM_EP:
 	case IMX8QXP_EP:
 		return &imx8q_pcie_epc_features;
@@ -1318,7 +1586,6 @@ static int imx6_add_pcie_ep(struct imx6_pcie *imx6_pcie,
 	int ret;
 	unsigned int pcie_dbi2_offset;
 	struct dw_pcie_ep *ep;
-	struct resource *res;
 	struct dw_pcie *pci = imx6_pcie->pci;
 	struct dw_pcie_rp *pp = &pci->pp;
 	struct device *dev = pci->dev;
@@ -1328,8 +1595,8 @@ static int imx6_add_pcie_ep(struct imx6_pcie *imx6_pcie,
 	ep->ops = &pcie_ep_ops;
 
 	switch (imx6_pcie->drvdata->variant) {
-	case IMX8MM_EP:
 	case IMX8MQ_EP:
+	case IMX8MM_EP:
 	case IMX8MP_EP:
 		pcie_dbi2_offset = SZ_1M;
 		break;
@@ -1338,13 +1605,14 @@ static int imx6_add_pcie_ep(struct imx6_pcie *imx6_pcie,
 		break;
 	}
 	pci->dbi_base2 = pci->dbi_base + pcie_dbi2_offset;
-	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "addr_space");
-	if (!res)
-		return -EINVAL;
 
-	ep->phys_base = res->start;
-	ep->addr_size = resource_size(res);
-	ep->page_size = SZ_64K;
+	/*
+	 * db2 information should fetch from dtb file. dw_pcie_ep_init() can get dbi_base2 from
+	 * "dbi2" if pci->dbi_base2 is NULL. All code related pcie_dbi2_offset should be removed
+	 * after all dts added "dbi2" reg.
+	 */
+	if (imx6_pcie->drvdata->variant == IMX95_EP)
+		pci->dbi_base2 = NULL;
 
 	ret = dw_pcie_ep_init(ep);
 	if (ret) {
@@ -1409,6 +1677,35 @@ static void imx6_pcie_pm_turnoff(struct imx6_pcie *imx6_pcie)
 					imx6_pcie->controller_id, val);
 
 		break;
+	case IMX95:
+	case IMX95_EP:
+		regmap_update_bits(imx6_pcie->iomuxc_gpr,
+				IMX95_PE0_PM_CTRL,
+				IMX95_PCIE_PME_PF_INDEX, 0);
+		regmap_update_bits(imx6_pcie->iomuxc_gpr,
+				IMX95_PE0_PM_CTRL,
+				IMX95_PCIE_PM_PME_REQ,
+				IMX95_PCIE_PM_PME_REQ);
+		regmap_update_bits(imx6_pcie->iomuxc_gpr,
+				IMX95_PE0_PM_CTRL,
+				IMX95_PCIE_PM_PME_REQ, 0);
+		regmap_update_bits(imx6_pcie->iomuxc_gpr,
+				IMX95_PE0_PM_CTRL,
+				IMX95_PCIE_PM_READY_ENTR_L23,
+				IMX95_PCIE_PM_READY_ENTR_L23);
+
+		/* check the L2 is entered or not. */
+		if (regmap_read_poll_timeout(imx6_pcie->iomuxc_gpr,
+					IMX95_PE0_PM_STS, val,
+					val & IMX95_PCIE_PM_LINKST_IN_L2,
+					10, 10000))
+			dev_err(dev, "PCIE%d can't enter into L2.\n",
+					imx6_pcie->controller_id);
+		else
+			dev_info(dev, "PCIE%d enter into L2 (STTS:0x%08x).\n",
+					imx6_pcie->controller_id, val);
+
+		break;
 	default:
 		dev_err(dev, "PME_Turn_Off not implemented\n");
 		return;
@@ -1423,6 +1720,26 @@ static void imx6_pcie_pm_turnoff(struct imx6_pcie *imx6_pcie)
 	 */
 pm_turnoff_sleep:
 	usleep_range(1000, 10000);
+}
+
+static void imx6_pcie_msi_save_restore(struct imx6_pcie *imx6_pcie, bool save)
+{
+	u8 offset;
+	u16 val;
+	struct dw_pcie *pci = imx6_pcie->pci;
+
+	if (pci_msi_enabled()) {
+		offset = dw_pcie_find_capability(pci, PCI_CAP_ID_MSI);
+		if (save) {
+			val = dw_pcie_readw_dbi(pci, offset + PCI_MSI_FLAGS);
+			imx6_pcie->msi_ctrl = val;
+		} else {
+			dw_pcie_dbi_ro_wr_en(pci);
+			val = imx6_pcie->msi_ctrl;
+			dw_pcie_writew_dbi(pci, offset + PCI_MSI_FLAGS, val);
+			dw_pcie_dbi_ro_wr_dis(pci);
+		}
+	}
 }
 
 static int imx6_pcie_suspend_noirq(struct device *dev)
@@ -1444,6 +1761,7 @@ static int imx6_pcie_suspend_noirq(struct device *dev)
 				   IMX6Q_GPR1_PCIE_TEST_PD,
 				   IMX6Q_GPR1_PCIE_TEST_PD);
 	} else {
+		imx6_pcie_msi_save_restore(imx6_pcie, true);
 		imx6_pcie_pm_turnoff(imx6_pcie);
 		imx6_pcie_stop_link(imx6_pcie->pci);
 		imx6_pcie_host_exit(pp);
@@ -1474,8 +1792,8 @@ static int imx6_pcie_resume_noirq(struct device *dev)
 		ret = imx6_pcie_host_init(pp);
 		if (ret)
 			return ret;
+		imx6_pcie_msi_save_restore(imx6_pcie, false);
 		dw_pcie_setup_rc(pp);
-		pci_imx_set_msi_en(pp);
 
 		if (imx6_pcie->link_is_up)
 			imx6_pcie_start_link(imx6_pcie->pci);
@@ -1484,21 +1802,45 @@ static int imx6_pcie_resume_noirq(struct device *dev)
 	return 0;
 }
 
+static int imx6_pcie_suspend(struct device *dev)
+{
+	struct imx6_pcie *imx6_pcie = dev_get_drvdata(dev);
+
+	if (imx6_pcie->host_wake_irq >= 0)
+		enable_irq_wake(imx6_pcie->host_wake_irq);
+
+	return 0;
+}
+
+static int imx6_pcie_resume(struct device *dev)
+{
+	struct imx6_pcie *imx6_pcie = dev_get_drvdata(dev);
+
+	if (imx6_pcie->host_wake_irq >= 0)
+		disable_irq_wake(imx6_pcie->host_wake_irq);
+
+	return 0;
+}
+
 static const struct dev_pm_ops imx6_pcie_pm_ops = {
 	NOIRQ_SYSTEM_SLEEP_PM_OPS(imx6_pcie_suspend_noirq,
 				  imx6_pcie_resume_noirq)
+	SYSTEM_SLEEP_PM_OPS(imx6_pcie_suspend, imx6_pcie_resume)
 };
 
-static int __init imx6_pcie_compliance_test_enable(char *str)
+irqreturn_t host_wake_irq_handler(int irq, void *priv)
 {
-	if (!strcmp(str, "yes")) {
-		pr_info("Enable the i.MX PCIe compliance tests mode.\n");
-		imx6_pcie_cz_enabled = 1;
-	}
-	return 1;
-}
+	struct imx6_pcie *imx6_pcie = priv;
+	struct device *dev = imx6_pcie->pci->dev;
 
-__setup("pcie_cz_enabled=", imx6_pcie_compliance_test_enable);
+	dev_dbg(dev, "%s: host wakeup by pcie", __func__);
+
+	/* Notify PM core we are wakeup source */
+	pm_wakeup_event(dev, 0);
+	pm_system_wakeup();
+
+	return IRQ_HANDLED;
+}
 
 static int imx6_pcie_probe(struct platform_device *pdev)
 {
@@ -1508,7 +1850,9 @@ static int imx6_pcie_probe(struct platform_device *pdev)
 	struct device_node *np;
 	struct resource *dbi_base;
 	struct device_node *node = dev->of_node;
+	struct gpio_desc *host_wake_gpio;
 	int ret;
+	u16 val;
 
 	imx6_pcie = devm_kzalloc(dev, sizeof(*imx6_pcie), GFP_KERNEL);
 	if (!imx6_pcie)
@@ -1540,8 +1884,7 @@ static int imx6_pcie_probe(struct platform_device *pdev)
 			return PTR_ERR(imx6_pcie->phy_base);
 	}
 
-	dbi_base = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	pci->dbi_base = devm_ioremap_resource(dev, dbi_base);
+	pci->dbi_base = devm_platform_get_and_ioremap_resource(pdev, 0, &dbi_base);
 	if (IS_ERR(pci->dbi_base))
 		return PTR_ERR(pci->dbi_base);
 
@@ -1662,6 +2005,23 @@ static int imx6_pcie_probe(struct platform_device *pdev)
 					     "failed to get pcie phy\n");
 
 		break;
+	case IMX95:
+	case IMX95_EP:
+		if (dbi_base->start == IMX95_PCIE2_BASE_ADDR)
+			imx6_pcie->controller_id = 1;
+		of_property_read_u32(node, "fsl,refclk-pad-mode",
+				&imx6_pcie->refclk_pad_mode);
+		imx6_pcie->pcie_aux = devm_clk_get(dev, "pcie_aux");
+		if (IS_ERR(imx6_pcie->pcie_aux))
+			return dev_err_probe(dev, PTR_ERR(imx6_pcie->pcie_aux),
+					     "pcie_aux clock source missing or invalid\n");
+		imx6_pcie->iomuxc_gpr = syscon_regmap_lookup_by_phandle(node,
+				"ctrl-ssr");
+		if (IS_ERR(imx6_pcie->iomuxc_gpr)) {
+			dev_err(dev, "unable to find hsio ctrl registers\n");
+			return PTR_ERR(imx6_pcie->iomuxc_gpr);
+		}
+		break;
 	default:
 		break;
 	}
@@ -1691,6 +2051,9 @@ static int imx6_pcie_probe(struct platform_device *pdev)
 			return PTR_ERR(imx6_pcie->iomuxc_gpr);
 		}
 	}
+
+	if (imx6_check_flag(imx6_pcie, IMX6_PCIE_FLAG_SUPPORT_64BIT))
+		dma_set_mask_and_coherent(dev, DMA_BIT_MASK(64));
 
 	/* Grab PCIe PHY Tx Settings */
 	if (of_property_read_u32(node, "fsl,tx-deemph-gen1",
@@ -1749,9 +2112,41 @@ static int imx6_pcie_probe(struct platform_device *pdev)
 		ret = dw_pcie_host_init(&pci->pp);
 		if (ret < 0)
 			return ret;
-	}
 
-	pci_imx_set_msi_en(&pci->pp);
+		if (pci_msi_enabled()) {
+			u8 offset = dw_pcie_find_capability(pci, PCI_CAP_ID_MSI);
+
+			val = dw_pcie_readw_dbi(pci, offset + PCI_MSI_FLAGS);
+			val |= PCI_MSI_FLAGS_ENABLE;
+			dw_pcie_writew_dbi(pci, offset + PCI_MSI_FLAGS, val);
+		}
+
+		/* host wakeup support */
+		imx6_pcie->host_wake_irq = -1;
+		host_wake_gpio = devm_gpiod_get_optional(dev, "host-wake", GPIOD_IN);
+		if (IS_ERR(host_wake_gpio))
+			return PTR_ERR(host_wake_gpio);
+
+		if (host_wake_gpio != NULL) {
+			imx6_pcie->host_wake_irq = gpiod_to_irq(host_wake_gpio);
+			ret = devm_request_threaded_irq(dev, imx6_pcie->host_wake_irq, NULL,
+							host_wake_irq_handler,
+							IRQF_ONESHOT | IRQF_TRIGGER_FALLING,
+							"host_wake", imx6_pcie);
+			if (ret) {
+				dev_err(dev, "Failed to request host_wake_irq %d (%d)\n",
+					imx6_pcie->host_wake_irq, ret);
+				imx6_pcie->host_wake_irq = -1;
+				return ret;
+			}
+
+			if (device_init_wakeup(dev, true)) {
+				dev_err(dev, "fail to init host_wake_irq\n");
+				imx6_pcie->host_wake_irq = -1;
+				return ret;
+			}
+		}
+	}
 
 	return 0;
 }
@@ -1759,6 +2154,12 @@ static int imx6_pcie_probe(struct platform_device *pdev)
 static void imx6_pcie_shutdown(struct platform_device *pdev)
 {
 	struct imx6_pcie *imx6_pcie = platform_get_drvdata(pdev);
+
+	if (imx6_pcie->host_wake_irq >= 0) {
+		device_init_wakeup(&pdev->dev, false);
+		disable_irq(imx6_pcie->host_wake_irq);
+		imx6_pcie->host_wake_irq = -1;
+	}
 
 	/* bring down link, so bootloader gets clean state in case of reboot */
 	imx6_pcie_assert_core_reset(imx6_pcie);
@@ -1821,25 +2222,25 @@ static const struct imx6_pcie_drvdata drvdata[] = {
 		.flags = IMX6_PCIE_FLAG_SUPPORTS_SUSPEND,
 		.gpr = "fsl,imx8mq-iomuxc-gpr",
 	},
-	[IMX8MQ_EP] = {
-		.variant = IMX8MQ_EP,
-		.mode = DW_PCIE_EP_TYPE,
-		.gpr = "fsl,imx8mq-iomuxc-gpr",
-	},
 	[IMX8MM] = {
 		.variant = IMX8MM,
 		.flags = IMX6_PCIE_FLAG_SUPPORTS_SUSPEND,
-		.gpr = "fsl,imx8mm-iomuxc-gpr",
-	},
-	[IMX8MM_EP] = {
-		.variant = IMX8MM_EP,
-		.mode = DW_PCIE_EP_TYPE,
 		.gpr = "fsl,imx8mm-iomuxc-gpr",
 	},
 	[IMX8MP] = {
 		.variant = IMX8MP,
 		.flags = IMX6_PCIE_FLAG_SUPPORTS_SUSPEND,
 		.gpr = "fsl,imx8mp-iomuxc-gpr",
+	},
+	[IMX8MQ_EP] = {
+		.variant = IMX8MQ_EP,
+		.mode = DW_PCIE_EP_TYPE,
+		.gpr = "fsl,imx8mq-iomuxc-gpr",
+	},
+	[IMX8MM_EP] = {
+		.variant = IMX8MM_EP,
+		.mode = DW_PCIE_EP_TYPE,
+		.gpr = "fsl,imx8mm-iomuxc-gpr",
 	},
 	[IMX8MP_EP] = {
 		.variant = IMX8MP_EP,
@@ -1866,6 +2267,15 @@ static const struct imx6_pcie_drvdata drvdata[] = {
 		.mode = DW_PCIE_EP_TYPE,
 		.flags = IMX6_PCIE_FLAG_IMX6_CPU_ADDR_FIXUP,
 	},
+	[IMX95] = {
+		.variant = IMX95,
+		.flags = IMX6_PCIE_FLAG_SUPPORTS_SUSPEND,
+	},
+	[IMX95_EP] = {
+		.variant = IMX95_EP,
+		.mode = DW_PCIE_EP_TYPE,
+		.flags = IMX6_PCIE_FLAG_SUPPORT_64BIT,
+	},
 };
 
 static const struct of_device_id imx6_pcie_of_match[] = {
@@ -1878,15 +2288,17 @@ static const struct of_device_id imx6_pcie_of_match[] = {
 	{ .compatible = "fsl,imx7d-pcie",  .data = &drvdata[IMX7D],  },
 	{ .compatible = "fsl,imx7d-pcie-ep", .data = &drvdata[IMX7D_EP], },
 	{ .compatible = "fsl,imx8mq-pcie", .data = &drvdata[IMX8MQ], },
-	{ .compatible = "fsl,imx8mq-pcie-ep", .data = &drvdata[IMX8MQ_EP], },
 	{ .compatible = "fsl,imx8mm-pcie", .data = &drvdata[IMX8MM], },
-	{ .compatible = "fsl,imx8mm-pcie-ep", .data = &drvdata[IMX8MM_EP], },
 	{ .compatible = "fsl,imx8mp-pcie", .data = &drvdata[IMX8MP], },
+	{ .compatible = "fsl,imx8mq-pcie-ep", .data = &drvdata[IMX8MQ_EP], },
+	{ .compatible = "fsl,imx8mm-pcie-ep", .data = &drvdata[IMX8MM_EP], },
 	{ .compatible = "fsl,imx8mp-pcie-ep", .data = &drvdata[IMX8MP_EP], },
 	{ .compatible = "fsl,imx8qm-pcie", .data = &drvdata[IMX8QM], },
 	{ .compatible = "fsl,imx8qm-pcie-ep", .data = &drvdata[IMX8QM_EP], },
 	{ .compatible = "fsl,imx8qxp-pcie", .data = &drvdata[IMX8QXP], },
 	{ .compatible = "fsl,imx8qxp-pcie-ep", .data = &drvdata[IMX8QXP_EP], },
+	{ .compatible = "fsl,imx95-pcie", .data = &drvdata[IMX95], },
+	{ .compatible = "fsl,imx95-pcie-ep", .data = &drvdata[IMX95_EP], },
 	{},
 };
 

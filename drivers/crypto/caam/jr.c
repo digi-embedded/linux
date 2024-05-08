@@ -4,11 +4,12 @@
  * JobR backend functionality
  *
  * Copyright 2008-2012 Freescale Semiconductor, Inc.
- * Copyright 2019-2020 NXP
+ * Copyright 2019, 2023 NXP
  */
 
 #include <linux/of_irq.h>
 #include <linux/of_address.h>
+#include <linux/platform_device.h>
 
 #include "compat.h"
 #include "ctrl.h"
@@ -156,7 +157,6 @@ static int caam_jr_flush(struct device *dev)
 	return caam_jr_stop_processing(dev, JRCR_RESET);
 }
 
-#ifdef CONFIG_PM_SLEEP
 /* The resume can be used after a park or a flush if CAAM has not been reset */
 static int caam_jr_restart_processing(struct device *dev)
 {
@@ -173,20 +173,17 @@ static int caam_jr_restart_processing(struct device *dev)
 
 	return 0;
 }
-#endif /* CONFIG_PM_SLEEP */
 
 static int caam_reset_hw_jr(struct device *dev)
 {
 	struct caam_drv_private_jr *jrp = dev_get_drvdata(dev);
 	unsigned int timeout = 100000;
 	int err;
-
 	/*
 	 * mask interrupts since we are going to poll
 	 * for reset completion status
 	 */
 	clrsetbits_32(&jrp->rregs->rconfig_lo, 0, JRCFG_IMSK);
-
 	err = caam_jr_flush(dev);
 	if (err)
 		return err;
@@ -257,6 +254,11 @@ static int caam_jr_remove(struct platform_device *pdev)
 	jr_driver_probed--;
 
 	return ret;
+}
+
+static void caam_jr_platform_shutdown(struct platform_device *pdev)
+{
+	caam_jr_remove(pdev);
 }
 
 /* Main per-ring interrupt handler */
@@ -806,7 +808,6 @@ static int caam_jr_probe(struct platform_device *pdev)
 	return 0;
 }
 
-#ifdef CONFIG_PM_SLEEP
 static void caam_jr_get_hw_state(struct device *dev)
 {
 	struct caam_drv_private_jr *jrp = dev_get_drvdata(dev);
@@ -925,8 +926,7 @@ add_jr:
 	return 0;
 }
 
-SIMPLE_DEV_PM_OPS(caam_jr_pm_ops, caam_jr_suspend, caam_jr_resume);
-#endif /* CONFIG_PM_SLEEP */
+static DEFINE_SIMPLE_DEV_PM_OPS(caam_jr_pm_ops, caam_jr_suspend, caam_jr_resume);
 
 static const struct of_device_id caam_jr_match[] = {
 	{
@@ -943,12 +943,11 @@ static struct platform_driver caam_jr_driver = {
 	.driver = {
 		.name = "caam_jr",
 		.of_match_table = caam_jr_match,
-#ifdef CONFIG_PM_SLEEP
-		.pm = &caam_jr_pm_ops,
-#endif
+		.pm = pm_ptr(&caam_jr_pm_ops),
 	},
 	.probe       = caam_jr_probe,
 	.remove      = caam_jr_remove,
+	.shutdown    = caam_jr_platform_shutdown,
 };
 
 static int __init jr_driver_init(void)

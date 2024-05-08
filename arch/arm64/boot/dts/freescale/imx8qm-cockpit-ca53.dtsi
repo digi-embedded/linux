@@ -34,7 +34,7 @@
 		i2c0 = &i2c_rpbus_0;
 		i2c1 = &i2c_rpbus_1;
 		dphy0 = &mipi0_dphy;
-		mipi_dsi0 = &mipi0_dsi_host;
+		mipi-dsi0 = &mipi0_dsi_host;
 	};
 
 	cpus: cpus {
@@ -269,7 +269,7 @@
 	};
 
 	thermal_zones: thermal-zones {
-		cpu-thermal0 {
+		cpu0-thermal {
 			polling-delay-passive = <250>;
 			polling-delay = <2000>;
 			thermal-sensors = <&tsens IMX_SC_R_A53>;
@@ -334,7 +334,7 @@
 		};
 	};
 
-	rpmsg0: rpmsg0{
+	rpmsg0: rpmsg@90000000 {
 		compatible = "fsl,imx8qm-rpmsg";
 		/* up to now, the following channels are used in imx rpmsg
 		 * - tx1/rx1: messages channel.
@@ -349,7 +349,7 @@
 		status = "disabled";
 	};
 
-	rpmsg1: rpmsg1{
+	rpmsg1: rpmsg@90100000 {
 		compatible = "fsl,imx8qm-rpmsg";
 		/* up to now, the following channels are used in imx rpmsg
 		 * - tx1/rx1: messages channel.

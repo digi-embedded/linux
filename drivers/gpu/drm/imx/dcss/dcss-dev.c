@@ -4,8 +4,9 @@
  */
 
 #include <linux/clk.h>
-#include <linux/of_device.h>
+#include <linux/of.h>
 #include <linux/of_graph.h>
+#include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <linux/slab.h>
 #include <drm/drm_bridge_connector.h>
@@ -252,7 +253,7 @@ struct dcss_dev *dcss_dev_create(struct device *dev, bool hdmi_output)
 
 	dcss->of_port = of_graph_get_port_by_id(dev->of_node, 0);
 	if (!dcss->of_port) {
-		dev_err(dev, "no port@0 node in %s\n", dev->of_node->full_name);
+		dev_err(dev, "no port@0 node in %pOF\n", dev->of_node);
 		ret = -ENODEV;
 		goto clks_err;
 	}
@@ -303,19 +304,14 @@ void dcss_dev_destroy(struct dcss_dev *dcss)
 	kfree(dcss);
 }
 
-#ifdef CONFIG_PM_SLEEP
-int dcss_dev_suspend(struct device *dev)
+static int dcss_dev_suspend(struct device *dev)
 {
 	struct dcss_dev *dcss = dcss_drv_dev_to_dcss(dev);
 	struct drm_device *ddev = dcss_drv_dev_to_drm(dev);
-	struct dcss_kms_dev *kms = container_of(ddev, struct dcss_kms_dev, base);
 	int ret;
 
 	if (!dcss)
 		return 0;
-
-	if (!dcss_drv_is_componentized(dev))
-		drm_bridge_connector_disable_hpd(kms->connector);
 
 	drm_mode_config_helper_suspend(ddev);
 
@@ -333,11 +329,10 @@ int dcss_dev_suspend(struct device *dev)
 	return 0;
 }
 
-int dcss_dev_resume(struct device *dev)
+static int dcss_dev_resume(struct device *dev)
 {
 	struct dcss_dev *dcss = dcss_drv_dev_to_dcss(dev);
 	struct drm_device *ddev = dcss_drv_dev_to_drm(dev);
-	struct dcss_kms_dev *kms = container_of(ddev, struct dcss_kms_dev, base);
 
 	if (!dcss)
 		return 0;
@@ -357,15 +352,10 @@ int dcss_dev_resume(struct device *dev)
 
 	drm_mode_config_helper_resume(ddev);
 
-	if (!dcss_drv_is_componentized(dev))
-		drm_bridge_connector_enable_hpd(kms->connector);
-
 	return 0;
 }
-#endif /* CONFIG_PM_SLEEP */
 
-#ifdef CONFIG_PM
-int dcss_dev_runtime_suspend(struct device *dev)
+static int dcss_dev_runtime_suspend(struct device *dev)
 {
 	struct dcss_dev *dcss = dcss_drv_dev_to_dcss(dev);
 	int ret;
@@ -384,7 +374,7 @@ int dcss_dev_runtime_suspend(struct device *dev)
 	return 0;
 }
 
-int dcss_dev_runtime_resume(struct device *dev)
+static int dcss_dev_runtime_resume(struct device *dev)
 {
 	struct dcss_dev *dcss = dcss_drv_dev_to_dcss(dev);
 
@@ -401,4 +391,8 @@ int dcss_dev_runtime_resume(struct device *dev)
 
 	return 0;
 }
-#endif /* CONFIG_PM */
+
+EXPORT_GPL_DEV_PM_OPS(dcss_dev_pm_ops) = {
+	RUNTIME_PM_OPS(dcss_dev_runtime_suspend, dcss_dev_runtime_resume, NULL)
+	SYSTEM_SLEEP_PM_OPS(dcss_dev_suspend, dcss_dev_resume)
+};

@@ -41,7 +41,7 @@
 						   <25000000>,
 						   <400000000>;
 
-	port@0 {
+	port {
 		dcss_out: endpoint {
 			remote-endpoint = <&mipi_dsi_in>;
 		};
@@ -50,7 +50,6 @@
 
 &mipi_dsi {
 	status = "okay";
-	fsl,clock-drop-level = <2>;
 	#address-cells = <1>;
 	#size-cells = <0>;
 

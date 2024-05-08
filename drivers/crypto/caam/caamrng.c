@@ -3,7 +3,7 @@
  * caam - Freescale FSL CAAM support for hw_random
  *
  * Copyright 2011 Freescale Semiconductor, Inc.
- * Copyright 2018-2019 NXP
+ * Copyright 2018-2019, 2023 NXP
  *
  * Based on caamalg.c crypto API driver.
  *
@@ -12,6 +12,8 @@
 #include <linux/hw_random.h>
 #include <linux/completion.h>
 #include <linux/atomic.h>
+#include <linux/dma-mapping.h>
+#include <linux/kernel.h>
 #include <linux/kfifo.h>
 #include <linux/busfreq-imx.h>
 
@@ -177,20 +179,29 @@ static void caam_cleanup(struct hwrng *rng)
 static inline void test_len(struct hwrng *rng, size_t len, bool wait)
 {
 	u8 *buf;
-	int real_len;
+	int read_len;
 	struct caam_rng_ctx *ctx = to_caam_rng_ctx(rng);
 	struct device *dev = ctx->ctrldev;
 
-	buf = kzalloc(sizeof(u8) * len, GFP_KERNEL);
-	real_len = rng->read(rng, buf, len, wait);
-	dev_info(dev, "wanted %zu bytes, got %d\n", len, real_len);
-	if (real_len < 0)
-		dev_err(dev, "READ FAILED\n");
-	else if (real_len == 0 && wait)
-		dev_err(dev, "WAITING FAILED\n");
-	if (real_len > 0)
-		print_hex_dump_debug("random bytes@: ", DUMP_PREFIX_ADDRESS, 16,
-				     4, buf, real_len, 1);
+	buf = kcalloc(CAAM_RNG_MAX_FIFO_STORE_SIZE, sizeof(u8), GFP_KERNEL);
+
+	while (len > 0) {
+		read_len = rng->read(rng, buf, len, wait);
+
+		if (read_len < 0 || (read_len == 0 && wait)) {
+			dev_err(dev, "RNG Read FAILED received %d bytes\n",
+				read_len);
+			kfree(buf);
+			return;
+		}
+
+		print_hex_dump_debug("random bytes@: ",
+			DUMP_PREFIX_ADDRESS, 16, 4,
+			buf, read_len, 1);
+
+		len = len - read_len;
+	}
+
 	kfree(buf);
 }
 
@@ -201,21 +212,10 @@ static inline void test_mode_once(struct hwrng *rng, bool wait)
 	test_len(rng, 128, wait);
 }
 
-static inline void test_mode(struct hwrng *rng, bool wait)
-{
-#define TEST_PASS 1
-	int i;
-
-	for (i = 0; i < TEST_PASS; i++)
-		test_mode_once(rng, wait);
-}
-
 static void self_test(struct hwrng *rng)
 {
-	pr_info("testing without waiting\n");
-	test_mode(rng, false);
-	pr_info("testing with waiting\n");
-	test_mode(rng, true);
+	pr_info("Executing RNG SELF-TEST with wait\n");
+	test_mode_once(rng, true);
 }
 #endif
 
@@ -225,17 +225,18 @@ static int caam_init(struct hwrng *rng)
 	int err;
 
 	ctx->desc_sync = devm_kzalloc(ctx->ctrldev, CAAM_RNG_DESC_LEN,
-				      GFP_DMA | GFP_KERNEL);
+				      GFP_KERNEL);
 	if (!ctx->desc_sync)
 		return -ENOMEM;
 
 	ctx->desc_async = devm_kzalloc(ctx->ctrldev, CAAM_RNG_DESC_LEN,
-				       GFP_DMA | GFP_KERNEL);
+				       GFP_KERNEL);
 	if (!ctx->desc_async)
 		return -ENOMEM;
 
-	if (kfifo_alloc(&ctx->fifo, CAAM_RNG_MAX_FIFO_STORE_SIZE,
-			GFP_DMA | GFP_KERNEL))
+	if (kfifo_alloc(&ctx->fifo, ALIGN(CAAM_RNG_MAX_FIFO_STORE_SIZE,
+					  dma_get_cache_alignment()),
+			GFP_KERNEL))
 		return -ENOMEM;
 
 	INIT_WORK(&ctx->worker, caam_rng_worker);
@@ -295,7 +296,6 @@ int caam_rng_init(struct device *ctrldev)
 	ctx->rng.cleanup = caam_cleanup;
 	ctx->rng.read    = caam_read;
 	ctx->rng.priv    = (unsigned long)ctx;
-	ctx->rng.quality = 1024;
 
 	dev_info(ctrldev, "registering rng-caam\n");
 

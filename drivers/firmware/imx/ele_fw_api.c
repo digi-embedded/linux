@@ -4,27 +4,57 @@
  */
 
 #include <linux/dma-mapping.h>
-#include <linux/firmware/imx/ele_fw_api.h>
 
-#include "ele_mu.h"
+#include "ele_common.h"
+#include "ele_fw_api.h"
 
-/* Fill a command message header with a given command ID and length in bytes. */
-static int plat_fill_cmd_msg_hdr(struct mu_hdr *hdr, uint8_t cmd, uint32_t len)
+struct ele_rng_msg {
+	u32 header; /* u8 Tag; u8 Command; u8 Size; u8 Ver; */
+	u16 rsv;
+	u16 flags;
+	u32 data[2];
+};
+
+int ele_init_fw(struct device *dev)
 {
-	struct ele_mu_priv *priv = NULL;
-	int err = 0;
+	struct ele_mu_priv *priv = dev_get_drvdata(dev);
+	unsigned int status;
+	int ret;
 
-	err = get_ele_mu_priv(&priv);
-	if (err) {
-		pr_err("Error: iMX EdgeLock Enclave MU is not probed successfully.\n");
-		return err;
+	ret = imx_se_alloc_tx_rx_buf(priv);
+	if (ret)
+		return ret;
+
+	ret = plat_fill_cmd_msg_hdr(priv,
+				    (struct mu_hdr *)&priv->tx_msg->header,
+				    ELE_INIT_FW_REQ, ELE_INIT_FW_REQ_SZ,
+				    false);
+	if (ret)
+		goto exit;
+
+	ret = imx_ele_msg_send_rcv(priv);
+	if (ret < 0)
+		goto exit;
+
+	ret  = validate_rsp_hdr(priv,
+				priv->rx_msg->header,
+				ELE_INIT_FW_REQ,
+				ELE_INIT_FW_RSP_SZ,
+				false);
+	if (ret)
+		goto exit;
+
+	status = RES_STATUS(priv->rx_msg->data[0]);
+	if (status != priv->success_tag) {
+		dev_err(dev, "Command Id[%d], Response Failure = 0x%x",
+			ELE_INIT_FW_REQ, status);
+		ret = -1;
 	}
-	hdr->tag = priv->cmd_tag;
-	hdr->ver = MESSAGING_VERSION_7;
-	hdr->command = cmd;
-	hdr->size = (uint8_t)(len / sizeof(uint32_t));
 
-	return err;
+exit:
+	imx_se_free_tx_rx_buf(priv);
+
+	return ret;
 }
 
 /*
@@ -33,80 +63,75 @@ static int plat_fill_cmd_msg_hdr(struct mu_hdr *hdr, uint8_t cmd, uint32_t len)
  *
  * returns:  size of the rondom number generated
  */
-int ele_get_random(struct hwrng *rng, void *data, size_t len, bool wait)
+int ele_get_random(struct device *dev,
+		   void *data, size_t len)
 {
-	struct ele_mu_priv *priv;
-	unsigned int tag, command, size, ver, status;
+	struct ele_mu_priv *priv = dev_get_drvdata(dev);
+	struct ele_rng_msg *tx_msg;
+	unsigned int status;
 	dma_addr_t dst_dma;
 	u8 *buf;
 	int ret;
 
-	/* access ele_mu_priv data structure pointer*/
-	ret = get_ele_mu_priv(&priv);
-	if (ret)
-		return ret;
-
+	/* As per RBG3(RS) construction mentioned in NIST SP800-90C,
+	 * CTR_DRBG generates 128(full entropy) bits after reseeding
+	 * the CTR_DRBG with 256 bits of entropy. so splitting the
+	 * user rng request in multiple of 128 bits & enforce reseed
+	 * for every iteration.
+	 */
+	len = ELE_RNG_MAX_SIZE;
 	buf = dmam_alloc_coherent(priv->dev, len, &dst_dma, GFP_KERNEL);
 	if (!buf) {
 		dev_err(priv->dev, "Failed to map destination buffer memory\n");
 		return -ENOMEM;
 	}
 
-	ret = plat_fill_cmd_msg_hdr((struct mu_hdr *)&priv->tx_msg.header, ELE_GET_RANDOM_REQ, 16);
+	ret = imx_se_alloc_tx_rx_buf(priv);
+	if (ret) {
+		ret = -ENOMEM;
+		goto exit1;
+	}
+
+	tx_msg = (struct ele_rng_msg *)priv->tx_msg;
+	ret = plat_fill_cmd_msg_hdr(priv,
+				    (struct mu_hdr *)&tx_msg->header,
+				    ELE_GET_RANDOM_REQ, ELE_GET_RANDOM_REQ_SZ,
+				    false);
 	if (ret)
 		goto exit;
 
-	priv->tx_msg.data[0] = 0x0;
-	priv->tx_msg.data[1] = dst_dma;
-	priv->tx_msg.data[2] = len;
+	/* bit 1(blocking reseed): wait for trng entropy,
+	 * then reseed rng context.
+	 */
+	tx_msg->flags = BIT(1);
+	tx_msg->data[0] = dst_dma;
+	tx_msg->data[1] = len;
 	ret = imx_ele_msg_send_rcv(priv);
 	if (ret < 0)
 		goto exit;
 
-	tag = MSG_TAG(priv->rx_msg.header);
-	command = MSG_COMMAND(priv->rx_msg.header);
-	size = MSG_SIZE(priv->rx_msg.header);
-	ver = MSG_VER(priv->rx_msg.header);
-	status = RES_STATUS(priv->rx_msg.data[0]);
-	if (tag == 0xe1 && command == ELE_GET_RANDOM_REQ && size == 0x02 &&
-	    ver == 0x07 && status == 0xd6) {
+	ret  = validate_rsp_hdr(priv,
+				priv->rx_msg->header,
+				ELE_GET_RANDOM_REQ,
+				ELE_GET_RANDOM_RSP_SZ,
+				false);
+	if (ret)
+		return ret;
+
+	status = RES_STATUS(priv->rx_msg->data[0]);
+	if (status != priv->success_tag) {
+		dev_err(dev, "Command Id[%d], Response Failure = 0x%x",
+			ELE_GET_RANDOM_REQ, status);
+		ret = -1;
+	} else {
 		memcpy(data, buf, len);
 		ret = len;
-	} else
-		ret = -EINVAL;
+	}
 
 exit:
+	imx_se_free_tx_rx_buf(priv);
+exit1:
 	dmam_free_coherent(priv->dev, len, buf, dst_dma);
+
 	return ret;
-}
-
-int ele_init_fw(void)
-{
-	struct ele_mu_priv *priv;
-	int ret;
-	unsigned int tag, command, size, ver, status;
-
-	ret = get_ele_mu_priv(&priv);
-	if (ret)
-		return ret;
-
-	ret = plat_fill_cmd_msg_hdr((struct mu_hdr *)&priv->tx_msg.header, ELE_INIT_FW_REQ, 4);
-	if (ret)
-		return ret;
-
-	ret = imx_ele_msg_send_rcv(priv);
-	if (ret < 0)
-		return ret;
-
-	tag = MSG_TAG(priv->rx_msg.header);
-	command = MSG_COMMAND(priv->rx_msg.header);
-	size = MSG_SIZE(priv->rx_msg.header);
-	ver = MSG_VER(priv->rx_msg.header);
-	status = RES_STATUS(priv->rx_msg.data[0]);
-
-	if (tag == 0xe1 && command == ELE_INIT_FW_REQ && size == 0x02 &&
-	    ver == MESSAGING_VERSION_7 && status == 0xd6)
-		return 0;
-
-	return -EINVAL;
 }

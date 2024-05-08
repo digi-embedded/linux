@@ -319,34 +319,40 @@
 };
 
 &mipi_csi_1 {
-	#address-cells = <1>;
-	#size-cells = <0>;
 	status = "okay";
 	port {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
 		mipi1_sensor_ep: endpoint@0 {
+			reg = <0>;
 			remote-endpoint = <&ov5640_mipi1_ep>;
 			data-lanes = <1 2>;
 			bus-type = <4>;
 		};
 
 		csi1_mipi_ep: endpoint@1 {
+			reg = <1>;
 			remote-endpoint = <&csi1_ep>;
 		};
 	};
 };
 
 &mipi_csi_2 {
-	#address-cells = <1>;
-	#size-cells = <0>;
 	status = "okay";
 	port {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
 		mipi2_sensor_ep: endpoint@0 {
+			reg = <0>;
 			remote-endpoint = <&ov5640_mipi2_ep>;
 			data-lanes = <1 2>;
 			bus-type = <4>;
 		};
 
 		csi2_mipi_ep: endpoint@1 {
+			reg = <1>;
 			remote-endpoint = <&csi2_ep>;
 		};
 	};
@@ -610,10 +616,9 @@
 	pinctrl-0 = <&pinctrl_pcie0>;
 	reset-gpio = <&gpio5 28 GPIO_ACTIVE_LOW>;
 	clocks = <&clk IMX8MQ_CLK_PCIE1_ROOT>,
-		 <&clk IMX8MQ_CLK_PCIE1_AUX>,
+		 <&pcie0_refclk>,
 		 <&clk IMX8MQ_CLK_PCIE1_PHY>,
-		 <&pcie0_refclk>;
-	clock-names = "pcie", "pcie_aux", "pcie_phy", "pcie_bus";
+		 <&clk IMX8MQ_CLK_PCIE1_AUX>;
 	vph-supply = <&vgen5_reg>;
 	status = "okay";
 };
@@ -622,39 +627,14 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_pcie1>;
 	reset-gpio = <&gpio5 12 GPIO_ACTIVE_LOW>;
+	host-wake-gpio = <&gpio5 11 GPIO_ACTIVE_LOW>;
 	clocks = <&clk IMX8MQ_CLK_PCIE2_ROOT>,
-		 <&clk IMX8MQ_CLK_PCIE2_AUX>,
+		 <&pcie0_refclk>,
 		 <&clk IMX8MQ_CLK_PCIE2_PHY>,
-		 <&pcie0_refclk>;
-	clock-names = "pcie", "pcie_aux", "pcie_phy", "pcie_bus";
+		 <&clk IMX8MQ_CLK_PCIE2_AUX>;
 	vpcie-supply = <&reg_pcie1>;
 	vph-supply = <&vgen5_reg>;
 	status = "okay";
-
-	wifi_wake_host {
-		compatible = "nxp,wifi-wake-host";
-		interrupt-parent = <&gpio5>;
-		interrupts = <11 IRQ_TYPE_LEVEL_LOW>;
-		interrupt-names = "host-wake";
-	};
-};
-
-&pcie1_ep {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_pcie1>;
-	clocks = <&clk IMX8MQ_CLK_PCIE2_ROOT>,
-		 <&clk IMX8MQ_CLK_PCIE2_AUX>,
-		 <&clk IMX8MQ_CLK_PCIE2_PHY>,
-		 <&pcie0_refclk>;
-	clock-names = "pcie", "pcie_aux", "pcie_phy", "pcie_bus";
-	assigned-clocks = <&clk IMX8MQ_CLK_PCIE2_AUX>,
-			  <&clk IMX8MQ_CLK_PCIE1_PHY>,
-			  <&clk IMX8MQ_CLK_PCIE1_CTRL>;
-	assigned-clock-rates = <10000000>, <100000000>, <250000000>;
-	assigned-clock-parents = <&clk IMX8MQ_SYS2_PLL_50M>,
-				 <&clk IMX8MQ_SYS2_PLL_100M>,
-				 <&clk IMX8MQ_SYS2_PLL_250M>;
-	status = "disabled";
 };
 
 &pgc_gpu {
@@ -1250,7 +1230,7 @@
 &dcss {
 	status = "okay";
 
-	port@0 {
+	port {
 		dcss_out: endpoint {
 			  remote-endpoint = <&hdmi_in>;
 		};
@@ -1262,7 +1242,12 @@
 	lane-mapping = <0xe4>;
 	hdcp-config = <0x3>;
 	status = "okay";
+
+	#address-cells = <1>;
+	#size-cells = <0>;
+
 	port@1 {
+		reg = <1>;
 		hdmi_in: endpoint {
 			remote-endpoint = <&dcss_out>;
 		};

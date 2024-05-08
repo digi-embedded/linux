@@ -11,8 +11,8 @@
 #include "desc.h"
 
 /**
- * is_key_type -	Check if the object is a key
  *
+ * is_key_type -	Check if the object is a key
  * @type:		The object type
  *
  * Return:		True if the object is a key (of black or red color),

@@ -123,7 +123,7 @@
 		#size-cells = <2>;
 		ranges;
 
-		its: gic-its@6020000 {
+		its: msi-controller@6020000 {
 			compatible = "arm,gic-v3-its";
 			msi-controller;
 			reg = <0x0 0x6020000 0 0x20000>;
@@ -236,6 +236,18 @@
 		reset: syscon@1e60000 {
 			compatible = "fsl,ls1088a-reset", "syscon";
 			reg = <0x0 0x1e60000 0x0 0x10000>;
+		};
+
+		serdes1: phy@1ea0000 {
+			compatible = "fsl,ls1088a-serdes1", "fsl,lynx-10g";
+			reg = <0x00 0x1ea0000 0x0 0xffff>;
+			#phy-cells = <1>;
+		};
+
+		serdes2: phy@1eb0000 {
+			compatible = "fsl,ls1088a-serdes2", "fsl,lynx-10g";
+			reg = <0x00 0x1eb0000 0x0 0xffff>;
+			#phy-cells = <1>;
 		};
 
 		isc: syscon@1f70000 {

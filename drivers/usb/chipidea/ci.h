@@ -135,8 +135,8 @@ enum ci_revision {
 struct ci_role_driver {
 	int		(*start)(struct ci_hdrc *);
 	void		(*stop)(struct ci_hdrc *);
-	void		(*suspend)(struct ci_hdrc *);
-	void		(*resume)(struct ci_hdrc *, bool power_lost);
+	void		(*suspend)(struct ci_hdrc *ci);
+	void		(*resume)(struct ci_hdrc *ci, bool power_lost);
 	irqreturn_t	(*irq)(struct ci_hdrc *);
 	const char	*name;
 };
@@ -176,6 +176,7 @@ struct hw_bank {
  * @enabled_otg_timer_bits: bits of enabled otg timers
  * @next_otg_timer: next nearest enabled timer to be expired
  * @work: work for role changing
+ * @power_lost_work: work for power lost handling
  * @wq: workqueue thread
  * @qh_pool: allocation pool for queue heads
  * @td_pool: allocation pool for transfer descriptors
@@ -208,8 +209,6 @@ struct hw_bank {
  * @in_lpm: if the core in low power mode
  * @wakeup_int: if wakeup interrupt occur
  * @rev: The revision number for controller
- * @power_lost_work: work item when controller power is lost
- * @power_lost_wq: work queue for controller power is lost
  * @mutex: protect code from concorrent running when doing role switch
  */
 struct ci_hdrc {
@@ -228,6 +227,7 @@ struct ci_hdrc {
 	enum otg_fsm_timer		next_otg_timer;
 	struct usb_role_switch		*role_switch;
 	struct work_struct		work;
+	struct work_struct		power_lost_work;
 	struct workqueue_struct		*wq;
 
 	struct dma_pool			*qh_pool;
@@ -264,20 +264,7 @@ struct ci_hdrc {
 	bool				in_lpm;
 	bool				wakeup_int;
 	enum ci_revision		rev;
-	struct work_struct		power_lost_work;
-	struct workqueue_struct		*power_lost_wq;
-	/* register save area for suspend&resume */
-	u32				pm_command;
-	u32				pm_status;
-	u32				pm_intr_enable;
-	u32				pm_frame_index;
-	u32				pm_segment;
-	u32				pm_frame_list;
-	u32				pm_async_next;
-	u32				pm_configured_flag;
-	u32				pm_portsc;
-	u32				pm_usbmode;
-	struct mutex			mutex;
+	struct mutex                    mutex;
 };
 
 static inline struct ci_role_driver *ci_role(struct ci_hdrc *ci)
@@ -304,14 +291,13 @@ static inline int ci_role_start(struct ci_hdrc *ci, enum ci_role role)
 
 	if (ci->usb_phy) {
 		if (role == CI_ROLE_HOST)
-			usb_phy_set_mode(ci->usb_phy,
-					CUR_USB_MODE_HOST);
+			usb_phy_set_event(ci->usb_phy, USB_EVENT_ID);
 		else
-			usb_phy_set_mode(ci->usb_phy,
-					CUR_USB_MODE_DEVICE);
+			/* in device mode but vbus is invalid*/
+			usb_phy_set_event(ci->usb_phy, USB_EVENT_NONE);
 	}
 
-	return 0;
+	return ret;
 }
 
 static inline void ci_role_stop(struct ci_hdrc *ci)
@@ -326,7 +312,7 @@ static inline void ci_role_stop(struct ci_hdrc *ci)
 	ci->roles[role]->stop(ci);
 
 	if (ci->usb_phy)
-		usb_phy_set_mode(ci->usb_phy, CUR_USB_MODE_NONE);
+		usb_phy_set_event(ci->usb_phy, USB_EVENT_NONE);
 }
 
 static inline enum usb_role ci_role_to_usb_role(struct ci_hdrc *ci)

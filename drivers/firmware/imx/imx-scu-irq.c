@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Copyright 2019-2020 NXP
+ * Copyright 2019,2023 NXP
  *
  * Implementation of the SCU IRQ functions using MU.
  *
@@ -9,13 +9,15 @@
 #include <dt-bindings/firmware/imx/rsrc.h>
 #include <linux/firmware/imx/ipc.h>
 #include <linux/firmware/imx/sci.h>
+#include <linux/kobject.h>
 #include <linux/mailbox_client.h>
+#include <linux/of.h>
 #include <linux/suspend.h>
 #include <linux/sysfs.h>
-#include <linux/kobject.h>
 
 #define IMX_SC_IRQ_FUNC_ENABLE	1
 #define IMX_SC_IRQ_FUNC_STATUS	2
+#define IMX_SC_IRQ_NUM_GROUP	9
 
 static u32 mu_resource_id;
 
@@ -48,12 +50,12 @@ struct scu_wakeup {
 };
 
 /* Sysfs functions */
-struct kobject *wakeup_obj;
+static struct kobject *wakeup_obj;
 static ssize_t wakeup_source_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf);
-static struct kobj_attribute wakeup_source_attr = __ATTR(wakeup_src, 0660, wakeup_source_show, NULL);
+static struct kobj_attribute wakeup_source_attr =
+		__ATTR(wakeup_src, 0660, wakeup_source_show, NULL);
 
 static struct scu_wakeup scu_irq_wakeup[IMX_SC_IRQ_NUM_GROUP];
-
 
 static struct imx_sc_ipc *imx_sc_irq_ipc_handle;
 static struct work_struct imx_sc_irq_work;
@@ -90,6 +92,7 @@ static void imx_scu_irq_work_handler(struct work_struct *work)
 			scu_irq_wakeup[i].valid = false;
 			scu_irq_wakeup[i].wakeup_src = 0;
 		}
+
 		ret = imx_scu_irq_get_status(i, &irq_status);
 		if (ret) {
 			pr_err("get irq group %d status failed, ret %d\n",
@@ -105,6 +108,7 @@ static void imx_scu_irq_work_handler(struct work_struct *work)
 		} else {
 			scu_irq_wakeup[i].wakeup_src = irq_status;
 		}
+
 		pm_system_wakeup();
 		imx_scu_irq_notifier_call_chain(irq_status, &i);
 	}
@@ -173,21 +177,22 @@ static void imx_scu_irq_callback(struct mbox_client *c, void *msg)
 	schedule_work(&imx_sc_irq_work);
 }
 
-static ssize_t wakeup_source_show(struct kobject *kobj,
-					struct kobj_attribute *attr, char *buf)
+static ssize_t wakeup_source_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
-	u8 i = 0, size = 0;
+	int i;
 
 	for (i = 0; i < IMX_SC_IRQ_NUM_GROUP; i++) {
-		if (scu_irq_wakeup[i].wakeup_src != 0) {
-			if (scu_irq_wakeup[i].valid)
-				size += sprintf(buf + size, "Wakeup source group = %d, irq = 0x%x\n",
-							i, scu_irq_wakeup[i].wakeup_src);
-			else
-				size += sprintf(buf + size, "Spurious SCU wakeup, group = %d, irq = 0x%x\n",
-							i, scu_irq_wakeup[i].wakeup_src);
-		}
+		if (!scu_irq_wakeup[i].wakeup_src)
+			continue;
+
+		if (scu_irq_wakeup[i].valid)
+			sprintf(buf, "Wakeup source group = %d, irq = 0x%x\n",
+				i, scu_irq_wakeup[i].wakeup_src);
+		else
+			sprintf(buf, "Spurious SCU wakeup, group = %d, irq = 0x%x\n",
+				i, scu_irq_wakeup[i].wakeup_src);
 	}
+
 	return strlen(buf);
 }
 
@@ -232,12 +237,22 @@ int imx_scu_enable_general_irq_channel(struct device *dev)
 
 	/* Create directory under /sysfs/firmware */
 	wakeup_obj = kobject_create_and_add("scu_wakeup_source", firmware_kobj);
-
-	if (sysfs_create_file(wakeup_obj, &wakeup_source_attr.attr)) {
-		pr_err("Cannot create sysfs file......\n");
-		kobject_put(wakeup_obj);
-		sysfs_remove_file(firmware_kobj, &wakeup_source_attr.attr);
+	if (!wakeup_obj) {
+		ret = -ENOMEM;
+		goto free_ch;
 	}
+
+	ret = sysfs_create_file(wakeup_obj, &wakeup_source_attr.attr);
+	if (ret) {
+		dev_err(dev, "Cannot create wakeup source src file......\n");
+		kobject_put(wakeup_obj);
+		goto free_ch;
+	}
+
+	return 0;
+
+free_ch:
+	mbox_free_channel(ch);
 
 	return ret;
 }

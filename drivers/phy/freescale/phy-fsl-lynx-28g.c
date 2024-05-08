@@ -2,6 +2,7 @@
 /* Copyright (c) 2021-2022 NXP. */
 
 #include <linux/module.h>
+#include <linux/of.h>
 #include <linux/phy.h>
 #include <linux/phy/phy.h>
 #include <linux/platform_device.h>
@@ -465,6 +466,7 @@ link_mode_to_lane_mode(enum ethtool_link_mode_bit_indices link_mode)
 	case ETHTOOL_LINK_MODE_10000baseKR_Full_BIT:
 		return LANE_MODE_10GBASEKR;
 	case ETHTOOL_LINK_MODE_25000baseKR_Full_BIT:
+	case ETHTOOL_LINK_MODE_25000baseKR_S_Full_BIT:
 		return LANE_MODE_25GBASEKR;
 	case ETHTOOL_LINK_MODE_40000baseKR4_Full_BIT:
 		return LANE_MODE_40GBASEKR4;

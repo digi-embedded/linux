@@ -2,17 +2,15 @@
 /*
  * ELE Random Number Generator Driver NXP's Platforms
  *
- * Author: Gaurav Jain: <gaurav.jain@nxp.com>
- *
- * Copyright 2022 NXP
+ * Copyright 2023 NXP
  */
 
-#include <linux/firmware/imx/ele_fw_api.h>
-
-#include "ele_mu.h"
+#include "ele_common.h"
+#include "ele_fw_api.h"
 
 struct ele_trng {
 	struct hwrng rng;
+	struct device *dev;
 };
 
 int ele_trng_init(struct device *dev)
@@ -24,12 +22,13 @@ int ele_trng_init(struct device *dev)
 	if (!trng)
 		return -ENOMEM;
 
+	trng->dev         = dev;
 	trng->rng.name    = "ele-trng";
-	trng->rng.read    = ele_get_random;
+	trng->rng.read    = ele_get_hwrng;
 	trng->rng.priv    = (unsigned long)trng;
 	trng->rng.quality = 1024;
 
-	dev_info(dev, "registering ele-trng\n");
+	dev_dbg(dev, "registering ele-trng\n");
 
 	ret = devm_hwrng_register(dev, &trng->rng);
 	if (ret)
@@ -37,4 +36,12 @@ int ele_trng_init(struct device *dev)
 
 	dev_info(dev, "Successfully registered ele-trng\n");
 	return 0;
+}
+
+int ele_get_hwrng(struct hwrng *rng,
+		  void *data, size_t len, bool wait)
+{
+	struct ele_trng *trng = (struct ele_trng *)rng->priv;
+
+	return ele_get_random(trng->dev, data, len);
 }

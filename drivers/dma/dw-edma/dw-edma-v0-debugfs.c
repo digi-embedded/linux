@@ -136,7 +136,8 @@ static void dw_edma_debugfs_regs_ch(struct dw_edma *dw, enum dw_edma_dir dir,
 	dw_edma_debugfs_create_x32(dw, debugfs_regs, nr_entries, dent);
 }
 
-static void dw_edma_debugfs_regs_wr(struct dw_edma *dw, struct dentry *dent)
+static noinline_for_stack void
+dw_edma_debugfs_regs_wr(struct dw_edma *dw, struct dentry *dent)
 {
 	const struct dw_edma_debugfs_entry debugfs_regs[] = {
 		/* eDMA global registers */
@@ -197,7 +198,8 @@ static void dw_edma_debugfs_regs_wr(struct dw_edma *dw, struct dentry *dent)
 	}
 }
 
-static void dw_edma_debugfs_regs_rd(struct dw_edma *dw, struct dentry *dent)
+static noinline_for_stack void dw_edma_debugfs_regs_rd(struct dw_edma *dw,
+						       struct dentry *dent)
 {
 	const struct dw_edma_debugfs_entry debugfs_regs[] = {
 		/* eDMA global registers */

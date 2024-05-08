@@ -141,7 +141,7 @@ static int scmi_hwmon_thermal_get_temp(struct thermal_zone_device *tz,
 {
 	int ret;
 	long value;
-	struct scmi_thermal_sensor *th_sensor = tz->devdata;
+	struct scmi_thermal_sensor *th_sensor = thermal_zone_device_priv(tz);
 
 	ret = scmi_hwmon_read_scaled_value(th_sensor->ph, th_sensor->info,
 					   &value);
@@ -151,7 +151,34 @@ static int scmi_hwmon_thermal_get_temp(struct thermal_zone_device *tz,
 	return ret;
 }
 
+static int scmi_hwmon_thermal_change_mode(struct thermal_zone_device *tz,
+					  enum thermal_device_mode new_mode)
+{
+	int ret;
+	u32 config;
+	enum thermal_device_mode cur_mode = THERMAL_DEVICE_DISABLED;
+	struct scmi_thermal_sensor *th_sensor = thermal_zone_device_priv(tz);
+
+	ret = sensor_ops->config_get(th_sensor->ph, th_sensor->info->id, &config);
+	if (ret)
+		return ret;
+
+	if (config & BIT(0))
+		cur_mode = THERMAL_DEVICE_ENABLED;
+
+	if (cur_mode == new_mode)
+		return 0;
+
+	if (new_mode == THERMAL_DEVICE_ENABLED)
+		config |= SCMI_SENS_CFG_SENSOR_ENABLED_MASK;
+	else
+		config &= ~SCMI_SENS_CFG_SENSOR_ENABLED_MASK;
+
+	return sensor_ops->config_set(th_sensor->ph, th_sensor->info->id, config);
+}
+
 static const struct thermal_zone_device_ops scmi_hwmon_thermal_ops = {
+	.change_mode = scmi_hwmon_thermal_change_mode,
 	.get_temp = scmi_hwmon_thermal_get_temp,
 };
 
@@ -220,7 +247,7 @@ static int scmi_thermal_sensor_register(struct device *dev,
 			sensor->name);
 	} else {
 		dev_dbg(dev, "Sensor '%s' attached to thermal zone ID:%d\n",
-			sensor->name, tzd->id);
+			sensor->name, thermal_zone_device_id(tzd));
 	}
 
 	return 0;

@@ -2510,7 +2510,7 @@ static int mxc_mmap(struct file *file, struct vm_area_struct *vma)
 		goto mxc_mmap_exit;
 	}
 
-	vma->vm_flags &= ~VM_IO;	/* using shared anonymous pages */
+	vm_flags_clear(vma, VM_IO);	/* using shared anonymous pages */
 
 mxc_mmap_exit:
 	up(&cam->busy_lock);

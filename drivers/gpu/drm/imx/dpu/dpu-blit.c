@@ -271,6 +271,7 @@ const struct drm_ioctl_desc imx_drm_dpu_ioctls[4] = {
 	DRM_IOCTL_DEF_DRV(IMX_DPU_SYNC_DMABUF, imx_drm_dpu_sync_dmabuf_ioctl,
 			DRM_RENDER_ALLOW),
 };
+EXPORT_SYMBOL_GPL(imx_drm_dpu_ioctls);
 
 static int dpu_bliteng_bind(struct device *dev, struct device *master,
 			    void *data)

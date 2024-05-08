@@ -884,24 +884,6 @@ static int pfe_eth_mdio_mux(u8 muxval)
 	return 0;
 }
 
-static int pfe_eth_mdio_write_addr(struct mii_bus *bus, int mii_id,
-				   int dev_addr, int regnum)
-{
-	struct pfe_mdio_priv_s *priv = (struct pfe_mdio_priv_s *)bus->priv;
-
-	__raw_writel(EMAC_MII_DATA_PA(mii_id) |
-		     EMAC_MII_DATA_RA(dev_addr) |
-		     EMAC_MII_DATA_TA | EMAC_MII_DATA(regnum),
-		     priv->mdio_base + EMAC_MII_DATA_REG);
-
-	if (pfe_eth_mdio_timeout(priv, EMAC_MDIO_TIMEOUT)) {
-		dev_err(&bus->dev, "phy MDIO address write timeout\n");
-		return -1;
-	}
-
-	return 0;
-}
-
 static int pfe_eth_mdio_write(struct mii_bus *bus, int mii_id, int regnum,
 			      u16 value)
 {
@@ -911,22 +893,12 @@ static int pfe_eth_mdio_write(struct mii_bus *bus, int mii_id, int regnum,
 	if ((mii_id) && (pfe->mdio_muxval[mii_id]))
 		pfe_eth_mdio_mux(pfe->mdio_muxval[mii_id]);
 
-	if (regnum & MII_ADDR_C45) {
-		pfe_eth_mdio_write_addr(bus, mii_id, (regnum >> 16) & 0x1f,
-					regnum & 0xffff);
-		__raw_writel(EMAC_MII_DATA_OP_CL45_WR |
-			     EMAC_MII_DATA_PA(mii_id) |
-			     EMAC_MII_DATA_RA((regnum >> 16) & 0x1f) |
-			     EMAC_MII_DATA_TA | EMAC_MII_DATA(value),
-			     priv->mdio_base + EMAC_MII_DATA_REG);
-	} else {
-		/* start a write op */
-		__raw_writel(EMAC_MII_DATA_ST | EMAC_MII_DATA_OP_WR |
-			     EMAC_MII_DATA_PA(mii_id) |
-			     EMAC_MII_DATA_RA(regnum) |
-			     EMAC_MII_DATA_TA | EMAC_MII_DATA(value),
-			     priv->mdio_base + EMAC_MII_DATA_REG);
-	}
+	/* start a write op */
+	__raw_writel(EMAC_MII_DATA_ST | EMAC_MII_DATA_OP_WR |
+		     EMAC_MII_DATA_PA(mii_id) |
+		     EMAC_MII_DATA_RA(regnum) |
+		     EMAC_MII_DATA_TA | EMAC_MII_DATA(value),
+		     priv->mdio_base + EMAC_MII_DATA_REG);
 
 	if (pfe_eth_mdio_timeout(priv, EMAC_MDIO_TIMEOUT)) {
 		dev_err(&bus->dev, "%s: phy MDIO write timeout\n", __func__);
@@ -944,22 +916,12 @@ static int pfe_eth_mdio_read(struct mii_bus *bus, int mii_id, int regnum)
 	if ((mii_id) && (pfe->mdio_muxval[mii_id]))
 		pfe_eth_mdio_mux(pfe->mdio_muxval[mii_id]);
 
-	if (regnum & MII_ADDR_C45) {
-		pfe_eth_mdio_write_addr(bus, mii_id, (regnum >> 16) & 0x1f,
-					regnum & 0xffff);
-		__raw_writel(EMAC_MII_DATA_OP_CL45_RD |
-			     EMAC_MII_DATA_PA(mii_id) |
-			     EMAC_MII_DATA_RA((regnum >> 16) & 0x1f) |
-			     EMAC_MII_DATA_TA,
-			     priv->mdio_base + EMAC_MII_DATA_REG);
-	} else {
-		/* start a read op */
-		__raw_writel(EMAC_MII_DATA_ST | EMAC_MII_DATA_OP_RD |
-			     EMAC_MII_DATA_PA(mii_id) |
-			     EMAC_MII_DATA_RA(regnum) |
-			     EMAC_MII_DATA_TA, priv->mdio_base +
-			     EMAC_MII_DATA_REG);
-	}
+	/* start a read op */
+	__raw_writel(EMAC_MII_DATA_ST | EMAC_MII_DATA_OP_RD |
+		     EMAC_MII_DATA_PA(mii_id) |
+		     EMAC_MII_DATA_RA(regnum) |
+		     EMAC_MII_DATA_TA, priv->mdio_base +
+		     EMAC_MII_DATA_REG);
 
 	if (pfe_eth_mdio_timeout(priv, EMAC_MDIO_TIMEOUT)) {
 		dev_err(&bus->dev, "%s: phy MDIO read timeout\n", __func__);

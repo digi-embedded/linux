@@ -52,6 +52,11 @@ properties:
       immune to paired-pages corruptions
     type: boolean
 
+  linux,rootfs:
+    description: Marks partition that contains root filesystem to mount and boot
+      user space from
+    type: boolean
+
   encrypted:
     description: This parameter flags a partition as encrypted. All accesses
       to and from this partition will be encrypted/decrypted.
@@ -82,4 +87,5 @@ then:
     $nodename:
       pattern: '^partition-.*$'
 
+# This is a generic file other binding inherit from and extend
 additionalProperties: true

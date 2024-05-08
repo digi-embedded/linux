@@ -1516,7 +1516,7 @@ exit:
 	return rval;
 }
 
-static int si476x_radio_remove(struct platform_device *pdev)
+static void si476x_radio_remove(struct platform_device *pdev)
 {
 	struct si476x_radio *radio = platform_get_drvdata(pdev);
 
@@ -1524,8 +1524,6 @@ static int si476x_radio_remove(struct platform_device *pdev)
 	video_unregister_device(&radio->videodev);
 	v4l2_device_unregister(&radio->v4l2dev);
 	debugfs_remove_recursive(radio->debugfs);
-
-	return 0;
 }
 
 MODULE_ALIAS("platform:si476x-radio");
@@ -1535,7 +1533,7 @@ static struct platform_driver si476x_radio_driver = {
 		.name	= DRIVER_NAME,
 	},
 	.probe		= si476x_radio_probe,
-	.remove		= si476x_radio_remove,
+	.remove_new	= si476x_radio_remove,
 };
 module_platform_driver(si476x_radio_driver);
 

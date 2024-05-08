@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause)
-/* Copyright 2017-2019 NXP */
+/* Copyright 2017-2023 NXP */
 
+#include <linux/ethtool_netlink.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/init.h>
@@ -9,7 +10,10 @@
 #include <net/genetlink.h>
 #include <net/netlink.h>
 #include <linux/version.h>
+#include <net/pkt_sched.h>
 #include <net/tsn.h>
+
+#include "../sched/sch_mqprio_lib.h"
 
 #define NLA_PARSE_NESTED(a, b, c, d) \
 	nla_parse_nested_deprecated(a, b, c, d, NULL)
@@ -2306,7 +2310,7 @@ static int cmd_qbv_get(struct genl_info *info)
 					qbvconf.admin.base_time))
 				goto err;
 
-		kfree(qbvconf.admin.control_list);
+		kfree(qbvconf.admin.control_list); /* FIXME: this leaks on errors */
 	} else {
 		pr_info("tsn: error getting administrative schedule data\n");
 	}
@@ -3226,42 +3230,32 @@ static int tsn_pcpmap_set(struct sk_buff *skb, struct genl_info *info)
 	tsnops = port->tsnops;
 
 	if (!info->attrs[TSN_ATTR_PCPMAP]) {
-		tsn_simple_reply(info, TSN_CMD_REPLY,
-				 netdev->name, -EINVAL);
-		return -EINVAL;
+		ret = -EINVAL;
+		goto out;
 	}
 
 	na = info->attrs[TSN_ATTR_PCPMAP];
 
 	if (!tsnops->pcpmap_set) {
-		tsn_simple_reply(info, TSN_CMD_REPLY,
-				 netdev->name, -EPERM);
-		return -1;
+		ret = -EOPNOTSUPP;
+		goto out;
 	}
 
-	ret = NLA_PARSE_NESTED(pcpa, TSN_PCP_ATTR_MAX,
-			       na, pcpmap_policy);
-	if (ret) {
-		tsn_simple_reply(info, TSN_CMD_REPLY,
-				 netdev->name, -EINVAL);
-		return -EINVAL;
-	}
+	ret = NLA_PARSE_NESTED(pcpa, TSN_PCP_ATTR_MAX, na, pcpmap_policy);
+	if (ret)
+		goto out;
 
 	pcp_conf.pcp = nla_get_u32(pcpa[TSN_PCP_ATTR_PCP]);
 	pcp_conf.dei = nla_get_u32(pcpa[TSN_PCP_ATTR_DEI]);
 	pcp_conf.cos = nla_get_u32(pcpa[TSN_PCP_ATTR_COS]);
 	pcp_conf.dpl = nla_get_u32(pcpa[TSN_PCP_ATTR_DPL]);
+
 	ret = tsnops->pcpmap_set(netdev, &pcp_conf);
-	if (ret < 0) {
-		tsn_simple_reply(info, TSN_CMD_REPLY,
-				 netdev->name, ret);
-		return ret;
-	}
 
-	tsn_simple_reply(info, TSN_CMD_REPLY,
-			 netdev->name, 0);
+out:
+	tsn_simple_reply(info, TSN_CMD_REPLY, netdev->name, ret);
 
-	return 0;
+	return ret;
 }
 
 static const struct genl_ops tsnnl_ops[] = {
@@ -3414,6 +3408,7 @@ static const struct genl_ops tsnnl_ops[] = {
 		.cmd		= TSN_CMD_PCPMAP_SET,
 		.doit		= tsn_pcpmap_set,
 		.flags		= GENL_ADMIN_PERM,
+		.validate	= GENL_DONT_VALIDATE_STRICT,
 	},
 };
 
@@ -3437,7 +3432,7 @@ static struct genl_family tsn_family = {
 };
 
 int tsn_port_register(struct net_device *netdev,
-		      struct tsn_ops *tsnops, u16 groupid)
+		      const struct tsn_ops *tsnops, u16 groupid)
 {
 	struct tsn_port *port;
 
@@ -3474,6 +3469,144 @@ int tsn_port_register(struct net_device *netdev,
 	return 0;
 }
 EXPORT_SYMBOL(tsn_port_register);
+
+static struct tc_taprio_qopt_offload *
+tsn_conf_to_taprio(struct net_device *netdev,
+		   const struct tsn_qbv_conf *qbv,
+		   const struct tsn_preempt_status *qbu)
+{
+	const struct tsn_qbv_basic *admin_basic = &qbv->admin;
+	int i, num_entries = admin_basic->control_list_length;
+	struct tc_taprio_qopt_offload *taprio;
+
+	taprio = taprio_offload_alloc(num_entries);
+	if (!taprio)
+		return NULL;
+
+	taprio->base_time = admin_basic->base_time;
+	taprio->cycle_time = admin_basic->cycle_time;
+	taprio->cycle_time_extension = admin_basic->cycle_time_extension;
+	taprio->cmd = qbv->gate_enabled ? TAPRIO_CMD_REPLACE : TAPRIO_CMD_DESTROY;
+	taprio->num_entries = num_entries;
+
+	for (i = 0; i < TC_MAX_QUEUE; i++)
+		taprio->max_sdu[i] = qbv->maxsdu;
+
+	for (i = 0; i < num_entries; i++) {
+		struct tsn_qbv_entry *entry = &admin_basic->control_list[i];
+		struct tc_taprio_sched_entry *e = &taprio->entries[i];
+
+		e->command = TC_TAPRIO_CMD_SET_GATES;
+		e->interval = entry->time_interval;
+		e->gate_mask = entry->gate_state;
+	}
+
+	if (qbv->gate_enabled) {
+		if (netdev_get_num_tc(netdev)) {
+			/* Device had a previous mqprio TXQ/TC configuration,
+			 * preserve it
+			 */
+			mqprio_qopt_reconstruct(netdev, &taprio->mqprio.qopt);
+		} else {
+			/* Create a hardcoded mqprio configuration with 8 TCs,
+			 * 1 TXQ per TC and a 1:1 prio:tc mapping
+			 */
+			int i;
+
+			taprio->mqprio.qopt.num_tc = 8;
+
+			for (i = 0; i < 8; i++) {
+				taprio->mqprio.qopt.prio_tc_map[i] = i;
+				taprio->mqprio.qopt.count[i] = 1;
+				taprio->mqprio.qopt.offset[i] = i;
+			}
+		}
+		taprio->mqprio.preemptible_tcs = qbu->admin_state;
+	}
+
+	return taprio;
+}
+
+int tsn_qbv_tc_taprio_compat_set(struct net_device *netdev, struct tsn_qbv_conf *qbv,
+				 bool previously_enabled)
+{
+	struct tsn_port *port = tsn_get_port(netdev);
+	struct tc_taprio_qopt_offload *taprio;
+	struct tsn_preempt_status qbu = {};
+	int ret;
+
+	/* block concurrent tc-taprio attempts */
+	rtnl_lock();
+
+	ret = port->tsnops->qbu_get(netdev, &qbu);
+	if (ret)
+		goto out_unlock;
+
+	taprio = tsn_conf_to_taprio(netdev, qbv, &qbu);
+	if (!taprio) {
+		ret = -ENOMEM;
+		goto out_unlock;
+	}
+
+	/* Do nothing if requested to disable something
+	 * that was never enabled
+	 */
+	if (taprio->cmd == TAPRIO_CMD_DESTROY && !previously_enabled)
+		goto out;
+
+	/* If offload is already enabled, disable the current one first */
+	if (taprio->cmd == TAPRIO_CMD_REPLACE && previously_enabled) {
+		taprio->cmd = TAPRIO_CMD_DESTROY;
+		netdev->netdev_ops->ndo_setup_tc(netdev, TC_SETUP_QDISC_TAPRIO,
+						 taprio);
+		taprio->cmd = TAPRIO_CMD_REPLACE;
+	}
+
+	ret = netdev->netdev_ops->ndo_setup_tc(netdev, TC_SETUP_QDISC_TAPRIO,
+					       taprio);
+out:
+	taprio_offload_free(taprio);
+out_unlock:
+	rtnl_unlock();
+
+	return ret;
+}
+EXPORT_SYMBOL(tsn_qbv_tc_taprio_compat_set);
+
+int tsn_qbu_ethtool_mm_compat_get(struct net_device *netdev,
+				  struct tsn_preempt_status *preemptstat)
+{
+	struct ethtool_mm_state state = {};
+	int err;
+
+	err = netdev->ethtool_ops->get_mm(netdev, &state);
+	if (err)
+		return err;
+
+	preemptstat->preemption_active = state.tx_active;
+
+	return 0;
+}
+EXPORT_SYMBOL(tsn_qbu_ethtool_mm_compat_get);
+
+int tsn_qbu_ethtool_mm_compat_set(struct net_device *netdev,
+				  u8 preemptible_tcs)
+{
+	struct ethtool_mm_state state = {};
+	struct ethtool_mm_cfg cfg;
+	int err;
+
+	err = netdev->ethtool_ops->get_mm(netdev, &state);
+	if (err)
+		return err;
+
+	mm_state_to_cfg(&state, &cfg);
+	cfg.tx_enabled = !!preemptible_tcs;
+	cfg.pmac_enabled = cfg.tx_enabled;
+
+	return netdev->ethtool_ops->set_mm(netdev, &cfg, NULL);
+}
+EXPORT_SYMBOL(tsn_qbu_ethtool_mm_compat_set);
 
 void tsn_port_unregister(struct net_device *netdev)
 {

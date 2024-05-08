@@ -3,17 +3,15 @@
 
 #include "imx8qm-mek-rpmsg.dts"
 
+/delete-node/ &dsp_reserved_heap;
+/delete-node/ &dsp_vdev0vring0;
+/delete-node/ &dsp_vdev0vring1;
+/delete-node/ &dsp_vdev0buffer;
+
 / {
 	reserved-memory {
-		/delete-node/ dsp_reserved;
-		/delete-node/ dsp_reserved_heap;
-		/delete-node/ dsp_vdev0vring0;
-		/delete-node/ dsp_vdev0vring1;
-		/delete-node/ dsp_vdev0buffer;
-
 		dsp_reserved: dsp@92400000 {
 			reg = <0 0x92400000 0 0x2000000>;
-			no-map;
 		};
 	};
 
@@ -109,7 +107,8 @@
 			<&pd IMX_SC_R_AUDIO_CLK_0>,
 			<&pd IMX_SC_R_AUDIO_CLK_1>,
 			<&pd IMX_SC_R_AUDIO_PLL_0>,
-			<&pd IMX_SC_R_AUDIO_PLL_1>;
+			<&pd IMX_SC_R_AUDIO_PLL_1>,
+			<&pd IMX_SC_R_MU_2A>;
 
 	clock-names = "ipg", "ocram", "core",
 		"sai1_bus", "sai1_mclk0", "sai1_mclk1", "sai1_mclk2", "sai1_mclk3";

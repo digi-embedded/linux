@@ -78,8 +78,8 @@ static void rpmsgtty_close(struct tty_struct *tty, struct file *filp)
 	return tty_port_close(tty->port, tty, filp);
 }
 
-static int rpmsgtty_write(struct tty_struct *tty, const unsigned char *buf,
-			 int total)
+static ssize_t rpmsgtty_write(struct tty_struct *tty, const unsigned char *buf,
+			 size_t total)
 {
 	int count, ret = 0;
 	const unsigned char *tbuf;

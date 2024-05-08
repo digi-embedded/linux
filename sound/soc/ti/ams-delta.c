@@ -303,7 +303,7 @@ static int cx81801_open(struct tty_struct *tty)
 static void cx81801_close(struct tty_struct *tty)
 {
 	struct snd_soc_component *component = tty->disc_data;
-	struct snd_soc_dapm_context *dapm = &component->card->dapm;
+	struct snd_soc_dapm_context *dapm;
 
 	del_timer_sync(&cx81801_timer);
 
@@ -314,6 +314,8 @@ static void cx81801_close(struct tty_struct *tty)
 		return;
 
 	v253_ops.close(tty);
+
+	dapm = &component->card->dapm;
 
 	/* Revert back to default audio input/output constellation */
 	snd_soc_dapm_mutex_lock(dapm);
@@ -336,8 +338,8 @@ static void cx81801_hangup(struct tty_struct *tty)
 }
 
 /* Line discipline .receive_buf() */
-static void cx81801_receive(struct tty_struct *tty, const unsigned char *cp,
-		const char *fp, int count)
+static void cx81801_receive(struct tty_struct *tty, const u8 *cp, const u8 *fp,
+			    size_t count)
 {
 	struct snd_soc_component *component = tty->disc_data;
 	const unsigned char *c;
@@ -578,7 +580,7 @@ static int ams_delta_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static int ams_delta_remove(struct platform_device *pdev)
+static void ams_delta_remove(struct platform_device *pdev)
 {
 	struct snd_soc_card *card = platform_get_drvdata(pdev);
 
@@ -586,7 +588,6 @@ static int ams_delta_remove(struct platform_device *pdev)
 
 	snd_soc_unregister_card(card);
 	card->dev = NULL;
-	return 0;
 }
 
 #define DRV_NAME "ams-delta-audio"
@@ -596,7 +597,7 @@ static struct platform_driver ams_delta_driver = {
 		.name = DRV_NAME,
 	},
 	.probe = ams_delta_probe,
-	.remove = ams_delta_remove,
+	.remove_new = ams_delta_remove,
 };
 
 module_platform_driver(ams_delta_driver);

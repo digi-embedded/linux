@@ -737,7 +737,7 @@ static void hynix_fixup_onfi_param_page(struct nand_chip *chip,
 	 * According to ONFI specification, bit 0 of this field "shall be 1".
 	 * Forcibly set this bit.
 	 */
-	p->sdr_timing_modes |= BIT(0);
+	p->sdr_timing_modes |= cpu_to_le16(BIT(0));
 }
 
 const struct nand_manufacturer_ops hynix_nand_manuf_ops = {

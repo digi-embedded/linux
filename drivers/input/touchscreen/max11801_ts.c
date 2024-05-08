@@ -295,8 +295,7 @@ static void max11801_ts_phy_init(struct max11801_data *data)
 	}
 }
 
-static int max11801_ts_probe(struct i2c_client *client,
-				       const struct i2c_device_id *id)
+static int max11801_ts_probe(struct i2c_client *client)
 {
 	struct max11801_data *data;
 	struct input_dev *input_dev;

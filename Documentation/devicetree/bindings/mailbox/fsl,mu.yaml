@@ -31,8 +31,11 @@ properties:
       - const: fsl,imx8-mu-seco
       - const: fsl,imx8ulp-mu-s4
       - const: fsl,imx93-mu-s4
+      - const: fsl,imx95-mu-ele
       - items:
-          - const: fsl,imx93-mu
+          - enum:
+              - fsl,imx93-mu
+              - fsl,imx95-mu
           - const: fsl,imx8ulp-mu
       - items:
           - enum:
@@ -74,9 +77,9 @@ properties:
       type      : Channel type
       channel   : Channel number
 
-      This MU support 5 type of unidirectional channels, each type
+      This MU support 6 type of unidirectional channels, each type
       has 4 channels except RST channel which only has 1 channel.
-      A total of 17 channels.  Following types are
+      A total of 21 channels.  Following types are
       supported:
       0 - TX channel with 32bit transmit register and IRQ transmit
           acknowledgment support.
@@ -84,6 +87,7 @@ properties:
       2 - TX doorbell channel. Without own register and no ACK support.
       3 - RX doorbell channel.
       4 - RST channel
+      5 - Tx doorbell channel. With S/W ACK from the other side.
     const: 2
 
   clocks:

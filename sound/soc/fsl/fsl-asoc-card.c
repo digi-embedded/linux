@@ -28,7 +28,10 @@
 #include "../codecs/wm8960.h"
 #include "../codecs/wm8994.h"
 #include "../codecs/tlv320aic31xx.h"
+#include "../codecs/nau8822.h"
 #include "../codecs/max98088.h"
+
+#define DRIVER_NAME "fsl-asoc-card"
 
 #define CS427x_SYSCLK_MCLK 0
 
@@ -55,6 +58,7 @@ enum fsl_asoc_card_type {
 
 /**
  * struct codec_priv - CODEC private data
+ * @mclk: Main clock of the CODEC
  * @mclk_freq: Clock rate of MCLK
  * @free_freq: Clock rate of MCLK for hw_free()
  * @mclk_id: MCLK (or main clock) id for set_sysclk()
@@ -62,11 +66,12 @@ enum fsl_asoc_card_type {
  * @pll_id: PLL id for set_pll()
  */
 struct codec_priv {
+	struct clk *mclk;
 	unsigned long mclk_freq;
 	unsigned long free_freq;
 	u32 mclk_id;
-	u32 fll_id;
-	u32 pll_id;
+	int fll_id;
+	int pll_id;
 };
 
 /**
@@ -75,6 +80,7 @@ struct codec_priv {
  * @sysclk_dir: SYSCLK directions for set_sysclk()
  * @sysclk_id: SYSCLK ids for set_sysclk()
  * @slot_width: Slot width of each frame
+ * @slot_num: Number of slots of each frame
  *
  * Note: [1] for tx and [0] for rx
  */
@@ -83,6 +89,7 @@ struct cpu_priv {
 	u32 sysclk_dir[2];
 	u32 sysclk_id[2];
 	u32 slot_width;
+	u32 slot_num;
 };
 
 /**
@@ -219,7 +226,11 @@ static int fsl_asoc_card_hw_params(struct snd_pcm_substream *substream,
 	}
 
 	if (cpu_priv->slot_width) {
-		ret = snd_soc_dai_set_tdm_slot(asoc_rtd_to_cpu(rtd, 0), 0x3, 0x3, 2,
+		if (!cpu_priv->slot_num)
+			cpu_priv->slot_num = 2;
+
+		ret = snd_soc_dai_set_tdm_slot(asoc_rtd_to_cpu(rtd, 0), 0x3, 0x3,
+					       cpu_priv->slot_num,
 					       cpu_priv->slot_width);
 		if (ret && ret != -ENOTSUPP) {
 			dev_err(dev, "failed to set TDM slot for cpu dai\n");
@@ -228,7 +239,7 @@ static int fsl_asoc_card_hw_params(struct snd_pcm_substream *substream,
 	}
 
 	/* Specific configuration for PLL */
-	if (codec_priv->pll_id && codec_priv->fll_id) {
+	if (codec_priv->pll_id >= 0 && codec_priv->fll_id >= 0) {
 		if (priv->sample_format == SNDRV_PCM_FORMAT_S24_LE ||
 		    priv->sample_format == SNDRV_PCM_FORMAT_S20_3LE)
 			pll_out = priv->sample_rate * 384;
@@ -256,7 +267,7 @@ static int fsl_asoc_card_hw_params(struct snd_pcm_substream *substream,
 
 	if (priv->card_type == CARD_CS42888) {
 		priv->is_stream_tdm[tx] = channels > 1 && channels % 2;
-		if (asoc_rtd_to_cpu(rtd, 0)->stream_active[!substream->stream] &&
+		if (asoc_rtd_to_cpu(rtd, 0)->stream[!substream->stream].active &&
 			(priv->is_stream_tdm[tx] != priv->is_stream_tdm[!tx])) {
 			dev_err(dev, "Don't support different fmt for tx & rx\n");
 			return -EINVAL;
@@ -290,7 +301,8 @@ static int fsl_asoc_card_hw_params(struct snd_pcm_substream *substream,
 						 cpu_priv->slot_width);
 		}
 		/* set cpu DAI configuration */
-		ret = snd_soc_dai_set_fmt(asoc_rtd_to_cpu(rtd, 0), priv->dai_fmt);
+		ret = snd_soc_dai_set_fmt(asoc_rtd_to_cpu(rtd, 0),
+					  snd_soc_daifmt_clock_provider_flipped(priv->dai_fmt));
 		if (ret) {
 			dev_err(dev, "failed to set cpu dai fmt: %d\n", ret);
 			return ret;
@@ -320,7 +332,7 @@ static int fsl_asoc_card_hw_free(struct snd_pcm_substream *substream)
 
 	priv->streams &= ~BIT(substream->stream);
 
-	if (!priv->streams && codec_priv->pll_id && codec_priv->fll_id) {
+	if (!priv->streams && codec_priv->pll_id >= 0 && codec_priv->fll_id >= 0) {
 		/* Force freq to be free_freq to avoid error message in codec */
 		ret = snd_soc_dai_set_sysclk(asoc_rtd_to_codec(rtd, 0),
 					     codec_priv->mclk_id,
@@ -438,23 +450,6 @@ static int be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
 	return 0;
 }
 
-static int be_hw_params_fixup_esai(struct snd_soc_pcm_runtime *rtd,
-				   struct snd_pcm_hw_params *params)
-{
-	struct snd_pcm_substream *substream = snd_soc_dpcm_get_substream(rtd,
-					      SNDRV_PCM_STREAM_PLAYBACK);
-	struct snd_soc_dai *cpu_dai = asoc_rtd_to_cpu(rtd, 0);
-	struct fsl_esai *esai = snd_soc_dai_get_drvdata(cpu_dai);
-	bool tx = substream->stream == SNDRV_PCM_STREAM_PLAYBACK;
-	struct fsl_esai_mix *mix = &esai->mix[tx];
-	struct snd_interval *channels;
-
-	channels = hw_param_interval(params, SNDRV_PCM_HW_PARAM_CHANNELS);
-	channels->max = channels->min = mix->channels;
-
-	return 0;
-}
-
 SND_SOC_DAILINK_DEFS(hifi,
 	DAILINK_COMP_ARRAY(COMP_EMPTY()),
 	DAILINK_COMP_ARRAY(COMP_EMPTY()),
@@ -470,7 +465,7 @@ SND_SOC_DAILINK_DEFS(hifi_be,
 	DAILINK_COMP_ARRAY(COMP_EMPTY()),
 	DAILINK_COMP_ARRAY(COMP_DUMMY()));
 
-static struct snd_soc_dai_link fsl_asoc_card_dai[] = {
+static const struct snd_soc_dai_link fsl_asoc_card_dai[] = {
 	/* Default ASoC DAI Link*/
 	{
 		.name = "HiFi",
@@ -699,6 +694,9 @@ static int fsl_asoc_card_late_probe(struct snd_soc_card *card)
 		return ret;
 	}
 
+	if (!IS_ERR_OR_NULL(codec_priv->mclk))
+		clk_prepare_enable(codec_priv->mclk);
+
 	return 0;
 }
 
@@ -712,8 +710,6 @@ static int fsl_asoc_card_probe(struct platform_device *pdev)
 	struct platform_device *cpu_pdev;
 	struct fsl_asoc_card_priv *priv;
 	struct device *codec_dev = NULL;
-	struct of_phandle_args args[2];
-	struct platform_device *client_pdev[2];
 	const char *codec_dai_name;
 	const char *codec_dev_name;
 	u32 asrc_fmt = 0;
@@ -786,6 +782,11 @@ static int fsl_asoc_card_probe(struct platform_device *pdev)
 
 	priv->card.dapm_routes = audio_map;
 	priv->card.num_dapm_routes = ARRAY_SIZE(audio_map);
+	priv->card.driver_name = DRIVER_NAME;
+
+	priv->codec_priv.fll_id = -1;
+	priv->codec_priv.pll_id = -1;
+
 	/* Diversify the card configurations */
 	if (of_device_is_compatible(np, "fsl,imx-audio-cs42888")) {
 		codec_dai_name = "cs42888";
@@ -873,6 +874,14 @@ static int fsl_asoc_card_probe(struct platform_device *pdev)
 		priv->card.dapm_routes = NULL;
 		priv->card.num_dapm_routes = 0;
 		priv->card_type = CARD_WM8958;
+	} else if (of_device_is_compatible(np, "fsl,imx-audio-nau8822")) {
+		codec_dai_name = "nau8822-hifi";
+		priv->codec_priv.mclk_id = NAU8822_CLK_MCLK;
+		priv->codec_priv.fll_id = NAU8822_CLK_PLL;
+		priv->codec_priv.pll_id = NAU8822_CLK_PLL;
+		priv->dai_fmt |= SND_SOC_DAIFMT_CBM_CFM;
+		if (codec_dev)
+			priv->codec_priv.mclk = devm_clk_get(codec_dev, NULL);
 	} else if (of_device_is_compatible(np, "fsl,imx-audio-max98088")) {
 		codec_dai_name = "HiFi";
 		priv->dai_fmt |= SND_SOC_DAIFMT_CBC_CFC;
@@ -1032,7 +1041,7 @@ static int fsl_asoc_card_probe(struct platform_device *pdev)
 	priv->card.num_links = 1;
 
 	if (asrc_pdev) {
-		/* DPCM DAI Links only if ASRC exsits */
+		/* DPCM DAI Links only if ASRC exists */
 		priv->dai_link[1].cpus->of_node = asrc_np;
 		priv->dai_link[1].platforms->of_node = asrc_np;
 		priv->dai_link[2].codecs->dai_name = codec_dai_name;
@@ -1068,80 +1077,6 @@ static int fsl_asoc_card_probe(struct platform_device *pdev)
 			else
 				priv->asrc_format = SNDRV_PCM_FORMAT_S16_LE;
 		}
-	}
-
-	/* switch to v2 if there is "client-dais" property */
-	if (of_property_read_bool(cpu_np, "client-dais")) {
-		ret = of_parse_phandle_with_args(cpu_np, "client-dais", NULL, 0,
-						 &args[0]);
-		if (ret < 0) {
-			dev_err(&pdev->dev, "of_parse_phandle_with_args failed\n");
-			goto asrc_fail;
-		}
-
-		client_pdev[0] = of_find_device_by_node(args[0].np);
-		if (!client_pdev[0]) {
-			dev_err(&pdev->dev, "failed to find SAI platform device\n");
-			ret = -EINVAL;
-			goto asrc_fail;
-		}
-
-		ret = of_parse_phandle_with_args(cpu_np, "client-dais", NULL, 1,
-						 &args[1]);
-		if (ret < 0) {
-			dev_err(&pdev->dev, "of_parse_phandle_with_args failed\n");
-			goto asrc_fail;
-		}
-
-		client_pdev[1] = of_find_device_by_node(args[1].np);
-		if (!client_pdev[1]) {
-			dev_err(&pdev->dev, "failed to find SAI platform device\n");
-			ret = -EINVAL;
-			goto asrc_fail;
-		}
-
-		priv->dai_link[0].name = "HiFi-FE1";
-		priv->dai_link[0].stream_name = "HiFi-FE1";
-		priv->dai_link[0].ops = NULL;
-		priv->dai_link[0].dynamic = 1;
-		priv->dai_link[0].dpcm_playback = 1;
-		priv->dai_link[0].dpcm_capture = 1;
-		priv->dai_link[0].dpcm_merged_chan = 1;
-		priv->dai_link[0].dpcm_merged_rate = 1;
-		priv->dai_link[0].dpcm_merged_format = 1;
-
-		priv->dai_link[1].name = "HiFi-FE2";
-		priv->dai_link[1].stream_name = "HiFi-FE2";
-		priv->dai_link[1].ops = NULL;
-		priv->dai_link[1].dynamic = 1;
-		priv->dai_link[1].dpcm_playback = 1;
-		priv->dai_link[1].dpcm_capture = 1;
-		priv->dai_link[1].dpcm_merged_chan = 1;
-		priv->dai_link[1].dpcm_merged_rate = 1;
-		priv->dai_link[1].dpcm_merged_format = 1;
-
-		priv->dai_link[2].name = "HiFi-BE";
-		priv->dai_link[2].stream_name = "HiFi-BE";
-		priv->dai_link[2].no_pcm = 1;
-		priv->dai_link[2].dpcm_playback = 1;
-		priv->dai_link[2].dpcm_capture = 1;
-		priv->dai_link[2].be_hw_params_fixup = be_hw_params_fixup_esai;
-
-		priv->dai_link[0].cpus->dai_name = dev_name(&client_pdev[0]->dev);
-		priv->dai_link[0].cpus->of_node = args[0].np;
-		priv->dai_link[0].platforms->of_node = args[0].np;
-		priv->dai_link[0].codecs->name = "snd-soc-dummy";
-		priv->dai_link[0].codecs->dai_name = "snd-soc-dummy-dai";
-		priv->dai_link[0].codecs->of_node = NULL;
-		priv->dai_link[1].cpus->dai_name = dev_name(&client_pdev[1]->dev);
-		priv->dai_link[1].cpus->of_node = args[1].np;
-		priv->dai_link[1].platforms->of_node = args[1].np;
-		priv->dai_link[2].cpus->dai_name = dev_name(&cpu_pdev->dev);
-		priv->dai_link[2].codecs->of_node = codec_np;
-
-		priv->card.num_links = 3;
-		priv->card.dapm_routes = audio_map_esai;
-		priv->card.num_dapm_routes = ARRAY_SIZE(audio_map_esai);
 	}
 
 	/* Finish card registering */
@@ -1203,6 +1138,7 @@ static const struct of_device_id fsl_asoc_card_dt_ids[] = {
 	{ .compatible = "fsl,imx-audio-wm8524", },
 	{ .compatible = "fsl,imx-audio-si476x", },
 	{ .compatible = "fsl,imx-audio-wm8958", },
+	{ .compatible = "fsl,imx-audio-nau8822", },
 	{ .compatible = "fsl,imx-audio-max98088", },
 	{}
 };
@@ -1211,7 +1147,7 @@ MODULE_DEVICE_TABLE(of, fsl_asoc_card_dt_ids);
 static struct platform_driver fsl_asoc_card_driver = {
 	.probe = fsl_asoc_card_probe,
 	.driver = {
-		.name = "fsl-asoc-card",
+		.name = DRIVER_NAME,
 		.pm = &snd_soc_pm_ops,
 		.of_match_table = fsl_asoc_card_dt_ids,
 	},
@@ -1220,5 +1156,5 @@ module_platform_driver(fsl_asoc_card_driver);
 
 MODULE_DESCRIPTION("Freescale Generic ASoC Sound Card driver with ASRC");
 MODULE_AUTHOR("Nicolin Chen <nicoleotsuka@gmail.com>");
-MODULE_ALIAS("platform:fsl-asoc-card");
+MODULE_ALIAS("platform:" DRIVER_NAME);
 MODULE_LICENSE("GPL");

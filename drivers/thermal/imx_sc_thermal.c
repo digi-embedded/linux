@@ -4,17 +4,14 @@
  */
 
 #include <dt-bindings/firmware/imx/rsrc.h>
-#include <linux/device_cooling.h>
 #include <linux/err.h>
 #include <linux/firmware/imx/sci.h>
 #include <linux/module.h>
 #include <linux/of.h>
-#include <linux/of_device.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>
 #include <linux/thermal.h>
 
-#include "thermal_core.h"
 #include "thermal_hwmon.h"
 
 #define IMX_SC_MISC_FUNC_GET_TEMP	13
@@ -25,7 +22,6 @@ static struct imx_sc_ipc *thermal_ipc_handle;
 struct imx_sc_sensor {
 	struct thermal_zone_device *tzd;
 	u32 resource_id;
-	struct thermal_cooling_device *cdev;
 	int temp_passive;
 	int temp_critical;
 };
@@ -63,7 +59,7 @@ static int imx_sc_thermal_get_temp(struct thermal_zone_device *tz, int *temp)
 {
 	struct imx_sc_msg_misc_get_temp msg;
 	struct imx_sc_rpc_msg *hdr = &msg.hdr;
-	struct imx_sc_sensor *sensor = tz->devdata;
+	struct imx_sc_sensor *sensor = thermal_zone_device_priv(tz);
 	int ret;
 
 	msg.data.req.resource_id = sensor->resource_id;
@@ -91,7 +87,8 @@ static int imx_sc_thermal_get_temp(struct thermal_zone_device *tz, int *temp)
 	return 0;
 }
 
-static int imx_sc_thermal_get_trend(struct thermal_zone_device *tz, int trip,
+static int imx_sc_thermal_get_trend(struct thermal_zone_device *tz,
+				    const struct thermal_trip *trip,
 				    enum thermal_trend *trend)
 {
 	int trip_temp;
@@ -100,7 +97,7 @@ static int imx_sc_thermal_get_trend(struct thermal_zone_device *tz, int trip,
 	if (!sensor->tzd)
 		return 0;
 
-	trip_temp = (trip == IMX_TRIP_PASSIVE) ? sensor->temp_passive :
+	trip_temp = (trip->type == THERMAL_TRIP_PASSIVE) ? sensor->temp_passive :
 					     sensor->temp_critical;
 
 	if (sensor->tzd->temperature >=
@@ -135,9 +132,9 @@ static const struct thermal_zone_device_ops imx_sc_thermal_ops = {
 static int imx_sc_thermal_probe(struct platform_device *pdev)
 {
 	struct imx_sc_sensor *sensor;
-	const struct thermal_trip *trip;
+	struct thermal_trip trip;
 	const int *resource_id;
-	int i, ret;
+	int i, j, ret;
 
 	ret = imx_scu_get_handle(&thermal_ipc_handle);
 	if (ret)
@@ -179,34 +176,20 @@ static int imx_sc_thermal_probe(struct platform_device *pdev)
 			return ret;
 		}
 
-		if (devm_thermal_add_hwmon_sysfs(sensor->tzd))
-			dev_warn(&pdev->dev, "failed to add hwmon sysfs attributes\n");
+		devm_thermal_add_hwmon_sysfs(&pdev->dev, sensor->tzd);
 
-		trip = of_thermal_get_trip_points(sensor->tzd);
-		sensor->temp_passive = trip[0].temperature;
-		sensor->temp_critical = trip[1].temperature;
+		for (j = 0; j < thermal_zone_get_num_trips(sensor->tzd); j++) {
+			ret = thermal_zone_get_trip(sensor->tzd, j, &trip);
+			if (ret)
+				continue;
 
-		sensor->cdev = devfreq_cooling_register();
-		if (IS_ERR(sensor->cdev)) {
-			dev_err(&pdev->dev,
-				"failed to register devfreq cooling device: %d\n",
-				ret);
-			return ret;
+			if (trip.type == THERMAL_TRIP_CRITICAL) {
+				sensor->temp_critical = trip.temperature;
+			} else if(trip.type == THERMAL_TRIP_PASSIVE) {
+				sensor->temp_passive = trip.temperature;
+			}
 		}
 
-		ret = thermal_zone_bind_cooling_device(sensor->tzd,
-			IMX_TRIP_PASSIVE,
-			sensor->cdev,
-			THERMAL_NO_LIMIT,
-			THERMAL_NO_LIMIT,
-			THERMAL_WEIGHT_DEFAULT);
-		if (ret) {
-			dev_err(&sensor->tzd->device,
-				"binding zone %s with cdev %s failed:%d\n",
-				sensor->tzd->type, sensor->cdev->type, ret);
-			devfreq_cooling_unregister(sensor->cdev);
-			return ret;
-		}
 	}
 
 	return 0;

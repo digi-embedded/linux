@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: (GPL-2.0+ OR BSD-3-Clause) WITH Linux-syscall-note */
-/* Copyright 2017-2019 NXP */
+/* Copyright 2017-2023 NXP */
 
 #ifndef __UAPI_GENL_TSN_H
 #define __UAPI_GENL_TSN_H
@@ -86,7 +86,7 @@ enum {
 	TSN_ATTR_IFNAME,
 	TSN_ATTR_PORT_NUMBER,
 	TSN_ATTR_QBV,
-	TSN_ATTR_STREAM_IDENTIFY, /* stream identify */
+	TSN_ATTR_STREAM_IDENTIFY,	/* stream identify */
 	TSN_ATTR_QCI_SP,		/* psfp port capbility parameters */
 	TSN_ATTR_QCI_SFI,		/* psfp stream filter instance */
 	TSN_ATTR_QCI_SGI,		/* psfp stream gate instance */
@@ -97,10 +97,10 @@ enum {
 	TSN_ATTR_CT,			/* cut through */
 	TSN_ATTR_CBGEN,			/* 802.1CB sequence generate */
 	TSN_ATTR_CBREC,			/* 802.1CB sequence recover */
-	TSN_ATTR_CBSTAT,                 /* 802.1CB status */
+	TSN_ATTR_CBSTAT,		/* 802.1CB status */
 	TSN_ATTR_PCPMAP,
 	TSN_ATTR_DSCP,
-	TSN_ATTR_CAP,		/* TSN capbility */
+	TSN_ATTR_CAP,			/* TSN capbility */
 	__TSN_CMD_ATTR_MAX,
 };
 #define TSN_CMD_ATTR_MAX (__TSN_CMD_ATTR_MAX - 1)

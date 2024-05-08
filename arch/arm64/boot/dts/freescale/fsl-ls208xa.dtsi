@@ -61,7 +61,7 @@
 		interrupt-controller;
 		interrupts = <1 9 0x4>;
 
-		its: gic-its@6020000 {
+		its: msi-controller@6020000 {
 			compatible = "arm,gic-v3-its";
 			msi-controller;
 			reg = <0x0 0x6020000 0 0x20000>;
@@ -284,6 +284,18 @@
 			clocks = <&clockgen QORIQ_CLK_PLATFORM_PLL
 					    QORIQ_CLK_PLL_DIV(4)>;
 			clock-names = "sfp";
+		};
+
+		serdes1: phy@1ea0000 {
+			compatible = "fsl,ls2088a-serdes1", "fsl,lynx-10g";
+			reg = <0x00 0x1ea0000 0x0 0xffff>;
+			#phy-cells = <1>;
+		};
+
+		serdes2: phy@1eb0000 {
+			compatible = "fsl,ls2088a-serdes2", "fsl,lynx-10g";
+			reg = <0x00 0x1eb0000 0x0 0xffff>;
+			#phy-cells = <1>;
 		};
 
 		isc: syscon@1f70000 {

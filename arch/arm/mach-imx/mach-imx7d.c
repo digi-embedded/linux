@@ -5,7 +5,7 @@
 #include <linux/irqchip.h>
 #include <linux/mfd/syscon.h>
 #include <linux/mfd/syscon/imx7-iomuxc-gpr.h>
-#include <linux/of_platform.h>
+#include <linux/platform_device.h>
 #include <linux/phy.h>
 #include <linux/regmap.h>
 
@@ -94,7 +94,6 @@ static inline void imx7d_disable_arm_arch_timer(void)
 static void __init imx7d_init_machine(void)
 {
 	imx_anatop_init();
-	of_platform_default_populate(NULL, NULL, NULL);
 	imx7d_pm_init();
 	imx7d_enet_init();
 }

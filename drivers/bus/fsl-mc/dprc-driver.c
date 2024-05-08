@@ -11,7 +11,6 @@
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/interrupt.h>
-#include <linux/msi.h>
 #include <linux/fsl/mc.h>
 
 #include "fsl-mc-private.h"
@@ -841,10 +840,10 @@ EXPORT_SYMBOL_GPL(dprc_cleanup);
  *
  * It removes the DPRC's child objects from Linux (not from the MC).
  */
-static int dprc_remove(struct fsl_mc_device *mc_dev)
+static void dprc_remove(struct fsl_mc_device *mc_dev)
 {
 	if (!is_fsl_mc_bus_dprc(mc_dev))
-		return -EINVAL;
+		return;
 
 	device_for_each_child(&mc_dev->dev, NULL, __fsl_mc_device_remove);
 
@@ -854,8 +853,6 @@ static int dprc_remove(struct fsl_mc_device *mc_dev)
 		fsl_mc_uapi_remove_device_file(to_fsl_mc_bus(mc_dev));
 
 	dev_info(&mc_dev->dev, "DPRC device unbound from driver");
-
-	return 0;
 }
 
 /**

@@ -101,7 +101,7 @@ static int skcipher_free_shm(struct tee_crypt_priv_data *tc_prv_ctx,
 	struct tee_ioctl_invoke_arg inv_arg;
 	struct tee_param param[4];
 
-	if (!tc_prv || !pa) {
+	if (!tc_prv_ctx || !pa) {
 		pr_err("%s: Invalid Input params.\n", __func__);
 		return -EINVAL;
 	}
@@ -158,8 +158,8 @@ static int skcipher_setkey(struct crypto_skcipher *skcipher,
 						  key_len);
 	if (IS_ERR(reg_shm_key)) {
 		pr_err("key buffer, tee-shm register failed.\n");
-		mutex_unlock(&tc_prv_lock);
-		return PTR_ERR(reg_shm_key);
+		ret = PTR_ERR(reg_shm_key);
+		goto exit;
 	}
 
 	inv_arg.func = xts_algo ? PTA_SET_XTS_KEY : PTA_SET_CBC_KEY;
@@ -182,6 +182,7 @@ static int skcipher_setkey(struct crypto_skcipher *skcipher,
 		ret = -EFAULT;
 	}
 
+exit:
 	mutex_unlock(&tc_prv_lock);
 
 	if (reg_shm_key)
@@ -536,17 +537,35 @@ static int optee_ctx_match(struct tee_ioctl_version_data *ver, const void *data)
 	return (ver->impl_id == TEE_IMPL_ID_OPTEE);
 }
 
+static int tee_crypt_close_session(struct tee_crypt_priv_data *tc_prv_ctx)
+{
+	if (!tc_prv_ctx)
+		return -EFAULT;
+
+	if (tc_prv_ctx->shm_pool)
+		memunmap(tc_prv_ctx->shm_pool);
+	if (tc_prv_ctx->shm_pool_paddr)
+		skcipher_free_shm(tc_prv_ctx, tc_prv_ctx->shm_pool_paddr);
+	if (tc_prv_ctx->session_id)
+		tee_client_close_session(tc_prv_ctx->ctx,
+					 tc_prv_ctx->session_id);
+	if (tc_prv_ctx->ctx)
+		tee_client_close_context(tc_prv_ctx->ctx);
+
+	return 0;
+}
+
 static int tee_crypt_open_session(struct tee_crypt_priv_data *tc_prv_ctx)
 {
 	int ret;
 	struct tee_ioctl_open_session_arg sess_arg = { };
 
-	if (!tc_prv)
+	if (!tc_prv_ctx)
 		return -EFAULT;
 
 	tc_prv_ctx->ctx = tee_client_open_context(NULL, optee_ctx_match, NULL,
 						  NULL);
-	if (IS_ERR(tc_prv->ctx))
+	if (IS_ERR(tc_prv_ctx->ctx))
 		return -ENODEV;
 
 	memcpy(sess_arg.uuid, tc_prv_ctx->uuid.b, TEE_IOCTL_UUID_LEN);
@@ -569,7 +588,7 @@ static int tee_crypt_open_session(struct tee_crypt_priv_data *tc_prv_ctx)
 		ret = -ENOMEM;
 		goto out_ctx;
 	}
-	tc_prv->shm_pool = memremap(tc_prv_ctx->shm_pool_paddr,
+	tc_prv_ctx->shm_pool = memremap(tc_prv_ctx->shm_pool_paddr,
 				    AES_BLOCK_SIZE + 2 * SZ_4K, MEMREMAP_WB);
 	if (!tc_prv_ctx->shm_pool) {
 		ret = -EINVAL;
@@ -579,34 +598,9 @@ static int tee_crypt_open_session(struct tee_crypt_priv_data *tc_prv_ctx)
 	return 0;
 
 out_ctx:
-	if (tc_prv->shm_pool)
-		memunmap(tc_prv->shm_pool);
-	if (tc_prv->shm_pool_paddr)
-		skcipher_free_shm(tc_prv, tc_prv->shm_pool_paddr);
-	if (tc_prv->session_id)
-		tee_client_close_session(tc_prv->ctx, tc_prv->session_id);
-	if (tc_prv->ctx)
-		tee_client_close_context(tc_prv->ctx);
+	tee_crypt_close_session(tc_prv_ctx);
 
 	return ret;
-}
-
-static int tee_crypt_close_session(struct tee_crypt_priv_data *tc_prv_ctx)
-{
-	if (!tc_prv_ctx)
-		return -EFAULT;
-
-	if (tc_prv_ctx->shm_pool)
-		memunmap(tc_prv_ctx->shm_pool);
-	if (tc_prv_ctx->shm_pool_paddr)
-		skcipher_free_shm(tc_prv_ctx, tc_prv_ctx->shm_pool_paddr);
-	if (tc_prv_ctx->session_id)
-		tee_client_close_session(tc_prv_ctx->ctx,
-					 tc_prv_ctx->session_id);
-	if (tc_prv_ctx->ctx)
-		tee_client_close_context(tc_prv_ctx->ctx);
-
-	return 0;
 }
 
 #define VERSION "1.0"

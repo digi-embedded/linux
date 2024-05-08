@@ -155,7 +155,7 @@ static int __init ethosu_init(void)
 {
 	int ret;
 
-	ethosu_class = class_create(THIS_MODULE, ETHOSU_DRIVER_NAME);
+	ethosu_class = class_create(ETHOSU_DRIVER_NAME);
 	if (IS_ERR(ethosu_class)) {
 		printk("Failed to create class '%s'.\n", ETHOSU_DRIVER_NAME);
 

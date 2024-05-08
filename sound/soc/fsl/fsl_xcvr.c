@@ -326,7 +326,7 @@ static int fsl_xcvr_en_aud_pll(struct fsl_xcvr *xcvr, u32 freq)
 	struct device *dev = &xcvr->pdev->dev;
 	int ret;
 
-	freq = xcvr->soc_data->spdif_only ? freq / 10 : freq;
+	freq = xcvr->soc_data->spdif_only ? freq / 5 : freq;
 	clk_disable_unprepare(xcvr->phy_clk);
 	ret = clk_set_rate(xcvr->phy_clk, freq);
 	if (ret < 0) {
@@ -377,11 +377,21 @@ static int fsl_xcvr_prepare(struct snd_pcm_substream *substream,
 	bool tx = substream->stream == SNDRV_PCM_STREAM_PLAYBACK;
 	u32 m_ctl = 0, v_ctl = 0;
 	u32 r = substream->runtime->rate, ch = substream->runtime->channels;
-	u32 fout = 32 * r * ch * 10 * 2;
+	u32 fout = 32 * r * ch * 10;
 	int ret = 0;
 
 	switch (xcvr->mode) {
 	case FSL_XCVR_MODE_SPDIF:
+		if (xcvr->soc_data->spdif_only && tx) {
+			ret = regmap_update_bits(xcvr->regmap, FSL_XCVR_TX_DPTH_CTRL_SET,
+						 FSL_XCVR_TX_DPTH_CTRL_BYPASS_FEM,
+						 FSL_XCVR_TX_DPTH_CTRL_BYPASS_FEM);
+			if (ret < 0) {
+				dev_err(dai->dev, "Failed to set bypass fem: %d\n", ret);
+				return ret;
+			}
+		}
+		fallthrough;
 	case FSL_XCVR_MODE_ARC:
 		if (tx) {
 			ret = fsl_xcvr_en_aud_pll(xcvr, fout);
@@ -874,13 +884,6 @@ static struct snd_kcontrol_new fsl_xcvr_tx_ctls[] = {
 	},
 };
 
-static const struct snd_soc_dai_ops fsl_xcvr_dai_ops = {
-	.prepare = fsl_xcvr_prepare,
-	.startup = fsl_xcvr_startup,
-	.shutdown = fsl_xcvr_shutdown,
-	.trigger = fsl_xcvr_trigger,
-};
-
 static int fsl_xcvr_dai_probe(struct snd_soc_dai *dai)
 {
 	struct fsl_xcvr *xcvr = snd_soc_dai_get_drvdata(dai);
@@ -901,8 +904,15 @@ static int fsl_xcvr_dai_probe(struct snd_soc_dai *dai)
 	return 0;
 }
 
+static const struct snd_soc_dai_ops fsl_xcvr_dai_ops = {
+	.probe		= fsl_xcvr_dai_probe,
+	.prepare	= fsl_xcvr_prepare,
+	.startup	= fsl_xcvr_startup,
+	.shutdown	= fsl_xcvr_shutdown,
+	.trigger	= fsl_xcvr_trigger,
+};
+
 static struct snd_soc_dai_driver fsl_xcvr_dai = {
-	.probe  = fsl_xcvr_dai_probe,
 	.ops = &fsl_xcvr_dai_ops,
 	.playback = {
 		.stream_name = "CPU-Playback",
@@ -1138,8 +1148,8 @@ static irqreturn_t irq0_isr(int irq, void *devid)
 		if (!xcvr->soc_data->spdif_only) {
 			/* Data RAM is 4KiB, last two pages: 8 and 9. Select page 8. */
 			regmap_update_bits(xcvr->regmap, FSL_XCVR_EXT_CTRL,
-					FSL_XCVR_EXT_CTRL_PAGE_MASK,
-					FSL_XCVR_EXT_CTRL_PAGE(8));
+					   FSL_XCVR_EXT_CTRL_PAGE_MASK,
+					   FSL_XCVR_EXT_CTRL_PAGE(8));
 
 			/* Find updated CS buffer */
 			reg_ctrl = xcvr->ram_addr + FSL_XCVR_RX_CS_CTRL_0;
@@ -1154,7 +1164,7 @@ static irqreturn_t irq0_isr(int irq, void *devid)
 			if (val) {
 				/* copy CS buffer */
 				memcpy_fromio(&xcvr->rx_iec958.status, reg_buff,
-						sizeof(xcvr->rx_iec958.status));
+					      sizeof(xcvr->rx_iec958.status));
 				for (i = 0; i < 6; i++) {
 					val = *(u32 *)(xcvr->rx_iec958.status + i*4);
 					*(u32 *)(xcvr->rx_iec958.status + i*4) =
@@ -1338,12 +1348,10 @@ static int fsl_xcvr_probe(struct platform_device *pdev)
 	return ret;
 }
 
-static int fsl_xcvr_remove(struct platform_device *pdev)
+static void fsl_xcvr_remove(struct platform_device *pdev)
 {
 	sysfs_remove_group(&pdev->dev.kobj, fsl_xcvr_get_attr_grp());
 	pm_runtime_disable(&pdev->dev);
-
-	return 0;
 }
 
 static __maybe_unused int fsl_xcvr_runtime_suspend(struct device *dev)
@@ -1384,7 +1392,6 @@ static __maybe_unused int fsl_xcvr_runtime_resume(struct device *dev)
 {
 	struct fsl_xcvr *xcvr = dev_get_drvdata(dev);
 	int ret;
-	u64 rate, div;
 
 	ret = reset_control_assert(xcvr->reset);
 	if (ret < 0) {
@@ -1396,17 +1403,6 @@ static __maybe_unused int fsl_xcvr_runtime_resume(struct device *dev)
 	if (ret) {
 		dev_err(dev, "failed to start IPG clock.\n");
 		return ret;
-	}
-
-	/* set clk div for xcvr ip internal use */
-	if (xcvr->soc_data->spdif_only) {
-		rate = clk_get_rate(xcvr->ipg_clk);
-		div = rate / 1000000 - 1;
-		ret = regmap_write(xcvr->regmap, FSL_XCVR_CLK_CTRL, div);
-		if (ret < 0) {
-			dev_err(dev, "Error while setting CLK_CTRL: %d\n", ret);
-			return ret;
-		}
 	}
 
 	ret = clk_prepare_enable(xcvr->pll_ipg_clk);
@@ -1486,13 +1482,12 @@ static const struct dev_pm_ops fsl_xcvr_pm_ops = {
 
 static struct platform_driver fsl_xcvr_driver = {
 	.probe = fsl_xcvr_probe,
-	.remove = fsl_xcvr_remove,
 	.driver = {
 		.name = "fsl,imx8mp-audio-xcvr",
 		.pm = &fsl_xcvr_pm_ops,
 		.of_match_table = fsl_xcvr_dt_ids,
 	},
-	.remove = fsl_xcvr_remove,
+	.remove_new = fsl_xcvr_remove,
 };
 module_platform_driver(fsl_xcvr_driver);
 

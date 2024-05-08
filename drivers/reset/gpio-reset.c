@@ -19,23 +19,10 @@
 
 struct gpio_reset_data {
 	struct reset_controller_dev rcdev;
-	unsigned int gpio;
-	bool active_low;
+	struct gpio_desc *gpiod;
 	s32 delay_us;
 	s32 post_delay_ms;
 };
-
-static void gpio_reset_set(struct reset_controller_dev *rcdev, int asserted)
-{
-	struct gpio_reset_data *drvdata = container_of(rcdev,
-			struct gpio_reset_data, rcdev);
-	int value = asserted;
-
-	if (drvdata->active_low)
-		value = !value;
-
-	gpio_set_value_cansleep(drvdata->gpio, value);
-}
 
 static int gpio_reset(struct reset_controller_dev *rcdev, unsigned long id)
 {
@@ -45,9 +32,9 @@ static int gpio_reset(struct reset_controller_dev *rcdev, unsigned long id)
 	if (drvdata->delay_us < 0)
 		return -ENOSYS;
 
-	gpio_reset_set(rcdev, 1);
+	gpiod_set_value_cansleep(drvdata->gpiod, 1);
 	udelay(drvdata->delay_us);
-	gpio_reset_set(rcdev, 0);
+	gpiod_set_value_cansleep(drvdata->gpiod, 0);
 
 	if (drvdata->post_delay_ms < 0)
 		return 0;
@@ -59,15 +46,20 @@ static int gpio_reset(struct reset_controller_dev *rcdev, unsigned long id)
 static int gpio_reset_assert(struct reset_controller_dev *rcdev,
 		unsigned long id)
 {
-	gpio_reset_set(rcdev, 1);
+	struct gpio_reset_data *drvdata = container_of(rcdev,
+			struct gpio_reset_data, rcdev);
 
+	gpiod_set_value_cansleep(drvdata->gpiod, 1);
 	return 0;
 }
 
 static int gpio_reset_deassert(struct reset_controller_dev *rcdev,
 		unsigned long id)
 {
-	gpio_reset_set(rcdev, 0);
+	struct gpio_reset_data *drvdata = container_of(rcdev,
+			struct gpio_reset_data, rcdev);
+
+	gpiod_set_value_cansleep(drvdata->gpiod, 0);
 
 	return 0;
 }
@@ -91,8 +83,7 @@ static int gpio_reset_probe(struct platform_device *pdev)
 {
 	struct device_node *np = pdev->dev.of_node;
 	struct gpio_reset_data *drvdata;
-	enum of_gpio_flags flags;
-	unsigned long gpio_flags;
+	enum gpiod_flags flags;
 	bool initially_in_reset;
 	int ret;
 
@@ -100,21 +91,24 @@ static int gpio_reset_probe(struct platform_device *pdev)
 	if (drvdata == NULL)
 		return -ENOMEM;
 
-	if (of_gpio_named_count(np, "reset-gpios") != 1) {
+	if (gpiod_count(&pdev->dev, "reset") != 1) {
 		dev_err(&pdev->dev,
 			"reset-gpios property missing, or not a single gpio\n");
 		return -EINVAL;
 	}
 
-	drvdata->gpio = of_get_named_gpio_flags(np, "reset-gpios", 0, &flags);
-	if (drvdata->gpio == -EPROBE_DEFER) {
-		return drvdata->gpio;
-	} else if (!gpio_is_valid(drvdata->gpio)) {
-		dev_err(&pdev->dev, "invalid reset gpio: %d\n", drvdata->gpio);
-		return drvdata->gpio;
+	initially_in_reset = of_property_read_bool(np, "initially-in-reset");
+	flags = initially_in_reset ? GPIOD_OUT_HIGH : GPIOD_OUT_LOW;
+	drvdata->gpiod = devm_gpiod_get(&pdev->dev, "reset", flags);
+	if (IS_ERR(drvdata->gpiod)) {
+		ret = PTR_ERR(drvdata->gpiod);
+		if (ret == -EPROBE_DEFER) {
+			return ret;
+		} else {
+			dev_err(&pdev->dev, "invalid reset gpio: %d\n", ret);
+			return ret;
+		}
 	}
-
-	drvdata->active_low = flags & OF_GPIO_ACTIVE_LOW;
 
 	ret = of_property_read_u32(np, "reset-delay-us", &drvdata->delay_us);
 	if (ret < 0)
@@ -128,19 +122,6 @@ static int gpio_reset_probe(struct platform_device *pdev)
 	ret = of_property_read_u32(np, "reset-post-delay-ms", &drvdata->post_delay_ms);
 	if (ret < 0)
 		drvdata->post_delay_ms = -1;
-
-	initially_in_reset = of_property_read_bool(np, "initially-in-reset");
-	if (drvdata->active_low ^ initially_in_reset)
-		gpio_flags = GPIOF_OUT_INIT_HIGH;
-	else
-		gpio_flags = GPIOF_OUT_INIT_LOW;
-
-	ret = devm_gpio_request_one(&pdev->dev, drvdata->gpio, gpio_flags, NULL);
-	if (ret < 0) {
-		dev_err(&pdev->dev, "failed to request gpio %d: %d\n",
-			drvdata->gpio, ret);
-		return ret;
-	}
 
 	platform_set_drvdata(pdev, drvdata);
 

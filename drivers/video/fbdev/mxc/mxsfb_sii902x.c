@@ -393,8 +393,7 @@ static int mxsfb_get_of_property(void)
 	return ret;
 }
 
-static int sii902x_probe(struct i2c_client *client,
-		const struct i2c_device_id *id)
+static int sii902x_probe(struct i2c_client *client)
 {
 	int i, dat, ret;
 	struct fb_info edid_fbi;

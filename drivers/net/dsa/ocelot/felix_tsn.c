@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: (GPL-2.0 OR MIT)
-/* Felix Switch TSN driver
+/* TSN support for Felix VSC9959 through tsntool
  *
- * Copyright 2020-2022 NXP
+ * Copyright 2020-2023 NXP
  */
 
 #include <soc/mscc/ocelot_qsys.h>
@@ -95,76 +95,18 @@ static u32 felix_tsn_get_cap(struct net_device *ndev)
 	       TSN_CAP_CB | TSN_CAP_TBS | TSN_CAP_CTH;
 }
 
-static struct tc_taprio_qopt_offload *
-tsn_qbv_conf_to_taprio(const struct tsn_qbv_conf *shaper_config)
-{
-	const struct tsn_qbv_basic *admin_basic = &shaper_config->admin;
-	int i, num_entries = admin_basic->control_list_length;
-	struct tc_taprio_qopt_offload *taprio;
-
-	taprio = taprio_offload_alloc(num_entries);
-	if (!taprio)
-		return NULL;
-
-	taprio->base_time = admin_basic->base_time;
-	taprio->cycle_time = admin_basic->cycle_time;
-	taprio->cycle_time_extension = admin_basic->cycle_time_extension;
-	taprio->enable = shaper_config->gate_enabled;
-	taprio->num_entries = num_entries;
-
-	for (i = 0; i < num_entries; i++) {
-		struct tsn_qbv_entry *entry = &admin_basic->control_list[i];
-		struct tc_taprio_sched_entry *e = &taprio->entries[i];
-
-		e->command = TC_TAPRIO_CMD_SET_GATES;
-		e->interval = entry->time_interval;
-		e->gate_mask = entry->gate_state;
-	}
-
-	return taprio;
-}
-
 static int felix_qbv_set(struct net_device *ndev,
 			 struct tsn_qbv_conf *shaper_config)
 {
 	struct dsa_port *dp = dsa_port_from_netdev(ndev);
-	struct tc_taprio_qopt_offload *taprio;
 	struct ocelot *ocelot = dp->ds->priv;
 	struct ocelot_port *ocelot_port;
 	int port = dp->index;
-	int err = 0;
 
 	ocelot_port = ocelot->ports[port];
 
-	taprio = tsn_qbv_conf_to_taprio(shaper_config);
-	if (!taprio)
-		return -ENOMEM;
-
-	/* block concurrent tc-taprio attempts */
-	rtnl_lock();
-
-	/* Do nothing if requested to disable something
-	 * that was never enabled
-	 */
-	if (!taprio->enable && !ocelot_port->taprio)
-		goto done;
-
-	/* If offload is already enabled, disable the current one first */
-	if (taprio->enable && ocelot_port->taprio) {
-		taprio->enable = false;
-		ndev->netdev_ops->ndo_setup_tc(ndev, TC_SETUP_QDISC_TAPRIO,
-					       taprio);
-		taprio->enable = true;
-	}
-
-	/* Call felix_port_setup_tc() */
-	err = ndev->netdev_ops->ndo_setup_tc(ndev, TC_SETUP_QDISC_TAPRIO,
-					     taprio);
-done:
-	rtnl_unlock();
-	taprio_offload_free(taprio);
-
-	return err;
+	return tsn_qbv_tc_taprio_compat_set(ndev, shaper_config,
+					    !!ocelot_port->taprio);
 }
 
 static int felix_qbv_get(struct net_device *ndev, struct tsn_qbv_conf *shaper_config)
@@ -336,66 +278,41 @@ static int felix_qbv_get_status(struct net_device *ndev,
 	return 0;
 }
 
-static int felix_qbu_set(struct net_device *ndev, u8 preemptible)
+static int felix_qbu_set(struct net_device *ndev, u8 preemptible_tcs)
 {
 	struct dsa_port *dp = dsa_port_from_netdev(ndev);
 	struct ocelot *ocelot = dp->ds->priv;
-	struct felix *felix = ocelot_to_felix(ocelot);
-	struct ocelot_port *ocelot_port;
 	int port = dp->index;
+	int err;
 
-	ocelot_port = ocelot->ports[port];
+	err = tsn_qbu_ethtool_mm_compat_set(ndev, preemptible_tcs);
+	if (err)
+		return err;
 
 	mutex_lock(&ocelot->fwd_domain_lock);
-
-	if (ocelot_port->cut_thru & preemptible) {
-		netdev_err(ndev,
-			   "A priority cannot be preemptable and cut-through at the same time.\n");
-		mutex_unlock(&ocelot->fwd_domain_lock);
-		return -EBUSY;
-	}
-
-	ocelot_port_rmwl(ocelot_port,
-			 DEV_MM_CONFIG_ENABLE_CONFIG_MM_RX_ENA |
-			 DEV_MM_CONFIG_ENABLE_CONFIG_MM_TX_ENA,
-			 DEV_MM_CONFIG_ENABLE_CONFIG_MM_RX_ENA |
-			 DEV_MM_CONFIG_ENABLE_CONFIG_MM_TX_ENA,
-			 DEV_MM_ENABLE_CONFIG);
-
-	ocelot_rmw_rix(ocelot,
-		       QSYS_PREEMPTION_CFG_P_QUEUES(preemptible),
-		       QSYS_PREEMPTION_CFG_P_QUEUES_M,
-		       QSYS_PREEMPTION_CFG,
-		       port);
-
-	ocelot_port->preemptable_prios = preemptible;
-
-	if (ocelot_port->taprio && felix->info->tas_guard_bands_update)
-		felix->info->tas_guard_bands_update(ocelot, port);
-
+	err = ocelot_port_change_fp(ocelot, port, preemptible_tcs);
 	mutex_unlock(&ocelot->fwd_domain_lock);
 
-	return 0;
+	return err;
 }
 
 static int felix_qbu_get(struct net_device *ndev, struct tsn_preempt_status *c)
 {
 	struct dsa_port *dp = dsa_port_from_netdev(ndev);
 	struct ocelot *ocelot = dp->ds->priv;
-	struct ocelot_port *ocelot_port;
-	int port = dp->index;
+	struct ocelot_mm_state *mm;
+	int err, port = dp->index;
 	u32 val;
 
-	ocelot_port = ocelot->ports[port];
+	err = tsn_qbu_ethtool_mm_compat_get(ndev, c);
+	if (err)
+		return err;
+
+	mm = &ocelot->mm[port];
+	c->admin_state = mm->preemptible_tcs;
 
 	val = ocelot_read_rix(ocelot, QSYS_PREEMPTION_CFG, port);
-
-	c->admin_state = QSYS_PREEMPTION_CFG_P_QUEUES(val);
 	c->hold_advance = QSYS_PREEMPTION_CFG_HOLD_ADVANCE_X(val);
-
-	val = ocelot_port_readl(ocelot_port, DEV_MM_STATUS);
-	c->preemption_active =
-		DEV_MM_STATISTICS_MM_STATUS_PRMPT_ACTIVE_STATUS & val;
 
 	return 0;
 }
@@ -1256,7 +1173,7 @@ static int felix_cbs_set(struct net_device *ndev, u8 tc, u8 bw)
 	return 0;
 }
 
-void felix_cbs_reset(struct ocelot *ocelot, int port, int speed)
+void felix_cbs_reset(struct ocelot *ocelot, int port, u32 speed)
 {
 	int i, idx;
 
@@ -1287,28 +1204,33 @@ static int felix_cut_thru_set(struct net_device *ndev, u8 cut_thru)
 	struct dsa_port *dp = dsa_port_from_netdev(ndev);
 	struct ocelot *ocelot = dp->ds->priv;
 	struct ocelot_port *ocelot_port;
+	struct ocelot_mm_state *mm;
 	int port = dp->index;
+	int err = 0;
 
 	ocelot_port = ocelot->ports[port];
+	mm = &ocelot->mm[port];
 
 	mutex_lock(&ocelot->fwd_domain_lock);
 
-	if (cut_thru & ocelot_port->preemptable_prios) {
+	if (cut_thru & mm->preemptible_tcs) {
 		netdev_err(ndev,
-			   "A priority cannot be preemptable and cut-through at the same time.\n");
-		mutex_unlock(&ocelot->fwd_domain_lock);
-		return -EBUSY;
+			   "A traffic class cannot be preemptible and cut-through at the same time.\n");
+		err = -EBUSY;
+		goto unlock;
 	}
 
 	ocelot_port->cut_thru = cut_thru;
+	ocelot_port->cut_thru_selected_by_user = cut_thru;
 	ocelot->ops->cut_through_fwd(ocelot);
 
+unlock:
 	mutex_unlock(&ocelot->fwd_domain_lock);
 
-	return 0;
+	return err;
 }
 
-static int felix_rtag_parse_enable(struct ocelot *ocelot, u8 port)
+static void felix_rtag_parse_enable(struct ocelot *ocelot, u8 port)
 {
 	ocelot_rmw_rix(ocelot,
 		       ANA_PORT_MODE_REDTAG_PARSE_CFG,
@@ -1330,8 +1252,6 @@ static int felix_rtag_parse_enable(struct ocelot *ocelot, u8 port)
 			   DEV_MAC_TAGS_CFG_VLAN_DBL_AWR_ENA |
 			   DEV_MAC_TAGS_CFG_VLAN_LEN_AWR_ENA,
 			   DEV_MAC_TAGS_CFG);
-
-	return 0;
 }
 
 static int felix_seq_gen_set(struct net_device *ndev, u32 index,
@@ -1549,19 +1469,6 @@ static int felix_pcpmap_set(struct net_device *ndev,
 	return 0;
 }
 
-void felix_preempt_irq_clean(struct ocelot *ocelot)
-{
-	struct ocelot_port *ocelot_port;
-	int port;
-	u32 val;
-
-	val = DEV_MM_STATISTICS_MM_STATUS_PRMPT_ACTIVE_STICKY;
-	for (port = 0; port < ocelot->num_phys_ports; port++) {
-		ocelot_port = ocelot->ports[port];
-		ocelot_port_rmwl(ocelot_port, val, val, DEV_MM_STATUS);
-	}
-}
-
 static const struct tsn_ops felix_tsn_ops = {
 	.get_capability                 = felix_tsn_get_cap,
 	.qbv_set			= felix_qbv_set,
@@ -1591,15 +1498,13 @@ static const struct tsn_ops felix_tsn_ops = {
 	.pcpmap_set			= felix_pcpmap_set,
 };
 
-int felix_tsn_enable(struct dsa_switch *ds)
+void felix_tsn_enable(struct dsa_switch *ds)
 {
 	struct dsa_port *dp;
+
+	INIT_LIST_HEAD(&streamtable);
 
 	dsa_switch_for_each_user_port(dp, ds)
 		tsn_port_register(dp->slave, (struct tsn_ops *)&felix_tsn_ops,
 				  GROUP_OFFSET_SWITCH);
-
-	INIT_LIST_HEAD(&streamtable);
-
-	return 0;
 }

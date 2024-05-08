@@ -14,6 +14,8 @@
 #include <asm/asm-offsets.h>
 #include "hardware.h"
 
+.arch armv7-a
+
 /*
  * ==================== low level suspend ====================
  *

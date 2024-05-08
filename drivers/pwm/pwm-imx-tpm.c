@@ -33,6 +33,7 @@
 #define PWM_IMX_TPM_CnV(n)	(0x24 + (n) * 0x8)
 
 #define PWM_IMX_TPM_PARAM_CHAN			GENMASK(7, 0)
+#define PWM_IMX_TPM_GLOBAL_RST			BIT(1)
 
 #define PWM_IMX_TPM_SC_PS			GENMASK(2, 0)
 #define PWM_IMX_TPM_SC_CMOD			GENMASK(4, 3)
@@ -341,6 +342,7 @@ static const struct pwm_ops imx_tpm_pwm_ops = {
 
 static int pwm_imx_tpm_probe(struct platform_device *pdev)
 {
+	struct device_node *np = pdev->dev.of_node;
 	struct imx_tpm_pwm_chip *tpm;
 	int ret;
 	u32 val;
@@ -375,6 +377,12 @@ static int pwm_imx_tpm_probe(struct platform_device *pdev)
 	val = readl(tpm->base + PWM_IMX_TPM_PARAM);
 	tpm->chip.npwm = FIELD_GET(PWM_IMX_TPM_PARAM_CHAN, val);
 
+	if (of_property_read_bool(np, "pwm-rst")) {
+		/* Resets all internal logic and registers */
+		writel(PWM_IMX_TPM_GLOBAL_RST, tpm->base + PWM_IMX_TPM_GLOBAL);
+		writel(0, tpm->base + PWM_IMX_TPM_GLOBAL);
+	}
+
 	mutex_init(&tpm->lock);
 
 	ret = pwmchip_add(&tpm->chip);
@@ -386,15 +394,13 @@ static int pwm_imx_tpm_probe(struct platform_device *pdev)
 	return ret;
 }
 
-static int pwm_imx_tpm_remove(struct platform_device *pdev)
+static void pwm_imx_tpm_remove(struct platform_device *pdev)
 {
 	struct imx_tpm_pwm_chip *tpm = platform_get_drvdata(pdev);
 
 	pwmchip_remove(&tpm->chip);
 
 	clk_disable_unprepare(tpm->clk);
-
-	return 0;
 }
 
 static int __maybe_unused pwm_imx_tpm_suspend(struct device *dev)
@@ -462,7 +468,7 @@ static struct platform_driver imx_tpm_pwm_driver = {
 		.pm = &imx_tpm_pwm_pm,
 	},
 	.probe	= pwm_imx_tpm_probe,
-	.remove = pwm_imx_tpm_remove,
+	.remove_new = pwm_imx_tpm_remove,
 };
 module_platform_driver(imx_tpm_pwm_driver);
 

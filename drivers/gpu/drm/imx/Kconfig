@@ -70,13 +70,6 @@ config DRM_IMX93_LDB
 	  Choose this to enable the internal LVDS Display Bridge (LDB)
 	  found on i.MX93 processors.
 
-config DRM_IMX_IPUV3
-	tristate
-	depends on DRM_IMX
-	depends on IMX_IPUV3_CORE
-	default y if DRM_IMX=y
-	default m if DRM_IMX=m
-
 config IMX8MP_HDMI_PAVI
 	tristate "NXP i.MX8MP HDMI Audio Video (PVI/PAI)"
 	help
@@ -116,8 +109,10 @@ config DRM_IMX_SEC_DSIM
 
 source "drivers/gpu/drm/imx/dcnano/Kconfig"
 source "drivers/gpu/drm/imx/dpu/Kconfig"
+source "drivers/gpu/drm/imx/dpu95/Kconfig"
 source "drivers/gpu/drm/imx/dcss/Kconfig"
 source "drivers/gpu/drm/imx/mhdp/Kconfig"
 source "drivers/gpu/drm/imx/ipuv3/Kconfig"
 source "drivers/gpu/drm/imx/lcdif/Kconfig"
 source "drivers/gpu/drm/imx/lcdifv3/Kconfig"
+source "drivers/gpu/drm/imx/lcdc/Kconfig"

@@ -2,21 +2,21 @@
 /*
  * NXP i.MX93 ADC driver
  *
- * Copyright 2022 NXP
+ * Copyright 2023 NXP
  */
 
 #include <linux/bitfield.h>
-#include <linux/completion.h>
 #include <linux/clk.h>
+#include <linux/completion.h>
 #include <linux/err.h>
-#include <linux/of.h>
-#include <linux/platform_device.h>
-#include <linux/interrupt.h>
 #include <linux/iio/iio.h>
+#include <linux/interrupt.h>
 #include <linux/io.h>
 #include <linux/iopoll.h>
-#include <linux/pm_runtime.h>
+#include <linux/mod_devicetable.h>
 #include <linux/module.h>
+#include <linux/platform_device.h>
+#include <linux/pm_runtime.h>
 #include <linux/regulator/consumer.h>
 
 #define IMX93_ADC_DRIVER_NAME	"imx93-adc"
@@ -39,34 +39,32 @@
 #define IMX93_ADC_PCDR7		0x11c
 #define IMX93_ADC_CALSTAT	0x39C
 
+/* ADC bit shift */
 #define IMX93_ADC_MCR_MODE_MASK			BIT(29)
 #define IMX93_ADC_MCR_NSTART_MASK		BIT(24)
 #define IMX93_ADC_MCR_CALSTART_MASK		BIT(14)
 #define IMX93_ADC_MCR_ADCLKSE_MASK		BIT(8)
 #define IMX93_ADC_MCR_PWDN_MASK			BIT(0)
-
 #define IMX93_ADC_MSR_CALFAIL_MASK		BIT(30)
 #define IMX93_ADC_MSR_CALBUSY_MASK		BIT(29)
-#define IMX93_ADC_MSR_ADCSTATUS_MASK		GENMASK(2,0)
-
+#define IMX93_ADC_MSR_ADCSTATUS_MASK		GENMASK(2, 0)
+#define IMX93_ADC_ISR_ECH_MASK			BIT(0)
 #define IMX93_ADC_ISR_EOC_MASK			BIT(1)
+#define IMX93_ADC_ISR_EOC_ECH_MASK		(IMX93_ADC_ISR_EOC_MASK | \
+						 IMX93_ADC_ISR_ECH_MASK)
+#define IMX93_ADC_IMR_JEOC_MASK			BIT(3)
+#define IMX93_ADC_IMR_JECH_MASK			BIT(2)
+#define IMX93_ADC_IMR_EOC_MASK			BIT(1)
+#define IMX93_ADC_IMR_ECH_MASK			BIT(0)
+#define IMX93_ADC_PCDR_CDATA_MASK		GENMASK(11, 0)
 
-#define IMX93_ADC_IMR_JEOC_MASK			BIT(3)	// End of injected conversion interrupt mask
-#define IMX93_ADC_IMR_JECH_MASK			BIT(2)	// End of injected chain conversion interrupt mask
-#define IMX93_ADC_IMR_EOC_MASK			BIT(1)	// End of conversion interrupt mask
-#define IMX93_ADC_IMR_ECH_MASK			BIT(0)	// End of chain conversion interrupt mask
-
-#define IMX93_ADC_PCDR_CDATA_MASK		GENMASK(11,0)
-
-#define ON_SHOT_MODE		0
-#define SCAN_MODE		1
-
-#define IDLE			0
-#define POWER_DOWN		1
-#define WAIT_STATE		2
-#define BUSY_IN_CALIBRATION	3
-#define SAMPLE			4
-#define CONVERSION		6
+/* ADC status */
+#define IMX93_ADC_MSR_ADCSTATUS_IDLE			0
+#define IMX93_ADC_MSR_ADCSTATUS_POWER_DOWN		1
+#define IMX93_ADC_MSR_ADCSTATUS_WAIT_STATE		2
+#define IMX93_ADC_MSR_ADCSTATUS_BUSY_IN_CALIBRATION	3
+#define IMX93_ADC_MSR_ADCSTATUS_SAMPLE			4
+#define IMX93_ADC_MSR_ADCSTATUS_CONVERSION		6
 
 #define IMX93_ADC_TIMEOUT		msecs_to_jiffies(100)
 
@@ -74,7 +72,9 @@ struct imx93_adc {
 	struct device *dev;
 	void __iomem *regs;
 	struct clk *ipg_clk;
+	int irq;
 	struct regulator *vref;
+	/* lock to protect against multiple access to the device */
 	struct mutex lock;
 	struct completion completion;
 };
@@ -93,20 +93,39 @@ static const struct iio_chan_spec imx93_adc_iio_channels[] = {
 	IMX93_ADC_CHAN(1),
 	IMX93_ADC_CHAN(2),
 	IMX93_ADC_CHAN(3),
+	IMX93_ADC_CHAN(4),
+	IMX93_ADC_CHAN(5),
+	IMX93_ADC_CHAN(6),
+	IMX93_ADC_CHAN(7),
 };
 
 static void imx93_adc_power_down(struct imx93_adc *adc)
 {
 	u32 mcr, msr;
 	int ret;
+
 	mcr = readl(adc->regs + IMX93_ADC_MCR);
 	mcr |= FIELD_PREP(IMX93_ADC_MCR_PWDN_MASK, 1);
 	writel(mcr, adc->regs + IMX93_ADC_MCR);
 
 	ret = readl_poll_timeout(adc->regs + IMX93_ADC_MSR, msr,
-		((msr & IMX93_ADC_MSR_ADCSTATUS_MASK) == POWER_DOWN), 1, 50);
+				 ((msr & IMX93_ADC_MSR_ADCSTATUS_MASK) ==
+				  IMX93_ADC_MSR_ADCSTATUS_POWER_DOWN),
+				 1, 50);
 	if (ret == -ETIMEDOUT)
-		dev_warn(adc->dev, "ADC do not in power down mode, current MSR is %x\n", msr);
+		dev_warn(adc->dev,
+			 "ADC do not in power down mode, current MSR is %x\n",
+			 msr);
+}
+
+static void imx93_adc_power_up(struct imx93_adc *adc)
+{
+	u32 mcr;
+
+	/* bring ADC out of power down state, in idle state */
+	mcr = readl(adc->regs + IMX93_ADC_MCR);
+	mcr &= ~FIELD_PREP(IMX93_ADC_MCR_PWDN_MASK, 1);
+	writel(mcr, adc->regs + IMX93_ADC_MCR);
 }
 
 static void imx93_adc_config_ad_clk(struct imx93_adc *adc)
@@ -121,36 +140,27 @@ static void imx93_adc_config_ad_clk(struct imx93_adc *adc)
 	mcr |= FIELD_PREP(IMX93_ADC_MCR_ADCLKSE_MASK, 1);
 	writel(mcr, adc->regs + IMX93_ADC_MCR);
 
-	/* bring ADC out of power down state, in idle state */
-	mcr = readl(adc->regs + IMX93_ADC_MCR);
-	mcr &= ~FIELD_PREP(IMX93_ADC_MCR_PWDN_MASK, 1);
-	writel(mcr, adc->regs + IMX93_ADC_MCR);
+	imx93_adc_power_up(adc);
 }
 
 static int imx93_adc_calibration(struct imx93_adc *adc)
 {
-	u32 mcr, msr, adc_status;
+	u32 mcr, msr;
 	int ret;
 
 	/* make sure ADC in power down mode */
-	msr = readl(adc->regs + IMX93_ADC_MSR);
-	adc_status = FIELD_GET(IMX93_ADC_MSR_ADCSTATUS_MASK, msr);
-	if (adc_status != POWER_DOWN)
-		imx93_adc_power_down(adc);
+	imx93_adc_power_down(adc);
 
 	/* config SAR controller operating clock */
 	mcr = readl(adc->regs + IMX93_ADC_MCR);
 	mcr &= ~FIELD_PREP(IMX93_ADC_MCR_ADCLKSE_MASK, 1);
 	writel(mcr, adc->regs + IMX93_ADC_MCR);
 
-	/* bring ADC out of power down state */
-	mcr = readl(adc->regs + IMX93_ADC_MCR);
-	mcr &= ~FIELD_PREP(IMX93_ADC_MCR_PWDN_MASK, 1);
-	writel(mcr, adc->regs + IMX93_ADC_MCR);
+	imx93_adc_power_up(adc);
 
 	/*
-	 * we use the default TSAMP/NRSMPL/AVGEN in MCR,
-	 * can add the setting of these bit if need
+	 * TODO: we use the default TSAMP/NRSMPL/AVGEN in MCR,
+	 * can add the setting of these bit if need in future.
 	 */
 
 	/* run calibration */
@@ -162,7 +172,8 @@ static int imx93_adc_calibration(struct imx93_adc *adc)
 	ret = readl_poll_timeout(adc->regs + IMX93_ADC_MSR, msr,
 		!(msr & IMX93_ADC_MSR_CALBUSY_MASK), 1000, 2000000);
 	if (ret == -ETIMEDOUT) {
-		dev_warn(adc->dev, "ADC do not finish calibration in 1min!\n");
+		dev_warn(adc->dev, "ADC do not finish calibration in 2 min!\n");
+		imx93_adc_power_down(adc);
 		return ret;
 	}
 
@@ -170,10 +181,57 @@ static int imx93_adc_calibration(struct imx93_adc *adc)
 	msr = readl(adc->regs + IMX93_ADC_MSR);
 	if (msr & IMX93_ADC_MSR_CALFAIL_MASK) {
 		dev_warn(adc->dev, "ADC calibration failed!\n");
+		imx93_adc_power_down(adc);
 		return -EAGAIN;
 	}
 
 	return 0;
+}
+
+static int imx93_adc_read_channel_conversion(struct imx93_adc *adc,
+						int channel_number,
+						int *result)
+{
+	u32 channel;
+	u32 imr, mcr, pcda;
+	long ret;
+
+	reinit_completion(&adc->completion);
+
+	/* config channel mask register */
+	channel = 1 << channel_number;
+	writel(channel, adc->regs + IMX93_ADC_NCMR0);
+
+	/* TODO: can config desired sample time in CTRn if need */
+
+	/* config interrupt mask */
+	imr = FIELD_PREP(IMX93_ADC_IMR_EOC_MASK, 1);
+	writel(imr, adc->regs + IMX93_ADC_IMR);
+	writel(channel, adc->regs + IMX93_ADC_CIMR0);
+
+	/* config one-shot mode */
+	mcr = readl(adc->regs + IMX93_ADC_MCR);
+	mcr &= ~FIELD_PREP(IMX93_ADC_MCR_MODE_MASK, 1);
+	writel(mcr, adc->regs + IMX93_ADC_MCR);
+
+	/* start normal conversion */
+	mcr = readl(adc->regs + IMX93_ADC_MCR);
+	mcr |= FIELD_PREP(IMX93_ADC_MCR_NSTART_MASK, 1);
+	writel(mcr, adc->regs + IMX93_ADC_MCR);
+
+	ret = wait_for_completion_interruptible_timeout(&adc->completion,
+							IMX93_ADC_TIMEOUT);
+	if (ret == 0)
+		return -ETIMEDOUT;
+
+	if (ret < 0)
+		return ret;
+
+	pcda = readl(adc->regs + IMX93_ADC_PCDR0 + channel_number * 4);
+
+	*result = FIELD_GET(IMX93_ADC_PCDR_CDATA_MASK, pcda);
+
+	return ret;
 }
 
 static int imx93_adc_read_raw(struct iio_dev *indio_dev,
@@ -182,62 +240,26 @@ static int imx93_adc_read_raw(struct iio_dev *indio_dev,
 {
 	struct imx93_adc *adc = iio_priv(indio_dev);
 	struct device *dev = adc->dev;
-	u32 channel;
-	u32 imr, mcr, pcda;
-	long ret;
-	u32 vref_uv;
+	int ret;
 
 	switch (mask) {
 	case IIO_CHAN_INFO_RAW:
 		pm_runtime_get_sync(dev);
 		mutex_lock(&adc->lock);
-
-		reinit_completion(&adc->completion);
-
-		/* config channel mask register */
-		channel = 1 << chan->channel;
-		writel(channel, adc->regs + IMX93_ADC_NCMR0);
-
-		/* can config sesired sample time in CTRn is need */
-
-		/* config interrupt mask */
-		imr = FIELD_PREP(IMX93_ADC_IMR_EOC_MASK, 1);
-		writel(imr, adc->regs + IMX93_ADC_IMR);
-		writel(channel, adc->regs + IMX93_ADC_CIMR0);
-
-		/* config one-shot mode */
-		mcr = readl(adc->regs + IMX93_ADC_MCR);
-		mcr &= ~FIELD_PREP(IMX93_ADC_MCR_MODE_MASK, 1);
-		writel(mcr, adc->regs + IMX93_ADC_MCR);
-
-		/* start normal conversion */
-		mcr = readl(adc->regs + IMX93_ADC_MCR);
-		mcr |= FIELD_PREP(IMX93_ADC_MCR_NSTART_MASK, 1);
-		writel(mcr, adc->regs + IMX93_ADC_MCR);
-
-		ret = wait_for_completion_interruptible_timeout(&adc->completion,
-								IMX93_ADC_TIMEOUT);
-		if (ret == 0) {
-			mutex_unlock(&adc->lock);
-			return -ETIMEDOUT;
-		}
-		if (ret < 0) {
-			mutex_unlock(&adc->lock);
-			return ret;
-		}
-
-		pcda = readl(adc->regs + IMX93_ADC_PCDR0 + chan->channel * 4);
-
-		*val = FIELD_GET(IMX93_ADC_PCDR_CDATA_MASK, pcda);
-
+		ret = imx93_adc_read_channel_conversion(adc, chan->channel, val);
 		mutex_unlock(&adc->lock);
 		pm_runtime_mark_last_busy(dev);
 		pm_runtime_put_sync_autosuspend(dev);
+		if (ret < 0)
+			return ret;
+
 		return IIO_VAL_INT;
 
 	case IIO_CHAN_INFO_SCALE:
-		vref_uv = regulator_get_voltage(adc->vref);
-		*val = vref_uv / 1000;
+		ret = regulator_get_voltage(adc->vref);
+		if (ret < 0)
+			return ret;
+		*val = ret / 1000;
 		*val2 = 12;
 		return IIO_VAL_FRACTIONAL_LOG2;
 
@@ -253,13 +275,22 @@ static int imx93_adc_read_raw(struct iio_dev *indio_dev,
 static irqreturn_t imx93_adc_isr(int irq, void *dev_id)
 {
 	struct imx93_adc *adc = dev_id;
-	u32 isr;
+	u32 isr, eoc, unexpected;
 
 	isr = readl(adc->regs + IMX93_ADC_ISR);
-	writel(isr, adc->regs + IMX93_ADC_ISR);
 
-	if (FIELD_GET(IMX93_ADC_ISR_EOC_MASK, isr))
+	if (FIELD_GET(IMX93_ADC_ISR_EOC_ECH_MASK, isr)) {
+		eoc = isr & IMX93_ADC_ISR_EOC_ECH_MASK;
+		writel(eoc, adc->regs + IMX93_ADC_ISR);
 		complete(&adc->completion);
+	}
+
+	unexpected = isr & ~IMX93_ADC_ISR_EOC_ECH_MASK;
+	if (unexpected) {
+		writel(unexpected, adc->regs + IMX93_ADC_ISR);
+		dev_err(adc->dev, "Unexpected interrupt 0x%08x.\n", unexpected);
+		return IRQ_NONE;
+	}
 
 	return IRQ_HANDLED;
 }
@@ -273,13 +304,12 @@ static int imx93_adc_probe(struct platform_device *pdev)
 	struct imx93_adc *adc;
 	struct iio_dev *indio_dev;
 	struct device *dev = &pdev->dev;
-	int irq, ret;
+	int ret;
 
 	indio_dev = devm_iio_device_alloc(dev, sizeof(*adc));
-	if (!indio_dev) {
-		dev_err(dev, "Failed allocating iio device\n");
-		return -ENOMEM;
-	}
+	if (!indio_dev)
+		return dev_err_probe(dev, -ENOMEM,
+				     "Failed allocating iio device\n");
 
 	adc = iio_priv(indio_dev);
 	adc->dev = dev;
@@ -287,31 +317,34 @@ static int imx93_adc_probe(struct platform_device *pdev)
 	mutex_init(&adc->lock);
 	adc->regs = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(adc->regs))
-		return PTR_ERR(adc->regs);
+		return dev_err_probe(dev, PTR_ERR(adc->regs),
+				     "Failed getting ioremap resource\n");
 
-	irq = platform_get_irq(pdev, 2);
-	if (irq < 0)
-		return irq;
+	/* The third irq is for ADC conversion usage */
+	adc->irq = platform_get_irq(pdev, 2);
+	if (adc->irq < 0)
+		return adc->irq;
 
 	adc->ipg_clk = devm_clk_get(dev, "ipg");
 	if (IS_ERR(adc->ipg_clk))
-		return dev_err_probe(dev, PTR_ERR(adc->ipg_clk), "Failed getting clock\n");
+		return dev_err_probe(dev, PTR_ERR(adc->ipg_clk),
+				     "Failed getting clock.\n");
 
 	adc->vref = devm_regulator_get(dev, "vref");
 	if (IS_ERR(adc->vref))
-		return dev_err_probe(dev, PTR_ERR(adc->vref), "Failed getting reference voltage\n");
+		return dev_err_probe(dev, PTR_ERR(adc->vref),
+				     "Failed getting reference voltage.\n");
 
 	ret = regulator_enable(adc->vref);
-	if (ret) {
-		dev_err(dev, "Can't enable adc reference top voltage\n");
-		return ret;
-	}
+	if (ret)
+		return dev_err_probe(dev, ret,
+				     "Failed to enable reference voltage.\n");
 
 	platform_set_drvdata(pdev, indio_dev);
 
 	init_completion(&adc->completion);
 
-	indio_dev->name = IMX93_ADC_DRIVER_NAME;
+	indio_dev->name = "imx93-adc";
 	indio_dev->info = &imx93_adc_iio_info;
 	indio_dev->modes = INDIO_DIRECT_MODE;
 	indio_dev->channels = imx93_adc_iio_channels;
@@ -319,13 +352,15 @@ static int imx93_adc_probe(struct platform_device *pdev)
 
 	ret = clk_prepare_enable(adc->ipg_clk);
 	if (ret) {
-		dev_err(&pdev->dev, "Could not prepare or enable the clock.\n");
-		return ret;
+		dev_err_probe(dev, ret,
+			      "Failed to enable ipg clock.\n");
+		goto error_regulator_disable;
 	}
 
-	ret = devm_request_irq(dev, irq, imx93_adc_isr, 0, IMX93_ADC_DRIVER_NAME, adc);
+	ret = request_irq(adc->irq, imx93_adc_isr, 0, IMX93_ADC_DRIVER_NAME, adc);
 	if (ret < 0) {
-		dev_err(dev, "Failed requesting irq, irq = %d\n", irq);
+		dev_err_probe(dev, ret,
+			      "Failed requesting irq, irq = %d\n", adc->irq);
 		goto error_ipg_clk_disable;
 	}
 
@@ -333,15 +368,16 @@ static int imx93_adc_probe(struct platform_device *pdev)
 	if (ret < 0) {
 		if (ret == -EAGAIN)
 			ret = -EPROBE_DEFER;
-		goto error_ipg_clk_disable;
+		goto error_free_adc_irq;
 	}
 
 	imx93_adc_config_ad_clk(adc);
 
 	ret = iio_device_register(indio_dev);
 	if (ret) {
-		dev_err(dev, "Couldn't register the device.\n");
-		goto error_ipg_clk_disable;
+		dev_err_probe(dev, ret,
+			      "Failed to register this iio device.\n");
+		goto error_adc_power_down;
 	}
 
 	pm_runtime_set_active(dev);
@@ -351,8 +387,13 @@ static int imx93_adc_probe(struct platform_device *pdev)
 
 	return 0;
 
+error_adc_power_down:
+	imx93_adc_power_down(adc);
+error_free_adc_irq:
+	free_irq(adc->irq, adc);
 error_ipg_clk_disable:
 	clk_disable_unprepare(adc->ipg_clk);
+error_regulator_disable:
 	regulator_disable(adc->vref);
 
 	return ret;
@@ -364,20 +405,23 @@ static int imx93_adc_remove(struct platform_device *pdev)
 	struct imx93_adc *adc = iio_priv(indio_dev);
 	struct device *dev = adc->dev;
 
+	/* adc power down need clock on */
 	pm_runtime_get_sync(dev);
+
+	pm_runtime_disable(dev);
+	pm_runtime_dont_use_autosuspend(dev);
+	pm_runtime_put_noidle(dev);
 
 	iio_device_unregister(indio_dev);
 	imx93_adc_power_down(adc);
+	free_irq(adc->irq, adc);
 	clk_disable_unprepare(adc->ipg_clk);
 	regulator_disable(adc->vref);
-
-	pm_runtime_disable(dev);
-	pm_runtime_put_noidle(dev);
 
 	return 0;
 }
 
-static __maybe_unused int imx93_adc_runtime_suspend(struct device *dev)
+static int imx93_adc_runtime_suspend(struct device *dev)
 {
 	struct iio_dev *indio_dev = dev_get_drvdata(dev);
 	struct imx93_adc *adc = iio_priv(indio_dev);
@@ -389,16 +433,17 @@ static __maybe_unused int imx93_adc_runtime_suspend(struct device *dev)
 	return 0;
 }
 
-static __maybe_unused int imx93_adc_runtime_resume(struct device *dev)
+static int imx93_adc_runtime_resume(struct device *dev)
 {
 	struct iio_dev *indio_dev = dev_get_drvdata(dev);
 	struct imx93_adc *adc = iio_priv(indio_dev);
 	int ret;
-	u32 mcr;
 
 	ret = regulator_enable(adc->vref);
 	if (ret) {
-		dev_err(dev, "Can't enable adc reference top voltage, err = %d\n", ret);
+		dev_err(dev,
+			"Can't enable adc reference top voltage, err = %d\n",
+			ret);
 		return ret;
 	}
 
@@ -408,10 +453,7 @@ static __maybe_unused int imx93_adc_runtime_resume(struct device *dev)
 		goto err_disable_reg;
 	}
 
-	/* bring ADC out of power down state, in idle state */
-	mcr = readl(adc->regs + IMX93_ADC_MCR);
-	mcr &= ~FIELD_PREP(IMX93_ADC_MCR_PWDN_MASK, 1);
-	writel(mcr, adc->regs + IMX93_ADC_MCR);
+	imx93_adc_power_up(adc);
 
 	return 0;
 
@@ -421,10 +463,9 @@ err_disable_reg:
 	return ret;
 }
 
-static const struct dev_pm_ops imx93_adc_pm_ops = {
-	SET_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend, pm_runtime_force_resume)
-	SET_RUNTIME_PM_OPS(imx93_adc_runtime_suspend, imx93_adc_runtime_resume, NULL)
-};
+static DEFINE_RUNTIME_DEV_PM_OPS(imx93_adc_pm_ops,
+				 imx93_adc_runtime_suspend,
+				 imx93_adc_runtime_resume, NULL);
 
 static const struct of_device_id imx93_adc_match[] = {
 	{ .compatible = "nxp,imx93-adc", },
@@ -438,7 +479,7 @@ static struct platform_driver imx93_adc_driver = {
 	.driver		= {
 		.name	= IMX93_ADC_DRIVER_NAME,
 		.of_match_table = imx93_adc_match,
-		.pm	= &imx93_adc_pm_ops,
+		.pm	= pm_ptr(&imx93_adc_pm_ops),
 	},
 };
 

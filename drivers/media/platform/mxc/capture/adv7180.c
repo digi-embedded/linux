@@ -45,8 +45,7 @@ static struct regulator *avdd_regulator;
 static struct regulator *pvdd_regulator;
 static int pwn_gpio;
 
-static int adv7180_probe(struct i2c_client *adapter,
-			 const struct i2c_device_id *id);
+static int adv7180_probe(struct i2c_client *adapter);
 static void adv7180_detach(struct i2c_client *client);
 
 #ifdef CONFIG_OF
@@ -1208,8 +1207,7 @@ static void adv7180_hard_reset(bool cvbs)
  *
  *  @return		Error code indicating success or failure.
  */
-static int adv7180_probe(struct i2c_client *client,
-			 const struct i2c_device_id *id)
+static int adv7180_probe(struct i2c_client *client)
 {
 	int rev_id;
 	int ret = 0;

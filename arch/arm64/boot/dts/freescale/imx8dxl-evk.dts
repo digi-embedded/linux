@@ -75,7 +75,7 @@
 			no-map;
 		};
 
-		vdevbuffer: vdevbuffer {
+		vdevbuffer: vdevbuffer@90400000 {
 			compatible = "shared-dma-pool";
 			reg = <0 0x90400000 0 0x100000>;
 			no-map;
@@ -97,7 +97,7 @@
 		#reset-cells = <0>;
 	};
 
-	reg_pcieb: fixedregulator@100 {
+	reg_pcieb: fixedregulator-100 {
 		compatible = "regulator-fixed";
 		regulator-min-microvolt = <3300000>;
 		regulator-max-microvolt = <3300000>;
@@ -107,7 +107,7 @@
 		regulator-always-on;
 	};
 
-	m2_uart1_sel: fixedregulator@101 {
+	m2_uart1_sel: fixedregulator-101 {
 		compatible = "regulator-fixed";
 		regulator-min-microvolt = <3300000>;
 		regulator-max-microvolt = <3300000>;
@@ -117,7 +117,7 @@
 		regulator-always-on;
 	};
 
-	m2_spi0_sel: fixedregulator@102 {
+	m2_spi0_sel: fixedregulator-102 {
 		compatible = "regulator-fixed";
 		regulator-min-microvolt = <3300000>;
 		regulator-max-microvolt = <3300000>;
@@ -136,7 +136,7 @@
 		regulator-always-on;
 	};
 
-	pcie_clk_sel_ext: fixedregulator@103 {
+	pcie_clk_sel_ext: fixedregulator-103 {
 		compatible = "regulator-fixed";
 		regulator-min-microvolt = <3300000>;
 		regulator-max-microvolt = <3300000>;
@@ -200,6 +200,16 @@
 		regulator-name = "vref_1v8";
 		regulator-min-microvolt = <1800000>;
 		regulator-max-microvolt = <1800000>;
+	};
+
+	mii_select: regulator-4 {
+		compatible = "regulator-fixed";
+		regulator-name = "mii-select";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		gpio = <&scu_gpio 6 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		regulator-always-on;
 	};
 
 	bt_sco_codec: bt_sco_codec {
@@ -279,23 +289,6 @@
 			"LINPUT1", "Mic Jack",
 			"Mic Jack", "MICB";
 	};
-
-	scu_gpio0: scu-gpio0 {
-		compatible = "fsl,imx8qxp-sc-gpio";
-		gpio-controller;
-		#gpio-cells = <2>;
-		#interrupt-cells = <2>;
-	};
-
-	mii_select: mii_select {
-		compatible = "regulator-fixed";
-		regulator-name = "mii-select";
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
-		gpio = <&scu_gpio0 6 GPIO_ACTIVE_HIGH>;
-		enable-active-high;
-		regulator-always-on;
-	};
 };
 
 &adc0 {
@@ -305,10 +298,6 @@
 
 &asrc0 {
 	fsl,asrc-rate  = <48000>;
-	status = "okay";
-};
-
-&edma2 {
 	status = "okay";
 };
 
@@ -400,6 +389,10 @@
 	};
 };
 
+&edma2 {
+	status = "okay";
+};
+
 &imx8dxl_cm4 {
 	memory-region = <&vdevbuffer>, <&vdev0vring0>, <&vdev0vring1>,
 			<&vdev1vring0>, <&vdev1vring1>, <&rsc_table>;
@@ -408,21 +401,6 @@
 
 &lsio_mu5 {
 	status = "okay";
-};
-
-&lpspi3 {
-	fsl,spi-num-chipselects = <1>;
-	fsl,spi-only-use-cs1-sel;
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_lpspi3>;
-	pinctrl-assert-gpios = <&pca6416_1 7 GPIO_ACTIVE_HIGH>;
-	status = "okay";
-
-	spidev0: spi@0 {
-		reg = <0>;
-		compatible = "rohm,dh2228fv";
-		spi-max-frequency = <30000000>;
-	};
 };
 
 &i2c2 {
@@ -726,7 +704,7 @@
 };
 
 &thermal_zones {
-	pmic-thermal0 {
+	pmic-thermal {
 		polling-delay-passive = <250>;
 		polling-delay = <2000>;
 		thermal-sensors = <&tsens IMX_SC_R_PMIC_0>;
@@ -757,6 +735,8 @@
 };
 
 &usbphy1 {
+	/* USB eye diagram tests result */
+	fsl,tx-d-cal = <114>;
 	status = "okay";
 	fsl,tx-d-cal = <114>;
 };
@@ -773,6 +753,8 @@
 };
 
 &usbphy2 {
+	/* USB eye diagram tests result */
+	fsl,tx-d-cal = <111>;
 	status = "okay";
         fsl,tx-d-cal = <111>;
 };
@@ -811,6 +793,20 @@
 	wp-gpios = <&lsio_gpio5 0 GPIO_ACTIVE_HIGH>;
 	max-frequency = <100000000>;
 	status = "okay";
+};
+
+&lpspi3 {
+	fsl,spi-only-use-cs1-sel;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lpspi3>;
+	pinctrl-assert-gpios = <&pca6416_1 7 GPIO_ACTIVE_HIGH>;
+	status = "okay";
+
+	spidev0: spi@0 {
+		reg = <0>;
+		compatible = "rohm,dh2228fv";
+		spi-max-frequency = <30000000>;
+	};
 };
 
 &iomuxc {
@@ -919,15 +915,6 @@
 			IMX8DXL_SPI3_CS1_ADMA_SPI3_CS1		0x6000040
 		>;
 	};
-
-		pinctrl_lpspi3: lpspi3grp {
-			fsl,pins = <
-				IMX8DXL_SPI3_SCK_ADMA_SPI3_SCK		0x6000040
-				IMX8DXL_SPI3_SDO_ADMA_SPI3_SDO		0x6000040
-				IMX8DXL_SPI3_SDI_ADMA_SPI3_SDI		0x6000040
-				IMX8DXL_SPI3_CS1_ADMA_SPI3_CS1		0x6000040
-			>;
-		};
 
 	pinctrl_i2c2: i2c2grp {
 		fsl,pins = <

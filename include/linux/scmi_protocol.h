@@ -58,6 +58,10 @@ struct scmi_clock_info {
 			u64 step_size;
 		} range;
 	};
+	int num_parents;
+	u32 *parents;
+	u32 attributes;
+	u32 perm;
 };
 
 enum scmi_power_scale {
@@ -80,6 +84,11 @@ struct scmi_protocol_handle;
  * @rate_set: set the clock rate of a clock
  * @enable: enables the specified clock
  * @disable: disables the specified clock
+ * @state_get: get the status of the specified clock
+ * @config_oem_get: get the value of an OEM specific clock config
+ * @config_oem_set: set the value of an OEM specific clock config
+ * @parent_get: get the parent id of a clk
+ * @parent_set: set the parent of a clock
  */
 struct scmi_clk_proto_ops {
 	int (*count_get)(const struct scmi_protocol_handle *ph);
@@ -90,22 +99,36 @@ struct scmi_clk_proto_ops {
 			u64 *rate);
 	int (*rate_set)(const struct scmi_protocol_handle *ph, u32 clk_id,
 			u64 rate);
-	int (*enable)(const struct scmi_protocol_handle *ph, u32 clk_id);
-	int (*disable)(const struct scmi_protocol_handle *ph, u32 clk_id);
-	int (*enable_atomic)(const struct scmi_protocol_handle *ph, u32 clk_id);
-	int (*disable_atomic)(const struct scmi_protocol_handle *ph,
-			      u32 clk_id);
+	int (*enable)(const struct scmi_protocol_handle *ph, u32 clk_id,
+		      bool atomic);
+	int (*disable)(const struct scmi_protocol_handle *ph, u32 clk_id,
+		       bool atomic);
+	int (*state_get)(const struct scmi_protocol_handle *ph, u32 clk_id,
+			 bool *enabled, bool atomic);
+	int (*config_oem_get)(const struct scmi_protocol_handle *ph, u32 clk_id,
+			      u8 oem_type, u32 *oem_val, u32 *attributes,
+			      bool atomic);
+	int (*config_oem_set)(const struct scmi_protocol_handle *ph, u32 clk_id,
+			      u8 oem_type, u32 oem_val, bool atomic);
+	int (*parent_get)(const struct scmi_protocol_handle *ph, u32 clk_id, u32 *parent_id);
+	int (*parent_set)(const struct scmi_protocol_handle *ph, u32 clk_id, u32 parent_id);
+};
+
+struct scmi_perf_domain_info {
+	char name[SCMI_MAX_STR_SIZE];
+	bool set_perf;
 };
 
 /**
  * struct scmi_perf_proto_ops - represents the various operations provided
  *	by SCMI Performance Protocol
  *
+ * @num_domains_get: gets the number of supported performance domains
+ * @info_get: get the information of a performance domain
  * @limits_set: sets limits on the performance level of a domain
  * @limits_get: gets limits on the performance level of a domain
  * @level_set: sets the performance level of a domain
  * @level_get: gets the performance level of a domain
- * @device_domain_id: gets the scmi domain id for a given device
  * @transition_latency_get: gets the DVFS transition latency for a given device
  * @device_opps_add: adds all the OPPs for a given device
  * @freq_set: sets the frequency for a given device using sustained frequency
@@ -120,6 +143,9 @@ struct scmi_clk_proto_ops {
  *	or in some other (abstract) scale
  */
 struct scmi_perf_proto_ops {
+	int (*num_domains_get)(const struct scmi_protocol_handle *ph);
+	const struct scmi_perf_domain_info __must_check *(*info_get)
+		(const struct scmi_protocol_handle *ph, u32 domain);
 	int (*limits_set)(const struct scmi_protocol_handle *ph, u32 domain,
 			  u32 max_perf, u32 min_perf);
 	int (*limits_get)(const struct scmi_protocol_handle *ph, u32 domain,
@@ -128,11 +154,10 @@ struct scmi_perf_proto_ops {
 			 u32 level, bool poll);
 	int (*level_get)(const struct scmi_protocol_handle *ph, u32 domain,
 			 u32 *level, bool poll);
-	int (*device_domain_id)(struct device *dev);
 	int (*transition_latency_get)(const struct scmi_protocol_handle *ph,
-				      struct device *dev);
+				      u32 domain);
 	int (*device_opps_add)(const struct scmi_protocol_handle *ph,
-			       struct device *dev);
+			       struct device *dev, u32 domain);
 	int (*freq_set)(const struct scmi_protocol_handle *ph, u32 domain,
 			unsigned long rate, bool poll);
 	int (*freq_get)(const struct scmi_protocol_handle *ph, u32 domain,
@@ -140,7 +165,7 @@ struct scmi_perf_proto_ops {
 	int (*est_power_get)(const struct scmi_protocol_handle *ph, u32 domain,
 			     unsigned long *rate, unsigned long *power);
 	bool (*fast_switch_possible)(const struct scmi_protocol_handle *ph,
-				     struct device *dev);
+				     u32 domain);
 	enum scmi_power_scale (*power_scale_get)(const struct scmi_protocol_handle *ph);
 };
 
@@ -629,11 +654,25 @@ struct scmi_powercap_info {
  * @num_domains_get: get the count of powercap domains provided by SCMI.
  * @info_get: get the information for the specified domain.
  * @cap_get: get the current CAP value for the specified domain.
+ *	     On SCMI platforms supporting powercap zone disabling, this could
+ *	     report a zero value for a zone where powercapping is disabled.
  * @cap_set: set the CAP value for the specified domain to the provided value;
  *	     if the domain supports setting the CAP with an asynchronous command
  *	     this request will finally trigger an asynchronous transfer, but, if
  *	     @ignore_dresp here is set to true, this call will anyway return
  *	     immediately without waiting for the related delayed response.
+ *	     Note that the powercap requested value must NOT be zero, even if
+ *	     the platform supports disabling a powercap by setting its cap to
+ *	     zero (since SCMI v3.2): there are dedicated operations that should
+ *	     be used for that. (@cap_enable_set/get)
+ * @cap_enable_set: enable or disable the powercapping on the specified domain,
+ *		    if supported by the SCMI platform implementation.
+ *		    Note that, by the SCMI specification, the platform can
+ *		    silently ignore our disable request and decide to enforce
+ *		    anyway some other powercap value requested by another agent
+ *		    on the system: for this reason @cap_get and @cap_enable_get
+ *		    will always report the final platform view of the powercaps.
+ * @cap_enable_get: get the current CAP enable status for the specified domain.
  * @pai_get: get the current PAI value for the specified domain.
  * @pai_set: set the PAI value for the specified domain to the provided value.
  * @measurements_get: retrieve the current average power measurements for the
@@ -662,6 +701,10 @@ struct scmi_powercap_proto_ops {
 		       u32 *power_cap);
 	int (*cap_set)(const struct scmi_protocol_handle *ph, u32 domain_id,
 		       u32 power_cap, bool ignore_dresp);
+	int (*cap_enable_set)(const struct scmi_protocol_handle *ph,
+			      u32 domain_id, bool enable);
+	int (*cap_enable_get)(const struct scmi_protocol_handle *ph,
+			      u32 domain_id, bool *enable);
 	int (*pai_get)(const struct scmi_protocol_handle *ph, u32 domain_id,
 		       u32 *pai);
 	int (*pai_set)(const struct scmi_protocol_handle *ph, u32 domain_id,
@@ -674,6 +717,47 @@ struct scmi_powercap_proto_ops {
 	int (*measurements_threshold_get)(const struct scmi_protocol_handle *ph,
 					  u32 domain_id, u32 *power_thresh_low,
 					  u32 *power_thresh_high);
+};
+
+enum scmi_pinctrl_selector_type {
+	PIN_TYPE = 0,
+	GROUP_TYPE,
+	FUNCTION_TYPE,
+};
+
+/**
+ * struct scmi_pinctrl_proto_ops - represents the various operations provided
+ * by SCMI Pinctrl Protocol
+ *
+ * @count_get: returns count of the registered elements in given type
+ * @name_get: returns name by index of given type
+ * @group_pins_get: returns the set of pins, assigned to the specified group
+ * @function_groups_get: returns the set of groups, assigned to the specified
+ *	function
+ * @mux_set: set muxing function for groups of pins
+ * @config_get: returns configuration parameter for pin or group
+ * @config_set: sets the configuration parameter for pin or group
+ * @pin_request: aquire pin before selecting mux setting
+ * @pin_free: frees pin, acquired by request_pin call
+ */
+struct scmi_pinctrl_proto_ops {
+	int (*count_get)(const struct scmi_protocol_handle *ph,
+			 enum scmi_pinctrl_selector_type type);
+	int (*name_get)(const struct scmi_protocol_handle *ph, u32 selector,
+			enum scmi_pinctrl_selector_type type, const char **name);
+	int (*group_pins_get)(const struct scmi_protocol_handle *ph, u32 selector,
+			      const unsigned int **pins, unsigned int *nr_pins);
+	int (*function_groups_get)(const struct scmi_protocol_handle *ph, u32 selector,
+				   unsigned int *nr_groups, const unsigned int **groups);
+	int (*mux_set)(const struct scmi_protocol_handle *ph, u32 selector, u32 group);
+	int (*config_get)(const struct scmi_protocol_handle *ph, u32 selector,
+			  enum scmi_pinctrl_selector_type type,
+			  u8 config_type, unsigned long *config_value);
+	int (*config_set)(const struct scmi_protocol_handle *ph, u32 selector,
+			  enum scmi_pinctrl_selector_type type,
+			  unsigned long *configs, unsigned int num_configs);
+	int (*pin_request)(const struct scmi_protocol_handle *ph, u32 pin);
+	int (*pin_free)(const struct scmi_protocol_handle *ph, u32 pin);
 };
 
 /**
@@ -783,6 +867,7 @@ enum scmi_std_protocol {
 	SCMI_PROTOCOL_RESET = 0x16,
 	SCMI_PROTOCOL_VOLTAGE = 0x17,
 	SCMI_PROTOCOL_POWERCAP = 0x18,
+	SCMI_PROTOCOL_PINCTRL = 0x19,
 };
 
 enum scmi_system_events {
@@ -803,11 +888,6 @@ struct scmi_device {
 };
 
 #define to_scmi_dev(d) container_of(d, struct scmi_device, dev)
-
-struct scmi_device *
-scmi_device_create(struct device_node *np, struct device *parent, int protocol,
-		   const char *name);
-void scmi_device_destroy(struct scmi_device *scmi_dev);
 
 struct scmi_device_id {
 	u8 protocol_id;
