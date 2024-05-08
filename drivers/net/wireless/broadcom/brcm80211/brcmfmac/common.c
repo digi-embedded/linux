@@ -138,6 +138,10 @@ static int brcmf_sdio_idleclk_disable = BRCMFMAC_AUTO;
 module_param_named(sdio_idleclk_disable, brcmf_sdio_idleclk_disable, int, 0644);
 MODULE_PARM_DESC(sdio_idleclk_disable, "Disable SDIO idle clock");
 
+static int brcmf_idle_time_zero;
+module_param_named(idle_time_zero, brcmf_idle_time_zero, int, 0644);
+MODULE_PARM_DESC(idle_time_zero, "Set idle interval to zero");
+
 static struct brcmfmac_platform_data *brcmfmac_pdata;
 struct brcmf_mp_global_t brcmf_mp_global;
 
@@ -692,6 +696,7 @@ int brcmf_debugfs_param_read(struct seq_file *s, void *data)
 	seq_printf(s, "%-20s: 0x%x\n", "offload_feat", brcmf_offload_feat);
 	seq_printf(s, "%-20s: %d\n", "txglomsz", brcmf_sdiod_txglomsz);
 	seq_printf(s, "%-20s: %d\n", "bt_over_sdio", !!brcmf_bt_over_sdio);
+	seq_printf(s, "%-20s: %d\n", "idle_time_zero", !!brcmf_idle_time_zero);
 
 	return 0;
 }
@@ -763,6 +768,9 @@ struct brcmf_mp_device *brcmf_get_module_param(struct device *dev,
 		settings->bus.sdio.txglomsz = brcmf_sdiod_txglomsz;
 		brcmf_dbg(INFO, "txglomsz: %d\n", settings->bus.sdio.txglomsz);
 	}
+
+	settings->idle_time_zero = brcmf_idle_time_zero;
+	brcmf_dbg(INFO, "idle_time_zero: %d\n", settings->idle_time_zero);
 
 	/* See if there is any device specific platform data configured */
 	found = false;
