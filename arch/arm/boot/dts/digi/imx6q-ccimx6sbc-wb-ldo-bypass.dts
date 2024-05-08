@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2018 Digi International, Inc.
+ * Copyright 2014-2018 Digi International, Inc.
  *
  * The code contained herein is licensed under the GNU General Public
  * License. You may obtain a copy of the GNU General Public License
@@ -12,11 +12,56 @@
 /dts-v1/;
 #include <dt-bindings/gpio/gpio.h>
 /* i.MX6 Quad/Dual CPU */
-#include "imx6q.dtsi"
-/* ConnectCore 6 (common) */
-#include "imx6qdl-ccimx6.dtsi"
+#include "../nxp/imx/imx6q.dtsi"
+/* ConnectCore 6 (Quad/Dual wireless/bluetooth variant) */
+#include "imx6q-ccimx6-wb.dtsi"
 /* ConnectCore 6 Quad/Dual SBC carrier board */
 #include "imx6q-ccimx6sbc.dtsi"
+
+&cpu0 {
+	operating-points = <
+		/* kHz    uV */
+		1200000 1350000
+		996000  1300000
+		852000  1250000
+		792000  1200000
+		396000  1100000
+		>;
+	fsl,soc-operating-points = <
+		/* ARM kHz  SOC-PU uV */
+		1200000       1250000
+		996000        1250000
+		852000        1250000
+		792000        1250000
+		396000        1250000
+		>;
+	arm-supply = <&bcore1>;
+	soc-supply = <&bcore2>;
+};
+
+&gpc {
+	fsl,ldo-bypass = <1>; /* use ldo-bypass, u-boot will check it and configure */
+};
+
+&i2c2 {
+	dialog@58 {
+		regulators {
+			bcore1 {
+				regulator-min-microvolt = <3000>;
+				regulator-max-microvolt = <1570000>;
+				regulator-suspend-mem-microvolt = <1175000>;
+				regulator-suspend-standby-microvolt = <1175000>;
+			};
+
+			bcore2 {
+				regulator-min-microvolt = <3000>;
+				regulator-max-microvolt = <1570000>;
+				regulator-suspend-mem-microvolt = <1175000>;
+				regulator-suspend-standby-microvolt = <1175000>;
+			};
+		};
+	};
+};
 
 &fec {
 	status = "okay";
@@ -63,6 +108,9 @@
 	status = "okay";
 
 	lvds-channel@0 {
+		status = "okay";
+	};
+	lvds-channel@1 {
 		status = "okay";
 	};
 };
@@ -151,11 +199,6 @@
 };
 
 &pcie {
-	pinctrl-names = "default";
-	reset-gpio = <&gpio7 8 GPIO_ACTIVE_HIGH>;
-	wake-up-gpio = <&gpio7 7 GPIO_ACTIVE_HIGH>;
-	disable-gpio = <&gpio1 4 GPIO_ACTIVE_HIGH>;
-	vin-supply = <&ldo6>;
 	status = "okay";
 };
 

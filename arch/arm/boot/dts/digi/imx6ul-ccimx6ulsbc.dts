@@ -13,9 +13,9 @@
 #include <dt-bindings/input/input.h>
 #include <dt-bindings/interrupt-controller/irq.h>
 /* i.MX6 UltraLite CPU */
-#include "imx6ul.dtsi"
-/* ConnectCore 6UL (wireless/bluetooth variant) */
-#include "imx6ul-ccimx6ul-wb.dtsi"
+#include "../nxp/imx/imx6ul.dtsi"
+/* ConnectCore 6UL */
+#include "imx6ul-ccimx6ul.dtsi"
 /* ConnectCore 6UL SBC */
 #include "imx6ul-ccimx6ulsbc.dtsi"
 
@@ -40,9 +40,9 @@
  * Before enabling the camera you need to disable
  * usdhc2 node.
  */
-// &csi {
+//&csi {
 //	status = "okay";
-// };
+//};
 
 /* ECSPI1 (as master) */
 &ecspi1 {
@@ -183,9 +183,9 @@
  * Before enabling the camera you need to disable
  * usdhc2 node.
  */
-// &ov5640 {
+//&ov5640 {
 //	status = "okay";
-// };
+//};
 
 /*
  * To use CSI camera with suspend/resume, uncomment ext_3v3

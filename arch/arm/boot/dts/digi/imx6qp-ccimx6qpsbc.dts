@@ -17,7 +17,7 @@
 /dts-v1/;
 #include <dt-bindings/gpio/gpio.h>
 /* i.MX6 QuadPlus CPU */
-#include "imx6qp.dtsi"
+#include "../nxp/imx/imx6qp.dtsi"
 /* ConnectCore 6 QuadPlus (non-wireless variant) */
 #include "imx6qp-ccimx6.dtsi"
 /* ConnectCore 6 QuadPlus SBC carrier board */
@@ -43,6 +43,19 @@
 	status = "okay";
 };
 
+&ecspi1 {
+	status = "okay";
+
+	/*
+	 * Add your slave devices here. Next is an example of spidev.
+	 */
+	spidev@0 {
+		reg = <0>;
+		compatible = "rohm,dh2228fv";
+		spi-max-frequency = <4000000>;
+	};
+};
+
 &fec {
 	status = "okay";
 };
@@ -66,37 +79,14 @@
 		status = "okay";
 	};
 
-	/*
-	 * Fusion touch controller has I2C address 0x10. If using the latest Video Adapter Board,
-	 * an I2C-address translator moves it to address 0x14. This device tree has two 'fusion'
-	 * entries (one at 0x10 and another at 0x14), so that the touch works out of the box in old
-	 * and new displays, although this will make the kernel complain for the entry where the touch
-	 * does not respond. You can remove the 'fusion' node that doesn't match your display
-	 * to avoid this error message.
-	 */
 	/* Uncomment to enable the fusion touch, used with hsd101pfw2 */
-	fusion@10 {
-		compatible = "touchrev,fusion-touch";
-		reg = <0x10>;
-		/* Interrupt for LVDS0 */
-		interrupt-parent = <&gpio7>;
-		interrupts = <11 1>;
-		/* Interrupt for LVDS1 */
-		//interrupt-parent = <&gpio3>;
-		//interrupts = <23 1>;
-		/* Interrupt for parallel LCD */
-		//interrupt-parent = <&gpio2>;
-		//interrupts = <1 1>;
-		status = "okay";
-	};
-
 	//fusion@14 {
 	//	status = "okay";
 	//};
 
-	//goodix_touch: gt911@14 {
-	//	status = "okay";
-	//};
+	goodix_touch: gt911@14 {
+		status = "okay";
+	};
 
 	/* MIPI-CSI2 camera */
 	ov5640_mipi: ov5640_mipi@3c {
@@ -127,10 +117,6 @@
 
 	lvds-channel@0 {
 		status = "okay";
-		/* Select Fusion 10" for MFG test */
-		display-timings {
-			native-mode = <&hsd101pfw2_1>;
-		};
 	};
 	lvds-channel@1 {
 		status = "okay";

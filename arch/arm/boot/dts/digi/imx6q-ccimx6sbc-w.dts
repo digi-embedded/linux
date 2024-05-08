@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 Digi International, Inc.
+ * Copyright 2015-2018 Digi International, Inc.
  *
  * The code contained herein is licensed under the GNU General Public
  * License. You may obtain a copy of the GNU General Public License
@@ -12,9 +12,9 @@
 /dts-v1/;
 #include <dt-bindings/gpio/gpio.h>
 /* i.MX6 Quad/Dual CPU */
-#include "imx6q.dtsi"
-/* ConnectCore 6 (Quad wireless/bluetooth variant) */
-#include "imx6q-ccimx6-wb.dtsi"
+#include "../nxp/imx/imx6q.dtsi"
+/* ConnectCore 6 (Quad/Dual wireless variant) */
+#include "imx6q-ccimx6-w.dtsi"
 /* ConnectCore 6 Quad/Dual SBC carrier board */
 #include "imx6q-ccimx6sbc.dtsi"
 
@@ -50,10 +50,22 @@
 	status = "okay";
 };
 
+/*
+ * Parallel LCD conflicts with other interfaces:
+ * IPU0:DI0 with MIPI display: comment the 'mipi_dsi' and 'mipi_dsi_reset' nodes.
+ * Pad DISP0_DAT8 with PWM1: comment the 'pwm1' node.
+ */
+//&lcd {
+//	status = "okay";
+//};
+
 &ldb {
 	status = "okay";
 
 	lvds-channel@0 {
+		status = "okay";
+	};
+	lvds-channel@1 {
 		status = "okay";
 	};
 };
@@ -71,6 +83,10 @@
 };
 
 &mxcfb4 {
+	status = "okay";
+};
+
+&sata {
 	status = "okay";
 };
 
@@ -116,8 +132,8 @@
 		status = "okay";
 	};
 
-	/* Parallel camera CSI1 */
-	ov5642_2: ov5642_2@6c {
+	/* Parallel camera CSI0 */
+	ov5642_1: ov5642_1@5c {
 		status = "okay";
 	};
 };
@@ -126,6 +142,9 @@
 	status = "okay";
 };
 
+/*
+ * The MIPI display conflicts with IPU0:DI0 on the parallel LCD.
+ */
 &mipi_dsi {
 	status = "okay";
 };
@@ -138,7 +157,10 @@
 	status = "okay";
 };
 
-/* PWM1 on pin 10 of LCD connector */
+/*
+ * PWM1 uses pad DISP0_DAT8 on pin 10 of the parallel LCD connector.
+ * Disable PWM1 if you want to use the parallel LCD.
+ */
 &pwm1 {
 	status = "okay";
 };
@@ -192,8 +214,6 @@
 };
 
 &v4l2_cap_1 {
-	ipu_id = <1>;
-	csi_id = <1>;
 	status = "okay";
 };
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2018 Digi International, Inc.
+ * Copyright 2015-2018 Digi International, Inc.
  *
  * The code contained herein is licensed under the GNU General Public
  * License. You may obtain a copy of the GNU General Public License
@@ -11,12 +11,12 @@
 
 /dts-v1/;
 #include <dt-bindings/gpio/gpio.h>
-/* i.MX6 Quad/Dual CPU */
-#include "imx6q.dtsi"
-/* ConnectCore 6 (Quad/Dual wireless/bluetooth variant) */
-#include "imx6q-ccimx6-wb.dtsi"
-/* ConnectCore 6 Quad/Dual SBC carrier board */
-#include "imx6q-ccimx6sbc.dtsi"
+/* i.MX6 DualLite/Solo CPU */
+#include "../nxp/imx/imx6dl.dtsi"
+/* ConnectCore 6 (DualLite/Solo wireless variant) */
+#include "imx6dl-ccimx6-w.dtsi"
+/* ConnectCore 6 DualLite/Solo SBC carrier board */
+#include "imx6dl-ccimx6sbc.dtsi"
 
 &fec {
 	status = "okay";
@@ -65,9 +65,6 @@
 	lvds-channel@0 {
 		status = "okay";
 	};
-	lvds-channel@1 {
-		status = "okay";
-	};
 };
 
 &mxcfb1 {
@@ -75,18 +72,6 @@
 };
 
 &mxcfb2 {
-	status = "okay";
-};
-
-&mxcfb3 {
-	status = "okay";
-};
-
-&mxcfb4 {
-	status = "okay";
-};
-
-&sata {
 	status = "okay";
 };
 
@@ -101,8 +86,8 @@
 	 * Add your slave devices here. Next is an example of spidev.
 	 */
 	spidev@0 {
-		reg = <0>;
 		compatible = "rohm,dh2228fv";
+		reg = <0>;
 		spi-max-frequency = <4000000>;
 	};
 };
@@ -157,15 +142,15 @@
 	status = "okay";
 };
 
+&ssi2 {
+	status = "okay";
+};
+
 /*
  * PWM1 uses pad DISP0_DAT8 on pin 10 of the parallel LCD connector.
  * Disable PWM1 if you want to use the parallel LCD.
  */
 &pwm1 {
-	status = "okay";
-};
-
-&ssi2 {
 	status = "okay";
 };
 

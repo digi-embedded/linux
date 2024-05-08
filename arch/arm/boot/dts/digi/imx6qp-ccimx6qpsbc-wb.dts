@@ -17,9 +17,9 @@
 /dts-v1/;
 #include <dt-bindings/gpio/gpio.h>
 /* i.MX6 QuadPlus CPU */
-#include "imx6qp.dtsi"
-/* ConnectCore 6 QuadPlus (non-wireless variant) */
-#include "imx6qp-ccimx6.dtsi"
+#include "../nxp/imx/imx6qp.dtsi"
+/* ConnectCore 6 QuadPlus (wireless/bluetooth variant) */
+#include "imx6qp-ccimx6-wb.dtsi"
 /* ConnectCore 6 QuadPlus SBC carrier board */
 #include "imx6qp-ccimx6qpsbc.dtsi"
 

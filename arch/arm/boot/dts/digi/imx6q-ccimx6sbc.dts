@@ -12,9 +12,9 @@
 /dts-v1/;
 #include <dt-bindings/gpio/gpio.h>
 /* i.MX6 Quad/Dual CPU */
-#include "imx6q.dtsi"
-/* ConnectCore 6 (Quad/Dual wireless/bluetooth variant) */
-#include "imx6q-ccimx6-wb.dtsi"
+#include "../nxp/imx/imx6q.dtsi"
+/* ConnectCore 6 (common) */
+#include "imx6qdl-ccimx6.dtsi"
 /* ConnectCore 6 Quad/Dual SBC carrier board */
 #include "imx6q-ccimx6sbc.dtsi"
 
@@ -63,9 +63,6 @@
 	status = "okay";
 
 	lvds-channel@0 {
-		status = "okay";
-	};
-	lvds-channel@1 {
 		status = "okay";
 	};
 };
@@ -154,6 +151,11 @@
 };
 
 &pcie {
+	pinctrl-names = "default";
+	reset-gpio = <&gpio7 8 GPIO_ACTIVE_HIGH>;
+	wake-up-gpio = <&gpio7 7 GPIO_ACTIVE_HIGH>;
+	disable-gpio = <&gpio1 4 GPIO_ACTIVE_HIGH>;
+	vin-supply = <&ldo6>;
 	status = "okay";
 };
 
