@@ -17,6 +17,12 @@
 #include <dt-bindings/rtc/rtc-stm32.h>
 
 / {
+	aliases {
+		mmc0 = &sdmmc2; /* eMMC */
+		mmc1 = &sdmmc1; /* Micro SD */
+		mmc2 = &sdmmc3; /* Wireless */
+	};
+
 	/* Wifi/Bluetooth regulators, disabled by default */
 	regulators {
 		compatible = "simple-bus";
