@@ -733,15 +733,8 @@ static void pkt_align(struct sk_buff *p, int len, int align)
 /* To check if there's window offered */
 static bool data_ok(struct brcmf_sdio *bus)
 {
-	u8 tx_rsv = 0;
-
-	/* Reserve TXCTL_CREDITS credits for txctl when it is ready to send */
-	if (bus->ctrl_frame_stat)
-		tx_rsv = TXCTL_CREDITS;
-
-	return (bus->tx_max - bus->tx_seq - tx_rsv) != 0 &&
-	       ((bus->tx_max - bus->tx_seq - tx_rsv) & 0x80) == 0;
-
+	return (u8)(bus->tx_max - bus->tx_seq) > TXCTL_CREDITS &&
+	       ((u8)(bus->tx_max - bus->tx_seq) & 0x80) == 0;
 }
 
 /* To check if there's window offered */
@@ -2733,7 +2726,7 @@ static uint brcmf_sdio_sendfromq(struct brcmf_sdio *bus, uint maxframes)
 	u32 intstatus = 0;
 	int ret = 0, prec_out, i;
 	uint cnt = 0;
-	u8 tx_prec_map, pkt_num;
+	u8 tx_prec_map, pkt_num, que_cnt;
 
 	brcmf_dbg(TRACE, "Enter\n");
 
@@ -2742,9 +2735,12 @@ static uint brcmf_sdio_sendfromq(struct brcmf_sdio *bus, uint maxframes)
 	/* Send frames until the limit or some other event */
 	for (cnt = 0; (cnt < maxframes) && data_ok(bus);) {
 		pkt_num = 1;
-		if (bus->txglom)
-			pkt_num = min_t(u8, bus->tx_max - bus->tx_seq,
+		que_cnt = bus->tx_max - bus->tx_seq;
+		if (bus->txglom) {
+			pkt_num = min_t(u8, que_cnt - TXCTL_CREDITS,
 					bus->sdiodev->txglomsz);
+		}
+
 		pkt_num = min_t(u32, pkt_num,
 				brcmu_pktq_mlen(&bus->txq, ~bus->flowcontrol));
 		__skb_queue_head_init(&pktq);
