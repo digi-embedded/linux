@@ -1785,8 +1785,6 @@ sdhci_esdhc_imx_probe_dt(struct platform_device *pdev,
 	of_property_read_u32(np, "fsl,strobe-dll-delay-target",
 				&boarddata->strobe_dll_delay_target);
 	if (of_property_read_bool(np, "no-1-8-v")) {
-		dev_warn(mmc_dev(host->mmc),
-				"could not get ultra high speed state, work on normal mode\n");
 		host->quirks2 |= SDHCI_QUIRK2_NO_1_8_V;
 		host->quirks2 &= ~SDHCI_QUIRK2_CAPS_BIT63_FOR_HS400;
 	}
