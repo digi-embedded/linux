@@ -1,0 +1,52 @@
+/*
+ * Copyright 2024 Digi International Inc.
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+#include <dt-bindings/interrupt-controller/irq.h>
+
+/dts-v1/;
+/plugin/;
+
+/ {
+	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			overlay-description = "DVK: MikroE SPI to FDCAN Click board";
+		};
+	};
+
+	/* MikroE SPI to FDCAN bridge (SPI to FDCAN-click) */
+	fragment@1 {
+		target = <&spi3>;
+		__overlay__ {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			can2: mcp2518@0 {
+				compatible = "microchip,mcp2518fd";
+				reg = <0>;
+				clocks = <&mcp2518_clk>;
+				pinctrl-names = "default";
+				interrupt-parent = <&gpiog>;
+				interrupts = <3 IRQ_TYPE_LEVEL_LOW>; /* MIKROBUS_INT */
+				spi-max-frequency = <10000000>;
+				mcp2518_clk: oscillator {
+					#clock-cells = <0>;
+					compatible = "fixed-clock";
+					clock-frequency = <40000000>;
+				};
+			};
+		};
+	};
+};
