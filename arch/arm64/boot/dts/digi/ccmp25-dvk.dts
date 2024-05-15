@@ -61,14 +61,6 @@
 		};
 	};
 
-	panel_dsi_backlight: panel-dsi-backlight {
-		compatible = "gpio-backlight";
-		gpios = <&gpioi 5 GPIO_ACTIVE_LOW>;
-		default-on;
-		default-brightness-level = <0>;
-		status = "disabled";
-	};
-
 	display_bl: display-bl {
 		compatible = "pwm-backlight";
 		/* node TIM20_CH4 period (ns) */
