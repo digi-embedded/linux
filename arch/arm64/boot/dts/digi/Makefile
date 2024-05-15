@@ -6,6 +6,7 @@ ccmp25-dtbs :=		ccmp25-dvk.dtb \
 			_ov_board_mikroe-gyro-click_ccmp25-dvk.dtbo \
 			_ov_board_mikroe-i2c-to-spi-click_ccmp25-dvk.dtbo \
 			_ov_board_mikroe-mcp2518fd-click_ccmp25-dvk.dtbo \
+			_ov_board_n25q256a-spi-nor-flash_ccmp25-dvk.dtbo \
 			_ov_som_bt_ccmp25.dtbo \
 			_ov_som_wifi_ccmp25.dtbo
 
