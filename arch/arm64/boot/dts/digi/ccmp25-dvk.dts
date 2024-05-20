@@ -61,29 +61,6 @@
 		};
 	};
 
-	gpio-keys {
-		compatible = "gpio-keys";
-
-		button-user-1 {
-			label = "User-1";
-			linux,code = <BTN_1>;
-			gpios = <&gpiod 2 GPIO_ACTIVE_HIGH>;
-			status = "okay";
-		};
-	};
-
-	gpio-leds {
-		compatible = "gpio-leds";
-
-		led-blue {
-			function = LED_FUNCTION_HEARTBEAT;
-			color = <LED_COLOR_ID_BLUE>;
-			gpios = <&gpioj 7 GPIO_ACTIVE_HIGH>;
-			linux,default-trigger = "heartbeat";
-			default-state = "off";
-		};
-	};
-
 	panel_dsi_backlight: panel-dsi-backlight {
 		compatible = "gpio-backlight";
 		gpios = <&gpioi 5 GPIO_ACTIVE_LOW>;
