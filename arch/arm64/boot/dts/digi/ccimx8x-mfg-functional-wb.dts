@@ -41,7 +41,7 @@
 
 &pcieb {
 	clkreq-gpio = <&lsio_gpio4 1 GPIO_ACTIVE_LOW>;
-	epdev_on-supply = <&reg_rf_wl_en>;
+	vpcie-supply = <&reg_rf_wl_en>;
 	digi,disable_pci_msi;
 };
 

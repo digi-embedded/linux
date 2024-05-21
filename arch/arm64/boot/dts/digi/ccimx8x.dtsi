@@ -1,5 +1,5 @@
 /*
- * Copyright 2018-2020 Digi International Inc.
+ * Copyright 2018-2024 Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -104,7 +104,7 @@
 			no-map;
 		};
 
-		decoder_rpc: decoder-rpc@0x92000000 {
+		decoder_rpc: decoder-rpc@92000000 {
 			reg = <0 0x92000000 0 0x100000>;
 			no-map;
 		};
@@ -114,7 +114,7 @@
 			no-map;
 		};
 
-		encoder_rpc: encoder-rpc@0x94400000 {
+		encoder_rpc: encoder-rpc@94400000 {
 			reg = <0 0x94400000 0 0x700000>;
 			no-map;
 		};
@@ -374,19 +374,19 @@
 			compatible = "digi,mca-gpio-wdt";
 			status = "disabled";
 
-			gpio_wdt0: gpio-wdt@0x210 {
+			gpio_wdt0: gpio-wdt@210 {
 				status = "disabled";
 			};
 
-			gpio_wdt1: gpio-wdt@0x220 {
+			gpio_wdt1: gpio-wdt@220 {
 				status = "disabled";
 			};
 
-			gpio_wdt2: gpio-wdt@0x230 {
+			gpio_wdt2: gpio-wdt@230 {
 				status = "disabled";
 			};
 
-			gpio_wdt3: gpio-wdt@0x240 {
+			gpio_wdt3: gpio-wdt@240 {
 				status = "disabled";
 			};
 		};
@@ -425,19 +425,19 @@
 			#size-cells = <0>;
 			status = "disabled";
 
-			mca_uart0: serial@0x900 {
+			mca_uart0: serial@900 {
 				reg = <0x900>;
 				index = <0>;
 				status = "disabled";
 			};
 
-			mca_uart1: serial@0x920 {
+			mca_uart1: serial@920 {
 				reg = <0x920>;
 				index = <1>;
 				status = "disabled";
 			};
 
-			mca_uart2: serial@0x940 {
+			mca_uart2: serial@940 {
 				reg = <0x940>;
 				index = <2>;
 				status = "disabled";
@@ -509,10 +509,8 @@
 
 /* PCIe (Wireless), disabled by default */
 &pcieb{
-	compatible = "fsl,imx8qxp-pcie", "snps,dw-pcie";
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_pcieb>;
-	ext_osc = <1>;
 	reset-gpio = <&lsio_gpio4 0 GPIO_ACTIVE_LOW>;
 	status = "disabled";
 };
@@ -521,22 +519,19 @@
 	tsens-num = <2>;
 };
 
-&thermal_zones {
-	cpu-thermal0 {
-		trips {
-			cpu_alert0: trip0 {
-				temperature = <85000>;
-				hysteresis = <2000>;
-				type = "passive";
-			};
-			cpu_crit0: trip1 {
-				temperature = <100000>;
-				hysteresis = <2000>;
-				type = "critical";
-			};
-		};
-	};
+&cpu_alert0 {
+	temperature = <85000>;
+	hysteresis = <2000>;
+	type = "passive";
+};
 
+&cpu_crit0 {
+	temperature = <100000>;
+	hysteresis = <2000>;
+	type = "critical";
+};
+
+&thermal_zones {
 	pmic-thermal0 {
 		polling-delay-passive = <250>;
 		polling-delay = <2000>;
@@ -637,7 +632,7 @@
 	pinctrl_pcieb: pcieagrp {
 		fsl,pins = <
 			IMX8QXP_PCIE_CTRL0_PERST_B_LSIO_GPIO4_IO00		0x06000021
-			IMX8QXP_PCIE_CTRL0_CLKREQ_B_LSIO_GPIO4_IO01		0x46000021
+			IMX8QXP_PCIE_CTRL0_CLKREQ_B_HSIO_PCIE0_CLKREQ_B		0x46000021
 			IMX8QXP_PCIE_CTRL0_WAKE_B_LSIO_GPIO4_IO02		0x06000021
 		>;
 	};
