@@ -14,4 +14,6 @@ ccmp25-dtbs :=		ccmp25-dvk.dtb \
 			_ov_som_wifi_ccmp25.dtbo
 
 dtb-$(CONFIG_ARCH_STM32) += \
-	ccmp25.dtb
+	ccmp25.dtb \
+	ccmp25-mfg-functional.dtb \
+	ccmp25-mfg-functional-wb.dtb

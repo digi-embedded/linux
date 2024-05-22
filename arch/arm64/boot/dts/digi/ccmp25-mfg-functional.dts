@@ -1,0 +1,388 @@
+// SPDX-License-Identifier: (GPL-2.0-or-later OR BSD-3-Clause)
+/*
+ * Copyright (C) 2024, Digi International Inc.
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+/dts-v1/;
+
+/* STM32MP25 CPU */
+#include "../st/stm32mp257.dtsi"
+#include "../st/stm32mp25xf.dtsi"
+#include "../st/stm32mp25-pinctrl.dtsi"
+#include "../st/stm32mp25xxai-pinctrl.dtsi"
+/* Digi ConnectCore MP25 (SOM) */
+#include "ccmp25.dtsi"
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/input/input.h>
+#include <dt-bindings/leds/common.h>
+#include <dt-bindings/regulator/st,stm32mp25-regulator.h>
+#include "dt-bindings/pwm/pwm.h"
+
+/ {
+	model = "Digi International ConnectCore MP25 Development Kit";
+	compatible = "digi,ccmp25-dvk", "digi,ccmp25", "st,stm32mp257";
+	digi,machine,name = "ccmp257-dvk";
+
+	aliases {
+		ethernet0 = &eth2;
+		ethernet1 = &eth1;
+		serial2 = &uart5; /* Console M33 / XBEE */
+		serial3 = &usart6; /* Connector J41 */
+		serial4 = &uart7; /* MikroBus UART */
+	};
+
+	chosen {
+		stdout-path = "serial0:115200n8";
+	};
+
+	clocks {
+		clk_ext_camera: clk-ext-camera {
+			#clock-cells = <0>;
+			compatible = "fixed-clock";
+			clock-frequency = <24000000>;
+		};
+
+		pad_clk: pad-clk {
+			#clock-cells = <0>;
+			compatible = "fixed-clock";
+			clock-frequency = <100000000>;
+		};
+	};
+
+	panel_lvds: panel-lvds {
+		compatible = "auo,g101evn010", "panel-lvds";
+		backlight = <&panel_lvds_gpio_backlight>;
+		status = "disabled";
+
+		width-mm = <216>;
+		height-mm = <135>;
+		data-mapping = "jeida-24";
+
+		panel-timing {
+			clock-frequency = <54000000>;
+			hactive = <1280>;
+			vactive = <800>;
+			hfront-porch = <82>;
+			hback-porch = <84>;
+			hsync-len = <2>;
+			vfront-porch = <8>;
+			vback-porch = <6>;
+			vsync-len = <2>;
+		};
+
+		port {
+			lvds_panel_in: endpoint {
+				remote-endpoint = <&lvds_out0>;
+			};
+		};
+	};
+
+	panel_lvds_gpio_backlight: panel-lvds-gpio-backlight {
+		compatible = "gpio-backlight";
+		gpios = <&gpiob 0 GPIO_ACTIVE_HIGH>; /* LVDS_BCKL_PWM */
+		default-on;
+		default-brightness-level = <0>;
+		status = "disabled";
+	};
+
+	regulators {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		external_vref: regulator-board@1 {
+			reg = <1>;
+			compatible = "regulator-fixed";
+			regulator-name = "external-vref";
+			regulator-min-microvolt = <1800000>;
+			regulator-max-microvolt = <1800000>;
+			status = "okay";
+			vin-supply = <&scmi_ldo7>; /* ANA_REF */
+		};
+	};
+};
+
+/*
+ * Internal VREFBUF is not supported yet. VREF+ is connected internally to 1V8
+ * to use like an external voltage reference. If you plan to use an external
+ * voltage reference, depopulate internal SOM resistor connected to VREF+.
+ */
+&adc_12 {
+	vref-supply = <&external_vref>;
+	vdda-supply = <&scmi_vdda18adc>;
+	status = "okay";
+
+	adc1: adc@0 {
+		status = "okay";
+
+		channel@0 {
+			reg = <0>;
+			/* 16.5 ck_cycles sampling time */
+			st,min-sample-time-ns = <400>;
+		};
+
+		channel@1 {
+			reg = <1>;
+			/* 16.5 ck_cycles sampling time */
+			st,min-sample-time-ns = <400>;
+		};
+	};
+};
+
+&combophy {
+	clocks = <&rcc CK_BUS_USB3PCIEPHY>, <&rcc CK_KER_USB3PCIEPHY>, <&pad_clk>;
+	clock-names = "apb-clk", "ker-clk", "pad-clk";
+	status = "okay";
+};
+
+&csi2host {
+	status = "okay";
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		port@0 {
+			reg = <0>;
+			csi2host_sink: endpoint {
+				remote-endpoint = <&ov5640_mipi_ep>;
+				data-lanes = <0 1>;
+				bus-type = <4>;
+			};
+		};
+		port@1 {
+			reg = <1>;
+			csi2host_source: endpoint {
+				remote-endpoint = <&dcmipp_0>;
+			};
+		};
+	};
+};
+
+&dcmipp {
+	status = "okay";
+	port {
+		dcmipp_0: endpoint {
+			remote-endpoint = <&csi2host_source>;
+			bus-type = <4>;
+		};
+	};
+};
+
+&dsi {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	status = "okay";
+
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		port@0 {
+			reg = <0>;
+			dsi_in: endpoint {
+				remote-endpoint = <&ltdc_ep0_out>;
+			};
+		};
+
+		port@1 {
+			reg = <1>;
+			dsi_out: endpoint {
+				remote-endpoint = <&dsi_panel_in>;
+			};
+		};
+	};
+
+	panel@0 {
+		compatible = "newhaven,nhd-3.5-640480ef-msxp";
+		reg = <0>;
+		VCC-supply = <&scmi_v3v3>;
+		IOVCC-supply = <&scmi_v3v3>;
+		reset-gpios = <&gpiod 7 GPIO_ACTIVE_HIGH>;
+		dsi-lanes = <4>;
+		status = "okay";
+
+		port {
+			dsi_panel_in: endpoint {
+				remote-endpoint = <&dsi_out>;
+			};
+		};
+	};
+};
+
+/* Peripheral I2C bus (J18 Connector) */
+&i2c1 {
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&ccmp25_i2c1_pins>;
+	pinctrl-1 = <&ccmp25_i2c1_sleep_pins>;
+	i2c-scl-rising-time-ns = <185>;
+	i2c-scl-falling-time-ns = <20>;
+	clock-frequency = <100000>;
+	status = "okay";
+	/* spare dmas for other usage */
+	/delete-property/dmas;
+	/delete-property/dma-names;
+
+	/* MIPI-CSI camera */
+	ov5640_mipi: ov5640_mipi@3c {
+		compatible = "ovti,ov5640";
+		reg = <0x3c>;
+		clocks = <&clk_ext_camera>;
+		clock-names = "xclk";
+		csi_id = <0>;
+		DOVDD-supply = <&scmi_v3v3>;
+		reset-gpios = <&gpiog 7 (GPIO_ACTIVE_LOW | GPIO_PUSH_PULL)>; /* CSI_RESET */
+		status = "okay";
+
+		port {
+			ov5640_mipi_ep: endpoint {
+				remote-endpoint = <&csi2host_sink>;
+				clock-lanes = <0>;
+				data-lanes = <1 2>;
+				link-frequencies = /bits/ 64 <594000000>;
+			};
+		};
+	};
+};
+
+&ltdc {
+	rotation-memory = <&ltdc_sec_rotation>;
+	status = "okay";
+
+	port {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		ltdc_ep0_out: endpoint@0 {
+			reg = <0>;
+			remote-endpoint = <&dsi_in>;
+		};
+
+		ltdc_ep1_out: endpoint@1 {
+			reg = <1>;
+			remote-endpoint = <&lvds_in>;
+		};
+	};
+};
+
+&lvds {
+	status = "disabled";
+
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		port@0 {
+			reg = <0>;
+			lvds_in: endpoint {
+				remote-endpoint = <&ltdc_ep1_out>;
+			};
+		};
+
+		port@1 {
+			reg = <1>;
+			lvds_out0: endpoint {
+				remote-endpoint = <&lvds_panel_in>;
+			};
+		};
+	};
+};
+
+&mlahb {
+	intc_rpmsg: interrupt-controller@1 {
+		compatible = "rpmsg,intc";
+		reg = <1 0>;
+		#interrupt-cells = <1>;
+		interrupt-controller;
+	};
+
+	i2c_rpmsg: i2c@2 {
+		compatible = "rpmsg,i2c-controller";
+		reg = <2 0>;
+		rpmsg,dev-id = "rpmsg_i2c";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		status = "okay";
+	};
+};
+
+/* PCIe conflicts with USB 3.0 */
+&pcie_ep {
+	reset-gpios = <&gpioh 5 GPIO_ACTIVE_LOW>;
+	status = "disabled";
+	/* DIGI - Not supported by ST driver */
+	/*disable-gpio = <&gpioh 4 GPIO_ACTIVE_LOW>;*/
+	/*wake-gpio = <&gpioa 1 GPIO_ACTIVE_LOW>;*/
+};
+
+&pcie_rc {
+	reset-gpios = <&gpioh 5 GPIO_ACTIVE_LOW>;
+	vdd3v3-supply = <&scmi_v3v3>;
+	vdd1v5-supply = <&scmi_ldo6>;
+	status = "okay";
+	/* DIGI - Not supported by ST driver */
+	/*disable-gpio = <&gpioh 4 GPIO_ACTIVE_LOW>;*/
+	/*wake-gpio = <&gpioa 1 GPIO_ACTIVE_LOW>;*/
+};
+
+&timers20 {
+	/delete-property/dmas;
+	/delete-property/dma-names;
+	status = "okay";
+	timer@19 {
+		status = "okay";
+	};
+};
+
+/* Console A35 */
+&usart2 {
+	pinctrl-names = "default", "idle", "sleep";
+	pinctrl-0 = <&usart2_pins_a>;
+	pinctrl-1 = <&usart2_idle_pins_a>;
+	pinctrl-2 = <&usart2_sleep_pins_a>;
+	/delete-property/dmas;
+	/delete-property/dma-names;
+	status = "okay";
+};
+
+/* USB 2.0 Host */
+&usb2_phy1 {
+	status = "okay";
+};
+
+&usb2h {
+	status = "okay";
+
+	usb2h_ohci: usb@482e0000 {
+		status = "disabled";
+	};
+};
+
+&pinctrl {
+	ccmp25_i2c1_pins: ccmp25-i2c1-0 {
+		pins {
+			pinmux = <STM32_PINMUX('G', 13, AF9)>, /* I2C1_SCL */
+				 <STM32_PINMUX('I', 1, AF9)>; /* I2C1_SDA */
+			bias-disable;
+			drive-open-drain;
+			slew-rate = <0>;
+		};
+	};
+
+	ccmp25_i2c1_sleep_pins: ccmp25-i2c1-sleep-0 {
+		pins {
+			pinmux = <STM32_PINMUX('G', 13, ANALOG)>, /* I2C1_SCL */
+				 <STM32_PINMUX('I', 1, ANALOG)>; /* I2C1_SDA */
+		};
+	};
+};
