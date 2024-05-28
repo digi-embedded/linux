@@ -429,6 +429,14 @@
 		#clock-cells = <0>;
 		status = "okay";
 	};
+
+	ext_rtc: ext_rtc@52 {
+		compatible = "microcrystal,rv3028";
+		reg = <0x52>;
+		interrupt-parent = <&gpiof>;
+		interrupts = <4 IRQ_TYPE_EDGE_FALLING>; /* RTC_INT_N */
+		wakeup-source;
+	};
 };
 
 /* J34 Connector */
