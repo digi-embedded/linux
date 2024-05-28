@@ -5,6 +5,8 @@
  * Copyright 2019 NXP
  * Author: Jun Li <jun.li@nxp.com>
  *
+ * Copyright (C) 2024, Digi International Inc.
+ *
  */
 
 #include <linux/delay.h>
@@ -21,6 +23,7 @@ struct gpio_typec_switch {
 	struct mutex lock;
 	struct gpio_desc *ss_sel;
 	struct gpio_desc *ss_reset;
+	struct gpio_desc *ss_shutdown;
 };
 
 static int switch_gpio_set(struct typec_switch_dev *sw,
@@ -64,6 +67,15 @@ static int typec_switch_gpio_probe(struct platform_device *pdev)
 	sw_desc.name = NULL;
 	mutex_init(&gpio_sw->lock);
 
+	/* Get the super speed mux shutdown GPIO, it's optional */
+	gpio_sw->ss_shutdown = devm_gpiod_get_optional(dev, "shutdown",
+						    GPIOD_OUT_LOW);
+	if (IS_ERR(gpio_sw->ss_shutdown))
+		return PTR_ERR(gpio_sw->ss_shutdown);
+
+	if (gpio_sw->ss_shutdown)
+		usleep_range(90, 220);
+
 	/* Get the super speed mux reset GPIO, it's optional */
 	gpio_sw->ss_reset = devm_gpiod_get_optional(dev, "reset",
 						    GPIOD_OUT_HIGH);
@@ -99,6 +111,7 @@ static int typec_switch_gpio_remove(struct platform_device *pdev)
 static const struct of_device_id of_typec_switch_gpio_match[] = {
 	{ .compatible = "nxp,ptn36043" },
 	{ .compatible = "nxp,cbtl04gp" },
+	{ .compatible = "nxp,cbtu02043" },
 	{ /* Sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, of_typec_switch_gpio_match);
