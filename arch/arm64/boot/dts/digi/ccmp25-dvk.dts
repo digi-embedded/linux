@@ -686,6 +686,13 @@
 	pinctrl-1 = <&spi3_sleep_pins_a>;
 	cs-gpios = <&gpiob 1 0>; /* SPI3_SS */
 	status = "okay";
+
+	st33htpm0: st33htpm@0{
+		compatible = "st,st33htpm-spi";
+		reg = <0>;
+		spi-max-frequency = <33000000>;
+		status = "okay";
+	};
 };
 
 /* ETH1 and ETH3 */
