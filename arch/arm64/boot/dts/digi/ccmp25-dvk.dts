@@ -47,6 +47,21 @@
 		stdout-path = "serial0:115200n8";
 	};
 
+	/* USB 3.0 Data switch */
+	usb3_data_switch: cbtl04gp {
+		compatible = "nxp,cbtu02043";
+		switch-gpios = <&gpiod 11 GPIO_ACTIVE_HIGH>; /* USBC_BUS_SEL */
+		shutdown-gpios = <&gpiod 10 GPIO_ACTIVE_LOW>; /* USBC_SW_PWR */
+		orientation-switch;
+		status = "disabled";
+
+		port {
+			typec_ep: endpoint {
+				remote-endpoint = <&dwc3_ep>;
+			};
+		};
+	};
+
 	clocks {
 		clk_ext_camera: clk-ext-camera {
 			#clock-cells = <0>;
@@ -132,6 +147,17 @@
 			regulator-min-microvolt = <5000000>;
 			regulator-max-microvolt = <5000000>;
 			gpio = <&gpiob 2 GPIO_ACTIVE_HIGH>; /* 5V_EN */
+			enable-active-high;
+			status = "okay";
+		};
+
+		reg_5v_usb_pwr_sw: regulator-board@3 {
+			compatible = "regulator-fixed";
+			reg = <3>;
+			regulator-name = "5v_usb_pwr_sw";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			gpio = <&gpiog 4 GPIO_ACTIVE_HIGH>; /* NX5P3290_EN */
 			enable-active-high;
 			status = "okay";
 		};
@@ -508,23 +534,6 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 		status = "okay";
-
-		typec@35 {
-			compatible = "st,stm32mp25-typec";
-			reg = <0x35>;
-			interrupts-extended = <&intc_rpmsg 0>;
-			status = "okay";
-			connector {
-				compatible = "usb-c-connector";
-				label = "USB-C";
-
-				port {
-					typec_ep: endpoint {
-						remote-endpoint = <&dwc3_ep>;
-					};
-				};
-			};
-		};
 	};
 };
 
@@ -550,6 +559,7 @@
 	};
 };
 
+/* PCIe conflicts with USB 3.0 */
 &pcie_ep {
 	reset-gpios = <&gpioh 5 GPIO_ACTIVE_LOW>;
 	status = "disabled";
@@ -686,11 +696,8 @@
 	status = "okay";
 };
 
+/* USB 2.0 Host */
 &usb2_phy1 {
-	status = "okay";
-};
-
-&usb2_phy2 {
 	status = "okay";
 };
 
@@ -702,12 +709,18 @@
 	};
 };
 
+/* USB 2.0/3.0 Host/Device */
+&usb2_phy2 {
+	status = "okay";
+};
+
 &usb3dr {
 	status = "okay";
 
 	dwc3: usb@48300000 {
 		maximum-speed = "high-speed";
 		usb-role-switch;
+
 		port {
 			dwc3_ep: endpoint {
 				remote-endpoint = <&typec_ep>;
