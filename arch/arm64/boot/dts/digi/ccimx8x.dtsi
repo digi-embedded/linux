@@ -585,25 +585,9 @@
 };
 
 &vpu_core1 {
-	memory-region = <&encoder_boot>, <&encoder_rpc>;
 	reg = <0x2d050000 0x10000>;
-	resolution-max = <1920 1080>;
-	mbox-names = "enc1_tx0", "enc1_tx1", "enc1_rx";
-	mboxes = <&mu1_m0 0 0
-		  &mu1_m0 0 1
-		  &mu1_m0 1 0>;
+	memory-region = <&encoder_boot>, <&encoder_rpc>;
 	status = "disabled";
-
-	core0@1020000 {
-		compatible = "fsl,imx8-mu1-vpu-m0";
-		reg = <0x1020000 0x20000>;
-		reg-csr = <0x1050000 0x10000>;
-		interrupts = <GIC_SPI 470 IRQ_TYPE_LEVEL_HIGH>;
-		fsl,vpu_ap_mu_id = <17>;
-		fw-buf-size = <0x200000>;
-		rpc-buf-size = <0x80000>;
-		print-buf-size = <0x80000>;
-	};
 };
 
 /* IOMUX */
