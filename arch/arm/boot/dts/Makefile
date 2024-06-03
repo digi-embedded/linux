@@ -1158,6 +1158,7 @@ dtb-$(CONFIG_ARCH_STM32) += \
 	_ov_board_mikroe-gyro-click_ccmp15-dvk.dtbo \
 	_ov_board_mikroe-i2c-to-spi-click_ccmp13-dvk.dtbo \
 	_ov_board_mikroe-i2c-to-spi-click_ccmp15-dvk.dtbo \
+	_ov_board_nhd-3-5-640480ef-msxp-mipi-dsi_ccmp15-dvk.dtbo \
 	_ov_board_can1_ccmp15-dvk.dtbo \
 	_ov_board_can2_ccmp15-dvk.dtbo \
 	_ov_board_dlc0200ccp04df-mipi-dsi_ccmp15-dvk.dtbo \
