@@ -161,6 +161,15 @@
 			enable-active-high;
 			status = "okay";
 		};
+
+		external_vref: regulator-board@4 {
+			reg = <4>;
+			compatible = "regulator-fixed";
+			regulator-name = "external-vref";
+			regulator-min-microvolt = <1800000>;
+			regulator-max-microvolt = <1800000>;
+			status = "okay";
+		};
 	};
 
 	/* AUDIO */
@@ -192,6 +201,33 @@
 
 		codec_dai: simple-audio-card,codec {
 			sound-dai = <&max98089>;
+		};
+	};
+};
+
+/*
+ * Internal VREFBUF is not supported yet. VREF+ is connected internally to 1V8
+ * to use like an external voltage reference. If you plan to use an external
+ * voltage reference, depopulate internal SOM resistor connected to VREF+.
+ */
+&adc_12 {
+	vref-supply = <&external_vref>;
+	vdda-supply = <&scmi_vdda18adc>;
+	status = "okay";
+
+	adc1: adc@0 {
+		status = "okay";
+
+		channel@0 {
+			reg = <0>;
+			/* 16.5 ck_cycles sampling time */
+			st,min-sample-time-ns = <400>;
+		};
+
+		channel@1 {
+			reg = <1>;
+			/* 16.5 ck_cycles sampling time */
+			st,min-sample-time-ns = <400>;
 		};
 	};
 };
