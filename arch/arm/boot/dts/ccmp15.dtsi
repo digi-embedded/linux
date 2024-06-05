@@ -249,7 +249,7 @@
 	interrupt-parent = <&exti>;
 	interrupts = <68 1>;
 	wakeup-source;
-	status = "disabled";
+	status = "okay";
 };
 
 &vrefbuf {
