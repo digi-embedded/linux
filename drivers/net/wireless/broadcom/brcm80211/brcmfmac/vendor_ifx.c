@@ -847,13 +847,13 @@ int ifx_vndr_cmdstr_offload_config(struct wiphy *wiphy, struct wireless_dev *wde
 	 * send 0x000319 0x1C -
 	 *
 	 */
-	if (cmd_str[1] && (strlen(cmd_str[1]) == 6) &&
+	if (cmd_str[1][0] != '\0' && (strlen(cmd_str[1]) == 6) &&
 	    (memcmp(cmd_str[1], "Enable", 6)) == 0 &&
 	    (cmd_val[0] == 0 || cmd_val[0] == 1)) {
 		brcmf_generic_offload_enable(ifp, brcmf_offload_feat, cmd_val[0]);
-	} else if (cmd_str[1] && (strlen(cmd_str[1]) == 7) &&
+	} else if (cmd_str[1][0] != '\0' && (strlen(cmd_str[1]) == 7) &&
 		  (memcmp(cmd_str[1], "Profile", 7)) == 0) {
-		if (cmd_str[2]) {
+		if (cmd_str[2][0] != '\0') {
 			unsigned int ol_prof;
 
 			if ((strlen(cmd_str[2]) == 6) &&
@@ -869,7 +869,7 @@ int ifx_vndr_cmdstr_offload_config(struct wiphy *wiphy, struct wireless_dev *wde
 				brcmf_err("unknown offload_config Profile attr\n");
 				return -EINVAL;
 			}
-			if (cmd_str[3] && (strlen(cmd_str[3]) == 2) &&
+			if (cmd_str[3][0] != '\0' && (strlen(cmd_str[3]) == 2) &&
 			    (memcmp(cmd_str[3], "-s", 2)) == 0)
 				brcmf_generic_offload_config(ifp, ~cmd_val[1], ol_prof, cmd_val[0]);
 			else
@@ -893,43 +893,76 @@ int ifx_vndr_cmdstr_mkeep_alive(struct wiphy *wiphy, struct wireless_dev *wdev,
 {
 	struct brcmf_cfg80211_vif *vif;
 	struct brcmf_if *ifp;
-	int ret = 0;
-	struct ifx_mkeep_alive mkeep_alive = {0};
+	int ret = 0, i = 0, j = 0;
+	struct ifx_mkeep_alive *mkeep_alive;
+	u8 buf[150] = {0};
 	bool immed_flag = 0;
 
 	vif = container_of(wdev, struct brcmf_cfg80211_vif, wdev);
 	ifp = vif->ifp;
 
-	/* echo 'mkeep_alive 0 1000 ' | iw dev wlan0 vendor
+	/* NULL Keep-Alive
+	 * echo 'mkeep_alive 0 1000 ' | iw dev wlan0 vendor
+	 * send 0x000319 0x1C -
+	 *
+	 * NAT Keep-Alive
+	 * echo 'mkeep_alive 0 1000 0x080027b1050a00904c3104
+	 * 0008004500001e000040004011c52a0a8830700a88302513c
+	 * 413c5000a00000a0d ' | iw dev wlan0 vendor
 	 * send 0x000319 0x1C -
 	 */
-
 	if (cmd_val[0] < 0 || cmd_val[0] > 4 || cmd_val[1] < 0) {
-		brcmf_err("Invalid command format\n");
-		return -EINVAL;
+		brcmf_err("Invalid command value\n");
+		ret = -EINVAL;
+		goto exit;
 	}
-	if (cmd_str[1] && (strlen(cmd_str[1]) == 9) &&
+	mkeep_alive = (struct ifx_mkeep_alive *)buf;
+
+	mkeep_alive->period_msec = cmd_val[1];
+	if (cmd_str[1][0] != '\0' && (strlen(cmd_str[1]) == 9) &&
 	    (memcmp(cmd_str[1], "immediate", 9)) == 0) {
 		immed_flag = 1;
-	}
-	mkeep_alive.period_msec = cmd_val[1];
-	if (mkeep_alive.period_msec & WL_MKEEP_ALIVE_IMMEDIATE) {
-		brcmf_err("Period %d too large\n", mkeep_alive.period_msec);
-		return -EINVAL;
-	}
-	if (immed_flag && mkeep_alive.period_msec)
-		mkeep_alive.period_msec |= WL_MKEEP_ALIVE_IMMEDIATE;
 
-	mkeep_alive.version = WL_MKEEP_ALIVE_VERSION;
-	mkeep_alive.length = offsetof(struct ifx_mkeep_alive, data);
-	mkeep_alive.keep_alive_id = cmd_val[0];
-	mkeep_alive.len_bytes = 0;
+		if (mkeep_alive->period_msec & WL_MKEEP_ALIVE_IMMEDIATE) {
+			brcmf_err("Period %d too large\n", mkeep_alive->period_msec);
+			ret = -EINVAL;
+			goto exit;
+		}
+		if (immed_flag && mkeep_alive->period_msec)
+			mkeep_alive->period_msec |= WL_MKEEP_ALIVE_IMMEDIATE;
+	}
+	mkeep_alive->version = WL_MKEEP_ALIVE_VERSION;
+	mkeep_alive->keep_alive_id = cmd_val[0];
+	mkeep_alive->length = offsetof(struct ifx_mkeep_alive, data);
 
-	ret = brcmf_fil_bsscfg_data_set(ifp, "mkeep_alive", (void *)&mkeep_alive,
-					mkeep_alive.length);
+	/* If there is no hex value for pkt data, it is treated as NULL KA.
+	 * If there is hex value for pkt data, then copy hex as data and is
+	 * treated as NAT KA.
+	 */
+	if (mkeep_alive->period_msec > 0) {
+		j = 2;
+		if (cmd_val[j] < 0) {
+			mkeep_alive->len_bytes = 0;
+		} else if (cmd_val[j + 14] < 0) {
+			brcmf_err("Invalid pkt data. Required len bytes >= 14.\n");
+			ret = -EINVAL;
+			goto exit;
+		} else {
+			while (cmd_val[j] != ' ') {
+				if (j <= VNDR_CMD_VAL_NUM) {
+					mkeep_alive->data[i] = cmd_val[j];
+					j++;
+				}
+				i++;
+			}
+			mkeep_alive->len_bytes = i;
+		}
+	}
+	ret = brcmf_fil_iovar_data_set(ifp, "mkeep_alive", buf, sizeof(buf));
 	if (ret)
 		brcmf_err("Failed to set mkeeplive params: %d\n", ret);
 
+exit:
 	return ret;
 }
 
@@ -940,32 +973,51 @@ int ifx_vndr_cmdstr_tko(struct wiphy *wiphy, struct wireless_dev *wdev,
 	struct brcmf_cfg80211_vif *vif;
 	struct brcmf_if *ifp;
 	int ret = 0;
-	struct ifx_tko tko = {0};
+	struct ifx_tko *tko;
+	struct ifx_tko_param *tko_param;
 	struct ifx_tko_enable *tko_enable;
+	u8 buf[128] = {0};
 	int length;
 
 	vif = container_of(wdev, struct brcmf_cfg80211_vif, wdev);
 	ifp = vif->ifp;
 
-	/* echo 'tko enable 1 ' | iw dev wlan0 vendor
+	tko = (struct ifx_tko *)buf;
+
+	/* echo 'tko param 10 4 10 0 ' | iw dev wlan0 vendor
 	 * send 0x000319 0x1C -
 	 */
-	if (cmd_str[1] && (strlen(cmd_str[1]) == 6) &&
-	    (memcmp(cmd_str[1], "enable", 6) == 0) &&
-	     (cmd_val[0] == 0 || cmd_val[0] == 1)) {
-		tko_enable = (struct ifx_tko_enable *)tko.data;
-		tko.subcmd_id = WL_TKO_SUBCMD_ENABLE;
-		tko.len = sizeof(*tko_enable);
-		tko_enable->enable = cmd_val[0];
+	if (cmd_str[1][0] != '\0' && (strlen(cmd_str[1]) == 5) &&
+	    (memcmp(cmd_str[1], "param", 5) == 0) &&
+	    (cmd_val[0] >= 0 && cmd_val[1] >= 0 &&
+	     cmd_val[2] >= 0 && cmd_val[3] >= 0)) {
+		tko_param = (struct ifx_tko_param *)tko->data;
+		tko->subcmd_id = WL_TKO_SUBCMD_PARAM;
+		tko->len = sizeof(*tko_param);
+		tko_param->interval = cmd_val[0];
+		tko_param->retry_interval = cmd_val[1];
+		tko_param->retry_count = cmd_val[2];
+		tko_param->rst_delay = cmd_val[3];
 
-		length = offsetof(struct ifx_tko, data) + tko.len;
-		ret = brcmf_fil_bsscfg_data_set(ifp, "tko", (void *)&tko, length);
-		if (ret)
-			brcmf_err("Failed to enable/disable tko: %d\n", ret);
+	} else if (cmd_str[1][0] != '\0' && (strlen(cmd_str[1]) == 6) &&
+		   (memcmp(cmd_str[1], "enable", 6) == 0) &&
+		   (cmd_val[0] == 0 || cmd_val[0] == 1)) {
+		/* echo 'tko enable 1 ' | iw dev wlan0 vendor
+		 * send 0x000319 0x1C -
+		 */
+		tko_enable = (struct ifx_tko_enable *)tko->data;
+		tko->subcmd_id = WL_TKO_SUBCMD_ENABLE;
+		tko->len = sizeof(*tko_enable);
+		tko_enable->enable = cmd_val[0];
 	} else {
 		brcmf_err("Invalid tko command format\n");
 		return -EINVAL;
 	}
+
+	length = offsetof(struct ifx_tko, data) + tko->len;
+	ret = brcmf_fil_iovar_data_set(ifp, "tko", buf, length);
+	if (ret)
+		brcmf_err("Failed to configure tko: %d\n", ret);
 
 	return ret;
 }
@@ -977,9 +1029,9 @@ int ifx_cfg80211_vndr_cmds_str(struct wiphy *wiphy, struct wireless_dev *wdev,
 	struct brcmf_if *ifp;
 	struct ifx_vndr_cmdstr_hashtbl *hash_entry;
 	u32 jhash_key;
-	int ret = 0, i = 0, j = 0;
+	int ret = 0, idx_str = 0, idx_val = 0;
 	unsigned long val;
-	char cmd_str[VNDR_CMD_STR_NUM][VNDR_CMD_STR_MAX_LEN] = {{""}};
+	char cmd_str[VNDR_CMD_STR_NUM][VNDR_CMD_STR_MAX_LEN];
 	long cmd_val[VNDR_CMD_VAL_NUM];
 	char *tok = NULL, *buf = NULL;
 
@@ -987,29 +1039,63 @@ int ifx_cfg80211_vndr_cmds_str(struct wiphy *wiphy, struct wireless_dev *wdev,
 	vif = container_of(wdev, struct brcmf_cfg80211_vif, wdev);
 	ifp = vif->ifp;
 
+	memset(cmd_str, '\0', VNDR_CMD_STR_NUM * VNDR_CMD_STR_MAX_LEN * sizeof(char));
 	memset(cmd_val, -1, VNDR_CMD_VAL_NUM * sizeof(*cmd_val));
 
-	while ((tok = strsep(&buf, " ")) != NULL) {
-		if (kstrtoul(tok, 10, &val) == 0) {
-			cmd_val[j] = val;
-			j++;
+	while (idx_str < VNDR_CMD_STR_NUM && idx_val < VNDR_CMD_VAL_NUM &&
+	       ((tok = strsep(&buf, " ")) != NULL)) {
+		if (kstrtol(tok, 10, &val) == 0) {
+			cmd_val[idx_val] = val;
+			idx_val++;
 		} else if ((strncmp(tok, "0x", 2) == 0) || (strncmp(tok, "0X", 2) == 0)) {
-			if (kstrtoul(tok, 16, &val) == 0) {
-				cmd_val[j] = val;
-				j++;
+			if (kstrtol(tok, 16, &val) == 0) {
+				cmd_val[idx_val] = val;
+				idx_val++;
+
+			} else if (strnlen(tok, VNDR_CMD_VAL_NUM) >= 20) {
+			/* For larger input hex, split the hex pattern into 2 bytes each
+			 * and store it individually.
+			 */
+				tok = tok + 2;/* Skip past 0x */
+				if (strlen(tok) % 2 != 0) {
+					brcmf_err("Data invalid format. Even length required\n");
+					return -EINVAL;
+				}
+				while (*tok != '\0') {
+					char num[3];
+
+					if (idx_val >= VNDR_CMD_VAL_NUM) {
+						brcmf_err("pkt header hex length exceeded\n");
+						return -EINVAL;
+					}
+					memcpy(num, tok, 2);
+					num[2] = '\0';
+					if (kstrtol(num, 16, &val) == 0) {
+						cmd_val[idx_val] = val;
+					} else {
+						brcmf_err("Invalid hex pkt data\n");
+						return -EINVAL;
+					}
+					tok += 2;
+					idx_val++;
+				}
+				cmd_val[idx_val] = ' ';
 			} else {
 				brcmf_err("Failed to parse hex token\n");
 				return -EINVAL;
 			}
 		} else if (strnlen(tok, VNDR_CMD_STR_MAX_LEN) <= VNDR_CMD_STR_MAX_LEN) {
-			strncpy(cmd_str[i], tok, strnlen(tok, VNDR_CMD_STR_MAX_LEN));
-			i++;
+			strncpy(cmd_str[idx_str], tok, strnlen(tok, VNDR_CMD_STR_MAX_LEN));
+			idx_str++;
 		} else {
 			brcmf_err("Failed to parse token\n");
 			return -EINVAL;
 		}
 	}
-
+	if (idx_str >= VNDR_CMD_STR_NUM || idx_val >= VNDR_CMD_VAL_NUM) {
+		brcmf_err("CMD parameter limit exceeded\n");
+		return -EINVAL;
+	}
 	/* Run the user cmd string input via Jenkins hash to pass and search the entry in
 	 * vendor cmd hashtable initialized at load time.
 	 */
