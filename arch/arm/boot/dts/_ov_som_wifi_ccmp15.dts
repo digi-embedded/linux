@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Digi International Inc.
+ * Copyright 2022-2024 Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -45,21 +45,37 @@
 		};
 	};
 
-	/* Enable SDMMC3 (Wireless) */
-	fragment@3 {
-		target = <&sdmmc3>;
-		__overlay__ {
-			status = "okay";
-		};
-	};
-
 	/* Enable External 32kHz Low-Power Oscillator */
-	fragment@4 {
+	fragment@3 {
 		target = <&rtc>;
 		__overlay__ {
 			st,lsco = <RTC_OUT2_RMP>;
 			pinctrl-0 = <&ccmp15_rtc_out1_pins_a &rtc_out2_rmp_pins_a>;
 			pinctrl-names = "default";
+		};
+	};
+
+	/* USDHC3 (Wireless) */
+	fragment@4 {
+		target = <&sdmmc3>;
+		__overlay__ {
+			pinctrl-names = "default", "opendrain", "sleep";
+			pinctrl-0 = <&sdmmc3_b4_pins_a>;
+			pinctrl-1 = <&sdmmc3_b4_od_pins_a>;
+			pinctrl-2 = <&sdmmc3_b4_sleep_pins_a>;
+			non-removable;
+			no-1-8-v;
+			st,neg-edge;
+			bus-width = <4>;
+			vmmc-supply = <&reg_rf_wl_en>;
+			status = "okay";
+
+			brcmf {
+				compatible = "brcm,bcm4329-fmac";
+				brcm,broken_sg_support;
+				brcm,sd_head_align = /bits/  16 <8>;
+				brcm,sd_sgentry_align = /bits/ 16 <32>;
+			};
 		};
 	};
 };
