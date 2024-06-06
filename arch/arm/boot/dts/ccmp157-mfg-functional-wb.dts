@@ -1,5 +1,5 @@
  /*
- * Copyright 2022, 2023 Digi International Inc.
+ * Copyright 2022-2024 Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -24,6 +24,10 @@
 
 	wireless {
 		/* U-Boot will fill in the MAC address here */
+	};
+
+	aliases {
+		serial1 = "/soc/serial@5c000000";
 	};
 };
 
@@ -69,10 +73,18 @@
 
 /* Enable USART1 (Bluetooth) */
 &usart1{
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&ccmp15_usart1_pins_c>, <&ccmp15_usart1_pins_z>;
+	pinctrl-1 = <&ccmp15_usart1_sleep_pins_c>, <&ccmp15_usart1_sleep_pins_z>;
+	uart-has-rtscts;
 	status = "okay";
-};
 
-/* Enable CYW4373 Bluetooth node */
-&cyw4373_bt{
-	status = "okay";
+	cyw4373_bt {
+		shutdown-gpios = <&gpioz 6 GPIO_ACTIVE_HIGH>;
+		compatible = "brcm,bcm43438-bt";
+		max-speed = <3000000>;
+		vbat-supply = <&v3v3>;
+		vddio-supply = <&reg_3v3_rf>;
+		status = "okay";
+	};
 };
