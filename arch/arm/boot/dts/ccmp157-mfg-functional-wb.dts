@@ -46,8 +46,25 @@
 
 /* Enable SDMMC3 (Wireless) */
 &sdmmc3{
+	pinctrl-names = "default", "opendrain", "sleep";
+	pinctrl-0 = <&sdmmc3_b4_pins_a>;
+	pinctrl-1 = <&sdmmc3_b4_od_pins_a>;
+	pinctrl-2 = <&sdmmc3_b4_sleep_pins_a>;
+	non-removable;
+	no-1-8-v;
+	st,neg-edge;
+	bus-width = <4>;
+	vmmc-supply = <&reg_rf_wl_en>;
 	max-frequency = <1000000>;
 	status = "okay";
+
+	brcmf {
+		compatible = "brcm,bcm4329-fmac";
+
+		brcm,broken_sg_support;
+		brcm,sd_head_align = /bits/  16 <8>;
+		brcm,sd_sgentry_align = /bits/ 16 <32>;
+	};
 };
 
 /* Enable USART1 (Bluetooth) */
