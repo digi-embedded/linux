@@ -719,7 +719,16 @@ struct ifx_tko {
 };
 
 /* subcommand ids */
+#define WL_TKO_SUBCMD_PARAM		1	/* configure offload common parameters  */
 #define WL_TKO_SUBCMD_ENABLE		3	/* enable/disable */
+
+/* WL_TKO_SUBCMD_PARAM subcommand data */
+struct ifx_tko_param {
+	u16 interval;		/* keepalive tx interval (secs) */
+	u16 retry_interval;	/* keepalive retry interval (secs) */
+	u16 retry_count;	/* retry_count */
+	s16 rst_delay;		/* delay to delay a RST frame from reaching the host */
+};
 
 struct ifx_tko_enable {
 	u8 enable;		/* 1 - enable, 0 - disable */
@@ -730,7 +739,7 @@ struct ifx_tko_enable {
  */
 #define VNDR_CMD_STR_NUM	15
 #define VNDR_CMD_STR_MAX_LEN	20
-#define VNDR_CMD_VAL_NUM	15
+#define VNDR_CMD_VAL_NUM	50
 #define VNDR_CMD_HASH_BITS	4
 
 struct ifx_vendor_cmdstr {
