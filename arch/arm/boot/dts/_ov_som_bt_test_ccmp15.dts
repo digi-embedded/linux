@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Digi International Inc.
+ * Copyright 2023-2024 Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -13,6 +13,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/rtc/rtc-stm32.h>
 
 /dts-v1/;
@@ -25,6 +26,9 @@
 			overlay-description = "SOM: Bluetooth test";
 			bluetooth {
 				/* U-Boot will fill in the MAC address here */
+			};
+			aliases {
+				serial1 = "/soc/serial@5c000000";
 			};
 		};
 	};
@@ -41,20 +45,16 @@
 	fragment@2 {
 		target = <&usart1>;
 		__overlay__ {
+			pinctrl-names = "default", "sleep";
+			pinctrl-0 = <&ccmp15_usart1_pins_c>, <&ccmp15_usart1_pins_z>;
+			pinctrl-1 = <&ccmp15_usart1_sleep_pins_c>, <&ccmp15_usart1_sleep_pins_z>;
+			uart-has-rtscts;
 			status = "okay";
 		};
 	};
 
-	/* Disable CYW4373 Bluetooth node */
-	fragment@3 {
-		target = <&cyw4373_bt>;
-		__overlay__ {
-			status = "disabled";
-		};
-	};
-
 	/* Enable External 32kHz Low-Power Oscillator */
-	fragment@4 {
+	fragment@3 {
 		target = <&rtc>;
 		__overlay__ {
 			st,lsco = <RTC_OUT2_RMP>;
