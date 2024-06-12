@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 
 ccmp25-dtbs :=		ccmp25-dvk.dtb \
+			_ov_board_e55rb-i-mw346-c-mipi-dsi_ccmp25-dvk.dtbo \
 			_ov_board_g101evn010-lvds_ccmp25-dvk.dtbo \
 			_ov_board_mikroe-accel2-click_ccmp25-dvk.dtbo \
 			_ov_board_mikroe-gyro-click_ccmp25-dvk.dtbo \
