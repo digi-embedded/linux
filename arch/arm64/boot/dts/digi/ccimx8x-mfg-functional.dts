@@ -378,6 +378,12 @@
 	status = "okay";
 };
 
+/* Enable PCIe clock */
+&phyx1 {
+	fsl,refclk-pad-mode = <IMX8_PCIE_REFCLK_PAD_INPUT>;
+	status = "okay";
+};
+
 &dc0_pc {
 	status = "okay";
 };
