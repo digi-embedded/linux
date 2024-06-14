@@ -42,8 +42,26 @@
 
 /* Enable SDMMC2 (Wireless) */
 &sdmmc2{
+	arm,primecell-periphid = <0x10153180>;
+	pinctrl-names = "default", "opendrain", "sleep";
+	pinctrl-0 = <&sdmmc2_b4_pins_a &sdmmc2_clk_pins_a>;
+	pinctrl-1 = <&sdmmc2_b4_od_pins_a &sdmmc2_clk_pins_a>;
+	pinctrl-2 = <&sdmmc2_b4_sleep_pins_a>;
+	non-removable;
+	no-1-8-v;
+	st,neg-edge;
+	bus-width = <4>;
+	vmmc-supply = <&reg_rf_wl_en>;
 	max-frequency = <1000000>;
 	status = "okay";
+
+	brcmf {
+		compatible = "brcm,bcm4329-fmac";
+
+		brcm,broken_sg_support;
+		brcm,sd_head_align = /bits/  16 <8>;
+		brcm,sd_sgentry_align = /bits/ 16 <32>;
+	};
 };
 
 /* Enable USART2 (Bluetooth) */
