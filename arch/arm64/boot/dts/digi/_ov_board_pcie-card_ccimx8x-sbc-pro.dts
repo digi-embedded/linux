@@ -14,6 +14,7 @@
  */
 
 #include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/phy/phy-imx8-pcie.h>
 
 /dts-v1/;
 /plugin/;
@@ -49,6 +50,15 @@
 			reset-gpio = <&lsio_gpio3 16 GPIO_ACTIVE_LOW>; /* PCIE_RESET_N */
 			disable-gpio = <&lsio_gpio0 30 GPIO_ACTIVE_HIGH>; /* PCIE_DIS_N */
 			vpcie-supply = <&reg_3v3_pcie>;
+			status = "okay";
+		};
+	};
+
+	/* Enable PCIE clock */
+	fragment@3 {
+		target = <&phyx1>;
+		__overlay__ {
+			fsl,refclk-pad-mode = <IMX8_PCIE_REFCLK_PAD_INPUT>;
 			status = "okay";
 		};
 	};
