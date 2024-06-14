@@ -66,10 +66,20 @@
 
 /* Enable USART2 (Bluetooth) */
 &usart2{
+	pinctrl-names = "default", "sleep", "idle";
+	pinctrl-0 = <&ccmp13_usart2_pins_a>;
+	pinctrl-1 = <&ccmp13_usart2_sleep_pins_a>;
+	pinctrl-2 = <&ccmp13_usart2_idle_pins_a>;
+	uart-has-rtscts;
 	status = "okay";
-};
 
-/* Enable CYW4373 Bluetooth node */
-&cyw4373_bt{
-	status = "okay";
+	/* Enable CYW4373 Bluetooth node */
+	cyw4373_bt {
+		shutdown-gpios = <&gpiod 13 GPIO_ACTIVE_HIGH>;
+		compatible = "brcm,bcm43438-bt";
+		max-speed = <3000000>;
+		vbat-supply = <&reg_3v3_rf>;
+		vddio-supply = <&reg_3v3_rf>;
+		status = "okay";
+	};
 };
