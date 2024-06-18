@@ -83,7 +83,6 @@ dtb-$(CONFIG_ARCH_MXC) += ccimx8mm.dtb \
 			  ccimx8x-sbc-express.dtb \
 			  ccimx8x-sbc-express-mfg.dtb \
 			  ccimx8x-sbc-pro-mfg.dtb \
-			  ccimx8x-sbc-pro.dtb \
 			  ccimx91.dtb \
 			  ccimx91-mfg-functional.dtb \
 			  ccimx91-mfg-functional-wb.dtb \
