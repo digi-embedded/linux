@@ -13,6 +13,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/rtc/rtc-stm32.h>
 
 /dts-v1/;
@@ -33,6 +34,13 @@
 	fragment@1 {
 		target = <&reg_3v3_rf>;
 		__overlay__ {
+			compatible = "regulator-fixed";
+			regulator-name = "3v3_rf";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			gpio = <&gpiof 2 GPIO_ACTIVE_HIGH>; /* 3V3_RF_EN */
+			enable-active-high;
+			startup-delay-us = <100000>;
 			status = "okay";
 		};
 	};
@@ -41,6 +49,14 @@
 	fragment@2 {
 		target = <&reg_rf_wl_en>;
 		__overlay__ {
+			compatible = "regulator-fixed";
+			regulator-name = "rf_wl_en";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			gpio = <&gpiod 13 GPIO_ACTIVE_HIGH>; /* WL_EN */
+			enable-active-high;
+			startup-delay-us = <100>;
+			vin-supply = <&reg_3v3_rf>;
 			status = "okay";
 		};
 	};
