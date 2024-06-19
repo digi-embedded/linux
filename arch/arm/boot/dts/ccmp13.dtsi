@@ -50,27 +50,14 @@
 		#size-cells = <0>;
 
 		reg_3v3_rf: regulator-som@1 {
-			compatible = "regulator-fixed";
+			/* Filled-in by Wi-Fi/BT DT overlays */
 			reg = <1>;
-			regulator-name = "3v3_rf";
-			regulator-min-microvolt = <3300000>;
-			regulator-max-microvolt = <3300000>;
-			gpio = <&gpiob 7 GPIO_ACTIVE_HIGH>; /* 3V3_RF_EN */
-			enable-active-high;
-			startup-delay-us = <100000>;
 			status = "disabled";
 		};
 
 		reg_rf_wl_en: regulator-som@2 {
-			compatible = "regulator-fixed";
+			/* Filled-in by Wi-Fi DT overlay */
 			reg = <2>;
-			regulator-name = "rf_wl_en";
-			regulator-min-microvolt = <3300000>;
-			regulator-max-microvolt = <3300000>;
-			gpio = <&gpiod 6 GPIO_ACTIVE_HIGH>; /* WL_REG_EN */
-			enable-active-high;
-			startup-delay-us = <100>;
-			vin-supply = <&reg_3v3_rf>;
 			status = "disabled";
 		};
 	};
