@@ -7893,14 +7893,17 @@ done:
 	roam_info.resp_ie = conn_info->resp_ie;
 	roam_info.resp_ie_len = conn_info->resp_ie_len;
 
-	if ((profile->use_fwsup == BRCMF_PROFILE_FWSUP_1X ||
-	    profile->use_fwsup == BRCMF_PROFILE_FWSUP_ROAM) &&
+	if (((profile->use_fwsup == BRCMF_PROFILE_FWSUP_1X ||
+	      profile->use_fwsup == BRCMF_PROFILE_FWSUP_ROAM) &&
 	    (brcmf_has_pmkid(roam_info.req_ie, roam_info.req_ie_len, NULL) ||
-	     profile->is_ft || profile->is_okc))
+	     profile->is_ft || profile->is_okc)) ||
+	     profile->use_fwsup == BRCMF_PROFILE_FWSUP_PSK ||
+	     profile->use_fwsup == BRCMF_PROFILE_FWSUP_SAE)
 		roam_info.authorized = true;
 
 	cfg80211_roamed(ndev, &roam_info, GFP_KERNEL);
-	brcmf_dbg(CONN, "Report roaming result\n");
+	brcmf_dbg(CONN, "Report roaming result, authorized is %s\n",
+		  roam_info.authorized ? "true" : "false");
 
 	clear_bit(BRCMF_VIF_STATUS_CONNECTING, &ifp->vif->sme_state);
 	set_bit(BRCMF_VIF_STATUS_CONNECTED, &ifp->vif->sme_state);
