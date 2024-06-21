@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Digi International Inc.
+ * Copyright 2020-2024 Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,6 +14,7 @@
  */
 
 #include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/phy/phy-imx8-pcie.h>
 
 /dts-v1/;
 /plugin/;
@@ -55,8 +56,17 @@
 	fragment@3 {
 		target = <&pcieb>;
 		__overlay__ {
-			epdev_on-supply = <&reg_rf_wl_en>;
+			vpcie-supply = <&reg_rf_wl_en>;
 			digi,disable_pci_msi;
+			status = "okay";
+		};
+	};
+
+	/* Enable PCIE clock */
+	fragment@4 {
+		target = <&phyx1>;
+		__overlay__ {
+			fsl,refclk-pad-mode = <IMX8_PCIE_REFCLK_PAD_INPUT>;
 			status = "okay";
 		};
 	};

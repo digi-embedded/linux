@@ -729,13 +729,6 @@ static int mca_tamper_remove(struct platform_device *pdev)
 			continue;
 		/* Release the resources allocated */
 		mca = mca_tamper[iface]->mca;
-		if (mca->gpio_base >= 0) {
-			devm_gpio_free(&pdev->dev,
-				       mca->gpio_base + mca_tamper[iface]->io_in);
-			if (mca_tamper[iface]->config0 & MCA_TAMPER_OUT_EN)
-				devm_gpio_free(&pdev->dev,
-					       mca->gpio_base + mca_tamper[iface]->io_out);
-		}
 		devm_kfree(&pdev->dev, (void *)mca_tamper[iface]->iio->channels);
 		if (mca_tamper[iface]->irq)
 			devm_free_irq(&pdev->dev, mca_tamper[iface]->irq,

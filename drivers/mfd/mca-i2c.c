@@ -316,13 +316,11 @@ static int mca_i2c_probe(struct i2c_client *i2c,
 	return mca_device_init(mca, i2c->irq);
 }
 
-static int mca_i2c_remove(struct i2c_client *i2c)
+static void mca_i2c_remove(struct i2c_client *i2c)
 {
 	struct mca_drv *mca = i2c_get_clientdata(i2c);
 
 	mca_device_exit(mca);
-
-	return 0;
 }
 
 /*

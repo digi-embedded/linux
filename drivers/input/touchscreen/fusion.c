@@ -431,7 +431,7 @@ static int fusion_resume(struct device *dev)
 
 static SIMPLE_DEV_PM_OPS(fusion_dev_pm_ops, fusion_suspend, fusion_resume);
 
-static int fusion_remove(struct i2c_client *i2c)
+static void fusion_remove(struct i2c_client *i2c)
 {
 	destroy_workqueue(fusion.workq);
 	free_irq(i2c->irq, &fusion);
@@ -439,8 +439,6 @@ static int fusion_remove(struct i2c_client *i2c)
 	i2c_set_clientdata(i2c, NULL);
 
 	printk(KERN_INFO "Fusion driver removed\n");
-
-	return 0;
 }
 
 static struct i2c_device_id fusion_id[] = {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2018-2021, Digi International Inc.
+ * Copyright 2024 Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -13,39 +13,24 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* Digi ConnectCore 8X WiFi-Bluetooth FCT */
-#include "ccimx8x-mfg-functional.dts"
+/dts-v1/;
+/plugin/;
 
 / {
-	wireless {
-		/* U-Boot will fill in the MAC address here */
+	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			overlay-description = "SOM: Bluetooth DTM Mode";
+		};
 	};
-};
 
-&bluetooth {
-	status = "okay";
-};
-
-/* RF regulators */
-&reg_3v3_rf {
-	status = "okay";
-};
-
-&reg_rf_bt_en {
-	status = "okay";
-};
-
-&reg_rf_wl_en {
-	status = "okay";
-};
-
-&pcieb {
-	clkreq-gpio = <&lsio_gpio4 1 GPIO_ACTIVE_LOW>;
-	vpcie-supply = <&reg_rf_wl_en>;
-	digi,disable_pci_msi;
-};
-
-/* IOMUX */
-&iomuxc {
-	pinctrl-0 = <&pinctrl_hog_common>;
+	fragment@1 {
+		target = <&lpuart1>;
+		__overlay__ {
+			status = "okay";
+			bluetooth {
+				status = "disabled";
+			};
+		};
+	};
 };

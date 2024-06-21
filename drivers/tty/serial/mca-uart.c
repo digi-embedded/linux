@@ -155,7 +155,7 @@ static void mca_uart_break_ctl(struct uart_port *port, int break_state)
 
 static void mca_uart_set_termios(struct uart_port *port,
 				  struct ktermios *termios,
-				  struct ktermios *old)
+				  const struct ktermios *old)
 {
 	struct mca_uart *mca_uart = to_mca_uart(port, port);
 	struct regmap *regmap = mca_uart->mca->regmap;
@@ -384,6 +384,7 @@ static void mca_uart_flush_buffer(struct uart_port *port)
 }
 
 static int mca_uart_rs485_config(struct uart_port *port,
+				 struct ktermios *termios,
 				 struct serial_rs485 *rs485conf)
 {
 	struct mca_uart *mca_uart = to_mca_uart(port, port);
@@ -935,19 +936,9 @@ static int mca_uart_allocate_port_resources(struct mca_uart_drv *uart_drv,
 					NULL, mca_uart_irq_handler,
 					IRQF_ONESHOT, MCA_BASE_DRVNAME_UART,
 					mca_uart);
-	if (ret) {
+	if (ret)
 		dev_err(uart_drv->dev, "Failed to register IRQ\n");
-		goto error_ios;
-	}
 
-	return 0;
-
-error_ios:
-	for (i = 0; i < mca_uart->npins; i++) {
-		int io = mca_uart->pins[i];
-
-		devm_gpio_free(uart_drv->dev, uart_drv->mca->gpio_base + io);
-	}
 	return ret;
 }
 
@@ -955,7 +946,6 @@ static int mca_uart_release_port_resources(struct mca_uart *mca_uart)
 {
 	struct mca_uart_drv *uart_drv =
 		dev_get_drvdata(mca_uart->port.dev->parent);
-	int i;
 
 	cancel_work_sync(&mca_uart->tx_work);
 	cancel_work_sync(&mca_uart->dc_work);
@@ -965,12 +955,6 @@ static int mca_uart_release_port_resources(struct mca_uart *mca_uart)
 
 	if (mca_uart->port.irq)
 		devm_free_irq(uart_drv->dev, mca_uart->port.irq, mca_uart);
-
-	for (i = 0; i < mca_uart->npins; i++) {
-		int io = mca_uart->pins[i];
-
-		devm_gpio_free(uart_drv->dev, uart_drv->mca->gpio_base + io);
-	}
 
 	return 0;
 }

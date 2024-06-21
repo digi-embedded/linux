@@ -254,7 +254,6 @@ static int mca_led_probe(struct platform_device *pdev)
 		if (ret) {
 			dev_err(&pdev->dev, "failed to set io register (%d)\n",
 				ret);
-			devm_gpio_free(&pdev->dev, led_drv->mca->gpio_base + io);
 			continue;
 		}
 
@@ -265,7 +264,6 @@ static int mca_led_probe(struct platform_device *pdev)
 		if (ret) {
 			dev_err(&pdev->dev, "failed to set cfg register (%d)\n",
 				ret);
-			devm_gpio_free(&pdev->dev, led_drv->mca->gpio_base + io);
 			continue;
 		}
 
@@ -277,8 +275,6 @@ static int mca_led_probe(struct platform_device *pdev)
 			if (ret) {
 				dev_err(&pdev->dev, "failed to set brightness (%d)\n",
 				ret);
-				devm_gpio_free(&pdev->dev,
-					       led_drv->mca->gpio_base + io);
 				continue;
 			}
 		}
@@ -287,7 +283,6 @@ static int mca_led_probe(struct platform_device *pdev)
 		if (ret) {
 			dev_err(&pdev->dev, "failed to register LED %d (%d)\n",
 				led_drv->num_leds, ret);
-			devm_gpio_free(&pdev->dev, led_drv->mca->gpio_base + io);
 			goto err_free_cdev;
 		}
 
@@ -317,7 +312,6 @@ static int mca_led_remove(struct platform_device *pdev)
 
 	for (i = 0; i < led_drv->num_leds; i++) {
 		led_classdev_unregister(&led_drv->leds[i].cdev);
-		devm_gpio_free(&pdev->dev, led_drv->mca->gpio_base + led_drv->leds[i].io);
 	}
 
 	devm_kfree(&pdev->dev, led_drv->leds);

@@ -14,6 +14,7 @@
  */
 
 #include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/phy/phy-imx8-pcie.h>
 
 /dts-v1/;
 /plugin/;
@@ -61,6 +62,15 @@
 	fragment@3 {
 		target = <&reg_3v3_pcie>;
 		__overlay__ {
+			status = "okay";
+		};
+	};
+
+	/* Enable PCIE clock */
+	fragment@4 {
+		target = <&phyx1>;
+		__overlay__ {
+			fsl,refclk-pad-mode = <IMX8_PCIE_REFCLK_PAD_INPUT>;
 			status = "okay";
 		};
 	};

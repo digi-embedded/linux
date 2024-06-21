@@ -865,11 +865,6 @@ error_free_ch:
 	devm_kfree(&pdev->dev, (void *)iio_ch_list);
 
 error_dev_free:
-	while (num_adcs && gpio_base >= 0) {
-		devm_gpio_free(&pdev->dev,
-			       gpio_base + adc_ch_list[num_adcs - 1]);
-		num_adcs--;
-	}
 	iio_device_free(indio_dev);
 
 	return ret;
@@ -889,14 +884,6 @@ static int mca_adc_remove(struct platform_device *pdev)
 	}
 
 	/* Release allocated resources */
-	if (mca->gpio_base >= 0) {
-		for (i = 0, chan = (struct iio_chan_spec *)indio_dev->channels;
-		     i < indio_dev->num_channels;
-		     i++) {
-			devm_gpio_free(&pdev->dev, mca->gpio_base + chan->channel);
-		}
-	}
-
 	if (adc->irq != -1)
 		devm_free_irq(&pdev->dev, adc->irq, indio_dev);
 

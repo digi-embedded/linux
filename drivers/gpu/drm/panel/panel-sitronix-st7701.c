@@ -404,7 +404,7 @@ static void dmt028vghmcmi_1a_gip_sequence(struct st7701 *st7701)
 	ST7701_DSI(st7701, 0x3A, 0x70);
 }
 
-static void dlc0200cc904df_gip_sequence(struct st7701 *st7701)
+static void dlc0200ccp04df_gip_sequence(struct st7701 *st7701)
 {
 	ST7701_DSI(st7701, MIPI_DCS_SOFT_RESET, 0x00);
 
@@ -784,7 +784,7 @@ static const struct st7701_panel_desc dmt028vghmcmi_1a_desc = {
 	.gip_sequence = dmt028vghmcmi_1a_gip_sequence,
 };
 
-static const struct drm_display_mode dlc0200cc904df_mode = {
+static const struct drm_display_mode dlc0200ccp04df_mode = {
 	.clock = 25000,
 
 	.hdisplay = 480,
@@ -803,12 +803,12 @@ static const struct drm_display_mode dlc0200cc904df_mode = {
 	.type = DRM_MODE_TYPE_DRIVER | DRM_MODE_TYPE_PREFERRED,
 };
 
-static const struct st7701_panel_desc dlc0200cc904df_desc = {
-	.mode = &dlc0200cc904df_mode,
+static const struct st7701_panel_desc dlc0200ccp04df_desc = {
+	.mode = &dlc0200ccp04df_mode,
 	.lanes = 2,
 	.format = MIPI_DSI_FMT_RGB888,
 	.panel_sleep_delay = 0,
-	.gip_sequence = dlc0200cc904df_gip_sequence,
+	.gip_sequence = dlc0200ccp04df_gip_sequence,
 };
 
 static int st7701_dsi_probe(struct mipi_dsi_device *dsi)
@@ -886,7 +886,7 @@ static void st7701_dsi_remove(struct mipi_dsi_device *dsi)
 
 static const struct of_device_id st7701_of_match[] = {
 	{ .compatible = "densitron,dmt028vghmcmi-1a", .data = &dmt028vghmcmi_1a_desc },
-	{ .compatible = "dlc,dlc0200cc904df", .data = &dlc0200cc904df_desc },
+	{ .compatible = "dlc,dlc0200ccp04df", .data = &dlc0200ccp04df_desc },
 	{ .compatible = "techstar,ts8550b", .data = &ts8550b_desc },
 	{ }
 };

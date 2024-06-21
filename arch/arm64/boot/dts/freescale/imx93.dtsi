@@ -281,6 +281,22 @@
 				nxp,no-divider;
 			};
 
+			tpm1: pwm@44310000 {
+				compatible = "fsl,imx7ulp-pwm";
+				reg = <0x44310000 0x1000>;
+				clocks = <&clk IMX93_CLK_TPM1_GATE>;
+				#pwm-cells = <3>;
+				status = "disabled";
+			};
+
+			tpm2: pwm@44320000 {
+				compatible = "fsl,imx7ulp-pwm";
+				reg = <0x44320000 0x10000>;
+				clocks = <&clk IMX93_CLK_TPM2_GATE>;
+				#pwm-cells = <3>;
+				status = "disabled";
+			};
+
 			i3c1: i3c-master@44330000 {
 				#address-cells = <3>;
 				#size-cells = <0>;
@@ -686,20 +702,33 @@
 				fsl,ext-reset-output;
 			};
 
+			tpm3: pwm@424e0000 {
+				compatible = "fsl,imx7ulp-pwm";
+				reg = <0x424e0000 0x1000>;
+				clocks = <&clk IMX93_CLK_TPM3_GATE>;
+				#pwm-cells = <3>;
+				status = "disabled";
+			};
+
 			tpm4: pwm@424f0000 {
 				compatible = "fsl,imx7ulp-pwm";
-				reg = <0x424f0000 0x1000>;
+				reg = <0x424f0000 0x10000>;
 				clocks = <&clk IMX93_CLK_TPM4_GATE>;
-				assigned-clocks = <&clk IMX93_CLK_TPM4>;
-				assigned-clock-parents = <&clk IMX93_CLK_24M>;
-				assigned-clock-rates = <24000000>;
+				#pwm-cells = <3>;
+				status = "disabled";
+			};
+
+			tpm5: pwm@42500000 {
+				compatible = "fsl,imx7ulp-pwm";
+				reg = <0x42500000 0x10000>;
+				clocks = <&clk IMX93_CLK_TPM5_GATE>;
 				#pwm-cells = <3>;
 				status = "disabled";
 			};
 
 			tpm6: pwm@42510000 {
 				compatible = "fsl,imx7ulp-pwm";
-				reg = <0x42510000 0x1000>;
+				reg = <0x42510000 0x10000>;
 				clocks = <&clk IMX93_CLK_TPM6_GATE>;
 				#pwm-cells = <3>;
 				status = "disabled";

@@ -38,24 +38,23 @@
 
 	sound_max98089: sound-max98089 {
 		compatible = "fsl,imx-audio-max98088";
-		model = "imx-max98088";
-		cpu-dai = <&sai2>;
+		model = "max98088-audio";
+		audio-cpu = <&sai2>;
 		audio-codec = <&max98089>;
-		asrc-controller = <&asrc>;
-		gpr = <&gpr>;
+		audio-asrc = <&asrc>;
 		audio-routing =
 			"Headphone Jack", "HPL",
 			"Headphone Jack", "HPR",
 			"Ext Spk", "SPKL",
 			"Ext Spk", "SPKR",
-			"LineOut", "RECL",
-			"LineOut", "RECR",
-			"Mic1", "MIC1",
-			"Mic2", "MIC2",
-			"LineInA", "INA1",
-			"LineInA", "INA2",
-			"LineInB", "INB1",
-			"LineInB", "INB2";
+			"Line Out Jack", "RECL",
+			"Line Out Jack", "RECR",
+			"Mic Jack", "MIC1",
+			"Mic Jack", "MIC2",
+			"Line In Jack", "INA1",
+			"Line In Jack", "INA2",
+			"Line In Jack", "INB1",
+			"Line In Jack", "INB2";
 		status = "disabled";
 	};
 
@@ -389,6 +388,7 @@
 			  <&clks IMX6UL_CLK_SAI2>;
 	assigned-clock-rates = <0>, <786432000>, <12288000>;
 	assigned-clock-parents = <&clks IMX6UL_CLK_PLL4_AUDIO_DIV>;
+	fsl,sai-mclk-direction-output;
 	status = "disabled";
 };
 

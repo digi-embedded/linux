@@ -20,56 +20,46 @@
 	fragment@0 {
 		target-path = "/";
 		__overlay__ {
-			overlay-description = "DVK: DLC0200CC904DF-2 MIPI DSI display";
+			overlay-description = "SOM: add Cortex-M4 support";
+			reserved-memory {
+				#address-cells = <2>;
+				#size-cells = <2>;
+
+				m_core_reserved: m_core@0x80000000 {
+					no-map;
+					reg = <0 0x80000000 0 0x1000000>;
+				};
+
+				vdev0vring0: vdev0vring0@b8000000 {
+					reg = <0 0xb8000000 0 0x8000>;
+					no-map;
+				};
+
+				vdev0vring1: vdev0vring1@b8008000 {
+					reg = <0 0xb8008000 0 0x8000>;
+					no-map;
+				};
+
+				rsc_table: rsc_table@b80ff000 {
+					reg = <0 0xb80ff000 0 0x1000>;
+					no-map;
+				};
+
+				vdevbuffer: vdevbuffer@b8400000 {
+					compatible = "shared-dma-pool";
+					reg = <0 0xb8400000 0 0x100000>;
+					no-map;
+				};
+			};
 		};
 	};
 
-	/* Disable the HDMI bridge */
 	fragment@1 {
-		target = <&lt_bridge>;
+		target = <&imx8mm_cm4>;
 		__overlay__ {
-			status = "disabled";
-		};
-	};
-
-	/* Configure the MIPI DSI */
-	fragment@2 {
-		target = <&dsi>;
-		__overlay__ {
-
-			#address-cells = <1>;
-			#size-cells = <0>;
-
-			panel@0 {
-				compatible = "dlc,dlc0200ccp04df";
-				status = "okay";
-				reg = <0>;
-				VCC-supply = <&buck4>;
-				IOVCC-supply = <&buck4>;
-				/* reset-gpios signal not connected on DVK */
-
-				port {
-					mipi_dsi_panel_in: endpoint {
-						remote-endpoint = <&mipi_dsi_panel_out>;
-					};
-				};
-			};
-
-			ports {
-				port@1 {
-					mipi_dsi_panel_out: endpoint {
-						remote-endpoint = <&mipi_dsi_panel_in>;
-					};
-				};
-			};
-		};
-	};
-
-	/* Adjust ldcif clock */
-	fragment@3 {
-		target = <&lcdif>;
-		__overlay__ {
-			assigned-clock-rates = <300000000>, <50000000>, <400000000>, <133333333>;
+			memory-region = <&vdevbuffer>, <&vdev0vring0>, <&vdev0vring1>,
+				<&rsc_table>;
+			status = "okay";
 		};
 	};
 };
