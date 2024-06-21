@@ -1,5 +1,5 @@
 /*
- * Copyright 2022, 2023 Digi International, Inc.
+ * Copyright 2022-2024 Digi International, Inc.
  *
  * The code contained herein is licensed under the GNU General Public
  * License. You may obtain a copy of the GNU General Public License
@@ -21,7 +21,6 @@
 		i2c3 = &i2c3;
 		i2c4 = &i2c4;
 		i2c5 = &i2c5;
-		mmc0 = &sdmmc2; /* Wireless */
 	};
 
 	memory@c0000000 {
@@ -51,27 +50,14 @@
 		#size-cells = <0>;
 
 		reg_3v3_rf: regulator-som@1 {
-			compatible = "regulator-fixed";
+			/* Filled-in by Wi-Fi/BT DT overlays */
 			reg = <1>;
-			regulator-name = "3v3_rf";
-			regulator-min-microvolt = <3300000>;
-			regulator-max-microvolt = <3300000>;
-			gpio = <&gpiob 7 GPIO_ACTIVE_HIGH>; /* 3V3_RF_EN */
-			enable-active-high;
-			startup-delay-us = <100000>;
 			status = "disabled";
 		};
 
 		reg_rf_wl_en: regulator-som@2 {
-			compatible = "regulator-fixed";
+			/* Filled-in by Wi-Fi DT overlay */
 			reg = <2>;
-			regulator-name = "rf_wl_en";
-			regulator-min-microvolt = <3300000>;
-			regulator-max-microvolt = <3300000>;
-			gpio = <&gpiod 6 GPIO_ACTIVE_HIGH>; /* WL_REG_EN */
-			enable-active-high;
-			startup-delay-us = <100>;
-			vin-supply = <&reg_3v3_rf>;
 			status = "disabled";
 		};
 	};
@@ -82,25 +68,6 @@
 		regulator-min-microvolt = <5000000>;
 		regulator-max-microvolt = <5000000>;
 		regulator-always-on;
-	};
-};
-
-/* Bluetooth */
-&usart2 {
-	pinctrl-names = "default", "sleep", "idle";
-	pinctrl-0 = <&ccmp13_usart2_pins_a>;
-	pinctrl-1 = <&ccmp13_usart2_sleep_pins_a>;
-	pinctrl-2 = <&ccmp13_usart2_idle_pins_a>;
-	uart-has-rtscts;
-	status = "disabled";
-
-	cyw4373_bt: cyw4373-bt {
-		shutdown-gpios = <&gpiod 13 GPIO_ACTIVE_HIGH>;
-		compatible = "brcm,bcm43438-bt";
-		max-speed = <3000000>;
-		vbat-supply = <&reg_3v3_rf>;
-		vddio-supply = <&reg_3v3_rf>;
-		status = "disabled";
 	};
 };
 
@@ -196,32 +163,6 @@
 	scmi_vbus_sw: voltd-vbus_sw {
 		voltd-name = "vbus_sw";
 		regulator-name = "vbus_sw";
-	};
-};
-
-/* Wireless */
-&sdmmc2 {
-	arm,primecell-periphid = <0x10153180>;
-	pinctrl-names = "default", "opendrain", "sleep";
-	pinctrl-0 = <&sdmmc2_b4_pins_a &sdmmc2_clk_pins_a>;
-	pinctrl-1 = <&sdmmc2_b4_od_pins_a &sdmmc2_clk_pins_a>;
-	pinctrl-2 = <&sdmmc2_b4_sleep_pins_a>;
-	non-removable;
-	no-1-8-v;
-	st,neg-edge;
-	bus-width = <4>;
-	vmmc-supply = <&reg_rf_wl_en>;
-	status = "disabled";
-
-	#address-cells = <1>;
-	#size-cells = <0>;
-	brcmf: bcrmf@1 {
-		reg = <1>;
-		compatible = "brcm,bcm4329-fmac";
-
-		brcm,broken_sg_support;
-		brcm,sd_head_align = /bits/  16 <8>;
-		brcm,sd_sgentry_align = /bits/ 16 <32>;
 	};
 };
 

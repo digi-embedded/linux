@@ -239,10 +239,18 @@ struct sbsocramregs {
 #define CYW55572_RAM_BASE	(0x370000 + \
 				 CYW55572_TCAM_SIZE + CYW55572_TRXHDR_SIZE)
 
+/* 55500, Dedicated sapce for TCAM_PATCH and TRX HDR area at RAMSTART */
+#define CYW55500_RAM_START	(0x3a0000)
+#define CYW55500_TCAM_SIZE	(0x800)
+#define CYW55500_TRXHDR_SIZE	(0x2b4)
+
+#define CYW55500_RAM_BASE	(CYW55500_RAM_START + CYW55500_TCAM_SIZE + \
+				 CYW55500_TRXHDR_SIZE)
+
 #define BRCMF_BLHS_POLL_INTERVAL			10	/* msec */
 #define BRCMF_BLHS_D2H_READY_TIMEOUT			100	/* msec */
 #define BRCMF_BLHS_D2H_TRXHDR_PARSE_DONE_TIMEOUT	50	/* msec */
-#define BRCMF_BLHS_D2H_VALDN_DONE_TIMEOUT		250	/* msec */
+#define BRCMF_BLHS_D2H_VALDN_DONE_TIMEOUT		450	/* msec */
 
 /* Bootloader handshake flags - dongle to host */
 #define BRCMF_BLHS_D2H_START			BIT(0)
@@ -793,6 +801,8 @@ static u32 brcmf_chip_tcm_rambase(struct brcmf_chip_priv *ci)
 		return 0x170000;
 	case CY_CC_89459_CHIP_ID:
 		return ((ci->pub.chiprev < 9) ? 0x180000 : 0x160000);
+	case CY_CC_55500_CHIP_ID:
+		return CYW55500_RAM_BASE;
 	case CY_CC_55572_CHIP_ID:
 		return CYW55572_RAM_BASE;
 	default:
@@ -813,9 +823,15 @@ int brcmf_chip_get_raminfo(struct brcmf_chip *pub)
 	if (mem) {
 		mem_core = container_of(mem, struct brcmf_core_priv, pub);
 		ci->pub.ramsize = brcmf_chip_tcm_ramsize(mem_core);
+
+		if (ci->pub.chip == CY_CC_55500_CHIP_ID)
+			ci->pub.ramsize -= (CYW55500_TCAM_SIZE +
+					    CYW55500_TRXHDR_SIZE);
+
 		if (ci->pub.chip == CY_CC_55572_CHIP_ID)
 			ci->pub.ramsize -= (CYW55572_TCAM_SIZE +
 					    CYW55572_TRXHDR_SIZE);
+
 		ci->pub.rambase = brcmf_chip_tcm_rambase(ci);
 		if (ci->pub.rambase == INVALID_RAMBASE) {
 			brcmf_err("RAM base not provided with ARM CR4 core\n");
@@ -965,7 +981,10 @@ int brcmf_chip_dmp_erom_scan(struct brcmf_chip_priv *ci)
 	u32 base, wrap;
 	int err;
 
-	eromaddr = ci->ops->read32(ci->ctx,
+	if (ci->pub.ccsec)
+		eromaddr = ci->pub.ccsec->erombase;
+	else
+		eromaddr = ci->ops->read32(ci->ctx,
 				   CORE_CC_REG(ci->pub.enum_base, eromptr));
 
 	while (desc_type != DMP_DESC_EOT) {
@@ -1166,11 +1185,15 @@ static int brcmf_chip_recognition(struct brcmf_chip_priv *ci)
 	int ret;
 
 	/* Get CC core rev
-	 * Chipid is assume to be at offset 0 from SI_ENUM_BASE
+	 * Chipid is in bus core if CC space is protected or
+	 * it is assume to be at offset 0 from SI_ENUM_BASE
 	 * For different chiptypes or old sdio hosts w/o chipcommon,
 	 * other ways of recognition should be added here.
 	 */
-	regdata = ci->ops->read32(ci->ctx,
+	if (ci->pub.ccsec)
+		regdata = ci->pub.ccsec->chipid;
+	else
+		regdata = ci->ops->read32(ci->ctx,
 				  CORE_CC_REG(ci->pub.enum_base, chipid));
 	ci->pub.chip = regdata & CID_ID_MASK;
 	ci->pub.chiprev = (regdata & CID_REV_MASK) >> CID_REV_SHIFT;
@@ -1310,6 +1333,7 @@ struct brcmf_chip *brcmf_chip_attach(void *ctx, u16 devid,
 {
 	struct brcmf_chip_priv *chip;
 	struct brcmf_blhs *blhs;
+	struct brcmf_ccsec *ccsec;
 	int err = 0;
 
 	if (WARN_ON(!ops->read32))
@@ -1338,8 +1362,9 @@ struct brcmf_chip *brcmf_chip_attach(void *ctx, u16 devid,
 		goto fail;
 
 	blhs = NULL;
-	if (chip->ops->blhs_attach) {
-		err = chip->ops->blhs_attach(chip->ctx, &blhs,
+	ccsec = NULL;
+	if (chip->ops->sec_attach) {
+		err = chip->ops->sec_attach(chip->ctx, &blhs, &ccsec,
 					     BRCMF_BLHS_D2H_READY,
 					     BRCMF_BLHS_D2H_READY_TIMEOUT,
 					     BRCMF_BLHS_POLL_INTERVAL);
@@ -1356,6 +1381,7 @@ struct brcmf_chip *brcmf_chip_attach(void *ctx, u16 devid,
 		}
 	}
 	chip->pub.blhs = blhs;
+	chip->pub.ccsec = ccsec;
 
 	err = brcmf_chip_recognition(chip);
 	if (err < 0)
@@ -1383,7 +1409,9 @@ void brcmf_chip_detach(struct brcmf_chip *pub)
 		list_del(&core->list);
 		kfree(core);
 	}
+
 	kfree(pub->blhs);
+	kfree(pub->ccsec);
 	kfree(chip);
 }
 
@@ -1669,6 +1697,7 @@ bool brcmf_chip_sr_capable(struct brcmf_chip *pub)
 		reg = chip->ops->read32(chip->ctx, addr);
 		return (reg & (PMU_RCTL_MACPHY_DISABLE_MASK |
 			       PMU_RCTL_LOGIC_DISABLE_MASK)) == 0;
+	case CY_CC_55500_CHIP_ID:
 	case CY_CC_55572_CHIP_ID:
 		return brcmf_chip_find_coreid(chip, BCMA_CORE_SR);
 	default:

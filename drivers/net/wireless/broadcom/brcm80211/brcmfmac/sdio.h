@@ -10,6 +10,12 @@
 #include <linux/firmware.h>
 #include "firmware.h"
 
+#if (LINUX_VERSION_CODE <= KERNEL_VERSION(5, 15, 58))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0))
+#include <uapi/linux/sched/types.h>
+#endif /* kernel 4.11.0 */
+#endif /* kernel 5.15.58 */
+
 #define SDIOD_FBR_SIZE		0x100
 
 /* io_en */
@@ -37,6 +43,7 @@
 #define SDIO_CCCR_BRCM_CARDCAP_CMD14_SUPPORT	BIT(1)
 #define SDIO_CCCR_BRCM_CARDCAP_CMD14_EXT	BIT(2)
 #define SDIO_CCCR_BRCM_CARDCAP_CMD_NODEC	BIT(3)
+#define SDIO_CCCR_BRCM_CARDCAP_CHIPID_PRESENT	BIT(6)
 #define SDIO_CCCR_BRCM_CARDCAP_SECURE_MODE	BIT(7)
 
 /* Interrupt enable bits for each function */
@@ -120,6 +127,10 @@
 #define SBSDIO_FUNC1_MISC_REG_START	0x10000	/* f1 misc register start */
 #define SBSDIO_FUNC1_MISC_REG_LIMIT	0x1001F	/* f1 misc register end */
 
+/* Sdio Core Rev 31 */
+/* Hard Reset SDIO core, output soft reset signal which should cause backplane reset */
+#define SDIO_IO_CARD_RESET                0x08
+
 /* function 1 OCP space */
 
 /* sb offset addr is <= 15 bits, 32k */
@@ -146,6 +157,16 @@
 
 /* watchdog polling interval */
 #define BRCMF_WD_POLL	msecs_to_jiffies(10)
+
+/* SDIO function number definition */
+#define SDIO_FUNC_0		0
+#define SDIO_FUNC_1		1
+#define SDIO_FUNC_2		2
+#define SDIO_FUNC_3		3
+#define SDIO_FUNC_4		4
+#define SDIO_FUNC_5		5
+#define SDIO_FUNC_6		6
+#define SDIO_FUNC_7		7
 
 /**
  * enum brcmf_sdiod_state - the state of the bus.
@@ -287,7 +308,11 @@ struct sdpcmd_regs {
 	u32 clockctlstatus;		/* rev8 */
 	u32 PAD[7];
 
-	u32 PAD[128];			/* DMA engines */
+	u32 PAD[76];			/* DMA engines */
+
+	u32 chipid;			/* SDIO ChipID Register, 0x330, rev31 */
+	u32 eromptr;			/* SDIO EromPtrOffset Register, 0x334, rev31 */
+	u32 PAD[50];
 
 	/* SDIO/PCMCIA CIS region */
 	char cis[512];			/* 0x400-0x5ff, rev6 */

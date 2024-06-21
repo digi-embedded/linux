@@ -25,11 +25,26 @@
 
 /* Enable the RF regulator */
 &reg_3v3_rf{
+	compatible = "regulator-fixed";
+	regulator-name = "3v3_rf";
+	regulator-min-microvolt = <3300000>;
+	regulator-max-microvolt = <3300000>;
+	gpio = <&gpiob 7 GPIO_ACTIVE_HIGH>; /* 3V3_RF_EN */
+	enable-active-high;
+	startup-delay-us = <100000>;
 	status = "okay";
 };
 
 /* Enable the WL regulator */
 &reg_rf_wl_en{
+	compatible = "regulator-fixed";
+	regulator-name = "rf_wl_en";
+	regulator-min-microvolt = <3300000>;
+	regulator-max-microvolt = <3300000>;
+	gpio = <&gpiod 6 GPIO_ACTIVE_HIGH>; /* WL_REG_EN */
+	enable-active-high;
+	startup-delay-us = <100>;
+	vin-supply = <&reg_3v3_rf>;
 	status = "okay";
 };
 
@@ -42,16 +57,44 @@
 
 /* Enable SDMMC2 (Wireless) */
 &sdmmc2{
+	arm,primecell-periphid = <0x10153180>;
+	pinctrl-names = "default", "opendrain", "sleep";
+	pinctrl-0 = <&sdmmc2_b4_pins_a &sdmmc2_clk_pins_a>;
+	pinctrl-1 = <&sdmmc2_b4_od_pins_a &sdmmc2_clk_pins_a>;
+	pinctrl-2 = <&sdmmc2_b4_sleep_pins_a>;
+	non-removable;
+	no-1-8-v;
+	st,neg-edge;
+	bus-width = <4>;
+	vmmc-supply = <&reg_rf_wl_en>;
 	max-frequency = <1000000>;
 	status = "okay";
+
+	brcmf {
+		compatible = "brcm,bcm4329-fmac";
+
+		brcm,broken_sg_support;
+		brcm,sd_head_align = /bits/  16 <8>;
+		brcm,sd_sgentry_align = /bits/ 16 <32>;
+	};
 };
 
 /* Enable USART2 (Bluetooth) */
 &usart2{
+	pinctrl-names = "default", "sleep", "idle";
+	pinctrl-0 = <&ccmp13_usart2_pins_a>;
+	pinctrl-1 = <&ccmp13_usart2_sleep_pins_a>;
+	pinctrl-2 = <&ccmp13_usart2_idle_pins_a>;
+	uart-has-rtscts;
 	status = "okay";
-};
 
-/* Enable CYW4373 Bluetooth node */
-&cyw4373_bt{
-	status = "okay";
+	/* Enable CYW4373 Bluetooth node */
+	cyw4373_bt {
+		shutdown-gpios = <&gpiod 13 GPIO_ACTIVE_HIGH>;
+		compatible = "brcm,bcm43438-bt";
+		max-speed = <3000000>;
+		vbat-supply = <&reg_3v3_rf>;
+		vddio-supply = <&reg_3v3_rf>;
+		status = "okay";
+	};
 };

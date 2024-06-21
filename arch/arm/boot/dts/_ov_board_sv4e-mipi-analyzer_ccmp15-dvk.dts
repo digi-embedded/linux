@@ -20,15 +20,45 @@
 	fragment@0 {
 		target-path = "/";
 		__overlay__ {
-			overlay-description = "SOM: Cortex-M4 RemoteProc";
+			overlay-description = "DVK: SV4E MIPI analyzer";
 		};
 	};
 
-	/* Enable RemoteProc framework for intercommunication with Cortex-M4 cpu */
+	/* Disable LT8912 */
 	fragment@1 {
-		target = <&m4_rproc>;
+		target = <&lt_bridge>;
 		__overlay__ {
-			status = "okay";
+			status = "disabled";
+		};
+	};
+
+	/* Add SV4E MIPI analyzer panel */
+	fragment@2 {
+		target = <&dsi>;
+		__overlay__ {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			ports {
+				port@1 {
+					dsi_out: endpoint {
+						remote-endpoint = <&panel_in>;
+					};
+				};
+			};
+
+			panel@0 {
+				compatible = "introspect,sv4e-2-lane-mipi-analyzer";
+				reg = <0>;
+				power-supply = <&v3v3>;
+				status = "okay";
+
+				port {
+					panel_in: endpoint {
+						remote-endpoint = <&dsi_out>;
+					};
+				};
+			};
 		};
 	};
 };

@@ -1,6 +1,6 @@
 /* Infineon WLAN driver: vendor specific implement
  *
- * Copyright 2022 Cypress Semiconductor Corporation (an Infineon company)
+ * Copyright 2022-2023 Cypress Semiconductor Corporation (an Infineon company)
  * or an affiliate of Cypress Semiconductor Corporation. All rights reserved.
  * This software, including source code, documentation and related materials
  * ("Software") is owned by Cypress Semiconductor Corporation or one of its
@@ -33,6 +33,7 @@
 #define IFX_VENDOR_H
 
 #include <net/netlink.h>
+#include <net/cfg80211.h>
 
 /* This file is a registry of identifier assignments from the Infineon
  * OUI 00:03:19 for purposes other than MAC address assignment. New identifiers
@@ -41,13 +42,6 @@
  */
 #define OUI_IFX		0x000319
 
-/* enum ifx_nl80211_vendor_subcmds - IFX nl80211 vendor command identifiers
- *
- * @IFX_VENDOR_SCMD_UNSPEC: Reserved value 0
- *
- * @IFX_VENDOR_SCMD_MAX: This acts as a the tail of cmds list.
- *      Make sure it located at the end of the list.
- */
 #define SCMD(_CMD)	IFX_VENDOR_SCMD_##_CMD
 #define IFX_SUBCMD(_CMD, _FLAGS, _POLICY, _FN) \
 	{	\
@@ -65,42 +59,58 @@ struct bcm_iov_buf {
 	u16	data[1];
 };
 
+/*
+ * enum ifx_nl80211_vendor_subcmds - IFX nl80211 vendor command identifiers
+ *
+ * @IFX_VENDOR_SCMD_UNSPEC: Reserved value 0
+ *
+ * @IFX_VENDOR_SCMD_DCMD: Handle the Dongle commands triggered from the userspace utilities.
+ *	These commands will be passed to the Dongle for processing.
+ *
+ * @IFX_VENDOR_SCMD_FRAMEBURST: Control the Frameburst feature. This feature allows more
+ *	efficient use of the airtime between the transmitting and receiving WLAN devices.
+ *
+ * @IFX_VENDOR_SCMD_ACS: Configure the Automatic Channel Selection (ACS) feature.
+ *
+ * @IFX_VENDOR_SCMD_SET_MAC_P2P_DEV: Set MAC address for a P2P Discovery device.
+ *	Uses Vendor attribute IFX_VENDOR_ATTR_MAC_ADDR to pass the MAC address.
+ *
+ * @IFX_VENDOR_SCMD_MUEDCA_OPT: Configure Multi User Enhanced Distrubuted Channel Access (MU-EDCA).
+ *
+ * @IFX_VENDOR_SCMD_LDPC: Enable support for handling Low Density Parity Check (LDPC) Coding
+ *	in received payload.
+ *
+ * @IFX_VENDOR_SCMD_AMSDU: Control AMSDU aggregation for both TX & RX on all the TID queues.
+ *
+ * @IFX_VENDOR_SCMD_TWT: Configure Target Wake Time (TWT) Session with the needed parameters.
+ *	Uses Vendor attributes defined in the enum ifx_vendor_attr_twt.
+ *
+ * @IFX_VENDOR_SCMD_OCE: Configure the Optimized Connectivity Experience (OCE) functionality
+ *	related parameters.
+ *
+ * @IFX_VENDOR_SCMD_BSSCOLOR: Set BSS Color (1-63) for AP Mode operation in HE.
+ *
+ * @IFX_VENDOR_SCMD_RAND_MAC: Configure the Random MAC module.
+ *
+ * @IFX_VENDOR_SCMD_MBO: Configure Multi Band Operation (MBO) functionality related parameters.
+ *
+ * @IFX_VENDOR_SCMD_MPC: Control the Minimum Power Consumption (MPC) feature.
+ *	This is a STA-only power saving feature and not related to 802.11 power save.
+ *
+ * @IFX_VENDOR_SCMD_GIANTRX: Allow handling RX MGMT Packts of size 1840 bytes.
+ *
+ * @IFX_VENDOR_SCMD_PFN_CONFIG: Send the Preferred Network (PFN) information to the Dongle
+ *
+ * @IFX_VENDOR_SCMD_PFN_STATUS: Fetch the Preferred Network (PFN) information from the Dongle
+ *	through the driver.
+ *
+ * @IFX_VENDOR_SCMD_WNM: Configure the Wireless Network Management (WNM) 802.11v functionaltiy
+ *	related parameters.
+ *
+ * @IFX_VENDOR_SCMD_MAX: This acts as a the tail of cmds list.
+ *      Make sure it located at the end of the list.
+ */
 enum ifx_nl80211_vendor_subcmds {
-	/* TODO: IFX Vendor subcmd enum IDs between 2-15 are reserved
-	 * to be filled later with BRCM Vendor subcmds that are
-	 * already used by IFX.
-	 *
-	 * @IFX_VENDOR_SCMD_DCMD: equivilent to SCMD_PRIV_STR in DHD.
-	 *
-	 * @IFX_VENDOR_SCMD_FRAMEBURST: align ID to DHD.
-	 *
-	 * @IFX_VENDOR_SCMD_MUEDCA_OPT_ENABLE: Vendor command to enable/disable HE MU-EDCA opt.
-	 *
-	 * @IFX_VENDOR_SCMD_LDPC_CAP: Vendor command enable/disable LDPC Capability.
-	 *
-	 * @IFX_VENDOR_SCMD_AMSDU: Vendor command to enable/disable AMSDU on all the TID queues.
-	 *
-	 * @IFX_VENDOR_SCMD_TWT: Vendor subcommand to configure TWT.
-	 *	Uses attributes defined in enum ifx_vendor_attr_twt.
-	 *
-	 * @IFX_VENDOR_SCMD_OCE_ENABLE: Vendor command to enable/disable OCE Capability.
-	 *
-	 * @IFX_VENDOR_SCMD_BSS_COLOR: Vendor command to get BSSCOLOR value.
-	 *
-	 * @IFX_VENDOR_SCMD_RANDMAC: Vendor command to enable/disable RANDMAC Capability.
-	 *
-	 * @IFX_VENDOR_SCMD_MBO: Vendor subcommand to configure MBO.
-	 *      Uses attributes defined in enum ifx_vendor_attr_mbo.
-	 *
-	 * @IFX_VENDOR_SCMD_MPC: Vendor command to set/get MPC setting.
-	 *
-	 * @IFX_VENDOR_SCMD_GIANTRX: Vendor command to set/get GIANTRX setting.
-	 *
-	 * @IFX_VENDOR_SCMD_MAX: This acts as a the tail of cmds list.
-	 *      Make sure it located at the end of the list.
-	 */
-	/* Reserved 2-5 */
-
 	SCMD(UNSPEC)		= 0,
 	SCMD(DCMD)		= 1,
 	SCMD(RSV2)		= 2,
@@ -110,36 +120,47 @@ enum ifx_nl80211_vendor_subcmds {
 	SCMD(FRAMEBURST)	= 6,
 	SCMD(RSV7)		= 7,
 	SCMD(RSV8)		= 8,
-	SCMD(RSV9)		= 9,
-	SCMD(RSV10)		= 10,
-	SCMD(MUEDCA_OPT_ENABLE)		= 11,
-	SCMD(LDPC_CAP)		= 12,
+	SCMD(ACS)		= 9,
+	SCMD(SET_MAC_P2P_DEV)	= 10,
+	SCMD(MUEDCA_OPT)	= 11,
+	SCMD(LDPC)		= 12,
 	SCMD(AMSDU)		= 13,
 	SCMD(TWT)		= 14,
-	SCMD(OCE_ENABLE)	= 15,
+	SCMD(OCE)		= 15,
 	SCMD(BSSCOLOR)		= 16,
-	SCMD(RANDMAC)		= 17,
+	SCMD(RAND_MAC)		= 17,
 	SCMD(MBO)		= 18,
 	SCMD(MPC)		= 19,
 	SCMD(GIANTRX)		= 20,
-	SCMD(MAX)		= 21
+	SCMD(PFN_CONFIG)	= 21,
+	SCMD(PFN_STATUS)	= 22,
+	SCMD(RSV22)		= 23,
+	SCMD(RSV24)		= 24,
+	SCMD(WNM)		= 25,
+	SCMD(MAX)		= 26
 };
 
-/* enum ifx_vendor_attr - IFX nl80211 vendor attributes
+/*
+ * enum ifx_vendor_attr - IFX nl80211 vendor attributes
  *
  * @IFX_VENDOR_ATTR_UNSPEC: Reserved value 0
+ *
+ * @IFX_VENDOR_ATTR_LEN: Dongle Command Message Body Length.
+ *
+ * @IFX_VENDOR_ATTR_DATA: Dongle Commend Message Body.
+ *
+ * @IFX_VENDOR_ATTR_MAC_ADDR: Medium Access Control (MAC) address.
  *
  * @IFX_VENDOR_ATTR_MAX: This acts as a the tail of attrs list.
  *      Make sure it located at the end of the list.
  */
 enum ifx_vendor_attr {
-	/* TODO: IFX Vendor attr enum IDs between 0-10 are reserved
-	 * to be filled later with BRCM Vendor attrs that are
-	 * already used by IFX.
-	 */
 	IFX_VENDOR_ATTR_UNSPEC		= 0,
-	/* Reserved 1-10 */
-	IFX_VENDOR_ATTR_MAX		= 11
+	IFX_VENDOR_ATTR_LEN		= 1,
+	IFX_VENDOR_ATTR_DATA		= 2,
+	IFX_VENDOR_ATTR_MAC_ADDR	= 3,
+	/* Reserved 4-10 */
+	IFX_VENDOR_ATTR_MAX
 };
 
 #define IFX_MBO_IOV_MAJOR_VER 1
@@ -233,43 +254,8 @@ enum {
 	IFX_MBO_XTLV_CELLULAR_DATA_PREF = 0xe
 };
 
-/* TWT define/enum/struct
- */
-/* TWT cmd version*/
-#define IFX_TWT_SETUP_VER	0u
-#define IFX_TWT_TEARDOWN_VER	0u
-/* Flow flags */
-#define IFX_TWT_FLOW_FLAG_BROADCAST	BIT(0)
-#define IFX_TWT_FLOW_FLAG_IMPLICIT	BIT(1)
-#define IFX_TWT_FLOW_FLAG_UNANNOUNCED	BIT(2)
-#define IFX_TWT_FLOW_FLAG_TRIGGER	BIT(3)
-#define IFX_TWT_FLOW_FLAG_WAKE_TBTT_NEGO BIT(4)
-#define IFX_TWT_FLOW_FLAG_REQUEST	BIT(5)
-#define IFX_TWT_FLOW_FLAG_PROTECT	BIT(0)
-#define IFX_TWT_FLOW_FLAG_RESPONDER_PM BIT(6)
-#define IFX_TWT_FLOW_FLAG_UNSOLICITED	BIT(7)
-/* Flow id */
-#define IFX_TWT_FLOW_ID_FID	0x07u	/* flow id */
-#define IFX_TWT_FLOW_ID_GID_MASK	0x70u	/* group id - broadcast TWT only */
-#define IFX_TWT_FLOW_ID_GID_SHIFT 4u
-#define IFX_TWT_INV_BCAST_ID	0xFFu
-#define IFX_TWT_INV_FLOW_ID	0xFFu
-/* auto flow_id */
-#define IFX_TWT_SETUP_FLOW_ID_AUTO	0xFFu
-/* auto broadcast ID */
-#define IFX_TWT_SETUP_BCAST_ID_AUTO	0xFFu
-/* Infinite persistence for broadcast schedule */
-#define IFX_TWT_INFINITE_BTWT_PERSIST	0xFFFFFFFFu
-/* Wake type */
-/* TODO: not yet finalized */
-/* The time specified in wake_time_h/l is the BSS TSF time. */
-#define IFX_TWT_TIME_TYPE_BSS	0u
-/* The time specified in wake_time_h/l is an offset of the TSF time when the iovar is processed. */
-#define IFX_TWT_TIME_TYPE_OFFSET 1u
-/* The target wake time is chosen internally by the FW */
-#define IFX_TWT_TIME_TYPE_AUTO 2u
-
-/* enum ifx_vendor_attr_twt - Attributes for the TWT vendor command
+/*
+ * enum ifx_vendor_attr_twt - Attributes for the TWT vendor command
  *
  * @IFX_VENDOR_ATTR_TWT_UNSPEC: Reserved value 0
  *
@@ -290,13 +276,14 @@ enum ifx_vendor_attr_twt {
 	IFX_VENDOR_ATTR_TWT_MAX
 };
 
-/* enum ifx_twt_oper - TWT operation to be specified using the vendor
+/*
+ * enum ifx_twt_oper - TWT operation to be specified using the vendor
  * attribute IFX_VENDOR_ATTR_TWT_OPER
  *
  * @IFX_TWT_OPER_UNSPEC: Reserved value 0
  *
  * @IFX_TWT_OPER_SETUP: Setup a TWT session. Required parameters are
- *	obtained through the nested attrs under IFX_VENDOR_ATTR_TWT_PARAMS.
+ *	obtained through the nested attrs under %IFX_VENDOR_ATTR_TWT_PARAMS.
  *
  * @IFX_TWT_OPER_TEARDOWN: Teardown the already negotiated TWT session.
  *	Required parameters are obtained through the nested attrs under
@@ -312,7 +299,8 @@ enum ifx_twt_oper {
 	IFX_TWT_OPER_MAX
 };
 
-/* enum ifx_vendor_attr_twt_param - TWT parameters
+/*
+ * enum ifx_vendor_attr_twt_param - TWT parameters
  *
  * @IFX_VENDOR_ATTR_TWT_PARAM_UNSPEC: Reserved value 0
  *
@@ -343,15 +331,19 @@ enum ifx_twt_oper {
  * @IFX_VENDOR_ATTR_TWT_PARAM_DIALOG_TOKEN: Dialog Token used by the TWT Requesting STA to
  *	identify the TWT Setup request/response transaction.
  *
- * @IFX_VENDOR_ATTR_TWT_PARAM_WAKE_TIME: Target Wake Time.
+ * @IFX_VENDOR_ATTR_TWT_PARAM_WAKE_TIME: Target Wake Time TSF at which the STA has to wake up.
  *
- * @IFX_VENDOR_ATTR_TWT_PARAM_WAKE_TIME_OFFSET: Target Wake Time Offset.
+ * @IFX_VENDOR_ATTR_TWT_PARAM_WAKE_TIME_OFFSET: Target Wake Time TSF Offset from current TSF
+ *	in microseconds.
  *
  * @IFX_VENDOR_ATTR_TWT_PARAM_MIN_WAKE_DURATION: Nominal Minimum TWT Wake Duration.
+ *	Used along with %IFX_VENDOR_ATTR_TWT_PARAM_MIN_WAKE_DURATION_UNIT to derive Wake Duration.
  *
  * @IFX_VENDOR_ATTR_TWT_PARAM_WAKE_INTVL_EXPONENT: TWT Wake Interval Exponent.
+ *	Used along with %IFX_VENDOR_ATTR_TWT_PARAM_WAKE_INTVL_MANTISSA to derive Wake Interval.
  *
  * @IFX_VENDOR_ATTR_TWT_PARAM_WAKE_INTVL_MANTISSA: TWT Wake Interval Mantissa.
+ *	Used along with %IFX_VENDOR_ATTR_TWT_PARAM_WAKE_INTVL_EXPONENT to derive Wake Interval.
  *
  * @IFX_VENDOR_ATTR_TWT_PARAM_REQUESTOR: Specify this is a TWT Requesting / Responding STA.
  *
@@ -361,9 +353,10 @@ enum ifx_twt_oper {
  *
  * @IFX_VENDOR_ATTR_TWT_PARAM_FLOW_TYPE: Specify Un-Announced / Announced TWT session.
  *
- * @IFX_VENDOR_ATTR_TWT_PARAM_FLOW_ID: Flow ID of an iTWT session.
+ * @IFX_VENDOR_ATTR_TWT_PARAM_FLOW_ID: Flow ID is the unique identifier of an iTWT session.
  *
- * @IFX_VENDOR_ATTR_TWT_PARAM_BCAST_TWT_ID: Brocast TWT ID of a bTWT session.
+ * @IFX_VENDOR_ATTR_TWT_PARAM_BCAST_TWT_ID: Broadcast TWT ID is the unique identifier of a
+ *	bTWT session.
  *
  * @IFX_VENDOR_ATTR_TWT_PARAM_PROTECTION: Specifies whether Tx within SP is protected.
  *	Set to 1 to indicate that TXOPs within the TWT SPs shall be initiated
@@ -408,15 +401,79 @@ enum ifx_vendor_attr_twt_param {
 	IFX_VENDOR_ATTR_TWT_PARAM_MAX
 };
 
+/*
+ * enum ifx_twt_param_nego_type - TWT Session Negotiation Type Parameters
+ *
+ * @IFX_TWT_PARAM_NEGO_TYPE_ITWT: Individual TWT negotiation between TWT requesting STA
+ *	and TWT responding STA or individual TWT announcement by TWT Responder
+ *
+ * @IFX_TWT_PARAM_NEGO_TYPE_WAKE_TBTT: Wake TBTT and Wake interval negotiation between
+ *	TWT scheduled STA and TWT scheduling AP.
+ *
+ * @IFX_TWT_PARAM_NEGO_TYPE_BTWT_IE_BCN: Provide Broadcast TWT schedules to TWT scheduled
+ *	STAs by including the TWT element in broadcast Managemnet frames sent by TWT
+ *	scheduling AP.
+ *
+ * @IFX_TWT_PARAM_NEGO_TYPE_BTWT: Broadcast TWT negotiation between TWT requesting STA
+ *	and TWT responding STA. Manage Memberships in broadcast TWT schedules by including
+ *	the TWT element in individually addressed Management frames sent by either a TWT
+ *	scheduled STA or a TWT scheduling AP.
+ *
+ * @IFX_TWT_PARAM_NEGO_TYPE_MAX: This acts as a the tail of the list.
+ *      Make sure it located at the end of the list.
+ */
 enum ifx_twt_param_nego_type {
-	IFX_TWT_PARAM_NEGO_TYPE_INVALID			= -1,
-	IFX_TWT_PARAM_NEGO_TYPE_ITWT			= 0,
-	IFX_TWT_PARAM_NEGO_TYPE_WAKE_TBTT		= 1,
-	IFX_TWT_PARAM_NEGO_TYPE_BTWT_IE_BCN		= 2,
-	IFX_TWT_PARAM_NEGO_TYPE_BTWT			= 3,
-	IFX_TWT_PARAM_NEGO_TYPE_MAX			= 4
+	IFX_TWT_PARAM_NEGO_TYPE_INVALID		= -1,
+	IFX_TWT_PARAM_NEGO_TYPE_ITWT		= 0,
+	IFX_TWT_PARAM_NEGO_TYPE_WAKE_TBTT	= 1,
+	IFX_TWT_PARAM_NEGO_TYPE_BTWT_IE_BCN	= 2,
+	IFX_TWT_PARAM_NEGO_TYPE_BTWT		= 3,
+	IFX_TWT_PARAM_NEGO_TYPE_MAX		= 4
 };
 
+/*
+ * enum ifx_vendor_attr_twt_param - TWT Session setup command types
+ *
+ * @IFX_TWT_OPER_SETUP_CMD_TYPE_REQUEST: A TWT requesting or TWT scheduled STA
+ *	requests to join a TWT without specifying a target wake time. This type needs to
+ *	be used only by the TWT requesting STA.
+ *
+ * @IFX_TWT_OPER_SETUP_CMD_TYPE_SUGGEST: A TWT requesting or TWT scheduled STA requests to
+ *	join a TWT without specifying a target wake time. This type needs to be used only
+ *	by the TWT requesting STA.
+ *
+ * @IFX_TWT_OPER_SETUP_CMD_TYPE_DEMAND: A TWT requesting or TWT scheduled STA requests to
+ *	join a TWT and specifies a demanded set of TWT parameters. If the demanded set of
+ *	TWT parameters is not accommodated by the responding STA or TWT scheduling AP, then
+ *	the TWT requesting STA or TWT scheduled STA will reject the TWT setup. This type
+ *	needs to be used only by the TWT requesting STA.
+ *
+ * @IFX_TWT_OPER_SETUP_CMD_TYPE_GROUPING: The TWT responding STA suggests TWT group
+ *	parameters that are different from the suggested or demanded TWT parameters of the
+ *	TWT requesting STA. This type needs to be used only by the S1G TWT Responding STA in
+ *	case of ITWT Setup Negotiation.
+ *
+ * @IFX_TWT_OPER_SETUP_CMD_TYPE_ACCEPT: A TWT responding STA or TWT scheduling AP accepts
+ *	the TWT request with the TWT parameters (see NOTE) indicated in the TWT element
+ *	transmitted by the TWT requesting STA or TWT scheduled STA. This value is also used
+ *	in unsolicited TWT responses. This needs type needs to be used only by the TWT
+ *	responding STA.
+ *
+ * @IFX_TWT_OPER_SETUP_CMD_TYPE_ALTERNATE: A TWT responding STA or TWT scheduling AP suggests
+ *	TWT parameters that are different from those suggested by the TWT requesting STA or
+ *	TWT scheduled STA. This needs type needs to be used only by the TWT reponding STA.
+ *
+ * @IFX_TWT_OPER_SETUP_CMD_TYPE_DICTATE: A TWT responding STA or TWT scheduling AP indicates
+ *	TWT parameters that are different from those suggested by the TWT requesting STA or
+ *	TWT scheduled STA. This needs type needs to be used only by the TWT responding STA.
+ *
+ * @IFX_TWT_OPER_SETUP_CMD_TYPE_REJECT: A TWT responding STA or TWT scheduling AP rejects
+ *	setup, or a TWT scheduling AP terminates an existing broadcast TWT, or a TWT
+ *	scheduled STA terminates its membership in a broadcast TWT.
+ *
+ * @IFX_TWT_OPER_SETUP_CMD_TYPE_MAX: This acts as a the tail of the list.
+ *	Make sure it located at the end of the list.
+ */
 enum ifx_twt_oper_setup_cmd_type {
 	IFX_TWT_OPER_SETUP_CMD_TYPE_INVALID	= -1,
 	IFX_TWT_OPER_SETUP_CMD_TYPE_REQUEST	= 0,
@@ -428,21 +485,6 @@ enum ifx_twt_oper_setup_cmd_type {
 	IFX_TWT_OPER_SETUP_CMD_TYPE_DICTATE	= 6,
 	IFX_TWT_OPER_SETUP_CMD_TYPE_REJECT	= 7,
 	IFX_TWT_OPER_SETUP_CMD_TYPE_MAX		= 8
-};
-
-/* TWT top level command IDs */
-enum {
-	IFX_TWT_CMD_ENAB = 0,
-	IFX_TWT_CMD_SETUP = 1,
-	IFX_TWT_CMD_TEARDOWN = 2,
-	IFX_TWT_CMD_INFO = 3,
-	IFX_TWT_CMD_AUTOSCHED = 4,
-	IFX_TWT_CMD_STATS = 5,
-	IFX_TWT_CMD_EARLY_TERM_TIME = 6,
-	IFX_TWT_CMD_RESP_CONFIG = 7,
-	IFX_TWT_CMD_SPPS_ENAB = 8,
-	IFX_TWT_CMD_FEATURES = 9,
-	IFX_TWT_CMD_LAST
 };
 
 /**
@@ -541,91 +583,6 @@ static const struct nla_policy ifx_vendor_attr_twt_policy[IFX_VENDOR_ATTR_TWT_MA
 	[IFX_VENDOR_ATTR_TWT_MAX] = {.type = NLA_U8},
 };
 
-struct ifx_twt {
-	u8 twt_oper;
-	enum ifx_twt_param_nego_type negotiation_type;
-	enum ifx_twt_oper_setup_cmd_type setup_cmd;
-	u8 dialog_token;
-	u64 twt;
-	u64 twt_offset;
-	u8 min_twt;
-	u8 exponent;
-	u16 mantissa;
-	u8 requestor;
-	u8 trigger;
-	u8 implicit;
-	u8 flow_type;
-	u8 flow_id;
-	u8 bcast_twt_id;
-	u8 protection;
-	u8 twt_channel;
-	u8 twt_info_frame_disabled;
-	u8 min_twt_unit;
-	u8 teardown_all_twt;
-};
-
-/* NOTES:
- * ifx_twt_sdesc is used to support both broadcast TWT and individual TWT.
- * Value in bit[0:2] in 'flow_id' field is interpreted differently:
- * - flow id for individual TWT (when IFX_TWT_FLOW_FLAG_BROADCAST bit is NOT set
- *   in 'flow_flags' field)
- * - flow id as defined in Table 8-248l1 for broadcast TWT (when
- *   IFX_TWT_FLOW_FLAG_BROADCAST bit is set)
- * In latter case other bits could be used to differentiate different flows
- * in order to support multiple broadcast TWTs with the same flow id.
- */
-
-/* TWT Setup descriptor */
-struct ifx_twt_sdesc {
-	/* Setup Command. */
-	u8 setup_cmd;		/* See TWT_SETUP_CMD_XXXX in 802.11ah.h */
-	u8 flow_flags;		/* Flow attributes. See WL_TWT_FLOW_FLAG_XXXX below */
-	u8 flow_id;		/* must be between 0 and 7. Set 0xFF for auto assignment */
-	u8 wake_type;	/* See WL_TWT_TIME_TYPE_XXXX below */
-	u32 wake_time_h;	/* target wake time - BSS TSF (us) */
-	u32 wake_time_l;
-	u32 wake_dur;	/* target wake duration in unit of microseconds */
-	u32 wake_int;	/* target wake interval */
-	u32 btwt_persistence;	/* Broadcast TWT Persistence */
-	u32 wake_int_max;	/* max wake interval(uS) for TWT */
-	u8 duty_cycle_min;	/* min duty cycle for TWT(Percentage) */
-	u8 pad;
-	u8 bid;		/* must be between 0 and 31. Set 0xFF for auto assignment */
-	u8 channel;		/* Twt channel - Not used for now */
-	u8 negotiation_type;	/* Negotiation Type: See macros TWT_NEGO_TYPE_X */
-	u8 frame_recomm;	/* frame recommendation for broadcast TWTs - Not used for now	 */
-};
-
-/* twt teardown descriptor */
-struct ifx_twt_teardesc {
-	u8 negotiation_type;
-	u8 flow_id;		/* must be between 0 and 7 */
-	u8 bid;		/* must be between 0 and 31 */
-	u8 alltwt;		/* all twt teardown - 0 or 1 */
-};
-
-/* HE TWT Setup command */
-struct ifx_twt_setup {
-	/* structure control */
-	u16 version;	/* structure version */
-	u16 length;	/* data length (starting after this field) */
-	/* peer address */
-	struct ether_addr peer;	/* leave it all 0s' for AP */
-	u8 pad[2];
-	/* setup descriptor */
-	struct ifx_twt_sdesc desc;
-};
-
-/* HE TWT Teardown command */
-struct ifx_twt_teardown {
-	/* structure control */
-	u16 version;	/* structure version */
-	u16 length;	/* data length (starting after this field) */
-	/* peer address */
-	struct ether_addr peer;	/* leave it all 0s' for AP */
-	struct ifx_twt_teardesc teardesc;	/* Teardown descriptor */
-};
-
 /* randmac define/enum/struct
  */
 #define WL_RANDMAC_API_VERSION		0x0100 /**< version 1.0 */
@@ -648,6 +605,81 @@ struct ifx_randmac {
 	u16 len;			/* total length */
 	u16 subcmd_id;	/* subcommand id */
 	u8 data[0];			/* subcommand data */
+};
+
+enum ifx_vendor_attr_wnm_param {
+	IFX_VENDOR_ATTR_WNM_PARAM_UNSPEC,
+	IFX_VENDOR_ATTR_WNM_PARAM_GET_INFO,
+	IFX_VENDOR_ATTR_WNM_PARAM_IDLE_PERIOD,
+	IFX_VENDOR_ATTR_WNM_PARAM_PROTECTION_OPT,
+	IFX_VENDOR_ATTR_WNM_PARAM_MAX
+};
+
+static const struct nla_policy
+ifx_vendor_attr_wnm_param_policy[IFX_VENDOR_ATTR_WNM_PARAM_MAX + 1] = {
+	[IFX_VENDOR_ATTR_WNM_PARAM_UNSPEC] = {.type = NLA_U8},
+	[IFX_VENDOR_ATTR_WNM_PARAM_GET_INFO] = {.type = NLA_U8},
+	[IFX_VENDOR_ATTR_WNM_PARAM_IDLE_PERIOD] = {.type = NLA_U8},
+	[IFX_VENDOR_ATTR_WNM_PARAM_PROTECTION_OPT] = {.type = NLA_U8},
+	[IFX_VENDOR_ATTR_WNM_PARAM_MAX] = {.type = NLA_U8},
+};
+
+enum ifx_vendor_attr_wnm {
+	IFX_VENDOR_ATTR_WNM_UNSPEC,
+	IFX_VENDOR_ATTR_WNM_CMD,
+	IFX_VENDOR_ATTR_WNM_PARAMS,
+	IFX_VENDOR_ATTR_WNM_MAX
+};
+
+static const struct nla_policy ifx_vendor_attr_wnm_policy[IFX_VENDOR_ATTR_WNM_MAX + 1] = {
+	[IFX_VENDOR_ATTR_WNM_UNSPEC] = {.type = NLA_U8},
+	[IFX_VENDOR_ATTR_WNM_CMD] = {.type = NLA_U8},
+	[IFX_VENDOR_ATTR_WNM_PARAMS] =
+		NLA_POLICY_NESTED(ifx_vendor_attr_wnm_param_policy),
+	[IFX_VENDOR_ATTR_WNM_MAX] = {.type = NLA_U8},
+};
+
+enum {
+	IFX_WNM_CMD_IOV_WNM = 1,
+	IFX_WNM_CMD_IOV_WNM_MAXIDLE = 2,
+	IFX_WNM_CMD_IOV_WNM_TIMBC_OFFSET = 3,
+	IFX_WNM_CMD_IOV_WNM_BSSTRANS_URL = 4,
+	IFX_WNM_CMD_IOV_WNM_BSSTRANS_REQ = 5,
+	IFX_WNM_CMD_IOV_WNM_TFS_TCLASTYPE = 6,
+	IFX_WNM_CMD_IOV_WNM_PARP_DISCARD = 7,
+	IFX_WNM_CMD_IOV_WNM_PARP_ALLNODE = 8,
+	IFX_WNM_CMD_IOV_WNM_TIMBC_SET = 9,
+	IFX_WNM_CMD_IOV_WNM_TIMBC_STATUS = 10,
+	IFX_WNM_CMD_IOV_WNM_DMS_SET = 11,
+	IFX_WNM_CMD_IOV_WNM_DMS_TERM = 12,
+	IFX_WNM_CMD_IOV_WNM_SERVICE_TERM = 13,
+	IFX_WNM_CMD_IOV_WNM_SLEEP_INTV = 14,
+	IFX_WNM_CMD_IOV_WNM_SLEEP_MODE = 15,
+	IFX_WNM_CMD_IOV_WNM_BSSTRANS_QUERY = 16,
+	IFX_WNM_CMD_IOV_WNM_BSSTRANS_RESP = 17,
+	IFX_WNM_CMD_IOV_WNM_TCLAS_ADD = 18,
+	IFX_WNM_CMD_IOV_WNM_TCLAS_DEL = 19,
+	IFX_WNM_CMD_IOV_WNM_TCLAS_LIST = 20,
+	IFX_WNM_CMD_IOV_WNM_DMS_STATUS = 21,
+	IFX_WNM_CMD_IOV_WNM_KEEPALIVES_MAX_IDLE = 22,
+	IFX_WNM_CMD_IOV_WNM_PM_IGNORE_BCMC = 23,
+	IFX_WNM_CMD_IOV_WNM_DMS_DEPENDENCY = 24,
+	IFX_WNM_CMD_IOV_WNM_BSSTRANS_ROAMTHROTTLE = 25,
+	IFX_WNM_CMD_IOV_WNM_TFS_SET  = 26,
+	IFX_WNM_CMD_IOV_WNM_TFS_TERM = 27,
+	IFX_WNM_CMD_IOV_WNM_TFS_STATUS = 28,
+	IFX_WNM_CMD_IOV_WNM_BTQ_NBR_ADD = 29,
+	IFX_WNM_CMD_IOV_WNM_BTQ_NBR_DEL = 30,
+	IFX_WNM_CMD_IOV_WNM_BTQ_NBR_LIST = 31,
+	IFX_WNM_CMD_IOV_WNM_BSSTRANS_RSSI_RATE_MAP = 32,
+	IFX_WNM_CMD_IOV_WNM_KEEPALIVE_PKT_TYPE = 33,
+	IFX_WNM_CONFIG_CMD_IOV_WNM_TYPE_MAX
+};
+
+struct ifx_maxidle_wnm {
+	u8  get_info;
+	int period;
+	int protect;
 };
 
 int ifx_cfg80211_vndr_cmds_twt(struct wiphy *wiphy,
@@ -679,6 +711,9 @@ int ifx_cfg80211_vndr_cmds_mpc(struct wiphy *wiphy,
 int ifx_cfg80211_vndr_cmds_giantrx(struct wiphy *wiphy,
 				   struct wireless_dev *wdev,
 				   const void *data, int len);
+int ifx_cfg80211_vndr_cmds_wnm(struct wiphy *wiphy,
+			       struct wireless_dev *wdev,
+			       const void *data, int len);
 
 #endif /* IFX_VENDOR_H */
 

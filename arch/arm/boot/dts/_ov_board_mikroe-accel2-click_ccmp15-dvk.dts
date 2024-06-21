@@ -28,6 +28,9 @@
 	fragment@1 {
 		target = <&i2c6>;
 		__overlay__ {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
 			accelerometer@1d {
 				compatible = "st,lis3dh-accel";
 				reg = <0x1d>;

@@ -28,7 +28,7 @@ properties:
     items:
       - enum:
           - techstar,ts8550b
-          - dlc,dlc0200cc904df
+          - dlc,dlc0200ccp04df
       - const: sitronix,st7701
 
   reg:

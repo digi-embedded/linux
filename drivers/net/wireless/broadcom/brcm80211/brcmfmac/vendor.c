@@ -257,14 +257,14 @@ const struct wiphy_vendor_command brcmf_vendor_cmds[] = {
 			   brcmf_cfg80211_vndr_cmds_frameburst)
 	},
 	{
-		IFX_SUBCMD(MUEDCA_OPT_ENABLE,
+		IFX_SUBCMD(MUEDCA_OPT,
 			   (WIPHY_VENDOR_CMD_NEED_WDEV |
 			    WIPHY_VENDOR_CMD_NEED_NETDEV),
 			   VENDOR_CMD_RAW_DATA,
 			   ifx_cfg80211_vndr_cmds_muedca_opt)
 	},
 	{
-		IFX_SUBCMD(LDPC_CAP,
+		IFX_SUBCMD(LDPC,
 			   (WIPHY_VENDOR_CMD_NEED_WDEV |
 			    WIPHY_VENDOR_CMD_NEED_NETDEV),
 			   VENDOR_CMD_RAW_DATA,
@@ -286,7 +286,7 @@ const struct wiphy_vendor_command brcmf_vendor_cmds[] = {
 		.maxattr = IFX_VENDOR_ATTR_TWT_MAX
 	},
 	{
-		IFX_SUBCMD(OCE_ENABLE,
+		IFX_SUBCMD(OCE,
 			   (WIPHY_VENDOR_CMD_NEED_WDEV |
 				WIPHY_VENDOR_CMD_NEED_NETDEV),
 			VENDOR_CMD_RAW_DATA,
@@ -300,7 +300,7 @@ const struct wiphy_vendor_command brcmf_vendor_cmds[] = {
 			ifx_cfg80211_vndr_cmds_bsscolor)
 	},
 	{
-		IFX_SUBCMD(RANDMAC,
+		IFX_SUBCMD(RAND_MAC,
 			   (WIPHY_VENDOR_CMD_NEED_WDEV |
 				WIPHY_VENDOR_CMD_NEED_NETDEV),
 			VENDOR_CMD_RAW_DATA,
@@ -327,6 +327,14 @@ const struct wiphy_vendor_command brcmf_vendor_cmds[] = {
 			    WIPHY_VENDOR_CMD_NEED_NETDEV),
 			   VENDOR_CMD_RAW_DATA,
 			   ifx_cfg80211_vndr_cmds_giantrx)
+	},
+	{
+		IFX_SUBCMD(WNM,
+			   (WIPHY_VENDOR_CMD_NEED_WDEV |
+				WIPHY_VENDOR_CMD_NEED_NETDEV),
+			ifx_vendor_attr_wnm_policy,
+			ifx_cfg80211_vndr_cmds_wnm),
+		.maxattr = IFX_VENDOR_ATTR_WNM_MAX
 	},
 };
 

@@ -227,7 +227,7 @@ static void st7701_init_sequence(struct st7701 *st7701)
 		   0x77, 0x01, 0x00, 0x00, DSI_CMD2BKX_SEL_NONE);
 }
 
-static void dlc0200cc904df_init_sequence(struct st7701 *st7701)
+static void dlc0200ccp04df_init_sequence(struct st7701 *st7701)
 {
 	ST7701_DSI(st7701, MIPI_DCS_SOFT_RESET, 0x00);
 
@@ -436,7 +436,7 @@ static const struct st7701_panel_desc ts8550b_desc = {
 	.init_sequence = st7701_init_sequence,
 };
 
-static const struct drm_display_mode dlc0200cc904df_mode = {
+static const struct drm_display_mode dlc0200ccp04df_mode = {
 	.clock		= 25000,
 
 	.hdisplay	= 480,
@@ -455,20 +455,20 @@ static const struct drm_display_mode dlc0200cc904df_mode = {
 	.type = DRM_MODE_TYPE_DRIVER | DRM_MODE_TYPE_PREFERRED,
 };
 
-static const char * const dlc0200cc904df_supply_names[] = {
+static const char * const dlc0200ccp04df_supply_names[] = {
 	"VCC",
 	"IOVCC",
 };
 
-static const struct st7701_panel_desc dlc0200cc904df_desc = {
-	.mode = &dlc0200cc904df_mode,
+static const struct st7701_panel_desc dlc0200ccp04df_desc = {
+	.mode = &dlc0200ccp04df_mode,
 	.lanes = 2,
 	.flags = (MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_LPM),
 	.format = MIPI_DSI_FMT_RGB888,
-	.supply_names = dlc0200cc904df_supply_names,
-	.num_supplies = ARRAY_SIZE(dlc0200cc904df_supply_names),
+	.supply_names = dlc0200ccp04df_supply_names,
+	.num_supplies = ARRAY_SIZE(dlc0200ccp04df_supply_names),
 	.panel_sleep_delay = 0,
-	.init_sequence = dlc0200cc904df_init_sequence,
+	.init_sequence = dlc0200ccp04df_init_sequence,
 };
 
 static int st7701_dsi_probe(struct mipi_dsi_device *dsi)
@@ -553,7 +553,7 @@ static int st7701_dsi_remove(struct mipi_dsi_device *dsi)
 
 static const struct of_device_id st7701_of_match[] = {
 	{ .compatible = "techstar,ts8550b", .data = &ts8550b_desc },
-	{ .compatible = "dlc,dlc0200cc904df", .data = &dlc0200cc904df_desc },
+	{ .compatible = "dlc,dlc0200ccp04df", .data = &dlc0200ccp04df_desc },
 	{ }
 };
 MODULE_DEVICE_TABLE(of, st7701_of_match);

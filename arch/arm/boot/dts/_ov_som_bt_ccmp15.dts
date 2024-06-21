@@ -1,5 +1,5 @@
 /*
- * Copyright 2022, 2023 Digi International Inc.
+ * Copyright 2022-2024 Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -13,6 +13,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/rtc/rtc-stm32.h>
 
 /dts-v1/;
@@ -26,6 +27,9 @@
 			bluetooth {
 				/* U-Boot will fill in the MAC address here */
 			};
+			aliases {
+				serial1 = "/soc/serial@5c000000";
+			};
 		};
 	};
 
@@ -33,6 +37,13 @@
 	fragment@1 {
 		target = <&reg_3v3_rf>;
 		__overlay__ {
+			compatible = "regulator-fixed";
+			regulator-name = "3v3_rf";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			gpio = <&gpiof 2 GPIO_ACTIVE_HIGH>; /* 3V3_RF_EN */
+			enable-active-high;
+			startup-delay-us = <100000>;
 			status = "okay";
 		};
 	};
@@ -41,20 +52,25 @@
 	fragment@2 {
 		target = <&usart1>;
 		__overlay__ {
+			pinctrl-names = "default", "sleep";
+			pinctrl-0 = <&ccmp15_usart1_pins_c>, <&ccmp15_usart1_pins_z>;
+			pinctrl-1 = <&ccmp15_usart1_sleep_pins_c>, <&ccmp15_usart1_sleep_pins_z>;
+			uart-has-rtscts;
 			status = "okay";
-		};
-	};
 
-	/* Enable CYW4373 Bluetooth node */
-	fragment@3 {
-		target = <&cyw4373_bt>;
-		__overlay__ {
-			status = "okay";
+			cyw4373_bt {
+				shutdown-gpios = <&gpioz 6 GPIO_ACTIVE_HIGH>;
+				compatible = "brcm,bcm43438-bt";
+				max-speed = <3000000>;
+				vbat-supply = <&v3v3>;
+				vddio-supply = <&reg_3v3_rf>;
+				status = "okay";
+			};
 		};
 	};
 
 	/* Enable External 32kHz Low-Power Oscillator */
-	fragment@4 {
+	fragment@3 {
 		target = <&rtc>;
 		__overlay__ {
 			st,lsco = <RTC_OUT2_RMP>;

@@ -1,6 +1,6 @@
 /* Infineon WLAN driver: vendor specific implement
  *
- * Copyright 2022 Cypress Semiconductor Corporation (an Infineon company)
+ * Copyright 2022-2023 Cypress Semiconductor Corporation (an Infineon company)
  * or an affiliate of Cypress Semiconductor Corporation. All rights reserved.
  * This software, including source code, documentation and related materials
  * ("Software") is owned by Cypress Semiconductor Corporation or one of its
@@ -36,6 +36,7 @@
 #include "fwil.h"
 #include "vendor_ifx.h"
 #include "xtlv.h"
+#include "twt.h"
 
 static int ifx_cfg80211_vndr_send_cmd_reply(struct wiphy *wiphy,
 					    const void  *data, int len)
@@ -54,211 +55,9 @@ static int ifx_cfg80211_vndr_send_cmd_reply(struct wiphy *wiphy,
 	return cfg80211_vendor_cmd_reply(skb);
 }
 
-/* Wake Duration derivation from Nominal Minimum Wake Duration */
-static inline u32
-ifx_twt_min_twt_to_wake_dur(u8 min_twt, u8 min_twt_unit)
-{
-	u32 wake_dur;
-
-	if (min_twt_unit == 1) {
-		/* If min_twt_unit is 1, then min_twt is
-		 * in units of TUs (i.e) 102400 usecs.
-		 */
-		wake_dur = (u32)min_twt * 102400;
-	} else if (min_twt_unit == 0) {
-		/* If min_twt_unit is 0, then min_twt is
-		 * in units of 256 usecs.
-		 */
-		wake_dur = (u32)min_twt * 256;
-	} else {
-		/* Invalid min_twt */
-		wake_dur = 0;
-	}
-
-	return wake_dur;
-}
-
-/* Wake Interval derivation from Wake Interval Mantissa & Exponent */
-static inline u32
-ifx_twt_float_to_uint32(u8 exponent, u16 mantissa)
-{
-	return (u32)mantissa << exponent;
-}
-
-int ifx_twt_setup(struct wireless_dev *wdev, struct ifx_twt twt)
-{
-	struct brcmf_cfg80211_vif *vif;
-	struct brcmf_if *ifp;
-	struct ifx_twt_setup val;
-	s32 err;
-
-	vif = container_of(wdev, struct brcmf_cfg80211_vif, wdev);
-	ifp = vif->ifp;
-
-	memset(&val, 0, sizeof(val));
-	val.version = IFX_TWT_SETUP_VER;
-	val.length = sizeof(val.version) + sizeof(val.length);
-
-	/* Default values, Override Below */
-	val.desc.flow_flags = 0x0;
-	val.desc.wake_dur = 0xFFFFFFFF;
-	val.desc.wake_int = 0xFFFFFFFF;
-	val.desc.wake_int_max = 0xFFFFFFFF;
-
-	/* Setup command */
-	val.desc.setup_cmd = twt.setup_cmd;
-
-	/* Flow flags */
-	val.desc.flow_flags |= ((twt.negotiation_type & 0x02) >> 1 ?
-				IFX_TWT_FLOW_FLAG_BROADCAST : 0);
-	val.desc.flow_flags |= (twt.implicit ? IFX_TWT_FLOW_FLAG_IMPLICIT : 0);
-	val.desc.flow_flags |= (twt.flow_type ? IFX_TWT_FLOW_FLAG_UNANNOUNCED : 0);
-	val.desc.flow_flags |= (twt.trigger ? IFX_TWT_FLOW_FLAG_TRIGGER : 0);
-	val.desc.flow_flags |= ((twt.negotiation_type & 0x01) ?
-				IFX_TWT_FLOW_FLAG_WAKE_TBTT_NEGO : 0);
-	val.desc.flow_flags |= (twt.requestor ? IFX_TWT_FLOW_FLAG_REQUEST : 0);
-	val.desc.flow_flags |= (twt.protection ? IFX_TWT_FLOW_FLAG_PROTECT : 0);
-
-	if (twt.flow_id) {
-		/* Flow ID */
-		val.desc.flow_id = twt.flow_id;
-	} else if (twt.bcast_twt_id) {
-		/* Broadcast TWT ID */
-		val.desc.bid = twt.bcast_twt_id;
-	} else {
-		/* Let the FW choose the Flow ID, Broadcast TWT ID */
-		val.desc.flow_id = 0xFF;
-		val.desc.bid = 0xFF;
-	}
-
-	if (twt.twt) {
-		/* Target Wake Time parameter */
-		val.desc.wake_time_h = (u32)(twt.twt >> 32);
-		val.desc.wake_time_l = (u32)(twt.twt);
-		val.desc.wake_type = IFX_TWT_TIME_TYPE_BSS;
-	} else if (twt.twt_offset) {
-		/* Target Wake Time offset parameter */
-		val.desc.wake_time_h = (u32)(twt.twt_offset >> 32);
-		val.desc.wake_time_l = (u32)(twt.twt_offset);
-		val.desc.wake_type = IFX_TWT_TIME_TYPE_OFFSET;
-	} else {
-		/* Let the FW choose the Target Wake Time */
-		val.desc.wake_time_h = 0x0;
-		val.desc.wake_time_l = 0x0;
-		val.desc.wake_type = IFX_TWT_TIME_TYPE_AUTO;
-	}
-
-	/* Wake Duration or Service Period */
-	val.desc.wake_dur = ifx_twt_min_twt_to_wake_dur(twt.min_twt,
-							twt.min_twt_unit);
-	/* Wake Interval or Service Interval */
-	val.desc.wake_int = ifx_twt_float_to_uint32(twt.exponent,
-						    twt.mantissa);
-	/* TWT Negotiation_type */
-	val.desc.negotiation_type = (u8)twt.negotiation_type;
-	err = brcmf_fil_xtlv_data_set(ifp, "twt", IFX_TWT_CMD_SETUP,
-				      (void *)&val, sizeof(val));
-
-	brcmf_dbg(TRACE, "TWT setup\n"
-		"Setup command	: %u\n"
-		"Flow flags	: 0x %02x\n"
-		"Flow ID		: %u\n"
-		"Broadcast TWT ID	: %u\n"
-		"Wake Time H,L	: 0x %08x %08x\n"
-		"Wake Type		: %u\n"
-		"Wake Dururation	: %u usecs\n"
-		"Wake Interval	: %u usecs\n"
-		"Negotiation type	: %u\n",
-		val.desc.setup_cmd,
-		val.desc.flow_flags,
-		val.desc.flow_id,
-		val.desc.bid,
-		val.desc.wake_time_h,
-		val.desc.wake_time_l,
-		val.desc.wake_type,
-		val.desc.wake_dur,
-		val.desc.wake_int,
-		val.desc.negotiation_type);
-
-	if (err < 0)
-		brcmf_err("TWT setup failed. ret:%d\n", err);
-
-	return err;
-}
-
-int ifx_twt_teardown(struct wireless_dev *wdev, struct ifx_twt twt)
-{
-	struct brcmf_cfg80211_vif *vif;
-	struct brcmf_if *ifp;
-	struct ifx_twt_teardown val;
-	s32 err;
-
-	vif = container_of(wdev, struct brcmf_cfg80211_vif, wdev);
-	ifp = vif->ifp;
-
-	memset(&val, 0, sizeof(val));
-	val.version = IFX_TWT_TEARDOWN_VER;
-	val.length = sizeof(val.version) + sizeof(val.length);
-
-	if (twt.flow_id) {
-		/* Flow ID */
-		val.teardesc.flow_id = twt.flow_id;
-	} else if (twt.bcast_twt_id) {
-		/* Broadcast TWT ID */
-		val.teardesc.bid = twt.bcast_twt_id;
-	} else {
-		/* Let the FW choose the Flow ID, Broadcast TWT */
-		val.teardesc.flow_id = 0xFF;
-		val.teardesc.bid = 0xFF;
-	}
-
-	/* TWT Negotiation_type */
-	val.teardesc.negotiation_type = (u8)twt.negotiation_type;
-	/* Teardown all Negotiated TWT */
-	val.teardesc.alltwt = twt.teardown_all_twt;
-	err = brcmf_fil_xtlv_data_set(ifp, "twt", IFX_TWT_CMD_TEARDOWN,
-				      (void *)&val, sizeof(val));
-
-	brcmf_dbg(TRACE, "TWT teardown\n"
-		"Flow ID		: %u\n"
-		"Broadcast TWT ID	: %u\n"
-		"Negotiation type	: %u\n"
-		"Teardown all TWT	: %u\n",
-		val.teardesc.flow_id,
-		val.teardesc.bid,
-		val.teardesc.negotiation_type,
-		val.teardesc.alltwt);
-
-	if (err < 0)
-		brcmf_err("TWT teardown failed. ret:%d\n", err);
-
-	return err;
-}
-
-int ifx_twt_oper(struct wireless_dev *wdev, struct ifx_twt twt)
-{
-	int ret = -1;
-
-	switch (twt.twt_oper) {
-	case IFX_TWT_OPER_SETUP:
-		ret = ifx_twt_setup(wdev, twt);
-		break;
-	case IFX_TWT_OPER_TEARDOWN:
-		ret = ifx_twt_teardown(wdev, twt);
-		break;
-	default:
-		brcmf_err("Requested TWT operation (%d) is not supported\n",
-			  twt.twt_oper);
-		ret = -EINVAL;
-		goto exit;
-	}
-exit:
-	return ret;
-}
-
 static void
 ifx_cfgvendor_twt_parse_params(const struct nlattr *attr_iter,
-			       struct ifx_twt *twt)
+			       struct brcmf_twt_params *twt_params)
 {
 	int tmp, twt_param;
 	const struct nlattr *twt_param_iter;
@@ -267,61 +66,61 @@ ifx_cfgvendor_twt_parse_params(const struct nlattr *attr_iter,
 		twt_param = nla_type(twt_param_iter);
 		switch (twt_param) {
 		case IFX_VENDOR_ATTR_TWT_PARAM_NEGO_TYPE:
-			twt->negotiation_type = nla_get_u8(twt_param_iter);
+			twt_params->negotiation_type = nla_get_u8(twt_param_iter);
 			break;
 		case IFX_VENDOR_ATTR_TWT_PARAM_SETUP_CMD_TYPE:
-			twt->setup_cmd = nla_get_u8(twt_param_iter);
+			twt_params->setup_cmd = nla_get_u8(twt_param_iter);
 			break;
 		case IFX_VENDOR_ATTR_TWT_PARAM_DIALOG_TOKEN:
-			twt->dialog_token = nla_get_u8(twt_param_iter);
+			twt_params->dialog_token = nla_get_u8(twt_param_iter);
 			break;
 		case IFX_VENDOR_ATTR_TWT_PARAM_WAKE_TIME:
-			twt->twt = nla_get_u64(twt_param_iter);
+			twt_params->twt = nla_get_u64(twt_param_iter);
 			break;
 		case IFX_VENDOR_ATTR_TWT_PARAM_WAKE_TIME_OFFSET:
-			twt->twt_offset = nla_get_u64(twt_param_iter);
+			twt_params->twt_offset = nla_get_u64(twt_param_iter);
 			break;
 		case IFX_VENDOR_ATTR_TWT_PARAM_MIN_WAKE_DURATION:
-			twt->min_twt = nla_get_u8(twt_param_iter);
+			twt_params->min_twt = nla_get_u8(twt_param_iter);
 			break;
 		case IFX_VENDOR_ATTR_TWT_PARAM_WAKE_INTVL_EXPONENT:
-			twt->exponent = nla_get_u8(twt_param_iter);
+			twt_params->exponent = nla_get_u8(twt_param_iter);
 			break;
 		case IFX_VENDOR_ATTR_TWT_PARAM_WAKE_INTVL_MANTISSA:
-			twt->mantissa = nla_get_u16(twt_param_iter);
+			twt_params->mantissa = nla_get_u16(twt_param_iter);
 			break;
 		case IFX_VENDOR_ATTR_TWT_PARAM_REQUESTOR:
-			twt->requestor = nla_get_u8(twt_param_iter);
+			twt_params->requestor = nla_get_u8(twt_param_iter);
 			break;
 		case IFX_VENDOR_ATTR_TWT_PARAM_TRIGGER:
-			twt->trigger = nla_get_u8(twt_param_iter);
+			twt_params->trigger = nla_get_u8(twt_param_iter);
 			break;
 		case IFX_VENDOR_ATTR_TWT_PARAM_IMPLICIT:
-			twt->implicit = nla_get_u8(twt_param_iter);
+			twt_params->implicit = nla_get_u8(twt_param_iter);
 			break;
 		case IFX_VENDOR_ATTR_TWT_PARAM_FLOW_TYPE:
-			twt->flow_type = nla_get_u8(twt_param_iter);
+			twt_params->flow_type = nla_get_u8(twt_param_iter);
 			break;
 		case IFX_VENDOR_ATTR_TWT_PARAM_FLOW_ID:
-			twt->flow_id = nla_get_u8(twt_param_iter);
+			twt_params->flow_id = nla_get_u8(twt_param_iter);
 			break;
 		case IFX_VENDOR_ATTR_TWT_PARAM_BCAST_TWT_ID:
-			twt->bcast_twt_id = nla_get_u8(twt_param_iter);
+			twt_params->bcast_twt_id = nla_get_u8(twt_param_iter);
 			break;
 		case IFX_VENDOR_ATTR_TWT_PARAM_PROTECTION:
-			twt->protection = nla_get_u8(twt_param_iter);
+			twt_params->protection = nla_get_u8(twt_param_iter);
 			break;
 		case IFX_VENDOR_ATTR_TWT_PARAM_CHANNEL:
-			twt->twt_channel = nla_get_u8(twt_param_iter);
+			twt_params->twt_channel = nla_get_u8(twt_param_iter);
 			break;
 		case IFX_VENDOR_ATTR_TWT_PARAM_TWT_INFO_FRAME_DISABLED:
-			twt->twt_info_frame_disabled = nla_get_u8(twt_param_iter);
+			twt_params->twt_info_frame_disabled = nla_get_u8(twt_param_iter);
 			break;
 		case IFX_VENDOR_ATTR_TWT_PARAM_MIN_WAKE_DURATION_UNIT:
-			twt->min_twt_unit = nla_get_u8(twt_param_iter);
+			twt_params->min_twt_unit = nla_get_u8(twt_param_iter);
 			break;
 		case IFX_VENDOR_ATTR_TWT_PARAM_TEARDOWN_ALL_TWT:
-			twt->teardown_all_twt = nla_get_u8(twt_param_iter);
+			twt_params->teardown_all_twt = nla_get_u8(twt_param_iter);
 			break;
 		default:
 			brcmf_dbg(TRACE, "Unknown TWT param %d, skipping\n",
@@ -331,13 +130,13 @@ ifx_cfgvendor_twt_parse_params(const struct nlattr *attr_iter,
 	}
 }
 
-int ifx_cfg80211_vndr_cmds_twt(struct wiphy *wiphy,
-			       struct wireless_dev *wdev, const void  *data, int len)
+int ifx_cfg80211_vndr_cmds_twt(struct wiphy *wiphy, struct wireless_dev *wdev,
+			       const void  *data, int len)
 {
 	int tmp, attr_type;
 	const struct nlattr *attr_iter;
 
-	struct ifx_twt twt = {
+	struct brcmf_twt_params twt_params = {
 		.twt_oper = 0,
 		.negotiation_type = IFX_TWT_PARAM_NEGO_TYPE_ITWT,
 		.setup_cmd = IFX_TWT_OPER_SETUP_CMD_TYPE_REQUEST,
@@ -362,10 +161,10 @@ int ifx_cfg80211_vndr_cmds_twt(struct wiphy *wiphy,
 
 		switch (attr_type) {
 		case IFX_VENDOR_ATTR_TWT_OPER:
-			twt.twt_oper = nla_get_u8(attr_iter);
+			twt_params.twt_oper = nla_get_u8(attr_iter);
 			break;
 		case IFX_VENDOR_ATTR_TWT_PARAMS:
-			ifx_cfgvendor_twt_parse_params(attr_iter, &twt);
+			ifx_cfgvendor_twt_parse_params(attr_iter, &twt_params);
 			break;
 		default:
 			brcmf_dbg(TRACE, "Unknown TWT attribute %d, skipping\n",
@@ -374,7 +173,7 @@ int ifx_cfg80211_vndr_cmds_twt(struct wiphy *wiphy,
 		}
 	}
 
-	return ifx_twt_oper(wdev, twt);
+	return (int)brcmf_twt_oper(wiphy, wdev, twt_params);
 }
 
 int ifx_cfg80211_vndr_cmds_bsscolor(struct wiphy *wiphy,
@@ -824,3 +623,88 @@ int ifx_cfg80211_vndr_cmds_giantrx(struct wiphy *wiphy,
 	return ret;
 }
 
+int ifx_cfg80211_vndr_cmds_wnm(struct wiphy *wiphy,
+			       struct wireless_dev *wdev, const void  *data, int len)
+{
+	int tmp, attr_type = 0, wnm_param = 0, ret = 0;
+	const struct nlattr *attr_iter, *wnm_param_iter;
+
+	struct brcmf_cfg80211_vif *vif;
+	struct brcmf_if *ifp;
+	u8 param[64] = {0}, get_info = 0;
+	u16 buf_len = 0, wnm_id = 0;
+
+	vif = container_of(wdev, struct brcmf_cfg80211_vif, wdev);
+	ifp = vif->ifp;
+	nla_for_each_attr(attr_iter, data, len, tmp) {
+		attr_type = nla_type(attr_iter);
+
+		switch (attr_type) {
+		case IFX_VENDOR_ATTR_WNM_CMD:
+			wnm_id = cpu_to_le16(nla_get_u8(attr_iter));
+			break;
+		case IFX_VENDOR_ATTR_WNM_PARAMS:
+			nla_for_each_nested(wnm_param_iter, attr_iter, tmp) {
+				wnm_param = nla_type(wnm_param_iter);
+				switch (wnm_param) {
+				case IFX_VENDOR_ATTR_WNM_PARAM_GET_INFO:
+				{
+					get_info = (int)nla_get_u8(wnm_param_iter);
+				}
+					break;
+				case IFX_VENDOR_ATTR_WNM_PARAM_IDLE_PERIOD:
+				{
+					int period;
+
+					period = (int)nla_get_u8(wnm_param_iter);
+					memcpy(&param[buf_len], &period, sizeof(period));
+					buf_len += sizeof(period);
+				}
+					break;
+				case IFX_VENDOR_ATTR_WNM_PARAM_PROTECTION_OPT:
+				{
+					int option;
+
+					option = (int)nla_get_u8(wnm_param_iter);
+					memcpy(&param[buf_len], &option, sizeof(option));
+					buf_len += sizeof(option);
+				}
+					break;
+				default:
+					brcmf_err("unknown wnm param attr:%d\n", wnm_param);
+					return -EINVAL;
+				}
+			}
+			break;
+		default:
+			brcmf_err("Unknown wnm attribute %d, skipping\n",
+				  attr_type);
+			return -EINVAL;
+		}
+	}
+
+	switch (wnm_id) {
+	case IFX_WNM_CMD_IOV_WNM_MAXIDLE:
+	{
+		if (get_info) {
+			int get_period = 0;
+
+			ret = brcmf_fil_iovar_int_get(ifp, "wnm_maxidle", &get_period);
+			if (!ret)
+				ret = ifx_cfg80211_vndr_send_cmd_reply(
+					wiphy, &get_period, sizeof(get_period));
+		} else
+			ret = brcmf_fil_iovar_data_set(ifp, "wnm_maxidle", param, buf_len);
+	}
+	break;
+
+	default:
+		brcmf_err("unsupport wnm cmd:%d\n", wnm_id);
+		return -EINVAL;
+	}
+
+	if (ret)
+		brcmf_err("wnm %s error:%d\n", get_info?"get":"set", ret);
+
+	return ret;
+}

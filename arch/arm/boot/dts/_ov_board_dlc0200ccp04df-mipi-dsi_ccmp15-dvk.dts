@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Digi International Inc.
+ * Copyright 2024 Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -20,20 +20,45 @@
 	fragment@0 {
 		target-path = "/";
 		__overlay__ {
-			overlay-description = "DVK: MikroE I2C to SPI Click board";
+			overlay-description = "DVK: DLC0200CCP04DF-2 MIPI display";
 		};
 	};
 
-	/* MikroE I2C to SPI bridge (I2C to SPI-click) */
+	/* Disable LT8912 */
 	fragment@1 {
-		target = <&i2c2>;
+		target = <&lt_bridge>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	/* Add DLC0200CCP04DF MIPI display panel */
+	fragment@2 {
+		target = <&dsi>;
 		__overlay__ {
 			#address-cells = <1>;
 			#size-cells = <0>;
 
-			sc18is602@28 {
-				compatible = "nxp,sc18is602";
-				reg = <0x28>;
+			ports {
+				port@1 {
+					dsi_out: endpoint {
+						remote-endpoint = <&panel_in>;
+					};
+				};
+			};
+
+			panel@0 {
+				compatible = "dlc,dlc0200ccp04df";
+				reg = <0>;
+				VCC-supply = <&v3v3>;
+				IOVCC-supply = <&v3v3>;
+				status = "okay";
+
+				port {
+					panel_in: endpoint {
+						remote-endpoint = <&dsi_out>;
+					};
+				};
 			};
 		};
 	};

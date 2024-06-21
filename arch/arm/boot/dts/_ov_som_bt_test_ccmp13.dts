@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Digi International Inc.
+ * Copyright 2023-2024 Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -13,6 +13,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/rtc/rtc-stm32.h>
 
 /dts-v1/;
@@ -33,6 +34,13 @@
 	fragment@1 {
 		target = <&reg_3v3_rf>;
 		__overlay__ {
+			compatible = "regulator-fixed";
+			regulator-name = "3v3_rf";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			gpio = <&gpiob 7 GPIO_ACTIVE_HIGH>; /* 3V3_RF_EN */
+			enable-active-high;
+			startup-delay-us = <100000>;
 			status = "okay";
 		};
 	};
@@ -41,20 +49,17 @@
 	fragment@2 {
 		target = <&usart2>;
 		__overlay__ {
+			pinctrl-names = "default", "sleep", "idle";
+			pinctrl-0 = <&ccmp13_usart2_pins_a>;
+			pinctrl-1 = <&ccmp13_usart2_sleep_pins_a>;
+			pinctrl-2 = <&ccmp13_usart2_idle_pins_a>;
+			uart-has-rtscts;
 			status = "okay";
 		};
 	};
 
-	/* Disable CYW4373 Bluetooth node */
-	fragment@3 {
-		target = <&cyw4373_bt>;
-		__overlay__ {
-			status = "disabled";
-		};
-	};
-
 	/* Enable External 32kHz Low-Power Oscillator */
-	fragment@4 {
+	fragment@3 {
 		target = <&rtc>;
 		__overlay__ {
 			st,lsco = <RTC_OUT2_RMP>;

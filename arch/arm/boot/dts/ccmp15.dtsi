@@ -24,9 +24,7 @@
 		i2c4 = &i2c4;
 		i2c5 = &i2c5;
 		i2c6 = &i2c6;
-		mmc0 = &sdmmc3; /* Wireless */
 		serial0 = &uart4;
-		serial1 = &usart1;
 		serial2 = &usart3;
 	};
 
@@ -100,27 +98,14 @@
 		#size-cells = <0>;
 
 		reg_3v3_rf: regulator-som@1 {
-			compatible = "regulator-fixed";
+			/* Filled-in by Wi-Fi/BT DT overlays */
 			reg = <1>;
-			regulator-name = "3v3_rf";
-			regulator-min-microvolt = <3300000>;
-			regulator-max-microvolt = <3300000>;
-			gpio = <&gpiof 2 GPIO_ACTIVE_HIGH>; /* 3V3_RF_EN */
-			enable-active-high;
-			startup-delay-us = <100000>;
 			status = "disabled";
 		};
 
 		reg_rf_wl_en: regulator-som@2 {
-			compatible = "regulator-fixed";
+			/* Filled-in by Wi-Fi overlay */
 			reg = <2>;
-			regulator-name = "rf_wl_en";
-			regulator-min-microvolt = <3300000>;
-			regulator-max-microvolt = <3300000>;
-			gpio = <&gpiod 13 GPIO_ACTIVE_HIGH>; /* WL_EN */
-			enable-active-high;
-			startup-delay-us = <100>;
-			vin-supply = <&reg_3v3_rf>;
 			status = "disabled";
 		};
 	};
@@ -198,49 +183,6 @@
 	status = "okay";
 };
 
-/* USART1 (Bluetooth) */
-&usart1 {
-	pinctrl-names = "default", "sleep";
-	pinctrl-0 = <&ccmp15_usart1_pins_c>, <&ccmp15_usart1_pins_z>;
-	pinctrl-1 = <&ccmp15_usart1_sleep_pins_c>, <&ccmp15_usart1_sleep_pins_z>;
-	uart-has-rtscts;
-	status = "disabled";
-
-	cyw4373_bt: cyw4373-bt {
-		shutdown-gpios = <&gpioz 6 GPIO_ACTIVE_HIGH>;
-		compatible = "brcm,bcm43438-bt";
-		max-speed = <3000000>;
-		vbat-supply = <&v3v3>;
-		vddio-supply = <&reg_3v3_rf>;
-		status = "disabled";
-	};
-};
-
-/* USDHC3 (Wireless) */
-&sdmmc3 {
-	pinctrl-names = "default", "opendrain", "sleep";
-	pinctrl-0 = <&sdmmc3_b4_pins_a>;
-	pinctrl-1 = <&sdmmc3_b4_od_pins_a>;
-	pinctrl-2 = <&sdmmc3_b4_sleep_pins_a>;
-	non-removable;
-	no-1-8-v;
-	st,neg-edge;
-	bus-width = <4>;
-	vmmc-supply = <&reg_rf_wl_en>;
-	status = "disabled";
-
-	#address-cells = <1>;
-	#size-cells = <0>;
-	brcmf: bcrmf@1 {
-		reg = <1>;
-		compatible = "brcm,bcm4329-fmac";
-
-		brcm,broken_sg_support;
-		brcm,sd_head_align = /bits/  16 <8>;
-		brcm,sd_sgentry_align = /bits/ 16 <32>;
-	};
-};
-
 &m4_rproc {
 	memory-region = <&retram>, <&mcuram>, <&mcuram2>, <&vdev0vring0>,
 			<&vdev0vring1>, <&vdev0buffer>, <&mcu_rsc_table>;
@@ -249,7 +191,7 @@
 	interrupt-parent = <&exti>;
 	interrupts = <68 1>;
 	wakeup-source;
-	status = "disabled";
+	status = "okay";
 };
 
 &vrefbuf {
