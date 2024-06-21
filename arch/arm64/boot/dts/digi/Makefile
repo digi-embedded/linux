@@ -37,6 +37,7 @@ ccimx93_dvk_overlays := _ov_board_dsi_display_ccimx93-dvk.dtbo \
 			_ov_board_lvds_ccimx93-dvk.dtbo \
 			_ov_board_mikroe-accel2-click_ccimx93-dvk.dtbo \
 			_ov_board_mikroe-gyro-click_ccimx93-dvk.dtbo \
+			_ov_board_nhd-3-5-640480ef-msxp-mipi-dsi_ccimx93-dvk.dtbo \
 			_ov_board_eqos-tsn_ccimx93-dvk.dtbo
 
 ccimx8mm-dtbs :=	ccimx8mm-dvk.dtb \

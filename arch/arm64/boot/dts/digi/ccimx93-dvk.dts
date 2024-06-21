@@ -757,6 +757,14 @@
 		>;
 	};
 
+	/* MIPI display */
+	pinctrl_mipi_display: mipidisplay {
+		fsl,pins = <
+			/* MIPI_DSI_RESET */
+			MX93_PAD_GPIO_IO06__GPIO2_IO06				0x31e
+		>;
+	};
+
 	/* HDMI bridge IOs */
 	pinctrl_lt8912: lt8912grp {
 		fsl,pins = <

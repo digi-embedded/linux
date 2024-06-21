@@ -1,0 +1,79 @@
+/*
+ * Copyright 2024 Digi International Inc.
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+#include <dt-bindings/gpio/gpio.h>
+
+/dts-v1/;
+/plugin/;
+
+/ {
+	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			overlay-description = "DVK: NHD-3.5-640480EF-MSXP MIPI display";
+		};
+	};
+
+	/* Disable LT8912 */
+	fragment@1 {
+		target = <&lt_bridge>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	/* Add NHD-3.5-640480EF-MSXP MIPI display panel */
+	fragment@2 {
+		target = <&dsi>;
+		__overlay__ {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			ports {
+				port@1 {
+					dsi_out: endpoint {
+						remote-endpoint = <&dsi_panel_in>;
+					};
+				};
+			};
+
+			panel@0 {
+				compatible = "newhaven,nhd-3.5-640480ef-msxp";
+				reg = <0>;
+				VCC-supply = <&reg_5v_board>;
+				IOVCC-supply = <&buck4>;
+				pinctrl-names = "default";
+				pinctrl-0 = <&pinctrl_mipi_display>;
+				reset-gpios = <&gpio2 6 GPIO_ACTIVE_HIGH>;
+				dsi-lanes = <4>;
+				status = "okay";
+
+				port {
+					dsi_panel_in: endpoint {
+						remote-endpoint = <&dsi_out>;
+					};
+				};
+			};
+		};
+	};
+
+	/* Adjust ldcif clock */
+	fragment@3 {
+		target = <&lcdif>;
+		__overlay__ {
+			assigned-clock-rates = <300000000>, <50000000>, <400000000>, <133333333>;
+		};
+	};
+};
