@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Digi International Inc.
+ * Copyright 2023, 2024 Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -20,7 +20,7 @@
 	fragment@0 {
 		target-path = "/";
 		__overlay__ {
-			overlay-description = "DVK: DLC0200CC904DF-2 MIPI DSI display";
+			overlay-description = "DVK: DLC0200CCP04DF-2 MIPI DSI display";
 		};
 	};
 
