@@ -45,9 +45,9 @@
 		};
 	};
 
-	/* Enable SDMMC3 (Wireless) */
+	/* Enable SDMMC1 (Wireless) */
 	fragment@3 {
-		target = <&sdmmc3>;
+		target = <&sdmmc1>;
 		__overlay__ {
 			status = "okay";
 		};
