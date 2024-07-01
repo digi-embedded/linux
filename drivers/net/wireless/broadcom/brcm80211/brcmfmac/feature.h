@@ -39,6 +39,7 @@
  *	ARP, ND, etc and send out a suitable response packet from within
  * 	Firmware.
  * ULP: Firmware supports Ultra Low Power mode of operation.
+ * CSI: Firmware has the CSI Module Support.
  */
 #define BRCMF_FEAT_LIST \
 	BRCMF_FEAT_DEF(MBSS) \
@@ -71,7 +72,8 @@
 	BRCMF_FEAT_DEF(TWT) \
 	BRCMF_FEAT_DEF(OFFLOADS) \
 	BRCMF_FEAT_DEF(ULP) \
-	BRCMF_FEAT_DEF(PROPTXSTATUS)
+	BRCMF_FEAT_DEF(PROPTXSTATUS) \
+	BRCMF_FEAT_DEF(CSI)
 
 /*
  * Quirks:

@@ -35,4 +35,16 @@ struct trx_header_le {
 	__le32 offsets[TRX_MAX_OFFSET];	/* Offsets of partitions */
 };
 
+#define TRX_VERSION5	5			/* Version 5 */
+
+struct trxv5_header_le {
+	__le32 magic;		/* "HDR0" */
+	__le32 len;			/* Length of file including header */
+	__le32 crc32;		/* 32-bit CRC from flag_version to end of file */
+	__le32 flag_version;	/* 0:15 flags, 16:31 version */
+	__le32 root_cert_start_offset;	/* Start Offset IDX for Root Certificate */
+	__le32 content_cert_start_offset;	/* Start Offset IDX for Content Certificate */
+	__le32 fw_entry;	/* Firmware Entry Point for CM mode */
+	__le32 reserved;
+};
 #endif /* BRCMFMAC_TRXHDR_H */

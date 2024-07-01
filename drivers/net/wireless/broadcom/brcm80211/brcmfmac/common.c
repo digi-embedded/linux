@@ -143,6 +143,10 @@ static int brcmf_idle_time_zero;
 module_param_named(idle_time_zero, brcmf_idle_time_zero, int, 0644);
 MODULE_PARM_DESC(idle_time_zero, "Set idle interval to zero");
 
+static int brcmf_short_psq;
+module_param_named(short_psq, brcmf_short_psq, int, 0);
+MODULE_PARM_DESC(short_psq, "Use shorter PS Queue");
+
 static struct brcmfmac_platform_data *brcmfmac_pdata;
 struct brcmf_mp_global_t brcmf_mp_global;
 
@@ -697,6 +701,7 @@ int brcmf_debugfs_param_read(struct seq_file *s, void *data)
 	seq_printf(s, "%-20s: 0x%x\n", "offload_feat", brcmf_offload_feat);
 	seq_printf(s, "%-20s: %d\n", "txglomsz", brcmf_sdiod_txglomsz);
 	seq_printf(s, "%-20s: %d\n", "bt_over_sdio", !!brcmf_bt_over_sdio);
+	seq_printf(s, "%-20s: %d\n", "short_psq", !!brcmf_short_psq);
 	seq_printf(s, "%-20s: %d\n", "idle_time_zero", !!brcmf_idle_time_zero);
 
 	return 0;
@@ -766,6 +771,8 @@ struct brcmf_mp_device *brcmf_get_module_param(struct device *dev,
 
 	settings->bt_over_sdio = !!brcmf_bt_over_sdio;
 	brcmf_dbg(INFO, "bt_over_sdio: %d\n", settings->bt_over_sdio);
+	settings->short_psq = !!brcmf_short_psq;
+	brcmf_dbg(INFO, "brcmf_short_psq: %d\n", settings->short_psq);
 
 	settings->idleclk_disable = brcmf_sdio_idleclk_disable;
 	brcmf_dbg(INFO, "idleclk_disable: %d\n", settings->idleclk_disable);

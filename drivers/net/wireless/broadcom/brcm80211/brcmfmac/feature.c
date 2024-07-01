@@ -51,6 +51,7 @@ static const struct brcmf_feat_fwcap brcmf_fwcap_map[] = {
 	{ BRCMF_FEAT_OFFLOADS, "offloads" },
 	{ BRCMF_FEAT_ULP, "ulp" },
 	{ BRCMF_FEAT_PROPTXSTATUS, "proptxstatus" },
+	{ BRCMF_FEAT_CSI, "csi" },
 };
 
 #ifdef DEBUG
@@ -324,6 +325,7 @@ void brcmf_feat_attach(struct brcmf_pub *drvr)
 
 	brcmf_feat_iovar_int_get(ifp, BRCMF_FEAT_FWSUP, "sup_wpa");
 	brcmf_feat_iovar_enab_get(ifp, BRCMF_FEAT_TWT, "twt", BRCMF_TWT_CMD_ENAB);
+	brcmf_feat_iovar_int_get(ifp, BRCMF_FEAT_CSI, "csi");
 
 	if (drvr->settings->feature_disable) {
 		brcmf_dbg(INFO, "Features: 0x%02x, disable: 0x%02x\n",

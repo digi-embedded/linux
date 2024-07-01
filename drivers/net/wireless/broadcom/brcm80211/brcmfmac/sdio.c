@@ -347,7 +347,7 @@ struct rte_console {
 #define BRCMF_IDLE_INTERVAL	1
 
 #define KSO_WAIT_US 50
-#define KSO_MAX_SEQ_TIME (1000 * 10) /* Ideal time for kso sequence 10ms */
+#define KSO_MAX_SEQ_TIME_NS (1000000*10) /* Ideal time for kso sequence 10ms in ns*/
 #define MAX_KSO_ATTEMPTS (PMU_MAX_TRANSITION_DLY/KSO_WAIT_US)
 
 static void brcmf_sdio_firmware_callback(struct device *dev, int err,
@@ -571,7 +571,9 @@ struct brcmf_sdio {
 	u32 store_idx;
 	u32 sent_idx;
 	struct task_ctl	thr_rxf_ctl;
-	spinlock_t	rxf_lock; /* lock for rxf idx protection */
+	spinlock_t rxf_lock;	/* lock for rxf idx protection */
+	bool h1_ddr50_mode;	/* H1 DDR50 Mode enabled*/
+	bool ignore_bus_error;	/* Ignore SDIO Bus access error*/
 };
 
 /* clkstate */
@@ -757,8 +759,8 @@ brcmf_sdio_kso_control(struct brcmf_sdio *bus, bool on)
 	int err = 0;
 	int err_cnt = 0;
 	int try_cnt = 0;
-	unsigned long start_jiffy = 0;
-	unsigned int kso_loop_time = 0;
+	unsigned long kso_loop_time = 0;
+	struct timespec64 ts_start, ts_end, ts_delta;
 
 	brcmf_dbg(TRACE, "Enter: on=%d\n", on);
 
@@ -771,11 +773,14 @@ brcmf_sdio_kso_control(struct brcmf_sdio *bus, bool on)
 	wr_val = (on << SBSDIO_FUNC1_SLEEPCSR_KSO_SHIFT);
 
 	/* Start time of kso_sequence */
-	start_jiffy = jiffies;
+	ktime_get_ts64(&ts_start);
 
 	/* Change bus width to 1-bit mode before kso 0 */
 	if (!on && bus->idleclock == BRCMF_IDLE_STOP)
 		brcmf_sdio_set_sdbus_clk_width(bus, SDIO_SDMODE_1BIT);
+	else
+	/* Set Flag to ignore SDIO Bus access error during KSO */
+		bus->ignore_bus_error = true;
 
 	/* 1st KSO write goes to AOS wake up core if device is asleep  */
 	brcmf_sdiod_writeb(bus->sdiodev, SBSDIO_FUNC1_SLEEPCSR, wr_val, &err);
@@ -788,9 +793,7 @@ brcmf_sdio_kso_control(struct brcmf_sdio *bus, bool on)
 	if (!on) {
 		bus->sdiodev->sbwad_valid = 0;
 		return err;
-	}
-
-	if (on) {
+	} else {
 		/* device WAKEUP through KSO:
 		 * write bit 0 & read back until
 		 * both bits 0 (kso bit) & 1 (dev on status) are set
@@ -798,13 +801,6 @@ brcmf_sdio_kso_control(struct brcmf_sdio *bus, bool on)
 		cmp_val = SBSDIO_FUNC1_SLEEPCSR_KSO_MASK |
 			  SBSDIO_FUNC1_SLEEPCSR_DEVON_MASK;
 		bmask = cmp_val;
-	} else {
-		/* Put device to sleep, turn off KSO */
-		cmp_val = 0;
-		/* only check for bit0, bit1(dev on status) may not
-		 * get cleared right away
-		 */
-		bmask = SBSDIO_FUNC1_SLEEPCSR_KSO_MASK;
 	}
 
 	do {
@@ -850,24 +846,43 @@ brcmf_sdio_kso_control(struct brcmf_sdio *bus, bool on)
 
 	} while (try_cnt++ < MAX_KSO_ATTEMPTS);
 
-	kso_loop_time = jiffies_to_usecs(jiffies - start_jiffy);
+	ktime_get_ts64(&ts_end);
+	ts_delta = timespec64_sub(ts_end, ts_start);
+	kso_loop_time = timespec64_to_ns(&ts_delta);
 
 	if (try_cnt > MAX_KSO_ATTEMPTS)
-		brcmf_err("ERR: KSO=%d sequence failed after max tries=%d and err_cnt=%d kso_seq_time=%uus rd_val=0x%x err=%d\n",
-			  on, try_cnt, err_cnt, kso_loop_time, rd_val, err);
-
-	if (kso_loop_time > KSO_MAX_SEQ_TIME)
-		brcmf_dbg(SDIO, "WARN: KSO=%d sequence took %uus > expected %uus try_cnt=%d err_cnt=%d rd_val=0x%x err=%d\n",
-			  on, kso_loop_time, KSO_MAX_SEQ_TIME, try_cnt, err_cnt, rd_val, err);
-	else
-		brcmf_dbg(SDIO, "INFO: KSO=%d try_cnt=%d err_cnt=%d kso_seq_time=%uus rd_val=0x%x err=%d\n",
-			  on, try_cnt, err_cnt, kso_loop_time, rd_val, err);
+		brcmf_err("ERR: KSO=%d sequence failed after max tries=%d and err_cnt=%d "
+			  "kso_seq_time=%luns rd_val=0x%x err=%d\n",
+			   on, try_cnt, err_cnt, kso_loop_time, rd_val, err);
 
 	if (on && bus->idleclock == BRCMF_IDLE_STOP) {
 		/* Change the bus width to 4-bit mode on kso 1 */
 		brcmf_sdio_set_sdbus_clk_width(bus, SDIO_SDMODE_4BIT);
+
+		/* New KSO Sequence for H1 DDR50 Mode*/
+		if (bus->h1_ddr50_mode) {
+			struct brcmf_sdio_dev *sdiod = bus->sdiodev;
+			u32 ret, chipid;
+
+			chipid = brcmf_sdiod_readl(sdiod,
+					bus->ci->ccsec->bus_corebase + SD_REG(chipid),
+					&ret);
+			brcmf_dbg(SDIO, "chipid: 0x%x ret = 0x%x\n", chipid, ret);
+		}
+
+		/* Clear Flag to ignore SDIO Bus access error during KSO */
+		bus->ignore_bus_error = false;
 		sdio_retune_release(bus->sdiodev->func1);
 	}
+
+	if (kso_loop_time > KSO_MAX_SEQ_TIME_NS)
+		brcmf_err("WARN: KSO=%d sequence took %luns > expected %uns try_cnt=%d "
+			  "err_cnt=%d rd_val=0x%x err=%d\n",
+			   on, kso_loop_time, KSO_MAX_SEQ_TIME_NS, try_cnt, err_cnt, rd_val, err);
+
+	brcmf_dbg(SDIO, "INFO: KSO=%d try_cnt=%d err_cnt=%d kso_seq_time=%luns "
+			"rd_val=0x%x err=%d\n", on, try_cnt, err_cnt, kso_loop_time, rd_val, err);
+
 	sdio_retune_crc_enable(bus->sdiodev->func1);
 
 	return err;
@@ -1241,7 +1256,7 @@ done:
 
 bool brcmf_sdio_bus_sleep_state(struct brcmf_sdio *bus)
 {
-	return bus->sleeping;
+	return bus->sleeping  && !bus->ignore_bus_error;
 }
 
 #ifdef DEBUG
@@ -3501,6 +3516,14 @@ static int brcmf_sdio_readconsole(struct brcmf_sdio *bus)
 
 	/* Read the console buffer */
 	addr = le32_to_cpu(c->log_le.buf);
+
+	/* During FW Control Switch from Bootloader to Ram
+	 * Console address read will return all 0's which is not a valid.
+	 * when we try to access 0 ram address we are getting SDIO error.
+	 */
+	if (addr == 0)
+		return 0;
+
 	rv = brcmf_sdiod_ramrw(bus->sdiodev, false, addr, c->buf, c->bufsize);
 	if (rv < 0)
 		return rv;
@@ -3992,7 +4015,10 @@ static int brcmf_sdio_download_code_file(struct brcmf_sdio *bus,
 			err = -EIO;
 	} else {
 		if (trx->magic == cpu_to_le32(TRX_MAGIC)) {
-			address -= sizeof(struct trx_header_le);
+			if ((trx->flag_version >> 16) == TRX_VERSION5)
+				address -= sizeof(struct trxv5_header_le);
+			else
+				address -= sizeof(struct trx_header_le);
 			fw_size = le32_to_cpu(trx->len);
 		}
 
@@ -4542,7 +4568,12 @@ static void brcmf_sdio_bus_watchdog(struct brcmf_sdio *bus)
 #endif
 					brcmf_sdio_wd_timer(bus, false);
 				bus->idlecount = 0;
-				brcmf_sdio_bus_sleep(bus, true, false);
+
+				if (!bus->dpc_triggered && !bus->dpc_running)
+					brcmf_sdio_bus_sleep(bus, true, false);
+				else
+					brcmf_err("DPC active Skip sleep");
+
 				sdio_release_host(bus->sdiodev->func1);
 			}
 		} else {
@@ -4877,6 +4908,20 @@ brcmf_sdio_buscore_sec_attach(void *ctx, struct brcmf_blhs **blhs, struct brcmf_
 		*ccsec = ccsech;
 	}
 
+	if (cardcap & SDIO_CCCR_BRCM_CARDCAP_CHIPID_PRESENT) {
+		u32 reg_val;
+		u32 err;
+
+		/* Get SDIO Bus Mode*/
+		reg_val = brcmf_sdiod_func0_rb(sdiodev, SDIO_CCCR_SPEED, &err);
+		if (err) {
+			brcmf_err("error getting sdio bus speed\n");
+		} else {
+			if (reg_val & SDIO_SPEED_DDR50)
+				sdiodev->bus->h1_ddr50_mode = true;
+		}
+	}
+
 	return 0;
 }
 
@@ -4982,6 +5027,14 @@ brcmf_sdio_probe_attach(struct brcmf_sdio *bus)
 		brcmf_err("Failed to get device parameters\n");
 		goto fail;
 	}
+
+	if (sdiodev->settings->bus.sdio.oob_irq_supported) {
+		/*Below Module Params are not supported in OOB mode*/
+		sdiodev->settings->sdio_in_isr = 0;
+		sdiodev->settings->sdio_rxf_in_kthread_enabled = 0;
+		brcmf_dbg(TRACE, "OOB Enabled, Disable sdio_in_isr\n");
+	}
+
 	/* platform specific configuration:
 	 *   alignments must be at least 4 bytes for ADMA
 	 */
@@ -5711,7 +5764,12 @@ struct brcmf_sdio *brcmf_sdio_probe(struct brcmf_sdio_dev *sdiodev)
 	else
 		bus->idletime = BRCMF_IDLE_INTERVAL;
 
-	bus->idleclock = BRCMF_IDLE_ACTIVE;
+	if (sdiodev->settings->idleclk_disable)
+		bus->idleclock = BRCMF_IDLE_STOP;
+	else
+		bus->idleclock = BRCMF_IDLE_ACTIVE;
+	brcmf_dbg(TRACE, "ilde clock Disable %d\n", sdiodev->settings->idleclk_disable);
+
 
 	/* SR state */
 	bus->sr_enabled = false;

@@ -31,6 +31,7 @@
 #define BRCMF_FWCON_VAL		0x00100000
 #define BRCMF_ULP_VAL		0x00200000
 #define BRCMF_TWT_VAL		0x00400000
+#define BRCMF_CSI_VAL		0x00800000
 
 /* set default print format */
 #undef pr_fmt
