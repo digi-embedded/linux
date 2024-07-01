@@ -35,6 +35,7 @@
 #include "bus.h"
 #include "common.h"
 #include "twt.h"
+#include "csi.h"
 
 #define BRCMF_SCAN_IE_LEN_MAX		2048
 
@@ -1892,13 +1893,11 @@ static int brcmf_set_pmk(struct brcmf_if *ifp, const u8 *pmk_data, u16 pmk_len)
 {
 	struct brcmf_pub *drvr = ifp->drvr;
 	struct brcmf_wsec_pmk_le pmk;
-	int i, err;
+	int err;
 
-	/* convert to firmware key format */
-	pmk.key_len = cpu_to_le16(pmk_len << 1);
-	pmk.flags = cpu_to_le16(BRCMF_WSEC_PASSPHRASE);
-	for (i = 0; i < pmk_len; i++)
-		snprintf(&pmk.key[2 * i], 3, "%02x", pmk_data[i]);
+	pmk.key_len = cpu_to_le16(pmk_len);
+	pmk.flags = 0;
+	memcpy(pmk.key, pmk_data, pmk_len);
 
 	/* store psk in firmware */
 	err = brcmf_fil_cmd_data_set(ifp, BRCMF_C_SET_WSEC_PMK,
@@ -2174,7 +2173,12 @@ static s32 brcmf_set_wpa_version(struct net_device *ndev,
 		else
 			val = WPA2_AUTH_PSK | WPA2_AUTH_UNSPECIFIED;
 	} else if (sme->crypto.wpa_versions & NL80211_WPA_VERSION_3) {
-		val = WPA3_AUTH_SAE_PSK;
+		if (sme->crypto.akm_suites[0] == WLAN_AKM_SUITE_FT_OVER_SAE)
+			val = WPA3_AUTH_SAE_PSK | WPA3_AUTH_SAE_FT;
+		else if (sme->crypto.akm_suites[0] == WLAN_AKM_SUITE_FT_8021X_SHA384)
+			val = WPA3_AUTH_SAE_PSK | WPA3_AUTH_SAE_FT_1X;
+		else
+			val = WPA3_AUTH_SAE_PSK;
 	} else {
 		val = WPA_AUTH_DISABLED;
 	}
@@ -2343,6 +2347,7 @@ brcmf_set_key_mgmt(struct net_device *ndev, struct cfg80211_connect_params *sme)
 	struct brcmf_if *ifp = netdev_priv(ndev);
 	struct brcmf_cfg80211_profile *profile = &ifp->vif->profile;
 	struct brcmf_pub *drvr = ifp->drvr;
+	struct brcmf_bus *bus = drvr->bus_if;
 	s32 val;
 	s32 err;
 	s32 okc_enable;
@@ -2437,6 +2442,11 @@ brcmf_set_key_mgmt(struct net_device *ndev, struct cfg80211_connect_params *sme)
 				profile->use_fwsup = BRCMF_PROFILE_FWSUP_1X;
 			else
 				profile->use_fwsup = BRCMF_PROFILE_FWSUP_ROAM;
+
+			/*Disable intrnal sup for SuiteB in H1 combo*/
+			if (bus->chip == CY_CC_55500_CHIP_ID) {
+				profile->use_fwsup = BRCMF_PROFILE_FWSUP_NONE;
+			}
 			break;
 		default:
 			bphy_err(drvr, "invalid akm suite (%d)\n",
@@ -2457,14 +2467,11 @@ brcmf_set_key_mgmt(struct net_device *ndev, struct cfg80211_connect_params *sme)
 			}
 			break;
 		case WLAN_AKM_SUITE_FT_OVER_SAE:
-			val = WPA3_AUTH_SAE_FBT;
+			val = WPA3_AUTH_SAE_PSK | WPA3_AUTH_SAE_FT;
 			profile->is_ft = true;
 			if (sme->crypto.sae_pwd) {
 				brcmf_dbg(INFO, "using SAE offload\n");
 				profile->use_fwsup = BRCMF_PROFILE_FWSUP_SAE;
-			}
-			else {
-				profile->use_fwsup = BRCMF_PROFILE_FWSUP_ROAM;
 			}
 			break;
 		default:
@@ -2759,6 +2766,28 @@ brcmf_cfg80211_connect(struct wiphy *wiphy, struct net_device *ndev,
 	bool skip_hints = ifp->drvr->settings->fw_ap_select;
 
 	brcmf_dbg(TRACE, "Enter\n");
+
+	if (cfg->pfn_enable && cfg->pfn_connection) {
+		err = brcmf_fil_cmd_data_set(ifp,
+				BRCMF_C_DISASSOC, NULL, 0);
+		if (err) {
+			brcmf_err("BRCMF_C_DISASSOC error:%d\n", err);
+			return -1;
+		}
+		cfg->pfn_connection = 0;
+
+		/* Disable pfn */
+		err = brcmf_fil_iovar_int_set(ifp, "pfn", 0);
+		if (err < 0) {
+			brcmf_err("pfn disable error:%d\n", err);
+		} else {
+			/* clear pfn */
+			err = brcmf_fil_iovar_data_set(ifp, "pfnclear", NULL, 0);
+			if (err)
+				brcmf_err("pfnclear error:%d\n", err);
+		}
+	}
+
 	if (!check_vif_up(ifp->vif))
 		return -EIO;
 
@@ -2779,6 +2808,24 @@ brcmf_cfg80211_connect(struct wiphy *wiphy, struct net_device *ndev,
 
 		if (sme->bssid_hint)
 			sme->bssid = sme->bssid_hint;
+	}
+
+	/* FT Cert: Handling the roam request from supplicant for FT roaming */
+	if (sme->prev_bssid && sme->bssid &&
+	    brcmf_feat_is_enabled(ifp, BRCMF_FEAT_FBT) &&
+	    wpa_akm_ft(sme->crypto.akm_suites[0])) {
+		/* Only reassoc IOVAR required for Roam skip additional IOVAR */
+		struct brcmf_assoc_params_le ext_roam_params;
+
+		brcmf_dbg(CONN, "Trying to REASSOC For FT\n");
+		memset(&ext_roam_params, 0, sizeof(ext_roam_params));
+		memcpy(&ext_roam_params.bssid, sme->bssid, ETH_ALEN);
+		set_bit(BRCMF_VIF_STATUS_CONNECTING, &ifp->vif->sme_state);
+
+		err = brcmf_fil_cmd_data_set(ifp, BRCMF_C_REASSOC,
+					     &ext_roam_params,
+					     sizeof(ext_roam_params));
+		goto done;
 	}
 
 	if (ifp->vif == cfg->p2p.bss_idx[P2PAPI_BSSCFG_PRIMARY].vif) {
@@ -3034,6 +3081,11 @@ brcmf_cfg80211_disconnect(struct wiphy *wiphy, struct net_device *ndev,
 	clear_bit(BRCMF_VIF_STATUS_EAP_SUCCESS, &ifp->vif->sme_state);
 	clear_bit(BRCMF_VIF_STATUS_ASSOC_SUCCESS, &ifp->vif->sme_state);
 	cfg80211_disconnected(ndev, reason_code, NULL, 0, true, GFP_KERNEL);
+
+	if (cfg->pfn_enable) {
+		cfg->pfn_connection = 0;
+		pfn_send_network_blob_fw(wiphy, &ifp->vif->wdev);
+	}
 
 	memcpy(&scbval.ea, &profile->bssid, ETH_ALEN);
 	scbval.val = cpu_to_le32(reason_code);
@@ -5892,6 +5944,7 @@ brcmf_cfg80211_start_ap(struct wiphy *wiphy, struct net_device *ndev,
 	int is_11d;
 	bool supports_11d;
 	struct bcm_xtlv *he_tlv;
+	struct brcmf_p2p_info *p2p = &cfg->p2p;
 
 	brcmf_dbg(TRACE, "ctrlchn=%d, center=%d, bw=%d, beacon_interval=%d, dtim_period=%d,\n",
 		  settings->chandef.chan->hw_value,
@@ -6160,6 +6213,7 @@ brcmf_cfg80211_start_ap(struct wiphy *wiphy, struct net_device *ndev,
 			goto exit;
 		}
 
+		p2p->afx_hdl.my_listen_chan = chanspec;
 		ifp->isap = true;
 		brcmf_dbg(TRACE, "GO mode configuration complete\n");
 	} else {
@@ -6909,7 +6963,7 @@ static int brcmf_cfg80211_set_pmk(struct wiphy *wiphy, struct net_device *dev,
 			(ifp->vif->profile.is_okc != true)))
 		return -EINVAL;
 
-	if (conf->pmk_len > BRCMF_WSEC_MAX_PSK_LEN)
+	if (conf->pmk_len > BRCMF_WSEC_MAX_PMK_LEN)
 		return -ERANGE;
 
 	if (ifp->vif->profile.is_okc) {
@@ -7600,6 +7654,7 @@ static s32 brcmf_get_assoc_ies(struct brcmf_cfg80211_info *cfg,
 		return -EINVAL;
 	}
 	if (req_len) {
+		memset(cfg->extra_buf, '\0', req_len);
 		err = brcmf_fil_iovar_data_get(ifp, "assoc_req_ies",
 					       cfg->extra_buf,
 					       WL_ASSOC_INFO_MAX);
@@ -7778,7 +7833,7 @@ brcmf_bss_connect_done(struct brcmf_cfg80211_info *cfg,
 	struct brcmf_cfg80211_connect_info *conn_info = cfg_to_conn(cfg);
 	struct cfg80211_connect_resp_params conn_params;
 
-	brcmf_dbg(TRACE, "Enter\n");
+	brcmf_dbg(TRACE, "Enter cfg->pfn_enable %d\n", cfg->pfn_enable);
 
 	if (test_and_clear_bit(BRCMF_VIF_STATUS_CONNECTING,
 			       &ifp->vif->sme_state)) {
@@ -7811,6 +7866,8 @@ brcmf_bss_connect_done(struct brcmf_cfg80211_info *cfg,
 		cfg80211_connect_done(ndev, &conn_params, GFP_KERNEL);
 		brcmf_dbg(CONN, "Report connect result - connection %s\n",
 			  completed ? "succeeded" : "failed");
+	} else if (cfg->pfn_enable && completed) {
+		cfg->pfn_connection = 1;
 	}
 	brcmf_dbg(TRACE, "Exit\n");
 	return 0;
@@ -7907,6 +7964,7 @@ brcmf_notify_connect_status(struct brcmf_if *ifp,
 			} else {
 				brcmf_bss_connect_done(cfg, ndev, e, true);
 			}
+			brcmf_bss_connect_done(cfg, ndev, e, true);
 		}
 		brcmf_net_setcarrier(ifp, true);
 	} else if (brcmf_is_linkdown(ifp->vif, e)) {
@@ -8518,6 +8576,14 @@ static void brcmf_register_event_handlers(struct brcmf_cfg80211_info *cfg)
 			    brcmf_notify_assoc_req_ie);
 	brcmf_fweh_register(cfg->pub, BRCMF_E_ASSOC_RESP_IE,
 			    brcmf_notify_assoc_resp_ie);
+	if (brcmf_feat_is_enabled(ifp, BRCMF_FEAT_CSI)) {
+		brcmf_fweh_register(cfg->pub, BRCMF_E_CSI_ENABLE,
+				    brcmf_notify_csi_event);
+		brcmf_fweh_register(cfg->pub, BRCMF_E_CSI_DATA,
+				    brcmf_notify_csi_event);
+		brcmf_fweh_register(cfg->pub, BRCMF_E_CSI_DISABLE,
+				    brcmf_notify_csi_event);
+	}
 }
 
 static void brcmf_deinit_priv_mem(struct brcmf_cfg80211_info *cfg)
@@ -10564,6 +10630,13 @@ struct brcmf_cfg80211_info *brcmf_cfg80211_attach(struct brcmf_pub *drvr,
 					    brcmf_notify_tdls_peer_event);
 		}
 	}
+	if (brcmf_feat_is_enabled(ifp, BRCMF_FEAT_CSI)) {
+		err = brcmf_csi_attach(cfg);
+		if (err) {
+			bphy_err(drvr, "CSI initialisation failed (%d)\n", err);
+			brcmf_csi_cleanup(cfg);
+		}
+	}
 
 	err = ifx_vndr_cmdstr_hashtbl_init();
 	if (err) {
@@ -10613,6 +10686,7 @@ void brcmf_cfg80211_detach(struct brcmf_cfg80211_info *cfg)
 	ifx_vndr_cmdstr_hashtbl_deinit();
 	brcmf_pno_detach(cfg);
 	brcmf_btcoex_detach(cfg);
+	brcmf_csi_cleanup(cfg);
 	wiphy_unregister(cfg->wiphy);
 	wl_deinit_priv(cfg);
 	cancel_work_sync(&cfg->escan_timeout_work);

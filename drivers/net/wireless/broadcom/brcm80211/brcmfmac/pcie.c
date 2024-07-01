@@ -2483,6 +2483,11 @@ brcmf_pcie_buscore_sec_attach(void *ctx, struct brcmf_blhs **blhs, struct brcmf_
 		addr = regdata + pcie_enum + blhsh->h2d;
 		brcmf_pcie_buscore_write32(ctx, addr, 0);
 
+		/* Raspberry pi specific */
+		*blhs = blhsh;
+		msleep(200);
+		return 0;
+
 		addr = regdata + pcie_enum + blhsh->d2h;
 		SPINWAIT_MS((brcmf_pcie_buscore_read32(ctx, addr) & flag) == 0,
 			    timeout, interval);

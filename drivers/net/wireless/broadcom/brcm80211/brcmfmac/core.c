@@ -1848,6 +1848,9 @@ void brcmf_detach(struct device *dev)
 	}
 
 	if (drvr->config) {
+		if (drvr->config->pfn_data.network_blob_data)
+			kfree(drvr->config->pfn_data.network_blob_data);
+
 		brcmf_p2p_detach(&drvr->config->p2p);
 		brcmf_cfg80211_detach(drvr->config);
 		drvr->config = NULL;

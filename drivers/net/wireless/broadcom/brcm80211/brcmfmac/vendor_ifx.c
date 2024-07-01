@@ -38,6 +38,7 @@
 #include "vendor_ifx.h"
 #include "xtlv.h"
 #include "twt.h"
+#include "pno.h"
 #include "bus.h"
 #include <linux/string.h>
 #include <linux/kernel.h>
@@ -846,13 +847,13 @@ int ifx_vndr_cmdstr_offload_config(struct wiphy *wiphy, struct wireless_dev *wde
 	 * send 0x000319 0x1C -
 	 *
 	 */
-	if (cmd_str[1] && (strlen(cmd_str[1]) == 6) &&
+	if (cmd_str[1][0] != '\0' && (strlen(cmd_str[1]) == 6) &&
 	    (memcmp(cmd_str[1], "Enable", 6)) == 0 &&
 	    (cmd_val[0] == 0 || cmd_val[0] == 1)) {
 		brcmf_generic_offload_enable(ifp, brcmf_offload_feat, cmd_val[0]);
-	} else if (cmd_str[1] && (strlen(cmd_str[1]) == 7) &&
+	} else if (cmd_str[1][0] != '\0' && (strlen(cmd_str[1]) == 7) &&
 		  (memcmp(cmd_str[1], "Profile", 7)) == 0) {
-		if (cmd_str[2]) {
+		if (cmd_str[2][0] != '\0') {
 			unsigned int ol_prof;
 
 			if ((strlen(cmd_str[2]) == 6) &&
@@ -868,7 +869,7 @@ int ifx_vndr_cmdstr_offload_config(struct wiphy *wiphy, struct wireless_dev *wde
 				brcmf_err("unknown offload_config Profile attr\n");
 				return -EINVAL;
 			}
-			if (cmd_str[3] && (strlen(cmd_str[3]) == 2) &&
+			if (cmd_str[3][0] != '\0' && (strlen(cmd_str[3]) == 2) &&
 			    (memcmp(cmd_str[3], "-s", 2)) == 0)
 				brcmf_generic_offload_config(ifp, ~cmd_val[1], ol_prof, cmd_val[0]);
 			else
@@ -892,43 +893,76 @@ int ifx_vndr_cmdstr_mkeep_alive(struct wiphy *wiphy, struct wireless_dev *wdev,
 {
 	struct brcmf_cfg80211_vif *vif;
 	struct brcmf_if *ifp;
-	int ret = 0;
-	struct ifx_mkeep_alive mkeep_alive = {0};
+	int ret = 0, i = 0, j = 0;
+	struct ifx_mkeep_alive *mkeep_alive;
+	u8 buf[150] = {0};
 	bool immed_flag = 0;
 
 	vif = container_of(wdev, struct brcmf_cfg80211_vif, wdev);
 	ifp = vif->ifp;
 
-	/* echo 'mkeep_alive 0 1000 ' | iw dev wlan0 vendor
+	/* NULL Keep-Alive
+	 * echo 'mkeep_alive 0 1000 ' | iw dev wlan0 vendor
+	 * send 0x000319 0x1C -
+	 *
+	 * NAT Keep-Alive
+	 * echo 'mkeep_alive 0 1000 0x080027b1050a00904c3104
+	 * 0008004500001e000040004011c52a0a8830700a88302513c
+	 * 413c5000a00000a0d ' | iw dev wlan0 vendor
 	 * send 0x000319 0x1C -
 	 */
-
 	if (cmd_val[0] < 0 || cmd_val[0] > 4 || cmd_val[1] < 0) {
-		brcmf_err("Invalid command format\n");
-		return -EINVAL;
+		brcmf_err("Invalid command value\n");
+		ret = -EINVAL;
+		goto exit;
 	}
-	if (cmd_str[1] && (strlen(cmd_str[1]) == 9) &&
+	mkeep_alive = (struct ifx_mkeep_alive *)buf;
+
+	mkeep_alive->period_msec = cmd_val[1];
+	if (cmd_str[1][0] != '\0' && (strlen(cmd_str[1]) == 9) &&
 	    (memcmp(cmd_str[1], "immediate", 9)) == 0) {
 		immed_flag = 1;
-	}
-	mkeep_alive.period_msec = cmd_val[1];
-	if (mkeep_alive.period_msec & WL_MKEEP_ALIVE_IMMEDIATE) {
-		brcmf_err("Period %d too large\n", mkeep_alive.period_msec);
-		return -EINVAL;
-	}
-	if (immed_flag && mkeep_alive.period_msec)
-		mkeep_alive.period_msec |= WL_MKEEP_ALIVE_IMMEDIATE;
 
-	mkeep_alive.version = WL_MKEEP_ALIVE_VERSION;
-	mkeep_alive.length = offsetof(struct ifx_mkeep_alive, data);
-	mkeep_alive.keep_alive_id = cmd_val[0];
-	mkeep_alive.len_bytes = 0;
+		if (mkeep_alive->period_msec & WL_MKEEP_ALIVE_IMMEDIATE) {
+			brcmf_err("Period %d too large\n", mkeep_alive->period_msec);
+			ret = -EINVAL;
+			goto exit;
+		}
+		if (immed_flag && mkeep_alive->period_msec)
+			mkeep_alive->period_msec |= WL_MKEEP_ALIVE_IMMEDIATE;
+	}
+	mkeep_alive->version = WL_MKEEP_ALIVE_VERSION;
+	mkeep_alive->keep_alive_id = cmd_val[0];
+	mkeep_alive->length = offsetof(struct ifx_mkeep_alive, data);
 
-	ret = brcmf_fil_bsscfg_data_set(ifp, "mkeep_alive", (void *)&mkeep_alive,
-					mkeep_alive.length);
+	/* If there is no hex value for pkt data, it is treated as NULL KA.
+	 * If there is hex value for pkt data, then copy hex as data and is
+	 * treated as NAT KA.
+	 */
+	if (mkeep_alive->period_msec > 0) {
+		j = 2;
+		if (cmd_val[j] < 0) {
+			mkeep_alive->len_bytes = 0;
+		} else if (cmd_val[j + 14] < 0) {
+			brcmf_err("Invalid pkt data. Required len bytes >= 14.\n");
+			ret = -EINVAL;
+			goto exit;
+		} else {
+			while (cmd_val[j] != ' ') {
+				if (j <= VNDR_CMD_VAL_NUM) {
+					mkeep_alive->data[i] = cmd_val[j];
+					j++;
+				}
+				i++;
+			}
+			mkeep_alive->len_bytes = i;
+		}
+	}
+	ret = brcmf_fil_iovar_data_set(ifp, "mkeep_alive", buf, sizeof(buf));
 	if (ret)
 		brcmf_err("Failed to set mkeeplive params: %d\n", ret);
 
+exit:
 	return ret;
 }
 
@@ -939,32 +973,51 @@ int ifx_vndr_cmdstr_tko(struct wiphy *wiphy, struct wireless_dev *wdev,
 	struct brcmf_cfg80211_vif *vif;
 	struct brcmf_if *ifp;
 	int ret = 0;
-	struct ifx_tko tko = {0};
+	struct ifx_tko *tko;
+	struct ifx_tko_param *tko_param;
 	struct ifx_tko_enable *tko_enable;
+	u8 buf[128] = {0};
 	int length;
 
 	vif = container_of(wdev, struct brcmf_cfg80211_vif, wdev);
 	ifp = vif->ifp;
 
-	/* echo 'tko enable 1 ' | iw dev wlan0 vendor
+	tko = (struct ifx_tko *)buf;
+
+	/* echo 'tko param 10 4 10 0 ' | iw dev wlan0 vendor
 	 * send 0x000319 0x1C -
 	 */
-	if (cmd_str[1] && (strlen(cmd_str[1]) == 6) &&
-	    (memcmp(cmd_str[1], "enable", 6) == 0) &&
-	     (cmd_val[0] == 0 || cmd_val[0] == 1)) {
-		tko_enable = (struct ifx_tko_enable *)tko.data;
-		tko.subcmd_id = WL_TKO_SUBCMD_ENABLE;
-		tko.len = sizeof(*tko_enable);
-		tko_enable->enable = cmd_val[0];
+	if (cmd_str[1][0] != '\0' && (strlen(cmd_str[1]) == 5) &&
+	    (memcmp(cmd_str[1], "param", 5) == 0) &&
+	    (cmd_val[0] >= 0 && cmd_val[1] >= 0 &&
+	     cmd_val[2] >= 0 && cmd_val[3] >= 0)) {
+		tko_param = (struct ifx_tko_param *)tko->data;
+		tko->subcmd_id = WL_TKO_SUBCMD_PARAM;
+		tko->len = sizeof(*tko_param);
+		tko_param->interval = cmd_val[0];
+		tko_param->retry_interval = cmd_val[1];
+		tko_param->retry_count = cmd_val[2];
+		tko_param->rst_delay = cmd_val[3];
 
-		length = offsetof(struct ifx_tko, data) + tko.len;
-		ret = brcmf_fil_bsscfg_data_set(ifp, "tko", (void *)&tko, length);
-		if (ret)
-			brcmf_err("Failed to enable/disable tko: %d\n", ret);
+	} else if (cmd_str[1][0] != '\0' && (strlen(cmd_str[1]) == 6) &&
+		   (memcmp(cmd_str[1], "enable", 6) == 0) &&
+		   (cmd_val[0] == 0 || cmd_val[0] == 1)) {
+		/* echo 'tko enable 1 ' | iw dev wlan0 vendor
+		 * send 0x000319 0x1C -
+		 */
+		tko_enable = (struct ifx_tko_enable *)tko->data;
+		tko->subcmd_id = WL_TKO_SUBCMD_ENABLE;
+		tko->len = sizeof(*tko_enable);
+		tko_enable->enable = cmd_val[0];
 	} else {
 		brcmf_err("Invalid tko command format\n");
 		return -EINVAL;
 	}
+
+	length = offsetof(struct ifx_tko, data) + tko->len;
+	ret = brcmf_fil_iovar_data_set(ifp, "tko", buf, length);
+	if (ret)
+		brcmf_err("Failed to configure tko: %d\n", ret);
 
 	return ret;
 }
@@ -976,9 +1029,9 @@ int ifx_cfg80211_vndr_cmds_str(struct wiphy *wiphy, struct wireless_dev *wdev,
 	struct brcmf_if *ifp;
 	struct ifx_vndr_cmdstr_hashtbl *hash_entry;
 	u32 jhash_key;
-	int ret = 0, i = 0, j = 0;
+	int ret = 0, idx_str = 0, idx_val = 0;
 	unsigned long val;
-	char cmd_str[VNDR_CMD_STR_NUM][VNDR_CMD_STR_MAX_LEN] = {{""}};
+	char cmd_str[VNDR_CMD_STR_NUM][VNDR_CMD_STR_MAX_LEN];
 	long cmd_val[VNDR_CMD_VAL_NUM];
 	char *tok = NULL, *buf = NULL;
 
@@ -986,29 +1039,62 @@ int ifx_cfg80211_vndr_cmds_str(struct wiphy *wiphy, struct wireless_dev *wdev,
 	vif = container_of(wdev, struct brcmf_cfg80211_vif, wdev);
 	ifp = vif->ifp;
 
+	memset(cmd_str, '\0', VNDR_CMD_STR_NUM * VNDR_CMD_STR_MAX_LEN * sizeof(char));
 	memset(cmd_val, -1, VNDR_CMD_VAL_NUM * sizeof(*cmd_val));
 
-	while ((tok = strsep(&buf, " ")) != NULL) {
-		if (kstrtoul(tok, 10, &val) == 0) {
-			cmd_val[j] = val;
-			j++;
+	while (idx_str < VNDR_CMD_STR_NUM && idx_val < VNDR_CMD_VAL_NUM &&
+	       ((tok = strsep(&buf, " ")) != NULL)) {
+		if (kstrtol(tok, 10, &val) == 0) {
+			cmd_val[idx_val] = val;
+			idx_val++;
 		} else if ((strncmp(tok, "0x", 2) == 0) || (strncmp(tok, "0X", 2) == 0)) {
-			if (kstrtoul(tok, 16, &val) == 0) {
-				cmd_val[j] = val;
-				j++;
+			if (kstrtol(tok, 16, &val) == 0) {
+				cmd_val[idx_val] = val;
+				idx_val++;
+
+			} else if (strnlen(tok, VNDR_CMD_VAL_NUM) >= 20) {
+			/* For larger input hex, split the hex pattern into 2 bytes each
+			 * and store it individually.
+			 */
+				tok = tok + 2;/* Skip past 0x */
+				if (strlen(tok) % 2 != 0) {
+					brcmf_err("Data invalid format. Even length required\n");
+					return -EINVAL;
+				}
+				while (*tok != '\0') {
+					char num[3];
+					if (idx_val >= VNDR_CMD_VAL_NUM) {
+						brcmf_err("pkt header hex length exceeded\n");
+						return -EINVAL;
+					}
+					memcpy(num, tok, 2);
+					num[2] = '\0';
+					if (kstrtol(num, 16, &val) == 0) {
+						cmd_val[idx_val] = val;
+					} else {
+						brcmf_err("Invalid hex pkt data\n");
+						return -EINVAL;
+					}
+					tok += 2;
+					idx_val++;
+				}
+				cmd_val[idx_val] = ' ';
 			} else {
 				brcmf_err("Failed to parse hex token\n");
 				return -EINVAL;
 			}
 		} else if (strnlen(tok, VNDR_CMD_STR_MAX_LEN) <= VNDR_CMD_STR_MAX_LEN) {
-			strncpy(cmd_str[i], tok, strnlen(tok, VNDR_CMD_STR_MAX_LEN));
-			i++;
+			strncpy(cmd_str[idx_str], tok, strnlen(tok, VNDR_CMD_STR_MAX_LEN));
+			idx_str++;
 		} else {
 			brcmf_err("Failed to parse token\n");
 			return -EINVAL;
 		}
 	}
-
+	if (idx_str >= VNDR_CMD_STR_NUM || idx_val >= VNDR_CMD_VAL_NUM) {
+		brcmf_err("CMD parameter limit exceeded\n");
+		return -EINVAL;
+	}
 	/* Run the user cmd string input via Jenkins hash to pass and search the entry in
 	 * vendor cmd hashtable initialized at load time.
 	 */
@@ -1029,4 +1115,98 @@ int ifx_cfg80211_vndr_cmds_str(struct wiphy *wiphy, struct wireless_dev *wdev,
 	}
 
 	return ret;
+}
+
+int ifx_cfg80211_vndr_cmds_config_pfn(struct wiphy *wiphy,
+		struct wireless_dev *wdev,
+		const void *data, int len)
+{
+	int buflen;
+	struct brcmf_cfg80211_info *cfg = wiphy_to_cfg(wiphy);
+	struct drv_config_pfn_params *pfn_data;
+
+	brcmf_dbg(TRACE, "Enter pfn_enable %d Network_blob count %d\n",
+			cfg->pfn_enable, *((u8 *)data));
+
+	cfg->pfn_enable = 1;
+	pfn_data = (struct drv_config_pfn_params *)data;
+	cfg->pfn_data.pfn_config = pfn_data->pfn_config;
+	cfg->pfn_data.count = pfn_data->count;
+
+	if (cfg->pfn_data.count > BRCMF_PNO_MAX_PFN_COUNT) {
+		brcmf_dbg(TRACE, "Not in range. Max 16 ssids allowed to add in pfn list");
+		cfg->pfn_data.count = BRCMF_PNO_MAX_PFN_COUNT;
+	}
+
+	buflen = cfg->pfn_data.count * sizeof(struct network_blob);
+	cfg->pfn_data.network_blob_data = (struct network_blob *)kmalloc(buflen, GFP_KERNEL);
+	memset(cfg->pfn_data.network_blob_data, '\0', buflen);
+	memcpy(cfg->pfn_data.network_blob_data, (u8 *)data + PFN_CONFIG_AND_COUNT_SIZE, buflen);
+	pfn_send_network_blob_fw(wiphy, wdev);
+	brcmf_dbg(TRACE, "Exit\n");
+	return 0;
+}
+
+int ifx_cfg80211_vndr_cmds_get_pfn_status(struct wiphy *wiphy,
+					struct wireless_dev *wdev,
+					const void *data, int len)
+{
+	struct brcmf_cfg80211_info *cfg = wiphy_to_cfg(wiphy);
+	u8 *buf = NULL;
+	struct brcmf_bss_info_le *bi = NULL;
+	int err = 0, i = 0;
+	struct brcmf_cfg80211_vif *vif;
+	struct brcmf_if *ifp;
+	struct network_blob *network_blob_data = NULL;
+	struct brcmu_chan ch;
+	struct pfn_conn_info curr_bssid;
+
+	brcmf_dbg(TRACE, "Enter\n");
+	vif = container_of(wdev, struct brcmf_cfg80211_vif, wdev);
+	ifp = vif->ifp;
+	if (cfg->pfn_enable != 1)
+		return 0;
+	buf = kzalloc(WL_BSS_INFO_MAX, GFP_KERNEL);
+	if (!buf) {
+		err = -ENOMEM;
+		return 0;
+	}
+
+	*(u32 *)buf = cpu_to_le32(WL_BSS_INFO_MAX);
+	err = brcmf_fil_cmd_data_get(ifp, BRCMF_C_GET_BSS_INFO,
+					buf, WL_BSS_INFO_MAX);
+	if (err) {
+		brcmf_err("pfn_status buf error:%d\n", err);
+		return 0;
+	}
+	bi = (struct brcmf_bss_info_le *)(buf + 4);
+	memset(&curr_bssid, '\0', sizeof(struct pfn_conn_info));
+
+	if (bi->SSID_len > 0) {
+		memcpy(curr_bssid.SSID, bi->SSID, bi->SSID_len);
+		memcpy(curr_bssid.BSSID, bi->BSSID, ETH_ALEN);
+		curr_bssid.SSID_len = bi->SSID_len;
+		curr_bssid.RSSI = bi->RSSI;
+		curr_bssid.phy_noise = bi->phy_noise;
+		ch.chspec = le16_to_cpu(bi->chanspec);
+		cfg->d11inf.decchspec(&ch);
+		curr_bssid.channel = ch.control_ch_num;
+		curr_bssid.SNR = bi->SNR;
+
+		network_blob_data = cfg->pfn_data.network_blob_data;
+		for (; i < cfg->pfn_data.count && network_blob_data; i++) {
+			if (!strncmp(network_blob_data->ssid, bi->SSID, bi->SSID_len)) {
+				curr_bssid.proto = network_blob_data->proto;
+				curr_bssid.key_mgmt = network_blob_data->key_mgmt;
+				break;
+			}
+			network_blob_data++;
+		}
+	}
+	if (curr_bssid.SSID_len)
+		ifx_cfg80211_vndr_send_cmd_reply(wiphy, (void *)&curr_bssid,
+						sizeof(struct pfn_conn_info));
+	kfree(buf);
+	brcmf_dbg(TRACE, "Exit\n");
+	return 0;
 }
