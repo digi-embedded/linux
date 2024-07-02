@@ -1,0 +1,357 @@
+/*
+ * Copyright 2024, Digi International Inc.
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+/ {
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		linux,cma {
+			compatible = "shared-dma-pool";
+			reusable;
+			alloc-ranges = <0 0xb0000000 0 0x30000000>;
+			size = <0 0xc000000>;
+			linux,cma-default;
+		};
+
+		ele_reserved: ele-reserved@a4120000 {
+			compatible = "shared-dma-pool";
+			reg = <0 0xa4120000 0 0x100000>;
+			no-map;
+		};
+	};
+
+	thermal-zones {
+		cpu-thermal {
+			trips {
+				cpu_alert: cpu-alert {
+					temperature = <85000>;
+					hysteresis = <2000>;
+					type = "passive";
+				};
+
+				cpu_crit: cpu-crit {
+					temperature = <100000>;
+					hysteresis = <2000>;
+					type = "critical";
+				};
+			};
+		};
+	};
+
+	wlan_pwrseq: wlan_pwrseq {
+		compatible = "mmc-pwrseq-simple";
+		/* Note that this is connected to the PDn line */
+
+		reset-gpios = <&gpio2 7 GPIO_ACTIVE_LOW>;
+		status = "disabled";
+	};
+};
+
+/* only one CPU core */
+&A55_1 {
+	status = "fail";
+};
+
+&ele_mu {
+	memory-region = <&ele_reserved>;
+};
+
+/* Configure pwrkey timeout */
+&bbnsm_pwrkey {
+	/* Supported discrete values: 0 (disable power-off), 5, 10, 15 */
+	power-off-time-sec = <10>;
+};
+
+/* LPI2C1 bus connected to MCA and PMIC */
+&lpi2c1 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	clock-frequency = <400000>;
+	pinctrl-names = "default", "gpio", "sleep";
+	pinctrl-0 = <&pinctrl_lpi2c1>;
+	pinctrl-1 = <&pinctrl_lpi2c1_gpio>;
+	pinctrl-2 = <&pinctrl_lpi2c1>;
+	scl-gpios = <&gpio1 0 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
+	sda-gpios = <&gpio1 1 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
+	digi,hold-time-ns = <8000>;
+	digi,buffer-time-us = <35>;
+	status = "okay";
+
+	pmic_cc93: pmic@25 {
+		compatible = "nxp,pca9451a";
+		reg = <0x25>;
+		digi,wdog_b-disabled-in-suspend;
+
+		interrupt-parent = <&gpio2>;
+		interrupts = <29 IRQ_TYPE_LEVEL_LOW>;
+
+		regulators {
+			buck1: BUCK1 {
+				regulator-name = "BUCK1";
+				regulator-min-microvolt = <650000>;
+				regulator-max-microvolt = <2237500>;
+				regulator-boot-on;
+				regulator-always-on;
+				regulator-ramp-delay = <3125>;
+			};
+
+			buck2: BUCK2 {
+				regulator-name = "BUCK2";
+				regulator-min-microvolt = <600000>;
+				regulator-max-microvolt = <2187500>;
+				regulator-boot-on;
+				regulator-always-on;
+				regulator-ramp-delay = <3125>;
+			};
+
+			/* VDD_3V3 */
+			buck4: BUCK4{
+				regulator-name = "BUCK4";
+				regulator-min-microvolt = <600000>;
+				regulator-max-microvolt = <3400000>;
+				regulator-boot-on;
+				regulator-always-on;
+				regulator-state-mem {
+					regulator-off-in-suspend;
+				};
+			};
+
+			/* VDD_1V8 */
+			buck5: BUCK5{
+				regulator-name = "BUCK5";
+				regulator-min-microvolt = <600000>;
+				regulator-max-microvolt = <3400000>;
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			/* VDD2_DDR */
+			buck6: BUCK6 {
+				regulator-name = "BUCK6";
+				regulator-min-microvolt = <600000>;
+				regulator-max-microvolt = <3400000>;
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			/* NVCC_BBSM_1V8 */
+			ldo1: LDO1 {
+				regulator-name = "LDO1";
+				regulator-min-microvolt = <1600000>;
+				regulator-max-microvolt = <3300000>;
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			/* LDO2 */
+			ldo2: LDO2 {
+				regulator-name = "LDO2";
+				regulator-min-microvolt = <800000>;
+				regulator-max-microvolt = <1150000>;
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			/* LDO3 */
+			ldo3: LDO3 {
+				regulator-name = "LDO3";
+				regulator-min-microvolt = <800000>;
+				regulator-max-microvolt = <3300000>;
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			/* VDD_ANA_0V8 */
+			ldo4: LDO4 {
+				regulator-name = "LDO4";
+				regulator-min-microvolt = <800000>;
+				regulator-max-microvolt = <3300000>;
+				regulator-boot-on;
+				regulator-always-on;
+			};
+
+			/* MUX_3V3_1V8 */
+			ldo5: LDO5 {
+				regulator-name = "LDO5";
+				regulator-min-microvolt = <1800000>;
+				regulator-max-microvolt = <3300000>;
+				regulator-boot-on;
+				regulator-always-on;
+			};
+		};
+	};
+};
+
+/* Bluetooth UART */
+&lpuart1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_uart1>;
+	status = "disabled";
+};
+
+/* eMMC */
+&usdhc1 {
+	pinctrl-names = "default", "state_100mhz", "state_200mhz";
+	pinctrl-0 = <&pinctrl_usdhc1>;
+	pinctrl-1 = <&pinctrl_usdhc1_100mhz>;
+	pinctrl-2 = <&pinctrl_usdhc1_200mhz>;
+	bus-width = <8>;
+	non-removable;
+	status = "okay";
+};
+
+/* Wifi MAC */
+&usdhc3 {
+	pinctrl-names = "default", "state_100mhz", "state_200mhz";
+	pinctrl-0 = <&pinctrl_usdhc3>, <&pinctrl_usdhc3_wlan>;
+	pinctrl-1 = <&pinctrl_usdhc3_100mhz>, <&pinctrl_usdhc3_wlan>;
+	pinctrl-2 = <&pinctrl_usdhc3_200mhz>, <&pinctrl_usdhc3_wlan>;
+
+	mmc-pwrseq = <&wlan_pwrseq>;
+	bus-width = <4>;
+	non-removable;
+	wakeup-source;
+	fsl,sdio-async-interrupt-enabled;
+	status = "disabled";
+
+	// TODO enable when IO is defined
+	//wifi_wake_host {
+	//      compatible = "nxp,wifi-wake-host";
+	//      interrupt-parent = <&gpio3>;
+	//      interrupts = <26 IRQ_TYPE_LEVEL_LOW>;
+	//      interrupt-names = "host-wake";
+	//};
+};
+
+/* IOMUX */
+&iomuxc {
+	/* Internal LPI2C1 (MCA, PMIC) */
+	pinctrl_lpi2c1: lpi2c1grp {
+		fsl,pins = <
+			MX93_PAD_I2C1_SCL__LPI2C1_SCL			0x40000b9e
+			MX93_PAD_I2C1_SDA__LPI2C1_SDA			0x40000b9e
+		>;
+	};
+
+	pinctrl_lpi2c1_gpio: lpi2c1grp-gpio {
+		fsl,pins = <
+			MX93_PAD_I2C1_SCL__GPIO1_IO00			0xb9e
+			MX93_PAD_I2C1_SDA__GPIO1_IO01			0xb9e
+		>;
+	};
+
+	/* Bluetooth UART */
+	pinctrl_uart1: uart1grp {
+		fsl,pins = <
+			MX93_PAD_UART1_RXD__LPUART1_RX			0x31e
+			MX93_PAD_UART1_TXD__LPUART1_TX			0x31e
+			MX93_PAD_UART2_RXD__LPUART1_CTS_B		0x31e
+			MX93_PAD_UART2_TXD__LPUART1_RTS_B		0x31e
+		>;
+	};
+
+	/* eMMC, need to config the SION for data and cmd pad, refer to ERR052021 */
+	pinctrl_usdhc1: usdhc1grp {
+		fsl,pins = <
+			MX93_PAD_SD1_CLK__USDHC1_CLK			0x1582
+			MX93_PAD_SD1_CMD__USDHC1_CMD			0x40001382
+			MX93_PAD_SD1_DATA0__USDHC1_DATA0		0x40001382
+			MX93_PAD_SD1_DATA1__USDHC1_DATA1		0x40001382
+			MX93_PAD_SD1_DATA2__USDHC1_DATA2		0x40001382
+			MX93_PAD_SD1_DATA3__USDHC1_DATA3		0x40001382
+			MX93_PAD_SD1_DATA4__USDHC1_DATA4		0x40001382
+			MX93_PAD_SD1_DATA5__USDHC1_DATA5		0x40001382
+			MX93_PAD_SD1_DATA6__USDHC1_DATA6		0x40001382
+			MX93_PAD_SD1_DATA7__USDHC1_DATA7		0x40001382
+			MX93_PAD_SD1_STROBE__USDHC1_STROBE		0x15fe
+		>;
+	};
+
+	pinctrl_usdhc1_100mhz: usdhc1grp-100mhzgrp {
+		fsl,pins = <
+			MX93_PAD_SD1_CLK__USDHC1_CLK			0x158e
+			MX93_PAD_SD1_CMD__USDHC1_CMD			0x4000138e
+			MX93_PAD_SD1_DATA0__USDHC1_DATA0		0x4000138e
+			MX93_PAD_SD1_DATA1__USDHC1_DATA1		0x4000138e
+			MX93_PAD_SD1_DATA2__USDHC1_DATA2		0x4000138e
+			MX93_PAD_SD1_DATA3__USDHC1_DATA3		0x4000138e
+			MX93_PAD_SD1_DATA4__USDHC1_DATA4		0x4000138e
+			MX93_PAD_SD1_DATA5__USDHC1_DATA5		0x4000138e
+			MX93_PAD_SD1_DATA6__USDHC1_DATA6		0x4000138e
+			MX93_PAD_SD1_DATA7__USDHC1_DATA7		0x4000138e
+			MX93_PAD_SD1_STROBE__USDHC1_STROBE		0x15fe
+		>;
+	};
+
+	pinctrl_usdhc1_200mhz: usdhc1grp-200mhzgrp {
+		fsl,pins = <
+			MX93_PAD_SD1_CLK__USDHC1_CLK			0x15fe
+			MX93_PAD_SD1_CMD__USDHC1_CMD			0x400013fe
+			MX93_PAD_SD1_DATA0__USDHC1_DATA0		0x400013fe
+			MX93_PAD_SD1_DATA1__USDHC1_DATA1		0x400013fe
+			MX93_PAD_SD1_DATA2__USDHC1_DATA2		0x400013fe
+			MX93_PAD_SD1_DATA3__USDHC1_DATA3		0x400013fe
+			MX93_PAD_SD1_DATA4__USDHC1_DATA4		0x400013fe
+			MX93_PAD_SD1_DATA5__USDHC1_DATA5		0x400013fe
+			MX93_PAD_SD1_DATA6__USDHC1_DATA6		0x400013fe
+			MX93_PAD_SD1_DATA7__USDHC1_DATA7		0x400013fe
+			MX93_PAD_SD1_STROBE__USDHC1_STROBE		0x15fe
+		>;
+	};
+
+	/* Wifi MAC, need to config the SION for data and cmd pad, refer to ERR052021 */
+	pinctrl_usdhc3: usdhc3grp {
+		fsl,pins = <
+			MX93_PAD_SD3_CLK__USDHC3_CLK			0x1582
+			MX93_PAD_SD3_CMD__USDHC3_CMD			0x40001382
+			MX93_PAD_SD3_DATA0__USDHC3_DATA0		0x40001382
+			MX93_PAD_SD3_DATA1__USDHC3_DATA1        	0x40001382
+			MX93_PAD_SD3_DATA2__USDHC3_DATA2        	0x40001382
+			MX93_PAD_SD3_DATA3__USDHC3_DATA3        	0x40001382
+		>;
+	};
+
+	pinctrl_usdhc3_100mhz: usdhc3grp-100mhzgrp {
+		fsl,pins = <
+			MX93_PAD_SD3_CLK__USDHC3_CLK			0x158e
+			MX93_PAD_SD3_CMD__USDHC3_CMD			0x4000138e
+			MX93_PAD_SD3_DATA0__USDHC3_DATA0		0x4000138e
+			MX93_PAD_SD3_DATA1__USDHC3_DATA1        	0x4000138e
+			MX93_PAD_SD3_DATA2__USDHC3_DATA2        	0x4000138e
+			MX93_PAD_SD3_DATA3__USDHC3_DATA3        	0x4000138e
+		>;
+	};
+
+	pinctrl_usdhc3_200mhz: usdhc3grp-200mhzgrp {
+		fsl,pins = <
+			MX93_PAD_SD3_CLK__USDHC3_CLK			0x15fe
+			MX93_PAD_SD3_CMD__USDHC3_CMD			0x400013fe
+			MX93_PAD_SD3_DATA0__USDHC3_DATA0		0x400013fe
+			MX93_PAD_SD3_DATA1__USDHC3_DATA1        	0x400013fe
+			MX93_PAD_SD3_DATA2__USDHC3_DATA2        	0x400013fe
+			MX93_PAD_SD3_DATA3__USDHC3_DATA3        	0x400013fe
+		>;
+	};
+
+	/* Wifi/BT control lines */
+	pinctrl_usdhc3_wlan: usdhc3wlangrp {
+		fsl,pins = <
+			/* WLAN_PDn */
+			MX93_PAD_GPIO_IO07__GPIO2_IO07			0x31e
+		>;
+	};
+};
