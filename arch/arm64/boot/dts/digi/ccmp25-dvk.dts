@@ -515,21 +515,6 @@
 	/delete-property/dma-names;
 };
 
-&i2s2 {
-	pinctrl-names = "default", "sleep";
-	pinctrl-0 = <&i2s2_pins_a>;
-	pinctrl-1 = <&i2s2_sleep_pins_a>;
-	status = "disabled";
-
-	i2s2_port: port {
-		i2s2_endpoint: endpoint {
-			/*remote-endpoint = <&adv753x_tx_endpoint>;*/
-			format = "i2s";
-			mclk-fs = <256>;
-		};
-	};
-};
-
 &lpuart1 {
 	pinctrl-names = "default", "idle", "sleep";
 	pinctrl-0 = <&lpuart1_pins_a>;
