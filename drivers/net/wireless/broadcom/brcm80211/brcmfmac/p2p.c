@@ -1572,8 +1572,9 @@ int brcmf_p2p_notify_action_tx_complete(struct brcmf_if *ifp,
  * brcmf_p2p_tx_action_frame() - send action frame over fil.
  *
  * @p2p: p2p info struct for vif.
+ * @vif: vif to send.
  * @af_params: action frame data/info.
- * @vif: vif to send
+ * @band: nl80211 band info.
  *
  * Send an action frame immediately without doing channel synchronization.
  *
@@ -1582,17 +1583,13 @@ int brcmf_p2p_notify_action_tx_complete(struct brcmf_if *ifp,
  * frame is transmitted.
  */
 static s32 brcmf_p2p_tx_action_frame(struct brcmf_p2p_info *p2p,
+				     struct brcmf_cfg80211_vif *vif,
 				     struct brcmf_fil_af_params_le *af_params,
-				     struct brcmf_cfg80211_vif *vif
-				     )
+				     u8 band)
 {
 	struct brcmf_pub *drvr = p2p->cfg->pub;
 	s32 err = 0;
-	struct brcmf_fil_action_frame_le *action_frame;
-	u16 action_frame_len;
-
-	action_frame = &af_params->action_frame;
-	action_frame_len = le16_to_cpu(action_frame->len);
+	struct brcmf_fil_af_params_v2_le af_params_v2;
 
 	brcmf_dbg(TRACE, "Enter\n");
 
@@ -1600,8 +1597,23 @@ static s32 brcmf_p2p_tx_action_frame(struct brcmf_p2p_info *p2p,
 	clear_bit(BRCMF_P2P_STATUS_ACTION_TX_COMPLETED, &p2p->status);
 	clear_bit(BRCMF_P2P_STATUS_ACTION_TX_NOACK, &p2p->status);
 
-	err = brcmf_fil_bsscfg_data_set(vif->ifp, "actframe", af_params,
-					sizeof(*af_params));
+	if (drvr->wlc_ver.wlc_ver_major == BRCMF_AF_PARAM_V2_FW_MAJOR &&
+	    drvr->wlc_ver.wlc_ver_minor >= BRCMF_AF_PARAM_V2_FW_MINOR) {
+		/* set actframe iovar with af_params_v2 */
+		af_params_v2.band = nl80211_band_to_fwil(band);
+		af_params_v2.channel = af_params->channel;
+		af_params_v2.dwell_time = af_params->dwell_time;
+		memcpy(af_params_v2.bssid, af_params->bssid, ETH_ALEN);
+		af_params_v2.action_frame = af_params->action_frame;
+
+		err = brcmf_fil_bsscfg_data_set(vif->ifp, "actframe", &af_params_v2,
+						sizeof(af_params_v2));
+	} else {
+		/* set actframe iovar with af_params */
+		err = brcmf_fil_bsscfg_data_set(vif->ifp, "actframe", af_params,
+						sizeof(*af_params));
+	}
+
 	if (err) {
 		bphy_err(drvr, " sending action frame has failed\n");
 		goto exit;
@@ -1908,7 +1920,7 @@ bool brcmf_p2p_send_action_frame(struct brcmf_cfg80211_info *cfg,
 		if (af_params->channel)
 			msleep(P2P_AF_RETRY_DELAY_TIME);
 
-		ack = !brcmf_p2p_tx_action_frame(p2p, af_params, vif);
+		ack = !brcmf_p2p_tx_action_frame(p2p, vif, af_params, peer_listen_chan->band);
 		tx_retry++;
 		dwell_overflow = brcmf_p2p_check_dwell_overflow(requested_dwell,
 								dwell_jiffies);
