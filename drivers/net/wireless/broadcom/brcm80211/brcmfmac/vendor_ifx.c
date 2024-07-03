@@ -1033,15 +1033,15 @@ int ifx_cfg80211_vndr_cmds_str(struct wiphy *wiphy, struct wireless_dev *wdev,
 }
 
 int ifx_cfg80211_vndr_cmds_config_pfn(struct wiphy *wiphy,
-		struct wireless_dev *wdev,
-		const void *data, int len)
+				      struct wireless_dev *wdev,
+				      const void *data, int len)
 {
 	int buflen;
 	struct brcmf_cfg80211_info *cfg = wiphy_to_cfg(wiphy);
 	struct drv_config_pfn_params *pfn_data;
 
 	brcmf_dbg(TRACE, "Enter pfn_enable %d Network_blob count %d\n",
-			cfg->pfn_enable, *((u8 *)data));
+		  cfg->pfn_enable, *((u8 *)data));
 
 	cfg->pfn_enable = 1;
 	pfn_data = (struct drv_config_pfn_params *)data;
@@ -1054,7 +1054,7 @@ int ifx_cfg80211_vndr_cmds_config_pfn(struct wiphy *wiphy,
 	}
 
 	buflen = cfg->pfn_data.count * sizeof(struct network_blob);
-	cfg->pfn_data.network_blob_data = (struct network_blob *)kmalloc(buflen, GFP_KERNEL);
+	cfg->pfn_data.network_blob_data = kmalloc(buflen, GFP_KERNEL);
 	memset(cfg->pfn_data.network_blob_data, '\0', buflen);
 	memcpy(cfg->pfn_data.network_blob_data, (u8 *)data + PFN_CONFIG_AND_COUNT_SIZE, buflen);
 	pfn_send_network_blob_fw(wiphy, wdev);
@@ -1063,8 +1063,8 @@ int ifx_cfg80211_vndr_cmds_config_pfn(struct wiphy *wiphy,
 }
 
 int ifx_cfg80211_vndr_cmds_get_pfn_status(struct wiphy *wiphy,
-					struct wireless_dev *wdev,
-					const void *data, int len)
+					  struct wireless_dev *wdev,
+					  const void *data, int len)
 {
 	struct brcmf_cfg80211_info *cfg = wiphy_to_cfg(wiphy);
 	u8 *buf = NULL;
@@ -1084,15 +1084,15 @@ int ifx_cfg80211_vndr_cmds_get_pfn_status(struct wiphy *wiphy,
 	buf = kzalloc(WL_BSS_INFO_MAX, GFP_KERNEL);
 	if (!buf) {
 		err = -ENOMEM;
-		return 0;
+		return err;
 	}
 
 	*(u32 *)buf = cpu_to_le32(WL_BSS_INFO_MAX);
 	err = brcmf_fil_cmd_data_get(ifp, BRCMF_C_GET_BSS_INFO,
-					buf, WL_BSS_INFO_MAX);
+				     buf, WL_BSS_INFO_MAX);
 	if (err) {
 		brcmf_err("pfn_status buf error:%d\n", err);
-		return 0;
+		return err;
 	}
 	bi = (struct brcmf_bss_info_le *)(buf + 4);
 	memset(&curr_bssid, '\0', sizeof(struct pfn_conn_info));
@@ -1120,7 +1120,7 @@ int ifx_cfg80211_vndr_cmds_get_pfn_status(struct wiphy *wiphy,
 	}
 	if (curr_bssid.SSID_len)
 		ifx_cfg80211_vndr_send_cmd_reply(wiphy, (void *)&curr_bssid,
-						sizeof(struct pfn_conn_info));
+						 sizeof(struct pfn_conn_info));
 	kfree(buf);
 	brcmf_dbg(TRACE, "Exit\n");
 	return 0;

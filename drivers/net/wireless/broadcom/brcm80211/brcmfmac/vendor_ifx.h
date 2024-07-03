@@ -795,7 +795,7 @@ int ifx_vndr_cmdstr_tko(struct wiphy *wiphy, struct wireless_dev *wdev,
 int ifx_cfg80211_vndr_cmds_str(struct wiphy *wiphy, struct wireless_dev *wdev,
 			       const void *data, int len);
 int ifx_cfg80211_vndr_cmds_config_pfn(struct wiphy *wiphy,
-				struct wireless_dev *wdev, const void  *data, int len);
+				      struct wireless_dev *wdev, const void  *data, int len);
 int ifx_cfg80211_vndr_cmds_get_pfn_status(struct wiphy *wiphy,
-					struct wireless_dev *wdev, const void  *data, int len);
+					  struct wireless_dev *wdev, const void  *data, int len);
 #endif /* IFX_VENDOR_H */

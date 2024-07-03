@@ -2821,7 +2821,7 @@ brcmf_cfg80211_connect(struct wiphy *wiphy, struct net_device *ndev,
 
 	if (cfg->pfn_enable && cfg->pfn_connection) {
 		err = brcmf_fil_cmd_data_set(ifp,
-				BRCMF_C_DISASSOC, NULL, 0);
+					     BRCMF_C_DISASSOC, NULL, 0);
 		if (err) {
 			brcmf_err("BRCMF_C_DISASSOC error:%d\n", err);
 			return -1;
@@ -8049,7 +8049,6 @@ brcmf_notify_connect_status(struct brcmf_if *ifp,
 			} else {
 				brcmf_bss_connect_done(cfg, ndev, e, true);
 			}
-			brcmf_bss_connect_done(cfg, ndev, e, true);
 		}
 		brcmf_net_setcarrier(ifp, true);
 	} else if (brcmf_is_linkdown(ifp->vif, e)) {

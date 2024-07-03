@@ -12,6 +12,7 @@
 #include "core.h"
 #include "fwil_types.h"
 #include "p2p.h"
+#include "pno.h"
 
 #define BRCMF_SCAN_IE_LEN_MAX		2048
 
@@ -353,11 +354,11 @@ struct brcmf_cfg80211_wowl {
 };
 
 struct network_blob {
-	char ssid[32];
+	char ssid[IEEE80211_MAX_SSID_LEN];
 	u8 ssid_len;
 	int key_mgmt;
-	char psk[64];
-	char sae_password[64];
+	char psk[WSEC_MAX_PASSWORD_LEN];
+	char sae_password[WSEC_MAX_PASSWORD_LEN];
 	u8 proto;
 	u8 pairwise_cipher;
 	u8 frequency;
