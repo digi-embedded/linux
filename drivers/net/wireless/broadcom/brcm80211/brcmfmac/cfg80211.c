@@ -553,7 +553,7 @@ wl_cfgoce_has_ie(const u8 *ie, const u8 **tlvs, u32 *tlvs_len,
 	return false;
 }
 
-static u8 nl80211_band_to_fwil(enum nl80211_band band)
+u8 nl80211_band_to_fwil(enum nl80211_band band)
 {
 	switch (band) {
 	case NL80211_BAND_2GHZ:

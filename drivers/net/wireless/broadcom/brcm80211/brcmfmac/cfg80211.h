@@ -493,6 +493,8 @@ brcmf_cfg80211_connect_info *cfg_to_conn(struct brcmf_cfg80211_info *cfg)
 	return &cfg->conn_info;
 }
 
+u8 nl80211_band_to_fwil(enum nl80211_band band);
+
 struct brcmf_cfg80211_info *brcmf_cfg80211_attach(struct brcmf_pub *drvr,
 						  struct cfg80211_ops *ops,
 						  bool p2pdev_forced);

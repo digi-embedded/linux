@@ -12,6 +12,9 @@
 
 #define BRCMF_FIL_ACTION_FRAME_SIZE	1800
 
+#define BRCMF_AF_PARAM_V2_FW_MAJOR 13
+#define BRCMF_AF_PARAM_V2_FW_MINOR 2
+
 /* ARP Offload feature flags for arp_ol iovar */
 #define BRCMF_ARP_OL_AGENT		0x00000001
 #define BRCMF_ARP_OL_SNOOP		0x00000002
@@ -305,6 +308,17 @@ struct brcmf_fil_af_params_le {
 	__le32					dwell_time;
 	u8					bssid[ETH_ALEN];
 	u8					pad[2];
+	struct brcmf_fil_action_frame_le	action_frame;
+};
+
+struct brcmf_fil_af_params_v2_le {
+	__le16					version;
+	__le16					length;
+	__le32					channel;
+	__le32					dwell_time;
+	u8					bssid[ETH_ALEN];
+	u8					band;
+	u8					pad[1];
 	struct brcmf_fil_action_frame_le	action_frame;
 };
 

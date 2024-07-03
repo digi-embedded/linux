@@ -450,6 +450,7 @@ int brcmf_c_preinit_dcmds(struct brcmf_if *ifp)
 	struct brcmf_bus *bus;
 	struct brcmf_rev_info_le revinfo;
 	struct brcmf_rev_info *ri;
+	struct brcmf_wlc_version_le wlc_ver;
 	char *clmver;
 	char *ptr;
 	s32 err;
@@ -563,6 +564,21 @@ int brcmf_c_preinit_dcmds(struct brcmf_if *ifp)
 		goto done;
 	}
 	strscpy(ifp->drvr->fwver, ptr + 1, sizeof(ifp->drvr->fwver));
+
+	/* Get wlc interface version, set to 0 for legacy chip
+	 * that is not supporting wlc_ver iovar
+	 */
+	err = brcmf_fil_iovar_data_get(ifp, "wlc_ver", &wlc_ver, sizeof(wlc_ver));
+	if (err < 0) {
+		ifp->drvr->wlc_ver.wlc_ver_major = 0;
+		ifp->drvr->wlc_ver.wlc_ver_minor = 0;
+	} else {
+		ifp->drvr->wlc_ver.wlc_ver_major = le16_to_cpu(wlc_ver.wlc_ver_major);
+		ifp->drvr->wlc_ver.wlc_ver_minor = le16_to_cpu(wlc_ver.wlc_ver_minor);
+	}
+	brcmf_dbg(TRACE, "wlc interface version, major=%d, minor=%d\n",
+		  ifp->drvr->wlc_ver.wlc_ver_major,
+		  ifp->drvr->wlc_ver.wlc_ver_minor);
 
 	/* Query for 'clmver' to get CLM version info from firmware */
 	memset(buf, 0, sizeof(buf));
