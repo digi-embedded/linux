@@ -9,20 +9,12 @@
 #define BRCMF_PNO_MAX_PFN_COUNT			16
 #define BRCMF_PNO_SCHED_SCAN_MIN_PERIOD	10
 #define BRCMF_PNO_SCHED_SCAN_MAX_PERIOD	508
-
-#define WPA_CIPHER_NONE                 0       /* None */
-#define WPA_CIPHER_WEP_40               1       /* WEP (40-bit) */
-#define WPA_CIPHER_TKIP                 2       /* TKIP: default for WPA */
-#define WPA_CIPHER_AES_CCM              4       /* AES (CCM) */
-#define WPA_CIPHER_WEP_104              5       /* WEP (104-bit) */
-
 #define AUTO_CONNECT_MASK		0x0010
 #define AUTO_NET_SWITCH_MASK		0x0002
 #define BRCMF_PNO_WPA_AUTH_ANY		0xFFFFFFFF
 #define MAXNUM_SSID_PER_ADD		16
-#define WSEC_MIN_PSK_LEN		8
-#define WSEC_MAX_PSK_LEN		64
-#define DOT11_MAX_SSID_LEN		32      /* d11 max ssid length */
+#define WSEC_MIN_PASSWORD_LEN		8
+#define WSEC_MAX_PASSWORD_LEN		64
 #define PFN_VERSION			2
 #define PFN_LIST_ORDER			0
 #define PFN_RSSI			1
@@ -33,15 +25,10 @@
 #define DEFAULT_MSCAN			0
 #define DEFAULT_REPEAT			10
 #define DEFAULT_EXP			2
-#define WPA_AUTH_DISABLED		0x0000
 #define PFN_SET				1
 #define PFN_UNSET			0
 #define PFN_CONFIG_AND_COUNT_SIZE	2
-#define WLAN_AUTH_OPEN			0
-#define WLAN_AUTH_SHARED_KEY		1
-#define WLAN_AUTH_FT			2
-#define WLAN_AUTH_SAE			3
-
+#define PFN_SSID_INFRA			1
 #define KEY_MGMT_WPA			0x00000001
 #define KEY_MGMT_WPA2			0x00000002
 #define KEY_MGMT_WPA_PSK		0x00000004
@@ -67,7 +54,7 @@
 #define KEY_MGMT_CCKM			0x00400000
 #define KEY_MGMT_OSEN			0x00800000
 
-typedef struct brcm_pfn_param {
+struct brcm_pfn_param {
 	s32 version;
 	s32 scan_freq;
 	s32 lost_network_timeout;
@@ -78,32 +65,21 @@ typedef struct brcm_pfn_param {
 	u8 repeat;
 	u8 exp;
 	s32 slow_freq;
-} brcm_pfn_param_t;
-
-typedef struct wsec_pmk {
-	u16  key_len;
-	u16  flags;
-	u8   key[WSEC_MAX_PSK_LEN];
-} wsec_pmk_t;
-
-typedef struct brcm_ssid {
-	u32          SSID_len;
-	u8           SSID[DOT11_MAX_SSID_LEN];
-} brcm_ssid_t;
+};
 
 struct brcm_pfn {
-	brcm_ssid_t              ssid;                   /**< ssid name and its length */
-	s32                   flags;                  /**< bit2: hidden */
-	s32                   infra;                  /**< BSS Vs IBSS */
-	s32                   auth;                   /**< Open Vs Closed */
-	s32                   wpa_auth;               /**< WPA type */
-	s32                   wsec;                   /**< wsec value */
-	wsec_pmk_t              psk;                    /**< Password */
+	struct brcmf_ssid_le ssid; /*ssid and its length*/
+	s32 flags; /*bit2: hidden*/
+	s32 infra; /*BSS Vs IBSS*/
+	s32 auth; /*Open Vs Closed*/
+	s32 wpa_auth; /*WPA type*/
+	s32 wsec; /*wsec value*/
+	struct brcmf_wsec_pmk_le psk; /*Password*/
 };
 
 struct pfn_conn_info {
 	u8 SSID_len;
-	u8 SSID[32];
+	u8 SSID[IEEE80211_MAX_SSID_LEN];
 	u8 BSSID[ETH_ALEN];
 	s16 RSSI;
 	s8 phy_noise;
@@ -117,15 +93,6 @@ enum {
 	PFN_CONFIG_AUTOCONNECT,
 	PFN_CONFIG_AUTOSWITCH_LISTORDER,
 	PFN_CONFIG_AUTOSWITCH_RSSI,
-};
-
-enum wpas_mode {
-	WPAS_MODE_INFRA = 0,
-	WPAS_MODE_IBSS = 1,
-	WPAS_MODE_AP = 2,
-	WPAS_MODE_P2P_GO = 3,
-	WPAS_MODE_P2P_GROUP_FORMATION = 4,
-	WPAS_MODE_MESH = 5,
 };
 
 /* forward declaration */
@@ -187,7 +154,6 @@ u64 brcmf_pno_find_reqid_by_bucket(struct brcmf_pno_info *pi, u32 bucket);
 u32 brcmf_pno_get_bucket_map(struct brcmf_pno_info *pi,
 			     struct brcmf_pno_net_info_le *netinfo);
 
-#endif /* _BRCMF_PNO_H */
-
 int pfn_send_network_blob_fw(struct wiphy *wiphy,
-				struct wireless_dev *wdev);
+			     struct wireless_dev *wdev);
+#endif /* _BRCMF_PNO_H */

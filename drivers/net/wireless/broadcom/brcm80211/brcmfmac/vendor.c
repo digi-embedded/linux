@@ -359,17 +359,17 @@ const struct wiphy_vendor_command brcmf_vendor_cmds[] = {
 	},
 	{
 		IFX_SUBCMD(PFN_CONFIG,
-				(WIPHY_VENDOR_CMD_NEED_WDEV |
-				 WIPHY_VENDOR_CMD_NEED_NETDEV),
-				VENDOR_CMD_RAW_DATA,
-				ifx_cfg80211_vndr_cmds_config_pfn)
+			   (WIPHY_VENDOR_CMD_NEED_WDEV |
+			   WIPHY_VENDOR_CMD_NEED_NETDEV),
+			   VENDOR_CMD_RAW_DATA,
+			   ifx_cfg80211_vndr_cmds_config_pfn)
 	},
 	{
 		IFX_SUBCMD(PFN_STATUS,
-				(WIPHY_VENDOR_CMD_NEED_WDEV |
-				 WIPHY_VENDOR_CMD_NEED_NETDEV),
-				VENDOR_CMD_RAW_DATA,
-				ifx_cfg80211_vndr_cmds_get_pfn_status)
+			   (WIPHY_VENDOR_CMD_NEED_WDEV |
+			   WIPHY_VENDOR_CMD_NEED_NETDEV),
+			   VENDOR_CMD_RAW_DATA,
+			   ifx_cfg80211_vndr_cmds_get_pfn_status)
 	},
 };
 
