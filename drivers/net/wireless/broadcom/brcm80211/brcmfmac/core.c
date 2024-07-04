@@ -617,7 +617,7 @@ void brcmf_netif_rx(struct brcmf_if *ifp, struct sk_buff *skb, bool inirq)
 	ifp->ndev->stats.rx_packets++;
 
 	brcmf_dbg(DATA, "rx proto=0x%X\n", ntohs(skb->protocol));
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0))
+#if (KERNEL_VERSION(5, 18, 0) <= LINUX_VERSION_CODE)
 	netif_rx(skb);
 #else
 	if (inirq) {

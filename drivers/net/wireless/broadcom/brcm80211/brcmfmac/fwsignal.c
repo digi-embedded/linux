@@ -502,7 +502,7 @@ struct brcmf_fws_info {
 	bool creditmap_received;
 	u8 mode;
 	bool avoid_queueing;
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 16, 0))
+#if (KERNEL_VERSION(4, 16, 0) > LINUX_VERSION_CODE)
 	int fifo_init_credit[BRCMF_FWS_FIFO_COUNT];
 #endif
 };
@@ -1620,7 +1620,7 @@ static int brcmf_fws_notify_credit_map(struct brcmf_if *ifp,
 		WARN_ONCE(fws->fifo_credit[i] < 0,
 			  "fifo_credit[%d] is negative(%d)\n", i,
 			  fws->fifo_credit[i]);
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 16, 0))
+#if (KERNEL_VERSION(4, 16, 0) > LINUX_VERSION_CODE)
 		fws->fifo_init_credit[i] = fws->fifo_credit[i];
 #endif
 	}
@@ -2200,7 +2200,7 @@ void brcmf_fws_del_interface(struct brcmf_if *ifp)
 	brcmf_fws_unlock(fws);
 }
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 16, 0))
+#if (KERNEL_VERSION(4, 16, 0) > LINUX_VERSION_CODE)
 static bool brcmf_fws_ismultistream(struct brcmf_fws_info *fws)
 {
 	bool ret = false;
@@ -2245,7 +2245,7 @@ static void brcmf_fws_dequeue_worker(struct work_struct *worker)
 	fws = container_of(worker, struct brcmf_fws_info, fws_dequeue_work);
 	drvr = fws->drvr;
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 16, 0))
+#if (KERNEL_VERSION(4, 16, 0) > LINUX_VERSION_CODE)
 	if (brcmf_fws_ismultistream(fws))
 		drvr->bus_if->allow_skborphan = false;
 	else
