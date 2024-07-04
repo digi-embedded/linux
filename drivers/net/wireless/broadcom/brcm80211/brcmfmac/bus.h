@@ -200,7 +200,7 @@ struct brcmf_bus {
 	struct brcmf_bus_msgbuf *msgbuf;
 
 	struct list_head list;
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 16, 0))
+#if (KERNEL_VERSION(4, 16, 0) > LINUX_VERSION_CODE)
 	bool allow_skborphan;
 #endif
 #ifdef CONFIG_BRCMFMAC_BT_SHARED_SDIO
