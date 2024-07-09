@@ -2984,6 +2984,16 @@ brcmf_cfg80211_connect(struct wiphy *wiphy, struct net_device *ndev,
 		}
 		if (err)
 			goto done;
+
+		if (brcmf_feat_is_enabled(ifp, BRCMF_FEAT_OWE) &&
+		    sme->crypto.akm_suites[0] == WLAN_AKM_SUITE_OWE) {
+			/* clean up user-space RSNE */
+			if (brcmf_fil_iovar_data_set(ifp, "wpaie", NULL, 0)) {
+				bphy_err(drvr, "failed to clean up user-space RSNE\n");
+				goto done;
+			}
+		}
+
 	}
 	/* Join with specific BSSID and cached SSID
 	 * If SSID is zero join based on BSSID only
@@ -9879,6 +9889,9 @@ static int brcmf_setup_wiphy(struct wiphy *wiphy, struct brcmf_if *ifp)
 				      NL80211_EXT_FEATURE_4WAY_HANDSHAKE_STA_PSK);
 		wiphy_ext_feature_set(wiphy,
 				      NL80211_EXT_FEATURE_4WAY_HANDSHAKE_STA_1X);
+		if (brcmf_feat_is_enabled(ifp, BRCMF_FEAT_OWE))
+			wiphy_ext_feature_set(wiphy,
+					      NL80211_EXT_FEATURE_OWE_OFFLOAD);
 		if (brcmf_feat_is_enabled(ifp, BRCMF_FEAT_SAE))
 			wiphy_ext_feature_set(wiphy,
 					      NL80211_EXT_FEATURE_SAE_OFFLOAD);
