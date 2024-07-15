@@ -106,6 +106,12 @@ then:
     type: boolean
     description: If present limit downstream MRRS to 256B
 
+  vdd3v3-supply:
+    description: A phandle to the regulator node that supplies 3.3V to the slot.
+
+  vdd1v5-supply:
+    description: A phandle to the regulator node that supplies 1.5V to the slot.
+
 required:
   - st,syscfg
   - interrupt-map
