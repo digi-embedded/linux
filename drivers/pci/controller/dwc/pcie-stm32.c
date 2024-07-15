@@ -15,6 +15,7 @@
 #include <linux/phy/phy.h>
 #include <linux/msi.h>
 #include <linux/regmap.h>
+#include <linux/regulator/consumer.h>
 #include <linux/reset.h>
 #include "pcie-designware.h"
 #include "pcie-stm32.h"
@@ -26,6 +27,8 @@ struct stm32_pcie {
 	struct phy *phy;
 	struct clk *clk;
 	struct gpio_desc *reset_gpio;
+	struct regulator *vdd3v3;
+	struct regulator *vdd1v5;
 	int aer_irq;
 	int pme_irq;
 	u32     max_payload;
@@ -83,7 +86,24 @@ static int stm32_pcie_host_init(struct dw_pcie_rp *pp)
 {
 	struct dw_pcie *pci = to_dw_pcie_from_pp(pp);
 	struct stm32_pcie *stm32_pcie = to_stm32_pcie(pci);
+	struct device *dev = pci->dev;
 	int ret = 0;
+
+	if (stm32_pcie->vdd3v3) {
+		ret = regulator_enable(stm32_pcie->vdd3v3);
+		if (ret) {
+			dev_err(dev, "failed to enable vdd3v3 regulator: %d\n", ret);
+			return ret;
+		}
+	}
+
+	if (stm32_pcie->vdd1v5) {
+		ret = regulator_enable(stm32_pcie->vdd1v5);
+		if (ret) {
+			dev_err(dev, "failed to enable vdd1v5 regulator: %d\n", ret);
+			return ret;
+		}
+	}
 
 	if (stm32_pcie->max_payload) {
 		ret = stm32_pcie_set_max_payload(pci, stm32_pcie->max_payload);
@@ -329,6 +349,21 @@ static int stm32_pcie_probe(struct platform_device *pdev)
 		return dev_err_probe(dev, PTR_ERR(stm32_pcie->reset_gpio),
 				     "Failed to get reset GPIO\n");
 
+	/* Power supply regulators */
+	stm32_pcie->vdd3v3 = devm_regulator_get_optional(dev, "vdd3v3");
+	if (IS_ERR(stm32_pcie->vdd3v3)) {
+		if (PTR_ERR(stm32_pcie->vdd3v3) != -ENODEV)
+			return PTR_ERR(stm32_pcie->vdd3v3);
+		stm32_pcie->vdd3v3 = NULL;
+	}
+
+	stm32_pcie->vdd1v5 = devm_regulator_get_optional(dev, "vdd1v5");
+	if (IS_ERR(stm32_pcie->vdd1v5)) {
+		if (PTR_ERR(stm32_pcie->vdd1v5) != -ENODEV)
+			return PTR_ERR(stm32_pcie->vdd1v5);
+		stm32_pcie->vdd1v5 = NULL;
+	}
+
 	ret = phy_set_mode(stm32_pcie->phy, PHY_MODE_PCIE);
 	if (ret)
 		return ret;
@@ -361,6 +396,11 @@ static int stm32_pcie_remove(struct platform_device *pdev)
 	pcie_port_irqs_hook = NULL;
 
 	phy_exit(stm32_pcie->phy);
+
+	if (stm32_pcie->vdd3v3)
+		regulator_disable(stm32_pcie->vdd3v3);
+	if (stm32_pcie->vdd1v5)
+		regulator_disable(stm32_pcie->vdd1v5);
 
 	return 0;
 }

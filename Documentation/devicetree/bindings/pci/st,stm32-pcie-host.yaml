@@ -100,6 +100,12 @@ properties:
     description: GPIO controlled connection to PERST# signal
     maxItems: 1
 
+  vdd3v3-supply:
+    description: A phandle to the regulator node that supplies 3.3V to the slot.
+
+  vdd1v5-supply:
+    description: A phandle to the regulator node that supplies 1.5V to the slot.
+
 required:
   - st,syscfg
   - interrupt-map
