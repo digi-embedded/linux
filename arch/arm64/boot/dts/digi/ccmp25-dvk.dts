@@ -656,6 +656,8 @@
 	reset-gpios = <&gpioh 5 GPIO_ACTIVE_LOW>;
 	wakeup-source;
 	wake-gpios = <&gpioa 1 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+	vdd3v3-supply = <&reg_3v3_board>;
+	vdd1v5-supply = <&scmi_ldo6>;
 	/* Not supported by driver */
 	/*disable-gpio = <&gpioh 4 GPIO_ACTIVE_LOW>;*/
 	status = "okay";
