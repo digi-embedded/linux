@@ -607,6 +607,8 @@
 
 &pcie_rc {
 	reset-gpios = <&gpioh 5 GPIO_ACTIVE_LOW>;
+	vdd3v3-supply = <&reg_3v3_board>;
+	vdd1v5-supply = <&scmi_ldo6>;
 	status = "okay";
 	/* DIGI - Not supported by ST driver */
 	/*disable-gpio = <&gpioh 4 GPIO_ACTIVE_LOW>;*/
