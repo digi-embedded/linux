@@ -148,7 +148,7 @@ static s32 brcmf_csi_process_csi_data(struct brcmf_csi_info *csi_info, char *msg
 static void brcmf_csi_netlink_release(struct brcmf_csi_info *csi_info)
 {
 	brcmf_err("CSI: Exit module\n");
-	if (csi_info->nl_sock) {
+	if (csi_info && csi_info->nl_sock) {
 		netlink_kernel_release(csi_info->nl_sock);
 		csi_info->nl_sock = NULL;
 	}
