@@ -66,6 +66,19 @@ properties:
       Refer to <include/dt-bindings/rtc/rtc-stm32.h> for the supported values.
       Pinctrl state named "default" may be defined to reserve pin for RTC output.
 
+  digi,calib-calp:
+    description: |
+      Sets RTC_CALR CALP flag (bit 15) to increase the RTC count.
+      This is used in combination with 'digi,calib-calm'.
+    type: boolean
+
+  digi,calib-calm:
+    $ref: "/schemas/types.yaml#/definitions/uint32"
+    description: |
+      Sets RTC_CALR CALM value (bits 8:0) to decrease the RTC count.
+      This is used in combination with 'digi,calib-calp'.
+
+
 allOf:
   - if:
       properties:
