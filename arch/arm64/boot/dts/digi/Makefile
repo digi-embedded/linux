@@ -38,8 +38,8 @@ ccimx9_dvk_overlays := _ov_board_enet2_ccimx9-dvk.dtbo \
 
 ccimx93_som_overlays := _ov_som_npu_ccimx93.dtbo
 
-ccimx93_dvk_overlays := _ov_board_dsi_display_ccimx93-dvk.dtbo \
-			_ov_board_lvds_ccimx93-dvk.dtbo \
+ccimx93_dvk_overlays := _ov_board_dlc0200ccp04df-mipi-dsi_ccimx93-dvk.dtbo \
+			_ov_board_lvds_ccimx93-dvk.dtbo
 
 ccimx8mm-dtbs :=	ccimx8mm-dvk.dtb \
 			$(ccimx8m_dvk_overlays) \

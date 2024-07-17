@@ -429,6 +429,9 @@
 &lpuart6 { /* console */
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_uart6>;
+	/* Uncomment to remove DMA if using A0 silicon of the CPU */
+//	/delete-property/dmas;
+//	/delete-property/dma-names;
 	status = "okay";
 };
 
@@ -442,6 +445,9 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_uart4>, <&pinctrl_xbee_rf_gpios>;
 	fsl,uart-has-rtscts;
+	/* Uncomment to remove DMA if using A0 silicon of the CPU */
+//	/delete-property/dmas;
+//	/delete-property/dma-names;
 	status = "okay";
 };
 
@@ -748,6 +754,14 @@
 		fsl,pins = <
 			/* MIPI_CSI_RESET_N */
 			MX93_PAD_GPIO_IO22__GPIO2_IO22 				0x31e
+		>;
+	};
+
+	/* MIPI display */
+	pinctrl_mipi_display: mipidisplay {
+		fsl,pins = <
+			/* MIPI_DSI_RESET */
+			MX93_PAD_GPIO_IO06__GPIO2_IO06				0x31e
 		>;
 	};
 

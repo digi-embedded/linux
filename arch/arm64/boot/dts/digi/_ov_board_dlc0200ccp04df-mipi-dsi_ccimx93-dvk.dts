@@ -1,0 +1,75 @@
+/*
+ * Copyright 2023, 2024 Digi International Inc.
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+/dts-v1/;
+/plugin/;
+
+/ {
+	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			overlay-description = "DVK: DLC0200CCP04DF-2 MIPI DSI display";
+		};
+	};
+
+	/* Disable the HDMI bridge */
+	fragment@1 {
+		target = <&lt_bridge>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	/* Configure the MIPI DSI */
+	fragment@2 {
+		target = <&dsi>;
+		__overlay__ {
+
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			panel@0 {
+				compatible = "dlc,dlc0200ccp04df";
+				status = "okay";
+				reg = <0>;
+				VCC-supply = <&buck4>;
+				IOVCC-supply = <&buck4>;
+				/* reset-gpios signal not connected on DVK */
+
+				port {
+					mipi_dsi_panel_in: endpoint {
+						remote-endpoint = <&mipi_dsi_panel_out>;
+					};
+				};
+			};
+
+			ports {
+				port@1 {
+					mipi_dsi_panel_out: endpoint {
+						remote-endpoint = <&mipi_dsi_panel_in>;
+					};
+				};
+			};
+		};
+	};
+
+	/* Adjust ldcif clock */
+	fragment@3 {
+		target = <&lcdif>;
+		__overlay__ {
+			assigned-clock-rates = <300000000>, <50000000>, <400000000>, <133333333>;
+		};
+	};
+};
