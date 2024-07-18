@@ -135,7 +135,7 @@
 			regulator-name = "3v3_board";
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
-			gpio = <&gpioa 12 GPIO_ACTIVE_HIGH>; /* 3V3_DVK_EN */
+			gpio = <&gpioa 12 GPIO_ACTIVE_HIGH>; /* 3V3_BOARD_EN */
 			enable-active-high;
 			status = "okay";
 		};
@@ -146,7 +146,7 @@
 			regulator-name = "5v_board";
 			regulator-min-microvolt = <5000000>;
 			regulator-max-microvolt = <5000000>;
-			gpio = <&gpiob 2 GPIO_ACTIVE_HIGH>; /* 5V_EN */
+			gpio = <&gpiob 3 GPIO_ACTIVE_HIGH>; /* 5V_BOARD_EN */
 			enable-active-high;
 			status = "okay";
 		};
@@ -289,7 +289,7 @@
 
 		phy1_eth1: ethernet-phy@0 {
 			compatible = "ethernet-phy-id0141.0dd0"; /* PHY ID for Marvell 88E1512 */
-			reset-gpios =  <&gpiob 3 GPIO_ACTIVE_LOW>; /* ETH1_RST */
+			reset-gpios =  <&gpiob 2 GPIO_ACTIVE_LOW>; /* ETH1_RST */
 			reset-assert-us = <1000>;
 			reset-deassert-us = <2000>;
 			reg = <0>;
@@ -313,7 +313,7 @@
 		compatible = "snps,dwmac-mdio";
 		phy1_eth2: ethernet-phy@1 {
 			compatible = "ethernet-phy-id0141.0dd0"; /* PHY ID for Marvell 88E1512 */
-			reset-gpios =  <&gpiob 6 GPIO_ACTIVE_LOW>; /* ETH2_RST */
+			reset-gpios =  <&gpiog 6 GPIO_ACTIVE_LOW>; /* ETH2_RST */
 			reset-assert-us = <1000>;
 			reset-deassert-us = <2000>;
 			reg = <1>;
