@@ -321,7 +321,7 @@
 	};
 };
 
-/* Peripheral I2C bus */
+/* Peripheral I2C bus (J18 Connector) */
 &i2c1 {
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&ccmp25_i2c1_pins>;
@@ -353,12 +353,54 @@
 		status = "disabled";
 	};
 
+	/* MIPI-CSI camera */
+	ov5640_mipi: ov5640_mipi@3c {
+		compatible = "ovti,ov5640";
+		reg = <0x3c>;
+		clocks = <&clk_ext_camera>;
+		clock-names = "xclk";
+		csi_id = <0>;
+		DOVDD-supply = <&reg_3v3_board>;
+		reset-gpios = <&gpiog 7 (GPIO_ACTIVE_LOW | GPIO_PUSH_PULL)>; /* CSI_RESET */
+		status = "okay";
+
+		port {
+			ov5640_mipi_ep: endpoint {
+				remote-endpoint = <&csi2host_sink>;
+				clock-lanes = <0>;
+				data-lanes = <1 2>;
+				link-frequencies = /bits/ 64 <594000000>;
+			};
+		};
+	};
+
+	ext_rtc: ext_rtc@52 {
+		compatible = "microcrystal,rv3028";
+		reg = <0x52>;
+		interrupt-parent = <&gpiof>;
+		interrupts = <4 IRQ_TYPE_EDGE_FALLING>; /* RTC_INT_N */
+		wakeup-source;
+	};
+};
+
+/* Peripheral I2C2 bus (J28 Connector) */
+&i2c2 {
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&i2c2_pins_a>;
+	pinctrl-1 = <&i2c2_sleep_pins_a>;
+	i2c-scl-rising-time-ns = <185>;
+	i2c-scl-falling-time-ns = <20>;
+	clock-frequency = <100000>;
+	status = "okay";
+	/* spare dmas for other usage */
+	/delete-property/dmas;
+	/delete-property/dma-names;
+
 	lt_bridge: lt8912@48 {
 		compatible = "lontium,lt8912";
 		reg = <0x48>;
 		reset-gpios = <&gpiod 4 GPIO_ACTIVE_LOW>;
-		/*hpd-gpios = <&gpiod 2 GPIO_ACTIVE_HIGH>;*/
-		no-hpd;
+		hpd-gpios = <&gpiod 2 GPIO_ACTIVE_HIGH>;
 		no-edid;
 		digi,dsi-lanes = <4>;
 		vdd1-supply = <&reg_5v_board>;
@@ -411,27 +453,6 @@
 		};
 	};
 
-	/* MIPI-CSI camera */
-	ov5640_mipi: ov5640_mipi@3c {
-		compatible = "ovti,ov5640";
-		reg = <0x3c>;
-		clocks = <&clk_ext_camera>;
-		clock-names = "xclk";
-		csi_id = <0>;
-		DOVDD-supply = <&reg_3v3_board>;
-		reset-gpios = <&gpiog 7 (GPIO_ACTIVE_LOW | GPIO_PUSH_PULL)>; /* CSI_RESET */
-		status = "okay";
-
-		port {
-			ov5640_mipi_ep: endpoint {
-				remote-endpoint = <&csi2host_sink>;
-				clock-lanes = <0>;
-				data-lanes = <1 2>;
-				link-frequencies = /bits/ 64 <594000000>;
-			};
-		};
-	};
-
 	max98089: codec@10 {
 		compatible = "maxim,max98089";
 		reg = <0x10>;
@@ -458,28 +479,6 @@
 			};
 		};
 	};
-
-	ext_rtc: ext_rtc@52 {
-		compatible = "microcrystal,rv3028";
-		reg = <0x52>;
-		interrupt-parent = <&gpiof>;
-		interrupts = <4 IRQ_TYPE_EDGE_FALLING>; /* RTC_INT_N */
-		wakeup-source;
-	};
-};
-
-/* J34 Connector */
-&i2c2 {
-	pinctrl-names = "default", "sleep";
-	pinctrl-0 = <&i2c2_pins_a>;
-	pinctrl-1 = <&i2c2_sleep_pins_a>;
-	i2c-scl-rising-time-ns = <185>;
-	i2c-scl-falling-time-ns = <20>;
-	clock-frequency = <100000>;
-	status = "okay";
-	/* spare dmas for other usage */
-	/delete-property/dmas;
-	/delete-property/dma-names;
 };
 
 &ltdc {
