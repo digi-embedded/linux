@@ -17,7 +17,7 @@
 /dts-v1/;
 
 /* STM32MP25 CPU */
-#include "../st/stm32mp257.dtsi"
+#include "../st/stm32mp255.dtsi"
 #include "../st/stm32mp25xf.dtsi"
 #include "../st/stm32mp25-pinctrl.dtsi"
 #include "../st/stm32mp25xxai-pinctrl.dtsi"
@@ -32,8 +32,8 @@
 
 / {
 	model = "Digi International ConnectCore MP25 Development Kit";
-	compatible = "digi,ccmp25-dvk", "digi,ccmp25", "st,stm32mp257";
-	digi,machine,name = "ccmp257-dvk";
+	compatible = "digi,ccmp25-dvk", "digi,ccmp25", "st,stm32mp255";
+	digi,machine,name = "ccmp255-dvk";
 
 	aliases {
 		ethernet0 = &eth2;
@@ -693,15 +693,6 @@
 		spi-max-frequency = <33000000>;
 		status = "okay";
 	};
-};
-
-/* ETH1 and ETH3 */
-&switch0 {
-	status = "disabled";
-	pinctrl-0 = <&eth1_rgmii_pins_a>, <&eth3_rgmii_pins_a>;
-	pinctrl-names = "default";
-	phy-mode = "rgmii";
-	st,ethsw-internal-125;
 };
 
 &timers1 {
