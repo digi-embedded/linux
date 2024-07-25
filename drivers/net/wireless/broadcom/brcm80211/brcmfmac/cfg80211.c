@@ -2234,6 +2234,8 @@ static s32 brcmf_set_wpa_version(struct net_device *ndev,
 			val = WPA3_AUTH_SAE_PSK;
 		else if (sme->crypto.akm_suites[0] == WLAN_AKM_SUITE_OWE)
 			val = WPA3_AUTH_OWE;
+		else if (sme->crypto.akm_suites[0] == WLAN_AKM_SUITE_8021X_SHA256)
+			val = WPA3_AUTH_1X_SHA256;
 		else
 			val = WPA2_AUTH_PSK | WPA2_AUTH_UNSPECIFIED;
 	} else if (sme->crypto.wpa_versions & NL80211_WPA_VERSION_3) {
