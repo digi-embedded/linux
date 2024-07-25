@@ -246,6 +246,11 @@ static inline bool ac_bitmap_tst(u8 bitmap, int prec)
 #define WFA_AUTH_DPP		0x200000 /* WFA DPP AUTH */
 #define WPA3_AUTH_1X_SUITE_B_SHA384	0x400000 /* Suite B-192 SHA384 */
 
+/* WPA3 1x with SHA256 key derivation.
+ * Shares the same value as WPA2_AUTH_1X_SHA256 since the value of
+ * akm-suite is the same for both
+ */
+#define WPA3_AUTH_1X_SHA256 WPA2_AUTH_1X_SHA256
 
 #define WFA_OUI			"\x50\x6F\x9A"	/* WFA OUI */
 #define DPP_VER			0x1A	/* WFA DPP v1.0 */
