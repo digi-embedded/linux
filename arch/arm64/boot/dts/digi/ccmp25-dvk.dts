@@ -39,7 +39,7 @@
 		ethernet0 = &eth2;
 		ethernet1 = &eth1;
 		serial2 = &uart5; /* Console M33 / XBEE */
-		serial3 = &usart6; /* Connector J41 */
+		serial3 = &usart6; /* Connector J11 */
 		serial4 = &uart7; /* MikroBus UART */
 	};
 
@@ -746,14 +746,15 @@
 	status = "okay";
 };
 
-/* Connector J8 */
+/* Connector J11 */
 &usart6 {
 	pinctrl-names = "default", "idle", "sleep";
 	pinctrl-0 = <&usart6_pins_a>;
 	pinctrl-1 = <&usart6_idle_pins_a>;
 	pinctrl-2 = <&usart6_sleep_pins_a>;
+	linux,rs485-enabled-at-boot-time;
 	uart-has-rtscts;
-	status = "disabled";
+	status = "okay";
 };
 
 /* MikroBus UART */
