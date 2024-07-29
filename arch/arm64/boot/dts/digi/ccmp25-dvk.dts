@@ -36,8 +36,8 @@
 	digi,machine,name = "ccmp255-dvk";
 
 	aliases {
-		ethernet0 = &eth2;
-		ethernet1 = &eth1;
+		ethernet0 = &eth1;
+		ethernet1 = &eth2;
 		serial2 = &uart5; /* Console M33 / XBEE */
 		serial3 = &usart6; /* Connector J11 */
 		serial4 = &uart7; /* MikroBus UART */
