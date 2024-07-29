@@ -710,13 +710,28 @@
 	};
 };
 
+&timers2 {
+	/delete-property/dmas;
+	/delete-property/dma-names;
+	status = "okay";
+	pwm_mikrobus: pwm {
+		pinctrl-0 = <&ccmp25_pwm2_pins>;
+		pinctrl-1 = <&ccmp25_pwm2_sleep_pins>;
+		pinctrl-names = "default", "sleep";
+		status = "okay";
+	};
+	timer@1 {
+		status = "okay";
+	};
+};
+
 &timers20 {
 	/delete-property/dmas;
 	/delete-property/dma-names;
 	status = "okay";
 	pwm_lvds_bckl: pwm {
-		pinctrl-0 = <&ccmp25_pwm2_pins>;
-		pinctrl-1 = <&ccmp25_pwm2_sleep_pins>;
+		pinctrl-0 = <&ccmp25_pwm20_pins>;
+		pinctrl-1 = <&ccmp25_pwm20_sleep_pins>;
 		pinctrl-names = "default", "sleep";
 		status = "okay";
 	};
@@ -856,7 +871,7 @@
 
 	ccmp25_pwm2_pins: ccmp25-pwm2-0 {
 		pins {
-			pinmux = <STM32_PINMUX('B', 0, AF8)>; /* TIM20_CH4N */
+			pinmux = <STM32_PINMUX('F', 11, AF7)>; /* TIM2_CH4 */
 			bias-disable;
 			drive-push-pull;
 			slew-rate = <0>;
@@ -864,6 +879,21 @@
 	};
 
 	ccmp25_pwm2_sleep_pins: ccmp25-pwm2-sleep-0 {
+		pins {
+			pinmux = <STM32_PINMUX('F', 11, ANALOG)>; /* TIM2_CH4 */
+		};
+	};
+
+	ccmp25_pwm20_pins: ccmp25-pwm20-0 {
+		pins {
+			pinmux = <STM32_PINMUX('B', 0, AF8)>; /* TIM20_CH4N */
+			bias-disable;
+			drive-push-pull;
+			slew-rate = <0>;
+		};
+	};
+
+	ccmp25_pwm20_sleep_pins: ccmp25-pwm20-sleep-0 {
 		pins {
 			pinmux = <STM32_PINMUX('B', 0, ANALOG)>; /* TIM20_CH4N */
 		};
