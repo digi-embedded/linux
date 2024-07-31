@@ -207,6 +207,8 @@
 &adc_12 {
 	vref-supply = <&external_vref>;
 	vdda-supply = <&scmi_vdda18adc>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&ccmp25_adc_pins>;
 	status = "okay";
 
 	adc1: adc@0 {
@@ -220,6 +222,12 @@
 
 		channel@1 {
 			reg = <1>;
+			/* 16.5 ck_cycles sampling time */
+			st,min-sample-time-ns = <400>;
+		};
+
+		channel@6 {
+			reg = <6>;
 			/* 16.5 ck_cycles sampling time */
 			st,min-sample-time-ns = <400>;
 		};
@@ -1025,6 +1033,12 @@
 		pins {
 			pinmux = <STM32_PINMUX('D', 3, ANALOG)>, /* UART7_TX */
 				 <STM32_PINMUX('D', 0, ANALOG)>; /* UART7_RX */
+		};
+	};
+
+	ccmp25_adc_pins: ccmp25_adc_pins-0 {
+		pins {
+			pinmux = <STM32_PINMUX('G', 1, ANALOG)>;
 		};
 	};
 };
