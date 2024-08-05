@@ -49,6 +49,45 @@
 		clock-frequency = <24000000>;
 		clock-output-names = "xtal_24MHz";
 	};
+
+	lvds_backlight: lvds_backlight {
+		compatible = "pwm-backlight";
+		pwms = <&tpm6 1 50000 0>;
+		brightness-levels = <0 20 25 30 35 40 100>;
+		default-brightness-level = <6>;
+		status = "okay";
+	};
+
+	lvds_panel: lvds_panel {
+		compatible = "panel-lvds";
+		status = "okay";
+		backlight = <&lvds_backlight>;
+		data-mapping = "jeida-24";
+		de-high;
+		width-mm = <72>;
+		height-mm = <70>;
+
+		panel-timing {
+			clock-frequency = <17000000>;
+			hactive = <480>;
+			vactive = <480>;
+			hfront-porch = <1>;
+			hback-porch = <1>;
+			hsync-len = <8>;
+			vback-porch = <2>;
+			vfront-porch = <2>;
+			vsync-len = <8>;
+			hsync-active = <0>;
+			vsync-active = <0>;
+			pixelclk-active = <0>;
+		};
+
+		port {
+			panel_lvds_in: endpoint {
+				remote-endpoint = <&lvds_out>;
+			};
+		};
+	};
 };
 
 /* ADC - 4 channels */
@@ -90,11 +129,11 @@
 
 /* MIPI DSI PHY */
 &dphy {
-	status = "okay";
+	status = "disabled";
 };
 
 &dsi {
-	status = "okay";
+	status = "disabled";
 	#address-cells = <1>;
 	#size-cells = <0>;
 
@@ -107,7 +146,7 @@
 		pinctrl-0 = <&pinctrl_mipi_display>;
 		reset-gpios = <&gpio2 17 GPIO_ACTIVE_HIGH>;
 		dsi-lanes = <4>;
-		status = "okay";
+		status = "disabled";
 
 		port {
 			mipi_dsi_panel_in: endpoint {
@@ -126,13 +165,40 @@
 	};
 };
 
+&ldb {
+	status = "okay";
+
+	lvds-channel@0 {
+		status = "okay";
+
+		port@1 {
+			reg = <1>;
+
+			lvds_out: endpoint {
+				remote-endpoint = <&panel_lvds_in>;
+			};
+		};
+	};
+};
+
+
+&ldb_phy{
+	status = "okay";
+};
+
+&tpm6 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_tpm6>;
+	status = "okay";
+};
+
 &epxp {
 	status = "okay";
 };
 
 &lcdif {
 	status = "okay";
-	assigned-clock-rates = <300000000>, <50000000>, <400000000>, <133333333>;
+	assigned-clock-rates = <498000000>, <68930000>, <400000000>, <133333333>;
 };
 
 /* LPI2C4 connected to MIPI Camera connector */
@@ -346,6 +412,13 @@
 		fsl,pins = <
 			MX93_PAD_GPIO_IO05__LPUART6_RX				0x31e
 			MX93_PAD_GPIO_IO04__LPUART6_TX				0x31e
+		>;
+	};
+
+	/* LVDS PWM backlight */
+	pinctrl_tpm6: tpm6grp {
+		fsl,pins = <
+			MX93_PAD_GPIO_IO23__TPM6_CH1				 0x19e
 		>;
 	};
 };
