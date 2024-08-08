@@ -466,11 +466,6 @@ dw_mipi_dsi_phy_141_get_lane_mbps(void *priv_data,
 	/* Get the adjusted lane data rate value, lane data rate = 2 * pll output */
 	*lane_mbps = 2 * dsi_pll_get_clkout_khz(pll_in_khz, idf, ndiv, odf) / 1000;
 	dsi->lane_mbps = *lane_mbps;
-	/* WORKAROUND HDMI FLIKERING */
-	if (dsi->lane_mbps > 1000) {
-		DRM_WARN("Workaround to reduce lane data rate from %u Mbps to 1 Gbps\n", dsi->lane_mbps);
-		dsi->lane_mbps = 1000;
-	}
 
 	DRM_DEBUG_DRIVER("lane_mbps %d\n", *lane_mbps);
 
