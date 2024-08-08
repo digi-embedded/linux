@@ -129,6 +129,10 @@ enum dsi_color {
 #define SLEEP_US	1000
 #define TIMEOUT_US	200000
 
+/* Default PLL increase for burst mode is 30%, max is 50% */
+#define DEFAULT_BURST_PLL_INC_PCNT 30
+#define MAX_BURST_PLL_INC_PCNT 50
+
 struct dw_mipi_dsi_stm {
 	void __iomem *base;
 	struct device *dev;
@@ -145,6 +149,7 @@ struct dw_mipi_dsi_stm {
 	struct dw_mipi_dsi_plat_data pdata;
 	unsigned int lane_mbps;
 	u32 format;
+	unsigned char burst_pll_inc_pcnt;
 };
 
 static inline void dsi_write(struct dw_mipi_dsi_stm *dsi, u32 reg, u32 val)
@@ -446,9 +451,9 @@ dw_mipi_dsi_phy_141_get_lane_mbps(void *priv_data,
 	bpp = mipi_dsi_pixel_format_to_bpp(dsi->format);
 	pll_out_khz = mode->clock * bpp / (lanes * 2);
 
-	/* Add 30% to pll out to be higher than pixel bw (burst mode only) */
-	if (mode_flags & MIPI_DSI_MODE_VIDEO_BURST)
-		pll_out_khz = (pll_out_khz * 13) / 10;
+	/* Increase pll out to be higher than pixel bw (burst mode only) */
+	if ((mode_flags & MIPI_DSI_MODE_VIDEO_BURST) && dsi->burst_pll_inc_pcnt)
+		pll_out_khz = (pll_out_khz * (100 + dsi->burst_pll_inc_pcnt)) / 100;
 
 	if (pll_out_khz > dsi->lane_max_kbps) {
 		pll_out_khz = dsi->lane_max_kbps;
@@ -790,9 +795,9 @@ dw_mipi_dsi_get_lane_mbps(void *priv_data, const struct drm_display_mode *mode,
 	bpp = mipi_dsi_pixel_format_to_bpp(format);
 	pll_out_khz = mode->clock * bpp / lanes;
 
-	/* Add 30% to pll out to be higher than pixel bw (burst mode only) */
-	if (mode_flags & MIPI_DSI_MODE_VIDEO_BURST)
-		pll_out_khz = (pll_out_khz * 13) / 10;
+	/* Increase pll out to be higher than pixel bw (burst mode only) */
+	if ((mode_flags & MIPI_DSI_MODE_VIDEO_BURST) && dsi->burst_pll_inc_pcnt)
+		pll_out_khz = (pll_out_khz * (100 + dsi->burst_pll_inc_pcnt)) / 100;
 
 	if (pll_out_khz > dsi->lane_max_kbps) {
 		pll_out_khz = dsi->lane_max_kbps;
@@ -966,9 +971,9 @@ dw_mipi_dsi_stm_mode_valid(void *priv_data,
 	if (pll_out_khz > dsi->lane_max_kbps)
 		return MODE_CLOCK_HIGH;
 
-	if (mode_flags & MIPI_DSI_MODE_VIDEO_BURST) {
-		/* Add 30% to pll out to be higher than pixel bw */
-		pll_out_khz = (pll_out_khz * 13) / 10;
+	if ((mode_flags & MIPI_DSI_MODE_VIDEO_BURST) && dsi->burst_pll_inc_pcnt) {
+		/* Increase pll out to be higher than pixel bw */
+		pll_out_khz = (pll_out_khz * (100 + dsi->burst_pll_inc_pcnt)) / 100;
 	} else {
 		if (pll_out_khz < dsi->lane_min_kbps)
 			return MODE_CLOCK_LOW;
@@ -1079,6 +1084,7 @@ static int dw_mipi_dsi_stm_probe(struct platform_device *pdev)
 	struct dw_mipi_dsi_stm *dsi;
 	const struct dw_mipi_dsi_plat_data *pdata = of_device_get_match_data(dev);
 	int ret;
+	u32 burst_increase = DEFAULT_BURST_PLL_INC_PCNT;
 
 	dsi = devm_kzalloc(dev, sizeof(*dsi), GFP_KERNEL);
 	if (!dsi)
@@ -1207,6 +1213,12 @@ static int dw_mipi_dsi_stm_probe(struct platform_device *pdev)
 	}
 
 	clk_disable_unprepare(dsi->pclk);
+
+	ret = of_property_read_u32(dev->of_node, "digi,burst-pll-inc-pcnt", &burst_increase);
+	if (burst_increase > MAX_BURST_PLL_INC_PCNT)
+		burst_increase = DEFAULT_BURST_PLL_INC_PCNT;
+
+	dsi->burst_pll_inc_pcnt = burst_increase;
 
 	return 0;
 
