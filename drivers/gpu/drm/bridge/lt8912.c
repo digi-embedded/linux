@@ -158,7 +158,7 @@ static void lt8912_init(struct lt8912 *lt)
 	regmap_write(lt->regmap[1], 0x3f, hfp >> 8);
 	regmap_read(lt->regmap[0], 0xab, &reg);
 	reg &= 0xfc;
-	reg |= (hsync_activehigh < 1) | vsync_activehigh;
+	reg |= (hsync_activehigh << 1) | vsync_activehigh;
 	regmap_write(lt->regmap[0], 0xab, reg);
 
 	/* DDSConfig */
