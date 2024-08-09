@@ -68,8 +68,9 @@ static inline struct lt8912 *connector_to_lt8912(struct drm_connector *c)
 static void lt8912_init(struct lt8912 *lt)
 {
 	u8 lanes = lt->dsi->lanes;
+	u8 settle = 0x08;
 	const struct drm_display_mode *mode = &lt->mode;
-	u32 hactive, hfp, hsync, hbp, vfp, vsync, vbp, htotal, vtotal;
+	u32 hactive, hfp, hsync, hbp, vactive, vfp, vsync, vbp, htotal, vtotal;
 	unsigned int hsync_activehigh, vsync_activehigh, reg;
 	unsigned int version[2];
 
@@ -81,12 +82,18 @@ static void lt8912_init(struct lt8912 *lt)
 	hsync = mode->hsync_end - mode->hsync_start;
 	hsync_activehigh = !!(mode->flags & DRM_MODE_FLAG_PHSYNC);
 	hbp = mode->htotal - mode->hsync_end;
+	vactive = mode->vdisplay;
 	vfp = mode->vsync_start - mode->vdisplay;
 	vsync = mode->vsync_end - mode->vsync_start;
 	vsync_activehigh = !!(mode->flags & DRM_MODE_FLAG_PVSYNC);
 	vbp = mode->vtotal - mode->vsync_end;
 	htotal = mode->htotal;
 	vtotal = mode->vtotal;
+
+	if (vactive <= 600)
+		settle = 0x04;
+	else if (vactive == 1080)
+		settle = 0x0a;
 
 	regmap_read(lt->regmap[0], 0x00, &version[0]);
 	regmap_read(lt->regmap[0], 0x01, &version[1]);
@@ -136,7 +143,7 @@ static void lt8912_init(struct lt8912 *lt)
 
 	/* MIPIDig */
 	regmap_write(lt->regmap[1], 0x10, 0x01);
-	regmap_write(lt->regmap[1], 0x11, 0x0a);
+	regmap_write(lt->regmap[1], 0x11, settle);
 	regmap_write(lt->regmap[1], 0x18, hsync);
 	regmap_write(lt->regmap[1], 0x19, vsync);
 	regmap_write(lt->regmap[1], 0x1c, hactive % 0x100);
