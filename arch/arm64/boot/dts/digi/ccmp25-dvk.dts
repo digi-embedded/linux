@@ -468,9 +468,9 @@
 				hfront-porch = <88>;
 				hsync-len = <44>;
 				hback-porch = <148>;
-				vfront-porch = <36>;
+				vfront-porch = <4>;
 				vsync-len = <5>;
-				vback-porch = <4>;
+				vback-porch = <36>;
 				hsync-active = <0>;
 				vsync-active = <0>;
 				de-active = <0>;
