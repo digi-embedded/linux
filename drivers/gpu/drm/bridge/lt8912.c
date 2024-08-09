@@ -237,7 +237,7 @@ static void lt8912_init(struct lt8912 *lt)
 
 }
 
-int lt8912_parse_dt(struct device_node *np, struct lt8912 *lt)
+static int lt8912_parse_dt(struct device_node *np, struct lt8912 *lt)
 {
 	struct device *dev = &lt->i2c->dev;
 	u32 num_lanes = 0;
