@@ -732,10 +732,10 @@
 
 &usbh {
 	status = "okay";
+};
 
-	usbh_ohci: usb@482e0000 {
-		status = "disabled";
-	};
+&usbh_ehci {
+	status = "okay";
 };
 
 &usb3dr {

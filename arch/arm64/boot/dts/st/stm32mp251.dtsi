@@ -2326,6 +2326,7 @@
 					phys = <&usb2_phy1>;
 					phy-names = "usb";
 					wakeup-source;
+					status = "disabled";
 				};
 
 				usbh_ehci: usb@482f0000 {
@@ -2338,6 +2339,7 @@
 					phys = <&usb2_phy1>;
 					phy-names = "usb";
 					wakeup-source;
+					status = "disabled";
 				};
 			};
 

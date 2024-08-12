@@ -793,20 +793,17 @@
 
 &usbh {
 	status = "okay";
+};
 
-	usbh_ehci: usb@482f0000 {
-		#address-cells = <1>;
-		#size-cells = <0>;
-		/* onboard HUB */
-		hub@1 {
-			compatible = "usb424,2514";
-			reg = <1>;
-			vdd-supply = <&scmi_v3v3>;
-		};
-	};
-
-	usbh_ohci: usb@482e0000 {
-		status = "disabled";
+&usbh_ehci {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	status = "okay";
+	/* onboard HUB */
+	hub@1 {
+		compatible = "usb424,2514";
+		reg = <1>;
+		vdd-supply = <&scmi_v3v3>;
 	};
 };
 
