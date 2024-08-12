@@ -648,10 +648,10 @@
 
 &usb2h {
 	status = "okay";
+};
 
-	usb2h_ohci: usb@482e0000 {
-		status = "disabled";
-	};
+&usb2h_ehci {
+	status = "okay";
 };
 
 &usb3dr {
