@@ -13,6 +13,7 @@
 #include <net/cfg80211.h>
 #include "fweh.h"
 #include "fwil_types.h"
+#include "feature.h"
 
 #if IS_MODULE(CONFIG_BRCMFMAC)
 #define BRCMF_EXPORT_SYMBOL_GPL(__sym)	EXPORT_SYMBOL_NS_GPL(__sym, BRCMFMAC)
@@ -135,7 +136,7 @@ struct brcmf_pub {
 	struct brcmf_ampdu_rx_reorder
 		*reorder_flows[BRCMF_AMPDU_RX_REORDER_MAXFLOWS];
 
-	u32 feat_flags;
+	u8 feat_flags[DIV_ROUND_UP(BRCMF_FEAT_LAST, 8)];
 	u32 chip_quirks;
 	int req_mpc;
 

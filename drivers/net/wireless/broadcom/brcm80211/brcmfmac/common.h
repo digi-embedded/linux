@@ -68,9 +68,10 @@ extern struct brcmf_mp_global_t brcmf_mp_global;
  * @idleclk_disable: SDIO bus clock output disable when bus is idle.
  * @idle_time_zero: Set idle interval to zero.
  */
+#define BRCMF_MAX_FEATURE_BYTES DIV_ROUND_UP(BRCMF_FEAT_LAST, 8)
 struct brcmf_mp_device {
 	bool		p2p_enable;
-	unsigned int	feature_disable;
+	unsigned char	feature_disable[BRCMF_MAX_FEATURE_BYTES];
 	int		fcmode;
 	unsigned int	roamoff;
 	bool		iapp;

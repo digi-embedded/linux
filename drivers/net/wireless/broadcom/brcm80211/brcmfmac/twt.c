@@ -209,7 +209,7 @@ brcmf_twt_stats_read(struct seq_file *seq, void *data)
 	int i;
 
 	/* Return if the if TWT is not supported by Firmware */
-	if (!(drvr->feat_flags & BIT(BRCMF_FEAT_TWT)))
+	if (!(drvr->feat_flags[BRCMF_FEAT_TWT / 8] & BIT(BRCMF_FEAT_TWT % 8)))
 		return 0;
 
 	/* Iterate the interface list in struct brcmf_pub */
