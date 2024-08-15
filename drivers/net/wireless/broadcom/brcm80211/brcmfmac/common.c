@@ -53,9 +53,11 @@ static int brcmf_p2p_enable;
 module_param_named(p2pon, brcmf_p2p_enable, int, 0);
 MODULE_PARM_DESC(p2pon, "Enable legacy p2p management functionality");
 
-static int brcmf_feature_disable;
-module_param_named(feature_disable, brcmf_feature_disable, int, 0);
-MODULE_PARM_DESC(feature_disable, "Disable features");
+static u8 brcmf_feature_disable[BRCMF_MAX_FEATURE_BYTES] = {0};
+static int brcmf_feature_disable_size;
+module_param_array_named(feature_disable, brcmf_feature_disable, byte,
+			 &brcmf_feature_disable_size, 0644);
+MODULE_PARM_DESC(feature_disable, "Disable features (bitmap)");
 
 static char brcmf_firmware_path[BRCMF_FW_ALTPATH_LEN];
 module_param_string(alternative_fw_path, brcmf_firmware_path,
@@ -768,7 +770,6 @@ int brcmf_debugfs_param_read(struct seq_file *s, void *data)
 	seq_printf(s, "%-20s: 0x%x\n", "debug", brcmf_msg_level);
 	seq_printf(s, "%-20s: %s\n", "alternative_fw_path", brcmf_firmware_path);
 	seq_printf(s, "%-20s: %d\n", "p2pon", !!brcmf_p2p_enable);
-	seq_printf(s, "%-20s: %d\n", "feature_disable", brcmf_feature_disable);
 	seq_printf(s, "%-20s: %d\n", "fcmode", bus_if->drvr->settings->fcmode);
 	seq_printf(s, "%-20s: %d\n", "roamoff", !!brcmf_roamoff);
 	seq_printf(s, "%-20s: %d\n", "iapp", !!brcmf_iapp_enable);
@@ -812,8 +813,14 @@ struct brcmf_mp_device *brcmf_get_module_param(struct device *dev,
 	brcmf_dbg(INFO, "alternative_fw_path: %s\n", brcmf_firmware_path);
 	settings->p2p_enable = !!brcmf_p2p_enable;
 	brcmf_dbg(INFO, "p2pon: %d\n", settings->p2p_enable);
-	settings->feature_disable = brcmf_feature_disable;
-	brcmf_dbg(INFO, "feature_disable: %d\n", settings->feature_disable);
+	memcpy(settings->feature_disable,
+	       brcmf_feature_disable,
+	       sizeof(brcmf_feature_disable));
+	brcmf_dbg(INFO, "feature_disable: ");
+	for (i = 0; i < BRCMF_MAX_FEATURE_BYTES; i++)
+		brcmf_dbg(INFO, "0x%x ", settings->feature_disable[i]);
+	brcmf_dbg(INFO, "\n");
+
 	settings->fcmode = brcmf_fcmode;
 	brcmf_dbg(INFO, "fcmode: %d\n", settings->fcmode);
 	settings->roamoff = brcmf_roamoff;
