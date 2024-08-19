@@ -115,6 +115,10 @@
 	};
 };
 
+&tmu {
+	status = "disabled";
+};
+
 /* LVDS PWM backlight */
 &tpm6 {
 	pinctrl-names = "default";
