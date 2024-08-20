@@ -62,7 +62,7 @@
 		compatible = "panel-lvds";
 		status = "okay";
 		backlight = <&lvds_backlight>;
-		data-mapping = "jeida-24";
+		data-mapping = "vesa-24";
 		de-high;
 		width-mm = <72>;
 		height-mm = <70>;
@@ -71,11 +71,11 @@
 			clock-frequency = <17000000>;
 			hactive = <480>;
 			vactive = <480>;
-			hfront-porch = <1>;
-			hback-porch = <1>;
+			hfront-porch = <10>;
+			hback-porch = <50>;
 			hsync-len = <8>;
-			vback-porch = <2>;
-			vfront-porch = <2>;
+			vback-porch = <20>;
+			vfront-porch = <21>;
 			vsync-len = <8>;
 			hsync-active = <0>;
 			vsync-active = <0>;
@@ -198,7 +198,7 @@
 
 &lcdif {
 	status = "okay";
-	assigned-clock-rates = <498000000>, <68930000>, <400000000>, <133333333>;
+	assigned-clock-rates = <645000000>, <17000000>, <400000000>, <133333333>;
 };
 
 /* LPI2C4 connected to MIPI Camera connector */
