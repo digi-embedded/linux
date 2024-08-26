@@ -2509,7 +2509,8 @@ brcmf_set_key_mgmt(struct net_device *ndev, struct cfg80211_connect_params *sme)
 				profile->use_fwsup = BRCMF_PROFILE_FWSUP_ROAM;
 
 			/*Disable intrnal sup for SuiteB*/
-			profile->use_fwsup = BRCMF_PROFILE_FWSUP_NONE;
+			if (brcmf_feat_is_enabled(ifp, BRCMF_FEAT_FWSUP))
+				profile->use_fwsup = BRCMF_PROFILE_FWSUP_NONE;
 			break;
 		default:
 			bphy_err(drvr, "invalid akm suite (%d)\n",
