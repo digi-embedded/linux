@@ -200,9 +200,11 @@
 };
 
 /*
- * Internal VREFBUF is not supported yet. VREF+ is connected internally to 1V8
- * to use like an external voltage reference. If you plan to use an external
- * voltage reference, depopulate internal SOM resistor connected to VREF+.
+ * Internal VREFBUF is not supported yet.
+ * VREF+ pad is not connected. External 1.8V must be supplied
+ * at VREF+ pad for the ADC to work.
+ * To supply a different reference voltage, edit the voltage
+ * of the 'external_vref' regulator (Max is 1.8V).
  */
 &adc_12 {
 	vref-supply = <&external_vref>;
