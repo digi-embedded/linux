@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Digi International Inc.
+ * Copyright 2024 Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -13,6 +13,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <dt-bindings/gpio/gpio.h>
+
 /dts-v1/;
 /plugin/;
 
@@ -20,11 +22,11 @@
 	fragment@0 {
 		target-path = "/";
 		__overlay__ {
-			overlay-description = "DVK: DLC0200CC904DF-2 MIPI DSI display";
+			overlay-description = "DVK: NHD-3.5-640480EF-MSXP MIPI display";
 		};
 	};
 
-	/* Disable the HDMI bridge */
+	/* Disable LT8912 */
 	fragment@1 {
 		target = <&lt_bridge>;
 		__overlay__ {
@@ -32,33 +34,35 @@
 		};
 	};
 
-	/* Configure the MIPI DSI */
+	/* Add NHD-3.5-640480EF-MSXP MIPI display panel */
 	fragment@2 {
 		target = <&dsi>;
 		__overlay__ {
-
 			#address-cells = <1>;
 			#size-cells = <0>;
 
-			panel@0 {
-				compatible = "dlc,dlc0200ccp04df";
-				status = "okay";
-				reg = <0>;
-				VCC-supply = <&buck4>;
-				IOVCC-supply = <&buck4>;
-				/* reset-gpios signal not connected on DVK */
-
-				port {
-					mipi_dsi_panel_in: endpoint {
-						remote-endpoint = <&mipi_dsi_panel_out>;
+			ports {
+				port@1 {
+					dsi_out: endpoint {
+						remote-endpoint = <&dsi_panel_in>;
 					};
 				};
 			};
 
-			ports {
-				port@1 {
-					mipi_dsi_panel_out: endpoint {
-						remote-endpoint = <&mipi_dsi_panel_in>;
+			panel@0 {
+				compatible = "newhaven,nhd-3.5-640480ef-msxp";
+				reg = <0>;
+				VCC-supply = <&reg_5v_board>;
+				IOVCC-supply = <&buck4>;
+				pinctrl-names = "default";
+				pinctrl-0 = <&pinctrl_mipi_display>;
+				reset-gpios = <&gpio2 6 GPIO_ACTIVE_HIGH>;
+				dsi-lanes = <4>;
+				status = "okay";
+
+				port {
+					dsi_panel_in: endpoint {
+						remote-endpoint = <&dsi_out>;
 					};
 				};
 			};

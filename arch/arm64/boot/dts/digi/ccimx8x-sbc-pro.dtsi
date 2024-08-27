@@ -282,6 +282,7 @@
 
 &asrc0 {
 	fsl,asrc-rate  = <48000>;
+	status = "disabled";
 };
 
 &fec1 {
@@ -921,6 +922,7 @@
 	assigned-clock-rates = <786432000>, <49152000>, <12288000>, <49152000>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_sai0>;
+	fsl,sai-mclk-direction-output;
 	status = "disabled";
 };
 

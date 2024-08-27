@@ -57,7 +57,7 @@ static inline struct regmap *mca_tpm_mod_to_regmap(struct mca_tpm_mod *mca_tpm)
 }
 
 static int mca_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm,
-			  int duty_ns, int period_ns)
+			  int duty_ns, int period_ns, bool enabled)
 {
 	struct mca_tpm_mod *mca_tpm = to_mca_tpm_mod(chip);
 	struct regmap *map = mca_tpm_mod_to_regmap(mca_tpm);
@@ -66,7 +66,11 @@ static int mca_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm,
 	int ret, prescaler_idx = 0;
 	u8 buf[2];
 
-	if (pwm_is_enabled(pwm) && (period_ns != pwm_get_period(pwm))) {
+	/* If the channel is disabled we're done. */
+	if (!enabled)
+		return 0;
+
+	if (period_ns != pwm_get_period(pwm)) {
 		dev_err(chip->dev, "cannot change PWM period while enabled\n");
 		return -EBUSY;
 	}
@@ -223,12 +227,44 @@ mca_pwm_of_xlate(struct pwm_chip *chip, const struct of_phandle_args *args)
 	return of_pwm_xlate_with_flags(chip, args);
 }
 
+static int mca_pwm_apply(struct pwm_chip *chip, struct pwm_device *pwm,
+			 const struct pwm_state *state)
+{
+	int err;
+	bool enabled = pwm->state.enabled;
+
+	if (state->polarity != pwm->state.polarity) {
+		if (enabled) {
+			mca_pwm_disable(chip, pwm);
+			enabled = false;
+		}
+
+		err = mca_pwm_set_polarity(chip, pwm, state->polarity);
+		if (err)
+			return err;
+	}
+
+	if (!state->enabled) {
+		if (enabled)
+			mca_pwm_disable(chip, pwm);
+
+		return 0;
+	}
+
+	err = mca_pwm_config(pwm->chip, pwm,
+			     state->duty_cycle, state->period, enabled);
+	if (err)
+		return err;
+
+	if (!enabled)
+		err = mca_pwm_enable(chip, pwm);
+
+	return err;
+}
+
 static struct pwm_ops mca_pwm_ops = {
-	.config		= mca_pwm_config,
-	.enable		= mca_pwm_enable,
-	.disable	= mca_pwm_disable,
-	.set_polarity	= mca_pwm_set_polarity,
-	.owner		= THIS_MODULE,
+	.apply	= mca_pwm_apply,
+	.owner	= THIS_MODULE,
 };
 
 static const struct of_device_id mca_pwm_dt_ids[] = {
@@ -331,7 +367,7 @@ static int mca_pwm_probe(struct platform_device *pdev)
 		tpm->chip.base = -1;
 		tpm->chip.of_xlate = mca_pwm_of_xlate;
 
-		ret = pwmchip_add(&tpm->chip);
+		ret = devm_pwmchip_add(&pdev->dev, &tpm->chip);
 		if (ret < 0) {
 			dev_err(&pdev->dev, "pwmchip_add() failed: %d\n", ret);
 			goto err_free;

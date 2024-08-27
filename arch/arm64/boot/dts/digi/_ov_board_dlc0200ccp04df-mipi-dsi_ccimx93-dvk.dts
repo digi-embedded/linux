@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Digi International Inc.
+ * Copyright 2023, 2024 Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -13,9 +13,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <dt-bindings/gpio/gpio.h>
-#include <dt-bindings/phy/phy-imx8-pcie.h>
-
 /dts-v1/;
 /plugin/;
 
@@ -23,43 +20,56 @@
 	fragment@0 {
 		target-path = "/";
 		__overlay__ {
-			overlay-description = "SBC: PCIe (mini card)";
+			overlay-description = "DVK: DLC0200CCP04DF-2 MIPI DSI display";
 		};
 	};
 
-	/* Enable the PCIe regulator */
+	/* Disable the HDMI bridge */
 	fragment@1 {
-		target = <&reg_3v3_pcie>;
+		target = <&lt_bridge>;
 		__overlay__ {
-			status = "okay";
+			status = "disabled";
 		};
 	};
 
-	/*
-	 * Enable PCIe (mini card):
-	 * - Add the 3V3 PCIe regulator as a supply
-	 * - Use the regulator and mini card pinctrls
-	 * - Change the reset GPIO and add the disable GPIO
-	 */
+	/* Configure the MIPI DSI */
 	fragment@2 {
-		target = <&pcieb>;
+		target = <&dsi>;
 		__overlay__ {
-			pinctrl-names = "default", "sleep";
-			pinctrl-0 = <&pinctrl_reg_3v3_pcie>, <&pinctrl_pcieb_mini_card>;
-			pinctrl-1 = <&pinctrl_reg_3v3_pcie_sleep>;
-			reset-gpio = <&lsio_gpio3 16 GPIO_ACTIVE_LOW>; /* PCIE_RESET_N */
-			disable-gpio = <&lsio_gpio0 30 GPIO_ACTIVE_HIGH>; /* PCIE_DIS_N */
-			vpcie-supply = <&reg_3v3_pcie>;
-			status = "okay";
+
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			panel@0 {
+				compatible = "dlc,dlc0200ccp04df";
+				status = "okay";
+				reg = <0>;
+				VCC-supply = <&buck4>;
+				IOVCC-supply = <&buck4>;
+				/* reset-gpios signal not connected on DVK */
+
+				port {
+					mipi_dsi_panel_in: endpoint {
+						remote-endpoint = <&mipi_dsi_panel_out>;
+					};
+				};
+			};
+
+			ports {
+				port@1 {
+					mipi_dsi_panel_out: endpoint {
+						remote-endpoint = <&mipi_dsi_panel_in>;
+					};
+				};
+			};
 		};
 	};
 
-	/* Enable PCIE clock */
+	/* Adjust ldcif clock */
 	fragment@3 {
-		target = <&phyx1>;
+		target = <&lcdif>;
 		__overlay__ {
-			fsl,refclk-pad-mode = <IMX8_PCIE_REFCLK_PAD_INPUT>;
-			status = "okay";
+			assigned-clock-rates = <300000000>, <50000000>, <400000000>, <133333333>;
 		};
 	};
 };
