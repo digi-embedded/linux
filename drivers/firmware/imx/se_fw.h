@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0+ */
 /*
- * Copyright 2021-2023 NXP
+ * Copyright 2021-2024 NXP
  */
 
 #ifndef SE_MU_H
@@ -22,6 +22,7 @@
 #define MSG_SIZE(x)			(((x) & 0x0000ff00) >> 8)
 #define MSG_VER(x)			((x) & 0x000000ff)
 #define RES_STATUS(x)			((x) & 0x000000ff)
+#define RES_IND(x)			(((x) & 0x0000ff00) >> 8)
 #define MAX_DATA_SIZE_PER_USER		(65 * 1024)
 #define S4_DEFAULT_MUAP_INDEX		(2)
 #define S4_MUAP_DEFAULT_MAX_USERS	(4)
@@ -33,6 +34,8 @@
 
 #define ELE_MU_IO_FLAGS_USE_SEC_MEM	(0x02u)
 #define ELE_MU_IO_FLAGS_USE_SHORT_ADDR	(0x04u)
+
+#define SOC_ID_OF_IMX95			0x9500
 
 struct ele_imem_buf {
 	u8 *buf;
@@ -103,6 +106,11 @@ struct ele_api_msg {
 	u32 data[ELE_MSG_DATA_NUM];
 };
 
+struct perf_time_frame {
+	struct timespec64 t_start;
+	struct timespec64 t_end;
+};
+
 struct ele_mu_priv {
 	struct list_head priv_data;
 	struct ele_mu_device_ctx *cmd_receiver_dev;
@@ -127,6 +135,7 @@ struct ele_mu_priv {
 	u8 success_tag;
 	u8 base_api_ver;
 	u8 fw_api_ver;
+	u32 fw_fail;
 	const void *info;
 
 	struct mbox_client ele_mb_cl;
@@ -142,8 +151,13 @@ struct ele_mu_priv {
 	u8 max_dev_ctx;
 	struct ele_mu_device_ctx **ctxs;
 	struct ele_imem_buf imem;
+	struct perf_time_frame time_frame;
+	struct imx_sc_ipc *ipc_scu;
+	u8 part_owner;
+	bool imem_restore;
 };
 
+uint32_t get_se_soc_id(struct device *dev);
 phys_addr_t get_phy_buf_mem_pool(struct device *dev,
 				 char *mem_pool_name,
 				 u32 **buf,

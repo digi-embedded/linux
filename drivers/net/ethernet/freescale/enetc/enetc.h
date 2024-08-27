@@ -17,6 +17,7 @@
 
 #include "enetc_hw.h"
 #include "enetc4_hw.h"
+#include "enetc_msg.h"
 
 #define ENETC_MAC_MAXFRM_SIZE	9600
 #define ENETC_MAX_MTU		(ENETC_MAC_MAXFRM_SIZE - \
@@ -30,6 +31,8 @@
 				(ETH_FCS_LEN + ETH_HLEN + VLAN_HLEN))
 
 #define ENETC_CBD_DATA_MEM_ALIGN 64
+
+#define ENETC_INT_NAME_MAX	(IFNAMSIZ + 8)
 
 struct enetc_tx_swbd {
 	union {
@@ -211,12 +214,6 @@ static inline union enetc_rx_bd *enetc_rxbd_ext(union enetc_rx_bd *rxbd)
 	return ++rxbd;
 }
 
-struct enetc_msg_swbd {
-	void *vaddr;
-	dma_addr_t dma;
-	int size;
-};
-
 /* Credit-Based Shaper parameters */
 struct enetc_cbs_tc_cfg {
 	u8 tc;
@@ -284,14 +281,23 @@ struct enetc_si {
 	struct netc_cbdr cbdr;
 	struct dentry *debugfs_root;
 
-	int num_mac_fe;	/* number of mac address filter table entries */
+	struct workqueue_struct *workqueue;
+	struct work_struct rx_mode_task;
+	struct work_struct msg_task;
 	struct enetc_mac_filter mac_filter[MADDR_TYPE];
+	struct mutex msg_lock; /* mailbox message lock */
+	char msg_int_name[ENETC_INT_NAME_MAX];
 
 	DECLARE_BITMAP(active_vlans, VLAN_N_VID);
 	DECLARE_BITMAP(vlan_ht_filter, ENETC_VLAN_HT_SIZE);
 
 	int (*set_rss_table)(struct enetc_si *si, const u32 *table, int count);
 	int (*get_rss_table)(struct enetc_si *si, u32 *table, int count);
+
+	/* Notice, only for VSI/VF to use */
+	int (*vf_register_msg_msix)(struct enetc_si *si);
+	void (*vf_free_msg_msix)(struct enetc_si *si);
+	int (*vf_register_link_status_notify)(struct enetc_si *si, bool notify);
 };
 
 static inline bool is_enetc_rev1(struct enetc_si *si)
@@ -347,7 +353,6 @@ static inline int enetc4_pf_to_port(struct pci_dev *pf_pdev)
 }
 
 #define ENETC_MAX_NUM_TXQS	8
-#define ENETC_INT_NAME_MAX	(IFNAMSIZ + 8)
 
 struct enetc_int_vector {
 	void __iomem *rbier;
@@ -461,8 +466,8 @@ struct enetc_ndev_priv {
 	struct net_device *ndev;
 	struct device *dev; /* dma-mapping device */
 	struct enetc_si *si;
-	struct clk *ipg_clk; /* NETC system clock */
 	struct clk *ref_clk; /* RGMII/RMII reference clock */
+	struct pci_dev *rcec;
 
 	int bdr_int_num; /* number of Rx/Tx ring interrupts */
 	struct enetc_int_vector *int_vector[ENETC_MAX_BDR_INT];
@@ -485,11 +490,13 @@ struct enetc_ndev_priv {
 
 	struct enetc_cls_rule *cls_rules;
 	int max_ipf_entries;
+	u32 ipt_wol_eid;
 
 	union psfp_cap psfp_cap;
 	struct enetc_psfp_chain psfp_chain;
 	unsigned long *ist_bitmap;
 	unsigned long *isct_bitmap;
+	unsigned long *sgclt_used_words;
 
 	/* Minimum number of TX queues required by the network stack */
 	unsigned int min_num_stack_tx_queues;
@@ -501,6 +508,7 @@ struct enetc_ndev_priv {
 	struct bpf_prog *xdp_prog;
 
 	unsigned long flags;
+	int wolopts;
 
 	struct work_struct	tx_onestep_tstamp;
 	struct sk_buff_head	tx_skbs;
@@ -512,29 +520,6 @@ struct enetc_ndev_priv {
 	 * and link state updates
 	 */
 	struct mutex		mm_lock;
-};
-
-/* Messaging */
-
-/* VF-PF set primary MAC address message format */
-struct enetc_msg_cmd_set_primary_mac {
-	struct enetc_msg_cmd_header header;
-	struct sockaddr mac;
-};
-
-/* VSI-to-PSI Messaging: set MAC filter message format */
-struct enetc_msg_config_mac_filter {
-	struct enetc_msg_cmd_header header;
-	u8 uc_promisc;
-	u8 mc_promisc;
-	DECLARE_BITMAP(uc_hash_table, ENETC_MADDR_HASH_TBL_SZ);
-	DECLARE_BITMAP(mc_hash_table, ENETC_MADDR_HASH_TBL_SZ);
-};
-
-struct enetc_msg_config_vlan_filter {
-	struct enetc_msg_cmd_header header;
-	u8 vlan_promisc;
-	DECLARE_BITMAP(vlan_hash_table, ENETC_VLAN_HT_SIZE);
 };
 
 #define ENETC_CBD(R, i)	(&(((struct enetc_cbd *)((R).bd_base))[i]))
@@ -557,6 +542,8 @@ int enetc_alloc_si_resources(struct enetc_ndev_priv *priv);
 void enetc_free_si_resources(struct enetc_ndev_priv *priv);
 int enetc_configure_si(struct enetc_ndev_priv *priv);
 
+int enetc_suspend(struct net_device *ndev, bool wol);
+int enetc_resume(struct net_device *ndev, bool wol);
 int enetc_open(struct net_device *ndev);
 int enetc_close(struct net_device *ndev);
 void enetc_start(struct net_device *ndev);

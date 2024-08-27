@@ -12,6 +12,7 @@
 #include <media/v4l2-device.h>
 #include <media/videobuf2-core.h>
 #include <media/videobuf2-v4l2.h>
+#include <uapi/linux/nxp_neoisp.h>
 #include "neoisp_regs.h"
 
 /*
@@ -35,7 +36,7 @@
 #define NEOISP_MAX_CTRLS         (1)
 #define NEOISP_CTRL_PARAMS       (0)
 
-#define NEOISP_FMT_VCAP_COUNT    (12)
+#define NEOISP_FMT_VCAP_COUNT    (15)
 #define NEOISP_FMT_VOUT_COUNT    (24)
 #define NEOISP_FMT_MCAP_COUNT    (1)
 #define NEOISP_FMT_MOUT_COUNT    (1)
@@ -67,14 +68,17 @@
 #define FMT_IS_YUV(x) ( \
 		((x) == V4L2_PIX_FMT_GREY) || \
 		((x) == V4L2_PIX_FMT_NV12) || \
+		((x) == V4L2_PIX_FMT_NV21) || \
 		((x) == V4L2_PIX_FMT_NV16) || \
+		((x) == V4L2_PIX_FMT_NV61) || \
 		((x) == V4L2_PIX_FMT_UYVY) || \
-		((x) == V4L2_PIX_FMT_Y10) || \
-		((x) == V4L2_PIX_FMT_Y12) || \
-		((x) == V4L2_PIX_FMT_Y14) || \
 		((x) == V4L2_PIX_FMT_YUYV) || \
 		((x) == V4L2_PIX_FMT_YUV24) || \
-		((x) == V4L2_PIX_FMT_YUYV))
+		((x) == V4L2_PIX_FMT_YUVX32) || \
+		((x) == V4L2_PIX_FMT_VUYX32) || \
+		((x) == V4L2_PIX_FMT_VYUY))
+
+#define NEOISP_SUSPEND_TIMEOUT_MS (500)
 
 /* For logging only */
 #define NODE_NAME(node) \
@@ -108,10 +112,24 @@ enum neoisp_node_e {
 /*
  * structs
  */
+
+/*
+ * struct neoisp_info_s - ISP Hardware various information
+ *
+ * @isp_ver: ISP version
+ *
+ * This structure contains information about the ISP specific to a particular
+ * ISP model, version, or integration in a particular SoC.
+ */
+struct neoisp_info_s {
+	enum neoisp_version_e neoisp_hw_ver;
+};
+
 struct neoisp_node_desc_s {
 	const char *ent_name;
 	enum v4l2_buf_type buf_type;
 	__u32 caps;
+	__u32 link_flags;
 };
 
 struct neoisp_fmt_s {
@@ -228,11 +246,6 @@ struct neoisp_mod_params_s {
 	struct neoisp_mparam_conf_s conf;
 	struct neoisp_mparam_packetizer_s pack;
 };
-
-/*
- * functions
- */
-int neoisp_set_params(struct neoisp_dev_s *neoispd, struct neoisp_meta_params_s *p);
 
 /*
  * globals

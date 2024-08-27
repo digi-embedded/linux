@@ -1355,7 +1355,7 @@ static int imx6_pcie_config_sid(struct imx6_pcie *imx6_pcie)
 					       smmu_size / sizeof(u32)))
 			return -EINVAL;
 
-		of_property_read_u32(dev->of_node, "smmu_map_mask",
+		of_property_read_u32(dev->of_node, "iommu-map-mask",
 				     &smmu_map_mask);
 	}
 
@@ -1584,7 +1584,6 @@ static int imx6_add_pcie_ep(struct imx6_pcie *imx6_pcie,
 			   struct platform_device *pdev)
 {
 	int ret;
-	unsigned int pcie_dbi2_offset;
 	struct dw_pcie_ep *ep;
 	struct dw_pcie *pci = imx6_pcie->pci;
 	struct dw_pcie_rp *pp = &pci->pp;
@@ -1593,26 +1592,6 @@ static int imx6_add_pcie_ep(struct imx6_pcie *imx6_pcie,
 	imx6_pcie_host_init(pp);
 	ep = &pci->ep;
 	ep->ops = &pcie_ep_ops;
-
-	switch (imx6_pcie->drvdata->variant) {
-	case IMX8MQ_EP:
-	case IMX8MM_EP:
-	case IMX8MP_EP:
-		pcie_dbi2_offset = SZ_1M;
-		break;
-	default:
-		pcie_dbi2_offset = SZ_4K;
-		break;
-	}
-	pci->dbi_base2 = pci->dbi_base + pcie_dbi2_offset;
-
-	/*
-	 * db2 information should fetch from dtb file. dw_pcie_ep_init() can get dbi_base2 from
-	 * "dbi2" if pci->dbi_base2 is NULL. All code related pcie_dbi2_offset should be removed
-	 * after all dts added "dbi2" reg.
-	 */
-	if (imx6_pcie->drvdata->variant == IMX95_EP)
-		pci->dbi_base2 = NULL;
 
 	ret = dw_pcie_ep_init(ep);
 	if (ret) {

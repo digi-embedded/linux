@@ -283,11 +283,11 @@ static int snd_soc_is_matching_dai(const struct snd_soc_dai_link_component *dlc,
 
 	/* see snd_soc_dai_name_get() */
 
-	if (strcmp(dlc->dai_name, dai->name) == 0)
-		return 1;
-
 	if (dai->driver->name &&
 	    strcmp(dai->driver->name, dlc->dai_name) == 0)
+		return 1;
+
+	if (strcmp(dlc->dai_name, dai->name) == 0)
 		return 1;
 
 	if (dai->component->name &&
@@ -300,11 +300,11 @@ static int snd_soc_is_matching_dai(const struct snd_soc_dai_link_component *dlc,
 const char *snd_soc_dai_name_get(struct snd_soc_dai *dai)
 {
 	/* see snd_soc_is_matching_dai() */
-	if (dai->name)
-		return dai->name;
-
 	if (dai->driver->name)
 		return dai->driver->name;
+
+	if (dai->name)
+		return dai->name;
 
 	if (dai->component->name)
 		return dai->component->name;
@@ -1103,6 +1103,9 @@ static int snd_soc_add_pcm_runtime(struct snd_soc_card *card,
 	for_each_link_platforms(dai_link, i, platform) {
 		for_each_component(component) {
 			if (!snd_soc_is_matching_component(platform, component))
+				continue;
+
+			if (snd_soc_component_is_dummy(component) && component->num_dai)
 				continue;
 
 			snd_soc_rtd_add_component(rtd, component);

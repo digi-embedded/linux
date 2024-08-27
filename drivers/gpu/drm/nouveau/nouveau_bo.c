@@ -318,8 +318,9 @@ nouveau_bo_alloc(struct nouveau_cli *cli, u64 *size, int *align, u32 domain,
 			    (!vmm->page[i].host || vmm->page[i].shift > PAGE_SHIFT))
 				continue;
 
-			if (pi < 0)
-				pi = i;
+			/* pick the last one as it will be smallest. */
+			pi = i;
+
 			/* Stop once the buffer is larger than the current page size. */
 			if (*size >= 1ULL << vmm->page[i].shift)
 				break;
@@ -1254,6 +1255,8 @@ out:
 			drm_vma_node_unmap(&nvbo->bo.base.vma_node,
 					   bdev->dev_mapping);
 			nouveau_ttm_io_mem_free_locked(drm, nvbo->bo.resource);
+			nvbo->bo.resource->bus.offset = 0;
+			nvbo->bo.resource->bus.addr = NULL;
 			goto retry;
 		}
 

@@ -26,7 +26,8 @@ enum scmi_imx_misc_protocol_cmd {
 
 struct scmi_imx_misc_info {
 	u32 version;
-	u32 nr_ctrl;
+	u32 nr_dev_ctrl;
+	u32 nr_brd_ctrl;
 	u32 nr_reason;
 };
 
@@ -34,8 +35,11 @@ struct scmi_msg_imx_misc_protocol_attributes {
 	__le32 attributes;
 };
 
+#define GET_BRD_CTRLS_NR(x)	le32_get_bits((x), GENMASK(31, 24))
 #define GET_REASONS_NR(x)	le32_get_bits((x), GENMASK(23, 16))
-#define GET_CTRLS_NR(x)		le32_get_bits((x), GENMASK(15, 0))
+#define GET_DEV_CTRLS_NR(x)	le32_get_bits((x), GENMASK(15, 0))
+
+#define BRD_CTRL_START_ID	BIT(15)
 
 struct scmi_imx_misc_ctrl_set_in {
 	__le32 id;
@@ -73,10 +77,11 @@ static int scmi_imx_misc_attributes_get(const struct scmi_protocol_handle *ph,
 
 	ret = ph->xops->do_xfer(ph, t);
 	if (!ret) {
-		mi->nr_ctrl = GET_CTRLS_NR(attr->attributes);
+		mi->nr_dev_ctrl = GET_DEV_CTRLS_NR(attr->attributes);
+		mi->nr_brd_ctrl = GET_BRD_CTRLS_NR(attr->attributes);
 		mi->nr_reason = GET_REASONS_NR(attr->attributes);
-		dev_info(ph->dev, "i.MX MISC NUM CTRL: %d, NUM Reason: %d\n",
-			 mi->nr_ctrl, mi->nr_reason);
+		dev_info(ph->dev, "i.MX MISC NUM DEV CTRL: %d, NUM BRD CTRL: %d,NUM Reason: %d\n",
+			 mi->nr_dev_ctrl, mi->nr_brd_ctrl, mi->nr_reason);
 	}
 
 	ph->xops->xfer_put(ph, t);
@@ -84,16 +89,29 @@ static int scmi_imx_misc_attributes_get(const struct scmi_protocol_handle *ph,
 	return ret;
 }
 
-static int scmi_imx_misc_ctrl_notify(const struct scmi_protocol_handle *ph,
-				     u32 ctrl_id, u32 flags)
+static int scmi_imx_misc_ctrl_validate_id(const struct scmi_protocol_handle *ph,
+					  u32 ctrl_id)
 {
 	struct scmi_imx_misc_info *mi = ph->get_priv(ph);
+
+	if ((ctrl_id < BRD_CTRL_START_ID) && (ctrl_id > mi->nr_dev_ctrl))
+		return -EINVAL;
+	if (ctrl_id >= BRD_CTRL_START_ID + mi->nr_brd_ctrl)
+		return -EINVAL;
+
+	return 0;
+}
+
+static int scmi_imx_misc_ctrl_notify(const struct scmi_protocol_handle *ph,
+				     u32 ctrl_id, u32 evt_id, u32 flags)
+{
 	struct scmi_imx_misc_ctrl_notify_in *in;
 	struct scmi_xfer *t;
 	int ret;
 
-	if (ctrl_id >= mi->nr_ctrl)
-		return -EINVAL;
+	ret = scmi_imx_misc_ctrl_validate_id(ph, ctrl_id);
+	if (ret)
+		return ret;
 
 	ret = ph->xops->xfer_get_init(ph, SCMI_IMX_MISC_CTRL_NOTIFY, sizeof(*in), 0, &t);
 	if (ret)
@@ -115,7 +133,10 @@ static int scmi_imx_misc_ctrl_set_notify_enabled(const struct scmi_protocol_hand
 {
 	int ret;
 
-	ret = scmi_imx_misc_ctrl_notify(ph, src_id, enable ? evt_id : 0);
+	if (enable)
+		return 0;
+
+	ret = scmi_imx_misc_ctrl_notify(ph, src_id, evt_id, 0);
 	if (ret)
 		dev_err(ph->dev, "FAIL_ENABLED - evt[%X] src[%d] - ret:%d\n",
 			 evt_id, src_id, ret);
@@ -125,9 +146,7 @@ static int scmi_imx_misc_ctrl_set_notify_enabled(const struct scmi_protocol_hand
 
 static int scmi_imx_misc_ctrl_get_num_sources(const struct scmi_protocol_handle *ph)
 {
-	struct scmi_imx_misc_info *mi = ph->get_priv(ph);
-
-	return mi->nr_ctrl;
+	return GENMASK(15, 0);
 }
 
 static void *scmi_imx_misc_ctrl_fill_custom_report(const struct scmi_protocol_handle *ph,
@@ -159,20 +178,10 @@ static const struct scmi_event_ops scmi_imx_misc_event_ops = {
 
 static const struct scmi_event scmi_imx_misc_events[] = {
 	{
-		.id = SCMI_EVENT_IMX_MISC_CONTROL_DISABLED,
+		.id = SCMI_EVENT_IMX_MISC_CONTROL,
 		.max_payld_sz = sizeof(struct scmi_imx_misc_ctrl_notify_payld),
 		.max_report_sz = sizeof(struct scmi_imx_misc_ctrl_notify_report),
 	},
-	{
-		.id = SCMI_EVENT_IMX_MISC_CONTROL_FALLING_EDGE,
-		.max_payld_sz = sizeof(struct scmi_imx_misc_ctrl_notify_payld),
-		.max_report_sz = sizeof(struct scmi_imx_misc_ctrl_notify_report),
-	},
-	{
-		.id = SCMI_EVENT_IMX_MISC_CONTROL_RISING_EDGE,
-		.max_payld_sz = sizeof(struct scmi_imx_misc_ctrl_notify_payld),
-		.max_report_sz = sizeof(struct scmi_imx_misc_ctrl_notify_report),
-	}
 };
 
 static struct scmi_protocol_events scmi_imx_misc_protocol_events = {
@@ -209,13 +218,13 @@ static int scmi_imx_misc_protocol_init(const struct scmi_protocol_handle *ph)
 static int scmi_imx_misc_ctrl_get(const struct scmi_protocol_handle *ph,
 				  u32 ctrl_id, u32 *num, u32 *val)
 {
-	struct scmi_imx_misc_info *mi = ph->get_priv(ph);
 	struct scmi_imx_misc_ctrl_get_out *out;
 	struct scmi_xfer *t;
 	int ret, i;
 
-	if (ctrl_id >= mi->nr_ctrl)
-		return -EINVAL;
+	ret = scmi_imx_misc_ctrl_validate_id(ph, ctrl_id);
+	if (ret)
+		return ret;
 
 	ret = ph->xops->xfer_get_init(ph, SCMI_IMX_MISC_CTRL_GET, sizeof(u32), sizeof(*out), &t);
 	if (ret)
@@ -238,13 +247,13 @@ static int scmi_imx_misc_ctrl_get(const struct scmi_protocol_handle *ph,
 static int scmi_imx_misc_ctrl_set(const struct scmi_protocol_handle *ph,
 				  u32 ctrl_id, u32 num, u32 *val)
 {
-	struct scmi_imx_misc_info *mi = ph->get_priv(ph);
 	struct scmi_imx_misc_ctrl_set_in *in;
 	struct scmi_xfer *t;
 	int ret, i;
 
-	if (ctrl_id >= mi->nr_ctrl)
-		return -EINVAL;
+	ret = scmi_imx_misc_ctrl_validate_id(ph, ctrl_id);
+	if (ret)
+		return ret;
 
 	ret = ph->xops->xfer_get_init(ph, SCMI_IMX_MISC_CTRL_SET, sizeof(*in), 0, &t);
 	if (ret)
@@ -266,6 +275,7 @@ static int scmi_imx_misc_ctrl_set(const struct scmi_protocol_handle *ph,
 static const struct scmi_imx_misc_proto_ops scmi_imx_misc_proto_ops = {
 	.misc_ctrl_set = scmi_imx_misc_ctrl_set,
 	.misc_ctrl_get = scmi_imx_misc_ctrl_get,
+	.misc_ctrl_req_notify = scmi_imx_misc_ctrl_notify,
 };
 
 static const struct scmi_protocol scmi_imx_misc = {

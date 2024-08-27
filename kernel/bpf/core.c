@@ -371,14 +371,18 @@ static int bpf_adj_delta_to_imm(struct bpf_insn *insn, u32 pos, s32 end_old,
 static int bpf_adj_delta_to_off(struct bpf_insn *insn, u32 pos, s32 end_old,
 				s32 end_new, s32 curr, const bool probe_pass)
 {
-	const s32 off_min = S16_MIN, off_max = S16_MAX;
+	s64 off_min, off_max, off;
 	s32 delta = end_new - end_old;
-	s32 off;
 
-	if (insn->code == (BPF_JMP32 | BPF_JA))
+	if (insn->code == (BPF_JMP32 | BPF_JA)) {
 		off = insn->imm;
-	else
+		off_min = S32_MIN;
+		off_max = S32_MAX;
+	} else {
 		off = insn->off;
+		off_min = S16_MIN;
+		off_max = S16_MAX;
+	}
 
 	if (curr < pos && curr + off + 1 >= end_old)
 		off += delta;
@@ -859,7 +863,12 @@ static LIST_HEAD(pack_list);
  * CONFIG_MMU=n. Use PAGE_SIZE in these cases.
  */
 #ifdef PMD_SIZE
-#define BPF_PROG_PACK_SIZE (PMD_SIZE * num_possible_nodes())
+/* PMD_SIZE is really big for some archs. It doesn't make sense to
+ * reserve too much memory in one allocation. Hardcode BPF_PROG_PACK_SIZE to
+ * 2MiB * num_possible_nodes(). On most architectures PMD_SIZE will be
+ * greater than or equal to 2MB.
+ */
+#define BPF_PROG_PACK_SIZE (SZ_2M * num_possible_nodes())
 #else
 #define BPF_PROG_PACK_SIZE PAGE_SIZE
 #endif

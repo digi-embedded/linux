@@ -77,6 +77,10 @@
 #define NETC_TMR_SYSTEM_CLK		1 /* enet_clk_root/2, from CCM */
 #define NETC_TMR_EXT_OSC		2 /* tmr_1588_clk, from IO pins */
 
+#define NETC_TMR_SYSCLK_RATE		333333333UL
+#define NETC_TMR_SYSCLK_PERIOD_INT	3
+#define NETC_TMR_SYSCLK_PERIOD_FRAC	0xd
+
 #define NETC_TMR_FIPER_PW		0x1f
 
 struct netc_timer {
@@ -95,6 +99,10 @@ struct netc_timer {
 	u32 period_int;
 	/* fractional part of clock period * BIT(32) */
 	u32 period_frac;
+	/* High 32 bits are the integer part, low 32 bits
+	 * are the fractional part
+	 */
+	u64 base_period;
 	u32 oclk_prsc; /* must be an even value */
 	u32 fiper[NETC_TMR_FIPER_NUM];
 };
@@ -168,17 +176,15 @@ static u32 netc_timer_calculate_fiper_pulse_width(struct netc_timer *priv,
 static void netc_timer_adjust_period(struct netc_timer *priv, u64 period)
 {
 	u32 period_frac = lower_32_bits(period);
+	u32 period_int = upper_32_bits(period);
+	u32 tmr_ctrl, old_tmr_ctrl;
 
-	/*
-	 * u32 period_int = upper_32_bits(period);
-	 * u32 tmr_ctrl, old_tmr_ctrl;
-
-	 * old_tmr_ctrl = netc_timer_read_reg(priv, NETC_TMR_CTRL);
-	 * tmr_ctrl = u32_replace_bits(old_tmr_ctrl, period_int,
-	 *				TMR_CTRL_TCLK_PERIOD);
-	 * if (unlikely(old_tmr_ctrl != tmr_ctrl))
-	 *	netc_timer_write_reg(priv, NETC_TMR_CTRL, tmr_ctrl);
-	 */
+	guard(spinlock_irqsave)(&priv->lock);
+	old_tmr_ctrl = netc_timer_read_reg(priv, NETC_TMR_CTRL);
+	tmr_ctrl = u32_replace_bits(old_tmr_ctrl, period_int,
+				    TMR_CTRL_TCLK_PERIOD);
+	if (tmr_ctrl != old_tmr_ctrl)
+		netc_timer_write_reg(priv, NETC_TMR_CTRL, tmr_ctrl);
 
 	netc_timer_write_reg(priv, NETC_TMR_ADD, period_frac);
 }
@@ -220,7 +226,6 @@ static int netc_timer_get_clk_config(struct netc_timer *priv)
 {
 	struct device_node *node = priv->dev->of_node;
 	u32 clk_cfg[3];
-	u64 clk_info;
 	int err;
 
 	err = of_property_read_u32_array(node, "fsl,clk-cfg", clk_cfg,
@@ -229,23 +234,16 @@ static int netc_timer_get_clk_config(struct netc_timer *priv)
 		priv->clk_freq = clk_cfg[0];
 		priv->period_int = clk_cfg[1];
 		priv->period_frac = clk_cfg[2];
+		priv->base_period = ((u64)priv->period_int << 32) |
+				    priv->period_frac;
 
 		return 0;
 	}
 
-	/* If "fsl,clk-cfg" property does not exist, then get the period
-	 * from IERB NETCCLKFR[FRAC] and NETCCLKCR[PERIOD]. And get clock
-	 * frequency from NETCCLKCR[FREQ].
-	 */
-	clk_info = netc_ierb_get_clk_config();
-	if (!clk_info) {
-		dev_err(priv->dev, "Clock period from NETC IERB is invalid\n");
-		return -EINVAL;
-	}
-
-	priv->clk_freq = (clk_info >> 32) & NETCCLKCR_FREQ;
-	priv->period_int = ((clk_info >> 32) & NETCCLKCR_PERIOD) >> 16;
-	priv->period_frac = clk_info & NETCCLKCR_FRAC;
+	priv->clk_freq = NETC_TMR_SYSCLK_RATE;
+	priv->period_int = NETC_TMR_SYSCLK_PERIOD_INT;
+	priv->period_frac = NETC_TMR_SYSCLK_PERIOD_FRAC;
+	priv->base_period = ((u64)priv->period_int << 32) | priv->period_frac;
 
 	return 0;
 }
@@ -253,24 +251,14 @@ static int netc_timer_get_clk_config(struct netc_timer *priv)
 /* ppm: parts per million, ppb: parts per billion */
 static int netc_timer_adjfine(struct ptp_clock_info *ptp, long scaled_ppm)
 {
-	struct netc_timer *priv;
-	u64 clk_period, diff;
-	unsigned long flags;
-	bool neg_adj;
+	struct netc_timer *priv = container_of(ptp, struct netc_timer, caps);
+	u64 new_period;
 
 	if (!scaled_ppm)
 		return 0;
 
-	priv = container_of(ptp, struct netc_timer, caps);
-	clk_period = ((u64)priv->period_int << 32) | priv->period_frac;
-	neg_adj = diff_by_scaled_ppm(clk_period, scaled_ppm, &diff);
-	clk_period = neg_adj ? clk_period - diff : clk_period + diff;
-
-	spin_lock_irqsave(&priv->lock, flags);
-
-	netc_timer_adjust_period(priv, clk_period);
-
-	spin_unlock_irqrestore(&priv->lock, flags);
+	new_period = adjust_by_scaled_ppm(priv->base_period, scaled_ppm);
+	netc_timer_adjust_period(priv, new_period);
 
 	return 0;
 }
@@ -473,7 +461,7 @@ static int netc_timer_enable(struct ptp_clock_info *ptp,
 static const struct ptp_clock_info netc_timer_ptp_caps = {
 	.owner		= THIS_MODULE,
 	.name		= "NETC Timer PTP clock",
-	.max_adj	= 1000000,
+	.max_adj	= 500000000,
 	.n_alarm	= 2,
 	.n_ext_ts	= 2,
 	.n_per_out	= 3,
@@ -567,17 +555,15 @@ static int netc_timer_init(struct netc_timer *priv)
 	ns = timespec64_to_ns(&now);
 	netc_timer_cnt_write(priv, ns);
 
-	tmr_ctrl |= ((priv->period_int << 16) & TMR_CTRL_TCLK_PERIOD);
-	netc_timer_write_reg(priv, NETC_TMR_ADD, priv->period_frac);
+	/* Allow atomic writes to TCLK_PERIOD and TMR_ADD,  An update
+	 * to TCLK_PERIOD doesn't take effect until TMR_ADD is written.
+	 */
+	tmr_ctrl |= ((priv->period_int << 16) & TMR_CTRL_TCLK_PERIOD) |
+		    TMR_COMP_MODE;
 	netc_timer_write_reg(priv, NETC_TMR_CTRL, tmr_ctrl);
+	netc_timer_write_reg(priv, NETC_TMR_ADD, priv->period_frac);
 
 	spin_unlock_irqrestore(&priv->lock, flags);
-
-	priv->clock = ptp_clock_register(&priv->caps, priv->dev);
-	if (IS_ERR(priv->clock))
-		return PTR_ERR(priv->clock);
-
-	priv->phc_index = ptp_clock_index(priv->clock);
 
 	return 0;
 }
@@ -670,10 +656,21 @@ static int netc_timer_probe(struct pci_dev *pdev,
 		dev_err(dev, "NETC Timer initialization failed\n");
 		goto free_irq;
 	}
+
+	priv->clock = ptp_clock_register(&priv->caps, priv->dev);
+	if (IS_ERR(priv->clock)) {
+		err = PTR_ERR(priv->clock);
+		goto deinit_timer;
+	}
+
+	priv->phc_index = ptp_clock_index(priv->clock);
+
 	pci_set_drvdata(pdev, priv);
 
 	return 0;
 
+deinit_timer:
+	netc_timer_deinit(priv);
 free_irq:
 	free_irq(priv->irq, priv);
 free_irq_vectors:
@@ -713,11 +710,124 @@ static const struct pci_device_id netc_timer_id_table[] = {
 };
 MODULE_DEVICE_TABLE(pci, netc_timer_id_table);
 
+static int ptp_netc_shutdown(struct netc_timer *priv)
+{
+	struct pci_dev *pdev = priv->pci_dev;
+
+	netc_timer_deinit(priv);
+	disable_irq(priv->irq);
+	irq_set_affinity_hint(priv->irq, NULL);
+	free_irq(priv->irq, priv);
+	pci_free_irq_vectors(pdev);
+
+	pci_save_state(pdev);
+	pci_disable_device(priv->pci_dev);
+
+	return 0;
+}
+
+static int ptp_netc_powerup(struct netc_timer *priv)
+{
+	struct pci_dev *pdev = priv->pci_dev;
+	int err, n;
+
+	err = netc_ierb_get_init_status();
+	if (err) {
+		dev_err(&pdev->dev, "Can't get IERB init status: %d\n", err);
+		return err;
+	}
+
+	err = pci_enable_device_mem(pdev);
+	if (err) {
+		dev_err(&pdev->dev, "device enable failed\n");
+		return err;
+	}
+	pci_restore_state(pdev);
+
+	pci_set_master(pdev);
+
+	n = pci_alloc_irq_vectors(pdev, 1, 1, PCI_IRQ_MSIX);
+	if (n != 1) {
+		err = -EPERM;
+		goto disable_dev;
+	}
+	priv->irq = pci_irq_vector(pdev, 0);
+	err = request_irq(priv->irq, netc_timer_isr, 0, priv->irq_name, priv);
+	if (err) {
+		dev_err(&pdev->dev, "request_irq() failed!\n");
+		goto free_irq_vectors;
+	}
+
+	err = netc_timer_init(priv);
+	if (err) {
+		dev_err(&pdev->dev, "NETC Timer initialization failed, err=%d\n", err);
+		goto free_irq;
+	}
+
+	return 0;
+
+free_irq:
+	free_irq(priv->irq, priv);
+free_irq_vectors:
+	pci_free_irq_vectors(pdev);
+disable_dev:
+	pci_disable_device(pdev);
+
+	return err;
+}
+
+static int ptp_netc_suspend_noirq(struct device *dev)
+{
+	struct pci_dev *pdev = to_pci_dev(dev);
+	struct netc_timer *priv;
+	int err;
+
+	priv = pci_get_drvdata(pdev);
+
+	if (netc_ierb_may_wakeonlan())
+		return 0;
+
+	err = ptp_netc_shutdown(priv);
+	if (err) {
+		dev_err(dev, "NETC Timer shutdown failed\n");
+		return err;
+	}
+
+	return err;
+}
+
+static int ptp_netc_resume_noirq(struct device *dev)
+{
+	struct pci_dev *pdev = to_pci_dev(dev);
+	struct netc_timer *priv;
+	int err;
+
+	priv = pci_get_drvdata(pdev);
+
+	if (netc_ierb_may_wakeonlan())
+		return 0;
+
+	err = ptp_netc_powerup(priv);
+	if (err) {
+		dev_err(dev, "NETC Timer powerup failed\n");
+		kfree(priv);
+		return err;
+	}
+
+	return err;
+}
+
+static const struct dev_pm_ops __maybe_unused ptp_netc_pm_ops = {
+	SET_NOIRQ_SYSTEM_SLEEP_PM_OPS(ptp_netc_suspend_noirq,
+				      ptp_netc_resume_noirq)
+};
+
 static struct pci_driver netc_timer_driver = {
 	.name = KBUILD_MODNAME,
 	.id_table = netc_timer_id_table,
 	.probe = netc_timer_probe,
 	.remove = netc_timer_remove,
+	.driver.pm = &ptp_netc_pm_ops,
 };
 module_pci_driver(netc_timer_driver);
 

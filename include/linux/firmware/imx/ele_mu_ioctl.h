@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: (GPL-2.0 WITH Linux-syscall-note) OR BSD-3-Clause*/
 /*
- * Copyright 2019-2023 NXP
+ * Copyright 2019-2024 NXP
  */
 
 #ifndef ELE_MU_IOCTL_H
@@ -43,6 +43,11 @@ struct ele_mu_ioctl_get_soc_info {
 	u16 soc_rev;
 };
 
+struct ele_time_frame {
+	struct timespec64 t_start;
+	struct timespec64 t_end;
+};
+
 /* IO Buffer Flags */
 #define ELE_MU_IO_FLAGS_IS_OUTPUT	(0x00u)
 #define ELE_MU_IO_FLAGS_IS_INPUT	(0x01u)
@@ -61,6 +66,11 @@ struct ele_mu_ioctl_get_soc_info {
  */
 #define ELE_MU_IOCTL_ENABLE_CMD_RCV	_IO(ELE_MU_IOCTL, 0x01)
 
+/*
+ * ioctl to get configure the SCU shared buffer.
+ */
+#define ELE_MU_IOCTL_SHARED_BUF_CFG	_IOW(ELE_MU_IOCTL, 0x02, \
+					     struct ele_mu_ioctl_shared_mem_cfg)
 /*
  * ioctl to get the buffer allocated from the memory, which is shared
  * between kernel and FW.
@@ -86,4 +96,9 @@ struct ele_mu_ioctl_get_soc_info {
 #define ELE_MU_IOCTL_GET_SOC_INFO      _IOR(ELE_MU_IOCTL, 0x06, \
 					struct ele_mu_ioctl_get_soc_info)
 
+/*
+ * ioctl to capture the timestamp at the request to FW and response from FW
+ * for a crypto operation
+ */
+#define ELE_MU_IOCTL_GET_TIMER	_IOR(ELE_MU_IOCTL, 0x08, struct ele_time_frame)
 #endif

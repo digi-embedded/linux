@@ -3,6 +3,7 @@
 
 #include "enetc.h"
 #include <linux/bpf_trace.h>
+#include <linux/clk.h>
 #include <linux/tcp.h>
 #include <linux/udp.h>
 #include <linux/vmalloc.h>
@@ -2444,6 +2445,22 @@ static void enetc4_set_lso_flags_mask(struct enetc_hw *hw)
 	enetc_wr(hw, ENETC4_SILSOSFMR1, 0);
 }
 
+static int enetc_set_rss(struct net_device *ndev, bool en)
+{
+	struct enetc_ndev_priv *priv = netdev_priv(ndev);
+	struct enetc_hw *hw = &priv->si->hw;
+	u32 reg;
+
+	enetc_wr(hw, ENETC_SIRBGCR, priv->num_rx_rings);
+
+	reg = enetc_rd(hw, ENETC_SIMR);
+	reg &= ~ENETC_SIMR_RSSE;
+	reg |= (en) ? ENETC_SIMR_RSSE : 0;
+	enetc_wr(hw, ENETC_SIMR, reg);
+
+	return 0;
+}
+
 int enetc_configure_si(struct enetc_ndev_priv *priv)
 {
 	struct enetc_si *si = priv->si;
@@ -2463,6 +2480,8 @@ int enetc_configure_si(struct enetc_ndev_priv *priv)
 		enetc4_set_lso_flags_mask(hw);
 	}
 
+	mutex_init(&si->msg_lock);
+
 	/* set SI cache attributes */
 	enetc_wr(hw, ENETC_SICAR0,
 		 ENETC_SICAR_RD_COHERENT | ENETC_SICAR_WR_COHERENT);
@@ -2475,6 +2494,9 @@ int enetc_configure_si(struct enetc_ndev_priv *priv)
 		if (err)
 			return err;
 	}
+
+	if (priv->ndev->features & NETIF_F_RXHASH)
+		enetc_set_rss(priv->ndev, true);
 
 	return 0;
 }
@@ -2822,11 +2844,23 @@ static void enetc_clear_interrupts(struct enetc_ndev_priv *priv)
 static int enetc_phylink_connect(struct net_device *ndev)
 {
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
+	struct enetc_si *si = priv->si;
 	struct ethtool_eee edata;
 	int err;
 
 	if (!priv->phylink) {
 		/* phy-less mode */
+		if (si->pdev->is_virtfn && si->vf_register_msg_msix) {
+			err = si->vf_register_msg_msix(si);
+			if (err)
+				return err;
+
+			if (si->vf_register_link_status_notify)
+				si->vf_register_link_status_notify(si, true);
+
+			return 0;
+		}
+
 		netif_carrier_on(ndev);
 		return 0;
 	}
@@ -2894,14 +2928,19 @@ int enetc_open(struct net_device *ndev)
 {
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
 	struct enetc_bdr_resource *tx_res, *rx_res;
+	struct enetc_si *si = priv->si;
 	bool extended;
 	int err;
 
 	extended = !!(priv->active_offloads & ENETC_F_RX_TSTAMP);
 
-	err = enetc_setup_irqs(priv);
+	err = clk_prepare_enable(priv->ref_clk);
 	if (err)
 		return err;
+
+	err = enetc_setup_irqs(priv);
+	if (err)
+		goto err_setup_irqs;
 
 	err = enetc_phylink_connect(ndev);
 	if (err)
@@ -2930,10 +2969,22 @@ int enetc_open(struct net_device *ndev)
 err_alloc_rx:
 	enetc_free_tx_resources(tx_res, priv->num_tx_rings);
 err_alloc_tx:
-	if (priv->phylink)
+	if (priv->phylink) {
 		phylink_disconnect_phy(priv->phylink);
+	} else {
+		if (si->pdev->is_virtfn && si->vf_free_msg_msix) {
+			if (si->vf_register_link_status_notify)
+				si->vf_register_link_status_notify(si, false);
+
+			si->vf_free_msg_msix(si);
+
+			return 0;
+		}
+	}
 err_phy_connect:
 	enetc_free_irqs(priv);
+err_setup_irqs:
+	clk_disable_unprepare(priv->ref_clk);
 
 	return err;
 }
@@ -2966,6 +3017,7 @@ EXPORT_SYMBOL_GPL(enetc_stop);
 int enetc_close(struct net_device *ndev)
 {
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
+	struct enetc_si *si = priv->si;
 
 	enetc_stop(ndev);
 
@@ -2973,6 +3025,13 @@ int enetc_close(struct net_device *ndev)
 		phylink_stop(priv->phylink);
 		phylink_disconnect_phy(priv->phylink);
 	} else {
+		if (si->pdev->is_virtfn && si->vf_free_msg_msix) {
+			if (si->vf_register_link_status_notify)
+				si->vf_register_link_status_notify(si, false);
+
+			si->vf_free_msg_msix(si);
+		}
+
 		netif_carrier_off(ndev);
 	}
 
@@ -2983,6 +3042,8 @@ int enetc_close(struct net_device *ndev)
 	enetc_assign_tx_resources(priv, NULL);
 
 	enetc_free_irqs(priv);
+
+	clk_disable_unprepare(priv->ref_clk);
 
 	return 0;
 }
@@ -3048,6 +3109,79 @@ out_free_tx_res:
 out:
 	return err;
 }
+
+int enetc_suspend(struct net_device *ndev, bool wol)
+{
+	struct enetc_ndev_priv *priv = netdev_priv(ndev);
+
+	enetc_stop(ndev);
+
+	enetc_free_rxtx_rings(priv);
+
+	/* Avoids dangling pointers and also frees old resources */
+	enetc_assign_rx_resources(priv, NULL);
+	enetc_assign_tx_resources(priv, NULL);
+
+	if (!wol) {
+		enetc_free_irqs(priv);
+		clk_disable_unprepare(priv->ref_clk);
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(enetc_suspend);
+
+int enetc_resume(struct net_device *ndev, bool wol)
+{
+	struct enetc_ndev_priv *priv = netdev_priv(ndev);
+	struct enetc_bdr_resource *tx_res, *rx_res;
+	bool extended;
+	int err;
+
+	extended = !!(priv->active_offloads & ENETC_F_RX_TSTAMP);
+
+	if (!wol) {
+		err = clk_prepare_enable(priv->ref_clk);
+			if (err)
+				return err;
+
+		err = enetc_setup_irqs(priv);
+		if (err)
+			goto out_setup_irqs;
+	}
+
+	tx_res = enetc_alloc_tx_resources(priv);
+	if (IS_ERR(tx_res)) {
+		err = PTR_ERR(tx_res);
+		goto out_free_irqs;
+	}
+
+	rx_res = enetc_alloc_rx_resources(priv, extended);
+	if (IS_ERR(rx_res)) {
+		err = PTR_ERR(rx_res);
+		goto out_free_tx_res;
+	}
+
+	enetc_tx_onestep_tstamp_init(priv);
+	enetc_assign_tx_resources(priv, tx_res);
+	enetc_assign_rx_resources(priv, rx_res);
+	enetc_setup_bdrs(priv, extended);
+	enetc_start(priv->ndev);
+
+	return 0;
+
+out_free_tx_res:
+	enetc_free_tx_resources(tx_res, priv->num_tx_rings);
+out_free_irqs:
+	if (!wol)
+		enetc_free_irqs(priv);
+out_setup_irqs:
+	if (!wol)
+		clk_disable_unprepare(priv->ref_clk);
+
+	return err;
+}
+EXPORT_SYMBOL_GPL(enetc_resume);
 
 static void enetc_debug_tx_ring_prios(struct enetc_ndev_priv *priv)
 {
@@ -3251,22 +3385,6 @@ struct net_device_stats *enetc_get_stats(struct net_device *ndev)
 	return stats;
 }
 EXPORT_SYMBOL_GPL(enetc_get_stats);
-
-static int enetc_set_rss(struct net_device *ndev, bool en)
-{
-	struct enetc_ndev_priv *priv = netdev_priv(ndev);
-	struct enetc_hw *hw = &priv->si->hw;
-	u32 reg;
-
-	enetc_wr(hw, ENETC_SIRBGCR, priv->num_rx_rings);
-
-	reg = enetc_rd(hw, ENETC_SIMR);
-	reg &= ~ENETC_SIMR_RSSE;
-	reg |= (en) ? ENETC_SIMR_RSSE : 0;
-	enetc_wr(hw, ENETC_SIMR, reg);
-
-	return 0;
-}
 
 static void enetc_enable_rxvlan(struct net_device *ndev, bool en)
 {

@@ -1,20 +1,24 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Copyright 2021-2023 NXP
+ * Copyright 2021-2024 NXP
  */
 
-#include <linux/dma-mapping.h>
+#include <linux/clk.h>
 #include <linux/completion.h>
+#include <linux/delay.h>
 #include <linux/dev_printk.h>
+#include <linux/dma-mapping.h>
 #include <linux/errno.h>
 #include <linux/export.h>
+#include <linux/firmware.h>
 #include <linux/firmware/imx/ele_base_msg.h>
-#include <linux/firmware/imx/v2x_base_msg.h>
 #include <linux/firmware/imx/ele_mu_ioctl.h>
 #include <linux/firmware/imx/se_fw_inc.h>
+#include <linux/firmware/imx/v2x_base_msg.h>
+#include <linux/firmware/imx/svc/seco.h>
 #include <linux/genalloc.h>
-#include <linux/io.h>
 #include <linux/init.h>
+#include <linux/io.h>
 #include <linux/miscdevice.h>
 #include <linux/mod_devicetable.h>
 #include <linux/module.h>
@@ -24,22 +28,26 @@
 #include <linux/slab.h>
 #include <linux/string.h>
 #include <linux/sys_soc.h>
+#include <linux/fs_struct.h>
 
-#include "se_fw.h"
 #include "ele_common.h"
 #include "ele_fw_api.h"
+#include "se_fw.h"
 
 static uint32_t v2x_fw_state;
 
 #define SOC_ID_OF_IMX8ULP		0x084D
 #define SOC_ID_OF_IMX93			0x9300
-#define SOC_ID_OF_IMX95			0x9500
+#define SOC_ID_OF_IMX8DXL		0xE
 #define SOC_VER_MASK			0xFFFF0000
 #define SOC_ID_MASK			0x0000FFFF
 #define RESERVED_DMA_POOL		BIT(1)
+#define SCU_MEM_CFG			BIT(2)
+#define IMX_ELE_FW_DIR                 "/lib/firmware/imx/ele/"
+#define SECURE_RAM_BASE_ADDRESS_SCU	(0x20800000u)
 
 struct imx_info {
-	const uint8_t pdev_name[2][10];
+	const uint8_t pdev_name[10];
 	bool socdev;
 	uint8_t mu_id;
 	uint8_t mu_did;
@@ -56,11 +64,16 @@ struct imx_info {
 	uint32_t mu_buff_size;
 	bool reserved_dma_ranges;
 	bool init_fw;
+	int (*pre_if_config)(struct device *dev);
+	int (*post_if_config)(struct device *dev);
 	/* platform specific flag to enable/disable the ELE True RNG */
 	bool v2x_state_check;
 	int (*start_rng)(struct device *dev);
 	bool enable_ele_trng;
 	bool imem_mgmt;
+	bool imem_restore;
+	uint8_t *fw_name_in_rfs;
+	uint8_t *imem_save_rfs;
 };
 
 struct imx_info_list {
@@ -77,7 +90,7 @@ static const struct imx_info_list imx8ulp_info = {
 	.soc_id = SOC_ID_OF_IMX8ULP,
 	.info = {
 			{
-				.pdev_name = {"se-fw2", "mu2"},
+				.pdev_name = {"se-fw2"},
 				.socdev = true,
 				.mu_id = 2,
 				.mu_did = 7,
@@ -87,17 +100,21 @@ static const struct imx_info_list imx8ulp_info = {
 				.success_tag = 0xd6,
 				.base_api_ver = MESSAGING_VERSION_6,
 				.fw_api_ver = MESSAGING_VERSION_7,
-				.se_name = "ele",
+				.se_name = "hsm1",
 				.mbox_tx_name = "tx",
 				.mbox_rx_name = "rx",
 				.pool_name = "sram",
 				.reserved_dma_ranges = true,
-				.init_fw = false,
+				.pre_if_config = false,
+				.post_if_config = false,
 				.v2x_state_check = false,
 				.start_rng = ele_start_rng,
 				.enable_ele_trng = false,
 				.imem_mgmt = true,
 				.mu_buff_size = 0,
+				.fw_name_in_rfs = IMX_ELE_FW_DIR\
+						  "mx8ulpa2ext-ahab-container.img",
+				.imem_save_rfs = IMX_ELE_FW_DIR"mx8ulp-imem.img",
 			},
 	},
 };
@@ -107,8 +124,8 @@ static const struct imx_info_list imx93_info = {
 	.soc_id = SOC_ID_OF_IMX93,
 	.info = {
 			{
-				.pdev_name = {"se-fw2", "mu2"},
-				.socdev = true,
+				.pdev_name = {"se-fw2"},
+				.socdev = false,
 				.mu_id = 2,
 				.mu_did = 3,
 				.max_dev_ctx = 4,
@@ -117,28 +134,220 @@ static const struct imx_info_list imx93_info = {
 				.success_tag = 0xd6,
 				.base_api_ver = MESSAGING_VERSION_6,
 				.fw_api_ver = MESSAGING_VERSION_7,
-				.se_name = "ele",
+				.se_name = "hsm1",
 				.mbox_tx_name = "tx",
 				.mbox_rx_name = "rx",
 				.pool_name = NULL,
 				.reserved_dma_ranges = true,
-				.init_fw = true,
+				.pre_if_config = false,
+				.post_if_config = ele_init_fw,
 				.v2x_state_check = false,
 				.start_rng = ele_start_rng,
 				.enable_ele_trng = true,
 				.imem_mgmt = false,
 				.mu_buff_size = 0,
+				.fw_name_in_rfs = NULL,
+				.imem_save_rfs = NULL,
+			},
+	},
+};
+
+static const struct imx_info_list imx8dxl_info = {
+	.num_mu = 7,
+	.soc_id = SOC_ID_OF_IMX8DXL,
+	.info = {
+			{
+				.pdev_name = {"seco-she"},
+				.socdev = false,
+				.mu_id = 1,
+				.mu_did = 0,
+				.max_dev_ctx = 4,
+				.cmd_tag = 0x17,
+				.rsp_tag = 0xe1,
+				.success_tag = 0x00,
+				.base_api_ver = MESSAGING_VERSION_6,
+				.fw_api_ver = MESSAGING_VERSION_7,
+				.se_name = "she1",
+				.mbox_tx_name = "txdb",
+				.mbox_rx_name = "rxdb",
+				.pool_name = NULL,
+				.reserved_dma_ranges = false,
+				.pre_if_config = imx_scu_init_fw,
+				.post_if_config = false,
+				.v2x_state_check = false,
+				.start_rng = false,
+				.enable_ele_trng = false,
+				.imem_mgmt = false,
+				.mu_buff_size = 0,
+				.fw_name_in_rfs = NULL,
+				.imem_save_rfs = NULL,
+			},
+			{
+				.pdev_name = {"se-fw2"},
+				.socdev = false,
+				.mu_id = 2,
+				.mu_did = 0,
+				.max_dev_ctx = 2,
+				.cmd_tag = 0x17,
+				.rsp_tag = 0xe1,
+				.success_tag = 0x00,
+				.base_api_ver = MESSAGING_VERSION_6,
+				.fw_api_ver = MESSAGING_VERSION_7,
+				.se_name = "hsm1",
+				.mbox_tx_name = "txdb",
+				.mbox_rx_name = "rxdb",
+				.pool_name = NULL,
+				.reserved_dma_ranges = false,
+				.pre_if_config = imx_scu_init_fw,
+				.post_if_config = false,
+				.v2x_state_check = false,
+				.start_rng = false,
+				.enable_ele_trng = false,
+				.imem_mgmt = false,
+				.mu_buff_size = 0,
+				.fw_name_in_rfs = NULL,
+				.imem_save_rfs = NULL,
+			},
+			{
+				.pdev_name = {"v2x-sv0"},
+				.socdev = false,
+				.mu_id = 4,
+				.mu_did = 0,
+				.max_dev_ctx = 2,
+				.cmd_tag = 0x18,
+				.rsp_tag = 0xe2,
+				.success_tag = 0x00,
+				.base_api_ver = 0x02,
+				.fw_api_ver = MESSAGING_VERSION_7,
+				.se_name = "v2x_sv0",
+				.mbox_tx_name = "txdb",
+				.mbox_rx_name = "rxdb",
+				.pool_name = NULL,
+				.reserved_dma_ranges = false,
+				.pre_if_config = imx_scu_init_fw,
+				.post_if_config = false,
+				.v2x_state_check = false,
+				.start_rng = false,
+				.enable_ele_trng = false,
+				.imem_mgmt = false,
+				.mu_buff_size = 0,
+				.fw_name_in_rfs = NULL,
+				.imem_save_rfs = NULL,
+			},
+			{
+				.pdev_name = {"v2x-sv1"},
+				.socdev = false,
+				.mu_id = 5,
+				.mu_did = 0,
+				.max_dev_ctx = 2,
+				.cmd_tag = 0x19,
+				.rsp_tag = 0xe3,
+				.success_tag = 0x00,
+				.base_api_ver = 0x02,
+				.fw_api_ver = MESSAGING_VERSION_7,
+				.se_name = "v2x_sv1",
+				.mbox_tx_name = "txdb",
+				.mbox_rx_name = "rxdb",
+				.pool_name = NULL,
+				.reserved_dma_ranges = false,
+				.pre_if_config = imx_scu_init_fw,
+				.post_if_config = false,
+				.v2x_state_check = false,
+				.start_rng = false,
+				.enable_ele_trng = false,
+				.imem_mgmt = false,
+				.mu_buff_size = 0,
+				.fw_name_in_rfs = NULL,
+				.imem_save_rfs = NULL,
+			},
+			{
+				.pdev_name = {"v2x-she"},
+				.socdev = false,
+				.mu_id = 6,
+				.mu_did = 0,
+				.max_dev_ctx = 2,
+				.cmd_tag = 0x1a,
+				.rsp_tag = 0xe4,
+				.success_tag = 0x00,
+				.base_api_ver = 0x02,
+				.fw_api_ver = MESSAGING_VERSION_7,
+				.se_name = "v2x_she",
+				.mbox_tx_name = "txdb",
+				.mbox_rx_name = "rxdb",
+				.pool_name = NULL,
+				.reserved_dma_ranges = false,
+				.pre_if_config = imx_scu_init_fw,
+				.post_if_config = false,
+				.v2x_state_check = false,
+				.start_rng = false,
+				.enable_ele_trng = false,
+				.imem_mgmt = false,
+				.mu_buff_size = 16,
+				.fw_name_in_rfs = NULL,
+				.imem_save_rfs = NULL,
+			},
+			{
+				.pdev_name = {"v2x-sg0"},
+				.socdev = false,
+				.mu_id = 7,
+				.mu_did = 0,
+				.max_dev_ctx = 2,
+				.cmd_tag = 0x1d,
+				.rsp_tag = 0xe7,
+				.success_tag = 0x00,
+				.base_api_ver = 0x02,
+				.fw_api_ver = MESSAGING_VERSION_7,
+				.se_name = "v2x_sg0",
+				.mbox_tx_name = "txdb",
+				.mbox_rx_name = "rxdb",
+				.pool_name = NULL,
+				.reserved_dma_ranges = false,
+				.pre_if_config = imx_scu_init_fw,
+				.post_if_config = false,
+				.v2x_state_check = false,
+				.start_rng = false,
+				.enable_ele_trng = false,
+				.imem_mgmt = false,
+				.mu_buff_size = 0,
+				.fw_name_in_rfs = NULL,
+				.imem_save_rfs = NULL,
+			},
+			{
+				.pdev_name = {"v2x-sg1"},
+				.socdev = false,
+				.mu_id = 8,
+				.mu_did = 0,
+				.max_dev_ctx = 2,
+				.cmd_tag = 0x1e,
+				.rsp_tag = 0xe8,
+				.success_tag = 0x00,
+				.base_api_ver = 0x02,
+				.fw_api_ver = MESSAGING_VERSION_7,
+				.se_name = "v2x_sg1",
+				.mbox_tx_name = "txdb",
+				.mbox_rx_name = "rxdb",
+				.pool_name = NULL,
+				.reserved_dma_ranges = false,
+				.pre_if_config = imx_scu_init_fw,
+				.post_if_config = false,
+				.v2x_state_check = false,
+				.start_rng = false,
+				.enable_ele_trng = false,
+				.imem_mgmt = false,
+				.mu_buff_size = 0,
+				.fw_name_in_rfs = NULL,
+				.imem_save_rfs = NULL,
 			},
 	},
 };
 
 static const struct imx_info_list imx95_info = {
-	.num_mu = 3,
+	.num_mu = 4,
 	.soc_id = SOC_ID_OF_IMX95,
 	.info = {
 			{
-				.pdev_name = {"se-fw2", "mu2"},
-				.socdev = true,
+				.pdev_name = {"se-fw2"},
+				.socdev = false,
 				.mu_id = 2,
 				.mu_did = 3,
 				.max_dev_ctx = 4,
@@ -147,20 +356,23 @@ static const struct imx_info_list imx95_info = {
 				.success_tag = 0xd6,
 				.base_api_ver = MESSAGING_VERSION_6,
 				.fw_api_ver = MESSAGING_VERSION_7,
-				.se_name = "ele",
+				.se_name = "hsm1",
 				.mbox_tx_name = "tx",
 				.mbox_rx_name = "rx",
 				.pool_name = NULL,
 				.reserved_dma_ranges = false,
-				.init_fw = true,
+				.pre_if_config = false,
+				.post_if_config = ele_init_fw,
 				.v2x_state_check = true,
 				.start_rng = ele_start_rng,
-				.enable_ele_trng = false,
+				.enable_ele_trng = true,
 				.imem_mgmt = false,
 				.mu_buff_size = 0,
+				.fw_name_in_rfs = NULL,
+				.imem_save_rfs = NULL,
 			},
 			{
-				.pdev_name = {"v2x-fw0", "mu0"},
+				.pdev_name = {"v2x-fw0"},
 				.socdev = false,
 				.mu_id = 0,
 				.mu_did = 0,
@@ -170,20 +382,49 @@ static const struct imx_info_list imx95_info = {
 				.success_tag = 0xd6,
 				.base_api_ver = 0x2,
 				.fw_api_ver = 0x2,
-				.se_name = "seco",
+				.se_name = "v2x_dbg",
 				.pool_name = NULL,
 				.mbox_tx_name = "tx",
 				.mbox_rx_name = "rx",
 				.reserved_dma_ranges = false,
-				.init_fw = false,
+				.pre_if_config = false,
+				.post_if_config = false,
 				.v2x_state_check = true,
 				.start_rng = v2x_start_rng,
 				.enable_ele_trng = false,
 				.imem_mgmt = false,
 				.mu_buff_size = 0,
+				.fw_name_in_rfs = NULL,
+				.imem_save_rfs = NULL,
 			},
 			{
-				.pdev_name = {"v2x-fw6", "mu6"},
+				.pdev_name = {"v2x-fw4"},
+				.socdev = false,
+				.mu_id = 4,
+				.mu_did = 0,
+				.max_dev_ctx = 4,
+				.cmd_tag = 0x18,
+				.rsp_tag = 0xe2,
+				.success_tag = 0xd6,
+				.base_api_ver = 0x2,
+				.fw_api_ver = 0x2,
+				.se_name = "v2x_sv0",
+				.pool_name = NULL,
+				.mbox_tx_name = "tx",
+				.mbox_rx_name = "rx",
+				.reserved_dma_ranges = false,
+				.pre_if_config = false,
+				.post_if_config = false,
+				.v2x_state_check = true,
+				.start_rng = NULL,
+				.enable_ele_trng = false,
+				.imem_mgmt = false,
+				.mu_buff_size = 16,
+				.fw_name_in_rfs = NULL,
+				.imem_save_rfs = NULL,
+			},
+			{
+				.pdev_name = {"v2x-fw6"},
 				.socdev = false,
 				.mu_id = 6,
 				.mu_did = 0,
@@ -193,17 +434,20 @@ static const struct imx_info_list imx95_info = {
 				.success_tag = 0xd6,
 				.base_api_ver = 0x2,
 				.fw_api_ver = 0x2,
-				.se_name = "seco",
+				.se_name = "v2x_she",
 				.pool_name = NULL,
 				.mbox_tx_name = "tx",
 				.mbox_rx_name = "rx",
 				.reserved_dma_ranges = false,
-				.init_fw = false,
+				.pre_if_config = false,
+				.post_if_config = false,
 				.v2x_state_check = true,
 				.start_rng = NULL,
 				.enable_ele_trng = false,
 				.imem_mgmt = false,
 				.mu_buff_size = 256,
+				.fw_name_in_rfs = NULL,
+				.imem_save_rfs = NULL,
 			},
 	}
 };
@@ -212,8 +456,28 @@ static const struct of_device_id se_fw_match[] = {
 	{ .compatible = "fsl,imx8ulp-se-fw", .data = (void *)&imx8ulp_info},
 	{ .compatible = "fsl,imx93-se-fw", .data = (void *)&imx93_info},
 	{ .compatible = "fsl,imx95-se-fw", .data = (void *)&imx95_info},
+	{ .compatible = "fsl,imx8dxl-se-fw", .data = (void *)&imx8dxl_info},
 	{},
 };
+
+/*
+ * get_se_soc_id() - to fetch the soc_id of the platform
+ *
+ * @dev  : reference to the device for se interface.
+ *
+ * This function returns the SoC ID.
+ *
+ * Context: Other module, requiring to access the secure services based on SoC Id.
+ *
+ * Return: SoC Id of the device.
+ */
+uint32_t get_se_soc_id(struct device *dev)
+{
+	struct imx_info_list *info_list
+		= (struct imx_info_list *) device_get_match_data(dev);
+
+	return info_list->soc_id;
+}
 
 static struct imx_info *get_imx_info(struct imx_info_list *info_list,
 				     const uint8_t *pdev_name,
@@ -222,7 +486,7 @@ static struct imx_info *get_imx_info(struct imx_info_list *info_list,
 	int i = 0;
 
 	for (i = 0; i < info_list->num_mu; i++)
-		if (!memcmp(info_list->info[i].pdev_name[0], pdev_name, len))
+		if (!memcmp(info_list->info[i].pdev_name, pdev_name, len))
 			return &info_list->info[i];
 
 	return NULL;
@@ -257,6 +521,8 @@ static void ele_mu_rx_callback(struct mbox_client *c, void *msg)
 		dev_ctx = priv->cmd_receiver_dev;
 	} else if (header.tag == priv->rsp_tag) {
 		if (priv->waiting_rsp_dev) {
+			/* Capture response timer for user space interaction */
+			ktime_get_ts64(&priv->time_frame.t_end);
 			dev_dbg(dev, "Selecting rsp waiter\n");
 			dev_ctx = priv->waiting_rsp_dev;
 			is_response = true;
@@ -346,8 +612,8 @@ void free_phybuf_mem_pool(struct device *dev,
 	gen_pool_free(mem_pool, (unsigned long)buf, size);
 }
 
-static int imx_soc_device_register(struct device *dev,
-				   struct imx_info *info)
+static int imx_fetch_soc_info(struct device *dev,
+			      struct imx_info *info, u32 *state)
 {
 	struct soc_device_attribute *attr;
 	struct soc_device *sdev = NULL;
@@ -356,9 +622,12 @@ static int imx_soc_device_register(struct device *dev,
 	phys_addr_t get_info_addr = 0;
 	u32 *get_info_data = NULL;
 	u8 major_ver, minor_ver;
-	int err;
+	int err = 0;
 
 	info_list = (struct imx_info_list *)of_id->data;
+
+	if (info_list->soc_rev)
+		return err;
 
 	if (info->pool_name) {
 		get_info_addr = get_phy_buf_mem_pool(dev,
@@ -417,6 +686,8 @@ static int imx_soc_device_register(struct device *dev,
 							 "i.MX95");
 				break;
 		}
+
+		*state = get_info_data[39];
 	}
 
 	err = of_property_read_string(of_root, "model",
@@ -441,6 +712,9 @@ static int imx_soc_device_register(struct device *dev,
 				   get_info_data,
 				   get_info_addr);
 	}
+
+	if (!info->socdev)
+		return 0;
 
 	sdev = soc_device_register(attr);
 	if (IS_ERR(sdev)) {
@@ -569,6 +843,11 @@ static ssize_t ele_mu_fops_write(struct file *fp, const char __user *buf,
 	dev_dbg(ele_mu_priv->dev,
 		"%s: sending message\n",
 			dev_ctx->miscdev.name);
+
+	/* Capture request timer here to not include time for mutex lock */
+	if (header.tag == ele_mu_priv->cmd_tag)
+		ktime_get_ts64(&ele_mu_priv->time_frame.t_start);
+
 	err = mbox_send_message(ele_mu_priv->tx_chan, dev_ctx->temp_cmd);
 	if (err < 0) {
 		dev_err(ele_mu_priv->dev,
@@ -675,8 +954,16 @@ static ssize_t ele_mu_fops_read(struct file *fp, char __user *buf,
 			}
 		}
 
-		if (b_desc->shared_buf_ptr)
-			memset(b_desc->shared_buf_ptr, 0, b_desc->size);
+		/*
+		 * Variable "mu_buff_offset" is set while dealing with MU's device memory.
+		 * For device type memory, it is recommended to use memset_io.
+		 */
+		if (b_desc->shared_buf_ptr) {
+			if (dev_ctx->mu_buff_offset)
+				memset_io(b_desc->shared_buf_ptr, 0, b_desc->size);
+			else
+				memset(b_desc->shared_buf_ptr, 0, b_desc->size);
+		}
 
 		__list_del_entry(&b_desc->link);
 		devm_kfree(dev_ctx->dev, b_desc);
@@ -702,7 +989,6 @@ static ssize_t ele_mu_fops_read(struct file *fp, char __user *buf,
 	dev_ctx->non_secure_mem.pos = 0;
 
 	dev_ctx->pending_hdr = 0;
-	dev_ctx->mu_buff_offset = 0;
 
 exit:
 	/*
@@ -724,8 +1010,16 @@ exit:
 		if (!b_desc)
 			continue;
 
-		if (b_desc->shared_buf_ptr)
-			memset(b_desc->shared_buf_ptr, 0, b_desc->size);
+		/*
+		 * Variable "mu_buff_offset" is set while dealing with MU's device memory.
+		 * For device type memory, it is recommended to use memset_io.
+		 */
+		if (b_desc->shared_buf_ptr) {
+			if (dev_ctx->mu_buff_offset)
+				memset_io(b_desc->shared_buf_ptr, 0, b_desc->size);
+			else
+				memset(b_desc->shared_buf_ptr, 0, b_desc->size);
+		}
 
 		__list_del_entry(&b_desc->link);
 		devm_kfree(dev_ctx->dev, b_desc);
@@ -733,32 +1027,43 @@ exit:
 	if (header.tag == ele_mu_priv->rsp_tag)
 		mutex_unlock(&ele_mu_priv->mu_cmd_lock);
 
+	dev_ctx->mu_buff_offset = 0;
+
 	up(&dev_ctx->fops_lock);
 	return err;
 }
 
-/* Give access to EdgeLock Enclave, to the memory we want to share */
-static int ele_mu_setup_ele_mem_access(struct ele_mu_device_ctx *dev_ctx,
-					     u64 addr, u32 len)
+/* Configure the shared memory according to user config */
+static int ele_mu_ioctl_shared_mem_cfg_handler(struct file *fp,
+					       struct ele_mu_device_ctx *dev_ctx,
+					       unsigned long arg)
 {
-	/* Assuming EdgeLock Enclave has access to all the memory regions */
-	int ret = 0;
+	struct ele_mu_ioctl_shared_mem_cfg cfg;
+	int err = -EINVAL;
 
-	if (ret) {
-		dev_err(dev_ctx->priv->dev,
-			"%s: Fail find memreg\n", dev_ctx->miscdev.name);
-		goto exit;
+	/* Check if not already configured. */
+	if (dev_ctx->secure_mem.dma_addr != 0u) {
+		dev_err(dev_ctx->priv->dev, "Shared memory not configured\n");
+		return err;
 	}
 
-	if (ret) {
-		dev_err(dev_ctx->priv->dev,
-			"%s: Fail set permission for resource\n",
-				dev_ctx->miscdev.name);
-		goto exit;
+	err = (int)copy_from_user(&cfg, (u8 *)arg, sizeof(cfg));
+	if (err) {
+		dev_err(dev_ctx->priv->dev, "Fail copy memory config\n");
+		err = -EFAULT;
+		return err;
 	}
 
-exit:
-	return ret;
+	dev_dbg(dev_ctx->priv->dev, "cfg offset: %u(%d)\n", cfg.base_offset, cfg.size);
+
+	err = imx_scu_sec_mem_cfg(fp, cfg.base_offset, cfg.size);
+	if (err) {
+		dev_err(dev_ctx->priv->dev, "Failt to map memory\n");
+		err = -ENOMEM;
+		return err;
+	}
+
+	return err;
 }
 
 static int ele_mu_ioctl_get_mu_info(struct ele_mu_device_ctx *dev_ctx,
@@ -826,7 +1131,7 @@ static int ele_mu_ioctl_setup_iobuf_handler(struct ele_mu_device_ctx *dev_ctx,
 		addr = get_mu_buf(priv->tx_chan);
 		addr = addr + dev_ctx->mu_buff_offset;
 		dev_ctx->mu_buff_offset = dev_ctx->mu_buff_offset + io.length;
-		if (dev_ctx->mu_buff_offset >= imx_info->mu_buff_size) {
+		if (dev_ctx->mu_buff_offset > imx_info->mu_buff_size) {
 			err = -ENOMEM;
 			goto exit;
 		}
@@ -850,13 +1155,10 @@ static int ele_mu_ioctl_setup_iobuf_handler(struct ele_mu_device_ctx *dev_ctx,
 
 	/* Select the shared memory to be used for this buffer. */
 	if (!(io.flags & ELE_MU_IO_DATA_BUF_SHE_V2X)) {
-		if (io.flags & ELE_MU_IO_FLAGS_USE_SEC_MEM) {
+		if ((io.flags & ELE_MU_IO_FLAGS_USE_SEC_MEM) &&
+		    (priv->flags & SCU_MEM_CFG)) {
 			/* App requires to use secure memory for this buffer.*/
-			dev_err(dev_ctx->priv->dev,
-				"%s: Failed allocate SEC MEM memory\n",
-				dev_ctx->miscdev.name);
-			err = -EFAULT;
-			goto exit;
+			shared_mem = &dev_ctx->secure_mem;
 		} else {
 			/* No specific requirement for this buffer. */
 			shared_mem = &dev_ctx->non_secure_mem;
@@ -883,14 +1185,12 @@ static int ele_mu_ioctl_setup_iobuf_handler(struct ele_mu_device_ctx *dev_ctx,
 		io.ele_addr = (u64)addr;
 	}
 
-	if ((io.flags & ELE_MU_IO_FLAGS_USE_SEC_MEM) &&
-	    !(io.flags & ELE_MU_IO_FLAGS_USE_SHORT_ADDR)) {
-		/*Add base address to get full address.*/
-		dev_err(dev_ctx->priv->dev,
-			"%s: Failed allocate SEC MEM memory\n",
-				dev_ctx->miscdev.name);
-		err = -EFAULT;
-		goto exit;
+	if (priv->flags & SCU_MEM_CFG) {
+		if ((io.flags & ELE_MU_IO_FLAGS_USE_SEC_MEM) &&
+		    !(io.flags & ELE_MU_IO_FLAGS_USE_SHORT_ADDR)) {
+			/*Add base address to get full address.#TODO: Add API*/
+			io.ele_addr += SECURE_RAM_BASE_ADDRESS_SCU;
+		}
 	}
 
 	if (!(io.flags & ELE_MU_IO_DATA_BUF_SHE_V2X)) {
@@ -996,6 +1296,34 @@ exit:
 	return err;
 }
 
+/* IOCTL to provide request and response timestamps from FW for a crypto
+ * operation
+ */
+static int ele_mu_ioctl_get_time(struct ele_mu_device_ctx *dev_ctx, unsigned long arg)
+{
+	struct ele_mu_priv *priv = dev_get_drvdata(dev_ctx->dev);
+	int err = -EINVAL;
+	struct ele_time_frame time_frame;
+
+	if (!priv) {
+		err = -EINVAL;
+		goto exit;
+	}
+
+	time_frame.t_start = priv->time_frame.t_start;
+	time_frame.t_end = priv->time_frame.t_end;
+	err = (int)copy_to_user((u8 *)arg, (u8 *)(&time_frame), sizeof(time_frame));
+	if (err) {
+		dev_err(dev_ctx->priv->dev,
+			"%s: Failed to copy timer to user\n",
+			dev_ctx->miscdev.name);
+		err  = -EFAULT;
+		goto exit;
+	}
+exit:
+	return err;
+}
+
 /* Open a char device. */
 static int ele_mu_fops_open(struct inode *nd, struct file *fp)
 {
@@ -1003,6 +1331,7 @@ static int ele_mu_fops_open(struct inode *nd, struct file *fp)
 		= container_of(fp->private_data,
 			       struct ele_mu_device_ctx,
 			       miscdev);
+	struct ele_mu_priv *priv = dev_ctx->priv;
 	int err;
 
 	/* Avoid race if opened at the same time */
@@ -1031,15 +1360,15 @@ static int ele_mu_fops_open(struct inode *nd, struct file *fp)
 		goto exit;
 	}
 
-	err = ele_mu_setup_ele_mem_access(dev_ctx,
-					  dev_ctx->non_secure_mem.dma_addr,
-					  MAX_DATA_SIZE_PER_USER);
-	if (err) {
-		err = -EPERM;
-		dev_err(dev_ctx->priv->dev,
-			"%s: Failed to share access to shared memory\n",
-			   dev_ctx->miscdev.name);
-		goto free_coherent;
+	if (priv->flags & SCU_MEM_CFG) {
+		err = imx_scu_mem_access(fp);
+		if (err) {
+			err = -EPERM;
+			dev_err(dev_ctx->priv->dev,
+				"%s: Failed to share access to shared memory\n",
+				dev_ctx->miscdev.name);
+			goto free_coherent;
+		}
 	}
 
 	dev_ctx->non_secure_mem.size = MAX_DATA_SIZE_PER_USER;
@@ -1119,8 +1448,16 @@ static int ele_mu_fops_close(struct inode *nd, struct file *fp)
 		if (!b_desc)
 			continue;
 
-		if (b_desc->shared_buf_ptr)
-			memset(b_desc->shared_buf_ptr, 0, b_desc->size);
+		/*
+		 * Variable "mu_buff_offset" is set while dealing with MU's device memory.
+		 * For device type memory, it is recommended to use memset_io.
+		 */
+		if (b_desc->shared_buf_ptr) {
+			if (dev_ctx->mu_buff_offset)
+				memset_io(b_desc->shared_buf_ptr, 0, b_desc->size);
+			else
+				memset(b_desc->shared_buf_ptr, 0, b_desc->size);
+		}
 
 		__list_del_entry(&b_desc->link);
 		devm_kfree(dev_ctx->dev, b_desc);
@@ -1154,17 +1491,22 @@ static long ele_mu_ioctl(struct file *fp, unsigned int cmd, unsigned long arg)
 			err = 0;
 		}
 		break;
+	case ELE_MU_IOCTL_SHARED_BUF_CFG:
+		if (ele_mu_priv->flags & SCU_MEM_CFG)
+			err = ele_mu_ioctl_shared_mem_cfg_handler(fp, dev_ctx, arg);
+		break;
 	case ELE_MU_IOCTL_GET_MU_INFO:
 		err = ele_mu_ioctl_get_mu_info(dev_ctx, arg);
 		break;
 	case ELE_MU_IOCTL_SETUP_IOBUF:
 		err = ele_mu_ioctl_setup_iobuf_handler(dev_ctx, arg);
 		break;
-
 	case ELE_MU_IOCTL_GET_SOC_INFO:
 		err = ele_mu_ioctl_get_soc_info_handler(dev_ctx, arg);
 		break;
-
+	case ELE_MU_IOCTL_GET_TIMER:
+		err = ele_mu_ioctl_get_time(dev_ctx, arg);
+		break;
 	default:
 		err = -EINVAL;
 		dev_dbg(ele_mu_priv->dev,
@@ -1333,9 +1675,9 @@ static int init_device_context(struct device *dev)
 		INIT_LIST_HEAD(&dev_ctx->pending_in);
 		sema_init(&dev_ctx->fops_lock, 1);
 
-		devname = devm_kasprintf(dev, GFP_KERNEL, "%s_%s_ch%d",
+		devname = devm_kasprintf(dev, GFP_KERNEL, "%s_ch%d",
 					 info->se_name,
-					 info->pdev_name[1], i);
+					 i);
 		if (!devname) {
 			ret = -ENOMEM;
 			dev_err(dev,
@@ -1367,6 +1709,173 @@ static int init_device_context(struct device *dev)
 	return ret;
 }
 
+static int se_save_imem_to_file(const char *path,
+				const void *buf, size_t buf_size)
+{
+	struct file *file;
+	struct path root;
+	ssize_t wret;
+	loff_t offset = 0;
+
+	if (!path || !*path)
+		return -EINVAL;
+
+	task_lock(&init_task);
+	get_fs_root(init_task.fs, &root);
+	task_unlock(&init_task);
+
+	file = file_open_root(&root, path, O_CREAT | O_WRONLY, 0);
+	path_put(&root);
+	if (IS_ERR(file)) {
+		pr_err("open file %s failed\n", path);
+		return PTR_ERR(file);
+	}
+
+	wret = kernel_write(file, buf, buf_size, &offset);
+	if (wret < 0) {
+		pr_err("Error writing to imem file\n");
+	} else if (wret != buf_size) {
+		pr_err("Wrote only 0x%lx bytes of 0x%lx writing to imem file %s\n",
+		wret, buf_size, path);
+	}
+
+	wret = filp_close(file, NULL);
+	if (wret)
+		pr_err("Error %pe closing imem file\n",
+		       ERR_PTR(wret));
+
+	return 0;
+}
+
+static void se_load_firmware(const struct firmware *fw, void *context)
+{
+	struct ele_mu_priv *priv = context;
+	const struct imx_info *info = priv->info;
+	const char *ele_fw_name = info->fw_name_in_rfs;
+	uint8_t *ele_fw_buf;
+	phys_addr_t ele_fw_phyaddr;
+
+	if (!fw) {
+		if (priv->fw_fail)
+			dev_dbg(priv->dev,
+				 "External FW not found, using ROM FW.\n");
+		else {
+			/*add a bit delay to wait for firmware priv released */
+			msleep(20);
+
+			/* Load firmware one more time if timeout */
+			request_firmware_nowait(THIS_MODULE,
+					FW_ACTION_UEVENT, info->fw_name_in_rfs,
+					priv->dev, GFP_KERNEL, priv,
+					se_load_firmware);
+			priv->fw_fail++;
+			dev_dbg(priv->dev, "Value of retries = 0x%x\n",
+				priv->fw_fail);
+		}
+
+		return;
+	}
+
+	/* allocate buffer to store the ELE FW */
+	ele_fw_buf = dmam_alloc_coherent(priv->dev, fw->size,
+					 &ele_fw_phyaddr,
+					 GFP_KERNEL);
+	if (!ele_fw_buf) {
+		dev_err(priv->dev, "Failed to alloc ELE fw buffer memory\n");
+		goto exit;
+	}
+
+	memcpy(ele_fw_buf, fw->data, fw->size);
+
+	if (ele_fw_authenticate(priv->dev, ele_fw_phyaddr))
+		dev_err(priv->dev,
+			"Failed to authenticate & load ELE firmware %s.\n",
+			ele_fw_name);
+
+exit:
+	dmam_free_coherent(priv->dev,
+			   fw->size,
+			   ele_fw_buf,
+			   ele_fw_phyaddr);
+
+	release_firmware(fw);
+
+	if (info->imem_mgmt && info->imem_save_rfs) {
+		priv->imem.size = save_imem(priv->dev);
+		se_save_imem_to_file(info->imem_save_rfs, priv->imem.buf, priv->imem.size);
+	}
+}
+
+static void se_load_imem_file(const struct firmware *fw, void *context)
+{
+	struct ele_mu_priv *priv = context;
+	const struct imx_info *info = priv->info;
+
+	if (!fw) {
+		if (priv->fw_fail)
+			dev_dbg(priv->dev,
+				"External iMEM FW not found, using ROM FW.\n");
+		else {
+			/*add a bit delay to wait for firmware priv released */
+			msleep(20);
+
+			/* Load firmware one more time if timeout */
+			request_firmware_nowait(THIS_MODULE,
+						FW_ACTION_UEVENT, info->imem_save_rfs,
+						priv->dev, GFP_KERNEL, priv,
+						se_load_imem_file);
+			priv->fw_fail++;
+			dev_dbg(priv->dev, "Value of retries = 0x%x\n",
+				priv->fw_fail);
+		}
+
+		return;
+	}
+
+	dev_dbg(priv->dev, "load imem file ok, size 0x%lx\n", fw->size);
+	memcpy(priv->imem.buf, fw->data, fw->size);
+	priv->imem.size = fw->size;
+
+	restore_imem(priv->dev, info->pool_name);
+	dev_dbg(priv->dev, "restore imem done\n");
+
+	release_firmware(fw);
+}
+
+static void se_save_imem_file(const struct firmware *fw, void *context)
+{
+	struct ele_mu_priv *priv = context;
+	const struct imx_info *info = priv->info;
+
+	if (!fw) {
+		if (priv->fw_fail)
+			dev_dbg(priv->dev,
+				"External iMEM FW not found, using ROM FW.\n");
+		else {
+			/*add a bit delay to wait for firmware priv released */
+			msleep(20);
+
+			/* Load firmware one more time if timeout */
+			request_firmware_nowait(THIS_MODULE,
+						FW_ACTION_UEVENT, info->imem_save_rfs,
+						priv->dev, GFP_KERNEL, priv,
+						se_save_imem_file);
+			priv->fw_fail++;
+			dev_dbg(priv->dev, "Value of retries = 0x%x\n",
+				priv->fw_fail);
+		}
+		return;
+	}
+
+	dev_dbg(priv->dev, "check imem file ok, size 0x%lx\n", fw->size);
+	release_firmware(fw);
+
+	priv->imem.size = save_imem(priv->dev);
+	se_save_imem_to_file(info->imem_save_rfs, priv->imem.buf, priv->imem.size);
+
+	dev_dbg(priv->dev, "save imem file done\n");
+}
+
 static int se_fw_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -1375,6 +1884,7 @@ static int se_fw_probe(struct platform_device *pdev)
 	struct imx_info *info = NULL;
 	int ret;
 	struct device_node *np;
+	u32 ele_state;
 
 	info = get_imx_info((struct imx_info_list *)of_id->data,
 			    pdev->name, strlen(pdev->name) + 1);
@@ -1391,7 +1901,7 @@ static int se_fw_probe(struct platform_device *pdev)
 		 * loaded, then exit.
 		 */
 		if (v2x_fw_state != V2X_FW_STATE_RUNNING &&
-			!memcmp(info->se_name, "seco", 5)) {
+			!memcmp(info->se_name, "v2x_dbg", 8)) {
 			ret = -1;
 			dev_err(dev, "Failure: V2X FW is not loaded.");
 			return ret;
@@ -1420,6 +1930,17 @@ static int se_fw_probe(struct platform_device *pdev)
 		dev_err(dev, "Cannot find MU User entry in device tree\n");
 		ret = -EOPNOTSUPP;
 		goto exit;
+	}
+
+	if (info->pre_if_config) {
+		/* start initializing ele fw */
+		ret = info->pre_if_config(dev);
+		if (ret) {
+			dev_err(dev, "Failed to initialize scu config.\n");
+			priv->flags &= (~SCU_MEM_CFG);
+			goto exit;
+		}
+		priv->flags |= SCU_MEM_CFG;
 	}
 
 	/* Initialize the mutex. */
@@ -1475,28 +1996,37 @@ static int se_fw_probe(struct platform_device *pdev)
 		priv->flags |= RESERVED_DMA_POOL;
 	}
 
-	if (info->init_fw) {
+	if (info->post_if_config) {
 		/* start initializing ele fw */
-		ret = ele_init_fw(dev);
+		ret = info->post_if_config(dev);
 		if (ret) {
 			dev_err(dev, "Failed to initialize ele fw.\n");
 			goto exit;
 		}
 	}
 
-	if (info->socdev) {
-		ret = imx_soc_device_register(dev, info);
-		if (ret) {
-			dev_err(dev,
-				"failed[%d] to register SoC device\n", ret);
-			goto exit;
-		}
+	ret = imx_fetch_soc_info(dev, info, &ele_state);
+	if (ret) {
+		dev_err(dev,
+			"failed[%d] to register SoC device\n", ret);
+		goto exit;
 	}
+
+	if (((ele_state >> 16) & 0xFF) == 0xFE)
+		priv->imem_restore = true;
+	else if (((ele_state >> 16) & 0xFF) == 0xCA)
+		priv->imem_restore = false;
+	else {
+		dev_info(dev,
+			 "Unknown state 0x%x\n", ele_state);
+		priv->imem_restore = false;
+	}
+	dev_info(dev, "ele_state 0x%x, imem_restore %d\n", ele_state, priv->imem_restore);
 
 	/* Assumed v2x_state_check is enabled for i.MX95 only. */
 	if (info->v2x_state_check) {
 		if (v2x_fw_state == V2X_FW_STATE_UNKNOWN &&
-				!memcmp(info->se_name, "ele", 4)) {
+				!memcmp(info->se_name, "hsm1", 5)) {
 			ret = ele_get_v2x_fw_state(dev, &v2x_fw_state);
 			if (ret)
 				dev_err(dev, "Failed to start ele rng\n");
@@ -1506,7 +2036,7 @@ static int se_fw_probe(struct platform_device *pdev)
 		 * loaded, then exit.
 		 */
 		if (v2x_fw_state != V2X_FW_STATE_RUNNING &&
-			!memcmp(info->se_name, "seco", 5)) {
+			!memcmp(info->se_name, "v2x_she", 8)) {
 			ret = -1;
 			dev_err(dev, "Failure: V2X FW is not loaded.");
 			goto exit;
@@ -1537,6 +2067,29 @@ static int se_fw_probe(struct platform_device *pdev)
 			ret = -ENOMEM;
 			goto exit;
 		}
+
+		if (priv->imem_restore && info->imem_save_rfs) {
+			ret = request_firmware_nowait(THIS_MODULE,
+						      FW_ACTION_UEVENT,
+						      info->imem_save_rfs,
+						      dev, GFP_KERNEL, priv,
+						      se_load_imem_file);
+			if (ret)
+				dev_warn(dev, "Failed to get imem firmware [%s].\n",
+					 info->imem_save_rfs);
+		}
+
+	}
+
+	if (!priv->imem_restore && info->fw_name_in_rfs) {
+		ret = request_firmware_nowait(THIS_MODULE,
+					      FW_ACTION_UEVENT,
+					      info->fw_name_in_rfs,
+					      dev, GFP_KERNEL, priv,
+					      se_load_firmware);
+		if (ret)
+			dev_warn(dev, "Failed to get firmware [%s].\n",
+				 info->fw_name_in_rfs);
 	}
 
 	if (info->max_dev_ctx) {
@@ -1550,7 +2103,7 @@ static int se_fw_probe(struct platform_device *pdev)
 	}
 
 	dev_info(dev, "i.MX secure-enclave: %s interface to firmware, configured.\n",
-		info->pdev_name[1]);
+		 info->se_name);
 
 	return devm_of_platform_populate(dev);
 
@@ -1558,7 +2111,10 @@ exit:
 	/* if execution control reaches here, ele-mu probe fail.
 	 * hence doing the cleanup
 	 */
-	return se_probe_cleanup(pdev);
+	if (se_probe_cleanup(pdev))
+		dev_err(dev, "Failed clean-up.\n");
+
+	return ret;
 }
 
 /**
@@ -1610,13 +2166,25 @@ static int se_fw_resume(struct device *dev)
 {
 	struct ele_mu_priv *priv = dev_get_drvdata(dev);
 	const struct imx_info *info = priv->info;
-	int i;
+	int i, ret;
 
 	for (i = 0; i < priv->max_dev_ctx; i++)
 		wake_up_interruptible(&priv->ctxs[i]->wq);
 
-	if (info && info->imem_mgmt)
+	if (info && info->imem_mgmt) {
 		restore_imem(dev, info->pool_name);
+		if (info->imem_save_rfs) {
+			priv->fw_fail = 0;
+			ret = request_firmware_nowait(THIS_MODULE,
+						      FW_ACTION_UEVENT,
+						      info->imem_save_rfs,
+						      dev, GFP_KERNEL, priv,
+						      se_save_imem_file);
+			if (ret)
+				dev_warn(dev, "Failed to get imem firmware [%s].\n",
+					 info->imem_save_rfs);
+		}
+	}
 
 	return 0;
 }

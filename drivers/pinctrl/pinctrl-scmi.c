@@ -78,7 +78,7 @@ static int pinctrl_scmi_get_group_pins(struct pinctrl_dev *pctldev,
 }
 
 #ifdef CONFIG_OF
-#ifdef CONFIG_PINCTRL_IMX
+#if IS_ENABLED(CONFIG_PINCTRL_IMX)
 extern int imx_scmi_dt_node_to_map(struct pinctrl_dev *pctldev, struct device_node *np,
 				   struct pinctrl_map **map, unsigned int *num_maps);
 #else
@@ -101,13 +101,6 @@ static int pinctrl_scmi_dt_node_to_map(struct pinctrl_dev *pctldev,
 					      PIN_MAP_TYPE_INVALID);
 
 }
-
-static void pinctrl_scmi_dt_free_map(struct pinctrl_dev *pctldev, struct pinctrl_map *map,
-				     u32 num_maps)
-{
-	kfree(map);
-}
-
 #endif /* CONFIG_OF */
 
 static const struct pinctrl_ops pinctrl_scmi_pinctrl_ops = {
@@ -116,7 +109,7 @@ static const struct pinctrl_ops pinctrl_scmi_pinctrl_ops = {
 	.get_group_pins = pinctrl_scmi_get_group_pins,
 #ifdef CONFIG_OF
 	.dt_node_to_map = pinctrl_scmi_dt_node_to_map,
-	.dt_free_map = pinctrl_scmi_dt_free_map,
+	.dt_free_map = pinconf_generic_dt_free_map,
 #endif
 };
 

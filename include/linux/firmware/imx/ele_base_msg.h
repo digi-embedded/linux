@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0+ */
 /*
- * Copyright 2021-2023 NXP
+ * Copyright 2021-2024 NXP
  *
  * Header file for the ELE Base API(s).
  */
@@ -56,6 +56,10 @@
 #define ELE_IMEM_EXPORT			0x1
 #define ELE_IMEM_IMPORT			0x2
 
+#define ELE_FW_AUTH_REQ			0x02
+#define ELE_FW_AUTH_REQ_SZ		0x10
+#define ELE_FW_AUTH_RSP_MSG_SZ		0x08
+
 #define ELE_READ_FUSE_REQ		0x97
 #define ELE_READ_FUSE_REQ_MSG_SZ	0x08
 #define ELE_READ_FUSE_RSP_MSG_SZ	0x0C
@@ -68,6 +72,10 @@
 #define ELE_GET_STATE_REQ_SZ		0x04
 #define ELE_GET_STATE_RSP_SZ		0x10
 
+#define ELE_WRITE_FUSE			0xD6
+#define ELE_WRITE_FUSE_REQ_MSG_SZ	12
+#define ELE_WRITE_FUSE_RSP_MSG_SZ	12
+
 #define V2X_FW_STATE_UNKNOWN		0x00
 #define V2X_FW_STATE_RUNNING		0x15
 
@@ -79,7 +87,10 @@ int ele_service_swap(struct device *dev,
 		     phys_addr_t addr,
 		     u32 addr_size, u16 flag);
 int ele_get_v2x_fw_state(struct device *dev, uint32_t *state);
+int ele_write_fuse(struct device *dev, uint16_t fuse_index, u32 value, bool block);
 
 int read_common_fuse(struct device *dev,
 		     uint16_t fuse_id, u32 *value);
+
+int ele_fw_authenticate(struct device *dev, phys_addr_t addr);
 #endif

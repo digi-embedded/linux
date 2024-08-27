@@ -27,7 +27,6 @@
 #include <media/v4l2-ioctl.h>
 #include <media/v4l2-mem2mem.h>
 #include <media/videobuf2-dma-contig.h>
-#include <uapi/linux/nxp_neoisp.h>
 
 #include "neoisp.h"
 #include "neoisp_regs.h"
@@ -144,6 +143,11 @@ static const struct neoisp_fmt_s *neoisp_find_pixel_format(u32 pixel_format,
 	return NULL;
 }
 
+static int neoisp_node_link_state(struct neoisp_node_s *node)
+{
+	return (node->intf_link->flags & MEDIA_LNK_FL_ENABLED);
+}
+
 static int neoisp_node_queue_setup(struct vb2_queue *q, __u32 *nbuffers,
 		__u32 *nplanes, __u32 sizes[],
 		struct device *alloc_devs[])
@@ -245,7 +249,7 @@ static dma_addr_t get_addr(struct neoisp_buffer_s *buf, __u32 num_plane)
 	return 0;
 }
 
-static void neoisp_config_gcm_for_yuv(struct neoisp_dev_s *neoispd)
+static void neoisp_config_gcm_for_yuv(struct neoisp_reg_params_s *regp)
 {
 	/**
 	 * conversion matrix values comes from:
@@ -257,36 +261,18 @@ static void neoisp_config_gcm_for_yuv(struct neoisp_dev_s *neoispd)
 		{112, -94, -18},
 	};
 
-	regmap_field_write(neoispd->regs.fields[NEO_GCM_OMAT0_CAM0_IDX],
-			NEO_GCM_OMAT0_CAM0_R0C0_SET(yuv_mat[0][0])
-			| NEO_GCM_OMAT0_CAM0_R0C1_SET(yuv_mat[0][1]));
-	regmap_field_write(neoispd->regs.fields[NEO_GCM_OMAT1_CAM0_IDX],
-			NEO_GCM_OMAT1_CAM0_R0C2_SET(yuv_mat[0][2]));
-	regmap_field_write(neoispd->regs.fields[NEO_GCM_OMAT2_CAM0_IDX],
-			NEO_GCM_OMAT2_CAM0_R1C0_SET(yuv_mat[1][0])
-			| NEO_GCM_OMAT2_CAM0_R1C1_SET(yuv_mat[1][1]));
-	regmap_field_write(neoispd->regs.fields[NEO_GCM_OMAT3_CAM0_IDX],
-			NEO_GCM_OMAT3_CAM0_R1C2_SET(yuv_mat[1][2]));
-	regmap_field_write(neoispd->regs.fields[NEO_GCM_OMAT4_CAM0_IDX],
-			NEO_GCM_OMAT4_CAM0_R2C0_SET(yuv_mat[2][0])
-			| NEO_GCM_OMAT4_CAM0_R2C1_SET(yuv_mat[2][1]));
-	regmap_field_write(neoispd->regs.fields[NEO_GCM_OMAT5_CAM0_IDX],
-			NEO_GCM_OMAT5_CAM0_R2C2_SET(yuv_mat[2][2]));
-	regmap_field_write(neoispd->regs.fields[NEO_GCM_OOFFSET0_CAM0_IDX],
-			NEO_GCM_OOFFSET0_CAM0_OFFSET0_SET(256));
-	regmap_field_write(neoispd->regs.fields[NEO_GCM_OOFFSET1_CAM0_IDX],
-			NEO_GCM_OOFFSET1_CAM0_OFFSET1_SET(2048));
-	regmap_field_write(neoispd->regs.fields[NEO_GCM_OOFFSET2_CAM0_IDX],
-			NEO_GCM_OOFFSET2_CAM0_OFFSET2_SET(2048));
-	regmap_field_write(neoispd->regs.fields[NEO_GCM_MAT_CONFG_CAM0_IDX],
-			NEO_GCM_MAT_CONFG_CAM0_SIGN_CONFG_SET(1));
+	memcpy(regp->gcm.omat_rxcy, yuv_mat, sizeof(yuv_mat));
+	regp->gcm.ooffsets[0] = 256;
+	regp->gcm.ooffsets[1] = 2048;
+	regp->gcm.ooffsets[2] = 2048;
 }
 
-static void neoisp_config_gcm_for_rgb(struct neoisp_dev_s *neoispd)
+static void neoisp_config_gcm_for_rgb(struct neoisp_reg_params_s *regp)
 {
 	/* set default gcm parameters that corresponds to rgb output */
-	neoisp_set_gcm(&neoisp_default_params.regs, neoispd);
-
+	memcpy(&regp->gcm,
+	       &neoisp_default_params.regs.gcm,
+	       sizeof(struct neoisp_gcm_cfg_s));
 }
 
 static int neoisp_set_packetizer(struct neoisp_dev_s *neoispd)
@@ -295,20 +281,46 @@ static int neoisp_set_packetizer(struct neoisp_dev_s *neoispd)
 	struct neoisp_node_s *nd = &neoispd->queued_job.node_group->node[NEOISP_FRAME_NODE];
 	__u32 pixfmt = nd->format.fmt.pix_mp.pixelformat;
 
-	if (FMT_IS_YUV(pixfmt))
-		neoisp_config_gcm_for_yuv(neoispd);
-	else
-		neoisp_config_gcm_for_rgb(neoispd);
-
 	switch (pixfmt) {
 	case V4L2_PIX_FMT_NV12:
 		pck->ctrl_cam0_type = 0;
 		pck->ch12_ctrl_cam0_subsample = 2;
-		pck->ch12_ctrl_cam0_obpp = 6;
 		/* set channels orders */
-		pck->ctrl_cam0_order0 = 0;
+		pck->ctrl_cam0_order0 = 2;
 		pck->ctrl_cam0_order1 = 0;
 		pck->ctrl_cam0_order2 = 1;
+		/* remove 0-padding */
+		pck->ctrl_cam0_a0s = 0;
+		break;
+	case V4L2_PIX_FMT_NV21:
+		pck->ctrl_cam0_type = 0;
+		pck->ch12_ctrl_cam0_subsample = 2;
+		/* set channels orders */
+		pck->ctrl_cam0_order0 = 2;
+		pck->ctrl_cam0_order1 = 1;
+		pck->ctrl_cam0_order2 = 0;
+		/* remove 0-padding */
+		pck->ctrl_cam0_a0s = 0;
+		break;
+	case V4L2_PIX_FMT_NV16:
+		pck->ctrl_cam0_type = 0;
+		pck->ch12_ctrl_cam0_subsample = 1;
+		/* set channels orders */
+		pck->ctrl_cam0_order0 = 2;
+		pck->ctrl_cam0_order1 = 0;
+		pck->ctrl_cam0_order2 = 1;
+		/* remove 0-padding */
+		pck->ctrl_cam0_a0s = 0;
+		break;
+	case V4L2_PIX_FMT_NV61:
+		pck->ctrl_cam0_type = 0;
+		pck->ch12_ctrl_cam0_subsample = 1;
+		/* set channels orders */
+		pck->ctrl_cam0_order0 = 2;
+		pck->ctrl_cam0_order1 = 1;
+		pck->ctrl_cam0_order2 = 0;
+		/* remove 0-padding */
+		pck->ctrl_cam0_a0s = 0;
 		break;
 	case V4L2_PIX_FMT_YUYV:
 		pck->ctrl_cam0_type = 1;
@@ -317,6 +329,78 @@ static int neoisp_set_packetizer(struct neoisp_dev_s *neoispd)
 		pck->ctrl_cam0_order0 = 0;
 		pck->ctrl_cam0_order1 = 1;
 		pck->ctrl_cam0_order2 = 3;
+		/* remove 0-padding */
+		pck->ctrl_cam0_a0s = 0;
+		break;
+	case V4L2_PIX_FMT_YVYU:
+		pck->ctrl_cam0_type = 1;
+		pck->ch12_ctrl_cam0_subsample = 1;
+		/* set channels orders */
+		pck->ctrl_cam0_order0 = 0;
+		pck->ctrl_cam0_order1 = 3;
+		pck->ctrl_cam0_order2 = 1;
+		/* remove 0-padding */
+		pck->ctrl_cam0_a0s = 0;
+		break;
+	case V4L2_PIX_FMT_UYVY:
+		pck->ctrl_cam0_type = 1;
+		pck->ch12_ctrl_cam0_subsample = 1;
+		/* set channels orders */
+		pck->ctrl_cam0_order0 = 1;
+		pck->ctrl_cam0_order1 = 0;
+		pck->ctrl_cam0_order2 = 2;
+		/* remove 0-padding */
+		pck->ctrl_cam0_a0s = 0;
+		break;
+	case V4L2_PIX_FMT_YUVX32:
+		pck->ctrl_cam0_type = 1;
+		pck->ch12_ctrl_cam0_subsample = 0;
+		/* set channels orders */
+		pck->ctrl_cam0_order0 = 0;
+		pck->ctrl_cam0_order1 = 1;
+		pck->ctrl_cam0_order2 = 2;
+		/* add 0-padding */
+		pck->ctrl_cam0_a0s = 8;
+		break;
+	case V4L2_PIX_FMT_VUYX32:
+		pck->ctrl_cam0_type = 1;
+		pck->ch12_ctrl_cam0_subsample = 0;
+		/* set channels orders */
+		pck->ctrl_cam0_order0 = 2;
+		pck->ctrl_cam0_order1 = 1;
+		pck->ctrl_cam0_order2 = 0;
+		/* add 0-padding */
+		pck->ctrl_cam0_a0s = 8;
+		break;
+	case V4L2_PIX_FMT_XBGR32:
+		pck->ctrl_cam0_type = 1;
+		pck->ch12_ctrl_cam0_subsample = 0;
+		/* set channels orders */
+		pck->ctrl_cam0_order0 = 2;
+		pck->ctrl_cam0_order1 = 1;
+		pck->ctrl_cam0_order2 = 0;
+		/* add 0-padding */
+		pck->ctrl_cam0_a0s = 8;
+		break;
+	case V4L2_PIX_FMT_RGBX32:
+		pck->ctrl_cam0_type = 1;
+		pck->ch12_ctrl_cam0_subsample = 0;
+		/* set channels orders */
+		pck->ctrl_cam0_order0 = 0;
+		pck->ctrl_cam0_order1 = 1;
+		pck->ctrl_cam0_order2 = 2;
+		/* add 0-padding */
+		pck->ctrl_cam0_a0s = 8;
+		break;
+	case V4L2_PIX_FMT_BGR24:
+		pck->ctrl_cam0_type = 1;
+		pck->ch12_ctrl_cam0_subsample = 0;
+		/* set channels orders */
+		pck->ctrl_cam0_order0 = 2;
+		pck->ctrl_cam0_order1 = 1;
+		pck->ctrl_cam0_order2 = 0;
+		/* remove 0-padding */
+		pck->ctrl_cam0_a0s = 0;
 		break;
 	default: /* all other pixel formats */
 		pck->ctrl_cam0_type = 1;
@@ -325,6 +409,8 @@ static int neoisp_set_packetizer(struct neoisp_dev_s *neoispd)
 		pck->ctrl_cam0_order0 = 0;
 		pck->ctrl_cam0_order1 = 1;
 		pck->ctrl_cam0_order2 = 2;
+		/* remove 0-padding */
+		pck->ctrl_cam0_a0s = 0;
 		break;
 	}
 
@@ -348,10 +434,8 @@ static int neoisp_set_packetizer(struct neoisp_dev_s *neoispd)
 	return 0;
 }
 
-static void neoisp_update_hdr_decompress(__u32 ibpp)
+static void neoisp_update_hdr_decompress(struct neoisp_reg_params_s *regp, __u32 ibpp)
 {
-	struct neoisp_reg_params_s *regp = &neoisp_default_params.regs;
-
 	/* 16 bits per pixel is already in default configuration */
 	if (ibpp < 16) { /* 8, 10, 12 or 14 */
 		regp->decompress_input0.knee_point1 = 1 << ibpp;
@@ -439,17 +523,18 @@ static int neoisp_set_pipe_conf(struct neoisp_dev_s *neoispd)
 	regmap_field_write(neoispd->regs.fields[NEO_PIPE_CONF_IMG1_IN_ADDR_CAM0_IDX], 0u);
 	regmap_field_write(neoispd->regs.fields[NEO_PIPE_CONF_IMG1_IN_LS_CAM0_IDX], 0u);
 
-	/* rgb output image address */
-	if (out_pixfmt == V4L2_PIX_FMT_NV12) {
+	/* rgb/yuv output image address */
+	if (out_pixfmt == V4L2_PIX_FMT_NV12 || out_pixfmt == V4L2_PIX_FMT_NV21 ||
+		out_pixfmt == V4L2_PIX_FMT_NV16 || out_pixfmt == V4L2_PIX_FMT_NV61) {
 		regmap_field_write(neoispd->regs.fields[NEO_PIPE_CONF_OUTCH0_ADDR_CAM0_IDX],
 				NEO_PIPE_CONF_IMG_ADDR_CAM0_SET(get_addr(buf_out, 0)));
 		regmap_field_write(neoispd->regs.fields[NEO_PIPE_CONF_OUTCH0_LS_CAM0_IDX],
-				NEO_PIPE_CONF_IMG0_IN_LS_CAM0_LS_SET(width));
+				NEO_PIPE_CONF_IMG0_IN_LS_CAM0_LS_SET(obpp * width));
 
 		regmap_field_write(neoispd->regs.fields[NEO_PIPE_CONF_OUTCH1_ADDR_CAM0_IDX],
 				NEO_PIPE_CONF_IMG_ADDR_CAM0_SET(get_addr(buf_out, 1)));
 		regmap_field_write(neoispd->regs.fields[NEO_PIPE_CONF_OUTCH1_LS_CAM0_IDX],
-				NEO_PIPE_CONF_IMG0_IN_LS_CAM0_LS_SET(width / 2));
+				NEO_PIPE_CONF_IMG0_IN_LS_CAM0_LS_SET(obpp * width));
 	} else {
 		regmap_field_write(neoispd->regs.fields[NEO_PIPE_CONF_OUTCH0_ADDR_CAM0_IDX], 0u);
 		regmap_field_write(neoispd->regs.fields[NEO_PIPE_CONF_OUTCH0_LS_CAM0_IDX], 0u);
@@ -485,17 +570,20 @@ static void neoisp_queue_job(struct neoisp_dev_s *neoispd,
 		struct neoisp_node_group_s *node_group,
 		struct neoisp_meta_params_s *params)
 {
-	/* if params provided then do setup */
-	if (!IS_ERR_OR_NULL(params))
-		neoisp_set_params(neoispd, params);
-	neoisp_set_packetizer(neoispd);
-	neoisp_set_pipe_conf(neoispd);
+	static __u32 prev_ctx_id = NEOISP_NODE_GROUPS_COUNT + 1; /* init to invalid id */
 
+	neoisp_set_packetizer(neoispd);
+	if (!IS_ERR_OR_NULL(params))
+		neoisp_update_ctx(neoispd, node_group->id, params);
+
+	neoisp_program_ctx(neoispd, node_group->id);
+
+	neoisp_set_pipe_conf(neoispd);
 	/* kick off the hw */
 	regmap_field_write(neoispd->regs.fields[NEO_PIPE_CONF_TRIG_CAM0_IDX],
 			NEO_PIPE_CONF_TRIG_CAM0_TRIGGER);
 	send_frame_sync_event(neoispd);
-	dev_dbg(&neoispd->pdev->dev, "isp starting\n");
+	dev_dbg(&neoispd->pdev->dev, "isp starting ctx id: %d\n", prev_ctx_id);
 }
 
 static int neoisp_schedule_internal(struct neoisp_node_group_s *node_group, unsigned long flags)
@@ -525,14 +613,14 @@ static int neoisp_schedule_internal(struct neoisp_node_group_s *node_group, unsi
 		return 0;
 	}
 
-	if (!mod_params.test.disable_params) {
+	node = &node_group->node[NEOISP_PARAMS_NODE];
+	if (neoisp_node_link_state(node)) {
 		if ((BIT(NEOISP_PARAMS_NODE) & node_group->streaming_map)
 				!= BIT(NEOISP_PARAMS_NODE)) {
 			dev_dbg(&neoispd->pdev->dev, "Params is not disabled and not ready\n");
 			return 0;
 		}
 
-		node = &node_group->node[NEOISP_PARAMS_NODE];
 		spin_lock_irqsave(&node->ready_lock, flags1);
 		buf[NEOISP_PARAMS_NODE] =
 			list_first_entry_or_null(&node->ready_queue, struct neoisp_buffer_s,
@@ -1036,20 +1124,33 @@ static int neoisp_s_fmt_vid_out(struct file *file, void *priv,
 	return 0;
 }
 
+static void neoisp_set_ctx_default_params(struct neoisp_dev_s *neoispd, int ctx_id)
+{
+	memcpy(&neoispd->node_group[ctx_id].params[VB2_MAX_FRAME],
+		&neoisp_default_params,
+		sizeof(neoisp_default_params));
+}
+
 static int neoisp_node_streamon(struct file *file, void *priv,
 		enum v4l2_buf_type type)
 {
 	struct neoisp_node_s *node = video_drvdata(file);
 	struct neoisp_dev_s *neoispd = node->node_group->neoisp_dev;
+	struct neoisp_meta_params_s *params = &node->node_group->params[VB2_MAX_FRAME];
+	__u32 pixfmt = node->format.fmt.pix_mp.pixelformat;
 
 	dev_dbg(&neoispd->pdev->dev, "Stream on for node %s\n", NODE_NAME(node));
 	/*
 	 * Check if this is input0 node to preload default params
 	 */
-	if (node->id == NEOISP_INPUT0_NODE) {
-		neoisp_update_hdr_decompress(node->neoisp_format->bit_depth);
-		/* program registers and look-up tables */
-		neoisp_set_params(neoispd, &neoisp_default_params);
+	if (node->id == NEOISP_INPUT0_NODE)
+		neoisp_update_hdr_decompress(&params->regs, node->neoisp_format->bit_depth);
+
+	if (node->id == NEOISP_FRAME_NODE) {
+		if (FMT_IS_YUV(pixfmt))
+			neoisp_config_gcm_for_yuv(&params->regs);
+		else
+			neoisp_config_gcm_for_rgb(&params->regs);
 	}
 
 	INIT_LIST_HEAD(&node->ready_queue);
@@ -1065,6 +1166,10 @@ static int neoisp_node_streamoff(struct file *file, void *priv,
 		enum v4l2_buf_type type)
 {
 	struct neoisp_node_s *node = video_drvdata(file);
+	struct neoisp_dev_s *neoispd = node->node_group->neoisp_dev;
+
+	if (node->id == NEOISP_INPUT0_NODE)
+		neoisp_set_ctx_default_params(neoispd, node->node_group->id);
 
 	return vb2_streamoff(&node->queue, type);
 }
@@ -1116,26 +1221,24 @@ static const struct video_device neoisp_videodev = {
 };
 
 /* Try and schedule a job for next of the node groups. */
-static void neoisp_schedule_next(struct neoisp_dev_s *neoispd, bool clear_hw_busy)
+static void neoisp_schedule_next(struct neoisp_dev_s *neoispd, __u32 idx)
 {
 	unsigned long flags;
+	unsigned int i;
 
 	spin_lock_irqsave(&neoispd->hw_lock, flags);
 
-	if (clear_hw_busy)
-		neoispd->hw_busy = 0;
-	if (neoispd->hw_busy == 0) {
-		unsigned int i;
-
-		for (i = 0; i < NEOISP_NODE_GROUPS_COUNT; i++) {
-			/*
-			 * A non-zero return from neoisp_schedule_internal means
-			 * the lock was released.
-			 */
-			if (neoisp_schedule_internal(&neoispd->node_group[i], flags))
-				return;
-		}
+	for (i = 1; i <= NEOISP_NODE_GROUPS_COUNT; i++) {
+		/* try to schedule next index from last processed one */
+		__u32 next = (i + idx) % NEOISP_NODE_GROUPS_COUNT;
+		/*
+		 * A non-zero return from neoisp_schedule_internal means
+		 * the lock was released.
+		 */
+		if (neoisp_schedule_internal(&neoispd->node_group[next], flags))
+			return;
 	}
+	neoispd->hw_busy = 0;
 	spin_unlock_irqrestore(&neoispd->hw_lock, flags);
 }
 
@@ -1150,12 +1253,13 @@ static void neoisp_get_offsize(enum isp_block_map_e map, __u32 *offset, __u32 *s
 
 static void neoisp_get_stats(struct neoisp_dev_s *neoispd, struct neoisp_buffer_s *buf)
 {
+	struct neoisp_node_s *node = &neoispd->queued_job.node_group->node[NEOISP_STATS_NODE];
 	struct neoisp_meta_stats_s *dest = (struct neoisp_meta_stats_s *)get_vaddr(buf);
 	__u8 *src = (__u8 *)(uintptr_t)neoispd->mmio_tcm;
 	__u32 offset, size;
 
-	/* check if stats node */
-	if (mod_params.test.disable_stats)
+	/* check if stats node link is enabled */
+	if (!neoisp_node_link_state(node))
 		return;
 
 	if (IS_ERR_OR_NULL(dest) || IS_ERR_OR_NULL(src)) {
@@ -1283,7 +1387,7 @@ static irqreturn_t neoisp_irq_handler(int irq, void *dev_id)
 		/* update frame_sequence */
 		node_group->frame_sequence++;
 		/* check if there's more to do before going to sleep */
-		neoisp_schedule_next(neoispd, true);
+		neoisp_schedule_next(neoispd, node_group->id);
 	}
 
 	return IRQ_HANDLED;
@@ -1324,7 +1428,6 @@ static int neoisp_init_subdev(struct neoisp_node_group_s *node_group)
 	sd->owner = THIS_MODULE;
 	sd->dev = &neoispd->pdev->dev;
 	sd->flags |= V4L2_SUBDEV_FL_HAS_DEVNODE
-			| V4L2_SUBDEV_FL_STREAMS
 			| V4L2_SUBDEV_FL_HAS_EVENTS;
 	strscpy(sd->name, NEOISP_NAME, sizeof(sd->name));
 
@@ -1388,12 +1491,13 @@ static void node_set_default_format(struct neoisp_node_s *node)
  * Initialise a struct neoisp_node_s and register it as /dev/video<N>
  * to represent one of the neoisp's input or output streams.
  */
-static int neoisp_init_node(struct neoisp_node_group_s *node_group, __u32 id)
+int neoisp_init_node(struct neoisp_node_group_s *node_group, __u32 id)
 {
 	bool output = NODE_DESC_IS_OUTPUT(&node_desc[id]);
 	struct neoisp_node_s *node = &node_group->node[id];
 	struct neoisp_dev_s *neoispd = node_group->neoisp_dev;
 	struct media_entity *entity = &node->vfd.entity;
+	struct media_pad *mpad;
 	struct video_device *vdev = &node->vfd;
 	struct vb2_queue *q = &node->queue;
 	int ret;
@@ -1456,14 +1560,20 @@ static int neoisp_init_node(struct neoisp_node_group_s *node_group, __u32 id)
 
 	if (output)
 		ret = media_create_pad_link(entity, 0, &node_group->sd.entity,
-				id, MEDIA_LNK_FL_IMMUTABLE |
-				MEDIA_LNK_FL_ENABLED);
+				id, node_desc[id].link_flags);
 	else
 		ret = media_create_pad_link(&node_group->sd.entity, id, entity,
-				0, MEDIA_LNK_FL_IMMUTABLE |
-				MEDIA_LNK_FL_ENABLED);
+				0, node_desc[id].link_flags);
 	if (ret)
 		goto err_unregister_video_dev;
+
+	media_entity_for_each_pad(&node_group->sd.entity, mpad)
+		if (mpad->index == id)
+			break;
+	if (output)
+		node->intf_link = media_entity_find_link(&node->pad, mpad);
+	else
+		node->intf_link = media_entity_find_link(mpad, &node->pad);
 
 	dev_dbg(&neoispd->pdev->dev,
 			"%s device node registered as /dev/video%d\n",
@@ -1477,7 +1587,8 @@ err_unregister_queue:
 	vb2_queue_release(&node->queue);
 	return ret;
 }
-static int neoisp_init_group(struct neoisp_dev_s *neoispd, __u32 id)
+
+static int neoisp_init_group(struct neoisp_dev_s *neoispd, struct neoisp_info_s *info, __u32 id)
 {
 	struct neoisp_node_group_s *node_group = &neoispd->node_group[id];
 	struct v4l2_device *v4l2_dev;
@@ -1494,6 +1605,7 @@ static int neoisp_init_group(struct neoisp_dev_s *neoispd, __u32 id)
 	/* Register v4l2_device and media_device */
 	mdev = &node_group->mdev;
 	mdev->dev = &neoispd->pdev->dev;
+	mdev->hw_revision = info->neoisp_hw_ver;
 	strscpy(mdev->model, NEOISP_NAME, sizeof(mdev->model));
 	snprintf(mdev->bus_info, sizeof(mdev->bus_info),
 			"platform:%s", dev_name(&neoispd->pdev->dev));
@@ -1529,7 +1641,7 @@ static int neoisp_init_group(struct neoisp_dev_s *neoispd, __u32 id)
 
 	node_group->params =
 		dma_alloc_coherent(mdev->dev,
-				sizeof(struct neoisp_meta_params_s) * VB2_MAX_FRAME,
+				sizeof(struct neoisp_meta_params_s) * (VB2_MAX_FRAME + 1),
 				&node_group->params_dma_addr, GFP_KERNEL);
 	if (!node_group->params) {
 		dev_err(mdev->dev, "Unable to allocate cached params buffers.\n");
@@ -1561,7 +1673,7 @@ static void neoisp_destroy_node_group(struct neoisp_node_group_s *node_group)
 
 	if (node_group->params) {
 		dma_free_coherent(&neoispd->pdev->dev,
-				sizeof(struct neoisp_meta_params_s) * VB2_MAX_FRAME,
+				sizeof(struct neoisp_meta_params_s) * (VB2_MAX_FRAME + 1),
 				node_group->params,
 				node_group->params_dma_addr);
 	}
@@ -1581,7 +1693,7 @@ static void neoisp_destroy_node_group(struct neoisp_node_group_s *node_group)
 	v4l2_device_unregister(&node_group->v4l2_dev);
 }
 
-static int neoisp_init_ctx(void)
+static int neoisp_init_ctx(struct neoisp_dev_s *neoispd)
 {
 	int i = 0;
 	__u16 *ptr = neoisp_default_params.mems.gtm.drc_global_tonemap;
@@ -1589,6 +1701,11 @@ static int neoisp_init_ctx(void)
 	/* Fill default global tonemap lut with 1.0 value (256) */
 	for (; i < NEO_DRC_GLOBAL_TONEMAP_SIZE; i++)
 		ptr[i] = 1 << 8;
+
+	for (i = 0; i < NEOISP_NODE_GROUPS_COUNT; i++)
+		memcpy(&neoispd->node_group[i].params[VB2_MAX_FRAME],
+			&neoisp_default_params,
+			sizeof(neoisp_default_params));
 
 	return 0;
 }
@@ -1611,12 +1728,8 @@ static int neoisp_init_hw(struct neoisp_dev_s *neoispd)
 			NEO_IDBG2_LINE_NUM_LINE_NUM_MASK);
 
 	ret += regmap_field_write(neoispd->regs.fields[NEO_PIPE_CONF_INT_EN0_IDX],
-			NEO_PIPE_CONF_INT_EN0_EN_FS1
-			| NEO_PIPE_CONF_INT_EN0_EN_FS2
-			| NEO_PIPE_CONF_INT_EN0_EN_FD1
-			| NEO_PIPE_CONF_INT_EN0_EN_FD2
+			NEO_PIPE_CONF_INT_EN0_EN_FD2
 			| NEO_PIPE_CONF_INT_EN0_EN_STATD
-			| NEO_PIPE_CONF_INT_EN0_EN_DRCD
 			| NEO_PIPE_CONF_INT_EN0_EN_BUS_ERR_MASK
 			| NEO_PIPE_CONF_INT_EN0_EN_CSI_TERR
 			| NEO_PIPE_CONF_INT_EN0_EN_TRIG_ERR);
@@ -1628,12 +1741,14 @@ static int neoisp_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct neoisp_dev_s *neoisp_dev;
+	struct neoisp_info_s *info;
 	int num_groups, ret, irq;
 
 	neoisp_dev = devm_kzalloc(dev, sizeof(*neoisp_dev), GFP_KERNEL);
 	if (!neoisp_dev)
 		return -ENOMEM;
 	neoisp_dev->pdev = pdev;
+	info = (struct neoisp_info_s *)of_device_get_match_data(dev);
 
 	ret = devm_clk_bulk_get_all(dev, &neoisp_dev->clks);
 	if (ret < 0) {
@@ -1685,16 +1800,17 @@ static int neoisp_probe(struct platform_device *pdev)
 	 * device
 	 */
 	for (num_groups = 0; num_groups < NEOISP_NODE_GROUPS_COUNT; num_groups++) {
-		ret = neoisp_init_group(neoisp_dev, num_groups);
+		ret = neoisp_init_group(neoisp_dev, info, num_groups);
 		if (ret)
 			goto disable_nodes_err;
 	}
 
+	spin_lock_init(&neoisp_dev->hw_lock);
 	ret = neoisp_init_hw(neoisp_dev);
 	if (ret)
 		goto disable_nodes_err;
 
-	ret = neoisp_init_ctx();
+	ret = neoisp_init_ctx(neoisp_dev);
 	if (ret)
 		goto disable_nodes_err;
 
@@ -1740,21 +1856,55 @@ static int __maybe_unused neoisp_runtime_resume(struct device *dev)
 
 	ret = clk_bulk_prepare_enable(neoisp_dev->num_clks, neoisp_dev->clks);
 
-	if (ret)
+	if (ret) {
+		dev_err(dev, "Failed to resume device. Could not re-enable clocks.\n");
 		return ret;
+	}
+
+	ret = neoisp_init_hw(neoisp_dev);
+	if (ret) {
+		dev_err(dev, "Failed to resume device. Could not re-initialize hardware.\n");
+		return ret;
+	}
 
 	return 0;
 }
 
+static int __maybe_unused neoisp_pm_suspend(struct device *dev)
+{
+	struct neoisp_dev_s *neoispd = dev_get_drvdata(dev);
+	unsigned long timeout;
+
+	timeout = jiffies + msecs_to_jiffies(NEOISP_SUSPEND_TIMEOUT_MS);
+	while (neoispd->hw_busy) {
+		cond_resched();
+		if (time_after_eq(jiffies, timeout)) {
+			dev_err(dev, "Failed to enter idle on system suspend\n");
+			return -EBUSY;
+		}
+	}
+
+	pm_runtime_force_suspend(dev);
+
+	return 0;
+}
+
+static int __maybe_unused neoisp_pm_resume(struct device *dev)
+{
+	return pm_runtime_force_resume(dev);
+}
+
 static const struct dev_pm_ops neoisp_pm = {
-	SET_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend,
-			pm_runtime_force_resume)
-		SET_RUNTIME_PM_OPS(neoisp_runtime_suspend,
-				neoisp_runtime_resume, NULL)
+	SET_SYSTEM_SLEEP_PM_OPS(neoisp_pm_suspend, neoisp_pm_resume)
+	SET_RUNTIME_PM_OPS(neoisp_runtime_suspend, neoisp_runtime_resume, NULL)
+};
+
+static const struct neoisp_info_s neoisp_v1_data = {
+	.neoisp_hw_ver = NEO_ISP_V1,
 };
 
 static const struct of_device_id neoisp_dt_ids[] = {
-	{ .compatible = "nxp,neoisp", .data = NULL },
+	{ .compatible = "nxp,imx95-a0-neoisp", .data = &neoisp_v1_data },
 	{ },
 };
 MODULE_DEVICE_TABLE(of, neoisp_dt_ids);

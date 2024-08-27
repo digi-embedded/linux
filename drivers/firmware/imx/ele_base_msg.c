@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Copyright 2021-2023 NXP
+ * Copyright 2021-2024 NXP
  */
 
 #include <linux/types.h>
@@ -104,7 +104,55 @@ exit:
 	return ret;
 }
 
+int ele_write_fuse(struct device *dev, uint16_t fuse_id, u32 value, bool lock)
+{
+	struct ele_mu_priv *priv = dev_get_drvdata(dev);
+	unsigned int status, ind;
+	int ret;
 
+	ret = imx_se_alloc_tx_rx_buf(priv);
+	if (ret)
+		return ret;
+
+	ret = plat_fill_cmd_msg_hdr(priv,
+				    (struct mu_hdr *)&priv->tx_msg->header,
+				    ELE_WRITE_FUSE, ELE_WRITE_FUSE_REQ_MSG_SZ,
+				    true);
+	if (ret) {
+		pr_err("Error: plat_fill_cmd_msg_hdr failed.\n");
+		goto exit;
+	}
+
+	priv->tx_msg->data[0] = (32 << 16) | (fuse_id << 5);
+	if (lock)
+		priv->tx_msg->data[0] |= BIT(31);
+	priv->tx_msg->data[1] = value;
+
+	ret = imx_ele_msg_send_rcv(priv);
+	if (ret < 0)
+		goto exit;
+
+	ret  = validate_rsp_hdr(priv,
+				priv->rx_msg->header,
+				ELE_WRITE_FUSE,
+				ELE_WRITE_FUSE_RSP_MSG_SZ,
+				true);
+	if (ret)
+		goto exit;
+
+	status = RES_STATUS(priv->rx_msg->data[0]);
+	ind = RES_IND(priv->rx_msg->data[0]);
+	if (status != priv->success_tag) {
+		dev_err(dev, "Command Id[%d], Status=0x%x, Indicator=0x%x",
+			ELE_WRITE_FUSE, status, ind);
+		ret = -1;
+	}
+
+exit:
+	imx_se_free_tx_rx_buf(priv);
+	return ret;
+}
+EXPORT_SYMBOL_GPL(ele_write_fuse);
 
 int ele_ping(struct device *dev)
 {
@@ -189,10 +237,6 @@ int ele_get_trng_state(struct device *dev)
 
 	ret = imx_ele_msg_send_rcv(priv);
 	if (ret)
-		goto exit;
-
-	ret = imx_ele_msg_send_rcv(priv);
-	if (ret < 0)
 		goto exit;
 
 	ret  = validate_rsp_hdr(priv,
@@ -284,7 +328,7 @@ int ele_service_swap(struct device *dev,
 				    ELE_SERVICE_SWAP_REQ_MSG_SZ,
 				    true);
 	if (ret)
-		return ret;
+		goto exit;
 
 	priv->tx_msg->data[0] = flag;
 	priv->tx_msg->data[1] = addr_size;
@@ -294,7 +338,7 @@ int ele_service_swap(struct device *dev,
 						 ELE_SERVICE_SWAP_REQ_MSG_SZ);
 	ret = imx_ele_msg_send_rcv(priv);
 	if (ret < 0)
-		return ret;
+		goto exit;
 
 	ret  = validate_rsp_hdr(priv,
 				priv->rx_msg->header,
@@ -302,7 +346,7 @@ int ele_service_swap(struct device *dev,
 				ELE_SERVICE_SWAP_RSP_MSG_SZ,
 				true);
 	if (ret)
-		return ret;
+		goto exit;
 
 	status = RES_STATUS(priv->rx_msg->data[0]);
 	if (status != priv->success_tag) {
@@ -315,6 +359,54 @@ int ele_service_swap(struct device *dev,
 		else
 			ret = 0;
 	}
+exit:
+	imx_se_free_tx_rx_buf(priv);
+
+	return ret;
+}
+
+int ele_fw_authenticate(struct device *dev, phys_addr_t addr)
+{
+	struct ele_mu_priv *priv = dev_get_drvdata(dev);
+	unsigned int status;
+	int ret;
+
+	ret = imx_se_alloc_tx_rx_buf(priv);
+	if (ret)
+		return ret;
+
+	ret = plat_fill_cmd_msg_hdr(priv,
+				    (struct mu_hdr *)&priv->tx_msg->header,
+				    ELE_FW_AUTH_REQ,
+				    ELE_FW_AUTH_REQ_SZ,
+				    true);
+	if (ret)
+		goto exit;
+
+	priv->tx_msg->data[0] = addr;
+	priv->tx_msg->data[1] = 0x0;
+	priv->tx_msg->data[2] = addr;
+
+	ret = imx_ele_msg_send_rcv(priv);
+	if (ret < 0)
+		goto exit;
+
+	ret  = validate_rsp_hdr(priv,
+				priv->rx_msg->header,
+				ELE_FW_AUTH_REQ,
+				ELE_FW_AUTH_RSP_MSG_SZ,
+				true);
+	if (ret)
+		goto exit;
+
+	status = RES_STATUS(priv->rx_msg->data[0]);
+	if (status != priv->success_tag) {
+		dev_err(dev, "Command Id[%d], Response Failure = 0x%x",
+			ELE_FW_AUTH_REQ, status);
+		ret = -1;
+	}
+exit:
+	imx_se_free_tx_rx_buf(priv);
 
 	return ret;
 }

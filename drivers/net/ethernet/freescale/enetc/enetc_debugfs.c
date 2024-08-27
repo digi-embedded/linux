@@ -148,7 +148,7 @@ static int enetc_rx_mode_show(struct seq_file *s, void *data)
 		   val & PSIPMMR_SI_MAC_UP, (val & PSIPMMR_SI_MAC_MP) >> 16);
 
 	/* Use MAC hash filter */
-	if (!si->num_mac_fe) {
+	if (!pf->num_mac_fe) {
 		for (i = 0; i < pf->num_vfs + 1; i++)
 			enetc_show_si_mac_hash_filter(s, hw, i);
 
@@ -156,9 +156,9 @@ static int enetc_rx_mode_show(struct seq_file *s, void *data)
 	}
 
 	seq_printf(s, "The total number of entries in MAC filter table is %d.\n",
-		   si->num_mac_fe);
+		   pf->num_mac_fe);
 	/* Use MAC exact match table */
-	for (i = 0; i < si->num_mac_fe; i++) {
+	for (i = 0; i < pf->num_mac_fe; i++) {
 		struct ntmp_mfe entry;
 
 		err = ntmp_maft_query_entry(&si->cbdr, i, &entry);
@@ -351,12 +351,12 @@ static int enetc_psfp_show(struct seq_file *s, void *data)
 
 		seq_printf(s, "Show PSFP entry %d information.\n", i++);
 
-		err = ntmp_isit_query_entry(&si->cbdr, psfp->isit_cfg.isi_eid,
+		err = ntmp_isit_query_entry(&si->cbdr, psfp->isit_cfg.entry_id,
 					    isi_info);
 		if (err)
 			goto free_isc_info;
 		seq_printf(s, "Show ingress stream identification table entry %u:\n",
-			   psfp->isit_cfg.isi_eid);
+			   psfp->isit_cfg.entry_id);
 		enetc_psfp_isi_show(s, isi_info);
 
 		err = ntmp_ist_query_entry(&si->cbdr, psfp->isit_cfg.is_eid,

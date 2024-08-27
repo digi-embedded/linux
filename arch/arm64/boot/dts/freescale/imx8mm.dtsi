@@ -1268,10 +1268,9 @@
 				interrupts = <GIC_SPI 17 IRQ_TYPE_LEVEL_HIGH>;
 				clock-frequency = <333000000>;
 				clocks = <&clk IMX8MM_CLK_CSI1_CORE>,
-					<&clk IMX8MM_CLK_CSI1_PHY_REF>,
 					<&clk IMX8MM_CLK_DISP_AXI_ROOT>,
 					<&clk IMX8MM_CLK_DISP_APB_ROOT>;
-				clock-names = "mipi_clk", "phy_clk", "disp_axi", "disp_apb";
+				clock-names = "mipi_clk", "disp_axi", "disp_apb";
 				bus-width = <4>;
 				power-domains = <&disp_blk_ctrl IMX8MM_DISPBLK_PD_MIPI_CSI>;
 				status = "disabled";
@@ -1295,7 +1294,7 @@
 					 <&clk IMX8MM_CLK_DSI_CORE>,
 					 <&clk IMX8MM_CLK_DSI_PHY_REF>,
 					 <&clk IMX8MM_CLK_CSI1_CORE>,
-					 <&clk IMX8MM_CLK_CSI1_PHY_REF>;
+					 <&clk IMX8MM_CLK_DISP_APB_ROOT>;
 				clock-names = "csi-bridge-axi","csi-bridge-apb",
 					      "csi-bridge-core", "lcdif-axi",
 					      "lcdif-apb", "lcdif-pix",
@@ -1426,9 +1425,11 @@
 
 		pcie0_ep: pcie-ep@33800000 {
 			compatible = "fsl,imx8mm-pcie-ep";
-			reg = <0x33800000 0x400000>,
+			reg = <0x33800000 0x100000>,
+			      <0x33900000 0x100000>,
+			      <0x33b00000 0x100000>,
 			      <0x18000000 0x8000000>;
-			reg-names = "dbi", "addr_space";
+			reg-names = "dbi", "dbi2", "atu", "addr_space";
 			num-lanes = <1>;
 			interrupts = <GIC_SPI 127 IRQ_TYPE_LEVEL_HIGH>;
 			interrupt-names = "dma";
