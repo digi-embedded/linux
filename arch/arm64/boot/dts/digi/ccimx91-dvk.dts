@@ -16,14 +16,14 @@
 /dts-v1/;
 
 #include <dt-bindings/usb/pd.h>
-/* i.MX93 CPU */
-#include "../freescale/imx93.dtsi"
+#include "../freescale/imx91.dtsi"
+
 /* Digi ConnectCore 91 (SOM) */
 #include "ccimx91.dtsi"
 
 / {
 	model = "Digi International ConnectCore 91 DVK";
-	compatible = "digi,ccimx91-dvk", "digi,ccimx91", "fsl,imx91p", "fsl,imx93";
+	compatible = "digi,ccimx91-dvk", "digi,ccimx91", "fsl,imx91";
 	digi,machine,name = "ccimx91-dvk";
 
 	chosen {
@@ -115,10 +115,6 @@
 	};
 };
 
-&tmu {
-	status = "disabled";
-};
-
 /* LVDS PWM backlight */
 &tpm6 {
 	pinctrl-names = "default";
@@ -207,7 +203,7 @@
 	max98089: codec@10 {
 		compatible = "maxim,max98089";
 		reg = <0x10>;
-		clocks = <&clk IMX93_CLK_SAI3_GATE>;
+		clocks = <&clk IMX91_CLK_SAI3_GATE>;
 		clock-names = "mclk";
 	};
 
@@ -271,7 +267,7 @@
 /* Ethernet EQoS */
 &eqos {
 	pinctrl-names = "default", "sleep";
-	pinctrl-0 = <&pinctrl_eqos>, <&pinctrl_eqos_mdio>;
+	pinctrl-0 = <&pinctrl_eqos>;
 	pinctrl-1 = <&pinctrl_eqos_sleep>;
 	phy-mode = "rgmii-id";
 	phy-handle = <&ethphy0>;
@@ -293,7 +289,7 @@
 /* Ethernet MAC (ENET) */
 &fec {
 	pinctrl-names = "default", "sleep";
-	pinctrl-0 = <&pinctrl_fec>, <&pinctrl_fec_mdio>;
+	pinctrl-0 = <&pinctrl_fec>;
 	pinctrl-1 = <&pinctrl_fec_sleep>;
 	phy-mode = "rgmii-id";
 	phy-handle = <&ethphy1>;
@@ -322,8 +318,8 @@
 &sai3 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_sai3>;
-	assigned-clocks = <&clk IMX93_CLK_SAI3>;
-	assigned-clock-parents = <&clk IMX93_CLK_AUDIO_PLL>;
+	assigned-clocks = <&clk IMX91_CLK_SAI3>;
+	assigned-clock-parents = <&clk IMX91_CLK_AUDIO_PLL>;
 	assigned-clock-rates = <12288000>;
 	fsl,sai-mclk-direction-output;
 	status = "okay";
@@ -369,6 +365,14 @@
 	no-mmc;
 };
 
+&wdog3 {
+	status = "okay";
+};
+
+&tempsense0 {
+	status = "okay";
+};
+
 &iomuxc {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_gpio>, <&pinctrl_gpio_shared_enet2>;
@@ -376,108 +380,96 @@
 	/* EQoS RGMII */
 	pinctrl_eqos: eqosgrp {
 		fsl,pins = <
-			MX93_PAD_ENET1_RD0__ENET_QOS_RGMII_RD0			0x57e
-			MX93_PAD_ENET1_RD1__ENET_QOS_RGMII_RD1			0x57e
-			MX93_PAD_ENET1_RD2__ENET_QOS_RGMII_RD2			0x57e
-			MX93_PAD_ENET1_RD3__ENET_QOS_RGMII_RD3			0x57e
-			MX93_PAD_ENET1_RXC__CCM_ENET_QOS_CLOCK_GENERATE_RX_CLK	0x5fe
-			MX93_PAD_ENET1_RX_CTL__ENET_QOS_RGMII_RX_CTL		0x57e
-			MX93_PAD_ENET1_TD0__ENET_QOS_RGMII_TD0			0x57e
-			MX93_PAD_ENET1_TD1__ENET_QOS_RGMII_TD1			0x57e
-			MX93_PAD_ENET1_TD2__ENET_QOS_RGMII_TD2			0x57e
-			MX93_PAD_ENET1_TD3__ENET_QOS_RGMII_TD3			0x57e
-			MX93_PAD_ENET1_TXC__CCM_ENET_QOS_CLOCK_GENERATE_TX_CLK	0x5fe
-			MX93_PAD_ENET1_TX_CTL__ENET_QOS_RGMII_TX_CTL		0x57e
-		>;
-	};
-
-	/* EQoS MDIO */
-	pinctrl_eqos_mdio: ethmdio {
-		fsl,pins = <
-			MX93_PAD_ENET1_MDC__ENET_QOS_MDC			0x57e
-			MX93_PAD_ENET1_MDIO__ENET_QOS_MDIO			0x57e
+			MX91_PAD_ENET1_MDC__ENET1_MDC				0x57e
+			MX91_PAD_ENET1_MDIO__ENET_QOS_MDIO			0x57e
+			MX91_PAD_ENET1_RD0__ENET_QOS_RGMII_RD0			0x57e
+			MX91_PAD_ENET1_RD1__ENET_QOS_RGMII_RD1			0x57e
+			MX91_PAD_ENET1_RD2__ENET_QOS_RGMII_RD2			0x57e
+			MX91_PAD_ENET1_RD3__ENET_QOS_RGMII_RD3			0x57e
+			MX91_PAD_ENET1_RXC__ENET_QOS_RGMII_RXC			0x5fe
+			MX91_PAD_ENET1_RX_CTL__ENET_QOS_RGMII_RX_CTL		0x57e
+			MX91_PAD_ENET1_TD0__ENET_QOS_RGMII_TD0			0x57e
+			MX91_PAD_ENET1_TD1__ENET1_RGMII_TD1			0x57e
+			MX91_PAD_ENET1_TD2__ENET_QOS_RGMII_TD2			0x57e
+			MX91_PAD_ENET1_TD3__ENET_QOS_RGMII_TD3			0x57e
+			MX91_PAD_ENET1_TXC__CCM_ENET_QOS_CLOCK_GENERATE_TX_CLK	0x5fe
+			MX91_PAD_ENET1_TX_CTL__ENET_QOS_RGMII_TX_CTL		0x57e
 		>;
 	};
 
 	/* EQoS sleep */
-	pinctrl_eqos_sleep: eqosgrp-sleep {
+	pinctrl_eqos_sleep: eqosgrpsleep {
 		fsl,pins = <
-			MX93_PAD_ENET1_RD0__GPIO4_IO10			0xc00
-			MX93_PAD_ENET1_RD1__GPIO4_IO11			0xc00
-			MX93_PAD_ENET1_RD2__GPIO4_IO12			0xc00
-			MX93_PAD_ENET1_RD3__GPIO4_IO13			0xc00
-			MX93_PAD_ENET1_RXC__GPIO4_IO09			0xc00
-			MX93_PAD_ENET1_RX_CTL__GPIO4_IO08		0xc00
-			MX93_PAD_ENET1_TD0__GPIO4_IO05			0xc00
-			MX93_PAD_ENET1_TD1__GPIO4_IO04			0xc00
-			MX93_PAD_ENET1_TD2__GPIO4_IO03			0xc00
-			MX93_PAD_ENET1_TD3__GPIO4_IO02			0xc00
-			MX93_PAD_ENET1_TXC__GPIO4_IO07			0xc00
-			MX93_PAD_ENET1_TX_CTL__GPIO4_IO06		0xc00
-			MX93_PAD_ENET1_MDC__GPIO4_IO00			0xc00
-			MX93_PAD_ENET1_MDIO__GPIO4_IO01			0xc00
+			MX91_PAD_ENET1_MDC__GPIO4_IO0			0xc00
+			MX91_PAD_ENET1_MDIO__GPIO4_IO1			0xc00
+			MX91_PAD_ENET1_RD0__GPIO4_IO10			0xc00
+			MX91_PAD_ENET1_RD1__GPIO4_IO11			0xc00
+			MX91_PAD_ENET1_RD2__GPIO4_IO12			0xc00
+			MX91_PAD_ENET1_RD3__GPIO4_IO13			0xc00
+			MX91_PAD_ENET1_RXC__GPIO4_IO9			0xc00
+			MX91_PAD_ENET1_RX_CTL__GPIO4_IO8		0xc00
+			MX91_PAD_ENET1_TD0__GPIO4_IO5			0xc00
+			MX91_PAD_ENET1_TD1__GPIO4_IO4			0xc00
+			MX91_PAD_ENET1_TD2__GPIO4_IO3			0xc00
+			MX91_PAD_ENET1_TD3__GPIO4_IO3			0xc00
+			MX91_PAD_ENET1_TXC__GPIO4_IO7			0xc00
+			MX91_PAD_ENET1_TX_CTL__GPIO4_IO6		0xc00
 		>;
 	};
 
 	/* FEC RGMII */
 	pinctrl_fec: fecgrp {
 		fsl,pins = <
-			MX93_PAD_ENET2_RD0__ENET1_RGMII_RD0			0x57e
-			MX93_PAD_ENET2_RD1__ENET1_RGMII_RD1			0x57e
-			MX93_PAD_ENET2_RD2__ENET1_RGMII_RD2			0x57e
-			MX93_PAD_ENET2_RD3__ENET1_RGMII_RD3			0x57e
-			MX93_PAD_ENET2_RXC__ENET1_RGMII_RXC			0x5fe
-			MX93_PAD_ENET2_RX_CTL__ENET1_RGMII_RX_CTL		0x57e
-			MX93_PAD_ENET2_TD0__ENET1_RGMII_TD0			0x57e
-			MX93_PAD_ENET2_TD1__ENET1_RGMII_TD1			0x57e
-			MX93_PAD_ENET2_TD2__ENET1_RGMII_TD2			0x57e
-			MX93_PAD_ENET2_TD3__ENET1_RGMII_TD3			0x57e
-			MX93_PAD_ENET2_TXC__ENET1_RGMII_TXC			0x5fe
-			MX93_PAD_ENET2_TX_CTL__ENET1_RGMII_TX_CTL		0x57e
-		>;
-	};
-
-	/* FEC MDIO */
-	pinctrl_fec_mdio: fecmdiogrp {
-		fsl,pins = <
-			MX93_PAD_ENET2_MDC__ENET1_MDC				0x57e
-			MX93_PAD_ENET2_MDIO__ENET1_MDIO				0x57e
+			MX91_PAD_ENET2_MDC__ENET2_MDC			0x57e
+			MX91_PAD_ENET2_MDIO__ENET2_MDIO			0x57e
+			MX91_PAD_ENET2_RD0__ENET2_RGMII_RD0		0x57e
+			MX91_PAD_ENET2_RD1__ENET2_RGMII_RD1		0x57e
+			MX91_PAD_ENET2_RD2__ENET2_RGMII_RD2		0x57e
+			MX91_PAD_ENET2_RD3__ENET2_RGMII_RD3		0x57e
+			MX91_PAD_ENET2_RXC__ENET2_RGMII_RXC		0x5fe
+			MX91_PAD_ENET2_RX_CTL__ENET2_RGMII_RX_CTL	0x57e
+			MX91_PAD_ENET2_TD0__ENET2_RGMII_TD0		0x57e
+			MX91_PAD_ENET2_TD1__ENET2_RGMII_TD1		0x57e
+			MX91_PAD_ENET2_TD2__ENET2_RGMII_TD2		0x57e
+			MX91_PAD_ENET2_TD3__ENET2_RGMII_TD3		0x57e
+			MX91_PAD_ENET2_TXC__ENET2_RGMII_TXC		0x5fe
+			MX91_PAD_ENET2_TX_CTL__ENET2_RGMII_TX_CTL	0x57e
 		>;
 	};
 
 	/* FEC_SLEEP */
-	pinctrl_fec_sleep: fecgrp-sleep {
+	pinctrl_fec_sleep: fecsleepgrp {
 		fsl,pins = <
-			MX93_PAD_ENET2_RD0__GPIO4_IO24			0xc00
-			MX93_PAD_ENET2_RD1__GPIO4_IO25			0xc00
-			MX93_PAD_ENET2_RD2__GPIO4_IO26			0xc00
-			MX93_PAD_ENET2_RD3__GPIO4_IO27			0xc00
-			MX93_PAD_ENET2_RXC__GPIO4_IO23			0xc00
-			MX93_PAD_ENET2_RX_CTL__GPIO4_IO22		0xc00
-			MX93_PAD_ENET2_TD0__GPIO4_IO19			0xc00
-			MX93_PAD_ENET2_TD1__GPIO4_IO18			0xc00
-			MX93_PAD_ENET2_TD2__GPIO4_IO17			0xc00
-			MX93_PAD_ENET2_TD3__GPIO4_IO16			0xc00
-			MX93_PAD_ENET2_TXC__GPIO4_IO21			0xc00
-			MX93_PAD_ENET2_TX_CTL__GPIO4_IO20		0xc00
-			MX93_PAD_ENET2_MDC__GPIO4_IO14			0xc00
-			MX93_PAD_ENET2_MDIO__GPIO4_IO15			0xc00
+			MX91_PAD_ENET2_MDC__GPIO4_IO14			0xc00
+			MX91_PAD_ENET2_MDIO__GPIO4_IO15			0xc00
+			MX91_PAD_ENET2_RD0__GPIO4_IO24			0xc00
+			MX91_PAD_ENET2_RD1__GPIO4_IO25			0xc00
+			MX91_PAD_ENET2_RD2__GPIO4_IO26			0xc00
+			MX91_PAD_ENET2_RD3__GPIO4_IO27			0xc00
+			MX91_PAD_ENET2_RXC__GPIO4_IO23                  0xc00
+			MX91_PAD_ENET2_RX_CTL__GPIO4_IO22		0xc00
+			MX91_PAD_ENET2_TD0__GPIO4_IO19			0xc00
+			MX91_PAD_ENET2_TD1__GPIO4_IO18			0xc00
+			MX91_PAD_ENET2_TD2__GPIO4_IO17			0xc00
+			MX91_PAD_ENET2_TD3__GPIO4_IO16			0xc00
+			MX91_PAD_ENET2_TXC__GPIO4_IO21                  0xc00
+			MX91_PAD_ENET2_TX_CTL__GPIO4_IO20               0xc00
 		>;
 	};
 
 	/* CAN1 */
 	pinctrl_flexcan1: flexcan1grp {
 		fsl,pins = <
-			MX93_PAD_PDM_CLK__CAN1_TX				0x139e
-			MX93_PAD_PDM_BIT_STREAM0__CAN1_RX			0x139e
+			MX91_PAD_PDM_CLK__CAN1_TX			0x139e
+			MX91_PAD_PDM_BIT_STREAM0__CAN1_RX		0x139e
 		>;
 	};
 
 	/* CAN2 */
 	pinctrl_flexcan2: flexcan2grp {
 		fsl,pins = <
-			MX93_PAD_GPIO_IO25__CAN2_TX				0x139e
-			MX93_PAD_GPIO_IO27__CAN2_RX				0x139e
+			MX91_PAD_GPIO_IO25__CAN2_TX			0x139e
+			MX91_PAD_GPIO_IO27__CAN2_RX			0x139e
 		>;
 	};
 
@@ -485,9 +477,9 @@
 	pinctrl_gpio: gpiogrp {
 		fsl,pins = <
 			/* ULED/BUTTON1 */
-			MX93_PAD_SD2_RESET_B__GPIO3_IO07			0x31e
+			MX91_PAD_SD2_RESET_B__GPIO3_IO7			0x31e
 			/* MIKROBUS_INT */
-			MX93_PAD_GPIO_IO11__GPIO2_IO11				0x31e
+			MX91_PAD_GPIO_IO11__GPIO2_IO11			0x31e
 		>;
 	};
 
@@ -495,50 +487,50 @@
 	pinctrl_gpio_shared_enet2: gpiosharedenet2grp {
 		fsl,pins = <
 			/* GPIO4_IO16 */
-			MX93_PAD_ENET2_TD3__GPIO4_IO16			0x31e
+			MX91_PAD_ENET2_TD3__GPIO4_IO16			0x31e
 			/* GPIO4_IO17 */
-			MX93_PAD_ENET2_TD2__GPIO4_IO17			0x31e
+			MX91_PAD_ENET2_TD2__GPIO4_IO17			0x31e
 			/* GPIO4_IO22 */
-			MX93_PAD_ENET2_RX_CTL__GPIO4_IO22			0x31e
+			MX91_PAD_ENET2_RX_CTL__GPIO4_IO22		0x31e
 			/* ULED/BUTTON2 */
-			MX93_PAD_ENET2_RXC__GPIO4_IO23			0x31e
+			MX91_PAD_ENET2_RXC__GPIO4_IO23			0x31e
 			/* GPIO4_IO25 */
-			MX93_PAD_ENET2_RD1__GPIO4_IO25			0x31e
+			MX91_PAD_ENET2_RD1__GPIO4_IO25			0x31e
 			/* GPIO4_IO27 */
-			MX93_PAD_ENET2_RD3__GPIO4_IO27			0x31e
+			MX91_PAD_ENET2_RD3__GPIO4_IO27			0x31e
 		>;
 	};
 
 	/* Power led */
 	pinctrl_gpio_led: gpioledgrp {
 		fsl,pins = <
-			MX93_PAD_CCM_CLKO4__GPIO4_IO29				0x31e
+			MX91_PAD_CCM_CLKO4__GPIO4_IO29			0x31e
 		>;
 	};
 
 	/* LPI2C3 */
 	pinctrl_lpi2c3: lpi2c3grp {
 		fsl,pins = <
-			MX93_PAD_GPIO_IO00__LPI2C3_SDA				0x40000b9e
-			MX93_PAD_GPIO_IO01__LPI2C3_SCL				0x40000b9e
+			MX91_PAD_GPIO_IO00__LPI2C3_SDA			0x40000b9e
+			MX91_PAD_GPIO_IO01__LPI2C3_SCL			0x40000b9e
 		>;
 	};
 
 	/* LPI2C4 */
 	pinctrl_lpi2c4: lpi2c4grp {
 		fsl,pins = <
-			MX93_PAD_GPIO_IO02__LPI2C4_SDA				0x40000b9e
-			MX93_PAD_GPIO_IO03__LPI2C4_SCL				0x40000b9e
+			MX91_PAD_GPIO_IO02__LPI2C4_SDA			0x40000b9e
+			MX91_PAD_GPIO_IO03__LPI2C4_SCL			0x40000b9e
 		>;
 	};
 
 	/* mikroBUS SPI interface */
 	pinctrl_lpspi8: lpspi8grp {
 		fsl,pins = <
-			MX93_PAD_GPIO_IO12__GPIO2_IO12				0x3fe
-			MX93_PAD_GPIO_IO13__LPSPI8_SIN				0x3fe
-			MX93_PAD_GPIO_IO14__LPSPI8_SOUT				0x3fe
-			MX93_PAD_GPIO_IO15__LPSPI8_SCK				0x3fe
+			MX91_PAD_GPIO_IO12__GPIO2_IO12			0x3fe
+			MX91_PAD_GPIO_IO13__LPSPI8_SIN			0x3fe
+			MX91_PAD_GPIO_IO14__LPSPI8_SOUT			0x3fe
+			MX91_PAD_GPIO_IO15__LPSPI8_SCK			0x3fe
 		>;
 	};
 
@@ -546,103 +538,100 @@
 	pinctrl_reg_5v_board: reg_5v_board_grp {
 		fsl,pins = <
 			/* 5V regulator power enable */
-			MX93_PAD_SAI1_RXD0__GPIO1_IO14				0x31e
+			MX91_PAD_SAI1_RXD0__GPIO1_IO14			0x31e
 		>;
 	};
 
 	/* CAN1 STBY control */
 	pinctrl_reg_can1_stby: reg_can1_stby_grp {
 		fsl,pins = <
-			MX93_PAD_SAI1_TXFS__GPIO1_IO11				0x31e
+			MX91_PAD_SAI1_TXFS__GPIO1_IO11			0x31e
 		>;
 	};
 
 	/* CAN2 STBY control */
 	pinctrl_reg_can2_stby: reg_can2_stby_grp {
 		fsl,pins = <
-			MX93_PAD_SAI1_TXD0__GPIO1_IO13				0x31e
+			MX91_PAD_SAI1_TXD0__GPIO1_IO13			0x31e
 		>;
 	};
 
 	/* RTC INT */
 	pinctrl_rtc: rtc_grp {
 		fsl,pins = <
-			MX93_PAD_GPIO_IO18__GPIO2_IO18				0x31e
+			MX91_PAD_GPIO_IO18__GPIO2_IO18			0x31e
 		>;
 	};
 
 	/* Audio Interface */
 	pinctrl_sai3: sai3grp {
 		fsl,pins = <
-			MX93_PAD_GPIO_IO21__SAI3_TX_DATA00			0x31e
-			MX93_PAD_GPIO_IO20__SAI3_RX_DATA00			0x31e
-			MX93_PAD_GPIO_IO26__SAI3_TX_SYNC			0x31e
-			MX93_PAD_GPIO_IO16__SAI3_TX_BCLK			0x31e
-			MX93_PAD_GPIO_IO17__SAI3_MCLK				0x31e
+			MX91_PAD_GPIO_IO21__SAI3_TX_DATA0		0x31e
+			MX91_PAD_GPIO_IO20__SAI3_RX_DATA0		0x31e
+			MX91_PAD_GPIO_IO26__SAI3_TX_SYNC		0x31e
+			MX91_PAD_GPIO_IO16__SAI3_TX_BCLK		0x31e
+			MX91_PAD_GPIO_IO17__SAI3_MCLK			0x31e
 		>;
 	};
 
 	/* SD card */
 	pinctrl_usdhc2_gpio: usdhc2gpiogrp {
 		fsl,pins = <
-			MX93_PAD_SD2_CD_B__GPIO3_IO00				0x31e
+			MX91_PAD_SD2_CD_B__GPIO3_IO0			0x31e
 		>;
 	};
 
-	/* need to config the SION for data and cmd pad, refer to ERR052021 */
 	pinctrl_usdhc2: usdhc2grp {
 		fsl,pins = <
-			MX93_PAD_SD2_CLK__USDHC2_CLK				0x1582
-			MX93_PAD_SD2_CMD__USDHC2_CMD				0x40001382
-			MX93_PAD_SD2_DATA0__USDHC2_DATA0			0x40001382
-			MX93_PAD_SD2_DATA1__USDHC2_DATA1			0x40001382
-			MX93_PAD_SD2_DATA2__USDHC2_DATA2			0x40001382
-			MX93_PAD_SD2_DATA3__USDHC2_DATA3			0x40001382
-			MX93_PAD_SD2_VSELECT__USDHC2_VSELECT			0x51e
+			MX91_PAD_SD2_CLK__USDHC2_CLK			0x1582
+			MX91_PAD_SD2_CMD__USDHC2_CMD			0x1382
+			MX91_PAD_SD2_DATA0__USDHC2_DATA0		0x1382
+			MX91_PAD_SD2_DATA1__USDHC2_DATA1		0x1382
+			MX91_PAD_SD2_DATA2__USDHC2_DATA2		0x1382
+			MX91_PAD_SD2_DATA3__USDHC2_DATA3		0x1382
+			MX91_PAD_SD2_VSELECT__USDHC2_VSELECT		0x51e
 		>;
 	};
 
-	/* need to config the SION for data and cmd pad, refer to ERR052021 */
-	pinctrl_usdhc2_100mhz: usdhc2grp-100mhzgrp {
+	pinctrl_usdhc2_100mhz: usdhc2-100mhzgrp {
 		fsl,pins = <
-			MX93_PAD_SD2_CLK__USDHC2_CLK				0x158e
-			MX93_PAD_SD2_CMD__USDHC2_CMD				0x4000138e
-			MX93_PAD_SD2_DATA0__USDHC2_DATA0			0x4000138e
-			MX93_PAD_SD2_DATA1__USDHC2_DATA1			0x4000138e
-			MX93_PAD_SD2_DATA2__USDHC2_DATA2			0x4000138e
-			MX93_PAD_SD2_DATA3__USDHC2_DATA3			0x4000138e
-			MX93_PAD_SD2_VSELECT__USDHC2_VSELECT			0x51e
+			MX91_PAD_SD2_CLK__USDHC2_CLK			0x158e
+			MX91_PAD_SD2_CMD__USDHC2_CMD			0x138e
+			MX91_PAD_SD2_DATA0__USDHC2_DATA0		0x138e
+			MX91_PAD_SD2_DATA1__USDHC2_DATA1		0x138e
+			MX91_PAD_SD2_DATA2__USDHC2_DATA2		0x138e
+			MX91_PAD_SD2_DATA3__USDHC2_DATA3		0x138e
+			MX91_PAD_SD2_VSELECT__USDHC2_VSELECT		0x51e
 		>;
 	};
 
-	/* need to config the SION for data and cmd pad, refer to ERR052021 */
-	pinctrl_usdhc2_200mhz: usdhc2grp-200mhzgrp {
+	pinctrl_usdhc2_200mhz: usdhc2-200mhzgrp {
 		fsl,pins = <
-			MX93_PAD_SD2_CLK__USDHC2_CLK				0x15fe
-			MX93_PAD_SD2_CMD__USDHC2_CMD				0x400013fe
-			MX93_PAD_SD2_DATA0__USDHC2_DATA0			0x400013fe
-			MX93_PAD_SD2_DATA1__USDHC2_DATA1			0x400013fe
-			MX93_PAD_SD2_DATA2__USDHC2_DATA2			0x400013fe
-			MX93_PAD_SD2_DATA3__USDHC2_DATA3			0x400013fe
-			MX93_PAD_SD2_VSELECT__USDHC2_VSELECT			0x51e
+			MX91_PAD_SD2_CLK__USDHC2_CLK			0x15fe
+			MX91_PAD_SD2_CMD__USDHC2_CMD			0x13fe
+			MX91_PAD_SD2_DATA0__USDHC2_DATA0		0x13fe
+			MX91_PAD_SD2_DATA1__USDHC2_DATA1		0x13fe
+			MX91_PAD_SD2_DATA2__USDHC2_DATA2		0x13fe
+			MX91_PAD_SD2_DATA3__USDHC2_DATA3		0x13fe
+			MX91_PAD_SD2_VSELECT__USDHC2_VSELECT		0x51e
 		>;
 	};
 
 	/* Serial console */
 	pinctrl_uart6: uart6grp {
 		fsl,pins = <
-			MX93_PAD_GPIO_IO05__LPUART6_RX				0x31e
-			MX93_PAD_GPIO_IO04__LPUART6_TX				0x31e
+			MX91_PAD_GPIO_IO05__LPUART6_RX			0x31e
+			MX91_PAD_GPIO_IO04__LPUART6_TX			0x31e
 		>;
 	};
 
 	/* XBee uart */
 	pinctrl_uart4: uart4grp {
-	fsl,pins = <
-			MX93_PAD_ENET2_RD0__LPUART4_RX				0x31e
-			MX93_PAD_ENET2_TD0__LPUART4_TX				0x31e
-			MX93_PAD_ENET2_RD2__LPUART4_CTS_B			0x31e
-			MX93_PAD_ENET2_TD1__LPUART4_RTS_B			0x31e
+		fsl,pins = <
+			MX91_PAD_ENET2_RD0__LPUART4_RX			0x31e
+			MX91_PAD_ENET2_TD0__LPUART4_TX			0x31e
+			MX91_PAD_ENET2_RD2__LPUART4_CTS_B		0x31e
+			MX91_PAD_ENET2_TD1__LPUART4_RTS_B		0x31e
 		>;
 	};
 
@@ -650,17 +639,17 @@
 	pinctrl_xbee_rf_gpios: xbeerfgrp {
 		fsl,pins = <
 			/* XBEE_RESET_N */
-			MX93_PAD_GPIO_IO19__GPIO2_IO19				0x31e
+			MX91_PAD_GPIO_IO19__GPIO2_IO19			0x31e
 		>;
 	};
 
 	/* mikroBUS/RS485 uart */
 	pinctrl_uart7: uart7grp {
 	fsl,pins = <
-			MX93_PAD_GPIO_IO09__LPUART7_RX				0x31e
-			MX93_PAD_GPIO_IO08__LPUART7_TX				0x31e
+			MX91_PAD_GPIO_IO09__LPUART7_RX			0x31e
+			MX91_PAD_GPIO_IO08__LPUART7_TX			0x31e
 			/* RS485_DE */
-			MX93_PAD_GPIO_IO10__GPIO2_IO10				0x31e
+			MX91_PAD_GPIO_IO10__GPIO2_IO10			0x31e
 		>;
 	};
 
@@ -668,14 +657,14 @@
 	pinctrl_usbc: usbcgrp {
 		fsl,pins = <
 			/* USBC Alert */
-			MX93_PAD_ENET2_TXC__GPIO4_IO21				0x31e
+			MX91_PAD_ENET2_TXC__GPIO4_IO21			0x31e
 		>;
 	};
 
 	/* LVDS PWM backlight */
 	pinctrl_tpm6: tpm6grp {
 		fsl,pins = <
-			MX93_PAD_GPIO_IO23__TPM6_CH1					0x19e
+			MX91_PAD_GPIO_IO23__TPM6_CH1			0x19e
 		>;
 	};
 };

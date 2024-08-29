@@ -37,7 +37,7 @@
 			no-map;
 		};
 
-		vdev1vring0: vdev1vring0@a4000000 {
+		vdev1vring0: vdev1vring0@a4010000 {
 			reg = <0 0xa4010000 0 0x8000>;
 			no-map;
 		};
@@ -63,17 +63,6 @@
 			reg = <0 0xa4120000 0 0x100000>;
 			no-map;
 		};
-	};
-
-	cm33: imx93-cm33 {
-		compatible = "fsl,imx93-cm33";
-		mbox-names = "tx", "rx", "rxdb";
-		mboxes = <&mu1 0 1
-			  &mu1 1 1
-			  &mu1 3 1>;
-		memory-region = <&vdevbuffer>, <&vdev0vring0>, <&vdev0vring1>,
-				<&vdev1vring0>, <&vdev1vring1>, <&rsc_table>;
-		fsl,startup-delay-ms = <500>;
 	};
 
 	thermal-zones {
@@ -103,14 +92,25 @@
 	};
 };
 
-&ele_mu {
-	memory-region = <&ele_reserved>;
-};
-
 /* Configure pwrkey timeout */
 &bbnsm_pwrkey {
 	/* Supported discrete values: 0 (disable power-off), 5, 10, 15 */
 	power-off-time-sec = <10>;
+};
+
+&cm33 {
+	mbox-names = "tx", "rx", "rxdb";
+	mboxes = <&mu1 0 1>,
+		 <&mu1 1 1>,
+		 <&mu1 3 1>;
+	memory-region = <&vdevbuffer>, <&vdev0vring0>, <&vdev0vring1>,
+			<&vdev1vring0>, <&vdev1vring1>, <&rsc_table>;
+	fsl,startup-delay-ms = <500>;
+	status = "okay";
+};
+
+&ele_fw2 {
+	memory-region = <&ele_reserved>;
 };
 
 /* LPI2C1 bus connected to MCA and PMIC */
@@ -128,11 +128,10 @@
 	digi,buffer-time-us = <35>;
 	status = "okay";
 
-	pmic_cc93: pmic@25 {
+	pmic@25 {
 		compatible = "nxp,pca9451a";
 		reg = <0x25>;
 		digi,wdog_b-disabled-in-suspend;
-
 		interrupt-parent = <&gpio2>;
 		interrupts = <29 IRQ_TYPE_LEVEL_LOW>;
 
@@ -189,24 +188,6 @@
 			ldo1: LDO1 {
 				regulator-name = "LDO1";
 				regulator-min-microvolt = <1600000>;
-				regulator-max-microvolt = <3300000>;
-				regulator-boot-on;
-				regulator-always-on;
-			};
-
-			/* LDO2 */
-			ldo2: LDO2 {
-				regulator-name = "LDO2";
-				regulator-min-microvolt = <800000>;
-				regulator-max-microvolt = <1150000>;
-				regulator-boot-on;
-				regulator-always-on;
-			};
-
-			/* LDO3 */
-			ldo3: LDO3 {
-				regulator-name = "LDO3";
-				regulator-min-microvolt = <800000>;
 				regulator-max-microvolt = <3300000>;
 				regulator-boot-on;
 				regulator-always-on;
