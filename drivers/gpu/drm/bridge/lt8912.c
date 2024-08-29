@@ -587,8 +587,7 @@ void lt8912_detach_dsi(struct lt8912 *lt)
 	mipi_dsi_device_unregister(lt->dsi);
 }
 
-
-static int lt8912_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
+static int lt8912_probe(struct i2c_client *i2c)
 {
 	struct device *dev = &i2c->dev;
 	struct lt8912 *lt;
