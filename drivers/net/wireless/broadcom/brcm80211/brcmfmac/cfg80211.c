@@ -6755,6 +6755,7 @@ static int brcmf_cfg80211_get_channel(struct wiphy *wiphy,
 				      struct cfg80211_chan_def *chandef)
 {
 	struct brcmf_cfg80211_info *cfg = wiphy_to_cfg(wiphy);
+	struct brcmf_cfg80211_vif *vif = wdev_to_vif(wdev);
 	struct net_device *ndev = wdev->netdev;
 	struct brcmf_pub *drvr = cfg->pub;
 	struct brcmu_chan ch;
@@ -6765,7 +6766,8 @@ static int brcmf_cfg80211_get_channel(struct wiphy *wiphy,
 
 	if (!ndev || drvr->bus_if->state != BRCMF_BUS_UP)
 		return -ENODEV;
-
+	if (!check_vif_up(vif))
+		return -EIO;
 	err = brcmf_fil_iovar_int_get(netdev_priv(ndev), "chanspec", &chanspec);
 	if (err) {
 		bphy_err(drvr, "chanspec failed (%d)\n", err);
