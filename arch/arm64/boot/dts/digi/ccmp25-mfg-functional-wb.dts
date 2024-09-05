@@ -49,8 +49,8 @@
 	status = "okay";
 };
 
-/* Enable CYW4373 Bluetooth node */
-&cyw4373_bt {
+/* Enable CYW55512 Bluetooth node */
+&cyw55512_bt {
 	status = "okay";
 };
 

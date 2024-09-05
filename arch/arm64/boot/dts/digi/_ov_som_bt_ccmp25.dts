@@ -45,11 +45,11 @@
 		};
 	};
 
-	/* Enable CYW4373 Bluetooth node */
+	/* Enable CYW55512 Bluetooth node */
 	fragment@3 {
-		target = <&cyw4373_bt>;
+		target = <&cyw55512_bt>;
 		__overlay__ {
-			status = "okay";
+			status = "disabled";
 		};
 	};
 

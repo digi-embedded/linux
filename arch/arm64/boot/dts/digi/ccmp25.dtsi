@@ -354,7 +354,7 @@
 	uart-has-rtscts;
 	status = "disabled";
 
-	cyw4373_bt: cyw4373-bt {
+	cyw55512_bt: cyw55512-bt {
 		shutdown-gpios = <&gpioz 5 GPIO_ACTIVE_HIGH>; /* BT_REG_EN */
 		compatible = "brcm,bcm43438-bt";
 		max-speed = <3000000>;
