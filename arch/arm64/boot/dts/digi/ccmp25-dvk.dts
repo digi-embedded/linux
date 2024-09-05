@@ -51,7 +51,7 @@
 	usb3_data_switch: cbtl04gp {
 		compatible = "nxp,cbtu02043";
 		switch-gpios = <&gpiod 11 GPIO_ACTIVE_HIGH>; /* USBC_BUS_SEL */
-		shutdown-gpios = <&gpiod 10 GPIO_ACTIVE_LOW>; /* USBC_SW_PWR */
+		shutdown-gpios = <&gpiod 10 GPIO_ACTIVE_HIGH>; /* USBC_SW_PWR */
 		orientation-switch;
 		status = "disabled";
 
