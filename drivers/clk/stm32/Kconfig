@@ -35,7 +35,7 @@ config COMMON_CLK_STM32MP215
 
 config COMMON_CLK_STM32MP257
 	bool "Clock driver for stm32mp25x clocks"
-	depends on ARM64 || COMPILE_TEST
+	depends on ARM || ARM64 || COMPILE_TEST
 	select COMMON_CLK_REGMAP
 	default y
 	help

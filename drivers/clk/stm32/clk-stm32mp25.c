@@ -4,6 +4,7 @@
  * Author: Gabriel Fernandez <gabriel.fernandez@foss.st.com> for STMicroelectronics.
  */
 
+#include <linux/bitfield.h>
 #include <linux/bus/stm32_firewall.h>
 #include <linux/bus/stm32_firewall_device.h>
 #include <linux/clk.h>
@@ -2503,7 +2504,7 @@ static unsigned long clk_get_pll_fvco(struct clk_stm32_clock_data *data, u32 off
 	void __iomem *pllxcfgr1 = data->base + offset_base;
 	void __iomem *pllxcfgr2 = pllxcfgr1 + RCC_OFFSET_PLLXCFGR2;
 	void __iomem *pllxcfgr3 = pllxcfgr1 + RCC_OFFSET_PLLXCFGR3;
-	unsigned long fvco = 0UL;
+	u64 fvco;
 	u32 fracin, fbdiv, refdiv;
 
 	fracin = readl(pllxcfgr3) & RCC_PLLxCFGR3_FRACIN_MASK;
