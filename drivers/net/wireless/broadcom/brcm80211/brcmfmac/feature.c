@@ -13,7 +13,6 @@
 #include "debug.h"
 #include "fwil.h"
 #include "fwil_types.h"
-#include "fwvid.h"
 #include "feature.h"
 #include "common.h"
 #include "xtlv.h"
@@ -326,8 +325,6 @@ void brcmf_feat_attach(struct brcmf_pub *drvr)
 	brcmf_feat_iovar_int_get(ifp, BRCMF_FEAT_FWSUP, "sup_wpa");
 	brcmf_feat_iovar_int_get(ifp, BRCMF_FEAT_SCAN_V2, "scan_ver");
 	brcmf_feat_iovar_enab_get(ifp, BRCMF_FEAT_TWT, "twt", BRCMF_TWT_CMD_ENAB);
-
-	brcmf_fwvid_feat_attach(ifp);
 
 	for (i = 0; i < BRCMF_MAX_FEATURE_BYTES; i++) {
 		if (drvr->settings->feature_disable[i]) {
