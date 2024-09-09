@@ -754,7 +754,7 @@ brcmf_sdio_kso_control(struct brcmf_sdio *bus, bool on)
 	unsigned long kso_loop_time = 0;
 	struct timespec64 ts_start, ts_end, ts_delta;
 
-	brcmf_dbg(TRACE, "Enter: on=%d\n", on);
+	brcmf_dbg(SDIO, "Enter: on=%d\n", on);
 
 	sdio_retune_crc_disable(bus->sdiodev->func1);
 
@@ -4441,7 +4441,7 @@ void brcmf_sdio_trigger_dpc(struct brcmf_sdio *bus)
 
 void brcmf_sdio_isr(struct brcmf_sdio *bus, bool in_isr)
 {
-	brcmf_dbg(TRACE, "Enter\n");
+	brcmf_dbg(SDIO, "Enter\n");
 
 	if (!bus) {
 		brcmf_err("bus is null pointer, exiting\n");
