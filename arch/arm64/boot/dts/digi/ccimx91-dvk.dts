@@ -115,10 +115,11 @@
 	};
 };
 
-/* LVDS PWM backlight */
+/* PWM signal on LVDS connector of ConnectCore 93 DVK */
 &tpm6 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_tpm6>;
+	status = "okay";
 };
 
 /* ADC - 4 channels available on expansion connector */
