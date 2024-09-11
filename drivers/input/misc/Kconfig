@@ -939,16 +939,6 @@ config INPUT_STPMIC1_ONKEY
 	  To compile this driver as a module, choose M here: the
 	  module will be called stpmic1_onkey.
 
-config SENSOR_IMX_RPMSG
-	tristate "NXP IMX rpmsg virtual sensor device driver"
-	depends on (SOC_IMX7ULP)
-	depends on RPMSG && SYSFS
-	depends on OF
-	default n
-	help
-	  This is rpmsg virtual sensor driver on i.mx7ulp, because some
-	  sensors connect with M4 core.
-
 config INPUT_MCA_PWRKEY
 	tristate "Digi ConnectCore SOMs Micro Controller Assist Power key"
 	select MFD_MCA
