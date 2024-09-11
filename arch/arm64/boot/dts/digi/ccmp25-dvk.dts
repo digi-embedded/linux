@@ -707,7 +707,7 @@
 		compatible = "st,st33htpm-spi";
 		reg = <0>;
 		spi-max-frequency = <33000000>;
-		status = "okay";
+		status = "disabled";
 	};
 };
 
