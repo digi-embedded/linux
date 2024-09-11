@@ -13,6 +13,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/rtc/rtc-stm32.h>
 
 /dts-v1/;
@@ -23,6 +24,9 @@
 		target-path = "/";
 		__overlay__ {
 			overlay-description = "SOM: Bluetooth";
+			aliases {
+				serial1 = "/soc@0/rifsc@42080000/serial@40330000"; /* Bluetooth */
+			};
 			bluetooth {
 				/* U-Boot will fill in the MAC address here */
 			};
@@ -31,9 +35,25 @@
 
 	/* Enable the RF regulator */
 	fragment@1 {
-		target = <&reg_3v3_rf>;
+		target-path = "/";
 		__overlay__ {
-			status = "okay";
+			regulators {
+				compatible = "simple-bus";
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				reg_3v3_rf: regulator-som@1 {
+					compatible = "regulator-fixed";
+					reg = <1>;
+					regulator-name = "3v3_rf";
+					regulator-min-microvolt = <3300000>;
+					regulator-max-microvolt = <3300000>;
+					gpio = <&gpioz 6 GPIO_ACTIVE_HIGH>; /* 3V3_RF_EN */
+					enable-active-high;
+					startup-delay-us = <100000>;
+					status = "okay";
+				};
+			};
 		};
 	};
 
@@ -41,20 +61,26 @@
 	fragment@2 {
 		target = <&usart1>;
 		__overlay__ {
+			pinctrl-names = "default", "idle", "sleep";
+			pinctrl-0 = <&ccmp25_usart1_pins>;
+			pinctrl-1 = <&ccmp25_usart1_idle_pins>;
+			pinctrl-2 = <&ccmp25_usart1_sleep_pins>;
+			uart-has-rtscts;
 			status = "okay";
-		};
-	};
 
-	/* Enable CYW55512 Bluetooth node */
-	fragment@3 {
-		target = <&cyw55512_bt>;
-		__overlay__ {
-			status = "disabled";
+			cyw55512_bt: cyw55512-bt {
+				shutdown-gpios = <&gpioz 5 GPIO_ACTIVE_HIGH>; /* BT_REG_EN */
+				compatible = "brcm,bcm43438-bt";
+				max-speed = <3000000>;
+				vbat-supply = <&scmi_v3v3>;
+				vddio-supply = <&scmi_ldo8_1v8_rf>;
+				status = "disabled";
+			};
 		};
 	};
 
 	/* Enable External 32kHz Low-Power Oscillator */
-	fragment@4 {
+	fragment@3 {
 		target = <&rtc>;
 		__overlay__ {
 			st,lsco = <RTC_OUT2_RMP>;
