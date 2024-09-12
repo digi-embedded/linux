@@ -124,6 +124,13 @@
 	vdda-supply = <&vdda>;
 };
 
+&bsec {
+	/* Digi hardware ID (HWID) stored in OTP59, OTP60, OTP61 */
+	hwid: hwid@ec {
+		reg = <0xec 0xc>;
+	};
+};
+
 &cpu0{
 	cpu-supply = <&vddcore>;
 };
