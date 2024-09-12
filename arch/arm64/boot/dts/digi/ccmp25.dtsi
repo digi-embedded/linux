@@ -201,6 +201,13 @@
 	status = "okay";
 };
 
+&bsec {
+	/* Digi hardware ID (HWID) stored in OTP23, OTP24, OTP25 */
+	hwid: hwid@5c {
+		reg = <0x5c 0xc>;
+	};
+};
+
 &crc {
 	status = "okay";
 };
