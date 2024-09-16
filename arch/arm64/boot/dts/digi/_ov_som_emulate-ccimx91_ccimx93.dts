@@ -34,7 +34,6 @@
 					clock-latency-ns = <150000>;
 					opp-suspend;
 				};
-
 			};
 
 			reserved-memory {
@@ -42,16 +41,41 @@
 				#size-cells = <2>;
 
 				linux,cma {
-					compatible = "shared-dma-pool";
-					reusable;
 					alloc-ranges = <0 0x80000000 0 0x40000000>;
-					size = <0 0x10000000>;
-					linux,cma-default;
+					size = <0 0x6000000>;
 				};
 
-				ele-reserved@a4120000 {
+				vdev0vring0: vdev0vring0@a4000000 {
+					status = "disabled";
+				};
+
+				vdev0vring1: vdev0vring1@a4008000 {
+					status = "disabled";
+				};
+
+				vdev1vring0: vdev1vring0@a4000000 {
+					status = "disabled";
+				};
+
+				vdev1vring1: vdev1vring1@a4018000 {
+					status = "disabled";
+				};
+
+				rsc_table: rsc-table@2021e000 {
+					status = "disabled";
+				};
+
+				vdevbuffer: vdevbuffer@a4020000 {
+					status = "disabled";
+				};
+
+				ele_reserved: ele-reserved@a4120000 {
+					status = "disabled";
+				};
+
+				ele_reserved512M: ele-reserved512M@99000000 {
 					compatible = "shared-dma-pool";
-					reg = <0 0xa4120000 0 0x100000>;
+					reg = <0 0x99000000 0 0x100000>;
 					no-map;
 				};
 			};
@@ -134,6 +158,13 @@
 		target = <&cm33>;
 		__overlay__ {
 			status = "disabled";
+		};
+	};
+
+	fragment@12 {
+		target = <&ele_mu>;
+		__overlay__ {
+			memory-region = <&ele_reserved512M>;
 		};
 	};
 };
