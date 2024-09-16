@@ -75,6 +75,7 @@
 			regulator-min-microvolt = <5000000>;
 			regulator-max-microvolt = <5000000>;
 			gpio = <&gpio1 14 GPIO_ACTIVE_HIGH>;
+			startup-delay-us = <5000>;
 			enable-active-high;
 		};
 
@@ -86,6 +87,7 @@
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
 			gpio = <&gpio1 11 GPIO_ACTIVE_LOW>;
+			vin-supply = <&reg_5v_board>;
 			enable-active-low;
 		};
 
@@ -97,6 +99,7 @@
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
 			gpio = <&gpio1 13 GPIO_ACTIVE_LOW>;
+			vin-supply = <&reg_5v_board>;
 			enable-active-low;
 		};
 
