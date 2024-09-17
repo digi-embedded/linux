@@ -862,6 +862,8 @@ static void lvds_config_mode(struct stm_lvds *lvds)
 		lvds_cr |= CR_VSPOL;
 
 	switch (lvds->link_type) {
+	case LVDS_SINGLE_LINK_PRIMARY:
+	case LVDS_SINGLE_LINK_SECONDARY:
 	case LVDS_DUAL_LINK_EVEN_ODD_PIXELS: /* LKPHA = 0 */
 		lvds_cr &= ~CR_LKPHA;
 		break;
