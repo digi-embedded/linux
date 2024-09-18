@@ -1,5 +1,5 @@
 /*
- * Copyright 2022-2023, Digi International Inc.
+ * Copyright 2024, Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -15,16 +15,16 @@
 
 /dts-v1/;
 
+#include <dt-bindings/usb/pd.h>
 /* i.MX93 CPU */
 #include "../freescale/imx93.dtsi"
-/* Digi ConnectCore 93 (SOM) */
-#include "ccimx93.dtsi"
-#include <dt-bindings/usb/pd.h>
+/* Digi ConnectCore 91 (SOM) */
+#include "ccimx91.dtsi"
 
 / {
-	model = "Digi International ConnectCore 93 DVK";
-	compatible = "digi,ccimx93-dvk", "digi,ccimx93", "fsl,imx93";
-	digi,machine,name = "ccimx93-dvk";
+	model = "Digi International ConnectCore 91 DVK";
+	compatible = "digi,ccimx91-dvk", "digi,ccimx91", "fsl,imx91p", "fsl,imx93";
+	digi,machine,name = "ccimx91-dvk";
 
 	chosen {
 		stdout-path = &lpuart6;
@@ -33,32 +33,6 @@
 	aliases {
 		ethernet0 = &eqos;
 		ethernet1 = &fec;
-	};
-
-	/* fixed 24MHz crystal for mipi camera */
-	mipi_csi_xtal24m: mipi_csi_xtal24m {
-		compatible = "fixed-clock";
-		#clock-cells = <0>;
-		clock-frequency = <24000000>;
-		clock-output-names = "xtal_24MHz";
-	};
-
-	lvds_backlight: lvds_backlight {
-		compatible = "pwm-backlight";
-		pwms = <&tpm6 1 50000 0>;
-		brightness-levels = <0 20 25 30 35 40 100>;
-		default-brightness-level = <6>;
-		status = "disabled";
-	};
-
-	lvds_panel: lvds_panel {
-		status = "disabled";
-
-		port {
-			panel_lvds_in: endpoint {
-				remote-endpoint = <&lvds_out>;
-			};
-		};
 	};
 
 	regulators {
@@ -144,6 +118,10 @@
 	};
 };
 
+&tmu {
+	status = "disabled";
+};
+
 /* LVDS PWM backlight */
 &tpm6 {
 	pinctrl-names = "default";
@@ -156,57 +134,7 @@
 	status = "okay";
 };
 
-/* MIPI-CSI CAMERA */
-&cameradev {
-	status = "okay";
-};
-
-&isi_0 {
-	status = "okay";
-
-	cap_device {
-		status = "okay";
-	};
-};
-
-&mipi_csi {
-	#address-cells = <1>;
-	#size-cells = <0>;
-	status = "okay";
-
-	/* Camera 0 MIPI CSI */
-	port@0 {
-		reg = <0>;
-		mipi_csi0_ep: endpoint {
-			remote-endpoint = <&ov5640_mipi_ep>;
-			data-lanes = <2>;
-			cfg-clk-range = <28>;
-			hs-clk-range = <0x16>;
-			bus-type = <4>;
-		};
-	};
-};
-
-/* MIPI DSI PHY */
-&dphy {
-	status = "okay";
-};
-
-&dsi {
-	status = "okay";
-
-	ports {
-		port@1 {
-			reg = <1>;
-
-			mipi_dsi_hdmi_out: endpoint {
-				remote-endpoint = <&lt8912_1_in>;
-			};
-		};
-	};
-};
-
-&epxp {
+&media_blk_ctrl {
 	status = "okay";
 };
 
@@ -224,32 +152,7 @@
 	status = "okay";
 };
 
-&lcdif {
-	status = "okay";
-	assigned-clock-rates = <445333333>, <148444444>, <400000000>, <133333333>;
-};
-
-&ldb {
-	status = "disabled";
-
-	lvds-channel@0 {
-		status = "disabled";
-
-		port@1 {
-			reg = <1>;
-
-			lvds_out: endpoint {
-				remote-endpoint = <&panel_lvds_in>;
-			};
-		};
-	};
-};
-
-&ldb_phy {
-	status = "disabled";
-};
-
-/* LPI2C3 - HDMI bridge, ... */
+/* LPI2C3 - ext RTC ... */
 &lpi2c3 {
 	#address-cells = <1>;
 	#size-cells = <0>;
@@ -258,21 +161,6 @@
 	pinctrl-0 = <&pinctrl_lpi2c3>;
 	pinctrl-1 = <&pinctrl_lpi2c3>;
 	status = "okay";
-
-	goodix_touch: gt9271@14 {
-		compatible = "goodix,gt9271";
-		reg = <0x14>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_touch>;
-		/* LVDS interrupt */
-		interrupt-parent = <&gpio2>;
-		interrupts = <24 IRQ_TYPE_EDGE_FALLING>;
-		irq-gpios = <&gpio2 24 GPIO_ACTIVE_HIGH>;
-		reload-fw-on-resume;
-		skip-firmware-request;
-		vin-supply = <&reg_5v_board>;
-		status = "disabled";
-	};
 
 	ext_rtc: ext_rtc@52 {
 		compatible = "microcrystal,rv3028";
@@ -307,32 +195,9 @@
 			source-pdos = <PDO_FIXED(5000, 3000, PDO_FIXED_USB_COMM)>;
 		};
 	};
-
-	/* MIPI-CSI camera */
-	ov5640_mipi: ov5640_mipi@3c {
-		compatible = "ovti,ov5640";
-		reg = <0x3c>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_mipi>;
-		clocks = <&mipi_csi_xtal24m>;
-		clock-names = "xclk";
-		csi_id = <0>;
-		powerdown-gpios = <&gpio2 22 GPIO_ACTIVE_LOW>;
-		mclk = <24000000>;
-		mclk_source = <0>;
-		mipi_csi;
-		status = "okay";
-		port {
-			ov5640_mipi_ep: endpoint {
-				remote-endpoint = <&mipi_csi0_ep>;
-				data-lanes = <1 2>;
-				clocks-lanes = <0>;
-			};
-		};
-	};
 };
 
-/* LPI2C4 - Audio codec and HDMI bridge */
+/* LPI2C4 - Audio codec */
 &lpi2c4 {
 	#address-cells = <1>;
 	#size-cells = <0>;
@@ -349,63 +214,6 @@
 		clock-names = "mclk";
 	};
 
-	lt_bridge: lt8912@48 {
-		compatible = "lontium,lt8912";
-		reg = <0x48>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_lt8912>;
-		reset-gpios = <&gpio1 3 GPIO_ACTIVE_LOW>;
-		no-hpd;
-		digi,dsi-lanes = <4>;
-		vdd1-supply = <&reg_5v_board>;
-		no-edid;
-		status = "okay";
-
-		port {
-			lt8912_1_in: endpoint {
-				/* add lanes */
-				remote-endpoint = <&mipi_dsi_hdmi_out>;
-			};
-		};
-
-		display-timings {
-			native-mode = <&timing1>;
-
-			/* High Definition */
-			timing0: timing0 {
-				clock-frequency = <74250000>;
-				hactive = <1280>;
-				vactive = <720>;
-				hfront-porch = <110>;
-				hsync-len = <40>;
-				hback-porch = <220>;
-				vfront-porch = <5>;
-				vsync-len = <5>;
-				vback-porch = <20>;
-				hsync-active = <0>;
-				vsync-active = <0>;
-				de-active = <0>;
-				pixelclk-active = <0>;
-			};
-
-			/* Full HD */
-			timing1: timing1 {
-				clock-frequency = <148500000>;
-				hactive = <1920>;
-				vactive = <1080>;
-				hfront-porch = <88>;
-				hsync-len = <44>;
-				hback-porch = <148>;
-				vfront-porch = <36>;
-				vsync-len = <5>;
-				vback-porch = <4>;
-				hsync-active = <0>;
-				vsync-active = <0>;
-				de-active = <0>;
-				pixelclk-active = <0>;
-			};
-		};
-	};
 };
 
 /* mikroBUS SPI interface */
@@ -432,9 +240,6 @@
 &lpuart6 { /* console */
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_uart6>;
-	/* Uncomment to remove DMA if using A0 silicon of the CPU */
-//	/delete-property/dmas;
-//	/delete-property/dma-names;
 	status = "okay";
 };
 
@@ -448,9 +253,6 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_uart4>, <&pinctrl_xbee_rf_gpios>;
 	fsl,uart-has-rtscts;
-	/* Uncomment to remove DMA if using A0 silicon of the CPU */
-//	/delete-property/dmas;
-//	/delete-property/dma-names;
 	status = "okay";
 };
 
@@ -466,15 +268,6 @@
 	digi,rts-gpio = <&gpio2 10 GPIO_ACTIVE_HIGH>;
 	/delete-property/dmas;
 	/delete-property/dma-names;
-	status = "okay";
-};
-
-/* Messaging Units for inter-processors communication */
-&mu1 {
-	status = "okay";
-};
-
-&mu2 {
 	status = "okay";
 };
 
@@ -752,30 +545,6 @@
 		>;
 	};
 
-	/* MIPI Camera */
-	pinctrl_mipi: mipi {
-		fsl,pins = <
-			/* MIPI_CSI_RESET_N */
-			MX93_PAD_GPIO_IO22__GPIO2_IO22 				0x31e
-		>;
-	};
-
-	/* MIPI display */
-	pinctrl_mipi_display: mipidisplay {
-		fsl,pins = <
-			/* MIPI_DSI_RESET */
-			MX93_PAD_GPIO_IO06__GPIO2_IO06				0x31e
-		>;
-	};
-
-	/* HDMI bridge IOs */
-	pinctrl_lt8912: lt8912grp {
-		fsl,pins = <
-			/* Reset */
-			MX93_PAD_I2C2_SDA__GPIO1_IO03				0x31e
-		>;
-	};
-
 	/* DVK 5V power switch */
 	pinctrl_reg_5v_board: reg_5v_board_grp {
 		fsl,pins = <
@@ -813,14 +582,6 @@
 			MX93_PAD_GPIO_IO26__SAI3_TX_SYNC			0x31e
 			MX93_PAD_GPIO_IO16__SAI3_TX_BCLK			0x31e
 			MX93_PAD_GPIO_IO17__SAI3_MCLK				0x31e
-		>;
-	};
-
-	/* LVDS touch interface IOs */
-	pinctrl_touch: touchgrp {
-		fsl,pins = <
-			/* LVDS touch interrupt */
-			MX93_PAD_GPIO_IO24__GPIO2_IO24				0x31e
 		>;
 	};
 

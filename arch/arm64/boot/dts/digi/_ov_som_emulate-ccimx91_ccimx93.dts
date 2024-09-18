@@ -1,0 +1,170 @@
+/*
+ * Copyright 2024 Digi International Inc.
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/clock/imx93-clock.h>
+
+/ {
+	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			overlay-description = "DVK: emulate as i.MX91";
+
+			a55_opp_table: opp-table {
+				compatible = "operating-points-v2";
+				opp-shared;
+
+				opp-1400000000 {
+					opp-hz = /bits/ 64 <1400000000>;
+					opp-microvolt = <850000>;
+					clock-latency-ns = <150000>;
+					opp-suspend;
+				};
+			};
+
+			reserved-memory {
+				#address-cells = <2>;
+				#size-cells = <2>;
+
+				linux,cma {
+					alloc-ranges = <0 0x80000000 0 0x40000000>;
+					size = <0 0x6000000>;
+				};
+
+				vdev0vring0: vdev0vring0@a4000000 {
+					status = "disabled";
+				};
+
+				vdev0vring1: vdev0vring1@a4008000 {
+					status = "disabled";
+				};
+
+				vdev1vring0: vdev1vring0@a4000000 {
+					status = "disabled";
+				};
+
+				vdev1vring1: vdev1vring1@a4018000 {
+					status = "disabled";
+				};
+
+				rsc_table: rsc-table@2021e000 {
+					status = "disabled";
+				};
+
+				vdevbuffer: vdevbuffer@a4020000 {
+					status = "disabled";
+				};
+
+				ele_reserved: ele-reserved@a4120000 {
+					status = "disabled";
+				};
+
+				ele_reserved512M: ele-reserved512M@99000000 {
+					compatible = "shared-dma-pool";
+					reg = <0 0x99000000 0 0x100000>;
+					no-map;
+				};
+			};
+		};
+	};
+
+	fragment@1 {
+		target = <&A55_0>;
+		__overlay__ {
+			clocks = <&clk IMX93_CLK_A55>;
+			clock-frequency = <1400000000>;
+			operating-points-v2 = <&a55_opp_table>;
+		};
+	};
+
+	fragment@2 {
+		target = <&A55_1>;
+		__overlay__ {
+			status = "fail";
+		};
+	};
+
+	fragment@3 {
+		target = <&epxp>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	fragment@4 {
+		target = <&dphy>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	fragment@5 {
+		target = <&dsi>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	fragment@6 {
+		target = <&mipi_csi>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	fragment@7 {
+		target = <&cameradev>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	fragment@8 {
+		target = <&isi_0>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	fragment@9 {
+		target = <&lcdif>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	fragment@10 {
+		target = <&lt_bridge>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	fragment@11 {
+		target = <&cm33>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	fragment@12 {
+		target = <&ele_mu>;
+		__overlay__ {
+			memory-region = <&ele_reserved512M>;
+		};
+	};
+};
