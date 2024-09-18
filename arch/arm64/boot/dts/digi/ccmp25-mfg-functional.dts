@@ -32,7 +32,7 @@
 
 / {
 	model = "Digi International ConnectCore MP25 Development Kit";
-	compatible = "digi,ccmp25-dvk", "digi,ccmp25", "st,stm32mp257";
+	compatible = "digi,ccmp25-dvk", "digi,ccmp25", "digi,ccmp2", "st,stm32mp257";
 	digi,machine,name = "ccmp257-dvk";
 
 	aliases {
