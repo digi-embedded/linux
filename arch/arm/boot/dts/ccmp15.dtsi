@@ -125,6 +125,9 @@
 };
 
 &bsec {
+	/* By default, make the OTP bits read-only */
+	read-only;
+
 	/* Digi hardware ID (HWID) stored in OTP59, OTP60, OTP61 */
 	hwid: hwid@ec {
 		reg = <0xec 0xc>;
