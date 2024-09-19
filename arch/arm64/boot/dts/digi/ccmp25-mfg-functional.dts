@@ -17,7 +17,7 @@
 /dts-v1/;
 
 /* STM32MP25 CPU */
-#include "../st/stm32mp257.dtsi"
+#include "../st/stm32mp255.dtsi"
 #include "../st/stm32mp25xf.dtsi"
 #include "../st/stm32mp25-pinctrl.dtsi"
 #include "../st/stm32mp25xxai-pinctrl.dtsi"
@@ -33,7 +33,7 @@
 / {
 	model = "Digi International ConnectCore MP25 Development Kit";
 	compatible = "digi,ccmp25-dvk", "digi,ccmp25", "digi,ccmp2", "st,stm32mp257";
-	digi,machine,name = "ccmp257-dvk";
+	digi,machine,name = "ccmp255-dvk";
 
 	aliases {
 		ethernet0 = &eth2;
