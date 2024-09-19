@@ -15,17 +15,16 @@ description:
   such as the HannStar HSD060BHW4 720x1440 TFT LCD panel connected with
   a MIPI-DSI video interface.
 
-allOf:
-  - $ref: panel-common.yaml#
-
 properties:
   compatible:
     items:
       - enum:
           - hannstar,hsd060bhw4
+          - rocktech,rk055mhd042a0
       - const: himax,hx8394
 
-  reg: true
+  reg:
+    maxItems: 1
 
   reset-gpios: true
 
@@ -42,13 +41,24 @@ properties:
 required:
   - compatible
   - reg
-  - reset-gpios
   - backlight
   - port
   - vcc-supply
   - iovcc-supply
 
 additionalProperties: false
+
+allOf:
+  - $ref: panel-common.yaml#
+  - if:
+      not:
+        properties:
+          compatible:
+            enum:
+              - rocktech,rk055mhd042a0
+    then:
+      required:
+        - reset-gpios
 
 examples:
   - |
