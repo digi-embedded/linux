@@ -329,6 +329,7 @@
 		reset-gpios = <&gpiof 15 GPIO_ACTIVE_LOW>;
 		backlight = <&panel_backlight>;
 		power-supply = <&v3v3>;
+		default-on;
 		status = "okay";
 
 		port {
