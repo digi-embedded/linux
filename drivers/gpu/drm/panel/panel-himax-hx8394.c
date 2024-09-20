@@ -472,7 +472,11 @@ static int hx8394_probe(struct mipi_dsi_device *dsi)
 	if (!ctx)
 		return -ENOMEM;
 
-	ctx->reset_gpio = devm_gpiod_get(dev, "reset", GPIOD_OUT_HIGH);
+	if (device_property_read_bool(dev, "default-on"))
+		ctx->reset_gpio = devm_gpiod_get(dev, "reset", GPIOD_OUT_LOW);
+	else
+		ctx->reset_gpio = devm_gpiod_get(dev, "reset", GPIOD_OUT_HIGH);
+
 	if (IS_ERR(ctx->reset_gpio))
 		return dev_err_probe(dev, PTR_ERR(ctx->reset_gpio),
 				     "Failed to get reset gpio\n");
@@ -511,13 +515,21 @@ static int hx8394_probe(struct mipi_dsi_device *dsi)
 	pm_runtime_set_autosuspend_delay(dev, 1000);
 	pm_runtime_use_autosuspend(dev);
 
+	if (device_property_read_bool(dev, "default-on")) {
+		ret = pm_runtime_get_sync(dev);
+		if (ret < 0)
+			goto disable_pm_runtime;
+
+		ctx->prepared = true;
+	}
+
 	drm_panel_add(&ctx->panel);
 
 	ret = mipi_dsi_attach(dsi);
 	if (ret < 0) {
 		dev_err_probe(dev, ret, "mipi_dsi_attach failed\n");
 		drm_panel_remove(&ctx->panel);
-		return ret;
+		goto disable_pm_runtime;
 	}
 
 	dev_dbg(dev, "%ux%u@%u %ubpp dsi %udl - ready\n",
@@ -526,6 +538,12 @@ static int hx8394_probe(struct mipi_dsi_device *dsi)
 		mipi_dsi_pixel_format_to_bpp(dsi->format), dsi->lanes);
 
 	return 0;
+
+disable_pm_runtime:
+	pm_runtime_dont_use_autosuspend(dev);
+	pm_runtime_disable(dev);
+
+	return ret;
 }
 
 static void hx8394_shutdown(struct mipi_dsi_device *dsi)
@@ -576,7 +594,8 @@ static __maybe_unused int himax_hx8394_resume(struct device *dev)
 	struct hx8394 *ctx = dev_get_drvdata(dev);
 	int ret;
 
-	gpiod_set_value_cansleep(ctx->reset_gpio, 1);
+	if (!device_property_read_bool(dev, "default-on"))
+		gpiod_set_value_cansleep(ctx->reset_gpio, 1);
 
 	ret = regulator_enable(ctx->vcc);
 	if (ret) {
