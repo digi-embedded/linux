@@ -113,6 +113,7 @@
 		backlight = <&panel_backlight>;
 		power-supply = <&scmi_v3v3_sw>;
 		data-mapping = "bgr666";
+		default-on;
 		status = "okay";
 
 		width-mm = <105>;
