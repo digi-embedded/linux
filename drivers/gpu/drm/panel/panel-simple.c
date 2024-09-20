@@ -323,7 +323,6 @@ static int panel_simple_unprepare(struct drm_panel *panel)
 	if (!p->prepared)
 		return 0;
 
-	pm_runtime_set_autosuspend_delay(panel->dev, 1000);
 	pm_runtime_mark_last_busy(panel->dev);
 	ret = pm_runtime_put_autosuspend(panel->dev);
 	if (ret < 0)
@@ -595,7 +594,8 @@ static int panel_simple_probe(struct device *dev, const struct panel_desc *desc)
 	if (IS_ERR(panel->supply))
 		return PTR_ERR(panel->supply);
 
-	panel->enable_gpio = devm_gpiod_get_optional(dev, "enable", GPIOD_OUT_HIGH);
+	panel->enable_gpio = devm_gpiod_get_optional(dev, "enable",
+						     GPIOD_OUT_LOW);
 	if (IS_ERR(panel->enable_gpio))
 		return dev_err_probe(dev, PTR_ERR(panel->enable_gpio),
 				     "failed to request GPIO\n");
@@ -689,15 +689,10 @@ static int panel_simple_probe(struct device *dev, const struct panel_desc *desc)
 	 * fully enabling the panel.
 	 */
 	pm_runtime_enable(dev);
-	/* set delay to 60s to keep alive the panel to wait the splash screen */
-	pm_runtime_set_autosuspend_delay(dev, 60000);
+	pm_runtime_set_autosuspend_delay(dev, 1000);
 	pm_runtime_use_autosuspend(dev);
 
 	drm_panel_init(&panel->base, dev, &panel_simple_funcs, connector_type);
-
-	pm_runtime_get_sync(dev);
-	pm_runtime_mark_last_busy(dev);
-	pm_runtime_put_autosuspend(dev);
 
 	err = drm_panel_of_backlight(&panel->base);
 	if (err) {
