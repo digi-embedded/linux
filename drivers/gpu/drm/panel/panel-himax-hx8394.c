@@ -16,6 +16,7 @@
 #include <linux/mod_devicetable.h>
 #include <linux/module.h>
 #include <linux/of.h>
+#include <linux/pm_runtime.h>
 #include <linux/regulator/consumer.h>
 
 #include <video/mipi_display.h>
@@ -396,14 +397,14 @@ static int hx8394_disable(struct drm_panel *panel)
 static int hx8394_unprepare(struct drm_panel *panel)
 {
 	struct hx8394 *ctx = panel_to_hx8394(panel);
+	int ret;
 
 	if (!ctx->prepared)
 		return 0;
 
-	gpiod_set_value_cansleep(ctx->reset_gpio, 1);
-
-	regulator_disable(ctx->iovcc);
-	regulator_disable(ctx->vcc);
+	ret = pm_runtime_put_autosuspend(panel->dev);
+	if (ret < 0)
+		return ret;
 
 	ctx->prepared = false;
 
@@ -418,32 +419,15 @@ static int hx8394_prepare(struct drm_panel *panel)
 	if (ctx->prepared)
 		return 0;
 
-	gpiod_set_value_cansleep(ctx->reset_gpio, 1);
-
-	ret = regulator_enable(ctx->vcc);
-	if (ret) {
-		dev_err(ctx->dev, "Failed to enable vcc supply: %d\n", ret);
+	ret = pm_runtime_get_sync(panel->dev);
+	if (ret < 0) {
+		pm_runtime_put_autosuspend(panel->dev);
 		return ret;
 	}
-
-	ret = regulator_enable(ctx->iovcc);
-	if (ret) {
-		dev_err(ctx->dev, "Failed to enable iovcc supply: %d\n", ret);
-		goto disable_vcc;
-	}
-
-	gpiod_set_value_cansleep(ctx->reset_gpio, 0);
-
-	msleep(180);
 
 	ctx->prepared = true;
 
 	return 0;
-
-disable_vcc:
-	gpiod_set_value_cansleep(ctx->reset_gpio, 1);
-	regulator_disable(ctx->vcc);
-	return ret;
 }
 
 static int hx8394_get_modes(struct drm_panel *panel,
@@ -519,6 +503,14 @@ static int hx8394_probe(struct mipi_dsi_device *dsi)
 	if (ret)
 		return ret;
 
+	/*
+	 * We use runtime PM for prepare / unprepare since those power the panel
+	 * on and off and those can be very slow operations.
+	 */
+	pm_runtime_enable(dev);
+	pm_runtime_set_autosuspend_delay(dev, 1000);
+	pm_runtime_use_autosuspend(dev);
+
 	drm_panel_add(&ctx->panel);
 
 	ret = mipi_dsi_attach(dsi);
@@ -562,7 +554,62 @@ static void hx8394_remove(struct mipi_dsi_device *dsi)
 		dev_err(&dsi->dev, "Failed to detach from DSI host: %d\n", ret);
 
 	drm_panel_remove(&ctx->panel);
+
+	pm_runtime_dont_use_autosuspend(ctx->dev);
+	pm_runtime_disable(ctx->dev);
 }
+
+static __maybe_unused int himax_hx8394_suspend(struct device *dev)
+{
+	struct hx8394 *ctx = dev_get_drvdata(dev);
+
+	gpiod_set_value_cansleep(ctx->reset_gpio, 1);
+
+	regulator_disable(ctx->iovcc);
+	regulator_disable(ctx->vcc);
+
+	return 0;
+}
+
+static __maybe_unused int himax_hx8394_resume(struct device *dev)
+{
+	struct hx8394 *ctx = dev_get_drvdata(dev);
+	int ret;
+
+	gpiod_set_value_cansleep(ctx->reset_gpio, 1);
+
+	ret = regulator_enable(ctx->vcc);
+	if (ret) {
+		dev_err(ctx->dev, "Failed to enable vcc supply: %d\n", ret);
+		return ret;
+	}
+
+	ret = regulator_enable(ctx->iovcc);
+	if (ret) {
+		dev_err(ctx->dev, "Failed to enable iovcc supply: %d\n", ret);
+		goto disable_vcc;
+	}
+
+	gpiod_set_value_cansleep(ctx->reset_gpio, 0);
+
+	msleep(180);
+
+	ctx->prepared = true;
+
+	return 0;
+
+disable_vcc:
+	gpiod_set_value_cansleep(ctx->reset_gpio, 1);
+	regulator_disable(ctx->vcc);
+
+	return ret;
+}
+
+static const struct dev_pm_ops himax_hx8394_pm_ops = {
+	SET_RUNTIME_PM_OPS(himax_hx8394_suspend, himax_hx8394_resume, NULL)
+	SET_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend,
+				pm_runtime_force_resume)
+};
 
 static const struct of_device_id hx8394_of_match[] = {
 	{ .compatible = "hannstar,hsd060bhw4", .data = &hsd060bhw4_desc },
@@ -578,6 +625,7 @@ static struct mipi_dsi_driver hx8394_driver = {
 	.driver = {
 		.name = DRV_NAME,
 		.of_match_table = hx8394_of_match,
+		.pm = &himax_hx8394_pm_ops,
 	},
 };
 module_mipi_dsi_driver(hx8394_driver);
