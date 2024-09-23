@@ -45,8 +45,6 @@ struct goodix_ts_data {
 	struct touchscreen_properties prop;
 	unsigned int max_touch_num;
 	unsigned int int_trigger_type;
-	struct regulator *avdd28;
-	struct regulator *vddio;
 	struct gpio_desc *gpiod_int;
 	struct gpio_desc *gpiod_rst;
 	int gpio_count;
@@ -65,6 +63,8 @@ struct goodix_ts_data {
 	unsigned short keymap[GOODIX_MAX_KEYS];
 	bool reload_fw_on_resume;
 	struct firmware cfg;
+	struct regulator *reg;
+	unsigned int extended_desktop_offset;
 };
 
 int goodix_i2c_read(struct i2c_client *client, u16 reg, u8 *buf, int len);

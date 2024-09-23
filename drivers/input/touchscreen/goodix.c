@@ -21,6 +21,7 @@
 #include <linux/slab.h>
 #include <linux/acpi.h>
 #include <linux/of.h>
+#include <linux/regulator/consumer.h>
 #include <asm/unaligned.h>
 #include "goodix.h"
 
@@ -39,9 +40,7 @@
 #define GOODIX_CONFIG_967_LENGTH	228
 #define GOODIX_CONFIG_GT9X_LENGTH	240
 
-#define GOODIX_BUFFER_STATUS_READY	BIT(7)
-#define GOODIX_HAVE_KEY			BIT(4)
-#define GOODIX_BUFFER_STATUS_TIMEOUT	20
+#define GOODIX_HAVE_KEY                        BIT(4)
 
 #define RESOLUTION_LOC		1
 #define MAX_CONTACTS_LOC	5
@@ -228,59 +227,35 @@ static const struct goodix_chip_data *goodix_get_chip_data(const char *id)
 
 static int goodix_ts_read_input_report(struct goodix_ts_data *ts, u8 *data)
 {
-	unsigned long max_timeout;
 	int touch_num;
 	int error;
-	u16 addr = GOODIX_READ_COOR_ADDR;
-	/*
-	 * We are going to read 1-byte header,
-	 * ts->contact_size * max(1, touch_num) bytes of coordinates
-	 * and 1-byte footer which contains the touch-key code.
-	 */
-	const int header_contact_keycode_size = 1 + ts->contact_size + 1;
 
-	/*
-	 * The 'buffer status' bit, which indicates that the data is valid, is
-	 * not set as soon as the interrupt is raised, but slightly after.
-	 * This takes around 10 ms to happen, so we poll for 20 ms.
-	 */
-	max_timeout = jiffies + msecs_to_jiffies(GOODIX_BUFFER_STATUS_TIMEOUT);
-	do {
-		error = goodix_i2c_read(ts->client, addr, data,
-					header_contact_keycode_size);
-		if (error) {
-			dev_err(&ts->client->dev, "I2C transfer error: %d\n",
-					error);
+	error = goodix_i2c_read(ts->client, GOODIX_READ_COOR_ADDR, data,
+				GOODIX_CONTACT_SIZE + 1);
+	if (error) {
+		dev_err(&ts->client->dev, "I2C transfer error: %d\n", error);
+		return error;
+	}
+
+	if (!(data[0] & 0x80))
+		return -EAGAIN;
+
+	touch_num = data[0] & 0x0f;
+	if (touch_num > ts->max_touch_num)
+		return -EPROTO;
+
+	if (touch_num > 1) {
+		data += 1 + GOODIX_CONTACT_SIZE;
+		error = goodix_i2c_read(ts->client,
+					GOODIX_READ_COOR_ADDR +
+						1 + GOODIX_CONTACT_SIZE,
+					data,
+					GOODIX_CONTACT_SIZE * (touch_num - 1));
+		if (error)
 			return error;
-		}
+	}
 
-		if (data[0] & GOODIX_BUFFER_STATUS_READY) {
-			touch_num = data[0] & 0x0f;
-			if (touch_num > ts->max_touch_num)
-				return -EPROTO;
-
-			if (touch_num > 1) {
-				addr += header_contact_keycode_size;
-				data += header_contact_keycode_size;
-				error = goodix_i2c_read(ts->client,
-						addr, data,
-						ts->contact_size *
-							(touch_num - 1));
-				if (error)
-					return error;
-			}
-
-			return touch_num;
-		}
-
-		usleep_range(1000, 2000); /* Poll every 1 - 2 ms */
-	} while (time_before(jiffies, max_timeout));
-
-	/*
-	 * The Goodix panel will send spurious interrupts after a
-	 * 'finger up' event, which will always cause a timeout.
-	 */
-	return -ENOMSG;
+	return touch_num;
 }
 
 static void goodix_ts_report_touch_8b(struct goodix_ts_data *ts, u8 *coor_data)
@@ -304,6 +279,8 @@ static void goodix_ts_report_touch_9b(struct goodix_ts_data *ts, u8 *coor_data)
 	int input_x = get_unaligned_le16(&coor_data[3]);
 	int input_y = get_unaligned_le16(&coor_data[5]);
 	int input_w = get_unaligned_le16(&coor_data[7]);
+
+	input_x += ts->extended_desktop_offset;
 
 	input_mt_slot(ts->input_dev, id);
 	input_mt_report_slot_state(ts->input_dev, MT_TOOL_FINGER, true);
@@ -826,30 +803,6 @@ static int goodix_get_gpio_config(struct goodix_ts_data *ts)
 		return -EINVAL;
 	dev = &ts->client->dev;
 
-	/*
-	 * By default we request the reset pin as input, leaving it in
-	 * high-impedance when not resetting the controller to save power.
-	 */
-	ts->gpiod_rst_flags = GPIOD_IN;
-
-	ts->avdd28 = devm_regulator_get(dev, "AVDD28");
-	if (IS_ERR(ts->avdd28)) {
-		error = PTR_ERR(ts->avdd28);
-		if (error != -EPROBE_DEFER)
-			dev_err(dev,
-				"Failed to get AVDD28 regulator: %d\n", error);
-		return error;
-	}
-
-	ts->vddio = devm_regulator_get(dev, "VDDIO");
-	if (IS_ERR(ts->vddio)) {
-		error = PTR_ERR(ts->vddio);
-		if (error != -EPROBE_DEFER)
-			dev_err(dev,
-				"Failed to get VDDIO regulator: %d\n", error);
-		return error;
-	}
-
 retry_get_irq_gpio:
 	/* Get the interrupt GPIO pin number */
 	gpiod = devm_gpiod_get_optional(dev, GOODIX_GPIO_INT_NAME, GPIOD_IN);
@@ -1144,19 +1097,12 @@ err_release_cfg:
 	complete_all(&ts->firmware_loading_complete);
 }
 
-static void goodix_disable_regulators(void *arg)
-{
-	struct goodix_ts_data *ts = arg;
-
-	regulator_disable(ts->vddio);
-	regulator_disable(ts->avdd28);
-}
-
 static int goodix_ts_probe(struct i2c_client *client,
 			   const struct i2c_device_id *id)
 {
 	struct goodix_ts_data *ts;
-	int error;
+	struct device_node *extends_desktop, *display_timings, *native_mode;
+	int error, reg_error;
 
 	dev_dbg(&client->dev, "I2C Address: 0x%02x\n", client->addr);
 
@@ -1174,43 +1120,68 @@ static int goodix_ts_probe(struct i2c_client *client,
 	init_completion(&ts->firmware_loading_complete);
 	ts->contact_size = GOODIX_CONTACT_SIZE;
 
+	ts->reg = devm_regulator_get_optional(&client->dev, "vin");
+	if (!IS_ERR(ts->reg)) {
+		error = regulator_enable(ts->reg);
+		if (error) {
+			dev_err(&client->dev, "enable regulator failed\n");
+			return error;
+		}
+	} else {
+		ts->reg = NULL;
+		dev_info(&client->dev, "No vin supply\n");
+	}
+
 	error = goodix_get_gpio_config(ts);
 	if (error)
-		return error;
+		goto disable_regulator;
 
-	/* power up the controller */
-	error = regulator_enable(ts->avdd28);
-	if (error) {
-		dev_err(&client->dev,
-			"Failed to enable AVDD28 regulator: %d\n",
-			error);
-		return error;
-	}
-
-	error = regulator_enable(ts->vddio);
-	if (error) {
-		dev_err(&client->dev,
-			"Failed to enable VDDIO regulator: %d\n",
-			error);
-		regulator_disable(ts->avdd28);
-		return error;
-	}
-
-	error = devm_add_action_or_reset(&client->dev,
-					 goodix_disable_regulators, ts);
-	if (error)
-		return error;
-
-reset:
 	ts->reload_fw_on_resume = device_property_read_bool(&client->dev,
 						    "reload-fw-on-resume");
+
+	/* By default, the extended desktop offset is 0 */
+	ts->extended_desktop_offset = 0;
+	extends_desktop = of_parse_phandle(client->dev.of_node,
+	                                   "extends-desktop",
+	                                   0);
+
+	/* If the property exists, find the display's width (hactive value) */
+	if (extends_desktop) {
+		display_timings = of_get_child_by_name(extends_desktop,
+		                                       "display-timings");
+		if (!display_timings) {
+			dev_warn(&client->dev,
+			         "Display timings for extended desktop not found, using default 0 offset.\n");
+		} else {
+			native_mode = of_parse_phandle(display_timings,
+			                               "native-mode",
+			                               0);
+			if (!native_mode) {
+				dev_warn(&client->dev,
+				         "Native mode for extended desktop not found, using default 0 offset.\n");
+			} else {
+				error = of_property_read_u32(native_mode,
+				                             "hactive",
+				                             &ts->extended_desktop_offset);
+				if (error)
+					dev_warn(&client->dev,
+					         "hactive property for extended desktop not found, using default 0 offset.\n");
+			}
+		}
+	}
+
+reset:
 	if (ts->reset_controller_at_probe) {
 		/* reset the controller */
 		error = goodix_reset(ts);
 		if (error)
-			return error;
+			goto disable_regulator;
 	} else {
 		goodix_int_sync(ts);
+		if (error) {
+			dev_err(&client->dev, "Controller reset failed.\n");
+			goto disable_regulator;
+		}
 	}
 
 	error = goodix_i2c_test(client);
@@ -1222,24 +1193,24 @@ reset:
 			goto reset;
 		}
 		dev_err(&client->dev, "I2C communication failure: %d\n", error);
-		return error;
+		goto disable_regulator;
 	}
 
 	error = goodix_read_version(ts);
 	if (error) {
 		dev_err(&client->dev, "Read version failed.\n");
-		return error;
+		goto disable_regulator;
 	}
 
 	ts->chip = goodix_get_chip_data(ts->id);
 
-	if (ts->load_cfg_from_disk &&
+	if (ts->gpiod_int && 
 	    !device_property_read_bool(&client->dev, "skip-firmware-request")) {
 		/* update device config */
 		ts->cfg_name = devm_kasprintf(&client->dev, GFP_KERNEL,
 					      "goodix_%s_cfg.bin", ts->id);
 		if (!ts->cfg_name)
-			return -ENOMEM;
+			goto disable_regulator;
 
 		error = request_firmware_nowait(THIS_MODULE, true, ts->cfg_name,
 						&client->dev, GFP_KERNEL, ts,
@@ -1248,7 +1219,7 @@ reset:
 			dev_err(&client->dev,
 				"Failed to invoke firmware loader: %d\n",
 				error);
-			return error;
+			goto disable_regulator;
 		}
 
 		return 0;
@@ -1257,20 +1228,39 @@ reset:
 
 		error = goodix_configure_dev(ts);
 		if (error)
-			return error;
+			goto disable_regulator;
 	}
 
 	return 0;
+
+disable_regulator:
+	if (ts->reg) {
+		reg_error = regulator_disable(ts->reg);
+		if (reg_error) {
+			dev_err(&client->dev, "disable regulator failed\n");
+			return reg_error;
+		}
+	}
+	return error;
 }
 
 static int goodix_ts_remove(struct i2c_client *client)
 {
 	struct goodix_ts_data *ts = i2c_get_clientdata(client);
+	int error;
 
-	if (ts->load_cfg_from_disk)
+	if (ts->gpiod_int)
 		wait_for_completion(&ts->firmware_loading_complete);
 
 	kfree(ts->cfg.data);
+
+	if (ts->reg) {
+		error = regulator_disable(ts->reg);
+		if (error) {
+			dev_err(&client->dev, "disable regulator failed\n");
+			return error;
+		}
+	}
 
 	return 0;
 }
@@ -1285,7 +1275,7 @@ static int __maybe_unused goodix_suspend(struct device *dev)
 		wait_for_completion(&ts->firmware_loading_complete);
 
 	/* We need gpio pins to suspend/resume */
-	if (ts->irq_pin_access_method == IRQ_PIN_ACCESS_NONE) {
+	if (!ts->gpiod_int) {
 		disable_irq(client->irq);
 		return 0;
 	}
@@ -1328,7 +1318,35 @@ static int __maybe_unused goodix_suspend(struct device *dev)
 		 * sooner, delay 58ms here.
 		 */
 		msleep(58);
+		gpiod_direction_input(ts->gpiod_int);
 	}
+
+	if (ts->reg) {
+		error = regulator_disable(ts->reg);
+		if (error) {
+			dev_err(&client->dev, "disable regulator failed\n");
+			return error;
+		}
+	}
+
+
+	/*
+	 * The Goodix touch controller sets its I2C address based on the level of
+	 * the INT and RESET signals when the chip is powered. The RESET line is
+	 * not present on the Digi LVDS connector so the touch sometimes probes
+	 * at address 0x14 and sometimes at 0x5d. When resuming from suspend, INT
+	 * line is always high, so the chip probes at address 0x14.
+	 * This is problematic if the chip probed at 0x5d during power-up.
+	 * To work around the problem, set the INT line high or low before
+	 * suspending, according to the current address.
+	 */
+	if (client->addr == 0x5D)
+		error = gpiod_direction_output(ts->gpiod_int, 0);
+	else
+		error = gpiod_direction_output(ts->gpiod_int, 1);
+
+	if (error)
+		return error;
 
 	return 0;
 }
@@ -1340,7 +1358,15 @@ static int __maybe_unused goodix_resume(struct device *dev)
 	u8 config_ver;
 	int error;
 
-	if (ts->irq_pin_access_method == IRQ_PIN_ACCESS_NONE) {
+	if (ts->reg) {
+		error = regulator_enable(ts->reg);
+		if (error) {
+			dev_err(&client->dev, "enable regulator failed\n");
+			return error;
+		}
+	}
+
+	if (!ts->gpiod_int) {
 		enable_irq(client->irq);
 		return 0;
 	}
@@ -1365,6 +1391,13 @@ static int __maybe_unused goodix_resume(struct device *dev)
 			}
 		}
 	} else {
+		/*
+		 * Wait a bit before toggling the int gpio, just in case the
+		 * touch controller has been power cycled. Otherwise, it might
+		 * fail to reinitialize.
+		 */
+		msleep(60);
+
 		/*
 		* Exit sleep mode by outputting HIGH level to INT pin
 		* for 2ms~5ms.

@@ -568,7 +568,11 @@
 		interrupt-parent = <&lsio_gpio3>;
 		interrupts = <20 IRQ_TYPE_EDGE_FALLING>;
 		irq-gpios = <&lsio_gpio3 20 GPIO_ACTIVE_HIGH>;
+		reload-fw-on-resume;
 		skip-firmware-request;
+		vin-supply = <&reg_5v_display>;
+		touchscreen-size-x = <1280>;
+		touchscreen-size-y = <800>;
 		status = "disabled";
 	};
 
@@ -581,7 +585,11 @@
 		interrupt-parent = <&lsio_gpio3>;
 		interrupts = <20 IRQ_TYPE_EDGE_FALLING>;
 		irq-gpios = <&lsio_gpio3 20 GPIO_ACTIVE_HIGH>;
+		reload-fw-on-resume;
 		skip-firmware-request;
+		vin-supply = <&reg_5v_display>;
+		touchscreen-size-x = <1280>;
+		touchscreen-size-y = <800>;
 		status = "disabled";
 	};
 
