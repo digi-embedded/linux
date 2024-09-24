@@ -12,6 +12,7 @@
 #include "fwil_types.h"
 #include "cfg80211.h"
 #include "pno.h"
+#include "feature.h"
 #include "vendor_ifx.h"
 #include <brcmu_wifi.h>
 
@@ -622,10 +623,12 @@ int pfn_send_network_blob_fw(struct wiphy *wiphy,
 	}
 	brcmf_pno_clean(ifp);
 
-	ret = brcmf_fil_iovar_int_set(ifp, "sup_wpa", 1);
-	if (ret) {
-		brcmf_err("sup_wpa set error:%d\n", ret);
-		return ret;
+	if (brcmf_feat_is_enabled(ifp, BRCMF_FEAT_FWSUP)) {
+		ret = brcmf_fil_iovar_int_set(ifp, "sup_wpa", 1);
+		if (ret) {
+			brcmf_err("sup_wpa set error:%d\n", ret);
+			return ret;
+		}
 	}
 
 	if (!cfg->pfn_data.count)
