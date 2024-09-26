@@ -72,12 +72,14 @@ struct stm32_dcmipp_isp_ex_cfg {
 /**
  * struct stm32_dcmipp_isp_dm_cfg - STM32 DCMIPP ISP demosaicing filters
  *
+ * @en: enable / disable the demosaicing block
  * @edge: strength of the edge detection
  * @lineh: strength of the horizontal line detection
  * @linev: strength of the vertical line detection
  * @peak: strength of the peak detection
  */
 struct stm32_dcmipp_isp_dm_cfg {
+	__u32 en;
 	__u8 edge;
 	__u8 lineh;
 	__u8 linev;
