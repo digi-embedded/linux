@@ -5956,7 +5956,11 @@ void brcmf_sdio_remove(struct brcmf_sdio *bus)
 		release_firmware(bus->sdiodev->clm_fw);
 		bus->sdiodev->clm_fw = NULL;
 		inf_btsdio_deinit(bus_if);
-
+#if IS_BUILTIN(CONFIG_MMC)
+		sdio_claim_host(bus->sdiodev->func1);
+		mmc_hw_reset(bus->sdiodev->func1->card);
+		sdio_release_host(bus->sdiodev->func1);
+#endif
 		kfree(bus->rxbuf);
 		kfree(bus->hdrbuf);
 		kfree(bus);
