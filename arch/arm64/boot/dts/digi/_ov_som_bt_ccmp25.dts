@@ -33,32 +33,8 @@
 		};
 	};
 
-	/* Enable the RF regulator */
-	fragment@1 {
-		target-path = "/";
-		__overlay__ {
-			regulators {
-				compatible = "simple-bus";
-				#address-cells = <1>;
-				#size-cells = <0>;
-
-				reg_3v3_rf: regulator-som@1 {
-					compatible = "regulator-fixed";
-					reg = <1>;
-					regulator-name = "3v3_rf";
-					regulator-min-microvolt = <3300000>;
-					regulator-max-microvolt = <3300000>;
-					gpio = <&gpioz 6 GPIO_ACTIVE_HIGH>; /* 3V3_RF_EN */
-					enable-active-high;
-					startup-delay-us = <100000>;
-					status = "okay";
-				};
-			};
-		};
-	};
-
 	/* Enable USART1 (Bluetooth) */
-	fragment@2 {
+	fragment@1 {
 		target = <&usart1>;
 		__overlay__ {
 			pinctrl-names = "default", "idle", "sleep";
@@ -80,7 +56,7 @@
 	};
 
 	/* Enable External 32kHz Low-Power Oscillator */
-	fragment@3 {
+	fragment@2 {
 		target = <&rtc>;
 		__overlay__ {
 			st,lsco = <RTC_OUT2_RMP>;
