@@ -44,14 +44,17 @@
 			uart-has-rtscts;
 			status = "okay";
 
-			cyw55512_bt: cyw55512-bt {
-				shutdown-gpios = <&gpioz 5 GPIO_ACTIVE_HIGH>; /* BT_REG_EN */
-				compatible = "brcm,bcm43438-bt";
-				max-speed = <3000000>;
-				vbat-supply = <&scmi_v3v3>;
-				vddio-supply = <&scmi_ldo8_1v8_rf>;
-				status = "disabled";
-			};
+			/*
+			 * Currently the early FW is not supported by the driver, so we use
+			 * the generic HCI_UART support.
+			 */
+//			cyw55512_bt: cyw55512-bt {
+//				shutdown-gpios = <&gpioz 5 GPIO_ACTIVE_HIGH>; /* BT_REG_EN */
+//				compatible = "brcm,bcm43438-bt";
+//				max-speed = <3000000>;
+//				vbat-supply = <&scmi_v3v3>;
+//				vddio-supply = <&scmi_ldo8_1v8_rf>;
+//			};
 		};
 	};
 
@@ -62,6 +65,17 @@
 			st,lsco = <RTC_OUT2_RMP>;
 			pinctrl-0 = <&ccmp25_rtc_out1_pins &ccmp25_rtc_out2_pins>;
 			pinctrl-names = "default";
+		};
+	};
+
+	/*
+	 * This regulator needs to be enabled by the driver.
+	 * Since the driver is not currently in use, enable the regulator always.
+	 */
+	fragment@3 {
+		target = <&scmi_ldo8_1v8_rf>;
+		__overlay__ {
+			regulator-always-on;
 		};
 	};
 };
