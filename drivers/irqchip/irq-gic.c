@@ -109,7 +109,6 @@ static DEFINE_RAW_SPINLOCK(cpu_map_lock);
 #endif
 
 static DEFINE_STATIC_KEY_FALSE(needs_rmw_access);
-static DEFINE_STATIC_KEY_FALSE(needs_gic_ctrl_restore);
 
 /*
  * The GIC mapping of CPU interfaces does not necessarily match
@@ -232,24 +231,15 @@ static void gic_eoi_irq(struct irq_data *d)
 static void gic_eoimode1_eoi_irq(struct irq_data *d)
 {
 	u32 hwirq = gic_irq(d);
-	u32 save_cpu_ctrl;
 
 	/* Do not deactivate an IRQ forwarded to a vcpu. */
 	if (irqd_is_forwarded_to_vcpu(d))
 		return;
 
-	if (static_branch_unlikely(&needs_gic_ctrl_restore))
-		save_cpu_ctrl = readl_relaxed(gic_cpu_base(d) + GIC_CPU_CTRL);
-
 	if (hwirq < 16)
 		hwirq = this_cpu_read(sgi_intid);
 
 	writel_relaxed(hwirq, gic_cpu_base(d) + GIC_CPU_DEACTIVATE);
-
-	if (static_branch_unlikely(&needs_gic_ctrl_restore)) {
-		writel_relaxed(save_cpu_ctrl, gic_cpu_base(d) + GIC_CPU_CTRL);
-		gic_poke_irq(d, GIC_DIST_ACTIVE_CLEAR);
-	}
 }
 
 static int gic_irq_set_irqchip_state(struct irq_data *d,
@@ -1390,30 +1380,11 @@ static bool gic_enable_rmw_access(void *data)
 	return false;
 }
 
-static bool gic_eoi_restore_ctrl(void *data)
-{
-	 /*
-	  * A write to GIC_CPU_DEACTIVATE resets the GIC CTRL
-	  * register. make sure it is restored and irq cleared
-	  */
-	if (of_machine_is_compatible("st,stm32mp257")) {
-		static_branch_enable(&needs_gic_ctrl_restore);
-		return true;
-	}
-
-	return false;
-}
-
 static const struct gic_quirk gic_quirks[] = {
 	{
 		.desc		= "broken byte access",
 		.compatible	= "arm,pl390",
 		.init		= gic_enable_rmw_access,
-	},
-	{
-		.desc		= "broken EOI in split irq mode",
-		.compatible	= "arm,cortex-a7-gic",
-		.init		= gic_eoi_restore_ctrl,
 	},
 	{ },
 };
