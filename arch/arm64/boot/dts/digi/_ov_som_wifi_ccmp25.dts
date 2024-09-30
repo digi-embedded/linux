@@ -39,21 +39,9 @@
 				#address-cells = <1>;
 				#size-cells = <0>;
 
-				reg_3v3_rf: regulator-som@1 {
+				reg_rf_wl_en: regulator-som@1 {
 					compatible = "regulator-fixed";
 					reg = <1>;
-					regulator-name = "3v3_rf";
-					regulator-min-microvolt = <3300000>;
-					regulator-max-microvolt = <3300000>;
-					gpio = <&gpioz 6 GPIO_ACTIVE_HIGH>; /* 3V3_RF_EN */
-					enable-active-high;
-					startup-delay-us = <100000>;
-					status = "okay";
-				};
-
-				reg_rf_wl_en: regulator-som@2 {
-					compatible = "regulator-fixed";
-					reg = <2>;
 					regulator-name = "rf_wl_en";
 					regulator-min-microvolt = <3300000>;
 					regulator-max-microvolt = <3300000>;
