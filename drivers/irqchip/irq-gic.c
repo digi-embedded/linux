@@ -72,6 +72,7 @@ struct gic_chip_data {
 	union gic_base cpu_base;
 	void __iomem *raw_dist_base;
 	void __iomem *raw_cpu_base;
+	phys_addr_t cpu_phys_base;
 	u32 percpu_offset;
 #if defined(CONFIG_CPU_PM) || defined(CONFIG_ARM_GIC_PM)
 	u32 saved_spi_enable[DIV_ROUND_UP(1020, 32)];
@@ -107,6 +108,8 @@ static DEFINE_RAW_SPINLOCK(cpu_map_lock);
 #define gic_unlock()			do { } while(0)
 
 #endif
+
+static DEFINE_STATIC_KEY_FALSE(gic_stm32_gicc_dir_access);
 
 static DEFINE_STATIC_KEY_FALSE(needs_rmw_access);
 
@@ -228,6 +231,8 @@ static void gic_eoi_irq(struct irq_data *d)
 	writel_relaxed(hwirq, gic_cpu_base(d) + GIC_CPU_EOI);
 }
 
+#define GIC_STM32_CPU_DEACTIVATE 0x10000
+
 static void gic_eoimode1_eoi_irq(struct irq_data *d)
 {
 	u32 hwirq = gic_irq(d);
@@ -239,7 +244,10 @@ static void gic_eoimode1_eoi_irq(struct irq_data *d)
 	if (hwirq < 16)
 		hwirq = this_cpu_read(sgi_intid);
 
-	writel_relaxed(hwirq, gic_cpu_base(d) + GIC_CPU_DEACTIVATE);
+	if (static_branch_unlikely(&gic_stm32_gicc_dir_access))
+		writel_relaxed(hwirq, gic_cpu_base(d) + GIC_STM32_CPU_DEACTIVATE);
+	else
+		writel_relaxed(hwirq, gic_cpu_base(d) + GIC_CPU_DEACTIVATE);
 }
 
 static int gic_irq_set_irqchip_state(struct irq_data *d,
@@ -1380,17 +1388,50 @@ static bool gic_enable_rmw_access(void *data)
 	return false;
 }
 
+/*
+ * 8kB GICC range is not accessible with the default 4kB translation
+ * granule. 0x1000 offset is accessible at 64kB translation.
+ */
+static bool gic_8kbaccess(void *data)
+{
+	struct gic_chip_data *gic = data;
+	void __iomem *alt;
+
+	if (!is_hyp_mode_available())
+		return false;
+
+	alt = ioremap(gic->cpu_phys_base, GIC_STM32_CPU_DEACTIVATE + 4);
+	if (!alt) {
+		pr_err("Unable to remap GICC_DIR register\n");
+		return false;
+	}
+
+	iounmap(gic->raw_cpu_base);
+	gic->raw_cpu_base = alt;
+
+	static_branch_enable(&gic_stm32_gicc_dir_access);
+
+	return true;
+}
+
 static const struct gic_quirk gic_quirks[] = {
 	{
 		.desc		= "broken byte access",
 		.compatible	= "arm,pl390",
 		.init		= gic_enable_rmw_access,
 	},
+	{
+		.desc		= "4kB GICC access disabled",
+		.compatible	= "st,stm32mp2-cortex-a7-gic",
+		.init		= gic_8kbaccess,
+	},
 	{ },
 };
 
 static int gic_of_setup(struct gic_chip_data *gic, struct device_node *node)
 {
+	struct resource cpuif_res;
+
 	if (!gic || !node)
 		return -EINVAL;
 
@@ -1398,6 +1439,8 @@ static int gic_of_setup(struct gic_chip_data *gic, struct device_node *node)
 	if (WARN(!gic->raw_dist_base, "unable to map gic dist registers\n"))
 		goto error;
 
+	of_address_to_resource(node, 1, &cpuif_res);
+	gic->cpu_phys_base = cpuif_res.start;
 	gic->raw_cpu_base = of_iomap(node, 1);
 	if (WARN(!gic->raw_cpu_base, "unable to map gic cpu registers\n"))
 		goto error;
@@ -1513,6 +1556,7 @@ gic_of_init(struct device_node *node, struct device_node *parent)
 	gic_cnt++;
 	return 0;
 }
+
 IRQCHIP_DECLARE(gic_400, "arm,gic-400", gic_of_init);
 IRQCHIP_DECLARE(arm11mp_gic, "arm,arm11mp-gic", gic_of_init);
 IRQCHIP_DECLARE(arm1176jzf_dc_gic, "arm,arm1176jzf-devchip-gic", gic_of_init);
@@ -1522,6 +1566,7 @@ IRQCHIP_DECLARE(cortex_a7_gic, "arm,cortex-a7-gic", gic_of_init);
 IRQCHIP_DECLARE(msm_8660_qgic, "qcom,msm-8660-qgic", gic_of_init);
 IRQCHIP_DECLARE(msm_qgic2, "qcom,msm-qgic2", gic_of_init);
 IRQCHIP_DECLARE(pl390, "arm,pl390", gic_of_init);
+IRQCHIP_DECLARE(stm32mp2_cortex_a7_gic, "st,stm32mp2-cortex-a7-gic", gic_of_init);
 
 #ifdef CONFIG_ACPI
 static struct
