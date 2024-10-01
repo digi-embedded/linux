@@ -1,0 +1,84 @@
+/*
+ * Copyright 2024 Digi International Inc.
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+#include <dt-bindings/gpio/gpio.h>
+
+/dts-v1/;
+/plugin/;
+
+/ {
+	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			overlay-description = "DVK: Sony imx335 MIPI-CSI camera";
+		};
+	};
+
+	/* Add Sony imx335 MIPI-CSI camera */
+	fragment@1 {
+		target = <&i2c1>;
+		__overlay__ {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			/* MIPI-CSI camera */
+			imx335: imx335@1a {
+				compatible = "sony,imx335";
+				reg = <0x1a>;
+				clocks = <&clk_ext_camera>;
+				reset-gpios = <&gpiog 7 (GPIO_ACTIVE_HIGH | GPIO_PUSH_PULL)>;
+				powerdown-gpios = <&gpiof 3 (GPIO_ACTIVE_HIGH | GPIO_PUSH_PULL)>;
+				status = "okay";
+
+				port {
+					imx335_ep: endpoint {
+						remote-endpoint = <&csi2host_sink>;
+						clock-lanes = <0>;
+						data-lanes = <1 2>;
+						link-frequencies = /bits/ 64 <594000000>;
+					};
+				};
+			};
+		};
+	};
+
+	/* Set CSI endpoint */
+	fragment@2 {
+		target = <&csi2host>;
+		__overlay__ {
+			ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
+				port@0 {
+					reg = <0>;
+					csi2host_sink: endpoint {
+						remote-endpoint = <&imx335_ep>;
+						data-lanes = <0 1>;
+						bus-type = <4>;
+					};
+				};
+			};
+		};
+	};
+
+	/* Disable OV5640 MIPI-CSI camera */
+	fragment@3 {
+		target = <&ov5640_mipi>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+};
