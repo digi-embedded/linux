@@ -1,0 +1,60 @@
+/*
+ * Copyright 2024 Digi International Inc.
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+/dts-v1/;
+/plugin/;
+
+/ {
+	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			overlay-description = "SOM: single core 512MB variant";
+
+			reserved-memory {
+				#address-cells = <2>;
+				#size-cells = <2>;
+
+				linux,cma {
+					alloc-ranges = <0 0x80000000 0 0x40000000>;
+					size = <0 0x6000000>;
+				};
+
+				ele_reserved: ele-reserved@a4120000 {
+					status = "disabled";
+				};
+
+				ele_reserved512M: ele-reserved512M@99000000 {
+					compatible = "shared-dma-pool";
+					reg = <0 0x99000000 0 0x100000>;
+					no-map;
+				};
+			};
+		};
+	};
+
+	fragment@1 {
+		target = <&A55_1>;
+		__overlay__ {
+			status = "fail";
+		};
+	};
+
+	fragment@2 {
+		target = <&ele_mu>;
+		__overlay__ {
+			memory-region = <&ele_reserved512M>;
+		};
+	};
+};
