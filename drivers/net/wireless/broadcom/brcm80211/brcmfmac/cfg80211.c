@@ -7458,10 +7458,8 @@ static bool brcmf_is_linkup(struct brcmf_cfg80211_vif *vif,
 	    event == BRCMF_E_PSK_SUP &&
 	    status == BRCMF_E_STATUS_FWSUP_COMPLETED)
 		set_bit(BRCMF_VIF_STATUS_EAP_SUCCESS, &vif->sme_state);
-	if ((event == BRCMF_E_SET_SSID && status == BRCMF_E_STATUS_SUCCESS) ||
-	    (event == BRCMF_E_LINK && status == BRCMF_E_STATUS_SUCCESS &&
-	    ((e->reason != BRCMF_E_REASON_INITIAL_ASSOC) &&
-	    (e->flags & BRCMF_EVENT_MSG_LINK)))) {
+	if (event == BRCMF_E_LINK && status == BRCMF_E_STATUS_SUCCESS &&
+	    (e->flags & BRCMF_EVENT_MSG_LINK)) {
 		brcmf_dbg(CONN, "Processing set ssid\n");
 		memcpy(vif->profile.bssid, e->addr, ETH_ALEN);
 		if (vif->profile.use_fwsup != BRCMF_PROFILE_FWSUP_PSK &&
@@ -7485,10 +7483,12 @@ static bool brcmf_is_linkdown(struct brcmf_cfg80211_vif *vif,
 {
 	u32 event = e->event_code;
 	u16 flags = e->flags;
+	u32 status = e->status;
 
 	if ((event == BRCMF_E_DEAUTH) || (event == BRCMF_E_DEAUTH_IND) ||
 	    (event == BRCMF_E_DISASSOC_IND) ||
-	    ((event == BRCMF_E_LINK) && (!(flags & BRCMF_EVENT_MSG_LINK)))) {
+	    ((event == BRCMF_E_LINK) && (!(flags & BRCMF_EVENT_MSG_LINK))) ||
+	    (event == BRCMF_E_SET_SSID && status != BRCMF_E_STATUS_SUCCESS)) {
 		brcmf_dbg(CONN, "Processing link down\n");
 		clear_bit(BRCMF_VIF_STATUS_EAP_SUCCESS, &vif->sme_state);
 		clear_bit(BRCMF_VIF_STATUS_ASSOC_SUCCESS, &vif->sme_state);
