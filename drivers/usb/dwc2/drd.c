@@ -28,8 +28,11 @@ static void dwc2_ovr_init_stm32mp21(struct dwc2_hsotg *hsotg)
 	if (hsotg->role_sw_default_mode == USB_DR_MODE_HOST) {
 		ggpio &= ~GGPIO_STM32_OTG_GCCFG_VBVALOVAL;
 		ggpio &= ~GGPIO_STM32_OTG_GCCFG_IDPULLUP_DIS;
-	} else {
+	} else if (hsotg->role_sw_default_mode == USB_DR_MODE_PERIPHERAL) {
+		ggpio |= GGPIO_STM32_OTG_GCCFG_IDPULLUP_DIS;
 		ggpio |= GGPIO_STM32_OTG_GCCFG_VBVALOVAL;
+	} else {
+		ggpio &= ~GGPIO_STM32_OTG_GCCFG_VBVALOVAL;
 		ggpio |= GGPIO_STM32_OTG_GCCFG_IDPULLUP_DIS;
 	}
 	dwc2_writel(hsotg, ggpio, GGPIO);
@@ -40,33 +43,27 @@ static void dwc2_ovr_init_stm32mp21(struct dwc2_hsotg *hsotg)
 			(hsotg->role_sw_default_mode == USB_DR_MODE_HOST));
 }
 
-static int dwc2_ovr_avalid_stm32mp21(struct dwc2_hsotg *hsotg, bool valid)
+static void dwc2_ovr_avalid_stm32mp21(struct dwc2_hsotg *hsotg, bool valid)
 {
 	u32 ggpio;
 
 	ggpio = dwc2_readl(hsotg, GGPIO);
-	if (valid) {
-		ggpio &= ~GGPIO_STM32_OTG_GCCFG_VBVALOVAL;
-		ggpio &= ~GGPIO_STM32_OTG_GCCFG_IDPULLUP_DIS;
-	} else {
-		ggpio |= GGPIO_STM32_OTG_GCCFG_VBVALOVAL;
-		ggpio |= GGPIO_STM32_OTG_GCCFG_IDPULLUP_DIS;
-	}
+	ggpio &= ~GGPIO_STM32_OTG_GCCFG_IDPULLUP_DIS;
+	ggpio &= ~GGPIO_STM32_OTG_GCCFG_VBVALOVAL;
 	dwc2_writel(hsotg, ggpio, GGPIO);
-
-	return 0;
 }
 
-static int dwc2_ovr_bvalid_stm32mp21(struct dwc2_hsotg *hsotg, bool valid)
+static void dwc2_ovr_bvalid_stm32mp21(struct dwc2_hsotg *hsotg, bool valid)
 {
 	u32 ggpio;
 
 	ggpio = dwc2_readl(hsotg, GGPIO);
-	ggpio |= GGPIO_STM32_OTG_GCCFG_VBVALOVAL;
 	ggpio |= GGPIO_STM32_OTG_GCCFG_IDPULLUP_DIS;
+	if (!valid)
+		ggpio &= ~GGPIO_STM32_OTG_GCCFG_VBVALOVAL;
+	else
+		ggpio |= GGPIO_STM32_OTG_GCCFG_VBVALOVAL;
 	dwc2_writel(hsotg, ggpio, GGPIO);
-
-	return 0;
 }
 
 static void dwc2_ovr_init(struct dwc2_hsotg *hsotg)
@@ -75,7 +72,7 @@ static void dwc2_ovr_init(struct dwc2_hsotg *hsotg)
 	u32 gotgctl;
 
 	if (hsotg->params.activate_stm32_bvaloval_en)
-		return dwc2_ovr_init_stm32mp21(hsotg);
+		dwc2_ovr_init_stm32mp21(hsotg);
 
 	spin_lock_irqsave(&hsotg->lock, flags);
 
@@ -99,7 +96,7 @@ static int dwc2_ovr_avalid(struct dwc2_hsotg *hsotg, bool valid)
 	u32 gotgctl = dwc2_readl(hsotg, GOTGCTL);
 
 	if (hsotg->params.activate_stm32_bvaloval_en)
-		return dwc2_ovr_avalid_stm32mp21(hsotg, valid);
+		dwc2_ovr_avalid_stm32mp21(hsotg, valid);
 
 	/* Check if A-Session is already in the right state */
 	if ((valid && (gotgctl & GOTGCTL_AVALOVAL) && (gotgctl & GOTGCTL_VBVALOVAL)) ||
@@ -124,7 +121,7 @@ static int dwc2_ovr_bvalid(struct dwc2_hsotg *hsotg, bool valid)
 	u32 gotgctl = dwc2_readl(hsotg, GOTGCTL);
 
 	if (hsotg->params.activate_stm32_bvaloval_en)
-		return dwc2_ovr_bvalid_stm32mp21(hsotg, valid);
+		dwc2_ovr_bvalid_stm32mp21(hsotg, valid);
 
 	/* Check if B-Session is already in the right state */
 	if ((valid && (gotgctl & GOTGCTL_BVALOVAL) && (gotgctl & GOTGCTL_VBVALOVAL)) ||
