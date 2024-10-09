@@ -1000,7 +1000,6 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_uart1>;
 	uart-has-rtscts;
-	digi,pwr-en-gpio = <&gpio2 26 GPIO_ACTIVE_HIGH>;
 };
 
 &uart2 {
@@ -1013,7 +1012,6 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_uart3>;
 	uart-has-rtscts;
-	digi,pwr-en-gpio = <&gpio2 26 GPIO_ACTIVE_HIGH>;
 };
 
 &uart4 {
