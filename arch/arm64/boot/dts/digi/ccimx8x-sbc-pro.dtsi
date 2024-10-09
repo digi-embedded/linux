@@ -932,7 +932,6 @@
 	pinctrl-0 = <&pinctrl_usbotg1>;
 
 	vbus-supply = <&reg_3v3_usb_hub>;
-	fsl,reset-gpio = <&lsio_gpio1 3 GPIO_ACTIVE_LOW>;
 	dr_mode = "host";
 	disable-over-current;
 	status = "disabled";

@@ -1025,10 +1025,6 @@
 	uart-has-rtscts;
 };
 
-&usbh1 {
-	fsl,reset-gpio = <&gpio3 10 GPIO_ACTIVE_HIGH>;
-};
-
 &usbotg {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_usbotg>;
