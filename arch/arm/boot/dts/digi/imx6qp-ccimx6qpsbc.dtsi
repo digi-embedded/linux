@@ -340,7 +340,7 @@
 		leds {
 			compatible = "dlg,da9063-leds";
 
-			lvds0-backlight@0xc6 {
+			lvds0-backlight@c6 {
 				dlg,led-gpio-reg = <0x1a 0xf0>;
 				dlg,led-reg = <0xc6>;
 				/*
@@ -351,7 +351,7 @@
 				linux,default-trigger = "backlight";
 			};
 
-			lvds1-backlight@0xc6 {
+			lvds1-backlight@c6 {
 				dlg,led-gpio-reg = <0x1c 0xf0>;
 				dlg,led-reg = <0xc8>;
 				/*
