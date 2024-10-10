@@ -188,7 +188,6 @@ static int da9063_gpio_probe(struct platform_device *pdev)
 
 	gpio->gp = reference_gp;
 
-	gpio->gp.of_node = pdev->dev.of_node;
 	ret = devm_gpiochip_add_data(&pdev->dev, &gpio->gp, gpio);
 	if (ret < 0) {
 		dev_err(&pdev->dev, "Could not register gpiochip, %d\n", ret);
