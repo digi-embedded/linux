@@ -7,7 +7,7 @@
 #include <linux/of.h>
 #include <linux/of_platform.h>
 #include <linux/i2c.h>
-#include <linux/of_gpio.h>
+#include <linux/gpio/consumer.h>
 #include <linux/clk.h>
 #include <linux/gpio.h>
 #include <linux/slab.h>
@@ -155,6 +155,7 @@ static int imx_sgtl5000_probe(struct platform_device *pdev)
 	int int_port, ext_port;
 	int ret;
 	struct imx_priv *priv = &card_priv;
+	struct gpio_desc *hp_desc;
 
 	priv->pdev = pdev;
 
@@ -169,10 +170,11 @@ static int imx_sgtl5000_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	priv->hp_gpio = of_get_named_gpio_flags(np, "hp-det-gpios", 0,
-			(enum of_gpio_flags *)&priv->hp_gpio_active_low);
+	hp_desc = fwnode_gpiod_get_index(of_fwnode_handle(np), "hp-det", 0,
+			GPIOD_OUT_LOW, "hp-det");
 
-	if (gpio_is_valid(priv->hp_gpio)) {
+	if (hp_desc) {
+		priv->hp_gpio = gpiod_to_irq(hp_desc);
 		imx_hp_jack_gpio.gpio = priv->hp_gpio;
 		imx_hp_jack_gpio.invert = priv->hp_gpio_active_low;
 		priv->hp_gpio_debounce_time = DEFAULT_DEBOUNCE_TIME;
