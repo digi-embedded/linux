@@ -7,6 +7,7 @@
 #include <linux/clk.h>
 #include <linux/irqchip.h>
 #include <linux/of_gpio.h>
+#include <linux/gpio/consumer.h>
 #include <linux/of_platform.h>
 #include <linux/pci.h>
 #include <linux/phy.h>
@@ -204,7 +205,7 @@ static void imx6q_wifi_init (void)
 {
 	struct device_node *np;
 	unsigned int pwrdown_gpio, pwrdown_delay;
-	enum of_gpio_flags flags;
+	struct gpio_desc *pwr_desc;
 
 	np = of_find_node_by_path("/wireless");
 	if (!np)
@@ -215,8 +216,10 @@ static void imx6q_wifi_init (void)
 		pwrdown_delay = 5;
 
 	/* Read the power down gpio */
-	pwrdown_gpio = of_get_named_gpio_flags(np, "digi,pwrdown-gpios", 0, &flags);
-	if (gpio_is_valid(pwrdown_gpio)) {
+	pwr_desc = fwnode_gpiod_get_index(of_fwnode_handle(np), "digi,pwrdown", 0,
+			GPIOD_OUT_HIGH, "pwrdown-gpio");
+	if (pwr_desc) {
+		pwrdown_gpio = gpiod_to_irq(pwr_desc);
 		if (!gpio_request_one(pwrdown_gpio, GPIOF_DIR_OUT,
 			"wifi_chip_pwd_l")) {
 			/* Start with Power pin low, then set high to power Wifi */
