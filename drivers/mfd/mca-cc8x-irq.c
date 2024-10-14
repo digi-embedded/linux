@@ -127,12 +127,8 @@ static void regmap_irq_sync_unlock(struct irq_data *data)
 			if (!d->type_buf_def[i])
 				continue;
 			reg = d->chip->config_base + i;
-			if (d->chip->type_invert)
-				ret = regmap_update_bits(map, reg,
-					d->type_buf_def[i], ~d->type_buf[i]);
-			else
-				ret = regmap_update_bits(map, reg,
-					d->type_buf_def[i], d->type_buf[i]);
+			ret = regmap_update_bits(map, reg,
+				d->type_buf_def[i], d->type_buf[i]);
 			if (ret != 0)
 				dev_err(d->map->dev, "Failed to sync type in %x\n",
 					reg);
@@ -494,8 +490,7 @@ int mca_cc8x_add_irq_chip(struct regmap *map, int irq, int irq_base,
 
 			ret = regmap_read(map, reg, &d->type_buf_def[i]);
 
-			if (d->chip->type_invert)
-				d->type_buf_def[i] = ~d->type_buf_def[i];
+			d->type_buf_def[i] = ~d->type_buf_def[i];
 
 			if (ret) {
 				dev_err(map->dev, "Failed to get type defaults at 0x%x: %d\n",
