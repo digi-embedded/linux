@@ -123,10 +123,10 @@ static void regmap_irq_sync_unlock(struct irq_data *data)
 
 	/* Don't update the type bits if we're using mask bits for irq type. */
 	if (!d->chip->type_in_mask) {
-		for (i = 0; i < d->chip->num_type_reg; i++) {
+		for (i = 0; i < d->chip->num_config_regs; i++) {
 			if (!d->type_buf_def[i])
 				continue;
-			reg = d->chip->type_base + i;
+			reg = d->chip->config_base + i;
 			if (d->chip->type_invert)
 				ret = regmap_update_bits(map, reg,
 					d->type_buf_def[i], ~d->type_buf[i]);
@@ -377,7 +377,7 @@ int mca_cc8x_add_irq_chip(struct regmap *map, int irq, int irq_base,
 	struct regmap_irq_chip_data *d;
 	int i;
 	int ret = -ENOMEM;
-	int num_type_reg;
+	int num_config_regs;
 	u32 reg;
 
 	if (chip->num_regs <= 0)
@@ -411,14 +411,14 @@ int mca_cc8x_add_irq_chip(struct regmap *map, int irq, int irq_base,
 	if (!d->mask_buf_def)
 		goto err_alloc;
 
-	num_type_reg = chip->type_in_mask ? chip->num_regs : chip->num_type_reg;
-	if (num_type_reg) {
-		d->type_buf_def = kcalloc(num_type_reg,
+	num_config_regs = chip->type_in_mask ? chip->num_regs : chip->num_config_regs;
+	if (num_config_regs) {
+		d->type_buf_def = kcalloc(num_config_regs,
 					  sizeof(unsigned int), GFP_KERNEL);
 		if (!d->type_buf_def)
 			goto err_alloc;
 
-		d->type_buf = kcalloc(num_type_reg, sizeof(unsigned int),
+		d->type_buf = kcalloc(num_config_regs, sizeof(unsigned int),
 				      GFP_KERNEL);
 		if (!d->type_buf)
 			goto err_alloc;
@@ -488,9 +488,9 @@ int mca_cc8x_add_irq_chip(struct regmap *map, int irq, int irq_base,
 		}
 	}
 
-	if (chip->num_type_reg && !chip->type_in_mask) {
-		for (i = 0; i < chip->num_type_reg; ++i) {
-			reg = chip->type_base + i;
+	if (chip->num_config_regs && !chip->type_in_mask) {
+		for (i = 0; i < chip->num_config_regs; ++i) {
+			reg = chip->config_base + i;
 
 			ret = regmap_read(map, reg, &d->type_buf_def[i]);
 
