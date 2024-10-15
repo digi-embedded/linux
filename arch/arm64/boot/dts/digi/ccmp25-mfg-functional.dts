@@ -317,6 +317,15 @@
 	/*wake-gpio = <&gpioa 1 GPIO_ACTIVE_LOW>;*/
 };
 
+&scmi_regu {
+	/* Always-on for non-wireless variants of the SOM, to be
+	 * able to use the pads PE0..PE5 which are powered by this
+	 * regulator */
+	scmi_vddio1: regulator@0 {
+		regulator-always-on;
+	};
+};
+
 &timers20 {
 	/delete-property/dmas;
 	/delete-property/dma-names;
