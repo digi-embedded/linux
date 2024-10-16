@@ -424,6 +424,10 @@
 	};
 };
 
+&rtc {
+	status = "okay";
+};
+
 &scmi_regu {
 	scmi_vddcore: regulator@5  {
 		reg = <VOLTD_SCMI_STPMIC_BUCK1>;
