@@ -413,7 +413,7 @@
 	/delete-property/dmas;
 	/delete-property/dma-names;
 
-	imx335: imx335@1a {
+	imx335: camera@1a {
 		compatible = "sony,imx335";
 		reg = <0x1a>;
 		clocks = <&clk_ext_camera>;
