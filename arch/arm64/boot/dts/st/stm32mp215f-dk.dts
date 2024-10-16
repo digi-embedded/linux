@@ -311,13 +311,12 @@
 		status = "okay" ;
 	};
 
-	imx335: imx335@1a {
+	imx335: camera@1a {
 		compatible = "sony,imx335";
 		reg = <0x1a>;
 		clocks = <&clk_ext_camera>;
 		reset-gpios = <&gpiod 5 (GPIO_ACTIVE_LOW | GPIO_PUSH_PULL)>;
 		powerdown-gpios = <&gpiod 0 (GPIO_ACTIVE_HIGH | GPIO_PUSH_PULL)>;
-		status = "okay";
 
 		port {
 			imx335_ep: endpoint {
