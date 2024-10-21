@@ -28,9 +28,5 @@
 			access-controllers = <&rifsc 120>;
 			access-controller-names = "l3";
 		};
-		rot {
-			access-controllers = <&rifsc 121>;
-			access-controller-names = "rot";
-		};
 	};
 };
