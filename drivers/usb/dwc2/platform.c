@@ -695,8 +695,22 @@ error:
 static int __maybe_unused dwc2_suspend(struct device *dev)
 {
 	struct dwc2_hsotg *dwc2 = dev_get_drvdata(dev);
-	bool is_device_mode = dwc2_is_device_mode(dwc2);
+	bool is_device_mode;
+	bool ll_hw_enabled = dwc2->ll_hw_enabled;
 	int ret = 0;
+
+	/*
+	 * The low level HW may have been left disabled from the probe,
+	 * or disabled later on (e.g. gadget driver removed. Need to re-enable
+	 * temporarily, to properly manage the suspend.
+	 */
+	if (!ll_hw_enabled) {
+		ret = __dwc2_lowlevel_hw_enable(dwc2);
+		if (ret)
+			return ret;
+	}
+
+	is_device_mode = dwc2_is_device_mode(dwc2);
 
 	if (is_device_mode) {
 		/*
@@ -745,6 +759,10 @@ static int __maybe_unused dwc2_suspend(struct device *dev)
 		regulator_disable(dwc2->usb33d);
 	}
 
+	/* balance temporarily re-enabled HW */
+	if (!ll_hw_enabled)
+		ret = __dwc2_lowlevel_hw_disable(dwc2);
+
 	if (dwc2->ll_hw_enabled &&
 	    (is_device_mode || dwc2_host_can_poweroff_phy(dwc2))) {
 		ret = __dwc2_lowlevel_hw_disable(dwc2);
@@ -760,10 +778,17 @@ static int __maybe_unused dwc2_suspend(struct device *dev)
 static int __maybe_unused dwc2_resume(struct device *dev)
 {
 	struct dwc2_hsotg *dwc2 = dev_get_drvdata(dev);
+	bool ll_hw_enabled = dwc2->ll_hw_enabled;
 	int ret = 0;
 
 	if (device_may_wakeup(dev) || device_wakeup_path(dev))
 		disable_irq_wake(dwc2->irq);
+
+	if (!ll_hw_enabled) {
+		ret = __dwc2_lowlevel_hw_enable(dwc2);
+		if (ret)
+			return ret;
+	}
 
 	if (dev->dma_range_map && dwc2->params.activate_stm32_otgarcr_en) {
 		regmap_set_bits(dwc2->params.stm32_regmap,
@@ -825,6 +850,10 @@ static int __maybe_unused dwc2_resume(struct device *dev)
 
 	if (dwc2_is_device_mode(dwc2))
 		ret = dwc2_hsotg_resume(dwc2);
+
+	/* balance temporarily re-enabled HW */
+	if (!ll_hw_enabled)
+		ret = __dwc2_lowlevel_hw_disable(dwc2);
 
 	return ret;
 }
