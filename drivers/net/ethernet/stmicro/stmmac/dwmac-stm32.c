@@ -6,6 +6,7 @@
  * Author:  Alexandre Torgue <alexandre.torgue@st.com> for STMicroelectronics.
  */
 
+#include <linux/bus/stm32_firewall_device.h>
 #include <linux/clk.h>
 #include <linux/kernel.h>
 #include <linux/mfd/syscon.h>
@@ -103,6 +104,7 @@ struct stm32_dwmac {
 	u32 speed;
 	const struct stm32_ops *ops;
 	struct device *dev;
+	struct stm32_firewall firewall;
 };
 
 struct stm32_syscfg_pmcsetr {
@@ -504,11 +506,26 @@ static int stm32_dwmac_probe(struct platform_device *pdev)
 		goto err_remove_config_dt;
 	}
 
+	/* Get stm32 firewall information */
+	ret = stm32_firewall_get_firewall(pdev->dev.of_node, &dwmac->firewall, 1);
+	if (ret)
+		goto err_remove_config_dt;
+
+	if (dwmac->firewall.firewall_id != 0) {
+		ret = stm32_firewall_grant_access_by_id(&dwmac->firewall,
+							dwmac->firewall.firewall_id);
+		if (ret) {
+			dev_err(&pdev->dev, "stm32 firewall grant error:%d\n",
+				ret);
+			goto err_remove_config_dt;
+		}
+	}
+
 	data = of_device_get_match_data(&pdev->dev);
 	if (!data) {
 		dev_err(&pdev->dev, "no of match data provided\n");
 		ret = -EINVAL;
-		goto err_remove_config_dt;
+		goto err_remove_firewall;
 	}
 
 	dwmac->ops = data;
@@ -517,7 +534,7 @@ static int stm32_dwmac_probe(struct platform_device *pdev)
 	ret = stm32_dwmac_parse_data(dwmac, &pdev->dev);
 	if (ret) {
 		dev_err(&pdev->dev, "Unable to parse OF data\n");
-		goto err_remove_config_dt;
+		goto err_remove_firewall;
 	}
 
 	if (stmmac_res.wol_irq && !dwmac->clk_eth_ck) {
@@ -551,6 +568,10 @@ err_wake_init_disable:
 		dev_pm_clear_wake_irq(&pdev->dev);
 		device_set_wakeup_capable(&pdev->dev, false);
 	}
+err_remove_firewall:
+	if (dwmac->firewall.firewall_id != 0)
+		stm32_firewall_release_access_by_id(&dwmac->firewall,
+						    dwmac->firewall.firewall_id);
 err_remove_config_dt:
 	stmmac_remove_config_dt(pdev, plat_dat);
 
@@ -561,6 +582,7 @@ static void stm32_dwmac_remove(struct platform_device *pdev)
 {
 	struct net_device *ndev = platform_get_drvdata(pdev);
 	struct stmmac_priv *priv = netdev_priv(ndev);
+	struct stm32_dwmac *dwmac = priv->plat->bsp_priv;
 
 	stmmac_dvr_remove(&pdev->dev);
 	stm32_dwmac_clk_disable(priv->plat->bsp_priv);
@@ -569,6 +591,10 @@ static void stm32_dwmac_remove(struct platform_device *pdev)
 	device_init_wakeup(&pdev->dev, false);
 
 	phy_power_on(priv->plat->bsp_priv, false);
+
+	if (dwmac->firewall.firewall_id != 0)
+		stm32_firewall_release_access_by_id(&dwmac->firewall,
+						    dwmac->firewall.firewall_id);
 }
 
 static int stm32mp1_suspend(struct stm32_dwmac *dwmac)
