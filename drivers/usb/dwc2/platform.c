@@ -765,6 +765,12 @@ static int __maybe_unused dwc2_resume(struct device *dev)
 	if (device_may_wakeup(dev) || device_wakeup_path(dev))
 		disable_irq_wake(dwc2->irq);
 
+	if (dev->dma_range_map && dwc2->params.activate_stm32_otgarcr_en) {
+		regmap_set_bits(dwc2->params.stm32_regmap,
+				dwc2->params.stm32_syscfg_otgarcr_reg_off,
+				STM32_SYSCFG_OTGARCR_OFFSET_AREN_MASK);
+	}
+
 	if (dwc2->phy_off_for_suspend && dwc2->ll_hw_enabled) {
 		ret = __dwc2_lowlevel_hw_enable(dwc2);
 		if (ret)
