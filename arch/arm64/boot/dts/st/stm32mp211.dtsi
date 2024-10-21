@@ -1780,7 +1780,7 @@
 				usbh_ohci: usb@482e0000 {
 					compatible = "generic-ohci";
 					reg = <0x482e0000 0x1000>;
-					clocks = <&rcc CK_BUS_USBHOHCI>;
+					clocks = <&usb2_phy1>, <&rcc CK_BUS_USBHOHCI>;
 					resets = <&rcc USBH_R>;
 					interrupts = <GIC_SPI 127 IRQ_TYPE_LEVEL_HIGH>;
 					phys = <&usb2_phy1>;
@@ -1790,7 +1790,7 @@
 				usbh_ehci: usb@482f0000 {
 					compatible = "generic-ehci";
 					reg = <0x482f0000 0x1000>;
-					clocks = <&rcc CK_BUS_USBHEHCI>;
+					clocks = <&usb2_phy1>, <&rcc CK_BUS_USBHEHCI>;
 					resets = <&rcc USBH_R>;
 					interrupts = <GIC_SPI 126 IRQ_TYPE_LEVEL_HIGH>;
 					companion = <&usbh_ohci>;
