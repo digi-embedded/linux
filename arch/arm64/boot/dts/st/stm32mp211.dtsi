@@ -1802,8 +1802,8 @@
 			usbotg_hs: usb@48300000 {
 				compatible = "st,stm32mp21-hsotg", "snps,dwc2";
 				reg = <0x48300000 0x0 0x10000>;
-				clocks = <&rcc CK_BUS_OTG>;
-				clock-names = "otg";
+				clocks = <&rcc CK_BUS_OTG>, <&usb2_phy2>;
+				clock-names = "otg", "utmi";
 				resets = <&rcc OTG_R>;
 				reset-names = "dwc2";
 				interrupts = <GIC_SPI 191 IRQ_TYPE_LEVEL_HIGH>;
