@@ -134,13 +134,8 @@
 			no-map;
 		};
 
-		ltdc_sec_layer: ltdc-sec-layer@fe800000 {
-			reg = <0x0 0xfe800000 0x0 0x800000>;
-			no-map;
-		};
-
-		ltdc_sec_rotation: ltdc-sec-rotation@ff000000 {
-			reg = <0x0 0xff000000 0x0 0x1000000>;
+		ltdc_sec_layer: ltdc-sec-layer@ff800000 {
+			reg = <0x0 0xff800000 0x0 0x800000>;
 			no-map;
 		};
 
