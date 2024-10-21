@@ -934,6 +934,9 @@
 	vbus-supply = <&reg_3v3_usb_hub>;
 	dr_mode = "host";
 	disable-over-current;
+	srp-disable;
+	hnp-disable;
+	adp-disable;
 	status = "disabled";
 };
 
