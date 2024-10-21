@@ -211,6 +211,7 @@
 	usb2_phy2: usb2-phy2 {
 		compatible      = "st,stm32mp21-usb2phy";
 		#phy-cells      = <0>;
+		#clock-cells    = <0>;
 		st,syscfg       = <&syscfg 0x2800>;
 		clocks          = <&rcc CK_KER_USB2PHY2EN>;
 		resets          = <&rcc USB2PHY2_R>;
