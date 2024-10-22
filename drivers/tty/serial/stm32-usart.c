@@ -1087,6 +1087,8 @@ static irqreturn_t stm32_usart_interrupt(int irq, void *ptr)
 		}
 		/* Discard rx which contains tx echo */
 		stm32_usart_set_bits(port, ofs->rqr, USART_RQR_RXFRQ);
+
+		ret = IRQ_HANDLED;
 	} else {
 		/*
 		 * rx errors in dma mode has to be handled ASAP to avoid overrun as the DMA request
