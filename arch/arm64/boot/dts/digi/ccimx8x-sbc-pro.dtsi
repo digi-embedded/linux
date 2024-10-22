@@ -1,5 +1,5 @@
 /*
- * Copyright 2018-2020 Digi International Inc.
+ * Copyright 2018-2024 Digi International Inc.
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -192,6 +192,7 @@
 			regulator-min-microvolt = <5000000>;
 			regulator-max-microvolt = <5000000>;
 			gpio = <&lsio_gpio0 13 GPIO_ACTIVE_HIGH>;
+			startup-delay-us = <5000>;
 			enable-active-high;
 		};
 
@@ -254,6 +255,30 @@
 			gpio = <&mca_gpio 9 GPIO_ACTIVE_HIGH>;
 			enable-active-high;
 			regulator-always-on;
+		};
+
+		reg_can2_stby: regulator-can2-stby {
+			compatible = "regulator-fixed";
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_reg_can2_stby>;
+			regulator-name = "can2-stby";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			gpio = <&lsio_gpio1 0 GPIO_ACTIVE_LOW>;
+			vin-supply = <&reg_5v_display>;
+			enable-active-low;
+		};
+
+		reg_can3_stby: regulator-can3-stby {
+			compatible = "regulator-fixed";
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_reg_can3_stby>;
+			regulator-name = "can3-stby";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+			gpio = <&lsio_gpio1 2 GPIO_ACTIVE_LOW>;
+			vin-supply = <&reg_5v_display>;
+			enable-active-low;
 		};
 	};
 
@@ -354,8 +379,7 @@
 &flexcan2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan2>;
-	xceiver-supply = <&reg_5v_display>;
-	stby-gpios = <&lsio_gpio1 0 GPIO_ACTIVE_HIGH>;
+	xceiver-supply = <&reg_can2_stby>;
 	status = "disabled";
 };
 
@@ -368,8 +392,7 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_flexcan3>,
 		    <&pinctrl_flexcan3_lpuart3_gpios>;
-	xceiver-supply = <&reg_5v_display>;
-	stby-gpios = <&lsio_gpio1 2 GPIO_ACTIVE_HIGH>;
+	xceiver-supply = <&reg_can3_stby>;
 	pinctrl-assert-gpios = <&lsio_gpio3 23 GPIO_ACTIVE_HIGH>;
 	status = "disabled";
 };
@@ -1148,7 +1171,12 @@
 		fsl,pins = <
 			IMX8QXP_FLEXCAN1_TX_ADMA_FLEXCAN1_TX		0x21
 			IMX8QXP_FLEXCAN1_RX_ADMA_FLEXCAN1_RX		0x21
-			IMX8QXP_SPI2_CS0_LSIO_GPIO1_IO00                   0x06000020
+		>;
+	};
+
+	pinctrl_reg_can2_stby: reg_can2_stbygrp {
+		fsl,pins = <
+			IMX8QXP_SPI2_CS0_LSIO_GPIO1_IO00		0x06000020
 		>;
 	};
 
@@ -1156,13 +1184,18 @@
 		fsl,pins = <
 			IMX8QXP_FLEXCAN2_TX_ADMA_FLEXCAN2_TX		0x21
 			IMX8QXP_FLEXCAN2_RX_ADMA_FLEXCAN2_RX		0x21
-			IMX8QXP_SPI2_SDI_LSIO_GPIO1_IO02                   0x06000020
 		>;
 	};
 
 	pinctrl_flexcan3_lpuart3_gpios: flexcan2lpuart3gpios-grp {
 		fsl,pins = <
 			IMX8QXP_QSPI0B_SS0_B_LSIO_GPIO3_IO23 0x06000060
+		>;
+	};
+
+	pinctrl_reg_can3_stby: reg_can3_stbygrp {
+		fsl,pins = <
+			IMX8QXP_SPI2_SDI_LSIO_GPIO1_IO02		0x06000020
 		>;
 	};
 
