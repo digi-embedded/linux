@@ -10,6 +10,7 @@
 #include <linux/module.h>
 #include <linux/vmalloc.h>
 #include <linux/bitfield.h>
+#include <linux/string.h>
 #include <net/cfg80211.h>
 #include <net/netlink.h>
 #include <uapi/linux/if_arp.h>
@@ -514,7 +515,8 @@ wl_set_wsec_info_algos(struct brcmf_if *ifp, u32 algos, u32 mask)
 
 	wsec_info_tlv->id = cpu_to_le16(WL_WSEC_INFO_BSS_ALGOS);
 	wsec_info_tlv->len = cpu_to_le16(tlv_data_len);
-	memcpy(wsec_info_tlv->data, tlv_data, tlv_data_len);
+	unsafe_memcpy(wsec_info_tlv->data, tlv_data, tlv_data_len,
+			/* alloc enough buf*/);
 
 	param_len = offsetof(struct wl_wsec_info, tlvs) +
 		    offsetof(struct wl_wsec_info_tlv, data) + tlv_data_len;
@@ -6638,8 +6640,8 @@ brcmf_cfg80211_mgmt_tx(struct wiphy *wiphy, struct wireless_dev *wdev,
 		memcpy(&mf_params->da[0], &mgmt->da[0], ETH_ALEN);
 		memcpy(&mf_params->bssid[0], &mgmt->bssid[0], ETH_ALEN);
 		mf_params->packet_id = cpu_to_le32(*cookie);
-		memcpy(mf_params->data, &buf[DOT11_MGMT_HDR_LEN],
-		       le16_to_cpu(mf_params->len));
+		unsafe_memcpy(mf_params->data, &buf[DOT11_MGMT_HDR_LEN],
+		       le16_to_cpu(mf_params->len), /* alloc enough buf*/);
 
 		brcmf_dbg(TRACE, "Auth frame, cookie=%d, fc=%04x, len=%d, channel=%d\n",
 			  le32_to_cpu(mf_params->packet_id),
@@ -8327,8 +8329,9 @@ brcmf_notify_auth_frame_rx(struct brcmf_if *ifp,
 	brcmf_fil_cmd_data_get(ifp, BRCMF_C_GET_BSSID, mgmt_frame->bssid,
 			       ETH_ALEN);
 	frame += offsetof(struct ieee80211_mgmt, u);
-	memcpy(&mgmt_frame->u, frame,
-	       mgmt_frame_len - offsetof(struct ieee80211_mgmt, u));
+	unsafe_memcpy(&mgmt_frame->u, frame,
+	       mgmt_frame_len - offsetof(struct ieee80211_mgmt, u),
+		   /* alloc enough buf*/);
 
 	freq = ieee80211_channel_to_frequency(ch.control_ch_num,
 			BRCMU_CHAN_BAND_TO_NL80211(ch.band));
