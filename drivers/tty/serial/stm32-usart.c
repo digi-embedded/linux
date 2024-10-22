@@ -113,6 +113,7 @@ static struct stm32_usart_info __maybe_unused stm32h7_info = {
 static void stm32_usart_stop_tx(struct uart_port *port);
 static void stm32_usart_transmit_chars(struct uart_port *port);
 static void __maybe_unused stm32_usart_console_putchar(struct uart_port *port, unsigned char ch);
+static int stm32_usart_rx_dma_start_or_resume(struct uart_port *port);
 
 static inline struct stm32_port *to_stm32_port(struct uart_port *port)
 {
@@ -648,18 +649,33 @@ static unsigned int stm32_usart_receive_chars(struct uart_port *port, bool force
 {
 	struct stm32_port *stm32_port = to_stm32_port(port);
 	const struct stm32_usart_offsets *ofs = &stm32_port->info->ofs;
+	struct dma_tx_state *state;
 	enum dma_status rx_dma_status;
 	u32 sr;
 	unsigned int size = 0;
 
 	if (stm32_usart_rx_dma_started(stm32_port) || force_dma_flush) {
+		state = &stm32_port->rx_dma_state;
 		rx_dma_status = dmaengine_tx_status(stm32_port->rx_ch,
-						    stm32_port->rx_ch->cookie,
-						    &stm32_port->rx_dma_state);
+						    stm32_port->rx_ch->cookie, state);
 		if (rx_dma_status == DMA_IN_PROGRESS ||
 		    rx_dma_status == DMA_PAUSED) {
-			/* Empty DMA buffer */
-			size = stm32_usart_receive_chars_dma(port);
+			if (force_dma_flush && state->in_flight_bytes) {
+				/* Disable RX DMA to force in flight data is drained */
+				stm32_usart_rx_dma_terminate(stm32_port);
+				state->residue -= state->in_flight_bytes;
+				/* Empty DMA buffer */
+				size = stm32_usart_receive_chars_dma(port);
+				if (rx_dma_status == DMA_IN_PROGRESS) {
+					/* If restarting DMA fails, fall back to interrupt mode */
+					if (stm32_usart_rx_dma_start_or_resume(port))
+						size = stm32_usart_receive_chars_pio(port);
+				}
+			} else {
+				/* Empty DMA buffer */
+				size = stm32_usart_receive_chars_dma(port);
+			}
+
 			sr = readl_relaxed(port->membase + ofs->isr);
 			if (sr & USART_SR_ERR_MASK) {
 				/* Disable DMA request line */
@@ -1117,7 +1133,7 @@ static irqreturn_t stm32_usart_interrupt(int irq, void *ptr)
 	/* Receiver timeout irq for DMA RX */
 	if (stm32_usart_rx_dma_started(stm32_port) && !stm32_port->throttled) {
 		spin_lock(&port->lock);
-		size = stm32_usart_receive_chars(port, false);
+		size = stm32_usart_receive_chars(port, (sr & USART_SR_RTOF));
 		uart_unlock_and_check_sysrq(port);
 		if (size)
 			tty_flip_buffer_push(tport);
