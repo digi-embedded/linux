@@ -1550,14 +1550,14 @@ static int stm32_mdf_audio_init(struct device *dev, struct iio_dev *indio_dev)
 
 	ret = stm32_mdf_adc_chan_init(indio_dev, ch);
 	if (ret < 0)
-		return dev_err_probe(&indio_dev->dev, ret, "Channels init failed\n");
+		return dev_err_probe(dev, ret, "Channels init failed\n");
 
 	indio_dev->num_channels = 1;
 	indio_dev->channels = ch;
 
 	ret = stm32_mdf_dma_request(dev, indio_dev);
 	if (ret)
-		return dev_err_probe(&indio_dev->dev, ret, "Failed to get dma: %d\n", ret);
+		return dev_err_probe(dev, ret, "Failed to get DMA\n");
 
 	ret =  stm32_mdf_adc_filter_set_mode(adc, true);
 	if (ret)
@@ -1598,7 +1598,7 @@ static int stm32_mdf_adc_init(struct device *dev, struct iio_dev *indio_dev)
 
 		ret = stm32_mdf_adc_chan_init(indio_dev, ch);
 		if (ret < 0)
-			return dev_err_probe(&indio_dev->dev, ret, "Channels init failed\n");
+			return dev_err_probe(dev, ret, "Channels init failed\n");
 	}
 
 	indio_dev->num_channels = num_ch;
@@ -1931,10 +1931,8 @@ static int stm32_mdf_adc_probe(struct platform_device *pdev)
 		return dev_err_probe(dev, irq, "Failed to get IRQ\n");
 
 	ret = devm_request_irq(dev, irq, stm32_mdf_irq, 0, pdev->name, iio);
-	if (ret < 0) {
-		dev_err(dev, "Failed to request IRQ\n");
-		return ret;
-	}
+	if (ret < 0)
+		return dev_err_probe(dev, ret, "Failed to request IRQ\n");
 
 	ret = stm32_mdf_adc_parse_of(pdev, adc);
 	if (ret < 0)
@@ -1955,7 +1953,7 @@ static int stm32_mdf_adc_probe(struct platform_device *pdev)
 	if (!MDF_IS_INTERLEAVED_FILT_NOT_0(adc)) {
 		ret = iio_device_register(iio);
 		if (ret < 0) {
-			dev_err(dev, "Failed to register IIO device: %d\n", ret);
+			dev_err_probe(dev, ret, "Failed to register IIO device: %d\n", ret);
 			goto err_cleanup;
 		}
 	}
