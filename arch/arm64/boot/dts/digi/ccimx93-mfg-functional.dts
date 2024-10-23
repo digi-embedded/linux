@@ -42,6 +42,23 @@
 		};
 	};
 
+	reserved-memory {
+		linux,cma {
+			alloc-ranges = <0 0x80000000 0 0x40000000>;
+			size = <0 0x6000000>;
+		};
+
+		ele_reserved: ele-reserved@a4120000 {
+			status = "disabled";
+		};
+
+		ele_reserved512M: ele-reserved512M@99000000 {
+			compatible = "shared-dma-pool";
+			reg = <0 0x99000000 0 0x100000>;
+			no-map;
+		};
+	};
+
 	/* fixed 24MHz crystal for mipi camera */
 	mipi_csi_xtal24m: mipi_csi_xtal24m {
 		compatible = "fixed-clock";
@@ -99,6 +116,10 @@
 /* MIPI-CSI CAMERA */
 &cameradev {
 	status = "okay";
+};
+
+&ele_mu {
+	memory-region = <&ele_reserved512M>;
 };
 
 &isi_0 {
