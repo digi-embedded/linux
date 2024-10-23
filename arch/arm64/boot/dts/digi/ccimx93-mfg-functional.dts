@@ -118,7 +118,7 @@
 	status = "okay";
 };
 
-&ele_mu {
+&ele_fw2 {
 	memory-region = <&ele_reserved512M>;
 };
 
@@ -131,13 +131,10 @@
 };
 
 &mipi_csi {
-	#address-cells = <1>;
-	#size-cells = <0>;
 	status = "okay";
 
 	/* Camera 0 MIPI CSI */
-	port@0 {
-		reg = <0>;
+	port {
 		mipi_csi0_ep: endpoint {
 			remote-endpoint = <&ov5640_mipi_ep>;
 			data-lanes = <2>;

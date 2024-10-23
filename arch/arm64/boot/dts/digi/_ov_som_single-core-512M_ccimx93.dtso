@@ -52,7 +52,7 @@
 	};
 
 	fragment@2 {
-		target = <&ele_mu>;
+		target = <&ele_fw2>;
 		__overlay__ {
 			memory-region = <&ele_reserved512M>;
 		};
