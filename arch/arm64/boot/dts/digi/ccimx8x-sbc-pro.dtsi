@@ -197,6 +197,7 @@
 			enable-active-high;
 			startup-delay-us = <10000>;
 			vin-supply = <&reg_3v3_ext>;
+			regulator-boot-on;
 		};
 
 		reg_5v_display: regulator@4 {
