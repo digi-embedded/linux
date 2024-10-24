@@ -37,6 +37,7 @@
 #define RNG_SR_SECS		BIT(2)
 #define RNG_SR_CEIS		BIT(5)
 #define RNG_SR_SEIS		BIT(6)
+#define RNG_SR_ERROR_MASK	(RNG_SR_CECS | RNG_SR_SECS | RNG_SR_CEIS | RNG_SR_SEIS)
 
 #define RNG_DR			0x08
 
@@ -361,7 +362,7 @@ static int stm32_rng_init(struct hwrng *rng)
 	err = readl_relaxed_poll_timeout_atomic(priv->base + RNG_SR, reg,
 						reg & RNG_SR_DRDY,
 						10, 100000);
-	if (err || (reg & ~RNG_SR_DRDY)) {
+	if (err || (reg & RNG_SR_ERROR_MASK)) {
 		if (priv->bus_clk)
 			clk_disable_unprepare(priv->bus_clk);
 		clk_disable_unprepare(priv->clk);
@@ -520,6 +521,15 @@ static const struct stm32_rng_data stm32mp25_rng_data = {
 	.htcr = 0x969D,
 };
 
+static const struct stm32_rng_data stm32mp21_rng_data = {
+	.has_cond_reset = true,
+	.max_clock_rate = 48000000,
+	.nb_clock = 2,
+	.cr = 0x00800D00,
+	.nscr = 0x01F7,
+	.htcr = 0xAAC7,
+};
+
 static const struct stm32_rng_data stm32mp13_rng_data = {
 	.has_cond_reset = true,
 	.max_clock_rate = 48000000,
@@ -539,6 +549,10 @@ static const struct of_device_id stm32_rng_match[] = {
 	{
 		.compatible = "st,stm32mp25-rng",
 		.data = &stm32mp25_rng_data,
+	},
+	{
+		.compatible = "st,stm32mp21-rng",
+		.data = &stm32mp21_rng_data,
 	},
 	{
 		.compatible = "st,stm32mp13-rng",
