@@ -1589,7 +1589,7 @@ static s32 brcmf_p2p_tx_action_frame(struct brcmf_p2p_info *p2p,
 {
 	struct brcmf_pub *drvr = p2p->cfg->pub;
 	s32 err = 0;
-	struct brcmf_fil_af_params_v2_le af_params_v2;
+	struct brcmf_fil_af_params_v2_le *af_params_v2;
 
 	brcmf_dbg(TRACE, "Enter\n");
 
@@ -1599,15 +1599,23 @@ static s32 brcmf_p2p_tx_action_frame(struct brcmf_p2p_info *p2p,
 
 	if (drvr->wlc_ver.wlc_ver_major == BRCMF_AF_PARAM_V2_FW_MAJOR &&
 	    drvr->wlc_ver.wlc_ver_minor >= BRCMF_AF_PARAM_V2_FW_MINOR) {
-		/* set actframe iovar with af_params_v2 */
-		af_params_v2.band = nl80211_band_to_fwil(band);
-		af_params_v2.channel = af_params->channel;
-		af_params_v2.dwell_time = af_params->dwell_time;
-		memcpy(af_params_v2.bssid, af_params->bssid, ETH_ALEN);
-		af_params_v2.action_frame = af_params->action_frame;
+		af_params_v2 = kzalloc(sizeof(*af_params_v2), GFP_KERNEL);
+		if (!af_params_v2) {
+			err = -ENOMEM;
+			goto exit;
+		}
 
-		err = brcmf_fil_bsscfg_data_set(vif->ifp, "actframe", &af_params_v2,
-						sizeof(af_params_v2));
+		/* set actframe iovar with af_params_v2 */
+		af_params_v2->band = nl80211_band_to_fwil(band);
+		af_params_v2->channel = af_params->channel;
+		af_params_v2->dwell_time = af_params->dwell_time;
+		memcpy(af_params_v2->bssid, af_params->bssid, ETH_ALEN);
+		memcpy(&af_params_v2->action_frame, &af_params->action_frame,
+		       sizeof(af_params_v2->action_frame));
+
+		err = brcmf_fil_bsscfg_data_set(vif->ifp, "actframe", af_params_v2,
+						sizeof(*af_params_v2));
+		kfree(af_params_v2);
 	} else {
 		/* set actframe iovar with af_params */
 		err = brcmf_fil_bsscfg_data_set(vif->ifp, "actframe", af_params,
