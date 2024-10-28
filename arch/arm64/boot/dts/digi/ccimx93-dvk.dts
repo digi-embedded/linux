@@ -61,6 +61,22 @@
 		};
 	};
 
+	hdmi-connector {
+		compatible = "hdmi-connector";
+		label = "hdmi";
+		type = "a";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_hdmi_hpd>;
+		hdmi-pwr-supply = <&reg_5v_board>;
+		hpd-gpios = <&gpio1 12 GPIO_ACTIVE_HIGH>;
+
+		port {
+			hdmi_connector_in: endpoint {
+				remote-endpoint = <&lt8912_out>;
+			};
+		};
+	};
+
 	regulators {
 		compatible = "simple-bus";
 		#address-cells = <1>;
@@ -347,21 +363,30 @@
 	};
 
 	lt_bridge: lt8912@48 {
-		compatible = "lontium,lt8912";
+		compatible = "lontium,lt8912b";
 		reg = <0x48>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_lt8912>;
 		reset-gpios = <&gpio1 3 GPIO_ACTIVE_LOW>;
-		no-hpd;
-		digi,dsi-lanes = <4>;
-		vdd1-supply = <&reg_5v_board>;
-		no-edid;
 		status = "okay";
 
-		port {
-			lt8912_1_in: endpoint {
-				/* add lanes */
-				remote-endpoint = <&mipi_dsi_hdmi_out>;
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port@0 {
+				reg = <0>;
+				lt8912_1_in: endpoint {
+					data-lanes = <1 2 3 4>;
+					remote-endpoint = <&mipi_dsi_hdmi_out>;
+				};
+			};
+
+			port@1 {
+				reg = <1>;
+				lt8912_out: endpoint {
+					remote-endpoint = <&hdmi_connector_in>;
+				};
 			};
 		};
 
@@ -774,6 +799,13 @@
 		fsl,pins = <
 			/* Reset */
 			MX93_PAD_I2C2_SDA__GPIO1_IO03				0x31e
+		>;
+	};
+
+	/* HDMI HPD */
+	pinctrl_hdmi_hpd: hdmi_hpd_grp {
+		fsl,pins = <
+			MX93_PAD_SAI1_TXC__GPIO1_IO12				0x31e
 		>;
 	};
 
