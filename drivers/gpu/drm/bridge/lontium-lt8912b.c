@@ -427,6 +427,34 @@ lt8912_connector_mode_valid(struct drm_connector *connector,
 	return MODE_OK;
 }
 
+#include <video/of_display_timing.h>
+static int lt8912_connector_get_modes_from_dt(struct drm_connector *connector)
+{
+	struct drm_display_mode *mode;
+	struct lt8912 *lt = connector_to_lt8912(connector);
+	u32 bus_flags = 0;
+	int ret, num = 0;
+
+	mode = drm_mode_create(connector->dev);
+	if (!mode)
+		return num;
+
+	ret = of_get_drm_display_mode(lt->dev->of_node, mode,
+				      &bus_flags, OF_USE_NATIVE_MODE);
+	if (ret < 0) {
+		dev_err(lt->dev, "failed to get display timings\n");
+		drm_mode_destroy(connector->dev, mode);
+		return num;
+	}
+
+	mode->type |= DRM_MODE_TYPE_DRIVER | DRM_MODE_TYPE_PREFERRED;
+	drm_mode_set_name(mode);
+	drm_mode_probed_add(connector, mode);
+	num = 1;
+
+	return num;
+}
+
 static int lt8912_connector_get_modes(struct drm_connector *connector)
 {
 	const struct drm_edid *drm_edid;
@@ -437,7 +465,7 @@ static int lt8912_connector_get_modes(struct drm_connector *connector)
 	drm_edid = drm_bridge_edid_read(lt->hdmi_port, connector);
 	drm_edid_connector_update(connector, drm_edid);
 	if (!drm_edid)
-		return 0;
+		return lt8912_connector_get_modes_from_dt(connector);
 
 	num = drm_edid_connector_add_modes(connector);
 
