@@ -1190,6 +1190,12 @@ static int brcmf_usb_get_blob(struct device *dev, const struct firmware **fw,
 	return 0;
 }
 
+static void brcmf_usb_wowl_config(struct device *dev, bool enabled)
+{
+	brcmf_dbg(USB, "Configuring WOWL, enabled=%d\n", enabled);
+	device_set_wakeup_enable(dev, enabled);
+}
+
 static const struct brcmf_bus_ops brcmf_usb_bus_ops = {
 	.preinit = brcmf_usb_up,
 	.stop = brcmf_usb_down,
@@ -1197,6 +1203,7 @@ static const struct brcmf_bus_ops brcmf_usb_bus_ops = {
 	.txctl = brcmf_usb_tx_ctlpkt,
 	.rxctl = brcmf_usb_rx_ctlpkt,
 	.get_blob = brcmf_usb_get_blob,
+	.wowl_config = brcmf_usb_wowl_config,
 };
 
 #define BRCMF_USB_FW_CODE	0
@@ -1547,7 +1554,6 @@ static int brcmf_usb_suspend(struct usb_interface *intf, pm_message_t state)
 
 	devinfo->bus_pub.state = BRCMFMAC_USB_STATE_SLEEP;
 	brcmf_cancel_all_urbs(devinfo);
-	device_set_wakeup_enable(devinfo->dev, true);
 	return 0;
 }
 
@@ -1563,7 +1569,6 @@ static int brcmf_usb_resume(struct usb_interface *intf)
 
 	devinfo->bus_pub.state = BRCMFMAC_USB_STATE_UP;
 	brcmf_usb_rx_fill_all(devinfo);
-	device_set_wakeup_enable(devinfo->dev, false);
 	return 0;
 }
 
