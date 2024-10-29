@@ -118,7 +118,7 @@
 
 		ethphy0: ethernet-phy@0 {
 			compatible = "ethernet-phy-ieee802.3-c22";
-			clocks = <&clks IMX6UL_CLK_ENET_REF>;
+			clocks = <&clks IMX6UL_CLK_ENET1_REF_SEL>;
 			clock-names = "refclk";
 			smsc,disable-energy-detect;
 			reg = <0>;
@@ -126,7 +126,7 @@
 
 		ethphy1: ethernet-phy@1 {
 			compatible = "ethernet-phy-ieee802.3-c22";
-			clocks = <&clks IMX6UL_CLK_ENET2_REF>;
+			clocks = <&clks IMX6UL_CLK_ENET2_REF_SEL>;
 			clock-names = "refclk";
 			smsc,disable-energy-detect;
 			reg = <1>;
