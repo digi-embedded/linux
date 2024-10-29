@@ -1660,7 +1660,7 @@ error_return:
 #define CYPRESS_USB_DEVICE(dev_id) \
 	{ \
 		USB_DEVICE(CY_USB_VENDOR_ID_CYPRESS, dev_id), \
-		.driver_info = BRCMF_FWVENDOR_WCC \
+		.driver_info = BRCMF_FWVENDOR_CYW \
 	}
 
 static const struct usb_device_id brcmf_usb_devid_table[] = {
