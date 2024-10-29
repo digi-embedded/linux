@@ -221,6 +221,15 @@
 	status = "disabled";
 };
 
+/* Messaging Units for inter-processors communication */
+&mu1 {
+	status = "okay";
+};
+
+&mu2 {
+	status = "okay";
+};
+
 /* eMMC */
 &usdhc1 {
 	pinctrl-names = "default", "state_100mhz", "state_200mhz";
