@@ -456,6 +456,11 @@ static int stm32_rifsc_register_debugfs(struct stm32_firewall_controller *contro
 
 	return 0;
 }
+#else /* CONFIG_DEBUG_FS */
+static int stm32_rifsc_register_debugfs(struct stm32_firewall_controller *controller __unused)
+{
+	return 0;
+}
 #endif /* CONFIG_DEBUG_FS */
 
 static bool stm32_rifsc_is_semaphore_available(void __iomem *addr)
@@ -659,7 +664,11 @@ static int stm32_rifsc_probe(struct platform_device *pdev)
 		return rc;
 	}
 
-	stm32_rifsc_register_debugfs(rifsc_controller);
+	rc = stm32_rifsc_register_debugfs(rifsc_controller);
+	if (rc) {
+		dev_err(rifsc_controller->dev, "Couldn't add RIFSC debug entry: %d", rc);
+		return rc;
+	}
 
 	/* Populate all allowed nodes */
 	return of_platform_populate(np, NULL, NULL, &pdev->dev);
