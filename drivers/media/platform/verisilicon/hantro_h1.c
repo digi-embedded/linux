@@ -142,10 +142,14 @@ static inline bool is_rgb16(struct v4l2_pix_format_mplane *fmt)
 static inline bool is_rgb32(struct v4l2_pix_format_mplane *fmt)
 {
 	return ((fmt->pixelformat == V4L2_PIX_FMT_XBGR32) ||
+		(fmt->pixelformat == V4L2_PIX_FMT_ABGR32) ||
 		(fmt->pixelformat == V4L2_PIX_FMT_BGR32) ||
 		(fmt->pixelformat == V4L2_PIX_FMT_RGBX32) ||
+		(fmt->pixelformat == V4L2_PIX_FMT_RGBA32) ||
 		(fmt->pixelformat == V4L2_PIX_FMT_BGRX32) ||
+		(fmt->pixelformat == V4L2_PIX_FMT_BGRA32) ||
 		(fmt->pixelformat == V4L2_PIX_FMT_XRGB32) ||
+		(fmt->pixelformat == V4L2_PIX_FMT_ARGB32) ||
 		(fmt->pixelformat == V4L2_PIX_FMT_RGB32));
 };
 
@@ -195,6 +199,7 @@ static inline u32 to_cconv_mask(struct v4l2_pix_format_mplane *fmt)
 		break;
 
 	case V4L2_PIX_FMT_XBGR32:
+	case V4L2_PIX_FMT_ABGR32:
 	case V4L2_PIX_FMT_BGR32:
 		/*
 		 * <MSB>                      <LSB>
@@ -210,6 +215,7 @@ static inline u32 to_cconv_mask(struct v4l2_pix_format_mplane *fmt)
 		break;
 
 	case V4L2_PIX_FMT_RGBX32:
+	case V4L2_PIX_FMT_RGBA32:
 		/*
 		 * <MSB>                      <LSB>
 		 * XXXXXXXXBBBBBBBBGGGGGGGGRRRRRRRR
@@ -224,6 +230,7 @@ static inline u32 to_cconv_mask(struct v4l2_pix_format_mplane *fmt)
 		break;
 
 	case V4L2_PIX_FMT_BGRX32:
+	case V4L2_PIX_FMT_BGRA32:
 		/*
 		 * <MSB>                      <LSB>
 		 * RRRRRRRRGGGGGGGGBBBBBBBBXXXXXXXX
@@ -238,6 +245,7 @@ static inline u32 to_cconv_mask(struct v4l2_pix_format_mplane *fmt)
 		break;
 
 	case V4L2_PIX_FMT_XRGB32:
+	case V4L2_PIX_FMT_ARGB32:
 	case V4L2_PIX_FMT_RGB32:
 		/*
 		 * <MSB>                      <LSB>
