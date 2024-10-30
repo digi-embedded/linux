@@ -314,7 +314,7 @@ void hantro_h1_set_axi_ctrl(struct hantro_dev *vpu, struct hantro_ctx *ctx)
 	u32 reg;
 
 	if (is_rgb32(&ctx->src_fmt)) {
-		input_swap32 = 0;
+		input_swap32 = 1;
 		input_swap16 = 0;
 		input_swap8  = 0;
 	} else if (is_rgb16(&ctx->src_fmt)) {
