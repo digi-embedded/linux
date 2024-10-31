@@ -82,6 +82,14 @@
 		status = "disabled";
 	};
 
+	clocks {
+		clk_rcbsec: clk-rcbsec {
+			#clock-cells = <0>;
+			compatible = "fixed-clock";
+			clock-frequency = <64000000>;
+		};
+	};
+
 	cs_replicator: replicator {
 		compatible = "arm,coresight-static-replicator";
 		clocks = <&scmi_clk CK_SCMI_SYSATB>;
@@ -1581,6 +1589,17 @@
 				dmas = <&hpdma 6 0x40 0x3021>;
 				dma-names = "in";
 				access-controllers = <&rifsc 96>;
+				power-domains = <&CLUSTER_PD>;
+				status = "disabled";
+			};
+
+			rng2: rng@42020000 {
+				compatible = "st,stm32mp21-rng";
+				reg = <0x42020000 0x0 0x400>;
+				clocks = <&clk_rcbsec>, <&rcc CK_BUS_RNG2>;
+				clock-names = "rng_clk", "rng_hclk";
+				resets = <&rcc RNG2_R>;
+				access-controllers = <&rifsc 93>;
 				power-domains = <&CLUSTER_PD>;
 				status = "disabled";
 			};
