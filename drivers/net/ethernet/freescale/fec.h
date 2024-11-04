@@ -644,6 +644,8 @@ struct fec_enet_private {
 	int	wol_flag;
 	int	wake_irq;
 	u32	quirks;
+	bool phy_reset_in_suspend;
+	struct gpio_desc *phy_reset;
 
 	struct	napi_struct napi;
 	int	csum_flags;

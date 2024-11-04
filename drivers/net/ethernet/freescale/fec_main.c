@@ -4153,9 +4153,10 @@ static void fec_enet_deinit(struct net_device *ndev)
 #ifdef CONFIG_OF
 static int fec_reset_phy(struct platform_device *pdev)
 {
-	struct gpio_desc *phy_reset;
 	int msec = 1, phy_post_delay = 0;
 	struct device_node *np = pdev->dev.of_node;
+	struct net_device *ndev = platform_get_drvdata(pdev);
+	struct fec_enet_private *fep = netdev_priv(ndev);
 	int err;
 
 	if (!np)
@@ -4171,13 +4172,13 @@ static int fec_reset_phy(struct platform_device *pdev)
 	if (!err && phy_post_delay > 1000)
 		return -EINVAL;
 
-	phy_reset = devm_gpiod_get_optional(&pdev->dev, "phy-reset",
+	fep->phy_reset = devm_gpiod_get_optional(&pdev->dev, "phy-reset",
 					    GPIOD_OUT_HIGH);
-	if (IS_ERR(phy_reset))
-		return dev_err_probe(&pdev->dev, PTR_ERR(phy_reset),
+	if (IS_ERR(fep->phy_reset))
+		return dev_err_probe(&pdev->dev, PTR_ERR(fep->phy_reset),
 				     "failed to get phy-reset-gpios\n");
 
-	if (!phy_reset)
+	if (!fep->phy_reset)
 		return 0;
 
 	if (msec > 20)
@@ -4185,7 +4186,10 @@ static int fec_reset_phy(struct platform_device *pdev)
 	else
 		usleep_range(msec * 1000, msec * 1000 + 1000);
 
-	gpiod_set_value_cansleep(phy_reset, 0);
+	gpiod_set_value_cansleep(fep->phy_reset, 0);
+
+	/* Allows to reset the PHY in suspend mode */
+	fep->phy_reset_in_suspend = of_find_property(np, "digi,phy-reset-in-suspend", NULL);
 
 	if (!phy_post_delay)
 		return 0;
@@ -4658,6 +4662,8 @@ static int __maybe_unused fec_suspend(struct device *dev)
 		fec_stop(ndev);
 		if (!(fep->wol_flag & FEC_WOL_FLAG_ENABLE)) {
 			fec_irqs_disable(ndev);
+			if (fep->phy_reset_in_suspend)
+				gpiod_set_value_cansleep(fep->phy_reset, 1);
 			pinctrl_pm_select_sleep_state(&fep->pdev->dev);
 		} else {
 			fec_irqs_disable_except_wakeup(ndev);
@@ -4679,6 +4685,8 @@ static int __maybe_unused fec_suspend(struct device *dev)
 			}
 		}
 	} else if (fep->mii_bus_share && !ndev->phydev) {
+		if (fep->phy_reset_in_suspend)
+			gpiod_set_value_cansleep(fep->phy_reset, 1);
 		pinctrl_pm_select_sleep_state(&fep->pdev->dev);
 	}
 	rtnl_unlock();
@@ -4739,6 +4747,8 @@ static int __maybe_unused fec_resume(struct device *dev)
 			fep->wol_flag &= ~FEC_WOL_FLAG_SLEEP_ON;
 		} else {
 			pinctrl_pm_select_default_state(&fep->pdev->dev);
+			if (fep->phy_reset_in_suspend)
+				gpiod_set_value_cansleep(fep->phy_reset, 0);
 		}
 		fec_restart(ndev);
 		netif_tx_lock_bh(ndev);
@@ -4749,6 +4759,8 @@ static int __maybe_unused fec_resume(struct device *dev)
 		phy_start(ndev->phydev);
 	} else if (fep->mii_bus_share && !ndev->phydev) {
 		pinctrl_pm_select_default_state(&fep->pdev->dev);
+		if (fep->phy_reset_in_suspend)
+			gpiod_set_value_cansleep(fep->phy_reset, 0);
 		/* And then recovery mii bus */
 		ret = fec_restore_mii_bus(ndev);
 		if (ret < 0)
