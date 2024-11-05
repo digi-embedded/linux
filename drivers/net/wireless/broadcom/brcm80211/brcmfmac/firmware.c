@@ -903,7 +903,8 @@ brcmf_fw_alloc_request(u32 chip, u32 chiprev,
 			BRCMF_FW_NAME_LEN);
 
 		/* If brcmfmac.testmode=1, load '_mfgtest' binary instead */
-		if (!strcmp(fwnames[j].extension, ".bin")) {
+		if ((!strcmp(fwnames[j].extension, ".bin")) ||
+		    (!strcmp(fwnames[j].extension, ".trxse"))) {
 			if (brcmf_testmode) {
 				brcmf_info("loading 'mfgtest' firmware\n");
 				strlcat(fwnames[j].path, "_mfgtest", BRCMF_FW_NAME_LEN);
