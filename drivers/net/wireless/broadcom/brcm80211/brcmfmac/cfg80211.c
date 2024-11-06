@@ -7742,7 +7742,7 @@ static s32 brcmf_get_assoc_ies(struct brcmf_cfg80211_info *cfg,
 			return err;
 		}
 
-		if (assoc_info->flags & BRCMF_ASSOC_REQ_IS_REASSOC)
+		if (flags & BRCMF_ASSOC_REQ_IS_REASSOC)
 			conn_info->req_ie_len = req_len - sizeof(struct dot11_reassoc_req);
 		else
 			conn_info->req_ie_len = req_len - sizeof(struct dot11_assoc_req);
