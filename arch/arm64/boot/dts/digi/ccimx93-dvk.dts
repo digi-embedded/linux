@@ -859,7 +859,7 @@
 		>;
 	};
 
-	pinctrl_sai3_sleep: sai3grp {
+	pinctrl_sai3_sleep: sai3grpsleep {
 		fsl,pins = <
 			MX93_PAD_GPIO_IO21__GPIO2_IO21				0x51e
 			MX93_PAD_GPIO_IO20__GPIO2_IO20				0x51e
