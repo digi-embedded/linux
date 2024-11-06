@@ -1578,7 +1578,7 @@
 			};
 
 			mdf1: mdf@404d0000 {
-				compatible = "st,stm32mp25-mdf";
+				compatible = "st,stm32mp23-mdf";
 				ranges = <0 0x404d0000 0x1000>;
 				reg = <0x404d0000 0x8>, <0x404d0ff0 0x10>;
 				#address-cells = <1>;
