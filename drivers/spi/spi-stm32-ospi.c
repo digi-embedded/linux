@@ -1167,7 +1167,7 @@ static int __maybe_unused stm32_ospi_suspend(struct device *dev)
 	struct stm32_ospi *ospi = dev_get_drvdata(dev);
 	struct stm32_omi *omi = ospi->omi;
 
-	pinctrl_pm_select_sleep_state(dev);
+	pinctrl_pm_select_sleep_state(omi->dev);
 
 	return pm_runtime_force_suspend(omi->dev);
 }
@@ -1183,7 +1183,7 @@ static int __maybe_unused stm32_ospi_resume(struct device *dev)
 	if (ret < 0)
 		return ret;
 
-	pinctrl_pm_select_default_state(dev);
+	pinctrl_pm_select_default_state(omi->dev);
 
 	ret = pm_runtime_resume_and_get(omi->dev);
 	if (ret < 0)
