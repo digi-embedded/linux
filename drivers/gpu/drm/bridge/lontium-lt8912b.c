@@ -541,6 +541,9 @@ static int lt8912_attach_dsi(struct lt8912 *lt)
 			  MIPI_DSI_MODE_LPM |
 			  MIPI_DSI_MODE_NO_EOT_PACKET;
 
+	/* Override mode flags if provided in DT */
+	of_property_read_u32(dev->of_node, "digi,mipi-mode-flags", (u32 *) &dsi->mode_flags);
+
 	ret = devm_mipi_dsi_attach(dev, dsi);
 	if (ret < 0) {
 		dev_err(dev, "failed to attach dsi to host\n");

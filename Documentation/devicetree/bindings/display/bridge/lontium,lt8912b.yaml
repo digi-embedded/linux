@@ -55,6 +55,9 @@ properties:
       - port@0
       - port@1
 
+  digi,mipi-mode-flags:
+    description: Custom MIPI DSI mode flags, as defined in drm_mipi_dsi.h.
+
 required:
   - compatible
   - reg
