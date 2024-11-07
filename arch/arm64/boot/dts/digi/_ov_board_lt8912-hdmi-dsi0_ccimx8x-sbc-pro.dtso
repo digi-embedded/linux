@@ -74,20 +74,27 @@
 	};
 
 	fragment@8 {
+		target = <&lvds0_panel>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	fragment@9 {
 		target = <&lt_bridge>;
 		__overlay__ {
 			status = "okay";
 		};
 	};
 
-	fragment@9 {
+	fragment@10 {
 		target = <&mipi0_dphy>;
 		__overlay__ {
 			status = "okay";
 		};
 	};
 
-	fragment@10 {
+	fragment@11 {
 		target = <&mipi0_dsi_host>;
 		__overlay__ {
 			status = "okay";
