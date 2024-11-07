@@ -632,6 +632,7 @@ static struct stm32_dma3_swdesc *stm32_dma3_chan_desc_alloc(struct stm32_dma3_ch
 	struct stm32_dma3_ddata *ddata = to_stm32_dma3_ddata(chan);
 	struct stm32_dma3_swdesc *swdesc;
 	dma_addr_t base_addr;
+	u32 lap = ddata->lap;
 	int ret;
 
 	/*
@@ -661,13 +662,14 @@ static struct stm32_dma3_swdesc *stm32_dma3_chan_desc_alloc(struct stm32_dma3_ch
 	 * Force using the second port (hopefully AHB) if addresses are remapped on AXI,
 	 * and LLI are in internal RAM.
 	 */
-	if (ddata->axi_addr_offset && ddata->ports_max_dw[1] != DW_INVALID &&
-	    ddata->gen_pool && gen_pool_has_addr(ddata->gen_pool, swdesc->lli[0].hwdesc_addr,
+	if (ddata->axi_addr_offset && port_is_axi(ddata->ports_max_dw[lap]) &&
+	    ddata->gen_pool && gen_pool_has_addr(ddata->gen_pool,
+						 (unsigned long)swdesc->lli[0].hwdesc,
 						 sizeof(struct stm32_dma3_hwdesc))) {
 		if (port_is_ahb(ddata->ports_max_dw[1])) {
-			dev_notice(chan2dev(chan),
-				   "Address remapping enabled on AXI port, force LL port on AHB\n");
-			ddata->lap = 1;
+			dev_notice_once(chan2dev(chan),
+				"Address remapping enabled on AXI port, force LL port on AHB\n");
+			lap = 1;
 		} else { /* We should not enter this condition */
 			dev_err(chan2dev(chan),
 				"Address remapping enabled on AXI port, %pad unreachable for LL\n",
@@ -678,13 +680,13 @@ static struct stm32_dma3_swdesc *stm32_dma3_chan_desc_alloc(struct stm32_dma3_ch
 	}
 
 	/* Set LL allocated port */
-	swdesc->ccr = FIELD_PREP(CCR_LAP, ddata->lap);
+	swdesc->ccr = FIELD_PREP(CCR_LAP, lap);
 
 	/* Set LL base address */
-	base_addr = stm32_dma3_translate_addr(ddata, ddata->lap, chan2dev(chan),
+	base_addr = stm32_dma3_translate_addr(ddata, lap, ddata->dma_dev.dev,
 					      swdesc->lli[0].hwdesc_addr);
 	writel_relaxed(base_addr & CLBAR_LBA, ddata->base + STM32_DMA3_CLBAR(chan->id));
-	if (ddata->axi_addr_offset)
+	if (ddata->axi_addr_offset && base_addr != swdesc->lli[0].hwdesc_addr)
 		dev_dbg(chan2dev(chan), "Configured LL base=%pap, real LL base=%pap\n",
 			&base_addr, &swdesc->lli[0].hwdesc_addr);
 
@@ -751,7 +753,7 @@ static void stm32_dma3_chan_prep_hwdesc(struct stm32_dma3_chan *chan,
 	struct device *client = chan->vchan.chan.slave;
 	struct stm32_dma3_hwdesc *hwdesc;
 	dma_addr_t next_lli;
-	u32 next = curr + 1;
+	u32 lap, next = curr + 1;
 
 	hwdesc = swdesc->lli[curr].hwdesc;
 	hwdesc->ctr1 = ctr1;
@@ -760,14 +762,15 @@ static void stm32_dma3_chan_prep_hwdesc(struct stm32_dma3_chan *chan,
 	hwdesc->csar = stm32_dma3_translate_addr(ddata, FIELD_GET(CTR1_SAP, ctr1), client, src);
 	hwdesc->cdar = stm32_dma3_translate_addr(ddata, FIELD_GET(CTR1_DAP, ctr1), client, dst);
 
+	lap = FIELD_GET(CCR_LAP, swdesc->ccr);
 	if (is_last) {
 		if (is_cyclic)
-			next_lli = stm32_dma3_translate_addr(ddata, ddata->lap, chan2dev(chan),
+			next_lli = stm32_dma3_translate_addr(ddata, lap, ddata->dma_dev.dev,
 							     swdesc->lli[0].hwdesc_addr);
 		else
 			next_lli = 0;
 	} else {
-		next_lli = stm32_dma3_translate_addr(ddata, ddata->lap, chan2dev(chan),
+		next_lli = stm32_dma3_translate_addr(ddata, lap, ddata->dma_dev.dev,
 						     swdesc->lli[next].hwdesc_addr);
 	}
 
