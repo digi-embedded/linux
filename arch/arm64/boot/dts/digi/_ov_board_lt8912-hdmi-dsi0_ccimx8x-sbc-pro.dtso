@@ -21,6 +21,9 @@
 		target-path = "/";
 		__overlay__ {
 			overlay-description = "SBC: LT8912 MIPI-to-HDMI adapter board on DSI0";
+			hdmi-connector {
+				status = "okay";
+			};
 		};
 	};
 
