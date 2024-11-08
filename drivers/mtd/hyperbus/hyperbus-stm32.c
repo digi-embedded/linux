@@ -250,7 +250,7 @@ static int __maybe_unused stm32_hyperbus_suspend(struct device *dev)
 
 	pm_runtime_put_sync_suspend(omi->dev);
 
-	pinctrl_pm_select_sleep_state(dev);
+	pinctrl_pm_select_sleep_state(omi->dev);
 
 	return pm_runtime_force_suspend(omi->dev);
 }
@@ -265,7 +265,7 @@ static int __maybe_unused stm32_hyperbus_resume(struct device *dev)
 	if (ret < 0)
 		return ret;
 
-	pinctrl_pm_select_default_state(dev);
+	pinctrl_pm_select_default_state(omi->dev);
 
 	ret = pm_runtime_resume_and_get(omi->dev);
 	if (ret < 0)
