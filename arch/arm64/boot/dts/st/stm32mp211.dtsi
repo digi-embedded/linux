@@ -1466,6 +1466,7 @@
 				clocks = <&scmi_clk CK_SCMI_OSPI1>;
 				resets = <&scmi_reset RST_SCMI_OSPI1>, <&scmi_reset RST_SCMI_OSPI1DLL>;
 				access-controllers = <&rifsc 74>;
+				power-domains = <&CLUSTER_PD>;
 				status = "disabled";
 			};
 
