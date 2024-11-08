@@ -1770,6 +1770,7 @@
 				max-frequency = <120000000>;
 				access-controllers = <&rifsc 76>;
 				st,syscfg-arcr = <&syscfg 0x40c 0x1>;
+				power-domains = <&CLUSTER_PD>;
 				status = "disabled";
 			};
 
@@ -1786,6 +1787,7 @@
 				max-frequency = <120000000>;
 				access-controllers = <&rifsc 77>;
 				st,syscfg-arcr = <&syscfg 0x80c 0x1>;
+				power-domains = <&CLUSTER_PD>;
 				status = "disabled";
 			};
 
@@ -1802,6 +1804,7 @@
 				max-frequency = <120000000>;
 				access-controllers = <&rifsc 78>;
 				st,syscfg-arcr = <&syscfg 0xc0c 0x1>;
+				power-domains = <&CLUSTER_PD>;
 				status = "disabled";
 			};
 
