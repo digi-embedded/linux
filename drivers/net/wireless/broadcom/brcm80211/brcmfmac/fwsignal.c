@@ -1766,6 +1766,7 @@ void brcmf_fws_rxreorder(struct brcmf_if *ifp, struct sk_buff *pkt, bool inirq)
 				brcmf_dbg(INFO, "HOLE: ERROR buffer pending..free it\n");
 				brcmu_pkt_buf_free_skb(rfi->pktslots[cur_idx]);
 				rfi->pktslots[cur_idx] = NULL;
+				rfi->pend_pkts--;
 			}
 			rfi->pktslots[cur_idx] = pkt;
 			rfi->pend_pkts++;
@@ -1783,6 +1784,7 @@ void brcmf_fws_rxreorder(struct brcmf_if *ifp, struct sk_buff *pkt, bool inirq)
 				brcmf_dbg(INFO, "error buffer pending..free it\n");
 				brcmu_pkt_buf_free_skb(rfi->pktslots[cur_idx]);
 				rfi->pktslots[cur_idx] = NULL;
+				rfi->pend_pkts--;
 			}
 			rfi->pktslots[cur_idx] = pkt;
 			rfi->pend_pkts++;
