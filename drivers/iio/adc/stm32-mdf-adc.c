@@ -779,6 +779,11 @@ static int mdf_adc_set_samp_freq(struct iio_dev *indio_dev, unsigned long sample
 		dev_dbg(dev, "Sample rate deviation [%lu] ppm: [%lu] vs [%lu] Hz\n",
 			delta_ppm, sck_freq / decim_ratio, sample_freq);
 
+	/*
+	 * Convert settling time into a minimum number of output sample to discard before releasing
+	 * the data. This allows to drop the samples affected by the impulse response of the
+	 * filter and wait for stable data.
+	 */
 	adc->nbdis = DIV_ROUND_UP(adc->stu * sample_freq, 1000000);
 	if (adc->nbdis > MDF_DFLTCR_NBDIS_MAX) {
 		dev_warn(dev, "NBDIS [%u] too large. Force to [%lu]\n",
@@ -1177,13 +1182,22 @@ static int stm32_mdf_channel_parse_of(struct iio_dev *indio_dev, struct fwnode_h
 
 	/* settling-time-us is optional */
 	if (fwnode_property_present(node, "settling-time-us")) {
-		ret = fwnode_property_read_u32(node, "settling-time-us", &stu);
-		if (ret < 0) {
-			dev_err(&indio_dev->dev, "Failed to read settling time: [%d]\n", ret);
-			return ret;
+		/*
+		 * The settling time is relevant only for the first channel. In case of interleaved
+		 * channels, the settling time of the first configured channel, is applied to other
+		 * channels.
+		 */
+		if (!ch->scan_index) {
+			ret = fwnode_property_read_u32(node, "settling-time-us", &stu);
+			if (ret < 0) {
+				dev_err(&indio_dev->dev, "Failed to read settling time: [%d]\n",
+					ret);
+				return ret;
+			}
+
+			adc->stu = stu;
 		}
 	}
-	adc->stu = stu;
 
 	if (adc->dev_data->type == STM32_MDF_IIO) {
 		backend = devm_iio_backend_fwnode_get(&indio_dev->dev, NULL, node);
