@@ -1218,10 +1218,8 @@ static int stm32_mdf_adc_chan_init_one(struct iio_dev *indio_dev, struct fwnode_
 		ch->scan_type.shift = 8;
 	}
 
-	if (adc->dev_data->type == STM32_MDF_AUDIO) {
+	if (adc->dev_data->type == STM32_MDF_AUDIO)
 		ch->ext_info = stm32_mdf_adc_audio_ext_info;
-		ch->info_mask_separate = BIT(IIO_CHAN_INFO_RAW);
-	}
 
 	ch->info_mask_shared_by_all = BIT(IIO_CHAN_INFO_SAMP_FREQ);
 	ch->scan_type.sign = 's';
