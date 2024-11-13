@@ -232,7 +232,10 @@
 		reg_3v3_pcie: regulator@6 {
 			compatible = "regulator-fixed";
 			reg = <6>;
-			regulator-name = "vcc";
+			pinctrl-names = "default", "sleep";
+			pinctrl-0 = <&pinctrl_reg_3v3_pcie>;
+			pinctrl-1 = <&pinctrl_reg_3v3_pcie_sleep>;
+			regulator-name = "3v3_pcie";
 			regulator-min-microvolt = <3300000>;
 			regulator-max-microvolt = <3300000>;
 			gpio = <&lsio_gpio0 31 GPIO_ACTIVE_HIGH>; /* PCIE_VCC_EN */
