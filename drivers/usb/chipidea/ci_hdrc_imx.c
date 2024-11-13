@@ -10,6 +10,7 @@
 #include <linux/of_platform.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
+#include <linux/reset.h>
 #include <linux/usb/chipidea.h>
 #include <linux/usb/of.h>
 #include <linux/clk.h>
@@ -364,6 +365,26 @@ static irqreturn_t ci_wakeup_irq_handler(int irq, void *data)
 	return IRQ_NONE;
 }
 
+static int ci_hdrc_imx_reset_controller(struct device *dev)
+{
+	struct reset_control *rst;
+	int ret;
+
+	rst = devm_reset_control_get_optional_shared(dev, NULL);
+	if (IS_ERR(rst)) {
+		dev_err(dev, "can't get ci_hdrc_imx reset: %pe\n", rst);
+		return PTR_ERR(rst);
+	}
+
+	ret = reset_control_reset(rst);
+	if (ret) {
+		dev_err(dev, "Couldn't reset the ci_hdrc_imx controller (%d)\n", ret);
+		return ret;
+	}
+
+	return 0;
+}
+
 static int ci_hdrc_imx_probe(struct platform_device *pdev)
 {
 	struct ci_hdrc_imx_data *data;
@@ -481,6 +502,12 @@ static int ci_hdrc_imx_probe(struct platform_device *pdev)
 				goto err_clk;
 			}
 		}
+	}
+
+	ret = ci_hdrc_imx_reset_controller(&pdev->dev);
+	if (ret) {
+		dev_err_probe(dev, ret, "failed to reset controller");
+		goto err_clk;
 	}
 
 	pdata.usb_phy = data->phy;
