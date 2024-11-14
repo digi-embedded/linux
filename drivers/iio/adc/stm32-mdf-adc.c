@@ -1206,13 +1206,13 @@ static int stm32_mdf_adc_chan_init_one(struct iio_dev *indio_dev, struct fwnode_
 	ch->indexed = 1;
 	ch->scan_index = idx;
 
-	if (adc->dev_data->type == STM32_MDF_IIO) {
-		ret = stm32_mdf_channel_parse_of(indio_dev, node, ch);
-		if (ret < 0) {
-			dev_err(&indio_dev->dev, "Failed to parse channel [%d]\n", idx);
-			return ret;
-		}
+	ret = stm32_mdf_channel_parse_of(indio_dev, node, ch);
+	if (ret < 0) {
+		dev_err(&indio_dev->dev, "Failed to parse channel [%d]\n", idx);
+		return ret;
+	}
 
+	if (adc->dev_data->type == STM32_MDF_IIO) {
 		ch->info_mask_separate = BIT(IIO_CHAN_INFO_RAW) | BIT(IIO_CHAN_INFO_SCALE) |
 					 BIT(IIO_CHAN_INFO_OFFSET);
 		ch->scan_type.shift = 8;
@@ -1235,6 +1235,10 @@ static int stm32_mdf_adc_chan_init(struct iio_dev *indio_dev, struct iio_chan_sp
 	int chan_idx = 0, ret;
 
 	device_for_each_child_node(indio_dev->dev.parent, child) {
+		/* Skip the child nodes with a compatible. (e.g. DAI node for audio) */
+		if (fwnode_property_present(child, "compatible"))
+			continue;
+
 		ret = stm32_mdf_adc_chan_init_one(indio_dev, child, &channels[chan_idx], chan_idx);
 		if (ret < 0) {
 			dev_err(&indio_dev->dev, "Channels [%d] init failed\n", chan_idx);
