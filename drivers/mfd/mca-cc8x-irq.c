@@ -126,7 +126,7 @@ static void regmap_irq_sync_unlock(struct irq_data *data)
 		for (i = 0; i < d->chip->num_config_regs; i++) {
 			if (!d->type_buf_def[i])
 				continue;
-			reg = d->chip->config_base + i;
+			reg = d->chip->config_base[i];
 			ret = regmap_update_bits(map, reg,
 				d->type_buf_def[i], d->type_buf[i]);
 			if (ret != 0)
@@ -486,7 +486,7 @@ int mca_cc8x_add_irq_chip(struct regmap *map, int irq, int irq_base,
 
 	if (chip->num_config_regs && !chip->type_in_mask) {
 		for (i = 0; i < chip->num_config_regs; ++i) {
-			reg = chip->config_base + i;
+			reg = chip->config_base[i];
 
 			ret = regmap_read(map, reg, &d->type_buf_def[i]);
 
