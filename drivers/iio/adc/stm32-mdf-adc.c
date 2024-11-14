@@ -1255,19 +1255,15 @@ static int stm32_mdf_adc_chan_init(struct iio_dev *indio_dev, struct iio_chan_sp
 
 		ret = stm32_mdf_adc_chan_init_one(indio_dev, child, &channels[chan_idx], chan_idx);
 		if (ret < 0) {
-			dev_err(&indio_dev->dev, "Channels [%d] init failed\n", chan_idx);
-			goto err;
+			fwnode_handle_put(child);
+			return dev_err_probe(&indio_dev->dev, ret, "Channels [%d] init failed\n",
+					     chan_idx);
 		}
 
 		chan_idx++;
 	}
 
 	return chan_idx;
-
-err:
-	fwnode_handle_put(child);
-
-	return ret;
 }
 
 static int stm32_mdf_set_watermark(struct iio_dev *indio_dev, unsigned int val)
@@ -1525,18 +1521,15 @@ static int stm32_mdf_audio_init(struct device *dev, struct iio_dev *indio_dev)
 		return -ENOMEM;
 
 	ret = stm32_mdf_adc_chan_init(indio_dev, ch);
-	if (ret < 0) {
-		dev_err(&indio_dev->dev, "Channels init failed\n");
-		return ret;
-	}
+	if (ret < 0)
+		return dev_err_probe(&indio_dev->dev, ret, "Channels init failed\n");
+
 	indio_dev->num_channels = 1;
 	indio_dev->channels = ch;
 
 	ret = stm32_mdf_dma_request(dev, indio_dev);
-	if (ret) {
-		dev_err(&indio_dev->dev, "Failed to get dma: %d\n", ret);
-		return ret;
-	}
+	if (ret)
+		return dev_err_probe(&indio_dev->dev, ret, "Failed to get dma: %d\n", ret);
 
 	ret =  stm32_mdf_adc_filter_set_mode(adc, true);
 	if (ret)
@@ -1576,10 +1569,8 @@ static int stm32_mdf_adc_init(struct device *dev, struct iio_dev *indio_dev)
 			return -ENOMEM;
 
 		ret = stm32_mdf_adc_chan_init(indio_dev, ch);
-		if (ret < 0) {
-			dev_err(&indio_dev->dev, "Channels init failed\n");
-			return ret;
-		}
+		if (ret < 0)
+			return dev_err_probe(&indio_dev->dev, ret, "Channels init failed\n");
 	}
 
 	indio_dev->num_channels = num_ch;
