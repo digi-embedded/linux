@@ -410,10 +410,17 @@
 	};
 
 	filter0: filter@84  {
+		#address-cells = <1>;
+		#size-cells = <0>;
 		st,cic-mode = <4>;
 		st,sitf = <&sitf3 0>;
 		st,hpf-filter-cutoff-bp = <625>;
 		status = "okay";
+
+		channel@0 {
+			reg = <0>;
+			label = "dmic_u26";
+		};
 
 		asoc_pdm0: mdf-dai {
 			compatible = "st,stm32mp25-mdf-dai";
@@ -430,10 +437,17 @@
 	};
 
 	filter1: filter@104  {
+		#address-cells = <1>;
+		#size-cells = <0>;
 		st,cic-mode = <4>;
 		st,sitf = <&sitf3 1>;
 		st,hpf-filter-cutoff-bp = <625>;
 		status = "okay";
+
+		channel@1 {
+			reg = <1>;
+			label = "dmic_u27";
+		};
 
 		asoc_pdm1: mdf-dai {
 			compatible = "st,stm32mp25-mdf-dai";
