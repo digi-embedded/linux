@@ -49,6 +49,10 @@ struct stm32_mdf_dev_data {
 	int (*init)(struct device *dev, struct iio_dev *indio_dev);
 };
 
+struct stm32_mdf_adc_chan {
+	const char *channel_name;
+};
+
 /*
  * struct stm32_mdf_adc - STM32 MDF ADC private data
  * @entry: pointer to serial interfaces list
@@ -58,6 +62,7 @@ struct stm32_mdf_dev_data {
  * @node: pointer to filter node
  * @dma_chan: filter dma channel pointer
  * @backend: backend handles array
+ * @channels: pointer to channel descriptors array
  * @dev_data: mdf device data pointer
  * @sitf: pointer to serial interface feeding the filter
  * @completion: completion for conversion
@@ -94,6 +99,7 @@ struct stm32_mdf_adc {
 	struct fwnode_handle *node;
 	struct dma_chan *dma_chan;
 	struct iio_backend **backend;
+	struct stm32_mdf_adc_chan *channels;
 	const struct stm32_mdf_dev_data *dev_data;
 	struct stm32_mdf_sitf *sitf;
 	struct completion completion;
@@ -1171,6 +1177,7 @@ static int stm32_mdf_channel_parse_of(struct iio_dev *indio_dev, struct fwnode_h
 {
 	struct stm32_mdf_adc *adc = iio_priv(indio_dev);
 	struct iio_backend *backend;
+	const char *label = fwnode_get_name(node);
 	int ret;
 	u32 stu = 0;
 
@@ -1179,6 +1186,17 @@ static int stm32_mdf_channel_parse_of(struct iio_dev *indio_dev, struct fwnode_h
 		dev_err(&indio_dev->dev, "Failed to read channel index: [%d]\n", ret);
 		return ret;
 	}
+
+	if (fwnode_property_present(node, "label")) {
+		/* label is optional */
+		ret = fwnode_property_read_string(node, "label", &label);
+		if (ret < 0) {
+			dev_err(&indio_dev->dev,
+				" Error parsing 'label' for idx %d\n", ch->channel);
+			return ret;
+		}
+	}
+	adc->channels[ch->scan_index].channel_name = label;
 
 	/* settling-time-us is optional */
 	if (fwnode_property_present(node, "settling-time-us")) {
@@ -1449,16 +1467,27 @@ err_release_direct_mode:
 	return ret;
 }
 
+static int stm32_mdf_adc_read_label(struct iio_dev *indio_dev, const struct iio_chan_spec *chan,
+				    char *label)
+{
+	struct stm32_mdf_adc *adc = iio_priv(indio_dev);
+	const char *name = adc->channels[chan->scan_index].channel_name;
+
+	return sysfs_emit(label, "%s\n", name);
+}
+
 static const struct iio_info stm32_mdf_info_audio = {
 	.hwfifo_set_watermark = stm32_mdf_set_watermark,
 	.write_raw = stm32_mdf_adc_write_raw,
 	.read_raw = stm32_mdf_adc_read_raw,
+	.read_label = stm32_mdf_adc_read_label,
 };
 
 static const struct iio_info stm32_mdf_info_adc = {
 	.hwfifo_set_watermark = stm32_mdf_set_watermark,
 	.write_raw = stm32_mdf_adc_write_raw,
 	.read_raw = stm32_mdf_adc_read_raw,
+	.read_label = stm32_mdf_adc_read_label,
 	.validate_trigger = stm32_mdf_adc_get_trig,
 };
 
@@ -1520,6 +1549,10 @@ static int stm32_mdf_audio_init(struct device *dev, struct iio_dev *indio_dev)
 	if (!ch)
 		return -ENOMEM;
 
+	adc->channels = devm_kzalloc(&indio_dev->dev, sizeof(*adc->channels), GFP_KERNEL);
+	if (!adc->channels)
+		return -ENOMEM;
+
 	ret = stm32_mdf_adc_chan_init(indio_dev, ch);
 	if (ret < 0)
 		return dev_err_probe(&indio_dev->dev, ret, "Channels init failed\n");
@@ -1559,13 +1592,18 @@ static int stm32_mdf_adc_init(struct device *dev, struct iio_dev *indio_dev)
 			}
 		}
 
+		ch = devm_kcalloc(&indio_dev->dev, num_ch, sizeof(*ch), GFP_KERNEL);
+		if (!ch)
+			return -ENOMEM;
+
+		adc->channels = devm_kcalloc(&indio_dev->dev, num_ch, sizeof(*adc->channels),
+					     GFP_KERNEL);
+		if (!adc->channels)
+			return -ENOMEM;
+
 		adc->backend = devm_kcalloc(&indio_dev->dev, num_ch, sizeof(*adc->backend),
 					    GFP_KERNEL);
 		if (!adc->backend)
-			return -ENOMEM;
-
-		ch = devm_kcalloc(&indio_dev->dev, num_ch, sizeof(*ch), GFP_KERNEL);
-		if (!ch)
 			return -ENOMEM;
 
 		ret = stm32_mdf_adc_chan_init(indio_dev, ch);
