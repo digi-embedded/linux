@@ -87,7 +87,6 @@
 #define PF8X00_DEF_STBY_MODE		PF8X00_STBY_PFM
 
 /* SCU interface communication macros */
-#define IMX_SC_C_MISC0			62U
 #define IMX_SC_R_PMIC_0			497
 #define PF8X00_SC_C(r)			(IMX_SC_C_MISC0 | (r) << 16)
 
