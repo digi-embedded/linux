@@ -19,7 +19,6 @@
 #include <linux/of_irq.h>
 #include <linux/platform_device.h>
 #include <linux/pm.h>
-#include <linux/pm_domain.h>
 #include <linux/pm_runtime.h>
 
 #include <dt-bindings/interrupt-controller/arm-gic.h>
@@ -840,63 +839,6 @@ static void stm32mp_exti_check_rif(struct stm32mp_exti_host_data *host_data)
 	}
 }
 
-static void stm32mp_exti_genpd_remove(void *data)
-{
-	struct generic_pm_domain *genpd = data;
-
-	pm_genpd_remove(genpd);
-}
-
-/* manage WakeUp capable device with EXTI domain, registered on PSCI CPUIdle domain */
-static int stm32mp_exti_add_domain(struct device *dev)
-{
-	struct device_node *np = dev->of_node;
-	struct generic_pm_domain *genpd;
-	int ret;
-
-	/* The PM domain core automatically attaches a single power domain to a device */
-	if (!dev->pm_domain)
-		return 0;
-
-	genpd = devm_kzalloc(dev, sizeof(*genpd), GFP_KERNEL);
-	if (!genpd)
-		return -ENOMEM;
-
-	/* Simple PM domain: only manage the wakeup path for EXTI */
-	genpd->name = np->full_name;
-	genpd->flags = GENPD_FLAG_ACTIVE_WAKEUP;
-	ret = pm_genpd_init(genpd, &pm_domain_always_on_gov, false);
-	if (ret) {
-		dev_err(dev, "Failed to add genpd %d\n", ret);
-		return ret;
-	}
-	ret = devm_add_action_or_reset(dev, stm32mp_exti_genpd_remove, genpd);
-	if (ret)
-		return ret;
-
-	/* Use the same parent for IRQ domain */
-	ret = pm_genpd_add_subdomain(pd_to_genpd(dev->pm_domain), genpd);
-	if (ret) {
-		dev_err(dev, "Failed to add PM subdomain to parent %s\n",
-			pd_to_genpd(dev->pm_domain)->name);
-		return ret;
-	}
-
-	/* Move EXTI device in the created IRQ domain to manage wakeup path */
-	ret = pm_genpd_remove_device(dev);
-	if (ret)  {
-		dev_err(dev, "Failed to remove dev to genpd %d\n", ret);
-		return ret;
-	}
-	ret = pm_genpd_add_device(genpd, dev);
-	if (ret)  {
-		dev_err(dev, "Failed to add dev to genpd %d\n", ret);
-		return ret;
-	}
-
-	return 0;
-}
-
 static void stm32mp_exti_remove_irq(void *data)
 {
 	struct irq_domain *domain = data;
@@ -1031,10 +973,6 @@ static int stm32mp_exti_probe(struct platform_device *pdev)
 		if (ret)
 			return ret;
 	}
-
-	ret = stm32mp_exti_add_domain(dev);
-	if (ret)
-		return ret;
 
 	devm_pm_runtime_enable(dev);
 
