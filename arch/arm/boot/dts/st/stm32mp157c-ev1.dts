@@ -329,6 +329,8 @@
 		reset-gpios = <&gpiof 15 GPIO_ACTIVE_LOW>;
 		backlight = <&panel_backlight>;
 		power-supply = <&v3v3>;
+		vcc-supply = <&v3v3>;
+		iovcc-supply = <&v3v3>;
 		default-on;
 		status = "okay";
 
