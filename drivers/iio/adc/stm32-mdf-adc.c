@@ -1115,7 +1115,7 @@ static ssize_t stm32_mdf_adc_audio_get_channels(struct iio_dev *indio_dev, uintp
 	if (MDF_IS_FILTER0(adc) && adc->mdf->nb_interleave)
 		sub_channels_nb = adc->mdf->nb_interleave;
 
-	return snprintf(buf, STM32_MDF_EXT_INFO_BUZ_SZ, "%u", sub_channels_nb);
+	return snprintf(buf, STM32_MDF_EXT_INFO_BUZ_SZ, "%u\n", sub_channels_nb);
 }
 
 /*
