@@ -164,6 +164,12 @@ patternProperties:
       "#io-channel-cells":
         const: 1
 
+      '#address-cells':
+        const: 1
+
+      '#size-cells':
+        const: 0
+
       st,cic-mode:
         description: |
           Cascaded-integrator-comb (CIC) filter configuration
@@ -215,7 +221,30 @@ patternProperties:
       - reg
       - interrupts
       - "#io-channel-cells"
+      - "#address-cells"
+      - "#size-cells"
       - st,sitf
+
+    patternProperties:
+      "^channel@([0-7])$":
+        type: object
+        $ref: "adc.yaml"
+        description: Represents the external channel which is connected to the MDF.
+
+        properties:
+          reg:
+            maximum: 7
+
+          io-backends:
+            description:
+              Used to pipe external sigma delta modulator or internal ADC backend to MDF
+              channel.
+            maxItems: 1
+
+        required:
+          - reg
+
+        unevaluatedProperties: false
 
     allOf:
       - if:
@@ -225,48 +254,10 @@ patternProperties:
                 const: st,stm32mp25-mdf-adc
 
         then:
-          properties:
-            '#address-cells':
-              const: 1
-
-            '#size-cells':
-              const: 0
-
-          required:
-            - '#address-cells'
-            - '#size-cells'
-
           patternProperties:
-            "^channel@([0-9])$":
-              type: object
-              $ref: "adc.yaml"
-              description: Represents the external channel which is connected to the MDF.
-
-              properties:
-                reg:
-                  maxItems: 1
-                  items:
-                    minimum: 0
-                    maximum: 8
-
-                settling-time-us:
-                  description:
-                    Time between enabling the channel and the first sample. This time is converted
-                    by the driver into a minimum number of output sample to discard before releasing
-                    the data. It allows to drop the samples affected by the impulse response of the
-                    filter and wait for stable data.
-
-                io-backends:
-                  description:
-                    Used to pipe external sigma delta modulator or internal ADC backend to MDF
-                    channel.
-                  maxItems: 1
-
+            "^channel@[0-7]$":
               required:
-                - reg
                 - io-backends
-
-              additionalProperties: false
 
       - if:
           properties:
@@ -340,6 +331,12 @@ examples:
         dma-names = "rx";
         st,cic-mode	= <5>;
         st,sitf = <&sitf5 0>;
+        #address-cells = <1>;
+        #size-cells = <0>;
+
+        channel@0 {
+          reg = <0>;
+        };
 
         asoc_pdm0: mdf-dai {
           compatible = "st,stm32mp25-mdf-dai";
