@@ -2038,6 +2038,7 @@
 			interrupt-controller;
 			#interrupt-cells = <2>;
 			reg = <0x44220000 0x0 0x400>;
+			power-domains = <&RET_PD>;
 			interrupts-extended =
 				<&intc GIC_SPI 268 IRQ_TYPE_LEVEL_HIGH>,	/* EXTI_0 */
 				<&intc GIC_SPI 269 IRQ_TYPE_LEVEL_HIGH>,
