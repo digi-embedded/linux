@@ -39,9 +39,15 @@ properties:
       CCK0 and CCK1 are optional output clocks, which share the same clock frequency,
       but can be gated independently to save power.
     minItems: 1
-    items:
-      - const: cck0
-      - const: cck1
+    maxItems: 2
+    oneOf:
+      - items:
+          - const: cck0
+      - items:
+          - const: cck1
+      - items:
+          - const: cck0
+          - const: cck1
 
   clock-frequency:
     description: |
