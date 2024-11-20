@@ -475,31 +475,26 @@ dw_mipi_dsi_phy_141_get_lane_mbps(void *priv_data,
 static void dw_mipi_dsi_clk_disable(struct clk_hw *clk)
 {
 	struct dw_mipi_dsi_stm *dsi = clk_to_dw_mipi_dsi_stm(clk);
-	int ret;
 
 	DRM_DEBUG_DRIVER("\n");
 
 	if (!dsi->probe_done)
 		return;
 
-	ret = clk_prepare_enable(dsi->pclk);
-	if (ret) {
-		DRM_ERROR("%s: Failed to enable peripheral clk\n", __func__);
-		return;
-	}
+	if (__clk_is_enabled(dsi->pclk)) {
+		if (dsi->hw_version == HWVER_141) {
+			/* Disable the DSI PLL */
+			dsi_clear(dsi, DSI_WRPCR2, WRPCR2_PLLEN);
+		} else {
+			/* Disable the DSI PLL */
+			dsi_clear(dsi, DSI_WRPCR, WRPCR_PLLEN);
 
-	if (dsi->hw_version == HWVER_141) {
-		/* Disable the DSI PLL */
-		dsi_clear(dsi, DSI_WRPCR2, WRPCR2_PLLEN);
+			/* Disable the regulator */
+			dsi_clear(dsi, DSI_WRPCR, WRPCR_REGEN | WRPCR_BGREN);
+		}
 	} else {
-		/* Disable the DSI PLL */
-		dsi_clear(dsi, DSI_WRPCR, WRPCR_PLLEN);
-
-		/* Disable the regulator */
-		dsi_clear(dsi, DSI_WRPCR, WRPCR_REGEN | WRPCR_BGREN);
+		DRM_WARN("Warning peripheral clock was not enabled!\n");
 	}
-
-	clk_disable_unprepare(dsi->pclk);
 }
 
 static int dw_mipi_dsi_clk_enable(struct clk_hw *clk)
