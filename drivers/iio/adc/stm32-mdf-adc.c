@@ -51,6 +51,7 @@ struct stm32_mdf_dev_data {
 
 struct stm32_mdf_adc_chan {
 	const char *channel_name;
+	struct iio_backend *backend;
 };
 
 /*
@@ -61,7 +62,6 @@ struct stm32_mdf_adc_chan {
  * @regmap: regmap pointer for register read/write
  * @node: pointer to filter node
  * @dma_chan: filter dma channel pointer
- * @backend: backend handles array
  * @channels: pointer to channel descriptors array
  * @dev_data: mdf device data pointer
  * @sitf: pointer to serial interface feeding the filter
@@ -98,7 +98,6 @@ struct stm32_mdf_adc {
 	struct regmap *regmap;
 	struct fwnode_handle *node;
 	struct dma_chan *dma_chan;
-	struct iio_backend **backend;
 	struct stm32_mdf_adc_chan *channels;
 	const struct stm32_mdf_dev_data *dev_data;
 	struct stm32_mdf_sitf *sitf;
@@ -1021,17 +1020,15 @@ static int stm32_mdf_adc_postenable(struct iio_dev *indio_dev)
 	/* Reset adc buffer index */
 	adc->bufi = 0;
 
-	if (adc->backend) {
-		while (adc->backend[i]) {
-			ret = iio_backend_enable(adc->backend[i]);
-			if (ret < 0) {
-				while (--i > 0)
-					iio_backend_disable(adc->backend[i]);
+	while (adc->channels[i].backend && i < indio_dev->num_channels) {
+		ret = iio_backend_enable(adc->channels[i].backend);
+		if (ret < 0) {
+			while (--i > 0)
+				iio_backend_disable(adc->channels[i].backend);
 
-				return ret;
-			}
-			i++;
+			return ret;
 		}
+		i++;
 	}
 
 	ret = stm32_mdf_adc_start_mdf(indio_dev);
@@ -1072,11 +1069,9 @@ err_dma:
 	stm32_mdf_adc_stop_mdf(indio_dev);
 err_start:
 	i = 0;
-	if (adc->backend) {
-		while (adc->backend[i]) {
-			iio_backend_disable(adc->backend[i]);
-			i++;
-		}
+	while (adc->channels[i].backend && i < indio_dev->num_channels) {
+		iio_backend_disable(adc->channels[i].backend);
+		i++;
 	}
 
 	return ret;
@@ -1098,11 +1093,9 @@ static int stm32_mdf_adc_predisable(struct iio_dev *indio_dev)
 
 	stm32_mdf_adc_stop_mdf(indio_dev);
 
-	if (adc->backend) {
-		while (adc->backend[i]) {
-			iio_backend_disable(adc->backend[i]);
-			i++;
-		}
+	while (adc->channels[i].backend && i < indio_dev->num_channels) {
+		iio_backend_disable(adc->channels[i].backend);
+		i++;
 	}
 
 	return 0;
@@ -1222,7 +1215,7 @@ static int stm32_mdf_channel_parse_of(struct iio_dev *indio_dev, struct fwnode_h
 		if (IS_ERR(backend))
 			return dev_err_probe(&indio_dev->dev, PTR_ERR(backend),
 					     "Failed to get backend\n");
-		adc->backend[ch->scan_index] = backend;
+		adc->channels[ch->scan_index].backend = backend;
 	}
 
 	return ret;
@@ -1392,8 +1385,8 @@ static int stm32_mdf_adc_read_raw(struct iio_dev *indio_dev, struct iio_chan_spe
 		if (ret)
 			return ret;
 
-		if (adc->backend) {
-			ret = iio_backend_enable(adc->backend[idx]);
+		if (adc->channels[idx].backend) {
+			ret = iio_backend_enable(adc->channels[idx].backend);
 			if (ret)
 				goto err_release_direct_mode;
 		}
@@ -1402,8 +1395,8 @@ static int stm32_mdf_adc_read_raw(struct iio_dev *indio_dev, struct iio_chan_spe
 		if (ret)
 			goto err_backend_disable;
 
-		if (adc->backend)
-			iio_backend_disable(adc->backend[idx]);
+		if (adc->channels[idx].backend)
+			iio_backend_disable(adc->channels[idx].backend);
 
 		iio_device_release_direct_mode(indio_dev);
 
@@ -1424,8 +1417,9 @@ static int stm32_mdf_adc_read_raw(struct iio_dev *indio_dev, struct iio_chan_spe
 		 * max_dflt = D^N * gain_lin * gain_rsflt
 		 * scale = Vref * max / dflt_max
 		 */
-		if (adc->backend) {
-			ret = iio_backend_read_scale(adc->backend[idx], chan, &scale, NULL);
+		if (adc->channels[idx].backend) {
+			ret = iio_backend_read_scale(adc->channels[idx].backend, chan,
+						     &scale, NULL);
 			if (ret < 0)
 				return ret;
 
@@ -1441,8 +1435,9 @@ static int stm32_mdf_adc_read_raw(struct iio_dev *indio_dev, struct iio_chan_spe
 		return IIO_VAL_FRACTIONAL_LOG2;
 
 	case IIO_CHAN_INFO_OFFSET:
-		if (adc->backend) {
-			ret = iio_backend_read_offset(adc->backend[idx], chan, &offset, NULL);
+		if (adc->channels[idx].backend) {
+			ret = iio_backend_read_offset(adc->channels[idx].backend, chan,
+						      &offset, NULL);
 			if (ret < 0)
 				return ret;
 
@@ -1459,8 +1454,8 @@ static int stm32_mdf_adc_read_raw(struct iio_dev *indio_dev, struct iio_chan_spe
 	return -EINVAL;
 
 err_backend_disable:
-	if (adc->backend)
-		iio_backend_disable(adc->backend[idx]);
+	if (adc->channels[idx].backend)
+		iio_backend_disable(adc->channels[idx].backend);
 err_release_direct_mode:
 	iio_device_release_direct_mode(indio_dev);
 
@@ -1599,11 +1594,6 @@ static int stm32_mdf_adc_init(struct device *dev, struct iio_dev *indio_dev)
 		adc->channels = devm_kcalloc(&indio_dev->dev, num_ch, sizeof(*adc->channels),
 					     GFP_KERNEL);
 		if (!adc->channels)
-			return -ENOMEM;
-
-		adc->backend = devm_kcalloc(&indio_dev->dev, num_ch, sizeof(*adc->backend),
-					    GFP_KERNEL);
-		if (!adc->backend)
 			return -ENOMEM;
 
 		ret = stm32_mdf_adc_chan_init(indio_dev, ch);
