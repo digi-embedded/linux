@@ -86,6 +86,7 @@ struct stm32_usb2phy {
 	struct clk_hw clk48_hw;
 	atomic_t en_refcnt;
 	const struct stm32mp2_usb2phy_hw_data *hw_data;
+	bool do_wakeup;
 };
 
 enum stm32_usb2phy_mode {
@@ -270,10 +271,13 @@ static int stm32_usb2phy_enable(struct stm32_usb2phy *phy_dev)
 			phy_dev->value_trim2);
 	}
 
-	ret = stm32_usb2phy_regulators_enable(phy_dev);
-	if (ret) {
-		dev_err(dev, "can't enable regulators (%d)\n", ret);
-		return ret;
+	/* balance regulator_enable calls (kept ON during suspend, with wakeup enabled) */
+	if (!phy_dev->do_wakeup) {
+		ret = stm32_usb2phy_regulators_enable(phy_dev);
+		if (ret) {
+			dev_err(dev, "can't enable regulators (%d)\n", ret);
+			return ret;
+		}
 	}
 
 	ret = clk_prepare_enable(phy_dev->phyref);
@@ -314,10 +318,13 @@ static int stm32_usb2phy_disable(struct stm32_usb2phy *phy_dev)
 
 	clk_disable_unprepare(phy_dev->phyref);
 
-	ret = stm32_usb2phy_regulators_disable(phy_dev);
-	if (ret) {
-		dev_err(phy_dev->dev, "can't disable regulators (%d)\n", ret);
-		return ret;
+	if (!phy_dev->do_wakeup) {
+		/* Need to keep regulators ON for the wakeup case */
+		ret = stm32_usb2phy_regulators_disable(phy_dev);
+		if (ret) {
+			dev_err(phy_dev->dev, "can't disable regulators (%d)\n", ret);
+			return ret;
+		}
 	}
 
 	return 0;
@@ -334,6 +341,7 @@ static int stm32_usb2phy_suspend(struct device *dev)
 	 * usb2-phy is already turned off by HCD driver using exit callback
 	 */
 	if (phy_dev->is_init) {
+		phy_dev->do_wakeup = true;
 		ret = stm32_usb2phy_disable(phy_dev);
 		if (ret) {
 			dev_err(dev, "can't disable usb2phy (%d)\n", ret);
@@ -360,6 +368,7 @@ static int stm32_usb2phy_resume(struct device *dev)
 			dev_err(dev, "can't enable usb2phy (%d)\n", ret);
 			return ret;
 		}
+		phy_dev->do_wakeup = false;
 	}
 
 	return 0;
