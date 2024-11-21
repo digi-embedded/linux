@@ -274,6 +274,8 @@
 		st,syscfg       = <&syscfg 0x2800>;
 		clocks          = <&rcc CK_KER_USB2PHY2EN>;
 		resets          = <&rcc USB2PHY2_R>;
+		interrupts-extended = <&exti1 44 IRQ_TYPE_EDGE_RISING>;
+		wakeup-source;
 		status          = "disabled";
 	};
 
@@ -1890,6 +1892,8 @@
 				phys = <&usb2_phy2>;
 				phy-names = "usb2-phy";
 				st,syscfg = <&syscfg 0x2824>;
+				power-domains = <&CLUSTER_PD>;
+				wakeup-source;
 				status = "disabled";
 			};
 		};
