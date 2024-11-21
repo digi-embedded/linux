@@ -295,7 +295,7 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_rtc>;
 		interrupt-parent = <&gpio2>;
-		interrupts = <18 IRQ_TYPE_EDGE_FALLING>;
+		interrupts = <18 IRQ_TYPE_LEVEL_LOW>;
 		wakeup-source;
 	};
 
