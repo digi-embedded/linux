@@ -43,6 +43,12 @@ properties:
     description: Phandle to the STM32-MPU System Controller DT node
                  <syscon-handle cr-offset>
 
+  wakeup-source: true
+
+  interrupts:
+    maxItems: 1
+    description: interrupt used for wakeup
+
   st,pll-ipath-tune:
     $ref: /schemas/types.yaml#/definitions/uint8
     description: PLL Integral Path Tune
