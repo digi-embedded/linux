@@ -95,9 +95,8 @@ struct stm32_rng_private {
  * Indeed, when SEIS is set and SECS is cleared it means RNG performed
  * the reset automatically (auto-reset).
  * 2. If SECS was set in step 1 (no auto-reset) wait for CONDRST
- * to be cleared in the RNG_CR register, then confirm that SEIS is
- * cleared in the RNG_SR register. Otherwise just clear SEIS bit in
- * the RNG_SR register.
+ * to be cleared in the RNG_CR register. Otherwise just clear SEIS bit
+ * in the RNG_SR register.
  * 3. If SECS was set in step 1 (no auto-reset) wait for SECS to be
  * cleared by RNG. The random number generation is now back to normal.
  */
@@ -124,10 +123,6 @@ static int stm32_rng_conceal_seed_error_cond_reset(struct stm32_rng_private *pri
 		dev_err(dev, "%s: timeout %x\n", __func__, sr);
 		return err;
 	}
-
-	/* Check SEIS is cleared (step 2.) */
-	if (readl_relaxed(priv->base + RNG_SR) & RNG_SR_SEIS)
-		return -EINVAL;
 
 	err = readl_relaxed_poll_timeout_atomic(priv->base + RNG_SR, sr, !(sr & RNG_SR_SECS), 10,
 						100000);
@@ -534,7 +529,7 @@ static const struct stm32_rng_data stm32mp21_rng_data = {
 	.max_clock_rate = 48000000,
 	.nb_clock = 2,
 	.cr = 0x00800D00,
-	.nscr = 0x01F7,
+	.nscr = 0x01FF,
 	.htcr = 0xAAC7,
 };
 
