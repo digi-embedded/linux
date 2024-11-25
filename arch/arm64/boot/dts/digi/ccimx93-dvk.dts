@@ -172,6 +172,10 @@
 	status = "okay";
 };
 
+&media_blk_ctrl {
+	status = "okay";
+};
+
 /* MIPI-CSI CAMERA */
 &cameradev {
 	status = "okay";
