@@ -1392,7 +1392,7 @@ else ifeq ("$(SRCARCH)", "arm64")
 export TARGET_ARM64=y
 endif
 
-stdtstree := $(dtstree)/st
+stdtstree := $(dtstree)/digi
 
 # Default path for external device trees
 KBUILD_EXTDTS ?= $(realpath $(srctree))/$(stdtstree)/external-dt/linux
@@ -1406,14 +1406,14 @@ ifneq ($(stdtstree),)
 KBUILD_EXTDTB := $(or $(and $(wildcard $(KBUILD_EXTDTS)), 1), 0)
 
 %.dtb: dtbs_prepare
-	$(Q)$(MAKE) $(build)=$(stdtstree) $(dtstree)/$@ || ( \
+	$(Q)$(MAKE) $(build)=$(stdtstree) $(stdtstree)/$@ || ( \
 	test ! -e $(dtstree)/$@ -a $(KBUILD_EXTDTB) -eq 1  && ( \
 		echo "Looking for $(patsubst st/%.dtb,%.dtb,$@) into $(KBUILD_EXTDTS)"; \
 		$(MAKE) $(build)=$(stdtstree) src=$(KBUILD_EXTDTS) $(dtstree)/$@ || \
 		/bin/false) || /bin/false)
 
 %.dtbo: dtbs_prepare
-	$(Q)$(MAKE) $(build)=$(dtstree) $(dtstree)/$@
+	$(Q)$(MAKE) $(build)=$(stdtstree) $(stdtstree)/$@
 
 PHONY += dtbs dtbs_prepare dtbs_install dtbs_check
 dtbs: dtbs_prepare
