@@ -112,6 +112,12 @@ static void dwc2_handle_otg_intr(struct dwc2_hsotg *hsotg)
 					"Device Not Connected/Responding!\n");
 			}
 
+			/* Exit gadget mode clock gating. */
+			if (hsotg->params.power_down ==
+			    DWC2_POWER_DOWN_PARAM_NONE && hsotg->bus_suspended &&
+			    !hsotg->params.no_clock_gating)
+				dwc2_gadget_exit_clock_gating(hsotg, 0);
+
 			/*
 			 * If Session End Detected the B-Cable has been
 			 * disconnected
