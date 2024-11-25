@@ -134,7 +134,6 @@ static int stm32_risaf_conf_dump_show(struct seq_file *s, void *data)
 	memset(separator, '-', sizeof(separator) - 1);
 	memset(separator + sizeof(separator) - 1, '\0', 1);
 
-
 	seq_printf(s, "\n%s\n", separator);
 	seq_puts(s, "| Region ID |");
 	seq_puts(s, "| Region base addr |");

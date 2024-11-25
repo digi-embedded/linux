@@ -66,20 +66,16 @@ struct clk_stm32_clock_data {
 };
 
 struct clock_summary {
-	struct clk_summary *clocks;
 	int nb_clocks;
+	struct clk_summary **clocks;
 };
 
 struct clk_summary {
 	const char *name;
-	unsigned long rate;
-	int enabled;
-	int nb_parents;
 	int gate_id;
 	int mux_id;
 	int div_id;
 	void *data;
-
 	bool (*is_enabled)(struct clk_stm32_clock_data *data,
 			   struct clk_summary *c);
 	u8 (*get_parent)(struct clk_stm32_clock_data *data,
@@ -87,7 +83,8 @@ struct clk_summary {
 	unsigned long (*get_rate)(struct clk_stm32_clock_data *data,
 				  struct clk_summary *c,
 				  unsigned long parent_rate);
-	const char * const *parent_names;
+	int nb_parents;
+	struct clk_summary **clks;
 };
 
 struct stm32_rcc_match_data {
@@ -96,20 +93,19 @@ struct stm32_rcc_match_data {
 	const struct clock_config	*tab_clocks;
 	unsigned int			maxbinding;
 	struct clk_stm32_clock_data	*clock_data;
-	u32				clear_offset;
-
-	int (*check_security)(void __iomem *base,
+	struct clk_stm32_reset_data	*reset_data;
+	int (*check_security)(struct device_node *np, void __iomem *base,
 			      const struct clock_config *cfg);
 	int (*multi_mux)(void __iomem *base, const struct clock_config *cfg);
-	u32				reset_us;
 	struct clock_summary		*clock_summary;
 };
 
-int stm32_rcc_reset_init(struct device *dev, const struct of_device_id *match,
-			 void __iomem *base);
-
 int stm32_rcc_init(struct device *dev, const struct of_device_id *match_data,
 		   void __iomem *base);
+
+int stm32_gate_is_enabled(void __iomem *base,
+			  struct clk_stm32_clock_data *data,
+			  u16 gate_id);
 
 unsigned long stm32_divider_get_rate(void __iomem *base,
 				     struct clk_stm32_clock_data *data,

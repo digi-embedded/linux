@@ -94,12 +94,14 @@ struct annotation_options {
 	int  min_pcnt;
 	int  max_lines;
 	int  context;
-	const char *objdump_path;
-	const char *disassembler_style;
+	char *objdump_path;
+	char *disassembler_style;
 	const char *prefix;
 	const char *prefix_strip;
 	unsigned int percent_type;
 };
+
+extern struct annotation_options annotate_opts;
 
 enum {
 	ANNOTATION__OFFSET_JUMP_TARGETS = 1,
@@ -108,8 +110,6 @@ enum {
 };
 
 #define ANNOTATION__MIN_OFFSET_LEVEL ANNOTATION__OFFSET_JUMP_TARGETS
-
-extern struct annotation_options annotation__default_options;
 
 struct annotation;
 
@@ -132,6 +132,13 @@ struct annotation_data {
 	struct sym_hist_entry	 he;
 };
 
+struct cycles_info {
+	float			 ipc;
+	u64			 avg;
+	u64			 max;
+	u64			 min;
+};
+
 struct annotation_line {
 	struct list_head	 node;
 	struct rb_node		 rb_node;
@@ -139,12 +146,9 @@ struct annotation_line {
 	char			*line;
 	int			 line_nr;
 	char			*fileloc;
-	int			 jump_sources;
-	float			 ipc;
-	u64			 cycles;
-	u64			 cycles_max;
-	u64			 cycles_min;
 	char			*path;
+	struct cycles_info	*cycles;
+	int			 jump_sources;
 	u32			 idx;
 	int			 idx_asm;
 	int			 data_nr;
@@ -216,8 +220,7 @@ struct annotation_write_ops {
 };
 
 void annotation_line__write(struct annotation_line *al, struct annotation *notes,
-			    struct annotation_write_ops *ops,
-			    struct annotation_options *opts);
+			    struct annotation_write_ops *ops);
 
 int __annotation__scnprintf_samples_period(struct annotation *notes,
 					   char *bf, size_t size,
@@ -273,8 +276,7 @@ struct annotated_source {
 	struct sym_hist	   *histograms;
 };
 
-struct annotation {
-	struct mutex lock;
+struct LOCKABLE annotation {
 	u64			max_coverage;
 	u64			start;
 	u64			hit_cycles;
@@ -300,8 +302,14 @@ struct annotation {
 	struct annotated_source *src;
 };
 
-void annotation__init(struct annotation *notes);
+static inline void annotation__init(struct annotation *notes __maybe_unused)
+{
+}
 void annotation__exit(struct annotation *notes);
+
+void annotation__lock(struct annotation *notes) EXCLUSIVE_LOCK_FUNCTION(*notes);
+void annotation__unlock(struct annotation *notes) UNLOCK_FUNCTION(*notes);
+bool annotation__trylock(struct annotation *notes) EXCLUSIVE_TRYLOCK_FUNCTION(true, *notes);
 
 static inline int annotation__cycles_width(struct annotation *notes)
 {
@@ -322,7 +330,6 @@ static inline bool annotation_line__filter(struct annotation_line *al, struct an
 }
 
 void annotation__set_offsets(struct annotation *notes, s64 size);
-void annotation__compute_ipc(struct annotation *notes, size_t size);
 void annotation__mark_jump_targets(struct annotation *notes, struct symbol *sym);
 void annotation__update_column_widths(struct annotation *notes);
 void annotation__init_column_widths(struct annotation *notes, struct symbol *sym);
@@ -358,11 +365,9 @@ void symbol__annotate_zero_histograms(struct symbol *sym);
 
 int symbol__annotate(struct map_symbol *ms,
 		     struct evsel *evsel,
-		     struct annotation_options *options,
 		     struct arch **parch);
 int symbol__annotate2(struct map_symbol *ms,
 		      struct evsel *evsel,
-		      struct annotation_options *options,
 		      struct arch **parch);
 
 enum symbol_disassemble_errno {
@@ -389,20 +394,18 @@ enum symbol_disassemble_errno {
 
 int symbol__strerror_disassemble(struct map_symbol *ms, int errnum, char *buf, size_t buflen);
 
-int symbol__annotate_printf(struct map_symbol *ms, struct evsel *evsel,
-			    struct annotation_options *options);
+int symbol__annotate_printf(struct map_symbol *ms, struct evsel *evsel);
 void symbol__annotate_zero_histogram(struct symbol *sym, int evidx);
 void symbol__annotate_decay_histogram(struct symbol *sym, int evidx);
 void annotated_source__purge(struct annotated_source *as);
 
-int map_symbol__annotation_dump(struct map_symbol *ms, struct evsel *evsel,
-				struct annotation_options *opts);
+int map_symbol__annotation_dump(struct map_symbol *ms, struct evsel *evsel);
 
 bool ui__has_annotation(void);
 
-int symbol__tty_annotate(struct map_symbol *ms, struct evsel *evsel, struct annotation_options *opts);
+int symbol__tty_annotate(struct map_symbol *ms, struct evsel *evsel);
 
-int symbol__tty_annotate2(struct map_symbol *ms, struct evsel *evsel, struct annotation_options *opts);
+int symbol__tty_annotate2(struct map_symbol *ms, struct evsel *evsel);
 
 #ifdef HAVE_SLANG_SUPPORT
 int symbol__tui_annotate(struct map_symbol *ms, struct evsel *evsel,
@@ -417,6 +420,9 @@ static inline int symbol__tui_annotate(struct map_symbol *ms __maybe_unused,
 	return 0;
 }
 #endif
+
+void annotation_options__init(struct annotation_options *opt);
+void annotation_options__exit(struct annotation_options *opt);
 
 void annotation_config__init(struct annotation_options *opt);
 

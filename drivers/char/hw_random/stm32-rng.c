@@ -10,8 +10,9 @@
 #include <linux/iopoll.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/of.h>
 #include <linux/of_address.h>
-#include <linux/of_platform.h>
+#include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <linux/reset.h>
 #include <linux/slab.h>
@@ -37,12 +38,12 @@
 #define RNG_SR_CEIS		BIT(5)
 #define RNG_SR_SEIS		BIT(6)
 
-#define RNG_DR		0x08
+#define RNG_DR			0x08
 
 #define RNG_NSCR		0x0C
 #define RNG_NSCR_MASK		GENMASK(17, 0)
 
-#define RNG_HTCR	0x10
+#define RNG_HTCR		0x10
 
 #define RNG_NB_RECOVER_TRIES	3
 
@@ -190,7 +191,10 @@ static int stm32_rng_read(struct hwrng *rng, void *data, size_t max, bool wait)
 
 	pm_runtime_get_sync((struct device *) priv->rng.priv);
 
-	while (max > sizeof(u32)) {
+	if (readl_relaxed(priv->base + RNG_SR) & RNG_SR_SEIS)
+		stm32_rng_conceal_seed_error(rng);
+
+	while (max >= sizeof(u32)) {
 		sr = readl_relaxed(priv->base + RNG_SR);
 		/*
 		 * Manage timeout which is based on timer and take
@@ -322,12 +326,14 @@ static int stm32_rng_init(struct hwrng *rng)
 		reg |= RNG_CR_RNGEN;
 		if (priv->lock_conf)
 			reg |= RNG_CR_CONFLOCK;
+
 		writel_relaxed(reg, priv->base + RNG_CR);
 
 		err = readl_relaxed_poll_timeout_atomic(priv->base + RNG_CR, reg,
 							(!(reg & RNG_CR_CONDRST)),
 							10, 50000);
 		if (err) {
+			clk_disable_unprepare(priv->clk);
 			dev_err((struct device *)priv->rng.priv,
 				"%s: timeout %x!\n", __func__, reg);
 			return -EINVAL;
@@ -346,9 +352,6 @@ static int stm32_rng_init(struct hwrng *rng)
 
 		if (priv->data->has_cond_reset)
 			reg &= ~RNG_CR_CONDRST;
-
-		if (priv->lock_conf)
-			reg |= RNG_CR_CONFLOCK;
 
 		reg |= RNG_CR_RNGEN;
 
@@ -378,8 +381,7 @@ static int stm32_rng_remove(struct platform_device *ofdev)
 	return 0;
 }
 
-#ifdef CONFIG_PM
-static int stm32_rng_runtime_suspend(struct device *dev)
+static int __maybe_unused stm32_rng_runtime_suspend(struct device *dev)
 {
 	struct stm32_rng_private *priv = dev_get_drvdata(dev);
 	u32 reg;
@@ -395,7 +397,7 @@ static int stm32_rng_runtime_suspend(struct device *dev)
 	return 0;
 }
 
-static int stm32_rng_suspend(struct device *dev)
+static int __maybe_unused stm32_rng_suspend(struct device *dev)
 {
 	struct stm32_rng_private *priv = dev_get_drvdata(dev);
 
@@ -416,7 +418,7 @@ static int stm32_rng_suspend(struct device *dev)
 	return 0;
 }
 
-static int stm32_rng_runtime_resume(struct device *dev)
+static int __maybe_unused stm32_rng_runtime_resume(struct device *dev)
 {
 	struct stm32_rng_private *priv = dev_get_drvdata(dev);
 	int err;
@@ -428,8 +430,10 @@ static int stm32_rng_runtime_resume(struct device *dev)
 
 	if (priv->bus_clk) {
 		err = clk_prepare_enable(priv->bus_clk);
-		if (err)
+		if (err) {
+			clk_disable_unprepare(priv->clk);
 			return err;
+		}
 	}
 
 	/* Clean error indications */
@@ -442,7 +446,7 @@ static int stm32_rng_runtime_resume(struct device *dev)
 	return 0;
 }
 
-static int stm32_rng_resume(struct device *dev)
+static int __maybe_unused stm32_rng_resume(struct device *dev)
 {
 	struct stm32_rng_private *priv = dev_get_drvdata(dev);
 	int err;
@@ -454,8 +458,10 @@ static int stm32_rng_resume(struct device *dev)
 
 	if (priv->bus_clk) {
 		err = clk_prepare_enable(priv->bus_clk);
-		if (err)
+		if (err) {
+			clk_disable_unprepare(priv->clk);
 			return err;
+		}
 	}
 
 	/* Clean error indications */
@@ -497,9 +503,8 @@ static int stm32_rng_resume(struct device *dev)
 
 	return 0;
 }
-#endif /* CONFIG_PM */
 
-static const struct dev_pm_ops stm32_rng_pm_ops = {
+static const struct dev_pm_ops __maybe_unused stm32_rng_pm_ops = {
 	SET_RUNTIME_PM_OPS(stm32_rng_runtime_suspend,
 			   stm32_rng_runtime_resume, NULL)
 	SET_SYSTEM_SLEEP_PM_OPS(stm32_rng_suspend,
@@ -549,7 +554,6 @@ MODULE_DEVICE_TABLE(of, stm32_rng_match);
 
 static int stm32_rng_probe(struct platform_device *ofdev)
 {
-	const struct of_device_id *match;
 	struct device *dev = &ofdev->dev;
 	struct device_node *np = ofdev->dev.of_node;
 	struct stm32_rng_private *priv;
@@ -573,13 +577,9 @@ static int stm32_rng_probe(struct platform_device *ofdev)
 	priv->ced = of_property_read_bool(np, "clock-error-detect");
 	priv->lock_conf = of_property_read_bool(np, "st,rng-lock-conf");
 
-	match = of_match_device(of_match_ptr(stm32_rng_match), dev);
-	if (!match) {
-		dev_err(dev, "no compatible OF match\n");
-		return -EINVAL;
-	}
-
-	priv->data = match->data;
+	priv->data = of_device_get_match_data(dev);
+	if (!priv->data)
+		return -ENODEV;
 
 	dev_set_drvdata(dev, priv);
 
@@ -613,7 +613,7 @@ static int stm32_rng_probe(struct platform_device *ofdev)
 static struct platform_driver stm32_rng_driver = {
 	.driver = {
 		.name = "stm32-rng",
-		.pm = &stm32_rng_pm_ops,
+		.pm = pm_ptr(&stm32_rng_pm_ops),
 		.of_match_table = stm32_rng_match,
 	},
 	.probe = stm32_rng_probe,

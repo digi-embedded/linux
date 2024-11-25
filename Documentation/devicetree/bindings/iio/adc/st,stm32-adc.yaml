@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
 %YAML 1.2
 ---
-$id: "http://devicetree.org/schemas/iio/adc/st,stm32-adc.yaml#"
-$schema: "http://devicetree.org/meta-schemas/core.yaml#"
+$id: http://devicetree.org/schemas/iio/adc/st,stm32-adc.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
 
-title: STMicroelectronics STM32 ADC bindings
+title: STMicroelectronics STM32 ADC
 
 description: |
   STM32 ADC is a successive approximation analog-to-digital converter.
@@ -28,6 +28,8 @@ properties:
       - st,stm32h7-adc-core
       - st,stm32mp1-adc-core
       - st,stm32mp13-adc-core
+      - st,stm32mp21-adc-core
+      - st,stm32mp23-adc-core
       - st,stm32mp25-adc-core
 
   reg:
@@ -84,7 +86,7 @@ properties:
     description:
       Phandle to system configuration controller. It can be used to control the
       analog circuitry on stm32mp1.
-    $ref: "/schemas/types.yaml#/definitions/phandle-array"
+    $ref: /schemas/types.yaml#/definitions/phandle-array
 
   interrupt-controller: true
 
@@ -97,10 +99,9 @@ properties:
   '#size-cells':
     const: 0
 
-  feature-domains:
-    $ref: /schemas/types.yaml#/definitions/phandle-array
-    description: |
-      Phandle to the rifsc device to check access right.
+  access-controllers:
+    minItems: 1
+    maxItems: 2
 
 allOf:
   - if:
@@ -222,7 +223,34 @@ allOf:
       properties:
         compatible:
           contains:
-            const: st,stm32mp25-adc-core
+            const: st,stm32mp21-adc-core
+
+    then:
+      properties:
+        clocks:
+          maxItems: 1
+
+        clock-names:
+          const: adc
+
+        interrupts:
+          items:
+            - description: interrupt line for ADC1
+            - description: interrupt line for ADC2
+          minItems: 1
+
+        st,max-clk-rate-hz:
+          minimum: 700000
+          maximum: 70000000
+          default: 70000000
+
+  - if:
+      properties:
+        compatible:
+          contains:
+            enum:
+              - st,stm32mp23-adc-core
+              - st,stm32mp25-adc-core
 
     then:
       properties:
@@ -272,6 +300,8 @@ patternProperties:
           - st,stm32h7-adc
           - st,stm32mp1-adc
           - st,stm32mp13-adc
+          - st,stm32mp21-adc
+          - st,stm32mp23-adc
           - st,stm32mp25-adc
 
       reg:
@@ -324,7 +354,7 @@ patternProperties:
             - 16 channels, numbered from 0 to 15 (for in0..in15) on stm32f4
             - 19 channels, numbered from 0 to 18 (for in0..in18) on stm32mp13.
             - 20 channels, numbered from 0 to 19 (for in0..in19) on stm32h7,
-              stm32mp1 and stm32mp25.
+              stm32mp1, stm32mp21, stm32mp23 and stm32mp25.
         $ref: /schemas/types.yaml#/definitions/uint32-array
         deprecated: true
 
@@ -373,10 +403,16 @@ patternProperties:
         items:
           - const: vrefint
 
+      st,adc-trigger-sel:
+        description: Selects the HW trigger configuration available on this ADC
+        $ref: /schemas/types.yaml#/definitions/uint32
+        enum: [0, 1]
+        default: 0
+
     patternProperties:
       "^channel@([0-9]|1[0-9])$":
         type: object
-        $ref: "adc.yaml"
+        $ref: adc.yaml
         description: Represents the external channels which are connected to the ADC.
 
         properties:
@@ -521,7 +557,40 @@ patternProperties:
           properties:
             compatible:
               contains:
-                const: st,stm32mp25-adc
+                const: st,stm32mp21-adc
+
+          then:
+            properties:
+              reg:
+                const: 0x0
+
+              interrupts:
+                const: 0
+
+              assigned-resolution-bits:
+                enum: [6, 8, 10, 12]
+                default: 12
+
+              st,adc-channels:
+                minItems: 1
+                maxItems: 20
+                items:
+                  minimum: 0
+                  maximum: 19
+
+              st,min-sample-time-nsecs:
+                minItems: 1
+                maxItems: 20
+                items:
+                  minimum: 40
+
+      - if:
+          properties:
+            compatible:
+              contains:
+                enum:
+                  - st,stm32mp23-adc
+                  - st,stm32mp25-adc
 
         then:
           properties:

@@ -382,7 +382,7 @@ struct mpi3mr_bsg_in_reply_buf {
 	__u8	mpi_reply_type;
 	__u8	rsvd1;
 	__u16	rsvd2;
-	__u8	reply_buf[1];
+	__u8	reply_buf[];
 };
 
 /**
@@ -455,12 +455,6 @@ struct mpi3mr_bsg_packet {
 	} cmd;
 };
 
-
-/* MPI3: NVMe Encasulation related definitions */
-#ifndef MPI3_NVME_ENCAP_CMD_MAX
-#define MPI3_NVME_ENCAP_CMD_MAX               (1)
-#endif
-
 struct mpi3_nvme_encapsulated_request {
 	__le16	host_tag;
 	__u8	ioc_use_only02;
@@ -474,7 +468,7 @@ struct mpi3_nvme_encapsulated_request {
 	__le16	flags;
 	__le32	data_length;
 	__le32  reserved14[3];
-	__le32	command[MPI3_NVME_ENCAP_CMD_MAX];
+	__le32	command[];
 };
 
 struct mpi3_nvme_encapsulated_error_reply {

@@ -30,16 +30,7 @@
  * SAE: simultaneous authentication of equals
  * FWAUTH: Firmware authenticator
  * DUMP_OBSS: Firmware has capable to dump obss info to support ACS
- * SURVEY_DUMP: Firmware has capable to survey dump info
- * SAE_EXT: SAE be handled by userspace supplicant
- * GCMP: firmware has defined GCMP or not.
- * TWT: Firmware has the TWT Module Support.
- * OFFLOADS: Firmware can do the packet processing work offloaded by
- *	Host Driver, i.e, it can process specifc types of RX packets like
- *	ARP, ND, etc and send out a suitable response packet from within
- * 	Firmware.
- * ULP: Firmware supports Ultra Low Power mode of operation.
- * CSI: Firmware has the CSI Module Support.
+ * SCAN_V2: Version 2 scan params
  */
 #define BRCMF_FEAT_LIST \
 	BRCMF_FEAT_DEF(MBSS) \
@@ -64,16 +55,9 @@
 	BRCMF_FEAT_DEF(SAE) \
 	BRCMF_FEAT_DEF(FWAUTH) \
 	BRCMF_FEAT_DEF(DUMP_OBSS) \
-	BRCMF_FEAT_DEF(SURVEY_DUMP) \
-	BRCMF_FEAT_DEF(SAE_EXT) \
-	BRCMF_FEAT_DEF(FBT) \
-	BRCMF_FEAT_DEF(OKC) \
-	BRCMF_FEAT_DEF(GCMP) \
-	BRCMF_FEAT_DEF(TWT) \
-	BRCMF_FEAT_DEF(OFFLOADS) \
-	BRCMF_FEAT_DEF(ULP) \
-	BRCMF_FEAT_DEF(PROPTXSTATUS) \
-	BRCMF_FEAT_DEF(CSI)
+	BRCMF_FEAT_DEF(SCAN_V2) \
+	BRCMF_FEAT_DEF(PMKID_V2) \
+	BRCMF_FEAT_DEF(PMKID_V3)
 
 /*
  * Quirks:
@@ -141,31 +125,5 @@ bool brcmf_feat_is_enabled(struct brcmf_if *ifp, enum brcmf_feat_id id);
  */
 bool brcmf_feat_is_quirk_enabled(struct brcmf_if *ifp,
 				 enum brcmf_feat_quirk quirk);
-
-/**
- * brcmf_feat_is_6ghz_enabled() - Find if 6GHZ Operation is allowed
- *
- * @ifp: interface instance.
- *
- * Return: true if 6GHz operation is allowed; otherwise false.
- */
-bool brcmf_feat_is_6ghz_enabled(struct brcmf_if *ifp);
-
-/**
- * brcmf_feat_is_sdio_rxf_in_kthread() - handle SDIO Rx frame in kthread.
- *
- * @drvr: driver instance.
- */
-bool brcmf_feat_is_sdio_rxf_in_kthread(struct brcmf_pub *drvr);
-
-/**
- * brcmf_feat_is_offloads_enabled() - Find if offload_prof power profile
- * is given by user
- *
- * @ifp: interface instance.
- *
- * Return: true if offloads_prof is set otherwise false.
- */
-bool brcmf_feat_is_offloads_enabled(struct brcmf_if *ifp);
 
 #endif /* _BRCMF_FEATURE_H */

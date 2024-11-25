@@ -109,11 +109,8 @@ static unsigned long stm32_exti_pending(struct irq_chip_generic *gc)
 {
 	struct stm32_exti_chip_data *chip_data = gc->private;
 	const struct stm32_exti_bank *stm32_bank = chip_data->reg_bank;
-	unsigned long pending;
 
-	pending = irq_reg_readl(gc, stm32_bank->rpr_ofst);
-
-	return pending;
+	return irq_reg_readl(gc, stm32_bank->rpr_ofst);
 }
 
 static void stm32_irq_handler(struct irq_desc *desc)

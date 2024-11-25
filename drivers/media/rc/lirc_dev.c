@@ -789,7 +789,7 @@ int __init lirc_dev_init(void)
 {
 	int retval;
 
-	lirc_class = class_create(THIS_MODULE, "lirc");
+	lirc_class = class_create("lirc");
 	if (IS_ERR(lirc_class)) {
 		pr_err("class_create failed\n");
 		return PTR_ERR(lirc_class);
@@ -828,8 +828,10 @@ struct rc_dev *rc_dev_get_from_fd(int fd, bool write)
 		return ERR_PTR(-EINVAL);
 	}
 
-	if (write && !(f.file->f_mode & FMODE_WRITE))
+	if (write && !(f.file->f_mode & FMODE_WRITE)) {
+		fdput(f);
 		return ERR_PTR(-EPERM);
+	}
 
 	fh = f.file->private_data;
 	dev = fh->rc;

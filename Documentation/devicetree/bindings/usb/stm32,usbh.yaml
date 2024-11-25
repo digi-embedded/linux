@@ -11,7 +11,9 @@ maintainers:
 
 properties:
   compatible:
-    const: st,stm32mp25-usbh
+    enum:
+      - const: st,stm32mp21-usbh
+      - const: st,stm32mp25-usbh
 
   "#address-cells":
     const: 1
@@ -39,11 +41,6 @@ properties:
   interrupts:
     maxItems: 1
     description: interrupt used for wakeup
-
-  feature-domains:
-    $ref: /schemas/types.yaml#/definitions/phandle-array
-    description: |
-      Phandle to the rifsc device to check access right.
 
 # Required child node:
 
@@ -74,9 +71,9 @@ additionalProperties: false
 examples:
   - |
 
-    #include <dt-bindings/clock/stm32mp25-clks.h>
+    #include <dt-bindings/clock/st,stm32mp25-rcc.h>
     #include <dt-bindings/interrupt-controller/arm-gic.h>
-    #include <dt-bindings/reset/stm32mp25-resets.h>
+    #include <dt-bindings/reset/st,stm32mp25-rcc.h>
 
 
     usbh: usb@482e0000 {

@@ -9,7 +9,6 @@
 #include <linux/arm-smccc.h>
 #include <linux/rhashtable.h>
 #include <linux/semaphore.h>
-#include <linux/spinlock.h>
 #include <linux/tee_drv.h>
 #include <linux/types.h>
 #include "optee_msg.h"
@@ -114,7 +113,7 @@ struct optee_pcpu {
  *			OPTEE_SMC_SEC_CAP_* in optee_smc.h
  * @notif_irq		interrupt used as async notification by OP-TEE or 0
  * @optee_pcpu		per_cpu optee instance for per cpu work or NULL
- * @notif_pcpu_wq	workqueue for per cpu aynchronous notification or NULL
+ * @notif_pcpu_wq	workqueue for per cpu asynchronous notification or NULL
  * @notif_pcpu_work	work for per cpu asynchronous notification
  * @notif_cpuhp_state   CPU hotplug state assigned for pcpu interrupt management
  * @domain		interrupt domain registered by OP-TEE driver
@@ -150,13 +149,11 @@ struct optee;
 
 /**
  * struct optee_call_extra - Extra data used by calling TEE
- * @system: True when call context relates to a system session
  * @ocall_arg: OCall arguments related to the call or NULL
- * @tee_thread_id: TEE thread ID to use to return from an OCall, or NUL
+ * @tee_thread_id: TEE thread ID to use to return from an OCall, or 0
  * @ocall_call_waiter: Reference to the waiter that tracks TEE entry
  */
 struct optee_call_extra {
-	bool system;
 	struct tee_ocall2_arg *ocall_arg;
 	u32 tee_thread_id;
 	struct optee_call_waiter *ocall_call_waiter;
@@ -184,15 +181,6 @@ struct optee_ops {
 			      const struct optee_msg_param *msg_params);
 };
 
-struct optee_thread {
-	spinlock_t lock;
-	size_t thread_cnt;
-	size_t thread_free_cnt;
-	size_t system_thread_cnt;
-	size_t system_thread_free_cnt;
-	bool best_effort;
-};
-
 /**
  * struct optee - main service struct
  * @supp_teedev:	supplicant device
@@ -210,6 +198,7 @@ struct optee_thread {
  * @scan_bus_done	flag if device registation was already done.
  * @scan_bus_wq		workqueue to scan optee bus and register optee drivers
  * @scan_bus_work	workq to scan optee bus and register optee drivers
+ * @itr_notif		True if OP-TEE offers interrupt notification
  */
 struct optee {
 	struct tee_device *supp_teedev;
@@ -229,17 +218,17 @@ struct optee {
 	bool   scan_bus_done;
 	struct workqueue_struct *scan_bus_wq;
 	struct work_struct scan_bus_work;
-	struct optee_thread thread;
+	bool itr_notif;
 };
 
 /**
  * struct tee_session_ocall - Ocall context of a session
  * @thread_p1:    TEE thread ID plus 1 (0 means no suspended TEE thread)
+ * @call_waiter:  Waiter for the call entry completed at Ocall return entry
  * @call_arg:     Invocation argument from initial call that issued the Ocall
  * @msg_arg:      Reference to optee msg used at initial call
  * @msg_entry:    Reference to optee msg allocation entry
  * @msg_offs:     Reference to optee msg allocation offset
- * @call_waiter:  Waiter for the call entry completed at Ocall return entry
  */
 struct tee_session_ocall {
 	u32 thread_p1;
@@ -253,19 +242,12 @@ struct tee_session_ocall {
 /**
  * struct tee_session - Session between a client and a TEE service (TA)
  * @list_node: User list for the session
- * @session_id:        Session identifeir provided by the TEE
- * @system:            Session has system attribute
- * @ocall_thread_p1:   TEE thread ID the OCall is bound to, plus 1
- * @ocall_invoke_arg:  Invocation argument used at TEE initial entry
- * @ocall_msg_arg:     Reference to msg buffer used at TEE initial entry
- * @ocall_msg_entry:   Entry reference of allocated msg buffer
- * @ocall_msg_offs:    Offset reference of allocated msg buffer
- * @ocall_call_waiter: Waiter that tracks TEE entry on Ocall cases
+ * @session_id:        Session identifier provided by the TEE
+ * @ocall_ctx:         OCall context
  */
 struct optee_session {
 	struct list_head list_node;
 	u32 session_id;
-	bool system;
 	struct tee_session_ocall ocall_ctx;
 };
 
@@ -301,8 +283,6 @@ int optee_notif_send(struct optee *optee, u_int key);
 u32 optee_supp_thrd_req(struct tee_context *ctx, u32 func, size_t num_params,
 			struct tee_param *param);
 
-int optee_supp_read(struct tee_context *ctx, void __user *buf, size_t len);
-int optee_supp_write(struct tee_context *ctx, void __user *buf, size_t len);
 void optee_supp_init(struct optee_supp *supp);
 void optee_supp_uninit(struct optee_supp *supp);
 void optee_supp_release(struct optee_supp *supp);
@@ -315,8 +295,7 @@ int optee_supp_send(struct tee_context *ctx, u32 ret, u32 num_params,
 int optee_open_session(struct tee_context *ctx,
 		       struct tee_ioctl_open_session_arg *arg,
 		       struct tee_param *param);
-int optee_close_session_helper(struct tee_context *ctx,
-			       struct optee_session *sess);
+int optee_close_session_helper(struct tee_context *ctx, u32 session);
 int optee_close_session(struct tee_context *ctx, u32 session);
 int optee_invoke_func(struct tee_context *ctx, struct tee_ioctl_invoke_arg *arg,
 		      struct tee_param *param);
@@ -393,10 +372,6 @@ struct tee_shm *optee_rpc_cmd_alloc_suppl(struct tee_context *ctx, size_t sz);
 void optee_rpc_cmd_free_suppl(struct tee_context *ctx, struct tee_shm *shm);
 void optee_rpc_cmd(struct tee_context *ctx, struct optee *optee,
 		   struct optee_msg_arg *arg);
-
-/* Find a session held in optee context */
-struct optee_session *optee_find_session(struct optee_context_data *ctxdata,
-					 u32 session_id);
 
 /*
  * Small helpers

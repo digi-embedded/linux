@@ -27,33 +27,18 @@ properties:
       - const: mclk
 
   dmas:
-    minItems: 1
-    maxItems: 2
+    maxItems: 1
 
   dma-names:
     items:
       - const: tx
-      - const: mdma-tx
-    minItems: 1
 
   resets:
     maxItems: 1
 
-  power-domains:
-    maxItems: 1
-
-  sram:
-    $ref: /schemas/types.yaml#/definitions/phandle
-    description:
-      phandles to a reserved SRAM region which is used as temporary
-      storage memory between DMA and MDMA engines.
-      The region should be defined as child nodes of the AHB SRAM node
-      as per the generic bindings in Documentation/devicetree/bindings/sram/sram.yaml
-
-  feature-domains:
-    $ref: /schemas/types.yaml#/definitions/phandle-array
-    description: |
-      Phandle to the rifsc device to check access right.
+  access-controllers:
+    minItems: 1
+    maxItems: 2
 
   port:
     $ref: /schemas/graph.yaml#/$defs/port-base
@@ -109,7 +94,9 @@ examples:
   - |
     #include <dt-bindings/interrupt-controller/arm-gic.h>
     #include <dt-bindings/clock/stm32mp1-clks.h>
+    #include <dt-bindings/media/video-interfaces.h>
     #include <dt-bindings/reset/stm32mp1-resets.h>
+
     dcmi: dcmi@4c006000 {
         compatible = "st,stm32-dcmi";
         reg = <0x4c006000 0x400>;
@@ -123,7 +110,7 @@ examples:
         port {
              dcmi_0: endpoint {
                    remote-endpoint = <&ov5640_0>;
-                   bus-type = <5>;
+                   bus-type = <MEDIA_BUS_TYPE_PARALLEL>;
                    bus-width = <8>;
                    hsync-active = <0>;
                    vsync-active = <0>;

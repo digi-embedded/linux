@@ -30,11 +30,23 @@ mcp251xfd_cmd_prepare_write_reg(const struct mcp251xfd_priv *priv,
 	last_byte = mcp251xfd_last_byte_set(mask);
 	len = last_byte - first_byte + 1;
 
-	data = mcp251xfd_spi_cmd_write(priv, write_reg_buf, reg + first_byte);
+	data = mcp251xfd_spi_cmd_write(priv, write_reg_buf, reg + first_byte, len);
 	val_le32 = cpu_to_le32(val >> BITS_PER_BYTE * first_byte);
 	memcpy(data, &val_le32, len);
 
-	if (priv->devtype_data.quirks & MCP251XFD_QUIRK_CRC_REG) {
+	if (!(priv->devtype_data.quirks & MCP251XFD_QUIRK_CRC_REG)) {
+		len += sizeof(write_reg_buf->nocrc.cmd);
+	} else if (len == 1) {
+		u16 crc;
+
+		/* CRC */
+		len += sizeof(write_reg_buf->safe.cmd);
+		crc = mcp251xfd_crc16_compute(&write_reg_buf->safe, len);
+		put_unaligned_be16(crc, (void *)write_reg_buf + len);
+
+		/* Total length */
+		len += sizeof(write_reg_buf->safe.crc);
+	} else {
 		u16 crc;
 
 		mcp251xfd_spi_cmd_crc_set_len_in_reg(&write_reg_buf->crc.cmd,
@@ -46,8 +58,6 @@ mcp251xfd_cmd_prepare_write_reg(const struct mcp251xfd_priv *priv,
 
 		/* Total length */
 		len += sizeof(write_reg_buf->crc.crc);
-	} else {
-		len += sizeof(write_reg_buf->nocrc.cmd);
 	}
 
 	return len;
@@ -475,6 +485,8 @@ int mcp251xfd_ring_alloc(struct mcp251xfd_priv *priv)
 		clear_bit(MCP251XFD_FLAGS_FD_MODE, priv->flags);
 	}
 
+	tx_ring->obj_num_shift_to_u8 = BITS_PER_TYPE(tx_ring->obj_num) -
+		ilog2(tx_ring->obj_num);
 	tx_ring->obj_size = tx_obj_size;
 
 	rem = priv->rx_obj_num;

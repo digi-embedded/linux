@@ -28,10 +28,9 @@ properties:
   resets:
     maxItems: 1
 
-  feature-domains:
-    $ref: /schemas/types.yaml#/definitions/phandle-array
-    description: |
-      Phandle to the rifsc device to check access right.
+  access-controllers:
+    minItems: 1
+    maxItems: 2
 
 required:
   - compatible

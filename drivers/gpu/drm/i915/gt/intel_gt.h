@@ -6,12 +6,44 @@
 #ifndef __INTEL_GT__
 #define __INTEL_GT__
 
+#include "i915_drv.h"
 #include "intel_engine_types.h"
 #include "intel_gt_types.h"
 #include "intel_reset.h"
 
 struct drm_i915_private;
 struct drm_printer;
+
+/*
+ * Check that the GT is a graphics GT and has an IP version within the
+ * specified range (inclusive).
+ */
+#define IS_GFX_GT_IP_RANGE(gt, from, until) ( \
+	BUILD_BUG_ON_ZERO((from) < IP_VER(2, 0)) + \
+	BUILD_BUG_ON_ZERO((until) < (from)) + \
+	((gt)->type != GT_MEDIA && \
+	 GRAPHICS_VER_FULL((gt)->i915) >= (from) && \
+	 GRAPHICS_VER_FULL((gt)->i915) <= (until)))
+
+/*
+ * Check that the GT is a graphics GT with a specific IP version and has
+ * a stepping in the range [from, until).  The lower stepping bound is
+ * inclusive, the upper bound is exclusive.  The most common use-case of this
+ * macro is for checking bounds for workarounds, which usually have a stepping
+ * ("from") at which the hardware issue is first present and another stepping
+ * ("until") at which a hardware fix is present and the software workaround is
+ * no longer necessary.  E.g.,
+ *
+ *    IS_GFX_GT_IP_STEP(gt, IP_VER(12, 70), STEP_A0, STEP_B0)
+ *    IS_GFX_GT_IP_STEP(gt, IP_VER(12, 71), STEP_B1, STEP_FOREVER)
+ *
+ * "STEP_FOREVER" can be passed as "until" for workarounds that have no upper
+ * stepping bound for the specified IP version.
+ */
+#define IS_GFX_GT_IP_STEP(gt, ipver, from, until) ( \
+	BUILD_BUG_ON_ZERO((until) <= (from)) + \
+	(IS_GFX_GT_IP_RANGE((gt), (ipver), (ipver)) && \
+	 IS_GRAPHICS_STEP((gt)->i915, (from), (until))))
 
 #define GT_TRACE(gt, fmt, ...) do {					\
 	const struct intel_gt *gt__ __maybe_unused = (gt);		\
@@ -22,6 +54,11 @@ struct drm_printer;
 static inline bool gt_is_root(struct intel_gt *gt)
 {
 	return !gt->info.id;
+}
+
+static inline bool intel_gt_needs_wa_22016122933(struct intel_gt *gt)
+{
+	return MEDIA_VER_FULL(gt->i915) == IP_VER(13, 0) && gt->type == GT_MEDIA;
 }
 
 static inline struct intel_gt *uc_to_gt(struct intel_uc *uc)
@@ -37,6 +74,11 @@ static inline struct intel_gt *guc_to_gt(struct intel_guc *guc)
 static inline struct intel_gt *huc_to_gt(struct intel_huc *huc)
 {
 	return container_of(huc, struct intel_gt, uc.huc);
+}
+
+static inline struct intel_gt *gsc_uc_to_gt(struct intel_gsc_uc *gsc_uc)
+{
+	return container_of(gsc_uc, struct intel_gt, uc.gsc);
 }
 
 static inline struct intel_gt *gsc_to_gt(struct intel_gsc *gsc)
@@ -60,6 +102,7 @@ void intel_gt_driver_late_release_all(struct drm_i915_private *i915);
 int intel_gt_wait_for_idle(struct intel_gt *gt, long timeout);
 
 void intel_gt_check_and_clear_faults(struct intel_gt *gt);
+i915_reg_t intel_gt_perf_limit_reasons_reg(struct intel_gt *gt);
 void intel_gt_clear_error_registers(struct intel_gt *gt,
 				    intel_engine_mask_t engine_mask);
 
@@ -101,16 +144,8 @@ void intel_gt_info_print(const struct intel_gt_info *info,
 
 void intel_gt_watchdog_work(struct work_struct *work);
 
-static inline u32 intel_gt_tlb_seqno(const struct intel_gt *gt)
-{
-	return seqprop_sequence(&gt->tlb.seqno);
-}
-
-static inline u32 intel_gt_next_invalidate_tlb_full(const struct intel_gt *gt)
-{
-	return intel_gt_tlb_seqno(gt) | 1;
-}
-
-void intel_gt_invalidate_tlb(struct intel_gt *gt, u32 seqno);
+enum i915_map_type intel_gt_coherent_map_type(struct intel_gt *gt,
+					      struct drm_i915_gem_object *obj,
+					      bool always_coherent);
 
 #endif /* __INTEL_GT_H__ */

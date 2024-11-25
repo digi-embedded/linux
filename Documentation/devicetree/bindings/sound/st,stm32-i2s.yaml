@@ -49,17 +49,17 @@ properties:
   resets:
     maxItems: 1
 
-  power-domains:
-    maxItems: 1
-
   "#clock-cells":
     description: Configure the I2S device as MCLK clock provider.
     const: 0
 
-  feature-domains:
-    $ref: /schemas/types.yaml#/definitions/phandle-array
-    description: |
-      Phandle to the rifsc device to check access right.
+  port:
+    $ref: audio-graph-port.yaml#
+    unevaluatedProperties: false
+
+  access-controllers:
+    minItems: 1
+    maxItems: 2
 
 required:
   - compatible
@@ -72,6 +72,8 @@ required:
   - dma-names
 
 allOf:
+  - $ref: dai-common.yaml#
+
   - if:
       properties:
         compatible:
@@ -112,7 +114,7 @@ allOf:
             - const: pclk
             - const: i2sclk
 
-additionalProperties: false
+unevaluatedProperties: false
 
 examples:
   - |
@@ -130,6 +132,13 @@ examples:
         dma-names = "rx", "tx";
         pinctrl-names = "default";
         pinctrl-0 = <&i2s2_pins_a>;
+
+        /* assume audio-graph */
+        port {
+            codec_endpoint: endpoint {
+                remote-endpoint = <&codec_endpoint>;
+            };
+        };
     };
 
 ...

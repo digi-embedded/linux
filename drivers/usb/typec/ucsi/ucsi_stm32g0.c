@@ -67,6 +67,7 @@ struct ucsi_stm32g0 {
 	struct completion complete;
 	struct device *dev;
 	unsigned long flags;
+#define ACK_PENDING	2
 	const char *fw_name;
 	struct ucsi *ucsi;
 	bool suspended;
@@ -651,7 +652,7 @@ static int ucsi_stm32g0_probe_bootloader(struct ucsi *ucsi)
 	return 0;
 }
 
-static int ucsi_stm32g0_probe(struct i2c_client *client, const struct i2c_device_id *id)
+static int ucsi_stm32g0_probe(struct i2c_client *client)
 {
 	struct device *dev = &client->dev;
 	struct ucsi_stm32g0 *g0;

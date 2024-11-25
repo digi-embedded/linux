@@ -46,7 +46,7 @@ additionalProperties: true
 examples:
   - |
     #include <dt-bindings/interrupt-controller/arm-gic.h>
-    #include <dt-bindings/clock/stm32mp25-clks.h>
+    #include <dt-bindings/clock/st,stm32mp25-rcc.h>
     switch0: ttt-sw@4c000000 {
         #address-cells  = <1>;
         #size-cells     = <1>;

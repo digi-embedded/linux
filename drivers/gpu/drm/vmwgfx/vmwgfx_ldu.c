@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0 OR MIT
 /**************************************************************************
  *
- * Copyright 2009-2022 VMware, Inc., Palo Alto, CA., USA
+ * Copyright 2009-2023 VMware, Inc., Palo Alto, CA., USA
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the
@@ -25,11 +25,13 @@
  *
  **************************************************************************/
 
+#include "vmwgfx_bo.h"
+#include "vmwgfx_kms.h"
+
 #include <drm/drm_atomic.h>
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_fourcc.h>
 
-#include "vmwgfx_kms.h"
 
 #define vmw_crtc_to_ldu(x) \
 	container_of(x, struct vmw_legacy_display_unit, base.crtc)
@@ -134,6 +136,47 @@ static int vmw_ldu_commit_list(struct vmw_private *dev_priv)
 	return 0;
 }
 
+/*
+ * Pin the buffer in a location suitable for access by the
+ * display system.
+ */
+static int vmw_ldu_fb_pin(struct vmw_framebuffer *vfb)
+{
+	struct vmw_private *dev_priv = vmw_priv(vfb->base.dev);
+	struct vmw_bo *buf;
+	int ret;
+
+	buf = vfb->bo ?  vmw_framebuffer_to_vfbd(&vfb->base)->buffer :
+		vmw_framebuffer_to_vfbs(&vfb->base)->surface->res.guest_memory_bo;
+
+	if (!buf)
+		return 0;
+	WARN_ON(dev_priv->active_display_unit != vmw_du_legacy);
+
+	if (dev_priv->active_display_unit == vmw_du_legacy) {
+		vmw_overlay_pause_all(dev_priv);
+		ret = vmw_bo_pin_in_start_of_vram(dev_priv, buf, false);
+		vmw_overlay_resume_all(dev_priv);
+	} else
+		ret = -EINVAL;
+
+	return ret;
+}
+
+static int vmw_ldu_fb_unpin(struct vmw_framebuffer *vfb)
+{
+	struct vmw_private *dev_priv = vmw_priv(vfb->base.dev);
+	struct vmw_bo *buf;
+
+	buf = vfb->bo ?  vmw_framebuffer_to_vfbd(&vfb->base)->buffer :
+		vmw_framebuffer_to_vfbs(&vfb->base)->surface->res.guest_memory_bo;
+
+	if (WARN_ON(!buf))
+		return 0;
+
+	return vmw_bo_unpin(dev_priv, buf, false);
+}
+
 static int vmw_ldu_del_active(struct vmw_private *vmw_priv,
 			      struct vmw_legacy_display_unit *ldu)
 {
@@ -145,8 +188,7 @@ static int vmw_ldu_del_active(struct vmw_private *vmw_priv,
 	list_del_init(&ldu->active);
 	if (--(ld->num_active) == 0) {
 		BUG_ON(!ld->fb);
-		if (ld->fb->unpin)
-			ld->fb->unpin(ld->fb);
+		WARN_ON(vmw_ldu_fb_unpin(ld->fb));
 		ld->fb = NULL;
 	}
 
@@ -163,11 +205,10 @@ static int vmw_ldu_add_active(struct vmw_private *vmw_priv,
 
 	BUG_ON(!ld->num_active && ld->fb);
 	if (vfb != ld->fb) {
-		if (ld->fb && ld->fb->unpin)
-			ld->fb->unpin(ld->fb);
+		if (ld->fb)
+			WARN_ON(vmw_ldu_fb_unpin(ld->fb));
 		vmw_svga_enable(vmw_priv);
-		if (vfb->pin)
-			vfb->pin(vfb);
+		WARN_ON(vmw_ldu_fb_pin(vfb));
 		ld->fb = vfb;
 	}
 
@@ -263,7 +304,7 @@ static void vmw_ldu_connector_destroy(struct drm_connector *connector)
 static const struct drm_connector_funcs vmw_legacy_connector_funcs = {
 	.dpms = vmw_du_connector_dpms,
 	.detect = vmw_du_connector_detect,
-	.fill_modes = vmw_du_connector_fill_modes,
+	.fill_modes = drm_helper_probe_single_connector_modes,
 	.destroy = vmw_ldu_connector_destroy,
 	.reset = vmw_du_connector_reset,
 	.atomic_duplicate_state = vmw_du_connector_duplicate_state,
@@ -272,6 +313,8 @@ static const struct drm_connector_funcs vmw_legacy_connector_funcs = {
 
 static const struct
 drm_connector_helper_funcs vmw_ldu_connector_helper_funcs = {
+	.get_modes = vmw_connector_get_modes,
+	.mode_valid = vmw_connector_mode_valid
 };
 
 static int vmw_kms_ldu_do_bo_dirty(struct vmw_private *dev_priv,
@@ -408,7 +451,6 @@ static int vmw_ldu_init(struct vmw_private *dev_priv, unsigned unit)
 	ldu->base.pref_active = (unit == 0);
 	ldu->base.pref_width = dev_priv->initial_width;
 	ldu->base.pref_height = dev_priv->initial_height;
-	ldu->base.pref_mode = NULL;
 
 	/*
 	 * Remove this after enabling atomic because property values can

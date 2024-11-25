@@ -21,7 +21,6 @@
 #include <media/v4l2-subdev.h>
 
 #include "dcmipp-common.h"
-#include "dcmipp-colorconv.h"
 
 #define DCMIPP_ISP_DRV_NAME "dcmipp-isp"
 
@@ -30,43 +29,43 @@
 
 #define DCMIPP_CMSR2_P1VSYNCF BIT(18)
 
-#define DCMIPP_P1FSCR (0x804)
+#define DCMIPP_P1FSCR	0x804
 #define DCMIPP_P1FSCR_PIPEDIFF BIT(18)
 
-#define DCMIPP_P1SRCR (0x820)
-#define DCMIPP_P1SRCR_LASTLINE_SHIFT 0
-#define DCMIPP_P1SRCR_LASTLINE_MASK GENMASK(11, 0)
-#define DCMIPP_P1SRCR_FIRSTLINEDEL_SHIFT 12
-#define DCMIPP_P1SRCR_FIRSTLINEDEL_MASK GENMASK(14, 12)
-#define DCMIPP_P1SRCR_CROPEN BIT(15)
+#define DCMIPP_P1SRCR	0x820
+#define DCMIPP_P1SRCR_LASTLINE_SHIFT	0
+#define DCMIPP_P1SRCR_LASTLINE_MASK	GENMASK(11, 0)
+#define DCMIPP_P1SRCR_FIRSTLINEDEL_SHIFT	12
+#define DCMIPP_P1SRCR_FIRSTLINEDEL_MASK	GENMASK(14, 12)
+#define DCMIPP_P1SRCR_CROPEN		BIT(15)
 
-#define DCMIPP_P1DECR (0x830)
-#define DCMIPP_P1DECR_ENABLE BIT(0)
-#define DCMIPP_P1DECR_HDEC_SHIFT 1
-#define DCMIPP_P1DECR_HDEC_MASK GENMASK(2, 1)
-#define DCMIPP_P1DECR_VDEC_SHIFT 3
-#define DCMIPP_P1DECR_VDEC_MASK GENMASK(4, 3)
+#define DCMIPP_P1DECR	0x830
+#define DCMIPP_P1DECR_ENABLE		BIT(0)
+#define DCMIPP_P1DECR_HDEC_SHIFT	1
+#define DCMIPP_P1DECR_HDEC_MASK		GENMASK(2, 1)
+#define DCMIPP_P1DECR_VDEC_SHIFT	3
+#define DCMIPP_P1DECR_VDEC_MASK		GENMASK(4, 3)
 
-#define DCMIPP_P1DMCR (0x870)
-#define DCMIPP_P1DMCR_ENABLE BIT(0)
-#define DCMIPP_P1DMCR_TYPE_SHIFT 1
-#define DCMIPP_P1DMCR_TYPE_MASK GENMASK(2, 1)
-#define DCMIPP_P1DMCR_TYPE_RGGB 0x0
-#define DCMIPP_P1DMCR_TYPE_GRBG 0x1
-#define DCMIPP_P1DMCR_TYPE_GBRG 0x2
-#define DCMIPP_P1DMCR_TYPE_BGGR 0x3
+#define DCMIPP_P1DMCR	0x870
+#define DCMIPP_P1DMCR_ENABLE		BIT(0)
+#define DCMIPP_P1DMCR_TYPE_SHIFT	1
+#define DCMIPP_P1DMCR_TYPE_MASK		GENMASK(2, 1)
+#define DCMIPP_P1DMCR_TYPE_RGGB		0x0
+#define DCMIPP_P1DMCR_TYPE_GRBG		0x1
+#define DCMIPP_P1DMCR_TYPE_GBRG		0x2
+#define DCMIPP_P1DMCR_TYPE_BGGR		0x3
 
-#define DCMIPP_P1CCCR (0x880)
-#define DCMIPP_P1CCCR_ENABLE BIT(0)
-#define DCMIPP_P1CCCR_TYPE_YUV 0
-#define DCMIPP_P1CCCR_TYPE_RGB BIT(1)
-#define DCMIPP_P1CCCR_CLAMP BIT(2)
-#define DCMIPP_P1CCRR1 (0x884)
-#define DCMIPP_P1CCRR2 (0x888)
-#define DCMIPP_P1CCGR1 (0x88C)
-#define DCMIPP_P1CCGR2 (0x890)
-#define DCMIPP_P1CCBR1 (0x894)
-#define DCMIPP_P1CCBR2 (0x898)
+#define DCMIPP_P1CCCR	0x880
+#define DCMIPP_P1CCCR_ENABLE		BIT(0)
+#define DCMIPP_P1CCCR_TYPE_YUV		0
+#define DCMIPP_P1CCCR_TYPE_RGB		BIT(1)
+#define DCMIPP_P1CCCR_CLAMP		BIT(2)
+#define DCMIPP_P1CCRR1	0x884
+#define DCMIPP_P1CCRR2	0x888
+#define DCMIPP_P1CCGR1	0x88C
+#define DCMIPP_P1CCGR2	0x890
+#define DCMIPP_P1CCBR1	0x894
+#define DCMIPP_P1CCBR2	0x898
 
 #define IS_SINK(pad) (!(pad))
 #define IS_SRC(pad)  ((pad))
@@ -78,13 +77,24 @@
 static const unsigned int dcmipp_isp_sink_pix_map_list[] = {
 	/* RGB565 */
 	MEDIA_BUS_FMT_RGB565_2X8_LE,
+	MEDIA_BUS_FMT_RGB565_1X16,
+	/* RGB888 */
+	MEDIA_BUS_FMT_RGB888_3X8,
+	MEDIA_BUS_FMT_RGB888_1X24,
 	/* YUV422 */
 	MEDIA_BUS_FMT_YUYV8_2X8,
+	MEDIA_BUS_FMT_YUYV8_1X16,
 	MEDIA_BUS_FMT_UYVY8_2X8,
+	MEDIA_BUS_FMT_UYVY8_1X16,
 	MEDIA_BUS_FMT_YVYU8_2X8,
+	MEDIA_BUS_FMT_YVYU8_1X16,
 	MEDIA_BUS_FMT_VYUY8_2X8,
+	MEDIA_BUS_FMT_VYUY8_1X16,
 	/* GREY */
 	MEDIA_BUS_FMT_Y8_1X8,
+	MEDIA_BUS_FMT_Y10_1X10,
+	MEDIA_BUS_FMT_Y12_1X12,
+	MEDIA_BUS_FMT_Y14_1X14,
 	/* Raw Bayer */
 	/* Raw 8 */
 	MEDIA_BUS_FMT_SBGGR8_1X8,
@@ -106,32 +116,17 @@ static const unsigned int dcmipp_isp_sink_pix_map_list[] = {
 	MEDIA_BUS_FMT_SGBRG14_1X14,
 	MEDIA_BUS_FMT_SGRBG14_1X14,
 	MEDIA_BUS_FMT_SRGGB14_1X14,
+	/* Raw 16 */
+	MEDIA_BUS_FMT_SBGGR16_1X16,
+	MEDIA_BUS_FMT_SGBRG16_1X16,
+	MEDIA_BUS_FMT_SGRBG16_1X16,
+	MEDIA_BUS_FMT_SRGGB16_1X16,
 };
 
 static const unsigned int dcmipp_isp_src_pix_map_list[] = {
 	MEDIA_BUS_FMT_RGB888_1X24,
 	MEDIA_BUS_FMT_YUV8_1X24,
 };
-
-static unsigned int
-dcmipp_isp_pix_map_by_index(unsigned int i, unsigned int pad)
-{
-	const unsigned int *l;
-	unsigned int size;
-
-	if (IS_SRC(pad)) {
-		l = dcmipp_isp_src_pix_map_list;
-		size = ARRAY_SIZE(dcmipp_isp_src_pix_map_list);
-	} else {
-		l = dcmipp_isp_sink_pix_map_list;
-		size = ARRAY_SIZE(dcmipp_isp_sink_pix_map_list);
-	}
-
-	if (i >= size)
-		return 0;
-
-	return l[i];
-}
 
 static unsigned int
 dcmipp_isp_pix_map_by_code(u32 code, unsigned int pad)
@@ -160,14 +155,8 @@ struct dcmipp_isp_device {
 	struct dcmipp_ent_device ved;
 	struct v4l2_subdev sd;
 	struct device *dev;
-	struct v4l2_mbus_framefmt sink_fmt;
-	struct v4l2_mbus_framefmt src_fmt;
-	unsigned int decimation;
-	struct v4l2_rect crop;
-	struct v4l2_rect compose;
-	bool streaming;
-	/* Protect this data structure */
-	struct mutex lock;
+
+	refcount_t usecnt;
 
 	void __iomem *regs;
 };
@@ -183,17 +172,16 @@ static const struct v4l2_mbus_framefmt fmt_default = {
 	.xfer_func = V4L2_XFER_FUNC_DEFAULT,
 };
 
-static inline unsigned int dcmipp_isp_compute_decimation(unsigned int orig,
-							 unsigned int req)
+static inline unsigned int dcmipp_isp_adjust_decimation(unsigned int size,
+							unsigned int req)
 {
-	unsigned int i;
+	unsigned int i = 0;
 
-	for (i = 0; i < 4; i++) {
-		if (req >= (orig / (1 << i)))
-			return i;
-	}
+	/* Maximum decimation factor is 8 */
+	while (size > req && ++i < 4)
+		size /= 2;
 
-	return (i - 1);
+	return size;
 }
 
 static void dcmipp_isp_adjust_fmt(struct v4l2_mbus_framefmt *fmt, u32 pad)
@@ -217,16 +205,26 @@ static void dcmipp_isp_adjust_fmt(struct v4l2_mbus_framefmt *fmt, u32 pad)
 static int dcmipp_isp_init_cfg(struct v4l2_subdev *sd,
 			       struct v4l2_subdev_state *state)
 {
+	struct v4l2_mbus_framefmt *mf;
 	unsigned int i;
 
-	for (i = 0; i < sd->entity.num_pads; i++) {
-		struct v4l2_mbus_framefmt *mf;
+	/* Initialize the sink & source pads of data */
+	for (i = 0; i < 2; i++) {
 
-		mf = v4l2_subdev_get_try_format(sd, state, i);
+		mf = v4l2_subdev_state_get_format(state, i);
 		*mf = fmt_default;
 		mf->code = IS_SRC(i) ? ISP_MEDIA_BUS_SRC_FMT_DEFAULT :
 				       ISP_MEDIA_BUS_SINK_FMT_DEFAULT;
 	}
+
+	/* Initialize isp params & isp stats pads */
+	mf = v4l2_subdev_state_get_format(state, 2);
+	memset(mf, 0, sizeof(struct v4l2_mbus_framefmt));
+	mf->code = MEDIA_BUS_FMT_METADATA_FIXED;
+
+	mf = v4l2_subdev_state_get_format(state, 3);
+	memset(mf, 0, sizeof(struct v4l2_mbus_framefmt));
+	mf->code = MEDIA_BUS_FMT_METADATA_FIXED;
 
 	return 0;
 }
@@ -235,13 +233,21 @@ static int dcmipp_isp_enum_mbus_code(struct v4l2_subdev *sd,
 				     struct v4l2_subdev_state *state,
 				     struct v4l2_subdev_mbus_code_enum *code)
 {
-	unsigned int pix_code;
+	const unsigned int *l;
+	unsigned int size;
 
-	pix_code = dcmipp_isp_pix_map_by_index(code->index, code->pad);
-	if (!pix_code)
+	if (IS_SRC(code->pad)) {
+		l = dcmipp_isp_src_pix_map_list;
+		size = ARRAY_SIZE(dcmipp_isp_src_pix_map_list);
+	} else {
+		l = dcmipp_isp_sink_pix_map_list;
+		size = ARRAY_SIZE(dcmipp_isp_sink_pix_map_list);
+	}
+
+	if (code->index >= size)
 		return -EINVAL;
 
-	code->code = pix_code;
+	code->code = l[code->index];
 
 	return 0;
 }
@@ -265,77 +271,62 @@ static int dcmipp_isp_enum_frame_size(struct v4l2_subdev *sd,
 	return 0;
 }
 
-static int dcmipp_isp_get_fmt(struct v4l2_subdev *sd,
-			      struct v4l2_subdev_state *state,
-			      struct v4l2_subdev_format *fmt)
-{
-	struct dcmipp_isp_device *isp = v4l2_get_subdevdata(sd);
-
-	mutex_lock(&isp->lock);
-
-	if (IS_SINK(fmt->pad))
-		fmt->format = fmt->which == V4L2_SUBDEV_FORMAT_TRY ?
-			      *v4l2_subdev_get_try_format(sd, state, fmt->pad) :
-			      isp->sink_fmt;
-	else
-		fmt->format = fmt->which == V4L2_SUBDEV_FORMAT_TRY ?
-			      *v4l2_subdev_get_try_format(sd, state, fmt->pad) :
-			      isp->src_fmt;
-
-	mutex_unlock(&isp->lock);
-
-	return 0;
-}
-
 static int dcmipp_isp_set_fmt(struct v4l2_subdev *sd,
 			      struct v4l2_subdev_state *state,
 			      struct v4l2_subdev_format *fmt)
 {
 	struct dcmipp_isp_device *isp = v4l2_get_subdevdata(sd);
-	struct v4l2_mbus_framefmt *pad_fmt;
-	int ret = 0;
+	struct v4l2_mbus_framefmt *pad_fmt, *opp_pad_fmt;
 
-	mutex_lock(&isp->lock);
+	if (refcount_read(&isp->usecnt))
+		return -EBUSY;
 
-	if (fmt->which == V4L2_SUBDEV_FORMAT_ACTIVE) {
-		if (isp->streaming) {
-			ret = -EBUSY;
-			goto out;
-		}
-
-		if (IS_SINK(fmt->pad))
-			pad_fmt = &isp->sink_fmt;
-		else
-			pad_fmt = &isp->src_fmt;
-
-	} else {
-		pad_fmt = v4l2_subdev_get_try_format(sd, state, fmt->pad);
-	}
+	pad_fmt = v4l2_subdev_state_get_format(state, fmt->pad);
 
 	dcmipp_isp_adjust_fmt(&fmt->format, fmt->pad);
 
-	/* When setting sink format, we have to update the src format */
 	if (IS_SINK(fmt->pad)) {
-		struct v4l2_mbus_framefmt *src_pad_fmt;
+		struct v4l2_rect *crop, *compose;
 
-		if (fmt->which == V4L2_SUBDEV_FORMAT_ACTIVE)
-			src_pad_fmt = &isp->src_fmt;
-		else
-			src_pad_fmt = v4l2_subdev_get_try_format(sd, state, 1);
+		opp_pad_fmt = v4l2_subdev_state_get_format(state, 1);
+		crop = v4l2_subdev_state_get_crop(state, 0);
+		compose = v4l2_subdev_state_get_compose(state, 0);
 
-		*src_pad_fmt = fmt->format;
+		*opp_pad_fmt = fmt->format;
 		if (fmt->format.code >= MEDIA_BUS_FMT_Y8_1X8 &&
 		    fmt->format.code < MEDIA_BUS_FMT_SBGGR8_1X8)
-			src_pad_fmt->code = MEDIA_BUS_FMT_YUV8_1X24;
+			opp_pad_fmt->code = MEDIA_BUS_FMT_YUV8_1X24;
 		else
-			src_pad_fmt->code = MEDIA_BUS_FMT_RGB888_1X24;
+			opp_pad_fmt->code = MEDIA_BUS_FMT_RGB888_1X24;
+
+		crop->top = 0;
+		crop->left = 0;
+		crop->width = fmt->format.width;
+		crop->height = fmt->format.height;
+		*compose = *crop;
 
 		dev_dbg(isp->dev, "%s: source format update: new:%dx%d (0x%x, %d, %d, %d, %d)\n",
 			isp->sd.name,
-			src_pad_fmt->width, src_pad_fmt->height,
-			src_pad_fmt->code, src_pad_fmt->colorspace,
-			src_pad_fmt->quantization,
-			src_pad_fmt->xfer_func, src_pad_fmt->ycbcr_enc);
+			opp_pad_fmt->width, opp_pad_fmt->height,
+			opp_pad_fmt->code, opp_pad_fmt->colorspace,
+			opp_pad_fmt->quantization,
+			opp_pad_fmt->xfer_func, opp_pad_fmt->ycbcr_enc);
+	} else {
+		struct v4l2_rect *compose;
+
+		opp_pad_fmt = v4l2_subdev_state_get_format(state, 0);
+		compose = v4l2_subdev_state_get_compose(state, 0);
+
+		fmt->format = *opp_pad_fmt;
+		if (opp_pad_fmt->code >= MEDIA_BUS_FMT_Y8_1X8 &&
+		    opp_pad_fmt->code < MEDIA_BUS_FMT_SBGGR8_1X8)
+			fmt->format.code = MEDIA_BUS_FMT_YUV8_1X24;
+		else
+			fmt->format.code = MEDIA_BUS_FMT_RGB888_1X24;
+		if (compose->width && compose->height) {
+			fmt->format.width = compose->width;
+			fmt->format.height = compose->height;
+		}
 	}
 
 	dev_dbg(isp->dev, "%s: %s format update: old:%dx%d (0x%x, %d, %d, %d, %d) new:%dx%d (0x%x, %d, %d, %d, %d)\n",
@@ -352,54 +343,26 @@ static int dcmipp_isp_set_fmt(struct v4l2_subdev *sd,
 
 	*pad_fmt = fmt->format;
 
-	/* Update sink pad crop */
-	if (IS_SINK(fmt->pad) && fmt->which == V4L2_SUBDEV_FORMAT_ACTIVE) {
-		isp->crop.top = 0;
-		isp->crop.left = 0;
-		isp->crop.width = fmt->format.width;
-		isp->crop.height = fmt->format.height;
-
-		isp->compose.top = 0;
-		isp->compose.left = 0;
-		isp->compose.width = fmt->format.width;
-		isp->compose.height = fmt->format.height;
-		isp->decimation = 0;
-	}
-
-out:
-	mutex_unlock(&isp->lock);
-
-	return ret;
-}
-
-static struct v4l2_rect
-dcmipp_isp_get_crop_bound(const struct v4l2_mbus_framefmt *fmt)
-{
-	/* Get the crop bounds to clamp the crop rectangle correctly */
-	struct v4l2_rect r = {
-		.left = 0,
-		.top = 0,
-		.width = fmt->width,
-		.height = fmt->height,
-	};
-	return r;
+	return 0;
 }
 
 static void dcmipp_isp_adjust_crop(struct v4l2_rect *r,
-				   const struct v4l2_mbus_framefmt *fmt,
-				   unsigned int fmt_width)
+				   const struct v4l2_mbus_framefmt *fmt)
 {
-	const struct v4l2_rect src_rect =
-		dcmipp_isp_get_crop_bound(fmt);
-	static struct v4l2_rect crop_min = {
-		.width = DCMIPP_FMT_WIDTH_DEFAULT,
-		.height = 1,
+	struct v4l2_rect src_rect = {
+		.top = 0,
+		.left = 0,
+		.width = fmt->width,
+		.height = fmt->height,
+	};
+	struct v4l2_rect crop_min = {
 		.top = 8,
 		.left = 0,
+		.width = fmt->width,
+		.height = 1,
 	};
 
 	/* Disallow rectangles smaller than the minimal one. */
-	crop_min.width = fmt_width;
 	v4l2_rect_set_min_size(r, &crop_min);
 	v4l2_rect_map_inside(r, &src_rect);
 }
@@ -408,22 +371,15 @@ static int dcmipp_isp_get_selection(struct v4l2_subdev *sd,
 				    struct v4l2_subdev_state *state,
 				    struct v4l2_subdev_selection *s)
 {
-	struct dcmipp_isp_device *isp = v4l2_get_subdevdata(sd);
 	struct v4l2_mbus_framefmt *sink_fmt;
 	struct v4l2_rect *crop, *compose;
 
 	if (IS_SRC(s->pad))
 		return -EINVAL;
 
-	if (s->which == V4L2_SUBDEV_FORMAT_ACTIVE) {
-		sink_fmt = &isp->sink_fmt;
-		crop = &isp->crop;
-		compose = &isp->compose;
-	} else {
-		sink_fmt = v4l2_subdev_get_try_format(sd, state, s->pad);
-		crop = v4l2_subdev_get_try_crop(sd, state, s->pad);
-		compose = v4l2_subdev_get_try_compose(sd, state, s->pad);
-	}
+	sink_fmt = v4l2_subdev_state_get_format(state, s->pad);
+	crop = v4l2_subdev_state_get_crop(state, s->pad);
+	compose = v4l2_subdev_state_get_compose(state, s->pad);
 
 	switch (s->target) {
 	case V4L2_SEL_TGT_CROP:
@@ -431,10 +387,17 @@ static int dcmipp_isp_get_selection(struct v4l2_subdev *sd,
 		break;
 	case V4L2_SEL_TGT_CROP_BOUNDS:
 	case V4L2_SEL_TGT_CROP_DEFAULT:
-		s->r = dcmipp_isp_get_crop_bound(sink_fmt);
+		s->r.top = 0;
+		s->r.left = 0;
+		s->r.width = sink_fmt->width;
+		s->r.height = sink_fmt->height;
 		break;
 	case V4L2_SEL_TGT_COMPOSE:
 		s->r = *compose;
+		break;
+	case V4L2_SEL_TGT_COMPOSE_BOUNDS:
+	case V4L2_SEL_TGT_COMPOSE_DEFAULT:
+		s->r = *crop;
 		break;
 	default:
 		return -EINVAL;
@@ -450,37 +413,21 @@ static int dcmipp_isp_set_selection(struct v4l2_subdev *sd,
 	struct dcmipp_isp_device *isp = v4l2_get_subdevdata(sd);
 	struct v4l2_mbus_framefmt *sink_fmt, *src_fmt;
 	struct v4l2_rect *crop, *compose;
-	unsigned int dec;
 
 	if (IS_SRC(s->pad))
 		return -EINVAL;
 
-	if (s->which == V4L2_SUBDEV_FORMAT_ACTIVE) {
-		sink_fmt = &isp->sink_fmt;
-		src_fmt = &isp->src_fmt;
-		crop = &isp->crop;
-		compose = &isp->compose;
-	} else {
-		sink_fmt = v4l2_subdev_get_try_format(sd, state, s->pad);
-		src_fmt = v4l2_subdev_get_try_format(sd, state, 1);
-		crop = v4l2_subdev_get_try_crop(sd, state, s->pad);
-		compose = v4l2_subdev_get_try_compose(sd, state, s->pad);
-	}
+	sink_fmt = v4l2_subdev_state_get_format(state, s->pad);
+	src_fmt = v4l2_subdev_state_get_format(state, 1);
+	crop = v4l2_subdev_state_get_crop(state, s->pad);
+	compose = v4l2_subdev_state_get_compose(state, s->pad);
 
 	switch (s->target) {
 	case V4L2_SEL_TGT_CROP:
-		dcmipp_isp_adjust_crop(&s->r, sink_fmt, isp->sink_fmt.width);
+		dcmipp_isp_adjust_crop(&s->r, sink_fmt);
 
 		*crop = s->r;
-
-		/* When we set the crop, this impact as well the compose */
 		*compose = s->r;
-
-		src_fmt->width = s->r.width;
-		src_fmt->height = s->r.height;
-
-		if (s->which == V4L2_SUBDEV_FORMAT_ACTIVE)
-			isp->decimation = 0;
 
 		dev_dbg(isp->dev, "s_selection: crop %ux%u@(%u,%u)\n",
 			crop->width, crop->height, crop->left, crop->top);
@@ -490,28 +437,15 @@ static int dcmipp_isp_set_selection(struct v4l2_subdev *sd,
 		s->r.left = 0;
 		if (s->r.width > crop->width)
 			s->r.width = crop->width;
+		else
+			s->r.width = dcmipp_isp_adjust_decimation(crop->width,
+								  s->r.width);
 		if (s->r.height > crop->height)
 			s->r.height = crop->height;
-		dec = dcmipp_isp_compute_decimation(crop->width, s->r.width);
-		s->r.width = crop->width / (1 << dec);
-		if (s->which == V4L2_SUBDEV_FORMAT_ACTIVE) {
-			isp->decimation = 0;
-			isp->decimation |= (dec << DCMIPP_P1DECR_HDEC_SHIFT);
-		}
-		dec = dcmipp_isp_compute_decimation(crop->height, s->r.height);
-		s->r.height = crop->height / (1 << dec);
-		if (crop->height % (1 << dec))
-			s->r.height += 1;
-		if (s->which == V4L2_SUBDEV_FORMAT_ACTIVE) {
-			isp->decimation |= (dec << DCMIPP_P1DECR_VDEC_SHIFT);
-			if (isp->decimation)
-				isp->decimation |= DCMIPP_P1DECR_ENABLE;
-		}
-
+		else
+			s->r.height = dcmipp_isp_adjust_decimation(crop->height,
+								   s->r.height);
 		*compose = s->r;
-
-		src_fmt->width = s->r.width;
-		src_fmt->height = s->r.height;
 
 		dev_dbg(isp->dev, "s_selection: compose %ux%u@(%u,%u)\n",
 			s->r.width, s->r.height, s->r.left, s->r.top);
@@ -520,6 +454,10 @@ static int dcmipp_isp_set_selection(struct v4l2_subdev *sd,
 		return -EINVAL;
 	}
 
+	/* Update the source pad size */
+	src_fmt->width = s->r.width;
+	src_fmt->height = s->r.height;
+
 	return 0;
 }
 
@@ -527,82 +465,55 @@ static const struct v4l2_subdev_pad_ops dcmipp_isp_pad_ops = {
 	.init_cfg		= dcmipp_isp_init_cfg,
 	.enum_mbus_code		= dcmipp_isp_enum_mbus_code,
 	.enum_frame_size	= dcmipp_isp_enum_frame_size,
-	.get_fmt		= dcmipp_isp_get_fmt,
+	.get_fmt		= v4l2_subdev_get_fmt,
 	.set_fmt		= dcmipp_isp_set_fmt,
 	.get_selection		= dcmipp_isp_get_selection,
 	.set_selection		= dcmipp_isp_set_selection,
 };
 
-static void dcmipp_isp_config_demosaicing(struct dcmipp_isp_device *isp)
+static void dcmipp_isp_config_demosaicing(struct dcmipp_isp_device *isp,
+					  struct v4l2_mbus_framefmt *sink_fmt)
 {
-	unsigned int pix_code = isp->sink_fmt.code, val = 0;
+	unsigned int pix_code = sink_fmt->code;
+	unsigned int val = 0;
 
 	/* Disable demosaicing */
-	reg_clear(isp, DCMIPP_P1DMCR, DCMIPP_P1DMCR_ENABLE | DCMIPP_P1DMCR_TYPE_MASK);
+	reg_clear(isp, DCMIPP_P1DMCR,
+		  DCMIPP_P1DMCR_ENABLE | DCMIPP_P1DMCR_TYPE_MASK);
 
-	if (pix_code >= 0x3000 && pix_code < 0x4000) {
-		dev_dbg(isp->dev, "Input is RawBayer, enable Demosaicing\n");
+	if (pix_code < 0x3000 || pix_code >= 0x4000)
+		return;
 
-		if (pix_code == MEDIA_BUS_FMT_SBGGR8_1X8 ||
-		    pix_code == MEDIA_BUS_FMT_SBGGR10_1X10 ||
-		    pix_code == MEDIA_BUS_FMT_SBGGR12_1X12 ||
-		    pix_code == MEDIA_BUS_FMT_SBGGR14_1X14)
-			val = DCMIPP_P1DMCR_TYPE_BGGR << DCMIPP_P1DMCR_TYPE_SHIFT;
-		else if (pix_code == MEDIA_BUS_FMT_SGBRG8_1X8 ||
-			 pix_code == MEDIA_BUS_FMT_SGBRG10_1X10 ||
-			 pix_code == MEDIA_BUS_FMT_SGBRG12_1X12 ||
-			 pix_code == MEDIA_BUS_FMT_SGBRG14_1X14)
-			val = DCMIPP_P1DMCR_TYPE_GBRG << DCMIPP_P1DMCR_TYPE_SHIFT;
-		else if (pix_code == MEDIA_BUS_FMT_SGRBG8_1X8 ||
-			 pix_code == MEDIA_BUS_FMT_SGRBG10_1X10 ||
-			 pix_code == MEDIA_BUS_FMT_SGRBG12_1X12 ||
-			 pix_code == MEDIA_BUS_FMT_SGRBG14_1X14)
-			val = DCMIPP_P1DMCR_TYPE_GRBG << DCMIPP_P1DMCR_TYPE_SHIFT;
-		else if (pix_code == MEDIA_BUS_FMT_SRGGB8_1X8 ||
-			 pix_code == MEDIA_BUS_FMT_SRGGB10_1X10 ||
-			 pix_code == MEDIA_BUS_FMT_SRGGB12_1X12 ||
-			 pix_code == MEDIA_BUS_FMT_SRGGB14_1X14)
-			val = DCMIPP_P1DMCR_TYPE_RGGB << DCMIPP_P1DMCR_TYPE_SHIFT;
+	dev_dbg(isp->dev, "Input is RawBayer, enable Demosaicing\n");
 
-		val |= DCMIPP_P1DMCR_ENABLE;
-	}
+	if (pix_code == MEDIA_BUS_FMT_SBGGR8_1X8 ||
+	    pix_code == MEDIA_BUS_FMT_SBGGR10_1X10 ||
+	    pix_code == MEDIA_BUS_FMT_SBGGR12_1X12 ||
+	    pix_code == MEDIA_BUS_FMT_SBGGR14_1X14 ||
+	    pix_code == MEDIA_BUS_FMT_SBGGR16_1X16)
+		val = DCMIPP_P1DMCR_TYPE_BGGR << DCMIPP_P1DMCR_TYPE_SHIFT;
+	else if (pix_code == MEDIA_BUS_FMT_SGBRG8_1X8 ||
+		 pix_code == MEDIA_BUS_FMT_SGBRG10_1X10 ||
+		 pix_code == MEDIA_BUS_FMT_SGBRG12_1X12 ||
+		 pix_code == MEDIA_BUS_FMT_SGBRG14_1X14 ||
+		 pix_code == MEDIA_BUS_FMT_SGBRG16_1X16)
+		val = DCMIPP_P1DMCR_TYPE_GBRG << DCMIPP_P1DMCR_TYPE_SHIFT;
+	else if (pix_code == MEDIA_BUS_FMT_SGRBG8_1X8 ||
+		 pix_code == MEDIA_BUS_FMT_SGRBG10_1X10 ||
+		 pix_code == MEDIA_BUS_FMT_SGRBG12_1X12 ||
+		 pix_code == MEDIA_BUS_FMT_SGRBG14_1X14 ||
+		 pix_code == MEDIA_BUS_FMT_SGRBG16_1X16)
+		val = DCMIPP_P1DMCR_TYPE_GRBG << DCMIPP_P1DMCR_TYPE_SHIFT;
+	else if (pix_code == MEDIA_BUS_FMT_SRGGB8_1X8 ||
+		 pix_code == MEDIA_BUS_FMT_SRGGB10_1X10 ||
+		 pix_code == MEDIA_BUS_FMT_SRGGB12_1X12 ||
+		 pix_code == MEDIA_BUS_FMT_SRGGB14_1X14 ||
+		 pix_code == MEDIA_BUS_FMT_SRGGB16_1X16)
+		val = DCMIPP_P1DMCR_TYPE_RGGB << DCMIPP_P1DMCR_TYPE_SHIFT;
 
-	if (val)
-		reg_set(isp, DCMIPP_P1DMCR, val);
-}
+	val |= DCMIPP_P1DMCR_ENABLE;
 
-static int dcmipp_isp_colorconv_set(struct dcmipp_isp_device *isp,
-				    struct dcmipp_colorconv_config *ccconf)
-{
-	u32 val = 0;
-	int i;
-
-	for (i = 0; i < 6; i++)
-		reg_write(isp, DCMIPP_P1CCRR1 + (4 * i), ccconf->conv_matrix[i]);
-
-	if (ccconf->clamping)
-		val |= DCMIPP_P1CCCR_CLAMP;
-	if (ccconf->clamping_as_rgb)
-		val |= DCMIPP_P1CCCR_TYPE_RGB;
-	if (ccconf->enable)
-		val |= DCMIPP_P1CCCR_ENABLE;
-
-	reg_write(isp, DCMIPP_P1CCCR, val);
-
-	return 0;
-}
-
-static int dcmipp_isp_colorconv_auto(struct dcmipp_isp_device *isp)
-{
-	struct dcmipp_colorconv_config ccconf;
-	int ret;
-
-	/* Get the "src to sink" color conversion matrix */
-	ret = dcmipp_colorconv_configure(isp->dev, &isp->sink_fmt, &isp->src_fmt, &ccconf);
-	if (ret)
-		return ret;
-
-	return dcmipp_isp_colorconv_set(isp, &ccconf);
+	reg_set(isp, DCMIPP_P1DMCR, val);
 }
 
 static bool dcmipp_isp_is_aux_output_enabled(struct dcmipp_isp_device *isp)
@@ -623,13 +534,49 @@ static bool dcmipp_isp_is_aux_output_enabled(struct dcmipp_isp_device *isp)
 	return false;
 }
 
+static void dcmipp_isp_config_decimation(struct dcmipp_isp_device *isp,
+					 struct v4l2_rect *crop,
+					 struct v4l2_rect *compose)
+{
+	u32 decr;
+
+	decr = (fls(crop->width / compose->width) - 1) << DCMIPP_P1DECR_HDEC_SHIFT |
+	       (fls(crop->height / compose->height) - 1) << DCMIPP_P1DECR_VDEC_SHIFT;
+	if (decr)
+		decr |= DCMIPP_P1DECR_ENABLE;
+
+	dev_dbg(isp->dev, "%s: config decr: 0x%x\n", __func__, decr);
+
+	reg_write(isp, DCMIPP_P1DECR, decr);
+}
+
 static int dcmipp_isp_s_stream(struct v4l2_subdev *sd, int enable)
 {
 	struct dcmipp_isp_device *isp = v4l2_get_subdevdata(sd);
+	struct v4l2_mbus_framefmt *sink_fmt;
+	struct v4l2_rect *compose, *crop;
+	struct v4l2_subdev_state *state;
+	struct v4l2_subdev *s_subdev;
+	struct media_pad *pad;
 	int ret = 0;
 
-	mutex_lock(&isp->lock);
+	/* Get source subdev */
+	pad = media_pad_remote_pad_first(&sd->entity.pads[0]);
+	if (!pad || !is_media_entity_v4l2_subdev(pad->entity))
+		return -EINVAL;
+	s_subdev = media_entity_to_v4l2_subdev(pad->entity);
+
 	if (enable) {
+		/* Nothing to do if already enabled by someone */
+		if (refcount_inc_not_zero(&isp->usecnt))
+			return 0;
+
+		state = v4l2_subdev_lock_and_get_active_state(&isp->sd);
+		sink_fmt = v4l2_subdev_state_get_format(state, 0);
+		crop = v4l2_subdev_state_get_crop(state, 0);
+		compose = v4l2_subdev_state_get_compose(state, 0);
+		v4l2_subdev_unlock_state(state);
+
 		/* Check if link between ISP & Pipe2 postproc is enabled */
 		if (dcmipp_isp_is_aux_output_enabled(isp))
 			reg_clear(isp, DCMIPP_P1FSCR, DCMIPP_P1FSCR_PIPEDIFF);
@@ -638,28 +585,30 @@ static int dcmipp_isp_s_stream(struct v4l2_subdev *sd, int enable)
 
 		/* Configure Statistic Removal */
 		reg_write(isp, DCMIPP_P1SRCR,
-			  ((isp->crop.top << DCMIPP_P1SRCR_FIRSTLINEDEL_SHIFT) |
-			   (isp->crop.height << DCMIPP_P1SRCR_LASTLINE_SHIFT) |
+			  ((crop->top << DCMIPP_P1SRCR_FIRSTLINEDEL_SHIFT) |
+			   (crop->height << DCMIPP_P1SRCR_LASTLINE_SHIFT) |
 			   DCMIPP_P1SRCR_CROPEN));
 
 		/* Configure Decimation */
-		reg_write(isp, DCMIPP_P1DECR, isp->decimation);
+		dcmipp_isp_config_decimation(isp, crop, compose);
 
 		/* Configure Demosaicing */
-		dcmipp_isp_config_demosaicing(isp);
-
-		/* Configure ColorConversion */
-		ret = dcmipp_isp_colorconv_auto(isp);
-		if (ret)
-			goto out;
+		dcmipp_isp_config_demosaicing(isp, sink_fmt);
+	} else {
+		if (refcount_dec_not_one(&isp->usecnt))
+			return 0;
 	}
 
-	isp->streaming = enable;
+	ret = dcmipp_s_stream_helper(s_subdev, enable);
+	if (ret < 0) {
+		dev_err(isp->dev,
+			"failed to start source subdev streaming (%d)\n", ret);
+		return ret;
+	}
 
-out:
-	mutex_unlock(&isp->lock);
+	refcount_set(&isp->usecnt, enable ? 1 : 0);
 
-	return ret;
+	return 0;
 }
 
 static const struct v4l2_subdev_video_ops dcmipp_isp_video_ops = {
@@ -677,16 +626,33 @@ void dcmipp_isp_ent_release(struct dcmipp_ent_device *ved)
 			container_of(ved, struct dcmipp_isp_device, ved);
 
 	dcmipp_ent_sd_unregister(ved, &isp->sd);
-	mutex_destroy(&isp->lock);
 	kfree(isp);
 }
 
-struct dcmipp_ent_device *dcmipp_isp_ent_init(struct device *dev,
-					      const char *entity_name,
-					      struct v4l2_device *v4l2_dev,
-					      void __iomem *regs)
+static int dcmipp_isp_link_validate(struct media_link *link)
+{
+	/*
+	 * We only need to check link coming to the sink pad #0 since
+	 * sink pad #2 is connected to the output video device
+	 */
+	if (link->sink->index != 0)
+		return 0;
+
+	return v4l2_subdev_link_validate(link);
+}
+
+static const struct media_entity_operations dcmipp_isp_mops = {
+	.link_validate		= dcmipp_isp_link_validate,
+};
+
+struct dcmipp_ent_device *dcmipp_isp_ent_init(const char *entity_name,
+					      struct dcmipp_device *dcmipp)
 {
 	struct dcmipp_isp_device *isp;
+	const unsigned long pads_flag[] = {
+		MEDIA_PAD_FL_SINK, MEDIA_PAD_FL_SOURCE,
+		MEDIA_PAD_FL_SINK, MEDIA_PAD_FL_SOURCE,
+	};
 	int ret;
 
 	/* Allocate the isp struct */
@@ -694,36 +660,23 @@ struct dcmipp_ent_device *dcmipp_isp_ent_init(struct device *dev,
 	if (!isp)
 		return ERR_PTR(-ENOMEM);
 
-	isp->regs = regs;
-	isp->dev = dev;
-
-	/* Initialize the lock */
-	mutex_init(&isp->lock);
-
-	/* Initialize the frame format */
-	isp->sink_fmt = fmt_default;
-	isp->sink_fmt.code = ISP_MEDIA_BUS_SINK_FMT_DEFAULT;
-	isp->src_fmt = fmt_default;
-	isp->src_fmt.code = ISP_MEDIA_BUS_SRC_FMT_DEFAULT;
+	isp->regs = dcmipp->regs;
+	isp->dev = dcmipp->dev;
+	refcount_set(&isp->usecnt, 0);
 
 	/* Initialize ved and sd */
 	ret = dcmipp_ent_sd_register(&isp->ved, &isp->sd,
-				     v4l2_dev,
-				     entity_name,
-				     MEDIA_ENT_F_PROC_VIDEO_PIXEL_FORMATTER, 4,
-				     (const unsigned long[4]) {
-				     MEDIA_PAD_FL_SINK,
-				     MEDIA_PAD_FL_SOURCE,
-				     MEDIA_PAD_FL_SINK,
-				     MEDIA_PAD_FL_SOURCE,
-				     },
+				     &dcmipp->v4l2_dev, entity_name,
+				     MEDIA_ENT_F_PROC_VIDEO_PIXEL_FORMATTER,
+				     ARRAY_SIZE(pads_flag), pads_flag,
 				     NULL, &dcmipp_isp_ops,
 				     NULL, NULL);
 	if (ret) {
-		mutex_destroy(&isp->lock);
 		kfree(isp);
 		return ERR_PTR(ret);
 	}
+	isp->sd.entity.ops = &dcmipp_isp_mops;
+	isp->ved.dcmipp = dcmipp;
 
 	return &isp->ved;
 }

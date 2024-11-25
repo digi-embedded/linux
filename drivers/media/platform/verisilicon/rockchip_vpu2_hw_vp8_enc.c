@@ -1038,7 +1038,8 @@ rockchip_vpu2_vp8_enc_set_buffers(struct hantro_dev *vpu, struct hantro_ctx *ctx
 	size_t luma_size;
 	dma_addr_t dst_dma;
 	size_t dst_size;
-	int i, ref_idx;
+	int i;
+	int ref_idx = 0;
 
 	src_buf = hantro_get_src_buf(ctx);
 	dst_buf = hantro_get_dst_buf(ctx);

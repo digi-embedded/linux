@@ -47,6 +47,8 @@ $(OUTPUT)counter_watch_events: $(COUNTER_WATCH_EVENTS)
 clean:
 	rm -f $(ALL_PROGRAMS)
 	rm -rf $(OUTPUT)include/linux/counter.h
+	rm -df $(OUTPUT)include/linux
+	rm -df $(OUTPUT)include
 	find $(or $(OUTPUT),.) -name '*.o' -delete -o -name '\.*.d' -delete
 	find $(or $(OUTPUT),.) -name '\.*.o.cmd' -delete
 

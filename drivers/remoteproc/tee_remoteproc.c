@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 /*
  * Copyright (C) STMicroelectronics 2023 - All Rights Reserved
- * Authors: Arnaud Pouliquen <arnaud.pouliquen@st.com>
+ * Author: Arnaud Pouliquen <arnaud.pouliquen@st.com>
  */
 
 #include <linux/firmware.h>
@@ -23,32 +23,32 @@
 /*
  * Authentication of the firmware and load in the remote processor memory
  *
- * [in]  params[0].value.a:	unique 32bit identifier of the firmware
+ * [in]  params[0].value.a:	unique 32bit identifier of the remote processor
  * [in]	 params[1].memref:	buffer containing the image of the buffer
  */
 #define TA_RPROC_FW_CMD_LOAD_FW		1
 
 /*
- * start the remote processor
+ * Start the remote processor
  *
- * [in]  params[0].value.a:	unique 32bit identifier of the firmware
+ * [in]  params[0].value.a:	unique 32bit identifier of the remote processor
  */
 #define TA_RPROC_FW_CMD_START_FW	2
 
 /*
- * stop the remote processor
+ * Stop the remote processor
  *
- * [in]  params[0].value.a:	unique 32bit identifier of the firmware
+ * [in]  params[0].value.a:	unique 32bit identifier of the remote processor
  */
 #define TA_RPROC_FW_CMD_STOP_FW		3
 
 /*
- * return the address of the resource table, or 0 if not found
+ * Return the address of the resource table, or 0 if not found
  * No check is done to verify that the address returned is accessible by
  * the non secure context. If the resource table is loaded in a protected
  * memory the access by the non secure context will lead to a data abort.
  *
- * [in]  params[0].value.a:	unique 32bit identifier of the firmware
+ * [in]  params[0].value.a:	unique 32bit identifier of the remote processor
  * [out]  params[1].value.a:	32bit LSB resource table memory address
  * [out]  params[1].value.b:	32bit MSB resource table memory address
  * [out]  params[2].value.a:	32bit LSB resource table memory size
@@ -57,9 +57,9 @@
 #define TA_RPROC_FW_CMD_GET_RSC_TABLE	4
 
 /*
- * return the address of the core dump
+ * Return the address of the core dump
  *
- * [in]  params[0].value.a:	unique 32bit identifier of the firmware
+ * [in]  params[0].value.a:	unique 32bit identifier of the remote processor
  * [out] params[1].memref:	address of the core dump image if exist,
  *				else return Null
  */
@@ -79,7 +79,7 @@ struct tee_rproc_context {
 	struct device *dev;
 };
 
-struct tee_rproc_context *tee_rproc_ctx;
+static struct tee_rproc_context *tee_rproc_ctx;
 
 static void prepare_args(struct tee_rproc *trproc, int cmd, struct tee_ioctl_invoke_arg *arg,
 			 struct tee_param *param, unsigned int num_params)
@@ -105,15 +105,12 @@ int tee_rproc_load_fw(struct tee_rproc *trproc, const struct firmware *fw)
 	int ret;
 
 	fw_shm = tee_shm_register_kernel_buf(tee_rproc_ctx->tee_ctx, (void *)fw->data, fw->size);
-	if (IS_ERR(fw_shm)) {
-		dev_err(tee_rproc_ctx->dev, "Failed to register kernel buffer in tee: %ld\n",
-			PTR_ERR(fw_shm));
+	if (IS_ERR(fw_shm))
 		return PTR_ERR(fw_shm);
-	}
 
 	prepare_args(trproc, TA_RPROC_FW_CMD_LOAD_FW, &arg, param, 1);
 
-	/* provide the address of the firmware image */
+	/* Provide the address of the firmware image */
 	param[1] = (struct tee_param) {
 		.attr = TEE_IOCTL_PARAM_ATTR_TYPE_MEMREF_INPUT,
 		.u.memref = {
@@ -165,10 +162,7 @@ int rproc_tee_get_rsc_table(struct tee_rproc *trproc)
 	if (!rsc_size)
 		return 0;
 
-	/*
-	 * Store the resource table address that would be updated by the remote
-	 * core and the virtio.
-	 */
+	/* Store the resource table address that would be updated by the remote core . */
 	trproc->rsc_va = ioremap_wc(param[1].u.value.a, rsc_size);
 	if (IS_ERR_OR_NULL(trproc->rsc_va)) {
 		dev_err(tee_rproc_ctx->dev, "Unable to map memory region: %lld+%zx\n",
@@ -179,9 +173,9 @@ int rproc_tee_get_rsc_table(struct tee_rproc *trproc)
 
 	/*
 	 * A cached table is requested as the physical address is not mapped yet
-	 * but remoteproc need to parse the table for resources.
+	 * but remoteproc needs to parse the table for resources.
 	 */
-	rproc->cached_table = kmemdup(trproc->rsc_va, rsc_size, GFP_KERNEL);
+	rproc->cached_table = kmemdup((__force void *)trproc->rsc_va, rsc_size, GFP_KERNEL);
 	if (!rproc->cached_table)
 		return -ENOMEM;
 
@@ -194,7 +188,7 @@ EXPORT_SYMBOL_GPL(rproc_tee_get_rsc_table);
 
 struct resource_table *tee_rproc_get_loaded_rsc_table(struct tee_rproc *trproc)
 {
-	return (struct resource_table *)trproc->rsc_va;
+	return (__force struct resource_table *)trproc->rsc_va;
 }
 EXPORT_SYMBOL_GPL(tee_rproc_get_loaded_rsc_table);
 
@@ -272,13 +266,9 @@ struct tee_rproc *tee_rproc_register(struct device *dev, unsigned int rproc_id)
 	rproc_tee_device = to_tee_client_device(tee_rproc_ctx->dev);
 	memset(&sess_arg, 0, sizeof(sess_arg));
 
-	/* Open session with rproc_tee load Trusted App */
+	/* Open session with rproc_tee load the OP-TEE Trusted Application */
 	memcpy(sess_arg.uuid, rproc_tee_device->id.uuid.b, TEE_IOCTL_UUID_LEN);
 
-	/*
-	 * TODO: should we replace TEE_IOCTL_LOGIN_PUBLIC by
-	 * TEE_IOCTL_LOGIN_REE_KERNEL?
-	 */
 	sess_arg.clnt_login = TEE_IOCTL_LOGIN_REE_KERNEL;
 	sess_arg.num_params = 1;
 
@@ -399,5 +389,5 @@ static void __exit tee_rproc_fw_mod_exit(void)
 module_init(tee_rproc_fw_mod_init);
 module_exit(tee_rproc_fw_mod_exit);
 
-MODULE_DESCRIPTION("secure remote processor control driver");
+MODULE_DESCRIPTION(" TEE remote processor control driver");
 MODULE_LICENSE("GPL");

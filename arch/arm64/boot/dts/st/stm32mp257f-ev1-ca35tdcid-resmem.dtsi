@@ -62,6 +62,24 @@
 			no-map;
 		};
 
+		cm0_cube_fw: cm0-cube-fw@200C0000 {
+			compatible = "shared-dma-pool";
+			reg = <0x0 0x200C0000 0x0 0x4000>;
+			no-map;
+		};
+
+		cm0_cube_data: cm0-cube-data@200C4000 {
+			compatible = "shared-dma-pool";
+			reg = <0x0 0x200C4000 0x0 0x2000>;
+			no-map;
+		};
+
+		ipc_shmem_2: ipc-shmem-2@200C6000{
+			compatible = "shared-dma-pool";
+			reg = <0x0 0x200C6000 0x0 0x2000>;
+			no-map;
+		};
+
 		/* Backup RAM reserved memory declaration */
 		bl31_lowpower: bl31-lowpower@42000000 {
 			reg = <0x0 0x42000000 0x0 0x1000>;

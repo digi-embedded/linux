@@ -1762,12 +1762,32 @@ void ath10k_wmi_put_wmi_channel(struct ath10k *ar, struct wmi_channel *ch,
 
 int ath10k_wmi_wait_for_service_ready(struct ath10k *ar)
 {
-	unsigned long time_left;
+	unsigned long time_left, i;
 
 	time_left = wait_for_completion_timeout(&ar->wmi.service_ready,
 						WMI_SERVICE_READY_TIMEOUT_HZ);
-	if (!time_left)
-		return -ETIMEDOUT;
+	if (!time_left) {
+		/* Sometimes the PCI HIF doesn't receive interrupt
+		 * for the service ready message even if the buffer
+		 * was completed. PCIe sniffer shows that it's
+		 * because the corresponding CE ring doesn't fires
+		 * it. Workaround here by polling CE rings once.
+		 */
+		ath10k_warn(ar, "failed to receive service ready completion, polling..\n");
+
+		for (i = 0; i < CE_COUNT; i++)
+			ath10k_hif_send_complete_check(ar, i, 1);
+
+		time_left = wait_for_completion_timeout(&ar->wmi.service_ready,
+							WMI_SERVICE_READY_TIMEOUT_HZ);
+		if (!time_left) {
+			ath10k_warn(ar, "polling timed out\n");
+			return -ETIMEDOUT;
+		}
+
+		ath10k_warn(ar, "service ready completion received, continuing normally\n");
+	}
+
 	return 0;
 }
 
@@ -8164,28 +8184,6 @@ ath10k_wmi_10_2_4_op_gen_pdev_get_tpc_config(struct ath10k *ar, u32 param)
 	return skb;
 }
 
-size_t ath10k_wmi_fw_stats_num_peers(struct list_head *head)
-{
-	struct ath10k_fw_stats_peer *i;
-	size_t num = 0;
-
-	list_for_each_entry(i, head, list)
-		++num;
-
-	return num;
-}
-
-size_t ath10k_wmi_fw_stats_num_vdevs(struct list_head *head)
-{
-	struct ath10k_fw_stats_vdev *i;
-	size_t num = 0;
-
-	list_for_each_entry(i, head, list)
-		++num;
-
-	return num;
-}
-
 static void
 ath10k_wmi_fw_pdev_base_stats_fill(const struct ath10k_fw_stats_pdev *pdev,
 				   char *buf, u32 *length)
@@ -8462,8 +8460,8 @@ void ath10k_wmi_main_op_fw_stats_fill(struct ath10k *ar,
 		goto unlock;
 	}
 
-	num_peers = ath10k_wmi_fw_stats_num_peers(&fw_stats->peers);
-	num_vdevs = ath10k_wmi_fw_stats_num_vdevs(&fw_stats->vdevs);
+	num_peers = list_count_nodes(&fw_stats->peers);
+	num_vdevs = list_count_nodes(&fw_stats->vdevs);
 
 	ath10k_wmi_fw_pdev_base_stats_fill(pdev, buf, &len);
 	ath10k_wmi_fw_pdev_tx_stats_fill(pdev, buf, &len);
@@ -8520,8 +8518,8 @@ void ath10k_wmi_10x_op_fw_stats_fill(struct ath10k *ar,
 		goto unlock;
 	}
 
-	num_peers = ath10k_wmi_fw_stats_num_peers(&fw_stats->peers);
-	num_vdevs = ath10k_wmi_fw_stats_num_vdevs(&fw_stats->vdevs);
+	num_peers = list_count_nodes(&fw_stats->peers);
+	num_vdevs = list_count_nodes(&fw_stats->vdevs);
 
 	ath10k_wmi_fw_pdev_base_stats_fill(pdev, buf, &len);
 	ath10k_wmi_fw_pdev_extra_stats_fill(pdev, buf, &len);
@@ -8668,8 +8666,8 @@ void ath10k_wmi_10_4_op_fw_stats_fill(struct ath10k *ar,
 		goto unlock;
 	}
 
-	num_peers = ath10k_wmi_fw_stats_num_peers(&fw_stats->peers);
-	num_vdevs = ath10k_wmi_fw_stats_num_vdevs(&fw_stats->vdevs);
+	num_peers = list_count_nodes(&fw_stats->peers);
+	num_vdevs = list_count_nodes(&fw_stats->vdevs);
 
 	ath10k_wmi_fw_pdev_base_stats_fill(pdev, buf, &len);
 	ath10k_wmi_fw_pdev_extra_stats_fill(pdev, buf, &len);

@@ -20,13 +20,6 @@
 #include "of.h"
 #include "firmware.h"
 #include "chip.h"
-#include "defs.h"
-#include "fweh.h"
-#include <brcm_hw_ids.h>
-#include <linux/reboot.h>
-#include <linux/notifier.h>
-#include "pcie.h"
-#include "sdio.h"
 
 MODULE_AUTHOR("Broadcom Corporation");
 MODULE_DESCRIPTION("Broadcom 802.11 wireless LAN fullmac driver.");
@@ -62,31 +55,17 @@ module_param_string(alternative_fw_path, brcmf_firmware_path,
 		    BRCMF_FW_ALTPATH_LEN, 0400);
 MODULE_PARM_DESC(alternative_fw_path, "Alternative firmware path");
 
-static int brcmf_fcmode = 2;
+static int brcmf_fcmode;
 module_param_named(fcmode, brcmf_fcmode, int, 0);
 MODULE_PARM_DESC(fcmode, "Mode of firmware signalled flow control");
 
 static int brcmf_roamoff;
 module_param_named(roamoff, brcmf_roamoff, int, 0400);
-MODULE_PARM_DESC(roamoff,
-		 "Do not use fw roaming engine: 0=use fw_roam, 1=fw_roam off & report BCNLOST_MSG, 2=fw_roam off & report DISCONNECTED");
+MODULE_PARM_DESC(roamoff, "Do not use internal roaming engine");
 
 static int brcmf_iapp_enable;
 module_param_named(iapp, brcmf_iapp_enable, int, 0);
 MODULE_PARM_DESC(iapp, "Enable partial support for the obsoleted Inter-Access Point Protocol");
-
-static int brcmf_eap_restrict;
-module_param_named(eap_restrict, brcmf_eap_restrict, int, 0400);
-MODULE_PARM_DESC(eap_restrict, "Block non-802.1X frames until auth finished");
-
-/* Default Power save value is PM_FAST */
-static int brcmf_max_pm=2;
-module_param_named(max_pm, brcmf_max_pm, int, 0);
-MODULE_PARM_DESC(max_pm, "Use max power management mode by default");
-
-int brcmf_pkt_prio_enable;
-module_param_named(pkt_prio, brcmf_pkt_prio_enable, int, 0);
-MODULE_PARM_DESC(pkt_prio, "Support for update the packet priority");
 
 #ifdef DEBUG
 /* always succeed brcmf_bus_started() */
@@ -95,171 +74,8 @@ module_param_named(ignore_probe_fail, brcmf_ignore_probe_fail, int, 0);
 MODULE_PARM_DESC(ignore_probe_fail, "always succeed probe for debugging");
 #endif
 
-static int brcmf_fw_ap_select;
-module_param_named(fw_ap_select, brcmf_fw_ap_select, int, 0400);
-MODULE_PARM_DESC(fw_ap_select, "Allow FW for AP selection");
-
-static int brcmf_disable_6ghz;
-module_param_named(disable_6ghz, brcmf_disable_6ghz, int, 0400);
-MODULE_PARM_DESC(disable_6ghz, "Disable 6GHz Operation");
-
-static int brcmf_sdio_in_isr;
-module_param_named(sdio_in_isr, brcmf_sdio_in_isr, int, 0400);
-MODULE_PARM_DESC(sdio_in_isr, "Handle SDIO DPC in ISR");
-
-static int brcmf_sdio_rxf_in_kthread;
-module_param_named(sdio_rxf_thread, brcmf_sdio_rxf_in_kthread, int, 0400);
-MODULE_PARM_DESC(sdio_rxf_thread, "SDIO RX Frame in Kthread");
-
-unsigned int brcmf_offload_prof = BRCMF_OL_PROF_TYPE_LOW_PWR;
-module_param_named(offload_prof, brcmf_offload_prof, uint, 0400);
-MODULE_PARM_DESC(offload_prof,
-		 "Offload power profile: 1:low 2:mid 3:high (default:1)");
-
-unsigned int brcmf_offload_feat = BRCMF_OL_ARP |
-				  BRCMF_OL_ND |
-				  BRCMF_OL_BDO |
-				  BRCMF_OL_ICMP |
-				  BRCMF_OL_TKO |
-				  BRCMF_OL_DLTRO |
-				  BRCMF_OL_PNO |
-				  BRCMF_OL_KEEPALIVE |
-				  BRCMF_OL_GTKOE |
-				  BRCMF_OL_WOWLPF;
-module_param_named(offload_feat, brcmf_offload_feat, uint, 0400);
-MODULE_PARM_DESC(offload_feat,
-		 "Offload feat bitmap: 0:arp 1:nd 2:mdns 3:icmp 4:tcp-keepalive "
-		 "5:dhcp-renewal 6:pno 7:keepalive 8:gtk 9:wowlpf (default: 0x1FF)");
-
-static int brcmf_bt_over_sdio;
-module_param_named(bt_over_sdio, brcmf_bt_over_sdio, int, 0);
-MODULE_PARM_DESC(bt_over_sdio, "Enable BT over SDIO");
-
-static int brcmf_sdio_idleclk_disable = BRCMFMAC_AUTO;
-module_param_named(sdio_idleclk_disable, brcmf_sdio_idleclk_disable, int, 0644);
-MODULE_PARM_DESC(sdio_idleclk_disable, "Disable SDIO idle clock");
-
-static int brcmf_idle_time_zero;
-module_param_named(idle_time_zero, brcmf_idle_time_zero, int, 0644);
-MODULE_PARM_DESC(idle_time_zero, "Set idle interval to zero");
-
-static int brcmf_short_psq;
-module_param_named(short_psq, brcmf_short_psq, int, 0);
-MODULE_PARM_DESC(short_psq, "Use shorter PS Queue");
-
 static struct brcmfmac_platform_data *brcmfmac_pdata;
 struct brcmf_mp_global_t brcmf_mp_global;
-
-static int brcmf_reboot_callback(struct notifier_block *this, unsigned long code, void *unused);
-static struct notifier_block brcmf_reboot_notifier = {
-	.notifier_call = brcmf_reboot_callback,
-	.priority = 1,
-};
-
-/* Offload features to firmware based on a user based power profile using module param
- * offload_prof and offload_feat (provides flag list of all offloads).
- * Default power profile : LowPwr with all offloads enabled.
- */
-void brcmf_generic_offload_config(struct brcmf_if *ifp, unsigned int ol_feat,
-				  unsigned int ol_profile, bool reset)
-{
-	struct brcmf_ol_cfg_v1 ol_cfg = {0};
-	u32 ol_feat_skip = ~ol_feat;
-	int err = 0;
-
-	ol_cfg.ver = BRCMF_OL_CFG_VER_1;
-	ol_cfg.len = sizeof(ol_cfg);
-	ol_cfg.id = BRCMF_OL_CFG_ID_PROF;
-	ol_cfg.offload_skip = ol_feat_skip;
-	ol_cfg.u.ol_profile.reset = reset;
-	ol_cfg.u.ol_profile.type = ol_profile;
-
-	err = brcmf_fil_iovar_data_set(ifp, "offload_config", &ol_cfg,
-				       sizeof(ol_cfg));
-	if (err < 0)
-		brcmf_err("failed to %s generic offload profile:%u feat:0x%x, err = %d",
-			  reset ? "reset" : "set", ol_profile, ol_feat, err);
-	else
-		brcmf_info("successfully %s generic offload profile:%u feat:0x%x",
-			   reset ? "reset" : "set", ol_profile, ol_feat);
-}
-
-/* Enable specific offloads that are not enabled in a power profile but have
- * to be enabled in suspend state as host goes to sleep.
- */
-void brcmf_generic_offload_enable(struct brcmf_if *ifp, unsigned int ol_feat,
-				  bool enable)
-{
-	struct brcmf_ol_cfg_v1 ol_cfg = {0};
-	u32 ol_feat_skip = ~ol_feat;
-	int err = 0;
-
-	ol_cfg.ver = BRCMF_OL_CFG_VER_1;
-	ol_cfg.len = sizeof(ol_cfg);
-	ol_cfg.id = BRCMF_OL_CFG_ID_ACTIVATE;
-	ol_cfg.u.ol_activate.enable = enable;
-	ol_cfg.offload_skip = ol_feat_skip;
-
-	err = brcmf_fil_iovar_data_set(ifp, "offload_config", &ol_cfg,
-				       sizeof(ol_cfg));
-	if (err < 0)
-		brcmf_err("failed to %s generic offload feat:0x%x, err = %d",
-			  enable ? "enable" : "disable", ol_feat, err);
-	else
-		brcmf_info("successfully %s generic offload feat:0x%x",
-			   enable ? "enabled" : "disabled", ol_feat);
-}
-
-void brcmf_generic_offload_host_ipv4_update(struct brcmf_if *ifp, unsigned int ol_feat,
-					    u32 ipaddr, bool is_add)
-{
-	struct brcmf_ol_cfg_v1 ol_cfg = {0};
-	u32 ol_feat_skip = ~ol_feat;
-	int err = 0;
-
-	ol_cfg.ver = BRCMF_OL_CFG_VER_1;
-	ol_cfg.len = sizeof(ol_cfg);
-	ol_cfg.id = BRCMF_OL_CFG_ID_INET_V4;
-	ol_cfg.u.ol_inet_v4.del = !is_add;
-	memcpy(ol_cfg.u.ol_inet_v4.host_ipv4.addr, &ipaddr, sizeof(struct ipv4_addr));
-	ol_cfg.offload_skip = ol_feat_skip;
-
-	err = brcmf_fil_iovar_data_set(ifp, "offload_config", &ol_cfg,
-				       sizeof(ol_cfg));
-	if (err < 0)
-		brcmf_err("failed to %s generic offload host address %pI4, err = %d",
-			  is_add ? "add" : "del", &ipaddr, err);
-	else
-		brcmf_dbg(TRACE, "successfully %s generic offload host address %pI4",
-			  is_add ? "added" : "deleted", &ipaddr);
-}
-
-int brcmf_generic_offload_host_ipv6_update(struct brcmf_if *ifp, unsigned int ol_feat,
-					   void *ptr, u8 type, bool is_add)
-{
-	struct brcmf_ol_cfg_v1 ol_cfg = {0};
-	u32 ol_feat_skip = ~ol_feat;
-	int err = 0;
-
-	ol_cfg.ver = BRCMF_OL_CFG_VER_1;
-	ol_cfg.len = sizeof(ol_cfg);
-	ol_cfg.id = BRCMF_OL_CFG_ID_INET_V6;
-	ol_cfg.u.ol_inet_v6.del = !is_add;
-	ol_cfg.u.ol_inet_v6.type = type;
-	memcpy(ol_cfg.u.ol_inet_v6.host_ipv6.addr, ptr, sizeof(struct ipv6_addr));
-	ol_cfg.offload_skip = ol_feat_skip;
-
-	err = brcmf_fil_iovar_data_set(ifp, "offload_config", &ol_cfg,
-				       sizeof(ol_cfg));
-	if (err < 0)
-		brcmf_err("failed to %s host address %pI6 err = %d",
-			  is_add ? "add" : "del", ptr, err);
-	else
-		brcmf_dbg(TRACE, "successfully %s host address %pI6",
-			  is_add ? "add" : "del", ptr);
-
-	return err;
-}
 
 void brcmf_c_set_joinpref_default(struct brcmf_if *ifp)
 {
@@ -285,7 +101,7 @@ void brcmf_c_set_joinpref_default(struct brcmf_if *ifp)
 
 static int brcmf_c_download(struct brcmf_if *ifp, u16 flag,
 			    struct brcmf_dload_data_le *dload_buf,
-			    u32 len)
+			    u32 len, const char *var)
 {
 	s32 err;
 
@@ -294,19 +110,19 @@ static int brcmf_c_download(struct brcmf_if *ifp, u16 flag,
 	dload_buf->dload_type = cpu_to_le16(DL_TYPE_CLM);
 	dload_buf->len = cpu_to_le32(len);
 	dload_buf->crc = cpu_to_le32(0);
-	len = sizeof(*dload_buf) + len - 1;
 
-	err = brcmf_fil_iovar_data_set(ifp, "clmload", dload_buf, len);
+	err = brcmf_fil_iovar_data_set(ifp, var, dload_buf,
+				       struct_size(dload_buf, data, len));
 
 	return err;
 }
 
-static int brcmf_c_process_clm_blob(struct brcmf_if *ifp)
+static int brcmf_c_download_blob(struct brcmf_if *ifp,
+				 const void *data, size_t size,
+				 const char *loadvar, const char *statvar)
 {
 	struct brcmf_pub *drvr = ifp->drvr;
-	struct brcmf_bus *bus = drvr->bus_if;
 	struct brcmf_dload_data_le *chunk_buf;
-	const struct firmware *clm = NULL;
 	u32 chunk_len;
 	u32 datalen;
 	u32 cumulative_len;
@@ -316,20 +132,14 @@ static int brcmf_c_process_clm_blob(struct brcmf_if *ifp)
 
 	brcmf_dbg(TRACE, "Enter\n");
 
-	err = brcmf_bus_get_blob(bus, &clm, BRCMF_BLOB_CLM);
-	if (err || !clm) {
-		brcmf_info("no clm_blob available (err=%d), device may have limited channels available\n",
-			   err);
-		return 0;
-	}
-
-	chunk_buf = kzalloc(sizeof(*chunk_buf) + MAX_CHUNK_LEN - 1, GFP_KERNEL);
+	chunk_buf = kzalloc(struct_size(chunk_buf, data, MAX_CHUNK_LEN),
+			    GFP_KERNEL);
 	if (!chunk_buf) {
 		err = -ENOMEM;
-		goto done;
+		return -ENOMEM;
 	}
 
-	datalen = clm->size;
+	datalen = size;
 	cumulative_len = 0;
 	do {
 		if (datalen > MAX_CHUNK_LEN) {
@@ -338,9 +148,10 @@ static int brcmf_c_process_clm_blob(struct brcmf_if *ifp)
 			chunk_len = datalen;
 			dl_flag |= DL_END;
 		}
-		memcpy(chunk_buf->data, clm->data + cumulative_len, chunk_len);
+		memcpy(chunk_buf->data, data + cumulative_len, chunk_len);
 
-		err = brcmf_c_download(ifp, dl_flag, chunk_buf, chunk_len);
+		err = brcmf_c_download(ifp, dl_flag, chunk_buf, chunk_len,
+				       loadvar);
 
 		dl_flag &= ~DL_BEGIN;
 
@@ -349,20 +160,64 @@ static int brcmf_c_process_clm_blob(struct brcmf_if *ifp)
 	} while ((datalen > 0) && (err == 0));
 
 	if (err) {
-		bphy_err(drvr, "clmload (%zu byte file) failed (%d)\n",
-			 clm->size, err);
-		/* Retrieve clmload_status and print */
-		err = brcmf_fil_iovar_int_get(ifp, "clmload_status", &status);
+		bphy_err(drvr, "%s (%zu byte file) failed (%d)\n",
+			 loadvar, size, err);
+		/* Retrieve status and print */
+		err = brcmf_fil_iovar_int_get(ifp, statvar, &status);
 		if (err)
-			bphy_err(drvr, "get clmload_status failed (%d)\n", err);
+			bphy_err(drvr, "get %s failed (%d)\n", statvar, err);
 		else
-			brcmf_dbg(INFO, "clmload_status=%d\n", status);
+			brcmf_dbg(INFO, "%s=%d\n", statvar, status);
 		err = -EIO;
 	}
 
 	kfree(chunk_buf);
-done:
-	release_firmware(clm);
+	return err;
+}
+
+static int brcmf_c_process_clm_blob(struct brcmf_if *ifp)
+{
+	struct brcmf_pub *drvr = ifp->drvr;
+	struct brcmf_bus *bus = drvr->bus_if;
+	const struct firmware *fw = NULL;
+	s32 err;
+
+	brcmf_dbg(TRACE, "Enter\n");
+
+	err = brcmf_bus_get_blob(bus, &fw, BRCMF_BLOB_CLM);
+	if (err || !fw) {
+		brcmf_info("no clm_blob available (err=%d), device may have limited channels available\n",
+			   err);
+		return 0;
+	}
+
+	err = brcmf_c_download_blob(ifp, fw->data, fw->size,
+				    "clmload", "clmload_status");
+
+	release_firmware(fw);
+	return err;
+}
+
+static int brcmf_c_process_txcap_blob(struct brcmf_if *ifp)
+{
+	struct brcmf_pub *drvr = ifp->drvr;
+	struct brcmf_bus *bus = drvr->bus_if;
+	const struct firmware *fw = NULL;
+	s32 err;
+
+	brcmf_dbg(TRACE, "Enter\n");
+
+	err = brcmf_bus_get_blob(bus, &fw, BRCMF_BLOB_TXCAP);
+	if (err || !fw) {
+		brcmf_info("no txcap_blob available (err=%d)\n", err);
+		return 0;
+	}
+
+	brcmf_info("TxCap blob found, loading\n");
+	err = brcmf_c_download_blob(ifp, fw->data, fw->size,
+				    "txcapload", "txcapload_status");
+
+	release_firmware(fw);
 	return err;
 }
 
@@ -391,6 +246,23 @@ static const u8 brcmf_default_mac_address[ETH_ALEN] = {
 	0x00, 0x90, 0x4c, 0xc5, 0x12, 0x38
 };
 
+static int brcmf_c_process_cal_blob(struct brcmf_if *ifp)
+{
+	struct brcmf_pub *drvr = ifp->drvr;
+	struct brcmf_mp_device *settings = drvr->settings;
+	s32 err;
+
+	brcmf_dbg(TRACE, "Enter\n");
+
+	if (!settings->cal_blob || !settings->cal_size)
+		return 0;
+
+	brcmf_info("Calibration blob provided by platform, loading\n");
+	err = brcmf_c_download_blob(ifp, settings->cal_blob, settings->cal_size,
+				    "calload", "calload_status");
+	return err;
+}
+
 int brcmf_c_preinit_dcmds(struct brcmf_if *ifp)
 {
 	struct brcmf_pub *drvr = ifp->drvr;
@@ -402,8 +274,6 @@ int brcmf_c_preinit_dcmds(struct brcmf_if *ifp)
 	char *clmver;
 	char *ptr;
 	s32 err;
-	struct eventmsgs_ext *eventmask_msg = NULL;
-	u8 msglen;
 
 	if (is_valid_ether_addr(ifp->mac_addr)) {
 		/* set mac address */
@@ -476,6 +346,20 @@ int brcmf_c_preinit_dcmds(struct brcmf_if *ifp)
 		goto done;
 	}
 
+	/* Do TxCap downloading, if needed */
+	err = brcmf_c_process_txcap_blob(ifp);
+	if (err < 0) {
+		bphy_err(drvr, "download TxCap blob file failed, %d\n", err);
+		goto done;
+	}
+
+	/* Download external calibration blob, if available */
+	err = brcmf_c_process_cal_blob(ifp);
+	if (err < 0) {
+		bphy_err(drvr, "download calibration blob file failed, %d\n", err);
+		goto done;
+	}
+
 	/* query for 'ver' to get version info from firmware */
 	memset(buf, 0, sizeof(buf));
 	err = brcmf_fil_iovar_data_get(ifp, "ver", buf, sizeof(buf));
@@ -519,11 +403,6 @@ int brcmf_c_preinit_dcmds(struct brcmf_if *ifp)
 		brcmf_dbg(INFO, "CLM version = %s\n", clmver);
 	}
 
-	/* set apsta */
-	err = brcmf_fil_iovar_int_set(ifp, "apsta", 1);
-	if (err)
-		brcmf_info("failed setting apsta, %d\n", err);
-
 	/* set mpc */
 	err = brcmf_fil_iovar_int_set(ifp, "mpc", 1);
 	if (err) {
@@ -548,43 +427,6 @@ int brcmf_c_preinit_dcmds(struct brcmf_if *ifp)
 		goto done;
 	}
 
-	/* Enable event_msg_ext specific to 43012/43022 chip */
-	if (bus->chip == CY_CC_43012_CHIP_ID || bus->chip == CY_CC_43022_CHIP_ID) {
-		/* Program event_msg_ext to support event larger than 128 */
-		msglen = (roundup(BRCMF_E_LAST, NBBY) / NBBY) +
-				  EVENTMSGS_EXT_STRUCT_SIZE;
-		/* Allocate buffer for eventmask_msg */
-		eventmask_msg = kzalloc(msglen, GFP_KERNEL);
-		if (!eventmask_msg) {
-			err = -ENOMEM;
-			goto done;
-		}
-
-		/* Read the current programmed event_msgs_ext */
-		eventmask_msg->ver = EVENTMSGS_VER;
-		eventmask_msg->len = roundup(BRCMF_E_LAST, NBBY) / NBBY;
-		err = brcmf_fil_iovar_data_get(ifp, "event_msgs_ext",
-					       eventmask_msg,
-					       msglen);
-
-		/* Enable ULP event */
-		brcmf_dbg(EVENT, "enable event ULP\n");
-		setbit(eventmask_msg->mask, BRCMF_E_ULP);
-
-		/* Write updated Event mask */
-		eventmask_msg->ver = EVENTMSGS_VER;
-		eventmask_msg->command = EVENTMSGS_SET_MASK;
-		eventmask_msg->len = (roundup(BRCMF_E_LAST, NBBY) / NBBY);
-
-		err = brcmf_fil_iovar_data_set(ifp, "event_msgs_ext",
-					       eventmask_msg, msglen);
-		if (err) {
-			brcmf_err("Set event_msgs_ext error (%d)\n", err);
-			kfree(eventmask_msg);
-			goto done;
-		}
-		kfree(eventmask_msg);
-	}
 	/* Setup default scan channel time */
 	err = brcmf_fil_cmd_int_set(ifp, BRCMF_C_SET_SCAN_CHANNEL_TIME,
 				    BRCMF_DEFAULT_SCAN_CHANNEL_TIME);
@@ -605,20 +447,6 @@ int brcmf_c_preinit_dcmds(struct brcmf_if *ifp)
 
 	/* Enable tx beamforming, errors can be ignored (not supported) */
 	(void)brcmf_fil_iovar_int_set(ifp, "txbf", 1);
-	err = brcmf_fil_iovar_int_set(ifp, "chanspec", 0x1001);
-	if (err < 0)
-		bphy_err(drvr, "Initial Channel failed %d\n", err);
-	/* add unicast packet filter */
-	err = brcmf_pktfilter_add_remove(ifp->ndev,
-					 BRCMF_UNICAST_FILTER_NUM, true);
-	if (err == -BRCMF_FW_UNSUPPORTED) {
-		/* FW not support can be ignored */
-		err = 0;
-		goto done;
-	} else if (err) {
-		bphy_err(drvr, "Add unicast filter error (%d)\n", err);
-	}
-
 done:
 	return err;
 }
@@ -675,38 +503,6 @@ static void brcmf_mp_attach(void)
 	}
 }
 
-int brcmf_debugfs_param_read(struct seq_file *s, void *data)
-{
-	struct brcmf_bus *bus_if = dev_get_drvdata(s->private);
-
-	seq_printf(s, "%-20s: %s\n", "Name", "Value");
-	seq_printf(s, "%-20s: 0x%x\n", "debug", brcmf_msg_level);
-	seq_printf(s, "%-20s: %s\n", "alternative_fw_path", brcmf_firmware_path);
-	seq_printf(s, "%-20s: %d\n", "p2pon", !!brcmf_p2p_enable);
-	seq_printf(s, "%-20s: %d\n", "feature_disable", brcmf_feature_disable);
-	seq_printf(s, "%-20s: %d\n", "fcmode", bus_if->drvr->settings->fcmode);
-	seq_printf(s, "%-20s: %d\n", "roamoff", !!brcmf_roamoff);
-	seq_printf(s, "%-20s: %d\n", "iapp", !!brcmf_iapp_enable);
-	seq_printf(s, "%-20s: %d\n", "eap_restrict", !!brcmf_eap_restrict);
-	seq_printf(s, "%-20s: %d\n", "max_pm", !!brcmf_max_pm);
-#ifdef DEBUG
-	seq_printf(s, "%-20s: %d\n", "ignore_probe_fail", !!brcmf_ignore_probe_fail);
-#endif
-	seq_printf(s, "%-20s: %d\n", "fw_ap_select", !!brcmf_fw_ap_select);
-	seq_printf(s, "%-20s: %d\n", "disable_6ghz", !!brcmf_disable_6ghz);
-	seq_printf(s, "%-20s: %d\n", "sdio_in_isr", !!brcmf_sdio_in_isr);
-	seq_printf(s, "%-20s: %d\n", "pkt_prio", !!brcmf_pkt_prio_enable);
-	seq_printf(s, "%-20s: %d\n", "sdio_rxf_thread", !!brcmf_sdio_rxf_in_kthread);
-	seq_printf(s, "%-20s: %d\n", "offload_prof", brcmf_offload_prof);
-	seq_printf(s, "%-20s: 0x%x\n", "offload_feat", brcmf_offload_feat);
-	seq_printf(s, "%-20s: %d\n", "txglomsz", brcmf_sdiod_txglomsz);
-	seq_printf(s, "%-20s: %d\n", "bt_over_sdio", !!brcmf_bt_over_sdio);
-	seq_printf(s, "%-20s: %d\n", "short_psq", !!brcmf_short_psq);
-	seq_printf(s, "%-20s: %d\n", "idle_time_zero", !!brcmf_idle_time_zero);
-
-	return 0;
-}
-
 struct brcmf_mp_device *brcmf_get_module_param(struct device *dev,
 					       enum brcmf_bus_type bus_type,
 					       u32 chip, u32 chiprev)
@@ -722,68 +518,18 @@ struct brcmf_mp_device *brcmf_get_module_param(struct device *dev,
 	if (!settings)
 		return NULL;
 
-	/* start by using the module parameters */
-	brcmf_dbg(INFO, "debug: 0x%x\n", brcmf_msg_level);
-	brcmf_dbg(INFO, "alternative_fw_path: %s\n", brcmf_firmware_path);
+	/* start by using the module paramaters */
 	settings->p2p_enable = !!brcmf_p2p_enable;
-	brcmf_dbg(INFO, "p2pon: %d\n", settings->p2p_enable);
 	settings->feature_disable = brcmf_feature_disable;
-	brcmf_dbg(INFO, "feature_disable: %d\n", settings->feature_disable);
 	settings->fcmode = brcmf_fcmode;
-	brcmf_dbg(INFO, "fcmode: %d\n", settings->fcmode);
-	settings->roamoff = brcmf_roamoff;
-	brcmf_dbg(INFO, "roamoff: %d\n", settings->roamoff);
+	settings->roamoff = !!brcmf_roamoff;
 	settings->iapp = !!brcmf_iapp_enable;
-	brcmf_dbg(INFO, "iapp: %d\n", settings->iapp);
-	settings->eap_restrict = !!brcmf_eap_restrict;
-	brcmf_dbg(INFO, "eap_restrict: %d\n", settings->eap_restrict);
-	if(brcmf_max_pm == 0)
-		settings->default_pm=PM_OFF;
-	else if(brcmf_max_pm == 1)
-		settings->default_pm=PM_MAX;
-	else
-		settings->default_pm=PM_FAST;
-	brcmf_dbg(INFO, "default_pm: %d\n", settings->default_pm);
 #ifdef DEBUG
 	settings->ignore_probe_fail = !!brcmf_ignore_probe_fail;
-	brcmf_dbg(INFO, "ignore_probe_fail: %d\n", settings->ignore_probe_fail);
 #endif
-	settings->fw_ap_select = !!brcmf_fw_ap_select;
-	brcmf_dbg(INFO, "fw_ap_select: %d\n", settings->fw_ap_select);
-	settings->disable_6ghz = !!brcmf_disable_6ghz;
-	brcmf_dbg(INFO, "disable_6ghz: %d\n", settings->disable_6ghz);
-	settings->sdio_in_isr = !!brcmf_sdio_in_isr;
-	brcmf_dbg(INFO, "sdio_in_isr: %d\n", settings->sdio_in_isr);
-	settings->pkt_prio = !!brcmf_pkt_prio_enable;
-	brcmf_dbg(INFO, "pkt_prio: %d\n", settings->pkt_prio);
-	settings->sdio_rxf_in_kthread_enabled = !!brcmf_sdio_rxf_in_kthread;
-	brcmf_dbg(INFO, "sdio_rxf_thread: %d\n", settings->sdio_rxf_in_kthread_enabled);
 
-	brcmf_dbg(INFO, "offload_prof: %d\n", brcmf_offload_prof);
-	if (brcmf_offload_prof >= BRCMF_OL_PROF_TYPE_MAX) {
-		brcmf_err("Invalid Offload power profile %u, using default profile 1",
-			  brcmf_offload_prof);
-		brcmf_offload_prof = BRCMF_OL_PROF_TYPE_LOW_PWR;
-	}
-	settings->offload_prof = brcmf_offload_prof;
-	settings->offload_feat = brcmf_offload_feat;
-	brcmf_dbg(INFO, "offload_feat: 0x%x\n", settings->offload_feat);
-
-	settings->bt_over_sdio = !!brcmf_bt_over_sdio;
-	brcmf_dbg(INFO, "bt_over_sdio: %d\n", settings->bt_over_sdio);
-	settings->short_psq = !!brcmf_short_psq;
-	brcmf_dbg(INFO, "brcmf_short_psq: %d\n", settings->short_psq);
-
-	settings->idleclk_disable = brcmf_sdio_idleclk_disable;
-	brcmf_dbg(INFO, "idleclk_disable: %d\n", settings->idleclk_disable);
-
-	if (bus_type == BRCMF_BUSTYPE_SDIO) {
+	if (bus_type == BRCMF_BUSTYPE_SDIO)
 		settings->bus.sdio.txglomsz = brcmf_sdiod_txglomsz;
-		brcmf_dbg(INFO, "txglomsz: %d\n", settings->bus.sdio.txglomsz);
-	}
-
-	settings->idle_time_zero = brcmf_idle_time_zero;
-	brcmf_dbg(INFO, "idle_time_zero: %d\n", settings->idle_time_zero);
 
 	/* See if there is any device specific platform data configured */
 	found = false;
@@ -810,6 +556,7 @@ struct brcmf_mp_device *brcmf_get_module_param(struct device *dev,
 		/* No platform data for this device, try OF and DMI data */
 		brcmf_dmi_probe(settings, chip, chiprev);
 		brcmf_of_probe(dev, bus_type, settings);
+		brcmf_acpi_probe(dev, bus_type, settings);
 	}
 	return settings;
 }
@@ -819,22 +566,13 @@ void brcmf_release_module_param(struct brcmf_mp_device *module_param)
 	kfree(module_param);
 }
 
-static int
-brcmf_reboot_callback(struct notifier_block *this, unsigned long code, void *unused)
-{
-	brcmf_dbg(INFO, "code = %ld\n", code);
-	if (code == SYS_RESTART)
-		brcmf_core_exit();
-	return NOTIFY_DONE;
-}
-
 static int __init brcmf_common_pd_probe(struct platform_device *pdev)
 {
 	brcmf_dbg(INFO, "Enter\n");
 
 	brcmfmac_pdata = dev_get_platdata(&pdev->dev);
 
-	if (brcmfmac_pdata && brcmfmac_pdata->power_on)
+	if (brcmfmac_pdata->power_on)
 		brcmfmac_pdata->power_on();
 
 	return 0;
@@ -861,14 +599,12 @@ static int __init brcmfmac_module_init(void)
 {
 	int err;
 
-	brcmf_dbg(INFO, "Loading RPI modules form version %s-%s\n", BCM_TAG_STR, BCM_SHAID_STR);
-
 	/* Get the platform data (if available) for our devices */
 	err = platform_driver_probe(&brcmf_pd, brcmf_common_pd_probe);
 	if (err == -ENODEV)
 		brcmf_dbg(INFO, "No platform data available.\n");
 
-	/* Initialize global module parameters */
+	/* Initialize global module paramaters */
 	brcmf_mp_attach();
 
 	/* Continue the initialization by registering the different busses */
@@ -876,8 +612,6 @@ static int __init brcmfmac_module_init(void)
 	if (err) {
 		if (brcmfmac_pdata)
 			platform_driver_unregister(&brcmf_pd);
-	} else {
-		register_reboot_notifier(&brcmf_reboot_notifier);
 	}
 
 	return err;
@@ -886,7 +620,6 @@ static int __init brcmfmac_module_init(void)
 static void __exit brcmfmac_module_exit(void)
 {
 	brcmf_core_exit();
-	unregister_reboot_notifier(&brcmf_reboot_notifier);
 	if (brcmfmac_pdata)
 		platform_driver_unregister(&brcmf_pd);
 }

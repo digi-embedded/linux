@@ -1361,6 +1361,7 @@ static const struct ieee80211_ops ar5523_ops = {
 	.start			= ar5523_start,
 	.stop			= ar5523_stop,
 	.tx			= ar5523_tx,
+	.wake_tx_queue		= ieee80211_handle_wake_tx_queue,
 	.set_rts_threshold	= ar5523_set_rts_threshold,
 	.add_interface		= ar5523_add_interface,
 	.remove_interface	= ar5523_remove_interface,
@@ -1588,6 +1589,20 @@ static int ar5523_probe(struct usb_interface *intf,
 	struct ieee80211_hw *hw;
 	struct ar5523 *ar;
 	int error = -ENOMEM;
+
+	static const u8 bulk_ep_addr[] = {
+		AR5523_CMD_TX_PIPE | USB_DIR_OUT,
+		AR5523_DATA_TX_PIPE | USB_DIR_OUT,
+		AR5523_CMD_RX_PIPE | USB_DIR_IN,
+		AR5523_DATA_RX_PIPE | USB_DIR_IN,
+		0};
+
+	if (!usb_check_bulk_endpoints(intf, bulk_ep_addr)) {
+		dev_err(&dev->dev,
+			"Could not find all expected endpoints\n");
+		error = -ENODEV;
+		goto out;
+	}
 
 	/*
 	 * Load firmware if the device requires it.  This will return

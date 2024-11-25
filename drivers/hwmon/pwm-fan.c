@@ -151,7 +151,7 @@ static int pwm_fan_power_on(struct pwm_fan_ctx *ctx)
 	}
 
 	state->enabled = true;
-	ret = pwm_apply_state(ctx->pwm, state);
+	ret = pwm_apply_might_sleep(ctx->pwm, state);
 	if (ret) {
 		dev_err(ctx->dev, "failed to enable PWM\n");
 		goto disable_regulator;
@@ -181,7 +181,7 @@ static int pwm_fan_power_off(struct pwm_fan_ctx *ctx)
 
 	state->enabled = false;
 	state->duty_cycle = 0;
-	ret = pwm_apply_state(ctx->pwm, state);
+	ret = pwm_apply_might_sleep(ctx->pwm, state);
 	if (ret) {
 		dev_err(ctx->dev, "failed to disable PWM\n");
 		return ret;
@@ -207,7 +207,7 @@ static int  __set_pwm(struct pwm_fan_ctx *ctx, unsigned long pwm)
 
 		period = state->period;
 		state->duty_cycle = DIV_ROUND_UP(pwm * (period - 1), MAX_PWM);
-		ret = pwm_apply_state(ctx->pwm, state);
+		ret = pwm_apply_might_sleep(ctx->pwm, state);
 		if (ret)
 			return ret;
 		ret = pwm_fan_power_on(ctx);
@@ -278,7 +278,7 @@ static int pwm_fan_update_enable(struct pwm_fan_ctx *ctx, long val)
 						    state,
 						    &enable_regulator);
 
-			pwm_apply_state(ctx->pwm, state);
+			pwm_apply_might_sleep(ctx->pwm, state);
 			pwm_fan_switch_power(ctx, enable_regulator);
 			pwm_fan_update_state(ctx, 0);
 		}
@@ -427,7 +427,7 @@ static int pwm_fan_of_get_cooling_data(struct device *dev,
 	struct device_node *np = dev->of_node;
 	int num, i, ret;
 
-	if (!of_find_property(np, "cooling-levels", NULL))
+	if (!of_property_present(np, "cooling-levels"))
 		return 0;
 
 	ret = of_property_count_u32_elems(np, "cooling-levels");
@@ -506,6 +506,14 @@ static int pwm_fan_probe(struct platform_device *pdev)
 	}
 
 	pwm_init_state(ctx->pwm, &ctx->pwm_state);
+
+	/*
+	 * PWM fans are controlled solely by the duty cycle of the PWM signal,
+	 * they do not care about the exact timing. Thus set usage_power to true
+	 * to allow less flexible hardware to work as a PWM source for fan
+	 * control.
+	 */
+	ctx->pwm_state.usage_power = true;
 
 	/*
 	 * set_pwm assumes that MAX_PWM * (period - 1) fits into an unsigned

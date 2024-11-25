@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
 %YAML 1.2
 ---
-$id: "http://devicetree.org/schemas/remoteproc/st,stm32-rproc.yaml#"
-$schema: "http://devicetree.org/meta-schemas/core.yaml#"
+$id: http://devicetree.org/schemas/remoteproc/st,stm32-rproc.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
 
-title: STMicroelectronics STM32 remote processor controller bindings
+title: STMicroelectronics STM32 remote processor controller
 
 description:
   This document defines the binding for the remoteproc component that loads and
@@ -44,12 +44,23 @@ properties:
 
   st,syscfg-holdboot:
     description: remote processor reset hold boot
-    $ref: "/schemas/types.yaml#/definitions/phandle-array"
+    $ref: /schemas/types.yaml#/definitions/phandle-array
     items:
       - items:
           - description: Phandle of syscon block
           - description: The offset of the hold boot setting register
           - description: The field mask of the hold boot
+
+  st,syscfg-tz:
+    deprecated: true
+    description:
+      Reference to the system configuration which holds the RCC trust zone mode
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    items:
+      - items:
+          - description: Phandle of syscon block
+          - description: The offset of the trust zone setting register
+          - description: The field mask of the trust zone state
 
   interrupts:
     description: Should contain the WWDG1 watchdog reset interrupt
@@ -77,9 +88,9 @@ properties:
               ready for shutdown
       - description: |
           A channel (d) used by the local proc to notify the remote proc that it
-          has to stop interprocessor communnication.
+          has to stop interprocessor communication.
           Unidirectional channel:
-            - from local to remote, where ACK from the remote means that communnication
+            - from local to remote, where ACK from the remote means that communication
               as been stopped on the remote side.
     minItems: 1
 
@@ -100,7 +111,7 @@ properties:
       (see ../reserved-memory/reserved-memory.txt)
 
   st,syscfg-pdds:
-    $ref: "/schemas/types.yaml#/definitions/phandle-array"
+    $ref: /schemas/types.yaml#/definitions/phandle-array
     description: |
       Reference to the system configuration which holds the remote
     items:
@@ -109,16 +120,8 @@ properties:
           - description: The offset of the power setting register
           - description: The field mask of the PDDS selection
 
-  st,syscfg-nsvtor:
-    $ref: "/schemas/types.yaml#/definitions/phandle-array"
-    description: |
-      Reference to the system configuration register which stores the remote processor
-      non-secure vector table pointer.
-      address, used to boot it.
-    maxItems: 1
-
   st,syscfg-cm-state:
-    $ref: "/schemas/types.yaml#/definitions/phandle-array"
+    $ref: /schemas/types.yaml#/definitions/phandle-array
     description: |
       Reference to the register which exposes the Cortex-M state.
     items:
@@ -128,7 +131,7 @@ properties:
           - description: The field mask of the Cortex-M4 state
 
   st,syscfg-rsc-tbl:
-    $ref: "/schemas/types.yaml#/definitions/phandle-array"
+    $ref: /schemas/types.yaml#/definitions/phandle-array
     description: |
       Reference to the tamp register which references the Cortex-M4
       resource table address.
@@ -138,87 +141,104 @@ properties:
           - description: The offset of the tamp register
           - description: The field mask of the Cortex-M4 resource table address
 
-  nvmem-cells:
-    maxItems: 2
-    description: |
-      Specify the resource table address and size for firmware started by
-      the boot loader.
-
-  nvmem-cell-names:
-    items:
-      - const: rsc-tbl-addr
-      - const: rsc-tbl-size
-
   st,auto-boot:
     $ref: /schemas/types.yaml#/definitions/flag
     description:
       If defined, when remoteproc is probed, it loads the default firmware and
       starts the remote processor.
 
+  power-domains:
+    items:
+      - description: CLUSTER power domain
+      - description: RETENTION power domain
+
+  power-domain-names:
+    items:
+      - const: default
+      - const: sleep
+
+  keep-power-in-suspend:
+    $ref: /schemas/types.yaml#/definitions/flag
+    description:
+      SRAM only. Preserves power during a suspend/resume cycle.
+
 required:
   - compatible
   - reg
-  - resets
 
 allOf:
   - if:
       properties:
-        reset-names:
-          not:
-            contains:
-              const: hold_boot
+        compatible:
+          contains:
+            const: st,stm32mp1-m4
     then:
-      required:
-        - st,syscfg-holdboot
-    else:
-      properties:
-        st,syscfg-holdboot: false
+      if:
+        properties:
+          reset-names:
+            not:
+              contains:
+                const: hold_boot
+      then:
+        required:
+          - st,syscfg-holdboot
+          - resets
+      else:
+        properties:
+          st,syscfg-holdboot: false
+        required:
+          - resets
+
+  - if:
       properties:
         compatible:
-          enum:
-            - st,stm32mp1-m4-tee
+          contains:
+            const: st,stm32mp1-m4-tee
     then:
-      required:
-        - memory-region
-
+      properties:
+        st,syscfg-holdboot: false
+        reset-names: false
+        resets: false
 
 additionalProperties: false
 
 examples:
-#--------------------
-# Without SCMI server
-#--------------------
   - |
     #include <dt-bindings/reset/stm32mp1-resets.h>
-    m4_rproc: m4@10000000 {
+    m4@10000000 {
       compatible = "st,stm32mp1-m4";
       reg = <0x10000000 0x40000>,
             <0x30000000 0x40000>,
             <0x38000000 0x10000>;
-      memory-region = <&retram>, <&mcuram>, <&mcuram2>, <&vdev0vring0>,
-                      <&m_ipc_shm>, <&vdev0vring1>, <&vdev0buffer>;
-      resets = <&scmi_reset RST_SCMI_MCU>;
+      resets = <&rcc MCU_R>;
       reset-names = "mcu_rst";
       /* Hold boot managed using system config*/
       st,syscfg-holdboot = <&rcc 0x10C 0x1>;
       st,syscfg-rsc-tbl = <&tamp 0x144 0xFFFFFFFF>;
       st,syscfg-cm-state = <&tamp 0x148 0xFFFFFFFF>;
     };
-
-#--------------------
-# With SCMI server
-#--------------------
   - |
     #include <dt-bindings/reset/stm32mp1-resets.h>
-    m4_rproc_w_scmi: m4@10000000 {
+    m4@10000000 {
       compatible = "st,stm32mp1-m4";
       reg = <0x10000000 0x40000>,
             <0x30000000 0x40000>,
             <0x38000000 0x10000>;
-      resets = <&scmi_reset RST_SCMI_MCU>,
-               <&scmi_reset RST_SCMI_MCU_HOLD_BOOT>;
+      /* Hold boot managed using SCMI reset controller */
+      resets = <&scmi MCU_R>, <&scmi MCU_HOLD_BOOT_R>;
       reset-names = "mcu_rst", "hold_boot";
       st,syscfg-rsc-tbl = <&tamp 0x144 0xFFFFFFFF>;
       st,syscfg-cm-state = <&tamp 0x148 0xFFFFFFFF>;
     };
+  - |
+    #include <dt-bindings/reset/stm32mp1-resets.h>
+    m4@10000000 {
+      compatible = "st,stm32mp1-m4-tee";
+      reg = <0x10000000 0x40000>,
+            <0x30000000 0x40000>,
+            <0x38000000 0x10000>;
+      st,syscfg-rsc-tbl = <&tamp 0x144 0xFFFFFFFF>;
+      st,syscfg-m4-state = <&tamp 0x148 0xFFFFFFFF>;
+    };
+
 ...

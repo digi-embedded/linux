@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL
 /*
- * Copyright (C) STMicroelectronics 2022 - All Rights Reserved
+ * Copyright (C) STMicroelectronics 2024 - All Rights Reserved
  * Author(s): Patrice Chotard <patrice.chotard@foss.st.com> for STMicroelectronics.
  */
 
+#include <linux/bus/stm32_firewall_device.h>
 #include <linux/clk.h>
 #include <linux/err.h>
 #include <linux/mfd/syscon.h>
@@ -16,9 +17,6 @@
 #include <linux/regmap.h>
 #include <linux/reset.h>
 #include <memory/stm32-omi.h>
-
-/* Temporary */
-#include "../bus/stm32_sys_bus.h"
 
 #define OMM_CR			0
 #define CR_MUXEN		BIT(0)
@@ -256,20 +254,14 @@ err_clk_disable:
 
 static int stm32_omm_check_access(struct device *dev, struct device_node *np)
 {
-	int err;
-	u32 feature_domain_cell[2];
-	u32 id_bus;
+	struct stm32_firewall firewall;
+	int ret;
 
-	/* Get reg from device node */
-	err = of_property_read_u32_array(np, "feature-domains", feature_domain_cell, 2);
-	if (err) {
-		dev_err(dev, "Unable to find feature-domains property\n");
-		return -ENODEV;
-	}
+	ret = stm32_firewall_get_firewall(np, &firewall, 1);
+	if (ret)
+		return ret;
 
-	id_bus = feature_domain_cell[1];
-
-	return stm32_rifsc_get_access_by_id(id_bus);
+	return stm32_firewall_grant_access(&firewall);
 }
 
 static int stm32_omm_disable_child(struct device *dev)

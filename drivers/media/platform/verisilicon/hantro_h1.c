@@ -312,7 +312,6 @@ void hantro_h1_set_axi_ctrl(struct hantro_dev *vpu, struct hantro_ctx *ctx)
 {
 	bool input_swap8, input_swap16, input_swap32;
 	u32 reg;
-	u32 max_burst_length = vpu->max_burst_length;
 
 	if (is_rgb32(&ctx->src_fmt)) {
 		input_swap32 = 0;
@@ -329,12 +328,9 @@ void hantro_h1_set_axi_ctrl(struct hantro_dev *vpu, struct hantro_ctx *ctx)
 		input_swap8  = 1;
 	}
 
-	if (ctx->vpu_dst_fmt->codec_mode == HANTRO_MODE_H264_ENC)
-		max_burst_length = 16;
-
 	reg =     H1_REG_AXI_CTRL_OUTPUT_SWAP16
 		| (input_swap16 ? H1_REG_AXI_CTRL_INPUT_SWAP16 : 0)
-		| H1_REG_AXI_CTRL_BURST_LEN(max_burst_length)
+		| H1_REG_AXI_CTRL_BURST_LEN(16)
 		| H1_REG_AXI_CTRL_OUTPUT_SWAP32
 		| (input_swap32 ? H1_REG_AXI_CTRL_INPUT_SWAP32 : 0)
 		| H1_REG_AXI_CTRL_OUTPUT_SWAP8

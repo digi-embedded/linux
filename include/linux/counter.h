@@ -359,7 +359,6 @@ struct counter_ops {
  * @num_counts:		number of Counts specified in @counts
  * @ext:		optional array of Counter device extensions
  * @num_ext:		number of Counter device extensions specified in @ext
- * @priv:		optional private data supplied by driver
  * @dev:		internal device structure
  * @chrdev:		internal character device structure
  * @events_list:	list of current watching Counter events
@@ -399,7 +398,7 @@ struct counter_device {
 	struct mutex ops_exist_lock;
 };
 
-void *counter_priv(const struct counter_device *const counter);
+void *counter_priv(const struct counter_device *const counter) __attribute_const__;
 
 struct counter_device *counter_alloc(size_t sizeof_priv);
 void counter_put(struct counter_device *const counter);

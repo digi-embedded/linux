@@ -1,16 +1,16 @@
-# SPDX-License-Identifier: (GPL-2.0-only or BSD-2-Clause)
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
 %YAML 1.2
 ---
 $id: http://devicetree.org/schemas/display/panel/rocktech,hx8394.yaml#
 $schema: http://devicetree.org/meta-schemas/core.yaml#
 
-title:  ROCKTECH DISPLAYS LIMITED HX8394 5.5" 720p MIPI-DSI TFT LCD panel
+title: Rocktech Semiconductor Corporation HX8394 5.5" 720p MIPI-DSI TFT LCD panel
 
 maintainers:
-  - Yannick Fertre <yannick.fertre@foss.st.com>
+  - YANNICK FERTRE <yannick.fertre@foss.st.com>
 
 description: |
-  The  ROCKTECH DISPLAYS LIMITED HX8394 is a 5.5" 720x1280 TFT LCD
+  The Rocktech Semiconductor Corporation HX8394 is a 5.5" 720x1280 TFT LCD
   panel connected using a MIPI-DSI video interface.
 
 allOf:

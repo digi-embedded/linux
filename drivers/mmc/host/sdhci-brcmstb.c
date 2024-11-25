@@ -23,6 +23,7 @@
 #define BRCMSTB_MATCH_FLAGS_NO_64BIT		BIT(0)
 #define BRCMSTB_MATCH_FLAGS_BROKEN_TIMEOUT	BIT(1)
 #define BRCMSTB_MATCH_FLAGS_HAS_CLOCK_GATE	BIT(2)
+#define BRCMSTB_MATCH_FLAGS_USE_CARD_BUSY	BIT(4)
 
 #define BRCMSTB_PRIV_FLAGS_HAS_CQE		BIT(0)
 #define BRCMSTB_PRIV_FLAGS_GATE_CLOCK		BIT(1)
@@ -179,7 +180,7 @@ static const struct brcmstb_match_priv match_priv_7216 = {
 	.ops = &sdhci_brcmstb_ops_7216,
 };
 
-static const struct of_device_id sdhci_brcm_of_match[] = {
+static const struct of_device_id __maybe_unused sdhci_brcm_of_match[] = {
 	{ .compatible = "brcm,bcm7425-sdhci", .data = &match_priv_7425 },
 	{ .compatible = "brcm,bcm7445-sdhci", .data = &match_priv_7445 },
 	{ .compatible = "brcm,bcm7216-sdhci", .data = &match_priv_7216 },
@@ -255,7 +256,6 @@ static int sdhci_brcmstb_probe(struct platform_device *pdev)
 	struct sdhci_brcmstb_priv *priv;
 	u32 actual_clock_mhz;
 	struct sdhci_host *host;
-	struct resource *iomem;
 	struct clk *clk;
 	struct clk *base_clk = NULL;
 	int res;
@@ -265,23 +265,17 @@ static int sdhci_brcmstb_probe(struct platform_device *pdev)
 
 	dev_dbg(&pdev->dev, "Probe found match for %s\n",  match->compatible);
 
-	clk = devm_clk_get_optional(&pdev->dev, NULL);
+	clk = devm_clk_get_optional_enabled(&pdev->dev, NULL);
 	if (IS_ERR(clk))
 		return dev_err_probe(&pdev->dev, PTR_ERR(clk),
-				     "Failed to get clock from Device Tree\n");
-
-	res = clk_prepare_enable(clk);
-	if (res)
-		return res;
+				     "Failed to get and enable clock from Device Tree\n");
 
 	memset(&brcmstb_pdata, 0, sizeof(brcmstb_pdata));
 	brcmstb_pdata.ops = match_priv->ops;
 	host = sdhci_pltfm_init(pdev, &brcmstb_pdata,
 				sizeof(struct sdhci_brcmstb_priv));
-	if (IS_ERR(host)) {
-		res = PTR_ERR(host);
-		goto err_clk;
-	}
+	if (IS_ERR(host))
+		return PTR_ERR(host);
 
 	pltfm_host = sdhci_priv(host);
 	priv = sdhci_pltfm_priv(pltfm_host);
@@ -291,8 +285,7 @@ static int sdhci_brcmstb_probe(struct platform_device *pdev)
 	}
 
 	/* Map in the non-standard CFG registers */
-	iomem = platform_get_resource(pdev, IORESOURCE_MEM, 1);
-	priv->cfg_regs = devm_ioremap_resource(&pdev->dev, iomem);
+	priv->cfg_regs = devm_platform_get_and_ioremap_resource(pdev, 1, NULL);
 	if (IS_ERR(priv->cfg_regs)) {
 		res = PTR_ERR(priv->cfg_regs);
 		goto err;
@@ -324,16 +317,17 @@ static int sdhci_brcmstb_probe(struct platform_device *pdev)
 	 * will allow these modes to be specified by device tree
 	 * properties through mmc_of_parse().
 	 */
-	host->caps = sdhci_readl(host, SDHCI_CAPABILITIES);
+	sdhci_read_caps(host);
 	if (match_priv->flags & BRCMSTB_MATCH_FLAGS_NO_64BIT)
 		host->caps &= ~SDHCI_CAN_64BIT;
-	host->caps1 = sdhci_readl(host, SDHCI_CAPABILITIES_1);
 	host->caps1 &= ~(SDHCI_SUPPORT_SDR50 | SDHCI_SUPPORT_SDR104 |
 			 SDHCI_SUPPORT_DDR50);
-	host->quirks |= SDHCI_QUIRK_MISSING_CAPS;
 
 	if (match_priv->flags & BRCMSTB_MATCH_FLAGS_BROKEN_TIMEOUT)
 		host->quirks |= SDHCI_QUIRK_BROKEN_TIMEOUT_VAL;
+
+	if (!(match_priv->flags & BRCMSTB_MATCH_FLAGS_USE_CARD_BUSY))
+		host->mmc_host_ops.card_busy = NULL;
 
 	/* Change the base clock frequency if the DT property exists */
 	if (device_property_read_u32(&pdev->dev, "clock-frequency",
@@ -373,9 +367,7 @@ add_host:
 
 err:
 	sdhci_pltfm_free(pdev);
-err_clk:
 	clk_disable_unprepare(base_clk);
-	clk_disable_unprepare(clk);
 	return res;
 }
 
@@ -434,7 +426,7 @@ static struct platform_driver sdhci_brcmstb_driver = {
 		.of_match_table = of_match_ptr(sdhci_brcm_of_match),
 	},
 	.probe		= sdhci_brcmstb_probe,
-	.remove		= sdhci_pltfm_unregister,
+	.remove_new	= sdhci_pltfm_remove,
 	.shutdown	= sdhci_brcmstb_shutdown,
 };
 

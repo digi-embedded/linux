@@ -13,11 +13,14 @@
 #include <linux/irq.h>
 #include <linux/irqchip.h>
 #include <linux/irqdomain.h>
+#include <linux/mod_devicetable.h>
 #include <linux/module.h>
 #include <linux/of_address.h>
 #include <linux/of_irq.h>
-#include <linux/of_platform.h>
+#include <linux/platform_device.h>
 #include <linux/pm.h>
+#include <linux/pm_domain.h>
+#include <linux/pm_runtime.h>
 
 #include <dt-bindings/interrupt-controller/arm-gic.h>
 
@@ -130,8 +133,8 @@ static const struct stm32mp_exti_bank *stm32mp_exti_banks[] = {
 static struct irq_chip stm32mp_exti_chip;
 static struct irq_chip stm32mp_exti_chip_direct;
 
-#define EXTI_INVALID_IRQ	U8_MAX
-#define STM32MP_DESC_IRQ_SIZE	(ARRAY_SIZE(stm32mp_exti_banks) * IRQS_PER_BANK)
+#define EXTI_INVALID_IRQ       U8_MAX
+#define STM32MP_DESC_IRQ_SIZE  (ARRAY_SIZE(stm32mp_exti_banks) * IRQS_PER_BANK)
 
 /*
  * Use some intentionally tricky logic here to initialize the whole array to
@@ -178,6 +181,7 @@ static const u8 stm32mp1_desc_irq[] = {
 	[31] = 53,
 	[32] = 82,
 	[33] = 83,
+	[46] = 151,
 	[47] = 93,
 	[48] = 138,
 	[50] = 139,
@@ -286,6 +290,10 @@ static void stm32mp_chip_suspend(struct stm32mp_exti_chip_data *chip_data,
 	chip_data->ftsr_cache = readl_relaxed(base + bank->ftsr_ofst);
 
 	writel_relaxed(wake_active, base + bank->imr_ofst);
+
+	/* wakeup for IRQ power domain for S2IDLE */
+	if (wake_active)
+		device_set_wakeup_path(chip_data->host_data->dev);
 }
 
 static void stm32mp_chip_resume(struct stm32mp_exti_chip_data *chip_data,
@@ -299,6 +307,9 @@ static void stm32mp_chip_resume(struct stm32mp_exti_chip_data *chip_data,
 	writel_relaxed(chip_data->ftsr_cache, base + bank->ftsr_ofst);
 
 	writel_relaxed(mask_cache, base + bank->imr_ofst);
+
+	if (mask_cache)
+		pm_runtime_get(chip_data->host_data->dev);
 }
 
 /* directly set the target bit without reading first. */
@@ -347,6 +358,10 @@ static void stm32mp_exti_eoi(struct irq_data *d)
 	stm32mp_exti_write_bit(d, bank->rpr_ofst);
 	stm32mp_exti_write_bit(d, bank->fpr_ofst);
 
+	/* power domain is ON when IMR change from 0 */
+	if (!chip_data->mask_cache)
+		pm_runtime_get(chip_data->host_data->dev);
+
 	chip_data->mask_cache = stm32mp_exti_set_bit(d, bank->imr_ofst);
 
 	raw_spin_unlock(&chip_data->rlock);
@@ -361,6 +376,11 @@ static void stm32mp_exti_mask(struct irq_data *d)
 
 	raw_spin_lock(&chip_data->rlock);
 	chip_data->mask_cache = stm32mp_exti_clr_bit(d, bank->imr_ofst);
+
+	/* power domain is OFF when IMR becomes 0 */
+	if (!chip_data->mask_cache)
+		pm_runtime_put(chip_data->host_data->dev);
+
 	raw_spin_unlock(&chip_data->rlock);
 
 	irq_chip_mask_parent(d);
@@ -372,6 +392,11 @@ static void stm32mp_exti_unmask(struct irq_data *d)
 	const struct stm32mp_exti_bank *bank = chip_data->reg_bank;
 
 	raw_spin_lock(&chip_data->rlock);
+
+	/* power domain is ON when IMR change from 0 */
+	if (!chip_data->mask_cache)
+		pm_runtime_get(chip_data->host_data->dev);
+
 	chip_data->mask_cache = stm32mp_exti_set_bit(d, bank->imr_ofst);
 	raw_spin_unlock(&chip_data->rlock);
 
@@ -477,10 +502,9 @@ static int stm32mp_exti_resume(struct device *dev)
 	struct stm32mp_exti_chip_data *chip_data;
 	int i;
 
+	stm32mp_exti_resume_gpio_mux(host_data);
 	for (i = 0; i < host_data->drv_data->bank_nr; i++) {
 		chip_data = &host_data->chips_data[i];
-		if (i == 0)
-			stm32mp_exti_resume_gpio_mux(host_data);
 		stm32mp_chip_resume(chip_data, chip_data->mask_cache);
 	}
 
@@ -667,7 +691,6 @@ static int stm32mp_exti_domain_alloc(struct irq_domain *dm,
 	u8 desc_irq;
 	struct irq_fwspec *fwspec = data;
 	struct irq_fwspec p_fwspec;
-	struct of_phandle_args out_irq;
 	irq_hw_number_t hwirq;
 	int bank, ret;
 	u32 event_trg;
@@ -697,6 +720,8 @@ static int stm32mp_exti_domain_alloc(struct irq_domain *dm,
 	irq_domain_set_hwirq_and_chip(dm, virq, hwirq, chip, chip_data);
 
 	if (host_data->dt_has_irqs_desc) {
+		struct of_phandle_args out_irq;
+
 		ret = of_irq_parse_one(host_data->dev->of_node, hwirq, &out_irq);
 		if (ret) {
 			stm32mp_exti_gpio_bank_free(dm, hwirq);
@@ -786,8 +811,8 @@ static const struct irq_domain_ops stm32mp_exti_domain_ops = {
 
 static void stm32mp_exti_check_rif(struct stm32mp_exti_host_data *host_data)
 {
-	u32 cid, cidcfgr, hwcfgr1;
 	unsigned int bank, i, event;
+	u32 cid, cidcfgr, hwcfgr1;
 
 	/* quit on CID not supported */
 	hwcfgr1 = readl_relaxed(host_data->base + EXTI_HWCFGR1);
@@ -803,6 +828,63 @@ static void stm32mp_exti_check_rif(struct stm32mp_exti_host_data *host_data)
 				host_data->chips_data[bank].event_reserved |= BIT(i);
 		}
 	}
+}
+
+static void stm32mp_exti_genpd_remove(void *data)
+{
+	struct generic_pm_domain *genpd = data;
+
+	pm_genpd_remove(genpd);
+}
+
+/* manage WakeUp capable device with EXTI domain, registered on PSCI CPUIdle domain */
+static int stm32mp_exti_add_domain(struct device *dev)
+{
+	struct device_node *np = dev->of_node;
+	struct generic_pm_domain *genpd;
+	int ret;
+
+	/* The PM domain core automatically attaches a single power domain to a device */
+	if (!dev->pm_domain)
+		return 0;
+
+	genpd = devm_kzalloc(dev, sizeof(*genpd), GFP_KERNEL);
+	if (!genpd)
+		return -ENOMEM;
+
+	/* Simple PM domain: only manage the wakeup path for EXTI */
+	genpd->name = np->full_name;
+	genpd->flags = GENPD_FLAG_ACTIVE_WAKEUP;
+	ret = pm_genpd_init(genpd, &pm_domain_always_on_gov, false);
+	if (ret) {
+		dev_err(dev, "Failed to add genpd %d\n", ret);
+		return ret;
+	}
+	ret = devm_add_action_or_reset(dev, stm32mp_exti_genpd_remove, genpd);
+	if (ret)
+		return ret;
+
+	/* Use the same parent for IRQ domain */
+	ret = pm_genpd_add_subdomain(pd_to_genpd(dev->pm_domain), genpd);
+	if (ret) {
+		dev_err(dev, "Failed to add PM subdomain to parent %s\n",
+			pd_to_genpd(dev->pm_domain)->name);
+		return ret;
+	}
+
+	/* Move EXTI device in the created IRQ domain to manage wakeup path */
+	ret = pm_genpd_remove_device(dev);
+	if (ret)  {
+		dev_err(dev, "Failed to remove dev to genpd %d\n", ret);
+		return ret;
+	}
+	ret = pm_genpd_add_device(genpd, dev);
+	if (ret)  {
+		dev_err(dev, "Failed to add dev to genpd %d\n", ret);
+		return ret;
+	}
+
+	return 0;
 }
 
 static void stm32mp_exti_remove_irq(void *data)
@@ -940,6 +1022,12 @@ static int stm32mp_exti_probe(struct platform_device *pdev)
 			return ret;
 	}
 
+	ret = stm32mp_exti_add_domain(dev);
+	if (ret)
+		return ret;
+
+	devm_pm_runtime_enable(dev);
+
 	return 0;
 }
 
@@ -957,9 +1045,9 @@ static const struct dev_pm_ops stm32mp_exti_dev_pm_ops = {
 static struct platform_driver stm32mp_exti_driver = {
 	.probe		= stm32mp_exti_probe,
 	.driver		= {
-		.name	= "stm32mp_exti",
-		.of_match_table = stm32mp_exti_ids,
-		.pm = &stm32mp_exti_dev_pm_ops,
+		.name		= "stm32mp_exti",
+		.of_match_table	= stm32mp_exti_ids,
+		.pm		= &stm32mp_exti_dev_pm_ops,
 	},
 };
 

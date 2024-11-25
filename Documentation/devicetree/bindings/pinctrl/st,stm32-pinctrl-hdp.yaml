@@ -44,6 +44,15 @@ patternProperties:
 
     additionalProperties: false
 
+  st,syscfg:
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    items:
+      - items:
+        - description: Phandle of syscon node with the HDP option register.
+        - description: The offset of the HDP option register.
+        - description: The mask to use when writing to the register.
+        - description: The value to write in the register.
+
 allOf:
   - $ref: "pinctrl.yaml#"
 

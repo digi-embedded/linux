@@ -167,7 +167,7 @@
  * following events occur.
  * a) Expiration of hardware timer whose expiration time is set to maximum
  * coalescing delay of matching coalesce rule.
- * b) Coalescing buffer in hardware reaches its limit.
+ * b) Coalescing buffer in hardware reaches it's limit.
  * c) Packet doesn't match any of the configured coalesce rules.
  *
  * User needs to configure following parameters for creating a coalesce
@@ -326,21 +326,12 @@
 /**
  * DOC: Multi-Link Operation
  *
- * In Multi-Link Operation, a connection between two MLDs utilizes multiple
+ * In Multi-Link Operation, a connection between to MLDs utilizes multiple
  * links. To use this in nl80211, various commands and responses now need
  * to or will include the new %NL80211_ATTR_MLO_LINKS attribute.
  * Additionally, various commands that need to operate on a specific link
  * now need to be given the %NL80211_ATTR_MLO_LINK_ID attribute, e.g. to
  * use %NL80211_CMD_START_AP or similar functions.
- */
-
-/**
- * DOC: OWE DH IE handling offload
- *
- * By setting @NL80211_EXT_FEATURE_OWE_OFFLOAD flag, drivers can indicate
- * kernel/application space to avoid DH IE handling. When this flag is
- * advertised, the driver/device will take care of DH IE inclusion and
- * processing of peer DH IE to generate PMK.
  */
 
 /**
@@ -1574,7 +1565,6 @@ enum nl80211_commands {
 	NL80211_CMD_MODIFY_LINK_STA,
 	NL80211_CMD_REMOVE_LINK_STA,
 
-
 	NL80211_CMD_SET_HW_TIMESTAMP,
 
 	NL80211_CMD_LINKS_REMOVED,
@@ -2567,12 +2557,7 @@ enum nl80211_commands {
  *	in %NL80211_CMD_CONNECT to indicate that for 802.1X authentication it
  *	wants to use the supported offload of the 4-way handshake.
  * @NL80211_ATTR_PMKR0_NAME: PMK-R0 Name for offloaded FT.
- * @NL80211_ATTR_PORT_AUTHORIZED: flag attribute used in %NL80211_CMD_ROAMED
- *	notification indicating that that 802.1X authentication was done by
- *	the driver or is not needed (because roaming used the Fast Transition
- *	protocol). Also used in %NL80211_CMD_CONNECT notification indicating
- *	that the Open or SAE authentication followed by 4-way handshake was
- *	is completed successfully.
+ * @NL80211_ATTR_PORT_AUTHORIZED: (reserved)
  *
  * @NL80211_ATTR_EXTERNAL_AUTH_ACTION: Identify the requested external
  *     authentication operation (u32 attribute with an
@@ -2705,13 +2690,11 @@ enum nl80211_commands {
  *
  * @NL80211_ATTR_FILS_DISCOVERY: Optional parameter to configure FILS
  *	discovery. It is a nested attribute, see
- *	&enum nl80211_fils_discovery_attributes. Userspace should pass an empty
- *	nested attribute to disable this feature and delete the templates.
+ *	&enum nl80211_fils_discovery_attributes.
  *
  * @NL80211_ATTR_UNSOL_BCAST_PROBE_RESP: Optional parameter to configure
  *	unsolicited broadcast probe response. It is a nested attribute, see
- *	&enum nl80211_unsol_bcast_probe_resp_attributes. Userspace should pass an empty
- *	nested attribute to disable this feature and delete the templates.
+ *	&enum nl80211_unsol_bcast_probe_resp_attributes.
  *
  * @NL80211_ATTR_S1G_CAPABILITY: S1G Capability information element (from
  *	association request when used with NL80211_CMD_NEW_STATION)
@@ -3359,7 +3342,6 @@ enum nl80211_attrs {
 
 	NL80211_ATTR_TX_HW_TIMESTAMP,
 	NL80211_ATTR_RX_HW_TIMESTAMP,
-
 	NL80211_ATTR_TD_BITMAP,
 
 	NL80211_ATTR_PUNCT_BITMAP,
@@ -4231,8 +4213,6 @@ enum nl80211_wmm_rule {
  *	as the primary or any of the secondary channels isn't possible
  * @NL80211_FREQUENCY_ATTR_NO_EHT: EHT operation is not allowed on this channel
  *	in current regulatory domain.
- * @NL80211_FREQUENCY_ATTR_PSD: Power spectral density (in dBm) that
- *	is allowed on this channel in current regulatory domain.
  * @NL80211_FREQUENCY_ATTR_MAX: highest frequency attribute number
  *	currently defined
  * @__NL80211_FREQUENCY_ATTR_AFTER_LAST: internal use
@@ -4271,7 +4251,6 @@ enum nl80211_frequency_attr {
 	NL80211_FREQUENCY_ATTR_16MHZ,
 	NL80211_FREQUENCY_ATTR_NO_320MHZ,
 	NL80211_FREQUENCY_ATTR_NO_EHT,
-	NL80211_FREQUENCY_ATTR_PSD,
 
 	/* keep last */
 	__NL80211_FREQUENCY_ATTR_AFTER_LAST,
@@ -4372,8 +4351,6 @@ enum nl80211_reg_type {
  * 	a given frequency range. The value is in mBm (100 * dBm).
  * @NL80211_ATTR_DFS_CAC_TIME: DFS CAC time in milliseconds.
  *	If not present or 0 default CAC time will be used.
- * @NL80211_ATTR_POWER_RULE_PSD: power spectral density (in dBm).
- *	This could be negative.
  * @NL80211_REG_RULE_ATTR_MAX: highest regulatory rule attribute number
  *	currently defined
  * @__NL80211_REG_RULE_ATTR_AFTER_LAST: internal use
@@ -4390,8 +4367,6 @@ enum nl80211_reg_rule_attr {
 	NL80211_ATTR_POWER_RULE_MAX_EIRP,
 
 	NL80211_ATTR_DFS_CAC_TIME,
-
-	NL80211_ATTR_POWER_RULE_PSD,
 
 	/* keep last */
 	__NL80211_REG_RULE_ATTR_AFTER_LAST,
@@ -4476,7 +4451,6 @@ enum nl80211_sched_scan_match_attr {
  * @NL80211_RRF_NO_HE: HE operation not allowed
  * @NL80211_RRF_NO_320MHZ: 320MHz operation not allowed
  * @NL80211_RRF_NO_EHT: EHT operation not allowed
- * @NL80211_RRF_PSD: Ruleset has power spectral density value
  */
 enum nl80211_reg_rule_flags {
 	NL80211_RRF_NO_OFDM		= 1<<0,
@@ -4497,7 +4471,6 @@ enum nl80211_reg_rule_flags {
 	NL80211_RRF_NO_HE		= 1<<17,
 	NL80211_RRF_NO_320MHZ		= 1<<18,
 	NL80211_RRF_NO_EHT		= 1<<19,
-	NL80211_RRF_PSD			= 1<<20,
 };
 
 #define NL80211_RRF_PASSIVE_SCAN	NL80211_RRF_NO_IR
@@ -5065,7 +5038,7 @@ enum nl80211_bss_scan_width {
  *	elements from a Beacon frame (bin); not present if no Beacon frame has
  *	yet been received
  * @NL80211_BSS_CHAN_WIDTH: channel width of the control channel
- *	(u32, enum nl80211_bss_scan_width) - No longer used!
+ *	(u32, enum nl80211_bss_scan_width)
  * @NL80211_BSS_BEACON_TSF: TSF of the last received beacon (u64)
  *	(not present if no beacon frame has been received yet)
  * @NL80211_BSS_PRESP_DATA: the data in @NL80211_BSS_INFORMATION_ELEMENTS and
@@ -6427,15 +6400,6 @@ enum nl80211_feature_flags {
  *	in authentication and deauthentication frames sent to unassociated peer
  *	using @NL80211_CMD_FRAME.
  *
- * @NL80211_EXT_FEATURE_OWE_OFFLOAD: Driver/Device wants to do OWE DH IE
- *	handling in station mode.
- *
- * @NL80211_EXT_FEATURE_OWE_OFFLOAD_AP: Driver/Device wants to do OWE DH IE
- *	handling in AP mode.
- *
- * @NL80211_EXT_FEATURE_ROAM_OFFLOAD: Driver/Device wants to do Fast Roaming
- *	handling in station mode.
- *
  * @NUM_NL80211_EXT_FEATURES: number of extended features.
  * @MAX_NL80211_EXT_FEATURES: highest extended feature index.
  */
@@ -6507,9 +6471,6 @@ enum nl80211_ext_feature_index {
 	NL80211_EXT_FEATURE_PUNCT,
 	NL80211_EXT_FEATURE_SECURE_NAN,
 	NL80211_EXT_FEATURE_AUTH_AND_DEAUTH_RANDOM_TA,
-	NL80211_EXT_FEATURE_OWE_OFFLOAD,
-	NL80211_EXT_FEATURE_OWE_OFFLOAD_AP,
-	NL80211_EXT_FEATURE_ROAM_OFFLOAD,
 
 	/* add new features before the definition below */
 	NUM_NL80211_EXT_FEATURES,
@@ -7645,7 +7606,7 @@ enum nl80211_iftype_akm_attributes {
  * @NL80211_FILS_DISCOVERY_ATTR_INT_MIN: Minimum packet interval (u32, TU).
  *	Allowed range: 0..10000 (TU = Time Unit)
  * @NL80211_FILS_DISCOVERY_ATTR_INT_MAX: Maximum packet interval (u32, TU).
- *	Allowed range: 0..10000 (TU = Time Unit). If set to 0, the feature is disabled.
+ *	Allowed range: 0..10000 (TU = Time Unit)
  * @NL80211_FILS_DISCOVERY_ATTR_TMPL: Template data for FILS discovery action
  *	frame including the headers.
  *
@@ -7678,8 +7639,7 @@ enum nl80211_fils_discovery_attributes {
  *
  * @NL80211_UNSOL_BCAST_PROBE_RESP_ATTR_INT: Maximum packet interval (u32, TU).
  *	Allowed range: 0..20 (TU = Time Unit). IEEE P802.11ax/D6.0
- *	26.17.2.3.2 (AP behavior for fast passive scanning). If set to 0, the feature is
- *	disabled.
+ *	26.17.2.3.2 (AP behavior for fast passive scanning).
  * @NL80211_UNSOL_BCAST_PROBE_RESP_ATTR_TMPL: Unsolicited broadcast probe response
  *	frame template (binary).
  *

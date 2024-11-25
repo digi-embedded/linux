@@ -113,6 +113,7 @@ int tpg_alloc(struct tpg_data *tpg, unsigned max_w)
 {
 	unsigned pat;
 	unsigned plane;
+	int ret = 0;
 
 	tpg->max_line_width = max_w;
 	for (pat = 0; pat < TPG_MAX_PAT_LINES; pat++) {
@@ -121,14 +122,18 @@ int tpg_alloc(struct tpg_data *tpg, unsigned max_w)
 
 			tpg->lines[pat][plane] =
 				vzalloc(array3_size(max_w, 2, pixelsz));
-			if (!tpg->lines[pat][plane])
-				return -ENOMEM;
+			if (!tpg->lines[pat][plane]) {
+				ret = -ENOMEM;
+				goto free_lines;
+			}
 			if (plane == 0)
 				continue;
 			tpg->downsampled_lines[pat][plane] =
 				vzalloc(array3_size(max_w, 2, pixelsz));
-			if (!tpg->downsampled_lines[pat][plane])
-				return -ENOMEM;
+			if (!tpg->downsampled_lines[pat][plane]) {
+				ret = -ENOMEM;
+				goto free_lines;
+			}
 		}
 	}
 	for (plane = 0; plane < TPG_MAX_PLANES; plane++) {
@@ -136,18 +141,45 @@ int tpg_alloc(struct tpg_data *tpg, unsigned max_w)
 
 		tpg->contrast_line[plane] =
 			vzalloc(array_size(pixelsz, max_w));
-		if (!tpg->contrast_line[plane])
-			return -ENOMEM;
+		if (!tpg->contrast_line[plane]) {
+			ret = -ENOMEM;
+			goto free_contrast_line;
+		}
 		tpg->black_line[plane] =
 			vzalloc(array_size(pixelsz, max_w));
-		if (!tpg->black_line[plane])
-			return -ENOMEM;
+		if (!tpg->black_line[plane]) {
+			ret = -ENOMEM;
+			goto free_contrast_line;
+		}
 		tpg->random_line[plane] =
 			vzalloc(array3_size(max_w, 2, pixelsz));
-		if (!tpg->random_line[plane])
-			return -ENOMEM;
+		if (!tpg->random_line[plane]) {
+			ret = -ENOMEM;
+			goto free_contrast_line;
+		}
 	}
 	return 0;
+
+free_contrast_line:
+	for (plane = 0; plane < TPG_MAX_PLANES; plane++) {
+		vfree(tpg->contrast_line[plane]);
+		vfree(tpg->black_line[plane]);
+		vfree(tpg->random_line[plane]);
+		tpg->contrast_line[plane] = NULL;
+		tpg->black_line[plane] = NULL;
+		tpg->random_line[plane] = NULL;
+	}
+free_lines:
+	for (pat = 0; pat < TPG_MAX_PAT_LINES; pat++)
+		for (plane = 0; plane < TPG_MAX_PLANES; plane++) {
+			vfree(tpg->lines[pat][plane]);
+			tpg->lines[pat][plane] = NULL;
+			if (plane == 0)
+				continue;
+			vfree(tpg->downsampled_lines[pat][plane]);
+			tpg->downsampled_lines[pat][plane] = NULL;
+		}
+	return ret;
 }
 EXPORT_SYMBOL_GPL(tpg_alloc);
 
@@ -872,7 +904,7 @@ static void precalculate_color(struct tpg_data *tpg, int k)
 	} else if (tpg->pattern == TPG_PAT_NOISE) {
 		r = g = b = get_random_u8();
 	} else if (k == TPG_COLOR_RANDOM) {
-		r = g = b = tpg->qual_offset + prandom_u32_max(196);
+		r = g = b = tpg->qual_offset + get_random_u32_below(196);
 	} else if (k >= TPG_COLOR_RAMP) {
 		r = g = b = k - TPG_COLOR_RAMP;
 	}
@@ -2286,7 +2318,7 @@ static void tpg_fill_params_extras(const struct tpg_data *tpg,
 		params->wss_width = tpg->crop.width;
 	params->wss_width = tpg_hscale_div(tpg, p, params->wss_width);
 	params->wss_random_offset =
-		params->twopixsize * prandom_u32_max(tpg->src_width / 2);
+		params->twopixsize * get_random_u32_below(tpg->src_width / 2);
 
 	if (tpg->crop.left < tpg->border.left) {
 		left_pillar_width = tpg->border.left - tpg->crop.left;
@@ -2495,9 +2527,9 @@ static void tpg_fill_plane_pattern(const struct tpg_data *tpg,
 		linestart_newer = tpg->black_line[p];
 	} else if (tpg->pattern == TPG_PAT_NOISE || tpg->qual == TPG_QUAL_NOISE) {
 		linestart_older = tpg->random_line[p] +
-				  twopixsize * prandom_u32_max(tpg->src_width / 2);
+				  twopixsize * get_random_u32_below(tpg->src_width / 2);
 		linestart_newer = tpg->random_line[p] +
-				  twopixsize * prandom_u32_max(tpg->src_width / 2);
+				  twopixsize * get_random_u32_below(tpg->src_width / 2);
 	} else {
 		unsigned frame_line_old =
 			(frame_line + mv_vert_old) % tpg->src_height;

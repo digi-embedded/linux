@@ -299,7 +299,6 @@ static int otm8009a_unprepare(struct drm_panel *panel)
 	if (!ctx->prepared)
 		return 0;
 
-	pm_runtime_set_autosuspend_delay(ctx->dev, 1000);
 	pm_runtime_mark_last_busy(panel->dev);
 	ret = pm_runtime_put_autosuspend(panel->dev);
 	if (ret < 0)
@@ -402,7 +401,7 @@ static int otm8009a_backlight_update_status(struct backlight_device *bd)
 
 	if (!ctx->prepared) {
 		dev_dbg(&bd->dev, "lcd not ready yet for setting its backlight!\n");
-		return 0;
+		return ret;
 	}
 
 	if (bd->props.power <= FB_BLANK_NORMAL) {
@@ -418,6 +417,7 @@ static int otm8009a_backlight_update_status(struct backlight_device *bd)
 
 		/* set Brightness Control & Backlight on */
 		data[1] = 0x24;
+
 	} else {
 		/* Power off the backlight: set Brightness Control & Bl off */
 		data[1] = 0;
@@ -446,21 +446,19 @@ static int otm8009a_probe(struct mipi_dsi_device *dsi)
 	if (!ctx)
 		return -ENOMEM;
 
-	ctx->reset_gpio = devm_gpiod_get_optional(dev, "reset", GPIOD_OUT_LOW);
-	if (IS_ERR(ctx->reset_gpio)) {
-		ret = PTR_ERR(ctx->reset_gpio);
-		if (ret != -EPROBE_DEFER)
-			dev_err(dev, "cannot get reset GPIO: %d\n", ret);
-		return ret;
-	}
+	if (device_property_read_bool(dev, "default-on"))
+		ctx->reset_gpio = devm_gpiod_get_optional(dev, "reset", GPIOD_OUT_LOW);
+	else
+		ctx->reset_gpio = devm_gpiod_get_optional(dev, "reset", GPIOD_OUT_HIGH);
+
+	if (IS_ERR(ctx->reset_gpio))
+		return dev_err_probe(dev, PTR_ERR(ctx->reset_gpio),
+				     "cannot get reset GPIO\n");
 
 	ctx->supply = devm_regulator_get(dev, "power");
-	if (IS_ERR(ctx->supply)) {
-		ret = PTR_ERR(ctx->supply);
-		if (ret != -EPROBE_DEFER)
-			dev_err(dev, "failed to request regulator: %d\n", ret);
-		return ret;
-	}
+	if (IS_ERR(ctx->supply))
+		return dev_err_probe(dev, PTR_ERR(ctx->supply),
+				     "cannot get regulator\n");
 
 	mipi_dsi_set_drvdata(dsi, ctx);
 
@@ -472,16 +470,11 @@ static int otm8009a_probe(struct mipi_dsi_device *dsi)
 			  MIPI_DSI_MODE_LPM | MIPI_DSI_CLOCK_NON_CONTINUOUS;
 
 	pm_runtime_enable(ctx->dev);
-	/* set delay to 60s to keep alive the panel to wait the splash screen */
-	pm_runtime_set_autosuspend_delay(ctx->dev, 60000);
+	pm_runtime_set_autosuspend_delay(ctx->dev, 1000);
 	pm_runtime_use_autosuspend(ctx->dev);
 
 	drm_panel_init(&ctx->panel, dev, &otm8009a_drm_funcs,
 		       DRM_MODE_CONNECTOR_DSI);
-
-	pm_runtime_get_sync(ctx->dev);
-	pm_runtime_mark_last_busy(ctx->dev);
-	pm_runtime_put_autosuspend(ctx->dev);
 
 	ctx->bl_dev = devm_backlight_device_register(dev, dev_name(dev),
 						     dev, ctx,
@@ -490,7 +483,7 @@ static int otm8009a_probe(struct mipi_dsi_device *dsi)
 	if (IS_ERR(ctx->bl_dev)) {
 		ret = PTR_ERR(ctx->bl_dev);
 		dev_err(dev, "failed to register backlight: %d\n", ret);
-		return ret;
+		goto disable_pm_runtime;
 	}
 
 	ctx->bl_dev->props.max_brightness = OTM8009A_BACKLIGHT_MAX;
@@ -504,10 +497,16 @@ static int otm8009a_probe(struct mipi_dsi_device *dsi)
 	if (ret < 0) {
 		dev_err(dev, "mipi_dsi_attach failed. Is host ready?\n");
 		drm_panel_remove(&ctx->panel);
-		return ret;
+		goto disable_pm_runtime;
 	}
 
 	return 0;
+
+disable_pm_runtime:
+	pm_runtime_dont_use_autosuspend(dev);
+	pm_runtime_disable(dev);
+
+	return ret;
 }
 
 static void otm8009a_remove(struct mipi_dsi_device *dsi)
@@ -525,9 +524,6 @@ static __maybe_unused int orisetech_otm8009a_suspend(struct device *dev)
 {
 	struct otm8009a *ctx = dev_get_drvdata(dev);
 
-	gpiod_set_value_cansleep(ctx->reset_gpio, 1);
-	msleep(20);
-
 	regulator_disable(ctx->supply);
 
 	return 0;
@@ -537,6 +533,9 @@ static __maybe_unused int orisetech_otm8009a_resume(struct device *dev)
 {
 	struct otm8009a *ctx = dev_get_drvdata(dev);
 	int ret;
+
+	gpiod_set_value_cansleep(ctx->reset_gpio, 1);
+	msleep(20);
 
 	ret = regulator_enable(ctx->supply);
 	if (ret < 0) {

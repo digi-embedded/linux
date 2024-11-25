@@ -1,6 +1,7 @@
 /*
    BlueZ - Bluetooth protocol stack for Linux
    Copyright (C) 2000-2001 Qualcomm Incorporated
+   Copyright 2023 NXP
 
    Written 2000,2001 by Maxim Krasnyansky <maxk@qualcomm.com>
 
@@ -32,9 +33,6 @@
 #define HCI_MAX_FRAME_SIZE	(HCI_MAX_ACL_SIZE + 4)
 
 #define HCI_LINK_KEY_SIZE	16
-#define HCI_AMP_LINK_KEY_SIZE	(2 * HCI_LINK_KEY_SIZE)
-
-#define HCI_MAX_AMP_ASSOC_SIZE	672
 
 #define HCI_MAX_CPB_DATA_SIZE	252
 
@@ -69,26 +67,6 @@
 #define HCI_I2C		8
 #define HCI_SMD		9
 #define HCI_VIRTIO	10
-
-/* HCI controller types */
-#define HCI_PRIMARY	0x00
-#define HCI_AMP		0x01
-
-/* First BR/EDR Controller shall have ID = 0 */
-#define AMP_ID_BREDR	0x00
-
-/* AMP controller types */
-#define AMP_TYPE_BREDR	0x00
-#define AMP_TYPE_80211	0x01
-
-/* AMP controller status */
-#define AMP_STATUS_POWERED_DOWN			0x00
-#define AMP_STATUS_BLUETOOTH_ONLY		0x01
-#define AMP_STATUS_NO_CAPACITY			0x02
-#define AMP_STATUS_LOW_CAPACITY			0x03
-#define AMP_STATUS_MEDIUM_CAPACITY		0x04
-#define AMP_STATUS_HIGH_CAPACITY		0x05
-#define AMP_STATUS_FULL_CAPACITY		0x06
 
 /* HCI device quirks */
 enum {
@@ -174,6 +152,15 @@ enum {
 	 * during the hdev->setup vendor callback.
 	 */
 	HCI_QUIRK_USE_BDADDR_PROPERTY,
+
+	/* When this quirk is set, the Bluetooth Device Address provided by
+	 * the 'local-bd-address' fwnode property is incorrectly specified in
+	 * big-endian order.
+	 *
+	 * This quirk can be set before hci_register_dev is called or
+	 * during the hdev->setup vendor callback.
+	 */
+	HCI_QUIRK_BDADDR_PROPERTY_BROKEN,
 
 	/* When this quirk is set, the duplicate filtering during
 	 * scanning is based on Bluetooth devices addresses. To allow
@@ -309,6 +296,34 @@ enum {
 	 * to support it.
 	 */
 	HCI_QUIRK_BROKEN_SET_RPA_TIMEOUT,
+
+	/* When this quirk is set, MSFT extension monitor tracking by
+	 * address filter is supported. Since tracking quantity of each
+	 * pattern is limited, this feature supports tracking multiple
+	 * devices concurrently if controller supports multiple
+	 * address filters.
+	 *
+	 * This quirk must be set before hci_register_dev is called.
+	 */
+	HCI_QUIRK_USE_MSFT_EXT_ADDRESS_FILTER,
+
+	/*
+	 * When this quirk is set, LE Coded PHY shall not be used. This is
+	 * required for some Intel controllers which erroneously claim to
+	 * support it but it causes problems with extended scanning.
+	 *
+	 * This quirk can be set before hci_register_dev is called or
+	 * during the hdev->setup vendor callback.
+	 */
+	HCI_QUIRK_BROKEN_LE_CODED,
+
+	/*
+	 * When this quirk is set, the HCI_OP_READ_ENC_KEY_SIZE command is
+	 * skipped during an HCI_EV_ENCRYPT_CHANGE event. This is required
+	 * for Actions Semiconductor ATS2851 based controllers, which erroneously
+	 * claim to support it.
+	 */
+	HCI_QUIRK_BROKEN_READ_ENC_KEY_SIZE,
 };
 
 /* HCI device flags */
@@ -372,7 +387,6 @@ enum {
 	HCI_LIMITED_PRIVACY,
 	HCI_RPA_EXPIRED,
 	HCI_RPA_RESOLVING,
-	HCI_HS_ENABLED,
 	HCI_LE_ENABLED,
 	HCI_ADVERTISING,
 	HCI_ADVERTISING_CONNECTABLE,
@@ -416,7 +430,6 @@ enum {
 #define HCI_NCMD_TIMEOUT	msecs_to_jiffies(4000)	/* 4 seconds */
 #define HCI_ACL_TX_TIMEOUT	msecs_to_jiffies(45000)	/* 45 seconds */
 #define HCI_AUTO_OFF_TIMEOUT	msecs_to_jiffies(2000)	/* 2 seconds */
-#define HCI_POWER_OFF_TIMEOUT	msecs_to_jiffies(5000)	/* 5 seconds */
 #define HCI_LE_CONN_TIMEOUT	msecs_to_jiffies(20000)	/* 20 seconds */
 #define HCI_LE_AUTOCONN_TIMEOUT	msecs_to_jiffies(4000)	/* 4 seconds */
 
@@ -490,7 +503,6 @@ enum {
 #define ESCO_LINK	0x02
 /* Low Energy links do not have defined link type. Use invented one */
 #define LE_LINK		0x80
-#define AMP_LINK	0x81
 #define ISO_LINK	0x82
 #define INVALID_LINK	0xff
 
@@ -577,6 +589,7 @@ enum {
 #define HCI_LE_CIS_CENTRAL		0x10
 #define HCI_LE_CIS_PERIPHERAL		0x20
 #define HCI_LE_ISO_BROADCASTER		0x40
+#define HCI_LE_ISO_SYNC_RECEIVER	0x80
 
 /* Connection modes */
 #define HCI_CM_ACTIVE	0x0000
@@ -651,6 +664,8 @@ enum {
 /* The core spec defines 127 as the "not available" value */
 #define HCI_TX_POWER_INVALID	127
 #define HCI_RSSI_INVALID	127
+
+#define HCI_SYNC_HANDLE_INVALID	0xffff
 
 #define HCI_ROLE_MASTER		0x00
 #define HCI_ROLE_SLAVE		0x01
@@ -899,56 +914,6 @@ struct hci_cp_remote_oob_data_neg_reply {
 struct hci_cp_io_capability_neg_reply {
 	bdaddr_t bdaddr;
 	__u8     reason;
-} __packed;
-
-#define HCI_OP_CREATE_PHY_LINK		0x0435
-struct hci_cp_create_phy_link {
-	__u8     phy_handle;
-	__u8     key_len;
-	__u8     key_type;
-	__u8     key[HCI_AMP_LINK_KEY_SIZE];
-} __packed;
-
-#define HCI_OP_ACCEPT_PHY_LINK		0x0436
-struct hci_cp_accept_phy_link {
-	__u8     phy_handle;
-	__u8     key_len;
-	__u8     key_type;
-	__u8     key[HCI_AMP_LINK_KEY_SIZE];
-} __packed;
-
-#define HCI_OP_DISCONN_PHY_LINK		0x0437
-struct hci_cp_disconn_phy_link {
-	__u8     phy_handle;
-	__u8     reason;
-} __packed;
-
-struct ext_flow_spec {
-	__u8       id;
-	__u8       stype;
-	__le16     msdu;
-	__le32     sdu_itime;
-	__le32     acc_lat;
-	__le32     flush_to;
-} __packed;
-
-#define HCI_OP_CREATE_LOGICAL_LINK	0x0438
-#define HCI_OP_ACCEPT_LOGICAL_LINK	0x0439
-struct hci_cp_create_accept_logical_link {
-	__u8                  phy_handle;
-	struct ext_flow_spec  tx_flow_spec;
-	struct ext_flow_spec  rx_flow_spec;
-} __packed;
-
-#define HCI_OP_DISCONN_LOGICAL_LINK	0x043a
-struct hci_cp_disconn_logical_link {
-	__le16   log_handle;
-} __packed;
-
-#define HCI_OP_LOGICAL_LINK_CANCEL	0x043b
-struct hci_cp_logical_link_cancel {
-	__u8     phy_handle;
-	__u8     flow_spec_id;
 } __packed;
 
 #define HCI_OP_ENHANCED_SETUP_SYNC_CONN		0x043d
@@ -1572,46 +1537,6 @@ struct hci_rp_read_enc_key_size {
 	__u8     key_size;
 } __packed;
 
-#define HCI_OP_READ_LOCAL_AMP_INFO	0x1409
-struct hci_rp_read_local_amp_info {
-	__u8     status;
-	__u8     amp_status;
-	__le32   total_bw;
-	__le32   max_bw;
-	__le32   min_latency;
-	__le32   max_pdu;
-	__u8     amp_type;
-	__le16   pal_cap;
-	__le16   max_assoc_size;
-	__le32   max_flush_to;
-	__le32   be_flush_to;
-} __packed;
-
-#define HCI_OP_READ_LOCAL_AMP_ASSOC	0x140a
-struct hci_cp_read_local_amp_assoc {
-	__u8     phy_handle;
-	__le16   len_so_far;
-	__le16   max_len;
-} __packed;
-struct hci_rp_read_local_amp_assoc {
-	__u8     status;
-	__u8     phy_handle;
-	__le16   rem_len;
-	__u8     frag[];
-} __packed;
-
-#define HCI_OP_WRITE_REMOTE_AMP_ASSOC	0x140b
-struct hci_cp_write_remote_amp_assoc {
-	__u8     phy_handle;
-	__le16   len_so_far;
-	__le16   rem_len;
-	__u8     frag[];
-} __packed;
-struct hci_rp_write_remote_amp_assoc {
-	__u8     status;
-	__u8     phy_handle;
-} __packed;
-
 #define HCI_OP_GET_MWS_TRANSPORT_CONFIG	0x140c
 
 #define HCI_OP_ENABLE_DUT_MODE		0x1803
@@ -1622,6 +1547,15 @@ struct hci_rp_write_remote_amp_assoc {
 struct hci_cp_le_set_event_mask {
 	__u8     mask[8];
 } __packed;
+
+/* BLUETOOTH CORE SPECIFICATION Version 5.4 | Vol 4, Part E
+ * 7.8.2 LE Read Buffer Size command
+ * MAX_LE_MTU is 0xffff.
+ * 0 is also valid. It means that no dedicated LE Buffer exists.
+ * It should use the HCI_Read_Buffer_Size command and mtu is shared
+ * between BR/EDR and LE.
+ */
+#define HCI_MIN_LE_MTU 0x001b
 
 #define HCI_OP_LE_READ_BUFFER_SIZE	0x2002
 struct hci_rp_le_read_buffer_size {
@@ -2172,7 +2106,7 @@ struct hci_cp_le_big_create_sync {
 	__u8    mse;
 	__le16  timeout;
 	__u8    num_bis;
-	__u8    bis[0];
+	__u8    bis[];
 } __packed;
 
 #define HCI_OP_LE_BIG_TERM_SYNC			0x206c
@@ -2190,7 +2124,7 @@ struct hci_cp_le_setup_iso_path {
 	__le16  codec_vid;
 	__u8    delay[3];
 	__u8    codec_cfg_len;
-	__u8    codec_cfg[0];
+	__u8    codec_cfg[];
 } __packed;
 
 struct hci_rp_le_setup_iso_path {
@@ -2626,6 +2560,7 @@ struct hci_ev_le_conn_complete {
 #define LE_EXT_ADV_DIRECT_IND		0x0004
 #define LE_EXT_ADV_SCAN_RSP		0x0008
 #define LE_EXT_ADV_LEGACY_PDU		0x0010
+#define LE_EXT_ADV_EVT_TYPE_MASK	0x007f
 
 #define ADDR_LE_DEV_PUBLIC		0x00
 #define ADDR_LE_DEV_RANDOM		0x01
@@ -2757,6 +2692,17 @@ struct hci_ev_le_enh_conn_complete {
 	__le16    latency;
 	__le16    supervision_timeout;
 	__u8      clk_accurancy;
+} __packed;
+
+#define HCI_EV_LE_PER_ADV_REPORT    0x0f
+struct hci_ev_le_per_adv_report {
+	__le16	 sync_handle;
+	__u8	 tx_power;
+	__u8	 rssi;
+	__u8	 cte_type;
+	__u8	 data_status;
+	__u8     length;
+	__u8     data[];
 } __packed;
 
 #define HCI_EV_LE_EXT_ADV_SET_TERM	0x12

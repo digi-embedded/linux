@@ -10,21 +10,22 @@
  * Copyright (C) 2012 ARM Ltd.
  */
 
-#include <linux/irq.h>
-#include <linux/memory.h>
-#include <linux/smp.h>
 #include <linux/hardirq.h>
 #include <linux/init.h>
+#include <linux/irq.h>
 #include <linux/irqchip.h>
 #include <linux/kprobes.h>
+#include <linux/memory.h>
 #include <linux/scs.h>
 #include <linux/seq_file.h>
+#include <linux/smp.h>
 #include <linux/vmalloc.h>
 #include <asm/daifflags.h>
 #include <asm/exception.h>
 #include <asm/numa.h>
-#include <asm/vmap_stack.h>
 #include <asm/softirq_stack.h>
+#include <asm/stacktrace.h>
+#include <asm/vmap_stack.h>
 
 /* Only access this in an NMI enter/exit */
 DEFINE_PER_CPU(struct nmi_ctx, nmi_contexts);
@@ -42,7 +43,7 @@ static void init_irq_scs(void)
 {
 	int cpu;
 
-	if (!IS_ENABLED(CONFIG_SHADOW_CALL_STACK))
+	if (!scs_is_enabled())
 		return;
 
 	for_each_possible_cpu(cpu)

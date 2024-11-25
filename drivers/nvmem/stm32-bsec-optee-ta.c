@@ -61,7 +61,7 @@ static int stm32_bsec_optee_ta_match(struct tee_ioctl_version_data *ver,
 {
 	/* Currently this driver only supports GP compliant, OP-TEE based TA */
 	if ((ver->impl_id == TEE_IMPL_ID_OPTEE) &&
-	    (ver->gen_caps & TEE_GEN_CAP_GP))
+		(ver->gen_caps & TEE_GEN_CAP_GP))
 		return 1;
 	else
 		return 0;
@@ -178,7 +178,7 @@ int stm32_bsec_optee_ta_read(struct tee_context *ctx, unsigned int offset,
 	ret = tee_client_invoke_func(ctx, &arg, param);
 	if (ret < 0 || arg.ret != 0) {
 		pr_err("TA_BSEC invoke failed TEE err:%#x, ret:%#x\n",
-		       arg.ret, ret);
+			arg.ret, ret);
 		if (!ret)
 			ret = -EIO;
 	}

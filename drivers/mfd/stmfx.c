@@ -198,8 +198,8 @@ static int stmfx_irq_set_affinity(struct irq_data *d, const struct cpumask *dest
 	static DEFINE_RATELIMIT_STATE(rs, DEFAULT_RATELIMIT_INTERVAL * 10, 1);
 
 	if (__ratelimit(&rs))
-		dev_notice(stmfx->dev,
-			   "Can't set the affinity, set it for irq %d instead\n", client->irq);
+		dev_notice(stmfx->dev, "Can't set the affinity, set it for irq %d instead\n",
+			   client->irq);
 	if (force)
 		return -EINVAL;
 
@@ -443,8 +443,7 @@ static void stmfx_chip_exit(struct i2c_client *client)
 	}
 }
 
-static int stmfx_probe(struct i2c_client *client,
-		       const struct i2c_device_id *id)
+static int stmfx_probe(struct i2c_client *client)
 {
 	struct device *dev = &client->dev;
 	struct stmfx *stmfx;
@@ -484,10 +483,6 @@ static int stmfx_probe(struct i2c_client *client,
 	if (ret)
 		goto err_chip_exit;
 
-	/* Parent I2C controller could use DMA, STMFX and child devices do not */
-	dev->coherent_dma_mask = 0;
-	dev->dma_mask = &dev->coherent_dma_mask;
-
 	ret = devm_mfd_add_devices(dev, PLATFORM_DEVID_NONE,
 				   stmfx_cells, ARRAY_SIZE(stmfx_cells), NULL,
 				   0, stmfx->irq_domain);
@@ -511,7 +506,6 @@ static void stmfx_remove(struct i2c_client *client)
 	stmfx_chip_exit(client);
 }
 
-#ifdef CONFIG_PM_SLEEP
 static int stmfx_suspend(struct device *dev)
 {
 	struct stmfx *stmfx = dev_get_drvdata(dev);
@@ -582,9 +576,8 @@ static int stmfx_resume(struct device *dev)
 
 	return 0;
 }
-#endif
 
-static SIMPLE_DEV_PM_OPS(stmfx_dev_pm_ops, stmfx_suspend, stmfx_resume);
+static DEFINE_SIMPLE_DEV_PM_OPS(stmfx_dev_pm_ops, stmfx_suspend, stmfx_resume);
 
 static const struct of_device_id stmfx_of_match[] = {
 	{ .compatible = "st,stmfx-0300", },
@@ -596,7 +589,7 @@ static struct i2c_driver stmfx_driver = {
 	.driver = {
 		.name = "stmfx-core",
 		.of_match_table = stmfx_of_match,
-		.pm = &stmfx_dev_pm_ops,
+		.pm = pm_sleep_ptr(&stmfx_dev_pm_ops),
 	},
 	.probe = stmfx_probe,
 	.remove = stmfx_remove,

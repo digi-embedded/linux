@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (C) 2022, STMicroelectronics - All Rights Reserved
+ * Copyright (C) 2023, STMicroelectronics - All Rights Reserved
  * Author(s): Raphaël GALLAIS-POU <raphael.gallais-pou@foss.st.com> for STMicroelectronics.
  */
 
@@ -25,21 +25,25 @@
 
 /* LVDS Host registers */
 #define LVDS_CR		0x0000  /* configuration register */
-#define LVDS_DMLCR0	0x0004  /* data mapping lsb configuration register 0	*/
-#define LVDS_DMMCR0	0x0008  /* data mapping msb configuration register 0	*/
-#define LVDS_DMLCR1	0x000C  /* data mapping lsb configuration register 1	*/
-#define LVDS_DMMCR1	0x0010  /* data mapping msb configuration register 1	*/
-#define LVDS_DMLCR2	0x0014  /* data mapping lsb configuration register 2	*/
-#define LVDS_DMMCR2	0x0018  /* data mapping msb configuration register 2	*/
-#define LVDS_DMLCR3	0x001C  /* data mapping lsb configuration register 3	*/
-#define LVDS_DMMCR3	0x0020  /* data mapping msb configuration register 3	*/
-#define LVDS_DMLCR4	0x0024  /* data mapping lsb configuration register 4	*/
-#define LVDS_DMMCR4	0x0028  /* data mapping msb configuration register 4	*/
-#define LVDS_CDL1CR	0x002C  /* channel distrib link 1 configuration register	*/
-#define LVDS_CDL2CR	0x0030  /* channel distrib link 2 configuration register	*/
+#define LVDS_DMLCR0	0x0004  /* data mapping lsb configuration register 0 */
+#define LVDS_DMMCR0	0x0008  /* data mapping msb configuration register 0 */
+#define LVDS_DMLCR1	0x000C  /* data mapping lsb configuration register 1 */
+#define LVDS_DMMCR1	0x0010  /* data mapping msb configuration register 1 */
+#define LVDS_DMLCR2	0x0014  /* data mapping lsb configuration register 2 */
+#define LVDS_DMMCR2	0x0018  /* data mapping msb configuration register 2 */
+#define LVDS_DMLCR3	0x001C  /* data mapping lsb configuration register 3 */
+#define LVDS_DMMCR3	0x0020  /* data mapping msb configuration register 3 */
+#define LVDS_DMLCR4	0x0024  /* data mapping lsb configuration register 4 */
+#define LVDS_DMMCR4	0x0028  /* data mapping msb configuration register 4 */
+#define LVDS_CDL1CR	0x002C  /* channel distrib link 1 configuration register */
+#define LVDS_CDL2CR	0x0030  /* channel distrib link 2 configuration register */
 
-#define CDL1CR_DEFAULT	0x04321	/* Default value for CDL1CR */
-#define CDL2CR_DEFAULT	0x59876	/* Default value for CDL2CR */
+#define CDL1CR_DEFAULT	0x04321 /* Default value for CDL1CR */
+#define CDL2CR_4DL_DEFAULT	0x04321 /* Default value for CDL2CR with SINGLE link */
+#define CDL2CR_8DL_DEFAULT	0x59876 /* Default value for CDL2CR with DUAL link */
+
+#define LVDS_DMLCR(bit)	(LVDS_DMLCR0 + 0x8 * (bit))
+#define LVDS_DMMCR(bit)	(LVDS_DMMCR0 + 0x8 * (bit))
 
 /* LVDS Wrapper registers */
 #define LVDS_WCLKCR	0x11B0  /* Wrapper clock control register */
@@ -49,69 +53,65 @@
 #define LVDS_IPIDR	0x1FF8  /* Identification register	*/
 #define LVDS_SIDR	0x1FFC  /* Size Identification register	*/
 
+/* Bitfield description */
 #define CR_LVDSEN	BIT(0)  /* LVDS PHY Enable */
-#define CR_HSPOL	BIT(1)  /* HS Polarity (horizontal sync) */
-#define CR_VSPOL	BIT(2)  /* VS Polarity (vertical sync) */
-#define CR_DEPOL	BIT(3)  /* DE Polarity (data enable) */
+#define CR_HSPOL	BIT(1)  /* Horizontal Synchronization Polarity */
+#define CR_VSPOL	BIT(2)  /* Vertical Synchronization Polarity */
+#define CR_DEPOL	BIT(3)  /* Data Enable Polarity */
 #define CR_CI		BIT(4)  /* Control Internal (software controlled bit) */
 #define CR_LKMOD	BIT(5)  /* Link Mode, for both Links */
 #define CR_LKPHA	BIT(6)  /* Link Phase, for both Links */
 #define CR_LK1POL	GENMASK(20, 16)  /* Link-1 output Polarity */
 #define CR_LK2POL	GENMASK(25, 21)  /* Link-2 output Polarity */
 
-#define DMMCRx_MAP0	GENMASK(4, 0)
-#define DMMCRx_MAP1	GENMASK(9, 5)
-#define DMMCRx_MAP2	GENMASK(14, 10)
-#define DMMCRx_MAP3	GENMASK(19, 15)
-#define DMLCRx_MAP4	GENMASK(4, 0)
-#define DMLCRx_MAP5	GENMASK(9, 5)
-#define DMLCRx_MAP6	GENMASK(14, 10)
+#define DMMCR_MAP0	GENMASK(4, 0) /* Mapping for bit 0 of datalane x */
+#define DMMCR_MAP1	GENMASK(9, 5) /* Mapping for bit 1 of datalane x */
+#define DMMCR_MAP2	GENMASK(14, 10) /* Mapping for bit 2 of datalane x */
+#define DMMCR_MAP3	GENMASK(19, 15) /* Mapping for bit 3 of datalane x */
+#define DMLCR_MAP4	GENMASK(4, 0) /* Mapping for bit 4 of datalane x */
+#define DMLCR_MAP5	GENMASK(9, 5) /* Mapping for bit 5 of datalane x */
+#define DMLCR_MAP6	GENMASK(14, 10) /* Mapping for bit 6 of datalane x */
 
-#define CDLCRx_DISTR0	GENMASK(3, 0)
-#define CDLCRx_DISTR1	GENMASK(7, 4)
-#define CDLCRx_DISTR2	GENMASK(11, 8)
-#define CDLCRx_DISTR3	GENMASK(15, 12)
-#define CDLCRx_DISTR4	GENMASK(19, 16)
+#define CDLCR_DISTR0	GENMASK(3, 0) /* Channel distribution for lane 0 */
+#define CDLCR_DISTR1	GENMASK(7, 4) /* Channel distribution for lane 1 */
+#define CDLCR_DISTR2	GENMASK(11, 8) /* Channel distribution for lane 2 */
+#define CDLCR_DISTR3	GENMASK(15, 12) /* Channel distribution for lane 3 */
+#define CDLCR_DISTR4	GENMASK(19, 16) /* Channel distribution for lane 4 */
 
-#define FREF_INDEX	0
-#define NDIV_INDEX	1
-#define FPFD_INDEX	2
-#define MDIV_INDEX	3
-#define FVCO_INDEX	4
-#define BDIV_INDEX	5
-#define FBIT_INDEX	6
-#define FLS_INDEX	7
-#define FDP_INDEX	8
+#define PHY_GCR_BIT_CLK_OUT	BIT(0)  /* BIT clock enable */
+#define PHY_GCR_LS_CLK_OUT	BIT(4)  /* LS clock enable */
+#define PHY_GCR_DP_CLK_OUT	BIT(8)  /* DP clock enable */
+#define PHY_GCR_RSTZ		BIT(24) /* LVDS PHY digital reset */
+#define PHY_GCR_DIV_RSTN	BIT(25) /* Output divider reset */
+#define PHY_SCR_TX_EN		BIT(16) /* Transmission mode enable */
+/* Current mode driver enable */
+#define PHY_CMCR_CM_EN_DL	(BIT(28) | BIT(20) | BIT(12) | BIT(4))
+#define PHY_CMCR_CM_EN_DL4	BIT(4)
+/* Bias enable */
+#define PHY_BCR1_EN_BIAS_DL	(BIT(16) | BIT(12) | BIT(8) | BIT(4) | BIT(0))
+#define PHY_BCR2_BIAS_EN	BIT(28)
+/* Voltage mode driver enable */
+#define PHY_BCR3_VM_EN_DL	(BIT(16) | BIT(12) | BIT(8) | BIT(4) | BIT(0))
+#define PHY_DCR_POWER_OK	BIT(12)
+#define PHY_CFGCR_EN_DIG_DL	GENMASK(4, 0) /* LVDS PHY digital lane enable */
+#define PHY_PLLCR1_PLL_EN	BIT(0) /* LVDS PHY PLL enable */
+#define PHY_PLLCR1_EN_SD	BIT(1) /* LVDS PHY PLL sigma-delta signal enable */
+#define PHY_PLLCR1_EN_TWG	BIT(2) /* LVDS PHY PLL triangular wave generator enable */
+#define PHY_PLLCR1_DIV_EN	BIT(8) /* LVDS PHY PLL dividers enable */
+#define PHY_PLLCR2_NDIV		GENMASK(25, 16) /* NDIV mask value */
+#define PHY_PLLCR2_BDIV		GENMASK(9, 0)   /* BDIV mask value */
+#define PHY_PLLSR_PLL_LOCK	BIT(0) /* LVDS PHY PLL lock status */
+#define PHY_PLLSDCR1_MDIV	GENMASK(9, 0)   /* MDIV mask value */
+#define PHY_PLLTESTCR_TDIV	GENMASK(25, 16) /* TDIV mask value */
+#define PHY_PLLTESTCR_CLK_EN	BIT(0) /* Test clock enable */
+#define PHY_PLLTESTCR_EN	BIT(8) /* Test divider output enable */
 
-#define PHY_GCR_BIT_CLK_OUT	BIT(0)
-#define PHY_GCR_LS_CLK_OUT	BIT(4)
-#define PHY_GCR_DP_CLK_OUT	BIT(8)
-#define PHY_GCR_RSTZ		BIT(24)
-#define PHY_GCR_DIV_RSTN	BIT(25)
-
-#define PHY_PxPLLTESTCR_TDIV	GENMASK(25, 16)
-#define PHY_PxPLLCR2_NDIV	GENMASK(25, 16)
-#define PHY_PxPLLCR2_BDIV	GENMASK(9, 0)
-#define PHY_PxPLLSDCR1_MDIV	GENMASK(9, 0)
-
-#define PLL_EN		BIT(0)
-#define PLL_LOCK	BIT(0)
-#define CM_EN_DL	(BIT(28) | BIT(20) | BIT(12) | BIT(4))
-#define CM_EN_DL4	BIT(4)
-#define VM_EN_DL	(BIT(16) | BIT(12) | BIT(8) | BIT(4) | BIT(0))
-#define EN_BIAS_DL	(BIT(16) | BIT(12) | BIT(8) | BIT(4) | BIT(0))
-#define EN_DIG_DL	GENMASK(4, 0)
-#define BIAS_EN		BIT(28)
-#define POWER_OK	BIT(12)
-
-#define WCLKCR_SLV_CLKPIX_SEL	BIT(0)
-#define WCLKCR_SRCSEL		BIT(8)
+#define WCLKCR_SECND_CLKPIX_SEL	BIT(0) /* Pixel clock selection */
+#define WCLKCR_SRCSEL		BIT(8) /* Source selection for the pixel clock */
 
 /* Sleep & timeout for pll lock/unlock */
 #define SLEEP_US	1000
 #define TIMEOUT_US	200000
-
-#define PHY_SLV_OFS	0x100
 
 /*
  * The link phase defines whether an ODD pixel is carried over together with
@@ -133,153 +133,146 @@
  *
  */
 enum lvds_link_type {
-	LVDS_SINGLE_LINK_MASTER = 0,
-	LVDS_SINGLE_LINK_SLAVE = 1,
-	LVDS_DUAL_LINK_EVEN_ODD_PIXELS = 2,
-	LVDS_DUAL_LINK_ODD_EVEN_PIXELS = 3,
+	LVDS_SINGLE_LINK_PRIMARY = 0,
+	LVDS_SINGLE_LINK_SECONDARY,
+	LVDS_DUAL_LINK_EVEN_ODD_PIXELS,
+	LVDS_DUAL_LINK_ODD_EVEN_PIXELS,
 };
 
 enum lvds_pixel {
-	PIX_R_0		= 0x00,
-	PIX_R_1		= 0x01,
-	PIX_R_2		= 0x02,
-	PIX_R_3		= 0x03,
-	PIX_R_4		= 0x04,
-	PIX_R_5		= 0x05,
-	PIX_R_6		= 0x06,
-	PIX_R_7		= 0x07,
-	PIX_G_0		= 0x08,
-	PIX_G_1		= 0x09,
-	PIX_G_2		= 0x0A,
-	PIX_G_3		= 0x0B,
-	PIX_G_4		= 0x0C,
-	PIX_G_5		= 0x0D,
-	PIX_G_6		= 0x0E,
-	PIX_G_7		= 0x0F,
-	PIX_B_0		= 0x10,
-	PIX_B_1		= 0x11,
-	PIX_B_2		= 0x12,
-	PIX_B_3		= 0x13,
-	PIX_B_4		= 0x14,
-	PIX_B_5		= 0x15,
-	PIX_B_6		= 0x16,
-	PIX_B_7		= 0x17,
-	PIX_H_S		= 0x18,
-	PIX_V_S		= 0x19,
-	PIX_D_E		= 0x1A,
-	PIX_C_E		= 0x1B,
-	PIX_C_I		= 0x1C,
-	PIX_TOG		= 0x1D,
-	PIX_ONE		= 0x1E,
-	PIX_ZER		= 0x1F,
+	PIX_R_0 = 0,
+	PIX_R_1,
+	PIX_R_2,
+	PIX_R_3,
+	PIX_R_4,
+	PIX_R_5,
+	PIX_R_6,
+	PIX_R_7,
+	PIX_G_0,
+	PIX_G_1,
+	PIX_G_2,
+	PIX_G_3,
+	PIX_G_4,
+	PIX_G_5,
+	PIX_G_6,
+	PIX_G_7,
+	PIX_B_0,
+	PIX_B_1,
+	PIX_B_2,
+	PIX_B_3,
+	PIX_B_4,
+	PIX_B_5,
+	PIX_B_6,
+	PIX_B_7,
+	PIX_H_S,
+	PIX_V_S,
+	PIX_D_E,
+	PIX_C_E,
+	PIX_C_I,
+	PIX_TOG,
+	PIX_ONE,
+	PIX_ZER,
 };
 
-struct phy_offsets {
-	u32 PxGCR;	/* Global Control Register	*/
-	u32 PxCMCR1;    /* Current Mode Control Register 1 */
-	u32 PxCMCR2;    /* Current Mode Control Register 2 */
-	u32 PxSCR;      /* Serial Control Register	*/
-	u32 PxBCR1;     /* Bias Control Register 1	*/
-	u32 PxBCR2;     /* Bias Control Register 2	*/
-	u32 PxBCR3;     /* Bias Control Register 3	*/
-	u32 PxMPLCR;    /* Monitor PLL Lock Control Register */
-	u32 PxDCR;      /* Debug Control Register	*/
-	u32 PxSSR1;     /* Spare Status Register 1	*/
-	u32 PxCFGCR;    /* Configuration Control Register */
-	u32 PxPLLCR1;   /* PLL_MODE 1 Control Register	*/
-	u32 PxPLLCR2;   /* PLL_MODE 2 Control Register	*/
-	u32 PxPLLSR;    /* PLL Status Register	*/
-	u32 PxPLLSDCR1; /* PLL_SD_1 Control Register	*/
-	u32 PxPLLSDCR2; /* PLL_SD_2 Control Register	*/
-	u32 PxPLLTWGCR1;/* PLL_TWG_1 Control Register	*/
-	u32 PxPLLTWGCR2;/* PLL_TWG_2 Control Register	*/
-	u32 PxPLLCPCR;	/* PLL_CP Control Register	*/
-	u32 PxPLLTESTCR;/* PLL_TEST Control Register	*/
+struct phy_reg_offsets {
+	u32 GCR;	/* Global Control Register	*/
+	u32 CMCR1;    /* Current Mode Control Register 1 */
+	u32 CMCR2;    /* Current Mode Control Register 2 */
+	u32 SCR;      /* Serial Control Register	*/
+	u32 BCR1;     /* Bias Control Register 1	*/
+	u32 BCR2;     /* Bias Control Register 2	*/
+	u32 BCR3;     /* Bias Control Register 3	*/
+	u32 MPLCR;    /* Monitor PLL Lock Control Register */
+	u32 DCR;      /* Debug Control Register	*/
+	u32 SSR1;     /* Spare Status Register 1	*/
+	u32 CFGCR;    /* Configuration Control Register */
+	u32 PLLCR1;   /* PLL_MODE 1 Control Register	*/
+	u32 PLLCR2;   /* PLL_MODE 2 Control Register	*/
+	u32 PLLSR;    /* PLL Status Register	*/
+	u32 PLLSDCR1; /* PLL_SD_1 Control Register	*/
+	u32 PLLSDCR2; /* PLL_SD_2 Control Register	*/
+	u32 PLLTWGCR1;/* PLL_TWG_1 Control Register	*/
+	u32 PLLTWGCR2;/* PLL_TWG_2 Control Register	*/
+	u32 PLLCPCR;  /* PLL_CP Control Register	*/
+	u32 PLLTESTCR;/* PLL_TEST Control Register	*/
 };
 
 struct lvds_phy_info {
 	u32 base;
-	struct phy_offsets ofs;
+	struct phy_reg_offsets ofs;
 };
 
-static struct lvds_phy_info lvds_phy_16ff_master = {
+static struct lvds_phy_info lvds_phy_16ff_primary = {
 	.base = 0x1000,
 	.ofs = {
-		.PxGCR = 0x0,
-		.PxCMCR1 = 0xC,
-		.PxCMCR2 = 0x10,
-		.PxSCR = 0x20,
-		.PxBCR1 = 0x2C,
-		.PxBCR2 = 0x30,
-		.PxBCR3 = 0x34,
-		.PxMPLCR = 0x64,
-		.PxDCR = 0x84,
-		.PxSSR1 = 0x88,
-		.PxCFGCR = 0xA0,
-		.PxPLLCR1 = 0xC0,
-		.PxPLLCR2 = 0xC4,
-		.PxPLLSR = 0xC8,
-		.PxPLLSDCR1 = 0xCC,
-		.PxPLLSDCR2 = 0xD0,
-		.PxPLLTWGCR1 = 0xD4,
-		.PxPLLTWGCR2 = 0xD8,
-		.PxPLLCPCR = 0xE0,
-		.PxPLLTESTCR = 0xE8,
+		.GCR = 0x0,
+		.CMCR1 = 0xC,
+		.CMCR2 = 0x10,
+		.SCR = 0x20,
+		.BCR1 = 0x2C,
+		.BCR2 = 0x30,
+		.BCR3 = 0x34,
+		.MPLCR = 0x64,
+		.DCR = 0x84,
+		.SSR1 = 0x88,
+		.CFGCR = 0xA0,
+		.PLLCR1 = 0xC0,
+		.PLLCR2 = 0xC4,
+		.PLLSR = 0xC8,
+		.PLLSDCR1 = 0xCC,
+		.PLLSDCR2 = 0xD0,
+		.PLLTWGCR1 = 0xD4,
+		.PLLTWGCR2 = 0xD8,
+		.PLLCPCR = 0xE0,
+		.PLLTESTCR = 0xE8,
 	}
 };
 
-static struct lvds_phy_info lvds_phy_16ff_slave = {
+static struct lvds_phy_info lvds_phy_16ff_secondary = {
 	.base = 0x1100,
 	.ofs = {
-		.PxGCR = 0x0,
-		.PxCMCR1 = 0xC,
-		.PxCMCR2 = 0x10,
-		.PxSCR = 0x20,
-		.PxBCR1 = 0x2C,
-		.PxBCR2 = 0x30,
-		.PxBCR3 = 0x34,
-		.PxMPLCR = 0x64,
-		.PxDCR = 0x84,
-		.PxSSR1 = 0x88,
-		.PxCFGCR = 0xA0,
-		.PxPLLCR1 = 0xC0,
-		.PxPLLCR2 = 0xC4,
-		.PxPLLSR = 0xC8,
-		.PxPLLSDCR1 = 0xCC,
-		.PxPLLSDCR2 = 0xD0,
-		.PxPLLTWGCR1 = 0xD4,
-		.PxPLLTWGCR2 = 0xD8,
-		.PxPLLCPCR = 0xE0,
-		.PxPLLTESTCR = 0xE8,
+		.GCR = 0x0,
+		.CMCR1 = 0xC,
+		.CMCR2 = 0x10,
+		.SCR = 0x20,
+		.BCR1 = 0x2C,
+		.BCR2 = 0x30,
+		.BCR3 = 0x34,
+		.MPLCR = 0x64,
+		.DCR = 0x84,
+		.SSR1 = 0x88,
+		.CFGCR = 0xA0,
+		.PLLCR1 = 0xC0,
+		.PLLCR2 = 0xC4,
+		.PLLSR = 0xC8,
+		.PLLSDCR1 = 0xCC,
+		.PLLSDCR2 = 0xD0,
+		.PLLTWGCR1 = 0xD4,
+		.PLLTWGCR2 = 0xD8,
+		.PLLCPCR = 0xE0,
+		.PLLTESTCR = 0xE8,
 	}
-};
-
-struct lvds_clk_data {
-	const char *clk_name;
-	const struct clk_ops *clk_ops;
-	const char * const *clk_src;
-	unsigned int max_clk_src;
 };
 
 struct stm_lvds {
 	void __iomem *base;
 	struct device *dev;
-	struct clk *pclk;		/* APB bus clock */
-	struct clk *pllref_clk;		/* HSE / Flexclkgen */
+	struct clk *pclk;		/* APB peripheral clock */
+	struct clk *pllref_clk;		/* Reference clock for the internal PLL */
 	struct clk_hw lvds_ck_px;	/* Pixel clock */
 	u32 pixel_clock_rate;		/* Pixel clock rate */
-	struct {
-		u32 hw_version;
-		u32 link_type;
-	} config;
-	struct lvds_phy_info *phy_master;
-	struct lvds_phy_info *phy_slave;
 
-	struct drm_bridge	lvds_bridge;
-	struct drm_bridge	*next_bridge;
-	struct drm_connector	connector;
-	struct drm_encoder	*encoder;
-	struct drm_panel	*panel;
+	struct lvds_phy_info *primary;
+	struct lvds_phy_info *secondary;
+
+	struct drm_bridge lvds_bridge;
+	struct drm_bridge *next_bridge;
+	struct drm_connector connector;
+	struct drm_encoder *encoder;
+	struct drm_panel *panel;
+
+	u32 hw_version;
+	u32 link_type;
 
 	struct regulator *vdd_supply;
 	struct regulator *vdda18_supply;
@@ -318,12 +311,6 @@ static inline void lvds_clear(struct stm_lvds *lvds, u32 reg, u32 mask)
 	lvds_write(lvds, reg, lvds_read(lvds, reg) & ~mask);
 }
 
-static inline void lvds_update_bits(struct stm_lvds *lvds, u32 reg,
-				    u32 mask, u32 val)
-{
-	lvds_write(lvds, reg, (lvds_read(lvds, reg) & ~mask) | val);
-}
-
 /*
  * Expected JEIDA-RGB888 data to be sent in LSB format
  *	    bit6 ............................bit0
@@ -333,18 +320,12 @@ static inline void lvds_update_bits(struct stm_lvds *lvds, u32 reg,
  * CHAN3   {DE,  VS,  HS,   B7,   B6,   B5,  B4}
  * CHAN4   {CE,  B1,  B0,   G1,   G0,   R1,  R0}
  */
-const enum lvds_pixel lvds_bitmap_jeida_rgb888[5][7] = {
-	{
-		PIX_ONE, PIX_ONE, PIX_ZER, PIX_ZER, PIX_ZER, PIX_ONE, PIX_ONE
-	}, {
-		PIX_G_2, PIX_R_7, PIX_R_6, PIX_R_5, PIX_R_4, PIX_R_3, PIX_R_2
-	}, {
-		PIX_B_3, PIX_B_2, PIX_G_7, PIX_G_6, PIX_G_5, PIX_G_4, PIX_G_3
-	}, {
-		PIX_D_E, PIX_V_S, PIX_H_S, PIX_B_7, PIX_B_6, PIX_B_5, PIX_B_4
-	}, {
-		PIX_C_E, PIX_B_1, PIX_B_0, PIX_G_1, PIX_G_0, PIX_R_1, PIX_R_0
-	}
+enum lvds_pixel lvds_bitmap_jeida_rgb888[5][7] = {
+	{ PIX_ONE, PIX_ONE, PIX_ZER, PIX_ZER, PIX_ZER, PIX_ONE, PIX_ONE },
+	{ PIX_G_2, PIX_R_7, PIX_R_6, PIX_R_5, PIX_R_4, PIX_R_3, PIX_R_2 },
+	{ PIX_B_3, PIX_B_2, PIX_G_7, PIX_G_6, PIX_G_5, PIX_G_4, PIX_G_3 },
+	{ PIX_D_E, PIX_V_S, PIX_H_S, PIX_B_7, PIX_B_6, PIX_B_5, PIX_B_4 },
+	{ PIX_C_E, PIX_B_1, PIX_B_0, PIX_G_1, PIX_G_0, PIX_R_1, PIX_R_0 }
 };
 
 /*
@@ -356,64 +337,58 @@ const enum lvds_pixel lvds_bitmap_jeida_rgb888[5][7] = {
  * CHAN3   {DE,  VS,  HS,   B5,   B4,   B3,  B2}
  * CHAN4   {CE,  B7,  B6,   G7,   G6,   R7,  R6}
  */
-const enum lvds_pixel lvds_bitmap_vesa_rgb888[5][7] = {
-	{
-		PIX_ONE, PIX_ONE, PIX_ZER, PIX_ZER, PIX_ZER, PIX_ONE, PIX_ONE
-	}, {
-		PIX_G_0, PIX_R_5, PIX_R_4, PIX_R_3, PIX_R_2, PIX_R_1, PIX_R_0
-	}, {
-		PIX_B_1, PIX_B_0, PIX_G_5, PIX_G_4, PIX_G_3, PIX_G_2, PIX_G_1
-	}, {
-		PIX_D_E, PIX_V_S, PIX_H_S, PIX_B_5, PIX_B_4, PIX_B_3, PIX_B_2
-	}, {
-		PIX_C_E, PIX_B_7, PIX_B_6, PIX_G_7, PIX_G_6, PIX_R_7, PIX_R_6
-	}
+enum lvds_pixel lvds_bitmap_vesa_rgb888[5][7] = {
+	{ PIX_ONE, PIX_ONE, PIX_ZER, PIX_ZER, PIX_ZER, PIX_ONE, PIX_ONE },
+	{ PIX_G_0, PIX_R_5, PIX_R_4, PIX_R_3, PIX_R_2, PIX_R_1, PIX_R_0 },
+	{ PIX_B_1, PIX_B_0, PIX_G_5, PIX_G_4, PIX_G_3, PIX_G_2, PIX_G_1 },
+	{ PIX_D_E, PIX_V_S, PIX_H_S, PIX_B_5, PIX_B_4, PIX_B_3, PIX_B_2 },
+	{ PIX_C_E, PIX_B_7, PIX_B_6, PIX_G_7, PIX_G_6, PIX_R_7, PIX_R_6 }
 };
 
+/*
+ * Clocks and PHY related functions
+ */
 static int lvds_pll_enable(struct stm_lvds *lvds, struct lvds_phy_info *phy)
 {
+	struct drm_device *drm = lvds->lvds_bridge.dev;
 	u32 lvds_gcr;
-	int ret, val;
+	int val, ret;
 
-	/* PLL lock timing control for the monitor unmask after startup (pll_en) */
-	/* Adjust the value so that the masking window is opened at start-up */
-	/* MST_MON_PLL_LOCK_UNMASK_TUNE */
-	lvds_write(lvds, phy->base + phy->ofs.PxMPLCR, (0x200 - 0x160) << 16);
+	/*
+	 * PLL lock timing control for the monitor unmask after startup (pll_en)
+	 * Adjusted value so that the masking window is opened at start-up
+	 */
+	lvds_write(lvds, phy->base + phy->ofs.MPLCR, (0x200 - 0x160) << 16);
 
-	lvds_write(lvds, phy->base + phy->ofs.PxBCR2, BIAS_EN);
+	/* Enable bias */
+	lvds_write(lvds, phy->base + phy->ofs.BCR2, PHY_BCR2_BIAS_EN);
 
+	/* Enable DP, LS, BIT clock output */
 	lvds_gcr = PHY_GCR_DP_CLK_OUT | PHY_GCR_LS_CLK_OUT | PHY_GCR_BIT_CLK_OUT;
-	lvds_set(lvds, phy->base + phy->ofs.PxGCR, lvds_gcr);
+	lvds_set(lvds, phy->base + phy->ofs.GCR, lvds_gcr);
 
-	/* TODO hardcoded values for now */
-	lvds_set(lvds, phy->base + phy->ofs.PxPLLTESTCR, BIT(8) /* PLL_TEST_DIV_EN */);
-	lvds_set(lvds, phy->base + phy->ofs.PxPLLCR1, BIT(8) /* PLL_DIVIDERS_ENABLE */);
+	/* Power up all output dividers */
+	lvds_set(lvds, phy->base + phy->ofs.PLLTESTCR, PHY_PLLTESTCR_EN);
+	lvds_set(lvds, phy->base + phy->ofs.PLLCR1, PHY_PLLCR1_DIV_EN);
 
-	lvds_set(lvds, phy->base + phy->ofs.PxSCR, BIT(16) /* SER_DATA_OK */);
+	/* Set PHY in serial transmission mode */
+	lvds_set(lvds, phy->base + phy->ofs.SCR, PHY_SCR_TX_EN);
 
 	/* Enable the LVDS PLL & wait for its lock */
-	lvds_set(lvds, phy->base + phy->ofs.PxPLLCR1, PLL_EN);
-	ret = readl_poll_timeout_atomic(lvds->base + phy->base + phy->ofs.PxPLLSR,
-					val, val & PLL_LOCK,
+	lvds_set(lvds, phy->base + phy->ofs.PLLCR1, PHY_PLLCR1_PLL_EN);
+	ret = readl_poll_timeout_atomic(lvds->base + phy->base + phy->ofs.PLLSR,
+					val, val & PHY_PLLSR_PLL_LOCK,
 					SLEEP_US, TIMEOUT_US);
 	if (ret)
-		DRM_ERROR("!TIMEOUT! waiting PLL, let's continue\n");
+		drm_err(drm, "!TIMEOUT! waiting PLL, let's continue\n");
 
-	/* Select MST PHY clock as pixel clock for the LDITX instead of FREF */
-	/* WCLKCR_SLV_CLKPIX_SEL is for dual link */
-	lvds_write(lvds, LVDS_WCLKCR, WCLKCR_SLV_CLKPIX_SEL);
+	/* WCLKCR_SECND_CLKPIX_SEL is for dual link */
+	lvds_write(lvds, LVDS_WCLKCR, WCLKCR_SECND_CLKPIX_SEL);
 
-	/* JF Duret */
-	lvds_set(lvds, phy->ofs.PxPLLTESTCR, BIT(0));
+	lvds_set(lvds, phy->ofs.PLLTESTCR, PHY_PLLTESTCR_CLK_EN);
 
 	return ret;
 }
-
-/* Integer mode */
-#define EN_SD		0
-#define EN_TWG		0
-#define DOWN_SPREAD	0
-#define TEST_DIV	70
 
 static int pll_get_clkout_khz(int clkin_khz, int bdiv, int mdiv, int ndiv)
 {
@@ -426,6 +401,7 @@ static int pll_get_clkout_khz(int clkin_khz, int bdiv, int mdiv, int ndiv)
 	return clkin_khz * mdiv / divisor;
 }
 
+#define TDIV	70
 #define NDIV_MIN	2
 #define NDIV_MAX	6
 #define BDIV_MIN	2
@@ -437,8 +413,8 @@ static int lvds_pll_get_params(struct stm_lvds *lvds,
 			       unsigned int clkin_khz, unsigned int clkout_khz,
 			       unsigned int *bdiv, unsigned int *mdiv, unsigned int *ndiv)
 {
-	int i, o, n;
 	int delta, best_delta; /* all in khz */
+	int i, o, n;
 
 	/* Early checks preventing division by 0 & odd results */
 	if (clkin_khz <= 0 || clkout_khz <= 0)
@@ -473,50 +449,55 @@ static int lvds_pll_get_params(struct stm_lvds *lvds,
 
 static void lvds_pll_config(struct stm_lvds *lvds, struct lvds_phy_info *phy)
 {
-	/* Set PLL Slv & Mst configs and timings */
+	unsigned int pll_in_khz, bdiv = 0, mdiv = 0, ndiv = 0;
 	struct clk_hw *hwclk;
-	unsigned int pll_in_khz, bdiv, mdiv, ndiv;
 	int multiplier;
 
 	/*
-	 * The LVDS PLL is made of a pre-divider and a multiplier (strangely
-	 * enough called M and N respectively), followed by a post-divider E.
+	 * The LVDS PHY includes a low power low jitter high performance and
+	 * highly configuration Phase Locked Loop supporting integer and
+	 * fractional multiplication ratios and Spread Spectrum Clocking.  In
+	 * integer mode, the only software supported feature for now, the PLL is
+	 * made of a pre-divider NDIV, a feedback multiplier MDIV, followed by
+	 * several post-dividers, each one with a specific application.
 	 *
 	 *          ,------.         ,-----.     ,-----.
-	 * Fref --> | NDIV | -Fpdf-> | PFD | --> | VCO | --> Fvco
+	 * Fref --> | NDIV | -Fpdf-> | PFD | --> | VCO | --------> Fvco
 	 *          `------'     ,-> |     |     `-----'  |
 	 *                       |   `-----'              |
 	 *                       |         ,------.       |
 	 *                       `-------- | MDIV | <-----'
 	 *                                 `------'
 	 *
-	 * The clock output by the PLL is then further divided by a programmable
-	 * divider DIV to achieve the desired target frequency. Finally, an
-	 * optional fixed /7 divider is used to convert the bit clock to a pixel
-	 * clock (as LVDS transmits 7 bits per lane per clock sample).
+	 * From the output of the VCO, the clock can be optionally extracted on
+	 * the RCC clock observer, with a divider TDIV, for testing purpose, or
+	 * is passed through a programmable post-divider BDIV.  Finally, the
+	 * frequency can be divided further with two fixed dividers.
 	 *
-	 *          ,------.     ,-----.     ,-------.     |\
-	 * Fvco --> | BDIV | --> | 1/7 | --> | 1/3.5 | --> | |
-	 *          `------'  |  `-----'     `-------'     | | --> dot clock
-	 *                    `--------------------------> | |
-	 *                                                 |/
+	 *                            ,--------.
+	 *                    ,-----> | DP div | ----------------> Fdp
+	 *          ,------.  |       `--------'
+	 * Fvco --> | BDIV | ------------------------------------> Fbit
+	 *      |   `------'    ,------.   |
+	 *      `-------------> | TDIV | --.---------------------> ClkObs
+	 *                      '------'   |    ,--------.
+	 *                                 `--> | LS div | ------> Fls
+	 *                                      '--------'
 	 *
-	 * The /7 divider is optional, it is enabled when the LVDS PLL is used
-	 * to drive the LVDS encoder, and disabled when used to generate a dot
-	 * clock for the display unit RGB output, without using the LVDS
-	 * encoder.
-	 *
-	 * The PLL allowed input frequency range is 12 MHz to 192 MHz.
+	 * The LS and DP clock dividers operate at a fixed ratio of 7 and 3.5
+	 * respectively with regards to fbit. LS divider converts the bit clock
+	 * to a pixel clock per lane per clock sample (Fls).  This is useful
+	 * when used to generate a dot clock for the display unit RGB output,
+	 * and DP divider is.
 	 */
 
-	/* TODO resolv blocking subroutine */
 	hwclk = __clk_get_hw(lvds->pllref_clk);
 	if (!hwclk)
 		return;
 
 	pll_in_khz = clk_hw_get_rate(hwclk) / 1000;
 
-	if (lvds_is_dual_link(lvds->config.link_type))
+	if (lvds_is_dual_link(lvds->link_type))
 		multiplier = 2;
 	else
 		multiplier = 1;
@@ -525,18 +506,20 @@ static void lvds_pll_config(struct stm_lvds *lvds, struct lvds_phy_info *phy)
 			    lvds->pixel_clock_rate * 7 / 1000 / multiplier,
 			    &bdiv, &mdiv, &ndiv);
 
-	/* MST_PLL_INPUT_DIV */
-	lvds_write(lvds, phy->base + phy->ofs.PxPLLCR2, ndiv << 16);
-	/* MST_PLL_BIT_DIV */
-	lvds_set(lvds, phy->base + phy->ofs.PxPLLCR2, bdiv);
-	/* MST_PLL_SD_INT_RATIO */
-	lvds_write(lvds, phy->base + phy->ofs.PxPLLSDCR1, mdiv);
-	/* MST_PLL_TEST_DIV_SETTINGS */
-	lvds_write(lvds, phy->base + phy->ofs.PxPLLTESTCR, TEST_DIV << 16);
+	/* Set BDIV, MDIV and NDIV */
+	lvds_write(lvds, phy->base + phy->ofs.PLLCR2, ndiv << 16);
+	lvds_set(lvds, phy->base + phy->ofs.PLLCR2, bdiv);
+	lvds_write(lvds, phy->base + phy->ofs.PLLSDCR1, mdiv);
+
+	/* Hardcode TDIV as dynamic values are not yet implemented */
+	lvds_write(lvds, phy->base + phy->ofs.PLLTESTCR, TDIV << 16);
 
 	/*
+	 * For now, PLL just needs to be in integer mode
+	 * Fractional and spread spectrum clocking are not yet implemented
+	 *
 	 * PLL integer mode:
-	 *	- MST_PLL_TWG_STEP = MST_PLL_SD_INT_RATIO
+	 *	- PMRY_PLL_TWG_STEP = PMRY_PLL_SD_INT_RATIO
 	 *	- EN_TWG = 0
 	 *	- EN_SD = 0
 	 *	- DOWN_SPREAD = 0
@@ -545,129 +528,153 @@ static void lvds_pll_config(struct stm_lvds *lvds, struct lvds_phy_info *phy)
 	 *	- EN_TWG = 0
 	 *	- EN_SD = 1
 	 *	- DOWN_SPREAD = 0
+	 *
+	 * Spread Spectrum Clocking
+	 *	- EN_TWG = 1
+	 *	- EN_SD = 1
 	 */
 
-	/* For now, PLL just need to be in integer mode */
-	lvds_clear(lvds, phy->base + phy->ofs.PxPLLCR1, EN_TWG | EN_SD); /* Disable TWG and SD */
+	/* Disable TWG and SD */
+	lvds_clear(lvds, phy->base + phy->ofs.PLLCR1, PHY_PLLCR1_EN_TWG | PHY_PLLCR1_EN_SD);
 
 	/* Power up bias and PLL dividers */
-	lvds_set(lvds, phy->base + phy->ofs.PxDCR, POWER_OK);
+	lvds_set(lvds, phy->base + phy->ofs.DCR, PHY_DCR_POWER_OK);
+	lvds_set(lvds, phy->base + phy->ofs.CMCR1, PHY_CMCR_CM_EN_DL);
+	lvds_set(lvds, phy->base + phy->ofs.CMCR2, PHY_CMCR_CM_EN_DL4);
 
-	lvds_set(lvds, phy->base + phy->ofs.PxCMCR1, CM_EN_DL);
-	lvds_set(lvds, phy->base + phy->ofs.PxCMCR2, CM_EN_DL4);
-
-	/* JF Duret */
-	lvds_set(lvds, phy->base + phy->ofs.PxPLLCPCR, 0x1);
-
-	lvds_set(lvds, phy->base + phy->ofs.PxBCR3, VM_EN_DL);
-
-	lvds_set(lvds, phy->base + phy->ofs.PxBCR1, EN_BIAS_DL);
-
-	lvds_set(lvds, phy->base + phy->ofs.PxCFGCR, EN_DIG_DL);
+	/* Set up voltage mode */
+	lvds_set(lvds, phy->base + phy->ofs.PLLCPCR, 0x1);
+	lvds_set(lvds, phy->base + phy->ofs.BCR3, PHY_BCR3_VM_EN_DL);
+	lvds_set(lvds, phy->base + phy->ofs.BCR1, PHY_BCR1_EN_BIAS_DL);
+	/* Enable digital datalanes */
+	lvds_set(lvds, phy->base + phy->ofs.CFGCR, PHY_CFGCR_EN_DIG_DL);
 }
 
-/* TODO enhance & make clearer logic */
 static int lvds_pixel_clk_enable(struct clk_hw *hw)
 {
-	/* PLL enable here */
 	struct stm_lvds *lvds = container_of(hw, struct stm_lvds, lvds_ck_px);
+	struct drm_device *drm = lvds->lvds_bridge.dev;
 	struct lvds_phy_info *phy;
 	int ret;
 
-	ret = clk_prepare_enable(lvds->pclk);
-	if (ret)
+	ret = pm_runtime_resume_and_get(lvds->dev);
+	if (ret < 0) {
+		DRM_ERROR("Failed to enable clocks, cannot resume pm\n");
 		return ret;
+	}
 
-	ret = clk_prepare_enable(lvds->pllref_clk);
-	if (ret)
-		goto err_pclk;
+	/* In case we are operating in dual link the second PHY is set before the primary PHY. */
+	if (lvds->secondary) {
+		phy = lvds->secondary;
 
-	/*
-	 * In case we are operating in dual link, PHY Slv is set before PHY
-	 * Mst.
-	 */
-	if (lvds->phy_slave) {
-		phy = lvds->phy_slave;
-
-		lvds_set(lvds, phy->base + phy->ofs.PxGCR, PHY_GCR_DIV_RSTN | PHY_GCR_RSTZ);
+		/* Release LVDS PHY from reset mode */
+		lvds_set(lvds, phy->base + phy->ofs.GCR, PHY_GCR_DIV_RSTN | PHY_GCR_RSTZ);
 		lvds_pll_config(lvds, phy);
 
 		ret = lvds_pll_enable(lvds, phy);
 		if (ret) {
-			DRM_ERROR("Unable to enable PHY PLL Slv: %d\n", ret);
-			goto err_pllref;
+			drm_err(drm, "Failed to enable secondary PHY PLL: %d\n", ret);
+			return ret;
 		}
 	}
 
-	if (lvds->phy_master) {
-		phy = lvds->phy_master;
+	if (lvds->primary) {
+		phy = lvds->primary;
 
 		/* Release LVDS PHY from reset mode */
-		lvds_set(lvds, phy->base + phy->ofs.PxGCR, PHY_GCR_DIV_RSTN | PHY_GCR_RSTZ);
+		lvds_set(lvds, phy->base + phy->ofs.GCR, PHY_GCR_DIV_RSTN | PHY_GCR_RSTZ);
 		lvds_pll_config(lvds, phy);
 
 		ret = lvds_pll_enable(lvds, phy);
 		if (ret) {
-			DRM_ERROR("Unable to enable PHY PLL Mst: %d\n", ret);
-			goto err_pllref;
+			drm_err(drm, "Failed to enable primary PHY PLL: %d\n", ret);
+			return ret;
 		}
 	}
 
 	return 0;
-
-err_pllref:
-	clk_disable_unprepare(lvds->pllref_clk);
-err_pclk:
-	clk_disable_unprepare(lvds->pclk);
-
-	return ret;
 }
 
 static void lvds_pixel_clk_disable(struct clk_hw *hw)
 {
-	/* PLL disable here */
 	struct stm_lvds *lvds = container_of(hw, struct stm_lvds, lvds_ck_px);
 
-	/* TODO Disable D-PHY clocks and digital */
-//	lvds_clear(lvds, lvds->phy_master->base + lvds->phy_master->ofs.PxGCR,
-//		   (PHY_GCR_DP_CLK_OUT | PHY_GCR_LS_CLK_OUT | PHY_GCR_BIT_CLK_OUT));
+	/*
+	 * For each PHY:
+	 * Disable DP, LS, BIT clock outputs
+	 * Shutdown the PLL
+	 * Assert LVDS PHY in reset mode
+	 */
 
-	/* Assert LVDS PHY Master & Slave in reset mode */
-	if (lvds->phy_master)
-		lvds_clear(lvds, lvds->phy_master->base + lvds->phy_master->ofs.PxGCR,
+	if (lvds->primary) {
+		lvds_clear(lvds, lvds->primary->base + lvds->primary->ofs.GCR,
+			   (PHY_GCR_DP_CLK_OUT | PHY_GCR_LS_CLK_OUT | PHY_GCR_BIT_CLK_OUT));
+		lvds_clear(lvds, lvds->primary->base + lvds->primary->ofs.PLLCR1,
+			   PHY_PLLCR1_PLL_EN);
+		lvds_clear(lvds, lvds->primary->base + lvds->primary->ofs.GCR,
 			   PHY_GCR_DIV_RSTN | PHY_GCR_RSTZ);
+	}
 
-	if (lvds->phy_slave)
-		lvds_clear(lvds, lvds->phy_slave->base + lvds->phy_slave->ofs.PxGCR,
+	if (lvds->secondary) {
+		lvds_clear(lvds, lvds->secondary->base + lvds->secondary->ofs.GCR,
+			   (PHY_GCR_DP_CLK_OUT | PHY_GCR_LS_CLK_OUT | PHY_GCR_BIT_CLK_OUT));
+		lvds_clear(lvds, lvds->secondary->base + lvds->secondary->ofs.PLLCR1,
+			   PHY_PLLCR1_PLL_EN);
+		lvds_clear(lvds, lvds->secondary->base + lvds->secondary->ofs.GCR,
 			   PHY_GCR_DIV_RSTN | PHY_GCR_RSTZ);
+	}
 
-	clk_disable_unprepare(lvds->pllref_clk);
-	clk_disable_unprepare(lvds->pclk);
+	pm_runtime_put(lvds->dev);
 }
 
 static unsigned long lvds_pixel_clk_recalc_rate(struct clk_hw *hw,
 						unsigned long parent_rate)
 {
 	struct stm_lvds *lvds = container_of(hw, struct stm_lvds, lvds_ck_px);
+	struct drm_device *drm = lvds->lvds_bridge.dev;
 	unsigned int pll_in_khz, bdiv, mdiv, ndiv;
-	int multiplier;
+	int ret, multiplier, pll_out_khz;
+	u32 val;
 
-	pll_in_khz = (unsigned int)(parent_rate / 1000);
+	ret = clk_prepare_enable(lvds->pclk);
+	if (ret) {
+		drm_err(drm, "Failed to enable lvds peripheral clk\n");
+		return 0;
+	}
 
-	if (lvds_is_dual_link(lvds->config.link_type))
+	if (lvds_is_dual_link(lvds->link_type))
 		multiplier = 2;
 	else
 		multiplier = 1;
 
-	lvds_pll_get_params(lvds, pll_in_khz,
-			    lvds->pixel_clock_rate * 7 / 1000 / multiplier,
-			    &bdiv, &mdiv, &ndiv);
+	val = lvds_read(lvds, lvds->primary->base + lvds->primary->ofs.PLLCR2);
 
-	/* X7 because for each pixel in 1 lane there is 7 bits
+	ndiv = (val & PHY_PLLCR2_NDIV) >> 16;
+	bdiv = (val & PHY_PLLCR2_BDIV) >> 0;
+
+	mdiv = (unsigned int)lvds_read(lvds,
+				       lvds->primary->base + lvds->primary->ofs.PLLSDCR1);
+
+	pll_in_khz = (unsigned int)(parent_rate / 1000);
+
+	/* Compute values if not yet accessible */
+	if (val == 0 || mdiv == 0) {
+		lvds_pll_get_params(lvds, pll_in_khz,
+				    lvds->pixel_clock_rate * 7 / 1000 / multiplier,
+				    &bdiv, &mdiv, &ndiv);
+	}
+
+	pll_out_khz = pll_get_clkout_khz(pll_in_khz, bdiv, mdiv, ndiv);
+	drm_dbg(drm, "ndiv %d , bdiv %d, mdiv %d, pll_out_khz %d\n",
+		ndiv, bdiv, mdiv, pll_out_khz);
+
+	/*
+	 * 1/7 because for each pixel in 1 lane there is 7 bits
 	 * We want pixclk, not bitclk
 	 */
-	lvds->pixel_clock_rate = (unsigned long)pll_get_clkout_khz(pll_in_khz, bdiv, mdiv, ndiv)
-					 * 1000 * multiplier / 7;
+	lvds->pixel_clock_rate = pll_out_khz * 1000 * multiplier / 7;
+
+	clk_disable_unprepare(lvds->pclk);
 
 	return (unsigned long)lvds->pixel_clock_rate;
 }
@@ -676,9 +683,9 @@ static long lvds_pixel_clk_round_rate(struct clk_hw *hw, unsigned long rate,
 				      unsigned long *parent_rate)
 {
 	struct stm_lvds *lvds = container_of(hw, struct stm_lvds, lvds_ck_px);
-	unsigned int pll_in_khz, bdiv, mdiv, ndiv;
-	const struct drm_display_mode *mode;
+	unsigned int pll_in_khz, bdiv = 0, mdiv = 0, ndiv = 0;
 	const struct drm_connector *connector;
+	const struct drm_display_mode *mode;
 	int multiplier;
 
 	connector = &lvds->connector;
@@ -686,7 +693,7 @@ static long lvds_pixel_clk_round_rate(struct clk_hw *hw, unsigned long rate,
 		return -EINVAL;
 
 	if (list_empty(&connector->modes)) {
-		dev_dbg(lvds->dev, "connector: empty modes list\n");
+		drm_dbg(connector->dev, "connector: empty modes list\n");
 		return -EINVAL;
 	}
 
@@ -695,14 +702,15 @@ static long lvds_pixel_clk_round_rate(struct clk_hw *hw, unsigned long rate,
 
 	pll_in_khz = (unsigned int)(*parent_rate / 1000);
 
-	if (lvds_is_dual_link(lvds->config.link_type))
+	if (lvds_is_dual_link(lvds->link_type))
 		multiplier = 2;
 	else
 		multiplier = 1;
 
 	lvds_pll_get_params(lvds, pll_in_khz, mode->clock * 7 / multiplier, &bdiv, &mdiv, &ndiv);
 
-	/* X7 because for each pixel in 1 lane there is 7 bits
+	/*
+	 * 1/7 because for each pixel in 1 lane there is 7 bits
 	 * We want pixclk, not bitclk
 	 */
 	lvds->pixel_clock_rate = (unsigned long)pll_get_clkout_khz(pll_in_khz, bdiv, mdiv, ndiv)
@@ -718,11 +726,12 @@ static const struct clk_ops lvds_pixel_clk_ops = {
 	.round_rate = lvds_pixel_clk_round_rate,
 };
 
-static const struct lvds_clk_data clk_data = {
-	.clk_name = "clk_pix_lvds",
-	.clk_ops = &lvds_pixel_clk_ops,
-	.clk_src = (const char * []) {"ck_ker_lvdsphy"},
-	.max_clk_src = 1,
+static const struct clk_init_data clk_data = {
+	.name = "clk_pix_lvds",
+	.ops = &lvds_pixel_clk_ops,
+	.parent_names = (const char * []) {"ck_ker_lvdsphy"},
+	.num_parents = 1,
+	.flags = CLK_IGNORE_UNUSED,
 };
 
 static void lvds_pixel_clk_unregister(void *data)
@@ -736,16 +745,9 @@ static void lvds_pixel_clk_unregister(void *data)
 static int lvds_pixel_clk_register(struct stm_lvds *lvds)
 {
 	struct device_node *node = lvds->dev->of_node;
-	struct clk_init_data init = {
-		.name = clk_data.clk_name,
-		.ops = clk_data.clk_ops,
-		.parent_names = clk_data.clk_src,
-		.num_parents = clk_data.max_clk_src,
-		.flags = CLK_IGNORE_UNUSED,
-	};
 	int ret;
 
-	lvds->lvds_ck_px.init = &init;
+	lvds->lvds_ck_px.init = &clk_data;
 
 	/* set the rate by default at 148500000 */
 	lvds->pixel_clock_rate = 148500000;
@@ -762,85 +764,66 @@ static int lvds_pixel_clk_register(struct stm_lvds *lvds)
 	return ret;
 }
 
-/* ------------------------------------------------------------------------- */
+/*
+ * Host configuration related
+ */
 static void lvds_config_data_mapping(struct stm_lvds *lvds)
 {
+	struct drm_device *drm = lvds->lvds_bridge.dev;
 	const struct drm_display_info *info;
-	u32 lvds_dmlcr[5], lvds_dmmcr[5]; /* 4 data lanes + 1 clk lane */
+	enum lvds_pixel (*bitmap)[7];
+	u32 lvds_dmlcr, lvds_dmmcr;
 	int i;
 
 	info = &(&lvds->connector)->display_info;
 	if (!info->num_bus_formats || !info->bus_formats) {
-		dev_warn(lvds->dev, "No LVDS bus format reported\n");
+		drm_warn(drm, "No LVDS bus format reported\n");
 		return;
 	}
 
-/*      Mode mirror : TODO
- *      info->bus_flags & DRM_BUS_FLAG_DATA_LSB_TO_MSB
- */
-
 	switch (info->bus_formats[0]) {
 	case MEDIA_BUS_FMT_RGB666_1X7X3_SPWG: /* VESA-RGB666 */
-		DRM_WARN("Pixel format with data mapping not yet compatible.\n");
-		break;
+		drm_warn(drm, "Pixel format with data mapping not yet supported.\n");
+		return;
 	case MEDIA_BUS_FMT_RGB888_1X7X4_SPWG: /* VESA-RGB888 */
-		for (i = 0; i < 5; i++) {
-			lvds_dmlcr[i] = ((lvds_bitmap_vesa_rgb888[i][0])
-					 + (lvds_bitmap_vesa_rgb888[i][1] << 5)
-					 + (lvds_bitmap_vesa_rgb888[i][2] << 10)
-					 + (lvds_bitmap_vesa_rgb888[i][3] << 15));
-			lvds_dmmcr[i] = ((lvds_bitmap_vesa_rgb888[i][4])
-					 + (lvds_bitmap_vesa_rgb888[i][5] << 5)
-					 + (lvds_bitmap_vesa_rgb888[i][6] << 10));
-		}
+		bitmap = lvds_bitmap_vesa_rgb888;
 		break;
 	case MEDIA_BUS_FMT_RGB888_1X7X4_JEIDA: /* JEIDA-RGB888 */
-		for (i = 0; i < 5; i++) {
-			lvds_dmlcr[i] = ((lvds_bitmap_jeida_rgb888[i][0])
-					+ (lvds_bitmap_jeida_rgb888[i][1] << 5)
-					+ (lvds_bitmap_jeida_rgb888[i][2] << 10)
-					+ (lvds_bitmap_jeida_rgb888[i][3] << 15));
-			lvds_dmmcr[i] = ((lvds_bitmap_jeida_rgb888[i][4])
-					+ (lvds_bitmap_jeida_rgb888[i][5] << 5)
-					+ (lvds_bitmap_jeida_rgb888[i][6] << 10));
-		}
+		bitmap = lvds_bitmap_jeida_rgb888;
 		break;
 	default:
-		dev_warn(lvds->dev, "Unsupported LVDS bus format 0x%04x\n",
-			 info->bus_formats[0]);
+		drm_warn(drm, "Unsupported LVDS bus format 0x%04x\n", info->bus_formats[0]);
+		return;
 	}
 
-	/* Write registers at the end of computations */
-	/* TODO use for loop */
-	lvds_write(lvds, LVDS_DMLCR0, lvds_dmlcr[0]);
-	lvds_write(lvds, LVDS_DMMCR0, lvds_dmmcr[0]);
-	lvds_write(lvds, LVDS_DMLCR1, lvds_dmlcr[1]);
-	lvds_write(lvds, LVDS_DMMCR1, lvds_dmmcr[1]);
-	lvds_write(lvds, LVDS_DMLCR2, lvds_dmlcr[2]);
-	lvds_write(lvds, LVDS_DMMCR2, lvds_dmmcr[2]);
-	lvds_write(lvds, LVDS_DMLCR3, lvds_dmlcr[3]);
-	lvds_write(lvds, LVDS_DMMCR3, lvds_dmmcr[3]);
-	lvds_write(lvds, LVDS_DMLCR4, lvds_dmlcr[4]);
-	lvds_write(lvds, LVDS_DMMCR4, lvds_dmmcr[4]);
+	/* Set bitmap for each lane */
+	for (i = 0; i < 5; i++) {
+		lvds_dmlcr = ((bitmap[i][0])
+			      + (bitmap[i][1] << 5)
+			      + (bitmap[i][2] << 10)
+			      + (bitmap[i][3] << 15));
+		lvds_dmmcr = ((bitmap[i][4])
+			      + (bitmap[i][5] << 5)
+			      + (bitmap[i][6] << 10));
+
+		lvds_write(lvds, LVDS_DMLCR(i), lvds_dmlcr);
+		lvds_write(lvds, LVDS_DMMCR(i), lvds_dmmcr);
+	}
 }
 
-static int lvds_config_mode(struct stm_lvds *lvds)
+static void lvds_config_mode(struct stm_lvds *lvds)
 {
+	u32 bus_flags, lvds_cr = 0, lvds_cdl1cr = 0, lvds_cdl2cr = 0;
 	const struct drm_display_mode *mode;
 	const struct drm_connector *connector;
-	u32 bus_flags, lvds_cr, lvds_cdl1cr, lvds_cdl2cr;
-
-	lvds_cr = 0;
-	lvds_cdl1cr = 0;
-	lvds_cdl2cr = 0;
 
 	connector = &lvds->connector;
 	if (!connector)
-		return -EINVAL;
+		return;
 
 	if (list_empty(&connector->modes)) {
-		dev_dbg(lvds->dev, "connector: empty modes list\n");
-		return -EINVAL;
+		drm_dbg(connector->dev, "connector: empty modes list\n");
+		return;
 	}
 
 	bus_flags = connector->display_info.bus_flags;
@@ -848,19 +831,22 @@ static int lvds_config_mode(struct stm_lvds *lvds)
 				struct drm_display_mode, head);
 
 	lvds_clear(lvds, LVDS_CR, CR_LKMOD);
-	lvds_clear(lvds, LVDS_CDL1CR, CDLCRx_DISTR0 | CDLCRx_DISTR1 | CDLCRx_DISTR2
-					| CDLCRx_DISTR3 | CDLCRx_DISTR4);
-	lvds_clear(lvds, LVDS_CDL2CR, CDLCRx_DISTR0 | CDLCRx_DISTR1 | CDLCRx_DISTR2
-					| CDLCRx_DISTR3 | CDLCRx_DISTR4);
+	lvds_clear(lvds, LVDS_CDL1CR, CDLCR_DISTR0 | CDLCR_DISTR1 | CDLCR_DISTR2 |
+				      CDLCR_DISTR3 | CDLCR_DISTR4);
+	lvds_clear(lvds, LVDS_CDL2CR, CDLCR_DISTR0 | CDLCR_DISTR1 | CDLCR_DISTR2 |
+				      CDLCR_DISTR3 | CDLCR_DISTR4);
 
 	/* Set channel distribution */
-	/* TODO Hardcoded values for now */
-	if (lvds->phy_master)
+	if (lvds->primary)
 		lvds_cdl1cr = CDL1CR_DEFAULT;
 
-	if (lvds->phy_slave) {
-		lvds_cr |= CR_LKMOD;
-		lvds_cdl2cr = CDL2CR_DEFAULT;
+	if (lvds->secondary) {
+		if (lvds->link_type == LVDS_SINGLE_LINK_SECONDARY) {
+			lvds_cdl2cr = CDL2CR_4DL_DEFAULT;
+		} else {
+			lvds_cr |= CR_LKMOD;
+			lvds_cdl2cr = CDL2CR_8DL_DEFAULT;
+		}
 	}
 
 	/* Set signal polarity */
@@ -873,7 +859,7 @@ static int lvds_config_mode(struct stm_lvds *lvds)
 	if (mode->flags & DRM_MODE_FLAG_NVSYNC)
 		lvds_cr |= CR_VSPOL;
 
-	switch (lvds->config.link_type) {
+	switch (lvds->link_type) {
 	case LVDS_DUAL_LINK_EVEN_ODD_PIXELS: /* LKPHA = 0 */
 		lvds_cr &= ~CR_LKPHA;
 		break;
@@ -881,7 +867,7 @@ static int lvds_config_mode(struct stm_lvds *lvds)
 		lvds_cr |= CR_LKPHA;
 		break;
 	default:
-		dev_warn(lvds->dev, "No phase precised, setting default\n");
+		drm_notice(lvds->lvds_bridge.dev, "No phase precised, setting default\n");
 		lvds_cr &= ~CR_LKPHA;
 		break;
 	}
@@ -890,38 +876,33 @@ static int lvds_config_mode(struct stm_lvds *lvds)
 	lvds_set(lvds, LVDS_CR, lvds_cr);
 	lvds_write(lvds, LVDS_CDL1CR, lvds_cdl1cr);
 	lvds_write(lvds, LVDS_CDL2CR, lvds_cdl2cr);
-
-	/* Set Data Mapping */
-	lvds_config_data_mapping(lvds);
-
-	return 0;
 }
 
-/* ------------------------------------------------------------------------- */
 static int lvds_connector_get_modes(struct drm_connector *connector)
 {
 	struct stm_lvds *lvds = connector_to_stm_lvds(connector);
-	int ret;
 
-	ret = drm_panel_get_modes(lvds->panel, connector);
-
-	return ret;
+	return drm_panel_get_modes(lvds->panel, connector);
 }
 
 static int lvds_connector_atomic_check(struct drm_connector *connector,
 				       struct drm_atomic_state *state)
 {
-	struct stm_lvds *lvds = connector_to_stm_lvds(connector);
 	const struct drm_display_mode *panel_mode;
 	struct drm_connector_state *conn_state;
 	struct drm_crtc_state *crtc_state;
 
 	conn_state = drm_atomic_get_new_connector_state(state, connector);
-	if (!conn_state->crtc)
+	if (!conn_state)
+		return -EINVAL;
+
+	if (!conn_state->crtc) {
+		drm_dbg(connector->dev, "connector: no crtc\n");
 		return 0;
+	}
 
 	if (list_empty(&connector->modes)) {
-		dev_dbg(lvds->dev, "connector: empty modes list\n");
+		drm_dbg(connector->dev, "connector: empty modes list\n");
 		return -EINVAL;
 	}
 
@@ -956,17 +937,16 @@ static const struct drm_connector_funcs lvds_conn_funcs = {
 	.atomic_destroy_state = drm_atomic_helper_connector_destroy_state,
 };
 
-/* ------------------------------------------------------------------------- */
 static int lvds_attach(struct drm_bridge *bridge,
 		       enum drm_bridge_attach_flags flags)
 {
 	struct stm_lvds *lvds = bridge_to_stm_lvds(bridge);
 	struct drm_connector *connector = &lvds->connector;
 	struct drm_encoder *encoder = bridge->encoder;
-	int ret = -ENODEV;
+	int ret;
 
 	if (!bridge->encoder) {
-		DRM_ERROR("Parent encoder object not found\n");
+		drm_err(bridge->dev, "Parent encoder object not found\n");
 		return -ENODEV;
 	}
 
@@ -982,7 +962,7 @@ static int lvds_attach(struct drm_bridge *bridge,
 					 bridge, flags);
 
 	if (flags & DRM_BRIDGE_ATTACH_NO_CONNECTOR) {
-		DRM_ERROR("Fix bridge driver to make connector optional!");
+		drm_err(bridge->dev, "Fix bridge driver to make connector optional!");
 		return -EINVAL;
 	}
 
@@ -998,23 +978,37 @@ static int lvds_attach(struct drm_bridge *bridge,
 	drm_connector_helper_add(connector, &lvds_conn_helper_funcs);
 
 	ret = drm_connector_attach_encoder(connector, encoder);
-	if (ret < 0)
-		return ret;
 
-	return 0;
+	return ret;
 }
 
-static void lvds_detach(struct drm_bridge *bridge)
-{}
-
-static void __lvds_atomic_enable(struct drm_bridge *bridge,
-				 struct drm_atomic_state *state,
-				 struct drm_crtc *crtc,
-				 struct drm_connector *connector)
+static void lvds_atomic_enable(struct drm_bridge *bridge,
+			       struct drm_bridge_state *old_bridge_state)
 {
+	struct drm_atomic_state *state = old_bridge_state->base.state;
 	struct stm_lvds *lvds = bridge_to_stm_lvds(bridge);
+	struct drm_connector_state *conn_state;
+	struct drm_connector *connector;
+	int ret;
+
+	ret = pm_runtime_resume_and_get(lvds->dev);
+	if (ret < 0) {
+		DRM_ERROR("Failed to enable lvds, cannot resume pm\n");
+		return;
+	}
+
+	connector = drm_atomic_get_new_connector_for_encoder(state, bridge->encoder);
+	if (!connector)
+		return;
+
+	conn_state = drm_atomic_get_new_connector_state(state, connector);
+	if (!conn_state)
+		return;
 
 	lvds_config_mode(lvds);
+
+	/* Set Data Mapping */
+	lvds_config_data_mapping(lvds);
 
 	/* Turn the output on. */
 	lvds_set(lvds, LVDS_CR, CR_LVDSEN);
@@ -1023,30 +1017,6 @@ static void __lvds_atomic_enable(struct drm_bridge *bridge,
 		drm_panel_prepare(lvds->panel);
 		drm_panel_enable(lvds->panel);
 	}
-}
-
-static void lvds_atomic_enable(struct drm_bridge *bridge,
-			       struct drm_bridge_state *old_bridge_state)
-{
-	struct stm_lvds *lvds = bridge_to_stm_lvds(bridge);
-	struct drm_atomic_state *state = old_bridge_state->base.state;
-	struct drm_connector *connector;
-	struct drm_crtc *crtc;
-	int ret;
-
-	if (!pm_runtime_active(lvds->dev)) {
-		ret = pm_runtime_get_sync(lvds->dev);
-		if (ret < 0) {
-			DRM_ERROR("Failed to set mode, cannot get sync\n");
-			return;
-		}
-	}
-
-	connector = drm_atomic_get_new_connector_for_encoder(state,
-							     bridge->encoder);
-	crtc = drm_atomic_get_new_connector_state(state, connector)->crtc;
-
-	__lvds_atomic_enable(bridge, state, crtc, connector);
 }
 
 static void lvds_atomic_disable(struct drm_bridge *bridge,
@@ -1059,23 +1029,14 @@ static void lvds_atomic_disable(struct drm_bridge *bridge,
 		drm_panel_unprepare(lvds->panel);
 	}
 
-	/* Check the LVDS handle allocation ? */
-
 	/* Disable LVDS module */
 	lvds_clear(lvds, LVDS_CR, CR_LVDSEN);
 
-	/* Shutdown the LVDS PLL */
-	/*
-	 * TODO: bug if PLL_EN cleared
-	 * Do NOT uncomment this line
-	 */
-	//lvds_clear(lvds, lvds->phy_master->base + lvds->phy_master->ofs.PxPLLCR1, PLL_EN);
 	pm_runtime_put(lvds->dev);
 }
 
 static const struct drm_bridge_funcs lvds_bridge_funcs = {
 	.attach = lvds_attach,
-	.detach = lvds_detach,
 	.atomic_enable = lvds_atomic_enable,
 	.atomic_disable = lvds_atomic_disable,
 	.atomic_duplicate_state = drm_atomic_helper_bridge_duplicate_state,
@@ -1083,19 +1044,18 @@ static const struct drm_bridge_funcs lvds_bridge_funcs = {
 	.atomic_reset = drm_atomic_helper_bridge_reset,
 };
 
-/* ------------------------------------------------------------------------- */
 static int lvds_probe(struct platform_device *pdev)
 {
-	struct device *dev = &pdev->dev;
 	struct device_node *port1, *port2, *remote;
-	struct stm_lvds *lvds;
+	struct device *dev = &pdev->dev;
 	struct reset_control *rstc;
 	struct lvds_phy_info *phy;
+	struct stm_lvds *lvds;
 	unsigned int pll_in_khz, bdiv, mdiv, ndiv;
 	int multiplier, rate;
 	int ret, dual_link;
 
-	DRM_DEBUG_DRIVER("Probing LVDS driver...\n");
+	dev_dbg(dev, "Probing LVDS driver...\n");
 
 	lvds = devm_kzalloc(dev, sizeof(*lvds), GFP_KERNEL);
 	if (!lvds)
@@ -1103,7 +1063,7 @@ static int lvds_probe(struct platform_device *pdev)
 
 	lvds->dev = dev;
 
-	ret = drm_of_find_panel_or_bridge(lvds->dev->of_node, 1, 0,
+	ret = drm_of_find_panel_or_bridge(dev->of_node, 1, 0,
 					  &lvds->panel, &lvds->next_bridge);
 	if (ret) {
 		dev_err_probe(dev, ret, "Panel not found\n");
@@ -1113,7 +1073,14 @@ static int lvds_probe(struct platform_device *pdev)
 	lvds->base = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(lvds->base)) {
 		ret = PTR_ERR(lvds->base);
-		DRM_ERROR("Unable to get regs %d\n", ret);
+		dev_err(dev, "Unable to get regs %d\n", ret);
+		return ret;
+	}
+
+	lvds->pclk = devm_clk_get(dev, "pclk");
+	if (IS_ERR(lvds->pclk)) {
+		ret = PTR_ERR(lvds->pclk);
+		dev_err(dev, "Unable to get peripheral clock: %d\n", ret);
 		return ret;
 	}
 
@@ -1149,14 +1116,14 @@ static int lvds_probe(struct platform_device *pdev)
 
 	switch (dual_link) {
 	case DRM_LVDS_DUAL_LINK_ODD_EVEN_PIXELS:
-		lvds->config.link_type = LVDS_DUAL_LINK_ODD_EVEN_PIXELS;
-		lvds->phy_master = &lvds_phy_16ff_master;
-		lvds->phy_slave = &lvds_phy_16ff_slave;
+		lvds->link_type = LVDS_DUAL_LINK_ODD_EVEN_PIXELS;
+		lvds->primary = &lvds_phy_16ff_primary;
+		lvds->secondary = &lvds_phy_16ff_secondary;
 		break;
 	case DRM_LVDS_DUAL_LINK_EVEN_ODD_PIXELS:
-		lvds->config.link_type = LVDS_DUAL_LINK_EVEN_ODD_PIXELS;
-		lvds->phy_master = &lvds_phy_16ff_master;
-		lvds->phy_slave = &lvds_phy_16ff_slave;
+		lvds->link_type = LVDS_DUAL_LINK_EVEN_ODD_PIXELS;
+		lvds->primary = &lvds_phy_16ff_primary;
+		lvds->secondary = &lvds_phy_16ff_secondary;
 		break;
 	case -EINVAL:
 		/*
@@ -1171,9 +1138,8 @@ static int lvds_probe(struct platform_device *pdev)
 		remote = of_get_next_available_child(port1, NULL);
 		if (remote) {
 			if (of_graph_get_remote_endpoint(remote)) {
-				lvds->config.link_type = LVDS_SINGLE_LINK_MASTER;
-				lvds->phy_master = &lvds_phy_16ff_master;
-				lvds->phy_slave = NULL;
+				lvds->link_type = LVDS_SINGLE_LINK_PRIMARY;
+				lvds->primary = &lvds_phy_16ff_primary;
 			} else {
 				ret = -EINVAL;
 			}
@@ -1184,9 +1150,8 @@ static int lvds_probe(struct platform_device *pdev)
 		remote = of_get_next_available_child(port2, NULL);
 		if (remote) {
 			if (of_graph_get_remote_endpoint(remote)) {
-				lvds->config.link_type = LVDS_SINGLE_LINK_SLAVE;
-				lvds->phy_master = NULL;
-				lvds->phy_slave = &lvds_phy_16ff_slave;
+				lvds->link_type = LVDS_SINGLE_LINK_SECONDARY;
+				lvds->secondary = &lvds_phy_16ff_secondary;
 			} else {
 				ret = (ret == -EINVAL) ? -EINVAL : 0;
 			}
@@ -1200,17 +1165,10 @@ static int lvds_probe(struct platform_device *pdev)
 	of_node_put(port1);
 	of_node_put(port2);
 
-	lvds->pclk = devm_clk_get(lvds->dev, "pclk");
-	if (IS_ERR(lvds->pclk)) {
-		ret = PTR_ERR(lvds->pclk);
-		DRM_ERROR("Unable to get peripheral clock: %d\n", ret);
-		return ret;
-	}
-
-	lvds->pllref_clk = devm_clk_get(lvds->dev, "ref");
+	lvds->pllref_clk = devm_clk_get(dev, "ref");
 	if (IS_ERR(lvds->pllref_clk)) {
 		ret = PTR_ERR(lvds->pllref_clk);
-		DRM_ERROR("Unable to get reference clock: %d\n", ret);
+		dev_err(dev, "Unable to get reference clock: %d\n", ret);
 		return ret;
 	}
 
@@ -1220,33 +1178,48 @@ static int lvds_probe(struct platform_device *pdev)
 		return ret;
 	}
 
+	ret = clk_prepare_enable(lvds->pclk);
+	if (ret) {
+		lvds_pixel_clk_unregister(lvds);
+		dev_err(dev, "%s: Failed to enable peripheral clk\n", __func__);
+		return ret;
+	}
+
 	lvds->lvds_bridge.funcs = &lvds_bridge_funcs;
 	lvds->lvds_bridge.of_node = dev->of_node;
+	lvds->hw_version = lvds_read(lvds, LVDS_VERR);
 
+	clk_disable_unprepare(lvds->pclk);
+
+	dev_info(dev, "version 0x%02x initialized\n", lvds->hw_version);
+
+	pm_runtime_enable(lvds->dev);
 	drm_bridge_add(&lvds->lvds_bridge);
 	platform_set_drvdata(pdev, lvds);
-
-	pm_runtime_enable(dev);
 
 	/*
 	 * To obtain a continuous display after the probe,
 	 *  the clocks must remain activated
 	 */
 	if (device_property_read_bool(dev, "default-on")) {
-		pm_runtime_get_sync(dev);
+		ret = pm_runtime_resume_and_get(dev);
+		if (ret < 0) {
+			DRM_ERROR("Failed to probe lvds, cannot resume pm\n");
+			return ret;
+		}
 
-		if (lvds->phy_master) {
-			if (lvds_is_dual_link(lvds->config.link_type))
+		if (lvds->primary) {
+			if (lvds_is_dual_link(lvds->link_type))
 				multiplier = 2;
 			else
 				multiplier = 1;
 
-			phy = lvds->phy_master;
+			phy = lvds->primary;
 			pll_in_khz = clk_get_rate(lvds->pllref_clk) / 1000;
 
-			ndiv = lvds_read(lvds, phy->base + phy->ofs.PxPLLCR2) >> 16;
-			bdiv = lvds_read(lvds, phy->base + phy->ofs.PxPLLCR2) & 0xFFFF;
-			mdiv = lvds_read(lvds, phy->base + phy->ofs.PxPLLSDCR1);
+			ndiv = lvds_read(lvds, phy->base + phy->ofs.PLLCR2) >> 16;
+			bdiv = lvds_read(lvds, phy->base + phy->ofs.PLLCR2) & 0xFFFF;
+			mdiv = lvds_read(lvds, phy->base + phy->ofs.PLLSDCR1);
 
 			/* X7 because for each pixel in 1 lane there is 7 bits
 			 * We want pixclk, not bitclk
@@ -1266,7 +1239,6 @@ static int lvds_remove(struct platform_device *pdev)
 	lvds_pixel_clk_unregister(lvds);
 	pm_runtime_disable(&pdev->dev);
 
-	/* Unregister LVDS bridge */
 	drm_bridge_remove(&lvds->lvds_bridge);
 
 	return 0;
@@ -1341,11 +1313,11 @@ static const struct dev_pm_ops lvds_pm_ops = {
 };
 
 static struct platform_driver lvds_platform_driver = {
-	.probe	  = lvds_probe,
-	.remove	 = lvds_remove,
-	.driver	 = {
-		.name   = "stm32-display-lvds",
-		.owner  = THIS_MODULE,
+	.probe = lvds_probe,
+	.remove = lvds_remove,
+	.driver = {
+		.name = "stm32-display-lvds",
+		.owner = THIS_MODULE,
 		.of_match_table = lvds_dt_ids,
 		.pm = &lvds_pm_ops,
 	},
@@ -1357,4 +1329,4 @@ MODULE_AUTHOR("Raphaël Gallais-Pou <raphael.gallais-pou@foss.st.com>");
 MODULE_AUTHOR("Philippe Cornu <philippe.cornu@foss.st.com>");
 MODULE_AUTHOR("Yannick Fertre <yannick.fertre@foss.st.com>");
 MODULE_DESCRIPTION("STMicroelectronics LVDS Display Interface Transmitter DRM driver");
-MODULE_LICENSE("GPL v2");
+MODULE_LICENSE("GPL");

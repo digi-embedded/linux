@@ -5,9 +5,6 @@
 # Copyright (c) 2010 Broadcom Corporation
 #
 
-subdir-ccflags-y += -DBCM_TAG_STR=\"$(shell git describe --abbrev=4 --dirty --always --tags)\"
-subdir-ccflags-y += -DBCM_SHAID_STR=\"$(shell git rev-parse --short HEAD)\"
-
 ccflags-y += \
 	-I $(srctree)/$(src) \
 	-I $(srctree)/$(src)/../include
@@ -23,14 +20,12 @@ brcmfmac-objs += \
 		common.o \
 		core.o \
 		firmware.o \
+		fwvid.o \
 		feature.o \
 		btcoex.o \
 		vendor.o \
 		pno.o \
-		xtlv.o \
-		vendor_ifx.o \
-		twt.o \
-		csi.o
+		xtlv.o
 brcmfmac-$(CONFIG_BRCMFMAC_PROTO_BCDC) += \
 		bcdc.o \
 		fwsignal.o
@@ -53,7 +48,15 @@ brcmfmac-$(CONFIG_OF) += \
 		of.o
 brcmfmac-$(CONFIG_DMI) += \
 		dmi.o
-brcmfmac-${CONFIG_BRCMFMAC_BT_SHARED_SDIO} += \
-		bt_shared_sdio.o
-brcmfmac-${CONFIG_IFX_BT_SHARED_SDIO} += \
-		bt_shared_sdio_ifx.o
+brcmfmac-$(CONFIG_ACPI) += \
+		acpi.o
+
+ifeq ($(CONFIG_BRCMFMAC),m)
+obj-m += wcc/
+obj-m += cyw/
+obj-m += bca/
+else
+brcmfmac-$(CONFIG_BRCMFMAC) += wcc/core.o
+brcmfmac-$(CONFIG_BRCMFMAC) += cyw/core.o
+brcmfmac-$(CONFIG_BRCMFMAC) += bca/core.o
+endif

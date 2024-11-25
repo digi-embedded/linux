@@ -9,11 +9,7 @@
  *          for STMicroelectronics.
  */
 
-#include <linux/delay.h>
 #include <linux/iopoll.h>
-#include <linux/module.h>
-#include <linux/mod_devicetable.h>
-#include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <media/v4l2-ioctl.h>
 #include <media/v4l2-mc.h>
@@ -23,9 +19,8 @@
 
 #include "dcmipp-common.h"
 
-#define DCMIPP_ISP_PARAMS_DRV_NAME "dcmipp-isp-params"
-
-#define DCMIPP_CMSR2_P1VSYNCF BIT(18)
+#define DCMIPP_CMSR2_P1VSYNCF	BIT(18)
+#define DCMIPP_CMSR2_P2VSYNCF	BIT(26)
 
 struct dcmipp_buf {
 	struct vb2_v4l2_buffer	vb;
@@ -40,10 +35,9 @@ struct dcmipp_isp_params_device {
 	struct list_head buffers;
 	/* Protects the access of variables shared within the interrupt */
 	spinlock_t irqlock;
-	/* Protect this data structure */
+	/* mutex used as vdev and queue lock */
 	struct mutex lock;
 	u32 sequence;
-	struct media_pipeline pipe;
 
 	void __iomem *regs;
 };
@@ -53,8 +47,6 @@ static int dcmipp_isp_params_querycap(struct file *file, void *priv,
 {
 	strscpy(cap->driver, DCMIPP_PDEV_NAME, sizeof(cap->driver));
 	strscpy(cap->card, KBUILD_MODNAME, sizeof(cap->card));
-	snprintf(cap->bus_info, sizeof(cap->bus_info),
-		 "platform:%s", DCMIPP_PDEV_NAME);
 
 	return 0;
 }
@@ -199,16 +191,14 @@ static const struct vb2_ops dcmipp_isp_params_qops = {
 	.wait_finish		= vb2_ops_wait_finish,
 };
 
-static const struct media_entity_operations dcmipp_isp_params_mops = {
-	.link_validate		= dcmipp_link_validate,
-};
-
 static void dcmipp_isp_params_release(struct video_device *vdev)
 {
 	struct dcmipp_isp_params_device *vout =
 		container_of(vdev, struct dcmipp_isp_params_device, vdev);
 
 	dcmipp_pads_cleanup(vout->ved.pads);
+	mutex_destroy(&vout->lock);
+
 	kfree(vout);
 }
 
@@ -217,15 +207,14 @@ void dcmipp_isp_params_ent_release(struct dcmipp_ent_device *ved)
 	struct dcmipp_isp_params_device *vout =
 		container_of(ved, struct dcmipp_isp_params_device, ved);
 
-	mutex_destroy(&vout->lock);
 	media_entity_cleanup(ved->ent);
 	vb2_video_unregister_device(&vout->vdev);
 }
 
-#define DCMIPP_P1BPRCR (0x824)
-#define DCMIPP_P1BPRCR_ENABLE BIT(0)
-#define DCMIPP_P1BPRCR_STRENGTH_SHIFT 1
-#define DCMIPP_P1BPRCR_STRENGTH_MASK 0x07
+#define DCMIPP_P1BPRCR			0x824
+#define DCMIPP_P1BPRCR_ENABLE		BIT(0)
+#define DCMIPP_P1BPRCR_STRENGTH_SHIFT	1
+#define DCMIPP_P1BPRCR_STRENGTH_MASK	0x07
 static inline int
 dcmipp_isp_params_valid_bpr(struct stm32_dcmipp_isp_bpr_cfg *cfg)
 {
@@ -244,11 +233,11 @@ dcmipp_isp_params_apply_bpr(struct dcmipp_isp_params_device *vout,
 		  cfg->strength << DCMIPP_P1BPRCR_STRENGTH_SHIFT);
 }
 
-#define DCMIPP_P1BLCCR (0x840)
-#define DCMIPP_P1BLCCR_ENABLE BIT(0)
-#define DCMIPP_P1BLCCR_BLCB_SHIFT 8
-#define DCMIPP_P1BLCCR_BLCG_SHIFT 16
-#define DCMIPP_P1BLCCR_BLCR_SHIFT 24
+#define DCMIPP_P1BLCCR			0x840
+#define DCMIPP_P1BLCCR_ENABLE		BIT(0)
+#define DCMIPP_P1BLCCR_BLCB_SHIFT	8
+#define DCMIPP_P1BLCCR_BLCG_SHIFT	16
+#define DCMIPP_P1BLCCR_BLCR_SHIFT	24
 static inline void
 dcmipp_isp_params_apply_blc(struct dcmipp_isp_params_device *vout,
 			    struct stm32_dcmipp_isp_blc_cfg *cfg)
@@ -260,17 +249,18 @@ dcmipp_isp_params_apply_blc(struct dcmipp_isp_params_device *vout,
 		  cfg->blc_b << DCMIPP_P1BLCCR_BLCB_SHIFT);
 }
 
-#define DCMIPP_P1EXCR1 (0x844)
-#define DCMIPP_P1EXCR1_ENABLE BIT(0)
-#define DCMIPP_P1EXCR1_MULTR_SHIFT 20
-#define DCMIPP_P1EXCR1_SHFR_SHIFT 28
-#define DCMIPP_P1EXCR1_SHFR_MASK 0x07
+#define DCMIPP_P1EXCR1			0x844
+#define DCMIPP_P1EXCR1_ENABLE		BIT(0)
+#define DCMIPP_P1EXCR1_MULTR_SHIFT	20
+#define DCMIPP_P1EXCR1_SHFR_SHIFT	28
+#define DCMIPP_P1EXCR1_SHFR_MASK	0x07
 
-#define DCMIPP_P1EXCR2 (0x848)
-#define DCMIPP_P1EXCR2_MULTB_SHIFT 4
-#define DCMIPP_P1EXCR2_SHFB_SHIFT 12
-#define DCMIPP_P1EXCR2_MULTG_SHIFT 20
-#define DCMIPP_P1EXCR2_SHFG_SHIFT 28
+#define DCMIPP_P1EXCR2			0x848
+#define DCMIPP_P1EXCR2_MULTB_SHIFT	4
+#define DCMIPP_P1EXCR2_SHFB_SHIFT	12
+#define DCMIPP_P1EXCR2_MULTG_SHIFT	20
+#define DCMIPP_P1EXCR2_SHFG_SHIFT	28
+
 static inline int
 dcmipp_isp_params_valid_ex(struct stm32_dcmipp_isp_ex_cfg *cfg)
 {
@@ -298,15 +288,15 @@ dcmipp_isp_params_apply_ex(struct dcmipp_isp_params_device *vout,
 		  cfg->shift_g << DCMIPP_P1EXCR2_SHFG_SHIFT);
 }
 
-#define DCMIPP_P1DMCR (0x870)
-#define DCMIPP_P1DMCR_PEAK_SHIFT 16
-#define DCMIPP_P1DMCR_PEAK_MASK 0x07
-#define DCMIPP_P1DMCR_LINEV_SHIFT 20
-#define DCMIPP_P1DMCR_LINEV_MASK 0x07
-#define DCMIPP_P1DMCR_LINEH_SHIFT 24
-#define DCMIPP_P1DMCR_LINEH_MASK 0x07
-#define DCMIPP_P1DMCR_EDGE_SHIFT 28
-#define DCMIPP_P1DMCR_EDGE_MASK 0x07
+#define DCMIPP_P1DMCR			0x870
+#define DCMIPP_P1DMCR_PEAK_SHIFT	16
+#define DCMIPP_P1DMCR_PEAK_MASK		0x07
+#define DCMIPP_P1DMCR_LINEV_SHIFT	20
+#define DCMIPP_P1DMCR_LINEV_MASK	0x07
+#define DCMIPP_P1DMCR_LINEH_SHIFT	24
+#define DCMIPP_P1DMCR_LINEH_MASK	0x07
+#define DCMIPP_P1DMCR_EDGE_SHIFT	28
+#define DCMIPP_P1DMCR_EDGE_MASK		0x07
 static inline int
 dcmipp_isp_params_valid_dm(struct stm32_dcmipp_isp_dm_cfg *cfg)
 {
@@ -338,31 +328,31 @@ dcmipp_isp_params_apply_dm(struct dcmipp_isp_params_device *vout,
 		  cfg->edge << DCMIPP_P1DMCR_EDGE_SHIFT);
 }
 
-#define DCMIPP_P1CCCR (0x880)
-#define DCMIPP_P1CCCR_ENABLE BIT(0)
-#define DCMIPP_P1CCCR_TYPE_YUV 0
-#define DCMIPP_P1CCCR_TYPE_RGB BIT(1)
-#define DCMIPP_P1CCCR_CLAMP BIT(2)
-#define DCMIPP_P1CCRR_RGB_MASK	0x7ff
-#define DCMIPP_P1CCRR_A_MASK	0x3ff
-#define DCMIPP_P1CCRR1 (0x884)
-#define DCMIPP_P1CCRR1_RG_SHIFT	16
-#define DCMIPP_P1CCRR1_RR_SHIFT	0
-#define DCMIPP_P1CCRR2 (0x888)
-#define DCMIPP_P1CCRR2_RA_SHIFT	16
-#define DCMIPP_P1CCRR2_RB_SHIFT	0
-#define DCMIPP_P1CCGR1 (0x88C)
-#define DCMIPP_P1CCGR1_GG_SHIFT	16
-#define DCMIPP_P1CCGR1_GR_SHIFT	0
-#define DCMIPP_P1CCGR2 (0x890)
-#define DCMIPP_P1CCGR2_GA_SHIFT	16
-#define DCMIPP_P1CCGR2_GB_SHIFT	0
-#define DCMIPP_P1CCBR1 (0x894)
-#define DCMIPP_P1CCBR1_BG_SHIFT	16
-#define DCMIPP_P1CCBR1_BR_SHIFT	0
-#define DCMIPP_P1CCBR2 (0x898)
-#define DCMIPP_P1CCBR2_BA_SHIFT	16
-#define DCMIPP_P1CCBR2_BB_SHIFT	0
+#define DCMIPP_P1CCCR			0x880
+#define DCMIPP_P1CCCR_ENABLE		BIT(0)
+#define DCMIPP_P1CCCR_TYPE_YUV		0
+#define DCMIPP_P1CCCR_TYPE_RGB		BIT(1)
+#define DCMIPP_P1CCCR_CLAMP		BIT(2)
+#define DCMIPP_P1CCRR_RGB_MASK		0x7ff
+#define DCMIPP_P1CCRR_A_MASK		0x3ff
+#define DCMIPP_P1CCRR1			0x884
+#define DCMIPP_P1CCRR1_RG_SHIFT		16
+#define DCMIPP_P1CCRR1_RR_SHIFT		0
+#define DCMIPP_P1CCRR2			0x888
+#define DCMIPP_P1CCRR2_RA_SHIFT		16
+#define DCMIPP_P1CCRR2_RB_SHIFT		0
+#define DCMIPP_P1CCGR1			0x88c
+#define DCMIPP_P1CCGR1_GG_SHIFT		16
+#define DCMIPP_P1CCGR1_GR_SHIFT		0
+#define DCMIPP_P1CCGR2			0x890
+#define DCMIPP_P1CCGR2_GA_SHIFT		16
+#define DCMIPP_P1CCGR2_GB_SHIFT		0
+#define DCMIPP_P1CCBR1			0x894
+#define DCMIPP_P1CCBR1_BG_SHIFT		16
+#define DCMIPP_P1CCBR1_BR_SHIFT		0
+#define DCMIPP_P1CCBR2			0x898
+#define DCMIPP_P1CCBR2_BA_SHIFT		16
+#define DCMIPP_P1CCBR2_BB_SHIFT		0
 static inline int
 dcmipp_isp_params_valid_cc(struct stm32_dcmipp_isp_cc_cfg *cfg)
 {
@@ -410,22 +400,22 @@ dcmipp_isp_params_apply_cc(struct dcmipp_isp_params_device *vout,
 		  cfg->ba << DCMIPP_P1CCBR2_BA_SHIFT);
 }
 
-#define DCMIPP_P1CTCR1 (0x8a0)
-#define DCMIPP_P1CTCR1_ENABLE BIT(0)
-#define DCMIPP_P1CTCR_LUM_MASK 0x3f
-#define DCMIPP_P1CTCR1_LUM0_SHIFT 9
+#define DCMIPP_P1CTCR1			0x8a0
+#define DCMIPP_P1CTCR1_ENABLE		BIT(0)
+#define DCMIPP_P1CTCR_LUM_MASK		0x3f
+#define DCMIPP_P1CTCR1_LUM0_SHIFT	9
 
-#define DCMIPP_P1CTCR2 (0x8a4)
-#define DCMIPP_P1CTCR2_LUM4_SHIFT 1
-#define DCMIPP_P1CTCR2_LUM3_SHIFT 9
-#define DCMIPP_P1CTCR2_LUM2_SHIFT 17
-#define DCMIPP_P1CTCR2_LUM1_SHIFT 25
+#define DCMIPP_P1CTCR2			0x8a4
+#define DCMIPP_P1CTCR2_LUM4_SHIFT	1
+#define DCMIPP_P1CTCR2_LUM3_SHIFT	9
+#define DCMIPP_P1CTCR2_LUM2_SHIFT	17
+#define DCMIPP_P1CTCR2_LUM1_SHIFT	25
 
-#define DCMIPP_P1CTCR3 (0x8a8)
-#define DCMIPP_P1CTCR3_LUM8_SHIFT 1
-#define DCMIPP_P1CTCR3_LUM7_SHIFT 9
-#define DCMIPP_P1CTCR3_LUM6_SHIFT 17
-#define DCMIPP_P1CTCR3_LUM5_SHIFT 25
+#define DCMIPP_P1CTCR3			0x8a8
+#define DCMIPP_P1CTCR3_LUM8_SHIFT	1
+#define DCMIPP_P1CTCR3_LUM7_SHIFT	9
+#define DCMIPP_P1CTCR3_LUM6_SHIFT	17
+#define DCMIPP_P1CTCR3_LUM5_SHIFT	25
 static inline int
 dcmipp_isp_params_valid_ce(struct stm32_dcmipp_isp_ce_cfg *cfg)
 {
@@ -522,7 +512,8 @@ static irqreturn_t dcmipp_isp_params_irq_thread(int irq, void *arg)
 	struct dcmipp_buf *cur_buf = NULL;
 
 	/* We are only interested in VSYNC interrupts */
-	if (!(ved->cmsr2 & DCMIPP_CMSR2_P1VSYNCF))
+	if (!(ved->cmsr2 & DCMIPP_CMSR2_P1VSYNCF) &&
+	    !(ved->cmsr2 & DCMIPP_CMSR2_P2VSYNCF))
 		return IRQ_HANDLED;
 
 	spin_lock_irq(&vout->irqlock);
@@ -559,12 +550,14 @@ static const struct v4l2_file_operations dcmipp_isp_params_fops = {
 };
 
 struct dcmipp_ent_device *
-dcmipp_isp_params_ent_init(struct device *dev, const char *entity_name,
-			   struct v4l2_device *v4l2_dev, void __iomem *regs)
+dcmipp_isp_params_ent_init(const char *entity_name,
+			   struct dcmipp_device *dcmipp)
 {
 	struct dcmipp_isp_params_device *vout;
+	struct device *dev = dcmipp->dev;
 	struct video_device *vdev;
 	struct vb2_queue *q;
+	const unsigned long pad_flag = MEDIA_PAD_FL_SOURCE;
 	int ret = 0;
 
 	/* Allocate the dcmipp_cap_device struct */
@@ -573,8 +566,7 @@ dcmipp_isp_params_ent_init(struct device *dev, const char *entity_name,
 		return ERR_PTR(-ENOMEM);
 
 	/* Allocate the pad */
-	vout->ved.pads =
-		dcmipp_pads_init(1, (const unsigned long[1]) {MEDIA_PAD_FL_SOURCE});
+	vout->ved.pads = dcmipp_pads_init(1, &pad_flag);
 	if (IS_ERR(vout->ved.pads)) {
 		ret = PTR_ERR(vout->ved.pads);
 		goto err_free_vout;
@@ -607,7 +599,7 @@ dcmipp_isp_params_ent_init(struct device *dev, const char *entity_name,
 	if (ret) {
 		dev_err(dev, "%s: vb2 queue init failed (err=%d)\n",
 			entity_name, ret);
-		goto err_mutex_destroy;
+		goto err_entity_cleanup;
 	}
 
 	/* Initialize buffer list and its lock */
@@ -619,19 +611,18 @@ dcmipp_isp_params_ent_init(struct device *dev, const char *entity_name,
 	vout->ved.handler = NULL;
 	vout->ved.thread_fn = dcmipp_isp_params_irq_thread;
 	vout->dev = dev;
-	vout->regs = regs;
+	vout->regs = dcmipp->regs;
 
 	/* Initialize the video_device struct */
 	vdev = &vout->vdev;
 	vdev->device_caps = V4L2_CAP_META_OUTPUT | V4L2_CAP_STREAMING;
 	vdev->vfl_dir = VFL_DIR_TX;
-	vdev->entity.ops = &dcmipp_isp_params_mops;
 	vdev->release = dcmipp_isp_params_release;
 	vdev->fops = &dcmipp_isp_params_fops;
 	vdev->ioctl_ops = &dcmipp_isp_params_ioctl_ops;
 	vdev->lock = &vout->lock;
 	vdev->queue = q;
-	vdev->v4l2_dev = v4l2_dev;
+	vdev->v4l2_dev = &dcmipp->v4l2_dev;
 	strscpy(vdev->name, entity_name, sizeof(vdev->name));
 	video_set_drvdata(vdev, &vout->ved);
 
@@ -640,14 +631,14 @@ dcmipp_isp_params_ent_init(struct device *dev, const char *entity_name,
 	if (ret) {
 		dev_err(dev, "%s: video register failed (err=%d)\n",
 			vout->vdev.name, ret);
-		goto err_mutex_destroy;
+		goto err_entity_cleanup;
 	}
 
 	return &vout->ved;
 
-err_mutex_destroy:
-	mutex_destroy(&vout->lock);
+err_entity_cleanup:
 	media_entity_cleanup(&vout->vdev.entity);
+	mutex_destroy(&vout->lock);
 err_clean_pads:
 	dcmipp_pads_cleanup(vout->ved.pads);
 err_free_vout:

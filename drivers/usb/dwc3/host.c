@@ -10,32 +10,29 @@
 #include <linux/irq.h>
 #include <linux/of.h>
 #include <linux/platform_device.h>
+#include <linux/usb.h>
+#include <linux/usb/hcd.h>
 
 #include "../host/xhci-plat.h"
-
-#include "io.h"
 #include "core.h"
 
-static void dwc3_xhci_post_plat_start(struct usb_hcd *hcd)
+static void dwc3_xhci_plat_start(struct usb_hcd *hcd)
 {
 	struct platform_device *pdev;
-	struct xhci_plat_priv *priv;
 	struct dwc3 *dwc;
 
 	if (!usb_hcd_is_primary_hcd(hcd))
 		return;
 
 	pdev = to_platform_device(hcd->self.controller);
-	priv = dev_get_platdata(&pdev->dev);
-
-	dwc = priv->data;
-
-	/* Only apply to DRD mode */
-	if (DWC3_GHWPARAMS0_MODE(dwc->hwparams.hwparams0) != DWC3_GHWPARAMS0_MODE_DRD)
-		return;
+	dwc = dev_get_drvdata(pdev->dev.parent);
 
 	dwc3_enable_susphy(dwc, true);
 }
+
+static const struct xhci_plat_priv dwc3_xhci_plat_quirk = {
+	.plat_start = dwc3_xhci_plat_start,
+};
 
 static void dwc3_host_fill_xhci_irq_res(struct dwc3 *dwc,
 					int irq, char *name)
@@ -76,13 +73,8 @@ static int dwc3_host_get_irq(struct dwc3 *dwc)
 		goto out;
 
 	irq = platform_get_irq(dwc3_pdev, 0);
-	if (irq > 0) {
+	if (irq > 0)
 		dwc3_host_fill_xhci_irq_res(dwc, irq, NULL);
-		goto out;
-	}
-
-	if (!irq)
-		irq = -EINVAL;
 
 out:
 	return irq;
@@ -92,8 +84,6 @@ int dwc3_host_init(struct dwc3 *dwc)
 {
 	struct property_entry	props[5];
 	struct platform_device	*xhci;
-	struct xhci_plat_priv dwc3_xhci_plat_data = { 0 };
-
 	int			ret, irq;
 	int			prop_idx = 0;
 
@@ -148,10 +138,7 @@ int dwc3_host_init(struct dwc3 *dwc)
 		}
 	}
 
-	dwc3_xhci_plat_data.post_plat_start = dwc3_xhci_post_plat_start;
-	dwc3_xhci_plat_data.data = dwc;
-
-	ret = platform_device_add_data(xhci, &dwc3_xhci_plat_data,
+	ret = platform_device_add_data(xhci, &dwc3_xhci_plat_quirk,
 				       sizeof(struct xhci_plat_priv));
 	if (ret)
 		goto err;
@@ -159,8 +146,15 @@ int dwc3_host_init(struct dwc3 *dwc)
 	ret = platform_device_add(xhci);
 	if (ret) {
 		dev_err(dwc->dev, "failed to register xHCI device\n");
-		kfree(dwc->xhci_plat_data);
 		goto err;
+	}
+
+	if (dwc->sys_wakeup) {
+		/* Restore wakeup setting if switched from device */
+		device_wakeup_enable(dwc->sysdev);
+
+		/* Pass on wakeup setting to the new xhci platform device */
+		device_init_wakeup(&xhci->dev, true);
 	}
 
 	return 0;
@@ -171,6 +165,10 @@ err:
 
 void dwc3_host_exit(struct dwc3 *dwc)
 {
+	if (dwc->sys_wakeup)
+		device_init_wakeup(&dwc->xhci->dev, false);
+
+	dwc3_enable_susphy(dwc, false);
 	platform_device_unregister(dwc->xhci);
 	dwc->xhci = NULL;
 }

@@ -2718,7 +2718,7 @@ __mwl8k_cmd_mac_multicast_adr(struct ieee80211_hw *hw, int allmulti,
 		cmd->action |= cpu_to_le16(MWL8K_ENABLE_RX_MULTICAST);
 		cmd->numaddr = cpu_to_le16(mc_count);
 		netdev_hw_addr_list_for_each(ha, mc_list) {
-			memcpy(cmd->addr[i], ha->addr, ETH_ALEN);
+			memcpy(cmd->addr[i++], ha->addr, ETH_ALEN);
 		}
 	}
 
@@ -5611,6 +5611,7 @@ static void mwl8k_sw_scan_complete(struct ieee80211_hw *hw,
 
 static const struct ieee80211_ops mwl8k_ops = {
 	.tx			= mwl8k_tx,
+	.wake_tx_queue		= ieee80211_handle_wake_tx_queue,
 	.start			= mwl8k_start,
 	.stop			= mwl8k_stop,
 	.add_interface		= mwl8k_add_interface,

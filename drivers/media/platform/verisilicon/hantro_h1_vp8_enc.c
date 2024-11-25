@@ -148,8 +148,7 @@ static s32 intra_4_tree_penalty[] = {
 	280, 622, 832, 1177, 1240, 1341, 1085, 1259, 1357, 1495
 };
 
-
-static int32_t const offset_tbl[] = {
+static const s32 offset_tbl[] = {
 	-1, -1, -1,  0,  1,  2, -1,  3,  4, -1,  5,  6, -1,  7,  8, -1,
 	9, 10, -1, 11, 12, 13, 14, 15, -1, 16, 17, -1, 18, 19, -1, 20,
 	21, -1, 22, 23, -1, 24, 25, -1, 26, 27, 28, 29, 30, -1, 31, 32,
@@ -207,12 +206,12 @@ static struct tree mv_tree[] = {
  * is log2(1/p), to encode 1 is log2(1/(1-p)).
  *
  * For example, if the probability of being zero is 0.5
- * bin = 0 -> average bits used is log2(1/0.5)      = 1 bits/bin
- * bin = 1 -> average bits used is log2(1/(1 - 0.5) = 1 bits/bin
+ * bin = 0 -> average bits used is log2(1/0.5)      = 1 bits/_bin
+ * bin = 1 -> average bits used is log2(1/(1 - 0.5) = 1 bits/_bin
  *
  * For example, if the probability of being zero is 0.95
- * bin = 0 -> average bits used is log2(1/0.95)      = 0.074 bits/bin
- * bin = 1 -> average bits used is log2(1/(1 - 0.95) = 4.321 bits/bin
+ * bin = 0 -> average bits used is log2(1/0.95)      = 0.074 bits/_bin
+ * bin = 1 -> average bits used is log2(1/(1 - 0.95) = 4.321 bits/_bin
  *
  * The cost[p] is average number of bits used to encode 0 if the probability is
  * p / 256, scaled by a magic number 256,
@@ -248,9 +247,12 @@ static const s32 vp8_prob_cost[] = {
 };
 
 /* Approximate bit cost of bin at given probability prob */
-#define COST_BOOL(prob, bin)	vp8_prob_cost[(bin) ? 255 - (prob) : (prob)]
+static inline s32 COST_BOOL(s32 prob, s32 bin)
+{
+	return vp8_prob_cost[(bin) ? 255 - (prob) : (prob)];
+}
 
-static uint32_t const coeff_update_prob[4][8][3][11] = {
+static const u32  coeff_update_prob[4][8][3][11] = {
 	{
 		{
 			{255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255},
@@ -390,7 +392,7 @@ static uint32_t const coeff_update_prob[4][8][3][11] = {
 	},
 };
 
-static uint32_t const mv_update_prob[2][19] = {
+static const u32 mv_update_prob[2][19] = {
 	{
 		237, 246, 253, 253, 254, 254, 254, 254, 254, 254,
 		254, 254, 254, 254, 250, 250, 252, 254, 254
@@ -400,7 +402,7 @@ static uint32_t const mv_update_prob[2][19] = {
 	}
 };
 
-static uint8_t const default_prob_skip_false[128] = {
+static const u8 default_prob_skip_false[128] = {
 	255, 255, 255, 255, 255, 255, 255, 255,
 	255, 255, 255, 255, 255, 255, 255, 255,
 	255, 255, 255, 255, 255, 255, 255, 255,
@@ -419,15 +421,15 @@ static uint8_t const default_prob_skip_false[128] = {
 	30,  28,  26,  24,  22,  20,  18, 16,
 };
 
-static int32_t const y_mode_prob[4] = {
+static const s32 y_mode_prob[4] = {
 	112, 86, 140, 37
 };
 
-static int32_t const uv_mode_prob[3] = {
+static const s32 uv_mode_prob[3] = {
 	162, 101, 204
 };
 
-static uint32_t const default_prob_coeff[4][8][3][11] = {
+static const u32 default_prob_coeff[4][8][3][11] = {
 	{
 		{
 			{128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128},
@@ -567,7 +569,7 @@ static uint32_t const default_prob_coeff[4][8][3][11] = {
 	}
 };
 
-static uint32_t const default_prob_mv[2][19] = {
+static const u32 default_prob_mv[2][19] = {
 	{
 		162, 128, 225, 146, 172, 147, 214,  39, 156, 128,
 		129, 132,  75, 145, 178, 206, 239, 254, 254,
@@ -599,7 +601,7 @@ static void hantro_h1_vp8_enc_write_coeff_prob(struct hantro_ctx *ctx)
 	struct hantro_vp8_entropy *entropy = &ctx->vp8_enc.entropy;
 
 	int i, j, k, l;
-	uint32_t prob, new, old;
+	u32 prob, new, old;
 
 	for (i = 0; i < 4; i++) {
 		for (j = 0; j < 8; j++) {
@@ -628,7 +630,7 @@ static void hantro_h1_vp8_enc_write_mv_prob(struct hantro_ctx *ctx)
 	struct hantro_vp8_entropy *entropy = &ctx->vp8_enc.entropy;
 
 	int i, j;
-	uint32_t prob, new, old;
+	u32 prob, new, old;
 
 	for (i = 0; i < 2; i++) {
 		for (j = 0; j < 19; j++) {
@@ -649,10 +651,10 @@ static void hantro_h1_vp8_enc_write_mv_prob(struct hantro_ctx *ctx)
 static void hantro_h1_vp8_enc_write_filter_level_delta(struct hantro_ctx *ctx)
 {
 	struct hantro_boolenc *e = &ctx->vp8_enc.boolenc;
-	int32_t i, tmp;
-	uint8_t  update = 0;
-	int32_t mode_update[4];
-	int32_t ref_update[4];
+	s32 i, tmp;
+	u8  update = 0;
+	s32 mode_update[4];
+	s32 ref_update[4];
 
 	if (is_intra(ctx)) {
 		memset(ctx->vp8_enc.old_mode_delta, 0, sizeof(ctx->vp8_enc.old_mode_delta));
@@ -698,7 +700,7 @@ static void hantro_h1_vp8_enc_write_filter_level_delta(struct hantro_ctx *ctx)
 }
 
 static void hantro_h1_vp8_enc_write_header(struct hantro_ctx *ctx, u32 qp,
-					       struct v4l2_ctrl_vp8_encode_params *params)
+					   struct v4l2_ctrl_vp8_encode_params *params)
 {
 	struct hantro_boolenc *e = &ctx->vp8_enc.boolenc;
 	struct vb2_v4l2_buffer *dst_buf = hantro_get_dst_buf(ctx);
@@ -782,9 +784,9 @@ static void hantro_h1_vp8_enc_write_header(struct hantro_ctx *ctx, u32 qp,
 	hantro_h1_vp8_enc_write_mv_prob(ctx);
 }
 
-static uint32_t calc_mvprob(uint32_t left, uint32_t right, uint32_t prob)
+static u32 calc_mvprob(u32 left, u32 right, u32 prob)
 {
-	uint32_t p;
+	u32 p;
 
 	if (left + right) {
 		p = (left * 255) / (left + right);
@@ -798,14 +800,14 @@ static uint32_t calc_mvprob(uint32_t left, uint32_t right, uint32_t prob)
 	return p;
 }
 
-static uint32_t update_prob(uint32_t prob, uint32_t left, uint32_t right,
-			    uint32_t old_prob, uint32_t new_prob, uint32_t fixed)
+static u32 update_prob(u32 prob, u32 left, u32 right,
+		       u32 old_prob, u32 new_prob, u32 fixed)
 {
-	int32_t u, s;
+	s32 u, s;
 
-	u = (int32_t)fixed + ((vp8_prob_cost[255 - prob] - vp8_prob_cost[prob]) >> 8);
-	s = ((int32_t)left * (vp8_prob_cost[old_prob] - vp8_prob_cost[new_prob]) +
-		(int32_t)right *
+	u = (s32)fixed + ((vp8_prob_cost[255 - prob] - vp8_prob_cost[prob]) >> 8);
+	s = ((s32)left * (vp8_prob_cost[old_prob] - vp8_prob_cost[new_prob]) +
+		(s32)right *
 		(vp8_prob_cost[255 - old_prob] - vp8_prob_cost[255 - new_prob])) >> 8;
 
 	return (s > u);
@@ -814,16 +816,16 @@ static uint32_t update_prob(uint32_t prob, uint32_t left, uint32_t right,
 static void hantro_h1_vp8_enc_update_entropy(struct hantro_ctx *ctx)
 {
 	struct hantro_vp8_entropy *entropy = &ctx->vp8_enc.entropy;
-	uint16_t *p_cnt = (uint16_t *)ctx->vp8_enc.priv_dst.cpu;
+	u16 *p_cnt = (u16 *)ctx->vp8_enc.priv_dst.cpu;
 
-	int32_t i, j, k, l;
+	s32 i, j, k, l;
 
-	uint32_t p, left, right;
-	uint32_t old_p, upd_p = 0;
+	u32 p, left, right;
+	u32 old_p, upd_p = 0;
 
-	uint32_t type;
-	uint32_t branch_cnt[2];
-	uint16_t *p_tmp = NULL;
+	u32 type;
+	u32 branch_cnt[2];
+	u16 *p_tmp = NULL;
 
 	if (!ctx->vp8_enc.refresh_entropy_probs || is_intra(ctx)) {
 		memcpy(entropy->coeff_prob, default_prob_coeff, sizeof(default_prob_coeff));
@@ -840,7 +842,7 @@ static void hantro_h1_vp8_enc_update_entropy(struct hantro_ctx *ctx)
 	for (i = 0; i < 4; i++) {
 		for (j = 0; j < 7; j++) {
 			for (k = 0; k < 3; k++) {
-				int32_t tmp, ii;
+				s32 tmp, ii;
 
 				tmp = i * 7 * 3 + j * 3 + k;
 				tmp += 2 * 4 * 7 * 3;
@@ -944,7 +946,7 @@ static inline int coeff_prob_idx(int index)
 static void hantro_h1_vp8_enc_write_entropy(struct hantro_ctx *ctx)
 {
 	struct hantro_vp8_entropy *entropy = &ctx->vp8_enc.entropy;
-	uint8_t *entropy_table = ctx->vp8_enc.priv_src.cpu;
+	u8 *entropy_table = ctx->vp8_enc.priv_src.cpu;
 	int index, i, j, k, l;
 
 	memset(entropy_table, 0, 56);
@@ -1014,7 +1016,7 @@ static inline size_t sw_hdr_size(struct hantro_ctx *ctx)
 
 static void
 hantro_h1_vp8_enc_set_buffers(struct hantro_dev *vpu, struct hantro_ctx *ctx, u32 qp,
-				  struct v4l2_ctrl_vp8_encode_params *params)
+			      struct v4l2_ctrl_vp8_encode_params *params)
 {
 	const u32 src_addr_regs[] = { H1_REG_ADDR_IN_PLANE_0,
 				      H1_REG_ADDR_IN_PLANE_1,
@@ -1024,7 +1026,8 @@ hantro_h1_vp8_enc_set_buffers(struct hantro_dev *vpu, struct hantro_ctx *ctx, u3
 	size_t luma_size;
 	dma_addr_t dst_dma;
 	size_t dst_size;
-	int i, ref_idx;
+	int i;
+	int ref_idx = 0;
 
 	src_buf = hantro_get_src_buf(ctx);
 	dst_buf = hantro_get_dst_buf(ctx);
@@ -1097,25 +1100,14 @@ hantro_h1_vp8_enc_set_buffers(struct hantro_dev *vpu, struct hantro_ctx *ctx, u3
 			   H1_REG_ADDR_REC_CHROMA);
 
 	/* Source buffer. */
-	vepu_write_relaxed(vpu,
-			   vb2_dma_contig_plane_dma_addr(&src_buf->vb2_buf, 0) +
-			   src_buf->vb2_buf.planes[0].data_offset,
-			   src_addr_regs[0]);
-	vepu_write_relaxed(vpu,
-			   vb2_dma_contig_plane_dma_addr(&src_buf->vb2_buf, 0) +
-			   src_buf->vb2_buf.planes[0].data_offset +
-			   luma_size,
-			   src_addr_regs[1]);
-
-	for (i = 1; i < src_fmt->num_planes; ++i)
-		/* Multiplanes. */
+	for (i = 0; i < src_fmt->num_planes; ++i)
 		vepu_write_relaxed(vpu,
 				   vb2_dma_contig_plane_dma_addr(&src_buf->vb2_buf, i) +
 				   src_buf->vb2_buf.planes[i].data_offset,
 				   src_addr_regs[i]);
 }
 
-static inline uint32_t compute_filter_level(int32_t qp)
+static inline u32 compute_filter_level(s32 qp)
 {
 	return clamp((qp * 64) / 128 + 8, 0, 63);
 }
@@ -1177,7 +1169,7 @@ static s32 cost_mv(s32 mvd, const s32 *mv_prob)
 }
 
 static void hantro_h1_vp8_enc_set_params(struct hantro_dev *vpu, struct hantro_ctx *ctx, u32 qp,
-					     struct v4l2_ctrl_vp8_encode_params *params)
+					 struct v4l2_ctrl_vp8_encode_params *params)
 {
 	struct hantro_vp8_entropy *entropy = &ctx->vp8_enc.entropy;
 	int i;
@@ -1202,15 +1194,16 @@ static void hantro_h1_vp8_enc_set_params(struct hantro_dev *vpu, struct hantro_c
 		 * It seems that hardware expects a negative s16 non-0 value
 		 * for inter_favor otherwise P frames have pink artefacts...
 		 */
-		/*inter_favor = max(0, (int32_t)(qp * 2 - 40));*/
-		inter_favor = -max(1, (int32_t)(qp * 2 - 40));
+		/*inter_favor = max(0, (s32)(qp * 2 - 40));*/
+		inter_favor = -max(1, (s32)(qp * 2 - 40));
 
 	reg |= H1_REG_ENC_CTRL2_INTRA16X16_MODE(qp * 1024 / 128);
-	vepu_write_relaxed(vpu, reg, H1_REG_ENC_CTRL2);//in VEPU_REG_INTRA_INTER_MODE
+	vepu_write_relaxed(vpu, reg, H1_REG_ENC_CTRL2);/* VEPU_REG_INTRA_INTER_MODE */
 
-	reg = H1_REG_ENC_CTRL5_INTER_MODE(inter_favor);//FIXME replace VEPU_REG_INTER_MODE(inter_favor of VEPU_REG_INTRA_INTER_MODE
-	reg |= H1_REG_ENC_CTRL5_MACROBLOCK_PENALTY(qp >= 100 ? (3 * qp / 4) : 0);//FIXME, guess !!
-	vepu_write_relaxed(vpu, reg, H1_REG_ENC_CTRL5);//in VEPU_REG_INTRA_INTER_MODE
+	/* FIXME replace VEPU_REG_INTER_MODE(inter_favor of VEPU_REG_INTRA_INTER_MODE */
+	reg = H1_REG_ENC_CTRL5_INTER_MODE(inter_favor);
+	reg |= H1_REG_ENC_CTRL5_MACROBLOCK_PENALTY(qp >= 100 ? (3 * qp / 4) : 0);/* FIXME guess */
+	vepu_write_relaxed(vpu, reg, H1_REG_ENC_CTRL5);/* in VEPU_REG_INTRA_INTER_MODE */
 
 	reg = H1_REG_ENC_CTRL3_MV_PENALTY_1P(60 / 2 * 32)
 		| H1_REG_ENC_CTRL3_MV_PENALTY_1_4P(8)
@@ -1219,16 +1212,16 @@ static void hantro_h1_vp8_enc_set_params(struct hantro_dev *vpu, struct hantro_c
 		reg |= H1_REG_ENC_CTRL3_MUTIMV_EN;
 	vepu_write_relaxed(vpu, reg, H1_REG_ENC_CTRL3);
 
-	reg = H1_REG_ENC_CTRL4_MV_PENALTY_16X8_8X16(
-			min(1023, split_penalty[qp] / 2))
-		| H1_REG_ENC_CTRL4_MV_PENALTY_8X8(
-			min(1023, (2 * split_penalty[qp] + 40) / 4))
+	reg = H1_REG_ENC_CTRL4_MV_PENALTY_16X8_8X16
+		(min(1023, split_penalty[qp] / 2))
+		| H1_REG_ENC_CTRL4_MV_PENALTY_8X8
+			(min(1023, (2 * split_penalty[qp] + 40) / 4))
 		| H1_REG_ENC_CTRL4_8X4_4X8(0x3ff);
 	/* no 8x4 or 4x8 block define in vp8 */
 	vepu_write_relaxed(vpu, reg, H1_REG_ENC_CTRL4);
 
-	reg = H1_REG_PENALTY_4X4MV(min(511,
-				       (8 * split_penalty[qp] + 500) / 16))
+	reg = H1_REG_PENALTY_4X4MV
+		(min(511, (8 * split_penalty[qp] + 500) / 16))
 		| H1_REG_ZERO_MV_FAVOR_D2(0);
 	vepu_write_relaxed(vpu, reg, H1_REG_QP_MV_MVC_CTRL);
 
@@ -1307,7 +1300,7 @@ static void hantro_h1_vp8_enc_set_params(struct hantro_dev *vpu, struct hantro_c
 	vepu_write_relaxed(vpu, 0xffffffff, H1_REG_INTRA_AREA_CTRL);
 
 	/* Intra 4x4 mode */
-	//FIXME VEPU=12bits (0xfff) + 16bits align ? while H1=10bits in regmap & 10bits aligned
+	/* FIXME VEPU=12bits (0xfff) + 16bits align ? while H1=10bits in regmap & 10bits aligned */
 	tmp = qp * 2 + 8;
 	for (i = 0; i < 5; i++) {
 		reg = H1_REG_VP8_INTRA_4X4_PENALTY_0
@@ -1319,7 +1312,7 @@ static void hantro_h1_vp8_enc_set_params(struct hantro_dev *vpu, struct hantro_c
 	}
 
 	/* Intra 16x16 mode */
-	//FIXME VEPU=12bits (0xfff) + 16bits align ? while H1=10bits in regmap & 10bits aligned
+	/* FIXME VEPU=12bits (0xfff) + 16bits align ? while H1=10bits in regmap & 10bits aligned */
 	tmp = qp * 2 + 64;
 	for (i = 0; i < 2; i++) {
 		reg = H1_REG_VP8_INTRA_16X16_PENALTY_0
@@ -1327,10 +1320,11 @@ static void hantro_h1_vp8_enc_set_params(struct hantro_dev *vpu, struct hantro_c
 		reg |= HI_REG_VP8_INTRA_16X16_PENALTY_1
 			((intra_16_tree_penalty[2 * i + 1] * tmp) >> 8);
 		vepu_write_relaxed(vpu, reg,
-				   H1_REG_VP8_INTRA_16X16_PENALTY(i));//VEPU_REG_VP8_INTRA_16X16_PENALTY
+				   /* VEPU_REG_VP8_INTRA_16X16_PENALTY */
+				   H1_REG_VP8_INTRA_16X16_PENALTY(i));
 	}
 
-	//FIXME H1 slightly different...
+	/* FIXME H1 slightly different... */
 	reg = H1_REG_VP8_LF_REF_DELTA_INTRA_MB(ctx->vp8_enc.ref_delta[REF_DELTA_INTRA_MB])
 		| H1_REG_VP8_LF_REF_DELTA_LAST_REF(ctx->vp8_enc.ref_delta[REF_DELTA_LAST_REF])
 		| H1_REG_VP8_LF_REF_DELTA_GOLDEN(ctx->vp8_enc.ref_delta[REF_DELTA_GOLDEN])
@@ -1343,8 +1337,7 @@ static void hantro_h1_vp8_enc_set_params(struct hantro_dev *vpu, struct hantro_c
 		| H1_REG_VP8_LF_MODE_DELTA_SPLITMV(ctx->vp8_enc.mode_delta[MODE_DELTA_SPLITMV]);
 	vepu_write_relaxed(vpu, reg, H1_REG_VP8_LOOP_FILTER_MODE_DELTA);
 
-	//HFR no match for VEPU_REG_VP8_INTER_TYPE_BIT_COST, but put to 0...
-
+	/* FIXME no match for VEPU_REG_VP8_INTER_TYPE_BIT_COST, but put to 0 ... */
 
 	for (i = 0; i < 128; i += 4) {
 		u32 x;
@@ -1359,76 +1352,27 @@ static void hantro_h1_vp8_enc_set_params(struct hantro_dev *vpu, struct hantro_c
 		y = cost_mv(i * 2, entropy->mv_prob[0]);	/* mv y */
 		x = cost_mv(i * 2, entropy->mv_prob[1]);	/* mv x */
 
-		reg = H1_REG_DMV_QPEL_PENALTY_BIT(
-			min(255u, (y + x + 1) / 2 * weight[qp] >> 8), 3);
+		reg = H1_REG_DMV_QPEL_PENALTY_BIT
+			(min(255u, (y + x + 1) / 2 * weight[qp] >> 8), 3);
 
 		y = cost_mv((i + 1) * 2, entropy->mv_prob[0]); /* mv y */
 		x = cost_mv((i + 1) * 2, entropy->mv_prob[1]); /* mv x */
-		reg |= H1_REG_DMV_QPEL_PENALTY_BIT(
-			min(255u, (y + x + 1) / 2 * weight[qp] >> 8), 2);
+		reg |= H1_REG_DMV_QPEL_PENALTY_BIT
+			(min(255u, (y + x + 1) / 2 * weight[qp] >> 8), 2);
 
 		y = cost_mv((i + 2) * 2, entropy->mv_prob[0]); /* mv y */
 		x = cost_mv((i + 2) * 2, entropy->mv_prob[1]); /* mv x */
-		reg |= H1_REG_DMV_QPEL_PENALTY_BIT(
-			min(255u, (y + x + 1) / 2 * weight[qp] >> 8), 1);
+		reg |= H1_REG_DMV_QPEL_PENALTY_BIT
+			(min(255u, (y + x + 1) / 2 * weight[qp] >> 8), 1);
 
 		y = cost_mv((i + 3) * 2, entropy->mv_prob[0]); /* mv y */
 		x = cost_mv((i + 3) * 2, entropy->mv_prob[1]); /* mv x */
-		reg |= H1_REG_DMV_QPEL_PENALTY_BIT(
-			min(255u, (y + x + 1) / 2 * weight[qp] >> 8), 0);
+		reg |= H1_REG_DMV_QPEL_PENALTY_BIT
+			(min(255u, (y + x + 1) / 2 * weight[qp] >> 8), 0);
 
 		vepu_write_relaxed(vpu, reg,
 				   H1_REG_DMV_QPEL_PENALTY(i / 4));
 	}
-}
-
-static char *encode_params_str(struct v4l2_ctrl_vp8_encode_params *p,
-			       char *str,
-			       unsigned int len)
-{
-	if (!p)
-		return NULL;
-
-	snprintf(str, len,
-		 "v4l2_ctrl_vp8_encode_params\n"
-		 " flags:\t\t\t %s %s %s %s %s %s\n"
-		 " frame_type:\t\t%s\n"
-		 " color_space:\t\t%s\n"
-		 " clamping_type:\t\t%s\n"
-		 " loop_filter_type:\t%s\n"
-		 " loop_filter_level:\t%d\n"
-		 " sharpness_level:\t%d\n"
-		 " log2_nbr_of_dct_parts:\t%s\n"
-		 " prob_intra:\t\t%d\n"
-		 " prob_last:\t\t%d\n"
-		 " prob_gf:\t\t%d\n"
-		 " copy_to_golden:\t\t%d\n"
-		 " copy_to_alternate:\t%d\n"
-		 " reference_type:\t\t%s\n",
-		 (p->flags & V4L2_VP8_FRAME_FLAG_SHOWFRAME) ? "SHOW" : "",
-		 (p->flags & V4L2_VP8_FRAME_FLAG_GOLDEN_REFRESH) ? "GOLDEN" : "",
-		 (p->flags & V4L2_VP8_FRAME_FLAG_ALTREF_REFRESH) ? "ALTREF" : "",
-		 (p->flags & V4L2_VP8_FRAME_FLAG_SEGMENT_ENABLED) ? "SEGMENT" : "",
-		 (p->flags & V4L2_VP8_FRAME_FLAG_LOOP_FILTER_ADJ_ENABLED) ? "LOOPFILTER" : "",
-		 (p->flags & V4L2_VP8_FRAME_FLAG_REFRESH_ENTROPY_PROBS) ? "REFRESH_ENTROPY" : "",
-		 (p->frame_type == V4L2_VP8_FRAME_TYPE_KEYFRAME) ? "KEYFRAME" : "INTER",
-		 (p->color_space == V4L2_VP8_FRAME_COLOR_SPACE_YUV) ? "YUV" : "RESERVED",
-		 (p->clamping_type == V4L2_VP8_FRAME_CLAMPING_REQUIRED) ? "REQ" : "NO",
-		 (p->loop_filter_type == V4L2_VP8_FRAME_FILTER_TYPE_NORMAL) ? "NORMAL" : "SIMPLE",
-		 p->loop_filter_level,
-		 p->sharpness_level,
-		 (p->log2_nbr_of_dct_partitions == V4L2_VP8_FRAME_NBR_DCT_PARTITIONS_1) ? "1" :
-		 (p->log2_nbr_of_dct_partitions == V4L2_VP8_FRAME_NBR_DCT_PARTITIONS_2) ? "2" :
-		 (p->log2_nbr_of_dct_partitions == V4L2_VP8_FRAME_NBR_DCT_PARTITIONS_4) ? "4" : "8",
-		 p->prob_intra,
-		 p->prob_last,
-		 p->prob_gf,
-		 p->copy_buffer_to_golden,
-		 p->copy_buffer_to_alternate,
-		 (p->reference_type == V4L2_VP8_FRAME_REF_LAST) ? "LAST" :
-		 (p->reference_type == V4L2_VP8_FRAME_REF_GOLDEN) ? "GOLDEN" : "ALT");
-
-	return str;
 }
 
 int hantro_h1_vp8_enc_run(struct hantro_ctx *ctx)
@@ -1444,8 +1388,6 @@ int hantro_h1_vp8_enc_run(struct hantro_ctx *ctx)
 	params = hantro_get_ctrl(ctx, V4L2_CID_STATELESS_VP8_ENCODE_PARAMS);
 	if (WARN_ON(!params))
 		return -EINVAL;
-
-	vpu_debug(1, "%s\n", encode_params_str(params, ctx->str, sizeof(ctx->str)));
 
 	if (params->flags & V4L2_VP8_FRAME_FLAG_SEGMENT_ENABLED)
 		return -EINVAL;
@@ -1497,7 +1439,7 @@ int hantro_h1_vp8_enc_run(struct hantro_ctx *ctx)
 
 	/* Start the hardware. */
 	reg =     H1_REG_ENC_CTRL_TIMEOUT_EN
-		| H1_REG_ENC_CTRL_MV_WRITE //for VEPU_REG_MV_WRITE_EN in VEPU_REG_INTERRUPT
+		| H1_REG_ENC_CTRL_MV_WRITE /* for VEPU_REG_MV_WRITE_EN in VEPU_REG_INTERRUPT */
 		| H1_REG_ENC_CTRL_WIDTH(MB_WIDTH(ctx->src_fmt.width))
 		| H1_REG_ENC_CTRL_HEIGHT(MB_HEIGHT(ctx->src_fmt.height))
 		| H1_REG_ENC_CTRL_ENC_MODE_VP8

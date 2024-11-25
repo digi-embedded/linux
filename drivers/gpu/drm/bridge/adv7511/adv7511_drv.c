@@ -9,7 +9,7 @@
 #include <linux/device.h>
 #include <linux/gpio/consumer.h>
 #include <linux/module.h>
-#include <linux/of_device.h>
+#include <linux/of.h>
 #include <linux/slab.h>
 
 #include <media/cec.h>
@@ -678,8 +678,6 @@ adv7511_detect(struct adv7511 *adv7511, struct drm_connector *connector)
 		adv7511_power_on(adv7511);
 		if (connector)
 			adv7511_get_modes(adv7511, connector);
-		if (adv7511->status == connector_status_connected)
-			status = connector_status_disconnected;
 	} else {
 		/* Renable HPD sensing */
 		if (adv7511->type == ADV7535)
@@ -1203,8 +1201,9 @@ static int adv7511_parse_dt(struct device_node *np,
 	return 0;
 }
 
-static int adv7511_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
+static int adv7511_probe(struct i2c_client *i2c)
 {
+	const struct i2c_device_id *id = i2c_client_get_device_id(i2c);
 	struct adv7511_link_config link_config;
 	struct adv7511 *adv7511;
 	struct device *dev = &i2c->dev;
@@ -1237,10 +1236,8 @@ static int adv7511_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 		return ret;
 
 	ret = adv7511_init_regulators(adv7511);
-	if (ret) {
-		dev_err(dev, "failed to init regulators\n");
-		return ret;
-	}
+	if (ret)
+		return dev_err_probe(dev, ret, "failed to init regulators\n");
 
 	/*
 	 * The power down GPIO is optional. If present, toggle it from active to

@@ -190,10 +190,6 @@ static inline void nf_ct_put(struct nf_conn *ct)
 		nf_ct_destroy(&ct->ct_general);
 }
 
-/* Protocol module loading */
-int nf_ct_l3proto_try_module_get(unsigned short l3proto);
-void nf_ct_l3proto_module_put(unsigned short l3proto);
-
 /* load module; enable/disable conntrack in this namespace */
 int nf_ct_netns_get(struct net *net, u8 nfproto);
 void nf_ct_netns_put(struct net *net, u8 nfproto);
@@ -369,6 +365,10 @@ static inline struct nf_conntrack_net *nf_ct_pernet(const struct net *net)
 {
 	return net_generic(net, nf_conntrack_net_id);
 }
+
+int nf_ct_skb_network_trim(struct sk_buff *skb, int family);
+int nf_ct_handle_fragments(struct net *net, struct sk_buff *skb,
+			   u16 zone, u8 family, u8 *proto, u16 *mru);
 
 #define NF_CT_STAT_INC(net, count)	  __this_cpu_inc((net)->ct.stat->count)
 #define NF_CT_STAT_INC_ATOMIC(net, count) this_cpu_inc((net)->ct.stat->count)

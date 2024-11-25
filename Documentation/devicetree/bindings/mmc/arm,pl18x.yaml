@@ -53,16 +53,11 @@ properties:
         items:
           - const: arm,pl18x
           - const: arm,primecell
-      - description: Entry for STMicroelectronics variant of PL18x.
-          This dedicated compatible is used by bootloaders.
+      - description: Entries for STMicroelectronics variant of PL18x.
         items:
-          - const: st,stm32-sdmmc2
-          - const: arm,pl18x
-          - const: arm,primecell
-      - description: Entry for STMicroelectronics variant of PL18x for
-          STM32MP25. This dedicated compatible is used by bootloaders.
-        items:
-          - const: st,stm32mp25-sdmmc2
+          - enum:
+              - st,stm32-sdmmc2
+              - st,stm32mp25-sdmmc2
           - const: arm,pl18x
           - const: arm,primecell
 
@@ -84,10 +79,9 @@ properties:
           - const: rx
           - const: tx
 
-  feature-domains:
-    $ref: /schemas/types.yaml#/definitions/phandle-array
-    description: |
-      Phandle to the rifsc device to check access right.
+  access-controllers:
+    minItems: 1
+    maxItems: 2
 
   power-domains: true
 
@@ -106,7 +100,9 @@ properties:
       PIO (polled I/O) interrupt and occurs when the FIFO needs to be
       emptied as part of a bulk read from the card. Some variants have these
       two interrupts wired into the same line (logic OR) and in that case
-      only one interrupt may be provided.
+      only one interrupt may be provided. The interrupt-names property is
+      not used due to inconsistency of existing DTs regarding its content.
+    deprecated: false
     minItems: 1
     maxItems: 2
 
@@ -170,6 +166,16 @@ properties:
     maxItems: 1
     description:
       The GPIO matching the CKIN pin.
+
+  st,syscfg-arcr:
+    description: ST Micro-specific property, use to enable address remapping
+      to allow to access the 4 GB of the DDR.
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    items:
+      - items:
+          - description: phandle to syscfg
+          - description: register offset within syscfg
+          - description: register bitmask for address remapping bit
 
 dependencies:
   st,cmd-gpios: [ "st,use-ckin" ]

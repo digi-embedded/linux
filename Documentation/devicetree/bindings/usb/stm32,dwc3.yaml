@@ -47,11 +47,6 @@ properties:
     maxItems: 1
     description: interrupt used for wakeup
 
-  feature-domains:
-    $ref: /schemas/types.yaml#/definitions/phandle-array
-    description: |
-      Phandle to the rifsc device to check access right.
-
 # Required child node:
 
 patternProperties:
@@ -78,9 +73,9 @@ additionalProperties: false
 
 examples:
   - |
-    #include <dt-bindings/clock/stm32mp25-clks.h>
+    #include <dt-bindings/clock/st,stm32mp25-rcc.h>
     #include <dt-bindings/interrupt-controller/arm-gic.h>
-    #include <dt-bindings/reset/stm32mp25-resets.h>
+    #include <dt-bindings/reset/st,stm32mp25-rcc.h>
 
     usb3dr: usb@48300000 {
         compatible      = "st,stm32mp25-dwc3";

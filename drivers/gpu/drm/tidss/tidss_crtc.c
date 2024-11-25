@@ -7,7 +7,6 @@
 #include <drm/drm_atomic.h>
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_crtc.h>
-#include <drm/drm_crtc_helper.h>
 #include <drm/drm_gem_dma_helper.h>
 #include <drm/drm_vblank.h>
 
@@ -269,6 +268,16 @@ static void tidss_crtc_atomic_disable(struct drm_crtc *crtc,
 	dev_dbg(ddev->dev, "%s, event %p\n", __func__, crtc->state->event);
 
 	reinit_completion(&tcrtc->framedone_completion);
+
+	/*
+	 * If a layer is left enabled when the videoport is disabled, and the
+	 * vid pipeline that was used for the layer is taken into use on
+	 * another videoport, the DSS will report sync lost issues. Disable all
+	 * the layers here as a work-around.
+	 */
+	for (u32 layer = 0; layer < tidss->feat->num_planes; layer++)
+		dispc_ovr_enable_layer(tidss->dispc, tcrtc->hw_videoport, layer,
+				       false);
 
 	dispc_vp_disable(tidss->dispc, tcrtc->hw_videoport);
 

@@ -335,7 +335,6 @@ config STM32_RPROC
 	depends on ARCH_STM32 || COMPILE_TEST
 	depends on REMOTEPROC
 	select MAILBOX
-	select TEE_REMOTEPROC
 	help
 	  Say y here to support STM32 MCU processors via the
 	  remote processor framework.
@@ -343,6 +342,21 @@ config STM32_RPROC
 	  You want to say y here in order to enable AMP
 	  use-cases to run on your platform (dedicated firmware could be
 	  offloaded to remote MCU processors using this framework).
+
+	  This can be either built-in or a loadable module.
+
+config STM32_M0_RPROC
+	tristate "STM32 remoteproc support for CM0+"
+	depends on ARCH_STM32 || COMPILE_TEST
+	depends on REMOTEPROC
+	select MAILBOX
+	help
+	  Say y here to support STM32 MCU CM0+ processors via the
+	  remote processor framework.
+
+	  You want to say y here in order to enable Low Power
+	  use-cases to run on your platform (dedicated firmware could be
+	  offloaded to remote MCU M0+ processors using this framework).
 
 	  This can be either built-in or a loadable module.
 
@@ -372,9 +386,22 @@ config TI_K3_R5_REMOTEPROC
 	  It's safe to say N here if you're not interested in utilizing
 	  a slave processor.
 
+config XLNX_R5_REMOTEPROC
+	tristate "Xilinx R5 remoteproc support"
+	depends on PM && ARCH_ZYNQMP
+	select ZYNQMP_FIRMWARE
+	select RPMSG_VIRTIO
+	select MAILBOX
+	select ZYNQMP_IPI_MBOX
+	help
+	  Say y or m here to support Xilinx R5 remote processors via the remote
+	  processor framework.
+
+	  It's safe to say N if not interested in using RPU r5f cores.
+
 
 config TEE_REMOTEPROC
-	tristate "trusted firmware support by a trusted application"
+	tristate "trusted firmware support by a TEE application"
 	depends on OPTEE
 	help
 	  Support for trusted remote processors firmware. The firmware

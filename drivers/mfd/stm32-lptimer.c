@@ -10,6 +10,8 @@
 #include <linux/mfd/stm32-lptimer.h>
 #include <linux/module.h>
 #include <linux/of_platform.h>
+#include <linux/platform_device.h>
+#include <linux/pm_runtime.h>
 
 #define STM32_LPTIM_MAX_REGISTER	0x3fc
 
@@ -87,7 +89,6 @@ static int stm32_lptimer_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct stm32_lptimer *ddata;
-	struct resource *res;
 	void __iomem *mmio;
 	int ret;
 
@@ -95,8 +96,7 @@ static int stm32_lptimer_probe(struct platform_device *pdev)
 	if (!ddata)
 		return -ENOMEM;
 
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	mmio = devm_ioremap_resource(dev, res);
+	mmio = devm_platform_get_and_ioremap_resource(pdev, 0, NULL);
 	if (IS_ERR(mmio))
 		return PTR_ERR(mmio);
 
@@ -115,11 +115,16 @@ static int stm32_lptimer_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, ddata);
 
+	ret = devm_pm_runtime_enable(dev);
+	if (ret)
+		return ret;
+
 	return devm_of_platform_populate(&pdev->dev);
 }
 
 static const struct of_device_id stm32_lptimer_of_match[] = {
 	{ .compatible = "st,stm32-lptimer", },
+	{ .compatible = "st,stm32mp21-lptimer", },
 	{ .compatible = "st,stm32mp25-lptimer", },
 	{},
 };

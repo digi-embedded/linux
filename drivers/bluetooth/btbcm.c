@@ -24,6 +24,7 @@
 #define BDADDR_BCM20702A1 (&(bdaddr_t) {{0x00, 0x00, 0xa0, 0x02, 0x70, 0x20}})
 #define BDADDR_BCM2076B1 (&(bdaddr_t) {{0x79, 0x56, 0x00, 0xa0, 0x76, 0x20}})
 #define BDADDR_BCM43430A0 (&(bdaddr_t) {{0xac, 0x1f, 0x12, 0xa0, 0x43, 0x43}})
+#define BDADDR_BCM43430A1 (&(bdaddr_t) {{0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa}})
 #define BDADDR_BCM4324B3 (&(bdaddr_t) {{0x00, 0x00, 0x00, 0xb3, 0x24, 0x43}})
 #define BDADDR_BCM4330B1 (&(bdaddr_t) {{0x00, 0x00, 0x00, 0xb1, 0x30, 0x43}})
 #define BDADDR_BCM4334B0 (&(bdaddr_t) {{0x00, 0x00, 0x00, 0xb0, 0x34, 0x43}})
@@ -31,14 +32,9 @@
 #define BDADDR_BCM43341B (&(bdaddr_t) {{0xac, 0x1f, 0x00, 0x1b, 0x34, 0x43}})
 
 #define BCM_FW_NAME_LEN			64
-#define BCM_FW_NAME_COUNT_MAX		5
+#define BCM_FW_NAME_COUNT_MAX		4
 /* For kmalloc-ing the fw-name array instead of putting it on the stack */
 typedef char bcm_fw_name[BCM_FW_NAME_LEN];
-
-#define MAX_REGDMN_LEN					10
-static char btbcm_regdmn[MAX_REGDMN_LEN] = "FCC.CE";
-module_param_string(regdmn, btbcm_regdmn, MAX_REGDMN_LEN, 0444);
-MODULE_PARM_DESC(regdmn, "Regulatory domain");
 
 #ifdef CONFIG_EFI
 static int btbcm_set_bdaddr_from_efi(struct hci_dev *hdev)
@@ -120,6 +116,9 @@ int btbcm_check_bdaddr(struct hci_dev *hdev)
 	 *
 	 * The address 43:43:A0:12:1F:AC indicates a BCM43430A0 controller
 	 * with no configured address.
+	 *
+	 * The address AA:AA:AA:AA:AA:AA indicates a BCM43430A1 controller
+	 * with no configured address.
 	 */
 	if (!bacmp(&bda->bdaddr, BDADDR_BCM20702A0) ||
 	    !bacmp(&bda->bdaddr, BDADDR_BCM20702A1) ||
@@ -129,6 +128,7 @@ int btbcm_check_bdaddr(struct hci_dev *hdev)
 	    !bacmp(&bda->bdaddr, BDADDR_BCM4334B0) ||
 	    !bacmp(&bda->bdaddr, BDADDR_BCM4345C5) ||
 	    !bacmp(&bda->bdaddr, BDADDR_BCM43430A0) ||
+	    !bacmp(&bda->bdaddr, BDADDR_BCM43430A1) ||
 	    !bacmp(&bda->bdaddr, BDADDR_BCM43341B)) {
 		/* Try falling back to BDADDR EFI variable */
 		if (btbcm_set_bdaddr_from_efi(hdev) != 0) {
@@ -501,7 +501,6 @@ static const struct bcm_subver_table bcm_uart_subver_table[] = {
 	{ 0x4606, "BCM4324B5"	},	/* 002.006.006 */
 	{ 0x6109, "BCM4335C0"	},	/* 003.001.009 */
 	{ 0x610c, "BCM4354"	},	/* 003.001.012 */
-	{ 0x2119, "BCM4373A0"	},	/* 001.001.025 */
 	{ 0x2122, "BCM4343A0"	},	/* 001.001.034 */
 	{ 0x2209, "BCM43430A1"  },	/* 001.002.009 */
 	{ 0x6119, "BCM4345C0"	},	/* 003.001.025 */
@@ -515,7 +514,6 @@ static const struct bcm_subver_table bcm_uart_subver_table[] = {
 	{ 0x4106, "BCM4335A0"	},	/* 002.001.006 */
 	{ 0x410c, "BCM43430B0"	},	/* 002.001.012 */
 	{ 0x2119, "BCM4373A0"	},	/* 001.001.025 */
-	{ 0x2220, "CYW55500A1"	},	/* 001.002.032 */
 	{ }
 };
 
@@ -654,14 +652,6 @@ int btbcm_initialize(struct hci_dev *hdev, bool *fw_load_done, bool use_autobaud
 		return -ENOMEM;
 
 	if (hw_name) {
-		/*
-		 * First try to load the firmware specified by regdmn, and if that
-		 * fails, fall back to load the generic firmware.
-		 */
-		snprintf(fw_name[fw_name_count], BCM_FW_NAME_LEN,
-			 "brcm/%s%s_%s.hcd", hw_name, postfix, btbcm_regdmn);
-		fw_name_count++;
-
 		if (board_name) {
 			snprintf(fw_name[fw_name_count], BCM_FW_NAME_LEN,
 				 "brcm/%s%s.%s.hcd", hw_name, postfix, board_name);

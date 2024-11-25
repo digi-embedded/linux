@@ -290,7 +290,7 @@ struct stm32_i3c_xfer {
 	int ret;
 	int cur_cmd;
 	unsigned int ncmds;
-	struct stm32_i3c_cmd cmds[]; //__counted_by(ncmds);
+	struct stm32_i3c_cmd cmds[] __counted_by(ncmds);
 };
 
 struct stm32_i3c_dev_ibi_data {
@@ -437,9 +437,15 @@ static u32 stm32_i3c_master_read_error(struct stm32_i3c_ddata *ddata)
 	if (ser & I3C_SER_DOVR)
 		dev_warn(ddata->dev, "(%s) RX-FIFO overrun or TX-FIFO underrun\n", bus_name);
 
-	if (ser & I3C_SER_PERR)
-		dev_warn(ddata->dev, "(%s) protocol error [M%lu]\n",
-			 bus_name, FIELD_GET(I3C_SER_CODERR, ser));
+	if (ser & I3C_SER_PERR) {
+		u32 coderr = FIELD_GET(I3C_SER_CODERR, ser) + 1;
+		if (coderr == I3C_ERROR_M2)
+			dev_warn(ddata->dev, "(%s) No response to broadcast address [M%u]\n",
+				 bus_name, coderr - 1);
+		else
+			dev_warn(ddata->dev, "(%s) protocol error [M%lu]\n",
+				bus_name, FIELD_GET(I3C_SER_CODERR, ser));
+	}
 
 	return ser;
 }
@@ -1849,18 +1855,13 @@ err_clk_disable:
 	return ret;
 }
 
-static int stm32_i3c_remove(struct platform_device *pdev)
+static void stm32_i3c_remove(struct platform_device *pdev)
 {
 	struct stm32_i3c_ddata *ddata = platform_get_drvdata(pdev);
-	int ret;
 
-	ret = i3c_master_unregister(&ddata->master);
-	if (ret)
-		return ret;
+	i3c_master_unregister(&ddata->master);
 
 	clk_disable_unprepare(ddata->clk);
-
-	return 0;
 }
 
 static const struct of_device_id stm32_i3c_of_match[] = {
@@ -1871,7 +1872,7 @@ MODULE_DEVICE_TABLE(of, stm32_i3c_of_match);
 
 static struct platform_driver stm32_i3c_driver = {
 	.probe = stm32_i3c_probe,
-	.remove = stm32_i3c_remove,
+	.remove_new = stm32_i3c_remove,
 	.driver = {
 		.name = "stm32-i3c",
 		.of_match_table = stm32_i3c_of_match,

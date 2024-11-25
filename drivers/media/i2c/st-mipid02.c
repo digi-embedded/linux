@@ -16,6 +16,7 @@
 #include <linux/module.h>
 #include <linux/of_graph.h>
 #include <linux/regulator/consumer.h>
+#include <media/mipi-csi2.h>
 #include <media/v4l2-async.h>
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-device.h>
@@ -68,7 +69,7 @@ static const u32 mipid02_supported_fmt_codes[] = {
 	MEDIA_BUS_FMT_RGB565_2X8_LE, MEDIA_BUS_FMT_RGB565_2X8_BE,
 	MEDIA_BUS_FMT_YUYV8_2X8, MEDIA_BUS_FMT_YVYU8_2X8,
 	MEDIA_BUS_FMT_UYVY8_2X8, MEDIA_BUS_FMT_VYUY8_2X8,
-	MEDIA_BUS_FMT_JPEG_1X8
+	MEDIA_BUS_FMT_Y8_1X8, MEDIA_BUS_FMT_JPEG_1X8
 };
 
 /* regulator supplies */
@@ -123,6 +124,7 @@ static int bpp_from_code(__u32 code)
 	case MEDIA_BUS_FMT_SGBRG8_1X8:
 	case MEDIA_BUS_FMT_SGRBG8_1X8:
 	case MEDIA_BUS_FMT_SRGGB8_1X8:
+	case MEDIA_BUS_FMT_Y8_1X8:
 		return 8;
 	case MEDIA_BUS_FMT_SBGGR10_1X10:
 	case MEDIA_BUS_FMT_SGBRG10_1X10:
@@ -160,17 +162,18 @@ static u8 data_type_from_code(__u32 code)
 	case MEDIA_BUS_FMT_SGBRG8_1X8:
 	case MEDIA_BUS_FMT_SGRBG8_1X8:
 	case MEDIA_BUS_FMT_SRGGB8_1X8:
-		return 0x2a;
+	case MEDIA_BUS_FMT_Y8_1X8:
+		return MIPI_CSI2_DT_RAW8;
 	case MEDIA_BUS_FMT_SBGGR10_1X10:
 	case MEDIA_BUS_FMT_SGBRG10_1X10:
 	case MEDIA_BUS_FMT_SGRBG10_1X10:
 	case MEDIA_BUS_FMT_SRGGB10_1X10:
-		return 0x2b;
+		return MIPI_CSI2_DT_RAW10;
 	case MEDIA_BUS_FMT_SBGGR12_1X12:
 	case MEDIA_BUS_FMT_SGBRG12_1X12:
 	case MEDIA_BUS_FMT_SGRBG12_1X12:
 	case MEDIA_BUS_FMT_SRGGB12_1X12:
-		return 0x2c;
+		return MIPI_CSI2_DT_RAW12;
 	case MEDIA_BUS_FMT_YUYV8_1X16:
 	case MEDIA_BUS_FMT_YVYU8_1X16:
 	case MEDIA_BUS_FMT_UYVY8_1X16:
@@ -179,13 +182,13 @@ static u8 data_type_from_code(__u32 code)
 	case MEDIA_BUS_FMT_YVYU8_2X8:
 	case MEDIA_BUS_FMT_UYVY8_2X8:
 	case MEDIA_BUS_FMT_VYUY8_2X8:
-		return 0x1e;
+		return MIPI_CSI2_DT_YUV422_8B;
 	case MEDIA_BUS_FMT_BGR888_1X24:
-		return 0x24;
+		return MIPI_CSI2_DT_RGB888;
 	case MEDIA_BUS_FMT_RGB565_1X16:
 	case MEDIA_BUS_FMT_RGB565_2X8_LE:
 	case MEDIA_BUS_FMT_RGB565_2X8_BE:
-		return 0x22;
+		return MIPI_CSI2_DT_RGB565;
 	default:
 		return 0;
 	}
@@ -545,7 +548,14 @@ static int mipid02_configure_from_code(struct mipid02_dev *bridge)
 static int mipid02_stream_disable(struct mipid02_dev *bridge)
 {
 	struct i2c_client *client = bridge->i2c_client;
-	int ret;
+	int ret = -EINVAL;
+
+	if (!bridge->s_subdev)
+		goto error;
+
+	ret = v4l2_subdev_call(bridge->s_subdev, video, s_stream, 0);
+	if (ret)
+		goto error;
 
 	/* Disable all lanes */
 	ret = mipid02_write_reg(bridge, MIPID02_CLK_LANE_REG1, 0);
@@ -630,6 +640,10 @@ static int mipid02_stream_enable(struct mipid02_dev *bridge)
 		goto error;
 	ret = mipid02_write_reg(bridge, MIPID02_PIX_WIDTH_CTRL_EMB,
 		bridge->r.pix_width_ctrl_emb);
+	if (ret)
+		goto error;
+
+	ret = v4l2_subdev_call(bridge->s_subdev, video, s_stream, 1);
 	if (ret)
 		goto error;
 
@@ -750,7 +764,8 @@ static void mipid02_set_fmt_source(struct v4l2_subdev *sd,
 	if (format->which != V4L2_SUBDEV_FORMAT_TRY)
 		return;
 
-	*v4l2_subdev_get_try_format(sd, sd_state, format->pad) = format->format;
+	*v4l2_subdev_get_try_format(sd, sd_state, MIPID02_SOURCE) =
+		format->format;
 }
 
 static void mipid02_set_fmt_sink(struct v4l2_subdev *sd,
@@ -758,6 +773,7 @@ static void mipid02_set_fmt_sink(struct v4l2_subdev *sd,
 				 struct v4l2_subdev_format *format)
 {
 	struct mipid02_dev *bridge = to_mipid02_dev(sd);
+	struct v4l2_subdev_format source_fmt;
 	struct v4l2_mbus_framefmt *fmt;
 
 	format->format.code = get_fmt_code(format->format.code);
@@ -768,6 +784,13 @@ static void mipid02_set_fmt_sink(struct v4l2_subdev *sd,
 		fmt = &bridge->fmt;
 
 	*fmt = format->format;
+
+	/*
+	 * Propagate the format change to the source pad, taking
+	 * care not to update the format pointer given back to user
+	 */
+	source_fmt = *format;
+	mipid02_set_fmt_source(sd, sd_state, &source_fmt);
 }
 
 static int mipid02_set_fmt(struct v4l2_subdev *sd,
@@ -825,7 +848,7 @@ static const struct media_entity_operations mipid02_subdev_entity_ops = {
 
 static int mipid02_async_bound(struct v4l2_async_notifier *notifier,
 			       struct v4l2_subdev *s_subdev,
-			       struct v4l2_async_subdev *asd)
+			       struct v4l2_async_connection *asd)
 {
 	struct mipid02_dev *bridge = to_mipid02_dev(notifier->sd);
 	struct i2c_client *client = bridge->i2c_client;
@@ -859,7 +882,7 @@ static int mipid02_async_bound(struct v4l2_async_notifier *notifier,
 
 static void mipid02_async_unbind(struct v4l2_async_notifier *notifier,
 				 struct v4l2_subdev *s_subdev,
-				 struct v4l2_async_subdev *asd)
+				 struct v4l2_async_connection *asd)
 {
 	struct mipid02_dev *bridge = to_mipid02_dev(notifier->sd);
 
@@ -875,7 +898,7 @@ static int mipid02_parse_rx_ep(struct mipid02_dev *bridge)
 {
 	struct v4l2_fwnode_endpoint ep = { .bus_type = V4L2_MBUS_CSI2_DPHY };
 	struct i2c_client *client = bridge->i2c_client;
-	struct v4l2_async_subdev *asd;
+	struct v4l2_async_connection *asd;
 	struct device_node *ep_node;
 	int ret;
 
@@ -907,10 +930,10 @@ static int mipid02_parse_rx_ep(struct mipid02_dev *bridge)
 	bridge->rx = ep;
 
 	/* register async notifier so we get noticed when sensor is connected */
-	v4l2_async_nf_init(&bridge->notifier);
+	v4l2_async_subdev_nf_init(&bridge->notifier, &bridge->sd);
 	asd = v4l2_async_nf_add_fwnode_remote(&bridge->notifier,
 					      of_fwnode_handle(ep_node),
-					      struct v4l2_async_subdev);
+					      struct v4l2_async_connection);
 	of_node_put(ep_node);
 
 	if (IS_ERR(asd)) {
@@ -920,7 +943,7 @@ static int mipid02_parse_rx_ep(struct mipid02_dev *bridge)
 	}
 	bridge->notifier.ops = &mipid02_notifier_ops;
 
-	ret = v4l2_async_subdev_nf_register(&bridge->sd, &bridge->notifier);
+	ret = v4l2_async_nf_register(&bridge->notifier);
 	if (ret)
 		v4l2_async_nf_cleanup(&bridge->notifier);
 
@@ -1096,7 +1119,7 @@ static struct i2c_driver mipid02_i2c_driver = {
 		.name  = "st-mipid02",
 		.of_match_table = mipid02_dt_ids,
 	},
-	.probe_new = mipid02_probe,
+	.probe = mipid02_probe,
 	.remove = mipid02_remove,
 };
 

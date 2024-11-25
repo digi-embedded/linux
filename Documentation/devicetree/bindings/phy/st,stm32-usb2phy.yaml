@@ -17,7 +17,9 @@ maintainers:
 
 properties:
   compatible:
-    const: st,stm32mp25-usb2phy
+    - enum:
+      - st,stm32mp21-usb2phy
+      - st,stm32mp25-usb2phy
 
   "#phy-cells":
     const: 0
@@ -161,9 +163,9 @@ additionalProperties: false
 
 examples:
   - |
-    #include <dt-bindings/clock/stm32mp25-clks.h>
+    #include <dt-bindings/clock/st,stm32mp25-rcc.h>
     #include <dt-bindings/interrupt-controller/arm-gic.h>
-    #include <dt-bindings/reset/stm32mp25-resets.h>
+    #include <dt-bindings/reset/st,stm32mp25-rcc.h>
 
     usb2_phy2: usb-phy {
         compatible      = "st,stm32mp25-usb2phy";

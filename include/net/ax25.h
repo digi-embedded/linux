@@ -216,7 +216,7 @@ typedef struct {
 struct ctl_table;
 
 typedef struct ax25_dev {
-	struct ax25_dev		*next;
+	struct list_head	list;
 
 	struct net_device	*dev;
 	netdevice_tracker	dev_tracker;
@@ -260,10 +260,7 @@ struct ax25_sock {
 	struct ax25_cb		*cb;
 };
 
-static inline struct ax25_sock *ax25_sk(const struct sock *sk)
-{
-	return (struct ax25_sock *) sk;
-}
+#define ax25_sk(ptr) container_of_const(ptr, struct ax25_sock, sk)
 
 static inline struct ax25_cb *sk_to_ax25(const struct sock *sk)
 {
@@ -333,7 +330,6 @@ int ax25_addr_size(const ax25_digi *);
 void ax25_digi_invert(const ax25_digi *, ax25_digi *);
 
 /* ax25_dev.c */
-extern ax25_dev *ax25_dev_list;
 extern spinlock_t ax25_dev_lock;
 
 #if IS_ENABLED(CONFIG_AX25)

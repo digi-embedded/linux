@@ -93,9 +93,9 @@ static void slim_device_remove(struct device *dev)
 	}
 }
 
-static int slim_device_uevent(struct device *dev, struct kobj_uevent_env *env)
+static int slim_device_uevent(const struct device *dev, struct kobj_uevent_env *env)
 {
-	struct slim_device *sbdev = to_slim_device(dev);
+	const struct slim_device *sbdev = to_slim_device(dev);
 
 	return add_uevent_var(env, "MODALIAS=slim:%s", dev_name(&sbdev->dev));
 }
@@ -436,8 +436,8 @@ static int slim_device_alloc_laddr(struct slim_device *sbdev,
 		if (ret < 0)
 			goto err;
 	} else if (report_present) {
-		ret = ida_simple_get(&ctrl->laddr_ida,
-				     0, SLIM_LA_MANAGER - 1, GFP_KERNEL);
+		ret = ida_alloc_max(&ctrl->laddr_ida,
+				    SLIM_LA_MANAGER - 1, GFP_KERNEL);
 		if (ret < 0)
 			goto err;
 

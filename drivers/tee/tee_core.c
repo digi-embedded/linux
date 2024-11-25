@@ -1170,13 +1170,6 @@ int tee_client_close_session(struct tee_context *ctx, u32 session)
 }
 EXPORT_SYMBOL_GPL(tee_client_close_session);
 
-int tee_client_system_session(struct tee_context *ctx, unsigned int session)
-{
-	if (!ctx->teedev->desc->ops->system_session)
-		return -EINVAL;
-	return ctx->teedev->desc->ops->system_session(ctx, session);
-}
-
 int tee_client_invoke_func(struct tee_context *ctx,
 			   struct tee_ioctl_invoke_arg *arg,
 			   struct tee_param *param)
@@ -1226,7 +1219,7 @@ static int tee_client_device_match(struct device *dev,
 	return 0;
 }
 
-static int tee_client_device_uevent(struct device *dev,
+static int tee_client_device_uevent(const struct device *dev,
 				    struct kobj_uevent_env *env)
 {
 	uuid_t *dev_id = &to_tee_client_device(dev)->id.uuid;
@@ -1245,7 +1238,7 @@ static int __init tee_init(void)
 {
 	int rc;
 
-	tee_class = class_create(THIS_MODULE, "tee");
+	tee_class = class_create("tee");
 	if (IS_ERR(tee_class)) {
 		pr_err("couldn't create class\n");
 		return PTR_ERR(tee_class);

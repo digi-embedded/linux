@@ -10,12 +10,15 @@
 #include <linux/platform_device.h>
 #include <dt-bindings/clock/stm32mp13-clks.h>
 #include "clk-stm32-core.h"
+#include "reset-stm32.h"
 #include "stm32mp13_rcc.h"
 
+#define STM32MP1_RESET_ID_MASK GENMASK(15, 0)
 #define RCC_CLR_OFFSET		0x4
 
 /* STM32 Gates definition */
 enum enum_gate_cfg {
+#ifdef CONFIG_DEBUG_FS
 	GATE_LSE,
 	GATE_LSE_RDY,
 	GATE_LSI,
@@ -63,6 +66,7 @@ enum enum_gate_cfg {
 	GATE_PLL4_DIVP,
 	GATE_PLL4_DIVQ,
 	GATE_PLL4_DIVR,
+#endif
 	GATE_MCO1,
 	GATE_MCO2,
 	GATE_DBGCK,
@@ -196,6 +200,7 @@ enum enum_gate_cfg {
 	_CFG_GATE(_id, _offset, _bit_idx, RCC_CLR_OFFSET)
 
 static struct stm32_gate_cfg stm32mp13_gates[] = {
+#ifdef CONFIG_DEBUG_FS
 	CFG_GATE(GATE_LSE,		RCC_BDCR,		0),
 	CFG_GATE(GATE_LSE_RDY,		RCC_BDCR,		2),
 	CFG_GATE(GATE_RTCCK,		RCC_BDCR,		20),
@@ -243,6 +248,7 @@ static struct stm32_gate_cfg stm32mp13_gates[] = {
 	CFG_GATE(GATE_PLL4_DIVP,	RCC_PLL4CR,		4),
 	CFG_GATE(GATE_PLL4_DIVQ,	RCC_PLL4CR,		5),
 	CFG_GATE(GATE_PLL4_DIVR,	RCC_PLL4CR,		6),
+#endif
 	CFG_GATE(GATE_MCO1,		RCC_MCO1CFGR,		12),
 	CFG_GATE(GATE_MCO2,		RCC_MCO2CFGR,		12),
 	CFG_GATE(GATE_DBGCK,		RCC_DBGCFGR,		8),
@@ -363,6 +369,7 @@ static struct stm32_gate_cfg stm32mp13_gates[] = {
 
 /* STM32 Divivers definition */
 enum enum_div_cfg {
+#ifdef CONFIG_DEBUG_FS
 	DIV_PLL1DIVP,
 	DIV_PLL2DIVP,
 	DIV_PLL2DIVQ,
@@ -382,6 +389,7 @@ enum enum_div_cfg {
 	DIV_APB4,
 	DIV_APB5,
 	DIV_APB6,
+#endif
 	DIV_RTC,
 	DIV_HSI,
 	DIV_MCO1,
@@ -392,6 +400,7 @@ enum enum_div_cfg {
 	DIV_NB
 };
 
+#ifdef CONFIG_DEBUG_FS
 static const struct clk_div_table axi_div_table[] = {
 	{ 0, 1 }, { 1, 2 }, { 2, 3 }, { 3, 4 },
 	{ 4, 4 }, { 5, 4 }, { 6, 4 }, { 7, 4 },
@@ -411,6 +420,7 @@ static const struct clk_div_table apb_div_table[] = {
 	{ 4, 16 }, { 5, 16 }, { 6, 16 }, { 7, 16 },
 	{ 0 },
 };
+#endif
 
 static const struct clk_div_table ck_trace_div_table[] = {
 	{ 0, 1 }, { 1, 2 }, { 2, 4 }, { 3, 8 },
@@ -429,6 +439,7 @@ static const struct clk_div_table ck_trace_div_table[] = {
 	}
 
 static const struct stm32_div_cfg stm32mp13_dividers[DIV_NB] = {
+#ifdef CONFIG_DEBUG_FS
 	CFG_DIV(DIV_MPU, RCC_MPCKDIVR, 0, 4, 0, NULL, DIV_NO_RDY),
 	CFG_DIV(DIV_AXI, RCC_AXIDIVR, 0, 3, 0, axi_div_table, DIV_NO_RDY),
 	CFG_DIV(DIV_MLAHB, RCC_MLAHBDIVR, 0, 4, 0, mlahb_div_table, DIV_NO_RDY),
@@ -450,7 +461,7 @@ static const struct stm32_div_cfg stm32mp13_dividers[DIV_NB] = {
 	CFG_DIV(DIV_PLL4DIVP, RCC_PLL4CFGR2, 0, 7, 0, NULL, DIV_NO_RDY),
 	CFG_DIV(DIV_PLL4DIVQ, RCC_PLL4CFGR2, 8, 7, 0, NULL, DIV_NO_RDY),
 	CFG_DIV(DIV_PLL4DIVR, RCC_PLL4CFGR2, 16, 7, 0, NULL, DIV_NO_RDY),
-
+#endif
 	CFG_DIV(DIV_RTC, RCC_RTCDIVR, 0, 6, 0, NULL, DIV_NO_RDY),
 	CFG_DIV(DIV_MCO1, RCC_MCO1CFGR, 4, 4, 0, NULL, DIV_NO_RDY),
 	CFG_DIV(DIV_MCO2, RCC_MCO2CFGR, 4, 4, 0, NULL, DIV_NO_RDY),
@@ -461,6 +472,7 @@ static const struct stm32_div_cfg stm32mp13_dividers[DIV_NB] = {
 
 /* STM32 Muxes definition */
 enum enum_mux_cfg {
+#ifdef CONFIG_DEBUG_FS
 	MUX_MPU,
 	MUX_AXI,
 	MUX_MLAHB,
@@ -469,6 +481,7 @@ enum enum_mux_cfg {
 	MUX_PLL4,
 	MUX_RTC,
 	MUX_CKPER,
+#endif
 	MUX_ADC1,
 	MUX_ADC2,
 	MUX_DCMIPP,
@@ -526,6 +539,7 @@ enum enum_mux_cfg {
 	_CFG_MUX(_id, _offset, _shift, _witdh, MUX_NO_RDY, MUX_SAFE)
 
 static const struct stm32_mux_cfg stm32mp13_muxes[] = {
+#ifdef CONFIG_DEBUG_FS
 	CFG_MUX(MUX_MPU,	RCC_MPCKSELR,		0, 2),
 	CFG_MUX(MUX_AXI,	RCC_ASSCKSELR,		0, 3),
 	CFG_MUX(MUX_MLAHB,	RCC_MSSCKSELR,		0, 2),
@@ -534,6 +548,7 @@ static const struct stm32_mux_cfg stm32mp13_muxes[] = {
 	CFG_MUX(MUX_PLL4,	RCC_RCK4SELR,		0, 2),
 	CFG_MUX(MUX_CKPER,	RCC_CPERCKSELR,		0, 2),
 	CFG_MUX(MUX_RTC,	RCC_BDCR,		16, 2),
+#endif
 	CFG_MUX(MUX_I2C12,	RCC_I2C12CKSELR,	0, 3),
 	CFG_MUX(MUX_LPTIM45,	RCC_LPTIM45CKSELR,	0, 3),
 	CFG_MUX(MUX_SPI23,	RCC_SPI2S23CKSELR,	0, 3),
@@ -1657,7 +1672,7 @@ static const struct clock_config stm32mp13_clock_cfg[] = {
 	STM32_COMPOSITE_CFG(CK_MCO2, ck_mco2, SECF_MCO2),
 };
 
-static int stm32mp13_clock_is_provided_by_secure(void __iomem *base,
+static int stm32mp13_clock_is_provided_by_secure(struct device_node *np, void __iomem *base,
 						 const struct clock_config *cfg)
 {
 	int sec_id = cfg->sec_id;
@@ -1716,14 +1731,19 @@ static struct clk_stm32_clock_data stm32mp13_clock_data = {
 	.is_multi_mux	= stm32mp13_is_multi_mux,
 };
 
+static struct clk_stm32_reset_data stm32mp13_reset_data = {
+	.nr_lines	= STM32MP1_RESET_ID_MASK,
+	.clear_offset	= RCC_CLR_OFFSET,
+	.reset_us	= 2,
+};
+
 static const struct stm32_rcc_match_data stm32mp13_data = {
 	.tab_clocks	= stm32mp13_clock_cfg,
 	.num_clocks	= ARRAY_SIZE(stm32mp13_clock_cfg),
 	.clock_data	= &stm32mp13_clock_data,
 	.check_security = &stm32mp13_clock_is_provided_by_secure,
 	.maxbinding	= STM32MP1_LAST_CLK,
-	.clear_offset	= RCC_CLR_OFFSET,
-	.reset_us	= 2,
+	.reset_data	= &stm32mp13_reset_data,
 #ifdef CONFIG_DEBUG_FS
 	.clock_summary	= &clock_summary_mp13,
 #endif
@@ -1738,79 +1758,16 @@ static const struct of_device_id stm32mp13_match_data[] = {
 };
 MODULE_DEVICE_TABLE(of, stm32mp13_match_data);
 
-static int stm32mp1_rcc_init(struct device *dev)
-{
-	void __iomem *rcc_base;
-	int ret = -ENOMEM;
-
-	rcc_base = of_iomap(dev_of_node(dev), 0);
-	if (!rcc_base) {
-		dev_err(dev, "%pOFn: unable to map resource", dev_of_node(dev));
-		goto out;
-	}
-
-	ret = stm32_rcc_init(dev, stm32mp13_match_data, rcc_base);
-out:
-	if (ret) {
-		if (rcc_base)
-			iounmap(rcc_base);
-
-		of_node_put(dev_of_node(dev));
-	}
-
-	return ret;
-}
-
-static int get_clock_deps(struct device *dev)
-{
-	static const char * const clock_deps_name[] = {
-		"hsi", "hse", "csi", "lsi", "lse",
-	};
-	size_t deps_size = sizeof(struct clk *) * ARRAY_SIZE(clock_deps_name);
-	struct clk **clk_deps;
-	int i;
-
-	clk_deps = devm_kzalloc(dev, deps_size, GFP_KERNEL);
-	if (!clk_deps)
-		return -ENOMEM;
-
-	for (i = 0; i < ARRAY_SIZE(clock_deps_name); i++) {
-		struct clk *clk = of_clk_get_by_name(dev_of_node(dev),
-						     clock_deps_name[i]);
-
-		if (IS_ERR(clk)) {
-			if (PTR_ERR(clk) != -EINVAL && PTR_ERR(clk) != -ENOENT)
-				return PTR_ERR(clk);
-		} else {
-			/* Device gets a reference count on the clock */
-			clk_deps[i] = devm_clk_get(dev, __clk_get_name(clk));
-			clk_put(clk);
-		}
-	}
-
-	return 0;
-}
-
 static int stm32mp1_rcc_clocks_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
-	int ret = get_clock_deps(dev);
+	void __iomem *base;
 
-	if (!ret)
-		ret = stm32mp1_rcc_init(dev);
+	base = devm_platform_ioremap_resource(pdev, 0);
+	if (WARN_ON(IS_ERR(base)))
+		return PTR_ERR(base);
 
-	return ret;
-}
-
-static int stm32mp1_rcc_clocks_remove(struct platform_device *pdev)
-{
-	struct device *dev = &pdev->dev;
-	struct device_node *child, *np = dev_of_node(dev);
-
-	for_each_available_child_of_node(np, child)
-		of_clk_del_provider(child);
-
-	return 0;
+	return stm32_rcc_init(dev, stm32mp13_match_data, base);
 }
 
 static struct platform_driver stm32mp13_rcc_clocks_driver = {
@@ -1819,7 +1776,6 @@ static struct platform_driver stm32mp13_rcc_clocks_driver = {
 		.of_match_table = stm32mp13_match_data,
 	},
 	.probe = stm32mp1_rcc_clocks_probe,
-	.remove = stm32mp1_rcc_clocks_remove,
 };
 
 static int __init stm32mp13_clocks_init(void)
@@ -1829,6 +1785,42 @@ static int __init stm32mp13_clocks_init(void)
 core_initcall(stm32mp13_clocks_init);
 
 #ifdef CONFIG_DEBUG_FS
+
+static bool cs_stm32_gate_is_enabled(struct clk_stm32_clock_data *data, struct clk_summary *c)
+{
+	return stm32_gate_is_enabled(data->base, data, c->gate_id);
+}
+
+static u8 cs_stm32_mux_get_parent(struct clk_stm32_clock_data *data, struct clk_summary *c)
+{
+	return stm32_mux_get_parent(data->base, data, c->mux_id);
+}
+
+static unsigned long cs_stm32_div_get_rate(struct clk_stm32_clock_data *data,
+					   struct clk_summary *c,
+					   unsigned long parent_rate)
+{
+	return stm32_divider_get_rate(data->base, data, c->div_id, parent_rate);
+}
+
+static unsigned long cs_stm32_get_rate_by_name(struct clk_stm32_clock_data *data,
+					       struct clk_summary *c,
+					       unsigned long parent_rate)
+{
+	struct clk *clk = __clk_lookup(c->name);
+
+	if (clk)
+		return clk_get_rate(clk);
+
+	return 0;
+}
+
+static unsigned long cs_hsediv2_recalc_rate(struct clk_stm32_clock_data *data,
+					    struct clk_summary *c,
+					    unsigned long parent_rate)
+{
+	return parent_rate / 2;
+}
 
 /* STM32 PLL */
 struct clk_pll_fractional_divider {
@@ -1844,9 +1836,6 @@ struct clk_pll_fractional_divider {
 	void __iomem *freg;
 	u8 fshift;
 	u8 fwidth;
-
-	/* lock pll enable/disable registers */
-	spinlock_t *lock;
 };
 
 struct cs_pll {
@@ -1866,9 +1855,9 @@ struct cs_pll {
 #define PLL_FRAC_SHIFT		3
 #define PLL_FRAC_WIDTH		13
 
-static unsigned long clk_summary_pll_frac_div_recalc_rate(struct clk_stm32_clock_data *data,
-							  struct clk_summary *c,
-							  unsigned long parent_rate)
+static unsigned long cs_stm32_pll_recalc_rate(struct clk_stm32_clock_data *data,
+					      struct clk_summary *c,
+					      unsigned long parent_rate)
 {
 	struct cs_pll *pll = (struct cs_pll *)c->data;
 	struct clk_pll_fractional_divider fracdiv;
@@ -1924,44 +1913,18 @@ static unsigned long clk_summary_pll_frac_div_recalc_rate(struct clk_stm32_clock
 	return rate + frate;
 }
 
-static unsigned long clk_summary_hsediv2_recalc_rate(struct clk_stm32_clock_data *data,
-						     struct clk_summary *c,
-						     unsigned long parent_rate)
-{
-	return parent_rate / 2;
-}
-
-static unsigned long clk_summary_osc_recalc_rate(struct clk_stm32_clock_data *data,
-						 struct clk_summary *c,
-						 unsigned long parent_rate)
-{
-	struct clk *clk = __clk_lookup(c->name);
-
-	if (clk)
-		return clk_get_rate(clk);
-
-	return 0;
-}
-
-static unsigned long clk_summary_div_recalc_rate(struct clk_stm32_clock_data *data,
-						 struct clk_summary *c,
-						 unsigned long parent_rate)
-{
-	return stm32_divider_get_rate(data->base, data, c->div_id, parent_rate);
-}
-
 /* The divider of RTC clock concerns only ck_hse clock */
 #define HSE_RTC 3
 
-static unsigned long clk_summary_rtc_recalc_rate(struct clk_stm32_clock_data *data,
-						 struct clk_summary *c,
-						 unsigned long parent_rate)
+static unsigned long cs_rtc_recalc_rate(struct clk_stm32_clock_data *data,
+					struct clk_summary *c,
+					unsigned long parent_rate)
 {
 	u8 parent;
 
 	parent = stm32_mux_get_parent(data->base, data, c->mux_id);
 	if (parent == HSE_RTC)
-		return clk_summary_div_recalc_rate(data, c, parent_rate);
+		return stm32_divider_get_rate(data->base, data, c->div_id, parent_rate);
 
 	return parent_rate;
 }
@@ -1974,9 +1937,9 @@ struct cs_stm32_timer {
 #define APB_DIV_MASK 0x07
 #define TIM_PRE_MASK 0x01
 
-static unsigned long clk_stm32_timer_recalc_rate(struct clk_stm32_clock_data *data,
-						 struct clk_summary *c,
-						 unsigned long parent_rate)
+static unsigned long cs_stm32_timer_recalc_rate(struct clk_stm32_clock_data *data,
+						struct clk_summary *c,
+						unsigned long parent_rate)
 {
 	struct cs_stm32_timer *tim = (struct cs_stm32_timer *)c->data;
 	void __iomem *rcc_base = data->base;
@@ -1992,335 +1955,636 @@ static unsigned long clk_stm32_timer_recalc_rate(struct clk_stm32_clock_data *da
 	return parent_rate * (timpre + 1U) * 2U;
 }
 
-#define PARENT(_parent)	((const char *[]) { _parent})
+#define CS_CLOCK(_name) (&cs_##_name)
 
-#define CS_OSC(_name, _gate) \
-{\
-	.name		= _name,\
-	.nb_parents	= 0,\
-	.gate_id	= _gate,\
-	.mux_id		= NO_STM32_MUX,\
-	.div_id		= NO_STM32_DIV,\
-	.get_rate	= clk_summary_osc_recalc_rate,\
-}
+#define CS_GATE(_name, _parent, _gate)						\
+	static struct clk_summary cs_##_name = {				\
+		.name		= #_name,					\
+		.gate_id	= (_gate),					\
+		.is_enabled	= cs_stm32_gate_is_enabled,			\
+		.nb_parents	= 1,						\
+		.clks		= (struct clk_summary *[]) {  &cs_##_parent },	\
+	}
 
-#define CS_DIV2(_name, _parent) \
-{\
-	.name		= _name,\
-	.nb_parents	= 1,\
-	.parent_names	= PARENT(_parent),\
-	.gate_id	= NO_STM32_GATE,\
-	.mux_id		= NO_STM32_MUX,\
-	.div_id		= NO_STM32_DIV,\
-	.get_rate	= clk_summary_hsediv2_recalc_rate,\
-}
+#define CS_MUX(_name, _parents, _mux)						\
+	static struct clk_summary cs_##_name = {				\
+		.name		= #_name,					\
+		.gate_id	= NO_STM32_GATE,				\
+		.mux_id		= (_mux),					\
+		.div_id		= NO_STM32_DIV,					\
+		.get_parent	= cs_stm32_mux_get_parent,			\
+		.nb_parents	= ARRAY_SIZE(_parents),				\
+		.clks		= _parents,					\
+	}
 
-#define CS_PLL(_name, _parents, _gate, _mux, _offset)\
-{\
-	.name		= _name,\
-	.nb_parents	= ARRAY_SIZE(_parents),\
-	.parent_names	= _parents,\
-	.gate_id	= _gate,\
-	.mux_id		= _mux,\
-	.div_id		= NO_STM32_DIV,\
-	.data		=  &(struct cs_pll) {\
-		.offset		= _offset,\
-	},\
-	.get_rate	= clk_summary_pll_frac_div_recalc_rate,\
-}
+#define CS_DIV(_name, _parent, _div)						\
+	static struct clk_summary cs_##_name = {				\
+		.name		= #_name,					\
+		.gate_id	= NO_STM32_GATE,				\
+		.mux_id		= NO_STM32_MUX,					\
+		.div_id		= _div,						\
+		.get_rate	= cs_stm32_div_get_rate,			\
+		.nb_parents	= 1,						\
+		.clks		= (struct clk_summary *[]) {  &cs_##_parent },	\
+	}
 
-#define CS_DIV(_name, _parent, _div) \
-{\
-	.name		= _name,\
-	.nb_parents	= 1,\
-	.parent_names	= PARENT(_parent),\
-	.div_id		= _div,\
-	.gate_id	= NO_STM32_GATE,\
-	.mux_id		= NO_STM32_MUX,\
-	.get_rate	= clk_summary_div_recalc_rate,\
-}
+#define CS_MUX_DIV(_name, _parents, _mux,  _div)				\
+	static struct clk_summary cs_##_name = {				\
+		.name		= #_name,					\
+		.gate_id	= NO_STM32_GATE,				\
+		.mux_id		= (_mux),					\
+		.div_id		= (_div),					\
+		.get_rate	= cs_stm32_div_get_rate,			\
+		.get_parent	= cs_stm32_mux_get_parent,			\
+		.nb_parents	= ARRAY_SIZE(_parents),				\
+		.clks		= _parents,					\
+	}
 
-#define CS_MUX(_name, _parents, _mux) \
-{\
-	.name		= _name,\
-	.nb_parents	= ARRAY_SIZE(_parents),\
-	.parent_names	= _parents,\
-	.mux_id		= _mux,\
-	.gate_id	= NO_STM32_GATE,\
-	.div_id		= NO_STM32_DIV,\
-}
+#define CS_GATE_MUX(_name, _parents, _gate, _mux)				\
+	static struct clk_summary cs_##_name = {				\
+		.name		= #_name,					\
+		.gate_id	= (_gate),					\
+		.mux_id		= (_mux),					\
+		.div_id		= NO_STM32_DIV,					\
+		.is_enabled	= cs_stm32_gate_is_enabled,			\
+		.get_parent	= cs_stm32_mux_get_parent,			\
+		.nb_parents	= ARRAY_SIZE(_parents),				\
+		.clks		= _parents,					\
+	}
 
-#define CS_GATE(_name, _parent, _gate) \
-{\
-	.name		= _name,\
-	.nb_parents	= 1,\
-	.parent_names	= PARENT(_parent),\
-	.gate_id	= _gate,\
-	.mux_id		= NO_STM32_MUX,\
-	.div_id		= NO_STM32_DIV,\
-}
+#define CS_GATE_DIV(_name, _parent, _gate,  _div)				\
+	static struct clk_summary cs_##_name = {				\
+		.name		= #_name,					\
+		.gate_id	= (_gate),					\
+		.mux_id		= NO_STM32_MUX,					\
+		.div_id		= (_div),					\
+		.is_enabled	= cs_stm32_gate_is_enabled,			\
+		.get_rate	= cs_stm32_div_get_rate,			\
+		.nb_parents	= 1,						\
+		.clks		= (struct clk_summary *[]) {  &cs_##_parent },	\
+	}
 
-#define CS_GATEDIV(_name, _parent, _gate, _div) \
-{\
-	.name		= _name,\
-	.nb_parents	= 1,\
-	.parent_names	= PARENT(_parent),\
-	.gate_id	= _gate,\
-	.mux_id		= NO_STM32_MUX,\
-	.div_id		= _div,\
-	.get_rate	= clk_summary_div_recalc_rate,\
-}
+#define CS_GATE_MUX_DIV(_name, _parents, _gate, _mux, _div)			\
+	static struct clk_summary cs_##_name = {				\
+		.name		= #_name,					\
+		.gate_id	= (_gate),					\
+		.mux_id		= (_mux),					\
+		.div_id		= (_div),					\
+		.is_enabled	= cs_stm32_gate_is_enabled,			\
+		.get_rate	= cs_stm32_div_get_rate,			\
+		.get_parent	= cs_stm32_mux_get_parent,			\
+		.nb_parents	= ARRAY_SIZE(_parents),				\
+		.clks		= _parents,					\
+	}
 
-#define CS_GATEMUX(_name, _parents, _gate, _mux) \
-{\
-	.name		= _name,\
-	.nb_parents	= ARRAY_SIZE(_parents),\
-	.parent_names	= _parents,\
-	.gate_id	= _gate,\
-	.mux_id		= _mux,\
-	.div_id		= NO_STM32_DIV,\
-}
+#define CS_OSC_EXT(_name, _gate_id)						\
+	static struct clk_summary cs_##_name = {				\
+		.name		= #_name,					\
+		.gate_id	= _gate_id,					\
+		.mux_id		= NO_STM32_MUX,					\
+		.div_id		= NO_STM32_DIV,					\
+		.is_enabled	= cs_stm32_gate_is_enabled,			\
+		.get_rate	= cs_stm32_get_rate_by_name,			\
+		.nb_parents	= 0,						\
+	}
 
-#define CS_COMPOSITE(_name, _parents, _gate, _mux, _div) \
-{\
-	.name		= _name,\
-	.nb_parents	= ARRAY_SIZE(_parents),\
-	.parent_names	= _parents,\
-	.gate_id	= _gate,\
-	.mux_id		= _mux,\
-	.div_id		= _div,\
-	.get_rate	= clk_summary_div_recalc_rate,\
-}
+#define CS_OSC_INT(_name, _gate_id) CS_OSC_EXT(_name, _gate_id)
 
-#define CS_RTC(_name, _parents, _gate, _mux, _div) \
-{\
-	.name		= _name,\
-	.nb_parents	= 4,\
-	.parent_names	= _parents,\
-	.gate_id	= _gate,\
-	.mux_id		= _mux,\
-	.div_id		= _div,\
-	.get_rate	= clk_summary_rtc_recalc_rate,\
-}
+#define CS_EXT(_name)								\
+	static struct clk_summary cs_##_name = {				\
+		.name		= #_name,					\
+		.gate_id	= NO_STM32_GATE,				\
+		.mux_id		= NO_STM32_MUX,					\
+		.div_id		= NO_STM32_DIV,					\
+		.get_rate	= cs_stm32_get_rate_by_name,			\
+		.nb_parents	= 0,\
+	}
 
-#define CS_STM32_TIMER(_name, _parent, _apbdiv, _timpre) \
-{\
-	.name		= _name,\
-	.nb_parents	= 1,\
-	.parent_names	= PARENT(_parent),\
-	.div_id		= NO_STM32_DIV,\
-	.gate_id	= NO_STM32_GATE,\
-	.mux_id		= NO_STM32_MUX,\
-	.data		=  &(struct cs_stm32_timer) {\
-		.apbdiv		= _apbdiv,\
-		.timpre		= _timpre,\
-	},\
-	.get_rate	= clk_stm32_timer_recalc_rate,\
-}
+#define CS_HSE_DIV2(_name, _parent)						\
+	static struct clk_summary cs_##_name = {				\
+		.name		= #_name,					\
+		.gate_id	= NO_STM32_GATE,				\
+		.mux_id		= NO_STM32_MUX,					\
+		.div_id		= NO_STM32_DIV,					\
+		.get_rate	= cs_hsediv2_recalc_rate,			\
+		.nb_parents	= 1,						\
+		.clks		= (struct clk_summary *[]) {  &cs_##_parent },	\
+	}
 
-static const char * const ref12_parents[] = {
-	"ck_hsi", "ck_hse"
+#define CS_PLL(_name, _parents, _gate, _mux, _offset)				\
+	static struct clk_summary cs_##_name = {				\
+		.name		= #_name,					\
+		.gate_id	= (_gate),					\
+		.mux_id		= (_mux),					\
+		.div_id		= NO_STM32_DIV,					\
+		.data		=  &(struct cs_pll) {				\
+			.offset		= _offset,				\
+		},								\
+		.is_enabled	= cs_stm32_gate_is_enabled,			\
+		.get_rate	= cs_stm32_pll_recalc_rate,			\
+		.get_parent	= cs_stm32_mux_get_parent,			\
+		.nb_parents	= ARRAY_SIZE(_parents),				\
+		.clks		= _parents,					\
+	}
+
+#define CS_STM32_TIMER(_name, _parent, _apbdiv, _timpre)			\
+	static struct clk_summary cs_##_name = {				\
+		.name		= #_name,					\
+		.data		=  &(struct cs_stm32_timer) {			\
+			.apbdiv		= _apbdiv,				\
+			.timpre		= _timpre,				\
+		},								\
+		.get_rate	= cs_stm32_timer_recalc_rate,			\
+		.nb_parents	= 1,						\
+		.clks		= (struct clk_summary *[]) {  &cs_##_parent },	\
+	}
+
+#define CS_RTC(_name, _parents, _gate, _mux, _div)				\
+	static struct clk_summary cs_##_name = {				\
+		.name		= #_name,					\
+		.gate_id	= (_gate),					\
+		.mux_id		= (_mux),					\
+		.div_id		= (_div),					\
+		.is_enabled	= cs_stm32_gate_is_enabled,			\
+		.get_rate	= cs_rtc_recalc_rate,				\
+		.get_parent	= cs_stm32_mux_get_parent,			\
+		.nb_parents	= ARRAY_SIZE(_parents),				\
+		.clks		= _parents,					\
+	}
+
+CS_OSC_INT(ck_hsi, GATE_HSI);
+CS_OSC_INT(ck_lsi, GATE_LSI);
+CS_OSC_INT(ck_csi, GATE_CSI);
+CS_OSC_EXT(ck_hse, GATE_HSE);
+
+CS_OSC_EXT(ck_lse, GATE_LSE);
+
+CS_EXT(ck_usbo_48m);
+CS_EXT(i2s_ckin);
+CS_EXT(spdif_ck_symb);
+
+CS_HSE_DIV2(hse_div2_ck, ck_hse);
+
+static struct clk_summary *cs_ref12_parents[] = {
+	CS_CLOCK(ck_hsi), CS_CLOCK(ck_hse)
 };
 
-static const char * const ref3_parents[] = {
-	"ck_hsi", "ck_hse", "ck_csi"
+static struct clk_summary *cs_ref3_parents[] = {
+	CS_CLOCK(ck_hsi), CS_CLOCK(ck_hse), CS_CLOCK(ck_csi)
 };
 
-static const char * const ref4_parents[] = {
-	"ck_hsi", "ck_hse", "ck_csi", "i2s_ckin"
+static struct clk_summary *cs_ref4_parents[] = {
+	CS_CLOCK(ck_hsi), CS_CLOCK(ck_hse), CS_CLOCK(ck_csi), CS_CLOCK(i2s_ckin)
 };
 
-static const char * const cpu_src[] = {
-	"ck_hsi", "ck_hse", "pll1_p", "pll1_p_div"
+CS_PLL(pll1, cs_ref12_parents, GATE_PLL1, MUX_PLL12, RCC_PLL1CR);
+CS_GATE_DIV(pll1_p, pll1, GATE_PLL1_DIVP, DIV_PLL1DIVP);
+CS_DIV(pll1_p_div, pll1_p, DIV_MPU);
+
+CS_PLL(pll2, cs_ref12_parents, GATE_PLL2, MUX_PLL12, RCC_PLL2CR);
+CS_GATE_DIV(pll2_p, pll2, GATE_PLL2_DIVP, DIV_PLL2DIVP);
+CS_GATE_DIV(pll2_q, pll2, GATE_PLL2_DIVQ, DIV_PLL2DIVQ);
+CS_GATE_DIV(pll2_r, pll2, GATE_PLL2_DIVR, DIV_PLL2DIVR);
+
+CS_PLL(pll3, cs_ref3_parents, GATE_PLL3, MUX_PLL3, RCC_PLL3CR);
+CS_GATE_DIV(pll3_p, pll3, GATE_PLL3_DIVP, DIV_PLL3DIVP);
+CS_GATE_DIV(pll3_q, pll3, GATE_PLL3_DIVQ, DIV_PLL3DIVQ);
+CS_GATE_DIV(pll3_r, pll3, GATE_PLL3_DIVR, DIV_PLL3DIVR);
+
+CS_PLL(pll4, cs_ref4_parents, GATE_PLL4, MUX_PLL4, RCC_PLL4CR);
+CS_GATE_DIV(pll4_p, pll4, GATE_PLL4_DIVP, DIV_PLL4DIVP);
+CS_GATE_DIV(pll4_q, pll4, GATE_PLL4_DIVQ, DIV_PLL4DIVQ);
+CS_GATE_DIV(pll4_r, pll4, GATE_PLL4_DIVR, DIV_PLL4DIVR);
+
+static struct clk_summary *cs_cpu_src[] = {
+	CS_CLOCK(ck_hsi), CS_CLOCK(ck_hse), CS_CLOCK(pll1_p), CS_CLOCK(pll1_p_div)
 };
 
-static const char * const axi_src[] = {
-	"ck_hsi", "ck_hse", "pll2_p"
+static struct clk_summary *cs_axi_src[] = {
+	CS_CLOCK(ck_hsi), CS_CLOCK(ck_hse), CS_CLOCK(pll2_p)
 };
 
-static const char * const mlahb_src[] = {
-	"ck_hsi", "ck_hse", "ck_csi", "pll3_p"
+static struct clk_summary *cs_mlahb_src[] = {
+	CS_CLOCK(ck_hsi), CS_CLOCK(ck_hse), CS_CLOCK(ck_csi), CS_CLOCK(pll3_p)
 };
 
-static const char * const per_src[] = {
-	"ck_hsi", "ck_csi", "ck_hse"
+static struct clk_summary *cs_per_src[] = {
+	CS_CLOCK(ck_hsi), CS_CLOCK(ck_csi), CS_CLOCK(ck_hse)
 };
 
-static const char * const rtc_src[] = {
-	"off", "ck_lse", "ck_lsi", "ck_hse"
+static struct clk_summary *cs_rtc_src[] = {
+	NULL, CS_CLOCK(ck_lse), CS_CLOCK(ck_lsi), CS_CLOCK(ck_hse)
 };
 
-static struct clk_summary stm32mp13_clock_summary[] = {
-	CS_OSC("ck_hsi", GATE_HSI),
-	CS_OSC("ck_csi", GATE_CSI),
-	CS_OSC("ck_lsi", GATE_LSI),
-	CS_OSC("ck_hse", GATE_HSE),
-	CS_OSC("ck_lse", GATE_LSE),
-	CS_OSC("ck_usbo_48m", NO_STM32_GATE),
-	CS_DIV2("clk-hse-div2", "ck_hse"),
+CS_MUX(ck_mpu, cs_cpu_src, MUX_MPU);
+CS_MUX(ck_axi, cs_axi_src, MUX_AXI);
+CS_MUX(ck_mlahb, cs_mlahb_src, MUX_MLAHB);
+CS_MUX(ck_per, cs_per_src, MUX_CKPER);
 
-	CS_PLL("pll1", ref12_parents, GATE_PLL1, MUX_PLL12, RCC_PLL1CR),
+CS_DIV(pclk1, ck_mlahb, DIV_APB1);
+CS_DIV(pclk2, ck_mlahb, DIV_APB2);
+CS_DIV(pclk3, ck_mlahb, DIV_APB3);
+CS_DIV(pclk4, ck_axi, DIV_APB4);
+CS_DIV(pclk5, ck_axi, DIV_APB5);
+CS_DIV(pclk6, ck_mlahb, DIV_APB6);
 
-	CS_GATEDIV("pll1_p", "pll1", GATE_PLL1_DIVP, DIV_PLL1DIVP),
+CS_STM32_TIMER(timg1_ck, pclk1, RCC_APB1DIVR, RCC_TIMG1PRER);
+CS_STM32_TIMER(timg2_ck, pclk2, RCC_APB2DIVR, RCC_TIMG2PRER);
+CS_STM32_TIMER(timg3_ck, pclk1, RCC_APB6DIVR, RCC_TIMG3PRER);
 
-	CS_DIV("pll1_p_div", "pll1_p", DIV_MPU),
+CS_GATE(tim2_k, timg1_ck, GATE_TIM2);
+CS_GATE(tim3_k, timg1_ck, GATE_TIM3);
+CS_GATE(tim4_k, timg1_ck, GATE_TIM4);
+CS_GATE(tim5_k, timg1_ck, GATE_TIM5);
+CS_GATE(tim6_k, timg1_ck, GATE_TIM6);
+CS_GATE(tim7_k, timg1_ck, GATE_TIM7);
+CS_GATE(tim1_k, timg2_ck, GATE_TIM1);
+CS_GATE(tim8_k, timg2_ck, GATE_TIM8);
+CS_GATE(tim12_k, timg3_ck, GATE_TIM12);
+CS_GATE(tim13_k, timg3_ck, GATE_TIM13);
+CS_GATE(tim14_k, timg3_ck, GATE_TIM14);
+CS_GATE(tim15_k, timg3_ck, GATE_TIM15);
+CS_GATE(tim16_k, timg3_ck, GATE_TIM16);
+CS_GATE(tim17_k, timg3_ck, GATE_TIM17);
+CS_GATE(spi2, pclk1, GATE_SPI2);
+CS_GATE(spi3, pclk1, GATE_SPI3);
+CS_GATE(sai1, pclk2, GATE_SAI1);
+CS_GATE(sai2, pclk2, GATE_SAI2);
+CS_GATE(spi1, pclk2, GATE_SPI1);
+CS_GATE(syscfg, pclk3, GATE_SYSCFG);
+CS_GATE(vref, pclk3, GATE_VREF);
+CS_GATE(dts, pclk3, GATE_DTS);
+CS_GATE(pmbctrl, pclk3, GATE_PMBCTRL);
+CS_GATE(hdp, pclk3, GATE_HDP);
+CS_GATE(iwdg2, pclk4, GATE_IWDG2APB);
+CS_GATE(stgenro, pclk4, GATE_STGENRO);
+CS_GATE(gpioa, pclk4, GATE_GPIOA);
+CS_GATE(gpiob, pclk4, GATE_GPIOB);
+CS_GATE(gpioc, pclk4, GATE_GPIOC);
+CS_GATE(gpiod, pclk4, GATE_GPIOD);
+CS_GATE(gpioe, pclk4, GATE_GPIOE);
+CS_GATE(gpiof, pclk4, GATE_GPIOF);
+CS_GATE(gpiog, pclk4, GATE_GPIOG);
+CS_GATE(gpioh, pclk4, GATE_GPIOH);
+CS_GATE(gpioi, pclk4, GATE_GPIOI);
+CS_GATE(tsc, pclk4, GATE_TSC);
+CS_GATE(ddrperfm, pclk4, GATE_DDRPERFM);
+CS_GATE(tzpc, pclk5, GATE_TZC);
+CS_GATE(iwdg1, pclk5, GATE_IWDG1APB);
+CS_GATE(bsec, pclk5, GATE_BSEC);
+CS_GATE(spi4, pclk6, GATE_SPI4);
+CS_GATE(spi5, pclk6, GATE_SPI5);
+CS_GATE(dma1, ck_mlahb, GATE_DMA1);
+CS_GATE(dma2, ck_mlahb, GATE_DMA2);
+CS_GATE(dmamux1, ck_mlahb, GATE_DMAMUX1);
+CS_GATE(dma3, ck_mlahb, GATE_DMA3);
+CS_GATE(dmamux2, ck_mlahb, GATE_DMAMUX2);
+CS_GATE(adc1, ck_mlahb, GATE_ADC1);
+CS_GATE(adc2, ck_mlahb, GATE_ADC2);
+CS_GATE(pka, ck_axi, GATE_PKA);
+CS_GATE(cryp1, ck_axi, GATE_CRYP1);
+CS_GATE(hash1, ck_axi, GATE_HASH1);
+CS_GATE(bkpsram, ck_axi, GATE_BKPSRAM);
+CS_GATE(mdma, ck_axi, GATE_MDMA);
+CS_GATE(eth1tx, ck_axi, GATE_ETH1TX);
+CS_GATE(eth1rx, ck_axi, GATE_ETH1RX);
+CS_GATE(eth1mac, ck_axi, GATE_ETH1MAC);
+CS_GATE(eth2tx, ck_axi, GATE_ETH2TX);
+CS_GATE(eth2rx, ck_axi, GATE_ETH2RX);
+CS_GATE(eth2mac, ck_axi, GATE_ETH2MAC);
+CS_GATE(crc1, ck_axi, GATE_CRC1);
+CS_GATE(usbh, ck_axi, GATE_USBH);
+CS_GATE(eth1stp, ck_axi, GATE_ETH1STP);
+CS_GATE(eth2stp, ck_axi, GATE_ETH2STP);
+CS_GATE(dfsdm_k, ck_mlahb, GATE_DFSDM);
+CS_GATE(ltdc_px, pll4_q, GATE_LTDC);
+CS_GATE(ck_sys_dbg, ck_axi, GATE_DBGCK);
+CS_GATE(rtcapb, pclk5, GATE_RTCAPB);
+CS_GATE_DIV(ck_trace, ck_axi, GATE_TRACECK, DIV_TRACE);
 
-	CS_PLL("pll2", ref12_parents, GATE_PLL2, MUX_PLL12, RCC_PLL2CR),
-	CS_GATEDIV("pll2_p", "pll2", GATE_PLL2_DIVP, DIV_PLL2DIVP),
-	CS_GATEDIV("pll2_q", "pll2", GATE_PLL2_DIVQ, DIV_PLL2DIVQ),
-	CS_GATEDIV("pll2_r", "pll2", GATE_PLL2_DIVR, DIV_PLL2DIVR),
+static struct clk_summary *cs_adc12_src[] = {
+	CS_CLOCK(pll4_r), CS_CLOCK(ck_per), CS_CLOCK(pll3_q)
+};
 
-	CS_PLL("pll3", ref3_parents, GATE_PLL3, MUX_PLL3, RCC_PLL3CR),
-	CS_GATEDIV("pll3_p", "pll3", GATE_PLL3_DIVP, DIV_PLL3DIVP),
-	CS_GATEDIV("pll3_q", "pll3", GATE_PLL3_DIVQ, DIV_PLL3DIVQ),
-	CS_GATEDIV("pll3_r", "pll3", GATE_PLL3_DIVR, DIV_PLL3DIVR),
+static struct clk_summary *cs_dcmipp_src[] = {
+	CS_CLOCK(ck_axi), CS_CLOCK(pll2_q), CS_CLOCK(pll4_p), CS_CLOCK(ck_per)
+};
 
-	CS_PLL("pll4", ref4_parents, GATE_PLL4, MUX_PLL4, RCC_PLL4CR),
-	CS_GATEDIV("pll4_p", "pll4", GATE_PLL4_DIVP, DIV_PLL4DIVP),
-	CS_GATEDIV("pll4_q", "pll4", GATE_PLL4_DIVQ, DIV_PLL4DIVQ),
-	CS_GATEDIV("pll4_r", "pll4", GATE_PLL4_DIVR, DIV_PLL4DIVR),
+static struct clk_summary *cs_eth12_src[] = {
+	CS_CLOCK(pll4_p), CS_CLOCK(pll3_q)
+};
 
-	CS_MUX("ck_mpu", cpu_src, MUX_MPU),
-	CS_MUX("ck_axi", axi_src, MUX_AXI),
-	CS_MUX("ck_mlahb", mlahb_src, MUX_MLAHB),
-	CS_MUX("ck_per", per_src, MUX_CKPER),
+static struct clk_summary *cs_fdcan_src[] = {
+	CS_CLOCK(ck_hse), CS_CLOCK(pll3_q), CS_CLOCK(pll4_q), CS_CLOCK(pll4_r)
+};
 
-	CS_DIV("pclk1", "ck_mlahb", DIV_APB1),
-	CS_DIV("pclk2", "ck_mlahb", DIV_APB2),
-	CS_DIV("pclk3", "ck_mlahb", DIV_APB3),
-	CS_DIV("pclk4", "ck_axi", DIV_APB4),
-	CS_DIV("pclk5", "ck_axi", DIV_APB5),
-	CS_DIV("pclk6", "ck_mlahb", DIV_APB6),
+static struct clk_summary *cs_fmc_src[] = {
+	CS_CLOCK(ck_axi), CS_CLOCK(pll3_r), CS_CLOCK(pll4_p), CS_CLOCK(ck_per)
+};
 
-	CS_STM32_TIMER("timg1_ck", "pclk1", RCC_APB1DIVR, RCC_TIMG1PRER),
-	CS_STM32_TIMER("timg2_ck", "pclk2", RCC_APB2DIVR, RCC_TIMG2PRER),
-	CS_STM32_TIMER("timg3_ck", "pclk1", RCC_APB6DIVR, RCC_TIMG3PRER),
+static struct clk_summary *cs_i2c12_src[] = {
+	CS_CLOCK(pclk1), CS_CLOCK(pll4_r), CS_CLOCK(ck_hsi), CS_CLOCK(ck_csi)
+};
 
-	CS_GATE("tim2_k", "timg1_ck", GATE_TIM2),
-	CS_GATE("tim3_k", "timg1_ck", GATE_TIM3),
-	CS_GATE("tim4_k", "timg1_ck", GATE_TIM4),
-	CS_GATE("tim5_k", "timg1_ck", GATE_TIM5),
-	CS_GATE("tim6_k", "timg1_ck", GATE_TIM6),
-	CS_GATE("tim7_k", "timg1_ck", GATE_TIM7),
-	CS_GATE("tim1_k", "timg2_ck", GATE_TIM1),
-	CS_GATE("tim8_k", "timg2_ck", GATE_TIM8),
-	CS_GATE("tim12_k", "timg3_ck", GATE_TIM12),
-	CS_GATE("tim13_k", "timg3_ck", GATE_TIM13),
-	CS_GATE("tim14_k", "timg3_ck", GATE_TIM14),
-	CS_GATE("tim15_k", "timg3_ck", GATE_TIM15),
-	CS_GATE("tim16_k", "timg3_ck", GATE_TIM16),
-	CS_GATE("tim17_k", "timg3_ck", GATE_TIM17),
+static struct clk_summary *cs_i2c345_src[] = {
+	CS_CLOCK(pclk6), CS_CLOCK(pll4_r), CS_CLOCK(ck_hsi), CS_CLOCK(ck_csi)
+};
 
-	CS_GATE("spi2", "pclk1", GATE_SPI2),
-	CS_GATE("spi3", "pclk1", GATE_SPI3),
+static struct clk_summary *cs_lptim1_src[] = {
+	CS_CLOCK(pclk1), CS_CLOCK(pll4_p), CS_CLOCK(pll3_q),
+	CS_CLOCK(ck_lse), CS_CLOCK(ck_lsi), CS_CLOCK(ck_per)
+};
 
-	CS_GATE("sai1", "pclk2", GATE_SAI1),
-	CS_GATE("sai2", "pclk2", GATE_SAI2),
-	CS_GATE("spi1", "pclk2", GATE_SPI1),
+static struct clk_summary *cs_lptim23_src[] = {
+	CS_CLOCK(pclk3), CS_CLOCK(pll4_q), CS_CLOCK(ck_per), CS_CLOCK(ck_lse), CS_CLOCK(ck_lsi)
+};
 
-	CS_GATE("syscfg", "pclk3", GATE_SYSCFG),
-	CS_GATE("vref", "pclk3", GATE_VREF),
-	CS_GATE("dts", "pclk3", GATE_DTS),
-	CS_GATE("pmbctrl", "pclk3", GATE_PMBCTRL),
-	CS_GATE("hdp", "pclk3", GATE_HDP),
+static struct clk_summary *cs_lptim45_src[] = {
+	CS_CLOCK(pclk3), CS_CLOCK(pll4_p), CS_CLOCK(pll3_q),
+	CS_CLOCK(ck_lse), CS_CLOCK(ck_lsi), CS_CLOCK(ck_per)
+};
 
-	CS_GATE("iwdg2", "pclk4", GATE_IWDG2APB),
-	CS_GATE("stgenro", "pclk4", GATE_STGENRO),
-	CS_GATE("gpioa", "pclk4", GATE_GPIOA),
-	CS_GATE("gpiob", "pclk4", GATE_GPIOB),
-	CS_GATE("gpioc", "pclk4", GATE_GPIOC),
-	CS_GATE("gpiod", "pclk4", GATE_GPIOD),
-	CS_GATE("gpioe", "pclk4", GATE_GPIOE),
-	CS_GATE("gpiof", "pclk4", GATE_GPIOF),
-	CS_GATE("gpiog", "pclk4", GATE_GPIOG),
-	CS_GATE("gpioh", "pclk4", GATE_GPIOH),
-	CS_GATE("gpioi", "pclk4", GATE_GPIOI),
-	CS_GATE("tsc", "pclk4", GATE_TSC),
-	CS_GATE("ddrperfm", "pclk4", GATE_DDRPERFM),
+static struct clk_summary *cs_mco1_src[] = {
+	CS_CLOCK(ck_hsi), CS_CLOCK(ck_hse), CS_CLOCK(ck_csi), CS_CLOCK(ck_lsi), CS_CLOCK(ck_lse)
+};
 
-	CS_GATE("tzpc", "pclk5", GATE_TZC),
-	CS_GATE("iwdg1", "pclk5", GATE_IWDG1APB),
-	CS_GATE("bsec", "pclk5", GATE_BSEC),
+static struct clk_summary *cs_mco2_src[] = {
+	CS_CLOCK(ck_mpu), CS_CLOCK(ck_axi), CS_CLOCK(ck_mlahb),
+	CS_CLOCK(pll4_p), CS_CLOCK(ck_hse), CS_CLOCK(ck_hsi)
+};
 
-	CS_GATE("spi4", "pclk6", GATE_SPI4),
-	CS_GATE("spi5", "pclk6", GATE_SPI5),
+static struct clk_summary *cs_qspi_src[] = {
+	CS_CLOCK(ck_axi), CS_CLOCK(pll3_r), CS_CLOCK(pll4_p), CS_CLOCK(ck_per)
+};
 
-	CS_GATE("dma1", "ck_mlahb", GATE_DMA1),
-	CS_GATE("dma2", "ck_mlahb", GATE_DMA2),
-	CS_GATE("dmamux1", "ck_mlahb", GATE_DMAMUX1),
-	CS_GATE("dma3", "ck_mlahb", GATE_DMA3),
-	CS_GATE("dmamux2", "ck_mlahb", GATE_DMAMUX2),
-	CS_GATE("adc1", "ck_mlahb", GATE_ADC1),
-	CS_GATE("adc2", "ck_mlahb", GATE_ADC2),
+static struct clk_summary *cs_rng1_src[] = {
+	CS_CLOCK(ck_csi), CS_CLOCK(pll4_r), NULL, CS_CLOCK(ck_lsi)
+};
 
-	CS_GATE("pka", "ck_axi", GATE_PKA),
-	CS_GATE("cryp1", "ck_axi", GATE_CRYP1),
-	CS_GATE("hash1", "ck_axi", GATE_HASH1),
-	CS_GATE("bkpsram", "ck_axi", GATE_BKPSRAM),
-	CS_GATE("mdma", "ck_axi", GATE_MDMA),
-	CS_GATE("eth1tx", "ck_axi", GATE_ETH1TX),
-	CS_GATE("eth1rx", "ck_axi", GATE_ETH1RX),
-	CS_GATE("eth1mac", "ck_axi", GATE_ETH1MAC),
-	CS_GATE("eth2tx", "ck_axi", GATE_ETH2TX),
-	CS_GATE("eth2rx", "ck_axi", GATE_ETH2RX),
-	CS_GATE("eth2mac", "ck_axi", GATE_ETH2MAC),
-	CS_GATE("crc1", "ck_axi", GATE_CRC1),
-	CS_GATE("usbh", "ck_axi", GATE_USBH),
-	CS_GATE("eth1stp", "ck_axi", GATE_ETH1STP),
-	CS_GATE("eth2stp", "ck_axi", GATE_ETH2STP),
+static struct clk_summary *cs_saes_src[] = {
+	CS_CLOCK(ck_axi), CS_CLOCK(ck_per), CS_CLOCK(pll4_r), CS_CLOCK(ck_lsi)
+};
 
-	CS_GATEMUX("sdmmc1_k", sdmmc12_src, GATE_SDMMC1, MUX_SDMMC1),
-	CS_GATEMUX("sdmmc2_k", sdmmc12_src, GATE_SDMMC2, MUX_SDMMC2),
-	CS_GATEMUX("fmc_k", fmc_src, GATE_FMC, MUX_FMC),
-	CS_GATEMUX("qspi_k", qspi_src, GATE_QSPI, MUX_QSPI),
-	CS_GATEMUX("spi2_k", spi123_src, GATE_SPI2, MUX_SPI23),
-	CS_GATEMUX("spi3_k", spi123_src, GATE_SPI3, MUX_SPI23),
-	CS_GATEMUX("i2c1_k", i2c12_src, GATE_I2C1, MUX_I2C12),
-	CS_GATEMUX("i2c2_k", i2c12_src, GATE_I2C2, MUX_I2C12),
-	CS_GATEMUX("lptim4_k", lptim45_src, GATE_LPTIM4, MUX_LPTIM45),
-	CS_GATEMUX("lptim5_k", lptim45_src, GATE_LPTIM5, MUX_LPTIM45),
-	CS_GATEMUX("usart3_k", usart34578_src, GATE_USART3, MUX_UART35),
-	CS_GATEMUX("uart5_k", usart34578_src, GATE_UART5, MUX_UART35),
-	CS_GATEMUX("uart7_k", usart34578_src, GATE_UART7, MUX_UART78),
-	CS_GATEMUX("uart8_k", usart34578_src, GATE_UART8, MUX_UART78),
-	CS_GATEMUX("sai1_k", sai1_src, GATE_SAI1, MUX_SAI1),
-	CS_GATEMUX("adfsdm_k", sai1_src, GATE_ADFSDM, MUX_SAI1),
-	CS_GATEMUX("sai2_k", sai2_src, GATE_SAI2, MUX_SAI2),
-	CS_GATEMUX("adc1_k", adc12_src, GATE_ADC1, MUX_ADC1),
-	CS_GATEMUX("adc2_k", adc12_src, GATE_ADC2, MUX_ADC2),
-	CS_GATEMUX("rng1_k", rng1_src, GATE_RNG1, MUX_RNG1),
-	CS_GATEMUX("usbphy_k", usbphy_src, GATE_USBPHY, MUX_USBPHY),
-	CS_GATEMUX("stgen_k", stgen_src, GATE_STGENC, MUX_STGEN),
-	CS_GATEMUX("spdif_k", spdif_src, GATE_SPDIF, MUX_SPDIF),
-	CS_GATEMUX("spi1_k", spi123_src, GATE_SPI1, MUX_SPI1),
-	CS_GATEMUX("spi4_k", spi4_src, GATE_SPI4, MUX_SPI4),
-	CS_GATEMUX("spi5_k", spi5_src, GATE_SPI5, MUX_SPI5),
-	CS_GATEMUX("i2c3_k", i2c345_src, GATE_I2C3, MUX_I2C3),
-	CS_GATEMUX("i2c4_k", i2c345_src, GATE_I2C4, MUX_I2C4),
-	CS_GATEMUX("i2c5_k", i2c345_src, GATE_I2C5, MUX_I2C5),
-	CS_GATEMUX("lptim1_k", lptim1_src, GATE_LPTIM1, MUX_LPTIM1),
-	CS_GATEMUX("lptim2_k", lptim23_src, GATE_LPTIM2, MUX_LPTIM2),
-	CS_GATEMUX("lptim3_k", lptim23_src, GATE_LPTIM3, MUX_LPTIM3),
-	CS_GATEMUX("usart1_k", usart12_src, GATE_USART1, MUX_UART1),
-	CS_GATEMUX("usart2_k", usart12_src, GATE_USART2, MUX_UART2),
-	CS_GATEMUX("uart4_k", usart34578_src, GATE_UART4, MUX_UART4),
-	CS_GATEMUX("uart6_k", usart6_src, GATE_USART6, MUX_UART6),
-	CS_GATEMUX("fdcan_k", fdcan_src, GATE_FDCAN, MUX_FDCAN),
-	CS_GATEMUX("dcmipp_k", dcmipp_src, GATE_DCMIPP, MUX_DCMIPP),
-	CS_GATEMUX("usbo_k", usbo_src, GATE_USBO, MUX_USBO),
-	CS_GATEMUX("eth1ck_k", eth12_src, GATE_ETH1CK, MUX_ETH1),
-	CS_GATEMUX("eth2ck_k", eth12_src, GATE_ETH2CK, MUX_ETH2),
-	CS_GATEMUX("saes_k", saes_src, GATE_SAES, MUX_SAES),
-	CS_GATE("dfsdm_k", "ck_mlahb", GATE_DFSDM),
-	CS_GATE("ltdc_px", "pll4_q", GATE_LTDC),
-	CS_COMPOSITE("eth1ptp_k", eth12_src, NO_STM32_GATE, MUX_ETH1, DIV_ETH1PTP),
-	CS_COMPOSITE("eth2ptp_k", eth12_src, NO_STM32_GATE, MUX_ETH2, DIV_ETH2PTP),
-	CS_COMPOSITE("ck_mco1", mco1_src, GATE_MCO1, MUX_MCO1, DIV_MCO1),
-	CS_COMPOSITE("ck_mco2", mco2_src, GATE_MCO2, MUX_MCO2, DIV_MCO2),
-	CS_GATE("ck_sys_dbg", "ck_axi", GATE_DBGCK),
-	CS_GATEDIV("ck_trace", "ck_axi", GATE_TRACECK, DIV_TRACE),
-	CS_GATE("rtcapb", "pclk5", GATE_RTCAPB),
-	CS_RTC("ck_rtc", rtc_src, GATE_RTCCK, MUX_RTC, DIV_RTC),
+static struct clk_summary *cs_sai1_src[] = {
+	CS_CLOCK(pll4_q), CS_CLOCK(pll3_q), CS_CLOCK(i2s_ckin), CS_CLOCK(ck_per), CS_CLOCK(pll3_r)
+};
+
+static struct clk_summary *cs_sai2_src[] = {
+	CS_CLOCK(pll4_q), CS_CLOCK(pll3_q), CS_CLOCK(i2s_ckin),
+	CS_CLOCK(ck_per), CS_CLOCK(spdif_ck_symb), CS_CLOCK(pll3_r)
+};
+
+static struct clk_summary *cs_sdmmc12_src[] = {
+	CS_CLOCK(ck_axi), CS_CLOCK(pll3_r), CS_CLOCK(pll4_p), CS_CLOCK(ck_hsi)
+};
+
+static struct clk_summary *cs_spdif_src[] = {
+	CS_CLOCK(pll4_p), CS_CLOCK(pll3_q), CS_CLOCK(ck_hsi)
+};
+
+static struct clk_summary *cs_spi123_src[] = {
+	CS_CLOCK(pll4_p), CS_CLOCK(pll3_q), CS_CLOCK(i2s_ckin), CS_CLOCK(ck_per), CS_CLOCK(pll3_r)
+};
+
+static struct clk_summary *cs_spi4_src[] = {
+	CS_CLOCK(pclk6), CS_CLOCK(pll4_q), CS_CLOCK(ck_hsi),
+	CS_CLOCK(ck_csi), CS_CLOCK(ck_hse), CS_CLOCK(i2s_ckin)
+};
+
+static struct clk_summary *cs_spi5_src[] = {
+	CS_CLOCK(pclk6), CS_CLOCK(pll4_q), CS_CLOCK(ck_hsi), CS_CLOCK(ck_csi), CS_CLOCK(ck_hse)
+};
+
+static struct clk_summary *cs_stgen_src[] = {
+	CS_CLOCK(ck_hsi), CS_CLOCK(ck_hse)
+};
+
+static struct clk_summary *cs_usart12_src[] = {
+	CS_CLOCK(pclk6), CS_CLOCK(pll3_q), CS_CLOCK(ck_hsi),
+	CS_CLOCK(ck_csi), CS_CLOCK(pll4_q), CS_CLOCK(ck_hse)
+};
+
+static struct clk_summary *cs_usart34578_src[] = {
+	CS_CLOCK(pclk1), CS_CLOCK(pll4_q), CS_CLOCK(ck_hsi), CS_CLOCK(ck_csi), CS_CLOCK(ck_hse)
+};
+
+static struct clk_summary *cs_usart6_src[] = {
+	CS_CLOCK(pclk2), CS_CLOCK(pll4_q), CS_CLOCK(ck_hsi), CS_CLOCK(ck_csi), CS_CLOCK(ck_hse)
+};
+
+static struct clk_summary *cs_usbo_src[] = {
+	CS_CLOCK(pll4_r), CS_CLOCK(ck_usbo_48m)
+};
+
+static struct clk_summary *cs_usbphy_src[] = {
+	CS_CLOCK(ck_hse), CS_CLOCK(pll4_r), CS_CLOCK(hse_div2_ck)
+};
+
+CS_GATE_MUX(sdmmc1_k, cs_sdmmc12_src, GATE_SDMMC1, MUX_SDMMC1);
+CS_GATE_MUX(sdmmc2_k, cs_sdmmc12_src, GATE_SDMMC2, MUX_SDMMC2);
+CS_GATE_MUX(fmc_k, cs_fmc_src, GATE_FMC, MUX_FMC);
+CS_GATE_MUX(qspi_k, cs_qspi_src, GATE_QSPI, MUX_QSPI);
+CS_GATE_MUX(spi2_k, cs_spi123_src, GATE_SPI2, MUX_SPI23);
+CS_GATE_MUX(spi3_k, cs_spi123_src, GATE_SPI3, MUX_SPI23);
+CS_GATE_MUX(i2c1_k, cs_i2c12_src, GATE_I2C1, MUX_I2C12);
+CS_GATE_MUX(i2c2_k, cs_i2c12_src, GATE_I2C2, MUX_I2C12);
+CS_GATE_MUX(lptim4_k, cs_lptim45_src, GATE_LPTIM4, MUX_LPTIM45);
+CS_GATE_MUX(lptim5_k, cs_lptim45_src, GATE_LPTIM5, MUX_LPTIM45);
+CS_GATE_MUX(usart3_k, cs_usart34578_src, GATE_USART3, MUX_UART35);
+CS_GATE_MUX(uart5_k, cs_usart34578_src, GATE_UART5, MUX_UART35);
+CS_GATE_MUX(uart7_k, cs_usart34578_src, GATE_UART7, MUX_UART78);
+CS_GATE_MUX(uart8_k, cs_usart34578_src, GATE_UART8, MUX_UART78);
+CS_GATE_MUX(sai1_k, cs_sai1_src, GATE_SAI1, MUX_SAI1);
+CS_GATE_MUX(adfsdm_k, cs_sai1_src, GATE_ADFSDM, MUX_SAI1);
+CS_GATE_MUX(sai2_k, cs_sai2_src, GATE_SAI2, MUX_SAI2);
+CS_GATE_MUX(adc1_k, cs_adc12_src, GATE_ADC1, MUX_ADC1);
+CS_GATE_MUX(adc2_k, cs_adc12_src, GATE_ADC2, MUX_ADC2);
+CS_GATE_MUX(rng1_k, cs_rng1_src, GATE_RNG1, MUX_RNG1);
+CS_GATE_MUX(usbphy_k, cs_usbphy_src, GATE_USBPHY, MUX_USBPHY);
+CS_GATE_MUX(stgen_k, cs_stgen_src, GATE_STGENC, MUX_STGEN);
+CS_GATE_MUX(spdif_k, cs_spdif_src, GATE_SPDIF, MUX_SPDIF);
+CS_GATE_MUX(spi1_k, cs_spi123_src, GATE_SPI1, MUX_SPI1);
+CS_GATE_MUX(spi4_k, cs_spi4_src, GATE_SPI4, MUX_SPI4);
+CS_GATE_MUX(spi5_k, cs_spi5_src, GATE_SPI5, MUX_SPI5);
+CS_GATE_MUX(i2c3_k, cs_i2c345_src, GATE_I2C3, MUX_I2C3);
+CS_GATE_MUX(i2c4_k, cs_i2c345_src, GATE_I2C4, MUX_I2C4);
+CS_GATE_MUX(i2c5_k, cs_i2c345_src, GATE_I2C5, MUX_I2C5);
+CS_GATE_MUX(lptim1_k, cs_lptim1_src, GATE_LPTIM1, MUX_LPTIM1);
+CS_GATE_MUX(lptim2_k, cs_lptim23_src, GATE_LPTIM2, MUX_LPTIM2);
+CS_GATE_MUX(lptim3_k, cs_lptim23_src, GATE_LPTIM3, MUX_LPTIM3);
+CS_GATE_MUX(usart1_k, cs_usart12_src, GATE_USART1, MUX_UART1);
+CS_GATE_MUX(usart2_k, cs_usart12_src, GATE_USART2, MUX_UART2);
+CS_GATE_MUX(uart4_k, cs_usart34578_src, GATE_UART4, MUX_UART4);
+CS_GATE_MUX(uart6_k, cs_usart6_src, GATE_USART6, MUX_UART6);
+CS_GATE_MUX(fdcan_k, cs_fdcan_src, GATE_FDCAN, MUX_FDCAN);
+CS_GATE_MUX(dcmipp_k, cs_dcmipp_src, GATE_DCMIPP, MUX_DCMIPP);
+CS_GATE_MUX(usbo_k, cs_usbo_src, GATE_USBO, MUX_USBO);
+CS_GATE_MUX(eth1ck_k, cs_eth12_src, GATE_ETH1CK, MUX_ETH1);
+CS_GATE_MUX(eth2ck_k, cs_eth12_src, GATE_ETH2CK, MUX_ETH2);
+CS_GATE_MUX(saes_k, cs_saes_src, GATE_SAES, MUX_SAES);
+
+CS_MUX_DIV(eth1ptp_k, cs_eth12_src, MUX_ETH1, DIV_ETH1PTP);
+CS_MUX_DIV(eth2ptp_k, cs_eth12_src, MUX_ETH2, DIV_ETH2PTP);
+
+CS_GATE_MUX_DIV(ck_mco1, cs_mco1_src, GATE_MCO1, MUX_MCO1, DIV_MCO1);
+CS_GATE_MUX_DIV(ck_mco2, cs_mco2_src, GATE_MCO2, MUX_MCO2, DIV_MCO2);
+
+CS_RTC(ck_rtc, cs_rtc_src, GATE_RTCCK, MUX_RTC, DIV_RTC);
+
+static struct clk_summary *stm32mp13_clock_summary[] = {
+	CS_CLOCK(ck_hsi),
+	CS_CLOCK(ck_lsi),
+	CS_CLOCK(ck_csi),
+	CS_CLOCK(ck_hse),
+	CS_CLOCK(ck_lse),
+	CS_CLOCK(ck_usbo_48m),
+	CS_CLOCK(i2s_ckin),
+	CS_CLOCK(spdif_ck_symb),
+	CS_CLOCK(hse_div2_ck),
+	CS_CLOCK(pll1),
+	CS_CLOCK(pll1_p),
+	CS_CLOCK(pll1_p_div),
+	CS_CLOCK(pll2),
+	CS_CLOCK(pll2_p),
+	CS_CLOCK(pll2_q),
+	CS_CLOCK(pll2_r),
+	CS_CLOCK(pll3),
+	CS_CLOCK(pll3_p),
+	CS_CLOCK(pll3_q),
+	CS_CLOCK(pll3_r),
+	CS_CLOCK(pll4),
+	CS_CLOCK(pll4_p),
+	CS_CLOCK(pll4_q),
+	CS_CLOCK(pll4_r),
+	CS_CLOCK(ck_mpu),
+	CS_CLOCK(ck_axi),
+	CS_CLOCK(ck_mlahb),
+	CS_CLOCK(ck_per),
+	CS_CLOCK(pclk1),
+	CS_CLOCK(pclk2),
+	CS_CLOCK(pclk3),
+	CS_CLOCK(pclk4),
+	CS_CLOCK(pclk5),
+	CS_CLOCK(pclk6),
+	CS_CLOCK(timg1_ck),
+	CS_CLOCK(timg2_ck),
+	CS_CLOCK(timg3_ck),
+	CS_CLOCK(tim2_k),
+	CS_CLOCK(tim3_k),
+	CS_CLOCK(tim4_k),
+	CS_CLOCK(tim5_k),
+	CS_CLOCK(tim6_k),
+	CS_CLOCK(tim7_k),
+	CS_CLOCK(tim1_k),
+	CS_CLOCK(tim8_k),
+	CS_CLOCK(tim12_k),
+	CS_CLOCK(tim13_k),
+	CS_CLOCK(tim14_k),
+	CS_CLOCK(tim15_k),
+	CS_CLOCK(tim16_k),
+	CS_CLOCK(tim17_k),
+	CS_CLOCK(spi2),
+	CS_CLOCK(spi3),
+	CS_CLOCK(sai1),
+	CS_CLOCK(sai2),
+	CS_CLOCK(spi1),
+	CS_CLOCK(syscfg),
+	CS_CLOCK(vref),
+	CS_CLOCK(dts),
+	CS_CLOCK(pmbctrl),
+	CS_CLOCK(hdp),
+	CS_CLOCK(iwdg2),
+	CS_CLOCK(stgenro),
+	CS_CLOCK(gpioa),
+	CS_CLOCK(gpiob),
+	CS_CLOCK(gpioc),
+	CS_CLOCK(gpiod),
+	CS_CLOCK(gpioe),
+	CS_CLOCK(gpiof),
+	CS_CLOCK(gpiog),
+	CS_CLOCK(gpioh),
+	CS_CLOCK(gpioi),
+	CS_CLOCK(tsc),
+	CS_CLOCK(ddrperfm),
+	CS_CLOCK(tzpc),
+	CS_CLOCK(iwdg1),
+	CS_CLOCK(bsec),
+	CS_CLOCK(spi4),
+	CS_CLOCK(spi5),
+	CS_CLOCK(dma1),
+	CS_CLOCK(dma2),
+	CS_CLOCK(dmamux1),
+	CS_CLOCK(dma3),
+	CS_CLOCK(dmamux2),
+	CS_CLOCK(adc1),
+	CS_CLOCK(adc2),
+	CS_CLOCK(pka),
+	CS_CLOCK(cryp1),
+	CS_CLOCK(hash1),
+	CS_CLOCK(bkpsram),
+	CS_CLOCK(mdma),
+	CS_CLOCK(eth1tx),
+	CS_CLOCK(eth1rx),
+	CS_CLOCK(eth1mac),
+	CS_CLOCK(eth2tx),
+	CS_CLOCK(eth2rx),
+	CS_CLOCK(eth2mac),
+	CS_CLOCK(crc1),
+	CS_CLOCK(usbh),
+	CS_CLOCK(eth1stp),
+	CS_CLOCK(eth2stp),
+	CS_CLOCK(dfsdm_k),
+	CS_CLOCK(ltdc_px),
+	CS_CLOCK(ck_sys_dbg),
+	CS_CLOCK(rtcapb),
+	CS_CLOCK(ck_trace),
+	CS_CLOCK(sdmmc1_k),
+	CS_CLOCK(sdmmc2_k),
+	CS_CLOCK(fmc_k),
+	CS_CLOCK(qspi_k),
+	CS_CLOCK(spi2_k),
+	CS_CLOCK(spi3_k),
+	CS_CLOCK(i2c1_k),
+	CS_CLOCK(i2c2_k),
+	CS_CLOCK(lptim4_k),
+	CS_CLOCK(lptim5_k),
+	CS_CLOCK(usart3_k),
+	CS_CLOCK(uart5_k),
+	CS_CLOCK(uart7_k),
+	CS_CLOCK(uart8_k),
+	CS_CLOCK(sai1_k),
+	CS_CLOCK(adfsdm_k),
+	CS_CLOCK(sai2_k),
+	CS_CLOCK(adc1_k),
+	CS_CLOCK(adc2_k),
+	CS_CLOCK(rng1_k),
+	CS_CLOCK(usbphy_k),
+	CS_CLOCK(stgen_k),
+	CS_CLOCK(spdif_k),
+	CS_CLOCK(spi1_k),
+	CS_CLOCK(spi4_k),
+	CS_CLOCK(spi5_k),
+	CS_CLOCK(i2c3_k),
+	CS_CLOCK(i2c4_k),
+	CS_CLOCK(i2c5_k),
+	CS_CLOCK(lptim1_k),
+	CS_CLOCK(lptim2_k),
+	CS_CLOCK(lptim3_k),
+	CS_CLOCK(usart1_k),
+	CS_CLOCK(usart2_k),
+	CS_CLOCK(uart4_k),
+	CS_CLOCK(uart6_k),
+	CS_CLOCK(fdcan_k),
+	CS_CLOCK(dcmipp_k),
+	CS_CLOCK(usbo_k),
+	CS_CLOCK(eth1ck_k),
+	CS_CLOCK(eth2ck_k),
+	CS_CLOCK(saes_k),
+	CS_CLOCK(eth1ptp_k),
+	CS_CLOCK(eth2ptp_k),
+	CS_CLOCK(ck_mco1),
+	CS_CLOCK(ck_mco2),
+	CS_CLOCK(ck_rtc),
 };
 
 static struct clock_summary clock_summary_mp13 = {

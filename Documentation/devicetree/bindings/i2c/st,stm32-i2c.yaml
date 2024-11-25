@@ -47,27 +47,24 @@ allOf:
         compatible:
           contains:
             enum:
+              - st,stm32f4-i2c
               - st,stm32f7-i2c
               - st,stm32mp13-i2c
               - st,stm32mp15-i2c
     then:
       properties:
         interrupts:
-          items:
-            - description: interrupt ID for I2C event
-            - description: interrupt ID for I2C error
+          minItems: 2
 
-  - if:
-      properties:
-        compatible:
-          contains:
-            enum:
-              - st,stm32mp25-i2c
-    then:
+        interrupt-names:
+          minItems: 2
+    else:
       properties:
         interrupts:
-          items:
-            - description: common interrupt for events and errors
+          maxItems: 1
+
+        interrupt-names:
+          maxItems: 1
 
 properties:
   compatible:
@@ -81,19 +78,22 @@ properties:
   reg:
     maxItems: 1
 
+  interrupts:
+    items:
+      - description: interrupt ID for I2C event
+      - description: interrupt ID for I2C error
+    minItems: 1
 
   interrupt-names:
     items:
       - const: event
       - const: error
+    minItems: 1
 
   resets:
     maxItems: 1
 
   clocks:
-    maxItems: 1
-
-  power-domains:
     maxItems: 1
 
   dmas:
@@ -118,7 +118,7 @@ properties:
   st,syscfg-fmp:
     description: Use to set Fast Mode Plus bit within SYSCFG when Fast Mode
       Plus speed is selected by slave.
-    $ref: "/schemas/types.yaml#/definitions/phandle-array"
+    $ref: /schemas/types.yaml#/definitions/phandle-array
     items:
       - items:
           - description: phandle to syscfg
@@ -127,10 +127,9 @@ properties:
 
   wakeup-source: true
 
-  feature-domains:
-    $ref: /schemas/types.yaml#/definitions/phandle-array
-    description: |
-      Phandle to the rifsc device to check access right.
+  access-controllers:
+    minItems: 1
+    maxItems: 2
 
 required:
   - compatible

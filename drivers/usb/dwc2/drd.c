@@ -17,10 +17,65 @@
 	((gotgctl) |= GOTGCTL_BVALOEN | GOTGCTL_AVALOEN | GOTGCTL_VBVALOEN | \
 	 GOTGCTL_DBNCE_FLTR_BYPASS)
 
+static void dwc2_ovr_init_stm32mp21(struct dwc2_hsotg *hsotg)
+{
+	unsigned long flags;
+	u32 ggpio;
+
+	spin_lock_irqsave(&hsotg->lock, flags);
+
+	ggpio = dwc2_readl(hsotg, GGPIO);
+	if (hsotg->role_sw_default_mode == USB_DR_MODE_HOST) {
+		ggpio &= ~GGPIO_STM32_OTG_GCCFG_VBVALOVAL;
+		ggpio &= ~GGPIO_STM32_OTG_GCCFG_IDPULLUP_DIS;
+	} else {
+		ggpio |= GGPIO_STM32_OTG_GCCFG_VBVALOVAL;
+		ggpio |= GGPIO_STM32_OTG_GCCFG_IDPULLUP_DIS;
+	}
+	dwc2_writel(hsotg, ggpio, GGPIO);
+
+	spin_unlock_irqrestore(&hsotg->lock, flags);
+
+	dwc2_force_mode(hsotg, (hsotg->dr_mode == USB_DR_MODE_HOST) ||
+			(hsotg->role_sw_default_mode == USB_DR_MODE_HOST));
+}
+
+static int dwc2_ovr_avalid_stm32mp21(struct dwc2_hsotg *hsotg, bool valid)
+{
+	u32 ggpio;
+
+	ggpio = dwc2_readl(hsotg, GGPIO);
+	if (valid) {
+		ggpio &= ~GGPIO_STM32_OTG_GCCFG_VBVALOVAL;
+		ggpio &= ~GGPIO_STM32_OTG_GCCFG_IDPULLUP_DIS;
+	} else {
+		ggpio |= GGPIO_STM32_OTG_GCCFG_VBVALOVAL;
+		ggpio |= GGPIO_STM32_OTG_GCCFG_IDPULLUP_DIS;
+	}
+	dwc2_writel(hsotg, ggpio, GGPIO);
+
+	return 0;
+}
+
+static int dwc2_ovr_bvalid_stm32mp21(struct dwc2_hsotg *hsotg, bool valid)
+{
+	u32 ggpio;
+
+	ggpio = dwc2_readl(hsotg, GGPIO);
+	ggpio |= GGPIO_STM32_OTG_GCCFG_VBVALOVAL;
+	ggpio |= GGPIO_STM32_OTG_GCCFG_IDPULLUP_DIS;
+	dwc2_writel(hsotg, ggpio, GGPIO);
+
+	return 0;
+}
+
 static void dwc2_ovr_init(struct dwc2_hsotg *hsotg)
 {
 	unsigned long flags;
 	u32 gotgctl;
+
+	if (hsotg->params.activate_stm32_bvaloval_en)
+		return dwc2_ovr_init_stm32mp21(hsotg);
 
 	spin_lock_irqsave(&hsotg->lock, flags);
 
@@ -43,6 +98,9 @@ static int dwc2_ovr_avalid(struct dwc2_hsotg *hsotg, bool valid)
 {
 	u32 gotgctl = dwc2_readl(hsotg, GOTGCTL);
 
+	if (hsotg->params.activate_stm32_bvaloval_en)
+		return dwc2_ovr_avalid_stm32mp21(hsotg, valid);
+
 	/* Check if A-Session is already in the right state */
 	if ((valid && (gotgctl & GOTGCTL_AVALOVAL) && (gotgctl & GOTGCTL_VBVALOVAL)) ||
 	    (!valid && !(gotgctl & (GOTGCTL_AVALOVAL | GOTGCTL_VBVALOVAL))))
@@ -64,6 +122,9 @@ static int dwc2_ovr_avalid(struct dwc2_hsotg *hsotg, bool valid)
 static int dwc2_ovr_bvalid(struct dwc2_hsotg *hsotg, bool valid)
 {
 	u32 gotgctl = dwc2_readl(hsotg, GOTGCTL);
+
+	if (hsotg->params.activate_stm32_bvaloval_en)
+		return dwc2_ovr_bvalid_stm32mp21(hsotg, valid);
 
 	/* Check if B-Session is already in the right state */
 	if ((valid && (gotgctl & GOTGCTL_BVALOVAL) && (gotgctl & GOTGCTL_VBVALOVAL)) ||

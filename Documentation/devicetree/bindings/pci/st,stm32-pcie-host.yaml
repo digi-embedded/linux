@@ -86,7 +86,7 @@ properties:
   power-domains:
     maxItems: 1
 
-  feature-domains:
+  access-controllers:
     maxItems: 1
 
   wake-gpios:
@@ -130,9 +130,9 @@ examples:
   - |
     #include <dt-bindings/gpio/gpio.h>
     #include <dt-bindings/phy/phy.h>
-    #include <dt-bindings/clock/stm32mp25-clks.h>
+    #include <dt-bindings/clock/st,stm32mp25-rcc.h>
     #include <dt-bindings/interrupt-controller/arm-gic.h>
-    #include <dt-bindings/reset/stm32mp25-resets.h>
+    #include <dt-bindings/reset/st,stm32mp25-rcc.h>
 
     pcie_rc: pcie@48400000 {
              compatible = "st,stm32mp25-pcie-rc";
@@ -164,6 +164,6 @@ examples:
              resets = <&rcc PCIE_R>;
              reset-names = "pcie";
              wakeup-source;
-             wake-gpios = <&gpioh 5 GPIO_ACTIVE_LOW>;
+             wake-gpios = <&gpioh 5 GPIO_ACTIVE_LOW | GPIO_PULL_UP>;
              msi-parent = <&v2m0>;
     };

@@ -13,9 +13,11 @@
 #include <linux/mfd/syscon.h>
 #include <linux/module.h>
 #include <linux/nvmem-consumer.h>
-#include <linux/of_address.h>
-#include <linux/of_device.h>
+#include <linux/of.h>
 #include <linux/of_reserved_mem.h>
+#include <linux/platform_device.h>
+#include <linux/pm_domain.h>
+#include <linux/pm_runtime.h>
 #include <linux/pm_wakeirq.h>
 #include <linux/regmap.h>
 #include <linux/remoteproc.h>
@@ -58,13 +60,9 @@
 #define M33_STATE_CSLEEP	2
 #define M33_STATE_CSTOP		3
 
-/*
- * Define a default index in future may come a global list of
- * firmwares which list platforms and associated firmware(s)
- */
-
-#define STM32_MP1_PROC_ID    0
-#define STM32_MP2_PROC_ID    1
+/* Remote processor unique identifier aligned with the Trusted Execution Environment definitions */
+#define STM32_MP1_M4_PROC_ID    0
+#define STM32_MP2_M33_PROC_ID   1
 
 struct stm32_rproc;
 
@@ -85,7 +83,6 @@ struct stm32_rproc_mem {
 struct stm32_rproc_data {
 	int proc_id;
 	int (*get_info)(struct rproc *rproc);
-	bool signed_fw;
 };
 
 struct stm32_mbox {
@@ -103,6 +100,10 @@ struct stm32_rproc {
 	struct stm32_syscon cm_state;
 	struct stm32_syscon rsctbl;
 	struct stm32_syscon boot_vec;
+
+	struct device *genpd_dev;
+	struct device_link *genpd_dev_link;
+
 	int wdg_irq;
 	u32 nb_rmems;
 	struct stm32_rproc_mem *rmems;
@@ -192,7 +193,7 @@ static int stm32_rproc_mem_alloc(struct rproc *rproc,
 	void *va;
 
 	dev_dbg(dev, "map memory: %pad+%zx\n", &mem->dma, mem->len);
-	va = ioremap_wc(mem->dma, mem->len);
+	va = (__force void *)ioremap_wc(mem->dma, mem->len);
 	if (IS_ERR_OR_NULL(va)) {
 		dev_err(dev, "Unable to map memory region: %pad+0x%zx\n",
 			&mem->dma, mem->len);
@@ -209,7 +210,7 @@ static int stm32_rproc_mem_release(struct rproc *rproc,
 				   struct rproc_mem_entry *mem)
 {
 	dev_dbg(rproc->dev.parent, "unmap memory: %pa\n", &mem->dma);
-	iounmap(mem->va);
+	iounmap((__force __iomem void *)mem->va);
 
 	return 0;
 }
@@ -333,7 +334,7 @@ static int stm32_rproc_release(struct rproc *rproc)
 	}
 
 	/* Update coprocessor state to OFF if available. */
-	if (ddata->desc->proc_id == STM32_MP1_PROC_ID && ddata->cm_state.map) {
+	if (ddata->desc->proc_id == STM32_MP1_M4_PROC_ID && ddata->cm_state.map) {
 		err = regmap_update_bits(ddata->cm_state.map,
 					 ddata->cm_state.reg,
 					 ddata->cm_state.mask,
@@ -373,7 +374,7 @@ static int stm32_rproc_tee_elf_load(struct rproc *rproc,
 	 * This function can be called by remote proc for recovery
 	 * without the sanity check. In this case we need to load the firmware
 	 * else nothing done here as the firmware has been preloaded for the
-	 * sanity check to be able to parse it for the resource table
+	 * sanity check to be able to parse it for the resource table.
 	 */
 	if (ddata->fw_loaded)
 		return 0;
@@ -383,9 +384,9 @@ static int stm32_rproc_tee_elf_load(struct rproc *rproc,
 		return ret;
 	ddata->fw_loaded = true;
 
-	/* update the resource table parameters */
+	/* Update the resource table parameters. */
 	if (rproc_tee_get_rsc_table(ddata->trproc)) {
-		/* no resource table: reset the related fields */
+		/* No resource table: reset the related fields. */
 		rproc->cached_table = NULL;
 		rproc->table_ptr = NULL;
 		rproc->table_sz = 0;
@@ -406,13 +407,22 @@ stm32_rproc_tee_elf_find_loaded_rsc_table(struct rproc *rproc,
 static int stm32_rproc_tee_start(struct rproc *rproc)
 {
 	struct stm32_rproc *ddata = rproc->priv;
+	int err;
 
-	return tee_rproc_start(ddata->trproc);
+	err = pm_runtime_resume_and_get(rproc->dev.parent);
+	if (err)
+		return err;
+
+	err = tee_rproc_start(ddata->trproc);
+	if (err)
+		return pm_runtime_put(rproc->dev.parent);
+
+	return err;
 }
 
 static int stm32_rproc_tee_attach(struct rproc *rproc)
 {
-	/* Nothing to do, remote proc already started by the secured context */
+	/* Nothing to do, remote proc already started by the secured context. */
 	return 0;
 }
 
@@ -422,6 +432,10 @@ static int stm32_rproc_tee_stop(struct rproc *rproc)
 	int err;
 
 	stm32_rproc_request_shutdown(rproc);
+
+	err = pm_runtime_put(rproc->dev.parent);
+	if (err < 0)
+		return err;
 
 	err = tee_rproc_stop(ddata->trproc);
 	if (err)
@@ -710,6 +724,10 @@ static int stm32_rproc_start(struct rproc *rproc)
 		}
 	}
 
+	err = pm_runtime_resume_and_get(rproc->dev.parent);
+	if (err)
+		return err;
+
 	err = stm32_rproc_set_hold_boot(rproc, false);
 	if (err)
 		return err;
@@ -719,7 +737,13 @@ static int stm32_rproc_start(struct rproc *rproc)
 
 static int stm32_rproc_attach(struct rproc *rproc)
 {
+	int err;
+
 	stm32_rproc_add_coredump_trace(rproc);
+
+	err = pm_runtime_resume_and_get(rproc->dev.parent);
+	if (err)
+		return err;
 
 	return stm32_rproc_set_hold_boot(rproc, true);
 }
@@ -758,6 +782,9 @@ static int stm32_rproc_stop(struct rproc *rproc)
 		return err;
 	}
 
+	err = pm_runtime_put(rproc->dev.parent);
+	if (err < 0)
+		dev_err(&rproc->dev, "failed to disable PM runtime:%d\n", err);
 
 	return stm32_rproc_release(rproc);
 }
@@ -790,7 +817,7 @@ stm32_rproc_get_loaded_rsc_table(struct rproc *rproc, size_t *table_sz)
 	struct stm32_rproc *ddata = rproc->priv;
 
 	*table_sz = ddata->rsc_sz;
-	return (struct resource_table *)ddata->rsc_va;
+	return (__force struct resource_table *)ddata->rsc_va;
 }
 
 static const struct rproc_ops st_rproc_ops = {
@@ -937,34 +964,20 @@ static int stm32_rproc_get_m33_info(struct rproc *rproc)
 }
 
 static const struct stm32_rproc_data stm32_rproc_stm32pm15 = {
-	.proc_id = STM32_MP1_PROC_ID,
+	.proc_id = STM32_MP1_M4_PROC_ID,
 	.get_info = stm32_rproc_get_m4_info,
-	.signed_fw = false,
-};
-
-static const struct stm32_rproc_data stm32_rproc_stm32pm15_tee = {
-	.proc_id = STM32_MP1_PROC_ID,
-	.get_info = stm32_rproc_get_m4_info,
-	.signed_fw = true,
 };
 
 static const struct stm32_rproc_data stm32_rproc_stm32pm25 = {
-	.proc_id = STM32_MP2_PROC_ID,
+	.proc_id = STM32_MP2_M33_PROC_ID,
 	.get_info = stm32_rproc_get_m33_info,
-	.signed_fw = false,
-};
-
-static const struct stm32_rproc_data stm32_rproc_stm32pm25_tee = {
-	.proc_id = STM32_MP2_PROC_ID,
-	.get_info = stm32_rproc_get_m33_info,
-	.signed_fw = true,
 };
 
 static const struct of_device_id stm32_rproc_match[] = {
 	{.compatible = "st,stm32mp1-m4", .data = &stm32_rproc_stm32pm15},
-	{.compatible = "st,stm32mp1-m4-tee", .data = &stm32_rproc_stm32pm15_tee},
+	{.compatible = "st,stm32mp1-m4-tee", .data = &stm32_rproc_stm32pm15},
 	{.compatible = "st,stm32mp2-m33", .data = &stm32_rproc_stm32pm25},
-	{.compatible = "st,stm32mp2-m33-tee", .data = &stm32_rproc_stm32pm25_tee},
+	{.compatible = "st,stm32mp2-m33-tee", .data = &stm32_rproc_stm32pm25},
 	{},
 };
 MODULE_DEVICE_TABLE(of, stm32_rproc_match);
@@ -1107,6 +1120,43 @@ static int stm32_rproc_parse_dt(struct platform_device *pdev,
 	return 0;
 }
 
+static void stm32_rproc_powerdomain_remove(struct device *dev,
+					   struct stm32_rproc *ddata)
+{
+	if (ddata->genpd_dev_link)
+		device_link_del(ddata->genpd_dev_link);
+	if (!IS_ERR_OR_NULL(ddata->genpd_dev))
+		dev_pm_domain_detach(ddata->genpd_dev, true);
+}
+
+static int stm32_rproc_powerdomain_init(struct device *dev,
+					struct stm32_rproc *ddata)
+{
+	int err;
+
+	if (!device_property_present(dev, "power-domains"))
+		return 0;
+
+	if (device_property_present(dev, "keep-power-in-suspend"))
+		ddata->genpd_dev = dev_pm_domain_attach_by_name(dev, "sleep");
+	else
+		ddata->genpd_dev = dev_pm_domain_attach_by_name(dev, "default");
+	if (IS_ERR_OR_NULL(ddata->genpd_dev)) {
+		err = ddata->genpd_dev ? PTR_ERR(ddata->genpd_dev) : -ENODEV;
+		dev_err(dev, "failed to get pm-domain: %d\n", err);
+		return err;
+	}
+
+	ddata->genpd_dev_link = device_link_add(dev, ddata->genpd_dev,
+						DL_FLAG_PM_RUNTIME | DL_FLAG_STATELESS);
+	if (!ddata->genpd_dev_link) {
+		dev_pm_domain_detach(ddata->genpd_dev, true);
+		return -ENODEV;
+	}
+
+	return 0;
+}
+
 static int stm32_rproc_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -1123,18 +1173,20 @@ static int stm32_rproc_probe(struct platform_device *pdev)
 	if (ret)
 		return ret;
 
-	if (desc->signed_fw) {
+	if (of_device_is_compatible(np, "st,stm32mp1-m4-tee") ||
+	    of_device_is_compatible(np, "st,stm32mp2-m33-tee")) {
 		trproc = tee_rproc_register(dev, desc->proc_id);
-		if (IS_ERR_OR_NULL(trproc)) {
+		if (IS_ERR(trproc)) {
+			dev_err_probe(dev, PTR_ERR(trproc),
+				      "signed firmware not supported by TEE\n");
 			return PTR_ERR(trproc);
+		}
 		/*
 		 * Delegate the firmware management to the secure context.
 		 * The firmware loaded has to be signed.
 		 */
 		dev_info(dev, "Support of signed firmware only\n");
-		}
 	}
-
 	rproc = rproc_alloc(dev, np->name,
 			    trproc ? &st_rproc_tee_ops : &st_rproc_ops,
 			    NULL, sizeof(*ddata));
@@ -1152,13 +1204,8 @@ static int stm32_rproc_probe(struct platform_device *pdev)
 		goto free_rproc;
 
 	if (trproc) {
-		/*
-		 * Delegate the firmware management to the secure context. The
-		 * firmware loaded has to be signed.
-		 */
-		dev_info(dev, "Support of signed firmware only\n");
-		rproc->fw_format = RPROC_FW_TEE;
 		trproc->rproc = rproc;
+		rproc->fw_format = RPROC_FW_TEE;
 	} else {
 		rproc->fw_format = RPROC_FW_ELF;
 	}
@@ -1186,7 +1233,11 @@ static int stm32_rproc_probe(struct platform_device *pdev)
 	if (ret)
 		goto free_mb;
 
-	return 0;
+	ret = stm32_rproc_powerdomain_init(dev, ddata);
+	if (ret < 0)
+		return ret;
+
+	return devm_pm_runtime_enable(dev);
 
 free_mb:
 	stm32_rproc_free_mbox(rproc);
@@ -1205,7 +1256,7 @@ free_tee:
 	return ret;
 }
 
-static int stm32_rproc_remove(struct platform_device *pdev)
+static void stm32_rproc_remove(struct platform_device *pdev)
 {
 	struct rproc *rproc = platform_get_drvdata(pdev);
 	struct stm32_rproc *ddata = rproc->priv;
@@ -1213,6 +1264,8 @@ static int stm32_rproc_remove(struct platform_device *pdev)
 
 	if (atomic_read(&rproc->power) > 0)
 		rproc_shutdown(rproc);
+
+	stm32_rproc_powerdomain_remove(dev, ddata);
 
 	rproc_del(rproc);
 	stm32_rproc_free_mbox(rproc);
@@ -1224,8 +1277,6 @@ static int stm32_rproc_remove(struct platform_device *pdev)
 	rproc_free(rproc);
 	if (ddata->trproc)
 		tee_rproc_unregister(ddata->trproc);
-
-	return 0;
 }
 
 static void stm32_rproc_shutdown(struct platform_device *pdev)
@@ -1241,6 +1292,10 @@ static int stm32_rproc_suspend(struct device *dev)
 {
 	struct rproc *rproc = dev_get_drvdata(dev);
 	struct stm32_rproc *ddata = rproc->priv;
+
+	if (ddata->genpd_dev && rproc->state != RPROC_OFFLINE &&
+	    !device_property_present(dev, "keep-power-in-suspend"))
+		return -EBUSY;
 
 	if (device_may_wakeup(dev))
 		return enable_irq_wake(ddata->wdg_irq);
@@ -1264,7 +1319,7 @@ static DEFINE_SIMPLE_DEV_PM_OPS(stm32_rproc_pm_ops,
 
 static struct platform_driver stm32_rproc_driver = {
 	.probe = stm32_rproc_probe,
-	.remove = stm32_rproc_remove,
+	.remove_new = stm32_rproc_remove,
 	.shutdown = stm32_rproc_shutdown,
 	.driver = {
 		.name = "stm32-rproc",

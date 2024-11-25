@@ -82,10 +82,9 @@ properties:
     description: if defined, it indicates that the controller
       supports memory-to-memory transfer
 
-  feature-domains:
-    $ref: /schemas/types.yaml#/definitions/phandle-array
-    description: |
-      Phandle to the rifsc device to check access right.
+  access-controllers:
+    minItems: 1
+    maxItems: 2
 
 required:
   - compatible

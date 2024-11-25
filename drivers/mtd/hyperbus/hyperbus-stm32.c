@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL
 /*
- * Copyright (C) 2023, STMicroelectronics - All Rights Reserved
+ * Copyright (C) 2024, STMicroelectronics - All Rights Reserved
  * Author(s): Patrice Chotard <patrice.chotard@st.com> for STMicroelectronics.
  */
 

@@ -14,26 +14,27 @@
 /*
  * STM32 DFSDM - global register map
  * __________________________________________________________
- * | Offset   |                 Registers block             |
+ * | Offset    |             Registers block                |
  * ----------------------------------------------------------
- * | 0x000    |      CHANNEL 0 + COMMON CHANNEL FIELDS      |
+ * | 0x000     |      CHANNEL 0 + COMMON CHANNEL FIELDS     |
  * ----------------------------------------------------------
- * | 0x020    |                CHANNEL 1                    |
+ * | 0x020     |                CHANNEL 1                   |
  * ----------------------------------------------------------
- * | ...      |                .....                        |
+ * | ...       |                 .....                      |
  * ----------------------------------------------------------
- * | 0x20 x n |                CHANNEL n                    |
+ * | 0x20 x n  |                CHANNEL n                   |
  * ----------------------------------------------------------
- * | 0x100    |      FILTER  0 + COMMON FILTER FIELDs       |
+ * | 0x100     |      FILTER  0 + COMMON FILTER FIELDs      |
  * ----------------------------------------------------------
- * | 0x200    |                FILTER  1                    |
+ * | 0x200     |                FILTER  1                   |
  * ----------------------------------------------------------
- * |          |                .....                        |
+ * |           |                 .....                      |
  * ----------------------------------------------------------
- * | 0x100 x m|                FILTER  m                    |
+ * | 0x100 x m |                FILTER  m                   |
  * ----------------------------------------------------------
+ * |           |                 .....                      |
  * ----------------------------------------------------------
- * | 0x7F0-7FC|         Identification registers            |
+ * | 0x7F0-7FC |         Identification registers           |
  * ----------------------------------------------------------
  */
 
@@ -243,22 +244,12 @@
 #define DFSDM_SIDR		0x7FC
 
 /* HWCFGR: Hardware configuration register */
-#define DFSDM_HWCFGR_NBT_SHIFT	0
 #define DFSDM_HWCFGR_NBT_MASK	GENMASK(7, 0)
-#define DFSDM_HWCFGR_NBF_SHIFT	8
 #define DFSDM_HWCFGR_NBF_MASK	GENMASK(15, 8)
 
 /* VERR: Version register */
-#define DFSDM_VERR_MINREV_SHIFT	0
 #define DFSDM_VERR_MINREV_MASK	GENMASK(3, 0)
-#define DFSDM_VERR_MAJREV_SHIFT	4
 #define DFSDM_VERR_MAJREV_MASK	GENMASK(7, 4)
-
-/* IPDR: Identification register */
-#define DFSDM_IPIDR_MASK	GENMASK(31, 0)
-
-/* SIDR: Size identification register */
-#define DFSDM_SIDR_MASK		GENMASK(31, 0)
 
 #define STM32MP15_IPIDR_NUMBER	0x00110031
 

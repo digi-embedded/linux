@@ -114,8 +114,11 @@ static int sgm3140_brightness_set(struct led_classdev *led_cdev,
 				"failed to enable regulator: %d\n", ret);
 			return ret;
 		}
+		gpiod_set_value_cansleep(priv->flash_gpio, 0);
 		gpiod_set_value_cansleep(priv->enable_gpio, 1);
 	} else {
+		del_timer_sync(&priv->powerdown_timer);
+		gpiod_set_value_cansleep(priv->flash_gpio, 0);
 		gpiod_set_value_cansleep(priv->enable_gpio, 0);
 		ret = regulator_disable(priv->vin_regulator);
 		if (ret) {
@@ -291,6 +294,7 @@ static int sgm3140_remove(struct platform_device *pdev)
 
 static const struct of_device_id sgm3140_dt_match[] = {
 	{ .compatible = "ocs,ocp8110" },
+	{ .compatible = "richtek,rt5033-led" },
 	{ .compatible = "sgmicro,sgm3140" },
 	{ /* sentinel */ }
 };

@@ -37,7 +37,7 @@ properties:
     maxItems: 1
 
   hdmi-pwr-supply:
-    description: Power supply for the HDMI_PWR pin
+    description: Power supply for the HDMI +5V Power pin
 
   port:
     $ref: /schemas/graph.yaml#/properties/port

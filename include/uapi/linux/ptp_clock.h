@@ -95,9 +95,7 @@ struct ptp_clock_caps {
 	int cross_timestamping;
 	/* Whether the clock supports adjust phase */
 	int adjust_phase;
-	/* Whether the clock supports precise cross timestamps with peer clock */
-	int peer_cross_timestamping;
-	int rsv[11];   /* Reserved for future use. */
+	int rsv[12];   /* Reserved for future use. */
 };
 
 struct ptp_extts_request {

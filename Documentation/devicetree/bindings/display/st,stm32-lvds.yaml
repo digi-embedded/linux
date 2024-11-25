@@ -15,12 +15,28 @@ description: |
   LVDS protocol: it maps the pixels received from the upstream Pixel-DMA (LTDC)
   onto the LVDS PHY.
 
-properties:
-  "#clock-cells":
-    const: 0
+  It is composed of three sub blocks:
+    - LVDS host: handles the LVDS protocol (FPD / OpenLDI) and maps its input
+      pixels onto the data lanes of the PHY
+    - LVDS PHY: parallelize the data and drives the LVDS data lanes
+    - LVDS wrapper: handles top-level settings
 
+  The LVDS controller driver supports the following high-level features:
+    - FDP-Link-I and OpenLDI (v0.95) protocols
+    - Single-Link or Dual-Link operation
+    - Single-Display or Double-Display (with the same content duplicated on both)
+    - Flexible Bit-Mapping, including JEIDA and VESA
+    - RGB888 or RGB666 output
+    - Synchronous design, with one input pixel per clock cycle
+
+properties:
   compatible:
     const: st,stm32mp25-lvds
+
+  "#clock-cells":
+    const: 0
+    description:
+      Provides the internal LVDS PHY clock to the framework.
 
   reg:
     maxItems: 1
@@ -38,53 +54,47 @@ properties:
   resets:
     maxItems: 1
 
-  feature-domains:
-    minItems: 1
-    maxItems: 2
-
-  power-domains:
-    maxItems: 1
-
   ports:
     $ref: /schemas/graph.yaml#/properties/ports
 
     properties:
       port@0:
         $ref: /schemas/graph.yaml#/properties/port
-        description: |
+        description:
           LVDS input port node, connected to the LTDC RGB output port.
 
       port@1:
         $ref: /schemas/graph.yaml#/properties/port
-        description: |
+        description:
           LVDS output port node, connected to a panel or bridge input port.
 
+    required:
+      - port@0
+      - port@1
+
 required:
-  - "#clock-cells"
   - compatible
+  - "#clock-cells"
   - reg
   - clocks
   - clock-names
   - resets
   - ports
 
-unevaluatedProperties: false
+additionalProperties: false
 
 examples:
   - |
-    #include <dt-bindings/bus/stm32mp25_sys_bus.h>
-    #include <dt-bindings/clock/stm32mp25-clks.h>
-    #include <dt-bindings/reset/stm32mp25-resets.h>
+    #include <dt-bindings/clock/st,stm32mp25-rcc.h>
+    #include <dt-bindings/reset/st,stm32mp25-rcc.h>
 
     lvds: lvds@48060000 {
-        #clock-cells = <0>;
         compatible = "st,stm32-lvds";
         reg = <0x48060000 0x2000>;
+        #clock-cells = <0>;
         clocks = <&rcc CK_BUS_LVDS>, <&rcc CK_KER_LVDSPHY>;
         clock-names = "pclk", "ref";
         resets = <&rcc LVDS_R>;
-        feature-domains = <&rifsc STM32MP25_RIFSC_LVDS_ID>;
-        power-domains = <&CLUSTER_PD>;
 
         ports {
             #address-cells = <1>;

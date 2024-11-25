@@ -38,6 +38,14 @@
 #include "pgtable.h"
 
 /*
+ * Fix alignment at 16 bytes. Following CONFIG_FUNCTION_ALIGNMENT will result
+ * in assembly errors due to trying to move .org backward due to the excessive
+ * alignment.
+ */
+#undef __ALIGN
+#define __ALIGN		.balign	16, 0x90
+
+/*
  * Locally defined symbols should be marked hidden:
  */
 	.hidden _bss
@@ -389,6 +397,11 @@ SYM_CODE_START(startup_64)
 	movq	%r15, %rdi
 	call	sev_enable
 #endif
+
+	/* Preserve only the CR4 bits that must be preserved, and clear the rest */
+	movq	%cr4, %rax
+	andl	$(X86_CR4_PAE | X86_CR4_MCE | X86_CR4_LA57), %eax
+	movq	%rax, %cr4
 
 	/*
 	 * configure_5level_paging() updates the number of paging levels using

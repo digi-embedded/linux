@@ -843,6 +843,9 @@ static int mctp_do_fragment_route(struct mctp_route *rt, struct sk_buff *skb,
 		/* copy message payload */
 		skb_copy_bits(skb, pos, skb_transport_header(skb2), size);
 
+		/* we need to copy the extensions, for MCTP flow data */
+		skb_ext_copy(skb2, skb);
+
 		/* do route */
 		rc = rt->output(rt, skb2);
 		if (rc)
@@ -1264,9 +1267,6 @@ static int mctp_newroute(struct sk_buff *skb, struct nlmsghdr *nlh,
 		if (tbx[RTAX_MTU])
 			mtu = nla_get_u32(tbx[RTAX_MTU]);
 	}
-
-	if (rtm->rtm_type != RTN_UNICAST)
-		return -EINVAL;
 
 	rc = mctp_route_add(mdev, daddr_start, rtm->rtm_dst_len, mtu,
 			    rtm->rtm_type);

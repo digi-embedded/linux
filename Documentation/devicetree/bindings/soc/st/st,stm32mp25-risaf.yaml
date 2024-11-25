@@ -55,7 +55,7 @@ additionalProperties: false
 
 examples:
   - |
-        #include <dt-bindings/clock/stm32mp25-clks.h>
+        #include <dt-bindings/clock/st,stm32mp25-rcc.h>
 
         risaf4: risaf@420d0000 {
           compatible = "st,stm32mp25-risaf-enc";

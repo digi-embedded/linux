@@ -87,7 +87,7 @@ static struct gfs2_sbd *init_sbd(struct super_block *sb)
 	set_bit(SDF_NOJOURNALID, &sdp->sd_flags);
 	gfs2_tune_init(&sdp->sd_tune);
 
-	init_waitqueue_head(&sdp->sd_glock_wait);
+	init_waitqueue_head(&sdp->sd_kill_wait);
 	init_waitqueue_head(&sdp->sd_async_glock_wait);
 	atomic_set(&sdp->sd_glock_disposal, 0);
 	init_completion(&sdp->sd_locking_init);
@@ -135,8 +135,8 @@ static struct gfs2_sbd *init_sbd(struct super_block *sb)
 	init_rwsem(&sdp->sd_log_flush_lock);
 	atomic_set(&sdp->sd_log_in_flight, 0);
 	init_waitqueue_head(&sdp->sd_log_flush_wait);
-	atomic_set(&sdp->sd_freeze_state, SFS_UNFROZEN);
 	mutex_init(&sdp->sd_freeze_mutex);
+	INIT_LIST_HEAD(&sdp->sd_dead_glocks);
 
 	return sdp;
 
@@ -254,7 +254,7 @@ static int gfs2_read_super(struct gfs2_sbd *sdp, sector_t sector, int silent)
 
 	bio = bio_alloc(sb->s_bdev, 1, REQ_OP_READ | REQ_META, GFP_NOFS);
 	bio->bi_iter.bi_sector = sector * (sb->s_blocksize >> 9);
-	bio_add_page(bio, page, PAGE_SIZE, 0);
+	__bio_add_page(bio, page, PAGE_SIZE, 0);
 
 	bio->bi_end_io = end_bio_io_page;
 	bio->bi_private = page;
@@ -434,7 +434,7 @@ static int init_locking(struct gfs2_sbd *sdp, struct gfs2_holder *mount_gh,
 	error = gfs2_glock_get(sdp, GFS2_FREEZE_LOCK, &gfs2_freeze_glops,
 			       CREATE, &sdp->sd_freeze_gl);
 	if (error) {
-		fs_err(sdp, "can't create transaction glock: %d\n", error);
+		fs_err(sdp, "can't create freeze glock: %d\n", error);
 		goto fail_rename;
 	}
 
@@ -649,7 +649,7 @@ static int init_statfs(struct gfs2_sbd *sdp)
 	struct gfs2_jdesc *jd;
 	struct gfs2_inode *ip;
 
-	sdp->sd_statfs_inode = gfs2_lookup_simple(master, "statfs");
+	sdp->sd_statfs_inode = gfs2_lookup_meta(master, "statfs");
 	if (IS_ERR(sdp->sd_statfs_inode)) {
 		error = PTR_ERR(sdp->sd_statfs_inode);
 		fs_err(sdp, "can't read in statfs inode: %d\n", error);
@@ -658,7 +658,7 @@ static int init_statfs(struct gfs2_sbd *sdp)
 	if (sdp->sd_args.ar_spectator)
 		goto out;
 
-	pn = gfs2_lookup_simple(master, "per_node");
+	pn = gfs2_lookup_meta(master, "per_node");
 	if (IS_ERR(pn)) {
 		error = PTR_ERR(pn);
 		fs_err(sdp, "can't find per_node directory: %d\n", error);
@@ -675,7 +675,7 @@ static int init_statfs(struct gfs2_sbd *sdp)
 			goto free_local;
 		}
 		sprintf(buf, "statfs_change%u", jd->jd_jid);
-		lsi->si_sc_inode = gfs2_lookup_simple(pn, buf);
+		lsi->si_sc_inode = gfs2_lookup_meta(pn, buf);
 		if (IS_ERR(lsi->si_sc_inode)) {
 			error = PTR_ERR(lsi->si_sc_inode);
 			fs_err(sdp, "can't find local \"sc\" file#%u: %d\n",
@@ -734,15 +734,13 @@ static int init_journal(struct gfs2_sbd *sdp, int undo)
 	struct inode *master = d_inode(sdp->sd_master_dir);
 	struct gfs2_holder ji_gh;
 	struct gfs2_inode *ip;
-	int jindex = 1;
 	int error = 0;
 
-	if (undo) {
-		jindex = 0;
+	gfs2_holder_mark_uninitialized(&ji_gh);
+	if (undo)
 		goto fail_statfs;
-	}
 
-	sdp->sd_jindex = gfs2_lookup_simple(master, "jindex");
+	sdp->sd_jindex = gfs2_lookup_meta(master, "jindex");
 	if (IS_ERR(sdp->sd_jindex)) {
 		fs_err(sdp, "can't lookup journal index: %d\n", error);
 		return PTR_ERR(sdp->sd_jindex);
@@ -852,7 +850,6 @@ static int init_journal(struct gfs2_sbd *sdp, int undo)
 	sdp->sd_log_idle = 1;
 	set_bit(SDF_JOURNAL_CHECKED, &sdp->sd_flags);
 	gfs2_glock_dq_uninit(&ji_gh);
-	jindex = 0;
 	INIT_WORK(&sdp->sd_freeze_work, gfs2_freeze_func);
 	return 0;
 
@@ -869,7 +866,7 @@ fail_journal_gh:
 		gfs2_glock_dq_uninit(&sdp->sd_journal_gh);
 fail_jindex:
 	gfs2_jindex_free(sdp);
-	if (jindex)
+	if (gfs2_holder_initialized(&ji_gh))
 		gfs2_glock_dq_uninit(&ji_gh);
 fail:
 	iput(sdp->sd_jindex);
@@ -892,7 +889,7 @@ static int init_inodes(struct gfs2_sbd *sdp, int undo)
 		goto fail;
 
 	/* Read in the resource index inode */
-	sdp->sd_rindex = gfs2_lookup_simple(master, "rindex");
+	sdp->sd_rindex = gfs2_lookup_meta(master, "rindex");
 	if (IS_ERR(sdp->sd_rindex)) {
 		error = PTR_ERR(sdp->sd_rindex);
 		fs_err(sdp, "can't get resource index inode: %d\n", error);
@@ -901,7 +898,7 @@ static int init_inodes(struct gfs2_sbd *sdp, int undo)
 	sdp->sd_rindex_uptodate = 0;
 
 	/* Read in the quota inode */
-	sdp->sd_quota_inode = gfs2_lookup_simple(master, "quota");
+	sdp->sd_quota_inode = gfs2_lookup_meta(master, "quota");
 	if (IS_ERR(sdp->sd_quota_inode)) {
 		error = PTR_ERR(sdp->sd_quota_inode);
 		fs_err(sdp, "can't get quota file inode: %d\n", error);
@@ -945,7 +942,7 @@ static int init_per_node(struct gfs2_sbd *sdp, int undo)
 	if (undo)
 		goto fail_qc_gh;
 
-	pn = gfs2_lookup_simple(master, "per_node");
+	pn = gfs2_lookup_meta(master, "per_node");
 	if (IS_ERR(pn)) {
 		error = PTR_ERR(pn);
 		fs_err(sdp, "can't find per_node directory: %d\n", error);
@@ -953,7 +950,7 @@ static int init_per_node(struct gfs2_sbd *sdp, int undo)
 	}
 
 	sprintf(buf, "quota_change%u", sdp->sd_jdesc->jd_jid);
-	sdp->sd_qc_inode = gfs2_lookup_simple(pn, buf);
+	sdp->sd_qc_inode = gfs2_lookup_meta(pn, buf);
 	if (IS_ERR(sdp->sd_qc_inode)) {
 		error = PTR_ERR(sdp->sd_qc_inode);
 		fs_err(sdp, "can't find local \"qc\" file: %d\n", error);
@@ -1078,7 +1075,7 @@ hostdata_error:
 void gfs2_lm_unmount(struct gfs2_sbd *sdp)
 {
 	const struct lm_lockops *lm = sdp->sd_lockstruct.ls_ops;
-	if (likely(!gfs2_withdrawn(sdp)) && lm->lm_unmount)
+	if (!gfs2_withdrawing_or_withdrawn(sdp) && lm->lm_unmount)
 		lm->lm_unmount(sdp);
 }
 
@@ -1107,27 +1104,44 @@ static int init_threads(struct gfs2_sbd *sdp)
 	struct task_struct *p;
 	int error = 0;
 
-	p = kthread_run(gfs2_logd, sdp, "gfs2_logd");
+	p = kthread_create(gfs2_logd, sdp, "gfs2_logd/%s", sdp->sd_fsname);
 	if (IS_ERR(p)) {
 		error = PTR_ERR(p);
-		fs_err(sdp, "can't start logd thread: %d\n", error);
+		fs_err(sdp, "can't create logd thread: %d\n", error);
 		return error;
 	}
+	get_task_struct(p);
 	sdp->sd_logd_process = p;
 
-	p = kthread_run(gfs2_quotad, sdp, "gfs2_quotad");
+	p = kthread_create(gfs2_quotad, sdp, "gfs2_quotad/%s", sdp->sd_fsname);
 	if (IS_ERR(p)) {
 		error = PTR_ERR(p);
-		fs_err(sdp, "can't start quotad thread: %d\n", error);
+		fs_err(sdp, "can't create quotad thread: %d\n", error);
 		goto fail;
 	}
+	get_task_struct(p);
 	sdp->sd_quotad_process = p;
+
+	wake_up_process(sdp->sd_logd_process);
+	wake_up_process(sdp->sd_quotad_process);
 	return 0;
 
 fail:
-	kthread_stop(sdp->sd_logd_process);
+	kthread_stop_put(sdp->sd_logd_process);
 	sdp->sd_logd_process = NULL;
 	return error;
+}
+
+void gfs2_destroy_threads(struct gfs2_sbd *sdp)
+{
+	if (sdp->sd_logd_process) {
+		kthread_stop_put(sdp->sd_logd_process);
+		sdp->sd_logd_process = NULL;
+	}
+	if (sdp->sd_quotad_process) {
+		kthread_stop_put(sdp->sd_quotad_process);
+		sdp->sd_quotad_process = NULL;
+	}
 }
 
 /**
@@ -1143,7 +1157,6 @@ static int gfs2_fill_super(struct super_block *sb, struct fs_context *fc)
 	int silent = fc->sb_flags & SB_SILENT;
 	struct gfs2_sbd *sdp;
 	struct gfs2_holder mount_gh;
-	struct gfs2_holder freeze_gh;
 	int error;
 
 	sdp = init_sbd(sb);
@@ -1197,9 +1210,15 @@ static int gfs2_fill_super(struct super_block *sb, struct fs_context *fc)
 
 	snprintf(sdp->sd_fsname, sizeof(sdp->sd_fsname), "%s", sdp->sd_table_name);
 
+	sdp->sd_delete_wq = alloc_workqueue("gfs2-delete/%s",
+			WQ_MEM_RECLAIM | WQ_FREEZABLE, 0, sdp->sd_fsname);
+	error = -ENOMEM;
+	if (!sdp->sd_delete_wq)
+		goto fail_free;
+
 	error = gfs2_sys_fs_add(sdp);
 	if (error)
-		goto fail_free;
+		goto fail_delete_wq;
 
 	gfs2_create_debugfs_file(sdp);
 
@@ -1260,27 +1279,20 @@ static int gfs2_fill_super(struct super_block *sb, struct fs_context *fc)
 
 	if (!sb_rdonly(sb)) {
 		error = init_threads(sdp);
-		if (error) {
-			gfs2_withdraw_delayed(sdp);
+		if (error)
 			goto fail_per_node;
-		}
 	}
 
-	error = gfs2_freeze_lock(sdp, &freeze_gh, 0);
+	error = gfs2_freeze_lock_shared(sdp);
 	if (error)
 		goto fail_per_node;
 
 	if (!sb_rdonly(sb))
 		error = gfs2_make_fs_rw(sdp);
 
-	gfs2_freeze_unlock(&freeze_gh);
 	if (error) {
-		if (sdp->sd_quotad_process)
-			kthread_stop(sdp->sd_quotad_process);
-		sdp->sd_quotad_process = NULL;
-		if (sdp->sd_logd_process)
-			kthread_stop(sdp->sd_logd_process);
-		sdp->sd_logd_process = NULL;
+		gfs2_freeze_unlock(&sdp->sd_freeze_gh);
+		gfs2_destroy_threads(sdp);
 		fs_err(sdp, "can't make FS RW: %d\n", error);
 		goto fail_per_node;
 	}
@@ -1309,6 +1321,8 @@ fail_lm:
 fail_debug:
 	gfs2_delete_debugfs_file(sdp);
 	gfs2_sys_fs_del(sdp);
+fail_delete_wq:
+	destroy_workqueue(sdp->sd_delete_wq);
 fail_free:
 	free_sbd(sdp);
 	sb->s_fs_info = NULL;
@@ -1378,6 +1392,7 @@ static const struct constant_table gfs2_param_quota[] = {
 	{"off",        GFS2_QUOTA_OFF},
 	{"account",    GFS2_QUOTA_ACCOUNT},
 	{"on",         GFS2_QUOTA_ON},
+	{"quiet",      GFS2_QUOTA_QUIET},
 	{}
 };
 
@@ -1585,12 +1600,6 @@ static int gfs2_reconfigure(struct fs_context *fc)
 		fc->sb_flags |= SB_RDONLY;
 
 	if ((sb->s_flags ^ fc->sb_flags) & SB_RDONLY) {
-		struct gfs2_holder freeze_gh;
-
-		error = gfs2_freeze_lock(sdp, &freeze_gh, 0);
-		if (error)
-			return -EINVAL;
-
 		if (fc->sb_flags & SB_RDONLY) {
 			gfs2_make_fs_ro(sdp);
 		} else {
@@ -1598,7 +1607,6 @@ static int gfs2_reconfigure(struct fs_context *fc)
 			if (error)
 				errorfc(fc, "unable to remount read-write");
 		}
-		gfs2_freeze_unlock(&freeze_gh);
 	}
 	sdp->sd_args = *newargs;
 
@@ -1720,6 +1728,55 @@ static int gfs2_meta_init_fs_context(struct fs_context *fc)
 	return 0;
 }
 
+/**
+ * gfs2_evict_inodes - evict inodes cooperatively
+ * @sb: the superblock
+ *
+ * When evicting an inode with a zero link count, we are trying to upgrade the
+ * inode's iopen glock from SH to EX mode in order to determine if we can
+ * delete the inode.  The other nodes are supposed to evict the inode from
+ * their caches if they can, and to poke the inode's inode glock if they cannot
+ * do so.  Either behavior allows gfs2_upgrade_iopen_glock() to proceed
+ * quickly, but if the other nodes are not cooperating, the lock upgrading
+ * attempt will time out.  Since inodes are evicted sequentially, this can add
+ * up quickly.
+ *
+ * Function evict_inodes() tries to keep the s_inode_list_lock list locked over
+ * a long time, which prevents other inodes from being evicted concurrently.
+ * This precludes the cooperative behavior we are looking for.  This special
+ * version of evict_inodes() avoids that.
+ *
+ * Modeled after drop_pagecache_sb().
+ */
+static void gfs2_evict_inodes(struct super_block *sb)
+{
+	struct inode *inode, *toput_inode = NULL;
+	struct gfs2_sbd *sdp = sb->s_fs_info;
+
+	set_bit(SDF_EVICTING, &sdp->sd_flags);
+
+	spin_lock(&sb->s_inode_list_lock);
+	list_for_each_entry(inode, &sb->s_inodes, i_sb_list) {
+		spin_lock(&inode->i_lock);
+		if ((inode->i_state & (I_FREEING|I_WILL_FREE|I_NEW)) &&
+		    !need_resched()) {
+			spin_unlock(&inode->i_lock);
+			continue;
+		}
+		atomic_inc(&inode->i_count);
+		spin_unlock(&inode->i_lock);
+		spin_unlock(&sb->s_inode_list_lock);
+
+		iput(toput_inode);
+		toput_inode = inode;
+
+		cond_resched();
+		spin_lock(&sb->s_inode_list_lock);
+	}
+	spin_unlock(&sb->s_inode_list_lock);
+	iput(toput_inode);
+}
+
 static void gfs2_kill_sb(struct super_block *sb)
 {
 	struct gfs2_sbd *sdp = sb->s_fs_info;
@@ -1735,6 +1792,18 @@ static void gfs2_kill_sb(struct super_block *sb)
 	sdp->sd_root_dir = NULL;
 	sdp->sd_master_dir = NULL;
 	shrink_dcache_sb(sb);
+
+	gfs2_evict_inodes(sb);
+
+	/*
+	 * Flush and then drain the delete workqueue here (via
+	 * destroy_workqueue()) to ensure that any delete work that
+	 * may be running will also see the SDF_KILL flag.
+	 */
+	set_bit(SDF_KILL, &sdp->sd_flags);
+	gfs2_flush_delete_work(sdp);
+	destroy_workqueue(sdp->sd_delete_wq);
+
 	kill_block_super(sb);
 }
 

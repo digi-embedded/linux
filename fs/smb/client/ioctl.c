@@ -143,6 +143,7 @@ static long smb_mnt_get_fsinfo(unsigned int xid, struct cifs_tcon *tcon,
 
 	fsinf->version = 1;
 	fsinf->protocol_id = tcon->ses->server->vals->protocol_id;
+	fsinf->tcon_flags = tcon->Flags;
 	fsinf->device_characteristics =
 			le32_to_cpu(tcon->fsDevInfo.DeviceCharacteristics);
 	fsinf->device_type = le32_to_cpu(tcon->fsDevInfo.DeviceType);
@@ -246,17 +247,21 @@ static int cifs_dump_full_key(struct cifs_tcon *tcon, struct smb3_full_key_debug
 		spin_lock(&cifs_tcp_ses_lock);
 		list_for_each_entry(server_it, &cifs_tcp_ses_list, tcp_ses_list) {
 			list_for_each_entry(ses_it, &server_it->smb_ses_list, smb_ses_list) {
-				if (ses_it->Suid == out.session_id) {
+				spin_lock(&ses_it->ses_lock);
+				if (ses_it->ses_status != SES_EXITING &&
+				    ses_it->Suid == out.session_id) {
 					ses = ses_it;
 					/*
 					 * since we are using the session outside the crit
 					 * section, we need to make sure it won't be released
 					 * so increment its refcount
 					 */
-					ses->ses_count++;
+					cifs_smb_ses_inc_refcount(ses);
+					spin_unlock(&ses_it->ses_lock);
 					found = true;
 					goto search_end;
 				}
+				spin_unlock(&ses_it->ses_lock);
 			}
 		}
 search_end:
@@ -335,19 +340,28 @@ long cifs_ioctl(struct file *filep, unsigned int command, unsigned long arg)
 	struct tcon_link *tlink;
 	struct cifs_sb_info *cifs_sb;
 	__u64	ExtAttrBits = 0;
+#ifdef CONFIG_CIFS_POSIX
+#ifdef CONFIG_CIFS_ALLOW_INSECURE_LEGACY
 	__u64   caps;
+#endif /* CONFIG_CIFS_ALLOW_INSECURE_LEGACY */
+#endif /* CONFIG_CIFS_POSIX */
 
 	xid = get_xid();
 
 	cifs_dbg(FYI, "cifs ioctl 0x%x\n", command);
+	if (pSMBFile == NULL)
+		trace_smb3_ioctl(xid, 0, command);
+	else
+		trace_smb3_ioctl(xid, pSMBFile->fid.persistent_fid, command);
+
 	switch (command) {
 		case FS_IOC_GETFLAGS:
 			if (pSMBFile == NULL)
 				break;
 			tcon = tlink_tcon(pSMBFile->tlink);
-			caps = le64_to_cpu(tcon->fsUnixInfo.Capability);
 #ifdef CONFIG_CIFS_POSIX
 #ifdef CONFIG_CIFS_ALLOW_INSECURE_LEGACY
+			caps = le64_to_cpu(tcon->fsUnixInfo.Capability);
 			if (CIFS_UNIX_EXTATTR_CAP & caps) {
 				__u64	ExtAttrMask = 0;
 				rc = CIFSGetExtAttr(xid, tcon,
@@ -454,16 +468,21 @@ long cifs_ioctl(struct file *filep, unsigned int command, unsigned long arg)
 			 * Dump encryption keys. This is an old ioctl that only
 			 * handles AES-128-{CCM,GCM}.
 			 */
-			if (pSMBFile == NULL)
-				break;
 			if (!capable(CAP_SYS_ADMIN)) {
 				rc = -EACCES;
 				break;
 			}
 
-			tcon = tlink_tcon(pSMBFile->tlink);
+			cifs_sb = CIFS_SB(inode->i_sb);
+			tlink = cifs_sb_tlink(cifs_sb);
+			if (IS_ERR(tlink)) {
+				rc = PTR_ERR(tlink);
+				break;
+			}
+			tcon = tlink_tcon(tlink);
 			if (!smb3_encryption_required(tcon)) {
 				rc = -EOPNOTSUPP;
+				cifs_put_tlink(tlink);
 				break;
 			}
 			pkey_inf.cipher_type =
@@ -480,6 +499,7 @@ long cifs_ioctl(struct file *filep, unsigned int command, unsigned long arg)
 				rc = -EFAULT;
 			else
 				rc = 0;
+			cifs_put_tlink(tlink);
 			break;
 		case CIFS_DUMP_FULL_KEY:
 			/*
@@ -491,8 +511,16 @@ long cifs_ioctl(struct file *filep, unsigned int command, unsigned long arg)
 				rc = -EACCES;
 				break;
 			}
-			tcon = tlink_tcon(pSMBFile->tlink);
+			cifs_sb = CIFS_SB(inode->i_sb);
+			tlink = cifs_sb_tlink(cifs_sb);
+			if (IS_ERR(tlink)) {
+				rc = PTR_ERR(tlink);
+				break;
+			}
+
+			tcon = tlink_tcon(tlink);
 			rc = cifs_dump_full_key(tcon, (void __user *)arg);
+			cifs_put_tlink(tlink);
 			break;
 		case CIFS_IOC_NOTIFY:
 			if (!S_ISDIR(inode->i_mode)) {

@@ -481,7 +481,12 @@ static bool brcm_avs_is_firmware_loaded(struct private_data *priv)
 static unsigned int brcm_avs_cpufreq_get(unsigned int cpu)
 {
 	struct cpufreq_policy *policy = cpufreq_cpu_get(cpu);
-	struct private_data *priv = policy->driver_data;
+	struct private_data *priv;
+
+	if (!policy)
+		return 0;
+
+	priv = policy->driver_data;
 
 	cpufreq_cpu_put(policy);
 
@@ -753,16 +758,11 @@ static int brcm_avs_cpufreq_probe(struct platform_device *pdev)
 	return ret;
 }
 
-static int brcm_avs_cpufreq_remove(struct platform_device *pdev)
+static void brcm_avs_cpufreq_remove(struct platform_device *pdev)
 {
-	int ret;
-
-	ret = cpufreq_unregister_driver(&brcm_avs_driver);
-	WARN_ON(ret);
+	cpufreq_unregister_driver(&brcm_avs_driver);
 
 	brcm_avs_prepare_uninit(pdev);
-
-	return 0;
 }
 
 static const struct of_device_id brcm_avs_cpufreq_match[] = {
@@ -777,7 +777,7 @@ static struct platform_driver brcm_avs_cpufreq_platdrv = {
 		.of_match_table = brcm_avs_cpufreq_match,
 	},
 	.probe		= brcm_avs_cpufreq_probe,
-	.remove		= brcm_avs_cpufreq_remove,
+	.remove_new	= brcm_avs_cpufreq_remove,
 };
 module_platform_driver(brcm_avs_cpufreq_platdrv);
 

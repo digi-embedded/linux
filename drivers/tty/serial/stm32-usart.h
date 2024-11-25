@@ -27,6 +27,7 @@ struct stm32_usart_offsets {
 	u16 tdr;
 	u16 presc;
 	u16 hwcfgr1;
+	u16 hwcfgr2;
 };
 
 struct stm32_backup_regs {
@@ -117,8 +118,6 @@ struct stm32_usart_info {
 #define USART_CR1_M1		BIT(28)		/* F7 */
 #define USART_CR1_IE_MASK	(GENMASK(8, 4) | BIT(14) | BIT(26) | BIT(27))
 #define USART_CR1_FIFOEN	BIT(29)		/* H7 */
-#define USART_CR1_DEAT_SHIFT 21
-#define USART_CR1_DEDT_SHIFT 16
 
 /* USART_CR2 */
 #define USART_CR2_ADD_MASK	GENMASK(3, 0)	/* F4 */
@@ -208,6 +207,9 @@ static const unsigned int STM32_USART_PRESC_VAL[] = {1, 2, 4, 6, 8, 10, 12, 16, 
 #define USART_HWCFCR1_CFG7	GENMASK(27, 24)	/* MP1 */
 #define USART_HWCFCR1_CFG8	GENMASK(31, 28)	/* MP1 */
 
+/* USART_HWCFCR2 */
+#define USART_HWCFCR2_CFG3	GENMASK(11, 8)	/* MP2 */
+
 #define STM32_SERIAL_NAME "ttySTM"
 #define STM32_MAX_PORTS 9
 #define STM32H7_USART_FIFO_SIZE 16
@@ -223,6 +225,7 @@ static const unsigned int STM32_USART_PRESC_VAL[] = {1, 2, 4, 6, 8, 10, 12, 16, 
 struct stm32_port {
 	struct uart_port port;
 	struct clk *clk;
+	struct clk *clk_am;
 	const struct stm32_usart_info *info;
 	struct dma_chan *rx_ch;  /* dma rx channel            */
 	dma_addr_t rx_dma_buf;   /* dma rx buffer bus address */
@@ -245,6 +248,7 @@ struct stm32_port {
 	int rxftcfg;		/* RX FIFO threshold CFG      */
 	int txftcfg;		/* TX FIFO threshold CFG      */
 	bool wakeup_src;
+	bool wakeup_am;		/* Autonomous mode enabled */
 	int rdr_mask;		/* receive data register mask */
 	struct mctrl_gpios *gpios; /* modem control gpios */
 	struct dma_tx_state rx_dma_state;

@@ -102,6 +102,7 @@ enum bpf_enum_value_kind {
 	case 2: val = *(const unsigned short *)p; break;		      \
 	case 4: val = *(const unsigned int *)p; break;			      \
 	case 8: val = *(const unsigned long long *)p; break;		      \
+	default: val = 0; break;					      \
 	}								      \
 	val <<= __CORE_RELO(s, field, LSHIFT_U64);			      \
 	if (__CORE_RELO(s, field, SIGNED))				      \
@@ -364,7 +365,7 @@ enum bpf_enum_value_kind {
 
 /* Non-CO-RE variant of BPF_CORE_READ_INTO() */
 #define BPF_PROBE_READ_INTO(dst, src, a, ...) ({			    \
-	___core_read(bpf_probe_read, bpf_probe_read,			    \
+	___core_read(bpf_probe_read_kernel, bpf_probe_read_kernel,	    \
 		     dst, (src), a, ##__VA_ARGS__)			    \
 })
 
@@ -400,7 +401,7 @@ enum bpf_enum_value_kind {
 
 /* Non-CO-RE variant of BPF_CORE_READ_STR_INTO() */
 #define BPF_PROBE_READ_STR_INTO(dst, src, a, ...) ({			    \
-	___core_read(bpf_probe_read_str, bpf_probe_read,		    \
+	___core_read(bpf_probe_read_kernel_str, bpf_probe_read_kernel,	    \
 		     dst, (src), a, ##__VA_ARGS__)			    \
 })
 

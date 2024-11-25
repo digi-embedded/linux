@@ -59,7 +59,7 @@ properties:
   power-domains:
     maxItems: 1
 
-  feature-domains:
+  access-controllers:
     maxItems: 1
 
 required:
@@ -77,9 +77,9 @@ unevaluatedProperties: false
 examples:
   - |
     #include <dt-bindings/phy/phy.h>
-    #include <dt-bindings/clock/stm32mp25-clks.h>
+    #include <dt-bindings/clock/st,stm32mp25-rcc.h>
     #include <dt-bindings/gpio/gpio.h>
-    #include <dt-bindings/reset/stm32mp25-resets.h>
+    #include <dt-bindings/reset/st,stm32mp25-rcc.h>
 
     pcie_ep: pcie-ep@48400000 {
              compatible = "st,stm32mp25-pcie-ep";

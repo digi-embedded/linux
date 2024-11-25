@@ -15,6 +15,7 @@
 #include <linux/of.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/platform_device.h>
+#include <linux/pm_runtime.h>
 #include <linux/types.h>
 
 #define TIM_CCMR_CCXS	(BIT(8) | BIT(0))
@@ -214,19 +215,27 @@ static int stm32_count_enable_write(struct counter_device *counter,
 {
 	struct stm32_timer_cnt *const priv = counter_priv(counter);
 	u32 cr1;
+	int ret;
 
 	if (enable) {
 		regmap_read(priv->regmap, TIM_CR1, &cr1);
-		if (!(cr1 & TIM_CR1_CEN))
-			clk_enable(priv->clk);
+		if (!(cr1 & TIM_CR1_CEN)) {
+			ret = pm_runtime_resume_and_get(counter->parent);
+			if (ret < 0)
+				return ret;
+		}
 
 		regmap_update_bits(priv->regmap, TIM_CR1, TIM_CR1_CEN,
 				   TIM_CR1_CEN);
 	} else {
 		regmap_read(priv->regmap, TIM_CR1, &cr1);
+		if (cr1 & TIM_CR1_CEN) {
+			ret = pm_runtime_put_sync_suspend(counter->parent);
+			if (ret < 0)
+				return ret;
+		}
+
 		regmap_update_bits(priv->regmap, TIM_CR1, TIM_CR1_CEN, 0);
-		if (cr1 & TIM_CR1_CEN)
-			clk_disable(priv->clk);
 	}
 
 	/* Keep enabled state to properly handle low power states */
@@ -670,6 +679,7 @@ static void stm32_timer_cnt_detect_channels(struct device *dev,
 static const char * const stm32_timer_trigger_compat[] = {
 	"st,stm32-timer-trigger",
 	"st,stm32h7-timer-trigger",
+	"st,stm32mp21-timer-trigger",
 	"st,stm32mp25-timer-trigger",
 };
 
@@ -780,6 +790,10 @@ static int stm32_timer_cnt_probe(struct platform_device *pdev)
 	/* Reset input selector to its default input */
 	regmap_write(priv->regmap, TIM_TISEL, 0x0);
 
+	ret = devm_pm_runtime_enable(dev);
+	if (ret)
+		return ret;
+
 	/* Register Counter device */
 	ret = devm_counter_add(dev, counter);
 	if (ret < 0)
@@ -788,9 +802,10 @@ static int stm32_timer_cnt_probe(struct platform_device *pdev)
 	return ret;
 }
 
-static int __maybe_unused stm32_timer_cnt_suspend(struct device *dev)
+static int stm32_timer_cnt_suspend(struct device *dev)
 {
 	struct stm32_timer_cnt *priv = dev_get_drvdata(dev);
+	int ret;
 
 	/* Only take care of enabled counter: don't disturb other MFD child */
 	if (priv->enabled) {
@@ -802,13 +817,16 @@ static int __maybe_unused stm32_timer_cnt_suspend(struct device *dev)
 
 		/* Disable the counter */
 		regmap_update_bits(priv->regmap, TIM_CR1, TIM_CR1_CEN, 0);
-		clk_disable(priv->clk);
+
+		ret = pm_runtime_force_suspend(dev);
+		if (ret)
+			return ret;
 	}
 
 	return pinctrl_pm_select_sleep_state(dev);
 }
 
-static int __maybe_unused stm32_timer_cnt_resume(struct device *dev)
+static int stm32_timer_cnt_resume(struct device *dev)
 {
 	struct stm32_timer_cnt *priv = dev_get_drvdata(dev);
 	int ret;
@@ -818,7 +836,9 @@ static int __maybe_unused stm32_timer_cnt_resume(struct device *dev)
 		return ret;
 
 	if (priv->enabled) {
-		clk_enable(priv->clk);
+		ret = pm_runtime_force_resume(dev);
+		if (ret)
+			return ret;
 
 		/* Restore registers that may have been lost */
 		regmap_write(priv->regmap, TIM_SMCR, priv->bak.smcr);
@@ -832,11 +852,35 @@ static int __maybe_unused stm32_timer_cnt_resume(struct device *dev)
 	return 0;
 }
 
-static SIMPLE_DEV_PM_OPS(stm32_timer_cnt_pm_ops, stm32_timer_cnt_suspend,
-			 stm32_timer_cnt_resume);
+static int stm32_timer_cnt_runtime_suspend(struct device *dev)
+{
+	struct stm32_timer_cnt *priv = dev_get_drvdata(dev);
+
+	clk_disable(priv->clk);
+
+	return 0;
+}
+
+static int stm32_timer_cnt_runtime_resume(struct device *dev)
+{
+	struct stm32_timer_cnt *priv = dev_get_drvdata(dev);
+	int ret;
+
+	ret = clk_enable(priv->clk);
+	if (ret)
+		dev_err(dev, "failed to enable clock. Error [%d]\n", ret);
+
+	return ret;
+}
+
+static const struct dev_pm_ops stm32_timer_cnt_pm_ops = {
+	SYSTEM_SLEEP_PM_OPS(stm32_timer_cnt_suspend, stm32_timer_cnt_resume)
+	RUNTIME_PM_OPS(stm32_timer_cnt_runtime_suspend, stm32_timer_cnt_runtime_resume, NULL)
+};
 
 static const struct of_device_id stm32_timer_cnt_of_match[] = {
 	{ .compatible = "st,stm32-timer-counter", },
+	{ .compatible = "st,stm32mp21-timer-counter", },
 	{ .compatible = "st,stm32mp25-timer-counter", },
 	{},
 };
@@ -847,7 +891,7 @@ static struct platform_driver stm32_timer_cnt_driver = {
 	.driver = {
 		.name = "stm32-timer-counter",
 		.of_match_table = stm32_timer_cnt_of_match,
-		.pm = &stm32_timer_cnt_pm_ops,
+		.pm = pm_ptr(&stm32_timer_cnt_pm_ops),
 	},
 };
 module_platform_driver(stm32_timer_cnt_driver);

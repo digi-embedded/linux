@@ -30,6 +30,16 @@ void *pci_traverse_device_nodes(struct device_node *start,
 				void *data);
 extern void pci_devs_phb_init_dynamic(struct pci_controller *phb);
 
+#if defined(CONFIG_IOMMU_API) && (defined(CONFIG_PPC_PSERIES) || \
+				  defined(CONFIG_PPC_POWERNV))
+extern void ppc_iommu_register_device(struct pci_controller *phb);
+extern void ppc_iommu_unregister_device(struct pci_controller *phb);
+#else
+static inline void ppc_iommu_register_device(struct pci_controller *phb) { }
+static inline void ppc_iommu_unregister_device(struct pci_controller *phb) { }
+#endif
+
+
 /* From rtas_pci.h */
 extern void init_pci_config_tokens (void);
 extern unsigned long get_phb_buid (struct device_node *);
@@ -57,11 +67,19 @@ void eeh_sysfs_remove_device(struct pci_dev *pdev);
 
 #endif /* CONFIG_EEH */
 
+#ifdef CONFIG_FSL_ULI1575
+void __init uli_init(void);
+#endif /* CONFIG_FSL_ULI1575 */
+
 #define PCI_BUSNO(bdfn) ((bdfn >> 8) & 0xff)
 
 #else /* CONFIG_PCI */
 static inline void init_pci_config_tokens(void) { }
 #endif /* !CONFIG_PCI */
+
+#if !defined(CONFIG_PCI) || !defined(CONFIG_FSL_ULI1575)
+static inline void __init uli_init(void) {}
+#endif /* !defined(CONFIG_PCI) || !defined(CONFIG_FSL_ULI1575) */
 
 #endif /* __KERNEL__ */
 #endif /* _ASM_POWERPC_PPC_PCI_H */

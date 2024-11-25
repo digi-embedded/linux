@@ -88,6 +88,8 @@
 
 		l2: l2-cache0 {
 			compatible = "cache";
+			cache-level = <2>;
+			cache-unified;
 		};
 	};
 
@@ -337,7 +339,7 @@
 		};
 
 		spdifin: audio-controller@400 {
-			compatible = "amlogic,g12a-spdifin",
+			compatible = "amlogic,sm1-spdifin",
 				     "amlogic,axg-spdifin";
 			reg = <0x0 0x400 0x0 0x30>;
 			#sound-dai-cells = <0>;
@@ -351,7 +353,7 @@
 		};
 
 		spdifout_a: audio-controller@480 {
-			compatible = "amlogic,g12a-spdifout",
+			compatible = "amlogic,sm1-spdifout",
 				     "amlogic,axg-spdifout";
 			reg = <0x0 0x480 0x0 0x50>;
 			#sound-dai-cells = <0>;
@@ -516,8 +518,16 @@
 		     "amlogic,meson-gpio-intc";
 };
 
+&hdmi_tx {
+	power-domains = <&pwrc PWRC_SM1_VPU_ID>;
+};
+
 &pcie {
 	power-domains = <&pwrc PWRC_SM1_PCIE_ID>;
+};
+
+&pmu {
+	compatible = "amlogic,sm1-ddr-pmu";
 };
 
 &pwrc {
@@ -542,4 +552,8 @@
 
 &usb {
 	power-domains = <&pwrc PWRC_SM1_USB_ID>;
+};
+
+&npu {
+	power-domains = <&pwrc PWRC_SM1_NNA_ID>;
 };

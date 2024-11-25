@@ -11,9 +11,12 @@
 #include <linux/io.h>
 #include <linux/mailbox_controller.h>
 #include <linux/module.h>
+#include <linux/of.h>
 #include <linux/platform_device.h>
 #include <linux/pm_wakeirq.h>
 #include <linux/workqueue.h>
+
+#include "mailbox.h"
 
 #define IPCC_XCR		0x000
 #define XCR_RXOIE		BIT(0)
@@ -203,8 +206,9 @@ static int stm32_ipcc_send_data(struct mbox_chan *link, void *data)
 			    TX_BIT_CHAN(chan));
 
 	/* unmask 'tx channel free' interrupt */
-	stm32_ipcc_clr_bits(&ipcc->lock, ipcc->reg_proc + IPCC_XMR,
-			    TX_BIT_CHAN(chan));
+	if (link->txdone_method == TXDONE_BY_IRQ)
+		stm32_ipcc_clr_bits(&ipcc->lock, ipcc->reg_proc + IPCC_XMR,
+				    TX_BIT_CHAN(chan));
 
 	return 0;
 }
@@ -215,9 +219,10 @@ static int stm32_ipcc_startup(struct mbox_chan *link)
 	unsigned long chan = chnl->chan;
 	struct stm32_ipcc *ipcc = container_of(link->mbox, struct stm32_ipcc,
 					       controller);
-	int ret;
+	int ret = 0;
 
-	ret = clk_prepare_enable(ipcc->clk);
+	if (ipcc->clk)
+		ret = clk_prepare_enable(ipcc->clk);
 	if (ret) {
 		dev_err(ipcc->controller.dev, "can not enable the clock\n");
 		return ret;
@@ -244,7 +249,8 @@ static void stm32_ipcc_shutdown(struct mbox_chan *link)
 	if (!chnl->irq_ctx)
 		flush_work(&chnl->rx_work);
 
-	clk_disable_unprepare(ipcc->clk);
+	if (ipcc->clk)
+		clk_disable_unprepare(ipcc->clk);
 }
 
 static int stm32_ipcc_check_rif(struct stm32_ipcc *ipcc, unsigned long chan)
@@ -313,7 +319,7 @@ static int stm32_ipcc_probe(struct platform_device *pdev)
 	struct stm32_ipcc *ipcc;
 	u32 ip_ver, hwcfg, cidcfgr, cid, cid_mask, cfen;
 	unsigned long i;
-	int ret;
+	int ret = 0;
 
 	if (!np) {
 		dev_err(dev, "No DT found\n");
@@ -344,12 +350,17 @@ static int stm32_ipcc_probe(struct platform_device *pdev)
 
 	ipcc->reg_proc = ipcc->reg_base + ipcc->proc_id * IPCC_PROC_OFFST;
 
-	/* clock */
-	ipcc->clk = devm_clk_get(dev, NULL);
+	/*
+	 * clock : When IPCC is used for the SCMI server, the clock node is not present
+	 * because IPCC needs to be probed before the clock framework, which relies on
+	 * scmi services.In such case the IPCC clock has to be managed by the boot stage
+	 * not by the Linux.
+	 */
+	ipcc->clk = devm_clk_get_optional(dev, NULL);
 	if (IS_ERR(ipcc->clk))
 		return PTR_ERR(ipcc->clk);
-
-	ret = clk_prepare_enable(ipcc->clk);
+	if (ipcc->clk)
+		ret = clk_prepare_enable(ipcc->clk);
 	if (ret) {
 		dev_err(dev, "can not enable the clock\n");
 		return ret;
@@ -452,7 +463,8 @@ static int stm32_ipcc_probe(struct platform_device *pdev)
 		 FIELD_GET(VER_MINREV_MASK, ip_ver),
 		 ipcc->controller.num_chans, ipcc->proc_id);
 
-	clk_disable_unprepare(ipcc->clk);
+	if (ipcc->clk)
+		clk_disable_unprepare(ipcc->clk);
 	return 0;
 
 err_irq_wkp:
@@ -461,7 +473,8 @@ err_irq_wkp:
 err_init_wkp:
 	device_set_wakeup_capable(dev, false);
 err_clk:
-	clk_disable_unprepare(ipcc->clk);
+	if (ipcc->clk)
+		clk_disable_unprepare(ipcc->clk);
 	return ret;
 }
 
@@ -521,7 +534,12 @@ static struct platform_driver stm32_ipcc_driver = {
 	.remove		= stm32_ipcc_remove,
 };
 
-module_platform_driver(stm32_ipcc_driver);
+static int __init ipcc_driver_init(void)
+{
+	return platform_driver_register(&stm32_ipcc_driver);
+}
+
+arch_initcall(ipcc_driver_init);
 
 MODULE_AUTHOR("Ludovic Barre <ludovic.barre@st.com>");
 MODULE_AUTHOR("Fabien Dessenne <fabien.dessenne@st.com>");

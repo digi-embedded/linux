@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL
 /*
- * Copyright (C) STMicroelectronics 2023 - All Rights Reserved
+ * Copyright (C) STMicroelectronics 2024 - All Rights Reserved
  * Author(s): Patrice Chotard <patrice.chotard@foss.st.com> for STMicroelectronics.
  */
 
@@ -200,8 +200,13 @@ static int stm32_ospi_wait_poll_status(struct stm32_ospi *ospi,
 	writel_relaxed(cr | CR_SMIE, regs_base + OSPI_CR);
 
 	if (!wait_for_completion_timeout(&omi->match_completion,
-					 msecs_to_jiffies(ospi->status_timeout)))
-		return -ETIMEDOUT;
+					 msecs_to_jiffies(ospi->status_timeout))) {
+		u32 sr = readl_relaxed(regs_base + OSPI_SR);
+
+		/* Avoid false timeout */
+		if (!(sr & SR_SMF))
+			return -ETIMEDOUT;
+	}
 
 	writel_relaxed(FCR_CSMF, regs_base + OSPI_FCR);
 
@@ -282,6 +287,10 @@ static int stm32_ospi_send(struct spi_device *spi, const struct spi_mem_op *op)
 	if (op->cmd.dtr) {
 		ccr |= CCR_IDTR;
 		ccr |= CCR_DQSE;
+
+		if (FIELD_GET(DCR2_PRESC_MASK,
+			      readl_relaxed(regs_base + OSPI_DCR2)))
+			tcr |= TCR_DHQC;
 	}
 
 	if (op->addr.dtr)
@@ -484,8 +493,7 @@ static int stm32_ospi_str_calibration(struct stm32_ospi *ospi)
 	 * Set memory device at low frequency (50MHz) and sent
 	 * READID (0x9F) command, save the answer as golden answer
 	 */
-	flash->presc = DIV_ROUND_UP(omi->clk_rate,
-				    STM32_DLYB_FREQ_THRESHOLD) - 1;
+	flash->presc = DIV_ROUND_UP(omi->clk_rate, STM32_DLYB_FREQ_THRESHOLD) - 1;
 	stm32_ospi_set_prescaler(ospi, flash->presc);
 
 	ret = stm32_ospi_readid(omi);
@@ -567,11 +575,8 @@ static int stm32_ospi_dtr_calibration(struct stm32_ospi *ospi)
 	writel_relaxed(flash->dcr_reg, regs_base + OSPI_DCR1);
 
 	prescaler = FIELD_GET(DCR2_PRESC_MASK,
-			      readl(regs_base + OSPI_DCR2));
+			      readl_relaxed(regs_base + OSPI_DCR2));
 	bus_freq = DIV_ROUND_UP(omi->clk_rate, prescaler + 1);
-
-	if (prescaler)
-		writel_relaxed(TCR_DHQC, regs_base + OSPI_TCR);
 
 	if (bus_freq <= STM32_DLYB_FREQ_THRESHOLD) {
 		bypass_mode = true;

@@ -191,6 +191,7 @@ static int lp8788_backlight_register(struct lp8788_bl *bl)
 	int init_brt;
 	char *name;
 
+	memset(&props, 0, sizeof(struct backlight_properties));
 	props.type = BACKLIGHT_PLATFORM;
 	props.max_brightness = MAX_BRIGHTNESS;
 
@@ -298,7 +299,7 @@ err_dev:
 	return ret;
 }
 
-static int lp8788_backlight_remove(struct platform_device *pdev)
+static void lp8788_backlight_remove(struct platform_device *pdev)
 {
 	struct lp8788_bl *bl = platform_get_drvdata(pdev);
 	struct backlight_device *bl_dev = bl->bl_dev;
@@ -307,13 +308,11 @@ static int lp8788_backlight_remove(struct platform_device *pdev)
 	backlight_update_status(bl_dev);
 	sysfs_remove_group(&pdev->dev.kobj, &lp8788_attr_group);
 	lp8788_backlight_unregister(bl);
-
-	return 0;
 }
 
 static struct platform_driver lp8788_bl_driver = {
 	.probe = lp8788_backlight_probe,
-	.remove = lp8788_backlight_remove,
+	.remove_new = lp8788_backlight_remove,
 	.driver = {
 		.name = LP8788_DEV_BACKLIGHT,
 	},

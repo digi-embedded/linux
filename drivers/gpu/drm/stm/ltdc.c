@@ -8,14 +8,14 @@
  *          Mickael Reulier <mickael.reulier@st.com>
  */
 
+#include <linux/bus/stm32_firewall_device.h>
 #include <linux/clk.h>
 #include <linux/component.h>
 #include <linux/delay.h>
 #include <linux/interrupt.h>
 #include <linux/media-bus-format.h>
 #include <linux/module.h>
-#include <linux/of_address.h>
-#include <linux/of_device.h>
+#include <linux/of.h>
 #include <linux/of_graph.h>
 #include <linux/of_reserved_mem.h>
 #include <linux/pinctrl/consumer.h>
@@ -41,10 +41,6 @@
 #include <drm/drm_probe_helper.h>
 #include <drm/drm_simple_kms_helper.h>
 #include <drm/drm_vblank.h>
-
-/* Temporary (wait to firewall interface) */
-#include <dt-bindings/bus/stm32mp25_sys_bus.h>
-#include "../../../bus/stm32_sys_bus.h"
 
 #include <video/videomode.h>
 
@@ -503,7 +499,7 @@ static const u64 ltdc_format_modifiers[] = {
 	DRM_FORMAT_MOD_INVALID
 };
 
-static struct regmap_config stm32_ltdc_regmap_cfg = {
+static const struct regmap_config stm32_ltdc_regmap_cfg = {
 	.reg_bits = 32,
 	.val_bits = 32,
 	.reg_stride = sizeof(u32),
@@ -803,6 +799,8 @@ static void ltdc_crtc_atomic_enable(struct drm_crtc *crtc,
 	struct drm_encoder *encoder = NULL, *en_iter;
 	struct drm_bridge *bridge = NULL, *br_iter;
 	struct drm_display_mode *mode = &crtc->state->adjusted_mode;
+	u32 hsync, vsync, accum_hbp, accum_vbp, accum_act_w, accum_act_h;
+	u32 total_width, total_height;
 	int orientation = DRM_MODE_PANEL_ORIENTATION_UNKNOWN;
 	u32 bus_formats = MEDIA_BUS_FMT_RGB888_1X24;
 	u32 bus_flags = 0;
@@ -811,6 +809,19 @@ static void ltdc_crtc_atomic_enable(struct drm_crtc *crtc,
 	int ret;
 
 	DRM_DEBUG_DRIVER("\n");
+
+	if (pm_runtime_active(ddev->dev)) {
+		if (!IS_ERR(ldev->rstc)) {
+			reset_control_assert(ldev->rstc);
+			usleep_range(10, 20);
+			reset_control_deassert(ldev->rstc);
+		}
+
+		/* Wait a while to clear the current display */
+		mdelay(30);
+
+		pm_runtime_put_sync_suspend(ddev->dev);
+	}
 
 	/* get encoder from crtc */
 	drm_for_each_encoder(en_iter, ddev)
@@ -845,12 +856,104 @@ static void ltdc_crtc_atomic_enable(struct drm_crtc *crtc,
 		orientation = connector->display_info.panel_orientation;
 	}
 
-	if (!pm_runtime_active(ddev->dev)) {
-		ret = pm_runtime_get_sync(ddev->dev);
-		if (ret) {
-			DRM_ERROR("Failed to set mode, cannot get sync\n");
-			return;
+	if (encoder->encoder_type == DRM_MODE_ENCODER_LVDS) {
+		if (ldev->lvds_clk) {
+			ret = clk_set_parent(ldev->pixel_clk, ldev->lvds_clk);
+			if (ret) {
+				DRM_ERROR("Could not set parent clock: %d\n", ret);
+				return;
+			}
 		}
+	} else {
+		if (ldev->ltdc_clk) {
+			ret = clk_set_parent(ldev->pixel_clk, ldev->ltdc_clk);
+			if (ret) {
+				DRM_ERROR("Could not set parent clock: %d\n", ret);
+				return;
+			}
+		}
+	}
+
+	if (clk_set_rate(ldev->pixel_clk, mode->clock * 1000) < 0) {
+		DRM_ERROR("Cannot set rate (%dHz) for pixel clk\n", mode->clock * 1000);
+		return;
+	}
+
+	/*
+	 * Set to default state the pinctrl only with DPI type.
+	 * Others types like DSI, don't need pinctrl due to
+	 * internal bridge (the signals do not come out of the chipset).
+	 */
+	if (encoder->encoder_type == DRM_MODE_ENCODER_DPI)
+		pinctrl_pm_select_default_state(ddev->dev);
+	else
+		pinctrl_pm_select_sleep_state(ddev->dev);
+
+	ret = pm_runtime_resume_and_get(ddev->dev);
+	if (ret) {
+		DRM_ERROR("Failed to enable crtc, cannot resume pm\n");
+		return;
+	}
+
+	DRM_DEBUG_DRIVER("CRTC:%d mode:%s\n", crtc->base.id, mode->name);
+	DRM_DEBUG_DRIVER("Video mode: %dx%d", mode->hdisplay, mode->vdisplay);
+	DRM_DEBUG_DRIVER(" hfp %d hbp %d hsl %d vfp %d vbp %d vsl %d\n",
+			 mode->hsync_start - mode->hdisplay,
+			 mode->htotal - mode->hsync_end,
+			 mode->hsync_end - mode->hsync_start,
+			 mode->vsync_start - mode->vdisplay,
+			 mode->vtotal - mode->vsync_end,
+			 mode->vsync_end - mode->vsync_start);
+
+	/* Convert video timings to ltdc timings */
+	hsync = mode->hsync_end - mode->hsync_start - 1;
+	vsync = mode->vsync_end - mode->vsync_start - 1;
+	accum_hbp = mode->htotal - mode->hsync_start - 1;
+	accum_vbp = mode->vtotal - mode->vsync_start - 1;
+	accum_act_w = accum_hbp + mode->hdisplay;
+	accum_act_h = accum_vbp + mode->vdisplay;
+	total_width = mode->htotal - 1;
+	total_height = mode->vtotal - 1;
+
+	/* check that an output rotation is required */
+	if (ldev->caps.crtc_rotation &&
+	    (orientation == DRM_MODE_PANEL_ORIENTATION_LEFT_UP ||
+	     orientation == DRM_MODE_PANEL_ORIENTATION_RIGHT_UP)) {
+		/* Set Synchronization size */
+		val = (vsync << 16) | hsync;
+		regmap_update_bits(ldev->regmap, LTDC_SSCR, SSCR_VSH | SSCR_HSW, val);
+
+		/* Set Accumulated Back porch */
+		val = (accum_vbp << 16) | accum_hbp;
+		regmap_update_bits(ldev->regmap, LTDC_BPCR, BPCR_AVBP | BPCR_AHBP, val);
+
+		/* Set Accumulated Active Width */
+		val = (accum_act_h << 16) | accum_act_w;
+		regmap_update_bits(ldev->regmap, LTDC_AWCR, AWCR_AAW | AWCR_AAH, val);
+
+		/* Set total width & height */
+		val = (total_height << 16) | total_width;
+		regmap_update_bits(ldev->regmap, LTDC_TWCR, TWCR_TOTALH | TWCR_TOTALW, val);
+
+		regmap_write(ldev->regmap, LTDC_LIPCR, (accum_act_w + 1));
+	} else {
+		/* Set Synchronization size */
+		val = (hsync << 16) | vsync;
+		regmap_update_bits(ldev->regmap, LTDC_SSCR, SSCR_VSH | SSCR_HSW, val);
+
+		/* Set Accumulated Back porch */
+		val = (accum_hbp << 16) | accum_vbp;
+		regmap_update_bits(ldev->regmap, LTDC_BPCR, BPCR_AVBP | BPCR_AHBP, val);
+
+		/* Set Accumulated Active Width */
+		val = (accum_act_w << 16) | accum_act_h;
+		regmap_update_bits(ldev->regmap, LTDC_AWCR, AWCR_AAW | AWCR_AAH, val);
+
+		/* Set total width & height */
+		val = (total_width << 16) | total_height;
+		regmap_update_bits(ldev->regmap, LTDC_TWCR, TWCR_TOTALH | TWCR_TOTALW, val);
+
+		regmap_write(ldev->regmap, LTDC_LIPCR, (accum_act_h + 1));
 	}
 
 	/* Configures the HS, VS, DE and PC polarities. Default Active Low */
@@ -1021,148 +1124,13 @@ static void ltdc_crtc_atomic_disable(struct drm_crtc *crtc,
 	ldev->fifo_warn = 0;
 	ldev->fifo_rot = 0;
 	mutex_unlock(&ldev->err_lock);
-}
 
-static void ltdc_crtc_mode_set_nofb(struct drm_crtc *crtc)
-{
-	struct ltdc_device *ldev = crtc_to_ltdc(crtc);
-	struct drm_device *ddev = crtc->dev;
-	struct drm_connector_list_iter iter;
-	struct drm_connector *connector = NULL;
-	struct drm_encoder *encoder = NULL, *en_iter;
-	struct drm_display_mode *mode = &crtc->state->adjusted_mode;
-	int orientation = DRM_MODE_PANEL_ORIENTATION_UNKNOWN;
-	int rate = mode->clock * 1000;
-	u32 hsync, vsync, accum_hbp, accum_vbp, accum_act_w, accum_act_h;
-	u32 total_width, total_height;
-	u32 val;
-	int ret;
-
-	DRM_DEBUG_DRIVER("\n");
-
-	/* disable to stream frame if previous session is still alive */
-	if (pm_runtime_active(ddev->dev)) {
-		regmap_clear_bits(ldev->regmap, LTDC_GCR, GCR_LTDCEN);
-		pm_runtime_put_sync_suspend(ddev->dev);
-	}
-
-	/* get encoder from crtc */
-	drm_for_each_encoder(en_iter, ddev)
-		if (en_iter->crtc == crtc) {
-			encoder = en_iter;
-			break;
-		}
-
-	if (encoder) {
-		/* Get the connector from encoder */
-		drm_connector_list_iter_begin(ddev, &iter);
-		drm_for_each_connector_iter(connector, &iter)
-			if (connector->encoder == encoder)
-				break;
-		drm_connector_list_iter_end(&iter);
-	}
-
-	if (connector)
-		orientation = connector->display_info.panel_orientation;
-
-	if (encoder->encoder_type == DRM_MODE_ENCODER_LVDS) {
-		if (ldev->lvds_clk) {
-			ret = clk_set_parent(ldev->pixel_clk, ldev->lvds_clk);
-			if (ret) {
-				DRM_ERROR("Could not set parent clock: %d\n", ret);
-				return;
-			}
-		}
-	} else {
-		if (ldev->ltdc_clk) {
-			ret = clk_set_parent(ldev->pixel_clk, ldev->ltdc_clk);
-			if (ret) {
-				DRM_ERROR("Could not set parent clock: %d\n", ret);
-				return;
-			}
-		}
-	}
-
-	if (clk_set_rate(ldev->pixel_clk, rate) < 0) {
-		DRM_ERROR("Cannot set rate (%dHz) for pixel clk\n", rate);
-		return;
-	}
-
-	/*
-	 * Set to default state the pinctrl only with DPI type.
-	 * Others types like DSI, don't need pinctrl due to
-	 * internal bridge (the signals do not come out of the chipset).
-	 */
-	if (encoder->encoder_type == DRM_MODE_ENCODER_DPI)
-		pinctrl_pm_select_default_state(ddev->dev);
-	else
-		pinctrl_pm_select_sleep_state(ddev->dev);
-
-	ret = pm_runtime_get_sync(ddev->dev);
-	if (ret) {
-		DRM_ERROR("Failed to set mode, cannot get sync\n");
-		return;
-	}
-
-	DRM_DEBUG_DRIVER("CRTC:%d mode:%s\n", crtc->base.id, mode->name);
-	DRM_DEBUG_DRIVER("Video mode: %dx%d", mode->hdisplay, mode->vdisplay);
-	DRM_DEBUG_DRIVER(" hfp %d hbp %d hsl %d vfp %d vbp %d vsl %d\n",
-			 mode->hsync_start - mode->hdisplay,
-			 mode->htotal - mode->hsync_end,
-			 mode->hsync_end - mode->hsync_start,
-			 mode->vsync_start - mode->vdisplay,
-			 mode->vtotal - mode->vsync_end,
-			 mode->vsync_end - mode->vsync_start);
-
-	/* Convert video timings to ltdc timings */
-	hsync = mode->hsync_end - mode->hsync_start - 1;
-	vsync = mode->vsync_end - mode->vsync_start - 1;
-	accum_hbp = mode->htotal - mode->hsync_start - 1;
-	accum_vbp = mode->vtotal - mode->vsync_start - 1;
-	accum_act_w = accum_hbp + mode->hdisplay;
-	accum_act_h = accum_vbp + mode->vdisplay;
-	total_width = mode->htotal - 1;
-	total_height = mode->vtotal - 1;
-
-	/* check that an output rotation is required */
-	if (ldev->caps.crtc_rotation &&
-	    (orientation == DRM_MODE_PANEL_ORIENTATION_LEFT_UP ||
-	     orientation == DRM_MODE_PANEL_ORIENTATION_RIGHT_UP)) {
-		/* Set Synchronization size */
-		val = (vsync << 16) | hsync;
-		regmap_update_bits(ldev->regmap, LTDC_SSCR, SSCR_VSH | SSCR_HSW, val);
-
-		/* Set Accumulated Back porch */
-		val = (accum_vbp << 16) | accum_hbp;
-		regmap_update_bits(ldev->regmap, LTDC_BPCR, BPCR_AVBP | BPCR_AHBP, val);
-
-		/* Set Accumulated Active Width */
-		val = (accum_act_h << 16) | accum_act_w;
-		regmap_update_bits(ldev->regmap, LTDC_AWCR, AWCR_AAW | AWCR_AAH, val);
-
-		/* Set total width & height */
-		val = (total_height << 16) | total_width;
-		regmap_update_bits(ldev->regmap, LTDC_TWCR, TWCR_TOTALH | TWCR_TOTALW, val);
-
-		regmap_write(ldev->regmap, LTDC_LIPCR, (accum_act_w + 1));
-	} else {
-		/* Set Synchronization size */
-		val = (hsync << 16) | vsync;
-		regmap_update_bits(ldev->regmap, LTDC_SSCR, SSCR_VSH | SSCR_HSW, val);
-
-		/* Set Accumulated Back porch */
-		val = (accum_hbp << 16) | accum_vbp;
-		regmap_update_bits(ldev->regmap, LTDC_BPCR, BPCR_AVBP | BPCR_AHBP, val);
-
-		/* Set Accumulated Active Width */
-		val = (accum_act_w << 16) | accum_act_h;
-		regmap_update_bits(ldev->regmap, LTDC_AWCR, AWCR_AAW | AWCR_AAH, val);
-
-		/* Set total width & height */
-		val = (total_width << 16) | total_height;
-		regmap_update_bits(ldev->regmap, LTDC_TWCR, TWCR_TOTALH | TWCR_TOTALW, val);
-
-		regmap_write(ldev->regmap, LTDC_LIPCR, (accum_act_h + 1));
+	/* Flush remaining vblank event*/
+	if (crtc->state->event && !crtc->state->active) {
+		spin_lock_irq(&crtc->dev->event_lock);
+		drm_crtc_send_vblank_event(crtc, crtc->state->event);
+		spin_unlock_irq(&crtc->dev->event_lock);
+		crtc->state->event = NULL;
 	}
 }
 
@@ -1259,7 +1227,6 @@ static bool ltdc_crtc_get_scanout_position(struct drm_crtc *crtc,
 }
 
 static const struct drm_crtc_helper_funcs ltdc_crtc_helper_funcs = {
-	.mode_set_nofb = ltdc_crtc_mode_set_nofb,
 	.atomic_flush = ltdc_crtc_atomic_flush,
 	.atomic_enable = ltdc_crtc_atomic_enable,
 	.atomic_disable = ltdc_crtc_atomic_disable,
@@ -1277,8 +1244,9 @@ static int ltdc_crtc_enable_vblank(struct drm_crtc *crtc)
 	if (state->enable) {
 		ldev->vblank_active = true;
 		regmap_set_bits(ldev->regmap, LTDC_IER, IER_LIE);
-	} else
+	} else {
 		return -EPERM;
+	}
 
 	return 0;
 }
@@ -1469,17 +1437,15 @@ static void ltdc_plane_update_clut(struct drm_plane *plane,
 	}
 }
 
-static void ltdc_plane_atomic_update(struct drm_plane *plane,
-				     struct drm_atomic_state *state)
+static void ltdc_plane_update(struct drm_plane *plane, struct drm_atomic_state *state)
 {
 	struct ltdc_device *ldev = plane_to_ltdc(plane);
 	struct drm_device *ddev = plane->dev;
 	struct device *dev = ddev->dev;
-	struct drm_plane_state *newstate = drm_atomic_get_new_plane_state(state,
-									  plane);
+	struct drm_plane_state *newstate = drm_atomic_get_new_plane_state(state, plane);
 	struct drm_framebuffer *fb = newstate->fb;
 	u32 lofs = plane->index * LAY_OFS;
-	u32 val, pitch_in_bytes, line_length, line_number, ahbp, avbp, bpcr;
+	u32 val, pitch_in_bytes, line_length, line_number, ahbp, avbp;
 	u32 paddr, paddr1, paddr2, lxcr;
 	enum ltdc_pix_fmt pf;
 	unsigned int plane_rotation = newstate->rotation;
@@ -1487,6 +1453,7 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 	struct drm_connector *connector = NULL;
 	struct drm_encoder *encoder = NULL, *en_iter;
 	struct drm_rect dst, src;
+	struct drm_display_mode *mode;
 	int orientation = DRM_MODE_PANEL_ORIENTATION_UNKNOWN;
 
 	if (!newstate->crtc || !fb) {
@@ -1523,17 +1490,21 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 	DRM_DEBUG_DRIVER("plane:%d fb:%d src: " DRM_RECT_FMT " -> crtc: " DRM_RECT_FMT "\n",
 			 plane->base.id, fb->base.id, DRM_RECT_ARG(&src), DRM_RECT_ARG(&dst));
 
-	if (!pm_runtime_active(ddev->dev))
-		return;
+	if (!pm_runtime_active(ddev->dev)) {
+		if (pm_runtime_resume_and_get(ddev->dev)) {
+			DRM_ERROR("Failed to set plane, cannot resume pm\n");
+			return;
+		}
+	}
 
-	regmap_read(ldev->regmap, LTDC_BPCR, &bpcr);
+	/* Get horizontal & vertical back porch values */
+	mode = &newstate->crtc->state->adjusted_mode;
+	avbp = mode->vtotal - mode->vsync_start - 1;
+	ahbp = mode->htotal - mode->hsync_start - 1;
 
 	if (ldev->caps.crtc_rotation &&
 	    (orientation == DRM_MODE_PANEL_ORIENTATION_RIGHT_UP ||
 	     orientation == DRM_MODE_PANEL_ORIENTATION_LEFT_UP)) {
-		avbp = (bpcr & BPCR_AHBP) >> 16;
-		ahbp = bpcr & BPCR_AVBP;
-
 		/* Configures the horizontal start and stop position */
 		val = (dst.x1 + 1 + ahbp) + ((dst.x2 + ahbp) << 16);
 		regmap_write_bits(ldev->regmap, LTDC_L1WHPCR + lofs,
@@ -1544,8 +1515,10 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 		regmap_write_bits(ldev->regmap, LTDC_L1WVPCR + lofs,
 				  LXWVPCR_WVSTPOS | LXWVPCR_WVSPPOS, val);
 
-		/* need to mirroring on X (rotation will switch lines & columns,
-		   not a real rotate */
+		/*
+		 * need to mirroring on X (rotation will switch lines & columns,
+		 * not a real rotate
+		 */
 		if (orientation == DRM_MODE_PANEL_ORIENTATION_RIGHT_UP) {
 			if (plane_rotation & DRM_MODE_REFLECT_X)
 				plane_rotation &= ~DRM_MODE_REFLECT_X;
@@ -1553,8 +1526,10 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 				plane_rotation |= DRM_MODE_REFLECT_X;
 		}
 
-		/* need to mirroring on Y (rotation will switch lines & columns,
-		   not a real rotate */
+		/*
+		 * need to mirroring on Y (rotation will switch lines & columns,
+		 * not a real rotate
+		 */
 		if (orientation == DRM_MODE_PANEL_ORIENTATION_LEFT_UP) {
 			if (plane_rotation & DRM_MODE_REFLECT_Y)
 				plane_rotation &= ~DRM_MODE_REFLECT_Y;
@@ -1562,9 +1537,6 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 				plane_rotation |= DRM_MODE_REFLECT_Y;
 		}
 	} else {
-		ahbp = (bpcr & BPCR_AHBP) >> 16;
-		avbp = bpcr & BPCR_AVBP;
-
 		/* Configures the horizontal start and stop position */
 		val = ((dst.x2 + ahbp) << 16) + (dst.x1 + 1 + ahbp);
 		regmap_write_bits(ldev->regmap, LTDC_L1WHPCR + lofs,
@@ -1751,7 +1723,8 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 	}
 
 	/* Configure burst length */
-	if (of_device_is_compatible(dev->of_node, "st,stm32mp25-ltdc"))
+	if (of_device_is_compatible(dev->of_node, "st,stm32mp21-ltdc") ||
+	    of_device_is_compatible(dev->of_node, "st,stm32mp25-ltdc"))
 		regmap_write(ldev->regmap, LTDC_L1BLCR + lofs, ldev->max_burst_length);
 
 	/* set color look-up table */
@@ -1760,7 +1733,6 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 
 	/* Enable layer and CLUT if needed */
 	lxcr = fb->format->format == DRM_FORMAT_C8 ? LXCR_CLUTEN : 0;
-	lxcr |= LXCR_LEN;
 
 	/* Enable horizontal mirroring if requested */
 	if (plane_rotation & DRM_MODE_REFLECT_X)
@@ -1794,7 +1766,10 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 		regmap_write(ldev->regmap, LTDC_L1SVSPR + lofs, val + (1 << SCALER_FRACTION));
 	}
 
-	regmap_write_bits(ldev->regmap, LTDC_L1CR + lofs, LXCR_MASK, lxcr);
+	if (ldev->plane_enabled[plane->index])
+		regmap_write_bits(ldev->regmap, LTDC_L1CR + lofs, LXCR_MASK, lxcr | LXCR_LEN);
+	else
+		regmap_write_bits(ldev->regmap, LTDC_L1CR + lofs, LXCR_MASK, lxcr);
 
 	/* Commit shadow registers = update plane at next vblank */
 	if (ldev->caps.plane_reg_shadow)
@@ -1828,6 +1803,21 @@ static void ltdc_plane_atomic_update(struct drm_plane *plane,
 	mutex_unlock(&ldev->err_lock);
 }
 
+static void ltdc_plane_atomic_update(struct drm_plane *plane,
+				     struct drm_atomic_state *state)
+{
+	struct drm_plane_state *newstate = drm_atomic_get_new_plane_state(state, plane);
+	struct drm_device *ddev = plane->dev;
+
+	DRM_DEBUG_DRIVER("CRTC:%d plane:%d\n", newstate->crtc->base.id, plane->base.id);
+
+	if (!pm_runtime_active(ddev->dev))
+		return;
+
+	/* Update plane settings */
+	ltdc_plane_update(plane, state);
+}
+
 static void ltdc_plane_atomic_disable(struct drm_plane *plane,
 				      struct drm_atomic_state *state)
 {
@@ -1836,6 +1826,8 @@ static void ltdc_plane_atomic_disable(struct drm_plane *plane,
 	struct ltdc_device *ldev = plane_to_ltdc(plane);
 	struct drm_device *ddev = plane->dev;
 	u32 lofs = plane->index * LAY_OFS;
+
+	ldev->plane_enabled[plane->index] = false;
 
 	if (!pm_runtime_active(ddev->dev))
 		return;
@@ -1853,6 +1845,28 @@ static void ltdc_plane_atomic_disable(struct drm_plane *plane,
 
 	DRM_DEBUG_DRIVER("CRTC:%d plane:%d\n",
 			 oldstate->crtc->base.id, plane->base.id);
+}
+
+static void ltdc_plane_atomic_enable(struct drm_plane *plane,
+				     struct drm_atomic_state *state)
+{
+	struct drm_plane_state *newstate = drm_atomic_get_new_plane_state(state, plane);
+	struct ltdc_device *ldev = plane_to_ltdc(plane);
+	struct drm_device *ddev = plane->dev;
+
+	DRM_DEBUG_DRIVER("CRTC:%d plane:%d\n", newstate->crtc->base.id, plane->base.id);
+
+	ldev->plane_enabled[plane->index] = true;
+
+	if (!pm_runtime_active(ddev->dev)) {
+		if (pm_runtime_resume_and_get(ddev->dev)) {
+			DRM_ERROR("Failed to enable plane, cannot resume pm\n");
+			return;
+		}
+	}
+
+	/* Update plane settings */
+	ltdc_plane_update(plane, state);
 }
 
 static void ltdc_plane_atomic_print_state(struct drm_printer *p,
@@ -1888,6 +1902,7 @@ static const struct drm_plane_helper_funcs ltdc_plane_helper_funcs = {
 	.atomic_check = ltdc_plane_atomic_check,
 	.atomic_update = ltdc_plane_atomic_update,
 	.atomic_disable = ltdc_plane_atomic_disable,
+	.atomic_enable = ltdc_plane_atomic_enable,
 };
 
 static struct drm_plane *ltdc_plane_create(struct drm_device *ddev,
@@ -1935,10 +1950,11 @@ static struct drm_plane *ltdc_plane_create(struct drm_device *ddev,
 		}
 
 		/*
-		 * Soc MP25 doesn't support pixel formats yuv semiplanar &
+		 * Soc MP21 & MP25 doesn't support pixel formats yuv semiplanar &
 		 * planar on layer1 only.
 		 */
-		if (!(of_device_is_compatible(dev->of_node, "st,stm32mp25-ltdc") && !index)) {
+		if (!((of_device_is_compatible(dev->of_node, "st,stm32mp21-ltdc") ||
+		    of_device_is_compatible(dev->of_node, "st,stm32mp25-ltdc")) && !index)) {
 			if (val & LXCR_C1R_YSPA) {
 				memcpy(&formats[nb_fmt], ltdc_drm_fmt_ycbcr_sp,
 				       ARRAY_SIZE(ltdc_drm_fmt_ycbcr_sp) * sizeof(*formats));
@@ -2204,9 +2220,11 @@ static int ltdc_get_caps(struct drm_device *ddev)
 {
 	struct ltdc_device *ldev = ddev->dev_private;
 	struct device *dev = ddev->dev;
+	struct device_node *np;
+	struct stm32_firewall *fwl = (struct stm32_firewall *)ldev->firewall;
 	u32 bus_width_log2, lcr, gc2r, lxc1r;
 	const struct ltdc_plat_data *pdata = of_device_get_match_data(ddev->dev);
-	int ret;
+	int ret, i;
 
 	/*
 	 * at least 1 layer must be managed & the number of layers
@@ -2216,15 +2234,56 @@ static int ltdc_get_caps(struct drm_device *ddev)
 
 	ldev->caps.nb_layers = clamp((int)lcr, 1, LTDC_MAX_LAYER);
 
-	/*
-	 * Check the security of layer 2.
-	 * Do not expose this layer to the user (do not create a plan)
-	 * if this one is reserved for secure application.
-	 */
-	if (of_device_is_compatible(dev->of_node, "st,stm32mp25-ltdc")) {
-		ret = stm32_rifsc_check_access_by_id(STM32MP25_RIFSC_LTDC_L2_ID);
+	if (of_device_is_compatible(dev->of_node, "st,stm32mp21-ltdc") ||
+	    of_device_is_compatible(dev->of_node, "st,stm32mp25-ltdc")) {
+		/* get firewall access */
+		ret = stm32_firewall_get_firewall(dev->of_node, &ldev->firewall[0], 1);
 		if (ret)
-			ldev->caps.nb_layers--;
+			return ret;
+
+		np = of_get_child_by_name(dev->of_node, "l1l2");
+		if (np) {
+			ret = stm32_firewall_get_firewall(np, &ldev->firewall[1], 1);
+			if (ret)
+				return ret;
+		}
+
+		np = of_get_child_by_name(dev->of_node, "l3");
+		if (np) {
+			ret = stm32_firewall_get_firewall(np, &ldev->firewall[2], 1);
+			if (ret)
+				return ret;
+		}
+
+		np = of_get_child_by_name(dev->of_node, "rot");
+		if (np) {
+			ret = stm32_firewall_get_firewall(np, &ldev->firewall[3], 1);
+			if (ret)
+				return ret;
+		}
+
+		for (i = 0; i < LTDC_MAX_FIREWALL; i++) {
+			DRM_DEBUG_DRIVER("Get firewall: id %d name %s\n",
+					 fwl[i].firewall_id, fwl[i].entry);
+			/* check id of firewall */
+			if (fwl[i].firewall_id != 0) {
+				ret = stm32_firewall_grant_access_by_id(fwl, fwl[i].firewall_id);
+				if (ret) {
+					/*
+					 * Check the security of layer 2.
+					 * Do not expose this layer to the user
+					 * (do not create a plan)
+					 * if this one is reserved for secure application.
+					 */
+					if (!strcmp("l3", fwl[i].entry)) {
+						ldev->caps.nb_layers--;
+					} else {
+						stm32_firewall_release_access(fwl);
+						return ret;
+					}
+				}
+			}
+		}
 	}
 
 	/* set data bus width */
@@ -2306,7 +2365,7 @@ static int ltdc_get_caps(struct drm_device *ddev)
 			ldev->caps.crtc_rotation = false;
 		ldev->caps.fifo_threshold = true;
 
-		for (int i = 0; i < lcr; i++) {
+		for (int i = 0; i < ldev->caps.nb_layers; i++) {
 			/* read 1st register of layer's configuration */
 			regmap_read(ldev->regmap, LTDC_L1C1R + i * LAY_OFS, &lxc1r);
 
@@ -2317,6 +2376,7 @@ static int ltdc_get_caps(struct drm_device *ddev)
 		}
 		break;
 	default:
+		DRM_ERROR("hardware identifier (0x%08x) not supported!\n", ldev->caps.hw_version);
 		return -ENODEV;
 	}
 
@@ -2343,6 +2403,7 @@ int ltdc_resume(struct ltdc_device *ldev)
 		DRM_ERROR("failed to enable pixel clock (%d)\n", ret);
 		return ret;
 	}
+
 	if (ldev->bus_clk) {
 		if (clk_prepare_enable(ldev->bus_clk)) {
 			DRM_ERROR("Unable to prepare bus clock\n");
@@ -2362,7 +2423,7 @@ int ltdc_load(struct drm_device *ddev)
 	struct drm_bridge *bridge;
 	struct drm_panel *panel;
 	struct drm_crtc *crtc;
-	struct reset_control *rstc;
+	struct resource *res;
 	int irq, i, nb_endpoints;
 	int ret = -ENODEV;
 	u32 mbl;
@@ -2375,7 +2436,8 @@ int ltdc_load(struct drm_device *ddev)
 	if (!nb_endpoints)
 		return -ENODEV;
 
-	if (of_device_is_compatible(np, "st,stm32mp25-ltdc")) {
+	if (of_device_is_compatible(np, "st,stm32mp21-ltdc") ||
+	    of_device_is_compatible(np, "st,stm32mp25-ltdc")) {
 		/* Get max burst length */
 		ret = of_property_read_u32(np, "st,burstlen", &mbl);
 		if (ret)
@@ -2419,7 +2481,7 @@ int ltdc_load(struct drm_device *ddev)
 		}
 	}
 
-	rstc = devm_reset_control_get_exclusive(dev, NULL);
+	ldev->rstc = devm_reset_control_get_exclusive(dev, NULL);
 
 	mutex_init(&ldev->err_lock);
 
@@ -2430,29 +2492,19 @@ int ltdc_load(struct drm_device *ddev)
 	 * remain activated and reset shouldn't be done
 	 */
 	if (!def_value) {
-		if (!IS_ERR(rstc)) {
-			reset_control_assert(rstc);
+		if (!IS_ERR(ldev->rstc)) {
+			reset_control_assert(ldev->rstc);
 			usleep_range(10, 20);
-			reset_control_deassert(rstc);
+			reset_control_deassert(ldev->rstc);
 		}
 	}
 
-	ldev->regs = devm_platform_ioremap_resource(pdev, 0);
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	ldev->regs = devm_ioremap_resource(dev, res);
 	if (IS_ERR(ldev->regs)) {
 		DRM_ERROR("Unable to get ltdc registers\n");
 		ret = PTR_ERR(ldev->regs);
 		goto err;
-	}
-
-	/*
-	 * Check the security of layer 2.
-	 * If layer 2 is secure then its registers are not accessible
-	 * (reduce mapping of ltdc registers to common registers and layers 0 and 1 registers).
-	 */
-	if (of_device_is_compatible(dev->of_node, "st,stm32mp25-ltdc")) {
-		ret = stm32_rifsc_check_access_by_id(STM32MP25_RIFSC_LTDC_L2_ID);
-		if (ret)
-			stm32_ltdc_regmap_cfg.max_register = 0x300;
 	}
 
 	ldev->regmap = devm_regmap_init_mmio(&pdev->dev, ldev->regs, &stm32_ltdc_regmap_cfg);
@@ -2463,11 +2515,8 @@ int ltdc_load(struct drm_device *ddev)
 	}
 
 	ret = ltdc_get_caps(ddev);
-	if (ret) {
-		DRM_ERROR("hardware identifier (0x%08x) not supported!\n",
-			  ldev->caps.hw_version);
+	if (ret)
 		goto err;
-	}
 
 	/* Disable all interrupts */
 	regmap_clear_bits(ldev->regmap, LTDC_IER, IER_MASK);
@@ -2525,7 +2574,11 @@ int ltdc_load(struct drm_device *ddev)
 
 	if (def_value) {
 		/* keep runtime active after the probe */
-		pm_runtime_get_sync(ddev->dev);
+		ret = pm_runtime_resume_and_get(ddev->dev);
+		if (ret) {
+			DRM_ERROR("Failed to load driver, cannot resume pm\n");
+			return ret;
+		}
 	} else {
 		/* set to sleep state the pinctrl to stop data trasfert */
 		pinctrl_pm_select_sleep_state(ddev->dev);
@@ -2553,9 +2606,13 @@ err:
 void ltdc_unload(struct drm_device *ddev)
 {
 	struct device *dev = ddev->dev;
+	struct ltdc_device *ldev = ddev->dev_private;
+	struct stm32_firewall *fwl = (struct stm32_firewall *)ldev->firewall;
 	int nb_endpoints, i;
 
 	DRM_DEBUG_DRIVER("\n");
+
+	stm32_firewall_release_access(fwl);
 
 	nb_endpoints = of_graph_get_endpoint_count(dev->of_node);
 
@@ -2612,6 +2669,13 @@ int ltdc_get_clk(struct device *dev, struct ltdc_device *ldev)
 		return PTR_ERR(ldev->pixel_clk);
 	}
 
+	if (of_device_is_compatible(dev->of_node, "st,stm32mp21-ltdc")) {
+		ldev->bus_clk = devm_clk_get(dev, "bus");
+		if (IS_ERR(ldev->bus_clk))
+			return dev_err_probe(dev, PTR_ERR(ldev->bus_clk),
+					     "Unable to get bus clock\n");
+	}
+
 	if (of_device_is_compatible(dev->of_node, "st,stm32mp25-ltdc")) {
 		ldev->bus_clk = devm_clk_get(dev, "bus");
 		if (IS_ERR(ldev->bus_clk))
@@ -2626,7 +2690,7 @@ int ltdc_get_clk(struct device *dev, struct ltdc_device *ldev)
 		/*
 		 * The lvds output clock is not available if the lvds is not probed.
 		 * This is a usual case, it is necessary to check the node to avoid
-	 * looking for a clock that will never be available.
+		 * looking for a clock that will never be available.
 		 */
 		node = of_find_compatible_node(NULL, NULL, "st,stm32mp25-lvds");
 		if (!IS_ERR(node)) {

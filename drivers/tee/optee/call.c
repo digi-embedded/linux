@@ -120,8 +120,8 @@ void optee_cq_wait_final(struct optee_call_queue *cq,
 }
 
 /* Requires the filpstate mutex to be held */
-struct optee_session *optee_find_session(struct optee_context_data *ctxdata,
-					 u32 session_id)
+static struct optee_session *find_session(struct optee_context_data *ctxdata,
+					  u32 session_id)
 {
 	struct optee_session *sess;
 
@@ -360,30 +360,21 @@ out:
 	return rc;
 }
 
-int optee_close_session_helper(struct tee_context *ctx,
-			       struct optee_session *sess)
+int optee_close_session_helper(struct tee_context *ctx, u32 session)
 {
 	struct optee *optee = tee_get_drvdata(ctx->teedev);
 	struct optee_shm_arg_entry *entry;
-	struct optee_call_extra call_ctx;
 	struct optee_msg_arg *msg_arg;
 	struct tee_shm *shm;
 	u_int offs;
-
-	if (WARN_ONCE(sess->ocall_ctx.thread_p1, "Can't close, on going Ocall\n"))
-		return -EINVAL;
 
 	msg_arg = optee_get_msg_arg(ctx, 0, &entry, &shm, &offs);
 	if (IS_ERR(msg_arg))
 		return PTR_ERR(msg_arg);
 
 	msg_arg->cmd = OPTEE_MSG_CMD_CLOSE_SESSION;
-	msg_arg->session = sess->session_id;
-
-	memset(&call_ctx, 0, sizeof(call_ctx));
-	call_ctx.system = sess->system;
-
-	optee->ops->do_call_with_arg(ctx, shm, offs, &call_ctx);
+	msg_arg->session = session;
+	optee->ops->do_call_with_arg(ctx, shm, offs, NULL);
 
 	optee_free_msg_arg(ctx, entry, offs);
 
@@ -394,11 +385,10 @@ int optee_close_session(struct tee_context *ctx, u32 session)
 {
 	struct optee_context_data *ctxdata = ctx->data;
 	struct optee_session *sess;
-	int rc;
 
 	/* Check that the session is valid and remove it from the list */
 	mutex_lock(&ctxdata->mutex);
-	sess = optee_find_session(ctxdata, session);
+	sess = find_session(ctxdata, session);
 	if (sess && !sess->ocall_ctx.thread_p1)
 		list_del(&sess->list_node);
 	mutex_unlock(&ctxdata->mutex);
@@ -407,10 +397,9 @@ int optee_close_session(struct tee_context *ctx, u32 session)
 	if (WARN_ONCE(sess->ocall_ctx.thread_p1, "Can't close, on going Ocall\n"))
 		return -EINVAL;
 
-	rc = optee_close_session_helper(ctx, sess);
 	kfree(sess);
 
-	return rc;
+	return optee_close_session_helper(ctx, session);
 }
 
 int optee_invoke_func(struct tee_context *ctx, struct tee_ioctl_invoke_arg *arg,
@@ -426,14 +415,14 @@ int optee_invoke_func_helper(struct tee_context *ctx,
 {
 	struct optee *optee = tee_get_drvdata(ctx->teedev);
 	struct optee_context_data *ctxdata = ctx->data;
-	struct optee_shm_arg_entry *entry;
 	struct optee_call_extra call_extra;
+	struct optee_shm_arg_entry *entry;
 	struct optee_msg_arg *msg_arg;
 	struct optee_session *sess;
 	struct tee_shm *shm;
+	u32 session_id;
 	u_int offs;
 	int rc;
-	u32 session_id;
 
 	if (tee_ocall_in_progress(ocall_arg))
 		session_id = ocall_arg->session;
@@ -442,10 +431,11 @@ int optee_invoke_func_helper(struct tee_context *ctx,
 
 	/* Check that the session is valid */
 	mutex_lock(&ctxdata->mutex);
-	sess = optee_find_session(ctxdata, session_id);
+	sess = find_session(ctxdata, session_id);
 	mutex_unlock(&ctxdata->mutex);
 	if (!sess)
 		return -EINVAL;
+
 	if (tee_ocall_in_progress(ocall_arg) && !sess->ocall_ctx.thread_p1) {
 		pr_err("Unexpected return from Ocall for the session\n");
 		return -EINVAL;
@@ -455,9 +445,8 @@ int optee_invoke_func_helper(struct tee_context *ctx,
 		return -EINVAL;
 	}
 
-	/* Setup TEE call extra data  */
+	/* Setup TEE call extra data */
 	memset(&call_extra, 0, sizeof(call_extra));
-	call_extra.system = sess->system;
 
 	if (tee_ocall_is_used(ocall_arg)) {
 		call_extra.ocall_arg = ocall_arg;
@@ -470,12 +459,10 @@ int optee_invoke_func_helper(struct tee_context *ctx,
 		goto do_call;
 	}
 
-	/* Get a shared memory buffer for the message */
 	msg_arg = optee_get_msg_arg(ctx, arg->num_params,
 				    &entry, &shm, &offs);
 	if (IS_ERR(msg_arg))
 		return PTR_ERR(msg_arg);
-
 	msg_arg->cmd = OPTEE_MSG_CMD_INVOKE_COMMAND;
 	msg_arg->func = arg->func;
 	msg_arg->session = arg->session;
@@ -496,7 +483,6 @@ int optee_invoke_func_helper(struct tee_context *ctx,
 
 do_call:
 	rc = optee->ops->do_call_with_arg(ctx, shm, offs, &call_extra);
-
 	if (rc == -EAGAIN) {
 		/* We are executing an Ocall request from TEE */
 		if (tee_ocall_in_progress(ocall_arg)) {
@@ -564,7 +550,7 @@ int optee_cancel_req(struct tee_context *ctx, u32 cancel_id, u32 session)
 
 	/* Check that the session is valid */
 	mutex_lock(&ctxdata->mutex);
-	sess = optee_find_session(ctxdata, session);
+	sess = find_session(ctxdata, session);
 	mutex_unlock(&ctxdata->mutex);
 	if (!sess)
 		return -EINVAL;
@@ -592,7 +578,7 @@ static bool is_normal_memory(pgprot_t p)
 #elif defined(CONFIG_ARM64)
 	return (pgprot_val(p) & PTE_ATTRINDX_MASK) == PTE_ATTRINDX(MT_NORMAL);
 #else
-#error "Unuspported architecture"
+#error "Unsupported architecture"
 #endif
 }
 

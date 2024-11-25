@@ -8,6 +8,8 @@
 #include <linux/mfd/stm32-timers.h>
 #include <linux/module.h>
 #include <linux/of_platform.h>
+#include <linux/platform_device.h>
+#include <linux/pm_runtime.h>
 #include <linux/reset.h>
 
 #define STM32_TIMERS_MAX_REGISTERS	0x3fc
@@ -294,8 +296,7 @@ static int stm32_timers_probe(struct platform_device *pdev)
 	if (!ddata)
 		return -ENOMEM;
 
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	mmio = devm_ioremap_resource(dev, res);
+	mmio = devm_platform_get_and_ioremap_resource(pdev, 0, &res);
 	if (IS_ERR(mmio))
 		return PTR_ERR(mmio);
 
@@ -316,6 +317,10 @@ static int stm32_timers_probe(struct platform_device *pdev)
 		return ret;
 
 	ret = stm32_timers_irq_probe(pdev, ddata);
+	if (ret)
+		return ret;
+
+	ret = devm_pm_runtime_enable(dev);
 	if (ret)
 		return ret;
 
@@ -350,6 +355,7 @@ static int stm32_timers_remove(struct platform_device *pdev)
 
 static const struct of_device_id stm32_timers_of_match[] = {
 	{ .compatible = "st,stm32-timers", },
+	{ .compatible = "st,stm32mp21-timers", .data = (void *)STM32MP21_TIM_IPIDR },
 	{ .compatible = "st,stm32mp25-timers", .data = (void *)STM32MP25_TIM_IPIDR },
 	{ /* end node */ },
 };

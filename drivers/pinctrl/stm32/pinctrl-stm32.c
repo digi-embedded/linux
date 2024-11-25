@@ -16,19 +16,20 @@
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
-#include <linux/of_device.h>
 #include <linux/of_irq.h>
-#include <linux/pinctrl/consumer.h>
-#include <linux/pinctrl/machine.h>
-#include <linux/pinctrl/pinconf.h>
-#include <linux/pinctrl/pinconf-generic.h>
-#include <linux/pinctrl/pinctrl.h>
-#include <linux/pinctrl/pinmux.h>
 #include <linux/platform_device.h>
 #include <linux/property.h>
 #include <linux/regmap.h>
 #include <linux/reset.h>
+#include <linux/seq_file.h>
 #include <linux/slab.h>
+
+#include <linux/pinctrl/consumer.h>
+#include <linux/pinctrl/machine.h>
+#include <linux/pinctrl/pinconf-generic.h>
+#include <linux/pinctrl/pinconf.h>
+#include <linux/pinctrl/pinctrl.h>
+#include <linux/pinctrl/pinmux.h>
 
 #include "../core.h"
 #include "../pinconf.h"
@@ -49,13 +50,18 @@
 #define STM32_GPIO_AFRH		0x24
 #define STM32_GPIO_SECCFGR	0x30
 #define STM32_GPIO_DELAYRL	0x40
+/* MP25 RevA: STM32_GPIO_PIOCFGR */
 #define STM32_GPIO_ADVCFGRL	0x48
 #define STM32_GPIO_CIDCFGR(x)	(0x50 + (0x8 * (x)))
 #define STM32_GPIO_SEMCR(x)	(0x54 + (0x8 * (x)))
 
+/* MP25 RevA: STM32_GPIO_PIOCFGR_CFG[0]_POS */
 #define STM32_GPIO_ADVCFGR_DLYPATH_POS		0
+/* MP25 RevA: STM32_GPIO_PIOCFGR_CFG[1]_POS */
 #define STM32_GPIO_ADVCFGR_DE_POS		1
+/* MP25 RevA: STM32_GPIO_PIOCFGR_CFG[2]_POS */
 #define STM32_GPIO_ADVCFGR_INVCLK_POS		2
+/* MP25 RevA: STM32_GPIO_PIOCFGR_CFG[3]_POS */
 #define STM32_GPIO_ADVCFGR_RET_POS		3
 
 #define STM32_GPIO_CIDCFGR_CFEN		BIT(0)
@@ -77,7 +83,9 @@
 #define STM32_GPIO_BKP_PUPD_MASK	GENMASK(9, 8)
 #define STM32_GPIO_BKP_TYPE		10
 #define STM32_GPIO_BKP_VAL		11
+/* MP25 RevA: STM32_GPIO_BKP_PIOCFG_SHIFT */
 #define STM32_GPIO_BKP_ADVCFG_SHIFT	12
+/* MP25 RevA: STM32_GPIO_BKP_PIOCFG_MASK */
 #define STM32_GPIO_BKP_ADVCFG_MASK	GENMASK(15, 12)
 #define STM32_GPIO_BKP_DELAY_SHIFT	16
 #define STM32_GPIO_BKP_DELAY_MASK	GENMASK(19, 16)
@@ -603,7 +611,6 @@ static struct irq_chip stm32_gpio_irq_chip = {
 	.irq_request_resources = stm32_gpio_irq_request_resources,
 	.irq_release_resources = stm32_gpio_irq_release_resources,
 	.irq_set_affinity = IS_ENABLED(CONFIG_SMP) ? irq_chip_set_affinity_parent : NULL,
-
 };
 
 static int stm32_gpio_domain_select(struct irq_domain *dm,
@@ -1767,7 +1774,7 @@ static int stm32_gpiolib_register_bank(struct stm32_pinctrl *pctl, struct fwnode
 	if (fwnode_property_read_u32(fwnode, "st,bank-ioport", &bank_ioport_nr))
 		bank_ioport_nr = bank_nr;
 
-	bank->gpio_chip.base = bank_nr * STM32_GPIO_PINS_PER_BANK;
+	bank->gpio_chip.base = -1;
 
 	bank->gpio_chip.ngpio = npins;
 	bank->gpio_chip.fwnode = fwnode;
@@ -1780,6 +1787,11 @@ static int stm32_gpiolib_register_bank(struct stm32_pinctrl *pctl, struct fwnode
 	spin_lock_init(&bank->lock);
 
 	names = devm_kcalloc(dev, npins, sizeof(char *), GFP_KERNEL);
+	if (!names) {
+		err = -ENOMEM;
+		goto err_clk;
+	}
+
 	for (i = 0; i < npins; i++) {
 		stm32_pin = stm32_pctrl_get_desc_pin_from_gpio(pctl, bank, i);
 		if (stm32_pin && stm32_pin->pin.name)
@@ -1878,7 +1890,7 @@ static struct irq_domain *stm32_pctrl_get_irq_domain(struct stm32_pinctrl *pctl)
 		return domain;
 	}
 
-	if (!of_find_property(np, "interrupt-parent", NULL))
+	if (!of_property_present(np, "interrupt-parent"))
 		return NULL;
 
 	parent = of_irq_find_parent(np);
@@ -2016,11 +2028,6 @@ int stm32_pctl_probe(struct platform_device *pdev)
 	match_data = device_get_match_data(dev);
 	if (!match_data)
 		return -EINVAL;
-
-	if (!device_property_present(dev, "pins-are-numbered")) {
-		dev_err(dev, "only support pins-are-numbered format\n");
-		return -EINVAL;
-	}
 
 	pctl = devm_kzalloc(dev, sizeof(*pctl), GFP_KERNEL);
 	if (!pctl)

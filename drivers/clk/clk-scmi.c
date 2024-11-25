@@ -75,14 +75,17 @@ static long scmi_clk_round_rate(struct clk_hw *hw, unsigned long rate,
 	u64 fmin, fmax, ftmp;
 	struct scmi_clk *clk = to_scmi_clk(hw);
 
-	/*
-	 * We can't figure out what rate it will be, so just return the
-	 * rate back to the caller. scmi_clk_recalc_rate() will be called
-	 * after the rate is set and we'll know what rate the clock is
-	 * running at then.
-	 */
-	if (clk->info->rate_discrete)
-		return rate;
+	if (clk->info->rate_discrete) {
+		fmin = clk->info->list.min_rate;
+		fmax = clk->info->list.max_rate;
+		if (rate <= fmin)
+			return fmin;
+		else if (rate >= fmax)
+			return fmax;
+
+		/* Use SCMI Clock protocol to find the roundest rate */
+		return scmi_clk_round_rate_get(hw, rate, parent_rate);
+	}
 
 	fmin = clk->info->range.min_rate;
 	fmax = clk->info->range.max_rate;
@@ -91,8 +94,27 @@ static long scmi_clk_round_rate(struct clk_hw *hw, unsigned long rate,
 	else if (rate >= fmax)
 		return fmax;
 
-	if (clk->info->range.step_size == 0)
+	if (clk->info->range.step_size == 0) {
+		if (!IS_ENABLED(CONFIG_SCMI_STM32MP_OSTL_V5)) {
+			/*
+			 * Unexpected step value. This is a protoocol error
+			 * but we must report a rate so preserve the legacy
+			 * implementation and return rate back to the caller.
+			 * scmi_clk_recalc_rate() will be called after the
+			 * rate is set and we'll know what rate the clock is
+			 * running at then.
+			 */
+			return rate;
+		}
+
+		/*
+		 * Support OSTLv4/v5 SCMI server where incremental rate
+		 * description with step of 0 denoted an SCMI server
+		 * that supports OSTL custom SCMI Clock message ID
+		 * CLOCK_ROUND_RATE_GET.
+		 */
 		return scmi_clk_round_rate_get(hw, rate, parent_rate);
+	}
 
 	ftmp = rate - fmin;
 	ftmp += clk->info->range.step_size - 1; /* to round up */
@@ -192,8 +214,8 @@ static int scmi_clk_ops_init(struct device *dev, struct scmi_clk *sclk,
 		if (num_rates <= 0)
 			return -EINVAL;
 
-		min_rate = sclk->info->list.rates[0];
-		max_rate = sclk->info->list.rates[num_rates - 1];
+		min_rate = sclk->info->list.min_rate;
+		max_rate = sclk->info->list.max_rate;
 	} else {
 		min_rate = sclk->info->range.min_rate;
 		max_rate = sclk->info->range.max_rate;

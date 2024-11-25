@@ -9,6 +9,7 @@
  * Inspired by dwc3-st.c
  */
 
+#include <linux/bitfield.h>
 #include <linux/clk.h>
 #include <linux/delay.h>
 #include <linux/interrupt.h>
@@ -77,10 +78,9 @@ static int stm32_dwc3_init(struct stm32_dwc3 *dwc3_data)
 				  FIELD_PREP(SYSCFG_USB3DRCR_VBUSEN_POLARITY_MASK,
 					     dwc3_data->vbusen_polarity_low) |
 				  FIELD_PREP(SYSCFG_USB3DRCR_USB2ONLYD_MASK,
-					    dwc3_data->usb2only_conf ? 1 : 0) |
+					     dwc3_data->usb2only_conf ? 1 : 0) |
 				  FIELD_PREP(SYSCFG_USB3DRCR_USB2ONLYH_MASK,
-					    dwc3_data->usb2only_conf ? 1 : 0));
-
+					     dwc3_data->usb2only_conf ? 1 : 0));
 }
 
 static irqreturn_t stm32_dwc3_irq_wakeup_handler(int irq, void *dev_id)
@@ -194,6 +194,14 @@ static int stm32_dwc3_probe(struct platform_device *pdev)
 	ret = devm_of_platform_populate(dev);
 	if (ret)
 		return dev_err_probe(dev, ret, "failed to add dwc3 core\n");
+
+	ret = devm_pm_runtime_enable(dev);
+	if (ret)
+		return dev_err_probe(dev, ret, "Failed to enable pm runtime\n");
+
+	ret = pm_runtime_resume_and_get(dev);
+	if (ret)
+		return dev_err_probe(dev, ret, "pm runtime resume failed\n");
 
 	platform_set_drvdata(pdev, dwc3_data);
 

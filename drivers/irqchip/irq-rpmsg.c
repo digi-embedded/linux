@@ -318,4 +318,4 @@ subsys_initcall(irq_rpmsg_init);
 module_exit(irq_rpmsg_exit);
 
 MODULE_DESCRIPTION("RPMsg IRQC Driver");
-MODULE_LICENSE("GPL v2");
+MODULE_LICENSE("GPL");

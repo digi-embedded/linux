@@ -2138,8 +2138,7 @@ static int savage_init_fb_info(struct fb_info *info, struct pci_dev *dev,
 	info->var.accel_flags = 0;
 
 	info->fbops          = &savagefb_ops;
-	info->flags          = FBINFO_DEFAULT |
-		               FBINFO_HWACCEL_YPAN |
+	info->flags          = FBINFO_HWACCEL_YPAN |
 		               FBINFO_HWACCEL_XPAN;
 
 	info->pseudo_palette = par->pseudo_palette;
@@ -2277,7 +2276,10 @@ static int savagefb_probe(struct pci_dev *dev, const struct pci_device_id *id)
 	if (info->var.xres_virtual > 0x1000)
 		info->var.xres_virtual = 0x1000;
 #endif
-	savagefb_check_var(&info->var, info);
+	err = savagefb_check_var(&info->var, info);
+	if (err)
+		goto failed;
+
 	savagefb_set_fix(info);
 
 	/*
@@ -2558,6 +2560,9 @@ static int __init savagefb_init(void)
 	char *option;
 
 	DBG("savagefb_init");
+
+	if (fb_modesetting_disabled("savagefb"))
+		return -ENODEV;
 
 	if (fb_get_options("savagefb", &option))
 		return -ENODEV;

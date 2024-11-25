@@ -6,6 +6,7 @@
  * Copyright (C) 2010 Alexey Charkov <alchark@gmail.com>
  */
 
+#include <linux/mod_devicetable.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/platform_device.h>
@@ -17,10 +18,6 @@
 #include <linux/clk.h>
 
 #include <asm/div64.h>
-
-#include <linux/of.h>
-#include <linux/of_device.h>
-#include <linux/of_address.h>
 
 /*
  * SoC architecture allocates register space for 4 PWMs but only
@@ -209,7 +206,7 @@ static int vt8500_pwm_apply(struct pwm_chip *chip, struct pwm_device *pwm,
 	 * We cannot skip calling ->config even if state->period ==
 	 * pwm->state.period && state->duty_cycle == pwm->state.duty_cycle
 	 * because we might have exited early in the last call to
-	 * pwm_apply_state because of !state->enabled and so the two values in
+	 * pwm_apply_might_sleep because of !state->enabled and so the two values in
 	 * pwm->state might not be configured in hardware.
 	 */
 	err = vt8500_pwm_config(pwm->chip, pwm, state->duty_cycle, state->period);
@@ -279,20 +276,18 @@ static int vt8500_pwm_probe(struct platform_device *pdev)
 	return ret;
 }
 
-static int vt8500_pwm_remove(struct platform_device *pdev)
+static void vt8500_pwm_remove(struct platform_device *pdev)
 {
 	struct vt8500_chip *vt8500 = platform_get_drvdata(pdev);
 
 	pwmchip_remove(&vt8500->chip);
 
 	clk_unprepare(vt8500->clk);
-
-	return 0;
 }
 
 static struct platform_driver vt8500_pwm_driver = {
 	.probe		= vt8500_pwm_probe,
-	.remove		= vt8500_pwm_remove,
+	.remove_new	= vt8500_pwm_remove,
 	.driver		= {
 		.name	= "vt8500-pwm",
 		.of_match_table = vt8500_pwm_dt_ids,

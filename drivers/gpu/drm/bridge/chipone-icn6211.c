@@ -17,7 +17,7 @@
 #include <linux/i2c.h>
 #include <linux/media-bus-format.h>
 #include <linux/module.h>
-#include <linux/of_device.h>
+#include <linux/of.h>
 #include <linux/regmap.h>
 #include <linux/regulator/consumer.h>
 
@@ -563,10 +563,8 @@ static int chipone_dsi_host_attach(struct chipone *icn)
 
 	host = of_find_mipi_dsi_host_by_node(host_node);
 	of_node_put(host_node);
-	if (!host) {
-		dev_err(dev, "failed to find dsi host\n");
-		return -EPROBE_DEFER;
-	}
+	if (!host)
+		return dev_err_probe(dev, -EPROBE_DEFER, "failed to find dsi host\n");
 
 	dsi = mipi_dsi_device_register_full(host, &info);
 	if (IS_ERR(dsi)) {
@@ -740,8 +738,7 @@ static int chipone_dsi_probe(struct mipi_dsi_device *dsi)
 	return ret;
 }
 
-static int chipone_i2c_probe(struct i2c_client *client,
-			     const struct i2c_device_id *id)
+static int chipone_i2c_probe(struct i2c_client *client)
 {
 	struct device *dev = &client->dev;
 	struct chipone *icn;

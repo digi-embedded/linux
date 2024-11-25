@@ -63,11 +63,6 @@ properties:
   power-domains:
     maxItems: 1
 
-  feature-domains:
-    $ref: /schemas/types.yaml#/definitions/phandle-array
-    description: |
-      Phandle to the rifsc device to check access right.
-
   st,ssc-on:
     type: boolean
     description:
@@ -129,8 +124,8 @@ additionalProperties: false
 examples:
   - |
     // Example 1: Combophy configured to use internal reference clock
-    #include <dt-bindings/clock/stm32mp25-clks.h>
-    #include <dt-bindings/reset/stm32mp25-resets.h>
+    #include <dt-bindings/clock/st,stm32mp25-rcc.h>
+    #include <dt-bindings/reset/st,stm32mp25-rcc.h>
 
     combophy_internal: phy@480c0000 {
               compatible = "st,stm32mp25-combophy";
@@ -148,8 +143,8 @@ examples:
   - |
     // Example 2: Combophy configured to use extrenal 100MHz reference clock
     // on CLKIN pad for PCIe
-    #include <dt-bindings/clock/stm32mp25-clks.h>
-    #include <dt-bindings/reset/stm32mp25-resets.h>
+    #include <dt-bindings/clock/st,stm32mp25-rcc.h>
+    #include <dt-bindings/reset/st,stm32mp25-rcc.h>
 
     clocks {
         pad_clk: pad-clk {

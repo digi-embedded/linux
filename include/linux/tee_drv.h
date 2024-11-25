@@ -77,21 +77,21 @@ struct tee_param {
 	} u;
 };
 
-/* State an Ocall context for argument passed with struct tee_ocall2_arg */
+/* State an Ocall2 context for argument passed with struct tee_ocall2_arg */
 enum tee_ocall2_state {
 	TEE_OCALL2_IDLE,
 	TEE_OCALL2_IN_PROGRESS,
 };
 
 /*
- * struct tee_ocall2_arg - Ocall context argument passed by caller
+ * struct tee_ocall2_arg - Ocall2 context argument passed by caller
  *
- * @state: Ocall unused, ready, in-progress
- * @session; Session the Ocall relates to
- * @in_commnad: Ocall command 32bit ID from the TEE service
- * @in_param: Ocall 32bit input parameter value from the TEE service
- * @out_result: Ocall 32bit result ID. Value 0 indicates an error.
- * @out_param: Ocall 32bit output parameter. TEEC_ERROR_* when @out_result is 0.
+ * @state: Ocall2 state: unused, ready or in-progress
+ * @session: Session the Ocall2 relates to
+ * @in_param1: Ocall2 command 32bit ID from the TEE service
+ * @in_param2: Ocall2 32bit input parameter value from the TEE service
+ * @out_param1: Ocall2 32bit result ID. Value 0 indicates an error.
+ * @out_param2: Ocall2 32bit output parameter. TEEC_ERROR_* when @out_result is 0.
  */
 struct tee_ocall2_arg {
 	enum tee_ocall2_state state;
@@ -114,7 +114,6 @@ struct tee_ocall2_arg {
  * @release:		release this open file
  * @open_session:	open a new session
  * @close_session:	close a session
- * @system_session:	declare session as a system session
  * @invoke_func:	invoke a trusted function
  * @cancel_req:		request cancel of an ongoing invoke or open
  * @supp_recv:		called for supplicant to get a command
@@ -131,7 +130,6 @@ struct tee_driver_ops {
 			    struct tee_ioctl_open_session_arg *arg,
 			    struct tee_param *param);
 	int (*close_session)(struct tee_context *ctx, u32 session);
-	int (*system_session)(struct tee_context *ctx, u32 session);
 	int (*invoke_func)(struct tee_context *ctx,
 			   struct tee_ioctl_invoke_arg *arg,
 			   struct tee_param *param);
@@ -466,20 +464,6 @@ int tee_client_open_session(struct tee_context *ctx,
 int tee_client_close_session(struct tee_context *ctx, u32 session);
 
 /**
- * tee_client_system_session() - Declare session as a system session
- * @ctx:	TEE Context
- * @session:	Session id
- *
- * This function requests TEE to provision an entry context ready to use for
- * that session only. The provisioned entry context is used for command
- * invocation and session closure, not for command cancelling requests.
- * TEE releases the provisioned context upon session closure.
- *
- * Return < 0 on error else 0 if an entry context has been provisioned.
- */
-int tee_client_system_session(struct tee_context *ctx, u32 session);
-
-/**
  * tee_client_invoke_func() - Invoke a function in a Trusted Application
  * @ctx:	TEE Context
  * @arg:	Invoke arguments, see description of
@@ -562,12 +546,12 @@ void teedev_close_context(struct tee_context *ctx);
 
 static inline bool tee_ocall_is_used(struct tee_ocall2_arg *arg)
 {
-	return arg;
+	return arg != NULL;
 }
 
 static inline bool tee_ocall_in_progress(struct tee_ocall2_arg *arg)
 {
-	return arg && arg->state == TEE_OCALL2_IN_PROGRESS;
+	return arg != NULL && arg->state == TEE_OCALL2_IN_PROGRESS;
 }
 
 static inline void tee_ocall_failure(struct tee_ocall2_arg *arg)

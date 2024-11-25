@@ -77,6 +77,7 @@ struct stm32_usb2phy {
 	struct regmap *regmap;
 	struct device *dev;
 	struct reset_control *rstc;
+	struct regulator *vbus;
 	struct clk *phyref;
 	struct regulator *vdd33, *vdda18;
 	enum phy_mode mode;
@@ -90,6 +91,7 @@ struct stm32_usb2phy {
 enum stm32_usb2phy_mode {
 	USB2_MODE_HOST_ONLY,
 	USB2_MODE_DRD,
+	USB2_MODE_OTG,
 };
 
 struct stm32mp2_usb2phy_hw_data {
@@ -97,7 +99,28 @@ struct stm32mp2_usb2phy_hw_data {
 	enum stm32_usb2phy_mode valid_mode;
 };
 
-static const struct stm32mp2_usb2phy_hw_data stm32mp2_usb2phy_hwdata[] = {
+static const struct stm32mp2_usb2phy_hw_data stm32mp21_usb2phy_hwdata[] = {
+	{
+		.cr_offset = PHY1CR_OFFSET,
+		.trim1_offset = PHY1TRIM1_OFFSET,
+		.trim2_offset = PHY1TRIM2_OFFSET,
+		.valid_mode = USB2_MODE_HOST_ONLY,
+		.phyrefsel_mask = 0x7,
+		.phyrefsel_bitpos = 4,
+	},
+	{
+		.cr_offset = PHY2CR_OFFSET,
+		.trim1_offset = PHY2TRIM1_OFFSET,
+		.trim2_offset = PHY2TRIM2_OFFSET,
+		.valid_mode = USB2_MODE_OTG,
+		.phyrefsel_mask = 0x7,
+		.phyrefsel_bitpos = 4,
+	},
+	{
+	}
+};
+
+static const struct stm32mp2_usb2phy_hw_data stm32mp25_usb2phy_hwdata[] = {
 	{
 		.cr_offset = PHY1CR_OFFSET,
 		.trim1_offset = PHY1TRIM1_OFFSET,
@@ -113,6 +136,8 @@ static const struct stm32mp2_usb2phy_hw_data stm32mp2_usb2phy_hwdata[] = {
 		.valid_mode = USB2_MODE_DRD,
 		.phyrefsel_mask = 0x7,
 		.phyrefsel_bitpos = 12,
+	},
+	{
 	}
 };
 
@@ -121,16 +146,20 @@ static const struct stm32mp2_usb2phy_hw_data stm32mp2_usb2phy_hwdata[] = {
  * depending on the instance. So identify the instance by using CR offset to report
  * the correct bitfields & modes to use
  */
-static const struct stm32mp2_usb2phy_hw_data *stm32_usb2phy_get_hwdata(unsigned long offset)
+static const struct stm32mp2_usb2phy_hw_data *stm32_usb2phy_get_hwdata(struct device *dev,
+								       unsigned long offset)
 {
 	int i;
+	const struct stm32mp2_usb2phy_hw_data *hwdata = device_get_match_data(dev);
 
-	for (i = 0; i < sizeof(stm32mp2_usb2phy_hwdata); i++)
-		if (stm32mp2_usb2phy_hwdata[i].cr_offset == offset)
-			break;
+	if (!hwdata)
+		return NULL;
 
-	if (i < sizeof(stm32mp2_usb2phy_hwdata))
-		return &stm32mp2_usb2phy_hwdata[i];
+	for (i = 0; i < (hwdata[i].cr_offset != offset) && (hwdata[i].cr_offset); i++)
+		;
+
+	if (hwdata[i].cr_offset)
+		return &hwdata[i];
 
 	return NULL;
 }
@@ -300,7 +329,7 @@ static int stm32_usb2phy_suspend(struct device *dev)
 	int ret;
 
 	/*
-	 * Fempto-phy should be turned off since it is not needed for
+	 * Usb2-phy should be turned off since it is not needed for
 	 * wakeup capability. In case usb-remote wakeup is not enabled,
 	 * usb2-phy is already turned off by HCD driver using exit callback
 	 */
@@ -321,7 +350,7 @@ static int stm32_usb2phy_resume(struct device *dev)
 	int ret;
 
 	/*
-	 * If fempto-phy was turned off by suspend call for wakeup then needs
+	 * If usb2-phy was turned off by suspend call for wakeup then needs
 	 * to be turned back ON in resume. In case usb-remote wakeup is not
 	 * enabled, usb2-phy is already turned ON by HCD driver using init callback
 	 */
@@ -345,7 +374,8 @@ static int stm32_usb2phy_set_mode(struct phy *phy, enum phy_mode mode, int submo
 
 	switch (mode) {
 	case PHY_MODE_USB_HOST:
-		if (phy_data->valid_mode == USB2_MODE_HOST_ONLY)
+		if (phy_data->valid_mode == USB2_MODE_HOST_ONLY ||
+		    phy_data->valid_mode == USB2_MODE_OTG)
 			ret = regmap_update_bits(phy_dev->regmap,
 						 phy_data->cr_offset,
 						 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK,
@@ -374,25 +404,32 @@ static int stm32_usb2phy_set_mode(struct phy *phy, enum phy_mode mode, int submo
 		break;
 
 	case PHY_MODE_USB_DEVICE:
-		if (submode == USB_ROLE_NONE) {
+		if (phy_data->valid_mode == USB2_MODE_OTG)
 			ret = regmap_update_bits(phy_dev->regmap,
 						 phy_data->cr_offset,
-						 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK |
-						 SYSCFG_USB2PHY2CR_VBUSVALID_MASK |
-						 SYSCFG_USB2PHY2CR_VBUSVLDEXTSEL_MASK |
-						 SYSCFG_USB2PHY2CR_VBUSVLDEXT_MASK,
-						 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK |
-						 SYSCFG_USB2PHY2CR_VBUSVLDEXTSEL_MASK);
-		} else {
-			ret = regmap_update_bits(phy_dev->regmap,
-						 phy_data->cr_offset,
-						 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK |
-						 SYSCFG_USB2PHY2CR_VBUSVALID_MASK |
-						 SYSCFG_USB2PHY2CR_VBUSVLDEXTSEL_MASK |
-						 SYSCFG_USB2PHY2CR_VBUSVLDEXT_MASK,
-						 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK |
-						 SYSCFG_USB2PHY2CR_VBUSVLDEXTSEL_MASK |
-						 SYSCFG_USB2PHY2CR_VBUSVLDEXT_MASK);
+						 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK,
+						 0);
+		else {
+			if (submode == USB_ROLE_NONE) {
+				ret = regmap_update_bits(phy_dev->regmap,
+							 phy_data->cr_offset,
+							 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK |
+							 SYSCFG_USB2PHY2CR_VBUSVALID_MASK |
+							 SYSCFG_USB2PHY2CR_VBUSVLDEXTSEL_MASK |
+							 SYSCFG_USB2PHY2CR_VBUSVLDEXT_MASK,
+							 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK |
+							 SYSCFG_USB2PHY2CR_VBUSVLDEXTSEL_MASK);
+			} else {
+				ret = regmap_update_bits(phy_dev->regmap,
+							 phy_data->cr_offset,
+							 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK |
+							 SYSCFG_USB2PHY2CR_VBUSVALID_MASK |
+							 SYSCFG_USB2PHY2CR_VBUSVLDEXTSEL_MASK |
+							 SYSCFG_USB2PHY2CR_VBUSVLDEXT_MASK,
+							 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK |
+							 SYSCFG_USB2PHY2CR_VBUSVLDEXTSEL_MASK |
+							 SYSCFG_USB2PHY2CR_VBUSVLDEXT_MASK);
+			}
 		}
 		if (ret) {
 			dev_err(dev, "can't set usb2phycr (%d)\n", ret);
@@ -455,9 +492,31 @@ static int stm32_usb2phy_exit(struct phy *phy)
 	return 0;
 }
 
+static int stm32_usb2phy_phy_power_on(struct phy *phy)
+{
+	struct stm32_usb2phy *phy_dev = phy_get_drvdata(phy);
+
+	if (phy_dev->vbus)
+		return regulator_enable(phy_dev->vbus);
+
+	return 0;
+}
+
+static int stm32_usb2phy_phy_power_off(struct phy *phy)
+{
+	struct stm32_usb2phy *phy_dev = phy_get_drvdata(phy);
+
+	if (phy_dev->vbus)
+		return regulator_disable(phy_dev->vbus);
+
+	return 0;
+}
+
 static const struct phy_ops stm32_usb2phy_data = {
 	.init = stm32_usb2phy_init,
 	.exit = stm32_usb2phy_exit,
+	.power_on = stm32_usb2phy_phy_power_on,
+	.power_off = stm32_usb2phy_phy_power_off,
 	.set_mode = stm32_usb2phy_set_mode,
 	.owner = THIS_MODULE,
 };
@@ -525,7 +584,7 @@ static int stm32_usb2phy_tuning(struct phy *phy)
 
 	ret = of_property_read_u8(np, "st,pll-ipath-tune", &val);
 	if (ret != -EINVAL) {
-		if (!ret && val <= SYSCFG_USB2PHYTRIM1_PLLITUNE_MASK) {
+		if (!ret && FIELD_FIT(SYSCFG_USB2PHYTRIM1_PLLITUNE_MASK, val)) {
 			phy_dev->mask_trim1 |= SYSCFG_USB2PHYTRIM1_PLLITUNE_MASK;
 			phy_dev->value_trim1 |= FIELD_PREP(SYSCFG_USB2PHYTRIM1_PLLITUNE_MASK, val);
 		} else {
@@ -536,7 +595,7 @@ static int stm32_usb2phy_tuning(struct phy *phy)
 
 	ret = of_property_read_u8(np, "st,pll-ppath-tune", &val);
 	if (ret != -EINVAL) {
-		if (!ret && val <= SYSCFG_USB2PHYTRIM1_PLLPTUNE_MASK) {
+		if (!ret && FIELD_FIT(SYSCFG_USB2PHYTRIM1_PLLPTUNE_MASK, val)) {
 			phy_dev->mask_trim1 |= SYSCFG_USB2PHYTRIM1_PLLPTUNE_MASK;
 			phy_dev->value_trim1 |= FIELD_PREP(SYSCFG_USB2PHYTRIM1_PLLPTUNE_MASK, val);
 		} else {
@@ -728,7 +787,7 @@ static int stm32_usb2phy_probe(struct platform_device *pdev)
 		phy_dev->vdda18 = NULL;
 	}
 
-	phy_dev->hw_data = stm32_usb2phy_get_hwdata(phycr);
+	phy_dev->hw_data = stm32_usb2phy_get_hwdata(dev, phycr);
 	if (!phy_dev->hw_data) {
 		dev_err(dev, "can't get matching stm32mp2_usb2_of_data\n");
 		return -EINVAL;
@@ -737,6 +796,14 @@ static int stm32_usb2phy_probe(struct platform_device *pdev)
 	phy = devm_phy_create(dev, NULL, &stm32_usb2phy_data);
 	if (IS_ERR(phy))
 		return dev_err_probe(dev, PTR_ERR(phy), "failed to create USB2-PHY\n");
+
+	phy_dev->vbus = devm_regulator_get_optional(dev, "vbus");
+	if (IS_ERR(phy_dev->vbus)) {
+		ret = PTR_ERR(phy_dev->vbus);
+		if (ret != -ENODEV)
+			return dev_err_probe(dev, ret, "failed to get vbus\n");
+		phy_dev->vbus = NULL;
+	}
 
 	phy_dev->phy = phy;
 	phy_set_drvdata(phy, phy_dev);
@@ -764,7 +831,8 @@ static DEFINE_SIMPLE_DEV_PM_OPS(stm32_usb2phy_pm_ops, stm32_usb2phy_suspend,
 				stm32_usb2phy_resume);
 
 static const struct of_device_id stm32_usb2phy_of_match[] = {
-	{ .compatible = "st,stm32mp25-usb2phy" },
+	{ .compatible = "st,stm32mp25-usb2phy", .data = (const void *)&stm32mp25_usb2phy_hwdata },
+	{ .compatible = "st,stm32mp21-usb2phy", .data = (const void *)&stm32mp21_usb2phy_hwdata },
 	{ /* sentinel */ },
 };
 MODULE_DEVICE_TABLE(of, stm32_usb2phy_of_match);

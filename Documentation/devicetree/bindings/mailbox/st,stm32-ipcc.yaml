@@ -1,18 +1,16 @@
 # SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
 %YAML 1.2
 ---
-$id: "http://devicetree.org/schemas/mailbox/st,stm32-ipcc.yaml#"
-$schema: "http://devicetree.org/meta-schemas/core.yaml#"
+$id: http://devicetree.org/schemas/mailbox/st,stm32-ipcc.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
 
-title: STMicroelectronics STM32 IPC controller bindings
+title: STMicroelectronics STM32 IPC controller
 
 description:
   The IPCC block provides a non blocking signaling mechanism to post and
   retrieve messages in an atomic way between two processors.
   It provides the signaling for N bidirectionnal channels. The number of
   channels (N) can be read from a dedicated register.
-  Depending on the DT channel parameter, the client can choice between be called under interrupt
-  normal or context.
 
 maintainers:
   - Fabien Dessenne <fabien.dessenne@foss.st.com>
@@ -52,7 +50,6 @@ required:
   - compatible
   - reg
   - st,proc-id
-  - clocks
   - interrupt-names
   - "#mbox-cells"
   - interrupts
@@ -61,7 +58,6 @@ additionalProperties: false
 
 examples:
   - |
-
     #include <dt-bindings/interrupt-controller/arm-gic.h>
     #include <dt-bindings/clock/stm32mp1-clks.h>
     ipcc: mailbox@4c001000 {
@@ -76,16 +72,4 @@ examples:
       wakeup-source;
     };
 
-    /*The client 1 uses the mailbox channel 0 and 1 in normal context */
-    mbox_clt1 {
-      mboxes = <&ipcc 0x0>, <&ipcc 1>;
-    };
-
-    /*
-     * The Client 2 uses mailbox channel 2 and 3 in interrupt context
-     * (add 0x100 to the channel value).
-     */
-
-    mbox_clt2 {
-      mboxes = <&ipcc 0x102>, <&ipcc 103>;
-    };
+...

@@ -395,6 +395,7 @@ int hantro_h1_h264_enc_run(struct hantro_ctx *ctx)
 		| H1_REG_ENC_CTRL_NAL_MODE_BIT
 		| H1_REG_ENC_CTRL_WIDTH(MB_WIDTH(ctx->src_fmt.width))
 		| H1_REG_ENC_CTRL_HEIGHT(MB_HEIGHT(ctx->src_fmt.height))
+		| H1_REG_ENC_REC_WRITE_BUFFER_4MB
 		| H1_REG_ENC_CTRL_ENC_MODE_H264
 		| H1_REG_ENC_CTRL_EN_BIT;
 	if (params->slice_type) {

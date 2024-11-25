@@ -7,16 +7,18 @@
 #include <linux/clk.h>
 #include <linux/gpio/driver.h>
 #include <linux/io.h>
+#include <linux/mfd/syscon.h>
 #include <linux/of.h>
 #include <linux/of_device.h>
+#include <linux/pinctrl/consumer.h>
 #include <linux/pinctrl/pinconf-generic.h>
 #include <linux/pinctrl/pinctrl.h>
 #include <linux/pinctrl/pinmux.h>
 #include <linux/platform_device.h>
 #include <linux/pm.h>
+#include <linux/regmap.h>
 
 #include "../core.h"
-#include "../../gpio/gpiolib.h"
 
 #define DRIVER_NAME		"stm32_hdp"
 #define HDP_CTRL_ENABLE		1
@@ -37,6 +39,9 @@
 #define HDP_MUX_MASK(n)		(GENMASK(3, 0) << HDP_MUX_SHIFT(n))
 #define HDP_MUX_GPOVAL(n)	(0xF << HDP_MUX_SHIFT(n))
 
+#define SYSCFG_USBDBGCR_REG	1
+#define SYSCFG_USBDBGCR_MASK	2
+#define SYSCFG_USBDBGCR_VAL	3
 struct stm32_hdp {
 	struct device *dev;
 	void __iomem *base;
@@ -45,6 +50,7 @@ struct stm32_hdp {
 	struct gpio_chip gpio_chip;
 	u32 mux_conf;
 	u32 gposet_conf;
+	struct regmap *regmap;
 };
 
 static const struct pinctrl_pin_desc stm32_hdp_pins[] = {
@@ -191,6 +197,29 @@ static const struct of_device_id stm32_hdp_of_match[] = {
 	{}
 };
 
+static int stm32_hdp_syscfg_setup(struct stm32_hdp *hdp)
+{
+	struct device_node *np = hdp->dev->of_node;
+	u32 usbdbgcr_reg, mask, val;
+	int err;
+
+	hdp->regmap = syscon_regmap_lookup_by_phandle_optional(np, "st,syscfg");
+	if (IS_ERR_OR_NULL(hdp->regmap))
+		return PTR_ERR_OR_ZERO(hdp->regmap);
+
+	err = of_property_read_u32_index(np, "st,syscfg", SYSCFG_USBDBGCR_REG, &usbdbgcr_reg);
+	if (err)
+		return dev_err_probe(hdp->dev, err, "can't get SYSCFG_USBDBGCR offset\n");
+	err = of_property_read_u32_index(np, "st,syscfg", SYSCFG_USBDBGCR_MASK, &mask);
+	if (err)
+		return dev_err_probe(hdp->dev, err, "can't get SYSCFG_USBDBGCR mask value\n");
+	err = of_property_read_u32_index(np, "st,syscfg", SYSCFG_USBDBGCR_VAL, &val);
+	if (err)
+		return dev_err_probe(hdp->dev, err, "can't get SYSCFG_USBDBGCR value\n");
+
+	return regmap_update_bits(hdp->regmap, usbdbgcr_reg, mask, val);
+}
+
 static int stm32_hdp_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -208,6 +237,10 @@ static int stm32_hdp_probe(struct platform_device *pdev)
 	hdp->base = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(hdp->base))
 		return PTR_ERR(hdp->base);
+
+	err = stm32_hdp_syscfg_setup(hdp);
+	if (err)
+		return dev_err_probe(dev, err, "Failed to setup and configure syscfg register");
 
 	hdp->clk = devm_clk_get_enabled(dev, NULL);
 	if (IS_ERR(hdp->clk))

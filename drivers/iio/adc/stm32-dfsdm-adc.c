@@ -9,8 +9,8 @@
 #include <linux/dmaengine.h>
 #include <linux/dma-mapping.h>
 #include <linux/iio/adc/stm32-dfsdm-adc.h>
+#include <linux/iio/backend.h>
 #include <linux/iio/buffer.h>
-#include <linux/iio/consumer.h>
 #include <linux/iio/hw-consumer.h>
 #include <linux/iio/sysfs.h>
 #include <linux/iio/timer/stm32-lptim-trigger.h>
@@ -20,7 +20,8 @@
 #include <linux/iio/triggered_buffer.h>
 #include <linux/interrupt.h>
 #include <linux/module.h>
-#include <linux/of_device.h>
+#include <linux/of.h>
+#include <linux/of_platform.h>
 #include <linux/platform_device.h>
 #include <linux/regmap.h>
 #include <linux/slab.h>
@@ -68,13 +69,6 @@ struct stm32_dfsdm_dev_data {
 	const struct regmap_config *regmap_cfg;
 };
 
-struct stm32_dfsdm_sd_chan_info {
-	int scale_val;
-	int scale_val2;
-	int offset;
-	unsigned int differential;
-};
-
 struct stm32_dfsdm_adc {
 	struct stm32_dfsdm *dfsdm;
 	const struct stm32_dfsdm_dev_data *dev_data;
@@ -85,9 +79,9 @@ struct stm32_dfsdm_adc {
 	/* ADC specific */
 	unsigned int oversamp;
 	struct iio_hw_consumer *hwc;
+	struct iio_backend **backend;
 	struct completion completion;
 	u32 *buffer;
-	struct stm32_dfsdm_sd_chan_info *sd_chan;
 
 	/* Audio specific */
 	unsigned int spi_freq;  /* SPI bus clock frequency */
@@ -674,6 +668,77 @@ static int stm32_dfsdm_channel_parse_of(struct stm32_dfsdm *dfsdm,
 	return 0;
 }
 
+static int stm32_dfsdm_generic_channel_parse_of(struct stm32_dfsdm *dfsdm,
+						struct iio_dev *indio_dev,
+						struct iio_chan_spec *ch,
+						struct fwnode_handle *node)
+{
+	struct stm32_dfsdm_channel *df_ch;
+	struct stm32_dfsdm_adc *adc = iio_priv(indio_dev);
+	struct iio_backend *backend;
+	const char *of_str;
+	int ret, val;
+
+	ret = fwnode_property_read_u32(node, "reg", &ch->channel);
+	if (ret < 0) {
+		dev_err(&indio_dev->dev, "Missing channel index %d\n", ret);
+		return ret;
+	}
+
+	if (ch->channel >= dfsdm->num_chs) {
+		dev_err(&indio_dev->dev, " Error bad channel number %d (max = %d)\n",
+			ch->channel, dfsdm->num_chs);
+		return -EINVAL;
+	}
+
+	if (fwnode_property_present(node, "label")) {
+		/* label is optional */
+		ret = fwnode_property_read_string(node, "label", &ch->datasheet_name);
+		if (ret < 0) {
+			dev_err(&indio_dev->dev,
+				" Error parsing 'label' for idx %d\n", ch->channel);
+			return ret;
+		}
+	}
+
+	df_ch =  &dfsdm->ch_list[ch->channel];
+	df_ch->id = ch->channel;
+
+	ret = fwnode_property_read_string(node, "st,adc-channel-type", &of_str);
+	if (!ret) {
+		val = stm32_dfsdm_str2val(of_str, stm32_dfsdm_chan_type);
+		if (val < 0)
+			return val;
+	} else {
+		val = 0;
+	}
+	df_ch->type = val;
+
+	ret = fwnode_property_read_string(node, "st,adc-channel-clk-src", &of_str);
+	if (!ret) {
+		val = stm32_dfsdm_str2val(of_str, stm32_dfsdm_chan_src);
+		if (val < 0)
+			return val;
+	} else {
+		val = 0;
+	}
+	df_ch->src = val;
+
+	ret = fwnode_property_read_u32(node, "st,adc-alt-channel", &df_ch->alt_si);
+	if (ret != -EINVAL)
+		df_ch->alt_si = 0;
+
+	if (adc->dev_data->type == DFSDM_IIO) {
+		backend = devm_iio_backend_fwnode_get(&indio_dev->dev, NULL, node);
+		if (IS_ERR(backend))
+			return dev_err_probe(&indio_dev->dev, PTR_ERR(backend),
+					     "Failed to get backend\n");
+		adc->backend[ch->scan_index] = backend;
+	}
+
+	return 0;
+}
+
 static ssize_t dfsdm_adc_audio_get_spiclk(struct iio_dev *indio_dev,
 					  uintptr_t priv,
 					  const struct iio_chan_spec *chan,
@@ -1010,6 +1075,7 @@ static int stm32_dfsdm_update_scan_mode(struct iio_dev *indio_dev,
 static int stm32_dfsdm_postenable(struct iio_dev *indio_dev)
 {
 	struct stm32_dfsdm_adc *adc = iio_priv(indio_dev);
+	int i = 0;
 	int ret;
 
 	/* Reset adc buffer index */
@@ -1019,6 +1085,15 @@ static int stm32_dfsdm_postenable(struct iio_dev *indio_dev)
 		ret = iio_hw_consumer_enable(adc->hwc);
 		if (ret < 0)
 			return ret;
+	}
+
+	if (adc->backend) {
+		while (adc->backend[i]) {
+			ret = iio_backend_enable(adc->backend[i]);
+			if (ret < 0)
+				return ret;
+			i++;
+		}
 	}
 
 	ret = stm32_dfsdm_start_dfsdm(adc->dfsdm);
@@ -1053,12 +1128,20 @@ err_stop_hwc:
 static int stm32_dfsdm_predisable(struct iio_dev *indio_dev)
 {
 	struct stm32_dfsdm_adc *adc = iio_priv(indio_dev);
+	int i = 0;
 
 	stm32_dfsdm_stop_conv(indio_dev);
 
 	stm32_dfsdm_adc_dma_stop(indio_dev);
 
 	stm32_dfsdm_stop_dfsdm(adc->dfsdm);
+
+	if (adc->backend) {
+		while (adc->backend[i]) {
+			iio_backend_disable(adc->backend[i]);
+			i++;
+		}
+	}
 
 	if (adc->hwc)
 		iio_hw_consumer_disable(adc->hwc);
@@ -1232,10 +1315,12 @@ static int stm32_dfsdm_read_raw(struct iio_dev *indio_dev,
 				int *val2, long mask)
 {
 	struct stm32_dfsdm_adc *adc = iio_priv(indio_dev);
+
 	struct stm32_dfsdm_filter *fl = &adc->dfsdm->fl_list[adc->fl_id];
 	struct stm32_dfsdm_filter_osr *flo = &fl->flo[fl->fast];
 	u32 max = flo->max << (flo->lshift - chan->scan_type.shift);
-	int ret, idx = chan->scan_index;
+	int idx = chan->scan_index;
+	int ret;
 
 	if (flo->lshift < chan->scan_type.shift)
 		max = flo->max >> (chan->scan_type.shift - flo->lshift);
@@ -1245,7 +1330,10 @@ static int stm32_dfsdm_read_raw(struct iio_dev *indio_dev,
 		ret = iio_device_claim_direct_mode(indio_dev);
 		if (ret)
 			return ret;
-		ret = iio_hw_consumer_enable(adc->hwc);
+		if (adc->hwc)
+			ret = iio_hw_consumer_enable(adc->hwc);
+		if (adc->backend)
+			ret = iio_backend_enable(adc->backend[idx]);
 		if (ret < 0) {
 			dev_err(&indio_dev->dev,
 				"%s: IIO enable failed (channel %d)\n",
@@ -1254,7 +1342,10 @@ static int stm32_dfsdm_read_raw(struct iio_dev *indio_dev,
 			return ret;
 		}
 		ret = stm32_dfsdm_single_conv(indio_dev, chan, val);
-		iio_hw_consumer_disable(adc->hwc);
+		if (adc->hwc)
+			iio_hw_consumer_disable(adc->hwc);
+		if (adc->backend)
+			iio_backend_disable(adc->backend[idx]);
 		if (ret < 0) {
 			dev_err(&indio_dev->dev,
 				"%s: Conversion failed (channel %d)\n",
@@ -1279,33 +1370,44 @@ static int stm32_dfsdm_read_raw(struct iio_dev *indio_dev,
 		/*
 		 * Scale is expressed in mV.
 		 * When fast mode is disabled, actual resolution may be lower
-		 * than 2^n, where n=realbits-1.
-		 * This leads to underestimating input voltage. To
-		 * compensate this deviation, the voltage reference can be
+		 * than 2^n, where n = realbits - 1.
+		 * This leads to underestimating the input voltage.
+		 * To compensate this deviation, the voltage reference can be
 		 * corrected with a factor = realbits resolution / actual max
 		 */
-		*val = div_u64((u64)adc->sd_chan[idx].scale_val *
-			       (u64)BIT(DFSDM_DATA_RES - 1), max);
-		*val2 = chan->scan_type.realbits;
-		if (adc->sd_chan[idx].differential)
-			*val *= 2;
+		if (adc->backend) {
+			ret = iio_backend_read_scale(adc->backend[idx], chan, val, NULL);
+			if (ret < 0)
+				return ret;
+
+			*val = div_u64((u64)*val * (u64)BIT(DFSDM_DATA_RES - 1), max);
+			*val2 = chan->scan_type.realbits;
+			if (chan->differential)
+				*val *= 2;
+		}
 		return IIO_VAL_FRACTIONAL_LOG2;
 
 	case IIO_CHAN_INFO_OFFSET:
 		/*
-		 * DFSDM output data are in the range [-2^n,2^n-1],
-		 * with n=realbits-1.
+		 * DFSDM output data are in the range [-2^n, 2^n],
+		 * with n = realbits - 1.
 		 * - Differential modulator:
 		 * Offset correspond to SD modulator offset.
 		 * - Single ended modulator:
-		 * Input is in [0V,Vref] range, where 0V corresponds to -2^n.
+		 * Input is in [0V, Vref] range,
+		 * where 0V corresponds to -2^n, and Vref to 2^n.
 		 * Add 2^n to offset. (i.e. middle of input range)
 		 * offset = offset(sd) * vref / res(sd) * max / vref.
 		 */
-		*val = div_u64((u64)max * adc->sd_chan[idx].offset,
-			       BIT(adc->sd_chan[idx].scale_val2 - 1));
-		if (!adc->sd_chan[idx].differential)
-			*val += max;
+		if (adc->backend) {
+			ret = iio_backend_read_offset(adc->backend[idx], chan, val, NULL);
+			if (ret < 0)
+				return ret;
+
+			*val = div_u64((u64)max * *val, BIT(*val2 - 1));
+			if (!chan->differential)
+				*val += max;
+		}
 		return IIO_VAL_INT;
 	}
 
@@ -1414,15 +1516,18 @@ static int stm32_dfsdm_dma_request(struct device *dev,
 	return 0;
 }
 
-static int stm32_dfsdm_adc_chan_init_one(struct iio_dev *indio_dev,
-					 struct iio_chan_spec *ch)
+static int stm32_dfsdm_adc_chan_init_one(struct iio_dev *indio_dev, struct iio_chan_spec *ch,
+					 struct fwnode_handle *child)
 {
 	struct stm32_dfsdm_adc *adc = iio_priv(indio_dev);
 	int ret;
 
-	ret = stm32_dfsdm_channel_parse_of(adc->dfsdm, indio_dev, ch);
+	if (child)
+		ret = stm32_dfsdm_generic_channel_parse_of(adc->dfsdm, indio_dev, ch, child);
+	else /* Legacy binding */
+		ret = stm32_dfsdm_channel_parse_of(adc->dfsdm, indio_dev, ch);
 	if (ret < 0)
-		return ret;
+		return dev_err_probe(&indio_dev->dev, ret, "Failed to parse channel\n");
 
 	ch->type = IIO_VOLTAGE;
 	ch->indexed = 1;
@@ -1431,23 +1536,69 @@ static int stm32_dfsdm_adc_chan_init_one(struct iio_dev *indio_dev,
 	 * IIO_CHAN_INFO_RAW: used to compute regular conversion
 	 * IIO_CHAN_INFO_OVERSAMPLING_RATIO: used to set oversampling
 	 */
-	ch->info_mask_separate = BIT(IIO_CHAN_INFO_RAW) |
-				 BIT(IIO_CHAN_INFO_SCALE) |
-				 BIT(IIO_CHAN_INFO_OFFSET);
+	if (child) {
+		ch->info_mask_separate = BIT(IIO_CHAN_INFO_RAW) |
+					 BIT(IIO_CHAN_INFO_SCALE) |
+					 BIT(IIO_CHAN_INFO_OFFSET);
+	} else {
+		/* Legacy. Scaling not supported */
+		ch->info_mask_separate = BIT(IIO_CHAN_INFO_RAW);
+	}
+
 	ch->info_mask_shared_by_all = BIT(IIO_CHAN_INFO_OVERSAMPLING_RATIO) |
 					BIT(IIO_CHAN_INFO_SAMP_FREQ);
 
 	if (adc->dev_data->type == DFSDM_AUDIO) {
 		ch->ext_info = dfsdm_adc_audio_ext_info;
+		ch->scan_index = 0;
 	} else {
 		ch->scan_type.shift = 8;
 	}
 	ch->scan_type.sign = 's';
-	ch->scan_type.realbits = DFSDM_DATA_RES;
+	ch->scan_type.realbits = 24;
 	ch->scan_type.storagebits = 32;
 
 	return stm32_dfsdm_chan_configure(adc->dfsdm,
 					  &adc->dfsdm->ch_list[ch->channel]);
+}
+
+static int stm32_dfsdm_chan_init(struct iio_dev *indio_dev, struct iio_chan_spec *channels)
+{
+	int num_ch = indio_dev->num_channels;
+	int chan_idx = 0;
+	int ret;
+
+	for (chan_idx = 0; chan_idx < num_ch; chan_idx++) {
+		channels[chan_idx].scan_index = chan_idx;
+		ret = stm32_dfsdm_adc_chan_init_one(indio_dev, &channels[chan_idx], NULL);
+		if (ret < 0)
+			return dev_err_probe(&indio_dev->dev, ret, "Channels init failed\n");
+	}
+
+	return 0;
+}
+
+static int stm32_dfsdm_generic_chan_init(struct iio_dev *indio_dev, struct iio_chan_spec *channels)
+{
+	int chan_idx = 0, ret;
+	struct fwnode_handle *child;
+
+	device_for_each_child_node(&indio_dev->dev, child) {
+		/* Skip DAI node in DFSDM audio nodes */
+		if (fwnode_property_present(child, "compatible"))
+			continue;
+
+		channels[chan_idx].scan_index = chan_idx;
+		ret = stm32_dfsdm_adc_chan_init_one(indio_dev, &channels[chan_idx], child);
+		if (ret < 0) {
+			fwnode_handle_put(child);
+			return dev_err_probe(&indio_dev->dev, ret, "Channels init failed\n");
+		}
+
+		chan_idx++;
+	}
+
+	return chan_idx;
 }
 
 static int stm32_dfsdm_audio_init(struct device *dev, struct iio_dev *indio_dev)
@@ -1455,15 +1606,26 @@ static int stm32_dfsdm_audio_init(struct device *dev, struct iio_dev *indio_dev)
 	struct iio_chan_spec *ch;
 	struct stm32_dfsdm_adc *adc = iio_priv(indio_dev);
 	struct stm32_dfsdm_channel *d_ch;
-	int ret;
+	bool legacy = false;
+	int num_ch, ret;
+
+	/* If st,adc-channels is defined legacy binding is used. Else assume generic binding. */
+	num_ch = of_property_count_u32_elems(indio_dev->dev.of_node, "st,adc-channels");
+	if (num_ch == 1)
+		legacy = true;
 
 	ch = devm_kzalloc(&indio_dev->dev, sizeof(*ch), GFP_KERNEL);
 	if (!ch)
 		return -ENOMEM;
 
-	ch->scan_index = 0;
+	indio_dev->num_channels = 1;
+	indio_dev->channels = ch;
 
-	ret = stm32_dfsdm_adc_chan_init_one(indio_dev, ch);
+	if (legacy)
+		ret = stm32_dfsdm_chan_init(indio_dev, ch);
+	else
+		ret = stm32_dfsdm_generic_chan_init(indio_dev, ch);
+
 	if (ret < 0) {
 		dev_err(&indio_dev->dev, "Channels init failed\n");
 		return ret;
@@ -1474,9 +1636,6 @@ static int stm32_dfsdm_audio_init(struct device *dev, struct iio_dev *indio_dev)
 	if (d_ch->src != DFSDM_CHANNEL_SPI_CLOCK_EXTERNAL)
 		adc->spi_freq = adc->dfsdm->spi_master_freq;
 
-	indio_dev->num_channels = 1;
-	indio_dev->channels = ch;
-
 	return stm32_dfsdm_dma_request(dev, indio_dev);
 }
 
@@ -1484,91 +1643,60 @@ static int stm32_dfsdm_adc_init(struct device *dev, struct iio_dev *indio_dev)
 {
 	struct iio_chan_spec *ch;
 	struct stm32_dfsdm_adc *adc = iio_priv(indio_dev);
-	struct iio_channel *channels, *chan;
-	struct stm32_dfsdm_sd_chan_info *sd_chan;
-	int num_ch;
-	int ret, chan_idx, val2;
+	int num_ch, ret;
+	bool legacy = false;
 
 	adc->oversamp = DFSDM_DEFAULT_OVERSAMPLING;
 	ret = stm32_dfsdm_compute_all_osrs(indio_dev, adc->oversamp);
 	if (ret < 0)
 		return ret;
 
-	num_ch = of_property_count_u32_elems(indio_dev->dev.of_node,
-					     "st,adc-channels");
-	if (num_ch < 0 || num_ch > adc->dfsdm->num_chs) {
-		dev_err(&indio_dev->dev, "Bad st,adc-channels\n");
-		return num_ch < 0 ? num_ch : -EINVAL;
+	num_ch = device_get_child_node_count(&indio_dev->dev);
+	if (!num_ch) {
+		/* No channels nodes found. Assume legacy binding */
+		num_ch = of_property_count_u32_elems(indio_dev->dev.of_node, "st,adc-channels");
+		if (num_ch < 0) {
+			dev_err(&indio_dev->dev, "Bad st,adc-channels\n");
+			return num_ch;
+		}
+
+		legacy = true;
 	}
 
-	/* Bind to SD modulator IIO device */
-	adc->hwc = devm_iio_hw_consumer_alloc(&indio_dev->dev);
-	if (IS_ERR(adc->hwc))
-		return -EPROBE_DEFER;
+	if (num_ch > adc->dfsdm->num_chs) {
+		dev_err(&indio_dev->dev, "Number of channel [%d] exceeds [%d]\n",
+			num_ch, adc->dfsdm->num_chs);
+		return -EINVAL;
+	}
+	indio_dev->num_channels = num_ch;
 
-	ch = devm_kcalloc(&indio_dev->dev, num_ch, sizeof(*ch),
-			  GFP_KERNEL);
+	if (legacy) {
+		/* Bind to SD modulator IIO device. */
+		adc->hwc = devm_iio_hw_consumer_alloc(&indio_dev->dev);
+		if (IS_ERR(adc->hwc))
+			return dev_err_probe(&indio_dev->dev, -EPROBE_DEFER,
+					     "waiting for SD modulator\n");
+	} else {
+		/* Generic binding. SD modulator IIO device not used. Use SD modulator backend. */
+		adc->hwc = NULL;
+
+		adc->backend = devm_kcalloc(&indio_dev->dev, num_ch, sizeof(*adc->backend),
+					    GFP_KERNEL);
+		if (!adc->backend)
+			return -ENOMEM;
+	}
+
+	ch = devm_kcalloc(&indio_dev->dev, num_ch, sizeof(*ch), GFP_KERNEL);
 	if (!ch)
 		return -ENOMEM;
-
-	/* Get SD modulator channels */
-	channels = iio_channel_get_all(&indio_dev->dev);
-	if (IS_ERR(channels)) {
-		dev_err(&indio_dev->dev, "Failed to get channel %ld\n",
-			PTR_ERR(channels));
-		return PTR_ERR(channels);
-	}
-	chan = &channels[0];
-
-	adc->sd_chan = devm_kzalloc(&indio_dev->dev,
-				    sizeof(*adc->sd_chan) * num_ch, GFP_KERNEL);
-	if (!adc->sd_chan)
-		return -ENOMEM;
-	sd_chan = adc->sd_chan;
-
-	for (chan_idx = 0; chan_idx < num_ch; chan_idx++) {
-		ch[chan_idx].scan_index = chan_idx;
-		ret = stm32_dfsdm_adc_chan_init_one(indio_dev, &ch[chan_idx]);
-		if (ret < 0) {
-			dev_err(&indio_dev->dev, "Channels init failed\n");
-			return ret;
-		}
-
-		if (!chan->indio_dev)
-			return -EINVAL;
-
-		ret = iio_read_channel_scale(chan, &sd_chan->scale_val,
-					     &sd_chan->scale_val2);
-		if (ret < 0) {
-			dev_err(&indio_dev->dev,
-				"Failed to get channel %d scale\n", chan_idx);
-			return ret;
-		}
-
-		if (iio_channel_has_info(chan->channel, IIO_CHAN_INFO_OFFSET)) {
-			ret = iio_read_channel_offset(chan, &sd_chan->offset,
-						      &val2);
-			if (ret < 0) {
-				dev_err(&indio_dev->dev,
-					"Failed to get channel %d offset\n",
-					chan_idx);
-				return ret;
-			}
-		}
-
-		sd_chan->differential = chan->channel->differential;
-
-		dev_dbg(&indio_dev->dev, "Channel %d %s scale ref=%d offset=%d",
-			chan_idx, chan->channel->differential ?
-			"differential" : "single-ended",
-			sd_chan->scale_val, sd_chan->offset);
-
-		chan++;
-		sd_chan++;
-	}
-
-	indio_dev->num_channels = num_ch;
 	indio_dev->channels = ch;
+
+	if (legacy)
+		ret = stm32_dfsdm_chan_init(indio_dev, ch);
+	else
+		ret = stm32_dfsdm_generic_chan_init(indio_dev, ch);
+	if (ret < 0)
+		return ret;
 
 	init_completion(&adc->completion);
 
@@ -1782,3 +1910,4 @@ module_platform_driver(stm32_dfsdm_adc_driver);
 MODULE_DESCRIPTION("STM32 sigma delta ADC");
 MODULE_AUTHOR("Arnaud Pouliquen <arnaud.pouliquen@st.com>");
 MODULE_LICENSE("GPL v2");
+MODULE_IMPORT_NS(IIO_BACKEND);

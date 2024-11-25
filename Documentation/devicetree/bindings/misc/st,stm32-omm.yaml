@@ -58,7 +58,7 @@ properties:
     items:
       - description: Octo Memory Manager reset
 
-  feature-domains:
+  access-controllers:
     $ref: /schemas/types.yaml#/definitions/phandle-array
     description: |
       Phandle to the rifsc device to check access right.
@@ -126,9 +126,8 @@ additionalProperties: false
 examples:
   - |
     #include <dt-bindings/interrupt-controller/arm-gic.h>
-    #include <dt-bindings/bus/stm32mp25_sys_bus.h>
-    #include <dt-bindings/clock/stm32mp25-clks.h>
-    #include <dt-bindings/reset/stm32mp25-resets.h>
+    #include <dt-bindings/clock/st,stm32mp25-rcc.h>
+    #include <dt-bindings/reset/st,stm32mp25-rcc.h>
 
     ommanager@40500000 {
       #address-cells = <2>;
@@ -144,7 +143,7 @@ examples:
       st,omm-req2ack-ns = <0x0>;
       st,omm-mux = <0x0>;
       st,omm-cssel-ovr = <0x0>;
-      feature-domains = <&rifsc STM32MP25_RIFSC_OCTOSPIM_ID>;
+      access-controllers = <&rifsc 111>;
       power-domains = <&CLUSTER_PD>;
 
       ranges = <0 0 0x40430000 0x400>,
@@ -162,7 +161,7 @@ examples:
         st,syscfg-dlyb = <&syscfg 0x1000>;
         clocks = <&rcc CK_KER_OSPI1>;
         resets = <&rcc OSPI1_R>, <&rcc OSPI1DLL_R>;
-        feature-domains = <&rifsc STM32MP25_RIFSC_OCTOSPI1_ID>;
+        access-controllers = <&rifsc 74>;
         power-domains = <&CLUSTER_PD>;
       };
 
@@ -178,7 +177,7 @@ examples:
         st,syscfg-dlyb = <&syscfg 0x1400>;
         clocks = <&rcc CK_KER_OSPI2>;
         resets = <&rcc OSPI2_R>, <&rcc OSPI2DLL_R>;
-        feature-domains = <&rifsc STM32MP25_RIFSC_OCTOSPI2_ID>;
+        access-controllers = <&rifsc 75>;
         power-domains = <&CLUSTER_PD>;
       };
     };

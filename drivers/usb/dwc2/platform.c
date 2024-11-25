@@ -11,11 +11,13 @@
 #include <linux/clk.h>
 #include <linux/device.h>
 #include <linux/dma-mapping.h>
-#include <linux/of_device.h>
+#include <linux/of.h>
+#include <linux/mfd/syscon.h>
 #include <linux/mutex.h>
 #include <linux/platform_device.h>
 #include <linux/phy/phy.h>
 #include <linux/platform_data/s3c-hsotg.h>
+#include <linux/regmap.h>
 #include <linux/reset.h>
 
 #include <linux/usb/of.h>
@@ -301,7 +303,7 @@ static int dwc2_lowlevel_hw_init(struct dwc2_hsotg *hsotg)
  * stops device processing. Any resources used on behalf of this device are
  * freed.
  */
-static int dwc2_driver_remove(struct platform_device *dev)
+static void dwc2_driver_remove(struct platform_device *dev)
 {
 	struct dwc2_hsotg *hsotg = platform_get_drvdata(dev);
 	struct dwc2_gregs_backup *gr;
@@ -331,7 +333,7 @@ static int dwc2_driver_remove(struct platform_device *dev)
 
 	/* Exit clock gating when driver is removed. */
 	if (hsotg->params.power_down == DWC2_POWER_DOWN_PARAM_NONE &&
-	    hsotg->bus_suspended) {
+	    hsotg->bus_suspended && !hsotg->params.no_clock_gating) {
 		if (dwc2_is_device_mode(hsotg))
 			dwc2_gadget_exit_clock_gating(hsotg, 0);
 		else
@@ -352,7 +354,13 @@ static int dwc2_driver_remove(struct platform_device *dev)
 	if (hsotg->ll_hw_enabled)
 		dwc2_lowlevel_hw_disable(hsotg);
 
-	return 0;
+	if (hsotg->params.activate_stm32_bvaloval_en) {
+		u32 ggpio = dwc2_readl(hsotg, GGPIO);
+
+		ggpio &= ~GGPIO_STM32_OTG_GCCFG_IDPULLUP_DIS;
+		ggpio &= ~GGPIO_STM32_OTG_GCCFG_VBVALOVAL;
+		dwc2_writel(hsotg, ggpio, GGPIO);
+	}
 }
 
 /**
@@ -437,6 +445,7 @@ int dwc2_check_core_version(struct dwc2_hsotg *hsotg)
  */
 static int dwc2_driver_probe(struct platform_device *dev)
 {
+	struct device_node *node = dev->dev.of_node;
 	struct dwc2_hsotg *hsotg;
 	struct resource *res;
 	int retval;
@@ -537,6 +546,30 @@ static int dwc2_driver_probe(struct platform_device *dev)
 	if (retval)
 		goto error;
 
+	if (hsotg->params.activate_stm32_otgarcr_en) {
+		hsotg->params.stm32_regmap = syscon_regmap_lookup_by_phandle(node, "st,syscfg");
+		if (IS_ERR(hsotg->params.stm32_regmap)) {
+			retval = dev_err_probe(&dev->dev, PTR_ERR(hsotg->params.stm32_regmap),
+					       "no st,syscfg node found\n");
+			goto error;
+		}
+
+		retval = of_property_read_u32_index(node, "st,syscfg", 1,
+						    &hsotg->params.stm32_syscfg_otgarcr_reg_off);
+		if (retval) {
+			retval = dev_err_probe(&dev->dev, retval, "can't get otgarcr offset\n");
+			goto error;
+		}
+		dev_vdbg(&dev->dev, "syscfg-otgarcr-reg offset 0x%x\n",
+			 hsotg->params.stm32_syscfg_otgarcr_reg_off);
+	}
+
+	if (dev->dev.dma_range_map && hsotg->params.activate_stm32_otgarcr_en) {
+		regmap_set_bits(hsotg->params.stm32_regmap,
+				hsotg->params.stm32_syscfg_otgarcr_reg_off,
+				STM32_SYSCFG_OTGARCR_OFFSET_AREN_MASK);
+	}
+
 	if (hsotg->params.activate_stm_id_vb_detection) {
 		u32 ggpio;
 
@@ -559,6 +592,14 @@ static int dwc2_driver_probe(struct platform_device *dev)
 
 		/* ID/VBUS detection startup time */
 		usleep_range(5000, 7000);
+	}
+
+	if (hsotg->params.activate_stm32_bvaloval_en) {
+		u32 ggpio = dwc2_readl(hsotg, GGPIO);
+
+		ggpio |= GGPIO_STM32_OTG_GCCFG_IDPULLUP_DIS;
+		ggpio |= GGPIO_STM32_OTG_GCCFG_VBVALOVAL;
+		dwc2_writel(hsotg, ggpio, GGPIO);
 	}
 
 	retval = dwc2_drd_init(hsotg);
@@ -696,6 +737,14 @@ static int __maybe_unused dwc2_suspend(struct device *dev)
 		regulator_disable(dwc2->usb33d);
 	}
 
+	if (dwc2->params.activate_stm32_bvaloval_en) {
+		u32 ggpio = dwc2_readl(dwc2, GGPIO);
+
+		ggpio &= ~GGPIO_STM32_OTG_GCCFG_IDPULLUP_DIS;
+		ggpio &= ~GGPIO_STM32_OTG_GCCFG_VBVALOVAL;
+		dwc2_writel(dwc2, ggpio, GGPIO);
+	}
+
 	if (dwc2->ll_hw_enabled &&
 	    (is_device_mode || dwc2_host_can_poweroff_phy(dwc2))) {
 		ret = __dwc2_lowlevel_hw_disable(dwc2);
@@ -748,6 +797,14 @@ static int __maybe_unused dwc2_resume(struct device *dev)
 		spin_unlock_irqrestore(&dwc2->lock, flags);
 	}
 
+	if (dwc2->params.activate_stm32_bvaloval_en) {
+		u32 ggpio = dwc2_readl(dwc2, GGPIO);
+
+		ggpio |= GGPIO_STM32_OTG_GCCFG_IDPULLUP_DIS;
+		ggpio |= GGPIO_STM32_OTG_GCCFG_VBVALOVAL;
+		dwc2_writel(dwc2, ggpio, GGPIO);
+	}
+
 	if (!dwc2->role_sw) {
 		/* Need to restore FORCEDEVMODE/FORCEHOSTMODE */
 		dwc2_force_dr_mode(dwc2);
@@ -773,7 +830,7 @@ static struct platform_driver dwc2_platform_driver = {
 		.pm = &dwc2_dev_pm_ops,
 	},
 	.probe = dwc2_driver_probe,
-	.remove = dwc2_driver_remove,
+	.remove_new = dwc2_driver_remove,
 	.shutdown = dwc2_driver_shutdown,
 };
 

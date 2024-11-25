@@ -26,8 +26,12 @@
 #define STM32MP_PKG_AC		BIT(2)
 #define STM32MP_PKG_AD		BIT(3)
 #define STM32MP_PKG_AI		BIT(8)
+#define STM32MP_PKG_AJ		BIT(9)
 #define STM32MP_PKG_AK		BIT(10)
 #define STM32MP_PKG_AL		BIT(11)
+#define STM32MP_PKG_AM		BIT(12)
+#define STM32MP_PKG_AN		BIT(13)
+#define STM32MP_PKG_AO		BIT(14)
 
 struct stm32_desc_function {
 	const char *name;

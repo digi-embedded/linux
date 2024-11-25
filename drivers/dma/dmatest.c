@@ -94,7 +94,7 @@ MODULE_PARM_DESC(polled, "Use polling for completion instead of interrupts");
 
 /**
  * struct dmatest_params - test parameters.
- * @nobounce:		avoid using swiotlb buffer
+ * @nobounce:		prevent using swiotlb buffer
  * @buf_size:		size of the memcpy test buffer
  * @channel:		bus ID of the channel to test
  * @device:		bus ID of the DMA Engine to test

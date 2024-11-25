@@ -2,70 +2,67 @@
 /*
  * Driver for STM32 Digital Camera Memory Interface Pixel Processor
  *
- * Copyright (C) STMicroelectronics SA 2021
+ * Copyright (C) STMicroelectronics SA 2023
  * Authors: Hugues Fruchet <hugues.fruchet@foss.st.com>
  *          Alain Volmat <alain.volmat@foss.st.com>
  *          for STMicroelectronics.
  */
 
-#include <linux/delay.h>
-#include <linux/module.h>
-#include <linux/mod_devicetable.h>
-#include <linux/platform_device.h>
 #include <linux/vmalloc.h>
 #include <linux/v4l2-mediabus.h>
-#include <media/mipi-csi2.h>
 #include <media/v4l2-rect.h>
 #include <media/v4l2-subdev.h>
 
 #include "dcmipp-common.h"
 
-#define DCMIPP_BYTEPROC_DRV_NAME "dcmipp-byteproc"
-
-#define DCMIPP_FMT_WIDTH_DEFAULT  640
-#define DCMIPP_FMT_HEIGHT_DEFAULT 480
-
-#define DCMIPP_P0FCTCR (0x500)
-#define DCMIPP_P0FCTCR_FRATE_MASK GENMASK(1, 0)
-#define DCMIPP_P0SCSTR (0x504)
+#define DCMIPP_P0FCTCR	0x500
+#define DCMIPP_P0FCTCR_FRATE_MASK	GENMASK(1, 0)
+#define DCMIPP_P0SCSTR	0x504
 #define DCMIPP_P0SCSTR_HSTART_SHIFT	0
 #define DCMIPP_P0SCSTR_VSTART_SHIFT	16
-#define DCMIPP_P0SCSZR (0x508)
-#define DCMIPP_P0SCSZR_ENABLE BIT(31)
+#define DCMIPP_P0SCSZR	0x508
+#define DCMIPP_P0SCSZR_ENABLE		BIT(31)
 #define DCMIPP_P0SCSZR_HSIZE_SHIFT	0
 #define DCMIPP_P0SCSZR_VSIZE_SHIFT	16
-#define DCMIPP_P0PPCR (0x5C0)
-#define DCMIPP_P0PPCR_BSM_1_2 0x1
-#define DCMIPP_P0PPCR_BSM_1_4 0x2
-#define DCMIPP_P0PPCR_BSM_2_4 0x3
-#define DCMIPP_P0PPCR_BSM_MASK GENMASK(8, 7)
-#define DCMIPP_P0PPCR_BSM_SHIFT 0x7
-#define DCMIPP_P0PPCR_LSM BIT(10)
-#define DCMIPP_P0PPCR_OELS BIT(11)
+#define DCMIPP_P0PPCR	0x5c0
+#define DCMIPP_P0PPCR_BSM_1_2		0x1
+#define DCMIPP_P0PPCR_BSM_1_4		0x2
+#define DCMIPP_P0PPCR_BSM_2_4		0x3
+#define DCMIPP_P0PPCR_BSM_MASK		GENMASK(8, 7)
+#define DCMIPP_P0PPCR_BSM_SHIFT		0x7
+#define DCMIPP_P0PPCR_LSM		BIT(10)
+#define DCMIPP_P0PPCR_OELS		BIT(11)
 
 #define IS_SINK(pad) (!(pad))
 #define IS_SRC(pad)  ((pad))
-#define PAD_STR(pad) (IS_SRC((pad))) ? "src" : "sink"
-
-#define BYTEPROC_MEDIA_BUS_FMT_DEFAULT MEDIA_BUS_FMT_RGB565_2X8_LE
 
 struct dcmipp_byteproc_pix_map {
 	unsigned int code;
 	unsigned int bpp;
 };
 
-#define PIXMAP_MBUS_BPP(mbus, byteperpixel)	\
-		{						\
-			.code = MEDIA_BUS_FMT_##mbus,		\
-			.bpp = byteperpixel,	\
-		}
+#define PIXMAP_MBUS_BPP(mbus, byteperpixel)		\
+	{						\
+		.code = MEDIA_BUS_FMT_##mbus,		\
+		.bpp = byteperpixel,			\
+	}
 static const struct dcmipp_byteproc_pix_map dcmipp_byteproc_pix_map_list[] = {
 	PIXMAP_MBUS_BPP(RGB565_2X8_LE, 2),
+	PIXMAP_MBUS_BPP(RGB565_1X16, 2),
+	PIXMAP_MBUS_BPP(RGB888_3X8, 3),
+	PIXMAP_MBUS_BPP(RGB888_1X24, 3),
 	PIXMAP_MBUS_BPP(YUYV8_2X8, 2),
+	PIXMAP_MBUS_BPP(YUYV8_1X16, 2),
 	PIXMAP_MBUS_BPP(YVYU8_2X8, 2),
+	PIXMAP_MBUS_BPP(YVYU8_1X16, 2),
 	PIXMAP_MBUS_BPP(UYVY8_2X8, 2),
+	PIXMAP_MBUS_BPP(UYVY8_1X16, 2),
 	PIXMAP_MBUS_BPP(VYUY8_2X8, 2),
+	PIXMAP_MBUS_BPP(VYUY8_1X16, 2),
 	PIXMAP_MBUS_BPP(Y8_1X8, 1),
+	PIXMAP_MBUS_BPP(Y10_1X10, 2),
+	PIXMAP_MBUS_BPP(Y12_1X12, 2),
+	PIXMAP_MBUS_BPP(Y14_1X14, 2),
 	PIXMAP_MBUS_BPP(SBGGR8_1X8, 1),
 	PIXMAP_MBUS_BPP(SGBRG8_1X8, 1),
 	PIXMAP_MBUS_BPP(SGRBG8_1X8, 1),
@@ -85,15 +82,14 @@ static const struct dcmipp_byteproc_pix_map dcmipp_byteproc_pix_map_list[] = {
 	PIXMAP_MBUS_BPP(JPEG_1X8, 1),
 };
 
-static const struct dcmipp_byteproc_pix_map *dcmipp_byteproc_pix_map_by_code(u32 code)
+static const struct dcmipp_byteproc_pix_map *
+dcmipp_byteproc_pix_map_by_code(u32 code)
 {
-	const struct dcmipp_byteproc_pix_map *l = dcmipp_byteproc_pix_map_list;
-	unsigned int size = ARRAY_SIZE(dcmipp_byteproc_pix_map_list);
 	unsigned int i;
 
-	for (i = 0; i < size; i++) {
-		if (l[i].code == code)
-			return &l[i];
+	for (i = 0; i < ARRAY_SIZE(dcmipp_byteproc_pix_map_list); i++) {
+		if (dcmipp_byteproc_pix_map_list[i].code == code)
+			return &dcmipp_byteproc_pix_map_list[i];
 	}
 
 	return NULL;
@@ -103,25 +99,18 @@ struct dcmipp_byteproc_device {
 	struct dcmipp_ent_device ved;
 	struct v4l2_subdev sd;
 	struct device *dev;
-	struct v4l2_mbus_framefmt sink_fmt;
-	bool streaming;
-	/* Protect this data structure */
-	struct mutex lock;
-
 	void __iomem *regs;
+	bool streaming;
 
 	struct v4l2_fract sink_interval;
 	struct v4l2_fract src_interval;
 	unsigned int frate;
-	u32 src_code;
-	struct v4l2_rect crop;
-	struct v4l2_rect compose;
 };
 
 static const struct v4l2_mbus_framefmt fmt_default = {
 	.width = DCMIPP_FMT_WIDTH_DEFAULT,
 	.height = DCMIPP_FMT_HEIGHT_DEFAULT,
-	.code = BYTEPROC_MEDIA_BUS_FMT_DEFAULT,
+	.code = MEDIA_BUS_FMT_RGB565_2X8_LE,
 	.field = V4L2_FIELD_NONE,
 	.colorspace = DCMIPP_COLORSPACE_DEFAULT,
 	.ycbcr_enc = DCMIPP_YCBCR_ENC_DEFAULT,
@@ -136,21 +125,8 @@ static const struct v4l2_rect crop_min = {
 	.left = 0,
 };
 
-static struct v4l2_rect
-dcmipp_byteproc_get_compose_bound(const struct v4l2_mbus_framefmt *fmt)
-{
-	/* Get the crop bounds to clamp the crop rectangle correctly */
-	struct v4l2_rect r = {
-		.left = 0,
-		.top = 0,
-		.width = fmt->width,
-		.height = fmt->height,
-	};
-
-	return r;
-}
-
-static void dcmipp_byteproc_adjust_crop(struct v4l2_rect *r, struct v4l2_rect *compose)
+static void dcmipp_byteproc_adjust_crop(struct v4l2_rect *r,
+					struct v4l2_rect *compose)
 {
 	/* Disallow rectangles smaller than the minimal one. */
 	v4l2_rect_set_min_size(r, &crop_min);
@@ -164,23 +140,11 @@ static void dcmipp_byteproc_adjust_compose(struct v4l2_rect *r,
 	r->left = 0;
 
 	/* Compose is not possible for JPEG or Bayer formats */
-	if ((fmt->code == MEDIA_BUS_FMT_JPEG_1X8) ||
-	    (fmt->code == MEDIA_BUS_FMT_SBGGR8_1X8) ||
-	    (fmt->code == MEDIA_BUS_FMT_SGBRG8_1X8) ||
-	    (fmt->code == MEDIA_BUS_FMT_SGRBG8_1X8) ||
-	    (fmt->code == MEDIA_BUS_FMT_SRGGB8_1X8) ||
-	    (fmt->code == MEDIA_BUS_FMT_SBGGR10_1X10) ||
-	    (fmt->code == MEDIA_BUS_FMT_SGBRG10_1X10) ||
-	    (fmt->code == MEDIA_BUS_FMT_SGRBG10_1X10) ||
-	    (fmt->code == MEDIA_BUS_FMT_SRGGB10_1X10) ||
-	    (fmt->code == MEDIA_BUS_FMT_SBGGR12_1X12) ||
-	    (fmt->code == MEDIA_BUS_FMT_SGBRG12_1X12) ||
-	    (fmt->code == MEDIA_BUS_FMT_SGRBG12_1X12) ||
-	    (fmt->code == MEDIA_BUS_FMT_SRGGB12_1X12) ||
-	    (fmt->code == MEDIA_BUS_FMT_SBGGR14_1X14) ||
-	    (fmt->code == MEDIA_BUS_FMT_SGBRG14_1X14) ||
-	    (fmt->code == MEDIA_BUS_FMT_SGRBG14_1X14) ||
-	    (fmt->code == MEDIA_BUS_FMT_SRGGB14_1X14)) {
+	if (fmt->code == MEDIA_BUS_FMT_JPEG_1X8 ||
+	    fmt->code == MEDIA_BUS_FMT_SBGGR8_1X8 ||
+	    fmt->code == MEDIA_BUS_FMT_SGBRG8_1X8 ||
+	    fmt->code == MEDIA_BUS_FMT_SGRBG8_1X8 ||
+	    fmt->code == MEDIA_BUS_FMT_SRGGB8_1X8) {
 		r->width = fmt->width;
 		r->height = fmt->height;
 		return;
@@ -192,7 +156,7 @@ static void dcmipp_byteproc_adjust_compose(struct v4l2_rect *r,
 	else
 		r->height = fmt->height;
 
-	/* Adjust width - /2 or /4 for 8bits formats and /2 for 16bits formats */
+	/* Adjust width /2 or /4 for 8bits formats and /2 for 16bits formats */
 	if (fmt->code == MEDIA_BUS_FMT_Y8_1X8 && r->width <= (fmt->width / 4))
 		r->width = fmt->width / 4;
 	else if (r->width <= (fmt->width / 2))
@@ -230,13 +194,13 @@ static int dcmipp_byteproc_init_cfg(struct v4l2_subdev *sd,
 		struct v4l2_mbus_framefmt *mf;
 		struct v4l2_rect *r;
 
-		mf = v4l2_subdev_get_try_format(sd, sd_state, i);
+		mf = v4l2_subdev_state_get_format(sd_state, i);
 		*mf = fmt_default;
 
 		if (IS_SINK(i))
-			r = v4l2_subdev_get_try_compose(sd, sd_state, i);
+			r = v4l2_subdev_state_get_compose(sd_state, i);
 		else
-			r = v4l2_subdev_get_try_crop(sd, sd_state, i);
+			r = v4l2_subdev_state_get_crop(sd_state, i);
 
 		r->top = 0;
 		r->left = 0;
@@ -247,11 +211,11 @@ static int dcmipp_byteproc_init_cfg(struct v4l2_subdev *sd,
 	return 0;
 }
 
-static int dcmipp_byteproc_enum_mbus_code(struct v4l2_subdev *sd,
-					  struct v4l2_subdev_state *sd_state,
-					  struct v4l2_subdev_mbus_code_enum *code)
+static int
+dcmipp_byteproc_enum_mbus_code(struct v4l2_subdev *sd,
+			       struct v4l2_subdev_state *sd_state,
+			       struct v4l2_subdev_mbus_code_enum *code)
 {
-	struct dcmipp_byteproc_device *byteproc = v4l2_get_subdevdata(sd);
 	const struct dcmipp_byteproc_pix_map *vpix;
 	struct v4l2_mbus_framefmt *sink_fmt;
 
@@ -265,61 +229,34 @@ static int dcmipp_byteproc_enum_mbus_code(struct v4l2_subdev *sd,
 		if (code->index > 0)
 			return -EINVAL;
 
-		if (code->which == V4L2_SUBDEV_FORMAT_TRY)
-			sink_fmt = v4l2_subdev_get_try_format(sd, sd_state, 0);
-		else
-			sink_fmt = &byteproc->sink_fmt;
+		sink_fmt = v4l2_subdev_state_get_format(sd_state, 0);
 		code->code = sink_fmt->code;
 	}
 
 	return 0;
 }
 
-static int dcmipp_byteproc_enum_frame_size(struct v4l2_subdev *sd,
-					   struct v4l2_subdev_state *sd_state,
-					   struct v4l2_subdev_frame_size_enum *fse)
+static int
+dcmipp_byteproc_enum_frame_size(struct v4l2_subdev *sd,
+				struct v4l2_subdev_state *sd_state,
+				struct v4l2_subdev_frame_size_enum *fse)
 {
-	const struct dcmipp_byteproc_pix_map *vpix;
+	struct v4l2_rect *compose;
 
 	if (fse->index)
 		return -EINVAL;
 
-	/* Only accept code in the pix map table */
-	vpix = dcmipp_byteproc_pix_map_by_code(fse->code);
-	if (!vpix)
-		return -EINVAL;
-
 	fse->min_width = DCMIPP_FRAME_MIN_WIDTH;
-	fse->max_width = DCMIPP_FRAME_MAX_WIDTH;
 	fse->min_height = DCMIPP_FRAME_MIN_HEIGHT;
-	fse->max_height = DCMIPP_FRAME_MAX_HEIGHT;
 
-	return 0;
-}
-
-static int dcmipp_byteproc_get_fmt(struct v4l2_subdev *sd,
-				   struct v4l2_subdev_state *sd_state,
-				   struct v4l2_subdev_format *fmt)
-{
-	struct dcmipp_byteproc_device *byteproc = v4l2_get_subdevdata(sd);
-	struct v4l2_rect *crop_rect;
-
-	mutex_lock(&byteproc->lock);
-
-	if (fmt->which == V4L2_SUBDEV_FORMAT_TRY) {
-		fmt->format = *v4l2_subdev_get_try_format(sd, sd_state, 0);
-		crop_rect = v4l2_subdev_get_try_crop(sd, sd_state, 1);
+	if (IS_SINK(fse->pad)) {
+		fse->max_width = DCMIPP_FRAME_MAX_WIDTH;
+		fse->max_height = DCMIPP_FRAME_MAX_HEIGHT;
 	} else {
-		fmt->format = byteproc->sink_fmt;
-		crop_rect = &byteproc->crop;
+		compose = v4l2_subdev_state_get_compose(sd_state, 0);
+		fse->max_width = compose->width;
+		fse->max_height = compose->height;
 	}
-
-	if (IS_SRC(fmt->pad)) {
-		fmt->format.width = crop_rect->width;
-		fmt->format.height = crop_rect->height;
-	}
-
-	mutex_unlock(&byteproc->lock);
 
 	return 0;
 }
@@ -329,29 +266,19 @@ static int dcmipp_byteproc_set_fmt(struct v4l2_subdev *sd,
 				   struct v4l2_subdev_format *fmt)
 {
 	struct dcmipp_byteproc_device *byteproc = v4l2_get_subdevdata(sd);
-	struct v4l2_mbus_framefmt *sink_fmt;
+	struct v4l2_mbus_framefmt *mf;
 	struct v4l2_rect *crop, *compose;
-	int ret = 0;
 
-	mutex_lock(&byteproc->lock);
+	if (byteproc->streaming)
+		return -EBUSY;
 
-	if (fmt->which == V4L2_SUBDEV_FORMAT_ACTIVE) {
-		if (byteproc->streaming) {
-			ret = -EBUSY;
-			goto out;
-		}
+	mf = v4l2_subdev_state_get_format(sd_state, fmt->pad);
 
-		sink_fmt = &byteproc->sink_fmt;
-		crop = &byteproc->crop;
-		compose = &byteproc->compose;
-	} else {
-		sink_fmt = v4l2_subdev_get_try_format(sd, sd_state, 0);
-		crop = v4l2_subdev_get_try_crop(sd, sd_state, 1);
-		compose = v4l2_subdev_get_try_compose(sd, sd_state, 0);
-	}
+	crop = v4l2_subdev_state_get_crop(sd_state, 1);
+	compose = v4l2_subdev_state_get_compose(sd_state, 0);
 
 	if (IS_SRC(fmt->pad)) {
-		fmt->format = *sink_fmt;
+		fmt->format = *v4l2_subdev_state_get_format(sd_state, 0);
 		fmt->format.width = crop->width;
 		fmt->format.height = crop->height;
 	} else {
@@ -361,20 +288,18 @@ static int dcmipp_byteproc_set_fmt(struct v4l2_subdev *sd,
 		crop->width = fmt->format.width;
 		crop->height = fmt->format.height;
 		*compose = *crop;
-		*sink_fmt = fmt->format;
+		/* Set the same format on SOURCE pad as well */
+		*v4l2_subdev_state_get_format(sd_state, 1) = fmt->format;
 	}
+	*mf = fmt->format;
 
-out:
-	mutex_unlock(&byteproc->lock);
-
-	return ret;
+	return 0;
 }
 
 static int dcmipp_byteproc_get_selection(struct v4l2_subdev *sd,
 					 struct v4l2_subdev_state *sd_state,
 					 struct v4l2_subdev_selection *s)
 {
-	struct dcmipp_byteproc_device *byteproc = v4l2_get_subdevdata(sd);
 	struct v4l2_mbus_framefmt *sink_fmt;
 	struct v4l2_rect *crop, *compose;
 
@@ -383,25 +308,21 @@ static int dcmipp_byteproc_get_selection(struct v4l2_subdev *sd,
 	 * Compose is done on the sink pad
 	 * Crop is done on the src pad
 	 */
-	if ((s->target == V4L2_SEL_TGT_CROP ||
+	if (IS_SINK(s->pad) &&
+	    (s->target == V4L2_SEL_TGT_CROP ||
 	     s->target == V4L2_SEL_TGT_CROP_BOUNDS ||
-	     s->target == V4L2_SEL_TGT_CROP_DEFAULT) && IS_SINK(s->pad))
+	     s->target == V4L2_SEL_TGT_CROP_DEFAULT))
 		return -EINVAL;
 
-	if ((s->target == V4L2_SEL_TGT_COMPOSE ||
+	if (IS_SRC(s->pad) &&
+	    (s->target == V4L2_SEL_TGT_COMPOSE ||
 	     s->target == V4L2_SEL_TGT_COMPOSE_BOUNDS ||
-	     s->target == V4L2_SEL_TGT_COMPOSE_DEFAULT) && IS_SRC(s->pad))
+	     s->target == V4L2_SEL_TGT_COMPOSE_DEFAULT))
 		return -EINVAL;
 
-	if (s->which == V4L2_SUBDEV_FORMAT_ACTIVE) {
-		sink_fmt = &byteproc->sink_fmt;
-		crop = &byteproc->crop;
-		compose = &byteproc->compose;
-	} else {
-		sink_fmt = v4l2_subdev_get_try_format(sd, sd_state, 0);
-		crop = v4l2_subdev_get_try_crop(sd, sd_state, 1);
-		compose = v4l2_subdev_get_try_compose(sd, sd_state, 0);
-	}
+	sink_fmt = v4l2_subdev_state_get_format(sd_state, 0);
+	crop = v4l2_subdev_state_get_crop(sd_state, 1);
+	compose = v4l2_subdev_state_get_compose(sd_state, 0);
 
 	switch (s->target) {
 	case V4L2_SEL_TGT_CROP:
@@ -415,8 +336,6 @@ static int dcmipp_byteproc_get_selection(struct v4l2_subdev *sd,
 		s->r = *compose;
 		break;
 	case V4L2_SEL_TGT_COMPOSE_BOUNDS:
-		s->r = dcmipp_byteproc_get_compose_bound(sink_fmt);
-		break;
 	case V4L2_SEL_TGT_COMPOSE_DEFAULT:
 		s->r.top = 0;
 		s->r.left = 0;
@@ -435,7 +354,7 @@ static int dcmipp_byteproc_set_selection(struct v4l2_subdev *sd,
 					 struct v4l2_subdev_selection *s)
 {
 	struct dcmipp_byteproc_device *byteproc = v4l2_get_subdevdata(sd);
-	struct v4l2_mbus_framefmt *sink_fmt;
+	struct v4l2_mbus_framefmt *mf;
 	struct v4l2_rect *crop, *compose;
 
 	/*
@@ -453,32 +372,34 @@ static int dcmipp_byteproc_set_selection(struct v4l2_subdev *sd,
 	     s->target == V4L2_SEL_TGT_COMPOSE_DEFAULT) && IS_SRC(s->pad))
 		return -EINVAL;
 
-	if (s->which == V4L2_SUBDEV_FORMAT_ACTIVE) {
-		sink_fmt = &byteproc->sink_fmt;
-		crop = &byteproc->crop;
-		compose = &byteproc->compose;
-	} else {
-		sink_fmt = v4l2_subdev_get_try_format(sd, sd_state, 0);
-		crop = v4l2_subdev_get_try_crop(sd, sd_state, 1);
-		compose = v4l2_subdev_get_try_compose(sd, sd_state, 0);
-	}
+	crop = v4l2_subdev_state_get_crop(sd_state, 1);
+	compose = v4l2_subdev_state_get_compose(sd_state, 0);
 
 	switch (s->target) {
 	case V4L2_SEL_TGT_CROP:
 		dcmipp_byteproc_adjust_crop(&s->r, compose);
 
 		*crop = s->r;
+		mf = v4l2_subdev_state_get_format(sd_state, 1);
+		mf->width = s->r.width;
+		mf->height = s->r.height;
 
 		dev_dbg(byteproc->dev, "s_selection: crop %ux%u@(%u,%u)\n",
 			crop->width, crop->height, crop->left, crop->top);
 		break;
 	case V4L2_SEL_TGT_COMPOSE:
-		dcmipp_byteproc_adjust_compose(&s->r, sink_fmt);
+		mf = v4l2_subdev_state_get_format(sd_state, 0);
+		dcmipp_byteproc_adjust_compose(&s->r, mf);
 		*compose = s->r;
 		*crop = s->r;
 
+		mf = v4l2_subdev_state_get_format(sd_state, 1);
+		mf->width = s->r.width;
+		mf->height = s->r.height;
+
 		dev_dbg(byteproc->dev, "s_selection: compose %ux%u@(%u,%u)\n",
-			compose->width, compose->height, compose->left, compose->top);
+			compose->width, compose->height,
+			compose->left, compose->top);
 		break;
 	default:
 		return -EINVAL;
@@ -497,7 +418,6 @@ static int dcmipp_byteproc_enum_frame_interval
 	struct dcmipp_byteproc_device *byteproc = v4l2_get_subdevdata(sd);
 	struct v4l2_fract *sink_interval = &byteproc->sink_interval;
 	unsigned int ratio;
-	int ret = 0;
 
 	if (fie->pad > 1 ||
 	    fie->index >= (IS_SRC(fie->pad) ? ARRAY_SIZE(dcmipp_frates) : 1) ||
@@ -505,11 +425,9 @@ static int dcmipp_byteproc_enum_frame_interval
 	    fie->height > DCMIPP_FRAME_MAX_HEIGHT)
 		return -EINVAL;
 
-	mutex_lock(&byteproc->lock);
-
 	if (IS_SINK(fie->pad)) {
 		fie->interval = *sink_interval;
-		goto out;
+		return 0;
 	}
 
 	ratio = dcmipp_frates[fie->index];
@@ -517,9 +435,7 @@ static int dcmipp_byteproc_enum_frame_interval
 	fie->interval.numerator = sink_interval->numerator * ratio;
 	fie->interval.denominator = sink_interval->denominator;
 
-out:
-	mutex_unlock(&byteproc->lock);
-	return ret;
+	return 0;
 }
 
 static const struct v4l2_subdev_pad_ops dcmipp_byteproc_pad_ops = {
@@ -527,7 +443,7 @@ static const struct v4l2_subdev_pad_ops dcmipp_byteproc_pad_ops = {
 	.enum_mbus_code		= dcmipp_byteproc_enum_mbus_code,
 	.enum_frame_size	= dcmipp_byteproc_enum_frame_size,
 	.enum_frame_interval	= dcmipp_byteproc_enum_frame_interval,
-	.get_fmt		= dcmipp_byteproc_get_fmt,
+	.get_fmt		= v4l2_subdev_get_fmt,
 	.set_fmt		= dcmipp_byteproc_set_fmt,
 	.get_selection		= dcmipp_byteproc_get_selection,
 	.set_selection		= dcmipp_byteproc_set_selection,
@@ -537,12 +453,20 @@ static int dcmipp_byteproc_configure_scale_crop
 			(struct dcmipp_byteproc_device *byteproc)
 {
 	const struct dcmipp_byteproc_pix_map *vpix;
+	struct v4l2_subdev_state *state;
+	struct v4l2_mbus_framefmt *sink_fmt;
 	u32 hprediv, vprediv;
-	struct v4l2_rect *crop = &byteproc->crop;
+	struct v4l2_rect *compose, *crop;
 	u32 val = 0;
 
+	state = v4l2_subdev_lock_and_get_active_state(&byteproc->sd);
+	sink_fmt = v4l2_subdev_state_get_format(state, 0);
+	compose = v4l2_subdev_state_get_compose(state, 0);
+	crop = v4l2_subdev_state_get_crop(state, 1);
+	v4l2_subdev_unlock_state(state);
+
 	/* find output format bpp */
-	vpix = dcmipp_byteproc_pix_map_by_code(byteproc->sink_fmt.code);
+	vpix = dcmipp_byteproc_pix_map_by_code(sink_fmt->code);
 	if (!vpix)
 		return -EINVAL;
 
@@ -557,7 +481,7 @@ static int dcmipp_byteproc_configure_scale_crop
 		return 0;
 
 	/* decimation */
-	hprediv = byteproc->sink_fmt.width / byteproc->compose.width;
+	hprediv = sink_fmt->width / compose->width;
 	if (hprediv == 4)
 		val |= DCMIPP_P0PPCR_BSM_1_4 << DCMIPP_P0PPCR_BSM_SHIFT;
 	else if ((vpix->code == MEDIA_BUS_FMT_Y8_1X8) && (hprediv == 2))
@@ -565,7 +489,7 @@ static int dcmipp_byteproc_configure_scale_crop
 	else if (hprediv == 2)
 		val |= DCMIPP_P0PPCR_BSM_2_4 << DCMIPP_P0PPCR_BSM_SHIFT;
 
-	vprediv = byteproc->sink_fmt.height / byteproc->compose.height;
+	vprediv = sink_fmt->height / compose->height;
 	if (vprediv == 2)
 		val |= DCMIPP_P0PPCR_LSM | DCMIPP_P0PPCR_OELS;
 
@@ -574,18 +498,21 @@ static int dcmipp_byteproc_configure_scale_crop
 		reg_set(byteproc, DCMIPP_P0PPCR, val);
 
 		dev_dbg(byteproc->dev, "decimate to %dx%d [prediv=%dx%d]\n",
-			byteproc->compose.width, byteproc->compose.height, hprediv, vprediv);
+			compose->width, compose->height,
+			hprediv, vprediv);
 	}
 
 	dev_dbg(byteproc->dev, "crop to %dx%d\n", crop->width, crop->height);
 
 	/* expressed in 32-bits words on X axis, lines on Y axis */
 	reg_write(byteproc, DCMIPP_P0SCSTR,
-		  (((crop->left * vpix->bpp) / 4) << DCMIPP_P0SCSTR_HSTART_SHIFT) |
+		  (((crop->left * vpix->bpp) / 4) <<
+		   DCMIPP_P0SCSTR_HSTART_SHIFT) |
 		  (crop->top << DCMIPP_P0SCSTR_VSTART_SHIFT));
 	reg_write(byteproc, DCMIPP_P0SCSZR,
 		  DCMIPP_P0SCSZR_ENABLE |
-		  (((crop->width * vpix->bpp) / 4) << DCMIPP_P0SCSZR_HSIZE_SHIFT) |
+		  (((crop->width * vpix->bpp) / 4) <<
+		   DCMIPP_P0SCSZR_HSIZE_SHIFT) |
 		  (crop->height << DCMIPP_P0SCSZR_VSIZE_SHIFT));
 
 	return 0;
@@ -617,12 +544,8 @@ static int dcmipp_byteproc_s_frame_interval(struct v4l2_subdev *sd,
 {
 	struct dcmipp_byteproc_device *byteproc = v4l2_get_subdevdata(sd);
 
-	mutex_lock(&byteproc->lock);
-
-	if (byteproc->streaming) {
-		mutex_unlock(&byteproc->lock);
+	if (byteproc->streaming)
 		return -EBUSY;
-	}
 
 	if (fi->interval.numerator == 0 || fi->interval.denominator == 0)
 		fi->interval = byteproc->sink_interval;
@@ -658,27 +581,49 @@ static int dcmipp_byteproc_s_frame_interval(struct v4l2_subdev *sd,
 			byteproc->sink_interval.denominator;
 	}
 
-	mutex_unlock(&byteproc->lock);
-
 	return 0;
 }
 
-#define STOP_TIMEOUT_US 1000
-#define POLL_INTERVAL_US  50
 static int dcmipp_byteproc_s_stream(struct v4l2_subdev *sd, int enable)
 {
 	struct dcmipp_byteproc_device *byteproc = v4l2_get_subdevdata(sd);
+	struct v4l2_subdev *s_subdev;
+	struct media_pad *pad;
 	int ret = 0;
 
-	mutex_lock(&byteproc->lock);
+	/* Get source subdev */
+	pad = media_pad_remote_pad_first(&sd->entity.pads[0]);
+	if (!pad || !is_media_entity_v4l2_subdev(pad->entity))
+		return -EINVAL;
+	s_subdev = media_entity_to_v4l2_subdev(pad->entity);
+
 	if (enable) {
 		dcmipp_byteproc_configure_framerate(byteproc);
 
 		ret = dcmipp_byteproc_configure_scale_crop(byteproc);
-	}
-	mutex_unlock(&byteproc->lock);
+		if (ret)
+			return ret;
 
-	return ret;
+		ret = dcmipp_s_stream_helper(s_subdev, enable);
+		if (ret < 0) {
+			dev_err(byteproc->dev,
+				"failed to start source subdev streaming (%d)\n",
+				ret);
+			return ret;
+		}
+	} else {
+		ret = dcmipp_s_stream_helper(s_subdev, enable);
+		if (ret < 0) {
+			dev_err(byteproc->dev,
+				"failed to stop source subdev streaming (%d)\n",
+				ret);
+			return ret;
+		}
+	}
+
+	byteproc->streaming = enable;
+
+	return 0;
 }
 
 static const struct v4l2_subdev_video_ops dcmipp_byteproc_video_ops = {
@@ -698,24 +643,16 @@ void dcmipp_byteproc_ent_release(struct dcmipp_ent_device *ved)
 			container_of(ved, struct dcmipp_byteproc_device, ved);
 
 	dcmipp_ent_sd_unregister(ved, &byteproc->sd);
-	mutex_destroy(&byteproc->lock);
 	kfree(byteproc);
 }
 
 struct dcmipp_ent_device *
-dcmipp_byteproc_ent_init(struct device *dev, const char *entity_name,
-			 struct v4l2_device *v4l2_dev, void __iomem *regs)
+dcmipp_byteproc_ent_init(const char *entity_name,
+			 struct dcmipp_device *dcmipp)
 {
 	struct dcmipp_byteproc_device *byteproc;
-	struct v4l2_rect r = {
-		.top = 0,
-		.left = 0,
-		.width = DCMIPP_FMT_WIDTH_DEFAULT,
-		.height = DCMIPP_FMT_HEIGHT_DEFAULT,
-	};
-	struct v4l2_fract interval = {
-		.numerator = 1,
-		.denominator = 30,
+	const unsigned long pads_flag[] = {
+		MEDIA_PAD_FL_SINK, MEDIA_PAD_FL_SOURCE,
 	};
 	int ret;
 
@@ -724,37 +661,23 @@ dcmipp_byteproc_ent_init(struct device *dev, const char *entity_name,
 	if (!byteproc)
 		return ERR_PTR(-ENOMEM);
 
-	byteproc->regs = regs;
-
-	/* Initialize the lock */
-	mutex_init(&byteproc->lock);
-
-	/* Initialize the frame format */
-	byteproc->sink_fmt = fmt_default;
-	byteproc->crop = r;
-	byteproc->compose = r;
-	byteproc->src_interval = interval;
-	byteproc->sink_interval = interval;
+	byteproc->regs = dcmipp->regs;
 
 	/* Initialize ved and sd */
 	ret = dcmipp_ent_sd_register(&byteproc->ved, &byteproc->sd,
-				     v4l2_dev,
-				     entity_name,
-				     MEDIA_ENT_F_PROC_VIDEO_PIXEL_FORMATTER, 2,
-				     (const unsigned long[2]) {
-				     MEDIA_PAD_FL_SINK,
-				     MEDIA_PAD_FL_SOURCE,
-				     },
+				     &dcmipp->v4l2_dev, entity_name,
+				     MEDIA_ENT_F_PROC_VIDEO_SCALER,
+				     ARRAY_SIZE(pads_flag), pads_flag,
 				     NULL,
 				     &dcmipp_byteproc_ops,
 				     NULL, NULL);
 	if (ret) {
-		mutex_destroy(&byteproc->lock);
 		kfree(byteproc);
 		return ERR_PTR(ret);
 	}
 
-	byteproc->dev = dev;
+	byteproc->ved.dcmipp = dcmipp;
+	byteproc->dev = dcmipp->dev;
 
 	return &byteproc->ved;
 }

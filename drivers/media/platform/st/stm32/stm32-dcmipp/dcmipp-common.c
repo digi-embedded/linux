@@ -2,7 +2,7 @@
 /*
  * Driver for STM32 Digital Camera Memory Interface Pixel Processor
  *
- * Copyright (C) STMicroelectronics SA 2021
+ * Copyright (C) STMicroelectronics SA 2023
  * Authors: Hugues Fruchet <hugues.fruchet@foss.st.com>
  *          Alain Volmat <alain.volmat@foss.st.com>
  *          for STMicroelectronics.
@@ -14,7 +14,7 @@
 #include "dcmipp-common.h"
 
 /* Helper function to allocate and initialize pads */
-struct media_pad *dcmipp_pads_init(u16 num_pads, const unsigned long *pads_flag)
+struct media_pad *dcmipp_pads_init(u16 num_pads, const unsigned long *pads_flags)
 {
 	struct media_pad *pads;
 	unsigned int i;
@@ -27,20 +27,14 @@ struct media_pad *dcmipp_pads_init(u16 num_pads, const unsigned long *pads_flag)
 	/* Initialize the pads */
 	for (i = 0; i < num_pads; i++) {
 		pads[i].index = i;
-		pads[i].flags = pads_flag[i];
+		pads[i].flags = pads_flags[i];
 	}
 
 	return pads;
 }
 
-int dcmipp_link_validate(struct media_link *link)
-{
-	/* TODO */
-	return 0;
-}
-
-static const struct media_entity_operations dcmipp_ent_sd_mops = {
-	.link_validate = dcmipp_link_validate,
+static const struct media_entity_operations dcmipp_entity_ops = {
+	.link_validate = v4l2_subdev_link_validate,
 };
 
 int dcmipp_ent_sd_register(struct dcmipp_ent_device *ved,
@@ -69,7 +63,7 @@ int dcmipp_ent_sd_register(struct dcmipp_ent_device *ved,
 	v4l2_subdev_init(sd, sd_ops);
 	sd->internal_ops = sd_int_ops;
 	sd->entity.function = function;
-	sd->entity.ops = &dcmipp_ent_sd_mops;
+	sd->entity.ops = &dcmipp_entity_ops;
 	sd->owner = THIS_MODULE;
 	strscpy(sd->name, name, sizeof(sd->name));
 	v4l2_set_subdevdata(sd, ved);
@@ -83,6 +77,10 @@ int dcmipp_ent_sd_register(struct dcmipp_ent_device *ved,
 	ret = media_entity_pads_init(&sd->entity, num_pads, ved->pads);
 	if (ret)
 		goto err_clean_pads;
+
+	ret = v4l2_subdev_init_finalize(sd);
+	if (ret < 0)
+		goto err_clean_m_ent;
 
 	/* Register the subdev with the v4l2 and the media framework */
 	ret = v4l2_device_register_subdev(v4l2_dev, sd);
@@ -105,9 +103,43 @@ err_clean_pads:
 	return ret;
 }
 
-void dcmipp_ent_sd_unregister(struct dcmipp_ent_device *ved, struct v4l2_subdev *sd)
+void
+dcmipp_ent_sd_unregister(struct dcmipp_ent_device *ved, struct v4l2_subdev *sd)
 {
 	media_entity_cleanup(ved->ent);
 	v4l2_device_unregister_subdev(sd);
 	dcmipp_pads_cleanup(ved->pads);
+}
+
+int dcmipp_get_frame_skip_rate(struct v4l2_subdev *source,
+			       u32 *frame_skip_rate)
+{
+	struct v4l2_subdev_frame_interval sink_fi = { .pad = 0, };
+	struct v4l2_subdev_frame_interval source_fi = { .pad = 1, };
+	u32 ratio = 1;
+	int ret;
+
+	/*
+	 * Retrieve the frame rate adjustment info from postproc subdev
+	 * if frame_interval are not available, rate will be 1
+	 */
+	ret = v4l2_subdev_call(source, video, g_frame_interval, &sink_fi);
+	if (ret < 0)
+		goto end;
+
+	ret = v4l2_subdev_call(source, video, g_frame_interval, &source_fi);
+	if (ret < 0)
+		goto end;
+
+	if (!sink_fi.interval.numerator || !sink_fi.interval.denominator ||
+	    !source_fi.interval.numerator || !source_fi.interval.denominator)
+		goto end;
+
+	ratio = (sink_fi.interval.denominator * source_fi.interval.numerator) /
+		(sink_fi.interval.numerator * source_fi.interval.denominator);
+
+end:
+	*frame_skip_rate = ratio;
+
+	return 0;
 }

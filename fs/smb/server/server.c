@@ -167,19 +167,16 @@ static void __handle_ksmbd_work(struct ksmbd_work *work,
 	int rc;
 	bool is_chained = false;
 
-	if (conn->ops->allocate_rsp_buf(work))
-		return;
-
 	if (conn->ops->is_transform_hdr &&
 	    conn->ops->is_transform_hdr(work->request_buf)) {
 		rc = conn->ops->decrypt_req(work);
-		if (rc < 0) {
-			conn->ops->set_rsp_status(work, STATUS_DATA_ERROR);
-			goto send;
-		}
-
+		if (rc < 0)
+			return;
 		work->encrypted = true;
 	}
+
+	if (conn->ops->allocate_rsp_buf(work))
+		return;
 
 	rc = conn->ops->init_rsp_hdr(work);
 	if (rc) {
@@ -432,7 +429,7 @@ int server_queue_ctrl_reset_work(void)
 	return __queue_ctrl_work(SERVER_CTRL_TYPE_RESET);
 }
 
-static ssize_t stats_show(struct class *class, struct class_attribute *attr,
+static ssize_t stats_show(const struct class *class, const struct class_attribute *attr,
 			  char *buf)
 {
 	/*
@@ -451,8 +448,8 @@ static ssize_t stats_show(struct class *class, struct class_attribute *attr,
 			  server_conf.ipc_last_active / HZ);
 }
 
-static ssize_t kill_server_store(struct class *class,
-				 struct class_attribute *attr, const char *buf,
+static ssize_t kill_server_store(const struct class *class,
+				 const struct class_attribute *attr, const char *buf,
 				 size_t len)
 {
 	if (!sysfs_streq(buf, "hard"))
@@ -472,7 +469,7 @@ static const char * const debug_type_strings[] = {"smb", "auth", "vfs",
 						  "oplock", "ipc", "conn",
 						  "rdma"};
 
-static ssize_t debug_show(struct class *class, struct class_attribute *attr,
+static ssize_t debug_show(const struct class *class, const struct class_attribute *attr,
 			  char *buf)
 {
 	ssize_t sz = 0;
@@ -490,7 +487,7 @@ static ssize_t debug_show(struct class *class, struct class_attribute *attr,
 	return sz;
 }
 
-static ssize_t debug_store(struct class *class, struct class_attribute *attr,
+static ssize_t debug_store(const struct class *class, const struct class_attribute *attr,
 			   const char *buf, size_t len)
 {
 	int i;
@@ -530,7 +527,6 @@ ATTRIBUTE_GROUPS(ksmbd_control_class);
 
 static struct class ksmbd_control_class = {
 	.name		= "ksmbd-control",
-	.owner		= THIS_MODULE,
 	.class_groups	= ksmbd_control_class_groups,
 };
 

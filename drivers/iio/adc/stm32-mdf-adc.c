@@ -10,6 +10,7 @@
 #include <linux/dmaengine.h>
 #include <linux/dma-mapping.h>
 #include <linux/iio/adc/stm32-mdf-adc.h>
+#include <linux/iio/backend.h>
 #include <linux/iio/buffer.h>
 #include <linux/iio/hw-consumer.h>
 #include <linux/iio/sysfs.h>
@@ -32,7 +33,11 @@
 #define STM32_MDF_DATA_RES 24
 #define STM32_MDF_HPF_BYPASS -1
 #define STM32_MDF_TIMEOUT_MS msecs_to_jiffies(100)
-#define MDF_DEFAULT_SAMPLING_FREQ 1024
+/*
+ * Choose a default sampling ratio supported for all filter orders with RSFLT active.
+ * 32 is the maximum decimation ratio for filter order 5, with RSFLT active.
+ */
+#define MDF_DEFAULT_DECIM_RATIO 32
 
 #define MDF_IS_FILTER0(adc)			(!((adc)->fl_id))
 #define MDF_IS_INTERLEAVED_FILT(adc)		((adc)->interleaved)
@@ -52,6 +57,7 @@ struct stm32_mdf_dev_data {
  * @regmap: regmap pointer for register read/write
  * @node: pointer to filter node
  * @dma_chan: filter dma channel pointer
+ * @backend: backend handles array
  * @dev_data: mdf device data pointer
  * @sitf: pointer to serial interface feeding the filter
  * @completion: completion for conversion
@@ -64,9 +70,12 @@ struct stm32_mdf_dev_data {
  * @fl_id: filter index
  * @decim_ratio: total decimation ratio
  * @decim_cic: CIC filter decimation ratio
+ * @stu: settling time in micro seconds
+ * @nbdis: number of samples to discard
  * @bufi: dma buffer current position
  * @buf_sz: dma buffer size
  * @buffer: buffer pointer for raw conversion
+ * @dflt_max: dflt maximum output
  * @cicmode: cic filter order
  * @hpf_cutoff: high pass filter cut-off frequency
  * @delay: microphone delay
@@ -84,6 +93,7 @@ struct stm32_mdf_adc {
 	struct regmap *regmap;
 	struct fwnode_handle *node;
 	struct dma_chan *dma_chan;
+	struct iio_backend **backend;
 	const struct stm32_mdf_dev_data *dev_data;
 	struct stm32_mdf_sitf *sitf;
 	struct completion completion;
@@ -96,8 +106,11 @@ struct stm32_mdf_adc {
 	unsigned int fl_id;
 	unsigned int decim_ratio;
 	unsigned int decim_cic;
+	unsigned int stu;
+	unsigned int nbdis;
 	unsigned int bufi;
 	unsigned int buf_sz;
+	unsigned int dflt_max;
 	u32 *buffer;
 	u32 cicmode;
 	u32 hpf_cutoff;
@@ -112,7 +125,8 @@ struct stm32_mdf_adc {
 
 struct stm32_mdf_scales {
 	unsigned int scale;
-	int gain;
+	int gain_db;
+	int gain_lin;
 };
 
 struct stm32_mdf_log10 {
@@ -203,47 +217,47 @@ static const unsigned int stm32_mdf_cic_max_decim_sitf[] = {
 
 /* Gain (dB) x 10 according to scale value in hex */
 static const struct stm32_mdf_scales stm32_mdf_scale_table[] = {
-	{0x20, -482},
-	{0x21, -446},
-	{0x22, -421},
-	{0x23, -386},
-	{0x24, -361},
-	{0x25, -326},
-	{0x26, -301},
-	{0x27, -266},
-	{0x28, -241},
-	{0x29, -206},
-	{0x2A, -181},
-	{0x2B, -145},
-	{0x2C, -120},
-	{0x2D, -85},
-	{0x2E, -60},
-	{0x2F, -25},
-	{0x00, 0},
-	{0x01, 35},
-	{0x02, 60},
-	{0x03, 95},
-	{0x04, 120},
-	{0x05, 156},
-	{0x06, 181},
-	{0x07, 216},
-	{0x08, 241},
-	{0x09, 276},
-	{0x0A, 301},
-	{0x0B, 336},
-	{0x0C, 361},
-	{0x0D, 396},
-	{0x0E, 421},
-	{0x0F, 457},
-	{0x10, 482},
-	{0x11, 517},
-	{0x12, 542},
-	{0x13, 577},
-	{0x14, 602},
-	{0x15, 637},
-	{0x16, 662},
-	{0x17, 697},
-	{0x18, 722},
+	{0x20, -482, -2558},
+	{0x21, -446, -1706},
+	{0x22, -421, -1280},
+	{0x23, -386, -853},
+	{0x24, -361, -640},
+	{0x25, -326, -427},
+	{0x26, -301, -320},
+	{0x27, -266, -213},
+	{0x28, -241, -160},
+	{0x29, -206, -107},
+	{0x2A, -181, -80},
+	{0x2B, -145, -53},
+	{0x2C, -120, -40},
+	{0x2D, -85,  -27},
+	{0x2E, -60,  -20},
+	{0x2F, -25,  -13},
+	{0x00, 0,    10},
+	{0x01, 35,   15},
+	{0x02, 60,   20},
+	{0x03, 95,   30},
+	{0x04, 120,  40},
+	{0x05, 156,  60},
+	{0x06, 181,  80},
+	{0x07, 216,  120},
+	{0x08, 241,  160},
+	{0x09, 276,  240},
+	{0x0A, 301,  320},
+	{0x0B, 336,  480},
+	{0x0C, 361,  640},
+	{0x0D, 396,  960},
+	{0x0E, 421,  1280},
+	{0x0F, 457,  1920},
+	{0x10, 482,  2560},
+	{0x11, 517,  3840},
+	{0x12, 542,  5120},
+	{0x13, 577,  7680},
+	{0x14, 602,  10240},
+	{0x15, 637,  15360},
+	{0x16, 662,  20480},
+	{0x17, 697,  30720},
+	{0x18, 722,  40960},
 };
 
 /* Prime number 1000 x log10 table */
@@ -468,7 +482,7 @@ static int stm32_mdf_adc_compute_scale(struct device *dev, unsigned int decim,
 {
 	unsigned long max = ARRAY_SIZE(stm32_mdf_log_table);
 	unsigned int prime_factors[16];
-	unsigned int num, div, logd;
+	unsigned int num, div, logd = 0;
 	int i, j, scale;
 
 	/* Decompose decimation ratio D, as prime number factors, to compute log10(D) */
@@ -514,6 +528,7 @@ static int stm32_mdf_adc_apply_filters_config(struct stm32_mdf_adc *adc, unsigne
 				adc_inter->datsrc = adc->datsrc;
 				adc_inter->cicmode = adc->cicmode;
 				adc_inter->decim_cic = adc->decim_cic;
+				adc_inter->nbdis = adc->nbdis;
 				adc_inter->hpf_cutoff = adc->hpf_cutoff;
 
 				stm32_mdf_adc_apply_filters_config(adc_inter, scale);
@@ -531,6 +546,14 @@ static int stm32_mdf_adc_apply_filters_config(struct stm32_mdf_adc *adc, unsigne
 	ret = regmap_update_bits(adc->regmap, MDF_DLYCR_REG, MDF_DLYCR_SKPDLY_MASK, adc->delay);
 	if (ret)
 		return ret;
+
+	/* Configure NBDIS */
+	if (adc->nbdis) {
+		ret = regmap_update_bits(adc->regmap, MDF_DFLTCR_REG, MDF_DFLTCR_NBDIS_MASK,
+					 MDF_DFLTCR_NBDIS(adc->nbdis));
+		if (ret)
+			return ret;
+	}
 
 	/* Configure CICR */
 	msk = MDF_SITFCR_SCKSRC_MASK | MDF_DFLTCICR_CICMOD_MASK |
@@ -559,7 +582,8 @@ static int stm32_mdf_adc_set_filters_config(struct iio_dev *indio_dev, unsigned 
 	struct device *dev = &indio_dev->dev;
 	unsigned int decim_cic, decim_rsflt = 1;
 	unsigned int data_size = STM32_MDF_DATA_RES, order = adc->cicmode;
-	int i, log, scale, max_scale;
+	u64 max;
+	int i, d, log, scale, max_scale, gain_lin;
 
 	if (!adc->rsflt_bypass) {
 		decim_rsflt = 4;
@@ -614,14 +638,57 @@ static int stm32_mdf_adc_set_filters_config(struct iio_dev *indio_dev, unsigned 
 	max_scale = DIV_ROUND_CLOSEST(max_scale, 100);
 	i = ARRAY_SIZE(stm32_mdf_scale_table) - 1;
 	while (i > 0) {
-		if (stm32_mdf_scale_table[i].gain < max_scale)
+		if (stm32_mdf_scale_table[i].gain_db < max_scale)
 			break;
 		i--;
 	};
 	scale = stm32_mdf_scale_table[i].scale;
+	gain_lin = stm32_mdf_scale_table[i].gain_lin;
+
+	dev_dbg(dev, "Set scale to [%d]dB: [0x%x]\n", stm32_mdf_scale_table[i].gain_db / 10, scale);
+
 	adc->decim_cic = decim_cic;
 
-	dev_dbg(dev, "Set scale to [%d] dB: [0x%x]\n", stm32_mdf_scale_table[i].gain / 10, scale);
+	/*
+	 * Calculate maximum DFLT output filter
+	 * max = K * G
+	 * - Fastsinc (order 0):	G = 2 * d^2 * gain_lin
+	 * - Sinc order 1 to 5:		G = d^N * gain_lin
+	 * - RSFLT off:			K = 1, d = decim
+	 * - RSFLT on:			K = 2.98, d = decim_cic
+	 * N = CIC filter order, decim = total decimation ratio, decim_cic = CIC decimation ratio
+	 * gain_lin is multiplied by a 10 factor in stm32_mdf_scale_table, and K with a 100 factor.
+	 */
+	if (adc->rsflt_bypass) {
+		d = decim;
+		max = 100;
+	} else {
+		d = decim_cic;
+		max = 298;
+	}
+
+	if (order) {
+		i = 0;
+		while (i < order) {
+			max *= d;
+			i++;
+		}
+	} else {
+		max *= 2 * d * d;
+	}
+
+	if (gain_lin > 0) {
+		max *= gain_lin;
+		max /= 1000;
+	}
+	if (gain_lin < 0) {
+		max /= -gain_lin;
+		max /= 10;
+	}
+
+	adc->dflt_max = max;
+
+	dev_dbg(dev, "DFLT maximum output [%d]\n", adc->dflt_max);
 
 	return stm32_mdf_adc_apply_filters_config(adc, scale);
 }
@@ -653,6 +720,7 @@ err:
 static int mdf_adc_set_samp_freq(struct iio_dev *indio_dev, unsigned long sample_freq, int lock)
 {
 	struct stm32_mdf_adc *adc = iio_priv(indio_dev);
+	struct device *dev = &indio_dev->dev;
 	unsigned int decim_ratio;
 	unsigned long delta, delta_ppm, sck_freq;
 	unsigned long cck_expected_freq;
@@ -666,10 +734,19 @@ static int mdf_adc_set_samp_freq(struct iio_dev *indio_dev, unsigned long sample
 
 	sck_freq = clk_get_rate(adc->sitf->sck);
 	if (!sck_freq) {
-		dev_err(&indio_dev->dev, "Unexpected serial clock frequency: 0Hz\n");
+		dev_err(dev, "Unexpected serial clock frequency: 0Hz\n");
 		ret = -EINVAL;
 		goto err;
 	}
+
+	/*
+	 * If requested sampling frequency is 0, set a default frequency.
+	 * The default frequency is computed from default decimation ratio.
+	 * This ensures that a filter configuration can be found whatever the selected filter
+	 * order. (Most constrained case is order 5)
+	 */
+	if (!sample_freq)
+		sample_freq = sck_freq / MDF_DEFAULT_DECIM_RATIO;
 
 	/*
 	 * MDF may share its parent clock with SAI, so kernel clock rate may have been changed.
@@ -696,11 +773,21 @@ static int mdf_adc_set_samp_freq(struct iio_dev *indio_dev, unsigned long sample
 	delta = abs(sck_freq - (decim_ratio * sample_freq));
 	delta_ppm = (1000000 * delta) / sck_freq;
 	if (delta_ppm > 1000)
-		dev_warn(&indio_dev->dev, "Sample rate deviation [%lu] ppm: [%lu] vs [%lu] Hz\n",
+		dev_warn(dev, "Sample rate deviation [%lu] ppm: [%lu] vs [%lu] Hz\n",
 			 delta_ppm, sck_freq / decim_ratio, sample_freq);
 	else if (delta)
-		dev_dbg(&indio_dev->dev, "Sample rate deviation [%lu] ppm: [%lu] vs [%lu] Hz\n",
+		dev_dbg(dev, "Sample rate deviation [%lu] ppm: [%lu] vs [%lu] Hz\n",
 			delta_ppm, sck_freq / decim_ratio, sample_freq);
+
+	adc->nbdis = DIV_ROUND_UP(adc->stu * sample_freq, 1000000);
+	if (adc->nbdis > MDF_DFLTCR_NBDIS_MAX) {
+		dev_warn(dev, "NBDIS [%u] too large. Force to [%lu]\n",
+			 adc->nbdis, MDF_DFLTCR_NBDIS_MAX);
+		adc->nbdis = MDF_DFLTCR_NBDIS_MAX;
+	} else {
+		dev_dbg(dev, "Settling time [%u] us. NBDIS set to [%u] samples\n",
+			adc->stu, adc->nbdis);
+	}
 
 	ret = stm32_mdf_adc_set_filters_config(indio_dev, decim_ratio);
 	if (ret < 0)
@@ -768,7 +855,8 @@ static int stm32_mdf_adc_start_conv(struct iio_dev *indio_dev)
 	 * before setting the sampling frequency.
 	 */
 	if (!adc->sample_freq) {
-		ret = mdf_adc_set_samp_freq(indio_dev, MDF_DEFAULT_SAMPLING_FREQ, 1);
+		/* Setting frequency to 0 means that the default frequency will be applied. */
+		ret = mdf_adc_set_samp_freq(indio_dev, 0, 1);
 		if (ret < 0)
 			goto stop_sitf;
 	}
@@ -916,14 +1004,28 @@ static void stm32_mdf_adc_dma_stop(struct iio_dev *indio_dev)
 static int stm32_mdf_adc_postenable(struct iio_dev *indio_dev)
 {
 	struct stm32_mdf_adc *adc = iio_priv(indio_dev);
+	int i = 0;
 	int ret;
 
 	/* Reset adc buffer index */
 	adc->bufi = 0;
 
+	if (adc->backend) {
+		while (adc->backend[i]) {
+			ret = iio_backend_enable(adc->backend[i]);
+			if (ret < 0) {
+				while (--i > 0)
+					iio_backend_disable(adc->backend[i]);
+
+				return ret;
+			}
+			i++;
+		}
+	}
+
 	ret = stm32_mdf_adc_start_mdf(indio_dev);
 	if (ret < 0)
-		return ret;
+		goto err_start;
 
 	stm32_mdf_adc_filter_set_mode(adc, true);
 
@@ -957,6 +1059,14 @@ err_trig:
 	stm32_mdf_adc_dma_stop(indio_dev);
 err_dma:
 	stm32_mdf_adc_stop_mdf(indio_dev);
+err_start:
+	i = 0;
+	if (adc->backend) {
+		while (adc->backend[i]) {
+			iio_backend_disable(adc->backend[i]);
+			i++;
+		}
+	}
 
 	return ret;
 }
@@ -964,6 +1074,7 @@ err_dma:
 static int stm32_mdf_adc_predisable(struct iio_dev *indio_dev)
 {
 	struct stm32_mdf_adc *adc = iio_priv(indio_dev);
+	int i = 0;
 
 	stm32_mdf_adc_stop_conv(indio_dev);
 
@@ -976,12 +1087,44 @@ static int stm32_mdf_adc_predisable(struct iio_dev *indio_dev)
 
 	stm32_mdf_adc_stop_mdf(indio_dev);
 
+	if (adc->backend) {
+		while (adc->backend[i]) {
+			iio_backend_disable(adc->backend[i]);
+			i++;
+		}
+	}
+
 	return 0;
 }
 
 static const struct iio_buffer_setup_ops stm32_mdf_buffer_setup_ops = {
 	.postenable = &stm32_mdf_adc_postenable,
 	.predisable = &stm32_mdf_adc_predisable,
+};
+
+static ssize_t stm32_mdf_adc_audio_get_channels(struct iio_dev *indio_dev, uintptr_t priv,
+						const struct iio_chan_spec *chan, char *buf)
+{
+	struct stm32_mdf_adc *adc = iio_priv(indio_dev);
+	unsigned int sub_channels_nb = 1;
+
+	if (MDF_IS_FILTER0(adc) && adc->mdf->nb_interleave)
+		sub_channels_nb = adc->mdf->nb_interleave;
+
+	return snprintf(buf, STM32_MDF_EXT_INFO_BUZ_SZ, "%u", sub_channels_nb);
+}
+
+/*
+ * IIO channel extended info used by the audio device IIO channel consumer.
+ * sub_channels_nb: provides the number of audio channels associated to the IIO channel.
+ */
+static const struct iio_chan_spec_ext_info stm32_mdf_adc_audio_ext_info[] = {
+	{
+		.name = "sub_channels_nb",
+		.shared = IIO_SHARED_BY_TYPE,
+		.read = stm32_mdf_adc_audio_get_channels,
+	},
+	{},
 };
 
 static void stm32_mdf_dma_release(struct iio_dev *indio_dev)
@@ -1021,11 +1164,34 @@ static int stm32_mdf_dma_request(struct device *dev, struct iio_dev *indio_dev)
 static int stm32_mdf_channel_parse_of(struct iio_dev *indio_dev, struct fwnode_handle *node,
 				      struct iio_chan_spec *ch)
 {
+	struct stm32_mdf_adc *adc = iio_priv(indio_dev);
+	struct iio_backend *backend;
 	int ret;
+	u32 stu = 0;
 
 	ret = fwnode_property_read_u32(node, "reg", &ch->channel);
-	if (ret < 0)
-		dev_err(&indio_dev->dev, "Missing channel index %d\n", ret);
+	if (ret < 0) {
+		dev_err(&indio_dev->dev, "Failed to read channel index: [%d]\n", ret);
+		return ret;
+	}
+
+	/* settling-time-us is optional */
+	if (fwnode_property_present(node, "settling-time-us")) {
+		ret = fwnode_property_read_u32(node, "settling-time-us", &stu);
+		if (ret < 0) {
+			dev_err(&indio_dev->dev, "Failed to read settling time: [%d]\n", ret);
+			return ret;
+		}
+	}
+	adc->stu = stu;
+
+	if (adc->dev_data->type == STM32_MDF_IIO) {
+		backend = devm_iio_backend_fwnode_get(&indio_dev->dev, NULL, node);
+		if (IS_ERR(backend))
+			return dev_err_probe(&indio_dev->dev, PTR_ERR(backend),
+					     "Failed to get backend\n");
+		adc->backend[ch->scan_index] = backend;
+	}
 
 	return ret;
 }
@@ -1036,23 +1202,29 @@ static int stm32_mdf_adc_chan_init_one(struct iio_dev *indio_dev, struct fwnode_
 	struct stm32_mdf_adc *adc = iio_priv(indio_dev);
 	int ret;
 
+	ch->type = IIO_VOLTAGE;
+	ch->indexed = 1;
+	ch->scan_index = idx;
+
 	if (adc->dev_data->type == STM32_MDF_IIO) {
 		ret = stm32_mdf_channel_parse_of(indio_dev, node, ch);
 		if (ret < 0) {
 			dev_err(&indio_dev->dev, "Failed to parse channel [%d]\n", idx);
 			return ret;
 		}
+
+		ch->info_mask_separate = BIT(IIO_CHAN_INFO_RAW) | BIT(IIO_CHAN_INFO_SCALE) |
+					 BIT(IIO_CHAN_INFO_OFFSET);
+		ch->scan_type.shift = 8;
 	}
 
-	ch->type = IIO_VOLTAGE;
-	ch->indexed = 1;
-	ch->scan_index = idx;
+	if (adc->dev_data->type == STM32_MDF_AUDIO) {
+		ch->ext_info = stm32_mdf_adc_audio_ext_info;
+		ch->info_mask_separate = BIT(IIO_CHAN_INFO_RAW);
+	}
 
-	ch->info_mask_separate = BIT(IIO_CHAN_INFO_RAW);
 	ch->info_mask_shared_by_all = BIT(IIO_CHAN_INFO_SAMP_FREQ);
 	ch->scan_type.sign = 's';
-	if (adc->dev_data->type == STM32_MDF_IIO)
-		ch->scan_type.shift = 8;
 	ch->scan_type.realbits = STM32_MDF_DATA_RES;
 	ch->scan_type.storagebits = 32;
 
@@ -1179,6 +1351,9 @@ static int stm32_mdf_adc_read_raw(struct iio_dev *indio_dev, struct iio_chan_spe
 				  int *val, int *val2, long mask)
 {
 	struct stm32_mdf_adc *adc = iio_priv(indio_dev);
+	int idx = chan->scan_index;
+	int max = BIT(STM32_MDF_DATA_RES - 1) - 1;
+	int scale, offset;
 	int ret;
 
 	switch (mask) {
@@ -1187,18 +1362,79 @@ static int stm32_mdf_adc_read_raw(struct iio_dev *indio_dev, struct iio_chan_spe
 		if (ret)
 			return ret;
 
+		if (adc->backend) {
+			ret = iio_backend_enable(adc->backend[idx]);
+			if (ret)
+				goto err_release_direct_mode;
+		}
+
 		ret = stm32_mdf_adc_single_conv(indio_dev, chan, val);
+		if (ret)
+			goto err_backend_disable;
+
+		if (adc->backend)
+			iio_backend_disable(adc->backend[idx]);
 
 		iio_device_release_direct_mode(indio_dev);
+
 		return IIO_VAL_INT;
 
 	case IIO_CHAN_INFO_SAMP_FREQ:
 		*val = adc->sample_freq;
 
 		return IIO_VAL_INT;
+
+	case IIO_CHAN_INFO_SCALE:
+		/*
+		 * Vconv = (raw>>shift + offset) * scale.
+		 * scale = Vref * k / 2^res (denominator is managed through FRACTIONAL_LOG2 type)
+		 * k correspond to the ratio between max resolution and actual filter maximum
+		 * k = max / dflt_max
+		 * max = 2^(res - 1) - 1
+		 * max_dflt = D^N * gain_lin * gain_rsflt
+		 * scale = Vref * max / dflt_max
+		 */
+		if (adc->backend) {
+			ret = iio_backend_read_scale(adc->backend[idx], chan, &scale, NULL);
+			if (ret < 0)
+				return ret;
+
+			*val = div_u64((u64)scale * max, adc->dflt_max);
+
+			*val2 = chan->scan_type.realbits;
+			if (chan->differential)
+				*val *= 2;
+		} else {
+			return -EPERM;
+		}
+
+		return IIO_VAL_FRACTIONAL_LOG2;
+
+	case IIO_CHAN_INFO_OFFSET:
+		if (adc->backend) {
+			ret = iio_backend_read_offset(adc->backend[idx], chan, &offset, NULL);
+			if (ret < 0)
+				return ret;
+
+			*val = offset;
+			if (!chan->differential)
+				*val += adc->dflt_max;
+		} else {
+			return -EPERM;
+		}
+
+		return IIO_VAL_INT;
 	}
 
 	return -EINVAL;
+
+err_backend_disable:
+	if (adc->backend)
+		iio_backend_disable(adc->backend[idx]);
+err_release_direct_mode:
+	iio_device_release_direct_mode(indio_dev);
+
+	return ret;
 }
 
 static const struct iio_info stm32_mdf_info_audio = {
@@ -1314,7 +1550,12 @@ static int stm32_mdf_adc_init(struct device *dev, struct iio_dev *indio_dev)
 			}
 		}
 
-		ch = devm_kzalloc(&indio_dev->dev, num_ch * sizeof(*ch), GFP_KERNEL);
+		adc->backend = devm_kcalloc(&indio_dev->dev, num_ch, sizeof(*adc->backend),
+					    GFP_KERNEL);
+		if (!adc->backend)
+			return -ENOMEM;
+
+		ch = devm_kcalloc(&indio_dev->dev, num_ch, sizeof(*ch), GFP_KERNEL);
 		if (!ch)
 			return -ENOMEM;
 
@@ -1650,10 +1891,6 @@ static int stm32_mdf_adc_probe(struct platform_device *pdev)
 	if (IS_ERR(adc->regmap))
 		return dev_err_probe(dev, PTR_ERR(adc->regmap), "Failed to get kernel clock\n");
 
-	ret = stm32_mdf_adc_parse_of(pdev, adc);
-	if (ret < 0)
-		return ret;
-
 	irq = platform_get_irq(pdev, 0);
 	if (irq < 0)
 		return dev_err_probe(dev, irq, "Failed to get IRQ\n");
@@ -1663,6 +1900,10 @@ static int stm32_mdf_adc_probe(struct platform_device *pdev)
 		dev_err(dev, "Failed to request IRQ\n");
 		return ret;
 	}
+
+	ret = stm32_mdf_adc_parse_of(pdev, adc);
+	if (ret < 0)
+		return ret;
 
 	if (dev_data->type == STM32_MDF_AUDIO)
 		iio->info = &stm32_mdf_info_audio;
@@ -1674,7 +1915,7 @@ static int stm32_mdf_adc_probe(struct platform_device *pdev)
 	adc->dev_data = dev_data;
 	ret = dev_data->init(dev, iio);
 	if (ret < 0)
-		return ret;
+		goto err_clean_list;
 
 	if (!MDF_IS_INTERLEAVED_FILT_NOT_0(adc)) {
 		ret = iio_device_register(iio);
@@ -1698,6 +1939,8 @@ err_unregister:
 	iio_device_unregister(iio);
 err_cleanup:
 	stm32_mdf_dma_release(iio);
+err_clean_list:
+	list_del(&adc->entry);
 
 	return ret;
 }
@@ -1712,6 +1955,8 @@ static int stm32_mdf_adc_remove(struct platform_device *pdev)
 	if (!MDF_IS_INTERLEAVED_FILT_NOT_0(adc))
 		iio_device_unregister(indio_dev);
 	stm32_mdf_dma_release(indio_dev);
+
+	list_del(&adc->entry);
 
 	return 0;
 }
@@ -1762,3 +2007,4 @@ module_platform_driver(stm32_mdf_adc_driver);
 MODULE_DESCRIPTION("STM32 MDF sigma delta ADC");
 MODULE_AUTHOR("Olivier Moysan <olivier.moysan@foss.st.com>");
 MODULE_LICENSE("GPL");
+MODULE_IMPORT_NS(IIO_BACKEND);

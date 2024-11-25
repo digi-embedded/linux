@@ -69,7 +69,7 @@ properties:
       minItems: 2
       maxItems: 2
 
-  feature-domains:
+  access-controllers:
     $ref: /schemas/types.yaml#/definitions/phandle-array
     description: |
       Phandle to the rifsc device to check access right.
@@ -157,9 +157,8 @@ additionalProperties: false
 examples:
   - |
     #include <dt-bindings/interrupt-controller/arm-gic.h>
-    #include <dt-bindings/bus/stm32mp25_sys_bus.h>
-    #include <dt-bindings/clock/stm32mp25-clks.h>
-    #include <dt-bindings/reset/stm32mp25-resets.h>
+    #include <dt-bindings/clock/st,stm32mp25-rcc.h>
+    #include <dt-bindings/reset/st,stm32mp25-rcc.h>
     spi@40430000 {
       compatible = "st,stm32mp25-omi";
       reg = <0x40430000 0x400>;
@@ -171,7 +170,7 @@ examples:
       st,syscfg-dlyb = <&syscfg 0x1000>;
       clocks = <&scmi_clk CK_SCMI_OSPI1>;
       resets = <&scmi_reset RST_SCMI_OSPI1DLL>, <&scmi_reset RST_SCMI_OSPI1DLL>;
-      feature-domains = <&rifsc STM32MP25_RIFSC_OCTOSPI1_ID>;
+      access-controllers = <&rifsc 74>;
       power-domains = <&CLUSTER_PD>;
 
       #address-cells = <1>;
@@ -187,9 +186,8 @@ examples:
 
   - |
     #include <dt-bindings/interrupt-controller/arm-gic.h>
-    #include <dt-bindings/bus/stm32mp25_sys_bus.h>
-    #include <dt-bindings/clock/stm32mp25-clks.h>
-    #include <dt-bindings/reset/stm32mp25-resets.h>
+    #include <dt-bindings/clock/st,stm32mp25-rcc.h>
+    #include <dt-bindings/reset/st,stm32mp25-rcc.h>
     memory-controller@40430000 {
       compatible = "st,stm32mp25-omi";
       reg = <0x40430000 0x400>;
@@ -200,7 +198,7 @@ examples:
       st,syscfg-dlyb = <&syscfg 0x1000>;
       clocks = <&scmi_clk CK_SCMI_OSPI1>;
       resets = <&scmi_reset RST_SCMI_OSPI1>, <&scmi_reset RST_SCMI_OSPI1DLL>;
-      feature-domains = <&rifsc STM32MP25_RIFSC_OCTOSPI1_ID>;
+      access-controllers = <&rifsc 74>;
       power-domains = <&CLUSTER_PD>;
 
       #address-cells = <2>;
@@ -215,9 +213,8 @@ examples:
     };
   - |
     #include <dt-bindings/interrupt-controller/arm-gic.h>
-    #include <dt-bindings/bus/stm32mp25_sys_bus.h>
-    #include <dt-bindings/clock/stm32mp25-clks.h>
-    #include <dt-bindings/reset/stm32mp25-resets.h>
+    #include <dt-bindings/clock/st,stm32mp25-rcc.h>
+    #include <dt-bindings/reset/st,stm32mp25-rcc.h>
     memory-controller@40430000 {
       compatible = "st,stm32mp25-omi";
       reg = <0x40430000 0x400>;
@@ -229,7 +226,7 @@ examples:
       st,syscfg-dlyb = <&syscfg 0x1000>;
       clocks = <&scmi_clk CK_SCMI_OSPI1>;
       resets = <&scmi_reset RST_SCMI_OSPI1>, <&scmi_reset RST_SCMI_OSPI1DLL>;
-      feature-domains = <&rifsc STM32MP25_RIFSC_OCTOSPI1_ID>;
+      access-controllers = <&rifsc 74>;
       power-domains = <&CLUSTER_PD>;
       cs-gpios = <&gpiod 1 GPIO_ACTIVE_LOW>;
 

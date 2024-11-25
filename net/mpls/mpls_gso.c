@@ -14,6 +14,7 @@
 #include <linux/netdev_features.h>
 #include <linux/netdevice.h>
 #include <linux/skbuff.h>
+#include <net/gso.h>
 #include <net/mpls.h>
 
 static struct sk_buff *mpls_gso_segment(struct sk_buff *skb,
@@ -25,6 +26,9 @@ static struct sk_buff *mpls_gso_segment(struct sk_buff *skb,
 	u16 mac_len = skb->mac_len;
 	__be16 mpls_protocol;
 	unsigned int mpls_hlen;
+
+	if (!skb_inner_network_header_was_set(skb))
+		goto out;
 
 	skb_reset_network_header(skb);
 	mpls_hlen = skb_inner_network_header(skb) - skb_network_header(skb);

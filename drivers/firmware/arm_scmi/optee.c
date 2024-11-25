@@ -241,6 +241,7 @@ struct ocall_ctx {
  * @req: Shared memory protocol handle for SCMI request and synchronous response
  * @tee_shm: TEE shared memory handle @req or NULL if using IOMEM shmem
  * @ocall_ctx: OP-TEE Ocall context the SCMI channel is executing in
+ * @agent: Handle of the SCMI OP-TEE agent the channel belongs to
  * @link: Reference in agent's channel list
  */
 struct scmi_optee_channel {
@@ -545,7 +546,7 @@ static int setup_ocall_thread(struct scmi_optee_channel *channel)
 
 		switch (ocall_ctx->args.ret) {
 		case TEEC_SUCCESS:
-			dev_dbg(dev, "unexpected successfull invocation\n");
+			dev_dbg(dev, "unexpected successful invocation\n");
 			break;
 		case TEEC_ERROR_NOT_SUPPORTED:
 			ret = -EOPNOTSUPP;
@@ -571,7 +572,7 @@ static int close_ocall_thread(struct scmi_optee_channel *channel)
 	struct ocall_ctx *ocall_ctx = channel->ocall_ctx;
 	int ret;
 
-	if(!ocall_ctx)
+	if (!ocall_ctx)
 		return 0;
 
 	ocall_ctx->ocall_arg.out_param1 = PTA_SCMI_OCALL_CLOSE_THREAD;
@@ -707,11 +708,11 @@ static int scmi_optee_link_supplier(struct device *dev)
 	return 0;
 }
 
-static bool scmi_optee_chan_available(struct device *dev, int idx)
+static bool scmi_optee_chan_available(struct device_node *of_node, int idx)
 {
 	u32 channel_id;
 
-	return !of_property_read_u32_index(dev->of_node, "linaro,optee-channel-id",
+	return !of_property_read_u32_index(of_node, "linaro,optee-channel-id",
 					   idx, &channel_id);
 }
 
@@ -782,7 +783,7 @@ out:
 static int setup_shmem(struct device *dev, struct scmi_chan_info *cinfo,
 		       struct scmi_optee_channel *channel)
 {
-	if (of_find_property(cinfo->dev->of_node, "shmem", NULL))
+	if (of_property_present(cinfo->dev->of_node, "shmem"))
 		return setup_static_shmem(dev, cinfo, channel);
 	else
 		return setup_dynamic_shmem(dev, channel);
@@ -819,10 +820,6 @@ static int scmi_optee_chan_setup(struct scmi_chan_info *cinfo, struct device *de
 	ret = open_session(channel->agent, &channel->tee_session);
 	if (ret)
 		goto err_free_shm;
-
-	ret = tee_client_system_session(channel->agent->tee_ctx, channel->tee_session);
-	if (ret)
-		dev_warn(dev, "Could not switch to system session, do best effort\n");
 
 	ret = get_channel(channel);
 	if (ret)
@@ -879,8 +876,6 @@ static int scmi_optee_chan_free(int id, void *p, void *data)
 
 	cinfo->transport_info = NULL;
 	channel->cinfo = NULL;
-
-	scmi_free_channel(cinfo, data, id);
 
 	devm_kfree(channel->agent->dev, channel);
 

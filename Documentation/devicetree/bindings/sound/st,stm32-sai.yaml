@@ -51,13 +51,9 @@ properties:
     minItems: 1
     maxItems: 3
 
-  feature-domains:
-    $ref: /schemas/types.yaml#/definitions/phandle-array
-    description: |
-      Phandle to the rifsc device to check access right.
-
-  power-domains:
-    maxItems: 1
+  access-controllers:
+    minItems: 1
+    maxItems: 2
 
 required:
   - compatible
@@ -74,7 +70,7 @@ patternProperties:
     additionalProperties: false
     description:
       Two subnodes corresponding to SAI sub-block instances A et B
-      can be defined. Subnode can be omitted for unsused sub-block.
+      can be defined. Subnode can be omitted for unused sub-block.
 
     properties:
       compatible:
@@ -98,9 +94,6 @@ patternProperties:
           - const: sai_ck
           - const: MCLK
         minItems: 1
-
-      power-domains:
-        maxItems: 1
 
       dmas:
         maxItems: 1

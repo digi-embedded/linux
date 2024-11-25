@@ -14,10 +14,13 @@
 #include <linux/mod_devicetable.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
+#include <linux/pm_runtime.h>
 #include <linux/property.h>
 
 #define MAX_TRIGGERS 7
 #define MAX_VALIDS 5
+
+#define STM32MP21_NUM_TRIGGERS 17
 
 /* List the triggers created by each timer */
 static const void *triggers_table[][MAX_TRIGGERS] = {
@@ -124,6 +127,7 @@ static int stm32_timer_start(struct stm32_timer_trigger *priv,
 	unsigned long long prd, div;
 	int prescaler = 0;
 	u32 ccer;
+	int ret;
 
 	/* Period and prescaler values depends of clock rate */
 	div = (unsigned long long)clk_get_rate(priv->clk);
@@ -156,7 +160,11 @@ static int stm32_timer_start(struct stm32_timer_trigger *priv,
 	mutex_lock(&priv->lock);
 	if (!priv->enabled) {
 		priv->enabled = true;
-		clk_enable(priv->clk);
+		ret = pm_runtime_resume_and_get(priv->dev);
+		if (ret < 0) {
+			mutex_unlock(&priv->lock);
+			return ret;
+		}
 	}
 
 	regmap_write(priv->regmap, TIM_PSC, prescaler);
@@ -208,7 +216,7 @@ static void stm32_timer_stop(struct stm32_timer_trigger *priv,
 
 	if (priv->enabled) {
 		priv->enabled = false;
-		clk_disable(priv->clk);
+		pm_runtime_put_sync_suspend(priv->dev);
 	}
 	mutex_unlock(&priv->lock);
 }
@@ -310,7 +318,7 @@ static ssize_t stm32_tt_store_master_mode(struct device *dev,
 	struct stm32_timer_trigger *priv = dev_get_drvdata(dev);
 	struct iio_trigger *trig = to_iio_trigger(dev);
 	u32 mask, shift, master_mode_max;
-	int i;
+	int i, ret;
 
 	if (stm32_timer_is_trgo2_name(trig->name)) {
 		mask = TIM_CR2_MMS2;
@@ -329,7 +337,11 @@ static ssize_t stm32_tt_store_master_mode(struct device *dev,
 			if (!priv->enabled) {
 				/* Clock should be enabled first */
 				priv->enabled = true;
-				clk_enable(priv->clk);
+				ret = pm_runtime_resume_and_get(priv->dev);
+				if (ret < 0) {
+					mutex_unlock(&priv->lock);
+					return ret;
+				}
 			}
 			regmap_update_bits(priv->regmap, TIM_CR2, mask,
 					   i << shift);
@@ -483,6 +495,7 @@ static int stm32_counter_write_raw(struct iio_dev *indio_dev,
 				   int val, int val2, long mask)
 {
 	struct stm32_timer_trigger *priv = iio_priv(indio_dev);
+	int ret;
 
 	switch (mask) {
 	case IIO_CHAN_INFO_RAW:
@@ -497,7 +510,11 @@ static int stm32_counter_write_raw(struct iio_dev *indio_dev,
 		if (val) {
 			if (!priv->enabled) {
 				priv->enabled = true;
-				clk_enable(priv->clk);
+				ret = pm_runtime_resume_and_get(priv->dev);
+				if (ret < 0) {
+					mutex_unlock(&priv->lock);
+					return ret;
+				}
 			}
 			regmap_update_bits(priv->regmap, TIM_CR1, TIM_CR1_CEN,
 					   TIM_CR1_CEN);
@@ -506,7 +523,11 @@ static int stm32_counter_write_raw(struct iio_dev *indio_dev,
 					   0);
 			if (priv->enabled) {
 				priv->enabled = false;
-				clk_disable(priv->clk);
+				ret = pm_runtime_put_sync_suspend(priv->dev);
+				if (ret < 0) {
+					mutex_unlock(&priv->lock);
+					return ret;
+				}
 			}
 		}
 		mutex_unlock(&priv->lock);
@@ -605,6 +626,7 @@ static int stm32_set_enable_mode(struct iio_dev *indio_dev,
 {
 	struct stm32_timer_trigger *priv = iio_priv(indio_dev);
 	int sms = stm32_enable_mode2sms(mode);
+	int ret;
 
 	if (sms < 0)
 		return sms;
@@ -614,7 +636,11 @@ static int stm32_set_enable_mode(struct iio_dev *indio_dev,
 	 */
 	mutex_lock(&priv->lock);
 	if (sms == 6 && !priv->enabled) {
-		clk_enable(priv->clk);
+		ret = pm_runtime_resume_and_get(priv->dev);
+		if (ret < 0) {
+			mutex_unlock(&priv->lock);
+			return ret;
+		}
 		priv->enabled = true;
 	}
 	mutex_unlock(&priv->lock);
@@ -802,6 +828,10 @@ static int stm32_timer_trigger_probe(struct platform_device *pdev)
 	stm32_timer_detect_trgo2(priv);
 	mutex_init(&priv->lock);
 
+	ret = devm_pm_runtime_enable(&pdev->dev);
+	if (ret)
+		return ret;
+
 	ret = stm32_register_iio_triggers(priv);
 	if (ret) {
 		stm32_unregister_iio_triggers(priv);
@@ -827,7 +857,7 @@ static int stm32_timer_trigger_remove(struct platform_device *pdev)
 		regmap_update_bits(priv->regmap, TIM_CR1, TIM_CR1_CEN, 0);
 
 	if (priv->enabled)
-		clk_disable(priv->clk);
+		pm_runtime_put_sync_suspend(priv->dev);
 
 	return 0;
 }
@@ -835,6 +865,7 @@ static int stm32_timer_trigger_remove(struct platform_device *pdev)
 static int stm32_timer_trigger_suspend(struct device *dev)
 {
 	struct stm32_timer_trigger *priv = dev_get_drvdata(dev);
+	int ret;
 
 	/* Only take care of enabled timer: don't disturb other MFD child */
 	if (priv->enabled) {
@@ -848,7 +879,10 @@ static int stm32_timer_trigger_suspend(struct device *dev)
 
 		/* Disable the timer */
 		regmap_update_bits(priv->regmap, TIM_CR1, TIM_CR1_CEN, 0);
-		clk_disable(priv->clk);
+
+		ret = pm_runtime_force_suspend(priv->dev);
+		if (ret)
+			return ret;
 	}
 
 	return 0;
@@ -860,7 +894,7 @@ static int stm32_timer_trigger_resume(struct device *dev)
 	int ret;
 
 	if (priv->enabled) {
-		ret = clk_enable(priv->clk);
+		ret = pm_runtime_force_resume(priv->dev);
 		if (ret)
 			return ret;
 
@@ -880,9 +914,32 @@ static int stm32_timer_trigger_resume(struct device *dev)
 	return 0;
 }
 
-static DEFINE_SIMPLE_DEV_PM_OPS(stm32_timer_trigger_pm_ops,
-				stm32_timer_trigger_suspend,
-				stm32_timer_trigger_resume);
+static int stm32_timer_trigger_runtime_suspend(struct device *dev)
+{
+	struct stm32_timer_trigger *priv = dev_get_drvdata(dev);
+
+	clk_disable(priv->clk);
+
+	return 0;
+}
+
+static int stm32_timer_trigger_pwm_runtime_resume(struct device *dev)
+{
+	struct stm32_timer_trigger *priv = dev_get_drvdata(dev);
+	int ret;
+
+	ret = clk_enable(priv->clk);
+	if (ret)
+		dev_err(dev, "failed to enable clock. Error [%d]\n", ret);
+
+	return ret;
+}
+
+static const struct dev_pm_ops stm32_timer_trigger_pm_ops = {
+	SYSTEM_SLEEP_PM_OPS(stm32_timer_trigger_suspend, stm32_timer_trigger_resume)
+	RUNTIME_PM_OPS(stm32_timer_trigger_runtime_suspend,
+		       stm32_timer_trigger_pwm_runtime_resume, NULL)
+};
 
 static const struct stm32_timer_trigger_cfg stm32_timer_trg_cfg = {
 	.valids_table = valids_table,
@@ -892,6 +949,11 @@ static const struct stm32_timer_trigger_cfg stm32_timer_trg_cfg = {
 static const struct stm32_timer_trigger_cfg stm32h7_timer_trg_cfg = {
 	.valids_table = stm32h7_valids_table,
 	.num_valids_table = ARRAY_SIZE(stm32h7_valids_table),
+};
+
+static const struct stm32_timer_trigger_cfg stm32mp21_timer_trg_cfg = {
+	/* The last timer instance is TIM17. */
+	.num_valids_table = STM32MP21_NUM_TRIGGERS,
 };
 
 static const struct stm32_timer_trigger_cfg stm32mp25_timer_trg_cfg = {
@@ -913,6 +975,9 @@ static const struct of_device_id stm32_trig_of_match[] = {
 		.compatible = "st,stm32h7-timer-trigger",
 		.data = (void *)&stm32h7_timer_trg_cfg,
 	}, {
+		.compatible = "st,stm32mp21-timer-trigger",
+		.data = (void *)&stm32mp21_timer_trg_cfg,
+	}, {
 		.compatible = "st,stm32mp25-timer-trigger",
 		.data = (void *)&stm32mp25_timer_trg_cfg,
 	},
@@ -926,7 +991,7 @@ static struct platform_driver stm32_timer_trigger_driver = {
 	.driver = {
 		.name = "stm32-timer-trigger",
 		.of_match_table = stm32_trig_of_match,
-		.pm = pm_sleep_ptr(&stm32_timer_trigger_pm_ops),
+		.pm = pm_ptr(&stm32_timer_trigger_pm_ops),
 	},
 };
 module_platform_driver(stm32_timer_trigger_driver);

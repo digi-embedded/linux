@@ -11,7 +11,6 @@
 #include <linux/mfd/syscon.h>
 #include <linux/module.h>
 #include <linux/of.h>
-#include <linux/of_device.h>
 #include <linux/of_net.h>
 #include <linux/phy.h>
 #include <linux/platform_device.h>
@@ -197,7 +196,7 @@ static int stm32mp1_set_mode(struct plat_stmmacenet_data *plat_dat)
 
 	clk_rate = clk_get_rate(dwmac->clk_eth_ck);
 	dwmac->enable_eth_ck = false;
-	switch (plat_dat->interface) {
+	switch (plat_dat->mac_interface) {
 	case PHY_INTERFACE_MODE_MII:
 		if (clk_rate == ETH_CK_F_25M)
 			dwmac->enable_eth_ck = true;
@@ -239,7 +238,7 @@ static int stm32mp1_set_mode(struct plat_stmmacenet_data *plat_dat)
 		break;
 	default:
 		pr_debug("SYSCFG init :  Do not manage %d interface\n",
-			 plat_dat->interface);
+			 plat_dat->mac_interface);
 		/* Do not manage others interfaces */
 		return -EINVAL;
 	}
@@ -261,7 +260,7 @@ static int stm32mp2_set_mode(struct plat_stmmacenet_data *plat_dat)
 
 	clk_rate = clk_get_rate(dwmac->clk_eth_ck);
 	dwmac->enable_eth_ck = false;
-	switch (plat_dat->interface) {
+	switch (plat_dat->mac_interface) {
 	case PHY_INTERFACE_MODE_MII:
 		if (clk_rate == ETH_CK_F_25M)
 			dwmac->enable_eth_ck = true;
@@ -302,7 +301,7 @@ static int stm32mp2_set_mode(struct plat_stmmacenet_data *plat_dat)
 		break;
 	default:
 		dev_err(dwmac->dev, "SYSCFG init :  Do not manage %d interface\n",
-			 plat_dat->interface);
+			 plat_dat->mac_interface);
 		/* Do not manage others interfaces */
 		return -EINVAL;
 	}
@@ -321,7 +320,7 @@ static int stm32mcu_set_mode(struct plat_stmmacenet_data *plat_dat)
 	u32 reg = dwmac->mode_reg;
 	int val;
 
-	switch (plat_dat->interface) {
+	switch (plat_dat->mac_interface) {
 	case PHY_INTERFACE_MODE_MII:
 		val = SYSCFG_MCU_ETH_SEL_MII;
 		pr_debug("SYSCFG init : PHY_INTERFACE_MODE_MII\n");
@@ -332,7 +331,7 @@ static int stm32mcu_set_mode(struct plat_stmmacenet_data *plat_dat)
 		break;
 	default:
 		pr_debug("SYSCFG init :  Do not manage %d interface\n",
-			 plat_dat->interface);
+			 plat_dat->mac_interface);
 		/* Do not manage others interfaces */
 		return -EINVAL;
 	}
@@ -554,26 +553,22 @@ err_wake_init_disable:
 	}
 err_remove_config_dt:
 	stmmac_remove_config_dt(pdev, plat_dat);
+
 	return ret;
 }
 
-static int stm32_dwmac_remove(struct platform_device *pdev)
+static void stm32_dwmac_remove(struct platform_device *pdev)
 {
 	struct net_device *ndev = platform_get_drvdata(pdev);
 	struct stmmac_priv *priv = netdev_priv(ndev);
-	int ret = stmmac_dvr_remove(&pdev->dev);
 
-	if (ret)
-		return ret;
-
+	stmmac_dvr_remove(&pdev->dev);
 	stm32_dwmac_clk_disable(priv->plat->bsp_priv);
 
 	dev_pm_clear_wake_irq(&pdev->dev);
-	ret = device_init_wakeup(&pdev->dev, false);
+	device_init_wakeup(&pdev->dev, false);
 
 	phy_power_on(priv->plat->bsp_priv, false);
-
-	return ret;
 }
 
 static int stm32mp1_suspend(struct stm32_dwmac *dwmac)
@@ -664,8 +659,8 @@ static struct stm32_ops stm32mp1_dwmac_data = {
 	.suspend = stm32mp1_suspend,
 	.resume = stm32mp1_resume,
 	.parse_data = stm32mp1_parse_data,
-	.syscfg_clr_off = 0x44,
 	.clk_rx_enable_in_suspend = true,
+	.syscfg_clr_off = 0x44,
 	.pmcsetr = {
 		.eth1_clk_sel		= BIT(16),
 		.eth1_ref_clk_sel	= BIT(17),
@@ -685,8 +680,8 @@ static struct stm32_ops stm32mp13_dwmac_data = {
 	.suspend = stm32mp1_suspend,
 	.resume = stm32mp1_resume,
 	.parse_data = stm32mp1_parse_data,
-	.syscfg_clr_off = 0x08,
 	.clk_rx_enable_in_suspend = true,
+	.syscfg_clr_off = 0x08,
 	.pmcsetr = {
 		.eth1_clk_sel		= BIT(16),
 		.eth1_ref_clk_sel	= BIT(17),
@@ -706,7 +701,6 @@ static struct stm32_ops stm32mp25_dwmac_data = {
 	.suspend = stm32mp1_suspend,
 	.resume = stm32mp1_resume,
 	.parse_data = stm32mp1_parse_data,
-	.clk_rx_enable_in_suspend = true,
 	.syscfg_eth_mask = SYSCFG_MP2_ETH_MASK
 };
 
@@ -721,7 +715,7 @@ MODULE_DEVICE_TABLE(of, stm32_dwmac_match);
 
 static struct platform_driver stm32_dwmac_driver = {
 	.probe  = stm32_dwmac_probe,
-	.remove = stm32_dwmac_remove,
+	.remove_new = stm32_dwmac_remove,
 	.driver = {
 		.name           = "stm32-dwmac",
 #ifdef CONFIG_PM_SLEEP

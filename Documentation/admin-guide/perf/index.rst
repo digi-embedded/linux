@@ -13,10 +13,13 @@ Performance monitor support
    imx-ddr
    qcom_l2_pmu
    qcom_l3_pmu
-   stm32-ddr-pmu
    arm-ccn
    arm-cmn
    xgene-pmu
    arm_dsu_pmu
    thunderx2-pmu
    alibaba_pmu
+   nvidia-pmu
+   meson-ddr-pmu
+   cxl
+   stm32-ddr-pmu

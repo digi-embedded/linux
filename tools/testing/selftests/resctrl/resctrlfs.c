@@ -8,6 +8,8 @@
  *    Sai Praneeth Prakhya <sai.praneeth.prakhya@intel.com>,
  *    Fenghua Yu <fenghua.yu@intel.com>
  */
+#include <limits.h>
+
 #include "resctrl.h"
 
 static int find_resctrl_mount(char *buffer)
@@ -17,7 +19,7 @@ static int find_resctrl_mount(char *buffer)
 
 	mounts = fopen("/proc/mounts", "r");
 	if (!mounts) {
-		perror("/proc/mounts");
+		ksft_perror("/proc/mounts");
 		return -ENXIO;
 	}
 	while (!feof(mounts)) {
@@ -48,45 +50,42 @@ static int find_resctrl_mount(char *buffer)
 }
 
 /*
- * remount_resctrlfs - Remount resctrl FS at /sys/fs/resctrl
- * @mum_resctrlfs:	Should the resctrl FS be remounted?
+ * mount_resctrlfs - Mount resctrl FS at /sys/fs/resctrl
  *
- * If not mounted, mount it.
- * If mounted and mum_resctrlfs then remount resctrl FS.
- * If mounted and !mum_resctrlfs then noop
+ * Mounts resctrl FS. Fails if resctrl FS is already mounted to avoid
+ * pre-existing settings interfering with the test results.
  *
  * Return: 0 on success, non-zero on failure
  */
-int remount_resctrlfs(bool mum_resctrlfs)
+int mount_resctrlfs(void)
 {
-	char mountpoint[256];
 	int ret;
 
-	ret = find_resctrl_mount(mountpoint);
-	if (ret)
-		strcpy(mountpoint, RESCTRL_PATH);
-
-	if (!ret && mum_resctrlfs && umount(mountpoint))
-		ksft_print_msg("Fail: unmounting \"%s\"\n", mountpoint);
-
-	if (!ret && !mum_resctrlfs)
-		return 0;
+	ret = find_resctrl_mount(NULL);
+	if (ret != -ENOENT)
+		return -1;
 
 	ksft_print_msg("Mounting resctrl to \"%s\"\n", RESCTRL_PATH);
 	ret = mount("resctrl", RESCTRL_PATH, "resctrl", 0, NULL);
 	if (ret)
-		perror("# mount");
+		ksft_perror("mount");
 
 	return ret;
 }
 
 int umount_resctrlfs(void)
 {
-	if (find_resctrl_mount(NULL))
-		return 0;
+	char mountpoint[256];
+	int ret;
 
-	if (umount(RESCTRL_PATH)) {
-		perror("# Unable to umount resctrl");
+	ret = find_resctrl_mount(mountpoint);
+	if (ret == -ENOENT)
+		return 0;
+	if (ret)
+		return ret;
+
+	if (umount(mountpoint)) {
+		ksft_perror("Unable to umount resctrl");
 
 		return errno;
 	}
@@ -115,12 +114,12 @@ int get_resource_id(int cpu_no, int *resource_id)
 
 	fp = fopen(phys_pkg_path, "r");
 	if (!fp) {
-		perror("Failed to open physical_package_id");
+		ksft_perror("Failed to open physical_package_id");
 
 		return -1;
 	}
 	if (fscanf(fp, "%d", resource_id) <= 0) {
-		perror("Could not get socket number or l3 id");
+		ksft_perror("Could not get socket number or l3 id");
 		fclose(fp);
 
 		return -1;
@@ -149,7 +148,7 @@ int get_cache_size(int cpu_no, char *cache_type, unsigned long *cache_size)
 	} else if (!strcmp(cache_type, "L2")) {
 		cache_num = 2;
 	} else {
-		perror("Invalid cache level");
+		ksft_print_msg("Invalid cache level\n");
 		return -1;
 	}
 
@@ -157,12 +156,12 @@ int get_cache_size(int cpu_no, char *cache_type, unsigned long *cache_size)
 		cpu_no, cache_num);
 	fp = fopen(cache_path, "r");
 	if (!fp) {
-		perror("Failed to open cache size");
+		ksft_perror("Failed to open cache size");
 
 		return -1;
 	}
 	if (fscanf(fp, "%s", cache_str) <= 0) {
-		perror("Could not get cache_size");
+		ksft_perror("Could not get cache_size");
 		fclose(fp);
 
 		return -1;
@@ -210,16 +209,16 @@ int get_cbm_mask(char *cache_type, char *cbm_mask)
 	if (!cbm_mask)
 		return -1;
 
-	sprintf(cbm_mask_path, "%s/%s/cbm_mask", CBM_MASK_PATH, cache_type);
+	sprintf(cbm_mask_path, "%s/%s/cbm_mask", INFO_PATH, cache_type);
 
 	fp = fopen(cbm_mask_path, "r");
 	if (!fp) {
-		perror("Failed to open cache level");
+		ksft_perror("Failed to open cache level");
 
 		return -1;
 	}
 	if (fscanf(fp, "%s", cbm_mask) <= 0) {
-		perror("Could not get max cbm_mask");
+		ksft_perror("Could not get max cbm_mask");
 		fclose(fp);
 
 		return -1;
@@ -246,12 +245,12 @@ int get_core_sibling(int cpu_no)
 
 	fp = fopen(core_siblings_path, "r");
 	if (!fp) {
-		perror("Failed to open core siblings path");
+		ksft_perror("Failed to open core siblings path");
 
 		return -1;
 	}
 	if (fscanf(fp, "%s", cpu_list_str) <= 0) {
-		perror("Could not get core_siblings list");
+		ksft_perror("Could not get core_siblings list");
 		fclose(fp);
 
 		return -1;
@@ -286,66 +285,12 @@ int taskset_benchmark(pid_t bm_pid, int cpu_no)
 	CPU_SET(cpu_no, &my_set);
 
 	if (sched_setaffinity(bm_pid, sizeof(cpu_set_t), &my_set)) {
-		perror("Unable to taskset benchmark");
+		ksft_perror("Unable to taskset benchmark");
 
 		return -1;
 	}
 
 	return 0;
-}
-
-/*
- * run_benchmark - Run a specified benchmark or fill_buf (default benchmark)
- *		   in specified signal. Direct benchmark stdio to /dev/null.
- * @signum:	signal number
- * @info:	signal info
- * @ucontext:	user context in signal handling
- *
- * Return: void
- */
-void run_benchmark(int signum, siginfo_t *info, void *ucontext)
-{
-	int operation, ret, malloc_and_init_memory, memflush;
-	unsigned long span, buffer_span;
-	char **benchmark_cmd;
-	char resctrl_val[64];
-	FILE *fp;
-
-	benchmark_cmd = info->si_ptr;
-
-	/*
-	 * Direct stdio of child to /dev/null, so that only parent writes to
-	 * stdio (console)
-	 */
-	fp = freopen("/dev/null", "w", stdout);
-	if (!fp)
-		PARENT_EXIT("Unable to direct benchmark status to /dev/null");
-
-	if (strcmp(benchmark_cmd[0], "fill_buf") == 0) {
-		/* Execute default fill_buf benchmark */
-		span = strtoul(benchmark_cmd[1], NULL, 10);
-		malloc_and_init_memory = atoi(benchmark_cmd[2]);
-		memflush =  atoi(benchmark_cmd[3]);
-		operation = atoi(benchmark_cmd[4]);
-		sprintf(resctrl_val, "%s", benchmark_cmd[5]);
-
-		if (strncmp(resctrl_val, CMT_STR, sizeof(CMT_STR)))
-			buffer_span = span * MB;
-		else
-			buffer_span = span;
-
-		if (run_fill_buf(buffer_span, malloc_and_init_memory, memflush,
-				 operation, resctrl_val))
-			fprintf(stderr, "Error in running fill buffer\n");
-	} else {
-		/* Execute specified benchmark */
-		ret = execvp(benchmark_cmd[0], benchmark_cmd);
-		if (ret)
-			perror("wrong\n");
-	}
-
-	fclose(stdout);
-	PARENT_EXIT("Unable to run specified benchmark");
 }
 
 /*
@@ -379,7 +324,7 @@ static int create_grp(const char *grp_name, char *grp, const char *parent_grp)
 		}
 		closedir(dp);
 	} else {
-		perror("Unable to open resctrl for group");
+		ksft_perror("Unable to open resctrl for group");
 
 		return -1;
 	}
@@ -387,7 +332,7 @@ static int create_grp(const char *grp_name, char *grp, const char *parent_grp)
 	/* Requested grp doesn't exist, hence create it */
 	if (found_grp == 0) {
 		if (mkdir(grp, 0) == -1) {
-			perror("Unable to create group");
+			ksft_perror("Unable to create group");
 
 			return -1;
 		}
@@ -402,12 +347,12 @@ static int write_pid_to_tasks(char *tasks, pid_t pid)
 
 	fp = fopen(tasks, "w");
 	if (!fp) {
-		perror("Failed to open tasks file");
+		ksft_perror("Failed to open tasks file");
 
 		return -1;
 	}
 	if (fprintf(fp, "%d\n", pid) < 0) {
-		perror("Failed to wr pid to tasks file");
+		ksft_print_msg("Failed to write pid to tasks file\n");
 		fclose(fp);
 
 		return -1;
@@ -474,7 +419,7 @@ int write_bm_pid_to_resctrl(pid_t bm_pid, char *ctrlgrp, char *mongrp,
 out:
 	ksft_print_msg("Writing benchmark parameters to resctrl FS\n");
 	if (ret)
-		perror("# writing to resctrlfs");
+		ksft_print_msg("Failed writing to resctrlfs\n");
 
 	return ret;
 }
@@ -498,6 +443,7 @@ int write_schemata(char *ctrlgrp, char *schemata, int cpu_no, char *resctrl_val)
 	FILE *fp;
 
 	if (strncmp(resctrl_val, MBA_STR, sizeof(MBA_STR)) &&
+	    strncmp(resctrl_val, MBM_STR, sizeof(MBM_STR)) &&
 	    strncmp(resctrl_val, CAT_STR, sizeof(CAT_STR)) &&
 	    strncmp(resctrl_val, CMT_STR, sizeof(CMT_STR)))
 		return -ENOENT;
@@ -523,7 +469,8 @@ int write_schemata(char *ctrlgrp, char *schemata, int cpu_no, char *resctrl_val)
 	if (!strncmp(resctrl_val, CAT_STR, sizeof(CAT_STR)) ||
 	    !strncmp(resctrl_val, CMT_STR, sizeof(CMT_STR)))
 		sprintf(schema, "%s%d%c%s", "L3:", resource_id, '=', schemata);
-	if (!strncmp(resctrl_val, MBA_STR, sizeof(MBA_STR)))
+	if (!strncmp(resctrl_val, MBA_STR, sizeof(MBA_STR)) ||
+	    !strncmp(resctrl_val, MBM_STR, sizeof(MBM_STR)))
 		sprintf(schema, "%s%d%c%s", "MB:", resource_id, '=', schemata);
 
 	fp = fopen(controlgroup, "w");
@@ -607,60 +554,46 @@ char *fgrep(FILE *inf, const char *str)
 
 /*
  * validate_resctrl_feature_request - Check if requested feature is valid.
- * @resctrl_val:	Requested feature
+ * @resource:	Required resource (e.g., MB, L3, L2, L3_MON, etc.)
+ * @feature:	Required monitor feature (in mon_features file). Can only be
+ *		set for L3_MON. Must be NULL for all other resources.
  *
- * Return: True if the feature is supported, else false
+ * Return: True if the resource/feature is supported, else false. False is
+ *         also returned if resctrl FS is not mounted.
  */
-bool validate_resctrl_feature_request(const char *resctrl_val)
+bool validate_resctrl_feature_request(const char *resource, const char *feature)
 {
+	char res_path[PATH_MAX];
 	struct stat statbuf;
-	bool found = false;
 	char *res;
 	FILE *inf;
+	int ret;
 
-	if (!resctrl_val)
+	if (!resource)
 		return false;
 
-	if (remount_resctrlfs(false))
+	ret = find_resctrl_mount(NULL);
+	if (ret)
 		return false;
 
-	if (!strncmp(resctrl_val, CAT_STR, sizeof(CAT_STR))) {
-		if (!stat(L3_PATH, &statbuf))
-			return true;
-	} else if (!strncmp(resctrl_val, MBA_STR, sizeof(MBA_STR))) {
-		if (!stat(MB_PATH, &statbuf))
-			return true;
-	} else if (!strncmp(resctrl_val, MBM_STR, sizeof(MBM_STR)) ||
-		   !strncmp(resctrl_val, CMT_STR, sizeof(CMT_STR))) {
-		if (!stat(L3_MON_PATH, &statbuf)) {
-			inf = fopen(L3_MON_FEATURES_PATH, "r");
-			if (!inf)
-				return false;
+	snprintf(res_path, sizeof(res_path), "%s/%s", INFO_PATH, resource);
 
-			if (!strncmp(resctrl_val, CMT_STR, sizeof(CMT_STR))) {
-				res = fgrep(inf, "llc_occupancy");
-				if (res) {
-					found = true;
-					free(res);
-				}
-			}
+	if (stat(res_path, &statbuf))
+		return false;
 
-			if (!strncmp(resctrl_val, MBM_STR, sizeof(MBM_STR))) {
-				res = fgrep(inf, "mbm_total_bytes");
-				if (res) {
-					free(res);
-					res = fgrep(inf, "mbm_local_bytes");
-					if (res) {
-						found = true;
-						free(res);
-					}
-				}
-			}
-			fclose(inf);
-		}
-	}
+	if (!feature)
+		return true;
 
-	return found;
+	snprintf(res_path, sizeof(res_path), "%s/%s/mon_features", INFO_PATH, resource);
+	inf = fopen(res_path, "r");
+	if (!inf)
+		return false;
+
+	res = fgrep(inf, feature);
+	free(res);
+	fclose(inf);
+
+	return !!res;
 }
 
 int filter_dmesg(void)
@@ -673,21 +606,22 @@ int filter_dmesg(void)
 
 	ret = pipe(pipefds);
 	if (ret) {
-		perror("pipe");
+		ksft_perror("pipe");
 		return ret;
 	}
+	fflush(stdout);
 	pid = fork();
 	if (pid == 0) {
 		close(pipefds[0]);
 		dup2(pipefds[1], STDOUT_FILENO);
 		execlp("dmesg", "dmesg", NULL);
-		perror("executing dmesg");
+		ksft_perror("Executing dmesg");
 		exit(1);
 	}
 	close(pipefds[1]);
 	fp = fdopen(pipefds[0], "r");
 	if (!fp) {
-		perror("fdopen(pipe)");
+		ksft_perror("fdopen(pipe)");
 		kill(pid, SIGTERM);
 
 		return -1;

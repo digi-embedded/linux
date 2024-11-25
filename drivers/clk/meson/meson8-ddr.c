@@ -8,9 +8,9 @@
 #include <dt-bindings/clock/meson8-ddr-clkc.h>
 
 #include <linux/clk-provider.h>
+#include <linux/clk-regmap.h>
 #include <linux/platform_device.h>
 
-#include "clk-regmap.h"
 #include "clk-pll.h"
 
 #define AM_DDR_PLL_CNTL			0x00

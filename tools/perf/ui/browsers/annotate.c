@@ -114,7 +114,7 @@ static void annotate_browser__write(struct ui_browser *browser, void *entry, int
 	if (!browser->navkeypressed)
 		ops.width += 1;
 
-	annotation_line__write(al, notes, &ops, ab->opts);
+	annotation_line__write(al, notes, &ops);
 
 	if (ops.current_entry)
 		ab->selection = al;
@@ -314,7 +314,7 @@ static void annotate_browser__calc_percent(struct annotate_browser *browser,
 
 	browser->entries = RB_ROOT;
 
-	mutex_lock(&notes->lock);
+	annotation__lock(notes);
 
 	symbol__calc_percent(sym, evsel);
 
@@ -337,13 +337,13 @@ static void annotate_browser__calc_percent(struct annotate_browser *browser,
 				max_percent = percent;
 		}
 
-		if (max_percent < 0.01 && pos->al.ipc == 0) {
+		if (max_percent < 0.01 && (!pos->al.cycles || pos->al.cycles->ipc == 0)) {
 			RB_CLEAR_NODE(&pos->al.rb_node);
 			continue;
 		}
 		disasm_rb_tree__insert(browser, &pos->al);
 	}
-	mutex_unlock(&notes->lock);
+	annotation__unlock(notes);
 
 	browser->curr_hot = rb_last(&browser->entries);
 }
@@ -441,7 +441,8 @@ static void ui_browser__init_asm_mode(struct ui_browser *browser)
 static int sym_title(struct symbol *sym, struct map *map, char *title,
 		     size_t sz, int percent_type)
 {
-	return snprintf(title, sz, "%s  %s [Percent: %s]", sym->name, map->dso->long_name,
+	return snprintf(title, sz, "%s  %s [Percent: %s]", sym->name,
+			map__dso(map)->long_name,
 			percent_type_str(percent_type));
 }
 
@@ -469,10 +470,10 @@ static bool annotate_browser__callq(struct annotate_browser *browser,
 	}
 
 	notes = symbol__annotation(dl->ops.target.sym);
-	mutex_lock(&notes->lock);
+	annotation__lock(notes);
 
 	if (!symbol__hists(dl->ops.target.sym, evsel->evlist->core.nr_entries)) {
-		mutex_unlock(&notes->lock);
+		annotation__unlock(notes);
 		ui__warning("Not enough memory for annotating '%s' symbol!\n",
 			    dl->ops.target.sym->name);
 		return true;
@@ -481,7 +482,7 @@ static bool annotate_browser__callq(struct annotate_browser *browser,
 	target_ms.maps = ms->maps;
 	target_ms.map = ms->map;
 	target_ms.sym = dl->ops.target.sym;
-	mutex_unlock(&notes->lock);
+	annotation__unlock(notes);
 	symbol__tui_annotate(&target_ms, evsel, hbt, browser->opts);
 	sym_title(ms->sym, ms->map, title, sizeof(title), browser->opts->percent_type);
 	ui_browser__show_title(&browser->b, title);
@@ -780,9 +781,9 @@ static int annotate_browser__run(struct annotate_browser *browser,
 			ui_browser__help_window(&browser->b,
 		"UP/DOWN/PGUP\n"
 		"PGDN/SPACE    Navigate\n"
+		"</>           Move to prev/next symbol\n"
 		"q/ESC/CTRL+C  Exit\n\n"
 		"ENTER         Go to target\n"
-		"ESC           Exit\n"
 		"H             Go to hottest instruction\n"
 		"TAB/shift+TAB Cycle thru hottest instructions\n"
 		"j             Toggle showing jump to target arrows\n"
@@ -883,7 +884,7 @@ show_sup_ins:
 			continue;
 		}
 		case 'P':
-			map_symbol__annotation_dump(ms, evsel, browser->opts);
+			map_symbol__annotation_dump(ms, evsel);
 			continue;
 		case 't':
 			if (symbol_conf.show_total_period) {
@@ -912,6 +913,8 @@ show_sup_ins:
 			annotation__toggle_full_addr(notes, ms);
 			continue;
 		case K_LEFT:
+		case '<':
+		case '>':
 		case K_ESC:
 		case 'q':
 		case CTRL('c'):
@@ -964,20 +967,22 @@ int symbol__tui_annotate(struct map_symbol *ms, struct evsel *evsel,
 		},
 		.opts = opts,
 	};
+	struct dso *dso;
 	int ret = -1, err;
 	int not_annotated = list_empty(&notes->src->source);
 
 	if (sym == NULL)
 		return -1;
 
-	if (ms->map->dso->annotate_warned)
+	dso = map__dso(ms->map);
+	if (dso->annotate_warned)
 		return -1;
 
 	if (not_annotated) {
-		err = symbol__annotate2(ms, evsel, opts, &browser.arch);
+		err = symbol__annotate2(ms, evsel, &browser.arch);
 		if (err) {
 			char msg[BUFSIZ];
-			ms->map->dso->annotate_warned = true;
+			dso->annotate_warned = true;
 			symbol__strerror_disassemble(ms, err, msg, sizeof(msg));
 			ui__error("Couldn't annotate %s:\n%s", sym->name, msg);
 			goto out_free_offsets;

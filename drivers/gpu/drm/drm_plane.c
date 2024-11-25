@@ -46,6 +46,11 @@
  * properties that specify how the pixels are positioned and blended, like
  * rotation or Z-position. All these properties are stored in &drm_plane_state.
  *
+ * Unless explicitly specified (via CRTC property or otherwise), the active area
+ * of a CRTC will be black by default. This means portions of the active area
+ * which are not covered by a plane will be black, and alpha blending of any
+ * planes with the CRTC background will blend with black at the lowest zpos.
+ *
  * To create a plane, a KMS drivers allocates and zeroes an instances of
  * &struct drm_plane (possibly as part of a larger structure) and registers it
  * with a call to drm_universal_plane_init().
@@ -671,6 +676,19 @@ int drm_mode_getplane_res(struct drm_device *dev, void *data,
 		 */
 		if (plane->type != DRM_PLANE_TYPE_OVERLAY &&
 		    !file_priv->universal_planes)
+			continue;
+
+		/*
+		 * If we're running on a virtualized driver then,
+		 * unless userspace advertizes support for the
+		 * virtualized cursor plane, disable cursor planes
+		 * because they'll be broken due to missing cursor
+		 * hotspot info.
+		 */
+		if (plane->type == DRM_PLANE_TYPE_CURSOR &&
+		    drm_core_check_feature(dev, DRIVER_CURSOR_HOTSPOT) &&
+		    file_priv->atomic &&
+		    !file_priv->supports_virtualized_cursor_plane)
 			continue;
 
 		if (drm_lease_held(file_priv, plane->base.id)) {

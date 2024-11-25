@@ -5,9 +5,9 @@
  */
 
 #include <linux/clk-provider.h>
+#include <linux/clk-regmap.h>
 #include <linux/module.h>
 
-#include "clk-regmap.h"
 #include "clk-phase.h"
 
 #define phase_step(_width) (360 / (1 << (_width)))

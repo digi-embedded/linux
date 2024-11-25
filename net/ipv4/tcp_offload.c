@@ -9,6 +9,7 @@
 #include <linux/indirect_call_wrapper.h>
 #include <linux/skbuff.h>
 #include <net/gro.h>
+#include <net/gso.h>
 #include <net/tcp.h>
 #include <net/protocol.h>
 
@@ -70,6 +71,9 @@ struct sk_buff *tcp_gso_segment(struct sk_buff *skb,
 	th = tcp_hdr(skb);
 	thlen = th->doff * 4;
 	if (thlen < sizeof(*th))
+		goto out;
+
+	if (unlikely(skb_checksum_start(skb) != skb_transport_header(skb)))
 		goto out;
 
 	if (!pskb_may_pull(skb, thlen))
@@ -295,7 +299,7 @@ out:
 	return pp;
 }
 
-int tcp_gro_complete(struct sk_buff *skb)
+void tcp_gro_complete(struct sk_buff *skb)
 {
 	struct tcphdr *th = tcp_hdr(skb);
 
@@ -310,8 +314,6 @@ int tcp_gro_complete(struct sk_buff *skb)
 
 	if (skb->encapsulation)
 		skb->inner_transport_header = skb->transport_header;
-
-	return 0;
 }
 EXPORT_SYMBOL(tcp_gro_complete);
 
@@ -341,7 +343,8 @@ INDIRECT_CALLABLE_SCOPE int tcp4_gro_complete(struct sk_buff *skb, int thoff)
 	if (NAPI_GRO_CB(skb)->is_atomic)
 		skb_shinfo(skb)->gso_type |= SKB_GSO_TCP_FIXEDID;
 
-	return tcp_gro_complete(skb);
+	tcp_gro_complete(skb);
+	return 0;
 }
 
 static const struct net_offload tcpv4_offload = {

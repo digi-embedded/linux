@@ -24,22 +24,23 @@ properties:
     maxItems: 1
 
   clocks:
-    minItems: 1
-
-  resets:
     maxItems: 1
 
-  power-domains:
+  resets:
     maxItems: 1
 
   clock-error-detect:
     type: boolean
     description: If set enable the clock detection management
 
-  feature-domains:
-    $ref: /schemas/types.yaml#/definitions/phandle-array
-    description: |
-      Phandle to the rifsc device to check access right.
+  st,rng-lock-conf:
+    type: boolean
+    description: If set, the RNG configuration in RNG_CR, RNG_HTCR and
+                  RNG_NSCR will be locked.
+
+  access-controllers:
+    minItems: 1
+    maxItems: 2
 
 required:
   - compatible
@@ -52,32 +53,10 @@ allOf:
         compatible:
           contains:
             enum:
-              - st,stm32mp13-rng
-              - st,stm32mp25-rng
+              - st,stm32-rng
     then:
       properties:
-        st,rng-lock-conf:
-          type: boolean
-          description: If set, the RNG configuration in RNG_CR, RNG_HTCR and
-                       RNG_NSCR will be locked.
-
-  - if:
-      properties:
-        compatible:
-          contains:
-            const: st,stm32mp25-rng
-    then:
-      properties:
-        clocks:
-          minItems: 2
-
-        clock-names:
-          items:
-            - const: rng_clk  # RNG kernel clock
-            - const: rng_hclk # RNG bus clock
-
-      required:
-        - clock-names
+        st,rng-lock-conf: false
 
 additionalProperties: false
 

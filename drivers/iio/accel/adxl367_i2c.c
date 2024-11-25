@@ -11,7 +11,7 @@
 
 #include "adxl367.h"
 
-#define ADXL367_I2C_FIFO_DATA	0x42
+#define ADXL367_I2C_FIFO_DATA	0x18
 
 struct adxl367_i2c_state {
 	struct regmap *regmap;
@@ -41,8 +41,7 @@ static const struct adxl367_ops adxl367_i2c_ops = {
 	.read_fifo = adxl367_i2c_read_fifo,
 };
 
-static int adxl367_i2c_probe(struct i2c_client *client,
-			     const struct i2c_device_id *id)
+static int adxl367_i2c_probe(struct i2c_client *client)
 {
 	struct adxl367_i2c_state *st;
 	struct regmap *regmap;

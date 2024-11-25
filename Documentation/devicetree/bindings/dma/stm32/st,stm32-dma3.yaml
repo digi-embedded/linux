@@ -9,8 +9,8 @@ title: STMicroelectronics STM32 DMA3 Controller
 description: |
   The STM32 DMA3 is a direct memory access controller with different features
   depending on its hardware configuration.
-  It is either called LPDMA (Low Power), GPDMA (General Purpose) or
-  HPDMA (High Performance).
+  It is either called LPDMA (Low Power), GPDMA (General Purpose) or HPDMA (High
+  Performance).
   Its hardware configuration registers allow to dynamically expose its features.
 
   GPDMA and HPDMA support 16 independent DMA channels, while only 4 for LPDMA.
@@ -18,52 +18,9 @@ description: |
 
   Bindings are generic for these 3 STM32 DMA3 configurations.
 
-  DMA clients connected to the STM32 DMA3 controller must use the format described
-  in the ../dma.txt file, using a four-cell specifier for each channel.
-  A phandle to the DMA controller plus the following three integer cells:
-    1. The request line number
-    2. A 32-bit mask specifying the DMA channel requirements
-      -bit 0-1: The priority level
-        0x0: low priority, low weight
-        0x1: low priority, mid weight
-        0x2: low priority, high weight
-        0x3: high priority
-      -bit 4-7: The FIFO requirement for queuing source and destination transfers
-        0x0: no FIFO requirement/any channel can fit
-        0x2: FIFO of 8 bytes (2^2+1)
-        0x4: FIFO of 32 bytes (2^4+1)
-        0x6: FIFO of 128 bytes (2^6+1)
-        0x7: FIFO of 256 bytes (2^7+1)
-    3. A 32-bit mask specifying the DMA transfer requirements
-      -bit 0: The source incrementing burst
-        0x0: fixed burst
-        0x1: contiguously incremented burst
-      -bit 1: The source allocated port
-        0x0: port 0 is allocated to the source transfer
-        0x1: port 1 is allocated to the source transfer
-      -bit 4: The destination incrementing burst
-        0x0: fixed burst
-        0x1: contiguously incremented burst
-      -bit 5: The destination allocated port
-        0x0: port 0 is allocated to the destination transfer
-        0x1: port 1 is allocated to the destination transfer
-      -bit 8: The type of hardware request
-        0x0: burst
-        0x1: block
-      -bit 9: The control mode
-        0x0: DMA controller control mode
-        0x1: peripheral control mode
-      -bit 12-13: The transfer complete event mode
-        0x0: at block level, transfer complete event is generated at the end of a block
-        0x2: at LLI level, the transfer complete event is generated at the end of the LLI transfer,
-             including the update of the LLI if any
-        0x3: at channel level, the transfer complete event is generated at the end of the last LLI
-      -bit 16: Prevent packing/unpacking mode
-        0x0: pack/unpack enabled when source data width/burst != destination data width/burst
-        0x1: memory data width/burst forced to peripheral data width/burst to prevent pack/unpack
-      -bit 17: Prevent linked-list refactoring
-        0x0: don't prevent driver to refactor the linked-list for optimal performance
-        0x1: prevent driver to refactor the linked-list, despite not optimal performance
+  DMA clients connected to the STM32 DMA3 controller must use the format
+  described in "#dma-cells" property description below, using a three-cell
+  specifier for each channel.
 
 maintainers:
   - Amelie Delaunay <amelie.delaunay@foss.st.com>
@@ -72,14 +29,18 @@ allOf:
   - $ref: /schemas/dma/dma-controller.yaml#
 
 properties:
-  "#dma-cells":
-    const: 3
-
   compatible:
     const: st,stm32-dma3
 
   reg:
     maxItems: 1
+
+  interrupts:
+    minItems: 4
+    maxItems: 16
+    description:
+      Should contain all of the per-channel DMA interrupts in ascending order
+      with respect to the DMA channel index.
 
   clocks:
     maxItems: 1
@@ -87,9 +48,8 @@ properties:
   resets:
     maxItems: 1
 
-  interrupts:
-    minItems: 4
-    maxItems: 16
+  power-domains:
+    maxItems: 1
 
   lli-bus-interface:
     description: |
@@ -108,9 +68,6 @@ properties:
       the STM32 DMA3 performance.
     maxItems: 1
 
-  power-domains:
-    maxItems: 1
-
   st,axi-max-burst-len:
     description: |
       Restrict AXI burst length in unit of beat by value specified in this property.
@@ -121,18 +78,83 @@ properties:
     maximum: 256
     default: 64
 
+  st,syscfg-arcr:
+    description: |
+      Phandle to system configuration controller. It is used to get the status of the STM32 DMA3 AXI
+      port address remapping. When enabled, the 4GB address space accessible by the STM32 DMA3 AXI
+      port starts at address 0x80000000 instead of 0x00000000.
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    items:
+      - items:
+          - description: phandle to syscfg
+          - description: register offset within syscfg
+          - description: register bitmask for DMA controller Address Remapping ENable (AREN) bit
+
+  "#dma-cells":
+    const: 3
+    description: |
+      Specifies the number of cells needed to provide DMA controller specific
+      information.
+      The first cell is the request line number.
+      The second cell is a 32-bit mask specifying the DMA channel requirements:
+        -bit 0-1: The priority level
+          0x0: low priority, low weight
+          0x1: low priority, mid weight
+          0x2: low priority, high weight
+          0x3: high priority
+        -bit 4-7: The FIFO requirement for queuing source/destination transfers
+          0x0: no FIFO requirement/any channel can fit
+          0x2: FIFO of 8 bytes (2^2+1)
+          0x4: FIFO of 32 bytes (2^4+1)
+          0x6: FIFO of 128 bytes (2^6+1)
+          0x7: FIFO of 256 bytes (2^7+1)
+      The third cell is a 32-bit mask specifying the DMA transfer requirements:
+        -bit 0: The source incrementing burst
+          0x0: fixed burst
+          0x1: contiguously incremented burst
+        -bit 1: The source allocated port
+          0x0: port 0 is allocated to the source transfer
+          0x1: port 1 is allocated to the source transfer
+        -bit 4: The destination incrementing burst
+          0x0: fixed burst
+          0x1: contiguously incremented burst
+        -bit 5: The destination allocated port
+          0x0: port 0 is allocated to the destination transfer
+          0x1: port 1 is allocated to the destination transfer
+        -bit 8: The type of hardware request
+          0x0: burst
+          0x1: block
+        -bit 9: The control mode
+          0x0: DMA controller control mode
+          0x1: peripheral control mode
+        -bit 12-13: The transfer complete event mode
+          0x0: at block level, transfer complete event is generated at the end
+               of a block
+          0x2: at LLI level, the transfer complete event is generated at the end
+               of the LLI transfer
+               including the update of the LLI if any
+          0x3: at channel level, the transfer complete event is generated at the
+               end of the last LLI
+        -bit 16: Prevent packing/unpacking mode
+          0x0: pack/unpack enabled when source data width/burst != destination data width/burst
+          0x1: memory data width/burst forced to peripheral data width/burst to prevent pack/unpack
+        -bit 17: Prevent linked-list refactoring
+          0x0: don't prevent driver to refactor the linked-list for optimal performance
+          0x1: prevent driver to refactor the linked-list, despite not optimal performance
+
 required:
   - compatible
   - reg
-  - clocks
   - interrupts
+  - clocks
+  - "#dma-cells"
 
 unevaluatedProperties: false
 
 examples:
   - |
     #include <dt-bindings/interrupt-controller/arm-gic.h>
-    #include <dt-bindings/clock/stm32mp25-clks.h>
+    #include <dt-bindings/clock/st,stm32mp25-rcc.h>
     dma-controller@40400000 {
       compatible = "st,stm32-dma3";
       reg = <0x40400000 0x1000>;
@@ -157,4 +179,3 @@ examples:
       st,axi-max-burst-len = <16>;
     };
 ...
-

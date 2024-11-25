@@ -186,7 +186,7 @@ struct sk_buff *brcmu_pktq_peek_tail(struct pktq *pq, int *prec_out)
 {
 	int prec;
 
-	if (pq->len == 0)
+	if (pktq_empty(pq))
 		return NULL;
 
 	for (prec = 0; prec < pq->hi_prec; prec++)
@@ -223,7 +223,7 @@ struct sk_buff *brcmu_pktq_mdeq(struct pktq *pq, uint prec_bmp,
 	struct sk_buff *p;
 	int prec;
 
-	if (pq->len == 0)
+	if (pktq_empty(pq))
 		return NULL;
 
 	while ((prec = pq->hi_prec) > 0 &&
@@ -291,19 +291,6 @@ char *brcmu_dotrev_str(u32 dotrev, char *buf)
 	return buf;
 }
 EXPORT_SYMBOL(brcmu_dotrev_str);
-
-struct sk_buff *__brcmu_pkt_buf_get_skb(uint len, gfp_t gfp_mask)
-{
-	struct sk_buff *skb;
-
-	skb = __netdev_alloc_skb(NULL, len, gfp_mask);
-	if (skb) {
-		skb_put(skb, len);
-		skb->priority = 0;
-	}
-	return skb;
-}
-EXPORT_SYMBOL(__brcmu_pkt_buf_get_skb);
 
 #if defined(DEBUG)
 /* pretty hex print a pkt buffer chain */

@@ -142,7 +142,7 @@ static const struct snd_soc_dai_driver stm32_adfsdm_dai = {
 			       SNDRV_PCM_FMTBIT_S32_LE,
 		    .rates = SNDRV_PCM_RATE_CONTINUOUS,
 		    .rate_min = 8000,
-		    .rate_max = 48000,
+		    .rate_max = 192000,
 		    },
 	.ops = &stm32_adfsdm_dai_ops,
 };
@@ -386,12 +386,10 @@ static int stm32_adfsdm_probe(struct platform_device *pdev)
 	return ret;
 }
 
-static int stm32_adfsdm_remove(struct platform_device *pdev)
+static void stm32_adfsdm_remove(struct platform_device *pdev)
 {
 	snd_soc_unregister_component(&pdev->dev);
 	pm_runtime_disable(&pdev->dev);
-
-	return 0;
 }
 
 static struct platform_driver stm32_adfsdm_driver = {
@@ -400,7 +398,7 @@ static struct platform_driver stm32_adfsdm_driver = {
 		   .of_match_table = stm32_adfsdm_of_match,
 		   },
 	.probe = stm32_adfsdm_probe,
-	.remove = stm32_adfsdm_remove,
+	.remove_new = stm32_adfsdm_remove,
 };
 
 module_platform_driver(stm32_adfsdm_driver);

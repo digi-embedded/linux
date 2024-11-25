@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
+#include <linux/linkage.h>
 #include <asm/vdso.h>
 #include <asm/unistd.h>
 #include <asm/asm-offsets.h>
@@ -16,15 +17,17 @@
 .macro vdso_func func
 	.globl __kernel_\func
 	.type  __kernel_\func,@function
-	.align 8
+	__ALIGN
 __kernel_\func:
 	CFI_STARTPROC
 	aghi	%r15,-WRAPPER_FRAME_SIZE
 	CFI_DEF_CFA_OFFSET (STACK_FRAME_OVERHEAD + WRAPPER_FRAME_SIZE)
 	CFI_VAL_OFFSET 15, -STACK_FRAME_OVERHEAD
 	stg	%r14,STACK_FRAME_OVERHEAD(%r15)
+	CFI_REL_OFFSET 14, STACK_FRAME_OVERHEAD
 	brasl	%r14,__s390_vdso_\func
 	lg	%r14,STACK_FRAME_OVERHEAD(%r15)
+	CFI_RESTORE 14
 	aghi	%r15,WRAPPER_FRAME_SIZE
 	CFI_DEF_CFA_OFFSET STACK_FRAME_OVERHEAD
 	CFI_RESTORE 15
@@ -41,7 +44,7 @@ vdso_func getcpu
 .macro vdso_syscall func,syscall
 	.globl __kernel_\func
 	.type  __kernel_\func,@function
-	.align 8
+	__ALIGN
 __kernel_\func:
 	CFI_STARTPROC
 	svc	\syscall

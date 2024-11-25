@@ -17,6 +17,7 @@ properties:
   compatible:
     enum:
       - st,stm32mp25-mdf
+      - st,stm32mp23-mdf
 
   reg:
     minItems: 1
@@ -65,7 +66,7 @@ properties:
     items:
       - const: mdf
 
-  feature-domains:
+  access-controllers:
     $ref: /schemas/types.yaml#/definitions/phandle-array
     description: |
       Phandle to the rifsc device to check access right.
@@ -248,8 +249,22 @@ patternProperties:
                     minimum: 0
                     maximum: 8
 
+                settling-time-us:
+                  description:
+                    Time between enabling the channel and the first sample. This time is converted
+                    by the driver into a minimum number of output sample to discard before releasing
+                    the data. It allows to drop the samples affected by the impulse response of the
+                    filter and wait for stable data.
+
+                io-backends:
+                  description:
+                    Used to pipe external sigma delta modulator or internal ADC backend to MDF
+                    channel.
+                  maxItems: 1
+
               required:
                 - reg
+                - io-backends
 
               additionalProperties: false
 
@@ -294,7 +309,7 @@ patternProperties:
 
 examples:
   - |
-    #include <dt-bindings/clock/stm32mp25-clks.h>
+    #include <dt-bindings/clock/st,stm32mp25-rcc.h>
     #include <dt-bindings/interrupt-controller/arm-gic.h>
     mdf1: mdf@504d0000 {
       compatible = "st,stm32mp25-mdf";
@@ -347,6 +362,8 @@ examples:
 
         channel@1 {
           reg = <1>;
+          settling-time-us = <1000>;
+          io-backends = <&sd_adc1>;
         };
       };
     };

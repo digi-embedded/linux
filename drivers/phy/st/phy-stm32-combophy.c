@@ -15,6 +15,7 @@
 #include <linux/of_platform.h>
 #include <linux/platform_device.h>
 #include <linux/phy/phy.h>
+#include <linux/pm_runtime.h>
 #include <linux/regmap.h>
 #include <linux/reset.h>
 #include <dt-bindings/phy/phy.h>
@@ -437,6 +438,7 @@ static int stm32_combophy_resume_noirq(struct device *dev)
 static int stm32_combophy_exit(struct phy *phy)
 {
 	struct stm32_combophy *combophy = phy_get_drvdata(phy);
+	struct device *dev = combophy->dev;
 
 	combophy->is_init = false;
 
@@ -453,32 +455,44 @@ static int stm32_combophy_exit(struct phy *phy)
 
 	stm32_combophy_disable_clocks(combophy);
 
+	pm_runtime_put_noidle(dev);
+
 	return 0;
 }
 
 static int stm32_combophy_init(struct phy *phy)
 {
 	struct stm32_combophy *combophy = phy_get_drvdata(phy);
+	struct device *dev = combophy->dev;
 	int ret;
+
+	pm_runtime_get_noresume(dev);
 
 	ret = stm32_combophy_enable_clocks(combophy);
 	if (ret) {
-		dev_err(combophy->dev, "Clock enable failed %d\n", ret);
+		dev_err(dev, "Clock enable failed %d\n", ret);
+		pm_runtime_put_noidle(dev);
 		return ret;
 	}
 
 	ret = stm32_combophy_set_mode(combophy);
 	if (ret) {
-		dev_err(combophy->dev, "combophy mode not set\n");
+		dev_err(dev, "combophy mode not set\n");
 		stm32_combophy_disable_clocks(combophy);
+		pm_runtime_put_noidle(dev);
 		return ret;
 	}
 
 	ret = stm32_combophy_pll_init(combophy);
 	if (ret) {
 		stm32_combophy_disable_clocks(combophy);
+		pm_runtime_put_noidle(dev);
 		return ret;
 	}
+
+	pm_runtime_disable(dev);
+	pm_runtime_set_active(dev);
+	pm_runtime_enable(dev);
 
 	combophy->is_init = true;
 
@@ -559,6 +573,10 @@ static int stm32_combophy_probe(struct platform_device *pdev)
 			return dev_err_probe(dev, ret, "unable to request wake IRQ %d\n",
 						 combophy->irq_wakeup);
 	}
+
+	ret = devm_pm_runtime_enable(dev);
+	if (ret)
+		return dev_err_probe(dev, ret, "Failed to enable pm runtime\n");
 
 	phy_set_drvdata(combophy->phy, combophy);
 

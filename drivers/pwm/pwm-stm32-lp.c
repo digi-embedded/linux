@@ -15,6 +15,7 @@
 #include <linux/of.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/platform_device.h>
+#include <linux/pm_runtime.h>
 #include <linux/pwm.h>
 
 struct stm32_pwm_lp {
@@ -158,7 +159,7 @@ static int stm32_pwm_lp_apply(struct pwm_chip *chip, struct pwm_device *pwm,
 			}
 
 			/* disable clock to PWM counter */
-			clk_disable(priv->clk);
+			return pm_runtime_put_sync_suspend(chip->dev);
 		}
 		return 0;
 	}
@@ -206,7 +207,7 @@ static int stm32_pwm_lp_apply(struct pwm_chip *chip, struct pwm_device *pwm,
 
 	if (!cstate.enabled) {
 		/* enable clock to drive PWM counter */
-		ret = clk_enable(priv->clk);
+		ret = pm_runtime_resume_and_get(chip->dev);
 		if (ret)
 			return ret;
 	}
@@ -276,9 +277,8 @@ static int stm32_pwm_lp_apply(struct pwm_chip *chip, struct pwm_device *pwm,
 
 	if (reenable) {
 		/* Start LP timer in continuous mode */
-		ret = regmap_update_bits(priv->regmap, STM32_LPTIM_CR,
-					 STM32_LPTIM_CNTSTRT,
-					 STM32_LPTIM_CNTSTRT);
+		ret = regmap_set_bits(priv->regmap, STM32_LPTIM_CR,
+				      STM32_LPTIM_CNTSTRT);
 		if (ret) {
 			regmap_write(priv->regmap, STM32_LPTIM_CR, 0);
 			goto err;
@@ -288,7 +288,7 @@ static int stm32_pwm_lp_apply(struct pwm_chip *chip, struct pwm_device *pwm,
 	return 0;
 err:
 	if (!cstate.enabled)
-		clk_disable(priv->clk);
+		pm_runtime_put_sync_suspend(chip->dev);
 
 	return ret;
 }
@@ -302,6 +302,7 @@ static int stm32_pwm_lp_get_state(struct pwm_chip *chip,
 	u32 val, presc, prd, ccmr1;
 	bool enabled;
 	u64 tmp;
+	int ret;
 
 	regmap_read(priv->regmap, STM32_LPTIM_CR, &val);
 	enabled = !!FIELD_GET(STM32_LPTIM_ENABLE, val);
@@ -316,8 +317,11 @@ static int stm32_pwm_lp_get_state(struct pwm_chip *chip,
 	state->enabled = enabled;
 
 	/* Keep PWM counter clock refcount in sync with PWM initial state */
-	if (state->enabled)
-		clk_enable(priv->clk);
+	if (state->enabled) {
+		ret = pm_runtime_resume_and_get(chip->dev);
+		if (ret < 0)
+			return ret;
+	}
 
 	regmap_read(priv->regmap, STM32_LPTIM_CFGR, &val);
 	presc = FIELD_GET(STM32_LPTIM_PRESC, val);
@@ -372,6 +376,10 @@ static int stm32_pwm_lp_probe(struct platform_device *pdev)
 		priv->chip.npwm = ddata->num_cc_chans;
 	}
 
+	ret = devm_pm_runtime_enable(&pdev->dev);
+	if (ret)
+		return ret;
+
 	ret = devm_pwmchip_add(&pdev->dev, &priv->chip);
 	if (ret < 0)
 		return ret;
@@ -381,7 +389,7 @@ static int stm32_pwm_lp_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static int __maybe_unused stm32_pwm_lp_suspend(struct device *dev)
+static int stm32_pwm_lp_suspend(struct device *dev)
 {
 	struct stm32_pwm_lp *priv = dev_get_drvdata(dev);
 	struct pwm_state state;
@@ -399,16 +407,40 @@ static int __maybe_unused stm32_pwm_lp_suspend(struct device *dev)
 	return pinctrl_pm_select_sleep_state(dev);
 }
 
-static int __maybe_unused stm32_pwm_lp_resume(struct device *dev)
+static int stm32_pwm_lp_resume(struct device *dev)
 {
 	return pinctrl_pm_select_default_state(dev);
 }
 
-static SIMPLE_DEV_PM_OPS(stm32_pwm_lp_pm_ops, stm32_pwm_lp_suspend,
-			 stm32_pwm_lp_resume);
+static int stm32_pwm_lp_runtime_suspend(struct device *dev)
+{
+	struct stm32_pwm_lp *priv = dev_get_drvdata(dev);
+
+	clk_disable(priv->clk);
+
+	return 0;
+}
+
+static int stm32_pwm_lp_runtime_resume(struct device *dev)
+{
+	struct stm32_pwm_lp *priv = dev_get_drvdata(dev);
+	int ret;
+
+	ret = clk_enable(priv->clk);
+	if (ret)
+		dev_err(dev, "failed to enable clock. Error [%d]\n", ret);
+
+	return ret;
+}
+
+static const struct dev_pm_ops stm32_pwm_lp_pm_ops = {
+	SYSTEM_SLEEP_PM_OPS(stm32_pwm_lp_suspend, stm32_pwm_lp_resume)
+	RUNTIME_PM_OPS(stm32_pwm_lp_runtime_suspend, stm32_pwm_lp_runtime_resume, NULL)
+};
 
 static const struct of_device_id stm32_pwm_lp_of_match[] = {
 	{ .compatible = "st,stm32-pwm-lp", },
+	{ .compatible = "st,stm32mp21-pwm-lp", },
 	{ .compatible = "st,stm32mp25-pwm-lp", },
 	{},
 };
@@ -418,8 +450,8 @@ static struct platform_driver stm32_pwm_lp_driver = {
 	.probe	= stm32_pwm_lp_probe,
 	.driver	= {
 		.name = "stm32-pwm-lp",
-		.of_match_table = of_match_ptr(stm32_pwm_lp_of_match),
-		.pm = &stm32_pwm_lp_pm_ops,
+		.of_match_table = stm32_pwm_lp_of_match,
+		.pm = pm_ptr(&stm32_pwm_lp_pm_ops),
 	},
 };
 module_platform_driver(stm32_pwm_lp_driver);

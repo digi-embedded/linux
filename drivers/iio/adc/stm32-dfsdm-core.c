@@ -12,14 +12,23 @@
 #include <linux/iio/sysfs.h>
 #include <linux/interrupt.h>
 #include <linux/module.h>
-#include <linux/of_device.h>
+#include <linux/of.h>
+#include <linux/of_platform.h>
 #include <linux/pinctrl/consumer.h>
+#include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <linux/regmap.h>
 #include <linux/slab.h>
 
 #include "stm32-dfsdm.h"
 
+/**
+ * struct stm32_dfsdm_dev_data - DFSDM compatible configuration data
+ * @ipid: DFSDM identification number. Used only if hardware provides identification registers
+ * @num_filters: DFSDM number of filters. Unused if identification registers are available
+ * @num_channels: DFSDM number of channels. Unused if identification registers are available
+ * @regmap_cfg: SAI register map configuration pointer
+ */
 struct stm32_dfsdm_dev_data {
 	u32 ipid;
 	unsigned int num_filters;
@@ -294,9 +303,9 @@ static const struct of_device_id stm32_dfsdm_of_match[] = {
 };
 MODULE_DEVICE_TABLE(of, stm32_dfsdm_of_match);
 
-static int stm32_dfsdm_config_check(struct platform_device *pdev,
-				    struct dfsdm_priv *priv,
-				    const struct stm32_dfsdm_dev_data *dev_data)
+static int stm32_dfsdm_probe_identification(struct platform_device *pdev,
+					    struct dfsdm_priv *priv,
+					    const struct stm32_dfsdm_dev_data *dev_data)
 {
 	struct device_node *np = pdev->dev.of_node;
 	struct device_node *child;
@@ -311,11 +320,10 @@ static int stm32_dfsdm_config_check(struct platform_device *pdev,
 		return 0;
 	}
 
-	ret = regmap_read(dfsdm->regmap, DFSDM_IPIDR, &val);
+	ret = regmap_read(dfsdm->regmap, DFSDM_IPIDR, &id);
 	if (ret)
 		return ret;
 
-	id = FIELD_GET(DFSDM_IPIDR_MASK, val);
 	if (id != dev_data->ipid) {
 		dev_err(&pdev->dev, "Unexpected IP version: 0x%x", id);
 		return -EINVAL;
@@ -325,7 +333,9 @@ static int stm32_dfsdm_config_check(struct platform_device *pdev,
 		ret = of_property_read_string(child, "compatible", &compat);
 		if (ret)
 			continue;
-		count++;
+		/* Count only child nodes with dfsdm compatible */
+		if (strstr(compat, "dfsdm"))
+			count++;
 	}
 
 	ret = regmap_read(dfsdm->regmap, DFSDM_HWCFGR, &val);
@@ -383,7 +393,7 @@ static int stm32_dfsdm_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	ret = stm32_dfsdm_config_check(pdev, priv, dev_data);
+	ret = stm32_dfsdm_probe_identification(pdev, priv, dev_data);
 	if (ret < 0)
 		return ret;
 

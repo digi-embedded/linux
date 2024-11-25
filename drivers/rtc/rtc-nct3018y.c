@@ -99,6 +99,8 @@ static int nct3018y_get_alarm_mode(struct i2c_client *client, unsigned char *ala
 		if (flags < 0)
 			return flags;
 		*alarm_enable = flags & NCT3018Y_BIT_AIE;
+		dev_dbg(&client->dev, "%s:alarm_enable:%x\n", __func__, *alarm_enable);
+
 	}
 
 	if (alarm_flag) {
@@ -107,10 +109,8 @@ static int nct3018y_get_alarm_mode(struct i2c_client *client, unsigned char *ala
 		if (flags < 0)
 			return flags;
 		*alarm_flag = flags & NCT3018Y_BIT_AF;
+		dev_dbg(&client->dev, "%s:alarm_flag:%x\n", __func__, *alarm_flag);
 	}
-
-	dev_dbg(&client->dev, "%s:alarm_enable:%x alarm_flag:%x\n",
-		__func__, *alarm_enable, *alarm_flag);
 
 	return 0;
 }
@@ -452,8 +452,7 @@ static const struct rtc_class_ops nct3018y_rtc_ops = {
 	.ioctl		= nct3018y_ioctl,
 };
 
-static int nct3018y_probe(struct i2c_client *client,
-			  const struct i2c_device_id *id)
+static int nct3018y_probe(struct i2c_client *client)
 {
 	struct nct3018y *nct3018y;
 	int err, flags;
@@ -539,7 +538,7 @@ MODULE_DEVICE_TABLE(of, nct3018y_of_match);
 static struct i2c_driver nct3018y_driver = {
 	.driver		= {
 		.name	= "rtc-nct3018y",
-		.of_match_table = of_match_ptr(nct3018y_of_match),
+		.of_match_table = nct3018y_of_match,
 	},
 	.probe		= nct3018y_probe,
 	.id_table	= nct3018y_id,

@@ -15,14 +15,19 @@ properties:
     oneOf:
       - items:
           - enum:
-              - st,stm32mp157-syscfg
-              - st,stm32mp25-syscfg
-              - st,stm32mp151-pwr-mcu
-              - st,stm32-syscfg
               - st,stm32-power-config
+              - st,stm32-syscfg
               - st,stm32-tamp
               - st,stm32mp25-tamp
-              - st,stm32mp25-a35ss-syscfg
+              - st,stm32f4-gcan
+              - st,stm32mp151-pwr-mcu
+              - st,stm32mp157-syscfg
+              - st,stm32mp25-syscfg
+              - st,stm32mp25-pwr
+              - st,stm32mp21-syscfg
+              - st,stm32mp21-pwr
+
+              - st,stm32mp25-a35ssc-m33
           - const: syscon
       - items:
           - const: st,stm32-tamp
@@ -43,10 +48,6 @@ properties:
 
   ranges: true
 
-  reboot-mode:
-    type: object
-    $ref: /schemas/power/reset/reboot-mode.yaml#
-
 patternProperties:
   "^nvram@[0-9a-f]+$":
     type: object
@@ -63,6 +64,7 @@ allOf:
           contains:
             enum:
               - st,stm32mp157-syscfg
+              - st,stm32f4-gcan
     then:
       required:
         - clocks

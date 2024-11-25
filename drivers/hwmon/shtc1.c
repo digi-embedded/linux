@@ -238,7 +238,7 @@ static int shtc1_probe(struct i2c_client *client)
 
 	if (np) {
 		data->setup.blocking_io = of_property_read_bool(np, "sensirion,blocking-io");
-		data->setup.high_precision = !of_property_read_bool(np, "sensicon,low-precision");
+		data->setup.high_precision = !of_property_read_bool(np, "sensirion,low-precision");
 	} else {
 		if (client->dev.platform_data)
 			data->setup = *(struct shtc1_platform_data *)dev->platform_data;
@@ -279,7 +279,7 @@ static struct i2c_driver shtc1_i2c_driver = {
 		.name = "shtc1",
 		.of_match_table = shtc1_of_match,
 	},
-	.probe_new    = shtc1_probe,
+	.probe        = shtc1_probe,
 	.id_table     = shtc1_id,
 };
 

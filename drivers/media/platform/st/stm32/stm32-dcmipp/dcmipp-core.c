@@ -2,26 +2,25 @@
 /*
  * Driver for STM32 Digital Camera Memory Interface Pixel Processor
  *
- * Copyright (C) STMicroelectronics SA 2021
+ * Copyright (C) STMicroelectronics SA 2023
  * Authors: Hugues Fruchet <hugues.fruchet@foss.st.com>
  *          Alain Volmat <alain.volmat@foss.st.com>
  *          for STMicroelectronics.
  */
+
+#include <linux/bus/stm32_firewall_device.h>
 #include <linux/clk.h>
 #include <linux/delay.h>
 #include <linux/init.h>
 #include <linux/module.h>
-#include <linux/of.h>
-#include <linux/of_device.h>
-#include <linux/of_graph.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
+#include <linux/property.h>
 #include <linux/reset.h>
 #include <media/media-device.h>
 #include <media/v4l2-device.h>
 #include <media/v4l2-fwnode.h>
-#include <media/v4l2-mc.h>
 
 #include "dcmipp-common.h"
 
@@ -35,38 +34,10 @@
 	.flags = link_flags,					\
 }
 
-#define DCMIPP_CMHWCFGR (0x200)
-#define DCMIPP_CMSR2 (0x3F8)
-#define DCMIPP_P0HWCFGR (0x400)
-#define DCMIPP_VERR (0xFF4)
+#define DCMIPP_CMSR2	0x3f8
 
-struct dcmipp_device {
-	/* The platform device */
-	struct platform_device		pdev;
-	struct device			*dev;
-
-	/* Hardware resources */
-	struct reset_control		*rstc;
-	void __iomem			*regs;
-	struct clk			*mclk;
-	struct clk			*kclk;
-
-	/* The pipeline configuration */
-	const struct dcmipp_pipeline_config	*pipe_cfg;
-
-	/* The Associated media_device parent */
-	struct media_device		mdev;
-
-	/* Internal v4l2 parent device*/
-	struct v4l2_device		v4l2_dev;
-
-	/* Entities */
-	struct dcmipp_ent_device	**entity;
-
-	struct v4l2_async_notifier	notifier;
-};
-
-static inline struct dcmipp_device *notifier_to_dcmipp(struct v4l2_async_notifier *n)
+static inline struct dcmipp_device *
+notifier_to_dcmipp(struct v4l2_async_notifier *n)
 {
 	return container_of(n, struct dcmipp_device, notifier);
 }
@@ -75,8 +46,8 @@ static inline struct dcmipp_device *notifier_to_dcmipp(struct v4l2_async_notifie
 struct dcmipp_ent_config {
 	const char *name;
 	struct dcmipp_ent_device *(*init)
-		(struct device *dev, const char *entity_name,
-		 struct v4l2_device *v4l2_dev, void __iomem *regs);
+		(const char *entity_name,
+		 struct dcmipp_device *dcmipp);
 	void (*release)(struct dcmipp_ent_device *ved);
 };
 
@@ -125,7 +96,7 @@ static const struct dcmipp_ent_config stm32mp13_ent_config[] = {
 #define ID_DUMP_CAPTURE 2
 
 static const struct dcmipp_ent_link stm32mp13_ent_links[] = {
-	DCMIPP_ENT_LINK(ID_INPUT,	  1, ID_DUMP_BYTEPROC, 0,
+	DCMIPP_ENT_LINK(ID_INPUT, 1, ID_DUMP_BYTEPROC, 0,
 			MEDIA_LNK_FL_ENABLED | MEDIA_LNK_FL_IMMUTABLE),
 	DCMIPP_ENT_LINK(ID_DUMP_BYTEPROC, 1, ID_DUMP_CAPTURE,  0,
 			MEDIA_LNK_FL_ENABLED | MEDIA_LNK_FL_IMMUTABLE),
@@ -147,6 +118,7 @@ static const struct dcmipp_pipeline_config stm32mp13_pipe_cfg = {
 #define	ID_AUX_CAPTURE 7
 #define	ID_ISP_STAT_CAPTURE 8
 #define	ID_ISP_PARAMS_OUTPUT 9
+#define	ID_TPG 10
 static const struct dcmipp_ent_config stm32mp25_ent_config[] = {
 	{
 		.name = "dcmipp_input",
@@ -198,15 +170,19 @@ static const struct dcmipp_ent_config stm32mp25_ent_config[] = {
 		.init = dcmipp_isp_params_ent_init,
 		.release = dcmipp_isp_params_ent_release,
 	},
+	{
+		.name = "dcmipp_tpg",
+		.init = dcmipp_tpg_ent_init,
+		.release = dcmipp_tpg_ent_release,
+	},
 };
 
 static const struct dcmipp_ent_link stm32mp25_ent_links[] = {
-	DCMIPP_ENT_LINK(ID_INPUT,	  1, ID_DUMP_BYTEPROC, 0,
-			MEDIA_LNK_FL_ENABLED | MEDIA_LNK_FL_IMMUTABLE),
+	DCMIPP_ENT_LINK(ID_TPG, 0, ID_INPUT, 0, 0),
+	DCMIPP_ENT_LINK(ID_INPUT, 1, ID_DUMP_BYTEPROC, 0, 0),
 	DCMIPP_ENT_LINK(ID_DUMP_BYTEPROC, 1, ID_DUMP_CAPTURE,  0,
 			MEDIA_LNK_FL_ENABLED | MEDIA_LNK_FL_IMMUTABLE),
-	DCMIPP_ENT_LINK(ID_INPUT,	2, ID_MAIN_ISP,  0,
-			MEDIA_LNK_FL_ENABLED | MEDIA_LNK_FL_IMMUTABLE),
+	DCMIPP_ENT_LINK(ID_INPUT,	2, ID_MAIN_ISP,  0, 0),
 	DCMIPP_ENT_LINK(ID_MAIN_ISP,	1, ID_MAIN_POSTPROC,  0,
 			MEDIA_LNK_FL_ENABLED | MEDIA_LNK_FL_IMMUTABLE),
 	DCMIPP_ENT_LINK(ID_MAIN_ISP,	1, ID_AUX_POSTPROC,  0, 0),
@@ -230,7 +206,6 @@ static const struct dcmipp_pipeline_config stm32mp25_pipe_cfg = {
 	.hw_revision	= DCMIPP_STM32MP25_VERR
 };
 
-/* -------------------------------------------------------------------------- */
 #define LINK_FLAG_TO_STR(f) ((f) == 0 ? "" :\
 			     (f) == MEDIA_LNK_FL_ENABLED ? "ENABLED" :\
 			     (f) == MEDIA_LNK_FL_IMMUTABLE ? "IMMUTABLE" :\
@@ -281,9 +256,7 @@ static int dcmipp_create_subdevs(struct dcmipp_device *dcmipp)
 
 		dev_dbg(dcmipp->dev, "add subdev %s\n", name);
 		dcmipp->entity[i] =
-			dcmipp->pipe_cfg->ents[i].init(dcmipp->dev, name,
-						       &dcmipp->v4l2_dev,
-						       dcmipp->regs);
+			dcmipp->pipe_cfg->ents[i].init(name, dcmipp);
 		if (IS_ERR(dcmipp->entity[i])) {
 			dev_err(dcmipp->dev, "failed to init subdev %s\n",
 				name);
@@ -310,48 +283,11 @@ err_init_entity:
 }
 
 static const struct of_device_id dcmipp_of_match[] = {
-	{ .compatible = "st,stm32mp13-dcmipp", .data = &stm32mp13_pipe_cfg},
-	{ .compatible = "st,stm32mp25-dcmipp", .data = &stm32mp25_pipe_cfg},
+	{ .compatible = "st,stm32mp13-dcmipp", .data = &stm32mp13_pipe_cfg },
+	{ .compatible = "st,stm32mp25-dcmipp", .data = &stm32mp25_pipe_cfg },
 	{ /* end node */ },
 };
 MODULE_DEVICE_TABLE(of, dcmipp_of_match);
-
-static int dcmipp_graph_notify_complete(struct v4l2_async_notifier *notifier)
-{
-	struct dcmipp_device *dcmipp = notifier_to_dcmipp(notifier);
-	int ret;
-
-	/* Register the media device */
-	ret = media_device_register(&dcmipp->mdev);
-	if (ret) {
-		dev_err(dcmipp->mdev.dev,
-			"media device register failed (err=%d)\n", ret);
-		return ret;
-	}
-
-	/* Expose all subdev's nodes*/
-	ret = v4l2_device_register_subdev_nodes(&dcmipp->v4l2_dev);
-	if (ret) {
-		dev_err(dcmipp->mdev.dev,
-			"dcmipp subdev nodes registration failed (err=%d)\n",
-			ret);
-		media_device_unregister(&dcmipp->mdev);
-		return ret;
-	}
-
-	dev_dbg(dcmipp->dev, "Notify complete !\n");
-
-	return 0;
-}
-
-static void dcmipp_graph_notify_unbind(struct v4l2_async_notifier *notifier,
-				       struct v4l2_subdev *sd,
-				       struct v4l2_async_subdev *asd)
-{
-	struct dcmipp_device *dcmipp = notifier_to_dcmipp(notifier);
-
-	dev_dbg(dcmipp->dev, "Removing %s\n", sd->name);
-}
 
 static irqreturn_t dcmipp_irq_thread(int irq, void *arg)
 {
@@ -399,29 +335,135 @@ static irqreturn_t dcmipp_irq_callback(int irq, void *arg)
 
 static int dcmipp_graph_notify_bound(struct v4l2_async_notifier *notifier,
 				     struct v4l2_subdev *subdev,
-				     struct v4l2_async_subdev *asd)
+				     struct v4l2_async_connection *asd)
 {
 	struct dcmipp_device *dcmipp = notifier_to_dcmipp(notifier);
 	unsigned int ret;
-	int src_pad;
+	int src_pad, i;
+	struct dcmipp_ent_device *sink;
+	struct v4l2_fwnode_endpoint vep = { 0 };
+	struct fwnode_handle *ep;
+	enum v4l2_mbus_type supported_types[] = {
+		V4L2_MBUS_PARALLEL, V4L2_MBUS_BT656, V4L2_MBUS_CSI2_DPHY
+	};
+	int supported_types_nb = ARRAY_SIZE(supported_types);
+	u32 media_flags = 0;
 
 	dev_dbg(dcmipp->dev, "Subdev \"%s\" bound\n", subdev->name);
 
-	/* Link this sub-device to DCMIPP input subdev */
+	/* Only MP25 supports CSI input */
+	if (!of_device_is_compatible(dcmipp->dev->of_node,
+				     "st,stm32mp25-dcmipp"))
+		supported_types_nb--;
+
+	/*
+	 * Link this sub-device to DCMIPP, it could be
+	 * a parallel camera sensor or a CSI-2 to parallel bridge
+	 */
 	src_pad = media_entity_get_fwnode_pad(&subdev->entity,
 					      subdev->fwnode,
 					      MEDIA_PAD_FL_SOURCE);
 
-	ret = media_create_pad_link(&subdev->entity, src_pad,
-				    dcmipp->entity[ID_INPUT]->ent, 0,
-				    MEDIA_LNK_FL_IMMUTABLE |
-				    MEDIA_LNK_FL_ENABLED);
-	if (ret)
+	/* Get bus characteristics from devicetree */
+	ep = fwnode_graph_get_endpoint_by_id(dev_fwnode(dcmipp->dev), 0, 0,
+					     FWNODE_GRAPH_ENDPOINT_NEXT);
+	if (!ep) {
+		dev_err(dcmipp->dev, "Could not find the endpoint\n");
+		return -ENODEV;
+	}
+
+	/* Check for supported MBUS type */
+	for (i = 0; i < supported_types_nb; i++) {
+		vep.bus_type = supported_types[i];
+		ret = v4l2_fwnode_endpoint_parse(ep, &vep);
+		if (!ret)
+			break;
+	}
+
+	fwnode_handle_put(ep);
+
+	if (ret) {
+		dev_err(dcmipp->dev, "Could not parse the endpoint\n");
+		return ret;
+	}
+
+	if (vep.bus_type != V4L2_MBUS_CSI2_DPHY &&
+	    vep.bus.parallel.bus_width == 0) {
+		dev_err(dcmipp->dev, "Invalid parallel interface bus-width\n");
+		return -ENODEV;
+	}
+
+	/* Only 8 bits bus width supported with BT656 bus */
+	if (vep.bus_type == V4L2_MBUS_BT656 &&
+	    vep.bus.parallel.bus_width != 8) {
+		dev_err(dcmipp->dev, "BT656 bus conflicts with %u bits bus width (8 bits required)\n",
+			vep.bus.parallel.bus_width);
+		return -ENODEV;
+	}
+
+	/* Connect input device to the dcmipp_input subdev */
+	sink = dcmipp->entity[ID_INPUT];
+	if (vep.bus_type != V4L2_MBUS_CSI2_DPHY) {
+		sink->bus.flags = vep.bus.parallel.flags;
+		sink->bus.bus_width = vep.bus.parallel.bus_width;
+		sink->bus.data_shift = vep.bus.parallel.data_shift;
+	}
+	sink->bus_type = vep.bus_type;
+
+	/*
+	 * STM32MP25 has a TPG input hence link between dcmipp_input and
+	 * bridge or sensor should not be IMMUTABLE
+	 */
+	if (!of_device_is_compatible(dcmipp->dev->of_node,
+				     "st,stm32mp25-dcmipp"))
+		media_flags = MEDIA_LNK_FL_IMMUTABLE;
+
+	ret = media_create_pad_link(&subdev->entity, src_pad, sink->ent, 0,
+				    media_flags | MEDIA_LNK_FL_ENABLED);
+	if (ret) {
 		dev_err(dcmipp->dev, "Failed to create media pad link with subdev \"%s\"\n",
 			subdev->name);
-	else
-		dev_dbg(dcmipp->dev, "DCMIPP is now linked to \"%s\"\n",
-			subdev->name);
+		return ret;
+	}
+
+	dev_dbg(dcmipp->dev, "DCMIPP is now linked to \"%s\"\n", subdev->name);
+
+	return 0;
+}
+
+static void dcmipp_graph_notify_unbind(struct v4l2_async_notifier *notifier,
+				       struct v4l2_subdev *sd,
+				       struct v4l2_async_connection *asd)
+{
+	struct dcmipp_device *dcmipp = notifier_to_dcmipp(notifier);
+
+	dev_dbg(dcmipp->dev, "Removing %s\n", sd->name);
+}
+
+static int dcmipp_graph_notify_complete(struct v4l2_async_notifier *notifier)
+{
+	struct dcmipp_device *dcmipp = notifier_to_dcmipp(notifier);
+	int ret;
+
+	/* Register the media device */
+	ret = media_device_register(&dcmipp->mdev);
+	if (ret) {
+		dev_err(dcmipp->mdev.dev,
+			"media device register failed (err=%d)\n", ret);
+		return ret;
+	}
+
+	/* Expose all subdev's nodes*/
+	ret = v4l2_device_register_subdev_nodes(&dcmipp->v4l2_dev);
+	if (ret) {
+		dev_err(dcmipp->mdev.dev,
+			"dcmipp subdev nodes registration failed (err=%d)\n",
+			ret);
+		media_device_unregister(&dcmipp->mdev);
+		return ret;
+	}
+
+	dev_dbg(dcmipp->dev, "Notify complete !\n");
 
 	return 0;
 }
@@ -434,23 +476,23 @@ static const struct v4l2_async_notifier_operations dcmipp_graph_notify_ops = {
 
 static int dcmipp_graph_init(struct dcmipp_device *dcmipp)
 {
-	struct v4l2_async_subdev *asd;
-	struct device_node *ep;
+	struct v4l2_async_connection *asd;
+	struct fwnode_handle *ep;
 	int ret;
 
-	ep = of_graph_get_next_endpoint(dcmipp->dev->of_node, NULL);
+	ep = fwnode_graph_get_endpoint_by_id(dev_fwnode(dcmipp->dev), 0, 0,
+					     FWNODE_GRAPH_ENDPOINT_NEXT);
 	if (!ep) {
 		dev_err(dcmipp->dev, "Failed to get next endpoint\n");
 		return -EINVAL;
 	}
 
-	v4l2_async_nf_init(&dcmipp->notifier);
+	v4l2_async_nf_init(&dcmipp->notifier, &dcmipp->v4l2_dev);
 
-	asd = v4l2_async_nf_add_fwnode_remote
-		(&dcmipp->notifier, of_fwnode_handle(ep),
-		 struct v4l2_async_subdev);
+	asd = v4l2_async_nf_add_fwnode_remote(&dcmipp->notifier, ep,
+					      struct v4l2_async_connection);
 
-	of_node_put(ep);
+	fwnode_handle_put(ep);
 
 	if (IS_ERR(asd)) {
 		dev_err(dcmipp->dev, "Failed to add fwnode remote subdev\n");
@@ -459,7 +501,7 @@ static int dcmipp_graph_init(struct dcmipp_device *dcmipp)
 
 	dcmipp->notifier.ops = &dcmipp_graph_notify_ops;
 
-	ret = v4l2_async_nf_register(&dcmipp->v4l2_dev, &dcmipp->notifier);
+	ret = v4l2_async_nf_register(&dcmipp->notifier);
 	if (ret < 0) {
 		dev_err(dcmipp->dev, "Failed to register notifier\n");
 		v4l2_async_nf_cleanup(&dcmipp->notifier);
@@ -469,26 +511,22 @@ static int dcmipp_graph_init(struct dcmipp_device *dcmipp)
 	return 0;
 }
 
-static const struct media_device_ops dcmipp_media_ops = {
-	.link_notify = v4l2_pipeline_link_notify,
-};
-
 static int dcmipp_probe(struct platform_device *pdev)
 {
 	struct dcmipp_device *dcmipp;
-	struct resource *res;
 	struct clk *kclk, *mclk;
 	const struct dcmipp_pipeline_config *pipe_cfg;
+	struct reset_control *rstc;
 	int irq;
 	int ret;
 
-	dcmipp = devm_kzalloc(&pdev->dev, sizeof(struct dcmipp_device), GFP_KERNEL);
+	dcmipp = devm_kzalloc(&pdev->dev, sizeof(*dcmipp), GFP_KERNEL);
 	if (!dcmipp)
 		return -ENOMEM;
 
 	dcmipp->dev = &pdev->dev;
 
-	pipe_cfg = of_device_get_match_data(&pdev->dev);
+	pipe_cfg = device_get_match_data(dcmipp->dev);
 	if (!pipe_cfg) {
 		dev_err(&pdev->dev, "Can't get device data\n");
 		return -ENODEV;
@@ -498,9 +536,9 @@ static int dcmipp_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, dcmipp);
 
 	/* Get hardware resources from devicetree */
-	dcmipp->rstc = devm_reset_control_get_exclusive(&pdev->dev, NULL);
-	if (IS_ERR(dcmipp->rstc))
-		return dev_err_probe(&pdev->dev, PTR_ERR(dcmipp->rstc),
+	rstc = devm_reset_control_get_exclusive(&pdev->dev, NULL);
+	if (IS_ERR(rstc))
+		return dev_err_probe(&pdev->dev, PTR_ERR(rstc),
 				     "Could not get reset control\n");
 
 	irq = platform_get_irq(pdev, 0);
@@ -510,13 +548,7 @@ static int dcmipp_probe(struct platform_device *pdev)
 		return irq ? irq : -ENXIO;
 	}
 
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	if (!res) {
-		dev_err(&pdev->dev, "Could not get resource\n");
-		return -ENODEV;
-	}
-
-	dcmipp->regs = devm_ioremap_resource(&pdev->dev, res);
+	dcmipp->regs = devm_platform_get_and_ioremap_resource(pdev, 0, NULL);
 	if (IS_ERR(dcmipp->regs)) {
 		dev_err(&pdev->dev, "Could not map registers\n");
 		return PTR_ERR(dcmipp->regs);
@@ -531,7 +563,7 @@ static int dcmipp_probe(struct platform_device *pdev)
 	}
 
 	/* Reset device */
-	ret = reset_control_assert(dcmipp->rstc);
+	ret = reset_control_assert(rstc);
 	if (ret) {
 		dev_err(&pdev->dev, "Failed to assert the reset line\n");
 		return ret;
@@ -539,7 +571,7 @@ static int dcmipp_probe(struct platform_device *pdev)
 
 	usleep_range(3000, 5000);
 
-	ret = reset_control_deassert(dcmipp->rstc);
+	ret = reset_control_deassert(rstc);
 	if (ret) {
 		dev_err(&pdev->dev, "Failed to deassert the reset line\n");
 		return ret;
@@ -564,11 +596,29 @@ static int dcmipp_probe(struct platform_device *pdev)
 	if (!dcmipp->entity)
 		return -ENOMEM;
 
+	/* Get stm32 firewall information */
+	ret = stm32_firewall_get_firewall(pdev->dev.of_node, &dcmipp->firewall, 1);
+	if (ret)
+		return ret;
+
+	if (dcmipp->firewall.firewall_id != 0) {
+		ret = stm32_firewall_grant_access_by_id(&dcmipp->firewall,
+							dcmipp->firewall.firewall_id);
+		if (ret) {
+			dev_err(&pdev->dev, "stm32 firewall grant error:%d\n",
+				ret);
+			return ret;
+		}
+	}
+
 	/* Register the v4l2 struct */
 	ret = v4l2_device_register(&pdev->dev, &dcmipp->v4l2_dev);
 	if (ret) {
 		dev_err(&pdev->dev,
 			"v4l2 device register failed (err=%d)\n", ret);
+		if (dcmipp->firewall.firewall_id != 0)
+			stm32_firewall_release_access_by_id(&dcmipp->firewall,
+							    dcmipp->firewall.firewall_id);
 		return ret;
 	}
 
@@ -578,11 +628,8 @@ static int dcmipp_probe(struct platform_device *pdev)
 	/* Initialize media device */
 	strscpy(dcmipp->mdev.model, DCMIPP_MDEV_MODEL_NAME,
 		sizeof(dcmipp->mdev.model));
-	snprintf(dcmipp->mdev.bus_info, sizeof(dcmipp->mdev.bus_info),
-		 "platform:%s", DCMIPP_PDEV_NAME);
 	dcmipp->mdev.hw_revision = pipe_cfg->hw_revision;
 	dcmipp->mdev.dev = &pdev->dev;
-	dcmipp->mdev.ops = &dcmipp_media_ops;
 	media_device_init(&dcmipp->mdev);
 
 	pm_runtime_enable(dcmipp->dev);
@@ -590,8 +637,12 @@ static int dcmipp_probe(struct platform_device *pdev)
 	/* Initialize subdevs */
 	ret = dcmipp_create_subdevs(dcmipp);
 	if (ret) {
+		pm_runtime_disable(dcmipp->dev);
 		media_device_cleanup(&dcmipp->mdev);
 		v4l2_device_unregister(&dcmipp->v4l2_dev);
+		if (dcmipp->firewall.firewall_id != 0)
+			stm32_firewall_release_access_by_id(&dcmipp->firewall,
+							    dcmipp->firewall.firewall_id);
 		return ret;
 	}
 
@@ -618,10 +669,13 @@ static int dcmipp_remove(struct platform_device *pdev)
 
 	v4l2_device_unregister(&dcmipp->v4l2_dev);
 
+	if (dcmipp->firewall.firewall_id != 0)
+		stm32_firewall_release_access_by_id(&dcmipp->firewall,
+						    dcmipp->firewall.firewall_id);
 	return 0;
 }
 
-static __maybe_unused int dcmipp_runtime_suspend(struct device *dev)
+static int dcmipp_runtime_suspend(struct device *dev)
 {
 	struct dcmipp_device *dcmipp = dev_get_drvdata(dev);
 
@@ -631,23 +685,23 @@ static __maybe_unused int dcmipp_runtime_suspend(struct device *dev)
 	return 0;
 }
 
-static __maybe_unused int dcmipp_runtime_resume(struct device *dev)
+static int dcmipp_runtime_resume(struct device *dev)
 {
 	struct dcmipp_device *dcmipp = dev_get_drvdata(dev);
 	int ret;
 
 	ret = clk_prepare_enable(dcmipp->mclk);
 	if (ret)
-		dev_err(dev, "%s: Failed to prepare_enable clock\n", __func__);
+		dev_err(dev, "%s: Failed to prepare_enable mclk\n", __func__);
 
 	ret = clk_prepare_enable(dcmipp->kclk);
 	if (ret)
-		dev_err(dev, "%s: Failed to prepare_enable k clock\n", __func__);
+		dev_err(dev, "%s: Failed to prepare_enable kclk\n", __func__);
 
 	return ret;
 }
 
-static __maybe_unused int dcmipp_suspend(struct device *dev)
+static int dcmipp_suspend(struct device *dev)
 {
 	/* disable clock */
 	pm_runtime_force_suspend(dev);
@@ -658,7 +712,7 @@ static __maybe_unused int dcmipp_suspend(struct device *dev)
 	return 0;
 }
 
-static __maybe_unused int dcmipp_resume(struct device *dev)
+static int dcmipp_resume(struct device *dev)
 {
 	/* restore pinctl default state */
 	pinctrl_pm_select_default_state(dev);
@@ -670,9 +724,8 @@ static __maybe_unused int dcmipp_resume(struct device *dev)
 }
 
 static const struct dev_pm_ops dcmipp_pm_ops = {
-	SET_SYSTEM_SLEEP_PM_OPS(dcmipp_suspend, dcmipp_resume)
-	SET_RUNTIME_PM_OPS(dcmipp_runtime_suspend,
-			   dcmipp_runtime_resume, NULL)
+	SYSTEM_SLEEP_PM_OPS(dcmipp_suspend, dcmipp_resume)
+	RUNTIME_PM_OPS(dcmipp_runtime_suspend, dcmipp_runtime_resume, NULL)
 };
 
 static struct platform_driver dcmipp_pdrv = {
@@ -680,8 +733,8 @@ static struct platform_driver dcmipp_pdrv = {
 	.remove		= dcmipp_remove,
 	.driver		= {
 		.name	= DCMIPP_PDEV_NAME,
-		.of_match_table = of_match_ptr(dcmipp_of_match),
-		.pm = &dcmipp_pm_ops,
+		.of_match_table = dcmipp_of_match,
+		.pm = pm_ptr(&dcmipp_pm_ops),
 	},
 };
 

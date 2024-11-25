@@ -427,6 +427,11 @@ static void cfg_buffers(struct hantro_ctx *ctx,
 
 	dst_dma = hantro_get_dec_buf_addr(ctx, &vb2_dst->vb2_buf);
 	vdpu_write_relaxed(vpu, dst_dma, G1_REG_ADDR_DST);
+
+	if (hdr->flags & V4L2_VP8_FRAME_FLAG_WEBP)
+		vdpu_write_relaxed(vpu, dst_dma +
+				   ctx->dst_fmt.height * ctx->dst_fmt.width,
+				   G1_REG_ADDR_DST_CHROMA);
 }
 
 int hantro_g1_vp8_dec_run(struct hantro_ctx *ctx)
@@ -458,12 +463,10 @@ int hantro_g1_vp8_dec_run(struct hantro_ctx *ctx)
 	      G1_REG_CONFIG_DEC_INSWAP32_E |
 	      G1_REG_CONFIG_DEC_STRSWAP32_E |
 	      G1_REG_CONFIG_DEC_OUTSWAP32_E |
+	      G1_REG_CONFIG_DEC_CLK_GATE_E |
 	      G1_REG_CONFIG_DEC_IN_ENDIAN |
 	      G1_REG_CONFIG_DEC_OUT_ENDIAN |
-	      G1_REG_CONFIG_DEC_2CHAN_DIS |
-	      G1_REG_CONFIG_DEC_SCMD_DIS |
-	      G1_REG_CONFIG_DEC_ADV_PRE_DIS |
-	      G1_REG_CONFIG_DEC_MAX_BURST(vpu->max_burst_length);
+	      G1_REG_CONFIG_DEC_MAX_BURST(16);
 	vdpu_write_relaxed(vpu, reg, G1_REG_CONFIG);
 
 	reg = G1_REG_DEC_CTRL0_DEC_MODE(10) |
@@ -474,6 +477,8 @@ int hantro_g1_vp8_dec_run(struct hantro_ctx *ctx)
 		reg |= G1_REG_DEC_CTRL0_SKIP_MODE;
 	if (hdr->lf.level == 0)
 		reg |= G1_REG_DEC_CTRL0_FILTERING_DIS;
+	if (hdr->flags & V4L2_VP8_FRAME_FLAG_WEBP)
+		reg |= G1_REG_DEC_CTRL0_WEBP_E;
 	vdpu_write_relaxed(vpu, reg, G1_REG_DEC_CTRL0);
 
 	/* Frame dimensions */

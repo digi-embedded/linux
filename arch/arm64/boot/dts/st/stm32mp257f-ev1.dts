@@ -83,6 +83,7 @@
 			label = "wake-up";
 			linux,code = <KEY_WAKEUP>;
 			interrupts-extended = <&optee 0>;
+			wakeup-source;
 			status = "okay";
 		};
 	};
@@ -91,6 +92,7 @@
 		compatible = "gpio-leds";
 
 		led-blue {
+			label = "heartbeat";
 			function = LED_FUNCTION_HEARTBEAT;
 			color = <LED_COLOR_ID_BLUE>;
 			gpios = <&gpioj 7 GPIO_ACTIVE_HIGH>;
@@ -109,6 +111,30 @@
 				remote-endpoint = <&adv753x_out>;
 			};
 		};
+	};
+
+	imx335_2v9: imx335-2v9 {
+		compatible = "regulator-fixed";
+		regulator-name = "imx335-avdd";
+		regulator-min-microvolt = <2900000>;
+		regulator-max-microvolt = <2900000>;
+		regulator-always-on;
+	};
+
+	imx335_1v8: imx335-1v8 {
+		compatible = "regulator-fixed";
+		regulator-name = "imx335-ovdd";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+		regulator-always-on;
+	};
+
+	imx335_1v2: imx335-1v2 {
+		compatible = "regulator-fixed";
+		regulator-name = "imx335-dvdd";
+		regulator-min-microvolt = <1200000>;
+		regulator-max-microvolt = <1200000>;
+		regulator-always-on;
 	};
 
 	memory@80000000 {
@@ -159,10 +185,43 @@
 		dais = <&i2s2_port>;
 		status = "disabled";
 	};
+
+	vdiv_ana0: voltage-divider-ana0 {
+		compatible = "voltage-divider";
+		io-channels = <&adc1 0>;
+		output-ohms = <560000>;
+		full-ohms = <1030000>;
+		status = "disabled";
+	};
+};
+
+&adc_12 {
+	/* Don't need a pinctrl for ANA0 dedicated pin e.g. Channel@0 */
+	vdda-supply = <&scmi_v1v8>;
+	vref-supply = <&scmi_v1v8>;
+	status = "disabled";
+	adc1: adc@0 {
+		status = "okay";
+		channel@0 {
+			reg = <0>;
+			st,min-sample-time-ns = <400>;
+		};
+	};
 };
 
 &a35ss_syscfg {
 	status = "okay";
+};
+
+&ahbsr {
+	mbox_client: mailbox-client@1 {
+		compatible = "mbox-cdev";
+		reg = <1 0>;
+		memory-region =  <&ipc_shmem_2>;
+		mboxes = <&ipcc2 0>;
+		mbox-names = "rx-tx";
+		status = "okay";
+	};
 };
 
 &arm_wdt {
@@ -241,7 +300,7 @@
 	status = "okay";
 };
 
-&csi2host {
+&csi {
 	vdd-supply =  <&scmi_vddcore>;
 	vdda18-supply = <&scmi_v1v8>;
 	status = "okay";
@@ -250,7 +309,7 @@
 		#size-cells = <0>;
 		port@0 {
 			reg = <0>;
-			csi2host_sink: endpoint {
+			csi_sink: endpoint {
 				remote-endpoint = <&imx335_ep>;
 				data-lanes = <0 1>;
 				bus-type = <4>;
@@ -258,7 +317,7 @@
 		};
 		port@1 {
 			reg = <1>;
-			csi2host_source: endpoint {
+			csi_source: endpoint {
 				remote-endpoint = <&dcmipp_0>;
 			};
 		};
@@ -269,7 +328,7 @@
 	status = "okay";
 	port {
 		dcmipp_0: endpoint {
-			remote-endpoint = <&csi2host_source>;
+			remote-endpoint = <&csi_source>;
 			bus-type = <4>;
 		};
 	};
@@ -384,13 +443,16 @@
 		compatible = "sony,imx335";
 		reg = <0x1a>;
 		clocks = <&clk_ext_camera>;
+		avdd-supply = <&imx335_2v9>;
+		ovdd-supply = <&imx335_1v8>;
+		dvdd-supply = <&imx335_1v2>;
 		reset-gpios = <&gpioi 7 (GPIO_ACTIVE_HIGH | GPIO_PUSH_PULL)>;
 		powerdown-gpios = <&gpioi 0 (GPIO_ACTIVE_HIGH | GPIO_PUSH_PULL)>;
 		status = "okay";
 
 		port {
 			imx335_ep: endpoint {
-				remote-endpoint = <&csi2host_sink>;
+				remote-endpoint = <&csi_sink>;
 				clock-lanes = <0>;
 				data-lanes = <1 2>;
 				link-frequencies = /bits/ 64 <594000000>;
@@ -489,6 +551,18 @@
 	status = "okay";
 };
 
+&ipcc2 {
+	status = "okay";
+};
+
+/* use LPTIMER with tick broadcast for suspend mode */
+&lptimer3 {
+	status = "okay";
+	timer {
+		status = "okay";
+	};
+};
+
 &lpuart1 {
 	pinctrl-names = "default", "idle", "sleep";
 	pinctrl-0 = <&lpuart1_pins_a>;
@@ -496,7 +570,6 @@
 	pinctrl-2 = <&lpuart1_sleep_pins_a>;
 	/delete-property/dmas;
 	/delete-property/dma-names;
-	wakeup-source;
 	uart-has-rtscts;
 	status = "disabled";
 };
@@ -548,6 +621,20 @@
 	};
 };
 
+&m0_rproc {
+	mboxes = <&ipcc2 0>, <&ipcc2 1>, <&ipcc2 2>;
+	mbox-names = "rx", "tx", "shutdown";
+	memory-region = <&cm0_cube_fw>, <&cm0_cube_data>;
+	clocks = <&rcc CK_CPU3>,
+		 <&rcc CK_CPU3_AM>,
+		 <&rcc CK_LPUART1_C3>,
+		 <&rcc CK_KER_LPUART1>,
+		 <&rcc CK_LPUART1_AM>,
+		 <&scmi_clk CK_SCMI_IPCC2>,
+		 <&scmi_clk CK_SCMI_IPCC2_AM>;
+	status = "okay";
+};
+
 &m33_rproc {
 	mboxes = <&ipcc1 0x100>, <&ipcc1 0x101>, <&ipcc1 2>;
 	mbox-names = "vq0", "vq1", "shutdown";
@@ -579,6 +666,7 @@
 		reg = <1 0>;
 		#interrupt-cells = <1>;
 		interrupt-controller;
+		status = "okay";
 	};
 
 	i2c_rpmsg: i2c@2 {
@@ -793,17 +881,17 @@
 
 &usbh {
 	status = "okay";
-};
 
-&usbh_ehci {
-	#address-cells = <1>;
-	#size-cells = <0>;
-	status = "okay";
-	/* onboard HUB */
-	hub@1 {
-		compatible = "usb424,2514";
-		reg = <1>;
-		vdd-supply = <&scmi_v3v3>;
+	usbh_ehci: usb@482f0000 {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		status = "okay";
+		/* onboard HUB */
+		hub@1 {
+			compatible = "usb424,2514";
+			reg = <1>;
+			vdd-supply = <&scmi_v3v3>;
+		};
 	};
 };
 

@@ -23,19 +23,14 @@ properties:
     maxItems: 1
 
   clocks:
-    minItems: 1
     maxItems: 2
 
   clock-names:
     items:
       - const: kclk
       - const: mclk
-    minItems: 1
 
   resets:
-    maxItems: 1
-
-  power-domains:
     maxItems: 1
 
   port:
@@ -62,24 +57,14 @@ properties:
           hsync-active: true
           vsync-active: true
 
-          pclk-max-frequency:
-            description:
-              Maximum acceptable pixel clock frequency.
-
         required:
           - pclk-sample
-
-  feature-domains:
-    $ref: /schemas/types.yaml#/definitions/phandle-array
-    description: |
-      Phandle to the rifsc device to check access right.
 
 required:
   - compatible
   - reg
   - interrupts
   - clocks
-  - clock-names
   - resets
   - port
 
@@ -112,22 +97,20 @@ examples:
     #include <dt-bindings/interrupt-controller/arm-gic.h>
     #include <dt-bindings/clock/stm32mp13-clks.h>
     #include <dt-bindings/reset/stm32mp13-resets.h>
-    dcmipp: dcmipp@5a000000 {
+    dcmipp@5a000000 {
         compatible = "st,stm32mp13-dcmipp";
         reg = <0x5a000000 0x400>;
         interrupts = <GIC_SPI 79 IRQ_TYPE_LEVEL_HIGH>;
         resets = <&rcc DCMIPP_R>;
         clocks = <&rcc DCMIPP_K>;
-        clock-names = "kclk";
 
         port {
-             dcmipp_0: endpoint {
+             endpoint {
                    remote-endpoint = <&mipid02_2>;
                    bus-width = <8>;
                    hsync-active = <0>;
                    vsync-active = <0>;
                    pclk-sample = <0>;
-                   pclk-max-frequency = <120000000>;
              };
         };
     };

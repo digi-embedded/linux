@@ -58,7 +58,7 @@
 	gic: interrupt-controller@f1001000 {
 		compatible = "arm,gic-400";
 		reg = <0x0 0xf1001000 0x0 0x1000>,  /* GICD */
-		      <0x0 0xf1002000 0x0 0x100>;   /* GICC */
+		      <0x0 0xf1002000 0x0 0x2000>;  /* GICC */
 		#address-cells = <0>;
 		#interrupt-cells = <3>;
 		interrupt-controller;
@@ -302,8 +302,8 @@
 			compatible = "snps,dw-mshc";
 			reg = <0x9820000 0x10000>;
 			interrupts = <GIC_SPI 34 IRQ_TYPE_LEVEL_HIGH>;
-			clocks = <&crg HISTB_SDIO0_CIU_CLK>,
-				 <&crg HISTB_SDIO0_BIU_CLK>;
+			clocks = <&crg HISTB_SDIO0_BIU_CLK>,
+				 <&crg HISTB_SDIO0_CIU_CLK>;
 			clock-names = "biu", "ciu";
 			resets = <&crg 0x9c 4>;
 			reset-names = "reset";

@@ -196,8 +196,7 @@ static int stm32_romem_probe(struct platform_device *pdev)
 	if (!priv)
 		return -ENOMEM;
 
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	priv->base = devm_ioremap_resource(dev, res);
+	priv->base = devm_platform_get_and_ioremap_resource(pdev, 0, &res);
 	if (IS_ERR(priv->base))
 		return PTR_ERR(priv->base);
 
@@ -208,6 +207,7 @@ static int stm32_romem_probe(struct platform_device *pdev)
 	priv->cfg.priv = priv;
 	priv->cfg.owner = THIS_MODULE;
 	priv->cfg.type = NVMEM_TYPE_OTP;
+	priv->cfg.add_legacy_fixed_of_cells = true;
 
 	priv->lower = 0;
 
@@ -256,7 +256,6 @@ static int stm32_romem_probe(struct platform_device *pdev)
  * - Upper: 2K bits, ECC protection, word programming only
  *   => 64 (x 32-bits) = words 32 to 95
  */
-
 static const struct stm32_romem_cfg stm32mp15_bsec_cfg = {
 	.size = 384,
 	.lower = 32,
@@ -274,7 +273,7 @@ static const struct stm32_romem_cfg stm32mp13_bsec_cfg = {
  *   lower OTP (OTP0 to OTP127), bitwise (1-bit) programmable
  *   mid OTP (OTP128 to OTP255), bulk (32-bit) programmable
  *   upper OTP (OTP256 to OTP383), bulk (32-bit) programmable
- *              but no access to HWKEY and ECIES key: limited at 367
+ *              but no access to HWKEY and ECIES key: limited at OTP367
  */
 static const struct stm32_romem_cfg stm32mp25_bsec_cfg = {
 	.size = 368 * 4,

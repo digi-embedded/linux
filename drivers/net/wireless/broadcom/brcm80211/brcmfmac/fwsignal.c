@@ -149,14 +149,11 @@ static const char *brcmf_fws_get_tlv_name(enum brcmf_fws_tlv_type id)
 
 #define BRCMF_FWS_HOSTIF_FLOWSTATE_OFF			0
 #define BRCMF_FWS_HOSTIF_FLOWSTATE_ON			1
-#define BRCMF_FWS_FLOWCONTROL_HIWATER			((256 * 8) - 256)
-#define BRCMF_FWS_FLOWCONTROL_LOWATER			256
-#define BRCMF_FWS_FLOWCONTROL_SHQUEUE_HIWATER		128
-#define BRCMF_FWS_FLOWCONTROL_SHQUEUE_LOWATER		64
+#define BRCMF_FWS_FLOWCONTROL_HIWATER			128
+#define BRCMF_FWS_FLOWCONTROL_LOWATER			64
 
 #define BRCMF_FWS_PSQ_PREC_COUNT		((BRCMF_FWS_FIFO_COUNT + 1) * 2)
-#define BRCMF_FWS_PSQ_LEN				(256 * 8)
-#define BRCMF_FWS_SHQUEUE_PSQ_LEN			256
+#define BRCMF_FWS_PSQ_LEN				256
 
 #define BRCMF_FWS_HTOD_FLAG_PKTFROMHOST			0x01
 #define BRCMF_FWS_HTOD_FLAG_PKT_REQUESTED		0x02
@@ -505,12 +502,6 @@ struct brcmf_fws_info {
 	bool creditmap_received;
 	u8 mode;
 	bool avoid_queueing;
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 16, 0))
-	int fifo_init_credit[BRCMF_FWS_FIFO_COUNT];
-#endif
-	int fws_psq_len;
-	int fws_psq_hi_water;
-	int fws_psq_low_water;
 };
 
 #define BRCMF_FWS_TLV_DEF(name, id, len) \
@@ -630,6 +621,7 @@ static inline int brcmf_fws_hanger_poppkt(struct brcmf_fws_hanger *h,
 static void brcmf_fws_psq_flush(struct brcmf_fws_info *fws, struct pktq *q,
 				int ifidx)
 {
+	struct brcmf_fws_hanger_item *hi;
 	bool (*matchfn)(struct sk_buff *, void *) = NULL;
 	struct sk_buff *skb;
 	int prec;
@@ -641,6 +633,9 @@ static void brcmf_fws_psq_flush(struct brcmf_fws_info *fws, struct pktq *q,
 		skb = brcmu_pktq_pdeq_match(q, prec, matchfn, &ifidx);
 		while (skb) {
 			hslot = brcmf_skb_htod_tag_get_field(skb, HSLOT);
+			hi = &fws->hanger.items[hslot];
+			WARN_ON(skb != hi->pkt);
+			hi->state = BRCMF_FWS_HANGER_ITEM_STATE_FREE;
 			brcmf_fws_hanger_poppkt(&fws->hanger, hslot, &skb,
 						true);
 			brcmu_pkt_buf_free_skb(skb);
@@ -970,11 +965,11 @@ brcmf_fws_flow_control_check(struct brcmf_fws_info *fws, struct pktq *pq,
 		return;
 
 	if ((ifp->netif_stop & BRCMF_NETIF_STOP_REASON_FWS_FC) &&
-	    pq->len <= fws->fws_psq_low_water)
+	    pq->len <= BRCMF_FWS_FLOWCONTROL_LOWATER)
 		brcmf_txflowblock_if(ifp,
 				     BRCMF_NETIF_STOP_REASON_FWS_FC, false);
 	if (!(ifp->netif_stop & BRCMF_NETIF_STOP_REASON_FWS_FC) &&
-	    pq->len >= fws->fws_psq_hi_water) {
+	    pq->len >= BRCMF_FWS_FLOWCONTROL_HIWATER) {
 		fws->stats.fws_flow_block++;
 		brcmf_txflowblock_if(ifp, BRCMF_NETIF_STOP_REASON_FWS_FC, true);
 	}
@@ -1020,9 +1015,8 @@ int brcmf_fws_macdesc_indicate(struct brcmf_fws_info *fws, u8 type, u8 *data)
 			entry->mac_handle = mac_handle;
 			brcmf_fws_macdesc_init(entry, addr, ifidx);
 			brcmf_fws_macdesc_set_name(fws, entry);
-			brcmu_pktq_init(&entry->psq,
-					BRCMF_FWS_PSQ_PREC_COUNT,
-					fws->fws_psq_len);
+			brcmu_pktq_init(&entry->psq, BRCMF_FWS_PSQ_PREC_COUNT,
+					BRCMF_FWS_PSQ_LEN);
 			brcmf_fws_unlock(fws);
 			brcmf_dbg(TRACE, "add %s mac %pM\n", entry->name, addr);
 		} else {
@@ -1623,13 +1617,9 @@ static int brcmf_fws_notify_credit_map(struct brcmf_if *ifp,
 			fws->fifo_credit_map |= 1 << i;
 		else
 			fws->fifo_credit_map &= ~(1 << i);
-
 		WARN_ONCE(fws->fifo_credit[i] < 0,
 			  "fifo_credit[%d] is negative(%d)\n", i,
 			  fws->fifo_credit[i]);
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 16, 0))
-		fws->fifo_init_credit[i] = fws->fifo_credit[i];
-#endif
 	}
 	brcmf_fws_schedule_deq(fws);
 	brcmf_fws_unlock(fws);
@@ -1854,7 +1844,7 @@ void brcmf_fws_hdrpull(struct brcmf_if *ifp, s16 siglen, struct sk_buff *skb)
 	u8 *signal_data;
 	s16 data_len;
 	u8 type;
-	s16 len;
+	u8 len;
 	u8 *data;
 	s32 status;
 	s32 err;
@@ -2184,9 +2174,8 @@ void brcmf_fws_add_interface(struct brcmf_if *ifp)
 	ifp->fws_desc = entry;
 	brcmf_fws_macdesc_init(entry, ifp->mac_addr, ifp->ifidx);
 	brcmf_fws_macdesc_set_name(fws, entry);
-	brcmu_pktq_init(&entry->psq,
-			BRCMF_FWS_PSQ_PREC_COUNT,
-			fws->fws_psq_len);
+	brcmu_pktq_init(&entry->psq, BRCMF_FWS_PSQ_PREC_COUNT,
+			BRCMF_FWS_PSQ_LEN);
 	brcmf_dbg(TRACE, "added %s\n", entry->name);
 }
 
@@ -2208,38 +2197,6 @@ void brcmf_fws_del_interface(struct brcmf_if *ifp)
 	brcmf_fws_unlock(fws);
 }
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 16, 0))
-static bool brcmf_fws_ismultistream(struct brcmf_fws_info *fws)
-{
-	bool ret = false;
-	u8 credit_usage = 0;
-
-	/* Check only for BE, VI and VO traffic */
-	u32 delay_map = fws->fifo_delay_map &
-		((1 << BRCMF_FWS_FIFO_AC_BE) |
-		 (1 << BRCMF_FWS_FIFO_AC_VI) |
-		 (1 << BRCMF_FWS_FIFO_AC_VO));
-
-	if (hweight_long(delay_map) > 1) {
-		ret = true;
-	} else {
-		if (fws->fifo_credit[BRCMF_FWS_FIFO_AC_BE] <
-			fws->fifo_init_credit[BRCMF_FWS_FIFO_AC_BE])
-			credit_usage++;
-		if (fws->fifo_credit[BRCMF_FWS_FIFO_AC_VI] <
-			fws->fifo_init_credit[BRCMF_FWS_FIFO_AC_VI])
-			credit_usage++;
-		if (fws->fifo_credit[BRCMF_FWS_FIFO_AC_VO] <
-			fws->fifo_init_credit[BRCMF_FWS_FIFO_AC_VO])
-			credit_usage++;
-
-		if (credit_usage > 1)
-			ret = true;
-	}
-	return ret;
-}
-#endif
-
 static void brcmf_fws_dequeue_worker(struct work_struct *worker)
 {
 	struct brcmf_fws_info *fws;
@@ -2252,13 +2209,6 @@ static void brcmf_fws_dequeue_worker(struct work_struct *worker)
 
 	fws = container_of(worker, struct brcmf_fws_info, fws_dequeue_work);
 	drvr = fws->drvr;
-
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 16, 0))
-	if (brcmf_fws_ismultistream(fws))
-		drvr->bus_if->allow_skborphan = false;
-	else
-		drvr->bus_if->allow_skborphan = true;
-#endif
 
 	brcmf_fws_lock(fws);
 	for (fifo = BRCMF_FWS_FIFO_BCMC; fifo >= 0 && !fws->bus_flow_blocked;
@@ -2409,16 +2359,6 @@ struct brcmf_fws_info *brcmf_fws_attach(struct brcmf_pub *drvr)
 	fws->drvr = drvr;
 	fws->fcmode = drvr->settings->fcmode;
 
-	if (drvr->settings->short_psq) {
-		fws->fws_psq_len = BRCMF_FWS_SHQUEUE_PSQ_LEN;
-		fws->fws_psq_hi_water = BRCMF_FWS_FLOWCONTROL_SHQUEUE_HIWATER;
-		fws->fws_psq_low_water = BRCMF_FWS_FLOWCONTROL_SHQUEUE_LOWATER;
-	} else {
-		fws->fws_psq_len = BRCMF_FWS_PSQ_LEN;
-		fws->fws_psq_hi_water = BRCMF_FWS_FLOWCONTROL_HIWATER;
-		fws->fws_psq_low_water = BRCMF_FWS_FLOWCONTROL_LOWATER;
-	}
-
 	if (!drvr->bus_if->always_use_fws_queue &&
 	    (fws->fcmode == BRCMF_FWS_FCMODE_NONE)) {
 		fws->avoid_queueing = true;
@@ -2486,9 +2426,8 @@ struct brcmf_fws_info *brcmf_fws_attach(struct brcmf_pub *drvr)
 	brcmf_fws_macdesc_init(&fws->desc.other, NULL, 0);
 	brcmf_fws_macdesc_set_name(fws, &fws->desc.other);
 	brcmf_dbg(INFO, "added %s\n", fws->desc.other.name);
-	brcmu_pktq_init(&fws->desc.other.psq,
-			BRCMF_FWS_PSQ_PREC_COUNT,
-			fws->fws_psq_len);
+	brcmu_pktq_init(&fws->desc.other.psq, BRCMF_FWS_PSQ_PREC_COUNT,
+			BRCMF_FWS_PSQ_LEN);
 
 	brcmf_dbg(INFO, "%s bdcv2 tlv signaling [%x]\n",
 		  fws->fw_signals ? "enabled" : "disabled", tlv);

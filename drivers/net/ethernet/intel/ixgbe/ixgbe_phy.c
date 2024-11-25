@@ -276,9 +276,8 @@ s32 ixgbe_identify_phy_generic(struct ixgbe_hw *hw)
 		return 0;
 
 	if (hw->phy.nw_mng_if_sel) {
-		phy_addr = (hw->phy.nw_mng_if_sel &
-			    IXGBE_NW_MNG_IF_SEL_MDIO_PHY_ADD) >>
-			   IXGBE_NW_MNG_IF_SEL_MDIO_PHY_ADD_SHIFT;
+		phy_addr = FIELD_GET(IXGBE_NW_MNG_IF_SEL_MDIO_PHY_ADD,
+				     hw->phy.nw_mng_if_sel);
 		if (ixgbe_probe_phy(hw, phy_addr))
 			return 0;
 		else
@@ -679,14 +678,14 @@ static s32 ixgbe_msca_cmd(struct ixgbe_hw *hw, u32 cmd)
 }
 
 /**
- *  ixgbe_mii_bus_read_generic - Read a clause 22/45 register with gssr flags
+ *  ixgbe_mii_bus_read_generic_c22 - Read a clause 22 register with gssr flags
  *  @hw: pointer to hardware structure
  *  @addr: address
  *  @regnum: register number
  *  @gssr: semaphore flags to acquire
  **/
-static s32 ixgbe_mii_bus_read_generic(struct ixgbe_hw *hw, int addr,
-				      int regnum, u32 gssr)
+static s32 ixgbe_mii_bus_read_generic_c22(struct ixgbe_hw *hw, int addr,
+					  int regnum, u32 gssr)
 {
 	u32 hwaddr, cmd;
 	s32 data;
@@ -695,31 +694,14 @@ static s32 ixgbe_mii_bus_read_generic(struct ixgbe_hw *hw, int addr,
 		return -EBUSY;
 
 	hwaddr = addr << IXGBE_MSCA_PHY_ADDR_SHIFT;
-	if (regnum & MII_ADDR_C45) {
-		hwaddr |= regnum & GENMASK(21, 0);
-		cmd = hwaddr | IXGBE_MSCA_ADDR_CYCLE | IXGBE_MSCA_MDI_COMMAND;
-	} else {
-		hwaddr |= (regnum & GENMASK(5, 0)) << IXGBE_MSCA_DEV_TYPE_SHIFT;
-		cmd = hwaddr | IXGBE_MSCA_OLD_PROTOCOL |
-			IXGBE_MSCA_READ_AUTOINC | IXGBE_MSCA_MDI_COMMAND;
-	}
+	hwaddr |= (regnum & GENMASK(5, 0)) << IXGBE_MSCA_DEV_TYPE_SHIFT;
+	cmd = hwaddr | IXGBE_MSCA_OLD_PROTOCOL |
+		IXGBE_MSCA_READ_AUTOINC | IXGBE_MSCA_MDI_COMMAND;
 
 	data = ixgbe_msca_cmd(hw, cmd);
 	if (data < 0)
 		goto mii_bus_read_done;
 
-	/* For a clause 45 access the address cycle just completed, we still
-	 * need to do the read command, otherwise just get the data
-	 */
-	if (!(regnum & MII_ADDR_C45))
-		goto do_mii_bus_read;
-
-	cmd = hwaddr | IXGBE_MSCA_READ | IXGBE_MSCA_MDI_COMMAND;
-	data = ixgbe_msca_cmd(hw, cmd);
-	if (data < 0)
-		goto mii_bus_read_done;
-
-do_mii_bus_read:
 	data = IXGBE_READ_REG(hw, IXGBE_MSRWD);
 	data = (data >> IXGBE_MSRWD_READ_DATA_SHIFT) & GENMASK(16, 0);
 
@@ -729,15 +711,53 @@ mii_bus_read_done:
 }
 
 /**
- *  ixgbe_mii_bus_write_generic - Write a clause 22/45 register with gssr flags
+ *  ixgbe_mii_bus_read_generic_c45 - Read a clause 45 register with gssr flags
+ *  @hw: pointer to hardware structure
+ *  @addr: address
+ *  @devad: device address to read
+ *  @regnum: register number
+ *  @gssr: semaphore flags to acquire
+ **/
+static s32 ixgbe_mii_bus_read_generic_c45(struct ixgbe_hw *hw, int addr,
+					  int devad, int regnum, u32 gssr)
+{
+	u32 hwaddr, cmd;
+	s32 data;
+
+	if (hw->mac.ops.acquire_swfw_sync(hw, gssr))
+		return -EBUSY;
+
+	hwaddr = addr << IXGBE_MSCA_PHY_ADDR_SHIFT;
+	hwaddr |= devad << 16 | regnum;
+	cmd = hwaddr | IXGBE_MSCA_ADDR_CYCLE | IXGBE_MSCA_MDI_COMMAND;
+
+	data = ixgbe_msca_cmd(hw, cmd);
+	if (data < 0)
+		goto mii_bus_read_done;
+
+	cmd = hwaddr | IXGBE_MSCA_READ | IXGBE_MSCA_MDI_COMMAND;
+	data = ixgbe_msca_cmd(hw, cmd);
+	if (data < 0)
+		goto mii_bus_read_done;
+
+	data = IXGBE_READ_REG(hw, IXGBE_MSRWD);
+	data = (data >> IXGBE_MSRWD_READ_DATA_SHIFT) & GENMASK(16, 0);
+
+mii_bus_read_done:
+	hw->mac.ops.release_swfw_sync(hw, gssr);
+	return data;
+}
+
+/**
+ *  ixgbe_mii_bus_write_generic_c22 - Write a clause 22 register with gssr flags
  *  @hw: pointer to hardware structure
  *  @addr: address
  *  @regnum: register number
  *  @val: value to write
  *  @gssr: semaphore flags to acquire
  **/
-static s32 ixgbe_mii_bus_write_generic(struct ixgbe_hw *hw, int addr,
-				       int regnum, u16 val, u32 gssr)
+static s32 ixgbe_mii_bus_write_generic_c22(struct ixgbe_hw *hw, int addr,
+					   int regnum, u16 val, u32 gssr)
 {
 	u32 hwaddr, cmd;
 	s32 err;
@@ -748,20 +768,43 @@ static s32 ixgbe_mii_bus_write_generic(struct ixgbe_hw *hw, int addr,
 	IXGBE_WRITE_REG(hw, IXGBE_MSRWD, (u32)val);
 
 	hwaddr = addr << IXGBE_MSCA_PHY_ADDR_SHIFT;
-	if (regnum & MII_ADDR_C45) {
-		hwaddr |= regnum & GENMASK(21, 0);
-		cmd = hwaddr | IXGBE_MSCA_ADDR_CYCLE | IXGBE_MSCA_MDI_COMMAND;
-	} else {
-		hwaddr |= (regnum & GENMASK(5, 0)) << IXGBE_MSCA_DEV_TYPE_SHIFT;
-		cmd = hwaddr | IXGBE_MSCA_OLD_PROTOCOL | IXGBE_MSCA_WRITE |
-			IXGBE_MSCA_MDI_COMMAND;
-	}
+	hwaddr |= (regnum & GENMASK(5, 0)) << IXGBE_MSCA_DEV_TYPE_SHIFT;
+	cmd = hwaddr | IXGBE_MSCA_OLD_PROTOCOL | IXGBE_MSCA_WRITE |
+		IXGBE_MSCA_MDI_COMMAND;
 
-	/* For clause 45 this is an address cycle, for clause 22 this is the
-	 * entire transaction
-	 */
 	err = ixgbe_msca_cmd(hw, cmd);
-	if (err < 0 || !(regnum & MII_ADDR_C45))
+
+	hw->mac.ops.release_swfw_sync(hw, gssr);
+	return err;
+}
+
+/**
+ *  ixgbe_mii_bus_write_generic_c45 - Write a clause 45 register with gssr flags
+ *  @hw: pointer to hardware structure
+ *  @addr: address
+ *  @devad: device address to read
+ *  @regnum: register number
+ *  @val: value to write
+ *  @gssr: semaphore flags to acquire
+ **/
+static s32 ixgbe_mii_bus_write_generic_c45(struct ixgbe_hw *hw, int addr,
+					   int devad, int regnum, u16 val,
+					   u32 gssr)
+{
+	u32 hwaddr, cmd;
+	s32 err;
+
+	if (hw->mac.ops.acquire_swfw_sync(hw, gssr))
+		return -EBUSY;
+
+	IXGBE_WRITE_REG(hw, IXGBE_MSRWD, (u32)val);
+
+	hwaddr = addr << IXGBE_MSCA_PHY_ADDR_SHIFT;
+	hwaddr |= devad << 16 | regnum;
+	cmd = hwaddr | IXGBE_MSCA_ADDR_CYCLE | IXGBE_MSCA_MDI_COMMAND;
+
+	err = ixgbe_msca_cmd(hw, cmd);
+	if (err < 0)
 		goto mii_bus_write_done;
 
 	cmd = hwaddr | IXGBE_MSCA_WRITE | IXGBE_MSCA_MDI_COMMAND;
@@ -773,70 +816,144 @@ mii_bus_write_done:
 }
 
 /**
- *  ixgbe_mii_bus_read - Read a clause 22/45 register
+ *  ixgbe_mii_bus_read_c22 - Read a clause 22 register
  *  @bus: pointer to mii_bus structure which points to our driver private
  *  @addr: address
  *  @regnum: register number
  **/
-static s32 ixgbe_mii_bus_read(struct mii_bus *bus, int addr, int regnum)
+static s32 ixgbe_mii_bus_read_c22(struct mii_bus *bus, int addr, int regnum)
 {
 	struct ixgbe_adapter *adapter = bus->priv;
 	struct ixgbe_hw *hw = &adapter->hw;
 	u32 gssr = hw->phy.phy_semaphore_mask;
 
-	return ixgbe_mii_bus_read_generic(hw, addr, regnum, gssr);
+	return ixgbe_mii_bus_read_generic_c22(hw, addr, regnum, gssr);
 }
 
 /**
- *  ixgbe_mii_bus_write - Write a clause 22/45 register
+ *  ixgbe_mii_bus_read_c45 - Read a clause 45 register
+ *  @bus: pointer to mii_bus structure which points to our driver private
+ *  @devad: device address to read
+ *  @addr: address
+ *  @regnum: register number
+ **/
+static s32 ixgbe_mii_bus_read_c45(struct mii_bus *bus, int devad, int addr,
+				  int regnum)
+{
+	struct ixgbe_adapter *adapter = bus->priv;
+	struct ixgbe_hw *hw = &adapter->hw;
+	u32 gssr = hw->phy.phy_semaphore_mask;
+
+	return ixgbe_mii_bus_read_generic_c45(hw, addr, devad, regnum, gssr);
+}
+
+/**
+ *  ixgbe_mii_bus_write_c22 - Write a clause 22 register
  *  @bus: pointer to mii_bus structure which points to our driver private
  *  @addr: address
  *  @regnum: register number
  *  @val: value to write
  **/
-static s32 ixgbe_mii_bus_write(struct mii_bus *bus, int addr, int regnum,
-			       u16 val)
+static s32 ixgbe_mii_bus_write_c22(struct mii_bus *bus, int addr, int regnum,
+				   u16 val)
 {
 	struct ixgbe_adapter *adapter = bus->priv;
 	struct ixgbe_hw *hw = &adapter->hw;
 	u32 gssr = hw->phy.phy_semaphore_mask;
 
-	return ixgbe_mii_bus_write_generic(hw, addr, regnum, val, gssr);
+	return ixgbe_mii_bus_write_generic_c22(hw, addr, regnum, val, gssr);
 }
 
 /**
- *  ixgbe_x550em_a_mii_bus_read - Read a clause 22/45 register on x550em_a
+ *  ixgbe_mii_bus_write_c45 - Write a clause 45 register
+ *  @bus: pointer to mii_bus structure which points to our driver private
+ *  @addr: address
+ *  @devad: device address to read
+ *  @regnum: register number
+ *  @val: value to write
+ **/
+static s32 ixgbe_mii_bus_write_c45(struct mii_bus *bus, int addr, int devad,
+				   int regnum, u16 val)
+{
+	struct ixgbe_adapter *adapter = bus->priv;
+	struct ixgbe_hw *hw = &adapter->hw;
+	u32 gssr = hw->phy.phy_semaphore_mask;
+
+	return ixgbe_mii_bus_write_generic_c45(hw, addr, devad, regnum, val,
+					       gssr);
+}
+
+/**
+ *  ixgbe_x550em_a_mii_bus_read_c22 - Read a clause 22 register on x550em_a
  *  @bus: pointer to mii_bus structure which points to our driver private
  *  @addr: address
  *  @regnum: register number
  **/
-static s32 ixgbe_x550em_a_mii_bus_read(struct mii_bus *bus, int addr,
-				       int regnum)
+static s32 ixgbe_x550em_a_mii_bus_read_c22(struct mii_bus *bus, int addr,
+					   int regnum)
 {
 	struct ixgbe_adapter *adapter = bus->priv;
 	struct ixgbe_hw *hw = &adapter->hw;
 	u32 gssr = hw->phy.phy_semaphore_mask;
 
 	gssr |= IXGBE_GSSR_TOKEN_SM | IXGBE_GSSR_PHY0_SM;
-	return ixgbe_mii_bus_read_generic(hw, addr, regnum, gssr);
+	return ixgbe_mii_bus_read_generic_c22(hw, addr, regnum, gssr);
 }
 
 /**
- *  ixgbe_x550em_a_mii_bus_write - Write a clause 22/45 register on x550em_a
+ *  ixgbe_x550em_a_mii_bus_read_c45 - Read a clause 45 register on x550em_a
  *  @bus: pointer to mii_bus structure which points to our driver private
  *  @addr: address
+ *  @devad: device address to read
  *  @regnum: register number
- *  @val: value to write
  **/
-static s32 ixgbe_x550em_a_mii_bus_write(struct mii_bus *bus, int addr,
-					int regnum, u16 val)
+static s32 ixgbe_x550em_a_mii_bus_read_c45(struct mii_bus *bus, int addr,
+					   int devad, int regnum)
 {
 	struct ixgbe_adapter *adapter = bus->priv;
 	struct ixgbe_hw *hw = &adapter->hw;
 	u32 gssr = hw->phy.phy_semaphore_mask;
 
 	gssr |= IXGBE_GSSR_TOKEN_SM | IXGBE_GSSR_PHY0_SM;
-	return ixgbe_mii_bus_write_generic(hw, addr, regnum, val, gssr);
+	return ixgbe_mii_bus_read_generic_c45(hw, addr, devad, regnum, gssr);
+}
+
+/**
+ *  ixgbe_x550em_a_mii_bus_write_c22 - Write a clause 22 register on x550em_a
+ *  @bus: pointer to mii_bus structure which points to our driver private
+ *  @addr: address
+ *  @regnum: register number
+ *  @val: value to write
+ **/
+static s32 ixgbe_x550em_a_mii_bus_write_c22(struct mii_bus *bus, int addr,
+					    int regnum, u16 val)
+{
+	struct ixgbe_adapter *adapter = bus->priv;
+	struct ixgbe_hw *hw = &adapter->hw;
+	u32 gssr = hw->phy.phy_semaphore_mask;
+
+	gssr |= IXGBE_GSSR_TOKEN_SM | IXGBE_GSSR_PHY0_SM;
+	return ixgbe_mii_bus_write_generic_c22(hw, addr, regnum, val, gssr);
+}
+
+/**
+ *  ixgbe_x550em_a_mii_bus_write_c45 - Write a clause 45 register on x550em_a
+ *  @bus: pointer to mii_bus structure which points to our driver private
+ *  @addr: address
+ *  @devad: device address to read
+ *  @regnum: register number
+ *  @val: value to write
+ **/
+static s32 ixgbe_x550em_a_mii_bus_write_c45(struct mii_bus *bus, int addr,
+					    int devad, int regnum, u16 val)
+{
+	struct ixgbe_adapter *adapter = bus->priv;
+	struct ixgbe_hw *hw = &adapter->hw;
+	u32 gssr = hw->phy.phy_semaphore_mask;
+
+	gssr |= IXGBE_GSSR_TOKEN_SM | IXGBE_GSSR_PHY0_SM;
+	return ixgbe_mii_bus_write_generic_c45(hw, addr, devad, regnum, val,
+					       gssr);
 }
 
 /**
@@ -908,8 +1025,11 @@ out:
  **/
 s32 ixgbe_mii_bus_init(struct ixgbe_hw *hw)
 {
-	s32 (*write)(struct mii_bus *bus, int addr, int regnum, u16 val);
-	s32 (*read)(struct mii_bus *bus, int addr, int regnum);
+	s32 (*write_c22)(struct mii_bus *bus, int addr, int regnum, u16 val);
+	s32 (*read_c22)(struct mii_bus *bus, int addr, int regnum);
+	s32 (*write_c45)(struct mii_bus *bus, int addr, int devad, int regnum,
+			 u16 val);
+	s32 (*read_c45)(struct mii_bus *bus, int addr, int devad, int regnum);
 	struct ixgbe_adapter *adapter = hw->back;
 	struct pci_dev *pdev = adapter->pdev;
 	struct device *dev = &adapter->netdev->dev;
@@ -928,12 +1048,16 @@ s32 ixgbe_mii_bus_init(struct ixgbe_hw *hw)
 	case IXGBE_DEV_ID_X550EM_A_1G_T_L:
 		if (!ixgbe_x550em_a_has_mii(hw))
 			return 0;
-		read = &ixgbe_x550em_a_mii_bus_read;
-		write = &ixgbe_x550em_a_mii_bus_write;
+		read_c22 = ixgbe_x550em_a_mii_bus_read_c22;
+		write_c22 = ixgbe_x550em_a_mii_bus_write_c22;
+		read_c45 = ixgbe_x550em_a_mii_bus_read_c45;
+		write_c45 = ixgbe_x550em_a_mii_bus_write_c45;
 		break;
 	default:
-		read = &ixgbe_mii_bus_read;
-		write = &ixgbe_mii_bus_write;
+		read_c22 = ixgbe_mii_bus_read_c22;
+		write_c22 = ixgbe_mii_bus_write_c22;
+		read_c45 = ixgbe_mii_bus_read_c45;
+		write_c45 = ixgbe_mii_bus_write_c45;
 		break;
 	}
 
@@ -941,8 +1065,10 @@ s32 ixgbe_mii_bus_init(struct ixgbe_hw *hw)
 	if (!bus)
 		return -ENOMEM;
 
-	bus->read = read;
-	bus->write = write;
+	bus->read = read_c22;
+	bus->write = write_c22;
+	bus->read_c45 = read_c45;
+	bus->write_c45 = write_c45;
 
 	/* Use the position of the device in the PCI hierarchy as the id */
 	snprintf(bus->id, MII_BUS_ID_SIZE, "%s-mdio-%s", ixgbe_driver_name,
@@ -1320,8 +1446,7 @@ s32 ixgbe_reset_phy_nl(struct ixgbe_hw *hw)
 		ret_val = hw->eeprom.ops.read(hw, data_offset, &eword);
 		if (ret_val)
 			goto err_eeprom;
-		control = (eword & IXGBE_CONTROL_MASK_NL) >>
-			   IXGBE_CONTROL_SHIFT_NL;
+		control = FIELD_GET(IXGBE_CONTROL_MASK_NL, eword);
 		edata = eword & IXGBE_DATA_MASK_NL;
 		switch (control) {
 		case IXGBE_DELAY_NL:

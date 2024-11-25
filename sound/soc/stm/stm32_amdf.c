@@ -10,6 +10,7 @@
 #include <linux/iio/adc/stm32-mdf-adc.h>
 #include <linux/iio/consumer.h>
 #include <linux/iio/iio.h>
+#include <linux/kstrtox.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/platform_device.h>
@@ -113,7 +114,7 @@ static const struct snd_soc_dai_ops stm32_amdf_dai_ops = {
 static const struct snd_soc_dai_driver stm32_amdf_dai = {
 	.capture = {
 		    .channels_min = 1,
-		    .channels_max = 2,
+		    .channels_max = 1,
 		    .formats = SNDRV_PCM_FMTBIT_S16_LE |
 			       SNDRV_PCM_FMTBIT_S32_LE,
 		    .rates = SNDRV_PCM_RATE_CONTINUOUS,
@@ -298,6 +299,9 @@ static int stm32_amdf_probe(struct platform_device *pdev)
 {
 	struct stm32_amdf_priv *priv;
 	struct snd_soc_component *component;
+	char chan_nb[STM32_MDF_EXT_INFO_BUZ_SZ];
+	long channels_max;
+	ssize_t size;
 	int ret;
 
 	priv = devm_kzalloc(&pdev->dev, sizeof(*priv), GFP_KERNEL);
@@ -310,13 +314,6 @@ static int stm32_amdf_probe(struct platform_device *pdev)
 	mutex_init(&priv->lock);
 
 	dev_set_drvdata(&pdev->dev, priv);
-
-	ret = devm_snd_soc_register_component(&pdev->dev, &stm32_amdf_dai_component,
-					      &priv->dai_drv, 1);
-	if (ret < 0) {
-		dev_err(&pdev->dev, "Failed to register %s\n", stm32_amdf_dai_component.name);
-		return ret;
-	}
 
 	/* Associate iio channel */
 	priv->iio_ch  = devm_iio_channel_get_all(&pdev->dev);
@@ -334,6 +331,23 @@ static int stm32_amdf_probe(struct platform_device *pdev)
 	ret = devm_add_action_or_reset(&pdev->dev, stm32_amdf_cleanup, priv->iio_cb);
 	if (ret < 0)  {
 		dev_err(&pdev->dev, "Unable to add action\n");
+		return ret;
+	}
+
+	size = iio_read_channel_ext_info(priv->iio_ch, "sub_channels_nb", chan_nb);
+	if (size >= STM32_MDF_EXT_INFO_BUZ_SZ)
+		return -EINVAL;
+	ret = kstrtol(chan_nb, 10, &channels_max);
+	if (ret < 0) {
+		dev_err(&pdev->dev, "Failed to get channels number\n");
+		return ret;
+	}
+	priv->dai_drv.capture.channels_max = channels_max;
+
+	ret = devm_snd_soc_register_component(&pdev->dev, &stm32_amdf_dai_component,
+					      &priv->dai_drv, 1);
+	if (ret < 0) {
+		dev_err(&pdev->dev, "Failed to register %s\n", stm32_amdf_dai_component.name);
 		return ret;
 	}
 

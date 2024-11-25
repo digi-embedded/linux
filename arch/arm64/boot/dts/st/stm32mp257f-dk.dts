@@ -35,6 +35,8 @@
 
 		framebuffer {
 			compatible = "simple-framebuffer";
+			clocks = <&rcc CK_BUS_LTDC>, <&rcc CK_KER_LTDC>,
+				 <&rcc CK_BUS_LVDS>, <&rcc CK_KER_LVDSPHY>;
 			status = "disabled";
 		};
 	};
@@ -57,6 +59,7 @@
 		compatible = "dmic-codec";
 		#sound-dai-cells = <1>;
 		sound-name-prefix = "dmic0";
+		status = "okay";
 
 		port {
 			dmic0_endpoint: endpoint {
@@ -69,6 +72,7 @@
 		compatible = "dmic-codec";
 		#sound-dai-cells = <1>;
 		sound-name-prefix = "dmic1";
+		status = "okay";
 
 		port {
 			dmic1_endpoint: endpoint {
@@ -127,6 +131,30 @@
 		};
 	};
 
+	imx335_2v9: imx335-2v9 {
+		compatible = "regulator-fixed";
+		regulator-name = "imx335-avdd";
+		regulator-min-microvolt = <2900000>;
+		regulator-max-microvolt = <2900000>;
+		regulator-always-on;
+	};
+
+	imx335_1v8: imx335-1v8 {
+		compatible = "regulator-fixed";
+		regulator-name = "imx335-ovdd";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+		regulator-always-on;
+	};
+
+	imx335_1v2: imx335-1v2 {
+		compatible = "regulator-fixed";
+		regulator-name = "imx335-dvdd";
+		regulator-min-microvolt = <1200000>;
+		regulator-max-microvolt = <1200000>;
+		regulator-always-on;
+	};
+
 	memory@80000000 {
 		device_type = "memory";
 		reg = <0x0 0x80000000 0x1 0x0>;
@@ -136,6 +164,7 @@
 		compatible = "edt,etml0700z9ndha", "panel-lvds";
 		enable-gpios = <&gpioi 4 GPIO_ACTIVE_HIGH>;
 		backlight = <&panel_lvds_backlight>;
+		default-on;
 		status = "okay";
 
 		width-mm = <156>;
@@ -165,7 +194,7 @@
 		compatible = "gpio-backlight";
 		gpios = <&gpioi 7 GPIO_ACTIVE_HIGH>;
 		default-on;
-		default-brightness-level = <0>;
+		default-brightness-level = <1>;
 		status = "okay";
 	};
 
@@ -186,6 +215,17 @@
 	status = "okay";
 };
 
+&ahbsr {
+	mbox_client: mailbox-client@1 {
+		compatible = "mbox-cdev";
+		reg = <1 0>;
+		memory-region =  <&ipc_shmem_2>;
+		mboxes = <&ipcc2 0>;
+		mbox-names = "rx-tx";
+		status = "okay";
+	};
+};
+
 &arm_wdt {
 	timeout-sec = <32>;
 	status = "okay";
@@ -204,7 +244,63 @@
 	status = "okay";
 };
 
-&csi2host {
+&cs_cpu_debug0 {
+	status = "okay";
+};
+
+&cs_cpu_debug1 {
+	status = "okay";
+};
+
+&cs_cti0 {
+	status = "okay";
+};
+
+&cs_cti1 {
+	status = "okay";
+};
+
+&cs_cti_cpu0 {
+	status = "okay";
+};
+
+&cs_cti_cpu1 {
+	status = "okay";
+};
+
+&cs_etf {
+	status = "okay";
+};
+
+&cs_etm0 {
+	status = "okay";
+};
+
+&cs_etm1 {
+	status = "okay";
+};
+
+&cs_etr {
+	status = "okay";
+};
+
+&cs_funnel {
+	status = "okay";
+};
+
+&cs_replicator {
+	status = "okay";
+};
+
+&cs_stm {
+	status = "okay";
+};
+
+&cs_tpiu {
+	status = "okay";
+};
+
+&csi {
 	vdd-supply =  <&scmi_vddcore>;
 	vdda18-supply = <&scmi_v1v8>;
 	status = "okay";
@@ -213,7 +309,7 @@
 		#size-cells = <0>;
 		port@0 {
 			reg = <0>;
-			csi2host_sink: endpoint {
+			csi_sink: endpoint {
 				remote-endpoint = <&imx335_ep>;
 				data-lanes = <0 1>;
 				bus-type = <4>;
@@ -221,7 +317,7 @@
 		};
 		port@1 {
 			reg = <1>;
-			csi2host_source: endpoint {
+			csi_source: endpoint {
 				remote-endpoint = <&dcmipp_0>;
 			};
 		};
@@ -232,7 +328,7 @@
 	status = "okay";
 	port {
 		dcmipp_0: endpoint {
-			remote-endpoint = <&csi2host_source>;
+			remote-endpoint = <&csi_source>;
 			bus-type = <4>;
 		};
 	};
@@ -321,13 +417,16 @@
 		compatible = "sony,imx335";
 		reg = <0x1a>;
 		clocks = <&clk_ext_camera>;
+		avdd-supply = <&imx335_2v9>;
+		ovdd-supply = <&imx335_1v8>;
+		dvdd-supply = <&imx335_1v2>;
 		reset-gpios = <&gpiob 1 (GPIO_ACTIVE_HIGH | GPIO_PUSH_PULL)>;
 		powerdown-gpios = <&gpiob 11 (GPIO_ACTIVE_HIGH | GPIO_PUSH_PULL)>;
 		status = "okay";
 
 		port {
 			imx335_ep: endpoint {
-				remote-endpoint = <&csi2host_sink>;
+				remote-endpoint = <&csi_sink>;
 				clock-lanes = <0>;
 				data-lanes = <1 2>;
 				link-frequencies = /bits/ 64 <594000000>;
@@ -422,7 +521,20 @@
 	status = "okay";
 };
 
+&ipcc2 {
+	status = "okay";
+};
+
+/* use LPTIMER with tick broadcast for suspend mode */
+&lptimer3 {
+	status = "okay";
+	timer {
+		status = "okay";
+	};
+};
+
 &ltdc {
+	default-on;
 	status = "okay";
 
 	port {
@@ -442,9 +554,11 @@
 };
 
 &lvds {
-	status = "okay";
+	default-on;
 	vdd-supply =  <&scmi_vddcore>;
 	vdda18-supply = <&scmi_v1v8>;
+	status = "okay";
+
 	ports {
 		#address-cells = <1>;
 		#size-cells = <0>;
@@ -465,6 +579,17 @@
 	};
 };
 
+&m0_rproc {
+	mboxes = <&ipcc2 0>, <&ipcc2 1>, <&ipcc2 2>;
+	mbox-names = "rx", "tx", "shutdown";
+	memory-region = <&cm0_cube_fw>, <&cm0_cube_data>;
+	clocks = <&rcc CK_CPU3>,
+		 <&rcc CK_CPU3_AM>,
+		 <&scmi_clk CK_SCMI_IPCC2>,
+		 <&scmi_clk CK_SCMI_IPCC2_AM>;
+	status = "okay";
+};
+
 &m33_rproc {
 	mboxes = <&ipcc1 0x100>, <&ipcc1 0x101>, <&ipcc1 2>;
 	mbox-names = "vq0", "vq1", "shutdown";
@@ -480,7 +605,7 @@
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&mdf_cck0_pins_a>;
 	pinctrl-1 = <&mdf_cck0_sleep_pins_a>;
-	#clock-cells = <0>;
+	#clock-cells = <1>;
 	clock-output-names = "cck0";
 	clock-frequency = <1536000>;
 	status = "okay";
@@ -490,7 +615,7 @@
 		pinctrl-0 = <&mdf_sdi6_pins_a>;
 		pinctrl-1 = <&mdf_sdi6_sleep_pins_a>;
 		st,sitf-mode = "spi";
-		clocks = <&mdf1>;
+		clocks = <&mdf1 0>;
 		status = "okay";
 	};
 
@@ -620,8 +745,8 @@
 
 &sdmmc1 {
 	pinctrl-names = "default", "opendrain", "sleep";
-	pinctrl-0 = <&sdmmc1_b4_pins_a>;
-	pinctrl-1 = <&sdmmc1_b4_od_pins_a>;
+	pinctrl-0 = <&sdmmc1_b4_pins_b>;
+	pinctrl-1 = <&sdmmc1_b4_od_pins_b>;
 	pinctrl-2 = <&sdmmc1_b4_sleep_pins_a>;
 	cd-gpios = <&gpiod 3 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
 	disable-wp;
@@ -650,7 +775,6 @@
 	vmmc-supply = <&scmi_vdd_emmc>;
 	vqmmc-supply = <&scmi_vddio2>;
 	mmc-ddr-1_8v;
-	mmc-hs200-1_8v;
 	status = "okay";
 };
 
@@ -673,6 +797,7 @@
 	brcmf: bcrmf@1 {
 		reg = <1>;
 		compatible = "brcm,bcm4329-fmac";
+		status = "disabled";
 	};
 };
 
@@ -732,10 +857,18 @@
 
 &usbh {
 	status = "okay";
-};
 
-&usbh_ehci {
-	status = "okay";
+	usbh_ehci: usb@482f0000 {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		status = "okay";
+		/* onboard HUB */
+		hub@1 {
+			compatible = "usb424,2514";
+			reg = <1>;
+			vdd-supply = <&scmi_v3v3>;
+		};
+	};
 };
 
 &usb3dr {

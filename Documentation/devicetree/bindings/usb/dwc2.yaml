@@ -4,7 +4,7 @@
 $id: http://devicetree.org/schemas/usb/dwc2.yaml#
 $schema: http://devicetree.org/meta-schemas/core.yaml#
 
-title: DesignWare HS OTG USB 2.0 controller Bindings
+title: DesignWare HS OTG USB 2.0 controller
 
 maintainers:
   - Rob Herring <robh@kernel.org>
@@ -43,13 +43,17 @@ properties:
           - const: rockchip,rk3066-usb
           - const: snps,dwc2
       - const: lantiq,arx100-usb
+      - const: lantiq,ase-usb
+      - const: lantiq,danube-usb
       - const: lantiq,xrx200-usb
+      - const: lantiq,xrx300-usb
       - items:
           - enum:
               - amlogic,meson8-usb
               - amlogic,meson8b-usb
               - amlogic,meson-gxbb-usb
               - amlogic,meson-g12a-usb
+              - amlogic,meson-a1-usb
               - intel,socfpga-agilex-hsotg
           - const: snps,dwc2
       - const: amcc,dwc-otg
@@ -61,6 +65,9 @@ properties:
       - const: st,stm32mp15-fsotg
       - items:
           - const: st,stm32mp15-hsotg
+          - const: snps,dwc2
+      - items:
+          - const: st,stm32mp21-hsotg
           - const: snps,dwc2
       - const: samsung,s3c6400-hsotg
       - const: intel,socfpga-agilex-hsotg
@@ -159,6 +166,15 @@ properties:
     description: If present indicates that we need to reset the PHY when we
       detect a wakeup. This is due to a hardware errata.
 
+  st,syscfg:
+    $ref: /schemas/types.yaml#/definitions/phandle-array
+    description: Used to enable address remapping to allow to access
+      the 4 GB of the DDR.
+  items:
+    - items:
+        - description: st,syscfg
+        - description: register offset within syscfg
+
   port:
     description:
       Any connector to the data bus of this controller should be modelled
@@ -168,14 +184,13 @@ properties:
 
   tpl-support: true
 
+  access-controllers:
+    minItems: 1
+    maxItems: 2
+
   wakeup-source:
     $ref: /schemas/types.yaml#/definitions/flag
     description: If present indicates this device has wakeup capabilities
-
-  feature-domains:
-    $ref: /schemas/types.yaml#/definitions/phandle-array
-    description: |
-      Phandle to the rifsc device to check access right.
 
 dependencies:
   port: [ usb-role-switch ]

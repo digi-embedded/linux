@@ -205,6 +205,11 @@ Will increase power usage.
 
 Default: 0 (off)
 
+mem_pcpu_rsv
+------------
+
+Per-cpu reserved forward alloc cache size in page units. Default 1MB per CPU.
+
 rmem_default
 ------------
 
@@ -214,6 +219,12 @@ rmem_max
 --------
 
 The maximum receive socket buffer size in bytes.
+
+rps_default_mask
+----------------
+
+The default RPS CPU mask used on newly created network devices. An empty
+mask means RPS disabled by default.
 
 tstamp_allow_data
 -----------------
@@ -380,8 +391,8 @@ Default : 0  (for compatibility reasons)
 txrehash
 --------
 
-Controls default hash rethink behaviour on listening socket when SO_TXREHASH
-option is set to SOCK_TXREHASH_DEFAULT (i. e. not overridden by setsockopt).
+Controls default hash rethink behaviour on socket when SO_TXREHASH option is set
+to SOCK_TXREHASH_DEFAULT (i. e. not overridden by setsockopt).
 
 If set to 1 (default), hash rethink is performed on listening socket.
 If set to 0, hash rethink is not performed.

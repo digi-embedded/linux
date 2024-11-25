@@ -129,7 +129,7 @@ int optee_open(struct tee_context *ctx, bool cap_memref_null)
 
 static void optee_release_helper(struct tee_context *ctx,
 				 int (*close_session)(struct tee_context *ctx,
-						      struct optee_session *s))
+						      u32 session))
 {
 	struct optee_context_data *ctxdata = ctx->data;
 	struct optee_session *sess;
@@ -141,7 +141,8 @@ static void optee_release_helper(struct tee_context *ctx,
 	list_for_each_entry_safe(sess, sess_tmp, &ctxdata->sess_list,
 				 list_node) {
 		list_del(&sess->list_node);
-		close_session(ctx, sess);
+		if (!WARN_ONCE(sess->ocall_ctx.thread_p1, "Can't close, on going Ocall\n"))
+			close_session(ctx, sess->session_id);
 		kfree(sess);
 	}
 	kfree(ctxdata);
@@ -188,7 +189,7 @@ void optee_remove_common(struct optee *optee)
 static int smc_abi_rc;
 static int ffa_abi_rc;
 
-static int optee_core_init(void)
+static int __init optee_core_init(void)
 {
 	/*
 	 * The kernel may have crashed at the same time that all available
@@ -210,7 +211,7 @@ static int optee_core_init(void)
 }
 module_init(optee_core_init);
 
-static void optee_core_exit(void)
+static void __exit optee_core_exit(void)
 {
 	if (!smc_abi_rc)
 		optee_smc_abi_unregister();

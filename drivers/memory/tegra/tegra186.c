@@ -7,7 +7,8 @@
 #include <linux/iommu.h>
 #include <linux/module.h>
 #include <linux/mod_devicetable.h>
-#include <linux/of_device.h>
+#include <linux/of.h>
+#include <linux/of_platform.h>
 #include <linux/platform_device.h>
 
 #include <soc/tegra/mc.h>
@@ -73,6 +74,9 @@ static void tegra186_mc_client_sid_override(struct tegra_mc *mc,
 					    unsigned int sid)
 {
 	u32 value, old;
+
+	if (client->regs.sid.security == 0 && client->regs.sid.override == 0)
+		return;
 
 	value = readl(mc->regs + client->regs.sid.security);
 	if ((value & MC_SID_STREAMID_SECURITY_OVERRIDE) == 0) {

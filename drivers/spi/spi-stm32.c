@@ -18,7 +18,6 @@
 #include <linux/pm_runtime.h>
 #include <linux/reset.h>
 #include <linux/spi/spi.h>
-#include <dt-bindings/spi/spi-stm32.h>
 
 #define DRIVER_NAME "spi_stm32"
 
@@ -85,7 +84,6 @@
 #define STM32H7_SPI_IFCR		0x18
 #define STM32H7_SPI_TXDR		0x20
 #define STM32H7_SPI_RXDR		0x30
-#define STM32H7_SPI_UDRDR		0x4C
 #define STM32H7_SPI_I2SCFGR		0x50
 
 /* STM32H7_SPI_CR1 bit fields */
@@ -103,14 +101,6 @@
 /* STM32H7_SPI_CFG1 bit fields */
 #define STM32H7_SPI_CFG1_DSIZE		GENMASK(4, 0)
 #define STM32H7_SPI_CFG1_FTHLV		GENMASK(8, 5)
-#define STM32H7_SPI_CFG1_UDRDET		GENMASK(12, 11)
-#define STM32H7_SPI_CFG1_UDRDET_BEGIN	0
-#define STM32H7_SPI_CFG1_UDRDET_LAST	1
-#define STM32H7_SPI_CFG1_UDRDET_SS	2
-#define STM32H7_SPI_CFG1_UDRCFG		GENMASK(10, 9)
-#define STM32H7_SPI_CFG1_UDRCFG_PTRN	0
-#define STM32H7_SPI_CFG1_UDRCFG_LAST_R	1
-#define STM32H7_SPI_CFG1_UDRCFG_LAST_T	2
 #define STM32H7_SPI_CFG1_RXDMAEN	BIT(14)
 #define STM32H7_SPI_CFG1_TXDMAEN	BIT(15)
 #define STM32H7_SPI_CFG1_MBR		GENMASK(30, 28)
@@ -136,7 +126,6 @@
 #define STM32H7_SPI_IER_DXPIE		BIT(2)
 #define STM32H7_SPI_IER_EOTIE		BIT(3)
 #define STM32H7_SPI_IER_TXTFIE		BIT(4)
-#define STM32H7_SPI_IER_UDRIE		BIT(5)
 #define STM32H7_SPI_IER_OVRIE		BIT(6)
 #define STM32H7_SPI_IER_MODFIE		BIT(9)
 #define STM32H7_SPI_IER_ALL		GENMASK(10, 0)
@@ -145,7 +134,6 @@
 #define STM32H7_SPI_SR_RXP		BIT(0)
 #define STM32H7_SPI_SR_TXP		BIT(1)
 #define STM32H7_SPI_SR_EOT		BIT(3)
-#define STM32H7_SPI_SR_UDR		BIT(5)
 #define STM32H7_SPI_SR_OVR		BIT(6)
 #define STM32H7_SPI_SR_MODF		BIT(9)
 #define STM32H7_SPI_SR_SUSP		BIT(11)
@@ -201,8 +189,8 @@
 #define SPI_DMA_MIN_BYTES	16
 
 /* STM32 SPI driver helpers */
-#define STM32_SPI_MASTER_MODE(stm32_spi) (!(stm32_spi)->slave_mode)
-#define STM32_SPI_SLAVE_MODE(stm32_spi) ((stm32_spi)->slave_mode)
+#define STM32_SPI_MASTER_MODE(stm32_spi) (!(stm32_spi)->device_mode)
+#define STM32_SPI_DEVICE_MODE(stm32_spi) ((stm32_spi)->device_mode)
 
 static unsigned int polling_limit_us = 30;
 module_param(polling_limit_us, uint, 0664);
@@ -276,9 +264,8 @@ struct stm32_spi;
  * @baud_rate_div_min: minimum baud rate divisor
  * @baud_rate_div_max: maximum baud rate divisor
  * @has_fifo: boolean to know if fifo is used for driver
+ * @has_device_mode: is this compatible capable to switch on device mode
  * @flags: compatible specific SPI controller flags used at registration time
- * @set_slave_udr: routine to configure registers to desired slave underrun
- * behavior (if driver has this functionality)
  * @prevent_dma_burst: boolean to indicate to prevent DMA burst
  */
 struct stm32_spi_cfg {
@@ -301,8 +288,8 @@ struct stm32_spi_cfg {
 	unsigned int baud_rate_div_min;
 	unsigned int baud_rate_div_max;
 	bool has_fifo;
+	bool has_device_mode;
 	u16 flags;
-	void (*set_slave_udr)(struct stm32_spi *spi);
 	bool prevent_dma_burst;
 };
 
@@ -334,9 +321,7 @@ struct stm32_spi_cfg {
  * @dma_tx: dma channel for TX transfer
  * @dma_rx: dma channel for RX transfer
  * @phys_addr: SPI registers physical base address
- * @slave_mode: the controller is configured as SPI slave
- * @slave_udr_mode: slave underrun behavior
- * @slave_udr_pattern: slave underrun pattern parameter
+ * @device_mode: the controller is configured as SPI device
  */
 struct stm32_spi {
 	struct device *dev;
@@ -370,9 +355,7 @@ struct stm32_spi {
 	struct dma_chan *dma_rx;
 	dma_addr_t phys_addr;
 
-	bool slave_mode;
-	u32 slave_udr_mode;
-	u32 slave_udr_pattern;
+	bool device_mode;
 };
 
 static const struct stm32_spi_regspec stm32f4_spi_regspec = {
@@ -389,10 +372,6 @@ static const struct stm32_spi_regspec stm32f4_spi_regspec = {
 
 	.rx = { STM32F4_SPI_DR },
 	.tx = { STM32F4_SPI_DR },
-
-	.fullcfg = {},
-
-	.rdy_en = {},
 };
 
 static const struct stm32_spi_regspec stm32h7_spi_regspec = {
@@ -413,10 +392,6 @@ static const struct stm32_spi_regspec stm32h7_spi_regspec = {
 
 	.rx = { STM32H7_SPI_RXDR },
 	.tx = { STM32H7_SPI_TXDR },
-
-	.fullcfg = {},
-
-	.rdy_en = {},
 };
 
 static const struct stm32_spi_regspec stm32mp25_spi_regspec = {
@@ -1004,7 +979,7 @@ static irqreturn_t stm32h7_spi_irq_thread(int irq, void *dev_id)
 		mask |= STM32H7_SPI_SR_TXP | STM32H7_SPI_SR_RXP;
 
 	if (!(sr & mask)) {
-		dev_warn(spi->dev, "spurious IT (sr=0x%08x, ier=0x%08x)\n",
+		dev_vdbg(spi->dev, "spurious IT (sr=0x%08x, ier=0x%08x)\n",
 			 sr, ier);
 		spin_unlock_irqrestore(&spi->lock, flags);
 		return IRQ_NONE;
@@ -1035,14 +1010,6 @@ static irqreturn_t stm32h7_spi_irq_thread(int irq, void *dev_id)
 	if (sr & STM32H7_SPI_SR_OVR) {
 		dev_err(spi->dev, "Overrun: RX data lost\n");
 		end = true;
-	}
-
-	if (sr & STM32H7_SPI_SR_UDR) {
-		static DEFINE_RATELIMIT_STATE(rs,
-					      DEFAULT_RATELIMIT_INTERVAL * 10,
-					      1);
-		if (__ratelimit(&rs))
-			dev_dbg_ratelimited(spi->dev, "Underrun detected\n");
 	}
 
 	if (sr & STM32H7_SPI_SR_EOT) {
@@ -1107,7 +1074,7 @@ static int stm32_spi_prepare_msg(struct spi_controller *ctrl,
 	else
 		clrb |= spi->cfg->regs->lsb_first.mask;
 
-	if (STM32_SPI_SLAVE_MODE(spi) && spi_dev->mode & SPI_CS_HIGH)
+	if (STM32_SPI_DEVICE_MODE(spi) && spi_dev->mode & SPI_CS_HIGH)
 		setb |= spi->cfg->regs->cs_high.mask;
 	else
 		clrb |= spi->cfg->regs->cs_high.mask;
@@ -1305,7 +1272,8 @@ static int stm32h7_spi_transfer_one_poll(struct stm32_spi *spi)
 	sr = readl_relaxed(spi->base + STM32H7_SPI_SR);
 	/* Keep writing / reading while waiting for the end of transfer */
 	while (spi->tx_len || spi->rx_len || !(sr & STM32H7_SPI_SR_EOT)) {
-		if (spi->rx_len && (sr & (STM32H7_SPI_SR_RXP | STM32H7_SPI_SR_RXWNE)))
+		if (spi->rx_len && (sr & (STM32H7_SPI_SR_RXP | STM32H7_SPI_SR_RXWNE |
+					  STM32H7_SPI_SR_RXPLVL)))
 			stm32h7_spi_read_rxfifo(spi);
 
 		if (spi->tx_len && (sr & STM32H7_SPI_SR_TXP))
@@ -1359,9 +1327,6 @@ static int stm32h7_spi_transfer_one_irq(struct stm32_spi *spi)
 	if (spi->tx_buf)
 		stm32h7_spi_write_txfifo(spi);
 
-	if (STM32_SPI_SLAVE_MODE(spi) && spi->slave_udr_mode != SPI_NO_ACTION)
-		ier |= STM32H7_SPI_IER_UDRIE;
-
 	if (STM32_SPI_MASTER_MODE(spi))
 		stm32_spi_set_bits(spi, STM32H7_SPI_CR1, STM32H7_SPI_CR1_CSTART);
 
@@ -1405,9 +1370,6 @@ static void stm32h7_spi_transfer_one_dma_start(struct stm32_spi *spi)
 	/* Enable the interrupts */
 	if (spi->cur_comm == SPI_SIMPLEX_TX || spi->cur_comm == SPI_3WIRE_TX)
 		ier |= STM32H7_SPI_IER_EOTIE | STM32H7_SPI_IER_TXTFIE;
-
-	if (STM32_SPI_SLAVE_MODE(spi) && spi->slave_udr_mode != SPI_NO_ACTION)
-		ier |= STM32H7_SPI_IER_UDRIE;
 
 	stm32_spi_set_bits(spi, STM32H7_SPI_IER, ier);
 
@@ -1719,53 +1681,6 @@ static int stm32h7_spi_number_of_data(struct stm32_spi *spi, u32 nb_words)
 }
 
 /**
- * stm32h7_spi_set_slave_udr - configure slave underrun detection and reaction
- * @spi: pointer to the spi controller data structure
- */
-static void stm32h7_spi_set_slave_udr(struct stm32_spi *spi)
-{
-	u32 max_udr_ptrn, udr_ptrn, cfg1_setb = 0;
-
-	if (spi->slave_udr_mode == SPI_NO_ACTION)
-		return;
-
-	switch (spi->slave_udr_mode) {
-	case SPI_SEND_PATTERN:
-		max_udr_ptrn = (1 << spi->cur_bpw) - 1;
-		if (spi->slave_udr_pattern > max_udr_ptrn) {
-			udr_ptrn = spi->slave_udr_pattern & max_udr_ptrn;
-			dev_warn(spi->dev,
-				 "force slave underrun pattern to data width (> 0x%x, set 0x%x)\n",
-				 max_udr_ptrn, udr_ptrn);
-		} else {
-			udr_ptrn = spi->slave_udr_pattern;
-			dev_dbg(spi->dev, "spi slave underrun: send pattern (0x%x)\n",
-				spi->slave_udr_pattern);
-		}
-		writel_relaxed(udr_ptrn, spi->base + STM32H7_SPI_UDRDR);
-		cfg1_setb |= FIELD_PREP(STM32H7_SPI_CFG1_UDRCFG, STM32H7_SPI_CFG1_UDRCFG_PTRN);
-		break;
-	case SPI_REPEAT_LAST_RECEIVED_DATA:
-		cfg1_setb |= FIELD_PREP(STM32H7_SPI_CFG1_UDRCFG, STM32H7_SPI_CFG1_UDRCFG_LAST_R);
-		dev_dbg(spi->dev, "spi slave underrun: repeat received data\n");
-		break;
-	case SPI_REPEAT_LAST_TRANSMITTED_DATA:
-		cfg1_setb |= FIELD_PREP(STM32H7_SPI_CFG1_UDRCFG, STM32H7_SPI_CFG1_UDRCFG_LAST_T);
-		dev_dbg(spi->dev, "spi slave underrun: repeat transmitted data\n");
-		break;
-	default:
-		dev_warn(spi->dev, "slave underrun detection disabled\n");
-		spi->slave_udr_mode = SPI_NO_ACTION;
-	}
-
-	if (spi->slave_udr_mode != SPI_NO_ACTION) {
-		cfg1_setb |= FIELD_PREP(STM32H7_SPI_CFG1_UDRDET, STM32H7_SPI_CFG1_UDRDET_LAST);
-
-		stm32_spi_set_bits(spi,  STM32H7_SPI_CFG1, cfg1_setb);
-	}
-}
-
-/**
  * stm32_spi_transfer_one_setup - common setup to transfer a single
  *				  spi_transfer either using DMA or
  *				  interrupts.
@@ -1832,9 +1747,6 @@ static int stm32_spi_transfer_one_setup(struct stm32_spi *spi,
 		if (ret < 0)
 			goto out;
 	}
-
-	if (STM32_SPI_SLAVE_MODE(spi) && spi->cfg->set_slave_udr)
-		spi->cfg->set_slave_udr(spi);
 
 	dev_dbg(spi->dev, "transfer communication mode set to %d\n",
 		spi->cur_comm);
@@ -1971,8 +1883,8 @@ static int stm32h7_spi_config(struct stm32_spi *spi)
 	stm32_spi_clr_bits(spi, STM32H7_SPI_I2SCFGR,
 			   STM32H7_SPI_I2SCFGR_I2SMOD);
 
-	if (STM32_SPI_SLAVE_MODE(spi)) {
-		/* Use native slave select */
+	if (STM32_SPI_DEVICE_MODE(spi)) {
+		/* Use native device select */
 		cfg2 &= ~STM32H7_SPI_CFG2_SSM;
 	} else {
 		/*
@@ -1984,7 +1896,7 @@ static int stm32h7_spi_config(struct stm32_spi *spi)
 
 		/*
 		 * - Set the master mode (default Motorola mode)
-		 * - Consider 1 master/n slaves configuration and
+		 * - Consider 1 master/n devices configuration and
 		 *   SS input value is determined by the SSI bit
 		 * - keep control of all associated GPIOs
 		 */
@@ -2015,7 +1927,8 @@ static const struct stm32_spi_cfg stm32f4_spi_cfg = {
 	.baud_rate_div_min = STM32F4_SPI_BR_DIV_MIN,
 	.baud_rate_div_max = STM32F4_SPI_BR_DIV_MAX,
 	.has_fifo = false,
-	.flags = SPI_MASTER_MUST_TX,
+	.has_device_mode = false,
+	.flags = SPI_CONTROLLER_MUST_TX,
 };
 
 static const struct stm32_spi_cfg stm32h7_spi_cfg = {
@@ -2040,7 +1953,7 @@ static const struct stm32_spi_cfg stm32h7_spi_cfg = {
 	.baud_rate_div_min = STM32H7_SPI_MBR_DIV_MIN,
 	.baud_rate_div_max = STM32H7_SPI_MBR_DIV_MAX,
 	.has_fifo = true,
-	.set_slave_udr = stm32h7_spi_set_slave_udr,
+	.has_device_mode = true,
 };
 
 /*
@@ -2071,6 +1984,7 @@ static const struct stm32_spi_cfg stm32mp25_spi_cfg = {
 	.baud_rate_div_max = STM32H7_SPI_MBR_DIV_MAX,
 	.has_fifo = true,
 	.prevent_dma_burst = true,
+	.has_device_mode = true,
 };
 
 static const struct of_device_id stm32_spi_of_match[] = {
@@ -2081,36 +1995,10 @@ static const struct of_device_id stm32_spi_of_match[] = {
 };
 MODULE_DEVICE_TABLE(of, stm32_spi_of_match);
 
-static int stm32h7_spi_slave_abort(struct spi_controller *ctrl)
+static int stm32h7_spi_device_abort(struct spi_controller *ctrl)
 {
 	spi_finalize_current_transfer(ctrl);
-
 	return 0;
-}
-
-static void stm32h7_spi_parse_slave_config(struct stm32_spi *spi, struct device_node *np)
-{
-	u32 udr_configs[2] = { 0, 0 };
-	int count, ret;
-
-	count = of_property_count_elems_of_size(np, "st,spi-slave-underrun", sizeof(u32));
-	if (count <= 0) {
-		if (count != -EINVAL)
-			dev_err(spi->dev, "Invalid st,spi-slave-underrun property\n");
-		return;
-	}
-
-	ret = of_property_read_u32_array(np, "st,spi-slave-underrun", udr_configs, count);
-	if (ret)
-		return;
-
-	spi->slave_udr_mode = udr_configs[0];
-	if (spi->slave_udr_mode == SPI_SEND_PATTERN) {
-		if (count > 1)
-			spi->slave_udr_pattern = udr_configs[1];
-		else
-			dev_warn(spi->dev, "Missing pattern in st,spi-slave-underrun property\n");
-	}
 }
 
 static int stm32_spi_probe(struct platform_device *pdev)
@@ -2120,12 +2008,23 @@ static int stm32_spi_probe(struct platform_device *pdev)
 	struct resource *res;
 	struct reset_control *rst;
 	struct device_node *np = pdev->dev.of_node;
-	bool slave_mode;
+	const struct stm32_spi_cfg *cfg;
+	bool device_mode;
 	int ret;
 
-	slave_mode = of_property_read_bool(np, "spi-slave");
+	cfg = of_device_get_match_data(&pdev->dev);
+	if (!cfg) {
+		dev_err(&pdev->dev, "Failed to get match data for platform\n");
+		return -ENODEV;
+	}
 
-	if (slave_mode)
+	device_mode = of_property_read_bool(np, "spi-slave");
+	if (!cfg->has_device_mode && device_mode) {
+		dev_err(&pdev->dev, "spi-slave not supported\n");
+		return -EPERM;
+	}
+
+	if (device_mode)
 		ctrl = devm_spi_alloc_slave(&pdev->dev, sizeof(struct stm32_spi));
 	else
 		ctrl = devm_spi_alloc_master(&pdev->dev, sizeof(struct stm32_spi));
@@ -2138,15 +2037,12 @@ static int stm32_spi_probe(struct platform_device *pdev)
 	spi = spi_controller_get_devdata(ctrl);
 	spi->dev = &pdev->dev;
 	spi->ctrl = ctrl;
-	spi->slave_mode = slave_mode;
+	spi->device_mode = device_mode;
 	spin_lock_init(&spi->lock);
 
-	spi->cfg = (const struct stm32_spi_cfg *)
-		of_match_device(pdev->dev.driver->of_match_table,
-				&pdev->dev)->data;
+	spi->cfg = cfg;
 
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	spi->base = devm_ioremap_resource(&pdev->dev, res);
+	spi->base = devm_platform_get_and_ioremap_resource(pdev, 0, &res);
 	if (IS_ERR(spi->base))
 		return PTR_ERR(spi->base);
 
@@ -2154,8 +2050,7 @@ static int stm32_spi_probe(struct platform_device *pdev)
 
 	spi->irq = platform_get_irq(pdev, 0);
 	if (spi->irq <= 0)
-		return dev_err_probe(&pdev->dev, spi->irq,
-				     "failed to get irq\n");
+		return spi->irq;
 
 	ret = devm_request_threaded_irq(&pdev->dev, spi->irq,
 					spi->cfg->irq_handler_event,
@@ -2166,9 +2061,6 @@ static int stm32_spi_probe(struct platform_device *pdev)
 			ret);
 		return ret;
 	}
-
-	if (STM32_SPI_SLAVE_MODE(spi))
-		stm32h7_spi_parse_slave_config(spi, np);
 
 	spi->clk = devm_clk_get(&pdev->dev, NULL);
 	if (IS_ERR(spi->clk)) {
@@ -2241,8 +2133,8 @@ static int stm32_spi_probe(struct platform_device *pdev)
 	ctrl->transfer_one = stm32_spi_transfer_one;
 	ctrl->unprepare_message = stm32_spi_unprepare_msg;
 	ctrl->flags = spi->cfg->flags;
-	if (STM32_SPI_SLAVE_MODE(spi))
-		ctrl->slave_abort = stm32h7_spi_slave_abort;
+	if (STM32_SPI_DEVICE_MODE(spi))
+		ctrl->slave_abort = stm32h7_spi_device_abort;
 
 	spi->dma_tx = dma_request_chan(spi->dev, "tx");
 	if (IS_ERR(spi->dma_tx)) {
@@ -2289,7 +2181,7 @@ static int stm32_spi_probe(struct platform_device *pdev)
 	pm_runtime_put_autosuspend(&pdev->dev);
 
 	dev_info(&pdev->dev, "driver initialized (%s mode)\n",
-		 STM32_SPI_MASTER_MODE(spi) ? "master" : "slave");
+		 STM32_SPI_MASTER_MODE(spi) ? "master" : "device");
 
 	return 0;
 
@@ -2309,7 +2201,7 @@ err_clk_disable:
 	return ret;
 }
 
-static int stm32_spi_remove(struct platform_device *pdev)
+static void stm32_spi_remove(struct platform_device *pdev)
 {
 	struct spi_controller *ctrl = platform_get_drvdata(pdev);
 	struct stm32_spi *spi = spi_controller_get_devdata(ctrl);
@@ -2333,8 +2225,6 @@ static int stm32_spi_remove(struct platform_device *pdev)
 
 
 	pinctrl_pm_select_sleep_state(&pdev->dev);
-
-	return 0;
 }
 
 static int __maybe_unused stm32_spi_runtime_suspend(struct device *dev)
@@ -2410,7 +2300,7 @@ static const struct dev_pm_ops stm32_spi_pm_ops = {
 
 static struct platform_driver stm32_spi_driver = {
 	.probe = stm32_spi_probe,
-	.remove = stm32_spi_remove,
+	.remove_new = stm32_spi_remove,
 	.driver = {
 		.name = DRIVER_NAME,
 		.pm = &stm32_spi_pm_ops,

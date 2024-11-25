@@ -74,8 +74,7 @@ void brcmf_of_probe(struct device *dev, enum brcmf_bus_type bus_type,
 	int irq;
 	int err;
 	u32 irqf;
-	u32 val32;
-	u16 val16;
+	u32 val;
 
 	/* Apple ARM64 platforms have their own idea of board type, passed in
 	 * via the device tree. They also have an antenna SKU parameter
@@ -86,6 +85,13 @@ void brcmf_of_probe(struct device *dev, enum brcmf_bus_type bus_type,
 
 	if (!of_property_read_string(np, "apple,antenna-sku", &prop))
 		settings->antenna_sku = prop;
+
+	/* The WLAN calibration blob is normally stored in SROM, but Apple
+	 * ARM64 platforms pass it via the DT instead.
+	 */
+	prop = of_get_property(np, "brcm,cal-blob", &settings->cal_size);
+	if (prop && settings->cal_size)
+		settings->cal_blob = prop;
 
 	/* Set board-type to the first string of the machine compatible prop */
 	root = of_find_node_by_path("/");
@@ -119,18 +125,11 @@ void brcmf_of_probe(struct device *dev, enum brcmf_bus_type bus_type,
 	if (bus_type != BRCMF_BUSTYPE_SDIO)
 		return;
 
-	if (of_property_read_u32(np, "brcm,drive-strength", &val32) == 0)
-		sdio->drive_strength = val32;
-
-	sdio->broken_sg_support = of_property_read_bool(np,
-			"brcm,broken_sg_support");
-	if (of_property_read_u16(np, "brcm,sd_head_align", &val16) == 0)
-		sdio->sd_head_align = val16;
-	if (of_property_read_u16(np, "brcm,sd_sgentry_align", &val16) == 0)
-		sdio->sd_sgentry_align = val16;
+	if (of_property_read_u32(np, "brcm,drive-strength", &val) == 0)
+		sdio->drive_strength = val;
 
 	/* make sure there are interrupts defined in the node */
-	if (!of_find_property(np, "interrupts", NULL))
+	if (!of_property_present(np, "interrupts"))
 		return;
 
 	irq = irq_of_parse_and_map(np, 0);

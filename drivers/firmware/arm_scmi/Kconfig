@@ -23,6 +23,38 @@ config ARM_SCMI_PROTOCOL
 
 if ARM_SCMI_PROTOCOL
 
+config ARM_SCMI_NEED_DEBUGFS
+	bool
+	help
+	  This declares whether at least one SCMI facility is configured
+	  which needs debugfs support. When selected causess the creation
+	  of a common SCMI debugfs root directory.
+
+config ARM_SCMI_RAW_MODE_SUPPORT
+	bool "Enable support for SCMI Raw transmission mode"
+	depends on DEBUG_FS
+	select ARM_SCMI_NEED_DEBUGFS
+	help
+	  Enable support for SCMI Raw transmission mode.
+
+	  If enabled allows the direct injection and snooping of SCMI bare
+	  messages through a dedicated debugfs interface.
+	  It is meant to be used by SCMI compliance/testing suites.
+
+	  When enabled regular SCMI drivers interactions are inhibited in
+	  order to avoid unexpected interactions with the SCMI Raw message
+	  flow. If unsure say N.
+
+config ARM_SCMI_RAW_MODE_SUPPORT_COEX
+	bool "Allow SCMI Raw mode coexistence with normal SCMI stack"
+	depends on ARM_SCMI_RAW_MODE_SUPPORT
+	help
+	  Allow SCMI Raw transmission mode to coexist with normal SCMI stack.
+
+	  This will allow regular SCMI drivers to register with the core and
+	  operate normally, thing which could make an SCMI test suite using the
+	  SCMI Raw mode support unreliable. If unsure, say N.
+
 config ARM_SCMI_HAVE_TRANSPORT
 	bool
 	help
@@ -133,6 +165,12 @@ config ARM_SCMI_TRANSPORT_VIRTIO_ATOMIC_ENABLE
 	  transport to optionally ask for atomic SCMI transactions and operate
 	  in atomic context too, at the price of using a number of busy-waiting
 	  primitives all over instead. If unsure say N.
+
+config SCMI_STM32MP_OSTL_V5
+	bool "Support for STM32MP legacy SCMI messages in OSTL distributions"
+	help
+	  Enable support for legacy SCMI message IDs used in STM32MP OSTL
+	  distributions, from its version v4.0 up to v5.0. If unsure, say N.
 
 endif #ARM_SCMI_PROTOCOL
 

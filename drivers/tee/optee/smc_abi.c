@@ -7,10 +7,13 @@
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
 #include <linux/arm-smccc.h>
+#include <linux/cpuhotplug.h>
 #include <linux/errno.h>
+#include <linux/firmware.h>
 #include <linux/interrupt.h>
 #include <linux/io.h>
 #include <linux/irqdomain.h>
+#include <linux/kernel.h>
 #include <linux/mm.h>
 #include <linux/module.h>
 #include <linux/of.h>
@@ -870,93 +873,6 @@ static void optee_handle_rpc(struct tee_context *ctx,
 	param->a0 = OPTEE_SMC_CALL_RETURN_FROM_RPC;
 }
 
-static bool call_shall_wait(struct tee_context *ctx, bool *system_call)
-{
-	struct optee *optee = tee_get_drvdata(ctx->teedev);
-	struct optee_thread *thd = &optee->thread;
-
-	bool wait = false;
-	unsigned long flags;
-
-	if (thd->best_effort)
-		return false;
-
-	spin_lock_irqsave(&thd->lock, flags);
-
-	if (*system_call && thd->system_thread_free_cnt) {
-		thd->system_thread_free_cnt--;
-		thd->thread_free_cnt--;
-	} else if (thd->thread_free_cnt > thd->system_thread_free_cnt) {
-		thd->thread_free_cnt--;
-		*system_call = false;
-	} else {
-		wait = true;
-	}
-
-	spin_unlock_irqrestore(&thd->lock, flags);
-
-	return wait;
-}
-
-static void call_completed(struct tee_context *ctx, bool system_call)
-{
-	struct optee *optee = tee_get_drvdata(ctx->teedev);
-	struct optee_thread *thd = &optee->thread;
-	unsigned long flags;
-
-	if (thd->best_effort)
-		return;
-
-	spin_lock_irqsave(&thd->lock, flags);
-
-	thd->thread_free_cnt++;
-	if (system_call)
-		thd->system_thread_free_cnt++;
-
-	spin_unlock_irqrestore(&thd->lock, flags);
-}
-
-static void call_out_of_thread(struct tee_context *ctx, bool system_call)
-{
-	struct optee *optee = tee_get_drvdata(ctx->teedev);
-	struct optee_thread *thd = &optee->thread;
-	unsigned long flags;
-
-	pr_warn("optee: unexpected thread limit reached\n");
-
-	spin_lock_irqsave(&thd->lock, flags);
-
-	/* Increment back counters since we did not use a thread */
-	thd->thread_free_cnt++;
-	if (system_call)
-		thd->system_thread_free_cnt++;
-
-	if (thd->thread_cnt <= 1) {
-		/* 1 thread in TEE, we can't do much: switch to best effort */
-		thd->best_effort = true;
-	} else {
-		/*
-		 * Expected free thread is missing: it has been lost by TEE's
-		 * previous client hence decrement thread count.
-		 */
-		thd->thread_cnt--;
-		thd->thread_free_cnt--;
-		pr_warn("optee: decrement max thread to %zu\n", thd->thread_cnt);
-
-		/*
-		 * If no enough thread to satisfy already provisioned system
-		 * threads, we can't do much about it: switch to best effort
-		 */
-		if (thd->system_thread_cnt > (thd->thread_cnt - 1))
-			thd->best_effort = true;
-	}
-
-	spin_unlock_irqrestore(&thd->lock, flags);
-
-	if (thd->best_effort)
-		pr_warn("optee: wrong thread count, switch to best effort\n");
-}
-
 /**
  * optee_smc_do_call_with_arg() - Do an SMC to OP-TEE in secure world
  * @ctx:	calling context
@@ -978,7 +894,6 @@ static int optee_smc_do_call_with_arg(struct tee_context *ctx,
 	struct optee_rpc_param param = { };
 	struct optee_call_ctx call_ctx = { };
 	struct optee_msg_arg *rpc_arg = NULL;
-	bool do_system_call = extra && extra->system;
 	int rc;
 
 	if (extra) {
@@ -1029,11 +944,6 @@ static int optee_smc_do_call_with_arg(struct tee_context *ctx,
 	/* Initialize waiter */
 	optee_cq_wait_init(&optee->call_queue, w);
 
-	/* May wait for a thread to become available in secure world */
-	if (!optee->thread.best_effort)
-		while (call_shall_wait(ctx, &do_system_call))
-			optee_cq_wait_for_completion(&optee->call_queue, w);
-
 call_optee:
 	while (true) {
 		struct arm_smccc_res res;
@@ -1045,22 +955,11 @@ call_optee:
 		trace_optee_invoke_fn_end(&param, &res);
 
 		if (res.a0 == OPTEE_SMC_RETURN_ETHREAD_LIMIT) {
-			if (optee->thread.best_effort) {
-				optee_cq_wait_for_completion(&optee->call_queue, w);
-			} else {
-				call_out_of_thread(ctx, do_system_call);
-
-				while (call_shall_wait(ctx, &do_system_call))
-					optee_cq_wait_for_completion(
-							&optee->call_queue, w);
-			}
-
 			/*
 			 * Out of threads in secure world, wait for a thread
 			 * become available.
 			 */
-			while (call_shall_wait(ctx, &do_system_call))
-				optee_cq_wait_for_completion(&optee->call_queue, w);
+			optee_cq_wait_for_completion(&optee->call_queue, w);
 		} else if (res.a0 == OPTEE_SMC_RETURN_RPC_OCALL2) {
 			cond_resched();
 			if (extra && tee_ocall_is_used(extra->ocall_arg)) {
@@ -1080,7 +979,6 @@ call_optee:
 			param.a2 = 0;
 		} else if (OPTEE_SMC_RETURN_IS_RPC(res.a0)) {
 			cond_resched();
-
 			param.a0 = res.a0;
 			param.a1 = res.a1;
 			param.a2 = res.a2;
@@ -1099,9 +997,6 @@ call_optee:
 	}
 
 	optee_rpc_finalize_call(&call_ctx);
-
-	call_completed(ctx, do_system_call);
-
 	/*
 	 * We're done with our thread in secure world, if there's any
 	 * thread waiters wake up one.
@@ -1117,16 +1012,13 @@ static int simple_call_with_arg(struct tee_context *ctx, u32 cmd)
 	struct optee_msg_arg *msg_arg;
 	struct tee_shm *shm;
 	u_int offs;
-	int rc;
 
 	msg_arg = optee_get_msg_arg(ctx, 0, &entry, &shm, &offs);
 	if (IS_ERR(msg_arg))
 		return PTR_ERR(msg_arg);
 
 	msg_arg->cmd = cmd;
-
-	rc = optee_smc_do_call_with_arg(ctx, shm, offs, NULL);
-	WARN_ONCE(rc, "optee unexpected call error %d\n", rc);
+	optee_smc_do_call_with_arg(ctx, shm, offs, NULL);
 
 	optee_free_msg_arg(ctx, entry, offs);
 	return 0;
@@ -1146,7 +1038,7 @@ static int optee_smc_stop_async_notif(struct tee_context *ctx)
  * 5. Asynchronous notification
  */
 
-static u32 get_it_value(optee_invoke_fn *invoke_fn, bool *value_valid,
+static int get_it_value(optee_invoke_fn *invoke_fn, bool *value_valid,
 			bool *value_pending)
 {
 	struct arm_smccc_res res;
@@ -1154,23 +1046,18 @@ static u32 get_it_value(optee_invoke_fn *invoke_fn, bool *value_valid,
 	invoke_fn(OPTEE_SMC_GET_IT_NOTIF_VALUE, 0, 0, 0, 0, 0, 0, 0, &res);
 
 	if (res.a0)
-		return 0;
+		return -1;
 
 	*value_valid = res.a2 & OPTEE_SMC_IT_NOTIF_VALUE_VALID;
 	*value_pending = res.a2 & OPTEE_SMC_IT_NOTIF_VALUE_PENDING;
-	return res.a1;
+	return (int)res.a1;
 }
 
-static u32 set_it_mask(optee_invoke_fn *invoke_fn, u32 it_value, bool mask)
+static void set_it_mask(optee_invoke_fn *invoke_fn, u32 it_value, bool mask)
 {
 	struct arm_smccc_res res;
 
 	invoke_fn(OPTEE_SMC_SET_IT_NOTIF_MASK, it_value, mask, 0, 0, 0, 0, 0, &res);
-
-	if (res.a0)
-		return 0;
-
-	return res.a1;
 }
 
 static int handle_optee_it(struct optee *optee)
@@ -1181,8 +1068,23 @@ static int handle_optee_it(struct optee *optee)
 
 	do {
 		struct irq_desc *desc;
+		int it_id;
 
-		it = get_it_value(optee->smc.invoke_fn, &value_valid, &value_pending);
+		it_id = get_it_value(optee->smc.invoke_fn, &value_valid, &value_pending);
+		if (it_id < 0) {
+			/*
+			 * OP-TEE interrupt notification is not supported
+			 * hence disable the feature so that current function
+			 * is no more called and we handle async value
+			 * OPTEE_SMC_ASYNC_NOTIF_VALUE_DO_IT as a generic legacy
+			 * OP-TEE async notif.
+			 */
+			optee->itr_notif = false;
+			optee_notif_send(optee, OPTEE_SMC_ASYNC_NOTIF_VALUE_DO_IT);
+			return 0;
+		}
+		it = (u32)it_id;
+
 		if (!value_valid)
 			break;
 
@@ -1228,7 +1130,8 @@ static int optee_it_alloc(struct irq_domain *d, unsigned int virq,
 
 	hwirq = fwspec->param[0];
 
-	irq_domain_set_hwirq_and_chip(d, virq, hwirq, &optee_it_irq_chip, d->host_data);
+	irq_domain_set_info(d, virq, hwirq, &optee_it_irq_chip, d->host_data,
+			    handle_simple_irq, NULL, NULL);
 
 	return 0;
 }
@@ -1282,13 +1185,14 @@ static irqreturn_t irq_handler(struct optee *optee)
 	u32 value;
 
 	do {
-		value = get_async_notif_value(optee->smc.invoke_fn, &value_valid, &value_pending);
+		value = get_async_notif_value(optee->smc.invoke_fn,
+					      &value_valid, &value_pending);
 		if (!value_valid)
 			break;
 
 		if (value == OPTEE_SMC_ASYNC_NOTIF_VALUE_DO_BOTTOM_HALF)
 			do_bottom_half = true;
-		else if (value == OPTEE_SMC_ASYNC_NOTIF_VALUE_DO_IT)
+		else if (optee->itr_notif && value == OPTEE_SMC_ASYNC_NOTIF_VALUE_DO_IT)
 			handle_optee_it(optee);
 		else
 			optee_notif_send(optee, value);
@@ -1458,101 +1362,12 @@ static void optee_get_version(struct tee_device *teedev,
 	*vers = v;
 }
 
-static void optee_get_thread_info(struct tee_context *ctx)
-{
-	struct optee *optee = tee_get_drvdata(ctx->teedev);
-	struct optee_thread *thd = &optee->thread;
-	struct arm_smccc_res res;
-	unsigned long flags;
-
-	spin_lock_irqsave(&thd->lock, flags);
-	if (!thd->thread_cnt) {
-		optee->smc.invoke_fn(OPTEE_SMC_GET_THREAD_COUNT,
-				     0, 0, 0, 0, 0, 0, 0, &res);
-		if (!res.a0) {
-			thd->thread_cnt = res.a1;
-			thd->thread_free_cnt = res.a1;
-			thd->system_thread_cnt = 0;
-			thd->system_thread_free_cnt = 0;
-		}
-	}
-	spin_unlock_irqrestore(&thd->lock, flags);
-}
-
 static int optee_smc_open(struct tee_context *ctx)
 {
 	struct optee *optee = tee_get_drvdata(ctx->teedev);
 	u32 sec_caps = optee->smc.sec_caps;
-	int rc;
 
-	rc = optee_open(ctx, sec_caps & OPTEE_SMC_SEC_CAP_MEMREF_NULL);
-	if (!rc)
-		optee_get_thread_info(ctx);
-
-	return rc;
-}
-
-int optee_smc_close_session(struct tee_context *ctx, u32 session)
-{
-	struct optee *optee = tee_get_drvdata(ctx->teedev);
-	struct optee_context_data *ctxdata = ctx->data;
-	struct optee_thread *thd = &optee->thread;
-	struct optee_session *sess;
-	bool system_session;
-	int rc;
-
-	mutex_lock(&ctxdata->mutex);
-	sess = optee_find_session(ctxdata, session);
-	mutex_unlock(&ctxdata->mutex);
-
-	if (!sess)
-		return -EINVAL;
-
-	system_session = (sess && sess->system);
-
-	rc = optee_close_session(ctx, session);
-
-	if (!rc && system_session && !thd->best_effort) {
-		unsigned long flags;
-
-		spin_lock_irqsave(&thd->lock, flags);
-		thd->system_thread_cnt--;
-		thd->system_thread_free_cnt--;
-		spin_unlock_irqrestore(&thd->lock, flags);
-	}
-
-	return rc;
-}
-
-int optee_smc_system_session(struct tee_context *ctx, u32 session)
-{
-	struct optee *optee = tee_get_drvdata(ctx->teedev);
-	struct optee_context_data *ctxdata = ctx->data;
-	struct optee_thread *thd = &optee->thread;
-	struct optee_session *sess;
-	int rc = -EINVAL;
-	unsigned long flags;
-
-	if (thd->best_effort)
-		return -EINVAL;
-
-	mutex_lock(&ctxdata->mutex);
-	sess = optee_find_session(ctxdata, session);
-
-	spin_lock_irqsave(&thd->lock, flags);
-	/* Leave at least 1 regular (non-system) thread context */
-	if (sess && !sess->system &&
-	    thd->system_thread_cnt < (thd->thread_cnt - 1)) {
-		thd->system_thread_cnt++;
-		thd->system_thread_free_cnt++;
-		sess->system = true;
-		rc = 0;
-	}
-	spin_unlock_irqrestore(&thd->lock, flags);
-
-	mutex_unlock(&ctxdata->mutex);
-
-	return rc;
+	return optee_open(ctx, sec_caps & OPTEE_SMC_SEC_CAP_MEMREF_NULL);
 }
 
 int optee_invoke_func_ocall2(struct tee_context *ctx,
@@ -1568,8 +1383,7 @@ static const struct tee_driver_ops optee_clnt_ops = {
 	.open = optee_smc_open,
 	.release = optee_release,
 	.open_session = optee_open_session,
-	.close_session = optee_smc_close_session,
-	.system_session = optee_smc_system_session,
+	.close_session = optee_close_session,
 	.invoke_func = optee_invoke_func,
 	.invoke_func_ocall2 = optee_invoke_func_ocall2,
 	.cancel_req = optee_cancel_req,
@@ -1628,6 +1442,22 @@ static bool optee_msg_api_uid_is_optee_api(optee_invoke_fn *invoke_fn)
 		return true;
 	return false;
 }
+
+#ifdef CONFIG_OPTEE_INSECURE_LOAD_IMAGE
+static bool optee_msg_api_uid_is_optee_image_load(optee_invoke_fn *invoke_fn)
+{
+	struct arm_smccc_res res;
+
+	invoke_fn(OPTEE_SMC_CALLS_UID, 0, 0, 0, 0, 0, 0, 0, &res);
+
+	if (res.a0 == OPTEE_MSG_IMAGE_LOAD_UID_0 &&
+	    res.a1 == OPTEE_MSG_IMAGE_LOAD_UID_1 &&
+	    res.a2 == OPTEE_MSG_IMAGE_LOAD_UID_2 &&
+	    res.a3 == OPTEE_MSG_IMAGE_LOAD_UID_3)
+		return true;
+	return false;
+}
+#endif
 
 static void optee_msg_get_os_revision(optee_invoke_fn *invoke_fn)
 {
@@ -1836,6 +1666,119 @@ static void optee_shutdown(struct platform_device *pdev)
 		optee_disable_shm_cache(optee);
 }
 
+#ifdef CONFIG_OPTEE_INSECURE_LOAD_IMAGE
+
+#define OPTEE_FW_IMAGE "optee/tee.bin"
+
+static optee_invoke_fn *cpuhp_invoke_fn;
+
+static int optee_cpuhp_probe(unsigned int cpu)
+{
+	/*
+	 * Invoking a call on a CPU will cause OP-TEE to perform the required
+	 * setup for that CPU. Just invoke the call to get the UID since that
+	 * has no side effects.
+	 */
+	if (optee_msg_api_uid_is_optee_api(cpuhp_invoke_fn))
+		return 0;
+	else
+		return -EINVAL;
+}
+
+static int optee_load_fw(struct platform_device *pdev,
+			 optee_invoke_fn *invoke_fn)
+{
+	const struct firmware *fw = NULL;
+	struct arm_smccc_res res;
+	phys_addr_t data_pa;
+	u8 *data_buf = NULL;
+	u64 data_size;
+	u32 data_pa_high, data_pa_low;
+	u32 data_size_high, data_size_low;
+	int rc;
+	int hp_state;
+
+	if (!optee_msg_api_uid_is_optee_image_load(invoke_fn))
+		return 0;
+
+	rc = request_firmware(&fw, OPTEE_FW_IMAGE, &pdev->dev);
+	if (rc) {
+		/*
+		 * The firmware in the rootfs will not be accessible until we
+		 * are in the SYSTEM_RUNNING state, so return EPROBE_DEFER until
+		 * that point.
+		 */
+		if (system_state < SYSTEM_RUNNING)
+			return -EPROBE_DEFER;
+		goto fw_err;
+	}
+
+	data_size = fw->size;
+	/*
+	 * This uses the GFP_DMA flag to ensure we are allocated memory in the
+	 * 32-bit space since TF-A cannot map memory beyond the 32-bit boundary.
+	 */
+	data_buf = kmemdup(fw->data, fw->size, GFP_KERNEL | GFP_DMA);
+	if (!data_buf) {
+		rc = -ENOMEM;
+		goto fw_err;
+	}
+	data_pa = virt_to_phys(data_buf);
+	reg_pair_from_64(&data_pa_high, &data_pa_low, data_pa);
+	reg_pair_from_64(&data_size_high, &data_size_low, data_size);
+	goto fw_load;
+
+fw_err:
+	pr_warn("image loading failed\n");
+	data_pa_high = 0;
+	data_pa_low = 0;
+	data_size_high = 0;
+	data_size_low = 0;
+
+fw_load:
+	/*
+	 * Always invoke the SMC, even if loading the image fails, to indicate
+	 * to EL3 that we have passed the point where it should allow invoking
+	 * this SMC.
+	 */
+	pr_warn("OP-TEE image loaded from kernel, this can be insecure");
+	invoke_fn(OPTEE_SMC_CALL_LOAD_IMAGE, data_size_high, data_size_low,
+		  data_pa_high, data_pa_low, 0, 0, 0, &res);
+	if (!rc)
+		rc = res.a0;
+	if (fw)
+		release_firmware(fw);
+	kfree(data_buf);
+
+	if (!rc) {
+		/*
+		 * We need to initialize OP-TEE on all other running cores as
+		 * well. Any cores that aren't running yet will get initialized
+		 * when they are brought up by the power management functions in
+		 * TF-A which are registered by the OP-TEE SPD. Due to that we
+		 * can un-register the callback right after registering it.
+		 */
+		cpuhp_invoke_fn = invoke_fn;
+		hp_state = cpuhp_setup_state(CPUHP_AP_ONLINE_DYN, "optee:probe",
+					     optee_cpuhp_probe, NULL);
+		if (hp_state < 0) {
+			pr_warn("Failed with CPU hotplug setup for OP-TEE");
+			return -EINVAL;
+		}
+		cpuhp_remove_state(hp_state);
+		cpuhp_invoke_fn = NULL;
+	}
+
+	return rc;
+}
+#else
+static inline int optee_load_fw(struct platform_device *pdev,
+				optee_invoke_fn *invoke_fn)
+{
+	return 0;
+}
+#endif
+
 static int optee_probe(struct platform_device *pdev)
 {
 	optee_invoke_fn *invoke_fn;
@@ -1853,6 +1796,10 @@ static int optee_probe(struct platform_device *pdev)
 	invoke_fn = get_invoke_func(&pdev->dev);
 	if (IS_ERR(invoke_fn))
 		return PTR_ERR(invoke_fn);
+
+	rc = optee_load_fw(pdev, invoke_fn);
+	if (rc)
+		return rc;
 
 	if (!optee_msg_api_uid_is_optee_api(invoke_fn)) {
 		pr_warn("api uid mismatch\n");
@@ -1932,7 +1879,15 @@ static int optee_probe(struct platform_device *pdev)
 	optee->smc.invoke_fn = invoke_fn;
 	optee->smc.sec_caps = sec_caps;
 	optee->rpc_param_count = rpc_param_count;
-	spin_lock_init(&optee->thread.lock);
+
+	/*
+	 * Default assume OP-TEE interrupt notification through async notif
+	 * value 1 (OPTEE_SMC_ASYNC_NOTIF_VALUE_DO_IT) is supported.
+	 * The feature will be disabled if we find SMC function ID
+	 * OPTEE_SMC_ASYNC_NOTIF_VALUE_DO_IT is not supported, meaning OP-TEE
+	 * async value 1 is a generic legacy async notif value.
+	 */
+	optee->itr_notif = true;
 
 	teedev = tee_device_alloc(&optee_clnt_desc, NULL, pool, optee);
 	if (IS_ERR(teedev)) {
@@ -1990,15 +1945,17 @@ static int optee_probe(struct platform_device *pdev)
 			goto err_notif_uninit;
 		}
 
-		rc = optee_irq_domain_init(pdev, optee);
-		if (rc) {
-			if (irq_is_percpu_devid(optee->smc.notif_irq))
-				uninit_pcpu_irq(optee);
-			else
-				free_irq(optee->smc.notif_irq, optee);
+		if (optee->itr_notif) {
+			rc = optee_irq_domain_init(pdev, optee);
+			if (rc) {
+				if (irq_is_percpu_devid(optee->smc.notif_irq))
+					uninit_pcpu_irq(optee);
+				else
+					free_irq(optee->smc.notif_irq, optee);
 
-			irq_dispose_mapping(irq);
-			goto err_notif_uninit;
+				irq_dispose_mapping(irq);
+				goto err_notif_uninit;
+			}
 		}
 
 		enable_async_notif(optee->smc.invoke_fn);

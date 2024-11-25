@@ -164,6 +164,7 @@ static int perf_gtk__annotate_symbol(GtkWidget *window, struct map_symbol *ms,
 static int symbol__gtk_annotate(struct map_symbol *ms, struct evsel *evsel,
 				struct hist_browser_timer *hbt)
 {
+	struct dso *dso = map__dso(ms->map);
 	struct symbol *sym = ms->sym;
 	GtkWidget *window;
 	GtkWidget *notebook;
@@ -171,13 +172,13 @@ static int symbol__gtk_annotate(struct map_symbol *ms, struct evsel *evsel,
 	GtkWidget *tab_label;
 	int err;
 
-	if (ms->map->dso->annotate_warned)
+	if (dso->annotate_warned)
 		return -1;
 
-	err = symbol__annotate(ms, evsel, &annotation__default_options, NULL);
+	err = symbol__annotate(ms, evsel, NULL);
 	if (err) {
 		char msg[BUFSIZ];
-		ms->map->dso->annotate_warned = true;
+		dso->annotate_warned = true;
 		symbol__strerror_disassemble(ms, err, msg, sizeof(msg));
 		ui__error("Couldn't annotate %s: %s\n", sym->name, msg);
 		return -1;

@@ -39,7 +39,7 @@ struct rpmsg_i2c_msg {
 	u8 addr;
 	u8 result;
 	u8 reserved[2];
-	u8 buf[0];
+	u8 buf[];
 } __packed;
 
 /**
@@ -356,7 +356,7 @@ static int rpmsg_i2c_platform_probe(struct platform_device *pdev)
 		dev_err(dev, "Error, proc-id property is missing: %d\n", ret);
 		return ret;
 	}
-	strncpy(ri2c_dev->dev_id[0].name, dev_id_name, RPMSG_NAME_SIZE - 1);
+	strscpy_pad(ri2c_dev->dev_id[0].name, dev_id_name, RPMSG_NAME_SIZE);
 
 	ri2c_dev->rpdrv.drv.name = "rpmsg_i2c";
 	ri2c_dev->rpdrv.id_table = ri2c_dev->dev_id;
@@ -419,4 +419,4 @@ module_exit(rpmsg_i2c_exit);
 
 MODULE_AUTHOR("Maxime Mere <maxime.mere@st.com>");
 MODULE_DESCRIPTION("Remote processor messaging I2C driver");
-MODULE_LICENSE("GPL v2");
+MODULE_LICENSE("GPL");

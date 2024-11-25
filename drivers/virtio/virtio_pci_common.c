@@ -345,8 +345,10 @@ static int vp_find_vqs_msix(struct virtio_device *vdev, unsigned int nvqs,
 				  vring_interrupt, 0,
 				  vp_dev->msix_names[msix_vec],
 				  vqs[i]);
-		if (err)
+		if (err) {
+			vp_del_vq(vqs[i]);
 			goto error_find;
+		}
 	}
 	return 0;
 
@@ -556,8 +558,6 @@ static int virtio_pci_probe(struct pci_dev *pci_dev,
 	}
 
 	pci_set_master(pci_dev);
-
-	vp_dev->is_legacy = vp_dev->ldev.ioaddr ? true : false;
 
 	rc = register_virtio_device(&vp_dev->vdev);
 	reg_dev = vp_dev;

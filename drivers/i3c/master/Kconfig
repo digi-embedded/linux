@@ -22,12 +22,26 @@ config DW_I3C_MASTER
 	  This driver can also be built as a module.  If so, the module
 	  will be called dw-i3c-master.
 
-config STM32_I3C_MASTER
-	tristate "STM32 I3C driver"
-	depends on I3C
-	depends on HAS_IOMEM
+config AST2600_I3C_MASTER
+	tristate "ASPEED AST2600 I3C master driver"
+	depends on DW_I3C_MASTER
+	depends on ARCH_ASPEED || COMPILE_TEST
+	select MFD_SYSCON
 	help
-	  Support for STmicroelectronics STM32 I3C controller.
+	  Support for ASPEED AST2600 I3C Controller.
+
+	  This hardware is an instance of the DW I3C controller; this
+	  driver adds platform- specific support for AST2600 hardware.
+
+	  This driver can also be built as a module.  If so, the module
+	  will be called ast2600-i3c-master.
+
+config STM32_I3C_MASTER
+	tristate "STM32 I3C Dual-Role Controller driver"
+	depends on I3C
+	depends on ARCH_STM32 || COMPILE_TEST
+	help
+	  Support for STmicroelectronics STM32 I3C Controller.
 
 config SVC_I3C_MASTER
 	tristate "Silvaco I3C Dual-Role Master driver"

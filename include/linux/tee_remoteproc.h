@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /*
- * Copyright(c) 2023 STMicroelectronics
+ * Copyright(c) 2023 STMicroelectronics - All Rights Reserved
  */
 
 #ifndef TEE_REMOTEPROC_H
@@ -14,18 +14,17 @@
  * @node:		Reference in list
  * @rproc:		Remoteproc reference
  * @parent:		Parent device
- * @rproc_id:		Identifier of the remote processor
+ * @rproc_id:		Identifier of the target firmware
  * @session_id:		TEE session identifier
  * @rsc_va:		Resource table virtual address.
  */
 struct tee_rproc {
 	struct list_head node;
-
 	struct rproc *rproc;
 	struct device *parent;
 	u32 rproc_id;
 	u32 session_id;
-	void *rsc_va;
+	void __iomem *rsc_va;
 };
 
 #if IS_ENABLED(CONFIG_TEE_REMOTEPROC)
@@ -54,7 +53,8 @@ static inline int tee_rproc_unregister(struct tee_rproc *trproc)
 	return 0;
 }
 
-static inline int tee_rproc_load_fw(struct tee_rproc *trproc, const struct firmware *fw)
+static inline int tee_rproc_load_fw(struct tee_rproc *trproc,
+				    const struct firmware *fw)
 {
 	/* This shouldn't be possible */
 	WARN_ON(1);

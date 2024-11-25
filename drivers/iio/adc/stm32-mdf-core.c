@@ -102,6 +102,7 @@ struct stm32_mdf_priv {
 };
 
 #define STM32_MDF_MAX_CCK 2
+#define STM32_MDF_MP23_FILTER_NB 4
 
 static inline struct stm32_mdf_priv *to_stm32_mdf_priv(struct stm32_mdf *mdf)
 {
@@ -307,11 +308,11 @@ static int stm32_mdf_core_cck_divider_set_rate(struct platform_device *pdev,
 	 * cck divider. Try to maximize cck divider first, to help fulfilling
 	 * frequency ratio requirements between fproc and fcck.
 	 */
-	cckdiv = gcd(ratio, MDF_CCKDIV_MAX);
+	cckdiv = gcd(ratio, MDF_CKG_CCKDIV_MAX);
 	procdiv = ratio / cckdiv;
 
 	if (procdiv > MDF_PROCDIV_MAX) {
-		dev_err(dev, "Proc divider out of range: %d > %d\n", procdiv, MDF_PROCDIV_MAX);
+		dev_err(dev, "Proc divider out of range: %u > %lu\n", procdiv, MDF_PROCDIV_MAX);
 		return -EINVAL;
 	}
 
@@ -445,7 +446,8 @@ static int stm32_mdf_core_register_clock_provider(struct platform_device *pdev,
 	clk_data->num = STM32_MDF_MAX_CCK;
 	ret = devm_of_clk_add_hw_provider(dev, of_clk_hw_onecell_get, clk_data);
 	if (ret) {
-		dev_err(dev, "Failed to add %s clock provider: %d\n", clk_name, ret);
+		dev_err(dev, "Failed to add %s clock provider: %d\n",
+			clk_name ? clk_name : "", ret);
 		return ret;
 	}
 
@@ -571,11 +573,23 @@ static int stm32_mdf_core_parse_of(struct platform_device *pdev, struct stm32_md
 	return ret;
 }
 
+static const struct of_device_id stm32_mdf_of_match[] = {
+	{ .compatible = "st,stm32mp25-mdf" },
+	{ .compatible = "st,stm32mp23-mdf", .data = (void *)STM32_MDF_MP23_FILTER_NB },
+	{}
+};
+MODULE_DEVICE_TABLE(of, stm32_mdf_of_match);
+
 static int stm32_mdf_core_identification(struct platform_device *pdev, struct stm32_mdf_priv *priv)
 {
 	struct stm32_mdf *mdf = &priv->mdf;
 	u32 val;
 	int ret;
+
+	/* If filter number is explicitly defined, don't check identification registers */
+	mdf->nbf = (uintptr_t)device_get_match_data(&pdev->dev);
+	if (mdf->nbf)
+		return 0;
 
 	ret = regmap_read(priv->regmap, MDF_IPIDR_REG, &val);
 	if (ret)
@@ -737,12 +751,6 @@ static const struct dev_pm_ops stm32_mdf_core_pm_ops = {
 	SET_SYSTEM_SLEEP_PM_OPS(stm32_mdf_core_suspend, stm32_mdf_core_resume)
 	SET_RUNTIME_PM_OPS(stm32_mdf_core_runtime_suspend, stm32_mdf_core_runtime_resume, NULL)
 };
-
-static const struct of_device_id stm32_mdf_of_match[] = {
-	{ .compatible = "st,stm32mp25-mdf" },
-	{}
-};
-MODULE_DEVICE_TABLE(of, stm32_mdf_of_match);
 
 static struct platform_driver stm32_mdf_driver = {
 	.probe = stm32_mdf_core_probe,
