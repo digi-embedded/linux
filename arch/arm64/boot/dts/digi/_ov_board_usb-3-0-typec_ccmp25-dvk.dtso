@@ -13,7 +13,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <dt-bindings/clock/stm32mp25-clks.h>
+#include <dt-bindings/clock/st,stm32mp25-rcc.h>
 #include <dt-bindings/phy/phy.h>
 
 /dts-v1/;
