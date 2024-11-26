@@ -343,7 +343,6 @@ struct rte_console {
 					 * when idle
 					 */
 #define BRCMF_IDLE_STOP		(-1)	/* Request SD clock be stopped */
-#define BRCMF_IDLE_INTERVAL	1
 
 #define KSO_WAIT_US 50
 #define KSO_MAX_SEQ_TIME_NS (1000000 * 10) /* Ideal time for kso sequence 10ms in ns*/
@@ -4554,7 +4553,7 @@ static void brcmf_sdio_bus_watchdog(struct brcmf_sdio *bus)
 		if ((!bus->dpc_running) && (bus->idletime > 0) &&
 		    (bus->clkstate == CLK_AVAIL)) {
 			bus->idlecount++;
-			if (bus->idlecount > bus->idletime) {
+			if (bus->idlecount >= bus->idletime) {
 				brcmf_dbg(SDIO, "idle\n");
 				sdio_claim_host(bus->sdiodev->func1);
 #ifdef DEBUG
@@ -5766,10 +5765,7 @@ struct brcmf_sdio *brcmf_sdio_probe(struct brcmf_sdio_dev *sdiodev)
 	/* ...and initialize clock/power states */
 	bus->clkstate = CLK_SDONLY;
 
-	if (sdiodev->settings->idle_time_zero)
-		bus->idletime = 0;
-	else
-		bus->idletime = BRCMF_IDLE_INTERVAL;
+	bus->idletime = sdiodev->settings->sdio_bus_idle_time;
 
 	/* SR state */
 	bus->sr_enabled = false;
