@@ -15,6 +15,7 @@
 #define BRCMFMAC_ENABLE		1
 #define BRCMFMAC_AUTO		2
 
+#define BRCMF_DEFAULT_SDIO_IDLE_CONFIG		2
 /* Keeping these macro definition here because these are defined in mmc drivers.
  * So for 3rd party mmc, fmac build should not fail due to build error.
  */
@@ -98,7 +99,7 @@ struct brcmf_mp_device {
 	} bus;
 	bool		pkt_prio;
 	int			idleclk_disable;
-	bool		idle_time_zero;
+	int		sdio_bus_idle_time;
 };
 
 /**
