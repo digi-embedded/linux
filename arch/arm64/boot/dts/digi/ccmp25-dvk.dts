@@ -95,7 +95,6 @@
 	panel_dsi_gpio_backlight: panel-dsi-gpio-backlight {
 		compatible = "gpio-backlight";
 		gpios = <&gpiod 9 GPIO_ACTIVE_HIGH>; /* MIPI_BCKL_PWM */
-		default-on;
 		default-brightness-level = <0>;
 		status = "disabled";
 	};
@@ -143,7 +142,6 @@
 	panel_lvds_gpio_backlight: panel-lvds-gpio-backlight {
 		compatible = "gpio-backlight";
 		gpios = <&gpiob 0 GPIO_ACTIVE_HIGH>; /* LVDS_BCKL_PWM */
-		default-on;
 		default-brightness-level = <1>;
 		status = "disabled";
 	};
@@ -575,7 +573,6 @@
 };
 
 &ltdc {
-	default-on;
 	rotation-memory = <&ltdc_sec_rotation>;
 	status = "okay";
 
