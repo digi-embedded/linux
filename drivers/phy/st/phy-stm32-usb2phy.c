@@ -250,6 +250,21 @@ static int stm32_usb2phy_enable(struct stm32_usb2phy *phy_dev)
 		return ret;
 	}
 
+	if (phy_data->valid_mode == USB2_MODE_HOST_ONLY) {
+		/*
+		 * The clock should default to active after standby, as it is
+		 * needed when resuming OHCI to access its registers.
+		 * CMN is default reset to 1, so enforce it is cleared, when the
+		 * clock enable request from OHCI driver comes at resume time.
+		 */
+		ret = regmap_clear_bits(phy_dev->regmap, phy_data->cr_offset,
+					SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK);
+		if (ret) {
+			dev_err(dev, "can't clear CMN bit (%d)\n", ret);
+			return ret;
+		}
+	}
+
 	if (phy_dev->mask_trim1) {
 		ret = regmap_update_bits(phy_dev->regmap, phy_dev->hw_data->trim1_offset,
 					 phy_dev->mask_trim1, phy_dev->value_trim1);
