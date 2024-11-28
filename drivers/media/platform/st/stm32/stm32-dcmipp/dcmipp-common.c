@@ -72,6 +72,9 @@ int dcmipp_ent_sd_register(struct dcmipp_ent_device *ved,
 	sd->flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
 	if (sd->ctrl_handler)
 		sd->flags |= V4L2_SUBDEV_FL_HAS_EVENTS;
+	/* dcmipp_input deals with streams to perform proper routing */
+	if (!strcmp(name, "dcmipp_input"))
+		sd->flags |= V4L2_SUBDEV_FL_STREAMS;
 
 	/* Initialize the media entity */
 	ret = media_entity_pads_init(&sd->entity, num_pads, ved->pads);
