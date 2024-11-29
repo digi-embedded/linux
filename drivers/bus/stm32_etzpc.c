@@ -6,6 +6,7 @@
 #include <linux/bitfield.h>
 #include <linux/bits.h>
 #include <linux/bus/stm32_firewall.h>
+#include <linux/bus/stm32_firewall_device.h>
 #include <linux/device.h>
 #include <linux/err.h>
 #include <linux/init.h>
@@ -15,6 +16,7 @@
 #include <linux/of.h>
 #include <linux/of_platform.h>
 #include <linux/platform_device.h>
+#include <linux/slab.h>
 #include <linux/types.h>
 
 /*
@@ -69,6 +71,59 @@ static void stm32_etzpc_release_access(struct stm32_firewall_controller *ctrl __
 {
 }
 
+static int stm32_etzpc_populate_bus(struct stm32_firewall_controller *ctrl)
+{
+	struct stm32_firewall *firewalls;
+	struct device_node *child;
+	struct device *parent;
+	unsigned int i;
+	int len;
+	int err;
+
+	parent = ctrl->dev;
+
+	dev_dbg(parent, "Populating %s system bus\n", dev_name(ctrl->dev));
+
+	for_each_available_child_of_node(dev_of_node(parent), child) {
+		/* The access-controllers property is mandatory for firewall bus devices */
+		len = of_count_phandle_with_args(child, "access-controllers",
+						 "#access-controller-cells");
+		if (len <= 0) {
+			of_node_put(child);
+			return -EINVAL;
+		}
+
+		firewalls = kcalloc(len, sizeof(*firewalls), GFP_KERNEL);
+		if (!firewalls) {
+			of_node_put(child);
+			return -ENOMEM;
+		}
+
+		err = stm32_firewall_get_firewall(child, firewalls, (unsigned int)len);
+		if (err) {
+			kfree(firewalls);
+			of_node_put(child);
+			return err;
+		}
+
+		for (i = 0; i < len; i++) {
+			if (ctrl->grant_access(ctrl, firewalls[i].firewall_id)) {
+				/*
+				 * Peripheral access not allowed or not defined.
+				 * Mark the node as populated so platform bus won't probe it
+				 */
+				of_detach_node(child);
+				dev_err(parent, "%s: Device driver will not be probed\n",
+					child->full_name);
+			}
+		}
+
+		kfree(firewalls);
+	}
+
+	return 0;
+}
+
 static int stm32_etzpc_probe(struct platform_device *pdev)
 {
 	struct stm32_firewall_controller *etzpc_controller;
@@ -109,7 +164,7 @@ static int stm32_etzpc_probe(struct platform_device *pdev)
 		return rc;
 	}
 
-	rc = stm32_firewall_populate_bus(etzpc_controller);
+	rc = stm32_etzpc_populate_bus(etzpc_controller);
 	if (rc) {
 		dev_err(etzpc_controller->dev, "Couldn't populate ETZPC bus: %d",
 			rc);

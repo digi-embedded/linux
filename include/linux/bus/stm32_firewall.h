@@ -70,16 +70,4 @@ int stm32_firewall_controller_register(struct stm32_firewall_controller *firewal
  */
 void stm32_firewall_controller_unregister(struct stm32_firewall_controller *firewall_controller);
 
-/**
- * stm32_firewall_populate_bus - Populate device tree nodes that have a correct firewall
- *				 configuration. This is used at boot-time only, as a sanity check
- *				 between device tree and firewalls hardware configurations to
- *				 prevent a kernel crash when a device driver is not granted access
- *
- * @firewall_controller:	Firewall controller which nodes will be populated or not
- *
- * Returns 0 in case of success or appropriate errno code if error occurred.
- */
-int stm32_firewall_populate_bus(struct stm32_firewall_controller *firewall_controller);
-
 #endif /* _STM32_FIREWALL_H */

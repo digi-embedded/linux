@@ -18,6 +18,7 @@
 #include <linux/types.h>
 
 #include <linux/bus/stm32_firewall.h>
+#include <linux/bus/stm32_firewall_device.h>
 
 /*
  * RIFSC offset register
@@ -575,6 +576,61 @@ static void stm32_rifsc_release_access(struct stm32_firewall_controller *ctrl, u
 	stm32_rif_release_semaphore(ctrl, firewall_id);
 }
 
+static int stm32_rifsc_populate_bus(struct stm32_firewall_controller *ctrl)
+{
+	struct stm32_firewall *firewalls;
+	struct device_node *child;
+	struct device *parent;
+	unsigned int i;
+	int len;
+	int err;
+
+	parent = ctrl->dev;
+
+	dev_dbg(parent, "Populating %s system bus\n", dev_name(ctrl->dev));
+
+	for_each_available_child_of_node(dev_of_node(parent), child) {
+		/* The access-controllers property is mandatory for firewall bus devices */
+		len = of_count_phandle_with_args(child, "access-controllers",
+						 "#access-controller-cells");
+		if (len <= 0) {
+			of_node_put(child);
+			return -EINVAL;
+		}
+
+		firewalls = kcalloc(len, sizeof(*firewalls), GFP_KERNEL);
+		if (!firewalls) {
+			of_node_put(child);
+			return -ENOMEM;
+		}
+
+		err = stm32_firewall_get_firewall(child, firewalls, (unsigned int)len);
+		if (err) {
+			kfree(firewalls);
+			of_node_put(child);
+			return err;
+		}
+
+		for (i = 0; i < len; i++) {
+			err = firewalls[i].firewall_ctrl->grant_access(firewalls[i].firewall_ctrl,
+								       firewalls[i].firewall_id);
+			if (err) {
+				/*
+				 * Peripheral access not allowed or not defined.
+				 * Mark the node as populated so platform bus won't probe it
+				 */
+				of_detach_node(child);
+				dev_err(parent, "%s: Device driver will not be probed, error: %d\n",
+					child->full_name, err);
+			}
+		}
+
+		kfree(firewalls);
+	}
+
+	return 0;
+}
+
 static int stm32_rifsc_probe(struct platform_device *pdev)
 {
 	struct stm32_firewall_controller *rifsc_controller;
@@ -657,7 +713,7 @@ static int stm32_rifsc_probe(struct platform_device *pdev)
 		return rc;
 	}
 
-	rc = stm32_firewall_populate_bus(rifsc_controller);
+	rc = stm32_rifsc_populate_bus(rifsc_controller);
 	if (rc) {
 		dev_err(rifsc_controller->dev, "Couldn't populate RIFSC bus: %d",
 			rc);
