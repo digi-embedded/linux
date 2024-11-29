@@ -576,6 +576,20 @@ static void stm32_rifsc_release_access(struct stm32_firewall_controller *ctrl, u
 	stm32_rif_release_semaphore(ctrl, firewall_id);
 }
 
+static void stm32_rifsc_unpriv_by_id(struct stm32_firewall_controller *ctrl, u32 firewall_id)
+{
+	u32 reg_id, reg_offset, priv_value;
+
+	reg_id = firewall_id / IDS_PER_RISC_SEC_PRIV_REGS;
+	reg_offset = firewall_id % IDS_PER_RISC_SEC_PRIV_REGS;
+
+	priv_value = readl(ctrl->mmio + RIFSC_RISC_PRIVCFGR0 + 0x4 * reg_id);
+	if (priv_value & BIT(reg_offset)) {
+		priv_value &= ~BIT(reg_offset);
+		writel(priv_value, ctrl->mmio + RIFSC_RISC_PRIVCFGR0 + 0x4 * reg_id);
+	}
+}
+
 static int stm32_rifsc_populate_bus(struct stm32_firewall_controller *ctrl)
 {
 	struct stm32_firewall *firewalls;
@@ -622,6 +636,10 @@ static int stm32_rifsc_populate_bus(struct stm32_firewall_controller *ctrl)
 				of_detach_node(child);
 				dev_err(parent, "%s: Device driver will not be probed, error: %d\n",
 					child->full_name, err);
+			}
+			if (IS_ENABLED(CONFIG_STM32_RIFSC_DEBUG)) {
+				dev_dbg(parent, "Unprivileged %s", child->full_name);
+				stm32_rifsc_unpriv_by_id(ctrl, firewalls[i].firewall_id);
 			}
 		}
 
