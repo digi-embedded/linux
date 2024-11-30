@@ -168,7 +168,6 @@ static const struct stm32_csi_event stm32_csi_events_sr1[] = {
 
 struct stm32_csi_dev {
 	struct device			*dev;
-	int				state;
 
 	void __iomem			*base;
 	struct clk			*pclk;
@@ -195,6 +194,7 @@ struct stm32_csi_dev {
 
 	/* Remote source */
 	struct v4l2_subdev		*s_subdev;
+	u32				s_subdev_pad_nb;
 };
 
 struct stm32_csi_fmts {
@@ -468,12 +468,12 @@ static void stm32_csi_phy_reg_write(struct stm32_csi_dev *csi2priv, uint32_t add
 	writel_relaxed(0, csi2priv->base + STM32_CSI_PTCR0);
 }
 
-static int stm32_csi_start(struct stm32_csi_dev *csi2priv)
+static int stm32_csi_start(struct stm32_csi_dev *csi2priv,
+			   struct v4l2_subdev_state *state)
 {
 	const struct stm32_csi_mbps_phy_reg *phy_regs;
 	struct v4l2_mbus_framefmt *sink_fmt;
 	const struct stm32_csi_fmts *fmt;
-	struct v4l2_subdev_state *state;
 	unsigned long phy_clk_frate;
 	int ret, i, mbps;
 	u32 lanes_ie = 0;
@@ -484,9 +484,7 @@ static int stm32_csi_start(struct stm32_csi_dev *csi2priv)
 	dev_dbg(csi2priv->dev, "Starting the CSI2\n");
 
 	/* Get the bpp value on pad0 (input of CSI) */
-	state = v4l2_subdev_lock_and_get_active_state(&csi2priv->subdev);
-	sink_fmt = v4l2_subdev_get_pad_format(&csi2priv->subdev, state, 0);
-	v4l2_subdev_unlock_state(state);
+	sink_fmt = v4l2_subdev_state_get_format(state, STM32_CSI_PAD_SINK);
 	fmt = stm32_csi_code_to_fmt(sink_fmt->code);
 
 	/* Get the remote sensor link frequency */
@@ -618,20 +616,16 @@ static void stm32_csi_stop(struct stm32_csi_dev *csi2priv)
 	pm_runtime_put(csi2priv->dev);
 }
 
-static int stm32_csi_start_vc(struct stm32_csi_dev *csi2priv, uint32_t vc)
+static int stm32_csi_start_vc(struct stm32_csi_dev *csi2priv,
+			      struct v4l2_subdev_state *state, u32 vc)
 {
-	struct v4l2_subdev *subdev = &csi2priv->subdev;
 	struct v4l2_mbus_framefmt *mbus_fmt;
 	const struct stm32_csi_fmts *fmt;
-	struct v4l2_subdev_state *state;
 	int ret = 0;
 	u32 cfgr1 = 0;
 	u32 status;
 
-	state = v4l2_subdev_lock_and_get_active_state(subdev);
-	mbus_fmt = v4l2_subdev_get_pad_format(subdev, state,
-					      STM32_CSI_PAD_SOURCE);
-	v4l2_subdev_unlock_state(state);
+	mbus_fmt = v4l2_subdev_state_get_format(state, STM32_CSI_PAD_SOURCE);
 	fmt = stm32_csi_code_to_fmt(mbus_fmt->code);
 
 	/* If the mbus code is JPEG, don't enable filtering */
@@ -693,52 +687,54 @@ static int stm32_csi_stop_vc(struct stm32_csi_dev *csi2priv, uint32_t vc)
 	return 0;
 }
 
-static int stm32_csi_s_stream(struct v4l2_subdev *subdev, int enable)
+static int stm32_csi_disable_streams(struct v4l2_subdev *sd,
+				     struct v4l2_subdev_state *state, u32 pad,
+				     u64 streams_mask)
 {
-	struct stm32_csi_dev *csi2priv = v4l2_subdev_to_csi2priv(subdev);
+	struct stm32_csi_dev *csi2priv = v4l2_subdev_to_csi2priv(sd);
 	int ret;
 
-	if (csi2priv->state == enable)
-		return 0;
+	ret = v4l2_subdev_disable_streams(csi2priv->s_subdev,
+					  csi2priv->s_subdev_pad_nb, BIT_ULL(0));
+	if (ret)
+		return ret;
 
-	if (enable) {
-		ret = stm32_csi_start(csi2priv);
-		if (ret)
-			return ret;
+	/* Stop the VC0 */
+	ret = stm32_csi_stop_vc(csi2priv, 0);
+	if (ret)
+		dev_err(csi2priv->dev, "Failed to stop VC0\n");
 
-		/* Configure & start the VC0 */
-		/*
-		 * For the time being only VC0 is used, other will be added
-		 * later on with usage of frame_desc to identify the vc to
-		 * use
-		 */
-		ret = stm32_csi_start_vc(csi2priv, 0);
-		if (ret) {
-			dev_err(csi2priv->dev, "Failed to start VC0\n");
-			stm32_csi_stop(csi2priv);
-			return ret;
-		}
+	stm32_csi_stop(csi2priv);
 
-		ret = v4l2_subdev_call(csi2priv->s_subdev, video, s_stream, 1);
-		if (ret) {
-			stm32_csi_stop_vc(csi2priv, 0);
-			stm32_csi_stop(csi2priv);
-			return ret;
-		}
-	} else {
-		ret = v4l2_subdev_call(csi2priv->s_subdev, video, s_stream, 0);
-		if (ret)
-			return ret;
+	return 0;
+}
 
-		/* Stop the VC0 */
-		ret = stm32_csi_stop_vc(csi2priv, 0);
-		if (ret)
-			dev_err(csi2priv->dev, "Failed to stop VC0\n");
+static int stm32_csi_enable_streams(struct v4l2_subdev *sd,
+				    struct v4l2_subdev_state *state, u32 pad,
+				    u64 streams_mask)
+{
+	struct stm32_csi_dev *csi2priv = v4l2_subdev_to_csi2priv(sd);
+	int ret;
 
+	ret = stm32_csi_start(csi2priv, state);
+	if (ret)
+		return ret;
+
+	/* Configure & start the VC0 */
+	ret = stm32_csi_start_vc(csi2priv, state, 0);
+	if (ret) {
+		dev_err(csi2priv->dev, "Failed to start VC0\n");
 		stm32_csi_stop(csi2priv);
+		return ret;
 	}
 
-	csi2priv->state = enable;
+	ret = v4l2_subdev_enable_streams(csi2priv->s_subdev,
+					 csi2priv->s_subdev_pad_nb, BIT_ULL(0));
+	if (ret) {
+		stm32_csi_stop_vc(csi2priv, 0);
+		stm32_csi_stop(csi2priv);
+		return ret;
+	}
 
 	return 0;
 }
@@ -827,7 +823,7 @@ static const struct v4l2_subdev_core_ops stm32_csi_core_ops = {
 };
 
 static const struct v4l2_subdev_video_ops stm32_csi_video_ops = {
-	.s_stream	= stm32_csi_s_stream,
+	.s_stream	= v4l2_subdev_s_stream_helper,
 };
 
 static const struct v4l2_subdev_pad_ops stm32_csi_pad_ops = {
@@ -835,6 +831,8 @@ static const struct v4l2_subdev_pad_ops stm32_csi_pad_ops = {
 	.enum_mbus_code	= stm32_csi_enum_mbus_code,
 	.set_fmt	= stm32_csi_set_pad_format,
 	.get_fmt	= v4l2_subdev_get_fmt,
+	.enable_streams	= stm32_csi_enable_streams,
+	.disable_streams = stm32_csi_disable_streams,
 };
 
 static const struct v4l2_subdev_ops stm32_csi_subdev_ops = {
@@ -861,6 +859,7 @@ static int stm32_csi_async_bound(struct v4l2_async_notifier *notifier,
 	}
 
 	csi2priv->s_subdev = s_subdev;
+	csi2priv->s_subdev_pad_nb = remote_pad;
 
 	return media_create_pad_link(&csi2priv->s_subdev->entity,
 				     remote_pad, &csi2priv->subdev.entity, 0,
