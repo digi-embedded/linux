@@ -684,11 +684,11 @@ static int stm32_mdf_adc_set_filters_config(struct iio_dev *indio_dev, unsigned 
 
 	if (gain_lin > 0) {
 		max *= gain_lin;
-		max /= 1000;
+		max = DIV_ROUND_CLOSEST_ULL(max, 1000);
 	}
 	if (gain_lin < 0) {
-		max /= -gain_lin;
-		max /= 10;
+		max = DIV_ROUND_CLOSEST_ULL(max, -gain_lin);
+		max = DIV_ROUND_CLOSEST_ULL(max,  10);
 	}
 
 	adc->dflt_max = max;
