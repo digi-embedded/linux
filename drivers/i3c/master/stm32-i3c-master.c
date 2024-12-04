@@ -819,8 +819,8 @@ static int stm32_i3c_pure_timing_cfg(struct i3c_master_controller *m, unsigned l
 	dev_dbg(ddata->dev, "mode=%u, i3c freq=%lu\n", bus->mode, bus->scl_rate.i3c);
 
 	duty_cycle = 50; //TODO SCL duty-cycle in I3C ?
-	ti3cclk_ps = DIV_ROUND_CLOSEST(PICO, i3cclk_rate);
-	ti3c_pp_min_ps = DIV_ROUND_CLOSEST(PICO, bus->scl_rate.i3c);
+	ti3cclk_ps = DIV_ROUND_CLOSEST_ULL(PICO, i3cclk_rate);
+	ti3c_pp_min_ps = DIV_ROUND_CLOSEST_ULL(PICO, bus->scl_rate.i3c);
 	ti3cl_od_min_ps = I3C_BUS_TLOW_OD_MIN_NS * 1000;
 
 	/* I3C Open Drain SCL Clock High Period */
@@ -904,11 +904,11 @@ static int stm32_i3c_mixed_timing_cfg(struct i3c_master_controller *m, unsigned 
 		bus->mode, bus->scl_rate.i3c, bus->scl_rate.i2c);
 
 	duty_cycle = 40; //TODO SCL duty-cycle in I2C ?
-	ti3cclk_ps = DIV_ROUND_CLOSEST(PICO, i3cclk_rate);
-	ti3c_pp_min_ps = DIV_ROUND_CLOSEST(PICO, bus->scl_rate.i3c);
-	ti2c_od_min_ps = DIV_ROUND_CLOSEST(PICO, bus->scl_rate.i2c);
+	ti3cclk_ps = DIV_ROUND_CLOSEST_ULL(PICO, i3cclk_rate);
+	ti3c_pp_min_ps = DIV_ROUND_CLOSEST_ULL(PICO, bus->scl_rate.i3c);
+	ti2c_od_min_ps = DIV_ROUND_CLOSEST_ULL(PICO, bus->scl_rate.i2c);
 	/*tfmp_od_min_ps = DIV_ROUND_CLOSEST(PICO, I3C_BUS_I2C_FM_PLUS_SCL_RATE);*/
-	tfm_od_min_ps = DIV_ROUND_CLOSEST(PICO, I3C_BUS_I2C_FM_SCL_RATE);
+	tfm_od_min_ps = DIV_ROUND_CLOSEST_ULL(PICO, I3C_BUS_I2C_FM_SCL_RATE);
 
 	/* I3C Open Drain SCL Clock High Period */
 	sclhi3c = DIV_ROUND_CLOSEST(ti3c_pp_min_ps * duty_cycle / 100, ti3cclk_ps) - 1;
