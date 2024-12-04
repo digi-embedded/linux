@@ -198,7 +198,7 @@
 	};
 
 	intc: interrupt-controller@4ac00000 {
-		compatible = "arm,cortex-a7-gic";
+		compatible = "st,stm32mp2-cortex-a7-gic", "arm,cortex-a7-gic";
 		#interrupt-cells = <3>;
 		interrupt-controller;
 		interrupt-parent = <&intc>;
