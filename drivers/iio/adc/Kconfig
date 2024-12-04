@@ -1126,6 +1126,7 @@ config STM32_MDF_ADC
 	tristate "STMicroelectronics STM32 MDF adc"
 	depends on (ARCH_STM32 && OF) || COMPILE_TEST
 	select STM32_MDF_CORE
+	select COMMON_CLK_REGMAP
 	select IIO_BUFFER
 	select IIO_BUFFER_HW_CONSUMER
 	select IIO_BACKEND
