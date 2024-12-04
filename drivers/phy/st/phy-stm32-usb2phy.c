@@ -6,6 +6,7 @@
  * Copyright (C) 2022 STMicroelectronics
  * Author(s): Pankaj Dev <pankaj.dev@st.com>.
  */
+#include <linux/bitfield.h>
 #include <linux/clk.h>
 #include <linux/clk-provider.h>
 #include <linux/io.h>
