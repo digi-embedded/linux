@@ -7,6 +7,7 @@
  * Author: Pankaj Dev <pankaj.dev@st.com>
  */
 
+#include <linux/bitfield.h>
 #include <linux/usb.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/mfd/syscon.h>
