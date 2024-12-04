@@ -483,7 +483,7 @@ static int stm32_csi_start(struct stm32_csi_dev *csi2priv)
 
 	/* MBPS is expressed in Mbps, hence link_freq / 100000 * 2 */
 	/* TODO - calcul below doesn't sound right, extra 0 ?? */
-	mbps = link_freq / 500000;
+	mbps = DIV_ROUND_CLOSEST_ULL((u64)link_freq, 500000);
 	dev_dbg(csi2priv->dev, "Computed Mbps: %u\n", mbps);
 
 	for (phy_regs = snps_stm32mp25; phy_regs->mbps != 0; phy_regs++)
