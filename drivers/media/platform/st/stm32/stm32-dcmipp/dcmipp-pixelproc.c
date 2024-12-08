@@ -1052,7 +1052,12 @@ static int dcmipp_pixelproc_s_stream(struct v4l2_subdev *sd, int enable)
 	s_subdev = media_entity_to_v4l2_subdev(pad->entity);
 
 	if (!enable) {
-		ret = v4l2_subdev_call(s_subdev, video, s_stream, enable);
+		/* Only dcmipp_input is streams enabled hence need to differentiate */
+		if (!strcmp(s_subdev->name, "dcmipp_input"))
+			ret = v4l2_subdev_disable_streams(s_subdev, pad->index,
+							  1);
+		else
+			ret = v4l2_subdev_call(s_subdev, video, s_stream, enable);
 		if (ret < 0)
 			dev_err(pixelproc->dev,
 				"failed to stop source subdev streaming (%d)\n",
@@ -1098,7 +1103,11 @@ static int dcmipp_pixelproc_s_stream(struct v4l2_subdev *sd, int enable)
 		return ret;
 	}
 
-	ret = v4l2_subdev_call(s_subdev, video, s_stream, enable);
+	/* Only dcmipp_input is streams enabled hence need to differentiate */
+	if (!strcmp(s_subdev->name, "dcmipp_input"))
+		ret = v4l2_subdev_enable_streams(s_subdev, pad->index, 1);
+	else
+		ret = v4l2_subdev_call(s_subdev, video, s_stream, enable);
 	if (ret < 0) {
 		dev_err(pixelproc->dev,
 			"failed to start source subdev streaming (%d)\n", ret);

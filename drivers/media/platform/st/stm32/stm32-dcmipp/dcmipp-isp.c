@@ -600,6 +600,13 @@ static int dcmipp_isp_s_stream(struct v4l2_subdev *sd, int enable)
 
 		/* Configure default ISP Histo area */
 		dcmipp_isp_config_histo(isp, compose);
+
+		ret = v4l2_subdev_enable_streams(s_subdev, pad->index, 1);
+		if (ret < 0) {
+			dev_err(isp->dev,
+				"failed to start source subdev streaming (%d)\n", ret);
+			goto error_s_stream;
+		}
 	} else {
 		if (isp->usecnt > 1)
 			goto out;
@@ -608,13 +615,13 @@ static int dcmipp_isp_s_stream(struct v4l2_subdev *sd, int enable)
 		reg_write(isp, DCMIPP_P1SRCR, 0);
 		reg_write(isp, DCMIPP_P1DECR, 0);
 		reg_write(isp, DCMIPP_P1DMCR, 0);
-	}
 
-	ret = v4l2_subdev_call(s_subdev, video, s_stream, enable);
-	if (ret < 0) {
-		dev_err(isp->dev,
-			"failed to start source subdev streaming (%d)\n", ret);
-		goto error_s_stream;
+		ret = v4l2_subdev_disable_streams(s_subdev, pad->index, 1);
+		if (ret < 0) {
+			dev_err(isp->dev,
+				"failed to stop source subdev streaming (%d)\n", ret);
+			goto error_s_stream;
+		}
 	}
 
 out:
