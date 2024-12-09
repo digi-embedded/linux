@@ -13,6 +13,7 @@
 #include <linux/of_address.h>
 #include <linux/of_irq.h>
 #include <linux/platform_device.h>
+#include <linux/pm_runtime.h>
 #include <linux/pm_wakeirq.h>
 
 #define CFGR_PSC_OFFSET		9
@@ -52,6 +53,15 @@ static int stm32_clkevent_lp_set_timer(unsigned long evt,
 				       int is_periodic)
 {
 	struct stm32_lp_private *priv = to_priv(clkevt);
+	int ret;
+
+	if (!pm_runtime_active(priv->dev)) {
+		ret = pm_runtime_resume_and_get(priv->dev);
+		if (ret) {
+			dev_err(priv->dev, "pm runtime get returned %d\n", ret);
+			return ret;
+		}
+	}
 
 	/* disable LPTIMER to be able to write into IER register*/
 	regmap_write(priv->reg, STM32_LPTIM_CR, 0);
@@ -131,6 +141,8 @@ static void stm32_clkevent_lp_suspend(struct clock_event_device *clkevt)
 
 	stm32_clkevent_lp_shutdown(clkevt);
 
+	pm_runtime_put_sync_suspend(priv->dev);
+
 	/* balance clk_prepare_enable() from the probe */
 	clk_disable_unprepare(priv->clk);
 }
@@ -207,6 +219,12 @@ static int stm32_clkevent_lp_probe(struct platform_device *pdev)
 		goto out_clk_disable;
 
 	stm32_clkevent_lp_set_prescaler(priv, &rate);
+
+	ret = devm_pm_runtime_enable(&pdev->dev);
+	if (ret)
+		return ret;
+
+	pm_runtime_irq_safe(&pdev->dev);
 
 	priv->dev = &pdev->dev;
 
