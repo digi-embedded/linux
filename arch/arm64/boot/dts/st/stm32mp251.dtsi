@@ -301,7 +301,7 @@
 	usb2_phy1: usb2-phy1 {
 		compatible      = "st,stm32mp25-usb2phy";
 		#phy-cells      = <0>;
-		#clock-cells    = <0>;
+		#clock-cells    = <1>;
 		st,syscfg       = <&syscfg 0x2400>;
 		clocks          = <&rcc CK_KER_USB2PHY1>;
 		resets          = <&rcc USB2PHY1_R>;
@@ -311,7 +311,7 @@
 	usb2_phy2: usb2-phy2 {
 		compatible      = "st,stm32mp25-usb2phy";
 		#phy-cells      = <0>;
-		#clock-cells    = <0>;
+		#clock-cells    = <1>;
 		st,syscfg       = <&syscfg 0x2800>;
 		clocks          = <&rcc CK_KER_USB2PHY2EN>;
 		resets          = <&rcc USB2PHY2_R>;
@@ -2351,7 +2351,7 @@
 				usbh_ohci: usb@482e0000 {
 					compatible = "generic-ohci";
 					reg = <0x482e0000 0x1000>;
-					clocks = <&usb2_phy1>, <&rcc CK_BUS_USB2OHCI>;
+					clocks = <&usb2_phy1 1>, <&rcc CK_BUS_USB2OHCI>;
 					resets = <&rcc USB2_R>;
 					interrupts = <GIC_SPI 140 IRQ_TYPE_LEVEL_HIGH>;
 					phys = <&usb2_phy1>;
@@ -2362,7 +2362,7 @@
 				usbh_ehci: usb@482f0000 {
 					compatible = "generic-ehci";
 					reg = <0x482f0000 0x1000>;
-					clocks = <&rcc CK_BUS_USB2EHCI>;
+					clocks = <&usb2_phy1 0>, <&rcc CK_BUS_USB2EHCI>;
 					resets = <&rcc USB2_R>;
 					interrupts = <GIC_SPI 139 IRQ_TYPE_LEVEL_HIGH>;
 					companion = <&usbh_ohci>;
