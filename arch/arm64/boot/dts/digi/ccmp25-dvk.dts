@@ -413,7 +413,7 @@
 		clock-names = "xclk";
 		csi_id = <0>;
 		DOVDD-supply = <&reg_3v3_board>;
-		reset-gpios = <&gpiog 7 (GPIO_ACTIVE_LOW | GPIO_PUSH_PULL)>; /* CSI_RESET */
+		powerdown-gpios = <&gpiog 7 (GPIO_ACTIVE_LOW | GPIO_PUSH_PULL)>; /* CSI_RESET */
 		status = "okay";
 
 		port {
