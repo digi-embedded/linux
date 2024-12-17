@@ -80,6 +80,7 @@ struct brcmf_buscore_ops {
 	void (*activate)(void *ctx, struct brcmf_chip *chip, u32 rstvec);
 	int (*sec_attach)(void *ctx, struct brcmf_blhs **blhs, struct brcmf_ccsec **ccsec,
 			  u32 flag, uint timeout, uint interval);
+	int (*get_intr_pend)(void *ctx);
 };
 
 /**
@@ -138,6 +139,5 @@ void brcmf_chip_reset_watchdog(struct brcmf_chip *pub);
 void brcmf_chip_ulp_reset_lhl_regs(struct brcmf_chip *pub);
 void brcmf_chip_reset_pmu_regs(struct brcmf_chip *pub);
 void brcmf_chip_set_default_min_res_mask(struct brcmf_chip *pub);
-int brcmf_get_intr_pending_data(void *ctx);
 
 #endif /* BRCMF_AXIDMP_H */

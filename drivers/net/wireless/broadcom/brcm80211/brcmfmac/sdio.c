@@ -4919,17 +4919,9 @@ brcmf_sdio_buscore_sec_attach(void *ctx, struct brcmf_blhs **blhs, struct brcmf_
 	return 0;
 }
 
-static const struct brcmf_buscore_ops brcmf_sdio_buscore_ops = {
-	.prepare = brcmf_sdio_buscoreprep,
-	.activate = brcmf_sdio_buscore_activate,
-	.read32 = brcmf_sdio_buscore_read32,
-	.write32 = brcmf_sdio_buscore_write32,
-	.sec_attach = brcmf_sdio_buscore_sec_attach,
-};
-
 #define LOOP_TO_CHECK_FOR_BP_ENABLE                     50000      /* Wait for 500msec */
 
-int brcmf_get_intr_pending_data(void *ctx)
+static int brcmf_get_intr_pending_data(void *ctx)
 {
 	struct brcmf_sdio_dev *sdiodev = (struct brcmf_sdio_dev *)ctx;
 	int loop = 0, status = 0, err = 0;
@@ -4957,6 +4949,15 @@ int brcmf_get_intr_pending_data(void *ctx)
 
 	return 0;
 }
+
+static const struct brcmf_buscore_ops brcmf_sdio_buscore_ops = {
+	.prepare = brcmf_sdio_buscoreprep,
+	.activate = brcmf_sdio_buscore_activate,
+	.read32 = brcmf_sdio_buscore_read32,
+	.write32 = brcmf_sdio_buscore_write32,
+	.sec_attach = brcmf_sdio_buscore_sec_attach,
+	.get_intr_pend = brcmf_get_intr_pending_data
+};
 
 static bool
 brcmf_sdio_probe_attach(struct brcmf_sdio *bus)
