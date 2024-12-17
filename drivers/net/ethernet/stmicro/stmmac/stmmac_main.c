@@ -7746,6 +7746,8 @@ int stmmac_suspend(struct device *dev)
 		return 0;
 	}
 
+	phylink_mac_change(priv->phylink, false);
+
 	mutex_lock(&priv->lock);
 
 	netif_device_detach(ndev);
@@ -7771,21 +7773,19 @@ int stmmac_suspend(struct device *dev)
 		stmmac_pmt(priv, priv->hw, priv->wolopts);
 		priv->irq_wake = 1;
 	} else {
+		mutex_unlock(&priv->lock);
+		rtnl_lock();
+		if (device_may_wakeup(priv->device))
+			phylink_speed_down(priv->phylink, false);
+		phylink_stop(priv->phylink);
+		rtnl_unlock();
+		mutex_lock(&priv->lock);
+
 		stmmac_mac_set(priv, priv->ioaddr, false);
 		pinctrl_pm_select_sleep_state(priv->device);
 	}
 
 	mutex_unlock(&priv->lock);
-
-	rtnl_lock();
-	if (device_may_wakeup(priv->device) && priv->plat->pmt) {
-		phylink_suspend(priv->phylink, true);
-	} else {
-		if (device_may_wakeup(priv->device))
-			phylink_speed_down(priv->phylink, false);
-		phylink_suspend(priv->phylink, false);
-	}
-	rtnl_unlock();
 
 	if (priv->dma_cap.fpesel) {
 		/* Disable FPE */
@@ -7884,9 +7884,15 @@ int stmmac_resume(struct device *dev)
 			return ret;
 	}
 
-	rtnl_lock();
-	phylink_phy_resume(priv->phylink);
+	if (!device_may_wakeup(priv->device) || !priv->plat->pmt) {
+		rtnl_lock();
+		phylink_start(priv->phylink);
+		/* We may have called phylink_speed_down before */
+		phylink_speed_up(priv->phylink);
+		rtnl_unlock();
+	}
 
+	rtnl_lock();
 	mutex_lock(&priv->lock);
 
 	stmmac_reset_queues_param(priv);
@@ -7910,6 +7916,8 @@ int stmmac_resume(struct device *dev)
 		phylink_speed_up(priv->phylink);
 
 	rtnl_unlock();
+
+	phylink_mac_change(priv->phylink, true);
 
 	netif_device_attach(ndev);
 
