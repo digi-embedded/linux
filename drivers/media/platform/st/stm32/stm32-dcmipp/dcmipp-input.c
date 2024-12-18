@@ -45,6 +45,7 @@
 #define DCMIPP_P0FSCR	0x404
 #define DCMIPP_P1FSCR	0x804
 #define DCMIPP_P2FSCR	0xC04
+#define DCMIPP_P1FSCR_PIPEDIFF		BIT(18)
 #define DCMIPP_PxFSCR_DTMODE_MASK	GENMASK(17, 16)
 #define DCMIPP_PxFSCR_DTMODE_SHIFT	16
 #define DCMIPP_PxFSCR_DTMODE_DTIDA	0x00
@@ -508,6 +509,17 @@ static int dcmipp_inp_s_stream(struct v4l2_subdev *sd, int enable)
 			ret = dcmipp_inp_configure_csi(inp);
 		if (ret)
 			goto error_s_stream;
+
+		/*
+		 * Check if the Aux pipe source pad is connected / enabled
+		 * or not.  If enabled, it means that Aux pipe works alone
+		 * and not connected to Main pipe ISP
+		 */
+		if (inp->ved.ent->num_pads >= 3 &&
+		    !media_pad_remote_pad_first(&inp->ved.pads[3]))
+			reg_clear(inp, DCMIPP_P1FSCR, DCMIPP_P1FSCR_PIPEDIFF);
+		else
+			reg_set(inp, DCMIPP_P1FSCR, DCMIPP_P1FSCR_PIPEDIFF);
 
 		ret = v4l2_subdev_call(s_subdev, video, s_stream, enable);
 		if (ret < 0) {

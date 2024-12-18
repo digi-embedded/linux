@@ -29,9 +29,6 @@
 
 #define DCMIPP_CMSR2_P1VSYNCF BIT(18)
 
-#define DCMIPP_P1FSCR	0x804
-#define DCMIPP_P1FSCR_PIPEDIFF BIT(18)
-
 #define DCMIPP_P1SRCR	0x820
 #define DCMIPP_P1SRCR_LASTLINE_SHIFT	0
 #define DCMIPP_P1SRCR_LASTLINE_MASK	GENMASK(11, 0)
@@ -518,24 +515,6 @@ static void dcmipp_isp_config_demosaicing(struct dcmipp_isp_device *isp,
 	reg_set(isp, DCMIPP_P1DMCR, val);
 }
 
-static bool dcmipp_isp_is_aux_output_enabled(struct dcmipp_isp_device *isp)
-{
-	struct media_link *link;
-
-	for_each_media_entity_data_link(isp->ved.ent, link) {
-		if (link->source != &isp->ved.pads[1])
-			continue;
-
-		if (!(link->flags & MEDIA_LNK_FL_ENABLED))
-			continue;
-
-		if (!strcmp(link->sink->entity->name, "dcmipp_aux_postproc"))
-			return true;
-	}
-
-	return false;
-}
-
 static void dcmipp_isp_config_decimation(struct dcmipp_isp_device *isp,
 					 struct v4l2_rect *crop,
 					 struct v4l2_rect *compose)
@@ -580,12 +559,6 @@ static int dcmipp_isp_s_stream(struct v4l2_subdev *sd, int enable)
 		crop = v4l2_subdev_state_get_crop(state, 0);
 		compose = v4l2_subdev_state_get_compose(state, 0);
 		v4l2_subdev_unlock_state(state);
-
-		/* Check if link between ISP & Pipe2 postproc is enabled */
-		if (dcmipp_isp_is_aux_output_enabled(isp))
-			reg_clear(isp, DCMIPP_P1FSCR, DCMIPP_P1FSCR_PIPEDIFF);
-		else
-			reg_set(isp, DCMIPP_P1FSCR, DCMIPP_P1FSCR_PIPEDIFF);
 
 		/* Configure Statistic Removal */
 		reg_write(isp, DCMIPP_P1SRCR,
