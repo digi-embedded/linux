@@ -658,6 +658,7 @@
 	vmmc-supply = <&scmi_vdd_emmc>;
 	vqmmc-supply = <&scmi_vddio2>;
 	mmc-ddr-1_8v;
+	mmc-hs200-1_8v;
 	status = "okay";
 };
 
