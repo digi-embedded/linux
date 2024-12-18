@@ -1798,7 +1798,7 @@
 				resets = <&rcc SDMMC1_R>;
 				cap-sd-highspeed;
 				cap-mmc-highspeed;
-				max-frequency = <120000000>;
+				max-frequency = <166000000>;
 				access-controllers = <&rifsc 76>;
 				st,syscfg-arcr = <&syscfg 0x40c 0x1>;
 				power-domains = <&CLUSTER_PD>;
@@ -1815,7 +1815,7 @@
 				resets = <&rcc SDMMC2_R>;
 				cap-sd-highspeed;
 				cap-mmc-highspeed;
-				max-frequency = <120000000>;
+				max-frequency = <166000000>;
 				access-controllers = <&rifsc 77>;
 				st,syscfg-arcr = <&syscfg 0x80c 0x1>;
 				power-domains = <&CLUSTER_PD>;
@@ -1832,7 +1832,7 @@
 				resets = <&rcc SDMMC3_R>;
 				cap-sd-highspeed;
 				cap-mmc-highspeed;
-				max-frequency = <120000000>;
+				max-frequency = <166000000>;
 				access-controllers = <&rifsc 78>;
 				st,syscfg-arcr = <&syscfg 0xc0c 0x1>;
 				power-domains = <&CLUSTER_PD>;
