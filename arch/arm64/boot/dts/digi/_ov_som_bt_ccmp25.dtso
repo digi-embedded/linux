@@ -25,7 +25,7 @@
 		__overlay__ {
 			overlay-description = "SOM: Bluetooth";
 			aliases {
-				serial1 = "/soc@0/rifsc@42080000/serial@40330000"; /* Bluetooth */
+				serial1 = "/soc@0/bus@42080000/serial@40330000"; /* Bluetooth */
 			};
 			bluetooth {
 				/* U-Boot will fill in the MAC address here */
