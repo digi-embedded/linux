@@ -1974,7 +1974,7 @@
 				resets = <&rcc SDMMC1_R>;
 				cap-sd-highspeed;
 				cap-mmc-highspeed;
-				max-frequency = <120000000>;
+				max-frequency = <166000000>;
 				access-controllers = <&rifsc 76>;
 				power-domains = <&CLUSTER_PD>;
 				status = "disabled";
@@ -1990,7 +1990,7 @@
 				resets = <&rcc SDMMC2_R>;
 				cap-sd-highspeed;
 				cap-mmc-highspeed;
-				max-frequency = <120000000>;
+				max-frequency = <166000000>;
 				access-controllers = <&rifsc 77>;
 				power-domains = <&CLUSTER_PD>;
 				status = "disabled";
@@ -2006,7 +2006,7 @@
 				resets = <&rcc SDMMC3_R>;
 				cap-sd-highspeed;
 				cap-mmc-highspeed;
-				max-frequency = <120000000>;
+				max-frequency = <166000000>;
 				access-controllers = <&rifsc 78>;
 				power-domains = <&CLUSTER_PD>;
 				status = "disabled";
