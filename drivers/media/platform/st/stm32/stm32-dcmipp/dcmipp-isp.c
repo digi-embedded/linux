@@ -52,18 +52,6 @@
 #define DCMIPP_P1DMCR_TYPE_GBRG		0x2
 #define DCMIPP_P1DMCR_TYPE_BGGR		0x3
 
-#define DCMIPP_P1CCCR	0x880
-#define DCMIPP_P1CCCR_ENABLE		BIT(0)
-#define DCMIPP_P1CCCR_TYPE_YUV		0
-#define DCMIPP_P1CCCR_TYPE_RGB		BIT(1)
-#define DCMIPP_P1CCCR_CLAMP		BIT(2)
-#define DCMIPP_P1CCRR1	0x884
-#define DCMIPP_P1CCRR2	0x888
-#define DCMIPP_P1CCGR1	0x88C
-#define DCMIPP_P1CCGR2	0x890
-#define DCMIPP_P1CCBR1	0x894
-#define DCMIPP_P1CCBR2	0x898
-
 #define IS_SINK(pad) (!(pad))
 #define IS_SRC(pad)  ((pad))
 #define PAD_STR(pad) (IS_SRC((pad))) ? "src" : "sink"
