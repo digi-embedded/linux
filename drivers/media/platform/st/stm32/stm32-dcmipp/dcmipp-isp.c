@@ -562,6 +562,11 @@ static int dcmipp_isp_s_stream(struct v4l2_subdev *sd, int enable)
 	} else {
 		if (isp->usecnt > 1)
 			goto out;
+
+		/* Disable all blocks */
+		reg_write(isp, DCMIPP_P1SRCR, 0);
+		reg_write(isp, DCMIPP_P1DECR, 0);
+		reg_write(isp, DCMIPP_P1DMCR, 0);
 	}
 
 	ret = v4l2_subdev_call(s_subdev, video, s_stream, enable);
