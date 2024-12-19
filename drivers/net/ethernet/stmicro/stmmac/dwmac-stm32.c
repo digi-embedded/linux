@@ -727,6 +727,7 @@ static struct stm32_ops stm32mp25_dwmac_data = {
 	.suspend = stm32mp1_suspend,
 	.resume = stm32mp1_resume,
 	.parse_data = stm32mp1_parse_data,
+	.clk_rx_enable_in_suspend = true,
 	.syscfg_eth_mask = SYSCFG_MP2_ETH_MASK
 };
 
