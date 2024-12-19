@@ -1411,7 +1411,10 @@ void phy_start(struct phy_device *phydev)
 {
 	mutex_lock(&phydev->lock);
 
-	if (phydev->state != PHY_READY && phydev->state != PHY_HALTED) {
+	if (phydev->state == PHY_RUNNING || phydev->state == PHY_UP)
+		goto out;
+
+	if (phydev->state != PHY_READY && phydev->state != PHY_HALTED && phydev->state != PHY_NOLINK) {
 		WARN(1, "called from state %s\n",
 		     phy_state_to_str(phydev->state));
 		goto out;
