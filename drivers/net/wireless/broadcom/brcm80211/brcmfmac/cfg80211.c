@@ -2519,7 +2519,7 @@ brcmf_set_key_mgmt(struct net_device *ndev, struct cfg80211_connect_params *sme)
 				 sme->crypto.akm_suites[0]);
 			return -EINVAL;
 		}
-	} else if (val & WPA3_AUTH_SAE_PSK) {
+	} else if (val & (WPA3_AUTH_SAE_PSK | WPA3_AUTH_SAE_FBT)) {
 		switch (sme->crypto.akm_suites[0]) {
 		case WLAN_AKM_SUITE_SAE:
 			val = WPA3_AUTH_SAE_PSK;
