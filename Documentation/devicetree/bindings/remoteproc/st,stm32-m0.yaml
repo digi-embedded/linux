@@ -40,29 +40,12 @@ properties:
 
   mboxes:
     description:
-      This property is required only if the rpmsg functionality is used.
-    items:
-      - description: |
-          A channel (a) used to communicate with the remote proc.
-          Bi-directional channel:
-            - from local to remote = send message
-            - from remote to local = send message ack
-      - description: |
-          A channel (b) working the opposite direction of channel (a)
-      - description: |
-          A channel (c) used by the local proc to notify the remote proc that it
-          is about to be shut down.
-          Unidirectional channel:
-            - from local to remote, where ACK from the remote means that it is
-              ready for shutdown
-    minItems: 1
+      A channel (c) used by the local proc to notify the remote proc that it
+      is about to be shut down.
 
   mbox-names:
     items:
-      - const: tx
-      - const: rx
       - const: shutdown
-    minItems: 1
 
   memory-region:
     description:
