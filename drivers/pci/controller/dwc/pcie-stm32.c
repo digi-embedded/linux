@@ -175,7 +175,7 @@ static int stm32_pcie_resume_noirq(struct device *dev)
 	int ret;
 
 	/* init_state was set in pinctrl_bind_pins() before probe */
-	if (!IS_ERR(dev->pins->init_state))
+	if (dev->pins && !IS_ERR(dev->pins->init_state))
 		ret = pinctrl_select_state(dev->pins->p, dev->pins->init_state);
 	else
 		ret = pinctrl_pm_select_default_state(dev);
