@@ -802,7 +802,7 @@ static struct clk_stm32_gate ck_icn_p_i3c2 = {
 
 static struct clk_stm32_gate ck_icn_p_i3c3 = {
 	.gate_id = GATE_I3C3,
-	.hw.init = CLK_HW_INIT_INDEX("ck_icn_p_i3c3", ICN_APB1, &clk_stm32_gate_ops, 0),
+	.hw.init = CLK_HW_INIT_INDEX("ck_icn_p_i3c3", ICN_APB5, &clk_stm32_gate_ops, 0),
 };
 
 static struct clk_stm32_gate ck_ker_i3c1 = {
@@ -2284,10 +2284,10 @@ CS_GATE(ck_icn_p_uart4, ck_icn_apb1, GATE_UART4);
 CS_GATE(ck_icn_p_uart5, ck_icn_apb1, GATE_UART5);
 CS_GATE(ck_icn_p_i2c1, ck_icn_apb1, GATE_I2C1);
 CS_GATE(ck_icn_p_i2c2, ck_icn_apb1, GATE_I2C2);
-CS_GATE(ck_icn_p_i2c3, ck_icn_apb1, GATE_I2C3);
+CS_GATE(ck_icn_p_i2c3, ck_icn_apb5, GATE_I2C3);
 CS_GATE(ck_icn_p_i3c1, ck_icn_apb1, GATE_I3C1);
 CS_GATE(ck_icn_p_i3c2, ck_icn_apb1, GATE_I3C2);
-CS_GATE(ck_icn_p_i3c3, ck_icn_apb1, GATE_I3C3);
+CS_GATE(ck_icn_p_i3c3, ck_icn_apb5, GATE_I3C3);
 CS_GATE(ck_icn_p_tim1, ck_icn_apb2, GATE_TIM1);
 CS_GATE(ck_icn_p_tim8, ck_icn_apb2, GATE_TIM8);
 CS_GATE(ck_icn_p_tim15, ck_icn_apb2, GATE_TIM15);
