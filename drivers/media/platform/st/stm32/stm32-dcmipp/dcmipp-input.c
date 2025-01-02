@@ -83,18 +83,18 @@ static const struct dcmipp_inp_pix_map dcmipp_inp_pix_map_list[] = {
 	PIXMAP_SINK_SRC_PRCR_SWAP(RGB565_2X8_BE, RGB565_2X8_LE, RGB565, 0, MIPI_CSI2_DT_RGB565),
 	PIXMAP_SINK_SRC_PRCR_SWAP(RGB565_1X16, RGB565_1X16, RGB565, 0, MIPI_CSI2_DT_RGB565),
 	/* RGB888 */
-	PIXMAP_SINK_SRC_PRCR_SWAP(RGB888_3X8, RGB888_3X8, RGB888, 1, MIPI_CSI2_DT_RGB888),
+	PIXMAP_SINK_SRC_PRCR_SWAP(RGB888_3X8, RGB888_3X8, RGB888, 0, MIPI_CSI2_DT_RGB888),
 	PIXMAP_SINK_SRC_PRCR_SWAP(RGB888_1X24, RGB888_1X24, RGB888, 0, MIPI_CSI2_DT_RGB888),
 	/* YUV422 */
-	PIXMAP_SINK_SRC_PRCR_SWAP(YUYV8_2X8, YUYV8_2X8, YUV422, 1, MIPI_CSI2_DT_YUV422_8B),
+	PIXMAP_SINK_SRC_PRCR_SWAP(YUYV8_2X8, YUYV8_2X8, YUV422, 0, MIPI_CSI2_DT_YUV422_8B),
 	PIXMAP_SINK_SRC_PRCR_SWAP(YUYV8_1X16, YUYV8_1X16, YUV422, 0, MIPI_CSI2_DT_YUV422_8B),
-	PIXMAP_SINK_SRC_PRCR_SWAP(YUYV8_2X8, UYVY8_2X8, YUV422, 0, MIPI_CSI2_DT_YUV422_8B),
-	PIXMAP_SINK_SRC_PRCR_SWAP(UYVY8_2X8, UYVY8_2X8, YUV422, 1, MIPI_CSI2_DT_YUV422_8B),
+	PIXMAP_SINK_SRC_PRCR_SWAP(YUYV8_2X8, UYVY8_2X8, YUV422, 1, MIPI_CSI2_DT_YUV422_8B),
+	PIXMAP_SINK_SRC_PRCR_SWAP(UYVY8_2X8, UYVY8_2X8, YUV422, 0, MIPI_CSI2_DT_YUV422_8B),
 	PIXMAP_SINK_SRC_PRCR_SWAP(UYVY8_1X16, UYVY8_1X16, YUV422, 0, MIPI_CSI2_DT_YUV422_8B),
-	PIXMAP_SINK_SRC_PRCR_SWAP(UYVY8_2X8, YUYV8_2X8, YUV422, 0, MIPI_CSI2_DT_YUV422_8B),
-	PIXMAP_SINK_SRC_PRCR_SWAP(YVYU8_2X8, YVYU8_2X8, YUV422, 1, MIPI_CSI2_DT_YUV422_8B),
+	PIXMAP_SINK_SRC_PRCR_SWAP(UYVY8_2X8, YUYV8_2X8, YUV422, 1, MIPI_CSI2_DT_YUV422_8B),
+	PIXMAP_SINK_SRC_PRCR_SWAP(YVYU8_2X8, YVYU8_2X8, YUV422, 0, MIPI_CSI2_DT_YUV422_8B),
 	PIXMAP_SINK_SRC_PRCR_SWAP(YVYU8_1X16, YVYU8_1X16, YUV422, 0, MIPI_CSI2_DT_YUV422_8B),
-	PIXMAP_SINK_SRC_PRCR_SWAP(VYUY8_2X8, VYUY8_2X8, YUV422, 1, MIPI_CSI2_DT_YUV422_8B),
+	PIXMAP_SINK_SRC_PRCR_SWAP(VYUY8_2X8, VYUY8_2X8, YUV422, 0, MIPI_CSI2_DT_YUV422_8B),
 	PIXMAP_SINK_SRC_PRCR_SWAP(VYUY8_1X16, VYUY8_1X16, YUV422, 0, MIPI_CSI2_DT_YUV422_8B),
 	/* GREY */
 	PIXMAP_SINK_SRC_PRCR_SWAP(Y8_1X8, Y8_1X8, G8, 0, MIPI_CSI2_DT_RAW8),
@@ -181,7 +181,10 @@ struct dcmipp_inp_device {
 	struct v4l2_subdev sd;
 	struct device *dev;
 	void __iomem *regs;
-	bool streaming;
+
+	/* Protect concurrent access to s_stream */
+	struct mutex lock;
+	u32 usecnt;
 };
 
 static const struct v4l2_mbus_framefmt fmt_default = {
@@ -283,8 +286,12 @@ static int dcmipp_inp_set_fmt(struct v4l2_subdev *sd,
 	struct v4l2_mbus_framefmt *mf;
 	int i;
 
-	if (inp->streaming)
+	mutex_lock(&inp->lock);
+
+	if (inp->usecnt) {
+		mutex_unlock(&inp->lock);
 		return -EBUSY;
+	}
 
 	mf = v4l2_subdev_state_get_format(sd_state, fmt->pad);
 
@@ -312,6 +319,8 @@ static int dcmipp_inp_set_fmt(struct v4l2_subdev *sd,
 			dcmipp_inp_adjust_fmt(inp, mf, 1);
 		}
 	}
+
+	mutex_unlock(&inp->lock);
 
 	return 0;
 }
@@ -485,40 +494,53 @@ static int dcmipp_inp_s_stream(struct v4l2_subdev *sd, int enable)
 		return -EINVAL;
 	s_subdev = media_entity_to_v4l2_subdev(pad->entity);
 
+	mutex_lock(&inp->lock);
+
 	if (enable) {
+		/* Nothing to do if already enabled by someone */
+		if (inp->usecnt)
+			goto out;
+
 		if (inp->ved.bus_type == V4L2_MBUS_PARALLEL ||
 		    inp->ved.bus_type == V4L2_MBUS_BT656)
 			ret = dcmipp_inp_configure_parallel(inp, enable);
 		else if (inp->ved.bus_type == V4L2_MBUS_CSI2_DPHY)
 			ret = dcmipp_inp_configure_csi(inp);
 		if (ret)
-			return ret;
+			goto error_s_stream;
 
-		ret = dcmipp_s_stream_helper(s_subdev, enable);
+		ret = v4l2_subdev_call(s_subdev, video, s_stream, enable);
 		if (ret < 0) {
 			dev_err(inp->dev,
 				"failed to start source subdev streaming (%d)\n",
 				ret);
-			return ret;
+			goto error_s_stream;
 		}
 	} else {
-		ret = dcmipp_s_stream_helper(s_subdev, enable);
+		if (inp->usecnt > 1)
+			goto out;
+
+		ret = v4l2_subdev_call(s_subdev, video, s_stream, enable);
 		if (ret < 0) {
 			dev_err(inp->dev,
 				"failed to stop source subdev streaming (%d)\n",
 				ret);
-			return ret;
+			goto error_s_stream;
 		}
 
 		if (inp->ved.bus_type == V4L2_MBUS_PARALLEL ||
 		    inp->ved.bus_type == V4L2_MBUS_BT656) {
 			ret = dcmipp_inp_configure_parallel(inp, enable);
 			if (ret)
-				return ret;
+				goto error_s_stream;
 		}
 	}
 
-	inp->streaming = enable;
+out:
+	inp->usecnt += enable ? 1 : -1;
+
+error_s_stream:
+	mutex_unlock(&inp->lock);
 
 	return ret;
 }
@@ -550,6 +572,7 @@ void dcmipp_inp_ent_release(struct dcmipp_ent_device *ved)
 			container_of(ved, struct dcmipp_inp_device, ved);
 
 	dcmipp_ent_sd_unregister(ved, &inp->sd);
+	mutex_destroy(&inp->lock);
 }
 
 #define DCMIPP_INP_SINK_PAD_NB_MP13	1
@@ -578,6 +601,9 @@ struct dcmipp_ent_device *dcmipp_inp_ent_init(const char *entity_name,
 
 	inp->regs = dcmipp->regs;
 
+	/* Initialize the lock */
+	mutex_init(&inp->lock);
+
 	/* Initialize ved and sd */
 	ret = dcmipp_ent_sd_register(&inp->ved, &inp->sd, &dcmipp->v4l2_dev,
 				     entity_name, MEDIA_ENT_F_VID_IF_BRIDGE,
@@ -585,6 +611,7 @@ struct dcmipp_ent_device *dcmipp_inp_ent_init(const char *entity_name,
 				     &dcmipp_inp_int_ops, &dcmipp_inp_ops,
 				     NULL, NULL);
 	if (ret) {
+		mutex_destroy(&inp->lock);
 		kfree(inp);
 		return ERR_PTR(ret);
 	}

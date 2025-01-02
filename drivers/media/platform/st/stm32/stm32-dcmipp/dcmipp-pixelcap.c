@@ -118,9 +118,9 @@ static const struct dcmipp_pixelcap_pix_map dcmipp_pixelcap_pix_map_list[] = {
 	PIXMAP_MBUS_PFMT(YUV8_1X24, GREY, 1, DCMIPP_PxPPCR_FORMAT_Y8, 0),
 	PIXMAP_MBUS_PFMT(RGB888_1X24, RGB24, 1, DCMIPP_PxPPCR_FORMAT_RGB888, 1),
 	PIXMAP_MBUS_PFMT(RGB888_1X24, BGR24, 1, DCMIPP_PxPPCR_FORMAT_RGB888, 0),
-	PIXMAP_MBUS_PFMT(RGB888_1X24, ARGB32, 1, DCMIPP_PxPPCR_FORMAT_ARGB8888, 1),
+	PIXMAP_MBUS_PFMT(RGB888_1X24, ARGB32, 1, DCMIPP_PxPPCR_FORMAT_RGBA8888, 1),
 	PIXMAP_MBUS_PFMT(RGB888_1X24, ABGR32, 1, DCMIPP_PxPPCR_FORMAT_ARGB8888, 0),
-	PIXMAP_MBUS_PFMT(RGB888_1X24, RGBA32, 1, DCMIPP_PxPPCR_FORMAT_RGBA8888, 1),
+	PIXMAP_MBUS_PFMT(RGB888_1X24, RGBA32, 1, DCMIPP_PxPPCR_FORMAT_ARGB8888, 1),
 	PIXMAP_MBUS_PFMT(RGB888_1X24, BGRA32, 1, DCMIPP_PxPPCR_FORMAT_RGBA8888, 0),
 
 	/* Semiplanar & planar formats (plane_nb > 1) are only supported on main pipe */
@@ -495,7 +495,7 @@ static int dcmipp_pipeline_s_stream(struct dcmipp_pixelcap_device *vcap,
 	if (ret < 0)
 		return ret;
 
-	ret = dcmipp_s_stream_helper(vcap->s_subdev, state);
+	ret = v4l2_subdev_call(vcap->s_subdev, video, s_stream, state);
 	if (ret < 0) {
 		dev_err(vcap->dev, "failed to %s streaming (%d)\n",
 			state ? "start" : "stop", ret);
@@ -505,8 +505,8 @@ static int dcmipp_pipeline_s_stream(struct dcmipp_pixelcap_device *vcap,
 	return 0;
 }
 
-static int dcmipp_start_capture(struct dcmipp_pixelcap_device *vcap,
-				struct dcmipp_buf *buf)
+static void dcmipp_start_capture(struct dcmipp_pixelcap_device *vcap,
+				 struct dcmipp_buf *buf)
 {
 	/*
 	 * Set frame addresses
@@ -532,8 +532,6 @@ static int dcmipp_start_capture(struct dcmipp_pixelcap_device *vcap,
 
 	/* Capture request */
 	reg_set(vcap, DCMIPP_PxFCTCR(vcap->pipe_id), DCMIPP_PxFCTCR_CPTREQ);
-
-	return 0;
 }
 
 static int dcmipp_pixelcap_start_streaming(struct vb2_queue *vq,
@@ -568,16 +566,33 @@ static int dcmipp_pixelcap_start_streaming(struct vb2_queue *vq,
 	if (ret)
 		goto err_media_pipeline_stop;
 
-	/* Configure the Pixel Packer */
-	vpix = dcmipp_pixelcap_pix_map_by_pixelformat(vcap->format.pixelformat);
-	if (!vpix)
-		goto err_media_pipeline_stop;
+	spin_lock_irq(&vcap->irqlock);
 
+	/*
+	 * Configure the Pixel Packer
+	 * vpix is guaranteed to be valid since pixelformat is validated
+	 * in dcmipp_pixelcap_s_fmt_vid_cap function before
+	 */
+	vpix = dcmipp_pixelcap_pix_map_by_pixelformat(vcap->format.pixelformat);
 	ppcr = vpix->ppcr_fmt;
 	if (vpix->swap_uv)
 		ppcr |= DCMIPP_PxPPCR_SWAPRB;
 
 	reg_write(vcap, DCMIPP_PxPPCR(vcap->pipe_id), ppcr);
+
+	/* Enable pipe at the end of programming */
+	reg_set(vcap, DCMIPP_PxFSCR(vcap->pipe_id), DCMIPP_PxFSCR_PIPEN);
+
+	/*
+	 * vb2 framework guarantee that we have at least 'min_buffers_needed'
+	 * buffers in the list at this moment
+	 */
+	vcap->next = list_first_entry(&vcap->buffers, typeof(*buf), list);
+	dev_dbg(vcap->dev, "Start with next [%d] %p phy=%pad\n",
+		vcap->next->vb.vb2_buf.index, vcap->next, &vcap->next->paddr);
+
+	/* Start capture */
+	dcmipp_start_capture(vcap, vcap->next);
 
 	/* Enable interruptions */
 	vcap->cmier |= DCMIPP_CMIER_PxALL(vcap->pipe_id);
@@ -585,30 +600,9 @@ static int dcmipp_pixelcap_start_streaming(struct vb2_queue *vq,
 	reg_set(vcap, DCMIPP_CMIER, vcap->cmier);
 	spin_unlock(&vcap->vdev.v4l2_dev->lock);
 
-	/* Enable pipe at the end of programming */
-	reg_set(vcap, DCMIPP_PxFSCR(vcap->pipe_id), DCMIPP_PxFSCR_PIPEN);
-
-	/*
-	 * Start capture if at least one buffer has been queued,
-	 * otherwise start is deferred at next buffer queueing
-	 */
-	buf = list_first_entry_or_null(&vcap->buffers, typeof(*buf), list);
-	if (!buf) {
-		dev_dbg(vcap->dev, "Start streaming is deferred to next buffer queueing\n");
-		vcap->next = NULL;
-		vcap->state = DCMIPP_WAIT_FOR_BUFFER;
-		return 0;
-	}
-	vcap->next = buf;
-	dev_dbg(vcap->dev, "Start with next [%d] %p phy=%pad\n",
-		buf->vb.vb2_buf.index, buf, &buf->paddr);
-
 	vcap->state = DCMIPP_RUNNING;
 
-	/* Start capture */
-	ret = dcmipp_start_capture(vcap, buf);
-	if (ret)
-		goto err_media_pipeline_stop;
+	spin_unlock_irq(&vcap->irqlock);
 
 	return 0;
 

@@ -25,6 +25,7 @@
 #define DCMIPP_P0SCSZR_HSIZE_SHIFT	0
 #define DCMIPP_P0SCSZR_VSIZE_SHIFT	16
 #define DCMIPP_P0PPCR	0x5c0
+#define DCMIPP_P0PPCR_SWAPYUV		BIT(0)
 #define DCMIPP_P0PPCR_BSM_1_2		0x1
 #define DCMIPP_P0PPCR_BSM_1_4		0x2
 #define DCMIPP_P0PPCR_BSM_2_4		0x3
@@ -470,9 +471,10 @@ static int dcmipp_byteproc_configure_scale_crop
 	if (!vpix)
 		return -EINVAL;
 
-	/* clear decimation/crop */
+	/* clear decimation/crop/swap yuv */
 	reg_clear(byteproc, DCMIPP_P0PPCR, DCMIPP_P0PPCR_BSM_MASK);
 	reg_clear(byteproc, DCMIPP_P0PPCR, DCMIPP_P0PPCR_LSM);
+	reg_clear(byteproc, DCMIPP_P0PPCR, DCMIPP_P0PPCR_SWAPYUV);
 	reg_write(byteproc, DCMIPP_P0SCSTR, 0);
 	reg_write(byteproc, DCMIPP_P0SCSZR, 0);
 
@@ -492,6 +494,16 @@ static int dcmipp_byteproc_configure_scale_crop
 	vprediv = sink_fmt->height / compose->height;
 	if (vprediv == 2)
 		val |= DCMIPP_P0PPCR_LSM | DCMIPP_P0PPCR_OELS;
+
+	/*
+	 * Perform a SWAP YUV if input is parallel since in this mode
+	 * the DCMIPP will swap YUV by default
+	 */
+	if (sink_fmt->code == MEDIA_BUS_FMT_YUYV8_2X8 ||
+	    sink_fmt->code == MEDIA_BUS_FMT_YVYU8_2X8 ||
+	    sink_fmt->code == MEDIA_BUS_FMT_UYVY8_2X8 ||
+	    sink_fmt->code == MEDIA_BUS_FMT_VYUY8_2X8)
+		val |= DCMIPP_P0PPCR_SWAPYUV;
 
 	/* decimate using bytes and lines skipping */
 	if (val) {
@@ -604,7 +616,7 @@ static int dcmipp_byteproc_s_stream(struct v4l2_subdev *sd, int enable)
 		if (ret)
 			return ret;
 
-		ret = dcmipp_s_stream_helper(s_subdev, enable);
+		ret = v4l2_subdev_call(s_subdev, video, s_stream, enable);
 		if (ret < 0) {
 			dev_err(byteproc->dev,
 				"failed to start source subdev streaming (%d)\n",
@@ -612,7 +624,7 @@ static int dcmipp_byteproc_s_stream(struct v4l2_subdev *sd, int enable)
 			return ret;
 		}
 	} else {
-		ret = dcmipp_s_stream_helper(s_subdev, enable);
+		ret = v4l2_subdev_call(s_subdev, video, s_stream, enable);
 		if (ret < 0) {
 			dev_err(byteproc->dev,
 				"failed to stop source subdev streaming (%d)\n",

@@ -65,7 +65,7 @@ struct dcmipp_tpg_pix_map {
 		.tpg_format = tpg_fmt,			\
 	}
 static const struct dcmipp_tpg_pix_map dcmipp_tpg_pix_map_list[] = {
-	PIXMAP_MBUS_TPG(YUYV8_1X16, DCMIPP_CMTPGCR2_FMT_YUV422),
+	PIXMAP_MBUS_TPG(UYVY8_1X16, DCMIPP_CMTPGCR2_FMT_YUV422),
 	PIXMAP_MBUS_TPG(RGB565_1X16, DCMIPP_CMTPGCR2_FMT_RGB565),
 	PIXMAP_MBUS_TPG(RGB888_1X24, DCMIPP_CMTPGCR2_FMT_RGB888),
 	PIXMAP_MBUS_TPG(SBGGR8_1X8, DCMIPP_CMTPGCR2_FMT_RAW8 |
@@ -278,7 +278,7 @@ static int dcmipp_tpg_s_stream(struct v4l2_subdev *sd, int enable)
 		goto unlock;
 
 	/* Set YT if format is YUV422 */
-	if (fmt->code == MEDIA_BUS_FMT_YUYV8_1X16) {
+	if (fmt->code == MEDIA_BUS_FMT_UYVY8_1X16) {
 		if (fmt->quantization != V4L2_QUANTIZATION_FULL_RANGE)
 			reg_set(tpg, DCMIPP_CMTPGCR2,
 				DCMIPP_CMTPGCR2_YT_REDUCED);

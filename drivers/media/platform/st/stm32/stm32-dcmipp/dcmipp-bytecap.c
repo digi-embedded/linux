@@ -375,7 +375,7 @@ static int dcmipp_pipeline_s_stream(struct dcmipp_bytecap_device *vcap,
 	if (ret < 0)
 		return ret;
 
-	ret = dcmipp_s_stream_helper(vcap->s_subdev, state);
+	ret = v4l2_subdev_call(vcap->s_subdev, video, s_stream, state);
 	if (ret < 0) {
 		dev_err(vcap->dev, "failed to %s streaming (%d)\n",
 			state ? "start" : "stop", ret);

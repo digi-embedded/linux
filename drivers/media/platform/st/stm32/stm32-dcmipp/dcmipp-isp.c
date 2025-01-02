@@ -83,13 +83,7 @@ static const unsigned int dcmipp_isp_sink_pix_map_list[] = {
 	MEDIA_BUS_FMT_RGB888_1X24,
 	/* YUV422 */
 	MEDIA_BUS_FMT_YUYV8_2X8,
-	MEDIA_BUS_FMT_YUYV8_1X16,
-	MEDIA_BUS_FMT_UYVY8_2X8,
 	MEDIA_BUS_FMT_UYVY8_1X16,
-	MEDIA_BUS_FMT_YVYU8_2X8,
-	MEDIA_BUS_FMT_YVYU8_1X16,
-	MEDIA_BUS_FMT_VYUY8_2X8,
-	MEDIA_BUS_FMT_VYUY8_1X16,
 	/* GREY */
 	MEDIA_BUS_FMT_Y8_1X8,
 	MEDIA_BUS_FMT_Y10_1X10,
@@ -156,7 +150,9 @@ struct dcmipp_isp_device {
 	struct v4l2_subdev sd;
 	struct device *dev;
 
-	refcount_t usecnt;
+	/* Protect concurrent access to s_stream */
+	struct mutex lock;
+	u32 usecnt;
 
 	void __iomem *regs;
 };
@@ -278,8 +274,12 @@ static int dcmipp_isp_set_fmt(struct v4l2_subdev *sd,
 	struct dcmipp_isp_device *isp = v4l2_get_subdevdata(sd);
 	struct v4l2_mbus_framefmt *pad_fmt, *opp_pad_fmt;
 
-	if (refcount_read(&isp->usecnt))
+	mutex_lock(&isp->lock);
+
+	if (isp->usecnt) {
+		mutex_unlock(&isp->lock);
 		return -EBUSY;
+	}
 
 	pad_fmt = v4l2_subdev_state_get_format(state, fmt->pad);
 
@@ -342,6 +342,8 @@ static int dcmipp_isp_set_fmt(struct v4l2_subdev *sd,
 		fmt->format.xfer_func, fmt->format.ycbcr_enc);
 
 	*pad_fmt = fmt->format;
+
+	mutex_unlock(&isp->lock);
 
 	return 0;
 }
@@ -566,10 +568,12 @@ static int dcmipp_isp_s_stream(struct v4l2_subdev *sd, int enable)
 		return -EINVAL;
 	s_subdev = media_entity_to_v4l2_subdev(pad->entity);
 
+	mutex_lock(&isp->lock);
+
 	if (enable) {
 		/* Nothing to do if already enabled by someone */
-		if (refcount_inc_not_zero(&isp->usecnt))
-			return 0;
+		if (isp->usecnt)
+			goto out;
 
 		state = v4l2_subdev_lock_and_get_active_state(&isp->sd);
 		sink_fmt = v4l2_subdev_state_get_format(state, 0);
@@ -595,18 +599,21 @@ static int dcmipp_isp_s_stream(struct v4l2_subdev *sd, int enable)
 		/* Configure Demosaicing */
 		dcmipp_isp_config_demosaicing(isp, sink_fmt);
 	} else {
-		if (refcount_dec_not_one(&isp->usecnt))
-			return 0;
+		if (isp->usecnt > 1)
+			goto out;
 	}
 
-	ret = dcmipp_s_stream_helper(s_subdev, enable);
+	ret = v4l2_subdev_call(s_subdev, video, s_stream, enable);
 	if (ret < 0) {
 		dev_err(isp->dev,
 			"failed to start source subdev streaming (%d)\n", ret);
-		return ret;
+		goto error_s_stream;
 	}
 
-	refcount_set(&isp->usecnt, enable ? 1 : 0);
+out:
+	isp->usecnt += enable ? 1 : -1;
+error_s_stream:
+	mutex_unlock(&isp->lock);
 
 	return 0;
 }
@@ -626,6 +633,7 @@ void dcmipp_isp_ent_release(struct dcmipp_ent_device *ved)
 			container_of(ved, struct dcmipp_isp_device, ved);
 
 	dcmipp_ent_sd_unregister(ved, &isp->sd);
+	mutex_destroy(&isp->lock);
 	kfree(isp);
 }
 
@@ -662,7 +670,9 @@ struct dcmipp_ent_device *dcmipp_isp_ent_init(const char *entity_name,
 
 	isp->regs = dcmipp->regs;
 	isp->dev = dcmipp->dev;
-	refcount_set(&isp->usecnt, 0);
+
+	/* Initialize the lock */
+	mutex_init(&isp->lock);
 
 	/* Initialize ved and sd */
 	ret = dcmipp_ent_sd_register(&isp->ved, &isp->sd,
@@ -672,6 +682,7 @@ struct dcmipp_ent_device *dcmipp_isp_ent_init(const char *entity_name,
 				     NULL, &dcmipp_isp_ops,
 				     NULL, NULL);
 	if (ret) {
+		mutex_destroy(&isp->lock);
 		kfree(isp);
 		return ERR_PTR(ret);
 	}

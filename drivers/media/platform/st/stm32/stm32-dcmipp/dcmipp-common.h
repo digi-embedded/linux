@@ -248,45 +248,6 @@ static inline void __reg_clear(struct device *dev, void __iomem *base, u32 reg,
 	__reg_write(dev, base, reg, readl_relaxed(base + reg) & ~mask);
 }
 
-/*
- * Helper function to avoid calling s_stream if v4l2_subdev streaming state
- * is already correct
- * This helper is here temporarily while waiting to move to proper
- * v4l2_subdev_stream_ functions
- * The move isn't yet done since this would require a much larger rework such
- * as implementing pad->enable_streams ops for subdev having multiple source
- * pads (such as dcmipp_input).  Moreover the stream API is still considered
- * as experimental as of linux v6.6
- *
- * This function reuse the enabled_streams counter within v4l2-subdev to count
- * the number of users of a subdevice.  Below we need to use a local variable
- * and not directly enabled_streams otherwise we would have v4l2_subdev_call
- * complain that the value are already matching when enabling and disable the
- * subdev.
- */
-static inline int dcmipp_s_stream_helper(struct v4l2_subdev *sd, int state)
-{
-	u64 count = sd->enabled_streams;
-	int ret;
-
-	/*
-	 * If enabling, don't do anything if enabled_streams was already > 0
-	 * if disabling, don't do anything if decreamented enabled_streams is still > 0
-	 */
-	if ((state && count++) || (!state && --count)) {
-		sd->enabled_streams = count;
-		return 0;
-	}
-
-	ret = v4l2_subdev_call(sd, video, s_stream, state);
-	if (ret)
-		return ret;
-
-	sd->enabled_streams = count;
-
-	return 0;
-}
-
 /* DCMIPP subdev init / release entry points */
 struct dcmipp_ent_device *dcmipp_tpg_ent_init(const char *entity_name,
 					      struct dcmipp_device *dcmipp);

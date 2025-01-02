@@ -121,15 +121,7 @@ static const struct dcmipp_pixelproc_pix_map dcmipp_pixelproc_sink_pix_map_list[
 	PIXMAP_MBUS(RGB888_3X8, DCMIPP_AUX_PIPE),
 	/* YUV formats */
 	PIXMAP_MBUS(YUYV8_2X8, DCMIPP_AUX_PIPE),
-	PIXMAP_MBUS(YUYV8_1X16, DCMIPP_AUX_PIPE),
-	PIXMAP_MBUS(YUYV8_2X8, DCMIPP_AUX_PIPE),
-	PIXMAP_MBUS(UYVY8_2X8, DCMIPP_AUX_PIPE),
 	PIXMAP_MBUS(UYVY8_1X16, DCMIPP_AUX_PIPE),
-	PIXMAP_MBUS(UYVY8_2X8, DCMIPP_AUX_PIPE),
-	PIXMAP_MBUS(YVYU8_2X8, DCMIPP_AUX_PIPE),
-	PIXMAP_MBUS(YVYU8_1X16, DCMIPP_AUX_PIPE),
-	PIXMAP_MBUS(VYUY8_2X8, DCMIPP_AUX_PIPE),
-	PIXMAP_MBUS(VYUY8_1X16, DCMIPP_AUX_PIPE),
 	PIXMAP_MBUS(Y8_1X8, DCMIPP_AUX_PIPE),
 	PIXMAP_MBUS(Y10_1X10, DCMIPP_AUX_PIPE),
 	PIXMAP_MBUS(Y12_1X12, DCMIPP_AUX_PIPE),
@@ -1064,7 +1056,7 @@ static int dcmipp_pixelproc_s_stream(struct v4l2_subdev *sd, int enable)
 	s_subdev = media_entity_to_v4l2_subdev(pad->entity);
 
 	if (!enable) {
-		ret = dcmipp_s_stream_helper(s_subdev, enable);
+		ret = v4l2_subdev_call(s_subdev, video, s_stream, enable);
 		if (ret < 0)
 			dev_err(pixelproc->dev,
 				"failed to stop source subdev streaming (%d)\n",
@@ -1110,7 +1102,7 @@ static int dcmipp_pixelproc_s_stream(struct v4l2_subdev *sd, int enable)
 		return ret;
 	}
 
-	ret = dcmipp_s_stream_helper(s_subdev, enable);
+	ret = v4l2_subdev_call(s_subdev, video, s_stream, enable);
 	if (ret < 0) {
 		dev_err(pixelproc->dev,
 			"failed to start source subdev streaming (%d)\n", ret);
