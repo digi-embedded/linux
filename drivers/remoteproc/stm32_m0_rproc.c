@@ -19,11 +19,6 @@
 #include "remoteproc_internal.h"
 #include "remoteproc_elf_helpers.h"
 
-#define MBOX_NB_Q		2
-#define MBOX_NB_MBX		3
-
-#define STM32_MBX_RX		"rx"
-#define STM32_MBX_TX		"tx"
 #define STM32_MBX_SHUTDOWN	"shutdown"
 
 struct stm32_rproc;
@@ -50,7 +45,7 @@ struct stm32_rproc {
 	int wdg_irq;
 	u32 nb_rmems;
 	struct stm32_m0_rproc_mem *rmems;
-	struct stm32_mbox mb[MBOX_NB_MBX];
+	struct stm32_mbox mb;
 };
 
 static int stm32_m0_rproc_pa_to_da(struct rproc *rproc, phys_addr_t pa, u64 *da)
@@ -173,32 +168,16 @@ free_mem:
 	return ret;
 }
 
-static int stm32_m0_rproc_mbox_idx(struct rproc *rproc, const unsigned char *name)
-{
-	struct stm32_rproc *ddata = rproc->priv;
-	int i;
-
-	for (i = 0; i < ARRAY_SIZE(ddata->mb); i++) {
-		if (!strncmp(ddata->mb[i].name, name, strlen(name)))
-			return i;
-	}
-	dev_err(&rproc->dev, "mailbox %s not found\n", name);
-
-	return -EINVAL;
-}
-
 static void stm32_m0_rproc_request_shutdown(struct rproc *rproc)
 {
 	struct stm32_rproc *ddata = rproc->priv;
-	int err, dummy_data, idx;
+	int err, dummy_data;
 
 	/* Request shutdown of the remote processor */
 	if (rproc->state != RPROC_OFFLINE && rproc->state != RPROC_CRASHED) {
-		idx = stm32_m0_rproc_mbox_idx(rproc, STM32_MBX_SHUTDOWN);
-		if (idx >= 0 && ddata->mb[idx].chan) {
+		if (ddata->mb.chan) {
 			/* A dummy data is sent to allow to block on transmit. */
-			err = mbox_send_message(ddata->mb[idx].chan,
-						&dummy_data);
+			err = mbox_send_message(ddata->mb.chan, &dummy_data);
 			if (err < 0)
 				dev_warn(&rproc->dev, "warning: remote FW shutdown without ack\n");
 		}
@@ -262,94 +241,52 @@ static irqreturn_t stm32_rproc_wdg(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
-static void stm32_m0_rproc_mb_callback(struct mbox_client *cl, void *data)
-{
-	struct rproc *rproc = dev_get_drvdata(cl->dev);
-	struct stm32_mbox *mb = container_of(cl, struct stm32_mbox, client);
-
-	if (rproc_vq_interrupt(rproc, mb->id) == IRQ_NONE)
-		dev_dbg(&rproc->dev, "no message found in q%d\n", mb->id);
-}
-
 static void stm32_m0_rproc_free_mbox(struct rproc *rproc)
 {
 	struct stm32_rproc *ddata = rproc->priv;
-	unsigned int i;
 
-	for (i = 0; i < ARRAY_SIZE(ddata->mb); i++) {
-		if (ddata->mb[i].chan)
-			mbox_free_channel(ddata->mb[i].chan);
-		ddata->mb[i].chan = NULL;
+	if (ddata->mb.chan) {
+		mbox_free_channel(ddata->mb.chan);
+		ddata->mb.chan = NULL;
 	}
 }
 
-static const struct stm32_mbox stm32_m0_rproc_mbox[MBOX_NB_MBX] = {
-	{
-		.name = STM32_MBX_RX,
-		.id = 0,
-		.client = {
-			.rx_callback = stm32_m0_rproc_mb_callback,
-			.tx_block = false,
-		},
+static const struct stm32_mbox stm32_m0_rproc_mbox = {
+	.name = STM32_MBX_SHUTDOWN,
+	.id = -1,
+	.client = {
+		.tx_block = true,
+		.tx_done = NULL,
+		.tx_tout = 500, /* 500 ms time out */
 	},
-	{
-		.name = STM32_MBX_TX,
-		.id = 1,
-		.client = {
-			.rx_callback = stm32_m0_rproc_mb_callback,
-			.tx_block = false,
-		},
-	},
-	{
-		.name = STM32_MBX_SHUTDOWN,
-		.id = -1,
-		.client = {
-			.tx_block = true,
-			.tx_done = NULL,
-			.tx_tout = 500, /* 500 ms time out */
-		},
-	}
 };
 
 static int stm32_m0_rproc_request_mbox(struct rproc *rproc)
 {
 	struct stm32_rproc *ddata = rproc->priv;
 	struct device *dev = &rproc->dev;
-	unsigned int i;
-	int j;
 	const unsigned char *name;
 	struct mbox_client *cl;
 
 	/* Initialise mailbox structure table */
-	memcpy(ddata->mb, stm32_m0_rproc_mbox, sizeof(stm32_m0_rproc_mbox));
+	memcpy(&ddata->mb, &stm32_m0_rproc_mbox, sizeof(stm32_m0_rproc_mbox));
 
-	for (i = 0; i < MBOX_NB_MBX; i++) {
-		name = ddata->mb[i].name;
+	name = stm32_m0_rproc_mbox.name;
+	cl = &ddata->mb.client;
+	cl->dev = dev->parent;
 
-		cl = &ddata->mb[i].client;
-		cl->dev = dev->parent;
-
-		ddata->mb[i].chan = mbox_request_channel_byname(cl, name);
-		if (IS_ERR(ddata->mb[i].chan)) {
-			if (PTR_ERR(ddata->mb[i].chan) == -EPROBE_DEFER) {
-				dev_err_probe(dev->parent,
-					      PTR_ERR(ddata->mb[i].chan),
-					      "failed to request mailbox %s\n",
-					      name);
-				goto err_probe;
-			}
-			dev_warn(dev, "cannot get %s mbox\n", name);
-			ddata->mb[i].chan = NULL;
+	ddata->mb.chan = mbox_request_channel_byname(cl, name);
+	if (IS_ERR(ddata->mb.chan)) {
+		if (PTR_ERR(ddata->mb.chan) == -EPROBE_DEFER) {
+			dev_err_probe(dev->parent, PTR_ERR(ddata->mb.chan),
+				      "failed to request mailbox %s\n", name);
+			return PTR_ERR(ddata->mb.chan);
 		}
+		dev_info(dev, "no %s mbox\n", name);
+		ddata->mb.chan = NULL;
 	}
 
 	return 0;
-
-err_probe:
-	for (j = i - 1; j >= 0; j--)
-		if (ddata->mb[j].chan)
-			mbox_free_channel(ddata->mb[j].chan);
-	return -EPROBE_DEFER;
 }
 
 static int stm32_m0_rproc_start(struct rproc *rproc)
@@ -406,33 +343,10 @@ static int stm32_m0_rproc_stop(struct rproc *rproc)
 	return 0;
 }
 
-static void stm32_m0_rproc_kick(struct rproc *rproc, int id)
-{
-	struct stm32_rproc *ddata = rproc->priv;
-	unsigned int i;
-	int err;
-
-	if (WARN_ON(id >= MBOX_NB_Q))
-		return;
-
-	for (i = 0; i < MBOX_NB_MBX; i++) {
-		if (id != ddata->mb[i].id)
-			continue;
-		if (!ddata->mb[i].chan)
-			return;
-		err = mbox_send_message(ddata->mb[i].chan, "kick");
-		if (err < 0)
-			dev_err(&rproc->dev, "%s: failed (%s, err:%d)\n",
-				__func__, ddata->mb[i].name, err);
-		return;
-	}
-}
-
 static const struct rproc_ops st_m0_rproc_ops = {
 	.prepare	= stm32_m0_rproc_prepare,
 	.start		= stm32_m0_rproc_start,
 	.stop		= stm32_m0_rproc_stop,
-	.kick		= stm32_m0_rproc_kick,
 	.load		= rproc_elf_load_segments,
 	.sanity_check	= rproc_elf_sanity_check,
 };
