@@ -231,7 +231,7 @@ static int mbox_cdev_driver_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	// Initialize mailbox client
+	/* Initialize mailbox client */
 	ret = mbox_cdev_request_mbox(dev, mbxdev);
 	if (ret)
 		goto unmap;
