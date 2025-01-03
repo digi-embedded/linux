@@ -1648,7 +1648,7 @@
 				compatible = "st,stm32mp25-i2c";
 				reg = <0x46040000 0x0 0x400>;
 				interrupt-names = "event";
-				interrupts = <GIC_SPI 137 IRQ_TYPE_LEVEL_HIGH>;
+				interrupts = <GIC_SPI 124 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_KER_I2C3>;
 				resets = <&rcc I2C3_R>;
 				#address-cells = <1>;
@@ -1666,7 +1666,7 @@
 				#size-cells = <0>;
 				compatible = "st,stm32-i3c";
 				reg = <0x46080000 0x0 0x400>;
-				interrupts = <GIC_SPI 138 IRQ_TYPE_LEVEL_HIGH>;
+				interrupts = <GIC_SPI 125 IRQ_TYPE_LEVEL_HIGH>;
 				clocks = <&rcc CK_KER_I3C3>;
 				resets = <&rcc I3C3_R>;
 				access-controllers = <&rifsc 116>;
