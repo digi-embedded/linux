@@ -295,13 +295,15 @@ config QCOM_IPCC
 	  acts as an interrupt controller for receiving interrupts from clients.
 	  Say Y here if you want to build this driver.
 
+	  It's safe to say N if you don't want to use this interface.
+endif
 
 config MAILBOX_CDEV
 	tristate "mailbox client char device"
+	select MAILBOX
 	help
 	  Say Y here to export mailboxes as a character device files, usually
 	  found in /dev/mailbox<%x>. They make it possible for ser-space
 	  programs to send and receive message through this interface.
 
 	  It's safe to say N if you don't want to use this interface.
-endif

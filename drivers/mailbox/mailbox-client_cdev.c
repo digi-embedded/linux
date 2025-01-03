@@ -210,6 +210,7 @@ static void mbox_cdev_driver_remove(struct platform_device *pdev)
 {
 	struct mbox_cdev_ddata *mbxdev = platform_get_drvdata(pdev);
 
+	device_destroy(mbox_cl_class, mbxdev->dev.devt);
 	mbox_free_channel(mbxdev->mb.chan);
 	cdev_del(&mbxdev->cdev);
 }
