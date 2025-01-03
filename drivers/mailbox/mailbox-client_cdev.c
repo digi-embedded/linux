@@ -211,7 +211,6 @@ static void mbox_cdev_driver_remove(struct platform_device *pdev)
 	struct mbox_cdev_ddata *mbxdev = platform_get_drvdata(pdev);
 
 	mbox_free_channel(mbxdev->mb.chan);
-	iounmap(mbxdev->resm);
 	cdev_del(&mbxdev->cdev);
 }
 
@@ -234,7 +233,7 @@ static int mbox_cdev_driver_probe(struct platform_device *pdev)
 	/* Initialize mailbox client */
 	ret = mbox_cdev_request_mbox(dev, mbxdev);
 	if (ret)
-		goto unmap;
+		return ret;
 
 	ret = mbxdev_char_device_add(pdev, mbxdev);
 	if (ret)
@@ -246,8 +245,6 @@ static int mbox_cdev_driver_probe(struct platform_device *pdev)
 
 free_mbx:
 	mbox_free_channel(mbxdev->mb.chan);
-unmap:
-	iounmap(mbxdev->resm);
 
 	return ret;
 }
