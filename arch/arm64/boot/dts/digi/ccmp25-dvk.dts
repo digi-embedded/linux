@@ -876,6 +876,12 @@
 };
 
 &pinctrl {
+	ccmp25_adc_pins: ccmp25-adc-pins-0 {
+		pins {
+			pinmux = <STM32_PINMUX('G', 1, ANALOG)>;
+		};
+	};
+
 	ccmp25_i2c1_pins: ccmp25-i2c1-0 {
 		pins {
 			pinmux = <STM32_PINMUX('G', 13, AF9)>, /* I2C1_SCL */
@@ -1114,12 +1120,6 @@
 		pins {
 			pinmux = <STM32_PINMUX('D', 3, ANALOG)>, /* UART7_TX */
 				 <STM32_PINMUX('D', 0, ANALOG)>; /* UART7_RX */
-		};
-	};
-
-	ccmp25_adc_pins: ccmp25_adc_pins-0 {
-		pins {
-			pinmux = <STM32_PINMUX('G', 1, ANALOG)>;
 		};
 	};
 };
