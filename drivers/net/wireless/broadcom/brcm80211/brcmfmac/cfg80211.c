@@ -10655,6 +10655,7 @@ struct brcmf_cfg80211_info *brcmf_cfg80211_attach(struct brcmf_pub *drvr,
 	brcmf_dbg(INFO, "Registering custom regulatory\n");
 	wiphy->reg_notifier = brcmf_cfg80211_reg_notifier;
 	wiphy->regulatory_flags |= REGULATORY_CUSTOM_REG;
+	wiphy->regulatory_flags |= REGULATORY_COUNTRY_IE_IGNORE;
 	wiphy_apply_custom_regulatory(wiphy, &brcmf_regdom);
 
 	/* firmware defaults to 40MHz disabled in 2G band. We signal
