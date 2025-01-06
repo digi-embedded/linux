@@ -8846,6 +8846,23 @@ static void brcmf_update_bw40_channel_flag(struct ieee80211_channel *channel,
 	}
 }
 
+static void brcmf_wiphy_reset_band_and_channel(struct wiphy *wiphy)
+{
+	enum nl80211_band band;
+	struct ieee80211_supported_band *wiphy_band = NULL;
+
+	for (band = 0; band < NUM_NL80211_BANDS; band++) {
+		wiphy_band = wiphy->bands[band];
+		if (!wiphy_band)
+			continue;
+
+		kfree(wiphy_band->channels);
+		wiphy_band->channels = NULL;
+		kfree(wiphy_band);
+		wiphy->bands[band] = NULL;
+	}
+}
+
 static int brcmf_fill_band_with_default_chanlist(struct wiphy *wiphy, struct brcmf_if *ifp)
 {
 	struct brcmf_pub *drvr = ifp->drvr;
@@ -8861,10 +8878,11 @@ static int brcmf_fill_band_with_default_chanlist(struct wiphy *wiphy, struct brc
 		return err;
 	}
 
+	brcmf_wiphy_reset_band_and_channel(wiphy);
+
 	n_bands = le32_to_cpu(bandlist[0]);
 	for (i = 1; i <= n_bands && i < ARRAY_SIZE(bandlist); i++) {
-		if (bandlist[i] == cpu_to_le32(WLC_BAND_2G) &&
-		    !wiphy->bands[NL80211_BAND_2GHZ]) {
+		if (bandlist[i] == cpu_to_le32(WLC_BAND_2G)) {
 			band = kmemdup(&__wl_band_2ghz, sizeof(__wl_band_2ghz),
 				       GFP_KERNEL);
 			if (!band)
@@ -8878,8 +8896,7 @@ static int brcmf_fill_band_with_default_chanlist(struct wiphy *wiphy, struct brc
 			/* restore 2G channels info */
 			band->n_channels = ARRAY_SIZE(__wl_2ghz_channels);
 			wiphy->bands[NL80211_BAND_2GHZ] = band;
-		} else if (bandlist[i] == cpu_to_le32(WLC_BAND_5G) &&
-		    !wiphy->bands[NL80211_BAND_5GHZ]) {
+		} else if (bandlist[i] == cpu_to_le32(WLC_BAND_5G)) {
 			band = kmemdup(&__wl_band_5ghz, sizeof(__wl_band_5ghz),
 				       GFP_KERNEL);
 			if (!band)
@@ -8894,7 +8911,6 @@ static int brcmf_fill_band_with_default_chanlist(struct wiphy *wiphy, struct brc
 			band->n_channels = ARRAY_SIZE(__wl_5ghz_channels);
 			wiphy->bands[NL80211_BAND_5GHZ] = band;
 		} else if (bandlist[i] == cpu_to_le32(WLC_BAND_6G) &&
-		    !wiphy->bands[NL80211_BAND_6GHZ] &&
 		    brcmf_feat_is_6ghz_enabled(ifp)) {
 			band = kmemdup(&__wl_band_6ghz, sizeof(__wl_band_6ghz),
 				       GFP_KERNEL);
@@ -8920,19 +8936,47 @@ static int brcmf_fill_band_with_default_chanlist(struct wiphy *wiphy, struct brc
 	return 0;
 
 mem_err:
-	if (wiphy->bands[NL80211_BAND_2GHZ]) {
-		kfree(wiphy->bands[NL80211_BAND_2GHZ]->channels);
-		kfree(wiphy->bands[NL80211_BAND_2GHZ]);
-	}
-	if (wiphy->bands[NL80211_BAND_5GHZ]) {
-		kfree(wiphy->bands[NL80211_BAND_5GHZ]->channels);
-		kfree(wiphy->bands[NL80211_BAND_5GHZ]);
-	}
-	if (wiphy->bands[NL80211_BAND_6GHZ]) {
-		kfree(wiphy->bands[NL80211_BAND_6GHZ]->channels);
-		kfree(wiphy->bands[NL80211_BAND_6GHZ]);
-	}
+	brcmf_wiphy_reset_band_and_channel(wiphy);
 	return -ENOMEM;
+}
+
+static void brcmf_wiphy_rm_disabled_band_and_channel(struct wiphy *wiphy)
+{
+	enum nl80211_band band;
+	struct ieee80211_supported_band *wiphy_band = NULL;
+	struct ieee80211_channel *cur = NULL;
+	struct ieee80211_channel *next = NULL;
+	u32 n_ch = 0;
+	u32 i, j;
+
+	for (band = 0; band < NUM_NL80211_BANDS; band++) {
+		wiphy_band = wiphy->bands[band];
+		if (!wiphy_band)
+			continue;
+
+		n_ch = wiphy_band->n_channels;
+		for (i = 0; i < n_ch;) {
+			cur = &wiphy_band->channels[i];
+			if (cur->flags == IEEE80211_CHAN_DISABLED) {
+				for (j = i; j < n_ch - 1; j++) {
+					cur = &wiphy_band->channels[j];
+					next = &wiphy_band->channels[j + 1];
+					memcpy(cur, next, sizeof(*cur));
+				}
+				n_ch--;
+			} else {
+				i++;
+			}
+		}
+
+		wiphy_band->n_channels = n_ch;
+		if (!n_ch) {
+			kfree(wiphy_band->channels);
+			wiphy_band->channels = NULL;
+			kfree(wiphy_band);
+			wiphy->bands[band] = NULL;
+		}
+	}
 }
 
 static int brcmf_construct_chaninfo(struct brcmf_cfg80211_info *cfg,
@@ -8942,14 +8986,14 @@ static int brcmf_construct_chaninfo(struct brcmf_cfg80211_info *cfg,
 	struct brcmf_pub *drvr = cfg->pub;
 	struct brcmf_if *ifp = brcmf_get_ifp(drvr, 0);
 	struct ieee80211_supported_band *band;
-	struct ieee80211_channel *channel, *cur, *next;
+	struct ieee80211_channel *channel;
 	struct brcmf_chanspec_list *list;
 	struct brcmu_chan ch;
 	int err;
 	u8 *pbuf;
 	u32 i, j;
 	u32 total;
-	u32 chaninfo, n_2g = 0, n_5g = 0, n_6g = 0;
+	u32 chaninfo;
 	pbuf = kzalloc(BRCMF_DCMD_MEDLEN, GFP_KERNEL);
 
 	if (pbuf == NULL)
@@ -9086,72 +9130,7 @@ static int brcmf_construct_chaninfo(struct brcmf_cfg80211_info *cfg,
 	}
 
 	/* Remove disabled channels and band to avoid unexpected restore. */
-	band = wiphy->bands[NL80211_BAND_2GHZ];
-	if (band) {
-		n_2g = band->n_channels;
-		for (i = 0; i < n_2g;) {
-			cur = &band->channels[i];
-			if (cur->flags == IEEE80211_CHAN_DISABLED) {
-				for (j = i; j < n_2g - 1; j++) {
-					cur = &band->channels[j];
-					next = &band->channels[j + 1];
-					memcpy(cur, next, sizeof(*cur));
-				}
-				n_2g--;
-			} else
-				i++;
-		}
-		wiphy->bands[NL80211_BAND_2GHZ]->n_channels = n_2g;
-		if (!n_2g) {
-			kfree(wiphy->bands[NL80211_BAND_2GHZ]->channels);
-			kfree(wiphy->bands[NL80211_BAND_2GHZ]);
-			wiphy->bands[NL80211_BAND_2GHZ] = NULL;
-		}
-	}
-	band = wiphy->bands[NL80211_BAND_5GHZ];
-	if (band) {
-		n_5g = band->n_channels;
-		for (i = 0; i < n_5g;) {
-			cur = &band->channels[i];
-			if (cur->flags == IEEE80211_CHAN_DISABLED) {
-				for (j = i; j < n_5g - 1; j++) {
-					cur = &band->channels[j];
-					next = &band->channels[j + 1];
-					memcpy(cur, next, sizeof(*cur));
-				}
-				n_5g--;
-			} else
-				i++;
-		}
-		wiphy->bands[NL80211_BAND_5GHZ]->n_channels = n_5g;
-		if (!n_5g) {
-			kfree(wiphy->bands[NL80211_BAND_5GHZ]->channels);
-			kfree(wiphy->bands[NL80211_BAND_5GHZ]);
-			wiphy->bands[NL80211_BAND_5GHZ] = NULL;
-		}
-	}
-	band = wiphy->bands[NL80211_BAND_6GHZ];
-	if (band) {
-		n_6g = band->n_channels;
-		for (i = 0; i < n_6g;) {
-			cur = &band->channels[i];
-			if (cur->flags == IEEE80211_CHAN_DISABLED) {
-				for (j = i; j < n_6g - 1; j++) {
-					cur = &band->channels[j];
-					next = &band->channels[j + 1];
-					memcpy(cur, next, sizeof(*cur));
-				}
-				n_6g--;
-			} else
-				i++;
-		}
-		wiphy->bands[NL80211_BAND_6GHZ]->n_channels = n_6g;
-		if (!n_6g) {
-			kfree(wiphy->bands[NL80211_BAND_6GHZ]->channels);
-			kfree(wiphy->bands[NL80211_BAND_6GHZ]);
-			wiphy->bands[NL80211_BAND_6GHZ] = NULL;
-		}
-	}
+	brcmf_wiphy_rm_disabled_band_and_channel(wiphy);
 
 fail_pbuf:
 	kfree(pbuf);
