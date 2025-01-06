@@ -415,7 +415,7 @@ static int stm32_rproc_tee_start(struct rproc *rproc)
 
 	err = tee_rproc_start(ddata->trproc);
 	if (err)
-		return pm_runtime_put(rproc->dev.parent);
+		pm_runtime_put(rproc->dev.parent);
 
 	return err;
 }
@@ -730,9 +730,18 @@ static int stm32_rproc_start(struct rproc *rproc)
 
 	err = stm32_rproc_set_hold_boot(rproc, false);
 	if (err)
-		return err;
+		goto disable_pm;
 
-	return stm32_rproc_set_hold_boot(rproc, true);
+	err = stm32_rproc_set_hold_boot(rproc, true);
+	if (err)
+		goto disable_pm;
+
+	return 0;
+
+disable_pm:
+	pm_runtime_put(rproc->dev.parent);
+
+	return err;
 }
 
 static int stm32_rproc_attach(struct rproc *rproc)
