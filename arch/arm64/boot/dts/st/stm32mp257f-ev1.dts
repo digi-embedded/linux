@@ -573,6 +573,12 @@
 		 <&rcc CK_LPUART1_C3>,
 		 <&rcc CK_KER_LPUART1>,
 		 <&rcc CK_LPUART1_AM>,
+		 <&rcc CK_GPIOZ_C3>,
+		 <&scmi_clk CK_SCMI_GPIOZ>,
+		 <&scmi_clk CK_SCMI_GPIOZ_AM>,
+		 <&rcc CK_LPTIM4_C3>,
+		 <&rcc CK_KER_LPTIM4>,
+		 <&rcc CK_LPTIM4_AM>,
 		 <&scmi_clk CK_SCMI_IPCC2>,
 		 <&scmi_clk CK_SCMI_IPCC2_AM>;
 	status = "okay";
