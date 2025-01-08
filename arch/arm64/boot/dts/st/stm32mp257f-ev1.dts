@@ -446,7 +446,7 @@
 		avdd-supply = <&imx335_2v9>;
 		ovdd-supply = <&imx335_1v8>;
 		dvdd-supply = <&imx335_1v2>;
-		reset-gpios = <&gpioi 7 (GPIO_ACTIVE_HIGH | GPIO_PUSH_PULL)>;
+		reset-gpios = <&gpioi 7 (GPIO_ACTIVE_LOW | GPIO_PUSH_PULL)>;
 		powerdown-gpios = <&gpioi 0 (GPIO_ACTIVE_HIGH | GPIO_PUSH_PULL)>;
 		status = "okay";
 
