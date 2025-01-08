@@ -216,6 +216,10 @@ unsigned long iomux_offsets_mx6dl[][2] = {
 
 int can_change_ddr_freq(void)
 {
+	/* Don't lower DDR frequency on CC6UL */
+	if (of_machine_is_compatible("digi,ccimx6ul"))
+		return 0;
+
 	return 1;
 }
 
