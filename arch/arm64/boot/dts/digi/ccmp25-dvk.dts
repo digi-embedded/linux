@@ -157,6 +157,13 @@
 		status = "disabled";
 	};
 
+	power_button {
+		compatible = "digi,stpmic-pwrkey";
+		interrupts-extended = <&optee 0>, <&optee 1>;
+		interrupt-names = "stpmic_pwrkey_fall", "stpmic_pwrkey_rise";
+		status = "okay";
+	};
+
 	regulators {
 		compatible = "simple-bus";
 		#address-cells = <1>;
