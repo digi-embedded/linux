@@ -1,6 +1,6 @@
-/* stmpmic1-pwrkey.c - Power Key device driver for ConnectCore modules
+/* stmpmic-pwrkey.c - Power Key device driver for ConnectCore modules
  *
- * Copyright (C) 2023  Digi International Inc
+ * Copyright (C) 2023-2025, Digi International Inc.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -29,11 +29,11 @@
 #include <linux/platform_device.h>
 
 /**
- * struct stpmic1_pwrkey_data - PMIC Power Key information
+ * struct stpmic_pwrkey_data - PMIC Power Key information
  * @name: name of the input device
  * @phys: physical path to the device in the system hierarchy
  */
-struct stpmic1_pwrkey_data {
+struct stpmic_pwrkey_data {
 	const char	*name;
 	const char	*phys;
 };
@@ -58,12 +58,12 @@ static irqreturn_t pwrkey_rise_irq(int irq, void *_pwrkey)
 	return IRQ_HANDLED;
 }
 
-static int stpmic1_pwrkey_probe(struct platform_device *pdev)
+static int stpmic_pwrkey_probe(struct platform_device *pdev)
 {
 	struct input_dev *pwrkey;
 	int fall_irq, rise_irq;
 	int error;
-	const struct stpmic1_pwrkey_data *devdata =
+	const struct stpmic_pwrkey_data *devdata =
 				      of_device_get_match_data(&pdev->dev);
 
 	pwrkey = devm_input_allocate_device(&pdev->dev);
@@ -88,7 +88,7 @@ static int stpmic1_pwrkey_probe(struct platform_device *pdev)
 	error = devm_request_any_context_irq(&pwrkey->dev, fall_irq,
 					   pwrkey_fall_irq,
 					   IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
-					   "stpmic1_pwrkey_fall",
+					   "stpmic_pwrkey_fall",
 					   pwrkey);
 	if (error < 0) {
 		dev_err(&pdev->dev, "%s: failed to register fall irq: %d\n",
@@ -99,7 +99,7 @@ static int stpmic1_pwrkey_probe(struct platform_device *pdev)
 	error = devm_request_any_context_irq(&pwrkey->dev, rise_irq,
 					   pwrkey_rise_irq,
 					   IRQF_TRIGGER_RISING | IRQF_ONESHOT,
-					   "stpmic1_pwrkey_rise",
+					   "stpmic_pwrkey_rise",
 					   pwrkey);
 	if (error < 0) {
 		dev_err(&pdev->dev, "%s: failed to register rise irq: %d\n",
@@ -120,27 +120,27 @@ static int stpmic1_pwrkey_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static struct stpmic1_pwrkey_data stpmic1_pwrkey_devdata = {
-	.name = "stpmic1 pwrkey",
-	.phys = "stpmic1-pwrkey/input0"
+static struct stpmic_pwrkey_data stpmic_pwrkey_devdata = {
+	.name = "stpmic pwrkey",
+	.phys = "stpmic-pwrkey/input0"
 };
 
-static const struct of_device_id stpmic1_pwrkey_id_table[] = {
-	{ .compatible = "digi,stpmic1-pwrkey", .data = &stpmic1_pwrkey_devdata},
+static const struct of_device_id stpmic_pwrkey_id_table[] = {
+	{ .compatible = "digi,stpmic-pwrkey", .data = &stpmic_pwrkey_devdata},
 	{ /* sentinel */ },
 };
-MODULE_DEVICE_TABLE(of, stpmic1_pwrkey_ids);
+MODULE_DEVICE_TABLE(of, stpmic_pwrkey_ids);
 
-static struct platform_driver stpmic1_pwrkey_driver = {
-	.probe	= stpmic1_pwrkey_probe,
+static struct platform_driver stpmic_pwrkey_driver = {
+	.probe	= stpmic_pwrkey_probe,
 	.driver	= {
-		.name = "stpmic1-pwrkey",
-		.of_match_table = of_match_ptr(stpmic1_pwrkey_id_table),
+		.name = "stpmic-pwrkey",
+		.of_match_table = of_match_ptr(stpmic_pwrkey_id_table),
 	},
 };
-module_platform_driver(stpmic1_pwrkey_driver);
+module_platform_driver(stpmic_pwrkey_driver);
 
-MODULE_ALIAS("platform:stpmic1-pwrkey");
+MODULE_ALIAS("platform:stpmic-pwrkey");
 MODULE_AUTHOR("Arturo Buzarra <Arturo.Buzarra@digi.com>");
 MODULE_DESCRIPTION("STPMIC Power Key driver");
 MODULE_LICENSE("GPL");

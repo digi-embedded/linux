@@ -939,11 +939,10 @@ config INPUT_STPMIC1_ONKEY
 	  To compile this driver as a module, choose M here: the
 	  module will be called stpmic1_onkey.
 
-config INPUT_STPMIC1_PWRKEY
-	tristate "STPMIC1 PMIC Power key support"
-	depends on MFD_STPMIC1
+config INPUT_STPMIC_PWRKEY
+	tristate "STPMIC PMIC Power key support"
 	help
-	  Say Y to enable support of power key embedded into STPMIC1 PMIC. Power key
+	  Say Y to enable support of power key embedded into STPMIC PMIC. Power key
 	  can be used to enter and wakeup from low power modes and force a shut-down
 	  on long press.
 
