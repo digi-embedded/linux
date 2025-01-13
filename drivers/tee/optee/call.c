@@ -419,9 +419,9 @@ int optee_invoke_func_helper(struct tee_context *ctx,
 	struct optee_shm_arg_entry *entry;
 	struct optee_msg_arg *msg_arg;
 	struct optee_session *sess;
-	struct tee_shm *shm;
+	struct tee_shm *shm = NULL;
 	u32 session_id;
-	u_int offs;
+	u_int offs = 0;
 	int rc;
 
 	if (tee_ocall_in_progress(ocall_arg))
