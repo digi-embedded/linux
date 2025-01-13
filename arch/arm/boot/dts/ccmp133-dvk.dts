@@ -58,6 +58,25 @@
 			enable-active-high;
 			status = "okay";
 		};
+
+		/*
+		 * External regulator for ADC.
+		 * This regulator DOES NOT exist on the DVK. It is only
+		 * a helper for testing the ADC channels.
+		 * To make use of it, you need to wire 3.3V from the board to
+		 * the VREF+ pad, to supply this external voltage reference to
+		 * the ADC.
+		 *
+		 * NOTE: This is incompatible with using the internal VREFBUF
+		 *       regulator, which outputs a voltage at VREF+ pad.
+		 */
+		external_vref: regulator@99 {
+			reg = <99>;
+			compatible = "regulator-fixed";
+			regulator-name = "external-vref";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+		};
 	};
 
 	sound_max98089: sound-max98089 {
@@ -118,8 +137,10 @@
 	/* PA5 which is shared with MikroE PWM */
 	pinctrl-names = "default";
 	pinctrl-0 = <&ccmp13_adc1_pins>;
-	vdda-supply = <&scmi_vdd_adc>;
-	vref-supply = <&scmi_vdd_adc>;
+	/* External Vref (requires connecting external voltage to VREF+ pad) */
+	vref-supply = <&external_vref>;
+	/* Internal Vref (requires enabling VREFBUF in OP-TEE device tree) */
+	//vref-supply = <&scmi_vrefbuf>;
 	status = "okay";
 
 	adc1: adc@0 {
@@ -242,6 +263,23 @@
 		output-high;
 		line-name = "PCIe-EN";
 	};
+};
+
+&scmi_regu {
+	/*
+	 * Internal VREFBUF regulator must be enabled in OP-TEE device tree
+	 * since it is a secure peripheral. Once enabled, you can uncomment
+	 * these lines to let Linux use it.
+	 * You must also change the 'vref-supply' on the ADC node.
+	 * VREFBUF can be set to 2.5 V, 2.048 V, 1.8 V or 1.65 V which are
+	  * output at VREF+ pad.
+	 */
+	// scmi_vrefbuf: voltd-vrefbuf {
+	// 	voltd-name = "vrefbuf";
+	// 	regulator-name = "vrefbuf";
+	// 	regulator-min-microvolt = <2500000>;
+	// 	regulator-max-microvolt = <2500000>;
+	// };
 };
 
 /* Micro SD */

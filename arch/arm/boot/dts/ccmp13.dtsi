@@ -71,6 +71,14 @@
 	};
 };
 
+&adc_1 {
+	vdda-supply = <&scmi_vdd_adc>;
+};
+
+&adc_2 {
+	vdda-supply = <&scmi_vdd_adc>;
+};
+
 &bsec {
 	/* By default, make the OTP bits read-only */
 	read-only;
