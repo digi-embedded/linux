@@ -397,6 +397,40 @@ static void display_connector_remove(struct platform_device *pdev)
 		i2c_put_adapter(conn->bridge.ddc);
 }
 
+static int display_connector_resume(struct device *dev)
+{
+	struct display_connector *conn = dev_get_drvdata(dev);
+	int ret = 0;
+
+	if (conn->hpd_irq >= 0)
+		enable_irq(conn->hpd_irq);
+
+	if (conn->supply) {
+		ret = regulator_enable(conn->supply);
+		if (ret)
+			dev_err(dev, "failed to enable PWR regulator: %d\n", ret);
+	}
+
+	return ret;
+}
+
+static int display_connector_suspend(struct device *dev)
+{
+	struct display_connector *conn = dev_get_drvdata(dev);
+
+	if (conn->hpd_irq >= 0)
+		disable_irq(conn->hpd_irq);
+
+	if (conn->supply)
+		regulator_disable(conn->supply);
+
+	return 0;
+}
+
+static DEFINE_SIMPLE_DEV_PM_OPS(display_connector_pm_ops,
+				display_connector_suspend,
+				display_connector_resume);
+
 static const struct of_device_id display_connector_match[] = {
 	{
 		.compatible = "composite-video-connector",
@@ -427,6 +461,7 @@ static struct platform_driver display_connector_driver = {
 	.driver		= {
 		.name		= "display-connector",
 		.of_match_table	= display_connector_match,
+		.pm = pm_sleep_ptr(&display_connector_pm_ops),
 	},
 };
 module_platform_driver(display_connector_driver);
