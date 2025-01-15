@@ -52,6 +52,8 @@ struct stm32_firewall_controller {
 					 size_t size);
 };
 
+#if IS_ENABLED(CONFIG_STM32_FIREWALL)
+
 /**
  * stm32_firewall_controller_register - Register a firewall controller to the STM32 firewall
  *					framework
@@ -68,4 +70,16 @@ int stm32_firewall_controller_register(struct stm32_firewall_controller *firewal
  */
 void stm32_firewall_controller_unregister(struct stm32_firewall_controller *firewall_controller);
 
+#else /* IS_ENABLED(CONFIG_STM32_FIREWALL) */
+
+int stm32_firewall_controller_register(struct stm32_firewall_controller *firewall_controller)
+{
+	return -ENODEV;
+}
+
+void stm32_firewall_controller_unregister(struct stm32_firewall_controller *firewall_controller)
+{
+}
+
+#endif/* IS_ENABLED(CONFIG_STM32_FIREWALL) */
 #endif /* _STM32_FIREWALL_H */
