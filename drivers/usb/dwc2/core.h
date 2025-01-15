@@ -1074,6 +1074,7 @@ struct dwc2_hsotg {
 	unsigned int reset_phy_on_wake:1;
 	unsigned int need_phy_for_wake:1;
 	unsigned int phy_off_for_suspend:1;
+	bool gadget_off_for_suspend;
 	u16 frame_number;
 
 	struct phy *phy;
