@@ -45,14 +45,12 @@
 /* Group hold register */
 #define IMX335_REG_HOLD		0x3001
 
-/* CSI Lane mode */
-#define IMX335_LANEMODE		0x3a01
-
 /* Input clock rate */
 #define IMX335_INCLK_RATE	24000000
 
 /* CSI2 HW configuration */
 #define IMX335_LINK_FREQ	594000000
+#define IMX335_NUM_DATA_LANES	4
 
 #define IMX335_REG_MIN		0x00
 #define IMX335_REG_MAX		0xfffff
@@ -139,7 +137,6 @@ struct imx335_mode {
  * @mutex: Mutex for serializing sensor controls
  * @streaming: Flag indicating streaming state
  * @cur_mbus_code: Currently selected media bus format code
- * @lanes_nb: Number of CSI lanes to be used
  */
 struct imx335 {
 	struct device *dev;
@@ -164,7 +161,6 @@ struct imx335 {
 	struct mutex mutex;
 	bool streaming;
 	u32 cur_mbus_code;
-	u32 lanes_nb;
 };
 
 static const s64 link_freq[] = {
@@ -771,16 +767,6 @@ static int imx335_start_streaming(struct imx335 *imx335)
 		return ret;
 	}
 
-	/* Set number of lanes to use */
-	if (imx335->lanes_nb == 2)
-		ret = imx335_write_reg(imx335, IMX335_LANEMODE, 1, 0x01);
-	else
-		ret = imx335_write_reg(imx335, IMX335_LANEMODE, 1, 0x03);
-	if (ret) {
-		dev_err(imx335->dev, "fail to write lanemode register\n");
-		return ret;
-	}
-
 	ret = imx335_set_framefmt(imx335);
 	if (ret) {
 		dev_err(imx335->dev, "%s failed to set frame format: %d\n",
@@ -964,15 +950,13 @@ static int imx335_parse_hw_config(struct imx335 *imx335)
 	if (ret)
 		return ret;
 
-	if (bus_cfg.bus.mipi_csi2.num_data_lanes != 2 &&
-	    bus_cfg.bus.mipi_csi2.num_data_lanes != 4) {
+	if (bus_cfg.bus.mipi_csi2.num_data_lanes != IMX335_NUM_DATA_LANES) {
 		dev_err(imx335->dev,
 			"number of CSI2 data lanes %d is not supported\n",
 			bus_cfg.bus.mipi_csi2.num_data_lanes);
 		ret = -EINVAL;
 		goto done_endpoint_free;
 	}
-	imx335->lanes_nb = bus_cfg.bus.mipi_csi2.num_data_lanes;
 
 	if (!bus_cfg.nr_of_link_frequencies) {
 		dev_err(imx335->dev, "no link frequencies defined\n");
