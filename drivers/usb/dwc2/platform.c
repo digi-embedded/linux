@@ -962,7 +962,7 @@ static int __maybe_unused dwc2_suspend(struct device *dev)
 		ret = __dwc2_lowlevel_hw_disable(dwc2);
 
 	if (dwc2->ll_hw_enabled &&
-	    (is_device_mode || dwc2_host_can_poweroff_phy(dwc2))) {
+	    (dwc2_gadget_can_poweroff_phy(dwc2) || dwc2_host_can_poweroff_phy(dwc2))) {
 		ret = __dwc2_lowlevel_hw_disable(dwc2);
 		dwc2->phy_off_for_suspend = true;
 	}
