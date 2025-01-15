@@ -963,7 +963,7 @@
 	 * to have the port work as USB 2.0 on the TypeC connector.
 	 */
 
-	 vcc-supply = <&reg_3v3_usb_sw>;
+	 phy-supply = <&reg_3v3_usb_sw>;
 };
 
 /* Micro SD card */
