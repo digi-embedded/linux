@@ -700,7 +700,7 @@ static irqreturn_t dcmipp_statcap_irq_thread(int irq, void *arg)
 
 		if (vcap->prev_capture_state == PHY_BIN_3_SHA_AV_RGB) {
 			/* The data capture refer to the previous location */
-			avr_bins = !vcap->stat_location == DCMIPP_P1STXCR_SRC_LOC_PRE ?
+			avr_bins = !(vcap->stat_location == DCMIPP_P1STXCR_SRC_LOC_PRE) ?
 					&vcap->local_buf.pre : &vcap->local_buf.post;
 			/* Accumulators contains the 4th set of BINS */
 			for (i = 0; i < 3; i++)
