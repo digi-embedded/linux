@@ -1707,6 +1707,7 @@ phys_addr_t __init_memblock memblock_phys_mem_size(void)
 {
 	return memblock.memory.total_size;
 }
+EXPORT_SYMBOL_GPL(memblock_phys_mem_size);
 
 phys_addr_t __init_memblock memblock_reserved_size(void)
 {

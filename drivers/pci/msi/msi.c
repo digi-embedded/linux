@@ -913,3 +913,4 @@ void pci_no_msi(void)
 {
 	pci_msi_enable = 0;
 }
+EXPORT_SYMBOL_GPL(pci_no_msi);
