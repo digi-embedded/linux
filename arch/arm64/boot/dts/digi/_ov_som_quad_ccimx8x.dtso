@@ -70,7 +70,7 @@
 	fragment@3 {
 		target = <&thermal_zones>;
 		__overlay__ {
-			cpu-thermal0 {
+			cpu0-thermal {
 				cooling-maps {
 					map0 {
 						cooling-device =
