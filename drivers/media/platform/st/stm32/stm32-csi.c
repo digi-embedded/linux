@@ -466,7 +466,6 @@ static int stm32_csi_start(struct stm32_csi_dev *csi2priv)
 	int ret, i, mbps;
 	u32 lanes_ie = 0;
 	u32 lanes_en = 0;
-	u32 lanes_stop = 0;
 	u32 ccfr;
 	s64 link_freq;
 
@@ -510,11 +509,9 @@ static int stm32_csi_start(struct stm32_csi_dev *csi2priv)
 		if (!csi2priv->lanes[i]) {
 			lanes_ie |= STM32_CSI_SR1_DL0_ERRORS;
 			lanes_en |= STM32_CSI_PCR_DL0EN;
-			lanes_stop |= STM32_CSI_SR1_STOPDL0F;
 		} else {
 			lanes_ie |= STM32_CSI_SR1_DL1_ERRORS;
 			lanes_en |= STM32_CSI_PCR_DL1EN;
-			lanes_stop |= STM32_CSI_SR1_STOPDL1F;
 		}
 	}
 
