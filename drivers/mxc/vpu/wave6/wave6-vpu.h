@@ -70,6 +70,7 @@ static inline bool wave6_vpu_both_queues_are_streaming(struct vpu_instance *inst
 	return vb2_is_streaming(vq_cap) && vb2_is_streaming(vq_out);
 }
 
+unsigned int wave6_default_bytesperline(unsigned int fourcc, unsigned int width);
 void wave6_update_pix_fmt(struct v4l2_pix_format_mplane *pix_mp,
 			  unsigned int width,
 			  unsigned int height);

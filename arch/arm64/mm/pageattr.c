@@ -36,12 +36,12 @@ bool can_set_direct_map(void)
 static int change_page_range(pte_t *ptep, unsigned long addr, void *data)
 {
 	struct page_change_data *cdata = data;
-	pte_t pte = READ_ONCE(*ptep);
+	pte_t pte = __ptep_get(ptep);
 
 	pte = clear_pte_bit(pte, cdata->clear_mask);
 	pte = set_pte_bit(pte, cdata->set_mask);
 
-	set_pte(ptep, pte);
+	__set_pte(ptep, pte);
 	return 0;
 }
 
@@ -176,6 +176,7 @@ int set_direct_map_invalid_noflush(struct page *page)
 				   (unsigned long)page_address(page),
 				   PAGE_SIZE, change_page_range, &data);
 }
+EXPORT_SYMBOL_GPL(set_direct_map_invalid_noflush);
 
 int set_direct_map_default_noflush(struct page *page)
 {
@@ -191,6 +192,7 @@ int set_direct_map_default_noflush(struct page *page)
 				   (unsigned long)page_address(page),
 				   PAGE_SIZE, change_page_range, &data);
 }
+EXPORT_SYMBOL_GPL(set_direct_map_default_noflush);
 
 #ifdef CONFIG_DEBUG_PAGEALLOC
 void __kernel_map_pages(struct page *page, int numpages, int enable)
@@ -242,5 +244,5 @@ bool kernel_page_present(struct page *page)
 		return true;
 
 	ptep = pte_offset_kernel(pmdp, addr);
-	return pte_valid(READ_ONCE(*ptep));
+	return pte_valid(__ptep_get(ptep));
 }

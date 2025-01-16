@@ -2,7 +2,8 @@
 menu "i.MX SoC drivers"
 
 config IMX_GPCV2_PM_DOMAINS
-	bool "i.MX GPCv2 PM domains"
+	tristate "i.MX GPCv2 PM domains"
+	default ARCH_MXC
 	depends on ARCH_MXC || (COMPILE_TEST && OF)
 	depends on PM
 	select PM_GENERIC_DOMAINS
@@ -42,7 +43,7 @@ config SOC_IMX9
 	  If you say yes here, you get support for the NXP i.MX9 family
 
 config IMX8M_BLK_CTRL
-	bool
+	tristate "i.MX8M PM domains blk ctrl"
 	default SOC_IMX8M && IMX_GPCV2_PM_DOMAINS
 	depends on PM_GENERIC_DOMAINS
 	depends on COMMON_CLK
@@ -82,4 +83,17 @@ config IMX8ULP_LPM_CTRL
 	  If you say yes here you get supoort for DDR frequency scaling support on
 	  i.MX8ULP for scaling the DDR frequency based on user case. The DDR frequency
 	  need to be switched manually by user.
+
+config IMX_GKI_FIX
+	bool "IMX GKI fix issue"
+	default n
+
+config IMX_GKI_8Q_FIX
+	bool "IMX GKI 8Q fix issue"
+	default n
+
+config IMX_LPA_CTRL
+	tristate "i.MX8MP lpa power mode control support"
+	depends on ARCH_MXC
+	default n
 endmenu

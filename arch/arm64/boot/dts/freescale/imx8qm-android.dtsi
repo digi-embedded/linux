@@ -1,0 +1,144 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright 2022 NXP
+ */
+
+/ {
+	firmware {
+		android {
+			compatible = "android,firmware";
+			/* sd card node which used if androidboot.boot_device_root=mmcblk1 */
+			boot_devices_mmcblk1 = "bus@5b000000/5b020000.mmc";
+			/* emmc node which used if androidboot.boot_device_root=mmcblk0 */
+			boot_devices_mmcblk0 = "bus@5b000000/5b010000.mmc";
+			vbmeta {
+				/*we need use FirstStageMountVBootV2 if we enable avb*/
+				compatible = "android,vbmeta";
+				/*parts means the partition witch can be mount in first stage*/
+				parts = "vbmeta,dtbo,boot,init_boot,system,vendor,vendor_dlkm,product";
+			};
+		};
+	};
+
+	trusty {
+		compatible = "android,trusty-smc-v1";
+		ranges;
+		#address-cells = <2>;
+		#size-cells = <2>;
+		trusty-irq {
+			compatible = "android,trusty-irq-v1";
+			interrupt-ranges = < 0 15 0>;
+			ipi-range = <8 15 8>;
+		};
+		trusty-virtio {
+			compatible = "android,trusty-virtio-v1";
+		};
+		trusty-log {
+			compatible = "android,trusty-log-v1";
+		};
+	};
+
+	reset_ctrl {
+		compatible = "imx8q,resetctrl";
+		status = "okay";
+	};
+};
+
+&cpus {
+	cpu@0{
+		dynamic-power-coefficient = <149>;
+		capacity-dmips-mhz = <483>;
+	};
+
+	cpu@1{
+		dynamic-power-coefficient = <149>;
+		capacity-dmips-mhz = <483>;
+	};
+
+	cpu@2{
+		dynamic-power-coefficient = <149>;
+		capacity-dmips-mhz = <483>;
+	};
+
+	cpu@3{
+		dynamic-power-coefficient = <149>;
+		capacity-dmips-mhz = <483>;
+	};
+
+	cpu@100{
+		dynamic-power-coefficient = <735>;
+		capacity-dmips-mhz = <1024>;
+	};
+
+	cpu@101{
+		dynamic-power-coefficient = <735>;
+		capacity-dmips-mhz = <1024>;
+	};
+};
+
+&{/reserved-memory/linux,cma} {
+	status = "disabled";
+};
+
+&{/reserved-memory} {
+	ramoops@91f00000 {
+		compatible = "ramoops";
+		reg = <0 0x91f00000 0 0x00100000>;
+		record-size     = <0x00020000>;
+		console-size    = <0x00020000>;
+		ftrace-size     = <0x00020000>;
+		pmsg-size       = <0x00020000>;
+	};
+
+	secure_region: secure {
+		compatible = "imx-secure-ion-pool";
+		reg = <0x0 0xE0000000 0 0x10000000>;
+	};
+};
+
+&dc1_dpr1_channel1 {
+	trusty;
+};
+&dc1_dpr1_channel2 {
+	trusty;
+};
+&dc1_dpr1_channel3 {
+	trusty;
+};
+&dc1_dpr2_channel1 {
+	trusty;
+};
+&dc1_dpr2_channel2 {
+	trusty;
+};
+&dc1_dpr2_channel3 {
+	trusty;
+};
+&dc0_dpr1_channel1 {
+	trusty;
+};
+&dc0_dpr1_channel2 {
+	trusty;
+};
+&dc0_dpr1_channel3 {
+	trusty;
+};
+&dc0_dpr2_channel1 {
+	trusty;
+};
+&dc0_dpr2_channel2 {
+	trusty;
+};
+&dc0_dpr2_channel3 {
+	trusty;
+};
+&dpu1 {
+	trusty;
+};
+&dpu2 {
+	trusty;
+};
+
+&lpuart1 {
+       /delete-node/ bluetooth;
+};

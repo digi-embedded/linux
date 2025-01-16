@@ -491,6 +491,7 @@ struct rpmsg_info {
 	/* period done */
 	struct rpmsg_msg         notify[2];
 	bool                     notify_updated[2];
+	bool                     buffer_full[2];
 
 	struct workqueue_struct  *rpmsg_wq;
 	struct work_of_rpmsg	 work_list[WORK_MAX_NUM];
@@ -505,6 +506,7 @@ struct rpmsg_info {
 	spinlock_t               wq_lock; /* spin lock for resource protection */
 	struct mutex             msg_lock; /* mutex for resource protection */
 	struct stream_timer      stream_timer[2];
+	struct wakeup_source     *rpmsg_wakeup_source;
 };
 
 struct rpmsg_codec {
@@ -520,6 +522,7 @@ struct rpmsg_codec {
 
 #define RPMSG_CODEC_DRV_NAME_WM8960 "rpmsg-codec-wm8960"
 #define RPMSG_CODEC_DRV_NAME_AK4497 "rpmsg-codec-ak4497"
+#define RPMSG_CODEC_DRV_NAME_PCM512X "rpmsg-codec-pcm512x"
 #define IMX_PCM_DRV_NAME "imx_pcm_rpmsg"
 
 #endif /* IMX_PCM_RPMSG_H */

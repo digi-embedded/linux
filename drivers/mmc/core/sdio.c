@@ -16,6 +16,8 @@
 #include <linux/mmc/sdio_func.h>
 #include <linux/mmc/sdio_ids.h>
 
+#include <trace/hooks/mmc.h>
+
 #include "core.h"
 #include "card.h"
 #include "host.h"
@@ -1043,7 +1045,7 @@ static int mmc_sdio_suspend(struct mmc_host *host)
 
 	/* Prevent processing of SDIO IRQs in suspended state. */
 	mmc_card_set_suspended(host->card);
-	cancel_delayed_work_sync(&host->sdio_irq_work);
+	cancel_work_sync(&host->sdio_irq_work);
 
 	mmc_claim_host(host);
 
@@ -1109,13 +1111,15 @@ static int mmc_sdio_resume(struct mmc_host *host)
 		if (!(host->caps2 & MMC_CAP2_SDIO_IRQ_NOTHREAD))
 			wake_up_process(host->sdio_irq_thread);
 		else if (host->caps & MMC_CAP_SDIO_IRQ)
-			queue_delayed_work(system_wq, &host->sdio_irq_work, 1);
+			schedule_work(&host->sdio_irq_work);
 	}
 
 out:
 	mmc_release_host(host);
 
 	host->pm_flags &= ~MMC_PM_KEEP_POWER;
+	trace_android_vh_mmc_sdio_pm_flag_set(host);
+
 	return err;
 }
 

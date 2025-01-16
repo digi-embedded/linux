@@ -720,3 +720,5 @@
 &epxp {
 	status = "okay";
 };
+
+#include "imx8ulp-android.dtsi"

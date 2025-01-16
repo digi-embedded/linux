@@ -175,7 +175,9 @@ struct phylink_config {
 				struct phylink_link_state *state);
 	DECLARE_PHY_INTERFACE_MASK(supported_interfaces);
 	unsigned long mac_capabilities;
+#ifndef CONFIG_IMX_GKI_FIX
 	unsigned int cfg_link_an_mode;
+#endif
 };
 
 void phylink_limit_mac_speed(struct phylink_config *config, u32 max_speed);
@@ -457,7 +459,9 @@ struct phylink_pcs {
 	struct phylink *phylink;
 	bool neg_mode;
 	bool poll;
+#ifndef CONFIG_IMX_GKI_FIX
 	unsigned int cfg_link_an_mode;
+#endif
 };
 
 /**
@@ -644,8 +648,10 @@ static inline int phylink_interface_max_speed(phy_interface_t interface)
 		return SPEED_1000;
 
 	case PHY_INTERFACE_MODE_2500BASEX:
+#ifndef CONFIG_IMX_GKI_FIX
 	case PHY_INTERFACE_MODE_2500SGMII:
 	case PHY_INTERFACE_MODE_10G_QXGMII:
+#endif
 		return SPEED_2500;
 
 	case PHY_INTERFACE_MODE_5GBASER:
@@ -660,11 +666,15 @@ static inline int phylink_interface_max_speed(phy_interface_t interface)
 		return SPEED_10000;
 
 	case PHY_INTERFACE_MODE_25GBASER:
+#ifndef CONFIG_IMX_GKI_FIX
 	case PHY_INTERFACE_MODE_25GKR:
+#endif
 		return SPEED_25000;
 
 	case PHY_INTERFACE_MODE_XLGMII:
+#ifndef CONFIG_IMX_GKI_FIX
 	case PHY_INTERFACE_MODE_40GKR4:
+#endif
 		return SPEED_40000;
 
 	case PHY_INTERFACE_MODE_INTERNAL:
@@ -757,7 +767,9 @@ static inline int phylink_get_link_timer_ns(phy_interface_t interface)
 	case PHY_INTERFACE_MODE_SGMII:
 	case PHY_INTERFACE_MODE_QSGMII:
 	case PHY_INTERFACE_MODE_USXGMII:
+#ifndef CONFIG_IMX_GKI_FIX
 	case PHY_INTERFACE_MODE_10G_QXGMII:
+#endif
 		return 1600000;
 
 	case PHY_INTERFACE_MODE_1000BASEX:

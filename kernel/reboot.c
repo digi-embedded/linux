@@ -19,6 +19,8 @@
 #include <linux/syscore_ops.h>
 #include <linux/uaccess.h>
 
+#include <trace/hooks/reboot.h>
+
 /*
  * this indicates whether you can reboot with ctrl-alt-del: the default is yes
  */
@@ -35,6 +37,7 @@ EXPORT_SYMBOL(cad_pid);
 enum reboot_mode reboot_mode DEFAULT_REBOOT_MODE;
 EXPORT_SYMBOL_GPL(reboot_mode);
 enum reboot_mode panic_reboot_mode = REBOOT_UNDEFINED;
+EXPORT_SYMBOL_GPL(panic_reboot_mode);
 
 /*
  * This variable is used privately to keep track of whether or not
@@ -977,6 +980,8 @@ void hw_protection_shutdown(const char *reason, int ms_until_forced)
 	/* Shutdown should be initiated only once. */
 	if (!atomic_dec_and_test(&allow_proceed))
 		return;
+
+	trace_android_rvh_hw_protection_shutdown(reason);
 
 	/*
 	 * Queue a backup emergency shutdown in the event of

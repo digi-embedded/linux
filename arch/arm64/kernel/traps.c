@@ -49,6 +49,8 @@
 #include <asm/system_misc.h>
 #include <asm/sysreg.h>
 
+#include <trace/hooks/traps.h>
+
 static bool __kprobes __check_eq(unsigned long pstate)
 {
 	return (pstate & PSR_Z_BIT) != 0;
@@ -483,6 +485,7 @@ void do_el1_undef(struct pt_regs *regs, unsigned long esr)
 		return;
 
 out_err:
+	trace_android_rvh_do_el1_undef(regs, esr);
 	die("Oops - Undefined instruction", regs, esr);
 }
 
@@ -497,6 +500,8 @@ void do_el1_bti(struct pt_regs *regs, unsigned long esr)
 		regs->pstate &= ~PSR_BTYPE_MASK;
 		return;
 	}
+
+	trace_android_rvh_do_el1_bti(regs, esr);
 	die("Oops - BTI", regs, esr);
 }
 
@@ -511,6 +516,7 @@ void do_el1_fpac(struct pt_regs *regs, unsigned long esr)
 	 * Unexpected FPAC exception in the kernel: kill the task before it
 	 * does any more harm.
 	 */
+	trace_android_rvh_do_el1_fpac(regs, esr);
 	die("Oops - FPAC", regs, esr);
 }
 
@@ -978,6 +984,8 @@ void __noreturn arm64_serror_panic(struct pt_regs *regs, unsigned long esr)
 
 	pr_crit("SError Interrupt on CPU%d, code 0x%016lx -- %s\n",
 		smp_processor_id(), esr, esr_get_class_string(esr));
+
+	trace_android_rvh_arm64_serror_panic(regs, esr);
 	if (regs)
 		__show_regs(regs);
 
@@ -1172,8 +1180,6 @@ static struct break_hook ubsan_break_hook = {
 };
 #endif
 
-#define esr_comment(esr) ((esr) & ESR_ELx_BRK64_ISS_COMMENT_MASK)
-
 /*
  * Initial handler for AArch64 BRK exceptions
  * This handler only used until debug_traps_init().
@@ -1182,15 +1188,15 @@ int __init early_brk64(unsigned long addr, unsigned long esr,
 		struct pt_regs *regs)
 {
 #ifdef CONFIG_CFI_CLANG
-	if ((esr_comment(esr) & ~CFI_BRK_IMM_MASK) == CFI_BRK_IMM_BASE)
+	if (esr_is_cfi_brk(esr))
 		return cfi_handler(regs, esr) != DBG_HOOK_HANDLED;
 #endif
 #ifdef CONFIG_KASAN_SW_TAGS
-	if ((esr_comment(esr) & ~KASAN_BRK_MASK) == KASAN_BRK_IMM)
+	if ((esr_brk_comment(esr) & ~KASAN_BRK_MASK) == KASAN_BRK_IMM)
 		return kasan_handler(regs, esr) != DBG_HOOK_HANDLED;
 #endif
 #ifdef CONFIG_UBSAN_TRAP
-	if ((esr_comment(esr) & ~UBSAN_BRK_MASK) == UBSAN_BRK_IMM)
+	if ((esr_brk_comment(esr) & ~UBSAN_BRK_MASK) == UBSAN_BRK_IMM)
 		return ubsan_handler(regs, esr) != DBG_HOOK_HANDLED;
 #endif
 	return bug_handler(regs, esr) != DBG_HOOK_HANDLED;

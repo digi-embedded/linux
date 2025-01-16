@@ -29,6 +29,7 @@
 #include <linux/idr.h>
 #include <linux/leds.h>
 #include <linux/rculist.h>
+#include <linux/android_kabi.h>
 
 #include <net/bluetooth/hci.h>
 #include <net/bluetooth/hci_sync.h>
@@ -126,6 +127,7 @@ enum suspended_state {
 struct hci_conn_hash {
 	struct list_head list;
 	unsigned int     acl_num;
+	unsigned int     amp_num;
 	unsigned int     sco_num;
 	unsigned int     iso_num;
 	unsigned int     le_num;
@@ -340,6 +342,14 @@ struct adv_monitor {
 /* Default authenticated payload timeout 30s */
 #define DEFAULT_AUTH_PAYLOAD_TIMEOUT   0x0bb8
 
+struct amp_assoc {
+	__u16	len;
+	__u16	offset;
+	__u16	rem_len;
+	__u16	len_so_far;
+	__u8	data[HCI_MAX_AMP_ASSOC_SIZE];
+};
+
 #define HCI_MAX_PAGES	3
 
 struct hci_dev {
@@ -352,6 +362,7 @@ struct hci_dev {
 	unsigned long	flags;
 	__u16		id;
 	__u8		bus;
+	__u8		dev_type;
 	bdaddr_t	bdaddr;
 	bdaddr_t	setup_addr;
 	bdaddr_t	public_addr;
@@ -457,6 +468,21 @@ struct hci_dev {
 	__u16		sniff_min_interval;
 	__u16		sniff_max_interval;
 
+	__u8		amp_status;
+	__u32		amp_total_bw;
+	__u32		amp_max_bw;
+	__u32		amp_min_latency;
+	__u32		amp_max_pdu;
+	__u8		amp_type;
+	__u16		amp_pal_cap;
+	__u16		amp_assoc_size;
+	__u32		amp_max_flush_to;
+	__u32		amp_be_flush_to;
+
+	struct amp_assoc	loc_assoc;
+
+	__u8		flow_ctl_mode;
+
 	unsigned int	auto_accept_delay;
 
 	unsigned long	quirks;
@@ -475,6 +501,11 @@ struct hci_dev {
 	unsigned int	sco_pkts;
 	unsigned int	le_pkts;
 	unsigned int	iso_pkts;
+
+	__u16		block_len;
+	__u16		block_mtu;
+	__u16		num_blocks;
+	__u16		block_cnt;
 
 	unsigned long	acl_last_tx;
 	unsigned long	sco_last_tx;
@@ -649,6 +680,11 @@ struct hci_dev {
 	int (*get_codec_config_data)(struct hci_dev *hdev, __u8 type,
 				     struct bt_codec *codec, __u8 *vnd_len,
 				     __u8 **vnd_data);
+
+	ANDROID_KABI_RESERVE(1);
+	ANDROID_KABI_RESERVE(2);
+	ANDROID_KABI_RESERVE(3);
+	ANDROID_KABI_RESERVE(4);
 };
 
 #define HCI_PHY_HANDLE(handle)	(handle & 0xff)
@@ -758,6 +794,11 @@ struct hci_conn {
 	void (*disconn_cfm_cb)	(struct hci_conn *conn, u8 reason);
 
 	void (*cleanup)(struct hci_conn *conn);
+
+	ANDROID_KABI_RESERVE(1);
+	ANDROID_KABI_RESERVE(2);
+	ANDROID_KABI_RESERVE(3);
+	ANDROID_KABI_RESERVE(4);
 };
 
 struct hci_link {
@@ -772,6 +813,8 @@ struct hci_chan {
 	struct sk_buff_head data_q;
 	unsigned int	sent;
 	__u8		state;
+
+	ANDROID_KABI_RESERVE(1);
 };
 
 struct hci_conn_params {
@@ -800,6 +843,8 @@ struct hci_conn_params {
 	/* Accessed without hdev->lock: */
 	hci_conn_flags_t flags;
 	u8  privacy_mode;
+
+	ANDROID_KABI_RESERVE(1);
 };
 
 extern struct list_head hci_dev_list;
@@ -1916,6 +1961,8 @@ struct hci_cb {
 								__u8 encrypt);
 	void (*key_change_cfm)	(struct hci_conn *conn, __u8 status);
 	void (*role_switch_cfm)	(struct hci_conn *conn, __u8 status, __u8 role);
+
+	ANDROID_KABI_RESERVE(1);
 };
 
 static inline void hci_connect_cfm(struct hci_conn *conn, __u8 status)
@@ -2162,6 +2209,8 @@ struct hci_mgmt_chan {
 	size_t handler_count;
 	const struct hci_mgmt_handler *handlers;
 	void (*hdev_init) (struct sock *sk, struct hci_dev *hdev);
+
+	ANDROID_KABI_RESERVE(1);
 };
 
 int hci_mgmt_chan_register(struct hci_mgmt_chan *c);

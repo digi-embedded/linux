@@ -2589,7 +2589,7 @@ lpuart32_console_write(struct console *co, const char *s, unsigned int count)
  * if the port was already initialised (eg, by a boot loader),
  * try to determine the current setup.
  */
-static void __init
+static void
 lpuart_console_get_options(struct lpuart_port *sport, int *baud,
 			   int *parity, int *bits)
 {
@@ -2638,7 +2638,7 @@ lpuart_console_get_options(struct lpuart_port *sport, int *baud,
 				"from %d to %d\n", baud_raw, *baud);
 }
 
-static void __init
+static void
 lpuart32_console_get_options(struct lpuart_port *sport, int *baud,
 			   int *parity, int *bits)
 {
@@ -2684,7 +2684,7 @@ lpuart32_console_get_options(struct lpuart_port *sport, int *baud,
 				"from %d to %d\n", baud_raw, *baud);
 }
 
-static int __init lpuart_console_setup(struct console *co, char *options)
+static int lpuart_console_setup(struct console *co, char *options)
 {
 	struct lpuart_port *sport;
 	int baud = 115200;
@@ -2802,25 +2802,9 @@ static int __init ls1028a_early_console_setup(struct earlycon_device *device,
 	return 0;
 }
 
-static int __init lpuart32_imx_early_console_setup(struct earlycon_device *device,
-						   const char *opt)
-{
-	if (!device->port.membase)
-		return -ENODEV;
-
-	device->port.iotype = UPIO_MEM32;
-	device->port.membase += IMX_REG_OFF;
-	device->con->write = lpuart32_early_write;
-
-	return 0;
-}
 OF_EARLYCON_DECLARE(lpuart, "fsl,vf610-lpuart", lpuart_early_console_setup);
 OF_EARLYCON_DECLARE(lpuart32, "fsl,ls1021a-lpuart", lpuart32_early_console_setup);
 OF_EARLYCON_DECLARE(lpuart32, "fsl,ls1028a-lpuart", ls1028a_early_console_setup);
-OF_EARLYCON_DECLARE(lpuart32, "fsl,imx7ulp-lpuart", lpuart32_imx_early_console_setup);
-OF_EARLYCON_DECLARE(lpuart32, "fsl,imx8ulp-lpuart", lpuart32_imx_early_console_setup);
-OF_EARLYCON_DECLARE(lpuart32, "fsl,imx8qxp-lpuart", lpuart32_imx_early_console_setup);
-OF_EARLYCON_DECLARE(lpuart32, "fsl,imxrt1050-lpuart", lpuart32_imx_early_console_setup);
 EARLYCON_DECLARE(lpuart, lpuart_early_console_setup);
 EARLYCON_DECLARE(lpuart32, lpuart32_early_console_setup);
 
@@ -2980,6 +2964,7 @@ static int lpuart_probe(struct platform_device *pdev)
 		handler = lpuart_int;
 	}
 
+	pm_runtime_get_noresume(&pdev->dev);
 	pm_runtime_use_autosuspend(&pdev->dev);
 	pm_runtime_set_autosuspend_delay(&pdev->dev, UART_AUTOSUSPEND_TIMEOUT);
 	pm_runtime_set_active(&pdev->dev);
@@ -3013,6 +2998,8 @@ static int lpuart_probe(struct platform_device *pdev)
 	if (ret)
 		goto failed_irq_request;
 
+	pm_runtime_put_sync(&pdev->dev);
+
 	return 0;
 
 failed_irq_request:
@@ -3023,6 +3010,7 @@ failed_reset:
 	pm_runtime_disable(&pdev->dev);
 	pm_runtime_set_suspended(&pdev->dev);
 	pm_runtime_dont_use_autosuspend(&pdev->dev);
+	pm_runtime_put_sync(&pdev->dev);
 	lpuart_disable_clks(sport);
 	return ret;
 }
@@ -3286,7 +3274,7 @@ static struct platform_driver lpuart_driver = {
 	},
 };
 
-static int __init lpuart_serial_init(void)
+static int lpuart_serial_init(void)
 {
 	int ret = uart_register_driver(&lpuart_reg);
 

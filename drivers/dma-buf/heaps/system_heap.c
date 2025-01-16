@@ -14,14 +14,19 @@
 #include <linux/dma-mapping.h>
 #include <linux/dma-heap.h>
 #include <linux/err.h>
+#include <linux/genalloc.h>
 #include <linux/highmem.h>
 #include <linux/mm.h>
 #include <linux/module.h>
+#include <linux/of_reserved_mem.h>
 #include <linux/scatterlist.h>
 #include <linux/slab.h>
 #include <linux/vmalloc.h>
 
 static struct dma_heap *sys_heap;
+static struct dma_heap *sys_uncached_heap;
+static struct dma_heap *secure_heap;
+static struct gen_pool *secure_heap_pool;
 
 struct system_heap_buffer {
 	struct dma_heap *heap;
@@ -31,6 +36,8 @@ struct system_heap_buffer {
 	struct sg_table sg_table;
 	int vmap_cnt;
 	void *vaddr;
+
+	bool uncached;
 };
 
 struct dma_heap_attachment {
@@ -38,6 +45,8 @@ struct dma_heap_attachment {
 	struct sg_table *table;
 	struct list_head list;
 	bool mapped;
+
+	bool uncached;
 };
 
 #define LOW_ORDER_GFP (GFP_HIGHUSER | __GFP_ZERO)
@@ -100,7 +109,7 @@ static int system_heap_attach(struct dma_buf *dmabuf,
 	a->dev = attachment->dev;
 	INIT_LIST_HEAD(&a->list);
 	a->mapped = false;
-
+	a->uncached = buffer->uncached;
 	attachment->priv = a;
 
 	mutex_lock(&buffer->lock);
@@ -130,9 +139,13 @@ static struct sg_table *system_heap_map_dma_buf(struct dma_buf_attachment *attac
 {
 	struct dma_heap_attachment *a = attachment->priv;
 	struct sg_table *table = a->table;
+	int attr = attachment->dma_map_attrs;
 	int ret;
 
-	ret = dma_map_sgtable(attachment->dev, table, direction, 0);
+	if (a->uncached)
+		attr |= DMA_ATTR_SKIP_CPU_SYNC;
+
+	ret = dma_map_sgtable(attachment->dev, table, direction, attr);
 	if (ret)
 		return ERR_PTR(ret);
 
@@ -145,9 +158,12 @@ static void system_heap_unmap_dma_buf(struct dma_buf_attachment *attachment,
 				      enum dma_data_direction direction)
 {
 	struct dma_heap_attachment *a = attachment->priv;
+	int attr = attachment->dma_map_attrs;
 
+	if (a->uncached)
+		attr |= DMA_ATTR_SKIP_CPU_SYNC;
 	a->mapped = false;
-	dma_unmap_sgtable(attachment->dev, table, direction, 0);
+	dma_unmap_sgtable(attachment->dev, table, direction, attr);
 }
 
 static int system_heap_dma_buf_begin_cpu_access(struct dma_buf *dmabuf,
@@ -161,10 +177,12 @@ static int system_heap_dma_buf_begin_cpu_access(struct dma_buf *dmabuf,
 	if (buffer->vmap_cnt)
 		invalidate_kernel_vmap_range(buffer->vaddr, buffer->len);
 
-	list_for_each_entry(a, &buffer->attachments, list) {
-		if (!a->mapped)
-			continue;
-		dma_sync_sgtable_for_cpu(a->dev, a->table, direction);
+	if (!buffer->uncached) {
+		list_for_each_entry(a, &buffer->attachments, list) {
+			if (!a->mapped)
+				continue;
+			dma_sync_sgtable_for_cpu(a->dev, a->table, direction);
+		}
 	}
 	mutex_unlock(&buffer->lock);
 
@@ -182,10 +200,12 @@ static int system_heap_dma_buf_end_cpu_access(struct dma_buf *dmabuf,
 	if (buffer->vmap_cnt)
 		flush_kernel_vmap_range(buffer->vaddr, buffer->len);
 
-	list_for_each_entry(a, &buffer->attachments, list) {
-		if (!a->mapped)
-			continue;
-		dma_sync_sgtable_for_device(a->dev, a->table, direction);
+	if (!buffer->uncached) {
+		list_for_each_entry(a, &buffer->attachments, list) {
+			if (!a->mapped)
+				continue;
+			dma_sync_sgtable_for_device(a->dev, a->table, direction);
+		}
 	}
 	mutex_unlock(&buffer->lock);
 
@@ -199,6 +219,9 @@ static int system_heap_mmap(struct dma_buf *dmabuf, struct vm_area_struct *vma)
 	unsigned long addr = vma->vm_start;
 	struct sg_page_iter piter;
 	int ret;
+
+	if (buffer->uncached)
+		vma->vm_page_prot = pgprot_writecombine(vma->vm_page_prot);
 
 	for_each_sgtable_page(table, &piter, vma->vm_pgoff) {
 		struct page *page = sg_page_iter_page(&piter);
@@ -221,17 +244,21 @@ static void *system_heap_do_vmap(struct system_heap_buffer *buffer)
 	struct page **pages = vmalloc(sizeof(struct page *) * npages);
 	struct page **tmp = pages;
 	struct sg_page_iter piter;
+	pgprot_t pgprot = PAGE_KERNEL;
 	void *vaddr;
 
 	if (!pages)
 		return ERR_PTR(-ENOMEM);
+
+	if (buffer->uncached)
+		pgprot = pgprot_writecombine(PAGE_KERNEL);
 
 	for_each_sgtable_page(table, &piter, 0) {
 		WARN_ON(tmp - pages >= npages);
 		*tmp++ = sg_page_iter_page(&piter);
 	}
 
-	vaddr = vmap(pages, npages, VM_MAP, PAGE_KERNEL);
+	vaddr = vmap(pages, npages, VM_MAP, pgprot);
 	vfree(pages);
 
 	if (!vaddr)
@@ -331,10 +358,11 @@ static struct page *alloc_largest_available(unsigned long size,
 	return NULL;
 }
 
-static struct dma_buf *system_heap_allocate(struct dma_heap *heap,
-					    unsigned long len,
-					    unsigned long fd_flags,
-					    unsigned long heap_flags)
+static struct dma_buf *system_heap_do_allocate(struct dma_heap *heap,
+					       unsigned long len,
+					       u32 fd_flags,
+					       u64 heap_flags,
+					       bool uncached)
 {
 	struct system_heap_buffer *buffer;
 	DEFINE_DMA_BUF_EXPORT_INFO(exp_info);
@@ -355,6 +383,7 @@ static struct dma_buf *system_heap_allocate(struct dma_heap *heap,
 	mutex_init(&buffer->lock);
 	buffer->heap = heap;
 	buffer->len = len;
+	buffer->uncached = uncached;
 
 	INIT_LIST_HEAD(&pages);
 	i = 0;
@@ -400,6 +429,18 @@ static struct dma_buf *system_heap_allocate(struct dma_heap *heap,
 		ret = PTR_ERR(dmabuf);
 		goto free_pages;
 	}
+
+	/*
+	 * For uncached buffers, we need to initially flush cpu cache, since
+	 * the __GFP_ZERO on the allocation means the zeroing was done by the
+	 * cpu and thus it is likely cached. Map (and implicitly flush) and
+	 * unmap it now so we don't get corruption later on.
+	 */
+	if (buffer->uncached) {
+		dma_map_sgtable(dma_heap_get_dev(heap), table, DMA_BIDIRECTIONAL, 0);
+		dma_unmap_sgtable(dma_heap_get_dev(heap), table, DMA_BIDIRECTIONAL, 0);
+	}
+
 	return dmabuf;
 
 free_pages:
@@ -417,9 +458,204 @@ free_buffer:
 	return ERR_PTR(ret);
 }
 
+static struct dma_buf *system_heap_allocate(struct dma_heap *heap,
+					    unsigned long len,
+					    u32 fd_flags,
+					    u64 heap_flags)
+{
+	return system_heap_do_allocate(heap, len, fd_flags, heap_flags, false);
+}
+
 static const struct dma_heap_ops system_heap_ops = {
 	.allocate = system_heap_allocate,
 };
+
+static struct dma_buf *system_uncached_heap_allocate(struct dma_heap *heap,
+						     unsigned long len,
+						     u32 fd_flags,
+						     u64 heap_flags)
+{
+	return system_heap_do_allocate(heap, len, fd_flags, heap_flags, true);
+}
+
+/* Dummy function to be used until we can call coerce_mask_and_coherent */
+static struct dma_buf *system_uncached_heap_not_initialized(struct dma_heap *heap,
+							    unsigned long len,
+							    u32 fd_flags,
+							    u64 heap_flags)
+{
+	return ERR_PTR(-EBUSY);
+}
+
+static struct dma_heap_ops system_uncached_heap_ops = {
+	/* After system_heap_create is complete, we will swap this */
+	.allocate = system_uncached_heap_not_initialized,
+};
+
+static int secure_heap_zero_buffer(struct system_heap_buffer *buffer)
+{
+	struct sg_table *sgt = &buffer->sg_table;
+	struct sg_page_iter piter;
+	struct page *p;
+	void *vaddr;
+	int ret = 0;
+
+	for_each_sgtable_page(sgt, &piter, 0) {
+		p = sg_page_iter_page(&piter);
+		vaddr = kmap_atomic(p);
+#if !defined(CONFIG_WIDEVINE_L1_SKIP_MEMSET_SECUREHEAP)
+		memset(vaddr, 0, PAGE_SIZE);
+#endif
+		kunmap_atomic(vaddr);
+	}
+
+	return ret;
+}
+
+static void secure_heap_dma_buf_release(struct dma_buf *dmabuf)
+{
+	struct system_heap_buffer *buffer = dmabuf->priv;
+	struct sg_table *table;
+	struct scatterlist *sg;
+	int i;
+
+	secure_heap_zero_buffer(buffer);
+	table = &buffer->sg_table;
+	for_each_sg(table->sgl, sg, table->nents, i) {
+		gen_pool_free(secure_heap_pool,
+						sg_dma_address(sg),
+						sg_dma_len(sg));
+	}
+
+	sg_free_table(table);
+	kfree(buffer);
+}
+
+static const struct dma_buf_ops secure_heap_buf_ops = {
+	.attach = system_heap_attach,
+	.detach = system_heap_detach,
+	.map_dma_buf = system_heap_map_dma_buf,
+	.unmap_dma_buf = system_heap_unmap_dma_buf,
+	.begin_cpu_access = system_heap_dma_buf_begin_cpu_access,
+	.end_cpu_access = system_heap_dma_buf_end_cpu_access,
+	.mmap = system_heap_mmap,
+	.vmap = system_heap_vmap,
+	.vunmap = system_heap_vunmap,
+	.release = secure_heap_dma_buf_release,
+};
+
+static struct dma_buf *secure_heap_do_allocate(struct dma_heap *heap,
+					       unsigned long len,
+					       u32 fd_flags,
+					       u64 heap_flags,
+					       bool uncached)
+{
+	struct system_heap_buffer *buffer;
+	DEFINE_DMA_BUF_EXPORT_INFO(exp_info);
+	unsigned long size = roundup(len,  PAGE_SIZE);
+	struct dma_buf *dmabuf;
+	struct sg_table *table;
+	int ret = -ENOMEM;
+	unsigned long phy_addr;
+
+	buffer = kzalloc(sizeof(*buffer), GFP_KERNEL);
+	if (!buffer)
+		return ERR_PTR(-ENOMEM);
+
+	INIT_LIST_HEAD(&buffer->attachments);
+	mutex_init(&buffer->lock);
+	buffer->heap = heap;
+	buffer->len = size;
+	buffer->uncached = uncached;
+
+	phy_addr = gen_pool_alloc(secure_heap_pool, size);
+	if (!phy_addr)
+		goto free_buffer;
+
+	table = &buffer->sg_table;
+	if (sg_alloc_table(table, 1, GFP_KERNEL))
+		goto free_buffer;
+
+	sg_set_page(table->sgl,
+			phys_to_page(phy_addr),
+			size, 0);
+	sg_dma_address(table->sgl) = phy_addr;
+	sg_dma_len(table->sgl) = size;
+
+	/* create the dmabuf */
+	exp_info.exp_name = dma_heap_get_name(heap);
+	exp_info.ops = &secure_heap_buf_ops;
+	exp_info.size = buffer->len;
+	exp_info.flags = fd_flags;
+	exp_info.priv = buffer;
+	dmabuf = dma_buf_export(&exp_info);
+	if (IS_ERR(dmabuf)) {
+		ret = PTR_ERR(dmabuf);
+		goto free_pages;
+	}
+
+	return dmabuf;
+
+free_pages:
+	sg_free_table(table);
+
+free_buffer:
+	kfree(buffer);
+
+	return ERR_PTR(ret);
+}
+
+static struct dma_buf *secure_heap_allocate(struct dma_heap *heap,
+					    unsigned long len,
+					    u32 fd_flags,
+					    u64 heap_flags)
+{
+	/* Use uncached buffer by default */
+	return secure_heap_do_allocate(heap, len, fd_flags, heap_flags, true);
+}
+
+static struct dma_heap_ops secure_heap_ops = {
+	.allocate = secure_heap_allocate,
+};
+
+static int secure_heap_create(void)
+{
+	struct dma_heap_export_info exp_info;
+	struct device_node np;
+	struct reserved_mem *rmem;
+	int ret = -EINVAL;
+
+	/* Add secure memory which reserved in dts into pool of genallocater */
+	np.full_name = "secure";
+	rmem = of_reserved_mem_lookup(&np);
+	if (!rmem || !rmem->base || !rmem->size)
+		return 0;
+
+	/* All allocations should be a multiple of 64K bytes */
+	secure_heap_pool = gen_pool_create(PAGE_SHIFT + 4, -1);
+	if (!secure_heap_pool)
+		return -ENOMEM;
+
+	ret = gen_pool_add(secure_heap_pool, rmem->base, rmem->size, -1);
+	if (ret)
+		goto fail;
+
+	exp_info.name = "secure";
+	exp_info.ops = &secure_heap_ops;
+	exp_info.priv = NULL;
+
+	secure_heap = dma_heap_add(&exp_info);
+	if (IS_ERR(secure_heap)) {
+		ret = PTR_ERR(secure_heap);
+		goto fail;
+	}
+
+	return 0;
+
+fail:
+	gen_pool_destroy(secure_heap_pool);
+	return ret;
+}
 
 static int system_heap_create(void)
 {
@@ -433,6 +669,20 @@ static int system_heap_create(void)
 	if (IS_ERR(sys_heap))
 		return PTR_ERR(sys_heap);
 
-	return 0;
+	exp_info.name = "system-uncached";
+	exp_info.ops = &system_uncached_heap_ops;
+	exp_info.priv = NULL;
+
+	sys_uncached_heap = dma_heap_add(&exp_info);
+	if (IS_ERR(sys_uncached_heap))
+		return PTR_ERR(sys_uncached_heap);
+
+	dma_coerce_mask_and_coherent(dma_heap_get_dev(sys_uncached_heap), DMA_BIT_MASK(64));
+	mb(); /* make sure we only set allocate after dma_mask is set */
+	system_uncached_heap_ops.allocate = system_uncached_heap_allocate;
+
+	return secure_heap_create();
 }
 module_init(system_heap_create);
+MODULE_LICENSE("GPL v2");
+MODULE_IMPORT_NS(DMA_BUF);

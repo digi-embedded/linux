@@ -17,6 +17,8 @@
 #include <linux/highmem.h>
 #include <linux/security.h>
 #include <linux/mempolicy.h>
+#include <linux/page_size_compat.h>
+#include <linux/pgsize_migration.h>
 #include <linux/personality.h>
 #include <linux/syscalls.h>
 #include <linux/swap.h>
@@ -32,6 +34,7 @@
 #include <linux/sched/sysctl.h>
 #include <linux/userfaultfd_k.h>
 #include <linux/memory-tiers.h>
+#include <uapi/linux/mman.h>
 #include <asm/cacheflush.h>
 #include <asm/mmu_context.h>
 #include <asm/tlbflush.h>
@@ -52,7 +55,7 @@ bool can_change_pte_writable(struct vm_area_struct *vma, unsigned long addr,
 		return false;
 
 	/* Do we need write faults for softdirty tracking? */
-	if (vma_soft_dirty_enabled(vma) && !pte_soft_dirty(pte))
+	if (pte_needs_soft_dirty_wp(vma, pte))
 		return false;
 
 	/* Do we need write faults for uffd-wp tracking? */
@@ -196,13 +199,13 @@ static long change_pte_range(struct mmu_gather *tlb,
 			pte_t newpte;
 
 			if (is_writable_migration_entry(entry)) {
-				struct page *page = pfn_swap_entry_to_page(entry);
+				struct folio *folio = pfn_swap_entry_folio(entry);
 
 				/*
 				 * A protection check is difficult so
 				 * just be safe and disable write
 				 */
-				if (PageAnon(page))
+				if (folio_test_anon(folio))
 					entry = make_readable_exclusive_migration_entry(
 							     swp_offset(entry));
 				else
@@ -658,7 +661,7 @@ success:
 	 * held in write mode.
 	 */
 	vma_start_write(vma);
-	vm_flags_reset(vma, newflags);
+	vm_flags_reset(vma, vma_pad_fixup_flags(vma, newflags));
 	if (vma_wants_manual_pte_write_upgrade(vma))
 		mm_cp_flags |= MM_CP_TRY_CHANGE_WRITABLE;
 	vma_set_page_prot(vma);
@@ -705,11 +708,11 @@ static int do_mprotect_pkey(unsigned long start, size_t len,
 	if (grows == (PROT_GROWSDOWN|PROT_GROWSUP)) /* can't be both */
 		return -EINVAL;
 
-	if (start & ~PAGE_MASK)
+	if (!__PAGE_ALIGNED(start))
 		return -EINVAL;
 	if (!len)
 		return 0;
-	len = PAGE_ALIGN(len);
+	len = __PAGE_ALIGN(len);
 	end = start + len;
 	if (end <= start)
 		return -ENOMEM;
@@ -751,6 +754,15 @@ static int do_mprotect_pkey(unsigned long start, size_t len,
 			if (!(vma->vm_flags & VM_GROWSUP))
 				goto out;
 		}
+	}
+
+	/*
+	 * checking if memory is sealed.
+	 * can_modify_mm assumes we have acquired the lock on MM.
+	 */
+	if (unlikely(!can_modify_mm(current->mm, start, end))) {
+		error = -EPERM;
+		goto out;
 	}
 
 	prev = vma_prev(&vmi);

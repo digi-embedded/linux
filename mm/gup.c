@@ -177,7 +177,7 @@ struct folio *try_grab_folio(struct page *page, int refs, unsigned int flags)
 	/*
 	 * Adjust the pincount before re-checking the PTE for changes.
 	 * This is essentially a smp_mb() and is paired with a memory
-	 * barrier in page_try_share_anon_rmap().
+	 * barrier in folio_try_share_anon_rmap_*().
 	 */
 	smp_mb__after_atomic();
 
@@ -571,7 +571,7 @@ static inline bool can_follow_write_pte(pte_t pte, struct page *page,
 		return false;
 
 	/* ... and a write-fault isn't required for other reasons. */
-	if (vma_soft_dirty_enabled(vma) && !pte_soft_dirty(pte))
+	if (pte_needs_soft_dirty_wp(vma, pte))
 		return false;
 	return !userfaultfd_pte_wp(vma, pte);
 }

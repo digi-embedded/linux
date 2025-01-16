@@ -10,6 +10,7 @@
 #include <linux/ptrace.h>
 #include <linux/slab.h>
 #include <linux/pagemap.h>
+#include <linux/pgsize_migration.h>
 #include <linux/mempolicy.h>
 #include <linux/rmap.h>
 #include <linux/swap.h>
@@ -17,9 +18,11 @@
 #include <linux/swapops.h>
 #include <linux/mmu_notifier.h>
 #include <linux/page_idle.h>
+#include <linux/page_size_compat.h>
 #include <linux/shmem_fs.h>
 #include <linux/uaccess.h>
 #include <linux/pkeys.h>
+#include <trace/hooks/mm.h>
 
 #include <asm/elf.h>
 #include <asm/tlb.h>
@@ -279,6 +282,9 @@ show_map_vma(struct seq_file *m, struct vm_area_struct *vma)
 
 	start = vma->vm_start;
 	end = vma->vm_end;
+
+	__fold_filemap_fixup_entry(&((struct proc_maps_private *)m->private)->iter, &end);
+
 	show_vma_header_prefix(m, start, end, flags, pgoff, dev, ino);
 	if (mm)
 		anon_name = anon_vma_name(vma);
@@ -339,7 +345,14 @@ done:
 
 static int show_map(struct seq_file *m, void *v)
 {
-	show_map_vma(m, v);
+	struct vm_area_struct *pad_vma = get_pad_vma(v);
+	struct vm_area_struct *vma = get_data_vma(v);
+
+	if (vma_pages(vma))
+		show_map_vma(m, vma);
+
+	show_map_pad_vma(vma, pad_vma, m, show_map_vma, false);
+
 	return 0;
 }
 
@@ -395,6 +408,10 @@ struct mem_size_stats {
 	unsigned long shmem_thp;
 	unsigned long file_thp;
 	unsigned long swap;
+	unsigned long swap_shared;
+	unsigned long writeback;
+	unsigned long same;
+	unsigned long huge;
 	unsigned long shared_hugetlb;
 	unsigned long private_hugetlb;
 	unsigned long ksm;
@@ -546,9 +563,14 @@ static void smaps_pte_entry(pte_t *pte, unsigned long addr,
 
 				do_div(pss_delta, mapcount);
 				mss->swap_pss += pss_delta;
+				trace_android_vh_smaps_swap_shared(
+						&mss->swap_shared);
 			} else {
 				mss->swap_pss += (u64)PAGE_SIZE << PSS_SHIFT;
 			}
+			trace_android_vh_smaps_pte_entry(swpent,
+					&mss->writeback,
+					&mss->same, &mss->huge);
 		} else if (is_pfn_swap_entry(swpent)) {
 			if (is_migration_entry(swpent))
 				migration = true;
@@ -700,6 +722,9 @@ static void show_smap_vma_flags(struct seq_file *m, struct vm_area_struct *vma)
 #ifdef CONFIG_X86_USER_SHADOW_STACK
 		[ilog2(VM_SHADOW_STACK)] = "ss",
 #endif
+#ifdef CONFIG_64BIT
+		[ilog2(VM_SEALED)] = "sl",
+#endif
 	};
 	size_t i;
 
@@ -844,14 +869,20 @@ static void __show_smap(struct seq_file *m, const struct mem_size_stats *mss,
 	SEQ_PUT_DEC(" kB\nLocked:         ",
 					mss->pss_locked >> PSS_SHIFT);
 	seq_puts(m, " kB\n");
+	trace_android_vh_show_smap_swap_shared(m, mss->swap_shared);
+	trace_android_vh_show_smap(m, mss->writeback, mss->same, mss->huge);
 }
 
 static int show_smap(struct seq_file *m, void *v)
 {
-	struct vm_area_struct *vma = v;
+	struct vm_area_struct *pad_vma = get_pad_vma(v);
+	struct vm_area_struct *vma = get_data_vma(v);
 	struct mem_size_stats mss;
 
 	memset(&mss, 0, sizeof(mss));
+
+	if (!vma_pages(vma))
+		goto show_pad;
 
 	smap_gather_stats(vma, &mss, 0);
 
@@ -865,11 +896,15 @@ static int show_smap(struct seq_file *m, void *v)
 	__show_smap(m, &mss, false);
 
 	seq_printf(m, "THPeligible:    %8u\n",
-		   hugepage_vma_check(vma, vma->vm_flags, true, false, true));
+		   !!thp_vma_allowable_orders(vma, vma->vm_flags, true, false,
+					      true, THP_ORDERS_ALL));
 
 	if (arch_pkeys_enabled())
 		seq_printf(m, "ProtectionKey:  %8u\n", vma_pkey(vma));
 	show_smap_vma_flags(m, vma);
+
+show_pad:
+	show_map_pad_vma(vma, pad_vma, m, show_smap, true);
 
 	return 0;
 }

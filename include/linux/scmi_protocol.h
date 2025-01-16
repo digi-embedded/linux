@@ -12,6 +12,7 @@
 #include <linux/device.h>
 #include <linux/notifier.h>
 #include <linux/types.h>
+#include <linux/android_kabi.h>
 
 #define SCMI_MAX_STR_SIZE		64
 #define SCMI_SHORT_NAME_MAX_SIZE	16
@@ -47,6 +48,9 @@ struct scmi_clock_info {
 	bool rate_discrete;
 	bool rate_changed_notifications;
 	bool rate_change_requested_notifications;
+	bool state_ctrl_forbidden;
+	bool rate_ctrl_forbidden;
+	bool parent_ctrl_forbidden;
 	union {
 		struct {
 			int num_rates;
@@ -60,8 +64,6 @@ struct scmi_clock_info {
 	};
 	int num_parents;
 	u32 *parents;
-	u32 attributes;
-	u32 perm;
 };
 
 enum scmi_power_scale {
@@ -112,6 +114,8 @@ struct scmi_clk_proto_ops {
 			      u8 oem_type, u32 oem_val, bool atomic);
 	int (*parent_get)(const struct scmi_protocol_handle *ph, u32 clk_id, u32 *parent_id);
 	int (*parent_set)(const struct scmi_protocol_handle *ph, u32 clk_id, u32 parent_id);
+
+	ANDROID_KABI_RESERVE(1);
 };
 
 struct scmi_perf_domain_info {
@@ -167,6 +171,8 @@ struct scmi_perf_proto_ops {
 	bool (*fast_switch_possible)(const struct scmi_protocol_handle *ph,
 				     u32 domain);
 	enum scmi_power_scale (*power_scale_get)(const struct scmi_protocol_handle *ph);
+
+	ANDROID_KABI_RESERVE(1);
 };
 
 /**
@@ -193,6 +199,8 @@ struct scmi_power_proto_ops {
 			 u32 state);
 	int (*state_get)(const struct scmi_protocol_handle *ph, u32 domain,
 			 u32 *state);
+
+	ANDROID_KABI_RESERVE(1);
 };
 
 /**
@@ -369,6 +377,8 @@ struct scmi_sensor_info {
 	unsigned int resolution;
 	int exponent;
 	struct scmi_range_attrs scalar_attrs;
+
+	ANDROID_KABI_RESERVE(1);
 };
 
 /*
@@ -504,6 +514,8 @@ struct scmi_sensor_proto_ops {
 			  u32 sensor_id, u32 *sensor_config);
 	int (*config_set)(const struct scmi_protocol_handle *ph,
 			  u32 sensor_id, u32 sensor_config);
+
+	ANDROID_KABI_RESERVE(1);
 };
 
 /**
@@ -525,6 +537,8 @@ struct scmi_reset_proto_ops {
 	int (*reset)(const struct scmi_protocol_handle *ph, u32 domain);
 	int (*assert)(const struct scmi_protocol_handle *ph, u32 domain);
 	int (*deassert)(const struct scmi_protocol_handle *ph, u32 domain);
+
+	ANDROID_KABI_RESERVE(1);
 };
 
 enum scmi_voltage_level_mode {
@@ -725,6 +739,32 @@ enum scmi_pinctrl_selector_type {
 	FUNCTION_TYPE,
 };
 
+enum scmi_pinctrl_conf_type {
+	SCMI_PIN_DEFAULT = 0,
+	SCMI_PIN_BIAS_BUS_HOLD = 1,
+	SCMI_PIN_BIAS_DISABLE = 2,
+	SCMI_PIN_BIAS_HIGH_IMPEDANCE = 3,
+	SCMI_PIN_BIAS_PULL_UP = 4,
+	SCMI_PIN_BIAS_PULL_DEFAULT = 5,
+	SCMI_PIN_BIAS_PULL_DOWN = 6,
+	SCMI_PIN_DRIVE_OPEN_DRAIN = 7,
+	SCMI_PIN_DRIVE_OPEN_SOURCE = 8,
+	SCMI_PIN_DRIVE_PUSH_PULL = 9,
+	SCMI_PIN_DRIVE_STRENGTH = 10,
+	SCMI_PIN_INPUT_DEBOUNCE = 11,
+	SCMI_PIN_INPUT_MODE = 12,
+	SCMI_PIN_PULL_MODE = 13,
+	SCMI_PIN_INPUT_VALUE = 14,
+	SCMI_PIN_INPUT_SCHMITT = 15,
+	SCMI_PIN_LOW_POWER_MODE = 16,
+	SCMI_PIN_OUTPUT_MODE = 17,
+	SCMI_PIN_OUTPUT_VALUE = 18,
+	SCMI_PIN_POWER_SOURCE = 19,
+	SCMI_PIN_SLEW_RATE = 20,
+	SCMI_PIN_OEM_START = 192,
+	SCMI_PIN_OEM_END = 255,
+};
+
 /**
  * struct scmi_pinctrl_proto_ops - represents the various operations provided
  * by SCMI Pinctrl Protocol
@@ -735,8 +775,10 @@ enum scmi_pinctrl_selector_type {
  * @function_groups_get: returns the set of groups, assigned to the specified
  *	function
  * @mux_set: set muxing function for groups of pins
- * @config_get: returns configuration parameter for pin or group
- * @config_set: sets the configuration parameter for pin or group
+ * @settings_get_one: returns one configuration parameter for pin or group
+ *	specified by config_type
+ * @settings_get_all: returns all configuration parameters for pin or group
+ * @settings_conf: sets the configuration parameter for pin or group
  * @pin_request: aquire pin before selecting mux setting
  * @pin_free: frees pin, acquired by request_pin call
  */
@@ -744,18 +786,32 @@ struct scmi_pinctrl_proto_ops {
 	int (*count_get)(const struct scmi_protocol_handle *ph,
 			 enum scmi_pinctrl_selector_type type);
 	int (*name_get)(const struct scmi_protocol_handle *ph, u32 selector,
-			enum scmi_pinctrl_selector_type type, const char **name);
-	int (*group_pins_get)(const struct scmi_protocol_handle *ph, u32 selector,
-			      const unsigned int **pins, unsigned int *nr_pins);
-	int (*function_groups_get)(const struct scmi_protocol_handle *ph, u32 selector,
-				   unsigned int *nr_groups, const unsigned int **groups);
-	int (*mux_set)(const struct scmi_protocol_handle *ph, u32 selector, u32 group);
-	int (*config_get)(const struct scmi_protocol_handle *ph, u32 selector,
-			  enum scmi_pinctrl_selector_type type,
-			  u8 config_type, unsigned long *config_value);
-	int (*config_set)(const struct scmi_protocol_handle *ph, u32 selector,
-			  enum scmi_pinctrl_selector_type type,
-			  unsigned long *configs, unsigned int num_configs);
+			enum scmi_pinctrl_selector_type type,
+			const char **name);
+	int (*group_pins_get)(const struct scmi_protocol_handle *ph,
+			      u32 selector, const unsigned int **pins,
+			      unsigned int *nr_pins);
+	int (*function_groups_get)(const struct scmi_protocol_handle *ph,
+				   u32 selector, unsigned int *nr_groups,
+				   const unsigned int **groups);
+	int (*mux_set)(const struct scmi_protocol_handle *ph, u32 selector,
+		       u32 group);
+	int (*settings_get_one)(const struct scmi_protocol_handle *ph,
+				u32 selector,
+				enum scmi_pinctrl_selector_type type,
+				enum scmi_pinctrl_conf_type config_type,
+				u32 *config_value);
+	int (*settings_get_all)(const struct scmi_protocol_handle *ph,
+				u32 selector,
+				enum scmi_pinctrl_selector_type type,
+				unsigned int *nr_configs,
+				enum scmi_pinctrl_conf_type *config_types,
+				u32 *config_values);
+	int (*settings_conf)(const struct scmi_protocol_handle *ph,
+			     u32 selector, enum scmi_pinctrl_selector_type type,
+			     unsigned int nr_configs,
+			     enum scmi_pinctrl_conf_type *config_type,
+			     u32 *config_value);
 	int (*pin_request)(const struct scmi_protocol_handle *ph, u32 pin);
 	int (*pin_free)(const struct scmi_protocol_handle *ph, u32 pin);
 };
@@ -855,6 +911,8 @@ struct scmi_handle {
 				    unsigned int *atomic_threshold);
 
 	const struct scmi_notify_ops *notify_ops;
+
+	ANDROID_KABI_RESERVE(1);
 };
 
 enum scmi_std_protocol {
@@ -891,6 +949,8 @@ struct scmi_device {
 	const char *name;
 	struct device dev;
 	struct scmi_handle *handle;
+
+	ANDROID_KABI_RESERVE(1);
 };
 
 #define to_scmi_dev(d) container_of(d, struct scmi_device, dev)

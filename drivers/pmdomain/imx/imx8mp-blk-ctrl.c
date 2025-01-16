@@ -693,7 +693,6 @@ static int imx8mp_blk_ctrl_probe(struct platform_device *pdev)
 		.reg_bits	= 32,
 		.val_bits	= 32,
 		.reg_stride	= 4,
-		.disable_debugfs = true,
 	};
 
 	bc = devm_kzalloc(dev, sizeof(*bc), GFP_KERNEL);
@@ -803,6 +802,12 @@ static int imx8mp_blk_ctrl_probe(struct platform_device *pdev)
 	if (ret) {
 		dev_err_probe(dev, ret, "failed to add power domain provider\n");
 		goto cleanup_pds;
+	}
+
+	for (i = 0; i < bc_data->num_domains; i++) {
+		struct imx8mp_blk_ctrl_domain *domain = &bc->domains[i];
+
+		pm_genpd_add_subdomain(pd_to_genpd(bc->bus_power_dev->pm_domain), &domain->genpd);
 	}
 
 	bc->power_nb.notifier_call = bc_data->power_notifier_fn;

@@ -75,7 +75,7 @@ static void __activate_traps(struct kvm_vcpu *vcpu)
 
 	val |= CPTR_EL2_TAM;
 
-	if (guest_owns_fp_regs(vcpu)) {
+	if (vcpu->arch.fp_state == FP_STATE_GUEST_OWNED) {
 		if (vcpu_has_sve(vcpu))
 			val |= CPACR_EL1_ZEN_EL0EN | CPACR_EL1_ZEN_EL1EN;
 	} else {
@@ -148,6 +148,8 @@ void activate_traps_vhe_load(struct kvm_vcpu *vcpu)
 
 	local_irq_save(flags);
 	__activate_traps_common(vcpu);
+	__activate_traps_hcrx(vcpu);
+	__activate_traps_hfgxtr(vcpu);
 	local_irq_restore(flags);
 }
 
@@ -157,7 +159,23 @@ void deactivate_traps_vhe_put(struct kvm_vcpu *vcpu)
 
 	local_irq_save(flags);
 	__deactivate_traps_common(vcpu);
+	__deactivate_traps_hfgxtr(vcpu);
 	local_irq_restore(flags);
+}
+
+static void __deactivate_fpsimd_traps(struct kvm_vcpu *vcpu)
+{
+	u64 reg = CPACR_EL1_FPEN_EL0EN | CPACR_EL1_FPEN_EL1EN;
+
+	if (vcpu_has_sve(vcpu))
+		reg |= CPACR_EL1_ZEN_EL0EN | CPACR_EL1_ZEN_EL1EN;
+
+	sysreg_clear_set(cpacr_el1, 0, reg);
+}
+
+static void kvm_hyp_handle_fpsimd_host(struct kvm_vcpu *vcpu)
+{
+	__fpsimd_save_state(vcpu->arch.host_fpsimd_state);
 }
 
 static const exit_handler_fn hyp_exit_handlers[] = {
@@ -293,7 +311,7 @@ int __kvm_vcpu_run(struct kvm_vcpu *vcpu)
 	return ret;
 }
 
-static void __hyp_call_panic(u64 spsr, u64 elr, u64 par)
+static void __noreturn __hyp_call_panic(u64 spsr, u64 elr, u64 par)
 {
 	struct kvm_cpu_context *host_ctxt;
 	struct kvm_vcpu *vcpu;
@@ -318,7 +336,6 @@ void __noreturn hyp_panic(void)
 	u64 par = read_sysreg_par();
 
 	__hyp_call_panic(spsr, elr, par);
-	unreachable();
 }
 
 asmlinkage void kvm_unexpected_el2_exception(void)

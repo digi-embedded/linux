@@ -176,7 +176,7 @@ accumulate_sum(u64 delta, struct sched_avg *sa,
  *   load_avg = u_0` + y*(u_0 + u_1*y + u_2*y^2 + ... )
  *            = u_0 + u_1*y + u_2*y^2 + ... [re-labeling u_i --> u_{i+1}]
  */
-static __always_inline int
+int
 ___update_load_sum(u64 now, struct sched_avg *sa,
 		  unsigned long load, unsigned long runnable, int running)
 {
@@ -228,6 +228,7 @@ ___update_load_sum(u64 now, struct sched_avg *sa,
 
 	return 1;
 }
+EXPORT_SYMBOL_GPL(___update_load_sum);
 
 /*
  * When syncing *_avg with *_sum, we must take into account the current
@@ -253,7 +254,7 @@ ___update_load_sum(u64 now, struct sched_avg *sa,
  * the period_contrib of cfs_rq when updating the sched_avg of a sched_entity
  * if it's more convenient.
  */
-static __always_inline void
+void
 ___update_load_avg(struct sched_avg *sa, unsigned long load)
 {
 	u32 divider = get_pelt_divider(sa);
@@ -265,6 +266,7 @@ ___update_load_avg(struct sched_avg *sa, unsigned long load)
 	sa->runnable_avg = div_u64(sa->runnable_sum, divider);
 	WRITE_ONCE(sa->util_avg, sa->util_sum / divider);
 }
+EXPORT_SYMBOL_GPL(___update_load_avg);
 
 /*
  * sched_entity:
@@ -302,6 +304,7 @@ int __update_load_avg_blocked_se(u64 now, struct sched_entity *se)
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(__update_load_avg_blocked_se);
 
 int __update_load_avg_se(u64 now, struct cfs_rq *cfs_rq, struct sched_entity *se)
 {
@@ -466,4 +469,69 @@ int update_irq_load_avg(struct rq *rq, u64 running)
 
 	return ret;
 }
+#endif
+
+__read_mostly unsigned int sched_pelt_lshift;
+
+#ifdef CONFIG_SYSCTL
+#include <trace/hooks/sched.h>
+static unsigned int sysctl_sched_pelt_multiplier = 1;
+
+int sched_pelt_multiplier(struct ctl_table *table, int write, void *buffer,
+			  size_t *lenp, loff_t *ppos)
+{
+	static DEFINE_MUTEX(mutex);
+	unsigned int old;
+	int ret;
+
+	mutex_lock(&mutex);
+	old = sysctl_sched_pelt_multiplier;
+	ret = proc_dointvec(table, write, buffer, lenp, ppos);
+	if (ret)
+		goto undo;
+	if (!write)
+		goto done;
+
+	trace_android_vh_sched_pelt_multiplier(old, sysctl_sched_pelt_multiplier, &ret);
+	if (ret)
+		goto undo;
+
+	switch (sysctl_sched_pelt_multiplier)  {
+	case 1:
+		fallthrough;
+	case 2:
+		fallthrough;
+	case 4:
+		WRITE_ONCE(sched_pelt_lshift,
+			   sysctl_sched_pelt_multiplier >> 1);
+		goto done;
+	default:
+		ret = -EINVAL;
+	}
+
+undo:
+	sysctl_sched_pelt_multiplier = old;
+done:
+	mutex_unlock(&mutex);
+
+	return ret;
+}
+
+static struct ctl_table sched_pelt_sysctls[] = {
+	{
+		.procname       = "sched_pelt_multiplier",
+		.data           = &sysctl_sched_pelt_multiplier,
+		.maxlen         = sizeof(unsigned int),
+		.mode           = 0644,
+		.proc_handler   = sched_pelt_multiplier,
+	},
+	{}
+};
+
+static int __init sched_pelt_sysctl_init(void)
+{
+	register_sysctl_init("kernel", sched_pelt_sysctls);
+	return 0;
+}
+late_initcall(sched_pelt_sysctl_init);
 #endif

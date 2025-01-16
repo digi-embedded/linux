@@ -17,12 +17,14 @@
 #include <linux/shm.h>
 #include <linux/mman.h>
 #include <linux/pagemap.h>
+#include <linux/page_size_compat.h>
 #include <linux/swap.h>
 #include <linux/syscalls.h>
 #include <linux/capability.h>
 #include <linux/init.h>
 #include <linux/file.h>
 #include <linux/fs.h>
+#include <linux/pgsize_migration.h>
 #include <linux/personality.h>
 #include <linux/security.h>
 #include <linux/hugetlb.h>
@@ -55,21 +57,25 @@
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/mmap.h>
+#undef CREATE_TRACE_POINTS
+#include <trace/hooks/mm.h>
 
 #include "internal.h"
+
+EXPORT_TRACEPOINT_SYMBOL_GPL(vm_unmapped_area);
 
 #ifndef arch_mmap_check
 #define arch_mmap_check(addr, len, flags)	(0)
 #endif
 
 #ifdef CONFIG_HAVE_ARCH_MMAP_RND_BITS
-const int mmap_rnd_bits_min = CONFIG_ARCH_MMAP_RND_BITS_MIN;
-const int mmap_rnd_bits_max = CONFIG_ARCH_MMAP_RND_BITS_MAX;
+int mmap_rnd_bits_min __read_mostly = CONFIG_ARCH_MMAP_RND_BITS_MIN;
+int mmap_rnd_bits_max __read_mostly = CONFIG_ARCH_MMAP_RND_BITS_MAX;
 int mmap_rnd_bits __read_mostly = CONFIG_ARCH_MMAP_RND_BITS;
 #endif
 #ifdef CONFIG_HAVE_ARCH_MMAP_RND_COMPAT_BITS
-const int mmap_rnd_compat_bits_min = CONFIG_ARCH_MMAP_RND_COMPAT_BITS_MIN;
-const int mmap_rnd_compat_bits_max = CONFIG_ARCH_MMAP_RND_COMPAT_BITS_MAX;
+int mmap_rnd_compat_bits_min __read_mostly = CONFIG_ARCH_MMAP_RND_COMPAT_BITS_MIN;
+int mmap_rnd_compat_bits_max __read_mostly = CONFIG_ARCH_MMAP_RND_COMPAT_BITS_MAX;
 int mmap_rnd_compat_bits __read_mostly = CONFIG_ARCH_MMAP_RND_COMPAT_BITS;
 #endif
 
@@ -216,8 +222,8 @@ SYSCALL_DEFINE1(brk, unsigned long, brk)
 			      mm->end_data, mm->start_data))
 		goto out;
 
-	newbrk = PAGE_ALIGN(brk);
-	oldbrk = PAGE_ALIGN(mm->brk);
+	newbrk = __PAGE_ALIGN(brk);
+	oldbrk = __PAGE_ALIGN(mm->brk);
 	if (oldbrk == newbrk) {
 		mm->brk = brk;
 		goto success;
@@ -250,8 +256,8 @@ SYSCALL_DEFINE1(brk, unsigned long, brk)
 	 * expansion area
 	 */
 	vma_iter_init(&vmi, mm, oldbrk);
-	next = vma_find(&vmi, newbrk + PAGE_SIZE + stack_guard_gap);
-	if (next && newbrk + PAGE_SIZE > vm_start_gap(next))
+	next = vma_find(&vmi, newbrk + __PAGE_SIZE + stack_guard_gap);
+	if (next && newbrk + __PAGE_SIZE > vm_start_gap(next))
 		goto out;
 
 	brkvma = vma_prev_limit(&vmi, mm->start_brk);
@@ -740,6 +746,8 @@ static inline bool is_mergeable_vma(struct vm_area_struct *vma,
 		return false;
 	if (!anon_vma_name_eq(anon_vma_name(vma), anon_name))
 		return false;
+	if (!is_mergable_pad_vma(vma, vm_flags))
+		return false;
 	return true;
 }
 
@@ -1149,10 +1157,10 @@ struct anon_vma *find_mergeable_anon_vma(struct vm_area_struct *vma)
  */
 static inline unsigned long round_hint_to_min(unsigned long hint)
 {
-	hint &= PAGE_MASK;
+	hint &= __PAGE_MASK;
 	if (((void *)hint != NULL) &&
 	    (hint < mmap_min_addr))
-		return PAGE_ALIGN(mmap_min_addr);
+		return __PAGE_ALIGN(mmap_min_addr);
 	return hint;
 }
 
@@ -1214,6 +1222,7 @@ unsigned long do_mmap(struct file *file, unsigned long addr,
 			unsigned long pgoff, unsigned long *populate,
 			struct list_head *uf)
 {
+	unsigned long old_len;
 	struct mm_struct *mm = current->mm;
 	int pkey = 0;
 
@@ -1240,9 +1249,12 @@ unsigned long do_mmap(struct file *file, unsigned long addr,
 		addr = round_hint_to_min(addr);
 
 	/* Careful about overflows.. */
-	len = PAGE_ALIGN(len);
+	len = __COMPAT_PAGE_ALIGN(len, flags);
 	if (!len)
 		return -ENOMEM;
+
+	/* Save the requested len */
+	old_len = len;
 
 	/* offset overflow? */
 	if ((pgoff + (len >> PAGE_SHIFT)) < pgoff)
@@ -1263,6 +1275,16 @@ unsigned long do_mmap(struct file *file, unsigned long addr,
 		if (find_vma_intersection(mm, addr, addr + len))
 			return -EEXIST;
 	}
+
+	/*
+	 * addr is returned from get_unmapped_area,
+	 * There are two cases:
+	 * 1> MAP_FIXED == false
+	 *	unallocated memory, no need to check sealing.
+	 * 1> MAP_FIXED == true
+	 *	sealing is checked inside mmap_region when
+	 *	do_vmi_munmap is called.
+	 */
 
 	if (prot == PROT_EXEC) {
 		pkey = execute_only_pkey(mm);
@@ -1290,6 +1312,8 @@ unsigned long do_mmap(struct file *file, unsigned long addr,
 
 		if (!file_mmap_ok(file, inode, pgoff, len))
 			return -EOVERFLOW;
+
+		len = __filemap_len(inode, pgoff, len, flags);
 
 		flags_mask = LEGACY_MAP_MASK | file->f_op->mmap_supported_flags;
 
@@ -1384,6 +1408,9 @@ unsigned long do_mmap(struct file *file, unsigned long addr,
 	    ((vm_flags & VM_LOCKED) ||
 	     (flags & (MAP_POPULATE | MAP_NONBLOCK)) == MAP_POPULATE))
 		*populate = len;
+
+	__filemap_fixup(addr, prot, old_len, len);
+
 	return addr;
 }
 
@@ -1577,7 +1604,7 @@ static unsigned long unmapped_area(struct vm_unmapped_area_info *info)
 	MA_STATE(mas, &current->mm->mm_mt, 0, 0);
 
 	/* Adjust search length to account for worst case alignment overhead */
-	length = info->length + info->align_mask;
+	length = __PAGE_SIZE_ROUND_UP_ADJ(info->length + info->align_mask);
 	if (length < info->length)
 		return -ENOMEM;
 
@@ -1607,7 +1634,7 @@ retry:
 		}
 	}
 
-	return gap;
+	return __PAGE_ALIGN(gap);
 }
 
 /**
@@ -1628,7 +1655,7 @@ static unsigned long unmapped_area_topdown(struct vm_unmapped_area_info *info)
 
 	MA_STATE(mas, &current->mm->mm_mt, 0, 0);
 	/* Adjust search length to account for worst case alignment overhead */
-	length = info->length + info->align_mask;
+	length = __PAGE_SIZE_ROUND_UP_ADJ(info->length + info->align_mask);
 	if (length < info->length)
 		return -ENOMEM;
 
@@ -1659,7 +1686,7 @@ retry:
 		}
 	}
 
-	return gap;
+	return __PAGE_ALIGN(gap);
 }
 
 /*
@@ -1683,6 +1710,7 @@ unsigned long vm_unmapped_area(struct vm_unmapped_area_info *info)
 	trace_vm_unmapped_area(addr, info);
 	return addr;
 }
+EXPORT_SYMBOL_GPL(vm_unmapped_area);
 
 /* Get an address range which is currently unmapped.
  * For shmat() with addr=0.
@@ -2067,7 +2095,7 @@ int expand_downwards(struct vm_area_struct *vma, unsigned long address)
 	if (!(vma->vm_flags & VM_GROWSDOWN))
 		return -EFAULT;
 
-	address &= PAGE_MASK;
+	address &= __PAGE_MASK;
 	if (address < mmap_min_addr || address < FIRST_USER_ADDRESS)
 		return -EPERM;
 
@@ -2418,6 +2446,8 @@ int __split_vma(struct vma_iterator *vmi, struct vm_area_struct *vma,
 	/* Success. */
 	if (new_below)
 		vma_next(vmi);
+
+	split_pad_vma(vma, new, addr, new_below);
 	return 0;
 
 out_free_mpol:
@@ -2637,6 +2667,14 @@ int do_vmi_munmap(struct vma_iterator *vmi, struct mm_struct *mm,
 	if (end == start)
 		return -EINVAL;
 
+	/*
+	 * Check if memory is sealed before arch_unmap.
+	 * Prevent unmapping a sealed VMA.
+	 * can_modify_mm assumes we have acquired the lock on MM.
+	 */
+	if (unlikely(!can_modify_mm(mm, start, end)))
+		return -EPERM;
+
 	 /* arch_unmap() might do unmaps itself.  */
 	arch_unmap(mm, start, end);
 
@@ -2698,7 +2736,10 @@ unsigned long mmap_region(struct file *file, unsigned long addr,
 	}
 
 	/* Unmap any existing mapping in the area */
-	if (do_vmi_munmap(&vmi, mm, addr, len, uf, false))
+	error = do_vmi_munmap(&vmi, mm, addr, len, uf, false);
+	if (error == -EPERM)
+		return error;
+	else if (error)
 		return -ENOMEM;
 
 	/*
@@ -2895,6 +2936,8 @@ expanded:
 
 	vma_set_page_prot(vma);
 
+	trace_android_vh_mmap_region(vma, addr);
+
 	validate_mm(mm);
 	return addr;
 
@@ -2950,6 +2993,13 @@ EXPORT_SYMBOL(vm_munmap);
 SYSCALL_DEFINE2(munmap, unsigned long, addr, size_t, len)
 {
 	addr = untagged_addr(addr);
+
+	if (!__PAGE_ALIGNED(addr))
+		return -EINVAL;
+
+	len = __PAGE_ALIGN(len);
+
+	profile_munmap(addr);
 	return __vm_munmap(addr, len, true);
 }
 
@@ -3057,6 +3107,14 @@ int do_vma_munmap(struct vma_iterator *vmi, struct vm_area_struct *vma,
 		bool unlock)
 {
 	struct mm_struct *mm = vma->vm_mm;
+
+	/*
+	 * Check if memory is sealed before arch_unmap.
+	 * Prevent unmapping a sealed VMA.
+	 * can_modify_mm assumes we have acquired the lock on MM.
+	 */
+	if (unlikely(!can_modify_mm(mm, start, end)))
+		return -EPERM;
 
 	arch_unmap(mm, start, end);
 	return do_vmi_align_munmap(vmi, vma, mm, start, end, uf, unlock);
@@ -3224,18 +3282,21 @@ void exit_mmap(struct mm_struct *mm)
 	arch_exit_mmap(mm);
 
 	vma = mas_find(&mas, ULONG_MAX);
-	if (!vma) {
+	if (!vma || unlikely(xa_is_zero(vma))) {
 		/* Can happen if dup_mmap() received an OOM */
 		mmap_read_unlock(mm);
-		return;
+		mmap_write_lock(mm);
+		goto destroy;
 	}
 
 	lru_add_drain();
 	flush_cache_mm(mm);
 	tlb_gather_mmu_fullmm(&tlb, mm);
+	trace_android_vh_swapmem_gather_init(mm);
 	/* update_hiwater_rss(mm) here? but nobody should be looking */
 	/* Use ULONG_MAX here to ensure all VMAs in the mm are unmapped */
 	unmap_vmas(&tlb, &mas, vma, 0, ULONG_MAX, ULONG_MAX, false);
+	trace_android_vh_swapmem_gather_finish(mm);
 	mmap_read_unlock(mm);
 
 	/*
@@ -3262,11 +3323,13 @@ void exit_mmap(struct mm_struct *mm)
 		remove_vma(vma, true);
 		count++;
 		cond_resched();
-	} while ((vma = mas_find(&mas, ULONG_MAX)) != NULL);
+		vma = mas_find(&mas, ULONG_MAX);
+	} while (vma && likely(!xa_is_zero(vma)));
 
 	BUG_ON(count != mm->map_count);
 
 	trace_exit_mmap(mm);
+destroy:
 	__mt_destroy(&mm->mm_mt);
 	mmap_write_unlock(mm);
 	vm_unacct_memory(nr_accounted);

@@ -1,0 +1,81 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright 2023 NXP
+ */
+
+/ {
+	firmware {
+		android {
+			compatible = "android,firmware";
+			/* sd card node which used if androidboot.boot_device_root=mmcblk0 */
+			boot_devices_mmcblk0 = "soc/42800000.bus/42850000.mmc";
+			/* emmc node which used if androidboot.boot_device_root=mmcblk1 */
+			boot_devices_mmcblk1 = "soc/42800000.bus/42860000.mmc";
+			vbmeta {
+				/*we need use FirstStageMountVBootV2 if we enable avb*/
+				compatible = "android,vbmeta";
+				/*parts means the partition witch can be mount in first stage*/
+				parts = "vbmeta,dtbo,boot,init_boot,system,vendor,vendor_dlkm,product";
+			};
+		};
+	};
+
+	chosen {
+		rng-seed = <0x01 0x02 0x03 0x04 0x05 0x06>;
+	};
+
+	trusty {
+		compatible = "android,trusty-smc-v1";
+		ranges;
+		#address-cells = <2>;
+		#size-cells = <2>;
+		trusty-irq {
+			compatible = "android,trusty-irq-v1";
+			interrupt-ranges = < 0 15 0>;
+			ipi-range = <8 15 8>;
+		};
+		trusty-virtio {
+			compatible = "android,trusty-virtio-v1";
+		};
+		trusty-log {
+			compatible = "android,trusty-log-v1";
+		};
+	};
+
+	reset_ctrl {
+		compatible = "imx95,resetctrl";
+		status = "okay";
+	};
+};
+
+&lpuart5 {
+       /delete-node/ bluetooth;
+};
+
+&{/reserved-memory/linux,cma} {
+	status = "disabled";
+};
+&dpu {
+	trusty;
+};
+
+&{/reserved-memory/} {
+	secure_region: secure {
+		compatible = "imx-secure-ion-pool";
+		reg = <0x0 0xA0000000 0 0x1EF00000>;
+	};
+};
+
+&vpu1 {
+	status = "okay";
+	trusty;
+};
+
+&vpu_boot {
+	reg = <0 0xBEF00000 0 0x100000>;
+	no-map;
+};
+
+&vpuctrl {
+	trusty;
+};

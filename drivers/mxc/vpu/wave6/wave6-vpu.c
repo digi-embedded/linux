@@ -19,6 +19,8 @@
 #include "wave6.h"
 #include "wave6-vpu-ctrl.h"
 #include "wave6-vpu-dbg.h"
+#include <linux/trusty/smcall.h>
+#include <linux/trusty/trusty.h>
 
 #define VPU_PLATFORM_DEVICE_NAME "vpu"
 #define VPU_CLK_NAME "vcodec"
@@ -26,6 +28,9 @@
 
 #define WAVE6_IS_ENC BIT(0)
 #define WAVE6_IS_DEC BIT(1)
+
+#define SMC_ENTITY_IMX_WAVE_LINUX_OPT 55
+#define SMC_IMX_ECHO SMC_FASTCALL_NR(SMC_ENTITY_IMX_WAVE_LINUX_OPT, 0)
 
 static unsigned int debug;
 module_param(debug, uint, 0644);
@@ -101,10 +106,6 @@ static irqreturn_t wave6_vpu_irq_thread(int irq, void *dev_id)
 		}
 
 		if (irq_status & BIT(INT_WAVE6_ENC_SET_PARAM)) {
-			complete(&dev->irq_done);
-			continue;
-		}
-		if (irq_status & BIT(INT_WAVE6_INIT_SEQ)) {
 			complete(&dev->irq_done);
 			continue;
 		}
@@ -208,8 +209,10 @@ static int wave6_vpu_probe(struct platform_device *pdev)
 	int ret;
 	struct vpu_device *dev;
 	const struct wave6_match_data *match_data;
-	struct device_node *np;
 	struct platform_device *pctrl;
+	struct device_node *np = pdev->dev.of_node;
+	struct device_node *sp;
+	struct platform_device * pd;
 
 	match_data = device_get_match_data(&pdev->dev);
 	if (!match_data) {
@@ -238,6 +241,32 @@ static int wave6_vpu_probe(struct platform_device *pdev)
 	dev->entity.write_reg = wave6_vpu_write_reg;
 	dev->entity.on_boot = wave6_vpu_on_boot;
 	dev->entity.pause = wave6_vpu_pause;
+
+	/* find trusty node */
+	dev->trusty_dev = NULL;
+	if (of_find_property(np, "trusty", NULL)) {
+		sp = of_find_node_by_name(NULL, "trusty");
+		if (sp != NULL) {
+			pd = of_find_device_by_node(sp);
+			if (pd != NULL) {
+				dev->trusty_dev = &(pd->dev);
+				ret = trusty_fast_call32(dev->trusty_dev, SMC_IMX_ECHO, 0, 0, 0);
+				if (ret < 0)
+					dev->trusty_dev = NULL;
+				else
+					dev_info(&pdev->dev, "vpu will use secure mode\n");
+			} else {
+				dev_info(&pdev->dev, "failed to get response of echo. vpu use normal mode.\n");
+			}
+		} else {
+			dev_info(&pdev->dev, "failed to get response of echo. vpu use normal mode.\n");
+		}
+	}
+
+	dev->entity.dev = dev->dev;
+	dev->entity.read_reg = wave6_vpu_read_reg;
+	dev->entity.write_reg = wave6_vpu_write_reg;
+	dev->entity.on_boot = wave6_vpu_on_boot;
 
 	dev->reg_base = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(dev->reg_base))

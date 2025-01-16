@@ -715,7 +715,6 @@ config I2C_IMG
 config I2C_IMX
 	tristate "IMX I2C interface"
 	depends on ARCH_MXC || ARCH_LAYERSCAPE || COLDFIRE || COMPILE_TEST
-	select I2C_SLAVE
 	help
 	  Say Y here if you want to use the IIC bus controller on
 	  the Freescale i.MX/MXC, Layerscape or ColdFire processors.
@@ -1157,7 +1156,6 @@ config I2C_TEGRA
 config I2C_TEGRA_BPMP
 	tristate "NVIDIA Tegra BPMP I2C controller"
 	depends on TEGRA_BPMP || COMPILE_TEST
-	default y if TEGRA_BPMP
 	help
 	  If you say yes to this option, support will be included for the I2C
 	  controller embedded in NVIDIA Tegra SoCs accessed via the BPMP.

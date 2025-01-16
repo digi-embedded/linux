@@ -57,6 +57,52 @@ void wave6_update_pix_fmt(struct v4l2_pix_format_mplane *pix_mp,
 	}
 }
 
+unsigned int wave6_default_bytesperline(unsigned int fourcc, unsigned int width)
+{
+	unsigned int bytesperline = width;
+
+	switch (fourcc) {
+		case V4L2_PIX_FMT_YUV420:
+		case V4L2_PIX_FMT_NV12:
+		case V4L2_PIX_FMT_NV21:
+		case V4L2_PIX_FMT_YUV422P:
+		case V4L2_PIX_FMT_NV16:
+		case V4L2_PIX_FMT_NV61:
+		case V4L2_PIX_FMT_NV24:
+		case V4L2_PIX_FMT_NV42:
+		case V4L2_PIX_FMT_YUV420M:
+		case V4L2_PIX_FMT_NV12M:
+		case V4L2_PIX_FMT_NV21M:
+		case V4L2_PIX_FMT_YUV422M:
+		case V4L2_PIX_FMT_NV16M:
+		case V4L2_PIX_FMT_NV61M:
+			bytesperline = round_up(width, 32);
+			break;
+		case V4L2_PIX_FMT_YUYV:
+			bytesperline = round_up(width, 32) * 2;
+			break;
+		case V4L2_PIX_FMT_YUV24:
+		case V4L2_PIX_FMT_RGB24:
+			bytesperline = round_up((width * 3), 16);
+			break;
+		case V4L2_PIX_FMT_P010:
+			bytesperline = round_up((width * 2), 32);
+			break;
+		case V4L2_PIX_FMT_ARGB32:
+		case V4L2_PIX_FMT_XRGB32:
+		case V4L2_PIX_FMT_RGBA32:
+		case V4L2_PIX_FMT_RGBX32:
+		case V4L2_PIX_FMT_ARGB2101010:
+			bytesperline = round_up((width * 4), 16);
+			break;
+	default:
+		bytesperline = width;
+		break;
+	}
+
+	return bytesperline;
+}
+
 dma_addr_t wave6_get_dma_addr(struct vb2_v4l2_buffer *buf, unsigned int plane_no)
 {
 	return vb2_dma_contig_plane_dma_addr(&buf->vb2_buf, plane_no) +
@@ -193,9 +239,6 @@ static int wave6_vpu_job_ready(void *priv)
 	dev_dbg(inst->dev->dev, "[%d]%s: state %d\n",
 		inst->id, __func__, inst->state);
 
-	/*decoder parse sequence header*/
-	if (inst->type == VPU_INST_TYPE_DEC && inst->state == VPU_INST_STATE_OPEN)
-		return 1;
 	if (inst->state < VPU_INST_STATE_PIC_RUN)
 		return 0;
 	if (inst->state == VPU_INST_STATE_STOP && inst->eos)

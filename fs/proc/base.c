@@ -97,7 +97,9 @@
 #include <linux/resctrl.h>
 #include <linux/cn_proc.h>
 #include <linux/ksm.h>
+#include <linux/cpufreq_times.h>
 #include <trace/events/oom.h>
+#include <trace/hooks/sched.h>
 #include "internal.h"
 #include "fd.h"
 
@@ -344,13 +346,24 @@ static ssize_t get_task_cmdline(struct task_struct *tsk, char __user *buf,
 				size_t count, loff_t *pos)
 {
 	struct mm_struct *mm;
+	bool prio_inherited = false;
+	int saved_prio;
 	ssize_t ret;
 
 	mm = get_task_mm(tsk);
 	if (!mm)
 		return 0;
 
+	/*
+	 * access_remote_vm() holds the hot mmap_sem lock which can cause the
+	 * task for which we read cmdline etc for by some debug deamon to slow
+	 * down and suffer a performance hit. Especially if the reader task has
+	 * a low nice value.
+	 */
+	trace_android_vh_prio_inheritance(tsk, &saved_prio, &prio_inherited);
 	ret = get_mm_cmdline(mm, buf, count, pos);
+	if (prio_inherited)
+		trace_android_vh_prio_restore(saved_prio);
 	mmput(mm);
 	return ret;
 }
@@ -1881,8 +1894,6 @@ void proc_pid_evict_inode(struct proc_inode *ei)
 		hlist_del_init_rcu(&ei->sibling_inodes);
 		spin_unlock(&pid->lock);
 	}
-
-	put_pid(pid);
 }
 
 struct inode *proc_pid_make_inode(struct super_block *sb,
@@ -3339,6 +3350,9 @@ static const struct pid_entry tgid_base_stuff[] = {
 #ifdef CONFIG_LIVEPATCH
 	ONE("patch_state",  S_IRUSR, proc_pid_patch_state),
 #endif
+#ifdef CONFIG_CPU_FREQ_TIMES
+	ONE("time_in_state", 0444, proc_time_in_state_show),
+#endif
 #ifdef CONFIG_STACKLEAK_METRICS
 	ONE("stack_depth", S_IRUGO, proc_stack_depth),
 #endif
@@ -3690,6 +3704,9 @@ static const struct pid_entry tid_base_stuff[] = {
 #ifdef CONFIG_KSM
 	ONE("ksm_merging_pages",  S_IRUSR, proc_pid_ksm_merging_pages),
 	ONE("ksm_stat",  S_IRUSR, proc_pid_ksm_stat),
+#endif
+#ifdef CONFIG_CPU_FREQ_TIMES
+	ONE("time_in_state", 0444, proc_time_in_state_show),
 #endif
 };
 

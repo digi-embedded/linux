@@ -38,6 +38,7 @@
 				     90 91 92 93 94 95 96 97 98 99
 				    100>;
 		default-brightness-level = <80>;
+		status = "disabled";
 	};
 
 	lvds_backlight1: lvds-backlight-1 {
@@ -56,6 +57,7 @@
 				     90 91 92 93 94 95 96 97 98 99
 				    100>;
 		default-brightness-level = <80>;
+		status = "disabled";
 	};
 
 	modem_reset: modem-reset {
@@ -94,9 +96,9 @@
 			reg = <0x8 0x80000000 0 0x10000000>;
 		};
 
-		decoder_boot: decoder_boot@84000000 {
+		decoder_boot: decoder_boot@96000000 {
 			no-map;
-			reg = <0 0x84000000 0 0x2000000>;
+			reg = <0 0x96000000 0 0x2000000>;
 		};
 		encoder1_boot: encoder1_boot@86000000 {
 			no-map;
@@ -106,9 +108,9 @@
 			no-map;
 			reg = <0 0x86200000 0 0x200000>;
 		};
-		decoder_rpc: decoder_rpc@92000000 {
+		decoder_rpc: decoder_rpc@a4000000 {
 			no-map;
-			reg = <0 0x92000000 0 0x100000>;
+			reg = <0 0xa4000000 0 0x100000>;
 		};
 		dsp_reserved: dsp@92400000 {
 			reg = <0 0x92400000 0 0x1000000>;
@@ -1199,9 +1201,13 @@
 		usb_con1: connector {
 			compatible = "usb-c-connector";
 			label = "USB-C";
-			power-role = "source";
+			power-role = "dual";
 			data-role = "dual";
+			try-power-role = "sink";
 			source-pdos = <PDO_FIXED(5000, 3000, PDO_FIXED_USB_COMM)>;
+			sink-pdos = <PDO_FIXED(5000, 0, PDO_FIXED_USB_COMM)>;
+			op-sink-microwatt = <0>;
+			self-powered;
 
 			ports {
 				#address-cells = <1>;
@@ -1882,3 +1888,5 @@
 	memory-region = <&encoder2_boot>, <&encoder2_rpc>;
 	status = "okay";
 };
+
+#include "imx8qm-android.dtsi"

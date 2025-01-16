@@ -40,7 +40,11 @@
 #include <linux/fs_parser.h>
 #include <linux/swapfile.h>
 #include <linux/iversion.h>
+#include <linux/mm_inline.h>
 #include "swap.h"
+
+#undef CREATE_TRACE_POINTS
+#include <trace/hooks/mm.h>
 
 static struct vfsmount *shm_mnt;
 
@@ -79,6 +83,7 @@ static struct vfsmount *shm_mnt;
 #include <linux/rmap.h>
 #include <linux/uuid.h>
 #include <linux/quotaops.h>
+#include <linux/android_vendor.h>
 
 #include <linux/uaccess.h>
 
@@ -696,7 +701,7 @@ next:
 		folio_put(folio);
 
 		/* If split failed move the inode on the list back to shrinklist */
-		if (ret)
+		if (ret < 0)
 			goto move_back;
 
 		split++;
@@ -1464,7 +1469,7 @@ static int shmem_writepage(struct page *page, struct writeback_control *wbc)
 	if (folio_test_large(folio)) {
 		/* Ensure the subpages are still dirty */
 		folio_test_set_dirty(folio);
-		if (split_huge_page(page) < 0)
+		if (split_huge_page(page))
 			goto redirty;
 		folio = page_folio(page);
 		folio_clear_dirty(folio);
@@ -1663,10 +1668,14 @@ static struct folio *shmem_alloc_folio(gfp_t gfp,
 			struct shmem_inode_info *info, pgoff_t index)
 {
 	struct vm_area_struct pvma;
-	struct folio *folio;
+	struct folio *folio = NULL;
 
 	shmem_pseudo_vma_init(&pvma, info, index);
+	trace_android_rvh_shmem_get_folio(info, &folio);
+	if (folio)
+		goto done;
 	folio = vma_alloc_folio(gfp, 0, &pvma, 0, false);
+done:
 	shmem_pseudo_vma_destroy(&pvma);
 
 	return folio;
@@ -1868,6 +1877,7 @@ static int shmem_swapin_folio(struct inode *inode, pgoff_t index,
 
 	/* We have to do this with folio locked to prevent races */
 	folio_lock(folio);
+	trace_android_vh_shmem_swapin_folio(folio);
 	if (!folio_test_swapcache(folio) ||
 	    folio->swap.val != swap.val ||
 	    !shmem_confirm_swap(mapping, index, swap)) {
@@ -1884,7 +1894,7 @@ static int shmem_swapin_folio(struct inode *inode, pgoff_t index,
 	 * Some architectures may have to restore extra metadata to the
 	 * folio after reading from swap.
 	 */
-	arch_swap_restore(swap, folio);
+	arch_swap_restore(folio_swap(swap, folio), folio);
 
 	if (shmem_should_replace_folio(folio, gfp)) {
 		error = shmem_replace_folio(&folio, gfp, info, index);
@@ -2167,7 +2177,7 @@ static int synchronous_wake_function(wait_queue_entry_t *wait, unsigned mode, in
 	return ret;
 }
 
-static vm_fault_t shmem_fault(struct vm_fault *vmf)
+vm_fault_t shmem_fault(struct vm_fault *vmf)
 {
 	struct vm_area_struct *vma = vmf->vma;
 	struct inode *inode = file_inode(vma->vm_file);
@@ -2470,6 +2480,7 @@ static struct inode *__shmem_get_inode(struct mnt_idmap *idmap,
 	inode->i_generation = get_random_u32();
 	info = SHMEM_I(inode);
 	memset(info, 0, (char *)inode - (char *)info);
+	android_init_vendor_data(info, 1);
 	spin_lock_init(&info->lock);
 	atomic_set(&info->stop_eviction, 0);
 	info->seals = F_SEAL_SEAL;
@@ -4941,3 +4952,41 @@ struct page *shmem_read_mapping_page_gfp(struct address_space *mapping,
 	return page;
 }
 EXPORT_SYMBOL_GPL(shmem_read_mapping_page_gfp);
+
+int reclaim_shmem_address_space(struct address_space *mapping)
+{
+#ifdef CONFIG_SHMEM
+	pgoff_t start = 0;
+	struct page *page;
+	LIST_HEAD(page_list);
+	XA_STATE(xas, &mapping->i_pages, start);
+
+	if (!shmem_mapping(mapping))
+		return -EINVAL;
+
+	lru_add_drain();
+
+	rcu_read_lock();
+	xas_for_each(&xas, page, ULONG_MAX) {
+		if (xas_retry(&xas, page))
+			continue;
+		if (xa_is_value(page))
+			continue;
+		if (!isolate_lru_page(page))
+			continue;
+
+		list_add(&page->lru, &page_list);
+
+		if (need_resched()) {
+			xas_pause(&xas);
+			cond_resched_rcu();
+		}
+	}
+	rcu_read_unlock();
+
+	return reclaim_pages(&page_list, false);
+#else
+	return 0;
+#endif
+}
+EXPORT_SYMBOL_GPL(reclaim_shmem_address_space);

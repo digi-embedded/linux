@@ -10,6 +10,7 @@
 #include <linux/uaccess.h>
 #include <linux/termios.h>
 #include <linux/seq_file.h>
+#include <linux/android_kabi.h>
 
 struct tty_struct;
 struct tty_driver;
@@ -380,7 +381,6 @@ struct tty_operations {
 	void (*hangup)(struct tty_struct *tty);
 	int (*break_ctl)(struct tty_struct *tty, int state);
 	void (*flush_buffer)(struct tty_struct *tty);
-	int (*ldisc_ok)(struct tty_struct *tty, int ldisc);
 	void (*set_ldisc)(struct tty_struct *tty);
 	void (*wait_until_sent)(struct tty_struct *tty, int timeout);
 	void (*send_xchar)(struct tty_struct *tty, char ch);
@@ -399,6 +399,9 @@ struct tty_operations {
 	void (*poll_put_char)(struct tty_driver *driver, int line, char ch);
 #endif
 	int (*proc_show)(struct seq_file *m, void *driver);
+
+	ANDROID_KABI_USE(1, int (*ldisc_ok)(struct tty_struct *tty, int ldisc));
+	ANDROID_KABI_RESERVE(2);
 } __randomize_layout;
 
 /**
@@ -469,6 +472,9 @@ struct tty_driver {
 
 	const struct tty_operations *ops;
 	struct list_head tty_drivers;
+
+	ANDROID_KABI_RESERVE(1);
+	ANDROID_KABI_RESERVE(2);
 } __randomize_layout;
 
 extern struct list_head tty_drivers;

@@ -45,6 +45,7 @@ enum sgmii_speed {
 #define phylink_pcs_to_lynx(pl_pcs) container_of((pl_pcs), struct lynx_pcs, pcs)
 #define lynx_to_phylink_pcs(lynx) (&(lynx)->pcs)
 
+#ifndef CONFIG_IMX_GKI_FIX
 static void lynx_pcs_get_state_usxgmii(struct mdio_device *pcs,
 				       struct phylink_link_state *state)
 {
@@ -67,6 +68,7 @@ static void lynx_pcs_get_state_usxgmii(struct mdio_device *pcs,
 
 	phylink_decode_usxgmii_word(state, lpa);
 }
+#endif
 
 static void lynx_pcs_get_state_2500basex(struct mdio_device *pcs,
 					 struct phylink_link_state *state)
@@ -94,10 +96,10 @@ static void lynx_pcs_get_state(struct phylink_pcs *pcs,
 			       struct phylink_link_state *state)
 {
 	struct lynx_pcs *lynx = phylink_pcs_to_lynx(pcs);
-
+#ifndef CONFIG_IMX_GKI_FIX
 	if (phylink_autoneg_c73(pcs->cfg_link_an_mode))
 		return mtip_backplane_get_state(lynx->anlt[PRIMARY_LANE], state);
-
+#endif
 	switch (state->interface) {
 	case PHY_INTERFACE_MODE_1000BASEX:
 	case PHY_INTERFACE_MODE_SGMII:
@@ -108,9 +110,11 @@ static void lynx_pcs_get_state(struct phylink_pcs *pcs,
 		lynx_pcs_get_state_2500basex(lynx->mdio, state);
 		break;
 	case PHY_INTERFACE_MODE_USXGMII:
+#ifndef CONFIG_IMX_GKI_FIX
 	case PHY_INTERFACE_MODE_10G_QXGMII:
 		lynx_pcs_get_state_usxgmii(lynx->mdio, state);
 		break;
+#endif
 	case PHY_INTERFACE_MODE_10GBASER:
 	case PHY_INTERFACE_MODE_25GBASER:
 		phylink_mii_c45_pcs_get_state(lynx->mdio, state);
@@ -164,6 +168,7 @@ static int lynx_pcs_config_giga(struct mdio_device *pcs,
 					  neg_mode);
 }
 
+#ifndef CONFIG_IMX_GKI_FIX
 static int lynx_pcs_config_usxgmii(struct mdio_device *pcs,
 				   phy_interface_t interface,
 				   const unsigned long *advertising,
@@ -184,6 +189,7 @@ static int lynx_pcs_config_usxgmii(struct mdio_device *pcs,
 				 MDIO_USXGMII_FULL_DUPLEX |
 				 ADVERTISE_SGMII | ADVERTISE_LPACK);
 }
+#endif
 
 static int lynx_pcs_config_c73(struct phylink_pcs *pcs, unsigned int neg_mode,
 			       const unsigned long *advertising)
@@ -236,9 +242,11 @@ static int lynx_pcs_config(struct phylink_pcs *pcs, unsigned int neg_mode,
 		}
 		break;
 	case PHY_INTERFACE_MODE_USXGMII:
+#ifndef CONFIG_IMX_GKI_FIX
 	case PHY_INTERFACE_MODE_10G_QXGMII:
 		return lynx_pcs_config_usxgmii(lynx->mdio, ifmode, advertising,
 					       neg_mode);
+#endif
 	case PHY_INTERFACE_MODE_10GBASER:
 	case PHY_INTERFACE_MODE_25GBASER:
 		/* Nothing to do here for 10GBASER and 25GBASER */
@@ -253,10 +261,10 @@ static int lynx_pcs_config(struct phylink_pcs *pcs, unsigned int neg_mode,
 static void lynx_pcs_an_restart(struct phylink_pcs *pcs)
 {
 	struct lynx_pcs *lynx = phylink_pcs_to_lynx(pcs);
-
+#ifndef CONFIG_IMX_GKI_FIX
 	if (phylink_autoneg_c73(pcs->cfg_link_an_mode))
 		return mtip_backplane_an_restart(lynx->anlt[PRIMARY_LANE]);
-
+#endif
 	phylink_mii_c22_pcs_an_restart(lynx->mdio);
 }
 
@@ -363,10 +371,10 @@ static int lynx_pcs_validate(struct phylink_pcs *pcs, unsigned long *supported,
 			     const struct phylink_link_state *state)
 {
 	struct lynx_pcs *lynx = phylink_pcs_to_lynx(pcs);
-
+#ifndef CONFIG_IMX_GKI_FIX
 	if (!phylink_autoneg_c73(pcs->cfg_link_an_mode))
 		return 0;
-
+#endif
 	if (!lynx->num_phys) {
 		linkmode_zero(supported);
 		dev_err(&lynx->mdio->dev, "C73 autoneg requires SerDes\n");
@@ -375,7 +383,7 @@ static int lynx_pcs_validate(struct phylink_pcs *pcs, unsigned long *supported,
 
 	return mtip_backplane_validate(lynx->serdes[PRIMARY_LANE], supported);
 }
-
+#ifndef CONFIG_IMX_GKI_FIX
 static int lynx_pcs_c73_init(struct phylink_pcs *pcs)
 {
 	struct lynx_pcs *lynx = phylink_pcs_to_lynx(pcs);
@@ -421,16 +429,16 @@ static void lynx_pcs_c73_teardown(struct phylink_pcs *pcs)
 		if (lynx->anlt[i])
 			mtip_backplane_destroy(lynx->anlt[i]);
 }
-
+#endif
 static int lynx_pcs_enable(struct phylink_pcs *pcs)
 {
 	struct lynx_pcs *lynx = phylink_pcs_to_lynx(pcs);
 	size_t i;
 	int err;
-
+#ifndef CONFIG_IMX_GKI_FIX
 	if (phylink_autoneg_c73(pcs->cfg_link_an_mode))
 		return lynx_pcs_c73_init(pcs);
-
+#endif
 	/* The backplane AN/LT deals with lane power management */
 	for (i = 0; i < lynx->num_phys; i++) {
 		err = phy_power_on(lynx->serdes[i]);
@@ -445,10 +453,10 @@ static void lynx_pcs_disable(struct phylink_pcs *pcs)
 {
 	struct lynx_pcs *lynx = phylink_pcs_to_lynx(pcs);
 	size_t i;
-
+#ifndef CONFIG_IMX_GKI_FIX
 	if (phylink_autoneg_c73(pcs->cfg_link_an_mode))
 		return lynx_pcs_c73_teardown(pcs);
-
+#endif
 	/* The backplane AN/LT deals with lane power management */
 	for (i = 0; i < lynx->num_phys; i++)
 		phy_power_off(lynx->serdes[i]);
@@ -509,11 +517,17 @@ static int lynx_pcs_validate_addr(struct mdio_device *mdiodev,
 			.type = PHY_PCVT_ETHERNET_PCS,
 		},
 	};
+#ifndef CONFIG_IMX_GKI_FIX
 	int i, err;
+#else
+	int i;
+#endif
 
+#ifndef CONFIG_IMX_GKI_FIX
 	err = phy_get_status(serdes, PHY_STATUS_PCVT_COUNT, &opts1);
 	if (err)
 		return err;
+#endif
 
 	for (i = 0; i < opts1.pcvt_count.num_pcvt; i++) {
 		union phy_status_opts opts2 = {
@@ -523,9 +537,11 @@ static int lynx_pcs_validate_addr(struct mdio_device *mdiodev,
 			},
 		};
 
+#ifndef CONFIG_IMX_GKI_FIX
 		err = phy_get_status(serdes, PHY_STATUS_PCVT_ADDR, &opts2);
 		if (err)
 			return err;
+#endif
 
 		/* For a multi-port protocol converter, the match is
 		 * approximate, since for full confidence, we'd have to

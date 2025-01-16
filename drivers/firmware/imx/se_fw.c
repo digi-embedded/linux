@@ -102,7 +102,7 @@ struct seco_soc_info {
 
 static LIST_HEAD(priv_data_list);
 
-static const struct imx_info_list imx8ulp_info = {
+static struct imx_info_list imx8ulp_info = {
 	.num_mu = 1,
 	.soc_id = SOC_ID_OF_IMX8ULP,
 	.board_type = 0,
@@ -123,8 +123,8 @@ static const struct imx_info_list imx8ulp_info = {
 				.mbox_rx_name = "rx",
 				.pool_name = "sram",
 				.reserved_dma_ranges = true,
-				.pre_if_config = false,
-				.post_if_config = false,
+				.pre_if_config = NULL,
+				.post_if_config = NULL,
 				.v2x_state_check = false,
 				.start_rng = ele_start_rng,
 				.enable_ele_trng = false,
@@ -136,7 +136,7 @@ static const struct imx_info_list imx8ulp_info = {
 	},
 };
 
-static const struct imx_info_list imx93_info = {
+static struct imx_info_list imx93_info = {
 	.num_mu = 1,
 	.soc_id = SOC_ID_OF_IMX93,
 	.board_type = 0,
@@ -157,7 +157,7 @@ static const struct imx_info_list imx93_info = {
 				.mbox_rx_name = "rx",
 				.pool_name = NULL,
 				.reserved_dma_ranges = true,
-				.pre_if_config = false,
+				.pre_if_config = NULL,
 				.post_if_config = ele_init_fw,
 				.v2x_state_check = false,
 				.start_rng = ele_start_rng,
@@ -191,9 +191,9 @@ static const struct imx_info_list imx8dxl_info = {
 				.pool_name = NULL,
 				.reserved_dma_ranges = false,
 				.pre_if_config = imx_scu_init_fw,
-				.post_if_config = false,
+				.post_if_config = NULL,
 				.v2x_state_check = false,
-				.start_rng = false,
+				.start_rng = NULL,
 				.enable_ele_trng = false,
 				.mu_buff_size = 0,
 				.fw_name_in_rfs = NULL,
@@ -216,9 +216,9 @@ static const struct imx_info_list imx8dxl_info = {
 				.pool_name = NULL,
 				.reserved_dma_ranges = false,
 				.pre_if_config = imx_scu_init_fw,
-				.post_if_config = false,
+				.post_if_config = NULL,
 				.v2x_state_check = false,
-				.start_rng = false,
+				.start_rng = NULL,
 				.enable_ele_trng = false,
 				.mu_buff_size = 0,
 				.fw_name_in_rfs = NULL,
@@ -241,9 +241,9 @@ static const struct imx_info_list imx8dxl_info = {
 				.pool_name = NULL,
 				.reserved_dma_ranges = false,
 				.pre_if_config = imx_scu_init_fw,
-				.post_if_config = false,
+				.post_if_config = NULL,
 				.v2x_state_check = false,
-				.start_rng = false,
+				.start_rng = NULL,
 				.enable_ele_trng = false,
 				.mu_buff_size = 0,
 				.fw_name_in_rfs = NULL,
@@ -266,9 +266,9 @@ static const struct imx_info_list imx8dxl_info = {
 				.pool_name = NULL,
 				.reserved_dma_ranges = false,
 				.pre_if_config = imx_scu_init_fw,
-				.post_if_config = false,
+				.post_if_config = NULL,
 				.v2x_state_check = false,
-				.start_rng = false,
+				.start_rng = NULL,
 				.enable_ele_trng = false,
 				.mu_buff_size = 0,
 				.fw_name_in_rfs = NULL,
@@ -291,9 +291,9 @@ static const struct imx_info_list imx8dxl_info = {
 				.pool_name = NULL,
 				.reserved_dma_ranges = false,
 				.pre_if_config = imx_scu_init_fw,
-				.post_if_config = false,
+				.post_if_config = NULL,
 				.v2x_state_check = false,
-				.start_rng = false,
+				.start_rng = NULL,
 				.enable_ele_trng = false,
 				.mu_buff_size = 16,
 				.fw_name_in_rfs = NULL,
@@ -316,9 +316,9 @@ static const struct imx_info_list imx8dxl_info = {
 				.pool_name = NULL,
 				.reserved_dma_ranges = false,
 				.pre_if_config = imx_scu_init_fw,
-				.post_if_config = false,
+				.post_if_config = NULL,
 				.v2x_state_check = false,
-				.start_rng = false,
+				.start_rng = NULL,
 				.enable_ele_trng = false,
 				.mu_buff_size = 0,
 				.fw_name_in_rfs = NULL,
@@ -341,9 +341,9 @@ static const struct imx_info_list imx8dxl_info = {
 				.pool_name = NULL,
 				.reserved_dma_ranges = false,
 				.pre_if_config = imx_scu_init_fw,
-				.post_if_config = false,
+				.post_if_config = NULL,
 				.v2x_state_check = false,
-				.start_rng = false,
+				.start_rng = NULL,
 				.enable_ele_trng = false,
 				.mu_buff_size = 0,
 				.fw_name_in_rfs = NULL,
@@ -352,7 +352,7 @@ static const struct imx_info_list imx8dxl_info = {
 	},
 };
 
-static const struct imx_info_list imx95_info = {
+static struct imx_info_list imx95_info = {
 	.num_mu = 4,
 	.soc_id = SOC_ID_OF_IMX95,
 	.board_type = 0,
@@ -373,7 +373,7 @@ static const struct imx_info_list imx95_info = {
 				.mbox_rx_name = "rx",
 				.pool_name = NULL,
 				.reserved_dma_ranges = false,
-				.pre_if_config = false,
+				.pre_if_config = NULL,
 				.post_if_config = ele_init_fw,
 				.v2x_state_check = true,
 				.start_rng = ele_start_rng,
@@ -398,8 +398,8 @@ static const struct imx_info_list imx95_info = {
 				.mbox_tx_name = "tx",
 				.mbox_rx_name = "rx",
 				.reserved_dma_ranges = false,
-				.pre_if_config = false,
-				.post_if_config = false,
+				.pre_if_config = NULL,
+				.post_if_config = NULL,
 				.v2x_state_check = true,
 				.start_rng = v2x_start_rng,
 				.enable_ele_trng = false,
@@ -423,8 +423,8 @@ static const struct imx_info_list imx95_info = {
 				.mbox_tx_name = "tx",
 				.mbox_rx_name = "rx",
 				.reserved_dma_ranges = false,
-				.pre_if_config = false,
-				.post_if_config = false,
+				.pre_if_config = NULL,
+				.post_if_config = NULL,
 				.v2x_state_check = true,
 				.start_rng = NULL,
 				.enable_ele_trng = false,
@@ -448,8 +448,8 @@ static const struct imx_info_list imx95_info = {
 				.mbox_tx_name = "tx",
 				.mbox_rx_name = "rx",
 				.reserved_dma_ranges = false,
-				.pre_if_config = false,
-				.post_if_config = false,
+				.pre_if_config = NULL,
+				.post_if_config = NULL,
 				.v2x_state_check = true,
 				.start_rng = NULL,
 				.enable_ele_trng = false,
@@ -852,7 +852,7 @@ static ssize_t ele_mu_fops_write(struct file *fp, const char __user *buf,
 	struct ele_mu_priv *ele_mu_priv = dev_ctx->priv;
 	u32 nb_words = 0;
 	struct mu_hdr header;
-	int err;
+	int err = 0;
 
 	dev_dbg(ele_mu_priv->dev,
 		"%s: write from buf (%p)%zu, ppos=%lld\n",
@@ -1501,7 +1501,7 @@ static int ele_mu_fops_open(struct inode *nd, struct file *fp)
 			       struct ele_mu_device_ctx,
 			       miscdev);
 	struct ele_mu_priv *priv = dev_ctx->priv;
-	int err;
+	int err = 0;
 
 	/* Avoid race if opened at the same time */
 	if (down_trylock(&dev_ctx->fops_lock))

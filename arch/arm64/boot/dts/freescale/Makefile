@@ -210,7 +210,7 @@ dtb-$(CONFIG_ARCH_MXC) += imx8mp-evk-revb4-rpmsg-lpv.dtb
 
 dtb-$(CONFIG_ARCH_MXC) += imx8mq-evk.dtb imx8mq-evk-rpmsg.dtb
 dtb-$(CONFIG_ARCH_MXC) += imx8mq-evk.dtb imx8mq-evk-rpmsg.dtb imx8mq-evk-pcie1-m2.dtb imx8mq-evk-usd-wifi.dtb \
-			  imx8mq-evk-usdhc2-m2.dtb
+			  imx8mq-evk-usdhc2-m2.dtb imx8mq-evk-usdhc2-m2-gki.dtb
 dtb-$(CONFIG_ARCH_MXC) += imx8mq-evk-ak4497.dtb imx8mq-evk-audio-tdm.dtb imx8mq-evk-pdm.dtb
 dtb-$(CONFIG_ARCH_MXC) += imx8mq-evk-root.dtb imx8mq-evk-inmate.dtb
 dtb-$(CONFIG_ARCH_MXC) += imx8mq-evk-lcdif-rm67191.dtb imx8mq-evk-lcdif-adv7535.dtb
@@ -278,6 +278,7 @@ imx8qm-mek-revd-dsi-rm67191-dtbs := imx8qm-mek-dsi-rm67191.dtb imx8qm-mek-revd.d
 imx8qm-mek-revd-dsi-rm67199-dtbs := imx8qm-mek-dsi-rm67199.dtb imx8qm-mek-revd.dtbo
 imx8qm-pcieax2pciebx1-revd-dtbs := imx8qm-pcieax2pciebx1.dtb imx8qm-mek-revd.dtbo
 imx8qm-mek-revd-root-dtbs := imx8qm-mek-root.dtb imx8qm-mek-revd.dtbo
+imx8qm-mek-revd-md-dtbs := imx8qm-mek-md.dtb imx8qm-mek-revd.dtbo
 
 dtb-$(CONFIG_ARCH_MXC) += imx8qm-mek-revd.dtb
 dtb-$(CONFIG_ARCH_MXC) += imx8qm-mek-revd-rpmsg.dtb
@@ -297,6 +298,7 @@ dtb-$(CONFIG_ARCH_MXC) += imx8qm-mek-revd-dsi-rm67191.dtb
 dtb-$(CONFIG_ARCH_MXC) += imx8qm-mek-revd-dsi-rm67199.dtb
 dtb-$(CONFIG_ARCH_MXC) += imx8qm-pcieax2pciebx1-revd.dtb
 dtb-$(CONFIG_ARCH_MXC) += imx8qm-mek-revd-root.dtb
+dtb-$(CONFIG_ARCH_MXC) += imx8qm-mek-revd-md.dtb
 #dtb-$(CONFIG_ARCH_MXC) += imx8qxp-ai_ml.dtb
 #dtb-$(CONFIG_ARCH_MXC) += imx8qxp-colibri-aster.dtb
 #dtb-$(CONFIG_ARCH_MXC) += imx8qxp-colibri-eval-v3.dtb
@@ -478,6 +480,12 @@ imx95-15x15-evk-adv7535-ap1302-dtbs := imx95-15x15-evk.dtb \
 				       imx95-15x15-evk-adv7535.dtbo \
 				       imx95-15x15-evk-ap1302.dtbo
 dtb-$(CONFIG_ARCH_MXC) += imx95-15x15-evk-adv7535-ap1302.dtb
+
+imx95-15x15-evk-adv7535-aud-hat-dtbs := imx95-15x15-evk-aud-hat.dtb imx95-15x15-evk-adv7535.dtbo
+dtb-$(CONFIG_ARCH_MXC) += imx95-15x15-evk-adv7535-aud-hat.dtb
+
+imx95-15x15-evk-adv7535-mqs-dtbs := imx95-15x15-evk-mqs.dtb imx95-15x15-evk-adv7535.dtbo
+dtb-$(CONFIG_ARCH_MXC) += imx95-15x15-evk-adv7535-mqs.dtb
 
 imx95-15x15-evk-adv7535-ap1302_rpi-dtbs := imx95-15x15-evk-adv7535-ap1302.dtb \
 				       imx95-15x15-evk-ap1302_rpi.dtbo
@@ -702,3 +710,40 @@ dtb-$(CONFIG_ARCH_S32) += s32v234-evb.dtb \
 			  s32v234-sbc.dtb
 dtb-$(CONFIG_ARCH_MXC) += imx8qm-mek-sof-cs42888.dtb imx8qm-mek-sof-wm8960.dtb \
 			  imx8qm-mek-revd-sof-wm8962.dtb imx8qm-mek-sof.dtb
+dtb-$(CONFIG_ARCH_MXC) += imx8qm-mek-md.dtb
+dtb-$(CONFIG_ARCH_MXC) += imx8mm-evk-iw612.dtb
+
+dtb-$(CONFIG_ARCH_MXC) += imx8mq-evk-pcie1-m2-gki.dtb imx8mq-evk-lcdif-adv7535-gki.dtb \
+                          imx8mq-evk-dcss-rm67199-gki.dtb  imx8mq-evk-dcss-rm67191-gki.dtb imx8mq-evk-dual-display-gki.dtb imx8mq-evk-gki.dtb
+dtb-$(CONFIG_ARCH_MXC) += imx8ulp-watch.dtb imx8ulp-evk-lpd.dtb imx8ulp-evk-g1120b0mipi.dtb
+dtb-$(CONFIG_ARCH_MXC) += imx8mp-evk-powersave.dtb
+dtb-$(CONFIG_ARCH_MXC) += imx8mp-evk-powersave.dtb imx8mp-evk-powersave-non-rpmsg.dtb \
+                          imx8mp-evk-hifiberry-dacpp-m-rpmsg.dtb
+
+imx8mp-evk-revb4-powersave-non-rpmsg-dtbs := imx8mp-evk-powersave-non-rpmsg.dtb imx8mp-evk-revb4.dtbo
+
+dtb-$(CONFIG_ARCH_MXC) += imx8mp-evk-revb4-powersave-non-rpmsg.dtb
+dtb-$(CONFIG_ARCH_MXC) += imx8mp-evk-revb4-powersave.dtb
+
+imx95-19x19-evk-adv7535-it6263-lvds1-ap1302-dtbs := imx95-19x19-evk.dtb imx95-19x19-evk-adv7535.dtbo \
+						     imx95-19x19-evk-it6263-lvds1.dtbo \
+						     imx95-19x19-evk-ap1302.dtbo
+dtb-$(CONFIG_ARCH_MXC) += imx95-19x19-evk-adv7535-it6263-lvds1-ap1302.dtb
+
+imx95-19x19-evk-adv7535-ap1302-cs42888-dtbs := imx95-19x19-evk.dtb imx95-19x19-evk-adv7535.dtbo \
+						imx95-19x19-evk-ap1302.dtbo \
+						imx95-19x19-evk-cs42888.dtbo
+dtb-$(CONFIG_ARCH_MXC) += imx95-19x19-evk-adv7535-ap1302-cs42888.dtb
+
+imx95-19x19-evk-adv7535-rpmsg-dtbs := imx95-19x19-evk-rpmsg.dtb imx95-19x19-evk-adv7535.dtbo
+dtb-$(CONFIG_ARCH_MXC) += imx95-19x19-evk-adv7535-rpmsg.dtb
+
+imx95-19x19-evk-os08a20-isp-adv7535-dtbs := imx95-19x19-evk-neoisp.dtb imx95-19x19-evk-os08a20.dtbo \
+                        imx95-19x19-evk-adv7535.dtbo
+dtb-$(CONFIG_ARCH_MXC) += imx95-19x19-evk-os08a20-isp-adv7535.dtb
+
+imx95-19x19-verdin-os08a20-isp-adv7535-dtbs := imx95-19x19-verdin.dtb \
+					      imx95-19x19-verdin-os08a20.dtbo \
+					      imx95-19x19-evk-neoisp.dtbo \
+					      imx95-19x19-verdin-adv7535.dtbo
+dtb-$(CONFIG_ARCH_MXC) += imx95-19x19-verdin-os08a20-isp-adv7535.dtb

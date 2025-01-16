@@ -41,6 +41,8 @@ KBUILD_CFLAGS	+= -mgeneral-regs-only	\
 KBUILD_CFLAGS	+= $(call cc-disable-warning, psabi)
 KBUILD_AFLAGS	+= $(compat_vdso)
 
+KBUILD_RUSTFLAGS += --target=$(objtree)/scripts/target.json
+
 KBUILD_CFLAGS	+= $(call cc-option,-mabi=lp64)
 KBUILD_AFLAGS	+= $(call cc-option,-mabi=lp64)
 
@@ -48,9 +50,12 @@ KBUILD_AFLAGS	+= $(call cc-option,-mabi=lp64)
 ifneq ($(CONFIG_UNWIND_TABLES),y)
 KBUILD_CFLAGS	+= -fno-asynchronous-unwind-tables -fno-unwind-tables
 KBUILD_AFLAGS	+= -fno-asynchronous-unwind-tables -fno-unwind-tables
+KBUILD_RUSTFLAGS += -Cforce-unwind-tables=n
 else
 KBUILD_CFLAGS	+= -fasynchronous-unwind-tables
 KBUILD_AFLAGS	+= -fasynchronous-unwind-tables
+# TODO: Pass -Zuse-sync-unwind=n once we upgrade to Rust 1.77.0
+KBUILD_RUSTFLAGS += -Cforce-unwind-tables=y
 endif
 
 ifeq ($(CONFIG_STACKPROTECTOR_PER_TASK),y)
@@ -65,7 +70,9 @@ endif
 
 ifeq ($(CONFIG_ARM64_BTI_KERNEL),y)
   KBUILD_CFLAGS += -mbranch-protection=pac-ret+bti
+  KBUILD_RUSTFLAGS += -Zbranch-protection=bti,pac-ret
 else ifeq ($(CONFIG_ARM64_PTR_AUTH_KERNEL),y)
+  KBUILD_RUSTFLAGS += -Zbranch-protection=pac-ret
   ifeq ($(CONFIG_CC_HAS_BRANCH_PROT_PAC_RET),y)
     KBUILD_CFLAGS += -mbranch-protection=pac-ret
   else
@@ -156,7 +163,10 @@ else
 KBUILD_IMAGE	:= $(boot)/vmlinuz.efi
 endif
 
+# Don't compile Image in mixed build with "all" target
+ifndef KBUILD_MIXED_TREE
 all:	$(notdir $(KBUILD_IMAGE))
+endif
 
 vmlinuz.efi: Image
 Image vmlinuz.efi: vmlinux
@@ -180,6 +190,11 @@ ifeq ($(CONFIG_ARM64_USE_LSE_ATOMICS),y)
   ifneq ($(CONFIG_ARM64_LSE_ATOMICS),y)
 	@echo "warning: LSE atomics not supported by binutils" >&2
   endif
+endif
+
+ifeq ($(CONFIG_KVM),y)
+archscripts:
+	$(Q)$(MAKE) $(build)=arch/arm64/tools gen-hyprel
 endif
 
 ifeq ($(KBUILD_EXTMOD),)

@@ -1,0 +1,71 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright 2022 NXP
+ */
+
+/ {
+	firmware {
+		android {
+			compatible = "android,firmware";
+			/* emmc node which used if androidboot.boot_device_root=mmcblk0 */
+			boot_devices_mmcblk0 = "soc@0/29800000.bus/298d0000.mmc";
+			vbmeta {
+				/*we need use FirstStageMountVBootV2 if we enable avb*/
+				compatible = "android,vbmeta";
+				/*parts means the partition witch can be mount in first stage*/
+				parts = "vbmeta,dtbo,boot,init_boot,system,vendor,vendor_dlkm,product";
+			};
+		};
+	};
+
+	chosen {
+		rng-seed = <0x01 0x02 0x03 0x04 0x05 0x06>;
+	};
+
+	trusty {
+		compatible = "android,trusty-smc-v1";
+		ranges;
+		#address-cells = <2>;
+		#size-cells = <2>;
+		trusty-irq {
+			compatible = "android,trusty-irq-v1";
+			interrupt-ranges = < 0 15 0>;
+			ipi-range = <8 15 8>;
+		};
+		trusty-virtio {
+			compatible = "android,trusty-virtio-v1";
+		};
+		trusty-log {
+			compatible = "android,trusty-log-v1";
+		};
+	};
+};
+
+&{/reserved-memory/linux,cma} {
+	status = "disabled";
+};
+
+&{/reserved-memory} {
+	ramoops@af600000 {
+		compatible = "ramoops";
+		reg = <0 0xaf600000 0 0x00100000>;
+		record-size     = <0x00020000>;
+		console-size    = <0x00020000>;
+		ftrace-size     = <0x00020000>;
+		pmsg-size      = <0x00020000>;
+	};
+
+	/* secure heap for secureime */
+	secure_region: secure {
+		compatible = "imx-secure-ion-pool";
+		reg = <0x0 0xA9600000 0 0x6000000>;
+	};
+};
+
+&dcnano {
+	trusty;
+};
+
+&lpuart6 {
+       /delete-node/ bluetooth;
+};

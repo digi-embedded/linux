@@ -23,6 +23,7 @@
 #include <linux/ieee80211.h>
 #include <linux/net.h>
 #include <linux/rfkill.h>
+#include <linux/android_kabi.h>
 #include <net/regulatory.h>
 
 /**
@@ -76,6 +77,8 @@ struct wiphy;
  * @IEEE80211_CHAN_DISABLED: This channel is disabled.
  * @IEEE80211_CHAN_NO_IR: do not initiate radiation, this includes
  *	sending probe requests or beaconing.
+ * @IEEE80211_CHAN_PSD: Power spectral density (in dBm) is set for this
+ *	channel.
  * @IEEE80211_CHAN_RADAR: Radar detection is required on this channel.
  * @IEEE80211_CHAN_NO_HT40PLUS: extension channel above this channel
  *	is not permitted.
@@ -115,11 +118,16 @@ struct wiphy;
  *	This may be due to the driver or due to regulatory bandwidth
  *	restrictions.
  * @IEEE80211_CHAN_NO_EHT: EHT operation is not permitted on this channel.
+ * @IEEE80211_CHAN_DFS_CONCURRENT: See %NL80211_RRF_DFS_CONCURRENT
+ * @IEEE80211_CHAN_NO_6GHZ_VLP_CLIENT: Client connection with VLP AP
+ *	not permitted using this channel
+ * @IEEE80211_CHAN_NO_6GHZ_AFC_CLIENT: Client connection with AFC AP
+ *	not permitted using this channel
  */
 enum ieee80211_channel_flags {
 	IEEE80211_CHAN_DISABLED		= 1<<0,
 	IEEE80211_CHAN_NO_IR		= 1<<1,
-	/* hole at 1<<2 */
+	IEEE80211_CHAN_PSD		= 1<<2,
 	IEEE80211_CHAN_RADAR		= 1<<3,
 	IEEE80211_CHAN_NO_HT40PLUS	= 1<<4,
 	IEEE80211_CHAN_NO_HT40MINUS	= 1<<5,
@@ -138,6 +146,9 @@ enum ieee80211_channel_flags {
 	IEEE80211_CHAN_16MHZ		= 1<<18,
 	IEEE80211_CHAN_NO_320MHZ	= 1<<19,
 	IEEE80211_CHAN_NO_EHT		= 1<<20,
+	IEEE80211_CHAN_DFS_CONCURRENT	= 1<<21,
+	IEEE80211_CHAN_NO_6GHZ_VLP_CLIENT = 1<<22,
+	IEEE80211_CHAN_NO_6GHZ_AFC_CLIENT = 1<<23,
 };
 
 #define IEEE80211_CHAN_NO_HT40 \
@@ -171,6 +182,7 @@ enum ieee80211_channel_flags {
  *	on this channel.
  * @dfs_state_entered: timestamp (jiffies) when the dfs state was entered.
  * @dfs_cac_ms: DFS CAC time in milliseconds, this is valid for DFS channels.
+ * @psd: power spectral density (in dBm)
  */
 struct ieee80211_channel {
 	enum nl80211_band band;
@@ -187,6 +199,7 @@ struct ieee80211_channel {
 	enum nl80211_dfs_state dfs_state;
 	unsigned long dfs_state_entered;
 	unsigned int dfs_cac_ms;
+	s8 psd;
 };
 
 /**
@@ -1158,6 +1171,8 @@ struct cfg80211_crypto_settings {
 	const u8 *sae_pwd;
 	u8 sae_pwd_len;
 	enum nl80211_sae_pwe_mechanism sae_pwe;
+
+	ANDROID_KABI_RESERVE(1);
 };
 
 /**
@@ -1263,6 +1278,8 @@ struct cfg80211_beacon_data {
 	size_t civicloc_len;
 	struct cfg80211_he_bss_color he_bss_color;
 	bool he_bss_color_valid;
+
+	ANDROID_KABI_RESERVE(1);
 };
 
 struct mac_address {
@@ -1397,6 +1414,8 @@ struct cfg80211_ap_settings {
 	struct cfg80211_unsol_bcast_probe_resp unsol_bcast_probe_resp;
 	struct cfg80211_mbssid_config mbssid_config;
 	u16 punct_bitmap;
+
+	ANDROID_KABI_RESERVE(1);
 };
 
 /**
@@ -1430,6 +1449,8 @@ struct cfg80211_csa_settings {
 	bool block_tx;
 	u8 count;
 	u16 punct_bitmap;
+
+	ANDROID_KABI_RESERVE(1);
 };
 
 /**
@@ -1552,6 +1573,8 @@ struct link_station_parameters {
 	const struct ieee80211_he_6ghz_capa *he_6ghz_capa;
 	const struct ieee80211_eht_cap_elem *eht_capa;
 	u8 eht_capa_len;
+
+	ANDROID_KABI_RESERVE(1);
 };
 
 /**
@@ -1565,6 +1588,21 @@ struct link_station_parameters {
 struct link_station_del_parameters {
 	const u8 *mld_mac;
 	u32 link_id;
+};
+
+/**
+ * struct cfg80211_ttlm_params: TID to link mapping parameters
+ *
+ * Used for setting a TID to link mapping.
+ *
+ * @dlink: Downlink TID to link mapping, as defined in section 9.4.2.314
+ *     (TID-To-Link Mapping element) in Draft P802.11be_D4.0.
+ * @ulink: Uplink TID to link mapping, as defined in section 9.4.2.314
+ *     (TID-To-Link Mapping element) in Draft P802.11be_D4.0.
+ */
+struct cfg80211_ttlm_params {
+	u16 dlink[8];
+	u16 ulink[8];
 };
 
 /**
@@ -2021,6 +2059,8 @@ struct station_info {
 	u8 mld_addr[ETH_ALEN] __aligned(2);
 	const u8 *assoc_resp_ies;
 	size_t assoc_resp_ies_len;
+
+	ANDROID_KABI_RESERVE(1);
 };
 
 /**
@@ -2328,6 +2368,8 @@ struct mesh_config {
 	u16 dot11MeshAwakeWindowDuration;
 	u32 plink_timeout;
 	bool dot11MeshNolearn;
+
+	ANDROID_KABI_RESERVE(1);
 };
 
 /**
@@ -2377,6 +2419,8 @@ struct mesh_setup {
 	struct cfg80211_bitrate_mask beacon_rate;
 	bool userspace_handles_dfs;
 	bool control_port_over_nl80211;
+
+	ANDROID_KABI_RESERVE(1);
 };
 
 /**
@@ -2487,7 +2531,6 @@ struct cfg80211_scan_6ghz_params {
  * @n_ssids: number of SSIDs
  * @channels: channels to scan on.
  * @n_channels: total number of channels to scan
- * @scan_width: channel width for scanning
  * @ie: optional information element(s) to add into Probe Request or %NULL
  * @ie_len: length of ie in octets
  * @duration: how long to listen on each channel, in TUs. If
@@ -2517,7 +2560,6 @@ struct cfg80211_scan_request {
 	struct cfg80211_ssid *ssids;
 	int n_ssids;
 	u32 n_channels;
-	enum nl80211_bss_scan_width scan_width;
 	const u8 *ie;
 	size_t ie_len;
 	u16 duration;
@@ -2541,6 +2583,8 @@ struct cfg80211_scan_request {
 	bool scan_6ghz;
 	u32 n_6ghz_params;
 	struct cfg80211_scan_6ghz_params *scan_6ghz_params;
+
+	ANDROID_KABI_RESERVE(1);
 
 	/* keep last */
 	struct ieee80211_channel *channels[] __counted_by(n_channels);
@@ -2612,7 +2656,6 @@ struct cfg80211_bss_select_adjust {
  * @ssids: SSIDs to scan for (passed in the probe_reqs in active scans)
  * @n_ssids: number of SSIDs
  * @n_channels: total number of channels to scan
- * @scan_width: channel width for scanning
  * @ie: optional information element(s) to add into Probe Request or %NULL
  * @ie_len: length of ie in octets
  * @flags: control flags from &enum nl80211_scan_flags
@@ -2660,7 +2703,6 @@ struct cfg80211_sched_scan_request {
 	struct cfg80211_ssid *ssids;
 	int n_ssids;
 	u32 n_channels;
-	enum nl80211_bss_scan_width scan_width;
 	const u8 *ie;
 	size_t ie_len;
 	u32 flags;
@@ -2688,6 +2730,8 @@ struct cfg80211_sched_scan_request {
 	bool nl_owner_dead;
 	struct list_head list;
 
+	ANDROID_KABI_RESERVE(1);
+
 	/* keep last */
 	struct ieee80211_channel *channels[];
 };
@@ -2708,7 +2752,6 @@ enum cfg80211_signal_type {
 /**
  * struct cfg80211_inform_bss - BSS inform data
  * @chan: channel the frame was received on
- * @scan_width: scan width that was used
  * @signal: signal strength value, according to the wiphy's
  *	signal type
  * @boottime_ns: timestamp (CLOCK_BOOTTIME) when the information was
@@ -2724,17 +2767,26 @@ enum cfg80211_signal_type {
  *	the BSS that requested the scan in which the beacon/probe was received.
  * @chains: bitmask for filled values in @chain_signal.
  * @chain_signal: per-chain signal strength of last received BSS in dBm.
+ * @restrict_use: restrict usage, if not set, assume @use_for is
+ *	%NL80211_BSS_USE_FOR_NORMAL.
+ * @use_for: bitmap of possible usage for this BSS, see
+ *	&enum nl80211_bss_use_for
+ * @cannot_use_reasons: the reasons (bitmap) for not being able to connect,
+ *	if @restrict_use is set and @use_for is zero (empty); may be 0 for
+ *	unspecified reasons; see &enum nl80211_bss_cannot_use_reasons
  * @drv_data: Data to be passed through to @inform_bss
  */
 struct cfg80211_inform_bss {
 	struct ieee80211_channel *chan;
-	enum nl80211_bss_scan_width scan_width;
 	s32 signal;
 	u64 boottime_ns;
 	u64 parent_tsf;
 	u8 parent_bssid[ETH_ALEN] __aligned(2);
 	u8 chains;
 	s8 chain_signal[IEEE80211_MAX_CHAINS];
+
+	u8 restrict_use:1, use_for:7;
+	u8 cannot_use_reasons;
 
 	void *drv_data;
 };
@@ -2762,7 +2814,6 @@ struct cfg80211_bss_ies {
  * for use in scan results and similar.
  *
  * @channel: channel this BSS is on
- * @scan_width: width of the control channel
  * @bssid: BSSID of the BSS
  * @beacon_interval: the beacon interval as from the frame
  * @capability: the capability field in host byte order
@@ -2788,11 +2839,15 @@ struct cfg80211_bss_ies {
  * @chain_signal: per-chain signal strength of last received BSS in dBm.
  * @bssid_index: index in the multiple BSS set
  * @max_bssid_indicator: max number of members in the BSS set
+ * @use_for: bitmap of possible usage for this BSS, see
+ *	&enum nl80211_bss_use_for
+ * @cannot_use_reasons: the reasons (bitmap) for not being able to connect,
+ *	if @restrict_use is set and @use_for is zero (empty); may be 0 for
+ *	unspecified reasons; see &enum nl80211_bss_cannot_use_reasons
  * @priv: private area for driver use, has at least wiphy->bss_priv_size bytes
  */
 struct cfg80211_bss {
 	struct ieee80211_channel *channel;
-	enum nl80211_bss_scan_width scan_width;
 
 	const struct cfg80211_bss_ies __rcu *ies;
 	const struct cfg80211_bss_ies __rcu *beacon_ies;
@@ -2813,6 +2868,11 @@ struct cfg80211_bss {
 
 	u8 bssid_index;
 	u8 max_bssid_indicator;
+
+	u8 use_for;
+	u8 cannot_use_reasons;
+
+	ANDROID_KABI_RESERVE(1);
 
 	u8 priv[] __aligned(sizeof(void *));
 };
@@ -2983,6 +3043,8 @@ struct cfg80211_assoc_request {
 	struct cfg80211_assoc_link links[IEEE80211_MLD_MAX_NUM_LINKS];
 	const u8 *ap_mld_addr;
 	s8 link_id;
+
+	ANDROID_KABI_RESERVE(1);
 };
 
 /**
@@ -3081,6 +3143,8 @@ struct cfg80211_ibss_params {
 	struct ieee80211_ht_cap ht_capa_mask;
 	struct key_params *wep_keys;
 	int wep_tx_key;
+
+	ANDROID_KABI_RESERVE(1);
 };
 
 /**
@@ -3195,6 +3259,8 @@ struct cfg80211_connect_params {
 	size_t fils_erp_rrk_len;
 	bool want_1x;
 	struct ieee80211_edmg edmg;
+
+	ANDROID_KABI_RESERVE(1);
 };
 
 /**
@@ -3656,6 +3722,8 @@ struct cfg80211_nan_func {
 	u8 num_rx_filters;
 	u8 instance_id;
 	u64 cookie;
+
+	ANDROID_KABI_RESERVE(1);
 };
 
 /**
@@ -3828,6 +3896,8 @@ struct cfg80211_pmsr_ftm_result {
 	    dist_avg_valid:1,
 	    dist_variance_valid:1,
 	    dist_spread_valid:1;
+
+	ANDROID_KABI_RESERVE(1);
 };
 
 /**
@@ -4401,6 +4471,7 @@ struct mgmt_frame_regs {
  * @del_link_station: Remove a link of a station.
  *
  * @set_hw_timestamp: Enable/disable HW timestamping of TM/FTM frames.
+ * @set_ttlm: set the TID to link mapping.
  */
 struct cfg80211_ops {
 	int	(*suspend)(struct wiphy *wiphy, struct cfg80211_wowlan *wow);
@@ -4760,6 +4831,13 @@ struct cfg80211_ops {
 				    struct link_station_del_parameters *params);
 	int	(*set_hw_timestamp)(struct wiphy *wiphy, struct net_device *dev,
 				    struct cfg80211_set_hw_timestamp *hwts);
+	int	(*set_ttlm)(struct wiphy *wiphy, struct net_device *dev,
+			    struct cfg80211_ttlm_params *params);
+
+	ANDROID_KABI_RESERVE(1);
+	ANDROID_KABI_RESERVE(2);
+	ANDROID_KABI_RESERVE(3);
+	ANDROID_KABI_RESERVE(4);
 };
 
 /*
@@ -4771,7 +4849,7 @@ struct cfg80211_ops {
  * enum wiphy_flags - wiphy capability flags
  *
  * @WIPHY_FLAG_SPLIT_SCAN_6GHZ: if set to true, the scan request will be split
- *	 into two, first for legacy bands and second for UHB.
+ *	 into two, first for legacy bands and second for 6 GHz.
  * @WIPHY_FLAG_NETNS_OK: if not set, do not allow changing the netns of this
  *	wiphy at all
  * @WIPHY_FLAG_PS_ON_BY_DEFAULT: if set to true, powersave will be enabled
@@ -4817,6 +4895,10 @@ struct cfg80211_ops {
  * @WIPHY_FLAG_NOTIFY_REGDOM_BY_DRIVER: The device could handle reg notify for
  *	NL80211_REGDOM_SET_BY_DRIVER.
  * @WIPHY_FLAG_DISABLE_WEXT: disable wireless extensions for this device
+ * @WIPHY_FLAG_CHANNEL_CHANGE_ON_BEACON: reg_call_notifier() is called if driver
+ *	set this flag to update channels on beacon hints.
+ * @WIPHY_FLAG_SUPPORTS_NSTR_NONPRIMARY: support connection to non-primary link
+ *	of an NSTR mobile AP MLD.
  */
 enum wiphy_flags {
 	WIPHY_FLAG_SUPPORTS_EXT_KEK_KCK		= BIT(0),
@@ -4831,7 +4913,7 @@ enum wiphy_flags {
 	WIPHY_FLAG_DISABLE_WEXT			= BIT(9),
 	WIPHY_FLAG_MESH_AUTH			= BIT(10),
 	WIPHY_FLAG_SUPPORTS_EXT_KCK_32          = BIT(11),
-	/* use hole at 12 */
+	WIPHY_FLAG_SUPPORTS_NSTR_NONPRIMARY	= BIT(12),
 	WIPHY_FLAG_SUPPORTS_FW_ROAM		= BIT(13),
 	WIPHY_FLAG_AP_UAPSD			= BIT(14),
 	WIPHY_FLAG_SUPPORTS_TDLS		= BIT(15),
@@ -4844,7 +4926,8 @@ enum wiphy_flags {
 	WIPHY_FLAG_SUPPORTS_5_10_MHZ		= BIT(22),
 	WIPHY_FLAG_HAS_CHANNEL_SWITCH		= BIT(23),
 	WIPHY_FLAG_NOTIFY_REGDOM_BY_DRIVER	= BIT(24),
-	WIPHY_FLAG_DFS_OFFLOAD                  = BIT(25)
+	WIPHY_FLAG_CHANNEL_CHANGE_ON_BEACON	= BIT(25),
+	WIPHY_FLAG_DFS_OFFLOAD			= BIT(26)
 };
 
 /**
@@ -5131,6 +5214,8 @@ struct wiphy_vendor_command {
 		      unsigned long *storage);
 	const struct nla_policy *policy;
 	unsigned int maxattr;
+
+	ANDROID_KABI_RESERVE(1);
 };
 
 /**
@@ -5586,6 +5671,8 @@ struct wiphy {
 	u16 max_num_akm_suites;
 
 	u16 hw_timestamp_max_peers;
+
+	ANDROID_KABI_RESERVE(1);
 
 	char priv[] __aligned(NETDEV_ALIGN);
 };
@@ -6090,6 +6177,9 @@ struct wireless_dev {
 		};
 	} links[IEEE80211_MLD_MAX_NUM_LINKS];
 	u16 valid_links;
+
+	ANDROID_KABI_RESERVE(1);
+	ANDROID_KABI_RESERVE(2);
 };
 
 static inline const u8 *wdev_address(struct wireless_dev *wdev)
@@ -6281,13 +6371,11 @@ ieee80211_get_response_rate(struct ieee80211_supported_band *sband,
 /**
  * ieee80211_mandatory_rates - get mandatory rates for a given band
  * @sband: the band to look for rates in
- * @scan_width: width of the control channel
  *
  * This function returns a bitmap of the mandatory rates for the given
  * band, bits are set according to the rate position in the bitrates array.
  */
-u32 ieee80211_mandatory_rates(struct ieee80211_supported_band *sband,
-			      enum nl80211_bss_scan_width scan_width);
+u32 ieee80211_mandatory_rates(struct ieee80211_supported_band *sband);
 
 /*
  * Radiotap parsing functions -- for controlled injection support
@@ -6712,8 +6800,8 @@ cfg80211_find_vendor_ie(unsigned int oui, int oui_type,
  * @elem: the element to defragment
  * @ies: elements where @elem is contained
  * @ieslen: length of @ies
- * @data: buffer to store element data
- * @data_len: length of @data
+ * @data: buffer to store element data, or %NULL to just determine size
+ * @data_len: length of @data, or 0
  * @frag_id: the element ID of fragments
  *
  * Return: length of @data, or -EINVAL on error
@@ -6975,22 +7063,6 @@ cfg80211_inform_bss_frame_data(struct wiphy *wiphy,
 			       gfp_t gfp);
 
 static inline struct cfg80211_bss * __must_check
-cfg80211_inform_bss_width_frame(struct wiphy *wiphy,
-				struct ieee80211_channel *rx_channel,
-				enum nl80211_bss_scan_width scan_width,
-				struct ieee80211_mgmt *mgmt, size_t len,
-				s32 signal, gfp_t gfp)
-{
-	struct cfg80211_inform_bss data = {
-		.chan = rx_channel,
-		.scan_width = scan_width,
-		.signal = signal,
-	};
-
-	return cfg80211_inform_bss_frame_data(wiphy, &data, mgmt, len, gfp);
-}
-
-static inline struct cfg80211_bss * __must_check
 cfg80211_inform_bss_frame(struct wiphy *wiphy,
 			  struct ieee80211_channel *rx_channel,
 			  struct ieee80211_mgmt *mgmt, size_t len,
@@ -6998,7 +7070,6 @@ cfg80211_inform_bss_frame(struct wiphy *wiphy,
 {
 	struct cfg80211_inform_bss data = {
 		.chan = rx_channel,
-		.scan_width = NL80211_BSS_CHAN_WIDTH_20,
 		.signal = signal,
 	};
 
@@ -7054,11 +7125,13 @@ size_t cfg80211_merge_profile(const u8 *ie, size_t ielen,
  *	from a beacon or probe response
  * @CFG80211_BSS_FTYPE_BEACON: data comes from a beacon
  * @CFG80211_BSS_FTYPE_PRESP: data comes from a probe response
+ * @CFG80211_BSS_FTYPE_S1G_BEACON: data comes from an S1G beacon
  */
 enum cfg80211_bss_frame_type {
 	CFG80211_BSS_FTYPE_UNKNOWN,
 	CFG80211_BSS_FTYPE_BEACON,
 	CFG80211_BSS_FTYPE_PRESP,
+	CFG80211_BSS_FTYPE_S1G_BEACON,
 };
 
 /**
@@ -7101,26 +7174,6 @@ cfg80211_inform_bss_data(struct wiphy *wiphy,
 			 gfp_t gfp);
 
 static inline struct cfg80211_bss * __must_check
-cfg80211_inform_bss_width(struct wiphy *wiphy,
-			  struct ieee80211_channel *rx_channel,
-			  enum nl80211_bss_scan_width scan_width,
-			  enum cfg80211_bss_frame_type ftype,
-			  const u8 *bssid, u64 tsf, u16 capability,
-			  u16 beacon_interval, const u8 *ie, size_t ielen,
-			  s32 signal, gfp_t gfp)
-{
-	struct cfg80211_inform_bss data = {
-		.chan = rx_channel,
-		.scan_width = scan_width,
-		.signal = signal,
-	};
-
-	return cfg80211_inform_bss_data(wiphy, &data, ftype, bssid, tsf,
-					capability, beacon_interval, ie, ielen,
-					gfp);
-}
-
-static inline struct cfg80211_bss * __must_check
 cfg80211_inform_bss(struct wiphy *wiphy,
 		    struct ieee80211_channel *rx_channel,
 		    enum cfg80211_bss_frame_type ftype,
@@ -7130,7 +7183,6 @@ cfg80211_inform_bss(struct wiphy *wiphy,
 {
 	struct cfg80211_inform_bss data = {
 		.chan = rx_channel,
-		.scan_width = NL80211_BSS_CHAN_WIDTH_20,
 		.signal = signal,
 	};
 
@@ -7138,6 +7190,25 @@ cfg80211_inform_bss(struct wiphy *wiphy,
 					capability, beacon_interval, ie, ielen,
 					gfp);
 }
+
+/**
+ * __cfg80211_get_bss - get a BSS reference
+ * @wiphy: the wiphy this BSS struct belongs to
+ * @channel: the channel to search on (or %NULL)
+ * @bssid: the desired BSSID (or %NULL)
+ * @ssid: the desired SSID (or %NULL)
+ * @ssid_len: length of the SSID (or 0)
+ * @bss_type: type of BSS, see &enum ieee80211_bss_type
+ * @privacy: privacy filter, see &enum ieee80211_privacy
+ * @use_for: indicates which use is intended
+ */
+struct cfg80211_bss *__cfg80211_get_bss(struct wiphy *wiphy,
+					struct ieee80211_channel *channel,
+					const u8 *bssid,
+					const u8 *ssid, size_t ssid_len,
+					enum ieee80211_bss_type bss_type,
+					enum ieee80211_privacy privacy,
+					u32 use_for);
 
 /**
  * cfg80211_get_bss - get a BSS reference
@@ -7148,13 +7219,20 @@ cfg80211_inform_bss(struct wiphy *wiphy,
  * @ssid_len: length of the SSID (or 0)
  * @bss_type: type of BSS, see &enum ieee80211_bss_type
  * @privacy: privacy filter, see &enum ieee80211_privacy
+ *
+ * This version implies regular usage, %NL80211_BSS_USE_FOR_NORMAL.
  */
-struct cfg80211_bss *cfg80211_get_bss(struct wiphy *wiphy,
-				      struct ieee80211_channel *channel,
-				      const u8 *bssid,
-				      const u8 *ssid, size_t ssid_len,
-				      enum ieee80211_bss_type bss_type,
-				      enum ieee80211_privacy privacy);
+static inline struct cfg80211_bss *
+cfg80211_get_bss(struct wiphy *wiphy, struct ieee80211_channel *channel,
+		 const u8 *bssid, const u8 *ssid, size_t ssid_len,
+		 enum ieee80211_bss_type bss_type,
+		 enum ieee80211_privacy privacy)
+{
+	return __cfg80211_get_bss(wiphy, channel, bssid, ssid, ssid_len,
+				  bss_type, privacy,
+				  NL80211_BSS_USE_FOR_NORMAL);
+}
+
 static inline struct cfg80211_bss *
 cfg80211_get_ibss(struct wiphy *wiphy,
 		  struct ieee80211_channel *channel,
@@ -7214,19 +7292,6 @@ void cfg80211_bss_iter(struct wiphy *wiphy,
 				    struct cfg80211_bss *bss,
 				    void *data),
 		       void *iter_data);
-
-static inline enum nl80211_bss_scan_width
-cfg80211_chandef_to_scan_width(const struct cfg80211_chan_def *chandef)
-{
-	switch (chandef->width) {
-	case NL80211_CHAN_WIDTH_5:
-		return NL80211_BSS_CHAN_WIDTH_5;
-	case NL80211_CHAN_WIDTH_10:
-		return NL80211_BSS_CHAN_WIDTH_10;
-	default:
-		return NL80211_BSS_CHAN_WIDTH_20;
-	}
-}
 
 /**
  * cfg80211_rx_mlme_mgmt - notification of processed MLME management frame
@@ -8747,9 +8812,7 @@ int cfg80211_register_netdevice(struct net_device *dev);
  */
 static inline void cfg80211_unregister_netdevice(struct net_device *dev)
 {
-#if IS_ENABLED(CONFIG_CFG80211)
 	cfg80211_unregister_wdev(dev->ieee80211_ptr);
-#endif
 }
 
 /**

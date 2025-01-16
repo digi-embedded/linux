@@ -27,6 +27,9 @@
 #include <asm/sysreg.h>
 #include <asm/system_misc.h>
 
+#include <trace/hooks/traps.h>
+#include <trace/hooks/gic.h>
+
 /*
  * Handle IRQ/context state management when entering from kernel mode.
  * Before this function is called it is not safe to call regular kernel code,
@@ -294,6 +297,7 @@ static void noinstr __panic_unhandled(struct pt_regs *regs, const char *vector,
 		vector, smp_processor_id(), esr,
 		esr_get_class_string(esr));
 
+	trace_android_rvh_panic_unhandled(regs, vector, esr);
 	__show_regs(regs);
 	panic("Unhandled exception");
 }
@@ -524,6 +528,7 @@ asmlinkage void noinstr el1h_64_irq_handler(struct pt_regs *regs)
 
 asmlinkage void noinstr el1h_64_fiq_handler(struct pt_regs *regs)
 {
+	trace_android_rvh_fiq_dump(regs);
 	el1_interrupt(regs, handle_arch_fiq);
 }
 
@@ -891,6 +896,7 @@ asmlinkage void noinstr __noreturn handle_bad_stack(struct pt_regs *regs)
 	unsigned long far = read_sysreg(far_el1);
 
 	arm64_enter_nmi(regs);
+	trace_android_rvh_handle_bad_stack(regs, esr, far);
 	panic_bad_stack(regs, esr, far);
 }
 #endif /* CONFIG_VMAP_STACK */

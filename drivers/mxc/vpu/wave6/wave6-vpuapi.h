@@ -1137,6 +1137,7 @@ struct vpu_device {
 	struct mutex pause_lock;
 	const struct wave6_match_data *res;
 	struct dentry *debugfs;
+	struct device *trusty_dev;
 };
 
 struct vpu_instance;
@@ -1192,10 +1193,12 @@ struct vpu_instance {
 	bool cbcr_interleave;
 	bool nv21;
 	bool eos;
+	bool header_separate;
 
 	struct vpu_buf aux_vbuf[AUX_BUF_TYPE_MAX][WAVE6_MAX_FBS];
 	struct vpu_buf ar_vbuf;
 	bool thumbnail_mode;
+	bool secure_mode;
 	enum display_mode disp_mode;
 
 	unsigned int frame_rate;
@@ -1206,6 +1209,8 @@ struct vpu_instance {
 	struct workqueue_struct *workqueue;
 	u64 total_frames;
 	u64 total_frame_cycle;
+	struct work_struct init_task;
+	atomic_t start_init_seq;
 
 	struct vpu_performance_info performance;
 
@@ -1214,6 +1219,8 @@ struct vpu_instance {
 
 void wave6_vdi_writel(struct vpu_device *vpu_device, unsigned int addr, unsigned int data);
 unsigned int wave6_vdi_readl(struct vpu_device *vpu_dev, unsigned int addr);
+int wave6_allocate_secure_dma_memory(struct vpu_device *vpu_dev, struct vpu_buf *vb);
+void wave6_free_secure_dma_memory(struct vpu_device *vpu_dev, struct vpu_buf *vb);
 
 int wave6_vpu_dec_open(struct vpu_instance *inst, struct dec_open_param *pop);
 int wave6_vpu_dec_close(struct vpu_instance *inst, u32 *fail_res);

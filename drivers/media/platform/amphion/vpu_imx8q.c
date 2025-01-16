@@ -20,7 +20,7 @@
 #define IMX8Q_CSR_CM0Px_ADDR_OFFSET			0x00000000
 #define IMX8Q_CSR_CM0Px_CPUWAIT				0x00000004
 
-#ifdef CONFIG_IMX_SCU
+#if IS_ENABLED(CONFIG_IMX_SCU)
 #include <linux/firmware/imx/ipc.h>
 #include <linux/firmware/imx/svc/misc.h>
 
@@ -155,13 +155,28 @@ int vpu_imx8q_get_power_state(struct vpu_core *core)
 
 int vpu_imx8q_on_firmware_loaded(struct vpu_core *core)
 {
-	u8 *p;
+	if (core->id != 0 || core->vpu->res->plat_type != IMX8QM) {
+		u8 *p;
 
-	p = core->fw.virt;
-	p[16] = core->vpu->res->plat_type;
-	p[17] = core->id;
-	p[18] = 1;
-
+		p = core->fw.virt;
+		p[16] = core->vpu->res->plat_type;
+		p[17] = core->id;
+		p[18] = 1;
+	} else {
+		if (core->vpu->trusty_dev) {
+			int ret;
+			ret = trusty_fast_call32(core->vpu->trusty_dev, SMC_WV_FIRMWARE_LOADED,
+						 core->vpu->res->plat_type, core->id, 1);
+			if (ret)
+				dev_err(core->dev, "secure firmware loaded failed : %d\n",ret);
+		} else {
+			u8 *p;
+			p = core->fw.virt;
+			p[16] = core->vpu->res->plat_type;
+			p[17] = core->id;
+			p[18] = 1;
+		}
+	}
 	return 0;
 }
 
@@ -189,7 +204,7 @@ int vpu_imx8q_check_memory_region(dma_addr_t base, dma_addr_t addr, u32 size)
 	return VPU_CORE_MEMORY_INVALID;
 }
 
-#ifdef CONFIG_IMX_SCU
+#if IS_ENABLED(CONFIG_IMX_SCU)
 static u32 vpu_imx8q_get_fuse(void)
 {
 	static u32 fuse_got;

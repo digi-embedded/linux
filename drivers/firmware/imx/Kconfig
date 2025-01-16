@@ -11,7 +11,7 @@ config IMX_DSP
 	  exchange information with DSP side.
 
 config IMX_SCU
-	bool "IMX SCU Protocol driver"
+	tristate "IMX SCU Protocol driver"
 	depends on IMX_MBOX
 	select SOC_BUS
 	help
@@ -24,7 +24,7 @@ config IMX_SCU
 	  SCU firmware running on M4.
 
 config IMX_SCU_PD
-	bool "IMX SCU Power Domain driver"
+	tristate "IMX SCU Power Domain driver"
 	depends on IMX_SCU
 	help
 	  The System Controller Firmware (SCFW) based power domain driver.
@@ -56,7 +56,6 @@ config IMX_ELE_TRNG
 	tristate "i.MX ELE True Random Number Generator"
 	default y
 	select CRYPTO_RNG
-	select HW_RANDOM
 	help
 	  This driver provides kernel-side support for the Random Number generation,
           through NXP hardware IP for secure-enclave called EdgeLock Enclave.

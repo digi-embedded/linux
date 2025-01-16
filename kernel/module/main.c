@@ -528,6 +528,7 @@ static struct module_attribute modinfo_##field = {                    \
 
 MODINFO_ATTR(version);
 MODINFO_ATTR(srcversion);
+MODINFO_ATTR(scmversion);
 
 static struct {
 	char name[MODULE_NAME_LEN + 1];
@@ -980,6 +981,7 @@ struct module_attribute *modinfo_attrs[] = {
 	&module_uevent,
 	&modinfo_version,
 	&modinfo_srcversion,
+	&modinfo_scmversion,
 	&modinfo_initstate,
 	&modinfo_coresize,
 #ifdef CONFIG_ARCH_WANTS_MODULES_DATA_IN_VMALLOC
@@ -1111,6 +1113,8 @@ static const struct kernel_symbol *resolve_symbol(struct module *mod,
 						  const char *name,
 						  char ownername[])
 {
+	bool is_vendor_module;
+	bool is_vendor_exported_symbol;
 	struct find_symbol_arg fsa = {
 		.name	= name,
 		.gplok	= !(mod->taints & (1 << TAINT_PROPRIETARY_MODULE)),
@@ -1144,6 +1148,24 @@ static const struct kernel_symbol *resolve_symbol(struct module *mod,
 	err = verify_namespace_is_imported(info, fsa.sym, mod);
 	if (err) {
 		fsa.sym = ERR_PTR(err);
+		goto getname;
+	}
+
+	/*
+	 * ANDROID GKI
+	 *
+	 * Vendor (i.e., unsigned) modules are only permitted to use:
+	 *
+	 * 1. symbols exported by other vendor (unsigned) modules
+	 * 2. unprotected symbols
+	 */
+	is_vendor_module = !mod->sig_ok;
+	is_vendor_exported_symbol = fsa.owner && !fsa.owner->sig_ok;
+
+	if (is_vendor_module &&
+	    !is_vendor_exported_symbol &&
+	    !gki_is_module_unprotected_symbol(name)) {
+		fsa.sym = ERR_PTR(-EACCES);
 		goto getname;
 	}
 
@@ -1336,6 +1358,14 @@ static int verify_exported_symbols(struct module *mod)
 				.name	= kernel_symbol_name(s),
 				.gplok	= true,
 			};
+
+			if (!mod->sig_ok && gki_is_module_protected_export(
+						kernel_symbol_name(s))) {
+				pr_err("%s: exports protected symbol %s\n",
+				       mod->name, kernel_symbol_name(s));
+				return -EACCES;
+			}
+
 			if (find_symbol(&fsa)) {
 				pr_err("%s: exports duplicate symbol %s"
 				       " (owned by %s)\n",
@@ -1416,9 +1446,15 @@ static int simplify_symbols(struct module *mod, const struct load_info *info)
 			     ignore_undef_symbol(info->hdr->e_machine, name)))
 				break;
 
-			ret = PTR_ERR(ksym) ?: -ENOENT;
-			pr_warn("%s: Unknown symbol %s (err %d)\n",
-				mod->name, name, ret);
+			if (PTR_ERR(ksym) == -EACCES) {
+				ret = -EACCES;
+				pr_warn("%s: Protected symbol: %s (err %d)\n",
+					mod->name, name, ret);
+			} else {
+				ret = PTR_ERR(ksym) ?: -ENOENT;
+				pr_warn("%s: Unknown symbol %s (err %d)\n",
+					mod->name, name, ret);
+			}
 			break;
 
 		default:
@@ -2048,6 +2084,8 @@ static void module_augment_kernel_taints(struct module *mod, struct load_info *i
 			       "kernel\n", mod->name);
 		add_taint_module(mod, TAINT_UNSIGNED_MODULE, LOCKDEP_STILL_OK);
 	}
+#else
+	mod->sig_ok = 0;
 #endif
 
 	/*

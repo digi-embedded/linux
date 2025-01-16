@@ -300,7 +300,6 @@ struct sdebug_dev_info {
 	enum blk_zoned_model zmodel;
 	unsigned int zcap;
 	unsigned int zsize;
-	unsigned int zsize_shift;
 	unsigned int nr_zones;
 	unsigned int nr_conv_zones;
 	unsigned int nr_seq_zones;
@@ -752,6 +751,7 @@ static int sdebug_host_max_queue;	/* per host */
 static int sdebug_lowest_aligned = DEF_LOWEST_ALIGNED;
 static int sdebug_max_luns = DEF_MAX_LUNS;
 static int sdebug_max_queue = SDEBUG_CANQUEUE;	/* per submit queue */
+static unsigned int sdebug_max_segment_size = BLK_MAX_SEGMENT_SIZE;
 static unsigned int sdebug_medium_error_start = OPT_MEDIUM_ERR_ADDR;
 static int sdebug_medium_error_count = OPT_MEDIUM_ERR_NUM;
 static int sdebug_ndelay = DEF_NDELAY;	/* if > 0 then unit is nanoseconds */
@@ -2718,7 +2718,7 @@ static inline bool sdebug_dev_is_zoned(struct sdebug_dev_info *devip)
 static struct sdeb_zone_state *zbc_zone(struct sdebug_dev_info *devip,
 					unsigned long long lba)
 {
-	u32 zno = lba >> devip->zsize_shift;
+	u32 zno = div_u64(lba, devip->zsize);
 	struct sdeb_zone_state *zsp;
 
 	if (devip->zcap == devip->zsize || zno < devip->nr_conv_zones)
@@ -4954,6 +4954,14 @@ static void sdebug_q_cmd_wq_complete(struct work_struct *work)
 static bool got_shared_uuid;
 static uuid_t shared_uuid;
 
+static bool sdebug_is_zone_start(struct sdebug_dev_info *devip, u64 zstart)
+{
+	u32 remainder;
+
+	div_u64_rem(zstart, devip->zsize, &remainder);
+	return remainder == 0;
+}
+
 static int sdebug_device_create_zones(struct sdebug_dev_info *devip)
 {
 	struct sdeb_zone_state *zsp;
@@ -4978,10 +4986,6 @@ static int sdebug_device_create_zones(struct sdebug_dev_info *devip)
 			return -EINVAL;
 		}
 	} else {
-		if (!is_power_of_2(sdeb_zbc_zone_size_mb)) {
-			pr_err("Zone size is not a power of 2\n");
-			return -EINVAL;
-		}
 		devip->zsize = (sdeb_zbc_zone_size_mb * SZ_1M)
 			>> ilog2(sdebug_sector_size);
 		if (devip->zsize >= capacity) {
@@ -4990,8 +4994,7 @@ static int sdebug_device_create_zones(struct sdebug_dev_info *devip)
 		}
 	}
 
-	devip->zsize_shift = ilog2(devip->zsize);
-	devip->nr_zones = (capacity + devip->zsize - 1) >> devip->zsize_shift;
+	devip->nr_zones = div_u64(capacity + devip->zsize - 1, devip->zsize);
 
 	if (sdeb_zbc_zone_cap_mb == 0) {
 		devip->zcap = devip->zsize;
@@ -5004,14 +5007,14 @@ static int sdebug_device_create_zones(struct sdebug_dev_info *devip)
 		}
 	}
 
-	conv_capacity = (sector_t)sdeb_zbc_nr_conv << devip->zsize_shift;
+	conv_capacity = (sector_t)sdeb_zbc_nr_conv * devip->zsize;
 	if (conv_capacity >= capacity) {
 		pr_err("Number of conventional zones too large\n");
 		return -EINVAL;
 	}
 	devip->nr_conv_zones = sdeb_zbc_nr_conv;
-	devip->nr_seq_zones = ALIGN(capacity - conv_capacity, devip->zsize) >>
-			      devip->zsize_shift;
+	devip->nr_seq_zones = div_u64(capacity - conv_capacity +
+				      devip->zsize - 1, devip->zsize);
 	devip->nr_zones = devip->nr_conv_zones + devip->nr_seq_zones;
 
 	/* Add gap zones if zone capacity is smaller than the zone size */
@@ -5042,7 +5045,7 @@ static int sdebug_device_create_zones(struct sdebug_dev_info *devip)
 			zsp->z_wp = (sector_t)-1;
 			zsp->z_size =
 				min_t(u64, devip->zsize, capacity - zstart);
-		} else if ((zstart & (devip->zsize - 1)) == 0) {
+		} else if (sdebug_is_zone_start(devip, zstart)) {
 			if (devip->zmodel == BLK_ZONED_HM)
 				zsp->z_type = ZBC_ZTYPE_SWR;
 			else
@@ -5730,6 +5733,7 @@ module_param_named(lowest_aligned, sdebug_lowest_aligned, int, S_IRUGO);
 module_param_named(lun_format, sdebug_lun_am_i, int, S_IRUGO | S_IWUSR);
 module_param_named(max_luns, sdebug_max_luns, int, S_IRUGO | S_IWUSR);
 module_param_named(max_queue, sdebug_max_queue, int, S_IRUGO | S_IWUSR);
+module_param_named(max_segment_size, sdebug_max_segment_size, uint, S_IRUGO);
 module_param_named(medium_error_count, sdebug_medium_error_count, int,
 		   S_IRUGO | S_IWUSR);
 module_param_named(medium_error_start, sdebug_medium_error_start, int,
@@ -5806,6 +5810,7 @@ MODULE_PARM_DESC(lowest_aligned, "lowest aligned lba (def=0)");
 MODULE_PARM_DESC(lun_format, "LUN format: 0->peripheral (def); 1 --> flat address method");
 MODULE_PARM_DESC(max_luns, "number of LUNs per target to simulate(def=1)");
 MODULE_PARM_DESC(max_queue, "max number of queued commands (1 to max(def))");
+MODULE_PARM_DESC(max_segment_size, "max bytes in a single segment");
 MODULE_PARM_DESC(medium_error_count, "count of sectors to return follow on MEDIUM error");
 MODULE_PARM_DESC(medium_error_start, "starting sector number to return MEDIUM error");
 MODULE_PARM_DESC(ndelay, "response delay in nanoseconds (def=0 -> ignore)");
@@ -7715,6 +7720,7 @@ static int sdebug_driver_probe(struct device *dev)
 
 	sdebug_driver_template.can_queue = sdebug_max_queue;
 	sdebug_driver_template.cmd_per_lun = sdebug_max_queue;
+	sdebug_driver_template.max_segment_size = sdebug_max_segment_size;
 	if (!sdebug_clustering)
 		sdebug_driver_template.dma_boundary = PAGE_SIZE - 1;
 

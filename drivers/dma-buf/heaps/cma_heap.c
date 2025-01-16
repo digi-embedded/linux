@@ -102,13 +102,13 @@ static struct sg_table *cma_heap_map_dma_buf(struct dma_buf_attachment *attachme
 {
 	struct dma_heap_attachment *a = attachment->priv;
 	struct sg_table *table = &a->table;
-	int attr = 0;
+	int attrs = attachment->dma_map_attrs;
 	int ret;
 
 	if (a->uncached)
-		attr = DMA_ATTR_SKIP_CPU_SYNC;
+		attrs |= DMA_ATTR_SKIP_CPU_SYNC;
 
-	ret = dma_map_sgtable(attachment->dev, table, direction, attr);
+	ret = dma_map_sgtable(attachment->dev, table, direction, attrs);
 	if (ret)
 		return ERR_PTR(-ENOMEM);
 	a->mapped = true;
@@ -120,13 +120,13 @@ static void cma_heap_unmap_dma_buf(struct dma_buf_attachment *attachment,
 				   enum dma_data_direction direction)
 {
 	struct dma_heap_attachment *a = attachment->priv;
-	int attr = 0;
+	int attrs = attachment->dma_map_attrs;
 
 	if (a->uncached)
-		attr = DMA_ATTR_SKIP_CPU_SYNC;
+		attrs |= DMA_ATTR_SKIP_CPU_SYNC;
 
 	a->mapped = false;
-	dma_unmap_sgtable(attachment->dev, table, direction, attr);
+	dma_unmap_sgtable(attachment->dev, table, direction, attrs);
 }
 
 static int cma_heap_dma_buf_begin_cpu_access(struct dma_buf *dmabuf,
@@ -183,10 +183,7 @@ static vm_fault_t cma_heap_vm_fault(struct vm_fault *vmf)
 	if (vmf->pgoff > buffer->pagecount)
 		return VM_FAULT_SIGBUS;
 
-	vmf->page = buffer->pages[vmf->pgoff];
-	get_page(vmf->page);
-
-	return 0;
+	return vmf_insert_pfn(vma, vmf->address, page_to_pfn(buffer->pages[vmf->pgoff]));
 }
 
 static const struct vm_operations_struct dma_heap_vm_ops = {
@@ -202,6 +199,8 @@ static int cma_heap_mmap(struct dma_buf *dmabuf, struct vm_area_struct *vma)
 
 	if (buffer->uncached)
 		vma->vm_page_prot = pgprot_writecombine(vma->vm_page_prot);
+
+	vm_flags_set(vma, VM_IO | VM_PFNMAP | VM_DONTEXPAND | VM_DONTDUMP);
 
 	vma->vm_ops = &dma_heap_vm_ops;
 	vma->vm_private_data = buffer;
@@ -297,8 +296,8 @@ static const struct dma_buf_ops cma_heap_buf_ops = {
 
 static struct dma_buf *cma_heap_do_allocate(struct dma_heap *heap,
 					 unsigned long len,
-					 unsigned long fd_flags,
-					 unsigned long heap_flags,
+					 u32 fd_flags,
+					 u64 heap_flags,
 					 bool uncached)
 {
 	struct cma_heap *cma_heap = dma_heap_get_drvdata(heap);
@@ -404,16 +403,16 @@ free_buffer:
 
 static struct dma_buf *cma_heap_allocate(struct dma_heap *heap,
 				  unsigned long len,
-				  unsigned long fd_flags,
-				  unsigned long heap_flags)
+				  u32 fd_flags,
+				  u64 heap_flags)
 {
 	return cma_heap_do_allocate(heap, len, fd_flags, heap_flags, false);
 }
 
 static struct dma_buf *cma_uncached_heap_allocate(struct dma_heap *heap,
 				  unsigned long len,
-				  unsigned long fd_flags,
-				  unsigned long heap_flags)
+				  u32 fd_flags,
+				  u64 heap_flags)
 {
 	return cma_heap_do_allocate(heap, len, fd_flags, heap_flags, true);
 }
@@ -421,8 +420,8 @@ static struct dma_buf *cma_uncached_heap_allocate(struct dma_heap *heap,
 /* Dummy function to be used until we can call coerce_mask_and_coherent */
 static struct dma_buf *cma_uncached_heap_not_initialized(struct dma_heap *heap,
 						unsigned long len,
-						unsigned long fd_flags,
-						unsigned long heap_flags)
+						u32 fd_flags,
+						u64 heap_flags)
 {
 	return ERR_PTR(-EBUSY);
 }
@@ -502,3 +501,5 @@ static int add_default_cma_heap(void)
 }
 module_init(add_default_cma_heap);
 MODULE_DESCRIPTION("DMA-BUF CMA Heap");
+MODULE_LICENSE("GPL v2");
+MODULE_IMPORT_NS(DMA_BUF);

@@ -19,8 +19,6 @@ static inline int gfp_migratetype(const gfp_t gfp_flags)
 	BUILD_BUG_ON((1UL << GFP_MOVABLE_SHIFT) != ___GFP_MOVABLE);
 	BUILD_BUG_ON((___GFP_MOVABLE >> GFP_MOVABLE_SHIFT) != MIGRATE_MOVABLE);
 	BUILD_BUG_ON((___GFP_RECLAIMABLE >> GFP_MOVABLE_SHIFT) != MIGRATE_RECLAIMABLE);
-	BUILD_BUG_ON(((___GFP_MOVABLE | ___GFP_RECLAIMABLE) >>
-		      GFP_MOVABLE_SHIFT) != MIGRATE_HIGHATOMIC);
 
 	if (unlikely(page_group_by_mobility_disabled))
 		return MIGRATE_UNMOVABLE;
@@ -87,8 +85,8 @@ static inline bool gfpflags_allow_blocking(const gfp_t gfp_flags)
  * GFP_ZONES_SHIFT must be <= 2 on 32 bit platforms.
  */
 
-#if defined(CONFIG_ZONE_DEVICE) && (MAX_NR_ZONES-1) <= 4
-/* ZONE_DEVICE is not a valid GFP zone specifier */
+#if MAX_NR_ZONES - 2 - IS_ENABLED(CONFIG_ZONE_DEVICE) <= 4
+/* zones beyond ZONE_MOVABLE are not valid GFP zone specifiers */
 #define GFP_ZONES_SHIFT 2
 #else
 #define GFP_ZONES_SHIFT ZONES_SHIFT
@@ -126,7 +124,9 @@ static inline bool gfpflags_allow_blocking(const gfp_t gfp_flags)
 	| 1 << (___GFP_MOVABLE | ___GFP_DMA32 | ___GFP_DMA | ___GFP_HIGHMEM)  \
 )
 
-static inline enum zone_type gfp_zone(gfp_t flags)
+DECLARE_STATIC_KEY_FALSE(movablecore_enabled);
+
+static inline enum zone_type __gfp_zone(gfp_t flags)
 {
 	enum zone_type z;
 	int bit = (__force int) (flags & GFP_ZONEMASK);
@@ -134,8 +134,31 @@ static inline enum zone_type gfp_zone(gfp_t flags)
 	z = (GFP_ZONE_TABLE >> (bit * GFP_ZONES_SHIFT)) &
 					 ((1 << GFP_ZONES_SHIFT) - 1);
 	VM_BUG_ON((GFP_ZONE_BAD >> bit) & 1);
+
+	if ((flags & __GFP_COMP) &&
+	    (!static_branch_unlikely(&movablecore_enabled) || (flags & __GFP_MOVABLE)))
+		return LAST_VIRT_ZONE;
+
 	return z;
 }
+
+extern int zone_nomerge_order __read_mostly;
+extern int zone_nosplit_order __read_mostly;
+
+static inline enum zone_type gfp_order_zone(gfp_t flags, int order)
+{
+	enum zone_type zid = __gfp_zone(flags);
+
+	if (zid >= ZONE_NOMERGE && (!zone_nomerge_order || order != zone_nomerge_order))
+		zid = ZONE_NOMERGE - 1;
+
+	if (zid == ZONE_NOSPLIT && (!zone_nosplit_order || order < zone_nosplit_order))
+		zid = ZONE_NOSPLIT - 1;
+
+	return zid;
+}
+
+enum zone_type gfp_zone(gfp_t flags);
 
 /*
  * There is only one page-allocator function, and two main namespaces to
