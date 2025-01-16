@@ -12,6 +12,7 @@ ccimx8x_som_overlays := _ov_som_bt_ccimx8x.dtbo \
 			_ov_som_cm4_ccimx8x.dtbo \
 			_ov_som_mca-keypad_ccimx8x.dtbo \
 			_ov_som_quad_ccimx8x.dtbo \
+			_ov_som_trusty_ccimx8x.dtbo \
 			_ov_som_wifi_ccimx8x.dtbo
 
 ccimx8x_dvk_overlays := _ov_board_flexcan1_ccimx8x-sbc-pro.dtbo \

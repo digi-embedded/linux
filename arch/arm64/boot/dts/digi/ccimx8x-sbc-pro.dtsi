@@ -1494,3 +1494,5 @@
 		>;
 	};
 };
+
+#include "ccimx8x-android.dtsi"
