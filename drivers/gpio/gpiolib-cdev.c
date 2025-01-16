@@ -2684,7 +2684,7 @@ static long gpio_ioctl_unlocked(struct file *file, unsigned int cmd, unsigned lo
 	case GPIO_GET_LINEINFO_WATCH_IOCTL:
 		return lineinfo_get_v1(cdev, ip, true);
 #endif /* CONFIG_GPIO_CDEV_V1 */
-	case GPIO_SET_DEBOUNCE_IOCTL:
+	case GPIO_SET_DEBOUNCE_IOCTL: {
 		struct gpioline_debounce linedebounce;
 		struct gpio_desc *desc;
 
@@ -2696,6 +2696,7 @@ static long gpio_ioctl_unlocked(struct file *file, unsigned int cmd, unsigned lo
 		desc = &gdev->descs[linedebounce.line_offset];
 
 		return gpiod_set_debounce(desc, linedebounce.debounce_usec);
+	}
 	case GPIO_V2_GET_LINEINFO_IOCTL:
 		return lineinfo_get(cdev, ip, false);
 	case GPIO_V2_GET_LINEINFO_WATCH_IOCTL:
