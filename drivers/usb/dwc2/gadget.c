@@ -4613,6 +4613,8 @@ static int dwc2_hsotg_udc_start(struct usb_gadget *gadget,
 	gadget->sg_supported = using_desc_dma(hsotg);
 	dev_info(hsotg->dev, "bound driver %s\n", driver->driver.name);
 
+	device_set_wakeup_capable(&gadget->dev, true);
+
 	return 0;
 
 err:
@@ -4634,6 +4636,8 @@ static int dwc2_hsotg_udc_stop(struct usb_gadget *gadget)
 
 	if (!hsotg)
 		return -ENODEV;
+
+	device_set_wakeup_capable(&gadget->dev, false);
 
 	/* all endpoints should be shutdown */
 	for (ep = 1; ep < hsotg->num_of_eps; ep++) {
@@ -5001,6 +5005,17 @@ static void dwc2_hsotg_dump(struct dwc2_hsotg *hsotg)
 #endif
 }
 
+static void dwc2_gadget_remote_wkup_change(struct work_struct *work)
+{
+	struct dwc2_hsotg *hsotg = container_of(work, struct dwc2_hsotg, wf_gadget);
+	int ret;
+
+	dev_dbg(hsotg->dev, "lx_state: %d\n", hsotg->lx_state);
+	ret = device_set_wakeup_enable(&hsotg->gadget.dev, hsotg->lx_state == DWC2_L2);
+	if (ret)
+		dev_dbg(hsotg->dev, "device_set_wakeup_enable failed: %d\n", ret);
+}
+
 /**
  * dwc2_gadget_init - init function for gadget
  * @hsotg: Programming view of the DWC_otg controller
@@ -5078,6 +5093,13 @@ int dwc2_gadget_init(struct dwc2_hsotg *hsotg)
 		return -EINVAL;
 	}
 
+	hsotg->wq_gadget = alloc_ordered_workqueue("dwc2_gadget", 0);
+	if (!hsotg->wq_gadget) {
+		dev_err(hsotg->dev, "Failed to create workqueue\n");
+		return -ENOMEM;
+	}
+	INIT_WORK(&hsotg->wf_gadget, dwc2_gadget_remote_wkup_change);
+
 	/* setup endpoint information */
 
 	INIT_LIST_HEAD(&hsotg->gadget.ep_list);
@@ -5089,6 +5111,7 @@ int dwc2_gadget_init(struct dwc2_hsotg *hsotg)
 						     GFP_KERNEL);
 	if (!hsotg->ctrl_req) {
 		dev_err(dev, "failed to allocate ctrl req\n");
+		destroy_workqueue(hsotg->wq_gadget);
 		return -ENOMEM;
 	}
 
@@ -5117,12 +5140,18 @@ int dwc2_hsotg_remove(struct dwc2_hsotg *hsotg)
 	usb_del_gadget_udc(&hsotg->gadget);
 	dwc2_hsotg_ep_free_request(&hsotg->eps_out[0]->ep, hsotg->ctrl_req);
 
+	if (!cancel_work_sync(&hsotg->wf_gadget))
+		flush_workqueue(hsotg->wq_gadget);
+	destroy_workqueue(hsotg->wq_gadget);
+
 	return 0;
 }
 
 int dwc2_hsotg_suspend(struct dwc2_hsotg *hsotg)
 {
 	unsigned long flags;
+
+	flush_workqueue(hsotg->wq_gadget);
 
 	if (hsotg->lx_state != DWC2_L0) {
 		hsotg->gadget_off_for_suspend = false;
@@ -5410,6 +5439,8 @@ int dwc2_gadget_enter_hibernation(struct dwc2_hsotg *hsotg)
 	hsotg->gr_backup.gpwrdn = dwc2_readl(hsotg, GPWRDN);
 	dev_dbg(hsotg->dev, "Hibernation completed\n");
 
+	queue_work(hsotg->wq_gadget, &hsotg->wf_gadget);
+
 	return ret;
 }
 
@@ -5519,6 +5550,7 @@ int dwc2_gadget_exit_hibernation(struct dwc2_hsotg *hsotg,
 
 	hsotg->hibernated = 0;
 	hsotg->lx_state = DWC2_L0;
+	queue_work(hsotg->wq_gadget, &hsotg->wf_gadget);
 	dev_dbg(hsotg->dev, "Hibernation recovery completes here\n");
 
 	return ret;
@@ -5579,6 +5611,7 @@ int dwc2_gadget_enter_partial_power_down(struct dwc2_hsotg *hsotg)
 	/* Set in_ppd flag to 1 as here core enters suspend. */
 	hsotg->in_ppd = 1;
 	hsotg->lx_state = DWC2_L2;
+	queue_work(hsotg->wq_gadget, &hsotg->wf_gadget);
 
 	dev_dbg(hsotg->dev, "Entering device partial power down completed.\n");
 
@@ -5647,6 +5680,7 @@ int dwc2_gadget_exit_partial_power_down(struct dwc2_hsotg *hsotg,
 	/* Set in_ppd flag to 0 as here core exits from suspend. */
 	hsotg->in_ppd = 0;
 	hsotg->lx_state = DWC2_L0;
+	queue_work(hsotg->wq_gadget, &hsotg->wf_gadget);
 
 	dev_dbg(hsotg->dev, "Exiting device partial Power Down completed.\n");
 	return ret;
@@ -5681,6 +5715,7 @@ void dwc2_gadget_enter_clock_gating(struct dwc2_hsotg *hsotg)
 
 	hsotg->lx_state = DWC2_L2;
 	hsotg->bus_suspended = true;
+	queue_work(hsotg->wq_gadget, &hsotg->wf_gadget);
 }
 
 /*
@@ -5720,4 +5755,5 @@ void dwc2_gadget_exit_clock_gating(struct dwc2_hsotg *hsotg, int rem_wakeup)
 	/* Change to L0 state */
 	hsotg->lx_state = DWC2_L0;
 	hsotg->bus_suspended = false;
+	queue_work(hsotg->wq_gadget, &hsotg->wf_gadget);
 }
