@@ -32,17 +32,10 @@
 		compatible = "operating-points-v2";
 		opp-shared;
 
-		opp-400000000 {
-			opp-hz = /bits/ 64 <400000000>;
-			opp-microvolt = <1200000>;
-			opp-supported-hw = <0x2>;
-			opp-suspend;
-		};
-
 		opp-650000000 {
 			opp-hz = /bits/ 64 <650000000>;
 			opp-microvolt = <1200000>;
-			opp-supported-hw = <0x1>;
+			opp-supported-hw = <0x3>;
 		};
 
 		opp-800000000 {
