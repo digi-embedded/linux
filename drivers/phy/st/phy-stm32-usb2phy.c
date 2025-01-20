@@ -400,12 +400,16 @@ static int stm32_usb2phy_set_mode(struct phy *phy, enum phy_mode mode, int submo
 
 	switch (mode) {
 	case PHY_MODE_USB_HOST:
-		if (phy_data->valid_mode == USB2_MODE_HOST_ONLY ||
-		    phy_data->valid_mode == USB2_MODE_OTG)
+		if (phy_data->valid_mode == USB2_MODE_HOST_ONLY)
 			ret = regmap_update_bits(phy_dev->regmap,
 						 phy_data->cr_offset,
 						 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK,
 						 0);
+		else if (phy_data->valid_mode == USB2_MODE_OTG)
+			ret = regmap_update_bits(phy_dev->regmap,
+						 phy_data->cr_offset,
+						 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK,
+						 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK);
 		else {
 			if (submode == USB_ROLE_NONE) {
 				ret = regmap_update_bits(phy_dev->regmap,
@@ -434,7 +438,7 @@ static int stm32_usb2phy_set_mode(struct phy *phy, enum phy_mode mode, int submo
 			ret = regmap_update_bits(phy_dev->regmap,
 						 phy_data->cr_offset,
 						 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK,
-						 0);
+						 SYSCFG_USB2PHY2CR_USB2PHY2CMN_MASK);
 		else {
 			if (submode == USB_ROLE_NONE) {
 				ret = regmap_update_bits(phy_dev->regmap,
