@@ -557,10 +557,12 @@ static int lvds_pixel_clk_enable(struct clk_hw *hw)
 	struct lvds_phy_info *phy;
 	int ret;
 
-	ret = pm_runtime_resume_and_get(lvds->dev);
-	if (ret < 0) {
-		DRM_ERROR("Failed to enable clocks, cannot resume pm\n");
-		return ret;
+	if (!pm_runtime_active(lvds->dev)) {
+		ret = pm_runtime_resume_and_get(lvds->dev);
+		if (ret < 0) {
+			DRM_ERROR("Failed to enable clocks, cannot resume pm\n");
+			return ret;
+		}
 	}
 
 	/* In case we are operating in dual link the second PHY is set before the primary PHY. */
@@ -1202,7 +1204,7 @@ static int lvds_probe(struct platform_device *pdev)
 	 *  the clocks must remain activated
 	 */
 	if (device_property_read_bool(dev, "default-on")) {
-		ret = pm_runtime_resume_and_get(dev);
+		ret = pm_runtime_resume_and_get(lvds->dev);
 		if (ret < 0) {
 			DRM_ERROR("Failed to probe lvds, cannot resume pm\n");
 			return ret;
