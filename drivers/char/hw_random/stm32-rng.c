@@ -82,6 +82,7 @@ struct stm32_rng_private {
 	const struct stm32_rng_data *data;
 	bool ced;
 	bool lock_conf;
+	bool init_done;
 };
 
 /*
@@ -293,8 +294,10 @@ static int stm32_rng_init(struct hwrng *rng)
 
 	if (priv->bus_clk) {
 		err = clk_prepare_enable(priv->bus_clk);
-		if (err)
+		if (err) {
+			clk_disable_unprepare(priv->clk);
 			return err;
+		}
 	}
 
 	/* clear error indicators */
@@ -361,19 +364,28 @@ static int stm32_rng_init(struct hwrng *rng)
 						reg & RNG_SR_DRDY,
 						10, 100000);
 
+	/* Clocks will be enabled at runtime */
+	if (priv->bus_clk)
+		clk_disable_unprepare(priv->bus_clk);
+	clk_disable_unprepare(priv->clk);
+
 	mask = RNG_SR_ERROR_MASK;
 
 	if (err || (reg & mask)) {
-		if (priv->bus_clk)
-			clk_disable_unprepare(priv->bus_clk);
-		clk_disable_unprepare(priv->clk);
 		dev_err(priv->dev, "%s: timeout:%x SR: %x!\n", __func__, err, reg);
 		return -EINVAL;
 	}
 
-	clk_disable_unprepare(priv->clk);
+	priv->init_done = true;
 
 	return 0;
+}
+
+static void stm32_rng_cleanup(struct hwrng *rng)
+{
+	struct stm32_rng_private *priv = container_of(rng, struct stm32_rng_private, rng);
+
+	priv->init_done = false;
 }
 
 static int stm32_rng_remove(struct platform_device *ofdev)
@@ -404,9 +416,21 @@ static int __maybe_unused stm32_rng_suspend(struct device *dev)
 	struct stm32_rng_private *priv = dev_get_drvdata(dev);
 	int err;
 
+	/* Skip routine if init is not done */
+	if (!priv->init_done)
+		return 0;
+
 	err = clk_prepare_enable(priv->clk);
 	if (err)
 		return err;
+
+	if (priv->bus_clk) {
+		err = clk_prepare_enable(priv->bus_clk);
+		if (err) {
+			clk_disable_unprepare(priv->clk);
+			return err;
+		}
+	}
 
 	if (priv->data->has_cond_reset) {
 		priv->pm_conf.nscr = readl_relaxed(priv->base + RNG_NSCR);
@@ -458,6 +482,10 @@ static int __maybe_unused stm32_rng_resume(struct device *dev)
 	struct stm32_rng_private *priv = dev_get_drvdata(dev);
 	int err;
 	u32 reg;
+
+	/* Skip routine if init is not done */
+	if (!priv->init_done)
+		return 0;
 
 	err = clk_prepare_enable(priv->clk);
 	if (err)
@@ -608,6 +636,7 @@ static int stm32_rng_probe(struct platform_device *ofdev)
 
 	priv->rng.name = dev_driver_string(dev);
 	priv->rng.init = stm32_rng_init;
+	priv->rng.cleanup = stm32_rng_cleanup;
 	priv->rng.read = stm32_rng_read;
 	priv->rng.quality = 900;
 
@@ -617,7 +646,7 @@ static int stm32_rng_probe(struct platform_device *ofdev)
 			return PTR_ERR(priv->clk);
 
 		priv->bus_clk = devm_clk_get(&ofdev->dev, "rng_hclk");
-		if (IS_ERR(priv->clk))
+		if (IS_ERR(priv->bus_clk))
 			return PTR_ERR(priv->bus_clk);
 	} else {
 		priv->clk = devm_clk_get(&ofdev->dev, NULL);
