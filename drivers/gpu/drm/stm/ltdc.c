@@ -2631,6 +2631,9 @@ void ltdc_unload(struct drm_device *ddev)
 
 	DRM_DEBUG_DRIVER("\n");
 
+	if (pm_runtime_active(ddev->dev))
+		pm_runtime_put_sync_suspend(ddev->dev);
+
 	stm32_firewall_release_access(fwl);
 
 	nb_endpoints = of_graph_get_endpoint_count(dev->of_node);
