@@ -16,7 +16,8 @@
 #include <linux/platform_device.h>
 #include <linux/property.h>
 
-#define MAX_TRIGGERS 2
+/* Maximum triggers + one trailing null entry to indicate the end of array */
+#define MAX_TRIGGERS 3
 
 struct stm32_lptim_cfg {
 	const char * const (*triggers)[MAX_TRIGGERS];
