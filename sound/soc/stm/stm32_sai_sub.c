@@ -132,7 +132,8 @@ struct stm32_sai_sub_data {
 	struct snd_aes_iec958 iec958;
 	struct mutex ctrl_lock; /* protect resources accessed by controls */
 	spinlock_t irq_lock; /* used to prevent race condition with IRQ */
-	int (*set_sai_ck_rate)(struct stm32_sai_sub_data *sai, unsigned int rate);
+	int (*set_sai_ck_rate)(struct stm32_sai_sub_data *sai, unsigned int rate,
+			       unsigned int clk_ref);
 	void (*put_sai_ck_rate)(struct stm32_sai_sub_data *sai);
 };
 
@@ -142,6 +143,11 @@ enum stm32_sai_fifo_th {
 	STM_SAI_FIFO_TH_HALF,
 	STM_SAI_FIFO_TH_3_QUARTER,
 	STM_SAI_FIFO_TH_FULL,
+};
+
+enum stm32_sai_clk_ref {
+	STM_SAI_CLK_FS,
+	STM_SAI_CLK_MCLK,
 };
 
 static bool stm32_sai_sub_readable_reg(struct device *dev, unsigned int reg)
@@ -379,7 +385,7 @@ static bool stm32_sai_rate_accurate(unsigned int max_rate, unsigned int rate)
 }
 
 static int stm32_sai_set_parent_clk(struct stm32_sai_sub_data *sai,
-				    unsigned int rate)
+				    unsigned int rate, unsigned int clk_ref)
 {
 	struct platform_device *pdev = sai->pdev;
 	struct clk *parent_clk = sai->pdata->clk_x8k;
@@ -406,10 +412,10 @@ static void stm32_sai_put_parent_rate(struct stm32_sai_sub_data *sai)
 }
 
 static int stm32_sai_set_parent_rate(struct stm32_sai_sub_data *sai,
-				     unsigned int rate)
+				     unsigned int rate, unsigned int clk_ref)
 {
 	struct platform_device *pdev = sai->pdev;
-	unsigned int sai_ck_rate, sai_ck_max_rate, sai_curr_rate, sai_new_rate;
+	unsigned int sai_ck_rate, sai_ck_max_rate, sai_ck_min_rate, sai_curr_rate, sai_new_rate;
 	int div, ret;
 
 	/*
@@ -428,8 +434,18 @@ static int stm32_sai_set_parent_rate(struct stm32_sai_sub_data *sai,
 	else
 		sai_ck_max_rate = SAI_MAX_SAMPLE_RATE_8K * 256;
 
-	if (!sai->sai_mclk && !STM_SAI_PROTOCOL_IS_SPDIF(sai))
-		sai_ck_max_rate /= DIV_ROUND_CLOSEST(256, roundup_pow_of_two(sai->fs_length));
+	/* If the reference clock is the master clock, rate = mclk rate. otherwise rate = fs */
+	if (clk_ref == STM_SAI_CLK_MCLK) {
+		sai_ck_min_rate = rate;
+	} else {
+		if (STM_SAI_PROTOCOL_IS_SPDIF(sai)) {
+			sai_ck_min_rate = rate * 256;
+		} else {
+			sai_ck_min_rate = rate * sai->fs_length;
+			sai_ck_max_rate /= DIV_ROUND_CLOSEST(256,
+							     roundup_pow_of_two(sai->fs_length));
+		}
+	}
 
 	/*
 	 * Request exclusivity, as the clock is shared by SAI sub-blocks and by
@@ -472,7 +488,7 @@ static int stm32_sai_set_parent_rate(struct stm32_sai_sub_data *sai,
 		/* Try a lower frequency */
 		div++;
 		sai_ck_rate = sai_ck_max_rate / div;
-	} while (sai_ck_rate > rate);
+	} while (sai_ck_rate >= sai_ck_min_rate);
 
 	/* No accurate rate found */
 	dev_err(&pdev->dev, "Failed to find an accurate rate");
@@ -686,7 +702,7 @@ static int stm32_sai_set_sysclk(struct snd_soc_dai *cpu_dai,
 		}
 
 		/* If master clock is used, configure SAI kernel clock now */
-		ret = sai->set_sai_ck_rate(sai, freq);
+		ret = sai->set_sai_ck_rate(sai, freq, STM_SAI_CLK_MCLK);
 		if (ret)
 			return ret;
 
@@ -1110,7 +1126,7 @@ static int stm32_sai_configure_clock(struct snd_soc_dai *cpu_dai,
 	int ret;
 
 	if (!sai->sai_mclk) {
-		ret = sai->set_sai_ck_rate(sai, rate);
+		ret = sai->set_sai_ck_rate(sai, rate, STM_SAI_CLK_FS);
 		if (ret)
 			return ret;
 	}
