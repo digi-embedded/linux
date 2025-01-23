@@ -1536,6 +1536,8 @@
 					dmas = <&hpdma 58 0x40 0x12>;
 					dma-names = "rx";
 					st,adc-trigger-sel = <0>;
+					nvmem-cells = <&vrefint>;
+					nvmem-cell-names = "vrefint";
 					status = "disabled";
 
 					channel@14 {
@@ -1569,6 +1571,8 @@
 					dmas = <&hpdma 59 0x40 0x12>;
 					dma-names = "rx";
 					st,adc-trigger-sel = <1>;
+					nvmem-cells = <&vrefint>;
+					nvmem-cell-names = "vrefint";
 					status = "disabled";
 
 					channel@14 {
@@ -1985,6 +1989,10 @@
 
 			part_number_otp@24 {
 				reg = <0x24 0x4>;
+			};
+
+			vrefint: vrefin-cal@1b8 {
+				reg = <0x1b8 0x2>;
 			};
 
 			package_otp@1e8 {
