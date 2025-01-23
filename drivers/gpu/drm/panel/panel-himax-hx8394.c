@@ -221,8 +221,6 @@ static const struct hx8394_panel_desc hsd060bhw4_desc = {
 static int rocktech_rk055mhd042a0_init_sequence(struct hx8394 *ctx)
 {
 	struct mipi_dsi_device *dsi = to_mipi_dsi_device(ctx->dev);
-	u8 id1, id2, id3;
-	int ret;
 
 	mipi_dsi_dcs_write_seq(dsi, HX8394_CMD_SETEXTC,
 			       0xFF, 0x83, 0x94);
@@ -293,24 +291,6 @@ static int rocktech_rk055mhd042a0_init_sequence(struct hx8394 *ctx)
 	mipi_dsi_dcs_write_seq(dsi, HX8394_CMD_UNKNOWN2, 0xED);
 
 	mipi_dsi_dcs_write_seq(dsi, MIPI_DCS_SET_ADDRESS_MODE, FH);
-
-	ret = mipi_dsi_dcs_read(dsi, HX8394_CMD_READ_ID1, &id1, 1);
-	if (ret < 0) {
-		dev_err(ctx->dev, "could not read MTP ID1\n");
-		return ret;
-	}
-	ret = mipi_dsi_dcs_read(dsi, HX8394_CMD_READ_ID2, &id2, 1);
-	if (ret < 0) {
-		dev_err(ctx->dev, "could not read MTP ID2\n");
-		return ret;
-	}
-	ret = mipi_dsi_dcs_read(dsi, HX8394_CMD_READ_ID3, &id3, 1);
-	if (ret < 0) {
-		dev_err(ctx->dev, "could not read MTP ID3\n");
-		return ret;
-	}
-
-	dev_info(ctx->dev, "MTP ID manufacturer: %02x version: %02x driver: %02x\n", id1, id2, id3);
 
 	return 0;
 }
