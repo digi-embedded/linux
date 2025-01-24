@@ -182,6 +182,10 @@
 		voltd-name = "vbus_sw";
 		regulator-name = "vbus_sw";
 	};
+	scmi_vrefbuf: voltd-vrefbuf {
+		voltd-name = "vrefbuf";
+		regulator-name = "vrefbuf";
+	};
 };
 
 &sram {

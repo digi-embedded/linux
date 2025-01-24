@@ -139,7 +139,7 @@
 	pinctrl-0 = <&ccmp13_adc1_pins>;
 	/* External Vref (requires connecting external voltage to VREF+ pad) */
 	vref-supply = <&external_vref>;
-	/* Internal Vref (requires enabling VREFBUF in OP-TEE device tree) */
+	/* Internal Vref (this outputs VREFBUF voltage at VREF+ pad) */
 	//vref-supply = <&scmi_vrefbuf>;
 	status = "okay";
 
@@ -265,21 +265,13 @@
 	};
 };
 
-&scmi_regu {
-	/*
-	 * Internal VREFBUF regulator must be enabled in OP-TEE device tree
-	 * since it is a secure peripheral. Once enabled, you can uncomment
-	 * these lines to let Linux use it.
-	 * You must also change the 'vref-supply' on the ADC node.
-	 * VREFBUF can be set to 2.5 V, 2.048 V, 1.8 V or 1.65 V which are
-	  * output at VREF+ pad.
-	 */
-	// scmi_vrefbuf: voltd-vrefbuf {
-	// 	voltd-name = "vrefbuf";
-	// 	regulator-name = "vrefbuf";
-	// 	regulator-min-microvolt = <2500000>;
-	// 	regulator-max-microvolt = <2500000>;
-	// };
+/*
+ * VREFBUF can be set to 2.5 V, 2.048 V, 1.8 V or 1.65 V which are
+ * output at VREF+ pad.
+ */
+&scmi_vrefbuf {
+	regulator-min-microvolt = <2500000>;
+	regulator-max-microvolt = <2500000>;
 };
 
 /* Micro SD */
