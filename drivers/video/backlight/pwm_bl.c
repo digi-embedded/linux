@@ -528,10 +528,9 @@ static int pwm_backlight_probe(struct platform_device *pdev)
 	if (!state.period && (data->pwm_period_ns > 0))
 		state.period = data->pwm_period_ns;
 
-	ret = pwm_apply_might_sleep(pb->pwm, &state);
+	ret = pwm_adjust_config(pb->pwm);
 	if (ret) {
-		dev_err(&pdev->dev, "failed to apply initial PWM state: %d\n",
-			ret);
+		dev_err(&pdev->dev, "failed to apply adjusted PWM state: %d\n", ret);
 		goto err_alloc;
 	}
 
