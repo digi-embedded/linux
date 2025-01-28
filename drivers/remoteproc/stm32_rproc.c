@@ -1334,9 +1334,14 @@ static int stm32_rproc_suspend(struct device *dev)
 	if (rproc->state == RPROC_CRASHED)
 		return -EBUSY;
 
-	if (ddata->genpd_dev && rproc->state != RPROC_OFFLINE &&
-	    !device_property_present(dev, "keep-power-in-suspend"))
-		return -EBUSY;
+	if (ddata->genpd_dev && rproc->state != RPROC_OFFLINE) {
+		if (!device_property_present(dev, "keep-power-in-suspend")) {
+			dev_err(dev, "remote fw is still running\n");
+			return -EBUSY;
+		}
+		/* wakeup path used by power domain for S2IDLE */
+		device_set_wakeup_path(ddata->genpd_dev);
+	}
 
 	if (device_may_wakeup(dev))
 		return enable_irq_wake(ddata->wdg_irq);
