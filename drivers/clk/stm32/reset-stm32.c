@@ -145,7 +145,7 @@ static int stm32_reset(struct reset_controller_dev *rcdev, unsigned long id)
 	if (ret)
 		return ret;
 
-	if (!data->reset_us)
+	if (data->reset_us)
 		usleep_range(data->reset_us, data->reset_us * 2);
 
 	ret = stm32_reset_deassert(rcdev, id);
