@@ -36,9 +36,6 @@
 				compatible = "st,lis3dh-accel";
 				reg = <0x1d>;
 				vdd-supply = <&buck4>;
-				vddio-supply = <&buck4>;
-				interrupt-parent = <&gpio2>;
-				interrupts = <11 IRQ_TYPE_EDGE_RISING>;
 			};
 		};
 	};
