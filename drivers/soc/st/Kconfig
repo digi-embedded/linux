@@ -12,6 +12,11 @@ config STM32_PM_DOMAINS
 	select PM_GENERIC_DOMAINS
 	default y if MACH_STM32MP157
 
+config STM32MP_PM_DOMAIN
+	tristate "STM32MP PM domain"
+	select PM_GENERIC_DOMAINS
+	default y
+
 config STM32_RISAB
 	tristate "STM32 RISAB"
 	depends on ARM64 && DEBUG_FS
