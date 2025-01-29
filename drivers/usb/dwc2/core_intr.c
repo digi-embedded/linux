@@ -439,6 +439,8 @@ static void dwc2_handle_wakeup_detected_intr(struct dwc2_hsotg *hsotg)
 			    !hsotg->params.no_clock_gating)
 				dwc2_gadget_exit_clock_gating(hsotg, 0);
 
+			/* Change to L0 state, when no_clock_gating == true */
+			hsotg->lx_state = DWC2_L0;
 			call_gadget(hsotg, resume);
 		} else {
 			/* Change to L0 state */
