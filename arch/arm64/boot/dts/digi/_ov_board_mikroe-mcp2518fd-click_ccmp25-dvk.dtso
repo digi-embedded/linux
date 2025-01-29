@@ -38,6 +38,8 @@
 				reg = <0>;
 				clocks = <&mcp2518_clk>;
 				pinctrl-names = "default";
+				vdd-supply = <&reg_3v3_board>;
+				xceiver-supply = <&reg_5v_board>;
 				interrupt-parent = <&gpiog>;
 				interrupts = <3 IRQ_TYPE_LEVEL_LOW>; /* MIKROBUS_INT */
 				spi-max-frequency = <10000000>;

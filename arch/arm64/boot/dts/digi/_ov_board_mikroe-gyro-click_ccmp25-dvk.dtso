@@ -34,6 +34,7 @@
 			gyroscope@68 {
 				compatible = "st,l3g4200d-gyro";
 				reg = <0x68>;
+				vdd-supply = <&reg_3v3_board>;
 			};
 		};
 	};
