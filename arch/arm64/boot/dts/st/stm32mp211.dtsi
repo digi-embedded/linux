@@ -1590,6 +1590,17 @@
 				};
 			};
 
+			rng2: rng@42020000 {
+				compatible = "st,stm32mp21-rng";
+				reg = <0x42020000 0x0 0x400>;
+				clocks = <&clk_rcbsec>, <&rcc CK_BUS_RNG2>;
+				clock-names = "rng_clk", "rng_hclk";
+				resets = <&rcc RNG2_R>;
+				access-controllers = <&rifsc 93>;
+				power-domains = <&d1_pd>;
+				status = "disabled";
+			};
+
 			hash1: hash@42030400 {
 				compatible = "st,stm32mp13-hash";
 				reg = <0x42030400 0x0 0x400>;
@@ -1599,17 +1610,6 @@
 				dmas = <&hpdma 6 0x40 0x3021>;
 				dma-names = "in";
 				access-controllers = <&rifsc 96>;
-				power-domains = <&d1_pd>;
-				status = "disabled";
-			};
-
-			rng2: rng@42020000 {
-				compatible = "st,stm32mp21-rng";
-				reg = <0x42020000 0x0 0x400>;
-				clocks = <&clk_rcbsec>, <&rcc CK_BUS_RNG2>;
-				clock-names = "rng_clk", "rng_hclk";
-				resets = <&rcc RNG2_R>;
-				access-controllers = <&rifsc 93>;
 				power-domains = <&d1_pd>;
 				status = "disabled";
 			};
