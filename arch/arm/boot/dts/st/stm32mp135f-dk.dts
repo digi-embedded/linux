@@ -37,6 +37,7 @@
 		framebuffer {
 			compatible = "simple-framebuffer";
 			clocks = <&rcc LTDC_PX>;
+			lcd-supply =  <&scmi_v3v3_sw>;
 			status = "disabled";
 		};
 	};
