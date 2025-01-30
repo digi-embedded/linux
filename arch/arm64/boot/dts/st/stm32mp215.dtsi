@@ -29,7 +29,7 @@
 		clocks = <&rcc CK_BUS_LTDC>, <&rcc CK_KER_LTDC>;
 		clock-names = "bus", "lcd";
 		resets = <&rcc LTDC_R>;
-		power-domains = <&CLUSTER_PD>;
+		power-domains = <&d1_pd>;
 		status = "disabled";
 		access-controllers = <&rifsc 80>;
 		access-controller-names = "cmn";
