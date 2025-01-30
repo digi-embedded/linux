@@ -579,7 +579,7 @@
 			compatible = "st,stm32mp25-mdf-dai";
 			#sound-dai-cells = <0>;
 			io-channels = <&filter0 0>;
-			power-domains = <&RET_PD>;
+			power-domains = <&ret_pd>;
 			status = "okay";
 
 			mdf1_port0: port {
@@ -607,7 +607,7 @@
 			compatible = "st,stm32mp25-mdf-dai";
 			#sound-dai-cells = <0>;
 			io-channels = <&filter1 0>;
-			power-domains = <&RET_PD>;
+			power-domains = <&ret_pd>;
 			status = "okay";
 
 			mdf1_port1: port {
