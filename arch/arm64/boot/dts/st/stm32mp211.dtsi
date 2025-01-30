@@ -1236,7 +1236,6 @@
 				interrupts = <GIC_SPI 140 IRQ_TYPE_LEVEL_HIGH>;
 				resets = <&rcc SAI1_R>;
 				access-controllers = <&rifsc 49>;
-				power-domains = <&d1_pd>;
 				status = "disabled";
 
 				sai1a: audio-controller@40290004 {
@@ -1273,7 +1272,6 @@
 				interrupts = <GIC_SPI 145 IRQ_TYPE_LEVEL_HIGH>;
 				resets = <&rcc SAI2_R>;
 				access-controllers = <&rifsc 50>;
-				power-domains = <&d1_pd>;
 				status = "disabled";
 
 				sai2a: audio-controller@402a0004 {
@@ -1310,7 +1308,6 @@
 				interrupts = <GIC_SPI 164 IRQ_TYPE_LEVEL_HIGH>;
 				resets = <&rcc SAI3_R>;
 				access-controllers = <&rifsc 51>;
-				power-domains = <&d1_pd>;
 				status = "disabled";
 
 				sai3a: audio-controller@402b0004 {
@@ -1361,7 +1358,6 @@
 				interrupts = <GIC_SPI 187 IRQ_TYPE_LEVEL_HIGH>;
 				resets = <&rcc SAI4_R>;
 				access-controllers = <&rifsc 52>;
-				power-domains = <&d1_pd>;
 				status = "disabled";
 
 				sai4a: audio-controller@40340004 {
