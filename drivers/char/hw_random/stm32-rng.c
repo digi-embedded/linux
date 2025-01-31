@@ -28,8 +28,7 @@
 #define RNG_CR_CONFIG1		GENMASK(25, 20)
 #define RNG_CR_CONDRST		BIT(30)
 #define RNG_CR_CONFLOCK		BIT(31)
-#define RNG_CR_ENTROPY_SRC_MASK	(RNG_CR_CONFIG3 | RNG_CR_NISTC | RNG_CR_CONFIG2 | RNG_CR_CONFIG1)
-#define RNG_CR_CONFIG_MASK	(RNG_CR_ENTROPY_SRC_MASK | RNG_CR_CED | RNG_CR_CLKDIV)
+#define RNG_CR_CONFIG_MASK	(RNG_CR_CED | RNG_CR_CLKDIV)
 
 #define RNG_SR			0x04
 #define RNG_SR_DRDY		BIT(0)
@@ -52,6 +51,7 @@
 struct stm32_rng_data {
 	uint	max_clock_rate;
 	uint	nb_clock;
+	u32	cr_config1_mask;
 	u32	cr;
 	u32	nscr;
 	u32	htcr;
@@ -84,6 +84,12 @@ struct stm32_rng_private {
 	bool lock_conf;
 	bool init_done;
 };
+
+static uint32_t stm32_rng_get_entropy_mask(struct stm32_rng_private *priv)
+{
+	return (RNG_CR_CONFIG3 | RNG_CR_NISTC |
+		RNG_CR_CONFIG2 | priv->data->cr_config1_mask);
+}
 
 /*
  * Extracts from the STM32 RNG specification when RNG supports CONDRST.
@@ -311,9 +317,10 @@ static int stm32_rng_init(struct hwrng *rng)
 	 */
 	if (priv->data->has_cond_reset && priv->data->cr) {
 		uint clock_div = stm32_rng_clock_freq_restrain(rng);
+		u32 entropy_mask = stm32_rng_get_entropy_mask(priv);
 
-		reg &= ~RNG_CR_CONFIG_MASK;
-		reg |= RNG_CR_CONDRST | (priv->data->cr & RNG_CR_ENTROPY_SRC_MASK) |
+		reg &= ~(RNG_CR_CONFIG_MASK | entropy_mask);
+		reg |= RNG_CR_CONDRST | (priv->data->cr & entropy_mask) |
 		       (clock_div << RNG_CR_CLKDIV_SHIFT);
 		if (priv->ced)
 			reg &= ~RNG_CR_CED;
@@ -551,15 +558,17 @@ static const struct stm32_rng_data stm32mp25_rng_data = {
 	.has_cond_reset = true,
 	.max_clock_rate = 48000000,
 	.nb_clock = 2,
-	.cr = 0x00F00D00,
-	.nscr = 0x2B5BB,
-	.htcr = 0x969D,
+	.cr_config1_mask = GENMASK(27, 20),
+	.cr = 0x08F01E00,
+	.nscr = 0x2E649,
+	.htcr = 0x6688,
 };
 
 static const struct stm32_rng_data stm32mp21_rng_data = {
 	.has_cond_reset = true,
 	.max_clock_rate = 48000000,
 	.nb_clock = 2,
+	.cr_config1_mask = GENMASK(27, 20),
 	.cr = 0x00800D00,
 	.nscr = 0x01FF,
 	.htcr = 0xAAC7,
@@ -569,6 +578,7 @@ static const struct stm32_rng_data stm32mp13_rng_data = {
 	.has_cond_reset = true,
 	.max_clock_rate = 48000000,
 	.nb_clock = 1,
+	.cr_config1_mask = GENMASK(25, 20),
 	.cr = 0x00F00D00,
 	.nscr = 0x2B5BB,
 	.htcr = 0x969D,
