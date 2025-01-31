@@ -610,6 +610,7 @@
 };
 
 &usb2_phy2 {
+	vdda18-supply = <&scmi_vdda_1v8>;
 	vdd33-supply = <&scmi_vdd3v3_usb>;
 	status = "okay";
 };
