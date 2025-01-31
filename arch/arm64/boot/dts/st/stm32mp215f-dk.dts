@@ -256,6 +256,7 @@
 	phy-mode = "rmii";
 	max-speed = <100>;
 	phy-handle = <&phy0_eth1>;
+	phy-supply = <&scmi_v3v3>;
 	st,ext-phyclk;
 
 	mdio1 {
