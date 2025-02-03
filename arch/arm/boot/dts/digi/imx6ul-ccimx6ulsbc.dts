@@ -142,7 +142,7 @@
  */
 //&mca_uart {
 //	status = "okay";
-//	mca_uart0: serial@0x900 {
+//	mca_uart0: serial@900 {
 //		iopins-names = "rx", "tx";
 //		iopins = <2 1>;
 //		/*

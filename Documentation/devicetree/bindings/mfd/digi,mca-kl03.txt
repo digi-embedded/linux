@@ -109,7 +109,7 @@ Example:
 			#address-cells = <1>;
 			#size-cells = <0>;
 
-			mca_uart0: serial@0x900 {
+			mca_uart0: serial@900 {
 				reg = <0x900>;
 				index = <0>;
 			};
