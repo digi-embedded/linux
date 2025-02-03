@@ -18,9 +18,6 @@
 
 #include "dcmipp-common.h"
 
-#define DCMIPP_FMT_WIDTH_DEFAULT  640
-#define DCMIPP_FMT_HEIGHT_DEFAULT 480
-
 #define DCMIPP_P1FCTCR	0x900
 #define DCMIPP_P2FCTCR	0xD00
 #define DCMIPP_PxFCTCR(id) (((id) == 1) ? DCMIPP_P1FCTCR :\
