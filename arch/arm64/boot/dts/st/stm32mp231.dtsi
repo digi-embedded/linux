@@ -3020,6 +3020,8 @@
 			interrupts = <GIC_SPI 4 IRQ_TYPE_LEVEL_HIGH>;
 			nvmem-cells = <&rsc_tbl_addr>, <&rsc_tbl_size>;
 			nvmem-cell-names = "rsc-tbl-addr", "rsc-tbl-size";
+			power-domains = <&cluster_pd>, <&ret_pd>;
+			power-domain-names = "default", "sleep";
 
 			status = "disabled";
 		};
