@@ -393,8 +393,8 @@
 /* eMMC */
 &sdmmc2 {
 	pinctrl-names = "default", "opendrain", "sleep";
-	pinctrl-0 = <&sdmmc2_b4_pins_a &sdmmc2_d47_pins_a>;
-	pinctrl-1 = <&sdmmc2_b4_od_pins_a &sdmmc2_d47_pins_a>;
+	pinctrl-0 = <&ccmp25_sdmmc2_b4_pins &ccmp25_sdmmc2_d47_pins>;
+	pinctrl-1 = <&ccmp25_sdmmc2_b4_od_pins &ccmp25_sdmmc2_d47_pins>;
 	pinctrl-2 = <&sdmmc2_b4_sleep_pins_a &sdmmc2_d47_sleep_pins_a>;
 	non-removable;
 	no-sd;
@@ -405,6 +405,7 @@
 	vqmmc-supply = <&scmi_vddio2>;
 	mmc-ddr-1_8v;
 	mmc-hs200-1_8v;
+	max-frequency = <200000000>; /* 200 MHz */
 	status = "okay";
 };
 
@@ -418,6 +419,51 @@
 	ccmp25_rtc_out2_pins: ccmp25_rtc-out2-pins-0 {
 		pins {
 			pinmux = <STM32_PINMUX('I', 8, ANALOG)>; /* RTC_OUT2 */
+		};
+	};
+
+	ccmp25_sdmmc2_b4_pins: ccmp25-sdmmc2-b4-0 {
+		pins1 {
+			pinmux = <STM32_PINMUX('E', 13, AF12)>, /* SDMMC2_D0 */
+				 <STM32_PINMUX('E', 11, AF12)>, /* SDMMC2_D1 */
+				 <STM32_PINMUX('E', 8, AF12)>, /* SDMMC2_D2 */
+				 <STM32_PINMUX('E', 12, AF12)>, /* SDMMC2_D3 */
+				 <STM32_PINMUX('E', 15, AF12)>, /* SDMMC2_CMD */
+				 <STM32_PINMUX('E', 14, AF12)>; /* SDMMC2_CK */
+			slew-rate = <3>;
+			drive-push-pull;
+			bias-pull-up;
+		};
+	};
+
+	ccmp25_sdmmc2_b4_od_pins: ccmp25-sdmmc2-b4-od-0 {
+		pins1 {
+			pinmux = <STM32_PINMUX('E', 13, AF12)>, /* SDMMC2_D0 */
+				 <STM32_PINMUX('E', 11, AF12)>, /* SDMMC2_D1 */
+				 <STM32_PINMUX('E', 8, AF12)>, /* SDMMC2_D2 */
+				 <STM32_PINMUX('E', 12, AF12)>, /* SDMMC2_D3 */
+				 <STM32_PINMUX('E', 14, AF12)>; /* SDMMC2_CK */
+			slew-rate = <3>;
+			drive-push-pull;
+			bias-pull-up;
+		};
+		pins2 {
+			pinmux = <STM32_PINMUX('E', 15, AF12)>; /* SDMMC2_CMD */
+			slew-rate = <3>;
+			drive-open-drain;
+			bias-pull-up;
+		};
+	};
+
+	ccmp25_sdmmc2_d47_pins: ccmp25-sdmmc2-d47-0 {
+		pins {
+			pinmux = <STM32_PINMUX('E', 10, AF12)>, /* SDMMC2_D4 */
+				 <STM32_PINMUX('E', 9, AF12)>, /* SDMMC2_D5 */
+				 <STM32_PINMUX('E', 6, AF12)>, /* SDMMC2_D6 */
+				 <STM32_PINMUX('E', 7, AF12)>; /* SDMMC2_D7 */
+			slew-rate = <3>;
+			drive-push-pull;
+			bias-pull-up;
 		};
 	};
 
