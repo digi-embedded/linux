@@ -1468,6 +1468,7 @@ void hantro_h1_vp8_enc_done(struct hantro_ctx *ctx)
 	int part1_sz = ctx->vp8_enc.boolenc.bytes_written + ctrl_buf->hw_hdr_size;
 	void *dst = ctx->vp8_enc.frame_tag;
 	int old_g = ctx->vp8_enc.golden_ref, old_a = ctx->vp8_enc.alt_ref;
+	size_t dst_size;
 	int i;
 
 	ctx->vp8_enc.frame_tag->tag[0] |= ((part1_sz << 5) & 0xff);
@@ -1475,6 +1476,23 @@ void hantro_h1_vp8_enc_done(struct hantro_ctx *ctx)
 	ctx->vp8_enc.frame_tag->tag[2] = ((part1_sz << 5) >> 16) & 0xff;
 
 	dst_buf = hantro_get_dst_buf(ctx);
+	dst_size = vb2_plane_size(&dst_buf->vb2_buf, 0);
+
+	/* Guard against hardware header overflow */
+	if (ctrl_buf->hw_hdr_size > ctx->vp8_enc.estimated_hdr_size) {
+		dst_buf->flags |= V4L2_BUF_FLAG_ERROR;
+		vpu_debug(0, "Header buffer overflow (%d > %lu)",
+			  ctrl_buf->hw_hdr_size, ctx->vp8_enc.estimated_hdr_size);
+		return;
+	}
+
+	/* Guard against DCT overflow */
+	if (ctrl_buf->dct_size > (dst_size - ctx->vp8_enc.estimated_hdr_size)) {
+		dst_buf->flags |= V4L2_BUF_FLAG_ERROR;
+		vpu_debug(0, "DCT buffer overflow (%d > %lu), enlarge compressed buffer or decrease quality",
+			  ctrl_buf->dct_size, dst_size - ctx->vp8_enc.estimated_hdr_size);
+		return;
+	}
 
 	/* assemble dst frame */
 	vb2_set_plane_payload(&dst_buf->vb2_buf, 0,
