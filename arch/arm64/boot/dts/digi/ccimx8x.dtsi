@@ -25,7 +25,7 @@
 	/* Bluetooth, disabled by default */
 	bluetooth: bluetooth {
 		/* U-Boot will fill in the MAC address here */
-		compatible = "digi,bluetooth-cc8x";
+		compatible = "digi,rfkill-bt-cc";
 		vin-supply = <&reg_rf_bt_en>;
 		status = "disabled";
 	};
