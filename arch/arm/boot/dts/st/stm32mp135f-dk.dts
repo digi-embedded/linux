@@ -515,7 +515,15 @@
 	pinctrl-names = "default", "sleep";
 	pinctrl-0 = <&spi5_pins_a>;
 	pinctrl-1 = <&spi5_sleep_pins_a>;
+	sram = <&spi5_dma_pool>;
 	status = "disabled";
+};
+
+&sram2 {
+	spi5_dma_pool: dma-sram@1000 {
+		reg = <0x1000 0x1000>;
+		pool;
+	};
 };
 
 &timers1 {
