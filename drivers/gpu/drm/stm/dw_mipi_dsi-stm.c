@@ -733,16 +733,6 @@ static int dw_mipi_dsi_clk_set_rate(struct clk_hw *hw, unsigned long rate,
 	return 0;
 }
 
-static void dw_mipi_dsi_clk_unregister(void *data)
-{
-	struct dw_mipi_dsi_stm *dsi = data;
-
-	DRM_DEBUG_DRIVER("\n");
-
-	of_clk_del_provider(dsi->dev->of_node);
-	clk_hw_unregister(&dsi->txbyte_clk);
-}
-
 static const struct clk_ops dw_mipi_dsi_stm_clk_ops = {
 	.enable = dw_mipi_dsi_clk_enable,
 	.disable = dw_mipi_dsi_clk_disable,
@@ -766,10 +756,9 @@ static struct clk_init_data cdata_init_141 = {
 	.num_parents = 1,
 };
 
-static int dw_mipi_dsi_clk_register(struct dw_mipi_dsi_stm *dsi,
-				    struct device *dev)
+static int dw_mipi_dsi_clk_register(struct dw_mipi_dsi_stm *dsi)
 {
-	struct device_node *node = dev->of_node;
+	struct device *dev = dsi->dev;
 	int ret;
 
 	DRM_DEBUG_DRIVER("Registering clk\n");
@@ -787,12 +776,22 @@ static int dw_mipi_dsi_clk_register(struct dw_mipi_dsi_stm *dsi,
 	if (ret)
 		return ret;
 
-	ret = of_clk_add_hw_provider(node, of_clk_hw_simple_get,
+	ret = of_clk_add_hw_provider(dev->of_node, of_clk_hw_simple_get,
 				     &dsi->txbyte_clk);
 	if (ret)
 		clk_hw_unregister(&dsi->txbyte_clk);
 
 	return ret;
+}
+
+static void dw_mipi_dsi_clk_unregister(struct dw_mipi_dsi_stm *dsi)
+{
+	struct device *dev = dsi->dev;
+
+	DRM_DEBUG_DRIVER("\n");
+
+	of_clk_del_provider(dev->of_node);
+	clk_hw_unregister(&dsi->txbyte_clk);
 }
 
 static int dw_mipi_dsi_phy_init(void *priv_data)
@@ -1253,7 +1252,9 @@ static int dw_mipi_dsi_stm_probe(struct platform_device *pdev)
 		goto err_dsi_probe;
 	}
 
-	ret = dw_mipi_dsi_clk_register(dsi, dev);
+	dsi->dev = dev;
+
+	ret = dw_mipi_dsi_clk_register(dsi);
 	if (ret) {
 		DRM_ERROR("Failed to register DSI pixel clock: %d\n", ret);
 		goto err_dsi_probe;
