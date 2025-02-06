@@ -1282,6 +1282,9 @@ static int dw_mipi_dsi_stm_probe(struct platform_device *pdev)
 	clk_disable_unprepare(dsi->pclk);
 	regulator_disable(dsi->vdd_supply);
 
+	if (of_device_is_compatible(dev->of_node, "st,stm32mp25-dsi"))
+		regulator_disable(dsi->vdda18_supply);
+
 	return 0;
 
 err_dsi_probe:
