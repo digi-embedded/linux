@@ -1245,13 +1245,6 @@ static int dw_mipi_dsi_stm_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, dsi);
 
-	dsi->dsi = dw_mipi_dsi_probe(pdev, &dsi->pdata);
-	if (IS_ERR(dsi->dsi)) {
-		ret = PTR_ERR(dsi->dsi);
-		dev_err_probe(dev, ret, "Failed to initialize mipi dsi host\n");
-		goto err_dsi_probe;
-	}
-
 	dsi->dev = dev;
 
 	ret = dw_mipi_dsi_clk_register(dsi);
@@ -1264,6 +1257,13 @@ static int dw_mipi_dsi_stm_probe(struct platform_device *pdev)
 	/* No need to return since only MP25 has it */
 	if (IS_ERR(dsi->px_clk))
 		dev_err_probe(dev, PTR_ERR(dsi->px_clk), "Unable to get px_clk clock\n");
+
+	dsi->dsi = dw_mipi_dsi_probe(pdev, &dsi->pdata);
+	if (IS_ERR(dsi->dsi)) {
+		ret = PTR_ERR(dsi->dsi);
+		dev_err_probe(dev, ret, "Failed to initialize mipi dsi host\n");
+		goto err_dsi_probe;
+	}
 
 	dsi->probe_done = true;
 
