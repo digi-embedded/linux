@@ -202,6 +202,7 @@
 			regulator-name = "5v_board";
 			regulator-min-microvolt = <5000000>;
 			regulator-max-microvolt = <5000000>;
+			regulator-enable-ramp-delay = <8000>;
 			gpio = <&gpiob 3 GPIO_ACTIVE_HIGH>; /* 5V_BOARD_EN */
 			enable-active-high;
 			status = "okay";
