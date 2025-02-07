@@ -45,8 +45,6 @@ struct stm32_firewall_controller {
 	struct list_head entry;
 	unsigned int type;
 	unsigned int max_entries;
-	u32 *risal_map_bases;
-	u32 nb_risal;
 
 	int (*grant_access)(struct stm32_firewall_controller *ctrl, u32 id);
 	void (*release_access)(struct stm32_firewall_controller *ctrl, u32 id);
