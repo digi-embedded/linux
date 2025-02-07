@@ -98,6 +98,7 @@
 		label = "hdmi";
 		type = "a";
 		hdmi-pwr-supply = <&reg_5v_board>;
+		lv-pwr-supply = <&scmi_ldo7>; /* 1V8_HDMI */
 		hpd-gpios = <&gpiod 2 GPIO_ACTIVE_HIGH>;
 		status = "okay";
 
