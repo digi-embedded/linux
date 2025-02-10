@@ -1,67 +1,67 @@
-ccimx8m_som_overlays := _ov_som_bt_ccimx8m.dtbo \
-			_ov_som_mca-keypad_ccimx8m.dtbo \
-			_ov_som_wifi_ccimx8m.dtbo
+ccimx8m_som_overlays := ccimx8m_bt.dtbo \
+			ccimx8m_mca-keypad.dtbo \
+			ccimx8m_wifi.dtbo
 
-ccimx8m_dvk_overlays := _ov_board_flexspi_ccimx8m-dvk.dtbo \
-			_ov_board_gpio-watchdog_ccimx8m-dvk.dtbo \
-			_ov_board_hsd101pfw2-lvds_ccimx8m-dvk.dtbo \
-			_ov_board_lvds_ccimx8m-dvk.dtbo \
-			_ov_board_user-leds_ccimx8m-dvk.dtbo
+ccimx8m_dvk_overlays := ccimx8m-dvk_flexspi.dtbo \
+			ccimx8m-dvk_gpio-watchdog.dtbo \
+			ccimx8m-dvk_hsd101pfw2-lvds.dtbo \
+			ccimx8m-dvk_lvds.dtbo \
+			ccimx8m-dvk_user-leds.dtbo
 
-ccimx8x_som_overlays := _ov_som_bt_ccimx8x.dtbo \
-			_ov_som_cm4_ccimx8x.dtbo \
-			_ov_som_mca-keypad_ccimx8x.dtbo \
-			_ov_som_quad_ccimx8x.dtbo \
-			_ov_som_trusty_ccimx8x.dtbo \
-			_ov_som_wifi_ccimx8x.dtbo
+ccimx8x_som_overlays := ccimx8x_bt.dtbo \
+			ccimx8x_cm4.dtbo \
+			ccimx8x_mca-keypad.dtbo \
+			ccimx8x_quad.dtbo \
+			ccimx8x_trusty.dtbo \
+			ccimx8x_wifi.dtbo
 
-ccimx8x_dvk_overlays := _ov_board_flexcan1_ccimx8x-sbc-pro.dtbo \
-			_ov_board_gpio-watchdog_ccimx8x-sbc-pro.dtbo \
-			_ov_board_lpuart3_ccimx8x-sbc-pro.dtbo \
-			_ov_board_flexspi_ccimx8x-sbc-pro.dtbo \
-			_ov_board_hsd101pfw2-lvds_ccimx8x-sbc-pro.dtbo \
-			_ov_board_lt8912-hdmi-dsi0_ccimx8x-sbc-pro.dtbo \
-			_ov_board_lvds1_ccimx8x-sbc-pro.dtbo \
-			_ov_board_parallel-camera_ccimx8x-sbc-pro.dtbo \
-			_ov_board_pcie-card_ccimx8x-sbc-pro.dtbo \
-			_ov_board_pcie-modem_ccimx8x-sbc-pro.dtbo \
-			_ov_board_user-leds_ccimx8x-sbc-pro.dtbo \
-			_ov_board_v1-v3_ccimx8x-sbc-pro.dtbo
+ccimx8x_dvk_overlays := ccimx8x-sbc-pro_flexcan1.dtbo \
+			ccimx8x-sbc-pro_gpio-watchdog.dtbo \
+			ccimx8x-sbc-pro_lpuart3.dtbo \
+			ccimx8x-sbc-pro_flexspi.dtbo \
+			ccimx8x-sbc-pro_hsd101pfw2-lvds.dtbo \
+			ccimx8x-sbc-pro_lt8912-hdmi-dsi0.dtbo \
+			ccimx8x-sbc-pro_lvds1.dtbo \
+			ccimx8x-sbc-pro_parallel-camera.dtbo \
+			ccimx8x-sbc-pro_pcie-card.dtbo \
+			ccimx8x-sbc-pro_pcie-modem.dtbo \
+			ccimx8x-sbc-pro_user-leds.dtbo \
+			ccimx8x-sbc-pro_v1-v3.dtbo
 
-ccimx9_som_overlays := _ov_som_bt_ccimx9.dtbo \
-			_ov_som_bt-dtm_ccimx9.dtbo \
-			_ov_som_wifi_ccimx9.dtbo
+ccimx9_som_overlays := ccimx9_bt.dtbo \
+			ccimx9_bt-dtm.dtbo \
+			ccimx9_wifi.dtbo
 
-ccimx9_dvk_overlays := _ov_board_enet2_ccimx9-dvk.dtbo \
-			_ov_board_mikroe-accel2-click_ccimx9-dvk.dtbo \
-			_ov_board_mikroe-gyro-click_ccimx9-dvk.dtbo \
-			_ov_board_eqos-tsn_ccimx9-dvk.dtbo
+ccimx9_dvk_overlays := ccimx9-dvk_enet2.dtbo \
+			ccimx9-dvk_mikroe-accel2-click.dtbo \
+			ccimx9-dvk_mikroe-gyro-click.dtbo \
+			ccimx9-dvk_eqos-tsn.dtbo
 
-ccimx93_som_overlays := _ov_som_npu_ccimx93.dtbo \
-			_ov_som_single-core-512M_ccimx93.dtbo
+ccimx93_som_overlays := ccimx93_npu.dtbo \
+			ccimx93_single-core-512M.dtbo
 
-ccimx93_dvk_overlays := _ov_board_dlc0200ccp04df-mipi-dsi_ccimx93-dvk.dtbo \
-			_ov_som_emulate-ccimx91_ccimx93.dtbo \
-			_ov_board_lvds_ccimx93-dvk.dtbo
+ccimx93_dvk_overlays := ccimx93_emulate-ccimx91.dtbo \
+			ccimx93-dvk_dlc0200ccp04df-mipi-dsi.dtbo \
+			ccimx93-dvk_lvds.dtbo
 
 ccimx8mm-dtbs :=	ccimx8mm-dvk.dtb \
 			$(ccimx8m_dvk_overlays) \
 			$(ccimx8m_som_overlays) \
-			_ov_som_cm4_ccimx8mm.dtbo
+			ccimx8mm_cm4.dtbo
 
 ccimx8mn-dtbs :=	ccimx8mn-dvk.dtb \
 			$(ccimx8m_dvk_overlays) \
 			$(ccimx8m_som_overlays) \
-			_ov_som_cm7_ccimx8mn.dtbo \
-			_ov_board_v1-v2_ccimx8mn-dvk.dtbo \
-			_ov_som_v1_ccimx8mn.dtbo
+			ccimx8mn_cm7.dtbo \
+			ccimx8mn-dvk_v1-v2.dtbo \
+			ccimx8mn_v1.dtbo
 
 ccimx8xsbcpro-dtbs := 	ccimx8x-sbc-pro.dtb \
 			$(ccimx8x_dvk_overlays) \
 			$(ccimx8x_som_overlays)
 
 ccimx8xmfg-dtbs :=	ccimx8x-mfg-functional.dtb \
-			_ov_som_mfg-functional_ccimx8x.dtbo
+			ccimx8x_mfg-functional.dtbo
 
 ccimx91-dtbs := 	ccimx91-dvk.dtb \
 			$(ccimx9_dvk_overlays) \
