@@ -2089,6 +2089,60 @@ static void cdns3_configure_dmult(struct cdns3_device *priv_dev,
 }
 
 /**
+ * cdns3_gadget_check_config - ensure cdns3 can support the USB configuration
+ * @gadget: pointer to the USB gadget
+ *
+ * Used to record the maximum number of endpoints being used in a USB composite
+ * device. (across all configurations)  This is to be used in the calculation
+ * of the TXFIFO sizes when resizing internal memory for individual endpoints.
+ * It will help ensured that the resizing logic reserves enough space for at
+ * least one max packet.
+ */
+static int cdns3_gadget_check_config(struct usb_gadget *gadget)
+{
+	struct cdns3_device *priv_dev = gadget_to_cdns3_device(gadget);
+	struct cdns3_endpoint *priv_ep;
+	struct usb_ep *ep;
+	int n_in = 0;
+	int iso = 0;
+	int out = 1;
+	int total;
+	int n;
+
+	list_for_each_entry(ep, &gadget->ep_list, ep_list) {
+		priv_ep = ep_to_cdns3_ep(ep);
+		if (!(priv_ep->flags & EP_CLAIMED))
+			continue;
+
+		n = (priv_ep->mult + 1) * (priv_ep->bMaxBurst + 1);
+		if (ep->address & USB_DIR_IN) {
+			/*
+			 * ISO transfer: DMA start move data when get ISO, only transfer
+			 * data as min(TD size, iso). No benefit for allocate bigger
+			 * internal memory than 'iso'.
+			 */
+			if (priv_ep->type == USB_ENDPOINT_XFER_ISOC)
+				iso += n;
+			else
+				n_in++;
+		} else {
+			if (priv_ep->type == USB_ENDPOINT_XFER_ISOC)
+				out = max_t(int, out, n);
+		}
+	}
+
+	/* 2KB are reserved for EP0, 1KB for out*/
+	total = 2 + n_in + out + iso;
+
+	if (total > priv_dev->onchip_buffers)
+		return -ENOMEM;
+
+	priv_dev->ep_buf_size = (priv_dev->onchip_buffers - 2 - iso) / (n_in + out);
+
+	return 0;
+}
+
+/**
  * cdns3_ep_config - Configure hardware endpoint
  * @priv_ep: extended endpoint object
  * @enable: set EP_CFG_ENABLE bit in ep_cfg register.
@@ -2103,6 +2157,9 @@ int cdns3_ep_config(struct cdns3_endpoint *priv_ep, bool enable)
 	u32 ep_cfg = 0;
 	u8 buffering;
 	int ret;
+
+	if (priv_dev && priv_dev->ep_buf_size <= 0)
+		ret = cdns3_gadget_check_config(&priv_dev->gadget);
 
 	buffering = priv_dev->ep_buf_size - 1;
 
@@ -3057,60 +3114,6 @@ static int cdns3_gadget_udc_stop(struct usb_gadget *gadget)
 	writel(0, &priv_dev->regs->usb_ien);
 	writel(0, &priv_dev->regs->usb_pwr);
 	writel(USB_CONF_DEVDS, &priv_dev->regs->usb_conf);
-
-	return 0;
-}
-
-/**
- * cdns3_gadget_check_config - ensure cdns3 can support the USB configuration
- * @gadget: pointer to the USB gadget
- *
- * Used to record the maximum number of endpoints being used in a USB composite
- * device. (across all configurations)  This is to be used in the calculation
- * of the TXFIFO sizes when resizing internal memory for individual endpoints.
- * It will help ensured that the resizing logic reserves enough space for at
- * least one max packet.
- */
-static int cdns3_gadget_check_config(struct usb_gadget *gadget)
-{
-	struct cdns3_device *priv_dev = gadget_to_cdns3_device(gadget);
-	struct cdns3_endpoint *priv_ep;
-	struct usb_ep *ep;
-	int n_in = 0;
-	int iso = 0;
-	int out = 1;
-	int total;
-	int n;
-
-	list_for_each_entry(ep, &gadget->ep_list, ep_list) {
-		priv_ep = ep_to_cdns3_ep(ep);
-		if (!(priv_ep->flags & EP_CLAIMED))
-			continue;
-
-		n = (priv_ep->mult + 1) * (priv_ep->bMaxBurst + 1);
-		if (ep->address & USB_DIR_IN) {
-			/*
-			 * ISO transfer: DMA start move data when get ISO, only transfer
-			 * data as min(TD size, iso). No benefit for allocate bigger
-			 * internal memory than 'iso'.
-			 */
-			if (priv_ep->type == USB_ENDPOINT_XFER_ISOC)
-				iso += n;
-			else
-				n_in++;
-		} else {
-			if (priv_ep->type == USB_ENDPOINT_XFER_ISOC)
-				out = max_t(int, out, n);
-		}
-	}
-
-	/* 2KB are reserved for EP0, 1KB for out*/
-	total = 2 + n_in + out + iso;
-
-	if (total > priv_dev->onchip_buffers)
-		return -ENOMEM;
-
-	priv_dev->ep_buf_size = (priv_dev->onchip_buffers - 2 - iso) / (n_in + out);
 
 	return 0;
 }
