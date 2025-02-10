@@ -57,7 +57,7 @@ static inline struct regmap *mca_tpm_mod_to_regmap(struct mca_tpm_mod *mca_tpm)
 }
 
 static int mca_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm,
-			  int duty_ns, int period_ns, bool enabled)
+			  int duty_ns, int period_ns)
 {
 	struct mca_tpm_mod *mca_tpm = to_mca_tpm_mod(chip);
 	struct regmap *map = mca_tpm_mod_to_regmap(mca_tpm);
@@ -65,10 +65,6 @@ static int mca_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm,
 	u64 freq_hz, duty_percent, tpm_mod_val;
 	int ret, prescaler_idx = 0;
 	u8 buf[2];
-
-	/* If the channel is disabled we're done. */
-	if (!enabled)
-		return 0;
 
 	if (period_ns != pwm_get_period(pwm)) {
 		dev_err(chip->dev, "cannot change PWM period while enabled\n");
@@ -252,14 +248,11 @@ static int mca_pwm_apply(struct pwm_chip *chip, struct pwm_device *pwm,
 	}
 
 	err = mca_pwm_config(pwm->chip, pwm,
-			     state->duty_cycle, state->period, enabled);
+			     state->duty_cycle, state->period);
 	if (err)
 		return err;
 
-	if (!enabled)
-		err = mca_pwm_enable(chip, pwm);
-
-	return err;
+	return mca_pwm_enable(chip, pwm);
 }
 
 static struct pwm_ops mca_pwm_ops = {
