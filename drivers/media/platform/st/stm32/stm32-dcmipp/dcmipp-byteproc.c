@@ -37,6 +37,8 @@
 #define IS_SINK(pad) (!(pad))
 #define IS_SRC(pad)  ((pad))
 
+#define DCMIPP_P0_CROP_MAX	4094
+
 struct dcmipp_byteproc_pix_map {
 	unsigned int code;
 	unsigned int bpp;
@@ -126,12 +128,42 @@ static const struct v4l2_rect crop_min = {
 	.left = 0,
 };
 
-static void dcmipp_byteproc_adjust_crop(struct v4l2_rect *r,
-					struct v4l2_rect *compose)
+static void dcmipp_byteproc_adjust_crop(struct dcmipp_byteproc_device *byteproc,
+					struct v4l2_rect *r,
+					struct v4l2_rect *compose,
+					unsigned int bytesperpixel)
 {
+	u32 alignment = 1;
+
+	/* The pipe outputs in words hence the line byte length needs to be multiple of 4 */
+	if (bytesperpixel == 1 || bytesperpixel == 3)
+		alignment = 4;
+	else if (bytesperpixel == 2)
+		alignment = 2;
+
 	/* Disallow rectangles smaller than the minimal one. */
 	v4l2_rect_set_min_size(r, &crop_min);
 	v4l2_rect_map_inside(r, compose);
+
+	/* Ensure that frame output match HW requirements */
+	r->left = round_down(r->left, alignment);
+	r->width = round_down(r->width, alignment);
+
+	/* Check if crop can be programmed within the registers */
+	if (r->left * bytesperpixel / 4 > DCMIPP_P0_CROP_MAX ||
+	    r->width * bytesperpixel / 4 > DCMIPP_P0_CROP_MAX) {
+		r->left = 0;
+		r->width = compose->width;
+		dev_dbg(byteproc->dev, "Frame horizontal crop disabled\n");
+	}
+	if (r->top > DCMIPP_P0_CROP_MAX || r->height > DCMIPP_P0_CROP_MAX) {
+		r->top = 0;
+		r->height = compose->height;
+		dev_dbg(byteproc->dev, "Frame vertical crop disabled\n");
+	}
+	if (r->width != compose->width || r->height != compose->height)
+		dev_dbg(byteproc->dev, "Frame cropped as (%d,%d)%dx%d\n",
+			r->left, r->top, r->width, r->height);
 }
 
 static void dcmipp_byteproc_adjust_compose(struct v4l2_rect *r,
@@ -173,14 +205,18 @@ static void dcmipp_byteproc_adjust_compose(struct v4l2_rect *r,
 		r->width = fmt->width;
 }
 
-static void dcmipp_byteproc_adjust_fmt(struct v4l2_mbus_framefmt *fmt)
+static void dcmipp_byteproc_adjust_fmt_crop(struct dcmipp_byteproc_device *byteproc,
+					    struct v4l2_mbus_framefmt *fmt,
+					    struct v4l2_rect *crop)
 {
 	const struct dcmipp_byteproc_pix_map *vpix;
 
 	/* Only accept code in the pix map table */
 	vpix = dcmipp_byteproc_pix_map_by_code(fmt->code);
-	if (!vpix)
+	if (!vpix) {
 		fmt->code = fmt_default.code;
+		vpix = dcmipp_byteproc_pix_map_by_code(fmt->code);
+	}
 
 	fmt->width = clamp_t(u32, fmt->width, DCMIPP_FRAME_MIN_WIDTH,
 			     DCMIPP_FRAME_MAX_WIDTH) & ~1;
@@ -191,6 +227,14 @@ static void dcmipp_byteproc_adjust_fmt(struct v4l2_mbus_framefmt *fmt)
 		fmt->field = fmt_default.field;
 
 	dcmipp_colorimetry_clamp(fmt);
+
+	crop->top = 0;
+	crop->left = 0;
+	crop->width = fmt->width;
+	crop->height = fmt->height;
+
+	/* At this stage the output of compose is equivalent to crop */
+	dcmipp_byteproc_adjust_crop(byteproc, crop, crop, vpix->bpp);
 }
 
 static int dcmipp_byteproc_init_cfg(struct v4l2_subdev *sd,
@@ -274,7 +318,7 @@ static int dcmipp_byteproc_set_fmt(struct v4l2_subdev *sd,
 				   struct v4l2_subdev_format *fmt)
 {
 	struct dcmipp_byteproc_device *byteproc = v4l2_get_subdevdata(sd);
-	struct v4l2_mbus_framefmt *mf;
+	struct v4l2_mbus_framefmt *mf, *src_fmt;
 	struct v4l2_rect *crop, *compose;
 
 	if (byteproc->streaming)
@@ -290,15 +334,19 @@ static int dcmipp_byteproc_set_fmt(struct v4l2_subdev *sd,
 		fmt->format.width = crop->width;
 		fmt->format.height = crop->height;
 	} else {
-		dcmipp_byteproc_adjust_fmt(&fmt->format);
-		crop->top = 0;
-		crop->left = 0;
-		crop->width = fmt->format.width;
-		crop->height = fmt->format.height;
-		*compose = *crop;
-		/* Set the same format on SOURCE pad as well */
-		*v4l2_subdev_state_get_format(sd_state, 1) = fmt->format;
+		dcmipp_byteproc_adjust_fmt_crop(byteproc, &fmt->format,
+						crop);
+		compose->top = 0;
+		compose->left = 0;
+		compose->width = fmt->format.width;
+		compose->height = fmt->format.height;
+		/* Set the same format on SOURCE pad with crop constraints */
+		src_fmt = v4l2_subdev_state_get_format(sd_state, 1);
+		*src_fmt = fmt->format;
+		src_fmt->width = crop->width;
+		src_fmt->height = crop->height;
 	}
+
 	*mf = fmt->format;
 
 	return 0;
@@ -362,6 +410,7 @@ static int dcmipp_byteproc_set_selection(struct v4l2_subdev *sd,
 					 struct v4l2_subdev_selection *s)
 {
 	struct dcmipp_byteproc_device *byteproc = v4l2_get_subdevdata(sd);
+	const struct dcmipp_byteproc_pix_map *vpix;
 	struct v4l2_mbus_framefmt *mf;
 	struct v4l2_rect *crop, *compose;
 
@@ -385,10 +434,11 @@ static int dcmipp_byteproc_set_selection(struct v4l2_subdev *sd,
 
 	switch (s->target) {
 	case V4L2_SEL_TGT_CROP:
-		dcmipp_byteproc_adjust_crop(&s->r, compose);
+		mf = v4l2_subdev_state_get_format(sd_state, 1);
+		vpix = dcmipp_byteproc_pix_map_by_code(mf->code);
+		dcmipp_byteproc_adjust_crop(byteproc, &s->r, compose, vpix->bpp);
 
 		*crop = s->r;
-		mf = v4l2_subdev_state_get_format(sd_state, 1);
 		mf->width = s->r.width;
 		mf->height = s->r.height;
 
@@ -399,9 +449,12 @@ static int dcmipp_byteproc_set_selection(struct v4l2_subdev *sd,
 		mf = v4l2_subdev_state_get_format(sd_state, 0);
 		dcmipp_byteproc_adjust_compose(&s->r, mf);
 		*compose = s->r;
-		*crop = s->r;
 
 		mf = v4l2_subdev_state_get_format(sd_state, 1);
+		vpix = dcmipp_byteproc_pix_map_by_code(mf->code);
+		dcmipp_byteproc_adjust_crop(byteproc, &s->r, compose, vpix->bpp);
+		*crop = s->r;
+
 		mf->width = s->r.width;
 		mf->height = s->r.height;
 
@@ -465,6 +518,7 @@ static int dcmipp_byteproc_configure_scale_crop
 	struct v4l2_mbus_framefmt *sink_fmt;
 	u32 hprediv, vprediv;
 	struct v4l2_rect *compose, *crop;
+	u32 cstr = 0, cszr = 0;
 	u32 val = 0;
 
 	state = v4l2_subdev_lock_and_get_active_state(&byteproc->sd);
@@ -521,18 +575,25 @@ static int dcmipp_byteproc_configure_scale_crop
 			hprediv, vprediv);
 	}
 
-	dev_dbg(byteproc->dev, "crop to %dx%d\n", crop->width, crop->height);
-
-	/* expressed in 32-bits words on X axis, lines on Y axis */
-	reg_write(byteproc, DCMIPP_P0SCSTR,
-		  (((crop->left * vpix->bpp) / 4) <<
-		   DCMIPP_P0SCSTR_HSTART_SHIFT) |
-		  (crop->top << DCMIPP_P0SCSTR_VSTART_SHIFT));
-	reg_write(byteproc, DCMIPP_P0SCSZR,
-		  DCMIPP_P0SCSZR_ENABLE |
-		  (((crop->width * vpix->bpp) / 4) <<
-		   DCMIPP_P0SCSZR_HSIZE_SHIFT) |
-		  (crop->height << DCMIPP_P0SCSZR_VSIZE_SHIFT));
+	/* Configure crop if necessary */
+	if (crop->width != compose->width) {
+		cstr |= (((crop->left * vpix->bpp) / 4) <<
+			DCMIPP_P0SCSTR_HSTART_SHIFT);
+		cszr |= (((crop->width * vpix->bpp) / 4) <<
+			DCMIPP_P0SCSZR_HSIZE_SHIFT);
+		cszr |= DCMIPP_P0SCSZR_ENABLE;
+	}
+	if (crop->height != compose->height) {
+		cstr |= crop->top << DCMIPP_P0SCSTR_VSTART_SHIFT;
+		cszr |= crop->height << DCMIPP_P0SCSZR_VSIZE_SHIFT;
+		cszr |= DCMIPP_P0SCSZR_ENABLE;
+	}
+	if (cstr && cszr) {
+		dev_dbg(byteproc->dev, "crop to (%d,%d)%dx%d\n",
+			crop->left, crop->top, crop->width, crop->height);
+		reg_write(byteproc, DCMIPP_P0SCSTR, cstr);
+		reg_write(byteproc, DCMIPP_P0SCSZR, cszr);
+	}
 
 	return 0;
 }
