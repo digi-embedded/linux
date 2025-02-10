@@ -51,7 +51,7 @@
 
 #define DCMIPP_TPG_MIN_WIDTH	16
 #define DCMIPP_TPG_MAX_WIDTH	16383
-#define DCMIPP_TPG_MIN_HEIGHT	16
+#define DCMIPP_TPG_MIN_HEIGHT	2
 #define DCMIPP_TPG_MAX_HEIGHT	16383
 
 struct dcmipp_tpg_pix_map {
