@@ -219,9 +219,9 @@ static void dcmipp_byteproc_adjust_fmt_crop(struct dcmipp_byteproc_device *bytep
 	}
 
 	fmt->width = clamp_t(u32, fmt->width, DCMIPP_FRAME_MIN_WIDTH,
-			     DCMIPP_FRAME_MAX_WIDTH) & ~1;
+			     DCMIPP_FRAME_MAX_WIDTH);
 	fmt->height = clamp_t(u32, fmt->height, DCMIPP_FRAME_MIN_HEIGHT,
-			      DCMIPP_FRAME_MAX_HEIGHT) & ~1;
+			      DCMIPP_FRAME_MAX_HEIGHT);
 
 	if (fmt->field == V4L2_FIELD_ANY || fmt->field == V4L2_FIELD_ALTERNATE)
 		fmt->field = fmt_default.field;

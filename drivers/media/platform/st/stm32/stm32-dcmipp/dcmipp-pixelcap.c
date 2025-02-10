@@ -317,12 +317,12 @@ static int dcmipp_pixelcap_try_fmt_vid_cap(struct file *file, void *priv,
 	in_w = format->width;
 	in_h = format->height;
 	format->width = clamp_t(u32, format->width, DCMIPP_FRAME_MIN_WIDTH,
-				DCMIPP_FRAME_MAX_WIDTH);
+				DCMIPP_PIXEL_FRAME_MAX_WIDTH);
 	format->width = round_up(format->width,
 				 1 << hdw_pixel_alignment(format->pixelformat));
 	format->height = clamp_t(u32, format->height,
 				 DCMIPP_FRAME_MIN_HEIGHT,
-				 DCMIPP_FRAME_MAX_HEIGHT);
+				 DCMIPP_PIXEL_FRAME_MAX_HEIGHT);
 	if (format->width != in_w || format->height != in_h)
 		dev_dbg(vcap->dev,
 			"resolution updated: %dx%d -> %dx%d\n",
@@ -435,9 +435,9 @@ static int dcmipp_pixelcap_enum_framesizes(struct file *file, void *fh,
 
 	fsize->type = V4L2_FRMSIZE_TYPE_CONTINUOUS;
 	fsize->stepwise.min_width = DCMIPP_FRAME_MIN_WIDTH;
-	fsize->stepwise.max_width = DCMIPP_FRAME_MAX_WIDTH;
+	fsize->stepwise.max_width = DCMIPP_PIXEL_FRAME_MAX_WIDTH;
 	fsize->stepwise.min_height = DCMIPP_FRAME_MIN_HEIGHT;
-	fsize->stepwise.max_height = DCMIPP_FRAME_MAX_HEIGHT;
+	fsize->stepwise.max_height = DCMIPP_PIXEL_FRAME_MAX_HEIGHT;
 	fsize->stepwise.step_width = 1;
 	fsize->stepwise.step_height = 1;
 

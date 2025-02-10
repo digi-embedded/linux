@@ -530,9 +530,9 @@ static void dcmipp_pixelproc_adjust_fmt(struct dcmipp_pixelproc_device *pixelpro
 		fmt->code = PIXELPROC_MEDIA_BUS_FMT_DEFAULT;
 
 	fmt->width = clamp_t(u32, fmt->width, DCMIPP_FRAME_MIN_WIDTH,
-			     DCMIPP_FRAME_MAX_WIDTH);
+			     DCMIPP_PIXEL_FRAME_MAX_WIDTH);
 	fmt->height = clamp_t(u32, fmt->height, DCMIPP_FRAME_MIN_HEIGHT,
-			      DCMIPP_FRAME_MAX_HEIGHT);
+			      DCMIPP_PIXEL_FRAME_MAX_HEIGHT);
 
 	if (fmt->field == V4L2_FIELD_ANY || fmt->field == V4L2_FIELD_ALTERNATE)
 		fmt->field = V4L2_FIELD_NONE;
@@ -618,9 +618,9 @@ static int dcmipp_pixelproc_enum_frame_size(struct v4l2_subdev *sd,
 		return -EINVAL;
 
 	fse->min_width = DCMIPP_FRAME_MIN_WIDTH;
-	fse->max_width = DCMIPP_FRAME_MAX_WIDTH;
+	fse->max_width = DCMIPP_PIXEL_FRAME_MAX_WIDTH;
 	fse->min_height = DCMIPP_FRAME_MIN_HEIGHT;
-	fse->max_height = DCMIPP_FRAME_MAX_HEIGHT;
+	fse->max_height = DCMIPP_PIXEL_FRAME_MAX_HEIGHT;
 
 	return 0;
 }
@@ -818,8 +818,8 @@ dcmipp_pixelproc_enum_frame_interval(struct v4l2_subdev *sd,
 
 	if (fie->pad > 1 ||
 	    fie->index >= (IS_SRC(fie->pad) ? ARRAY_SIZE(dcmipp_frates) : 1) ||
-	    fie->width > DCMIPP_FRAME_MAX_WIDTH ||
-	    fie->height > DCMIPP_FRAME_MAX_HEIGHT)
+	    fie->width > DCMIPP_PIXEL_FRAME_MAX_WIDTH ||
+	    fie->height > DCMIPP_PIXEL_FRAME_MAX_HEIGHT)
 		return -EINVAL;
 
 	if (IS_SINK(fie->pad)) {
