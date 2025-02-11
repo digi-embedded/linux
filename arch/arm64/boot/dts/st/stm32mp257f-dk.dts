@@ -196,6 +196,7 @@
 		pwms = <&pwm3 1 1000000 0>;
 		brightness-levels = <0 16 22 30 40 55 75 102 138 188 255>;
 		default-brightness-level = <10>;
+		power-supply = <&scmi_v3v3>;
 		status = "okay";
 	};
 
