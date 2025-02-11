@@ -146,6 +146,7 @@
 		compatible = "edt,etml0700z9ndha", "panel-lvds";
 		enable-gpios = <&gpiog 15 GPIO_ACTIVE_HIGH>;
 		backlight = <&panel_lvds_backlight>;
+		power-supply = <&scmi_v3v3>;
 		default-on;
 		status = "okay";
 
