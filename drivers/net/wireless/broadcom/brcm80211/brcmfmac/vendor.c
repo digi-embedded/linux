@@ -371,6 +371,14 @@ const struct wiphy_vendor_command brcmf_vendor_cmds[] = {
 			   VENDOR_CMD_RAW_DATA,
 			   ifx_cfg80211_vndr_cmds_get_pfn_status)
 	},
+	{
+		IFX_SUBCMD(SSID_PROT,
+			   (WIPHY_VENDOR_CMD_NEED_WDEV |
+			   WIPHY_VENDOR_CMD_NEED_NETDEV),
+			   ifx_vendor_attr_ssid_prot_policy,
+			   ifx_cfg80211_vndr_cmds_ssid_prot),
+		.maxattr = IFX_VENDOR_ATTR_SSID_PROT_MAX
+	},
 };
 
 const struct nl80211_vendor_cmd_info brcmf_vendor_events[] = {
