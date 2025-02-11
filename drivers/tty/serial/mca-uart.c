@@ -1080,9 +1080,10 @@ static int mca_uart_probe(struct platform_device *pdev)
 		/* Allocate resources */
 		ret = mca_uart_allocate_port_resources(uart_drv, mca_uart);
 		if (ret) {
-			dev_err(&pdev->dev,
-				"Failed allocating resources for port (%d)\n",
-				ret);
+			if (ret != -EPROBE_DEFER)
+				dev_err(&pdev->dev,
+					"Failed allocating resources for port (%d)\n",
+					ret);
 			uart_remove_one_port(&uart_drv->uart, &mca_uart->port);
 			i--;
 			goto error_port;
