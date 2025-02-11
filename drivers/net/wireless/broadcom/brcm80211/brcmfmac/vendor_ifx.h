@@ -113,6 +113,8 @@ struct bcm_iov_buf {
  *	String parsing and calling corresponding function handler for a specific command
  *	given by user.
  *
+ * @IFX_VENDOR_SCMD_SSID_PROT: Vendor command to enable/disable SSID protection
+ *
  * @IFX_VENDOR_SCMD_MAX: This acts as a the tail of cmds list.
  *      Make sure it located at the end of the list.
  */
@@ -146,7 +148,9 @@ enum ifx_nl80211_vendor_subcmds {
 	SCMD(HWCAPS)		= 26,
 	SCMD(WNM_WL_CAP)	= 27,
 	SCMD(CMDSTR)		= 28,
-	SCMD(MAX)		= 29
+	/* Reserved 29 */
+	SCMD(SSID_PROT)		= 30,
+	SCMD(MAX)		= 31
 };
 
 /*
@@ -700,6 +704,19 @@ struct ifx_maxidle_wnm {
 	int protect;
 };
 
+enum ifx_vendor_attr_ssid_prot {
+	IFX_VENDOR_ATTR_SSID_PROT_UNSPEC,
+	IFX_VENDOR_ATTR_SSID_PROT_ENABLE,
+	IFX_VENDOR_ATTR_SSID_PROT_MAX
+};
+
+static const struct nla_policy
+ifx_vendor_attr_ssid_prot_policy[IFX_VENDOR_ATTR_SSID_PROT_MAX + 1] = {
+	[IFX_VENDOR_ATTR_SSID_PROT_UNSPEC] = {.type = NLA_U8},
+	[IFX_VENDOR_ATTR_SSID_PROT_ENABLE] = {.type = NLA_U8},
+	[IFX_VENDOR_ATTR_SSID_PROT_MAX] = {.type = NLA_U8},
+};
+
 #define WL_MKEEP_ALIVE_VERSION		1
 #define WL_MKEEP_ALIVE_IMMEDIATE	0x80000000
 
@@ -807,4 +824,6 @@ int ifx_cfg80211_vndr_cmds_config_pfn(struct wiphy *wiphy,
 				      struct wireless_dev *wdev, const void  *data, int len);
 int ifx_cfg80211_vndr_cmds_get_pfn_status(struct wiphy *wiphy,
 					  struct wireless_dev *wdev, const void  *data, int len);
+int ifx_cfg80211_vndr_cmds_ssid_prot(struct wiphy *wiphy,
+				     struct wireless_dev *wdev, const void *data, int len);
 #endif /* IFX_VENDOR_H */

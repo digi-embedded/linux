@@ -1211,3 +1211,33 @@ int ifx_cfg80211_vndr_cmds_get_pfn_status(struct wiphy *wiphy,
 	brcmf_dbg(TRACE, "Exit\n");
 	return 0;
 }
+
+int ifx_cfg80211_vndr_cmds_ssid_prot(struct wiphy *wiphy,
+				     struct wireless_dev *wdev,
+				     const void *data, int len)
+{
+	int ret = 0;
+	int val = 0;
+	struct brcmf_cfg80211_vif *vif;
+	struct brcmf_if *ifp;
+	const struct nlattr *attr_iter;
+	int tmp, attr_type = 0;
+
+	vif = container_of(wdev, struct brcmf_cfg80211_vif, wdev);
+	ifp = vif->ifp;
+
+	nla_for_each_attr(attr_iter, data, len, tmp) {
+		attr_type = nla_type(attr_iter);
+		if (attr_type == IFX_VENDOR_ATTR_SSID_PROT_ENABLE) {
+			val = nla_get_u8(attr_iter);
+			ret = brcmf_fil_iovar_int_set(ifp, "ssid_protection", val);
+			if (ret < 0)
+				brcmf_err("Failed set ssid_protection, ret=%d\n", ret);
+			else
+				brcmf_dbg(INFO, "ssid_protection is %s\n",
+					  val ? "enabled" : "disabled");
+		}
+	}
+	return ret;
+}
+
