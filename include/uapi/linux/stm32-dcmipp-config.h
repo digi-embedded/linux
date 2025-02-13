@@ -21,6 +21,8 @@
 #define STM32_DCMIPP_ISP_CC		(1U << 4)
 /* Contrast Enhancement */
 #define STM32_DCMIPP_ISP_CE		(1U << 5)
+/* Histogram Extraction */
+#define STM32_DCMIPP_ISP_HISTO		(1U << 6)
 
 /**
  * struct stm32_dcmipp_isp_bpr_cfg - STM32 DCMIPP ISP bad pixel removal
@@ -139,6 +141,68 @@ struct stm32_dcmipp_isp_ce_cfg {
 };
 
 /**
+ * struct stm32_dcmipp_isp_histo_cfg - STM32 DCMIPP ISP histogram output
+ *
+ * @left: left start (in pixel) of histogram area
+ * @top: top start (in pixel) of histogram area
+ * @width: width (in pixel) of one region
+ * @height: height (in pixel) of one region
+ * @bin: bin amount per histogram
+ * @dyn: dynamic of input components
+ * @comp: component to be extracted
+ * @vdec: vertical decimation of input before histogram extraction
+ * @hdec: horizontal decimation of input before histogram extraction
+ * @hreg: amount of horizontal regions
+ * @vreg: amount of vertical regions
+ * @src: stage within ISP for extraction of histogram
+ */
+#define STM32_DCMIPP_ISP_HISTO_BIN_4	0
+#define STM32_DCMIPP_ISP_HISTO_BIN_16	1
+#define STM32_DCMIPP_ISP_HISTO_BIN_64	2
+#define STM32_DCMIPP_ISP_HISTO_BIN_256	3
+
+#define STM32_DCMIPP_ISP_HISTO_DYN_LIGHT	0
+#define STM32_DCMIPP_ISP_HISTO_DYN_SEMI_LIGHT	1
+#define STM32_DCMIPP_ISP_HISTO_DYN_SEMI_DARK	2
+#define STM32_DCMIPP_ISP_HISTO_DYN_DARK		3
+
+#define STM32_DCMIPP_ISP_HISTO_COMP_R_R_V_128	0
+#define STM32_DCMIPP_ISP_HISTO_COMP_GR_G_Y_Y	1
+#define STM32_DCMIPP_ISP_HISTO_COMP_B_B_U_128	2
+#define STM32_DCMIPP_ISP_HISTO_COMP_GB_L_L_L	3
+#define STM32_DCMIPP_ISP_HISTO_COMP_ALL		4
+
+#define STM32_DCMIPP_ISP_HISTO_VHDEC_NONE	0
+#define STM32_DCMIPP_ISP_HISTO_VHDEC_2		1
+#define STM32_DCMIPP_ISP_HISTO_VHDEC_4		2
+#define STM32_DCMIPP_ISP_HISTO_VHDEC_8		3
+#define STM32_DCMIPP_ISP_HISTO_VHDEC_16		4
+
+#define STM32_DCMIPP_ISP_HISTO_MAX_VHREG	16
+
+#define STM32_DCMIPP_ISP_HISTO_SRC_POST_DEC	0
+#define STM32_DCMIPP_ISP_HISTO_SRC_POST_BLC	1
+#define STM32_DCMIPP_ISP_HISTO_SRC_POST_EX	2
+#define STM32_DCMIPP_ISP_HISTO_SRC_POST_DM	3
+#define STM32_DCMIPP_ISP_HISTO_SRC_POST_CC	4
+#define STM32_DCMIPP_ISP_HISTO_SRC_POST_CE	5
+
+struct stm32_dcmipp_isp_histo_cfg {
+	__u16 left;
+	__u16 top;
+	__u16 width;
+	__u16 height;
+	__u8 bin;
+	__u8 dyn;
+	__u8 comp;
+	__u8 vdec;
+	__u8 hdec;
+	__u8 vreg;
+	__u8 hreg;
+	__u8 src;
+};
+
+/**
  * struct stm32_dcmipp_isp_ctrls_cfg - STM32 DCMIPP ISP Controls
  *
  * @bpr_cfg: configuration of the bad pixel removal block
@@ -147,6 +211,7 @@ struct stm32_dcmipp_isp_ce_cfg {
  * @dm_cfg: configuration of the demosaicing filters block
  * @cc_cfg: configuration of the color conversion block
  * @ce_cfg: configuration of the contrast enhancement block
+ * @histo_cfg: configuration of the histogram block
  */
 struct stm32_dcmipp_isp_ctrls_cfg {
 	struct stm32_dcmipp_isp_bpr_cfg bpr_cfg;
@@ -155,6 +220,7 @@ struct stm32_dcmipp_isp_ctrls_cfg {
 	struct stm32_dcmipp_isp_dm_cfg dm_cfg;
 	struct stm32_dcmipp_isp_cc_cfg cc_cfg;
 	struct stm32_dcmipp_isp_ce_cfg ce_cfg;
+	struct stm32_dcmipp_isp_histo_cfg histo_cfg;
 };
 
 /**
@@ -187,10 +253,13 @@ struct stm32_dcmipp_stat_avr_bins {
  * @post: average & bins statistics at post-demosaicing location
  * @bad_pixel_count: number of bad pixels detected in the frame
  */
+#define STM32_DCMIPP_HISTO_BIN_MAX	(320 * 16)
 struct stm32_dcmipp_stat_buf {
 	struct stm32_dcmipp_stat_avr_bins pre;
 	struct stm32_dcmipp_stat_avr_bins post;
 	__u32 bad_pixel_count;
+	__u32 reserved;
+	__u16 histograms[STM32_DCMIPP_HISTO_BIN_MAX];
 };
 
 #endif
