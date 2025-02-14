@@ -905,6 +905,7 @@
 	dwc3: usb@48300000 {
 		maximum-speed = "high-speed";
 		usb-role-switch;
+		role-switch-default-mode = "peripheral";
 
 		port {
 			dwc3_ep: endpoint {

@@ -76,7 +76,7 @@
 				maximum-speed = "super-speed";
 				phys = <&usb2_phy2>, <&combophy PHY_TYPE_USB3>;
 				phy-names = "usb2-phy", "usb3-phy";
-				dr_mode = "host";
+				role-switch-default-mode = "host";
 		};
 	};
 
