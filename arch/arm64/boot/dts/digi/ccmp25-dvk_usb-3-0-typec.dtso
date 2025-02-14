@@ -14,6 +14,7 @@
  */
 
 #include <dt-bindings/clock/st,stm32mp25-rcc.h>
+#include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/phy/phy.h>
 
 /dts-v1/;
@@ -24,6 +25,21 @@
 		target-path = "/";
 		__overlay__ {
 			overlay-description = "DVK: USB 3.0 Type-C";
+
+			/* USB 3.0 Data switch */
+			usb3_data_switch: cbtl04gp {
+				compatible = "nxp,cbtu02043";
+				switch-gpios = <&gpiod 11 GPIO_ACTIVE_HIGH>; /* USBC_BUS_SEL */
+				shutdown-gpios = <&gpiod 10 GPIO_ACTIVE_HIGH>; /* USBC_SW_PWR */
+				orientation-switch;
+				status = "okay";
+
+				port {
+					typec_ep: endpoint {
+						remote-endpoint = <&dwc3_ep>;
+					};
+				};
+			};
 		};
 	};
 
@@ -77,6 +93,12 @@
 				phys = <&usb2_phy2>, <&combophy PHY_TYPE_USB3>;
 				phy-names = "usb2-phy", "usb3-phy";
 				role-switch-default-mode = "host";
+
+				port {
+					dwc3_ep: endpoint {
+						remote-endpoint = <&typec_ep>;
+					};
+				};
 		};
 	};
 

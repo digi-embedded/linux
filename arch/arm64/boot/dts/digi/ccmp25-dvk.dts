@@ -58,21 +58,6 @@
 		};
 	};
 
-	/* USB 3.0 Data switch */
-	usb3_data_switch: cbtl04gp {
-		compatible = "nxp,cbtu02043";
-		switch-gpios = <&gpiod 11 GPIO_ACTIVE_HIGH>; /* USBC_BUS_SEL */
-		shutdown-gpios = <&gpiod 10 GPIO_ACTIVE_HIGH>; /* USBC_SW_PWR */
-		orientation-switch;
-		status = "disabled";
-
-		port {
-			typec_ep: endpoint {
-				remote-endpoint = <&dwc3_ep>;
-			};
-		};
-	};
-
 	clocks {
 		cec_clock: cec-clock {
 			compatible = "fixed-clock";
@@ -906,12 +891,6 @@
 		maximum-speed = "high-speed";
 		usb-role-switch;
 		role-switch-default-mode = "peripheral";
-
-		port {
-			dwc3_ep: endpoint {
-				remote-endpoint = <&typec_ep>;
-			};
-		};
 	};
 };
 
