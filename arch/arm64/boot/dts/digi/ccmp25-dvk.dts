@@ -201,6 +201,7 @@
 			regulator-max-microvolt = <3300000>;
 			gpio = <&gpiog 4 GPIO_ACTIVE_HIGH>; /* NX5P3290_EN */
 			enable-active-high;
+			vin-supply = <&reg_5v_board>;
 			status = "okay";
 		};
 
